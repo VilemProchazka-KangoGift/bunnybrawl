@@ -439,15 +439,29 @@ export class GameLoop {
         if (player.slowTimer <= 0 && player.invincibleTimer <= 0 && aabbOverlap(player.x, player.y, player.width, player.height, thorn.x, thorn.y, thorn.width, thorn.height)) {
           player.slowTimer = THORN_SLOW_DURATION;
           thorn.hit = true;
-          // Blood splash particles at thorn location
+          audio.play('thornhit');
+
+          // Big blood splash at player + thorn location
+          const px = player.x + player.width / 2;
+          const py = player.y + player.height / 2;
           const tx = thorn.x + thorn.width / 2;
-          const ty = thorn.y + thorn.height / 2;
-          for (let i = 0; i < 10; i++) {
+          const ty = thorn.y;
+          // Blood from player
+          for (let i = 0; i < 18; i++) {
             const angle = Math.random() * Math.PI * 2;
-            const speed = 40 + Math.random() * 100;
-            const life = 0.3 + Math.random() * 0.3;
-            this.particles.push({ x: tx, y: ty, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 40, life, maxLife: life, size: 2 + Math.random() * 3, color: '#CC2222' });
+            const speed = 60 + Math.random() * 160;
+            const life = 0.4 + Math.random() * 0.5;
+            this.particles.push({ x: px + (Math.random() - 0.5) * 8, y: py + (Math.random() - 0.5) * 8, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 80, life, maxLife: life, size: 2.5 + Math.random() * 4, color: '#CC2222' });
           }
+          // Thorn shrapnel
+          for (let i = 0; i < 8; i++) {
+            const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI;
+            const speed = 30 + Math.random() * 80;
+            const life = 0.3 + Math.random() * 0.3;
+            this.particles.push({ x: tx, y: ty, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life, maxLife: life, size: 1.5 + Math.random() * 2, color: '#5C3A1E' });
+          }
+          // Small screen shake
+          this.state.screenShake = Math.max(this.state.screenShake, 0.15);
         }
       }
 

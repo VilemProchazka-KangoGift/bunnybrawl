@@ -1,6 +1,6 @@
 import { Howl } from 'howler';
 
-export type SoundName = 'jump' | 'stomp' | 'victory' | 'select' | 'music' | 'bunny' | 'fox' | 'frog' | 'bear' | 'owl' | 'cat' | 'wolf' | 'panda' | 'pig' | 'cow' | 'goat' | 'horse' | 'sheep' | 'monkey';
+export type SoundName = 'jump' | 'stomp' | 'victory' | 'select' | 'music' | 'thornhit' | 'bunny' | 'fox' | 'frog' | 'bear' | 'owl' | 'cat' | 'wolf' | 'panda' | 'pig' | 'cow' | 'goat' | 'horse' | 'sheep' | 'monkey';
 
 class AudioManager {
   private sounds: Map<SoundName, Howl> = new Map();
@@ -30,6 +30,11 @@ class AudioManager {
     this.sounds.set('select', new Howl({
       src: [generateSelectSound()],
       volume: 0.3,
+    }));
+
+    this.sounds.set('thornhit', new Howl({
+      src: [generateThornHitSound()],
+      volume: 0.5,
     }));
 
     this.sounds.set('music', new Howl({
@@ -287,6 +292,31 @@ function generateStompSound(): string {
     const noise = (Math.random() * 2 - 1) * Math.max(0, 1 - progress * 4) * 0.3;
 
     buffer[i] = (thud + noise) * envelope;
+  }
+
+  return floatBufferToWavDataUri(buffer, sampleRate);
+}
+
+function generateThornHitSound(): string {
+  // Painful prick: sharp high attack + descending crunch + noise burst
+  const sampleRate = 44100;
+  const duration = 0.3;
+  const numSamples = Math.floor(sampleRate * duration);
+  const buffer = new Float32Array(numSamples);
+
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / sampleRate;
+    const progress = i / numSamples;
+
+    // Sharp initial stab (high freq, fast decay)
+    const stab = Math.sin(2 * Math.PI * 1200 * t) * Math.max(0, 1 - progress * 8) * 0.35;
+    // Descending pain tone
+    const painFreq = 600 - progress * 400;
+    const pain = Math.sin(2 * Math.PI * painFreq * t) * Math.max(0, 1 - progress * 3) * 0.2;
+    // Crackle noise
+    const noise = (Math.random() * 2 - 1) * Math.max(0, 1 - progress * 5) * 0.15;
+
+    buffer[i] = stab + pain + noise;
   }
 
   return floatBufferToWavDataUri(buffer, sampleRate);

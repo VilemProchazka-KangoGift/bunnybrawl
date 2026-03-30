@@ -638,15 +638,19 @@ export class Renderer {
     this.drawFern(ctx, 770, gy);
     this.drawFern(ctx, 1220, gy);
 
-    // Hanging leaves / vines on floating platforms
+    // Foreground bushes + vines on floating platforms
     const floats = arena.platforms.filter(p => p.y < 650);
     for (const plat of floats) {
       if (plat.width > 180) {
+        // Foreground bush on larger platforms
+        this.drawFgBush(ctx, plat.x + plat.width * 0.2, plat.y, 22);
+        this.drawFgBush(ctx, plat.x + plat.width * 0.8, plat.y, 18);
         this.drawHangingVine(ctx, plat.x + 15, plat.y + plat.height, 25);
         this.drawHangingVine(ctx, plat.x + plat.width - 15, plat.y + plat.height, 20);
-        // Foreground leaf cluster on top
         this.drawFgLeafCluster(ctx, plat.x + plat.width / 2, plat.y);
       } else {
+        // Small foreground bush on smaller platforms
+        this.drawFgBush(ctx, plat.x + plat.width * 0.5, plat.y, 15);
         this.drawHangingVine(ctx, plat.x + plat.width / 2, plat.y + plat.height, 18);
       }
     }
