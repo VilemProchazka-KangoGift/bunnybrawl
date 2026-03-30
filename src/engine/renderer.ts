@@ -308,7 +308,7 @@ export class Renderer {
 
   // ---- Frame rendering ----
 
-  renderFrame(matchState: MatchState, _arena: Arena, particles: Particle[]): void {
+  renderFrame(matchState: MatchState, arena: Arena, particles: Particle[]): void {
     const ctx = this.fgCtx;
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
@@ -328,8 +328,223 @@ export class Renderer {
       this.drawPlayer(ctx, player);
     }
 
+    // Foreground nature — drawn AFTER players so rabbits hide behind them
+    this.drawForegroundNature(ctx, arena);
+
     // HUD
     this.drawHUD(ctx, matchState);
+  }
+
+  // ---- Foreground nature (drawn over players) ----
+
+  private drawForegroundNature(ctx: CanvasRenderingContext2D, arena: Arena): void {
+    const ground = arena.platforms[0];
+    const gy = ground.y;
+
+    // Large foreground bushes on ground — rabbits hide behind these
+    this.drawFgBush(ctx, 160, gy, 45);
+    this.drawFgBush(ctx, 520, gy, 38);
+    this.drawFgBush(ctx, 850, gy, 42);
+    this.drawFgBush(ctx, 1120, gy, 35);
+
+    // Tall grass clusters
+    this.drawTallGrass(ctx, 310, gy, 7);
+    this.drawTallGrass(ctx, 680, gy, 9);
+    this.drawTallGrass(ctx, 1020, gy, 6);
+    this.drawTallGrass(ctx, 430, gy, 5);
+
+    // Foreground ferns
+    this.drawFern(ctx, 80, gy);
+    this.drawFern(ctx, 770, gy);
+    this.drawFern(ctx, 1220, gy);
+
+    // Hanging leaves / vines on floating platforms
+    const floats = arena.platforms.filter(p => p.y < 650);
+    for (const plat of floats) {
+      if (plat.width > 180) {
+        this.drawHangingVine(ctx, plat.x + 15, plat.y + plat.height, 25);
+        this.drawHangingVine(ctx, plat.x + plat.width - 15, plat.y + plat.height, 20);
+        // Foreground leaf cluster on top
+        this.drawFgLeafCluster(ctx, plat.x + plat.width / 2, plat.y);
+      } else {
+        this.drawHangingVine(ctx, plat.x + plat.width / 2, plat.y + plat.height, 18);
+      }
+    }
+
+    // Foreground wildflowers (taller than background ones)
+    this.drawFgWildflower(ctx, 240, gy, '#FF6B8A', 18);
+    this.drawFgWildflower(ctx, 580, gy, '#DDA0DD', 20);
+    this.drawFgWildflower(ctx, 930, gy, '#FFD700', 16);
+    this.drawFgWildflower(ctx, 1180, gy, '#FF69B4', 22);
+  }
+
+  private drawFgBush(ctx: CanvasRenderingContext2D, x: number, groundY: number, size: number): void {
+    // Dark back layer
+    ctx.fillStyle = '#1E5C1E';
+    ctx.beginPath();
+    ctx.ellipse(x, groundY - size * 0.35, size * 0.7, size * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Main body
+    ctx.fillStyle = '#2B7A2B';
+    ctx.beginPath();
+    ctx.ellipse(x + 2, groundY - size * 0.4, size * 0.6, size * 0.45, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Left lobe
+    ctx.fillStyle = '#338A33';
+    ctx.beginPath();
+    ctx.ellipse(x - size * 0.3, groundY - size * 0.3, size * 0.35, size * 0.32, -0.3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Right lobe
+    ctx.fillStyle = '#2E8030';
+    ctx.beginPath();
+    ctx.ellipse(x + size * 0.3, groundY - size * 0.35, size * 0.33, size * 0.3, 0.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Highlight spots
+    ctx.fillStyle = '#3DA63D';
+    ctx.beginPath();
+    ctx.ellipse(x - size * 0.1, groundY - size * 0.55, size * 0.15, size * 0.12, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(x + size * 0.2, groundY - size * 0.5, size * 0.12, size * 0.1, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Small berries
+    const berryColors = ['#CC3333', '#DD4444', '#BB2222'];
+    for (let i = 0; i < 3; i++) {
+      ctx.fillStyle = berryColors[i];
+      ctx.beginPath();
+      ctx.arc(
+        x + (i - 1) * size * 0.2 + (i * 3 % 5),
+        groundY - size * 0.25 - (i * 7 % 6),
+        2.5, 0, Math.PI * 2
+      );
+      ctx.fill();
+    }
+  }
+
+  private drawTallGrass(ctx: CanvasRenderingContext2D, x: number, groundY: number, bladeCount: number): void {
+    for (let i = 0; i < bladeCount; i++) {
+      const bx = x + (i - bladeCount / 2) * 6;
+      const height = 14 + (i * 7 % 10);
+      const lean = (i % 3 - 1) * 4;
+
+      // Dark blade
+      ctx.strokeStyle = i % 2 === 0 ? '#2D7A2D' : '#3A8A3A';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(bx, groundY);
+      ctx.quadraticCurveTo(bx + lean * 0.5, groundY - height * 0.6, bx + lean, groundY - height);
+      ctx.stroke();
+
+      // Lighter overlay on some
+      if (i % 3 === 0) {
+        ctx.strokeStyle = '#4CA64C';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(bx + 1, groundY);
+        ctx.quadraticCurveTo(bx + lean * 0.5 + 1, groundY - height * 0.6, bx + lean + 1, groundY - height);
+        ctx.stroke();
+      }
+    }
+  }
+
+  private drawFern(ctx: CanvasRenderingContext2D, x: number, groundY: number): void {
+    // Central stem
+    const height = 22;
+    ctx.strokeStyle = '#2D6B2D';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x, groundY);
+    ctx.quadraticCurveTo(x + 2, groundY - height * 0.5, x + 4, groundY - height);
+    ctx.stroke();
+
+    // Fronds on each side
+    const frondCount = 4;
+    for (let i = 0; i < frondCount; i++) {
+      const fy = groundY - 5 - i * 4;
+      const fLen = 10 - i * 1.5;
+      for (const side of [-1, 1]) {
+        ctx.strokeStyle = i < 2 ? '#2B7A2B' : '#3A9A3A';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x + 1, fy);
+        ctx.quadraticCurveTo(x + side * fLen * 0.7, fy - 3, x + side * fLen, fy - 1);
+        ctx.stroke();
+      }
+    }
+  }
+
+  private drawHangingVine(ctx: CanvasRenderingContext2D, x: number, topY: number, length: number): void {
+    // Vine stem
+    ctx.strokeStyle = '#3A7A3A';
+    ctx.lineWidth = 1.5;
+    const sway = Math.sin(x * 0.1) * 4;
+    ctx.beginPath();
+    ctx.moveTo(x, topY);
+    ctx.quadraticCurveTo(x + sway, topY + length * 0.6, x + sway * 0.5, topY + length);
+    ctx.stroke();
+
+    // Small leaves along vine
+    ctx.fillStyle = '#3D8B3D';
+    for (let i = 0; i < 3; i++) {
+      const ly = topY + (i + 1) * length * 0.25;
+      const lx = x + sway * (i + 1) / 4;
+      const side = i % 2 === 0 ? -1 : 1;
+      ctx.beginPath();
+      ctx.ellipse(lx + side * 4, ly, 4, 2.5, side * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  private drawFgLeafCluster(ctx: CanvasRenderingContext2D, x: number, platY: number): void {
+    // Small cluster of leaves sitting on top of platform, drawn in foreground
+    ctx.fillStyle = '#2E7A2E';
+    ctx.beginPath();
+    ctx.ellipse(x - 6, platY - 4, 8, 5, -0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#3A8C3A';
+    ctx.beginPath();
+    ctx.ellipse(x + 6, platY - 5, 7, 4, 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#4A9C4A';
+    ctx.beginPath();
+    ctx.ellipse(x, platY - 7, 6, 3.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  private drawFgWildflower(ctx: CanvasRenderingContext2D, x: number, groundY: number, color: string, height: number): void {
+    // Tall stem
+    ctx.strokeStyle = '#2D6B2D';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x, groundY);
+    ctx.lineTo(x + 1, groundY - height);
+    ctx.stroke();
+
+    // Small leaf on stem
+    ctx.fillStyle = '#3A8A3A';
+    ctx.beginPath();
+    ctx.ellipse(x + 5, groundY - height * 0.5, 5, 2.5, 0.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Flower head (larger than bg flowers)
+    ctx.fillStyle = color;
+    const petalR = 4;
+    for (let a = 0; a < 6; a++) {
+      const angle = (a / 6) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.arc(x + 1 + Math.cos(angle) * 4, groundY - height - 1 + Math.sin(angle) * 4, petalR, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Center
+    ctx.fillStyle = '#FFE04A';
+    ctx.beginPath();
+    ctx.arc(x + 1, groundY - height - 1, 2.5, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   // ---- Particles ----
