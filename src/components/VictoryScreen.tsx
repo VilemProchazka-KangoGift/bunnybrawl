@@ -1,9 +1,23 @@
+import { useRef, useEffect } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { CHARACTERS } from '../engine/characters';
+import type { CharacterSlot } from '../engine/types';
 import './VictoryScreen.css';
+
+interface FireworkParticle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  maxLife: number;
+  color: string;
+  size: number;
+}
 
 export function VictoryScreen() {
   const { winner, lastMatchState, setScreen, setActivePlayers } = useGameStore();
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const winnerChar = winner ? CHARACTERS[winner] : null;
   const players = lastMatchState?.players.filter(p => p.active) ?? [];
@@ -18,8 +32,95 @@ export function VictoryScreen() {
     setScreen('menu');
   };
 
+  // Fireworks background effect
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d')!;
+    canvas.width = 1280;
+    canvas.height = 720;
+
+    const particles: FireworkParticle[] = [];
+    let lastSpawn = 0;
+    const SPAWN_INTERVAL = 400;
+    const COLORS = ['#FF4444', '#44FF44', '#4488FF', '#FFD700', '#FF69B4', '#44FFFF', '#FF8844', '#AA44FF'];
+
+    function spawnBurst(time: number) {
+      const bx = 100 + Math.random() * 1080;
+      const by = 80 + Math.random() * 400;
+      const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+      const count = 20 + Math.floor(Math.random() * 15);
+      for (let i = 0; i < count; i++) {
+        const angle = (i / count) * Math.PI * 2 + Math.random() * 0.3;
+        const speed = 60 + Math.random() * 120;
+        particles.push({
+          x: bx,
+          y: by,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 1.0 + Math.random() * 0.5,
+          maxLife: 1.0 + Math.random() * 0.5,
+          color,
+          size: 2 + Math.random() * 2,
+        });
+      }
+      lastSpawn = time;
+    }
+
+    let rafId = 0;
+    let lastTime = 0;
+
+    function animate(time: number) {
+      const dt = lastTime ? Math.min((time - lastTime) / 1000, 0.05) : 1 / 60;
+      lastTime = time;
+
+      ctx.clearRect(0, 0, 1280, 720);
+
+      // Spawn new bursts
+      if (time - lastSpawn > SPAWN_INTERVAL) {
+        spawnBurst(time);
+      }
+
+      // Update and draw particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.life -= dt;
+        if (p.life <= 0) {
+          particles.splice(i, 1);
+          continue;
+        }
+        p.vy += 80 * dt; // gravity
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.vx *= 0.98;
+
+        const alpha = p.life / p.maxLife;
+        ctx.globalAlpha = alpha * 0.8;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * alpha, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.globalAlpha = 1;
+      rafId = requestAnimationFrame(animate);
+    }
+
+    rafId = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(rafId);
+  }, []);
+
+  // Get stats for a player if available
+  const getPlayerStats = (playerId: CharacterSlot) => {
+    if (!lastMatchState) return null;
+    const stats = (lastMatchState as any).stats;
+    if (!stats || !stats.perPlayer) return null;
+    return stats.perPlayer.get(playerId) ?? null;
+  };
+
   return (
     <div className="victory-screen" data-testid="victory-screen">
+      <canvas ref={canvasRef} className="fireworks-canvas" />
       <div className="victory-bg">
         <div className="victory-content">
           {winnerChar ? (
@@ -51,6 +152,36 @@ export function VictoryScreen() {
               </div>
             ))}
           </div>
+
+          {/* Per-player stats section */}
+          {sortedPlayers.length > 0 && (
+            <div className="player-stats-section">
+              <h2>Player Stats</h2>
+              <div className="stats-grid">
+                <div className="stats-header">
+                  <span className="stats-cell stats-name-cell">Player</span>
+                  <span className="stats-cell">Streak</span>
+                  <span className="stats-cell">Airborne</span>
+                  <span className="stats-cell">Distance</span>
+                  <span className="stats-cell">Carrots</span>
+                </div>
+                {sortedPlayers.map((player) => {
+                  const ps = getPlayerStats(player.id);
+                  return (
+                    <div key={player.id} className="stats-row">
+                      <span className="stats-cell stats-name-cell" style={{ color: player.character.color }}>
+                        {player.character.name}
+                      </span>
+                      <span className="stats-cell">{ps?.bestStreak ?? 0}</span>
+                      <span className="stats-cell">{ps ? (ps.timeAirborne).toFixed(1) + 's' : '0.0s'}</span>
+                      <span className="stats-cell">{ps ? Math.floor(ps.distanceTraveled / 100) : 0}</span>
+                      <span className="stats-cell">{ps?.carrotsEaten ?? 0}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="match-stats">
             <span>Match time: {formatTime(lastMatchState?.timeElapsed ?? 0)}</span>

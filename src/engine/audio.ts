@@ -1,6 +1,6 @@
 import { Howl } from 'howler';
 
-export type SoundName = 'jump' | 'stomp' | 'victory' | 'select' | 'music' | 'thornhit' | 'bunny' | 'fox' | 'frog' | 'bear' | 'owl' | 'cat' | 'wolf' | 'panda' | 'pig' | 'cow' | 'goat' | 'horse' | 'sheep' | 'monkey';
+export type SoundName = 'jump' | 'stomp' | 'victory' | 'select' | 'music' | 'thornhit' | 'bunny' | 'fox' | 'frog' | 'bear' | 'owl' | 'cat' | 'wolf' | 'panda' | 'pig' | 'cow' | 'goat' | 'horse' | 'sheep' | 'monkey' | 'footstep_grass' | 'footstep_wood' | 'countdown_beep' | 'countdown_go' | 'oof' | 'splash' | 'ambient' | 'crowd';
 
 class AudioManager {
   private sounds: Map<SoundName, Howl> = new Map();
@@ -122,6 +122,55 @@ class AudioManager {
       volume: 0.4,
     }));
 
+    // Footstep grass: very short soft crunch
+    this.sounds.set('footstep_grass', new Howl({
+      src: [generateFootstepGrass()],
+      volume: 0.15,
+    }));
+
+    // Footstep wood: short higher-pitched tap
+    this.sounds.set('footstep_wood', new Howl({
+      src: [generateFootstepWood()],
+      volume: 0.15,
+    }));
+
+    // Countdown beep: clean 440Hz sine, 0.15s
+    this.sounds.set('countdown_beep', new Howl({
+      src: [generateToneBuffer(440, 0.15, 'sine', 0.4)],
+      volume: 0.4,
+    }));
+
+    // Countdown go: higher 880Hz sine, 0.2s
+    this.sounds.set('countdown_go', new Howl({
+      src: [generateToneBuffer(880, 0.2, 'sine', 0.5)],
+      volume: 0.5,
+    }));
+
+    // Oof: low impact (150Hz->100Hz, 0.15s, noise burst)
+    this.sounds.set('oof', new Howl({
+      src: [generateOofSound()],
+      volume: 0.3,
+    }));
+
+    // Splash: noise burst with quick decay (0.1s)
+    this.sounds.set('splash', new Howl({
+      src: [generateSplashSound()],
+      volume: 0.2,
+    }));
+
+    // Ambient: 2-second loop of very quiet brownian noise
+    this.sounds.set('ambient', new Howl({
+      src: [generateAmbientSound()],
+      volume: 0.05,
+      loop: true,
+    }));
+
+    // Crowd: filtered noise burst, 0.5s, volume 0 initially
+    this.sounds.set('crowd', new Howl({
+      src: [generateCrowdSound()],
+      volume: 0,
+    }));
+
     this.initialized = true;
   }
 
@@ -151,6 +200,11 @@ class AudioManager {
 
   isMuted(): boolean {
     return this.muted;
+  }
+
+  setVolume(name: SoundName, vol: number): void {
+    const sound = this.sounds.get(name);
+    if (sound) sound.volume(vol);
   }
 
   playAnimal(characterName: string): void {
@@ -390,6 +444,95 @@ function generateMusicLoop(): string {
     buffer[i] = bass + melody + hat;
   }
 
+  return floatBufferToWavDataUri(buffer, sampleRate);
+}
+
+function generateFootstepGrass(): string {
+  const sampleRate = 44100;
+  const duration = 0.05;
+  const numSamples = Math.floor(sampleRate * duration);
+  const buffer = new Float32Array(numSamples);
+  for (let i = 0; i < numSamples; i++) {
+    const progress = i / numSamples;
+    const envelope = Math.max(0, 1 - progress * 3) * 0.15;
+    buffer[i] = (Math.random() * 2 - 1) * envelope;
+  }
+  return floatBufferToWavDataUri(buffer, sampleRate);
+}
+
+function generateFootstepWood(): string {
+  const sampleRate = 44100;
+  const duration = 0.05;
+  const numSamples = Math.floor(sampleRate * duration);
+  const buffer = new Float32Array(numSamples);
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / sampleRate;
+    const progress = i / numSamples;
+    const envelope = Math.max(0, 1 - progress * 3) * 0.15;
+    const tone = Math.sin(2 * Math.PI * 1200 * t);
+    buffer[i] = tone * envelope;
+  }
+  return floatBufferToWavDataUri(buffer, sampleRate);
+}
+
+function generateOofSound(): string {
+  const sampleRate = 44100;
+  const duration = 0.15;
+  const numSamples = Math.floor(sampleRate * duration);
+  const buffer = new Float32Array(numSamples);
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / sampleRate;
+    const progress = i / numSamples;
+    const freq = 150 + (100 - 150) * progress;
+    const envelope = Math.max(0, 1 - progress * 2) * 0.3;
+    const tone = Math.sin(2 * Math.PI * freq * t);
+    const noise = (Math.random() * 2 - 1) * Math.max(0, 1 - progress * 5) * 0.2;
+    buffer[i] = (tone + noise) * envelope;
+  }
+  return floatBufferToWavDataUri(buffer, sampleRate);
+}
+
+function generateSplashSound(): string {
+  const sampleRate = 44100;
+  const duration = 0.1;
+  const numSamples = Math.floor(sampleRate * duration);
+  const buffer = new Float32Array(numSamples);
+  for (let i = 0; i < numSamples; i++) {
+    const progress = i / numSamples;
+    const envelope = Math.max(0, 1 - progress * 4) * 0.2;
+    buffer[i] = (Math.random() * 2 - 1) * envelope;
+  }
+  return floatBufferToWavDataUri(buffer, sampleRate);
+}
+
+function generateAmbientSound(): string {
+  const sampleRate = 44100;
+  const duration = 2;
+  const numSamples = Math.floor(sampleRate * duration);
+  const buffer = new Float32Array(numSamples);
+  let brown = 0;
+  for (let i = 0; i < numSamples; i++) {
+    const white = Math.random() * 2 - 1;
+    brown += white * 0.02;
+    brown = Math.max(-1, Math.min(1, brown));
+    buffer[i] = brown * 0.05;
+  }
+  return floatBufferToWavDataUri(buffer, sampleRate);
+}
+
+function generateCrowdSound(): string {
+  const sampleRate = 44100;
+  const duration = 0.5;
+  const numSamples = Math.floor(sampleRate * duration);
+  const buffer = new Float32Array(numSamples);
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / sampleRate;
+    const progress = i / numSamples;
+    const envelope = Math.max(0, 1 - progress * 1.5);
+    // Filtered noise: mix of low-frequency modulated noise
+    const mod = Math.sin(2 * Math.PI * 8 * t) * 0.5 + 0.5;
+    buffer[i] = (Math.random() * 2 - 1) * envelope * mod * 0.3;
+  }
   return floatBufferToWavDataUri(buffer, sampleRate);
 }
 

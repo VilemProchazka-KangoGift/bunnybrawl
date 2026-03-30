@@ -389,6 +389,11 @@ export class Renderer {
     // Weather (leaves, petals)
     this.drawWeather(ctx, matchState.weather);
 
+    // Puddles (shallow blue ellipses on the ground)
+    if (matchState.puddles && matchState.puddles.length > 0) {
+      this.drawPuddles(ctx, matchState.puddles);
+    }
+
     // Springs and thorns (behind players)
     for (const spring of matchState.springs) this.drawSpringMushroom(ctx, spring);
     for (const thorn of matchState.thorns) this.drawThorn(ctx, thorn);
@@ -400,6 +405,32 @@ export class Renderer {
 
     // Particles
     this.drawParticles(ctx, particles);
+
+    // Afterimage ghost trails (drawn behind players)
+    for (const player of matchState.players) {
+      if (!player.active) continue;
+      if (player.state === 'respawning') continue;
+      const afterimages = player.afterimages;
+      if (afterimages && afterimages.length > 0) {
+        const isInvincible = player.invincibleTimer > 0;
+        const trailColor = isInvincible ? '#88BBFF' : player.character.color;
+        for (const img of afterimages) {
+          ctx.save();
+          ctx.globalAlpha = img.alpha;
+          ctx.fillStyle = trailColor;
+          ctx.beginPath();
+          ctx.ellipse(
+            img.x + player.width / 2,
+            img.y + player.height * 0.55,
+            player.width * 0.38,
+            player.height * 0.38,
+            0, 0, Math.PI * 2
+          );
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+    }
 
     // Players
     for (const player of matchState.players) {
@@ -416,7 +447,17 @@ export class Renderer {
       this.drawFireworks(ctx, particles);
     }
 
+    // Day/night cycle overlay
+    if (matchState.dayPhase !== undefined) {
+      this.drawDayNightCycle(ctx, matchState.dayPhase);
+    }
+
     ctx.restore();
+
+    // Countdown overlay
+    if (matchState.countdown !== undefined && matchState.countdown > 0) {
+      this.drawCountdown(ctx, matchState.countdown);
+    }
 
     // HUD (not affected by shake)
     this.drawHUD(ctx, matchState);
@@ -867,6 +908,16 @@ export class Renderer {
     const cx = x + width / 2;
     const cy = y + height;
 
+    // Squash/stretch from landing/jumping (centered on feet)
+    const squashScale = (player as any).squashScale ?? 1;
+    if (squashScale !== 1) {
+      const ssX = 1 + (1 - squashScale) * 0.5; // wider when squashed
+      const ssY = squashScale;
+      ctx.translate(cx, cy);
+      ctx.scale(ssX, ssY);
+      ctx.translate(-cx, -cy);
+    }
+
     // Fat scaling
     const isFat = fatTimer > 0;
     if (isFat) {
@@ -884,7 +935,8 @@ export class Renderer {
     if (state === 'splat') {
       this.drawSplatCharacter(ctx, x, y, width, height, character.color, character.darkColor);
     } else {
-      this.drawCharacterSprite(ctx, x, y, width, height, character, state, animFrame, fastFalling);
+      this.drawCharacterSprite(ctx, x, y, width, height, character, state, animFrame, fastFalling, player.idleAnimTimer);
+      this.drawExpression(ctx, player);
     }
 
     // Red tint pulse overlay when hit by thorns
@@ -903,7 +955,8 @@ export class Renderer {
     ctx: CanvasRenderingContext2D,
     x: number, y: number, w: number, h: number,
     char: { name: string; color: string; darkColor: string; lightColor: string },
-    state: string, animFrame: number, fastFalling: boolean
+    state: string, animFrame: number, fastFalling: boolean,
+    idleAnimTimer?: number
   ): void {
     const cx = x + w / 2;
     const isAirborne = state === 'airborne';
@@ -926,19 +979,43 @@ export class Renderer {
       ctx.translate(-cx, -(yOff + h / 2));
     }
 
+    // Idle animation — character-specific subtle motions when idleAnimTimer is between 0 and 0.5
+    const idleT = idleAnimTimer ?? -1;
+    const isIdleAnim = idleT >= 0 && idleT < 0.5;
+    if (isIdleAnim && state !== 'run' && state !== 'airborne') {
+      const t = idleT / 0.5; // 0..1 over the idle animation
+      const pulse = Math.sin(t * Math.PI); // 0->1->0
+      if (char.name === 'Cat') {
+        // Head tilt
+        ctx.translate(cx, yOff + h * 0.5);
+        ctx.rotate(pulse * 0.12);
+        ctx.translate(-cx, -(yOff + h * 0.5));
+      } else if (char.name === 'Owl') {
+        // Head rotate (slight x-scale flip and back)
+        const flipScale = 1 - pulse * 0.15;
+        ctx.translate(cx, yOff + h * 0.5);
+        ctx.scale(flipScale, 1);
+        ctx.translate(-cx, -(yOff + h * 0.5));
+      } else if (char.name !== 'Bunny' && char.name !== 'Fox' && char.name !== 'Frog' && char.name !== 'Bear') {
+        // Generic head bob for others
+        ctx.translate(0, -pulse * 2);
+      }
+    }
+
     // Body
     ctx.fillStyle = char.color;
     ctx.beginPath();
     if (char.name === 'Bunny') {
       ctx.ellipse(cx, yOff + h * 0.55, w * 0.4, h * 0.4, 0, 0, Math.PI * 2);
       ctx.fill();
-      // Ears
+      // Ears (with idle twitch on right ear)
+      const earTwitch = isIdleAnim ? Math.sin((idleT / 0.5) * Math.PI) * 0.25 : 0;
       ctx.fillStyle = char.color;
       ctx.beginPath();
       ctx.ellipse(cx - 5, yOff + 2, 4, 12, -0.2, 0, Math.PI * 2);
       ctx.fill();
       ctx.beginPath();
-      ctx.ellipse(cx + 5, yOff + 2, 4, 12, 0.2, 0, Math.PI * 2);
+      ctx.ellipse(cx + 5, yOff + 2, 4, 12, 0.2 + earTwitch, 0, Math.PI * 2);
       ctx.fill();
       // Inner ears
       ctx.fillStyle = '#FFB6C1';
@@ -946,7 +1023,7 @@ export class Renderer {
       ctx.ellipse(cx - 5, yOff + 2, 2, 8, -0.2, 0, Math.PI * 2);
       ctx.fill();
       ctx.beginPath();
-      ctx.ellipse(cx + 5, yOff + 2, 2, 8, 0.2, 0, Math.PI * 2);
+      ctx.ellipse(cx + 5, yOff + 2, 2, 8, 0.2 + earTwitch, 0, Math.PI * 2);
       ctx.fill();
       // Tail
       ctx.fillStyle = char.lightColor;
@@ -969,7 +1046,7 @@ export class Renderer {
       ctx.fill();
       ctx.fillStyle = char.lightColor;
       ctx.beginPath();
-      const tailWag = isRunning ? Math.sin(animFrame * Math.PI) * 5 : 0;
+      const tailWag = isRunning ? Math.sin(animFrame * Math.PI) * 5 : (isIdleAnim ? Math.sin((idleT / 0.5) * Math.PI * 2) * 4 : 0);
       ctx.moveTo(cx - w * 0.3, yOff + h * 0.5);
       ctx.quadraticCurveTo(cx - w * 0.7, yOff + h * 0.2 + tailWag, cx - w * 0.5, yOff + h * 0.1);
       ctx.quadraticCurveTo(cx - w * 0.3, yOff + h * 0.3, cx - w * 0.3, yOff + h * 0.5);
@@ -988,13 +1065,28 @@ export class Renderer {
       ctx.beginPath();
       ctx.arc(cx + 7, yOff + 8, 6, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = '#000';
-      ctx.beginPath();
-      ctx.arc(cx - 6, yOff + 8, 3, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(cx + 8, yOff + 8, 3, 0, Math.PI * 2);
-      ctx.fill();
+      // Frog idle blink: draw lines instead of circle eyes
+      const frogBlink = isIdleAnim && (idleT / 0.5) > 0.3 && (idleT / 0.5) < 0.7;
+      if (frogBlink) {
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(cx - 9, yOff + 8);
+        ctx.lineTo(cx - 3, yOff + 8);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx + 5, yOff + 8);
+        ctx.lineTo(cx + 11, yOff + 8);
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.arc(cx - 6, yOff + 8, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(cx + 8, yOff + 8, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.fillStyle = '#90EE90';
       ctx.beginPath();
       ctx.ellipse(cx, yOff + h * 0.62, w * 0.25, h * 0.18, 0, 0, Math.PI * 2);
@@ -1019,6 +1111,14 @@ export class Renderer {
       ctx.beginPath();
       ctx.ellipse(cx + 2, yOff + h * 0.5, 6, 5, 0, 0, Math.PI * 2);
       ctx.fill();
+      // Bear scratch idle: small paw near ear
+      if (isIdleAnim) {
+        const scratchY = Math.sin((idleT / 0.5) * Math.PI * 3) * 3;
+        ctx.fillStyle = char.darkColor;
+        ctx.beginPath();
+        ctx.arc(cx + 13, yOff + 6 + scratchY, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
     } else if (char.name === 'Owl') {
       // Owl: round body, tufts, big round eyes
       ctx.ellipse(cx, yOff + h * 0.5, w * 0.4, h * 0.42, 0, 0, Math.PI * 2);
@@ -1580,6 +1680,214 @@ export class Renderer {
       }
     }
     ctx.globalAlpha = 1;
+  }
+
+  // ---- Puddles ----
+
+  private drawPuddles(ctx: CanvasRenderingContext2D, puddles: Array<{x: number; width: number}>): void {
+    for (const puddle of puddles) {
+      const px = puddle.x + puddle.width / 2;
+      // Draw on the ground level (approximately 660 based on typical arena ground)
+      const py = 660;
+      const hw = puddle.width / 2;
+      const hh = 5;
+
+      // Main puddle body
+      ctx.save();
+      ctx.fillStyle = 'rgba(100, 160, 220, 0.3)';
+      ctx.beginPath();
+      ctx.ellipse(px, py, hw, hh, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Lighter reflection highlight
+      ctx.fillStyle = 'rgba(180, 220, 255, 0.25)';
+      ctx.beginPath();
+      ctx.ellipse(px - hw * 0.2, py - hh * 0.3, hw * 0.4, hh * 0.5, -0.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Subtle edge
+      ctx.strokeStyle = 'rgba(80, 140, 200, 0.2)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.ellipse(px, py, hw, hh, 0, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+  }
+
+  // ---- Day/Night Cycle ----
+
+  private drawDayNightCycle(ctx: CanvasRenderingContext2D, dayPhase: number): void {
+    // Phase 0.0-0.25: full daylight (no overlay)
+    // Phase 0.25-0.5: transition to night (increasing dark blue overlay)
+    // Phase 0.5-0.75: night (dark blue overlay + stars + fireflies)
+    // Phase 0.75-1.0: transition back to day (decreasing overlay)
+
+    let overlayAlpha = 0;
+    let nightIntensity = 0; // 0-1, how "night" it is for stars/fireflies
+
+    if (dayPhase >= 0.25 && dayPhase < 0.5) {
+      // Transition to night
+      const t = (dayPhase - 0.25) / 0.25;
+      overlayAlpha = t * 0.35;
+      nightIntensity = t;
+    } else if (dayPhase >= 0.5 && dayPhase < 0.75) {
+      // Full night
+      overlayAlpha = 0.35;
+      nightIntensity = 1;
+    } else if (dayPhase >= 0.75 && dayPhase < 1.0) {
+      // Transition back to day
+      const t = 1 - (dayPhase - 0.75) / 0.25;
+      overlayAlpha = t * 0.35;
+      nightIntensity = t;
+    }
+
+    if (overlayAlpha > 0) {
+      ctx.save();
+      ctx.fillStyle = `rgba(15, 20, 60, ${overlayAlpha})`;
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.restore();
+    }
+
+    // Stars — only visible during night phases
+    if (nightIntensity > 0.3) {
+      const starAlpha = Math.min((nightIntensity - 0.3) / 0.7, 1) * 0.8;
+      ctx.save();
+      ctx.fillStyle = `rgba(255, 255, 255, ${starAlpha})`;
+      // ~30 stars at pseudo-random but fixed positions (seeded from index)
+      for (let i = 0; i < 30; i++) {
+        const sx = ((i * 137 + 83) % CANVAS_WIDTH);
+        const sy = ((i * 97 + 41) % (CANVAS_HEIGHT * 0.4));
+        const size = 1 + (i % 3) * 0.5;
+        // Twinkle effect
+        const twinkle = Math.sin(performance.now() / 500 + i * 1.7) * 0.3 + 0.7;
+        ctx.globalAlpha = starAlpha * twinkle;
+        ctx.beginPath();
+        ctx.arc(sx, sy, size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    // Fireflies — during night
+    if (nightIntensity > 0.5) {
+      const fireflyAlpha = Math.min((nightIntensity - 0.5) / 0.5, 1) * 0.7;
+      const now = performance.now() / 1000;
+      ctx.save();
+      for (let i = 0; i < 8; i++) {
+        const baseX = ((i * 173 + 57) % CANVAS_WIDTH);
+        const baseY = 100 + ((i * 211 + 29) % (CANVAS_HEIGHT * 0.6));
+        const fx = baseX + Math.sin(now * 0.5 + i * 2.3) * 30;
+        const fy = baseY + Math.cos(now * 0.4 + i * 1.7) * 20;
+        const pulse = Math.sin(now * 2 + i * 1.1) * 0.3 + 0.7;
+
+        // Glow
+        ctx.globalAlpha = fireflyAlpha * pulse * 0.3;
+        ctx.fillStyle = '#AAFF44';
+        ctx.beginPath();
+        ctx.arc(fx, fy, 6, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Core
+        ctx.globalAlpha = fireflyAlpha * pulse;
+        ctx.fillStyle = '#CCFF66';
+        ctx.beginPath();
+        ctx.arc(fx, fy, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+
+  // ---- Countdown Overlay ----
+
+  private drawCountdown(ctx: CanvasRenderingContext2D, countdown: number): void {
+    const secs = Math.ceil(countdown);
+    const frac = countdown - Math.floor(countdown);
+    const text = secs > 0 ? `${secs}` : 'GO!';
+
+    // Scale-up effect when number just ticked (fractional part near 1)
+    const tickScale = frac > 0.8 ? 1 + (frac - 0.8) * 2.5 : 1;
+
+    ctx.save();
+    ctx.translate(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+    ctx.scale(tickScale, tickScale);
+
+    // Black stroke
+    ctx.font = 'bold 80px "Fredoka", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 6;
+    ctx.strokeText(text, 0, 0);
+
+    // White fill
+    ctx.fillStyle = '#FFF';
+    ctx.fillText(text, 0, 0);
+
+    ctx.restore();
+  }
+
+  // ---- Facial Expressions ----
+
+  private drawExpression(ctx: CanvasRenderingContext2D, player: Player): void {
+    const expression = player.expression;
+    if (!expression || expression === 'normal') return;
+
+    const { x, y, width, height } = player;
+    const cx = x + width / 2;
+    const isRunning = player.state === 'run';
+    const bounce = isRunning ? Math.sin(player.animFrame * Math.PI / 2) * 2 : 0;
+    const yOff = y - bounce;
+
+    ctx.save();
+
+    if (expression === 'angry') {
+      // Two red-tinted angled lines above eyes (angry eyebrows)
+      ctx.strokeStyle = 'rgba(200, 40, 40, 0.8)';
+      ctx.lineWidth = 2;
+      // Left eyebrow — angling inward-down
+      ctx.beginPath();
+      ctx.moveTo(cx - 8, yOff + height * 0.3);
+      ctx.lineTo(cx - 2, yOff + height * 0.34);
+      ctx.stroke();
+      // Right eyebrow — angling inward-down
+      ctx.beginPath();
+      ctx.moveTo(cx + 10, yOff + height * 0.3);
+      ctx.lineTo(cx + 4, yOff + height * 0.34);
+      ctx.stroke();
+    } else if (expression === 'scared') {
+      // Sweat drop on the side of the head
+      ctx.fillStyle = 'rgba(100, 180, 255, 0.7)';
+      ctx.beginPath();
+      // Teardrop shape
+      ctx.moveTo(cx + width * 0.35, yOff + height * 0.2);
+      ctx.quadraticCurveTo(cx + width * 0.42, yOff + height * 0.3, cx + width * 0.35, yOff + height * 0.35);
+      ctx.quadraticCurveTo(cx + width * 0.28, yOff + height * 0.3, cx + width * 0.35, yOff + height * 0.2);
+      ctx.fill();
+    } else if (expression === 'dizzy') {
+      // 3 small yellow stars circling above the head
+      const now = performance.now() / 1000;
+      ctx.fillStyle = '#FFD700';
+      for (let i = 0; i < 3; i++) {
+        const angle = now * 3 + (i * Math.PI * 2 / 3);
+        const starX = cx + Math.cos(angle) * 12;
+        const starY = yOff - 4 + Math.sin(angle) * 5;
+        // Draw small 4-point star
+        ctx.beginPath();
+        for (let p = 0; p < 4; p++) {
+          const sa = (p / 4) * Math.PI * 2 - Math.PI / 2;
+          const saInner = sa + Math.PI / 4;
+          ctx.lineTo(starX + Math.cos(sa) * 3, starY + Math.sin(sa) * 3);
+          ctx.lineTo(starX + Math.cos(saInner) * 1.2, starY + Math.sin(saInner) * 1.2);
+        }
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    ctx.restore();
   }
 
   // ---- HUD ----

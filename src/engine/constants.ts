@@ -65,3 +65,23 @@ export const SLOW_MO_FACTOR = 0.25; // time scale during slow-mo
 
 // Weather
 export const WEATHER_PARTICLE_COUNT = 30;
+
+// Squash/stretch
+export const SQUASH_ON_LAND = 0.7;     // squash scale on landing
+export const STRETCH_ON_JUMP = 1.3;     // stretch scale on jump
+export const SQUASH_ON_CROUCH = 0.6;    // squash when pressing down on ground
+export const SQUASH_DECAY_SPEED = 8;    // how fast squash returns to 1.0
+
+// Afterimage
+export const AFTERIMAGE_INTERVAL = 0.03; // seconds between ghost spawns
+export const AFTERIMAGE_SPEED_THRESHOLD = 200; // min speed to spawn afterimages
+export const AFTERIMAGE_MAX = 5;
+
+// Day/night
+export const DAY_CYCLE_DURATION = 120;  // seconds for full day/night cycle
+
+// Countdown
+export const MATCH_COUNTDOWN = 3;       // seconds before match starts
+
+// Idle animation
+export const IDLE_ANIM_INTERVAL = 3;    // seconds between idle animations

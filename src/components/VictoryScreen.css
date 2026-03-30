@@ -2,6 +2,17 @@
   width: 1280px;
   height: 720px;
   font-family: 'Fredoka', sans-serif;
+  position: relative;
+}
+
+.fireworks-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1280px;
+  height: 720px;
+  pointer-events: none;
+  z-index: 2;
 }
 
 .victory-bg {
@@ -11,10 +22,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  z-index: 1;
 }
 
 .victory-content {
   text-align: center;
+  position: relative;
+  z-index: 2;
 }
 
 .winner-text {
@@ -98,6 +113,74 @@
   font-size: 16px;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.7);
+}
+
+/* Player stats section */
+.player-stats-section {
+  margin: 16px auto 0;
+  width: 520px;
+}
+
+.player-stats-section h2 {
+  color: rgba(255, 255, 255, 0.6);
+  font-family: 'Fredoka', sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.stats-grid {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.stats-header {
+  display: flex;
+  padding: 8px 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.stats-header .stats-cell {
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 600;
+}
+
+.stats-row {
+  display: flex;
+  padding: 7px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  transition: background 0.15s ease;
+}
+
+.stats-row:last-child {
+  border-bottom: none;
+}
+
+.stats-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.stats-cell {
+  flex: 1;
+  font-family: 'Fredoka', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.6);
+  text-align: center;
+}
+
+.stats-name-cell {
+  flex: 1.5;
+  text-align: left;
+  font-weight: 600;
 }
 
 .match-stats {

@@ -68,6 +68,12 @@ export interface Player {
   fastFalling: boolean;
   fatTimer: number;
   slowTimer: number;
+  squashScale: number;   // 1.0 = normal, <1 = squashed, >1 = stretched
+  squashTimer: number;   // decay timer for squash/stretch
+  afterimages: Array<{x: number; y: number; facing: 'left'|'right'; alpha: number}>;
+  idleAnimTimer: number; // for character-specific idle animations
+  expression: 'normal' | 'scared' | 'angry' | 'dizzy';
+  killStreak: number;    // current consecutive kills without dying
 }
 
 export type SplatShape = 'circle' | 'star' | 'splat' | 'ring' | 'paw';
@@ -165,6 +171,21 @@ export interface MatchState {
   screenShake: number; // remaining shake time
   slowMotion: number;  // remaining slow-mo time
   weather: WeatherParticle[];
+  dayPhase: number;       // 0-1 cycle (0=noon, 0.5=night, 1=noon again)
+  puddles: Array<{x: number; width: number}>;
+  countdown: number;      // >0 = pre-match countdown in seconds, 0 = match running
+  stats: MatchStats;
+}
+
+export interface MatchStats {
+  perPlayer: Map<CharacterSlot, PlayerStats>;
+}
+
+export interface PlayerStats {
+  bestStreak: number;
+  timeAirborne: number;
+  distanceTraveled: number;
+  carrotsEaten: number;
 }
 
 export interface WeatherParticle {

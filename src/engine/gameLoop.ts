@@ -1,6 +1,6 @@
 import type {
   MatchState, MatchSettings, Arena, CharacterSlot, Player, Particle,
-  WeatherParticle,
+  WeatherParticle, MatchStats, PlayerStats,
 } from './types';
 import { InputManager } from './input';
 import { Renderer } from './renderer';
@@ -16,6 +16,9 @@ import {
   SPRING_SPAWN_INTERVAL, THORN_SPAWN_INTERVAL, HAZARD_LIFETIME, HAZARD_GROW_TIME,
   SCREEN_SHAKE_DURATION, SLOW_MO_DURATION, SLOW_MO_FACTOR,
   WEATHER_PARTICLE_COUNT,
+  SQUASH_ON_LAND, STRETCH_ON_JUMP, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED,
+  AFTERIMAGE_INTERVAL, AFTERIMAGE_SPEED_THRESHOLD, AFTERIMAGE_MAX,
+  DAY_CYCLE_DURATION, MATCH_COUNTDOWN, IDLE_ANIM_INTERVAL,
 } from './constants';
 import { CHARACTERS } from './characters';
 
@@ -37,6 +40,8 @@ export class GameLoop {
   private newSplatsSinceRender: number[] = [];
   private particles: Particle[] = [];
   private fireworkTimer = 0;
+  private afterimageAccumulators: Map<CharacterSlot, number> = new Map();
+  private footstepAccumulators: Map<CharacterSlot, number> = new Map();
 
   constructor(
     bgCanvas: HTMLCanvasElement,
@@ -63,6 +68,8 @@ export class GameLoop {
       splatTimer: 0, respawnTimer: 0, invincibleTimer: 0,
       score: 0, active: true, animFrame: 0, animTimer: 0,
       fastFalling: false, fatTimer: 0, slowTimer: 0,
+      squashScale: 1, squashTimer: 0, afterimages: [], idleAnimTimer: 0,
+      expression: 'normal' as const, killStreak: 0,
     }));
 
     // Init weather particles
@@ -70,6 +77,27 @@ export class GameLoop {
     for (let i = 0; i < WEATHER_PARTICLE_COUNT; i++) {
       weather.push(this.createWeatherParticle(true));
     }
+
+    // Generate puddles on the ground platform (y >= 650 assumed ground)
+    const groundPlatforms = arena.platforms.filter(p => p.y >= 650);
+    const puddles: Array<{x: number; width: number}> = [];
+    const puddleCount = 4 + Math.floor(Math.random() * 2); // 4-5
+    for (let i = 0; i < puddleCount; i++) {
+      const gp = groundPlatforms.length > 0
+        ? groundPlatforms[Math.floor(Math.random() * groundPlatforms.length)]
+        : arena.platforms[0];
+      puddles.push({
+        x: gp.x + 20 + Math.random() * (gp.width - 80),
+        width: 30 + Math.random() * 30,
+      });
+    }
+
+    // Init stats
+    const statsMap = new Map<CharacterSlot, PlayerStats>();
+    for (const slot of activePlayers) {
+      statsMap.set(slot, { bestStreak: 0, timeAirborne: 0, distanceTraveled: 0, carrotsEaten: 0 });
+    }
+    const stats: MatchStats = { perPlayer: statsMap };
 
     this.state = {
       players,
@@ -81,6 +109,10 @@ export class GameLoop {
       thornSpawnTimer: 8,  // first thorn after 8s
       screenShake: 0, slowMotion: 0,
       weather,
+      dayPhase: 0,
+      puddles,
+      countdown: MATCH_COUNTDOWN,
+      stats,
     };
   }
 
@@ -349,6 +381,27 @@ export class GameLoop {
     if (this.state.matchOver) return;
     this.state.timeElapsed += dt;
 
+    // Day/night cycle
+    this.state.dayPhase += dt / DAY_CYCLE_DURATION;
+    if (this.state.dayPhase > 1) this.state.dayPhase -= 1;
+
+    // Countdown logic
+    if (this.state.countdown > 0) {
+      const prevSec = Math.ceil(this.state.countdown);
+      this.state.countdown -= dt;
+      const curSec = Math.ceil(this.state.countdown);
+      if (this.state.countdown <= 0) {
+        this.state.countdown = 0;
+        audio.play('countdown_go');
+      } else if (curSec < prevSec) {
+        audio.play('countdown_beep');
+      }
+      // During countdown, still update weather/particles but skip player input
+      this.updateWeather(dt);
+      this.updateParticles(dt);
+      return;
+    }
+
     // Screen shake decay
     if (this.state.screenShake > 0) this.state.screenShake -= dt;
 
@@ -409,7 +462,12 @@ export class GameLoop {
       const prevVx = player.vx;
 
       applyInput(player, input, dt);
-      if (!wasAirborne && player.state === 'airborne') audio.play('jump');
+      if (!wasAirborne && player.state === 'airborne') {
+        audio.play('jump');
+        // Stretch on jump
+        player.squashScale = STRETCH_ON_JUMP;
+        player.squashTimer = 0.15;
+      }
 
       applyGravity(player, dt);
       movePlayer(player, dt);
@@ -417,10 +475,153 @@ export class GameLoop {
       applyArenaConstraints(player, this.arena);
       updatePlayerState(player);
 
-      if (wasAirborne && player.state !== 'airborne' && prevVy >= DUST_LAND_VY_THRESHOLD) this.spawnDustParticles(player, prevVy);
+      // Landing detection
+      const justLanded = wasAirborne && player.state !== 'airborne';
+
+      if (justLanded && prevVy >= DUST_LAND_VY_THRESHOLD) this.spawnDustParticles(player, prevVy);
       if (player.state === 'run' && Math.abs(player.vx) > 150 && Math.random() < 0.3) this.spawnRunDust(player);
       if (wasAirborne && prevVy < -50 && player.vy === 0 && player.state === 'airborne') this.spawnImpactDust(player, 'up');
-      if (Math.abs(prevVx) > 100 && player.vx === 0 && prevVx !== 0) this.spawnImpactDust(player, prevVx > 0 ? 'right' : 'left');
+
+      // Oof sound: when player hits a wall (prevVx was high, now 0)
+      if (Math.abs(prevVx) > 100 && player.vx === 0 && prevVx !== 0) {
+        this.spawnImpactDust(player, prevVx > 0 ? 'right' : 'left');
+        audio.play('oof');
+      }
+
+      // Squash on landing
+      if (justLanded) {
+        player.squashScale = SQUASH_ON_LAND;
+        player.squashTimer = 0.15;
+
+        // Puddle splash on landing on ground platform
+        const playerCx = player.x + player.width / 2;
+        const playerBottom = player.y + player.height;
+        if (playerBottom >= 650) {
+          for (const puddle of this.state.puddles) {
+            if (playerCx >= puddle.x && playerCx <= puddle.x + puddle.width) {
+              audio.play('splash');
+              // Spawn blue-ish splash particles
+              for (let i = 0; i < 10; i++) {
+                const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI;
+                const speed = 40 + Math.random() * 100;
+                const life = 0.3 + Math.random() * 0.3;
+                this.particles.push({ x: playerCx + (Math.random() - 0.5) * 20, y: playerBottom - 2, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 40, life, maxLife: life, size: 2 + Math.random() * 3, color: '#4488CC' });
+              }
+              break;
+            }
+          }
+        }
+
+        // Platform crumble when landing hard
+        if (prevVy > 300) {
+          const playerCxCrumble = player.x + player.width / 2;
+          const playerBottomCrumble = player.y + player.height;
+          for (let i = 0; i < 6; i++) {
+            const life = 0.2 + Math.random() * 0.3;
+            this.particles.push({
+              x: playerCxCrumble + (Math.random() - 0.5) * player.width,
+              y: playerBottomCrumble,
+              vx: (Math.random() - 0.5) * 60,
+              vy: Math.random() * 20 + 10,
+              life, maxLife: life,
+              size: 1.5 + Math.random() * 2,
+              color: '#8B6914',
+            });
+          }
+        }
+      }
+
+      // Squash when pressing down on ground (crouch)
+      if (input.down && player.state !== 'airborne') {
+        player.squashScale = SQUASH_ON_CROUCH;
+      } else {
+        // Squash/stretch decay
+        if (player.squashTimer > 0) {
+          player.squashTimer -= dt;
+          player.squashScale += (1.0 - player.squashScale) * SQUASH_DECAY_SPEED * dt;
+        } else {
+          player.squashScale = 1.0;
+        }
+      }
+
+      // Size wobble when fat
+      if (player.fatTimer > 0) {
+        player.squashScale *= 1 + Math.sin(this.state.timeElapsed * 6) * 0.05;
+      }
+
+      // Expressions
+      if (player.invincibleTimer > 0) {
+        player.expression = 'dizzy';
+      } else if (player.vy > 400) {
+        player.expression = 'scared';
+      } else {
+        // Check for nearby enemy
+        let angry = false;
+        for (const other of this.state.players) {
+          if (other.id === player.id || !other.active || other.state === 'splat' || other.state === 'respawning') continue;
+          const dx = Math.abs((other.x + other.width / 2) - (player.x + player.width / 2));
+          const dy = Math.abs((other.y + other.height / 2) - (player.y + player.height / 2));
+          if (dx < 80 && dy < 60) { angry = true; break; }
+        }
+        player.expression = angry ? 'angry' : 'normal';
+      }
+
+      // Idle animations
+      if (player.state === 'idle') {
+        player.idleAnimTimer += dt;
+        if (player.idleAnimTimer >= IDLE_ANIM_INTERVAL) {
+          player.idleAnimTimer = 0;
+        }
+      } else {
+        player.idleAnimTimer = 0;
+      }
+
+      // Afterimages
+      const speed = Math.max(Math.abs(player.vx), Math.abs(player.vy));
+      const spawnAfterimage = speed > AFTERIMAGE_SPEED_THRESHOLD || player.invincibleTimer > 0;
+      if (spawnAfterimage) {
+        let acc = this.afterimageAccumulators.get(player.id) || 0;
+        acc += dt;
+        while (acc >= AFTERIMAGE_INTERVAL) {
+          acc -= AFTERIMAGE_INTERVAL;
+          if (player.afterimages.length < AFTERIMAGE_MAX) {
+            player.afterimages.push({ x: player.x, y: player.y, facing: player.facing, alpha: 1 });
+          }
+        }
+        this.afterimageAccumulators.set(player.id, acc);
+      } else {
+        this.afterimageAccumulators.set(player.id, 0);
+      }
+      // Decay afterimage alpha
+      for (let i = player.afterimages.length - 1; i >= 0; i--) {
+        player.afterimages[i].alpha -= dt * 4;
+        if (player.afterimages[i].alpha <= 0) player.afterimages.splice(i, 1);
+      }
+
+      // Footstep sounds
+      if (player.state === 'run') {
+        let fAcc = this.footstepAccumulators.get(player.id) || 0;
+        fAcc += dt;
+        if (fAcc >= 0.15) {
+          fAcc -= 0.15;
+          const playerBottom = player.y + player.height;
+          audio.play(playerBottom > 600 ? 'footstep_grass' : 'footstep_wood');
+        }
+        this.footstepAccumulators.set(player.id, fAcc);
+      } else {
+        this.footstepAccumulators.set(player.id, 0);
+      }
+
+      // Stats: airborne time
+      if (player.state === 'airborne') {
+        const ps = this.state.stats.perPlayer.get(player.id);
+        if (ps) ps.timeAirborne += dt;
+      }
+      // Stats: distance traveled
+      {
+        const ps = this.state.stats.perPlayer.get(player.id);
+        if (ps) ps.distanceTraveled += (Math.abs(player.vx) * dt + Math.abs(player.vy) * dt);
+      }
 
       // Spring collision (only fully grown)
       for (const spring of this.state.springs) {
@@ -474,6 +675,9 @@ export class GameLoop {
           player.fatTimer = FAT_DURATION;
           audio.play('select');
           audio.play(player.character.name.toLowerCase() as any);
+          // Stats: carrots eaten
+          const ps = this.state.stats.perPlayer.get(player.id);
+          if (ps) ps.carrotsEaten += 1;
         }
       }
     }
@@ -494,15 +698,36 @@ export class GameLoop {
 
     for (const entry of killFeedEntries) {
       const attacker = this.state.players.find(p => p.id === entry.attacker);
-      if (attacker) audio.play(attacker.character.name.toLowerCase() as any);
+      if (attacker) {
+        audio.play(attacker.character.name.toLowerCase() as any);
+        // Stats: kill streak
+        attacker.killStreak += 1;
+        const aps = this.state.stats.perPlayer.get(attacker.id);
+        if (aps && attacker.killStreak > aps.bestStreak) aps.bestStreak = attacker.killStreak;
+      }
       const victim = this.state.players.find(p => p.id === entry.victim);
-      if (victim) this.spawnKillSplatter(victim);
+      if (victim) {
+        this.spawnKillSplatter(victim);
+        // Stats: reset kill streak on death
+        victim.killStreak = 0;
+      }
     }
     if (killFeedEntries.length > 0) this.state.killFeed.push(...killFeedEntries);
 
     collidePlayersHorizontal(this.state.players);
     updateSplatTimers(this.state.players, this.arena.spawnPoints, dt);
     this.updateParticles(dt);
+
+    // Crowd cheering: ramp up volume near end of match
+    const leadScore = Math.max(...this.state.players.filter(p => p.active).map(p => p.score));
+    if (leadScore >= this.settings.killLimit - 1) {
+      audio.setVolume('crowd', 0.3);
+    } else if (leadScore >= this.settings.killLimit - 3) {
+      audio.setVolume('crowd', 0.15);
+    } else {
+      audio.setVolume('crowd', 0);
+    }
+
     this.checkMatchEnd();
   }
 
