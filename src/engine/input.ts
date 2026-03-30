@@ -28,18 +28,24 @@ export class InputManager {
     this.jumpPressed.clear();
   }
 
+  private normalizeKey(key: string): string {
+    // Arrow keys stay as-is, letters become lowercase so CapsLock doesn't matter
+    return key.length === 1 ? key.toLowerCase() : key;
+  }
+
   private handleKeyDown(e: KeyboardEvent): void {
     e.preventDefault();
-    this.keys.add(e.key);
+    this.keys.add(this.normalizeKey(e.key));
   }
 
   private handleKeyUp(e: KeyboardEvent): void {
     e.preventDefault();
-    this.keys.delete(e.key);
+    this.keys.delete(this.normalizeKey(e.key));
 
     // Reset jump pressed state when jump key is released
+    const normalized = this.normalizeKey(e.key);
     for (const [slot, bindings] of Object.entries(KEY_BINDINGS)) {
-      if (e.key === bindings.jump) {
+      if (normalized === bindings.jump) {
         this.jumpPressed.set(slot as CharacterSlot, false);
       }
     }
