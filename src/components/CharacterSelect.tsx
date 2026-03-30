@@ -202,7 +202,9 @@ export function CharacterSelect() {
         }
       }
 
-      // Player-player horizontal collision
+      // No side collisions in lobby — players walk through each other freely
+      // Only stomp detection above handles character interaction
+      if (false) { // disabled — kept for reference
       for (let i = 0; i < allLobby.length; i++) {
         if (allLobby[i].splatTimer > 0) continue;
         for (let j = i + 1; j < allLobby.length; j++) {
@@ -225,6 +227,7 @@ export function CharacterSelect() {
           }
         }
       }
+      } // end disabled collision block
 
       // Ready zone check
       const inZone = playersRef.current.filter(p => p.x + PLAYER_WIDTH > READY_ZONE_X && p.splatTimer <= 0);
