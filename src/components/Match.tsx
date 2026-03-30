@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState, useCallback } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { GameLoop } from '../engine/gameLoop';
 import { getArena } from '../engine/arena';
@@ -9,7 +9,40 @@ export function Match() {
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
   const fgCanvasRef = useRef<HTMLCanvasElement>(null);
   const gameLoopRef = useRef<GameLoop | null>(null);
-  const { activePlayers, matchSettings, setMatchResult } = useGameStore();
+  const { activePlayers, matchSettings, setMatchResult, setScreen, setActivePlayers } = useGameStore();
+  const [paused, setPaused] = useState(false);
+
+  const handleResume = useCallback(() => {
+    gameLoopRef.current?.resume();
+    setPaused(false);
+  }, []);
+
+  const handleQuit = useCallback(() => {
+    gameLoopRef.current?.stop();
+    gameLoopRef.current = null;
+    setActivePlayers([]);
+    setScreen('menu');
+  }, [setActivePlayers, setScreen]);
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        const loop = gameLoopRef.current;
+        if (!loop) return;
+
+        if (loop.isPaused()) {
+          handleResume();
+        } else {
+          loop.pause();
+          setPaused(true);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [handleResume]);
 
   useEffect(() => {
     const bgCanvas = bgCanvasRef.current;
@@ -24,7 +57,6 @@ export function Match() {
       matchSettings,
       activePlayers,
       (winner, state) => {
-        // Small delay so victory sound can play
         setTimeout(() => {
           setMatchResult(winner, state);
         }, 1500);
@@ -56,6 +88,20 @@ export function Match() {
           height={CANVAS_HEIGHT}
           data-testid="game-canvas"
         />
+        {paused && (
+          <div className="pause-overlay" data-testid="pause-menu">
+            <div className="pause-box">
+              <h2 className="pause-title">Paused</h2>
+              <button className="pause-btn resume-btn" onClick={handleResume} data-testid="resume-button">
+                Resume
+              </button>
+              <button className="pause-btn quit-btn" onClick={handleQuit} data-testid="quit-button">
+                Quit to Menu
+              </button>
+              <p className="pause-hint">Press ESC to resume</p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

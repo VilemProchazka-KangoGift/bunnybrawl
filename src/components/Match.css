@@ -24,3 +24,80 @@
 .fg-canvas {
   z-index: 2;
 }
+
+.pause-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(3px);
+}
+
+.pause-box {
+  background: rgba(20, 10, 40, 0.95);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 16px;
+  padding: 40px 60px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.pause-title {
+  color: #FFD700;
+  font-size: 36px;
+  margin: 0 0 30px;
+  text-shadow: 2px 2px 0 rgba(0,0,0,0.5);
+}
+
+.pause-btn {
+  display: block;
+  width: 220px;
+  margin: 12px auto;
+  padding: 14px 24px;
+  font-size: 18px;
+  font-weight: bold;
+  border-radius: 10px;
+  border: 2px solid;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s;
+  font-family: inherit;
+}
+
+.pause-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.pause-btn:active {
+  transform: scale(0.98);
+}
+
+.resume-btn {
+  background: linear-gradient(180deg, #4CAF50, #388E3C);
+  border-color: #4CAF50;
+  color: #FFF;
+  text-shadow: 1px 1px 0 rgba(0,0,0,0.3);
+}
+
+.quit-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #FFF;
+}
+
+.quit-btn:hover {
+  background: rgba(255, 80, 80, 0.3);
+  border-color: rgba(255, 80, 80, 0.5);
+}
+
+.pause-hint {
+  margin-top: 20px;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 13px;
+}

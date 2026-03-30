@@ -25,6 +25,7 @@ export class GameLoop {
   private accumulator = 0;
   private rafId = 0;
   private running = false;
+  private paused = false;
   private newSplatsSinceRender: number[] = [];
   private particles: Particle[] = [];
 
@@ -95,8 +96,31 @@ export class GameLoop {
     return this.state;
   }
 
+  pause(): void {
+    this.paused = true;
+    audio.stop('music');
+  }
+
+  resume(): void {
+    this.paused = false;
+    this.lastTime = performance.now();
+    audio.play('music');
+  }
+
+  isPaused(): boolean {
+    return this.paused;
+  }
+
   private loop = (currentTime: number): void => {
     if (!this.running) return;
+
+    if (this.paused) {
+      // Keep RAF alive but don't update game
+      this.lastTime = currentTime;
+      this.renderer.renderFrame(this.state, this.arena, this.particles);
+      this.rafId = requestAnimationFrame(this.loop);
+      return;
+    }
 
     let frameTime = (currentTime - this.lastTime) / 1000;
     this.lastTime = currentTime;

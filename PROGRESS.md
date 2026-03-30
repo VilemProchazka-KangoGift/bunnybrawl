@@ -1,58 +1,34 @@
 # BunnyBrawl — Progress Log
 
+## Session 2 — 2026-03-30
+
+### New Features
+- Fast-fall: press down for instant downward snap (500px/s) + 2.67x gravity
+- Jump'n'Bump style lobby: walk characters right to join, countdown starts
+- Nature decorations: trees, bushes, flowers, mushrooms on ground and platforms
+- Animated clouds drifting across the sky
+- Dust particles: landing impacts (scales with speed), running trails, wall/ceiling bumps
+- Player-player collision: rabbits push each other horizontally
+- Pause menu: ESC during match shows Resume/Quit overlay
+- Down key bindings: P1=S, P2=ArrowDown, P3=K, P4=G
+
 ## Session 1 — 2026-03-30
 
-### Status: COMPLETE
-
-### Completed
-- [x] Project setup (Vite + React + TypeScript)
-- [x] Game engine core (game loop, physics, collision)
-- [x] Arena/level system (Meadow with 8 platforms, 6 spawn points)
-- [x] Character system (Bunny, Fox, Frog, Bear — procedural sprites)
-- [x] Input handling (4-player shared keyboard)
-- [x] Stomp/splat system (detection, persistent marks, respawn)
-- [x] Match management (scoring, kill limit, timer, kill feed)
-- [x] Screens (Main Menu, Character Select, Match HUD, Victory)
-- [x] Audio system (procedural: jump, stomp, victory SFX + music loop)
-- [x] Visual assets (procedural canvas sprites for all characters)
-- [x] Unit tests (87 tests passing — physics, stomp, input, arena, characters, store, components)
-- [x] Integration tests (component rendering, store transitions, player interactions)
-- [x] E2E tests (14 Playwright tests — full game flow, navigation, settings)
-- [x] Build verification (TypeScript clean, Vite build succeeds)
-
-### Test Summary
-- **87 unit/integration tests** (Vitest) — all passing
-- **14 E2E tests** (Playwright/Chromium) — all passing
-- **101 total tests**
+### Initial Build — COMPLETE
+- [x] Vite + React + TypeScript project
+- [x] Game engine: physics, AABB collision, horizontal wrapping
+- [x] 4 characters: Bunny, Fox, Frog, Bear with procedural sprites
+- [x] Meadow arena with 9 platforms
+- [x] Stomp/splat system with persistent marks
+- [x] Match management (kill/time limits, scoring, kill feed)
+- [x] All screens: Menu, Lobby, Match, Victory
+- [x] Procedural audio: jump, stomp, victory SFX + music loop
+- [x] 90 unit/integration tests + 6 E2E tests (96 total)
 
 ### Architecture
 ```
-src/
-├── engine/          # Game engine (pure logic, no React)
-│   ├── types.ts     # All type definitions
-│   ├── constants.ts # Physics and game constants
-│   ├── physics.ts   # Movement, gravity, collision, wrapping
-│   ├── stomp.ts     # Stomp detection, splat marks, respawn
-│   ├── input.ts     # 4-player keyboard input manager
-│   ├── arena.ts     # Meadow arena layout
-│   ├── characters.ts# Character definitions (Bunny, Fox, Frog, Bear)
-│   ├── renderer.ts  # Canvas rendering (two layers: bg + fg)
-│   ├── audio.ts     # Procedural audio generation via Howler.js
-│   ├── gameLoop.ts  # Main game loop with fixed timestep
-│   └── index.ts     # Public API
-├── components/      # React components (menus/HUD)
-│   ├── MainMenu.tsx
-│   ├── CharacterSelect.tsx
-│   ├── Match.tsx
-│   └── VictoryScreen.tsx
-├── store/           # Zustand game store
-│   └── gameStore.ts
-└── App.tsx          # Root component with screen routing
+src/engine/  — Pure game logic (physics, stomp, input, arena, characters, renderer, audio, gameLoop)
+src/components/ — React screens (MainMenu, CharacterSelect/Lobby, Match, VictoryScreen)
+src/store/   — Zustand game store
+e2e/         — Playwright E2E tests
 ```
-
-### Key Decisions
-- All audio generated procedurally (no external asset dependencies)
-- All character sprites rendered via Canvas 2D (no sprite sheet files)
-- Two-layer canvas: background (static + splat marks) + foreground (players + HUD)
-- Fixed 60fps timestep with accumulator pattern
-- Jump is single-press (consumed on read, re-enabled on key release)
