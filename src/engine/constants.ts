@@ -36,7 +36,7 @@ export const RUN_FRAMES = 4;
 
 // Carrot
 export const CARROT_SPAWN_INTERVAL = 10; // seconds between carrot spawns
-export const CARROT_SIZE = 20; // px
+export const CARROT_SIZE = 30; // px (bigger sideways carrot)
 export const FAT_DURATION = 10; // seconds
 export const FAT_SCALE = 1.4; // size multiplier when fat
 export const FAT_SPEED_MULT = 0.6; // speed multiplier when fat
@@ -50,3 +50,18 @@ export const SPRING_SIZE = 20; // px
 export const THORN_SLOW_DURATION = 5; // seconds
 export const THORN_SPEED_MULT = 0.5; // speed while slowed
 export const THORN_JUMP_MULT = 0.7; // jump while slowed
+
+// Hazard spawning
+export const SPRING_SPAWN_INTERVAL = 12; // seconds between spring spawns
+export const THORN_SPAWN_INTERVAL = 15; // seconds between thorn spawns
+export const HAZARD_LIFETIME = 20; // seconds before despawn
+export const HAZARD_GROW_TIME = 0.5; // seconds for grow-in animation
+
+// Screen effects
+export const SCREEN_SHAKE_DURATION = 0.3; // seconds
+export const SCREEN_SHAKE_INTENSITY = 6; // pixels
+export const SLOW_MO_DURATION = 1.0; // seconds for final kill slow-mo
+export const SLOW_MO_FACTOR = 0.25; // time scale during slow-mo
+
+// Weather
+export const WEATHER_PARTICLE_COUNT = 30;

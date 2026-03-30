@@ -1,8 +1,8 @@
-import type { Arena, Player, SplatMark, MatchState, Particle, Platform, Carrot, SpringMushroom, Thorn } from './types';
-import { CARROT_SIZE, SPRING_SIZE, FAT_SCALE } from './constants';
+import type { Arena, Player, SplatMark, MatchState, Particle, Platform, Carrot, SpringMushroom, Thorn, WeatherParticle } from './types';
 import { CHARACTERS } from './characters';
 import {
-  CANVAS_WIDTH, CANVAS_HEIGHT,
+  CANVAS_WIDTH, CANVAS_HEIGHT, CARROT_SIZE, SPRING_SIZE, FAT_SCALE,
+  SCREEN_SHAKE_INTENSITY, HAZARD_GROW_TIME,
 } from './constants';
 
 interface Cloud {
@@ -292,13 +292,69 @@ export class Renderer {
 
   // ---- Splat marks ----
 
-  renderSplatMarks(splatMarks: SplatMark[]): void {
+  renderSplatMarks(splatMarks: SplatMark[], goreMode: boolean): void {
     const ctx = this.bgCtx;
     for (const splat of splatMarks) {
-      ctx.fillStyle = splat.color + '88';
+      const color = goreMode ? '#CC222288' : splat.color + '88';
+      ctx.fillStyle = color;
+
+      // Shape-specific main mark
       ctx.beginPath();
-      ctx.arc(splat.x, splat.y, splat.radius, 0, Math.PI * 2);
+      switch (splat.shape) {
+        case 'star': {
+          const r = splat.radius;
+          for (let i = 0; i < 5; i++) {
+            const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
+            const aInner = a + Math.PI / 5;
+            ctx.lineTo(splat.x + Math.cos(a) * r, splat.y + Math.sin(a) * r);
+            ctx.lineTo(splat.x + Math.cos(aInner) * r * 0.4, splat.y + Math.sin(aInner) * r * 0.4);
+          }
+          ctx.closePath();
+          break;
+        }
+        case 'ring':
+          ctx.arc(splat.x, splat.y, splat.radius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = 'rgba(0,0,0,0)';
+          ctx.globalCompositeOperation = 'destination-out';
+          ctx.beginPath();
+          ctx.arc(splat.x, splat.y, splat.radius * 0.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.fillStyle = color;
+          ctx.beginPath(); // dummy to skip main fill below
+          break;
+        case 'paw': {
+          // Main pad
+          ctx.ellipse(splat.x, splat.y, splat.radius * 0.6, splat.radius * 0.5, 0, 0, Math.PI * 2);
+          ctx.fill();
+          // Toe beans
+          for (let i = -1; i <= 1; i++) {
+            ctx.beginPath();
+            ctx.arc(splat.x + i * splat.radius * 0.4, splat.y - splat.radius * 0.5, splat.radius * 0.25, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.beginPath();
+          break;
+        }
+        case 'splat': {
+          // Irregular blob
+          const points = 8;
+          for (let i = 0; i < points; i++) {
+            const a = (i / points) * Math.PI * 2;
+            const r = splat.radius * (0.6 + Math.random() * 0.8);
+            if (i === 0) ctx.moveTo(splat.x + Math.cos(a) * r, splat.y + Math.sin(a) * r);
+            else ctx.lineTo(splat.x + Math.cos(a) * r, splat.y + Math.sin(a) * r);
+          }
+          ctx.closePath();
+          break;
+        }
+        default:
+          ctx.arc(splat.x, splat.y, splat.radius, 0, Math.PI * 2);
+      }
       ctx.fill();
+
+      // Droplet particles
       for (const p of splat.particles) {
         ctx.beginPath();
         ctx.arc(splat.x + p.x, splat.y + p.y, p.radius, 0, Math.PI * 2);
@@ -313,29 +369,39 @@ export class Renderer {
     const ctx = this.fgCtx;
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
+    ctx.save();
+
+    // Screen shake offset
+    if (matchState.screenShake > 0) {
+      const intensity = SCREEN_SHAKE_INTENSITY * (matchState.screenShake / 0.3);
+      ctx.translate(
+        (Math.random() - 0.5) * intensity * 2,
+        (Math.random() - 0.5) * intensity * 2,
+      );
+    }
+
     // Animated clouds
     const now = performance.now() / 1000;
     const dt = now - (this.lastCloudTime || now);
     this.lastCloudTime = now;
     this.updateAndDrawClouds(ctx, dt);
 
-    // Draw springs and thorns (behind players)
-    for (const spring of matchState.springs) {
-      this.drawSpringMushroom(ctx, spring);
-    }
-    for (const thorn of matchState.thorns) {
-      this.drawThorn(ctx, thorn);
-    }
+    // Weather (leaves, petals)
+    this.drawWeather(ctx, matchState.weather);
 
-    // Draw carrots
+    // Springs and thorns (behind players)
+    for (const spring of matchState.springs) this.drawSpringMushroom(ctx, spring);
+    for (const thorn of matchState.thorns) this.drawThorn(ctx, thorn);
+
+    // Carrots
     for (const carrot of matchState.carrots) {
-      if (carrot.active) this.drawCarrot(ctx, carrot);
+      if (carrot.active) this.drawCarrot(ctx, carrot, matchState.timeElapsed);
     }
 
-    // Render particles (dust + splatter)
+    // Particles
     this.drawParticles(ctx, particles);
 
-    // Render players
+    // Players
     for (const player of matchState.players) {
       if (!player.active) continue;
       if (player.state === 'respawning') continue;
@@ -345,70 +411,125 @@ export class Renderer {
     // Foreground nature
     this.drawForegroundNature(ctx, arena);
 
-    // HUD
+    ctx.restore();
+
+    // HUD (not affected by shake)
     this.drawHUD(ctx, matchState);
+  }
+
+  // ---- Weather ----
+
+  private drawWeather(ctx: CanvasRenderingContext2D, weather: WeatherParticle[]): void {
+    for (const w of weather) {
+      ctx.save();
+      ctx.translate(w.x, w.y);
+      ctx.rotate(w.rotation);
+      if (w.type === 'leaf') {
+        ctx.fillStyle = 'rgba(90, 160, 60, 0.4)';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, w.size, w.size * 0.4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Vein
+        ctx.strokeStyle = 'rgba(60, 120, 40, 0.3)';
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(-w.size * 0.7, 0);
+        ctx.lineTo(w.size * 0.7, 0);
+        ctx.stroke();
+      } else {
+        // Petal
+        ctx.fillStyle = 'rgba(255, 180, 200, 0.35)';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, w.size, w.size * 0.6, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
   }
 
   // ---- Game objects ----
 
-  private drawCarrot(ctx: CanvasRenderingContext2D, carrot: Carrot): void {
+  private drawCarrot(ctx: CanvasRenderingContext2D, carrot: Carrot, timeElapsed: number): void {
     const x = carrot.x;
     const y = carrot.y;
     const bob = Math.sin(performance.now() / 300) * 3;
+    const age = timeElapsed - carrot.spawnTime;
 
-    // Carrot body
+    // Spawn glow ring (fades over 2 seconds)
+    if (age < 2) {
+      const ring = 1 - age / 2;
+      ctx.strokeStyle = `rgba(255, 200, 50, ${ring * 0.6})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x, y + CARROT_SIZE / 2 + bob, 20 + age * 20, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    ctx.save();
+    ctx.translate(x, y + CARROT_SIZE / 2 + bob);
+    ctx.rotate(-0.3); // tilted sideways
+
+    const hw = CARROT_SIZE * 0.35;
+    const hh = CARROT_SIZE * 0.65;
+
+    // Carrot body (big, sideways)
     ctx.fillStyle = '#FF8C00';
     ctx.beginPath();
-    ctx.moveTo(x, y + CARROT_SIZE + bob);
-    ctx.lineTo(x - 6, y + 4 + bob);
-    ctx.quadraticCurveTo(x, y + bob, x + 6, y + 4 + bob);
-    ctx.closePath();
+    ctx.moveTo(hh, 0);
+    ctx.quadraticCurveTo(hh * 0.3, -hw, -hh * 0.3, -hw * 0.7);
+    ctx.quadraticCurveTo(-hh, 0, -hh * 0.3, hw * 0.7);
+    ctx.quadraticCurveTo(hh * 0.3, hw, hh, 0);
     ctx.fill();
 
     // Stripes
     ctx.strokeStyle = '#E07000';
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(x - 3, y + 8 + bob);
-    ctx.lineTo(x + 3, y + 8 + bob);
-    ctx.moveTo(x - 4, y + 12 + bob);
-    ctx.lineTo(x + 4, y + 12 + bob);
+    ctx.moveTo(hh * 0.2, -hw * 0.5);
+    ctx.lineTo(hh * 0.2, hw * 0.5);
+    ctx.moveTo(-hh * 0.15, -hw * 0.4);
+    ctx.lineTo(-hh * 0.15, hw * 0.4);
     ctx.stroke();
 
-    // Green top
+    // Green top (left side)
     ctx.fillStyle = '#228B22';
     ctx.beginPath();
-    ctx.ellipse(x - 3, y + 3 + bob, 3, 6, -0.4, 0, Math.PI * 2);
+    ctx.ellipse(-hh * 0.6, -3, 4, 8, -0.5, 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
-    ctx.ellipse(x + 3, y + 3 + bob, 3, 6, 0.4, 0, Math.PI * 2);
+    ctx.ellipse(-hh * 0.6, 3, 4, 7, 0.3, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = '#2EA52E';
     ctx.beginPath();
-    ctx.ellipse(x, y + 2 + bob, 2, 5, 0, 0, Math.PI * 2);
+    ctx.ellipse(-hh * 0.7, 0, 3, 6, 0, 0, Math.PI * 2);
     ctx.fill();
 
+    ctx.restore();
+
     // Sparkle
-    ctx.fillStyle = 'rgba(255,255,200,0.8)';
     const sparkle = Math.sin(performance.now() / 200) * 0.5 + 0.5;
-    ctx.globalAlpha = sparkle;
+    ctx.fillStyle = `rgba(255,255,200,${sparkle * 0.8})`;
     ctx.beginPath();
-    ctx.arc(x + 4, y + 6 + bob, 2, 0, Math.PI * 2);
+    ctx.arc(x + 8, y + 4 + bob, 2.5, 0, Math.PI * 2);
     ctx.fill();
-    ctx.globalAlpha = 1;
   }
 
   private drawSpringMushroom(ctx: CanvasRenderingContext2D, spring: SpringMushroom): void {
     const x = spring.x;
     const y = spring.y;
     const squash = spring.bounceTimer > 0 ? Math.sin(spring.bounceTimer * 20) * 5 : 0;
-    const s = SPRING_SIZE * 1.4; // bigger
+    const s = SPRING_SIZE * 1.4;
 
-    // Glow
-    ctx.fillStyle = 'rgba(100, 255, 100, 0.15)';
-    ctx.beginPath();
-    ctx.arc(x, y - s * 0.5, s * 1.2, 0, Math.PI * 2);
-    ctx.fill();
+    // Grow animation
+    const growScale = spring.growTimer > 0 ? 1 - (spring.growTimer / HAZARD_GROW_TIME) : 1;
+    // Fade out when about to die
+    const fadeAlpha = spring.life < 2 ? spring.life / 2 : 1;
+
+    ctx.save();
+    ctx.globalAlpha = fadeAlpha;
+    ctx.translate(x, y);
+    ctx.scale(growScale, growScale);
+    ctx.translate(-x, -y);
 
     // Stem
     ctx.fillStyle = '#F5F0E0';
@@ -449,21 +570,21 @@ export class Renderer {
     ctx.arc(x, y - s * 0.9 + squash, 2.5, 0, Math.PI * 2);
     ctx.fill();
 
-    // Up arrow indicator
-    ctx.fillStyle = 'rgba(255,255,255,0.6)';
-    ctx.font = 'bold 14px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('\u2191', x, y - s - 2 + squash);
+    ctx.restore();
   }
 
   private drawThorn(ctx: CanvasRenderingContext2D, thorn: Thorn): void {
     const { x, y, width, height } = thorn;
 
-    // Warning glow
-    ctx.fillStyle = 'rgba(255, 50, 50, 0.1)';
-    ctx.beginPath();
-    ctx.ellipse(x + width / 2, y + height / 2, width * 0.8, height * 1.5, 0, 0, Math.PI * 2);
-    ctx.fill();
+    // Grow animation
+    const growScale = thorn.growTimer > 0 ? 1 - (thorn.growTimer / HAZARD_GROW_TIME) : 1;
+    const fadeAlpha = thorn.life < 2 ? thorn.life / 2 : 1;
+
+    ctx.save();
+    ctx.globalAlpha = fadeAlpha;
+    ctx.translate(x + width / 2, y + height);
+    ctx.scale(growScale, growScale);
+    ctx.translate(-(x + width / 2), -(y + height));
 
     // Vine base
     ctx.fillStyle = '#3A5C1E';
@@ -474,19 +595,19 @@ export class Renderer {
     for (let i = 0; i < spikeCount; i++) {
       const sx = x + 4 + i * (width / spikeCount);
       const spikeH = height + 4 + (i % 2) * 3;
-      // Dark spike
       ctx.fillStyle = '#5C3A1E';
       ctx.beginPath();
       ctx.moveTo(sx - 4, y + height - 4);
       ctx.lineTo(sx, y + height - spikeH);
       ctx.lineTo(sx + 4, y + height - 4);
       ctx.fill();
-      // Red tip
       ctx.fillStyle = '#DD2222';
       ctx.beginPath();
       ctx.arc(sx, y + height - spikeH + 1, 2, 0, Math.PI * 2);
       ctx.fill();
     }
+
+    ctx.restore();
   }
 
   // ---- Foreground nature (drawn over players) ----

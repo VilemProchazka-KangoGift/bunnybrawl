@@ -1,4 +1,4 @@
-import type { Player, SplatMark, KillFeedEntry, SpawnPoint } from './types';
+import type { Player, SplatMark, KillFeedEntry, SpawnPoint, SplatShape } from './types';
 import {
   STOMP_VY_THRESHOLD, STOMP_BOUNCE, SPLAT_DURATION,
   RESPAWN_DELAY, INVINCIBLE_DURATION,
@@ -64,6 +64,14 @@ export function isStomping(attacker: Player, victim: Player): boolean {
   return overlap > 0 && overlap < victim.height * 0.5;
 }
 
+const CHARACTER_SPLAT_SHAPES: Record<string, SplatShape> = {
+  Bunny: 'paw',
+  Fox: 'star',
+  Frog: 'splat',
+  Bear: 'circle',
+  Owl: 'ring',
+};
+
 export function createSplatMark(victim: Player): SplatMark {
   const particles: Array<{ x: number; y: number; radius: number }> = [];
   const numParticles = 5 + Math.floor(Math.random() * 6);
@@ -81,6 +89,7 @@ export function createSplatMark(victim: Player): SplatMark {
     y: victim.y + victim.height / 2,
     radius: 15 + Math.random() * 10,
     color: victim.character.color,
+    shape: CHARACTER_SPLAT_SHAPES[victim.character.name] ?? 'circle',
     particles,
   };
 }

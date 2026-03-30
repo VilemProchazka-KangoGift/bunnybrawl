@@ -66,15 +66,18 @@ export interface Player {
   animFrame: number;
   animTimer: number;
   fastFalling: boolean;
-  fatTimer: number;    // > 0 = fat from carrot or thorn debuff
-  slowTimer: number;   // > 0 = slowed (thorn effect, no size change)
+  fatTimer: number;
+  slowTimer: number;
 }
+
+export type SplatShape = 'circle' | 'star' | 'splat' | 'ring' | 'paw';
 
 export interface SplatMark {
   x: number;
   y: number;
   radius: number;
   color: string;
+  shape: SplatShape;
   particles: Array<{ x: number; y: number; radius: number }>;
 }
 
@@ -115,7 +118,7 @@ export interface MatchSettings {
   killLimit: number;
   timeLimit: number; // seconds, 0 = off
   playerCount: number;
-  goreMode: boolean; // true = blood, false = confetti
+  goreMode: boolean;
 }
 
 // Pickups and hazards
@@ -123,13 +126,16 @@ export interface Carrot {
   x: number;
   y: number;
   active: boolean;
+  spawnTime: number; // for spawn VFX
 }
 
 export interface SpringMushroom {
   x: number;
   y: number;
-  platformIndex: number; // which platform it sits on
-  bounceTimer: number;   // visual animation when triggered
+  platformIndex: number;
+  bounceTimer: number;
+  life: number;    // time remaining before despawn
+  growTimer: number; // grow-in animation (starts at ~0.5, counts down)
 }
 
 export interface Thorn {
@@ -138,6 +144,8 @@ export interface Thorn {
   width: number;
   height: number;
   platformIndex: number;
+  life: number;
+  growTimer: number;
 }
 
 export interface MatchState {
@@ -151,4 +159,20 @@ export interface MatchState {
   carrotTimer: number;
   springs: SpringMushroom[];
   thorns: Thorn[];
+  springSpawnTimer: number;
+  thornSpawnTimer: number;
+  screenShake: number; // remaining shake time
+  slowMotion: number;  // remaining slow-mo time
+  weather: WeatherParticle[];
+}
+
+export interface WeatherParticle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  size: number;
+  type: 'leaf' | 'petal';
+  rotation: number;
+  rotSpeed: number;
 }
