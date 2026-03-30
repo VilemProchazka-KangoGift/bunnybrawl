@@ -3,10 +3,10 @@ export const GRAVITY = 900; // px/s²
 export const MAX_WALK_SPEED = 280; // px/s
 export const ACCELERATION = 1400; // px/s²
 export const FRICTION = 800; // px/s² (deceleration when no input)
-export const JUMP_IMPULSE = -420; // px/s (negative = upward)
+export const JUMP_IMPULSE = -560; // px/s (negative = upward) → ~174px max jump height
 export const MAX_FALL_SPEED = 600; // px/s
 export const STOMP_VY_THRESHOLD = 50; // minimum downward velocity for stomp
-export const STOMP_BOUNCE = -300; // upward bounce after stomp
+export const STOMP_BOUNCE = -400; // upward bounce after stomp
 
 // Player dimensions
 export const PLAYER_WIDTH = 32;
