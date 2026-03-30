@@ -1071,51 +1071,87 @@ export class Renderer {
       ctx.ellipse(cx - w * 0.3, yOff + h * 0.45 - wingFlap, 6, 10, -0.3, 0, Math.PI * 2);
       ctx.fill();
     } else if (char.name === 'Cat') {
-      // Cat: sleek body, pointed ears, whiskers
-      ctx.ellipse(cx, yOff + h * 0.55, w * 0.38, h * 0.38, 0, 0, Math.PI * 2);
+      // Cat: rounder wider body, tall upright triangular ears, whiskers, upright tail
+      ctx.ellipse(cx, yOff + h * 0.55, w * 0.42, h * 0.36, 0, 0, Math.PI * 2);
       ctx.fill();
-      // Pointed ears
+      // Tall upright triangular ears (much taller/narrower than fox)
+      ctx.beginPath();
+      ctx.moveTo(cx - 9, yOff + 10);
+      ctx.lineTo(cx - 7, yOff - 8);
+      ctx.lineTo(cx - 2, yOff + 8);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(cx + 9, yOff + 10);
+      ctx.lineTo(cx + 7, yOff - 8);
+      ctx.lineTo(cx + 2, yOff + 8);
+      ctx.closePath();
+      ctx.fill();
+      // Pink inner ears
+      ctx.fillStyle = '#FF9AAA';
       ctx.beginPath();
       ctx.moveTo(cx - 8, yOff + 8);
-      ctx.lineTo(cx - 10, yOff - 4);
-      ctx.lineTo(cx - 3, yOff + 6);
+      ctx.lineTo(cx - 7, yOff - 4);
+      ctx.lineTo(cx - 3, yOff + 7);
+      ctx.closePath();
       ctx.fill();
       ctx.beginPath();
       ctx.moveTo(cx + 8, yOff + 8);
-      ctx.lineTo(cx + 10, yOff - 4);
-      ctx.lineTo(cx + 3, yOff + 6);
+      ctx.lineTo(cx + 7, yOff - 4);
+      ctx.lineTo(cx + 3, yOff + 7);
+      ctx.closePath();
       ctx.fill();
-      // Inner ears
-      ctx.fillStyle = '#FFB0C0';
+      // Small pink nose
+      ctx.fillStyle = '#FF8090';
       ctx.beginPath();
-      ctx.moveTo(cx - 7, yOff + 6);
-      ctx.lineTo(cx - 9, yOff - 1);
-      ctx.lineTo(cx - 4, yOff + 5);
+      ctx.arc(cx + 1, yOff + h * 0.48, 2.5, 0, Math.PI * 2);
       ctx.fill();
+      // Mouth lines from nose
+      ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+      ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(cx + 7, yOff + 6);
-      ctx.lineTo(cx + 9, yOff - 1);
-      ctx.lineTo(cx + 4, yOff + 5);
-      ctx.fill();
-      // Tail
-      ctx.strokeStyle = char.color;
-      ctx.lineWidth = 3;
-      const tailWave = Math.sin((animFrame + 1) * Math.PI * 0.5) * 4;
-      ctx.beginPath();
-      ctx.moveTo(cx - w * 0.3, yOff + h * 0.5);
-      ctx.quadraticCurveTo(cx - w * 0.6, yOff + h * 0.2 + tailWave, cx - w * 0.4, yOff + h * 0.05);
+      ctx.moveTo(cx + 1, yOff + h * 0.5);
+      ctx.lineTo(cx - 3, yOff + h * 0.55);
+      ctx.moveTo(cx + 1, yOff + h * 0.5);
+      ctx.lineTo(cx + 5, yOff + h * 0.55);
       ctx.stroke();
-      // Whiskers
-      ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+      // Whiskers (long, distinctive)
+      ctx.strokeStyle = 'rgba(0,0,0,0.35)';
       ctx.lineWidth = 1;
       for (const side of [-1, 1]) {
         for (let wi = -1; wi <= 1; wi++) {
           ctx.beginPath();
-          ctx.moveTo(cx + side * 6, yOff + h * 0.48 + wi * 2);
-          ctx.lineTo(cx + side * 16, yOff + h * 0.46 + wi * 3);
+          ctx.moveTo(cx + side * 7, yOff + h * 0.47 + wi * 2.5);
+          ctx.lineTo(cx + side * 20, yOff + h * 0.44 + wi * 4);
           ctx.stroke();
         }
       }
+      // Upright curved tail (very different from fox's bushy tail)
+      ctx.strokeStyle = char.color;
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'round';
+      const tailCurve = Math.sin((animFrame + 1) * Math.PI * 0.5) * 3;
+      ctx.beginPath();
+      ctx.moveTo(cx - w * 0.3, yOff + h * 0.55);
+      ctx.quadraticCurveTo(cx - w * 0.45, yOff + h * 0.1, cx - w * 0.25 + tailCurve, yOff - h * 0.1);
+      ctx.stroke();
+      ctx.lineCap = 'butt';
+      // Cat eyes (distinctive: almond-shaped, green)
+      ctx.fillStyle = '#90EE60';
+      ctx.beginPath();
+      ctx.ellipse(cx - 5, yOff + h * 0.38, 3.5, 2.5, -0.15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(cx + 5, yOff + h * 0.38, 3.5, 2.5, 0.15, 0, Math.PI * 2);
+      ctx.fill();
+      // Vertical slit pupils
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.ellipse(cx - 4.5, yOff + h * 0.38, 1, 2.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(cx + 5.5, yOff + h * 0.38, 1, 2.5, 0, 0, Math.PI * 2);
+      ctx.fill();
     } else if (char.name === 'Wolf') {
       // Wolf: angular body, pointy snout
       ctx.ellipse(cx, yOff + h * 0.52, w * 0.4, h * 0.4, 0, 0, Math.PI * 2);

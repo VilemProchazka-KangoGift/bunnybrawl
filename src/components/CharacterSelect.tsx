@@ -583,9 +583,25 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
     ctx.beginPath(); ctx.arc(cx - 4.5, yOff + h * 0.36, 2, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(cx + 5.5, yOff + h * 0.36, 2, 0, Math.PI * 2); ctx.fill();
   } else if (char.name === 'Cat') {
-    ctx.ellipse(cx, yOff + h * 0.55, w * 0.38, h * 0.38, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(cx - 8, yOff + 8); ctx.lineTo(cx - 10, yOff - 4); ctx.lineTo(cx - 3, yOff + 6); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(cx + 8, yOff + 8); ctx.lineTo(cx + 10, yOff - 4); ctx.lineTo(cx + 3, yOff + 6); ctx.fill();
+    // Wider rounder body
+    ctx.ellipse(cx, yOff + h * 0.55, w * 0.42, h * 0.36, 0, 0, Math.PI * 2); ctx.fill();
+    // Tall upright ears
+    ctx.beginPath(); ctx.moveTo(cx - 9, yOff + 10); ctx.lineTo(cx - 7, yOff - 8); ctx.lineTo(cx - 2, yOff + 8); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(cx + 9, yOff + 10); ctx.lineTo(cx + 7, yOff - 8); ctx.lineTo(cx + 2, yOff + 8); ctx.closePath(); ctx.fill();
+    // Pink inner ears
+    ctx.fillStyle = '#FF9AAA';
+    ctx.beginPath(); ctx.moveTo(cx - 8, yOff + 8); ctx.lineTo(cx - 7, yOff - 4); ctx.lineTo(cx - 3, yOff + 7); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(cx + 8, yOff + 8); ctx.lineTo(cx + 7, yOff - 4); ctx.lineTo(cx + 3, yOff + 7); ctx.closePath(); ctx.fill();
+    // Pink nose
+    ctx.fillStyle = '#FF8090';
+    ctx.beginPath(); ctx.arc(cx + 1, yOff + h * 0.48, 2, 0, Math.PI * 2); ctx.fill();
+    // Green almond eyes
+    ctx.fillStyle = '#90EE60';
+    ctx.beginPath(); ctx.ellipse(cx - 5, yOff + h * 0.38, 3, 2, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx + 5, yOff + h * 0.38, 3, 2, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#000';
+    ctx.beginPath(); ctx.ellipse(cx - 4.5, yOff + h * 0.38, 1, 2, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx + 5.5, yOff + h * 0.38, 1, 2, 0, 0, Math.PI * 2); ctx.fill();
   } else if (char.name === 'Wolf') {
     ctx.ellipse(cx, yOff + h * 0.52, w * 0.4, h * 0.4, 0, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.moveTo(cx - 9, yOff + 6); ctx.lineTo(cx - 11, yOff - 6); ctx.lineTo(cx - 3, yOff + 4); ctx.fill();
@@ -686,7 +702,7 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
   }
 
   // Generic eyes for characters without custom ones
-  if (!['Frog', 'Owl', 'Panda', 'Cow', 'Goat', 'Sheep', 'Monkey'].includes(char.name)) {
+  if (!['Frog', 'Owl', 'Cat', 'Panda', 'Cow', 'Goat', 'Sheep', 'Monkey'].includes(char.name)) {
     ctx.fillStyle = '#000';
     ctx.beginPath(); ctx.arc(cx - 4, yOff + h * 0.4, 2.5, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(cx + 6, yOff + h * 0.4, 2.5, 0, Math.PI * 2); ctx.fill();
