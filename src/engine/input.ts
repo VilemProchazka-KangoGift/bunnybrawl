@@ -1,0 +1,71 @@
+import type { CharacterSlot, InputState, KeyBindings } from './types';
+
+export const KEY_BINDINGS: Record<CharacterSlot, KeyBindings> = {
+  P1: { left: 'a', right: 'd', jump: 'w' },
+  P2: { left: 'ArrowLeft', right: 'ArrowRight', jump: 'ArrowUp' },
+  P3: { left: 'j', right: 'l', jump: 'i' },
+  P4: { left: 'f', right: 'h', jump: 't' },
+};
+
+export class InputManager {
+  private keys: Set<string> = new Set();
+  private jumpPressed: Map<CharacterSlot, boolean> = new Map();
+
+  constructor() {
+    this.handleKeyDown = this.handleKeyDown.bind(this);
+    this.handleKeyUp = this.handleKeyUp.bind(this);
+  }
+
+  attach(): void {
+    window.addEventListener('keydown', this.handleKeyDown);
+    window.addEventListener('keyup', this.handleKeyUp);
+  }
+
+  detach(): void {
+    window.removeEventListener('keydown', this.handleKeyDown);
+    window.removeEventListener('keyup', this.handleKeyUp);
+    this.keys.clear();
+    this.jumpPressed.clear();
+  }
+
+  private handleKeyDown(e: KeyboardEvent): void {
+    e.preventDefault();
+    this.keys.add(e.key);
+  }
+
+  private handleKeyUp(e: KeyboardEvent): void {
+    e.preventDefault();
+    this.keys.delete(e.key);
+
+    // Reset jump pressed state when jump key is released
+    for (const [slot, bindings] of Object.entries(KEY_BINDINGS)) {
+      if (e.key === bindings.jump) {
+        this.jumpPressed.set(slot as CharacterSlot, false);
+      }
+    }
+  }
+
+  getInput(slot: CharacterSlot): InputState {
+    const bindings = KEY_BINDINGS[slot];
+    const jump = this.keys.has(bindings.jump) && !this.jumpPressed.get(slot);
+
+    // Mark jump as consumed so it's only triggered once per press
+    if (jump) {
+      this.jumpPressed.set(slot, true);
+    }
+
+    return {
+      left: this.keys.has(bindings.left),
+      right: this.keys.has(bindings.right),
+      jump,
+    };
+  }
+
+  isKeyDown(key: string): boolean {
+    return this.keys.has(key);
+  }
+
+  isAnyKeyDown(): boolean {
+    return this.keys.size > 0;
+  }
+}
