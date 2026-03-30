@@ -144,6 +144,9 @@ export function aabbOverlap(
 }
 
 export function collidePlayersHorizontal(players: Player[]): void {
+  // Small inset so sprites visually touch before the wall kicks in
+  const margin = 4;
+
   for (let i = 0; i < players.length; i++) {
     const a = players[i];
     if (!a.active || a.state === 'splat' || a.state === 'respawning') continue;
@@ -152,41 +155,38 @@ export function collidePlayersHorizontal(players: Player[]): void {
       if (!b.active || b.state === 'splat' || b.state === 'respawning') continue;
       if (a.invincibleTimer > 0 || b.invincibleTimer > 0) continue;
 
-      // Use a narrower hitbox for player-player collision (sprites are smaller than AABB)
-      const shrink = a.width * 0.25;
-      const ax = a.x + shrink;
-      const aw = a.width - shrink * 2;
-      const bx = b.x + shrink;
-      const bw = b.width - shrink * 2;
+      // Skip if one is above the other (stomp zone)
+      const vertOverlap = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+      if (vertOverlap < a.height * 0.5) continue;
 
-      if (aabbOverlap(ax, a.y, aw, a.height, bx, b.y, bw, b.height)) {
-        // Skip horizontal push if one is above the other (stomp zone)
-        const aBottom = a.y + a.height;
-        const bBottom = b.y + b.height;
-        const vertOverlap = Math.min(aBottom, bBottom) - Math.max(a.y, b.y);
-        if (vertOverlap < a.height * 0.5) continue;
+      // Check overlap using inset boxes
+      const aLeft = a.x + margin;
+      const aRight = a.x + a.width - margin;
+      const bLeft = b.x + margin;
+      const bRight = b.x + b.width - margin;
 
-        // Horizontal overlap — push apart
+      if (aRight > bLeft && aLeft < bRight) {
+        // Overlapping — hard separate
         const aCx = a.x + a.width / 2;
         const bCx = b.x + b.width / 2;
-        const overlap = (aw / 2 + bw / 2) - Math.abs(aCx - bCx);
+        const halfW = (a.width - margin * 2) / 2 + (b.width - margin * 2) / 2;
+        const dist = Math.abs(aCx - bCx);
+        const overlap = halfW - dist;
 
         if (overlap > 0) {
-          const push = overlap / 2;
-          if (aCx < bCx) {
-            a.x -= push;
-            b.x += push;
-            // Transfer momentum based on relative velocity
-            const relVx = a.vx - b.vx;
-            a.vx -= PLAYER_PUSH_FORCE * Math.sign(relVx || -1) * 0.5;
-            b.vx += PLAYER_PUSH_FORCE * Math.sign(relVx || -1) * 0.5;
+          const half = overlap / 2 + 0.5;
+          if (aCx <= bCx) {
+            a.x -= half;
+            b.x += half;
           } else {
-            a.x += push;
-            b.x -= push;
-            const relVx = a.vx - b.vx;
-            a.vx += PLAYER_PUSH_FORCE * Math.sign(relVx || 1) * 0.5;
-            b.vx -= PLAYER_PUSH_FORCE * Math.sign(relVx || 1) * 0.5;
+            a.x += half;
+            b.x -= half;
           }
+
+          // Velocity exchange: transfer momentum
+          const avgVx = (a.vx + b.vx) / 2;
+          a.vx = avgVx - PLAYER_PUSH_FORCE * (aCx <= bCx ? 0.3 : -0.3);
+          b.vx = avgVx + PLAYER_PUSH_FORCE * (aCx <= bCx ? 0.3 : -0.3);
         }
       }
     }

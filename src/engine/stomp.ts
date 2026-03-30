@@ -104,7 +104,7 @@ export function updateSplatTimers(
     if (player.state === 'respawning') {
       player.respawnTimer -= dt;
       if (player.respawnTimer <= 0) {
-        respawnPlayer(player, spawnPoints);
+        respawnPlayer(player, spawnPoints, players);
       }
     }
 
@@ -114,8 +114,8 @@ export function updateSplatTimers(
   }
 }
 
-export function respawnPlayer(player: Player, spawnPoints: SpawnPoint[]): void {
-  const spawn = spawnPoints[Math.floor(Math.random() * spawnPoints.length)];
+export function respawnPlayer(player: Player, spawnPoints: SpawnPoint[], allPlayers?: Player[]): void {
+  const spawn = pickSafeSpawn(player, spawnPoints, allPlayers);
   player.x = spawn.x - player.width / 2;
   player.y = spawn.y - player.height;
   player.vx = 0;
@@ -125,4 +125,34 @@ export function respawnPlayer(player: Player, spawnPoints: SpawnPoint[]): void {
   player.splatTimer = 0;
   player.respawnTimer = 0;
   player.fastFalling = false;
+}
+
+function pickSafeSpawn(player: Player, spawnPoints: SpawnPoint[], allPlayers?: Player[]): SpawnPoint {
+  if (!allPlayers || allPlayers.length === 0) {
+    return spawnPoints[Math.floor(Math.random() * spawnPoints.length)];
+  }
+
+  const others = allPlayers.filter(
+    p => p !== player && p.active && p.state !== 'splat' && p.state !== 'respawning'
+  );
+
+  // Score each spawn point by distance to nearest player — pick the safest
+  let bestSpawn = spawnPoints[0];
+  let bestMinDist = -1;
+
+  for (const sp of spawnPoints) {
+    let minDist = Infinity;
+    for (const other of others) {
+      const dx = sp.x - (other.x + other.width / 2);
+      const dy = sp.y - (other.y + other.height / 2);
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < minDist) minDist = dist;
+    }
+    if (minDist > bestMinDist) {
+      bestMinDist = minDist;
+      bestSpawn = sp;
+    }
+  }
+
+  return bestSpawn;
 }
