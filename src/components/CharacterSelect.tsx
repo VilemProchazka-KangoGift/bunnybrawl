@@ -14,7 +14,14 @@ const GROUND_Y = 560;
 const LOBBY_GRAVITY = 600;
 const LOBBY_SPEED = 200;
 const LOBBY_JUMP = -400;
+const LOBBY_FAST_FALL = 500;
 const STOMP_VY = 50;
+
+// Wall obstacle at ~2/3 of screen — forces players to jump to reach the ready zone
+const WALL_X = CANVAS_WIDTH * 0.58;
+const WALL_WIDTH = 24;
+const WALL_HEIGHT = 120; // tall enough to require a jump
+const WALL_Y = GROUND_Y - WALL_HEIGHT;
 
 interface LobbyPlayer {
   slot: CharacterSlot;
@@ -149,6 +156,11 @@ export function CharacterSelect() {
 
         if (keys.has(bindings.jump) && p.onGround) { p.vy = LOBBY_JUMP; p.onGround = false; }
 
+        // Fast-fall with down key
+        if (keys.has(bindings.down) && !p.onGround) {
+          p.vy = Math.max(p.vy, LOBBY_FAST_FALL);
+        }
+
         updateLobbyPhysics(p, dt);
       }
 
@@ -257,12 +269,41 @@ function updateLobbyPhysics(p: LobbyPlayer, dt: number): void {
   p.y += p.vy * dt;
   p.x += p.vx * dt;
 
+  // Ground collision
   if (p.y + PLAYER_HEIGHT >= GROUND_Y) {
     p.y = GROUND_Y - PLAYER_HEIGHT;
     p.vy = 0;
     p.onGround = true;
   }
 
+  // Wall obstacle collision (can land on top or be blocked sideways)
+  if (
+    p.x + PLAYER_WIDTH > WALL_X &&
+    p.x < WALL_X + WALL_WIDTH &&
+    p.y + PLAYER_HEIGHT > WALL_Y &&
+    p.y < GROUND_Y
+  ) {
+    const overlapLeft = (p.x + PLAYER_WIDTH) - WALL_X;
+    const overlapRight = (WALL_X + WALL_WIDTH) - p.x;
+    const overlapTop = (p.y + PLAYER_HEIGHT) - WALL_Y;
+
+    if (overlapTop < Math.min(overlapLeft, overlapRight) && p.vy >= 0) {
+      // Landing on top of wall
+      p.y = WALL_Y - PLAYER_HEIGHT;
+      p.vy = 0;
+      p.onGround = true;
+    } else if (overlapLeft < overlapRight) {
+      // Blocked from the left
+      p.x = WALL_X - PLAYER_WIDTH;
+      p.vx = 0;
+    } else {
+      // Blocked from the right
+      p.x = WALL_X + WALL_WIDTH;
+      p.vx = 0;
+    }
+  }
+
+  // Screen bounds
   if (p.x < 0) p.x = 0;
   if (p.x + PLAYER_WIDTH > CANVAS_WIDTH) p.x = CANVAS_WIDTH - PLAYER_WIDTH;
 
@@ -338,6 +379,43 @@ function drawLobby(
     ctx.beginPath();
     ctx.moveTo(x, GROUND_Y);
     ctx.lineTo(x - 2, GROUND_Y - 5 - (x * 7 % 4));
+    ctx.stroke();
+  }
+
+  // Wall obstacle
+  // Stone base
+  ctx.fillStyle = '#6B5B4F';
+  ctx.fillRect(WALL_X, WALL_Y, WALL_WIDTH, WALL_HEIGHT);
+  // Brick lines
+  ctx.strokeStyle = '#5A4A3E';
+  ctx.lineWidth = 1;
+  for (let row = 0; row < WALL_HEIGHT; row += 14) {
+    ctx.beginPath();
+    ctx.moveTo(WALL_X, WALL_Y + row);
+    ctx.lineTo(WALL_X + WALL_WIDTH, WALL_Y + row);
+    ctx.stroke();
+    // Offset vertical line per row
+    const offset = (row / 14) % 2 === 0 ? WALL_WIDTH * 0.5 : 0;
+    if (offset > 0) {
+      ctx.beginPath();
+      ctx.moveTo(WALL_X + offset, WALL_Y + row);
+      ctx.lineTo(WALL_X + offset, WALL_Y + row + 14);
+      ctx.stroke();
+    }
+  }
+  // Top edge highlight
+  ctx.fillStyle = '#7D6D5F';
+  ctx.fillRect(WALL_X, WALL_Y, WALL_WIDTH, 3);
+  // Moss on top
+  ctx.fillStyle = '#5DAF4A';
+  ctx.fillRect(WALL_X - 2, WALL_Y - 2, WALL_WIDTH + 4, 4);
+  // Small grass on top
+  ctx.strokeStyle = '#4A9A3A';
+  ctx.lineWidth = 1.5;
+  for (let gx = WALL_X + 3; gx < WALL_X + WALL_WIDTH; gx += 6) {
+    ctx.beginPath();
+    ctx.moveTo(gx, WALL_Y - 2);
+    ctx.lineTo(gx - 1, WALL_Y - 7 - Math.random() * 3);
     ctx.stroke();
   }
 
