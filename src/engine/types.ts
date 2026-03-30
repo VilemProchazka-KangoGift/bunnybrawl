@@ -146,6 +146,7 @@ export interface Thorn {
   platformIndex: number;
   life: number;
   growTimer: number;
+  hit: boolean;
 }
 
 export interface MatchState {

@@ -36,6 +36,7 @@ export class GameLoop {
   private paused = false;
   private newSplatsSinceRender: number[] = [];
   private particles: Particle[] = [];
+  private fireworkTimer = 0;
 
   constructor(
     bgCanvas: HTMLCanvasElement,
@@ -146,6 +147,17 @@ export class GameLoop {
       this.state.slowMotion -= frameTime;
     }
 
+    // Fireworks when match is over
+    if (this.state.matchOver) {
+      this.fireworkTimer -= frameTime;
+      if (this.fireworkTimer <= 0) {
+        this.fireworkTimer = 0.3;
+        this.spawnFirework();
+      }
+      // Update firework particles with gravity
+      this.updateParticles(frameTime);
+    }
+
     // Render
     if (this.newSplatsSinceRender.length > 0) {
       const newSplats = this.newSplatsSinceRender.map(i => this.state.splatMarks[i]);
@@ -186,6 +198,7 @@ export class GameLoop {
       platformIndex: pi,
       life: HAZARD_LIFETIME,
       growTimer: HAZARD_GROW_TIME,
+      hit: false,
     });
   }
 
@@ -244,14 +257,49 @@ export class GameLoop {
     }
   }
 
+  private spawnFirework(): void {
+    const fx = Math.random() * CANVAS_WIDTH;
+    const fy = Math.random() * (CANVAS_HEIGHT * 0.5); // upper half
+    const count = 20 + Math.floor(Math.random() * 11); // 20-30
+    const brightColors = ['#FF4444', '#44FF44', '#4444FF', '#FFFF44', '#FF44FF', '#44FFFF', '#FFD700', '#FF8C00', '#FF69B4'];
+    const color = brightColors[Math.floor(Math.random() * brightColors.length)];
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 60 + Math.random() * 140;
+      const life = 0.6 + Math.random() * 0.6;
+      this.particles.push({
+        x: fx, y: fy,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 50, // upward bias
+        life, maxLife: life,
+        size: 2 + Math.random() * 4,
+        color,
+      });
+    }
+  }
+
   // ---- Carrot spawning ----
 
   private spawnCarrot(): void {
     const candidates: Array<{ x: number; y: number; dist: number }> = [];
     for (const plat of this.arena.platforms) {
+      // On-platform candidates
       for (let attempt = 0; attempt < 3; attempt++) {
         const cx = plat.x + 20 + Math.random() * (plat.width - 40);
         const cy = plat.y - CARROT_SIZE;
+        let minDist = Infinity;
+        for (const p of this.state.players) {
+          if (!p.active || p.state === 'splat' || p.state === 'respawning') continue;
+          const dx = cx - (p.x + p.width / 2);
+          const dy = cy - (p.y + p.height / 2);
+          minDist = Math.min(minDist, Math.sqrt(dx * dx + dy * dy));
+        }
+        candidates.push({ x: cx, y: cy, dist: minDist });
+      }
+      // Mid-air candidates above platforms (reachable by jumping)
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const cx = plat.x + 20 + Math.random() * (plat.width - 40);
+        const cy = plat.y - 60 - Math.random() * 60; // 60 to 120 px above platform
         let minDist = Infinity;
         for (const p of this.state.players) {
           if (!p.active || p.state === 'splat' || p.state === 'respawning') continue;
@@ -328,7 +376,7 @@ export class GameLoop {
       t.life -= dt;
       if (t.growTimer > 0) t.growTimer -= dt;
     }
-    this.state.thorns = this.state.thorns.filter(t => t.life > 0);
+    this.state.thorns = this.state.thorns.filter(t => t.life > 0 && !t.hit);
 
     // Carrot timer
     this.state.carrotTimer -= dt;
@@ -387,9 +435,19 @@ export class GameLoop {
 
       // Thorn collision (only fully grown)
       for (const thorn of this.state.thorns) {
-        if (thorn.growTimer > 0) continue;
+        if (thorn.growTimer > 0 || thorn.hit) continue;
         if (player.slowTimer <= 0 && player.invincibleTimer <= 0 && aabbOverlap(player.x, player.y, player.width, player.height, thorn.x, thorn.y, thorn.width, thorn.height)) {
           player.slowTimer = THORN_SLOW_DURATION;
+          thorn.hit = true;
+          // Blood splash particles at thorn location
+          const tx = thorn.x + thorn.width / 2;
+          const ty = thorn.y + thorn.height / 2;
+          for (let i = 0; i < 10; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 40 + Math.random() * 100;
+            const life = 0.3 + Math.random() * 0.3;
+            this.particles.push({ x: tx, y: ty, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 40, life, maxLife: life, size: 2 + Math.random() * 3, color: '#CC2222' });
+          }
         }
       }
 
@@ -401,6 +459,7 @@ export class GameLoop {
           player.score += 1;
           player.fatTimer = FAT_DURATION;
           audio.play('select');
+          audio.play(player.character.name.toLowerCase() as any);
         }
       }
     }
@@ -420,6 +479,8 @@ export class GameLoop {
     }
 
     for (const entry of killFeedEntries) {
+      const attacker = this.state.players.find(p => p.id === entry.attacker);
+      if (attacker) audio.play(attacker.character.name.toLowerCase() as any);
       const victim = this.state.players.find(p => p.id === entry.victim);
       if (victim) this.spawnKillSplatter(victim);
     }

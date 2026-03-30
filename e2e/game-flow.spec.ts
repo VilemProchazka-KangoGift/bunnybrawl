@@ -34,26 +34,30 @@ test.describe('BunnyBrawl E2E', () => {
   });
 
   test('players can reach ready zone and start match', async ({ page }) => {
-    test.setTimeout(40000);
+    test.setTimeout(50000);
     await page.getByTestId('play-button').click();
     await expect(page.getByTestId('lobby-canvas')).toBeVisible();
 
-    // Hold right + repeatedly jump to get over the wall
+    // Hold right + spam jump to get over the wall and NPCs
     await page.keyboard.down('d');
     await page.keyboard.down('ArrowRight');
 
-    // Spam jump keys to get over wall
+    // Aggressively jump + fast-fall to push through NPCs and over wall
     const jumpLoop = async () => {
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < 60; i++) {
         await page.keyboard.press('w');
         await page.keyboard.press('ArrowUp');
-        await page.waitForTimeout(500);
+        // Alternate: fast-fall to stomp NPCs, then jump again
+        if (i % 3 === 1) {
+          await page.keyboard.press('s');
+          await page.keyboard.press('ArrowDown');
+        }
+        await page.waitForTimeout(200);
       }
     };
-    jumpLoop(); // fire and forget
+    jumpLoop();
 
-    // Wait for match to start (walk + wall jump + countdown)
-    await expect(page.getByTestId('match-screen')).toBeVisible({ timeout: 25000 });
+    await expect(page.getByTestId('match-screen')).toBeVisible({ timeout: 40000 });
     await expect(page.getByTestId('game-canvas')).toBeVisible();
   });
 

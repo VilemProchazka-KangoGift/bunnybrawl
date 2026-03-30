@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap');
+
 * {
   margin: 0;
   padding: 0;
@@ -8,6 +10,7 @@ body {
   background: #111;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
+  font-family: 'Fredoka', sans-serif;
 }
 
 #root {
@@ -19,5 +22,6 @@ body {
 }
 
 button {
-  font-family: inherit;
+  font-family: 'Fredoka', sans-serif;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.2s ease;
 }

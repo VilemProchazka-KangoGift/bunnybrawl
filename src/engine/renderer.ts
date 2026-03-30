@@ -411,6 +411,11 @@ export class Renderer {
     // Foreground nature
     this.drawForegroundNature(ctx, arena);
 
+    // Fireworks when match is over
+    if (matchState.matchOver) {
+      this.drawFireworks(ctx, particles);
+    }
+
     ctx.restore();
 
     // HUD (not affected by shake)
@@ -852,6 +857,9 @@ export class Renderer {
       ctx.globalAlpha = Math.max(ctx.globalAlpha ?? 1, 0) * (0.7 + Math.sin(slowTimer * 8) * 0.15);
     }
 
+    // Red pulse overlay when slowed by thorns
+    const drawRedPulse = slowTimer > 0;
+
     const cx = x + width / 2;
     const cy = y + height;
 
@@ -873,6 +881,15 @@ export class Renderer {
       this.drawSplatCharacter(ctx, x, y, width, height, character.color, character.darkColor);
     } else {
       this.drawCharacterSprite(ctx, x, y, width, height, character, state, animFrame, fastFalling);
+    }
+
+    // Red tint pulse overlay when hit by thorns
+    if (drawRedPulse) {
+      const pulseAlpha = Math.abs(Math.sin(slowTimer * 8)) * 0.3;
+      ctx.fillStyle = `rgba(255, 0, 0, ${pulseAlpha})`;
+      ctx.beginPath();
+      ctx.ellipse(cx, y + height * 0.5, width * 0.5, height * 0.5, 0, 0, Math.PI * 2);
+      ctx.fill();
     }
 
     ctx.restore();
@@ -1168,10 +1185,238 @@ export class Renderer {
       ctx.beginPath();
       ctx.ellipse(cx, yOff + h * 0.48, 3, 2, 0, 0, Math.PI * 2);
       ctx.fill();
+    } else if (char.name === 'Pig') {
+      // Pig: round pink body, snout, curly tail, small ears
+      ctx.ellipse(cx, yOff + h * 0.55, w * 0.4, h * 0.38, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Small upright ears
+      ctx.beginPath();
+      ctx.moveTo(cx - 8, yOff + 10);
+      ctx.lineTo(cx - 10, yOff + 0);
+      ctx.lineTo(cx - 4, yOff + 8);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(cx + 8, yOff + 10);
+      ctx.lineTo(cx + 10, yOff + 0);
+      ctx.lineTo(cx + 4, yOff + 8);
+      ctx.fill();
+      // Snout circle
+      ctx.fillStyle = char.lightColor;
+      ctx.beginPath();
+      ctx.ellipse(cx + 3, yOff + h * 0.52, 6, 4.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Nostrils
+      ctx.fillStyle = char.darkColor;
+      ctx.beginPath();
+      ctx.arc(cx + 1, yOff + h * 0.52, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx + 5, yOff + h * 0.52, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+      // Curly tail
+      ctx.strokeStyle = char.darkColor;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(cx - w * 0.35, yOff + h * 0.45, 5, 0, Math.PI * 1.5);
+      ctx.stroke();
+    } else if (char.name === 'Cow') {
+      // Cow: round cream body, black patches, horns, pink nose
+      ctx.ellipse(cx, yOff + h * 0.52, w * 0.42, h * 0.42, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Black patches
+      ctx.fillStyle = char.darkColor;
+      ctx.beginPath();
+      ctx.ellipse(cx - 6, yOff + h * 0.4, 5, 4, -0.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(cx + 4, yOff + h * 0.58, 4, 3.5, 0.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(cx + 8, yOff + h * 0.35, 3, 2.5, 0.2, 0, Math.PI * 2);
+      ctx.fill();
+      // Small horns
+      ctx.fillStyle = '#E8D8A0';
+      ctx.beginPath();
+      ctx.moveTo(cx - 7, yOff + 6);
+      ctx.lineTo(cx - 10, yOff - 4);
+      ctx.lineTo(cx - 5, yOff + 4);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(cx + 7, yOff + 6);
+      ctx.lineTo(cx + 10, yOff - 4);
+      ctx.lineTo(cx + 5, yOff + 4);
+      ctx.fill();
+      // Pink nose/muzzle
+      ctx.fillStyle = '#FFB0B0';
+      ctx.beginPath();
+      ctx.ellipse(cx + 2, yOff + h * 0.52, 5, 3.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Nostrils
+      ctx.fillStyle = '#D08080';
+      ctx.beginPath();
+      ctx.arc(cx + 0.5, yOff + h * 0.52, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx + 3.5, yOff + h * 0.52, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+      // Custom eyes for Cow
+      ctx.fillStyle = '#000';
+      ctx.beginPath(); ctx.arc(cx - 5, yOff + h * 0.38, 2.5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx + 5, yOff + h * 0.38, 2.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#FFF';
+      ctx.beginPath(); ctx.arc(cx - 4, yOff + h * 0.36, 1, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx + 6, yOff + h * 0.36, 1, 0, Math.PI * 2); ctx.fill();
+    } else if (char.name === 'Horse') {
+      // Horse: tall-ish oval body, long face, pointed ears, short mane
+      ctx.ellipse(cx, yOff + h * 0.5, w * 0.36, h * 0.44, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Long face/snout
+      ctx.fillStyle = char.lightColor;
+      ctx.beginPath();
+      ctx.ellipse(cx + 5, yOff + h * 0.52, 5, 6, 0.15, 0, Math.PI * 2);
+      ctx.fill();
+      // Pointed ears
+      ctx.fillStyle = char.color;
+      ctx.beginPath();
+      ctx.moveTo(cx - 6, yOff + 6);
+      ctx.lineTo(cx - 8, yOff - 6);
+      ctx.lineTo(cx - 2, yOff + 4);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(cx + 6, yOff + 6);
+      ctx.lineTo(cx + 8, yOff - 6);
+      ctx.lineTo(cx + 2, yOff + 4);
+      ctx.fill();
+      // Short mane
+      ctx.fillStyle = char.darkColor;
+      ctx.beginPath();
+      ctx.moveTo(cx - 2, yOff + 2);
+      ctx.lineTo(cx + 0, yOff - 4);
+      ctx.lineTo(cx + 3, yOff + 2);
+      ctx.lineTo(cx + 5, yOff - 2);
+      ctx.lineTo(cx + 7, yOff + 4);
+      ctx.stroke();
+      ctx.fillRect(cx - 2, yOff + 0, 8, 5);
+      // Nostril
+      ctx.fillStyle = '#333';
+      ctx.beginPath();
+      ctx.arc(cx + 8, yOff + h * 0.54, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (char.name === 'Goat') {
+      // Goat: round body, small curved horns, beard, horizontal pupils
+      ctx.ellipse(cx, yOff + h * 0.52, w * 0.4, h * 0.4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Small curved horns
+      ctx.strokeStyle = '#A09070';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(cx - 8, yOff + 2, 6, -Math.PI * 0.8, -Math.PI * 0.1);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(cx + 8, yOff + 2, 6, -Math.PI * 0.9, -Math.PI * 0.2);
+      ctx.stroke();
+      // Beard (small triangle below face)
+      ctx.fillStyle = char.lightColor;
+      ctx.beginPath();
+      ctx.moveTo(cx - 2, yOff + h * 0.58);
+      ctx.lineTo(cx + 2, yOff + h * 0.58);
+      ctx.lineTo(cx, yOff + h * 0.7);
+      ctx.fill();
+      // Snout
+      ctx.fillStyle = char.lightColor;
+      ctx.beginPath();
+      ctx.ellipse(cx + 2, yOff + h * 0.5, 4, 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Horizontal pupils (goat eyes)
+      ctx.fillStyle = '#E8D060';
+      ctx.beginPath();
+      ctx.arc(cx - 5, yOff + h * 0.38, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx + 5, yOff + h * 0.38, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.ellipse(cx - 5, yOff + h * 0.38, 2.5, 1.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(cx + 5, yOff + h * 0.38, 2.5, 1.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (char.name === 'Sheep') {
+      // Sheep: fluffy cloud-like body (overlapping circles), small dark face
+      // Fluffy body — multiple overlapping circles
+      ctx.fillStyle = char.color;
+      ctx.beginPath(); ctx.arc(cx - 6, yOff + h * 0.48, 8, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx + 6, yOff + h * 0.48, 8, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx, yOff + h * 0.42, 9, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx - 4, yOff + h * 0.56, 7, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx + 4, yOff + h * 0.56, 7, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx, yOff + h * 0.35, 7, 0, Math.PI * 2); ctx.fill();
+      // Small dark face
+      ctx.fillStyle = char.darkColor;
+      ctx.beginPath();
+      ctx.ellipse(cx + 2, yOff + h * 0.44, 5, 6, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Eyes on dark face
+      ctx.fillStyle = '#FFF';
+      ctx.beginPath(); ctx.arc(cx - 0.5, yOff + h * 0.4, 2, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx + 4.5, yOff + h * 0.4, 2, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#000';
+      ctx.beginPath(); ctx.arc(cx - 0.5, yOff + h * 0.4, 1, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx + 4.5, yOff + h * 0.4, 1, 0, Math.PI * 2); ctx.fill();
+      // Small ears peeking from wool
+      ctx.fillStyle = char.darkColor;
+      ctx.beginPath();
+      ctx.ellipse(cx - 10, yOff + h * 0.38, 3, 5, -0.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(cx + 12, yOff + h * 0.38, 3, 5, 0.4, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (char.name === 'Monkey') {
+      // Monkey: round body, large round ears, lighter face, curling tail
+      ctx.ellipse(cx, yOff + h * 0.52, w * 0.4, h * 0.4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Large round ears
+      ctx.beginPath();
+      ctx.arc(cx - 12, yOff + h * 0.35, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx + 12, yOff + h * 0.35, 6, 0, Math.PI * 2);
+      ctx.fill();
+      // Inner ears
+      ctx.fillStyle = char.lightColor;
+      ctx.beginPath();
+      ctx.arc(cx - 12, yOff + h * 0.35, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx + 12, yOff + h * 0.35, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      // Lighter face circle
+      ctx.beginPath();
+      ctx.ellipse(cx + 1, yOff + h * 0.46, 7, 6, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Eyes
+      ctx.fillStyle = '#000';
+      ctx.beginPath(); ctx.arc(cx - 3, yOff + h * 0.4, 2.5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx + 5, yOff + h * 0.4, 2.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#FFF';
+      ctx.beginPath(); ctx.arc(cx - 2, yOff + h * 0.38, 1, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx + 6, yOff + h * 0.38, 1, 0, Math.PI * 2); ctx.fill();
+      // Nose/mouth
+      ctx.fillStyle = char.darkColor;
+      ctx.beginPath();
+      ctx.ellipse(cx + 1, yOff + h * 0.5, 2, 1.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Curling tail
+      ctx.strokeStyle = char.color;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(cx - w * 0.35, yOff + h * 0.4, 7, -Math.PI * 0.3, Math.PI * 1.3);
+      ctx.stroke();
     }
 
     // Eyes (generic — for characters without custom eyes)
-    if (!['Frog', 'Owl', 'Cat', 'Wolf', 'Panda'].includes(char.name)) {
+    if (!['Frog', 'Owl', 'Cat', 'Wolf', 'Panda', 'Cow', 'Goat', 'Sheep', 'Monkey'].includes(char.name)) {
       ctx.fillStyle = '#000';
       ctx.beginPath();
       ctx.arc(cx - 4, yOff + h * 0.4, 2.5, 0, Math.PI * 2);
@@ -1243,6 +1488,58 @@ export class Renderer {
     ctx.moveTo(x + w / 2 + 8, eyeY - 2);
     ctx.lineTo(x + w / 2 + 4, eyeY + 2);
     ctx.stroke();
+  }
+
+  // ---- Fireworks ----
+
+  private drawFireworks(ctx: CanvasRenderingContext2D, particles: Particle[]): void {
+    const now = performance.now() / 1000;
+    for (const p of particles) {
+      const alpha = p.life / p.maxLife;
+      const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+
+      // Trail lines behind fast-moving particles
+      if (speed > 50) {
+        const trailLen = Math.min(speed * 0.06, 20);
+        const angle = Math.atan2(p.vy, p.vx);
+        ctx.strokeStyle = p.color;
+        ctx.globalAlpha = alpha * 0.4;
+        ctx.lineWidth = p.size * alpha * 0.6;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(p.x - Math.cos(angle) * trailLen, p.y - Math.sin(angle) * trailLen);
+        ctx.stroke();
+      }
+
+      // Main particle with glow
+      ctx.globalAlpha = alpha * 0.8;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * alpha * 1.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Sparkle dots near particles
+      const sparklePhase = Math.sin(now * 12 + p.x * 0.1 + p.y * 0.1);
+      if (sparklePhase > 0.6) {
+        ctx.globalAlpha = alpha * (sparklePhase - 0.6) * 2;
+        ctx.fillStyle = '#FFF';
+        const sparkleOffX = Math.sin(now * 7 + p.x) * 6;
+        const sparkleOffY = Math.cos(now * 9 + p.y) * 6;
+        ctx.beginPath();
+        ctx.arc(p.x + sparkleOffX, p.y + sparkleOffY, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+        // Cross sparkle shape
+        ctx.strokeStyle = '#FFF';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(p.x + sparkleOffX - 3, p.y + sparkleOffY);
+        ctx.lineTo(p.x + sparkleOffX + 3, p.y + sparkleOffY);
+        ctx.moveTo(p.x + sparkleOffX, p.y + sparkleOffY - 3);
+        ctx.lineTo(p.x + sparkleOffX, p.y + sparkleOffY + 3);
+        ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
   }
 
   // ---- HUD ----

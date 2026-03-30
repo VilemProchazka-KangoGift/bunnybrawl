@@ -57,6 +57,7 @@ export function CharacterSelect() {
   const rafRef = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
   const startedRef = useRef<boolean>(false);
+  const readySoundPlayedRef = useRef<Set<CharacterSlot>>(new Set());
 
   useEffect(() => {
     // Randomly assign characters to players
@@ -76,10 +77,10 @@ export function CharacterSelect() {
     }));
 
     // Extra characters wandering around — NPCs that players can stomp to swap into
-    extraCharsRef.current = extras.map((ch, i) => ({
+    extraCharsRef.current = extras.map((ch, _i) => ({
       slot: 'P1' as CharacterSlot, // placeholder, not player-controlled
       char: ch,
-      x: 500 + i * 120,
+      x: 40 + Math.random() * (WALL_X - 80),
       y: GROUND_Y - PLAYER_HEIGHT,
       vx: (Math.random() - 0.5) * 60,
       vy: 0,
@@ -227,6 +228,19 @@ export function CharacterSelect() {
 
       // Ready zone check
       const inZone = playersRef.current.filter(p => p.x + PLAYER_WIDTH > READY_ZONE_X && p.splatTimer <= 0);
+      // Play animal sound when player enters ready zone for the first time
+      for (const p of inZone) {
+        if (!readySoundPlayedRef.current.has(p.slot)) {
+          readySoundPlayedRef.current.add(p.slot);
+          audio.play(p.char.name.toLowerCase() as any);
+        }
+      }
+      // Remove players who left the zone so they can trigger again if they re-enter
+      for (const p of playersRef.current) {
+        if (p.x + PLAYER_WIDTH <= READY_ZONE_X || p.splatTimer > 0) {
+          readySoundPlayedRef.current.delete(p.slot);
+        }
+      }
       if (inZone.length >= 1 && !countdownStartedRef.current) {
         countdownStartedRef.current = true;
         countdownRef.current = COUNTDOWN_SECONDS;
@@ -591,13 +605,88 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
     ctx.fillStyle = '#000';
     ctx.beginPath(); ctx.arc(cx - 4.5, yOff + h * 0.38, 1.2, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(cx + 5.5, yOff + h * 0.38, 1.2, 0, Math.PI * 2); ctx.fill();
+  } else if (char.name === 'Pig') {
+    // Pig: round pink body + snout
+    ctx.ellipse(cx, yOff + h * 0.55, w * 0.4, h * 0.38, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = char.lightColor;
+    ctx.beginPath(); ctx.ellipse(cx + 3, yOff + h * 0.52, 6, 4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = char.darkColor;
+    ctx.beginPath(); ctx.arc(cx + 1, yOff + h * 0.52, 1.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 5, yOff + h * 0.52, 1.5, 0, Math.PI * 2); ctx.fill();
+  } else if (char.name === 'Cow') {
+    // Cow: cream body + black patches
+    ctx.ellipse(cx, yOff + h * 0.52, w * 0.42, h * 0.42, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = char.darkColor;
+    ctx.beginPath(); ctx.ellipse(cx - 6, yOff + h * 0.4, 5, 4, -0.3, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx + 4, yOff + h * 0.58, 4, 3, 0.4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#FFB0B0';
+    ctx.beginPath(); ctx.ellipse(cx + 2, yOff + h * 0.52, 4, 3, 0, 0, Math.PI * 2); ctx.fill();
+    // Cow custom eyes
+    ctx.fillStyle = '#000';
+    ctx.beginPath(); ctx.arc(cx - 4, yOff + h * 0.38, 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 6, yOff + h * 0.38, 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#FFF';
+    ctx.beginPath(); ctx.arc(cx - 3, yOff + h * 0.36, 1, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 7, yOff + h * 0.36, 1, 0, Math.PI * 2); ctx.fill();
+  } else if (char.name === 'Horse') {
+    // Horse: tall oval body + long face
+    ctx.ellipse(cx, yOff + h * 0.5, w * 0.36, h * 0.44, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = char.lightColor;
+    ctx.beginPath(); ctx.ellipse(cx + 5, yOff + h * 0.52, 5, 6, 0.15, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = char.darkColor;
+    ctx.fillRect(cx - 2, yOff + 0, 8, 5);
+  } else if (char.name === 'Goat') {
+    // Goat: round body + horns + beard
+    ctx.ellipse(cx, yOff + h * 0.52, w * 0.4, h * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#A09070'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(cx - 8, yOff + 2, 6, -Math.PI * 0.8, -Math.PI * 0.1); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx + 8, yOff + 2, 6, -Math.PI * 0.9, -Math.PI * 0.2); ctx.stroke();
+    ctx.fillStyle = char.lightColor;
+    ctx.beginPath(); ctx.moveTo(cx - 2, yOff + h * 0.58); ctx.lineTo(cx + 2, yOff + h * 0.58); ctx.lineTo(cx, yOff + h * 0.7); ctx.fill();
+    // Goat horizontal pupils
+    ctx.fillStyle = '#E8D060';
+    ctx.beginPath(); ctx.arc(cx - 5, yOff + h * 0.38, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 5, yOff + h * 0.38, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#000';
+    ctx.beginPath(); ctx.ellipse(cx - 5, yOff + h * 0.38, 2.5, 1.2, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx + 5, yOff + h * 0.38, 2.5, 1.2, 0, 0, Math.PI * 2); ctx.fill();
+  } else if (char.name === 'Sheep') {
+    // Sheep: fluffy cloud body + dark face
+    ctx.fillStyle = char.color;
+    ctx.beginPath(); ctx.arc(cx - 6, yOff + h * 0.48, 8, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 6, yOff + h * 0.48, 8, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx, yOff + h * 0.42, 9, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx, yOff + h * 0.55, 7, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = char.darkColor;
+    ctx.beginPath(); ctx.ellipse(cx + 2, yOff + h * 0.44, 5, 6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#FFF';
+    ctx.beginPath(); ctx.arc(cx, yOff + h * 0.4, 2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 4, yOff + h * 0.4, 2, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#000';
+    ctx.beginPath(); ctx.arc(cx, yOff + h * 0.4, 1, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 4, yOff + h * 0.4, 1, 0, Math.PI * 2); ctx.fill();
+  } else if (char.name === 'Monkey') {
+    // Monkey: round body + big ears + light face
+    ctx.ellipse(cx, yOff + h * 0.52, w * 0.4, h * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx - 12, yOff + h * 0.35, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 12, yOff + h * 0.35, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = char.lightColor;
+    ctx.beginPath(); ctx.arc(cx - 12, yOff + h * 0.35, 3.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 12, yOff + h * 0.35, 3.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx + 1, yOff + h * 0.46, 7, 6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#000';
+    ctx.beginPath(); ctx.arc(cx - 3, yOff + h * 0.4, 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 5, yOff + h * 0.4, 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#FFF';
+    ctx.beginPath(); ctx.arc(cx - 2, yOff + h * 0.38, 1, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 6, yOff + h * 0.38, 1, 0, Math.PI * 2); ctx.fill();
   } else {
     // Fallback
     ctx.ellipse(cx, yOff + h * 0.5, w * 0.4, h * 0.4, 0, 0, Math.PI * 2); ctx.fill();
   }
 
   // Generic eyes for characters without custom ones
-  if (!['Frog', 'Owl', 'Panda'].includes(char.name)) {
+  if (!['Frog', 'Owl', 'Panda', 'Cow', 'Goat', 'Sheep', 'Monkey'].includes(char.name)) {
     ctx.fillStyle = '#000';
     ctx.beginPath(); ctx.arc(cx - 4, yOff + h * 0.4, 2.5, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(cx + 6, yOff + h * 0.4, 2.5, 0, Math.PI * 2); ctx.fill();

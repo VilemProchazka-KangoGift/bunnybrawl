@@ -1,6 +1,7 @@
 .victory-screen {
   width: 1280px;
   height: 720px;
+  font-family: 'Fredoka', sans-serif;
 }
 
 .victory-bg {
@@ -17,10 +18,13 @@
 }
 
 .winner-text {
-  font-size: 56px;
+  font-family: 'Fredoka', sans-serif;
+  font-size: 60px;
+  font-weight: 700;
   color: #FFD700;
-  text-shadow: 3px 3px 0 rgba(0,0,0,0.5);
+  text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 215, 0, 0.4), 0 0 60px rgba(255, 215, 0, 0.2);
   margin: 0 0 20px;
+  -webkit-text-stroke: 1px rgba(0, 0, 0, 0.2);
 }
 
 .winner-avatar {
@@ -29,52 +33,71 @@
   border-radius: 50%;
   margin: 0 auto 30px;
   border: 4px solid;
-  box-shadow: 0 0 30px rgba(255,215,0,0.3);
+  box-shadow: 0 0 30px rgba(255, 215, 0, 0.3), 0 0 60px rgba(255, 215, 0, 0.15);
 }
 
 .scoreboard {
   margin: 0 auto 20px;
-  width: 400px;
+  width: 420px;
 }
 
 .scoreboard h2 {
-  color: rgba(255,255,255,0.6);
+  color: rgba(255, 255, 255, 0.6);
+  font-family: 'Fredoka', sans-serif;
   font-size: 18px;
-  margin-bottom: 12px;
+  font-weight: 600;
+  margin-bottom: 14px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
 }
 
 .score-row {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 10px 20px;
-  margin: 4px 0;
-  background: rgba(255,255,255,0.05);
-  border-radius: 8px;
+  padding: 12px 20px;
+  margin: 6px 0;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: background 0.2s ease;
+}
+
+.score-row:hover {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .score-row.first {
-  background: rgba(255,215,0,0.1);
-  border: 1px solid rgba(255,215,0,0.3);
+  background: rgba(255, 215, 0, 0.12);
+  border: 2px solid rgba(255, 215, 0, 0.35);
+  box-shadow: 0 0 15px rgba(255, 215, 0, 0.1);
 }
 
 .rank {
+  font-family: 'Fredoka', sans-serif;
   font-size: 18px;
-  font-weight: bold;
-  color: rgba(255,255,255,0.5);
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.5);
   width: 40px;
 }
 
+.score-row.first .rank {
+  color: #FFD700;
+}
+
 .player-name {
+  font-family: 'Fredoka', sans-serif;
   font-size: 18px;
-  font-weight: bold;
+  font-weight: 600;
   flex: 1;
   text-align: left;
 }
 
 .player-score {
+  font-family: 'Fredoka', sans-serif;
   font-size: 16px;
-  color: rgba(255,255,255,0.7);
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .match-stats {
@@ -82,8 +105,9 @@
   gap: 30px;
   justify-content: center;
   margin: 20px 0 30px;
-  color: rgba(255,255,255,0.4);
+  color: rgba(255, 255, 255, 0.4);
   font-size: 14px;
+  font-family: 'Fredoka', sans-serif;
 }
 
 .victory-actions {
@@ -93,34 +117,49 @@
 }
 
 .rematch-btn {
-  padding: 14px 40px;
+  padding: 14px 44px;
   font-size: 22px;
-  font-weight: bold;
-  background: linear-gradient(180deg, #4CAF50, #388E3C);
-  border: 2px solid #4CAF50;
-  border-radius: 10px;
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 700;
+  background: linear-gradient(180deg, #5CBF60, #388E3C);
+  border: 2px solid #6BD06F;
+  border-radius: 16px;
   color: #FFF;
   cursor: pointer;
-  transition: all 0.2s;
-  text-shadow: 1px 1px 0 rgba(0,0,0,0.3);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 12px rgba(56, 142, 60, 0.4);
 }
 
 .rematch-btn:hover {
-  transform: scale(1.05);
-  box-shadow: 0 4px 12px rgba(76,175,80,0.4);
+  transform: scale(1.06);
+  box-shadow: 0 4px 24px rgba(76, 175, 80, 0.5), 0 0 20px rgba(76, 175, 80, 0.3);
+}
+
+.rematch-btn:active {
+  transform: scale(0.97);
 }
 
 .menu-btn-v {
-  padding: 14px 30px;
+  padding: 14px 32px;
   font-size: 18px;
-  background: rgba(255,255,255,0.1);
-  border: 2px solid rgba(255,255,255,0.3);
-  border-radius: 10px;
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.05));
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-radius: 16px;
   color: #FFF;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.2s ease;
 }
 
 .menu-btn-v:hover {
-  background: rgba(255,255,255,0.2);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.1));
+  border-color: rgba(255, 255, 255, 0.45);
+  transform: scale(1.05);
+  box-shadow: 0 4px 16px rgba(255, 255, 255, 0.12);
+}
+
+.menu-btn-v:active {
+  transform: scale(0.97);
 }

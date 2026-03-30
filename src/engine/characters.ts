@@ -49,7 +49,7 @@ export const ALL_CHARACTERS: CharacterDef[] = [
   {
     slot: 'P1', // slot is reassigned at lobby time
     name: 'Cat',
-    color: '#FFB6C1',
+    color: '#E8A030',
     darkColor: '#CC8A9A',
     lightColor: '#FFD4E0',
   },
@@ -66,6 +66,48 @@ export const ALL_CHARACTERS: CharacterDef[] = [
     color: '#F0F0F0',
     darkColor: '#333333',
     lightColor: '#FFFFFF',
+  },
+  {
+    slot: 'P1',
+    name: 'Pig',
+    color: '#F4A6B0',
+    darkColor: '#C88090',
+    lightColor: '#FFD0D8',
+  },
+  {
+    slot: 'P1',
+    name: 'Cow',
+    color: '#F5F0E0',
+    darkColor: '#4A3A2A',
+    lightColor: '#FFFFFF',
+  },
+  {
+    slot: 'P1',
+    name: 'Goat',
+    color: '#C8B896',
+    darkColor: '#8A7A60',
+    lightColor: '#E8D8C0',
+  },
+  {
+    slot: 'P1',
+    name: 'Horse',
+    color: '#8B6040',
+    darkColor: '#5C3A20',
+    lightColor: '#B08060',
+  },
+  {
+    slot: 'P1',
+    name: 'Sheep',
+    color: '#F0EDE8',
+    darkColor: '#B0A898',
+    lightColor: '#FFFFFF',
+  },
+  {
+    slot: 'P1',
+    name: 'Monkey',
+    color: '#B07040',
+    darkColor: '#704020',
+    lightColor: '#D09060',
   },
 ];
 

@@ -1,6 +1,6 @@
 import { Howl } from 'howler';
 
-export type SoundName = 'jump' | 'stomp' | 'victory' | 'select' | 'music';
+export type SoundName = 'jump' | 'stomp' | 'victory' | 'select' | 'music' | 'bunny' | 'fox' | 'frog' | 'bear' | 'owl' | 'cat' | 'wolf' | 'panda' | 'pig' | 'cow' | 'goat' | 'horse' | 'sheep' | 'monkey';
 
 class AudioManager {
   private sounds: Map<SoundName, Howl> = new Map();
@@ -38,6 +38,85 @@ class AudioManager {
       loop: true,
     }));
 
+    // Animal sounds
+    this.sounds.set('bunny', new Howl({
+      src: [generateToneBuffer(800, 0.1, 'square', 0.4, 1200)],
+      volume: 0.4,
+    }));
+    this.sounds.set('fox', new Howl({
+      src: [generateToneBuffer(600, 0.15, 'sawtooth', 0.4, 400)],
+      volume: 0.4,
+    }));
+    this.sounds.set('frog', new Howl({
+      src: [generateFrogRibbit()],
+      volume: 0.4,
+    }));
+    this.sounds.set('bear', new Howl({
+      src: [generateToneBuffer(100, 0.25, 'sawtooth', 0.4)],
+      volume: 0.4,
+    }));
+    this.sounds.set('owl', new Howl({
+      src: [generateMultiSegmentTone([
+        { freq: 400, freqEnd: 300, duration: 0.15, type: 'sine' },
+        { freq: 300, freqEnd: 400, duration: 0.15, type: 'sine' },
+      ], 0.4)],
+      volume: 0.4,
+    }));
+    this.sounds.set('cat', new Howl({
+      src: [generateMultiSegmentTone([
+        { freq: 700, freqEnd: 500, duration: 0.1, type: 'sine' },
+        { freq: 500, freqEnd: 600, duration: 0.1, type: 'sine' },
+      ], 0.4)],
+      volume: 0.4,
+    }));
+    this.sounds.set('wolf', new Howl({
+      src: [generateMultiSegmentTone([
+        { freq: 300, freqEnd: 500, duration: 0.12, type: 'sawtooth' },
+        { freq: 500, freqEnd: 400, duration: 0.23, type: 'sawtooth' },
+      ], 0.4)],
+      volume: 0.4,
+    }));
+    this.sounds.set('panda', new Howl({
+      src: [generateToneBuffer(500, 0.12, 'triangle', 0.4, 600)],
+      volume: 0.4,
+    }));
+    this.sounds.set('pig', new Howl({
+      src: [generateMultiSegmentTone([
+        { freq: 250, freqEnd: 350, duration: 0.07, type: 'square' },
+        { freq: 350, freqEnd: 200, duration: 0.13, type: 'square' },
+      ], 0.4)],
+      volume: 0.4,
+    }));
+    this.sounds.set('cow', new Howl({
+      src: [generateToneBuffer(150, 0.4, 'sine', 0.4, 130)],
+      volume: 0.4,
+    }));
+    this.sounds.set('goat', new Howl({
+      src: [generateMultiSegmentTone([
+        { freq: 400, freqEnd: 300, duration: 0.1, type: 'sawtooth' },
+        { freq: 300, freqEnd: 350, duration: 0.15, type: 'sawtooth' },
+      ], 0.4)],
+      volume: 0.4,
+    }));
+    this.sounds.set('horse', new Howl({
+      src: [generateMultiSegmentTone([
+        { freq: 500, freqEnd: 800, duration: 0.1, type: 'sawtooth' },
+        { freq: 800, freqEnd: 400, duration: 0.2, type: 'sawtooth' },
+      ], 0.4)],
+      volume: 0.4,
+    }));
+    this.sounds.set('sheep', new Howl({
+      src: [generateToneBuffer(350, 0.3, 'sine', 0.4, 250)],
+      volume: 0.4,
+    }));
+    this.sounds.set('monkey', new Howl({
+      src: [generateMultiSegmentTone([
+        { freq: 800, freqEnd: 1200, duration: 0.07, type: 'square' },
+        { freq: 1200, freqEnd: 600, duration: 0.13, type: 'square' },
+      ], 0.4)],
+      volume: 0.4,
+    }));
+
     this.initialized = true;
   }
 
@@ -67,6 +146,11 @@ class AudioManager {
 
   isMuted(): boolean {
     return this.muted;
+  }
+
+  playAnimal(characterName: string): void {
+    const soundName = characterName.toLowerCase() as SoundName;
+    this.play(soundName);
   }
 }
 
@@ -108,6 +192,75 @@ function generateToneBuffer(
         sample = Math.sin(2 * Math.PI * freq * t);
     }
 
+    buffer[i] = sample * envelope;
+  }
+
+  return floatBufferToWavDataUri(buffer, sampleRate);
+}
+
+interface ToneSegment {
+  freq: number;
+  freqEnd?: number;
+  duration: number;
+  type: OscillatorType;
+}
+
+function generateMultiSegmentTone(segments: ToneSegment[], volume = 0.3): string {
+  const sampleRate = 44100;
+  const totalDuration = segments.reduce((sum, s) => sum + s.duration, 0);
+  const totalSamples = Math.floor(sampleRate * totalDuration);
+  const buffer = new Float32Array(totalSamples);
+
+  let offset = 0;
+  for (const seg of segments) {
+    const numSamples = Math.floor(sampleRate * seg.duration);
+    for (let i = 0; i < numSamples && offset + i < totalSamples; i++) {
+      const t = i / sampleRate;
+      const progress = i / numSamples;
+      const globalProgress = (offset + i) / totalSamples;
+      const freq = seg.freqEnd ? seg.freq + (seg.freqEnd - seg.freq) * progress : seg.freq;
+      const envelope = Math.max(0, 1 - globalProgress) * volume;
+
+      let sample: number;
+      const phase = (t * freq) % 1;
+      switch (seg.type) {
+        case 'square':
+          sample = phase < 0.5 ? 1 : -1;
+          break;
+        case 'sawtooth':
+          sample = 2 * phase - 1;
+          break;
+        case 'triangle':
+          sample = 4 * Math.abs(phase - 0.5) - 1;
+          break;
+        default:
+          sample = Math.sin(2 * Math.PI * freq * t);
+      }
+
+      buffer[offset + i] = sample * envelope;
+    }
+    offset += numSamples;
+  }
+
+  return floatBufferToWavDataUri(buffer, sampleRate);
+}
+
+function generateFrogRibbit(): string {
+  const sampleRate = 44100;
+  const duration = 0.2;
+  const numSamples = Math.floor(sampleRate * duration);
+  const buffer = new Float32Array(numSamples);
+
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / sampleRate;
+    const progress = i / numSamples;
+    const freq = 200 + (150 - 200) * progress;
+    // Wobble effect
+    const wobble = Math.sin(2 * Math.PI * 30 * t) * 20;
+    const actualFreq = freq + wobble;
+    const envelope = Math.max(0, 1 - progress) * 0.4;
+    const phase = (t * actualFreq) % 1;
+    const sample = phase < 0.5 ? 1 : -1; // square wave
     buffer[i] = sample * envelope;
   }
 
