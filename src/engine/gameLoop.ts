@@ -287,10 +287,7 @@ export class GameLoop {
       }
     }
 
-    // Player-player collision (push apart)
-    collidePlayersHorizontal(this.state.players);
-
-    // Check stomps
+    // Check stomps BEFORE pushing players apart
     const { splatMarks, killFeedEntries } = checkStomps(
       this.state.players,
       this.arena.spawnPoints,
@@ -309,6 +306,9 @@ export class GameLoop {
     if (killFeedEntries.length > 0) {
       this.state.killFeed.push(...killFeedEntries);
     }
+
+    // Player-player collision (push apart — after stomps so stomps aren't blocked)
+    collidePlayersHorizontal(this.state.players);
 
     // Update splat/respawn timers
     updateSplatTimers(this.state.players, this.arena.spawnPoints, dt);

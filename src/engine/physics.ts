@@ -152,14 +152,27 @@ export function collidePlayersHorizontal(players: Player[]): void {
       if (!b.active || b.state === 'splat' || b.state === 'respawning') continue;
       if (a.invincibleTimer > 0 || b.invincibleTimer > 0) continue;
 
-      if (aabbOverlap(a.x, a.y, a.width, a.height, b.x, b.y, b.width, b.height)) {
+      // Use a narrower hitbox for player-player collision (sprites are smaller than AABB)
+      const shrink = a.width * 0.25;
+      const ax = a.x + shrink;
+      const aw = a.width - shrink * 2;
+      const bx = b.x + shrink;
+      const bw = b.width - shrink * 2;
+
+      if (aabbOverlap(ax, a.y, aw, a.height, bx, b.y, bw, b.height)) {
+        // Skip horizontal push if one is above the other (stomp zone)
+        const aBottom = a.y + a.height;
+        const bBottom = b.y + b.height;
+        const vertOverlap = Math.min(aBottom, bBottom) - Math.max(a.y, b.y);
+        if (vertOverlap < a.height * 0.5) continue;
+
         // Horizontal overlap — push apart
         const aCx = a.x + a.width / 2;
         const bCx = b.x + b.width / 2;
-        const overlap = (a.width / 2 + b.width / 2) - Math.abs(aCx - bCx);
+        const overlap = (aw / 2 + bw / 2) - Math.abs(aCx - bCx);
 
         if (overlap > 0) {
-          const push = overlap / 2 + 1;
+          const push = overlap / 2;
           if (aCx < bCx) {
             a.x -= push;
             b.x += push;
