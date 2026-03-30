@@ -5,6 +5,11 @@ export const ACCELERATION = 1400; // px/s²
 export const FRICTION = 800; // px/s² (deceleration when no input)
 export const JUMP_IMPULSE = -560; // px/s (negative = upward) → ~174px max jump height
 export const MAX_FALL_SPEED = 600; // px/s
+export const FAST_FALL_GRAVITY = 2400; // px/s² (much heavier when holding down)
+export const FAST_FALL_SPEED = 900; // px/s max speed when fast-falling
+export const FAST_FALL_INITIAL = 500; // px/s immediate downward snap when pressing down
+export const DUST_LAND_VY_THRESHOLD = 300; // minimum landing speed to spawn dust
+export const PLAYER_PUSH_FORCE = 200; // px/s push speed when players collide
 export const STOMP_VY_THRESHOLD = 50; // minimum downward velocity for stomp
 export const STOMP_BOUNCE = -400; // upward bounce after stomp
 

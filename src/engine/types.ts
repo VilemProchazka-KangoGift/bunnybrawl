@@ -65,6 +65,7 @@ export interface Player {
   active: boolean;
   animFrame: number;
   animTimer: number;
+  fastFalling: boolean;
 }
 
 export interface SplatMark {
@@ -85,12 +86,25 @@ export interface InputState {
   left: boolean;
   right: boolean;
   jump: boolean;
+  down: boolean;
 }
 
 export interface KeyBindings {
   left: string;
   right: string;
   jump: string;
+  down: string;
+}
+
+export interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  maxLife: number;
+  size: number;
+  color: string;
 }
 
 export type GameScreen = 'menu' | 'charSelect' | 'match' | 'victory';

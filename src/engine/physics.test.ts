@@ -29,23 +29,24 @@ function makePlayer(overrides: Partial<Player> = {}): Player {
     active: true,
     animFrame: 0,
     animTimer: 0,
+    fastFalling: false,
     ...overrides,
   };
 }
 
-const noInput: InputState = { left: false, right: false, jump: false };
+const noInput: InputState = { left: false, right: false, jump: false, down: false };
 
 describe('Physics - applyInput', () => {
   it('accelerates player right when right input is pressed', () => {
     const player = makePlayer();
-    applyInput(player, { left: false, right: true, jump: false }, 1 / 60);
+    applyInput(player, { left: false, right: true, jump: false, down: false }, 1 / 60);
     expect(player.vx).toBeGreaterThan(0);
     expect(player.facing).toBe('right');
   });
 
   it('accelerates player left when left input is pressed', () => {
     const player = makePlayer();
-    applyInput(player, { left: true, right: false, jump: false }, 1 / 60);
+    applyInput(player, { left: true, right: false, jump: false, down: false }, 1 / 60);
     expect(player.vx).toBeLessThan(0);
     expect(player.facing).toBe('left');
   });
@@ -61,35 +62,47 @@ describe('Physics - applyInput', () => {
     const player = makePlayer({ vx: MAX_WALK_SPEED - 1 });
     // Apply multiple frames of acceleration
     for (let i = 0; i < 60; i++) {
-      applyInput(player, { left: false, right: true, jump: false }, 1 / 60);
+      applyInput(player, { left: false, right: true, jump: false, down: false }, 1 / 60);
     }
     expect(player.vx).toBeLessThanOrEqual(MAX_WALK_SPEED);
   });
 
   it('applies jump impulse when jump is pressed and not airborne', () => {
     const player = makePlayer({ state: 'idle' });
-    applyInput(player, { left: false, right: false, jump: true }, 1 / 60);
+    applyInput(player, { left: false, right: false, jump: true, down: false }, 1 / 60);
     expect(player.vy).toBe(JUMP_IMPULSE);
     expect(player.state).toBe('airborne');
   });
 
   it('does not jump when already airborne', () => {
     const player = makePlayer({ state: 'airborne', vy: -100 });
-    applyInput(player, { left: false, right: false, jump: true }, 1 / 60);
+    applyInput(player, { left: false, right: false, jump: true, down: false }, 1 / 60);
     expect(player.vy).toBe(-100); // unchanged
   });
 
   it('ignores input when player is splatted', () => {
     const player = makePlayer({ state: 'splat' });
-    applyInput(player, { left: true, right: false, jump: true }, 1 / 60);
+    applyInput(player, { left: true, right: false, jump: true, down: false }, 1 / 60);
     expect(player.vx).toBe(0);
     expect(player.vy).toBe(0);
   });
 
   it('ignores input when player is respawning', () => {
     const player = makePlayer({ state: 'respawning' });
-    applyInput(player, { left: true, right: false, jump: true }, 1 / 60);
+    applyInput(player, { left: true, right: false, jump: true, down: false }, 1 / 60);
     expect(player.vx).toBe(0);
+  });
+
+  it('sets fastFalling when down is pressed while airborne', () => {
+    const player = makePlayer({ state: 'airborne', vy: 100 });
+    applyInput(player, { left: false, right: false, jump: false, down: true }, 1 / 60);
+    expect(player.fastFalling).toBe(true);
+  });
+
+  it('does not set fastFalling when on ground', () => {
+    const player = makePlayer({ state: 'idle' });
+    applyInput(player, { left: false, right: false, jump: false, down: true }, 1 / 60);
+    expect(player.fastFalling).toBe(false);
   });
 });
 
@@ -110,6 +123,20 @@ describe('Physics - applyGravity', () => {
     const player = makePlayer({ state: 'splat', vy: 0 });
     applyGravity(player, 1 / 60);
     expect(player.vy).toBe(0);
+  });
+
+  it('applies faster gravity when fast-falling', () => {
+    const normalPlayer = makePlayer({ vy: 0 });
+    const fastPlayer = makePlayer({ vy: 0, fastFalling: true });
+    applyGravity(normalPlayer, 1 / 60);
+    applyGravity(fastPlayer, 1 / 60);
+    expect(fastPlayer.vy).toBeGreaterThan(normalPlayer.vy);
+  });
+
+  it('allows higher max speed when fast-falling', () => {
+    const player = makePlayer({ vy: 850, fastFalling: true });
+    applyGravity(player, 1);
+    expect(player.vy).toBe(900); // FAST_FALL_SPEED
   });
 });
 

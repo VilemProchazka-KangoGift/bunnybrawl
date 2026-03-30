@@ -54,12 +54,24 @@ describe('InputManager', () => {
     expect(state.jump).toBe(true);
   });
 
+  it('detects P1 down key', () => {
+    pressKey('s');
+    const state = input.getInput('P1');
+    expect(state.down).toBe(true);
+  });
+
   it('detects P2 arrow keys', () => {
     pressKey('ArrowLeft');
     pressKey('ArrowUp');
     const state = input.getInput('P2');
     expect(state.left).toBe(true);
     expect(state.jump).toBe(true);
+  });
+
+  it('detects P2 down arrow', () => {
+    pressKey('ArrowDown');
+    const state = input.getInput('P2');
+    expect(state.down).toBe(true);
   });
 
   it('detects P3 keys', () => {

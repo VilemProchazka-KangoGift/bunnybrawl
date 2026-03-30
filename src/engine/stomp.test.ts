@@ -23,6 +23,7 @@ function makePlayer(overrides: Partial<Player> = {}): Player {
     active: true,
     animFrame: 0,
     animTimer: 0,
+    fastFalling: false,
     ...overrides,
   };
 }

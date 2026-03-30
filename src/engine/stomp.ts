@@ -124,4 +124,5 @@ export function respawnPlayer(player: Player, spawnPoints: SpawnPoint[]): void {
   player.invincibleTimer = INVINCIBLE_DURATION;
   player.splatTimer = 0;
   player.respawnTimer = 0;
+  player.fastFalling = false;
 }

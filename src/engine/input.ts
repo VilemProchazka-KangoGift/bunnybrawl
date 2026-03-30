@@ -1,10 +1,10 @@
 import type { CharacterSlot, InputState, KeyBindings } from './types';
 
 export const KEY_BINDINGS: Record<CharacterSlot, KeyBindings> = {
-  P1: { left: 'a', right: 'd', jump: 'w' },
-  P2: { left: 'ArrowLeft', right: 'ArrowRight', jump: 'ArrowUp' },
-  P3: { left: 'j', right: 'l', jump: 'i' },
-  P4: { left: 'f', right: 'h', jump: 't' },
+  P1: { left: 'a', right: 'd', jump: 'w', down: 's' },
+  P2: { left: 'ArrowLeft', right: 'ArrowRight', jump: 'ArrowUp', down: 'ArrowDown' },
+  P3: { left: 'j', right: 'l', jump: 'i', down: 'k' },
+  P4: { left: 'f', right: 'h', jump: 't', down: 'g' },
 };
 
 export class InputManager {
@@ -58,6 +58,7 @@ export class InputManager {
       left: this.keys.has(bindings.left),
       right: this.keys.has(bindings.right),
       jump,
+      down: this.keys.has(bindings.down),
     };
   }
 
