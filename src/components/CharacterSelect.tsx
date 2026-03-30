@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { CHARACTERS } from '../engine/characters';
+import { CHARACTERS, ALL_CHARACTERS } from '../engine/characters';
 import { KEY_BINDINGS } from '../engine/input';
 import { audio } from '../engine/audio';
 import type { CharacterSlot, CharacterDef } from '../engine/types';
@@ -8,12 +8,13 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT } from '../eng
 import './CharacterSelect.css';
 
 const SLOTS: CharacterSlot[] = ['P1', 'P2', 'P3', 'P4', 'P5'];
-const READY_ZONE_X = CANVAS_WIDTH * 0.7; // Right 30% of screen is the "ready zone"
+const READY_ZONE_X = CANVAS_WIDTH * 0.72;
 const COUNTDOWN_SECONDS = 5;
 const GROUND_Y = 560;
 const LOBBY_GRAVITY = 600;
 const LOBBY_SPEED = 200;
 const LOBBY_JUMP = -400;
+const STOMP_VY = 50;
 
 interface LobbyPlayer {
   slot: CharacterSlot;
@@ -26,12 +27,23 @@ interface LobbyPlayer {
   animFrame: number;
   animTimer: number;
   onGround: boolean;
+  splatTimer: number; // > 0 means squished
+}
+
+// Shuffle array in-place
+function shuffle<T>(arr: T[]): T[] {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
 }
 
 export function CharacterSelect() {
   const { setScreen, setActivePlayers, setMatchSettings } = useGameStore();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const playersRef = useRef<LobbyPlayer[]>([]);
+  const extraCharsRef = useRef<LobbyPlayer[]>([]); // extra NPCs on the field
   const keysRef = useRef<Set<string>>(new Set());
   const countdownRef = useRef<number>(-1);
   const countdownStartedRef = useRef<boolean>(false);
@@ -39,19 +51,34 @@ export function CharacterSelect() {
   const lastTimeRef = useRef<number>(0);
   const startedRef = useRef<boolean>(false);
 
-  // Init players spread across left side
   useEffect(() => {
+    // Randomly assign characters to players
+    const shuffled = shuffle([...ALL_CHARACTERS]);
+    const assigned = shuffled.slice(0, SLOTS.length);
+    const extras = shuffled.slice(SLOTS.length);
+
     playersRef.current = SLOTS.map((slot, i) => ({
       slot,
-      char: CHARACTERS[slot],
-      x: 60 + i * 100,
+      char: { ...assigned[i], slot },
+      x: 40 + i * 90,
       y: GROUND_Y - PLAYER_HEIGHT,
-      vx: 0,
+      vx: 0, vy: 0,
+      facing: 'right' as const,
+      animFrame: 0, animTimer: 0,
+      onGround: true, splatTimer: 0,
+    }));
+
+    // Extra characters wandering around — NPCs that players can stomp to swap into
+    extraCharsRef.current = extras.map((ch, i) => ({
+      slot: 'P1' as CharacterSlot, // placeholder, not player-controlled
+      char: ch,
+      x: 500 + i * 120,
+      y: GROUND_Y - PLAYER_HEIGHT,
+      vx: (Math.random() - 0.5) * 60,
       vy: 0,
-      facing: 'right',
-      animFrame: 0,
-      animTimer: 0,
-      onGround: true,
+      facing: (Math.random() > 0.5 ? 'right' : 'left') as 'left' | 'right',
+      animFrame: 0, animTimer: 0,
+      onGround: true, splatTimer: 0,
     }));
   }, []);
 
@@ -59,13 +86,17 @@ export function CharacterSelect() {
     if (startedRef.current) return;
     startedRef.current = true;
 
-    const inZone = playersRef.current.filter(p => p.x + PLAYER_WIDTH > READY_ZONE_X);
+    const inZone = playersRef.current.filter(p => p.x + PLAYER_WIDTH > READY_ZONE_X && p.splatTimer <= 0);
     if (inZone.length < 2) {
-      // Reset if not enough
       countdownRef.current = -1;
       countdownStartedRef.current = false;
       startedRef.current = false;
       return;
+    }
+
+    // Write the chosen characters back into CHARACTERS so the match uses them
+    for (const lp of inZone) {
+      CHARACTERS[lp.slot] = { ...lp.char, slot: lp.slot };
     }
 
     const activePlayers = inZone.map(p => p.slot);
@@ -76,19 +107,19 @@ export function CharacterSelect() {
   }, [setActivePlayers, setMatchSettings, setScreen]);
 
   useEffect(() => {
+    const normalizeKey = (key: string) => key.length === 1 ? key.toLowerCase() : key;
     const handleKeyDown = (e: KeyboardEvent) => {
       e.preventDefault();
-      keysRef.current.add(e.key);
+      keysRef.current.add(normalizeKey(e.key));
       if (e.key === 'Escape') setScreen('menu');
     };
     const handleKeyUp = (e: KeyboardEvent) => {
       e.preventDefault();
-      keysRef.current.delete(e.key);
+      keysRef.current.delete(normalizeKey(e.key));
     };
 
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
-
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
@@ -104,56 +135,86 @@ export function CharacterSelect() {
       const dt = lastTimeRef.current ? Math.min((time - lastTimeRef.current) / 1000, 0.05) : 1 / 60;
       lastTimeRef.current = time;
 
-      // Update players
+      const allLobby = [...playersRef.current, ...extraCharsRef.current];
+
+      // Update player-controlled characters
       for (const p of playersRef.current) {
+        if (p.splatTimer > 0) { p.splatTimer -= dt; continue; }
         const bindings = KEY_BINDINGS[p.slot];
         const keys = keysRef.current;
 
-        // Input
-        if (keys.has(bindings.left)) {
-          p.vx = -LOBBY_SPEED;
-          p.facing = 'left';
-        } else if (keys.has(bindings.right)) {
-          p.vx = LOBBY_SPEED;
-          p.facing = 'right';
-        } else {
-          p.vx *= 0.85; // friction
-          if (Math.abs(p.vx) < 5) p.vx = 0;
-        }
+        if (keys.has(bindings.left)) { p.vx = -LOBBY_SPEED; p.facing = 'left'; }
+        else if (keys.has(bindings.right)) { p.vx = LOBBY_SPEED; p.facing = 'right'; }
+        else { p.vx *= 0.85; if (Math.abs(p.vx) < 5) p.vx = 0; }
 
-        if (keys.has(bindings.jump) && p.onGround) {
-          p.vy = LOBBY_JUMP;
-          p.onGround = false;
-        }
+        if (keys.has(bindings.jump) && p.onGround) { p.vy = LOBBY_JUMP; p.onGround = false; }
 
-        // Gravity
-        p.vy += LOBBY_GRAVITY * dt;
-        p.y += p.vy * dt;
-        p.x += p.vx * dt;
+        updateLobbyPhysics(p, dt);
+      }
 
-        // Ground collision
-        if (p.y + PLAYER_HEIGHT >= GROUND_Y) {
-          p.y = GROUND_Y - PLAYER_HEIGHT;
-          p.vy = 0;
-          p.onGround = true;
-        }
+      // Update NPC extras — simple wandering AI
+      for (const npc of extraCharsRef.current) {
+        if (npc.splatTimer > 0) { npc.splatTimer -= dt; continue; }
+        // Random direction changes
+        if (Math.random() < 0.01) npc.vx = (Math.random() - 0.5) * 80;
+        if (Math.random() < 0.005 && npc.onGround) { npc.vy = LOBBY_JUMP * 0.6; npc.onGround = false; }
+        npc.facing = npc.vx > 0 ? 'right' : npc.vx < 0 ? 'left' : npc.facing;
+        updateLobbyPhysics(npc, dt);
+      }
 
-        // Keep in bounds
-        if (p.x < 0) p.x = 0;
-        if (p.x + PLAYER_WIDTH > CANVAS_WIDTH) p.x = CANVAS_WIDTH - PLAYER_WIDTH;
+      // Stomp detection — players stomp NPCs to swap characters, players stomp players to swap
+      for (const attacker of playersRef.current) {
+        if (attacker.splatTimer > 0) continue;
+        if (attacker.vy < STOMP_VY) continue; // must be falling
 
-        // Animation
-        if (Math.abs(p.vx) > 10) {
-          p.animTimer += dt;
-          if (p.animTimer > 0.12) {
-            p.animTimer = 0;
-            p.animFrame = (p.animFrame + 1) % 4;
+        for (const victim of allLobby) {
+          if (victim === attacker) continue;
+          if (victim.splatTimer > 0) continue;
+
+          // Check overlap + attacker above victim
+          if (
+            attacker.x + PLAYER_WIDTH > victim.x &&
+            attacker.x < victim.x + PLAYER_WIDTH &&
+            attacker.y + PLAYER_HEIGHT > victim.y &&
+            attacker.y + PLAYER_HEIGHT < victim.y + PLAYER_HEIGHT * 0.5 + 4
+          ) {
+            // Stomp! Swap characters
+            const tempChar = attacker.char;
+            attacker.char = { ...victim.char, slot: attacker.slot };
+            victim.char = { ...tempChar, slot: victim.slot };
+            victim.splatTimer = 0.8;
+            attacker.vy = -300; // bounce
+            audio.play('stomp');
           }
         }
       }
 
-      // Check ready zone
-      const inZone = playersRef.current.filter(p => p.x + PLAYER_WIDTH > READY_ZONE_X);
+      // Player-player horizontal collision
+      for (let i = 0; i < allLobby.length; i++) {
+        if (allLobby[i].splatTimer > 0) continue;
+        for (let j = i + 1; j < allLobby.length; j++) {
+          if (allLobby[j].splatTimer > 0) continue;
+          const a = allLobby[i];
+          const b = allLobby[j];
+
+          const vertOverlap = Math.min(a.y + PLAYER_HEIGHT, b.y + PLAYER_HEIGHT) - Math.max(a.y, b.y);
+          if (vertOverlap < PLAYER_HEIGHT * 0.5) continue;
+
+          if (a.x + PLAYER_WIDTH - 4 > b.x + 4 && a.x + 4 < b.x + PLAYER_WIDTH - 4) {
+            const aCx = a.x + PLAYER_WIDTH / 2;
+            const bCx = b.x + PLAYER_WIDTH / 2;
+            const overlap = PLAYER_WIDTH - 8 - Math.abs(aCx - bCx);
+            if (overlap > 0) {
+              const half = overlap / 2 + 0.5;
+              if (aCx <= bCx) { a.x -= half; b.x += half; }
+              else { a.x += half; b.x -= half; }
+            }
+          }
+        }
+      }
+
+      // Ready zone check
+      const inZone = playersRef.current.filter(p => p.x + PLAYER_WIDTH > READY_ZONE_X && p.splatTimer <= 0);
       if (inZone.length >= 1 && !countdownStartedRef.current) {
         countdownStartedRef.current = true;
         countdownRef.current = COUNTDOWN_SECONDS;
@@ -165,14 +226,10 @@ export function CharacterSelect() {
 
       if (countdownStartedRef.current) {
         countdownRef.current -= dt;
-        if (countdownRef.current <= 0) {
-          startMatch();
-        }
+        if (countdownRef.current <= 0) startMatch();
       }
 
-      // Draw
-      drawLobby(ctx, playersRef.current, countdownRef.current, countdownStartedRef.current);
-
+      drawLobby(ctx, playersRef.current, extraCharsRef.current, countdownRef.current, countdownStartedRef.current);
       rafRef.current = requestAnimationFrame(loop);
     };
 
@@ -193,11 +250,34 @@ export function CharacterSelect() {
   );
 }
 
+// ---- Physics ----
+
+function updateLobbyPhysics(p: LobbyPlayer, dt: number): void {
+  p.vy += LOBBY_GRAVITY * dt;
+  p.y += p.vy * dt;
+  p.x += p.vx * dt;
+
+  if (p.y + PLAYER_HEIGHT >= GROUND_Y) {
+    p.y = GROUND_Y - PLAYER_HEIGHT;
+    p.vy = 0;
+    p.onGround = true;
+  }
+
+  if (p.x < 0) p.x = 0;
+  if (p.x + PLAYER_WIDTH > CANVAS_WIDTH) p.x = CANVAS_WIDTH - PLAYER_WIDTH;
+
+  if (Math.abs(p.vx) > 10) {
+    p.animTimer += dt;
+    if (p.animTimer > 0.12) { p.animTimer = 0; p.animFrame = (p.animFrame + 1) % 4; }
+  }
+}
+
 // ---- Drawing ----
 
 function drawLobby(
   ctx: CanvasRenderingContext2D,
   players: LobbyPlayer[],
+  extras: LobbyPlayer[],
   countdown: number,
   countdownActive: boolean,
 ): void {
@@ -208,6 +288,42 @@ function drawLobby(
   gradient.addColorStop(1, '#B0E0E6');
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+  // Control schemes at top
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.beginPath();
+  ctx.roundRect(10, 8, CANVAS_WIDTH - 20, 42, 8);
+  ctx.fill();
+
+  ctx.font = 'bold 13px monospace';
+  ctx.textAlign = 'center';
+  const slotWidth = (CANVAS_WIDTH - 40) / SLOTS.length;
+  for (let i = 0; i < SLOTS.length; i++) {
+    const slot = SLOTS[i];
+    const bindings = KEY_BINDINGS[slot];
+    const player = players[i];
+    const sx = 20 + i * slotWidth + slotWidth / 2;
+
+    // Player color dot
+    ctx.fillStyle = player.char.color;
+    ctx.beginPath();
+    ctx.arc(sx - slotWidth * 0.35, 29, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#FFF';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Slot + character name
+    ctx.fillStyle = '#FFF';
+    ctx.textAlign = 'left';
+    ctx.fillText(`${slot}: ${player.char.name}`, sx - slotWidth * 0.25, 25);
+
+    // Keys
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = '11px monospace';
+    ctx.fillText(`${bindings.left} ${bindings.right} ${bindings.jump} ${bindings.down}`, sx - slotWidth * 0.25, 39);
+    ctx.font = 'bold 13px monospace';
+  }
 
   // Ground
   ctx.fillStyle = '#4a8c3f';
@@ -225,85 +341,97 @@ function drawLobby(
     ctx.stroke();
   }
 
-  // Ready zone highlight
+  // Ready zone
   ctx.fillStyle = 'rgba(76, 175, 80, 0.15)';
-  ctx.fillRect(READY_ZONE_X, 0, CANVAS_WIDTH - READY_ZONE_X, GROUND_Y);
+  ctx.fillRect(READY_ZONE_X, 55, CANVAS_WIDTH - READY_ZONE_X, GROUND_Y - 55);
 
-  // Zone border line
   ctx.strokeStyle = 'rgba(76, 175, 80, 0.5)';
   ctx.lineWidth = 3;
   ctx.setLineDash([10, 8]);
   ctx.beginPath();
-  ctx.moveTo(READY_ZONE_X, 0);
+  ctx.moveTo(READY_ZONE_X, 55);
   ctx.lineTo(READY_ZONE_X, GROUND_Y);
   ctx.stroke();
   ctx.setLineDash([]);
 
-  // Arrow sign pointing right at zone
-  ctx.fillStyle = 'rgba(76, 175, 80, 0.6)';
-  const arrowY = GROUND_Y - 60;
-  ctx.beginPath();
-  ctx.moveTo(READY_ZONE_X + 10, arrowY);
-  ctx.lineTo(READY_ZONE_X + 30, arrowY + 15);
-  ctx.lineTo(READY_ZONE_X + 10, arrowY + 30);
-  ctx.fill();
-
-  // "GO!" text in zone
   ctx.fillStyle = 'rgba(76, 175, 80, 0.4)';
   ctx.font = 'bold 48px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('GO!', (READY_ZONE_X + CANVAS_WIDTH) / 2, GROUND_Y / 2 + 10);
+  ctx.fillText('GO!', (READY_ZONE_X + CANVAS_WIDTH) / 2, GROUND_Y / 2 + 20);
+
+  // Draw extras (NPCs) first (behind players)
+  for (const npc of extras) {
+    if (npc.splatTimer > 0) {
+      drawSquishedChar(ctx, npc);
+    } else {
+      drawLobbyCharacter(ctx, npc);
+    }
+    // NPC label
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '9px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(npc.char.name, npc.x + PLAYER_WIDTH / 2, npc.y - 6);
+  }
 
   // Draw players
   for (const p of players) {
-    drawLobbyCharacter(ctx, p);
-    // Name tag above character
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.font = 'bold 11px sans-serif';
+    if (p.splatTimer > 0) {
+      drawSquishedChar(ctx, p);
+    } else {
+      drawLobbyCharacter(ctx, p);
+    }
+    // Player label: slot + name
+    ctx.fillStyle = p.char.color;
+    ctx.font = 'bold 12px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(p.char.name, p.x + PLAYER_WIDTH / 2, p.y - 18);
-
-    // Control hint
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.font = '9px monospace';
-    const bindings = KEY_BINDINGS[p.slot];
-    ctx.fillText(`${bindings.left} ${bindings.right} ${bindings.jump}`, p.x + PLAYER_WIDTH / 2, p.y - 8);
+    ctx.fillText(`${p.slot}`, p.x + PLAYER_WIDTH / 2, p.y - 14);
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.font = '10px sans-serif';
+    ctx.fillText(p.char.name, p.x + PLAYER_WIDTH / 2, p.y - 4);
   }
 
   // Title
   ctx.fillStyle = '#FFF';
-  ctx.font = 'bold 36px sans-serif';
+  ctx.font = 'bold 28px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
-  ctx.fillText('Walk right to join!', CANVAS_WIDTH / 2, 20);
+  ctx.fillText('Stomp to swap characters! Walk right to join!', CANVAS_WIDTH / 2, 56);
   ctx.textBaseline = 'alphabetic';
 
-  ctx.font = '16px sans-serif';
-  ctx.fillStyle = 'rgba(255,255,255,0.6)';
-  ctx.fillText('Press ESC to go back', CANVAS_WIDTH / 2, 65);
+  ctx.font = '14px sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.fillText('ESC = back', CANVAS_WIDTH / 2, 90);
 
   // Countdown
   if (countdownActive && countdown > 0) {
     const secs = Math.ceil(countdown);
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.beginPath();
-    ctx.roundRect(CANVAS_WIDTH / 2 - 80, 90, 160, 50, 12);
+    ctx.roundRect(CANVAS_WIDTH / 2 - 80, 98, 160, 44, 12);
     ctx.fill();
-
     ctx.fillStyle = '#FFD700';
-    ctx.font = 'bold 28px sans-serif';
+    ctx.font = 'bold 24px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(`Starting in ${secs}...`, CANVAS_WIDTH / 2, 123);
+    ctx.fillText(`Starting in ${secs}...`, CANVAS_WIDTH / 2, 127);
   }
 
-  // Player count in zone
-  const inZone = players.filter(p => p.x + PLAYER_WIDTH > READY_ZONE_X);
+  // Player count
+  const inZone = players.filter(p => p.x + PLAYER_WIDTH > READY_ZONE_X && p.splatTimer <= 0);
   if (inZone.length > 0) {
     ctx.fillStyle = 'rgba(76,175,80,0.8)';
     ctx.font = 'bold 16px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(`${inZone.length} player${inZone.length > 1 ? 's' : ''} ready`, (READY_ZONE_X + CANVAS_WIDTH) / 2, GROUND_Y - 20);
+    ctx.fillText(`${inZone.length} player${inZone.length > 1 ? 's' : ''} ready`, (READY_ZONE_X + CANVAS_WIDTH) / 2, GROUND_Y - 15);
   }
+}
+
+function drawSquishedChar(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void {
+  const cx = p.x + PLAYER_WIDTH / 2;
+  const by = p.y + PLAYER_HEIGHT;
+  ctx.fillStyle = p.char.color;
+  ctx.beginPath();
+  ctx.ellipse(cx, by - 4, PLAYER_WIDTH * 0.5, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
 }
 
 function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void {
@@ -323,113 +451,81 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
     ctx.translate(-cx, 0);
   }
 
-  // Simplified character drawing (same shapes as main game)
   ctx.fillStyle = char.color;
   ctx.beginPath();
+
   if (char.name === 'Bunny') {
     ctx.ellipse(cx, yOff + h * 0.55, w * 0.4, h * 0.4, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(cx - 5, yOff + 2, 4, 12, -0.2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(cx + 5, yOff + 2, 4, 12, 0.2, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx - 5, yOff + 2, 4, 12, -0.2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx + 5, yOff + 2, 4, 12, 0.2, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#FFB6C1';
-    ctx.beginPath();
-    ctx.ellipse(cx - 5, yOff + 2, 2, 8, -0.2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(cx + 5, yOff + 2, 2, 8, 0.2, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx - 5, yOff + 2, 2, 8, -0.2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx + 5, yOff + 2, 2, 8, 0.2, 0, Math.PI * 2); ctx.fill();
   } else if (char.name === 'Fox') {
-    ctx.ellipse(cx, yOff + h * 0.55, w * 0.38, h * 0.38, 0, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.ellipse(cx, yOff + h * 0.55, w * 0.38, h * 0.38, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = char.color;
-    ctx.beginPath();
-    ctx.moveTo(cx - 8, yOff + 8);
-    ctx.lineTo(cx - 12, yOff - 6);
-    ctx.lineTo(cx - 2, yOff + 6);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(cx + 8, yOff + 8);
-    ctx.lineTo(cx + 12, yOff - 6);
-    ctx.lineTo(cx + 2, yOff + 6);
-    ctx.fill();
+    ctx.beginPath(); ctx.moveTo(cx - 8, yOff + 8); ctx.lineTo(cx - 12, yOff - 6); ctx.lineTo(cx - 2, yOff + 6); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(cx + 8, yOff + 8); ctx.lineTo(cx + 12, yOff - 6); ctx.lineTo(cx + 2, yOff + 6); ctx.fill();
   } else if (char.name === 'Frog') {
-    ctx.ellipse(cx, yOff + h * 0.55, w * 0.42, h * 0.35, 0, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.ellipse(cx, yOff + h * 0.55, w * 0.42, h * 0.35, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = char.lightColor;
-    ctx.beginPath();
-    ctx.arc(cx - 7, yOff + 8, 6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(cx + 7, yOff + 8, 6, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(cx - 7, yOff + 8, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 7, yOff + 8, 6, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#000';
-    ctx.beginPath();
-    ctx.arc(cx - 6, yOff + 8, 3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(cx + 8, yOff + 8, 3, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(cx - 6, yOff + 8, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 8, yOff + 8, 3, 0, Math.PI * 2); ctx.fill();
   } else if (char.name === 'Bear') {
-    ctx.ellipse(cx, yOff + h * 0.5, w * 0.42, h * 0.42, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(cx - 10, yOff + 4, 6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(cx + 10, yOff + 4, 6, 0, Math.PI * 2);
-    ctx.fill();
-  } else {
-    // Owl
-    ctx.ellipse(cx, yOff + h * 0.5, w * 0.4, h * 0.42, 0, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.ellipse(cx, yOff + h * 0.5, w * 0.42, h * 0.42, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx - 10, yOff + 4, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 10, yOff + 4, 6, 0, Math.PI * 2); ctx.fill();
+  } else if (char.name === 'Owl') {
+    ctx.ellipse(cx, yOff + h * 0.5, w * 0.4, h * 0.42, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = char.darkColor;
-    ctx.beginPath();
-    ctx.moveTo(cx - 8, yOff + 6);
-    ctx.lineTo(cx - 12, yOff - 6);
-    ctx.lineTo(cx - 4, yOff + 4);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(cx + 8, yOff + 6);
-    ctx.lineTo(cx + 12, yOff - 6);
-    ctx.lineTo(cx + 4, yOff + 4);
-    ctx.fill();
-    // Big eyes
+    ctx.beginPath(); ctx.moveTo(cx - 8, yOff + 6); ctx.lineTo(cx - 12, yOff - 6); ctx.lineTo(cx - 4, yOff + 4); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(cx + 8, yOff + 6); ctx.lineTo(cx + 12, yOff - 6); ctx.lineTo(cx + 4, yOff + 4); ctx.fill();
     ctx.fillStyle = '#FFD700';
-    ctx.beginPath();
-    ctx.arc(cx - 5, yOff + h * 0.36, 4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(cx + 5, yOff + h * 0.36, 4, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(cx - 5, yOff + h * 0.36, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 5, yOff + h * 0.36, 4, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#000';
-    ctx.beginPath();
-    ctx.arc(cx - 4.5, yOff + h * 0.36, 2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(cx + 5.5, yOff + h * 0.36, 2, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(cx - 4.5, yOff + h * 0.36, 2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 5.5, yOff + h * 0.36, 2, 0, Math.PI * 2); ctx.fill();
+  } else if (char.name === 'Cat') {
+    ctx.ellipse(cx, yOff + h * 0.55, w * 0.38, h * 0.38, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(cx - 8, yOff + 8); ctx.lineTo(cx - 10, yOff - 4); ctx.lineTo(cx - 3, yOff + 6); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(cx + 8, yOff + 8); ctx.lineTo(cx + 10, yOff - 4); ctx.lineTo(cx + 3, yOff + 6); ctx.fill();
+  } else if (char.name === 'Wolf') {
+    ctx.ellipse(cx, yOff + h * 0.52, w * 0.4, h * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(cx - 9, yOff + 6); ctx.lineTo(cx - 11, yOff - 6); ctx.lineTo(cx - 3, yOff + 4); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(cx + 9, yOff + 6); ctx.lineTo(cx + 11, yOff - 6); ctx.lineTo(cx + 3, yOff + 4); ctx.fill();
+    ctx.fillStyle = char.lightColor;
+    ctx.beginPath(); ctx.ellipse(cx + 3, yOff + h * 0.5, 5, 4, 0, 0, Math.PI * 2); ctx.fill();
+  } else if (char.name === 'Panda') {
+    ctx.ellipse(cx, yOff + h * 0.52, w * 0.42, h * 0.42, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = char.darkColor;
+    ctx.beginPath(); ctx.arc(cx - 10, yOff + 4, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 10, yOff + 4, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx - 5, yOff + h * 0.38, 5, 4, -0.2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx + 5, yOff + h * 0.38, 5, 4, 0.2, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#FFF';
+    ctx.beginPath(); ctx.arc(cx - 5, yOff + h * 0.38, 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 5, yOff + h * 0.38, 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#000';
+    ctx.beginPath(); ctx.arc(cx - 4.5, yOff + h * 0.38, 1.2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 5.5, yOff + h * 0.38, 1.2, 0, Math.PI * 2); ctx.fill();
+  } else {
+    // Fallback
+    ctx.ellipse(cx, yOff + h * 0.5, w * 0.4, h * 0.4, 0, 0, Math.PI * 2); ctx.fill();
   }
 
-  // Eyes
-  if (char.name !== 'Frog' && char.name !== 'Owl') {
+  // Generic eyes for characters without custom ones
+  if (!['Frog', 'Owl', 'Panda'].includes(char.name)) {
     ctx.fillStyle = '#000';
-    ctx.beginPath();
-    ctx.arc(cx - 4, yOff + h * 0.4, 2.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(cx + 6, yOff + h * 0.4, 2.5, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(cx - 4, yOff + h * 0.4, 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 6, yOff + h * 0.4, 2.5, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#FFF';
-    ctx.beginPath();
-    ctx.arc(cx - 3, yOff + h * 0.38, 1, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(cx + 7, yOff + h * 0.38, 1, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(cx - 3, yOff + h * 0.38, 1, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 7, yOff + h * 0.38, 1, 0, Math.PI * 2); ctx.fill();
   }
 
   // Legs

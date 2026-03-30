@@ -1053,10 +1053,125 @@ export class Renderer {
       ctx.beginPath();
       ctx.ellipse(cx - w * 0.3, yOff + h * 0.45 - wingFlap, 6, 10, -0.3, 0, Math.PI * 2);
       ctx.fill();
+    } else if (char.name === 'Cat') {
+      // Cat: sleek body, pointed ears, whiskers
+      ctx.ellipse(cx, yOff + h * 0.55, w * 0.38, h * 0.38, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Pointed ears
+      ctx.beginPath();
+      ctx.moveTo(cx - 8, yOff + 8);
+      ctx.lineTo(cx - 10, yOff - 4);
+      ctx.lineTo(cx - 3, yOff + 6);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(cx + 8, yOff + 8);
+      ctx.lineTo(cx + 10, yOff - 4);
+      ctx.lineTo(cx + 3, yOff + 6);
+      ctx.fill();
+      // Inner ears
+      ctx.fillStyle = '#FFB0C0';
+      ctx.beginPath();
+      ctx.moveTo(cx - 7, yOff + 6);
+      ctx.lineTo(cx - 9, yOff - 1);
+      ctx.lineTo(cx - 4, yOff + 5);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(cx + 7, yOff + 6);
+      ctx.lineTo(cx + 9, yOff - 1);
+      ctx.lineTo(cx + 4, yOff + 5);
+      ctx.fill();
+      // Tail
+      ctx.strokeStyle = char.color;
+      ctx.lineWidth = 3;
+      const tailWave = Math.sin((animFrame + 1) * Math.PI * 0.5) * 4;
+      ctx.beginPath();
+      ctx.moveTo(cx - w * 0.3, yOff + h * 0.5);
+      ctx.quadraticCurveTo(cx - w * 0.6, yOff + h * 0.2 + tailWave, cx - w * 0.4, yOff + h * 0.05);
+      ctx.stroke();
+      // Whiskers
+      ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+      ctx.lineWidth = 1;
+      for (const side of [-1, 1]) {
+        for (let wi = -1; wi <= 1; wi++) {
+          ctx.beginPath();
+          ctx.moveTo(cx + side * 6, yOff + h * 0.48 + wi * 2);
+          ctx.lineTo(cx + side * 16, yOff + h * 0.46 + wi * 3);
+          ctx.stroke();
+        }
+      }
+    } else if (char.name === 'Wolf') {
+      // Wolf: angular body, pointy snout
+      ctx.ellipse(cx, yOff + h * 0.52, w * 0.4, h * 0.4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Pointed ears
+      ctx.beginPath();
+      ctx.moveTo(cx - 9, yOff + 6);
+      ctx.lineTo(cx - 11, yOff - 6);
+      ctx.lineTo(cx - 3, yOff + 4);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(cx + 9, yOff + 6);
+      ctx.lineTo(cx + 11, yOff - 6);
+      ctx.lineTo(cx + 3, yOff + 4);
+      ctx.fill();
+      // Snout
+      ctx.fillStyle = char.lightColor;
+      ctx.beginPath();
+      ctx.ellipse(cx + 3, yOff + h * 0.5, 5, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Nose
+      ctx.fillStyle = '#222';
+      ctx.beginPath();
+      ctx.arc(cx + 6, yOff + h * 0.48, 2, 0, Math.PI * 2);
+      ctx.fill();
+      // Belly
+      ctx.fillStyle = char.lightColor;
+      ctx.beginPath();
+      ctx.ellipse(cx, yOff + h * 0.62, w * 0.2, h * 0.16, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (char.name === 'Panda') {
+      // Panda: round, black & white
+      ctx.ellipse(cx, yOff + h * 0.52, w * 0.42, h * 0.42, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Black ears
+      ctx.fillStyle = char.darkColor;
+      ctx.beginPath();
+      ctx.arc(cx - 10, yOff + 4, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx + 10, yOff + 4, 6, 0, Math.PI * 2);
+      ctx.fill();
+      // Black eye patches
+      ctx.beginPath();
+      ctx.ellipse(cx - 5, yOff + h * 0.38, 5, 4, -0.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(cx + 5, yOff + h * 0.38, 5, 4, 0.2, 0, Math.PI * 2);
+      ctx.fill();
+      // White eyes in patches
+      ctx.fillStyle = '#FFF';
+      ctx.beginPath();
+      ctx.arc(cx - 5, yOff + h * 0.38, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx + 5, yOff + h * 0.38, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      // Pupils
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.arc(cx - 4.5, yOff + h * 0.38, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx + 5.5, yOff + h * 0.38, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+      // Nose
+      ctx.beginPath();
+      ctx.ellipse(cx, yOff + h * 0.48, 3, 2, 0, 0, Math.PI * 2);
+      ctx.fill();
     }
 
-    // Eyes (for bunny, bear, and owl has custom eyes)
-    if (char.name !== 'Frog' && char.name !== 'Owl') {
+    // Eyes (generic — for characters without custom eyes)
+    if (!['Frog', 'Owl', 'Cat', 'Wolf', 'Panda'].includes(char.name)) {
       ctx.fillStyle = '#000';
       ctx.beginPath();
       ctx.arc(cx - 4, yOff + h * 0.4, 2.5, 0, Math.PI * 2);

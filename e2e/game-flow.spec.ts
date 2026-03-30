@@ -44,10 +44,10 @@ test.describe('BunnyBrawl E2E', () => {
 
     // Wait for them to walk into the zone and countdown to finish
     // Countdown is 5 seconds, plus walk time
-    await page.waitForTimeout(8000);
+    await page.waitForTimeout(12000);
 
     // Should transition to match
-    await expect(page.getByTestId('match-screen')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId('match-screen')).toBeVisible({ timeout: 8000 });
     await expect(page.getByTestId('game-canvas')).toBeVisible();
   });
 
@@ -57,9 +57,9 @@ test.describe('BunnyBrawl E2E', () => {
     // Walk P1 and P2 into zone
     await page.keyboard.down('d');
     await page.keyboard.down('ArrowRight');
-    await page.waitForTimeout(8000);
+    await page.waitForTimeout(12000);
 
-    await expect(page.getByTestId('match-screen')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId('match-screen')).toBeVisible({ timeout: 8000 });
     const canvas = page.getByTestId('game-canvas');
     await expect(canvas).toHaveAttribute('width', '1280');
     await expect(canvas).toHaveAttribute('height', '720');

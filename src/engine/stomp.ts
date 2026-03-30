@@ -70,6 +70,9 @@ const CHARACTER_SPLAT_SHAPES: Record<string, SplatShape> = {
   Frog: 'splat',
   Bear: 'circle',
   Owl: 'ring',
+  Cat: 'paw',
+  Wolf: 'star',
+  Panda: 'circle',
 };
 
 export function createSplatMark(victim: Player): SplatMark {
