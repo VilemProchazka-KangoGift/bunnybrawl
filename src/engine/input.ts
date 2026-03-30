@@ -5,6 +5,7 @@ export const KEY_BINDINGS: Record<CharacterSlot, KeyBindings> = {
   P2: { left: 'ArrowLeft', right: 'ArrowRight', jump: 'ArrowUp', down: 'ArrowDown' },
   P3: { left: 'j', right: 'l', jump: 'i', down: 'k' },
   P4: { left: 'f', right: 'h', jump: 't', down: 'g' },
+  P5: { left: '4', right: '6', jump: '8', down: '5' },
 };
 
 export class InputManager {

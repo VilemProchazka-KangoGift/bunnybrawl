@@ -33,3 +33,20 @@ export const MAX_FRAME_TIME = 0.1; // prevent spiral of death
 // Animation
 export const ANIM_FRAME_DURATION = 0.12; // seconds per frame
 export const RUN_FRAMES = 4;
+
+// Carrot
+export const CARROT_SPAWN_INTERVAL = 10; // seconds between carrot spawns
+export const CARROT_SIZE = 20; // px
+export const FAT_DURATION = 10; // seconds
+export const FAT_SCALE = 1.4; // size multiplier when fat
+export const FAT_SPEED_MULT = 0.6; // speed multiplier when fat
+export const FAT_JUMP_MULT = 0.8; // jump multiplier when fat (still reachable)
+
+// Spring mushroom
+export const SPRING_BOUNCE = -700; // px/s upward bounce on spring
+export const SPRING_SIZE = 20; // px
+
+// Thorn
+export const THORN_SLOW_DURATION = 5; // seconds
+export const THORN_SPEED_MULT = 0.5; // speed while slowed
+export const THORN_JUMP_MULT = 0.7; // jump while slowed

@@ -30,6 +30,8 @@ function makePlayer(overrides: Partial<Player> = {}): Player {
     animFrame: 0,
     animTimer: 0,
     fastFalling: false,
+    fatTimer: 0,
+    slowTimer: 0,
     ...overrides,
   };
 }

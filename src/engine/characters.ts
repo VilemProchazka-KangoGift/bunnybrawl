@@ -29,6 +29,13 @@ export const CHARACTERS: Record<CharacterSlot, CharacterDef> = {
     darkColor: '#654321',
     lightColor: '#D2691E',
   },
+  P5: {
+    slot: 'P5',
+    name: 'Owl',
+    color: '#9370DB',
+    darkColor: '#6A4DB0',
+    lightColor: '#B8A0E8',
+  },
 };
 
 export function getCharacter(slot: CharacterSlot): CharacterDef {

@@ -43,6 +43,10 @@ describe('GameStore', () => {
       timeElapsed: 60,
       matchOver: true,
       winner: 'P1' as const,
+      carrots: [],
+      carrotTimer: 10,
+      springs: [],
+      thorns: [],
     };
 
     useGameStore.getState().setMatchResult('P1', mockState);

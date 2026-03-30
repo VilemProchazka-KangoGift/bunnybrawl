@@ -35,7 +35,7 @@ export interface Arena {
   platformColor: string;
 }
 
-export type CharacterSlot = 'P1' | 'P2' | 'P3' | 'P4';
+export type CharacterSlot = 'P1' | 'P2' | 'P3' | 'P4' | 'P5';
 
 export interface CharacterDef {
   slot: CharacterSlot;
@@ -66,6 +66,8 @@ export interface Player {
   animFrame: number;
   animTimer: number;
   fastFalling: boolean;
+  fatTimer: number;    // > 0 = fat from carrot or thorn debuff
+  slowTimer: number;   // > 0 = slowed (thorn effect, no size change)
 }
 
 export interface SplatMark {
@@ -113,6 +115,29 @@ export interface MatchSettings {
   killLimit: number;
   timeLimit: number; // seconds, 0 = off
   playerCount: number;
+  goreMode: boolean; // true = blood, false = confetti
+}
+
+// Pickups and hazards
+export interface Carrot {
+  x: number;
+  y: number;
+  active: boolean;
+}
+
+export interface SpringMushroom {
+  x: number;
+  y: number;
+  platformIndex: number; // which platform it sits on
+  bounceTimer: number;   // visual animation when triggered
+}
+
+export interface Thorn {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  platformIndex: number;
 }
 
 export interface MatchState {
@@ -122,4 +147,8 @@ export interface MatchState {
   timeElapsed: number;
   matchOver: boolean;
   winner: CharacterSlot | null;
+  carrots: Carrot[];
+  carrotTimer: number;
+  springs: SpringMushroom[];
+  thorns: Thorn[];
 }

@@ -3,7 +3,7 @@ import { audio } from '../engine/audio';
 import './MainMenu.css';
 
 export function MainMenu() {
-  const setScreen = useGameStore((s) => s.setScreen);
+  const { setScreen, matchSettings, setMatchSettings } = useGameStore();
 
   const handlePlay = () => {
     audio.init();
@@ -25,14 +25,23 @@ export function MainMenu() {
             <button className="menu-btn play-btn" onClick={handlePlay} data-testid="play-button">
               Play
             </button>
-            <button className="menu-btn" onClick={() => setScreen('charSelect')} data-testid="settings-button">
-              Settings
-            </button>
+          </div>
+
+          <div className="menu-settings">
+            <label className="gore-toggle">
+              <input
+                type="checkbox"
+                checked={matchSettings.goreMode}
+                onChange={(e) => setMatchSettings({ goreMode: e.target.checked })}
+                data-testid="gore-toggle"
+              />
+              <span>Blood mode</span>
+            </label>
           </div>
 
           <div className="credits">
             <p>A Jump'n'Bump tribute</p>
-            <p className="controls-hint">Up to 4 players — one keyboard!</p>
+            <p className="controls-hint">Up to 5 players — one keyboard!</p>
           </div>
         </div>
       </div>

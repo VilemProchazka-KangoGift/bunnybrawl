@@ -19,6 +19,7 @@ const defaultSettings: MatchSettings = {
   killLimit: 10,
   timeLimit: 180, // 3 minutes
   playerCount: 2,
+  goreMode: false,
 };
 
 export const useGameStore = create<GameStore>((set) => ({

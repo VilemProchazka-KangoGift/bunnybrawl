@@ -77,8 +77,28 @@
   font-size: 28px;
 }
 
+.menu-settings {
+  margin-top: 20px;
+}
+
+.gore-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: rgba(255,255,255,0.7);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.gore-toggle input {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
 .credits {
-  margin-top: 60px;
+  margin-top: 40px;
   color: rgba(255,255,255,0.7);
   font-size: 14px;
 }

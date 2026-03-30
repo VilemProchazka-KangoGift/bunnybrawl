@@ -7,7 +7,7 @@ import type { CharacterSlot, CharacterDef } from '../engine/types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT } from '../engine/constants';
 import './CharacterSelect.css';
 
-const SLOTS: CharacterSlot[] = ['P1', 'P2', 'P3', 'P4'];
+const SLOTS: CharacterSlot[] = ['P1', 'P2', 'P3', 'P4', 'P5'];
 const READY_ZONE_X = CANVAS_WIDTH * 0.7; // Right 30% of screen is the "ready zone"
 const COUNTDOWN_SECONDS = 5;
 const GROUND_Y = 560;
@@ -373,7 +373,7 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
     ctx.beginPath();
     ctx.arc(cx + 8, yOff + 8, 3, 0, Math.PI * 2);
     ctx.fill();
-  } else {
+  } else if (char.name === 'Bear') {
     ctx.ellipse(cx, yOff + h * 0.5, w * 0.42, h * 0.42, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
@@ -382,10 +382,40 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
     ctx.beginPath();
     ctx.arc(cx + 10, yOff + 4, 6, 0, Math.PI * 2);
     ctx.fill();
+  } else {
+    // Owl
+    ctx.ellipse(cx, yOff + h * 0.5, w * 0.4, h * 0.42, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = char.darkColor;
+    ctx.beginPath();
+    ctx.moveTo(cx - 8, yOff + 6);
+    ctx.lineTo(cx - 12, yOff - 6);
+    ctx.lineTo(cx - 4, yOff + 4);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(cx + 8, yOff + 6);
+    ctx.lineTo(cx + 12, yOff - 6);
+    ctx.lineTo(cx + 4, yOff + 4);
+    ctx.fill();
+    // Big eyes
+    ctx.fillStyle = '#FFD700';
+    ctx.beginPath();
+    ctx.arc(cx - 5, yOff + h * 0.36, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(cx + 5, yOff + h * 0.36, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#000';
+    ctx.beginPath();
+    ctx.arc(cx - 4.5, yOff + h * 0.36, 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(cx + 5.5, yOff + h * 0.36, 2, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   // Eyes
-  if (char.name !== 'Frog') {
+  if (char.name !== 'Frog' && char.name !== 'Owl') {
     ctx.fillStyle = '#000';
     ctx.beginPath();
     ctx.arc(cx - 4, yOff + h * 0.4, 2.5, 0, Math.PI * 2);

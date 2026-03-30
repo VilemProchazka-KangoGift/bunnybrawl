@@ -1,4 +1,5 @@
-import type { Arena, Player, SplatMark, MatchState, Particle, Platform } from './types';
+import type { Arena, Player, SplatMark, MatchState, Particle, Platform, Carrot, SpringMushroom, Thorn } from './types';
+import { CARROT_SIZE, SPRING_SIZE, FAT_SCALE } from './constants';
 import { CHARACTERS } from './characters';
 import {
   CANVAS_WIDTH, CANVAS_HEIGHT,
@@ -308,17 +309,30 @@ export class Renderer {
 
   // ---- Frame rendering ----
 
-  renderFrame(matchState: MatchState, arena: Arena, particles: Particle[]): void {
+  renderFrame(matchState: MatchState, arena: Arena, particles: Particle[], _goreMode: boolean): void {
     const ctx = this.fgCtx;
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    // Animated clouds (drawn on fg so they move)
+    // Animated clouds
     const now = performance.now() / 1000;
     const dt = now - (this.lastCloudTime || now);
     this.lastCloudTime = now;
     this.updateAndDrawClouds(ctx, dt);
 
-    // Render particles (dust)
+    // Draw springs and thorns (behind players)
+    for (const spring of matchState.springs) {
+      this.drawSpringMushroom(ctx, spring);
+    }
+    for (const thorn of matchState.thorns) {
+      this.drawThorn(ctx, thorn);
+    }
+
+    // Draw carrots
+    for (const carrot of matchState.carrots) {
+      if (carrot.active) this.drawCarrot(ctx, carrot);
+    }
+
+    // Render particles (dust + splatter)
     this.drawParticles(ctx, particles);
 
     // Render players
@@ -328,11 +342,151 @@ export class Renderer {
       this.drawPlayer(ctx, player);
     }
 
-    // Foreground nature — drawn AFTER players so rabbits hide behind them
+    // Foreground nature
     this.drawForegroundNature(ctx, arena);
 
     // HUD
     this.drawHUD(ctx, matchState);
+  }
+
+  // ---- Game objects ----
+
+  private drawCarrot(ctx: CanvasRenderingContext2D, carrot: Carrot): void {
+    const x = carrot.x;
+    const y = carrot.y;
+    const bob = Math.sin(performance.now() / 300) * 3;
+
+    // Carrot body
+    ctx.fillStyle = '#FF8C00';
+    ctx.beginPath();
+    ctx.moveTo(x, y + CARROT_SIZE + bob);
+    ctx.lineTo(x - 6, y + 4 + bob);
+    ctx.quadraticCurveTo(x, y + bob, x + 6, y + 4 + bob);
+    ctx.closePath();
+    ctx.fill();
+
+    // Stripes
+    ctx.strokeStyle = '#E07000';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x - 3, y + 8 + bob);
+    ctx.lineTo(x + 3, y + 8 + bob);
+    ctx.moveTo(x - 4, y + 12 + bob);
+    ctx.lineTo(x + 4, y + 12 + bob);
+    ctx.stroke();
+
+    // Green top
+    ctx.fillStyle = '#228B22';
+    ctx.beginPath();
+    ctx.ellipse(x - 3, y + 3 + bob, 3, 6, -0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(x + 3, y + 3 + bob, 3, 6, 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#2EA52E';
+    ctx.beginPath();
+    ctx.ellipse(x, y + 2 + bob, 2, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Sparkle
+    ctx.fillStyle = 'rgba(255,255,200,0.8)';
+    const sparkle = Math.sin(performance.now() / 200) * 0.5 + 0.5;
+    ctx.globalAlpha = sparkle;
+    ctx.beginPath();
+    ctx.arc(x + 4, y + 6 + bob, 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  private drawSpringMushroom(ctx: CanvasRenderingContext2D, spring: SpringMushroom): void {
+    const x = spring.x;
+    const y = spring.y;
+    const squash = spring.bounceTimer > 0 ? Math.sin(spring.bounceTimer * 20) * 5 : 0;
+    const s = SPRING_SIZE * 1.4; // bigger
+
+    // Glow
+    ctx.fillStyle = 'rgba(100, 255, 100, 0.15)';
+    ctx.beginPath();
+    ctx.arc(x, y - s * 0.5, s * 1.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Stem
+    ctx.fillStyle = '#F5F0E0';
+    ctx.fillRect(x - 6, y - s * 0.7 + squash, 12, s * 0.7 - squash);
+
+    // Spring coils on stem
+    ctx.strokeStyle = '#AAA';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 3; i++) {
+      const cy = y - 4 - i * 6;
+      ctx.beginPath();
+      ctx.moveTo(x - 5, cy);
+      ctx.lineTo(x + 5, cy - 3);
+      ctx.stroke();
+    }
+
+    // Cap
+    ctx.fillStyle = '#2ECC40';
+    ctx.beginPath();
+    ctx.ellipse(x, y - s * 0.7 + squash, s * 0.7, s * 0.4 - squash * 0.5, 0, Math.PI, 0);
+    ctx.fill();
+
+    // Cap highlight
+    ctx.fillStyle = '#5DDE70';
+    ctx.beginPath();
+    ctx.ellipse(x, y - s * 0.8 + squash, s * 0.4, s * 0.15, 0, Math.PI, 0);
+    ctx.fill();
+
+    // Spots
+    ctx.fillStyle = '#FFF';
+    ctx.beginPath();
+    ctx.arc(x - 6, y - s * 0.85 + squash, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x + 6, y - s * 0.75 + squash, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x, y - s * 0.9 + squash, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Up arrow indicator
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('\u2191', x, y - s - 2 + squash);
+  }
+
+  private drawThorn(ctx: CanvasRenderingContext2D, thorn: Thorn): void {
+    const { x, y, width, height } = thorn;
+
+    // Warning glow
+    ctx.fillStyle = 'rgba(255, 50, 50, 0.1)';
+    ctx.beginPath();
+    ctx.ellipse(x + width / 2, y + height / 2, width * 0.8, height * 1.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Vine base
+    ctx.fillStyle = '#3A5C1E';
+    ctx.fillRect(x, y + height - 4, width, 4);
+
+    // Spikes
+    const spikeCount = Math.floor(width / 7);
+    for (let i = 0; i < spikeCount; i++) {
+      const sx = x + 4 + i * (width / spikeCount);
+      const spikeH = height + 4 + (i % 2) * 3;
+      // Dark spike
+      ctx.fillStyle = '#5C3A1E';
+      ctx.beginPath();
+      ctx.moveTo(sx - 4, y + height - 4);
+      ctx.lineTo(sx, y + height - spikeH);
+      ctx.lineTo(sx + 4, y + height - 4);
+      ctx.fill();
+      // Red tip
+      ctx.fillStyle = '#DD2222';
+      ctx.beginPath();
+      ctx.arc(sx, y + height - spikeH + 1, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   // ---- Foreground nature (drawn over players) ----
@@ -342,10 +496,10 @@ export class Renderer {
     const gy = ground.y;
 
     // Large foreground bushes on ground — rabbits hide behind these
-    this.drawFgBush(ctx, 160, gy, 45);
-    this.drawFgBush(ctx, 520, gy, 38);
-    this.drawFgBush(ctx, 850, gy, 42);
-    this.drawFgBush(ctx, 1120, gy, 35);
+    this.drawFgBush(ctx, 160, gy, 60);
+    this.drawFgBush(ctx, 520, gy, 52);
+    this.drawFgBush(ctx, 850, gy, 58);
+    this.drawFgBush(ctx, 1120, gy, 48);
 
     // Tall grass clusters
     this.drawTallGrass(ctx, 310, gy, 7);
@@ -564,7 +718,7 @@ export class Renderer {
   // ---- Player drawing ----
 
   private drawPlayer(ctx: CanvasRenderingContext2D, player: Player): void {
-    const { x, y, width, height, character, state, facing, invincibleTimer, animFrame, fastFalling } = player;
+    const { x, y, width, height, character, state, facing, invincibleTimer, animFrame, fastFalling, fatTimer, slowTimer } = player;
 
     ctx.save();
 
@@ -572,7 +726,21 @@ export class Renderer {
       ctx.globalAlpha = 0.5;
     }
 
+    // Thorn slow tint
+    if (slowTimer > 0) {
+      ctx.globalAlpha = Math.max(ctx.globalAlpha ?? 1, 0) * (0.7 + Math.sin(slowTimer * 8) * 0.15);
+    }
+
     const cx = x + width / 2;
+    const cy = y + height;
+
+    // Fat scaling
+    const isFat = fatTimer > 0;
+    if (isFat) {
+      ctx.translate(cx, cy);
+      ctx.scale(FAT_SCALE, FAT_SCALE);
+      ctx.translate(-cx, -cy);
+    }
 
     if (facing === 'left') {
       ctx.translate(cx, 0);
@@ -709,10 +877,65 @@ export class Renderer {
       ctx.beginPath();
       ctx.ellipse(cx + 2, yOff + h * 0.5, 6, 5, 0, 0, Math.PI * 2);
       ctx.fill();
+    } else if (char.name === 'Owl') {
+      // Owl: round body, tufts, big round eyes
+      ctx.ellipse(cx, yOff + h * 0.5, w * 0.4, h * 0.42, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Ear tufts
+      ctx.fillStyle = char.darkColor;
+      ctx.beginPath();
+      ctx.moveTo(cx - 8, yOff + 6);
+      ctx.lineTo(cx - 12, yOff - 6);
+      ctx.lineTo(cx - 4, yOff + 4);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(cx + 8, yOff + 6);
+      ctx.lineTo(cx + 12, yOff - 6);
+      ctx.lineTo(cx + 4, yOff + 4);
+      ctx.fill();
+      // White face disk
+      ctx.fillStyle = '#E8E0F0';
+      ctx.beginPath();
+      ctx.ellipse(cx, yOff + h * 0.38, w * 0.28, h * 0.22, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Big round eyes
+      ctx.fillStyle = '#FFD700';
+      ctx.beginPath();
+      ctx.arc(cx - 5, yOff + h * 0.36, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx + 5, yOff + h * 0.36, 4, 0, Math.PI * 2);
+      ctx.fill();
+      // Pupils
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.arc(cx - 4.5, yOff + h * 0.36, 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx + 5.5, yOff + h * 0.36, 2, 0, Math.PI * 2);
+      ctx.fill();
+      // Beak
+      ctx.fillStyle = '#D4A030';
+      ctx.beginPath();
+      ctx.moveTo(cx - 2, yOff + h * 0.45);
+      ctx.lineTo(cx, yOff + h * 0.52);
+      ctx.lineTo(cx + 2, yOff + h * 0.45);
+      ctx.fill();
+      // Belly
+      ctx.fillStyle = char.lightColor;
+      ctx.beginPath();
+      ctx.ellipse(cx, yOff + h * 0.62, w * 0.22, h * 0.18, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Wing
+      const wingFlap = isAirborne ? Math.sin(animFrame * Math.PI) * 5 : 0;
+      ctx.fillStyle = char.darkColor;
+      ctx.beginPath();
+      ctx.ellipse(cx - w * 0.3, yOff + h * 0.45 - wingFlap, 6, 10, -0.3, 0, Math.PI * 2);
+      ctx.fill();
     }
 
-    // Eyes (for bunny and bear)
-    if (char.name !== 'Frog') {
+    // Eyes (for bunny, bear, and owl has custom eyes)
+    if (char.name !== 'Frog' && char.name !== 'Owl') {
       ctx.fillStyle = '#000';
       ctx.beginPath();
       ctx.arc(cx - 4, yOff + h * 0.4, 2.5, 0, Math.PI * 2);

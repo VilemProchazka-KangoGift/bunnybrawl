@@ -3,11 +3,27 @@ import {
   GRAVITY, MAX_WALK_SPEED, ACCELERATION, FRICTION,
   JUMP_IMPULSE, MAX_FALL_SPEED, FAST_FALL_GRAVITY, FAST_FALL_SPEED,
   FAST_FALL_INITIAL, PLAYER_PUSH_FORCE,
+  FAT_SPEED_MULT, FAT_JUMP_MULT, THORN_SPEED_MULT, THORN_JUMP_MULT,
 } from './constants';
 import type { InputState } from './types';
 
+export function getSpeedMult(player: Player): number {
+  if (player.fatTimer > 0) return FAT_SPEED_MULT;
+  if (player.slowTimer > 0) return THORN_SPEED_MULT;
+  return 1;
+}
+
+export function getJumpMult(player: Player): number {
+  if (player.fatTimer > 0) return FAT_JUMP_MULT;
+  if (player.slowTimer > 0) return THORN_JUMP_MULT;
+  return 1;
+}
+
 export function applyInput(player: Player, input: InputState, dt: number): void {
   if (player.state === 'splat' || player.state === 'respawning') return;
+
+  const speedMult = getSpeedMult(player);
+  const maxSpeed = MAX_WALK_SPEED * speedMult;
 
   // Horizontal movement
   if (input.left) {
@@ -17,7 +33,6 @@ export function applyInput(player: Player, input: InputState, dt: number): void 
     player.vx += ACCELERATION * dt;
     player.facing = 'right';
   } else {
-    // Apply friction
     if (player.vx > 0) {
       player.vx = Math.max(0, player.vx - FRICTION * dt);
     } else if (player.vx < 0) {
@@ -26,7 +41,7 @@ export function applyInput(player: Player, input: InputState, dt: number): void 
   }
 
   // Clamp horizontal speed
-  player.vx = Math.max(-MAX_WALK_SPEED, Math.min(MAX_WALK_SPEED, player.vx));
+  player.vx = Math.max(-maxSpeed, Math.min(maxSpeed, player.vx));
 
   // Fast fall — hold down while airborne: instant direction change
   if (input.down && player.state === 'airborne') {
@@ -41,7 +56,7 @@ export function applyInput(player: Player, input: InputState, dt: number): void 
 
   // Jump (only if on ground)
   if (input.jump && player.state !== 'airborne') {
-    player.vy = JUMP_IMPULSE;
+    player.vy = JUMP_IMPULSE * getJumpMult(player);
     player.state = 'airborne';
   }
 }
