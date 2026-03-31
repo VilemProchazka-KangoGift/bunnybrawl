@@ -124,7 +124,11 @@ export interface ThemeConfig {
   dayNight: DayNightConfig;
 
   // Custom draw functions for theme-specific decorations
+  /** Drawn between hills and platforms — distant scenery like mountain ranges or treelines */
+  drawFarBackground?: (ctx: CanvasRenderingContext2D, arena: Arena) => void;
+  /** Drawn after platforms — trees, snowmen, decorations behind players */
   drawBackgroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => void;
+  /** Drawn over players — foreground bushes, snow piles */
   drawForegroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => void;
 
   // Optional custom particle renderer (overrides default leaf/petal/snow drawing)

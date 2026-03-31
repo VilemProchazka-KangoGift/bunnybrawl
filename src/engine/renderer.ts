@@ -63,6 +63,11 @@ export class Renderer {
       drawHill(ctx, hill.x, hill.baseY, hill.width, hill.height);
     }
 
+    // Far background (distant scenery — treelines, mountains)
+    if (theme.drawFarBackground) {
+      theme.drawFarBackground(ctx, arena);
+    }
+
     // Platforms
     for (const plat of arena.platforms) {
       this.drawPlatform(ctx, plat.x, plat.y, plat.width, plat.height, plat.y >= 650);

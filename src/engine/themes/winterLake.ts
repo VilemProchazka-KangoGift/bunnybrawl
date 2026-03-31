@@ -153,21 +153,35 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
     drawChristmasTree(ctx, 850, y, 55);
     drawChristmasTree(ctx, 1150, y, 42);
 
-    // === PLATFORM TREES — smaller, sitting on floating platforms ===
-    for (const plat of floats) {
+    // === PLATFORM TREES — bigger trees on platforms ===
+    for (let i = 0; i < floats.length; i++) {
+      const plat = floats[i];
       const mid = plat.x + plat.width / 2;
-      if (plat.width >= 200) {
-        // Wide platforms get a tree on each side + decorations
-        drawPineTree(ctx, plat.x + 25, plat.y, 30, true);
-        drawChristmasTree(ctx, plat.x + plat.width - 25, plat.y, 28);
-        drawSnowball(ctx, mid, plat.y, 5);
+      if (plat.width >= 350) {
+        // Very wide bridge — tall trees on edges, christmas tree center
+        drawPineTree(ctx, plat.x + 30, plat.y, 50, true);
+        drawChristmasTree(ctx, mid, plat.y, 42);
+        drawPineTree(ctx, plat.x + plat.width - 30, plat.y, 45, true);
+        drawSnowball(ctx, plat.x + plat.width * 0.3, plat.y, 5);
+        drawSnowball(ctx, plat.x + plat.width * 0.7, plat.y, 4);
+      } else if (plat.width >= 200) {
+        // Wide platforms — big tree + smaller one
+        drawPineTree(ctx, plat.x + 25, plat.y, 42, true);
+        drawChristmasTree(ctx, plat.x + plat.width - 28, plat.y, 35);
+        drawSnowDrift(ctx, mid, plat.y, 30, 4);
       } else if (plat.width >= 140) {
-        // Medium platforms get one tree
-        drawPineTree(ctx, mid + 20, plat.y, 25, true);
-        drawSnowDrift(ctx, plat.x + 20, plat.y, 25, 3);
+        // Medium platforms — one decent tree
+        const isChristmas = i % 3 === 0;
+        if (isChristmas) {
+          drawChristmasTree(ctx, mid, plat.y, 32);
+        } else {
+          drawPineTree(ctx, mid, plat.y, 36, true);
+        }
+        drawSnowDrift(ctx, plat.x + 15, plat.y, 20, 3);
       } else {
-        // Small platforms get a snow drift or snowball
-        drawSnowball(ctx, mid, plat.y, 4);
+        // Small — little tree + snowball
+        drawPineTree(ctx, mid, plat.y, 22, true);
+        drawSnowball(ctx, plat.x + 15, plat.y, 4);
       }
     }
 
@@ -201,10 +215,86 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
     }
   },
 
+  drawFarBackground: (ctx, _arena) => {
+    // Distant snowy mountain range
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+
+    // Far mountains — tall, faded
+    ctx.fillStyle = '#9AB0C8';
+    ctx.beginPath();
+    ctx.moveTo(-20, 660);
+    ctx.lineTo(80, 380);
+    ctx.lineTo(200, 480);
+    ctx.lineTo(320, 350);
+    ctx.lineTo(440, 460);
+    ctx.lineTo(520, 370);
+    ctx.lineTo(640, 420);
+    ctx.lineTo(780, 340);
+    ctx.lineTo(900, 440);
+    ctx.lineTo(1000, 360);
+    ctx.lineTo(1120, 450);
+    ctx.lineTo(1220, 380);
+    ctx.lineTo(1300, 660);
+    ctx.closePath();
+    ctx.fill();
+
+    // Snow caps on peaks
+    ctx.fillStyle = '#D0E0F0';
+    ctx.globalAlpha = 0.3;
+    const peaks = [
+      { x: 80, y: 380, w: 60 }, { x: 320, y: 350, w: 55 },
+      { x: 520, y: 370, w: 50 }, { x: 780, y: 340, w: 60 },
+      { x: 1000, y: 360, w: 55 }, { x: 1220, y: 380, w: 45 },
+    ];
+    for (const p of peaks) {
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(p.x - p.w * 0.4, p.y + 35);
+      ctx.lineTo(p.x + p.w * 0.4, p.y + 35);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Nearer foothills
+    ctx.fillStyle = '#8AA0B8';
+    ctx.globalAlpha = 0.25;
+    ctx.beginPath();
+    ctx.moveTo(-20, 660);
+    ctx.lineTo(100, 500);
+    ctx.lineTo(250, 540);
+    ctx.lineTo(400, 490);
+    ctx.lineTo(550, 530);
+    ctx.lineTo(700, 480);
+    ctx.lineTo(850, 520);
+    ctx.lineTo(1000, 490);
+    ctx.lineTo(1150, 530);
+    ctx.lineTo(1300, 660);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.restore();
+  },
+
   drawForegroundNature: (ctx, arena) => {
     const ground = arena.platforms[0];
     const gy = ground.y;
+    const floats = arena.platforms.filter(p => p.y < 650);
 
+    // Foreground trees on ground — drawn OVER players
+    drawPineTree(ctx, 40, gy, 70, true);
+    drawChristmasTree(ctx, 400, gy, 55);
+    drawPineTree(ctx, 750, gy, 65, true);
+    drawPineTree(ctx, 1220, gy, 60, true);
+
+    // Foreground trees on select platforms
+    for (const plat of floats) {
+      if (plat.width >= 350) {
+        drawPineTree(ctx, plat.x + plat.width * 0.45, plat.y, 30, true);
+      }
+    }
+
+    // Snow bushes
     const snowBushColors = {
       backLayer: '#2A4A2A',
       mainBody: '#3A5A3A',
@@ -214,7 +304,7 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
       highlight2: '#4A6A4A',
       berries: ['#CC3333', '#DD4444', '#BB2222'],
     };
-    drawFgBush(ctx, 120, gy, 34, snowBushColors);
+    drawFgBush(ctx, 150, gy, 34, snowBushColors);
     drawFgBush(ctx, 580, gy, 38, snowBushColors);
     drawFgBush(ctx, 940, gy, 30, snowBushColors);
 
