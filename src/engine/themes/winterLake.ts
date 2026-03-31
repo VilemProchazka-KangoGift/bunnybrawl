@@ -153,46 +153,59 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
     drawChristmasTree(ctx, 850, y, 55);
     drawChristmasTree(ctx, 1150, y, 42);
 
-    // === PLATFORM TREES — bigger trees on platforms ===
+    // === PLATFORM DECORATIONS — trees, snowmen, snowballs, drifts ===
     for (let i = 0; i < floats.length; i++) {
       const plat = floats[i];
       const mid = plat.x + plat.width / 2;
       if (plat.width >= 350) {
-        // Very wide bridge — tall trees on edges, christmas tree center
+        // Very wide bridge — full scene
         drawPineTree(ctx, plat.x + 30, plat.y, 50, true);
-        drawChristmasTree(ctx, mid, plat.y, 42);
+        drawChristmasTree(ctx, mid - 40, plat.y, 42);
         drawPineTree(ctx, plat.x + plat.width - 30, plat.y, 45, true);
-        drawSnowball(ctx, plat.x + plat.width * 0.3, plat.y, 5);
-        drawSnowball(ctx, plat.x + plat.width * 0.7, plat.y, 4);
+        drawSnowman(ctx, mid + 50, plat.y, 16);
+        drawSnowball(ctx, plat.x + plat.width * 0.25, plat.y, 5);
+        drawSnowball(ctx, plat.x + plat.width * 0.75, plat.y, 4);
+        drawSnowDrift(ctx, plat.x + 80, plat.y, 30, 3);
       } else if (plat.width >= 200) {
-        // Wide platforms — big tree + smaller one
+        // Wide — trees + snowman or snowballs
         drawPineTree(ctx, plat.x + 25, plat.y, 42, true);
         drawChristmasTree(ctx, plat.x + plat.width - 28, plat.y, 35);
-        drawSnowDrift(ctx, mid, plat.y, 30, 4);
-      } else if (plat.width >= 140) {
-        // Medium platforms — one decent tree
-        const isChristmas = i % 3 === 0;
-        if (isChristmas) {
-          drawChristmasTree(ctx, mid, plat.y, 32);
+        if (i % 2 === 0) {
+          drawSnowman(ctx, mid, plat.y, 14);
         } else {
-          drawPineTree(ctx, mid, plat.y, 36, true);
+          drawSnowball(ctx, mid - 10, plat.y, 6);
+          drawSnowball(ctx, mid + 10, plat.y, 5);
         }
-        drawSnowDrift(ctx, plat.x + 15, plat.y, 20, 3);
+        drawSnowDrift(ctx, plat.x + 15, plat.y, 25, 3);
+      } else if (plat.width >= 140) {
+        // Medium — tree + small decoration
+        if (i % 3 === 0) {
+          drawChristmasTree(ctx, mid - 15, plat.y, 32);
+          drawSnowball(ctx, mid + 25, plat.y, 4);
+        } else if (i % 3 === 1) {
+          drawPineTree(ctx, mid - 15, plat.y, 36, true);
+          drawSnowman(ctx, mid + 30, plat.y, 12);
+        } else {
+          drawPineTree(ctx, mid, plat.y, 34, true);
+          drawSnowDrift(ctx, plat.x + 15, plat.y, 20, 3);
+        }
       } else {
-        // Small — little tree + snowball
-        drawPineTree(ctx, mid, plat.y, 22, true);
-        drawSnowball(ctx, plat.x + 15, plat.y, 4);
+        // Small — little tree or snowman
+        if (i % 2 === 0) {
+          drawPineTree(ctx, mid, plat.y, 22, true);
+        } else {
+          drawSnowman(ctx, mid, plat.y, 13);
+        }
+        drawSnowball(ctx, plat.x + 12, plat.y, 3);
       }
     }
 
-    // === SMALL SNOWMEN ===
+    // === SMALL SNOWMEN on ground ===
     drawSnowman(ctx, 380, y, 26);
     drawSnowman(ctx, 680, y, 20);
     drawSnowman(ctx, 960, y, 24);
 
-    // === SNOWBALLS & PYRAMIDS ===
-    drawSnowballPyramid(ctx, 430, y, 8);
-    drawSnowballPyramid(ctx, 820, y, 7);
+    // === SNOWBALLS on ground ===
     drawSnowball(ctx, 290, y, 10);
     drawSnowball(ctx, 550, y, 7);
     drawSnowball(ctx, 750, y, 12);
@@ -287,10 +300,24 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
     drawPineTree(ctx, 750, gy, 65, true);
     drawPineTree(ctx, 1220, gy, 60, true);
 
-    // Foreground trees on select platforms
+    // Foreground trees on platforms
     for (const plat of floats) {
       if (plat.width >= 350) {
-        drawPineTree(ctx, plat.x + plat.width * 0.45, plat.y, 30, true);
+        drawPineTree(ctx, plat.x + plat.width * 0.45, plat.y, 32, true);
+      } else if (plat.width >= 200) {
+        drawPineTree(ctx, plat.x + plat.width * 0.5, plat.y, 24, true);
+      }
+    }
+
+    // Big snowball pyramids — foreground, prominent
+    drawSnowballPyramid(ctx, 300, gy, 12);
+    drawSnowballPyramid(ctx, 640, gy, 14);
+    drawSnowballPyramid(ctx, 1050, gy, 11);
+
+    // Snowball pyramids on wide platforms
+    for (const plat of floats) {
+      if (plat.width >= 200) {
+        drawSnowballPyramid(ctx, plat.x + plat.width * 0.6, plat.y, 6);
       }
     }
 
