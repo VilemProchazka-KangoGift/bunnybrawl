@@ -101,11 +101,11 @@ export function VictoryScreen() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  });
+  }, []);
 
   const getPlayerStats = (playerId: CharacterSlot): PlayerStats | null => {
     if (!lastMatchState) return null;
-    const stats = (lastMatchState as any).stats;
+    const stats = lastMatchState.stats;
     if (!stats || !stats.perPlayer) return null;
     return stats.perPlayer.get(playerId) ?? null;
   };

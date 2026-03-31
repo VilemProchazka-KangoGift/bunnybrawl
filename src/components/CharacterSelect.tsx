@@ -221,40 +221,13 @@ export function CharacterSelect() {
         }
       }
 
-      // No side collisions in lobby — players walk through each other freely
-      // Only stomp detection above handles character interaction
-      if (false) { // disabled — kept for reference
-      for (let i = 0; i < allLobby.length; i++) {
-        if (allLobby[i].splatTimer > 0) continue;
-        for (let j = i + 1; j < allLobby.length; j++) {
-          if (allLobby[j].splatTimer > 0) continue;
-          const a = allLobby[i];
-          const b = allLobby[j];
-
-          const vertOverlap = Math.min(a.y + PLAYER_HEIGHT, b.y + PLAYER_HEIGHT) - Math.max(a.y, b.y);
-          if (vertOverlap < PLAYER_HEIGHT * 0.5) continue;
-
-          if (a.x + PLAYER_WIDTH - 4 > b.x + 4 && a.x + 4 < b.x + PLAYER_WIDTH - 4) {
-            const aCx = a.x + PLAYER_WIDTH / 2;
-            const bCx = b.x + PLAYER_WIDTH / 2;
-            const overlap = PLAYER_WIDTH - 8 - Math.abs(aCx - bCx);
-            if (overlap > 0) {
-              const half = overlap / 2 + 0.5;
-              if (aCx <= bCx) { a.x -= half; b.x += half; }
-              else { a.x += half; b.x -= half; }
-            }
-          }
-        }
-      }
-      } // end disabled collision block
-
       // Ready zone check
       const inZone = playersRef.current.filter(p => p.x + PLAYER_WIDTH > READY_ZONE_X && p.splatTimer <= 0);
       // Play animal sound when player enters ready zone for the first time
       for (const p of inZone) {
         if (!readySoundPlayedRef.current.has(p.slot)) {
           readySoundPlayedRef.current.add(p.slot);
-          audio.play(p.char.name.toLowerCase() as any);
+          audio.playAnimal(p.char.name);
         }
       }
       // Remove players who left the zone so they can trigger again if they re-enter
@@ -485,11 +458,12 @@ function drawLobby(
   ctx.fillStyle = 'rgba(76, 200, 80, 0.5)';
   ctx.font = "bold 80px 'Fredoka', sans-serif";
   ctx.textAlign = 'center';
-  ctx.fillText(i18n.t('lobby_go'), (READY_ZONE_X + CANVAS_WIDTH) / 2, GROUND_Y / 2 + 40);
+  const goText = i18n.t('lobby_go');
+  ctx.fillText(goText, (READY_ZONE_X + CANVAS_WIDTH) / 2, GROUND_Y / 2 + 40);
   // Outline for extra pop
   ctx.strokeStyle = 'rgba(76, 200, 80, 0.3)';
   ctx.lineWidth = 3;
-  ctx.strokeText(i18n.t('lobby_go'), (READY_ZONE_X + CANVAS_WIDTH) / 2, GROUND_Y / 2 + 40);
+  ctx.strokeText(goText, (READY_ZONE_X + CANVAS_WIDTH) / 2, GROUND_Y / 2 + 40);
 
   // ---- Draw NPCs (behind players) ----
   for (const npc of extras) {
@@ -791,7 +765,7 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
   }
 
   // Generic eyes for characters without custom ones
-  if (!['Frog', 'Owl', 'Cat', 'Panda', 'Cow', 'Goat', 'Sheep', 'Monkey'].includes(char.name)) {
+  if (!['Frog', 'Owl', 'Cat', 'Panda', 'Cow', 'Goat', 'Sheep', 'Monkey', 'Wolf'].includes(char.name)) {
     ctx.fillStyle = '#000';
     ctx.beginPath(); ctx.arc(cx - 4, yOff + h * 0.4, 2.5, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(cx + 6, yOff + h * 0.4, 2.5, 0, Math.PI * 2); ctx.fill();

@@ -153,7 +153,6 @@ export class GameLoop {
       screenShake: 0, slowMotion: 0,
       weather,
       dayPhase: 0,
-      puddles: [],
       countdown: MATCH_COUNTDOWN,
       stats,
       shockwaves: [],
@@ -208,7 +207,7 @@ export class GameLoop {
 
     if (this.paused) {
       this.lastTime = currentTime;
-      this.renderer.renderFrame(this.state, this.arena, this.particles, this.settings.goreMode);
+      this.renderer.renderFrame(this.state, this.arena, this.particles);
       this.rafId = requestAnimationFrame(this.loop);
       return;
     }
@@ -252,7 +251,7 @@ export class GameLoop {
       this.newSplatsSinceRender = [];
     }
 
-    this.renderer.renderFrame(this.state, this.arena, this.particles, this.settings.goreMode);
+    this.renderer.renderFrame(this.state, this.arena, this.particles);
     this.rafId = requestAnimationFrame(this.loop);
   };
 
@@ -428,7 +427,11 @@ export class GameLoop {
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
       p.life -= dt;
-      if (p.life <= 0) { this.particles.splice(i, 1); continue; }
+      if (p.life <= 0) {
+        this.particles[i] = this.particles[this.particles.length - 1];
+        this.particles.pop();
+        continue;
+      }
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       p.vy += 80 * dt;
@@ -657,7 +660,10 @@ export class GameLoop {
       // Decay afterimage alpha
       for (let i = player.afterimages.length - 1; i >= 0; i--) {
         player.afterimages[i].alpha -= dt * 4;
-        if (player.afterimages[i].alpha <= 0) player.afterimages.splice(i, 1);
+        if (player.afterimages[i].alpha <= 0) {
+          player.afterimages[i] = player.afterimages[player.afterimages.length - 1];
+          player.afterimages.pop();
+        }
       }
 
       // Footstep sounds
@@ -737,7 +743,7 @@ export class GameLoop {
           player.score += 1;
           player.fatTimer = FAT_DURATION;
           audio.play('select');
-          audio.play(player.character.name.toLowerCase() as any);
+          audio.playAnimal(player.character.name);
           // Score animation for carrot pickup
           this.state.scoreAnimations.push({ playerId: player.id, value: player.score, timer: SCORE_ANIM_DURATION });
           // Stats: carrots eaten
@@ -764,7 +770,7 @@ export class GameLoop {
     for (const entry of killFeedEntries) {
       const attacker = this.state.players.find(p => p.id === entry.attacker);
       if (attacker) {
-        audio.play(attacker.character.name.toLowerCase() as any);
+        audio.playAnimal(attacker.character.name);
         // Stats: kill streak
         attacker.killStreak += 1;
         const aps = this.state.stats.perPlayer.get(attacker.id);
@@ -808,8 +814,7 @@ export class GameLoop {
     }
     this.state.shockwaves = this.state.shockwaves.filter(sw => sw.life > 0);
 
-    // Decay screen flash
-    if (this.state.screenFlash > 0) this.state.screenFlash -= dt;
+    // screenFlash is decremented in loop() (real-time), not here
 
     // Decay score animations
     for (const sa of this.state.scoreAnimations) {
@@ -876,7 +881,8 @@ export class GameLoop {
     this.state.shootingStars = this.state.shootingStars.filter(s => s.life > 0);
 
     // Crowd cheering: ramp up volume near end of match
-    const leadScore = Math.max(...this.state.players.filter(p => p.active).map(p => p.score));
+    let leadScore = 0;
+    for (const p of this.state.players) { if (p.active && p.score > leadScore) leadScore = p.score; }
     if (leadScore >= this.settings.killLimit - 3) {
       if (!this.crowdStarted) {
         audio.play('crowd');
@@ -887,7 +893,7 @@ export class GameLoop {
       } else {
         audio.setVolume('crowd', 0.15);
       }
-    } else {
+    } else if (this.crowdStarted) {
       audio.setVolume('crowd', 0);
     }
 

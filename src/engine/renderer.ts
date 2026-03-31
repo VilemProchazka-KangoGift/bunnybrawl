@@ -387,7 +387,7 @@ export class Renderer {
 
   // ---- Frame rendering ----
 
-  renderFrame(matchState: MatchState, arena: Arena, particles: Particle[], _goreMode: boolean): void {
+  renderFrame(matchState: MatchState, arena: Arena, particles: Particle[]): void {
     const ctx = this.fgCtx;
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
@@ -1035,7 +1035,7 @@ export class Renderer {
     const drawRedPulse = slowTimer > 0;
 
     // Squash/stretch from landing/jumping (centered on feet)
-    const squashScale = (player as any).squashScale ?? 1;
+    const squashScale = player.squashScale ?? 1;
     if (squashScale !== 1) {
       const ssX = 1 + (1 - squashScale) * 0.5; // wider when squashed
       const ssY = squashScale;
@@ -1833,8 +1833,6 @@ export class Renderer {
     }
     ctx.globalAlpha = 1;
   }
-
-  // ---- Puddles ----
 
   // ---- Day/Night Cycle ----
 

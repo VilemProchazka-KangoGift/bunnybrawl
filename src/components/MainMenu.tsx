@@ -23,7 +23,7 @@ export function MainMenu() {
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  });
+  }, []);
 
   return (
     <div className="main-menu" data-testid="main-menu">

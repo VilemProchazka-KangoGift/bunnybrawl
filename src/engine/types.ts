@@ -176,7 +176,6 @@ export interface MatchState {
   slowMotion: number;  // remaining slow-mo time
   weather: WeatherParticle[];
   dayPhase: number;       // 0-1 cycle (0=noon, 0.5=night, 1=noon again)
-  puddles: Array<{x: number; width: number}>;
   countdown: number;      // >0 = pre-match countdown in seconds, 0 = match running
   stats: MatchStats;
   shockwaves: Array<{x: number; y: number; radius: number; maxRadius: number; life: number}>;
