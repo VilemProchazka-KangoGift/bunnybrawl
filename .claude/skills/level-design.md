@@ -117,6 +117,7 @@ Import from `./drawPrimitives`. All take `(ctx, x, groundY, ...)` where groundY 
 | `drawSnowDrift` | `x, groundY, width, height` | Snow mound with highlight |
 | `drawIcePatch` | `x, groundY, width` | Transparent ice surface with shine |
 | `drawIcicle` | `x, topY, length` | Translucent hanging icicle |
+| `drawIceCube` | `x, topY, width, height` | 3D translucent ice block with top/right faces, internal cracks, frozen bubbles, shine. Use with a platform on top for jumpable obstacles |
 | `drawSnowball` | `x, groundY, radius` | Single snow sphere with highlight + shadow |
 | `drawSnowballPyramid` | `x, groundY, ballRadius` | 3-2-1 stacked balls (6 total). ballRadius 6-14 is good range |
 | `drawSnowman` | `x, groundY, size` | Small decorative snowman (2-ball, eyes, nose, buttons). size 15-30 |

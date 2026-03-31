@@ -1,6 +1,6 @@
 import type { ThemeConfig } from './types';
 import {
-  drawPineTree, drawChristmasTree, drawSnowDrift, drawIcePatch, drawIcicle,
+  drawPineTree, drawChristmasTree, drawSnowDrift, drawIcePatch, drawIcicle, drawIceCube,
   drawBigSnowman, drawIgloo, drawSnowman, drawSnowball,
   drawSnowballPyramid, drawLargeSnowballPyramid,
   drawFgBush,
@@ -137,8 +137,13 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
     drawPineTree(ctx, 200, y, 75, true);
     drawChristmasTree(ctx, 640, y, 55);
     drawPineTree(ctx, 1200, y, 60, true);
-    drawSnowman(ctx, 440, y, 32);
+    drawSnowman(ctx, 530, y, 32);
     drawIcePatch(ctx, 700, y, 220);
+
+    // === ICE CUBES — 3D blocks with platforms on top ===
+    drawIceCube(ctx, 380, 610, 65, 50);    // left ground block
+    drawIceCube(ctx, 835, 610, 65, 50);    // right ground block
+    drawIceCube(ctx, 430, 370, 60, 50);    // floating mid-left
 
     // === PLATFORM DECORATIONS — rich variety per platform ===
     for (let i = 0; i < floats.length; i++) {

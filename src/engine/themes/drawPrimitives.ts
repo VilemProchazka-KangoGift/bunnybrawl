@@ -591,6 +591,86 @@ export function drawLargeSnowballPyramid(ctx: CanvasRenderingContext2D, x: numbe
   ctx.fill();
 }
 
+/** Ice cube — translucent 3D block. Draws behind the platform at (x, topY).
+ *  width/height are the visual cube dimensions (platform sits on top edge). */
+export function drawIceCube(ctx: CanvasRenderingContext2D, x: number, topY: number, width: number, height: number): void {
+  const depth = width * 0.3; // 3D depth offset
+
+  // Back face (darker, offset)
+  ctx.fillStyle = 'rgba(140, 180, 210, 0.3)';
+  ctx.beginPath();
+  ctx.moveTo(x + depth, topY - depth);
+  ctx.lineTo(x + width + depth, topY - depth);
+  ctx.lineTo(x + width + depth, topY + height - depth);
+  ctx.lineTo(x + depth, topY + height - depth);
+  ctx.closePath();
+  ctx.fill();
+
+  // Top face
+  ctx.fillStyle = 'rgba(200, 225, 245, 0.45)';
+  ctx.beginPath();
+  ctx.moveTo(x, topY);
+  ctx.lineTo(x + depth, topY - depth);
+  ctx.lineTo(x + width + depth, topY - depth);
+  ctx.lineTo(x + width, topY);
+  ctx.closePath();
+  ctx.fill();
+
+  // Right face
+  ctx.fillStyle = 'rgba(150, 190, 220, 0.35)';
+  ctx.beginPath();
+  ctx.moveTo(x + width, topY);
+  ctx.lineTo(x + width + depth, topY - depth);
+  ctx.lineTo(x + width + depth, topY + height - depth);
+  ctx.lineTo(x + width, topY + height);
+  ctx.closePath();
+  ctx.fill();
+
+  // Front face (main, most visible)
+  ctx.fillStyle = 'rgba(180, 215, 240, 0.5)';
+  ctx.fillRect(x, topY, width, height);
+
+  // Front face border
+  ctx.strokeStyle = 'rgba(160, 200, 230, 0.6)';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(x, topY, width, height);
+
+  // Internal cracks
+  ctx.strokeStyle = 'rgba(220, 240, 255, 0.35)';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(x + width * 0.2, topY + height * 0.3);
+  ctx.lineTo(x + width * 0.45, topY + height * 0.5);
+  ctx.lineTo(x + width * 0.35, topY + height * 0.75);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x + width * 0.6, topY + height * 0.2);
+  ctx.lineTo(x + width * 0.75, topY + height * 0.55);
+  ctx.stroke();
+
+  // Frozen bubbles
+  ctx.fillStyle = 'rgba(230, 245, 255, 0.4)';
+  ctx.beginPath();
+  ctx.arc(x + width * 0.3, topY + height * 0.4, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x + width * 0.65, topY + height * 0.6, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x + width * 0.5, topY + height * 0.25, 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Shine highlight on top-left
+  ctx.fillStyle = 'rgba(240, 250, 255, 0.5)';
+  ctx.beginPath();
+  ctx.moveTo(x + 3, topY + 3);
+  ctx.lineTo(x + width * 0.4, topY + 3);
+  ctx.lineTo(x + width * 0.3, topY + height * 0.2);
+  ctx.lineTo(x + 3, topY + height * 0.25);
+  ctx.closePath();
+  ctx.fill();
+}
+
 export function drawSnowDrift(ctx: CanvasRenderingContext2D, x: number, groundY: number, width: number, height: number): void {
   ctx.fillStyle = 'rgba(230, 240, 250, 0.7)';
   ctx.beginPath();
