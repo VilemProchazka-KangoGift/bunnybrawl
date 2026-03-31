@@ -1,7 +1,7 @@
 import type { ThemeConfig } from './types';
 import {
   drawPineTree, drawChristmasTree, drawSnowDrift, drawIcePatch, drawIcicle,
-  drawBigSnowman, drawIgloo, drawSnowman,
+  drawBigSnowman, drawIgloo, drawSnowman, drawSnowball, drawSnowballPyramid,
   drawFgBush,
 } from './drawPrimitives';
 
@@ -126,43 +126,74 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
   drawBackgroundNature: (ctx, arena) => {
     const ground = arena.platforms[0];
     const y = ground.y;
+    const floats = arena.platforms.filter(p => p.y < 650);
 
-    // Big snowman — background decoration (far left)
-    drawBigSnowman(ctx, 80, y, 100);
+    // === LANDMARKS (background) ===
+    drawBigSnowman(ctx, 55, y, 90);
+    drawIgloo(ctx, 1080, y, 180, 100);
 
-    // Igloo — background decoration (far right)
-    drawIgloo(ctx, 1050, y, 200, 110);
+    // === GROUND TREES — big to small, mix of pine and christmas ===
+    // Large pines (80-90px)
+    drawPineTree(ctx, 180, y, 85, true);
+    drawPineTree(ctx, 620, y, 80, true);
+    drawPineTree(ctx, 1200, y, 82, true);
+    // Medium pines (50-65px)
+    drawPineTree(ctx, 330, y, 55, true);
+    drawPineTree(ctx, 500, y, 50, true);
+    drawPineTree(ctx, 770, y, 60, true);
+    drawPineTree(ctx, 900, y, 48, true);
+    // Small pines (25-38px)
+    drawPineTree(ctx, 130, y, 28, true);
+    drawPineTree(ctx, 450, y, 32, true);
+    drawPineTree(ctx, 710, y, 25, true);
+    drawPineTree(ctx, 1040, y, 35, true);
+    // Christmas trees — various sizes
+    drawChristmasTree(ctx, 260, y, 65);
+    drawChristmasTree(ctx, 560, y, 50);
+    drawChristmasTree(ctx, 850, y, 55);
+    drawChristmasTree(ctx, 1150, y, 42);
 
-    // Small decorative snowmen scattered on ground
-    drawSnowman(ctx, 350, y, 28);
-    drawSnowman(ctx, 750, y, 22);
-    drawSnowman(ctx, 1000, y, 25);
+    // === PLATFORM TREES — smaller, sitting on floating platforms ===
+    for (const plat of floats) {
+      const mid = plat.x + plat.width / 2;
+      if (plat.width >= 200) {
+        // Wide platforms get a tree on each side + decorations
+        drawPineTree(ctx, plat.x + 25, plat.y, 30, true);
+        drawChristmasTree(ctx, plat.x + plat.width - 25, plat.y, 28);
+        drawSnowball(ctx, mid, plat.y, 5);
+      } else if (plat.width >= 140) {
+        // Medium platforms get one tree
+        drawPineTree(ctx, mid + 20, plat.y, 25, true);
+        drawSnowDrift(ctx, plat.x + 20, plat.y, 25, 3);
+      } else {
+        // Small platforms get a snow drift or snowball
+        drawSnowball(ctx, mid, plat.y, 4);
+      }
+    }
 
-    // Pine trees — many, various sizes
-    drawPineTree(ctx, 20, y, 60, true);
-    drawPineTree(ctx, 160, y, 35, true);
-    drawPineTree(ctx, 300, y, 48, true);
-    drawPineTree(ctx, 500, y, 30, true);
-    drawPineTree(ctx, 670, y, 55, true);
-    drawPineTree(ctx, 850, y, 32, true);
-    drawPineTree(ctx, 1180, y, 45, true);
+    // === SMALL SNOWMEN ===
+    drawSnowman(ctx, 380, y, 26);
+    drawSnowman(ctx, 680, y, 20);
+    drawSnowman(ctx, 960, y, 24);
 
-    // Christmas trees — decorated with ornaments and star
-    drawChristmasTree(ctx, 420, y, 52);
-    drawChristmasTree(ctx, 790, y, 44);
-    drawChristmasTree(ctx, 1240, y, 38);
+    // === SNOWBALLS & PYRAMIDS ===
+    drawSnowballPyramid(ctx, 430, y, 8);
+    drawSnowballPyramid(ctx, 820, y, 7);
+    drawSnowball(ctx, 290, y, 10);
+    drawSnowball(ctx, 550, y, 7);
+    drawSnowball(ctx, 750, y, 12);
+    drawSnowball(ctx, 1100, y, 8);
 
-    // Frozen lake in center
+    // === FROZEN LAKE ===
     drawIcePatch(ctx, 480, y, 320);
 
-    // Snow drifts
-    drawSnowDrift(ctx, 240, y, 65, 9);
-    drawSnowDrift(ctx, 580, y, 55, 7);
-    drawSnowDrift(ctx, 900, y, 70, 10);
-    drawSnowDrift(ctx, 1120, y, 50, 7);
+    // === SNOW DRIFTS ===
+    drawSnowDrift(ctx, 200, y, 60, 8);
+    drawSnowDrift(ctx, 640, y, 50, 7);
+    drawSnowDrift(ctx, 1000, y, 65, 9);
 
-    // Icicles under the wide center bridge
-    const bridge = arena.platforms.find(p => p.width >= 350 && p.y < 550);
+    // === ICICLES under wide bridge ===
+    const bridge = floats.find(p => p.width >= 350);
     if (bridge) {
       for (let i = 0; i < 6; i++) {
         drawIcicle(ctx, bridge.x + 30 + i * 60, bridge.y + bridge.height, 8 + Math.random() * 7);
@@ -183,11 +214,10 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
       highlight2: '#4A6A4A',
       berries: ['#CC3333', '#DD4444', '#BB2222'],
     };
-    drawFgBush(ctx, 130, gy, 32, snowBushColors);
-    drawFgBush(ctx, 620, gy, 36, snowBushColors);
-    drawFgBush(ctx, 950, gy, 30, snowBushColors);
+    drawFgBush(ctx, 120, gy, 34, snowBushColors);
+    drawFgBush(ctx, 580, gy, 38, snowBushColors);
+    drawFgBush(ctx, 940, gy, 30, snowBushColors);
 
-    // Snow piles at ground edges
     drawSnowDrift(ctx, 15, gy, 45, 6);
     drawSnowDrift(ctx, 1250, gy, 40, 5);
   },

@@ -482,6 +482,63 @@ export function drawChristmasTree(ctx: CanvasRenderingContext2D, x: number, grou
   }
 }
 
+export function drawSnowball(ctx: CanvasRenderingContext2D, x: number, groundY: number, radius: number): void {
+  ctx.fillStyle = '#E4ECF4';
+  ctx.beginPath();
+  ctx.arc(x, groundY - radius, radius, 0, Math.PI * 2);
+  ctx.fill();
+  // Highlight
+  ctx.fillStyle = '#F4F8FC';
+  ctx.beginPath();
+  ctx.arc(x - radius * 0.25, groundY - radius * 1.3, radius * 0.35, 0, Math.PI * 2);
+  ctx.fill();
+  // Shadow underneath
+  ctx.fillStyle = 'rgba(100, 130, 160, 0.15)';
+  ctx.beginPath();
+  ctx.ellipse(x, groundY, radius * 0.8, radius * 0.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+export function drawSnowballPyramid(ctx: CanvasRenderingContext2D, x: number, groundY: number, ballRadius: number): void {
+  const r = ballRadius;
+  const gap = r * 0.15;
+  // Bottom row — 3 balls
+  for (let i = 0; i < 3; i++) {
+    const bx = x + (i - 1) * (r * 2 + gap);
+    ctx.fillStyle = '#E4ECF4';
+    ctx.beginPath();
+    ctx.arc(bx, groundY - r, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#F2F6FB';
+    ctx.beginPath();
+    ctx.arc(bx - r * 0.2, groundY - r * 1.25, r * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Top row — 2 balls nestled on top
+  for (let i = 0; i < 2; i++) {
+    const bx = x + (i - 0.5) * (r * 2 + gap);
+    const by = groundY - r * 2 - r * 0.6;
+    ctx.fillStyle = '#E8F0F6';
+    ctx.beginPath();
+    ctx.arc(bx, by, r * 0.9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#F4F8FC';
+    ctx.beginPath();
+    ctx.arc(bx - r * 0.15, by - r * 0.3, r * 0.25, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Cap — 1 ball on very top
+  const capY = groundY - r * 2 - r * 0.6 - r * 1.5;
+  ctx.fillStyle = '#ECF2F8';
+  ctx.beginPath();
+  ctx.arc(x, capY, r * 0.8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#F6FAFC';
+  ctx.beginPath();
+  ctx.arc(x - r * 0.1, capY - r * 0.25, r * 0.2, 0, Math.PI * 2);
+  ctx.fill();
+}
+
 export function drawSnowDrift(ctx: CanvasRenderingContext2D, x: number, groundY: number, width: number, height: number): void {
   ctx.fillStyle = 'rgba(230, 240, 250, 0.7)';
   ctx.beginPath();
