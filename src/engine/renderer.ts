@@ -1035,7 +1035,7 @@ export class Renderer {
     const drawRedPulse = slowTimer > 0;
 
     // Squash/stretch from landing/jumping (centered on feet)
-    const squashScale = player.squashScale ?? 1;
+    const squashScale = player.squashScale;
     if (squashScale !== 1) {
       const ssX = 1 + (1 - squashScale) * 0.5; // wider when squashed
       const ssY = squashScale;

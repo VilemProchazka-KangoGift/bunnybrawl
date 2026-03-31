@@ -815,8 +815,6 @@ export class GameLoop {
     }
     this.state.shockwaves = this.state.shockwaves.filter(sw => sw.life > 0);
 
-    // screenFlash is decremented in loop() (real-time), not here
-
     // Decay score animations
     for (const sa of this.state.scoreAnimations) {
       sa.timer -= dt;
