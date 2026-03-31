@@ -51,5 +51,7 @@
   "char_Goat": "Koza",
   "char_Horse": "Kůň",
   "char_Sheep": "Ovce",
-  "char_Monkey": "Opice"
+  "char_Monkey": "Opice",
+  "fullscreen_enter": "Celá obrazovka",
+  "fullscreen_exit": "Ukončit celou obrazovku"
 }

@@ -29,7 +29,10 @@ src/
       registry.ts   # Theme registry map + getTheme() + listThemes()
       index.ts      # Barrel export
     index.ts      # Public API barrel export
+  hooks/
+    useScaler.ts  # Viewport scaling + fullscreen API hook
   components/     # React components (menus/HUD only — canvas is imperative)
+    GameScaler.tsx      # Viewport-responsive wrapper (CSS transform scaling)
     MainMenu.tsx        # Title screen with Play button, blood toggle, language switch
     CharacterSelect.tsx # Canvas-based JnB-style lobby (~810 lines)
     Match.tsx           # Game canvas mount + pause overlay
@@ -49,6 +52,7 @@ src/
 - **All audio is procedural** — generated as WAV data URIs at init time. No external audio files.
 - **All character sprites are procedural** — drawn with Canvas 2D primitives. No sprite sheets.
 - **React is for menus only** — the game canvas and lobby canvas use imperative requestAnimationFrame loops.
+- **CSS transform scaling** — the game renders internally at a fixed 1280x720 logical resolution. `GameScaler` wraps all screens and uses `transform: scale()` to fit the viewport while preserving 16:9 aspect ratio. Screen containers use `width/height: 100%` and inherit size from the scaler. Fullscreen via F11 or the corner button.
 - **i18n via i18next** — Czech is the default language. Canvas text uses `i18n.t()` directly (not the React hook).
 - **Data-driven arena themes** — Each arena has a `ThemeConfig` controlling all visuals (sky, platforms, decorations, weather, wildlife, fog, day/night) and optional physics modifiers. Themes are mostly data (colors, counts, ranges) with custom draw functions for unique decorations. Shared drawing primitives live in `themes/drawPrimitives.ts` and are reused across themes.
 
@@ -126,6 +130,7 @@ npm run test:e2e  # E2E tests (builds first)
 - **Arena type is flat** — `Arena` has `themeId` + platforms/spawns directly (not nested in a `layout` sub-object). The theme provides all visual config; the Arena provides structural layout. Color fields (`backgroundColor`, `groundColor`, `platformColor`) were removed — use the theme instead.
 - **Theme draw functions receive raw ctx + arena** — they import shared primitives from `drawPrimitives.ts` directly, not through a DrawKit indirection. Keep it simple.
 - **platforms[0] is always the ground** — convention used by themes, renderer, and gameLoop. Ground platform is detected by `p.y >= 650`.
+- **Screen containers must use `width/height: 100%`** — they inherit their size from `GameScaler`'s 1280x720 content div. Never set fixed pixel dimensions on screen containers (`.main-menu`, `.match-container`, `.char-select`, `.victory-screen`).
 
 ## File Size Reference
 

@@ -3,7 +3,7 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
 
 export function useScaler() {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(() => !!document.fullscreenElement);
 
   const updateScale = useCallback(() => {
     const el = containerRef.current;
@@ -45,7 +45,6 @@ export function useScaler() {
 
     const onFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement);
-      // Recalculate scale after fullscreen change
       requestAnimationFrame(updateScale);
     };
     document.addEventListener('fullscreenchange', onFullscreenChange);

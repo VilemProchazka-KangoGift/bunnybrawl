@@ -51,5 +51,7 @@
   "char_Goat": "Goat",
   "char_Horse": "Horse",
   "char_Sheep": "Sheep",
-  "char_Monkey": "Monkey"
+  "char_Monkey": "Monkey",
+  "fullscreen_enter": "Enter fullscreen",
+  "fullscreen_exit": "Exit fullscreen"
 }

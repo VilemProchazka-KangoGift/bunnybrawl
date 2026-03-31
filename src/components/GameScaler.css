@@ -10,8 +10,6 @@
 }
 
 .game-scaler-content {
-  width: 1280px;
-  height: 720px;
   transform-origin: center center;
   position: relative;
   flex-shrink: 0;
