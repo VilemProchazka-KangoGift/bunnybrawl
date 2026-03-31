@@ -119,8 +119,9 @@ Import from `./drawPrimitives`. All take `(ctx, x, groundY, ...)` where groundY 
 | `drawIcicle` | `x, topY, length` | Translucent hanging icicle |
 | `drawIceCube` | `x, topY, width, height` | 3D translucent ice block with top/right faces, internal cracks, frozen bubbles, shine. Use with a platform on top for jumpable obstacles |
 | `drawSnowball` | `x, groundY, radius` | Single snow sphere with highlight + shadow |
-| `drawSnowballPyramid` | `x, groundY, ballRadius` | 3-2-1 stacked balls (6 total). ballRadius 6-14 is good range |
-| `drawSnowman` | `x, groundY, size` | Small decorative snowman (2-ball, eyes, nose, buttons). size 15-30 |
+| `drawSnowballPyramid` | `x, groundY, ballRadius` | 3-2-1 stacked balls (6 total). ballRadius 6+ on platforms, 8+ on ground |
+| `drawLargeSnowballPyramid` | `x, groundY, ballRadius` | 4-3-2-1 stacked (10 balls) with depth shading. Foreground accent, radius 9-12 |
+| `drawSnowman` | `x, groundY, size` | Decorative snowman (2-ball, eyes, nose, buttons). size 24-32 everywhere — never tiny |
 | `drawBigSnowman` | `x, groundY, size` | Large 3-ball snowman with top hat, stick arms, buttons. size 80-140 |
 | `drawIgloo` | `x, groundY, width, height` | Snow dome with ice block lines + dark entrance. width 150-300 |
 
@@ -133,31 +134,61 @@ Use all 3 draw layers for visual depth:
 - **Background** (`drawBackgroundNature`): full-opacity decorations behind players — trees, snowmen, landmarks, structures on platforms
 - **Foreground** (`drawForegroundNature`): full-opacity decorations OVER players — large trees, bushes, snowball pyramids. Creates parallax depth
 
+### Overlap Prevention (CRITICAL)
+
+Before placing any decoration, check it doesn't overlap with:
+1. Other decorations at the same y level (map all x positions first)
+2. Foreground elements drawn at the same x (pyramids, trees)
+3. Platform edges — decorations on platforms must fit within the platform width
+4. 3D depth offsets (ice cubes extend ~30% width to the right and upward)
+
+**Map x positions before drawing.** List all ground elements with their approximate x-span, then verify no two overlap. Same for each platform.
+
+### Jumpable Decoration Obstacles
+
+To make a decoration into a solid obstacle players can jump onto:
+1. Add a platform in `arena.ts` at the top of the visual shape
+2. Draw the decoration visual in `drawBackgroundNature` at matching coordinates
+3. The platform provides collision; the drawing is purely visual behind it
+
+Example (ice cube): platform `{ x: 380, y: 610, width: 65, height: 24 }` + `drawIceCube(ctx, 380, 610, 65, 50)`. The cube visual extends 50px below the platform top.
+
+### Decoration Sizing — Keep Consistent
+
+All decorations should be proportionally sized to the player (32x32px). Do NOT use tiny decorations on platforms — they look wrong against regular-sized players.
+
+- **Snowmen**: size 24-32 everywhere (ground AND platforms). Never below 20.
+- **Snowball pyramids**: ballRadius 6+ on platforms, 10+ on ground for large variant
+- **Snowballs**: radius 4-5 on platforms, 7-12 on ground
+- **Trees on platforms**: 20-48px depending on platform width. Keep proportional to the platform.
+
 ### Platform Decorations
 
 Scale decorations to platform width. Every platform should have something:
-- **350px+** (very wide): 2-3 trees + snowman/snowball + drift/small details
-- **200px+** (wide): 2 trees + snowman or snowball pair + drift
-- **140px+** (medium): 1 tree + small decoration (snowball, drift, small snowman)
-- **100px** (small): 1 small tree OR small snowman + snowball
+- **350px+** (very wide): 2 trees + snowman + icicles underneath
+- **200px+** (wide): 2 trees + snowman or snowball pair
+- **140px+** (medium): 1 tree + decoration (snowman, pyramid, or snowball). Vary with `i % 3`
+- **100px** (small): 1 item (tree, snowman, or christmas tree). Vary with `i % 3`
 
 Use the platform index (`i % N`) to vary which decoration type appears, avoiding monotony.
 
 ### Tree Sizing Guide
 
-- **Tiny** (22-28px): filler, platform small
-- **Small** (30-38px): platform medium, ground filler
-- **Medium** (42-55px): platform wide, ground secondary
-- **Large** (60-70px): ground foreground trees (drawn over players)
-- **Very large** (80-90px): ground background landmark trees
+- **Small** (20-28px): platform small/medium
+- **Medium** (30-42px): platform wide, ground filler
+- **Large** (45-55px): platform very wide, ground secondary
+- **Foreground** (55-70px): ground only, drawn over players
+- **Landmark** (75-90px): ground background, skyline-defining
 
 ### Ground Decoration Spacing
 
-Spread decorations across the full 1280px width. Avoid clustering. Alternate types:
-- Trees every ~100-150px with varying sizes
-- Snowmen/snowballs every ~200-300px
-- Drifts to fill gaps
-- Pyramids as foreground accent pieces (2-3 per level)
+Keep ground SPARSE — platforms carry most of the visual interest. Ground should have:
+- 3-5 trees spread across 1280px (not more)
+- 1-2 snowmen or accent pieces
+- 1 ice patch or feature
+- Landmarks (big snowman, igloo) pushed to far edges
+
+Avoid clustering. More is not better — clutter makes the playfield hard to read.
 
 ## Example: Creating a New Level
 
