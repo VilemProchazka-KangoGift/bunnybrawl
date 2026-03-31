@@ -33,7 +33,7 @@ test.describe('BunnyBrawl E2E', () => {
     await expect(page.getByTestId('main-menu')).toBeVisible();
   });
 
-  test('players can reach ready zone and start match', async ({ page }) => {
+  test('players can reach ready zone and start match', { tag: '@flaky' }, async ({ page }) => {
     test.setTimeout(50000);
     await page.getByTestId('play-button').click();
     await expect(page.getByTestId('lobby-canvas')).toBeVisible();

@@ -1,6 +1,6 @@
 import type {
   MatchState, MatchSettings, Arena, CharacterSlot, Player, Particle,
-  WeatherParticle, MatchStats, PlayerStats,
+  WeatherParticle, MatchStats, PlayerStats, WildlifeEntity,
 } from './types';
 import { InputManager } from './input';
 import { Renderer } from './renderer';
@@ -19,6 +19,9 @@ import {
   SQUASH_ON_LAND, STRETCH_ON_JUMP, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED,
   AFTERIMAGE_INTERVAL, AFTERIMAGE_SPEED_THRESHOLD, AFTERIMAGE_MAX,
   DAY_CYCLE_DURATION, MATCH_COUNTDOWN, IDLE_ANIM_INTERVAL,
+  SHOCKWAVE_MAX_RADIUS, SHOCKWAVE_DURATION, SCREEN_FLASH_DURATION,
+  SPRING_TRAIL_DURATION, SCORE_ANIM_DURATION,
+  WILDLIFE_COUNT, FOG_PARTICLE_COUNT, POLLEN_COUNT,
 } from './constants';
 import { CHARACTERS } from './characters';
 
@@ -71,6 +74,7 @@ export class GameLoop {
       fastFalling: false, fatTimer: 0, slowTimer: 0,
       squashScale: 1, squashTimer: 0, afterimages: [], idleAnimTimer: 0,
       expression: 'normal' as const, killStreak: 0,
+      breathTimer: 0, springTrailTimer: 0, damageFlashSide: null, damageFlashTimer: 0,
     }));
 
     // Init weather particles
@@ -86,6 +90,58 @@ export class GameLoop {
     }
     const stats: MatchStats = { perPlayer: statsMap };
 
+    // Init wildlife
+    const wildlife: WildlifeEntity[] = [];
+    const brightColors = ['#FF6B6B', '#FFD93D', '#6BCB77', '#4D96FF', '#FF78C4', '#A66CFF'];
+    for (let i = 0; i < WILDLIFE_COUNT; i++) {
+      const isButterfly = Math.random() < 0.7;
+      if (isButterfly) {
+        wildlife.push({
+          type: 'butterfly',
+          x: Math.random() * CANVAS_WIDTH,
+          y: Math.random() * CANVAS_HEIGHT * 0.6,
+          vx: 10 + Math.random() * 20,
+          vy: 0,
+          wingPhase: Math.random() * Math.PI * 2,
+          color: brightColors[Math.floor(Math.random() * brightColors.length)],
+        });
+      } else {
+        wildlife.push({
+          type: 'bird',
+          x: -50 - Math.random() * 100,
+          y: Math.random() * CANVAS_HEIGHT * 0.4,
+          vx: 40 + Math.random() * 40,
+          vy: 0,
+          wingPhase: Math.random() * Math.PI * 2,
+          color: '#5C4033',
+        });
+      }
+    }
+
+    // Init fog particles (ground level ~660)
+    const fogParticles: Array<{x: number; y: number; vx: number; alpha: number}> = [];
+    for (let i = 0; i < FOG_PARTICLE_COUNT; i++) {
+      fogParticles.push({
+        x: Math.random() * CANVAS_WIDTH,
+        y: 650 + (Math.random() * 20 - 10),
+        vx: 5 + Math.random() * 10,
+        alpha: 0.15 + Math.random() * 0.15,
+      });
+    }
+
+    // Init pollen particles
+    const pollenParticles: Array<{x: number; y: number; vx: number; vy: number; size: number; alpha: number}> = [];
+    for (let i = 0; i < POLLEN_COUNT; i++) {
+      pollenParticles.push({
+        x: Math.random() * CANVAS_WIDTH,
+        y: Math.random() * CANVAS_HEIGHT,
+        vx: (Math.random() - 0.5) * 10,
+        vy: -(5 + Math.random() * 10),
+        size: 1 + Math.random() * 2,
+        alpha: 0.3 + Math.random() * 0.4,
+      });
+    }
+
     this.state = {
       players,
       splatMarks: [], killFeed: [],
@@ -100,6 +156,13 @@ export class GameLoop {
       puddles: [],
       countdown: MATCH_COUNTDOWN,
       stats,
+      shockwaves: [],
+      screenFlash: 0,
+      wildlife,
+      fogParticles,
+      pollenParticles,
+      shootingStars: [],
+      scoreAnimations: [],
     };
   }
 
@@ -457,6 +520,11 @@ export class GameLoop {
       }
       if (player.fatTimer > 0) player.fatTimer -= dt;
       if (player.slowTimer > 0) player.slowTimer -= dt;
+      // Breathing animation
+      player.breathTimer += dt;
+      // Decay damage flash and spring trail
+      if (player.damageFlashTimer > 0) player.damageFlashTimer -= dt;
+      if (player.springTrailTimer > 0) player.springTrailTimer -= dt;
     }
 
     // Input + physics
@@ -621,6 +689,7 @@ export class GameLoop {
           player.vy = SPRING_BOUNCE;
           player.state = 'airborne';
           spring.bounceTimer = 0.3;
+          player.springTrailTimer = SPRING_TRAIL_DURATION;
           audio.play('jump');
         }
       }
@@ -666,6 +735,8 @@ export class GameLoop {
           player.fatTimer = FAT_DURATION;
           audio.play('select');
           audio.play(player.character.name.toLowerCase() as any);
+          // Score animation for carrot pickup
+          this.state.scoreAnimations.push({ playerId: player.id, value: player.score, timer: SCORE_ANIM_DURATION });
           // Stats: carrots eaten
           const ps = this.state.stats.perPlayer.get(player.id);
           if (ps) ps.carrotsEaten += 1;
@@ -695,10 +766,27 @@ export class GameLoop {
         attacker.killStreak += 1;
         const aps = this.state.stats.perPlayer.get(attacker.id);
         if (aps && attacker.killStreak > aps.bestStreak) aps.bestStreak = attacker.killStreak;
+        // Score animation for attacker
+        this.state.scoreAnimations.push({ playerId: attacker.id, value: attacker.score, timer: SCORE_ANIM_DURATION });
       }
       const victim = this.state.players.find(p => p.id === entry.victim);
       if (victim) {
         this.spawnKillSplatter(victim);
+        // Shockwave at victim position
+        this.state.shockwaves.push({
+          x: victim.x + victim.width / 2,
+          y: victim.y + victim.height / 2,
+          radius: 0,
+          maxRadius: SHOCKWAVE_MAX_RADIUS,
+          life: SHOCKWAVE_DURATION,
+        });
+        // Damage flash on victim
+        if (attacker) {
+          victim.damageFlashSide = attacker.x < victim.x ? 'left' : 'right';
+        } else {
+          victim.damageFlashSide = null;
+        }
+        victim.damageFlashTimer = 0.3;
         // Stats: reset kill streak on death
         victim.killStreak = 0;
       }
@@ -708,6 +796,81 @@ export class GameLoop {
     collidePlayersHorizontal(this.state.players);
     updateSplatTimers(this.state.players, this.arena.spawnPoints, dt);
     this.updateParticles(dt);
+
+    // Decay shockwaves
+    for (const sw of this.state.shockwaves) {
+      const progress = 1 - sw.life / SHOCKWAVE_DURATION;
+      sw.radius = sw.maxRadius * progress;
+      sw.life -= dt;
+    }
+    this.state.shockwaves = this.state.shockwaves.filter(sw => sw.life > 0);
+
+    // Decay screen flash
+    if (this.state.screenFlash > 0) this.state.screenFlash -= dt;
+
+    // Decay score animations
+    for (const sa of this.state.scoreAnimations) {
+      sa.timer -= dt;
+    }
+    this.state.scoreAnimations = this.state.scoreAnimations.filter(sa => sa.timer > 0);
+
+    // Update wildlife
+    for (const w of this.state.wildlife) {
+      w.wingPhase += dt * 8;
+      if (w.type === 'butterfly') {
+        w.x += w.vx * dt;
+        w.vy = Math.sin(w.wingPhase * 0.5) * 20;
+        w.y += w.vy * dt;
+        // Wrap around screen
+        if (w.x > CANVAS_WIDTH + 20) w.x = -20;
+        if (w.x < -20) w.x = CANVAS_WIDTH + 20;
+        if (w.y < -20) w.y = CANVAS_HEIGHT * 0.6;
+        if (w.y > CANVAS_HEIGHT * 0.6) w.y = 0;
+      } else {
+        // Bird: fly right, respawn left
+        w.x += w.vx * dt;
+        w.y += Math.sin(w.wingPhase * 0.3) * 5 * dt;
+        if (w.x > CANVAS_WIDTH + 50) {
+          w.x = -50 - Math.random() * 100;
+          w.y = Math.random() * CANVAS_HEIGHT * 0.4;
+          w.vx = 40 + Math.random() * 40;
+        }
+      }
+    }
+
+    // Update fog particles
+    for (const f of this.state.fogParticles) {
+      f.x += f.vx * dt;
+      if (f.x > CANVAS_WIDTH + 30) f.x = -30;
+    }
+
+    // Update pollen particles
+    for (const p of this.state.pollenParticles) {
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      // Respawn at bottom when off top
+      if (p.y < -10) {
+        p.y = CANVAS_HEIGHT + 10;
+        p.x = Math.random() * CANVAS_WIDTH;
+      }
+    }
+
+    // Shooting stars (rare spawn during night phase > 0.4)
+    if (this.state.dayPhase > 0.4 && Math.random() < 0.005) {
+      this.state.shootingStars.push({
+        x: Math.random() * CANVAS_WIDTH * 0.5,
+        y: Math.random() * CANVAS_HEIGHT * 0.3,
+        vx: 300 + Math.random() * 200,
+        vy: 50 + Math.random() * 50,
+        life: 0.4,
+      });
+    }
+    for (const star of this.state.shootingStars) {
+      star.x += star.vx * dt;
+      star.y += star.vy * dt;
+      star.life -= dt;
+    }
+    this.state.shootingStars = this.state.shootingStars.filter(s => s.life > 0);
 
     // Crowd cheering: ramp up volume near end of match
     const leadScore = Math.max(...this.state.players.filter(p => p.active).map(p => p.score));
@@ -750,6 +913,7 @@ export class GameLoop {
   private endMatch(winner: CharacterSlot | null): void {
     this.state.matchOver = true;
     this.state.winner = winner;
+    this.state.screenFlash = SCREEN_FLASH_DURATION;
     audio.stop('music');
     audio.play('victory');
     this.onMatchEnd(winner, this.state);

@@ -74,6 +74,10 @@ export interface Player {
   idleAnimTimer: number; // for character-specific idle animations
   expression: 'normal' | 'scared' | 'angry' | 'dizzy';
   killStreak: number;    // current consecutive kills without dying
+  breathTimer: number;         // for idle breathing animation
+  springTrailTimer: number;    // >0 = spiral trail active after spring bounce
+  damageFlashSide: 'left' | 'right' | null; // which side got hit
+  damageFlashTimer: number;    // >0 = show red flash
 }
 
 export type SplatShape = 'circle' | 'star' | 'splat' | 'ring' | 'paw';
@@ -175,6 +179,13 @@ export interface MatchState {
   puddles: Array<{x: number; width: number}>;
   countdown: number;      // >0 = pre-match countdown in seconds, 0 = match running
   stats: MatchStats;
+  shockwaves: Array<{x: number; y: number; radius: number; maxRadius: number; life: number}>;
+  screenFlash: number;  // >0 = white flash on screen (for final kill)
+  wildlife: WildlifeEntity[];
+  fogParticles: Array<{x: number; y: number; vx: number; alpha: number}>;
+  pollenParticles: Array<{x: number; y: number; vx: number; vy: number; size: number; alpha: number}>;
+  shootingStars: Array<{x: number; y: number; vx: number; vy: number; life: number}>;
+  scoreAnimations: Array<{playerId: CharacterSlot; value: number; timer: number}>;
 }
 
 export interface MatchStats {
@@ -186,6 +197,16 @@ export interface PlayerStats {
   timeAirborne: number;
   distanceTraveled: number;
   carrotsEaten: number;
+}
+
+export interface WildlifeEntity {
+  type: 'butterfly' | 'bird';
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  wingPhase: number;
+  color: string;
 }
 
 export interface WeatherParticle {

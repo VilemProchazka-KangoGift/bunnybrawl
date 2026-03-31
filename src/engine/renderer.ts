@@ -1,8 +1,9 @@
-import type { Arena, Player, SplatMark, MatchState, Particle, Platform, Carrot, SpringMushroom, Thorn, WeatherParticle } from './types';
+import type { Arena, Player, SplatMark, MatchState, Particle, Platform, Carrot, SpringMushroom, Thorn, WeatherParticle, WildlifeEntity, CharacterSlot } from './types';
 import { CHARACTERS } from './characters';
 import {
   CANVAS_WIDTH, CANVAS_HEIGHT, CARROT_SIZE, SPRING_SIZE, FAT_SCALE,
   SCREEN_SHAKE_INTENSITY, HAZARD_GROW_TIME,
+  SHOCKWAVE_DURATION, SCREEN_FLASH_DURATION, SPRING_TRAIL_DURATION, SCORE_ANIM_DURATION,
 } from './constants';
 
 interface Cloud {
@@ -287,7 +288,28 @@ export class Renderer {
       ctx.fillRect(x, y, w, 6);
       ctx.fillStyle = '#6BBF59';
       ctx.fillRect(x, y, w, 3);
+
+      // Platform edge moss (r)
+      this.drawPlatformMoss(ctx, x, y, h);
+      this.drawPlatformMoss(ctx, x + w, y, h);
     }
+  }
+
+  private drawPlatformMoss(ctx: CanvasRenderingContext2D, edgeX: number, platY: number, platH: number): void {
+    ctx.fillStyle = '#3A7A3A';
+    // Several small hanging drapes
+    for (let i = 0; i < 3; i++) {
+      const ox = (i - 1) * 4;
+      const hang = 5 + i * 2;
+      ctx.beginPath();
+      ctx.ellipse(edgeX + ox, platY + platH + hang * 0.5, 3, hang * 0.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Darker accent
+    ctx.fillStyle = '#2D6B2D';
+    ctx.beginPath();
+    ctx.ellipse(edgeX, platY + platH + 2, 5, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   // ---- Splat marks ----
@@ -389,6 +411,11 @@ export class Renderer {
     // Weather (leaves, petals)
     this.drawWeather(ctx, matchState.weather);
 
+    // Wildlife: butterflies + birds (q) — drawn after clouds/weather, before springs
+    if (matchState.wildlife) {
+      this.drawWildlife(ctx, matchState.wildlife);
+    }
+
     // Springs and thorns (behind players)
     for (const spring of matchState.springs) this.drawSpringMushroom(ctx, spring);
     for (const thorn of matchState.thorns) this.drawThorn(ctx, thorn);
@@ -400,6 +427,23 @@ export class Renderer {
 
     // Particles
     this.drawParticles(ctx, particles);
+
+    // Stomp shockwaves (e) — after particles, before players
+    if (matchState.shockwaves) {
+      for (const sw of matchState.shockwaves) {
+        const progress = 1 - sw.life / SHOCKWAVE_DURATION;
+        const alpha = sw.life / SHOCKWAVE_DURATION;
+        const radius = sw.radius;
+        const lineW = Math.max(1, 4 * (1 - progress));
+        ctx.save();
+        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+        ctx.lineWidth = lineW;
+        ctx.beginPath();
+        ctx.arc(sw.x, sw.y, radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
 
     // Afterimage ghost trails (drawn behind players)
     for (const player of matchState.players) {
@@ -427,15 +471,66 @@ export class Renderer {
       }
     }
 
+    // Compute which players are near a carrot (c) for blush
+    const nearCarrotSet = new Set<CharacterSlot>();
+    for (const player of matchState.players) {
+      if (!player.active || player.state === 'respawning') continue;
+      const pcx = player.x + player.width / 2;
+      const pcy = player.y + player.height / 2;
+      for (const carrot of matchState.carrots) {
+        if (!carrot.active) continue;
+        const dx = pcx - carrot.x;
+        const dy = pcy - carrot.y;
+        if (Math.sqrt(dx * dx + dy * dy) < 100) {
+          nearCarrotSet.add(player.id);
+          break;
+        }
+      }
+    }
+
     // Players
     for (const player of matchState.players) {
       if (!player.active) continue;
       if (player.state === 'respawning') continue;
-      this.drawPlayer(ctx, player);
+      this.drawPlayer(ctx, player, nearCarrotSet.has(player.id));
+    }
+
+    // Spring spiral trail (h) — drawn near players
+    for (const player of matchState.players) {
+      if (!player.active || player.state === 'respawning') continue;
+      if (player.springTrailTimer > 0) {
+        this.drawSpringTrail(ctx, player);
+      }
+    }
+
+    // Ground fog (o) — after players, before foreground nature
+    if (matchState.fogParticles) {
+      for (const fp of matchState.fogParticles) {
+        ctx.save();
+        ctx.globalAlpha = fp.alpha * 0.3;
+        ctx.fillStyle = '#FFF';
+        ctx.beginPath();
+        ctx.ellipse(fp.x, fp.y, 40, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
     }
 
     // Foreground nature
     this.drawForegroundNature(ctx, arena);
+
+    // Pollen / dandelion seeds (p)
+    if (matchState.pollenParticles) {
+      for (const pp of matchState.pollenParticles) {
+        ctx.save();
+        ctx.globalAlpha = pp.alpha * 0.7;
+        ctx.fillStyle = pp.size > 2 ? '#FFFFF0' : '#FFFACD';
+        ctx.beginPath();
+        ctx.arc(pp.x, pp.y, pp.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
 
     // Fireworks when match is over
     if (matchState.matchOver) {
@@ -444,7 +539,7 @@ export class Renderer {
 
     // Day/night cycle overlay
     if (matchState.dayPhase !== undefined) {
-      this.drawDayNightCycle(ctx, matchState.dayPhase);
+      this.drawDayNightCycle(ctx, matchState.dayPhase, matchState);
     }
 
     ctx.restore();
@@ -456,6 +551,15 @@ export class Renderer {
 
     // HUD (not affected by shake)
     this.drawHUD(ctx, matchState);
+
+    // Screen flash (f) — drawn after everything
+    if (matchState.screenFlash > 0) {
+      const flashAlpha = Math.min(1, matchState.screenFlash / SCREEN_FLASH_DURATION);
+      ctx.save();
+      ctx.fillStyle = `rgba(255, 255, 255, ${flashAlpha})`;
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.restore();
+    }
   }
 
   // ---- Weather ----
@@ -884,8 +988,37 @@ export class Renderer {
 
   // ---- Player drawing ----
 
-  private drawPlayer(ctx: CanvasRenderingContext2D, player: Player): void {
+  private drawPlayer(ctx: CanvasRenderingContext2D, player: Player, nearCarrot: boolean = false): void {
     const { x, y, width, height, character, state, facing, invincibleTimer, animFrame, fastFalling, fatTimer, slowTimer } = player;
+
+    const cx = x + width / 2;
+    const cy = y + height;
+
+    // Character shadow (a) — draw before the character
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, 10, 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Kill streak flame aura (d) — drawn behind character sprite
+    if (player.killStreak >= 3) {
+      const now = performance.now() / 1000;
+      ctx.save();
+      for (let i = 0; i < 4; i++) {
+        const angle = now * 3 + i * 1.5;
+        const flameX = cx + Math.sin(angle) * 8;
+        const flameY = y + height * 0.3 + Math.cos(angle * 1.3) * 4;
+        const flameR = 8 + Math.sin(angle * 2) * 3;
+        const colors = ['rgba(255, 100, 0, 0.3)', 'rgba(255, 60, 0, 0.25)', 'rgba(255, 200, 0, 0.2)', 'rgba(255, 0, 0, 0.2)'];
+        ctx.fillStyle = colors[i];
+        ctx.beginPath();
+        ctx.arc(flameX, flameY, flameR, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
 
     ctx.save();
 
@@ -900,9 +1033,6 @@ export class Renderer {
 
     // Red pulse overlay when slowed by thorns
     const drawRedPulse = slowTimer > 0;
-
-    const cx = x + width / 2;
-    const cy = y + height;
 
     // Squash/stretch from landing/jumping (centered on feet)
     const squashScale = (player as any).squashScale ?? 1;
@@ -931,8 +1061,19 @@ export class Renderer {
     if (state === 'splat') {
       this.drawSplatCharacter(ctx, x, y, width, height, character.color, character.darkColor);
     } else {
-      this.drawCharacterSprite(ctx, x, y, width, height, character, state, animFrame, fastFalling, player.idleAnimTimer);
+      this.drawCharacterSprite(ctx, x, y, width, height, character, state, animFrame, fastFalling, player.idleAnimTimer, player.breathTimer);
       this.drawExpression(ctx, player);
+    }
+
+    // Blush near carrot (c)
+    if (nearCarrot && state !== 'splat') {
+      ctx.fillStyle = 'rgba(255, 150, 180, 0.45)';
+      ctx.beginPath();
+      ctx.ellipse(cx - 8, y + height * 0.52, 4, 2.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(cx + 10, y + height * 0.52, 4, 2.5, 0, 0, Math.PI * 2);
+      ctx.fill();
     }
 
     // Red tint pulse overlay when hit by thorns
@@ -944,6 +1085,14 @@ export class Renderer {
       ctx.fill();
     }
 
+    // Damage direction indicator (l)
+    if (player.damageFlashTimer > 0 && player.damageFlashSide) {
+      const flashAlpha = Math.min(0.5, player.damageFlashTimer * 3);
+      const flashX = player.damageFlashSide === 'left' ? x : x + width - 4;
+      ctx.fillStyle = `rgba(255, 0, 0, ${flashAlpha})`;
+      ctx.fillRect(flashX, y, 4, height);
+    }
+
     ctx.restore();
   }
 
@@ -952,7 +1101,8 @@ export class Renderer {
     x: number, y: number, w: number, h: number,
     char: { name: string; color: string; darkColor: string; lightColor: string },
     state: string, animFrame: number, fastFalling: boolean,
-    idleAnimTimer?: number
+    idleAnimTimer?: number,
+    breathTimer?: number
   ): void {
     const cx = x + w / 2;
     const isAirborne = state === 'airborne';
@@ -968,8 +1118,14 @@ export class Renderer {
       scaleY = 1.15;
     }
 
+    // Breathing animation (b) — idle vertical scale pulse
+    if (state === 'idle' && breathTimer !== undefined) {
+      const breathScale = 1 + Math.sin(breathTimer * 2.5) * 0.02;
+      scaleY *= breathScale;
+    }
+
     ctx.save();
-    if (fastFalling) {
+    if (fastFalling || (state === 'idle' && breathTimer !== undefined)) {
       ctx.translate(cx, yOff + h / 2);
       ctx.scale(scaleX, scaleY);
       ctx.translate(-cx, -(yOff + h / 2));
@@ -1588,14 +1744,14 @@ export class Renderer {
       ctx.stroke();
     }
 
-    // Fast-fall speed lines
+    // Fast-fall speed lines (g) — enhanced: more lines, longer, brighter
     if (fastFalling) {
-      ctx.strokeStyle = 'rgba(255,255,200,0.6)';
+      ctx.strokeStyle = 'rgba(255,255,220,0.8)';
       ctx.lineWidth = 2;
-      for (let i = -1; i <= 1; i++) {
+      for (let i = -2; i <= 2; i++) {
         ctx.beginPath();
-        ctx.moveTo(cx + i * 6, yOff - 4);
-        ctx.lineTo(cx + i * 6, yOff - 14);
+        ctx.moveTo(cx + i * 5, yOff - 2);
+        ctx.lineTo(cx + i * 5, yOff - 20);
         ctx.stroke();
       }
     }
@@ -1682,7 +1838,7 @@ export class Renderer {
 
   // ---- Day/Night Cycle ----
 
-  private drawDayNightCycle(ctx: CanvasRenderingContext2D, dayPhase: number): void {
+  private drawDayNightCycle(ctx: CanvasRenderingContext2D, dayPhase: number, matchState?: MatchState): void {
     // dayPhase: 0 = noon, 0.5 = midnight, 1.0 = noon again
     // Use cosine so darkness peaks smoothly at 0.5
     const nightIntensity = Math.max(0, (1 - Math.cos(dayPhase * Math.PI * 2)) / 2);
@@ -1692,11 +1848,13 @@ export class Renderer {
     // Sun: visible when nightIntensity < 0.8, arcs left→right during day half (0.75→0.0→0.25)
     // Remap dayPhase so sun progress 0→1 = sunrise→sunset
     const sunPhase = ((dayPhase + 0.25) % 1); // shift so 0=sunrise(6am), 0.5=sunset(6pm)
+    let sunX = CANVAS_WIDTH / 2;
+    let sunY = 80;
     if (sunPhase < 0.5) {
       const sunT = sunPhase / 0.5; // 0→1 across the day
-      const sunX = 60 + sunT * (CANVAS_WIDTH - 120);
+      sunX = 60 + sunT * (CANVAS_WIDTH - 120);
       const sunArc = Math.sin(sunT * Math.PI);
-      const sunY = 130 - sunArc * 90;
+      sunY = 130 - sunArc * 90;
       const sunAlpha = Math.min(1, (1 - nightIntensity) * 1.5);
 
       if (sunAlpha > 0.05) {
@@ -1719,6 +1877,24 @@ export class Renderer {
         ctx.arc(sunX, sunY, 9, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
+
+        // Light rays from sun (m) — during daytime
+        if (nightIntensity < 0.3) {
+          ctx.save();
+          const rayAlpha = 0.04 * (1 - nightIntensity / 0.3);
+          ctx.fillStyle = `rgba(255, 215, 100, ${rayAlpha})`;
+          for (let r = 0; r < 4; r++) {
+            const angle = -0.3 + r * 0.2;
+            const rayW = 60 + r * 20;
+            ctx.beginPath();
+            ctx.moveTo(sunX, sunY);
+            ctx.lineTo(sunX + Math.cos(angle) * 400 - rayW / 2, CANVAS_HEIGHT);
+            ctx.lineTo(sunX + Math.cos(angle) * 400 + rayW / 2, CANVAS_HEIGHT);
+            ctx.closePath();
+            ctx.fill();
+          }
+          ctx.restore();
+        }
       }
     }
 
@@ -1801,6 +1977,31 @@ export class Renderer {
         ctx.beginPath();
         ctx.arc(fx, fy, 2, 0, Math.PI * 2);
         ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    // Shooting stars (n)
+    if (matchState?.shootingStars) {
+      ctx.save();
+      for (const star of matchState.shootingStars) {
+        const alpha = Math.min(1, star.life * 2);
+        // Tail: line from current pos back along velocity
+        const tailLen = Math.min(40, Math.sqrt(star.vx * star.vx + star.vy * star.vy) * 0.1);
+        const angle = Math.atan2(star.vy, star.vx);
+        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.6})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(star.x, star.y);
+        ctx.lineTo(star.x - Math.cos(angle) * tailLen, star.y - Math.sin(angle) * tailLen);
+        ctx.stroke();
+        // Head: bright dot
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = '#FFF';
+        ctx.beginPath();
+        ctx.arc(star.x, star.y, 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
       }
       ctx.restore();
     }
@@ -1936,12 +2137,31 @@ export class Renderer {
       ctx.beginPath();
       ctx.roundRect(CANVAS_WIDTH / 2 - 40, 55, 80, 30, 6);
       ctx.fill();
-      ctx.fillStyle = '#FFF';
-      ctx.font = 'bold 14px monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText(`${minutes}:${seconds.toString().padStart(2, '0')}`, CANVAS_WIDTH / 2, 75);
+
+      // Timer red pulse when < 30 seconds remaining (k)
+      const settings = (state as any).settings as { timeLimit?: number } | undefined;
+      const timeLimit = settings?.timeLimit ?? 0;
+      const remaining = timeLimit > 0 ? timeLimit - state.timeElapsed : Infinity;
+      if (remaining < 30 && remaining > 0) {
+        const pulse = 1 + Math.sin(performance.now() / 200) * 0.1;
+        ctx.save();
+        ctx.translate(CANVAS_WIDTH / 2, 75);
+        ctx.scale(pulse, pulse);
+        ctx.fillStyle = '#FF4444';
+        ctx.font = 'bold 14px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`${minutes}:${seconds.toString().padStart(2, '0')}`, 0, 0);
+        ctx.restore();
+      } else {
+        ctx.fillStyle = '#FFF';
+        ctx.font = 'bold 14px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${minutes}:${seconds.toString().padStart(2, '0')}`, CANVAS_WIDTH / 2, 75);
+      }
     }
 
+    // Kill feed with character color dots (j)
     const recentKills = state.killFeed.slice(-3).reverse();
     for (let i = 0; i < recentKills.length; i++) {
       const entry = recentKills[i];
@@ -1954,14 +2174,126 @@ export class Renderer {
       ctx.roundRect(CANVAS_WIDTH - 250, fy, 240, 22, 4);
       ctx.fill();
 
+      // Attacker color dot (j)
+      ctx.fillStyle = attacker.color;
+      ctx.beginPath();
+      ctx.arc(CANVAS_WIDTH - 245, fy + 11, 4, 0, Math.PI * 2);
+      ctx.fill();
+
       ctx.font = '12px monospace';
       ctx.textAlign = 'right';
       ctx.fillStyle = attacker.color;
       ctx.fillText(attacker.name, CANVAS_WIDTH - 140, fy + 15);
       ctx.fillStyle = '#FFF';
       ctx.fillText(' splatted ', CANVAS_WIDTH - 80, fy + 15);
+
+      // Victim color dot (j)
       ctx.fillStyle = victim.color;
-      ctx.fillText(victim.name, CANVAS_WIDTH - 20, fy + 15);
+      ctx.beginPath();
+      ctx.arc(CANVAS_WIDTH - 18, fy + 11, 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.textAlign = 'right';
+      ctx.fillStyle = victim.color;
+      ctx.fillText(victim.name, CANVAS_WIDTH - 24, fy + 15);
     }
+
+    // Animated score numbers (i)
+    if (state.scoreAnimations) {
+      for (const anim of state.scoreAnimations) {
+        const progress = 1 - anim.timer / SCORE_ANIM_DURATION;
+        const yOffset = -20 * progress;
+        const scale = 1.4 - progress * 0.4; // starts large, settles
+        const alpha = 1 - progress * progress;
+
+        // Find the player's HUD position
+        const pidx = activePlayers.findIndex(p => p.id === anim.playerId);
+        if (pidx < 0) continue;
+        const px = startX + pidx * scoreWidth;
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.translate(px + scoreWidth / 2, 55 + yOffset);
+        ctx.scale(scale, scale);
+        ctx.fillStyle = '#FFD700';
+        ctx.font = 'bold 18px "Press Start 2P", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`+${anim.value}`, 0, 0);
+        ctx.restore();
+      }
+    }
+  }
+
+  // ---- Wildlife (q) ----
+
+  private drawWildlife(ctx: CanvasRenderingContext2D, wildlife: WildlifeEntity[]): void {
+    for (const w of wildlife) {
+      ctx.save();
+      ctx.translate(w.x, w.y);
+
+      if (w.type === 'butterfly') {
+        // Butterfly: small colored V-shapes that flutter
+        const wingAngle = Math.sin(w.wingPhase) * 0.6;
+        ctx.fillStyle = w.color;
+        // Left wing
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(-6 * Math.cos(wingAngle), -4 * Math.abs(Math.sin(wingAngle)) - 3);
+        ctx.lineTo(-3, 0);
+        ctx.closePath();
+        ctx.fill();
+        // Right wing
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(6 * Math.cos(wingAngle), -4 * Math.abs(Math.sin(wingAngle)) - 3);
+        ctx.lineTo(3, 0);
+        ctx.closePath();
+        ctx.fill();
+        // Body
+        ctx.fillStyle = '#333';
+        ctx.fillRect(-0.5, -1, 1, 3);
+      } else {
+        // Bird: simple M-shape silhouette
+        ctx.strokeStyle = w.color;
+        ctx.lineWidth = 2;
+        const wingFlap = Math.sin(w.wingPhase) * 4;
+        ctx.beginPath();
+        ctx.moveTo(-8, wingFlap);
+        ctx.lineTo(-3, -3);
+        ctx.lineTo(0, 0);
+        ctx.lineTo(3, -3);
+        ctx.lineTo(8, wingFlap);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+  }
+
+  // ---- Spring spiral trail (h) ----
+
+  private drawSpringTrail(ctx: CanvasRenderingContext2D, player: Player): void {
+    const cx = player.x + player.width / 2;
+    const baseY = player.y + player.height;
+    const t = player.springTrailTimer / SPRING_TRAIL_DURATION; // 1 = just started, 0 = fading
+
+    ctx.save();
+    const pointCount = 12;
+    for (let i = 0; i < pointCount; i++) {
+      const progress = i / pointCount;
+      const angle = progress * Math.PI * 4 + performance.now() / 200; // spiral
+      const radius = 6 + progress * 10;
+      const py = baseY + progress * 30;
+      const px = cx + Math.cos(angle) * radius;
+      const alpha = t * (1 - progress) * 0.5;
+
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = '#5DDE70';
+      ctx.beginPath();
+      ctx.arc(px, py, 2.5 - progress, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
   }
 }

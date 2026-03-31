@@ -85,3 +85,25 @@ export const MATCH_COUNTDOWN = 3;       // seconds before match starts
 
 // Idle animation
 export const IDLE_ANIM_INTERVAL = 3;    // seconds between idle animations
+
+// Shockwave
+export const SHOCKWAVE_MAX_RADIUS = 60;
+export const SHOCKWAVE_DURATION = 0.4;
+
+// Screen flash
+export const SCREEN_FLASH_DURATION = 0.15;
+
+// Spring trail
+export const SPRING_TRAIL_DURATION = 0.6;
+
+// Score animation
+export const SCORE_ANIM_DURATION = 0.5;
+
+// Wildlife
+export const WILDLIFE_COUNT = 5;
+
+// Fog
+export const FOG_PARTICLE_COUNT = 20;
+
+// Pollen
+export const POLLEN_COUNT = 12;

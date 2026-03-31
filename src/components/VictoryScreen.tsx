@@ -1,8 +1,8 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../store/gameStore';
 import { CHARACTERS } from '../engine/characters';
-import type { CharacterSlot } from '../engine/types';
+import type { CharacterSlot, PlayerStats } from '../engine/types';
 import './VictoryScreen.css';
 
 interface FireworkParticle {
@@ -126,12 +126,66 @@ export function VictoryScreen() {
   });
 
   // Get stats for a player if available
-  const getPlayerStats = (playerId: CharacterSlot) => {
+  const getPlayerStats = (playerId: CharacterSlot): PlayerStats | null => {
     if (!lastMatchState) return null;
     const stats = (lastMatchState as any).stats;
     if (!stats || !stats.perPlayer) return null;
     return stats.perPlayer.get(playerId) ?? null;
   };
+
+  // MVP highlights (t)
+  const mvpHighlights = useMemo(() => {
+    const highlights: Array<{ label: string; icon: string; playerName: string; playerColor: string; value: string }> = [];
+    if (!sortedPlayers.length) return highlights;
+
+    let bestAirborne = { name: '', color: '', val: 0 };
+    let bestCarrots = { name: '', color: '', val: 0 };
+    let bestStreak = { name: '', color: '', val: 0 };
+
+    for (const player of sortedPlayers) {
+      const ps = getPlayerStats(player.id);
+      if (!ps) continue;
+      if (ps.timeAirborne > bestAirborne.val) {
+        bestAirborne = { name: player.character.name, color: player.character.color, val: ps.timeAirborne };
+      }
+      if (ps.carrotsEaten > bestCarrots.val) {
+        bestCarrots = { name: player.character.name, color: player.character.color, val: ps.carrotsEaten };
+      }
+      if (ps.bestStreak > bestStreak.val) {
+        bestStreak = { name: player.character.name, color: player.character.color, val: ps.bestStreak };
+      }
+    }
+
+    if (bestAirborne.val > 0) {
+      highlights.push({
+        label: 'Most Airborne',
+        icon: '\u2708',
+        playerName: bestAirborne.name,
+        playerColor: bestAirborne.color,
+        value: bestAirborne.val.toFixed(1) + 's',
+      });
+    }
+    if (bestCarrots.val > 0) {
+      highlights.push({
+        label: 'Carrot King',
+        icon: '\uD83E\uDD55',
+        playerName: bestCarrots.name,
+        playerColor: bestCarrots.color,
+        value: String(bestCarrots.val),
+      });
+    }
+    if (bestStreak.val > 0) {
+      highlights.push({
+        label: 'Serial Killer',
+        icon: '\uD83D\uDD25',
+        playerName: bestStreak.name,
+        playerColor: bestStreak.color,
+        value: String(bestStreak.val) + ' streak',
+      });
+    }
+
+    return highlights;
+  }, [sortedPlayers, lastMatchState]);
 
   return (
     <div className="victory-screen" data-testid="victory-screen">
@@ -143,8 +197,9 @@ export function VictoryScreen() {
               <h1 className="winner-text">
                 <span style={{ color: winnerChar.color }}>{winnerChar.name}</span> {t('victory_wins')}
               </h1>
+              {/* Victory pose (u) — winner avatar is larger with bounce animation */}
               <div
-                className="winner-avatar"
+                className="winner-avatar winner-avatar-pose"
                 style={{ backgroundColor: winnerChar.color, borderColor: winnerChar.lightColor }}
               />
             </>
@@ -195,6 +250,45 @@ export function VictoryScreen() {
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {/* Character lineup (s) */}
+          {sortedPlayers.length > 0 && (
+            <div className="character-lineup">
+              {sortedPlayers.map((player) => {
+                const isWinner = winner && player.id === winner;
+                return (
+                  <div key={player.id} className={`lineup-character ${isWinner ? 'lineup-winner' : ''}`}>
+                    <div
+                      className={`lineup-avatar ${isWinner ? 'lineup-avatar-winner' : ''}`}
+                      style={{
+                        backgroundColor: player.character.color,
+                        borderColor: player.character.lightColor,
+                      }}
+                    />
+                    <span className="lineup-name" style={{ color: player.character.color }}>
+                      {player.character.name}
+                    </span>
+                    {isWinner && <span className="lineup-crown">{'\uD83D\uDC51'}</span>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* MVP highlights (t) */}
+          {mvpHighlights.length > 0 && (
+            <div className="mvp-highlights">
+              <h2>MVP Awards</h2>
+              {mvpHighlights.map((hl, idx) => (
+                <div key={idx} className="mvp-row">
+                  <span className="mvp-icon">{hl.icon}</span>
+                  <span className="mvp-label">{hl.label}</span>
+                  <span className="mvp-player" style={{ color: hl.playerColor }}>{hl.playerName}</span>
+                  <span className="mvp-value">{hl.value}</span>
+                </div>
+              ))}
             </div>
           )}
 
