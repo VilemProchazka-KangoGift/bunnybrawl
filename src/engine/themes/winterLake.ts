@@ -153,7 +153,7 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
         // Very wide — spaced out: tree, christmas, snowman, tree
         drawPineTree(ctx, plat.x + 35, plat.y, 45, true);
         drawChristmasTree(ctx, plat.x + plat.width * 0.35, plat.y, 38);
-        drawSnowman(ctx, plat.x + plat.width * 0.58, plat.y, 14);
+        drawSnowman(ctx, plat.x + plat.width * 0.58, plat.y, 26);
         drawPineTree(ctx, plat.x + plat.width - 35, plat.y, 42, true);
         drawIcicle(ctx, plat.x + 60, plat.y + plat.height, 10);
         drawIcicle(ctx, plat.x + plat.width - 60, plat.y + plat.height, 11);
@@ -162,7 +162,7 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
         drawPineTree(ctx, plat.x + 25, plat.y, 38, true);
         drawChristmasTree(ctx, plat.x + plat.width - 28, plat.y, 32);
         if (i % 2 === 0) {
-          drawSnowman(ctx, mid, plat.y, 13);
+          drawSnowman(ctx, mid, plat.y, 25);
         } else {
           drawSnowball(ctx, mid - 15, plat.y, 5);
           drawSnowball(ctx, mid + 15, plat.y, 4);
@@ -175,10 +175,10 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
           drawSnowball(ctx, mid + 22, plat.y, 4);
         } else if (i % 3 === 1) {
           drawPineTree(ctx, mid - 12, plat.y, 34, true);
-          drawSnowman(ctx, mid + 28, plat.y, 11);
+          drawSnowman(ctx, mid + 28, plat.y, 24);
         } else {
           drawPineTree(ctx, mid + 10, plat.y, 32, true);
-          drawSnowballPyramid(ctx, mid - 20, plat.y, 3);
+          drawSnowballPyramid(ctx, mid - 20, plat.y, 6);
         }
         drawSnowDrift(ctx, plat.x + 10, plat.y, 18, 2);
       } else {
@@ -186,7 +186,7 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
         if (i % 3 === 0) {
           drawPineTree(ctx, mid, plat.y, 20, true);
         } else if (i % 3 === 1) {
-          drawSnowman(ctx, mid, plat.y, 12);
+          drawSnowman(ctx, mid, plat.y, 24);
         } else {
           drawChristmasTree(ctx, mid, plat.y, 18);
         }
