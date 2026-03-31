@@ -42,6 +42,7 @@ export class GameLoop {
   private fireworkTimer = 0;
   private afterimageAccumulators: Map<CharacterSlot, number> = new Map();
   private footstepAccumulators: Map<CharacterSlot, number> = new Map();
+  private crowdStarted = false;
 
   constructor(
     bgCanvas: HTMLCanvasElement,
@@ -136,6 +137,7 @@ export class GameLoop {
     this.running = true;
     this.lastTime = performance.now();
     audio.play('music');
+    audio.play('ambient');
     this.loop(this.lastTime);
   }
 
@@ -144,6 +146,7 @@ export class GameLoop {
     if (this.rafId) cancelAnimationFrame(this.rafId);
     this.input.detach();
     audio.stop('music');
+    audio.stop('ambient');
   }
 
   getState(): MatchState { return this.state; }
@@ -486,6 +489,8 @@ export class GameLoop {
       if (Math.abs(prevVx) > 100 && player.vx === 0 && prevVx !== 0) {
         this.spawnImpactDust(player, prevVx > 0 ? 'right' : 'left');
         audio.play('oof');
+        player.squashScale = 1.3; // stretch vertically = squash horizontally
+        player.squashTimer = 0.12;
       }
 
       // Squash on landing
@@ -720,10 +725,16 @@ export class GameLoop {
 
     // Crowd cheering: ramp up volume near end of match
     const leadScore = Math.max(...this.state.players.filter(p => p.active).map(p => p.score));
-    if (leadScore >= this.settings.killLimit - 1) {
-      audio.setVolume('crowd', 0.3);
-    } else if (leadScore >= this.settings.killLimit - 3) {
-      audio.setVolume('crowd', 0.15);
+    if (leadScore >= this.settings.killLimit - 3) {
+      if (!this.crowdStarted) {
+        audio.play('crowd');
+        this.crowdStarted = true;
+      }
+      if (leadScore >= this.settings.killLimit - 1) {
+        audio.setVolume('crowd', 0.3);
+      } else {
+        audio.setVolume('crowd', 0.15);
+      }
     } else {
       audio.setVolume('crowd', 0);
     }

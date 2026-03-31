@@ -158,10 +158,10 @@ class AudioManager {
       volume: 0.2,
     }));
 
-    // Ambient: 2-second loop of very quiet brownian noise
+    // Ambient: 2-second loop of quiet brownian noise
     this.sounds.set('ambient', new Howl({
       src: [generateAmbientSound()],
-      volume: 0.05,
+      volume: 0.12,
       loop: true,
     }));
 

@@ -114,10 +114,12 @@ export function collidePlatforms(player: Player, platforms: Platform[]): void {
         player.y = plat.y + plat.height;
         player.vy = 0;
       } else if (minOverlap === overlapLeft) {
-        player.x = plat.x - player.width;
+        const sideMargin = 6;
+        player.x = plat.x - player.width + sideMargin;
         player.vx = 0;
       } else if (minOverlap === overlapRight) {
-        player.x = plat.x + plat.width;
+        const sideMargin = 6;
+        player.x = plat.x + plat.width - sideMargin;
         player.vx = 0;
       }
     }

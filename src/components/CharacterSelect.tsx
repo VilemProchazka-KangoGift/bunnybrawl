@@ -3,6 +3,7 @@ import { useGameStore } from '../store/gameStore';
 import { CHARACTERS, ALL_CHARACTERS } from '../engine/characters';
 import { KEY_BINDINGS } from '../engine/input';
 import { audio } from '../engine/audio';
+import i18n from '../i18n';
 import type { CharacterSlot, CharacterDef } from '../engine/types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT } from '../engine/constants';
 import './CharacterSelect.css';
@@ -452,7 +453,7 @@ function drawLobby(
   ctx.fillStyle = 'rgba(76, 175, 80, 0.4)';
   ctx.font = 'bold 48px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('GO!', (READY_ZONE_X + CANVAS_WIDTH) / 2, GROUND_Y / 2 + 20);
+  ctx.fillText(i18n.t('lobby_go'), (READY_ZONE_X + CANVAS_WIDTH) / 2, GROUND_Y / 2 + 20);
 
   // Draw extras (NPCs) first (behind players)
   for (const npc of extras) {
@@ -490,12 +491,12 @@ function drawLobby(
   ctx.font = 'bold 28px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
-  ctx.fillText('Stomp to swap characters! Walk right to join!', CANVAS_WIDTH / 2, 56);
+  ctx.fillText(i18n.t('lobby_title'), CANVAS_WIDTH / 2, 56);
   ctx.textBaseline = 'alphabetic';
 
   ctx.font = '14px sans-serif';
   ctx.fillStyle = 'rgba(255,255,255,0.5)';
-  ctx.fillText('ESC = back', CANVAS_WIDTH / 2, 90);
+  ctx.fillText(i18n.t('lobby_back'), CANVAS_WIDTH / 2, 90);
 
   // Countdown
   if (countdownActive && countdown > 0) {
@@ -507,7 +508,7 @@ function drawLobby(
     ctx.fillStyle = '#FFD700';
     ctx.font = 'bold 24px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(`Starting in ${secs}...`, CANVAS_WIDTH / 2, 127);
+    ctx.fillText(i18n.t('lobby_starting', { seconds: secs }), CANVAS_WIDTH / 2, 127);
   }
 
   // Player count
@@ -516,7 +517,7 @@ function drawLobby(
     ctx.fillStyle = 'rgba(76,175,80,0.8)';
     ctx.font = 'bold 16px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(`${inZone.length} player${inZone.length > 1 ? 's' : ''} ready`, (READY_ZONE_X + CANVAS_WIDTH) / 2, GROUND_Y - 15);
+    ctx.fillText(i18n.t('lobby_players_ready', { count: inZone.length }), (READY_ZONE_X + CANVAS_WIDTH) / 2, GROUND_Y - 15);
   }
 }
 

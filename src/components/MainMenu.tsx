@@ -1,8 +1,10 @@
+import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../store/gameStore';
 import { audio } from '../engine/audio';
 import './MainMenu.css';
 
 export function MainMenu() {
+  const { t, i18n } = useTranslation();
   const { setScreen, matchSettings, setMatchSettings } = useGameStore();
 
   const handlePlay = () => {
@@ -16,14 +18,14 @@ export function MainMenu() {
       <div className="menu-bg">
         <div className="menu-content">
           <h1 className="game-title">
-            <span className="title-bunny">Bunny</span>
-            <span className="title-brawl">Brawl</span>
+            <span className="title-bunny">{t('title_bunny')}</span>
+            <span className="title-brawl">{t('title_brawl')}</span>
           </h1>
-          <p className="tagline">Stomp your friends!</p>
+          <p className="tagline">{t('tagline')}</p>
 
           <div className="menu-buttons">
             <button className="menu-btn play-btn" onClick={handlePlay} data-testid="play-button">
-              Play
+              {t('play')}
             </button>
           </div>
 
@@ -35,13 +37,28 @@ export function MainMenu() {
                 onChange={(e) => setMatchSettings({ goreMode: e.target.checked })}
                 data-testid="gore-toggle"
               />
-              <span>Blood mode</span>
+              <span>{t('blood_mode')}</span>
             </label>
           </div>
 
           <div className="credits">
-            <p>A Jump'n'Bump tribute</p>
-            <p className="controls-hint">Up to 5 players — one keyboard!</p>
+            <p>{t('credits_tribute')}</p>
+            <p className="controls-hint">{t('credits_players')}</p>
+            <p className="lang-toggle" style={{ marginTop: '8px', cursor: 'pointer', fontSize: '14px', opacity: 0.7 }}>
+              <span
+                onClick={() => i18n.changeLanguage('en')}
+                style={{ fontWeight: i18n.language === 'en' ? 'bold' : 'normal', opacity: i18n.language === 'en' ? 1 : 0.6 }}
+              >
+                EN
+              </span>
+              {' | '}
+              <span
+                onClick={() => i18n.changeLanguage('cs')}
+                style={{ fontWeight: i18n.language === 'cs' ? 'bold' : 'normal', opacity: i18n.language === 'cs' ? 1 : 0.6 }}
+              >
+                CS
+              </span>
+            </p>
           </div>
         </div>
       </div>

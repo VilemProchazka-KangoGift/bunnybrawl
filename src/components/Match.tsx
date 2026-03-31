@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../store/gameStore';
 import { GameLoop } from '../engine/gameLoop';
 import { getArena } from '../engine/arena';
@@ -6,6 +7,7 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
 import './Match.css';
 
 export function Match() {
+  const { t } = useTranslation();
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
   const fgCanvasRef = useRef<HTMLCanvasElement>(null);
   const gameLoopRef = useRef<GameLoop | null>(null);
@@ -91,14 +93,14 @@ export function Match() {
         {paused && (
           <div className="pause-overlay" data-testid="pause-menu">
             <div className="pause-box">
-              <h2 className="pause-title">Paused</h2>
+              <h2 className="pause-title">{t('pause_title')}</h2>
               <button className="pause-btn resume-btn" onClick={handleResume} data-testid="resume-button">
-                Resume
+                {t('pause_resume')}
               </button>
               <button className="pause-btn quit-btn" onClick={handleQuit} data-testid="quit-button">
-                Quit to Menu
+                {t('pause_quit')}
               </button>
-              <p className="pause-hint">Press ESC to resume</p>
+              <p className="pause-hint">{t('pause_hint')}</p>
             </div>
           </div>
         )}

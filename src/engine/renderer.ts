@@ -391,7 +391,7 @@ export class Renderer {
 
     // Puddles (shallow blue ellipses on the ground)
     if (matchState.puddles && matchState.puddles.length > 0) {
-      this.drawPuddles(ctx, matchState.puddles);
+      this.drawPuddles(ctx, matchState.puddles, arena.platforms[0].y);
     }
 
     // Springs and thorns (behind players)
@@ -1684,29 +1684,42 @@ export class Renderer {
 
   // ---- Puddles ----
 
-  private drawPuddles(ctx: CanvasRenderingContext2D, puddles: Array<{x: number; width: number}>): void {
+  private drawPuddles(ctx: CanvasRenderingContext2D, puddles: Array<{x: number; width: number}>, groundY: number): void {
+    const now = performance.now() / 1000;
     for (const puddle of puddles) {
       const px = puddle.x + puddle.width / 2;
-      // Draw on the ground level (approximately 660 based on typical arena ground)
-      const py = 660;
+      const py = groundY;
       const hw = puddle.width / 2;
-      const hh = 5;
+      const hh = 8;
 
       // Main puddle body
       ctx.save();
-      ctx.fillStyle = 'rgba(100, 160, 220, 0.3)';
+      ctx.fillStyle = 'rgba(100, 160, 220, 0.5)';
       ctx.beginPath();
       ctx.ellipse(px, py, hw, hh, 0, 0, Math.PI * 2);
       ctx.fill();
 
       // Lighter reflection highlight
-      ctx.fillStyle = 'rgba(180, 220, 255, 0.25)';
+      ctx.fillStyle = 'rgba(180, 220, 255, 0.35)';
       ctx.beginPath();
       ctx.ellipse(px - hw * 0.2, py - hh * 0.3, hw * 0.4, hh * 0.5, -0.2, 0, Math.PI * 2);
       ctx.fill();
 
+      // Ripple animation: concentric ellipses that pulse
+      const ripplePhase = (now + px * 0.01) % 2; // 2-second cycle per puddle
+      for (let r = 0; r < 2; r++) {
+        const rippleT = ((ripplePhase + r * 1.0) % 2) / 2; // stagger two ripples
+        const rippleScale = 0.3 + rippleT * 0.7;
+        const rippleAlpha = (1 - rippleT) * 0.3;
+        ctx.strokeStyle = `rgba(180, 220, 255, ${rippleAlpha})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.ellipse(px, py, hw * rippleScale, hh * rippleScale, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
       // Subtle edge
-      ctx.strokeStyle = 'rgba(80, 140, 200, 0.2)';
+      ctx.strokeStyle = 'rgba(80, 140, 200, 0.3)';
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.ellipse(px, py, hw, hh, 0, 0, Math.PI * 2);
@@ -1730,16 +1743,16 @@ export class Renderer {
     if (dayPhase >= 0.25 && dayPhase < 0.5) {
       // Transition to night
       const t = (dayPhase - 0.25) / 0.25;
-      overlayAlpha = t * 0.35;
+      overlayAlpha = t * 0.55;
       nightIntensity = t;
     } else if (dayPhase >= 0.5 && dayPhase < 0.75) {
       // Full night
-      overlayAlpha = 0.35;
+      overlayAlpha = 0.55;
       nightIntensity = 1;
     } else if (dayPhase >= 0.75 && dayPhase < 1.0) {
       // Transition back to day
       const t = 1 - (dayPhase - 0.75) / 0.25;
-      overlayAlpha = t * 0.35;
+      overlayAlpha = t * 0.55;
       nightIntensity = t;
     }
 
@@ -1747,6 +1760,80 @@ export class Renderer {
       ctx.save();
       ctx.fillStyle = `rgba(15, 20, 60, ${overlayAlpha})`;
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.restore();
+    }
+
+    // Sun — arcs across the sky during daytime (dayPhase 0-0.25 and 0.75-1.0)
+    {
+      let sunProgress = -1; // -1 means not visible
+      if (dayPhase < 0.25) {
+        // First half of day: 0->0.25 maps to 0->1
+        sunProgress = dayPhase / 0.25;
+      } else if (dayPhase >= 0.75) {
+        // Second half of day: 0.75->1.0 maps to 0->1 (continuing arc not resetting)
+        // Actually sun sets as night ends, so 0.75->1.0 is sunrise
+        sunProgress = (dayPhase - 0.75) / 0.25;
+        // But this is the transition from night to day, so sun rises
+        // Map: 0.75=start(0) to 1.0=end(1) but we want it to arc left-to-right
+        // Let's unify: day is 0.75->1.0->0.0->0.25 = sunrise to sunset
+        // Remap: 0.75->1.0 = progress 0->0.33, 0.0->0.25 = progress 0.33->1.0
+        sunProgress = (dayPhase - 0.75) / 0.25 * 0.33;
+      }
+      if (dayPhase < 0.25) {
+        sunProgress = 0.33 + (dayPhase / 0.25) * 0.67;
+      }
+
+      if (sunProgress >= 0 && sunProgress <= 1) {
+        const sunX = sunProgress * CANVAS_WIDTH;
+        const sunArc = Math.sin(sunProgress * Math.PI);
+        const sunY = 120 - sunArc * 80; // arcs up to 80px above baseline at 120
+
+        ctx.save();
+        // Glow
+        ctx.globalAlpha = 0.25;
+        ctx.fillStyle = '#FFD700';
+        ctx.beginPath();
+        ctx.arc(sunX, sunY, 30, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Sun body
+        ctx.globalAlpha = 0.9;
+        ctx.fillStyle = '#FFA500';
+        ctx.beginPath();
+        ctx.arc(sunX, sunY, 14, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Bright center
+        ctx.fillStyle = '#FFD700';
+        ctx.beginPath();
+        ctx.arc(sunX, sunY, 8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    // Moon — arcs across the sky during nighttime (dayPhase 0.25-0.75)
+    if (dayPhase >= 0.25 && dayPhase < 0.75) {
+      const moonProgress = (dayPhase - 0.25) / 0.5; // 0 to 1
+      const moonX = moonProgress * CANVAS_WIDTH;
+      const moonArc = Math.sin(moonProgress * Math.PI);
+      const moonY = 100 - moonArc * 70;
+
+      ctx.save();
+      // Moon body (pale white/silver)
+      ctx.globalAlpha = 0.85 * nightIntensity + 0.15;
+      ctx.fillStyle = '#E8E8F0';
+      ctx.beginPath();
+      ctx.arc(moonX, moonY, 12, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Crescent: overlay a dark circle offset to the right to create crescent shape
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.fillStyle = 'rgba(0,0,0,1)';
+      ctx.beginPath();
+      ctx.arc(moonX + 6, moonY - 2, 10, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
       ctx.restore();
     }
 

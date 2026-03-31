@@ -1,4 +1,5 @@
 import { useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../store/gameStore';
 import { CHARACTERS } from '../engine/characters';
 import type { CharacterSlot } from '../engine/types';
@@ -16,6 +17,7 @@ interface FireworkParticle {
 }
 
 export function VictoryScreen() {
+  const { t } = useTranslation();
   const { winner, lastMatchState, setScreen, setActivePlayers } = useGameStore();
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -110,6 +112,19 @@ export function VictoryScreen() {
     return () => cancelAnimationFrame(rafId);
   }, []);
 
+  // Keyboard shortcuts: Enter = rematch, Escape = menu
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        handleRematch();
+      } else if (e.key === 'Escape') {
+        handleMenu();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  });
+
   // Get stats for a player if available
   const getPlayerStats = (playerId: CharacterSlot) => {
     if (!lastMatchState) return null;
@@ -126,7 +141,7 @@ export function VictoryScreen() {
           {winnerChar ? (
             <>
               <h1 className="winner-text">
-                <span style={{ color: winnerChar.color }}>{winnerChar.name}</span> Wins!
+                <span style={{ color: winnerChar.color }}>{winnerChar.name}</span> {t('victory_wins')}
               </h1>
               <div
                 className="winner-avatar"
@@ -134,11 +149,11 @@ export function VictoryScreen() {
               />
             </>
           ) : (
-            <h1 className="winner-text">It's a Draw!</h1>
+            <h1 className="winner-text">{t('victory_draw')}</h1>
           )}
 
           <div className="scoreboard">
-            <h2>Final Scores</h2>
+            <h2>{t('victory_results')}</h2>
             {sortedPlayers.map((player, idx) => (
               <div key={player.id} className={`score-row ${idx === 0 ? 'first' : ''}`}>
                 <span className="rank">#{idx + 1}</span>
@@ -148,7 +163,7 @@ export function VictoryScreen() {
                 >
                   {player.character.name}
                 </span>
-                <span className="player-score">{player.score} kills</span>
+                <span className="player-score">{player.score} {t('victory_pts')}</span>
               </div>
             ))}
           </div>
@@ -156,14 +171,14 @@ export function VictoryScreen() {
           {/* Per-player stats section */}
           {sortedPlayers.length > 0 && (
             <div className="player-stats-section">
-              <h2>Player Stats</h2>
+              <h2>{t('victory_stats')}</h2>
               <div className="stats-grid">
                 <div className="stats-header">
-                  <span className="stats-cell stats-name-cell">Player</span>
-                  <span className="stats-cell">Streak</span>
-                  <span className="stats-cell">Airborne</span>
-                  <span className="stats-cell">Distance</span>
-                  <span className="stats-cell">Carrots</span>
+                  <span className="stats-cell stats-name-cell">{t('victory_player')}</span>
+                  <span className="stats-cell">{t('victory_streak')}</span>
+                  <span className="stats-cell">{t('victory_airborne')}</span>
+                  <span className="stats-cell">{t('victory_distance')}</span>
+                  <span className="stats-cell">{t('victory_carrots')}</span>
                 </div>
                 {sortedPlayers.map((player) => {
                   const ps = getPlayerStats(player.id);
@@ -184,16 +199,16 @@ export function VictoryScreen() {
           )}
 
           <div className="match-stats">
-            <span>Match time: {formatTime(lastMatchState?.timeElapsed ?? 0)}</span>
-            <span>Total splats: {lastMatchState?.splatMarks.length ?? 0}</span>
+            <span>{t('victory_match_time')}: {formatTime(lastMatchState?.timeElapsed ?? 0)}</span>
+            <span>{t('victory_total_splats')}: {lastMatchState?.splatMarks.length ?? 0}</span>
           </div>
 
           <div className="victory-actions">
             <button className="rematch-btn" onClick={handleRematch} data-testid="rematch-button">
-              Rematch!
+              {t('victory_rematch')}
             </button>
             <button className="menu-btn-v" onClick={handleMenu} data-testid="menu-button">
-              Main Menu
+              {t('victory_menu')}
             </button>
           </div>
         </div>
