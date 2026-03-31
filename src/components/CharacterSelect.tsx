@@ -200,21 +200,23 @@ export function CharacterSelect() {
             attacker.vy = -300; // bounce
             audio.play('stomp');
 
-            // Respawn victim far from attacker (left of wall) so attacker lands safely
-            const minDist = 200;
-            let bestX = 40;
-            let bestDist = 0;
-            for (let attempt = 0; attempt < 10; attempt++) {
-              const tryX = 20 + Math.random() * (WALL_X - 80);
-              const dx = Math.abs(tryX - attacker.x);
-              if (dx > bestDist) { bestDist = dx; bestX = tryX; }
+            // Only respawn NPCs away — player-controlled characters stay in place
+            const isNPC = extraCharsRef.current.includes(victim);
+            if (isNPC) {
+              let bestX = 40;
+              let bestDist = 0;
+              for (let attempt = 0; attempt < 10; attempt++) {
+                const tryX = 20 + Math.random() * (WALL_X - 80);
+                const dx = Math.abs(tryX - attacker.x);
+                if (dx > bestDist) { bestDist = dx; bestX = tryX; }
+              }
+              if (bestDist < 200 && WALL_X > 200) bestX = attacker.x > WALL_X / 2 ? 40 : WALL_X - 60;
+              victim.x = bestX;
+              victim.y = GROUND_Y - PLAYER_HEIGHT;
+              victim.vx = 0;
+              victim.vy = 0;
+              victim.onGround = true;
             }
-            if (bestDist < minDist && WALL_X > 200) bestX = attacker.x > WALL_X / 2 ? 40 : WALL_X - 60;
-            victim.x = bestX;
-            victim.y = GROUND_Y - PLAYER_HEIGHT;
-            victim.vx = 0;
-            victim.vy = 0;
-            victim.onGround = true;
           }
         }
       }
@@ -461,27 +463,33 @@ function drawLobby(
     ctx.beginPath(); ctx.moveTo(gx, WALL_Y - 2); ctx.lineTo(gx - 1, WALL_Y - 7 - (gx * 3 % 4)); ctx.stroke();
   }
 
-  // ---- Ready zone (polished) ----
-  // Gradient highlight
+  // ---- Ready zone (highly visible) ----
+  // Strong gradient background
   const zoneGrad = ctx.createLinearGradient(READY_ZONE_X, 0, CANVAS_WIDTH, 0);
-  zoneGrad.addColorStop(0, 'rgba(76, 175, 80, 0.05)');
-  zoneGrad.addColorStop(0.3, 'rgba(76, 175, 80, 0.12)');
-  zoneGrad.addColorStop(1, 'rgba(76, 175, 80, 0.18)');
+  zoneGrad.addColorStop(0, 'rgba(76, 175, 80, 0.08)');
+  zoneGrad.addColorStop(0.3, 'rgba(76, 175, 80, 0.2)');
+  zoneGrad.addColorStop(1, 'rgba(76, 175, 80, 0.3)');
   ctx.fillStyle = zoneGrad;
   ctx.fillRect(READY_ZONE_X, 55, CANVAS_WIDTH - READY_ZONE_X, GROUND_Y - 55);
 
-  // Zone border — glowing line
-  ctx.strokeStyle = 'rgba(76, 175, 80, 0.4)';
-  ctx.lineWidth = 2;
-  ctx.setLineDash([12, 6]);
+  // Solid bright border line (not dashed — more visible)
+  ctx.strokeStyle = 'rgba(76, 200, 80, 0.7)';
+  ctx.lineWidth = 4;
   ctx.beginPath(); ctx.moveTo(READY_ZONE_X, 55); ctx.lineTo(READY_ZONE_X, GROUND_Y); ctx.stroke();
-  ctx.setLineDash([]);
+  // Glow on border
+  ctx.strokeStyle = 'rgba(76, 200, 80, 0.25)';
+  ctx.lineWidth = 12;
+  ctx.beginPath(); ctx.moveTo(READY_ZONE_X, 55); ctx.lineTo(READY_ZONE_X, GROUND_Y); ctx.stroke();
 
-  // "GO!" watermark
-  ctx.fillStyle = 'rgba(76, 175, 80, 0.2)';
-  ctx.font = "bold 64px 'Fredoka', sans-serif";
+  // Large "GO!" / "START!" text — very visible
+  ctx.fillStyle = 'rgba(76, 200, 80, 0.5)';
+  ctx.font = "bold 80px 'Fredoka', sans-serif";
   ctx.textAlign = 'center';
-  ctx.fillText(i18n.t('lobby_go'), (READY_ZONE_X + CANVAS_WIDTH) / 2, GROUND_Y / 2 + 30);
+  ctx.fillText(i18n.t('lobby_go'), (READY_ZONE_X + CANVAS_WIDTH) / 2, GROUND_Y / 2 + 40);
+  // Outline for extra pop
+  ctx.strokeStyle = 'rgba(76, 200, 80, 0.3)';
+  ctx.lineWidth = 3;
+  ctx.strokeText(i18n.t('lobby_go'), (READY_ZONE_X + CANVAS_WIDTH) / 2, GROUND_Y / 2 + 40);
 
   // ---- Draw NPCs (behind players) ----
   for (const npc of extras) {
@@ -544,26 +552,26 @@ function drawLobby(
     ctx.font = "bold 13px 'Fredoka', sans-serif";
     ctx.fillText(`${slot}: ${player.char.name}`, sx - slotWidth * 0.25, 26);
 
-    // Keys
+    // Keys — replace Arrow* with unicode icons
     ctx.fillStyle = 'rgba(255,255,255,0.45)';
     ctx.font = "11px 'Fredoka', monospace";
-    ctx.fillText(`${bindings.left} ${bindings.right} ${bindings.jump} ${bindings.down}`, sx - slotWidth * 0.25, 41);
+    const fmtKey = (k: string) => k === 'ArrowLeft' ? '\u2190' : k === 'ArrowRight' ? '\u2192' : k === 'ArrowUp' ? '\u2191' : k === 'ArrowDown' ? '\u2193' : k;
+    ctx.fillText(`${fmtKey(bindings.left)} ${fmtKey(bindings.right)} ${fmtKey(bindings.jump)} ${fmtKey(bindings.down)}`, sx - slotWidth * 0.25, 41);
   }
 
-  // ---- Title (below bar) ----
-  ctx.fillStyle = '#FFF';
-  ctx.font = "bold 26px 'Fredoka', sans-serif";
+  // ---- Title (below bar, with dark pill background for readability) ----
+  const titleText = i18n.t('lobby_title');
+  ctx.font = "bold 24px 'Fredoka', sans-serif";
   ctx.textAlign = 'center';
-  ctx.textBaseline = 'top';
-  ctx.shadowColor = 'rgba(0,0,0,0.4)';
-  ctx.shadowBlur = 6;
-  ctx.fillText(i18n.t('lobby_title'), CANVAS_WIDTH / 2, 58);
-  ctx.shadowBlur = 0;
+  const titleW = ctx.measureText(titleText).width + 30;
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.beginPath();
+  ctx.roundRect(CANVAS_WIDTH / 2 - titleW / 2, 56, titleW, 32, 8);
+  ctx.fill();
+  ctx.fillStyle = '#FFF';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(titleText, CANVAS_WIDTH / 2, 72);
   ctx.textBaseline = 'alphabetic';
-
-  ctx.font = "13px 'Fredoka', sans-serif";
-  ctx.fillStyle = 'rgba(255,255,255,0.45)';
-  ctx.fillText(i18n.t('lobby_back'), CANVAS_WIDTH / 2, 88);
 
   // ---- Countdown ----
   if (countdownActive && countdown > 0) {
