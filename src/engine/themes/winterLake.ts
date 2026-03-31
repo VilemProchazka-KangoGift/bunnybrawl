@@ -133,19 +133,12 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
     drawBigSnowman(ctx, 55, y, 90);
     drawIgloo(ctx, 1080, y, 180, 100);
 
-    // === GROUND TREES — fewer, spaced out ===
-    drawPineTree(ctx, 180, y, 80, true);
-    drawChristmasTree(ctx, 400, y, 58);
-    drawPineTree(ctx, 640, y, 75, true);
-    drawPineTree(ctx, 900, y, 50, true);
-    drawChristmasTree(ctx, 1200, y, 45);
-
-    // === GROUND ACCENTS ===
-    drawSnowman(ctx, 260, y, 32);
-    drawSnowman(ctx, 830, y, 30);
-    drawIcePatch(ctx, 480, y, 280);
-    drawSnowDrift(ctx, 550, y, 55, 7);
-    drawSnowDrift(ctx, 1000, y, 50, 6);
+    // === GROUND — sparse ===
+    drawPineTree(ctx, 200, y, 75, true);
+    drawChristmasTree(ctx, 640, y, 55);
+    drawPineTree(ctx, 1200, y, 60, true);
+    drawSnowman(ctx, 440, y, 32);
+    drawIcePatch(ctx, 700, y, 220);
 
     // === PLATFORM DECORATIONS — rich variety per platform ===
     for (let i = 0; i < floats.length; i++) {
@@ -276,24 +269,19 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
     const gy = ground.y;
     const floats = arena.platforms.filter(p => p.y < 650);
 
-    // Foreground trees on ground — drawn OVER players
-    drawPineTree(ctx, 40, gy, 70, true);
-    drawChristmasTree(ctx, 400, gy, 55);
-    drawPineTree(ctx, 750, gy, 65, true);
-    drawPineTree(ctx, 1220, gy, 60, true);
+    // Foreground trees on ground
+    drawPineTree(ctx, 50, gy, 65, true);
+    drawPineTree(ctx, 1230, gy, 55, true);
 
-    // Foreground trees on platforms
+    // Foreground trees on wide platforms
     for (const plat of floats) {
       if (plat.width >= 350) {
-        drawPineTree(ctx, plat.x + plat.width * 0.45, plat.y, 32, true);
-      } else if (plat.width >= 200) {
-        drawPineTree(ctx, plat.x + plat.width * 0.5, plat.y, 24, true);
+        drawPineTree(ctx, plat.x + plat.width * 0.45, plat.y, 28, true);
       }
     }
 
-    // Large snowball pyramids — foreground, prominent (4-3-2-1 model)
-    drawLargeSnowballPyramid(ctx, 300, gy, 10);
-    drawLargeSnowballPyramid(ctx, 1050, gy, 9);
+    // Large snowball pyramid — single foreground accent
+    drawLargeSnowballPyramid(ctx, 850, gy, 10);
 
     // Snow bushes
     const snowBushColors = {
@@ -305,9 +293,8 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
       highlight2: '#4A6A4A',
       berries: ['#CC3333', '#DD4444', '#BB2222'],
     };
-    drawFgBush(ctx, 150, gy, 34, snowBushColors);
-    drawFgBush(ctx, 580, gy, 38, snowBushColors);
-    drawFgBush(ctx, 940, gy, 30, snowBushColors);
+    drawFgBush(ctx, 350, gy, 34, snowBushColors);
+    drawFgBush(ctx, 960, gy, 30, snowBushColors);
 
     drawSnowDrift(ctx, 15, gy, 45, 6);
     drawSnowDrift(ctx, 1250, gy, 40, 5);
