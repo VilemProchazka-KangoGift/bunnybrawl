@@ -19,11 +19,16 @@ function loadGoreMode(): boolean {
   try { return localStorage.getItem('bunnybrawl_gore') === 'true'; } catch { return false; }
 }
 
+function loadArenaId(): string {
+  try { return localStorage.getItem('bunnybrawl_arena') || 'meadow'; } catch { return 'meadow'; }
+}
+
 const defaultSettings: MatchSettings = {
   killLimit: 10,
   timeLimit: 180, // 3 minutes
   playerCount: 2,
   goreMode: loadGoreMode(),
+  arenaId: loadArenaId(),
 };
 
 export const useGameStore = create<GameStore>((set) => ({
@@ -40,6 +45,9 @@ export const useGameStore = create<GameStore>((set) => ({
       const next = { ...state.matchSettings, ...settings };
       if ('goreMode' in settings) {
         try { localStorage.setItem('bunnybrawl_gore', String(next.goreMode)); } catch { /* noop */ }
+      }
+      if ('arenaId' in settings) {
+        try { localStorage.setItem('bunnybrawl_arena', next.arenaId); } catch { /* noop */ }
       }
       return { matchSettings: next };
     }),

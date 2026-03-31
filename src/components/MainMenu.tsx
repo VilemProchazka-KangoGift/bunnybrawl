@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../store/gameStore';
 import { audio } from '../engine/audio';
+import { listArenas } from '../engine/arena';
+import { listThemes } from '../engine/themes/registry';
 import './MainMenu.css';
 
 export function MainMenu() {
@@ -39,6 +41,29 @@ export function MainMenu() {
             <button className="menu-btn play-btn" onClick={handlePlay} data-testid="play-button">
               {t('play')}
             </button>
+          </div>
+
+          <div className="arena-selector" data-testid="arena-selector">
+            <span className="arena-label">{t('arena_label')}</span>
+            <div className="arena-options">
+              {listArenas().map(a => {
+                const theme = listThemes().find(t => t.id === a.themeId);
+                return (
+                  <button
+                    key={a.id}
+                    className={`arena-option ${matchSettings.arenaId === a.id ? 'selected' : ''}`}
+                    onClick={() => {
+                      audio.init();
+                      audio.play('select');
+                      setMatchSettings({ arenaId: a.id });
+                    }}
+                  >
+                    <div className="arena-preview" style={{ background: theme?.previewGradient || '#333' }} />
+                    <span className="arena-name">{t(theme?.nameKey || a.name)}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="menu-settings">

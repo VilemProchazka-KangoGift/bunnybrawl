@@ -1,10 +1,12 @@
-import type { Arena, Player, SplatMark, MatchState, Particle, Platform, Carrot, SpringMushroom, Thorn, WeatherParticle, WildlifeEntity, CharacterSlot } from './types';
+import type { Arena, Player, SplatMark, MatchState, Particle, Carrot, SpringMushroom, Thorn, WeatherParticle, WildlifeEntity, CharacterSlot } from './types';
+import type { ThemeConfig } from './themes/types';
 import { CHARACTERS } from './characters';
 import {
   CANVAS_WIDTH, CANVAS_HEIGHT, CARROT_SIZE, SPRING_SIZE, FAT_SCALE,
   SCREEN_SHAKE_INTENSITY, HAZARD_GROW_TIME,
   SHOCKWAVE_DURATION, SCREEN_FLASH_DURATION, SPRING_TRAIL_DURATION, SCORE_ANIM_DURATION,
 } from './constants';
+import { drawCloud as drawCloudPrimitive, drawHill, drawPlatformMoss } from './themes/drawPrimitives';
 
 interface Cloud {
   x: number;
@@ -18,298 +20,139 @@ export class Renderer {
   private fgCtx: CanvasRenderingContext2D;
   private clouds: Cloud[] = [];
   private lastCloudTime = 0;
+  theme: ThemeConfig;
 
-  constructor(bgCanvas: HTMLCanvasElement, fgCanvas: HTMLCanvasElement) {
+  constructor(bgCanvas: HTMLCanvasElement, fgCanvas: HTMLCanvasElement, theme: ThemeConfig) {
     this.bgCtx = bgCanvas.getContext('2d')!;
     this.fgCtx = fgCanvas.getContext('2d')!;
+    this.theme = theme;
 
     bgCanvas.width = CANVAS_WIDTH;
     bgCanvas.height = CANVAS_HEIGHT;
     fgCanvas.width = CANVAS_WIDTH;
     fgCanvas.height = CANVAS_HEIGHT;
 
-    // Init clouds
-    this.clouds = [
-      { x: 100, y: 70, size: 60, speed: 8 },
-      { x: 350, y: 45, size: 85, speed: 12 },
-      { x: 650, y: 90, size: 50, speed: 6 },
-      { x: 900, y: 55, size: 75, speed: 10 },
-      { x: 1150, y: 80, size: 55, speed: 7 },
-    ];
+    // Init clouds from theme config
+    const cc = theme.clouds;
+    this.clouds = [];
+    for (let i = 0; i < cc.count; i++) {
+      this.clouds.push({
+        x: (i / cc.count) * CANVAS_WIDTH + Math.random() * 100,
+        y: cc.yRange[0] + Math.random() * (cc.yRange[1] - cc.yRange[0]),
+        size: cc.minSize + Math.random() * (cc.maxSize - cc.minSize),
+        speed: cc.minSpeed + Math.random() * (cc.maxSpeed - cc.minSpeed),
+      });
+    }
   }
 
   renderBackground(arena: Arena): void {
     const ctx = this.bgCtx;
+    const theme = this.theme;
 
-    // Sky gradient
+    // Sky gradient from theme
     const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-    gradient.addColorStop(0, '#4A90D9');
-    gradient.addColorStop(0.6, '#87CEEB');
-    gradient.addColorStop(1, '#B0E0E6');
+    for (const stop of theme.sky.gradient) {
+      gradient.addColorStop(stop.offset, stop.color);
+    }
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    // Hills in background
-    ctx.fillStyle = '#5C9E4C';
-    this.drawHill(ctx, 0, 620, 300, 120);
-    this.drawHill(ctx, 250, 630, 400, 100);
-    this.drawHill(ctx, 600, 620, 350, 130);
-    this.drawHill(ctx, 900, 635, 400, 100);
+    // Hills from theme
+    for (const hill of theme.hills) {
+      ctx.fillStyle = hill.color;
+      drawHill(ctx, hill.x, hill.baseY, hill.width, hill.height);
+    }
 
     // Platforms
     for (const plat of arena.platforms) {
-      this.drawPlatform(ctx, plat.x, plat.y, plat.width, plat.height,
-        plat.y >= 650 ? arena.groundColor : arena.platformColor);
+      this.drawPlatform(ctx, plat.x, plat.y, plat.width, plat.height, plat.y >= 650);
     }
 
-    // Ground grass line
+    // Ground surface line
     const ground = arena.platforms[0];
-    ctx.fillStyle = '#6BBF59';
-    ctx.fillRect(ground.x, ground.y, ground.width, 4);
+    ctx.fillStyle = theme.ground.surfaceColor;
+    ctx.fillRect(ground.x, ground.y, ground.width, theme.ground.surfaceThickness);
 
-    // Grass blades on ground
-    ctx.strokeStyle = '#5DAF4A';
-    ctx.lineWidth = 2;
-    for (let x = 10; x < CANVAS_WIDTH; x += 15 + Math.random() * 10) {
-      ctx.beginPath();
-      ctx.moveTo(x, ground.y);
-      ctx.lineTo(x - 3, ground.y - 6 - Math.random() * 4);
-      ctx.stroke();
+    // Grass blades (if enabled by theme)
+    if (theme.ground.grassBlades) {
+      const gb = theme.ground.grassBlades;
+      ctx.strokeStyle = gb.color;
+      ctx.lineWidth = 2;
+      for (let x = 10; x < CANVAS_WIDTH; x += gb.spacing + Math.random() * (gb.spacing * 0.67)) {
+        const h = gb.heightRange[0] + Math.random() * (gb.heightRange[1] - gb.heightRange[0]);
+        ctx.beginPath();
+        ctx.moveTo(x, ground.y);
+        ctx.lineTo(x - 3, ground.y - h);
+        ctx.stroke();
+      }
     }
 
-    // Nature on ground
-    this.drawNatureOnGround(ctx, ground);
-
-    // Nature on floating platforms
-    const floats = arena.platforms.filter(p => p.y < 650);
-    for (const plat of floats) {
-      this.drawNatureOnPlatform(ctx, plat);
-    }
+    // Theme-specific background nature
+    theme.drawBackgroundNature(ctx, arena);
   }
 
-  // ---- Nature drawing ----
-
-  private drawNatureOnGround(ctx: CanvasRenderingContext2D, ground: Platform): void {
-    const y = ground.y;
-
-    // Trees
-    this.drawTree(ctx, 60, y, 50);
-    this.drawTree(ctx, 620, y, 60);
-    this.drawTree(ctx, 1180, y, 45);
-
-    // Bushes
-    this.drawBush(ctx, 200, y, 30);
-    this.drawBush(ctx, 450, y, 22);
-    this.drawBush(ctx, 700, y, 28);
-    this.drawBush(ctx, 950, y, 25);
-    this.drawBush(ctx, 1100, y, 20);
-
-    // Flowers
-    const flowerColors = ['#FF6B8A', '#FFD700', '#FF69B4', '#87CEEB', '#DDA0DD', '#FFA07A'];
-    const flowerPositions = [150, 280, 380, 500, 580, 750, 830, 980, 1050, 1200];
-    for (const fx of flowerPositions) {
-      const color = flowerColors[Math.floor(fx * 0.01) % flowerColors.length];
-      this.drawFlower(ctx, fx, y, color);
-    }
-
-    // Small mushrooms
-    this.drawMushroom(ctx, 340, y);
-    this.drawMushroom(ctx, 890, y);
-  }
-
-  private drawNatureOnPlatform(ctx: CanvasRenderingContext2D, plat: Platform): void {
-    const y = plat.y;
-    const mid = plat.x + plat.width / 2;
-
-    // Small bush or flowers depending on platform size
-    if (plat.width > 180) {
-      this.drawBush(ctx, mid - 30, y, 15);
-      this.drawFlower(ctx, plat.x + 20, y, '#FFD700');
-      this.drawFlower(ctx, plat.x + plat.width - 25, y, '#FF69B4');
-      // Small grass tufts
-      this.drawGrassTuft(ctx, plat.x + 10, y);
-      this.drawGrassTuft(ctx, plat.x + plat.width - 15, y);
-    } else {
-      this.drawFlower(ctx, mid - 10, y, '#DDA0DD');
-      this.drawGrassTuft(ctx, plat.x + 8, y);
-    }
-  }
-
-  private drawTree(ctx: CanvasRenderingContext2D, x: number, groundY: number, size: number): void {
-    const trunkW = size * 0.2;
-    const trunkH = size * 0.8;
-
-    // Trunk
-    ctx.fillStyle = '#6B4226';
-    ctx.fillRect(x - trunkW / 2, groundY - trunkH, trunkW, trunkH);
-    // Bark lines
-    ctx.strokeStyle = '#553318';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(x - 2, groundY - trunkH * 0.3);
-    ctx.lineTo(x - 1, groundY - trunkH * 0.6);
-    ctx.stroke();
-
-    // Foliage layers (bottom to top)
-    const layers = [
-      { yOff: 0.4, rx: size * 0.55, ry: size * 0.3, color: '#2D8B2D' },
-      { yOff: 0.6, rx: size * 0.45, ry: size * 0.28, color: '#3AA03A' },
-      { yOff: 0.8, rx: size * 0.32, ry: size * 0.22, color: '#4AB84A' },
-    ];
-    for (const l of layers) {
-      ctx.fillStyle = l.color;
-      ctx.beginPath();
-      ctx.ellipse(x, groundY - trunkH * l.yOff - size * 0.2, l.rx, l.ry, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  private drawBush(ctx: CanvasRenderingContext2D, x: number, groundY: number, size: number): void {
-    // Main body
-    ctx.fillStyle = '#3A8C3A';
-    ctx.beginPath();
-    ctx.ellipse(x, groundY - size * 0.4, size * 0.6, size * 0.45, 0, 0, Math.PI * 2);
-    ctx.fill();
-    // Lighter highlight
-    ctx.fillStyle = '#4CA64C';
-    ctx.beginPath();
-    ctx.ellipse(x + size * 0.15, groundY - size * 0.55, size * 0.35, size * 0.25, 0.3, 0, Math.PI * 2);
-    ctx.fill();
-    // Dark underside
-    ctx.fillStyle = '#2D6B2D';
-    ctx.beginPath();
-    ctx.ellipse(x - size * 0.1, groundY - size * 0.2, size * 0.5, size * 0.15, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  private drawFlower(ctx: CanvasRenderingContext2D, x: number, groundY: number, color: string): void {
-    // Stem
-    ctx.strokeStyle = '#3A7A3A';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(x, groundY);
-    ctx.lineTo(x, groundY - 12);
-    ctx.stroke();
-
-    // Petals
-    ctx.fillStyle = color;
-    const petalR = 3;
-    for (let a = 0; a < 5; a++) {
-      const angle = (a / 5) * Math.PI * 2;
-      ctx.beginPath();
-      ctx.arc(x + Math.cos(angle) * 3, groundY - 14 + Math.sin(angle) * 3, petalR, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    // Center
-    ctx.fillStyle = '#FFE04A';
-    ctx.beginPath();
-    ctx.arc(x, groundY - 14, 2, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  private drawMushroom(ctx: CanvasRenderingContext2D, x: number, groundY: number): void {
-    // Stem
-    ctx.fillStyle = '#F5F0E0';
-    ctx.fillRect(x - 3, groundY - 10, 6, 10);
-    // Cap
-    ctx.fillStyle = '#D32F2F';
-    ctx.beginPath();
-    ctx.ellipse(x, groundY - 10, 8, 6, 0, Math.PI, 0);
-    ctx.fill();
-    // Spots
-    ctx.fillStyle = '#FFF';
-    ctx.beginPath();
-    ctx.arc(x - 3, groundY - 13, 2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(x + 3, groundY - 12, 1.5, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  private drawGrassTuft(ctx: CanvasRenderingContext2D, x: number, groundY: number): void {
-    ctx.strokeStyle = '#5DAF4A';
-    ctx.lineWidth = 2;
-    for (let i = -1; i <= 1; i++) {
-      ctx.beginPath();
-      ctx.moveTo(x + i * 3, groundY);
-      ctx.lineTo(x + i * 5, groundY - 6 - Math.random() * 3);
-      ctx.stroke();
-    }
-  }
+  // (Nature drawing methods extracted to themes/drawPrimitives.ts)
 
   // ---- Clouds ----
 
-  private drawCloud(ctx: CanvasRenderingContext2D, x: number, y: number, size: number): void {
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-    ctx.beginPath();
-    ctx.arc(x, y, size * 0.5, 0, Math.PI * 2);
-    ctx.arc(x + size * 0.4, y - size * 0.15, size * 0.4, 0, Math.PI * 2);
-    ctx.arc(x + size * 0.8, y, size * 0.45, 0, Math.PI * 2);
-    ctx.arc(x + size * 0.35, y + size * 0.1, size * 0.35, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
   private updateAndDrawClouds(ctx: CanvasRenderingContext2D, dt: number): void {
+    const color = this.theme.clouds.color;
     for (const cloud of this.clouds) {
       cloud.x += cloud.speed * dt;
-      // Wrap around
       if (cloud.x - cloud.size > CANVAS_WIDTH) {
         cloud.x = -cloud.size * 2;
       }
-      this.drawCloud(ctx, cloud.x, cloud.y, cloud.size);
+      drawCloudPrimitive(ctx, cloud.x, cloud.y, cloud.size, color);
     }
   }
 
-  // ---- Other static helpers ----
+  // (drawHill extracted to themes/drawPrimitives.ts)
 
-  private drawHill(ctx: CanvasRenderingContext2D, x: number, baseY: number, width: number, height: number): void {
-    ctx.beginPath();
-    ctx.moveTo(x, baseY + 60);
-    ctx.quadraticCurveTo(x + width / 2, baseY - height, x + width, baseY + 60);
-    ctx.fill();
-  }
+  private drawPlatform(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, isGround: boolean): void {
+    const tp = this.theme.platform;
 
-  private drawPlatform(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, color: string): void {
-    if (h > 30) {
-      // Ground platform
-      ctx.fillStyle = '#5C3A1E';
+    // Allow theme to completely override platform drawing
+    if (tp.customDraw) {
+      tp.customDraw(ctx, x, y, w, h, isGround);
+      return;
+    }
+
+    if (isGround) {
+      ctx.fillStyle = tp.groundBodyColor;
       ctx.fillRect(x, y + 4, w, h - 4);
-      ctx.fillStyle = color;
+      ctx.fillStyle = tp.groundTopColor;
       ctx.fillRect(x, y, w, 8);
-      ctx.fillStyle = '#7B5B3A';
+      // Ground texture spots
+      const spotColor = this.blendColor(tp.groundBodyColor, '#FFFFFF', 0.15);
+      ctx.fillStyle = spotColor;
       for (let dx = 10; dx < w; dx += 30 + Math.random() * 20) {
         ctx.fillRect(x + dx, y + 15 + Math.random() * 20, 4, 3);
       }
     } else {
-      // Floating platform
-      ctx.fillStyle = '#6B4E1B';
+      ctx.fillStyle = tp.floatingBodyColor;
       ctx.fillRect(x, y + 4, w, h - 4);
-      ctx.fillStyle = color;
+      ctx.fillStyle = tp.floatingTopColor;
       ctx.fillRect(x, y, w, 6);
-      ctx.fillStyle = '#6BBF59';
-      ctx.fillRect(x, y, w, 3);
+      if (tp.floatingAccentColor) {
+        ctx.fillStyle = tp.floatingAccentColor;
+        ctx.fillRect(x, y, w, 3);
+      }
 
-      // Platform edge moss (r)
-      this.drawPlatformMoss(ctx, x, y, h);
-      this.drawPlatformMoss(ctx, x + w, y, h);
+      if (tp.drawMoss) {
+        drawPlatformMoss(ctx, x, y, h);
+        drawPlatformMoss(ctx, x + w, y, h);
+      }
     }
   }
 
-  private drawPlatformMoss(ctx: CanvasRenderingContext2D, edgeX: number, platY: number, platH: number): void {
-    ctx.fillStyle = '#3A7A3A';
-    // Several small hanging drapes
-    for (let i = 0; i < 3; i++) {
-      const ox = (i - 1) * 4;
-      const hang = 5 + i * 2;
-      ctx.beginPath();
-      ctx.ellipse(edgeX + ox, platY + platH + hang * 0.5, 3, hang * 0.5, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    // Darker accent
-    ctx.fillStyle = '#2D6B2D';
-    ctx.beginPath();
-    ctx.ellipse(edgeX, platY + platH + 2, 5, 3, 0, 0, Math.PI * 2);
-    ctx.fill();
+  private blendColor(hex: string, target: string, amount: number): string {
+    const parse = (h: string) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+    const [r1, g1, b1] = parse(hex);
+    const [r2, g2, b2] = parse(target);
+    const r = Math.round(r1 + (r2 - r1) * amount);
+    const g = Math.round(g1 + (g2 - g1) * amount);
+    const b = Math.round(b1 + (b2 - b1) * amount);
+    return `rgb(${r},${g},${b})`;
   }
 
   // ---- Splat marks ----
@@ -505,26 +348,28 @@ export class Renderer {
 
     // Ground fog (o) — after players, before foreground nature
     if (matchState.fogParticles) {
+      const fogCfg = this.theme.fog;
       for (const fp of matchState.fogParticles) {
         ctx.save();
         ctx.globalAlpha = fp.alpha * 0.3;
-        ctx.fillStyle = '#FFF';
+        ctx.fillStyle = fogCfg.color;
         ctx.beginPath();
-        ctx.ellipse(fp.x, fp.y, 40, 8, 0, 0, Math.PI * 2);
+        ctx.ellipse(fp.x, fp.y, fogCfg.sizeX, fogCfg.sizeY, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
       }
     }
 
-    // Foreground nature
-    this.drawForegroundNature(ctx, arena);
+    // Foreground nature — delegated to theme
+    this.theme.drawForegroundNature(ctx, arena);
 
-    // Pollen / dandelion seeds (p)
+    // Ambient particles (pollen / snow drift / sparkles)
     if (matchState.pollenParticles) {
+      const ambCfg = this.theme.ambientParticles;
       for (const pp of matchState.pollenParticles) {
         ctx.save();
         ctx.globalAlpha = pp.alpha * 0.7;
-        ctx.fillStyle = pp.size > 2 ? '#FFFFF0' : '#FFFACD';
+        ctx.fillStyle = ambCfg.colors[pp.size > 2 ? 0 : (ambCfg.colors.length > 1 ? 1 : 0)];
         ctx.beginPath();
         ctx.arc(pp.x, pp.y, pp.size, 0, Math.PI * 2);
         ctx.fill();
@@ -565,7 +410,12 @@ export class Renderer {
   // ---- Weather ----
 
   private drawWeather(ctx: CanvasRenderingContext2D, weather: WeatherParticle[]): void {
+    const customDraw = this.theme.drawWeatherParticle;
     for (const w of weather) {
+      if (customDraw) {
+        customDraw(ctx, w);
+        continue;
+      }
       ctx.save();
       ctx.translate(w.x, w.y);
       ctx.rotate(w.rotation);
@@ -574,18 +424,41 @@ export class Renderer {
         ctx.beginPath();
         ctx.ellipse(0, 0, w.size, w.size * 0.4, 0, 0, Math.PI * 2);
         ctx.fill();
-        // Vein
         ctx.strokeStyle = 'rgba(60, 120, 40, 0.3)';
         ctx.lineWidth = 0.5;
         ctx.beginPath();
         ctx.moveTo(-w.size * 0.7, 0);
         ctx.lineTo(w.size * 0.7, 0);
         ctx.stroke();
-      } else {
-        // Petal
+      } else if (w.type === 'petal') {
         ctx.fillStyle = 'rgba(255, 180, 200, 0.35)';
         ctx.beginPath();
         ctx.ellipse(0, 0, w.size, w.size * 0.6, 0, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (w.type === 'snow') {
+        ctx.fillStyle = w.color || 'rgba(230, 240, 255, 0.7)';
+        ctx.beginPath();
+        ctx.arc(0, 0, w.size, 0, Math.PI * 2);
+        ctx.fill();
+        if (w.size > 3.5) {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+          ctx.beginPath();
+          ctx.arc(0, -w.size * 0.3, 1, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (w.type === 'ember') {
+        ctx.fillStyle = w.color || 'rgba(255, 120, 30, 0.6)';
+        ctx.beginPath();
+        ctx.arc(0, 0, w.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255, 200, 50, 0.8)';
+        ctx.beginPath();
+        ctx.arc(0, 0, w.size * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (w.type === 'ash') {
+        ctx.fillStyle = w.color || 'rgba(150, 150, 150, 0.4)';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, w.size, w.size * 0.5, 0, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.restore();
@@ -757,220 +630,7 @@ export class Renderer {
 
   // ---- Foreground nature (drawn over players) ----
 
-  private drawForegroundNature(ctx: CanvasRenderingContext2D, arena: Arena): void {
-    const ground = arena.platforms[0];
-    const gy = ground.y;
-
-    // Large foreground bushes on ground — rabbits hide behind these
-    this.drawFgBush(ctx, 160, gy, 60);
-    this.drawFgBush(ctx, 520, gy, 52);
-    this.drawFgBush(ctx, 850, gy, 58);
-    this.drawFgBush(ctx, 1120, gy, 48);
-
-    // Tall grass clusters
-    this.drawTallGrass(ctx, 310, gy, 7);
-    this.drawTallGrass(ctx, 680, gy, 9);
-    this.drawTallGrass(ctx, 1020, gy, 6);
-    this.drawTallGrass(ctx, 430, gy, 5);
-
-    // Foreground ferns
-    this.drawFern(ctx, 80, gy);
-    this.drawFern(ctx, 770, gy);
-    this.drawFern(ctx, 1220, gy);
-
-    // Foreground bushes + vines on floating platforms
-    const floats = arena.platforms.filter(p => p.y < 650);
-    for (let pi = 0; pi < floats.length; pi++) {
-      const plat = floats[pi];
-      if (plat.width > 180) {
-        // Mix: one large hiding bush + one small decorative bush
-        this.drawFgBush(ctx, plat.x + plat.width * 0.15, plat.y, pi % 2 === 0 ? 45 : 18);
-        this.drawFgBush(ctx, plat.x + plat.width * 0.85, plat.y, pi % 2 === 0 ? 18 : 42);
-        this.drawHangingVine(ctx, plat.x + 15, plat.y + plat.height, 25);
-        this.drawHangingVine(ctx, plat.x + plat.width - 15, plat.y + plat.height, 20);
-        this.drawFgLeafCluster(ctx, plat.x + plat.width / 2, plat.y);
-      } else {
-        // Alternate: big hiding bush or small decorative
-        this.drawFgBush(ctx, plat.x + plat.width * 0.5, plat.y, pi % 3 === 0 ? 38 : 16);
-        this.drawHangingVine(ctx, plat.x + plat.width / 2, plat.y + plat.height, 18);
-      }
-    }
-
-    // Foreground wildflowers (taller than background ones)
-    this.drawFgWildflower(ctx, 240, gy, '#FF6B8A', 18);
-    this.drawFgWildflower(ctx, 580, gy, '#DDA0DD', 20);
-    this.drawFgWildflower(ctx, 930, gy, '#FFD700', 16);
-    this.drawFgWildflower(ctx, 1180, gy, '#FF69B4', 22);
-  }
-
-  private drawFgBush(ctx: CanvasRenderingContext2D, x: number, groundY: number, size: number): void {
-    // Dark back layer
-    ctx.fillStyle = '#1E5C1E';
-    ctx.beginPath();
-    ctx.ellipse(x, groundY - size * 0.35, size * 0.7, size * 0.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Main body
-    ctx.fillStyle = '#2B7A2B';
-    ctx.beginPath();
-    ctx.ellipse(x + 2, groundY - size * 0.4, size * 0.6, size * 0.45, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Left lobe
-    ctx.fillStyle = '#338A33';
-    ctx.beginPath();
-    ctx.ellipse(x - size * 0.3, groundY - size * 0.3, size * 0.35, size * 0.32, -0.3, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Right lobe
-    ctx.fillStyle = '#2E8030';
-    ctx.beginPath();
-    ctx.ellipse(x + size * 0.3, groundY - size * 0.35, size * 0.33, size * 0.3, 0.2, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Highlight spots
-    ctx.fillStyle = '#3DA63D';
-    ctx.beginPath();
-    ctx.ellipse(x - size * 0.1, groundY - size * 0.55, size * 0.15, size * 0.12, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(x + size * 0.2, groundY - size * 0.5, size * 0.12, size * 0.1, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Small berries
-    const berryColors = ['#CC3333', '#DD4444', '#BB2222'];
-    for (let i = 0; i < 3; i++) {
-      ctx.fillStyle = berryColors[i];
-      ctx.beginPath();
-      ctx.arc(
-        x + (i - 1) * size * 0.2 + (i * 3 % 5),
-        groundY - size * 0.25 - (i * 7 % 6),
-        2.5, 0, Math.PI * 2
-      );
-      ctx.fill();
-    }
-  }
-
-  private drawTallGrass(ctx: CanvasRenderingContext2D, x: number, groundY: number, bladeCount: number): void {
-    for (let i = 0; i < bladeCount; i++) {
-      const bx = x + (i - bladeCount / 2) * 6;
-      const height = 14 + (i * 7 % 10);
-      const lean = (i % 3 - 1) * 4;
-
-      // Dark blade
-      ctx.strokeStyle = i % 2 === 0 ? '#2D7A2D' : '#3A8A3A';
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      ctx.moveTo(bx, groundY);
-      ctx.quadraticCurveTo(bx + lean * 0.5, groundY - height * 0.6, bx + lean, groundY - height);
-      ctx.stroke();
-
-      // Lighter overlay on some
-      if (i % 3 === 0) {
-        ctx.strokeStyle = '#4CA64C';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(bx + 1, groundY);
-        ctx.quadraticCurveTo(bx + lean * 0.5 + 1, groundY - height * 0.6, bx + lean + 1, groundY - height);
-        ctx.stroke();
-      }
-    }
-  }
-
-  private drawFern(ctx: CanvasRenderingContext2D, x: number, groundY: number): void {
-    // Central stem
-    const height = 22;
-    ctx.strokeStyle = '#2D6B2D';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(x, groundY);
-    ctx.quadraticCurveTo(x + 2, groundY - height * 0.5, x + 4, groundY - height);
-    ctx.stroke();
-
-    // Fronds on each side
-    const frondCount = 4;
-    for (let i = 0; i < frondCount; i++) {
-      const fy = groundY - 5 - i * 4;
-      const fLen = 10 - i * 1.5;
-      for (const side of [-1, 1]) {
-        ctx.strokeStyle = i < 2 ? '#2B7A2B' : '#3A9A3A';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(x + 1, fy);
-        ctx.quadraticCurveTo(x + side * fLen * 0.7, fy - 3, x + side * fLen, fy - 1);
-        ctx.stroke();
-      }
-    }
-  }
-
-  private drawHangingVine(ctx: CanvasRenderingContext2D, x: number, topY: number, length: number): void {
-    // Vine stem
-    ctx.strokeStyle = '#3A7A3A';
-    ctx.lineWidth = 1.5;
-    const sway = Math.sin(x * 0.1) * 4;
-    ctx.beginPath();
-    ctx.moveTo(x, topY);
-    ctx.quadraticCurveTo(x + sway, topY + length * 0.6, x + sway * 0.5, topY + length);
-    ctx.stroke();
-
-    // Small leaves along vine
-    ctx.fillStyle = '#3D8B3D';
-    for (let i = 0; i < 3; i++) {
-      const ly = topY + (i + 1) * length * 0.25;
-      const lx = x + sway * (i + 1) / 4;
-      const side = i % 2 === 0 ? -1 : 1;
-      ctx.beginPath();
-      ctx.ellipse(lx + side * 4, ly, 4, 2.5, side * 0.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  private drawFgLeafCluster(ctx: CanvasRenderingContext2D, x: number, platY: number): void {
-    // Small cluster of leaves sitting on top of platform, drawn in foreground
-    ctx.fillStyle = '#2E7A2E';
-    ctx.beginPath();
-    ctx.ellipse(x - 6, platY - 4, 8, 5, -0.4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#3A8C3A';
-    ctx.beginPath();
-    ctx.ellipse(x + 6, platY - 5, 7, 4, 0.3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#4A9C4A';
-    ctx.beginPath();
-    ctx.ellipse(x, platY - 7, 6, 3.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  private drawFgWildflower(ctx: CanvasRenderingContext2D, x: number, groundY: number, color: string, height: number): void {
-    // Tall stem
-    ctx.strokeStyle = '#2D6B2D';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(x, groundY);
-    ctx.lineTo(x + 1, groundY - height);
-    ctx.stroke();
-
-    // Small leaf on stem
-    ctx.fillStyle = '#3A8A3A';
-    ctx.beginPath();
-    ctx.ellipse(x + 5, groundY - height * 0.5, 5, 2.5, 0.5, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Flower head (larger than bg flowers)
-    ctx.fillStyle = color;
-    const petalR = 4;
-    for (let a = 0; a < 6; a++) {
-      const angle = (a / 6) * Math.PI * 2;
-      ctx.beginPath();
-      ctx.arc(x + 1 + Math.cos(angle) * 4, groundY - height - 1 + Math.sin(angle) * 4, petalR, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    // Center
-    ctx.fillStyle = '#FFE04A';
-    ctx.beginPath();
-    ctx.arc(x + 1, groundY - height - 1, 2.5, 0, Math.PI * 2);
-    ctx.fill();
-  }
+  // (Foreground nature methods extracted to themes/drawPrimitives.ts)
 
   // ---- Particles ----
 
@@ -1968,8 +1628,8 @@ export class Renderer {
       ctx.restore();
     }
 
-    // Fireflies
-    if (nightIntensity > 0.4) {
+    // Fireflies (conditional on theme)
+    if (nightIntensity > 0.4 && this.theme.dayNight.showFireflies) {
       const fireflyAlpha = Math.min((nightIntensity - 0.4) / 0.4, 1) * 0.7;
       const now = performance.now() / 1000;
       ctx.save();

@@ -16,11 +16,18 @@ src/
     physics.ts    # Movement, gravity, collision, player pushing
     stomp.ts      # Stomp detection, splat marks, respawn
     input.ts      # 4-player keyboard input with case-insensitive normalization
-    arena.ts      # Meadow arena layout (platforms, spawn points)
+    arena.ts      # Arena layouts (platforms, spawn points) + getArena(id) + listArenas()
     characters.ts # 14 character definitions + ALL_CHARACTERS roster
     renderer.ts   # Canvas 2D rendering (two layers: bg + fg) — LARGEST FILE (~2300 lines)
     audio.ts      # Procedural audio generation (14 animal sounds + SFX + music)
     gameLoop.ts   # Main game loop with fixed timestep, all game systems (~920 lines)
+    themes/       # Data-driven arena theme system
+      types.ts      # ThemeConfig interface + all sub-interfaces
+      drawPrimitives.ts  # Shared drawing functions (trees, bushes, flowers, etc.)
+      meadow.ts     # Meadow theme config
+      winterLake.ts # Winter Lake theme config
+      registry.ts   # Theme registry map + getTheme() + listThemes()
+      index.ts      # Barrel export
     index.ts      # Public API barrel export
   components/     # React components (menus/HUD only — canvas is imperative)
     MainMenu.tsx        # Title screen with Play button, blood toggle, language switch
@@ -43,6 +50,7 @@ src/
 - **All character sprites are procedural** — drawn with Canvas 2D primitives. No sprite sheets.
 - **React is for menus only** — the game canvas and lobby canvas use imperative requestAnimationFrame loops.
 - **i18n via i18next** — Czech is the default language. Canvas text uses `i18n.t()` directly (not the React hook).
+- **Data-driven arena themes** — Each arena has a `ThemeConfig` controlling all visuals (sky, platforms, decorations, weather, wildlife, fog, day/night) and optional physics modifiers. Themes are mostly data (colors, counts, ranges) with custom draw functions for unique decorations. Shared drawing primitives live in `themes/drawPrimitives.ts` and are reused across themes.
 
 ## Common Patterns
 
@@ -54,6 +62,21 @@ src/
 5. Add splat shape in `stomp.ts` `CHARACTER_SPLAT_SHAPES`
 6. Add animal sound in `audio.ts` (SoundName type + init + generator function)
 7. Add localized name in `en.json` and `cs.json` (`char_NewAnimal`)
+
+### Adding a new arena / level
+1. Create theme config in `src/engine/themes/newTheme.ts` implementing `ThemeConfig` (see `meadow.ts` as reference)
+   - Define sky gradient, hills, ground style, platform colors
+   - Configure ambient systems: clouds, weather, wildlife, fog, ambient particles, day/night
+   - Write `drawBackgroundNature(ctx, arena)` — background decorations (trees, rocks, etc.)
+   - Write `drawForegroundNature(ctx, arena)` — foreground decorations drawn over players
+   - Optionally provide `drawWeatherParticle` for custom particle rendering
+   - Optionally set `physics` modifiers (gravity, friction, walkSpeed, jumpImpulse multipliers)
+   - Use shared primitives from `drawPrimitives.ts` (drawTree, drawBush, drawPineTree, etc.)
+2. Register theme in `src/engine/themes/registry.ts` (add to `THEMES` map)
+3. Add arena layout in `src/engine/arena.ts` — platforms array + spawn points + `themeId`
+4. Add arena to `ARENA_LIST` in `arena.ts` and register in `getArena()`
+5. Add localized name in `en.json` and `cs.json` (`arena_new_theme`)
+6. The MainMenu arena selector picks it up automatically from `listArenas()`
 
 ### Adding a new game mechanic / pickup
 1. Define the interface in `types.ts`
@@ -100,12 +123,16 @@ npm run test:e2e  # E2E tests (builds first)
 - **CharacterSelect.tsx has its own physics loop** — separate from the main game engine. Changes to lobby physics don't use the engine's `physics.ts`.
 - **Gore mode** is persisted in localStorage (`bunnybrawl_gore`).
 - **The CHARACTERS record is mutated** at lobby exit to write the selected characters back. This is intentional.
+- **Arena type is flat** — `Arena` has `themeId` + platforms/spawns directly (not nested in a `layout` sub-object). The theme provides all visual config; the Arena provides structural layout. Color fields (`backgroundColor`, `groundColor`, `platformColor`) were removed — use the theme instead.
+- **Theme draw functions receive raw ctx + arena** — they import shared primitives from `drawPrimitives.ts` directly, not through a DrawKit indirection. Keep it simple.
+- **platforms[0] is always the ground** — convention used by themes, renderer, and gameLoop. Ground platform is detected by `p.y >= 650`.
 
 ## File Size Reference
 
 Largest files to be aware of when context is limited:
-- `renderer.ts` ~2300 lines (all canvas drawing)
-- `gameLoop.ts` ~920 lines (all game systems)
+- `renderer.ts` ~2300 lines (canvas drawing, dispatches to theme for decorations)
+- `gameLoop.ts` ~920 lines (all game systems, reads theme for ambient init)
 - `CharacterSelect.tsx` ~810 lines (lobby with its own game loop)
 - `audio.ts` ~590 lines (procedural sound generation)
+- `themes/drawPrimitives.ts` — shared drawing functions extracted from renderer
 - `VictoryScreen.css` ~410 lines
