@@ -16,6 +16,15 @@ interface FireworkParticle {
   size: number;
 }
 
+// Map character names to emoji/text for visual display
+const CHAR_EMOJI: Record<string, string> = {
+  Bunny: '\uD83D\uDC30', Fox: '\uD83E\uDD8A', Frog: '\uD83D\uDC38',
+  Bear: '\uD83D\uDC3B', Owl: '\uD83E\uDD89', Cat: '\uD83D\uDC31',
+  Wolf: '\uD83D\uDC3A', Panda: '\uD83D\uDC3C', Pig: '\uD83D\uDC37',
+  Cow: '\uD83D\uDC2E', Goat: '\uD83D\uDC10', Horse: '\uD83D\uDC34',
+  Sheep: '\uD83D\uDC11', Monkey: '\uD83D\uDC35',
+};
+
 export function VictoryScreen() {
   const { t } = useTranslation();
   const { winner, lastMatchState, setScreen, setActivePlayers } = useGameStore();
@@ -25,16 +34,12 @@ export function VictoryScreen() {
   const players = lastMatchState?.players.filter(p => p.active) ?? [];
   const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
 
-  const handleRematch = () => {
-    setScreen('match');
-  };
+  const charName = (name: string) => t(`char_${name}`, name);
 
-  const handleMenu = () => {
-    setActivePlayers([]);
-    setScreen('menu');
-  };
+  const handleRematch = () => { setScreen('match'); };
+  const handleMenu = () => { setActivePlayers([]); setScreen('menu'); };
 
-  // Fireworks background effect
+  // Fireworks
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -44,7 +49,6 @@ export function VictoryScreen() {
 
     const particles: FireworkParticle[] = [];
     let lastSpawn = 0;
-    const SPAWN_INTERVAL = 400;
     const COLORS = ['#FF4444', '#44FF44', '#4488FF', '#FFD700', '#FF69B4', '#44FFFF', '#FF8844', '#AA44FF'];
 
     function spawnBurst(time: number) {
@@ -55,47 +59,26 @@ export function VictoryScreen() {
       for (let i = 0; i < count; i++) {
         const angle = (i / count) * Math.PI * 2 + Math.random() * 0.3;
         const speed = 60 + Math.random() * 120;
-        particles.push({
-          x: bx,
-          y: by,
-          vx: Math.cos(angle) * speed,
-          vy: Math.sin(angle) * speed,
-          life: 1.0 + Math.random() * 0.5,
-          maxLife: 1.0 + Math.random() * 0.5,
-          color,
-          size: 2 + Math.random() * 2,
-        });
+        particles.push({ x: bx, y: by, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: 1.0 + Math.random() * 0.5, maxLife: 1.0 + Math.random() * 0.5, color, size: 2 + Math.random() * 2 });
       }
       lastSpawn = time;
     }
 
     let rafId = 0;
     let lastTime = 0;
-
     function animate(time: number) {
       const dt = lastTime ? Math.min((time - lastTime) / 1000, 0.05) : 1 / 60;
       lastTime = time;
-
       ctx.clearRect(0, 0, 1280, 720);
-
-      // Spawn new bursts
-      if (time - lastSpawn > SPAWN_INTERVAL) {
-        spawnBurst(time);
-      }
-
-      // Update and draw particles
+      if (time - lastSpawn > 400) spawnBurst(time);
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
         p.life -= dt;
-        if (p.life <= 0) {
-          particles.splice(i, 1);
-          continue;
-        }
-        p.vy += 80 * dt; // gravity
+        if (p.life <= 0) { particles.splice(i, 1); continue; }
+        p.vy += 80 * dt;
         p.x += p.vx * dt;
         p.y += p.vy * dt;
         p.vx *= 0.98;
-
         const alpha = p.life / p.maxLife;
         ctx.globalAlpha = alpha * 0.8;
         ctx.fillStyle = p.color;
@@ -103,29 +86,23 @@ export function VictoryScreen() {
         ctx.arc(p.x, p.y, p.size * alpha, 0, Math.PI * 2);
         ctx.fill();
       }
-
       ctx.globalAlpha = 1;
       rafId = requestAnimationFrame(animate);
     }
-
     rafId = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(rafId);
   }, []);
 
-  // Keyboard shortcuts: Enter = rematch, Escape = menu
+  // Keyboard: Enter=rematch, Escape=menu
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Enter') {
-        handleRematch();
-      } else if (e.key === 'Escape') {
-        handleMenu();
-      }
+      if (e.key === 'Enter') handleRematch();
+      else if (e.key === 'Escape') handleMenu();
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   });
 
-  // Get stats for a player if available
   const getPlayerStats = (playerId: CharacterSlot): PlayerStats | null => {
     if (!lastMatchState) return null;
     const stats = (lastMatchState as any).stats;
@@ -133,7 +110,6 @@ export function VictoryScreen() {
     return stats.perPlayer.get(playerId) ?? null;
   };
 
-  // MVP highlights (t)
   const mvpHighlights = useMemo(() => {
     const highlights: Array<{ label: string; icon: string; playerName: string; playerColor: string; value: string }> = [];
     if (!sortedPlayers.length) return highlights;
@@ -145,47 +121,17 @@ export function VictoryScreen() {
     for (const player of sortedPlayers) {
       const ps = getPlayerStats(player.id);
       if (!ps) continue;
-      if (ps.timeAirborne > bestAirborne.val) {
-        bestAirborne = { name: player.character.name, color: player.character.color, val: ps.timeAirborne };
-      }
-      if (ps.carrotsEaten > bestCarrots.val) {
-        bestCarrots = { name: player.character.name, color: player.character.color, val: ps.carrotsEaten };
-      }
-      if (ps.bestStreak > bestStreak.val) {
-        bestStreak = { name: player.character.name, color: player.character.color, val: ps.bestStreak };
-      }
+      if (ps.timeAirborne > bestAirborne.val) bestAirborne = { name: player.character.name, color: player.character.color, val: ps.timeAirborne };
+      if (ps.carrotsEaten > bestCarrots.val) bestCarrots = { name: player.character.name, color: player.character.color, val: ps.carrotsEaten };
+      if (ps.bestStreak > bestStreak.val) bestStreak = { name: player.character.name, color: player.character.color, val: ps.bestStreak };
     }
 
-    if (bestAirborne.val > 0) {
-      highlights.push({
-        label: 'Most Airborne',
-        icon: '\u2708',
-        playerName: bestAirborne.name,
-        playerColor: bestAirborne.color,
-        value: bestAirborne.val.toFixed(1) + 's',
-      });
-    }
-    if (bestCarrots.val > 0) {
-      highlights.push({
-        label: 'Carrot King',
-        icon: '\uD83E\uDD55',
-        playerName: bestCarrots.name,
-        playerColor: bestCarrots.color,
-        value: String(bestCarrots.val),
-      });
-    }
-    if (bestStreak.val > 0) {
-      highlights.push({
-        label: 'Serial Killer',
-        icon: '\uD83D\uDD25',
-        playerName: bestStreak.name,
-        playerColor: bestStreak.color,
-        value: String(bestStreak.val) + ' streak',
-      });
-    }
+    if (bestAirborne.val > 0) highlights.push({ label: t('mvp_most_airborne'), icon: '\u2708', playerName: charName(bestAirborne.name), playerColor: bestAirborne.color, value: bestAirborne.val.toFixed(1) + 's' });
+    if (bestCarrots.val > 0) highlights.push({ label: t('mvp_carrot_king'), icon: '\uD83E\uDD55', playerName: charName(bestCarrots.name), playerColor: bestCarrots.color, value: String(bestCarrots.val) });
+    if (bestStreak.val > 0) highlights.push({ label: t('mvp_serial_killer'), icon: '\uD83D\uDD25', playerName: charName(bestStreak.name), playerColor: bestStreak.color, value: String(bestStreak.val) + ' ' + t('mvp_streak') });
 
     return highlights;
-  }, [sortedPlayers, lastMatchState]);
+  }, [sortedPlayers, lastMatchState, t]);
 
   return (
     <div className="victory-screen" data-testid="victory-screen">
@@ -195,13 +141,11 @@ export function VictoryScreen() {
           {winnerChar ? (
             <>
               <h1 className="winner-text">
-                <span style={{ color: winnerChar.color }}>{winnerChar.name}</span> {t('victory_wins')}
+                <span style={{ color: winnerChar.color }}>{charName(winnerChar.name)}</span> {t('victory_wins')}
               </h1>
-              {/* Victory pose (u) — winner avatar is larger with bounce animation */}
-              <div
-                className="winner-avatar winner-avatar-pose"
-                style={{ backgroundColor: winnerChar.color, borderColor: winnerChar.lightColor }}
-              />
+              <div className="winner-avatar winner-avatar-pose" style={{ borderColor: winnerChar.lightColor }}>
+                <span className="winner-emoji">{CHAR_EMOJI[winnerChar.name] ?? '\uD83C\uDFC6'}</span>
+              </div>
             </>
           ) : (
             <h1 className="winner-text">{t('victory_draw')}</h1>
@@ -212,18 +156,14 @@ export function VictoryScreen() {
             {sortedPlayers.map((player, idx) => (
               <div key={player.id} className={`score-row ${idx === 0 ? 'first' : ''}`}>
                 <span className="rank">#{idx + 1}</span>
-                <span
-                  className="player-name"
-                  style={{ color: player.character.color }}
-                >
-                  {player.character.name}
+                <span className="player-name" style={{ color: player.character.color }}>
+                  {charName(player.character.name)}
                 </span>
                 <span className="player-score">{player.score} {t('victory_pts')}</span>
               </div>
             ))}
           </div>
 
-          {/* Per-player stats section */}
           {sortedPlayers.length > 0 && (
             <div className="player-stats-section">
               <h2>{t('victory_stats')}</h2>
@@ -240,10 +180,10 @@ export function VictoryScreen() {
                   return (
                     <div key={player.id} className="stats-row">
                       <span className="stats-cell stats-name-cell" style={{ color: player.character.color }}>
-                        {player.character.name}
+                        {charName(player.character.name)}
                       </span>
                       <span className="stats-cell">{ps?.bestStreak ?? 0}</span>
-                      <span className="stats-cell">{ps ? (ps.timeAirborne).toFixed(1) + 's' : '0.0s'}</span>
+                      <span className="stats-cell">{ps ? ps.timeAirborne.toFixed(1) + 's' : '0.0s'}</span>
                       <span className="stats-cell">{ps ? Math.floor(ps.distanceTraveled / 100) : 0}</span>
                       <span className="stats-cell">{ps?.carrotsEaten ?? 0}</span>
                     </div>
@@ -253,22 +193,18 @@ export function VictoryScreen() {
             </div>
           )}
 
-          {/* Character lineup (s) */}
+          {/* Character lineup with emojis */}
           {sortedPlayers.length > 0 && (
             <div className="character-lineup">
               {sortedPlayers.map((player) => {
                 const isWinner = winner && player.id === winner;
                 return (
                   <div key={player.id} className={`lineup-character ${isWinner ? 'lineup-winner' : ''}`}>
-                    <div
-                      className={`lineup-avatar ${isWinner ? 'lineup-avatar-winner' : ''}`}
-                      style={{
-                        backgroundColor: player.character.color,
-                        borderColor: player.character.lightColor,
-                      }}
-                    />
+                    <div className={`lineup-avatar ${isWinner ? 'lineup-avatar-winner' : ''}`} style={{ borderColor: player.character.lightColor }}>
+                      <span className="lineup-emoji">{CHAR_EMOJI[player.character.name] ?? '?'}</span>
+                    </div>
                     <span className="lineup-name" style={{ color: player.character.color }}>
-                      {player.character.name}
+                      {charName(player.character.name)}
                     </span>
                     {isWinner && <span className="lineup-crown">{'\uD83D\uDC51'}</span>}
                   </div>
@@ -277,10 +213,9 @@ export function VictoryScreen() {
             </div>
           )}
 
-          {/* MVP highlights (t) */}
           {mvpHighlights.length > 0 && (
             <div className="mvp-highlights">
-              <h2>MVP Awards</h2>
+              <h2>{t('mvp_title')}</h2>
               {mvpHighlights.map((hl, idx) => (
                 <div key={idx} className="mvp-row">
                   <span className="mvp-icon">{hl.icon}</span>
@@ -298,12 +233,8 @@ export function VictoryScreen() {
           </div>
 
           <div className="victory-actions">
-            <button className="rematch-btn" onClick={handleRematch} data-testid="rematch-button">
-              {t('victory_rematch')}
-            </button>
-            <button className="menu-btn-v" onClick={handleMenu} data-testid="menu-button">
-              {t('victory_menu')}
-            </button>
+            <button className="rematch-btn" onClick={handleRematch} data-testid="rematch-button">{t('victory_rematch')}</button>
+            <button className="menu-btn-v" onClick={handleMenu} data-testid="menu-button">{t('victory_menu')}</button>
           </div>
         </div>
       </div>

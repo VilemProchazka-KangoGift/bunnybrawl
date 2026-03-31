@@ -226,9 +226,12 @@ export class GameLoop {
       this.accumulator -= FIXED_TIMESTEP;
     }
 
-    // Slow-mo timer runs in real time
+    // Timers that run in real time (not affected by fixedUpdate early return)
     if (this.state.slowMotion > 0) {
       this.state.slowMotion -= frameTime;
+    }
+    if (this.state.screenFlash > 0) {
+      this.state.screenFlash -= frameTime;
     }
 
     // Fireworks when match is over
