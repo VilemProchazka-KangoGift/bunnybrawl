@@ -46,27 +46,29 @@ export const WINTER_LAKE_ARENA: Arena = {
   platforms: [
     // Ground — full width
     { x: 0, y: 660, width: CANVAS_WIDTH, height: 60 },
-    // Ice shelf left
-    { x: 80, y: 540, width: 200, height: 24 },
-    // Ice shelf right
-    { x: 1000, y: 540, width: 200, height: 24 },
-    // Mid platforms
-    { x: 280, y: 420, width: 200, height: 24 },
-    { x: 800, y: 420, width: 200, height: 24 },
-    // Center low — wide frozen bridge
-    { x: 480, y: 500, width: 320, height: 24 },
-    // Top center — wide
-    { x: 430, y: 290, width: 400, height: 24 },
-    // High corners
-    { x: 100, y: 350, width: 150, height: 24 },
-    { x: 1030, y: 350, width: 150, height: 24 },
+    // Igloo top (right side) — wide dome platform
+    { x: 900, y: 530, width: 240, height: 24 },
+    // Big snowman head (left side) — small perch
+    { x: 200, y: 430, width: 100, height: 24 },
+    // Snowman belly shelf — wider, slightly below head
+    { x: 160, y: 540, width: 180, height: 24 },
+    // Frozen bridge — narrow, connects snowman area to igloo
+    { x: 440, y: 490, width: 140, height: 24 },
+    // High ice ledge left
+    { x: 50, y: 320, width: 130, height: 24 },
+    // High center — king of the hill spot
+    { x: 530, y: 330, width: 200, height: 24 },
+    // Tiny stepping stone mid-right
+    { x: 750, y: 420, width: 100, height: 24 },
+    // High right perch
+    { x: 1080, y: 360, width: 120, height: 24 },
   ],
   spawnPoints: [
-    { x: 180, y: 520 },
-    { x: 1100, y: 520 },
-    { x: 380, y: 400 },
-    { x: 900, y: 400 },
-    { x: 640, y: 270 },
+    { x: 250, y: 520 },
+    { x: 1020, y: 510 },
+    { x: 250, y: 410 },
+    { x: 630, y: 310 },
+    { x: 800, y: 400 },
     { x: 640, y: 640 },
   ],
 };

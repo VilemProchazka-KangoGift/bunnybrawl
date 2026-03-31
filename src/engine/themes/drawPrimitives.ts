@@ -429,6 +429,138 @@ export function drawIcicle(ctx: CanvasRenderingContext2D, x: number, topY: numbe
   ctx.fill();
 }
 
+/** Big snowman — purely decorative (drawn behind platforms). For the large
+ *  jumpable snowman, a platform is placed at the head and this draws the body. */
+export function drawBigSnowman(ctx: CanvasRenderingContext2D, x: number, groundY: number, size: number): void {
+  const bottomR = size * 0.42;
+  const midR = size * 0.32;
+  const headR = size * 0.22;
+  const midY = groundY - bottomR * 1.7;
+  const headY = midY - midR * 1.5;
+
+  // Bottom ball
+  ctx.fillStyle = '#E8EEF4';
+  ctx.beginPath();
+  ctx.arc(x, groundY - bottomR, bottomR, 0, Math.PI * 2);
+  ctx.fill();
+  // Bottom highlight
+  ctx.fillStyle = '#F4F8FC';
+  ctx.beginPath();
+  ctx.arc(x - bottomR * 0.2, groundY - bottomR * 1.1, bottomR * 0.35, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Middle ball
+  ctx.fillStyle = '#ECF0F6';
+  ctx.beginPath();
+  ctx.arc(x, midY, midR, 0, Math.PI * 2);
+  ctx.fill();
+  // Mid highlight
+  ctx.fillStyle = '#F6F9FC';
+  ctx.beginPath();
+  ctx.arc(x - midR * 0.25, midY - midR * 0.2, midR * 0.3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Head
+  ctx.fillStyle = '#F0F5FA';
+  ctx.beginPath();
+  ctx.arc(x, headY, headR, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Eyes
+  ctx.fillStyle = '#222';
+  ctx.beginPath();
+  ctx.arc(x - headR * 0.35, headY - headR * 0.15, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x + headR * 0.35, headY - headR * 0.15, 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Carrot nose
+  ctx.fillStyle = '#E88030';
+  ctx.beginPath();
+  ctx.moveTo(x, headY + headR * 0.05);
+  ctx.lineTo(x + headR * 0.8, headY + headR * 0.15);
+  ctx.lineTo(x, headY + headR * 0.3);
+  ctx.closePath();
+  ctx.fill();
+
+  // Stick arms
+  ctx.strokeStyle = '#6B4226';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(x - midR, midY);
+  ctx.lineTo(x - midR - size * 0.3, midY - size * 0.15);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x + midR, midY);
+  ctx.lineTo(x + midR + size * 0.3, midY - size * 0.1);
+  ctx.stroke();
+
+  // Buttons
+  ctx.fillStyle = '#222';
+  for (let i = 0; i < 3; i++) {
+    ctx.beginPath();
+    ctx.arc(x, midY + midR * 0.3 - i * midR * 0.35, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Top hat
+  ctx.fillStyle = '#1A1A2E';
+  ctx.fillRect(x - headR * 0.6, headY - headR * 1.3, headR * 1.2, headR * 0.8);
+  ctx.fillRect(x - headR * 0.85, headY - headR * 0.55, headR * 1.7, headR * 0.15);
+}
+
+/** Igloo — decorative dome drawn behind platforms. A platform at the top
+ *  makes it jumpable. */
+export function drawIgloo(ctx: CanvasRenderingContext2D, x: number, groundY: number, width: number, height: number): void {
+  // Snow dome
+  ctx.fillStyle = '#E0E8F0';
+  ctx.beginPath();
+  ctx.ellipse(x + width / 2, groundY, width / 2, height, 0, Math.PI, 0);
+  ctx.fill();
+
+  // Ice block lines (horizontal)
+  ctx.strokeStyle = 'rgba(180, 200, 220, 0.5)';
+  ctx.lineWidth = 1;
+  for (let row = 1; row <= 3; row++) {
+    const rowY = groundY - height * (row / 4);
+    const rowWidth = width * Math.sqrt(1 - (row / 4) ** 2);
+    ctx.beginPath();
+    ctx.moveTo(x + width / 2 - rowWidth / 2, rowY);
+    ctx.lineTo(x + width / 2 + rowWidth / 2, rowY);
+    ctx.stroke();
+  }
+
+  // Ice block lines (vertical-ish, staggered)
+  for (let row = 0; row < 4; row++) {
+    const rowY = groundY - height * (row / 4);
+    const nextY = groundY - height * ((row + 1) / 4);
+    const rowWidth = width * Math.sqrt(1 - (row / 4) ** 2);
+    const blocks = 3 + row;
+    for (let b = 1; b < blocks; b++) {
+      const bx = x + width / 2 - rowWidth / 2 + (rowWidth / blocks) * b;
+      ctx.beginPath();
+      ctx.moveTo(bx, rowY);
+      ctx.lineTo(bx, nextY);
+      ctx.stroke();
+    }
+  }
+
+  // Entrance (dark arch)
+  const doorW = width * 0.25;
+  const doorH = height * 0.45;
+  ctx.fillStyle = '#3A5060';
+  ctx.beginPath();
+  ctx.ellipse(x + width / 2, groundY, doorW / 2, doorH, 0, Math.PI, 0);
+  ctx.fill();
+
+  // Snow highlight on top
+  ctx.fillStyle = 'rgba(245, 250, 255, 0.6)';
+  ctx.beginPath();
+  ctx.ellipse(x + width / 2, groundY - height * 0.85, width * 0.2, height * 0.12, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
 export function drawSnowman(ctx: CanvasRenderingContext2D, x: number, groundY: number, size: number): void {
   const bodyR = size * 0.35;
   const headR = size * 0.22;
