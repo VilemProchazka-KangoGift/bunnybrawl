@@ -1,6 +1,6 @@
 import type { ThemeConfig } from './types';
 import {
-  drawTree, drawBush, drawFlower, drawMushroom, drawGrassTuft,
+  drawTree, drawBush, drawFlower, drawMushroom, drawGrassTuft, drawTreeStump,
   drawFgBush, drawTallGrass, drawFern, drawHangingVine, drawFgLeafCluster, drawFgWildflower,
 } from './drawPrimitives';
 
@@ -163,11 +163,15 @@ export const MEADOW_THEME: ThemeConfig = {
     }
 
     // Mushrooms
-    drawMushroom(ctx, 340, y);
-    drawMushroom(ctx, 890, y);
+    drawMushroom(ctx, 240, y);
+    drawMushroom(ctx, 800, y);
 
-    // Nature on floating platforms
-    const floats = arena.platforms.filter(p => p.y < 650);
+    // Tree stumps — solid obstacles matching platforms
+    drawTreeStump(ctx, 340, 615, 55, 45);
+    drawTreeStump(ctx, 860, 615, 55, 45);
+
+    // Nature on floating platforms (exclude small obstacle platforms)
+    const floats = arena.platforms.filter(p => p.y < 650 && p.width >= 80);
     for (const plat of floats) {
       const mid = plat.x + plat.width / 2;
       if (plat.width > 180) {

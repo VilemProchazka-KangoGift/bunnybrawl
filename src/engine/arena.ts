@@ -26,6 +26,10 @@ export const MEADOW_ARENA: Arena = {
     { x: 120, y: 340, width: 140, height: 24 },
     // High right small (reachable from mid-right)
     { x: 1020, y: 340, width: 140, height: 24 },
+    // Tree stump — left ground
+    { x: 340, y: 615, width: 55, height: 45 },
+    // Tree stump — right ground
+    { x: 860, y: 615, width: 55, height: 45 },
   ],
   spawnPoints: [
     { x: 190, y: 510 },

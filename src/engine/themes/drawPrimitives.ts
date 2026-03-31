@@ -344,6 +344,72 @@ export function drawFgWildflower(ctx: CanvasRenderingContext2D, x: number, groun
   ctx.fill();
 }
 
+/** Tree stump — solid jumpable obstacle. Draws a cut trunk with rings and moss.
+ *  x/topY is top-left corner, matching the platform position. */
+export function drawTreeStump(ctx: CanvasRenderingContext2D, x: number, topY: number, width: number, height: number): void {
+  // Bark body
+  ctx.fillStyle = '#5C3A1E';
+  ctx.fillRect(x, topY, width, height);
+
+  // Bark texture lines
+  ctx.strokeStyle = '#4A2E16';
+  ctx.lineWidth = 1;
+  for (let dy = 6; dy < height; dy += 8) {
+    ctx.beginPath();
+    ctx.moveTo(x + 2, topY + dy);
+    ctx.lineTo(x + width - 2, topY + dy + (dy % 16 < 8 ? 2 : -2));
+    ctx.stroke();
+  }
+
+  // Left/right bark edges (darker)
+  ctx.fillStyle = '#4A2E16';
+  ctx.fillRect(x, topY, 3, height);
+  ctx.fillRect(x + width - 3, topY, 3, height);
+
+  // Top face — cut surface with rings
+  ctx.fillStyle = '#C49A6C';
+  ctx.fillRect(x + 2, topY, width - 4, 6);
+
+  // Annual rings on top
+  ctx.strokeStyle = '#A07850';
+  ctx.lineWidth = 0.8;
+  const cx = x + width / 2;
+  const cy = topY + 3;
+  for (let r = 1; r <= 3; r++) {
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, r * (width * 0.12), r * 1.5, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // Center dot
+  ctx.fillStyle = '#8B6340';
+  ctx.beginPath();
+  ctx.arc(cx, cy, 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Moss patches on sides
+  ctx.fillStyle = '#4A8C3A';
+  ctx.beginPath();
+  ctx.ellipse(x + 4, topY + height * 0.6, 5, 3, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#3A7A2E';
+  ctx.beginPath();
+  ctx.ellipse(x + width - 5, topY + height * 0.4, 4, 3, 0.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Small mushroom growing on side
+  ctx.fillStyle = '#F5F0E0';
+  ctx.fillRect(x + width - 2, topY + height * 0.55, 4, 5);
+  ctx.fillStyle = '#D32F2F';
+  ctx.beginPath();
+  ctx.ellipse(x + width, topY + height * 0.55, 5, 3, 0, Math.PI, 0);
+  ctx.fill();
+  ctx.fillStyle = '#FFF';
+  ctx.beginPath();
+  ctx.arc(x + width - 1, topY + height * 0.5, 1, 0, Math.PI * 2);
+  ctx.fill();
+}
+
 // ---- Winter primitives ----
 
 export function drawPineTree(ctx: CanvasRenderingContext2D, x: number, groundY: number, size: number, snowCover = false): void {

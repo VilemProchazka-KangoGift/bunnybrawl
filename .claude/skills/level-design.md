@@ -96,6 +96,7 @@ Import from `./drawPrimitives`. All take `(ctx, x, groundY, ...)` where groundY 
 | `drawHill` | `x, baseY, width, height` | Background hill (quadratic curve). Must set `ctx.fillStyle` before calling |
 | `drawCloud` | `x, y, size, color?` | 4-arc cloud shape |
 | `drawPlatformMoss` | `edgeX, platY, platH` | Hanging moss drapes on platform edges |
+| `drawTreeStump` | `x, topY, width, height` | Cut tree trunk with bark texture, annual rings, moss patches, side mushroom. Solid obstacle — use with matching platform |
 
 ### Foreground (drawn over players)
 
@@ -144,14 +145,21 @@ Before placing any decoration, check it doesn't overlap with:
 
 **Map x positions before drawing.** List all ground elements with their approximate x-span, then verify no two overlap. Same for each platform.
 
-### Jumpable Decoration Obstacles
+### Solid Themed Obstacles (REQUIRED per level)
 
-To make a decoration into a solid obstacle players can jump onto:
-1. Add a platform in `arena.ts` at the top of the visual shape
-2. Draw the decoration visual in `drawBackgroundNature` at matching coordinates
-3. The platform provides collision; the drawing is purely visual behind it
+Every arena must have 2-3 solid themed obstacles on the ground that players can jump onto and collide with. These add verticality to the ground level and give each arena a distinct feel.
 
-Example (ice cube): platform `{ x: 380, y: 610, width: 65, height: 24 }` + `drawIceCube(ctx, 380, 610, 65, 50)`. The cube visual extends 50px below the platform top.
+| Arena | Obstacle | Primitive | Typical size |
+|-------|----------|-----------|-------------|
+| Meadow | Tree stump | `drawTreeStump` | 55w x 45h |
+| Winter Lake | Ice cube | `drawIceCube` | 60-65w x 50h |
+| (New arenas) | Must add one | Theme-appropriate | 50-70w x 40-55h |
+
+To create a solid obstacle:
+1. Add a platform in `arena.ts` with **full collision height** (not 24px — match the visual)
+2. Draw the visual in `drawBackgroundNature` at the **exact same coordinates**
+3. Exclude obstacle platforms from decoration loops: `arena.platforms.filter(p => p.y < 650 && p.width >= 80)`
+4. Place 2-3 per level, spread across the ground, avoiding overlap with other decorations
 
 ### Decoration Sizing — Keep Consistent
 
