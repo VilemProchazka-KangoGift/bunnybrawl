@@ -63,9 +63,6 @@ export const SCREEN_SHAKE_INTENSITY = 6; // pixels
 export const SLOW_MO_DURATION = 1.0; // seconds for final kill slow-mo
 export const SLOW_MO_FACTOR = 0.25; // time scale during slow-mo
 
-// Weather
-export const WEATHER_PARTICLE_COUNT = 30;
-
 // Squash/stretch
 export const SQUASH_ON_LAND = 0.7;     // squash scale on landing
 export const STRETCH_ON_JUMP = 1.3;     // stretch scale on jump
@@ -76,9 +73,6 @@ export const SQUASH_DECAY_SPEED = 8;    // how fast squash returns to 1.0
 export const AFTERIMAGE_INTERVAL = 0.03; // seconds between ghost spawns
 export const AFTERIMAGE_SPEED_THRESHOLD = 200; // min speed to spawn afterimages
 export const AFTERIMAGE_MAX = 5;
-
-// Day/night
-export const DAY_CYCLE_DURATION = 120;  // seconds for full day/night cycle
 
 // Countdown
 export const MATCH_COUNTDOWN = 3;       // seconds before match starts
@@ -99,11 +93,3 @@ export const SPRING_TRAIL_DURATION = 0.6;
 // Score animation
 export const SCORE_ANIM_DURATION = 0.5;
 
-// Wildlife
-export const WILDLIFE_COUNT = 5;
-
-// Fog
-export const FOG_PARTICLE_COUNT = 20;
-
-// Pollen
-export const POLLEN_COUNT = 12;

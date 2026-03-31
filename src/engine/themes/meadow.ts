@@ -27,7 +27,6 @@ export const MEADOW_THEME: ThemeConfig = {
   ground: {
     surfaceColor: '#6BBF59',
     surfaceThickness: 4,
-    dirtColor: '#5C3A1E',
     grassBlades: {
       color: '#5DAF4A',
       spacing: 15,
@@ -88,7 +87,6 @@ export const MEADOW_THEME: ThemeConfig = {
     vyRange: [-8, -20],
     alphaRange: [0.2, 0.5],
     colors: ['#FFF8DC', '#FFFFF0'],
-    direction: 'up',
   },
 
   dayNight: {

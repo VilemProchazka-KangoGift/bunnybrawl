@@ -20,7 +20,7 @@ export class Renderer {
   private fgCtx: CanvasRenderingContext2D;
   private clouds: Cloud[] = [];
   private lastCloudTime = 0;
-  theme: ThemeConfig;
+  private theme: ThemeConfig;
 
   constructor(bgCanvas: HTMLCanvasElement, fgCanvas: HTMLCanvasElement, theme: ThemeConfig) {
     this.bgCtx = bgCanvas.getContext('2d')!;
@@ -91,7 +91,6 @@ export class Renderer {
     theme.drawBackgroundNature(ctx, arena);
   }
 
-  // (Nature drawing methods extracted to themes/drawPrimitives.ts)
 
   // ---- Clouds ----
 
@@ -106,7 +105,6 @@ export class Renderer {
     }
   }
 
-  // (drawHill extracted to themes/drawPrimitives.ts)
 
   private drawPlatform(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, isGround: boolean): void {
     const tp = this.theme.platform;
@@ -630,7 +628,6 @@ export class Renderer {
 
   // ---- Foreground nature (drawn over players) ----
 
-  // (Foreground nature methods extracted to themes/drawPrimitives.ts)
 
   // ---- Particles ----
 

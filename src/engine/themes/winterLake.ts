@@ -4,6 +4,12 @@ import {
   drawFgBush, drawFgLeafCluster,
 } from './drawPrimitives';
 
+// Platform colors — shared between config fields and customDraw
+const FLOAT_BODY = '#5A7A8C';
+const FLOAT_TOP = '#D8E8F0';
+const GROUND_BODY = '#4A6A7C';
+const GROUND_TOP = '#E0EEF5';
+
 export const WINTER_LAKE_THEME: ThemeConfig = {
   id: 'winter_lake',
   nameKey: 'arena_winter_lake',
@@ -28,42 +34,33 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
   ground: {
     surfaceColor: '#E8F0F8',
     surfaceThickness: 5,
-    dirtColor: '#6B8BA0',
     // No grass blades in winter
   },
 
   platform: {
-    floatingBodyColor: '#5A7A8C',
-    floatingTopColor: '#D8E8F0',
+    floatingBodyColor: FLOAT_BODY,
+    floatingTopColor: FLOAT_TOP,
     floatingAccentColor: undefined,
-    groundBodyColor: '#4A6A7C',
-    groundTopColor: '#E0EEF5',
+    groundBodyColor: GROUND_BODY,
+    groundTopColor: GROUND_TOP,
     drawMoss: false,
     customDraw: (ctx, x, y, w, h, isGround) => {
       if (isGround) {
-        // Frozen earth body
-        ctx.fillStyle = '#4A6A7C';
+        ctx.fillStyle = GROUND_BODY;
         ctx.fillRect(x, y + 5, w, h - 5);
-        // Snow cap
-        ctx.fillStyle = '#E0EEF5';
+        ctx.fillStyle = GROUND_TOP;
         ctx.fillRect(x, y, w, 8);
-        // Ice crystals in ground
         ctx.fillStyle = '#8AAABA';
         for (let dx = 15; dx < w; dx += 35 + Math.random() * 25) {
           ctx.fillRect(x + dx, y + 18 + Math.random() * 15, 3, 3);
         }
       } else {
-        // Frozen log body
-        ctx.fillStyle = '#5A7A8C';
+        ctx.fillStyle = FLOAT_BODY;
         ctx.fillRect(x, y + 4, w, h - 4);
-        // Snow top
-        ctx.fillStyle = '#D8E8F0';
+        ctx.fillStyle = FLOAT_TOP;
         ctx.fillRect(x, y, w, 6);
-        // Thin ice shine
         ctx.fillStyle = 'rgba(200, 225, 245, 0.4)';
         ctx.fillRect(x, y, w, 2);
-
-        // Icicles on edges
         drawIcicle(ctx, x + 4, y + h, 8 + Math.random() * 5);
         drawIcicle(ctx, x + w - 4, y + h, 7 + Math.random() * 6);
         if (w > 160) {
@@ -115,7 +112,6 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
     vyRange: [5, 15],
     alphaRange: [0.2, 0.5],
     colors: ['#E8F0FF', '#FFFFFF'],
-    direction: 'down',
   },
 
   dayNight: {
@@ -186,22 +182,7 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
     drawSnowDrift(ctx, 1220, gy, 50, 7);
   },
 
-  drawWeatherParticle: (ctx, particle) => {
-    ctx.save();
-    ctx.translate(particle.x, particle.y);
-    ctx.fillStyle = particle.color || 'rgba(230, 240, 255, 0.7)';
-    ctx.beginPath();
-    ctx.arc(0, 0, particle.size, 0, Math.PI * 2);
-    ctx.fill();
-    // Sparkle on larger flakes
-    if (particle.size > 3.5) {
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-      ctx.beginPath();
-      ctx.arc(0, -particle.size * 0.3, 1, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.restore();
-  },
+  // Snow rendering handled by renderer's built-in 'snow' case
 
   physics: {
     friction: 0.6,
