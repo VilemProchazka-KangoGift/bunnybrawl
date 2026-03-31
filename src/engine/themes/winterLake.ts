@@ -1,6 +1,7 @@
 import type { ThemeConfig } from './types';
 import {
-  drawPineTree, drawSnowDrift, drawIcePatch, drawIcicle, drawSnowman,
+  drawPineTree, drawSnowDrift, drawIcePatch, drawIcicle,
+  drawBigSnowman, drawIgloo,
   drawFgBush, drawFgLeafCluster,
 } from './drawPrimitives';
 
@@ -126,29 +127,38 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
     const ground = arena.platforms[0];
     const y = ground.y;
 
-    // Pine trees with snow cover
-    drawPineTree(ctx, 80, y, 55, true);
-    drawPineTree(ctx, 350, y, 40, true);
-    drawPineTree(ctx, 580, y, 65, true);
-    drawPineTree(ctx, 920, y, 45, true);
-    drawPineTree(ctx, 1150, y, 50, true);
+    // --- BIG SNOWMAN (left side, lines up with platforms at y=430/540) ---
+    drawBigSnowman(ctx, 250, y, 120);
 
-    // Snowman
-    drawSnowman(ctx, 250, y, 30);
+    // --- IGLOO (right side, lines up with platform at y=530) ---
+    drawIgloo(ctx, 880, y, 280, 130);
 
-    // Snow drifts along ground
-    drawSnowDrift(ctx, 150, y, 80, 10);
-    drawSnowDrift(ctx, 450, y, 60, 8);
-    drawSnowDrift(ctx, 700, y, 100, 14);
-    drawSnowDrift(ctx, 1050, y, 70, 10);
+    // Pine trees — spread around landmarks
+    drawPineTree(ctx, 30, y, 50, true);
+    drawPineTree(ctx, 450, y, 40, true);
+    drawPineTree(ctx, 680, y, 55, true);
+    drawPineTree(ctx, 1200, y, 48, true);
 
-    // Frozen lake area (ice patch in center)
-    drawIcePatch(ctx, 400, y, 300);
+    // Frozen lake in center ground
+    drawIcePatch(ctx, 380, y, 250);
 
-    // Snow drifts and icicles on floating platforms
+    // Snow drifts
+    drawSnowDrift(ctx, 550, y, 80, 10);
+    drawSnowDrift(ctx, 780, y, 60, 8);
+    drawSnowDrift(ctx, 1150, y, 70, 9);
+
+    // Snow caps on floating platforms
     const floats = arena.platforms.filter(p => p.y < 650);
     for (const plat of floats) {
       drawSnowDrift(ctx, plat.x + plat.width / 2, plat.y, plat.width * 0.5, 4);
+    }
+
+    // Icicles on the frozen bridge
+    const bridge = arena.platforms.find(p => p.x > 400 && p.x < 500 && p.y < 550);
+    if (bridge) {
+      for (let i = 0; i < 4; i++) {
+        drawIcicle(ctx, bridge.x + 15 + i * 35, bridge.y + bridge.height, 10 + Math.random() * 6);
+      }
     }
   },
 
@@ -156,7 +166,6 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
     const ground = arena.platforms[0];
     const gy = ground.y;
 
-    // Sparse snowy bushes (darker, snow-dusted)
     const snowBushColors = {
       backLayer: '#2A4A2A',
       mainBody: '#3A5A3A',
@@ -166,10 +175,10 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
       highlight2: '#4A6A4A',
       berries: ['#CC3333', '#DD4444', '#BB2222'],
     };
-    drawFgBush(ctx, 180, gy, 40, snowBushColors);
-    drawFgBush(ctx, 900, gy, 45, snowBushColors);
+    drawFgBush(ctx, 600, gy, 35, snowBushColors);
+    drawFgBush(ctx, 1180, gy, 40, snowBushColors);
 
-    // Snow-covered leaf clusters on platforms
+    // Snow-covered clusters on wider platforms
     const floats = arena.platforms.filter(p => p.y < 650);
     for (const plat of floats) {
       if (plat.width > 160) {
@@ -177,14 +186,12 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
       }
     }
 
-    // Snow piles at edges of ground
-    drawSnowDrift(ctx, 40, gy, 60, 8);
-    drawSnowDrift(ctx, 1220, gy, 50, 7);
+    // Snow piles at edges
+    drawSnowDrift(ctx, 20, gy, 50, 7);
+    drawSnowDrift(ctx, 1240, gy, 45, 6);
   },
 
-  // Snow rendering handled by renderer's built-in 'snow' case
-
   physics: {
-    friction: 0.6,
+    friction: 0.3,
   },
 };
