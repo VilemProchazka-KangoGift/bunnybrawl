@@ -2,6 +2,7 @@ import { useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../store/gameStore';
 import { CHARACTERS } from '../engine/characters';
+import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
 import type { CharacterSlot, PlayerStats } from '../engine/types';
 import './VictoryScreen.css';
 
@@ -44,8 +45,8 @@ export function VictoryScreen() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d')!;
-    canvas.width = 1280;
-    canvas.height = 720;
+    canvas.width = CANVAS_WIDTH;
+    canvas.height = CANVAS_HEIGHT;
 
     const particles: FireworkParticle[] = [];
     let lastSpawn = 0;
@@ -69,7 +70,7 @@ export function VictoryScreen() {
     function animate(time: number) {
       const dt = lastTime ? Math.min((time - lastTime) / 1000, 0.05) : 1 / 60;
       lastTime = time;
-      ctx.clearRect(0, 0, 1280, 720);
+      ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
       if (time - lastSpawn > 400) spawnBurst(time);
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
