@@ -46,29 +46,39 @@ export const WINTER_LAKE_ARENA: Arena = {
   platforms: [
     // Ground — full width
     { x: 0, y: 660, width: CANVAS_WIDTH, height: 60 },
-    // Igloo top (right side) — wide dome platform
-    { x: 900, y: 530, width: 240, height: 24 },
-    // Big snowman head (left side) — small perch
-    { x: 200, y: 430, width: 100, height: 24 },
-    // Snowman belly shelf — wider, slightly below head
-    { x: 160, y: 540, width: 180, height: 24 },
-    // Frozen bridge — narrow, connects snowman area to igloo
-    { x: 440, y: 490, width: 140, height: 24 },
-    // High ice ledge left
-    { x: 50, y: 320, width: 130, height: 24 },
-    // High center — king of the hill spot
-    { x: 530, y: 330, width: 200, height: 24 },
-    // Tiny stepping stone mid-right
-    { x: 750, y: 420, width: 100, height: 24 },
-    // High right perch
-    { x: 1080, y: 360, width: 120, height: 24 },
+
+    // === SNOWMAN (left, x~250) — 3 stacked steps ===
+    // Bottom ball shoulder
+    { x: 170, y: 575, width: 150, height: 24 },
+    // Mid ball / neck
+    { x: 195, y: 505, width: 100, height: 24 },
+    // Hat top — tiny perch
+    { x: 215, y: 430, width: 70, height: 24 },
+
+    // === IGLOO (right, x~880) — dome with 2 steps ===
+    // Lower dome shelf
+    { x: 850, y: 575, width: 250, height: 24 },
+    // Dome top
+    { x: 905, y: 505, width: 140, height: 24 },
+
+    // === CENTER — contested bridge + high ledge ===
+    // Frozen bridge connecting snowman and igloo areas
+    { x: 470, y: 520, width: 160, height: 24 },
+    // King of the hill — high center
+    { x: 510, y: 350, width: 200, height: 24 },
+
+    // === CORNERS — small floating ledges ===
+    // Far left high
+    { x: 30, y: 400, width: 110, height: 24 },
+    // Far right high
+    { x: 1140, y: 420, width: 110, height: 24 },
   ],
   spawnPoints: [
-    { x: 250, y: 520 },
-    { x: 1020, y: 510 },
-    { x: 250, y: 410 },
-    { x: 630, y: 310 },
-    { x: 800, y: 400 },
+    { x: 245, y: 555 },
+    { x: 975, y: 555 },
+    { x: 245, y: 485 },
+    { x: 975, y: 485 },
+    { x: 550, y: 500 },
     { x: 640, y: 640 },
   ],
 };
