@@ -63,7 +63,6 @@ export interface AmbientParticleConfig {
   vyRange: [number, number];
   alphaRange: [number, number];
   colors: string[];
-  direction: 'up' | 'down' | 'drift';
 }
 
 export interface DayNightConfig {
@@ -98,7 +97,6 @@ export interface ThemeConfig {
   ground: {
     surfaceColor: string;       // top surface line color
     surfaceThickness: number;   // px
-    dirtColor: string;          // below-surface fill
     grassBlades?: {
       color: string;
       spacing: number;           // px between blades

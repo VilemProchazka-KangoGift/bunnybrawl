@@ -46,23 +46,27 @@ export function MainMenu() {
           <div className="arena-selector" data-testid="arena-selector">
             <span className="arena-label">{t('arena_label')}</span>
             <div className="arena-options">
-              {listArenas().map(a => {
-                const theme = listThemes().find(t => t.id === a.themeId);
-                return (
-                  <button
-                    key={a.id}
-                    className={`arena-option ${matchSettings.arenaId === a.id ? 'selected' : ''}`}
-                    onClick={() => {
-                      audio.init();
-                      audio.play('select');
-                      setMatchSettings({ arenaId: a.id });
-                    }}
-                  >
-                    <div className="arena-preview" style={{ background: theme?.previewGradient || '#333' }} />
-                    <span className="arena-name">{t(theme?.nameKey || a.name)}</span>
-                  </button>
-                );
-              })}
+              {(() => {
+                const arenas = listArenas();
+                const themes = listThemes();
+                return arenas.map(a => {
+                  const theme = themes.find(th => th.id === a.themeId);
+                  return (
+                    <button
+                      key={a.id}
+                      className={`arena-option ${matchSettings.arenaId === a.id ? 'selected' : ''}`}
+                      onClick={() => {
+                        audio.init();
+                        audio.play('select');
+                        setMatchSettings({ arenaId: a.id });
+                      }}
+                    >
+                      <div className="arena-preview" style={{ background: theme?.previewGradient || '#333' }} />
+                      <span className="arena-name">{t(theme?.nameKey || a.name)}</span>
+                    </button>
+                  );
+                });
+              })()}
             </div>
           </div>
 

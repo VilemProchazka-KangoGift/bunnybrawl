@@ -4,6 +4,7 @@ import type {
 } from './types';
 import type { ThemeConfig } from './themes/types';
 import { getTheme } from './themes/registry';
+import { randRange, pickWeighted } from './themes/utils';
 import { InputManager } from './input';
 import { Renderer } from './renderer';
 import { applyInput, applyGravity, movePlayer, collidePlatforms, updatePlayerState, applyArenaConstraints, collidePlayersHorizontal, aabbOverlap } from './physics';
@@ -108,53 +109,42 @@ export class GameLoop {
     }
     const stats: MatchStats = { perPlayer: statsMap };
 
-    // Init wildlife from theme config
     const wildlife: WildlifeEntity[] = [];
     const wc = this.theme.wildlife;
-    const totalWeight = wc.types.reduce((s, t) => s + t.weight, 0);
     for (let i = 0; i < wc.count; i++) {
-      let r = Math.random() * totalWeight;
-      let chosen = wc.types[0];
-      for (const t of wc.types) {
-        r -= t.weight;
-        if (r <= 0) { chosen = t; break; }
-      }
-      const speed = chosen.speedRange[0] + Math.random() * (chosen.speedRange[1] - chosen.speedRange[0]);
-      const yFrac = chosen.yRange[0] + Math.random() * (chosen.yRange[1] - chosen.yRange[0]);
+      const chosen = pickWeighted(wc.types);
       wildlife.push({
         type: chosen.type,
         x: chosen.type === 'bird' ? -50 - Math.random() * 100 : Math.random() * CANVAS_WIDTH,
-        y: yFrac * CANVAS_HEIGHT,
-        vx: speed,
+        y: randRange(chosen.yRange) * CANVAS_HEIGHT,
+        vx: randRange(chosen.speedRange),
         vy: 0,
         wingPhase: Math.random() * Math.PI * 2,
         color: chosen.colors[Math.floor(Math.random() * chosen.colors.length)],
       });
     }
 
-    // Init fog particles from theme config
     const fc = this.theme.fog;
     const fogParticles: Array<{x: number; y: number; vx: number; alpha: number}> = [];
     for (let i = 0; i < fc.count; i++) {
       fogParticles.push({
         x: Math.random() * CANVAS_WIDTH,
-        y: fc.baseY + (Math.random() * fc.yVariance * 2 - fc.yVariance),
-        vx: fc.speedRange[0] + Math.random() * (fc.speedRange[1] - fc.speedRange[0]),
-        alpha: fc.alphaRange[0] + Math.random() * (fc.alphaRange[1] - fc.alphaRange[0]),
+        y: fc.baseY + (Math.random() * 2 - 1) * fc.yVariance,
+        vx: randRange(fc.speedRange),
+        alpha: randRange(fc.alphaRange),
       });
     }
 
-    // Init ambient particles (pollen/snow drift) from theme config
     const ac = this.theme.ambientParticles;
     const pollenParticles: Array<{x: number; y: number; vx: number; vy: number; size: number; alpha: number}> = [];
     for (let i = 0; i < ac.count; i++) {
       pollenParticles.push({
         x: Math.random() * CANVAS_WIDTH,
         y: Math.random() * CANVAS_HEIGHT,
-        vx: ac.vxRange[0] + Math.random() * (ac.vxRange[1] - ac.vxRange[0]),
-        vy: ac.vyRange[0] + Math.random() * (ac.vyRange[1] - ac.vyRange[0]),
-        size: ac.sizeRange[0] + Math.random() * (ac.sizeRange[1] - ac.sizeRange[0]),
-        alpha: ac.alphaRange[0] + Math.random() * (ac.alphaRange[1] - ac.alphaRange[0]),
+        vx: randRange(ac.vxRange),
+        vy: randRange(ac.vyRange),
+        size: randRange(ac.sizeRange),
+        alpha: randRange(ac.alphaRange),
       });
     }
 
@@ -182,23 +172,16 @@ export class GameLoop {
   }
 
   private createWeatherParticle(randomY: boolean): WeatherParticle {
-    const wc = this.theme.weather;
-    const totalWeight = wc.types.reduce((s, t) => s + t.weight, 0);
-    let r = Math.random() * totalWeight;
-    let chosen = wc.types[0];
-    for (const t of wc.types) {
-      r -= t.weight;
-      if (r <= 0) { chosen = t; break; }
-    }
+    const chosen = pickWeighted(this.theme.weather.types);
     return {
       x: Math.random() * CANVAS_WIDTH,
       y: randomY ? Math.random() * CANVAS_HEIGHT : -10,
-      vx: chosen.vxRange[0] + Math.random() * (chosen.vxRange[1] - chosen.vxRange[0]),
-      vy: chosen.vyRange[0] + Math.random() * (chosen.vyRange[1] - chosen.vyRange[0]),
-      size: chosen.sizeRange[0] + Math.random() * (chosen.sizeRange[1] - chosen.sizeRange[0]),
+      vx: randRange(chosen.vxRange),
+      vy: randRange(chosen.vyRange),
+      size: randRange(chosen.sizeRange),
       type: chosen.type,
       rotation: Math.random() * Math.PI * 2,
-      rotSpeed: chosen.rotSpeedRange[0] + Math.random() * (chosen.rotSpeedRange[1] - chosen.rotSpeedRange[0]),
+      rotSpeed: randRange(chosen.rotSpeedRange),
       color: chosen.color,
     };
   }
