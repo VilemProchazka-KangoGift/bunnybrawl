@@ -143,35 +143,30 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
     // === ICE CUBES — 3D blocks with platforms on top ===
     drawIceCube(ctx, 380, 610, 65, 50);    // left ground block
     drawIceCube(ctx, 835, 610, 65, 50);    // right ground block
-    drawIceCube(ctx, 430, 370, 60, 50);    // floating mid-left
+    drawIceCube(ctx, 370, 370, 60, 50);    // floating mid-left
 
     // === PLATFORM DECORATIONS — rich variety per platform ===
     for (let i = 0; i < floats.length; i++) {
       const plat = floats[i];
       const mid = plat.x + plat.width / 2;
       if (plat.width >= 350) {
-        // Very wide — full scene with trees, snowman, snowballs, pyramid
-        drawPineTree(ctx, plat.x + 30, plat.y, 48, true);
-        drawChristmasTree(ctx, plat.x + plat.width * 0.35, plat.y, 40);
-        drawPineTree(ctx, plat.x + plat.width - 30, plat.y, 44, true);
-        drawSnowman(ctx, plat.x + plat.width * 0.6, plat.y, 15);
-        drawSnowballPyramid(ctx, plat.x + plat.width * 0.8, plat.y, 5);
-        drawSnowball(ctx, plat.x + 70, plat.y, 4);
-        drawSnowDrift(ctx, plat.x + plat.width * 0.45, plat.y, 25, 3);
-        drawIcicle(ctx, plat.x + 50, plat.y + plat.height, 10);
-        drawIcicle(ctx, plat.x + plat.width - 50, plat.y + plat.height, 12);
+        // Very wide — spaced out: tree, christmas, snowman, tree
+        drawPineTree(ctx, plat.x + 35, plat.y, 45, true);
+        drawChristmasTree(ctx, plat.x + plat.width * 0.35, plat.y, 38);
+        drawSnowman(ctx, plat.x + plat.width * 0.58, plat.y, 14);
+        drawPineTree(ctx, plat.x + plat.width - 35, plat.y, 42, true);
+        drawIcicle(ctx, plat.x + 60, plat.y + plat.height, 10);
+        drawIcicle(ctx, plat.x + plat.width - 60, plat.y + plat.height, 11);
       } else if (plat.width >= 200) {
         // Wide — trees + mixed decorations
-        drawPineTree(ctx, plat.x + 22, plat.y, 40, true);
-        drawChristmasTree(ctx, plat.x + plat.width - 25, plat.y, 34);
+        drawPineTree(ctx, plat.x + 25, plat.y, 38, true);
+        drawChristmasTree(ctx, plat.x + plat.width - 28, plat.y, 32);
         if (i % 2 === 0) {
           drawSnowman(ctx, mid, plat.y, 13);
-          drawSnowball(ctx, mid + 30, plat.y, 4);
         } else {
-          drawSnowballPyramid(ctx, mid + 10, plat.y, 4);
-          drawSnowball(ctx, mid - 25, plat.y, 5);
+          drawSnowball(ctx, mid - 15, plat.y, 5);
+          drawSnowball(ctx, mid + 15, plat.y, 4);
         }
-        drawSnowDrift(ctx, plat.x + 12, plat.y, 20, 3);
         drawIcicle(ctx, mid, plat.y + plat.height, 9);
       } else if (plat.width >= 140) {
         // Medium — tree + decoration

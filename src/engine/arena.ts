@@ -67,7 +67,7 @@ export const WINTER_LAKE_ARENA: Arena = {
     // Ice cube — right ground
     { x: 835, y: 610, width: 65, height: 24 },
     // Ice cube — floating mid-left
-    { x: 430, y: 370, width: 60, height: 24 },
+    { x: 370, y: 370, width: 60, height: 24 },
   ],
   spawnPoints: [
     { x: 180, y: 520 },
