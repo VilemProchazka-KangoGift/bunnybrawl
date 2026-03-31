@@ -589,10 +589,20 @@ function drawLobby(
   // ---- Player count in zone ----
   const inZone = players.filter(p => p.x + PLAYER_WIDTH > READY_ZONE_X && p.splatTimer <= 0);
   if (inZone.length > 0) {
-    ctx.fillStyle = 'rgba(76,175,80,0.85)';
+    const readyText = i18n.t('lobby_players_ready', { count: inZone.length });
     ctx.font = "bold 16px 'Fredoka', sans-serif";
     ctx.textAlign = 'center';
-    ctx.fillText(i18n.t('lobby_players_ready', { count: inZone.length }), (READY_ZONE_X + CANVAS_WIDTH) / 2, GROUND_Y - 14);
+    const rw = ctx.measureText(readyText).width + 24;
+    const rx = (READY_ZONE_X + CANVAS_WIDTH) / 2;
+    const ry = GROUND_Y - 22;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.beginPath();
+    ctx.roundRect(rx - rw / 2, ry, rw, 24, 6);
+    ctx.fill();
+    ctx.fillStyle = '#7CFC00';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(readyText, rx, ry + 12);
+    ctx.textBaseline = 'alphabetic';
   }
 }
 
