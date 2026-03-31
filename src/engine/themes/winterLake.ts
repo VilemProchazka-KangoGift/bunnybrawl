@@ -140,9 +140,9 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
     drawPineTree(ctx, 900, y, 50, true);
     drawChristmasTree(ctx, 1200, y, 45);
 
-    // === GROUND ACCENTS — just a few ===
-    drawSnowman(ctx, 320, y, 22);
-    drawSnowman(ctx, 780, y, 18);
+    // === GROUND ACCENTS ===
+    drawSnowman(ctx, 260, y, 32);
+    drawSnowman(ctx, 830, y, 30);
     drawIcePatch(ctx, 480, y, 280);
     drawSnowDrift(ctx, 550, y, 55, 7);
     drawSnowDrift(ctx, 1000, y, 50, 6);
