@@ -145,6 +145,14 @@ Before placing any decoration, check it doesn't overlap with:
 
 **Map x positions before drawing.** List all ground elements with their approximate x-span, then verify no two overlap. Same for each platform.
 
+When adding solid obstacles (stumps, ice cubes), check ALL layers:
+- Background decorations (bushes, flowers, mushrooms at same x)
+- Foreground decorations (FgBush, tall grass drawn over players)
+- Flowers array positions that fall within the obstacle's x-span
+- Existing platform decorations in the loop
+
+Remove or reposition any decoration that overlaps. Don't just add obstacles — audit the full x-position map.
+
 ### Solid Themed Obstacles (REQUIRED per level)
 
 Every arena must have 2-3 solid themed obstacles on the ground that players can jump onto and collide with. These add verticality to the ground level and give each arena a distinct feel.
@@ -159,7 +167,8 @@ To create a solid obstacle:
 1. Add a platform in `arena.ts` with **full collision height** (not 24px — match the visual)
 2. Draw the visual in `drawBackgroundNature` at the **exact same coordinates**
 3. Exclude obstacle platforms from decoration loops: `arena.platforms.filter(p => p.y < 650 && p.width >= 80)`
-4. Place 2-3 per level, spread across the ground, avoiding overlap with other decorations
+4. Place 2-3 on ground + 1-2 on wider platforms, spread out, avoiding overlap
+5. Audit all decoration layers (background, foreground, flowers) for conflicts at those x positions
 
 ### Decoration Sizing — Keep Consistent
 

@@ -156,7 +156,7 @@ export const MEADOW_THEME: ThemeConfig = {
 
     // Flowers
     const flowerColors = ['#FF6B8A', '#FFD700', '#FF69B4', '#87CEEB', '#DDA0DD', '#FFA07A'];
-    const flowerPositions = [150, 280, 380, 500, 580, 750, 830, 980, 1050, 1200];
+    const flowerPositions = [150, 280, 420, 500, 580, 750, 930, 980, 1050, 1200];
     for (const fx of flowerPositions) {
       const color = flowerColors[Math.floor(fx * 0.01) % flowerColors.length];
       drawFlower(ctx, fx, y, color);
@@ -169,6 +169,9 @@ export const MEADOW_THEME: ThemeConfig = {
     // Tree stumps — solid obstacles matching platforms
     drawTreeStump(ctx, 340, 615, 55, 45);
     drawTreeStump(ctx, 860, 615, 55, 45);
+    // Platform stumps (on mid-left and mid-right)
+    drawTreeStump(ctx, 440, 370, 45, 40);
+    drawTreeStump(ctx, 800, 370, 45, 40);
 
     // Nature on floating platforms (exclude small obstacle platforms)
     const floats = arena.platforms.filter(p => p.y < 650 && p.width >= 80);
@@ -191,10 +194,10 @@ export const MEADOW_THEME: ThemeConfig = {
     const ground = arena.platforms[0];
     const gy = ground.y;
 
-    // Large foreground bushes
+    // Large foreground bushes (avoid stump positions at x=340, x=860)
     drawFgBush(ctx, 160, gy, 60);
     drawFgBush(ctx, 520, gy, 52);
-    drawFgBush(ctx, 850, gy, 58);
+    drawFgBush(ctx, 1000, gy, 55);
     drawFgBush(ctx, 1120, gy, 48);
 
     // Tall grass clusters
