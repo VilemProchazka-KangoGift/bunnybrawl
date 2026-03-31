@@ -356,22 +356,172 @@ function drawLobby(
   countdown: number,
   countdownActive: boolean,
 ): void {
-  // Sky
-  const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-  gradient.addColorStop(0, '#4A90D9');
-  gradient.addColorStop(0.7, '#87CEEB');
-  gradient.addColorStop(1, '#B0E0E6');
-  ctx.fillStyle = gradient;
+  // ---- Sky with gradient ----
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+  skyGrad.addColorStop(0, '#3A7BD5');
+  skyGrad.addColorStop(0.5, '#6CB4EE');
+  skyGrad.addColorStop(0.85, '#B0E0E6');
+  skyGrad.addColorStop(1, '#90D8A0');
+  ctx.fillStyle = skyGrad;
   ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-  // Control schemes at top
-  ctx.fillStyle = 'rgba(0,0,0,0.5)';
-  ctx.beginPath();
-  ctx.roundRect(10, 8, CANVAS_WIDTH - 20, 42, 8);
-  ctx.fill();
+  // ---- Clouds ----
+  const now = performance.now() / 1000;
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  const clouds = [
+    { x: (now * 8) % (CANVAS_WIDTH + 200) - 100, y: 100, s: 60 },
+    { x: (now * 12 + 400) % (CANVAS_WIDTH + 200) - 100, y: 70, s: 80 },
+    { x: (now * 6 + 800) % (CANVAS_WIDTH + 200) - 100, y: 120, s: 50 },
+  ];
+  for (const c of clouds) {
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, c.s * 0.4, 0, Math.PI * 2);
+    ctx.arc(c.x + c.s * 0.35, c.y - c.s * 0.12, c.s * 0.35, 0, Math.PI * 2);
+    ctx.arc(c.x + c.s * 0.7, c.y, c.s * 0.38, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
-  ctx.font = 'bold 13px monospace';
+  // ---- Background hills ----
+  ctx.fillStyle = '#5C9E4C';
+  for (const [hx, hw, hh] of [[0, 300, 100], [350, 400, 80], [700, 350, 110], [1000, 350, 85]] as const) {
+    ctx.beginPath();
+    ctx.moveTo(hx, GROUND_Y + 10);
+    ctx.quadraticCurveTo(hx + hw / 2, GROUND_Y - hh, hx + hw, GROUND_Y + 10);
+    ctx.fill();
+  }
+
+  // ---- Ground ----
+  const groundGrad = ctx.createLinearGradient(0, GROUND_Y, 0, CANVAS_HEIGHT);
+  groundGrad.addColorStop(0, '#4a8c3f');
+  groundGrad.addColorStop(0.15, '#3a7030');
+  groundGrad.addColorStop(1, '#2a5520');
+  ctx.fillStyle = groundGrad;
+  ctx.fillRect(0, GROUND_Y, CANVAS_WIDTH, CANVAS_HEIGHT - GROUND_Y);
+  // Grass top
+  ctx.fillStyle = '#6BBF59';
+  ctx.fillRect(0, GROUND_Y, CANVAS_WIDTH, 5);
+  // Grass blades
+  ctx.strokeStyle = '#5DAF4A';
+  ctx.lineWidth = 2;
+  for (let x = 5; x < CANVAS_WIDTH; x += 14) {
+    ctx.beginPath();
+    ctx.moveTo(x, GROUND_Y);
+    ctx.lineTo(x - 2, GROUND_Y - 5 - (x * 7 % 5));
+    ctx.stroke();
+  }
+
+  // ---- Background flowers + bushes ----
+  const flowerColors = ['#FF6B8A', '#FFD700', '#FF69B4', '#DDA0DD'];
+  for (let fx = 30; fx < WALL_X - 20; fx += 80 + (fx * 3 % 40)) {
+    ctx.strokeStyle = '#3A7A3A';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(fx, GROUND_Y); ctx.lineTo(fx, GROUND_Y - 10); ctx.stroke();
+    ctx.fillStyle = flowerColors[Math.floor(fx * 0.02) % flowerColors.length];
+    for (let a = 0; a < 5; a++) {
+      const ang = (a / 5) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.arc(fx + Math.cos(ang) * 3, GROUND_Y - 12 + Math.sin(ang) * 3, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = '#FFE04A';
+    ctx.beginPath(); ctx.arc(fx, GROUND_Y - 12, 1.5, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // ---- Wall obstacle (nicer) ----
+  // Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  ctx.fillRect(WALL_X + 4, WALL_Y + 4, WALL_WIDTH, WALL_HEIGHT);
+  // Stone body
+  const wallGrad = ctx.createLinearGradient(WALL_X, WALL_Y, WALL_X + WALL_WIDTH, WALL_Y + WALL_HEIGHT);
+  wallGrad.addColorStop(0, '#7D6D5F');
+  wallGrad.addColorStop(0.5, '#6B5B4F');
+  wallGrad.addColorStop(1, '#5A4A3E');
+  ctx.fillStyle = wallGrad;
+  ctx.fillRect(WALL_X, WALL_Y, WALL_WIDTH, WALL_HEIGHT);
+  // Brick lines
+  ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+  ctx.lineWidth = 1;
+  for (let row = 0; row < WALL_HEIGHT; row += 14) {
+    ctx.beginPath(); ctx.moveTo(WALL_X, WALL_Y + row); ctx.lineTo(WALL_X + WALL_WIDTH, WALL_Y + row); ctx.stroke();
+    if ((row / 14) % 2 === 0) {
+      ctx.beginPath(); ctx.moveTo(WALL_X + WALL_WIDTH * 0.5, WALL_Y + row); ctx.lineTo(WALL_X + WALL_WIDTH * 0.5, WALL_Y + row + 14); ctx.stroke();
+    }
+  }
+  // Highlight top edge
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.fillRect(WALL_X, WALL_Y, WALL_WIDTH, 2);
+  // Moss + grass on top
+  ctx.fillStyle = '#5DAF4A';
+  ctx.beginPath();
+  ctx.ellipse(WALL_X + WALL_WIDTH / 2, WALL_Y - 1, WALL_WIDTH / 2 + 4, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#4A9A3A';
+  ctx.lineWidth = 1.5;
+  for (let gx = WALL_X + 3; gx < WALL_X + WALL_WIDTH; gx += 5) {
+    ctx.beginPath(); ctx.moveTo(gx, WALL_Y - 2); ctx.lineTo(gx - 1, WALL_Y - 7 - (gx * 3 % 4)); ctx.stroke();
+  }
+
+  // ---- Ready zone (polished) ----
+  // Gradient highlight
+  const zoneGrad = ctx.createLinearGradient(READY_ZONE_X, 0, CANVAS_WIDTH, 0);
+  zoneGrad.addColorStop(0, 'rgba(76, 175, 80, 0.05)');
+  zoneGrad.addColorStop(0.3, 'rgba(76, 175, 80, 0.12)');
+  zoneGrad.addColorStop(1, 'rgba(76, 175, 80, 0.18)');
+  ctx.fillStyle = zoneGrad;
+  ctx.fillRect(READY_ZONE_X, 55, CANVAS_WIDTH - READY_ZONE_X, GROUND_Y - 55);
+
+  // Zone border — glowing line
+  ctx.strokeStyle = 'rgba(76, 175, 80, 0.4)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([12, 6]);
+  ctx.beginPath(); ctx.moveTo(READY_ZONE_X, 55); ctx.lineTo(READY_ZONE_X, GROUND_Y); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // "GO!" watermark
+  ctx.fillStyle = 'rgba(76, 175, 80, 0.2)';
+  ctx.font = "bold 64px 'Fredoka', sans-serif";
   ctx.textAlign = 'center';
+  ctx.fillText(i18n.t('lobby_go'), (READY_ZONE_X + CANVAS_WIDTH) / 2, GROUND_Y / 2 + 30);
+
+  // ---- Draw NPCs (behind players) ----
+  for (const npc of extras) {
+    if (npc.splatTimer > 0) { drawSquishedChar(ctx, npc); }
+    else { drawLobbyCharacter(ctx, npc); }
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = "10px 'Fredoka', sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText(npc.char.name, npc.x + PLAYER_WIDTH / 2, npc.y - 5);
+  }
+
+  // ---- Draw players ----
+  for (const p of players) {
+    if (p.splatTimer > 0) { drawSquishedChar(ctx, p); }
+    else { drawLobbyCharacter(ctx, p); }
+    // Player tag with background pill
+    const tagX = p.x + PLAYER_WIDTH / 2;
+    const tagW = 36;
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.beginPath();
+    ctx.roundRect(tagX - tagW / 2, p.y - 22, tagW, 16, 4);
+    ctx.fill();
+    ctx.fillStyle = p.char.color;
+    ctx.font = "bold 10px 'Fredoka', sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText(`${p.slot}`, tagX, p.y - 10);
+  }
+
+  // ---- UI bar at top (polished) ----
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.beginPath();
+  ctx.roundRect(8, 6, CANVAS_WIDTH - 16, 46, 10);
+  ctx.fill();
+  // Subtle inner highlight
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect(9, 7, CANVAS_WIDTH - 18, 44, 9);
+  ctx.stroke();
+
   const slotWidth = (CANVAS_WIDTH - 40) / SLOTS.length;
   for (let i = 0; i < SLOTS.length; i++) {
     const slot = SLOTS[i];
@@ -379,161 +529,62 @@ function drawLobby(
     const player = players[i];
     const sx = 20 + i * slotWidth + slotWidth / 2;
 
-    // Player color dot
+    // Color dot
     ctx.fillStyle = player.char.color;
     ctx.beginPath();
-    ctx.arc(sx - slotWidth * 0.35, 29, 6, 0, Math.PI * 2);
+    ctx.arc(sx - slotWidth * 0.35, 29, 7, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = '#FFF';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    // Slot + character name
+    // Name
     ctx.fillStyle = '#FFF';
     ctx.textAlign = 'left';
-    ctx.fillText(`${slot}: ${player.char.name}`, sx - slotWidth * 0.25, 25);
+    ctx.font = "bold 13px 'Fredoka', sans-serif";
+    ctx.fillText(`${slot}: ${player.char.name}`, sx - slotWidth * 0.25, 26);
 
     // Keys
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.font = '11px monospace';
-    ctx.fillText(`${bindings.left} ${bindings.right} ${bindings.jump} ${bindings.down}`, sx - slotWidth * 0.25, 39);
-    ctx.font = 'bold 13px monospace';
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.font = "11px 'Fredoka', monospace";
+    ctx.fillText(`${bindings.left} ${bindings.right} ${bindings.jump} ${bindings.down}`, sx - slotWidth * 0.25, 41);
   }
 
-  // Ground
-  ctx.fillStyle = '#4a8c3f';
-  ctx.fillRect(0, GROUND_Y, CANVAS_WIDTH, CANVAS_HEIGHT - GROUND_Y);
-  ctx.fillStyle = '#6BBF59';
-  ctx.fillRect(0, GROUND_Y, CANVAS_WIDTH, 4);
-
-  // Grass
-  ctx.strokeStyle = '#5DAF4A';
-  ctx.lineWidth = 2;
-  for (let x = 5; x < CANVAS_WIDTH; x += 18) {
-    ctx.beginPath();
-    ctx.moveTo(x, GROUND_Y);
-    ctx.lineTo(x - 2, GROUND_Y - 5 - (x * 7 % 4));
-    ctx.stroke();
-  }
-
-  // Wall obstacle
-  // Stone base
-  ctx.fillStyle = '#6B5B4F';
-  ctx.fillRect(WALL_X, WALL_Y, WALL_WIDTH, WALL_HEIGHT);
-  // Brick lines
-  ctx.strokeStyle = '#5A4A3E';
-  ctx.lineWidth = 1;
-  for (let row = 0; row < WALL_HEIGHT; row += 14) {
-    ctx.beginPath();
-    ctx.moveTo(WALL_X, WALL_Y + row);
-    ctx.lineTo(WALL_X + WALL_WIDTH, WALL_Y + row);
-    ctx.stroke();
-    // Offset vertical line per row
-    const offset = (row / 14) % 2 === 0 ? WALL_WIDTH * 0.5 : 0;
-    if (offset > 0) {
-      ctx.beginPath();
-      ctx.moveTo(WALL_X + offset, WALL_Y + row);
-      ctx.lineTo(WALL_X + offset, WALL_Y + row + 14);
-      ctx.stroke();
-    }
-  }
-  // Top edge highlight
-  ctx.fillStyle = '#7D6D5F';
-  ctx.fillRect(WALL_X, WALL_Y, WALL_WIDTH, 3);
-  // Moss on top
-  ctx.fillStyle = '#5DAF4A';
-  ctx.fillRect(WALL_X - 2, WALL_Y - 2, WALL_WIDTH + 4, 4);
-  // Small grass on top
-  ctx.strokeStyle = '#4A9A3A';
-  ctx.lineWidth = 1.5;
-  for (let gx = WALL_X + 3; gx < WALL_X + WALL_WIDTH; gx += 6) {
-    ctx.beginPath();
-    ctx.moveTo(gx, WALL_Y - 2);
-    ctx.lineTo(gx - 1, WALL_Y - 7 - Math.random() * 3);
-    ctx.stroke();
-  }
-
-  // Ready zone
-  ctx.fillStyle = 'rgba(76, 175, 80, 0.15)';
-  ctx.fillRect(READY_ZONE_X, 55, CANVAS_WIDTH - READY_ZONE_X, GROUND_Y - 55);
-
-  ctx.strokeStyle = 'rgba(76, 175, 80, 0.5)';
-  ctx.lineWidth = 3;
-  ctx.setLineDash([10, 8]);
-  ctx.beginPath();
-  ctx.moveTo(READY_ZONE_X, 55);
-  ctx.lineTo(READY_ZONE_X, GROUND_Y);
-  ctx.stroke();
-  ctx.setLineDash([]);
-
-  ctx.fillStyle = 'rgba(76, 175, 80, 0.4)';
-  ctx.font = 'bold 48px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText(i18n.t('lobby_go'), (READY_ZONE_X + CANVAS_WIDTH) / 2, GROUND_Y / 2 + 20);
-
-  // Draw extras (NPCs) first (behind players)
-  for (const npc of extras) {
-    if (npc.splatTimer > 0) {
-      drawSquishedChar(ctx, npc);
-    } else {
-      drawLobbyCharacter(ctx, npc);
-    }
-    // NPC label
-    ctx.fillStyle = 'rgba(255,255,255,0.4)';
-    ctx.font = '9px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(npc.char.name, npc.x + PLAYER_WIDTH / 2, npc.y - 6);
-  }
-
-  // Draw players
-  for (const p of players) {
-    if (p.splatTimer > 0) {
-      drawSquishedChar(ctx, p);
-    } else {
-      drawLobbyCharacter(ctx, p);
-    }
-    // Player label: slot + name
-    ctx.fillStyle = p.char.color;
-    ctx.font = 'bold 12px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(`${p.slot}`, p.x + PLAYER_WIDTH / 2, p.y - 14);
-    ctx.fillStyle = 'rgba(0,0,0,0.7)';
-    ctx.font = '10px sans-serif';
-    ctx.fillText(p.char.name, p.x + PLAYER_WIDTH / 2, p.y - 4);
-  }
-
-  // Title
+  // ---- Title (below bar) ----
   ctx.fillStyle = '#FFF';
-  ctx.font = 'bold 28px sans-serif';
+  ctx.font = "bold 26px 'Fredoka', sans-serif";
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
-  ctx.fillText(i18n.t('lobby_title'), CANVAS_WIDTH / 2, 56);
+  ctx.shadowColor = 'rgba(0,0,0,0.4)';
+  ctx.shadowBlur = 6;
+  ctx.fillText(i18n.t('lobby_title'), CANVAS_WIDTH / 2, 58);
+  ctx.shadowBlur = 0;
   ctx.textBaseline = 'alphabetic';
 
-  ctx.font = '14px sans-serif';
-  ctx.fillStyle = 'rgba(255,255,255,0.5)';
-  ctx.fillText(i18n.t('lobby_back'), CANVAS_WIDTH / 2, 90);
+  ctx.font = "13px 'Fredoka', sans-serif";
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
+  ctx.fillText(i18n.t('lobby_back'), CANVAS_WIDTH / 2, 88);
 
-  // Countdown
+  // ---- Countdown ----
   if (countdownActive && countdown > 0) {
     const secs = Math.ceil(countdown);
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
     ctx.beginPath();
-    ctx.roundRect(CANVAS_WIDTH / 2 - 80, 98, 160, 44, 12);
+    ctx.roundRect(CANVAS_WIDTH / 2 - 90, 96, 180, 48, 14);
     ctx.fill();
     ctx.fillStyle = '#FFD700';
-    ctx.font = 'bold 24px sans-serif';
+    ctx.font = "bold 26px 'Fredoka', sans-serif";
     ctx.textAlign = 'center';
     ctx.fillText(i18n.t('lobby_starting', { seconds: secs }), CANVAS_WIDTH / 2, 127);
   }
 
-  // Player count
+  // ---- Player count in zone ----
   const inZone = players.filter(p => p.x + PLAYER_WIDTH > READY_ZONE_X && p.splatTimer <= 0);
   if (inZone.length > 0) {
-    ctx.fillStyle = 'rgba(76,175,80,0.8)';
-    ctx.font = 'bold 16px sans-serif';
+    ctx.fillStyle = 'rgba(76,175,80,0.85)';
+    ctx.font = "bold 16px 'Fredoka', sans-serif";
     ctx.textAlign = 'center';
-    ctx.fillText(i18n.t('lobby_players_ready', { count: inZone.length }), (READY_ZONE_X + CANVAS_WIDTH) / 2, GROUND_Y - 15);
+    ctx.fillText(i18n.t('lobby_players_ready', { count: inZone.length }), (READY_ZONE_X + CANVAS_WIDTH) / 2, GROUND_Y - 14);
   }
 }
 
