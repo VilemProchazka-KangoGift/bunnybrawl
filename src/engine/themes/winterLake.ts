@@ -127,7 +127,7 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
   drawBackgroundNature: (ctx, arena) => {
     const ground = arena.platforms[0];
     const y = ground.y;
-    const floats = arena.platforms.filter(p => p.y < 650);
+    const floats = arena.platforms.filter(p => p.y < 650 && p.width >= 80);
 
     // === LANDMARKS (background, edges) ===
     drawBigSnowman(ctx, 55, y, 90);
@@ -267,7 +267,7 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
   drawForegroundNature: (ctx, arena) => {
     const ground = arena.platforms[0];
     const gy = ground.y;
-    const floats = arena.platforms.filter(p => p.y < 650);
+    const floats = arena.platforms.filter(p => p.y < 650 && p.width >= 80);
 
     // Foreground trees on ground
     drawPineTree(ctx, 50, gy, 65, true);
@@ -301,6 +301,6 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
   },
 
   physics: {
-    friction: 0.15,
+    friction: 0.25,
   },
 };

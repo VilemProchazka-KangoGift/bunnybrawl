@@ -62,12 +62,12 @@ export const WINTER_LAKE_ARENA: Arena = {
     { x: 60, y: 340, width: 100, height: 24 },
     // Tiny stepping stone right
     { x: 1120, y: 340, width: 100, height: 24 },
-    // Ice cube — left ground (stepping block)
-    { x: 380, y: 610, width: 65, height: 24 },
+    // Ice cube — left ground (solid block)
+    { x: 380, y: 610, width: 65, height: 50 },
     // Ice cube — right ground
-    { x: 835, y: 610, width: 65, height: 24 },
+    { x: 835, y: 610, width: 65, height: 50 },
     // Ice cube — floating mid-left
-    { x: 370, y: 370, width: 60, height: 24 },
+    { x: 370, y: 370, width: 60, height: 50 },
   ],
   spawnPoints: [
     { x: 180, y: 520 },
