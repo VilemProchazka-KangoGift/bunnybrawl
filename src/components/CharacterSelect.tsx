@@ -199,6 +199,22 @@ export function CharacterSelect() {
             victim.splatTimer = 0.8;
             attacker.vy = -300; // bounce
             audio.play('stomp');
+
+            // Respawn victim far from attacker (left of wall) so attacker lands safely
+            const minDist = 200;
+            let bestX = 40;
+            let bestDist = 0;
+            for (let attempt = 0; attempt < 10; attempt++) {
+              const tryX = 20 + Math.random() * (WALL_X - 80);
+              const dx = Math.abs(tryX - attacker.x);
+              if (dx > bestDist) { bestDist = dx; bestX = tryX; }
+            }
+            if (bestDist < minDist && WALL_X > 200) bestX = attacker.x > WALL_X / 2 ? 40 : WALL_X - 60;
+            victim.x = bestX;
+            victim.y = GROUND_Y - PLAYER_HEIGHT;
+            victim.vx = 0;
+            victim.vy = 0;
+            victim.onGround = true;
           }
         }
       }
