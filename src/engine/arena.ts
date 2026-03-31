@@ -46,39 +46,29 @@ export const WINTER_LAKE_ARENA: Arena = {
   platforms: [
     // Ground — full width
     { x: 0, y: 660, width: CANVAS_WIDTH, height: 60 },
-
-    // === SNOWMAN (left, x~250) — 3 stacked steps ===
-    // Bottom ball shoulder
-    { x: 170, y: 575, width: 150, height: 24 },
-    // Mid ball / neck
-    { x: 195, y: 505, width: 100, height: 24 },
-    // Hat top — tiny perch
-    { x: 215, y: 430, width: 70, height: 24 },
-
-    // === IGLOO (right, x~880) — dome with 2 steps ===
-    // Lower dome shelf
-    { x: 850, y: 575, width: 250, height: 24 },
-    // Dome top
-    { x: 905, y: 505, width: 140, height: 24 },
-
-    // === CENTER — contested bridge + high ledge ===
-    // Frozen bridge connecting snowman and igloo areas
-    { x: 470, y: 520, width: 160, height: 24 },
-    // King of the hill — high center
-    { x: 510, y: 350, width: 200, height: 24 },
-
-    // === CORNERS — small floating ledges ===
-    // Far left high
-    { x: 30, y: 400, width: 110, height: 24 },
-    // Far right high
-    { x: 1140, y: 420, width: 110, height: 24 },
+    // Low left — wide ice shelf
+    { x: 60, y: 540, width: 240, height: 24 },
+    // Low right — wide ice shelf
+    { x: 980, y: 540, width: 240, height: 24 },
+    // Mid staircase left
+    { x: 200, y: 410, width: 160, height: 24 },
+    // Mid staircase right
+    { x: 920, y: 410, width: 160, height: 24 },
+    // Center — large frozen bridge
+    { x: 440, y: 480, width: 400, height: 24 },
+    // High center — king of the hill
+    { x: 520, y: 310, width: 240, height: 24 },
+    // Tiny stepping stone left
+    { x: 60, y: 340, width: 100, height: 24 },
+    // Tiny stepping stone right
+    { x: 1120, y: 340, width: 100, height: 24 },
   ],
   spawnPoints: [
-    { x: 245, y: 555 },
-    { x: 975, y: 555 },
-    { x: 245, y: 485 },
-    { x: 975, y: 485 },
-    { x: 550, y: 500 },
+    { x: 180, y: 520 },
+    { x: 1100, y: 520 },
+    { x: 280, y: 390 },
+    { x: 1000, y: 390 },
+    { x: 640, y: 290 },
     { x: 640, y: 640 },
   ],
 };

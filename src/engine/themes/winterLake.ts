@@ -1,7 +1,7 @@
 import type { ThemeConfig } from './types';
 import {
-  drawPineTree, drawSnowDrift, drawIcePatch, drawIcicle,
-  drawBigSnowman, drawIgloo,
+  drawPineTree, drawChristmasTree, drawSnowDrift, drawIcePatch, drawIcicle,
+  drawBigSnowman, drawIgloo, drawSnowman,
   drawFgBush,
 } from './drawPrimitives';
 
@@ -127,31 +127,45 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
     const ground = arena.platforms[0];
     const y = ground.y;
 
-    // --- BIG SNOWMAN (left, centered x=245) — platforms at y=575/505/430 ---
-    drawBigSnowman(ctx, 245, y, 140);
+    // Big snowman — background decoration (far left)
+    drawBigSnowman(ctx, 80, y, 100);
 
-    // --- IGLOO (right, x=850..1100) — platforms at y=575/505 ---
-    drawIgloo(ctx, 850, y, 300, 155);
+    // Igloo — background decoration (far right)
+    drawIgloo(ctx, 1050, y, 200, 110);
 
-    // Pine trees around the landmarks
-    drawPineTree(ctx, 30, y, 45, true);
-    drawPineTree(ctx, 420, y, 38, true);
-    drawPineTree(ctx, 680, y, 52, true);
-    drawPineTree(ctx, 1200, y, 42, true);
+    // Small decorative snowmen scattered on ground
+    drawSnowman(ctx, 350, y, 28);
+    drawSnowman(ctx, 750, y, 22);
+    drawSnowman(ctx, 1000, y, 25);
+
+    // Pine trees — many, various sizes
+    drawPineTree(ctx, 20, y, 60, true);
+    drawPineTree(ctx, 160, y, 35, true);
+    drawPineTree(ctx, 300, y, 48, true);
+    drawPineTree(ctx, 500, y, 30, true);
+    drawPineTree(ctx, 670, y, 55, true);
+    drawPineTree(ctx, 850, y, 32, true);
+    drawPineTree(ctx, 1180, y, 45, true);
+
+    // Christmas trees — decorated with ornaments and star
+    drawChristmasTree(ctx, 420, y, 52);
+    drawChristmasTree(ctx, 790, y, 44);
+    drawChristmasTree(ctx, 1240, y, 38);
 
     // Frozen lake in center
-    drawIcePatch(ctx, 400, y, 200);
+    drawIcePatch(ctx, 480, y, 320);
 
     // Snow drifts
-    drawSnowDrift(ctx, 550, y, 70, 9);
-    drawSnowDrift(ctx, 750, y, 55, 7);
-    drawSnowDrift(ctx, 1160, y, 60, 8);
+    drawSnowDrift(ctx, 240, y, 65, 9);
+    drawSnowDrift(ctx, 580, y, 55, 7);
+    drawSnowDrift(ctx, 900, y, 70, 10);
+    drawSnowDrift(ctx, 1120, y, 50, 7);
 
-    // Icicles under the frozen bridge
-    const bridge = arena.platforms.find(p => p.x >= 460 && p.x <= 480 && p.y < 550);
+    // Icicles under the wide center bridge
+    const bridge = arena.platforms.find(p => p.width >= 350 && p.y < 550);
     if (bridge) {
-      for (let i = 0; i < 4; i++) {
-        drawIcicle(ctx, bridge.x + 20 + i * 35, bridge.y + bridge.height, 10 + Math.random() * 6);
+      for (let i = 0; i < 6; i++) {
+        drawIcicle(ctx, bridge.x + 30 + i * 60, bridge.y + bridge.height, 8 + Math.random() * 7);
       }
     }
   },
@@ -169,12 +183,13 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
       highlight2: '#4A6A4A',
       berries: ['#CC3333', '#DD4444', '#BB2222'],
     };
-    drawFgBush(ctx, 600, gy, 35, snowBushColors);
-    drawFgBush(ctx, 1180, gy, 38, snowBushColors);
+    drawFgBush(ctx, 130, gy, 32, snowBushColors);
+    drawFgBush(ctx, 620, gy, 36, snowBushColors);
+    drawFgBush(ctx, 950, gy, 30, snowBushColors);
 
     // Snow piles at ground edges
-    drawSnowDrift(ctx, 20, gy, 50, 7);
-    drawSnowDrift(ctx, 1240, gy, 45, 6);
+    drawSnowDrift(ctx, 15, gy, 45, 6);
+    drawSnowDrift(ctx, 1250, gy, 40, 5);
   },
 
   physics: {

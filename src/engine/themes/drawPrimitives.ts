@@ -385,6 +385,103 @@ export function drawPineTree(ctx: CanvasRenderingContext2D, x: number, groundY: 
   }
 }
 
+export function drawChristmasTree(ctx: CanvasRenderingContext2D, x: number, groundY: number, size: number): void {
+  const trunkW = size * 0.15;
+  const trunkH = size * 0.3;
+
+  // Trunk
+  ctx.fillStyle = '#5C3A1E';
+  ctx.fillRect(x - trunkW / 2, groundY - trunkH, trunkW, trunkH);
+
+  // Triangle tiers (same as pine tree)
+  const tiers = [
+    { yBase: groundY - trunkH, width: size * 0.7, height: size * 0.4 },
+    { yBase: groundY - trunkH - size * 0.25, width: size * 0.55, height: size * 0.35 },
+    { yBase: groundY - trunkH - size * 0.45, width: size * 0.38, height: size * 0.32 },
+  ];
+
+  for (let t = 0; t < tiers.length; t++) {
+    const tier = tiers[t];
+    ctx.fillStyle = t === 0 ? '#1B5E2A' : t === 1 ? '#237A38' : '#2D9044';
+    ctx.beginPath();
+    ctx.moveTo(x, tier.yBase - tier.height);
+    ctx.lineTo(x - tier.width / 2, tier.yBase);
+    ctx.lineTo(x + tier.width / 2, tier.yBase);
+    ctx.closePath();
+    ctx.fill();
+
+    // Snow on edges
+    ctx.fillStyle = 'rgba(230, 240, 250, 0.7)';
+    ctx.beginPath();
+    ctx.moveTo(x, tier.yBase - tier.height);
+    ctx.lineTo(x - tier.width * 0.3, tier.yBase - tier.height * 0.35);
+    ctx.lineTo(x + tier.width * 0.3, tier.yBase - tier.height * 0.35);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Ornaments — colorful baubles on each tier
+  const ornamentColors = ['#FF3030', '#FFD700', '#3080FF', '#FF60A0', '#40E040'];
+  let oi = 0;
+  for (let t = 0; t < tiers.length; t++) {
+    const tier = tiers[t];
+    const midY = tier.yBase - tier.height * 0.5;
+    const ornCount = 3 - t; // more on bottom tiers
+    for (let i = 0; i < ornCount; i++) {
+      const ox = x + (i - (ornCount - 1) / 2) * (tier.width * 0.25);
+      const oy = midY + (i % 2) * tier.height * 0.15;
+      ctx.fillStyle = ornamentColors[oi % ornamentColors.length];
+      ctx.beginPath();
+      ctx.arc(ox, oy, 3 + (t === 0 ? 1 : 0), 0, Math.PI * 2);
+      ctx.fill();
+      // Shine dot
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      ctx.beginPath();
+      ctx.arc(ox - 1, oy - 1, 1, 0, Math.PI * 2);
+      ctx.fill();
+      oi++;
+    }
+  }
+
+  // Star on top
+  const starY = tiers[2].yBase - tiers[2].height - 4;
+  ctx.fillStyle = '#FFD700';
+  // Simple 4-point star
+  ctx.beginPath();
+  ctx.moveTo(x, starY - 6);
+  ctx.lineTo(x + 2, starY - 2);
+  ctx.lineTo(x + 6, starY);
+  ctx.lineTo(x + 2, starY + 2);
+  ctx.lineTo(x, starY + 6);
+  ctx.lineTo(x - 2, starY + 2);
+  ctx.lineTo(x - 6, starY);
+  ctx.lineTo(x - 2, starY - 2);
+  ctx.closePath();
+  ctx.fill();
+  // Star glow
+  ctx.fillStyle = 'rgba(255, 215, 0, 0.3)';
+  ctx.beginPath();
+  ctx.arc(x, starY, 10, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Tinsel garland — simple zigzag line
+  ctx.strokeStyle = 'rgba(255, 215, 0, 0.5)';
+  ctx.lineWidth = 1;
+  for (let t = 0; t < 2; t++) {
+    const tier = tiers[t];
+    const ty = tier.yBase - tier.height * 0.4;
+    const tw = tier.width * 0.3;
+    ctx.beginPath();
+    ctx.moveTo(x - tw, ty);
+    for (let s = 0; s < 4; s++) {
+      const sx = x - tw + (tw * 2 / 4) * (s + 1);
+      const sy = ty + (s % 2 === 0 ? 4 : -2);
+      ctx.lineTo(sx, sy);
+    }
+    ctx.stroke();
+  }
+}
+
 export function drawSnowDrift(ctx: CanvasRenderingContext2D, x: number, groundY: number, width: number, height: number): void {
   ctx.fillStyle = 'rgba(230, 240, 250, 0.7)';
   ctx.beginPath();
