@@ -19,11 +19,14 @@ export function getJumpMult(player: Player): number {
   return 1;
 }
 
-export function applyInput(player: Player, input: InputState, dt: number): void {
+export function applyInput(
+  player: Player, input: InputState, dt: number,
+  maxWalkSpeed = MAX_WALK_SPEED, friction = FRICTION, jumpImpulse = JUMP_IMPULSE,
+): void {
   if (player.state === 'splat' || player.state === 'respawning') return;
 
   const speedMult = getSpeedMult(player);
-  const maxSpeed = MAX_WALK_SPEED * speedMult;
+  const maxSpeed = maxWalkSpeed * speedMult;
 
   // Horizontal movement
   if (input.left) {
@@ -34,9 +37,9 @@ export function applyInput(player: Player, input: InputState, dt: number): void 
     player.facing = 'right';
   } else {
     if (player.vx > 0) {
-      player.vx = Math.max(0, player.vx - FRICTION * dt);
+      player.vx = Math.max(0, player.vx - friction * dt);
     } else if (player.vx < 0) {
-      player.vx = Math.min(0, player.vx + FRICTION * dt);
+      player.vx = Math.min(0, player.vx + friction * dt);
     }
   }
 
@@ -56,18 +59,18 @@ export function applyInput(player: Player, input: InputState, dt: number): void 
 
   // Jump (only if on ground)
   if (input.jump && player.state !== 'airborne') {
-    player.vy = JUMP_IMPULSE * getJumpMult(player);
+    player.vy = jumpImpulse * getJumpMult(player);
     player.state = 'airborne';
   }
 }
 
-export function applyGravity(player: Player, dt: number): void {
+export function applyGravity(player: Player, dt: number, gravity = GRAVITY, maxFallSpeed = MAX_FALL_SPEED): void {
   if (player.state === 'splat' || player.state === 'respawning') return;
 
-  const gravity = player.fastFalling ? FAST_FALL_GRAVITY : GRAVITY;
-  const maxFall = player.fastFalling ? FAST_FALL_SPEED : MAX_FALL_SPEED;
+  const g = player.fastFalling ? FAST_FALL_GRAVITY : gravity;
+  const maxFall = player.fastFalling ? FAST_FALL_SPEED : maxFallSpeed;
 
-  player.vy += gravity * dt;
+  player.vy += g * dt;
   player.vy = Math.min(player.vy, maxFall);
 }
 

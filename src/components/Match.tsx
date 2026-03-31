@@ -55,7 +55,7 @@ export function Match() {
     const fgCanvas = fgCanvasRef.current;
     if (!bgCanvas || !fgCanvas) return;
 
-    const arena = getArena();
+    const arena = getArena(matchSettings.arenaId);
     const loop = new GameLoop(
       bgCanvas,
       fgCanvas,

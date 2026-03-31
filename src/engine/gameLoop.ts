@@ -2,6 +2,8 @@ import type {
   MatchState, MatchSettings, Arena, CharacterSlot, Player, Particle,
   WeatherParticle, MatchStats, PlayerStats, WildlifeEntity,
 } from './types';
+import type { ThemeConfig } from './themes/types';
+import { getTheme } from './themes/registry';
 import { InputManager } from './input';
 import { Renderer } from './renderer';
 import { applyInput, applyGravity, movePlayer, collidePlatforms, updatePlayerState, applyArenaConstraints, collidePlayersHorizontal, aabbOverlap } from './physics';
@@ -15,13 +17,12 @@ import {
   THORN_SLOW_DURATION, CANVAS_WIDTH, CANVAS_HEIGHT,
   SPRING_SPAWN_INTERVAL, THORN_SPAWN_INTERVAL, HAZARD_LIFETIME, HAZARD_GROW_TIME,
   SCREEN_SHAKE_DURATION, SLOW_MO_DURATION, SLOW_MO_FACTOR,
-  WEATHER_PARTICLE_COUNT,
   SQUASH_ON_LAND, STRETCH_ON_JUMP, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED,
   AFTERIMAGE_INTERVAL, AFTERIMAGE_SPEED_THRESHOLD, AFTERIMAGE_MAX,
-  DAY_CYCLE_DURATION, MATCH_COUNTDOWN, IDLE_ANIM_INTERVAL,
+  MATCH_COUNTDOWN, IDLE_ANIM_INTERVAL,
   SHOCKWAVE_MAX_RADIUS, SHOCKWAVE_DURATION, SCREEN_FLASH_DURATION,
   SPRING_TRAIL_DURATION, SCORE_ANIM_DURATION,
-  WILDLIFE_COUNT, FOG_PARTICLE_COUNT, POLLEN_COUNT,
+  GRAVITY, FRICTION, MAX_WALK_SPEED, JUMP_IMPULSE, MAX_FALL_SPEED,
 } from './constants';
 import { CHARACTERS } from './characters';
 
@@ -34,6 +35,14 @@ export class GameLoop {
   private input: InputManager;
   private renderer: Renderer;
   private onMatchEnd: MatchEndCallback;
+  private theme: ThemeConfig;
+
+  // Effective physics (base constant * theme modifier)
+  private effGravity: number;
+  private effFriction: number;
+  private effWalkSpeed: number;
+  private effJumpImpulse: number;
+  private effMaxFallSpeed: number;
 
   private lastTime = 0;
   private accumulator = 0;
@@ -58,8 +67,17 @@ export class GameLoop {
     this.arena = arena;
     this.settings = settings;
     this.onMatchEnd = onMatchEnd;
+    this.theme = getTheme(arena.themeId);
     this.input = new InputManager();
-    this.renderer = new Renderer(bgCanvas, fgCanvas);
+    this.renderer = new Renderer(bgCanvas, fgCanvas, this.theme);
+
+    // Compute effective physics from theme modifiers
+    const pm = this.theme.physics;
+    this.effGravity = GRAVITY * (pm?.gravity ?? 1);
+    this.effFriction = FRICTION * (pm?.friction ?? 1);
+    this.effWalkSpeed = MAX_WALK_SPEED * (pm?.walkSpeed ?? 1);
+    this.effJumpImpulse = JUMP_IMPULSE * (pm?.jumpImpulse ?? 1);
+    this.effMaxFallSpeed = MAX_FALL_SPEED * (pm?.gravity ?? 1); // scale with gravity
 
     const players: Player[] = activePlayers.map((slot, index) => ({
       id: slot,
@@ -77,9 +95,9 @@ export class GameLoop {
       breathTimer: 0, springTrailTimer: 0, damageFlashSide: null, damageFlashTimer: 0,
     }));
 
-    // Init weather particles
+    // Init weather particles from theme config
     const weather: WeatherParticle[] = [];
-    for (let i = 0; i < WEATHER_PARTICLE_COUNT; i++) {
+    for (let i = 0; i < this.theme.weather.particleCount; i++) {
       weather.push(this.createWeatherParticle(true));
     }
 
@@ -90,55 +108,53 @@ export class GameLoop {
     }
     const stats: MatchStats = { perPlayer: statsMap };
 
-    // Init wildlife
+    // Init wildlife from theme config
     const wildlife: WildlifeEntity[] = [];
-    const brightColors = ['#FF6B6B', '#FFD93D', '#6BCB77', '#4D96FF', '#FF78C4', '#A66CFF'];
-    for (let i = 0; i < WILDLIFE_COUNT; i++) {
-      const isButterfly = Math.random() < 0.7;
-      if (isButterfly) {
-        wildlife.push({
-          type: 'butterfly',
-          x: Math.random() * CANVAS_WIDTH,
-          y: Math.random() * CANVAS_HEIGHT * 0.6,
-          vx: 10 + Math.random() * 20,
-          vy: 0,
-          wingPhase: Math.random() * Math.PI * 2,
-          color: brightColors[Math.floor(Math.random() * brightColors.length)],
-        });
-      } else {
-        wildlife.push({
-          type: 'bird',
-          x: -50 - Math.random() * 100,
-          y: Math.random() * CANVAS_HEIGHT * 0.4,
-          vx: 40 + Math.random() * 40,
-          vy: 0,
-          wingPhase: Math.random() * Math.PI * 2,
-          color: '#5C4033',
-        });
+    const wc = this.theme.wildlife;
+    const totalWeight = wc.types.reduce((s, t) => s + t.weight, 0);
+    for (let i = 0; i < wc.count; i++) {
+      let r = Math.random() * totalWeight;
+      let chosen = wc.types[0];
+      for (const t of wc.types) {
+        r -= t.weight;
+        if (r <= 0) { chosen = t; break; }
       }
-    }
-
-    // Init fog particles (ground level ~660)
-    const fogParticles: Array<{x: number; y: number; vx: number; alpha: number}> = [];
-    for (let i = 0; i < FOG_PARTICLE_COUNT; i++) {
-      fogParticles.push({
-        x: Math.random() * CANVAS_WIDTH,
-        y: 650 + (Math.random() * 20 - 10),
-        vx: 5 + Math.random() * 10,
-        alpha: 0.15 + Math.random() * 0.15,
+      const speed = chosen.speedRange[0] + Math.random() * (chosen.speedRange[1] - chosen.speedRange[0]);
+      const yFrac = chosen.yRange[0] + Math.random() * (chosen.yRange[1] - chosen.yRange[0]);
+      wildlife.push({
+        type: chosen.type,
+        x: chosen.type === 'bird' ? -50 - Math.random() * 100 : Math.random() * CANVAS_WIDTH,
+        y: yFrac * CANVAS_HEIGHT,
+        vx: speed,
+        vy: 0,
+        wingPhase: Math.random() * Math.PI * 2,
+        color: chosen.colors[Math.floor(Math.random() * chosen.colors.length)],
       });
     }
 
-    // Init pollen particles
+    // Init fog particles from theme config
+    const fc = this.theme.fog;
+    const fogParticles: Array<{x: number; y: number; vx: number; alpha: number}> = [];
+    for (let i = 0; i < fc.count; i++) {
+      fogParticles.push({
+        x: Math.random() * CANVAS_WIDTH,
+        y: fc.baseY + (Math.random() * fc.yVariance * 2 - fc.yVariance),
+        vx: fc.speedRange[0] + Math.random() * (fc.speedRange[1] - fc.speedRange[0]),
+        alpha: fc.alphaRange[0] + Math.random() * (fc.alphaRange[1] - fc.alphaRange[0]),
+      });
+    }
+
+    // Init ambient particles (pollen/snow drift) from theme config
+    const ac = this.theme.ambientParticles;
     const pollenParticles: Array<{x: number; y: number; vx: number; vy: number; size: number; alpha: number}> = [];
-    for (let i = 0; i < POLLEN_COUNT; i++) {
+    for (let i = 0; i < ac.count; i++) {
       pollenParticles.push({
         x: Math.random() * CANVAS_WIDTH,
         y: Math.random() * CANVAS_HEIGHT,
-        vx: (Math.random() - 0.5) * 10,
-        vy: -(5 + Math.random() * 10),
-        size: 1 + Math.random() * 2,
-        alpha: 0.3 + Math.random() * 0.4,
+        vx: ac.vxRange[0] + Math.random() * (ac.vxRange[1] - ac.vxRange[0]),
+        vy: ac.vyRange[0] + Math.random() * (ac.vyRange[1] - ac.vyRange[0]),
+        size: ac.sizeRange[0] + Math.random() * (ac.sizeRange[1] - ac.sizeRange[0]),
+        alpha: ac.alphaRange[0] + Math.random() * (ac.alphaRange[1] - ac.alphaRange[0]),
       });
     }
 
@@ -166,16 +182,24 @@ export class GameLoop {
   }
 
   private createWeatherParticle(randomY: boolean): WeatherParticle {
-    const type = Math.random() < 0.6 ? 'leaf' : 'petal';
+    const wc = this.theme.weather;
+    const totalWeight = wc.types.reduce((s, t) => s + t.weight, 0);
+    let r = Math.random() * totalWeight;
+    let chosen = wc.types[0];
+    for (const t of wc.types) {
+      r -= t.weight;
+      if (r <= 0) { chosen = t; break; }
+    }
     return {
       x: Math.random() * CANVAS_WIDTH,
       y: randomY ? Math.random() * CANVAS_HEIGHT : -10,
-      vx: 15 + Math.random() * 25,
-      vy: 20 + Math.random() * 40,
-      size: type === 'leaf' ? 4 + Math.random() * 5 : 3 + Math.random() * 3,
-      type,
+      vx: chosen.vxRange[0] + Math.random() * (chosen.vxRange[1] - chosen.vxRange[0]),
+      vy: chosen.vyRange[0] + Math.random() * (chosen.vyRange[1] - chosen.vyRange[0]),
+      size: chosen.sizeRange[0] + Math.random() * (chosen.sizeRange[1] - chosen.sizeRange[0]),
+      type: chosen.type,
       rotation: Math.random() * Math.PI * 2,
-      rotSpeed: (Math.random() - 0.5) * 3,
+      rotSpeed: chosen.rotSpeedRange[0] + Math.random() * (chosen.rotSpeedRange[1] - chosen.rotSpeedRange[0]),
+      color: chosen.color,
     };
   }
 
@@ -458,7 +482,7 @@ export class GameLoop {
     this.state.timeElapsed += dt;
 
     // Day/night cycle
-    this.state.dayPhase += dt / DAY_CYCLE_DURATION;
+    this.state.dayPhase += dt / this.theme.dayNight.cycleDuration;
     if (this.state.dayPhase > 1) this.state.dayPhase -= 1;
 
     // Countdown logic
@@ -542,7 +566,7 @@ export class GameLoop {
       const prevVy = player.vy;
       const prevVx = player.vx;
 
-      applyInput(player, input, dt);
+      applyInput(player, input, dt, this.effWalkSpeed, this.effFriction, this.effJumpImpulse);
       if (!wasAirborne && player.state === 'airborne') {
         audio.play('jump');
         // Stretch on jump
@@ -550,7 +574,7 @@ export class GameLoop {
         player.squashTimer = 0.15;
       }
 
-      applyGravity(player, dt);
+      applyGravity(player, dt, this.effGravity, this.effMaxFallSpeed);
       movePlayer(player, dt);
       collidePlatforms(player, this.arena.platforms);
       applyArenaConstraints(player, this.arena);
@@ -591,7 +615,7 @@ export class GameLoop {
               vy: -(Math.random() * 60 + 30) * intensity, // FLY UPWARD
               life, maxLife: life,
               size: 2 + Math.random() * 3,
-              color: i % 3 === 0 ? '#6B4E1B' : '#8B6914',
+              color: i % 3 === 0 ? this.theme.platform.floatingBodyColor : this.theme.platform.groundTopColor,
             });
           }
         }
@@ -862,8 +886,8 @@ export class GameLoop {
       }
     }
 
-    // Shooting stars (rare spawn during night phase > 0.4)
-    if (this.state.dayPhase > 0.4 && Math.random() < 0.005) {
+    // Shooting stars (rare spawn during night phase > 0.4, if enabled by theme)
+    if (this.theme.dayNight.showShootingStars && this.state.dayPhase > 0.4 && Math.random() < 0.005) {
       this.state.shootingStars.push({
         x: Math.random() * CANVAS_WIDTH * 0.5,
         y: Math.random() * CANVAS_HEIGHT * 0.3,

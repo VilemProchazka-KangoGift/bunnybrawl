@@ -25,14 +25,13 @@ export interface SpawnPoint {
 }
 
 export interface Arena {
+  id: string;
   name: string;
+  themeId: string;
   width: number;
   height: number;
   platforms: Platform[];
   spawnPoints: SpawnPoint[];
-  backgroundColor: string;
-  groundColor: string;
-  platformColor: string;
 }
 
 export type CharacterSlot = 'P1' | 'P2' | 'P3' | 'P4' | 'P5';
@@ -129,6 +128,7 @@ export interface MatchSettings {
   timeLimit: number; // seconds, 0 = off
   playerCount: number;
   goreMode: boolean;
+  arenaId: string;
 }
 
 // Pickups and hazards
@@ -208,13 +208,16 @@ export interface WildlifeEntity {
   color: string;
 }
 
+export type WeatherType = 'leaf' | 'petal' | 'snow' | 'ember' | 'ash';
+
 export interface WeatherParticle {
   x: number;
   y: number;
   vx: number;
   vy: number;
   size: number;
-  type: 'leaf' | 'petal';
+  type: WeatherType;
   rotation: number;
   rotSpeed: number;
+  color?: string;
 }

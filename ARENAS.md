@@ -1,13 +1,16 @@
 # BunnyBrawl — Arena Levels
 
-## Architecture Changes Needed
+## Architecture
 
-- [ ] Add `theme` field to `Arena` type (drives which background/decoration renderer to use)
-- [ ] Refactor `renderBackground` in renderer.ts to dispatch per theme (instead of hardcoded meadow)
-- [ ] Each theme defines: sky gradient, platform style, ground style, decorations, ambient particles
-- [ ] Add arena selector UI on MainMenu (thumbnail buttons or horizontal carousel)
-- [ ] Store selected arena in `matchSettings` (Zustand store)
-- [ ] Add arena name to locales (en.json, cs.json)
+Theme system lives in `src/engine/themes/`. See CLAUDE.md "Adding a new arena" for the step-by-step pattern.
+
+### Progress
+
+- [x] Phase 1: Foundation types (`themes/types.ts`, update `types.ts`, `themes/drawPrimitives.ts`)
+- [x] Phase 2: Meadow extraction (`themes/meadow.ts`, `themes/registry.ts`, update `arena.ts`)
+- [x] Phase 3: Renderer + GameLoop refactor (dispatch to theme config, parameterize physics)
+- [x] Phase 4: Winter Lake theme + arena layout + UI selector + locales
+- [x] Phase 5: Tests + visual QA
 
 ## Arenas
 
@@ -20,16 +23,18 @@
 - **Ambient FX**: Butterflies, birds
 - **Layout**: Balanced symmetric
 
-### 2. Winter Lake
+### 2. Winter Lake — IN PROGRESS
 
-- **Sky/BG**: Gray-white overcast
-- **Ground**: Snow/ice (white)
-- **Platforms**: Frozen logs (blue-gray)
-- **Decorations**: Pine trees, snowmen, icicles
-- **Ambient FX**: Falling snow particles
-- **Layout**: Wide frozen lake at bottom
-- **Gameplay modifier** (optional): Lower friction (slippery)
-- **Status**: Not started
+- **Sky/BG**: Dark blue-gray gradient (`#2C3E6B` -> `#B8C8DC`)
+- **Ground**: Snow-white surface (`#E8F0F8`), frozen earth below, no grass blades
+- **Platforms**: Blue-gray body, snow-white cap, no moss, icicles hanging off edges
+- **Decorations**: Pine trees with snow, snow drifts, frozen lake (ice patch), snowmen
+- **Ambient FX**: 50 snow particles (dense), blue-white fog, drifting snow sparkles
+- **Wildlife**: 2 dark birds, no butterflies
+- **Day/Night**: Enabled, no fireflies, shooting stars on
+- **Layout**: Wide center platform, ice shelf sides
+- **Physics**: `friction: 0.6` (icy sliding)
+- **Status**: Done
 
 ### 3. Volcano
 
@@ -62,11 +67,16 @@
 | Rooftops | Sunset city skyline | Chimneys, antennas, clotheslines | Gaps between buildings |
 | Space Station | Starfield + nebula | Metal grating, control panels, wires | Low gravity, wraparound edges |
 
-## Optional Per-Arena Gameplay Modifiers
+## Per-Arena Physics Modifiers
 
-These are stretch goals — purely visual theming with different platform layouts comes first.
+Supported via `ThemeConfig.physics` (multipliers on base constants):
 
-- **Winter**: Lower friction (slippery ice)
-- **Space**: Lower gravity
-- **Underwater**: Lower gravity + slower movement
-- **Treetops**: No ground — falling off the bottom kills you
+| Arena | gravity | friction | walkSpeed | jumpImpulse |
+|-------|---------|----------|-----------|-------------|
+| Meadow | 1.0 | 1.0 | 1.0 | 1.0 |
+| Winter Lake | 1.0 | 0.6 | 1.0 | 1.0 |
+| Volcano | — | — | — | — |
+| Castle | — | — | — | — |
+| Space Station | 0.5 | 1.0 | 1.0 | 0.8 |
+| Underwater | 0.6 | 1.2 | 0.7 | 0.9 |
+| Treetops | 1.0 | 1.0 | 1.0 | 1.0 |
