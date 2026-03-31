@@ -389,11 +389,6 @@ export class Renderer {
     // Weather (leaves, petals)
     this.drawWeather(ctx, matchState.weather);
 
-    // Puddles (shallow blue ellipses on the ground)
-    if (matchState.puddles && matchState.puddles.length > 0) {
-      this.drawPuddles(ctx, matchState.puddles, arena.platforms[0].y);
-    }
-
     // Springs and thorns (behind players)
     for (const spring of matchState.springs) this.drawSpringMushroom(ctx, spring);
     for (const thorn of matchState.thorns) this.drawThorn(ctx, thorn);
@@ -1684,51 +1679,6 @@ export class Renderer {
   }
 
   // ---- Puddles ----
-
-  private drawPuddles(ctx: CanvasRenderingContext2D, puddles: Array<{x: number; width: number}>, groundY: number): void {
-    const now = performance.now() / 1000;
-    for (const puddle of puddles) {
-      const px = puddle.x + puddle.width / 2;
-      const py = groundY;
-      const hw = puddle.width / 2;
-      const hh = 8;
-
-      // Main puddle body
-      ctx.save();
-      ctx.fillStyle = 'rgba(100, 160, 220, 0.5)';
-      ctx.beginPath();
-      ctx.ellipse(px, py, hw, hh, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Lighter reflection highlight
-      ctx.fillStyle = 'rgba(180, 220, 255, 0.35)';
-      ctx.beginPath();
-      ctx.ellipse(px - hw * 0.2, py - hh * 0.3, hw * 0.4, hh * 0.5, -0.2, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Ripple animation: concentric ellipses that pulse
-      const ripplePhase = (now + px * 0.01) % 2; // 2-second cycle per puddle
-      for (let r = 0; r < 2; r++) {
-        const rippleT = ((ripplePhase + r * 1.0) % 2) / 2; // stagger two ripples
-        const rippleScale = 0.3 + rippleT * 0.7;
-        const rippleAlpha = (1 - rippleT) * 0.3;
-        ctx.strokeStyle = `rgba(180, 220, 255, ${rippleAlpha})`;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.ellipse(px, py, hw * rippleScale, hh * rippleScale, 0, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-
-      // Subtle edge
-      ctx.strokeStyle = 'rgba(80, 140, 200, 0.3)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.ellipse(px, py, hw, hh, 0, 0, Math.PI * 2);
-      ctx.stroke();
-
-      ctx.restore();
-    }
-  }
 
   // ---- Day/Night Cycle ----
 

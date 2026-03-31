@@ -79,20 +79,6 @@ export class GameLoop {
       weather.push(this.createWeatherParticle(true));
     }
 
-    // Generate puddles on the ground platform (y >= 650 assumed ground)
-    const groundPlatforms = arena.platforms.filter(p => p.y >= 650);
-    const puddles: Array<{x: number; width: number}> = [];
-    const puddleCount = 4 + Math.floor(Math.random() * 2); // 4-5
-    for (let i = 0; i < puddleCount; i++) {
-      const gp = groundPlatforms.length > 0
-        ? groundPlatforms[Math.floor(Math.random() * groundPlatforms.length)]
-        : arena.platforms[0];
-      puddles.push({
-        x: gp.x + 20 + Math.random() * (gp.width - 80),
-        width: 30 + Math.random() * 30,
-      });
-    }
-
     // Init stats
     const statsMap = new Map<CharacterSlot, PlayerStats>();
     for (const slot of activePlayers) {
@@ -111,7 +97,7 @@ export class GameLoop {
       screenShake: 0, slowMotion: 0,
       weather,
       dayPhase: 0,
-      puddles,
+      puddles: [],
       countdown: MATCH_COUNTDOWN,
       stats,
     };
@@ -515,39 +501,22 @@ export class GameLoop {
         player.squashScale = SQUASH_ON_LAND;
         player.squashTimer = 0.15;
 
-        // Puddle splash on landing on ground platform
-        const playerCx = player.x + player.width / 2;
-        const playerBottom = player.y + player.height;
-        if (playerBottom >= 650) {
-          for (const puddle of this.state.puddles) {
-            if (playerCx >= puddle.x && playerCx <= puddle.x + puddle.width) {
-              audio.play('splash');
-              // Spawn blue-ish splash particles
-              for (let i = 0; i < 10; i++) {
-                const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI;
-                const speed = 40 + Math.random() * 100;
-                const life = 0.3 + Math.random() * 0.3;
-                this.particles.push({ x: playerCx + (Math.random() - 0.5) * 20, y: playerBottom - 2, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 40, life, maxLife: life, size: 2 + Math.random() * 3, color: '#4488CC' });
-              }
-              break;
-            }
-          }
-        }
-
-        // Platform crumble when landing hard
+        // Platform crumble when landing hard — chunks fly UP and outward
         if (prevVy > 300) {
-          const playerCxCrumble = player.x + player.width / 2;
-          const playerBottomCrumble = player.y + player.height;
-          for (let i = 0; i < 6; i++) {
-            const life = 0.2 + Math.random() * 0.3;
+          const cx = player.x + player.width / 2;
+          const groundY = player.y + player.height;
+          const intensity = Math.min(prevVy / 400, 2);
+          const count = Math.floor(8 + intensity * 5);
+          for (let i = 0; i < count; i++) {
+            const life = 0.3 + Math.random() * 0.4;
             this.particles.push({
-              x: playerCxCrumble + (Math.random() - 0.5) * player.width,
-              y: playerBottomCrumble,
-              vx: (Math.random() - 0.5) * 60,
-              vy: Math.random() * 20 + 10,
+              x: cx + (Math.random() - 0.5) * player.width * 1.5,
+              y: groundY - Math.random() * 3,
+              vx: (Math.random() - 0.5) * 100 * intensity,
+              vy: -(Math.random() * 60 + 30) * intensity, // FLY UPWARD
               life, maxLife: life,
-              size: 1.5 + Math.random() * 2,
-              color: '#8B6914',
+              size: 2 + Math.random() * 3,
+              color: i % 3 === 0 ? '#6B4E1B' : '#8B6914',
             });
           }
         }
