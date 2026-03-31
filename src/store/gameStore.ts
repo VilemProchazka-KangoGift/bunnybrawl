@@ -15,11 +15,15 @@ interface GameStore {
   reset: () => void;
 }
 
+function loadGoreMode(): boolean {
+  try { return localStorage.getItem('bunnybrawl_gore') === 'true'; } catch { return false; }
+}
+
 const defaultSettings: MatchSettings = {
   killLimit: 10,
   timeLimit: 180, // 3 minutes
   playerCount: 2,
-  goreMode: false,
+  goreMode: loadGoreMode(),
 };
 
 export const useGameStore = create<GameStore>((set) => ({
@@ -32,9 +36,13 @@ export const useGameStore = create<GameStore>((set) => ({
   setScreen: (screen) => set({ screen }),
 
   setMatchSettings: (settings) =>
-    set((state) => ({
-      matchSettings: { ...state.matchSettings, ...settings },
-    })),
+    set((state) => {
+      const next = { ...state.matchSettings, ...settings };
+      if ('goreMode' in settings) {
+        try { localStorage.setItem('bunnybrawl_gore', String(next.goreMode)); } catch { /* noop */ }
+      }
+      return { matchSettings: next };
+    }),
 
   setActivePlayers: (players) => set({ activePlayers: players }),
 

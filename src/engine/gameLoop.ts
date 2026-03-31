@@ -316,6 +316,7 @@ export class GameLoop {
   // ---- Carrot spawning ----
 
   private spawnCarrot(): void {
+    const MIN_CARROT_DIST = 150; // minimum distance from existing carrots
     const candidates: Array<{ x: number; y: number; dist: number }> = [];
     for (const plat of this.arena.platforms) {
       // On-platform candidates
@@ -329,12 +330,19 @@ export class GameLoop {
           const dy = cy - (p.y + p.height / 2);
           minDist = Math.min(minDist, Math.sqrt(dx * dx + dy * dy));
         }
+        // Also distance from existing carrots
+        for (const c of this.state.carrots) {
+          if (!c.active) continue;
+          const dx = cx - c.x;
+          const dy = cy - c.y;
+          minDist = Math.min(minDist, Math.sqrt(dx * dx + dy * dy));
+        }
         candidates.push({ x: cx, y: cy, dist: minDist });
       }
       // Mid-air candidates above platforms (reachable by jumping)
       for (let attempt = 0; attempt < 2; attempt++) {
         const cx = plat.x + 20 + Math.random() * (plat.width - 40);
-        const cy = plat.y - 60 - Math.random() * 60; // 60 to 120 px above platform
+        const cy = plat.y - 60 - Math.random() * 60;
         let minDist = Infinity;
         for (const p of this.state.players) {
           if (!p.active || p.state === 'splat' || p.state === 'respawning') continue;
@@ -342,12 +350,21 @@ export class GameLoop {
           const dy = cy - (p.y + p.height / 2);
           minDist = Math.min(minDist, Math.sqrt(dx * dx + dy * dy));
         }
+        for (const c of this.state.carrots) {
+          if (!c.active) continue;
+          const dx = cx - c.x;
+          const dy = cy - c.y;
+          minDist = Math.min(minDist, Math.sqrt(dx * dx + dy * dy));
+        }
         candidates.push({ x: cx, y: cy, dist: minDist });
       }
     }
-    candidates.sort((a, b) => b.dist - a.dist);
-    if (candidates.length > 0) {
-      const spot = candidates[0];
+    // Filter out candidates too close to existing carrots
+    const filtered = candidates.filter(c => c.dist >= MIN_CARROT_DIST);
+    const pool = filtered.length > 0 ? filtered : candidates;
+    pool.sort((a, b) => b.dist - a.dist);
+    if (pool.length > 0) {
+      const spot = pool[0];
       this.state.carrots.push({ x: spot.x, y: spot.y, active: true, spawnTime: this.state.timeElapsed });
       this.spawnCarrotVFX(spot.x, spot.y);
     }

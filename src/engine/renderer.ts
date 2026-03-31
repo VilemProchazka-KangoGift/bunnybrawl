@@ -681,17 +681,18 @@ export class Renderer {
 
     // Foreground bushes + vines on floating platforms
     const floats = arena.platforms.filter(p => p.y < 650);
-    for (const plat of floats) {
+    for (let pi = 0; pi < floats.length; pi++) {
+      const plat = floats[pi];
       if (plat.width > 180) {
-        // Foreground bush on larger platforms
-        this.drawFgBush(ctx, plat.x + plat.width * 0.2, plat.y, 22);
-        this.drawFgBush(ctx, plat.x + plat.width * 0.8, plat.y, 18);
+        // Mix: one large hiding bush + one small decorative bush
+        this.drawFgBush(ctx, plat.x + plat.width * 0.15, plat.y, pi % 2 === 0 ? 45 : 18);
+        this.drawFgBush(ctx, plat.x + plat.width * 0.85, plat.y, pi % 2 === 0 ? 18 : 42);
         this.drawHangingVine(ctx, plat.x + 15, plat.y + plat.height, 25);
         this.drawHangingVine(ctx, plat.x + plat.width - 15, plat.y + plat.height, 20);
         this.drawFgLeafCluster(ctx, plat.x + plat.width / 2, plat.y);
       } else {
-        // Small foreground bush on smaller platforms
-        this.drawFgBush(ctx, plat.x + plat.width * 0.5, plat.y, 15);
+        // Alternate: big hiding bush or small decorative
+        this.drawFgBush(ctx, plat.x + plat.width * 0.5, plat.y, pi % 3 === 0 ? 38 : 16);
         this.drawHangingVine(ctx, plat.x + plat.width / 2, plat.y + plat.height, 18);
       }
     }
@@ -1732,124 +1733,96 @@ export class Renderer {
   // ---- Day/Night Cycle ----
 
   private drawDayNightCycle(ctx: CanvasRenderingContext2D, dayPhase: number): void {
-    // Phase 0.0-0.25: full daylight (no overlay)
-    // Phase 0.25-0.5: transition to night (increasing dark blue overlay)
-    // Phase 0.5-0.75: night (dark blue overlay + stars + fireflies)
-    // Phase 0.75-1.0: transition back to day (decreasing overlay)
+    // dayPhase: 0 = noon, 0.5 = midnight, 1.0 = noon again
+    // Use cosine so darkness peaks smoothly at 0.5
+    const nightIntensity = Math.max(0, (1 - Math.cos(dayPhase * Math.PI * 2)) / 2);
+    // nightIntensity: 0 at noon, 1 at midnight, smooth transition
+    const overlayAlpha = nightIntensity * 0.55;
 
-    let overlayAlpha = 0;
-    let nightIntensity = 0; // 0-1, how "night" it is for stars/fireflies
+    // Sun: visible when nightIntensity < 0.8, arcs left→right during day half (0.75→0.0→0.25)
+    // Remap dayPhase so sun progress 0→1 = sunrise→sunset
+    const sunPhase = ((dayPhase + 0.25) % 1); // shift so 0=sunrise(6am), 0.5=sunset(6pm)
+    if (sunPhase < 0.5) {
+      const sunT = sunPhase / 0.5; // 0→1 across the day
+      const sunX = 60 + sunT * (CANVAS_WIDTH - 120);
+      const sunArc = Math.sin(sunT * Math.PI);
+      const sunY = 130 - sunArc * 90;
+      const sunAlpha = Math.min(1, (1 - nightIntensity) * 1.5);
 
-    if (dayPhase >= 0.25 && dayPhase < 0.5) {
-      // Transition to night
-      const t = (dayPhase - 0.25) / 0.25;
-      overlayAlpha = t * 0.55;
-      nightIntensity = t;
-    } else if (dayPhase >= 0.5 && dayPhase < 0.75) {
-      // Full night
-      overlayAlpha = 0.55;
-      nightIntensity = 1;
-    } else if (dayPhase >= 0.75 && dayPhase < 1.0) {
-      // Transition back to day
-      const t = 1 - (dayPhase - 0.75) / 0.25;
-      overlayAlpha = t * 0.55;
-      nightIntensity = t;
-    }
-
-    if (overlayAlpha > 0) {
-      ctx.save();
-      ctx.fillStyle = `rgba(15, 20, 60, ${overlayAlpha})`;
-      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-      ctx.restore();
-    }
-
-    // Sun — arcs across the sky during daytime (dayPhase 0-0.25 and 0.75-1.0)
-    {
-      let sunProgress = -1; // -1 means not visible
-      if (dayPhase < 0.25) {
-        // First half of day: 0->0.25 maps to 0->1
-        sunProgress = dayPhase / 0.25;
-      } else if (dayPhase >= 0.75) {
-        // Second half of day: 0.75->1.0 maps to 0->1 (continuing arc not resetting)
-        // Actually sun sets as night ends, so 0.75->1.0 is sunrise
-        sunProgress = (dayPhase - 0.75) / 0.25;
-        // But this is the transition from night to day, so sun rises
-        // Map: 0.75=start(0) to 1.0=end(1) but we want it to arc left-to-right
-        // Let's unify: day is 0.75->1.0->0.0->0.25 = sunrise to sunset
-        // Remap: 0.75->1.0 = progress 0->0.33, 0.0->0.25 = progress 0.33->1.0
-        sunProgress = (dayPhase - 0.75) / 0.25 * 0.33;
-      }
-      if (dayPhase < 0.25) {
-        sunProgress = 0.33 + (dayPhase / 0.25) * 0.67;
-      }
-
-      if (sunProgress >= 0 && sunProgress <= 1) {
-        const sunX = sunProgress * CANVAS_WIDTH;
-        const sunArc = Math.sin(sunProgress * Math.PI);
-        const sunY = 120 - sunArc * 80; // arcs up to 80px above baseline at 120
-
+      if (sunAlpha > 0.05) {
         ctx.save();
         // Glow
-        ctx.globalAlpha = 0.25;
+        ctx.globalAlpha = sunAlpha * 0.3;
         ctx.fillStyle = '#FFD700';
         ctx.beginPath();
-        ctx.arc(sunX, sunY, 30, 0, Math.PI * 2);
+        ctx.arc(sunX, sunY, 32, 0, Math.PI * 2);
         ctx.fill();
-
-        // Sun body
-        ctx.globalAlpha = 0.9;
+        // Body
+        ctx.globalAlpha = sunAlpha * 0.9;
         ctx.fillStyle = '#FFA500';
         ctx.beginPath();
-        ctx.arc(sunX, sunY, 14, 0, Math.PI * 2);
+        ctx.arc(sunX, sunY, 15, 0, Math.PI * 2);
         ctx.fill();
-
         // Bright center
         ctx.fillStyle = '#FFD700';
         ctx.beginPath();
-        ctx.arc(sunX, sunY, 8, 0, Math.PI * 2);
+        ctx.arc(sunX, sunY, 9, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
       }
     }
 
-    // Moon — arcs across the sky during nighttime (dayPhase 0.25-0.75)
-    if (dayPhase >= 0.25 && dayPhase < 0.75) {
-      const moonProgress = (dayPhase - 0.25) / 0.5; // 0 to 1
-      const moonX = moonProgress * CANVAS_WIDTH;
-      const moonArc = Math.sin(moonProgress * Math.PI);
-      const moonY = 100 - moonArc * 70;
-
+    // Darkness overlay
+    if (overlayAlpha > 0.02) {
       ctx.save();
-      // Moon body (pale white/silver)
-      ctx.globalAlpha = 0.85 * nightIntensity + 0.15;
-      ctx.fillStyle = '#E8E8F0';
-      ctx.beginPath();
-      ctx.arc(moonX, moonY, 12, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Crescent: overlay a dark circle offset to the right to create crescent shape
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.fillStyle = 'rgba(0,0,0,1)';
-      ctx.beginPath();
-      ctx.arc(moonX + 6, moonY - 2, 10, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = `rgba(10, 12, 45, ${overlayAlpha})`;
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
       ctx.restore();
     }
 
-    // Stars — only visible during night phases
-    if (nightIntensity > 0.3) {
-      const starAlpha = Math.min((nightIntensity - 0.3) / 0.7, 1) * 0.8;
+    // Moon: visible when nightIntensity > 0.2, arcs during night half (0.25→0.5→0.75)
+    const moonPhase = ((dayPhase + 0.75) % 1); // shift so 0=moonrise, 0.5=moonset
+    if (moonPhase < 0.5) {
+      const moonT = moonPhase / 0.5;
+      const moonX = 60 + moonT * (CANVAS_WIDTH - 120);
+      const moonArc = Math.sin(moonT * Math.PI);
+      const moonY = 110 - moonArc * 70;
+      const moonAlpha = Math.min(1, nightIntensity * 2);
+
+      if (moonAlpha > 0.05) {
+        ctx.save();
+        // Glow
+        ctx.globalAlpha = moonAlpha * 0.15;
+        ctx.fillStyle = '#AABBDD';
+        ctx.beginPath();
+        ctx.arc(moonX, moonY, 22, 0, Math.PI * 2);
+        ctx.fill();
+        // Moon body
+        ctx.globalAlpha = moonAlpha * 0.9;
+        ctx.fillStyle = '#E8E8F0';
+        ctx.beginPath();
+        ctx.arc(moonX, moonY, 12, 0, Math.PI * 2);
+        ctx.fill();
+        // Crescent shadow
+        ctx.fillStyle = `rgba(10, 12, 45, ${overlayAlpha + 0.3})`;
+        ctx.beginPath();
+        ctx.arc(moonX + 5, moonY - 2, 10, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    // Stars
+    if (nightIntensity > 0.25) {
+      const starAlpha = Math.min((nightIntensity - 0.25) / 0.5, 1) * 0.8;
       ctx.save();
-      ctx.fillStyle = `rgba(255, 255, 255, ${starAlpha})`;
-      // ~30 stars at pseudo-random but fixed positions (seeded from index)
       for (let i = 0; i < 30; i++) {
         const sx = ((i * 137 + 83) % CANVAS_WIDTH);
-        const sy = ((i * 97 + 41) % (CANVAS_HEIGHT * 0.4));
+        const sy = ((i * 97 + 41) % (CANVAS_HEIGHT * 0.35));
         const size = 1 + (i % 3) * 0.5;
-        // Twinkle effect
         const twinkle = Math.sin(performance.now() / 500 + i * 1.7) * 0.3 + 0.7;
         ctx.globalAlpha = starAlpha * twinkle;
+        ctx.fillStyle = '#FFF';
         ctx.beginPath();
         ctx.arc(sx, sy, size, 0, Math.PI * 2);
         ctx.fill();
@@ -1857,9 +1830,9 @@ export class Renderer {
       ctx.restore();
     }
 
-    // Fireflies — during night
-    if (nightIntensity > 0.5) {
-      const fireflyAlpha = Math.min((nightIntensity - 0.5) / 0.5, 1) * 0.7;
+    // Fireflies
+    if (nightIntensity > 0.4) {
+      const fireflyAlpha = Math.min((nightIntensity - 0.4) / 0.4, 1) * 0.7;
       const now = performance.now() / 1000;
       ctx.save();
       for (let i = 0; i < 8; i++) {
@@ -1868,15 +1841,11 @@ export class Renderer {
         const fx = baseX + Math.sin(now * 0.5 + i * 2.3) * 30;
         const fy = baseY + Math.cos(now * 0.4 + i * 1.7) * 20;
         const pulse = Math.sin(now * 2 + i * 1.1) * 0.3 + 0.7;
-
-        // Glow
         ctx.globalAlpha = fireflyAlpha * pulse * 0.3;
         ctx.fillStyle = '#AAFF44';
         ctx.beginPath();
         ctx.arc(fx, fy, 6, 0, Math.PI * 2);
         ctx.fill();
-
-        // Core
         ctx.globalAlpha = fireflyAlpha * pulse;
         ctx.fillStyle = '#CCFF66';
         ctx.beginPath();

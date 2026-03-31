@@ -40,6 +40,10 @@ export function Match() {
           setPaused(true);
         }
       }
+      if (e.key === 'Enter' && gameLoopRef.current?.isPaused()) {
+        e.preventDefault();
+        handleResume();
+      }
     };
 
     window.addEventListener('keydown', handleKey);

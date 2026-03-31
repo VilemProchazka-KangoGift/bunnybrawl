@@ -245,11 +245,11 @@ export function CharacterSelect() {
           readySoundPlayedRef.current.delete(p.slot);
         }
       }
-      if (inZone.length >= 1 && !countdownStartedRef.current) {
+      if (inZone.length >= 2 && !countdownStartedRef.current) {
         countdownStartedRef.current = true;
         countdownRef.current = COUNTDOWN_SECONDS;
       }
-      if (inZone.length === 0) {
+      if (inZone.length < 2) {
         countdownStartedRef.current = false;
         countdownRef.current = -1;
       }
