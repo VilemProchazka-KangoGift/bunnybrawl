@@ -994,13 +994,27 @@ export class Renderer {
     const cx = x + width / 2;
     const cy = y + height;
 
-    // Character shadow (a) — draw before the character
-    ctx.save();
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, 10, 2, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
+    // Character shadow — projected onto ground/platform below, shrinks with height
+    if (state !== 'splat' && state !== 'respawning') {
+      // Find the nearest platform surface below the player's feet
+      let shadowY = 660; // default: ground
+      // Check against a simple ground level — the renderer doesn't have arena access here,
+      // so use the player's feet position when grounded, or project to 660 (ground) when airborne
+      if (state === 'idle' || state === 'run') {
+        shadowY = cy; // on ground — shadow at feet
+      } else {
+        shadowY = Math.min(cy + 200, 660); // project downward, cap at ground
+      }
+      const heightAboveShadow = Math.max(0, shadowY - cy);
+      const shadowScale = Math.max(0.3, 1 - heightAboveShadow / 200);
+      const shadowAlpha = 0.2 * shadowScale;
+      ctx.save();
+      ctx.fillStyle = `rgba(0, 0, 0, ${shadowAlpha})`;
+      ctx.beginPath();
+      ctx.ellipse(cx, shadowY, 10 * shadowScale, 2 * shadowScale, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
 
     // Kill streak flame aura (d) — drawn behind character sprite
     if (player.killStreak >= 3) {
