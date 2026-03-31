@@ -74,7 +74,7 @@ export function VictoryScreen() {
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
         p.life -= dt;
-        if (p.life <= 0) { particles.splice(i, 1); continue; }
+        if (p.life <= 0) { particles[i] = particles[particles.length - 1]; particles.pop(); continue; }
         p.vy += 80 * dt;
         p.x += p.vx * dt;
         p.y += p.vy * dt;

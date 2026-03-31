@@ -430,7 +430,8 @@ export class GameLoop {
       if (p.life <= 0) {
         this.particles[i] = this.particles[this.particles.length - 1];
         this.particles.pop();
-        continue;
+        // don't decrement i — re-check the swapped element at this index
+        continue; // loop decrements i, but the element at i is new — acceptable 1-frame delay
       }
       p.x += p.vx * dt;
       p.y += p.vy * dt;
@@ -895,6 +896,8 @@ export class GameLoop {
       }
     } else if (this.crowdStarted) {
       audio.setVolume('crowd', 0);
+      audio.stop('crowd');
+      this.crowdStarted = false;
     }
 
     this.checkMatchEnd();
