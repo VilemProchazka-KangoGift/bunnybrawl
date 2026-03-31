@@ -97,6 +97,47 @@ export const MEADOW_THEME: ThemeConfig = {
     showShootingStars: true,
   },
 
+  drawFarBackground: (ctx, _arena) => {
+    // Distant forest treeline behind the hills
+    ctx.save();
+    ctx.globalAlpha = 0.25;
+
+    // Dark treeline — jagged tops suggesting a dense forest
+    ctx.fillStyle = '#3A6A3A';
+    ctx.beginPath();
+    ctx.moveTo(-10, 660);
+    // Generate a forest silhouette with varying tree heights
+    const treePositions = [
+      0, 530, 30, 510, 55, 530, 80, 495, 110, 525, 140, 500,
+      170, 520, 200, 490, 235, 515, 265, 485, 300, 510, 330, 495,
+      365, 520, 395, 480, 430, 505, 460, 490, 500, 515, 535, 485,
+      570, 510, 600, 475, 635, 500, 665, 490, 700, 510, 740, 480,
+      775, 505, 810, 495, 845, 515, 880, 475, 920, 500, 955, 490,
+      990, 510, 1025, 485, 1060, 505, 1095, 480, 1130, 500, 1165, 490,
+      1200, 510, 1235, 485, 1270, 505, 1300, 520,
+    ];
+    for (let i = 0; i < treePositions.length; i += 2) {
+      ctx.lineTo(treePositions[i], treePositions[i + 1]);
+    }
+    ctx.lineTo(1300, 660);
+    ctx.closePath();
+    ctx.fill();
+
+    // Lighter layer in front — slightly higher, more detail
+    ctx.fillStyle = '#4A7A4A';
+    ctx.globalAlpha = 0.18;
+    ctx.beginPath();
+    ctx.moveTo(-10, 660);
+    for (let i = 0; i < treePositions.length; i += 2) {
+      ctx.lineTo(treePositions[i] + 15, treePositions[i + 1] + 25);
+    }
+    ctx.lineTo(1300, 660);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.restore();
+  },
+
   drawBackgroundNature: (ctx, arena) => {
     const ground = arena.platforms[0];
     const y = ground.y;
