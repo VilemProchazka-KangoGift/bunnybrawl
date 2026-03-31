@@ -539,6 +539,58 @@ export function drawSnowballPyramid(ctx: CanvasRenderingContext2D, x: number, gr
   ctx.fill();
 }
 
+/** Large pyramid: 4-3-2-1 rows (10 balls) with depth shading. */
+export function drawLargeSnowballPyramid(ctx: CanvasRenderingContext2D, x: number, groundY: number, ballRadius: number): void {
+  const r = ballRadius;
+  const gap = r * 0.12;
+  const rowSpacing = r * 1.7;
+  const rows = [4, 3, 2, 1];
+  const shades = ['#DDE6EE', '#E4ECF4', '#EAF0F6', '#F0F5FA'];
+
+  for (let row = 0; row < rows.length; row++) {
+    const count = rows[row];
+    const rowY = groundY - r - row * rowSpacing;
+    const rowR = r * (1 - row * 0.06); // slightly smaller toward top
+    const rowWidth = (count - 1) * (rowR * 2 + gap);
+
+    for (let i = 0; i < count; i++) {
+      const bx = x - rowWidth / 2 + i * (rowR * 2 + gap);
+
+      // Shadow behind ball
+      ctx.fillStyle = 'rgba(100, 130, 160, 0.08)';
+      ctx.beginPath();
+      ctx.arc(bx + 1, rowY + 1, rowR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Ball body
+      ctx.fillStyle = shades[row];
+      ctx.beginPath();
+      ctx.arc(bx, rowY, rowR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Highlight
+      ctx.fillStyle = '#F6FAFC';
+      ctx.beginPath();
+      ctx.arc(bx - rowR * 0.25, rowY - rowR * 0.3, rowR * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Subtle snow texture dot
+      if (row < 2 && i % 2 === 0) {
+        ctx.fillStyle = 'rgba(200, 215, 230, 0.3)';
+        ctx.beginPath();
+        ctx.arc(bx + rowR * 0.2, rowY + rowR * 0.15, rowR * 0.15, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  // Ground shadow
+  ctx.fillStyle = 'rgba(100, 130, 160, 0.1)';
+  ctx.beginPath();
+  ctx.ellipse(x, groundY, r * 4.5, r * 0.4, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
 export function drawSnowDrift(ctx: CanvasRenderingContext2D, x: number, groundY: number, width: number, height: number): void {
   ctx.fillStyle = 'rgba(230, 240, 250, 0.7)';
   ctx.beginPath();
