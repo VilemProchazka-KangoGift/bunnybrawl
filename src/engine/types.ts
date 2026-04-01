@@ -59,9 +59,17 @@ export interface Arena {
 }
 
 export type CharacterSlot = 'P1' | 'P2' | 'P3' | 'P4' | 'P5';
+export type BotSlot = 'B1' | 'B2' | 'B3' | 'B4' | 'B5';
+export type PlayerSlot = CharacterSlot | BotSlot;
+
+export const ALL_BOT_SLOTS: BotSlot[] = ['B1', 'B2', 'B3', 'B4', 'B5'];
+
+export function isBotSlot(slot: PlayerSlot): slot is BotSlot {
+  return slot.startsWith('B');
+}
 
 export interface CharacterDef {
-  slot: CharacterSlot;
+  slot: PlayerSlot;
   name: string;
   color: string;
   darkColor: string;
@@ -71,7 +79,7 @@ export interface CharacterDef {
 export type PlayerState = 'idle' | 'run' | 'airborne' | 'splat' | 'respawning';
 
 export interface Player {
-  id: CharacterSlot;
+  id: PlayerSlot;
   character: CharacterDef;
   x: number;
   y: number;
@@ -115,8 +123,8 @@ export interface SplatMark {
 }
 
 export interface KillFeedEntry {
-  attacker: CharacterSlot;
-  victim: CharacterSlot;
+  attacker: PlayerSlot;
+  victim: PlayerSlot;
   timestamp: number;
 }
 
@@ -147,12 +155,16 @@ export interface Particle {
 
 export type GameScreen = 'menu' | 'charSelect' | 'match' | 'victory';
 
+export type BotDifficulty = 'easy' | 'medium' | 'hard';
+
 export interface MatchSettings {
   killLimit: number;
   timeLimit: number; // seconds, 0 = off
   playerCount: number;
   goreMode: boolean;
   arenaId: string;
+  botCount: number;
+  botDifficulty: BotDifficulty;
 }
 
 // Pickups and hazards
@@ -198,7 +210,7 @@ export interface MatchState {
   killFeed: KillFeedEntry[];
   timeElapsed: number;
   matchOver: boolean;
-  winner: CharacterSlot | null;
+  winner: PlayerSlot | null;
   carrots: Carrot[];
   carrotTimer: number;
   springs: SpringMushroom[];
@@ -217,7 +229,7 @@ export interface MatchState {
   fogParticles: Array<{x: number; y: number; vx: number; alpha: number}>;
   pollenParticles: Array<{x: number; y: number; vx: number; vy: number; size: number; alpha: number}>;
   shootingStars: Array<{x: number; y: number; vx: number; vy: number; life: number}>;
-  scoreAnimations: Array<{playerId: CharacterSlot; value: number; timer: number}>;
+  scoreAnimations: Array<{playerId: PlayerSlot; value: number; timer: number}>;
   ghosts: GhostEntity[];
   lavaRocks: LavaRock[];
   lavaRockTimer: number;
@@ -228,7 +240,7 @@ export interface MatchState {
 }
 
 export interface MatchStats {
-  perPlayer: Map<CharacterSlot, PlayerStats>;
+  perPlayer: Map<PlayerSlot, PlayerStats>;
 }
 
 export interface PlayerStats {

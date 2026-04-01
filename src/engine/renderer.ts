@@ -1,6 +1,5 @@
-import type { Arena, Player, SplatMark, MatchState, Particle, Carrot, SpringMushroom, Thorn, WeatherParticle, WildlifeEntity, CharacterSlot } from './types';
+import type { Arena, Player, SplatMark, MatchState, Particle, Carrot, SpringMushroom, Thorn, WeatherParticle, WildlifeEntity, PlayerSlot } from './types';
 import type { ThemeConfig } from './themes/types';
-import { CHARACTERS } from './characters';
 import { aabbOverlap } from './physics';
 import {
   CANVAS_WIDTH, CANVAS_HEIGHT, CARROT_SIZE, SPRING_SIZE, FAT_SCALE,
@@ -373,7 +372,7 @@ export class Renderer {
     }
 
     // Compute which players are near a carrot (c) for blush
-    const nearCarrotSet = new Set<CharacterSlot>();
+    const nearCarrotSet = new Set<PlayerSlot>();
     for (const player of matchState.players) {
       if (!player.active || player.state === 'respawning') continue;
       const pcx = player.x + player.width / 2;
@@ -2355,8 +2354,9 @@ export class Renderer {
     for (let i = 0; i < recentKills.length; i++) {
       const entry = recentKills[i];
       const fy = 100 + i * 25;
-      const attacker = CHARACTERS[entry.attacker];
-      const victim = CHARACTERS[entry.victim];
+      const attacker = state.players.find(p => p.id === entry.attacker)?.character;
+      const victim = state.players.find(p => p.id === entry.victim)?.character;
+      if (!attacker || !victim) continue;
 
       ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
       ctx.beginPath();

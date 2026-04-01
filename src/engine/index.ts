@@ -3,7 +3,7 @@ export type { MatchEndCallback } from './gameLoop';
 export { InputManager, KEY_BINDINGS } from './input';
 export { Renderer } from './renderer';
 export { audio } from './audio';
-export { CHARACTERS, getCharacter } from './characters';
+export { CHARACTERS, getCharacter, getCharacterForSlot, BOT_CHARACTERS, assignBotCharacters } from './characters';
 export { MEADOW_ARENA, WINTER_LAKE_ARENA, getArena, listArenas } from './arena';
 export { getTheme, listThemes, MEADOW_THEME, WINTER_LAKE_THEME } from './themes';
 export * from './types';

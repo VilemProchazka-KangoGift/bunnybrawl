@@ -1,4 +1,5 @@
-import type { CharacterDef, CharacterSlot } from './types';
+import type { CharacterDef, CharacterSlot, PlayerSlot, BotSlot } from './types';
+import { isBotSlot } from './types';
 
 // Characters tied to player slots (used in match)
 export const CHARACTERS: Record<CharacterSlot, CharacterDef> = {
@@ -111,6 +112,31 @@ export const ALL_CHARACTERS: CharacterDef[] = [
   },
 ];
 
+// Runtime map for bot character assignments (populated before match start)
+export const BOT_CHARACTERS: Map<BotSlot, CharacterDef> = new Map();
+
 export function getCharacter(slot: CharacterSlot): CharacterDef {
   return CHARACTERS[slot];
+}
+
+export function getCharacterForSlot(slot: PlayerSlot): CharacterDef {
+  if (isBotSlot(slot)) {
+    const char = BOT_CHARACTERS.get(slot);
+    if (!char) throw new Error(`No character assigned to bot slot ${slot}`);
+    return char;
+  }
+  return CHARACTERS[slot];
+}
+
+/** Assign characters from ALL_CHARACTERS to bot slots, avoiding characters already taken by humans. */
+export function assignBotCharacters(humanSlots: CharacterSlot[], botSlots: BotSlot[]): void {
+  BOT_CHARACTERS.clear();
+  const usedNames = new Set(humanSlots.map(s => CHARACTERS[s].name));
+  const available = ALL_CHARACTERS.filter(c => !usedNames.has(c.name));
+  // Shuffle available characters
+  const shuffled = [...available].sort(() => Math.random() - 0.5);
+  for (let i = 0; i < botSlots.length; i++) {
+    const char = shuffled[i % shuffled.length];
+    BOT_CHARACTERS.set(botSlots[i], { ...char, slot: botSlots[i] });
+  }
 }

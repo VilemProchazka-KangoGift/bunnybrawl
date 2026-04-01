@@ -1,9 +1,8 @@
 import { useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../store/gameStore';
-import { CHARACTERS } from '../engine/characters';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
-import type { CharacterSlot, PlayerStats } from '../engine/types';
+import type { PlayerSlot, PlayerStats } from '../engine/types';
 import './VictoryScreen.css';
 
 interface FireworkParticle {
@@ -31,7 +30,7 @@ export function VictoryScreen() {
   const { winner, lastMatchState, setScreen, setActivePlayers } = useGameStore();
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const winnerChar = winner ? CHARACTERS[winner] : null;
+  const winnerChar = winner ? lastMatchState?.players.find(p => p.id === winner)?.character ?? null : null;
   const players = lastMatchState?.players.filter(p => p.active) ?? [];
   const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
 
@@ -104,7 +103,7 @@ export function VictoryScreen() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const getPlayerStats = (playerId: CharacterSlot): PlayerStats | null => {
+  const getPlayerStats = (playerId: PlayerSlot): PlayerStats | null => {
     if (!lastMatchState) return null;
     const stats = lastMatchState.stats;
     if (!stats || !stats.perPlayer) return null;
