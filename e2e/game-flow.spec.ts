@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('BunnyBrawl E2E', () => {
+test.describe('Carrot Royale E2E', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
   });

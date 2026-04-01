@@ -283,6 +283,12 @@ export class GameLoop {
   pause(): void { this.paused = true; audio.stopMusic(); }
   resume(): void { this.paused = false; this.lastTime = performance.now(); audio.playMusic(this.arena.themeId); }
   isPaused(): boolean { return this.paused; }
+  skipCountdown(): void {
+    if (this.state.countdown > 0) {
+      this.state.countdown = 0;
+      audio.play('countdown_go');
+    }
+  }
 
   private loop = (currentTime: number): void => {
     if (!this.running) return;

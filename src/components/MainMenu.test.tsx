@@ -10,8 +10,8 @@ describe('MainMenu', () => {
 
   it('renders the game title', () => {
     render(<MainMenu />);
-    expect(screen.getByText('Bunny')).toBeInTheDocument();
-    expect(screen.getByText('Brawl')).toBeInTheDocument();
+    expect(screen.getByText('Carrot')).toBeInTheDocument();
+    expect(screen.getByText('Royale')).toBeInTheDocument();
   });
 
   it('renders Play button', () => {
@@ -27,6 +27,6 @@ describe('MainMenu', () => {
 
   it('shows tagline', () => {
     render(<MainMenu />);
-    expect(screen.getByText('Stomp your friends!')).toBeInTheDocument();
+    expect(screen.getByText('Locally sourced violence.')).toBeInTheDocument();
   });
 });

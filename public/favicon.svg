@@ -1,28 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <!-- Left ear -->
-  <ellipse cx="20" cy="12" rx="7" ry="16" fill="#f0e0d0" stroke="#c8a890" stroke-width="1.5"/>
-  <ellipse cx="20" cy="12" rx="4" ry="12" fill="#f0a0b0"/>
-  <!-- Right ear -->
-  <ellipse cx="44" cy="12" rx="7" ry="16" fill="#f0e0d0" stroke="#c8a890" stroke-width="1.5"/>
-  <ellipse cx="44" cy="12" rx="4" ry="12" fill="#f0a0b0"/>
-  <!-- Head -->
-  <circle cx="32" cy="38" r="22" fill="#f0e0d0" stroke="#c8a890" stroke-width="1.5"/>
-  <!-- Left eye -->
-  <ellipse cx="24" cy="35" rx="3.5" ry="4" fill="#333"/>
-  <ellipse cx="23" cy="33.5" rx="1.2" ry="1.5" fill="#fff"/>
-  <!-- Right eye -->
-  <ellipse cx="40" cy="35" rx="3.5" ry="4" fill="#333"/>
-  <ellipse cx="39" cy="33.5" rx="1.2" ry="1.5" fill="#fff"/>
-  <!-- Nose -->
-  <ellipse cx="32" cy="42" rx="3" ry="2.2" fill="#f0a0b0"/>
-  <!-- Mouth -->
-  <path d="M29 44 Q32 48 35 44" fill="none" stroke="#c8a890" stroke-width="1.2" stroke-linecap="round"/>
-  <!-- Whiskers -->
-  <line x1="10" y1="40" x2="22" y2="42" stroke="#c8a890" stroke-width="0.8" stroke-linecap="round"/>
-  <line x1="10" y1="44" x2="22" y2="44" stroke="#c8a890" stroke-width="0.8" stroke-linecap="round"/>
-  <line x1="42" y1="42" x2="54" y2="40" stroke="#c8a890" stroke-width="0.8" stroke-linecap="round"/>
-  <line x1="42" y1="44" x2="54" y2="44" stroke="#c8a890" stroke-width="0.8" stroke-linecap="round"/>
-  <!-- Cheeks -->
-  <circle cx="19" cy="43" r="4" fill="#f8c0c0" opacity="0.5"/>
-  <circle cx="45" cy="43" r="4" fill="#f8c0c0" opacity="0.5"/>
+  <!-- Carrot body -->
+  <path d="M32 58 L18 24 Q32 18 46 24 Z" fill="#FF8C00" stroke="#E07000" stroke-width="1.5"/>
+  <!-- Carrot stripes -->
+  <line x1="26" y1="32" x2="38" y2="30" stroke="#E07000" stroke-width="1" stroke-linecap="round" opacity="0.5"/>
+  <line x1="28" y1="40" x2="36" y2="38" stroke="#E07000" stroke-width="1" stroke-linecap="round" opacity="0.5"/>
+  <line x1="30" y1="48" x2="34" y2="47" stroke="#E07000" stroke-width="1" stroke-linecap="round" opacity="0.5"/>
+  <!-- Leaves -->
+  <path d="M28 24 Q22 8 18 6 Q24 10 30 20 Z" fill="#4CAF50" stroke="#388E3C" stroke-width="0.8"/>
+  <path d="M32 22 Q32 4 32 2 Q34 8 34 20 Z" fill="#66BB6A" stroke="#388E3C" stroke-width="0.8"/>
+  <path d="M36 24 Q42 8 46 6 Q40 10 34 20 Z" fill="#4CAF50" stroke="#388E3C" stroke-width="0.8"/>
 </svg>

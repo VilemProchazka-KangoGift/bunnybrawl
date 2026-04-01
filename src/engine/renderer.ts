@@ -10,6 +10,15 @@ import {
 import { drawCloud as drawCloudPrimitive, drawHill, drawPlatformMoss } from './themes/drawPrimitives';
 import i18n from '../i18n';
 
+const CHAR_EMOJI: Record<string, string> = {
+  Bunny: '\uD83D\uDC30', Fox: '\uD83E\uDD8A', Frog: '\uD83D\uDC38',
+  Bear: '\uD83D\uDC3B', Owl: '\uD83E\uDD89', Cat: '\uD83D\uDC31',
+  Wolf: '\uD83D\uDC3A', Panda: '\uD83D\uDC3C', Pig: '\uD83D\uDC37',
+  Cow: '\uD83D\uDC2E', Goat: '\uD83D\uDC10', Horse: '\uD83D\uDC34',
+  Sheep: '\uD83D\uDC11', Monkey: '\uD83D\uDC35',
+  Tiger: '\uD83D\uDC2F', Rhino: '\uD83E\uDD8F',
+};
+
 interface Cloud {
   x: number;
   y: number;
@@ -2808,28 +2817,28 @@ export class Renderer {
       ctx.roundRect(px, 10, scoreWidth - 10, 40, 8);
       ctx.fill();
 
-      ctx.fillStyle = player.character.color;
-      ctx.beginPath();
-      ctx.arc(px + 20, 30, 8, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#FFF';
-      ctx.lineWidth = 1;
-      ctx.stroke();
+      // Character emoji
+      ctx.font = '28px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(CHAR_EMOJI[player.character.name] ?? '?', px + 20, 30);
+      ctx.textBaseline = 'alphabetic';
 
       const translatedName = i18n.t(`char_${player.character.name}`, player.character.name);
       const displayName = compact ? translatedName.slice(0, 4) : translatedName;
-      ctx.fillStyle = '#FFF';
+      ctx.fillStyle = player.character.color;
       ctx.font = `bold ${compact ? 12 : 16}px "Press Start 2P", monospace`;
       ctx.textAlign = 'left';
-      ctx.fillText(displayName, px + 35, 28);
+      ctx.fillText(displayName, px + 38, 28);
+      ctx.fillStyle = '#FFF';
       ctx.font = `bold ${compact ? 14 : 18}px "Press Start 2P", monospace`;
-      ctx.fillText(`${player.score}`, px + 35, 45);
+      ctx.fillText(`${player.score}`, px + 38, 45);
 
       // Small bot indicator
       if (isBot) {
         ctx.fillStyle = 'rgba(180, 140, 255, 0.7)';
         ctx.font = 'bold 7px monospace';
-        ctx.fillText('BOT', px + 6, 18);
+        ctx.fillText('BOT', px + 4, 18);
       }
     }
 

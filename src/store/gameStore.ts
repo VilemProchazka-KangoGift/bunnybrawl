@@ -20,7 +20,7 @@ function loadGoreMode(): boolean {
 }
 
 function loadArenaId(): string {
-  try { return localStorage.getItem('bunnybrawl_arena') || 'random'; } catch { return 'random'; }
+  try { return localStorage.getItem('bunnybrawl_arena') || 'meadow'; } catch { return 'meadow'; }
 }
 
 function loadBotCount(): number {

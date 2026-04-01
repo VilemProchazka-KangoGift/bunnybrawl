@@ -8,10 +8,121 @@ import type { CharacterSlot, CharacterDef, PlayerSlot, BotSlot } from '../engine
 import { ALL_BOT_SLOTS, isBotSlot } from '../engine/types';
 import { assignBotCharacters } from '../engine/characters';
 import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT } from '../engine/constants';
+import {
+  drawTree, drawBush, drawFlower, drawMushroom, drawGrassTuft, drawCloud,
+} from '../engine/themes/drawPrimitives';
 import './CharacterSelect.css';
 
 const SLOTS: CharacterSlot[] = ['P1', 'P2', 'P3', 'P4', 'P5'];
+const CHAR_EMOJI: Record<string, string> = {
+  Bunny: '\uD83D\uDC30', Fox: '\uD83E\uDD8A', Frog: '\uD83D\uDC38',
+  Bear: '\uD83D\uDC3B', Owl: '\uD83E\uDD89', Cat: '\uD83D\uDC31',
+  Wolf: '\uD83D\uDC3A', Panda: '\uD83D\uDC3C', Pig: '\uD83D\uDC37',
+  Cow: '\uD83D\uDC2E', Goat: '\uD83D\uDC10', Horse: '\uD83D\uDC34',
+  Sheep: '\uD83D\uDC11', Monkey: '\uD83D\uDC35',
+  Tiger: '\uD83D\uDC2F', Rhino: '\uD83E\uDD8F',
+};
 const READY_ZONE_X = CANVAS_WIDTH * 0.72;
+const LOBBY_DAY_CYCLE = 90;
+
+interface SimpleWildlife {
+  x: number; y: number; vx: number; wingPhase: number;
+  type: 'butterfly' | 'bird'; color: string;
+}
+
+let lobbyWildlife: SimpleWildlife[] | null = null;
+
+function initLobbyWildlife(): SimpleWildlife[] {
+  const bColors = ['#FFD700', '#FF69B4', '#87CEEB', '#DDA0DD', '#FFA07A'];
+  const result: SimpleWildlife[] = [];
+  for (let i = 0; i < 6; i++) {
+    const isBird = i >= 4;
+    result.push({
+      x: Math.random() * CANVAS_WIDTH, wingPhase: Math.random() * Math.PI * 2,
+      y: isBird ? 30 + Math.random() * 60 : GROUND_Y * 0.25 + Math.random() * GROUND_Y * 0.45,
+      vx: isBird ? 40 + Math.random() * 40 : 15 + Math.random() * 15,
+      type: isBird ? 'bird' : 'butterfly', color: isBird ? '#444' : bColors[i % bColors.length],
+    });
+  }
+  return result;
+}
+
+function drawLobbyWildlife(ctx: CanvasRenderingContext2D, wildlife: SimpleWildlife[], dt: number): void {
+  for (const w of wildlife) {
+    w.x += w.vx * dt;
+    w.wingPhase += dt * (w.type === 'bird' ? 6 : 10);
+    if (w.x > CANVAS_WIDTH + 20) { w.x = -20; w.y = w.type === 'bird' ? 30 + Math.random() * 60 : GROUND_Y * 0.25 + Math.random() * GROUND_Y * 0.45; }
+    ctx.save();
+    ctx.translate(w.x, w.y + Math.sin(w.wingPhase * 0.3) * (w.type === 'butterfly' ? 8 : 3));
+    if (w.type === 'butterfly') {
+      const wing = Math.sin(w.wingPhase) * 0.6;
+      ctx.fillStyle = w.color;
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-6 * Math.cos(wing), -4 * Math.abs(Math.sin(wing)) - 3); ctx.lineTo(-3, 0); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(6 * Math.cos(wing), -4 * Math.abs(Math.sin(wing)) - 3); ctx.lineTo(3, 0); ctx.fill();
+      ctx.fillStyle = '#333'; ctx.fillRect(-0.5, -1.5, 1, 3);
+    } else {
+      const flap = Math.sin(w.wingPhase) * 4;
+      ctx.strokeStyle = w.color; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(-8, flap); ctx.lineTo(-3, -3); ctx.lineTo(0, 0); ctx.lineTo(3, -3); ctx.lineTo(8, flap); ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+function drawLobbyDayNight(ctx: CanvasRenderingContext2D, now: number): void {
+  const dayPhase = (now % LOBBY_DAY_CYCLE) / LOBBY_DAY_CYCLE;
+  const nightIntensity = Math.max(0, (1 - Math.cos(dayPhase * Math.PI * 2)) / 2);
+
+  if (dayPhase < 0.5) {
+    const sp = dayPhase / 0.5;
+    const sx = 60 + sp * 1160, sy = 130 - Math.sin(sp * Math.PI) * 90;
+    const rs = Math.max(0, Math.abs(sp - 0.5) * 2 - 0.3) * 0.7;
+    ctx.save(); ctx.globalAlpha = 1 - nightIntensity;
+    const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, 48);
+    g.addColorStop(0, `rgba(255,${Math.round(220 - rs * 80)},${Math.round(50 - rs * 50)},0.3)`);
+    g.addColorStop(1, 'rgba(255,200,50,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(sx, sy, 48, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = `rgb(255,${Math.round(230 - rs * 100)},${Math.round(80 - rs * 80)})`;
+    ctx.beginPath(); ctx.arc(sx, sy, 15, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = `rgb(255,${Math.round(245 - rs * 50)},${Math.round(150 - rs * 100)})`;
+    ctx.beginPath(); ctx.arc(sx, sy, 9, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+  if (nightIntensity > 0.02) {
+    ctx.save(); ctx.globalAlpha = nightIntensity * 0.55;
+    ctx.fillStyle = 'rgb(10,12,45)'; ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    ctx.restore();
+  }
+  if (dayPhase >= 0.5) {
+    const mp = (dayPhase - 0.5) / 0.5;
+    const mx = 60 + mp * 1160, my = 130 - Math.sin(mp * Math.PI) * 90;
+    ctx.save(); ctx.globalAlpha = nightIntensity;
+    ctx.fillStyle = 'rgba(170,187,221,0.25)'; ctx.beginPath(); ctx.arc(mx, my, 22, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#E8E8F0'; ctx.beginPath(); ctx.arc(mx, my, 12, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgb(10,12,45)'; ctx.beginPath(); ctx.arc(mx + 5, my - 2, 10, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+  if (nightIntensity > 0.25) {
+    ctx.save(); ctx.fillStyle = '#FFF';
+    for (let i = 0; i < 30; i++) {
+      const stx = (i * 137 + 83) % CANVAS_WIDTH, sty = (i * 89 + 47) % 200;
+      ctx.globalAlpha = (nightIntensity - 0.25) * 2 * (Math.sin(now * 2 + i * 1.7) * 0.3 + 0.7);
+      ctx.beginPath(); ctx.arc(stx, sty, 1 + (i % 3) * 0.5, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+  if (nightIntensity > 0.4) {
+    ctx.save();
+    for (let i = 0; i < 8; i++) {
+      const bx = (i * 173 + 50) % CANVAS_WIDTH, by = 300 + (i * 97) % 250;
+      const fx = bx + Math.sin(now * 0.7 + i * 2.1) * 30, fy = by + Math.cos(now * 0.5 + i * 1.3) * 20;
+      ctx.globalAlpha = (nightIntensity - 0.4) * 1.5 * (Math.sin(now * 3 + i * 4.7) * 0.3 + 0.7);
+      ctx.fillStyle = '#AAFF44'; ctx.beginPath(); ctx.arc(fx, fy, 6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#CCFF66'; ctx.beginPath(); ctx.arc(fx, fy, 2, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+}
 const COUNTDOWN_SECONDS = 5;
 const GROUND_Y = 560;
 const LOBBY_GRAVITY = 600;
@@ -153,6 +264,7 @@ export function CharacterSelect() {
       e.preventDefault();
       keysRef.current.add(normalizeKey(e.key));
       if (e.key === 'Escape') setScreen('menu');
+      if (e.key === 'Enter' && countdownStartedRef.current) startMatch();
     };
     const handleKeyUp = (e: KeyboardEvent) => {
       e.preventDefault();
@@ -165,7 +277,7 @@ export function CharacterSelect() {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [setScreen]);
+  }, [setScreen, startMatch]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -227,8 +339,8 @@ export function CharacterSelect() {
         for (const victim of allLobby) {
           if (victim === attacker) continue;
           if (victim.splatTimer > 0) continue;
-          // Bots cannot stomp human players in the lobby
-          if (attackerIsBot && humanPlayers.includes(victim)) continue;
+          // Bots cannot stomp human players or other bots in the lobby
+          if (attackerIsBot && !extraCharsRef.current.includes(victim)) continue;
 
           // Check overlap + attacker above victim
           if (
@@ -298,7 +410,7 @@ export function CharacterSelect() {
         if (countdownRef.current <= 0) startMatch();
       }
 
-      drawLobby(ctx, playersRef.current, botPlayersRef.current, extraCharsRef.current, countdownRef.current, countdownStartedRef.current);
+      drawLobby(ctx, playersRef.current, botPlayersRef.current, extraCharsRef.current, countdownRef.current, countdownStartedRef.current, dt);
       rafRef.current = requestAnimationFrame(loop);
     };
 
@@ -438,38 +550,60 @@ function drawLobby(
   extras: LobbyPlayer[],
   countdown: number,
   countdownActive: boolean,
+  dt: number,
 ): void {
-  // ---- Sky with gradient ----
+  // ---- Sky with gradient (meadow style) ----
   const skyGrad = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-  skyGrad.addColorStop(0, '#3A7BD5');
-  skyGrad.addColorStop(0.5, '#6CB4EE');
-  skyGrad.addColorStop(0.85, '#B0E0E6');
-  skyGrad.addColorStop(1, '#90D8A0');
+  skyGrad.addColorStop(0, '#4A90D9');
+  skyGrad.addColorStop(0.6, '#87CEEB');
+  skyGrad.addColorStop(1, '#B0E0E6');
   ctx.fillStyle = skyGrad;
   ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-  // ---- Clouds ----
-  const now = performance.now() / 1000;
-  ctx.fillStyle = 'rgba(255,255,255,0.6)';
-  const clouds = [
-    { x: (now * 8) % (CANVAS_WIDTH + 200) - 100, y: 100, s: 60 },
-    { x: (now * 12 + 400) % (CANVAS_WIDTH + 200) - 100, y: 70, s: 80 },
-    { x: (now * 6 + 800) % (CANVAS_WIDTH + 200) - 100, y: 120, s: 50 },
+  // ---- Distant forest treeline ----
+  ctx.save();
+  ctx.globalAlpha = 0.25;
+  ctx.fillStyle = '#3A6A3A';
+  ctx.beginPath();
+  ctx.moveTo(-10, GROUND_Y + 10);
+  const treeline = [
+    0, -70, 40, -50, 80, -75, 120, -45, 160, -65, 200, -55,
+    250, -80, 300, -50, 350, -70, 400, -45, 450, -60, 500, -75,
+    550, -50, 600, -80, 650, -55, 700, -65, 750, -50, 800, -70,
+    850, -55, 900, -75, 950, -45, 1000, -65, 1050, -55, 1100, -80,
+    1150, -50, 1200, -70, 1250, -55, 1300, -65,
   ];
-  for (const c of clouds) {
-    ctx.beginPath();
-    ctx.arc(c.x, c.y, c.s * 0.4, 0, Math.PI * 2);
-    ctx.arc(c.x + c.s * 0.35, c.y - c.s * 0.12, c.s * 0.35, 0, Math.PI * 2);
-    ctx.arc(c.x + c.s * 0.7, c.y, c.s * 0.38, 0, Math.PI * 2);
-    ctx.fill();
+  for (let i = 0; i < treeline.length; i += 2) {
+    ctx.lineTo(treeline[i], GROUND_Y + treeline[i + 1]);
+  }
+  ctx.lineTo(1300, GROUND_Y + 10);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  // ---- Clouds (animated, using drawCloud) ----
+  const now = performance.now() / 1000;
+  const cloudDefs = [
+    { speed: 8, offset: 0, y: 80, size: 70 },
+    { speed: 5, offset: 400, y: 50, size: 85 },
+    { speed: 11, offset: 800, y: 110, size: 55 },
+    { speed: 7, offset: 200, y: 35, size: 65 },
+  ];
+  for (const c of cloudDefs) {
+    const cx = (now * c.speed + c.offset) % (CANVAS_WIDTH + 300) - 150;
+    drawCloud(ctx, cx, c.y, c.size);
   }
 
   // ---- Background hills ----
-  ctx.fillStyle = '#5C9E4C';
-  for (const [hx, hw, hh] of [[0, 300, 100], [350, 400, 80], [700, 350, 110], [1000, 350, 85]] as const) {
+  const hillDefs: [number, number, number, number][] = [[0, 300, 120, 620], [250, 400, 100, 630], [600, 350, 130, 620], [900, 400, 100, 635]];
+  for (const [hx, hw, hh, hby] of hillDefs) {
+    ctx.fillStyle = '#5C9E4C';
     ctx.beginPath();
-    ctx.moveTo(hx, GROUND_Y + 10);
-    ctx.quadraticCurveTo(hx + hw / 2, GROUND_Y - hh, hx + hw, GROUND_Y + 10);
+    ctx.moveTo(hx, hby);
+    ctx.quadraticCurveTo(hx + hw / 2, hby - hh, hx + hw, hby);
+    ctx.lineTo(hx + hw, GROUND_Y + 10);
+    ctx.lineTo(hx, GROUND_Y + 10);
+    ctx.closePath();
     ctx.fill();
   }
 
@@ -480,35 +614,49 @@ function drawLobby(
   groundGrad.addColorStop(1, '#2a5520');
   ctx.fillStyle = groundGrad;
   ctx.fillRect(0, GROUND_Y, CANVAS_WIDTH, CANVAS_HEIGHT - GROUND_Y);
-  // Grass top
+  // Grass top strip
   ctx.fillStyle = '#6BBF59';
-  ctx.fillRect(0, GROUND_Y, CANVAS_WIDTH, 5);
+  ctx.fillRect(0, GROUND_Y, CANVAS_WIDTH, 4);
   // Grass blades
   ctx.strokeStyle = '#5DAF4A';
   ctx.lineWidth = 2;
-  for (let x = 5; x < CANVAS_WIDTH; x += 14) {
+  for (let x = 5; x < CANVAS_WIDTH; x += 15) {
+    const h = 6 + (x * 7 % 5);
     ctx.beginPath();
     ctx.moveTo(x, GROUND_Y);
-    ctx.lineTo(x - 2, GROUND_Y - 5 - (x * 7 % 5));
+    ctx.lineTo(x - 2, GROUND_Y - h);
     ctx.stroke();
   }
 
-  // ---- Background flowers + bushes ----
-  const flowerColors = ['#FF6B8A', '#FFD700', '#FF69B4', '#DDA0DD'];
-  for (let fx = 30; fx < WALL_X - 20; fx += 80 + (fx * 3 % 40)) {
-    ctx.strokeStyle = '#3A7A3A';
-    ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(fx, GROUND_Y); ctx.lineTo(fx, GROUND_Y - 10); ctx.stroke();
-    ctx.fillStyle = flowerColors[Math.floor(fx * 0.02) % flowerColors.length];
-    for (let a = 0; a < 5; a++) {
-      const ang = (a / 5) * Math.PI * 2;
-      ctx.beginPath();
-      ctx.arc(fx + Math.cos(ang) * 3, GROUND_Y - 12 + Math.sin(ang) * 3, 2.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.fillStyle = '#FFE04A';
-    ctx.beginPath(); ctx.arc(fx, GROUND_Y - 12, 1.5, 0, Math.PI * 2); ctx.fill();
+  // ---- Background trees ----
+  drawTree(ctx, 50, GROUND_Y, 55);
+  drawTree(ctx, 380, GROUND_Y, 45);
+  drawTree(ctx, 650, GROUND_Y, 50);
+
+  // ---- Background bushes ----
+  drawBush(ctx, 150, GROUND_Y, 28);
+  drawBush(ctx, 300, GROUND_Y, 22);
+  drawBush(ctx, 500, GROUND_Y, 25);
+
+  // ---- Flowers ----
+  const flowerColors = ['#FF6B8A', '#FFD700', '#FF69B4', '#DDA0DD', '#87CEEB', '#FFA07A'];
+  const flowerPositions = [100, 190, 260, 340, 430, 520, 580, 670];
+  for (const fx of flowerPositions) {
+    drawFlower(ctx, fx, GROUND_Y, flowerColors[Math.floor(fx * 0.01) % flowerColors.length]);
   }
+
+  // ---- Mushrooms ----
+  drawMushroom(ctx, 220, GROUND_Y);
+  drawMushroom(ctx, 560, GROUND_Y);
+
+  // ---- Grass tufts ----
+  for (let gx = 30; gx < WALL_X; gx += 90 + (gx * 3 % 30)) {
+    drawGrassTuft(ctx, gx, GROUND_Y);
+  }
+
+  // ---- Wildlife (butterflies & birds) ----
+  if (!lobbyWildlife) lobbyWildlife = initLobbyWildlife();
+  drawLobbyWildlife(ctx, lobbyWildlife, dt);
 
   // ---- Wall obstacle (nicer) ----
   // Shadow
@@ -562,16 +710,19 @@ function drawLobby(
   ctx.lineWidth = 12;
   ctx.beginPath(); ctx.moveTo(READY_ZONE_X, 55); ctx.lineTo(READY_ZONE_X, GROUND_Y); ctx.stroke();
 
-  // Large "GO!" / "START!" text — very visible
-  ctx.fillStyle = 'rgba(76, 200, 80, 0.5)';
+  // Large "GO!" / "START!" text
+  const goText = i18n.t('lobby_go');
+  const goCx = (READY_ZONE_X + CANVAS_WIDTH) / 2;
+  const goCy = GROUND_Y / 2 + 40;
   ctx.font = "bold 80px 'Fredoka', sans-serif";
   ctx.textAlign = 'center';
-  const goText = i18n.t('lobby_go');
-  ctx.fillText(goText, (READY_ZONE_X + CANVAS_WIDTH) / 2, GROUND_Y / 2 + 40);
-  // Outline for extra pop
-  ctx.strokeStyle = 'rgba(76, 200, 80, 0.3)';
-  ctx.lineWidth = 3;
-  ctx.strokeText(goText, (READY_ZONE_X + CANVAS_WIDTH) / 2, GROUND_Y / 2 + 40);
+  // Dark outline for contrast
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
+  ctx.lineWidth = 6;
+  ctx.strokeText(goText, goCx, goCy);
+  // Fill
+  ctx.fillStyle = 'rgba(40, 140, 45, 0.85)';
+  ctx.fillText(goText, goCx, goCy);
 
   // ---- Draw NPCs (behind players) ----
   for (const npc of extras) {
@@ -618,15 +769,15 @@ function drawLobby(
   }
 
   // ---- UI bar at top (polished) ----
+  const barH = 52;
   ctx.fillStyle = 'rgba(0,0,0,0.6)';
   ctx.beginPath();
-  ctx.roundRect(8, 6, CANVAS_WIDTH - 16, 46, 10);
+  ctx.roundRect(8, 6, CANVAS_WIDTH - 16, barH, 10);
   ctx.fill();
-  // Subtle inner highlight
   ctx.strokeStyle = 'rgba(255,255,255,0.08)';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.roundRect(9, 7, CANVAS_WIDTH - 18, 44, 9);
+  ctx.roundRect(9, 7, CANVAS_WIDTH - 18, barH - 2, 9);
   ctx.stroke();
 
   const slotWidth = (CANVAS_WIDTH - 40) / SLOTS.length;
@@ -635,60 +786,112 @@ function drawLobby(
     const bindings = KEY_BINDINGS[slot];
     const player = players[i];
     const sx = 20 + i * slotWidth + slotWidth / 2;
+    const emojiX = sx - slotWidth * 0.38;
+    const textX = emojiX + 22;
 
-    // Color dot
+    // Character emoji
+    ctx.font = '28px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(CHAR_EMOJI[player.char.name] ?? '?', emojiX, 32);
+    ctx.textBaseline = 'alphabetic';
+
+    // Name in player color
     ctx.fillStyle = player.char.color;
-    ctx.beginPath();
-    ctx.arc(sx - slotWidth * 0.35, 29, 7, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    // Name
-    ctx.fillStyle = '#FFF';
     ctx.textAlign = 'left';
-    ctx.font = "bold 13px 'Fredoka', sans-serif";
-    ctx.fillText(`${slot}: ${i18n.t(`char_${player.char.name}`, player.char.name)}`, sx - slotWidth * 0.25, 26);
+    ctx.font = "bold 14px 'Fredoka', sans-serif";
+    ctx.fillText(`${slot}: ${i18n.t(`char_${player.char.name}`, player.char.name)}`, textX, 26);
 
-    // Keys — replace Arrow* with unicode icons
-    ctx.fillStyle = 'rgba(255,255,255,0.45)';
-    ctx.font = "11px 'Fredoka', monospace";
+    // Keys
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.font = "bold 13px 'Fredoka', monospace";
     const fmtKey = (k: string) => k === 'ArrowLeft' ? '\u2190' : k === 'ArrowRight' ? '\u2192' : k === 'ArrowUp' ? '\u2191' : k === 'ArrowDown' ? '\u2193' : k;
-    ctx.fillText(`${fmtKey(bindings.left)} ${fmtKey(bindings.right)} ${fmtKey(bindings.jump)} ${fmtKey(bindings.down)}`, sx - slotWidth * 0.25, 41);
+    ctx.fillText(`${fmtKey(bindings.left)} ${fmtKey(bindings.right)} ${fmtKey(bindings.jump)} ${fmtKey(bindings.down)}`, textX, 42);
   }
 
-  // ---- Title (below bar, with dark pill background for readability) ----
-  const titleText = i18n.t('lobby_title');
-  ctx.font = "bold 24px 'Fredoka', sans-serif";
-  ctx.textAlign = 'center';
-  const titleW = ctx.measureText(titleText).width + 30;
+  // ---- Bottom-left: swap instruction ----
+  const swapText = i18n.t('lobby_title');
+  ctx.font = "bold 16px 'Fredoka', sans-serif";
+  const swapW = ctx.measureText(swapText).width + 28;
+  const blX = 14;
+  const blY = GROUND_Y + 10;
   ctx.fillStyle = 'rgba(0,0,0,0.55)';
   ctx.beginPath();
-  ctx.roundRect(CANVAS_WIDTH / 2 - titleW / 2, 56, titleW, 32, 8);
+  ctx.roundRect(blX, blY, swapW, 32, 8);
   ctx.fill();
   ctx.fillStyle = '#FFF';
+  ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.fillText(titleText, CANVAS_WIDTH / 2, 72);
+  ctx.fillText(swapText, blX + 14, blY + 16);
   ctx.textBaseline = 'alphabetic';
 
-  // ---- Countdown ----
+  // ---- Rules hint (below START in ready zone) ----
+  const rulesText = `${i18n.t('rules_label')}  🦶 ${i18n.t('rules_stomp')}   🥕 ${i18n.t('rules_carrot')}`;
+  ctx.font = "14px 'Fredoka', sans-serif";
+  ctx.textAlign = 'center';
+  const rulesCx = (READY_ZONE_X + CANVAS_WIDTH) / 2;
+  const rulesY = GROUND_Y / 2 + 80;
+  ctx.globalAlpha = 0.7;
+  const rulesW = ctx.measureText(rulesText).width + 24;
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.beginPath();
+  ctx.roundRect(rulesCx - rulesW / 2, rulesY - 12, rulesW, 24, 6);
+  ctx.fill();
+  ctx.fillStyle = '#DDD';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(rulesText, rulesCx, rulesY);
+  ctx.textBaseline = 'alphabetic';
+  ctx.globalAlpha = 1;
+
+  // ---- Bottom-right: join instruction with arrow ----
+  const joinText = i18n.t('lobby_join');
+  ctx.font = "bold 16px 'Fredoka', sans-serif";
+  const joinW = ctx.measureText(joinText).width + 50;
+  const brX = CANVAS_WIDTH - joinW - 14;
+  const brY = GROUND_Y + 10;
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.beginPath();
+  ctx.roundRect(brX, brY, joinW, 32, 8);
+  ctx.fill();
+  ctx.fillStyle = '#7CFC00';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  // Arrow pointing up toward the start zone
+  ctx.font = "bold 20px 'Fredoka', sans-serif";
+  ctx.fillText('\u2191', brX + 10, brY + 16);
+  ctx.font = "bold 16px 'Fredoka', sans-serif";
+  ctx.fillText(joinText, brX + 30, brY + 16);
+  ctx.textBaseline = 'alphabetic';
+
+  // ---- Countdown (in the ready zone) ----
   if (countdownActive && countdown > 0) {
     const secs = Math.ceil(countdown);
+    const cx = (READY_ZONE_X + CANVAS_WIDTH) / 2;
+    const cy = GROUND_Y / 2 + 115;
     ctx.fillStyle = 'rgba(0,0,0,0.65)';
     ctx.beginPath();
-    ctx.roundRect(CANVAS_WIDTH / 2 - 90, 96, 180, 48, 14);
+    ctx.roundRect(cx - 90, cy, 180, 48, 14);
     ctx.fill();
     ctx.fillStyle = '#FFD700';
     ctx.font = "bold 26px 'Fredoka', sans-serif";
     ctx.textAlign = 'center';
-    ctx.fillText(i18n.t('lobby_starting', { seconds: secs }), CANVAS_WIDTH / 2, 127);
+    ctx.fillText(i18n.t('lobby_starting', { seconds: secs }), cx, cy + 31);
+    ctx.font = "14px 'Fredoka', sans-serif";
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = '#FFF';
+    ctx.fillText(i18n.t('countdown_skip'), cx, cy + 62);
+    ctx.globalAlpha = 1;
   }
 
   // ---- Player count in zone ----
   const inZone = [...players, ...bots].filter(p => p.x + PLAYER_WIDTH > READY_ZONE_X && p.splatTimer <= 0);
   if (inZone.length > 0) {
-    const readyText = i18n.t('lobby_players_ready', { count: inZone.length });
+    const humanCount = inZone.filter(p => !isBotSlot(p.slot)).length;
+    const botCount = inZone.filter(p => isBotSlot(p.slot)).length;
+    const parts: string[] = [];
+    if (humanCount > 0) parts.push(i18n.t('lobby_humans_ready', { count: humanCount }));
+    if (botCount > 0) parts.push(i18n.t('lobby_bots_ready', { count: botCount }));
+    const readyText = parts.join(' + ');
     ctx.font = "bold 16px 'Fredoka', sans-serif";
     ctx.textAlign = 'center';
     const rw = ctx.measureText(readyText).width + 24;
@@ -703,6 +906,9 @@ function drawLobby(
     ctx.fillText(readyText, rx, ry + 12);
     ctx.textBaseline = 'alphabetic';
   }
+
+  // ---- Day/night cycle ----
+  drawLobbyDayNight(ctx, performance.now() / 1000);
 }
 
 function drawSquishedChar(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void {

@@ -75,10 +75,14 @@ export function Match() {
           setPaused(true);
         }
       }
-      if (e.key === 'Enter' && gameLoopRef.current?.isPaused()) {
+      if (e.key === 'Enter') {
         e.preventDefault();
-        if (!showLevelSelect) {
+        const loop = gameLoopRef.current;
+        if (!loop) return;
+        if (loop.isPaused() && !showLevelSelect) {
           handleResume();
+        } else {
+          loop.skipCountdown();
         }
       }
     };
