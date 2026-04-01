@@ -209,6 +209,22 @@ export function buildAwareness(
     }
   }
 
+  // Geyser escape: if inside an active geyser zone, compute escape direction
+  let geyserEscapeDx = 0;
+  for (const zone of arena.effectZones ?? []) {
+    if (zone.type !== 'geyser') continue;
+    const inZone = self.x + PLAYER_WIDTH > zone.x && self.x < zone.x + zone.width &&
+                   self.y + PLAYER_HEIGHT > zone.y && self.y < zone.y + zone.height;
+    if (inZone) {
+      const selfCx = self.x + PLAYER_WIDTH / 2;
+      const distToLeft = selfCx - zone.x;
+      const distToRight = zone.x + zone.width - selfCx;
+      // Go toward the nearer edge
+      geyserEscapeDx = distToLeft < distToRight ? -(distToLeft + 30) : (distToRight + 30);
+      break;
+    }
+  }
+
   // Roam target (wrap-aware): nearest carrot, then nearest enemy across full map
   let roamTarget: AwarenessSnapshot['roamTarget'] = null;
   if (nearestCarrot) {
@@ -256,7 +272,7 @@ export function buildAwareness(
     nearestEnemy, roamTarget, stompTarget, stompThreat, airborneAbove, nearestCarrot,
     nearestHazard, nearbyHazards, nearestPlatformAbove, nearestPlatformBelow,
     landingPlatform, nearEdge,
-    windDir, windStrength, inZeroG, inCurrent, nearGeyser,
+    windDir, windStrength, inZeroG, inCurrent, nearGeyser, geyserEscapeDx,
     nearbyBotCount, leaderScore, onElevatedPlatform,
   };
 }

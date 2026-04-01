@@ -25,6 +25,7 @@ export function evaluateActions(
   evaluateWindCompensation(awareness, scores);
   evaluateEdgeAvoidance(awareness, scores, personality);
   evaluateZoneExploitation(awareness, scores, personality);
+  evaluateGeyserEscape(awareness, scores);
   evaluateLandingPrediction(awareness, scores);
   evaluateInvincibilityAggression(awareness, scores, personality);
   evaluateClustering(awareness, scores);
@@ -89,7 +90,15 @@ function evaluateThreatEvasion(a: AwarenessSnapshot, s: ActionScores, p: AIPerso
 function evaluateChaseTarget(a: AwarenessSnapshot, s: ActionScores, p: AIPersonality): void {
   if (!a.nearestEnemy) return;
   const weight = 0.5 * p.aggressiveness;
-  const { dx, dy, dist } = a.nearestEnemy;
+  const { dx, dy } = a.nearestEnemy;
+
+  // If enemy is significantly above and there's a climbable platform,
+  // DON'T add horizontal chase — let platformSeeking handle the path
+  const needsClimbing = dy < -60 && a.nearestPlatformAbove && a.self.onGround;
+  if (needsClimbing) {
+    // Only hint at dropping if enemy is below
+    return;
+  }
 
   // Move toward nearest enemy — walking is the main chase behavior
   if (dx > 20) s.moveRight += weight;
@@ -98,11 +107,6 @@ function evaluateChaseTarget(a: AwarenessSnapshot, s: ActionScores, p: AIPersona
   // Same Y level (within ~40px) = same platform — just walk, never jump
   const samePlatform = Math.abs(dy) < 40;
   if (samePlatform) return;
-
-  // Only jump if enemy is clearly on a platform above AND we're close horizontally
-  if (dy < -50 && a.self.onGround && dist < 150 && Math.abs(dx) < 100) {
-    s.jump += weight * 0.3;
-  }
 
   // If enemy is below and we're on a platform, consider dropping
   if (dy > 60 && Math.abs(dx) < 50) {
@@ -117,18 +121,20 @@ function evaluatePlatformSeeking(a: AwarenessSnapshot, s: ActionScores, p: AIPer
   const roamAbove = a.roamTarget && a.roamTarget.y < a.self.y - 50;
   if (!hasEnemyAbove && !roamAbove && p.platformPreference < 1.5) return;
 
-  const weight = hasEnemyAbove ? 0.5 * p.platformPreference : 0.3 * p.platformPreference;
+  // Stronger weight when actively climbing toward a target
+  const climbing = hasEnemyAbove || roamAbove;
+  const weight = climbing ? 0.7 : 0.3 * p.platformPreference;
   const plat = a.nearestPlatformAbove;
 
-  // Walk toward platform — use wider tolerance for zigzag stairs
+  // Walk toward platform — the primary navigation when climbing
   const platCenter = plat.x + plat.width / 2;
   const dx = platCenter - a.self.x;
-  if (dx > 20) s.moveRight += weight;
-  else if (dx < -20) s.moveLeft += weight;
+  if (dx > 15) s.moveRight += weight;
+  else if (dx < -15) s.moveLeft += weight;
 
-  // Jump when positioned within reach of the platform (wider range for stairs)
-  if (Math.abs(dx) < plat.width / 2 + 60 && plat.dy > -200) {
-    s.jump += weight * 0.5;
+  // Jump when positioned within reach of the platform
+  if (Math.abs(dx) < plat.width / 2 + 80 && plat.dy > -200) {
+    s.jump += weight * 0.6;
   }
 }
 
@@ -168,18 +174,18 @@ function evaluateCarrotPursuit(a: AwarenessSnapshot, s: ActionScores, p: AIPerso
   if (!a.nearestCarrot) return;
   // Don't pursue carrots if already fat (slowed)
   if (a.self.fat) return;
-  // Reduce carrot pursuit during active combat (enemy very close)
-  if (a.nearestEnemy && a.nearestEnemy.dist < 80) return;
+  // Skip only if enemy is extremely close (active melee combat)
+  if (a.nearestEnemy && a.nearestEnemy.dist < 50) return;
 
-  const weight = 0.5 * p.greediness;
+  const weight = 0.7 * p.greediness;
   const dx = a.nearestCarrot.x - a.self.x;
 
-  if (dx > 15) s.moveRight += weight;
-  else if (dx < -15) s.moveLeft += weight;
+  if (dx > 10) s.moveRight += weight;
+  else if (dx < -10) s.moveLeft += weight;
 
   // Jump toward elevated carrots
   if (a.nearestCarrot.y < a.self.y - 30 && a.self.onGround) {
-    s.jump += weight * 0.5;
+    s.jump += weight * 0.4;
   }
 }
 
@@ -298,6 +304,18 @@ function evaluateCamping(a: AwarenessSnapshot, s: ActionScores, p: AIPersonality
   const campWeight = 0.3 * (p.cautiousness - 1.0);
   s.moveLeft -= campWeight;
   s.moveRight -= campWeight;
+}
+
+/** When stuck inside a geyser zone with no reason to stay, walk out sideways */
+function evaluateGeyserEscape(a: AwarenessSnapshot, s: ActionScores): void {
+  if (a.geyserEscapeDx === 0) return;
+  // Only escape if there's nothing useful up here (no enemies, no carrots nearby)
+  if (a.nearestEnemy && a.nearestEnemy.dist < 150) return;
+  if (a.nearestCarrot && a.nearestCarrot.dist < 100) return;
+
+  const weight = 1.0; // strong — being stuck in a geyser is bad
+  if (a.geyserEscapeDx > 0) s.moveRight += weight;
+  else s.moveLeft += weight;
 }
 
 function evaluateZoneExploitation(a: AwarenessSnapshot, s: ActionScores, p: AIPersonality): void {

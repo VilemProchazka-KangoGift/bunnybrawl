@@ -43,6 +43,8 @@ export interface AwarenessSnapshot {
   inZeroG: boolean;
   inCurrent: number; // vx push force, 0 if not in current
   nearGeyser: { x: number; y: number; active: boolean; timer: number } | null;
+  /** If inside an active geyser zone, the dx to nearest edge to escape */
+  geyserEscapeDx: number; // 0 = not in geyser, positive = go right, negative = go left
   /** How many other bots are within 120px */
   nearbyBotCount: number;
   /** Score of the current leader (for panic detection) */
