@@ -1,4 +1,4 @@
-import type { Player, SplatMark, KillFeedEntry, SpawnPoint, SplatShape } from './types';
+import type { Player, SplatMark, KillFeedEntry, SpawnPoint, SplatShape, GibType } from './types';
 import {
   STOMP_VY_THRESHOLD, STOMP_BOUNCE, SPLAT_DURATION,
   RESPAWN_DELAY, INVINCIBLE_DURATION,
@@ -79,24 +79,51 @@ const CHARACTER_SPLAT_SHAPES: Record<string, SplatShape> = {
   Horse: 'circle',
   Sheep: 'paw',
   Monkey: 'star',
+  Tiger: 'paw',
+  Rhino: 'circle',
+};
+
+export interface GibDef {
+  gibType: GibType;
+  width: number;
+  height: number;
+}
+
+export const CHARACTER_GIBS: Record<string, GibDef[]> = {
+  Bunny:  [{ gibType: 'ear', width: 8, height: 20 }, { gibType: 'ear', width: 8, height: 20 }, { gibType: 'tail', width: 8, height: 8 }, { gibType: 'body', width: 14, height: 12 }],
+  Fox:    [{ gibType: 'ear', width: 10, height: 10 }, { gibType: 'ear', width: 10, height: 10 }, { gibType: 'tail', width: 16, height: 10 }, { gibType: 'snout', width: 8, height: 6 }, { gibType: 'body', width: 14, height: 12 }],
+  Frog:   [{ gibType: 'body', width: 12, height: 10 }, { gibType: 'body', width: 10, height: 10 }, { gibType: 'body', width: 11, height: 9 }],
+  Bear:   [{ gibType: 'ear', width: 10, height: 10 }, { gibType: 'ear', width: 10, height: 10 }, { gibType: 'snout', width: 10, height: 8 }, { gibType: 'body', width: 14, height: 12 }],
+  Owl:    [{ gibType: 'wing', width: 12, height: 8 }, { gibType: 'wing', width: 12, height: 8 }, { gibType: 'body', width: 14, height: 12 }],
+  Cat:    [{ gibType: 'ear', width: 8, height: 10 }, { gibType: 'ear', width: 8, height: 10 }, { gibType: 'tail', width: 14, height: 6 }, { gibType: 'body', width: 14, height: 12 }],
+  Wolf:   [{ gibType: 'ear', width: 8, height: 12 }, { gibType: 'ear', width: 8, height: 12 }, { gibType: 'tail', width: 16, height: 10 }, { gibType: 'body', width: 14, height: 12 }],
+  Panda:  [{ gibType: 'ear', width: 10, height: 10 }, { gibType: 'ear', width: 10, height: 10 }, { gibType: 'body', width: 14, height: 12 }, { gibType: 'body', width: 10, height: 10 }],
+  Pig:    [{ gibType: 'ear', width: 8, height: 10 }, { gibType: 'ear', width: 8, height: 10 }, { gibType: 'snout', width: 8, height: 6 }, { gibType: 'tail', width: 10, height: 8 }, { gibType: 'body', width: 14, height: 12 }],
+  Cow:    [{ gibType: 'horn', width: 8, height: 12 }, { gibType: 'horn', width: 8, height: 12 }, { gibType: 'tail', width: 14, height: 6 }, { gibType: 'body', width: 14, height: 12 }],
+  Goat:   [{ gibType: 'horn', width: 8, height: 14 }, { gibType: 'horn', width: 8, height: 14 }, { gibType: 'beard', width: 8, height: 10 }, { gibType: 'body', width: 14, height: 12 }],
+  Horse:  [{ gibType: 'ear', width: 8, height: 10 }, { gibType: 'ear', width: 8, height: 10 }, { gibType: 'mane', width: 12, height: 14 }, { gibType: 'body', width: 14, height: 12 }],
+  Sheep:  [{ gibType: 'ear', width: 8, height: 8 }, { gibType: 'ear', width: 8, height: 8 }, { gibType: 'wool', width: 14, height: 12 }, { gibType: 'body', width: 14, height: 12 }],
+  Monkey: [{ gibType: 'ear', width: 10, height: 10 }, { gibType: 'ear', width: 10, height: 10 }, { gibType: 'tail', width: 16, height: 8 }, { gibType: 'body', width: 14, height: 12 }],
+  Tiger:  [{ gibType: 'ear', width: 10, height: 10 }, { gibType: 'ear', width: 10, height: 10 }, { gibType: 'snout', width: 8, height: 6 }, { gibType: 'body', width: 14, height: 12 }],
+  Rhino:  [{ gibType: 'ear', width: 8, height: 8 }, { gibType: 'ear', width: 8, height: 8 }, { gibType: 'horn', width: 8, height: 14 }, { gibType: 'body', width: 14, height: 12 }],
 };
 
 export function createSplatMark(victim: Player): SplatMark {
   const particles: Array<{ x: number; y: number; radius: number }> = [];
-  const numParticles = 5 + Math.floor(Math.random() * 6);
+  const numParticles = 8 + Math.floor(Math.random() * 8);
 
   for (let i = 0; i < numParticles; i++) {
     particles.push({
-      x: (Math.random() - 0.5) * 40,
-      y: (Math.random() - 0.5) * 30,
-      radius: 3 + Math.random() * 8,
+      x: (Math.random() - 0.5) * 60,
+      y: (Math.random() - 0.5) * 45,
+      radius: 4 + Math.random() * 10,
     });
   }
 
   return {
     x: victim.x + victim.width / 2,
     y: victim.y + victim.height / 2,
-    radius: 15 + Math.random() * 10,
+    radius: 20 + Math.random() * 15,
     color: victim.character.color,
     shape: CHARACTER_SPLAT_SHAPES[victim.character.name] ?? 'circle',
     particles,

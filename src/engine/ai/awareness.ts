@@ -342,6 +342,18 @@ export function buildAwareness(
     }
   }
 
+  // Nav hints: manual overrides for obstacle-blocked areas
+  if (navTarget && arena.navHints) {
+    for (const hint of arena.navHints) {
+      if (hint.onPlatform === currentPlatformIdx &&
+          self.x >= hint.inZone.x && self.x < hint.inZone.x + hint.inZone.width) {
+        const hp = arena.platforms[hint.goTo];
+        navTarget = { x: hp.x, y: hp.y, width: hp.width, approachX: hint.approachX, type: hint.type };
+        break;
+      }
+    }
+  }
+
   return {
     self: {
       x: self.x, y: self.y, vx: self.vx, vy: self.vy,
@@ -357,4 +369,3 @@ export function buildAwareness(
     currentPlatformIdx, navTarget,
   };
 }
-

@@ -57,6 +57,18 @@ export interface Arena {
   bouncyPlatforms?: number[];  // indices into platforms[] that bounce players
   allowFallOff?: boolean;
   noSpawnZones?: AABB[];       // zones where hazards/characters should not spawn
+  carrotZones?: AABB[];        // zones with increased carrot spawn likelihood
+  noSprings?: boolean;         // disable spring spawning on this arena
+  /** Nav hints: manual overrides for AI pathfinding in obstacle-blocked areas.
+   *  When a bot is on `onPlatform` within `inZone` x-range, navTarget is overridden
+   *  to route through `goTo` platform at `approachX`. Normal nav resumes after the hop. */
+  navHints?: Array<{
+    onPlatform: number;
+    inZone: { x: number; width: number };
+    goTo: number;
+    approachX: number;
+    type: 'j' | 'd';
+  }>;
 }
 
 export type CharacterSlot = 'P1' | 'P2' | 'P3' | 'P4' | 'P5';
@@ -156,6 +168,43 @@ export interface Particle {
   color: string;
 }
 
+export type GibType = 'ear' | 'tail' | 'body' | 'snout' | 'horn' | 'wing' | 'beard' | 'mane' | 'wool';
+
+export interface Gib {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  rotation: number;
+  rotationSpeed: number;
+  width: number;
+  height: number;
+  color: string;
+  darkColor: string;
+  lightColor: string;
+  characterName: string;
+  gibType: GibType;
+  bounced: boolean;
+  life: number;
+}
+
+export type ConfettiShape = 'star' | 'diamond' | 'circle' | 'ribbon';
+
+export interface ConfettiParticle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  maxLife: number;
+  size: number;
+  color: string;
+  shape: ConfettiShape;
+  rotation: number;
+  rotationSpeed: number;
+  flutter: number;
+}
+
 export type GameScreen = 'menu' | 'charSelect' | 'match' | 'victory';
 
 export type BotDifficulty = 'easy' | 'medium' | 'hard' | 'impossible';
@@ -209,7 +258,6 @@ export interface Thorn {
 
 export interface MatchState {
   players: Player[];
-  splatMarks: SplatMark[];
   killFeed: KillFeedEntry[];
   timeElapsed: number;
   matchOver: boolean;
@@ -240,6 +288,8 @@ export interface MatchState {
   geyserStates: Array<{ timer: number; active: boolean; activeTimer: number }>;
   pigeonFlocks: Array<{ x: number; y: number; active: boolean; respawnTimer: number; scatterParticles: Array<{ x: number; y: number; vx: number; vy: number; life: number }> }>;
   bouncyWobble: Map<number, number>;  // platform index → wobble timer
+  gibs: Gib[];
+  confetti: ConfettiParticle[];
 }
 
 export interface MatchStats {

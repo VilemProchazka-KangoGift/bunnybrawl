@@ -1,4 +1,4 @@
-import type { Arena, Player, SplatMark, MatchState, Particle, Carrot, SpringMushroom, Thorn, WeatherParticle, WildlifeEntity, PlayerSlot } from './types';
+import type { Arena, Player, MatchState, Particle, Carrot, SpringMushroom, Thorn, WeatherParticle, WildlifeEntity, PlayerSlot, Gib, ConfettiParticle } from './types';
 import { isBotSlot } from './types';
 import type { ThemeConfig } from './themes/types';
 import { aabbOverlap } from './physics';
@@ -8,6 +8,7 @@ import {
   SHOCKWAVE_DURATION, SCREEN_FLASH_DURATION, SPRING_TRAIL_DURATION, SCORE_ANIM_DURATION,
 } from './constants';
 import { drawCloud as drawCloudPrimitive, drawHill, drawPlatformMoss } from './themes/drawPrimitives';
+import i18n from '../i18n';
 
 interface Cloud {
   x: number;
@@ -160,74 +161,33 @@ export class Renderer {
     return `rgb(${r},${g},${b})`;
   }
 
-  // ---- Splat marks ----
-
-  renderSplatMarks(splatMarks: SplatMark[], goreMode: boolean): void {
+  bakeGibs(gibs: Gib[]): void {
     const ctx = this.bgCtx;
-    for (const splat of splatMarks) {
-      const color = goreMode ? '#CC222288' : splat.color + '88';
-      ctx.fillStyle = color;
+    for (const gib of gibs) {
+      ctx.save();
+      ctx.globalAlpha = 1;
+      ctx.translate(gib.x, gib.y);
+      ctx.rotate(gib.rotation);
+      this.drawGibShape(ctx, gib);
+      ctx.restore();
+    }
+  }
 
-      // Shape-specific main mark
+  renderBloodDrips(drips: Array<{ x: number; y: number; radius: number; color: string }>): void {
+    const ctx = this.bgCtx;
+    for (const drip of drips) {
+      ctx.fillStyle = drip.color + '99';
       ctx.beginPath();
-      switch (splat.shape) {
-        case 'star': {
-          const r = splat.radius;
-          for (let i = 0; i < 5; i++) {
-            const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
-            const aInner = a + Math.PI / 5;
-            ctx.lineTo(splat.x + Math.cos(a) * r, splat.y + Math.sin(a) * r);
-            ctx.lineTo(splat.x + Math.cos(aInner) * r * 0.4, splat.y + Math.sin(aInner) * r * 0.4);
-          }
-          ctx.closePath();
-          break;
-        }
-        case 'ring':
-          ctx.arc(splat.x, splat.y, splat.radius, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = 'rgba(0,0,0,0)';
-          ctx.globalCompositeOperation = 'destination-out';
-          ctx.beginPath();
-          ctx.arc(splat.x, splat.y, splat.radius * 0.5, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.globalCompositeOperation = 'source-over';
-          ctx.fillStyle = color;
-          ctx.beginPath(); // dummy to skip main fill below
-          break;
-        case 'paw': {
-          // Main pad
-          ctx.ellipse(splat.x, splat.y, splat.radius * 0.6, splat.radius * 0.5, 0, 0, Math.PI * 2);
-          ctx.fill();
-          // Toe beans
-          for (let i = -1; i <= 1; i++) {
-            ctx.beginPath();
-            ctx.arc(splat.x + i * splat.radius * 0.4, splat.y - splat.radius * 0.5, splat.radius * 0.25, 0, Math.PI * 2);
-            ctx.fill();
-          }
-          ctx.beginPath();
-          break;
-        }
-        case 'splat': {
-          // Irregular blob
-          const points = 8;
-          for (let i = 0; i < points; i++) {
-            const a = (i / points) * Math.PI * 2;
-            const r = splat.radius * (0.6 + Math.random() * 0.8);
-            if (i === 0) ctx.moveTo(splat.x + Math.cos(a) * r, splat.y + Math.sin(a) * r);
-            else ctx.lineTo(splat.x + Math.cos(a) * r, splat.y + Math.sin(a) * r);
-          }
-          ctx.closePath();
-          break;
-        }
-        default:
-          ctx.arc(splat.x, splat.y, splat.radius, 0, Math.PI * 2);
-      }
+      ctx.arc(drip.x, drip.y, drip.radius, 0, Math.PI * 2);
       ctx.fill();
-
-      // Droplet particles
-      for (const p of splat.particles) {
+      // Small trail drops below
+      const trailCount = 1 + Math.floor(Math.random() * 3);
+      for (let t = 0; t < trailCount; t++) {
+        const ty = drip.y + 2 + Math.random() * 4;
+        const tx = drip.x + (Math.random() - 0.5) * 3;
+        const tr = drip.radius * (0.3 + Math.random() * 0.4);
         ctx.beginPath();
-        ctx.arc(splat.x + p.x, splat.y + p.y, p.radius, 0, Math.PI * 2);
+        ctx.arc(tx, ty, tr, 0, Math.PI * 2);
         ctx.fill();
       }
     }
@@ -328,6 +288,10 @@ export class Renderer {
 
     // Particles
     this.drawParticles(ctx, particles);
+
+    // Gibs and confetti
+    if (matchState.gibs.length > 0) this.drawGibs(ctx, matchState.gibs);
+    if (matchState.confetti.length > 0) this.drawConfetti(ctx, matchState.confetti);
 
     // Stomp shockwaves (e) — after particles, before players
     if (matchState.shockwaves) {
@@ -1163,6 +1127,384 @@ export class Renderer {
     ctx.globalAlpha = 1;
   }
 
+  // ---- Gibs ----
+
+  private drawGibs(ctx: CanvasRenderingContext2D, gibs: Gib[]): void {
+    for (const gib of gibs) {
+      ctx.save();
+      ctx.globalAlpha = 1;
+      ctx.translate(gib.x, gib.y);
+      ctx.rotate(gib.rotation);
+      this.drawGibShape(ctx, gib);
+      ctx.restore();
+    }
+  }
+
+  private drawGibShape(ctx: CanvasRenderingContext2D, gib: Gib): void {
+    const { characterName, gibType, color, darkColor, lightColor } = gib;
+
+    // Body gib is generic for all characters — colored oval
+    if (gibType === 'body') {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, gib.width / 2, gib.height / 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      return;
+    }
+
+    switch (characterName) {
+      case 'Bunny':
+        if (gibType === 'ear') {
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 4, 12, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#FFB6C1';
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 2, 8, 0, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (gibType === 'tail') {
+          ctx.fillStyle = lightColor;
+          ctx.beginPath();
+          ctx.arc(0, 0, 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        break;
+
+      case 'Fox':
+        if (gibType === 'ear') {
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.moveTo(0, -6);
+          ctx.lineTo(-5, 5);
+          ctx.lineTo(5, 5);
+          ctx.closePath();
+          ctx.fill();
+        } else if (gibType === 'tail') {
+          ctx.fillStyle = lightColor;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 8, 5, 0.3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#FFFFFF';
+          ctx.beginPath();
+          ctx.arc(6, 0, 3, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (gibType === 'snout') {
+          ctx.fillStyle = '#FFF8DC';
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 5, 4, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        break;
+
+      case 'Bear':
+        if (gibType === 'ear') {
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.arc(0, 0, 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = darkColor;
+          ctx.beginPath();
+          ctx.arc(0, 0, 3, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (gibType === 'snout') {
+          ctx.fillStyle = '#D2B48C';
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 6, 5, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        break;
+
+      case 'Owl':
+        if (gibType === 'wing') {
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 6, 4, 0.4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = darkColor;
+          ctx.beginPath();
+          ctx.ellipse(0, 2, 4, 2, 0.4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        break;
+
+      case 'Cat':
+        if (gibType === 'ear') {
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.moveTo(0, -6);
+          ctx.lineTo(-4, 5);
+          ctx.lineTo(4, 5);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = '#FFB6C1';
+          ctx.beginPath();
+          ctx.moveTo(0, -3);
+          ctx.lineTo(-2, 3);
+          ctx.lineTo(2, 3);
+          ctx.closePath();
+          ctx.fill();
+        } else if (gibType === 'tail') {
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 3;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(-6, 0);
+          ctx.quadraticCurveTo(0, -6, 6, 0);
+          ctx.stroke();
+        }
+        break;
+
+      case 'Wolf':
+        if (gibType === 'ear') {
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.moveTo(0, -7);
+          ctx.lineTo(-4, 5);
+          ctx.lineTo(4, 5);
+          ctx.closePath();
+          ctx.fill();
+        } else if (gibType === 'tail') {
+          ctx.fillStyle = darkColor;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 8, 5, 0.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        break;
+
+      case 'Panda':
+        if (gibType === 'ear') {
+          ctx.fillStyle = darkColor;
+          ctx.beginPath();
+          ctx.arc(0, 0, 5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        break;
+
+      case 'Pig':
+        if (gibType === 'ear') {
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 4, 6, 0.3, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (gibType === 'snout') {
+          ctx.fillStyle = lightColor;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 5, 4, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = darkColor;
+          ctx.beginPath();
+          ctx.arc(-2, 0, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(2, 0, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (gibType === 'tail') {
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 2;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.arc(0, 0, 4, 0, Math.PI * 1.5);
+          ctx.stroke();
+        }
+        break;
+
+      case 'Cow':
+        if (gibType === 'horn') {
+          ctx.fillStyle = '#F5DEB3';
+          ctx.beginPath();
+          ctx.moveTo(0, -7);
+          ctx.lineTo(-3, 5);
+          ctx.lineTo(3, 5);
+          ctx.closePath();
+          ctx.fill();
+        } else if (gibType === 'tail') {
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 2;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(0, -4);
+          ctx.lineTo(0, 4);
+          ctx.stroke();
+          ctx.fillStyle = darkColor;
+          ctx.beginPath();
+          ctx.ellipse(0, 5, 3, 2, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        break;
+
+      case 'Goat':
+        if (gibType === 'horn') {
+          ctx.fillStyle = '#C8B896';
+          ctx.beginPath();
+          ctx.moveTo(0, -8);
+          ctx.quadraticCurveTo(4, -3, 2, 5);
+          ctx.lineTo(-2, 5);
+          ctx.quadraticCurveTo(-4, -3, 0, -8);
+          ctx.closePath();
+          ctx.fill();
+        } else if (gibType === 'beard') {
+          ctx.fillStyle = lightColor;
+          ctx.beginPath();
+          ctx.moveTo(-3, -3);
+          ctx.lineTo(0, 6);
+          ctx.lineTo(3, -3);
+          ctx.closePath();
+          ctx.fill();
+        }
+        break;
+
+      case 'Horse':
+        if (gibType === 'ear') {
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 3, 6, 0, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (gibType === 'mane') {
+          ctx.fillStyle = darkColor;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 4, 8, 0.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        break;
+
+      case 'Sheep':
+        if (gibType === 'ear') {
+          ctx.fillStyle = darkColor;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 3, 5, 0.3, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (gibType === 'wool') {
+          ctx.fillStyle = lightColor;
+          // Fluffy cloud shape
+          for (let i = 0; i < 5; i++) {
+            const a = (i / 5) * Math.PI * 2;
+            ctx.beginPath();
+            ctx.arc(Math.cos(a) * 4, Math.sin(a) * 3, 4, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        break;
+
+      case 'Monkey':
+        if (gibType === 'ear') {
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.arc(0, 0, 5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = lightColor;
+          ctx.beginPath();
+          ctx.arc(0, 0, 3, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (gibType === 'tail') {
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 3;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.arc(0, 0, 6, 0, Math.PI * 1.5);
+          ctx.stroke();
+        }
+        break;
+
+      case 'Tiger':
+        if (gibType === 'ear') {
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.arc(0, 0, 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = darkColor;
+          ctx.beginPath();
+          ctx.arc(0, 0, 3, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (gibType === 'snout') {
+          ctx.fillStyle = lightColor;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 6, 5, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        break;
+
+      case 'Rhino':
+        if (gibType === 'ear') {
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.arc(0, 0, 4, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (gibType === 'horn') {
+          ctx.fillStyle = lightColor;
+          ctx.beginPath();
+          ctx.moveTo(0, -8);
+          ctx.lineTo(-3, 5);
+          ctx.lineTo(3, 5);
+          ctx.closePath();
+          ctx.fill();
+        }
+        break;
+
+      default:
+        // Fallback: colored oval
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, gib.width / 2, gib.height / 2, 0, 0, Math.PI * 2);
+        ctx.fill();
+    }
+  }
+
+  // ---- Confetti ----
+
+  private drawConfetti(ctx: CanvasRenderingContext2D, confetti: ConfettiParticle[]): void {
+    for (const c of confetti) {
+      const alpha = c.life / c.maxLife;
+      ctx.save();
+      ctx.globalAlpha = alpha * 0.9;
+      ctx.translate(c.x, c.y);
+      ctx.rotate(c.rotation);
+      ctx.fillStyle = c.color;
+
+      switch (c.shape) {
+        case 'star': {
+          ctx.beginPath();
+          for (let i = 0; i < 5; i++) {
+            const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
+            const aInner = a + Math.PI / 5;
+            ctx.lineTo(Math.cos(a) * c.size, Math.sin(a) * c.size);
+            ctx.lineTo(Math.cos(aInner) * c.size * 0.4, Math.sin(aInner) * c.size * 0.4);
+          }
+          ctx.closePath();
+          ctx.fill();
+          break;
+        }
+        case 'diamond': {
+          const s = c.size;
+          ctx.beginPath();
+          ctx.moveTo(0, -s);
+          ctx.lineTo(s * 0.6, 0);
+          ctx.lineTo(0, s);
+          ctx.lineTo(-s * 0.6, 0);
+          ctx.closePath();
+          ctx.fill();
+          break;
+        }
+        case 'ribbon': {
+          const s = c.size;
+          ctx.beginPath();
+          ctx.moveTo(-s, -s * 0.3);
+          ctx.quadraticCurveTo(0, -s * 0.8, s, -s * 0.3);
+          ctx.lineTo(s, s * 0.3);
+          ctx.quadraticCurveTo(0, s * 0.8, -s, s * 0.3);
+          ctx.closePath();
+          ctx.fill();
+          break;
+        }
+        default: // circle
+          ctx.beginPath();
+          ctx.arc(0, 0, c.size, 0, Math.PI * 2);
+          ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+
   // ---- Player drawing ----
 
   private drawPlayer(ctx: CanvasRenderingContext2D, player: Player, nearCarrot: boolean = false): void {
@@ -1909,6 +2251,86 @@ export class Renderer {
       ctx.beginPath();
       ctx.arc(cx - w * 0.35, yOff + h * 0.4, 7, -Math.PI * 0.3, Math.PI * 1.3);
       ctx.stroke();
+    } else if (char.name === 'Tiger') {
+      // Tiger: muscular oval body, round ears, stripes
+      ctx.ellipse(cx, yOff + h * 0.52, w * 0.42, h * 0.42, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Round ears
+      ctx.beginPath();
+      ctx.arc(cx - 10, yOff + 4, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx + 10, yOff + 4, 6, 0, Math.PI * 2);
+      ctx.fill();
+      // Inner ears
+      ctx.fillStyle = char.darkColor;
+      ctx.beginPath();
+      ctx.arc(cx - 10, yOff + 4, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx + 10, yOff + 4, 3, 0, Math.PI * 2);
+      ctx.fill();
+      // Black stripes on body
+      ctx.strokeStyle = char.darkColor;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(cx - 8, yOff + h * 0.35); ctx.lineTo(cx - 12, yOff + h * 0.45); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx - 5, yOff + h * 0.3); ctx.lineTo(cx - 8, yOff + h * 0.42); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx + 8, yOff + h * 0.35); ctx.lineTo(cx + 12, yOff + h * 0.45); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx + 5, yOff + h * 0.3); ctx.lineTo(cx + 8, yOff + h * 0.42); ctx.stroke();
+      // White muzzle
+      ctx.fillStyle = char.lightColor;
+      ctx.beginPath();
+      ctx.ellipse(cx + 1, yOff + h * 0.52, 6, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Nose
+      ctx.fillStyle = '#FF6060';
+      ctx.beginPath();
+      ctx.ellipse(cx + 1, yOff + h * 0.48, 3, 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Whiskers
+      ctx.strokeStyle = '#DDD';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(cx - 4, yOff + h * 0.52); ctx.lineTo(cx - 14, yOff + h * 0.48); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx - 4, yOff + h * 0.54); ctx.lineTo(cx - 14, yOff + h * 0.56); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx + 6, yOff + h * 0.52); ctx.lineTo(cx + 16, yOff + h * 0.48); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx + 6, yOff + h * 0.54); ctx.lineTo(cx + 16, yOff + h * 0.56); ctx.stroke();
+    } else if (char.name === 'Rhino') {
+      // Rhino: wide heavy body, small ears, horn
+      ctx.ellipse(cx, yOff + h * 0.55, w * 0.44, h * 0.4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Small rounded ears
+      ctx.beginPath();
+      ctx.arc(cx - 10, yOff + 6, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx + 10, yOff + 6, 4, 0, Math.PI * 2);
+      ctx.fill();
+      // Horn
+      ctx.fillStyle = char.lightColor;
+      ctx.beginPath();
+      ctx.moveTo(cx + 3, yOff + h * 0.35);
+      ctx.lineTo(cx + 6, yOff - 2);
+      ctx.lineTo(cx + 9, yOff + h * 0.38);
+      ctx.closePath();
+      ctx.fill();
+      // Smaller second horn
+      ctx.beginPath();
+      ctx.moveTo(cx + 1, yOff + h * 0.42);
+      ctx.lineTo(cx + 3, yOff + h * 0.3);
+      ctx.lineTo(cx + 6, yOff + h * 0.42);
+      ctx.closePath();
+      ctx.fill();
+      // Thick skin folds
+      ctx.strokeStyle = char.darkColor;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(cx - 2, yOff + h * 0.55, w * 0.3, 0.3, 1.2);
+      ctx.stroke();
+      // Nostril
+      ctx.fillStyle = char.darkColor;
+      ctx.beginPath();
+      ctx.arc(cx + 9, yOff + h * 0.48, 1.5, 0, Math.PI * 2);
+      ctx.fill();
     }
 
     // Eyes (generic — for characters without custom eyes)
@@ -1958,6 +2380,45 @@ export class Renderer {
         ctx.lineTo(cx + i * 5, yOff - 20);
         ctx.stroke();
       }
+    }
+
+    // Bubble helmet for space station and underwater arenas
+    if (this.theme.id === 'space_station' || this.theme.id === 'underwater') {
+      const hCx = cx + 1;
+      const hCy = yOff + h * 0.38;
+      const hRx = w * 0.52;
+      const hRy = h * 0.42;
+      // Glass dome
+      ctx.beginPath();
+      ctx.ellipse(hCx, hCy, hRx, hRy, 0, 0, Math.PI * 2);
+      ctx.fillStyle = this.theme.id === 'underwater'
+        ? 'rgba(180, 220, 255, 0.12)'
+        : 'rgba(200, 230, 255, 0.10)';
+      ctx.fill();
+      ctx.strokeStyle = this.theme.id === 'underwater'
+        ? 'rgba(140, 200, 255, 0.50)'
+        : 'rgba(180, 210, 255, 0.45)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      // Highlight reflection arc (upper-left)
+      ctx.beginPath();
+      ctx.ellipse(hCx - hRx * 0.25, hCy - hRy * 0.2, hRx * 0.5, hRy * 0.45, -0.4, -Math.PI * 0.6, Math.PI * 0.3);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+      // Small specular dot
+      ctx.beginPath();
+      ctx.arc(hCx - hRx * 0.3, hCy - hRy * 0.35, 1.8, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.fill();
+      // Collar ring at the base of the helmet
+      ctx.beginPath();
+      ctx.ellipse(hCx, hCy + hRy * 0.85, hRx * 0.7, 3, 0, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(180, 190, 200, 0.4)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(140, 150, 160, 0.35)';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
     }
 
     ctx.restore();
@@ -2059,32 +2520,36 @@ export class Renderer {
       sunY = 130 - sunArc * 90;
       const sunAlpha = Math.min(1, (1 - nightIntensity) * 1.5);
 
+      // Sun redshift: gold → deep orange as sun approaches horizon
+      const sunRedshift = Math.max(0, (sunT - 0.55) / 0.45);
+      const lerpCh = (a: number, b: number, t: number) => Math.round(a + (b - a) * t);
+
       if (sunAlpha > 0.05) {
         ctx.save();
-        // Glow
-        ctx.globalAlpha = sunAlpha * 0.3;
-        ctx.fillStyle = '#FFD700';
+        // Glow (gold → deep red, grows during sunset)
+        ctx.globalAlpha = sunAlpha * (0.3 + sunRedshift * 0.2);
+        ctx.fillStyle = `rgb(${lerpCh(255,240,sunRedshift)}, ${lerpCh(215,50,sunRedshift)}, ${lerpCh(0,10,sunRedshift)})`;
         ctx.beginPath();
-        ctx.arc(sunX, sunY, 32, 0, Math.PI * 2);
+        ctx.arc(sunX, sunY, 32 + sunRedshift * 16, 0, Math.PI * 2);
         ctx.fill();
-        // Body
+        // Body (orange → crimson)
         ctx.globalAlpha = sunAlpha * 0.9;
-        ctx.fillStyle = '#FFA500';
+        ctx.fillStyle = `rgb(${lerpCh(255,220,sunRedshift)}, ${lerpCh(165,30,sunRedshift)}, ${lerpCh(0,10,sunRedshift)})`;
         ctx.beginPath();
         ctx.arc(sunX, sunY, 15, 0, Math.PI * 2);
         ctx.fill();
-        // Bright center
-        ctx.fillStyle = '#FFD700';
+        // Bright center (gold → deep orange)
+        ctx.fillStyle = `rgb(${lerpCh(255,255,sunRedshift)}, ${lerpCh(215,80,sunRedshift)}, ${lerpCh(0,10,sunRedshift)})`;
         ctx.beginPath();
         ctx.arc(sunX, sunY, 9, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
 
-        // Light rays from sun (m) — during daytime
+        // Light rays from sun (m) — during daytime, warmed during sunset
         if (nightIntensity < 0.3) {
           ctx.save();
           const rayAlpha = 0.04 * (1 - nightIntensity / 0.3);
-          ctx.fillStyle = `rgba(255, 215, 100, ${rayAlpha})`;
+          ctx.fillStyle = `rgba(255, ${lerpCh(215,60,sunRedshift)}, ${lerpCh(100,15,sunRedshift)}, ${rayAlpha})`;
           for (let r = 0; r < 4; r++) {
             const angle = -0.3 + r * 0.2;
             const rayW = 60 + r * 20;
@@ -2098,6 +2563,31 @@ export class Renderer {
           ctx.restore();
         }
       }
+    }
+
+    // Sunset afterglow: warm redshift overlay during golden hour
+    // dayPhase 0.25 = sunset; ramp in 0.16→0.25, linger + fade 0.25→0.38
+    let afterglowIntensity = 0;
+    if (dayPhase > 0.16 && dayPhase < 0.38) {
+      if (dayPhase < 0.25) {
+        afterglowIntensity = (dayPhase - 0.16) / 0.09;
+      } else {
+        afterglowIntensity = 1 - (dayPhase - 0.25) / 0.13;
+      }
+      // Smoothstep for natural ramp
+      afterglowIntensity = afterglowIntensity * afterglowIntensity * (3 - 2 * afterglowIntensity);
+    }
+    if (afterglowIntensity > 0.01) {
+      ctx.save();
+      // Gradient overlay: warm orange-red, stronger near horizon
+      const agGrad = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+      agGrad.addColorStop(0, `rgba(220, 40, 10, ${afterglowIntensity * 0.10})`);
+      agGrad.addColorStop(0.35, `rgba(240, 55, 15, ${afterglowIntensity * 0.20})`);
+      agGrad.addColorStop(0.65, `rgba(230, 45, 10, ${afterglowIntensity * 0.28})`);
+      agGrad.addColorStop(1.0, `rgba(200, 35, 10, ${afterglowIntensity * 0.22})`);
+      ctx.fillStyle = agGrad;
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.restore();
     }
 
     // Darkness overlay
@@ -2326,7 +2816,8 @@ export class Renderer {
       ctx.lineWidth = 1;
       ctx.stroke();
 
-      const displayName = compact ? player.character.name.slice(0, 4) : player.character.name;
+      const translatedName = i18n.t(`char_${player.character.name}`, player.character.name);
+      const displayName = compact ? translatedName.slice(0, 4) : translatedName;
       ctx.fillStyle = '#FFF';
       ctx.font = `bold ${compact ? 12 : 16}px "Press Start 2P", monospace`;
       ctx.textAlign = 'left';

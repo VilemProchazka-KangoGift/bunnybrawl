@@ -105,14 +105,19 @@ export class AIController {
   }
 
   private computeIdealInput(self: Player, state: MatchState, arena: Arena): InputState {
-    if (this.stuckTimer > 60) {
+    if (this.stuckTimer > 45) {
       this.stuckTimer = 0;
-      // If nav data suggests a drop, prefer walking off edge toward target
+      // Use nav target to escape in the right direction (jump over obstacles, drop off edges)
       const preferSafe = this.personality.cautiousness >= 1.2;
       const stuckAwareness = buildAwareness(self, state, arena, this.difficulty.awarenessRadius, this.difficulty.pathfindingDepth, preferSafe);
-      if (stuckAwareness.navTarget && stuckAwareness.navTarget.type === 'd') {
+      if (stuckAwareness.navTarget) {
         const dx = stuckAwareness.navTarget.approachX - self.x;
-        return { left: dx < -10, right: dx > 10, jump: false, down: true };
+        return {
+          left: dx < -10,
+          right: dx > 10,
+          jump: stuckAwareness.navTarget.type !== 'd',
+          down: stuckAwareness.navTarget.type === 'd',
+        };
       }
       return {
         left: Math.random() > 0.5,

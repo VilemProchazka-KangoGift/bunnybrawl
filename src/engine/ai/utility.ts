@@ -37,8 +37,11 @@ export function evaluateActions(
   evaluateRoam(awareness, scores);
 
   // Suppress jumping in tight spaces — but only when the platform is directly overhead
-  // (horizontal overlap), not when it's a side target the bot wants to jump onto
-  if (awareness.nearestPlatformAbove && awareness.nearestPlatformAbove.dy > -80) {
+  // (horizontal overlap), not when it's a side target the bot wants to jump onto.
+  // Skip suppression when nav is telling the bot to jump — small obstacles like headstones
+  // (dy > -80) shouldn't block a nav-guided jump to a higher platform.
+  const navWantsJump = awareness.navTarget && awareness.navTarget.type === 'j';
+  if (!navWantsJump && awareness.nearestPlatformAbove && awareness.nearestPlatformAbove.dy > -80) {
     const plat = awareness.nearestPlatformAbove;
     const selfCx = awareness.self.x + 16; // PLAYER_WIDTH/2
     const underPlatform = selfCx > plat.x && selfCx < plat.x + plat.width;
@@ -99,26 +102,22 @@ function evaluateChaseTarget(a: AwarenessSnapshot, s: ActionScores, p: AIPersona
   const weight = 0.5 * p.aggressiveness;
   const { dx, dy } = a.nearestEnemy;
 
-  // If nav system has a target (enemy on different platform), defer vertical navigation to it
-  // Only chase horizontally when on same platform or no nav available
-  if (a.navTarget && a.self.onGround) {
-    // Nav is handling the path — don't add conflicting horizontal chase
-    // Exception: if enemy is on same Y level, walk toward them directly
-    if (Math.abs(dy) > 40) return;
-  }
+  // When airborne, don't chase toward elevated/below enemies — let landing prediction steer
+  if (!a.self.onGround && Math.abs(dy) > 40) return;
+
+  // When on ground with nav, defer to nav for different-level enemies
+  if (a.navTarget && a.self.onGround && Math.abs(dy) > 40) return;
 
   // If enemy is significantly above and there's a climbable platform,
   // DON'T add horizontal chase — let platformSeeking handle the path
-  const needsClimbing = dy < -60 && a.nearestPlatformAbove && a.self.onGround;
-  if (needsClimbing) return;
+  if (dy < -60 && a.nearestPlatformAbove && a.self.onGround) return;
 
   // Move toward nearest enemy — walking is the main chase behavior
   if (dx > 20) s.moveRight += weight;
   else if (dx < -20) s.moveLeft += weight;
 
   // Same Y level (within ~40px) = same platform — just walk, never jump
-  const samePlatform = Math.abs(dy) < 40;
-  if (samePlatform) return;
+  if (Math.abs(dy) < 40) return;
 
   // If enemy is below and we're on a platform, consider dropping
   if (dy > 60 && Math.abs(dx) < 50) {
@@ -132,6 +131,11 @@ function evaluateTargetPriority(a: AwarenessSnapshot, s: ActionScores, p: AIPers
   // Scale by aggressiveness — aggressive bots hunt harder
   const weight = 0.8 * p.aggressiveness * Math.min(a.priorityTarget.juiciness, 3);
   const { dx, dy } = a.priorityTarget;
+
+  // When airborne, don't chase elevated/below targets
+  if (!a.self.onGround && Math.abs(dy) > 40) return;
+  // When on ground with nav, defer to platformSeeking for different-level targets
+  if (a.navTarget && a.self.onGround && dy < -60) return;
 
   // Move toward target
   if (dx > 15) s.moveRight += weight;
@@ -154,7 +158,7 @@ function evaluatePlatformSeeking(a: AwarenessSnapshot, s: ActionScores, p: AIPer
   const roamAbove = a.roamTarget && a.roamTarget.y < a.self.y - 50;
   const climbing = hasEnemyAbove || roamAbove;
 
-  const weight = climbing ? 1.0 : 0.55 + 0.2 * p.platformPreference;
+  const weight = climbing ? 1.0 : 0.75;
 
   // Nav-guided pathfinding: use precomputed graph when available
   // Anti-predictability: chaotic bots sometimes ignore nav (fall back to reactive)
@@ -361,11 +365,12 @@ function evaluateLandingPrediction(a: AwarenessSnapshot, s: ActionScores): void 
 /** After respawning (invincible), aggressively chase nearest enemy */
 function evaluateInvincibilityAggression(a: AwarenessSnapshot, s: ActionScores, _p: AIPersonality): void {
   if (!a.self.invincible || !a.nearestEnemy) return;
+  // When airborne, don't chase elevated enemies
+  if (!a.self.onGround && Math.abs(a.nearestEnemy.dy) > 40) return;
   const weight = 1.0; // override personality — everyone is aggressive when invincible
   const { dx, dy } = a.nearestEnemy;
   if (dx > 15) s.moveRight += weight;
   else if (dx < -15) s.moveLeft += weight;
-  // Jump toward if they're above
   if (dy < -40 && a.self.onGround) {
     s.jump += weight * 0.4;
   }
@@ -428,7 +433,7 @@ function evaluateZoneExploitation(a: AwarenessSnapshot, s: ActionScores, p: AIPe
   // Use geysers for height
   if (a.nearGeyser && a.nearGeyser.timer < 2 && !a.nearGeyser.active) {
     const gDx = a.nearGeyser.x - a.self.x;
-    const exploitWeight = 0.5 * p.platformPreference;
+    const exploitWeight = 0.5;
     if (Math.abs(gDx) > 20) {
       if (gDx > 0) s.moveRight += exploitWeight;
       else s.moveLeft += exploitWeight;
@@ -442,7 +447,7 @@ function evaluateZoneExploitation(a: AwarenessSnapshot, s: ActionScores, p: AIPe
     if (dx > 15) s.moveRight += weight;
     else if (dx < -15) s.moveLeft += weight;
   } else if (a.inZeroG && a.self.onGround) {
-    s.jump += 0.15 * p.platformPreference;
+    s.jump += 0.15;
   }
   // Compensate for current push
   if (a.inCurrent !== 0) {

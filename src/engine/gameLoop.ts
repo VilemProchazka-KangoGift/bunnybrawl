@@ -1,5 +1,5 @@
 import type {
-  MatchState, MatchSettings, Arena, PlayerSlot, Player, Particle,
+  MatchState, MatchSettings, Arena, PlayerSlot, Player, Particle, Gib, GibType,
   WeatherParticle, MatchStats, PlayerStats, WildlifeEntity, EffectZone, Platform,
   InputState,
 } from './types';
@@ -10,7 +10,7 @@ import { randRange, pickWeighted, swapRemove } from './themes/utils';
 import { InputManager } from './input';
 import { Renderer } from './renderer';
 import { applyInput, applyGravity, movePlayer, collidePlatforms, updatePlayerState, applyArenaConstraints, collidePlayersHorizontal, aabbOverlap } from './physics';
-import { checkStomps, updateSplatTimers } from './stomp';
+import { checkStomps, updateSplatTimers, CHARACTER_GIBS } from './stomp';
 import { audio } from './audio';
 import {
   FIXED_TIMESTEP, MAX_FRAME_TIME,
@@ -26,6 +26,10 @@ import {
   SHOCKWAVE_MAX_RADIUS, SHOCKWAVE_DURATION, SCREEN_FLASH_DURATION,
   SPRING_TRAIL_DURATION, SCORE_ANIM_DURATION,
   GRAVITY, FRICTION, MAX_WALK_SPEED, JUMP_IMPULSE, MAX_FALL_SPEED,
+  BLOOD_COLOR,
+  GIB_GRAVITY, GIB_LAUNCH_SPEED_MIN, GIB_LAUNCH_SPEED_MAX, GIB_ROTATION_MAX,
+  GIB_BOUNCE_FACTOR, GIB_MAX_FLIGHT, GIB_MAX_COUNT,
+  CONFETTI_COUNT, CONFETTI_GRAVITY, CONFETTI_FLUTTER, CONFETTI_LIFE_MIN, CONFETTI_LIFE_MAX,
 } from './constants';
 import { getCharacterForSlot } from './characters';
 import { AIController } from './ai';
@@ -53,7 +57,6 @@ export class GameLoop {
   private rafId = 0;
   private running = false;
   private paused = false;
-  private newSplatsSinceRender: number[] = [];
   private particles: Particle[] = [];
   private fireworkTimer = 0;
   private afterimageAccumulators: Map<PlayerSlot, number> = new Map();
@@ -65,6 +68,8 @@ export class GameLoop {
   private geyserIndexMap: Map<EffectZone, number> = new Map();
   private floatingPlatforms: Array<{ plat: Platform; idx: number }> = [];
   private aiControllers: Map<string, AIController> = new Map();
+  private newBloodDripsSinceRender: Array<{ x: number; y: number; radius: number; color: string }> = [];
+  private newGroundedGibsSinceRender: Gib[] = [];
 
   constructor(
     bgCanvas: HTMLCanvasElement,
@@ -167,7 +172,7 @@ export class GameLoop {
 
     this.state = {
       players,
-      splatMarks: [], killFeed: [],
+      killFeed: [],
       timeElapsed: 0, matchOver: false, winner: null,
       carrots: [], carrotTimer: CARROT_SPAWN_INTERVAL,
       springs: [], thorns: [],
@@ -199,6 +204,8 @@ export class GameLoop {
         scatterParticles: [],
       })),
       bouncyWobble: new Map(),
+      gibs: [],
+      confetti: [],
     };
 
     // Cache filtered zone arrays (arena-static, avoids per-frame allocations)
@@ -317,17 +324,18 @@ export class GameLoop {
       }
       // Update firework particles with gravity
       this.updateParticles(frameTime);
+      this.updateGibs(frameTime);
+      this.updateConfetti(frameTime);
     }
 
-    // Render
-    if (this.newSplatsSinceRender.length > 0) {
-      const newSplats = this.newSplatsSinceRender.map(i => this.state.splatMarks[i]);
-      this.renderer.renderSplatMarks(newSplats, this.settings.goreMode);
-      this.newSplatsSinceRender.length = 0;
-      // Cap after rendering to prevent unbounded growth (old marks are baked into bg canvas)
-      if (this.state.splatMarks.length > 200) {
-        this.state.splatMarks.length = 200;
-      }
+    // Render — bake settled gibs and blood drips onto persistent background canvas
+    if (this.newGroundedGibsSinceRender.length > 0) {
+      this.renderer.bakeGibs(this.newGroundedGibsSinceRender);
+      this.newGroundedGibsSinceRender.length = 0;
+    }
+    if (this.newBloodDripsSinceRender.length > 0) {
+      this.renderer.renderBloodDrips(this.newBloodDripsSinceRender);
+      this.newBloodDripsSinceRender.length = 0;
     }
 
     this.renderer.renderFrame(this.state, this.arena, this.particles);
@@ -353,6 +361,7 @@ export class GameLoop {
   }
 
   private spawnSpring(): void {
+    if (this.arena.noSprings) return;
     if (this.floatingPlatforms.length === 0) return;
     // Filter to platforms with enough vertical clearance for a spring bounce (~200px)
     const minClearance = 200;
@@ -431,15 +440,123 @@ export class GameLoop {
   }
 
   private spawnKillSplatter(victim: Player): void {
+    if (this.settings.goreMode) {
+      this.spawnGoreParticles(victim);
+    }
+    this.spawnGibs(victim);
+    if (!this.settings.goreMode) {
+      this.spawnConfetti(victim);
+    }
+  }
+
+  private spawnGoreParticles(victim: Player): void {
     const cx = victim.x + victim.width / 2;
     const cy = victim.y + victim.height / 2;
-    const color = this.settings.goreMode ? '#CC2222' : victim.character.color;
-    const count = 15 + Math.floor(Math.random() * 10);
+    const count = 35 + Math.floor(Math.random() * 15);
     for (let i = 0; i < count; i++) {
+      const side = Math.random() < 0.5 ? -1 : 1;
+      const hSpeed = (120 + Math.random() * 220) * side;
+      const vSpeed = -(40 + Math.random() * 180);
+      const life = 0.6 + Math.random() * 0.8;
+      this.particles.push({
+        x: cx + (Math.random() - 0.5) * 14,
+        y: cy + (Math.random() - 0.5) * 10,
+        vx: hSpeed + (Math.random() - 0.5) * 60,
+        vy: vSpeed,
+        life, maxLife: life,
+        size: 2 + Math.random() * 5,
+        color: BLOOD_COLOR,
+      });
+    }
+  }
+
+  private launchGib(
+    cx: number, cy: number, spread: number,
+    angleMin: number, angleMax: number, speedMin: number, speedMax: number,
+    w: number, h: number,
+    color: string, darkColor: string, lightColor: string,
+    characterName: string, gibType: GibType,
+  ): void {
+    const angle = -Math.PI * (angleMin + Math.random() * (angleMax - angleMin));
+    const speed = speedMin + Math.random() * (speedMax - speedMin);
+    this.state.gibs.push({
+      x: cx + (Math.random() - 0.5) * spread,
+      y: cy + (Math.random() - 0.5) * spread * 0.7,
+      vx: Math.cos(angle) * speed * (Math.random() < 0.5 ? 1 : -1),
+      vy: Math.sin(angle) * speed,
+      rotation: Math.random() * Math.PI * 2,
+      rotationSpeed: (Math.random() - 0.5) * 2 * GIB_ROTATION_MAX,
+      width: w, height: h,
+      color, darkColor, lightColor,
+      characterName, gibType,
+      bounced: false,
+      life: GIB_MAX_FLIGHT,
+    });
+  }
+
+  private spawnGibs(victim: Player): void {
+    const cx = victim.x + victim.width / 2;
+    const cy = victim.y + victim.height / 2;
+    const { color, darkColor, lightColor, name } = victim.character;
+    const gore = this.settings.goreMode;
+    const confettiColors = GameLoop.CONFETTI_COLORS;
+    const pickConfetti = () => confettiColors[Math.floor(Math.random() * confettiColors.length)];
+    // Character body part gibs
+    const gibDefs = CHARACTER_GIBS[name];
+    if (gibDefs) {
+      for (const def of gibDefs) {
+        this.launchGib(cx, cy, 12, 0.15, 0.85, GIB_LAUNCH_SPEED_MIN, GIB_LAUNCH_SPEED_MAX,
+          def.width, def.height, color, darkColor, lightColor, name, def.gibType);
+      }
+    }
+    // Chunk gibs: blood in gore mode, confetti-colored in non-gore
+    const chunkCount = 5 + Math.floor(Math.random() * 4);
+    for (let i = 0; i < chunkCount; i++) {
+      const size = 4 + Math.random() * 6;
+      const c = gore ? BLOOD_COLOR : pickConfetti();
+      this.launchGib(cx, cy, 16, 0.1, 0.9, GIB_LAUNCH_SPEED_MIN * 0.8, GIB_LAUNCH_SPEED_MAX,
+        size, size * (0.6 + Math.random() * 0.4), c, c, c, '', 'body');
+    }
+    // Micro drop gibs: blood specks in gore mode, confetti specks in non-gore
+    const microCount = 25 + Math.floor(Math.random() * 15);
+    for (let i = 0; i < microCount; i++) {
+      const size = 1.5 + Math.random() * 2.5;
+      const c = gore ? BLOOD_COLOR : pickConfetti();
+      this.launchGib(cx, cy, 20, 0.05, 0.95, GIB_LAUNCH_SPEED_MIN * 0.5, GIB_LAUNCH_SPEED_MAX * 1.2,
+        size, size, c, c, c, '', 'body');
+    }
+    // Cap airborne gibs (grounded ones are baked to bgCtx)
+    while (this.state.gibs.length > GIB_MAX_COUNT) {
+      swapRemove(this.state.gibs, 0);
+    }
+  }
+
+  private static readonly CONFETTI_COLORS = ['#FFD700', '#FF69B4', '#00FFFF', '#7CFC00', '#FF6347', '#DA70D6', '#FFA500'];
+  private static readonly CONFETTI_SHAPES: Array<'star' | 'diamond' | 'circle' | 'ribbon'> = ['star', 'diamond', 'circle', 'ribbon'];
+
+  private spawnConfetti(victim: Player): void {
+    const cx = victim.x + victim.width / 2;
+    const cy = victim.y + victim.height / 2;
+    const colors = GameLoop.CONFETTI_COLORS;
+    const shapes = GameLoop.CONFETTI_SHAPES;
+    for (let i = 0; i < CONFETTI_COUNT; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const speed = 80 + Math.random() * 200;
-      const life = 0.4 + Math.random() * 0.6;
-      this.particles.push({ x: cx + (Math.random() - 0.5) * 10, y: cy + (Math.random() - 0.5) * 10, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 60, life, maxLife: life, size: 3 + Math.random() * 5, color });
+      const speed = 60 + Math.random() * 190;
+      const life = CONFETTI_LIFE_MIN + Math.random() * (CONFETTI_LIFE_MAX - CONFETTI_LIFE_MIN);
+      this.state.confetti.push({
+        x: cx + (Math.random() - 0.5) * 10,
+        y: cy + (Math.random() - 0.5) * 10,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 80,
+        life,
+        maxLife: life,
+        size: 3 + Math.random() * 4,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        shape: shapes[Math.floor(Math.random() * shapes.length)],
+        rotation: Math.random() * Math.PI * 2,
+        rotationSpeed: (Math.random() - 0.5) * 10,
+        flutter: Math.random() * Math.PI * 2,
+      });
     }
   }
 
@@ -520,7 +637,30 @@ export class GameLoop {
         candidates.push({ x: cx, y: cy, distSq: minDistSqTo(cx, cy) * 2.25 }); // 1.5x bias squared
       }
     }
-    // Filter out candidates too close to existing carrots
+    // Extra candidates inside carrot zones (increased spawn likelihood)
+    if (this.arena.carrotZones) {
+      for (const zone of this.arena.carrotZones) {
+        for (let attempt = 0; attempt < 8; attempt++) {
+          const cx = zone.x + 20 + Math.random() * (zone.width - 40);
+          const cy = zone.y + 20 + Math.random() * (zone.height - 40);
+          candidates.push({ x: cx, y: cy, distSq: minDistSqTo(cx, cy) * 4 }); // 2x bias squared
+        }
+      }
+    }
+    // Filter out candidates inside noSpawnZones (unreachable building interiors)
+    const noSpawn = this.arena.noSpawnZones;
+    if (noSpawn) {
+      for (let i = candidates.length - 1; i >= 0; i--) {
+        const c = candidates[i];
+        for (const z of noSpawn) {
+          if (c.x >= z.x && c.x <= z.x + z.width && c.y >= z.y && c.y <= z.y + z.height) {
+            swapRemove(candidates, i);
+            break;
+          }
+        }
+      }
+    }
+    // Pick candidate farthest from players/carrots
     let bestIdx = 0;
     let bestDistSq = -1;
     for (let i = 0; i < candidates.length; i++) {
@@ -539,17 +679,97 @@ export class GameLoop {
   // ---- Updates ----
 
   private updateParticles(dt: number): void {
+    const platforms = this.arena.platforms;
+    const gore = this.settings.goreMode;
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
       p.life -= dt;
       if (p.life <= 0) {
         swapRemove(this.particles, i);
-        // don't decrement i — re-check the swapped element at this index
-        continue; // loop decrements i, but the element at i is new — acceptable 1-frame delay
+        continue;
       }
+      const prevY = p.y;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       p.vy += 80 * dt;
+      // Blood particles leave drip marks on platform surfaces
+      if (gore && p.color === BLOOD_COLOR && p.vy > 0) {
+        for (let pi = 0; pi < platforms.length; pi++) {
+          const plat = platforms[pi];
+          if (prevY < plat.y && p.y >= plat.y && p.x >= plat.x && p.x <= plat.x + plat.width) {
+            this.newBloodDripsSinceRender.push({
+              x: p.x, y: plat.y,
+              radius: 2 + Math.random() * 3,
+              color: BLOOD_COLOR,
+            });
+            p.life = 0;
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  private updateGibs(dt: number): void {
+    const platforms = this.arena.platforms;
+    const gibs = this.state.gibs;
+    for (let i = gibs.length - 1; i >= 0; i--) {
+      const g = gibs[i];
+      // Airborne gib physics
+      g.x += g.vx * dt;
+      g.y += g.vy * dt;
+      g.vy += GIB_GRAVITY * dt;
+      g.rotation += g.rotationSpeed * dt;
+      g.life -= dt;
+      // Platform collision
+      let settled = false;
+      const gibBottom = g.y + g.height / 2;
+      const prevBottom = gibBottom - g.vy * dt;
+      for (let pi = 0; pi < platforms.length; pi++) {
+        const plat = platforms[pi];
+        if (prevBottom < plat.y && gibBottom >= plat.y &&
+            g.x + g.width / 2 > plat.x && g.x - g.width / 2 < plat.x + plat.width) {
+          if (!g.bounced) {
+            g.vy = -Math.abs(g.vy) * GIB_BOUNCE_FACTOR;
+            g.vx *= 0.6;
+            g.rotationSpeed *= 0.5;
+            g.bounced = true;
+            g.y = plat.y - g.height / 2;
+          } else {
+            // Settle: bake to background canvas and remove from active array
+            g.y = plat.y - g.height / 2;
+            g.vx = 0;
+            g.vy = 0;
+            g.rotationSpeed = 0;
+            this.newGroundedGibsSinceRender.push(g);
+            swapRemove(gibs, i);
+            settled = true;
+          }
+          break;
+        }
+      }
+      if (settled) continue;
+      // Remove if max flight time exceeded without landing
+      if (g.life <= 0) {
+        swapRemove(gibs, i);
+      }
+    }
+  }
+
+  private updateConfetti(dt: number): void {
+    const confetti = this.state.confetti;
+    const time = this.state.timeElapsed;
+    for (let i = confetti.length - 1; i >= 0; i--) {
+      const c = confetti[i];
+      c.life -= dt;
+      if (c.life <= 0) {
+        swapRemove(confetti, i);
+        continue;
+      }
+      c.x += c.vx * dt + Math.sin(time * 6 + c.flutter) * CONFETTI_FLUTTER * dt;
+      c.y += c.vy * dt;
+      c.vy += CONFETTI_GRAVITY * dt;
+      c.rotation += c.rotationSpeed * dt;
     }
   }
 
@@ -994,7 +1214,7 @@ export class GameLoop {
             const angle = Math.random() * Math.PI * 2;
             const speed = 60 + Math.random() * 160;
             const life = 0.4 + Math.random() * 0.5;
-            this.particles.push({ x: px + (Math.random() - 0.5) * 8, y: py + (Math.random() - 0.5) * 8, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 80, life, maxLife: life, size: 2.5 + Math.random() * 4, color: '#CC2222' });
+            this.particles.push({ x: px + (Math.random() - 0.5) * 8, y: py + (Math.random() - 0.5) * 8, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 80, life, maxLife: life, size: 2.5 + Math.random() * 4, color: BLOOD_COLOR });
           }
           // Thorn shrapnel
           for (let i = 0; i < 8; i++) {
@@ -1024,7 +1244,7 @@ export class GameLoop {
               const angle = Math.random() * Math.PI * 2;
               const speed = 80 + Math.random() * 200;
               const life = 0.4 + Math.random() * 0.6;
-              const color = hz.type === 'lava' ? (i % 3 === 0 ? '#FFCC00' : i % 3 === 1 ? '#FF4400' : '#FF8800') : '#CC2222';
+              const color = hz.type === 'lava' ? (i % 3 === 0 ? '#FFCC00' : i % 3 === 1 ? '#FF4400' : '#FF8800') : BLOOD_COLOR;
               this.particles.push({ x: px + (Math.random() - 0.5) * 12, y: py + (Math.random() - 0.5) * 12, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 100, life, maxLife: life, size: 3 + Math.random() * 5, color });
             }
             // Knockback away from hazard center
@@ -1249,14 +1469,10 @@ export class GameLoop {
     }
 
     // Stomps
-    const { splatMarks, killFeedEntries } = checkStomps(this.state.players, this.arena.spawnPoints, this.state.timeElapsed);
+    const { killFeedEntries } = checkStomps(this.state.players, this.arena.spawnPoints, this.state.timeElapsed);
 
-    if (splatMarks.length > 0) {
-      const startIdx = this.state.splatMarks.length;
-      this.state.splatMarks.push(...splatMarks);
-      for (let i = 0; i < splatMarks.length; i++) this.newSplatsSinceRender.push(startIdx + i);
+    if (killFeedEntries.length > 0) {
       audio.play('stomp');
-      // Screen shake on kill
       this.state.screenShake = SCREEN_SHAKE_DURATION;
     }
 
@@ -1310,6 +1526,8 @@ export class GameLoop {
     }
     updateSplatTimers(this.state.players, this.arena.spawnPoints, dt);
     this.updateParticles(dt);
+    this.updateGibs(dt);
+    this.updateConfetti(dt);
 
     // Decay shockwaves
     for (const sw of this.state.shockwaves) {

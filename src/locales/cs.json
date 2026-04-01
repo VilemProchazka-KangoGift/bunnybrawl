@@ -64,6 +64,8 @@
   "char_Horse": "Kůň",
   "char_Sheep": "Ovce",
   "char_Monkey": "Opice",
+  "char_Tiger": "Tygr",
+  "char_Rhino": "Nosorožec",
   "bot_label": "Boti",
   "bot_diff_easy": "Lehká",
   "bot_diff_medium": "Střední",

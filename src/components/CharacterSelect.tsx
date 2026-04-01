@@ -884,6 +884,34 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
     ctx.fillStyle = '#FFF';
     ctx.beginPath(); ctx.arc(cx - 2, yOff + h * 0.38, 1, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(cx + 6, yOff + h * 0.38, 1, 0, Math.PI * 2); ctx.fill();
+  } else if (char.name === 'Tiger') {
+    // Tiger: muscular body, round ears, stripes
+    ctx.ellipse(cx, yOff + h * 0.52, w * 0.42, h * 0.42, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx - 10, yOff + 4, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 10, yOff + 4, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = char.darkColor;
+    ctx.beginPath(); ctx.arc(cx - 10, yOff + 4, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 10, yOff + 4, 3, 0, Math.PI * 2); ctx.fill();
+    // Stripes
+    ctx.strokeStyle = char.darkColor; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(cx - 8, yOff + h * 0.35); ctx.lineTo(cx - 12, yOff + h * 0.45); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx + 8, yOff + h * 0.35); ctx.lineTo(cx + 12, yOff + h * 0.45); ctx.stroke();
+    // Muzzle
+    ctx.fillStyle = char.lightColor;
+    ctx.beginPath(); ctx.ellipse(cx + 1, yOff + h * 0.52, 6, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#FF6060';
+    ctx.beginPath(); ctx.ellipse(cx + 1, yOff + h * 0.48, 3, 2, 0, 0, Math.PI * 2); ctx.fill();
+  } else if (char.name === 'Rhino') {
+    // Rhino: wide body, small ears, horn
+    ctx.ellipse(cx, yOff + h * 0.55, w * 0.44, h * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx - 10, yOff + 6, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 10, yOff + 6, 4, 0, Math.PI * 2); ctx.fill();
+    // Horn
+    ctx.fillStyle = char.lightColor;
+    ctx.beginPath(); ctx.moveTo(cx + 3, yOff + h * 0.35); ctx.lineTo(cx + 6, yOff - 2); ctx.lineTo(cx + 9, yOff + h * 0.38); ctx.closePath(); ctx.fill();
+    // Skin fold
+    ctx.strokeStyle = char.darkColor; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(cx - 2, yOff + h * 0.55, w * 0.3, 0.3, 1.2); ctx.stroke();
   } else {
     // Fallback
     ctx.ellipse(cx, yOff + h * 0.5, w * 0.4, h * 0.4, 0, 0, Math.PI * 2); ctx.fill();

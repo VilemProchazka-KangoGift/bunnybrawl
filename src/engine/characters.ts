@@ -110,6 +110,20 @@ export const ALL_CHARACTERS: CharacterDef[] = [
     darkColor: '#704020',
     lightColor: '#D09060',
   },
+  {
+    slot: 'P1',
+    name: 'Tiger',
+    color: '#E8820A',
+    darkColor: '#1A1A1A',
+    lightColor: '#FFD080',
+  },
+  {
+    slot: 'P1',
+    name: 'Rhino',
+    color: '#8A8A8A',
+    darkColor: '#5A5A5A',
+    lightColor: '#B0B0B0',
+  },
 ];
 
 // Runtime map for bot character assignments (populated before match start)

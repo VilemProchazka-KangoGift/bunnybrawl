@@ -7,7 +7,6 @@ export interface AIPersonality {
   cautiousness: number;       // weight on threat evasion + hazard avoidance
   greediness: number;         // weight on carrot pursuit
   chaosAffinity: number;      // 0-1 — random noise injection
-  platformPreference: number; // weight on high-ground seeking
   targetLeader: boolean;      // special: prioritize score leader
 }
 

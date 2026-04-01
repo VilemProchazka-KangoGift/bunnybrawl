@@ -63,6 +63,8 @@
   "char_Horse": "Horse",
   "char_Sheep": "Sheep",
   "char_Monkey": "Monkey",
+  "char_Tiger": "Tiger",
+  "char_Rhino": "Rhino",
   "bot_label": "Bots",
   "bot_diff_easy": "Easy",
   "bot_diff_medium": "Medium",

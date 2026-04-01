@@ -1,7 +1,7 @@
 import { Howl } from 'howler';
 import { generateThemeMusic } from './music';
 
-export type SoundName = 'jump' | 'stomp' | 'victory' | 'select' | 'thornhit' | 'bunny' | 'fox' | 'frog' | 'bear' | 'owl' | 'cat' | 'wolf' | 'panda' | 'pig' | 'cow' | 'goat' | 'horse' | 'sheep' | 'monkey' | 'footstep_grass' | 'footstep_wood' | 'countdown_beep' | 'countdown_go' | 'oof' | 'splash' | 'ambient' | 'crowd' | 'wind' | 'geyser' | 'pigeon_scatter' | 'zero_g';
+export type SoundName = 'jump' | 'stomp' | 'victory' | 'select' | 'thornhit' | 'bunny' | 'fox' | 'frog' | 'bear' | 'owl' | 'cat' | 'wolf' | 'panda' | 'pig' | 'cow' | 'goat' | 'horse' | 'sheep' | 'monkey' | 'tiger' | 'rhino' | 'footstep_grass' | 'footstep_wood' | 'countdown_beep' | 'countdown_go' | 'oof' | 'splash' | 'ambient' | 'crowd' | 'wind' | 'geyser' | 'pigeon_scatter' | 'zero_g';
 
 class AudioManager {
   private sounds: Map<SoundName, Howl> = new Map();
@@ -117,6 +117,20 @@ class AudioManager {
         { freq: 1200, freqEnd: 600, duration: 0.13, type: 'square' },
       ], 0.4)],
       volume: 0.4,
+    }));
+    this.sounds.set('tiger', new Howl({
+      src: [generateMultiSegmentTone([
+        { freq: 200, freqEnd: 120, duration: 0.2, type: 'sawtooth' },
+        { freq: 120, freqEnd: 80, duration: 0.15, type: 'sawtooth' },
+      ], 0.5)],
+      volume: 0.45,
+    }));
+    this.sounds.set('rhino', new Howl({
+      src: [generateMultiSegmentTone([
+        { freq: 100, freqEnd: 60, duration: 0.15, type: 'square' },
+        { freq: 60, freqEnd: 90, duration: 0.2, type: 'sine' },
+      ], 0.5)],
+      volume: 0.45,
     }));
 
     // Footstep grass: very short soft crunch

@@ -93,3 +93,22 @@ export const SPRING_TRAIL_DURATION = 0.6;
 // Score animation
 export const SCORE_ANIM_DURATION = 0.5;
 
+// Blood / gore
+export const BLOOD_COLOR = '#CC2222';
+
+// Gibs
+export const GIB_GRAVITY = 600;           // px/s²
+export const GIB_LAUNCH_SPEED_MIN = 120;  // px/s
+export const GIB_LAUNCH_SPEED_MAX = 350;  // px/s
+export const GIB_ROTATION_MAX = 12;       // rad/s
+export const GIB_BOUNCE_FACTOR = 0.3;     // velocity retained on bounce
+export const GIB_MAX_FLIGHT = 5;          // max airborne seconds
+export const GIB_MAX_COUNT = 150;         // grounded gibs persist forever; oldest evicted at cap
+
+// Confetti
+export const CONFETTI_COUNT = 20;
+export const CONFETTI_GRAVITY = 40;       // px/s² (very light)
+export const CONFETTI_FLUTTER = 80;       // px/s horizontal drift amplitude
+export const CONFETTI_LIFE_MIN = 1.0;
+export const CONFETTI_LIFE_MAX = 2.0;
+

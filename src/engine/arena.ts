@@ -228,6 +228,7 @@ export const CANDY_LAND_ARENA: Arena = {
     { x: 130, y: 320 }, { x: 1155, y: 320 },
   ],
   bouncyPlatforms: [0, 1, 2, 3, 4, 5, 6, 7],  // EVERYTHING is bouncy!
+  noSprings: true,
 };
 
 // ============================================================
@@ -331,15 +332,15 @@ export const HAUNTED_GRAVEYARD_ARENA: Arena = {
   width: CANVAS_WIDTH,
   height: CANVAS_HEIGHT,
   platforms: [
-    // Ground — full width
-    { x: 0, y: 660, width: CANVAS_WIDTH, height: 60 },
+    // Ground — split into left/right segments around the mausoleum so the nav graph
+    // computes separate paths for each side (mausoleum blocks ground-level passage)
+    { x: 0, y: 660, width: 480, height: 60 },                   // Ground left
+    { x: 800, y: 660, width: 480, height: 60 },                 // Ground right
     // === Headstone blocks on ground (small solid obstacles) ===
     { x: 120, y: 625, width: 35, height: 35 },                  // Headstone 1
     { x: 280, y: 625, width: 35, height: 35 },                  // Headstone 2
-    { x: 500, y: 625, width: 35, height: 35 },                  // Headstone 3
-    { x: 680, y: 625, width: 35, height: 35 },                  // Headstone 4
-    { x: 900, y: 625, width: 35, height: 35 },                  // Headstone 5
-    { x: 1080, y: 625, width: 35, height: 35 },                 // Headstone 6
+    { x: 900, y: 625, width: 35, height: 35 },                  // Headstone 3
+    { x: 1080, y: 625, width: 35, height: 35 },                 // Headstone 4
     // === Mausoleum (solid block — roof is standable, walls block passage) ===
     { x: 480, y: 420, width: 320, height: 240 },                // Mausoleum
     // === Crypt platforms (sides) ===
@@ -364,6 +365,12 @@ export const HAUNTED_GRAVEYARD_ARENA: Arena = {
     // Mausoleum interior — no springs, thorns, or character spawns inside the crypt
     { x: 480, y: 420, width: 320, height: 240 },
   ],
+  navHints: [
+    // Left ground behind headstones → hop onto headstone 2 (p3) first, then normal nav takes over
+    { onPlatform: 0, inZone: { x: 155, width: 325 }, goTo: 3, approachX: 315, type: 'j' },
+    // Right ground behind headstones → hop onto headstone 3 (p4) first
+    { onPlatform: 1, inZone: { x: 800, width: 100 }, goTo: 4, approachX: 868, type: 'j' },
+  ],
 };
 
 // ============================================================
@@ -376,47 +383,47 @@ export const ROOFTOPS_ARENA: Arena = {
   width: CANVAS_WIDTH,
   height: CANVAS_HEIGHT,
   platforms: [
-    // === Building A (left, x=0-320) ===
-    { x: 0, y: 660, width: 320, height: 60 },                  // A rooftop
-    { x: 10, y: 560, width: 300, height: 18 },                  // A hallway (one only)
-    // Rooftop furniture: chimney + AC block
-    { x: 60, y: 620, width: 30, height: 40 },                   // A chimney
-    { x: 220, y: 630, width: 45, height: 30 },                  // A rooftop AC
-    // === Building B (center, x=470-810) ===
-    { x: 470, y: 640, width: 340, height: 80 },                 // B rooftop (taller)
-    { x: 480, y: 540, width: 320, height: 18 },                 // B hallway (one only)
-    // Rooftop furniture
-    { x: 530, y: 600, width: 30, height: 40 },                  // B chimney L
-    { x: 760, y: 605, width: 30, height: 35 },                  // B chimney R
-    { x: 640, y: 610, width: 50, height: 30 },                  // B rooftop AC
-    // === Building C (right, x=960-1280) ===
-    { x: 960, y: 650, width: 320, height: 70 },                 // C rooftop
-    { x: 970, y: 555, width: 300, height: 18 },                 // C hallway (one only)
-    // Rooftop furniture
-    { x: 1100, y: 610, width: 30, height: 40 },                 // C chimney
-    { x: 1020, y: 620, width: 45, height: 30 },                 // C rooftop AC
-    // === Wall ACs/balconies — stepping stones across gaps ===
-    // Gap 1 (320-470): A right face + B left face
-    { x: 295, y: 610, width: 50, height: 16 },                  // AC: A right low
-    { x: 435, y: 600, width: 50, height: 16 },                  // AC: B left low
-    { x: 355, y: 530, width: 55, height: 14 },                  // Balcony: mid-gap high
-    // Gap 2 (810-960): B right face + C left face
-    { x: 800, y: 610, width: 50, height: 16 },                  // AC: B right low
-    { x: 925, y: 600, width: 50, height: 16 },                  // AC: C left low
-    { x: 860, y: 530, width: 55, height: 14 },                  // Balcony: mid-gap high
-    // === Upper platforms above rooftops ===
-    { x: 100, y: 470, width: 140, height: 20 },                 // Above A
-    { x: 560, y: 440, width: 160, height: 20 },                 // Above B
-    { x: 1060, y: 460, width: 140, height: 20 },                // Above C
-    // Top walkway connecting upper platforms
-    { x: 350, y: 370, width: 300, height: 20 },                 // High bridge L
-    { x: 780, y: 380, width: 200, height: 20 },                 // High bridge R
+    // === Building 1 (Left, x=80-350, w=270): Shortest, chimneys ===
+    { x: 80, y: 480, width: 270, height: 240 },                  // B1 solid block (→720)
+    { x: 130, y: 440, width: 28, height: 40 },                   // Chimney L
+    { x: 250, y: 444, width: 28, height: 36 },                   // Chimney R
+    // === Gap 1 (350-510): ACs flush on walls + hallway balcony ===
+    { x: 350, y: 505, width: 52, height: 20 },                   // AC on B1 right wall (flush)
+    { x: 458, y: 430, width: 52, height: 20 },                   // AC on B2 left wall (flush)
+    { x: 445, y: 550, width: 65, height: 14 },                   // B2 hallway L balcony+awning
+    // === Building 2 (Center, x=510-810, w=300): Mid-height ===
+    // Hallway at y=550 ensures rise to upper block (370) = 180px > 174px max jump
+    // → nav graph won't create phantom jump edge through the ceiling
+    { x: 510, y: 370, width: 300, height: 80 },                  // B2 upper block (→450)
+    { x: 510, y: 550, width: 300, height: 24 },                  // B2 hallway corridor
+    { x: 510, y: 580, width: 300, height: 140 },                 // B2 lower block (→720)
+    { x: 555, y: 335, width: 40, height: 35 },                   // HVAC L
+    { x: 650, y: 330, width: 45, height: 40 },                   // HVAC C
+    { x: 760, y: 338, width: 38, height: 32 },                   // HVAC R
+    // === Gap 2 (810-970): ACs flush on walls + hallway balconies ===
+    { x: 810, y: 550, width: 65, height: 14 },                   // B2 hallway R balcony+awning
+    { x: 810, y: 430, width: 52, height: 20 },                   // AC on B2 right wall (flush)
+    { x: 918, y: 360, width: 52, height: 20 },                   // AC on B3 left wall (flush)
+    { x: 905, y: 480, width: 65, height: 14 },                   // B3 hallway L balcony+awning
+    // === Building 3 (Right, x=970-1200, w=230): Tallest ===
+    // Hallway at y=480 ensures rise to upper block (300) = 180px > 174px max jump
+    { x: 970, y: 300, width: 230, height: 80 },                  // B3 upper block (→380)
+    { x: 970, y: 480, width: 230, height: 24 },                  // B3 hallway corridor
+    { x: 970, y: 510, width: 230, height: 210 },                 // B3 lower block (→720)
+    { x: 1200, y: 480, width: 65, height: 14 },                  // B3 hallway R balcony+awning
   ],
   spawnPoints: [
-    { x: 160, y: 640 }, { x: 640, y: 620 }, { x: 1120, y: 630 },
-    { x: 160, y: 540 }, { x: 640, y: 520 }, { x: 1120, y: 535 },
+    { x: 200, y: 460 }, { x: 660, y: 350 }, { x: 1080, y: 280 },
+    { x: 280, y: 460 }, { x: 660, y: 530 }, { x: 1080, y: 460 },
   ],
   allowFallOff: true,
+  noSpawnZones: [
+    // Building interiors below hallways — prevent carrots/hazards inside solid blocks
+    { x: 510, y: 450, width: 300, height: 130 },                 // B2: upper block bottom to hallway
+    { x: 510, y: 575, width: 300, height: 145 },                 // B2: below hallway to screen bottom
+    { x: 970, y: 380, width: 230, height: 100 },                 // B3: upper block bottom to hallway
+    { x: 970, y: 505, width: 230, height: 215 },                 // B3: below hallway to screen bottom
+  ],
 };
 
 // ============================================================
@@ -456,6 +463,11 @@ export const SPACE_STATION_ARENA: Arena = {
     // ONE MASSIVE central zero-G zone covering the entire middle
     { x: 250, y: 200, width: 780, height: 480, type: 'zero_g' },
   ],
+  carrotZones: [
+    // Central void — carrots spawn more here to lure players into zero-G
+    { x: 300, y: 220, width: 680, height: 440 },
+  ],
+  noSprings: true,
 };
 
 // ============================================================

@@ -17,16 +17,16 @@ src/
     stomp.ts      # Stomp detection, splat marks, respawn
     input.ts      # 4-player keyboard input with case-insensitive normalization
     arena.ts      # Arena layouts (platforms, spawn points) + getArena(id) + listArenas()
-    characters.ts # 14 character definitions + ALL_CHARACTERS roster
+    characters.ts # 16 character definitions + ALL_CHARACTERS roster
     renderer.ts   # Canvas 2D rendering (two layers: bg + fg) — LARGEST FILE (~2300 lines)
-    audio.ts      # Procedural audio generation (14 animal sounds + SFX + music)
+    audio.ts      # Procedural audio generation (16 animal sounds + SFX + music)
     gameLoop.ts   # Main game loop with fixed timestep, all game systems (~920 lines)
     ai/           # AI opponent system (utility-based decision making + nav graph)
       types.ts      # AIDifficulty, AIPersonality, AwarenessSnapshot, ActionScores
       aiController.ts # Per-bot brain: reaction buffer, stuck detection, taunt, search pause
       awareness.ts  # Single-pass game state sensing + nav graph lookup
       utility.ts    # 15 evaluators scoring moveLeft/moveRight/jump/drop
-      personality.ts # 14 character profiles + 3 difficulty presets
+      personality.ts # 16 character profiles + 3 difficulty presets
       reachability.ts # Physics-based jump/drop/walk platform reachability functions
       navData.ts    # Auto-generated per-arena navigation graphs (nextHop tables)
       index.ts      # Barrel export
@@ -75,8 +75,10 @@ src/
 3. Add simplified version in `CharacterSelect.tsx` `drawLobbyCharacter` function
 4. Add the name to the eye exclusion list if drawing custom eyes: `if (!['Frog', 'Owl', 'Cat', ...].includes(char.name))`
 5. Add splat shape in `stomp.ts` `CHARACTER_SPLAT_SHAPES`
-6. Add animal sound in `audio.ts` (SoundName type + init + generator function)
-7. Add localized name in `en.json` and `cs.json` (`char_NewAnimal`)
+6. Add gib definitions in `stomp.ts` `CHARACTER_GIBS` — 3-5 `GibDef` entries matching the character's body parts
+7. Add gib shape rendering in `renderer.ts` `drawGibShape` — simplified body part draws for each gibType
+8. Add animal sound in `audio.ts` (SoundName type + init + generator function)
+9. Add localized name in `en.json` and `cs.json` (`char_NewAnimal`)
 
 ### Adding a new arena / level
 1. Create theme config in `src/engine/themes/newTheme.ts` implementing `ThemeConfig` (see `meadow.ts` as reference)
@@ -106,12 +108,14 @@ src/
 Arena mechanics are a combination of **Arena** fields (structural positions) and **ThemeConfig** fields (behavioral config):
 - **Hazard zones** (`Arena.hazardZones`): Static danger areas (lava, icicles). Collision in gameLoop, rendered in renderer `drawHazardZone`. Also used by nav graph to compute danger scores — cautious bots route around hazards via `safeHop`. Lava hits set `burnTimer` (fire particles + orange glow) in addition to `slowTimer`; thorns/ghosts only set `slowTimer` (red pulse). The renderer uses `burnTimer > 0` to choose fire glow vs red pulse (`else if`).
 - **Effect zones** (`Arena.effectZones`): Zero-G (`zero_g`), water currents (`current`), bubble geysers (`geyser`). Zones applied in gameLoop per-player, rendered in renderer. Geyser zones generate nav graph edges so bots can ride them as elevators. Zero-G zones generate drift edges so bots cross through them (e.g. space station center).
-- **No-spawn zones** (`Arena.noSpawnZones`): AABB zones where springs, thorns, and characters should not spawn. Used to exclude solid structures like the cemetery mausoleum from hazard spawning.
+- **No-spawn zones** (`Arena.noSpawnZones`): AABB zones where springs, thorns, characters, AND carrots should not spawn. Used to exclude solid structures (mausoleum, building interiors below hallways) from all entity spawning.
 - **Bouncy platforms** (`Arena.bouncyPlatforms`): Platform indices that bounce players on landing. Rendered with jelly overlay.
 - **Fall-off** (`Arena.allowFallOff`): Split ground into segments with gaps. Player falling below screen respawns at -1 score.
 - **Ghosts** (`ThemeConfig.ghostConfig`): Roaming semi-transparent entities. Initialized in GameLoop constructor, updated/collided in fixedUpdate, drawn by renderer `drawGhost`.
 - **Wind** (`ThemeConfig.windConfig`): Periodic gusts affecting airborne players. Managed by wind state in MatchState.
 - **Pigeons** (`ThemeConfig.pigeonConfig`): Scatter-on-approach wildlife with particle burst.
+- **Carrot zones** (`Arena.carrotZones`): AABB zones with boosted carrot spawn likelihood. Generates 8 extra candidates per zone with 2x distance bias. Used by Space Station to lure players into zero-G.
+- **No springs** (`Arena.noSprings`): Disables spring spawning on the arena. Used by Candy Land (all-bouncy) and Space Station (zero-G).
 - **Custom hazard skins** (`ThemeConfig.drawCustomThorn`, `drawCustomSpring`): Override default thorn/spring rendering per theme.
 
 ### Adding a new game mechanic / pickup
@@ -134,7 +138,7 @@ Arena mechanics are a combination of **Arena** fields (structural positions) and
 - Key levers: `reactionFrames` (input delay), `awarenessRadius` (detection range), `noiseChance` (random input), `walkSpeedMult` (movement speed), `hesitationChance` (random freezes)
 - All difficulties use full pathfinding (`pathfindingDepth: Infinity`) — nav data is precomputed with zero runtime cost. Difficulty is differentiated by reaction delay, noise, awareness radius, and hesitation only.
 - `impossible`: 0 reaction frames, infinite awareness, 0 noise, 0 hesitation — perfect play
-- Personality weights multiply utility scores: `aggressiveness`, `cautiousness`, `greediness`, `chaosAffinity`, `platformPreference`
+- Personality weights multiply utility scores: `aggressiveness`, `cautiousness`, `greediness`, `chaosAffinity`
 - Jump behavior: controlled by `JUMP_THRESHOLD` (0.55) in aiController and `jumpCooldown` (20 frames)
 
 ### Adding a new visual effect
@@ -162,6 +166,9 @@ Arena mechanics are a combination of **Arena** fields (structural positions) and
 ```bash
 npm run dev       # Dev server with HMR
 npm run build     # Production build (tsc + vite)
+# Dev test link — skip lobby, jump straight into a match:
+# http://localhost:5173/bunnybrawl/?arena=rooftops&bots=2&difficulty=hard
+# Params: arena (required), bots (0-5, default 1), difficulty (easy|medium|hard|impossible)
 npm test          # Unit/integration tests
 npm run test:e2e  # E2E tests (builds first)
 npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/physics changes)
@@ -174,12 +181,13 @@ npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/
 - **Player-player collision and stomp detection interact** — stomps must be checked BEFORE `collidePlayersHorizontal`, and the collision must skip when vertical overlap < 50% (stomp zone).
 - **CharacterSelect.tsx has its own physics loop** — separate from the main game engine. Changes to lobby physics don't use the engine's `physics.ts`.
 - **Gore mode** is persisted in localStorage (`bunnybrawl_gore`). Arena selection persisted in `bunnybrawl_arena` (default: `'random'`).
+- **Death effects are gore-mode gated** — Gore ON: red blood particles + character-specific gibs (body parts) + enlarged splat marks + blood drip trails on platforms. Gore OFF: confetti particles (stars, diamonds, ribbons) only, no blood/splats/gibs at all. Gibs use platform collision (bounce once, then settle), persist on ground for 15s, then fade out. Blood drips are baked to bgCtx like splat marks. Gib definitions per character in `stomp.ts` `CHARACTER_GIBS`, gib shape rendering in `renderer.ts` `drawGibShape`.
 - **`arenaId: 'random'`** — resolved to a concrete arena in `Match.tsx` via `resolveArenaId()`, not in the store. A module-level `lastResolvedArenaId` prevents repeating the same arena on rematch. The store keeps `'random'` so it re-rolls each time.
 - **Pause screen has a level selector** — "Change Level" button shows an arena grid. Selecting an arena sets `currentArenaId` local state which retriggers the game loop useEffect, restarting the match.
 - **The CHARACTERS record is mutated** at lobby exit to write the selected characters back. This is intentional.
 - **Arena type is flat** — `Arena` has `themeId` + platforms/spawns directly (not nested in a `layout` sub-object). The theme provides all visual config; the Arena provides structural layout. Color fields (`backgroundColor`, `groundColor`, `platformColor`) were removed — use the theme instead.
 - **Theme draw functions receive raw ctx + arena** — they import shared primitives from `drawPrimitives.ts` directly, not through a DrawKit indirection. Keep it simple.
-- **platforms[0] is always the ground** — convention used by themes, renderer, and gameLoop. Ground platform is detected by `p.y >= 650`. For arenas with `allowFallOff`, ground is split into segments but platforms[0] still has y=660.
+- **platforms[0] is always the ground (or first ground segment)** — convention used by themes, renderer, and gameLoop. Ground platform is detected by `p.y >= 650`. For arenas with `allowFallOff` or impassable ground-level obstacles (haunted graveyard mausoleum), ground is split into segments but platforms[0] still has y=660.
 - **Hazard zone collision is inset** — lava/hazard hitboxes are 12px smaller on each side than their visual, so players can step on the edge without getting hurt.
 - **Effect zones interact with physics differently** — zero-G boosts upward velocity (vy*1.03) and slows falls (vy*0.92), currents add horizontal force (vx += force*dt), geysers set vy directly. All checked after normal physics. Zone arrays are cached as `cachedGeyserZones`/`cachedZeroGZones` class fields — never re-filter per frame.
 - **Scoring** — kill (stomp) = 2 points, carrot = 1 point, fall-off = no score penalty (just respawn slowed). Default kill limit is 16.
@@ -187,6 +195,7 @@ npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/
 - **Side squash on wall/push collisions** — `Player.sideSquash` (1.0 = normal, <1 = squashed horizontally). Triggered by platform side collision (0.75) or player push (0.8). Decays back to 1.0 via `SQUASH_DECAY_SPEED`. Renderer applies inverse: narrower + slightly taller. When adding new Player fields, also add `sideSquash: 1` to test helpers.
 - **MatchState has non-serializable fields** — `bouncyWobble` is a Map. If serialization is ever needed, this must be handled.
 - **Screen containers must use `width/height: 100%`** — they inherit their size from `GameScaler`'s 1280x720 content div. Never set fixed pixel dimensions on screen containers (`.main-menu`, `.match-container`, `.char-select`, `.victory-screen`).
+- **Bubble helmet is theme-gated in `drawCharacterSprite`** — drawn at the end of the method for `space_station` and `underwater` themes only. A glass dome ellipse overlays the character's head with reflection highlights and a collar ring. If adding more "costume" arenas, extend the theme ID check there.
 - **Day/night rendering must be gated on `dayNight.enabled`** — the renderer's `drawDayNightCycle` draws sun, moon, overlay, fireflies, and shooting stars. It must check `this.theme.dayNight.enabled` before drawing. Disabling the flag in the theme config is NOT enough if the renderer call isn't gated. When user says "remove day/night cycle" they mean: set `enabled: false` AND ensure no sun/moon/celestial bodies appear in `drawFarBackground` either.
 - **Tall narrow platform collision** — `collidePlatforms` uses a `landingFromAbove` guard (`sideOverlap > overlapTop`) to prevent the `feetNearTop` override from snapping players onto platforms they approached from the side. Without this, walking into the side of a tall block near its top edge would teleport the player on top. Very tall, very narrow platforms (e.g. 40x216) can still feel awkward — prefer wider-than-tall blocks for standable surfaces.
 - **Spring collision uses `bounceTimer` as cooldown** — skip collision when `spring.bounceTimer > 0` (0.3s). Without this, crouching into a spring triggers it every frame (vy=0 satisfies vy≥0), causing rapid sound spam.
@@ -196,6 +205,9 @@ npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/
 - **CharacterSelect.tsx canvas text needs i18n** — use `i18n.t('char_Name', name)` for character names displayed in the lobby canvas, not the raw English `char.name`.
 - **Entity cleanup uses `swapRemove`** — dead entities (springs, thorns, carrots, particles, etc.) are removed via `swapRemove(arr, i)` from `themes/utils.ts` in reverse-iterate loops. This is O(1) but does not preserve order. Never use `.filter()` for per-frame entity cleanup.
 - **`navData.ts` is generated** — do not hand-edit. Re-run `npx vite-node scripts/generateNavData.ts` after changing any arena platform layout, hazardZones, effectZones, or physics constants (`JUMP_IMPULSE`, `GRAVITY`, `MAX_WALK_SPEED`, `PLAYER_WIDTH`, `PLAYER_HEIGHT`, `CANVAS_WIDTH`). The generator computes jump/drop/walk/geyser edges with danger scores from hazard proximity, then Floyd-Warshall for `nextHop` (fastest) and `safeHop` (hazard-avoidant) paths.
+- **Nav graph doesn't model intra-platform obstacles** — the nav graph treats each platform as a single walkable node. Small obstacles sitting on a platform (headstones, stumps, pillars) block horizontal movement but the nav doesn't know. Bots handle these via directed stuck recovery (jump toward navTarget). For impassable barriers (mausoleum), split the ground manually in the arena definition. Do NOT auto-split all platforms — splitting mid-level platforms at small obstacles creates tiny segments that cause jitter (bots oscillate between segments each frame).
+- **Nav graph doesn't know about blocking ceilings** — `canJumpTo()` only checks physics (height, distance), NOT whether a solid platform blocks the path. If a hallway floor is within MAX_JUMP_HEIGHT (~174px) of an upper building block, the generator creates a phantom edge that bots try and fail to use (they hit the ceiling). Fix: ensure the vertical gap between hallway floor and the platform above exceeds 174px (e.g., rooftops uses 180px gaps).
+- **Solid building blocks need noSpawnZones** — when an arena uses thick building blocks (e.g., rooftops' upper/lower blocks around hallways), add `noSpawnZones` covering the building interiors. Without this, carrots spawn inside unreachable solid blocks. Hazards (springs/thorns) are also blocked by these zones.
 - **Fat bots flee like hurt bots** — `evaluateActions` gates both `self.slowed` and `self.fat` into `evaluateHurtFlee`, skipping chase/stomp/platformSeeking. `navTarget` is only consulted when healthy.
 - **Never splice/shift `splatMarks` during `fixedUpdate`** — multiple fixedUpdate ticks can run per frame, and `newSplatsSinceRender` stores indices into `splatMarks`. Splicing shifts indices and corrupts pending render references. Cap the array in the render path only (after indices are consumed).
 - **`GameLoop.stop()` must stop ALL looping sounds** — music, ambient, wind, zero_g, crowd. If a new looping sound is added, add a corresponding `audio.stop()` in `stop()`.
@@ -207,7 +219,9 @@ npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/
 - **Bot characters stored in `BOT_CHARACTERS` Map** — populated by `assignBotCharacters()` before match start. The `CHARACTERS` record is NOT extended for bots.
 - **AI awareness uses a single pass over `state.players`** — do NOT add separate `.filter()` loops. All enemy detection, roam target, clustering, and leader score are computed in one loop for perf.
 - **AI evaluators must not allocate arrays** — `evaluateActions()` runs 60× per bot per second. Use simple arithmetic on the `ActionScores` object. No `.filter()`, `.sort()`, or `.map()` in evaluators.
-- **Jump suppression has 3 layers** — tight-space check (platform <80px above), jump threshold (0.55), and jump cooldown (20 frames). All 3 must pass for a bot to jump. When tuning, check all 3.
+- **Jump suppression has 3 layers** — tight-space check (platform <80px above, skipped when navTarget is a jump edge), jump threshold (0.55), and jump cooldown (20 frames). All 3 must pass for a bot to jump. When tuning, check all 3.
+- **Stuck recovery is nav-directed** — after 45 frames of <2px movement, the bot jumps toward the navTarget approach point (not randomly). This clears small obstacles (headstones, stumps) blocking the nav path. Only falls back to random jump when no navTarget exists.
+- **Chase/priority/invincibility evaluators defer to nav** — when the enemy is on a different level (|dy| > 40) and a navTarget exists, chase and priority evaluators return early to avoid fighting the nav path direction. This prevents bots from walking into walls trying to reach elevated targets directly.
 - **Lobby bots use separate AI from match bots** — `CharacterSelect.tsx` has `updateBotLobbyAI()` for directed walking to ready zone. Match AI is in `src/engine/ai/`. They share no code.
 - **Bot settings persisted in localStorage** — `bunnybrawl_botcount` and `bunnybrawl_botdiff` (`easy`/`medium`/`hard`/`impossible`), loaded in `gameStore.ts`.
 - **Always document lessons learned** — after completing a feature or fixing iterative feedback, update the relevant `.claude/skills/*.md` file with lessons, gotchas, and patterns discovered. If no skill file exists for the domain, create one. This prevents repeating the same mistakes across sessions.
