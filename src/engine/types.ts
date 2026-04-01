@@ -239,7 +239,7 @@ export interface PlayerStats {
 }
 
 export interface WildlifeEntity {
-  type: 'butterfly' | 'bird';
+  type: 'butterfly' | 'bird' | 'fish' | 'bat';
   x: number;
   y: number;
   vx: number;

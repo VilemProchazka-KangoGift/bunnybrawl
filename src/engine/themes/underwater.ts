@@ -97,10 +97,10 @@ export const UNDERWATER_THEME: ThemeConfig = {
   },
 
   wildlife: {
-    count: 4,
+    count: 6,
     types: [
-      { type: 'butterfly', weight: 0.6, colors: ['#FF6B6B', '#FFD700', '#87CEEB', '#FF8C00', '#7B68EE'], speedRange: [15, 35], yRange: [0.2, 0.8] },
-      { type: 'bird', weight: 0.4, colors: ['#4A8ABB', '#5AA0CC', '#3A7AAA'], speedRange: [30, 50], yRange: [0.1, 0.4] },
+      { type: 'fish', weight: 0.7, colors: ['#FF6B6B', '#FFD700', '#FF8C00', '#7B68EE', '#4A8ABB', '#66CCAA'], speedRange: [20, 45], yRange: [0.15, 0.85] },
+      { type: 'fish', weight: 0.3, colors: ['#5AA0CC', '#3A7AAA', '#2288AA'], speedRange: [35, 60], yRange: [0.3, 0.7] },
     ],
   },
 
@@ -593,6 +593,76 @@ export const UNDERWATER_THEME: ThemeConfig = {
       ctx.arc(x - size * 0.03, y - size * 0.09, size * 0.04, 0, Math.PI * 2);
       ctx.fill();
     }
+
+    ctx.restore();
+  },
+
+  ghostConfig: {
+    count: 2,
+    speed: 25,
+    size: 32,
+    color: 'rgba(180, 140, 220, 0.5)',
+    glowColor: '#9966CC',
+  },
+
+  drawCustomGhost: (ctx, x, y, size, alpha, time) => {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.globalAlpha = alpha * (0.4 + Math.sin(time * 1.2) * 0.15);
+
+    // Jellyfish bell — pulsing dome
+    const pulse = 1 + Math.sin(time * 2.5) * 0.08;
+    const bellW = size * 0.5 * pulse;
+    const bellH = size * 0.35;
+
+    // Glow
+    const glow = ctx.createRadialGradient(0, -bellH * 0.3, size * 0.1, 0, 0, size * 1.2);
+    glow.addColorStop(0, 'rgba(180, 140, 255, 0.25)');
+    glow.addColorStop(1, 'rgba(180, 140, 255, 0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(-size * 1.2, -size * 1.2, size * 2.4, size * 2.4);
+
+    // Bell dome
+    const bellGrad = ctx.createRadialGradient(0, -bellH * 0.5, bellW * 0.2, 0, -bellH * 0.3, bellW);
+    bellGrad.addColorStop(0, 'rgba(220, 180, 255, 0.7)');
+    bellGrad.addColorStop(0.6, 'rgba(160, 120, 220, 0.5)');
+    bellGrad.addColorStop(1, 'rgba(120, 80, 180, 0.3)');
+    ctx.fillStyle = bellGrad;
+    ctx.beginPath();
+    ctx.ellipse(0, -bellH * 0.3, bellW, bellH, 0, Math.PI, 0);
+    // Scalloped rim
+    const scallops = 6;
+    for (let i = 0; i < scallops; i++) {
+      const sx = bellW - (i + 1) * (bellW * 2 / scallops);
+      const sy = -bellH * 0.3 + Math.sin(time * 2 + i) * 2;
+      const nx = bellW - (i + 1.5) * (bellW * 2 / scallops);
+      ctx.quadraticCurveTo((sx + nx) / 2, sy + 5, nx, sy);
+    }
+    ctx.closePath();
+    ctx.fill();
+
+    // Tentacles — wavy strands hanging down
+    ctx.lineWidth = 1.5;
+    const tentCount = 5;
+    for (let t = 0; t < tentCount; t++) {
+      const tx = -bellW * 0.6 + t * (bellW * 1.2 / (tentCount - 1));
+      const tentLen = size * (0.5 + (t % 2) * 0.25);
+      ctx.strokeStyle = `rgba(180, 140, 220, ${0.3 + (t % 2) * 0.15})`;
+      ctx.beginPath();
+      ctx.moveTo(tx, 0);
+      for (let s = 1; s <= 4; s++) {
+        const sy = s * tentLen / 4;
+        const sx = tx + Math.sin(time * 2 + t * 1.2 + s * 0.8) * 6;
+        ctx.lineTo(sx, sy);
+      }
+      ctx.stroke();
+    }
+
+    // Inner highlight on bell
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.beginPath();
+    ctx.ellipse(-bellW * 0.2, -bellH * 0.5, bellW * 0.25, bellH * 0.3, -0.2, 0, Math.PI * 2);
+    ctx.fill();
 
     ctx.restore();
   },

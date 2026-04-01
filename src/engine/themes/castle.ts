@@ -93,8 +93,10 @@ export const CASTLE_THEME: ThemeConfig = {
   },
 
   wildlife: {
-    count: 0,
-    types: [],
+    count: 3,
+    types: [
+      { type: 'bat', weight: 1, colors: ['#2A2A3A', '#1A1A2A', '#3A3A4A'], speedRange: [30, 55], yRange: [0.05, 0.25] },
+    ],
   },
 
   fog: {

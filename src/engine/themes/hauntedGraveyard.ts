@@ -94,9 +94,9 @@ export const HAUNTED_GRAVEYARD_THEME: ThemeConfig = {
   },
 
   wildlife: {
-    count: 3,
+    count: 4,
     types: [
-      { type: 'bird', weight: 1, colors: ['#1A1A1A', '#2A2A2A', '#151515'], speedRange: [35, 60], yRange: [0.05, 0.2] },
+      { type: 'bat', weight: 1, colors: ['#1A1A1A', '#2A2A2A', '#151515', '#252025'], speedRange: [35, 65], yRange: [0.05, 0.3] },
     ],
   },
 

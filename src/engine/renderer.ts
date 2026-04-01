@@ -2442,6 +2442,62 @@ export class Renderer {
         // Body
         ctx.fillStyle = '#333';
         ctx.fillRect(-0.5, -1, 1, 3);
+      } else if (w.type === 'fish') {
+        // Fish: oval body + wagging tail
+        const tailWag = Math.sin(w.wingPhase * 2) * 0.4;
+        // Body
+        ctx.fillStyle = w.color;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 7, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Tail fin
+        ctx.beginPath();
+        ctx.moveTo(-6, 0);
+        ctx.lineTo(-12, -4 + tailWag * 4);
+        ctx.lineTo(-12, 4 + tailWag * 4);
+        ctx.closePath();
+        ctx.fill();
+        // Dorsal fin
+        ctx.fillStyle = w.color;
+        ctx.globalAlpha = 0.7;
+        ctx.beginPath();
+        ctx.moveTo(-2, -3);
+        ctx.lineTo(1, -7);
+        ctx.lineTo(4, -3);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        // Eye
+        ctx.fillStyle = '#111';
+        ctx.beginPath();
+        ctx.arc(4, -1, 1.2, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (w.type === 'bat') {
+        // Bat: angular pointed wings with fast flap
+        ctx.fillStyle = w.color;
+        const wingFlap = Math.sin(w.wingPhase) * 5;
+        // Left wing
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(-4, -2 + wingFlap * 0.3);
+        ctx.lineTo(-10, wingFlap);
+        ctx.lineTo(-7, 0);
+        ctx.lineTo(-4, 1);
+        ctx.closePath();
+        ctx.fill();
+        // Right wing
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(4, -2 + wingFlap * 0.3);
+        ctx.lineTo(10, wingFlap);
+        ctx.lineTo(7, 0);
+        ctx.lineTo(4, 1);
+        ctx.closePath();
+        ctx.fill();
+        // Body
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 2, 3, 0, 0, Math.PI * 2);
+        ctx.fill();
       } else {
         // Bird: simple M-shape silhouette
         ctx.strokeStyle = w.color;
