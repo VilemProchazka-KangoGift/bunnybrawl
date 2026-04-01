@@ -170,13 +170,33 @@ export function buildAwareness(
     }
   }
 
+  // Roam target: always find something to walk toward (ignores awareness radius).
+  // Prefer nearest carrot, then nearest enemy on the full map.
+  let roamTarget: AwarenessSnapshot['roamTarget'] = null;
+  if (nearestCarrot) {
+    roamTarget = { x: nearestCarrot.x, y: nearestCarrot.y, dx: nearestCarrot.x - self.x };
+  }
+  if (!roamTarget) {
+    // Find nearest living enemy across the entire map
+    let bestDist = Infinity;
+    for (const e of enemies) {
+      const dx = e.x - self.x;
+      const dy = e.y - self.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < bestDist) {
+        bestDist = dist;
+        roamTarget = { x: e.x, y: e.y, dx };
+      }
+    }
+  }
+
   return {
     self: {
       x: self.x, y: self.y, vx: self.vx, vy: self.vy,
       onGround: selfOnGround, score: self.score,
       slowed: self.slowTimer > 0, fat: self.fatTimer > 0,
     },
-    nearestEnemy, stompTarget, stompThreat, nearestCarrot, nearestHazard,
+    nearestEnemy, roamTarget, stompTarget, stompThreat, nearestCarrot, nearestHazard,
     nearestPlatformAbove, nearestPlatformBelow, nearEdge,
     windDir, windStrength, inZeroG, inCurrent, nearGeyser,
   };

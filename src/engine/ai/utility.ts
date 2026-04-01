@@ -20,6 +20,9 @@ export function evaluateActions(
   evaluateEdgeAvoidance(awareness, scores, personality);
   evaluateZoneExploitation(awareness, scores, personality);
 
+  // Roam: always-on baseline so bots keep moving when nothing else is happening
+  evaluateRoam(awareness, scores);
+
   return scores;
 }
 
@@ -170,6 +173,19 @@ function evaluateEdgeAvoidance(a: AwarenessSnapshot, s: ActionScores, p: AIPerso
     if (a.self.vx > 0) s.moveLeft += weight;
     else s.moveRight += weight;
   }
+}
+
+function evaluateRoam(a: AwarenessSnapshot, s: ActionScores): void {
+  // Only kick in when other evaluators haven't produced a strong opinion
+  const totalAction = Math.abs(s.moveLeft) + Math.abs(s.moveRight);
+  if (totalAction > 0.3) return; // something else is already driving movement
+
+  if (!a.roamTarget) return;
+
+  // Walk toward the roam target (nearest carrot or nearest enemy, map-wide)
+  const weight = 0.4;
+  if (a.roamTarget.dx > 30) s.moveRight += weight;
+  else if (a.roamTarget.dx < -30) s.moveLeft += weight;
 }
 
 function evaluateZoneExploitation(a: AwarenessSnapshot, s: ActionScores, p: AIPersonality): void {
