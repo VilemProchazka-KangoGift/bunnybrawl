@@ -72,16 +72,22 @@ export function buildAwareness(
     }
   }
 
-  // Find nearest hazard (hazard zones, thorns, ghosts, lava rocks)
+  // Find all nearby hazards (hazard zones, thorns, ghosts, lava rocks)
+  const nearbyHazards: AwarenessSnapshot['nearbyHazards'] = [];
   let nearestHazard: AwarenessSnapshot['nearestHazard'] = null;
   let bestHazardDist = Infinity;
+  const HAZARD_DETECT_RADIUS = 200; // always detect hazards within 200px regardless of awareness
+  const hazardRadius = Math.max(awarenessRadius, HAZARD_DETECT_RADIUS);
   const checkHazard = (type: string, hx: number, hy: number) => {
     const dx = hx - self.x;
     const dy = hy - self.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist < awarenessRadius && dist < bestHazardDist) {
-      bestHazardDist = dist;
-      nearestHazard = { type, x: hx, y: hy, dist };
+    if (dist < hazardRadius) {
+      nearbyHazards.push({ type, x: hx, y: hy, dist });
+      if (dist < bestHazardDist) {
+        bestHazardDist = dist;
+        nearestHazard = { type, x: hx, y: hy, dist };
+      }
     }
   };
 
@@ -196,8 +202,8 @@ export function buildAwareness(
       onGround: selfOnGround, score: self.score,
       slowed: self.slowTimer > 0, fat: self.fatTimer > 0,
     },
-    nearestEnemy, roamTarget, stompTarget, stompThreat, nearestCarrot, nearestHazard,
-    nearestPlatformAbove, nearestPlatformBelow, nearEdge,
+    nearestEnemy, roamTarget, stompTarget, stompThreat, nearestCarrot,
+    nearestHazard, nearbyHazards, nearestPlatformAbove, nearestPlatformBelow, nearEdge,
     windDir, windStrength, inZeroG, inCurrent, nearGeyser,
   };
 }

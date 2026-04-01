@@ -10,9 +10,14 @@ export function evaluateActions(
 ): ActionScores {
   const scores: ActionScores = { moveLeft: 0, moveRight: 0, jump: 0, drop: 0 };
 
-  evaluateStompOpportunity(awareness, scores, personality);
+  // When hurt (slowed), flee from everyone instead of attacking
+  if (awareness.self.slowed) {
+    evaluateHurtFlee(awareness, scores, personality);
+  } else {
+    evaluateStompOpportunity(awareness, scores, personality);
+    evaluateChaseTarget(awareness, scores, personality);
+  }
   evaluateThreatEvasion(awareness, scores, personality);
-  evaluateChaseTarget(awareness, scores, personality);
   evaluatePlatformSeeking(awareness, scores, personality);
   evaluateHazardAvoidance(awareness, scores, personality);
   evaluateCarrotPursuit(awareness, scores, personality);
@@ -24,6 +29,15 @@ export function evaluateActions(
   evaluateRoam(awareness, scores);
 
   return scores;
+}
+
+function evaluateHurtFlee(a: AwarenessSnapshot, s: ActionScores, p: AIPersonality): void {
+  if (!a.nearestEnemy) return;
+  // When slowed/hurt, run away from nearest enemy
+  const weight = 1.0 * p.cautiousness;
+  const { dx } = a.nearestEnemy;
+  if (dx > 0) s.moveLeft += weight;
+  else s.moveRight += weight;
 }
 
 function evaluateStompOpportunity(a: AwarenessSnapshot, s: ActionScores, p: AIPersonality): void {
@@ -70,7 +84,11 @@ function evaluateChaseTarget(a: AwarenessSnapshot, s: ActionScores, p: AIPersona
   if (dx > 20) s.moveRight += weight;
   else if (dx < -20) s.moveLeft += weight;
 
-  // Only jump if enemy is on a platform above AND we're close horizontally
+  // Same Y level (within ~40px) = same platform — just walk, never jump
+  const samePlatform = Math.abs(dy) < 40;
+  if (samePlatform) return;
+
+  // Only jump if enemy is clearly on a platform above AND we're close horizontally
   if (dy < -50 && a.self.onGround && dist < 150 && Math.abs(dx) < 100) {
     s.jump += weight * 0.3;
   }
@@ -103,33 +121,34 @@ function evaluatePlatformSeeking(a: AwarenessSnapshot, s: ActionScores, p: AIPer
 }
 
 function evaluateHazardAvoidance(a: AwarenessSnapshot, s: ActionScores, p: AIPersonality): void {
-  if (!a.nearestHazard) return;
+  if (a.nearbyHazards.length === 0) return;
   const weight = 1.2 * p.cautiousness;
-  const hz = a.nearestHazard;
 
-  // Strength scales inversely with distance
-  const urgency = Math.max(0, 1 - hz.dist / 150);
-  const avoidWeight = weight * urgency;
+  // Avoid ALL nearby hazards, not just the nearest
+  for (const hz of a.nearbyHazards) {
+    const urgency = Math.max(0, 1 - hz.dist / 180);
+    const avoidWeight = weight * urgency;
+    if (avoidWeight < 0.05) continue;
 
-  const hzDx = hz.x - a.self.x;
-  if (hzDx > 0) s.moveLeft += avoidWeight;
-  else s.moveRight += avoidWeight;
+    const hzDx = hz.x - a.self.x;
+    if (hzDx > 0) s.moveLeft += avoidWeight;
+    else s.moveRight += avoidWeight;
 
-  // Jump away from ground hazards only when very close
-  if (hz.type === 'lava' && hz.dist < 50 && a.self.onGround) {
-    s.jump += avoidWeight * 0.4;
-  }
-  // Jump to avoid falling rocks
-  if (hz.type === 'lavaRock' && hz.dist < 60) {
-    const rockDx = hz.x - a.self.x;
-    if (Math.abs(rockDx) < 30) {
-      if (rockDx > 0) s.moveLeft += avoidWeight * 0.6;
+    // Jump away from ground hazards only when very close
+    if (hz.type === 'lava' && hz.dist < 50 && a.self.onGround) {
+      s.jump += avoidWeight * 0.4;
+    }
+    // Dodge falling rocks
+    if (hz.type === 'lavaRock' && hz.dist < 60 && Math.abs(hzDx) < 30) {
+      if (hzDx > 0) s.moveLeft += avoidWeight * 0.6;
       else s.moveRight += avoidWeight * 0.6;
     }
-  }
-  // Jump to avoid ghosts only when very close
-  if (hz.type === 'ghost' && hz.dist < 60 && a.self.onGround) {
-    s.jump += avoidWeight * 0.3;
+    // Avoid ghosts — stronger weight, wider range
+    if (hz.type === 'ghost' && hz.dist < 120) {
+      const ghostAvoid = avoidWeight * 0.6;
+      if (hzDx > 0) s.moveLeft += ghostAvoid;
+      else s.moveRight += ghostAvoid;
+    }
   }
 }
 

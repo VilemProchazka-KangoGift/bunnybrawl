@@ -30,6 +30,7 @@ export interface AwarenessSnapshot {
   stompThreat: { x: number; y: number; dist: number } | null;
   nearestCarrot: { x: number; y: number; dist: number } | null;
   nearestHazard: { type: string; x: number; y: number; dist: number } | null;
+  nearbyHazards: Array<{ type: string; x: number; y: number; dist: number }>;
   nearestPlatformAbove: { x: number; y: number; width: number; dy: number } | null;
   nearestPlatformBelow: { x: number; y: number; width: number; dy: number } | null;
   nearEdge: boolean;
