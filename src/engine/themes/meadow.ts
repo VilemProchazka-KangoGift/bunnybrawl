@@ -8,6 +8,7 @@ export const MEADOW_THEME: ThemeConfig = {
   id: 'meadow',
   nameKey: 'arena_meadow',
   previewGradient: 'linear-gradient(to bottom, #4A90D9 0%, #87CEEB 60%, #4a8c3f 100%)',
+  previewIcon: '🌿',
 
   sky: {
     gradient: [
@@ -97,6 +98,14 @@ export const MEADOW_THEME: ThemeConfig = {
     showShootingStars: true,
   },
 
+  windConfig: {
+    interval: [18, 30],
+    buildDuration: 3,
+    peakDuration: 4,
+    fadeDuration: 3,
+    maxStrength: 250,
+  },
+
   drawFarBackground: (ctx, _arena) => {
     // Distant forest treeline behind the hills
     ctx.save();
@@ -162,9 +171,9 @@ export const MEADOW_THEME: ThemeConfig = {
       drawFlower(ctx, fx, y, color);
     }
 
-    // Mushrooms
+    // Mushrooms (avoid stump positions at x=340, 440, 800, 860)
     drawMushroom(ctx, 240, y);
-    drawMushroom(ctx, 800, y);
+    drawMushroom(ctx, 720, y);
 
     // Tree stumps — solid obstacles matching platforms
     drawTreeStump(ctx, 340, 615, 55, 45);
@@ -211,8 +220,8 @@ export const MEADOW_THEME: ThemeConfig = {
     drawFern(ctx, 770, gy);
     drawFern(ctx, 1220, gy);
 
-    // Bushes + vines on floating platforms
-    const floats = arena.platforms.filter(p => p.y < 650);
+    // Bushes + vines on floating platforms (exclude stumps — width < 70)
+    const floats = arena.platforms.filter(p => p.y < 650 && p.width >= 70);
     for (let pi = 0; pi < floats.length; pi++) {
       const plat = floats[pi];
       if (plat.width > 180) {

@@ -11,6 +11,7 @@ export function Match() {
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
   const fgCanvasRef = useRef<HTMLCanvasElement>(null);
   const gameLoopRef = useRef<GameLoop | null>(null);
+  const victoryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { activePlayers, matchSettings, setMatchResult, setScreen, setActivePlayers } = useGameStore();
   const [paused, setPaused] = useState(false);
 
@@ -63,7 +64,7 @@ export function Match() {
       matchSettings,
       activePlayers,
       (winner, state) => {
-        setTimeout(() => {
+        victoryTimeoutRef.current = setTimeout(() => {
           setMatchResult(winner, state);
         }, 1500);
       },
@@ -75,6 +76,10 @@ export function Match() {
     return () => {
       loop.stop();
       gameLoopRef.current = null;
+      if (victoryTimeoutRef.current) {
+        clearTimeout(victoryTimeoutRef.current);
+        victoryTimeoutRef.current = null;
+      }
     };
   }, [activePlayers, matchSettings, setMatchResult]);
 

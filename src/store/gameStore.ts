@@ -24,7 +24,7 @@ function loadArenaId(): string {
 }
 
 const defaultSettings: MatchSettings = {
-  killLimit: 10,
+  killLimit: 16,
   timeLimit: 180, // 3 minutes
   playerCount: 2,
   goreMode: loadGoreMode(),

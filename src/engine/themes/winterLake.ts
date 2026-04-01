@@ -16,6 +16,7 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
   id: 'winter_lake',
   nameKey: 'arena_winter_lake',
   previewGradient: 'linear-gradient(to bottom, #2C3E6B 0%, #8FA8C8 60%, #D8E8F0 100%)',
+  previewIcon: '❄️',
 
   sky: {
     gradient: [
@@ -301,6 +302,161 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
   },
 
   physics: {
-    friction: 0.25,
+    friction: 0.15,
+  },
+
+  drawCustomThorn: (ctx, x, y, width, height, growScale, fadeAlpha) => {
+    ctx.save();
+    ctx.globalAlpha = fadeAlpha;
+    const cx = x + width / 2;
+    const by = y + height;
+    ctx.translate(cx, by);
+    ctx.scale(growScale, growScale);
+    ctx.translate(-cx, -by);
+
+    // Snow base mound
+    ctx.fillStyle = 'rgba(220, 235, 250, 0.6)';
+    ctx.beginPath();
+    ctx.ellipse(x + width / 2, by, width * 0.45, height * 0.08, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Ice crystal spikes — translucent blue/white
+    const crystals = [
+      { sx: 0.18, sh: 0.55, w: 0.1, tilt: -0.15 },
+      { sx: 0.32, sh: 0.8, w: 0.09, tilt: -0.05 },
+      { sx: 0.5, sh: 1.0, w: 0.11, tilt: 0 },
+      { sx: 0.68, sh: 0.75, w: 0.09, tilt: 0.08 },
+      { sx: 0.82, sh: 0.5, w: 0.08, tilt: 0.12 },
+    ];
+    for (const c of crystals) {
+      const cxp = x + width * c.sx;
+      const ch = height * c.sh;
+      const cw = width * c.w;
+      ctx.save();
+      ctx.translate(cxp, by);
+      ctx.rotate(c.tilt);
+
+      // Crystal body — translucent blue
+      const crystalGrd = ctx.createLinearGradient(0, 0, 0, -ch);
+      crystalGrd.addColorStop(0, 'rgba(160, 200, 240, 0.6)');
+      crystalGrd.addColorStop(0.5, 'rgba(180, 220, 255, 0.5)');
+      crystalGrd.addColorStop(1, 'rgba(220, 240, 255, 0.3)');
+      ctx.fillStyle = crystalGrd;
+      ctx.beginPath();
+      ctx.moveTo(-cw, 0);
+      ctx.lineTo(-cw * 0.3, -ch * 0.6);
+      ctx.lineTo(0, -ch);
+      ctx.lineTo(cw * 0.3, -ch * 0.6);
+      ctx.lineTo(cw, 0);
+      ctx.closePath();
+      ctx.fill();
+
+      // Inner facet highlight
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+      ctx.beginPath();
+      ctx.moveTo(-cw * 0.4, -ch * 0.1);
+      ctx.lineTo(-cw * 0.1, -ch * 0.7);
+      ctx.lineTo(0, -ch);
+      ctx.lineTo(cw * 0.1, -ch * 0.5);
+      ctx.lineTo(-cw * 0.1, -ch * 0.1);
+      ctx.closePath();
+      ctx.fill();
+
+      // Crystal edge outline
+      ctx.strokeStyle = 'rgba(200, 230, 255, 0.5)';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(-cw, 0);
+      ctx.lineTo(0, -ch);
+      ctx.lineTo(cw, 0);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    ctx.restore();
+  },
+
+  drawCustomSpring: (ctx, x, y, size, bounceTimer, growScale, fadeAlpha) => {
+    ctx.save();
+    ctx.globalAlpha = fadeAlpha;
+    ctx.translate(x, y);
+    ctx.scale(growScale, growScale);
+    ctx.translate(-x, -y);
+
+    const halfW = size * 0.5;
+    const squash = 1 + bounceTimer * 0.03;
+    const moundH = size * 0.4 / squash;
+
+    // Snow mound body
+    ctx.fillStyle = '#E8F0F8';
+    ctx.beginPath();
+    ctx.moveTo(x - halfW, y);
+    ctx.quadraticCurveTo(x - halfW * 0.5, y - moundH * 1.3, x, y - moundH);
+    ctx.quadraticCurveTo(x + halfW * 0.5, y - moundH * 1.3, x + halfW, y);
+    ctx.closePath();
+    ctx.fill();
+
+    // Snow surface highlight
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.beginPath();
+    ctx.moveTo(x - halfW * 0.6, y - moundH * 0.3);
+    ctx.quadraticCurveTo(x, y - moundH * 1.1, x + halfW * 0.5, y - moundH * 0.4);
+    ctx.quadraticCurveTo(x + halfW * 0.2, y - moundH * 0.8, x - halfW * 0.3, y - moundH * 0.5);
+    ctx.closePath();
+    ctx.fill();
+
+    // Shadow at base
+    ctx.fillStyle = 'rgba(150, 180, 210, 0.2)';
+    ctx.beginPath();
+    ctx.ellipse(x, y, halfW * 0.9, size * 0.04, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Snow particles kicked up on bounce
+    if (Math.abs(bounceTimer) > 1) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+      const particleCount = 5;
+      for (let p = 0; p < particleCount; p++) {
+        const angle = (p / particleCount) * Math.PI - Math.PI * 0.1;
+        const dist = halfW * 0.4 + Math.abs(bounceTimer) * 1.2;
+        const px = x + Math.cos(angle) * dist;
+        const py = y - moundH * 0.5 - Math.sin(angle) * dist * 0.5;
+        ctx.beginPath();
+        ctx.arc(px, py, 1.5 + Math.abs(bounceTimer) * 0.1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    ctx.restore();
+  },
+
+  drawCustomHazardZone: (ctx, x, y, width, height, _time) => {
+    ctx.save();
+    // Icicle spikes hanging downward
+    const icicleCount = Math.floor(width / 12);
+    for (let i = 0; i < icicleCount; i++) {
+      const ix = x + 6 + i * (width / icicleCount);
+      const ih = height + 15 + (i % 3) * 8;
+      // Ice body
+      ctx.fillStyle = 'rgba(180, 210, 240, 0.7)';
+      ctx.beginPath();
+      ctx.moveTo(ix - 4, y);
+      ctx.lineTo(ix, y + ih);
+      ctx.lineTo(ix + 4, y);
+      ctx.closePath();
+      ctx.fill();
+      // Highlight
+      ctx.fillStyle = 'rgba(220, 240, 255, 0.5)';
+      ctx.beginPath();
+      ctx.moveTo(ix - 1, y + 2);
+      ctx.lineTo(ix, y + ih * 0.7);
+      ctx.lineTo(ix + 1, y + 2);
+      ctx.closePath();
+      ctx.fill();
+    }
+    // Frost base along the platform bottom
+    ctx.fillStyle = 'rgba(200, 220, 240, 0.3)';
+    ctx.fillRect(x - 5, y - 2, width + 10, 4);
+    ctx.restore();
   },
 };

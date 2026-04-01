@@ -472,7 +472,7 @@ function drawLobby(
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
     ctx.font = "10px 'Fredoka', sans-serif";
     ctx.textAlign = 'center';
-    ctx.fillText(npc.char.name, npc.x + PLAYER_WIDTH / 2, npc.y - 5);
+    ctx.fillText(i18n.t(`char_${npc.char.name}`, npc.char.name), npc.x + PLAYER_WIDTH / 2, npc.y - 5);
   }
 
   // ---- Draw players ----
@@ -524,7 +524,7 @@ function drawLobby(
     ctx.fillStyle = '#FFF';
     ctx.textAlign = 'left';
     ctx.font = "bold 13px 'Fredoka', sans-serif";
-    ctx.fillText(`${slot}: ${player.char.name}`, sx - slotWidth * 0.25, 26);
+    ctx.fillText(`${slot}: ${i18n.t(`char_${player.char.name}`, player.char.name)}`, sx - slotWidth * 0.25, 26);
 
     // Keys — replace Arrow* with unicode icons
     ctx.fillStyle = 'rgba(255,255,255,0.45)';

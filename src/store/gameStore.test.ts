@@ -13,7 +13,7 @@ describe('GameStore', () => {
 
   it('has default match settings', () => {
     const { matchSettings } = useGameStore.getState();
-    expect(matchSettings.killLimit).toBe(10);
+    expect(matchSettings.killLimit).toBe(16);
     expect(matchSettings.timeLimit).toBe(180);
     expect(matchSettings.playerCount).toBe(2);
   });

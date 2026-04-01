@@ -1,10 +1,10 @@
 import type {
   MatchState, MatchSettings, Arena, CharacterSlot, Player, Particle,
-  WeatherParticle, MatchStats, PlayerStats, WildlifeEntity,
+  WeatherParticle, MatchStats, PlayerStats, WildlifeEntity, EffectZone, Platform,
 } from './types';
 import type { ThemeConfig } from './themes/types';
 import { getTheme } from './themes/registry';
-import { randRange, pickWeighted } from './themes/utils';
+import { randRange, pickWeighted, swapRemove } from './themes/utils';
 import { InputManager } from './input';
 import { Renderer } from './renderer';
 import { applyInput, applyGravity, movePlayer, collidePlatforms, updatePlayerState, applyArenaConstraints, collidePlayersHorizontal, aabbOverlap } from './physics';
@@ -56,6 +56,11 @@ export class GameLoop {
   private afterimageAccumulators: Map<CharacterSlot, number> = new Map();
   private footstepAccumulators: Map<CharacterSlot, number> = new Map();
   private crowdStarted = false;
+  private zeroGSoundPlaying = false;
+  private cachedGeyserZones: EffectZone[] = [];
+  private cachedZeroGZones: EffectZone[] = [];
+  private geyserIndexMap: Map<EffectZone, number> = new Map();
+  private floatingPlatforms: Array<{ plat: Platform; idx: number }> = [];
 
   constructor(
     bgCanvas: HTMLCanvasElement,
@@ -168,7 +173,45 @@ export class GameLoop {
       pollenParticles,
       shootingStars: [],
       scoreAnimations: [],
+      ghosts: [],
+      lavaRocks: [],
+      lavaRockTimer: this.theme.lavaRockConfig ? randRange(this.theme.lavaRockConfig.spawnInterval) : 9999,
+      wind: { direction: 0, strength: 0, timer: this.theme.windConfig ? 5 + Math.random() * 5 : 9999, phase: 'idle' as const },
+      geyserStates: (arena.effectZones || []).filter(z => z.type === 'geyser').map(z => ({
+        timer: (z.interval || 10) * Math.random(),
+        active: false,
+        activeTimer: 0,
+      })),
+      pigeonFlocks: (this.theme.pigeonConfig?.positions || []).map(p => ({
+        x: p.x, y: p.y, active: true, respawnTimer: 0,
+        scatterParticles: [],
+      })),
+      bouncyWobble: new Map(),
     };
+
+    // Cache filtered zone arrays (arena-static, avoids per-frame allocations)
+    this.cachedGeyserZones = (arena.effectZones || []).filter(z => z.type === 'geyser');
+    this.cachedZeroGZones = (arena.effectZones || []).filter(z => z.type === 'zero_g');
+    this.geyserIndexMap = new Map(this.cachedGeyserZones.map((z, i) => [z, i]));
+    // Cache floating platforms with indices for hazard spawning
+    this.floatingPlatforms = this.arena.platforms
+      .map((p, i) => ({ plat: p, idx: i }))
+      .filter(({ plat }) => plat.y < 650);
+
+    // Initialize ghosts from theme config
+    if (this.theme.ghostConfig) {
+      const gc = this.theme.ghostConfig;
+      for (let i = 0; i < gc.count; i++) {
+        this.state.ghosts.push({
+          x: Math.random() * CANVAS_WIDTH,
+          y: 300 + Math.random() * 300,
+          vx: (Math.random() < 0.5 ? -1 : 1) * gc.speed * (0.7 + Math.random() * 0.6),
+          size: gc.size,
+          alpha: 0.5 + Math.random() * 0.3,
+          wobblePhase: Math.random() * Math.PI * 2,
+        });
+      }
+    }
   }
 
   private createWeatherParticle(randomY: boolean): WeatherParticle {
@@ -202,6 +245,9 @@ export class GameLoop {
     this.input.detach();
     audio.stop('music');
     audio.stop('ambient');
+    audio.stop('wind');
+    audio.stop('zero_g');
+    audio.stop('crowd');
   }
 
   getState(): MatchState { return this.state; }
@@ -255,7 +301,11 @@ export class GameLoop {
     if (this.newSplatsSinceRender.length > 0) {
       const newSplats = this.newSplatsSinceRender.map(i => this.state.splatMarks[i]);
       this.renderer.renderSplatMarks(newSplats, this.settings.goreMode);
-      this.newSplatsSinceRender = [];
+      this.newSplatsSinceRender.length = 0;
+      // Cap after rendering to prevent unbounded growth (old marks are baked into bg canvas)
+      if (this.state.splatMarks.length > 200) {
+        this.state.splatMarks.length = 200;
+      }
     }
 
     this.renderer.renderFrame(this.state, this.arena, this.particles);
@@ -265,14 +315,12 @@ export class GameLoop {
   // ---- Hazard spawning ----
 
   private spawnSpring(): void {
-    const floats = this.arena.platforms.filter(p => p.y < 650);
-    if (floats.length === 0) return;
-    const plat = floats[Math.floor(Math.random() * floats.length)];
-    const pi = this.arena.platforms.indexOf(plat);
+    if (this.floatingPlatforms.length === 0) return;
+    const fp = this.floatingPlatforms[Math.floor(Math.random() * this.floatingPlatforms.length)];
     this.state.springs.push({
-      x: plat.x + 20 + Math.random() * (plat.width - 40),
-      y: plat.y,
-      platformIndex: pi,
+      x: fp.plat.x + 20 + Math.random() * (fp.plat.width - 40),
+      y: fp.plat.y,
+      platformIndex: fp.idx,
       bounceTimer: 0,
       life: HAZARD_LIFETIME,
       growTimer: HAZARD_GROW_TIME,
@@ -280,15 +328,13 @@ export class GameLoop {
   }
 
   private spawnThorn(): void {
-    const floats = this.arena.platforms.filter(p => p.y < 650);
-    if (floats.length === 0) return;
-    const plat = floats[Math.floor(Math.random() * floats.length)];
-    const pi = this.arena.platforms.indexOf(plat);
+    if (this.floatingPlatforms.length === 0) return;
+    const fp = this.floatingPlatforms[Math.floor(Math.random() * this.floatingPlatforms.length)];
     this.state.thorns.push({
-      x: plat.x + 10 + Math.random() * (plat.width - 44),
-      y: plat.y - 12,
+      x: fp.plat.x + 10 + Math.random() * (fp.plat.width - 44),
+      y: fp.plat.y - 12,
       width: 28, height: 12,
-      platformIndex: pi,
+      platformIndex: fp.idx,
       life: HAZARD_LIFETIME,
       growTimer: HAZARD_GROW_TIME,
       hit: false,
@@ -374,55 +420,61 @@ export class GameLoop {
   // ---- Carrot spawning ----
 
   private spawnCarrot(): void {
-    const MIN_CARROT_DIST = 150; // minimum distance from existing carrots
-    const candidates: Array<{ x: number; y: number; dist: number }> = [];
+    const MIN_CARROT_DIST_SQ = 150 * 150; // squared distance threshold
+    const candidates: Array<{ x: number; y: number; distSq: number }> = [];
+
+    const minDistSqTo = (cx: number, cy: number): number => {
+      let minSq = Infinity;
+      for (const p of this.state.players) {
+        if (!p.active || p.state === 'splat' || p.state === 'respawning') continue;
+        const dx = cx - (p.x + p.width / 2);
+        const dy = cy - (p.y + p.height / 2);
+        const sq = dx * dx + dy * dy;
+        if (sq < minSq) minSq = sq;
+      }
+      for (const c of this.state.carrots) {
+        if (!c.active) continue;
+        const dx = cx - c.x;
+        const dy = cy - c.y;
+        const sq = dx * dx + dy * dy;
+        if (sq < minSq) minSq = sq;
+      }
+      return minSq;
+    };
+
     for (const plat of this.arena.platforms) {
       // On-platform candidates
       for (let attempt = 0; attempt < 3; attempt++) {
         const cx = plat.x + 20 + Math.random() * (plat.width - 40);
         const cy = plat.y - CARROT_SIZE;
-        let minDist = Infinity;
-        for (const p of this.state.players) {
-          if (!p.active || p.state === 'splat' || p.state === 'respawning') continue;
-          const dx = cx - (p.x + p.width / 2);
-          const dy = cy - (p.y + p.height / 2);
-          minDist = Math.min(minDist, Math.sqrt(dx * dx + dy * dy));
-        }
-        // Also distance from existing carrots
-        for (const c of this.state.carrots) {
-          if (!c.active) continue;
-          const dx = cx - c.x;
-          const dy = cy - c.y;
-          minDist = Math.min(minDist, Math.sqrt(dx * dx + dy * dy));
-        }
-        candidates.push({ x: cx, y: cy, dist: minDist });
+        candidates.push({ x: cx, y: cy, distSq: minDistSqTo(cx, cy) });
       }
       // Mid-air candidates above platforms (reachable by jumping)
       for (let attempt = 0; attempt < 2; attempt++) {
         const cx = plat.x + 20 + Math.random() * (plat.width - 40);
         const cy = plat.y - 60 - Math.random() * 60;
-        let minDist = Infinity;
-        for (const p of this.state.players) {
-          if (!p.active || p.state === 'splat' || p.state === 'respawning') continue;
-          const dx = cx - (p.x + p.width / 2);
-          const dy = cy - (p.y + p.height / 2);
-          minDist = Math.min(minDist, Math.sqrt(dx * dx + dy * dy));
-        }
-        for (const c of this.state.carrots) {
-          if (!c.active) continue;
-          const dx = cx - c.x;
-          const dy = cy - c.y;
-          minDist = Math.min(minDist, Math.sqrt(dx * dx + dy * dy));
-        }
-        candidates.push({ x: cx, y: cy, dist: minDist });
+        candidates.push({ x: cx, y: cy, distSq: minDistSqTo(cx, cy) });
+      }
+    }
+    // Extra mid-air candidates inside effect zones (carrots floating in zero-G, etc.)
+    for (const zone of this.cachedZeroGZones) {
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const cx = zone.x + 30 + Math.random() * (zone.width - 60);
+        const cy = zone.y + 30 + Math.random() * (zone.height - 60);
+        candidates.push({ x: cx, y: cy, distSq: minDistSqTo(cx, cy) * 2.25 }); // 1.5x bias squared
       }
     }
     // Filter out candidates too close to existing carrots
-    const filtered = candidates.filter(c => c.dist >= MIN_CARROT_DIST);
-    const pool = filtered.length > 0 ? filtered : candidates;
-    pool.sort((a, b) => b.dist - a.dist);
-    if (pool.length > 0) {
-      const spot = pool[0];
+    let bestIdx = 0;
+    let bestDistSq = -1;
+    for (let i = 0; i < candidates.length; i++) {
+      if (candidates[i].distSq > bestDistSq) {
+        bestDistSq = candidates[i].distSq;
+        bestIdx = i;
+      }
+    }
+    if (candidates.length > 0) {
+      const spot = candidates[bestIdx];
       this.state.carrots.push({ x: spot.x, y: spot.y, active: true, spawnTime: this.state.timeElapsed });
       this.spawnCarrotVFX(spot.x, spot.y);
     }
@@ -435,8 +487,7 @@ export class GameLoop {
       const p = this.particles[i];
       p.life -= dt;
       if (p.life <= 0) {
-        this.particles[i] = this.particles[this.particles.length - 1];
-        this.particles.pop();
+        swapRemove(this.particles, i);
         // don't decrement i — re-check the swapped element at this index
         continue; // loop decrements i, but the element at i is new — acceptable 1-frame delay
       }
@@ -506,13 +557,21 @@ export class GameLoop {
       if (s.growTimer > 0) s.growTimer -= dt;
       if (s.bounceTimer > 0) s.bounceTimer -= dt;
     }
-    this.state.springs = this.state.springs.filter(s => s.life > 0);
+    for (let i = this.state.springs.length - 1; i >= 0; i--) {
+      if (this.state.springs[i].life <= 0) {
+        swapRemove(this.state.springs, i);
+      }
+    }
 
     for (const t of this.state.thorns) {
       t.life -= dt;
       if (t.growTimer > 0) t.growTimer -= dt;
     }
-    this.state.thorns = this.state.thorns.filter(t => t.life > 0 && !t.hit);
+    for (let i = this.state.thorns.length - 1; i >= 0; i--) {
+      if (this.state.thorns[i].life <= 0 || this.state.thorns[i].hit) {
+        swapRemove(this.state.thorns, i);
+      }
+    }
 
     // Carrot timer
     this.state.carrotTimer -= dt;
@@ -523,6 +582,123 @@ export class GameLoop {
 
     // Weather
     this.updateWeather(dt);
+
+    // Update lava rocks
+    if (this.theme.lavaRockConfig) {
+      const lrc = this.theme.lavaRockConfig;
+      this.state.lavaRockTimer -= dt;
+      if (this.state.lavaRockTimer <= 0) {
+        this.state.lavaRockTimer = randRange(lrc.spawnInterval);
+        this.state.lavaRocks.push({
+          x: 80 + Math.random() * (CANVAS_WIDTH - 160),
+          y: -20,
+          vy: randRange(lrc.fallSpeed),
+          size: randRange(lrc.sizeRange),
+          rotation: Math.random() * Math.PI * 2,
+          active: true,
+        });
+      }
+      for (const rock of this.state.lavaRocks) {
+        rock.y += rock.vy * dt;
+        rock.rotation += dt * 3;
+        if (rock.y > CANVAS_HEIGHT + 30) rock.active = false;
+      }
+      for (let i = this.state.lavaRocks.length - 1; i >= 0; i--) {
+        if (!this.state.lavaRocks[i].active) {
+          swapRemove(this.state.lavaRocks, i);
+        }
+      }
+    }
+
+    // Update ghosts
+    for (const ghost of this.state.ghosts) {
+      ghost.x += ghost.vx * dt;
+      ghost.wobblePhase += dt * 2;
+      ghost.y += Math.sin(ghost.wobblePhase) * 20 * dt;
+      // Wrap around screen
+      if (ghost.vx > 0 && ghost.x > CANVAS_WIDTH + ghost.size) {
+        ghost.x = -ghost.size;
+        ghost.y = 300 + Math.random() * 300;
+      } else if (ghost.vx < 0 && ghost.x < -ghost.size) {
+        ghost.x = CANVAS_WIDTH + ghost.size;
+        ghost.y = 300 + Math.random() * 300;
+      }
+    }
+
+    // Update wind system
+    if (this.theme.windConfig) {
+      const wc = this.theme.windConfig;
+      const wind = this.state.wind;
+      wind.timer -= dt;
+      if (wind.phase === 'idle' && wind.timer <= 0) {
+        wind.phase = 'building';
+        wind.direction = Math.random() < 0.5 ? -1 : 1;
+        wind.timer = wc.buildDuration;
+        audio.play('wind');
+      } else if (wind.phase === 'building') {
+        wind.strength = wc.maxStrength * (1 - wind.timer / wc.buildDuration);
+        if (wind.timer <= 0) { wind.phase = 'peak'; wind.timer = wc.peakDuration; }
+      } else if (wind.phase === 'peak') {
+        wind.strength = wc.maxStrength;
+        if (wind.timer <= 0) { wind.phase = 'fading'; wind.timer = wc.fadeDuration; }
+      } else if (wind.phase === 'fading') {
+        wind.strength = wc.maxStrength * (wind.timer / wc.fadeDuration);
+        if (wind.timer <= 0) {
+          wind.phase = 'idle';
+          wind.strength = 0;
+          wind.timer = randRange(wc.interval);
+          audio.stop('wind');
+        }
+      }
+    }
+
+    // Update geyser timers
+    const geyserZones = this.cachedGeyserZones;
+    for (let gi = 0; gi < this.state.geyserStates.length; gi++) {
+      const gs = this.state.geyserStates[gi];
+      const gz = geyserZones[gi];
+      if (!gz) continue;
+      if (!gs.active) {
+        gs.timer -= dt;
+        if (gs.timer <= 0) {
+          gs.active = true;
+          gs.activeTimer = gz.duration || 3;
+          audio.play('geyser');
+        }
+      } else {
+        gs.activeTimer -= dt;
+        if (gs.activeTimer <= 0) {
+          gs.active = false;
+          gs.timer = gz.interval || 10;
+        }
+      }
+    }
+
+    // Update pigeon flocks
+    for (const flock of this.state.pigeonFlocks) {
+      if (!flock.active) {
+        flock.respawnTimer -= dt;
+        if (flock.respawnTimer <= 0) flock.active = true;
+      }
+      // Decay scatter particles
+      for (let i = flock.scatterParticles.length - 1; i >= 0; i--) {
+        const sp = flock.scatterParticles[i];
+        sp.x += sp.vx * dt;
+        sp.y += sp.vy * dt;
+        sp.vy += 100 * dt;
+        sp.life -= dt;
+        if (sp.life <= 0) {
+          swapRemove(flock.scatterParticles, i);
+        }
+      }
+    }
+
+    // Decay bouncy wobble timers
+    for (const [idx, timer] of this.state.bouncyWobble) {
+      const newTimer = timer - dt;
+      if (newTimer <= 0) this.state.bouncyWobble.delete(idx);
+      else this.state.bouncyWobble.set(idx, newTimer);
+    }
 
     // Animation timers
     for (const player of this.state.players) {
@@ -669,8 +845,7 @@ export class GameLoop {
       for (let i = player.afterimages.length - 1; i >= 0; i--) {
         player.afterimages[i].alpha -= dt * 4;
         if (player.afterimages[i].alpha <= 0) {
-          player.afterimages[i] = player.afterimages[player.afterimages.length - 1];
-          player.afterimages.pop();
+          swapRemove(player.afterimages, i);
         }
       }
 
@@ -743,6 +918,198 @@ export class GameLoop {
         }
       }
 
+      // Hazard zone collision (lava pools etc.) — inset hitbox by 12px on sides to allow edge stepping
+      if (this.arena.hazardZones) {
+        for (const hz of this.arena.hazardZones) {
+          const inset = 12;
+          if (player.slowTimer <= 0 && player.invincibleTimer <= 0 &&
+              aabbOverlap(player.x, player.y, player.width, player.height, hz.x + inset, hz.y, hz.width - inset * 2, hz.height)) {
+            player.slowTimer = THORN_SLOW_DURATION;
+            audio.play('thornhit');
+            const px = player.x + player.width / 2;
+            const py = player.y + player.height / 2;
+            // Big particle burst
+            for (let i = 0; i < 24; i++) {
+              const angle = Math.random() * Math.PI * 2;
+              const speed = 80 + Math.random() * 200;
+              const life = 0.4 + Math.random() * 0.6;
+              const color = hz.type === 'lava' ? (i % 3 === 0 ? '#FFCC00' : i % 3 === 1 ? '#FF4400' : '#FF8800') : '#CC2222';
+              this.particles.push({ x: px + (Math.random() - 0.5) * 12, y: py + (Math.random() - 0.5) * 12, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 100, life, maxLife: life, size: 3 + Math.random() * 5, color });
+            }
+            // Knockback away from hazard center
+            const hcx = hz.x + hz.width / 2;
+            player.vx += (px > hcx ? 1 : -1) * 150;
+            player.vy = -200;
+            player.damageFlashSide = px > hcx ? 'left' : 'right';
+            player.damageFlashTimer = 0.4;
+            player.squashScale = 0.6;
+            player.squashTimer = 0.2;
+            this.state.screenShake = Math.max(this.state.screenShake, 0.25);
+            this.state.screenFlash = Math.max(this.state.screenFlash, 0.06);
+            break;
+          }
+        }
+      }
+
+      // Ghost collision
+      for (const ghost of this.state.ghosts) {
+        if (player.slowTimer <= 0 && player.invincibleTimer <= 0) {
+          const gx = ghost.x;
+          const gy = ghost.y;
+          const gr = ghost.size * 0.5;
+          const pcx = player.x + player.width / 2;
+          const pcy = player.y + player.height / 2;
+          const dx = pcx - gx;
+          const dy = pcy - gy;
+          if (dx * dx + dy * dy < (gr + player.width * 0.4) * (gr + player.width * 0.4)) {
+            player.slowTimer = THORN_SLOW_DURATION;
+            audio.play('thornhit');
+            // Big ghost hit burst
+            for (let i = 0; i < 20; i++) {
+              const angle = Math.random() * Math.PI * 2;
+              const speed = 60 + Math.random() * 160;
+              const life = 0.4 + Math.random() * 0.5;
+              const color = i % 2 === 0 ? '#8855CC' : '#AA77EE';
+              this.particles.push({ x: pcx, y: pcy, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 80, life, maxLife: life, size: 3 + Math.random() * 4, color });
+            }
+            // Knockback away from ghost
+            player.vx += (dx > 0 ? 1 : -1) * 180;
+            player.vy = -180;
+            player.damageFlashSide = dx > 0 ? 'left' : 'right';
+            player.damageFlashTimer = 0.4;
+            player.squashScale = 0.6;
+            player.squashTimer = 0.2;
+            this.state.screenShake = Math.max(this.state.screenShake, 0.2);
+            this.state.screenFlash = Math.max(this.state.screenFlash, 0.06);
+            break;
+          }
+        }
+      }
+
+      // Lava rock collision
+      for (const rock of this.state.lavaRocks) {
+        if (!rock.active) continue;
+        if (player.slowTimer <= 0 && player.invincibleTimer <= 0) {
+          const dx = (player.x + player.width / 2) - rock.x;
+          const dy = (player.y + player.height / 2) - rock.y;
+          const hitDist = rock.size + player.width * 0.3;
+          if (dx * dx + dy * dy < hitDist * hitDist) {
+            rock.active = false;
+            player.slowTimer = THORN_SLOW_DURATION;
+            audio.play('thornhit');
+            const pcx = player.x + player.width / 2;
+            const pcy = player.y + player.height / 2;
+            for (let i = 0; i < 16; i++) {
+              const angle = Math.random() * Math.PI * 2;
+              const speed = 60 + Math.random() * 150;
+              const life = 0.3 + Math.random() * 0.5;
+              const color = i % 2 === 0 ? '#FF6600' : '#FFAA00';
+              this.particles.push({ x: pcx, y: pcy, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 60, life, maxLife: life, size: 2.5 + Math.random() * 4, color });
+            }
+            player.vx += dx > 0 ? -120 : 120;
+            player.vy = -150;
+            player.damageFlashSide = dx > 0 ? 'left' : 'right';
+            player.damageFlashTimer = 0.3;
+            player.squashScale = 0.65;
+            player.squashTimer = 0.2;
+            this.state.screenShake = Math.max(this.state.screenShake, 0.2);
+          }
+        }
+      }
+
+      // Fall-off detection (rooftops, treetops — gaps in ground)
+      // No score penalty — just lose ~1 second to respawn in hurt state
+      if (this.arena.allowFallOff && player.y > CANVAS_HEIGHT + 50) {
+        const spawn = this.arena.spawnPoints[Math.floor(Math.random() * this.arena.spawnPoints.length)];
+        player.x = spawn.x - player.width / 2;
+        player.y = spawn.y - player.height;
+        player.vx = 0;
+        player.vy = 0;
+        player.state = 'idle';
+        player.invincibleTimer = 1.5;
+        player.slowTimer = 2.0; // respawn slowed (hurt state)
+        player.fastFalling = false;
+        player.fatTimer = 0;
+        audio.play('oof');
+        this.state.screenShake = Math.max(this.state.screenShake, 0.1);
+      }
+
+      // Wind force (affects airborne players)
+      if (this.state.wind.strength > 0 && player.state === 'airborne') {
+        player.vx += this.state.wind.direction * this.state.wind.strength * dt;
+      }
+
+      // Effect zone interactions
+      if (this.arena.effectZones) {
+        for (let zi = 0; zi < this.arena.effectZones.length; zi++) {
+          const zone = this.arena.effectZones[zi];
+          if (!aabbOverlap(player.x, player.y, player.width, player.height, zone.x, zone.y, zone.width, zone.height)) continue;
+
+          if (zone.type === 'zero_g') {
+            // Low gravity field — boost upward movement, slow falls
+            if (player.vy > 0) {
+              // Falling — slow down significantly
+              player.vy *= 0.92;
+            } else if (player.vy < 0) {
+              // Rising — boost upward (amplify jumps)
+              player.vy *= 1.03;
+            }
+          } else if (zone.type === 'current') {
+            // Push player horizontally
+            player.vx += (zone.vx || 0) * dt;
+          } else if (zone.type === 'geyser') {
+            // Find matching geyser state
+            const geyserIdx = this.geyserIndexMap.get(zone) ?? -1;
+            if (geyserIdx >= 0 && this.state.geyserStates[geyserIdx]?.active) {
+              player.vy = Math.min(player.vy, zone.strength || -550);
+              player.state = 'airborne';
+            }
+          }
+        }
+      }
+
+      // Bouncy platform check (on landing — skip if holding down on ground to avoid repeat bouncing)
+      if (this.arena.bouncyPlatforms && justLanded && !(input.down && prevVy < 100)) {
+        for (const bi of this.arena.bouncyPlatforms) {
+          const bp = this.arena.platforms[bi];
+          if (!bp) continue;
+          const playerBottom = player.y + player.height;
+          const playerCx = player.x + player.width / 2;
+          if (playerBottom >= bp.y && playerBottom <= bp.y + bp.height + 4 &&
+              playerCx >= bp.x && playerCx <= bp.x + bp.width) {
+            player.vy = SPRING_BOUNCE * 0.85;
+            player.state = 'airborne';
+            this.state.bouncyWobble.set(bi, 0.4);
+            audio.play('jump');
+            break;
+          }
+        }
+      }
+
+      // Pigeon scatter check
+      for (const flock of this.state.pigeonFlocks) {
+        if (!flock.active) continue;
+        const dx = (player.x + player.width / 2) - flock.x;
+        const dy = (player.y + player.height) - flock.y;
+        if (dx * dx + dy * dy < 60 * 60 && player.state !== 'airborne') {
+          flock.active = false;
+          flock.respawnTimer = this.theme.pigeonConfig?.respawnTime || 12;
+          audio.play('pigeon_scatter');
+          // Spawn scatter particles (gray birds flying away)
+          for (let pi = 0; pi < 6; pi++) {
+            const angle = -Math.PI * 0.5 + (Math.random() - 0.5) * Math.PI * 0.8;
+            const speed = 150 + Math.random() * 200;
+            flock.scatterParticles.push({
+              x: flock.x + (Math.random() - 0.5) * 20,
+              y: flock.y - 5,
+              vx: Math.cos(angle) * speed * (Math.random() < 0.5 ? -1 : 1),
+              vy: Math.sin(angle) * speed - 80,
+              life: 1.0 + Math.random() * 0.5,
+            });
+          }
+        }
+      }
+
       // Carrot pickup
       for (const carrot of this.state.carrots) {
         if (!carrot.active) continue;
@@ -761,7 +1128,34 @@ export class GameLoop {
       }
     }
 
-    this.state.carrots = this.state.carrots.filter(c => c.active);
+    for (let i = this.state.carrots.length - 1; i >= 0; i--) {
+      if (!this.state.carrots[i].active) {
+        swapRemove(this.state.carrots, i);
+      }
+    }
+
+    // Zero-G ambient sound management
+    const zeroGZones = this.cachedZeroGZones;
+    if (zeroGZones.length > 0) {
+      let anyInZeroG = false;
+      for (const p of this.state.players) {
+        if (!p.active || p.state === 'splat' || p.state === 'respawning') continue;
+        for (const z of zeroGZones) {
+          if (aabbOverlap(p.x, p.y, p.width, p.height, z.x, z.y, z.width, z.height)) {
+            anyInZeroG = true;
+            break;
+          }
+        }
+        if (anyInZeroG) break;
+      }
+      if (anyInZeroG && !this.zeroGSoundPlaying) {
+        audio.play('zero_g');
+        this.zeroGSoundPlaying = true;
+      } else if (!anyInZeroG && this.zeroGSoundPlaying) {
+        audio.stop('zero_g');
+        this.zeroGSoundPlaying = false;
+      }
+    }
 
     // Stomps
     const { splatMarks, killFeedEntries } = checkStomps(this.state.players, this.arena.spawnPoints, this.state.timeElapsed);
@@ -808,7 +1202,13 @@ export class GameLoop {
         victim.killStreak = 0;
       }
     }
-    if (killFeedEntries.length > 0) this.state.killFeed.push(...killFeedEntries);
+    if (killFeedEntries.length > 0) {
+      this.state.killFeed.push(...killFeedEntries);
+      // Cap kill feed (HUD only shows last 3)
+      if (this.state.killFeed.length > 10) {
+        this.state.killFeed.splice(0, this.state.killFeed.length - 10);
+      }
+    }
 
     collidePlayersHorizontal(this.state.players);
     updateSplatTimers(this.state.players, this.arena.spawnPoints, dt);
@@ -820,13 +1220,21 @@ export class GameLoop {
       sw.radius = sw.maxRadius * progress;
       sw.life -= dt;
     }
-    this.state.shockwaves = this.state.shockwaves.filter(sw => sw.life > 0);
+    for (let i = this.state.shockwaves.length - 1; i >= 0; i--) {
+      if (this.state.shockwaves[i].life <= 0) {
+        swapRemove(this.state.shockwaves, i);
+      }
+    }
 
     // Decay score animations
     for (const sa of this.state.scoreAnimations) {
       sa.timer -= dt;
     }
-    this.state.scoreAnimations = this.state.scoreAnimations.filter(sa => sa.timer > 0);
+    for (let i = this.state.scoreAnimations.length - 1; i >= 0; i--) {
+      if (this.state.scoreAnimations[i].timer <= 0) {
+        swapRemove(this.state.scoreAnimations, i);
+      }
+    }
 
     // Update wildlife
     for (const w of this.state.wildlife) {
@@ -884,7 +1292,11 @@ export class GameLoop {
       star.y += star.vy * dt;
       star.life -= dt;
     }
-    this.state.shootingStars = this.state.shootingStars.filter(s => s.life > 0);
+    for (let i = this.state.shootingStars.length - 1; i >= 0; i--) {
+      if (this.state.shootingStars[i].life <= 0) {
+        swapRemove(this.state.shootingStars, i);
+      }
+    }
 
     // Crowd cheering: ramp up volume near end of match
     let leadScore = 0;

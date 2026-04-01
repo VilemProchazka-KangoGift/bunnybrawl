@@ -1,6 +1,6 @@
 import { Howl } from 'howler';
 
-export type SoundName = 'jump' | 'stomp' | 'victory' | 'select' | 'music' | 'thornhit' | 'bunny' | 'fox' | 'frog' | 'bear' | 'owl' | 'cat' | 'wolf' | 'panda' | 'pig' | 'cow' | 'goat' | 'horse' | 'sheep' | 'monkey' | 'footstep_grass' | 'footstep_wood' | 'countdown_beep' | 'countdown_go' | 'oof' | 'splash' | 'ambient' | 'crowd';
+export type SoundName = 'jump' | 'stomp' | 'victory' | 'select' | 'music' | 'thornhit' | 'bunny' | 'fox' | 'frog' | 'bear' | 'owl' | 'cat' | 'wolf' | 'panda' | 'pig' | 'cow' | 'goat' | 'horse' | 'sheep' | 'monkey' | 'footstep_grass' | 'footstep_wood' | 'countdown_beep' | 'countdown_go' | 'oof' | 'splash' | 'ambient' | 'crowd' | 'wind' | 'geyser' | 'pigeon_scatter' | 'zero_g';
 
 class AudioManager {
   private sounds: Map<SoundName, Howl> = new Map();
@@ -171,6 +171,28 @@ class AudioManager {
       volume: 0,
     }));
 
+    this.sounds.set('wind', new Howl({
+      src: [generateWindSound()],
+      volume: 0.2,
+      loop: true,
+    }));
+
+    this.sounds.set('geyser', new Howl({
+      src: [generateGeyserSound()],
+      volume: 0.3,
+    }));
+
+    this.sounds.set('pigeon_scatter', new Howl({
+      src: [generatePigeonScatterSound()],
+      volume: 0.25,
+    }));
+
+    this.sounds.set('zero_g', new Howl({
+      src: [generateZeroGSound()],
+      volume: 0.15,
+      loop: true,
+    }));
+
     this.initialized = true;
   }
 
@@ -210,6 +232,14 @@ class AudioManager {
   playAnimal(characterName: string): void {
     const soundName = characterName.toLowerCase() as SoundName;
     this.play(soundName);
+  }
+
+  destroy(): void {
+    for (const sound of this.sounds.values()) {
+      sound.unload();
+    }
+    this.sounds.clear();
+    this.initialized = false;
   }
 }
 
@@ -572,13 +602,83 @@ function floatBufferToWavDataUri(buffer: Float32Array, sampleRate: number): stri
     view.setInt16(headerSize + i * bytesPerSample, intSample, true);
   }
 
-  // Convert to base64
+  // Convert to base64 (chunked to avoid O(n²) string concatenation)
   const bytes = new Uint8Array(arrayBuffer);
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
+  const chunks: string[] = [];
+  for (let i = 0; i < bytes.length; i += 8192) {
+    chunks.push(String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + 8192))));
   }
-  return 'data:audio/wav;base64,' + btoa(binary);
+  return 'data:audio/wav;base64,' + btoa(chunks.join(''));
+}
+
+function generateWindSound(): string {
+  const sampleRate = 44100;
+  const duration = 3;
+  const numSamples = Math.floor(sampleRate * duration);
+  const buffer = new Float32Array(numSamples);
+  let brown = 0;
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / sampleRate;
+    const white = Math.random() * 2 - 1;
+    brown += white * 0.015;
+    brown = Math.max(-1, Math.min(1, brown));
+    // Low-frequency modulation for "whooshing" effect
+    const mod = Math.sin(2 * Math.PI * 0.4 * t) * 0.4 + 0.6;
+    // Higher frequency detail
+    const detail = Math.sin(2 * Math.PI * 120 * t + Math.sin(2 * Math.PI * 0.2 * t) * 5) * 0.02;
+    buffer[i] = (brown * mod + detail) * 0.08;
+  }
+  return floatBufferToWavDataUri(buffer, sampleRate);
+}
+
+function generateGeyserSound(): string {
+  const sampleRate = 44100;
+  const duration = 0.6;
+  const numSamples = Math.floor(sampleRate * duration);
+  const buffer = new Float32Array(numSamples);
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / sampleRate;
+    const progress = i / numSamples;
+    const envelope = Math.max(0, 1 - progress * 1.5) * (progress < 0.1 ? progress * 10 : 1);
+    // Bubble-like rising tone
+    const freq = 200 + progress * 400;
+    const bubble = Math.sin(2 * Math.PI * freq * t) * 0.3;
+    const noise = (Math.random() * 2 - 1) * 0.15;
+    buffer[i] = (bubble + noise) * envelope * 0.3;
+  }
+  return floatBufferToWavDataUri(buffer, sampleRate);
+}
+
+function generateZeroGSound(): string {
+  const sampleRate = 44100;
+  const duration = 2;
+  const numSamples = Math.floor(sampleRate * duration);
+  const buffer = new Float32Array(numSamples);
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / sampleRate;
+    // Deep electronic hum with slight modulation
+    const hum = Math.sin(2 * Math.PI * 80 * t) * 0.08;
+    const mod = Math.sin(2 * Math.PI * 0.5 * t) * 0.3 + 0.7;
+    const high = Math.sin(2 * Math.PI * 220 * t + Math.sin(2 * Math.PI * 0.3 * t) * 3) * 0.02;
+    buffer[i] = (hum * mod + high) * 0.4;
+  }
+  return floatBufferToWavDataUri(buffer, sampleRate);
+}
+
+function generatePigeonScatterSound(): string {
+  const sampleRate = 44100;
+  const duration = 0.4;
+  const numSamples = Math.floor(sampleRate * duration);
+  const buffer = new Float32Array(numSamples);
+  for (let i = 0; i < numSamples; i++) {
+    const progress = i / numSamples;
+    const envelope = Math.max(0, 1 - progress * 2) * (progress < 0.05 ? progress * 20 : 1);
+    // Wing flapping noise
+    const flap = Math.sin(2 * Math.PI * 30 * progress * 8) * 0.3;
+    const noise = (Math.random() * 2 - 1) * 0.4;
+    buffer[i] = (noise * (0.5 + flap * 0.5)) * envelope * 0.2;
+  }
+  return floatBufferToWavDataUri(buffer, sampleRate);
 }
 
 function writeString(view: DataView, offset: number, str: string): void {

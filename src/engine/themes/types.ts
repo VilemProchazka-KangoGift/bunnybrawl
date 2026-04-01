@@ -86,6 +86,7 @@ export interface ThemeConfig {
   id: string;
   nameKey: string;           // i18n key for display name
   previewGradient: string;   // CSS gradient for menu thumbnail
+  previewIcon: string;       // Unicode icon for arena tile
 
   // Sky
   sky: { gradient: GradientStop[] };
@@ -133,6 +134,51 @@ export interface ThemeConfig {
 
   // Optional custom particle renderer (overrides default leaf/petal/snow drawing)
   drawWeatherParticle?: (ctx: CanvasRenderingContext2D, particle: WeatherParticle) => void;
+
+  // Optional custom hazard zone renderer (e.g. icicle spikes instead of lava)
+  drawCustomHazardZone?: (ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, time: number) => void;
+
+  // Optional custom ghost renderer (e.g. wasps for treetops)
+  drawCustomGhost?: (ctx: CanvasRenderingContext2D, x: number, y: number, size: number, alpha: number, time: number) => void;
+
+  // Optional custom thorn renderer (e.g. zombie hand for graveyard)
+  drawCustomThorn?: (ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, growScale: number, fadeAlpha: number) => void;
+
+  // Optional custom spring renderer (e.g. bubble for underwater)
+  drawCustomSpring?: (ctx: CanvasRenderingContext2D, x: number, y: number, size: number, bounceTimer: number, growScale: number, fadeAlpha: number) => void;
+
+  // Optional ghost hazards (roaming enemies that hurt on touch)
+  ghostConfig?: {
+    count: number;
+    speed: number;
+    size: number;
+    color: string;
+    glowColor: string;
+  };
+
+  // Optional falling hazard rocks (volcano lava rocks falling from sky)
+  lavaRockConfig?: {
+    spawnInterval: [number, number]; // seconds between rocks
+    fallSpeed: [number, number];     // vy range
+    sizeRange: [number, number];
+    color: string;
+    glowColor: string;
+  };
+
+  // Optional wind mechanic (periodic gusts that affect airborne players)
+  windConfig?: {
+    interval: [number, number];  // [min, max] seconds between gusts
+    buildDuration: number;
+    peakDuration: number;
+    fadeDuration: number;
+    maxStrength: number;  // px/s² horizontal force
+  };
+
+  // Optional pigeon flocks that scatter when disturbed
+  pigeonConfig?: {
+    positions: Array<{ x: number; y: number }>;
+    respawnTime: number;
+  };
 
   // Optional physics modifiers
   physics?: PhysicsModifiers;

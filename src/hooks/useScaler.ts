@@ -40,7 +40,11 @@ export function useScaler() {
   useEffect(() => {
     updateScale();
 
-    const onResize = () => updateScale();
+    let resizeTimer: ReturnType<typeof setTimeout>;
+    const onResize = () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(updateScale, 100);
+    };
     window.addEventListener('resize', onResize);
 
     const onFullscreenChange = () => {
@@ -59,6 +63,7 @@ export function useScaler() {
     window.addEventListener('keydown', onKeyDown);
 
     return () => {
+      clearTimeout(resizeTimer);
       window.removeEventListener('resize', onResize);
       document.removeEventListener('fullscreenchange', onFullscreenChange);
       document.removeEventListener('webkitfullscreenchange', onFullscreenChange);

@@ -24,6 +24,26 @@ export interface SpawnPoint {
   y: number;
 }
 
+export interface HazardZone {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  type: 'lava';
+}
+
+export interface EffectZone {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  type: 'zero_g' | 'current' | 'geyser';
+  vx?: number;       // for currents: horizontal push force (px/s)
+  strength?: number;  // for geysers: launch impulse
+  interval?: number;  // for geysers: seconds between activations
+  duration?: number;  // for geysers: active duration
+}
+
 export interface Arena {
   id: string;
   name: string;
@@ -32,6 +52,10 @@ export interface Arena {
   height: number;
   platforms: Platform[];
   spawnPoints: SpawnPoint[];
+  hazardZones?: HazardZone[];
+  effectZones?: EffectZone[];
+  bouncyPlatforms?: number[];  // indices into platforms[] that bounce players
+  allowFallOff?: boolean;
 }
 
 export type CharacterSlot = 'P1' | 'P2' | 'P3' | 'P4' | 'P5';
@@ -132,6 +156,15 @@ export interface MatchSettings {
 }
 
 // Pickups and hazards
+export interface LavaRock {
+  x: number;
+  y: number;
+  vy: number;
+  size: number;
+  rotation: number;
+  active: boolean;
+}
+
 export interface Carrot {
   x: number;
   y: number;
@@ -185,6 +218,13 @@ export interface MatchState {
   pollenParticles: Array<{x: number; y: number; vx: number; vy: number; size: number; alpha: number}>;
   shootingStars: Array<{x: number; y: number; vx: number; vy: number; life: number}>;
   scoreAnimations: Array<{playerId: CharacterSlot; value: number; timer: number}>;
+  ghosts: GhostEntity[];
+  lavaRocks: LavaRock[];
+  lavaRockTimer: number;
+  wind: { direction: number; strength: number; timer: number; phase: 'idle' | 'building' | 'peak' | 'fading' };
+  geyserStates: Array<{ timer: number; active: boolean; activeTimer: number }>;
+  pigeonFlocks: Array<{ x: number; y: number; active: boolean; respawnTimer: number; scatterParticles: Array<{ x: number; y: number; vx: number; vy: number; life: number }> }>;
+  bouncyWobble: Map<number, number>;  // platform index → wobble timer
 }
 
 export interface MatchStats {
@@ -208,7 +248,7 @@ export interface WildlifeEntity {
   color: string;
 }
 
-export type WeatherType = 'leaf' | 'petal' | 'snow' | 'ember' | 'ash';
+export type WeatherType = 'leaf' | 'petal' | 'snow' | 'ember' | 'ash' | 'bubble' | 'sprinkle' | 'spark' | 'raindrop';
 
 export interface WeatherParticle {
   x: number;
@@ -220,4 +260,13 @@ export interface WeatherParticle {
   rotation: number;
   rotSpeed: number;
   color?: string;
+}
+
+export interface GhostEntity {
+  x: number;
+  y: number;
+  vx: number;
+  size: number;
+  alpha: number;
+  wobblePhase: number;
 }

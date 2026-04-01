@@ -194,26 +194,6 @@ export function VictoryScreen() {
             </div>
           )}
 
-          {/* Character lineup with emojis */}
-          {sortedPlayers.length > 0 && (
-            <div className="character-lineup">
-              {sortedPlayers.map((player) => {
-                const isWinner = winner && player.id === winner;
-                return (
-                  <div key={player.id} className={`lineup-character ${isWinner ? 'lineup-winner' : ''}`}>
-                    <div className={`lineup-avatar ${isWinner ? 'lineup-avatar-winner' : ''}`} style={{ borderColor: player.character.lightColor }}>
-                      <span className="lineup-emoji">{CHAR_EMOJI[player.character.name] ?? '?'}</span>
-                    </div>
-                    <span className="lineup-name" style={{ color: player.character.color }}>
-                      {charName(player.character.name)}
-                    </span>
-                    {isWinner && <span className="lineup-crown">{'\uD83D\uDC51'}</span>}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
           {mvpHighlights.length > 0 && (
             <div className="mvp-highlights">
               <h2>{t('mvp_title')}</h2>

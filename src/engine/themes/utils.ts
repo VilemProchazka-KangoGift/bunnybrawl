@@ -1,3 +1,9 @@
+/** Remove element at index i by swapping with last element and popping. O(1) but unstable order. */
+export function swapRemove<T>(arr: T[], i: number): void {
+  arr[i] = arr[arr.length - 1];
+  arr.pop();
+}
+
 /** Random number in [min, max] from a tuple range. */
 export function randRange(range: [number, number]): number {
   return range[0] + Math.random() * (range[1] - range[0]);

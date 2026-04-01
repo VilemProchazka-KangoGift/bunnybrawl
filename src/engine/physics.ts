@@ -221,7 +221,7 @@ export function applyArenaConstraints(player: Player, arena: Arena): void {
     player.y = 0;
     player.vy = Math.max(player.vy, 0);
   }
-  if (player.y + player.height > arena.height) {
+  if (!arena.allowFallOff && player.y + player.height > arena.height) {
     player.y = arena.height - player.height;
     player.vy = 0;
     if (player.state === 'airborne') {

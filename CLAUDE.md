@@ -24,6 +24,7 @@ src/
     themes/       # Data-driven arena theme system
       types.ts      # ThemeConfig interface + all sub-interfaces
       drawPrimitives.ts  # Shared drawing functions (trees, bushes, flowers, etc.)
+      utils.ts      # Shared utilities (randRange, pickWeighted, swapRemove)
       meadow.ts     # Meadow theme config
       winterLake.ts # Winter Lake theme config
       registry.ts   # Theme registry map + getTheme() + listThemes()
@@ -69,18 +70,37 @@ src/
 
 ### Adding a new arena / level
 1. Create theme config in `src/engine/themes/newTheme.ts` implementing `ThemeConfig` (see `meadow.ts` as reference)
-   - Define sky gradient, hills, ground style, platform colors
+   - Define sky gradient, hills, ground style, platform colors, `previewIcon` (emoji)
    - Configure ambient systems: clouds, weather, wildlife, fog, ambient particles, day/night
    - Write `drawBackgroundNature(ctx, arena)` — background decorations (trees, rocks, etc.)
-   - Write `drawForegroundNature(ctx, arena)` — foreground decorations drawn over players
+   - Write `drawForegroundNature(ctx, arena)` — foreground decorations drawn over players (make these large enough to hide behind, ~40-80px tall, at alpha 0.4-0.6)
    - Optionally provide `drawWeatherParticle` for custom particle rendering
+   - Optionally provide `drawCustomThorn` / `drawCustomSpring` / `drawCustomHazardZone` / `drawCustomGhost` for themed skins
    - Optionally set `physics` modifiers (gravity, friction, walkSpeed, jumpImpulse multipliers)
+   - Optionally set `ghostConfig` for roaming hazard entities
+   - Optionally set `windConfig` for periodic wind gusts
+   - Optionally set `pigeonConfig` for scatter-on-approach wildlife
    - Use shared primitives from `drawPrimitives.ts` (drawTree, drawBush, drawPineTree, etc.)
 2. Register theme in `src/engine/themes/registry.ts` (add to `THEMES` map)
 3. Add arena layout in `src/engine/arena.ts` — platforms array + spawn points + `themeId`
+   - Optionally add `hazardZones` (lava pools etc. — collision inset by 12px on sides)
+   - Optionally add `effectZones` (zero_g, current, geyser)
+   - Optionally add `bouncyPlatforms` (indices into platforms array)
+   - Optionally set `allowFallOff: true` (gaps in ground, fall = respawn + -1 score)
 4. Add arena to `ARENA_LIST` in `arena.ts` and register in `getArena()`
 5. Add localized name in `en.json` and `cs.json` (`arena_new_theme`)
 6. The MainMenu arena selector picks it up automatically from `listArenas()`
+
+### Adding arena-specific mechanics
+Arena mechanics are a combination of **Arena** fields (structural positions) and **ThemeConfig** fields (behavioral config):
+- **Hazard zones** (`Arena.hazardZones`): Static danger areas (lava). Collision in gameLoop, rendered in renderer `drawHazardZone`.
+- **Effect zones** (`Arena.effectZones`): Zero-G (`zero_g`), water currents (`current`), bubble geysers (`geyser`). Zones applied in gameLoop per-player, rendered in renderer.
+- **Bouncy platforms** (`Arena.bouncyPlatforms`): Platform indices that bounce players on landing. Rendered with jelly overlay.
+- **Fall-off** (`Arena.allowFallOff`): Split ground into segments with gaps. Player falling below screen respawns at -1 score.
+- **Ghosts** (`ThemeConfig.ghostConfig`): Roaming semi-transparent entities. Initialized in GameLoop constructor, updated/collided in fixedUpdate, drawn by renderer `drawGhost`.
+- **Wind** (`ThemeConfig.windConfig`): Periodic gusts affecting airborne players. Managed by wind state in MatchState.
+- **Pigeons** (`ThemeConfig.pigeonConfig`): Scatter-on-approach wildlife with particle burst.
+- **Custom hazard skins** (`ThemeConfig.drawCustomThorn`, `drawCustomSpring`): Override default thorn/spring rendering per theme.
 
 ### Adding a new game mechanic / pickup
 1. Define the interface in `types.ts`
@@ -129,8 +149,20 @@ npm run test:e2e  # E2E tests (builds first)
 - **The CHARACTERS record is mutated** at lobby exit to write the selected characters back. This is intentional.
 - **Arena type is flat** — `Arena` has `themeId` + platforms/spawns directly (not nested in a `layout` sub-object). The theme provides all visual config; the Arena provides structural layout. Color fields (`backgroundColor`, `groundColor`, `platformColor`) were removed — use the theme instead.
 - **Theme draw functions receive raw ctx + arena** — they import shared primitives from `drawPrimitives.ts` directly, not through a DrawKit indirection. Keep it simple.
-- **platforms[0] is always the ground** — convention used by themes, renderer, and gameLoop. Ground platform is detected by `p.y >= 650`.
+- **platforms[0] is always the ground** — convention used by themes, renderer, and gameLoop. Ground platform is detected by `p.y >= 650`. For arenas with `allowFallOff`, ground is split into segments but platforms[0] still has y=660.
+- **Hazard zone collision is inset** — lava/hazard hitboxes are 12px smaller on each side than their visual, so players can step on the edge without getting hurt.
+- **Effect zones interact with physics differently** — zero-G boosts upward velocity (vy*1.03) and slows falls (vy*0.92), currents add horizontal force (vx += force*dt), geysers set vy directly. All checked after normal physics. Zone arrays are cached as `cachedGeyserZones`/`cachedZeroGZones` class fields — never re-filter per frame.
+- **Scoring** — kill (stomp) = 2 points, carrot = 1 point, fall-off = no score penalty (just respawn slowed). Default kill limit is 16.
+- **Ghost/hazard hits apply knockback** — unlike thorns (which only slow), ghost/lava hits also knock the player back and trigger screen flash + squash.
+- **MatchState has non-serializable fields** — `bouncyWobble` is a Map. If serialization is ever needed, this must be handled.
 - **Screen containers must use `width/height: 100%`** — they inherit their size from `GameScaler`'s 1280x720 content div. Never set fixed pixel dimensions on screen containers (`.main-menu`, `.match-container`, `.char-select`, `.victory-screen`).
+- **Day/night rendering must be gated on `dayNight.enabled`** — the renderer's `drawDayNightCycle` draws sun, moon, overlay, fireflies, and shooting stars. It must check `this.theme.dayNight.enabled` before drawing. Disabling the flag in the theme config is NOT enough if the renderer call isn't gated. When user says "remove day/night cycle" they mean: set `enabled: false` AND ensure no sun/moon/celestial bodies appear in `drawFarBackground` either.
+- **Tall narrow platforms cause "stuck" issues** — platforms only have top-collision, so a tall narrow block (e.g. 40x216 mausoleum wall) creates a wide "landing zone" that traps players. Use visual-only decorations for walls; only use platforms for surfaces players should stand on.
+- **Treetops has no platforms[0] ground** — the lowest playable platform is platforms[0] (a branch). Theme decorations use hardcoded y=750 for tree roots and y=620 for fog, not `platforms[0].y`.
+- **CharacterSelect.tsx canvas text needs i18n** — use `i18n.t('char_Name', name)` for character names displayed in the lobby canvas, not the raw English `char.name`.
+- **Entity cleanup uses `swapRemove`** — dead entities (springs, thorns, carrots, particles, etc.) are removed via `swapRemove(arr, i)` from `themes/utils.ts` in reverse-iterate loops. This is O(1) but does not preserve order. Never use `.filter()` for per-frame entity cleanup.
+- **Never splice/shift `splatMarks` during `fixedUpdate`** — multiple fixedUpdate ticks can run per frame, and `newSplatsSinceRender` stores indices into `splatMarks`. Splicing shifts indices and corrupts pending render references. Cap the array in the render path only (after indices are consumed).
+- **`GameLoop.stop()` must stop ALL looping sounds** — music, ambient, wind, zero_g, crowd. If a new looping sound is added, add a corresponding `audio.stop()` in `stop()`.
 
 ## Workflow Rules
 
@@ -139,9 +171,10 @@ npm run test:e2e  # E2E tests (builds first)
 ## File Size Reference
 
 Largest files to be aware of when context is limited:
-- `renderer.ts` ~2300 lines (canvas drawing, dispatches to theme for decorations)
-- `gameLoop.ts` ~920 lines (all game systems, reads theme for ambient init)
+- `renderer.ts` ~2600 lines (canvas drawing, effect zone/ghost/hazard renderers, dispatches to theme)
+- `gameLoop.ts` ~1100 lines (all game systems including wind/ghosts/zones/pigeons/bouncy)
 - `CharacterSelect.tsx` ~810 lines (lobby with its own game loop)
-- `audio.ts` ~590 lines (procedural sound generation)
+- `audio.ts` ~700 lines (procedural sound generation including wind/geyser/pigeon)
 - `themes/drawPrimitives.ts` — shared drawing functions extracted from renderer
+- Individual theme files ~300-500 lines each (10 themes: meadow, winterLake, volcano, castle, candyLand, treetops, underwater, hauntedGraveyard, rooftops, spaceStation)
 - `VictoryScreen.css` ~410 lines

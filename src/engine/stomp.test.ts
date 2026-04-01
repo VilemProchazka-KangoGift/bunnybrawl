@@ -81,7 +81,7 @@ describe('Stomp - checkStomps', () => {
     expect(killFeedEntries).toHaveLength(1);
     expect(killFeedEntries[0].attacker).toBe('P1');
     expect(killFeedEntries[0].victim).toBe('P2');
-    expect(attacker.score).toBe(1);
+    expect(attacker.score).toBe(2);
     expect(victim.state).toBe('splat');
   });
 

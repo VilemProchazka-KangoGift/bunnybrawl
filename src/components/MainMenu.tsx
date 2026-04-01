@@ -61,7 +61,9 @@ export function MainMenu() {
                         setMatchSettings({ arenaId: a.id });
                       }}
                     >
-                      <div className="arena-preview" style={{ background: theme?.previewGradient || '#333' }} />
+                      <div className="arena-preview" style={{ background: theme?.previewGradient || '#333' }}>
+                        <span className="arena-icon">{theme?.previewIcon || ''}</span>
+                      </div>
                       <span className="arena-name">{t(theme?.nameKey || a.name)}</span>
                     </button>
                   );

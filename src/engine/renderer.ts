@@ -1,6 +1,7 @@
 import type { Arena, Player, SplatMark, MatchState, Particle, Carrot, SpringMushroom, Thorn, WeatherParticle, WildlifeEntity, CharacterSlot } from './types';
 import type { ThemeConfig } from './themes/types';
 import { CHARACTERS } from './characters';
+import { aabbOverlap } from './physics';
 import {
   CANVAS_WIDTH, CANVAS_HEIGHT, CARROT_SIZE, SPRING_SIZE, FAT_SCALE,
   SCREEN_SHAKE_INTENSITY, HAZARD_GROW_TIME,
@@ -21,6 +22,7 @@ export class Renderer {
   private clouds: Cloud[] = [];
   private lastCloudTime = 0;
   private theme: ThemeConfig;
+  private frameTime = 0; // cached performance.now() per frame
 
   constructor(bgCanvas: HTMLCanvasElement, fgCanvas: HTMLCanvasElement, theme: ThemeConfig) {
     this.bgCtx = bgCanvas.getContext('2d')!;
@@ -237,6 +239,9 @@ export class Renderer {
     const ctx = this.fgCtx;
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
+    // Cache time once per frame
+    this.frameTime = performance.now();
+
     ctx.save();
 
     // Screen shake offset
@@ -249,7 +254,7 @@ export class Renderer {
     }
 
     // Animated clouds
-    const now = performance.now() / 1000;
+    const now = this.frameTime / 1000;
     const dt = now - (this.lastCloudTime || now);
     this.lastCloudTime = now;
     this.updateAndDrawClouds(ctx, dt);
@@ -260,6 +265,56 @@ export class Renderer {
     // Wildlife: butterflies + birds (q) — drawn after clouds/weather, before springs
     if (matchState.wildlife) {
       this.drawWildlife(ctx, matchState.wildlife);
+    }
+
+    // Hazard zones (lava pools etc.)
+    if (arena.hazardZones) {
+      for (const hz of arena.hazardZones) {
+        this.drawHazardZone(ctx, hz, matchState.timeElapsed);
+      }
+    }
+
+    // Effect zones (zero-G, currents, geysers)
+    if (arena.effectZones) {
+      let geyserIdx = 0;
+      for (let zi = 0; zi < arena.effectZones.length; zi++) {
+        const zone = arena.effectZones[zi];
+        if (zone.type === 'zero_g') {
+          this.drawZeroGZone(ctx, zone, matchState.timeElapsed);
+        } else if (zone.type === 'current') {
+          this.drawCurrentZone(ctx, zone, matchState.timeElapsed);
+        } else if (zone.type === 'geyser') {
+          const gs = matchState.geyserStates[geyserIdx];
+          if (gs) this.drawGeyser(ctx, zone, gs, matchState.timeElapsed);
+          geyserIdx++;
+        }
+      }
+    }
+
+    // Bouncy platform wobble
+    if (arena.bouncyPlatforms) {
+      for (const bi of arena.bouncyPlatforms) {
+        const bp = arena.platforms[bi];
+        if (!bp) continue;
+        const wobble = matchState.bouncyWobble.get(bi) || 0;
+        this.drawBouncyPlatformOverlay(ctx, bp, wobble, matchState.timeElapsed);
+      }
+    }
+
+    // Pigeon flocks
+    for (const flock of matchState.pigeonFlocks) {
+      this.drawPigeonFlock(ctx, flock, matchState.timeElapsed);
+    }
+
+    // Wind visual indicator
+    if (matchState.wind.strength > 0) {
+      this.drawWindIndicator(ctx, matchState.wind, matchState.timeElapsed);
+    }
+
+    // Lava rocks (falling hazards)
+    for (const rock of matchState.lavaRocks) {
+      if (!rock.active) continue;
+      this.drawLavaRock(ctx, rock);
     }
 
     // Springs and thorns (behind players)
@@ -327,7 +382,7 @@ export class Renderer {
         if (!carrot.active) continue;
         const dx = pcx - carrot.x;
         const dy = pcy - carrot.y;
-        if (Math.sqrt(dx * dx + dy * dy) < 100) {
+        if (dx * dx + dy * dy < 10000) {
           nearCarrotSet.add(player.id);
           break;
         }
@@ -349,35 +404,76 @@ export class Renderer {
       }
     }
 
+    // Zero-G character effect — shimmer around players in zero-G zones
+    if (arena.effectZones) {
+      for (const player of matchState.players) {
+        if (!player.active || player.state === 'splat' || player.state === 'respawning') continue;
+        for (const zone of arena.effectZones) {
+          if (zone.type !== 'zero_g') continue;
+          if (aabbOverlap(player.x, player.y, player.width, player.height, zone.x, zone.y, zone.width, zone.height)) {
+            const pcx = player.x + player.width / 2;
+            const pcy = player.y + player.height / 2;
+            ctx.save();
+            // Cyan glow around player
+            ctx.globalAlpha = 0.15 + Math.sin(matchState.timeElapsed * 4) * 0.05;
+            const glow = ctx.createRadialGradient(pcx, pcy, 5, pcx, pcy, 25);
+            glow.addColorStop(0, 'rgba(0, 220, 255, 0.3)');
+            glow.addColorStop(1, 'rgba(0, 200, 255, 0)');
+            ctx.fillStyle = glow;
+            ctx.fillRect(pcx - 25, pcy - 25, 50, 50);
+            // Sparkle ring
+            ctx.globalAlpha = 0.35;
+            for (let s = 0; s < 6; s++) {
+              const angle = matchState.timeElapsed * 2 + s * Math.PI / 3;
+              const sr = 18;
+              const sx = pcx + Math.cos(angle) * sr;
+              const sy = pcy + Math.sin(angle) * sr;
+              ctx.fillStyle = '#88EEFF';
+              ctx.beginPath();
+              ctx.arc(sx, sy, 1.5, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            ctx.restore();
+            break;
+          }
+        }
+      }
+    }
+
     // Ground fog (o) — after players, before foreground nature
     if (matchState.fogParticles) {
       const fogCfg = this.theme.fog;
+      const prevAlpha = ctx.globalAlpha;
+      ctx.fillStyle = fogCfg.color;
       for (const fp of matchState.fogParticles) {
-        ctx.save();
         ctx.globalAlpha = fp.alpha * 0.3;
-        ctx.fillStyle = fogCfg.color;
         ctx.beginPath();
         ctx.ellipse(fp.x, fp.y, fogCfg.sizeX, fogCfg.sizeY, 0, 0, Math.PI * 2);
         ctx.fill();
-        ctx.restore();
       }
+      ctx.globalAlpha = prevAlpha;
     }
 
     // Foreground nature — delegated to theme
     this.theme.drawForegroundNature(ctx, arena);
 
+    // Ghosts (drawn over foreground, semi-transparent)
+    for (const ghost of matchState.ghosts) {
+      this.drawGhost(ctx, ghost, matchState.timeElapsed);
+    }
+
     // Ambient particles (pollen / snow drift / sparkles)
     if (matchState.pollenParticles) {
       const ambCfg = this.theme.ambientParticles;
+      const prevAlpha = ctx.globalAlpha;
       for (const pp of matchState.pollenParticles) {
-        ctx.save();
         ctx.globalAlpha = pp.alpha * 0.7;
         ctx.fillStyle = ambCfg.colors[pp.size > 2 ? 0 : (ambCfg.colors.length > 1 ? 1 : 0)];
         ctx.beginPath();
         ctx.arc(pp.x, pp.y, pp.size, 0, Math.PI * 2);
         ctx.fill();
-        ctx.restore();
       }
+      ctx.globalAlpha = prevAlpha;
     }
 
     // Fireworks when match is over
@@ -385,8 +481,8 @@ export class Renderer {
       this.drawFireworks(ctx, particles);
     }
 
-    // Day/night cycle overlay
-    if (matchState.dayPhase !== undefined) {
+    // Day/night cycle overlay (only if theme has it enabled)
+    if (this.theme.dayNight.enabled && matchState.dayPhase !== undefined) {
       this.drawDayNightCycle(ctx, matchState.dayPhase, matchState);
     }
 
@@ -473,7 +569,7 @@ export class Renderer {
   private drawCarrot(ctx: CanvasRenderingContext2D, carrot: Carrot, timeElapsed: number): void {
     const x = carrot.x;
     const y = carrot.y;
-    const bob = Math.sin(performance.now() / 300) * 3;
+    const bob = Math.sin(this.frameTime / 300) * 3;
     const age = timeElapsed - carrot.spawnTime;
 
     // Spawn glow ring (fades over 2 seconds)
@@ -528,7 +624,7 @@ export class Renderer {
     ctx.restore();
 
     // Sparkle
-    const sparkle = Math.sin(performance.now() / 200) * 0.5 + 0.5;
+    const sparkle = Math.sin(this.frameTime / 200) * 0.5 + 0.5;
     ctx.fillStyle = `rgba(255,255,200,${sparkle * 0.8})`;
     ctx.beginPath();
     ctx.arc(x + 8, y + 4 + bob, 2.5, 0, Math.PI * 2);
@@ -545,6 +641,12 @@ export class Renderer {
     const growScale = spring.growTimer > 0 ? 1 - (spring.growTimer / HAZARD_GROW_TIME) : 1;
     // Fade out when about to die
     const fadeAlpha = spring.life < 2 ? spring.life / 2 : 1;
+
+    // Custom spring renderer
+    if (this.theme.drawCustomSpring) {
+      this.theme.drawCustomSpring(ctx, x, y, s, squash, growScale, fadeAlpha);
+      return;
+    }
 
     ctx.save();
     ctx.globalAlpha = fadeAlpha;
@@ -601,6 +703,12 @@ export class Renderer {
     const growScale = thorn.growTimer > 0 ? 1 - (thorn.growTimer / HAZARD_GROW_TIME) : 1;
     const fadeAlpha = thorn.life < 2 ? thorn.life / 2 : 1;
 
+    // Custom thorn renderer (e.g. zombie hand)
+    if (this.theme.drawCustomThorn) {
+      this.theme.drawCustomThorn(ctx, x, y, width, height, growScale, fadeAlpha);
+      return;
+    }
+
     ctx.save();
     ctx.globalAlpha = fadeAlpha;
     ctx.translate(x + width / 2, y + height);
@@ -628,6 +736,412 @@ export class Renderer {
       ctx.fill();
     }
 
+    ctx.restore();
+  }
+
+  // ---- Hazard zones ----
+
+  private drawHazardZone(ctx: CanvasRenderingContext2D, hz: { x: number; y: number; width: number; height: number; type: string }, time: number): void {
+    if (this.theme.drawCustomHazardZone) {
+      this.theme.drawCustomHazardZone(ctx, hz.x, hz.y, hz.width, hz.height, time);
+      return;
+    }
+    ctx.save();
+    if (hz.type === 'lava') {
+      // Animated lava pool
+      const pulse = 0.7 + Math.sin(time * 3) * 0.15;
+
+      // Lava body
+      const grd = ctx.createLinearGradient(hz.x, hz.y, hz.x, hz.y + hz.height);
+      grd.addColorStop(0, '#FF6600');
+      grd.addColorStop(0.5, '#FF4400');
+      grd.addColorStop(1, '#CC2200');
+      ctx.fillStyle = grd;
+      ctx.beginPath();
+      ctx.ellipse(hz.x + hz.width / 2, hz.y + hz.height / 2, hz.width / 2, hz.height / 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Bright center (pulsing)
+      ctx.globalAlpha = pulse;
+      ctx.fillStyle = '#FFCC33';
+      ctx.beginPath();
+      ctx.ellipse(hz.x + hz.width / 2, hz.y + hz.height / 2, hz.width * 0.3, hz.height * 0.3, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Glow halo
+      ctx.globalAlpha = 0.15 + Math.sin(time * 2) * 0.05;
+      const halo = ctx.createRadialGradient(
+        hz.x + hz.width / 2, hz.y + hz.height / 2, 2,
+        hz.x + hz.width / 2, hz.y + hz.height / 2, hz.width * 0.8
+      );
+      halo.addColorStop(0, 'rgba(255, 100, 0, 0.3)');
+      halo.addColorStop(1, 'rgba(255, 60, 0, 0)');
+      ctx.fillStyle = halo;
+      ctx.fillRect(hz.x - hz.width * 0.3, hz.y - hz.height, hz.width * 1.6, hz.height * 3);
+
+      // Bubble spots
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = '#FFAA00';
+      const bubbleX = hz.x + hz.width * (0.3 + Math.sin(time * 4) * 0.15);
+      const bubbleY = hz.y + hz.height * 0.3;
+      ctx.beginPath();
+      ctx.arc(bubbleX, bubbleY, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // ---- Ghost entities ----
+
+  private drawGhost(ctx: CanvasRenderingContext2D, ghost: { x: number; y: number; size: number; alpha: number; wobblePhase: number }, time: number): void {
+    // Custom ghost renderer (e.g. wasps)
+    if (this.theme.drawCustomGhost) {
+      this.theme.drawCustomGhost(ctx, ghost.x, ghost.y + Math.sin(ghost.wobblePhase + time * 2) * 3, ghost.size, ghost.alpha, time);
+      return;
+    }
+    ctx.save();
+    const wobble = Math.sin(ghost.wobblePhase + time * 2) * 3;
+    ctx.translate(ghost.x, ghost.y + wobble);
+    ctx.globalAlpha = ghost.alpha * (0.5 + Math.sin(time * 1.5) * 0.15);
+
+    const gc = this.theme.ghostConfig;
+    const color = gc?.color || '#AABBDD';
+    const glowColor = gc?.glowColor || '#6688BB';
+    const s = ghost.size;
+
+    // Ghost glow
+    const glow = ctx.createRadialGradient(0, 0, s * 0.2, 0, 0, s * 1.5);
+    glow.addColorStop(0, glowColor + '33');
+    glow.addColorStop(1, glowColor + '00');
+    ctx.fillStyle = glow;
+    ctx.fillRect(-s * 1.5, -s * 1.5, s * 3, s * 3);
+
+    // Ghost body (rounded top, wavy bottom)
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(0, -s * 0.2, s * 0.5, Math.PI, 0);
+    ctx.lineTo(s * 0.5, s * 0.3);
+    // Wavy bottom
+    const waves = 4;
+    for (let w = 0; w < waves; w++) {
+      const wx = s * 0.5 - (w + 1) * (s / waves);
+      const wy = s * 0.3 + Math.sin(time * 3 + w * 1.5) * s * 0.08;
+      const cx = wx + s / (waves * 2);
+      ctx.quadraticCurveTo(cx, wy + s * 0.12, wx, wy);
+    }
+    ctx.closePath();
+    ctx.fill();
+
+    // Eyes
+    ctx.fillStyle = '#111';
+    ctx.beginPath();
+    ctx.ellipse(-s * 0.15, -s * 0.2, s * 0.08, s * 0.1, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(s * 0.15, -s * 0.2, s * 0.08, s * 0.1, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Mouth
+    ctx.beginPath();
+    ctx.ellipse(0, -s * 0.02, s * 0.1, s * 0.06, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  // ---- Effect zones ----
+
+  private drawLavaRock(ctx: CanvasRenderingContext2D, rock: { x: number; y: number; size: number; rotation: number }): void {
+    const lrc = this.theme.lavaRockConfig;
+    ctx.save();
+    ctx.translate(rock.x, rock.y);
+    ctx.rotate(rock.rotation);
+    // Glow
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = lrc?.glowColor || '#FF6600';
+    ctx.beginPath();
+    ctx.arc(0, 0, rock.size * 1.8, 0, Math.PI * 2);
+    ctx.fill();
+    // Rock body — jagged
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = lrc?.color || '#4A2010';
+    ctx.beginPath();
+    const s = rock.size;
+    ctx.moveTo(-s, -s * 0.3);
+    ctx.lineTo(-s * 0.5, -s);
+    ctx.lineTo(s * 0.3, -s * 0.8);
+    ctx.lineTo(s, -s * 0.2);
+    ctx.lineTo(s * 0.7, s * 0.6);
+    ctx.lineTo(-s * 0.2, s * 0.8);
+    ctx.lineTo(-s * 0.8, s * 0.3);
+    ctx.closePath();
+    ctx.fill();
+    // Hot cracks
+    ctx.strokeStyle = '#FF8800';
+    ctx.globalAlpha = 0.6;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.3, -s * 0.5);
+    ctx.lineTo(s * 0.1, s * 0.2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(s * 0.2, -s * 0.3);
+    ctx.lineTo(-s * 0.1, s * 0.4);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  private drawZeroGZone(ctx: CanvasRenderingContext2D, zone: { x: number; y: number; width: number; height: number }, time: number): void {
+    ctx.save();
+
+    // Pulsing background fill
+    ctx.globalAlpha = 0.1 + Math.sin(time * 1.5) * 0.04;
+    const bgGrad = ctx.createLinearGradient(zone.x, zone.y, zone.x, zone.y + zone.height);
+    bgGrad.addColorStop(0, 'rgba(0, 180, 255, 0.2)');
+    bgGrad.addColorStop(0.5, 'rgba(0, 220, 255, 0.08)');
+    bgGrad.addColorStop(1, 'rgba(0, 180, 255, 0.2)');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(zone.x, zone.y, zone.width, zone.height);
+
+    // Animated dashed border — double line
+    ctx.globalAlpha = 0.35;
+    ctx.strokeStyle = '#00CCFF';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([8, 5]);
+    ctx.lineDashOffset = -time * 30;
+    ctx.strokeRect(zone.x + 1, zone.y + 1, zone.width - 2, zone.height - 2);
+    ctx.setLineDash([]);
+
+    // Corner brackets for emphasis
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.4;
+    const bLen = 15;
+    const corners = [
+      [zone.x, zone.y], [zone.x + zone.width, zone.y],
+      [zone.x, zone.y + zone.height], [zone.x + zone.width, zone.y + zone.height],
+    ];
+    for (const [cx, cy] of corners) {
+      const sx = cx === zone.x ? 1 : -1;
+      const sy = cy === zone.y ? 1 : -1;
+      ctx.beginPath();
+      ctx.moveTo(cx + sx * bLen, cy);
+      ctx.lineTo(cx, cy);
+      ctx.lineTo(cx, cy + sy * bLen);
+      ctx.stroke();
+    }
+
+    // Floating particles drifting upward
+    ctx.globalAlpha = 0.3;
+    for (let i = 0; i < 12; i++) {
+      const px = zone.x + 15 + (i * 47) % zone.width;
+      const py = zone.y + zone.height - ((time * 25 + i * 30) % zone.height);
+      const pSize = 1.5 + Math.sin(time + i) * 0.5;
+      ctx.fillStyle = i % 2 === 0 ? '#44EEFF' : '#88CCFF';
+      ctx.beginPath();
+      ctx.arc(px + Math.sin(time * 1.5 + i) * 5, py, pSize, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // "0G" label
+    ctx.globalAlpha = 0.2;
+    ctx.font = 'bold 14px monospace';
+    ctx.fillStyle = '#00DDFF';
+    ctx.textAlign = 'center';
+    ctx.fillText('0G', zone.x + zone.width / 2, zone.y + zone.height / 2 + 5);
+
+    ctx.restore();
+  }
+
+  private drawCurrentZone(ctx: CanvasRenderingContext2D, zone: { x: number; y: number; width: number; height: number; vx?: number }, time: number): void {
+    ctx.save();
+    const dir = (zone.vx || 0) > 0 ? 1 : -1;
+    ctx.globalAlpha = 0.08;
+    ctx.fillStyle = '#4488CC';
+    ctx.fillRect(zone.x, zone.y, zone.width, zone.height);
+    // Flow arrows
+    ctx.globalAlpha = 0.15;
+    ctx.strokeStyle = '#88CCFF';
+    ctx.lineWidth = 2;
+    const spacing = 40;
+    for (let dx = 0; dx < zone.width; dx += spacing) {
+      const ax = zone.x + ((dx + time * Math.abs(zone.vx || 60)) % zone.width);
+      const ay = zone.y + zone.height / 2;
+      if (ax < zone.x || ax > zone.x + zone.width - 10) continue;
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(ax + dir * 12, ay);
+      ctx.moveTo(ax + dir * 12, ay);
+      ctx.lineTo(ax + dir * 7, ay - 4);
+      ctx.moveTo(ax + dir * 12, ay);
+      ctx.lineTo(ax + dir * 7, ay + 4);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  private drawGeyser(ctx: CanvasRenderingContext2D, zone: { x: number; y: number; width: number; height: number }, gs: { active: boolean; activeTimer: number }, time: number): void {
+    ctx.save();
+    const cx = zone.x + zone.width / 2;
+    if (gs.active) {
+      // Active bubble column
+      ctx.globalAlpha = 0.2;
+      ctx.fillStyle = '#88CCFF';
+      ctx.fillRect(zone.x, zone.y, zone.width, zone.height);
+      // Rising bubbles
+      ctx.globalAlpha = 0.4;
+      for (let i = 0; i < 8; i++) {
+        const by = zone.y + zone.height - ((time * 80 + i * 20) % zone.height);
+        const bx = cx + Math.sin(time * 3 + i * 1.5) * (zone.width * 0.3);
+        const bs = 2 + (i % 3);
+        ctx.strokeStyle = 'rgba(180, 220, 255, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(bx, by, bs, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    } else {
+      // Dormant — small bubbles at base
+      ctx.globalAlpha = 0.15;
+      for (let i = 0; i < 3; i++) {
+        const bx = cx + Math.sin(time * 2 + i) * 5;
+        const by = zone.y + zone.height - 5 - Math.abs(Math.sin(time * 1.5 + i * 2)) * 8;
+        ctx.fillStyle = '#88BBDD';
+        ctx.beginPath();
+        ctx.arc(bx, by, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
+  private drawBouncyPlatformOverlay(ctx: CanvasRenderingContext2D, bp: { x: number; y: number; width: number; height: number }, wobble: number, time: number): void {
+    ctx.save();
+
+    // Wobbly jelly surface — always visible
+    const wobbleY = Math.sin(time * 3) * 2;
+    ctx.globalAlpha = 0.25;
+    const jellyGrad = ctx.createLinearGradient(bp.x, bp.y - 4, bp.x, bp.y + bp.height);
+    jellyGrad.addColorStop(0, '#FF69B4');
+    jellyGrad.addColorStop(0.5, '#FF99CC');
+    jellyGrad.addColorStop(1, '#FF69B4');
+    ctx.fillStyle = jellyGrad;
+    ctx.beginPath();
+    ctx.moveTo(bp.x, bp.y + bp.height);
+    ctx.lineTo(bp.x, bp.y);
+    // Wavy top edge
+    for (let wx = bp.x; wx <= bp.x + bp.width; wx += 10) {
+      const wy = bp.y - 2 + Math.sin(time * 4 + wx * 0.1) * 2 + wobbleY;
+      ctx.lineTo(wx, wy);
+    }
+    ctx.lineTo(bp.x + bp.width, bp.y + bp.height);
+    ctx.closePath();
+    ctx.fill();
+
+    // Bounce wobble — big jiggle effect
+    if (wobble > 0) {
+      const intensity = wobble * 5;
+      const squash = Math.sin(wobble * 30) * intensity;
+      ctx.globalAlpha = 0.3;
+      ctx.fillStyle = '#FFB6C1';
+      ctx.fillRect(bp.x - 2, bp.y - Math.abs(squash) - 2, bp.width + 4, bp.height + Math.abs(squash) + 2);
+    }
+
+    // Pulsing glow underneath
+    ctx.globalAlpha = 0.1 + Math.sin(time * 2) * 0.05;
+    ctx.fillStyle = '#FF69B4';
+    ctx.fillRect(bp.x, bp.y + bp.height, bp.width, 4);
+
+    // Up-arrow indicators
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = '#FFFFFF';
+    const arrowCount = Math.max(2, Math.floor(bp.width / 35));
+    for (let a = 0; a < arrowCount; a++) {
+      const ax = bp.x + bp.width * (a + 0.5) / arrowCount;
+      const ay = bp.y + bp.height / 2 + Math.sin(time * 3 + a) * 2;
+      ctx.beginPath();
+      ctx.moveTo(ax - 4, ay + 3);
+      ctx.lineTo(ax, ay - 3);
+      ctx.lineTo(ax + 4, ay + 3);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  private drawPigeonFlock(ctx: CanvasRenderingContext2D, flock: { x: number; y: number; active: boolean; scatterParticles: Array<{ x: number; y: number; vx: number; vy: number; life: number }> }, time: number): void {
+    ctx.save();
+    if (flock.active) {
+      // Draw sitting pigeons (3 birds)
+      ctx.globalAlpha = 0.6;
+      for (let i = 0; i < 3; i++) {
+        const px = flock.x - 10 + i * 10;
+        const py = flock.y - 4;
+        // Body
+        ctx.fillStyle = '#7A7A8A';
+        ctx.beginPath();
+        ctx.ellipse(px, py, 5, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Head
+        ctx.beginPath();
+        ctx.arc(px + 4, py - 3, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        // Beak
+        ctx.fillStyle = '#CCAA44';
+        ctx.beginPath();
+        ctx.moveTo(px + 6, py - 3);
+        ctx.lineTo(px + 8, py - 2.5);
+        ctx.lineTo(px + 6, py - 2);
+        ctx.fill();
+        // Head bob
+        if (Math.sin(time * 4 + i * 2) > 0.7) {
+          ctx.fillStyle = '#7A7A8A';
+          ctx.beginPath();
+          ctx.arc(px + 4, py - 4, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+    // Scatter particles (flying birds)
+    for (const sp of flock.scatterParticles) {
+      ctx.globalAlpha = Math.min(1, sp.life) * 0.6;
+      ctx.fillStyle = '#6A6A7A';
+      // Body
+      ctx.beginPath();
+      ctx.ellipse(sp.x, sp.y, 4, 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Wings (flapping)
+      const wing = Math.sin(sp.life * 30) * 6;
+      ctx.beginPath();
+      ctx.moveTo(sp.x - 3, sp.y);
+      ctx.lineTo(sp.x - 8, sp.y + wing);
+      ctx.lineTo(sp.x - 2, sp.y);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(sp.x + 3, sp.y);
+      ctx.lineTo(sp.x + 8, sp.y + wing);
+      ctx.lineTo(sp.x + 2, sp.y);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  private drawWindIndicator(ctx: CanvasRenderingContext2D, wind: { direction: number; strength: number }, time: number): void {
+    ctx.save();
+    const intensity = wind.strength / 300; // normalize to 0..~1
+    // Horizontal streaks
+    ctx.globalAlpha = intensity * 0.12;
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 12; i++) {
+      const y = 100 + i * 50 + Math.sin(time * 2 + i) * 20;
+      const x = ((time * wind.direction * 200 + i * 120) % 1400) - 60;
+      const len = 30 + intensity * 40;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + wind.direction * len, y);
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
@@ -680,7 +1194,7 @@ export class Renderer {
 
     // Kill streak flame aura (d) — drawn behind character sprite
     if (player.killStreak >= 3) {
-      const now = performance.now() / 1000;
+      const now = this.frameTime / 1000;
       ctx.save();
       for (let i = 0; i < 4; i++) {
         const angle = now * 3 + i * 1.5;
@@ -1461,7 +1975,7 @@ export class Renderer {
   // ---- Fireworks ----
 
   private drawFireworks(ctx: CanvasRenderingContext2D, particles: Particle[]): void {
-    const now = performance.now() / 1000;
+    const now = this.frameTime / 1000;
     for (const p of particles) {
       const alpha = p.life / p.maxLife;
       const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
@@ -1620,7 +2134,7 @@ export class Renderer {
         const sx = ((i * 137 + 83) % CANVAS_WIDTH);
         const sy = ((i * 97 + 41) % (CANVAS_HEIGHT * 0.35));
         const size = 1 + (i % 3) * 0.5;
-        const twinkle = Math.sin(performance.now() / 500 + i * 1.7) * 0.3 + 0.7;
+        const twinkle = Math.sin(this.frameTime / 500 + i * 1.7) * 0.3 + 0.7;
         ctx.globalAlpha = starAlpha * twinkle;
         ctx.fillStyle = '#FFF';
         ctx.beginPath();
@@ -1633,7 +2147,7 @@ export class Renderer {
     // Fireflies (conditional on theme)
     if (nightIntensity > 0.4 && this.theme.dayNight.showFireflies) {
       const fireflyAlpha = Math.min((nightIntensity - 0.4) / 0.4, 1) * 0.7;
-      const now = performance.now() / 1000;
+      const now = this.frameTime / 1000;
       ctx.save();
       for (let i = 0; i < 8; i++) {
         const baseX = ((i * 173 + 57) % CANVAS_WIDTH);
@@ -1749,7 +2263,7 @@ export class Renderer {
       ctx.fill();
     } else if (expression === 'dizzy') {
       // 3 small yellow stars circling above the head
-      const now = performance.now() / 1000;
+      const now = this.frameTime / 1000;
       ctx.fillStyle = '#FFD700';
       for (let i = 0; i < 3; i++) {
         const angle = now * 3 + (i * Math.PI * 2 / 3);
@@ -1817,7 +2331,7 @@ export class Renderer {
       const timeLimit = settings?.timeLimit ?? 0;
       const remaining = timeLimit > 0 ? timeLimit - state.timeElapsed : Infinity;
       if (remaining < 30 && remaining > 0) {
-        const pulse = 1 + Math.sin(performance.now() / 200) * 0.1;
+        const pulse = 1 + Math.sin(this.frameTime / 200) * 0.1;
         ctx.save();
         ctx.translate(CANVAS_WIDTH / 2, 75);
         ctx.scale(pulse, pulse);
@@ -1956,7 +2470,7 @@ export class Renderer {
     const pointCount = 12;
     for (let i = 0; i < pointCount; i++) {
       const progress = i / pointCount;
-      const angle = progress * Math.PI * 4 + performance.now() / 200; // spiral
+      const angle = progress * Math.PI * 4 + this.frameTime / 200; // spiral
       const radius = 6 + progress * 10;
       const py = baseY + progress * 30;
       const px = cx + Math.cos(angle) * radius;

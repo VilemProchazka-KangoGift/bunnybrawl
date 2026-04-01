@@ -30,7 +30,7 @@ export function checkStomps(
 
         attacker.vy = STOMP_BOUNCE;
         attacker.state = 'airborne';
-        attacker.score += 1;
+        attacker.score += 2;
 
         splatMarks.push(createSplatMark(victim));
         killFeedEntries.push({
