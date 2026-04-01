@@ -325,7 +325,7 @@ export function buildAwareness(
           if (nextIdx >= 0 && nextIdx < arena.platforms.length) {
             // Find the edge to get approach info
             const edges = nav.edges[currentPlatformIdx];
-            let edgeType: 'j' | 'd' | 'w' = 'j';
+            let edgeType: 'j' | 'd' | 'w' | 'g' = 'j';
             let approachX = arena.platforms[nextIdx].x + arena.platforms[nextIdx].width / 2;
             for (const e of edges) {
               if (e.t === nextIdx) {

@@ -5,15 +5,6 @@ import { JUMP_IMPULSE, GRAVITY, MAX_WALK_SPEED, PLAYER_WIDTH, PLAYER_HEIGHT, CAN
 const MAX_JUMP_HEIGHT = (JUMP_IMPULSE * JUMP_IMPULSE) / (2 * GRAVITY);
 // Time to apex: |v|/g = 560/900 ≈ 0.622s, full air time ≈ 1.244s
 const JUMP_AIR_TIME = (2 * Math.abs(JUMP_IMPULSE)) / GRAVITY;
-// Max horizontal distance during a full jump arc
-const MAX_JUMP_REACH = MAX_WALK_SPEED * JUMP_AIR_TIME;
-
-/** Shortest horizontal distance accounting for screen wrap */
-function wrapDx(dx: number): number {
-  if (dx > CANVAS_WIDTH / 2) return dx - CANVAS_WIDTH;
-  if (dx < -CANVAS_WIDTH / 2) return dx + CANVAS_WIDTH;
-  return dx;
-}
 
 export interface ReachResult {
   reachable: boolean;
@@ -25,8 +16,6 @@ export interface ReachResult {
  * Returns the ideal x to stand at on `from` before jumping.
  */
 export function canJumpTo(from: Platform, to: Platform): ReachResult {
-  // Must be higher (platform.y is top edge, lower y = higher)
-  const rise = (from.y - PLAYER_HEIGHT) - to.y; // how far above 'to' is relative to player feet on 'from'
   // Player stands on from: feet at from.y, head at from.y - PLAYER_HEIGHT
   // Needs to reach to.y (top of target platform) with feet
   // Rise needed = from.y - to.y (positive means 'to' is above)
@@ -49,8 +38,6 @@ export function canJumpTo(from: Platform, to: Platform): ReachResult {
   const discriminant = JUMP_IMPULSE * JUMP_IMPULSE - 2 * GRAVITY * riseNeeded;
   if (discriminant < 0) return { reachable: false, approachX: 0 };
 
-  // Time when player is at target height (ascending)
-  const tAscend = (-JUMP_IMPULSE - Math.sqrt(discriminant)) / GRAVITY;
   // Time when player returns to target height (descending)
   const tDescend = (-JUMP_IMPULSE + Math.sqrt(discriminant)) / GRAVITY;
   // Horizontal window: player can travel during [0, tDescend]
@@ -219,9 +206,7 @@ export function canGeyserTo(from: Platform, geyser: EffectZone, to: Platform): R
   if (to.y >= from.y) return { reachable: false, approachX: 0 };
 
   // Target must be within geyser zone's vertical extent (zone lifts through this range)
-  const zoneTop = geyser.y;
-  const zoneBottom = geyser.y + geyser.height;
-  if (to.y < zoneTop - 50) return { reachable: false, approachX: 0 }; // above zone + some drift margin
+  if (to.y < geyser.y - 50) return { reachable: false, approachX: 0 }; // above zone + some drift margin
 
   const geyserLeft = geyser.x;
   const geyserRight = geyser.x + geyser.width;
