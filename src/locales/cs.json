@@ -68,6 +68,7 @@
   "bot_diff_easy": "Lehká",
   "bot_diff_medium": "Střední",
   "bot_diff_hard": "Těžká",
+  "bot_diff_impossible": "Nemožná",
   "fullscreen_enter": "Celá obrazovka",
   "fullscreen_exit": "Ukončit celou obrazovku"
 }

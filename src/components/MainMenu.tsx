@@ -113,7 +113,7 @@ export function MainMenu() {
               </div>
               {matchSettings.botCount > 0 && (
                 <div className="bot-difficulty-row">
-                  {(['easy', 'medium', 'hard'] as const).map(d => (
+                  {(['easy', 'medium', 'hard', 'impossible'] as const).map(d => (
                     <button
                       key={d}
                       className={`difficulty-btn ${matchSettings.botDifficulty === d ? 'selected' : ''}`}

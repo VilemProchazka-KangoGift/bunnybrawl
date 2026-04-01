@@ -67,6 +67,7 @@
   "bot_diff_easy": "Easy",
   "bot_diff_medium": "Medium",
   "bot_diff_hard": "Hard",
+  "bot_diff_impossible": "Impossible",
   "fullscreen_enter": "Enter fullscreen",
   "fullscreen_exit": "Exit fullscreen"
 }

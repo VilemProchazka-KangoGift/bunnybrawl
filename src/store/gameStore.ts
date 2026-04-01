@@ -27,10 +27,10 @@ function loadBotCount(): number {
   try { return parseInt(localStorage.getItem('bunnybrawl_botcount') || '0', 10) || 0; } catch { return 0; }
 }
 
-function loadBotDifficulty(): 'easy' | 'medium' | 'hard' {
+function loadBotDifficulty(): 'easy' | 'medium' | 'hard' | 'impossible' {
   try {
     const val = localStorage.getItem('bunnybrawl_botdiff');
-    return val === 'easy' || val === 'medium' || val === 'hard' ? val : 'medium';
+    return val === 'easy' || val === 'medium' || val === 'hard' || val === 'impossible' ? val : 'medium';
   } catch { return 'medium'; }
 }
 

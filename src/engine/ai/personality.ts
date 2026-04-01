@@ -33,7 +33,7 @@ const DIFFICULTY_PARAMS: Record<BotDifficulty, DifficultyParams> = {
     noiseChance: 0.15,
     walkSpeedMult: 0.65,
     hesitationChance: 0.03,
-    pathfindingDepth: 0,
+    pathfindingDepth: Infinity,
   },
   medium: {
     reactionFrames: 10,
@@ -47,6 +47,14 @@ const DIFFICULTY_PARAMS: Record<BotDifficulty, DifficultyParams> = {
     reactionFrames: 4,
     awarenessRadius: 900,
     noiseChance: 0.03,
+    walkSpeedMult: 1.0,
+    hesitationChance: 0,
+    pathfindingDepth: Infinity,
+  },
+  impossible: {
+    reactionFrames: 0,
+    awarenessRadius: Infinity,
+    noiseChance: 0,
     walkSpeedMult: 1.0,
     hesitationChance: 0,
     pathfindingDepth: Infinity,

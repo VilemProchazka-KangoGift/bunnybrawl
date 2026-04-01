@@ -157,7 +157,7 @@ export interface Particle {
 
 export type GameScreen = 'menu' | 'charSelect' | 'match' | 'victory';
 
-export type BotDifficulty = 'easy' | 'medium' | 'hard';
+export type BotDifficulty = 'easy' | 'medium' | 'hard' | 'impossible';
 
 export interface MatchSettings {
   killLimit: number;
