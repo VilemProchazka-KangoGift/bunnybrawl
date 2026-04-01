@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../store/gameStore';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
 import type { PlayerSlot, PlayerStats } from '../engine/types';
+import { isBotSlot } from '../engine/types';
 import './VictoryScreen.css';
 
 interface FireworkParticle {
@@ -35,6 +36,8 @@ export function VictoryScreen() {
   const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
 
   const charName = (name: string) => t(`char_${name}`, name);
+  const isBot = (id: PlayerSlot) => isBotSlot(id);
+  const botSuffix = (id: PlayerSlot) => isBot(id) ? ' (BOT)' : '';
 
   const handleRematch = () => { setScreen('match'); };
   const handleMenu = () => { setActivePlayers([]); setScreen('menu'); };
@@ -141,7 +144,7 @@ export function VictoryScreen() {
           {winnerChar ? (
             <>
               <h1 className="winner-text">
-                <span style={{ color: winnerChar.color }}>{charName(winnerChar.name)}</span> {t('victory_wins')}
+                <span style={{ color: winnerChar.color }}>{charName(winnerChar.name)}{botSuffix(winner!)}</span> {t('victory_wins')}
               </h1>
               <div className="winner-avatar winner-avatar-pose" style={{ borderColor: winnerChar.lightColor }}>
                 <span className="winner-emoji">{CHAR_EMOJI[winnerChar.name] ?? '\uD83C\uDFC6'}</span>
@@ -157,7 +160,7 @@ export function VictoryScreen() {
               <div key={player.id} className={`score-row ${idx === 0 ? 'first' : ''}`}>
                 <span className="rank">#{idx + 1}</span>
                 <span className="player-name" style={{ color: player.character.color }}>
-                  {charName(player.character.name)}
+                  {charName(player.character.name)}{botSuffix(player.id)}
                 </span>
                 <span className="player-score">{player.score} {t('victory_pts')}</span>
               </div>
