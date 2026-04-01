@@ -152,65 +152,71 @@ export function VictoryScreen() {
             <h1 className="winner-text">{t('victory_draw')}</h1>
           )}
 
-          <div className="scoreboard">
-            <h2>{t('victory_results')}</h2>
-            {sortedPlayers.map((player, idx) => (
-              <div key={player.id} className={`score-row ${idx === 0 ? 'first' : ''}`}>
-                <span className="rank">#{idx + 1}</span>
-                <span className="player-name" style={{ color: player.character.color }}>
-                  {charName(player.character.name)}
-                </span>
-                <span className="player-score">{player.score} {t('victory_pts')}</span>
+          <div className="victory-columns">
+            <div className="victory-col-left">
+              <div className="scoreboard">
+                <h2>{t('victory_results')}</h2>
+                {sortedPlayers.map((player, idx) => (
+                  <div key={player.id} className={`score-row ${idx === 0 ? 'first' : ''}`}>
+                    <span className="rank">#{idx + 1}</span>
+                    <span className="player-name" style={{ color: player.character.color }}>
+                      {charName(player.character.name)}
+                    </span>
+                    <span className="player-score">{player.score} {t('victory_pts')}</span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
 
-          {sortedPlayers.length > 0 && (
-            <div className="player-stats-section">
-              <h2>{t('victory_stats')}</h2>
-              <div className="stats-grid">
-                <div className="stats-header">
-                  <span className="stats-cell stats-name-cell">{t('victory_player')}</span>
-                  <span className="stats-cell">{t('victory_streak')}</span>
-                  <span className="stats-cell">{t('victory_airborne')}</span>
-                  <span className="stats-cell">{t('victory_distance')}</span>
-                  <span className="stats-cell">{t('victory_carrots')}</span>
-                </div>
-                {sortedPlayers.map((player) => {
-                  const ps = getPlayerStats(player.id);
-                  return (
-                    <div key={player.id} className="stats-row">
-                      <span className="stats-cell stats-name-cell" style={{ color: player.character.color }}>
-                        {charName(player.character.name)}
-                      </span>
-                      <span className="stats-cell">{ps?.bestStreak ?? 0}</span>
-                      <span className="stats-cell">{ps ? ps.timeAirborne.toFixed(1) + 's' : '0.0s'}</span>
-                      <span className="stats-cell">{ps ? Math.floor(ps.distanceTraveled / 100) : 0}</span>
-                      <span className="stats-cell">{ps?.carrotsEaten ?? 0}</span>
+              <div className="match-stats">
+                <span>{t('victory_match_time')}: {formatTime(lastMatchState?.timeElapsed ?? 0)}</span>
+                <span>{t('victory_total_splats')}: {lastMatchState?.splatMarks.length ?? 0}</span>
+              </div>
+            </div>
+
+            <div className="victory-col-right">
+              {sortedPlayers.length > 0 && (
+                <div className="player-stats-section">
+                  <h2>{t('victory_stats')}</h2>
+                  <div className="stats-grid">
+                    <div className="stats-header">
+                      <span className="stats-cell stats-name-cell">{t('victory_player')}</span>
+                      <span className="stats-cell">{t('victory_streak')}</span>
+                      <span className="stats-cell">{t('victory_airborne')}</span>
+                      <span className="stats-cell">{t('victory_distance')}</span>
+                      <span className="stats-cell">{t('victory_carrots')}</span>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {mvpHighlights.length > 0 && (
-            <div className="mvp-highlights">
-              <h2>{t('mvp_title')}</h2>
-              {mvpHighlights.map((hl, idx) => (
-                <div key={idx} className="mvp-row">
-                  <span className="mvp-icon">{hl.icon}</span>
-                  <span className="mvp-label">{hl.label}</span>
-                  <span className="mvp-player" style={{ color: hl.playerColor }}>{hl.playerName}</span>
-                  <span className="mvp-value">{hl.value}</span>
+                    {sortedPlayers.map((player) => {
+                      const ps = getPlayerStats(player.id);
+                      return (
+                        <div key={player.id} className="stats-row">
+                          <span className="stats-cell stats-name-cell" style={{ color: player.character.color }}>
+                            {charName(player.character.name)}
+                          </span>
+                          <span className="stats-cell">{ps?.bestStreak ?? 0}</span>
+                          <span className="stats-cell">{ps ? ps.timeAirborne.toFixed(1) + 's' : '0.0s'}</span>
+                          <span className="stats-cell">{ps ? Math.floor(ps.distanceTraveled / 100) : 0}</span>
+                          <span className="stats-cell">{ps?.carrotsEaten ?? 0}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              ))}
-            </div>
-          )}
+              )}
 
-          <div className="match-stats">
-            <span>{t('victory_match_time')}: {formatTime(lastMatchState?.timeElapsed ?? 0)}</span>
-            <span>{t('victory_total_splats')}: {lastMatchState?.splatMarks.length ?? 0}</span>
+              {mvpHighlights.length > 0 && (
+                <div className="mvp-highlights">
+                  <h2>{t('mvp_title')}</h2>
+                  {mvpHighlights.map((hl, idx) => (
+                    <div key={idx} className="mvp-row">
+                      <span className="mvp-icon">{hl.icon}</span>
+                      <span className="mvp-label">{hl.label}</span>
+                      <span className="mvp-player" style={{ color: hl.playerColor }}>{hl.playerName}</span>
+                      <span className="mvp-value">{hl.value}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="victory-actions">
