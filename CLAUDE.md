@@ -64,7 +64,7 @@ src/
 - **React is for menus only** — the game canvas and lobby canvas use imperative requestAnimationFrame loops.
 - **CSS transform scaling** — the game renders internally at a fixed 1280x720 logical resolution. `GameScaler` wraps all screens and uses `transform: scale()` to fit the viewport while preserving 16:9 aspect ratio. Screen containers use `width/height: 100%` and inherit size from the scaler. Fullscreen via F11 or the corner button.
 - **i18n via i18next** — Czech is the default language. Canvas text uses `i18n.t()` directly (not the React hook).
-- **AI opponents via utility scoring + nav graph** — up to 5 bots (BotSlot B1-B5) alongside 5 human players. Each bot runs an `AIController` that produces `InputState` (4 booleans) per frame — same interface as keyboard. Decision pipeline: `buildAwareness()` (single-pass state scan + nav graph lookup) → `evaluateActions()` (15 weighted evaluators) → reaction buffer delay → output. Precomputed per-arena reachability graphs (`ai/navData.ts`) provide `nextHop` (fastest) and `safeHop` (hazard-avoidant) waypoints. Edges have danger scores from proximity to hazardZones (icicles, lava). Cautious bots (cautiousness ≥ 1.2) use `safeHop`, aggressive bots use `nextHop`. Geyser edges let bots ride bubble columns as elevators (underwater arena). Medium bots get 1-hop lookahead, hard bots get full pathfinding, easy bots get none.
+- **AI opponents via utility scoring + nav graph** — up to 5 bots (BotSlot B1-B5) alongside 5 human players. Each bot runs an `AIController` that produces `InputState` (4 booleans) per frame — same interface as keyboard. Decision pipeline: `buildAwareness()` (single-pass state scan + nav graph lookup) → `evaluateActions()` (15 weighted evaluators) → reaction buffer delay → output. Precomputed per-arena reachability graphs (`ai/navData.ts`) provide `nextHop` (fastest) and `safeHop` (hazard-avoidant) waypoints. Edges have danger scores from proximity to hazardZones (icicles, lava). Cautious bots (cautiousness ≥ 1.2) use `safeHop`, aggressive bots use `nextHop`. Geyser edges let bots ride bubble columns as elevators (underwater arena). All difficulties use full pathfinding (zero runtime cost); difficulty is differentiated by reaction delay, noise, and awareness radius.
 - **Data-driven arena themes** — Each arena has a `ThemeConfig` controlling all visuals (sky, platforms, decorations, weather, wildlife, fog, day/night) and optional physics modifiers. Themes are mostly data (colors, counts, ranges) with custom draw functions for unique decorations. Shared drawing primitives live in `themes/drawPrimitives.ts` and are reused across themes.
 
 ## Common Patterns
@@ -104,7 +104,7 @@ src/
 
 ### Adding arena-specific mechanics
 Arena mechanics are a combination of **Arena** fields (structural positions) and **ThemeConfig** fields (behavioral config):
-- **Hazard zones** (`Arena.hazardZones`): Static danger areas (lava, icicles). Collision in gameLoop, rendered in renderer `drawHazardZone`. Also used by nav graph to compute danger scores — cautious bots route around hazards via `safeHop`.
+- **Hazard zones** (`Arena.hazardZones`): Static danger areas (lava, icicles). Collision in gameLoop, rendered in renderer `drawHazardZone`. Also used by nav graph to compute danger scores — cautious bots route around hazards via `safeHop`. Lava hits set `burnTimer` (fire particles + orange glow) in addition to `slowTimer`; thorns/ghosts only set `slowTimer` (red pulse). The renderer uses `burnTimer > 0` to choose fire glow vs red pulse (`else if`).
 - **Effect zones** (`Arena.effectZones`): Zero-G (`zero_g`), water currents (`current`), bubble geysers (`geyser`). Zones applied in gameLoop per-player, rendered in renderer. Geyser zones generate nav graph edges so bots can ride them as elevators. Zero-G zones generate drift edges so bots cross through them (e.g. space station center).
 - **No-spawn zones** (`Arena.noSpawnZones`): AABB zones where springs, thorns, and characters should not spawn. Used to exclude solid structures like the cemetery mausoleum from hazard spawning.
 - **Bouncy platforms** (`Arena.bouncyPlatforms`): Platform indices that bounce players on landing. Rendered with jelly overlay.
@@ -130,11 +130,12 @@ Arena mechanics are a combination of **Arena** fields (structural positions) and
 5. If it needs per-bot persistent state (timers, cooldowns): add field to `AIController` class
 
 ### Tuning AI difficulty
-- `ai/personality.ts` has `DIFFICULTY_PARAMS` with `easy`/`medium`/`hard` presets
+- `ai/personality.ts` has `DIFFICULTY_PARAMS` with `easy`/`medium`/`hard`/`impossible` presets
 - Key levers: `reactionFrames` (input delay), `awarenessRadius` (detection range), `noiseChance` (random input), `walkSpeedMult` (movement speed), `hesitationChance` (random freezes)
+- All difficulties use full pathfinding (`pathfindingDepth: Infinity`) — nav data is precomputed with zero runtime cost. Difficulty is differentiated by reaction delay, noise, awareness radius, and hesitation only.
+- `impossible`: 0 reaction frames, infinite awareness, 0 noise, 0 hesitation — perfect play
 - Personality weights multiply utility scores: `aggressiveness`, `cautiousness`, `greediness`, `chaosAffinity`, `platformPreference`
 - Jump behavior: controlled by `JUMP_THRESHOLD` (0.55) in aiController and `jumpCooldown` (20 frames)
-- `pathfindingDepth` in `DifficultyParams`: `0` (easy — no nav, reactive only), `1` (medium — 1-hop lookahead), `Infinity` (hard — full multi-hop path)
 
 ### Adding a new visual effect
 1. If it needs state: add fields to `MatchState` or `Player` in `types.ts`
@@ -150,7 +151,7 @@ Arena mechanics are a combination of **Arena** fields (structural positions) and
 
 ## Testing
 
-- **Unit/Integration** (Vitest): `npm test` — 90 tests covering physics, stomp, input, arena, characters, store, components
+- **Unit/Integration** (Vitest): `npm test` — 115 tests covering physics, stomp, input, arena, characters, store, AI, components
 - **E2E** (Playwright/Chromium): `npm run test:e2e` — 6 tests covering full game flow
 - **The lobby walk-to-zone E2E test is inherently flaky** due to random NPC placement. Tagged `@flaky`, uses retries.
 - Tests force `i18n.changeLanguage('en')` in setup so string assertions work regardless of default language.
@@ -183,10 +184,12 @@ npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/
 - **Effect zones interact with physics differently** — zero-G boosts upward velocity (vy*1.03) and slows falls (vy*0.92), currents add horizontal force (vx += force*dt), geysers set vy directly. All checked after normal physics. Zone arrays are cached as `cachedGeyserZones`/`cachedZeroGZones` class fields — never re-filter per frame.
 - **Scoring** — kill (stomp) = 2 points, carrot = 1 point, fall-off = no score penalty (just respawn slowed). Default kill limit is 16.
 - **Ghost/hazard hits apply knockback** — unlike thorns (which only slow), ghost/lava hits also knock the player back and trigger screen flash + squash.
+- **Side squash on wall/push collisions** — `Player.sideSquash` (1.0 = normal, <1 = squashed horizontally). Triggered by platform side collision (0.75) or player push (0.8). Decays back to 1.0 via `SQUASH_DECAY_SPEED`. Renderer applies inverse: narrower + slightly taller. When adding new Player fields, also add `sideSquash: 1` to test helpers.
 - **MatchState has non-serializable fields** — `bouncyWobble` is a Map. If serialization is ever needed, this must be handled.
 - **Screen containers must use `width/height: 100%`** — they inherit their size from `GameScaler`'s 1280x720 content div. Never set fixed pixel dimensions on screen containers (`.main-menu`, `.match-container`, `.char-select`, `.victory-screen`).
 - **Day/night rendering must be gated on `dayNight.enabled`** — the renderer's `drawDayNightCycle` draws sun, moon, overlay, fireflies, and shooting stars. It must check `this.theme.dayNight.enabled` before drawing. Disabling the flag in the theme config is NOT enough if the renderer call isn't gated. When user says "remove day/night cycle" they mean: set `enabled: false` AND ensure no sun/moon/celestial bodies appear in `drawFarBackground` either.
 - **Tall narrow platform collision** — `collidePlatforms` uses a `landingFromAbove` guard (`sideOverlap > overlapTop`) to prevent the `feetNearTop` override from snapping players onto platforms they approached from the side. Without this, walking into the side of a tall block near its top edge would teleport the player on top. Very tall, very narrow platforms (e.g. 40x216) can still feel awkward — prefer wider-than-tall blocks for standable surfaces.
+- **Spring collision uses `bounceTimer` as cooldown** — skip collision when `spring.bounceTimer > 0` (0.3s). Without this, crouching into a spring triggers it every frame (vy=0 satisfies vy≥0), causing rapid sound spam.
 - **Spring spawn requires 200px clearance** — `spawnSpring()` filters out platforms that have another platform directly above within 200px. Spring bounce reaches ~272px (`SPRING_BOUNCE²/2g`), so spawning under a low ceiling wastes the spring.
 - **`allowFallOff` arenas need hills pushed offscreen** — themes for arenas with no full-width ground should set `hills[].baseY` to 780+ (below screen). Otherwise the hill mounds float visibly in the void below the lowest platforms. Treetops learned this the hard way.
 - **Treetops has no platforms[0] ground** — the lowest playable platform is platforms[0] (a branch). Theme decorations use hardcoded y=750 for tree roots and y=620 for fog, not `platforms[0].y`.
@@ -206,7 +209,7 @@ npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/
 - **AI evaluators must not allocate arrays** — `evaluateActions()` runs 60× per bot per second. Use simple arithmetic on the `ActionScores` object. No `.filter()`, `.sort()`, or `.map()` in evaluators.
 - **Jump suppression has 3 layers** — tight-space check (platform <80px above), jump threshold (0.55), and jump cooldown (20 frames). All 3 must pass for a bot to jump. When tuning, check all 3.
 - **Lobby bots use separate AI from match bots** — `CharacterSelect.tsx` has `updateBotLobbyAI()` for directed walking to ready zone. Match AI is in `src/engine/ai/`. They share no code.
-- **Bot settings persisted in localStorage** — `bunnybrawl_botcount` and `bunnybrawl_botdiff`, loaded in `gameStore.ts`.
+- **Bot settings persisted in localStorage** — `bunnybrawl_botcount` and `bunnybrawl_botdiff` (`easy`/`medium`/`hard`/`impossible`), loaded in `gameStore.ts`.
 - **Always document lessons learned** — after completing a feature or fixing iterative feedback, update the relevant `.claude/skills/*.md` file with lessons, gotchas, and patterns discovered. If no skill file exists for the domain, create one. This prevents repeating the same mistakes across sessions.
 
 ## File Size Reference
