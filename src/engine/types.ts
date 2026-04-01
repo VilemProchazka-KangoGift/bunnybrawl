@@ -109,6 +109,7 @@ export interface Player {
   springTrailTimer: number;    // >0 = spiral trail active after spring bounce
   damageFlashSide: 'left' | 'right' | null; // which side got hit
   damageFlashTimer: number;    // >0 = show red flash
+  burnTimer: number;           // >0 = on fire from lava, spawns flame particles
 }
 
 export type SplatShape = 'circle' | 'star' | 'splat' | 'ring' | 'paw';

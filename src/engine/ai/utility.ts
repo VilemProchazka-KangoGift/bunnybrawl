@@ -10,8 +10,8 @@ export function evaluateActions(
 ): ActionScores {
   const scores: ActionScores = { moveLeft: 0, moveRight: 0, jump: 0, drop: 0 };
 
-  // When hurt (slowed), flee from everyone instead of attacking
-  if (awareness.self.slowed) {
+  // When hurt (slowed) or fat, flee from everyone instead of attacking
+  if (awareness.self.slowed || awareness.self.fat) {
     evaluateHurtFlee(awareness, scores, personality);
   } else {
     evaluateStompOpportunity(awareness, scores, personality);
@@ -99,13 +99,18 @@ function evaluateChaseTarget(a: AwarenessSnapshot, s: ActionScores, p: AIPersona
   const weight = 0.5 * p.aggressiveness;
   const { dx, dy } = a.nearestEnemy;
 
+  // If nav system has a target (enemy on different platform), defer vertical navigation to it
+  // Only chase horizontally when on same platform or no nav available
+  if (a.navTarget && a.self.onGround) {
+    // Nav is handling the path — don't add conflicting horizontal chase
+    // Exception: if enemy is on same Y level, walk toward them directly
+    if (Math.abs(dy) > 40) return;
+  }
+
   // If enemy is significantly above and there's a climbable platform,
   // DON'T add horizontal chase — let platformSeeking handle the path
   const needsClimbing = dy < -60 && a.nearestPlatformAbove && a.self.onGround;
-  if (needsClimbing) {
-    // Only hint at dropping if enemy is below
-    return;
-  }
+  if (needsClimbing) return;
 
   // Move toward nearest enemy — walking is the main chase behavior
   if (dx > 20) s.moveRight += weight;
@@ -143,27 +148,68 @@ function evaluateTargetPriority(a: AwarenessSnapshot, s: ActionScores, p: AIPers
 }
 
 function evaluatePlatformSeeking(a: AwarenessSnapshot, s: ActionScores, p: AIPersonality): void {
-  if (!a.nearestPlatformAbove || !a.self.onGround) return;
+  if (!a.self.onGround) return;
 
   const hasEnemyAbove = a.nearestEnemy && a.nearestEnemy.dy < -30;
   const roamAbove = a.roamTarget && a.roamTarget.y < a.self.y - 50;
   const climbing = hasEnemyAbove || roamAbove;
 
-  // All bots prefer high ground (stomp advantage). Weight scales with context:
-  // - Actively chasing a target above: strong (0.8)
-  // - Idle with nowhere to go: moderate baseline (0.4) + platformPreference bonus
-  const weight = climbing ? 0.8 : 0.4 + 0.2 * p.platformPreference;
-  const plat = a.nearestPlatformAbove;
+  const weight = climbing ? 1.0 : 0.55 + 0.2 * p.platformPreference;
 
-  // Walk toward platform center
+  // Nav-guided pathfinding: use precomputed graph when available
+  // Anti-predictability: chaotic bots sometimes ignore nav (fall back to reactive)
+  const useNav = a.navTarget && (p.chaosAffinity < 0.5 || Math.random() > p.chaosAffinity * 0.4);
+
+  if (useNav && a.navTarget) {
+    const nav = a.navTarget;
+    // Add jitter to approach position for variability (+/- 20px)
+    const jitteredApproach = nav.approachX + (Math.random() - 0.5) * 40;
+    const dx = jitteredApproach - a.self.x;
+
+    if (nav.type === 'j') {
+      // Jump edge: walk to approach position, then jump
+      if (Math.abs(dx) > 15) {
+        if (dx > 0) s.moveRight += weight;
+        else s.moveLeft += weight;
+      }
+      // Jump when roughly in position
+      if (Math.abs(dx) < nav.width / 2 + 80) {
+        s.jump += weight * 0.75;
+      }
+    } else if (nav.type === 'd') {
+      // Drop edge: walk toward platform edge and drop
+      if (Math.abs(dx) > 10) {
+        if (dx > 0) s.moveRight += weight;
+        else s.moveLeft += weight;
+      }
+      s.drop += weight * 0.3;
+    } else if (nav.type === 'g') {
+      // Geyser edge: walk to geyser approach position and ride it up
+      if (Math.abs(dx) > 15) {
+        if (dx > 0) s.moveRight += weight;
+        else s.moveLeft += weight;
+      }
+      // Don't add jump — geyser launches automatically
+    } else {
+      // Walk edge: just walk toward target
+      if (Math.abs(dx) > 10) {
+        if (dx > 0) s.moveRight += weight;
+        else s.moveLeft += weight;
+      }
+    }
+    return;
+  }
+
+  // Fallback: reactive nearest-platform-above behavior (easy bots, or when nav has no target)
+  if (!a.nearestPlatformAbove) return;
+  const plat = a.nearestPlatformAbove;
   const platCenter = plat.x + plat.width / 2;
   const dx = platCenter - a.self.x;
   if (dx > 15) s.moveRight += weight;
   else if (dx < -15) s.moveLeft += weight;
 
-  // Jump when positioned within reach of the platform
   if (Math.abs(dx) < plat.width / 2 + 80 && plat.dy > -200) {
-    s.jump += weight * 0.6;
+    s.jump += weight * 0.75;
   }
 }
 
@@ -253,6 +299,17 @@ function evaluateRoam(a: AwarenessSnapshot, s: ActionScores): void {
   if (a.roamTarget.dx > 30) s.moveRight += weight;
   else if (a.roamTarget.dx < -30) s.moveLeft += weight;
 
+  // If target is above, bias toward climbing (seek higher ground)
+  const targetAbove = a.self.y - a.roamTarget.y;
+  if (targetAbove > 60 && a.self.onGround && a.nearestPlatformAbove) {
+    const climbWeight = 0.5;
+    const platCenter = a.nearestPlatformAbove.x + a.nearestPlatformAbove.width / 2;
+    const platDx = platCenter - a.self.x;
+    if (platDx > 15) s.moveRight += climbWeight;
+    else if (platDx < -15) s.moveLeft += climbWeight;
+    s.jump += climbWeight * 0.5;
+  }
+
   // If target is far below and we're on an elevated platform, actively walk toward edge to drop down
   const targetBelow = a.roamTarget.y - a.self.y;
   if (targetBelow > 80 && a.onElevatedPlatform && a.self.onGround) {
@@ -335,12 +392,23 @@ function evaluateCamping(a: AwarenessSnapshot, s: ActionScores, p: AIPersonality
   s.moveRight -= campWeight;
 }
 
-/** When stuck inside a geyser zone, walk out sideways — high priority */
+/** When stuck inside a geyser zone, steer out — toward nav target if riding intentionally */
 function evaluateGeyserEscape(a: AwarenessSnapshot, s: ActionScores): void {
   if (a.geyserEscapeDx === 0) return;
 
-  // Airborne in geyser = being launched, escape urgently
   const airborne = !a.self.onGround;
+
+  // If riding a geyser intentionally (nav target is a geyser edge), steer toward the target platform
+  if (airborne && a.navTarget && a.navTarget.type === 'g') {
+    const targetCx = a.navTarget.x + a.navTarget.width / 2;
+    const dx = targetCx - a.self.x;
+    const weight = 2.5;
+    if (dx > 15) s.moveRight += weight;
+    else if (dx < -15) s.moveLeft += weight;
+    return;
+  }
+
+  // Default: escape to nearest edge
   const weight = airborne ? 3.0 : 1.5;
   if (a.geyserEscapeDx > 0) s.moveRight += weight;
   else s.moveLeft += weight;

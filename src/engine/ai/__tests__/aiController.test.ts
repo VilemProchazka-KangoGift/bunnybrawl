@@ -20,7 +20,7 @@ function makePlayer(overrides: Partial<Player> & { id: PlayerSlot }): Player {
     squashScale: 1, squashTimer: 0, afterimages: [],
     idleAnimTimer: 0, expression: 'normal',
     killStreak: 0, breathTimer: 0, springTrailTimer: 0,
-    damageFlashSide: null, damageFlashTimer: 0,
+    damageFlashSide: null, damageFlashTimer: 0, burnTimer: 0,
     ...overrides,
   };
 }

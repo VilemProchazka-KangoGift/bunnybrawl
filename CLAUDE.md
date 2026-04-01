@@ -21,12 +21,14 @@ src/
     renderer.ts   # Canvas 2D rendering (two layers: bg + fg) — LARGEST FILE (~2300 lines)
     audio.ts      # Procedural audio generation (14 animal sounds + SFX + music)
     gameLoop.ts   # Main game loop with fixed timestep, all game systems (~920 lines)
-    ai/           # AI opponent system (utility-based decision making)
+    ai/           # AI opponent system (utility-based decision making + nav graph)
       types.ts      # AIDifficulty, AIPersonality, AwarenessSnapshot, ActionScores
       aiController.ts # Per-bot brain: reaction buffer, stuck detection, taunt, search pause
-      awareness.ts  # Single-pass game state sensing (enemies, hazards, platforms, zones)
+      awareness.ts  # Single-pass game state sensing + nav graph lookup
       utility.ts    # 15 evaluators scoring moveLeft/moveRight/jump/drop
       personality.ts # 14 character profiles + 3 difficulty presets
+      reachability.ts # Physics-based jump/drop/walk platform reachability functions
+      navData.ts    # Auto-generated per-arena navigation graphs (nextHop tables)
       index.ts      # Barrel export
     themes/       # Data-driven arena theme system
       types.ts      # ThemeConfig interface + all sub-interfaces
@@ -62,7 +64,7 @@ src/
 - **React is for menus only** — the game canvas and lobby canvas use imperative requestAnimationFrame loops.
 - **CSS transform scaling** — the game renders internally at a fixed 1280x720 logical resolution. `GameScaler` wraps all screens and uses `transform: scale()` to fit the viewport while preserving 16:9 aspect ratio. Screen containers use `width/height: 100%` and inherit size from the scaler. Fullscreen via F11 or the corner button.
 - **i18n via i18next** — Czech is the default language. Canvas text uses `i18n.t()` directly (not the React hook).
-- **AI opponents via utility scoring** — up to 5 bots (BotSlot B1-B5) alongside 5 human players. Each bot runs an `AIController` that produces `InputState` (4 booleans) per frame — same interface as keyboard. Decision pipeline: `buildAwareness()` (single-pass state scan) → `evaluateActions()` (15 weighted evaluators) → reaction buffer delay → output. No pathfinding graph — bots navigate via platform-seeking and roam evaluators.
+- **AI opponents via utility scoring + nav graph** — up to 5 bots (BotSlot B1-B5) alongside 5 human players. Each bot runs an `AIController` that produces `InputState` (4 booleans) per frame — same interface as keyboard. Decision pipeline: `buildAwareness()` (single-pass state scan + nav graph lookup) → `evaluateActions()` (15 weighted evaluators) → reaction buffer delay → output. Precomputed per-arena reachability graphs (`ai/navData.ts`) provide `nextHop` (fastest) and `safeHop` (hazard-avoidant) waypoints. Edges have danger scores from proximity to hazardZones (icicles, lava). Cautious bots (cautiousness ≥ 1.2) use `safeHop`, aggressive bots use `nextHop`. Geyser edges let bots ride bubble columns as elevators (underwater arena). Medium bots get 1-hop lookahead, hard bots get full pathfinding, easy bots get none.
 - **Data-driven arena themes** — Each arena has a `ThemeConfig` controlling all visuals (sky, platforms, decorations, weather, wildlife, fog, day/night) and optional physics modifiers. Themes are mostly data (colors, counts, ranges) with custom draw functions for unique decorations. Shared drawing primitives live in `themes/drawPrimitives.ts` and are reused across themes.
 
 ## Common Patterns
@@ -97,12 +99,13 @@ src/
    - Optionally set `allowFallOff: true` (gaps in ground, fall = respawn + -1 score)
 4. Add arena to `ARENA_LIST` in `arena.ts` and register in `getArena()`
 5. Add localized name in `en.json` and `cs.json` (`arena_new_theme`)
-6. The MainMenu arena selector picks it up automatically from `listArenas()`
+6. Re-run `npx vite-node scripts/generateNavData.ts` to regenerate AI navigation data (also required after physics constant changes)
+7. The MainMenu arena selector picks it up automatically from `listArenas()`
 
 ### Adding arena-specific mechanics
 Arena mechanics are a combination of **Arena** fields (structural positions) and **ThemeConfig** fields (behavioral config):
-- **Hazard zones** (`Arena.hazardZones`): Static danger areas (lava). Collision in gameLoop, rendered in renderer `drawHazardZone`.
-- **Effect zones** (`Arena.effectZones`): Zero-G (`zero_g`), water currents (`current`), bubble geysers (`geyser`). Zones applied in gameLoop per-player, rendered in renderer.
+- **Hazard zones** (`Arena.hazardZones`): Static danger areas (lava, icicles). Collision in gameLoop, rendered in renderer `drawHazardZone`. Also used by nav graph to compute danger scores — cautious bots route around hazards via `safeHop`.
+- **Effect zones** (`Arena.effectZones`): Zero-G (`zero_g`), water currents (`current`), bubble geysers (`geyser`). Zones applied in gameLoop per-player, rendered in renderer. Geyser zones generate nav graph edges so bots can ride them as elevators.
 - **Bouncy platforms** (`Arena.bouncyPlatforms`): Platform indices that bounce players on landing. Rendered with jelly overlay.
 - **Fall-off** (`Arena.allowFallOff`): Split ground into segments with gaps. Player falling below screen respawns at -1 score.
 - **Ghosts** (`ThemeConfig.ghostConfig`): Roaming semi-transparent entities. Initialized in GameLoop constructor, updated/collided in fixedUpdate, drawn by renderer `drawGhost`.
@@ -130,6 +133,7 @@ Arena mechanics are a combination of **Arena** fields (structural positions) and
 - Key levers: `reactionFrames` (input delay), `awarenessRadius` (detection range), `noiseChance` (random input), `walkSpeedMult` (movement speed), `hesitationChance` (random freezes)
 - Personality weights multiply utility scores: `aggressiveness`, `cautiousness`, `greediness`, `chaosAffinity`, `platformPreference`
 - Jump behavior: controlled by `JUMP_THRESHOLD` (0.55) in aiController and `jumpCooldown` (20 frames)
+- `pathfindingDepth` in `DifficultyParams`: `0` (easy — no nav, reactive only), `1` (medium — 1-hop lookahead), `Infinity` (hard — full multi-hop path)
 
 ### Adding a new visual effect
 1. If it needs state: add fields to `MatchState` or `Player` in `types.ts`
@@ -158,6 +162,7 @@ npm run dev       # Dev server with HMR
 npm run build     # Production build (tsc + vite)
 npm test          # Unit/integration tests
 npm run test:e2e  # E2E tests (builds first)
+npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/physics changes)
 ```
 
 ## Important Caveats
@@ -186,6 +191,8 @@ npm run test:e2e  # E2E tests (builds first)
 - **Treetops has no platforms[0] ground** — the lowest playable platform is platforms[0] (a branch). Theme decorations use hardcoded y=750 for tree roots and y=620 for fog, not `platforms[0].y`.
 - **CharacterSelect.tsx canvas text needs i18n** — use `i18n.t('char_Name', name)` for character names displayed in the lobby canvas, not the raw English `char.name`.
 - **Entity cleanup uses `swapRemove`** — dead entities (springs, thorns, carrots, particles, etc.) are removed via `swapRemove(arr, i)` from `themes/utils.ts` in reverse-iterate loops. This is O(1) but does not preserve order. Never use `.filter()` for per-frame entity cleanup.
+- **`navData.ts` is generated** — do not hand-edit. Re-run `npx vite-node scripts/generateNavData.ts` after changing any arena platform layout, hazardZones, effectZones, or physics constants (`JUMP_IMPULSE`, `GRAVITY`, `MAX_WALK_SPEED`, `PLAYER_WIDTH`, `PLAYER_HEIGHT`, `CANVAS_WIDTH`). The generator computes jump/drop/walk/geyser edges with danger scores from hazard proximity, then Floyd-Warshall for `nextHop` (fastest) and `safeHop` (hazard-avoidant) paths.
+- **Fat bots flee like hurt bots** — `evaluateActions` gates both `self.slowed` and `self.fat` into `evaluateHurtFlee`, skipping chase/stomp/platformSeeking. `navTarget` is only consulted when healthy.
 - **Never splice/shift `splatMarks` during `fixedUpdate`** — multiple fixedUpdate ticks can run per frame, and `newSplatsSinceRender` stores indices into `splatMarks`. Splicing shifts indices and corrupts pending render references. Cap the array in the render path only (after indices are consumed).
 - **`GameLoop.stop()` must stop ALL looping sounds** — music, ambient, wind, zero_g, crowd. If a new looping sound is added, add a corresponding `audio.stop()` in `stop()`.
 - **Victory screen uses two-column layout** — left column: scoreboard + match stats, right column: stats table + MVP highlights. This fits within 720px viewport. If adding more sections, keep both columns balanced.
@@ -210,6 +217,7 @@ Largest files to be aware of when context is limited:
 - `audio.ts` ~700 lines (procedural sound generation including wind/geyser/pigeon)
 - `themes/drawPrimitives.ts` — shared drawing functions extracted from renderer
 - Individual theme files ~300-500 lines each (10 themes: meadow, winterLake, volcano, castle, candyLand, treetops, underwater, hauntedGraveyard, rooftops, spaceStation)
-- `ai/awareness.ts` ~240 lines (single-pass game state sensing, most complex AI file)
-- `ai/utility.ts` ~300 lines (15 evaluator functions)
+- `ai/awareness.ts` ~300 lines (single-pass game state sensing + nav graph lookup)
+- `ai/utility.ts` ~400 lines (15 evaluator functions + nav-guided platformSeeking)
+- `ai/navData.ts` — auto-generated, ~300-500 lines (precomputed platform reachability per arena)
 - `VictoryScreen.css` ~410 lines

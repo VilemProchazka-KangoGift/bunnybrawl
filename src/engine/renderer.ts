@@ -1267,8 +1267,19 @@ export class Renderer {
       ctx.fill();
     }
 
-    // Red tint pulse overlay when hit by thorns
-    if (drawRedPulse) {
+    // Fire glow overlay when burning from lava
+    if (player.burnTimer > 0) {
+      const fireAlpha = Math.min(0.4, player.burnTimer * 0.5) * (0.6 + Math.sin(player.burnTimer * 12) * 0.4);
+      const grad = ctx.createRadialGradient(cx, y + height * 0.4, 0, cx, y + height * 0.4, width * 0.7);
+      grad.addColorStop(0, `rgba(255, 200, 0, ${fireAlpha * 0.6})`);
+      grad.addColorStop(0.5, `rgba(255, 100, 0, ${fireAlpha * 0.4})`);
+      grad.addColorStop(1, `rgba(255, 50, 0, 0)`);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.ellipse(cx, y + height * 0.4, width * 0.7, height * 0.6, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (drawRedPulse) {
+      // Red tint pulse overlay when hit by thorns (non-lava)
       const pulseAlpha = Math.abs(Math.sin(slowTimer * 8)) * 0.3;
       ctx.fillStyle = `rgba(255, 0, 0, ${pulseAlpha})`;
       ctx.beginPath();

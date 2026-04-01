@@ -352,9 +352,9 @@ export const HAUNTED_GRAVEYARD_ARENA: Arena = {
     { x: 980, y: 450, width: 100, height: 24 },                 // Connect R to mausoleum
   ],
   spawnPoints: [
-    { x: 100, y: 510 }, { x: 1160, y: 510 },
-    { x: 640, y: 400 }, { x: 640, y: 640 },
-    { x: 320, y: 320 }, { x: 960, y: 320 },
+    { x: 100, y: 500 }, { x: 1160, y: 500 },
+    { x: 600, y: 385 }, { x: 350, y: 628 },
+    { x: 320, y: 310 }, { x: 960, y: 310 },
   ],
 };
 

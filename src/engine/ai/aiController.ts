@@ -107,6 +107,13 @@ export class AIController {
   private computeIdealInput(self: Player, state: MatchState, arena: Arena): InputState {
     if (this.stuckTimer > 60) {
       this.stuckTimer = 0;
+      // If nav data suggests a drop, prefer walking off edge toward target
+      const preferSafe = this.personality.cautiousness >= 1.2;
+      const stuckAwareness = buildAwareness(self, state, arena, this.difficulty.awarenessRadius, this.difficulty.pathfindingDepth, preferSafe);
+      if (stuckAwareness.navTarget && stuckAwareness.navTarget.type === 'd') {
+        const dx = stuckAwareness.navTarget.approachX - self.x;
+        return { left: dx < -10, right: dx > 10, jump: false, down: true };
+      }
       return {
         left: Math.random() > 0.5,
         right: Math.random() > 0.5,
@@ -115,7 +122,8 @@ export class AIController {
       };
     }
 
-    const awareness = buildAwareness(self, state, arena, this.difficulty.awarenessRadius);
+    const preferSafe = this.personality.cautiousness >= 1.2;
+    const awareness = buildAwareness(self, state, arena, this.difficulty.awarenessRadius, this.difficulty.pathfindingDepth, preferSafe);
 
     // Search pause: when nothing is in immediate radius, pause briefly before roaming
     const nothingNearby = !awareness.nearestEnemy && !awareness.stompTarget && !awareness.stompThreat

@@ -2,6 +2,7 @@ import type { Player, MatchState, Arena } from '../types';
 import { isBotSlot } from '../types';
 import type { AwarenessSnapshot } from './types';
 import { PLAYER_WIDTH, PLAYER_HEIGHT, CANVAS_WIDTH } from '../constants';
+import { NAV_DATA } from './navData';
 
 /** Shortest horizontal distance accounting for screen wrap */
 function wrapDx(dx: number): number {
@@ -16,11 +17,45 @@ function wrapDist(ax: number, ay: number, bx: number, by: number): { dx: number;
   return { dx, dy, dist: Math.sqrt(dx * dx + dy * dy) };
 }
 
+/** Find which platform a position is standing on (-1 if none) */
+function findPlatformIdx(x: number, y: number, arena: Arena): number {
+  const feetY = y + PLAYER_HEIGHT;
+  for (let i = 0; i < arena.platforms.length; i++) {
+    const p = arena.platforms[i];
+    if (x + PLAYER_WIDTH > p.x && x < p.x + p.width &&
+        feetY >= p.y - 5 && feetY <= p.y + 10) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+/** Find nearest platform to a world position (for airborne targets) */
+function nearestPlatformIdx(x: number, y: number, arena: Arena): number {
+  let bestIdx = 0;
+  let bestDist = Infinity;
+  for (let i = 0; i < arena.platforms.length; i++) {
+    const p = arena.platforms[i];
+    const cx = p.x + p.width / 2;
+    const cy = p.y;
+    const dx = x - cx;
+    const dy = y - cy;
+    const dist = dx * dx + dy * dy;
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestIdx = i;
+    }
+  }
+  return bestIdx;
+}
+
 export function buildAwareness(
   self: Player,
   state: MatchState,
   arena: Arena,
   awarenessRadius: number,
+  pathfindingDepth: number = 0,
+  preferSafePath: boolean = false,
 ): AwarenessSnapshot {
   const selfOnGround = self.state !== 'airborne';
   const selfAirborne = self.state === 'airborne';
@@ -258,6 +293,55 @@ export function buildAwareness(
     onElevatedPlatform = true;
   }
 
+  // Nav graph: find current platform + compute navTarget
+  const currentPlatformIdx = selfOnGround ? findPlatformIdx(self.x, self.y, arena) : -1;
+  let navTarget: AwarenessSnapshot['navTarget'] = null;
+
+  if (pathfindingDepth > 0 && currentPlatformIdx >= 0) {
+    const nav = NAV_DATA[arena.id];
+    if (nav) {
+      // Determine goal: nearest enemy, priority target, or roam target
+      let goalX = 0, goalY = 0;
+      let hasGoal = false;
+      if (nearestEnemy) {
+        goalX = nearestEnemy.x; goalY = nearestEnemy.y; hasGoal = true;
+      } else if (roamTarget) {
+        goalX = roamTarget.x; goalY = roamTarget.y; hasGoal = true;
+      }
+      if (hasGoal) {
+        const goalPlatIdx = findPlatformIdx(goalX, goalY, arena);
+        const goalIdx = goalPlatIdx >= 0 ? goalPlatIdx : nearestPlatformIdx(goalX, goalY, arena);
+
+        if (goalIdx !== currentPlatformIdx) {
+          const hopTable = preferSafePath && nav.safeHop ? nav.safeHop : nav.nextHop;
+          let nextIdx = hopTable[currentPlatformIdx]?.[goalIdx] ?? -2;
+
+          // Medium difficulty: clamp to 1-hop (don't follow full multi-hop paths)
+          if (pathfindingDepth === 1 && nextIdx >= 0) {
+            // Only use the immediate next hop, don't chain further
+            // (This is already what nextHop gives us — single next step)
+          }
+
+          if (nextIdx >= 0 && nextIdx < arena.platforms.length) {
+            // Find the edge to get approach info
+            const edges = nav.edges[currentPlatformIdx];
+            let edgeType: 'j' | 'd' | 'w' = 'j';
+            let approachX = arena.platforms[nextIdx].x + arena.platforms[nextIdx].width / 2;
+            for (const e of edges) {
+              if (e.t === nextIdx) {
+                edgeType = e.y;
+                approachX = e.x;
+                break;
+              }
+            }
+            const p = arena.platforms[nextIdx];
+            navTarget = { x: p.x, y: p.y, width: p.width, approachX, type: edgeType };
+          }
+        }
+      }
+    }
+  }
+
   return {
     self: {
       x: self.x, y: self.y, vx: self.vx, vy: self.vy,
@@ -270,6 +354,7 @@ export function buildAwareness(
     landingPlatform, nearEdge,
     windDir, windStrength, inZeroG, inCurrent, nearGeyser, geyserEscapeDx,
     nearbyBotCount, leaderScore, onElevatedPlatform,
+    currentPlatformIdx, navTarget,
   };
 }
 

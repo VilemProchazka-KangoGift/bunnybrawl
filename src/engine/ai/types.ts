@@ -17,6 +17,7 @@ export interface DifficultyParams {
   noiseChance: number;        // 0-1, chance per frame of random input
   walkSpeedMult: number;      // 0-1, multiplied into effective walk speed for this bot
   hesitationChance: number;   // 0-1, chance per frame to freeze and do nothing
+  pathfindingDepth: number;   // 0 = none (easy), 1 = 1-hop (medium), Infinity = full path (hard)
 }
 
 export interface AwarenessSnapshot {
@@ -51,6 +52,10 @@ export interface AwarenessSnapshot {
   leaderScore: number;
   /** Is self on an elevated platform (above ground level)? */
   onElevatedPlatform: boolean;
+  /** Index of the platform the bot is standing on (-1 if airborne) */
+  currentPlatformIdx: number;
+  /** Next platform to reach via precomputed nav graph (null if no goal, airborne, or easy difficulty) */
+  navTarget: { x: number; y: number; width: number; approachX: number; type: 'j' | 'd' | 'w' | 'g' } | null;
 }
 
 export interface ActionScores {

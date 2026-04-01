@@ -102,7 +102,7 @@ export class GameLoop {
       fastFalling: false, fatTimer: 0, slowTimer: 0,
       squashScale: 1, squashTimer: 0, afterimages: [], idleAnimTimer: 0,
       expression: 'normal' as const, killStreak: 0,
-      breathTimer: 0, springTrailTimer: 0, damageFlashSide: null, damageFlashTimer: 0,
+      breathTimer: 0, springTrailTimer: 0, damageFlashSide: null, damageFlashTimer: 0, burnTimer: 0,
     }));
 
     // Init AI controllers for bot players
@@ -756,6 +756,28 @@ export class GameLoop {
       }
       if (player.fatTimer > 0) player.fatTimer -= dt;
       if (player.slowTimer > 0) player.slowTimer -= dt;
+      if (player.burnTimer > 0) {
+        player.burnTimer -= dt;
+        // Spawn fire particles while burning
+        if (player.state !== 'splat' && player.state !== 'respawning') {
+          const cx = player.x + player.width / 2;
+          const baseY = player.y + player.height;
+          for (let i = 0; i < 2; i++) {
+            const fx = cx + (Math.random() - 0.5) * player.width * 0.8;
+            const fy = baseY - Math.random() * player.height * 0.6;
+            const life = 0.25 + Math.random() * 0.3;
+            const colors = ['#FF4400', '#FF8800', '#FFCC00', '#FFAA00'];
+            this.particles.push({
+              x: fx, y: fy,
+              vx: (Math.random() - 0.5) * 40,
+              vy: -60 - Math.random() * 80,
+              life, maxLife: life,
+              size: 2 + Math.random() * 4,
+              color: colors[Math.floor(Math.random() * colors.length)],
+            });
+          }
+        }
+      }
       // Breathing animation
       player.breathTimer += dt;
       // Decay damage flash and spring trail
@@ -977,6 +999,7 @@ export class GameLoop {
           if (player.slowTimer <= 0 && player.invincibleTimer <= 0 &&
               aabbOverlap(player.x, player.y, player.width, player.height, hz.x + inset, hz.y, hz.width - inset * 2, hz.height)) {
             player.slowTimer = THORN_SLOW_DURATION;
+            if (hz.type === 'lava') player.burnTimer = THORN_SLOW_DURATION;
             audio.play('thornhit');
             const px = player.x + player.width / 2;
             const py = player.y + player.height / 2;
