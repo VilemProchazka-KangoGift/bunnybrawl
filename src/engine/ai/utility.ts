@@ -254,7 +254,7 @@ function evaluateAirborneAboveDodge(a: AwarenessSnapshot, s: ActionScores, p: AI
 
 /** When airborne and falling, steer toward the nearest landable platform */
 function evaluateLandingPrediction(a: AwarenessSnapshot, s: ActionScores): void {
-  if (!a.self.isAirborne || a.self.vy < 0) return; // only when falling
+  if (a.self.onGround || a.self.vy < 0) return; // only when falling
   if (!a.landingPlatform) return;
   const weight = 0.5;
   const { centerDx } = a.landingPlatform;

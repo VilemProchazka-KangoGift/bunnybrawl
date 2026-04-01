@@ -20,7 +20,7 @@ export interface DifficultyParams {
 }
 
 export interface AwarenessSnapshot {
-  self: { x: number; y: number; vx: number; vy: number; onGround: boolean; score: number; slowed: boolean; fat: boolean; invincible: boolean; isAirborne: boolean };
+  self: { x: number; y: number; vx: number; vy: number; onGround: boolean; score: number; slowed: boolean; fat: boolean; invincible: boolean };
   nearestEnemy: { x: number; y: number; vx: number; vy: number; dx: number; dy: number; dist: number; score: number } | null;
   /** Always set regardless of awareness radius — used for roaming when nothing else to do */
   roamTarget: { x: number; y: number; dx: number } | null;

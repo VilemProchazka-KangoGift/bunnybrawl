@@ -244,7 +244,7 @@ export function buildAwareness(
       x: self.x, y: self.y, vx: self.vx, vy: self.vy,
       onGround: selfOnGround, score: self.score,
       slowed: self.slowTimer > 0, fat: self.fatTimer > 0,
-      invincible: self.invincibleTimer > 0, isAirborne: selfAirborne,
+      invincible: self.invincibleTimer > 0,
     },
     nearestEnemy, roamTarget, stompTarget, stompThreat, airborneAbove, nearestCarrot,
     nearestHazard, nearbyHazards, nearestPlatformAbove, nearestPlatformBelow,
