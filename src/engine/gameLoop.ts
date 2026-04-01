@@ -736,7 +736,13 @@ export class GameLoop {
       const prevVy = player.vy;
       const prevVx = player.vx;
 
-      applyInput(player, input, dt, this.effWalkSpeed, this.effFriction, this.effJumpImpulse);
+      // Bot walk speed penalty (easy bots move slower)
+      let playerWalkSpeed = this.effWalkSpeed;
+      if (isBotSlot(player.id)) {
+        const ai = this.aiControllers.get(player.id);
+        if (ai) playerWalkSpeed *= ai.getWalkSpeedMult();
+      }
+      applyInput(player, input, dt, playerWalkSpeed, this.effFriction, this.effJumpImpulse);
       if (!wasAirborne && player.state === 'airborne') {
         audio.play('jump');
         // Stretch on jump

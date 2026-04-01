@@ -32,6 +32,10 @@ export class AIController {
     }
   }
 
+  getWalkSpeedMult(): number {
+    return this.difficulty.walkSpeedMult;
+  }
+
   getInput(state: MatchState, arena: Arena): InputState {
     const self = state.players.find(p => p.id === this.slot);
     if (!self || !self.active || self.state === 'splat' || self.state === 'respawning') {
@@ -47,6 +51,11 @@ export class AIController {
     }
     this.lastX = self.x;
     this.lastY = self.y;
+
+    // Hesitation: randomly freeze (looks like a confused player)
+    if (this.difficulty.hesitationChance > 0 && Math.random() < this.difficulty.hesitationChance) {
+      return { ...NO_INPUT };
+    }
 
     // Compute ideal input
     const ideal = this.computeIdealInput(self, state, arena);

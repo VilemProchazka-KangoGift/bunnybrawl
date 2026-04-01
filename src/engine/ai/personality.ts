@@ -28,11 +28,13 @@ export function getPersonality(characterName: string): AIPersonality {
 
 const DIFFICULTY_PARAMS: Record<BotDifficulty, DifficultyParams> = {
   easy: {
-    reactionFrames: 18,
+    reactionFrames: 30,
     awarenessRadius: 180,
-    noiseChance: 0.20,
+    noiseChance: 0.15,
     exploitMechanics: false,
     jumpTimingNoise: 12,
+    walkSpeedMult: 0.65,
+    hesitationChance: 0.03,
   },
   medium: {
     reactionFrames: 6,
@@ -40,6 +42,8 @@ const DIFFICULTY_PARAMS: Record<BotDifficulty, DifficultyParams> = {
     noiseChance: 0.06,
     exploitMechanics: true,
     jumpTimingNoise: 4,
+    walkSpeedMult: 1.0,
+    hesitationChance: 0,
   },
   hard: {
     reactionFrames: 2,
@@ -47,6 +51,8 @@ const DIFFICULTY_PARAMS: Record<BotDifficulty, DifficultyParams> = {
     noiseChance: 0.01,
     exploitMechanics: true,
     jumpTimingNoise: 1,
+    walkSpeedMult: 1.0,
+    hesitationChance: 0,
   },
 };
 

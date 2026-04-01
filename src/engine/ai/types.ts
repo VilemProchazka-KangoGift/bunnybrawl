@@ -17,6 +17,8 @@ export interface DifficultyParams {
   noiseChance: number;        // 0-1, chance per frame of random input
   exploitMechanics: boolean;  // use geysers, springs offensively
   jumpTimingNoise: number;    // frames of timing randomness for stomps
+  walkSpeedMult: number;      // 0-1, multiplied into effective walk speed for this bot
+  hesitationChance: number;   // 0-1, chance per frame to freeze and do nothing
 }
 
 export interface AwarenessSnapshot {
