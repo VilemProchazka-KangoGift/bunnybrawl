@@ -2289,15 +2289,17 @@ export class Renderer {
 
   private drawHUD(ctx: CanvasRenderingContext2D, state: MatchState): void {
     const activePlayers = state.players.filter(p => p.active);
-    const scoreWidth = 160;
+    const scoreWidth = Math.min(160, Math.floor((CANVAS_WIDTH - 40) / activePlayers.length));
+    const compact = scoreWidth < 130;
     const totalWidth = activePlayers.length * scoreWidth;
     const startX = (CANVAS_WIDTH - totalWidth) / 2;
 
     for (let i = 0; i < activePlayers.length; i++) {
       const player = activePlayers[i];
       const px = startX + i * scoreWidth;
+      const isBot = player.id.startsWith('B');
 
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.fillStyle = isBot ? 'rgba(40, 20, 60, 0.55)' : 'rgba(0, 0, 0, 0.5)';
       ctx.beginPath();
       ctx.roundRect(px, 10, scoreWidth - 10, 40, 8);
       ctx.fill();
@@ -2310,12 +2312,20 @@ export class Renderer {
       ctx.lineWidth = 1;
       ctx.stroke();
 
+      const displayName = compact ? player.character.name.slice(0, 4) : player.character.name;
       ctx.fillStyle = '#FFF';
-      ctx.font = 'bold 16px "Press Start 2P", monospace';
+      ctx.font = `bold ${compact ? 12 : 16}px "Press Start 2P", monospace`;
       ctx.textAlign = 'left';
-      ctx.fillText(`${player.character.name}`, px + 35, 28);
-      ctx.font = 'bold 18px "Press Start 2P", monospace';
+      ctx.fillText(displayName, px + 35, 28);
+      ctx.font = `bold ${compact ? 14 : 18}px "Press Start 2P", monospace`;
       ctx.fillText(`${player.score}`, px + 35, 45);
+
+      // Small bot indicator
+      if (isBot) {
+        ctx.fillStyle = 'rgba(180, 140, 255, 0.7)';
+        ctx.font = 'bold 7px monospace';
+        ctx.fillText('BOT', px + 6, 18);
+      }
     }
 
     if (state.timeElapsed >= 0) {

@@ -1,10 +1,12 @@
 import { useRef, useEffect, useCallback } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { CHARACTERS, ALL_CHARACTERS } from '../engine/characters';
+import { CHARACTERS, ALL_CHARACTERS, BOT_CHARACTERS } from '../engine/characters';
 import { KEY_BINDINGS } from '../engine/input';
 import { audio } from '../engine/audio';
 import i18n from '../i18n';
-import type { CharacterSlot, CharacterDef } from '../engine/types';
+import type { CharacterSlot, CharacterDef, PlayerSlot, BotSlot } from '../engine/types';
+import { ALL_BOT_SLOTS, isBotSlot } from '../engine/types';
+import { assignBotCharacters } from '../engine/characters';
 import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT } from '../engine/constants';
 import './CharacterSelect.css';
 
@@ -25,7 +27,7 @@ const WALL_HEIGHT = 120; // tall enough to require a jump
 const WALL_Y = GROUND_Y - WALL_HEIGHT;
 
 interface LobbyPlayer {
-  slot: CharacterSlot;
+  slot: PlayerSlot;
   char: CharacterDef;
   x: number;
   y: number;
@@ -48,9 +50,10 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 export function CharacterSelect() {
-  const { setScreen, setActivePlayers, setMatchSettings } = useGameStore();
+  const { setScreen, setActivePlayers, setMatchSettings, matchSettings } = useGameStore();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const playersRef = useRef<LobbyPlayer[]>([]);
+  const botPlayersRef = useRef<LobbyPlayer[]>([]); // AI-controlled bot players
   const extraCharsRef = useRef<LobbyPlayer[]>([]); // extra NPCs on the field
   const keysRef = useRef<Set<string>>(new Set());
   const countdownRef = useRef<number>(-1);
@@ -58,18 +61,34 @@ export function CharacterSelect() {
   const rafRef = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
   const startedRef = useRef<boolean>(false);
-  const readySoundPlayedRef = useRef<Set<CharacterSlot>>(new Set());
+  const readySoundPlayedRef = useRef<Set<PlayerSlot>>(new Set());
 
   useEffect(() => {
+    const botCount = matchSettings.botCount;
+    const botSlots = ALL_BOT_SLOTS.slice(0, botCount);
+
     // Randomly assign characters to players
     const shuffled = shuffle([...ALL_CHARACTERS]);
     const assigned = shuffled.slice(0, SLOTS.length);
-    const extras = shuffled.slice(SLOTS.length);
+    const botAssigned = shuffled.slice(SLOTS.length, SLOTS.length + botCount);
+    const extras = shuffled.slice(SLOTS.length + botCount);
 
     playersRef.current = SLOTS.map((slot, i) => ({
       slot,
       char: { ...assigned[i], slot },
       x: 40 + i * 90,
+      y: GROUND_Y - PLAYER_HEIGHT,
+      vx: 0, vy: 0,
+      facing: 'right' as const,
+      animFrame: 0, animTimer: 0,
+      onGround: true, splatTimer: 0,
+    }));
+
+    // Create bot lobby players — they spawn on the left and walk to the ready zone
+    botPlayersRef.current = botSlots.map((slot, i) => ({
+      slot,
+      char: { ...botAssigned[i], slot },
+      x: 40 + (SLOTS.length + i) * 60,
       y: GROUND_Y - PLAYER_HEIGHT,
       vx: 0, vy: 0,
       facing: 'right' as const,
@@ -95,7 +114,8 @@ export function CharacterSelect() {
     if (startedRef.current) return;
     startedRef.current = true;
 
-    const inZone = playersRef.current.filter(p => p.x + PLAYER_WIDTH > READY_ZONE_X && p.splatTimer <= 0);
+    const allParticipants = [...playersRef.current, ...botPlayersRef.current];
+    const inZone = allParticipants.filter(p => p.x + PLAYER_WIDTH > READY_ZONE_X && p.splatTimer <= 0);
     if (inZone.length < 2) {
       countdownRef.current = -1;
       countdownStartedRef.current = false;
@@ -103,12 +123,24 @@ export function CharacterSelect() {
       return;
     }
 
-    // Write the chosen characters back into CHARACTERS so the match uses them
-    for (const lp of inZone) {
-      CHARACTERS[lp.slot] = { ...lp.char, slot: lp.slot };
+    // Write the chosen characters back into CHARACTERS so the match uses them (humans only)
+    const humanInZone = inZone.filter(p => !isBotSlot(p.slot));
+    for (const lp of humanInZone) {
+      CHARACTERS[lp.slot as CharacterSlot] = { ...lp.char, slot: lp.slot };
     }
 
-    const activePlayers = inZone.map(p => p.slot);
+    // Assign bot characters
+    const humanSlots = humanInZone.map(p => p.slot as CharacterSlot);
+    const botInZone = inZone.filter(p => isBotSlot(p.slot));
+    const botSlots = botInZone.map(p => p.slot as BotSlot);
+    // Use the characters the bots walked in with
+    assignBotCharacters(humanSlots, botSlots);
+    // Override with the actual lobby characters (respecting any lobby swaps)
+    for (const bot of botInZone) {
+      BOT_CHARACTERS.set(bot.slot as BotSlot, { ...bot.char, slot: bot.slot });
+    }
+
+    const activePlayers: PlayerSlot[] = inZone.map(p => p.slot);
     setActivePlayers(activePlayers);
     setMatchSettings({ playerCount: activePlayers.length });
     audio.play('select');
@@ -144,12 +176,12 @@ export function CharacterSelect() {
       const dt = lastTimeRef.current ? Math.min((time - lastTimeRef.current) / 1000, 0.05) : 1 / 60;
       lastTimeRef.current = time;
 
-      const allLobby = [...playersRef.current, ...extraCharsRef.current];
+      const allLobby = [...playersRef.current, ...botPlayersRef.current, ...extraCharsRef.current];
 
-      // Update player-controlled characters
+      // Update player-controlled characters (always CharacterSlots)
       for (const p of playersRef.current) {
         if (p.splatTimer > 0) { p.splatTimer -= dt; continue; }
-        const bindings = KEY_BINDINGS[p.slot];
+        const bindings = KEY_BINDINGS[p.slot as CharacterSlot];
         const keys = keysRef.current;
 
         if (keys.has(bindings.left)) { p.vx = -LOBBY_SPEED; p.facing = 'left'; }
@@ -176,8 +208,16 @@ export function CharacterSelect() {
         updateLobbyPhysics(npc, dt);
       }
 
-      // Stomp detection — players stomp NPCs to swap characters, players stomp players to swap
-      for (const attacker of playersRef.current) {
+      // Update bot players — directed AI walking toward ready zone
+      for (const bot of botPlayersRef.current) {
+        if (bot.splatTimer > 0) { bot.splatTimer -= dt; continue; }
+        updateBotLobbyAI(bot, dt);
+        updateLobbyPhysics(bot, dt);
+      }
+
+      // Stomp detection — players/bots stomp NPCs to swap characters, players stomp players to swap
+      const stompAttackers = [...playersRef.current, ...botPlayersRef.current];
+      for (const attacker of stompAttackers) {
         if (attacker.splatTimer > 0) continue;
         if (attacker.vy < STOMP_VY) continue; // must be falling
 
@@ -221,9 +261,10 @@ export function CharacterSelect() {
         }
       }
 
-      // Ready zone check
-      const inZone = playersRef.current.filter(p => p.x + PLAYER_WIDTH > READY_ZONE_X && p.splatTimer <= 0);
-      // Play animal sound when player enters ready zone for the first time
+      // Ready zone check — includes both human players and bots
+      const allParticipants = [...playersRef.current, ...botPlayersRef.current];
+      const inZone = allParticipants.filter(p => p.x + PLAYER_WIDTH > READY_ZONE_X && p.splatTimer <= 0);
+      // Play animal sound when player/bot enters ready zone for the first time
       for (const p of inZone) {
         if (!readySoundPlayedRef.current.has(p.slot)) {
           readySoundPlayedRef.current.add(p.slot);
@@ -231,7 +272,7 @@ export function CharacterSelect() {
         }
       }
       // Remove players who left the zone so they can trigger again if they re-enter
-      for (const p of playersRef.current) {
+      for (const p of allParticipants) {
         if (p.x + PLAYER_WIDTH <= READY_ZONE_X || p.splatTimer > 0) {
           readySoundPlayedRef.current.delete(p.slot);
         }
@@ -250,7 +291,7 @@ export function CharacterSelect() {
         if (countdownRef.current <= 0) startMatch();
       }
 
-      drawLobby(ctx, playersRef.current, extraCharsRef.current, countdownRef.current, countdownStartedRef.current);
+      drawLobby(ctx, playersRef.current, botPlayersRef.current, extraCharsRef.current, countdownRef.current, countdownStartedRef.current);
       rafRef.current = requestAnimationFrame(loop);
     };
 
@@ -269,6 +310,58 @@ export function CharacterSelect() {
       />
     </div>
   );
+}
+
+// ---- Bot Lobby AI ----
+
+// Each bot gets slightly different behavior via a seeded offset
+const BOT_SPEED_VARIANCE = [0.85, 1.0, 0.9, 1.1, 0.95];
+const BOT_PAUSE_CHANCE = [0.003, 0.002, 0.004, 0.001, 0.003];
+
+function updateBotLobbyAI(bot: LobbyPlayer, _dt: number): void {
+  const slotIdx = parseInt(bot.slot[1]) - 1; // B1→0, B2→1, etc.
+  const speedMult = BOT_SPEED_VARIANCE[slotIdx % BOT_SPEED_VARIANCE.length];
+  const pauseChance = BOT_PAUSE_CHANCE[slotIdx % BOT_PAUSE_CHANCE.length];
+
+  // If in the ready zone, stop and idle
+  if (bot.x + PLAYER_WIDTH > READY_ZONE_X + 40) {
+    bot.vx *= 0.9;
+    if (Math.abs(bot.vx) < 5) bot.vx = 0;
+    // Occasional idle jump
+    if (Math.random() < 0.003 && bot.onGround) {
+      bot.vy = LOBBY_JUMP * 0.5;
+      bot.onGround = false;
+    }
+    return;
+  }
+
+  // Random pause for organic feel
+  if (Math.random() < pauseChance) {
+    bot.vx = 0;
+    return;
+  }
+
+  // Walk right toward the ready zone
+  bot.vx = LOBBY_SPEED * 0.7 * speedMult;
+  bot.facing = 'right';
+
+  // Jump at the wall obstacle
+  if (bot.onGround && bot.x + PLAYER_WIDTH > WALL_X - 60 && bot.x < WALL_X + WALL_WIDTH + 20) {
+    bot.vy = LOBBY_JUMP;
+    bot.onGround = false;
+  }
+
+  // If stuck against the wall, keep trying to jump
+  if (bot.onGround && bot.vx > 0 && Math.abs(bot.x - (WALL_X - PLAYER_WIDTH)) < 4) {
+    bot.vy = LOBBY_JUMP;
+    bot.onGround = false;
+  }
+
+  // If on top of the wall, walk right off it
+  if (bot.y < WALL_Y && bot.x > WALL_X - PLAYER_WIDTH && bot.x < WALL_X + WALL_WIDTH + PLAYER_WIDTH) {
+    bot.vx = LOBBY_SPEED * 0.8 * speedMult;
+    bot.facing = 'right';
+  }
 }
 
 // ---- Physics ----
@@ -327,6 +420,7 @@ function updateLobbyPhysics(p: LobbyPlayer, dt: number): void {
 function drawLobby(
   ctx: CanvasRenderingContext2D,
   players: LobbyPlayer[],
+  bots: LobbyPlayer[],
   extras: LobbyPlayer[],
   countdown: number,
   countdownActive: boolean,
@@ -475,6 +569,23 @@ function drawLobby(
     ctx.fillText(i18n.t(`char_${npc.char.name}`, npc.char.name), npc.x + PLAYER_WIDTH / 2, npc.y - 5);
   }
 
+  // ---- Draw bots ----
+  for (const bot of bots) {
+    if (bot.splatTimer > 0) { drawSquishedChar(ctx, bot); }
+    else { drawLobbyCharacter(ctx, bot); }
+    // Bot tag with "BOT" label
+    const tagX = bot.x + PLAYER_WIDTH / 2;
+    const tagW = 36;
+    ctx.fillStyle = 'rgba(80, 60, 120, 0.6)';
+    ctx.beginPath();
+    ctx.roundRect(tagX - tagW / 2, bot.y - 22, tagW, 16, 4);
+    ctx.fill();
+    ctx.fillStyle = '#C8A0FF';
+    ctx.font = "bold 10px 'Fredoka', sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText('BOT', tagX, bot.y - 10);
+  }
+
   // ---- Draw players ----
   for (const p of players) {
     if (p.splatTimer > 0) { drawSquishedChar(ctx, p); }
@@ -561,7 +672,7 @@ function drawLobby(
   }
 
   // ---- Player count in zone ----
-  const inZone = players.filter(p => p.x + PLAYER_WIDTH > READY_ZONE_X && p.splatTimer <= 0);
+  const inZone = [...players, ...bots].filter(p => p.x + PLAYER_WIDTH > READY_ZONE_X && p.splatTimer <= 0);
   if (inZone.length > 0) {
     const readyText = i18n.t('lobby_players_ready', { count: inZone.length });
     ctx.font = "bold 16px 'Fredoka', sans-serif";

@@ -16,7 +16,7 @@
   "arena_rooftops": "Střechy",
   "arena_space_station": "Vesmírná stanice",
   "credits_tribute": "Pocta hře Jump'n'Bump",
-  "credits_players": "Až 5 hráčů — jedna klávesnice!",
+  "credits_players": "Až 5 hráčů + 5 botů — jedna klávesnice!",
   "lobby_title": "Dupni pro výměnu! Jdi doprava pro připojení!",
   "lobby_players_ready_one": "{{count}} hráč připraven",
   "lobby_players_ready_few": "{{count}} hráči připraveni",
@@ -61,6 +61,10 @@
   "char_Horse": "Kůň",
   "char_Sheep": "Ovce",
   "char_Monkey": "Opice",
+  "bot_label": "Boti",
+  "bot_diff_easy": "Lehká",
+  "bot_diff_medium": "Střední",
+  "bot_diff_hard": "Těžká",
   "fullscreen_enter": "Celá obrazovka",
   "fullscreen_exit": "Ukončit celou obrazovku"
 }
