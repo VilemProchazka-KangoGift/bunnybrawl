@@ -1,10 +1,8 @@
 import type { Platform, EffectZone } from '../types';
-import { JUMP_IMPULSE, GRAVITY, MAX_WALK_SPEED, PLAYER_WIDTH, PLAYER_HEIGHT, CANVAS_WIDTH } from '../constants';
+import { JUMP_IMPULSE, GRAVITY, MAX_WALK_SPEED, PLAYER_WIDTH, CANVAS_WIDTH } from '../constants';
 
 // Max jump height: v²/(2g) = 560²/1800 ≈ 174px
 const MAX_JUMP_HEIGHT = (JUMP_IMPULSE * JUMP_IMPULSE) / (2 * GRAVITY);
-// Time to apex: |v|/g = 560/900 ≈ 0.622s, full air time ≈ 1.244s
-const JUMP_AIR_TIME = (2 * Math.abs(JUMP_IMPULSE)) / GRAVITY;
 
 export interface ReachResult {
   reachable: boolean;
