@@ -112,21 +112,22 @@ function evaluateChaseTarget(a: AwarenessSnapshot, s: ActionScores, p: AIPersona
 
 function evaluatePlatformSeeking(a: AwarenessSnapshot, s: ActionScores, p: AIPersonality): void {
   if (!a.nearestPlatformAbove || !a.self.onGround) return;
-  // Only seek platforms if there's actually a reason (enemy above, or strong preference)
+  // Seek platforms if: enemy above, roam target above, or strong preference
   const hasEnemyAbove = a.nearestEnemy && a.nearestEnemy.dy < -30;
-  if (!hasEnemyAbove && p.platformPreference < 1.5) return;
+  const roamAbove = a.roamTarget && a.roamTarget.y < a.self.y - 50;
+  if (!hasEnemyAbove && !roamAbove && p.platformPreference < 1.5) return;
 
-  const weight = 0.3 * p.platformPreference;
+  const weight = hasEnemyAbove ? 0.5 * p.platformPreference : 0.3 * p.platformPreference;
   const plat = a.nearestPlatformAbove;
 
-  // Walk toward platform center first
+  // Walk toward platform — use wider tolerance for zigzag stairs
   const platCenter = plat.x + plat.width / 2;
   const dx = platCenter - a.self.x;
-  if (dx > 30) s.moveRight += weight;
-  else if (dx < -30) s.moveLeft += weight;
+  if (dx > 20) s.moveRight += weight;
+  else if (dx < -20) s.moveLeft += weight;
 
-  // Only jump when well-positioned under the platform
-  if (Math.abs(dx) < plat.width / 2 && plat.dy > -180) {
+  // Jump when positioned within reach of the platform (wider range for stairs)
+  if (Math.abs(dx) < plat.width / 2 + 60 && plat.dy > -200) {
     s.jump += weight * 0.5;
   }
 }
@@ -216,6 +217,18 @@ function evaluateRoam(a: AwarenessSnapshot, s: ActionScores): void {
   const weight = 0.4;
   if (a.roamTarget.dx > 30) s.moveRight += weight;
   else if (a.roamTarget.dx < -30) s.moveLeft += weight;
+
+  // If target is far below and we're on an elevated platform, actively walk toward edge to drop down
+  const targetBelow = a.roamTarget.y - a.self.y;
+  if (targetBelow > 80 && a.onElevatedPlatform && a.self.onGround) {
+    const dropWeight = 0.5;
+    if (a.roamTarget.dx > 10) s.moveRight += dropWeight;
+    else if (a.roamTarget.dx < -10) s.moveLeft += dropWeight;
+    else {
+      // Target is directly below — walk either direction to reach an edge
+      s.moveRight += dropWeight * 0.5;
+    }
+  }
 }
 
 /** Don't walk under airborne enemies — sidestep with some imprecision */

@@ -119,13 +119,14 @@ export function buildAwareness(
     if (r.active) checkHazard('lavaRock', r.x, r.y);
   }
 
-  // Find nearest platform above and below
+  // Find nearest platform above and below (wider horizontal range for zigzag stairs)
   let nearestPlatformAbove: AwarenessSnapshot['nearestPlatformAbove'] = null;
   let nearestPlatformBelow: AwarenessSnapshot['nearestPlatformBelow'] = null;
   let bestAboveDy = Infinity;
   let bestBelowDy = Infinity;
   for (const plat of arena.platforms) {
-    if (self.x + PLAYER_WIDTH < plat.x - 80 || self.x > plat.x + plat.width + 80) continue;
+    // 160px horizontal reach — wide enough for zigzag staircases
+    if (self.x + PLAYER_WIDTH < plat.x - 160 || self.x > plat.x + plat.width + 160) continue;
     const platTop = plat.y;
     const dy = platTop - (self.y + PLAYER_HEIGHT);
     if (dy < -20 && -dy < bestAboveDy) {
