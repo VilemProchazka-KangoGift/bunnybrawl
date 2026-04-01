@@ -1,4 +1,4 @@
-import type { Player, MatchState, Arena, EffectZone } from '../types';
+import type { Player, MatchState, Arena } from '../types';
 import { isBotSlot } from '../types';
 import type { AwarenessSnapshot } from './types';
 import { PLAYER_WIDTH, PLAYER_HEIGHT, CANVAS_WIDTH } from '../constants';
@@ -22,56 +22,65 @@ export function buildAwareness(
   arena: Arena,
   awarenessRadius: number,
 ): AwarenessSnapshot {
-  const enemies = state.players.filter(
-    p => p.id !== self.id && p.active && p.state !== 'splat' && p.state !== 'respawning',
-  );
   const selfOnGround = self.state !== 'airborne';
   const selfAirborne = self.state === 'airborne';
 
-  // Find nearest enemy within awareness radius (wrap-aware)
+  // Single pass over all players: nearest enemy, stomp target/threat, airborne above,
+  // roam target, clustering, leader score — avoids 7 separate loops
   let nearestEnemy: AwarenessSnapshot['nearestEnemy'] = null;
   let nearestDist = Infinity;
-  for (const e of enemies) {
-    const { dx, dy, dist } = wrapDist(self.x, self.y, e.x, e.y);
-    if (dist < awarenessRadius && dist < nearestDist) {
-      nearestDist = dist;
-      nearestEnemy = { x: e.x, y: e.y, vx: e.vx, vy: e.vy, dx, dy, dist, score: e.score };
-    }
-  }
-
-  // Find stomp target: enemy below and roughly horizontally aligned
   let stompTarget: AwarenessSnapshot['stompTarget'] = null;
   let bestStompDist = Infinity;
-  for (const e of enemies) {
-    const { dx, dy, dist } = wrapDist(self.x, self.y, e.x, e.y);
-    if (dy > 0 && dy < 200 && Math.abs(dx) < 80) {
-      if (dist < awarenessRadius && dist < bestStompDist) {
-        bestStompDist = dist;
-        stompTarget = { x: e.x, y: e.y, dx, dist };
-      }
-    }
-  }
-
-  // Find stomp threat: enemy above falling toward us
   let stompThreat: AwarenessSnapshot['stompThreat'] = null;
   let closestThreatDist = Infinity;
-  for (const e of enemies) {
-    const { dx, dy, dist } = wrapDist(self.x, self.y, e.x, e.y);
-    if (dy < 0 && dy > -200 && Math.abs(dx) < 60 && e.vy > 0) {
-      if (dist < awarenessRadius && dist < closestThreatDist) {
-        closestThreatDist = dist;
-        stompThreat = { x: e.x, y: e.y, dist };
-      }
-    }
-  }
-
-  // Airborne enemies above — broader than stompThreat (includes non-falling)
   const airborneAbove: AwarenessSnapshot['airborneAbove'] = [];
-  for (const e of enemies) {
-    if (e.state !== 'airborne') continue;
-    const { dx, dy, dist } = wrapDist(self.x, self.y, e.x, e.y);
-    if (dy < 0 && dy > -250 && Math.abs(dx) < 100 && dist < 300) {
-      airborneAbove.push({ x: e.x, dx, dy, dist });
+  let roamTarget: AwarenessSnapshot['roamTarget'] = null;
+  let bestRoamDist = Infinity;
+  let nearbyBotCount = 0;
+  let leaderScore = 0;
+
+  for (const p of state.players) {
+    if (p.active && p.score > leaderScore) leaderScore = p.score;
+    if (p.id === self.id) continue;
+    if (!p.active) continue;
+
+    // Clustering: count nearby bots
+    if (isBotSlot(p.id) && p.state !== 'splat' && p.state !== 'respawning') {
+      const { dist: bDist } = wrapDist(self.x, self.y, p.x, p.y);
+      if (bDist < 120) nearbyBotCount++;
+    }
+
+    if (p.state === 'splat' || p.state === 'respawning') continue;
+
+    const { dx, dy, dist } = wrapDist(self.x, self.y, p.x, p.y);
+
+    // Nearest enemy (within awareness radius)
+    if (dist < awarenessRadius && dist < nearestDist) {
+      nearestDist = dist;
+      nearestEnemy = { x: p.x, y: p.y, vx: p.vx, vy: p.vy, dx, dy, dist, score: p.score };
+    }
+
+    // Stomp target: below, horizontally aligned
+    if (dy > 0 && dy < 200 && Math.abs(dx) < 80 && dist < awarenessRadius && dist < bestStompDist) {
+      bestStompDist = dist;
+      stompTarget = { x: p.x, y: p.y, dx, dist };
+    }
+
+    // Stomp threat: above, falling
+    if (dy < 0 && dy > -200 && Math.abs(dx) < 60 && p.vy > 0 && dist < awarenessRadius && dist < closestThreatDist) {
+      closestThreatDist = dist;
+      stompThreat = { x: p.x, y: p.y, dist };
+    }
+
+    // Airborne above (broader than threat)
+    if (p.state === 'airborne' && dy < 0 && dy > -250 && Math.abs(dx) < 100 && dist < 300) {
+      airborneAbove.push({ x: p.x, dx, dy, dist });
+    }
+
+    // Roam target: nearest enemy on full map (ignores awareness radius)
+    if (dist < bestRoamDist) {
+      bestRoamDist = dist;
+      roamTarget = { x: p.x, y: p.y, dx };
     }
   }
 
@@ -183,10 +192,12 @@ export function buildAwareness(
   const windDir = state.wind.direction;
   const windStrength = state.wind.strength;
 
-  // Effect zones
+  // Effect zones — single pass for zero-G, currents, geysers, and geyser escape
   let inZeroG = false;
   let inCurrent = 0;
   let nearGeyser: AwarenessSnapshot['nearGeyser'] = null;
+  let geyserEscapeDx = 0;
+  let geyserIdx = 0;
   for (const zone of arena.effectZones ?? []) {
     const inZone = self.x + PLAYER_WIDTH > zone.x && self.x < zone.x + zone.width &&
                    self.y + PLAYER_HEIGHT > zone.y && self.y < zone.y + zone.height;
@@ -198,62 +209,28 @@ export function buildAwareness(
       const dy = zone.y - (self.y + PLAYER_HEIGHT);
       const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist < 150) {
-        const gIdx = findGeyserIndex(zone, arena);
-        const gs = gIdx >= 0 && gIdx < state.geyserStates.length ? state.geyserStates[gIdx] : null;
+        const gs = geyserIdx < state.geyserStates.length ? state.geyserStates[geyserIdx] : null;
         nearGeyser = {
           x: geyserCx, y: zone.y,
           active: gs?.active ?? false,
           timer: gs?.timer ?? 99,
         };
       }
+      // Geyser escape: compute direction to nearest zone edge
+      if (inZone) {
+        const selfCx = self.x + PLAYER_WIDTH / 2;
+        const distToLeft = selfCx - zone.x;
+        const distToRight = zone.x + zone.width - selfCx;
+        geyserEscapeDx = distToLeft < distToRight ? -(distToLeft + 30) : (distToRight + 30);
+      }
+      geyserIdx++;
     }
   }
 
-  // Geyser escape: if inside an active geyser zone, compute escape direction
-  let geyserEscapeDx = 0;
-  for (const zone of arena.effectZones ?? []) {
-    if (zone.type !== 'geyser') continue;
-    const inZone = self.x + PLAYER_WIDTH > zone.x && self.x < zone.x + zone.width &&
-                   self.y + PLAYER_HEIGHT > zone.y && self.y < zone.y + zone.height;
-    if (inZone) {
-      const selfCx = self.x + PLAYER_WIDTH / 2;
-      const distToLeft = selfCx - zone.x;
-      const distToRight = zone.x + zone.width - selfCx;
-      // Go toward the nearer edge
-      geyserEscapeDx = distToLeft < distToRight ? -(distToLeft + 30) : (distToRight + 30);
-      break;
-    }
-  }
-
-  // Roam target (wrap-aware): nearest carrot, then nearest enemy across full map
-  let roamTarget: AwarenessSnapshot['roamTarget'] = null;
+  // Override roam target with nearest carrot if one exists (carrot > enemy for roaming)
   if (nearestCarrot) {
     const dx = wrapDx(nearestCarrot.x - self.x);
     roamTarget = { x: nearestCarrot.x, y: nearestCarrot.y, dx };
-  }
-  if (!roamTarget) {
-    let bestDist = Infinity;
-    for (const e of enemies) {
-      const { dx, dist } = wrapDist(self.x, self.y, e.x, e.y);
-      if (dist < bestDist) {
-        bestDist = dist;
-        roamTarget = { x: e.x, y: e.y, dx };
-      }
-    }
-  }
-
-  // Nearby bot count (clustering detection)
-  let nearbyBotCount = 0;
-  for (const p of state.players) {
-    if (p.id === self.id || !p.active || !isBotSlot(p.id)) continue;
-    const { dist } = wrapDist(self.x, self.y, p.x, p.y);
-    if (dist < 120) nearbyBotCount++;
-  }
-
-  // Leader score
-  let leaderScore = 0;
-  for (const p of state.players) {
-    if (p.active && p.score > leaderScore) leaderScore = p.score;
   }
 
   // Elevated platform check (above ground level y=650)
@@ -277,7 +254,3 @@ export function buildAwareness(
   };
 }
 
-function findGeyserIndex(zone: EffectZone, arena: Arena): number {
-  const geysers = (arena.effectZones ?? []).filter(z => z.type === 'geyser');
-  return geysers.indexOf(zone);
-}

@@ -133,10 +133,15 @@ export class AIController {
 
     // Wolf special: if targeting leader, override nearest enemy with score leader
     if (this.personality.targetLeader && awareness.nearestEnemy) {
-      const leader = state.players
-        .filter(p => p.id !== self.id && p.active && p.state !== 'splat' && p.state !== 'respawning')
-        .sort((a, b) => b.score - a.score)[0];
-      if (leader && leader.score > self.score) {
+      let leader: Player | null = null;
+      let bestScore = self.score;
+      for (const p of state.players) {
+        if (p.id !== self.id && p.active && p.state !== 'splat' && p.state !== 'respawning' && p.score > bestScore) {
+          leader = p;
+          bestScore = p.score;
+        }
+      }
+      if (leader) {
         const dx = leader.x - self.x;
         const dy = leader.y - self.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
