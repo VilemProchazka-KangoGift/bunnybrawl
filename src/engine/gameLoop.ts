@@ -420,7 +420,6 @@ export class GameLoop {
   // ---- Carrot spawning ----
 
   private spawnCarrot(): void {
-    const MIN_CARROT_DIST_SQ = 150 * 150; // squared distance threshold
     const candidates: Array<{ x: number; y: number; distSq: number }> = [];
 
     const minDistSqTo = (cx: number, cy: number): number => {
@@ -1042,7 +1041,7 @@ export class GameLoop {
       // Effect zone interactions
       if (this.arena.effectZones) {
         for (let zi = 0; zi < this.arena.effectZones.length; zi++) {
-          const zone = this.arena.effectZones[zi];
+          const zone: EffectZone = this.arena.effectZones[zi];
           if (!aabbOverlap(player.x, player.y, player.width, player.height, zone.x, zone.y, zone.width, zone.height)) continue;
 
           if (zone.type === 'zero_g') {
