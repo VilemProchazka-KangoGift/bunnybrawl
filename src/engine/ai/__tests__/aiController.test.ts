@@ -17,7 +17,7 @@ function makePlayer(overrides: Partial<Player> & { id: PlayerSlot }): Player {
     splatTimer: 0, respawnTimer: 0, invincibleTimer: 0,
     score: 0, active: true, animFrame: 0, animTimer: 0,
     fastFalling: false, fatTimer: 0, slowTimer: 0,
-    squashScale: 1, squashTimer: 0, afterimages: [],
+    squashScale: 1, squashTimer: 0, sideSquash: 1, afterimages: [],
     idleAnimTimer: 0, expression: 'normal',
     killStreak: 0, breathTimer: 0, springTrailTimer: 0,
     damageFlashSide: null, damageFlashTimer: 0, burnTimer: 0,

@@ -125,10 +125,10 @@ export function collidePlatforms(player: Player, platforms: Platform[]): void {
         player.vy = 0;
       } else if (minOverlap === overlapLeft) {
         player.x = plat.x - player.width;
-        if (player.vx > 0) player.vx = 0;
+        if (player.vx > 0) { player.sideSquash = 0.75; player.vx = 0; }
       } else if (minOverlap === overlapRight) {
         player.x = plat.x + plat.width;
-        if (player.vx < 0) player.vx = 0;
+        if (player.vx < 0) { player.sideSquash = 0.75; player.vx = 0; }
       } else {
         // Fallback: deeply embedded or ambiguous — eject via smallest overlap
         if (overlapTop <= overlapBottom) {
@@ -221,6 +221,9 @@ export function collidePlayersHorizontal(players: Player[]): void {
           const avgVx = (a.vx + b.vx) / 2;
           a.vx = avgVx - PLAYER_PUSH_FORCE * (aCx <= bCx ? 0.3 : -0.3);
           b.vx = avgVx + PLAYER_PUSH_FORCE * (aCx <= bCx ? 0.3 : -0.3);
+          // Side squash both characters on push
+          a.sideSquash = 0.8;
+          b.sideSquash = 0.8;
         }
       }
     }

@@ -100,7 +100,7 @@ export class GameLoop {
       splatTimer: 0, respawnTimer: 0, invincibleTimer: 0,
       score: 0, active: true, animFrame: 0, animTimer: 0,
       fastFalling: false, fatTimer: 0, slowTimer: 0,
-      squashScale: 1, squashTimer: 0, afterimages: [], idleAnimTimer: 0,
+      squashScale: 1, squashTimer: 0, sideSquash: 1, afterimages: [], idleAnimTimer: 0,
       expression: 'normal' as const, killStreak: 0,
       breathTimer: 0, springTrailTimer: 0, damageFlashSide: null, damageFlashTimer: 0, burnTimer: 0,
     }));
@@ -875,6 +875,12 @@ export class GameLoop {
         } else {
           player.squashScale = 1.0;
         }
+      }
+
+      // Side squash decay (wall/push squash recovers to 1.0)
+      if (player.sideSquash !== 1) {
+        player.sideSquash += (1.0 - player.sideSquash) * SQUASH_DECAY_SPEED * dt;
+        if (Math.abs(player.sideSquash - 1) < 0.02) player.sideSquash = 1;
       }
 
       // Size wobble when fat

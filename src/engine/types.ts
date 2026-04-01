@@ -100,8 +100,9 @@ export interface Player {
   fastFalling: boolean;
   fatTimer: number;
   slowTimer: number;
-  squashScale: number;   // 1.0 = normal, <1 = squashed, >1 = stretched
+  squashScale: number;   // 1.0 = normal, <1 = squashed, >1 = stretched (vertical)
   squashTimer: number;   // decay timer for squash/stretch
+  sideSquash: number;    // 1.0 = normal, <1 = squashed horizontally (wall/push)
   afterimages: Array<{x: number; y: number; facing: 'left'|'right'; alpha: number}>;
   idleAnimTimer: number; // for character-specific idle animations
   expression: 'normal' | 'scared' | 'angry' | 'dizzy';

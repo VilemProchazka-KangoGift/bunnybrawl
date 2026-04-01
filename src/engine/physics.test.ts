@@ -32,6 +32,7 @@ function makePlayer(overrides: Partial<Player> = {}): Player {
     fastFalling: false,
     fatTimer: 0,
     slowTimer: 0,
+    sideSquash: 1,
     burnTimer: 0,
     ...overrides,
   };

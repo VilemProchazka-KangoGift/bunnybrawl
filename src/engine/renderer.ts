@@ -1227,9 +1227,11 @@ export class Renderer {
 
     // Squash/stretch from landing/jumping (centered on feet)
     const squashScale = player.squashScale;
-    if (squashScale !== 1) {
-      const ssX = 1 + (1 - squashScale) * 0.5; // wider when squashed
-      const ssY = squashScale;
+    const sideSquash = player.sideSquash;
+    const hasSideSquash = sideSquash !== 1;
+    if (squashScale !== 1 || hasSideSquash) {
+      const ssX = (1 + (1 - squashScale) * 0.5) * (hasSideSquash ? sideSquash : 1);
+      const ssY = squashScale * (hasSideSquash ? 1 + (1 - sideSquash) * 0.4 : 1); // taller when side-squashed
       ctx.translate(cx, cy);
       ctx.scale(ssX, ssY);
       ctx.translate(-cx, -cy);
