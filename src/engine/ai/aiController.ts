@@ -22,6 +22,8 @@ export class AIController {
   private jumpCooldown = 0; // prevent jump spam
   private lastScore = 0;
   private tauntTimer = 0; // frames to freeze after a kill (celebration)
+  private searchTimer = 0; // frames to pause when nothing nearby (looking around)
+  private wasIdle = false; // track if previous frame had nothing in range
 
   constructor(slot: BotSlot, characterName: string, difficulty: BotDifficulty) {
     this.slot = slot;
@@ -111,6 +113,23 @@ export class AIController {
 
     // Build awareness snapshot
     const awareness = buildAwareness(self, state, arena, this.difficulty.awarenessRadius);
+
+    // Search pause: when nothing is in immediate radius, pause briefly before roaming
+    const nothingNearby = !awareness.nearestEnemy && !awareness.stompTarget && !awareness.stompThreat
+      && !awareness.nearestCarrot && awareness.airborneAbove.length === 0 && awareness.nearbyHazards.length === 0;
+    if (nothingNearby && !this.wasIdle) {
+      // Just transitioned to idle — start a search pause
+      this.searchTimer = 30 + Math.floor(Math.random() * 50); // 0.5-1.3s
+      this.wasIdle = true;
+    }
+    if (!nothingNearby) {
+      this.wasIdle = false;
+      this.searchTimer = 0;
+    }
+    if (this.searchTimer > 0) {
+      this.searchTimer--;
+      return { left: false, right: false, jump: false, down: false };
+    }
 
     // Wolf special: if targeting leader, override nearest enemy with score leader
     if (this.personality.targetLeader && awareness.nearestEnemy) {
