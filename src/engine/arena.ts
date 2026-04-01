@@ -110,10 +110,7 @@ export const VOLCANO_ARENA: Arena = {
     // Lava pit floors (lower — players can jump out even when hurt)
     { x: 260, y: 700, width: 160, height: 20 },                 // Left pit floor
     { x: 820, y: 700, width: 160, height: 20 },                 // Right pit floor
-    // Obsidian pillars — solid blocks on ground
-    { x: 200, y: 600, width: 40, height: 60 },                  // Pillar left
-    { x: 600, y: 605, width: 35, height: 55 },                  // Pillar center
-    { x: 900, y: 595, width: 40, height: 65 },                  // Pillar right
+    // (Obsidian pillars are visual-only — tall narrow blocks cause player sticking)
     // === Many short stepping platforms — easy to reach from ground ===
     // Low tier (just above ground — easy first jumps)
     { x: 60, y: 580, width: 80, height: 24 },                   // Low left
