@@ -71,6 +71,8 @@ export function Match() {
     );
 
     gameLoopRef.current = loop;
+    // Expose game state for E2E testing
+    (window as any).__gameLoop = loop;
     loop.start();
 
     return () => {
