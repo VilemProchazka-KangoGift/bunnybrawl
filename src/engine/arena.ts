@@ -77,19 +77,12 @@ export const WINTER_LAKE_ARENA: Arena = {
     { x: 640, y: 340 }, { x: 640, y: 640 },
   ],
   hazardZones: [
-    // Icicle spikes under the frozen bridge (wider, more prominent)
+    // Icicle spikes under the frozen bridge
     { x: 455, y: 384, width: 80, height: 14, type: 'lava' },
     { x: 580, y: 384, width: 80, height: 14, type: 'lava' },
     { x: 705, y: 384, width: 80, height: 14, type: 'lava' },
-    // Icicles under left staircase step 3
-    { x: 55, y: 444, width: 60, height: 10, type: 'lava' },
-    // Icicles under right staircase step 3
-    { x: 1125, y: 444, width: 60, height: 10, type: 'lava' },
     // Icicles under mid island
     { x: 570, y: 524, width: 70, height: 10, type: 'lava' },
-    // Icicles under stepping stones
-    { x: 285, y: 464, width: 50, height: 10, type: 'lava' },
-    { x: 935, y: 464, width: 50, height: 10, type: 'lava' },
   ],
 };
 
