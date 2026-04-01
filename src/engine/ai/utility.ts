@@ -28,6 +28,11 @@ export function evaluateActions(
   // Roam: always-on baseline so bots keep moving when nothing else is happening
   evaluateRoam(awareness, scores);
 
+  // Suppress jumping in tight spaces — platform close above means no room to jump
+  if (awareness.nearestPlatformAbove && awareness.nearestPlatformAbove.dy > -80) {
+    scores.jump = 0;
+  }
+
   return scores;
 }
 
