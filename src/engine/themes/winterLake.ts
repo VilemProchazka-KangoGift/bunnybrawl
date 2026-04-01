@@ -294,7 +294,26 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
       berries: ['#CC3333', '#DD4444', '#BB2222'],
     };
     drawFgBush(ctx, 350, gy, 34, snowBushColors);
+    // Snow cap on bush
+    ctx.fillStyle = 'rgba(230, 240, 250, 0.75)';
+    ctx.beginPath();
+    ctx.ellipse(350, gy - 34 * 0.55, 34 * 0.55, 34 * 0.22, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(245, 250, 255, 0.5)';
+    ctx.beginPath();
+    ctx.ellipse(355, gy - 34 * 0.65, 34 * 0.25, 34 * 0.12, 0, 0, Math.PI * 2);
+    ctx.fill();
+
     drawFgBush(ctx, 960, gy, 30, snowBushColors);
+    // Snow cap on bush
+    ctx.fillStyle = 'rgba(230, 240, 250, 0.75)';
+    ctx.beginPath();
+    ctx.ellipse(960, gy - 30 * 0.55, 30 * 0.55, 30 * 0.22, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(245, 250, 255, 0.5)';
+    ctx.beginPath();
+    ctx.ellipse(965, gy - 30 * 0.65, 30 * 0.25, 30 * 0.12, 0, 0, Math.PI * 2);
+    ctx.fill();
 
     drawSnowDrift(ctx, 15, gy, 45, 6);
     drawSnowDrift(ctx, 1250, gy, 40, 5);
