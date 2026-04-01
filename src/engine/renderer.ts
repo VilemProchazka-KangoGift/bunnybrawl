@@ -2350,43 +2350,6 @@ export class Renderer {
       }
     }
 
-    // Kill feed with character color dots (j)
-    const recentKills = state.killFeed.slice(-3).reverse();
-    for (let i = 0; i < recentKills.length; i++) {
-      const entry = recentKills[i];
-      const fy = 100 + i * 25;
-      const attacker = CHARACTERS[entry.attacker];
-      const victim = CHARACTERS[entry.victim];
-
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-      ctx.beginPath();
-      ctx.roundRect(CANVAS_WIDTH - 250, fy, 240, 22, 4);
-      ctx.fill();
-
-      // Attacker color dot (j)
-      ctx.fillStyle = attacker.color;
-      ctx.beginPath();
-      ctx.arc(CANVAS_WIDTH - 245, fy + 11, 4, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.font = '12px monospace';
-      ctx.textAlign = 'right';
-      ctx.fillStyle = attacker.color;
-      ctx.fillText(attacker.name, CANVAS_WIDTH - 140, fy + 15);
-      ctx.fillStyle = '#FFF';
-      ctx.fillText(' splatted ', CANVAS_WIDTH - 80, fy + 15);
-
-      // Victim color dot (j)
-      ctx.fillStyle = victim.color;
-      ctx.beginPath();
-      ctx.arc(CANVAS_WIDTH - 18, fy + 11, 4, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.textAlign = 'right';
-      ctx.fillStyle = victim.color;
-      ctx.fillText(victim.name, CANVAS_WIDTH - 24, fy + 15);
-    }
-
     // Animated score numbers (i)
     if (state.scoreAnimations) {
       for (const anim of state.scoreAnimations) {
