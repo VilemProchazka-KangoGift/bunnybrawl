@@ -316,7 +316,21 @@ export class GameLoop {
 
   private spawnSpring(): void {
     if (this.floatingPlatforms.length === 0) return;
-    const fp = this.floatingPlatforms[Math.floor(Math.random() * this.floatingPlatforms.length)];
+    // Filter to platforms with enough vertical clearance for a spring bounce (~200px)
+    const minClearance = 200;
+    const candidates = this.floatingPlatforms.filter(({ plat }) => {
+      for (const other of this.arena.platforms) {
+        if (other === plat) continue;
+        // Check if another platform is directly above within clearance range
+        if (other.y < plat.y && plat.y - other.y < minClearance &&
+            other.x < plat.x + plat.width && other.x + other.width > plat.x) {
+          return false;
+        }
+      }
+      return true;
+    });
+    if (candidates.length === 0) return;
+    const fp = candidates[Math.floor(Math.random() * candidates.length)];
     this.state.springs.push({
       x: fp.plat.x + 20 + Math.random() * (fp.plat.width - 40),
       y: fp.plat.y,
