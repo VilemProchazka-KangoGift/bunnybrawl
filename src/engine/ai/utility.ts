@@ -18,12 +18,18 @@ export function evaluateActions(
     evaluateChaseTarget(awareness, scores, personality);
   }
   evaluateThreatEvasion(awareness, scores, personality);
+  evaluateAirborneAboveDodge(awareness, scores, personality);
   evaluatePlatformSeeking(awareness, scores, personality);
   evaluateHazardAvoidance(awareness, scores, personality);
   evaluateCarrotPursuit(awareness, scores, personality);
   evaluateWindCompensation(awareness, scores);
   evaluateEdgeAvoidance(awareness, scores, personality);
   evaluateZoneExploitation(awareness, scores, personality);
+  evaluateLandingPrediction(awareness, scores);
+  evaluateInvincibilityAggression(awareness, scores, personality);
+  evaluateClustering(awareness, scores);
+  evaluatePanic(awareness, scores, personality);
+  evaluateCamping(awareness, scores, personality);
 
   // Roam: always-on baseline so bots keep moving when nothing else is happening
   evaluateRoam(awareness, scores);
@@ -210,6 +216,75 @@ function evaluateRoam(a: AwarenessSnapshot, s: ActionScores): void {
   const weight = 0.4;
   if (a.roamTarget.dx > 30) s.moveRight += weight;
   else if (a.roamTarget.dx < -30) s.moveLeft += weight;
+}
+
+/** Don't walk under airborne enemies — sidestep with some imprecision */
+function evaluateAirborneAboveDodge(a: AwarenessSnapshot, s: ActionScores, p: AIPersonality): void {
+  if (a.airborneAbove.length === 0 || !a.self.onGround) return;
+  const weight = 0.8 * p.cautiousness;
+  for (const ab of a.airborneAbove) {
+    if (ab.dist > 200) continue;
+    const urgency = Math.max(0, 1 - ab.dist / 200);
+    // Move away from their X, but with some randomness (not pixel-perfect dodge)
+    const dodgeDir = ab.dx > 0 ? -1 : 1;
+    const jitter = (Math.random() - 0.5) * 0.3; // imprecise reaction
+    if (dodgeDir + jitter > 0) s.moveRight += weight * urgency;
+    else s.moveLeft += weight * urgency;
+  }
+}
+
+/** When airborne and falling, steer toward the nearest landable platform */
+function evaluateLandingPrediction(a: AwarenessSnapshot, s: ActionScores): void {
+  if (!a.self.isAirborne || a.self.vy < 0) return; // only when falling
+  if (!a.landingPlatform) return;
+  const weight = 0.5;
+  const { centerDx } = a.landingPlatform;
+  if (centerDx > 20) s.moveRight += weight;
+  else if (centerDx < -20) s.moveLeft += weight;
+}
+
+/** After respawning (invincible), aggressively chase nearest enemy */
+function evaluateInvincibilityAggression(a: AwarenessSnapshot, s: ActionScores, _p: AIPersonality): void {
+  if (!a.self.invincible || !a.nearestEnemy) return;
+  const weight = 1.0; // override personality — everyone is aggressive when invincible
+  const { dx, dy } = a.nearestEnemy;
+  if (dx > 15) s.moveRight += weight;
+  else if (dx < -15) s.moveLeft += weight;
+  // Jump toward if they're above
+  if (dy < -40 && a.self.onGround) {
+    s.jump += weight * 0.4;
+  }
+}
+
+/** If 2+ bots are clustered together, add scatter force */
+function evaluateClustering(a: AwarenessSnapshot, s: ActionScores): void {
+  if (a.nearbyBotCount < 2) return;
+  // Scatter: add random directional force proportional to crowding
+  const scatterWeight = 0.3 * Math.min(a.nearbyBotCount, 4);
+  if (Math.random() > 0.5) s.moveRight += scatterWeight;
+  else s.moveLeft += scatterWeight;
+}
+
+/** When losing badly, increase erratic movement */
+function evaluatePanic(a: AwarenessSnapshot, s: ActionScores, _p: AIPersonality): void {
+  const scoreDiff = a.leaderScore - a.self.score;
+  if (scoreDiff < 6) return; // only panic when significantly behind
+  const panicLevel = Math.min(1, (scoreDiff - 5) / 10);
+  const noise = panicLevel * 0.4;
+  s.moveLeft += (Math.random() - 0.5) * noise;
+  s.moveRight += (Math.random() - 0.5) * noise;
+  s.jump += Math.random() * noise * 0.2;
+}
+
+/** Cautious bots on elevated platforms occasionally camp (idle) */
+function evaluateCamping(a: AwarenessSnapshot, s: ActionScores, p: AIPersonality): void {
+  if (!a.onElevatedPlatform || p.cautiousness < 1.3) return;
+  // Only camp if no enemy is very close
+  if (a.nearestEnemy && a.nearestEnemy.dist < 150) return;
+  // Dampen movement — prefer staying put
+  const campWeight = 0.3 * (p.cautiousness - 1.0);
+  s.moveLeft -= campWeight;
+  s.moveRight -= campWeight;
 }
 
 function evaluateZoneExploitation(a: AwarenessSnapshot, s: ActionScores, p: AIPersonality): void {

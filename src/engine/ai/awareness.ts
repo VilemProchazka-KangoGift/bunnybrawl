@@ -1,6 +1,20 @@
 import type { Player, MatchState, Arena, EffectZone } from '../types';
+import { isBotSlot } from '../types';
 import type { AwarenessSnapshot } from './types';
-import { PLAYER_WIDTH, PLAYER_HEIGHT } from '../constants';
+import { PLAYER_WIDTH, PLAYER_HEIGHT, CANVAS_WIDTH } from '../constants';
+
+/** Shortest horizontal distance accounting for screen wrap */
+function wrapDx(dx: number): number {
+  if (dx > CANVAS_WIDTH / 2) return dx - CANVAS_WIDTH;
+  if (dx < -CANVAS_WIDTH / 2) return dx + CANVAS_WIDTH;
+  return dx;
+}
+
+function wrapDist(ax: number, ay: number, bx: number, by: number): { dx: number; dy: number; dist: number } {
+  const dx = wrapDx(bx - ax);
+  const dy = by - ay;
+  return { dx, dy, dist: Math.sqrt(dx * dx + dy * dy) };
+}
 
 export function buildAwareness(
   self: Player,
@@ -12,14 +26,13 @@ export function buildAwareness(
     p => p.id !== self.id && p.active && p.state !== 'splat' && p.state !== 'respawning',
   );
   const selfOnGround = self.state !== 'airborne';
+  const selfAirborne = self.state === 'airborne';
 
-  // Find nearest enemy within awareness radius
+  // Find nearest enemy within awareness radius (wrap-aware)
   let nearestEnemy: AwarenessSnapshot['nearestEnemy'] = null;
   let nearestDist = Infinity;
   for (const e of enemies) {
-    const dx = e.x - self.x;
-    const dy = e.y - self.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
+    const { dx, dy, dist } = wrapDist(self.x, self.y, e.x, e.y);
     if (dist < awarenessRadius && dist < nearestDist) {
       nearestDist = dist;
       nearestEnemy = { x: e.x, y: e.y, vx: e.vx, vy: e.vy, dx, dy, dist, score: e.score };
@@ -30,11 +43,8 @@ export function buildAwareness(
   let stompTarget: AwarenessSnapshot['stompTarget'] = null;
   let bestStompDist = Infinity;
   for (const e of enemies) {
-    const dx = e.x - self.x;
-    const dy = e.y - self.y;
-    // Target must be below (dy > 0), roughly aligned horizontally
+    const { dx, dy, dist } = wrapDist(self.x, self.y, e.x, e.y);
     if (dy > 0 && dy < 200 && Math.abs(dx) < 80) {
-      const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist < awarenessRadius && dist < bestStompDist) {
         bestStompDist = dist;
         stompTarget = { x: e.x, y: e.y, dx, dist };
@@ -46,11 +56,8 @@ export function buildAwareness(
   let stompThreat: AwarenessSnapshot['stompThreat'] = null;
   let closestThreatDist = Infinity;
   for (const e of enemies) {
-    const dx = e.x - self.x;
-    const dy = e.y - self.y;
-    // Threat: above (dy < 0), horizontally close, and falling (vy > 0)
+    const { dx, dy, dist } = wrapDist(self.x, self.y, e.x, e.y);
     if (dy < 0 && dy > -200 && Math.abs(dx) < 60 && e.vy > 0) {
-      const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist < awarenessRadius && dist < closestThreatDist) {
         closestThreatDist = dist;
         stompThreat = { x: e.x, y: e.y, dist };
@@ -58,14 +65,22 @@ export function buildAwareness(
     }
   }
 
-  // Find nearest carrot
+  // Airborne enemies above — broader than stompThreat (includes non-falling)
+  const airborneAbove: AwarenessSnapshot['airborneAbove'] = [];
+  for (const e of enemies) {
+    if (e.state !== 'airborne') continue;
+    const { dx, dy, dist } = wrapDist(self.x, self.y, e.x, e.y);
+    if (dy < 0 && dy > -250 && Math.abs(dx) < 100 && dist < 300) {
+      airborneAbove.push({ x: e.x, dx, dy, dist });
+    }
+  }
+
+  // Find nearest carrot (wrap-aware)
   let nearestCarrot: AwarenessSnapshot['nearestCarrot'] = null;
   let bestCarrotDist = Infinity;
   for (const c of state.carrots) {
     if (!c.active) continue;
-    const dx = c.x - self.x;
-    const dy = c.y - self.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
+    const { dist } = wrapDist(self.x, self.y, c.x, c.y);
     if (dist < awarenessRadius && dist < bestCarrotDist) {
       bestCarrotDist = dist;
       nearestCarrot = { x: c.x, y: c.y, dist };
@@ -76,7 +91,7 @@ export function buildAwareness(
   const nearbyHazards: AwarenessSnapshot['nearbyHazards'] = [];
   let nearestHazard: AwarenessSnapshot['nearestHazard'] = null;
   let bestHazardDist = Infinity;
-  const HAZARD_DETECT_RADIUS = 200; // always detect hazards within 200px regardless of awareness
+  const HAZARD_DETECT_RADIUS = 200;
   const hazardRadius = Math.max(awarenessRadius, HAZARD_DETECT_RADIUS);
   const checkHazard = (type: string, hx: number, hy: number) => {
     const dx = hx - self.x;
@@ -110,7 +125,6 @@ export function buildAwareness(
   let bestAboveDy = Infinity;
   let bestBelowDy = Infinity;
   for (const plat of arena.platforms) {
-    // Platform must be horizontally reachable
     if (self.x + PLAYER_WIDTH < plat.x - 80 || self.x > plat.x + plat.width + 80) continue;
     const platTop = plat.y;
     const dy = platTop - (self.y + PLAYER_HEIGHT);
@@ -124,10 +138,29 @@ export function buildAwareness(
     }
   }
 
+  // Landing platform: when airborne, find the best platform to land on
+  let landingPlatform: AwarenessSnapshot['landingPlatform'] = null;
+  if (selfAirborne && self.vy >= 0) {
+    let bestLandDist = Infinity;
+    for (const plat of arena.platforms) {
+      const platTop = plat.y;
+      const dy = platTop - (self.y + PLAYER_HEIGHT);
+      if (dy < 5 || dy > 300) continue; // must be below us, within range
+      const centerX = plat.x + plat.width / 2;
+      const centerDx = wrapDx(centerX - (self.x + PLAYER_WIDTH / 2));
+      // Can we reach this platform horizontally? rough estimate
+      if (Math.abs(centerDx) > plat.width / 2 + 150) continue;
+      const dist = Math.sqrt(centerDx * centerDx + dy * dy);
+      if (dist < bestLandDist) {
+        bestLandDist = dist;
+        landingPlatform = { x: plat.x, y: plat.y, width: plat.width, centerDx };
+      }
+    }
+  }
+
   // Check if near edge (allowFallOff arenas)
   let nearEdge = false;
   if (arena.allowFallOff) {
-    // Check if there's ground below the player
     let hasGroundBelow = false;
     for (const plat of arena.platforms) {
       if (self.x + PLAYER_WIDTH > plat.x && self.x < plat.x + plat.width) {
@@ -136,7 +169,6 @@ export function buildAwareness(
       }
     }
     if (!hasGroundBelow && selfOnGround) nearEdge = true;
-    // Also near edge if close to platform edges
     for (const plat of arena.platforms) {
       if (self.y + PLAYER_HEIGHT >= plat.y - 5 && self.y + PLAYER_HEIGHT <= plat.y + 10) {
         if (self.x < plat.x + 20 || self.x + PLAYER_WIDTH > plat.x + plat.width - 20) {
@@ -176,19 +208,16 @@ export function buildAwareness(
     }
   }
 
-  // Roam target: always find something to walk toward (ignores awareness radius).
-  // Prefer nearest carrot, then nearest enemy on the full map.
+  // Roam target (wrap-aware): nearest carrot, then nearest enemy across full map
   let roamTarget: AwarenessSnapshot['roamTarget'] = null;
   if (nearestCarrot) {
-    roamTarget = { x: nearestCarrot.x, y: nearestCarrot.y, dx: nearestCarrot.x - self.x };
+    const dx = wrapDx(nearestCarrot.x - self.x);
+    roamTarget = { x: nearestCarrot.x, y: nearestCarrot.y, dx };
   }
   if (!roamTarget) {
-    // Find nearest living enemy across the entire map
     let bestDist = Infinity;
     for (const e of enemies) {
-      const dx = e.x - self.x;
-      const dy = e.y - self.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      const { dx, dist } = wrapDist(self.x, self.y, e.x, e.y);
       if (dist < bestDist) {
         bestDist = dist;
         roamTarget = { x: e.x, y: e.y, dx };
@@ -196,15 +225,38 @@ export function buildAwareness(
     }
   }
 
+  // Nearby bot count (clustering detection)
+  let nearbyBotCount = 0;
+  for (const p of state.players) {
+    if (p.id === self.id || !p.active || !isBotSlot(p.id)) continue;
+    const { dist } = wrapDist(self.x, self.y, p.x, p.y);
+    if (dist < 120) nearbyBotCount++;
+  }
+
+  // Leader score
+  let leaderScore = 0;
+  for (const p of state.players) {
+    if (p.active && p.score > leaderScore) leaderScore = p.score;
+  }
+
+  // Elevated platform check (above ground level y=650)
+  let onElevatedPlatform = false;
+  if (selfOnGround && self.y + PLAYER_HEIGHT < 640) {
+    onElevatedPlatform = true;
+  }
+
   return {
     self: {
       x: self.x, y: self.y, vx: self.vx, vy: self.vy,
       onGround: selfOnGround, score: self.score,
       slowed: self.slowTimer > 0, fat: self.fatTimer > 0,
+      invincible: self.invincibleTimer > 0, isAirborne: selfAirborne,
     },
-    nearestEnemy, roamTarget, stompTarget, stompThreat, nearestCarrot,
-    nearestHazard, nearbyHazards, nearestPlatformAbove, nearestPlatformBelow, nearEdge,
+    nearestEnemy, roamTarget, stompTarget, stompThreat, airborneAbove, nearestCarrot,
+    nearestHazard, nearbyHazards, nearestPlatformAbove, nearestPlatformBelow,
+    landingPlatform, nearEdge,
     windDir, windStrength, inZeroG, inCurrent, nearGeyser,
+    nearbyBotCount, leaderScore, onElevatedPlatform,
   };
 }
 

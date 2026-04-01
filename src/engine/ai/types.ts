@@ -22,23 +22,33 @@ export interface DifficultyParams {
 }
 
 export interface AwarenessSnapshot {
-  self: { x: number; y: number; vx: number; vy: number; onGround: boolean; score: number; slowed: boolean; fat: boolean };
+  self: { x: number; y: number; vx: number; vy: number; onGround: boolean; score: number; slowed: boolean; fat: boolean; invincible: boolean; isAirborne: boolean };
   nearestEnemy: { x: number; y: number; vx: number; vy: number; dx: number; dy: number; dist: number; score: number } | null;
   /** Always set regardless of awareness radius — used for roaming when nothing else to do */
   roamTarget: { x: number; y: number; dx: number } | null;
   stompTarget: { x: number; y: number; dx: number; dist: number } | null;
   stompThreat: { x: number; y: number; dist: number } | null;
+  /** Airborne enemies above us (not necessarily falling yet) — dodge zone */
+  airborneAbove: Array<{ x: number; dx: number; dy: number; dist: number }>;
   nearestCarrot: { x: number; y: number; dist: number } | null;
   nearestHazard: { type: string; x: number; y: number; dist: number } | null;
   nearbyHazards: Array<{ type: string; x: number; y: number; dist: number }>;
   nearestPlatformAbove: { x: number; y: number; width: number; dy: number } | null;
   nearestPlatformBelow: { x: number; y: number; width: number; dy: number } | null;
+  /** When airborne, nearest platform we could land on */
+  landingPlatform: { x: number; y: number; width: number; centerDx: number } | null;
   nearEdge: boolean;
   windDir: number;
   windStrength: number;
   inZeroG: boolean;
   inCurrent: number; // vx push force, 0 if not in current
   nearGeyser: { x: number; y: number; active: boolean; timer: number } | null;
+  /** How many other bots are within 120px */
+  nearbyBotCount: number;
+  /** Score of the current leader (for panic detection) */
+  leaderScore: number;
+  /** Is self on an elevated platform (above ground level)? */
+  onElevatedPlatform: boolean;
 }
 
 export interface ActionScores {

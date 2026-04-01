@@ -20,6 +20,8 @@ export class AIController {
   private lastX = 0;
   private lastY = 0;
   private jumpCooldown = 0; // prevent jump spam
+  private lastScore = 0;
+  private tauntTimer = 0; // frames to freeze after a kill (celebration)
 
   constructor(slot: BotSlot, characterName: string, difficulty: BotDifficulty) {
     this.slot = slot;
@@ -40,6 +42,17 @@ export class AIController {
     const self = state.players.find(p => p.id === this.slot);
     if (!self || !self.active || self.state === 'splat' || self.state === 'respawning') {
       return { ...NO_INPUT };
+    }
+
+    // Taunt: freeze briefly after getting a kill (celebration)
+    if (self.score > this.lastScore) {
+      this.tauntTimer = 20 + Math.floor(Math.random() * 15); // 0.3-0.6s
+      this.lastScore = self.score;
+    }
+    if (this.tauntTimer > 0) {
+      this.tauntTimer--;
+      // Crouch-spam during taunt for style
+      return { left: false, right: false, jump: false, down: this.tauntTimer % 6 < 3 };
     }
 
     // Stuck detection: if position hasn't changed in ~1 second (60 frames)
