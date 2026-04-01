@@ -958,9 +958,9 @@ export class GameLoop {
         if (ps) ps.distanceTraveled += (Math.abs(player.vx) * dt + Math.abs(player.vy) * dt);
       }
 
-      // Spring collision (only fully grown)
+      // Spring collision (only fully grown, not already bouncing)
       for (const spring of this.state.springs) {
-        if (spring.growTimer > 0) continue;
+        if (spring.growTimer > 0 || spring.bounceTimer > 0) continue;
         if (aabbOverlap(player.x, player.y, player.width, player.height, spring.x - SPRING_SIZE / 2, spring.y - SPRING_SIZE, SPRING_SIZE, SPRING_SIZE) && player.vy >= 0) {
           player.vy = SPRING_BOUNCE;
           player.state = 'airborne';
