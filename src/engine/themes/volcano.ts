@@ -204,27 +204,6 @@ export const VOLCANO_THEME: ThemeConfig = {
     drawLavaPool(550, 80);
     drawLavaPool(900, 120);
 
-    // Obsidian pillars (visual-only — not platforms to avoid player sticking)
-    const drawPillar = (px: number, pw: number, ph: number) => {
-      ctx.save();
-      // Dark obsidian body
-      ctx.fillStyle = '#1A1010';
-      ctx.fillRect(px, y - ph, pw, ph);
-      // Lighter face highlight
-      ctx.fillStyle = '#2A1818';
-      ctx.fillRect(px + 2, y - ph + 2, pw * 0.4, ph - 4);
-      // Glassy obsidian shine
-      ctx.fillStyle = 'rgba(80, 60, 80, 0.3)';
-      ctx.fillRect(px + pw * 0.6, y - ph + 4, pw * 0.15, ph - 8);
-      // Top edge
-      ctx.fillStyle = '#352020';
-      ctx.fillRect(px, y - ph, pw, 3);
-      ctx.restore();
-    };
-    drawPillar(200, 40, 60);
-    drawPillar(600, 35, 55);
-    drawPillar(900, 40, 65);
-
     // Dead trees (charred, no leaves)
     const drawDeadTree = (dx: number, dy: number, size: number) => {
       ctx.save();

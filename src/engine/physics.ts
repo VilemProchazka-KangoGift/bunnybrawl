@@ -103,11 +103,15 @@ export function collidePlatforms(player: Player, platforms: Platform[]): void {
       const overlapBottom = (plat.y + plat.height) - player.y;
 
       // Prefer top landing when player feet are near platform top —
-      // prevents shaking at platform edges where side and top overlap compete
+      // prevents shaking at platform edges where side and top overlap compete.
+      // But only when horizontal penetration exceeds vertical (came from above,
+      // not walking into the side of a tall block).
       const feetNearTop = overlapTop < player.height * 0.5;
+      const sideOverlap = Math.min(overlapLeft, overlapRight);
+      const landingFromAbove = feetNearTop && sideOverlap > overlapTop;
       const minOverlap = Math.min(overlapLeft, overlapRight, overlapTop, overlapBottom);
 
-      if ((minOverlap === overlapTop || feetNearTop) && player.vy >= 0 && overlapTop < overlapBottom) {
+      if ((minOverlap === overlapTop || landingFromAbove) && player.vy >= 0 && overlapTop < overlapBottom) {
         // Landing on top
         player.y = plat.y - player.height;
         player.vy = 0;
