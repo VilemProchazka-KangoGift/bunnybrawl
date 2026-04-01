@@ -246,7 +246,7 @@ export class GameLoop {
     this.renderer.renderBackground(this.arena);
     this.running = true;
     this.lastTime = performance.now();
-    audio.play('music');
+    audio.playMusic(this.arena.themeId);
     audio.play('ambient');
     this.loop(this.lastTime);
   }
@@ -255,7 +255,7 @@ export class GameLoop {
     this.running = false;
     if (this.rafId) cancelAnimationFrame(this.rafId);
     this.input.detach();
-    audio.stop('music');
+    audio.stopMusic();
     audio.stop('ambient');
     audio.stop('wind');
     audio.stop('zero_g');
@@ -263,8 +263,8 @@ export class GameLoop {
   }
 
   getState(): MatchState { return this.state; }
-  pause(): void { this.paused = true; audio.stop('music'); }
-  resume(): void { this.paused = false; this.lastTime = performance.now(); audio.play('music'); }
+  pause(): void { this.paused = true; audio.stopMusic(); }
+  resume(): void { this.paused = false; this.lastTime = performance.now(); audio.playMusic(this.arena.themeId); }
   isPaused(): boolean { return this.paused; }
 
   private loop = (currentTime: number): void => {
@@ -326,6 +326,22 @@ export class GameLoop {
 
   // ---- Hazard spawning ----
 
+  /** Check if any active player is standing on the given platform near x */
+  private playerNearSpawn(plat: Platform, spawnX: number): boolean {
+    const margin = 48; // don't spawn within 48px of a player
+    for (const p of this.state.players) {
+      if (!p.active || p.state === 'splat' || p.state === 'respawning') continue;
+      const feetY = p.y + p.height;
+      // Player is on this platform and near the spawn x
+      if (feetY >= plat.y - 4 && feetY <= plat.y + 6 &&
+          p.x + p.width > plat.x && p.x < plat.x + plat.width &&
+          Math.abs((p.x + p.width / 2) - spawnX) < margin) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   private spawnSpring(): void {
     if (this.floatingPlatforms.length === 0) return;
     // Filter to platforms with enough vertical clearance for a spring bounce (~200px)
@@ -342,29 +358,34 @@ export class GameLoop {
       return true;
     });
     if (candidates.length === 0) return;
-    const fp = candidates[Math.floor(Math.random() * candidates.length)];
-    this.state.springs.push({
-      x: fp.plat.x + 20 + Math.random() * (fp.plat.width - 40),
-      y: fp.plat.y,
-      platformIndex: fp.idx,
-      bounceTimer: 0,
-      life: HAZARD_LIFETIME,
-      growTimer: HAZARD_GROW_TIME,
-    });
+    // Try a few times to avoid spawning on top of a player
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const fp = candidates[Math.floor(Math.random() * candidates.length)];
+      const x = fp.plat.x + 20 + Math.random() * (fp.plat.width - 40);
+      if (!this.playerNearSpawn(fp.plat, x)) {
+        this.state.springs.push({
+          x, y: fp.plat.y, platformIndex: fp.idx,
+          bounceTimer: 0, life: HAZARD_LIFETIME, growTimer: HAZARD_GROW_TIME,
+        });
+        return;
+      }
+    }
   }
 
   private spawnThorn(): void {
     if (this.floatingPlatforms.length === 0) return;
-    const fp = this.floatingPlatforms[Math.floor(Math.random() * this.floatingPlatforms.length)];
-    this.state.thorns.push({
-      x: fp.plat.x + 10 + Math.random() * (fp.plat.width - 44),
-      y: fp.plat.y - 12,
-      width: 28, height: 12,
-      platformIndex: fp.idx,
-      life: HAZARD_LIFETIME,
-      growTimer: HAZARD_GROW_TIME,
-      hit: false,
-    });
+    // Try a few times to avoid spawning on top of a player
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const fp = this.floatingPlatforms[Math.floor(Math.random() * this.floatingPlatforms.length)];
+      const x = fp.plat.x + 10 + Math.random() * (fp.plat.width - 44);
+      if (!this.playerNearSpawn(fp.plat, x)) {
+        this.state.thorns.push({
+          x, y: fp.plat.y - 12, width: 28, height: 12,
+          platformIndex: fp.idx, life: HAZARD_LIFETIME, growTimer: HAZARD_GROW_TIME, hit: false,
+        });
+        return;
+      }
+    }
   }
 
   // ---- Particle spawners ----
@@ -1242,6 +1263,12 @@ export class GameLoop {
     }
 
     collidePlayersHorizontal(this.state.players);
+    // Re-resolve platform collisions after player-player pushes
+    // (prevents getting shoved inside solid blocks like the mausoleum)
+    for (const player of this.state.players) {
+      if (!player.active || player.state === 'splat' || player.state === 'respawning') continue;
+      collidePlatforms(player, this.arena.platforms);
+    }
     updateSplatTimers(this.state.players, this.arena.spawnPoints, dt);
     this.updateParticles(dt);
 
@@ -1383,7 +1410,7 @@ export class GameLoop {
     this.state.matchOver = true;
     this.state.winner = winner;
     this.state.screenFlash = SCREEN_FLASH_DURATION;
-    audio.stop('music');
+    audio.stopMusic();
     audio.play('victory');
     this.onMatchEnd(winner, this.state);
   }

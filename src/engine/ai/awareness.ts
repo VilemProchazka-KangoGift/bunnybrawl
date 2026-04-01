@@ -26,7 +26,7 @@ export function buildAwareness(
   const selfAirborne = self.state === 'airborne';
 
   // Single pass over all players: nearest enemy, stomp target/threat, airborne above,
-  // roam target, clustering, leader score — avoids 7 separate loops
+  // roam target, priority target, clustering, leader score — avoids separate loops
   let nearestEnemy: AwarenessSnapshot['nearestEnemy'] = null;
   let nearestDist = Infinity;
   let stompTarget: AwarenessSnapshot['stompTarget'] = null;
@@ -36,6 +36,8 @@ export function buildAwareness(
   const airborneAbove: AwarenessSnapshot['airborneAbove'] = [];
   let roamTarget: AwarenessSnapshot['roamTarget'] = null;
   let bestRoamDist = Infinity;
+  let priorityTarget: AwarenessSnapshot['priorityTarget'] = null;
+  let bestJuiciness = 0;
   let nearbyBotCount = 0;
   let leaderScore = 0;
 
@@ -58,6 +60,23 @@ export function buildAwareness(
     if (dist < awarenessRadius && dist < nearestDist) {
       nearestDist = dist;
       nearestEnemy = { x: p.x, y: p.y, vx: p.vx, vy: p.vy, dx, dy, dist, score: p.score };
+    }
+
+    // Priority target: fat, slowed, high-score, or streaking enemies are juicy
+    if (dist < awarenessRadius && p.invincibleTimer <= 0) {
+      let juiciness = 0;
+      if (p.fatTimer > 0) juiciness += 3;          // fat = big easy target
+      if (p.slowTimer > 0) juiciness += 2;          // slowed = can't escape
+      if (p.killStreak >= 3) juiciness += 1.5;      // end their streak
+      if (p.score >= 10) juiciness += p.score * 0.1; // high-score = high-value
+      // Discount by distance — nearby juicy targets are much better
+      if (juiciness > 0) {
+        juiciness *= Math.max(0.3, 1 - dist / 500);
+        if (juiciness > bestJuiciness) {
+          bestJuiciness = juiciness;
+          priorityTarget = { x: p.x, y: p.y, dx, dy, dist, juiciness };
+        }
+      }
     }
 
     // Stomp target: below, horizontally aligned
@@ -134,8 +153,8 @@ export function buildAwareness(
   let bestAboveDy = Infinity;
   let bestBelowDy = Infinity;
   for (const plat of arena.platforms) {
-    // 160px horizontal reach — wide enough for zigzag staircases
-    if (self.x + PLAYER_WIDTH < plat.x - 160 || self.x > plat.x + plat.width + 160) continue;
+    // 200px horizontal reach — wide enough for zigzag staircases and offset platforms
+    if (self.x + PLAYER_WIDTH < plat.x - 200 || self.x > plat.x + plat.width + 200) continue;
     const platTop = plat.y;
     const dy = platTop - (self.y + PLAYER_HEIGHT);
     if (dy < -20 && -dy < bestAboveDy) {
@@ -246,7 +265,7 @@ export function buildAwareness(
       slowed: self.slowTimer > 0, fat: self.fatTimer > 0,
       invincible: self.invincibleTimer > 0,
     },
-    nearestEnemy, roamTarget, stompTarget, stompThreat, airborneAbove, nearestCarrot,
+    nearestEnemy, priorityTarget, roamTarget, stompTarget, stompThreat, airborneAbove, nearestCarrot,
     nearestHazard, nearbyHazards, nearestPlatformAbove, nearestPlatformBelow,
     landingPlatform, nearEdge,
     windDir, windStrength, inZeroG, inCurrent, nearGeyser, geyserEscapeDx,

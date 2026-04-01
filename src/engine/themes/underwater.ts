@@ -600,15 +600,15 @@ export const UNDERWATER_THEME: ThemeConfig = {
   ghostConfig: {
     count: 2,
     speed: 25,
-    size: 32,
-    color: 'rgba(180, 140, 220, 0.5)',
-    glowColor: '#9966CC',
+    size: 36,
+    color: 'rgba(220, 120, 255, 0.7)',
+    glowColor: '#CC66FF',
   },
 
   drawCustomGhost: (ctx, x, y, size, alpha, time) => {
     ctx.save();
     ctx.translate(x, y);
-    ctx.globalAlpha = alpha * (0.4 + Math.sin(time * 1.2) * 0.15);
+    ctx.globalAlpha = alpha * (0.6 + Math.sin(time * 1.2) * 0.15);
 
     // Jellyfish bell — pulsing dome
     const pulse = 1 + Math.sin(time * 2.5) * 0.08;
@@ -617,16 +617,16 @@ export const UNDERWATER_THEME: ThemeConfig = {
 
     // Glow
     const glow = ctx.createRadialGradient(0, -bellH * 0.3, size * 0.1, 0, 0, size * 1.2);
-    glow.addColorStop(0, 'rgba(180, 140, 255, 0.25)');
-    glow.addColorStop(1, 'rgba(180, 140, 255, 0)');
+    glow.addColorStop(0, 'rgba(220, 160, 255, 0.4)');
+    glow.addColorStop(1, 'rgba(220, 160, 255, 0)');
     ctx.fillStyle = glow;
     ctx.fillRect(-size * 1.2, -size * 1.2, size * 2.4, size * 2.4);
 
     // Bell dome
     const bellGrad = ctx.createRadialGradient(0, -bellH * 0.5, bellW * 0.2, 0, -bellH * 0.3, bellW);
-    bellGrad.addColorStop(0, 'rgba(220, 180, 255, 0.7)');
-    bellGrad.addColorStop(0.6, 'rgba(160, 120, 220, 0.5)');
-    bellGrad.addColorStop(1, 'rgba(120, 80, 180, 0.3)');
+    bellGrad.addColorStop(0, 'rgba(240, 200, 255, 0.85)');
+    bellGrad.addColorStop(0.6, 'rgba(200, 140, 240, 0.65)');
+    bellGrad.addColorStop(1, 'rgba(160, 100, 220, 0.45)');
     ctx.fillStyle = bellGrad;
     ctx.beginPath();
     ctx.ellipse(0, -bellH * 0.3, bellW, bellH, 0, Math.PI, 0);
@@ -647,7 +647,7 @@ export const UNDERWATER_THEME: ThemeConfig = {
     for (let t = 0; t < tentCount; t++) {
       const tx = -bellW * 0.6 + t * (bellW * 1.2 / (tentCount - 1));
       const tentLen = size * (0.5 + (t % 2) * 0.25);
-      ctx.strokeStyle = `rgba(180, 140, 220, ${0.3 + (t % 2) * 0.15})`;
+      ctx.strokeStyle = `rgba(220, 160, 255, ${0.5 + (t % 2) * 0.15})`;
       ctx.beginPath();
       ctx.moveTo(tx, 0);
       for (let s = 1; s <= 4; s++) {

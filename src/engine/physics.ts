@@ -124,13 +124,20 @@ export function collidePlatforms(player: Player, platforms: Platform[]): void {
         player.y = plat.y + plat.height;
         player.vy = 0;
       } else if (minOverlap === overlapLeft) {
-        const sideMargin = 6;
-        player.x = plat.x - player.width + sideMargin;
-        player.vx = 0;
+        player.x = plat.x - player.width;
+        if (player.vx > 0) player.vx = 0;
       } else if (minOverlap === overlapRight) {
-        const sideMargin = 6;
-        player.x = plat.x + plat.width - sideMargin;
-        player.vx = 0;
+        player.x = plat.x + plat.width;
+        if (player.vx < 0) player.vx = 0;
+      } else {
+        // Fallback: deeply embedded or ambiguous — eject via smallest overlap
+        if (overlapTop <= overlapBottom) {
+          player.y = plat.y - player.height;
+          player.vy = 0;
+        } else {
+          player.y = plat.y + plat.height;
+          player.vy = 0;
+        }
       }
     }
   }

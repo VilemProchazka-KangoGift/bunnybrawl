@@ -16,6 +16,7 @@ export function evaluateActions(
   } else {
     evaluateStompOpportunity(awareness, scores, personality);
     evaluateChaseTarget(awareness, scores, personality);
+    evaluateTargetPriority(awareness, scores, personality);
   }
   evaluateThreatEvasion(awareness, scores, personality);
   evaluateAirborneAboveDodge(awareness, scores, personality);
@@ -35,9 +36,15 @@ export function evaluateActions(
   // Roam: always-on baseline so bots keep moving when nothing else is happening
   evaluateRoam(awareness, scores);
 
-  // Suppress jumping in tight spaces — platform close above means no room to jump
+  // Suppress jumping in tight spaces — but only when the platform is directly overhead
+  // (horizontal overlap), not when it's a side target the bot wants to jump onto
   if (awareness.nearestPlatformAbove && awareness.nearestPlatformAbove.dy > -80) {
-    scores.jump = 0;
+    const plat = awareness.nearestPlatformAbove;
+    const selfCx = awareness.self.x + 16; // PLAYER_WIDTH/2
+    const underPlatform = selfCx > plat.x && selfCx < plat.x + plat.width;
+    if (underPlatform) {
+      scores.jump = 0;
+    }
   }
 
   return scores;
@@ -114,19 +121,41 @@ function evaluateChaseTarget(a: AwarenessSnapshot, s: ActionScores, p: AIPersona
   }
 }
 
+/** Hunt fat, slowed, high-score, or streaking opponents — overrides normal chase when a juicy target exists */
+function evaluateTargetPriority(a: AwarenessSnapshot, s: ActionScores, p: AIPersonality): void {
+  if (!a.priorityTarget) return;
+  // Scale by aggressiveness — aggressive bots hunt harder
+  const weight = 0.8 * p.aggressiveness * Math.min(a.priorityTarget.juiciness, 3);
+  const { dx, dy } = a.priorityTarget;
+
+  // Move toward target
+  if (dx > 15) s.moveRight += weight;
+  else if (dx < -15) s.moveLeft += weight;
+
+  // Jump toward elevated targets on same horizontal
+  if (dy < -40 && a.self.onGround && Math.abs(dx) < 80) {
+    s.jump += weight * 0.3;
+  }
+  // Drop toward targets below
+  if (dy > 60 && Math.abs(dx) < 50) {
+    s.drop += weight * 0.2;
+  }
+}
+
 function evaluatePlatformSeeking(a: AwarenessSnapshot, s: ActionScores, p: AIPersonality): void {
   if (!a.nearestPlatformAbove || !a.self.onGround) return;
-  // Seek platforms if: enemy above, roam target above, or strong preference
+
   const hasEnemyAbove = a.nearestEnemy && a.nearestEnemy.dy < -30;
   const roamAbove = a.roamTarget && a.roamTarget.y < a.self.y - 50;
-  if (!hasEnemyAbove && !roamAbove && p.platformPreference < 1.5) return;
-
-  // Stronger weight when actively climbing toward a target
   const climbing = hasEnemyAbove || roamAbove;
-  const weight = climbing ? 0.7 : 0.3 * p.platformPreference;
+
+  // All bots prefer high ground (stomp advantage). Weight scales with context:
+  // - Actively chasing a target above: strong (0.8)
+  // - Idle with nowhere to go: moderate baseline (0.4) + platformPreference bonus
+  const weight = climbing ? 0.8 : 0.4 + 0.2 * p.platformPreference;
   const plat = a.nearestPlatformAbove;
 
-  // Walk toward platform — the primary navigation when climbing
+  // Walk toward platform center
   const platCenter = plat.x + plat.width / 2;
   const dx = platCenter - a.self.x;
   if (dx > 15) s.moveRight += weight;
@@ -306,14 +335,13 @@ function evaluateCamping(a: AwarenessSnapshot, s: ActionScores, p: AIPersonality
   s.moveRight -= campWeight;
 }
 
-/** When stuck inside a geyser zone with no reason to stay, walk out sideways */
+/** When stuck inside a geyser zone, walk out sideways — high priority */
 function evaluateGeyserEscape(a: AwarenessSnapshot, s: ActionScores): void {
   if (a.geyserEscapeDx === 0) return;
-  // Only escape if there's nothing useful up here (no enemies, no carrots nearby)
-  if (a.nearestEnemy && a.nearestEnemy.dist < 150) return;
-  if (a.nearestCarrot && a.nearestCarrot.dist < 100) return;
 
-  const weight = 1.0; // strong — being stuck in a geyser is bad
+  // Airborne in geyser = being launched, escape urgently
+  const airborne = !a.self.onGround;
+  const weight = airborne ? 3.0 : 1.5;
   if (a.geyserEscapeDx > 0) s.moveRight += weight;
   else s.moveLeft += weight;
 }

@@ -1,11 +1,14 @@
 import { Howl } from 'howler';
+import { generateThemeMusic } from './music';
 
-export type SoundName = 'jump' | 'stomp' | 'victory' | 'select' | 'music' | 'thornhit' | 'bunny' | 'fox' | 'frog' | 'bear' | 'owl' | 'cat' | 'wolf' | 'panda' | 'pig' | 'cow' | 'goat' | 'horse' | 'sheep' | 'monkey' | 'footstep_grass' | 'footstep_wood' | 'countdown_beep' | 'countdown_go' | 'oof' | 'splash' | 'ambient' | 'crowd' | 'wind' | 'geyser' | 'pigeon_scatter' | 'zero_g';
+export type SoundName = 'jump' | 'stomp' | 'victory' | 'select' | 'thornhit' | 'bunny' | 'fox' | 'frog' | 'bear' | 'owl' | 'cat' | 'wolf' | 'panda' | 'pig' | 'cow' | 'goat' | 'horse' | 'sheep' | 'monkey' | 'footstep_grass' | 'footstep_wood' | 'countdown_beep' | 'countdown_go' | 'oof' | 'splash' | 'ambient' | 'crowd' | 'wind' | 'geyser' | 'pigeon_scatter' | 'zero_g';
 
 class AudioManager {
   private sounds: Map<SoundName, Howl> = new Map();
   private initialized = false;
   private muted = false;
+  private musicHowl: Howl | null = null;
+  private musicThemeId: string | null = null;
 
   init(): void {
     if (this.initialized) return;
@@ -35,12 +38,6 @@ class AudioManager {
     this.sounds.set('thornhit', new Howl({
       src: [generateThornHitSound()],
       volume: 0.5,
-    }));
-
-    this.sounds.set('music', new Howl({
-      src: [generateMusicLoop()],
-      volume: 0.15,
-      loop: true,
     }));
 
     // Animal sounds
@@ -210,6 +207,7 @@ class AudioManager {
     for (const sound of this.sounds.values()) {
       sound.stop();
     }
+    this.stopMusic();
   }
 
   toggleMute(): boolean {
@@ -234,11 +232,40 @@ class AudioManager {
     this.play(soundName);
   }
 
+  /** Start theme-specific music. Lazily generates and caches per theme. */
+  playMusic(themeId: string): void {
+    if (this.muted) return;
+    if (!this.initialized) this.init();
+    // Already playing this theme
+    if (this.musicHowl && this.musicThemeId === themeId) {
+      this.musicHowl.play();
+      return;
+    }
+    // Stop previous track
+    this.stopMusic();
+    // Generate on demand
+    const src = generateThemeMusic(themeId);
+    this.musicHowl = new Howl({ src: [src], volume: 0.15, loop: true });
+    this.musicThemeId = themeId;
+    this.musicHowl.play();
+  }
+
+  stopMusic(): void {
+    if (this.musicHowl) {
+      this.musicHowl.stop();
+    }
+  }
+
   destroy(): void {
     for (const sound of this.sounds.values()) {
       sound.unload();
     }
     this.sounds.clear();
+    if (this.musicHowl) {
+      this.musicHowl.unload();
+      this.musicHowl = null;
+      this.musicThemeId = null;
+    }
     this.initialized = false;
   }
 }
@@ -431,51 +458,6 @@ function generateSelectSound(): string {
   return generateToneBuffer(440, 0.08, 'square', 0.2, 880);
 }
 
-function generateMusicLoop(): string {
-  const sampleRate = 44100;
-  const bpm = 140;
-  const beatsPerMeasure = 4;
-  const measures = 4;
-  const totalBeats = beatsPerMeasure * measures;
-  const beatDuration = 60 / bpm;
-  const totalDuration = totalBeats * beatDuration;
-  const numSamples = Math.floor(sampleRate * totalDuration);
-  const buffer = new Float32Array(numSamples);
-
-  // Simple chiptune loop
-  const bassNotes = [131, 131, 165, 165, 175, 175, 131, 131]; // C3, E3, F3, C3
-  const melodyNotes = [523, 0, 659, 0, 784, 659, 523, 0, 587, 0, 659, 0, 523, 0, 440, 0];
-
-  for (let i = 0; i < numSamples; i++) {
-    const t = i / sampleRate;
-    const beat = t / beatDuration;
-    const currentBeat = Math.floor(beat) % totalBeats;
-
-    // Bass (every 2 beats)
-    const bassIndex = Math.floor(currentBeat / 2) % bassNotes.length;
-    const bassFreq = bassNotes[bassIndex];
-    const bassPhase = (t * bassFreq) % 1;
-    const bass = (bassPhase < 0.5 ? 1 : -1) * 0.08;
-
-    // Melody
-    const melodyIndex = currentBeat % melodyNotes.length;
-    const melodyFreq = melodyNotes[melodyIndex];
-    let melody = 0;
-    if (melodyFreq > 0) {
-      const beatProgress = (beat - Math.floor(beat));
-      const melodyEnvelope = Math.max(0, 1 - beatProgress * 1.5);
-      melody = Math.sin(2 * Math.PI * melodyFreq * t) * 0.06 * melodyEnvelope;
-    }
-
-    // Hi-hat (every beat)
-    const hatProgress = beat - Math.floor(beat);
-    const hat = (Math.random() * 2 - 1) * 0.02 * Math.max(0, 1 - hatProgress * 8);
-
-    buffer[i] = bass + melody + hat;
-  }
-
-  return floatBufferToWavDataUri(buffer, sampleRate);
-}
 
 function generateFootstepGrass(): string {
   const sampleRate = 44100;
@@ -566,7 +548,7 @@ function generateCrowdSound(): string {
   return floatBufferToWavDataUri(buffer, sampleRate);
 }
 
-function floatBufferToWavDataUri(buffer: Float32Array, sampleRate: number): string {
+export function floatBufferToWavDataUri(buffer: Float32Array, sampleRate: number): string {
   const numSamples = buffer.length;
   const bytesPerSample = 2;
   const dataSize = numSamples * bytesPerSample;
