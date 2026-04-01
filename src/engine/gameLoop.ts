@@ -28,6 +28,7 @@ import {
   GRAVITY, FRICTION, MAX_WALK_SPEED, JUMP_IMPULSE, MAX_FALL_SPEED,
 } from './constants';
 import { getCharacterForSlot } from './characters';
+import { AIController } from './ai';
 
 export type MatchEndCallback = (winner: PlayerSlot | null, state: MatchState) => void;
 
@@ -63,6 +64,7 @@ export class GameLoop {
   private cachedZeroGZones: EffectZone[] = [];
   private geyserIndexMap: Map<EffectZone, number> = new Map();
   private floatingPlatforms: Array<{ plat: Platform; idx: number }> = [];
+  private aiControllers: Map<string, AIController> = new Map();
 
   constructor(
     bgCanvas: HTMLCanvasElement,
@@ -102,6 +104,14 @@ export class GameLoop {
       expression: 'normal' as const, killStreak: 0,
       breathTimer: 0, springTrailTimer: 0, damageFlashSide: null, damageFlashTimer: 0,
     }));
+
+    // Init AI controllers for bot players
+    const botDifficulty = settings.botDifficulty ?? 'medium';
+    for (const player of players) {
+      if (isBotSlot(player.id)) {
+        this.aiControllers.set(player.id, new AIController(player.id, player.character.name, botDifficulty));
+      }
+    }
 
     // Init weather particles from theme config
     const weather: WeatherParticle[] = [];
@@ -1342,7 +1352,8 @@ export class GameLoop {
 
   private getPlayerInput(slot: PlayerSlot): InputState {
     if (isBotSlot(slot)) {
-      // Placeholder: bots stand still until AI brain is wired in Phase 3
+      const ai = this.aiControllers.get(slot);
+      if (ai) return ai.getInput(this.state, this.arena);
       return { left: false, right: false, jump: false, down: false };
     }
     return this.input.getInput(slot);
