@@ -5,9 +5,9 @@ import { evaluateActions } from './utility';
 import { getPersonality, getDifficultyParams } from './personality';
 
 // Thresholds for converting utility scores to boolean inputs
-const MOVE_THRESHOLD = 0.25;
-const JUMP_THRESHOLD = 0.35;
-const DROP_THRESHOLD = 0.4;
+const MOVE_THRESHOLD = 0.20;
+const JUMP_THRESHOLD = 0.55;
+const DROP_THRESHOLD = 0.5;
 
 const NO_INPUT: InputState = { left: false, right: false, jump: false, down: false };
 
@@ -68,7 +68,7 @@ export class AIController {
       if (this.jumpCooldown > 0) {
         delayed.jump = false;
       } else {
-        this.jumpCooldown = 8; // prevent spamming
+        this.jumpCooldown = 20; // prevent spamming — bots should walk more
       }
     }
 
@@ -127,10 +127,10 @@ export class AIController {
 
   private randomInput(): InputState {
     return {
-      left: Math.random() > 0.6,
-      right: Math.random() > 0.6,
-      jump: Math.random() > 0.7,
-      down: Math.random() > 0.9,
+      left: Math.random() > 0.5,
+      right: Math.random() > 0.5,
+      jump: Math.random() > 0.92, // rarely jump randomly
+      down: Math.random() > 0.95,
     };
   }
 }

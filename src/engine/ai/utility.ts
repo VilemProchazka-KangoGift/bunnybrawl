@@ -25,7 +25,7 @@ export function evaluateActions(
 
 function evaluateStompOpportunity(a: AwarenessSnapshot, s: ActionScores, p: AIPersonality): void {
   if (!a.stompTarget) return;
-  const weight = 1.5 * p.aggressiveness;
+  const weight = 1.2 * p.aggressiveness;
   const { dx } = a.stompTarget;
 
   // Move toward the target horizontally
@@ -34,64 +34,68 @@ function evaluateStompOpportunity(a: AwarenessSnapshot, s: ActionScores, p: AIPe
 
   // If above target and close, drop down for the stomp
   if (Math.abs(dx) < 30 && a.self.vy >= 0) {
-    s.drop += weight * 0.5;
+    s.drop += weight * 0.4;
   }
 
-  // If on ground and target is below, jump first to gain height
-  if (a.self.onGround && a.stompTarget.dist < 120) {
-    s.jump += weight * 0.6;
+  // Only jump if on ground, target is clearly below, and we're close horizontally
+  if (a.self.onGround && a.stompTarget.dist < 100 && Math.abs(dx) < 50) {
+    s.jump += weight * 0.35;
   }
 }
 
 function evaluateThreatEvasion(a: AwarenessSnapshot, s: ActionScores, p: AIPersonality): void {
   if (!a.stompThreat) return;
-  const weight = 1.5 * p.cautiousness;
+  const weight = 1.2 * p.cautiousness;
 
-  // Move away from the threat horizontally
+  // Move away from the threat horizontally — prefer walking away
   const threatDx = a.stompThreat.x - a.self.x;
   if (threatDx > 0) s.moveLeft += weight;
   else s.moveRight += weight;
 
-  // Jump away if threat is close
-  if (a.stompThreat.dist < 80 && a.self.onGround) {
-    s.jump += weight * 0.8;
+  // Only jump if threat is very close and directly above
+  if (a.stompThreat.dist < 50 && a.self.onGround) {
+    s.jump += weight * 0.4;
   }
 }
 
 function evaluateChaseTarget(a: AwarenessSnapshot, s: ActionScores, p: AIPersonality): void {
   if (!a.nearestEnemy) return;
-  const weight = 0.6 * p.aggressiveness;
+  const weight = 0.5 * p.aggressiveness;
   const { dx, dy, dist } = a.nearestEnemy;
 
-  // Move toward nearest enemy
+  // Move toward nearest enemy — walking is the main chase behavior
   if (dx > 20) s.moveRight += weight;
   else if (dx < -20) s.moveLeft += weight;
 
-  // If enemy is above, jump to get closer
-  if (dy < -40 && a.self.onGround && dist < 200) {
-    s.jump += weight * 0.5;
+  // Only jump if enemy is on a platform above AND we're close horizontally
+  if (dy < -50 && a.self.onGround && dist < 150 && Math.abs(dx) < 100) {
+    s.jump += weight * 0.3;
   }
 
   // If enemy is below and we're on a platform, consider dropping
-  if (dy > 50 && Math.abs(dx) < 60) {
-    s.drop += weight * 0.3;
+  if (dy > 60 && Math.abs(dx) < 50) {
+    s.drop += weight * 0.2;
   }
 }
 
 function evaluatePlatformSeeking(a: AwarenessSnapshot, s: ActionScores, p: AIPersonality): void {
   if (!a.nearestPlatformAbove || !a.self.onGround) return;
-  const weight = 0.4 * p.platformPreference;
+  // Only seek platforms if there's actually a reason (enemy above, or strong preference)
+  const hasEnemyAbove = a.nearestEnemy && a.nearestEnemy.dy < -30;
+  if (!hasEnemyAbove && p.platformPreference < 1.5) return;
+
+  const weight = 0.3 * p.platformPreference;
   const plat = a.nearestPlatformAbove;
 
-  // Move toward platform center
+  // Walk toward platform center first
   const platCenter = plat.x + plat.width / 2;
   const dx = platCenter - a.self.x;
-  if (dx > 20) s.moveRight += weight;
-  else if (dx < -20) s.moveLeft += weight;
+  if (dx > 30) s.moveRight += weight;
+  else if (dx < -30) s.moveLeft += weight;
 
-  // Jump to reach it if we're roughly under it
-  if (Math.abs(dx) < plat.width / 2 + 30 && plat.dy > -200) {
-    s.jump += weight * 0.8;
+  // Only jump when well-positioned under the platform
+  if (Math.abs(dx) < plat.width / 2 && plat.dy > -180) {
+    s.jump += weight * 0.5;
   }
 }
 
@@ -108,9 +112,9 @@ function evaluateHazardAvoidance(a: AwarenessSnapshot, s: ActionScores, p: AIPer
   if (hzDx > 0) s.moveLeft += avoidWeight;
   else s.moveRight += avoidWeight;
 
-  // Jump away from ground hazards
-  if (hz.type === 'lava' && hz.dist < 80 && a.self.onGround) {
-    s.jump += avoidWeight * 0.8;
+  // Jump away from ground hazards only when very close
+  if (hz.type === 'lava' && hz.dist < 50 && a.self.onGround) {
+    s.jump += avoidWeight * 0.4;
   }
   // Jump to avoid falling rocks
   if (hz.type === 'lavaRock' && hz.dist < 60) {
@@ -120,9 +124,9 @@ function evaluateHazardAvoidance(a: AwarenessSnapshot, s: ActionScores, p: AIPer
       else s.moveRight += avoidWeight * 0.6;
     }
   }
-  // Jump to avoid ghosts
-  if (hz.type === 'ghost' && hz.dist < 100 && a.self.onGround) {
-    s.jump += avoidWeight * 0.5;
+  // Jump to avoid ghosts only when very close
+  if (hz.type === 'ghost' && hz.dist < 60 && a.self.onGround) {
+    s.jump += avoidWeight * 0.3;
   }
 }
 
@@ -178,9 +182,9 @@ function evaluateZoneExploitation(a: AwarenessSnapshot, s: ActionScores, p: AIPe
       else s.moveLeft += exploitWeight;
     }
   }
-  // In zero-G, jump more to exploit amplified jumps
+  // In zero-G, occasionally jump to exploit amplified jumps
   if (a.inZeroG && a.self.onGround) {
-    s.jump += 0.3 * p.platformPreference;
+    s.jump += 0.15 * p.platformPreference;
   }
   // Compensate for current push
   if (a.inCurrent !== 0) {

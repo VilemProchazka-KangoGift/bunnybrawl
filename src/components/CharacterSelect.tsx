@@ -215,15 +215,20 @@ export function CharacterSelect() {
         updateLobbyPhysics(bot, dt);
       }
 
-      // Stomp detection — players/bots stomp NPCs to swap characters, players stomp players to swap
-      const stompAttackers = [...playersRef.current, ...botPlayersRef.current];
+      // Stomp detection — humans stomp anyone to swap, bots only stomp NPCs (not humans)
+      const humanPlayers = playersRef.current;
+      const botPlayers = botPlayersRef.current;
+      const stompAttackers = [...humanPlayers, ...botPlayers];
       for (const attacker of stompAttackers) {
         if (attacker.splatTimer > 0) continue;
         if (attacker.vy < STOMP_VY) continue; // must be falling
+        const attackerIsBot = isBotSlot(attacker.slot);
 
         for (const victim of allLobby) {
           if (victim === attacker) continue;
           if (victim.splatTimer > 0) continue;
+          // Bots cannot stomp human players in the lobby
+          if (attackerIsBot && humanPlayers.includes(victim)) continue;
 
           // Check overlap + attacker above victim
           if (
@@ -277,11 +282,13 @@ export function CharacterSelect() {
           readySoundPlayedRef.current.delete(p.slot);
         }
       }
-      if (inZone.length >= 2 && !countdownStartedRef.current) {
+      const humansInZone = inZone.filter(p => !isBotSlot(p.slot));
+      // Need at least 1 human + total 2 participants to start countdown
+      if (inZone.length >= 2 && humansInZone.length >= 1 && !countdownStartedRef.current) {
         countdownStartedRef.current = true;
         countdownRef.current = COUNTDOWN_SECONDS;
       }
-      if (inZone.length < 2) {
+      if (inZone.length < 2 || humansInZone.length < 1) {
         countdownStartedRef.current = false;
         countdownRef.current = -1;
       }
@@ -323,14 +330,21 @@ function updateBotLobbyAI(bot: LobbyPlayer, _dt: number): void {
   const speedMult = BOT_SPEED_VARIANCE[slotIdx % BOT_SPEED_VARIANCE.length];
   const pauseChance = BOT_PAUSE_CHANCE[slotIdx % BOT_PAUSE_CHANCE.length];
 
-  // If in the ready zone, stop and idle
-  if (bot.x + PLAYER_WIDTH > READY_ZONE_X + 40) {
-    bot.vx *= 0.9;
-    if (Math.abs(bot.vx) < 5) bot.vx = 0;
-    // Occasional idle jump
-    if (Math.random() < 0.003 && bot.onGround) {
-      bot.vy = LOBBY_JUMP * 0.5;
-      bot.onGround = false;
+  // Each bot has a different target X in the ready zone to spread out
+  const zoneWidth = CANVAS_WIDTH - READY_ZONE_X - 20;
+  const botTargetX = READY_ZONE_X + 30 + (slotIdx / 5) * zoneWidth;
+
+  // If in the ready zone, slow down and idle near target position
+  if (bot.x + PLAYER_WIDTH > READY_ZONE_X + 20) {
+    const dxToTarget = botTargetX - bot.x;
+    if (Math.abs(dxToTarget) > 30) {
+      // Slowly drift toward spread-out target
+      bot.vx = Math.sign(dxToTarget) * 40;
+      bot.facing = dxToTarget > 0 ? 'right' : 'left';
+    } else {
+      // At target — stop
+      bot.vx *= 0.85;
+      if (Math.abs(bot.vx) < 5) bot.vx = 0;
     }
     return;
   }
