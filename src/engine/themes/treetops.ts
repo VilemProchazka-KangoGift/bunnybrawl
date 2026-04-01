@@ -17,10 +17,11 @@ export const TREETOPS_THEME: ThemeConfig = {
   },
 
   hills: [
-    { x: -20, baseY: 650, width: 400, height: 50, color: '#1A3A1A' },
-    { x: 350, baseY: 660, width: 450, height: 40, color: '#153515' },
-    { x: 750, baseY: 645, width: 380, height: 55, color: '#1A3A1A' },
-    { x: 1050, baseY: 655, width: 350, height: 45, color: '#153515' },
+    // Pushed below screen — treetops has no ground, hills would float in the void
+    { x: -20, baseY: 780, width: 400, height: 50, color: '#1A3A1A' },
+    { x: 350, baseY: 780, width: 450, height: 40, color: '#153515' },
+    { x: 750, baseY: 780, width: 380, height: 55, color: '#1A3A1A' },
+    { x: 1050, baseY: 780, width: 350, height: 45, color: '#153515' },
   ],
 
   ground: {
@@ -186,13 +187,13 @@ export const TREETOPS_THEME: ThemeConfig = {
     ctx.closePath();
     ctx.fill();
 
-    // Massive tree trunks in far background
+    // Massive tree trunks spanning full height (canopy to abyss)
     ctx.fillStyle = '#2A1A0A';
     ctx.globalAlpha = 0.2;
-    ctx.fillRect(50, 100, 40, 580);
-    ctx.fillRect(380, 80, 50, 600);
-    ctx.fillRect(750, 90, 45, 590);
-    ctx.fillRect(1100, 100, 40, 580);
+    ctx.fillRect(50, 0, 40, 720);
+    ctx.fillRect(380, 0, 50, 720);
+    ctx.fillRect(750, 0, 45, 720);
+    ctx.fillRect(1100, 0, 40, 720);
 
     ctx.restore();
   },
