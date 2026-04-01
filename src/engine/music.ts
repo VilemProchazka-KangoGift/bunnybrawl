@@ -198,20 +198,9 @@ function seq(start: number, notes: (readonly [number, number] | readonly [number
   let beat = start;
   for (const nd of notes) {
     const [m, dur] = nd;
-    const vel = nd.length > 2 ? nd[2] : 1;
+    const vel: number = nd.length > 2 ? nd[2]! : 1;
     if (m > 0) result.push({ startBeat: beat, durBeats: dur * 0.9, freq: midi(m), vel });
     beat += dur;
-  }
-  return result;
-}
-
-/** Repeat a note pattern, shifting by patternBeats each time */
-function repeat(pattern: SynthNote[], patternBeats: number, totalBeats: number): SynthNote[] {
-  const result: SynthNote[] = [];
-  for (let off = 0; off < totalBeats; off += patternBeats) {
-    for (const note of pattern) {
-      result.push({ ...note, startBeat: note.startBeat + off });
-    }
   }
   return result;
 }
@@ -513,7 +502,6 @@ function generateCastle(): string {
   renderTrack(buf, SR, bpm, harpsi, harpNotes);
 
   // Military drums — snare rolls, strong kick
-  const beatSec = 60 / bpm;
   const drumPat: [number, DrumEvent][] = [
     [0,    (b,s,t) => renderKick(b,s,t,0.18)],
     [0.5,  (b,s,t) => renderRim(b,s,t,0.04)],
@@ -588,7 +576,6 @@ function generateCandyLand(): string {
   renderTrack(buf, SR, bpm, sparkle, sparkleNotes);
 
   // Drums — bouncy, with toms
-  const beatSec = 60 / bpm;
   const drumPat: [number, DrumEvent][] = [
     [0,   (b,s,t) => renderKick(b,s,t,0.14)],
     [1.5, (b,s,t) => renderKick(b,s,t,0.12)],
@@ -655,7 +642,6 @@ function generateTreetops(): string {
   renderTrack(buf, SR, bpm, lead, melody);
 
   // Tribal drums — toms, no snare
-  const beatSec = 60 / bpm;
   const drumPat: [number, DrumEvent][] = [
     [0,    (b,s,t) => renderTom(b,s,t,100,0.14)],  // deep tom
     [1,    (b,s,t) => renderTom(b,s,t,200,0.08)],  // mid tom
@@ -864,7 +850,6 @@ function generateRooftops(): string {
   renderTrack(buf, SR, bpm, lead, melody);
 
   // Drums — tight groove, swung hats
-  const beatSec = 60 / bpm;
   const drumPat: [number, DrumEvent][] = [
     [0,    (b,s,t) => renderKick(b,s,t,0.16)],
     [1.5,  (b,s,t) => renderKick(b,s,t,0.12)],
@@ -957,7 +942,6 @@ function generateSpaceStation(): string {
   renderTrack(buf, SR, bpm, lead, melody);
 
   // Electronic drums — 808-style
-  const beatSec = 60 / bpm;
   const drumPat: [number, DrumEvent][] = [
     [0,    (b,s,t) => renderKick(b,s,t,0.20)],
     [2,    (b,s,t) => renderKick(b,s,t,0.16)],
