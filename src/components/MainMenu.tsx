@@ -46,6 +46,19 @@ export function MainMenu() {
           <div className="arena-selector" data-testid="arena-selector">
             <span className="arena-label">{t('arena_label')}</span>
             <div className="arena-options">
+              <button
+                className={`arena-option ${matchSettings.arenaId === 'random' ? 'selected' : ''}`}
+                onClick={() => {
+                  audio.init();
+                  audio.play('select');
+                  setMatchSettings({ arenaId: 'random' });
+                }}
+              >
+                <div className="arena-preview arena-preview-random">
+                  <span className="arena-icon">🎲</span>
+                </div>
+                <span className="arena-name">{t('arena_random')}</span>
+              </button>
               {(() => {
                 const arenas = listArenas();
                 const themes = listThemes();

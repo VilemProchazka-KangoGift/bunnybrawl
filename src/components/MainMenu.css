@@ -160,6 +160,10 @@
   justify-content: center;
 }
 
+.arena-preview-random {
+  background: linear-gradient(135deg, #FF6B6B 0%, #FFD700 25%, #4CAF50 50%, #42A5F5 75%, #AB47BC 100%);
+}
+
 .arena-icon {
   font-size: 28px;
   text-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
