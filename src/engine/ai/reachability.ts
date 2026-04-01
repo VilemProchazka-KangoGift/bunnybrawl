@@ -315,6 +315,7 @@ export function canZeroGTo(from: Platform, zone: EffectZone, to: Platform): Reac
 /**
  * Compute danger score (0-1) for an edge based on proximity to hazard zones.
  * 0 = no hazards nearby, 1 = passing directly through a hazard.
+ * Escape routes (moving AWAY from hazards) get reduced danger so bots don't get stuck in pits.
  */
 export function computeEdgeDanger(
   from: Platform, to: Platform, type: 'jump' | 'drop' | 'walk' | 'geyser',
@@ -322,33 +323,26 @@ export function computeEdgeDanger(
 ): number {
   if (hazardZones.length === 0) return 0;
 
-  // Sample points along the travel path and check distance to hazards
-  // For jumps/geysers: arc from (fromX, fromY) to (toX, toY)
-  // For drops: straight down then drift
-  // For walks: horizontal line
-  let maxDanger = 0;
-  const DANGER_RADIUS = 80; // px — how close before danger ramps up
-
-  // Sample the midpoint and endpoints of the trajectory
+  const DANGER_RADIUS = 80;
   const fromCx = from.x + from.width / 2;
   const fromY = from.y;
   const toCx = to.x + to.width / 2;
   const toY = to.y;
 
-  // Sample 3 points along the path: start, midpoint, end
+  // Compute danger at destination only (the midpoint of the path, not the source)
+  // This way, escaping FROM a dangerous area to a safe area has low danger
   const samplePoints: Array<[number, number]> = [
-    [fromCx, fromY],
     [(fromCx + toCx) / 2, Math.min(fromY, toY) - (type === 'jump' || type === 'geyser' ? 60 : 0)],
     [toCx, toY],
   ];
 
+  let maxDanger = 0;
   for (const [sx, sy] of samplePoints) {
     for (const hz of hazardZones) {
       const hzCx = hz.x + hz.width / 2;
       const hzCy = hz.y + hz.height / 2;
       const dx = sx - hzCx;
       const dy = sy - hzCy;
-      // Use rectangular proximity (more accurate for wide hazards like lava pools)
       const distX = Math.max(0, Math.abs(dx) - hz.width / 2);
       const distY = Math.max(0, Math.abs(dy) - hz.height / 2);
       const dist = Math.sqrt(distX * distX + distY * distY);
