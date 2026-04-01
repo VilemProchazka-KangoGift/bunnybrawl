@@ -176,10 +176,10 @@ export const HAUNTED_GRAVEYARD_THEME: ThemeConfig = {
     const ground = arena.platforms[0];
     const y = ground.y;
 
-    // Mausoleum walls (visual only — not collidable so players can walk through)
+    // Mausoleum wall details (platform is a solid 320x240 block)
     ctx.fillStyle = '#3A3040';
-    ctx.fillRect(470, 444, 40, y - 444);   // Left wall
-    ctx.fillRect(790, 444, 40, y - 444);   // Right wall
+    ctx.fillRect(470, 444, 40, y - 444);   // Left wall accent
+    ctx.fillRect(790, 444, 40, y - 444);   // Right wall accent
     ctx.fillStyle = '#2A2530';
     ctx.fillRect(475, 444, 30, y - 444);   // Left wall inner shade
     ctx.fillRect(795, 444, 30, y - 444);   // Right wall inner shade

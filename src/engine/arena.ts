@@ -336,8 +336,8 @@ export const HAUNTED_GRAVEYARD_ARENA: Arena = {
     { x: 680, y: 625, width: 35, height: 35 },                  // Headstone 4
     { x: 900, y: 625, width: 35, height: 35 },                  // Headstone 5
     { x: 1080, y: 625, width: 35, height: 35 },                 // Headstone 6
-    // === Mausoleum (center structure — walls are visual only, not collidable) ===
-    { x: 480, y: 420, width: 320, height: 24 },                 // Mausoleum roof
+    // === Mausoleum (solid block — roof is standable, walls block passage) ===
+    { x: 480, y: 420, width: 320, height: 240 },                // Mausoleum
     // === Crypt platforms (sides) ===
     { x: 30, y: 530, width: 170, height: 24 },                  // Left crypt low
     { x: 20, y: 390, width: 150, height: 24 },                  // Left crypt high
