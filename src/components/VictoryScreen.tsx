@@ -36,8 +36,7 @@ export function VictoryScreen() {
   const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
 
   const charName = (name: string) => t(`char_${name}`, name);
-  const isBot = (id: PlayerSlot) => isBotSlot(id);
-  const botSuffix = (id: PlayerSlot) => isBot(id) ? ' (BOT)' : '';
+  const botSuffix = (id: PlayerSlot) => isBotSlot(id) ? ' (BOT)' : '';
 
   const handleRematch = () => { setScreen('match'); };
   const handleMenu = () => { setActivePlayers([]); setScreen('menu'); };

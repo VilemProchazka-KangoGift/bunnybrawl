@@ -1,4 +1,5 @@
 import type { Arena, Player, SplatMark, MatchState, Particle, Carrot, SpringMushroom, Thorn, WeatherParticle, WildlifeEntity, PlayerSlot } from './types';
+import { isBotSlot } from './types';
 import type { ThemeConfig } from './themes/types';
 import { aabbOverlap } from './physics';
 import {
@@ -2297,7 +2298,7 @@ export class Renderer {
     for (let i = 0; i < activePlayers.length; i++) {
       const player = activePlayers[i];
       const px = startX + i * scoreWidth;
-      const isBot = player.id.startsWith('B');
+      const isBot = isBotSlot(player.id);
 
       ctx.fillStyle = isBot ? 'rgba(40, 20, 60, 0.55)' : 'rgba(0, 0, 0, 0.5)';
       ctx.beginPath();

@@ -133,8 +133,12 @@ export function assignBotCharacters(humanSlots: CharacterSlot[], botSlots: BotSl
   BOT_CHARACTERS.clear();
   const usedNames = new Set(humanSlots.map(s => CHARACTERS[s].name));
   const available = ALL_CHARACTERS.filter(c => !usedNames.has(c.name));
-  // Shuffle available characters
-  const shuffled = [...available].sort(() => Math.random() - 0.5);
+  // Fisher-Yates shuffle
+  const shuffled = [...available];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
   for (let i = 0; i < botSlots.length; i++) {
     const char = shuffled[i % shuffled.length];
     BOT_CHARACTERS.set(botSlots[i], { ...char, slot: botSlots[i] });

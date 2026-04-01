@@ -97,7 +97,7 @@ describe('AIController', () => {
     const state = makeState({ players: [bot, enemy] });
     const arena = makeArena();
 
-    const input = ai.getInput(state, arena);
+    const input = ai.getInput(bot, state, arena);
     expect(input).toHaveProperty('left');
     expect(input).toHaveProperty('right');
     expect(input).toHaveProperty('jump');
@@ -114,7 +114,7 @@ describe('AIController', () => {
     const state = makeState({ players: [bot] });
     const arena = makeArena();
 
-    const input = ai.getInput(state, arena);
+    const input = ai.getInput(bot, state, arena);
     expect(input).toEqual({ left: false, right: false, jump: false, down: false });
   });
 
@@ -124,7 +124,7 @@ describe('AIController', () => {
     const state = makeState({ players: [bot] });
     const arena = makeArena();
 
-    const input = ai.getInput(state, arena);
+    const input = ai.getInput(bot, state, arena);
     expect(input).toEqual({ left: false, right: false, jump: false, down: false });
   });
 
@@ -136,9 +136,9 @@ describe('AIController', () => {
     const arena = makeArena();
 
     // Run a few frames to flush reaction buffer
-    for (let i = 0; i < 5; i++) ai.getInput(state, arena);
+    for (let i = 0; i < 5; i++) ai.getInput(bot, state, arena);
 
-    const input = ai.getInput(state, arena);
+    const input = ai.getInput(bot, state, arena);
     // Fox is aggressive — should move toward enemy (right)
     expect(input.right).toBe(true);
   });
@@ -152,7 +152,7 @@ describe('AIController', () => {
 
     const inputs: string[] = [];
     for (let i = 0; i < 30; i++) {
-      const input = ai.getInput(state, arena);
+      const input = ai.getInput(bot, state, arena);
       inputs.push(JSON.stringify(input));
       // Simulate bot moving slightly to avoid stuck detection
       bot.x += (input.right ? 2 : 0) - (input.left ? 2 : 0);
@@ -173,7 +173,7 @@ describe('AIController', () => {
     // Simulate being stuck (don't move the bot) for 70 frames
     let gotJump = false;
     for (let i = 0; i < 70; i++) {
-      const input = ai.getInput(state, arena);
+      const input = ai.getInput(bot, state, arena);
       if (input.jump) gotJump = true;
     }
     // After ~60 frames stuck, should trigger escape with a jump

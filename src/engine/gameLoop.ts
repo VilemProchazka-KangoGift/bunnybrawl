@@ -731,7 +731,7 @@ export class GameLoop {
     // Input + physics
     for (const player of this.state.players) {
       if (!player.active) continue;
-      const input = this.getPlayerInput(player.id);
+      const input = this.getPlayerInput(player);
       const wasAirborne = player.state === 'airborne';
       const prevVy = player.vy;
       const prevVx = player.vx;
@@ -1356,13 +1356,13 @@ export class GameLoop {
     }
   }
 
-  private getPlayerInput(slot: PlayerSlot): InputState {
-    if (isBotSlot(slot)) {
-      const ai = this.aiControllers.get(slot);
-      if (ai) return ai.getInput(this.state, this.arena);
+  private getPlayerInput(player: Player): InputState {
+    if (isBotSlot(player.id)) {
+      const ai = this.aiControllers.get(player.id);
+      if (ai) return ai.getInput(player, this.state, this.arena);
       return { left: false, right: false, jump: false, down: false };
     }
-    return this.input.getInput(slot);
+    return this.input.getInput(player.id as import('./types').CharacterSlot);
   }
 
   private endMatch(winner: PlayerSlot | null): void {

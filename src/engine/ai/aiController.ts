@@ -1,10 +1,9 @@
-import type { Player, MatchState, Arena, InputState, BotSlot, BotDifficulty } from '../types';
+import type { Player, MatchState, Arena, InputState, BotDifficulty } from '../types';
 import type { AIPersonality, DifficultyParams } from './types';
 import { buildAwareness } from './awareness';
 import { evaluateActions } from './utility';
 import { getPersonality, getDifficultyParams } from './personality';
 
-// Thresholds for converting utility scores to boolean inputs
 const MOVE_THRESHOLD = 0.20;
 const JUMP_THRESHOLD = 0.55;
 const DROP_THRESHOLD = 0.5;
@@ -12,52 +11,56 @@ const DROP_THRESHOLD = 0.5;
 const NO_INPUT: InputState = { left: false, right: false, jump: false, down: false };
 
 export class AIController {
-  private slot: BotSlot;
   private personality: AIPersonality;
   private difficulty: DifficultyParams;
-  private reactionBuffer: InputState[] = [];
+  // Ring buffer for reaction delay (avoids O(n) Array.shift)
+  private ringBuffer: InputState[];
+  private ringWrite = 0;
+  private ringRead = 0;
+  private ringSize: number;
   private stuckTimer = 0;
   private lastX = 0;
   private lastY = 0;
-  private jumpCooldown = 0; // prevent jump spam
+  private jumpCooldown = 0;
   private lastScore = 0;
-  private tauntTimer = 0; // frames to freeze after a kill (celebration)
-  private searchTimer = 0; // frames to pause when nothing nearby (looking around)
-  private wasIdle = false; // track if previous frame had nothing in range
+  private tauntTimer = 0;
+  private searchTimer = 0;
+  private wasIdle = false;
 
-  constructor(slot: BotSlot, characterName: string, difficulty: BotDifficulty) {
-    this.slot = slot;
+  constructor(_slot: string, characterName: string, difficulty: BotDifficulty) { // slot used as map key by caller
     this.personality = getPersonality(characterName);
     this.difficulty = getDifficultyParams(difficulty);
 
-    // Pre-fill reaction buffer with no-ops
-    for (let i = 0; i < this.difficulty.reactionFrames; i++) {
-      this.reactionBuffer.push({ ...NO_INPUT });
+    // Pre-fill ring buffer with no-ops
+    this.ringSize = this.difficulty.reactionFrames + 1;
+    this.ringBuffer = new Array(this.ringSize);
+    for (let i = 0; i < this.ringSize; i++) {
+      this.ringBuffer[i] = { left: false, right: false, jump: false, down: false };
     }
+    this.ringWrite = this.difficulty.reactionFrames;
+    this.ringRead = 0;
   }
 
   getWalkSpeedMult(): number {
     return this.difficulty.walkSpeedMult;
   }
 
-  getInput(state: MatchState, arena: Arena): InputState {
-    const self = state.players.find(p => p.id === this.slot);
-    if (!self || !self.active || self.state === 'splat' || self.state === 'respawning') {
-      return { ...NO_INPUT };
+  getInput(self: Player, state: MatchState, arena: Arena): InputState {
+    if (!self.active || self.state === 'splat' || self.state === 'respawning') {
+      return NO_INPUT;
     }
 
-    // Taunt: freeze briefly after getting a kill (celebration)
+    // Taunt: freeze briefly after getting a kill
     if (self.score > this.lastScore) {
-      this.tauntTimer = 20 + Math.floor(Math.random() * 15); // 0.3-0.6s
+      this.tauntTimer = 20 + Math.floor(Math.random() * 15);
       this.lastScore = self.score;
     }
     if (this.tauntTimer > 0) {
       this.tauntTimer--;
-      // Crouch-spam during taunt for style
       return { left: false, right: false, jump: false, down: this.tauntTimer % 6 < 3 };
     }
 
-    // Stuck detection: if position hasn't changed in ~1 second (60 frames)
+    // Stuck detection
     const moved = Math.abs(self.x - this.lastX) + Math.abs(self.y - this.lastY);
     if (moved < 2) {
       this.stuckTimer++;
@@ -67,17 +70,19 @@ export class AIController {
     this.lastX = self.x;
     this.lastY = self.y;
 
-    // Hesitation: randomly freeze (looks like a confused player)
+    // Hesitation: randomly freeze
     if (this.difficulty.hesitationChance > 0 && Math.random() < this.difficulty.hesitationChance) {
-      return { ...NO_INPUT };
+      return NO_INPUT;
     }
 
     // Compute ideal input
     const ideal = this.computeIdealInput(self, state, arena);
 
-    // Push through reaction buffer
-    this.reactionBuffer.push(ideal);
-    const delayed = this.reactionBuffer.shift() ?? ideal;
+    // Push through ring buffer
+    this.ringBuffer[this.ringWrite] = ideal;
+    this.ringWrite = (this.ringWrite + 1) % this.ringSize;
+    const delayed = this.ringBuffer[this.ringRead];
+    this.ringRead = (this.ringRead + 1) % this.ringSize;
 
     // Decay jump cooldown
     if (this.jumpCooldown > 0) this.jumpCooldown--;
@@ -92,7 +97,7 @@ export class AIController {
       if (this.jumpCooldown > 0) {
         delayed.jump = false;
       } else {
-        this.jumpCooldown = 20; // prevent spamming — bots should walk more
+        this.jumpCooldown = 20;
       }
     }
 
@@ -100,7 +105,6 @@ export class AIController {
   }
 
   private computeIdealInput(self: Player, state: MatchState, arena: Arena): InputState {
-    // If stuck, try random escape
     if (this.stuckTimer > 60) {
       this.stuckTimer = 0;
       return {
@@ -111,15 +115,13 @@ export class AIController {
       };
     }
 
-    // Build awareness snapshot
     const awareness = buildAwareness(self, state, arena, this.difficulty.awarenessRadius);
 
     // Search pause: when nothing is in immediate radius, pause briefly before roaming
     const nothingNearby = !awareness.nearestEnemy && !awareness.stompTarget && !awareness.stompThreat
       && !awareness.nearestCarrot && awareness.airborneAbove.length === 0 && awareness.nearbyHazards.length === 0;
     if (nothingNearby && !this.wasIdle) {
-      // Just transitioned to idle — start a search pause
-      this.searchTimer = 30 + Math.floor(Math.random() * 50); // 0.5-1.3s
+      this.searchTimer = 30 + Math.floor(Math.random() * 50);
       this.wasIdle = true;
     }
     if (!nothingNearby) {
@@ -128,10 +130,10 @@ export class AIController {
     }
     if (this.searchTimer > 0) {
       this.searchTimer--;
-      return { left: false, right: false, jump: false, down: false };
+      return NO_INPUT;
     }
 
-    // Wolf special: if targeting leader, override nearest enemy with score leader
+    // Wolf special: target the score leader
     if (this.personality.targetLeader && awareness.nearestEnemy) {
       let leader: Player | null = null;
       let bestScore = self.score;
@@ -149,10 +151,9 @@ export class AIController {
       }
     }
 
-    // Evaluate utility scores
     const scores = evaluateActions(awareness, this.personality);
 
-    // Add chaos noise based on personality
+    // Add chaos noise
     if (this.personality.chaosAffinity > 0) {
       const noise = this.personality.chaosAffinity * 0.3;
       scores.moveLeft += (Math.random() - 0.5) * noise;
@@ -161,7 +162,6 @@ export class AIController {
       scores.drop += (Math.random() - 0.5) * noise * 0.3;
     }
 
-    // Convert scores to booleans
     const netHorizontal = scores.moveRight - scores.moveLeft;
     return {
       left: netHorizontal < -MOVE_THRESHOLD,
@@ -175,7 +175,7 @@ export class AIController {
     return {
       left: Math.random() > 0.5,
       right: Math.random() > 0.5,
-      jump: Math.random() > 0.92, // rarely jump randomly
+      jump: Math.random() > 0.92,
       down: Math.random() > 0.95,
     };
   }

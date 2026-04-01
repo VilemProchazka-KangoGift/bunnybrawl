@@ -28,7 +28,10 @@ function loadBotCount(): number {
 }
 
 function loadBotDifficulty(): 'easy' | 'medium' | 'hard' {
-  try { return (localStorage.getItem('bunnybrawl_botdiff') as 'easy' | 'medium' | 'hard') || 'medium'; } catch { return 'medium'; }
+  try {
+    const val = localStorage.getItem('bunnybrawl_botdiff');
+    return val === 'easy' || val === 'medium' || val === 'hard' ? val : 'medium';
+  } catch { return 'medium'; }
 }
 
 const defaultSettings: MatchSettings = {
