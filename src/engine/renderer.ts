@@ -987,9 +987,10 @@ export class Renderer {
       ctx.globalAlpha = 0.2;
       ctx.fillStyle = '#88CCFF';
       ctx.fillRect(zone.x, zone.y, zone.width, zone.height);
-      // Rising bubbles
+      // Rising bubbles — count scales with zone width
       ctx.globalAlpha = 0.4;
-      for (let i = 0; i < 8; i++) {
+      const bubbleCount = Math.max(8, Math.round(zone.width / 8));
+      for (let i = 0; i < bubbleCount; i++) {
         const by = zone.y + zone.height - ((time * 80 + i * 20) % zone.height);
         const bx = cx + Math.sin(time * 3 + i * 1.5) * (zone.width * 0.3);
         const bs = 2 + (i % 3);

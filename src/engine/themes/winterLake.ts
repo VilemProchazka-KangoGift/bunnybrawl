@@ -141,10 +141,9 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
     drawSnowman(ctx, 530, y, 32);
     drawIcePatch(ctx, 700, y, 220);
 
-    // === ICE CUBES — 3D blocks with platforms on top ===
-    drawIceCube(ctx, 380, 610, 65, 50);    // left ground block
-    drawIceCube(ctx, 835, 610, 65, 50);    // right ground block
-    drawIceCube(ctx, 370, 370, 60, 50);    // floating mid-left
+    // === ICE CUBES — 3D blocks aligned with solid platforms ===
+    drawIceCube(ctx, 370, 610, 65, 50);    // left ground block
+    drawIceCube(ctx, 870, 610, 65, 50);    // right ground block
 
     // === PLATFORM DECORATIONS — rich variety per platform ===
     for (let i = 0; i < floats.length; i++) {

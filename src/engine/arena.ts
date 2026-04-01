@@ -33,7 +33,7 @@ export const MEADOW_ARENA: Arena = {
 };
 
 // ============================================================
-// WINTER LAKE — Frozen bowl center + ice staircases on sides
+// WINTER LAKE — Ice staircases + bridge + slippery perches
 // ============================================================
 export const WINTER_LAKE_ARENA: Arena = {
   id: 'winter_lake',
@@ -42,7 +42,7 @@ export const WINTER_LAKE_ARENA: Arena = {
   width: CANVAS_WIDTH,
   height: CANVAS_HEIGHT,
   platforms: [
-    // Ground — flat full width (clean, no overlaps)
+    // Ground — flat full width
     { x: 0, y: 660, width: CANVAS_WIDTH, height: 60 },
     // Left ice staircase — 3 steps climbing up
     { x: 40, y: 580, width: 130, height: 24 },                  // Step 1
@@ -54,17 +54,22 @@ export const WINTER_LAKE_ARENA: Arena = {
     { x: 1110, y: 420, width: 130, height: 24 },                // Step 3
     // High center bridge (icicle spikes hang from this)
     { x: 440, y: 360, width: 400, height: 24 },                 // Frozen bridge
-    // High perches at top of staircases
+    // Left perch at top of staircase (no right perch — igloo is decorative)
     { x: 50, y: 340, width: 110, height: 24 },                  // Left perch
-    { x: 1120, y: 340, width: 110, height: 24 },                // Right perch
     // Center platform
     { x: 520, y: 500, width: 240, height: 24 },                 // Mid island
-    // Ice cube blocks on ground (solid obstacles)
-    { x: 300, y: 615, width: 55, height: 45 },                  // Ice block L
-    { x: 900, y: 615, width: 55, height: 45 },                  // Ice block R
+    // Ice cube blocks on ground (solid, aligned with visual)
+    { x: 370, y: 610, width: 65, height: 50 },                  // Ice block L
+    { x: 870, y: 610, width: 65, height: 50 },                  // Ice block R
     // Stepping stones between staircase and center
-    { x: 270, y: 440, width: 90, height: 24 },
-    { x: 920, y: 440, width: 90, height: 24 },
+    { x: 270, y: 440, width: 90, height: 24 },                  // Connect L
+    { x: 920, y: 440, width: 90, height: 24 },                  // Connect R
+    // Small slippery platforms — hard to land on with low friction
+    { x: 380, y: 280, width: 45, height: 18 },                  // Tiny above bridge L
+    { x: 855, y: 280, width: 45, height: 18 },                  // Tiny above bridge R
+    { x: 600, y: 230, width: 50, height: 18 },                  // Tiny top center
+    { x: 200, y: 350, width: 40, height: 18 },                  // Tiny left mid
+    { x: 1040, y: 350, width: 40, height: 18 },                 // Tiny right mid
   ],
   spawnPoints: [
     { x: 100, y: 560 }, { x: 1170, y: 560 },
@@ -72,10 +77,19 @@ export const WINTER_LAKE_ARENA: Arena = {
     { x: 640, y: 340 }, { x: 640, y: 640 },
   ],
   hazardZones: [
-    // Icicle spike zones hanging below the center bridge
-    { x: 470, y: 384, width: 60, height: 10, type: 'lava' },
-    { x: 600, y: 384, width: 60, height: 10, type: 'lava' },
-    { x: 740, y: 384, width: 60, height: 10, type: 'lava' },
+    // Icicle spikes under the frozen bridge (wider, more prominent)
+    { x: 455, y: 384, width: 80, height: 14, type: 'lava' },
+    { x: 580, y: 384, width: 80, height: 14, type: 'lava' },
+    { x: 705, y: 384, width: 80, height: 14, type: 'lava' },
+    // Icicles under left staircase step 3
+    { x: 55, y: 444, width: 60, height: 10, type: 'lava' },
+    // Icicles under right staircase step 3
+    { x: 1125, y: 444, width: 60, height: 10, type: 'lava' },
+    // Icicles under mid island
+    { x: 570, y: 524, width: 70, height: 10, type: 'lava' },
+    // Icicles under stepping stones
+    { x: 285, y: 464, width: 50, height: 10, type: 'lava' },
+    { x: 935, y: 464, width: 50, height: 10, type: 'lava' },
   ],
 };
 
@@ -269,7 +283,7 @@ export const TREETOPS_ARENA: Arena = {
 };
 
 // ============================================================
-// UNDERWATER — Central coral tower + geyser-positioned platforms
+// UNDERWATER — Wide bubble column elevator + scattered side perches
 // ============================================================
 export const UNDERWATER_ARENA: Arena = {
   id: 'underwater',
@@ -280,36 +294,33 @@ export const UNDERWATER_ARENA: Arena = {
   platforms: [
     // Ground — ocean floor
     { x: 0, y: 660, width: CANVAS_WIDTH, height: 60 },
-    // === Platforms around central bubble column ===
-    // Left side
-    { x: 40, y: 570, width: 180, height: 24 },                  // Left shelf
-    { x: 140, y: 460, width: 160, height: 24 },                 // Left mid
-    { x: 40, y: 350, width: 150, height: 24 },                  // Left high
-    // Right side
-    { x: 1060, y: 570, width: 180, height: 24 },                // Right shelf
-    { x: 980, y: 460, width: 160, height: 24 },                 // Right mid
-    { x: 1090, y: 350, width: 150, height: 24 },                // Right high
-    // Platforms flanking the central bubble stream
-    { x: 420, y: 530, width: 160, height: 24 },                 // Left of stream low
-    { x: 700, y: 530, width: 160, height: 24 },                 // Right of stream low
-    { x: 450, y: 390, width: 130, height: 24 },                 // Left of stream mid
-    { x: 700, y: 390, width: 130, height: 24 },                 // Right of stream mid
-    // Top platforms (reachable via bubble boost)
-    { x: 500, y: 270, width: 280, height: 24 },                 // Top center
-    { x: 270, y: 330, width: 100, height: 24 },                 // Top stepping L
-    { x: 910, y: 330, width: 100, height: 24 },                 // Top stepping R
+    // === Left side platforms (unreachable by jumping, need bubble column) ===
+    { x: 80, y: 400, width: 120, height: 24 },                  // Left low
+    { x: 180, y: 270, width: 110, height: 24 },                 // Left mid
+    { x: 60, y: 150, width: 120, height: 24 },                  // Left high
+    // === Right side platforms ===
+    { x: 1080, y: 400, width: 120, height: 24 },                // Right low
+    { x: 990, y: 270, width: 110, height: 24 },                 // Right mid
+    { x: 1100, y: 150, width: 120, height: 24 },                // Right high
+    // === Near-column perches (exit points from bubble stream) ===
+    { x: 310, y: 340, width: 90, height: 24 },                  // Left exit mid
+    { x: 880, y: 340, width: 90, height: 24 },                  // Right exit mid
+    { x: 290, y: 170, width: 100, height: 24 },                 // Left exit high
+    { x: 890, y: 170, width: 100, height: 24 },                 // Right exit high
+    // Top platform above bubble column
+    { x: 540, y: 80, width: 200, height: 24 },                  // Top crown
   ],
   spawnPoints: [
-    { x: 130, y: 550 }, { x: 1150, y: 550 },
-    { x: 480, y: 510 }, { x: 780, y: 510 },
-    { x: 640, y: 250 }, { x: 640, y: 640 },
+    { x: 200, y: 640 }, { x: 1080, y: 640 },
+    { x: 400, y: 640 }, { x: 880, y: 640 },
+    { x: 640, y: 640 }, { x: 640, y: 60 },
   ],
   effectZones: [
-    // PERMANENT central bubble upstream — always active (huge duration, tiny interval)
-    { x: 610, y: 200, width: 60, height: 460, type: 'geyser', strength: -500, interval: 0.1, duration: 9999 },
-    // Gentle currents pushing toward center (funnel players to the stream)
-    { x: 250, y: 400, width: 150, height: 200, type: 'current', vx: 60 },
-    { x: 880, y: 400, width: 150, height: 200, type: 'current', vx: -60 },
+    // WIDE central bubble column — full height, 400px wide elevator
+    { x: 440, y: 0, width: 400, height: 660, type: 'geyser', strength: -500, interval: 0.1, duration: 9999 },
+    // Gentle currents pushing toward center (funnel players to the column)
+    { x: 200, y: 400, width: 200, height: 260, type: 'current', vx: 70 },
+    { x: 880, y: 400, width: 200, height: 260, type: 'current', vx: -70 },
   ],
 };
 
