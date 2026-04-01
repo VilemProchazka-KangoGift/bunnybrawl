@@ -95,6 +95,36 @@ export function MainMenu() {
               />
               <span>{t('blood_mode')}</span>
             </label>
+
+            <div className="bot-settings" data-testid="bot-settings">
+              <div className="bot-count-row">
+                <span className="bot-label">{t('bot_label')}</span>
+                <button
+                  className="bot-btn"
+                  onClick={() => setMatchSettings({ botCount: Math.max(0, matchSettings.botCount - 1) })}
+                  disabled={matchSettings.botCount <= 0}
+                >-</button>
+                <span className="bot-count" data-testid="bot-count">{matchSettings.botCount}</span>
+                <button
+                  className="bot-btn"
+                  onClick={() => setMatchSettings({ botCount: Math.min(5, matchSettings.botCount + 1) })}
+                  disabled={matchSettings.botCount >= 5}
+                >+</button>
+              </div>
+              {matchSettings.botCount > 0 && (
+                <div className="bot-difficulty-row">
+                  {(['easy', 'medium', 'hard'] as const).map(d => (
+                    <button
+                      key={d}
+                      className={`difficulty-btn ${matchSettings.botDifficulty === d ? 'selected' : ''}`}
+                      onClick={() => setMatchSettings({ botDifficulty: d })}
+                    >
+                      {t(`bot_diff_${d}`)}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="credits">

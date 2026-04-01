@@ -1,6 +1,6 @@
-import type { Arena, Player, SplatMark, MatchState, Particle, Carrot, SpringMushroom, Thorn, WeatherParticle, WildlifeEntity, CharacterSlot } from './types';
+import type { Arena, Player, SplatMark, MatchState, Particle, Carrot, SpringMushroom, Thorn, WeatherParticle, WildlifeEntity, PlayerSlot } from './types';
+import { isBotSlot } from './types';
 import type { ThemeConfig } from './themes/types';
-import { CHARACTERS } from './characters';
 import { aabbOverlap } from './physics';
 import {
   CANVAS_WIDTH, CANVAS_HEIGHT, CARROT_SIZE, SPRING_SIZE, FAT_SCALE,
@@ -373,7 +373,7 @@ export class Renderer {
     }
 
     // Compute which players are near a carrot (c) for blush
-    const nearCarrotSet = new Set<CharacterSlot>();
+    const nearCarrotSet = new Set<PlayerSlot>();
     for (const player of matchState.players) {
       if (!player.active || player.state === 'respawning') continue;
       const pcx = player.x + player.width / 2;
@@ -2290,15 +2290,17 @@ export class Renderer {
 
   private drawHUD(ctx: CanvasRenderingContext2D, state: MatchState): void {
     const activePlayers = state.players.filter(p => p.active);
-    const scoreWidth = 160;
+    const scoreWidth = Math.min(160, Math.floor((CANVAS_WIDTH - 40) / activePlayers.length));
+    const compact = scoreWidth < 130;
     const totalWidth = activePlayers.length * scoreWidth;
     const startX = (CANVAS_WIDTH - totalWidth) / 2;
 
     for (let i = 0; i < activePlayers.length; i++) {
       const player = activePlayers[i];
       const px = startX + i * scoreWidth;
+      const isBot = isBotSlot(player.id);
 
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.fillStyle = isBot ? 'rgba(40, 20, 60, 0.55)' : 'rgba(0, 0, 0, 0.5)';
       ctx.beginPath();
       ctx.roundRect(px, 10, scoreWidth - 10, 40, 8);
       ctx.fill();
@@ -2311,12 +2313,20 @@ export class Renderer {
       ctx.lineWidth = 1;
       ctx.stroke();
 
+      const displayName = compact ? player.character.name.slice(0, 4) : player.character.name;
       ctx.fillStyle = '#FFF';
-      ctx.font = 'bold 16px "Press Start 2P", monospace';
+      ctx.font = `bold ${compact ? 12 : 16}px "Press Start 2P", monospace`;
       ctx.textAlign = 'left';
-      ctx.fillText(`${player.character.name}`, px + 35, 28);
-      ctx.font = 'bold 18px "Press Start 2P", monospace';
+      ctx.fillText(displayName, px + 35, 28);
+      ctx.font = `bold ${compact ? 14 : 18}px "Press Start 2P", monospace`;
       ctx.fillText(`${player.score}`, px + 35, 45);
+
+      // Small bot indicator
+      if (isBot) {
+        ctx.fillStyle = 'rgba(180, 140, 255, 0.7)';
+        ctx.font = 'bold 7px monospace';
+        ctx.fillText('BOT', px + 6, 18);
+      }
     }
 
     if (state.timeElapsed >= 0) {
@@ -2348,6 +2358,42 @@ export class Renderer {
         ctx.textAlign = 'center';
         ctx.fillText(`${minutes}:${seconds.toString().padStart(2, '0')}`, CANVAS_WIDTH / 2, 75);
       }
+    }
+
+    // Kill feed with character color dots
+    const recentKills = state.killFeed.slice(-3).reverse();
+    for (let i = 0; i < recentKills.length; i++) {
+      const entry = recentKills[i];
+      const fy = 100 + i * 25;
+      const attacker = state.players.find(p => p.id === entry.attacker)?.character;
+      const victim = state.players.find(p => p.id === entry.victim)?.character;
+      if (!attacker || !victim) continue;
+
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+      ctx.beginPath();
+      ctx.roundRect(CANVAS_WIDTH - 250, fy, 240, 22, 4);
+      ctx.fill();
+
+      ctx.fillStyle = attacker.color;
+      ctx.beginPath();
+      ctx.arc(CANVAS_WIDTH - 245, fy + 11, 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.font = '12px monospace';
+      ctx.textAlign = 'right';
+      ctx.fillStyle = attacker.color;
+      ctx.fillText(attacker.name, CANVAS_WIDTH - 140, fy + 15);
+      ctx.fillStyle = '#FFF';
+      ctx.fillText(' splatted ', CANVAS_WIDTH - 80, fy + 15);
+
+      ctx.fillStyle = victim.color;
+      ctx.beginPath();
+      ctx.arc(CANVAS_WIDTH - 18, fy + 11, 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.textAlign = 'right';
+      ctx.fillStyle = victim.color;
+      ctx.fillText(victim.name, CANVAS_WIDTH - 24, fy + 15);
     }
 
     // Animated score numbers (i)

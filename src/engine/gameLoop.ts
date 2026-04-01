@@ -1,7 +1,9 @@
 import type {
-  MatchState, MatchSettings, Arena, CharacterSlot, Player, Particle,
+  MatchState, MatchSettings, Arena, PlayerSlot, Player, Particle,
   WeatherParticle, MatchStats, PlayerStats, WildlifeEntity, EffectZone, Platform,
+  InputState,
 } from './types';
+import { isBotSlot } from './types';
 import type { ThemeConfig } from './themes/types';
 import { getTheme } from './themes/registry';
 import { randRange, pickWeighted, swapRemove } from './themes/utils';
@@ -25,9 +27,10 @@ import {
   SPRING_TRAIL_DURATION, SCORE_ANIM_DURATION,
   GRAVITY, FRICTION, MAX_WALK_SPEED, JUMP_IMPULSE, MAX_FALL_SPEED,
 } from './constants';
-import { CHARACTERS } from './characters';
+import { getCharacterForSlot } from './characters';
+import { AIController } from './ai';
 
-export type MatchEndCallback = (winner: CharacterSlot | null, state: MatchState) => void;
+export type MatchEndCallback = (winner: PlayerSlot | null, state: MatchState) => void;
 
 export class GameLoop {
   private arena: Arena;
@@ -53,21 +56,22 @@ export class GameLoop {
   private newSplatsSinceRender: number[] = [];
   private particles: Particle[] = [];
   private fireworkTimer = 0;
-  private afterimageAccumulators: Map<CharacterSlot, number> = new Map();
-  private footstepAccumulators: Map<CharacterSlot, number> = new Map();
+  private afterimageAccumulators: Map<PlayerSlot, number> = new Map();
+  private footstepAccumulators: Map<PlayerSlot, number> = new Map();
   private crowdStarted = false;
   private zeroGSoundPlaying = false;
   private cachedGeyserZones: EffectZone[] = [];
   private cachedZeroGZones: EffectZone[] = [];
   private geyserIndexMap: Map<EffectZone, number> = new Map();
   private floatingPlatforms: Array<{ plat: Platform; idx: number }> = [];
+  private aiControllers: Map<string, AIController> = new Map();
 
   constructor(
     bgCanvas: HTMLCanvasElement,
     fgCanvas: HTMLCanvasElement,
     arena: Arena,
     settings: MatchSettings,
-    activePlayers: CharacterSlot[],
+    activePlayers: PlayerSlot[],
     onMatchEnd: MatchEndCallback,
   ) {
     this.arena = arena;
@@ -87,7 +91,7 @@ export class GameLoop {
 
     const players: Player[] = activePlayers.map((slot, index) => ({
       id: slot,
-      character: CHARACTERS[slot],
+      character: getCharacterForSlot(slot),
       x: arena.spawnPoints[index % arena.spawnPoints.length].x - PLAYER_WIDTH / 2,
       y: arena.spawnPoints[index % arena.spawnPoints.length].y - PLAYER_HEIGHT,
       vx: 0, vy: 0,
@@ -101,6 +105,14 @@ export class GameLoop {
       breathTimer: 0, springTrailTimer: 0, damageFlashSide: null, damageFlashTimer: 0,
     }));
 
+    // Init AI controllers for bot players
+    const botDifficulty = settings.botDifficulty ?? 'medium';
+    for (const player of players) {
+      if (isBotSlot(player.id)) {
+        this.aiControllers.set(player.id, new AIController(player.id, player.character.name, botDifficulty));
+      }
+    }
+
     // Init weather particles from theme config
     const weather: WeatherParticle[] = [];
     for (let i = 0; i < this.theme.weather.particleCount; i++) {
@@ -108,7 +120,7 @@ export class GameLoop {
     }
 
     // Init stats
-    const statsMap = new Map<CharacterSlot, PlayerStats>();
+    const statsMap = new Map<PlayerSlot, PlayerStats>();
     for (const slot of activePlayers) {
       statsMap.set(slot, { bestStreak: 0, timeAirborne: 0, distanceTraveled: 0, carrotsEaten: 0 });
     }
@@ -733,12 +745,18 @@ export class GameLoop {
     // Input + physics
     for (const player of this.state.players) {
       if (!player.active) continue;
-      const input = this.input.getInput(player.id);
+      const input = this.getPlayerInput(player);
       const wasAirborne = player.state === 'airborne';
       const prevVy = player.vy;
       const prevVx = player.vx;
 
-      applyInput(player, input, dt, this.effWalkSpeed, this.effFriction, this.effJumpImpulse);
+      // Bot walk speed penalty (easy bots move slower)
+      let playerWalkSpeed = this.effWalkSpeed;
+      if (isBotSlot(player.id)) {
+        const ai = this.aiControllers.get(player.id);
+        if (ai) playerWalkSpeed *= ai.getWalkSpeedMult();
+      }
+      applyInput(player, input, dt, playerWalkSpeed, this.effFriction, this.effJumpImpulse);
       if (!wasAirborne && player.state === 'airborne') {
         audio.play('jump');
         // Stretch on jump
@@ -1342,7 +1360,7 @@ export class GameLoop {
       }
     }
     if (this.settings.timeLimit > 0 && this.state.timeElapsed >= this.settings.timeLimit) {
-      let winner: CharacterSlot | null = null;
+      let winner: PlayerSlot | null = null;
       let maxScore = -1;
       for (const player of this.state.players) {
         if (player.active && player.score > maxScore) { maxScore = player.score; winner = player.id; }
@@ -1352,7 +1370,16 @@ export class GameLoop {
     }
   }
 
-  private endMatch(winner: CharacterSlot | null): void {
+  private getPlayerInput(player: Player): InputState {
+    if (isBotSlot(player.id)) {
+      const ai = this.aiControllers.get(player.id);
+      if (ai) return ai.getInput(player, this.state, this.arena);
+      return { left: false, right: false, jump: false, down: false };
+    }
+    return this.input.getInput(player.id as import('./types').CharacterSlot);
+  }
+
+  private endMatch(winner: PlayerSlot | null): void {
     this.state.matchOver = true;
     this.state.winner = winner;
     this.state.screenFlash = SCREEN_FLASH_DURATION;

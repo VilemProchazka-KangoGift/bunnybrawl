@@ -17,7 +17,7 @@
   "arena_rooftops": "Rooftops",
   "arena_space_station": "Space Station",
   "credits_tribute": "A Jump'n'Bump tribute",
-  "credits_players": "Up to 5 players — one keyboard!",
+  "credits_players": "Up to 5 players + 5 bots — one keyboard!",
   "lobby_title": "Stomp to swap characters! Walk right to join!",
   "lobby_players_ready_one": "{{count}} player ready",
   "lobby_players_ready_other": "{{count}} players ready",
@@ -63,6 +63,10 @@
   "char_Horse": "Horse",
   "char_Sheep": "Sheep",
   "char_Monkey": "Monkey",
+  "bot_label": "Bots",
+  "bot_diff_easy": "Easy",
+  "bot_diff_medium": "Medium",
+  "bot_diff_hard": "Hard",
   "fullscreen_enter": "Enter fullscreen",
   "fullscreen_exit": "Exit fullscreen"
 }

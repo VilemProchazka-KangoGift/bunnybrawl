@@ -1,17 +1,17 @@
 import { create } from 'zustand';
-import type { GameScreen, MatchSettings, CharacterSlot, MatchState } from '../engine/types';
+import type { GameScreen, MatchSettings, PlayerSlot, MatchState } from '../engine/types';
 
 interface GameStore {
   screen: GameScreen;
   matchSettings: MatchSettings;
-  activePlayers: CharacterSlot[];
+  activePlayers: PlayerSlot[];
   lastMatchState: MatchState | null;
-  winner: CharacterSlot | null;
+  winner: PlayerSlot | null;
 
   setScreen: (screen: GameScreen) => void;
   setMatchSettings: (settings: Partial<MatchSettings>) => void;
-  setActivePlayers: (players: CharacterSlot[]) => void;
-  setMatchResult: (winner: CharacterSlot | null, state: MatchState) => void;
+  setActivePlayers: (players: PlayerSlot[]) => void;
+  setMatchResult: (winner: PlayerSlot | null, state: MatchState) => void;
   reset: () => void;
 }
 
@@ -23,12 +23,25 @@ function loadArenaId(): string {
   try { return localStorage.getItem('bunnybrawl_arena') || 'random'; } catch { return 'random'; }
 }
 
+function loadBotCount(): number {
+  try { return parseInt(localStorage.getItem('bunnybrawl_botcount') || '0', 10) || 0; } catch { return 0; }
+}
+
+function loadBotDifficulty(): 'easy' | 'medium' | 'hard' {
+  try {
+    const val = localStorage.getItem('bunnybrawl_botdiff');
+    return val === 'easy' || val === 'medium' || val === 'hard' ? val : 'medium';
+  } catch { return 'medium'; }
+}
+
 const defaultSettings: MatchSettings = {
   killLimit: 16,
   timeLimit: 180, // 3 minutes
   playerCount: 2,
   goreMode: loadGoreMode(),
   arenaId: loadArenaId(),
+  botCount: loadBotCount(),
+  botDifficulty: loadBotDifficulty(),
 };
 
 export const useGameStore = create<GameStore>((set) => ({
@@ -48,6 +61,12 @@ export const useGameStore = create<GameStore>((set) => ({
       }
       if ('arenaId' in settings) {
         try { localStorage.setItem('bunnybrawl_arena', next.arenaId); } catch { /* noop */ }
+      }
+      if ('botCount' in settings) {
+        try { localStorage.setItem('bunnybrawl_botcount', String(next.botCount)); } catch { /* noop */ }
+      }
+      if ('botDifficulty' in settings) {
+        try { localStorage.setItem('bunnybrawl_botdiff', next.botDifficulty); } catch { /* noop */ }
       }
       return { matchSettings: next };
     }),

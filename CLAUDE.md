@@ -21,6 +21,13 @@ src/
     renderer.ts   # Canvas 2D rendering (two layers: bg + fg) — LARGEST FILE (~2300 lines)
     audio.ts      # Procedural audio generation (14 animal sounds + SFX + music)
     gameLoop.ts   # Main game loop with fixed timestep, all game systems (~920 lines)
+    ai/           # AI opponent system (utility-based decision making)
+      types.ts      # AIDifficulty, AIPersonality, AwarenessSnapshot, ActionScores
+      aiController.ts # Per-bot brain: reaction buffer, stuck detection, taunt, search pause
+      awareness.ts  # Single-pass game state sensing (enemies, hazards, platforms, zones)
+      utility.ts    # 15 evaluators scoring moveLeft/moveRight/jump/drop
+      personality.ts # 14 character profiles + 3 difficulty presets
+      index.ts      # Barrel export
     themes/       # Data-driven arena theme system
       types.ts      # ThemeConfig interface + all sub-interfaces
       drawPrimitives.ts  # Shared drawing functions (trees, bushes, flowers, etc.)
@@ -55,6 +62,7 @@ src/
 - **React is for menus only** — the game canvas and lobby canvas use imperative requestAnimationFrame loops.
 - **CSS transform scaling** — the game renders internally at a fixed 1280x720 logical resolution. `GameScaler` wraps all screens and uses `transform: scale()` to fit the viewport while preserving 16:9 aspect ratio. Screen containers use `width/height: 100%` and inherit size from the scaler. Fullscreen via F11 or the corner button.
 - **i18n via i18next** — Czech is the default language. Canvas text uses `i18n.t()` directly (not the React hook).
+- **AI opponents via utility scoring** — up to 5 bots (BotSlot B1-B5) alongside 5 human players. Each bot runs an `AIController` that produces `InputState` (4 booleans) per frame — same interface as keyboard. Decision pipeline: `buildAwareness()` (single-pass state scan) → `evaluateActions()` (15 weighted evaluators) → reaction buffer delay → output. No pathfinding graph — bots navigate via platform-seeking and roam evaluators.
 - **Data-driven arena themes** — Each arena has a `ThemeConfig` controlling all visuals (sky, platforms, decorations, weather, wildlife, fog, day/night) and optional physics modifiers. Themes are mostly data (colors, counts, ranges) with custom draw functions for unique decorations. Shared drawing primitives live in `themes/drawPrimitives.ts` and are reused across themes.
 
 ## Common Patterns
@@ -109,6 +117,19 @@ Arena mechanics are a combination of **Arena** fields (structural positions) and
 4. Initialize in `GameLoop` constructor
 5. Add spawn/update/collision logic in `gameLoop.ts` `fixedUpdate`
 6. Add rendering in `renderer.ts` `renderFrame`
+
+### Adding a new AI behavior
+1. If it needs new game state data: add field to `AwarenessSnapshot` in `ai/types.ts`
+2. Compute the new field in `ai/awareness.ts` `buildAwareness()` — prefer adding to the existing single-pass player loop
+3. Add evaluator function in `ai/utility.ts` (convention: `evaluateXxx(awareness, scores, personality)`)
+4. Wire it into `evaluateActions()` — order matters: earlier evaluators can be overridden by later ones
+5. If it needs per-bot persistent state (timers, cooldowns): add field to `AIController` class
+
+### Tuning AI difficulty
+- `ai/personality.ts` has `DIFFICULTY_PARAMS` with `easy`/`medium`/`hard` presets
+- Key levers: `reactionFrames` (input delay), `awarenessRadius` (detection range), `noiseChance` (random input), `walkSpeedMult` (movement speed), `hesitationChance` (random freezes)
+- Personality weights multiply utility scores: `aggressiveness`, `cautiousness`, `greediness`, `chaosAffinity`, `platformPreference`
+- Jump behavior: controlled by `JUMP_THRESHOLD` (0.55) in aiController and `jumpCooldown` (20 frames)
 
 ### Adding a new visual effect
 1. If it needs state: add fields to `MatchState` or `Player` in `types.ts`
@@ -171,6 +192,13 @@ npm run test:e2e  # E2E tests (builds first)
 
 ## Workflow Rules
 
+- **PlayerSlot = CharacterSlot | BotSlot** — `Player.id` is `PlayerSlot` (not `CharacterSlot`). Human slots are P1-P5, bot slots are B1-B5. Use `isBotSlot(slot)` to check. `CHARACTERS` record only holds human slots; use `getCharacterForSlot(slot)` for universal lookup.
+- **Bot characters stored in `BOT_CHARACTERS` Map** — populated by `assignBotCharacters()` before match start. The `CHARACTERS` record is NOT extended for bots.
+- **AI awareness uses a single pass over `state.players`** — do NOT add separate `.filter()` loops. All enemy detection, roam target, clustering, and leader score are computed in one loop for perf.
+- **AI evaluators must not allocate arrays** — `evaluateActions()` runs 60× per bot per second. Use simple arithmetic on the `ActionScores` object. No `.filter()`, `.sort()`, or `.map()` in evaluators.
+- **Jump suppression has 3 layers** — tight-space check (platform <80px above), jump threshold (0.55), and jump cooldown (20 frames). All 3 must pass for a bot to jump. When tuning, check all 3.
+- **Lobby bots use separate AI from match bots** — `CharacterSelect.tsx` has `updateBotLobbyAI()` for directed walking to ready zone. Match AI is in `src/engine/ai/`. They share no code.
+- **Bot settings persisted in localStorage** — `bunnybrawl_botcount` and `bunnybrawl_botdiff`, loaded in `gameStore.ts`.
 - **Always document lessons learned** — after completing a feature or fixing iterative feedback, update the relevant `.claude/skills/*.md` file with lessons, gotchas, and patterns discovered. If no skill file exists for the domain, create one. This prevents repeating the same mistakes across sessions.
 
 ## File Size Reference
@@ -182,4 +210,6 @@ Largest files to be aware of when context is limited:
 - `audio.ts` ~700 lines (procedural sound generation including wind/geyser/pigeon)
 - `themes/drawPrimitives.ts` — shared drawing functions extracted from renderer
 - Individual theme files ~300-500 lines each (10 themes: meadow, winterLake, volcano, castle, candyLand, treetops, underwater, hauntedGraveyard, rooftops, spaceStation)
+- `ai/awareness.ts` ~240 lines (single-pass game state sensing, most complex AI file)
+- `ai/utility.ts` ~300 lines (15 evaluator functions)
 - `VictoryScreen.css` ~410 lines
