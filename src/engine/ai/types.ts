@@ -55,7 +55,7 @@ export interface AwarenessSnapshot {
   /** Index of the platform the bot is standing on (-1 if airborne) */
   currentPlatformIdx: number;
   /** Next platform to reach via precomputed nav graph (null if no goal, airborne, or easy difficulty) */
-  navTarget: { x: number; y: number; width: number; approachX: number; type: 'j' | 'd' | 'w' | 'g' } | null;
+  navTarget: { x: number; y: number; width: number; approachX: number; type: 'j' | 'd' | 'w' | 'g' | 'z' } | null;
 }
 
 export interface ActionScores {

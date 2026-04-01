@@ -56,6 +56,7 @@ export interface Arena {
   effectZones?: EffectZone[];
   bouncyPlatforms?: number[];  // indices into platforms[] that bounce players
   allowFallOff?: boolean;
+  noSpawnZones?: AABB[];       // zones where hazards/characters should not spawn
 }
 
 export type CharacterSlot = 'P1' | 'P2' | 'P3' | 'P4' | 'P5';

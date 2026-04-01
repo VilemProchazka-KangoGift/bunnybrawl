@@ -190,6 +190,16 @@ function evaluatePlatformSeeking(a: AwarenessSnapshot, s: ActionScores, p: AIPer
         else s.moveLeft += weight;
       }
       // Don't add jump — geyser launches automatically
+    } else if (nav.type === 'z') {
+      // Zero-G drift edge: walk to zone edge and jump into zero-G
+      if (Math.abs(dx) > 15) {
+        if (dx > 0) s.moveRight += weight;
+        else s.moveLeft += weight;
+      }
+      // Jump into the zone — zero-G amplifies the jump
+      if (Math.abs(dx) < 60) {
+        s.jump += weight * 0.8;
+      }
     } else {
       // Walk edge: just walk toward target
       if (Math.abs(dx) > 10) {
@@ -424,8 +434,14 @@ function evaluateZoneExploitation(a: AwarenessSnapshot, s: ActionScores, p: AIPe
       else s.moveLeft += exploitWeight;
     }
   }
-  // In zero-G, occasionally jump to exploit amplified jumps
-  if (a.inZeroG && a.self.onGround) {
+  // In zero-G: steer toward nav target platform if drifting intentionally, else jump to exploit
+  if (a.inZeroG && !a.self.onGround && a.navTarget && a.navTarget.type === 'z') {
+    const targetCx = a.navTarget.x + a.navTarget.width / 2;
+    const dx = targetCx - a.self.x;
+    const weight = 1.5;
+    if (dx > 15) s.moveRight += weight;
+    else if (dx < -15) s.moveLeft += weight;
+  } else if (a.inZeroG && a.self.onGround) {
     s.jump += 0.15 * p.platformPreference;
   }
   // Compensate for current push

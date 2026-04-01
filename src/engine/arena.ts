@@ -356,6 +356,10 @@ export const HAUNTED_GRAVEYARD_ARENA: Arena = {
     { x: 600, y: 385 }, { x: 350, y: 628 },
     { x: 320, y: 310 }, { x: 960, y: 310 },
   ],
+  noSpawnZones: [
+    // Mausoleum interior — no springs, thorns, or character spawns inside the crypt
+    { x: 480, y: 420, width: 320, height: 240 },
+  ],
 };
 
 // ============================================================

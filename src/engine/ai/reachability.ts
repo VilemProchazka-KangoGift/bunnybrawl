@@ -259,6 +259,60 @@ export function canGeyserTo(from: Platform, geyser: EffectZone, to: Platform): R
 }
 
 /**
+ * Can a player jump into a zero-G zone from `from` and drift across to land on `to`?
+ * Zero-G amplifies jumps (vy *= 1.03 each frame, falls slowed by vy *= 0.92).
+ * In practice, players float much further horizontally and vertically.
+ */
+export function canZeroGTo(from: Platform, zone: EffectZone, to: Platform): ReachResult {
+  // Both platforms must be at the edges of (or within) the zero-G zone
+  const zoneLeft = zone.x;
+  const zoneRight = zone.x + zone.width;
+  const zoneTop = zone.y;
+  const zoneBottom = zone.y + zone.height;
+
+  // The 'from' platform must be near or overlapping the zone edge
+  const fromRight = from.x + from.width;
+  const fromLeft = from.x;
+  const fromNearZone = fromRight >= zoneLeft - 100 && fromLeft <= zoneRight + 100;
+  if (!fromNearZone) return { reachable: false, approachX: 0 };
+
+  // Target must be within or near the zone (vertically and horizontally)
+  const toRight = to.x + to.width;
+  const toLeft = to.x;
+  const toNearZone = toRight >= zoneLeft - 100 && toLeft <= zoneRight + 100;
+  if (!toNearZone) return { reachable: false, approachX: 0 };
+
+  // Target Y must be within the zone's vertical extent (with margin for drift)
+  if (to.y < zoneTop - 100 || to.y > zoneBottom + 50) return { reachable: false, approachX: 0 };
+  if (from.y < zoneTop - 50 || from.y > zoneBottom + 50) return { reachable: false, approachX: 0 };
+
+  // In zero-G, effective jump height is much greater (~3-4x normal due to vy amplification)
+  // and horizontal drift is much greater (player floats for much longer)
+  // Conservative estimate: can cross the full zone width and reach ~400px height
+  const maxZeroGHeight = MAX_JUMP_HEIGHT * 3;
+  const maxZeroGReach = zone.width + 200; // can drift across the whole zone
+
+  const riseNeeded = from.y - to.y;
+  if (riseNeeded > maxZeroGHeight) return { reachable: false, approachX: 0 };
+
+  // Horizontal distance between platforms
+  const directDx = Math.abs((from.x + from.width / 2) - (to.x + to.width / 2));
+  if (directDx > maxZeroGReach) return { reachable: false, approachX: 0 };
+
+  // Approach position: edge of `from` platform closest to the zone center
+  const zoneCx = zoneLeft + zone.width / 2;
+  const fromCx = from.x + from.width / 2;
+  let approachX: number;
+  if (fromCx < zoneCx) {
+    approachX = fromRight - PLAYER_WIDTH; // stand at right edge, jump into zone
+  } else {
+    approachX = fromLeft; // stand at left edge
+  }
+
+  return { reachable: true, approachX: Math.round(Math.max(0, approachX)) };
+}
+
+/**
  * Compute danger score (0-1) for an edge based on proximity to hazard zones.
  * 0 = no hazards nearby, 1 = passing directly through a hazard.
  */

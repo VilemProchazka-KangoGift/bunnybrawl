@@ -206,9 +206,19 @@ export class GameLoop {
     this.cachedZeroGZones = (arena.effectZones || []).filter(z => z.type === 'zero_g');
     this.geyserIndexMap = new Map(this.cachedGeyserZones.map((z, i) => [z, i]));
     // Cache floating platforms with indices for hazard spawning
+    const noSpawn = this.arena.noSpawnZones ?? [];
     this.floatingPlatforms = this.arena.platforms
       .map((p, i) => ({ plat: p, idx: i }))
-      .filter(({ plat }) => plat.y < 650 && plat.height <= 40);
+      .filter(({ plat }) => {
+        if (plat.y >= 650) return false; // ground platforms
+        // Exclude platforms inside no-spawn zones (e.g. mausoleum)
+        const cx = plat.x + plat.width / 2;
+        const cy = plat.y + plat.height / 2;
+        for (const z of noSpawn) {
+          if (cx >= z.x && cx <= z.x + z.width && cy >= z.y && cy <= z.y + z.height) return false;
+        }
+        return true;
+      });
 
     // Initialize ghosts from theme config
     if (this.theme.ghostConfig) {
