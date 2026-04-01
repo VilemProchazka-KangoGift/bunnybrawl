@@ -71,7 +71,7 @@ src/
 ### Adding a new arena / level
 1. Create theme config in `src/engine/themes/newTheme.ts` implementing `ThemeConfig` (see `meadow.ts` as reference)
    - Define sky gradient, hills, ground style, platform colors, `previewIcon` (emoji)
-   - Configure ambient systems: clouds, weather, wildlife, fog, ambient particles, day/night
+   - Configure ambient systems: clouds, weather, wildlife (types: `butterfly`, `bird`, `fish`, `bat`), fog, ambient particles, day/night
    - Write `drawBackgroundNature(ctx, arena)` — background decorations (trees, rocks, etc.)
    - Write `drawForegroundNature(ctx, arena)` — foreground decorations drawn over players (make these large enough to hide behind, ~40-80px tall, at alpha 0.4-0.6)
    - Optionally provide `drawWeatherParticle` for custom particle rendering
@@ -145,7 +145,9 @@ npm run test:e2e  # E2E tests (builds first)
 - **gameLoop.ts fixedUpdate returns early when matchOver** — any timers that should keep running after match end (screenFlash, slowMotion) must be decayed in the `loop()` method instead.
 - **Player-player collision and stomp detection interact** — stomps must be checked BEFORE `collidePlayersHorizontal`, and the collision must skip when vertical overlap < 50% (stomp zone).
 - **CharacterSelect.tsx has its own physics loop** — separate from the main game engine. Changes to lobby physics don't use the engine's `physics.ts`.
-- **Gore mode** is persisted in localStorage (`bunnybrawl_gore`).
+- **Gore mode** is persisted in localStorage (`bunnybrawl_gore`). Arena selection persisted in `bunnybrawl_arena` (default: `'random'`).
+- **`arenaId: 'random'`** — resolved to a concrete arena in `Match.tsx` via `resolveArenaId()`, not in the store. A module-level `lastResolvedArenaId` prevents repeating the same arena on rematch. The store keeps `'random'` so it re-rolls each time.
+- **Pause screen has a level selector** — "Change Level" button shows an arena grid. Selecting an arena sets `currentArenaId` local state which retriggers the game loop useEffect, restarting the match.
 - **The CHARACTERS record is mutated** at lobby exit to write the selected characters back. This is intentional.
 - **Arena type is flat** — `Arena` has `themeId` + platforms/spawns directly (not nested in a `layout` sub-object). The theme provides all visual config; the Arena provides structural layout. Color fields (`backgroundColor`, `groundColor`, `platformColor`) were removed — use the theme instead.
 - **Theme draw functions receive raw ctx + arena** — they import shared primitives from `drawPrimitives.ts` directly, not through a DrawKit indirection. Keep it simple.
@@ -158,11 +160,14 @@ npm run test:e2e  # E2E tests (builds first)
 - **Screen containers must use `width/height: 100%`** — they inherit their size from `GameScaler`'s 1280x720 content div. Never set fixed pixel dimensions on screen containers (`.main-menu`, `.match-container`, `.char-select`, `.victory-screen`).
 - **Day/night rendering must be gated on `dayNight.enabled`** — the renderer's `drawDayNightCycle` draws sun, moon, overlay, fireflies, and shooting stars. It must check `this.theme.dayNight.enabled` before drawing. Disabling the flag in the theme config is NOT enough if the renderer call isn't gated. When user says "remove day/night cycle" they mean: set `enabled: false` AND ensure no sun/moon/celestial bodies appear in `drawFarBackground` either.
 - **Tall narrow platform collision** — `collidePlatforms` uses a `landingFromAbove` guard (`sideOverlap > overlapTop`) to prevent the `feetNearTop` override from snapping players onto platforms they approached from the side. Without this, walking into the side of a tall block near its top edge would teleport the player on top. Very tall, very narrow platforms (e.g. 40x216) can still feel awkward — prefer wider-than-tall blocks for standable surfaces.
+- **Spring spawn requires 200px clearance** — `spawnSpring()` filters out platforms that have another platform directly above within 200px. Spring bounce reaches ~272px (`SPRING_BOUNCE²/2g`), so spawning under a low ceiling wastes the spring.
+- **`allowFallOff` arenas need hills pushed offscreen** — themes for arenas with no full-width ground should set `hills[].baseY` to 780+ (below screen). Otherwise the hill mounds float visibly in the void below the lowest platforms. Treetops learned this the hard way.
 - **Treetops has no platforms[0] ground** — the lowest playable platform is platforms[0] (a branch). Theme decorations use hardcoded y=750 for tree roots and y=620 for fog, not `platforms[0].y`.
 - **CharacterSelect.tsx canvas text needs i18n** — use `i18n.t('char_Name', name)` for character names displayed in the lobby canvas, not the raw English `char.name`.
 - **Entity cleanup uses `swapRemove`** — dead entities (springs, thorns, carrots, particles, etc.) are removed via `swapRemove(arr, i)` from `themes/utils.ts` in reverse-iterate loops. This is O(1) but does not preserve order. Never use `.filter()` for per-frame entity cleanup.
 - **Never splice/shift `splatMarks` during `fixedUpdate`** — multiple fixedUpdate ticks can run per frame, and `newSplatsSinceRender` stores indices into `splatMarks`. Splicing shifts indices and corrupts pending render references. Cap the array in the render path only (after indices are consumed).
 - **`GameLoop.stop()` must stop ALL looping sounds** — music, ambient, wind, zero_g, crowd. If a new looping sound is added, add a corresponding `audio.stop()` in `stop()`.
+- **Victory screen uses two-column layout** — left column: scoreboard + match stats, right column: stats table + MVP highlights. This fits within 720px viewport. If adding more sections, keep both columns balanced.
 
 ## Workflow Rules
 
