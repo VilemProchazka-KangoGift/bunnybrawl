@@ -306,7 +306,11 @@ export const UNDERWATER_ARENA: Arena = {
   spawnPoints: [
     { x: 200, y: 640 }, { x: 1080, y: 640 },
     { x: 400, y: 640 }, { x: 880, y: 640 },
-    { x: 640, y: 640 }, { x: 640, y: 60 },
+    { x: 640, y: 640 }, { x: 100, y: 370 },
+  ],
+  noSpawnZones: [
+    // Top crown platform — geyser floats players above it, can't land on it
+    { x: 540, y: 56, width: 200, height: 48 },
   ],
   effectZones: [
     // WIDE central bubble column — full height, 400px wide elevator
