@@ -208,7 +208,7 @@ export class GameLoop {
     // Cache floating platforms with indices for hazard spawning
     this.floatingPlatforms = this.arena.platforms
       .map((p, i) => ({ plat: p, idx: i }))
-      .filter(({ plat }) => plat.y < 650);
+      .filter(({ plat }) => plat.y < 650 && plat.height <= 40);
 
     // Initialize ghosts from theme config
     if (this.theme.ghostConfig) {
