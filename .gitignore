@@ -12,6 +12,12 @@ dist
 dist-ssr
 *.local
 
+# Playwright MCP / E2E output
+.playwright-mcp/
+src/.playwright-mcp/
+hedgehog-*.png
+src/fullscreen-check.png
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
