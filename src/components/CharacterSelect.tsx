@@ -631,7 +631,7 @@ function drawLobby(
   const goText = i18n.t('lobby_go');
   const goCx = (READY_ZONE_X + CANVAS_WIDTH) / 2;
   const goCy = GROUND_Y / 2 + 40;
-  ctx.font = "bold 80px 'Fredoka', sans-serif";
+  ctx.font = "bold 80px 'Nunito', sans-serif";
   ctx.textAlign = 'center';
   // Dark outline for contrast
   ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
@@ -646,7 +646,7 @@ function drawLobby(
     if (npc.splatTimer > 0) { drawSquishedChar(ctx, npc); }
     else { drawLobbyCharacter(ctx, npc); }
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
-    ctx.font = "10px 'Fredoka', sans-serif";
+    ctx.font = "10px 'Nunito', sans-serif";
     ctx.textAlign = 'center';
     ctx.fillText(i18n.t(`char_${npc.char.name}`, npc.char.name), npc.x + PLAYER_WIDTH / 2, npc.y - 5);
   }
@@ -663,7 +663,7 @@ function drawLobby(
     ctx.roundRect(tagX - tagW / 2, bot.y - 22, tagW, 16, 4);
     ctx.fill();
     ctx.fillStyle = '#C8A0FF';
-    ctx.font = "bold 10px 'Fredoka', sans-serif";
+    ctx.font = "bold 10px 'Nunito', sans-serif";
     ctx.textAlign = 'center';
     ctx.fillText('BOT', tagX, bot.y - 10);
   }
@@ -680,7 +680,7 @@ function drawLobby(
     ctx.roundRect(tagX - tagW / 2, p.y - 22, tagW, 16, 4);
     ctx.fill();
     ctx.fillStyle = p.char.color;
-    ctx.font = "bold 10px 'Fredoka', sans-serif";
+    ctx.font = "bold 10px 'Nunito', sans-serif";
     ctx.textAlign = 'center';
     ctx.fillText(`${p.slot}`, tagX, p.y - 10);
   }
@@ -716,19 +716,19 @@ function drawLobby(
     // Name in player color
     ctx.fillStyle = player.char.color;
     ctx.textAlign = 'left';
-    ctx.font = "bold 14px 'Fredoka', sans-serif";
+    ctx.font = "bold 14px 'Nunito', sans-serif";
     ctx.fillText(`${slot}: ${i18n.t(`char_${player.char.name}`, player.char.name)}`, textX, 26);
 
     // Keys
     ctx.fillStyle = 'rgba(255,255,255,0.6)';
-    ctx.font = "bold 13px 'Fredoka', monospace";
+    ctx.font = "bold 13px 'Nunito', monospace";
     const fmtKey = (k: string) => k === 'ArrowLeft' ? '\u2190' : k === 'ArrowRight' ? '\u2192' : k === 'ArrowUp' ? '\u2191' : k === 'ArrowDown' ? '\u2193' : k;
     ctx.fillText(`${fmtKey(bindings.left)} ${fmtKey(bindings.right)} ${fmtKey(bindings.jump)} ${fmtKey(bindings.down)}`, textX, 42);
   }
 
   // ---- Bottom-left: swap instruction ----
   const swapText = i18n.t('lobby_title');
-  ctx.font = "bold 16px 'Fredoka', sans-serif";
+  ctx.font = "bold 16px 'Nunito', sans-serif";
   const swapW = ctx.measureText(swapText).width + 28;
   const blX = 14;
   const blY = GROUND_Y + 10;
@@ -744,7 +744,7 @@ function drawLobby(
 
   // ---- Rules hint (below START in ready zone) ----
   const rulesText = `${i18n.t('rules_label')}  🦶 ${i18n.t('rules_stomp')}   🥕 ${i18n.t('rules_carrot')}`;
-  ctx.font = "14px 'Fredoka', sans-serif";
+  ctx.font = "14px 'Nunito', sans-serif";
   ctx.textAlign = 'center';
   const rulesCx = (READY_ZONE_X + CANVAS_WIDTH) / 2;
   const rulesY = GROUND_Y / 2 + 80;
@@ -762,7 +762,7 @@ function drawLobby(
 
   // ---- Bottom-right: join instruction with arrow ----
   const joinText = i18n.t('lobby_join');
-  ctx.font = "bold 16px 'Fredoka', sans-serif";
+  ctx.font = "bold 16px 'Nunito', sans-serif";
   const joinW = ctx.measureText(joinText).width + 50;
   const brX = CANVAS_WIDTH - joinW - 14;
   const brY = GROUND_Y + 10;
@@ -774,9 +774,9 @@ function drawLobby(
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   // Arrow pointing up toward the start zone
-  ctx.font = "bold 20px 'Fredoka', sans-serif";
+  ctx.font = "bold 20px 'Nunito', sans-serif";
   ctx.fillText('\u2191', brX + 10, brY + 16);
-  ctx.font = "bold 16px 'Fredoka', sans-serif";
+  ctx.font = "bold 16px 'Nunito', sans-serif";
   ctx.fillText(joinText, brX + 30, brY + 16);
   ctx.textBaseline = 'alphabetic';
 
@@ -790,10 +790,10 @@ function drawLobby(
     ctx.roundRect(cx - 90, cy, 180, 48, 14);
     ctx.fill();
     ctx.fillStyle = '#FFD700';
-    ctx.font = "bold 26px 'Fredoka', sans-serif";
+    ctx.font = "bold 26px 'Nunito', sans-serif";
     ctx.textAlign = 'center';
     ctx.fillText(i18n.t('lobby_starting', { seconds: secs }), cx, cy + 31);
-    ctx.font = "14px 'Fredoka', sans-serif";
+    ctx.font = "14px 'Nunito', sans-serif";
     ctx.globalAlpha = 0.5;
     ctx.fillStyle = '#FFF';
     ctx.fillText(i18n.t('countdown_skip'), cx, cy + 62);
@@ -809,7 +809,7 @@ function drawLobby(
     if (humanCount > 0) parts.push(i18n.t('lobby_humans_ready', { count: humanCount }));
     if (botCount > 0) parts.push(i18n.t('lobby_bots_ready', { count: botCount }));
     const readyText = parts.join(' + ');
-    ctx.font = "bold 16px 'Fredoka', sans-serif";
+    ctx.font = "bold 16px 'Nunito', sans-serif";
     ctx.textAlign = 'center';
     const rw = ctx.measureText(readyText).width + 24;
     const rx = (READY_ZONE_X + CANVAS_WIDTH) / 2;

@@ -2864,7 +2864,7 @@ export class Renderer {
     ctx.scale(tickScale, tickScale);
 
     // Black stroke
-    ctx.font = 'bold 80px "Fredoka", sans-serif';
+    ctx.font = 'bold 80px "Nunito", sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.strokeStyle = '#000';

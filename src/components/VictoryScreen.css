@@ -1,7 +1,7 @@
 .victory-screen {
   width: 100%;
   height: 100%;
-  font-family: 'Fredoka', sans-serif;
+  font-family: 'Nunito', sans-serif;
   position: relative;
 }
 
@@ -54,7 +54,7 @@
 }
 
 .winner-text {
-  font-family: 'Fredoka', sans-serif;
+  font-family: 'Nunito', sans-serif;
   font-size: 42px;
   font-weight: 700;
   color: #FFD700;
@@ -79,7 +79,7 @@
 
 .scoreboard h2 {
   color: rgba(255, 255, 255, 0.6);
-  font-family: 'Fredoka', sans-serif;
+  font-family: 'Nunito', sans-serif;
   font-size: 18px;
   font-weight: 600;
   margin-bottom: 14px;
@@ -110,7 +110,7 @@
 }
 
 .rank {
-  font-family: 'Fredoka', sans-serif;
+  font-family: 'Nunito', sans-serif;
   font-size: 18px;
   font-weight: 700;
   color: rgba(255, 255, 255, 0.5);
@@ -122,7 +122,7 @@
 }
 
 .player-name {
-  font-family: 'Fredoka', sans-serif;
+  font-family: 'Nunito', sans-serif;
   font-size: 18px;
   font-weight: 600;
   flex: 1;
@@ -130,7 +130,7 @@
 }
 
 .player-score {
-  font-family: 'Fredoka', sans-serif;
+  font-family: 'Nunito', sans-serif;
   font-size: 16px;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.7);
@@ -144,7 +144,7 @@
 
 .player-stats-section h2 {
   color: rgba(255, 255, 255, 0.6);
-  font-family: 'Fredoka', sans-serif;
+  font-family: 'Nunito', sans-serif;
   font-size: 16px;
   font-weight: 600;
   margin-bottom: 10px;
@@ -191,7 +191,7 @@
 
 .stats-cell {
   flex: 1;
-  font-family: 'Fredoka', sans-serif;
+  font-family: 'Nunito', sans-serif;
   font-size: 13px;
   font-weight: 500;
   color: rgba(255, 255, 255, 0.6);
@@ -211,7 +211,7 @@
   margin: 8px 0 0;
   color: rgba(255, 255, 255, 0.4);
   font-size: 13px;
-  font-family: 'Fredoka', sans-serif;
+  font-family: 'Nunito', sans-serif;
 }
 
 .victory-actions {
@@ -338,7 +338,7 @@
 }
 
 .lineup-name {
-  font-family: 'Fredoka', sans-serif;
+  font-family: 'Nunito', sans-serif;
   font-size: 11px;
   font-weight: 600;
 }
@@ -363,7 +363,7 @@
 
 .mvp-highlights h2 {
   color: rgba(255, 255, 255, 0.6);
-  font-family: 'Fredoka', sans-serif;
+  font-family: 'Nunito', sans-serif;
   font-size: 13px;
   font-weight: 600;
   margin-bottom: 4px;
@@ -395,7 +395,7 @@
 }
 
 .mvp-label {
-  font-family: 'Fredoka', sans-serif;
+  font-family: 'Nunito', sans-serif;
   font-size: 13px;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.5);
@@ -404,7 +404,7 @@
 }
 
 .mvp-player {
-  font-family: 'Fredoka', sans-serif;
+  font-family: 'Nunito', sans-serif;
   font-size: 13px;
   font-weight: 600;
   flex: 1;
@@ -412,7 +412,7 @@
 }
 
 .mvp-value {
-  font-family: 'Fredoka', sans-serif;
+  font-family: 'Nunito', sans-serif;
   font-size: 12px;
   font-weight: 500;
   color: rgba(255, 255, 255, 0.4);

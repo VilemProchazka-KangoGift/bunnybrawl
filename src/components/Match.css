@@ -53,7 +53,7 @@
 
 .pause-title {
   color: #FFD700;
-  font-family: 'Fredoka', sans-serif;
+  font-family: 'Nunito', sans-serif;
   font-size: 40px;
   font-weight: 700;
   margin: 0 0 32px;
@@ -161,7 +161,7 @@
 
 .pause-arena-name {
   color: rgba(255, 255, 255, 0.8);
-  font-family: 'Fredoka', sans-serif;
+  font-family: 'Nunito', sans-serif;
   font-size: 11px;
   line-height: 1.2;
   text-align: center;
@@ -175,6 +175,6 @@
 .pause-hint {
   margin-top: 24px;
   color: rgba(255, 255, 255, 0.35);
-  font-family: 'Fredoka', sans-serif;
+  font-family: 'Nunito', sans-serif;
   font-size: 13px;
 }
