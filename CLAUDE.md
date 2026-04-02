@@ -239,3 +239,19 @@ Largest files to be aware of when context is limited:
 - `ai/utility.ts` ~400 lines (15 evaluator functions + nav-guided platformSeeking)
 - `ai/navData.ts` — auto-generated, ~300-500 lines (precomputed platform reachability per arena)
 - `VictoryScreen.css` ~410 lines
+- `fastMath.ts` — trig lookup table (fastSin/fastCos) for hot render paths
+
+## Performance Architecture
+
+The renderer and game loop use several caching/pooling strategies to maintain 60fps:
+
+- **Sprite caching** — `drawCharacterSprite` caches drawn sprites to `OffscreenCanvas` keyed by `char+state+animFrame+fastFalling+idleKey`. Cache hit = single `drawImage` instead of 50+ path ops. 600-entry eviction cap. Breathing animation (2% scale) is intentionally excluded from cache key — too small to notice, would defeat caching.
+- **Gradient caching** — Lava, zero-G, ghost glow, and bouncy platform gradients are cached in Maps keyed by position. Only created once per zone, reused every frame. Dynamic gradients (afterglow, fire glow, shimmer) remain per-frame.
+- **HUD caching** — `drawHUD` renders to a 1280x90 `OffscreenCanvas`. Only redraws when scores, timer second, or player count changes. Score animations (+N popups) draw on main ctx. Cache-busting also triggers during timer pulse mode (<30s remaining).
+- **Particle pool** — `emitParticle()` reuses dead particle objects via a free-list (`particleFreeList`, capped at 300). Avoids GC pressure from hundreds of short-lived allocations per second during combat.
+- **Platform filter caching** — `getFloatingPlatforms()` in `themes/utils.ts` uses a WeakMap to cache `arena.platforms.filter(p => p.y < 650 && p.width >= 80)`. All 10 themes use this instead of filtering per frame.
+- **AI throttling** — Bots compute decisions every 3rd frame, staggered by `botIndex % 3`. The reaction buffer naturally smooths this. `buildAwareness()` is called once per decision (not twice).
+- **globalAlpha batching** — Stars, fireflies, fog, and ambient particles bake alpha into `rgba()` fillStyle instead of mutating `ctx.globalAlpha` per element (which flushes the GPU pipeline).
+- **Off-screen culling** — Particles and gibs outside viewport bounds are skipped in draw loops.
+- **`fastMath.ts`** — 360-entry Float32Array lookup tables for `fastSin`/`fastCos`. Use for visual effects only (animations, sparkles, stars). Keep `Math.sin`/`Math.cos` for physics.
+- When adding new particles, always use `this.emitParticle(x, y, vx, vy, life, size, color)` instead of `this.particles.push({...})` to enable free-list recycling.
