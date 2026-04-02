@@ -12,22 +12,22 @@ export const MEADOW_ARENA: Arena = {
   height: CANVAS_HEIGHT,
   platforms: [
     { x: 0, y: 660, width: CANVAS_WIDTH, height: 60 },         // Ground
-    { x: 100, y: 530, width: 180, height: 24 },                 // Low left
-    { x: 1000, y: 530, width: 180, height: 24 },                // Low right
-    { x: 300, y: 410, width: 220, height: 24 },                 // Mid left
-    { x: 760, y: 410, width: 220, height: 24 },                 // Mid right
+    { x: 90, y: 520, width: 160, height: 24 },                  // Low left (narrow+high)
+    { x: 990, y: 535, width: 200, height: 24 },                 // Low right (wide+low)
+    { x: 280, y: 400, width: 200, height: 24 },                 // Mid left (narrow+high)
+    { x: 760, y: 415, width: 240, height: 24 },                 // Mid right (wide+low)
     { x: 540, y: 480, width: 200, height: 24 },                 // Mid center
     { x: 490, y: 290, width: 300, height: 24 },                 // Top center
-    { x: 120, y: 340, width: 140, height: 24 },                 // High left
-    { x: 1020, y: 340, width: 140, height: 24 },                // High right
+    { x: 110, y: 330, width: 120, height: 24 },                 // High left (narrow+high)
+    { x: 1010, y: 345, width: 160, height: 24 },                // High right (wide+low)
     { x: 340, y: 615, width: 55, height: 45 },                  // Stump left ground
     { x: 860, y: 615, width: 55, height: 45 },                  // Stump right ground
     { x: 440, y: 370, width: 45, height: 40 },                  // Stump on mid-left plat
     { x: 800, y: 370, width: 45, height: 40 },                  // Stump on mid-right plat
   ],
   spawnPoints: [
-    { x: 190, y: 510 }, { x: 1090, y: 510 },
-    { x: 410, y: 390 }, { x: 870, y: 390 },
+    { x: 170, y: 500 }, { x: 1090, y: 515 },
+    { x: 380, y: 380 }, { x: 870, y: 395 },
     { x: 640, y: 270 }, { x: 640, y: 640 },
   ],
 };
@@ -44,18 +44,18 @@ export const WINTER_LAKE_ARENA: Arena = {
   platforms: [
     // Ground — flat full width
     { x: 0, y: 660, width: CANVAS_WIDTH, height: 60 },
-    // Left ice staircase — 3 steps climbing up
-    { x: 40, y: 580, width: 130, height: 24 },                  // Step 1
-    { x: 100, y: 500, width: 120, height: 24 },                 // Step 2
-    { x: 40, y: 420, width: 130, height: 24 },                  // Step 3
-    // Right ice staircase — 3 steps climbing up
-    { x: 1110, y: 580, width: 130, height: 24 },                // Step 1
-    { x: 1060, y: 500, width: 120, height: 24 },                // Step 2
-    { x: 1110, y: 420, width: 130, height: 24 },                // Step 3
+    // Left ice staircase — 3 steps, tight+steep
+    { x: 35, y: 575, width: 115, height: 24 },                  // Step 1 (narrow)
+    { x: 95, y: 490, width: 110, height: 24 },                  // Step 2 (narrow+steep)
+    { x: 30, y: 415, width: 120, height: 24 },                  // Step 3 (narrow)
+    // Right ice staircase — 3 steps, wide+gradual
+    { x: 1095, y: 585, width: 145, height: 24 },                // Step 1 (wide)
+    { x: 1050, y: 505, width: 140, height: 24 },                // Step 2 (wide+gradual)
+    { x: 1100, y: 425, width: 140, height: 24 },                // Step 3 (wide)
     // High center bridge (icicle spikes hang from this)
     { x: 440, y: 360, width: 400, height: 24 },                 // Frozen bridge
-    // Left perch at top of staircase (no right perch — igloo is decorative)
-    { x: 50, y: 340, width: 110, height: 24 },                  // Left perch
+    // Left perch at top of staircase (narrow+high — rewards steep climb)
+    { x: 45, y: 330, width: 100, height: 24 },                  // Left perch
     // Center platform
     { x: 520, y: 500, width: 240, height: 24 },                 // Mid island
     // Ice cube blocks on ground (solid, aligned with visual)
@@ -72,8 +72,8 @@ export const WINTER_LAKE_ARENA: Arena = {
     { x: 1040, y: 350, width: 40, height: 18 },                 // Tiny right mid
   ],
   spawnPoints: [
-    { x: 100, y: 560 }, { x: 1170, y: 560 },
-    { x: 100, y: 400 }, { x: 1170, y: 400 },
+    { x: 95, y: 555 }, { x: 1170, y: 565 },
+    { x: 90, y: 395 }, { x: 1170, y: 405 },
     { x: 640, y: 340 }, { x: 640, y: 640 },
   ],
   hazardZones: [
@@ -165,14 +165,14 @@ export const CASTLE_ARENA: Arena = {
     { x: 900, y: 700, width: 140, height: 20 },                 // Right pit floor
     // Left tower staircase (zigzag up the left wall)
     { x: 30, y: 580, width: 130, height: 24 },                  // L stair 1
-    { x: 130, y: 500, width: 120, height: 24 },                 // L stair 2
+    { x: 120, y: 500, width: 140, height: 24 },                 // L stair 2 (wide)
     { x: 30, y: 420, width: 130, height: 24 },                  // L stair 3
-    { x: 130, y: 340, width: 120, height: 24 },                 // L stair 4
+    { x: 120, y: 340, width: 140, height: 24 },                 // L stair 4 (wide)
     // Right tower staircase (zigzag up the right wall)
     { x: 1120, y: 580, width: 130, height: 24 },                // R stair 1
-    { x: 1030, y: 500, width: 120, height: 24 },                // R stair 2
+    { x: 1040, y: 495, width: 105, height: 24 },                // R stair 2 (narrow+high)
     { x: 1120, y: 420, width: 130, height: 24 },                // R stair 3
-    { x: 1030, y: 340, width: 120, height: 24 },                // R stair 4
+    { x: 1045, y: 330, width: 105, height: 24 },                // R stair 4 (narrow+high)
     // Grand bridge connecting towers at top
     { x: 250, y: 280, width: 780, height: 24 },                 // Top bridge
     // Center structure — mid-level platforms
@@ -183,12 +183,12 @@ export const CASTLE_ARENA: Arena = {
     { x: 630, y: 600, width: 40, height: 60 },                  // Pillar center
     { x: 820, y: 590, width: 40, height: 70 },                  // Pillar R
     // Small mid connecting platforms
-    { x: 280, y: 440, width: 100, height: 24 },                 // L-to-center
-    { x: 900, y: 440, width: 100, height: 24 },                 // R-to-center
+    { x: 270, y: 440, width: 115, height: 24 },                 // L-to-center (wide)
+    { x: 910, y: 435, width: 85, height: 24 },                  // R-to-center (narrow+high)
   ],
   spawnPoints: [
     { x: 100, y: 560 }, { x: 1180, y: 560 },
-    { x: 90, y: 400 }, { x: 1180, y: 400 },
+    { x: 90, y: 400 }, { x: 1150, y: 390 },
     { x: 640, y: 260 }, { x: 640, y: 640 },
   ],
   hazardZones: [
@@ -215,17 +215,17 @@ export const CANDY_LAND_ARENA: Arena = {
     { x: 460, y: 530, width: 360, height: 24 },                 // Tower base
     { x: 510, y: 390, width: 260, height: 24 },                 // Tower mid (big 140px gap!)
     { x: 560, y: 260, width: 160, height: 24 },                 // Tower crown (130px gap!)
-    // === Side launch pads — few, spread out ===
-    { x: 40, y: 520, width: 160, height: 24 },                  // Left low
-    { x: 1080, y: 520, width: 160, height: 24 },                // Right low
+    // === Side launch pads — asymmetric ===
+    { x: 30, y: 530, width: 180, height: 24 },                  // Left low (wide+low)
+    { x: 1090, y: 510, width: 140, height: 24 },                // Right low (narrow+high)
     // High side perches (reachable only by bouncing)
-    { x: 60, y: 340, width: 130, height: 24 },                  // Left high
-    { x: 1090, y: 340, width: 130, height: 24 },                // Right high
+    { x: 50, y: 350, width: 145, height: 24 },                  // Left high (wide+low)
+    { x: 1100, y: 325, width: 115, height: 24 },                // Right high (narrow+high)
   ],
   spawnPoints: [
-    { x: 140, y: 500 }, { x: 1160, y: 500 },
+    { x: 130, y: 510 }, { x: 1160, y: 490 },
     { x: 640, y: 510 }, { x: 640, y: 240 },
-    { x: 130, y: 320 }, { x: 1155, y: 320 },
+    { x: 120, y: 330 }, { x: 1155, y: 305 },
   ],
   bouncyPlatforms: [0, 1, 2, 3, 4, 5, 6, 7],  // EVERYTHING is bouncy!
   noSprings: true,
@@ -288,17 +288,17 @@ export const UNDERWATER_ARENA: Arena = {
   platforms: [
     // Ground — ocean floor
     { x: 0, y: 660, width: CANVAS_WIDTH, height: 60 },
-    // === Left side platforms (unreachable by jumping, need bubble column) ===
-    { x: 80, y: 400, width: 120, height: 24 },                  // Left low
-    { x: 180, y: 270, width: 110, height: 24 },                 // Left mid
+    // === Left side platforms — closer to geyser, wider ===
+    { x: 100, y: 410, width: 130, height: 24 },                 // Left low (close+wide)
+    { x: 200, y: 275, width: 120, height: 24 },                 // Left mid (close)
     { x: 60, y: 150, width: 120, height: 24 },                  // Left high
-    // === Right side platforms ===
-    { x: 1080, y: 400, width: 120, height: 24 },                // Right low
-    { x: 990, y: 270, width: 110, height: 24 },                 // Right mid
+    // === Right side platforms — further out, narrow+elevated ===
+    { x: 1070, y: 390, width: 110, height: 24 },                // Right low (narrow+high)
+    { x: 975, y: 260, width: 100, height: 24 },                 // Right mid (narrow+high)
     { x: 1100, y: 150, width: 120, height: 24 },                // Right high
     // === Near-column perches (exit points from bubble stream) ===
-    { x: 310, y: 340, width: 90, height: 24 },                  // Left exit mid
-    { x: 880, y: 340, width: 90, height: 24 },                  // Right exit mid
+    { x: 330, y: 345, width: 95, height: 24 },                  // Left exit mid (shifted in)
+    { x: 865, y: 330, width: 85, height: 24 },                  // Right exit mid (narrow+high)
     { x: 290, y: 170, width: 100, height: 24 },                 // Left exit high
     { x: 890, y: 170, width: 100, height: 24 },                 // Right exit high
     // Top platform above bubble column
@@ -307,7 +307,7 @@ export const UNDERWATER_ARENA: Arena = {
   spawnPoints: [
     { x: 200, y: 640 }, { x: 1080, y: 640 },
     { x: 400, y: 640 }, { x: 880, y: 640 },
-    { x: 640, y: 640 }, { x: 100, y: 370 },
+    { x: 640, y: 640 }, { x: 120, y: 390 },
   ],
   noSpawnZones: [
     // Top crown platform — geyser floats players above it, can't land on it
@@ -439,22 +439,22 @@ export const SPACE_STATION_ARENA: Arena = {
     // Ground — ONLY left and right edges (center is void/zero-G)
     { x: 0, y: 660, width: 220, height: 60 },                  // Left deck
     { x: 1060, y: 660, width: 220, height: 60 },                // Right deck
-    // === Left station stack (no level 1 — forces players up or to center) ===
-    { x: 50, y: 460, width: 150, height: 24 },                  // L level 2
-    { x: 30, y: 360, width: 170, height: 24 },                  // L level 3
+    // === Left station stack — wide command deck ===
+    { x: 45, y: 465, width: 165, height: 24 },                  // L level 2 (wide+low)
+    { x: 25, y: 360, width: 180, height: 24 },                  // L level 3 (wide)
     { x: 60, y: 270, width: 140, height: 24 },                  // L level 4
-    // === Right station stack ===
-    { x: 1060, y: 460, width: 150, height: 24 },                // R level 2
-    { x: 1080, y: 360, width: 170, height: 24 },                // R level 3
-    { x: 1060, y: 270, width: 140, height: 24 },                // R level 4
+    // === Right station stack — narrow antenna array ===
+    { x: 1070, y: 445, width: 135, height: 24 },                // R level 2 (narrow+high)
+    { x: 1095, y: 350, width: 155, height: 24 },                // R level 3 (narrow+high)
+    { x: 1075, y: 260, width: 125, height: 24 },                // R level 4 (narrow+high)
     // No center platforms — zero-G jump boost covers the gap!
     // Crate blocks on decks
-    { x: 100, y: 625, width: 45, height: 35 },                  // Crate L
+    { x: 85, y: 625, width: 50, height: 35 },                   // Crate L (wider+shifted)
     { x: 1140, y: 625, width: 45, height: 35 },                 // Crate R
   ],
   spawnPoints: [
-    { x: 100, y: 440 }, { x: 1130, y: 440 },
-    { x: 100, y: 340 }, { x: 1160, y: 340 },
+    { x: 100, y: 445 }, { x: 1135, y: 425 },
+    { x: 100, y: 340 }, { x: 1170, y: 330 },
     { x: 110, y: 640 }, { x: 1160, y: 640 },
   ],
   effectZones: [
