@@ -55,7 +55,8 @@ export class AIController {
 
     // Taunt: freeze briefly after getting a kill
     if (self.score > this.lastScore) {
-      this.tauntTimer = 20 + Math.floor(Math.random() * 15);
+      const tf = this.difficulty.tauntFrames;
+      this.tauntTimer = Math.floor(tf * 0.6) + Math.floor(Math.random() * Math.ceil(tf * 0.4));
       this.lastScore = self.score;
     }
     if (this.tauntTimer > 0) {
@@ -105,7 +106,7 @@ export class AIController {
       if (this.jumpCooldown > 0) {
         delayed.jump = false;
       } else {
-        this.jumpCooldown = 20;
+        this.jumpCooldown = this.difficulty.jumpCooldownFrames;
       }
     }
 
@@ -141,7 +142,8 @@ export class AIController {
     const nothingNearby = !awareness.nearestEnemy && !awareness.stompTarget && !awareness.stompThreat
       && !awareness.nearestCarrot && awareness.airborneAbove.length === 0 && awareness.nearbyHazards.length === 0;
     if (nothingNearby && !this.wasIdle) {
-      this.searchTimer = 30 + Math.floor(Math.random() * 50);
+      const sp = this.difficulty.searchPauseFrames;
+      this.searchTimer = sp > 0 ? Math.floor(sp * 0.4) + Math.floor(Math.random() * Math.ceil(sp * 0.6)) : 0;
       this.wasIdle = true;
     }
     if (!nothingNearby) {
@@ -171,23 +173,30 @@ export class AIController {
       }
     }
 
-    const scores = evaluateActions(awareness, this.personality);
+    const scores = evaluateActions(awareness, this.personality, this.difficulty.precisionMult);
 
-    // Add chaos noise
-    if (this.personality.chaosAffinity > 0) {
-      const noise = this.personality.chaosAffinity * 0.3;
+    // Add chaos noise (suppressed at high difficulty)
+    const effectiveChaos = this.personality.chaosAffinity * (1 - this.difficulty.chaosSuppress);
+    if (effectiveChaos > 0) {
+      const noise = effectiveChaos * 0.3;
       scores.moveLeft += (Math.random() - 0.5) * noise;
       scores.moveRight += (Math.random() - 0.5) * noise;
       scores.jump += (Math.random() - 0.5) * noise * 0.5;
       scores.drop += (Math.random() - 0.5) * noise * 0.3;
     }
 
+    // Precision-adjusted thresholds: impossible bots act on weaker signals
+    const pm = this.difficulty.precisionMult;
+    const moveT = MOVE_THRESHOLD * (1 - pm * 0.5);   // 0.20 → 0.10
+    const jumpT = JUMP_THRESHOLD * (1 - pm * 0.45);  // 0.55 → 0.30
+    const dropT = DROP_THRESHOLD * (1 - pm * 0.4);   // 0.50 → 0.30
+
     const netHorizontal = scores.moveRight - scores.moveLeft;
     return {
-      left: netHorizontal < -MOVE_THRESHOLD,
-      right: netHorizontal > MOVE_THRESHOLD,
-      jump: scores.jump > JUMP_THRESHOLD,
-      down: scores.drop > DROP_THRESHOLD,
+      left: netHorizontal < -moveT,
+      right: netHorizontal > moveT,
+      jump: scores.jump > jumpT,
+      down: scores.drop > dropT,
     };
   }
 

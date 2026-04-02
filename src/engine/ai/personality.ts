@@ -36,6 +36,11 @@ const DIFFICULTY_PARAMS: Record<BotDifficulty, DifficultyParams> = {
     walkSpeedMult: 0.65,
     hesitationChance: 0.03,
     pathfindingDepth: Infinity,
+    tauntFrames: 35,
+    searchPauseFrames: 80,
+    jumpCooldownFrames: 20,
+    chaosSuppress: 0,
+    precisionMult: 0,
   },
   medium: {
     reactionFrames: 10,
@@ -44,6 +49,11 @@ const DIFFICULTY_PARAMS: Record<BotDifficulty, DifficultyParams> = {
     walkSpeedMult: 0.9,
     hesitationChance: 0.01,
     pathfindingDepth: Infinity,
+    tauntFrames: 35,
+    searchPauseFrames: 80,
+    jumpCooldownFrames: 20,
+    chaosSuppress: 0,
+    precisionMult: 0,
   },
   hard: {
     reactionFrames: 4,
@@ -52,6 +62,11 @@ const DIFFICULTY_PARAMS: Record<BotDifficulty, DifficultyParams> = {
     walkSpeedMult: 1.0,
     hesitationChance: 0,
     pathfindingDepth: Infinity,
+    tauntFrames: 35,
+    searchPauseFrames: 80,
+    jumpCooldownFrames: 20,
+    chaosSuppress: 0,
+    precisionMult: 0,
   },
   impossible: {
     reactionFrames: 0,
@@ -60,6 +75,11 @@ const DIFFICULTY_PARAMS: Record<BotDifficulty, DifficultyParams> = {
     walkSpeedMult: 1.0,
     hesitationChance: 0,
     pathfindingDepth: Infinity,
+    tauntFrames: 5,
+    searchPauseFrames: 0,
+    jumpCooldownFrames: 6,
+    chaosSuppress: 1.0,
+    precisionMult: 1.0,
   },
 };
 

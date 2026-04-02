@@ -17,6 +17,11 @@ export interface DifficultyParams {
   walkSpeedMult: number;      // 0-1, multiplied into effective walk speed for this bot
   hesitationChance: number;   // 0-1, chance per frame to freeze and do nothing
   pathfindingDepth: number;   // 0 = none (easy), 1 = 1-hop (medium), Infinity = full path (hard)
+  tauntFrames: number;        // max taunt freeze after kill (35=default, 5=impossible)
+  searchPauseFrames: number;  // max idle when nothing nearby (80=default, 0=impossible)
+  jumpCooldownFrames: number; // frames between jumps (20=default, 6=impossible)
+  chaosSuppress: number;      // 0-1, reduces personality chaosAffinity (0=none, 1=full suppress)
+  precisionMult: number;      // 0-1, reduces jitter + lowers thresholds (0=normal, 1=precise)
 }
 
 export interface AwarenessSnapshot {

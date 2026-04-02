@@ -7,6 +7,7 @@ import type { AwarenessSnapshot, ActionScores, AIPersonality } from './types';
 export function evaluateActions(
   awareness: AwarenessSnapshot,
   personality: AIPersonality,
+  precisionMult: number = 0,
 ): ActionScores {
   const scores: ActionScores = { moveLeft: 0, moveRight: 0, jump: 0, drop: 0 };
 
@@ -19,8 +20,8 @@ export function evaluateActions(
     evaluateTargetPriority(awareness, scores, personality);
   }
   evaluateThreatEvasion(awareness, scores, personality);
-  evaluateAirborneAboveDodge(awareness, scores, personality);
-  evaluatePlatformSeeking(awareness, scores, personality);
+  evaluateAirborneAboveDodge(awareness, scores, personality, precisionMult);
+  evaluatePlatformSeeking(awareness, scores, personality, precisionMult);
   evaluateHazardAvoidance(awareness, scores, personality);
   evaluateCarrotPursuit(awareness, scores, personality);
   evaluateWindCompensation(awareness, scores);
@@ -151,7 +152,7 @@ function evaluateTargetPriority(a: AwarenessSnapshot, s: ActionScores, p: AIPers
   }
 }
 
-function evaluatePlatformSeeking(a: AwarenessSnapshot, s: ActionScores, p: AIPersonality): void {
+function evaluatePlatformSeeking(a: AwarenessSnapshot, s: ActionScores, p: AIPersonality, precisionMult: number = 0): void {
   if (!a.self.onGround) return;
 
   const hasEnemyAbove = a.nearestEnemy && a.nearestEnemy.dy < -30;
@@ -166,8 +167,8 @@ function evaluatePlatformSeeking(a: AwarenessSnapshot, s: ActionScores, p: AIPer
 
   if (useNav && a.navTarget) {
     const nav = a.navTarget;
-    // Add jitter to approach position for variability (+/- 20px)
-    const jitteredApproach = nav.approachX + (Math.random() - 0.5) * 40;
+    // Add jitter to approach position for variability (+/- 20px), reduced by precision
+    const jitteredApproach = nav.approachX + (Math.random() - 0.5) * 40 * (1 - precisionMult);
     const dx = jitteredApproach - a.self.x;
 
     if (nav.type === 'j') {
@@ -338,7 +339,7 @@ function evaluateRoam(a: AwarenessSnapshot, s: ActionScores): void {
 }
 
 /** Don't walk under airborne enemies — sidestep with some imprecision */
-function evaluateAirborneAboveDodge(a: AwarenessSnapshot, s: ActionScores, p: AIPersonality): void {
+function evaluateAirborneAboveDodge(a: AwarenessSnapshot, s: ActionScores, p: AIPersonality, precisionMult: number = 0): void {
   if (a.airborneAbove.length === 0 || !a.self.onGround) return;
   const weight = 0.8 * p.cautiousness;
   for (const ab of a.airborneAbove) {
@@ -346,7 +347,7 @@ function evaluateAirborneAboveDodge(a: AwarenessSnapshot, s: ActionScores, p: AI
     const urgency = Math.max(0, 1 - ab.dist / 200);
     // Move away from their X, but with some randomness (not pixel-perfect dodge)
     const dodgeDir = ab.dx > 0 ? -1 : 1;
-    const jitter = (Math.random() - 0.5) * 0.3; // imprecise reaction
+    const jitter = (Math.random() - 0.5) * 0.3 * (1 - precisionMult);
     if (dodgeDir + jitter > 0) s.moveRight += weight * urgency;
     else s.moveLeft += weight * urgency;
   }
