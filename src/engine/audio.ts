@@ -234,7 +234,7 @@ class AudioManager {
     this.stopMusic();
     // Generate on demand
     const src = generateThemeMusic(themeId);
-    this.musicHowl = new Howl({ src: [src], volume: 0.15, loop: true });
+    this.musicHowl = new Howl({ src: [src], volume: 0.3, loop: true });
     this.musicThemeId = themeId;
     this.musicHowl.play();
   }
