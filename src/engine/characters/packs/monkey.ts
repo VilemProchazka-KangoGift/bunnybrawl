@@ -70,7 +70,6 @@ export const monkey: CharacterPack = {
   emoji: '\uD83D\uDC35', customEyes: true, idleTransform: 'headBob',
   splatShape: 'star',
   gibs: [{ gibType: 'ear', width: 10, height: 10 }, { gibType: 'ear', width: 10, height: 10 }, { gibType: 'tail', width: 16, height: 8 }, { gibType: 'body', width: 14, height: 12 }],
-  sound: { type: 'segment', segments: [{ freq: 800, freqEnd: 1200, duration: 0.1, type: 'square' }, { freq: 1200, freqEnd: 600, duration: 0.12, type: 'square' }], genVol: 0.4 },
   translations: { en: 'Monkey', cs: 'Opice' },
   drawSprite, drawGib,
 };

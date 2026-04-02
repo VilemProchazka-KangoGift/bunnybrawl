@@ -113,7 +113,6 @@ export const goat: CharacterPack = {
   emoji: '\uD83D\uDC10', customEyes: true, idleTransform: 'headBob',
   splatShape: 'star',
   gibs: [{ gibType: 'horn', width: 8, height: 14 }, { gibType: 'horn', width: 8, height: 14 }, { gibType: 'beard', width: 8, height: 10 }, { gibType: 'body', width: 14, height: 12 }],
-  sound: { type: 'segment', segments: [{ freq: 400, freqEnd: 300, duration: 0.12, type: 'sawtooth' }, { freq: 300, freqEnd: 350, duration: 0.12, type: 'sawtooth' }], genVol: 0.4 },
   translations: { en: 'Goat', cs: 'Koza' },
   drawSprite, drawGib,
 };

@@ -62,7 +62,6 @@ export const fox: CharacterPack = {
   emoji: '\uD83E\uDD8A', customEyes: false, idleTransform: 'none',
   splatShape: 'star',
   gibs: [{ gibType: 'ear', width: 10, height: 10 }, { gibType: 'ear', width: 10, height: 10 }, { gibType: 'tail', width: 16, height: 10 }, { gibType: 'snout', width: 8, height: 6 }, { gibType: 'body', width: 14, height: 12 }],
-  sound: { type: 'simple', freq: 600, duration: 0.15, waveform: 'sawtooth', genVol: 0.4, freqEnd: 400 },
   translations: { en: 'Fox', cs: 'Liška' },
   drawSprite, drawGib,
 };

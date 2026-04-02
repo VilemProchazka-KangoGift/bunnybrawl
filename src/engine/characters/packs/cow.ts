@@ -80,7 +80,6 @@ export const cow: CharacterPack = {
   emoji: '\uD83D\uDC2E', customEyes: true, idleTransform: 'headBob',
   splatShape: 'splat',
   gibs: [{ gibType: 'horn', width: 8, height: 12 }, { gibType: 'horn', width: 8, height: 12 }, { gibType: 'tail', width: 14, height: 6 }, { gibType: 'body', width: 14, height: 12 }],
-  sound: { type: 'simple', freq: 150, duration: 0.4, waveform: 'sine', genVol: 0.4, freqEnd: 130 },
   translations: { en: 'Cow', cs: 'Kráva' },
   drawSprite, drawGib,
 };

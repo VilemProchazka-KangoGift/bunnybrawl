@@ -8,8 +8,6 @@ export type {
 export {
   registerCharacter,
   getCharacterPack,
-  listCharacterNames,
-  listCharacterPacks,
   getCharacterEmoji,
   hasCustomEyes,
   getCharacterSplatShape,
@@ -27,10 +25,9 @@ export {
 
 export { registerBuiltinCharacters } from './builtin';
 
-// Re-export legacy symbols for backward compatibility
 export {
   CHARACTERS,
-  ALL_CHARACTERS,
+  getAllCharacters,
   BOT_CHARACTERS,
   getCharacterForSlot,
   assignBotCharacters,

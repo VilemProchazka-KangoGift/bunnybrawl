@@ -54,7 +54,6 @@ export const sheep: CharacterPack = {
   emoji: '\uD83D\uDC11', customEyes: true, idleTransform: 'headBob',
   splatShape: 'paw',
   gibs: [{ gibType: 'ear', width: 8, height: 8 }, { gibType: 'ear', width: 8, height: 8 }, { gibType: 'wool', width: 14, height: 12 }, { gibType: 'body', width: 14, height: 12 }],
-  sound: { type: 'simple', freq: 350, duration: 0.3, waveform: 'sine', genVol: 0.4, freqEnd: 250 },
   translations: { en: 'Sheep', cs: 'Ovce' },
   drawSprite, drawGib,
 };

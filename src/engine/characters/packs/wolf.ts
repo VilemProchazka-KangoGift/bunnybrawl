@@ -56,7 +56,6 @@ export const wolf: CharacterPack = {
   emoji: '\uD83D\uDC3A', customEyes: false, idleTransform: 'headBob',
   splatShape: 'star',
   gibs: [{ gibType: 'ear', width: 8, height: 12 }, { gibType: 'ear', width: 8, height: 12 }, { gibType: 'tail', width: 16, height: 10 }, { gibType: 'body', width: 14, height: 12 }],
-  sound: { type: 'segment', segments: [{ freq: 300, freqEnd: 500, duration: 0.2, type: 'sawtooth' }, { freq: 500, freqEnd: 400, duration: 0.15, type: 'sawtooth' }], genVol: 0.4 },
   translations: { en: 'Wolf', cs: 'Vlk' },
   drawSprite, drawGib,
 };

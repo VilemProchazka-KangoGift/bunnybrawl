@@ -118,7 +118,6 @@ export const cat: CharacterPack = {
   emoji: '\uD83D\uDC31', customEyes: true, idleTransform: 'headTilt',
   splatShape: 'paw',
   gibs: [{ gibType: 'ear', width: 8, height: 10 }, { gibType: 'ear', width: 8, height: 10 }, { gibType: 'tail', width: 14, height: 6 }, { gibType: 'body', width: 14, height: 12 }],
-  sound: { type: 'segment', segments: [{ freq: 700, freqEnd: 500, duration: 0.12, type: 'sine' }, { freq: 500, freqEnd: 600, duration: 0.12, type: 'sine' }], genVol: 0.4 },
   translations: { en: 'Cat', cs: 'Kočka' },
   drawSprite, drawGib,
 };

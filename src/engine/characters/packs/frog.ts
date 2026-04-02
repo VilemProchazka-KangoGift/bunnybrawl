@@ -50,7 +50,6 @@ export const frog: CharacterPack = {
   emoji: '\uD83D\uDC38', customEyes: true, idleTransform: 'none',
   splatShape: 'splat',
   gibs: [{ gibType: 'body', width: 12, height: 10 }, { gibType: 'body', width: 10, height: 10 }, { gibType: 'body', width: 11, height: 9 }],
-  sound: { type: 'custom' },
   translations: { en: 'Frog', cs: 'Žába' },
   drawSprite, drawGib,
 };

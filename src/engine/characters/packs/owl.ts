@@ -78,7 +78,6 @@ export const owl: CharacterPack = {
   emoji: '\uD83E\uDD89', customEyes: true, idleTransform: 'headFlip',
   splatShape: 'ring',
   gibs: [{ gibType: 'wing', width: 12, height: 8 }, { gibType: 'wing', width: 12, height: 8 }, { gibType: 'body', width: 14, height: 12 }],
-  sound: { type: 'segment', segments: [{ freq: 400, freqEnd: 300, duration: 0.15, type: 'sine' }, { freq: 300, freqEnd: 400, duration: 0.15, type: 'sine' }], genVol: 0.4 },
   translations: { en: 'Owl', cs: 'Sova' },
   drawSprite, drawGib,
 };

@@ -7,10 +7,10 @@ import { VictoryScreen } from './components/VictoryScreen';
 import { GameScaler } from './components/GameScaler';
 import { assignBotCharacters, registerBuiltinCharacters } from './engine/characters';
 import type { PlayerSlot, BotSlot, CharacterSlot } from './engine/types';
+import { ALL_BOT_SLOTS } from './engine/types';
 
 // Register all built-in characters into the pack registry at module load time
 registerBuiltinCharacters();
-import { ALL_BOT_SLOTS } from './engine/types';
 
 /**
  * Dev test link: skip lobby and jump straight into a match.

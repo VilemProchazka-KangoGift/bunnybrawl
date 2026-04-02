@@ -19,15 +19,14 @@ src/
     arena.ts      # Arena layouts (platforms, spawn points) + getArena(id) + listArenas()
     characters/   # Character pack system (registry-based, extensible)
       types.ts      # CharacterPack interface, CharacterRenderer/GibRenderer function types
-      registry.ts   # Pack registry: register/get/list + convenience lookups (emoji, eyes, splat, gibs, personality)
+      registry.ts   # Pack registry: register/get/list + convenience lookups (emoji, eyes, splat, gibs)
       builtin.ts    # Registers all 17 built-in characters at app startup
       fallbacks.ts  # Fallback pill-shape renderer for unknown/unregistered characters
-      legacy.ts     # Original CHARACTERS/ALL_CHARACTERS/CHAR_EMOJI/assignBotCharacters (backward compat)
-      index.ts      # Barrel export (re-exports both new registry + legacy symbols)
-      renderers/
-        sprites.ts  # 17 per-character CharacterRenderer functions (extracted from renderer.ts)
-      gibRenderers/
-        all.ts      # 17 per-character GibRenderer functions (extracted from renderer.ts)
+      legacy.ts     # CHARACTERS record (P1-P5 defaults), assignBotCharacters, getCharacterForSlot
+      index.ts      # Barrel export
+      packs/        # One file per character — self-contained with renderer, gibs, data, translations
+        bunny.ts fox.ts frog.ts bear.ts owl.ts cat.ts wolf.ts panda.ts
+        pig.ts cow.ts goat.ts horse.ts sheep.ts monkey.ts tiger.ts rhino.ts hedgehog.ts
     canvasAnimations.ts # Shared canvas utilities (wildlife, day/night cycle) used by MainMenu + CharacterSelect
     renderer.ts   # Canvas 2D rendering (two layers: bg + fg) — dispatches to character pack renderers
     audio.ts      # Procedural audio generation (animal sounds + SFX + music)

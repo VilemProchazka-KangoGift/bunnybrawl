@@ -50,7 +50,6 @@ export const bunny: CharacterPack = {
   emoji: '\uD83D\uDC30', customEyes: false, idleTransform: 'none',
   splatShape: 'paw',
   gibs: [{ gibType: 'ear', width: 8, height: 20 }, { gibType: 'ear', width: 8, height: 20 }, { gibType: 'tail', width: 8, height: 8 }, { gibType: 'body', width: 14, height: 12 }],
-  sound: { type: 'simple', freq: 800, duration: 0.1, waveform: 'square', genVol: 0.4, freqEnd: 1200 },
   translations: { en: 'Bunny', cs: 'Králík' },
   drawSprite, drawGib,
 };

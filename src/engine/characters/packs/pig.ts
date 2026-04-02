@@ -71,7 +71,6 @@ export const pig: CharacterPack = {
   emoji: '\uD83D\uDC37', customEyes: false, idleTransform: 'headBob',
   splatShape: 'circle',
   gibs: [{ gibType: 'ear', width: 8, height: 10 }, { gibType: 'ear', width: 8, height: 10 }, { gibType: 'snout', width: 8, height: 6 }, { gibType: 'tail', width: 10, height: 8 }, { gibType: 'body', width: 14, height: 12 }],
-  sound: { type: 'segment', segments: [{ freq: 250, freqEnd: 350, duration: 0.1, type: 'square' }, { freq: 350, freqEnd: 200, duration: 0.15, type: 'square' }], genVol: 0.4 },
   translations: { en: 'Pig', cs: 'Prase' },
   drawSprite, drawGib,
 };

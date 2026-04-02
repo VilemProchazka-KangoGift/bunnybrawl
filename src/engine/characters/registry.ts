@@ -17,17 +17,7 @@ export function getCharacterPack(name: string): CharacterPack | undefined {
   return PACKS.get(name);
 }
 
-/** List all registered character names. */
-export function listCharacterNames(): string[] {
-  return Array.from(PACKS.keys());
-}
-
-/** List all registered character packs. */
-export function listCharacterPacks(): CharacterPack[] {
-  return Array.from(PACKS.values());
-}
-
-// ---- Convenience lookups (replace scattered maps) ----
+// ---- Convenience lookups ----
 
 export function getCharacterEmoji(name: string): string {
   return PACKS.get(name)?.emoji ?? '?';

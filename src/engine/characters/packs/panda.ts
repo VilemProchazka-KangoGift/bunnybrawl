@@ -57,7 +57,6 @@ export const panda: CharacterPack = {
   emoji: '\uD83D\uDC3C', customEyes: true, idleTransform: 'headBob',
   splatShape: 'circle',
   gibs: [{ gibType: 'ear', width: 10, height: 10 }, { gibType: 'ear', width: 10, height: 10 }, { gibType: 'body', width: 14, height: 12 }, { gibType: 'body', width: 10, height: 10 }],
-  sound: { type: 'simple', freq: 500, duration: 0.12, waveform: 'triangle', genVol: 0.4, freqEnd: 600 },
   translations: { en: 'Panda', cs: 'Panda' },
   drawSprite, drawGib,
 };

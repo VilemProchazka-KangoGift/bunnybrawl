@@ -96,7 +96,6 @@ export const horse: CharacterPack = {
   emoji: '\uD83D\uDC34', customEyes: true, idleTransform: 'headBob',
   splatShape: 'circle',
   gibs: [{ gibType: 'ear', width: 8, height: 10 }, { gibType: 'ear', width: 8, height: 10 }, { gibType: 'mane', width: 12, height: 14 }, { gibType: 'body', width: 14, height: 12 }],
-  sound: { type: 'segment', segments: [{ freq: 500, freqEnd: 800, duration: 0.15, type: 'sawtooth' }, { freq: 800, freqEnd: 400, duration: 0.2, type: 'sawtooth' }], genVol: 0.4 },
   translations: { en: 'Horse', cs: 'Kůň' },
   drawSprite, drawGib,
 };

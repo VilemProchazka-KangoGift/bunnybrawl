@@ -63,7 +63,6 @@ export const rhino: CharacterPack = {
   emoji: '\uD83E\uDD8F', customEyes: false, idleTransform: 'headBob',
   splatShape: 'circle',
   gibs: [{ gibType: 'ear', width: 8, height: 8 }, { gibType: 'ear', width: 8, height: 8 }, { gibType: 'horn', width: 8, height: 14 }, { gibType: 'body', width: 14, height: 12 }],
-  sound: { type: 'segment', segments: [{ freq: 100, freqEnd: 60, duration: 0.2, type: 'square' }, { freq: 60, freqEnd: 90, duration: 0.2, type: 'sine' }], genVol: 0.4, vol: 0.5 },
   translations: { en: 'Rhino', cs: 'Nosorožec' },
   drawSprite, drawGib,
 };

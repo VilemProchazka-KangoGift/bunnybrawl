@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { CHARACTERS, ALL_CHARACTERS, BOT_CHARACTERS, assignBotCharacters, getCharacterEmoji, hasCustomEyes, getSpriteRenderer, getCharacterDisplayName } from '../engine/characters';
+import { CHARACTERS, getAllCharacters, BOT_CHARACTERS, assignBotCharacters, getCharacterEmoji, hasCustomEyes, getSpriteRenderer, getCharacterDisplayName } from '../engine/characters';
 import { KEY_BINDINGS } from '../engine/input';
 import { audio } from '../engine/audio';
 import i18n from '../i18n';
@@ -79,7 +79,7 @@ export function CharacterSelect() {
     const botSlots = ALL_BOT_SLOTS.slice(0, botCount);
 
     // Randomly assign characters to players
-    const shuffled = shuffle([...ALL_CHARACTERS]);
+    const shuffled = shuffle([...getAllCharacters()]);
     const assigned = shuffled.slice(0, SLOTS.length);
     const botAssigned = shuffled.slice(SLOTS.length, SLOTS.length + botCount);
     const extras = shuffled.slice(SLOTS.length + botCount);

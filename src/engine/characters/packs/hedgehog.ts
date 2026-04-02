@@ -92,7 +92,6 @@ export const hedgehog: CharacterPack = {
   emoji: '\uD83E\uDD94', customEyes: true, idleTransform: 'headBob',
   splatShape: 'star',
   gibs: [{ gibType: 'spine', width: 6, height: 10 }, { gibType: 'spine', width: 6, height: 10 }, { gibType: 'snout', width: 8, height: 6 }, { gibType: 'body', width: 14, height: 12 }],
-  sound: { type: 'segment', segments: [{ freq: 600, freqEnd: 800, duration: 0.08, type: 'triangle' }, { freq: 800, freqEnd: 500, duration: 0.1, type: 'triangle' }], genVol: 0.4 },
   translations: { en: 'Hedgehog', cs: 'Ježek' },
   drawSprite, drawGib,
 };

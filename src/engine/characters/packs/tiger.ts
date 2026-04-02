@@ -73,7 +73,6 @@ export const tiger: CharacterPack = {
   emoji: '\uD83D\uDC2F', customEyes: false, idleTransform: 'headBob',
   splatShape: 'paw',
   gibs: [{ gibType: 'ear', width: 10, height: 10 }, { gibType: 'ear', width: 10, height: 10 }, { gibType: 'snout', width: 8, height: 6 }, { gibType: 'body', width: 14, height: 12 }],
-  sound: { type: 'segment', segments: [{ freq: 200, freqEnd: 120, duration: 0.2, type: 'sawtooth' }, { freq: 120, freqEnd: 80, duration: 0.25, type: 'sawtooth' }], genVol: 0.4, vol: 0.5 },
   translations: { en: 'Tiger', cs: 'Tygr' },
   drawSprite, drawGib,
 };

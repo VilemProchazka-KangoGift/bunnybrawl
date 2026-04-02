@@ -56,7 +56,6 @@ export const bear: CharacterPack = {
   emoji: '\uD83D\uDC3B', customEyes: false, idleTransform: 'none',
   splatShape: 'circle',
   gibs: [{ gibType: 'ear', width: 10, height: 10 }, { gibType: 'ear', width: 10, height: 10 }, { gibType: 'snout', width: 10, height: 8 }, { gibType: 'body', width: 14, height: 12 }],
-  sound: { type: 'simple', freq: 100, duration: 0.25, waveform: 'sawtooth', genVol: 0.4 },
   translations: { en: 'Bear', cs: 'Medvěd' },
   drawSprite, drawGib,
 };

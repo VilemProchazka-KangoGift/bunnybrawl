@@ -138,7 +138,7 @@ export function VictoryScreen() {
                 <span style={{ color: winnerChar.color }}>{charName(winnerChar.name)}{botSuffix(winner!)}</span> {t('victory_wins')}
               </h1>
               <div className="winner-avatar winner-avatar-pose" style={{ borderColor: winnerChar.lightColor }}>
-                <span className="winner-emoji">{getCharacterEmoji(winnerChar.name) || '\uD83C\uDFC6'}</span>
+                <span className="winner-emoji">{getCharacterEmoji(winnerChar.name)}</span>
               </div>
             </>
           ) : (
