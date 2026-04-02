@@ -15,19 +15,19 @@ src/
     constants.ts  # Physics, timing, sizing constants
     physics.ts    # Movement, gravity, collision, player pushing
     stomp.ts      # Stomp detection, splat marks, respawn
-    input.ts      # 4-player keyboard input with case-insensitive normalization
+    input.ts      # 5-player keyboard input with case-insensitive normalization
     arena.ts      # Arena layouts (platforms, spawn points) + getArena(id) + listArenas()
-    characters.ts # 16 character definitions + ALL_CHARACTERS roster + CHAR_EMOJI + CUSTOM_EYE_CHARS
+    characters.ts # 11 character definitions + ALL_CHARACTERS roster + CHAR_EMOJI + CUSTOM_EYE_CHARS
     canvasAnimations.ts # Shared canvas utilities (wildlife, day/night cycle) used by MainMenu + CharacterSelect
-    renderer.ts   # Canvas 2D rendering (two layers: bg + fg) — LARGEST FILE (~2300 lines)
-    audio.ts      # Procedural audio generation (16 animal sounds + SFX + music)
-    gameLoop.ts   # Main game loop with fixed timestep, all game systems (~920 lines)
+    renderer.ts   # Canvas 2D rendering (two layers: bg + fg) — LARGEST FILE (~3200 lines)
+    audio.ts      # Procedural audio generation (animal sounds + SFX + music)
+    gameLoop.ts   # Main game loop with fixed timestep, all game systems (~1700 lines)
     ai/           # AI opponent system (utility-based decision making + nav graph)
       types.ts      # AIDifficulty, AIPersonality, AwarenessSnapshot, ActionScores
       aiController.ts # Per-bot brain: reaction buffer, stuck detection, taunt, search pause
       awareness.ts  # Single-pass game state sensing + nav graph lookup
       utility.ts    # 15 evaluators scoring moveLeft/moveRight/jump/drop
-      personality.ts # 16 character profiles + 3 difficulty presets
+      personality.ts # 11 character profiles + 4 difficulty presets
       reachability.ts # Physics-based jump/drop/walk platform reachability functions
       navData.ts    # Auto-generated per-arena navigation graphs (nextHop tables)
       index.ts      # Barrel export
@@ -45,7 +45,7 @@ src/
   components/     # React components (menus/HUD only — canvas is imperative)
     GameScaler.tsx      # Viewport-responsive wrapper (CSS transform scaling)
     MainMenu.tsx        # Title screen with Play button, blood toggle, language switch
-    CharacterSelect.tsx # Canvas-based JnB-style lobby (~810 lines)
+    CharacterSelect.tsx # Canvas-based JnB-style lobby (~1100 lines)
     Match.tsx           # Game canvas mount + pause overlay
     VictoryScreen.tsx   # Results, stats, MVP awards, fireworks
   store/
@@ -157,8 +157,8 @@ Arena mechanics are a combination of **Arena** fields (structural positions) and
 
 ## Testing
 
-- **Unit/Integration** (Vitest): `npm test` — 115 tests covering physics, stomp, input, arena, characters, store, AI, components
-- **E2E** (Playwright/Chromium): `npm run test:e2e` — 6 tests covering full game flow
+- **Unit/Integration** (Vitest): `npm test` — ~115 tests covering physics, stomp, input, arena, characters, store, AI, components
+- **E2E** (Playwright/Chromium): `npm run test:e2e` — 12 tests across 2 spec files (game-flow, bot-behavior)
 - **The lobby walk-to-zone E2E test is inherently flaky** due to random NPC placement. Tagged `@flaky`, uses retries.
 - Tests force `i18n.changeLanguage('en')` in setup so string assertions work regardless of default language.
 - When adding new Player fields, update the `makePlayer()` helpers in `physics.test.ts` and `stomp.test.ts`, and the mock player objects in `VictoryScreen.test.tsx`.
@@ -178,7 +178,7 @@ npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/
 
 ## Important Caveats
 
-- **renderer.ts is ~2300 lines** — the largest file. When editing, use targeted searches to find the right method. Character sprite drawing is organized by `if/else if (char.name === ...)` blocks.
+- **renderer.ts is ~3200 lines** — the largest file. When editing, use targeted searches to find the right method. Character sprite drawing is organized by `if/else if (char.name === ...)` blocks.
 - **gameLoop.ts fixedUpdate returns early when matchOver** — any timers that should keep running after match end (screenFlash, slowMotion) must be decayed in the `loop()` method instead.
 - **Player-player collision and stomp detection interact** — stomps must be checked BEFORE `collidePlayersHorizontal`, and the collision must skip when vertical overlap < 50% (stomp zone).
 - **CharacterSelect.tsx has its own physics loop** — separate from the main game engine. Changes to lobby physics don't use the engine's `physics.ts`. `LobbyPlayer` has `sideSquash` (wall/edge hit → 0.75) and `squashScale` (crouch → 0.6), both decaying at rate 8. The draw function applies the same squash transform as the main renderer (narrower+taller for side, wider+shorter for crouch). Wildlife and day/night cycle are shared via `canvasAnimations.ts` (also used by MainMenu).
@@ -232,14 +232,14 @@ npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/
 ## File Size Reference
 
 Largest files to be aware of when context is limited:
-- `renderer.ts` ~2600 lines (canvas drawing, effect zone/ghost/hazard renderers, dispatches to theme)
-- `gameLoop.ts` ~1100 lines (all game systems including wind/ghosts/zones/pigeons/bouncy)
-- `CharacterSelect.tsx` ~810 lines (lobby with its own game loop)
-- `audio.ts` ~700 lines (procedural sound generation including wind/geyser/pigeon)
-- `themes/drawPrimitives.ts` — shared drawing functions extracted from renderer
-- Individual theme files ~300-500 lines each (10 themes: meadow, winterLake, volcano, castle, candyLand, treetops, underwater, hauntedGraveyard, rooftops, spaceStation)
-- `ai/awareness.ts` ~300 lines (single-pass game state sensing + nav graph lookup)
-- `ai/utility.ts` ~400 lines (15 evaluator functions + nav-guided platformSeeking)
+- `renderer.ts` ~3200 lines (canvas drawing, effect zone/ghost/hazard renderers, dispatches to theme)
+- `gameLoop.ts` ~1700 lines (all game systems including wind/ghosts/zones/pigeons/bouncy)
+- `CharacterSelect.tsx` ~1100 lines (lobby with its own game loop)
+- `themes/drawPrimitives.ts` ~1000 lines (shared drawing functions extracted from renderer)
+- `audio.ts` ~660 lines (procedural sound generation including wind/geyser/pigeon)
+- Individual theme files ~250-800 lines each (10 themes: meadow, winterLake, volcano, castle, candyLand, treetops, underwater, hauntedGraveyard, rooftops, spaceStation)
+- `ai/awareness.ts` ~370 lines (single-pass game state sensing + nav graph lookup)
+- `ai/utility.ts` ~460 lines (15 evaluator functions + nav-guided platformSeeking)
 - `ai/navData.ts` — auto-generated, ~300-500 lines (precomputed platform reachability per arena)
 - `VictoryScreen.css` ~410 lines
 - `fastMath.ts` — trig lookup table (fastSin/fastCos) for hot render paths
