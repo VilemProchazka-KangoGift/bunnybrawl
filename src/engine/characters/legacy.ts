@@ -136,10 +136,6 @@ export const ALL_CHARACTERS: CharacterDef[] = [
 // Runtime map for bot character assignments (populated before match start)
 export const BOT_CHARACTERS: Map<BotSlot, CharacterDef> = new Map();
 
-export function getCharacter(slot: CharacterSlot): CharacterDef {
-  return CHARACTERS[slot];
-}
-
 export function getCharacterForSlot(slot: PlayerSlot): CharacterDef {
   if (isBotSlot(slot)) {
     const char = BOT_CHARACTERS.get(slot);

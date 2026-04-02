@@ -3,11 +3,6 @@ export type {
   CharacterRenderer,
   GibRenderer,
   CharacterColors,
-  SimpleSoundDef,
-  SegmentSoundDef,
-  CustomSoundDef,
-  SoundDef,
-  IdleTransformType,
 } from './types';
 
 export {
@@ -37,7 +32,6 @@ export {
   CHARACTERS,
   ALL_CHARACTERS,
   BOT_CHARACTERS,
-  getCharacter,
   getCharacterForSlot,
   assignBotCharacters,
 } from './legacy';
