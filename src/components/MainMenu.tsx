@@ -7,6 +7,7 @@ import { listThemes } from '../engine/themes/registry';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
 import { initWildlife, updateAndDrawWildlife, drawDayNightCycle } from '../engine/canvasAnimations';
 import type { SimpleWildlife } from '../engine/canvasAnimations';
+import logoImg from '/logo.png?url';
 import {
   drawTree, drawBush, drawFlower, drawMushroom, drawGrassTuft, drawCloud,
   drawFgBush, drawTallGrass, drawFern, drawFgWildflower,
@@ -197,10 +198,7 @@ export function MainMenu() {
       <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="menu-bg-canvas" />
       <div className="menu-bg">
         <div className="menu-content">
-          <h1 className="game-title">
-            <span className="title-bunny">{t('title_bunny')}</span>
-            <span className="title-brawl">{t('title_brawl')}</span>
-          </h1>
+          <img src={logoImg} alt="Carrot Royale" className="game-logo" />
           <p className="tagline">{t('tagline')}</p>
           <p className="controls-hint">{t('credits_players')}</p>
 
@@ -253,16 +251,6 @@ export function MainMenu() {
           </div>
 
           <div className="menu-settings">
-            <label className="gore-toggle">
-              <input
-                type="checkbox"
-                checked={matchSettings.goreMode}
-                onChange={(e) => setMatchSettings({ goreMode: e.target.checked })}
-                data-testid="gore-toggle"
-              />
-              <span>{t('blood_mode')}</span>
-            </label>
-
             <div className="bot-settings" data-testid="bot-settings">
               <div className="bot-count-row">
                 <span className="bot-label">{t('bot_label')}</span>
@@ -294,34 +282,41 @@ export function MainMenu() {
             </div>
           </div>
 
-          <div className="credits">
-            <p className="lang-toggle" style={{ marginTop: '8px', cursor: 'pointer', fontSize: '14px', opacity: 0.7 }}>
-              <span
-                onClick={() => i18n.changeLanguage('en')}
-                style={{ fontWeight: i18n.language === 'en' ? 'bold' : 'normal', opacity: i18n.language === 'en' ? 1 : 0.6 }}
-              >
-                <svg width="18" height="12" viewBox="0 0 60 40" style={{ verticalAlign: 'middle', marginRight: 4 }}>
-                  <rect width="60" height="40" fill="#012169"/>
-                  <path d="M0,0 L60,40 M60,0 L0,40" stroke="#fff" strokeWidth="7"/>
-                  <path d="M0,0 L60,40 M60,0 L0,40" stroke="#C8102E" strokeWidth="4"/>
-                  <path d="M30,0 V40 M0,20 H60" stroke="#fff" strokeWidth="10"/>
-                  <path d="M30,0 V40 M0,20 H60" stroke="#C8102E" strokeWidth="6"/>
-                </svg>
-                EN
-              </span>
-              {' | '}
-              <span
-                onClick={() => i18n.changeLanguage('cs')}
-                style={{ fontWeight: i18n.language === 'cs' ? 'bold' : 'normal', opacity: i18n.language === 'cs' ? 1 : 0.6 }}
-              >
-                <svg width="18" height="12" viewBox="0 0 60 40" style={{ verticalAlign: 'middle', marginRight: 4 }}>
-                  <rect width="60" height="20" fill="#fff"/>
-                  <rect y="20" width="60" height="20" fill="#D7141A"/>
-                  <polygon points="0,0 30,20 0,40" fill="#11457E"/>
-                </svg>
-                CS
-              </span>
-            </p>
+          <label className="gore-toggle">
+            <input
+              type="checkbox"
+              checked={matchSettings.goreMode}
+              onChange={(e) => setMatchSettings({ goreMode: e.target.checked })}
+              data-testid="gore-toggle"
+            />
+            <span>{t('blood_mode')}</span>
+          </label>
+          <div className="lang-toggle">
+            <span
+              onClick={() => i18n.changeLanguage('en')}
+              style={{ fontWeight: i18n.language === 'en' ? 'bold' : 'normal', opacity: i18n.language === 'en' ? 1 : 0.6 }}
+            >
+              <svg width="18" height="12" viewBox="0 0 60 40" style={{ verticalAlign: 'middle', marginRight: 4 }}>
+                <rect width="60" height="40" fill="#012169"/>
+                <path d="M0,0 L60,40 M60,0 L0,40" stroke="#fff" strokeWidth="7"/>
+                <path d="M0,0 L60,40 M60,0 L0,40" stroke="#C8102E" strokeWidth="4"/>
+                <path d="M30,0 V40 M0,20 H60" stroke="#fff" strokeWidth="10"/>
+                <path d="M30,0 V40 M0,20 H60" stroke="#C8102E" strokeWidth="6"/>
+              </svg>
+              EN
+            </span>
+            {' | '}
+            <span
+              onClick={() => i18n.changeLanguage('cs')}
+              style={{ fontWeight: i18n.language === 'cs' ? 'bold' : 'normal', opacity: i18n.language === 'cs' ? 1 : 0.6 }}
+            >
+              <svg width="18" height="12" viewBox="0 0 60 40" style={{ verticalAlign: 'middle', marginRight: 4 }}>
+                <rect width="60" height="20" fill="#fff"/>
+                <rect y="20" width="60" height="20" fill="#D7141A"/>
+                <polygon points="0,0 30,20 0,40" fill="#11457E"/>
+              </svg>
+              CS
+            </span>
           </div>
         </div>
       </div>
