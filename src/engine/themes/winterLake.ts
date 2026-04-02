@@ -5,6 +5,7 @@ import {
   drawBigSnowman, drawIgloo, drawSnowman, drawSnowball,
   drawSnowballPyramid, drawLargeSnowballPyramid,
   drawFgBush,
+  createThornRenderer, createSpringRenderer,
 } from './drawPrimitives';
 
 // Platform colors — shared between config fields and customDraw
@@ -324,14 +325,8 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
     friction: 0.15,
   },
 
-  drawCustomThorn: (ctx, x, y, width, height, growScale, fadeAlpha) => {
-    ctx.save();
-    ctx.globalAlpha = fadeAlpha;
-    const cx = x + width / 2;
+  drawCustomThorn: createThornRenderer((ctx, x, y, width, height, _fadeAlpha) => {
     const by = y + height;
-    ctx.translate(cx, by);
-    ctx.scale(growScale, growScale);
-    ctx.translate(-cx, -by);
 
     // Snow base mound
     ctx.fillStyle = 'rgba(220, 235, 250, 0.6)';
@@ -392,17 +387,9 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
 
       ctx.restore();
     }
+  }),
 
-    ctx.restore();
-  },
-
-  drawCustomSpring: (ctx, x, y, size, bounceTimer, growScale, fadeAlpha) => {
-    ctx.save();
-    ctx.globalAlpha = fadeAlpha;
-    ctx.translate(x, y);
-    ctx.scale(growScale, growScale);
-    ctx.translate(-x, -y);
-
+  drawCustomSpring: createSpringRenderer((ctx, x, y, size, bounceTimer, _fadeAlpha) => {
     const halfW = size * 0.5;
     const squash = 1 + bounceTimer * 0.03;
     const moundH = size * 0.4 / squash;
@@ -445,9 +432,7 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
         ctx.fill();
       }
     }
-
-    ctx.restore();
-  },
+  }),
 
   drawCustomHazardZone: (ctx, x, y, width, height, _time) => {
     ctx.save();

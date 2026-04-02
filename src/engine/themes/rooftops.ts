@@ -1,4 +1,5 @@
 import type { ThemeConfig } from './types';
+import { createThornRenderer, createSpringRenderer } from './drawPrimitives';
 
 export const ROOFTOPS_THEME: ThemeConfig = {
   id: 'rooftops',
@@ -716,14 +717,8 @@ export const ROOFTOPS_THEME: ThemeConfig = {
     ctx.restore();
   },
 
-  drawCustomThorn: (ctx, x, y, width, height, growScale, fadeAlpha) => {
-    ctx.save();
-    ctx.globalAlpha = fadeAlpha;
-    const cx = x + width / 2;
+  drawCustomThorn: createThornRenderer((ctx, x, y, width, height, _fadeAlpha) => {
     const by = y + height;
-    ctx.translate(cx, by);
-    ctx.scale(growScale, growScale);
-    ctx.translate(-cx, -by);
     ctx.fillStyle = '#5A5050';
     ctx.fillRect(x + width * 0.05, by - height * 0.12, width * 0.9, height * 0.12);
     const nails = [
@@ -749,15 +744,9 @@ export const ROOFTOPS_THEME: ThemeConfig = {
       ctx.closePath(); ctx.fill();
       ctx.restore();
     }
-    ctx.restore();
-  },
+  }),
 
-  drawCustomSpring: (ctx, x, y, size, bounceTimer, growScale, fadeAlpha) => {
-    ctx.save();
-    ctx.globalAlpha = fadeAlpha;
-    ctx.translate(x, y);
-    ctx.scale(growScale, growScale);
-    ctx.translate(-x, -y);
+  drawCustomSpring: createSpringRenderer((ctx, x, y, size, bounceTimer, _fadeAlpha) => {
     const halfW = size * 0.45;
     const squash = 1 + bounceTimer * 0.03;
     ctx.fillStyle = '#6A6A72';
@@ -775,6 +764,5 @@ export const ROOFTOPS_THEME: ThemeConfig = {
     ctx.beginPath();
     ctx.ellipse(x, lidY, halfW * 0.7, size * 0.06, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.restore();
-  },
+  }),
 };

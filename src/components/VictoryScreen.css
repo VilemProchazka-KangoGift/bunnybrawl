@@ -223,38 +223,24 @@
 .rematch-btn {
   padding: 14px 44px;
   font-size: 22px;
-  font-family: 'Fredoka', sans-serif;
   font-weight: 700;
   background: linear-gradient(180deg, #5CBF60, #388E3C);
   border: 2px solid #6BD06F;
-  border-radius: 16px;
   color: #FFF;
-  cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
   text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.3);
   box-shadow: 0 4px 12px rgba(56, 142, 60, 0.4);
 }
 
 .rematch-btn:hover {
-  transform: scale(1.06);
   box-shadow: 0 4px 24px rgba(76, 175, 80, 0.5), 0 0 20px rgba(76, 175, 80, 0.3);
-}
-
-.rematch-btn:active {
-  transform: scale(0.97);
 }
 
 .menu-btn-v {
   padding: 14px 32px;
   font-size: 18px;
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 600;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.05));
   border: 2px solid rgba(255, 255, 255, 0.25);
-  border-radius: 16px;
   color: #FFF;
-  cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.2s ease;
 }
 
 .menu-btn-v:hover {
@@ -262,10 +248,6 @@
   border-color: rgba(255, 255, 255, 0.45);
   transform: scale(1.05);
   box-shadow: 0 4px 16px rgba(255, 255, 255, 0.12);
-}
-
-.menu-btn-v:active {
-  transform: scale(0.97);
 }
 
 /* Victory pose (u) — larger winner avatar with bounce animation */

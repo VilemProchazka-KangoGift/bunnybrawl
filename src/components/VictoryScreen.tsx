@@ -4,6 +4,7 @@ import { useGameStore } from '../store/gameStore';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
 import type { PlayerSlot, PlayerStats } from '../engine/types';
 import { isBotSlot } from '../engine/types';
+import { CHAR_EMOJI } from '../engine/characters';
 import './VictoryScreen.css';
 
 interface FireworkParticle {
@@ -16,15 +17,6 @@ interface FireworkParticle {
   color: string;
   size: number;
 }
-
-// Map character names to emoji/text for visual display
-const CHAR_EMOJI: Record<string, string> = {
-  Bunny: '\uD83D\uDC30', Fox: '\uD83E\uDD8A', Frog: '\uD83D\uDC38',
-  Bear: '\uD83D\uDC3B', Owl: '\uD83E\uDD89', Cat: '\uD83D\uDC31',
-  Wolf: '\uD83D\uDC3A', Panda: '\uD83D\uDC3C', Pig: '\uD83D\uDC37',
-  Cow: '\uD83D\uDC2E', Goat: '\uD83D\uDC10', Horse: '\uD83D\uDC34',
-  Sheep: '\uD83D\uDC11', Monkey: '\uD83D\uDC35',
-};
 
 export function VictoryScreen() {
   const { t } = useTranslation();
@@ -221,8 +213,8 @@ export function VictoryScreen() {
           </div>
 
           <div className="victory-actions">
-            <button className="rematch-btn" onClick={handleRematch} data-testid="rematch-button">{t('victory_rematch')}</button>
-            <button className="menu-btn-v" onClick={handleMenu} data-testid="menu-button">{t('victory_menu')}</button>
+            <button className="btn-base rematch-btn" onClick={handleRematch} data-testid="rematch-button">{t('victory_rematch')}</button>
+            <button className="btn-base menu-btn-v" onClick={handleMenu} data-testid="menu-button">{t('victory_menu')}</button>
           </div>
         </div>
       </div>

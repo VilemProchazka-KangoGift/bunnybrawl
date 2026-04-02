@@ -1,5 +1,6 @@
 import type { ThemeConfig } from './types';
 import { getFloatingPlatforms } from './utils';
+import { createThornRenderer } from './drawPrimitives';
 
 export const HAUNTED_GRAVEYARD_THEME: ThemeConfig = {
   id: 'haunted_graveyard',
@@ -396,14 +397,9 @@ export const HAUNTED_GRAVEYARD_THEME: ThemeConfig = {
     ctx.restore();
   },
 
-  drawCustomThorn: (ctx, x, y, width, height, growScale, fadeAlpha) => {
-    ctx.save();
-    ctx.globalAlpha = fadeAlpha;
+  drawCustomThorn: createThornRenderer((ctx, x, y, width, height, fadeAlpha) => {
     const cx = x + width / 2;
     const baseY = y + height;
-    ctx.translate(cx, baseY);
-    ctx.scale(growScale, growScale);
-    ctx.translate(-cx, -baseY);
 
     // Dirt mound at base
     ctx.fillStyle = '#3A3020';
@@ -468,9 +464,7 @@ export const HAUNTED_GRAVEYARD_THEME: ThemeConfig = {
     glow.addColorStop(1, 'rgba(40, 100, 40, 0)');
     ctx.fillStyle = glow;
     ctx.fillRect(cx - 25, baseY - armH - 10, 50, armH + 20);
-
-    ctx.restore();
-  },
+  }),
 
   ghostConfig: {
     count: 3,

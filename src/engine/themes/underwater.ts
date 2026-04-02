@@ -1,4 +1,5 @@
 import type { ThemeConfig } from './types';
+import { createThornRenderer, createSpringRenderer } from './drawPrimitives';
 import { getFloatingPlatforms } from './utils';
 
 export const UNDERWATER_THEME: ThemeConfig = {
@@ -469,15 +470,7 @@ export const UNDERWATER_THEME: ThemeConfig = {
     jumpImpulse: 0.9,
   },
 
-  drawCustomThorn: (ctx, x, y, width, height, growScale, fadeAlpha) => {
-    ctx.save();
-    ctx.globalAlpha = fadeAlpha;
-    const cx = x + width / 2;
-    const by = y + height;
-    ctx.translate(cx, by);
-    ctx.scale(growScale, growScale);
-    ctx.translate(-cx, -by);
-
+  drawCustomThorn: createThornRenderer((ctx, x, y, width, height, _fadeAlpha) => {
     // Sea urchin — dark spiky ball
     const urchinCX = x + width / 2;
     const urchinCY = y + height * 0.5;
@@ -533,17 +526,9 @@ export const UNDERWATER_THEME: ThemeConfig = {
     ctx.beginPath();
     ctx.arc(urchinCX - urchinR * 0.25, urchinCY - urchinR * 0.25, urchinR * 0.35, 0, Math.PI * 2);
     ctx.fill();
+  }),
 
-    ctx.restore();
-  },
-
-  drawCustomSpring: (ctx, x, y, size, bounceTimer, growScale, fadeAlpha) => {
-    ctx.save();
-    ctx.globalAlpha = fadeAlpha;
-    ctx.translate(x, y);
-    ctx.scale(growScale, growScale);
-    ctx.translate(-x, -y);
-
+  drawCustomSpring: createSpringRenderer((ctx, x, y, size, bounceTimer, _fadeAlpha) => {
     const halfW = size * 0.5;
     const openAmount = 0.3 + Math.abs(bounceTimer) * 0.04;
 
@@ -594,9 +579,7 @@ export const UNDERWATER_THEME: ThemeConfig = {
       ctx.arc(x - size * 0.03, y - size * 0.09, size * 0.04, 0, Math.PI * 2);
       ctx.fill();
     }
-
-    ctx.restore();
-  },
+  }),
 
   ghostConfig: {
     count: 2,

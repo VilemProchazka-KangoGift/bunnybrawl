@@ -15,33 +15,24 @@ interface GameStore {
   reset: () => void;
 }
 
-function loadGoreMode(): boolean {
-  try { return localStorage.getItem('bunnybrawl_gore') === 'true'; } catch { return false; }
+function loadStorage<T>(key: string, parse: (raw: string | null) => T, fallback: T): T {
+  try { return parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
 }
 
-function loadArenaId(): string {
-  try { return localStorage.getItem('bunnybrawl_arena') || 'meadow'; } catch { return 'meadow'; }
-}
-
-function loadBotCount(): number {
-  try { return parseInt(localStorage.getItem('bunnybrawl_botcount') || '0', 10) || 0; } catch { return 0; }
-}
-
-function loadBotDifficulty(): 'easy' | 'medium' | 'hard' | 'impossible' {
-  try {
-    const val = localStorage.getItem('bunnybrawl_botdiff');
-    return val === 'easy' || val === 'medium' || val === 'hard' || val === 'impossible' ? val : 'medium';
-  } catch { return 'medium'; }
+function saveStorage(key: string, value: string): void {
+  try { localStorage.setItem(key, value); } catch { /* noop */ }
 }
 
 const defaultSettings: MatchSettings = {
   killLimit: 16,
   timeLimit: 180, // 3 minutes
   playerCount: 2,
-  goreMode: loadGoreMode(),
-  arenaId: loadArenaId(),
-  botCount: loadBotCount(),
-  botDifficulty: loadBotDifficulty(),
+  goreMode: loadStorage('bunnybrawl_gore', v => v === 'true', false),
+  arenaId: loadStorage('bunnybrawl_arena', v => v || 'meadow', 'meadow'),
+  botCount: loadStorage('bunnybrawl_botcount', v => parseInt(v || '0', 10) || 0, 0),
+  botDifficulty: loadStorage<'easy' | 'medium' | 'hard' | 'impossible'>('bunnybrawl_botdiff', v => {
+    return v === 'easy' || v === 'medium' || v === 'hard' || v === 'impossible' ? v : 'medium';
+  }, 'medium'),
 };
 
 export const useGameStore = create<GameStore>((set) => ({
@@ -56,18 +47,10 @@ export const useGameStore = create<GameStore>((set) => ({
   setMatchSettings: (settings) =>
     set((state) => {
       const next = { ...state.matchSettings, ...settings };
-      if ('goreMode' in settings) {
-        try { localStorage.setItem('bunnybrawl_gore', String(next.goreMode)); } catch { /* noop */ }
-      }
-      if ('arenaId' in settings) {
-        try { localStorage.setItem('bunnybrawl_arena', next.arenaId); } catch { /* noop */ }
-      }
-      if ('botCount' in settings) {
-        try { localStorage.setItem('bunnybrawl_botcount', String(next.botCount)); } catch { /* noop */ }
-      }
-      if ('botDifficulty' in settings) {
-        try { localStorage.setItem('bunnybrawl_botdiff', next.botDifficulty); } catch { /* noop */ }
-      }
+      if ('goreMode' in settings) saveStorage('bunnybrawl_gore', String(next.goreMode));
+      if ('arenaId' in settings) saveStorage('bunnybrawl_arena', next.arenaId);
+      if ('botCount' in settings) saveStorage('bunnybrawl_botcount', String(next.botCount));
+      if ('botDifficulty' in settings) saveStorage('bunnybrawl_botdiff', next.botDifficulty);
       return { matchSettings: next };
     }),
 

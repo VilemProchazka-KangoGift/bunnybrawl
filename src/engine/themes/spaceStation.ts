@@ -1,4 +1,5 @@
 import type { ThemeConfig } from './types';
+import { createThornRenderer, createSpringRenderer } from './drawPrimitives';
 import { getFloatingPlatforms } from './utils';
 
 let scanLinePattern: CanvasPattern | null = null;
@@ -495,15 +496,7 @@ export const SPACE_STATION_THEME: ThemeConfig = {
     jumpImpulse: 0.8,
   },
 
-  drawCustomThorn: (ctx, x, y, width, height, growScale, fadeAlpha) => {
-    ctx.save();
-    ctx.globalAlpha = fadeAlpha;
-    const cx = x + width / 2;
-    const by = y + height;
-    ctx.translate(cx, by);
-    ctx.scale(growScale, growScale);
-    ctx.translate(-cx, -by);
-
+  drawCustomThorn: createThornRenderer((ctx, x, y, width, height, fadeAlpha) => {
     // Dark metal panel base
     ctx.fillStyle = '#1A1A2A';
     ctx.fillRect(x, y + height * 0.7, width, height * 0.3);
@@ -570,17 +563,9 @@ export const SPACE_STATION_THEME: ThemeConfig = {
       ctx.fillStyle = glow;
       ctx.fillRect(bx - 10, y + height * 0.7 - boltH - 10, 20, 20);
     }
+  }),
 
-    ctx.restore();
-  },
-
-  drawCustomSpring: (ctx, x, y, size, bounceTimer, growScale, fadeAlpha) => {
-    ctx.save();
-    ctx.globalAlpha = fadeAlpha;
-    ctx.translate(x, y);
-    ctx.scale(growScale, growScale);
-    ctx.translate(-x, -y);
-
+  drawCustomSpring: createSpringRenderer((ctx, x, y, size, bounceTimer, fadeAlpha) => {
     const halfW = size * 0.5;
     const squash = 1 + bounceTimer * 0.03;
 
@@ -629,7 +614,5 @@ export const SPACE_STATION_THEME: ThemeConfig = {
     ctx.beginPath();
     ctx.arc(x + halfW * 0.8, y - 3, 2, 0, Math.PI * 2);
     ctx.fill();
-
-    ctx.restore();
-  },
+  }),
 };

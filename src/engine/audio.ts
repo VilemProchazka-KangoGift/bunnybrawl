@@ -40,97 +40,72 @@ class AudioManager {
       volume: 0.5,
     }));
 
-    // Animal sounds
-    this.sounds.set('bunny', new Howl({
-      src: [generateToneBuffer(800, 0.1, 'square', 0.4, 1200)],
-      volume: 0.4,
-    }));
-    this.sounds.set('fox', new Howl({
-      src: [generateToneBuffer(600, 0.15, 'sawtooth', 0.4, 400)],
-      volume: 0.4,
-    }));
+    // Animal sounds — simple tones
+    const SIMPLE_ANIMAL_SOUNDS: Array<{ name: SoundName; freq: number; duration: number; type: OscillatorType; genVol: number; freqEnd?: number; vol?: number }> = [
+      { name: 'bunny', freq: 800, duration: 0.1, type: 'square', genVol: 0.4, freqEnd: 1200 },
+      { name: 'fox', freq: 600, duration: 0.15, type: 'sawtooth', genVol: 0.4, freqEnd: 400 },
+      { name: 'bear', freq: 100, duration: 0.25, type: 'sawtooth', genVol: 0.4 },
+      { name: 'panda', freq: 500, duration: 0.12, type: 'triangle', genVol: 0.4, freqEnd: 600 },
+      { name: 'cow', freq: 150, duration: 0.4, type: 'sine', genVol: 0.4, freqEnd: 130 },
+      { name: 'sheep', freq: 350, duration: 0.3, type: 'sine', genVol: 0.4, freqEnd: 250 },
+    ];
+    for (const s of SIMPLE_ANIMAL_SOUNDS) {
+      this.sounds.set(s.name, new Howl({
+        src: [generateToneBuffer(s.freq, s.duration, s.type, s.genVol, s.freqEnd)],
+        volume: s.vol ?? 0.4,
+      }));
+    }
+
+    // Animal sounds — multi-segment tones
+    const SEGMENT_ANIMAL_SOUNDS: Array<{ name: SoundName; segments: ToneSegment[]; genVol: number; vol?: number }> = [
+      { name: 'owl', segments: [
+        { freq: 400, freqEnd: 300, duration: 0.15, type: 'sine' },
+        { freq: 300, freqEnd: 400, duration: 0.15, type: 'sine' },
+      ], genVol: 0.4 },
+      { name: 'cat', segments: [
+        { freq: 700, freqEnd: 500, duration: 0.1, type: 'sine' },
+        { freq: 500, freqEnd: 600, duration: 0.1, type: 'sine' },
+      ], genVol: 0.4 },
+      { name: 'wolf', segments: [
+        { freq: 300, freqEnd: 500, duration: 0.12, type: 'sawtooth' },
+        { freq: 500, freqEnd: 400, duration: 0.23, type: 'sawtooth' },
+      ], genVol: 0.4 },
+      { name: 'pig', segments: [
+        { freq: 250, freqEnd: 350, duration: 0.07, type: 'square' },
+        { freq: 350, freqEnd: 200, duration: 0.13, type: 'square' },
+      ], genVol: 0.4 },
+      { name: 'goat', segments: [
+        { freq: 400, freqEnd: 300, duration: 0.1, type: 'sawtooth' },
+        { freq: 300, freqEnd: 350, duration: 0.15, type: 'sawtooth' },
+      ], genVol: 0.4 },
+      { name: 'horse', segments: [
+        { freq: 500, freqEnd: 800, duration: 0.1, type: 'sawtooth' },
+        { freq: 800, freqEnd: 400, duration: 0.2, type: 'sawtooth' },
+      ], genVol: 0.4 },
+      { name: 'monkey', segments: [
+        { freq: 800, freqEnd: 1200, duration: 0.07, type: 'square' },
+        { freq: 1200, freqEnd: 600, duration: 0.13, type: 'square' },
+      ], genVol: 0.4 },
+      { name: 'tiger', segments: [
+        { freq: 200, freqEnd: 120, duration: 0.2, type: 'sawtooth' },
+        { freq: 120, freqEnd: 80, duration: 0.15, type: 'sawtooth' },
+      ], genVol: 0.5, vol: 0.45 },
+      { name: 'rhino', segments: [
+        { freq: 100, freqEnd: 60, duration: 0.15, type: 'square' },
+        { freq: 60, freqEnd: 90, duration: 0.2, type: 'sine' },
+      ], genVol: 0.5, vol: 0.45 },
+    ];
+    for (const s of SEGMENT_ANIMAL_SOUNDS) {
+      this.sounds.set(s.name, new Howl({
+        src: [generateMultiSegmentTone(s.segments, s.genVol)],
+        volume: s.vol ?? 0.4,
+      }));
+    }
+
+    // Frog uses a custom generator
     this.sounds.set('frog', new Howl({
       src: [generateFrogRibbit()],
       volume: 0.4,
-    }));
-    this.sounds.set('bear', new Howl({
-      src: [generateToneBuffer(100, 0.25, 'sawtooth', 0.4)],
-      volume: 0.4,
-    }));
-    this.sounds.set('owl', new Howl({
-      src: [generateMultiSegmentTone([
-        { freq: 400, freqEnd: 300, duration: 0.15, type: 'sine' },
-        { freq: 300, freqEnd: 400, duration: 0.15, type: 'sine' },
-      ], 0.4)],
-      volume: 0.4,
-    }));
-    this.sounds.set('cat', new Howl({
-      src: [generateMultiSegmentTone([
-        { freq: 700, freqEnd: 500, duration: 0.1, type: 'sine' },
-        { freq: 500, freqEnd: 600, duration: 0.1, type: 'sine' },
-      ], 0.4)],
-      volume: 0.4,
-    }));
-    this.sounds.set('wolf', new Howl({
-      src: [generateMultiSegmentTone([
-        { freq: 300, freqEnd: 500, duration: 0.12, type: 'sawtooth' },
-        { freq: 500, freqEnd: 400, duration: 0.23, type: 'sawtooth' },
-      ], 0.4)],
-      volume: 0.4,
-    }));
-    this.sounds.set('panda', new Howl({
-      src: [generateToneBuffer(500, 0.12, 'triangle', 0.4, 600)],
-      volume: 0.4,
-    }));
-    this.sounds.set('pig', new Howl({
-      src: [generateMultiSegmentTone([
-        { freq: 250, freqEnd: 350, duration: 0.07, type: 'square' },
-        { freq: 350, freqEnd: 200, duration: 0.13, type: 'square' },
-      ], 0.4)],
-      volume: 0.4,
-    }));
-    this.sounds.set('cow', new Howl({
-      src: [generateToneBuffer(150, 0.4, 'sine', 0.4, 130)],
-      volume: 0.4,
-    }));
-    this.sounds.set('goat', new Howl({
-      src: [generateMultiSegmentTone([
-        { freq: 400, freqEnd: 300, duration: 0.1, type: 'sawtooth' },
-        { freq: 300, freqEnd: 350, duration: 0.15, type: 'sawtooth' },
-      ], 0.4)],
-      volume: 0.4,
-    }));
-    this.sounds.set('horse', new Howl({
-      src: [generateMultiSegmentTone([
-        { freq: 500, freqEnd: 800, duration: 0.1, type: 'sawtooth' },
-        { freq: 800, freqEnd: 400, duration: 0.2, type: 'sawtooth' },
-      ], 0.4)],
-      volume: 0.4,
-    }));
-    this.sounds.set('sheep', new Howl({
-      src: [generateToneBuffer(350, 0.3, 'sine', 0.4, 250)],
-      volume: 0.4,
-    }));
-    this.sounds.set('monkey', new Howl({
-      src: [generateMultiSegmentTone([
-        { freq: 800, freqEnd: 1200, duration: 0.07, type: 'square' },
-        { freq: 1200, freqEnd: 600, duration: 0.13, type: 'square' },
-      ], 0.4)],
-      volume: 0.4,
-    }));
-    this.sounds.set('tiger', new Howl({
-      src: [generateMultiSegmentTone([
-        { freq: 200, freqEnd: 120, duration: 0.2, type: 'sawtooth' },
-        { freq: 120, freqEnd: 80, duration: 0.15, type: 'sawtooth' },
-      ], 0.5)],
-      volume: 0.45,
-    }));
-    this.sounds.set('rhino', new Howl({
-      src: [generateMultiSegmentTone([
-        { freq: 100, freqEnd: 60, duration: 0.15, type: 'square' },
-        { freq: 60, freqEnd: 90, duration: 0.2, type: 'sine' },
-      ], 0.5)],
-      volume: 0.45,
     }));
 
     // Footstep grass: very short soft crunch

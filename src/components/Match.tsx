@@ -167,20 +167,20 @@ export function Match() {
                       );
                     })}
                   </div>
-                  <button className="pause-btn quit-btn" onClick={() => setShowLevelSelect(false)}>
+                  <button className="btn-base pause-btn quit-btn" onClick={() => setShowLevelSelect(false)}>
                     {t('pause_back')}
                   </button>
                 </>
               ) : (
                 <>
                   <h2 className="pause-title">{t('pause_title')}</h2>
-                  <button className="pause-btn resume-btn" onClick={handleResume} data-testid="resume-button">
+                  <button className="btn-base pause-btn resume-btn" onClick={handleResume} data-testid="resume-button">
                     {t('pause_resume')}
                   </button>
-                  <button className="pause-btn level-btn" onClick={() => setShowLevelSelect(true)}>
+                  <button className="btn-base pause-btn level-btn" onClick={() => setShowLevelSelect(true)}>
                     {t('pause_change_level')}
                   </button>
-                  <button className="pause-btn quit-btn" onClick={handleQuit} data-testid="quit-button">
+                  <button className="btn-base pause-btn quit-btn" onClick={handleQuit} data-testid="quit-button">
                     {t('pause_quit')}
                   </button>
                   <p className="pause-hint">{t('pause_hint')}</p>

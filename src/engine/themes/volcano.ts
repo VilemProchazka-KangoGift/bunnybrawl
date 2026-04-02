@@ -1,4 +1,5 @@
 import type { ThemeConfig } from './types';
+import { createThornRenderer, createSpringRenderer } from './drawPrimitives';
 import { getFloatingPlatforms } from './utils';
 
 export const VOLCANO_THEME: ThemeConfig = {
@@ -417,14 +418,8 @@ export const VOLCANO_THEME: ThemeConfig = {
     glowColor: '#FF6600',
   },
 
-  drawCustomThorn: (ctx, x, y, width, height, growScale, fadeAlpha) => {
-    ctx.save();
-    ctx.globalAlpha = fadeAlpha;
-    const cx = x + width / 2;
+  drawCustomThorn: createThornRenderer((ctx, x, y, width, height, _fadeAlpha) => {
     const by = y + height;
-    ctx.translate(cx, by);
-    ctx.scale(growScale, growScale);
-    ctx.translate(-cx, -by);
 
     // Obsidian spike base
     ctx.fillStyle = '#1A1010';
@@ -463,17 +458,9 @@ export const VOLCANO_THEME: ThemeConfig = {
       ctx.fillStyle = glow;
       ctx.fillRect(sx - sw, by - sh - sw, sw * 3, sw * 2);
     }
+  }),
 
-    ctx.restore();
-  },
-
-  drawCustomSpring: (ctx, x, y, size, bounceTimer, growScale, fadeAlpha) => {
-    ctx.save();
-    ctx.globalAlpha = fadeAlpha;
-    ctx.translate(x, y);
-    ctx.scale(growScale, growScale);
-    ctx.translate(-x, -y);
-
+  drawCustomSpring: createSpringRenderer((ctx, x, y, size, bounceTimer, _fadeAlpha) => {
     const halfW = size * 0.5;
     const squash = 1 + bounceTimer * 0.03;
 
@@ -512,7 +499,5 @@ export const VOLCANO_THEME: ThemeConfig = {
     ctx.beginPath();
     ctx.ellipse(x, y - size * 0.5 / squash, halfW * 0.15, flameH * 0.3, 0, 0, Math.PI * 2);
     ctx.fill();
-
-    ctx.restore();
-  },
+  }),
 };

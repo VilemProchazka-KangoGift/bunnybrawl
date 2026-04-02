@@ -1,4 +1,5 @@
 import type { ThemeConfig } from './types';
+import { createThornRenderer, createSpringRenderer } from './drawPrimitives';
 import { getFloatingPlatforms } from './utils';
 
 export const CASTLE_THEME: ThemeConfig = {
@@ -526,14 +527,8 @@ export const CASTLE_THEME: ThemeConfig = {
     glowColor: '#5566AA',
   },
 
-  drawCustomThorn: (ctx, x, y, width, height, growScale, fadeAlpha) => {
-    ctx.save();
-    ctx.globalAlpha = fadeAlpha;
-    const cx = x + width / 2;
+  drawCustomThorn: createThornRenderer((ctx, x, y, width, height, _fadeAlpha) => {
     const by = y + height;
-    ctx.translate(cx, by);
-    ctx.scale(growScale, growScale);
-    ctx.translate(-cx, -by);
 
     // Stone base block
     ctx.fillStyle = '#4A4A55';
@@ -570,17 +565,9 @@ export const CASTLE_THEME: ThemeConfig = {
       ctx.arc(sx, by - sh, sw * 0.5, 0, Math.PI * 2);
       ctx.fill();
     }
+  }),
 
-    ctx.restore();
-  },
-
-  drawCustomSpring: (ctx, x, y, size, bounceTimer, growScale, fadeAlpha) => {
-    ctx.save();
-    ctx.globalAlpha = fadeAlpha;
-    ctx.translate(x, y);
-    ctx.scale(growScale, growScale);
-    ctx.translate(-x, -y);
-
+  drawCustomSpring: createSpringRenderer((ctx, x, y, size, bounceTimer, fadeAlpha) => {
     const halfW = size * 0.45;
     const squash = 1 + bounceTimer * 0.03;
     const bodyH = size * 0.8 / squash;
@@ -649,7 +636,5 @@ export const CASTLE_THEME: ThemeConfig = {
     // Pedestal base
     ctx.fillStyle = '#4A4A55';
     ctx.fillRect(x - halfW * 0.7, y - 3, halfW * 1.4, 3);
-
-    ctx.restore();
-  },
+  }),
 };

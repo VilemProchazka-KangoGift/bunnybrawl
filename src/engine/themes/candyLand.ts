@@ -1,4 +1,5 @@
 import type { ThemeConfig } from './types';
+import { createThornRenderer, createSpringRenderer } from './drawPrimitives';
 import { getFloatingPlatforms } from './utils';
 
 export const CANDY_LAND_THEME: ThemeConfig = {
@@ -401,14 +402,8 @@ export const CANDY_LAND_THEME: ThemeConfig = {
     ctx.restore();
   },
 
-  drawCustomThorn: (ctx, x, y, width, height, growScale, fadeAlpha) => {
-    ctx.save();
-    ctx.globalAlpha = fadeAlpha;
-    const cx = x + width / 2;
+  drawCustomThorn: createThornRenderer((ctx, x, y, width, height, _fadeAlpha) => {
     const by = y + height;
-    ctx.translate(cx, by);
-    ctx.scale(growScale, growScale);
-    ctx.translate(-cx, -by);
 
     // Candy cane spikes — red/white striped pointed sticks
     const canes = [
@@ -457,17 +452,9 @@ export const CANDY_LAND_THEME: ThemeConfig = {
       ctx.closePath();
       ctx.fill();
     }
+  }),
 
-    ctx.restore();
-  },
-
-  drawCustomSpring: (ctx, x, y, size, bounceTimer, growScale, fadeAlpha) => {
-    ctx.save();
-    ctx.globalAlpha = fadeAlpha;
-    ctx.translate(x, y);
-    ctx.scale(growScale, growScale);
-    ctx.translate(-x, -y);
-
+  drawCustomSpring: createSpringRenderer((ctx, x, y, size, bounceTimer, _fadeAlpha) => {
     const squash = 1 + bounceTimer * 0.03;
     const halfW = size * 0.4;
     const bodyH = size * 0.85 / squash;
@@ -521,7 +508,5 @@ export const CANDY_LAND_THEME: ThemeConfig = {
     ctx.beginPath();
     ctx.ellipse(x + halfW * 0.2, y - bodyH * 0.5, halfW * 0.2, bodyH * 0.2, 0.3, 0, Math.PI * 2);
     ctx.fill();
-
-    ctx.restore();
-  },
+  }),
 };
