@@ -1,5 +1,5 @@
-import type { CharacterDef, CharacterSlot, PlayerSlot, BotSlot } from './types';
-import { isBotSlot } from './types';
+import type { CharacterDef, CharacterSlot, PlayerSlot, BotSlot } from '../types';
+import { isBotSlot } from '../types';
 
 // Characters tied to player slots (used in match)
 export const CHARACTERS: Record<CharacterSlot, CharacterDef> = {

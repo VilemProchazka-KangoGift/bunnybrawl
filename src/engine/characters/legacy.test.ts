@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { CHARACTERS, getCharacter } from './characters';
+import { CHARACTERS, getCharacter } from './legacy';
 
 describe('Characters', () => {
   it('has all four characters defined', () => {

@@ -17,9 +17,19 @@ src/
     stomp.ts      # Stomp detection, splat marks, respawn
     input.ts      # 5-player keyboard input with case-insensitive normalization
     arena.ts      # Arena layouts (platforms, spawn points) + getArena(id) + listArenas()
-    characters.ts # 11 character definitions + ALL_CHARACTERS roster + CHAR_EMOJI + CUSTOM_EYE_CHARS
+    characters/   # Character pack system (registry-based, extensible)
+      types.ts      # CharacterPack interface, CharacterRenderer/GibRenderer function types
+      registry.ts   # Pack registry: register/get/list + convenience lookups (emoji, eyes, splat, gibs, personality)
+      builtin.ts    # Registers all 17 built-in characters at app startup
+      fallbacks.ts  # Fallback pill-shape renderer for unknown/unregistered characters
+      legacy.ts     # Original CHARACTERS/ALL_CHARACTERS/CHAR_EMOJI/assignBotCharacters (backward compat)
+      index.ts      # Barrel export (re-exports both new registry + legacy symbols)
+      renderers/
+        sprites.ts  # 17 per-character CharacterRenderer functions (extracted from renderer.ts)
+      gibRenderers/
+        all.ts      # 17 per-character GibRenderer functions (extracted from renderer.ts)
     canvasAnimations.ts # Shared canvas utilities (wildlife, day/night cycle) used by MainMenu + CharacterSelect
-    renderer.ts   # Canvas 2D rendering (two layers: bg + fg) — LARGEST FILE (~3200 lines)
+    renderer.ts   # Canvas 2D rendering (two layers: bg + fg) — dispatches to character pack renderers
     audio.ts      # Procedural audio generation (animal sounds + SFX + music)
     gameLoop.ts   # Main game loop with fixed timestep, all game systems (~1700 lines)
     ai/           # AI opponent system (utility-based decision making + nav graph)
@@ -66,21 +76,31 @@ src/
 - **CSS transform scaling** — the game renders internally at a fixed 1280x720 logical resolution. `GameScaler` wraps all screens and uses `transform: scale()` to fit the viewport while preserving 16:9 aspect ratio. Screen containers use `width/height: 100%` and inherit size from the scaler. Fullscreen via F11 or the corner button.
 - **i18n via i18next** — Czech is the default language. Canvas text uses `i18n.t()` directly (not the React hook).
 - **AI opponents via utility scoring + nav graph** — up to 5 bots (BotSlot B1-B5) alongside 5 human players. Each bot runs an `AIController` that produces `InputState` (4 booleans) per frame — same interface as keyboard. Decision pipeline: `buildAwareness()` (single-pass state scan + nav graph lookup) → `evaluateActions()` (15 weighted evaluators) → reaction buffer delay → output. Precomputed per-arena reachability graphs (`ai/navData.ts`) provide `nextHop` (fastest) and `safeHop` (hazard-avoidant) waypoints. Edges have danger scores from proximity to hazardZones (icicles, lava). Cautious bots (cautiousness ≥ 1.2) use `safeHop`, aggressive bots use `nextHop`. Geyser edges let bots ride bubble columns as elevators (underwater arena). All difficulties use full pathfinding (zero runtime cost); difficulty is differentiated by reaction delay, noise, and awareness radius.
+- **Character pack registry** — Characters are registered as `CharacterPack` objects that bundle all per-character data: colors, emoji, rendering functions (`CharacterRenderer` + `GibRenderer`), gib definitions, splat shape, AI personality, and sound parameters. Built-in characters are registered at app startup via `registerBuiltinCharacters()` in `App.tsx`. The renderer dispatches to `getSpriteRenderer(name)` / `getGibRenderer(name)` with fallback pill-shape renderers for unknown characters. This architecture enables external character packs (JS modules providing `CharacterPack` objects).
 - **Data-driven arena themes** — Each arena has a `ThemeConfig` controlling all visuals (sky, platforms, decorations, weather, wildlife, fog, day/night) and optional physics modifiers. Themes are mostly data (colors, counts, ranges) with custom draw functions for unique decorations. Shared drawing primitives live in `themes/drawPrimitives.ts` and are reused across themes.
 
 ## Common Patterns
 
 ### Adding a new character
-1. Add to `ALL_CHARACTERS` in `characters.ts` (with color scheme)
-2. Add emoji to `CHAR_EMOJI` in `characters.ts` — this is the single source of truth used by renderer, lobby, and victory screen
-3. Add `} else if (char.name === 'NewAnimal')` block in `renderer.ts` `drawCharacterSprite` method
-4. Add simplified version in `CharacterSelect.tsx` `drawLobbyCharacter` function
-5. If drawing custom eyes: add name to `CUSTOM_EYE_CHARS` Set in `characters.ts` — shared by `renderer.ts` and `CharacterSelect.tsx`. The character MUST draw its own eyes or it will have none.
-6. Add splat shape in `stomp.ts` `CHARACTER_SPLAT_SHAPES`
-7. Add gib definitions in `stomp.ts` `CHARACTER_GIBS` — 3-5 `GibDef` entries matching the character's body parts
-8. Add gib shape rendering in `renderer.ts` `drawGibShape` — simplified body part draws for each gibType
-9. Add animal sound in `audio.ts` — add to `SoundName` type, then add entry to `SIMPLE_ANIMAL_SOUNDS` (for single-tone) or `SEGMENT_ANIMAL_SOUNDS` (for multi-segment) table in `init()`. Only use a custom generator function for complex sounds (like frog ribbit).
-10. Add localized name in `en.json` and `cs.json` (`char_NewAnimal`)
+Characters are registered as `CharacterPack` objects via the pack registry. All character data (colors, emoji, rendering, gibs, personality, sounds) is bundled into one entry.
+
+1. Create a `CharacterRenderer` function in `characters/renderers/sprites.ts` — draws the body, ears, tail, and custom eyes (if any). Must be a pure function of its inputs (result is cached to OffscreenCanvas). Reference existing characters for the API.
+2. Create a `GibRenderer` function in `characters/gibRenderers/all.ts` — draws non-body gib pieces (ears, tail, horns, etc.)
+3. Add the character entry in `characters/builtin.ts` `BUILTINS` array with all fields:
+   - `name`, `color`, `darkColor`, `lightColor`, `emoji`
+   - `customEyes` (true if renderer draws its own eyes; false = generic black dots)
+   - `idleTransform` ('none' | 'headTilt' | 'headFlip' | 'headBob')
+   - `splatShape`, `gibs`, `personality`, `sound`
+   - `drawSprite`, `drawGib`
+4. Also add to `ALL_CHARACTERS` in `characters/legacy.ts` (for lobby character pool)
+5. Add animal sound in `audio.ts` — add to `SoundName` type, then add entry to `SIMPLE_ANIMAL_SOUNDS` (for single-tone) or `SEGMENT_ANIMAL_SOUNDS` (for multi-segment) table in `init()`.
+6. Add localized name in `en.json` and `cs.json` (`char_NewAnimal`)
+
+**Character rendering contract:**
+- `CharacterRenderer(ctx, cx, yOff, w, h, state, animFrame, isIdleAnim, idleT, colors)` — draws body + features. Idle animation transforms (headTilt/headFlip/headBob) are applied by the renderer BEFORE this function is called. Generic eyes and legs are drawn AFTER.
+- Sprite caching: the result is cached keyed by `name_state_animFrame_fastFalling_idleKey`. The renderer must be a pure function — no external mutable state.
+- Characters with `customEyes: true` MUST draw their own eyes inside `drawSprite`. Characters with `customEyes: false` get generic black-dot eyes drawn automatically after the sprite renderer.
+- The same `drawSprite` renderer is used in both the game and the lobby (CharacterSelect).
 
 ### Adding a new arena / level
 1. Create theme config in `src/engine/themes/newTheme.ts` implementing `ThemeConfig` (see `meadow.ts` as reference)

@@ -5,8 +5,11 @@ import { CharacterSelect } from './components/CharacterSelect';
 import { Match } from './components/Match';
 import { VictoryScreen } from './components/VictoryScreen';
 import { GameScaler } from './components/GameScaler';
-import { assignBotCharacters } from './engine/characters';
+import { assignBotCharacters, registerBuiltinCharacters } from './engine/characters';
 import type { PlayerSlot, BotSlot, CharacterSlot } from './engine/types';
+
+// Register all built-in characters into the pack registry at module load time
+registerBuiltinCharacters();
 import { ALL_BOT_SLOTS } from './engine/types';
 
 /**
