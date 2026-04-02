@@ -78,17 +78,13 @@ export class AIController {
       return NO_INPUT;
     }
 
-    // Throttle: only compute new decisions every 3rd frame (staggered by botIndex)
+    // Throttle: only compute new decisions every 3rd frame (staggered by botIndex).
+    // On skipped frames, re-push the previous decision so the ring buffer advances at full speed.
     this.frameCounter++;
-    if (this.frameCounter % 3 !== this.botIndex % 3) {
-      // Non-decision frame: read the last delayed output without pushing a new decision
-      const delayed = this.ringBuffer[this.ringRead];
-      if (this.jumpCooldown > 0) this.jumpCooldown--;
-      return delayed;
-    }
-
-    // Compute ideal input
-    const ideal = this.computeIdealInput(self, state, arena);
+    const isDecisionFrame = this.frameCounter % 3 === this.botIndex % 3;
+    const ideal = isDecisionFrame
+      ? this.computeIdealInput(self, state, arena)
+      : this.ringBuffer[(this.ringWrite - 1 + this.ringSize) % this.ringSize];
 
     // Push through ring buffer
     this.ringBuffer[this.ringWrite] = ideal;

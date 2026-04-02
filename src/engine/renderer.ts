@@ -1742,13 +1742,11 @@ export class Renderer {
 
     this._drawCharacterSpriteImpl(sctx, x, y, w, h, char, state, animFrame, fastFalling, idleAnimTimer);
 
-    // Store in cache (limit size to prevent memory bloat)
     if (this.spriteCache.size > 600) {
       const first = this.spriteCache.keys().next().value;
       if (first !== undefined) this.spriteCache.delete(first);
     }
     this.spriteCache.set(cacheKey, cached);
-    // Blit to main canvas
     ctx.drawImage(cached, x - pad, y - pad);
   }
 

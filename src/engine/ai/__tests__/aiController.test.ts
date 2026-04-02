@@ -136,7 +136,6 @@ describe('AIController', () => {
 
     // Run frames to flush reaction buffer and sample multiple outputs
     // (noise chance means individual frames can be random)
-    // AI is throttled to every 3rd frame, so run 60 frames to get ~20 decision frames
     let rightCount = 0;
     for (let i = 0; i < 60; i++) {
       const input = ai.getInput(bot, state, arena);
@@ -153,7 +152,6 @@ describe('AIController', () => {
     const state = makeState({ players: [bot, enemy] });
     const arena = makeArena();
 
-    // AI is throttled to every 3rd frame, so run 90 frames to get ~30 decision frames
     const inputs: string[] = [];
     for (let i = 0; i < 90; i++) {
       const input = ai.getInput(bot, state, arena);
