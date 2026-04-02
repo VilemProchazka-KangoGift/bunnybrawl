@@ -1,7 +1,7 @@
 import { Howl } from 'howler';
 import { generateThemeMusic } from './music';
 
-export type SoundName = 'jump' | 'stomp' | 'victory' | 'select' | 'thornhit' | 'bunny' | 'fox' | 'frog' | 'bear' | 'owl' | 'cat' | 'wolf' | 'panda' | 'pig' | 'cow' | 'goat' | 'horse' | 'sheep' | 'monkey' | 'tiger' | 'rhino' | 'footstep_grass' | 'footstep_wood' | 'countdown_beep' | 'countdown_go' | 'oof' | 'splash' | 'ambient' | 'crowd' |'geyser' | 'pigeon_scatter' | 'zero_g';
+export type SoundName = 'jump' | 'stomp' | 'victory' | 'select' | 'thornhit' | 'bunny' | 'fox' | 'frog' | 'bear' | 'owl' | 'cat' | 'wolf' | 'panda' | 'pig' | 'cow' | 'goat' | 'horse' | 'sheep' | 'monkey' | 'tiger' | 'rhino' | 'hedgehog' | 'footstep_grass' | 'footstep_wood' | 'countdown_beep' | 'countdown_go' | 'oof' | 'splash' | 'ambient' | 'crowd' |'geyser' | 'pigeon_scatter' | 'zero_g';
 
 class AudioManager {
   private sounds: Map<SoundName, Howl> = new Map();
@@ -94,6 +94,10 @@ class AudioManager {
         { freq: 100, freqEnd: 60, duration: 0.15, type: 'square' },
         { freq: 60, freqEnd: 90, duration: 0.2, type: 'sine' },
       ], genVol: 0.5, vol: 0.45 },
+      { name: 'hedgehog', segments: [
+        { freq: 600, freqEnd: 800, duration: 0.06, type: 'triangle' },
+        { freq: 800, freqEnd: 500, duration: 0.1, type: 'triangle' },
+      ], genVol: 0.4 },
     ];
     for (const s of SEGMENT_ANIMAL_SOUNDS) {
       this.sounds.set(s.name, new Howl({

@@ -69,6 +69,7 @@
   "char_Monkey": "Monkey",
   "char_Tiger": "Tiger",
   "char_Rhino": "Rhino",
+  "char_Hedgehog": "Hedgehog",
   "bot_label": "Bots",
   "bot_diff_easy": "Easy",
   "bot_diff_medium": "Medium",

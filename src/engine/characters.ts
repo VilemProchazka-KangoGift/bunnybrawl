@@ -124,6 +124,13 @@ export const ALL_CHARACTERS: CharacterDef[] = [
     darkColor: '#5A5A5A',
     lightColor: '#B0B0B0',
   },
+  {
+    slot: 'P1',
+    name: 'Hedgehog',
+    color: '#8B6B4A',
+    darkColor: '#5C3D1E',
+    lightColor: '#D4B896',
+  },
 ];
 
 // Emoji mapping for all characters (used by renderer, lobby, victory screen)
@@ -134,6 +141,7 @@ export const CHAR_EMOJI: Record<string, string> = {
   Cow: '\uD83D\uDC2E', Goat: '\uD83D\uDC10', Horse: '\uD83D\uDC34',
   Sheep: '\uD83D\uDC11', Monkey: '\uD83D\uDC35',
   Tiger: '\uD83D\uDC2F', Rhino: '\uD83E\uDD8F',
+  Hedgehog: '\uD83E\uDD94',
 };
 
 // Characters that draw their own eyes (skip default eye drawing)

@@ -1484,6 +1484,27 @@ export class Renderer {
         }
         break;
 
+      case 'Hedgehog':
+        if (gibType === 'spine') {
+          ctx.fillStyle = darkColor;
+          ctx.beginPath();
+          ctx.moveTo(0, -6);
+          ctx.lineTo(-2, 4);
+          ctx.lineTo(2, 4);
+          ctx.closePath();
+          ctx.fill();
+        } else if (gibType === 'snout') {
+          ctx.fillStyle = lightColor;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 4, 3, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#222';
+          ctx.beginPath();
+          ctx.arc(3, -1, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        break;
+
       default:
         // Fallback: colored oval
         ctx.fillStyle = color;
@@ -2485,6 +2506,51 @@ export class Renderer {
       ctx.fillStyle = char.darkColor;
       ctx.beginPath();
       ctx.arc(cx + 9, yOff + h * 0.48, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (char.name === 'Hedgehog') {
+      // Hedgehog: round body with spiky quills on back/top
+      // Quills (behind body)
+      ctx.fillStyle = char.darkColor;
+      for (let i = -3; i <= 3; i++) {
+        const angle = -Math.PI * 0.5 + i * 0.28;
+        const sx = cx + Math.cos(angle) * w * 0.32;
+        const sy = yOff + h * 0.35 + Math.sin(angle) * h * 0.25;
+        const tx = cx + Math.cos(angle) * w * 0.55;
+        const ty = yOff + h * 0.35 + Math.sin(angle) * h * 0.48;
+        ctx.beginPath();
+        ctx.moveTo(sx - 2, sy);
+        ctx.lineTo(tx, ty);
+        ctx.lineTo(sx + 2, sy);
+        ctx.closePath();
+        ctx.fill();
+      }
+      // Body
+      ctx.fillStyle = char.color;
+      ctx.beginPath();
+      ctx.ellipse(cx, yOff + h * 0.55, w * 0.36, h * 0.35, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Lighter belly
+      ctx.fillStyle = char.lightColor;
+      ctx.beginPath();
+      ctx.ellipse(cx, yOff + h * 0.62, w * 0.24, h * 0.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Small rounded ears
+      ctx.fillStyle = char.color;
+      ctx.beginPath();
+      ctx.arc(cx - 8, yOff + h * 0.22, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx + 8, yOff + h * 0.22, 4, 0, Math.PI * 2);
+      ctx.fill();
+      // Snout
+      ctx.fillStyle = char.lightColor;
+      ctx.beginPath();
+      ctx.ellipse(cx + 2, yOff + h * 0.5, 5, 3.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Nose
+      ctx.fillStyle = '#222';
+      ctx.beginPath();
+      ctx.arc(cx + 6, yOff + h * 0.48, 2, 0, Math.PI * 2);
       ctx.fill();
     }
 

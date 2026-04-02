@@ -81,6 +81,7 @@ const CHARACTER_SPLAT_SHAPES: Record<string, SplatShape> = {
   Monkey: 'star',
   Tiger: 'paw',
   Rhino: 'circle',
+  Hedgehog: 'star',
 };
 
 export interface GibDef {
@@ -106,6 +107,7 @@ export const CHARACTER_GIBS: Record<string, GibDef[]> = {
   Monkey: [{ gibType: 'ear', width: 10, height: 10 }, { gibType: 'ear', width: 10, height: 10 }, { gibType: 'tail', width: 16, height: 8 }, { gibType: 'body', width: 14, height: 12 }],
   Tiger:  [{ gibType: 'ear', width: 10, height: 10 }, { gibType: 'ear', width: 10, height: 10 }, { gibType: 'snout', width: 8, height: 6 }, { gibType: 'body', width: 14, height: 12 }],
   Rhino:  [{ gibType: 'ear', width: 8, height: 8 }, { gibType: 'ear', width: 8, height: 8 }, { gibType: 'horn', width: 8, height: 14 }, { gibType: 'body', width: 14, height: 12 }],
+  Hedgehog: [{ gibType: 'spine', width: 6, height: 10 }, { gibType: 'spine', width: 6, height: 10 }, { gibType: 'snout', width: 8, height: 6 }, { gibType: 'body', width: 14, height: 12 }],
 };
 
 export function createSplatMark(victim: Player): SplatMark {

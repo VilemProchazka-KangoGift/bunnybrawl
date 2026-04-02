@@ -168,7 +168,7 @@ export interface Particle {
   color: string;
 }
 
-export type GibType = 'ear' | 'tail' | 'body' | 'snout' | 'horn' | 'wing' | 'beard' | 'mane' | 'wool';
+export type GibType = 'ear' | 'tail' | 'body' | 'snout' | 'horn' | 'wing' | 'beard' | 'mane' | 'wool' | 'spine';
 
 export interface Gib {
   x: number;

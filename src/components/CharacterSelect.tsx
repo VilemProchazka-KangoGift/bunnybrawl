@@ -1076,6 +1076,32 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
     // Skin fold
     ctx.strokeStyle = char.darkColor; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.arc(cx - 2, yOff + h * 0.55, w * 0.3, 0.3, 1.2); ctx.stroke();
+  } else if (char.name === 'Hedgehog') {
+    // Quills
+    ctx.fillStyle = char.darkColor;
+    for (let i = -3; i <= 3; i++) {
+      const angle = -Math.PI * 0.5 + i * 0.28;
+      const sx = cx + Math.cos(angle) * w * 0.32;
+      const sy = yOff + h * 0.35 + Math.sin(angle) * h * 0.25;
+      const tx = cx + Math.cos(angle) * w * 0.55;
+      const ty = yOff + h * 0.35 + Math.sin(angle) * h * 0.48;
+      ctx.beginPath(); ctx.moveTo(sx - 2, sy); ctx.lineTo(tx, ty); ctx.lineTo(sx + 2, sy); ctx.closePath(); ctx.fill();
+    }
+    // Body
+    ctx.fillStyle = char.color;
+    ctx.beginPath(); ctx.ellipse(cx, yOff + h * 0.55, w * 0.36, h * 0.35, 0, 0, Math.PI * 2); ctx.fill();
+    // Belly
+    ctx.fillStyle = char.lightColor;
+    ctx.beginPath(); ctx.ellipse(cx, yOff + h * 0.62, w * 0.24, h * 0.2, 0, 0, Math.PI * 2); ctx.fill();
+    // Ears
+    ctx.fillStyle = char.color;
+    ctx.beginPath(); ctx.arc(cx - 8, yOff + h * 0.22, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 8, yOff + h * 0.22, 4, 0, Math.PI * 2); ctx.fill();
+    // Snout + nose
+    ctx.fillStyle = char.lightColor;
+    ctx.beginPath(); ctx.ellipse(cx + 2, yOff + h * 0.5, 5, 3.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#222';
+    ctx.beginPath(); ctx.arc(cx + 6, yOff + h * 0.48, 2, 0, Math.PI * 2); ctx.fill();
   } else {
     // Fallback
     ctx.ellipse(cx, yOff + h * 0.5, w * 0.4, h * 0.4, 0, 0, Math.PI * 2); ctx.fill();

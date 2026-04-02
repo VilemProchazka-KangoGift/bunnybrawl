@@ -18,6 +18,7 @@ const PERSONALITIES: Record<string, AIPersonality> = {
   Monkey: { aggressiveness: 1.0, cautiousness: 0.4, greediness: 1.2, chaosAffinity: 1.0, targetLeader: false },
   Tiger:  { aggressiveness: 1.8, cautiousness: 0.3, greediness: 0.6, chaosAffinity: 0.5, targetLeader: true },
   Rhino:  { aggressiveness: 1.4, cautiousness: 1.0, greediness: 0.5, chaosAffinity: 0.2, targetLeader: false },
+  Hedgehog: { aggressiveness: 0.7, cautiousness: 1.6, greediness: 1.0, chaosAffinity: 0.3, targetLeader: false },
 };
 
 const DEFAULT_PERSONALITY: AIPersonality = {
