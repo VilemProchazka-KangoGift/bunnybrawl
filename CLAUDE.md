@@ -73,7 +73,7 @@ src/
 1. Add to `ALL_CHARACTERS` in `characters.ts` (with color scheme)
 2. Add `} else if (char.name === 'NewAnimal')` block in `renderer.ts` `drawCharacterSprite` method
 3. Add simplified version in `CharacterSelect.tsx` `drawLobbyCharacter` function
-4. Add the name to the eye exclusion list if drawing custom eyes: `if (!['Frog', 'Owl', 'Cat', ...].includes(char.name))`
+4. Add the name to the eye exclusion list if drawing custom eyes: `if (!['Frog', 'Owl', 'Cat', ...].includes(char.name))` — **both** in `renderer.ts` and `CharacterSelect.tsx`. If you add a character to the exclusion list, it MUST draw its own eyes or it will have none.
 5. Add splat shape in `stomp.ts` `CHARACTER_SPLAT_SHAPES`
 6. Add gib definitions in `stomp.ts` `CHARACTER_GIBS` — 3-5 `GibDef` entries matching the character's body parts
 7. Add gib shape rendering in `renderer.ts` `drawGibShape` — simplified body part draws for each gibType
@@ -107,7 +107,7 @@ src/
 ### Adding arena-specific mechanics
 Arena mechanics are a combination of **Arena** fields (structural positions) and **ThemeConfig** fields (behavioral config):
 - **Hazard zones** (`Arena.hazardZones`): Static danger areas (lava, icicles). Collision in gameLoop, rendered in renderer `drawHazardZone`. Also used by nav graph to compute danger scores — cautious bots route around hazards via `safeHop`. Lava hits set `burnTimer` (fire particles + orange glow) in addition to `slowTimer`; thorns/ghosts only set `slowTimer` (red pulse). The renderer uses `burnTimer > 0` to choose fire glow vs red pulse (`else if`).
-- **Effect zones** (`Arena.effectZones`): Zero-G (`zero_g`), water currents (`current`), bubble geysers (`geyser`). Zones applied in gameLoop per-player, rendered in renderer. Geyser zones generate nav graph edges so bots can ride them as elevators. Zero-G zones generate drift edges so bots cross through them (e.g. space station center).
+- **Effect zones** (`Arena.effectZones`): Zero-G (`zero_g`), water currents (`current`), bubble geysers (`geyser`). Zones applied in gameLoop per-player AND per-gib, rendered in renderer. Geyser zones generate nav graph edges so bots can ride them as elevators. Zero-G zones generate drift edges so bots cross through them (e.g. space station center). Gibs interact with effect zones: zero-G dampens/boosts, geysers push upward (70% player strength), currents drift horizontally.
 - **No-spawn zones** (`Arena.noSpawnZones`): AABB zones where springs, thorns, characters, AND carrots should not spawn. Used to exclude solid structures (mausoleum, building interiors below hallways) from all entity spawning.
 - **Bouncy platforms** (`Arena.bouncyPlatforms`): Platform indices that bounce players on landing. Rendered with jelly overlay.
 - **Fall-off** (`Arena.allowFallOff`): Split ground into segments with gaps. Player falling below screen respawns at -1 score.
@@ -179,7 +179,7 @@ npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/
 - **renderer.ts is ~2300 lines** — the largest file. When editing, use targeted searches to find the right method. Character sprite drawing is organized by `if/else if (char.name === ...)` blocks.
 - **gameLoop.ts fixedUpdate returns early when matchOver** — any timers that should keep running after match end (screenFlash, slowMotion) must be decayed in the `loop()` method instead.
 - **Player-player collision and stomp detection interact** — stomps must be checked BEFORE `collidePlayersHorizontal`, and the collision must skip when vertical overlap < 50% (stomp zone).
-- **CharacterSelect.tsx has its own physics loop** — separate from the main game engine. Changes to lobby physics don't use the engine's `physics.ts`.
+- **CharacterSelect.tsx has its own physics loop** — separate from the main game engine. Changes to lobby physics don't use the engine's `physics.ts`. `LobbyPlayer` has `sideSquash` (wall/edge hit → 0.75) and `squashScale` (crouch → 0.6), both decaying at rate 8. The draw function applies the same squash transform as the main renderer (narrower+taller for side, wider+shorter for crouch).
 - **Gore mode** is persisted in localStorage (`bunnybrawl_gore`). Arena selection persisted in `bunnybrawl_arena` (default: `'random'`).
 - **Death effects are gore-mode gated** — Gore ON: red blood particles + character-specific gibs (body parts) + enlarged splat marks + blood drip trails on platforms. Gore OFF: confetti particles (stars, diamonds, ribbons) only, no blood/splats/gibs at all. Gibs use platform collision (bounce once, then settle), persist on ground for 15s, then fade out. Blood drips are baked to bgCtx like splat marks. Gib definitions per character in `stomp.ts` `CHARACTER_GIBS`, gib shape rendering in `renderer.ts` `drawGibShape`.
 - **`arenaId: 'random'`** — resolved to a concrete arena in `Match.tsx` via `resolveArenaId()`, not in the store. A module-level `lastResolvedArenaId` prevents repeating the same arena on rematch. The store keeps `'random'` so it re-rolls each time.
