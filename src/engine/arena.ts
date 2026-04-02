@@ -439,13 +439,11 @@ export const SPACE_STATION_ARENA: Arena = {
     // Ground — ONLY left and right edges (center is void/zero-G)
     { x: 0, y: 660, width: 220, height: 60 },                  // Left deck
     { x: 1060, y: 660, width: 220, height: 60 },                // Right deck
-    // === Left station stack ===
-    { x: 30, y: 560, width: 170, height: 24 },                  // L level 1
+    // === Left station stack (no level 1 — forces players up or to center) ===
     { x: 50, y: 460, width: 150, height: 24 },                  // L level 2
     { x: 30, y: 360, width: 170, height: 24 },                  // L level 3
     { x: 60, y: 270, width: 140, height: 24 },                  // L level 4
     // === Right station stack ===
-    { x: 1080, y: 560, width: 170, height: 24 },                // R level 1
     { x: 1060, y: 460, width: 150, height: 24 },                // R level 2
     { x: 1080, y: 360, width: 170, height: 24 },                // R level 3
     { x: 1060, y: 270, width: 140, height: 24 },                // R level 4
@@ -455,7 +453,7 @@ export const SPACE_STATION_ARENA: Arena = {
     { x: 1140, y: 625, width: 45, height: 35 },                 // Crate R
   ],
   spawnPoints: [
-    { x: 110, y: 540 }, { x: 1160, y: 540 },
+    { x: 100, y: 440 }, { x: 1130, y: 440 },
     { x: 100, y: 340 }, { x: 1160, y: 340 },
     { x: 110, y: 640 }, { x: 1160, y: 640 },
   ],
