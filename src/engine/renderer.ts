@@ -1675,7 +1675,7 @@ export class Renderer {
     if (state === 'splat') {
       this.drawSplatCharacter(ctx, x, y, width, height, character.color, character.darkColor);
     } else {
-      this.drawCharacterSprite(ctx, x, y, width, height, character, state, animFrame, fastFalling, player.idleAnimTimer, player.breathTimer);
+      this.drawCharacterSprite(ctx, x, y, width, height, character, state, animFrame, fastFalling, player.idleAnimTimer);
       this.drawExpression(ctx, player);
     }
 
@@ -1727,7 +1727,6 @@ export class Renderer {
     char: { name: string; color: string; darkColor: string; lightColor: string },
     state: string, animFrame: number, fastFalling: boolean,
     idleAnimTimer?: number,
-    breathTimer?: number
   ): void {
     const idleKey = (state === 'idle' && idleAnimTimer !== undefined && idleAnimTimer > 0 && idleAnimTimer < 0.5)
       ? Math.floor(idleAnimTimer * 10)
