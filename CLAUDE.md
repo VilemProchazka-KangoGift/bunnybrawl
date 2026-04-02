@@ -143,6 +143,21 @@ Arena mechanics are a combination of **Arena** fields (structural positions) and
 - Personality weights multiply utility scores: `aggressiveness`, `cautiousness`, `greediness`, `chaosAffinity`
 - Jump behavior: controlled by `JUMP_THRESHOLD` (0.55) in aiController and `jumpCooldown` (20 frames)
 
+### Adding a new game mod
+1. Add boolean to `GameMods` interface in `types.ts`
+2. Add default `false` to the `loadStorage` parse + fallback in `gameStore.ts`
+3. Add constants if needed in `constants.ts`
+4. Implement the mod logic — see existing patterns:
+   - **Physics mods** (turbo, giant): multiply `eff*` fields or player dimensions in GameLoop constructor (after theme multipliers). Never change base constants — that would require nav regeneration.
+   - **Spawn rate mods** (carrot chase): use ternary on `this.settings.mods.xxx` in the timer reset
+   - **Arena structure mods** (super bounce): shallow-copy `this.arena` with overrides — never mutate the source arena
+   - **Scoring mods** (carrot chase): gate in `stomp.ts` `checkStomps` via the optional `mods` param
+   - **AI behavior mods** (carrot chase): thread flag through `getInput` → `computeIdealInput` → `evaluateActions`
+   - **Visual-only mods**: modify renderer, no physics impact
+5. Add entry to the mods array in `MainMenu.tsx` (the `[{ key, name, desc }]` array renders all toggles)
+6. Add i18n keys to `en.json` and `cs.json` (`mod_xxx`, `mod_xxx_desc`)
+7. **Critical**: all mods must be runtime-only — never change values used by `generateNavData.ts` (base physics constants, platform layouts). Apply multipliers to `eff*` fields or per-player fields instead.
+
 ### Adding a new visual effect
 1. If it needs state: add fields to `MatchState` or `Player` in `types.ts`
 2. Add trigger logic in `gameLoop.ts` (e.g., spawn particles on event)
@@ -196,6 +211,7 @@ npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/
 - **Ghost/hazard hits apply knockback** — unlike thorns (which only slow), ghost/lava hits also knock the player back and trigger screen flash + squash.
 - **Side squash on wall/push collisions** — `Player.sideSquash` (1.0 = normal, <1 = squashed horizontally). Triggered by platform side collision (0.75) or player push (0.8). Decays back to 1.0 via `SQUASH_DECAY_SPEED`. Renderer applies inverse: narrower + slightly taller. When adding new Player fields, also add `sideSquash: 1` to test helpers.
 - **MatchState has non-serializable fields** — `bouncyWobble` is a Map. If serialization is ever needed, this must be handled.
+- **Game mods are runtime-only** — `GameMods` (5 booleans in `MatchSettings.mods`) are applied in the GameLoop constructor via `eff*` multipliers, per-player fields, or shallow arena copies. They must NEVER mutate base constants or arena definitions, as that would corrupt nav data. The Super Bounce mod shallow-copies the arena (`{ ...arena, bouncyPlatforms: [...] }`). Mods are persisted as JSON in `bunnybrawl_mods` localStorage key. The Carrot Chase mod also affects AI behavior — `evaluateActions` receives a `carrotChase` flag that skips combat evaluators and boosts carrot pursuit weight.
 - **Screen containers must use `width/height: 100%`** — they inherit their size from `GameScaler`'s 1280x720 content div. Never set fixed pixel dimensions on screen containers (`.main-menu`, `.match-container`, `.char-select`, `.victory-screen`).
 - **Buttons use `.btn-base` from `shared.css`** — provides shared font-family, border-radius, cursor, transition, hover scale(1.06), active scale(0.97). Component-specific CSS adds colors, sizes, borders. New buttons should include `btn-base` in their className.
 - **Bubble helmet is theme-gated in `drawCharacterSprite`** — drawn at the end of the method for `space_station` and `underwater` themes only. A glass dome ellipse overlays the character's head with reflection highlights and a collar ring. If adding more "costume" arenas, extend the theme ID check there.
