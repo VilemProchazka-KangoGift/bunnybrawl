@@ -1077,42 +1077,45 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
     ctx.strokeStyle = char.darkColor; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.arc(cx - 2, yOff + h * 0.55, w * 0.3, 0.3, 1.2); ctx.stroke();
   } else if (char.name === 'Hedgehog') {
-    // Spiny dome back — overlapping V-quills
-    const quillBaseY = yOff + h * 0.55;
-    const quillCx = cx - 1;
+    // Hedgehog: round body, spines radiate outward from back/top surface
+    const bodyCx = cx + 2;
+    const bodyCy = yOff + h * 0.55;
+    const bodyRx = w * 0.34;
+    const bodyRy = h * 0.32;
+    // Spines radiating from body surface (back arc)
     ctx.fillStyle = char.darkColor;
-    for (let i = -5; i <= 5; i++) {
-      const qx = quillCx + i * 2.8;
-      const qy = quillBaseY - 10 - Math.abs(i) * 0.8;
-      ctx.beginPath(); ctx.moveTo(qx - 1.5, quillBaseY - 2); ctx.lineTo(qx, qy); ctx.lineTo(qx + 1.5, quillBaseY - 2); ctx.closePath(); ctx.fill();
+    const spineCount = 9;
+    for (let i = 0; i < spineCount; i++) {
+      const angle = Math.PI * 0.6 + (Math.PI * 1.1) * (i / (spineCount - 1));
+      const bx = bodyCx + Math.cos(angle) * bodyRx;
+      const by = bodyCy + Math.sin(angle) * bodyRy;
+      const tipLen = 7 + (i > 1 && i < spineCount - 1 ? 3 : 0);
+      const tx = bodyCx + Math.cos(angle) * (bodyRx + tipLen);
+      const ty = bodyCy + Math.sin(angle) * (bodyRy + tipLen);
+      const px = -Math.sin(angle) * 2, py = Math.cos(angle) * 2;
+      ctx.beginPath(); ctx.moveTo(bx - px, by - py); ctx.lineTo(tx, ty); ctx.lineTo(bx + px, by + py); ctx.closePath(); ctx.fill();
     }
+    // Body
     ctx.fillStyle = char.color;
-    for (let i = -4; i <= 4; i++) {
-      const qx = quillCx + i * 3;
-      const qy = quillBaseY - 6 - Math.abs(i) * 0.5;
-      ctx.beginPath(); ctx.moveTo(qx - 1.2, quillBaseY); ctx.lineTo(qx, qy); ctx.lineTo(qx + 1.2, quillBaseY); ctx.closePath(); ctx.fill();
-    }
-    // Low wide body
-    ctx.fillStyle = char.color;
-    ctx.beginPath(); ctx.ellipse(cx, yOff + h * 0.6, w * 0.38, h * 0.28, 0, 0, Math.PI * 2); ctx.fill();
-    // Cream face/belly
+    ctx.beginPath(); ctx.ellipse(bodyCx, bodyCy, bodyRx, bodyRy, 0, 0, Math.PI * 2); ctx.fill();
+    // Face/belly
     ctx.fillStyle = char.lightColor;
-    ctx.beginPath(); ctx.ellipse(cx + 3, yOff + h * 0.6, w * 0.22, h * 0.24, 0, 0, Math.PI * 2); ctx.fill();
-    // Pointed snout
+    ctx.beginPath(); ctx.ellipse(bodyCx + bodyRx * 0.35, bodyCy + bodyRy * 0.1, bodyRx * 0.55, bodyRy * 0.7, 0, 0, Math.PI * 2); ctx.fill();
+    // Snout
     ctx.fillStyle = char.lightColor;
-    ctx.beginPath(); ctx.moveTo(cx + 8, yOff + h * 0.48); ctx.quadraticCurveTo(cx + 16, yOff + h * 0.52, cx + 8, yOff + h * 0.58); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(bodyCx + bodyRx * 0.7, bodyCy - 3); ctx.quadraticCurveTo(bodyCx + bodyRx + 8, bodyCy, bodyCx + bodyRx * 0.7, bodyCy + 3); ctx.closePath(); ctx.fill();
     // Nose
     ctx.fillStyle = '#111';
-    ctx.beginPath(); ctx.arc(cx + 14, yOff + h * 0.53, 2, 0, Math.PI * 2); ctx.fill();
-    // Tiny ears
+    ctx.beginPath(); ctx.arc(bodyCx + bodyRx + 5, bodyCy, 2, 0, Math.PI * 2); ctx.fill();
+    // Ears
     ctx.fillStyle = char.color;
-    ctx.beginPath(); ctx.arc(cx - 6, yOff + h * 0.32, 3, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx + 6, yOff + h * 0.32, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(bodyCx - 2, bodyCy - bodyRy + 2, 3.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(bodyCx + 5, bodyCy - bodyRy + 2, 3.5, 0, Math.PI * 2); ctx.fill();
     // Beady eye
     ctx.fillStyle = '#000';
-    ctx.beginPath(); ctx.arc(cx + 5, yOff + h * 0.46, 2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(bodyCx + bodyRx * 0.5, bodyCy - bodyRy * 0.15, 2.2, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#FFF';
-    ctx.beginPath(); ctx.arc(cx + 5.8, yOff + h * 0.44, 0.8, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(bodyCx + bodyRx * 0.5 + 0.8, bodyCy - bodyRy * 0.15 - 0.8, 0.8, 0, Math.PI * 2); ctx.fill();
   } else {
     // Fallback
     ctx.ellipse(cx, yOff + h * 0.5, w * 0.4, h * 0.4, 0, 0, Math.PI * 2); ctx.fill();

@@ -2508,72 +2508,71 @@ export class Renderer {
       ctx.arc(cx + 9, yOff + h * 0.48, 1.5, 0, Math.PI * 2);
       ctx.fill();
     } else if (char.name === 'Hedgehog') {
-      // Hedgehog: spiny dome back, low round body, pointy snout
-      // Spiny back — rows of overlapping V-shaped quills covering the top half
-      const quillBaseY = yOff + h * 0.55;
-      const quillCx = cx - 1;
+      // Hedgehog: round body, spines radiate outward from back/top surface
+      const bodyCx = cx + 2;
+      const bodyCy = yOff + h * 0.55;
+      const bodyRx = w * 0.34;
+      const bodyRy = h * 0.32;
+      // Spines — radiate outward from the body ellipse (back arc: ~120° to ~300°)
       ctx.fillStyle = char.darkColor;
-      // Outer row of quills (longer, darker)
-      for (let i = -5; i <= 5; i++) {
-        const qx = quillCx + i * 2.8;
-        const qy = quillBaseY - 10 - Math.abs(i) * 0.8;
+      const spineCount = 9;
+      for (let i = 0; i < spineCount; i++) {
+        const angle = Math.PI * 0.6 + (Math.PI * 1.1) * (i / (spineCount - 1));
+        // Base points on the body surface
+        const bx = bodyCx + Math.cos(angle) * bodyRx;
+        const by = bodyCy + Math.sin(angle) * bodyRy;
+        // Tip extends outward from surface
+        const tipLen = 7 + (i > 1 && i < spineCount - 1 ? 3 : 0);
+        const tx = bodyCx + Math.cos(angle) * (bodyRx + tipLen);
+        const ty = bodyCy + Math.sin(angle) * (bodyRy + tipLen);
+        // Perpendicular spread for triangle base
+        const px = -Math.sin(angle) * 2;
+        const py = Math.cos(angle) * 2;
         ctx.beginPath();
-        ctx.moveTo(qx - 1.5, quillBaseY - 2);
-        ctx.lineTo(qx, qy);
-        ctx.lineTo(qx + 1.5, quillBaseY - 2);
+        ctx.moveTo(bx - px, by - py);
+        ctx.lineTo(tx, ty);
+        ctx.lineTo(bx + px, by + py);
         ctx.closePath();
         ctx.fill();
       }
-      // Inner row (shorter, slightly lighter)
-      ctx.fillStyle = char.color;
-      for (let i = -4; i <= 4; i++) {
-        const qx = quillCx + i * 3;
-        const qy = quillBaseY - 6 - Math.abs(i) * 0.5;
-        ctx.beginPath();
-        ctx.moveTo(qx - 1.2, quillBaseY);
-        ctx.lineTo(qx, qy);
-        ctx.lineTo(qx + 1.2, quillBaseY);
-        ctx.closePath();
-        ctx.fill();
-      }
-      // Body — wide, low oval
+      // Body
       ctx.fillStyle = char.color;
       ctx.beginPath();
-      ctx.ellipse(cx, yOff + h * 0.6, w * 0.38, h * 0.28, 0, 0, Math.PI * 2);
+      ctx.ellipse(bodyCx, bodyCy, bodyRx, bodyRy, 0, 0, Math.PI * 2);
       ctx.fill();
-      // Cream face/belly front
+      // Face/belly — lighter front
       ctx.fillStyle = char.lightColor;
       ctx.beginPath();
-      ctx.ellipse(cx + 3, yOff + h * 0.6, w * 0.22, h * 0.24, 0, 0, Math.PI * 2);
+      ctx.ellipse(bodyCx + bodyRx * 0.35, bodyCy + bodyRy * 0.1, bodyRx * 0.55, bodyRy * 0.7, 0, 0, Math.PI * 2);
       ctx.fill();
       // Pointed snout
       ctx.fillStyle = char.lightColor;
       ctx.beginPath();
-      ctx.moveTo(cx + 8, yOff + h * 0.48);
-      ctx.quadraticCurveTo(cx + 16, yOff + h * 0.52, cx + 8, yOff + h * 0.58);
+      ctx.moveTo(bodyCx + bodyRx * 0.7, bodyCy - 3);
+      ctx.quadraticCurveTo(bodyCx + bodyRx + 8, bodyCy, bodyCx + bodyRx * 0.7, bodyCy + 3);
       ctx.closePath();
       ctx.fill();
-      // Nose (black bead at snout tip)
+      // Nose
       ctx.fillStyle = '#111';
       ctx.beginPath();
-      ctx.arc(cx + 14, yOff + h * 0.53, 2, 0, Math.PI * 2);
+      ctx.arc(bodyCx + bodyRx + 5, bodyCy, 2, 0, Math.PI * 2);
       ctx.fill();
-      // Tiny rounded ears poking from quill line
+      // Tiny ears
       ctx.fillStyle = char.color;
       ctx.beginPath();
-      ctx.arc(cx - 6, yOff + h * 0.32, 3, 0, Math.PI * 2);
+      ctx.arc(bodyCx - 2, bodyCy - bodyRy + 2, 3.5, 0, Math.PI * 2);
       ctx.fill();
       ctx.beginPath();
-      ctx.arc(cx + 6, yOff + h * 0.32, 3, 0, Math.PI * 2);
+      ctx.arc(bodyCx + 5, bodyCy - bodyRy + 2, 3.5, 0, Math.PI * 2);
       ctx.fill();
-      // Eyes — small, beady, set in the face
+      // Beady eye
       ctx.fillStyle = '#000';
       ctx.beginPath();
-      ctx.arc(cx + 5, yOff + h * 0.46, 2, 0, Math.PI * 2);
+      ctx.arc(bodyCx + bodyRx * 0.5, bodyCy - bodyRy * 0.15, 2.2, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = '#FFF';
       ctx.beginPath();
-      ctx.arc(cx + 5.8, yOff + h * 0.44, 0.8, 0, Math.PI * 2);
+      ctx.arc(bodyCx + bodyRx * 0.5 + 0.8, bodyCy - bodyRy * 0.15 - 0.8, 0.8, 0, Math.PI * 2);
       ctx.fill();
     }
 
