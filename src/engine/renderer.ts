@@ -61,6 +61,7 @@ export class Renderer {
   // Sprite cache: key → OffscreenCanvas with pre-drawn character sprite
   private spriteCache = new Map<string, OffscreenCanvas>();
   private mirrored = false;
+  private originalArena: Arena | null = null;  // un-mirrored arena for theme draw calls
 
   constructor(bgCanvas: HTMLCanvasElement, fgCanvas: HTMLCanvasElement, theme: ThemeConfig, mirrored = false) {
     this.bgCtx = bgCanvas.getContext('2d')!;
@@ -86,7 +87,9 @@ export class Renderer {
     }
   }
 
-  renderBackground(arena: Arena): void {
+  renderBackground(arena: Arena, originalArena?: Arena): void {
+    if (originalArena) this.originalArena = originalArena;
+    const themeArena = this.originalArena ?? arena; // un-mirrored arena for theme draw calls
     const ctx = this.bgCtx;
     const theme = this.theme;
 
@@ -98,7 +101,7 @@ export class Renderer {
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    // Mirror transform for theme decorations (hardcoded positions)
+    // Mirror transform for theme decorations (hardcoded + arena-relative positions)
     if (this.mirrored) { ctx.save(); ctx.scale(-1, 1); ctx.translate(-CANVAS_WIDTH, 0); }
 
     // Hills from theme
@@ -109,7 +112,7 @@ export class Renderer {
 
     // Far background (distant scenery — treelines, mountains)
     if (theme.drawFarBackground) {
-      theme.drawFarBackground(ctx, arena);
+      theme.drawFarBackground(ctx, themeArena);
     }
 
     if (this.mirrored) { ctx.restore(); }
@@ -138,9 +141,9 @@ export class Renderer {
       }
     }
 
-    // Theme-specific background nature (mirror for hardcoded decoration positions)
+    // Theme-specific background nature (pass original arena, canvas transform handles mirroring)
     if (this.mirrored) { ctx.save(); ctx.scale(-1, 1); ctx.translate(-CANVAS_WIDTH, 0); }
-    theme.drawBackgroundNature(ctx, arena);
+    theme.drawBackgroundNature(ctx, themeArena);
     if (this.mirrored) { ctx.restore(); }
   }
 
@@ -274,8 +277,9 @@ export class Renderer {
 
     // Theme-specific animated background (e.g. space objects through windows)
     if (this.theme.drawAnimatedBackground) {
+      const thA = this.originalArena ?? arena;
       if (this.mirrored) { ctx.save(); ctx.scale(-1, 1); ctx.translate(-CANVAS_WIDTH, 0); }
-      this.theme.drawAnimatedBackground(ctx, arena, matchState.timeElapsed);
+      this.theme.drawAnimatedBackground(ctx, thA, matchState.timeElapsed);
       if (this.mirrored) { ctx.restore(); }
     }
 
@@ -468,9 +472,10 @@ export class Renderer {
       }
     }
 
-    // Foreground nature — delegated to theme (mirror for hardcoded decoration positions)
+    // Foreground nature — delegated to theme (pass original arena, canvas transform handles mirroring)
+    const themeArena = this.originalArena ?? arena;
     if (this.mirrored) { ctx.save(); ctx.scale(-1, 1); ctx.translate(-CANVAS_WIDTH, 0); }
-    this.theme.drawForegroundNature(ctx, arena);
+    this.theme.drawForegroundNature(ctx, themeArena);
     if (this.mirrored) { ctx.restore(); }
 
     // Ghosts (drawn over foreground, semi-transparent)

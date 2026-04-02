@@ -40,6 +40,7 @@ export type MatchEndCallback = (winner: PlayerSlot | null, state: MatchState) =>
 
 export class GameLoop {
   private arena: Arena;
+  private originalArena: Arena;  // un-mirrored arena for theme rendering
   private settings: MatchSettings;
   private state: MatchState;
   private input: InputManager;
@@ -84,6 +85,7 @@ export class GameLoop {
     onMatchEnd: MatchEndCallback,
   ) {
     this.arena = arena;
+    this.originalArena = arena;
     this.settings = settings;
     this.onMatchEnd = onMatchEnd;
     this.theme = getTheme(arena.themeId);
@@ -120,8 +122,8 @@ export class GameLoop {
     const players: Player[] = activePlayers.map((slot, index) => ({
       id: slot,
       character: getCharacterForSlot(slot),
-      x: arena.spawnPoints[index % arena.spawnPoints.length].x - pw / 2,
-      y: arena.spawnPoints[index % arena.spawnPoints.length].y - ph,
+      x: this.arena.spawnPoints[index % this.arena.spawnPoints.length].x - pw / 2,
+      y: this.arena.spawnPoints[index % this.arena.spawnPoints.length].y - ph,
       vx: 0, vy: 0,
       width: pw, height: ph,
       state: 'idle' as const, facing: 'right' as const,
@@ -285,7 +287,7 @@ export class GameLoop {
 
   start(): void {
     this.input.attach();
-    this.renderer.renderBackground(this.arena);
+    this.renderer.renderBackground(this.arena, this.originalArena);
     this.running = true;
     this.lastTime = performance.now();
     audio.playMusic(this.arena.themeId);
