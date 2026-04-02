@@ -731,7 +731,7 @@ export class GameLoop {
       // Effect zone interactions (zero-G, geyser, current)
       if (effectZones) {
         for (let zi = 0; zi < effectZones.length; zi++) {
-          const zone = effectZones[zi];
+          const zone: EffectZone = effectZones[zi];
           if (g.x < zone.x || g.x > zone.x + zone.width || g.y < zone.y || g.y > zone.y + zone.height) continue;
           if (zone.type === 'zero_g') {
             if (g.vy > 0) g.vy *= 0.92;
