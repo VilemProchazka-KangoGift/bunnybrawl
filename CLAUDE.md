@@ -17,7 +17,8 @@ src/
     stomp.ts      # Stomp detection, splat marks, respawn
     input.ts      # 4-player keyboard input with case-insensitive normalization
     arena.ts      # Arena layouts (platforms, spawn points) + getArena(id) + listArenas()
-    characters.ts # 16 character definitions + ALL_CHARACTERS roster
+    characters.ts # 16 character definitions + ALL_CHARACTERS roster + CHAR_EMOJI + CUSTOM_EYE_CHARS
+    canvasAnimations.ts # Shared canvas utilities (wildlife, day/night cycle) used by MainMenu + CharacterSelect
     renderer.ts   # Canvas 2D rendering (two layers: bg + fg) — LARGEST FILE (~2300 lines)
     audio.ts      # Procedural audio generation (16 animal sounds + SFX + music)
     gameLoop.ts   # Main game loop with fixed timestep, all game systems (~920 lines)
@@ -32,7 +33,7 @@ src/
       index.ts      # Barrel export
     themes/       # Data-driven arena theme system
       types.ts      # ThemeConfig interface + all sub-interfaces
-      drawPrimitives.ts  # Shared drawing functions (trees, bushes, flowers, etc.)
+      drawPrimitives.ts  # Shared drawing functions (trees, bushes, flowers, etc.) + hazard renderer factories
       utils.ts      # Shared utilities (randRange, pickWeighted, swapRemove)
       meadow.ts     # Meadow theme config
       winterLake.ts # Winter Lake theme config
@@ -71,14 +72,15 @@ src/
 
 ### Adding a new character
 1. Add to `ALL_CHARACTERS` in `characters.ts` (with color scheme)
-2. Add `} else if (char.name === 'NewAnimal')` block in `renderer.ts` `drawCharacterSprite` method
-3. Add simplified version in `CharacterSelect.tsx` `drawLobbyCharacter` function
-4. Add the name to the eye exclusion list if drawing custom eyes: `if (!['Frog', 'Owl', 'Cat', ...].includes(char.name))` — **both** in `renderer.ts` and `CharacterSelect.tsx`. If you add a character to the exclusion list, it MUST draw its own eyes or it will have none.
-5. Add splat shape in `stomp.ts` `CHARACTER_SPLAT_SHAPES`
-6. Add gib definitions in `stomp.ts` `CHARACTER_GIBS` — 3-5 `GibDef` entries matching the character's body parts
-7. Add gib shape rendering in `renderer.ts` `drawGibShape` — simplified body part draws for each gibType
-8. Add animal sound in `audio.ts` (SoundName type + init + generator function)
-9. Add localized name in `en.json` and `cs.json` (`char_NewAnimal`)
+2. Add emoji to `CHAR_EMOJI` in `characters.ts` — this is the single source of truth used by renderer, lobby, and victory screen
+3. Add `} else if (char.name === 'NewAnimal')` block in `renderer.ts` `drawCharacterSprite` method
+4. Add simplified version in `CharacterSelect.tsx` `drawLobbyCharacter` function
+5. If drawing custom eyes: add name to `CUSTOM_EYE_CHARS` Set in `characters.ts` — shared by `renderer.ts` and `CharacterSelect.tsx`. The character MUST draw its own eyes or it will have none.
+6. Add splat shape in `stomp.ts` `CHARACTER_SPLAT_SHAPES`
+7. Add gib definitions in `stomp.ts` `CHARACTER_GIBS` — 3-5 `GibDef` entries matching the character's body parts
+8. Add gib shape rendering in `renderer.ts` `drawGibShape` — simplified body part draws for each gibType
+9. Add animal sound in `audio.ts` — add to `SoundName` type, then add entry to `SIMPLE_ANIMAL_SOUNDS` (for single-tone) or `SEGMENT_ANIMAL_SOUNDS` (for multi-segment) table in `init()`. Only use a custom generator function for complex sounds (like frog ribbit).
+10. Add localized name in `en.json` and `cs.json` (`char_NewAnimal`)
 
 ### Adding a new arena / level
 1. Create theme config in `src/engine/themes/newTheme.ts` implementing `ThemeConfig` (see `meadow.ts` as reference)
@@ -87,7 +89,7 @@ src/
    - Write `drawBackgroundNature(ctx, arena)` — background decorations (trees, rocks, etc.)
    - Write `drawForegroundNature(ctx, arena)` — foreground decorations drawn over players (make these large enough to hide behind, ~40-80px tall, at alpha 0.4-0.6)
    - Optionally provide `drawWeatherParticle` for custom particle rendering
-   - Optionally provide `drawCustomThorn` / `drawCustomSpring` / `drawCustomHazardZone` / `drawCustomGhost` for themed skins
+   - Optionally provide `drawCustomThorn` / `drawCustomSpring` / `drawCustomHazardZone` / `drawCustomGhost` for themed skins. Use `createThornRenderer()` / `createSpringRenderer()` factories from `drawPrimitives.ts` to avoid duplicating grow/fade/transform boilerplate.
    - Optionally set `physics` modifiers (gravity, friction, walkSpeed, jumpImpulse multipliers)
    - Optionally set `ghostConfig` for roaming hazard entities
    - Optionally set `windConfig` for periodic wind gusts
@@ -149,8 +151,8 @@ Arena mechanics are a combination of **Arena** fields (structural positions) and
 
 ### Adding a new sound
 1. Add name to `SoundName` union type in `audio.ts`
-2. Add `this.sounds.set('name', new Howl({...}))` in `init()`
-3. Add generator function (use `generateToneBuffer` or `floatBufferToWavDataUri`)
+2. For animal sounds: add entry to `SIMPLE_ANIMAL_SOUNDS` or `SEGMENT_ANIMAL_SOUNDS` table in `init()`. For other sounds: add `this.sounds.set('name', new Howl({...}))` in `init()`
+3. If needed, add generator function (use `generateToneBuffer` or `floatBufferToWavDataUri`)
 4. Call `audio.play('name')` where needed in `gameLoop.ts`
 
 ## Testing
@@ -179,7 +181,7 @@ npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/
 - **renderer.ts is ~2300 lines** — the largest file. When editing, use targeted searches to find the right method. Character sprite drawing is organized by `if/else if (char.name === ...)` blocks.
 - **gameLoop.ts fixedUpdate returns early when matchOver** — any timers that should keep running after match end (screenFlash, slowMotion) must be decayed in the `loop()` method instead.
 - **Player-player collision and stomp detection interact** — stomps must be checked BEFORE `collidePlayersHorizontal`, and the collision must skip when vertical overlap < 50% (stomp zone).
-- **CharacterSelect.tsx has its own physics loop** — separate from the main game engine. Changes to lobby physics don't use the engine's `physics.ts`. `LobbyPlayer` has `sideSquash` (wall/edge hit → 0.75) and `squashScale` (crouch → 0.6), both decaying at rate 8. The draw function applies the same squash transform as the main renderer (narrower+taller for side, wider+shorter for crouch).
+- **CharacterSelect.tsx has its own physics loop** — separate from the main game engine. Changes to lobby physics don't use the engine's `physics.ts`. `LobbyPlayer` has `sideSquash` (wall/edge hit → 0.75) and `squashScale` (crouch → 0.6), both decaying at rate 8. The draw function applies the same squash transform as the main renderer (narrower+taller for side, wider+shorter for crouch). Wildlife and day/night cycle are shared via `canvasAnimations.ts` (also used by MainMenu).
 - **Gore mode** is persisted in localStorage (`bunnybrawl_gore`). Arena selection persisted in `bunnybrawl_arena` (default: `'random'`).
 - **Death effects are gore-mode gated** — Gore ON: red blood particles + character-specific gibs (body parts) + enlarged splat marks + blood drip trails on platforms. Gore OFF: confetti particles (stars, diamonds, ribbons) only, no blood/splats/gibs at all. Gibs use platform collision (bounce once, then settle), persist on ground for 15s, then fade out. Blood drips are baked to bgCtx like splat marks. Gib definitions per character in `stomp.ts` `CHARACTER_GIBS`, gib shape rendering in `renderer.ts` `drawGibShape`.
 - **`arenaId: 'random'`** — resolved to a concrete arena in `Match.tsx` via `resolveArenaId()`, not in the store. A module-level `lastResolvedArenaId` prevents repeating the same arena on rematch. The store keeps `'random'` so it re-rolls each time.
@@ -195,6 +197,7 @@ npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/
 - **Side squash on wall/push collisions** — `Player.sideSquash` (1.0 = normal, <1 = squashed horizontally). Triggered by platform side collision (0.75) or player push (0.8). Decays back to 1.0 via `SQUASH_DECAY_SPEED`. Renderer applies inverse: narrower + slightly taller. When adding new Player fields, also add `sideSquash: 1` to test helpers.
 - **MatchState has non-serializable fields** — `bouncyWobble` is a Map. If serialization is ever needed, this must be handled.
 - **Screen containers must use `width/height: 100%`** — they inherit their size from `GameScaler`'s 1280x720 content div. Never set fixed pixel dimensions on screen containers (`.main-menu`, `.match-container`, `.char-select`, `.victory-screen`).
+- **Buttons use `.btn-base` from `shared.css`** — provides shared font-family, border-radius, cursor, transition, hover scale(1.06), active scale(0.97). Component-specific CSS adds colors, sizes, borders. New buttons should include `btn-base` in their className.
 - **Bubble helmet is theme-gated in `drawCharacterSprite`** — drawn at the end of the method for `space_station` and `underwater` themes only. A glass dome ellipse overlays the character's head with reflection highlights and a collar ring. If adding more "costume" arenas, extend the theme ID check there.
 - **Day/night rendering must be gated on `dayNight.enabled`** — the renderer's `drawDayNightCycle` draws sun, moon, overlay, fireflies, and shooting stars. It must check `this.theme.dayNight.enabled` before drawing. Disabling the flag in the theme config is NOT enough if the renderer call isn't gated. When user says "remove day/night cycle" they mean: set `enabled: false` AND ensure no sun/moon/celestial bodies appear in `drawFarBackground` either.
 - **Tall narrow platform collision** — `collidePlatforms` uses a `landingFromAbove` guard (`sideOverlap > overlapTop`) to prevent the `feetNearTop` override from snapping players onto platforms they approached from the side. Without this, walking into the side of a tall block near its top edge would teleport the player on top. Very tall, very narrow platforms (e.g. 40x216) can still feel awkward — prefer wider-than-tall blocks for standable surfaces.
