@@ -81,25 +81,21 @@ src/
 ## Common Patterns
 
 ### Adding a new character
-Characters are registered as `CharacterPack` objects via the pack registry. All character data (colors, emoji, rendering, gibs, personality, sounds) is bundled into one entry.
+Each character is a single self-contained file in `src/engine/characters/packs/` exporting a `CharacterPack` object.
 
-1. Create a `CharacterRenderer` function in `characters/renderers/sprites.ts` — draws the body, ears, tail, and custom eyes (if any). Must be a pure function of its inputs (result is cached to OffscreenCanvas). Reference existing characters for the API.
-2. Create a `GibRenderer` function in `characters/gibRenderers/all.ts` — draws non-body gib pieces (ears, tail, horns, etc.)
-3. Add the character entry in `characters/builtin.ts` `BUILTINS` array with all fields:
-   - `name`, `color`, `darkColor`, `lightColor`, `emoji`
-   - `customEyes` (true if renderer draws its own eyes; false = generic black dots)
-   - `idleTransform` ('none' | 'headTilt' | 'headFlip' | 'headBob')
-   - `splatShape`, `gibs`, `personality`, `sound`
-   - `drawSprite`, `drawGib`
-4. Also add to `ALL_CHARACTERS` in `characters/legacy.ts` (for lobby character pool)
-5. Add animal sound in `audio.ts` — add to `SoundName` type, then add entry to `SIMPLE_ANIMAL_SOUNDS` (for single-tone) or `SEGMENT_ANIMAL_SOUNDS` (for multi-segment) table in `init()`.
-6. Add localized name in `en.json` and `cs.json` (`char_NewAnimal`)
+1. Create `src/engine/characters/packs/newAnimal.ts` — copy an existing pack file (e.g. `bunny.ts`) as template. Provide:
+   - `drawSprite: CharacterRenderer` — draws body, ears, tail, custom eyes (if any). Must be a **pure function** of its inputs (result is sprite-cached). Receives `(ctx, cx, yOff, w, h, state, animFrame, isIdleAnim, idleT, colors)`.
+   - `drawGib: GibRenderer` — draws non-body gib pieces (ears, tail, horns). Receives `(ctx, gibType, width, height, colors)` with ctx already translated+rotated to gib position.
+   - Data: `name`, `color/darkColor/lightColor`, `emoji`, `customEyes`, `idleTransform`, `splatShape`, `gibs[]`
+   - `translations: { en: 'Name', cs: 'Jméno' }` — character display names per language
+2. Import and add to the `BUILTINS` array in `characters/builtin.ts`
+3. Add animal sound in `audio.ts` — add to `SoundName` type, then add entry to `SIMPLE_ANIMAL_SOUNDS` or `SEGMENT_ANIMAL_SOUNDS` table in `init()`
 
-**Character rendering contract:**
-- `CharacterRenderer(ctx, cx, yOff, w, h, state, animFrame, isIdleAnim, idleT, colors)` — draws body + features. Idle animation transforms (headTilt/headFlip/headBob) are applied by the renderer BEFORE this function is called. Generic eyes and legs are drawn AFTER.
-- Sprite caching: the result is cached keyed by `name_state_animFrame_fastFalling_idleKey`. The renderer must be a pure function — no external mutable state.
-- Characters with `customEyes: true` MUST draw their own eyes inside `drawSprite`. Characters with `customEyes: false` get generic black-dot eyes drawn automatically after the sprite renderer.
-- The same `drawSprite` renderer is used in both the game and the lobby (CharacterSelect).
+**Rendering contract:**
+- `customEyes: true` = renderer MUST draw its own eyes. `customEyes: false` = generic black-dot eyes drawn automatically after the sprite renderer.
+- `idleTransform`: `'none'` | `'headTilt'` (Cat) | `'headFlip'` (Owl) | `'headBob'` (most characters) — applied by renderer BEFORE `drawSprite` is called.
+- Sprite caching: keyed by `name_state_animFrame_fastFalling_idleKey`. Same renderer used in game and lobby.
+- Generic legs, motion lines, fast-fall lines, and bubble helmet are drawn AFTER `drawSprite` by the renderer — don't draw these in the pack.
 
 ### Adding a new arena / level
 1. Create theme config in `src/engine/themes/newTheme.ts` implementing `ThemeConfig` (see `meadow.ts` as reference)
@@ -212,7 +208,10 @@ npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/
 
 ## Important Caveats
 
-- **renderer.ts is ~3200 lines** — the largest file. When editing, use targeted searches to find the right method. Character sprite drawing is organized by `if/else if (char.name === ...)` blocks.
+- **renderer.ts (~2100 lines)** — character sprite drawing is dispatched via `getSpriteRenderer(name)` from the character pack registry. The old if/else chain is gone. Gib drawing dispatches via `getGibRenderer(name)`.
+- **Character pack registry must be initialized before use** — `registerBuiltinCharacters()` is called at module scope in `App.tsx`. Any code that calls `getSpriteRenderer`, `getCharacterEmoji`, etc. before this will get fallback values.
+- **Character sounds are NOT in packs** — sound definitions stay in `audio.ts` (`SIMPLE_ANIMAL_SOUNDS` / `SEGMENT_ANIMAL_SOUNDS`). The pack `sound` field was removed to avoid stale duplication. If external packs need sounds, use `audio.registerSound()`.
+- **`legacy.ts` CHARACTERS record is still mutated at lobby exit** — the lobby writes selected characters back to `CHARACTERS`. `getAllCharacters()` derives the full roster from the pack registry; `CHARACTERS` only holds the P1-P5 default slot mapping.
 - **gameLoop.ts fixedUpdate returns early when matchOver** — any timers that should keep running after match end (screenFlash, slowMotion) must be decayed in the `loop()` method instead.
 - **Player-player collision and stomp detection interact** — stomps must be checked BEFORE `collidePlayersHorizontal`, and the collision must skip when vertical overlap < 50% (stomp zone).
 - **CharacterSelect.tsx has its own physics loop** — separate from the main game engine. Changes to lobby physics don't use the engine's `physics.ts`. `LobbyPlayer` has `sideSquash` (wall/edge hit → 0.75) and `squashScale` (crouch → 0.6), both decaying at rate 8. The draw function applies the same squash transform as the main renderer (narrower+taller for side, wider+shorter for crouch). Wildlife and day/night cycle are shared via `canvasAnimations.ts` (also used by MainMenu).
