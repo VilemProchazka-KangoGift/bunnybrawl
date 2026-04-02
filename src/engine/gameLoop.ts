@@ -631,7 +631,7 @@ export class GameLoop {
       // Mid-air candidates above platforms (reachable by jumping)
       for (let attempt = 0; attempt < 2; attempt++) {
         const cx = plat.x + 20 + Math.random() * (plat.width - 40);
-        const cy = plat.y - 60 - Math.random() * 60;
+        const cy = Math.max(CARROT_SIZE, plat.y - 60 - Math.random() * 60);
         candidates.push({ x: cx, y: cy, distSq: minDistSqTo(cx, cy) });
       }
     }
@@ -719,6 +719,7 @@ export class GameLoop {
   private updateGibs(dt: number): void {
     const platforms = this.arena.platforms;
     const gibs = this.state.gibs;
+    const effectZones = this.arena.effectZones;
     for (let i = gibs.length - 1; i >= 0; i--) {
       const g = gibs[i];
       // Airborne gib physics
@@ -727,6 +728,24 @@ export class GameLoop {
       g.vy += GIB_GRAVITY * dt;
       g.rotation += g.rotationSpeed * dt;
       g.life -= dt;
+      // Effect zone interactions (zero-G, geyser, current)
+      if (effectZones) {
+        for (let zi = 0; zi < effectZones.length; zi++) {
+          const zone = effectZones[zi];
+          if (g.x < zone.x || g.x > zone.x + zone.width || g.y < zone.y || g.y > zone.y + zone.height) continue;
+          if (zone.type === 'zero_g') {
+            if (g.vy > 0) g.vy *= 0.92;
+            else if (g.vy < 0) g.vy *= 1.03;
+          } else if (zone.type === 'current') {
+            g.vx += (zone.vx || 0) * dt;
+          } else if (zone.type === 'geyser') {
+            const geyserIdx = this.geyserIndexMap.get(zone) ?? -1;
+            if (geyserIdx >= 0 && this.state.geyserStates[geyserIdx]?.active) {
+              g.vy = Math.min(g.vy, (zone.strength || -550) * 0.7);
+            }
+          }
+        }
+      }
       // Platform collision
       let settled = false;
       const gibBottom = g.y + g.height / 2;
