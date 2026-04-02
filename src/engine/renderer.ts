@@ -21,17 +21,11 @@ interface Cloud {
 
 function lerpCh(a: number, b: number, t: number): number { return Math.round(a + (b - a) * t); }
 
-function getCached<T>(cache: Map<string, T>, key: string, create: () => T): T {
-  let val = cache.get(key);
-  if (!val) { val = create(); cache.set(key, val); }
-  return val;
-}
-
-function calcHazardAnim(growTimer: number, life: number): { growScale: number; fadeAlpha: number } {
-  return {
-    growScale: growTimer > 0 ? 1 - (growTimer / HAZARD_GROW_TIME) : 1,
-    fadeAlpha: life < 2 ? life / 2 : 1,
-  };
+const _hazardAnim = { growScale: 1, fadeAlpha: 1 };
+function calcHazardAnim(growTimer: number, life: number) {
+  _hazardAnim.growScale = growTimer > 0 ? 1 - (growTimer / HAZARD_GROW_TIME) : 1;
+  _hazardAnim.fadeAlpha = life < 2 ? life / 2 : 1;
+  return _hazardAnim;
 }
 
 const _nearCarrotSet = new Set<PlayerSlot>();
@@ -757,7 +751,9 @@ export class Renderer {
       const pulse = 0.7 + Math.sin(time * 3) * 0.15;
 
       // Lava body + halo (cached gradients)
-      const cachedLava = getCached(this.cachedLavaGradients, `${hz.x}_${hz.y}`, () => {
+      const lavaKey = `${hz.x}_${hz.y}`;
+      let cachedLava = this.cachedLavaGradients.get(lavaKey);
+      if (!cachedLava) {
         const body = ctx.createLinearGradient(hz.x, hz.y, hz.x, hz.y + hz.height);
         body.addColorStop(0, '#FF6600');
         body.addColorStop(0.5, '#FF4400');
@@ -768,8 +764,9 @@ export class Renderer {
         );
         halo.addColorStop(0, 'rgba(255, 100, 0, 0.3)');
         halo.addColorStop(1, 'rgba(255, 60, 0, 0)');
-        return { body, halo };
-      });
+        cachedLava = { body, halo };
+        this.cachedLavaGradients.set(lavaKey, cachedLava);
+      }
       ctx.fillStyle = cachedLava.body;
       ctx.beginPath();
       ctx.ellipse(hz.x + hz.width / 2, hz.y + hz.height / 2, hz.width / 2, hz.height / 2, 0, 0, Math.PI * 2);
@@ -818,12 +815,14 @@ export class Renderer {
     const s = ghost.size;
 
     // Ghost glow (cached gradient)
-    const glow = getCached(this.cachedGhostGlowGradients, `${s}_${glowColor}`, () => {
-      const g = ctx.createRadialGradient(0, 0, s * 0.2, 0, 0, s * 1.5);
-      g.addColorStop(0, glowColor + '33');
-      g.addColorStop(1, glowColor + '00');
-      return g;
-    });
+    const gKey = `${s}_${glowColor}`;
+    let glow = this.cachedGhostGlowGradients.get(gKey);
+    if (!glow) {
+      glow = ctx.createRadialGradient(0, 0, s * 0.2, 0, 0, s * 1.5);
+      glow.addColorStop(0, glowColor + '33');
+      glow.addColorStop(1, glowColor + '00');
+      this.cachedGhostGlowGradients.set(gKey, glow);
+    }
     ctx.fillStyle = glow;
     ctx.fillRect(-s * 1.5, -s * 1.5, s * 3, s * 3);
 
@@ -907,13 +906,15 @@ export class Renderer {
 
     // Pulsing background fill (cached gradient)
     ctx.globalAlpha = 0.1 + Math.sin(time * 1.5) * 0.04;
-    const bgGrad = getCached(this.cachedZeroGBgGradients, `${zone.x}_${zone.y}`, () => {
-      const g = this.fgCtx.createLinearGradient(zone.x, zone.y, zone.x, zone.y + zone.height);
-      g.addColorStop(0, 'rgba(0, 180, 255, 0.2)');
-      g.addColorStop(0.5, 'rgba(0, 220, 255, 0.08)');
-      g.addColorStop(1, 'rgba(0, 180, 255, 0.2)');
-      return g;
-    });
+    const zKey = `${zone.x}_${zone.y}`;
+    let bgGrad = this.cachedZeroGBgGradients.get(zKey);
+    if (!bgGrad) {
+      bgGrad = this.fgCtx.createLinearGradient(zone.x, zone.y, zone.x, zone.y + zone.height);
+      bgGrad.addColorStop(0, 'rgba(0, 180, 255, 0.2)');
+      bgGrad.addColorStop(0.5, 'rgba(0, 220, 255, 0.08)');
+      bgGrad.addColorStop(1, 'rgba(0, 180, 255, 0.2)');
+      this.cachedZeroGBgGradients.set(zKey, bgGrad);
+    }
     ctx.fillStyle = bgGrad;
     ctx.fillRect(zone.x, zone.y, zone.width, zone.height);
 
@@ -1035,13 +1036,15 @@ export class Renderer {
     // Wobbly jelly surface — always visible
     const wobbleY = Math.sin(time * 3) * 2;
     ctx.globalAlpha = 0.25;
-    const jellyGrad = getCached(this.cachedJellyGradients, `${bp.x}_${bp.y}_${bp.height}`, () => {
-      const g = this.fgCtx.createLinearGradient(bp.x, bp.y - 4, bp.x, bp.y + bp.height);
-      g.addColorStop(0, '#FF69B4');
-      g.addColorStop(0.5, '#FF99CC');
-      g.addColorStop(1, '#FF69B4');
-      return g;
-    });
+    const jellyKey = `${bp.x}_${bp.y}_${bp.height}`;
+    let jellyGrad = this.cachedJellyGradients.get(jellyKey);
+    if (!jellyGrad) {
+      jellyGrad = this.fgCtx.createLinearGradient(bp.x, bp.y - 4, bp.x, bp.y + bp.height);
+      jellyGrad.addColorStop(0, '#FF69B4');
+      jellyGrad.addColorStop(0.5, '#FF99CC');
+      jellyGrad.addColorStop(1, '#FF69B4');
+      this.cachedJellyGradients.set(jellyKey, jellyGrad);
+    }
     ctx.fillStyle = jellyGrad;
     ctx.beginPath();
     ctx.moveTo(bp.x, bp.y + bp.height);

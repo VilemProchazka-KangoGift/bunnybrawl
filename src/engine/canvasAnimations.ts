@@ -105,33 +105,29 @@ export function drawDayNightCycle(ctx: CanvasRenderingContext2D, now: number, cy
     ctx.restore();
   }
 
-  // Stars
+  // Stars (bake alpha into rgba to avoid per-element globalAlpha flushes)
   if (nightIntensity > 0.25) {
-    ctx.save();
-    ctx.fillStyle = '#FFF';
     for (let i = 0; i < 30; i++) {
       const stx = (i * 137 + 83) % CANVAS_WIDTH;
       const sty = (i * 89 + 47) % 200;
-      ctx.globalAlpha = (nightIntensity - 0.25) * 2 * (Math.sin(now * 2 + i * 1.7) * 0.3 + 0.7);
+      const a = (nightIntensity - 0.25) * 2 * (Math.sin(now * 2 + i * 1.7) * 0.3 + 0.7);
+      ctx.fillStyle = `rgba(255,255,255,${a})`;
       ctx.beginPath(); ctx.arc(stx, sty, 1 + (i % 3) * 0.5, 0, Math.PI * 2); ctx.fill();
     }
-    ctx.restore();
   }
 
-  // Fireflies
+  // Fireflies (bake alpha into rgba)
   if (nightIntensity > 0.4) {
-    ctx.save();
     for (let i = 0; i < 8; i++) {
       const bx = (i * 173 + 50) % CANVAS_WIDTH;
       const by = 300 + (i * 97) % 250;
       const fx = bx + Math.sin(now * 0.7 + i * 2.1) * 30;
       const fy = by + Math.cos(now * 0.5 + i * 1.3) * 20;
-      ctx.globalAlpha = (nightIntensity - 0.4) * 1.5 * (Math.sin(now * 3 + i * 4.7) * 0.3 + 0.7);
-      ctx.fillStyle = '#AAFF44';
+      const a = (nightIntensity - 0.4) * 1.5 * (Math.sin(now * 3 + i * 4.7) * 0.3 + 0.7);
+      ctx.fillStyle = `rgba(170,255,68,${a})`;
       ctx.beginPath(); ctx.arc(fx, fy, 6, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#CCFF66';
+      ctx.fillStyle = `rgba(204,255,102,${a})`;
       ctx.beginPath(); ctx.arc(fx, fy, 2, 0, Math.PI * 2); ctx.fill();
     }
-    ctx.restore();
   }
 }
