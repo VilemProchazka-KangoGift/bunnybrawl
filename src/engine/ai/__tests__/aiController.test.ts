@@ -29,7 +29,6 @@ function makePlayer(overrides: Partial<Player> & { id: PlayerSlot }): Player {
 function makeState(overrides?: Partial<MatchState>): MatchState {
   return {
     players: [],
-    splatMarks: [],
     killFeed: [],
     timeElapsed: 30,
     matchOver: false,

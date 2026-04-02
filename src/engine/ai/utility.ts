@@ -429,7 +429,7 @@ function evaluateGeyserEscape(a: AwarenessSnapshot, s: ActionScores): void {
   else s.moveLeft += weight;
 }
 
-function evaluateZoneExploitation(a: AwarenessSnapshot, s: ActionScores, p: AIPersonality): void {
+function evaluateZoneExploitation(a: AwarenessSnapshot, s: ActionScores, _p: AIPersonality): void {
   // Use geysers for height
   if (a.nearGeyser && a.nearGeyser.timer < 2 && !a.nearGeyser.active) {
     const gDx = a.nearGeyser.x - a.self.x;

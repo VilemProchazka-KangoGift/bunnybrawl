@@ -38,7 +38,6 @@ describe('GameStore', () => {
   it('setMatchResult transitions to victory', () => {
     const mockState = {
       players: [],
-      splatMarks: [],
       killFeed: [],
       timeElapsed: 60,
       matchOver: true,
