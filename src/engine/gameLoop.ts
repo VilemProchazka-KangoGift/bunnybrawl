@@ -1026,8 +1026,6 @@ export class GameLoop {
           }
         }
       }
-      // Breathing animation
-      player.breathTimer += dt;
       // Decay damage flash and spring trail
       if (player.damageFlashTimer > 0) player.damageFlashTimer -= dt;
       if (player.springTrailTimer > 0) player.springTrailTimer -= dt;

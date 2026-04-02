@@ -8,6 +8,7 @@ import {
   SHOCKWAVE_DURATION, SCREEN_FLASH_DURATION, SPRING_TRAIL_DURATION, SCORE_ANIM_DURATION,
 } from './constants';
 import { drawCloud as drawCloudPrimitive, drawHill, drawPlatformMoss } from './themes/drawPrimitives';
+import { hexToRGB } from './fastMath';
 import i18n from '../i18n';
 
 const CHAR_EMOJI: Record<string, string> = {
@@ -51,9 +52,10 @@ export class Renderer {
   // HUD cache
   private hudCache: OffscreenCanvas | null = null;
   private hudCacheCtx: OffscreenCanvasRenderingContext2D | null = null;
-  private hudLastScores: string = '';
   private hudLastTimer: number = -1;
   private hudLastPlayerCount: number = -1;
+  private _hudPlayerScores: Record<string, number> = {};
+  private _hudPlayerActive: Record<string, boolean> = {};
   // Shared between _drawHUDImpl and _drawScoreAnimations
   private _hudActivePlayers: Player[] = [];
   private _hudStartX: number = 0;
@@ -445,13 +447,8 @@ export class Renderer {
     // Ground fog (o) — after players, before foreground nature
     if (matchState.fogParticles) {
       const fogCfg = this.theme.fog;
-      // Parse fog color once (hex to rgb components)
       if (!this._fogRGB) {
-        const c = fogCfg.color;
-        const r = parseInt(c.slice(1, 3), 16);
-        const g = parseInt(c.slice(3, 5), 16);
-        const b = parseInt(c.slice(5, 7), 16);
-        this._fogRGB = { r, g, b };
+        this._fogRGB = hexToRGB(fogCfg.color);
       }
       const { r, g, b } = this._fogRGB;
       for (const fp of matchState.fogParticles) {
@@ -474,12 +471,7 @@ export class Renderer {
     if (matchState.pollenParticles) {
       const ambCfg = this.theme.ambientParticles;
       if (!this._ambientRGBs) {
-        this._ambientRGBs = ambCfg.colors.map(c => {
-          const r = parseInt(c.slice(1, 3), 16);
-          const g = parseInt(c.slice(3, 5), 16);
-          const b = parseInt(c.slice(5, 7), 16);
-          return { r, g, b };
-        });
+        this._ambientRGBs = ambCfg.colors.map(hexToRGB);
       }
       for (const pp of matchState.pollenParticles) {
         const ci = pp.size > 2 ? 0 : (this._ambientRGBs.length > 1 ? 1 : 0);
@@ -831,7 +823,7 @@ export class Renderer {
     const s = ghost.size;
 
     // Ghost glow (cached gradient)
-    const gKey = `${s}`;
+    const gKey = `${s}_${glowColor}`;
     let glow: CanvasGradient;
     const cachedGlow = this.cachedGhostGlowGradients.get(gKey);
     if (cachedGlow) {
@@ -2980,22 +2972,18 @@ export class Renderer {
   // ---- HUD ----
 
   private drawHUD(ctx: CanvasRenderingContext2D, state: MatchState): void {
-    // Build cache key from scores, timer, and player count
-    const scores = state.players.map(p => `${p.id}:${p.score}:${p.active}`).join(',');
+    // Check if HUD needs redraw (no allocations — simple loop comparison)
     const timerSec = Math.floor(state.timeElapsed);
-    const playerCount = state.players.filter(p => p.active).length;
-
-    // Check if timer is pulsing (< 30s remaining) — skip cache when animating per-frame
-    const settings = (state as any).settings as { timeLimit?: number } | undefined;
-    const timeLimit = settings?.timeLimit ?? 0;
-    const remaining = timeLimit > 0 ? timeLimit - state.timeElapsed : Infinity;
-    const timerPulsing = remaining < 30 && remaining > 0;
-
-    const needsRedraw = scores !== this.hudLastScores
-      || timerSec !== this.hudLastTimer
-      || playerCount !== this.hudLastPlayerCount
-      || timerPulsing
-      || !this.hudCache;
+    let needsRedraw = timerSec !== this.hudLastTimer || !this.hudCache;
+    if (!needsRedraw) {
+      let activeCount = 0;
+      for (const p of state.players) {
+        if (p.active) activeCount++;
+        if (p.score !== (this._hudPlayerScores?.[p.id as string] ?? -1)) { needsRedraw = true; break; }
+        if (p.active !== (this._hudPlayerActive?.[p.id as string] ?? false)) { needsRedraw = true; break; }
+      }
+      if (!needsRedraw && activeCount !== this.hudLastPlayerCount) needsRedraw = true;
+    }
 
     if (needsRedraw) {
       if (!this.hudCache) {
@@ -3008,9 +2996,14 @@ export class Renderer {
       // Draw HUD content to cache
       this._drawHUDImpl(hctx as unknown as CanvasRenderingContext2D, state);
 
-      this.hudLastScores = scores;
       this.hudLastTimer = timerSec;
-      this.hudLastPlayerCount = playerCount;
+      let ac = 0;
+      for (const p of state.players) {
+        this._hudPlayerScores[p.id as string] = p.score;
+        this._hudPlayerActive[p.id as string] = p.active;
+        if (p.active) ac++;
+      }
+      this.hudLastPlayerCount = ac;
     }
 
     // Blit cached HUD
