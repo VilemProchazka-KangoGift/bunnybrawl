@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { CHARACTERS, ALL_CHARACTERS, BOT_CHARACTERS, CHAR_EMOJI, CUSTOM_EYE_CHARS, assignBotCharacters } from '../engine/characters';
+import { CHARACTERS, ALL_CHARACTERS, BOT_CHARACTERS, assignBotCharacters, getCharacterEmoji, hasCustomEyes } from '../engine/characters';
 import { KEY_BINDINGS } from '../engine/input';
 import { audio } from '../engine/audio';
 import i18n from '../i18n';
@@ -710,7 +710,7 @@ function drawLobby(
     ctx.font = '28px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(CHAR_EMOJI[player.char.name] ?? '?', emojiX, 32);
+    ctx.fillText(getCharacterEmoji(player.char.name), emojiX, 32);
     ctx.textBaseline = 'alphabetic';
 
     // Name in player color
@@ -1122,7 +1122,7 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
   }
 
   // Generic eyes for characters without custom ones
-  if (!CUSTOM_EYE_CHARS.has(char.name)) {
+  if (!hasCustomEyes(char.name)) {
     ctx.fillStyle = '#000';
     ctx.beginPath(); ctx.arc(cx - 4, yOff + h * 0.4, 2.5, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(cx + 6, yOff + h * 0.4, 2.5, 0, Math.PI * 2); ctx.fill();

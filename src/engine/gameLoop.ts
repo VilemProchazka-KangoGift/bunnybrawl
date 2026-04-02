@@ -11,7 +11,8 @@ import { randRange, pickWeighted, swapRemove } from './themes/utils';
 import { InputManager } from './input';
 import { Renderer } from './renderer';
 import { applyInput, applyGravity, movePlayer, collidePlatforms, updatePlayerState, applyArenaConstraints, collidePlayersHorizontal, aabbOverlap } from './physics';
-import { checkStomps, updateSplatTimers, CHARACTER_GIBS } from './stomp';
+import { checkStomps, updateSplatTimers } from './stomp';
+import { getCharacterGibs } from './characters';
 import { audio } from './audio';
 import {
   FIXED_TIMESTEP, MAX_FRAME_TIME,
@@ -543,7 +544,7 @@ export class GameLoop {
     const confettiColors = GameLoop.CONFETTI_COLORS;
     const pickConfetti = () => confettiColors[Math.floor(Math.random() * confettiColors.length)];
     // Character body part gibs
-    const gibDefs = CHARACTER_GIBS[name];
+    const gibDefs = getCharacterGibs(name);
     if (gibDefs) {
       for (let r = 0; r < mult; r++) {
         for (const def of gibDefs) {

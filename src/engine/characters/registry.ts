@@ -1,7 +1,6 @@
 import type { CharacterPack, CharacterRenderer, GibRenderer } from './types';
 import type { CharacterDef, SplatShape } from '../types';
 import type { GibDef } from '../stomp';
-import type { AIPersonality } from '../ai/types';
 import { fallbackSpriteRenderer, fallbackGibRenderer } from './fallbacks';
 
 // ---- Registry ----
@@ -44,12 +43,6 @@ export function getCharacterSplatShape(name: string): SplatShape {
 
 export function getCharacterGibs(name: string): GibDef[] | undefined {
   return PACKS.get(name)?.gibs;
-}
-
-export function getCharacterPersonality(name: string): AIPersonality {
-  const pack = PACKS.get(name);
-  if (pack) return pack.personality;
-  return { aggressiveness: 1.0, cautiousness: 1.0, greediness: 0.8, chaosAffinity: 0.3, targetLeader: false };
 }
 
 // ---- Renderer dispatch ----

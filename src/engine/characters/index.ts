@@ -19,7 +19,6 @@ export {
   hasCustomEyes,
   getCharacterSplatShape,
   getCharacterGibs,
-  getCharacterPersonality,
   getSpriteRenderer,
   getGibRenderer,
   getAllCharacterDefs,
@@ -36,8 +35,6 @@ export { registerBuiltinCharacters } from './builtin';
 export {
   CHARACTERS,
   ALL_CHARACTERS,
-  CHAR_EMOJI,
-  CUSTOM_EYE_CHARS,
   BOT_CHARACTERS,
   getCharacter,
   getCharacterForSlot,

@@ -4,7 +4,7 @@ import { useGameStore } from '../store/gameStore';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
 import type { PlayerSlot, PlayerStats } from '../engine/types';
 import { isBotSlot } from '../engine/types';
-import { CHAR_EMOJI } from '../engine/characters';
+import { getCharacterEmoji } from '../engine/characters';
 import './VictoryScreen.css';
 
 interface FireworkParticle {
@@ -138,7 +138,7 @@ export function VictoryScreen() {
                 <span style={{ color: winnerChar.color }}>{charName(winnerChar.name)}{botSuffix(winner!)}</span> {t('victory_wins')}
               </h1>
               <div className="winner-avatar winner-avatar-pose" style={{ borderColor: winnerChar.lightColor }}>
-                <span className="winner-emoji">{CHAR_EMOJI[winnerChar.name] ?? '\uD83C\uDFC6'}</span>
+                <span className="winner-emoji">{getCharacterEmoji(winnerChar.name) || '\uD83C\uDFC6'}</span>
               </div>
             </>
           ) : (

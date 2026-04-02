@@ -1,4 +1,3 @@
-import type { AIPersonality } from '../ai/types';
 import type { GibDef } from '../stomp';
 import type { SplatShape, GibType } from '../types';
 
@@ -98,7 +97,6 @@ export interface CharacterPack {
   // Data
   splatShape: SplatShape;           // Splat mark shape on death
   gibs: GibDef[];                   // Death gib definitions
-  personality: AIPersonality;       // Bot behavior weights
 
   // Audio
   sound: SoundDef;                  // Procedural sound parameters

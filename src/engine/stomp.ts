@@ -1,9 +1,10 @@
-import type { Player, SplatMark, KillFeedEntry, SpawnPoint, SplatShape, GibType, GameMods } from './types';
+import type { Player, SplatMark, KillFeedEntry, SpawnPoint, GibType, GameMods } from './types';
 import {
   STOMP_VY_THRESHOLD, STOMP_BOUNCE, SPLAT_DURATION,
   RESPAWN_DELAY, INVINCIBLE_DURATION,
 } from './constants';
 import { aabbOverlap } from './physics';
+import { getCharacterSplatShape } from './characters';
 
 export function checkStomps(
   players: Player[],
@@ -65,51 +66,12 @@ export function isStomping(attacker: Player, victim: Player): boolean {
   return overlap > 0 && overlap < victim.height * 0.5;
 }
 
-const CHARACTER_SPLAT_SHAPES: Record<string, SplatShape> = {
-  Bunny: 'paw',
-  Fox: 'star',
-  Frog: 'splat',
-  Bear: 'circle',
-  Owl: 'ring',
-  Cat: 'paw',
-  Wolf: 'star',
-  Panda: 'circle',
-  Pig: 'circle',
-  Cow: 'splat',
-  Goat: 'star',
-  Horse: 'circle',
-  Sheep: 'paw',
-  Monkey: 'star',
-  Tiger: 'paw',
-  Rhino: 'circle',
-  Hedgehog: 'star',
-};
-
+// GibDef interface — kept here as it's used by types outside the character pack system
 export interface GibDef {
   gibType: GibType;
   width: number;
   height: number;
 }
-
-export const CHARACTER_GIBS: Record<string, GibDef[]> = {
-  Bunny:  [{ gibType: 'ear', width: 8, height: 20 }, { gibType: 'ear', width: 8, height: 20 }, { gibType: 'tail', width: 8, height: 8 }, { gibType: 'body', width: 14, height: 12 }],
-  Fox:    [{ gibType: 'ear', width: 10, height: 10 }, { gibType: 'ear', width: 10, height: 10 }, { gibType: 'tail', width: 16, height: 10 }, { gibType: 'snout', width: 8, height: 6 }, { gibType: 'body', width: 14, height: 12 }],
-  Frog:   [{ gibType: 'body', width: 12, height: 10 }, { gibType: 'body', width: 10, height: 10 }, { gibType: 'body', width: 11, height: 9 }],
-  Bear:   [{ gibType: 'ear', width: 10, height: 10 }, { gibType: 'ear', width: 10, height: 10 }, { gibType: 'snout', width: 10, height: 8 }, { gibType: 'body', width: 14, height: 12 }],
-  Owl:    [{ gibType: 'wing', width: 12, height: 8 }, { gibType: 'wing', width: 12, height: 8 }, { gibType: 'body', width: 14, height: 12 }],
-  Cat:    [{ gibType: 'ear', width: 8, height: 10 }, { gibType: 'ear', width: 8, height: 10 }, { gibType: 'tail', width: 14, height: 6 }, { gibType: 'body', width: 14, height: 12 }],
-  Wolf:   [{ gibType: 'ear', width: 8, height: 12 }, { gibType: 'ear', width: 8, height: 12 }, { gibType: 'tail', width: 16, height: 10 }, { gibType: 'body', width: 14, height: 12 }],
-  Panda:  [{ gibType: 'ear', width: 10, height: 10 }, { gibType: 'ear', width: 10, height: 10 }, { gibType: 'body', width: 14, height: 12 }, { gibType: 'body', width: 10, height: 10 }],
-  Pig:    [{ gibType: 'ear', width: 8, height: 10 }, { gibType: 'ear', width: 8, height: 10 }, { gibType: 'snout', width: 8, height: 6 }, { gibType: 'tail', width: 10, height: 8 }, { gibType: 'body', width: 14, height: 12 }],
-  Cow:    [{ gibType: 'horn', width: 8, height: 12 }, { gibType: 'horn', width: 8, height: 12 }, { gibType: 'tail', width: 14, height: 6 }, { gibType: 'body', width: 14, height: 12 }],
-  Goat:   [{ gibType: 'horn', width: 8, height: 14 }, { gibType: 'horn', width: 8, height: 14 }, { gibType: 'beard', width: 8, height: 10 }, { gibType: 'body', width: 14, height: 12 }],
-  Horse:  [{ gibType: 'ear', width: 8, height: 10 }, { gibType: 'ear', width: 8, height: 10 }, { gibType: 'mane', width: 12, height: 14 }, { gibType: 'body', width: 14, height: 12 }],
-  Sheep:  [{ gibType: 'ear', width: 8, height: 8 }, { gibType: 'ear', width: 8, height: 8 }, { gibType: 'wool', width: 14, height: 12 }, { gibType: 'body', width: 14, height: 12 }],
-  Monkey: [{ gibType: 'ear', width: 10, height: 10 }, { gibType: 'ear', width: 10, height: 10 }, { gibType: 'tail', width: 16, height: 8 }, { gibType: 'body', width: 14, height: 12 }],
-  Tiger:  [{ gibType: 'ear', width: 10, height: 10 }, { gibType: 'ear', width: 10, height: 10 }, { gibType: 'snout', width: 8, height: 6 }, { gibType: 'body', width: 14, height: 12 }],
-  Rhino:  [{ gibType: 'ear', width: 8, height: 8 }, { gibType: 'ear', width: 8, height: 8 }, { gibType: 'horn', width: 8, height: 14 }, { gibType: 'body', width: 14, height: 12 }],
-  Hedgehog: [{ gibType: 'spine', width: 6, height: 10 }, { gibType: 'spine', width: 6, height: 10 }, { gibType: 'snout', width: 8, height: 6 }, { gibType: 'body', width: 14, height: 12 }],
-};
 
 export function createSplatMark(victim: Player): SplatMark {
   const particles: Array<{ x: number; y: number; radius: number }> = [];
@@ -128,7 +90,7 @@ export function createSplatMark(victim: Player): SplatMark {
     y: victim.y + victim.height / 2,
     radius: 20 + Math.random() * 15,
     color: victim.character.color,
-    shape: CHARACTER_SPLAT_SHAPES[victim.character.name] ?? 'circle',
+    shape: getCharacterSplatShape(victim.character.name),
     particles,
   };
 }
