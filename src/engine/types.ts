@@ -209,6 +209,14 @@ export type GameScreen = 'menu' | 'charSelect' | 'match' | 'victory';
 
 export type BotDifficulty = 'easy' | 'medium' | 'hard' | 'impossible';
 
+export interface GameMods {
+  extremeGore: boolean;
+  carrotChase: boolean;
+  giantPlayers: boolean;
+  turbo: boolean;
+  superBounce: boolean;
+}
+
 export interface MatchSettings {
   killLimit: number;
   timeLimit: number; // seconds, 0 = off
@@ -217,6 +225,7 @@ export interface MatchSettings {
   arenaId: string;
   botCount: number;
   botDifficulty: BotDifficulty;
+  mods: GameMods;
 }
 
 // Pickups and hazards

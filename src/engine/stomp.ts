@@ -1,4 +1,4 @@
-import type { Player, SplatMark, KillFeedEntry, SpawnPoint, SplatShape, GibType } from './types';
+import type { Player, SplatMark, KillFeedEntry, SpawnPoint, SplatShape, GibType, GameMods } from './types';
 import {
   STOMP_VY_THRESHOLD, STOMP_BOUNCE, SPLAT_DURATION,
   RESPAWN_DELAY, INVINCIBLE_DURATION,
@@ -9,6 +9,7 @@ export function checkStomps(
   players: Player[],
   _spawnPoints: SpawnPoint[],
   timeElapsed: number,
+  mods?: GameMods,
 ): { splatMarks: SplatMark[]; killFeedEntries: KillFeedEntry[] } {
   const splatMarks: SplatMark[] = [];
   const killFeedEntries: KillFeedEntry[] = [];
@@ -30,7 +31,7 @@ export function checkStomps(
 
         attacker.vy = STOMP_BOUNCE;
         attacker.state = 'airborne';
-        attacker.score += 2;
+        if (!mods?.carrotChase) attacker.score += 2;
 
         splatMarks.push(createSplatMark(victim));
         killFeedEntries.push({

@@ -83,5 +83,18 @@
   "countdown_skip": "Stiskni Enter pro přeskočení",
   "rules_label": "Pravidla:",
   "rules_stomp": "Dupnutí = 2 body",
-  "rules_carrot": "Mrkev = 1 bod"
+  "rules_carrot": "Mrkev = 1 bod",
+  "mods_button": "Mody",
+  "mods_title": "Herní mody",
+  "mods_close": "Potvrdit",
+  "mod_extreme_gore": "Extrémní krev",
+  "mod_extreme_gore_desc": "10x více částí těla",
+  "mod_carrot_chase": "Hon na mrkve",
+  "mod_carrot_chase_desc": "Body jen za mrkve",
+  "mod_giant_players": "Obří hráči",
+  "mod_giant_players_desc": "Všichni jsou obrovští",
+  "mod_turbo": "Turbo",
+  "mod_turbo_desc": "2x rychlost, silnější skoky",
+  "mod_super_bounce": "Super odraz",
+  "mod_super_bounce_desc": "Všechny platformy odrážejí"
 }

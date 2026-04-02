@@ -15,7 +15,8 @@ import { audio } from './audio';
 import {
   FIXED_TIMESTEP, MAX_FRAME_TIME,
   PLAYER_WIDTH, PLAYER_HEIGHT, ANIM_FRAME_DURATION, RUN_FRAMES,
-  DUST_LAND_VY_THRESHOLD, CARROT_SPAWN_INTERVAL, CARROT_SIZE,
+  DUST_LAND_VY_THRESHOLD, CARROT_SPAWN_INTERVAL, CARROT_CHASE_SPAWN_INTERVAL,
+  CARROT_FIRST_SPAWN_DELAY, CARROT_CHASE_FIRST_SPAWN_DELAY, CARROT_SIZE, GIANT_SCALE,
   FAT_DURATION, SPRING_BOUNCE, SPRING_SIZE,
   THORN_SLOW_DURATION, CANVAS_WIDTH, CANVAS_HEIGHT,
   SPRING_SPAWN_INTERVAL, THORN_SPAWN_INTERVAL, HAZARD_LIFETIME, HAZARD_GROW_TIME,
@@ -95,13 +96,27 @@ export class GameLoop {
     this.effJumpImpulse = JUMP_IMPULSE * (pm?.jumpImpulse ?? 1);
     this.effMaxFallSpeed = MAX_FALL_SPEED * (pm?.gravity ?? 1); // scale with gravity
 
+    // Apply mod physics multipliers (stacks with theme)
+    if (settings.mods.turbo) {
+      this.effWalkSpeed *= 2;
+      this.effJumpImpulse *= 1.5;
+    }
+
+    // Super Bounce: mark all platforms as bouncy (shallow-copy arena to avoid mutation)
+    if (settings.mods.superBounce) {
+      this.arena = { ...arena, bouncyPlatforms: arena.platforms.map((_, i) => i) };
+    }
+
+    const pw = settings.mods.giantPlayers ? PLAYER_WIDTH * GIANT_SCALE : PLAYER_WIDTH;
+    const ph = settings.mods.giantPlayers ? PLAYER_HEIGHT * GIANT_SCALE : PLAYER_HEIGHT;
+
     const players: Player[] = activePlayers.map((slot, index) => ({
       id: slot,
       character: getCharacterForSlot(slot),
-      x: arena.spawnPoints[index % arena.spawnPoints.length].x - PLAYER_WIDTH / 2,
-      y: arena.spawnPoints[index % arena.spawnPoints.length].y - PLAYER_HEIGHT,
+      x: arena.spawnPoints[index % arena.spawnPoints.length].x - pw / 2,
+      y: arena.spawnPoints[index % arena.spawnPoints.length].y - ph,
       vx: 0, vy: 0,
-      width: PLAYER_WIDTH, height: PLAYER_HEIGHT,
+      width: pw, height: ph,
       state: 'idle' as const, facing: 'right' as const,
       splatTimer: 0, respawnTimer: 0, invincibleTimer: 0,
       score: 0, active: true, animFrame: 0, animTimer: 0,
@@ -176,7 +191,7 @@ export class GameLoop {
       players,
       killFeed: [],
       timeElapsed: 0, matchOver: false, winner: null,
-      carrots: [], carrotTimer: CARROT_SPAWN_INTERVAL,
+      carrots: [], carrotTimer: settings.mods.carrotChase ? CARROT_CHASE_FIRST_SPAWN_DELAY : CARROT_FIRST_SPAWN_DELAY,
       springs: [], thorns: [],
       springSpawnTimer: 5, // first spring after 5s
       thornSpawnTimer: 8,  // first thorn after 8s
@@ -471,7 +486,8 @@ export class GameLoop {
   private spawnGoreParticles(victim: Player): void {
     const cx = victim.x + victim.width / 2;
     const cy = victim.y + victim.height / 2;
-    const count = 35 + Math.floor(Math.random() * 15);
+    const baseCnt = 35 + Math.floor(Math.random() * 15);
+    const count = this.settings.mods.extremeGore ? baseCnt * 3 : baseCnt;
     for (let i = 0; i < count; i++) {
       const side = Math.random() < 0.5 ? -1 : 1;
       const hSpeed = (120 + Math.random() * 220) * side;
@@ -510,18 +526,22 @@ export class GameLoop {
     const cy = victim.y + victim.height / 2;
     const { color, darkColor, lightColor, name } = victim.character;
     const gore = this.settings.goreMode;
+    const extreme = this.settings.mods.extremeGore;
+    const mult = extreme ? 10 : 1;
     const confettiColors = GameLoop.CONFETTI_COLORS;
     const pickConfetti = () => confettiColors[Math.floor(Math.random() * confettiColors.length)];
     // Character body part gibs
     const gibDefs = CHARACTER_GIBS[name];
     if (gibDefs) {
-      for (const def of gibDefs) {
-        this.launchGib(cx, cy, 12, 0.15, 0.85, GIB_LAUNCH_SPEED_MIN, GIB_LAUNCH_SPEED_MAX,
-          def.width, def.height, color, darkColor, lightColor, name, def.gibType);
+      for (let r = 0; r < mult; r++) {
+        for (const def of gibDefs) {
+          this.launchGib(cx, cy, 12 + r * 3, 0.15, 0.85, GIB_LAUNCH_SPEED_MIN, GIB_LAUNCH_SPEED_MAX,
+            def.width, def.height, color, darkColor, lightColor, name, def.gibType);
+        }
       }
     }
     // Chunk gibs: blood in gore mode, confetti-colored in non-gore
-    const chunkCount = 5 + Math.floor(Math.random() * 4);
+    const chunkCount = (5 + Math.floor(Math.random() * 4)) * mult;
     for (let i = 0; i < chunkCount; i++) {
       const size = 4 + Math.random() * 6;
       const c = gore ? BLOOD_COLOR : pickConfetti();
@@ -529,7 +549,7 @@ export class GameLoop {
         size, size * (0.6 + Math.random() * 0.4), c, c, c, '', 'body');
     }
     // Micro drop gibs: blood specks in gore mode, confetti specks in non-gore
-    const microCount = 25 + Math.floor(Math.random() * 15);
+    const microCount = (25 + Math.floor(Math.random() * 15)) * mult;
     for (let i = 0; i < microCount; i++) {
       const size = 1.5 + Math.random() * 2.5;
       const c = gore ? BLOOD_COLOR : pickConfetti();
@@ -537,7 +557,8 @@ export class GameLoop {
         size, size, c, c, c, '', 'body');
     }
     // Cap airborne gibs (grounded ones are baked to bgCtx)
-    while (this.state.gibs.length > GIB_MAX_COUNT) {
+    const gibCap = extreme ? GIB_MAX_COUNT * 10 : GIB_MAX_COUNT;
+    while (this.state.gibs.length > gibCap) {
       swapRemove(this.state.gibs, 0);
     }
   }
@@ -877,7 +898,7 @@ export class GameLoop {
     this.state.carrotTimer -= dt;
     if (this.state.carrotTimer <= 0) {
       this.spawnCarrot();
-      this.state.carrotTimer = CARROT_SPAWN_INTERVAL;
+      this.state.carrotTimer = this.settings.mods.carrotChase ? CARROT_CHASE_SPAWN_INTERVAL : CARROT_SPAWN_INTERVAL;
     }
 
     // Weather
@@ -1446,7 +1467,7 @@ export class GameLoop {
     }
 
     // Stomps
-    const { killFeedEntries } = checkStomps(this.state.players, this.arena.spawnPoints, this.state.timeElapsed);
+    const { killFeedEntries } = checkStomps(this.state.players, this.arena.spawnPoints, this.state.timeElapsed, this.settings.mods);
 
     if (killFeedEntries.length > 0) {
       audio.play('stomp');
@@ -1637,7 +1658,7 @@ export class GameLoop {
   private getPlayerInput(player: Player): InputState {
     if (isBotSlot(player.id)) {
       const ai = this.aiControllers.get(player.id);
-      if (ai) return ai.getInput(player, this.state, this.arena);
+      if (ai) return ai.getInput(player, this.state, this.arena, this.settings.mods.carrotChase);
       return { left: false, right: false, jump: false, down: false };
     }
     return this.input.getInput(player.id as import('./types').CharacterSlot);

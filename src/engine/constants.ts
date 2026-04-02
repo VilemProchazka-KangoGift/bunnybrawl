@@ -36,6 +36,10 @@ export const RUN_FRAMES = 4;
 
 // Carrot
 export const CARROT_SPAWN_INTERVAL = 10; // seconds between carrot spawns
+export const CARROT_FIRST_SPAWN_DELAY = 10; // seconds before first carrot
+export const CARROT_CHASE_SPAWN_INTERVAL = 2; // Carrot Chase mod: faster respawn
+export const CARROT_CHASE_FIRST_SPAWN_DELAY = 1; // Carrot Chase mod: fast first carrot
+export const GIANT_SCALE = 1.8; // Giant Players mod: size multiplier
 export const CARROT_SIZE = 30; // px (bigger sideways carrot)
 export const FAT_DURATION = 6.6; // seconds
 export const FAT_SCALE = 1.4; // size multiplier when fat

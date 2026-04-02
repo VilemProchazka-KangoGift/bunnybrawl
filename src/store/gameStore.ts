@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { GameScreen, MatchSettings, PlayerSlot, MatchState } from '../engine/types';
+import type { GameScreen, MatchSettings, PlayerSlot, MatchState, GameMods } from '../engine/types';
 
 interface GameStore {
   screen: GameScreen;
@@ -33,6 +33,12 @@ const defaultSettings: MatchSettings = {
   botDifficulty: loadStorage<'easy' | 'medium' | 'hard' | 'impossible'>('bunnybrawl_botdiff', v => {
     return v === 'easy' || v === 'medium' || v === 'hard' || v === 'impossible' ? v : 'medium';
   }, 'medium'),
+  mods: loadStorage<GameMods>('bunnybrawl_mods', v => {
+    try {
+      const p = JSON.parse(v || '');
+      return { extremeGore: !!p.extremeGore, carrotChase: !!p.carrotChase, giantPlayers: !!p.giantPlayers, turbo: !!p.turbo, superBounce: !!p.superBounce };
+    } catch { return null as any; }
+  }, { extremeGore: false, carrotChase: false, giantPlayers: false, turbo: false, superBounce: false }),
 };
 
 export const useGameStore = create<GameStore>((set) => ({
@@ -51,6 +57,7 @@ export const useGameStore = create<GameStore>((set) => ({
       if ('arenaId' in settings) saveStorage('bunnybrawl_arena', next.arenaId);
       if ('botCount' in settings) saveStorage('bunnybrawl_botcount', String(next.botCount));
       if ('botDifficulty' in settings) saveStorage('bunnybrawl_botdiff', next.botDifficulty);
+      if ('mods' in settings) saveStorage('bunnybrawl_mods', JSON.stringify(next.mods));
       return { matchSettings: next };
     }),
 

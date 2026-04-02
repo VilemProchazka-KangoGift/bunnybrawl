@@ -48,7 +48,7 @@ export class AIController {
     return this.difficulty.walkSpeedMult;
   }
 
-  getInput(self: Player, state: MatchState, arena: Arena): InputState {
+  getInput(self: Player, state: MatchState, arena: Arena, carrotChase = false): InputState {
     if (!self.active || self.state === 'splat' || self.state === 'respawning') {
       return NO_INPUT;
     }
@@ -84,7 +84,7 @@ export class AIController {
     this.frameCounter++;
     const isDecisionFrame = this.frameCounter % 3 === this.botIndex % 3;
     const ideal = isDecisionFrame
-      ? this.computeIdealInput(self, state, arena)
+      ? this.computeIdealInput(self, state, arena, carrotChase)
       : this.ringBuffer[(this.ringWrite - 1 + this.ringSize) % this.ringSize];
 
     // Push through ring buffer
@@ -113,7 +113,7 @@ export class AIController {
     return delayed;
   }
 
-  private computeIdealInput(self: Player, state: MatchState, arena: Arena): InputState {
+  private computeIdealInput(self: Player, state: MatchState, arena: Arena, carrotChase = false): InputState {
     // Build awareness ONCE, reuse for stuck recovery and normal path
     const preferSafe = this.personality.cautiousness >= 1.2;
     const awareness = buildAwareness(self, state, arena, this.difficulty.awarenessRadius, this.difficulty.pathfindingDepth, preferSafe);
@@ -173,7 +173,7 @@ export class AIController {
       }
     }
 
-    const scores = evaluateActions(awareness, this.personality, this.difficulty.precisionMult);
+    const scores = evaluateActions(awareness, this.personality, this.difficulty.precisionMult, carrotChase);
 
     // Add chaos noise (suppressed at high difficulty)
     const effectiveChaos = this.personality.chaosAffinity * (1 - this.difficulty.chaosSuppress);

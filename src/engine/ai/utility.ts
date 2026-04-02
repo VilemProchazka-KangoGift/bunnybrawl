@@ -8,22 +8,28 @@ export function evaluateActions(
   awareness: AwarenessSnapshot,
   personality: AIPersonality,
   precisionMult: number = 0,
+  carrotChase: boolean = false,
 ): ActionScores {
   const scores: ActionScores = { moveLeft: 0, moveRight: 0, jump: 0, drop: 0 };
 
-  // When hurt (slowed) or fat, flee from everyone instead of attacking
-  if (awareness.self.slowed || awareness.self.fat) {
-    evaluateHurtFlee(awareness, scores, personality);
+  if (carrotChase) {
+    // In carrot chase, kills are worthless — skip combat, heavily pursue carrots
+    evaluateCarrotPursuit(awareness, scores, personality, true);
   } else {
-    evaluateStompOpportunity(awareness, scores, personality);
-    evaluateChaseTarget(awareness, scores, personality);
-    evaluateTargetPriority(awareness, scores, personality);
+    // When hurt (slowed) or fat, flee from everyone instead of attacking
+    if (awareness.self.slowed || awareness.self.fat) {
+      evaluateHurtFlee(awareness, scores, personality);
+    } else {
+      evaluateStompOpportunity(awareness, scores, personality);
+      evaluateChaseTarget(awareness, scores, personality);
+      evaluateTargetPriority(awareness, scores, personality);
+    }
+    evaluateCarrotPursuit(awareness, scores, personality, false);
   }
   evaluateThreatEvasion(awareness, scores, personality);
   evaluateAirborneAboveDodge(awareness, scores, personality, precisionMult);
   evaluatePlatformSeeking(awareness, scores, personality, precisionMult);
   evaluateHazardAvoidance(awareness, scores, personality);
-  evaluateCarrotPursuit(awareness, scores, personality);
   evaluateEdgeAvoidance(awareness, scores, personality);
   evaluateZoneExploitation(awareness, scores, personality);
   evaluateGeyserEscape(awareness, scores);
@@ -259,14 +265,14 @@ function evaluateHazardAvoidance(a: AwarenessSnapshot, s: ActionScores, p: AIPer
   }
 }
 
-function evaluateCarrotPursuit(a: AwarenessSnapshot, s: ActionScores, p: AIPersonality): void {
+function evaluateCarrotPursuit(a: AwarenessSnapshot, s: ActionScores, p: AIPersonality, carrotChase = false): void {
   if (!a.nearestCarrot) return;
-  // Don't pursue carrots if already fat (slowed)
-  if (a.self.fat) return;
-  // Skip only if enemy is extremely close (active melee combat)
-  if (a.nearestEnemy && a.nearestEnemy.dist < 50) return;
+  // Don't pursue carrots if already fat (slowed) — unless carrot chase (only way to score)
+  if (a.self.fat && !carrotChase) return;
+  // Skip only if enemy is extremely close (active melee combat) — not in carrot chase
+  if (!carrotChase && a.nearestEnemy && a.nearestEnemy.dist < 50) return;
 
-  const weight = 0.7 * p.greediness;
+  const weight = carrotChase ? 2.0 : 0.7 * p.greediness;
   const dx = a.nearestCarrot.x - a.self.x;
 
   if (dx > 10) s.moveRight += weight;

@@ -80,5 +80,18 @@
   "countdown_skip": "Press Enter to skip",
   "rules_label": "Rules:",
   "rules_stomp": "Stomp = 2 pts",
-  "rules_carrot": "Carrot = 1 pt"
+  "rules_carrot": "Carrot = 1 pt",
+  "mods_button": "Mods",
+  "mods_title": "Game Mods",
+  "mods_close": "Close",
+  "mod_extreme_gore": "Extreme Gore",
+  "mod_extreme_gore_desc": "10x body parts on splat",
+  "mod_carrot_chase": "Carrot Chase",
+  "mod_carrot_chase_desc": "Only carrots score points",
+  "mod_giant_players": "Giant Players",
+  "mod_giant_players_desc": "Everyone is huge",
+  "mod_turbo": "Turbo",
+  "mod_turbo_desc": "2x speed, stronger jumps",
+  "mod_super_bounce": "Super Bounce",
+  "mod_super_bounce_desc": "All platforms are bouncy"
 }
