@@ -6,6 +6,7 @@ import type {
 import { isBotSlot } from './types';
 import type { ThemeConfig } from './themes/types';
 import { getTheme } from './themes/registry';
+import { mirrorArena } from './arena';
 import { randRange, pickWeighted, swapRemove } from './themes/utils';
 import { InputManager } from './input';
 import { Renderer } from './renderer';
@@ -65,6 +66,7 @@ export class GameLoop {
   private footstepAccumulators: Map<PlayerSlot, number> = new Map();
   private crowdStarted = false;
   private zeroGSoundPlaying = false;
+  private hasWaterfallZones = false;
   private cachedGeyserZones: EffectZone[] = [];
   private cachedZeroGZones: EffectZone[] = [];
   private geyserIndexMap: Map<EffectZone, number> = new Map();
@@ -86,7 +88,7 @@ export class GameLoop {
     this.onMatchEnd = onMatchEnd;
     this.theme = getTheme(arena.themeId);
     this.input = new InputManager();
-    this.renderer = new Renderer(bgCanvas, fgCanvas, this.theme);
+    this.renderer = new Renderer(bgCanvas, fgCanvas, this.theme, settings.mods.mirrorArena);
 
     // Compute effective physics from theme modifiers
     const pm = this.theme.physics;
@@ -105,6 +107,11 @@ export class GameLoop {
     // Super Bounce: mark all platforms as bouncy (shallow-copy arena to avoid mutation)
     if (settings.mods.superBounce) {
       this.arena = { ...arena, bouncyPlatforms: arena.platforms.map((_, i) => i) };
+    }
+
+    // Mirror Arena: flip all positions horizontally (shallow-copy)
+    if (settings.mods.mirrorArena) {
+      this.arena = mirrorArena(this.arena);
     }
 
     const pw = settings.mods.giantPlayers ? PLAYER_WIDTH * GIANT_SCALE : PLAYER_WIDTH;
@@ -229,6 +236,7 @@ export class GameLoop {
     this.cachedGeyserZones = (arena.effectZones || []).filter(z => z.type === 'geyser');
     this.cachedZeroGZones = (arena.effectZones || []).filter(z => z.type === 'zero_g');
     this.geyserIndexMap = new Map(this.cachedGeyserZones.map((z, i) => [z, i]));
+    this.hasWaterfallZones = (arena.effectZones || []).some(z => z.type === 'current' && z.vy && z.vy > 0);
     // Cache floating platforms with indices for hazard spawning
     const noSpawn = this.arena.noSpawnZones ?? [];
     this.floatingPlatforms = this.arena.platforms
@@ -282,6 +290,7 @@ export class GameLoop {
     this.lastTime = performance.now();
     audio.playMusic(this.arena.themeId);
     audio.play('ambient');
+    if (this.hasWaterfallZones) audio.play('waterfall_ambient');
     this.loop(this.lastTime);
   }
 
@@ -293,6 +302,7 @@ export class GameLoop {
     audio.stop('ambient');
     audio.stop('zero_g');
     audio.stop('crowd');
+    audio.stop('waterfall_ambient');
   }
 
   getState(): MatchState { return this.state; }
@@ -758,6 +768,7 @@ export class GameLoop {
             else if (g.vy < 0) g.vy *= 1.03;
           } else if (zone.type === 'current') {
             g.vx += (zone.vx || 0) * dt;
+            g.vy += (zone.vy || 0) * dt;
           } else if (zone.type === 'geyser') {
             const geyserIdx = this.geyserIndexMap.get(zone) ?? -1;
             if (geyserIdx >= 0 && this.state.geyserStates[geyserIdx]?.active) {
@@ -1364,8 +1375,9 @@ export class GameLoop {
               player.vy *= 1.03;
             }
           } else if (zone.type === 'current') {
-            // Push player horizontally
+            // Push player horizontally and/or vertically
             player.vx += (zone.vx || 0) * dt;
+            player.vy += (zone.vy || 0) * dt;
           } else if (zone.type === 'geyser') {
             // Find matching geyser state
             const geyserIdx = this.geyserIndexMap.get(zone) ?? -1;
@@ -1658,7 +1670,7 @@ export class GameLoop {
   private getPlayerInput(player: Player): InputState {
     if (isBotSlot(player.id)) {
       const ai = this.aiControllers.get(player.id);
-      if (ai) return ai.getInput(player, this.state, this.arena, this.settings.mods.carrotChase);
+      if (ai) return ai.getInput(player, this.state, this.arena, this.settings.mods.carrotChase, this.settings.mods.mirrorArena);
       return { left: false, right: false, jump: false, down: false };
     }
     return this.input.getInput(player.id as import('./types').CharacterSlot);

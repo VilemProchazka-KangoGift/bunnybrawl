@@ -60,11 +60,13 @@ export class Renderer {
 
   // Sprite cache: key → OffscreenCanvas with pre-drawn character sprite
   private spriteCache = new Map<string, OffscreenCanvas>();
+  private mirrored = false;
 
-  constructor(bgCanvas: HTMLCanvasElement, fgCanvas: HTMLCanvasElement, theme: ThemeConfig) {
+  constructor(bgCanvas: HTMLCanvasElement, fgCanvas: HTMLCanvasElement, theme: ThemeConfig, mirrored = false) {
     this.bgCtx = bgCanvas.getContext('2d')!;
     this.fgCtx = fgCanvas.getContext('2d')!;
     this.theme = theme;
+    this.mirrored = mirrored;
 
     bgCanvas.width = CANVAS_WIDTH;
     bgCanvas.height = CANVAS_HEIGHT;
@@ -96,6 +98,9 @@ export class Renderer {
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
+    // Mirror transform for theme decorations (hardcoded positions)
+    if (this.mirrored) { ctx.save(); ctx.scale(-1, 1); ctx.translate(-CANVAS_WIDTH, 0); }
+
     // Hills from theme
     for (const hill of theme.hills) {
       ctx.fillStyle = hill.color;
@@ -107,7 +112,9 @@ export class Renderer {
       theme.drawFarBackground(ctx, arena);
     }
 
-    // Platforms
+    if (this.mirrored) { ctx.restore(); }
+
+    // Platforms (use mirrored arena data, no canvas transform needed)
     for (const plat of arena.platforms) {
       this.drawPlatform(ctx, plat.x, plat.y, plat.width, plat.height, plat.y >= 650);
     }
@@ -131,8 +138,10 @@ export class Renderer {
       }
     }
 
-    // Theme-specific background nature
+    // Theme-specific background nature (mirror for hardcoded decoration positions)
+    if (this.mirrored) { ctx.save(); ctx.scale(-1, 1); ctx.translate(-CANVAS_WIDTH, 0); }
     theme.drawBackgroundNature(ctx, arena);
+    if (this.mirrored) { ctx.restore(); }
   }
 
 
@@ -265,7 +274,9 @@ export class Renderer {
 
     // Theme-specific animated background (e.g. space objects through windows)
     if (this.theme.drawAnimatedBackground) {
+      if (this.mirrored) { ctx.save(); ctx.scale(-1, 1); ctx.translate(-CANVAS_WIDTH, 0); }
       this.theme.drawAnimatedBackground(ctx, arena, matchState.timeElapsed);
+      if (this.mirrored) { ctx.restore(); }
     }
 
     // Hazard zones (lava pools etc.)
@@ -450,15 +461,17 @@ export class Renderer {
       }
       const { r, g, b } = this._fogRGB;
       for (const fp of matchState.fogParticles) {
-        ctx.fillStyle = `rgba(${r},${g},${b},${fp.alpha * 0.3})`;
+        ctx.fillStyle = `rgba(${r},${g},${b},${fp.alpha * (fogCfg.opacity ?? 0.3)})`;
         ctx.beginPath();
         ctx.ellipse(fp.x, fp.y, fogCfg.sizeX, fogCfg.sizeY, 0, 0, Math.PI * 2);
         ctx.fill();
       }
     }
 
-    // Foreground nature — delegated to theme
+    // Foreground nature — delegated to theme (mirror for hardcoded decoration positions)
+    if (this.mirrored) { ctx.save(); ctx.scale(-1, 1); ctx.translate(-CANVAS_WIDTH, 0); }
     this.theme.drawForegroundNature(ctx, arena);
+    if (this.mirrored) { ctx.restore(); }
 
     // Ghosts (drawn over foreground, semi-transparent)
     for (const ghost of matchState.ghosts) {
@@ -968,8 +981,104 @@ export class Renderer {
     ctx.restore();
   }
 
-  private drawCurrentZone(ctx: CanvasRenderingContext2D, zone: { x: number; y: number; width: number; height: number; vx?: number }, time: number): void {
+  private drawCurrentZone(ctx: CanvasRenderingContext2D, zone: { x: number; y: number; width: number; height: number; vx?: number; vy?: number }, time: number): void {
     ctx.save();
+
+    // Vertical waterfall current
+    if (zone.vy && Math.abs(zone.vy) > Math.abs(zone.vx || 0)) {
+      const zx = zone.x, zy = zone.y, zw = zone.width, zh = zone.height;
+      const cx = zx + zw / 2;
+
+      // Water body — vertical gradient from blue-white at top to deeper blue at bottom
+      const waterGrad = ctx.createLinearGradient(0, zy, 0, zy + zh);
+      waterGrad.addColorStop(0, 'rgba(140, 200, 240, 0.45)');
+      waterGrad.addColorStop(0.3, 'rgba(100, 180, 230, 0.4)');
+      waterGrad.addColorStop(1, 'rgba(70, 150, 210, 0.35)');
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = waterGrad;
+      ctx.fillRect(zx, zy, zw, zh);
+
+      // Wavy edges — clip the sharp rectangle into organic water shape
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.globalAlpha = 1;
+      for (let side = 0; side < 2; side++) {
+        const ex = side === 0 ? zx : zx + zw;
+        const dir = side === 0 ? -1 : 1;
+        ctx.beginPath();
+        ctx.moveTo(ex + dir * 12, zy);
+        for (let ey = zy; ey <= zy + zh; ey += 8) {
+          const wave = Math.sin(ey * 0.03 + time * 2.5) * 5 + Math.sin(ey * 0.07 + time * 1.8) * 3;
+          ctx.lineTo(ex + wave * dir * 0.5, ey);
+        }
+        ctx.lineTo(ex + dir * 12, zy + zh);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.globalCompositeOperation = 'source-over';
+
+      // Flowing water columns — wide semi-transparent bands moving downward
+      const speed = Math.abs(zone.vy) * 0.3;
+      const colCount = 5;
+      for (let i = 0; i < colCount; i++) {
+        const colW = 20 + (i % 3) * 12;
+        const baseX = zx + 30 + (i * (zw - 60)) / colCount + Math.sin(time * 1.2 + i * 1.7) * 10;
+        const colLen = 80 + (i % 3) * 40;
+        const colY = zy + ((time * speed + i * 97) % (zh + colLen)) - colLen;
+        const y1 = Math.max(colY, zy);
+        const y2 = Math.min(colY + colLen, zy + zh);
+        if (y1 >= y2) continue;
+        ctx.globalAlpha = 0.15 + 0.05 * Math.sin(time * 1.5 + i);
+        ctx.fillStyle = '#D0EAFF';
+        ctx.beginPath();
+        ctx.ellipse(baseX, (y1 + y2) / 2, colW / 2, (y2 - y1) / 2, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // White foam streaks — thin fast lines for motion feel
+      const streakCount = Math.max(14, Math.round(zw / 20));
+      ctx.lineWidth = 1.5;
+      for (let i = 0; i < streakCount; i++) {
+        const sx = zx + 8 + ((i * 29 + Math.sin(i * 3.1) * 15) % (zw - 16));
+        const streakLen = 40 + (i % 5) * 15;
+        const sy = zy + ((time * speed * 1.2 + i * 37) % (zh + streakLen)) - streakLen;
+        const y1 = Math.max(sy, zy);
+        const y2 = Math.min(sy + streakLen, zy + zh);
+        if (y1 >= y2) continue;
+        ctx.globalAlpha = 0.25 + 0.1 * Math.sin(time * 2 + i * 0.8);
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.moveTo(sx, y1);
+        ctx.lineTo(sx + Math.sin(time * 0.8 + i) * 4, y2);
+        ctx.stroke();
+      }
+
+      // Splash/foam at the bottom of the waterfall
+      const foamY = zy + zh;
+      for (let i = 0; i < 18; i++) {
+        const fx = zx + 10 + (i / 18) * (zw - 20) + Math.sin(time * 3 + i * 1.3) * 8;
+        const fy = foamY - 4 - Math.abs(Math.sin(time * 2.2 + i * 0.7)) * 18;
+        const fr = 5 + Math.sin(time * 1.8 + i * 1.1) * 3;
+        ctx.globalAlpha = 0.35 + 0.15 * Math.sin(time * 1.5 + i);
+        ctx.fillStyle = '#E8F4FF';
+        ctx.beginPath();
+        ctx.arc(fx, fy, fr, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Bright highlight down the center
+      ctx.globalAlpha = 0.12;
+      const hlGrad = ctx.createLinearGradient(cx - 30, 0, cx + 30, 0);
+      hlGrad.addColorStop(0, 'rgba(255,255,255,0)');
+      hlGrad.addColorStop(0.5, 'rgba(255,255,255,1)');
+      hlGrad.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = hlGrad;
+      ctx.fillRect(cx - 30, zy, 60, zh);
+
+      ctx.restore();
+      return;
+    }
+
+    // Horizontal current (original logic)
     const dir = (zone.vx || 0) > 0 ? 1 : -1;
     ctx.globalAlpha = 0.08;
     ctx.fillStyle = '#4488CC';

@@ -469,6 +469,63 @@ export const SPACE_STATION_ARENA: Arena = {
 };
 
 // ============================================================
+// WATERFALL — Central downward current + side staircases + stepping stones
+// ============================================================
+export const WATERFALL_ARENA: Arena = {
+  id: 'waterfall',
+  name: 'Waterfall',
+  themeId: 'waterfall',
+  width: CANVAS_WIDTH,
+  height: CANVAS_HEIGHT,
+  platforms: [
+    // Ground — full width
+    { x: 0, y: 660, width: CANVAS_WIDTH, height: 60 },
+    // === Left side — wide staggered shelves ===
+    { x: 30, y: 570, width: 170, height: 24 },                  // Left low shelf
+    { x: 100, y: 470, width: 120, height: 24 },                 // Left mid shelf
+    { x: 20, y: 370, width: 160, height: 24 },                  // Left upper shelf
+    { x: 110, y: 280, width: 130, height: 24 },                 // Left high perch
+    // === Right side — narrower, tighter staircase ===
+    { x: 1100, y: 550, width: 140, height: 24 },                // Right step 1
+    { x: 1050, y: 440, width: 110, height: 24 },                // Right step 2
+    { x: 1120, y: 340, width: 130, height: 24 },                // Right step 3
+    { x: 1040, y: 240, width: 115, height: 24 },                // Right high ledge
+    // === Top ledges flanking the waterfall (asymmetric) ===
+    { x: 260, y: 190, width: 180, height: 24 },                 // Top ledge left
+    { x: 860, y: 170, width: 160, height: 24 },                 // Top ledge right (slightly higher)
+    // === Tiny stepping stones above the waterfall ===
+    { x: 510, y: 120, width: 45, height: 16 },                  // Stepping stone left
+    { x: 630, y: 95, width: 40, height: 16 },                   // Stepping stone center
+    { x: 740, y: 115, width: 42, height: 16 },                  // Stepping stone right
+    // === Mid connector platforms (asymmetric) ===
+    { x: 300, y: 430, width: 110, height: 24 },                 // Connect left mid
+    { x: 920, y: 400, width: 90, height: 24 },                  // Connect right mid (higher)
+    // === Rocks in splash zone ===
+    { x: 530, y: 612, width: 48, height: 48 },                  // Rock left
+    { x: 710, y: 618, width: 42, height: 42 },                  // Rock right
+  ],
+  spawnPoints: [
+    { x: 100, y: 550 },    // Left low shelf
+    { x: 1160, y: 530 },   // Right step 1
+    { x: 80, y: 350 },     // Left upper shelf
+    { x: 1140, y: 320 },   // Right step 3
+    { x: 320, y: 640 },    // Ground left
+    { x: 960, y: 640 },    // Ground right
+  ],
+  effectZones: [
+    // Main waterfall — strong downward current (starts below stepping stones)
+    { x: 440, y: 160, width: 400, height: 500, type: 'current', vy: 900 },
+    // Gentle side currents pushing toward center near ground
+    { x: 220, y: 500, width: 180, height: 160, type: 'current', vx: 50 },
+    { x: 880, y: 500, width: 180, height: 160, type: 'current', vx: -50 },
+  ],
+  carrotZones: [
+    // Waterfall column + stepping stones above — high-reward zone
+    { x: 420, y: 60, width: 440, height: 600 },
+  ],
+};
+
+// ============================================================
 
 const ARENA_LIST: Arena[] = [
   MEADOW_ARENA,
@@ -481,6 +538,7 @@ const ARENA_LIST: Arena[] = [
   HAUNTED_GRAVEYARD_ARENA,
   ROOFTOPS_ARENA,
   SPACE_STATION_ARENA,
+  WATERFALL_ARENA,
 ];
 
 export function getArena(id: string = 'meadow'): Arena {
@@ -491,4 +549,30 @@ export function getArena(id: string = 'meadow'): Arena {
 
 export function listArenas(): Array<{ id: string; name: string; themeId: string }> {
   return ARENA_LIST.map(a => ({ id: a.id, name: a.name, themeId: a.themeId }));
+}
+
+/** Create a horizontally mirrored copy of an arena. Never mutates the original. */
+export function mirrorArena(arena: Arena): Arena {
+  const W = CANVAS_WIDTH;
+  const mirrorX = (x: number, w: number) => W - x - w;
+  const mirrorPt = (x: number) => W - x;
+
+  return {
+    ...arena,
+    platforms: arena.platforms.map(p => ({ ...p, x: mirrorX(p.x, p.width) })),
+    spawnPoints: arena.spawnPoints.map(s => ({ ...s, x: mirrorPt(s.x) })),
+    hazardZones: arena.hazardZones?.map(h => ({ ...h, x: mirrorX(h.x, h.width) })),
+    effectZones: arena.effectZones?.map(e => ({
+      ...e,
+      x: mirrorX(e.x, e.width),
+      vx: e.vx != null ? -e.vx : undefined,
+    })),
+    noSpawnZones: arena.noSpawnZones?.map(z => ({ ...z, x: mirrorX(z.x, z.width) })),
+    carrotZones: arena.carrotZones?.map(z => ({ ...z, x: mirrorX(z.x, z.width) })),
+    navHints: arena.navHints?.map(h => ({
+      ...h,
+      inZone: { ...h.inZone, x: mirrorX(h.inZone.x, h.inZone.width) },
+      approachX: mirrorPt(h.approachX),
+    })),
+  };
 }

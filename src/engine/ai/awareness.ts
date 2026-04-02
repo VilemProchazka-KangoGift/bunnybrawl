@@ -56,6 +56,7 @@ export function buildAwareness(
   awarenessRadius: number,
   pathfindingDepth: number = 0,
   preferSafePath: boolean = false,
+  mirrorNav: boolean = false,
 ): AwarenessSnapshot {
   const selfOnGround = self.state !== 'airborne';
   const selfAirborne = self.state === 'airborne';
@@ -327,7 +328,7 @@ export function buildAwareness(
             for (const e of edges) {
               if (e.t === nextIdx) {
                 edgeType = e.y;
-                approachX = e.x;
+                approachX = mirrorNav ? CANVAS_WIDTH - e.x : e.x;
                 break;
               }
             }

@@ -9,6 +9,7 @@ import { UNDERWATER_THEME } from './underwater';
 import { HAUNTED_GRAVEYARD_THEME } from './hauntedGraveyard';
 import { ROOFTOPS_THEME } from './rooftops';
 import { SPACE_STATION_THEME } from './spaceStation';
+import { WATERFALL_THEME } from './waterfall';
 
 const THEMES: Map<string, ThemeConfig> = new Map([
   [MEADOW_THEME.id, MEADOW_THEME],
@@ -21,6 +22,7 @@ const THEMES: Map<string, ThemeConfig> = new Map([
   [HAUNTED_GRAVEYARD_THEME.id, HAUNTED_GRAVEYARD_THEME],
   [ROOFTOPS_THEME.id, ROOFTOPS_THEME],
   [SPACE_STATION_THEME.id, SPACE_STATION_THEME],
+  [WATERFALL_THEME.id, WATERFALL_THEME],
 ]);
 
 export function getTheme(id: string): ThemeConfig {

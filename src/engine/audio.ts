@@ -1,7 +1,7 @@
 import { Howl } from 'howler';
 import { generateThemeMusic } from './music';
 
-export type SoundName = 'jump' | 'stomp' | 'victory' | 'select' | 'thornhit' | 'bunny' | 'fox' | 'frog' | 'bear' | 'owl' | 'cat' | 'wolf' | 'panda' | 'pig' | 'cow' | 'goat' | 'horse' | 'sheep' | 'monkey' | 'tiger' | 'rhino' | 'hedgehog' | 'footstep_grass' | 'footstep_wood' | 'countdown_beep' | 'countdown_go' | 'oof' | 'splash' | 'ambient' | 'crowd' |'geyser' | 'pigeon_scatter' | 'zero_g';
+export type SoundName = 'jump' | 'stomp' | 'victory' | 'select' | 'thornhit' | 'bunny' | 'fox' | 'frog' | 'bear' | 'owl' | 'cat' | 'wolf' | 'panda' | 'pig' | 'cow' | 'goat' | 'horse' | 'sheep' | 'monkey' | 'tiger' | 'rhino' | 'hedgehog' | 'footstep_grass' | 'footstep_wood' | 'countdown_beep' | 'countdown_go' | 'oof' | 'splash' | 'ambient' | 'crowd' |'geyser' | 'pigeon_scatter' | 'zero_g' | 'waterfall_ambient';
 
 class AudioManager {
   private sounds: Map<SoundName, Howl> = new Map();
@@ -175,6 +175,12 @@ class AudioManager {
     this.sounds.set('zero_g', new Howl({
       src: [generateZeroGSound()],
       volume: 0.15,
+      loop: true,
+    }));
+
+    this.sounds.set('waterfall_ambient', new Howl({
+      src: [generateWaterfallSound()],
+      volume: 0.18,
       loop: true,
     }));
 
@@ -612,6 +618,31 @@ function generateZeroGSound(): string {
     const mod = Math.sin(2 * Math.PI * 0.5 * t) * 0.3 + 0.7;
     const high = Math.sin(2 * Math.PI * 220 * t + Math.sin(2 * Math.PI * 0.3 * t) * 3) * 0.02;
     buffer[i] = (hum * mod + high) * 0.4;
+  }
+  return floatBufferToWavDataUri(buffer, sampleRate);
+}
+
+function generateWaterfallSound(): string {
+  const sampleRate = 44100;
+  const duration = 3;
+  const numSamples = Math.floor(sampleRate * duration);
+  const buffer = new Float32Array(numSamples);
+  // Brownian noise for the low rumble, band-limited white noise for the rushing water
+  let brown = 0;
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / sampleRate;
+    const white = Math.random() * 2 - 1;
+    // Brownian component — deep rumble
+    brown += white * 0.015;
+    brown *= 0.998; // slow decay to prevent drift
+    brown = Math.max(-1, Math.min(1, brown));
+    // Filtered noise — rushing water (mid-high frequencies)
+    const rush = white * 0.12;
+    // Slow modulation for natural ebb and flow
+    const mod = 0.7 + 0.3 * Math.sin(2 * Math.PI * 0.25 * t);
+    // Gentle low tone for depth
+    const tone = Math.sin(2 * Math.PI * 55 * t) * 0.015;
+    buffer[i] = (brown * 0.08 + rush * mod + tone) * 0.35;
   }
   return floatBufferToWavDataUri(buffer, sampleRate);
 }

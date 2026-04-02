@@ -333,6 +333,7 @@ export function MainMenu() {
                   { key: 'giantPlayers', name: 'mod_giant_players', desc: 'mod_giant_players_desc' },
                   { key: 'turbo', name: 'mod_turbo', desc: 'mod_turbo_desc' },
                   { key: 'superBounce', name: 'mod_super_bounce', desc: 'mod_super_bounce_desc' },
+                  { key: 'mirrorArena', name: 'mod_mirror', desc: 'mod_mirror_desc' },
                 ] as const).map(mod => (
                   <div className="mod-row" key={mod.key}>
                     <label className="mod-toggle">

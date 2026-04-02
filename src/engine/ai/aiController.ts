@@ -48,7 +48,7 @@ export class AIController {
     return this.difficulty.walkSpeedMult;
   }
 
-  getInput(self: Player, state: MatchState, arena: Arena, carrotChase = false): InputState {
+  getInput(self: Player, state: MatchState, arena: Arena, carrotChase = false, mirrorNav = false): InputState {
     if (!self.active || self.state === 'splat' || self.state === 'respawning') {
       return NO_INPUT;
     }
@@ -84,7 +84,7 @@ export class AIController {
     this.frameCounter++;
     const isDecisionFrame = this.frameCounter % 3 === this.botIndex % 3;
     const ideal = isDecisionFrame
-      ? this.computeIdealInput(self, state, arena, carrotChase)
+      ? this.computeIdealInput(self, state, arena, carrotChase, mirrorNav)
       : this.ringBuffer[(this.ringWrite - 1 + this.ringSize) % this.ringSize];
 
     // Push through ring buffer
@@ -113,10 +113,10 @@ export class AIController {
     return delayed;
   }
 
-  private computeIdealInput(self: Player, state: MatchState, arena: Arena, carrotChase = false): InputState {
+  private computeIdealInput(self: Player, state: MatchState, arena: Arena, carrotChase = false, mirrorNav = false): InputState {
     // Build awareness ONCE, reuse for stuck recovery and normal path
     const preferSafe = this.personality.cautiousness >= 1.2;
-    const awareness = buildAwareness(self, state, arena, this.difficulty.awarenessRadius, this.difficulty.pathfindingDepth, preferSafe);
+    const awareness = buildAwareness(self, state, arena, this.difficulty.awarenessRadius, this.difficulty.pathfindingDepth, preferSafe, mirrorNav);
 
     if (this.stuckTimer > 45) {
       this.stuckTimer = 0;

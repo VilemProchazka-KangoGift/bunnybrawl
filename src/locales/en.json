@@ -16,6 +16,7 @@
   "arena_haunted_graveyard": "Haunted Graveyard",
   "arena_rooftops": "Rooftops",
   "arena_space_station": "Space Station",
+  "arena_waterfall": "Waterfall",
   "credits_players": "Up to 5 players on one keyboard!",
   "lobby_title": "Stomp to swap characters",
   "lobby_join": "Walk here to join the game",
@@ -93,5 +94,7 @@
   "mod_turbo": "Turbo",
   "mod_turbo_desc": "2x speed, stronger jumps",
   "mod_super_bounce": "Super Bounce",
-  "mod_super_bounce_desc": "All platforms are bouncy"
+  "mod_super_bounce_desc": "All platforms are bouncy",
+  "mod_mirror": "Mirror Mode",
+  "mod_mirror_desc": "Flip arenas horizontally"
 }

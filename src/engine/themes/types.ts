@@ -54,6 +54,7 @@ export interface FogConfig {
   color: string;
   sizeX: number;
   sizeY: number;
+  opacity?: number;  // renderer alpha multiplier (default 0.3)
 }
 
 export interface AmbientParticleConfig {

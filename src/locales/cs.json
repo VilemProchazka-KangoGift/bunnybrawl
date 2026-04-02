@@ -16,6 +16,7 @@
   "arena_haunted_graveyard": "Strašidelný hřbitov",
   "arena_rooftops": "Střechy",
   "arena_space_station": "Vesmírná stanice",
+  "arena_waterfall": "Vodopád",
   "credits_players": "Až 5 hráčů na jedné klávesnici!",
   "lobby_title": "Skoč na někoho pro výměnu postavy",
   "lobby_join": "Přejdi sem pro připojení ke hře",
@@ -96,5 +97,7 @@
   "mod_turbo": "Turbo",
   "mod_turbo_desc": "2x rychlost, silnější skoky",
   "mod_super_bounce": "Super odraz",
-  "mod_super_bounce_desc": "Všechny platformy odrážejí"
+  "mod_super_bounce_desc": "Všechny platformy odrážejí",
+  "mod_mirror": "Zrcadlový mód",
+  "mod_mirror_desc": "Převrátí arény horizontálně"
 }

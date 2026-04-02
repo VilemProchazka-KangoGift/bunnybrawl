@@ -39,6 +39,7 @@ export interface EffectZone {
   height: number;
   type: 'zero_g' | 'current' | 'geyser';
   vx?: number;       // for currents: horizontal push force (px/s)
+  vy?: number;       // for currents: vertical push force (px/s, positive = down)
   strength?: number;  // for geysers: launch impulse
   interval?: number;  // for geysers: seconds between activations
   duration?: number;  // for geysers: active duration
@@ -215,6 +216,7 @@ export interface GameMods {
   giantPlayers: boolean;
   turbo: boolean;
   superBounce: boolean;
+  mirrorArena: boolean;
 }
 
 export interface MatchSettings {

@@ -10,4 +10,5 @@ export { UNDERWATER_THEME } from './underwater';
 export { HAUNTED_GRAVEYARD_THEME } from './hauntedGraveyard';
 export { ROOFTOPS_THEME } from './rooftops';
 export { SPACE_STATION_THEME } from './spaceStation';
+export { WATERFALL_THEME } from './waterfall';
 export { randRange, pickWeighted } from './utils';
