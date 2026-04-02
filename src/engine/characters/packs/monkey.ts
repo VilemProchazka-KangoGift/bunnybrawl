@@ -1,0 +1,76 @@
+import type { CharacterPack } from '../types';
+
+const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, _state, _animFrame, _isIdleAnim, _idleT, colors) => {
+  ctx.fillStyle = colors.color;
+  ctx.beginPath();
+  ctx.ellipse(cx, yOff + h * 0.52, w * 0.4, h * 0.4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Large round ears
+  ctx.beginPath();
+  ctx.arc(cx - 12, yOff + h * 0.35, 6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(cx + 12, yOff + h * 0.35, 6, 0, Math.PI * 2);
+  ctx.fill();
+  // Inner ears
+  ctx.fillStyle = colors.lightColor;
+  ctx.beginPath();
+  ctx.arc(cx - 12, yOff + h * 0.35, 3.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(cx + 12, yOff + h * 0.35, 3.5, 0, Math.PI * 2);
+  ctx.fill();
+  // Lighter face circle
+  ctx.beginPath();
+  ctx.ellipse(cx + 1, yOff + h * 0.46, 7, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Eyes
+  ctx.fillStyle = '#000';
+  ctx.beginPath(); ctx.arc(cx - 3, yOff + h * 0.4, 2.5, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx + 5, yOff + h * 0.4, 2.5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#FFF';
+  ctx.beginPath(); ctx.arc(cx - 2, yOff + h * 0.38, 1, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx + 6, yOff + h * 0.38, 1, 0, Math.PI * 2); ctx.fill();
+  // Nose/mouth
+  ctx.fillStyle = colors.darkColor;
+  ctx.beginPath();
+  ctx.ellipse(cx + 1, yOff + h * 0.5, 2, 1.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Curling tail
+  ctx.strokeStyle = colors.color;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.arc(cx - w * 0.35, yOff + h * 0.4, 7, -Math.PI * 0.3, Math.PI * 1.3);
+  ctx.stroke();
+};
+
+const drawGib: CharacterPack['drawGib'] = (ctx, gibType, _w, _h, colors) => {
+  if (gibType === 'ear') {
+    ctx.fillStyle = colors.color;
+    ctx.beginPath();
+    ctx.arc(0, 0, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = colors.lightColor;
+    ctx.beginPath();
+    ctx.arc(0, 0, 3, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (gibType === 'tail') {
+    ctx.strokeStyle = colors.color;
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(0, 0, 6, 0, Math.PI * 1.5);
+    ctx.stroke();
+  }
+};
+
+export const monkey: CharacterPack = {
+  name: 'Monkey',
+  color: '#B07040', darkColor: '#704020', lightColor: '#D09060',
+  emoji: '\uD83D\uDC35', customEyes: true, idleTransform: 'headBob',
+  splatShape: 'star',
+  gibs: [{ gibType: 'ear', width: 10, height: 10 }, { gibType: 'ear', width: 10, height: 10 }, { gibType: 'tail', width: 16, height: 8 }, { gibType: 'body', width: 14, height: 12 }],
+  sound: { type: 'segment', segments: [{ freq: 800, freqEnd: 1200, duration: 0.1, type: 'square' }, { freq: 1200, freqEnd: 600, duration: 0.12, type: 'square' }], genVol: 0.4 },
+  translations: { en: 'Monkey', cs: 'Opice' },
+  drawSprite, drawGib,
+};

@@ -45,6 +45,13 @@ export function getCharacterGibs(name: string): GibDef[] | undefined {
   return PACKS.get(name)?.gibs;
 }
 
+/** Get a character's display name for the given language, falling back to the English name. */
+export function getCharacterDisplayName(name: string, lang: string): string {
+  const pack = PACKS.get(name);
+  if (!pack) return name;
+  return pack.translations?.[lang] ?? pack.translations?.en ?? name;
+}
+
 // ---- Renderer dispatch ----
 
 export function getSpriteRenderer(name: string): CharacterRenderer {

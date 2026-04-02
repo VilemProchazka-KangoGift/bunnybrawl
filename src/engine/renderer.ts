@@ -9,7 +9,7 @@ import {
 } from './constants';
 import { drawCloud as drawCloudPrimitive, drawHill, drawPlatformMoss } from './themes/drawPrimitives';
 import { hexToRGB } from './fastMath';
-import { getCharacterEmoji, hasCustomEyes, getSpriteRenderer, getGibRenderer, getCharacterPack } from './characters';
+import { getCharacterEmoji, hasCustomEyes, getSpriteRenderer, getGibRenderer, getCharacterPack, getCharacterDisplayName } from './characters';
 import i18n from '../i18n';
 
 interface Cloud {
@@ -2121,7 +2121,7 @@ export class Renderer {
       ctx.fillText(getCharacterEmoji(player.character.name), px + 20, 30);
       ctx.textBaseline = 'alphabetic';
 
-      const translatedName = i18n.t(`char_${player.character.name}`, player.character.name);
+      const translatedName = getCharacterDisplayName(player.character.name, i18n.language);
       const displayName = compact ? translatedName.slice(0, 4) : translatedName;
       ctx.fillStyle = player.character.color;
       ctx.font = `bold ${compact ? 12 : 16}px "Press Start 2P", monospace`;

@@ -4,7 +4,7 @@ import { useGameStore } from '../store/gameStore';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
 import type { PlayerSlot, PlayerStats } from '../engine/types';
 import { isBotSlot } from '../engine/types';
-import { getCharacterEmoji } from '../engine/characters';
+import { getCharacterEmoji, getCharacterDisplayName } from '../engine/characters';
 import './VictoryScreen.css';
 
 interface FireworkParticle {
@@ -19,7 +19,7 @@ interface FireworkParticle {
 }
 
 export function VictoryScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { winner, lastMatchState, setScreen, setActivePlayers } = useGameStore();
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -27,7 +27,7 @@ export function VictoryScreen() {
   const players = lastMatchState?.players.filter(p => p.active) ?? [];
   const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
 
-  const charName = (name: string) => t(`char_${name}`, name);
+  const charName = (name: string) => getCharacterDisplayName(name, i18n.language);
   const botSuffix = (id: PlayerSlot) => isBotSlot(id) ? ' (BOT)' : '';
 
   const handleRematch = () => { setScreen('match'); };

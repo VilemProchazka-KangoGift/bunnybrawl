@@ -18,6 +18,7 @@ export {
   getCharacterEmoji,
   hasCustomEyes,
   getCharacterSplatShape,
+  getCharacterDisplayName,
   getCharacterGibs,
   getSpriteRenderer,
   getGibRenderer,

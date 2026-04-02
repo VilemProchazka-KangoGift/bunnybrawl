@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { CHARACTERS, ALL_CHARACTERS, BOT_CHARACTERS, assignBotCharacters, getCharacterEmoji, hasCustomEyes, getSpriteRenderer } from '../engine/characters';
+import { CHARACTERS, ALL_CHARACTERS, BOT_CHARACTERS, assignBotCharacters, getCharacterEmoji, hasCustomEyes, getSpriteRenderer, getCharacterDisplayName } from '../engine/characters';
 import { KEY_BINDINGS } from '../engine/input';
 import { audio } from '../engine/audio';
 import i18n from '../i18n';
@@ -648,7 +648,7 @@ function drawLobby(
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
     ctx.font = "10px 'Nunito', sans-serif";
     ctx.textAlign = 'center';
-    ctx.fillText(i18n.t(`char_${npc.char.name}`, npc.char.name), npc.x + PLAYER_WIDTH / 2, npc.y - 5);
+    ctx.fillText(getCharacterDisplayName(npc.char.name, i18n.language), npc.x + PLAYER_WIDTH / 2, npc.y - 5);
   }
 
   // ---- Draw bots ----
@@ -717,7 +717,7 @@ function drawLobby(
     ctx.fillStyle = player.char.color;
     ctx.textAlign = 'left';
     ctx.font = "bold 14px 'Nunito', sans-serif";
-    ctx.fillText(`${slot}: ${i18n.t(`char_${player.char.name}`, player.char.name)}`, textX, 26);
+    ctx.fillText(`${slot}: ${getCharacterDisplayName(player.char.name, i18n.language)}`, textX, 26);
 
     // Keys
     ctx.fillStyle = 'rgba(255,255,255,0.6)';
