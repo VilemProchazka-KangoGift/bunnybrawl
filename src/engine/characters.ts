@@ -145,7 +145,7 @@ export const CHAR_EMOJI: Record<string, string> = {
 };
 
 // Characters that draw their own eyes (skip default eye drawing)
-export const CUSTOM_EYE_CHARS = new Set(['Frog', 'Owl', 'Cat', 'Panda', 'Cow', 'Goat', 'Sheep', 'Monkey', 'Horse']);
+export const CUSTOM_EYE_CHARS = new Set(['Frog', 'Owl', 'Cat', 'Panda', 'Cow', 'Goat', 'Sheep', 'Monkey', 'Horse', 'Hedgehog']);
 
 // Runtime map for bot character assignments (populated before match start)
 export const BOT_CHARACTERS: Map<BotSlot, CharacterDef> = new Map();

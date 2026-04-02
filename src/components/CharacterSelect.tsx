@@ -1077,31 +1077,42 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
     ctx.strokeStyle = char.darkColor; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.arc(cx - 2, yOff + h * 0.55, w * 0.3, 0.3, 1.2); ctx.stroke();
   } else if (char.name === 'Hedgehog') {
-    // Quills
+    // Spiny dome back — overlapping V-quills
+    const quillBaseY = yOff + h * 0.55;
+    const quillCx = cx - 1;
     ctx.fillStyle = char.darkColor;
-    for (let i = -3; i <= 3; i++) {
-      const angle = -Math.PI * 0.5 + i * 0.28;
-      const sx = cx + Math.cos(angle) * w * 0.32;
-      const sy = yOff + h * 0.35 + Math.sin(angle) * h * 0.25;
-      const tx = cx + Math.cos(angle) * w * 0.55;
-      const ty = yOff + h * 0.35 + Math.sin(angle) * h * 0.48;
-      ctx.beginPath(); ctx.moveTo(sx - 2, sy); ctx.lineTo(tx, ty); ctx.lineTo(sx + 2, sy); ctx.closePath(); ctx.fill();
+    for (let i = -5; i <= 5; i++) {
+      const qx = quillCx + i * 2.8;
+      const qy = quillBaseY - 10 - Math.abs(i) * 0.8;
+      ctx.beginPath(); ctx.moveTo(qx - 1.5, quillBaseY - 2); ctx.lineTo(qx, qy); ctx.lineTo(qx + 1.5, quillBaseY - 2); ctx.closePath(); ctx.fill();
     }
-    // Body
     ctx.fillStyle = char.color;
-    ctx.beginPath(); ctx.ellipse(cx, yOff + h * 0.55, w * 0.36, h * 0.35, 0, 0, Math.PI * 2); ctx.fill();
-    // Belly
-    ctx.fillStyle = char.lightColor;
-    ctx.beginPath(); ctx.ellipse(cx, yOff + h * 0.62, w * 0.24, h * 0.2, 0, 0, Math.PI * 2); ctx.fill();
-    // Ears
+    for (let i = -4; i <= 4; i++) {
+      const qx = quillCx + i * 3;
+      const qy = quillBaseY - 6 - Math.abs(i) * 0.5;
+      ctx.beginPath(); ctx.moveTo(qx - 1.2, quillBaseY); ctx.lineTo(qx, qy); ctx.lineTo(qx + 1.2, quillBaseY); ctx.closePath(); ctx.fill();
+    }
+    // Low wide body
     ctx.fillStyle = char.color;
-    ctx.beginPath(); ctx.arc(cx - 8, yOff + h * 0.22, 4, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx + 8, yOff + h * 0.22, 4, 0, Math.PI * 2); ctx.fill();
-    // Snout + nose
+    ctx.beginPath(); ctx.ellipse(cx, yOff + h * 0.6, w * 0.38, h * 0.28, 0, 0, Math.PI * 2); ctx.fill();
+    // Cream face/belly
     ctx.fillStyle = char.lightColor;
-    ctx.beginPath(); ctx.ellipse(cx + 2, yOff + h * 0.5, 5, 3.5, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#222';
-    ctx.beginPath(); ctx.arc(cx + 6, yOff + h * 0.48, 2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx + 3, yOff + h * 0.6, w * 0.22, h * 0.24, 0, 0, Math.PI * 2); ctx.fill();
+    // Pointed snout
+    ctx.fillStyle = char.lightColor;
+    ctx.beginPath(); ctx.moveTo(cx + 8, yOff + h * 0.48); ctx.quadraticCurveTo(cx + 16, yOff + h * 0.52, cx + 8, yOff + h * 0.58); ctx.closePath(); ctx.fill();
+    // Nose
+    ctx.fillStyle = '#111';
+    ctx.beginPath(); ctx.arc(cx + 14, yOff + h * 0.53, 2, 0, Math.PI * 2); ctx.fill();
+    // Tiny ears
+    ctx.fillStyle = char.color;
+    ctx.beginPath(); ctx.arc(cx - 6, yOff + h * 0.32, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 6, yOff + h * 0.32, 3, 0, Math.PI * 2); ctx.fill();
+    // Beady eye
+    ctx.fillStyle = '#000';
+    ctx.beginPath(); ctx.arc(cx + 5, yOff + h * 0.46, 2, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#FFF';
+    ctx.beginPath(); ctx.arc(cx + 5.8, yOff + h * 0.44, 0.8, 0, Math.PI * 2); ctx.fill();
   } else {
     // Fallback
     ctx.ellipse(cx, yOff + h * 0.5, w * 0.4, h * 0.4, 0, 0, Math.PI * 2); ctx.fill();

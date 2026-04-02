@@ -2508,49 +2508,72 @@ export class Renderer {
       ctx.arc(cx + 9, yOff + h * 0.48, 1.5, 0, Math.PI * 2);
       ctx.fill();
     } else if (char.name === 'Hedgehog') {
-      // Hedgehog: round body with spiky quills on back/top
-      // Quills (behind body)
+      // Hedgehog: spiny dome back, low round body, pointy snout
+      // Spiny back — rows of overlapping V-shaped quills covering the top half
+      const quillBaseY = yOff + h * 0.55;
+      const quillCx = cx - 1;
       ctx.fillStyle = char.darkColor;
-      for (let i = -3; i <= 3; i++) {
-        const angle = -Math.PI * 0.5 + i * 0.28;
-        const sx = cx + Math.cos(angle) * w * 0.32;
-        const sy = yOff + h * 0.35 + Math.sin(angle) * h * 0.25;
-        const tx = cx + Math.cos(angle) * w * 0.55;
-        const ty = yOff + h * 0.35 + Math.sin(angle) * h * 0.48;
+      // Outer row of quills (longer, darker)
+      for (let i = -5; i <= 5; i++) {
+        const qx = quillCx + i * 2.8;
+        const qy = quillBaseY - 10 - Math.abs(i) * 0.8;
         ctx.beginPath();
-        ctx.moveTo(sx - 2, sy);
-        ctx.lineTo(tx, ty);
-        ctx.lineTo(sx + 2, sy);
+        ctx.moveTo(qx - 1.5, quillBaseY - 2);
+        ctx.lineTo(qx, qy);
+        ctx.lineTo(qx + 1.5, quillBaseY - 2);
         ctx.closePath();
         ctx.fill();
       }
-      // Body
+      // Inner row (shorter, slightly lighter)
+      ctx.fillStyle = char.color;
+      for (let i = -4; i <= 4; i++) {
+        const qx = quillCx + i * 3;
+        const qy = quillBaseY - 6 - Math.abs(i) * 0.5;
+        ctx.beginPath();
+        ctx.moveTo(qx - 1.2, quillBaseY);
+        ctx.lineTo(qx, qy);
+        ctx.lineTo(qx + 1.2, quillBaseY);
+        ctx.closePath();
+        ctx.fill();
+      }
+      // Body — wide, low oval
       ctx.fillStyle = char.color;
       ctx.beginPath();
-      ctx.ellipse(cx, yOff + h * 0.55, w * 0.36, h * 0.35, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx, yOff + h * 0.6, w * 0.38, h * 0.28, 0, 0, Math.PI * 2);
       ctx.fill();
-      // Lighter belly
+      // Cream face/belly front
       ctx.fillStyle = char.lightColor;
       ctx.beginPath();
-      ctx.ellipse(cx, yOff + h * 0.62, w * 0.24, h * 0.2, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx + 3, yOff + h * 0.6, w * 0.22, h * 0.24, 0, 0, Math.PI * 2);
       ctx.fill();
-      // Small rounded ears
+      // Pointed snout
+      ctx.fillStyle = char.lightColor;
+      ctx.beginPath();
+      ctx.moveTo(cx + 8, yOff + h * 0.48);
+      ctx.quadraticCurveTo(cx + 16, yOff + h * 0.52, cx + 8, yOff + h * 0.58);
+      ctx.closePath();
+      ctx.fill();
+      // Nose (black bead at snout tip)
+      ctx.fillStyle = '#111';
+      ctx.beginPath();
+      ctx.arc(cx + 14, yOff + h * 0.53, 2, 0, Math.PI * 2);
+      ctx.fill();
+      // Tiny rounded ears poking from quill line
       ctx.fillStyle = char.color;
       ctx.beginPath();
-      ctx.arc(cx - 8, yOff + h * 0.22, 4, 0, Math.PI * 2);
+      ctx.arc(cx - 6, yOff + h * 0.32, 3, 0, Math.PI * 2);
       ctx.fill();
       ctx.beginPath();
-      ctx.arc(cx + 8, yOff + h * 0.22, 4, 0, Math.PI * 2);
+      ctx.arc(cx + 6, yOff + h * 0.32, 3, 0, Math.PI * 2);
       ctx.fill();
-      // Snout
-      ctx.fillStyle = char.lightColor;
+      // Eyes — small, beady, set in the face
+      ctx.fillStyle = '#000';
       ctx.beginPath();
-      ctx.ellipse(cx + 2, yOff + h * 0.5, 5, 3.5, 0, 0, Math.PI * 2);
+      ctx.arc(cx + 5, yOff + h * 0.46, 2, 0, Math.PI * 2);
       ctx.fill();
-      // Nose
-      ctx.fillStyle = '#222';
+      ctx.fillStyle = '#FFF';
       ctx.beginPath();
-      ctx.arc(cx + 6, yOff + h * 0.48, 2, 0, Math.PI * 2);
+      ctx.arc(cx + 5.8, yOff + h * 0.44, 0.8, 0, Math.PI * 2);
       ctx.fill();
     }
 
