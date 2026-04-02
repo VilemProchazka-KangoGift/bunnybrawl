@@ -133,20 +133,6 @@ export const ALL_CHARACTERS: CharacterDef[] = [
   },
 ];
 
-// Emoji mapping for all characters (used by renderer, lobby, victory screen)
-export const CHAR_EMOJI: Record<string, string> = {
-  Bunny: '\uD83D\uDC30', Fox: '\uD83E\uDD8A', Frog: '\uD83D\uDC38',
-  Bear: '\uD83D\uDC3B', Owl: '\uD83E\uDD89', Cat: '\uD83D\uDC31',
-  Wolf: '\uD83D\uDC3A', Panda: '\uD83D\uDC3C', Pig: '\uD83D\uDC37',
-  Cow: '\uD83D\uDC2E', Goat: '\uD83D\uDC10', Horse: '\uD83D\uDC34',
-  Sheep: '\uD83D\uDC11', Monkey: '\uD83D\uDC35',
-  Tiger: '\uD83D\uDC2F', Rhino: '\uD83E\uDD8F',
-  Hedgehog: '\uD83E\uDD94',
-};
-
-// Characters that draw their own eyes (skip default eye drawing)
-export const CUSTOM_EYE_CHARS = new Set(['Frog', 'Owl', 'Cat', 'Panda', 'Cow', 'Goat', 'Sheep', 'Monkey', 'Horse', 'Hedgehog']);
-
 // Runtime map for bot character assignments (populated before match start)
 export const BOT_CHARACTERS: Map<BotSlot, CharacterDef> = new Map();
 
