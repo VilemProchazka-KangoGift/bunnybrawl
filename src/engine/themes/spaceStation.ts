@@ -4,6 +4,149 @@ import { getFloatingPlatforms } from './utils';
 
 let scanLinePattern: CanvasPattern | null = null;
 
+// === Animated space objects visible through the hangar window ===
+
+const WIN_X = 280, WIN_Y = 25, WIN_W = 720, WIN_H = 635;
+
+interface SpaceObject {
+  type: 'asteroid' | 'satellite';
+  x: number; y: number;
+  vx: number; vy: number;
+  size: number;
+  rotation: number;
+  rotSpeed: number;
+  delay: number;
+}
+
+let spaceObjects: SpaceObject[] = [];
+let lastAnimTime = -1;
+
+function createSpaceObject(delay: number): SpaceObject {
+  const isAsteroid = Math.random() < 0.8;
+  const horizontal = Math.random() > 0.25;
+  const fromLeft = Math.random() > 0.5;
+  const fromTop = Math.random() > 0.5;
+  let x: number, y: number, vx: number, vy: number;
+
+  if (horizontal) {
+    x = fromLeft ? WIN_X - 40 : WIN_X + WIN_W + 40;
+    y = WIN_Y + 60 + Math.random() * (WIN_H - 120);
+    vx = fromLeft ? 10 + Math.random() * 18 : -(10 + Math.random() * 18);
+    vy = (Math.random() - 0.5) * 6;
+  } else {
+    x = WIN_X + 60 + Math.random() * (WIN_W - 120);
+    y = fromTop ? WIN_Y - 40 : WIN_Y + WIN_H + 40;
+    vx = (Math.random() - 0.5) * 8;
+    vy = fromTop ? 8 + Math.random() * 14 : -(8 + Math.random() * 14);
+  }
+
+  return {
+    type: isAsteroid ? 'asteroid' : 'satellite',
+    x, y, vx, vy,
+    size: isAsteroid ? 6 + Math.random() * 8 : 8 + Math.random() * 6,
+    rotation: isAsteroid ? Math.random() * Math.PI * 2 : (Math.random() - 0.5) * 0.4,
+    rotSpeed: isAsteroid ? (Math.random() - 0.5) * 1.2 : (Math.random() - 0.5) * 0.08,
+    delay,
+  };
+}
+
+function resetSpaceAnimations() {
+  spaceObjects = [];
+  for (let i = 0; i < 3; i++) {
+    spaceObjects.push(createSpaceObject(4 + i * 10));
+  }
+  lastAnimTime = -1;
+}
+
+function drawAsteroid(ctx: CanvasRenderingContext2D, obj: SpaceObject) {
+  ctx.save();
+  ctx.translate(obj.x, obj.y);
+  ctx.rotate(obj.rotation);
+  const s = obj.size;
+
+  // Rocky body
+  ctx.fillStyle = '#6A6A7A';
+  ctx.beginPath();
+  ctx.moveTo(-s * 0.7, -s * 0.3);
+  ctx.lineTo(-s * 0.3, -s * 0.8);
+  ctx.lineTo(s * 0.4, -s * 0.7);
+  ctx.lineTo(s * 0.8, -s * 0.1);
+  ctx.lineTo(s * 0.5, s * 0.7);
+  ctx.lineTo(-s * 0.2, s * 0.65);
+  ctx.lineTo(-s * 0.75, s * 0.2);
+  ctx.closePath();
+  ctx.fill();
+
+  // Lighter highlight
+  ctx.fillStyle = '#8A8A9A';
+  ctx.beginPath();
+  ctx.moveTo(-s * 0.2, -s * 0.6);
+  ctx.lineTo(s * 0.3, -s * 0.5);
+  ctx.lineTo(s * 0.5, -s * 0.1);
+  ctx.lineTo(-s * 0.1, s * 0.1);
+  ctx.closePath();
+  ctx.fill();
+
+  // Crater
+  ctx.fillStyle = '#555566';
+  ctx.beginPath();
+  ctx.arc(s * 0.1, s * 0.1, s * 0.18, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawSatellite(ctx: CanvasRenderingContext2D, obj: SpaceObject) {
+  ctx.save();
+  ctx.translate(obj.x, obj.y);
+  ctx.rotate(obj.rotation);
+  const s = obj.size;
+
+  // Solar panels — bright blue to stand out against dark space
+  ctx.fillStyle = '#3355CC';
+  ctx.fillRect(-s * 1.4, -s * 0.25, s * 1.0, s * 0.5);
+  ctx.fillRect(s * 0.4, -s * 0.25, s * 1.0, s * 0.5);
+  // Panel grid lines
+  ctx.strokeStyle = 'rgba(100, 160, 255, 0.6)';
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  ctx.moveTo(-s * 0.9, -s * 0.25); ctx.lineTo(-s * 0.9, s * 0.25);
+  ctx.moveTo(s * 0.9, -s * 0.25); ctx.lineTo(s * 0.9, s * 0.25);
+  ctx.moveTo(-s * 1.4, 0); ctx.lineTo(-s * 0.4, 0);
+  ctx.moveTo(s * 0.4, 0); ctx.lineTo(s * 1.4, 0);
+  ctx.stroke();
+  // Panel highlight edge
+  ctx.strokeStyle = 'rgba(150, 200, 255, 0.4)';
+  ctx.strokeRect(-s * 1.4, -s * 0.25, s * 1.0, s * 0.5);
+  ctx.strokeRect(s * 0.4, -s * 0.25, s * 1.0, s * 0.5);
+
+  // Body — bright metallic
+  ctx.fillStyle = '#AABBCC';
+  ctx.fillRect(-s * 0.35, -s * 0.35, s * 0.7, s * 0.7);
+  ctx.strokeStyle = '#CCDDEE';
+  ctx.lineWidth = 0.5;
+  ctx.strokeRect(-s * 0.35, -s * 0.35, s * 0.7, s * 0.7);
+
+  // Dish antenna
+  ctx.fillStyle = '#DDEEFF';
+  ctx.beginPath();
+  ctx.arc(0, -s * 0.35, s * 0.18, Math.PI, 0);
+  ctx.fill();
+  ctx.strokeStyle = '#BBCCDD';
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  ctx.moveTo(0, -s * 0.35); ctx.lineTo(0, -s * 0.55);
+  ctx.stroke();
+
+  // Blinking light on body
+  ctx.fillStyle = '#FF4444';
+  ctx.beginPath();
+  ctx.arc(0, 0, s * 0.08, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
 export const SPACE_STATION_THEME: ThemeConfig = {
   id: 'space_station',
   nameKey: 'arena_space_station',
@@ -129,6 +272,46 @@ export const SPACE_STATION_THEME: ThemeConfig = {
     maxNightAlpha: 0,
     showFireflies: false,
     showShootingStars: false,
+  },
+
+  drawAnimatedBackground: (ctx, _arena, time) => {
+    // Reset on new match (time resets to near 0)
+    if (time < lastAnimTime || spaceObjects.length === 0) {
+      resetSpaceAnimations();
+    }
+    const dt = lastAnimTime < 0 ? 0 : Math.min(time - lastAnimTime, 0.1);
+    lastAnimTime = time;
+
+    // Update space objects
+    for (let i = 0; i < spaceObjects.length; i++) {
+      const obj = spaceObjects[i];
+      if (obj.delay > 0) { obj.delay -= dt; continue; }
+      obj.x += obj.vx * dt;
+      obj.y += obj.vy * dt;
+      obj.rotation += obj.rotSpeed * dt;
+
+      // Off-window? Respawn with delay
+      const m = 60;
+      if (obj.x < WIN_X - m || obj.x > WIN_X + WIN_W + m ||
+          obj.y < WIN_Y - m || obj.y > WIN_Y + WIN_H + m) {
+        spaceObjects[i] = createSpaceObject(8 + Math.random() * 18);
+      }
+    }
+
+    // Draw clipped to window
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(WIN_X, WIN_Y, WIN_W, WIN_H);
+    ctx.clip();
+
+    for (const obj of spaceObjects) {
+      if (obj.delay > 0) continue;
+      ctx.globalAlpha = obj.type === 'satellite' ? 0.8 : 0.6;
+      if (obj.type === 'asteroid') drawAsteroid(ctx, obj);
+      else drawSatellite(ctx, obj);
+    }
+
+    ctx.restore();
   },
 
   drawFarBackground: (ctx, _arena) => {

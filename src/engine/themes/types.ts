@@ -132,6 +132,9 @@ export interface ThemeConfig {
   /** Drawn over players — foreground bushes, snow piles */
   drawForegroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => void;
 
+  /** Per-frame animated background (drawn behind players, after wildlife — e.g. objects visible through windows) */
+  drawAnimatedBackground?: (ctx: CanvasRenderingContext2D, arena: Arena, time: number) => void;
+
   // Optional custom particle renderer (overrides default leaf/petal/snow drawing)
   drawWeatherParticle?: (ctx: CanvasRenderingContext2D, particle: WeatherParticle) => void;
 

@@ -263,6 +263,11 @@ export class Renderer {
       this.drawWildlife(ctx, matchState.wildlife);
     }
 
+    // Theme-specific animated background (e.g. space objects through windows)
+    if (this.theme.drawAnimatedBackground) {
+      this.theme.drawAnimatedBackground(ctx, arena, matchState.timeElapsed);
+    }
+
     // Hazard zones (lava pools etc.)
     if (arena.hazardZones) {
       for (const hz of arena.hazardZones) {
