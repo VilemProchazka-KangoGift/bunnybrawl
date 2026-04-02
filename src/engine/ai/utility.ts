@@ -295,16 +295,12 @@ function evaluateEdgeAvoidance(a: AwarenessSnapshot, s: ActionScores, p: AIPerso
 }
 
 function evaluateRoam(a: AwarenessSnapshot, s: ActionScores): void {
-  // Only kick in when other evaluators haven't produced a strong opinion
-  const totalAction = Math.abs(s.moveLeft) + Math.abs(s.moveRight);
-  if (totalAction > 0.3) return; // something else is already driving movement
-
   if (!a.roamTarget) return;
 
   // Walk toward the roam target (nearest carrot or nearest enemy, map-wide)
-  const weight = 0.4;
-  if (a.roamTarget.dx > 30) s.moveRight += weight;
-  else if (a.roamTarget.dx < -30) s.moveLeft += weight;
+  const weight = 0.7;
+  if (a.roamTarget.dx > 15) s.moveRight += weight;
+  else if (a.roamTarget.dx < -15) s.moveLeft += weight;
 
   // If target is above, bias toward climbing (seek higher ground)
   const targetAbove = a.self.y - a.roamTarget.y;
