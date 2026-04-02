@@ -102,6 +102,7 @@ export const GIB_LAUNCH_SPEED_MIN = 120;  // px/s
 export const GIB_LAUNCH_SPEED_MAX = 350;  // px/s
 export const GIB_ROTATION_MAX = 12;       // rad/s
 export const GIB_BOUNCE_FACTOR = 0.3;     // velocity retained on bounce
+export const GIB_GEYSER_STRENGTH_MULT = 0.7; // gibs get 70% of player geyser force
 export const GIB_MAX_FLIGHT = 5;          // max airborne seconds
 export const GIB_MAX_COUNT = 150;         // grounded gibs persist forever; oldest evicted at cap
 

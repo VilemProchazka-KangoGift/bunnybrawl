@@ -7,7 +7,7 @@ import i18n from '../i18n';
 import type { CharacterSlot, CharacterDef, PlayerSlot, BotSlot } from '../engine/types';
 import { ALL_BOT_SLOTS, isBotSlot } from '../engine/types';
 import { assignBotCharacters } from '../engine/characters';
-import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT } from '../engine/constants';
+import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED } from '../engine/constants';
 import {
   drawTree, drawBush, drawFlower, drawMushroom, drawGrassTuft, drawCloud,
 } from '../engine/themes/drawPrimitives';
@@ -136,6 +136,7 @@ const WALL_X = CANVAS_WIDTH * 0.58;
 const WALL_WIDTH = 24;
 const WALL_HEIGHT = 120; // tall enough to require a jump
 const WALL_Y = GROUND_Y - WALL_HEIGHT;
+const CUSTOM_EYE_CHARS = new Set(['Frog', 'Owl', 'Cat', 'Panda', 'Cow', 'Goat', 'Sheep', 'Monkey', 'Horse']);
 
 interface LobbyPlayer {
   slot: PlayerSlot;
@@ -305,15 +306,16 @@ export function CharacterSelect() {
         if (keys.has(bindings.jump) && p.onGround) { p.vy = LOBBY_JUMP; p.onGround = false; }
 
         // Fast-fall with down key, or crouch squash on ground
-        if (keys.has(bindings.down)) {
+        const crouching = keys.has(bindings.down);
+        if (crouching) {
           if (!p.onGround) {
             p.vy = Math.max(p.vy, LOBBY_FAST_FALL);
           } else {
-            p.squashScale = 0.6;
+            p.squashScale = SQUASH_ON_CROUCH;
           }
         }
 
-        updateLobbyPhysics(p, dt);
+        updateLobbyPhysics(p, dt, crouching && p.onGround);
       }
 
       // Update NPC extras — simple wandering AI
@@ -498,7 +500,7 @@ function updateBotLobbyAI(bot: LobbyPlayer, _dt: number): void {
 
 // ---- Physics ----
 
-function updateLobbyPhysics(p: LobbyPlayer, dt: number): void {
+function updateLobbyPhysics(p: LobbyPlayer, dt: number, holdingCrouch = false): void {
   p.vy += LOBBY_GRAVITY * dt;
   p.y += p.vy * dt;
   p.x += p.vx * dt;
@@ -548,9 +550,15 @@ function updateLobbyPhysics(p: LobbyPlayer, dt: number): void {
     if (p.animTimer > 0.12) { p.animTimer = 0; p.animFrame = (p.animFrame + 1) % 4; }
   }
 
-  // Squash decay
-  if (p.squashScale !== 1) p.squashScale += (1.0 - p.squashScale) * 8 * dt;
-  if (p.sideSquash !== 1) p.sideSquash += (1.0 - p.sideSquash) * 8 * dt;
+  // Squash decay (skip vertical decay while actively crouching)
+  if (!holdingCrouch && p.squashScale !== 1) {
+    p.squashScale += (1.0 - p.squashScale) * SQUASH_DECAY_SPEED * dt;
+    if (Math.abs(p.squashScale - 1) < 0.02) p.squashScale = 1;
+  }
+  if (p.sideSquash !== 1) {
+    p.sideSquash += (1.0 - p.sideSquash) * SQUASH_DECAY_SPEED * dt;
+    if (Math.abs(p.sideSquash - 1) < 0.02) p.sideSquash = 1;
+  }
 }
 
 // ---- Drawing ----
@@ -1177,7 +1185,7 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
   }
 
   // Generic eyes for characters without custom ones
-  if (!['Frog', 'Owl', 'Cat', 'Panda', 'Cow', 'Goat', 'Sheep', 'Monkey', 'Horse'].includes(char.name)) {
+  if (!CUSTOM_EYE_CHARS.has(char.name)) {
     ctx.fillStyle = '#000';
     ctx.beginPath(); ctx.arc(cx - 4, yOff + h * 0.4, 2.5, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(cx + 6, yOff + h * 0.4, 2.5, 0, Math.PI * 2); ctx.fill();

@@ -19,6 +19,8 @@ const CHAR_EMOJI: Record<string, string> = {
   Tiger: '\uD83D\uDC2F', Rhino: '\uD83E\uDD8F',
 };
 
+const CUSTOM_EYE_CHARS = new Set(['Frog', 'Owl', 'Cat', 'Panda', 'Cow', 'Goat', 'Sheep', 'Monkey', 'Horse']);
+
 interface Cloud {
   x: number;
   y: number;
@@ -2428,7 +2430,7 @@ export class Renderer {
     }
 
     // Eyes (generic — for characters without custom eyes)
-    if (!['Frog', 'Owl', 'Cat', 'Panda', 'Cow', 'Goat', 'Sheep', 'Monkey', 'Horse'].includes(char.name)) {
+    if (!CUSTOM_EYE_CHARS.has(char.name)) {
       ctx.fillStyle = '#000';
       ctx.beginPath();
       ctx.arc(cx - 4, yOff + h * 0.4, 2.5, 0, Math.PI * 2);

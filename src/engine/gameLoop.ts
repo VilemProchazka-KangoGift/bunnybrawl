@@ -28,7 +28,7 @@ import {
   GRAVITY, FRICTION, MAX_WALK_SPEED, JUMP_IMPULSE, MAX_FALL_SPEED,
   BLOOD_COLOR,
   GIB_GRAVITY, GIB_LAUNCH_SPEED_MIN, GIB_LAUNCH_SPEED_MAX, GIB_ROTATION_MAX,
-  GIB_BOUNCE_FACTOR, GIB_MAX_FLIGHT, GIB_MAX_COUNT,
+  GIB_BOUNCE_FACTOR, GIB_GEYSER_STRENGTH_MULT, GIB_MAX_FLIGHT, GIB_MAX_COUNT,
   CONFETTI_COUNT, CONFETTI_GRAVITY, CONFETTI_FLUTTER, CONFETTI_LIFE_MIN, CONFETTI_LIFE_MAX,
 } from './constants';
 import { getCharacterForSlot } from './characters';
@@ -741,7 +741,7 @@ export class GameLoop {
           } else if (zone.type === 'geyser') {
             const geyserIdx = this.geyserIndexMap.get(zone) ?? -1;
             if (geyserIdx >= 0 && this.state.geyserStates[geyserIdx]?.active) {
-              g.vy = Math.min(g.vy, (zone.strength || -550) * 0.7);
+              g.vy = Math.min(g.vy, (zone.strength || -550) * GIB_GEYSER_STRENGTH_MULT);
             }
           }
         }
