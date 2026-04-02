@@ -24,7 +24,6 @@ export function evaluateActions(
   evaluatePlatformSeeking(awareness, scores, personality, precisionMult);
   evaluateHazardAvoidance(awareness, scores, personality);
   evaluateCarrotPursuit(awareness, scores, personality);
-  evaluateWindCompensation(awareness, scores);
   evaluateEdgeAvoidance(awareness, scores, personality);
   evaluateZoneExploitation(awareness, scores, personality);
   evaluateGeyserEscape(awareness, scores);
@@ -279,13 +278,6 @@ function evaluateCarrotPursuit(a: AwarenessSnapshot, s: ActionScores, p: AIPerso
   }
 }
 
-function evaluateWindCompensation(a: AwarenessSnapshot, s: ActionScores): void {
-  if (a.windStrength < 30 || a.self.onGround) return;
-  // Compensate for wind when airborne
-  const compensation = 0.3 * (a.windStrength / 300);
-  if (a.windDir > 0) s.moveLeft += compensation;
-  else s.moveRight += compensation;
-}
 
 function evaluateEdgeAvoidance(a: AwarenessSnapshot, s: ActionScores, p: AIPersonality): void {
   if (!a.nearEdge) return;

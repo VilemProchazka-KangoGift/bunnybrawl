@@ -43,8 +43,6 @@ export interface AwarenessSnapshot {
   /** When airborne, nearest platform we could land on */
   landingPlatform: { x: number; y: number; width: number; centerDx: number } | null;
   nearEdge: boolean;
-  windDir: number;
-  windStrength: number;
   inZeroG: boolean;
   inCurrent: number; // vx push force, 0 if not in current
   nearGeyser: { x: number; y: number; active: boolean; timer: number } | null;

@@ -168,14 +168,6 @@ export interface ThemeConfig {
     glowColor: string;
   };
 
-  // Optional wind mechanic (periodic gusts that affect airborne players)
-  windConfig?: {
-    interval: [number, number];  // [min, max] seconds between gusts
-    buildDuration: number;
-    peakDuration: number;
-    fadeDuration: number;
-    maxStrength: number;  // px/s² horizontal force
-  };
 
   // Optional pigeon flocks that scatter when disturbed
   pigeonConfig?: {

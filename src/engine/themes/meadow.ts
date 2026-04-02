@@ -99,13 +99,6 @@ export const MEADOW_THEME: ThemeConfig = {
     showShootingStars: true,
   },
 
-  windConfig: {
-    interval: [18, 30],
-    buildDuration: 3,
-    peakDuration: 4,
-    fadeDuration: 3,
-    maxStrength: 250,
-  },
 
   drawFarBackground: (ctx, _arena) => {
     // Distant forest treeline behind the hills

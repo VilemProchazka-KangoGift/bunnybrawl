@@ -307,10 +307,6 @@ export class Renderer {
       this.drawPigeonFlock(ctx, flock, matchState.timeElapsed);
     }
 
-    // Wind visual indicator
-    if (matchState.wind.strength > 0) {
-      this.drawWindIndicator(ctx, matchState.wind, matchState.timeElapsed);
-    }
 
     // Lava rocks (falling hazards)
     for (const rock of matchState.lavaRocks) {
@@ -1152,24 +1148,6 @@ export class Renderer {
     ctx.restore();
   }
 
-  private drawWindIndicator(ctx: CanvasRenderingContext2D, wind: { direction: number; strength: number }, time: number): void {
-    ctx.save();
-    const intensity = wind.strength / 300; // normalize to 0..~1
-    // Horizontal streaks
-    ctx.globalAlpha = intensity * 0.12;
-    ctx.strokeStyle = '#FFFFFF';
-    ctx.lineWidth = 1;
-    for (let i = 0; i < 12; i++) {
-      const y = 100 + i * 50 + Math.sin(time * 2 + i) * 20;
-      const x = ((time * wind.direction * 200 + i * 120) % 1400) - 60;
-      const len = 30 + intensity * 40;
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x + wind.direction * len, y);
-      ctx.stroke();
-    }
-    ctx.restore();
-  }
 
   // ---- Foreground nature (drawn over players) ----
 

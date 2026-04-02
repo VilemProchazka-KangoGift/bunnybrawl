@@ -284,7 +284,7 @@ export interface MatchState {
   ghosts: GhostEntity[];
   lavaRocks: LavaRock[];
   lavaRockTimer: number;
-  wind: { direction: number; strength: number; timer: number; phase: 'idle' | 'building' | 'peak' | 'fading' };
+
   geyserStates: Array<{ timer: number; active: boolean; activeTimer: number }>;
   pigeonFlocks: Array<{ x: number; y: number; active: boolean; respawnTimer: number; scatterParticles: Array<{ x: number; y: number; vx: number; vy: number; life: number }> }>;
   bouncyWobble: Map<number, number>;  // platform index → wobble timer

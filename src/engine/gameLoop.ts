@@ -195,7 +195,7 @@ export class GameLoop {
       ghosts: [],
       lavaRocks: [],
       lavaRockTimer: this.theme.lavaRockConfig ? randRange(this.theme.lavaRockConfig.spawnInterval) : 9999,
-      wind: { direction: 0, strength: 0, timer: this.theme.windConfig ? 5 + Math.random() * 5 : 9999, phase: 'idle' as const },
+
       geyserStates: (arena.effectZones || []).filter(z => z.type === 'geyser').map(z => ({
         timer: (z.interval || 10) * Math.random(),
         active: false,
@@ -276,7 +276,6 @@ export class GameLoop {
     this.input.detach();
     audio.stopMusic();
     audio.stop('ambient');
-    audio.stop('wind');
     audio.stop('zero_g');
     audio.stop('crowd');
   }
@@ -926,32 +925,6 @@ export class GameLoop {
       }
     }
 
-    // Update wind system
-    if (this.theme.windConfig) {
-      const wc = this.theme.windConfig;
-      const wind = this.state.wind;
-      wind.timer -= dt;
-      if (wind.phase === 'idle' && wind.timer <= 0) {
-        wind.phase = 'building';
-        wind.direction = Math.random() < 0.5 ? -1 : 1;
-        wind.timer = wc.buildDuration;
-        audio.play('wind');
-      } else if (wind.phase === 'building') {
-        wind.strength = wc.maxStrength * (1 - wind.timer / wc.buildDuration);
-        if (wind.timer <= 0) { wind.phase = 'peak'; wind.timer = wc.peakDuration; }
-      } else if (wind.phase === 'peak') {
-        wind.strength = wc.maxStrength;
-        if (wind.timer <= 0) { wind.phase = 'fading'; wind.timer = wc.fadeDuration; }
-      } else if (wind.phase === 'fading') {
-        wind.strength = wc.maxStrength * (wind.timer / wc.fadeDuration);
-        if (wind.timer <= 0) {
-          wind.phase = 'idle';
-          wind.strength = 0;
-          wind.timer = randRange(wc.interval);
-          audio.stop('wind');
-        }
-      }
-    }
 
     // Update geyser timers
     const geyserZones = this.cachedGeyserZones;
@@ -1353,10 +1326,6 @@ export class GameLoop {
         this.state.screenShake = Math.max(this.state.screenShake, 0.1);
       }
 
-      // Wind force (affects airborne players)
-      if (this.state.wind.strength > 0 && player.state === 'airborne') {
-        player.vx += this.state.wind.direction * this.state.wind.strength * dt;
-      }
 
       // Effect zone interactions
       if (this.arena.effectZones) {

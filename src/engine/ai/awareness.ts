@@ -242,9 +242,6 @@ export function buildAwareness(
     }
   }
 
-  // Wind
-  const windDir = state.wind.direction;
-  const windStrength = state.wind.strength;
 
   // Effect zones — single pass for zero-G, currents, geysers, and geyser escape
   let inZeroG = false;
@@ -364,7 +361,7 @@ export function buildAwareness(
     nearestEnemy, priorityTarget, roamTarget, stompTarget, stompThreat, airborneAbove, nearestCarrot,
     nearestHazard, nearbyHazards, nearestPlatformAbove, nearestPlatformBelow,
     landingPlatform, nearEdge,
-    windDir, windStrength, inZeroG, inCurrent, nearGeyser, geyserEscapeDx,
+    inZeroG, inCurrent, nearGeyser, geyserEscapeDx,
     nearbyBotCount, leaderScore, onElevatedPlatform,
     currentPlatformIdx, navTarget,
   };

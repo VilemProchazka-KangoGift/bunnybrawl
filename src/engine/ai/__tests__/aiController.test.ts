@@ -55,7 +55,7 @@ function makeState(overrides?: Partial<MatchState>): MatchState {
     ghosts: [],
     lavaRocks: [],
     lavaRockTimer: 10,
-    wind: { direction: 0, strength: 0, timer: 10, phase: 'idle' },
+
     geyserStates: [],
     pigeonFlocks: [],
     bouncyWobble: new Map(),
@@ -255,18 +255,6 @@ describe('Awareness', () => {
     expect(awareness.nearestEnemy).toBeNull();
   });
 
-  it('detects wind state', () => {
-    const bot = makePlayer({ id: 'B1', x: 200, y: 628 });
-    const state = makeState({
-      players: [bot],
-      wind: { direction: 1, strength: 200, timer: 3, phase: 'peak' },
-    });
-    const arena = makeArena();
-
-    const awareness = buildAwareness(bot, state, arena, Infinity);
-    expect(awareness.windDir).toBe(1);
-    expect(awareness.windStrength).toBe(200);
-  });
 
   it('detects ghost as hazard', () => {
     const bot = makePlayer({ id: 'B1', x: 200, y: 500 });
