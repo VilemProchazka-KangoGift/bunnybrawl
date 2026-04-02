@@ -149,6 +149,8 @@ interface LobbyPlayer {
   animTimer: number;
   onGround: boolean;
   splatTimer: number; // > 0 means squished
+  sideSquash: number; // 1.0 = normal, <1 = squashed horizontally (wall hit)
+  squashScale: number; // 1.0 = normal, <1 = squashed vertically (crouch)
 }
 
 // Shuffle array in-place
@@ -192,7 +194,7 @@ export function CharacterSelect() {
       vx: 0, vy: 0,
       facing: 'right' as const,
       animFrame: 0, animTimer: 0,
-      onGround: true, splatTimer: 0,
+      onGround: true, splatTimer: 0, sideSquash: 1, squashScale: 1,
     }));
 
     // Create bot lobby players — they spawn on the left and walk to the ready zone
@@ -204,7 +206,7 @@ export function CharacterSelect() {
       vx: 0, vy: 0,
       facing: 'right' as const,
       animFrame: 0, animTimer: 0,
-      onGround: true, splatTimer: 0,
+      onGround: true, splatTimer: 0, sideSquash: 1, squashScale: 1,
     }));
 
     // Extra characters wandering around — NPCs that players can stomp to swap into
@@ -217,7 +219,7 @@ export function CharacterSelect() {
       vy: 0,
       facing: (Math.random() > 0.5 ? 'right' : 'left') as 'left' | 'right',
       animFrame: 0, animTimer: 0,
-      onGround: true, splatTimer: 0,
+      onGround: true, splatTimer: 0, sideSquash: 1, squashScale: 1,
     }));
   }, []);
 
@@ -302,9 +304,13 @@ export function CharacterSelect() {
 
         if (keys.has(bindings.jump) && p.onGround) { p.vy = LOBBY_JUMP; p.onGround = false; }
 
-        // Fast-fall with down key
-        if (keys.has(bindings.down) && !p.onGround) {
-          p.vy = Math.max(p.vy, LOBBY_FAST_FALL);
+        // Fast-fall with down key, or crouch squash on ground
+        if (keys.has(bindings.down)) {
+          if (!p.onGround) {
+            p.vy = Math.max(p.vy, LOBBY_FAST_FALL);
+          } else {
+            p.squashScale = 0.6;
+          }
         }
 
         updateLobbyPhysics(p, dt);
@@ -522,23 +528,29 @@ function updateLobbyPhysics(p: LobbyPlayer, dt: number): void {
       p.onGround = true;
     } else if (overlapLeft < overlapRight) {
       // Blocked from the left
+      if (p.vx > 0) p.sideSquash = 0.75;
       p.x = WALL_X - PLAYER_WIDTH;
       p.vx = 0;
     } else {
       // Blocked from the right
+      if (p.vx < 0) p.sideSquash = 0.75;
       p.x = WALL_X + WALL_WIDTH;
       p.vx = 0;
     }
   }
 
   // Screen bounds
-  if (p.x < 0) p.x = 0;
-  if (p.x + PLAYER_WIDTH > CANVAS_WIDTH) p.x = CANVAS_WIDTH - PLAYER_WIDTH;
+  if (p.x < 0) { if (p.vx < 0) p.sideSquash = 0.75; p.x = 0; p.vx = 0; }
+  if (p.x + PLAYER_WIDTH > CANVAS_WIDTH) { if (p.vx > 0) p.sideSquash = 0.75; p.x = CANVAS_WIDTH - PLAYER_WIDTH; p.vx = 0; }
 
   if (Math.abs(p.vx) > 10) {
     p.animTimer += dt;
     if (p.animTimer > 0.12) { p.animTimer = 0; p.animFrame = (p.animFrame + 1) % 4; }
   }
+
+  // Squash decay
+  if (p.squashScale !== 1) p.squashScale += (1.0 - p.squashScale) * 8 * dt;
+  if (p.sideSquash !== 1) p.sideSquash += (1.0 - p.sideSquash) * 8 * dt;
 }
 
 // ---- Drawing ----
@@ -937,6 +949,18 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
     ctx.translate(-cx, 0);
   }
 
+  // Squash/stretch transform (side squash from wall + vertical crouch squash)
+  const ss = p.sideSquash;
+  const sq = p.squashScale;
+  if (ss !== 1 || sq !== 1) {
+    const ssX = (1 + (1 - sq) * 0.5) * (ss !== 1 ? ss : 1);
+    const ssY = sq * (ss !== 1 ? 1 + (1 - ss) * 0.4 : 1);
+    const footY = y + h;
+    ctx.translate(cx, footY);
+    ctx.scale(ssX, ssY);
+    ctx.translate(-cx, -footY);
+  }
+
   ctx.fillStyle = char.color;
   ctx.beginPath();
 
@@ -1002,13 +1026,6 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
     ctx.beginPath(); ctx.moveTo(cx + 9, yOff + 6); ctx.lineTo(cx + 11, yOff - 6); ctx.lineTo(cx + 3, yOff + 4); ctx.fill();
     ctx.fillStyle = char.lightColor;
     ctx.beginPath(); ctx.ellipse(cx + 3, yOff + h * 0.5, 5, 4, 0, 0, Math.PI * 2); ctx.fill();
-    // Wolf eyes — yellow with slit pupils
-    ctx.fillStyle = '#D4A800';
-    ctx.beginPath(); ctx.arc(cx - 5, yOff + h * 0.38, 3, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx + 5, yOff + h * 0.38, 3, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#000';
-    ctx.beginPath(); ctx.ellipse(cx - 5, yOff + h * 0.38, 1.2, 2.5, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(cx + 5, yOff + h * 0.38, 1.2, 2.5, 0, 0, Math.PI * 2); ctx.fill();
   } else if (char.name === 'Panda') {
     ctx.ellipse(cx, yOff + h * 0.52, w * 0.42, h * 0.42, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = char.darkColor;
@@ -1072,10 +1089,11 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
   } else if (char.name === 'Goat') {
     // Goat: stocky body, curved horns, floppy ears, beard, rectangular pupils
     ctx.ellipse(cx, yOff + h * 0.52, w * 0.4, h * 0.4, 0, 0, Math.PI * 2); ctx.fill();
-    // Filled curved horns
-    ctx.fillStyle = '#B0A080';
-    ctx.beginPath(); ctx.moveTo(cx - 7, yOff + 4); ctx.quadraticCurveTo(cx - 14, yOff - 6, cx - 8, yOff - 8); ctx.quadraticCurveTo(cx - 4, yOff - 6, cx - 5, yOff + 2); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(cx + 7, yOff + 4); ctx.quadraticCurveTo(cx + 14, yOff - 6, cx + 8, yOff - 8); ctx.quadraticCurveTo(cx + 4, yOff - 6, cx + 5, yOff + 2); ctx.fill();
+    // Curly ram horns
+    ctx.strokeStyle = '#B0A080'; ctx.lineWidth = 3.5; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(cx - 6, yOff + 4); ctx.bezierCurveTo(cx - 10, yOff - 6, cx - 18, yOff - 4, cx - 16, yOff + 4); ctx.bezierCurveTo(cx - 14, yOff + 10, cx - 8, yOff + 10, cx - 8, yOff + 6); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx + 6, yOff + 4); ctx.bezierCurveTo(cx + 10, yOff - 6, cx + 18, yOff - 4, cx + 16, yOff + 4); ctx.bezierCurveTo(cx + 14, yOff + 10, cx + 8, yOff + 10, cx + 8, yOff + 6); ctx.stroke();
+    ctx.lineCap = 'butt';
     // Floppy ears
     ctx.fillStyle = char.color;
     ctx.beginPath(); ctx.ellipse(cx - 12, yOff + h * 0.38, 4, 6, -0.3, 0, Math.PI * 2); ctx.fill();
@@ -1123,41 +1141,25 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
     ctx.beginPath(); ctx.arc(cx - 2, yOff + h * 0.38, 1, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(cx + 6, yOff + h * 0.38, 1, 0, Math.PI * 2); ctx.fill();
   } else if (char.name === 'Tiger') {
-    // Tiger: powerful body, angular ears, bold stripes, fierce face
+    // Tiger: muscular body, round ears, stripes
     ctx.ellipse(cx, yOff + h * 0.52, w * 0.42, h * 0.42, 0, 0, Math.PI * 2); ctx.fill();
-    // Angular ears
-    ctx.beginPath(); ctx.moveTo(cx - 8, yOff + 6); ctx.lineTo(cx - 12, yOff - 4); ctx.lineTo(cx - 4, yOff + 4); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(cx + 8, yOff + 6); ctx.lineTo(cx + 12, yOff - 4); ctx.lineTo(cx + 4, yOff + 4); ctx.fill();
-    // White ear spots
-    ctx.fillStyle = char.lightColor;
-    ctx.beginPath(); ctx.arc(cx - 9, yOff + 1, 2, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx + 9, yOff + 1, 2, 0, Math.PI * 2); ctx.fill();
-    // Stripes — forehead M + sides
+    ctx.beginPath(); ctx.arc(cx - 10, yOff + 4, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 10, yOff + 4, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = char.darkColor;
+    ctx.beginPath(); ctx.arc(cx - 10, yOff + 4, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 10, yOff + 4, 3, 0, Math.PI * 2); ctx.fill();
+    // Upper stripes
     ctx.strokeStyle = char.darkColor; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(cx - 7, yOff + h * 0.28); ctx.lineTo(cx - 4, yOff + h * 0.22); ctx.lineTo(cx, yOff + h * 0.27); ctx.lineTo(cx + 4, yOff + h * 0.22); ctx.lineTo(cx + 7, yOff + h * 0.28); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(cx - 6, yOff + h * 0.32); ctx.lineTo(cx - 12, yOff + h * 0.4); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(cx - 8, yOff + h * 0.4); ctx.lineTo(cx - 14, yOff + h * 0.5); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(cx + 6, yOff + h * 0.32); ctx.lineTo(cx + 12, yOff + h * 0.4); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(cx + 8, yOff + h * 0.4); ctx.lineTo(cx + 14, yOff + h * 0.5); ctx.stroke();
-    // White cheek ruff + muzzle
+    ctx.beginPath(); ctx.moveTo(cx - 8, yOff + h * 0.35); ctx.lineTo(cx - 12, yOff + h * 0.45); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx + 8, yOff + h * 0.35); ctx.lineTo(cx + 12, yOff + h * 0.45); ctx.stroke();
+    // Lower stripes
+    ctx.beginPath(); ctx.moveTo(cx - 7, yOff + h * 0.5); ctx.lineTo(cx - 11, yOff + h * 0.6); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx + 7, yOff + h * 0.5); ctx.lineTo(cx + 11, yOff + h * 0.6); ctx.stroke();
+    // Muzzle
     ctx.fillStyle = char.lightColor;
-    ctx.beginPath(); ctx.ellipse(cx - 6, yOff + h * 0.42, 4, 5, -0.2, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(cx + 8, yOff + h * 0.42, 4, 5, 0.2, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.ellipse(cx + 1, yOff + h * 0.52, 6, 5, 0, 0, Math.PI * 2); ctx.fill();
-    // Nose
-    ctx.fillStyle = '#E05050';
-    ctx.beginPath(); ctx.moveTo(cx + 1, yOff + h * 0.46); ctx.lineTo(cx - 2, yOff + h * 0.5); ctx.lineTo(cx + 4, yOff + h * 0.5); ctx.closePath(); ctx.fill();
-    // Angry eyes
-    ctx.fillStyle = '#50C020';
-    ctx.beginPath(); ctx.arc(cx - 5, yOff + h * 0.36, 3, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx + 5, yOff + h * 0.36, 3, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#000';
-    ctx.beginPath(); ctx.ellipse(cx - 5, yOff + h * 0.36, 1.3, 2.5, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(cx + 5, yOff + h * 0.36, 1.3, 2.5, 0, 0, Math.PI * 2); ctx.fill();
-    // Brow lines
-    ctx.strokeStyle = char.darkColor; ctx.lineWidth = 1.8;
-    ctx.beginPath(); ctx.moveTo(cx - 8, yOff + h * 0.3); ctx.lineTo(cx - 3, yOff + h * 0.32); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(cx + 8, yOff + h * 0.3); ctx.lineTo(cx + 3, yOff + h * 0.32); ctx.stroke();
+    ctx.fillStyle = '#FF6060';
+    ctx.beginPath(); ctx.ellipse(cx + 1, yOff + h * 0.48, 3, 2, 0, 0, Math.PI * 2); ctx.fill();
   } else if (char.name === 'Rhino') {
     // Rhino: wide body, small ears, horn
     ctx.ellipse(cx, yOff + h * 0.55, w * 0.44, h * 0.4, 0, 0, Math.PI * 2); ctx.fill();
@@ -1175,7 +1177,7 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
   }
 
   // Generic eyes for characters without custom ones
-  if (!['Frog', 'Owl', 'Cat', 'Wolf', 'Panda', 'Cow', 'Goat', 'Sheep', 'Monkey', 'Horse', 'Tiger'].includes(char.name)) {
+  if (!['Frog', 'Owl', 'Cat', 'Panda', 'Cow', 'Goat', 'Sheep', 'Monkey', 'Horse'].includes(char.name)) {
     ctx.fillStyle = '#000';
     ctx.beginPath(); ctx.arc(cx - 4, yOff + h * 0.4, 2.5, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(cx + 6, yOff + h * 0.4, 2.5, 0, Math.PI * 2); ctx.fill();
