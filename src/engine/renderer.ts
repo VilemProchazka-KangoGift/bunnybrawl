@@ -1964,7 +1964,7 @@ export class Renderer {
       ctx.ellipse(cx + 5.5, yOff + h * 0.38, 1, 2.5, 0, 0, Math.PI * 2);
       ctx.fill();
     } else if (char.name === 'Wolf') {
-      // Wolf: angular body, pointy snout
+      // Wolf: angular body, pointy snout, piercing eyes
       ctx.ellipse(cx, yOff + h * 0.52, w * 0.4, h * 0.4, 0, 0, Math.PI * 2);
       ctx.fill();
       // Pointed ears
@@ -1978,6 +1978,18 @@ export class Renderer {
       ctx.lineTo(cx + 11, yOff - 6);
       ctx.lineTo(cx + 3, yOff + 4);
       ctx.fill();
+      // Inner ear
+      ctx.fillStyle = char.darkColor;
+      ctx.beginPath();
+      ctx.moveTo(cx - 7, yOff + 5);
+      ctx.lineTo(cx - 9, yOff - 2);
+      ctx.lineTo(cx - 4, yOff + 4);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(cx + 7, yOff + 5);
+      ctx.lineTo(cx + 9, yOff - 2);
+      ctx.lineTo(cx + 4, yOff + 4);
+      ctx.fill();
       // Snout
       ctx.fillStyle = char.lightColor;
       ctx.beginPath();
@@ -1987,6 +1999,28 @@ export class Renderer {
       ctx.fillStyle = '#222';
       ctx.beginPath();
       ctx.arc(cx + 6, yOff + h * 0.48, 2, 0, Math.PI * 2);
+      ctx.fill();
+      // Eyes — yellow wolf eyes with slit pupils
+      ctx.fillStyle = '#D4A800';
+      ctx.beginPath();
+      ctx.arc(cx - 5, yOff + h * 0.38, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx + 5, yOff + h * 0.38, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.ellipse(cx - 5, yOff + h * 0.38, 1.2, 2.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(cx + 5, yOff + h * 0.38, 1.2, 2.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#FFF';
+      ctx.beginPath();
+      ctx.arc(cx - 4, yOff + h * 0.36, 0.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx + 6, yOff + h * 0.36, 0.8, 0, Math.PI * 2);
       ctx.fill();
       // Belly
       ctx.fillStyle = char.lightColor;
@@ -2114,80 +2148,157 @@ export class Renderer {
       ctx.beginPath(); ctx.arc(cx - 4, yOff + h * 0.36, 1, 0, Math.PI * 2); ctx.fill();
       ctx.beginPath(); ctx.arc(cx + 6, yOff + h * 0.36, 1, 0, Math.PI * 2); ctx.fill();
     } else if (char.name === 'Horse') {
-      // Horse: tall-ish oval body, long face, pointed ears, short mane
-      ctx.ellipse(cx, yOff + h * 0.5, w * 0.36, h * 0.44, 0, 0, Math.PI * 2);
+      // Horse: elongated body, long face, tall pointed ears, flowing mane
+      ctx.ellipse(cx, yOff + h * 0.52, w * 0.38, h * 0.42, 0, 0, Math.PI * 2);
       ctx.fill();
-      // Long face/snout
+      // Long face/muzzle — more elongated
       ctx.fillStyle = char.lightColor;
       ctx.beginPath();
-      ctx.ellipse(cx + 5, yOff + h * 0.52, 5, 6, 0.15, 0, Math.PI * 2);
+      ctx.ellipse(cx + 6, yOff + h * 0.54, 6, 7, 0.15, 0, Math.PI * 2);
       ctx.fill();
-      // Pointed ears
+      // Tall pointed ears
       ctx.fillStyle = char.color;
       ctx.beginPath();
-      ctx.moveTo(cx - 6, yOff + 6);
-      ctx.lineTo(cx - 8, yOff - 6);
-      ctx.lineTo(cx - 2, yOff + 4);
+      ctx.moveTo(cx - 7, yOff + 8);
+      ctx.lineTo(cx - 10, yOff - 6);
+      ctx.lineTo(cx - 3, yOff + 5);
       ctx.fill();
       ctx.beginPath();
-      ctx.moveTo(cx + 6, yOff + 6);
+      ctx.moveTo(cx + 5, yOff + 8);
       ctx.lineTo(cx + 8, yOff - 6);
-      ctx.lineTo(cx + 2, yOff + 4);
+      ctx.lineTo(cx + 1, yOff + 5);
       ctx.fill();
-      // Short mane
+      // Inner ears
+      ctx.fillStyle = char.lightColor;
+      ctx.beginPath();
+      ctx.moveTo(cx - 6, yOff + 6);
+      ctx.lineTo(cx - 8, yOff - 2);
+      ctx.lineTo(cx - 4, yOff + 5);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(cx + 4, yOff + 6);
+      ctx.lineTo(cx + 6, yOff - 2);
+      ctx.lineTo(cx + 2, yOff + 5);
+      ctx.fill();
+      // Flowing mane — spiky tufts along head/neck
       ctx.fillStyle = char.darkColor;
       ctx.beginPath();
-      ctx.moveTo(cx - 2, yOff + 2);
-      ctx.lineTo(cx + 0, yOff - 4);
-      ctx.lineTo(cx + 3, yOff + 2);
-      ctx.lineTo(cx + 5, yOff - 2);
-      ctx.lineTo(cx + 7, yOff + 4);
-      ctx.stroke();
-      ctx.fillRect(cx - 2, yOff + 0, 8, 5);
-      // Nostril
-      ctx.fillStyle = '#333';
+      ctx.moveTo(cx - 10, yOff + 4);
+      ctx.lineTo(cx - 14, yOff - 2);
+      ctx.lineTo(cx - 8, yOff + 6);
+      ctx.fill();
       ctx.beginPath();
-      ctx.arc(cx + 8, yOff + h * 0.54, 1.5, 0, Math.PI * 2);
+      ctx.moveTo(cx - 11, yOff + 10);
+      ctx.lineTo(cx - 16, yOff + 4);
+      ctx.lineTo(cx - 9, yOff + 12);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(cx - 10, yOff + h * 0.48);
+      ctx.lineTo(cx - 15, yOff + h * 0.38);
+      ctx.lineTo(cx - 8, yOff + h * 0.5);
+      ctx.fill();
+      // Nostrils
+      ctx.fillStyle = '#4A3020';
+      ctx.beginPath();
+      ctx.ellipse(cx + 8, yOff + h * 0.56, 1.8, 1.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(cx + 5, yOff + h * 0.57, 1.8, 1.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Eyes — warm brown with highlight
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.arc(cx - 3, yOff + h * 0.4, 2.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx + 5, yOff + h * 0.4, 2.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#FFF';
+      ctx.beginPath();
+      ctx.arc(cx - 2, yOff + h * 0.38, 1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx + 6, yOff + h * 0.38, 1, 0, Math.PI * 2);
       ctx.fill();
     } else if (char.name === 'Goat') {
-      // Goat: round body, small curved horns, beard, horizontal pupils
+      // Goat: stocky body, curved horns, floppy ears, beard, rectangular pupils
       ctx.ellipse(cx, yOff + h * 0.52, w * 0.4, h * 0.4, 0, 0, Math.PI * 2);
       ctx.fill();
-      // Small curved horns
-      ctx.strokeStyle = '#A09070';
-      ctx.lineWidth = 2.5;
+      // Curved horns — thicker, filled
+      ctx.fillStyle = '#B0A080';
       ctx.beginPath();
-      ctx.arc(cx - 8, yOff + 2, 6, -Math.PI * 0.8, -Math.PI * 0.1);
-      ctx.stroke();
+      ctx.moveTo(cx - 7, yOff + 4);
+      ctx.quadraticCurveTo(cx - 14, yOff - 6, cx - 8, yOff - 8);
+      ctx.quadraticCurveTo(cx - 4, yOff - 6, cx - 5, yOff + 2);
+      ctx.fill();
       ctx.beginPath();
-      ctx.arc(cx + 8, yOff + 2, 6, -Math.PI * 0.9, -Math.PI * 0.2);
-      ctx.stroke();
-      // Beard (small triangle below face)
+      ctx.moveTo(cx + 7, yOff + 4);
+      ctx.quadraticCurveTo(cx + 14, yOff - 6, cx + 8, yOff - 8);
+      ctx.quadraticCurveTo(cx + 4, yOff - 6, cx + 5, yOff + 2);
+      ctx.fill();
+      // Horn ridges
+      ctx.strokeStyle = '#8A7A58';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(cx - 7, yOff + 1); ctx.lineTo(cx - 9, yOff - 1); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx - 8, yOff - 2); ctx.lineTo(cx - 9, yOff - 5); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx + 7, yOff + 1); ctx.lineTo(cx + 9, yOff - 1); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx + 8, yOff - 2); ctx.lineTo(cx + 9, yOff - 5); ctx.stroke();
+      // Floppy ears
+      ctx.fillStyle = char.color;
+      ctx.beginPath();
+      ctx.ellipse(cx - 12, yOff + h * 0.38, 4, 6, -0.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(cx + 12, yOff + h * 0.38, 4, 6, 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      // Inner ears
       ctx.fillStyle = char.lightColor;
       ctx.beginPath();
-      ctx.moveTo(cx - 2, yOff + h * 0.58);
-      ctx.lineTo(cx + 2, yOff + h * 0.58);
-      ctx.lineTo(cx, yOff + h * 0.7);
+      ctx.ellipse(cx - 12, yOff + h * 0.38, 2.5, 4, -0.3, 0, Math.PI * 2);
       ctx.fill();
-      // Snout
+      ctx.beginPath();
+      ctx.ellipse(cx + 12, yOff + h * 0.38, 2.5, 4, 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      // Snout — wider muzzle
       ctx.fillStyle = char.lightColor;
       ctx.beginPath();
-      ctx.ellipse(cx + 2, yOff + h * 0.5, 4, 3, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx + 2, yOff + h * 0.5, 6, 4, 0, 0, Math.PI * 2);
       ctx.fill();
-      // Horizontal pupils (goat eyes)
-      ctx.fillStyle = '#E8D060';
+      // Nostrils
+      ctx.fillStyle = char.darkColor;
       ctx.beginPath();
-      ctx.arc(cx - 5, yOff + h * 0.38, 3, 0, Math.PI * 2);
+      ctx.ellipse(cx, yOff + h * 0.51, 1.2, 0.8, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.beginPath();
-      ctx.arc(cx + 5, yOff + h * 0.38, 3, 0, Math.PI * 2);
+      ctx.ellipse(cx + 4, yOff + h * 0.51, 1.2, 0.8, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Beard — wispy tuft
+      ctx.fillStyle = char.lightColor;
+      ctx.beginPath();
+      ctx.moveTo(cx - 1, yOff + h * 0.56);
+      ctx.lineTo(cx + 3, yOff + h * 0.56);
+      ctx.lineTo(cx + 2, yOff + h * 0.72);
+      ctx.lineTo(cx, yOff + h * 0.68);
+      ctx.lineTo(cx - 1, yOff + h * 0.72);
+      ctx.fill();
+      // Horizontal rectangular pupils (goat eyes!)
+      ctx.fillStyle = '#D4B840';
+      ctx.beginPath();
+      ctx.arc(cx - 5, yOff + h * 0.38, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx + 5, yOff + h * 0.38, 3.5, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = '#000';
       ctx.beginPath();
-      ctx.ellipse(cx - 5, yOff + h * 0.38, 2.5, 1.2, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx - 5, yOff + h * 0.38, 2.8, 1, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.beginPath();
-      ctx.ellipse(cx + 5, yOff + h * 0.38, 2.5, 1.2, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx + 5, yOff + h * 0.38, 2.8, 1, 0, 0, Math.PI * 2);
       ctx.fill();
     } else if (char.name === 'Sheep') {
       // Sheep: fluffy cloud-like body (overlapping circles), small dark face
@@ -2261,41 +2372,102 @@ export class Renderer {
       ctx.arc(cx - w * 0.35, yOff + h * 0.4, 7, -Math.PI * 0.3, Math.PI * 1.3);
       ctx.stroke();
     } else if (char.name === 'Tiger') {
-      // Tiger: muscular oval body, round ears, stripes
+      // Tiger: powerful body, angular ears, bold stripes, fierce face
       ctx.ellipse(cx, yOff + h * 0.52, w * 0.42, h * 0.42, 0, 0, Math.PI * 2);
       ctx.fill();
-      // Round ears
+      // Angular ears (not round — more pointed)
       ctx.beginPath();
-      ctx.arc(cx - 10, yOff + 4, 6, 0, Math.PI * 2);
+      ctx.moveTo(cx - 8, yOff + 6);
+      ctx.lineTo(cx - 12, yOff - 4);
+      ctx.lineTo(cx - 4, yOff + 4);
       ctx.fill();
       ctx.beginPath();
-      ctx.arc(cx + 10, yOff + 4, 6, 0, Math.PI * 2);
+      ctx.moveTo(cx + 8, yOff + 6);
+      ctx.lineTo(cx + 12, yOff - 4);
+      ctx.lineTo(cx + 4, yOff + 4);
       ctx.fill();
-      // Inner ears
-      ctx.fillStyle = char.darkColor;
-      ctx.beginPath();
-      ctx.arc(cx - 10, yOff + 4, 3, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(cx + 10, yOff + 4, 3, 0, Math.PI * 2);
-      ctx.fill();
-      // Black stripes on body
-      ctx.strokeStyle = char.darkColor;
-      ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(cx - 8, yOff + h * 0.35); ctx.lineTo(cx - 12, yOff + h * 0.45); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(cx - 5, yOff + h * 0.3); ctx.lineTo(cx - 8, yOff + h * 0.42); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(cx + 8, yOff + h * 0.35); ctx.lineTo(cx + 12, yOff + h * 0.45); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(cx + 5, yOff + h * 0.3); ctx.lineTo(cx + 8, yOff + h * 0.42); ctx.stroke();
-      // White muzzle
+      // White ear spots
       ctx.fillStyle = char.lightColor;
+      ctx.beginPath();
+      ctx.arc(cx - 9, yOff + 1, 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx + 9, yOff + 1, 2, 0, Math.PI * 2);
+      ctx.fill();
+      // Black stripes — full coverage: head, sides, and back
+      ctx.strokeStyle = char.darkColor;
+      ctx.lineWidth = 2.2;
+      // Forehead "M" marking
+      ctx.beginPath();
+      ctx.moveTo(cx - 7, yOff + h * 0.28);
+      ctx.lineTo(cx - 4, yOff + h * 0.22);
+      ctx.lineTo(cx, yOff + h * 0.27);
+      ctx.lineTo(cx + 4, yOff + h * 0.22);
+      ctx.lineTo(cx + 7, yOff + h * 0.28);
+      ctx.stroke();
+      // Left side stripes (3)
+      ctx.beginPath(); ctx.moveTo(cx - 6, yOff + h * 0.32); ctx.lineTo(cx - 12, yOff + h * 0.4); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx - 8, yOff + h * 0.4); ctx.lineTo(cx - 14, yOff + h * 0.5); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx - 7, yOff + h * 0.5); ctx.lineTo(cx - 12, yOff + h * 0.6); ctx.stroke();
+      // Right side stripes (3)
+      ctx.beginPath(); ctx.moveTo(cx + 6, yOff + h * 0.32); ctx.lineTo(cx + 12, yOff + h * 0.4); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx + 8, yOff + h * 0.4); ctx.lineTo(cx + 14, yOff + h * 0.5); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx + 7, yOff + h * 0.5); ctx.lineTo(cx + 12, yOff + h * 0.6); ctx.stroke();
+      // Back stripe
+      ctx.beginPath(); ctx.moveTo(cx - 2, yOff + h * 0.26); ctx.lineTo(cx + 2, yOff + h * 0.26); ctx.stroke();
+      // White cheek ruff
+      ctx.fillStyle = char.lightColor;
+      ctx.beginPath();
+      ctx.ellipse(cx - 6, yOff + h * 0.42, 4, 5, -0.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(cx + 8, yOff + h * 0.42, 4, 5, 0.2, 0, Math.PI * 2);
+      ctx.fill();
+      // White muzzle
       ctx.beginPath();
       ctx.ellipse(cx + 1, yOff + h * 0.52, 6, 5, 0, 0, Math.PI * 2);
       ctx.fill();
-      // Nose
-      ctx.fillStyle = '#FF6060';
+      // Nose — larger, triangular pink
+      ctx.fillStyle = '#E05050';
       ctx.beginPath();
-      ctx.ellipse(cx + 1, yOff + h * 0.48, 3, 2, 0, 0, Math.PI * 2);
+      ctx.moveTo(cx + 1, yOff + h * 0.46);
+      ctx.lineTo(cx - 2, yOff + h * 0.5);
+      ctx.lineTo(cx + 4, yOff + h * 0.5);
+      ctx.closePath();
       ctx.fill();
+      // Angry eyes — angular with brow line
+      ctx.fillStyle = '#50C020';
+      ctx.beginPath();
+      ctx.arc(cx - 5, yOff + h * 0.36, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx + 5, yOff + h * 0.36, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.ellipse(cx - 5, yOff + h * 0.36, 1.3, 2.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(cx + 5, yOff + h * 0.36, 1.3, 2.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#FFF';
+      ctx.beginPath();
+      ctx.arc(cx - 4, yOff + h * 0.34, 0.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx + 6, yOff + h * 0.34, 0.8, 0, Math.PI * 2);
+      ctx.fill();
+      // Angry brow lines
+      ctx.strokeStyle = char.darkColor;
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(cx - 8, yOff + h * 0.3);
+      ctx.lineTo(cx - 3, yOff + h * 0.32);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx + 8, yOff + h * 0.3);
+      ctx.lineTo(cx + 3, yOff + h * 0.32);
+      ctx.stroke();
       // Whiskers
       ctx.strokeStyle = '#DDD';
       ctx.lineWidth = 1;
@@ -2343,7 +2515,7 @@ export class Renderer {
     }
 
     // Eyes (generic — for characters without custom eyes)
-    if (!['Frog', 'Owl', 'Cat', 'Wolf', 'Panda', 'Cow', 'Goat', 'Sheep', 'Monkey'].includes(char.name)) {
+    if (!['Frog', 'Owl', 'Cat', 'Wolf', 'Panda', 'Cow', 'Goat', 'Sheep', 'Monkey', 'Horse', 'Tiger'].includes(char.name)) {
       ctx.fillStyle = '#000';
       ctx.beginPath();
       ctx.arc(cx - 4, yOff + h * 0.4, 2.5, 0, Math.PI * 2);
