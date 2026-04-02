@@ -1,4 +1,5 @@
 import type { ThemeConfig } from './types';
+import { getFloatingPlatforms } from './utils';
 
 let scanLinePattern: CanvasPattern | null = null;
 
@@ -313,7 +314,7 @@ export const SPACE_STATION_THEME: ThemeConfig = {
     drawCable(1105, y - 40, 1235, y - 30, '#00CC44');
 
     // Platform decorations — only on side stack platforms
-    const floats = arena.platforms.filter(p => p.y < 650 && p.width >= 80 && (p.x < 250 || p.x > 1000));
+    const floats = getFloatingPlatforms(arena.platforms).filter(p => p.x < 250 || p.x > 1000);
     for (let i = 0; i < floats.length; i++) {
       const plat = floats[i];
       const mid = plat.x + plat.width / 2;

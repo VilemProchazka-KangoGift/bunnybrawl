@@ -1,4 +1,5 @@
 import type { ThemeConfig } from './types';
+import { getFloatingPlatforms } from './utils';
 
 export const VOLCANO_THEME: ThemeConfig = {
   id: 'volcano',
@@ -265,7 +266,7 @@ export const VOLCANO_THEME: ThemeConfig = {
     drawRock(1000, y, 35, 20);
 
     // Platform decorations — small rocks and lava drips
-    const floats = arena.platforms.filter(p => p.y < 650 && p.width >= 80);
+    const floats = getFloatingPlatforms(arena.platforms);
     for (const plat of floats) {
       drawRock(plat.x + 10, plat.y, 15, 8);
       if (plat.width > 150) {

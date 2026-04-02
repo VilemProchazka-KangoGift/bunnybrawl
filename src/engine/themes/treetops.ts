@@ -1,4 +1,5 @@
 import type { ThemeConfig } from './types';
+import { getFloatingPlatforms } from './utils';
 import { drawTree, drawHangingVine, drawFgLeafCluster, drawFern } from './drawPrimitives';
 
 export const TREETOPS_THEME: ThemeConfig = {
@@ -278,7 +279,7 @@ export const TREETOPS_THEME: ThemeConfig = {
     };
 
     // Platform decorations
-    const floats = arena.platforms.filter(p => p.y < 650 && p.width >= 80);
+    const floats = getFloatingPlatforms(arena.platforms);
     for (let i = 0; i < floats.length; i++) {
       const plat = floats[i];
       const mid = plat.x + plat.width / 2;
@@ -308,7 +309,7 @@ export const TREETOPS_THEME: ThemeConfig = {
   },
 
   drawForegroundNature: (ctx, arena) => {
-    const floats = arena.platforms.filter(p => p.y < 650 && p.width >= 80);
+    const floats = getFloatingPlatforms(arena.platforms);
 
     // Foreground leaves hanging down from top
     ctx.save();

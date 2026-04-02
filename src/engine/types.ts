@@ -279,7 +279,7 @@ export interface MatchState {
   wildlife: WildlifeEntity[];
   fogParticles: Array<{x: number; y: number; vx: number; alpha: number}>;
   pollenParticles: Array<{x: number; y: number; vx: number; vy: number; size: number; alpha: number}>;
-  shootingStars: Array<{x: number; y: number; vx: number; vy: number; life: number}>;
+  shootingStars: Array<{x: number; y: number; vx: number; vy: number; life: number; tailLen: number}>;
   scoreAnimations: Array<{playerId: PlayerSlot; value: number; timer: number}>;
   ghosts: GhostEntity[];
   lavaRocks: LavaRock[];

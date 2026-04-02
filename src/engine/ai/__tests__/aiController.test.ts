@@ -136,8 +136,9 @@ describe('AIController', () => {
 
     // Run frames to flush reaction buffer and sample multiple outputs
     // (noise chance means individual frames can be random)
+    // AI is throttled to every 3rd frame, so run 60 frames to get ~20 decision frames
     let rightCount = 0;
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 60; i++) {
       const input = ai.getInput(bot, state, arena);
       if (input.right) rightCount++;
     }
@@ -152,15 +153,16 @@ describe('AIController', () => {
     const state = makeState({ players: [bot, enemy] });
     const arena = makeArena();
 
+    // AI is throttled to every 3rd frame, so run 90 frames to get ~30 decision frames
     const inputs: string[] = [];
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 90; i++) {
       const input = ai.getInput(bot, state, arena);
       inputs.push(JSON.stringify(input));
       // Simulate bot moving slightly to avoid stuck detection
       bot.x += (input.right ? 2 : 0) - (input.left ? 2 : 0);
     }
 
-    // With chaos affinity, should have some variety in 30 frames
+    // With chaos affinity, should have some variety in frames
     const unique = new Set(inputs);
     expect(unique.size).toBeGreaterThan(1);
   });
@@ -172,13 +174,15 @@ describe('AIController', () => {
     const state = makeState({ players: [bot, enemy] });
     const arena = makeArena();
 
-    // Simulate being stuck (don't move the bot) for 70 frames
+    // Simulate being stuck (don't move the bot)
+    // Stuck timer increments every frame, escape fires on next decision frame after timer > 45,
+    // then traverses reaction buffer (4 frames for hard). Run 80 frames to be safe.
     let gotJump = false;
-    for (let i = 0; i < 70; i++) {
+    for (let i = 0; i < 80; i++) {
       const input = ai.getInput(bot, state, arena);
       if (input.jump) gotJump = true;
     }
-    // After ~60 frames stuck, should trigger escape with a jump
+    // After stuck timer exceeds 45, should trigger escape with a jump
     expect(gotJump).toBe(true);
   });
 });

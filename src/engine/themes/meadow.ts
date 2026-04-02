@@ -1,4 +1,5 @@
 import type { ThemeConfig } from './types';
+import { getFloatingPlatforms } from './utils';
 import {
   drawTree, drawBush, drawFlower, drawMushroom, drawGrassTuft, drawTreeStump,
   drawFgBush, drawTallGrass, drawFern, drawHangingVine, drawFgLeafCluster, drawFgWildflower,
@@ -183,7 +184,7 @@ export const MEADOW_THEME: ThemeConfig = {
     drawTreeStump(ctx, 800, 370, 45, 40);
 
     // Nature on floating platforms (exclude small obstacle platforms)
-    const floats = arena.platforms.filter(p => p.y < 650 && p.width >= 80);
+    const floats = getFloatingPlatforms(arena.platforms);
     for (const plat of floats) {
       const mid = plat.x + plat.width / 2;
       if (plat.width > 180) {
@@ -221,7 +222,7 @@ export const MEADOW_THEME: ThemeConfig = {
     drawFern(ctx, 1220, gy);
 
     // Bushes + vines on floating platforms (exclude stumps — width < 70)
-    const floats = arena.platforms.filter(p => p.y < 650 && p.width >= 70);
+    const floats = getFloatingPlatforms(arena.platforms);
     for (let pi = 0; pi < floats.length; pi++) {
       const plat = floats[pi];
       if (plat.width > 180) {

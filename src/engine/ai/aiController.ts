@@ -26,10 +26,13 @@ export class AIController {
   private tauntTimer = 0;
   private searchTimer = 0;
   private wasIdle = false;
+  private frameCounter = 0;
+  private botIndex: number;
 
-  constructor(_slot: string, characterName: string, difficulty: BotDifficulty) { // slot used as map key by caller
+  constructor(_slot: string, characterName: string, difficulty: BotDifficulty, botIndex = 0) { // slot used as map key by caller
     this.personality = getPersonality(characterName);
     this.difficulty = getDifficultyParams(difficulty);
+    this.botIndex = botIndex;
 
     // Pre-fill ring buffer with no-ops
     this.ringSize = this.difficulty.reactionFrames + 1;
@@ -75,6 +78,15 @@ export class AIController {
       return NO_INPUT;
     }
 
+    // Throttle: only compute new decisions every 3rd frame (staggered by botIndex)
+    this.frameCounter++;
+    if (this.frameCounter % 3 !== this.botIndex % 3) {
+      // Non-decision frame: read the last delayed output without pushing a new decision
+      const delayed = this.ringBuffer[this.ringRead];
+      if (this.jumpCooldown > 0) this.jumpCooldown--;
+      return delayed;
+    }
+
     // Compute ideal input
     const ideal = this.computeIdealInput(self, state, arena);
 
@@ -105,18 +117,20 @@ export class AIController {
   }
 
   private computeIdealInput(self: Player, state: MatchState, arena: Arena): InputState {
+    // Build awareness ONCE, reuse for stuck recovery and normal path
+    const preferSafe = this.personality.cautiousness >= 1.2;
+    const awareness = buildAwareness(self, state, arena, this.difficulty.awarenessRadius, this.difficulty.pathfindingDepth, preferSafe);
+
     if (this.stuckTimer > 45) {
       this.stuckTimer = 0;
       // Use nav target to escape in the right direction (jump over obstacles, drop off edges)
-      const preferSafe = this.personality.cautiousness >= 1.2;
-      const stuckAwareness = buildAwareness(self, state, arena, this.difficulty.awarenessRadius, this.difficulty.pathfindingDepth, preferSafe);
-      if (stuckAwareness.navTarget) {
-        const dx = stuckAwareness.navTarget.approachX - self.x;
+      if (awareness.navTarget) {
+        const dx = awareness.navTarget.approachX - self.x;
         return {
           left: dx < -10,
           right: dx > 10,
-          jump: stuckAwareness.navTarget.type !== 'd',
-          down: stuckAwareness.navTarget.type === 'd',
+          jump: awareness.navTarget.type !== 'd',
+          down: awareness.navTarget.type === 'd',
         };
       }
       return {
@@ -126,9 +140,6 @@ export class AIController {
         down: false,
       };
     }
-
-    const preferSafe = this.personality.cautiousness >= 1.2;
-    const awareness = buildAwareness(self, state, arena, this.difficulty.awarenessRadius, this.difficulty.pathfindingDepth, preferSafe);
 
     // Search pause: when nothing is in immediate radius, pause briefly before roaming
     const nothingNearby = !awareness.nearestEnemy && !awareness.stompTarget && !awareness.stompThreat

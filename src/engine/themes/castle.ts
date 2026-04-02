@@ -1,4 +1,5 @@
 import type { ThemeConfig } from './types';
+import { getFloatingPlatforms } from './utils';
 
 export const CASTLE_THEME: ThemeConfig = {
   id: 'castle',
@@ -457,7 +458,7 @@ export const CASTLE_THEME: ThemeConfig = {
     // Foreground hanging banners — animated sway
     const t = Date.now() * 0.001; // time in seconds for animation
     const bannerColors = ['#8B0000', '#00008B', '#006400', '#4B0082'];
-    const floats = arena.platforms.filter(p => p.y < 650 && p.width >= 100);
+    const floats = getFloatingPlatforms(arena.platforms).filter(p => p.width >= 100);
     floats.forEach((plat, i) => {
       const bx = plat.x + plat.width / 2;
       const by = plat.y + plat.height;

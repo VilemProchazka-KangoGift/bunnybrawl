@@ -58,6 +58,7 @@ export class GameLoop {
   private running = false;
   private paused = false;
   private particles: Particle[] = [];
+  private particleFreeList: Particle[] = [];  // Recycled particle objects to reduce GC
   private fireworkTimer = 0;
   private afterimageAccumulators: Map<PlayerSlot, number> = new Map();
   private footstepAccumulators: Map<PlayerSlot, number> = new Map();
@@ -112,9 +113,10 @@ export class GameLoop {
 
     // Init AI controllers for bot players
     const botDifficulty = settings.botDifficulty ?? 'medium';
+    let botIndex = 0;
     for (const player of players) {
       if (isBotSlot(player.id)) {
-        this.aiControllers.set(player.id, new AIController(player.id, player.character.name, botDifficulty));
+        this.aiControllers.set(player.id, new AIController(player.id, player.character.name, botDifficulty, botIndex++));
       }
     }
 
@@ -413,6 +415,18 @@ export class GameLoop {
     }
   }
 
+  /** Emit a particle, reusing a recycled object if available to reduce GC pressure. */
+  private emitParticle(x: number, y: number, vx: number, vy: number, life: number, size: number, color: string): void {
+    const recycled = this.particleFreeList.pop();
+    if (recycled) {
+      recycled.x = x; recycled.y = y; recycled.vx = vx; recycled.vy = vy;
+      recycled.life = life; recycled.maxLife = life; recycled.size = size; recycled.color = color;
+      this.particles.push(recycled);
+    } else {
+      this.particles.push({ x, y, vx, vy, life, maxLife: life, size, color });
+    }
+  }
+
   // ---- Particle spawners ----
 
   private spawnDustParticles(player: Player, landVy: number): void {
@@ -422,7 +436,7 @@ export class GameLoop {
     const count = Math.floor(8 + intensity * 6);
     for (let i = 0; i < count; i++) {
       const life = 0.3 + Math.random() * 0.4 * intensity;
-      this.particles.push({ x: cx + (Math.random() - 0.5) * player.width * 1.5, y: groundY - Math.random() * 4, vx: (Math.random() - 0.5) * 150 * intensity, vy: -Math.random() * 80 * intensity - 20, life, maxLife: life, size: 2 + Math.random() * 4 * intensity, color: '#C8B896' });
+      this.emitParticle(cx + (Math.random() - 0.5) * player.width * 1.5, groundY - Math.random() * 4, (Math.random() - 0.5) * 150 * intensity, -Math.random() * 80 * intensity - 20, life, 2 + Math.random() * 4 * intensity, '#C8B896');
     }
   }
 
@@ -430,7 +444,7 @@ export class GameLoop {
     const groundY = player.y + player.height;
     const behindX = player.facing === 'right' ? player.x - 2 : player.x + player.width + 2;
     const life = 0.15 + Math.random() * 0.15;
-    this.particles.push({ x: behindX + (Math.random() - 0.5) * 6, y: groundY - Math.random() * 3, vx: (player.facing === 'right' ? -1 : 1) * (20 + Math.random() * 30), vy: -Math.random() * 20 - 5, life, maxLife: life, size: 1.5 + Math.random() * 2, color: '#C8B896' });
+    this.emitParticle(behindX + (Math.random() - 0.5) * 6, groundY - Math.random() * 3, (player.facing === 'right' ? -1 : 1) * (20 + Math.random() * 30), -Math.random() * 20 - 5, life, 1.5 + Math.random() * 2, '#C8B896');
   }
 
   private spawnImpactDust(player: Player, direction: 'up' | 'left' | 'right'): void {
@@ -441,7 +455,7 @@ export class GameLoop {
       if (direction === 'up') { px = cx + (Math.random() - 0.5) * player.width; py = player.y + 2; pvx = (Math.random() - 0.5) * 60; pvy = Math.random() * 40 + 10; }
       else { const side = direction === 'right' ? player.x + player.width : player.x; px = side; py = cy + (Math.random() - 0.5) * player.height * 0.6; pvx = (direction === 'right' ? -1 : 1) * (20 + Math.random() * 40); pvy = -Math.random() * 30; }
       const life = 0.2 + Math.random() * 0.2;
-      this.particles.push({ x: px, y: py, vx: pvx, vy: pvy, life, maxLife: life, size: 1.5 + Math.random() * 2.5, color: '#C8B896' });
+      this.emitParticle(px, py, pvx, pvy, life, 1.5 + Math.random() * 2.5, '#C8B896');
     }
   }
 
@@ -464,15 +478,7 @@ export class GameLoop {
       const hSpeed = (120 + Math.random() * 220) * side;
       const vSpeed = -(40 + Math.random() * 180);
       const life = 0.6 + Math.random() * 0.8;
-      this.particles.push({
-        x: cx + (Math.random() - 0.5) * 14,
-        y: cy + (Math.random() - 0.5) * 10,
-        vx: hSpeed + (Math.random() - 0.5) * 60,
-        vy: vSpeed,
-        life, maxLife: life,
-        size: 2 + Math.random() * 5,
-        color: BLOOD_COLOR,
-      });
+      this.emitParticle(cx + (Math.random() - 0.5) * 14, cy + (Math.random() - 0.5) * 10, hSpeed + (Math.random() - 0.5) * 60, vSpeed, life, 2 + Math.random() * 5, BLOOD_COLOR);
     }
   }
 
@@ -572,7 +578,7 @@ export class GameLoop {
       const angle = (i / 12) * Math.PI * 2;
       const speed = 40 + Math.random() * 60;
       const life = 0.5 + Math.random() * 0.3;
-      this.particles.push({ x, y: y + CARROT_SIZE / 2, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life, maxLife: life, size: 2 + Math.random() * 3, color: i % 2 === 0 ? '#FFD700' : '#FF8C00' });
+      this.emitParticle(x, y + CARROT_SIZE / 2, Math.cos(angle) * speed, Math.sin(angle) * speed, life, 2 + Math.random() * 3, i % 2 === 0 ? '#FFD700' : '#FF8C00');
     }
   }
 
@@ -586,14 +592,7 @@ export class GameLoop {
       const angle = Math.random() * Math.PI * 2;
       const speed = 60 + Math.random() * 140;
       const life = 0.6 + Math.random() * 0.6;
-      this.particles.push({
-        x: fx, y: fy,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - 50, // upward bias
-        life, maxLife: life,
-        size: 2 + Math.random() * 4,
-        color,
-      });
+      this.emitParticle(fx, fy, Math.cos(angle) * speed, Math.sin(angle) * speed - 50, life, 2 + Math.random() * 4, color);
     }
   }
 
@@ -692,6 +691,7 @@ export class GameLoop {
       p.life -= dt;
       if (p.life <= 0) {
         swapRemove(this.particles, i);
+        if (this.particleFreeList.length < 300) this.particleFreeList.push(p);
         continue;
       }
       const prevY = p.y;
@@ -1022,14 +1022,7 @@ export class GameLoop {
             const fy = baseY - Math.random() * player.height * 0.6;
             const life = 0.25 + Math.random() * 0.3;
             const colors = ['#FF4400', '#FF8800', '#FFCC00', '#FFAA00'];
-            this.particles.push({
-              x: fx, y: fy,
-              vx: (Math.random() - 0.5) * 40,
-              vy: -60 - Math.random() * 80,
-              life, maxLife: life,
-              size: 2 + Math.random() * 4,
-              color: colors[Math.floor(Math.random() * colors.length)],
-            });
+            this.emitParticle(fx, fy, (Math.random() - 0.5) * 40, -60 - Math.random() * 80, life, 2 + Math.random() * 4, colors[Math.floor(Math.random() * colors.length)]);
           }
         }
       }
@@ -1096,15 +1089,7 @@ export class GameLoop {
           const count = Math.floor(8 + intensity * 5);
           for (let i = 0; i < count; i++) {
             const life = 0.3 + Math.random() * 0.4;
-            this.particles.push({
-              x: cx + (Math.random() - 0.5) * player.width * 1.5,
-              y: groundY - Math.random() * 3,
-              vx: (Math.random() - 0.5) * 100 * intensity,
-              vy: -(Math.random() * 60 + 30) * intensity, // FLY UPWARD
-              life, maxLife: life,
-              size: 2 + Math.random() * 3,
-              color: i % 3 === 0 ? this.theme.platform.floatingBodyColor : this.theme.platform.groundTopColor,
-            });
+            this.emitParticle(cx + (Math.random() - 0.5) * player.width * 1.5, groundY - Math.random() * 3, (Math.random() - 0.5) * 100 * intensity, -(Math.random() * 60 + 30) * intensity, life, 2 + Math.random() * 3, i % 3 === 0 ? this.theme.platform.floatingBodyColor : this.theme.platform.groundTopColor);
           }
         }
       }
@@ -1239,14 +1224,14 @@ export class GameLoop {
             const angle = Math.random() * Math.PI * 2;
             const speed = 60 + Math.random() * 160;
             const life = 0.4 + Math.random() * 0.5;
-            this.particles.push({ x: px + (Math.random() - 0.5) * 8, y: py + (Math.random() - 0.5) * 8, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 80, life, maxLife: life, size: 2.5 + Math.random() * 4, color: BLOOD_COLOR });
+            this.emitParticle(px + (Math.random() - 0.5) * 8, py + (Math.random() - 0.5) * 8, Math.cos(angle) * speed, Math.sin(angle) * speed - 80, life, 2.5 + Math.random() * 4, BLOOD_COLOR);
           }
           // Thorn shrapnel
           for (let i = 0; i < 8; i++) {
             const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI;
             const speed = 30 + Math.random() * 80;
             const life = 0.3 + Math.random() * 0.3;
-            this.particles.push({ x: tx, y: ty, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life, maxLife: life, size: 1.5 + Math.random() * 2, color: '#5C3A1E' });
+            this.emitParticle(tx, ty, Math.cos(angle) * speed, Math.sin(angle) * speed, life, 1.5 + Math.random() * 2, '#5C3A1E');
           }
           // Small screen shake
           this.state.screenShake = Math.max(this.state.screenShake, 0.15);
@@ -1270,7 +1255,7 @@ export class GameLoop {
               const speed = 80 + Math.random() * 200;
               const life = 0.4 + Math.random() * 0.6;
               const color = hz.type === 'lava' ? (i % 3 === 0 ? '#FFCC00' : i % 3 === 1 ? '#FF4400' : '#FF8800') : BLOOD_COLOR;
-              this.particles.push({ x: px + (Math.random() - 0.5) * 12, y: py + (Math.random() - 0.5) * 12, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 100, life, maxLife: life, size: 3 + Math.random() * 5, color });
+              this.emitParticle(px + (Math.random() - 0.5) * 12, py + (Math.random() - 0.5) * 12, Math.cos(angle) * speed, Math.sin(angle) * speed - 100, life, 3 + Math.random() * 5, color);
             }
             // Knockback away from hazard center
             const hcx = hz.x + hz.width / 2;
@@ -1306,7 +1291,7 @@ export class GameLoop {
               const speed = 60 + Math.random() * 160;
               const life = 0.4 + Math.random() * 0.5;
               const color = i % 2 === 0 ? '#8855CC' : '#AA77EE';
-              this.particles.push({ x: pcx, y: pcy, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 80, life, maxLife: life, size: 3 + Math.random() * 4, color });
+              this.emitParticle(pcx, pcy, Math.cos(angle) * speed, Math.sin(angle) * speed - 80, life, 3 + Math.random() * 4, color);
             }
             // Knockback away from ghost
             player.vx += (dx > 0 ? 1 : -1) * 180;
@@ -1340,7 +1325,7 @@ export class GameLoop {
               const speed = 60 + Math.random() * 150;
               const life = 0.3 + Math.random() * 0.5;
               const color = i % 2 === 0 ? '#FF6600' : '#FFAA00';
-              this.particles.push({ x: pcx, y: pcy, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 60, life, maxLife: life, size: 2.5 + Math.random() * 4, color });
+              this.emitParticle(pcx, pcy, Math.cos(angle) * speed, Math.sin(angle) * speed - 60, life, 2.5 + Math.random() * 4, color);
             }
             player.vx += dx > 0 ? -120 : 120;
             player.vy = -150;
@@ -1536,9 +1521,11 @@ export class GameLoop {
     }
     if (killFeedEntries.length > 0) {
       this.state.killFeed.push(...killFeedEntries);
-      // Cap kill feed (HUD only shows last 3)
-      if (this.state.killFeed.length > 10) {
-        this.state.killFeed.splice(0, this.state.killFeed.length - 10);
+      // Cap kill feed — keep newest 10 via copyWithin + truncate (avoids O(n) splice from front)
+      const excess = this.state.killFeed.length - 10;
+      if (excess > 0) {
+        this.state.killFeed.copyWithin(0, excess);
+        this.state.killFeed.length = 10;
       }
     }
 
@@ -1619,12 +1606,13 @@ export class GameLoop {
 
     // Shooting stars (rare spawn during night phase > 0.4, if enabled by theme)
     if (this.theme.dayNight.showShootingStars && this.state.dayPhase > 0.4 && Math.random() < 0.005) {
+      const svx = 300 + Math.random() * 200;
+      const svy = 50 + Math.random() * 50;
       this.state.shootingStars.push({
         x: Math.random() * CANVAS_WIDTH * 0.5,
         y: Math.random() * CANVAS_HEIGHT * 0.3,
-        vx: 300 + Math.random() * 200,
-        vy: 50 + Math.random() * 50,
-        life: 0.4,
+        vx: svx, vy: svy, life: 0.4,
+        tailLen: Math.min(40, Math.sqrt(svx * svx + svy * svy) * 0.1),
       });
     }
     for (const star of this.state.shootingStars) {

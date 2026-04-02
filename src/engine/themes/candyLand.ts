@@ -1,4 +1,5 @@
 import type { ThemeConfig } from './types';
+import { getFloatingPlatforms } from './utils';
 
 export const CANDY_LAND_THEME: ThemeConfig = {
   id: 'candy_land',
@@ -308,7 +309,7 @@ export const CANDY_LAND_THEME: ThemeConfig = {
     drawCupcake(950, y, 22);
 
     // Platform decorations
-    const floats = arena.platforms.filter(p => p.y < 650 && p.width >= 80);
+    const floats = getFloatingPlatforms(arena.platforms);
     for (let i = 0; i < floats.length; i++) {
       const plat = floats[i];
       const mid = plat.x + plat.width / 2;

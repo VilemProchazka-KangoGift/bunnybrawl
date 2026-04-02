@@ -28,6 +28,10 @@ interface Cloud {
   speed: number;
 }
 
+function lerpCh(a: number, b: number, t: number): number { return Math.round(a + (b - a) * t); }
+
+const _nearCarrotSet = new Set<PlayerSlot>();
+
 export class Renderer {
   private bgCtx: CanvasRenderingContext2D;
   private fgCtx: CanvasRenderingContext2D;
@@ -35,6 +39,28 @@ export class Renderer {
   private lastCloudTime = 0;
   private theme: ThemeConfig;
   private frameTime = 0; // cached performance.now() per frame
+
+  // Gradient caches (avoid per-frame creation)
+  private cachedLavaGradients: Map<string, { body: CanvasGradient; halo: CanvasGradient }> = new Map();
+  private cachedZeroGBgGradients: Map<string, CanvasGradient> = new Map();
+  private cachedGhostGlowGradients: Map<string, CanvasGradient> = new Map();
+  private cachedJellyGradients: Map<string, CanvasGradient> = new Map();
+  private _fogRGB: { r: number; g: number; b: number } | null = null;
+  private _ambientRGBs: { r: number; g: number; b: number }[] | null = null;
+
+  // HUD cache
+  private hudCache: OffscreenCanvas | null = null;
+  private hudCacheCtx: OffscreenCanvasRenderingContext2D | null = null;
+  private hudLastScores: string = '';
+  private hudLastTimer: number = -1;
+  private hudLastPlayerCount: number = -1;
+  // Shared between _drawHUDImpl and _drawScoreAnimations
+  private _hudActivePlayers: Player[] = [];
+  private _hudStartX: number = 0;
+  private _hudScoreWidth: number = 0;
+
+  // Sprite cache: key → OffscreenCanvas with pre-drawn character sprite
+  private spriteCache = new Map<string, OffscreenCanvas>();
 
   constructor(bgCanvas: HTMLCanvasElement, fgCanvas: HTMLCanvasElement, theme: ThemeConfig) {
     this.bgCtx = bgCanvas.getContext('2d')!;
@@ -348,7 +374,8 @@ export class Renderer {
     }
 
     // Compute which players are near a carrot (c) for blush
-    const nearCarrotSet = new Set<PlayerSlot>();
+    _nearCarrotSet.clear();
+    const nearCarrotSet = _nearCarrotSet;
     for (const player of matchState.players) {
       if (!player.active || player.state === 'respawning') continue;
       const pcx = player.x + player.width / 2;
@@ -418,15 +445,21 @@ export class Renderer {
     // Ground fog (o) — after players, before foreground nature
     if (matchState.fogParticles) {
       const fogCfg = this.theme.fog;
-      const prevAlpha = ctx.globalAlpha;
-      ctx.fillStyle = fogCfg.color;
+      // Parse fog color once (hex to rgb components)
+      if (!this._fogRGB) {
+        const c = fogCfg.color;
+        const r = parseInt(c.slice(1, 3), 16);
+        const g = parseInt(c.slice(3, 5), 16);
+        const b = parseInt(c.slice(5, 7), 16);
+        this._fogRGB = { r, g, b };
+      }
+      const { r, g, b } = this._fogRGB;
       for (const fp of matchState.fogParticles) {
-        ctx.globalAlpha = fp.alpha * 0.3;
+        ctx.fillStyle = `rgba(${r},${g},${b},${fp.alpha * 0.3})`;
         ctx.beginPath();
         ctx.ellipse(fp.x, fp.y, fogCfg.sizeX, fogCfg.sizeY, 0, 0, Math.PI * 2);
         ctx.fill();
       }
-      ctx.globalAlpha = prevAlpha;
     }
 
     // Foreground nature — delegated to theme
@@ -440,15 +473,22 @@ export class Renderer {
     // Ambient particles (pollen / snow drift / sparkles)
     if (matchState.pollenParticles) {
       const ambCfg = this.theme.ambientParticles;
-      const prevAlpha = ctx.globalAlpha;
+      if (!this._ambientRGBs) {
+        this._ambientRGBs = ambCfg.colors.map(c => {
+          const r = parseInt(c.slice(1, 3), 16);
+          const g = parseInt(c.slice(3, 5), 16);
+          const b = parseInt(c.slice(5, 7), 16);
+          return { r, g, b };
+        });
+      }
       for (const pp of matchState.pollenParticles) {
-        ctx.globalAlpha = pp.alpha * 0.7;
-        ctx.fillStyle = ambCfg.colors[pp.size > 2 ? 0 : (ambCfg.colors.length > 1 ? 1 : 0)];
+        const ci = pp.size > 2 ? 0 : (this._ambientRGBs.length > 1 ? 1 : 0);
+        const { r, g, b } = this._ambientRGBs[ci];
+        ctx.fillStyle = `rgba(${r},${g},${b},${pp.alpha * 0.7})`;
         ctx.beginPath();
         ctx.arc(pp.x, pp.y, pp.size, 0, Math.PI * 2);
         ctx.fill();
       }
-      ctx.globalAlpha = prevAlpha;
     }
 
     // Fireworks when match is over
@@ -726,12 +766,24 @@ export class Renderer {
       // Animated lava pool
       const pulse = 0.7 + Math.sin(time * 3) * 0.15;
 
-      // Lava body
-      const grd = ctx.createLinearGradient(hz.x, hz.y, hz.x, hz.y + hz.height);
-      grd.addColorStop(0, '#FF6600');
-      grd.addColorStop(0.5, '#FF4400');
-      grd.addColorStop(1, '#CC2200');
-      ctx.fillStyle = grd;
+      // Lava body + halo (cached gradients)
+      const lavaKey = `${hz.x}_${hz.y}`;
+      let cachedLava = this.cachedLavaGradients.get(lavaKey);
+      if (!cachedLava) {
+        const body = ctx.createLinearGradient(hz.x, hz.y, hz.x, hz.y + hz.height);
+        body.addColorStop(0, '#FF6600');
+        body.addColorStop(0.5, '#FF4400');
+        body.addColorStop(1, '#CC2200');
+        const halo = ctx.createRadialGradient(
+          hz.x + hz.width / 2, hz.y + hz.height / 2, 2,
+          hz.x + hz.width / 2, hz.y + hz.height / 2, hz.width * 0.8
+        );
+        halo.addColorStop(0, 'rgba(255, 100, 0, 0.3)');
+        halo.addColorStop(1, 'rgba(255, 60, 0, 0)');
+        cachedLava = { body, halo };
+        this.cachedLavaGradients.set(lavaKey, cachedLava);
+      }
+      ctx.fillStyle = cachedLava.body;
       ctx.beginPath();
       ctx.ellipse(hz.x + hz.width / 2, hz.y + hz.height / 2, hz.width / 2, hz.height / 2, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -745,13 +797,7 @@ export class Renderer {
 
       // Glow halo
       ctx.globalAlpha = 0.15 + Math.sin(time * 2) * 0.05;
-      const halo = ctx.createRadialGradient(
-        hz.x + hz.width / 2, hz.y + hz.height / 2, 2,
-        hz.x + hz.width / 2, hz.y + hz.height / 2, hz.width * 0.8
-      );
-      halo.addColorStop(0, 'rgba(255, 100, 0, 0.3)');
-      halo.addColorStop(1, 'rgba(255, 60, 0, 0)');
-      ctx.fillStyle = halo;
+      ctx.fillStyle = cachedLava.halo;
       ctx.fillRect(hz.x - hz.width * 0.3, hz.y - hz.height, hz.width * 1.6, hz.height * 3);
 
       // Bubble spots
@@ -784,10 +830,18 @@ export class Renderer {
     const glowColor = gc?.glowColor || '#6688BB';
     const s = ghost.size;
 
-    // Ghost glow
-    const glow = ctx.createRadialGradient(0, 0, s * 0.2, 0, 0, s * 1.5);
-    glow.addColorStop(0, glowColor + '33');
-    glow.addColorStop(1, glowColor + '00');
+    // Ghost glow (cached gradient)
+    const gKey = `${s}`;
+    let glow: CanvasGradient;
+    const cachedGlow = this.cachedGhostGlowGradients.get(gKey);
+    if (cachedGlow) {
+      glow = cachedGlow;
+    } else {
+      glow = ctx.createRadialGradient(0, 0, s * 0.2, 0, 0, s * 1.5);
+      glow.addColorStop(0, glowColor + '33');
+      glow.addColorStop(1, glowColor + '00');
+      this.cachedGhostGlowGradients.set(gKey, glow);
+    }
     ctx.fillStyle = glow;
     ctx.fillRect(-s * 1.5, -s * 1.5, s * 3, s * 3);
 
@@ -869,12 +923,17 @@ export class Renderer {
   private drawZeroGZone(ctx: CanvasRenderingContext2D, zone: { x: number; y: number; width: number; height: number }, time: number): void {
     ctx.save();
 
-    // Pulsing background fill
+    // Pulsing background fill (cached gradient)
     ctx.globalAlpha = 0.1 + Math.sin(time * 1.5) * 0.04;
-    const bgGrad = ctx.createLinearGradient(zone.x, zone.y, zone.x, zone.y + zone.height);
-    bgGrad.addColorStop(0, 'rgba(0, 180, 255, 0.2)');
-    bgGrad.addColorStop(0.5, 'rgba(0, 220, 255, 0.08)');
-    bgGrad.addColorStop(1, 'rgba(0, 180, 255, 0.2)');
+    const zKey = `${zone.x}_${zone.y}`;
+    let bgGrad = this.cachedZeroGBgGradients.get(zKey);
+    if (!bgGrad) {
+      bgGrad = this.fgCtx.createLinearGradient(zone.x, zone.y, zone.x, zone.y + zone.height);
+      bgGrad.addColorStop(0, 'rgba(0, 180, 255, 0.2)');
+      bgGrad.addColorStop(0.5, 'rgba(0, 220, 255, 0.08)');
+      bgGrad.addColorStop(1, 'rgba(0, 180, 255, 0.2)');
+      this.cachedZeroGBgGradients.set(zKey, bgGrad);
+    }
     ctx.fillStyle = bgGrad;
     ctx.fillRect(zone.x, zone.y, zone.width, zone.height);
 
@@ -996,10 +1055,15 @@ export class Renderer {
     // Wobbly jelly surface — always visible
     const wobbleY = Math.sin(time * 3) * 2;
     ctx.globalAlpha = 0.25;
-    const jellyGrad = ctx.createLinearGradient(bp.x, bp.y - 4, bp.x, bp.y + bp.height);
-    jellyGrad.addColorStop(0, '#FF69B4');
-    jellyGrad.addColorStop(0.5, '#FF99CC');
-    jellyGrad.addColorStop(1, '#FF69B4');
+    const jellyKey = `${bp.x}_${bp.y}_${bp.height}`;
+    let jellyGrad = this.cachedJellyGradients.get(jellyKey);
+    if (!jellyGrad) {
+      jellyGrad = this.fgCtx.createLinearGradient(bp.x, bp.y - 4, bp.x, bp.y + bp.height);
+      jellyGrad.addColorStop(0, '#FF69B4');
+      jellyGrad.addColorStop(0.5, '#FF99CC');
+      jellyGrad.addColorStop(1, '#FF69B4');
+      this.cachedJellyGradients.set(jellyKey, jellyGrad);
+    }
     ctx.fillStyle = jellyGrad;
     ctx.beginPath();
     ctx.moveTo(bp.x, bp.y + bp.height);
@@ -1128,6 +1192,8 @@ export class Renderer {
 
   private drawParticles(ctx: CanvasRenderingContext2D, particles: Particle[]): void {
     for (const p of particles) {
+      // Off-screen culling
+      if (p.x < -20 || p.x > CANVAS_WIDTH + 20 || p.y < -20 || p.y > CANVAS_HEIGHT + 20) continue;
       const alpha = p.life / p.maxLife;
       ctx.globalAlpha = alpha * 0.7;
       ctx.fillStyle = p.color;
@@ -1142,6 +1208,8 @@ export class Renderer {
 
   private drawGibs(ctx: CanvasRenderingContext2D, gibs: Gib[]): void {
     for (const gib of gibs) {
+      // Off-screen culling
+      if (gib.x < -40 || gib.x > CANVAS_WIDTH + 40 || gib.y < -40 || gib.y > CANVAS_HEIGHT + 40) continue;
       ctx.save();
       ctx.globalAlpha = 1;
       ctx.translate(gib.x, gib.y);
@@ -1661,28 +1729,58 @@ export class Renderer {
     idleAnimTimer?: number,
     breathTimer?: number
   ): void {
+    const idleKey = (state === 'idle' && idleAnimTimer !== undefined && idleAnimTimer > 0 && idleAnimTimer < 0.5)
+      ? Math.floor(idleAnimTimer * 10)
+      : -1;
+    const cacheKey = `${char.name}_${state}_${animFrame}_${fastFalling ? 1 : 0}_${idleKey}`;
+
+    let cached = this.spriteCache.get(cacheKey);
+    if (cached) {
+      ctx.drawImage(cached, x - 10, y - 10);
+      return;
+    }
+
+    // Cache miss: render to offscreen canvas with padding for ears/tails/legs
+    const pad = 10;
+    const cw = Math.ceil(w) + pad * 2;
+    const ch = Math.ceil(h) + pad * 2;
+    cached = new OffscreenCanvas(cw, ch);
+    const sctx = cached.getContext('2d')! as unknown as CanvasRenderingContext2D;
+    // Translate so the existing draw code (which uses absolute x,y) draws into the padded offscreen canvas
+    sctx.translate(-x + pad, -y + pad);
+
+    this._drawCharacterSpriteImpl(sctx, x, y, w, h, char, state, animFrame, fastFalling, idleAnimTimer);
+
+    // Store in cache (limit size to prevent memory bloat)
+    if (this.spriteCache.size > 600) {
+      const first = this.spriteCache.keys().next().value;
+      if (first !== undefined) this.spriteCache.delete(first);
+    }
+    this.spriteCache.set(cacheKey, cached);
+    // Blit to main canvas
+    ctx.drawImage(cached, x - pad, y - pad);
+  }
+
+  private _drawCharacterSpriteImpl(
+    ctx: CanvasRenderingContext2D,
+    x: number, y: number, w: number, h: number,
+    char: { name: string; color: string; darkColor: string; lightColor: string },
+    state: string, animFrame: number, fastFalling: boolean,
+    idleAnimTimer?: number
+  ): void {
     const cx = x + w / 2;
     const isAirborne = state === 'airborne';
     const isRunning = state === 'run';
     const bounce = isRunning ? Math.sin(animFrame * Math.PI / 2) * 2 : 0;
     const yOff = y - bounce;
 
-    // Squash/stretch for fast fall
-    let scaleX = 1;
-    let scaleY = 1;
-    if (fastFalling) {
-      scaleX = 0.85;
-      scaleY = 1.15;
-    }
-
-    // Breathing animation (b) — idle vertical scale pulse
-    if (state === 'idle' && breathTimer !== undefined) {
-      const breathScale = 1 + Math.sin(breathTimer * 2.5) * 0.02;
-      scaleY *= breathScale;
-    }
+    // Squash/stretch for fast fall (part of cache key, so safe to bake in)
+    const scaleX = fastFalling ? 0.85 : 1;
+    const scaleY = fastFalling ? 1.15 : 1;
+    // Breathing animation removed — 2% scale pulse is imperceptible and would defeat caching
 
     ctx.save();
-    if (fastFalling || (state === 'idle' && breathTimer !== undefined)) {
+    if (fastFalling) {
       ctx.translate(cx, yOff + h / 2);
       ctx.scale(scaleX, scaleY);
       ctx.translate(-cx, -(yOff + h / 2));
@@ -2618,7 +2716,6 @@ export class Renderer {
 
       // Sun redshift: gold → deep orange as sun approaches horizon
       const sunRedshift = Math.max(0, (sunT - 0.55) / 0.45);
-      const lerpCh = (a: number, b: number, t: number) => Math.round(a + (b - a) * t);
 
       if (sunAlpha > 0.05) {
         ctx.save();
@@ -2729,44 +2826,40 @@ export class Renderer {
     // Stars
     if (nightIntensity > 0.25) {
       const starAlpha = Math.min((nightIntensity - 0.25) / 0.5, 1) * 0.8;
-      ctx.save();
       for (let i = 0; i < 30; i++) {
         const sx = ((i * 137 + 83) % CANVAS_WIDTH);
         const sy = ((i * 97 + 41) % (CANVAS_HEIGHT * 0.35));
         const size = 1 + (i % 3) * 0.5;
         const twinkle = Math.sin(this.frameTime / 500 + i * 1.7) * 0.3 + 0.7;
-        ctx.globalAlpha = starAlpha * twinkle;
-        ctx.fillStyle = '#FFF';
+        const a = starAlpha * twinkle;
+        ctx.fillStyle = `rgba(255,255,255,${a})`;
         ctx.beginPath();
         ctx.arc(sx, sy, size, 0, Math.PI * 2);
         ctx.fill();
       }
-      ctx.restore();
     }
 
     // Fireflies (conditional on theme)
     if (nightIntensity > 0.4 && this.theme.dayNight.showFireflies) {
       const fireflyAlpha = Math.min((nightIntensity - 0.4) / 0.4, 1) * 0.7;
       const now = this.frameTime / 1000;
-      ctx.save();
       for (let i = 0; i < 8; i++) {
         const baseX = ((i * 173 + 57) % CANVAS_WIDTH);
         const baseY = 100 + ((i * 211 + 29) % (CANVAS_HEIGHT * 0.6));
         const fx = baseX + Math.sin(now * 0.5 + i * 2.3) * 30;
         const fy = baseY + Math.cos(now * 0.4 + i * 1.7) * 20;
         const pulse = Math.sin(now * 2 + i * 1.1) * 0.3 + 0.7;
-        ctx.globalAlpha = fireflyAlpha * pulse * 0.3;
-        ctx.fillStyle = '#AAFF44';
+        const a1 = fireflyAlpha * pulse * 0.3;
+        ctx.fillStyle = `rgba(170,255,68,${a1})`;
         ctx.beginPath();
         ctx.arc(fx, fy, 6, 0, Math.PI * 2);
         ctx.fill();
-        ctx.globalAlpha = fireflyAlpha * pulse;
-        ctx.fillStyle = '#CCFF66';
+        const a2 = fireflyAlpha * pulse;
+        ctx.fillStyle = `rgba(204,255,102,${a2})`;
         ctx.beginPath();
         ctx.arc(fx, fy, 2, 0, Math.PI * 2);
         ctx.fill();
       }
-      ctx.restore();
     }
 
     // Shooting stars (n)
@@ -2775,7 +2868,7 @@ export class Renderer {
       for (const star of matchState.shootingStars) {
         const alpha = Math.min(1, star.life * 2);
         // Tail: line from current pos back along velocity
-        const tailLen = Math.min(40, Math.sqrt(star.vx * star.vx + star.vy * star.vy) * 0.1);
+        const tailLen = star.tailLen;
         const angle = Math.atan2(star.vy, star.vx);
         ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.6})`;
         ctx.lineWidth = 2;
@@ -2888,11 +2981,59 @@ export class Renderer {
   // ---- HUD ----
 
   private drawHUD(ctx: CanvasRenderingContext2D, state: MatchState): void {
+    // Build cache key from scores, timer, and player count
+    const scores = state.players.map(p => `${p.id}:${p.score}:${p.active}`).join(',');
+    const timerSec = Math.floor(state.timeElapsed);
+    const playerCount = state.players.filter(p => p.active).length;
+
+    // Check if timer is pulsing (< 30s remaining) — skip cache when animating per-frame
+    const settings = (state as any).settings as { timeLimit?: number } | undefined;
+    const timeLimit = settings?.timeLimit ?? 0;
+    const remaining = timeLimit > 0 ? timeLimit - state.timeElapsed : Infinity;
+    const timerPulsing = remaining < 30 && remaining > 0;
+
+    const needsRedraw = scores !== this.hudLastScores
+      || timerSec !== this.hudLastTimer
+      || playerCount !== this.hudLastPlayerCount
+      || timerPulsing
+      || !this.hudCache;
+
+    if (needsRedraw) {
+      if (!this.hudCache) {
+        this.hudCache = new OffscreenCanvas(CANVAS_WIDTH, 90);
+        this.hudCacheCtx = this.hudCache.getContext('2d')!;
+      }
+      const hctx = this.hudCacheCtx!;
+      hctx.clearRect(0, 0, CANVAS_WIDTH, 90);
+
+      // Draw HUD content to cache
+      this._drawHUDImpl(hctx as unknown as CanvasRenderingContext2D, state);
+
+      this.hudLastScores = scores;
+      this.hudLastTimer = timerSec;
+      this.hudLastPlayerCount = playerCount;
+    }
+
+    // Blit cached HUD
+    ctx.drawImage(this.hudCache!, 0, 0);
+
+    // Score animations are drawn on main ctx (they're transient)
+    if (state.scoreAnimations && state.scoreAnimations.length > 0) {
+      this._drawScoreAnimations(ctx, state);
+    }
+  }
+
+  private _drawHUDImpl(ctx: CanvasRenderingContext2D, state: MatchState): void {
     const activePlayers = state.players.filter(p => p.active);
     const scoreWidth = Math.min(160, Math.floor((CANVAS_WIDTH - 40) / activePlayers.length));
     const compact = scoreWidth < 130;
     const totalWidth = activePlayers.length * scoreWidth;
     const startX = (CANVAS_WIDTH - totalWidth) / 2;
+
+    // Store for _drawScoreAnimations
+    this._hudActivePlayers = activePlayers;
+    this._hudStartX = startX;
+    this._hudScoreWidth = scoreWidth;
 
     for (let i = 0; i < activePlayers.length; i++) {
       const player = activePlayers[i];
@@ -2959,32 +3100,34 @@ export class Renderer {
         ctx.fillText(`${minutes}:${seconds.toString().padStart(2, '0')}`, CANVAS_WIDTH / 2, 75);
       }
     }
+  }
 
+  private _drawScoreAnimations(ctx: CanvasRenderingContext2D, state: MatchState): void {
+    const activePlayers = this._hudActivePlayers;
+    const startX = this._hudStartX;
+    const scoreWidth = this._hudScoreWidth;
 
-    // Animated score numbers (i)
-    if (state.scoreAnimations) {
-      for (const anim of state.scoreAnimations) {
-        const progress = 1 - anim.timer / SCORE_ANIM_DURATION;
-        const yOffset = -20 * progress;
-        const scale = 1.4 - progress * 0.4; // starts large, settles
-        const alpha = 1 - progress * progress;
+    for (const anim of state.scoreAnimations!) {
+      const progress = 1 - anim.timer / SCORE_ANIM_DURATION;
+      const yOffset = -20 * progress;
+      const scale = 1.4 - progress * 0.4; // starts large, settles
+      const alpha = 1 - progress * progress;
 
-        // Find the player's HUD position
-        const pidx = activePlayers.findIndex(p => p.id === anim.playerId);
-        if (pidx < 0) continue;
-        const px = startX + pidx * scoreWidth;
+      // Find the player's HUD position
+      const pidx = activePlayers.findIndex(p => p.id === anim.playerId);
+      if (pidx < 0) continue;
+      const px = startX + pidx * scoreWidth;
 
-        ctx.save();
-        ctx.globalAlpha = alpha;
-        ctx.translate(px + scoreWidth / 2, 55 + yOffset);
-        ctx.scale(scale, scale);
-        ctx.fillStyle = '#FFD700';
-        ctx.font = 'bold 18px "Press Start 2P", monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(`+${anim.value}`, 0, 0);
-        ctx.restore();
-      }
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(px + scoreWidth / 2, 55 + yOffset);
+      ctx.scale(scale, scale);
+      ctx.fillStyle = '#FFD700';
+      ctx.font = 'bold 18px "Press Start 2P", monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`+${anim.value}`, 0, 0);
+      ctx.restore();
     }
   }
 

@@ -1,4 +1,5 @@
 import type { ThemeConfig } from './types';
+import { getFloatingPlatforms } from './utils';
 import {
   drawPineTree, drawChristmasTree, drawSnowDrift, drawIcePatch, drawIcicle, drawIceCube,
   drawBigSnowman, drawIgloo, drawSnowman, drawSnowball,
@@ -128,7 +129,7 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
   drawBackgroundNature: (ctx, arena) => {
     const ground = arena.platforms[0];
     const y = ground.y;
-    const floats = arena.platforms.filter(p => p.y < 650 && p.width >= 80);
+    const floats = getFloatingPlatforms(arena.platforms);
 
     // === LANDMARKS (background, edges) ===
     drawBigSnowman(ctx, 55, y, 90);
@@ -267,7 +268,7 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
   drawForegroundNature: (ctx, arena) => {
     const ground = arena.platforms[0];
     const gy = ground.y;
-    const floats = arena.platforms.filter(p => p.y < 650 && p.width >= 80);
+    const floats = getFloatingPlatforms(arena.platforms);
 
     // Foreground trees on ground
     drawPineTree(ctx, 50, gy, 65, true);
