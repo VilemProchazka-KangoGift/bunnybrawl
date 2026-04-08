@@ -53,20 +53,31 @@ src/
       index.ts      # Barrel export
       meadow.ts winterLake.ts volcano.ts castle.ts candyLand.ts
       treetops.ts underwater.ts hauntedGraveyard.ts rooftops.ts spaceStation.ts waterfall.ts
+    net/          # P2P network multiplayer (WebRTC/PeerJS rollback netcode)
+      prng.ts       # SeededRNG (mulberry32) for deterministic simulation
+      serialize.ts  # GameSnapshot take/restore + CRC32 desync detection
+      protocol.ts   # Binary input encoding + typed JSON control messages
+      transport.ts  # WebRTC P2P via PeerJS, room codes, RTT measurement
+      rollback.ts   # GGPO-style rollback engine (input buffer, prediction, rewind+resimulate)
+      netMatch.ts   # Orchestrator wiring Transport + RollbackEngine + GameLoop
+      index.ts      # Barrel export
     index.ts      # Public API barrel export
   hooks/
     useScaler.ts  # Viewport scaling + fullscreen API hook
   components/     # React components (menus/HUD only — canvas is imperative)
     GameScaler.tsx      # Viewport-responsive wrapper (CSS transform scaling)
-    MainMenu.tsx        # Title screen with Play button, blood toggle, language switch
-    CharacterSelect.tsx # Canvas-based JnB-style lobby
-    Match.tsx           # Game canvas mount + pause overlay
+    MainMenu.tsx        # Title screen with Play/Online buttons, blood toggle, language switch, online modal
+    CharacterSelect.tsx # Canvas-based JnB-style lobby (supports online mode: 1 player, any keys)
+    OnlineLobby.tsx     # Room create/join connection screen, auto-transitions to CharacterSelect
+    Match.tsx           # Game canvas mount + pause overlay + network match support
     VictoryScreen.tsx   # Results, stats, MVP awards, fireworks
   store/
-    gameStore.ts  # Zustand store (screen flow, match settings, gore mode persistence)
+    gameStore.ts  # Zustand store (screen flow, match settings, gore mode, online state)
   locales/
-    en.json       # English strings (character names, UI)
+    en.json       # English strings
     cs.json       # Czech strings (default language)
+    hi.json       # Hindi strings
+    fil.json      # Filipino strings
   i18n.ts         # i18next config (Czech default, English fallback)
 ```
 
@@ -82,13 +93,14 @@ src/
 - **Data-driven arena themes** — `ThemeConfig` controls all visuals + optional physics modifiers. Shared primitives in `drawPrimitives.ts`.
 - **AI via utility scoring + nav graph** — bots produce `InputState` (4 booleans) same as keyboard. Precomputed `navData.ts` provides nextHop/safeHop waypoints.
 - **Death effects are gore-mode gated** — Gore ON: blood, gibs, splat marks. Gore OFF: confetti only.
+- **P2P network multiplayer** — WebRTC DataChannels via PeerJS (free signaling). GGPO-style rollback netcode with seeded PRNG for determinism. 2-player MVP, bots run deterministically on both peers.
 
 ## Build & Run
 
 ```bash
 npm run dev       # Dev server with HMR
 npm run build     # Production build (tsc + vite)
-npm test          # Unit/integration tests (~113 tests, Vitest)
+npm test          # Unit/integration tests (~130 tests, Vitest)
 npm run test:e2e  # E2E tests (12 tests, Playwright, builds first)
 npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/physics changes)
 # Dev shortcut — skip lobby:
@@ -179,6 +191,28 @@ Themes support ambient sounds via `ThemeConfig.ambientSoundConfig`:
 5. **Arena names must fit the selector boxes** — test at runtime, shorten long names.
 6. **Avoid literal translations** — use natural/colloquial phrasing. Gaming terms (gravity, stomp, kills) often stay in English or use loan words. Academic translations (गुरुत्वाकर्षण, भौतिकी, pisika) sound wrong in a game UI.
 
+### Network multiplayer architecture
+Online play uses P2P WebRTC via PeerJS with GGPO-style rollback netcode:
+
+**Flow**: MainMenu (Online modal) → OnlineLobby (auto-create/join) → CharacterSelect (1 player, any keys) → Match (NetMatch drives GameLoop)
+
+**Key files**: `net/prng.ts` (seeded PRNG), `net/serialize.ts` (snapshots), `net/transport.ts` (WebRTC), `net/rollback.ts` (input buffer + resimulation), `net/netMatch.ts` (orchestrator)
+
+**Determinism**: 12 gameplay-affecting `Math.random()` calls replaced with `this.gameRandom()` (seeded in network mode, `Math.random()` in local). Cosmetic randomness (~234 calls) left as `Math.random()`.
+
+**GameLoop network mode**:
+- `setNetworkMode(true)` → `start()` skips internal RAF loop
+- `fixedUpdate(dt, networkInputs?)` → accepts explicit inputs from rollback engine
+- `playSound()` wrapper → muted during rollback resimulation via `setAudioEnabled(false)`
+- `renderFrame(frameDt?)` → decays `slowMotion`/`screenFlash`/`hitstopZoom` (normally done in `loop()`)
+- `resolveStuckPlayer()` failsafe runs after `collidePlatforms()` every frame
+
+**Snapshot convention**: `snapshot[f]` = state at START of frame f (before tick). Snapshots taken BEFORE `fixedUpdate`, never after.
+
+**Transport**: `Transport.setEvents()` re-wires callbacks when transitioning from lobby to match. PeerJS uses default `'binary'` serialization (NOT `'none'` — causes ESM/CJS issues with `sdp` module). Vite config needs `optimizeDeps.include: ['peerjs']`.
+
+**Online lobby (CharacterSelect)**: In online mode, `playersRef.current` has only 1 entry (P1). `drawLobby` must guard against missing players. All 5 key bindings map to P1. START zone sends CHARACTER_SELECT + READY over transport.
+
 ## Workflow Rules
 
 - **PlayerSlot = CharacterSlot | BotSlot** — human P1-P5, bot B1-B5. Use `isBotSlot(slot)`, `getCharacterForSlot(slot)`.
@@ -193,3 +227,4 @@ Largest files to be aware of when context is limited:
 - `audio.ts` ~1050 lines — `VictoryScreen.css` ~520 lines
 - Theme files ~250-800 lines each (11 themes)
 - AI: `utility.ts` ~450, `awareness.ts` ~370, `navData.ts` ~300-500 (generated)
+- Net: `rollback.ts` ~340, `serialize.ts` ~320, `transport.ts` ~260, `protocol.ts` ~200

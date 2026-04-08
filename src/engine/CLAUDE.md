@@ -70,3 +70,19 @@
 - globalAlpha: bake into `rgba()` fillStyle, don't mutate `ctx.globalAlpha` per element.
 - Off-screen culling for particles and gibs.
 - `fastMath.ts`: lookup tables for `fastSin`/`fastCos` — visual effects only, keep `Math.sin`/`Math.cos` for physics.
+
+## Network Multiplayer
+- `gameRandom()` wraps seeded PRNG in network mode, `Math.random()` in local. Use for ALL gameplay-affecting randomness (hazard spawning, respawn, AI decisions). Cosmetic randomness (particles, weather, gibs) stays as `Math.random()`.
+- `fixedUpdate` is public in network mode. Accepts optional `networkInputs` map — when provided, `getPlayerInput()` reads from it instead of InputManager/AIController.
+- `playSound()` wrapper gates all audio in fixedUpdate. Set `setAudioEnabled(false)` during rollback resimulation to prevent replay sounds.
+- `renderFrame(frameDt)` must receive frame delta in network mode to decay `slowMotion`/`screenFlash`/`hitstopZoom` timers (normally decayed in `loop()` which doesn't run in network mode).
+- `resolveStuckPlayer()` runs after `collidePlatforms()` — ejects players deeply embedded (>5px) in platforms. Catches desync-related position errors.
+- Snapshot convention: `snapshot[f]` = state BEFORE tick f. Taking snapshots AFTER `fixedUpdate` and storing at the same frame index causes compounding timer drift (each rollback adds +1dt). Always take before tick.
+- `MatchState.bouncyWobble` is a Map — serialize to `[key, value][]` for snapshots.
+- `AIController.serialize()`/`restore()` must capture ring buffer, all timers, and frame counter for correct rollback.
+- PeerJS `serialization: 'none'` breaks Vite builds (sdp module is CJS-only). Use default `'binary'` serialization.
+- `Transport.setEvents()` re-wires callbacks when transitioning from OnlineLobby to Match (transport created in lobby, message routing changes for match).
+- In `setupConnection()`, check `conn.open` immediately after attaching listeners — PeerJS may fire `peer.on('connection')` after the DataChannel is already open.
+- NEVER echo HANDSHAKE messages — both sides send once on connect. Echoing creates infinite ping-pong.
+- Character selection messages must NOT auto-switch and re-send — creates infinite cascade. Filter the dropdown instead.
+- React `useCallback` closures capture stale Zustand state. Use refs (`localCharRef`, `remoteCharRef`) for values read inside callbacks that fire from network events.
