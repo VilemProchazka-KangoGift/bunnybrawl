@@ -11,6 +11,7 @@ import {
 import { drawCloud as drawCloudPrimitive, drawHill, drawPlatformMoss } from './themes/drawPrimitives';
 import { hexToRGB } from './fastMath';
 import { CHAR_EMOJI, CUSTOM_EYE_CHARS } from './characters';
+import { getBodyEllipse, fillBodyGradient, fillBodyGradientCircle, drawHighlightSpot, drawFurEdge, getFurIntensity } from './spriteShading';
 import { debugFlags } from './debugFlags';
 import { drawNavDebugOverlay } from './navDebugOverlay';
 import type { BotNavDebugState } from './navDebugOverlay';
@@ -1929,11 +1930,11 @@ export class Renderer {
     }
 
     // Body
+    const bodyParams = getBodyEllipse(char.name, cx, yOff, w, h);
     ctx.fillStyle = char.color;
     ctx.beginPath();
     if (char.name === 'Bunny') {
-      ctx.ellipse(cx, yOff + h * 0.55, w * 0.4, h * 0.4, 0, 0, Math.PI * 2);
-      ctx.fill();
+      fillBodyGradient(ctx, bodyParams, char);
       // Ears (with idle twitch on right ear)
       const earTwitch = isIdleAnim ? Math.sin((idleT / 0.5) * Math.PI) * 0.25 : 0;
       ctx.fillStyle = char.color;
@@ -1957,8 +1958,7 @@ export class Renderer {
       ctx.arc(cx - w * 0.35, yOff + h * 0.5, 4, 0, Math.PI * 2);
       ctx.fill();
     } else if (char.name === 'Fox') {
-      ctx.ellipse(cx, yOff + h * 0.55, w * 0.38, h * 0.38, 0, 0, Math.PI * 2);
-      ctx.fill();
+      fillBodyGradient(ctx, bodyParams, char);
       ctx.fillStyle = char.color;
       ctx.beginPath();
       ctx.moveTo(cx - 8, yOff + 8);
@@ -1982,8 +1982,7 @@ export class Renderer {
       ctx.ellipse(cx, yOff + h * 0.6, w * 0.2, h * 0.2, 0, 0, Math.PI * 2);
       ctx.fill();
     } else if (char.name === 'Frog') {
-      ctx.ellipse(cx, yOff + h * 0.55, w * 0.42, h * 0.35, 0, 0, Math.PI * 2);
-      ctx.fill();
+      fillBodyGradient(ctx, bodyParams, char);
       ctx.fillStyle = char.lightColor;
       ctx.beginPath();
       ctx.arc(cx - 7, yOff + 8, 6, 0, Math.PI * 2);
@@ -2018,8 +2017,7 @@ export class Renderer {
       ctx.ellipse(cx, yOff + h * 0.62, w * 0.25, h * 0.18, 0, 0, Math.PI * 2);
       ctx.fill();
     } else if (char.name === 'Bear') {
-      ctx.ellipse(cx, yOff + h * 0.5, w * 0.42, h * 0.42, 0, 0, Math.PI * 2);
-      ctx.fill();
+      fillBodyGradient(ctx, bodyParams, char);
       ctx.beginPath();
       ctx.arc(cx - 10, yOff + 4, 6, 0, Math.PI * 2);
       ctx.fill();
@@ -2047,8 +2045,7 @@ export class Renderer {
       }
     } else if (char.name === 'Owl') {
       // Owl: round body, tufts, big round eyes
-      ctx.ellipse(cx, yOff + h * 0.5, w * 0.4, h * 0.42, 0, 0, Math.PI * 2);
-      ctx.fill();
+      fillBodyGradient(ctx, bodyParams, char);
       // Ear tufts
       ctx.fillStyle = char.darkColor;
       ctx.beginPath();
@@ -2102,8 +2099,7 @@ export class Renderer {
       ctx.fill();
     } else if (char.name === 'Cat') {
       // Cat: rounder wider body, tall upright triangular ears, whiskers, upright tail
-      ctx.ellipse(cx, yOff + h * 0.55, w * 0.42, h * 0.36, 0, 0, Math.PI * 2);
-      ctx.fill();
+      fillBodyGradient(ctx, bodyParams, char);
       // Tall upright triangular ears (much taller/narrower than fox)
       ctx.beginPath();
       ctx.moveTo(cx - 9, yOff + 10);
@@ -2184,8 +2180,7 @@ export class Renderer {
       ctx.fill();
     } else if (char.name === 'Wolf') {
       // Wolf: angular body, pointy snout
-      ctx.ellipse(cx, yOff + h * 0.52, w * 0.4, h * 0.4, 0, 0, Math.PI * 2);
-      ctx.fill();
+      fillBodyGradient(ctx, bodyParams, char);
       // Pointed ears
       ctx.beginPath();
       ctx.moveTo(cx - 9, yOff + 6);
@@ -2214,8 +2209,7 @@ export class Renderer {
       ctx.fill();
     } else if (char.name === 'Panda') {
       // Panda: round, black & white
-      ctx.ellipse(cx, yOff + h * 0.52, w * 0.42, h * 0.42, 0, 0, Math.PI * 2);
-      ctx.fill();
+      fillBodyGradient(ctx, bodyParams, char);
       // Black ears
       ctx.fillStyle = char.darkColor;
       ctx.beginPath();
@@ -2253,8 +2247,7 @@ export class Renderer {
       ctx.fill();
     } else if (char.name === 'Pig') {
       // Pig: round pink body, snout, curly tail, small ears
-      ctx.ellipse(cx, yOff + h * 0.55, w * 0.4, h * 0.38, 0, 0, Math.PI * 2);
-      ctx.fill();
+      fillBodyGradient(ctx, bodyParams, char);
       // Small upright ears
       ctx.beginPath();
       ctx.moveTo(cx - 8, yOff + 10);
@@ -2287,8 +2280,7 @@ export class Renderer {
       ctx.stroke();
     } else if (char.name === 'Cow') {
       // Cow: round cream body, black patches, horns, pink nose
-      ctx.ellipse(cx, yOff + h * 0.52, w * 0.42, h * 0.42, 0, 0, Math.PI * 2);
-      ctx.fill();
+      fillBodyGradient(ctx, bodyParams, char);
       // Black patches
       ctx.fillStyle = char.darkColor;
       ctx.beginPath();
@@ -2334,8 +2326,7 @@ export class Renderer {
       ctx.beginPath(); ctx.arc(cx + 6, yOff + h * 0.36, 1, 0, Math.PI * 2); ctx.fill();
     } else if (char.name === 'Horse') {
       // Horse: elongated body, long face, tall pointed ears, flowing mane
-      ctx.ellipse(cx, yOff + h * 0.52, w * 0.38, h * 0.42, 0, 0, Math.PI * 2);
-      ctx.fill();
+      fillBodyGradient(ctx, bodyParams, char);
       // Long face/muzzle — more elongated
       ctx.fillStyle = char.lightColor;
       ctx.beginPath();
@@ -2407,8 +2398,7 @@ export class Renderer {
       ctx.fill();
     } else if (char.name === 'Goat') {
       // Goat: stocky body, curved horns, floppy ears, beard, rectangular pupils
-      ctx.ellipse(cx, yOff + h * 0.52, w * 0.4, h * 0.4, 0, 0, Math.PI * 2);
-      ctx.fill();
+      fillBodyGradient(ctx, bodyParams, char);
       // Curly ram horns — spiral outward and downward
       ctx.strokeStyle = '#B0A080';
       ctx.lineWidth = 3.5;
@@ -2492,14 +2482,13 @@ export class Renderer {
       ctx.fill();
     } else if (char.name === 'Sheep') {
       // Sheep: fluffy cloud-like body (overlapping circles), small dark face
-      // Fluffy body — multiple overlapping circles
-      ctx.fillStyle = char.color;
-      ctx.beginPath(); ctx.arc(cx - 6, yOff + h * 0.48, 8, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(cx + 6, yOff + h * 0.48, 8, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(cx, yOff + h * 0.42, 9, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(cx - 4, yOff + h * 0.56, 7, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(cx + 4, yOff + h * 0.56, 7, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(cx, yOff + h * 0.35, 7, 0, Math.PI * 2); ctx.fill();
+      // Fluffy body — multiple overlapping gradient circles
+      fillBodyGradientCircle(ctx, cx - 6, yOff + h * 0.48, 8, char);
+      fillBodyGradientCircle(ctx, cx + 6, yOff + h * 0.48, 8, char);
+      fillBodyGradientCircle(ctx, cx, yOff + h * 0.42, 9, char);
+      fillBodyGradientCircle(ctx, cx - 4, yOff + h * 0.56, 7, char);
+      fillBodyGradientCircle(ctx, cx + 4, yOff + h * 0.56, 7, char);
+      fillBodyGradientCircle(ctx, cx, yOff + h * 0.35, 7, char);
       // Small dark face
       ctx.fillStyle = char.darkColor;
       ctx.beginPath();
@@ -2522,8 +2511,7 @@ export class Renderer {
       ctx.fill();
     } else if (char.name === 'Monkey') {
       // Monkey: round body, large round ears, lighter face, curling tail
-      ctx.ellipse(cx, yOff + h * 0.52, w * 0.4, h * 0.4, 0, 0, Math.PI * 2);
-      ctx.fill();
+      fillBodyGradient(ctx, bodyParams, char);
       // Large round ears
       ctx.beginPath();
       ctx.arc(cx - 12, yOff + h * 0.35, 6, 0, Math.PI * 2);
@@ -2563,8 +2551,7 @@ export class Renderer {
       ctx.stroke();
     } else if (char.name === 'Tiger') {
       // Tiger: muscular oval body, round ears, stripes
-      ctx.ellipse(cx, yOff + h * 0.52, w * 0.42, h * 0.42, 0, 0, Math.PI * 2);
-      ctx.fill();
+      fillBodyGradient(ctx, bodyParams, char);
       // Round ears
       ctx.beginPath();
       ctx.arc(cx - 10, yOff + 4, 6, 0, Math.PI * 2);
@@ -2609,8 +2596,7 @@ export class Renderer {
       ctx.beginPath(); ctx.moveTo(cx + 6, yOff + h * 0.54); ctx.lineTo(cx + 16, yOff + h * 0.56); ctx.stroke();
     } else if (char.name === 'Rhino') {
       // Rhino: wide heavy body, small ears, horn
-      ctx.ellipse(cx, yOff + h * 0.55, w * 0.44, h * 0.4, 0, 0, Math.PI * 2);
-      ctx.fill();
+      fillBodyGradient(ctx, bodyParams, char);
       // Small rounded ears
       ctx.beginPath();
       ctx.arc(cx - 10, yOff + 6, 4, 0, Math.PI * 2);
@@ -2673,10 +2659,7 @@ export class Renderer {
         ctx.fill();
       }
       // Body
-      ctx.fillStyle = char.color;
-      ctx.beginPath();
-      ctx.ellipse(bodyCx, bodyCy, bodyRx, bodyRy, 0, 0, Math.PI * 2);
-      ctx.fill();
+      fillBodyGradient(ctx, bodyParams, char);
       // Face/belly — lighter front
       ctx.fillStyle = char.lightColor;
       ctx.beginPath();
@@ -2712,6 +2695,10 @@ export class Renderer {
       ctx.arc(bodyCx + bodyRx * 0.5 + 0.8, bodyCy - bodyRy * 0.15 - 0.8, 0.8, 0, Math.PI * 2);
       ctx.fill();
     }
+
+    // 3D shading overlays (highlight spot + fur edge)
+    drawHighlightSpot(ctx, bodyParams);
+    drawFurEdge(ctx, bodyParams, char.darkColor, getFurIntensity(char.name));
 
     // Eyes (generic — for characters without custom eyes)
     if (!CUSTOM_EYE_CHARS.has(char.name)) {

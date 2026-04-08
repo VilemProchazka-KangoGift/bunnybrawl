@@ -10,6 +10,7 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CRO
 import {
   drawTree, drawBush, drawFlower, drawMushroom, drawGrassTuft, drawCloud,
 } from '../engine/themes/drawPrimitives';
+import { getBodyEllipse, fillBodyGradient, fillBodyGradientCircle, drawHighlightSpot, drawFurEdge, getFurIntensity } from '../engine/spriteShading';
 import './CharacterSelect.css';
 
 import { initWildlife, updateAndDrawWildlife, drawDayNightCycle } from '../engine/canvasAnimations';
@@ -870,24 +871,24 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
     ctx.translate(-cx, -footY);
   }
 
+  const bodyParams = getBodyEllipse(char.name, cx, yOff, w, h);
   ctx.fillStyle = char.color;
   ctx.beginPath();
 
   if (char.name === 'Bunny') {
-    ctx.ellipse(cx, yOff + h * 0.55, w * 0.4, h * 0.4, 0, 0, Math.PI * 2);
-    ctx.fill();
+    fillBodyGradient(ctx, bodyParams, char);
     ctx.beginPath(); ctx.ellipse(cx - 5, yOff + 2, 4, 12, -0.2, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.ellipse(cx + 5, yOff + 2, 4, 12, 0.2, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#FFB6C1';
     ctx.beginPath(); ctx.ellipse(cx - 5, yOff + 2, 2, 8, -0.2, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.ellipse(cx + 5, yOff + 2, 2, 8, 0.2, 0, Math.PI * 2); ctx.fill();
   } else if (char.name === 'Fox') {
-    ctx.ellipse(cx, yOff + h * 0.55, w * 0.38, h * 0.38, 0, 0, Math.PI * 2); ctx.fill();
+    fillBodyGradient(ctx, bodyParams, char);
     ctx.fillStyle = char.color;
     ctx.beginPath(); ctx.moveTo(cx - 8, yOff + 8); ctx.lineTo(cx - 12, yOff - 6); ctx.lineTo(cx - 2, yOff + 6); ctx.fill();
     ctx.beginPath(); ctx.moveTo(cx + 8, yOff + 8); ctx.lineTo(cx + 12, yOff - 6); ctx.lineTo(cx + 2, yOff + 6); ctx.fill();
   } else if (char.name === 'Frog') {
-    ctx.ellipse(cx, yOff + h * 0.55, w * 0.42, h * 0.35, 0, 0, Math.PI * 2); ctx.fill();
+    fillBodyGradient(ctx, bodyParams, char);
     ctx.fillStyle = char.lightColor;
     ctx.beginPath(); ctx.arc(cx - 7, yOff + 8, 6, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(cx + 7, yOff + 8, 6, 0, Math.PI * 2); ctx.fill();
@@ -895,11 +896,11 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
     ctx.beginPath(); ctx.arc(cx - 6, yOff + 8, 3, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(cx + 8, yOff + 8, 3, 0, Math.PI * 2); ctx.fill();
   } else if (char.name === 'Bear') {
-    ctx.ellipse(cx, yOff + h * 0.5, w * 0.42, h * 0.42, 0, 0, Math.PI * 2); ctx.fill();
+    fillBodyGradient(ctx, bodyParams, char);
     ctx.beginPath(); ctx.arc(cx - 10, yOff + 4, 6, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(cx + 10, yOff + 4, 6, 0, Math.PI * 2); ctx.fill();
   } else if (char.name === 'Owl') {
-    ctx.ellipse(cx, yOff + h * 0.5, w * 0.4, h * 0.42, 0, 0, Math.PI * 2); ctx.fill();
+    fillBodyGradient(ctx, bodyParams, char);
     ctx.fillStyle = char.darkColor;
     ctx.beginPath(); ctx.moveTo(cx - 8, yOff + 6); ctx.lineTo(cx - 12, yOff - 6); ctx.lineTo(cx - 4, yOff + 4); ctx.fill();
     ctx.beginPath(); ctx.moveTo(cx + 8, yOff + 6); ctx.lineTo(cx + 12, yOff - 6); ctx.lineTo(cx + 4, yOff + 4); ctx.fill();
@@ -911,7 +912,7 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
     ctx.beginPath(); ctx.arc(cx + 5.5, yOff + h * 0.36, 2, 0, Math.PI * 2); ctx.fill();
   } else if (char.name === 'Cat') {
     // Wider rounder body
-    ctx.ellipse(cx, yOff + h * 0.55, w * 0.42, h * 0.36, 0, 0, Math.PI * 2); ctx.fill();
+    fillBodyGradient(ctx, bodyParams, char);
     // Tall upright ears
     ctx.beginPath(); ctx.moveTo(cx - 9, yOff + 10); ctx.lineTo(cx - 7, yOff - 8); ctx.lineTo(cx - 2, yOff + 8); ctx.closePath(); ctx.fill();
     ctx.beginPath(); ctx.moveTo(cx + 9, yOff + 10); ctx.lineTo(cx + 7, yOff - 8); ctx.lineTo(cx + 2, yOff + 8); ctx.closePath(); ctx.fill();
@@ -930,13 +931,13 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
     ctx.beginPath(); ctx.ellipse(cx - 4.5, yOff + h * 0.38, 1, 2, 0, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.ellipse(cx + 5.5, yOff + h * 0.38, 1, 2, 0, 0, Math.PI * 2); ctx.fill();
   } else if (char.name === 'Wolf') {
-    ctx.ellipse(cx, yOff + h * 0.52, w * 0.4, h * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+    fillBodyGradient(ctx, bodyParams, char);
     ctx.beginPath(); ctx.moveTo(cx - 9, yOff + 6); ctx.lineTo(cx - 11, yOff - 6); ctx.lineTo(cx - 3, yOff + 4); ctx.fill();
     ctx.beginPath(); ctx.moveTo(cx + 9, yOff + 6); ctx.lineTo(cx + 11, yOff - 6); ctx.lineTo(cx + 3, yOff + 4); ctx.fill();
     ctx.fillStyle = char.lightColor;
     ctx.beginPath(); ctx.ellipse(cx + 3, yOff + h * 0.5, 5, 4, 0, 0, Math.PI * 2); ctx.fill();
   } else if (char.name === 'Panda') {
-    ctx.ellipse(cx, yOff + h * 0.52, w * 0.42, h * 0.42, 0, 0, Math.PI * 2); ctx.fill();
+    fillBodyGradient(ctx, bodyParams, char);
     ctx.fillStyle = char.darkColor;
     ctx.beginPath(); ctx.arc(cx - 10, yOff + 4, 6, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(cx + 10, yOff + 4, 6, 0, Math.PI * 2); ctx.fill();
@@ -950,7 +951,7 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
     ctx.beginPath(); ctx.arc(cx + 5.5, yOff + h * 0.38, 1.2, 0, Math.PI * 2); ctx.fill();
   } else if (char.name === 'Pig') {
     // Pig: round pink body + snout
-    ctx.ellipse(cx, yOff + h * 0.55, w * 0.4, h * 0.38, 0, 0, Math.PI * 2); ctx.fill();
+    fillBodyGradient(ctx, bodyParams, char);
     ctx.fillStyle = char.lightColor;
     ctx.beginPath(); ctx.ellipse(cx + 3, yOff + h * 0.52, 6, 4, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = char.darkColor;
@@ -958,7 +959,7 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
     ctx.beginPath(); ctx.arc(cx + 5, yOff + h * 0.52, 1.5, 0, Math.PI * 2); ctx.fill();
   } else if (char.name === 'Cow') {
     // Cow: cream body + black patches
-    ctx.ellipse(cx, yOff + h * 0.52, w * 0.42, h * 0.42, 0, 0, Math.PI * 2); ctx.fill();
+    fillBodyGradient(ctx, bodyParams, char);
     ctx.fillStyle = char.darkColor;
     ctx.beginPath(); ctx.ellipse(cx - 6, yOff + h * 0.4, 5, 4, -0.3, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.ellipse(cx + 4, yOff + h * 0.58, 4, 3, 0.4, 0, Math.PI * 2); ctx.fill();
@@ -973,7 +974,7 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
     ctx.beginPath(); ctx.arc(cx + 7, yOff + h * 0.36, 1, 0, Math.PI * 2); ctx.fill();
   } else if (char.name === 'Horse') {
     // Horse: elongated body, long face, pointed ears, flowing mane
-    ctx.ellipse(cx, yOff + h * 0.52, w * 0.38, h * 0.42, 0, 0, Math.PI * 2); ctx.fill();
+    fillBodyGradient(ctx, bodyParams, char);
     ctx.fillStyle = char.lightColor;
     ctx.beginPath(); ctx.ellipse(cx + 6, yOff + h * 0.54, 6, 7, 0.15, 0, Math.PI * 2); ctx.fill();
     // Tall pointed ears
@@ -997,7 +998,7 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
     ctx.beginPath(); ctx.arc(cx + 6, yOff + h * 0.38, 0.8, 0, Math.PI * 2); ctx.fill();
   } else if (char.name === 'Goat') {
     // Goat: stocky body, curved horns, floppy ears, beard, rectangular pupils
-    ctx.ellipse(cx, yOff + h * 0.52, w * 0.4, h * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+    fillBodyGradient(ctx, bodyParams, char);
     // Curly ram horns
     ctx.strokeStyle = '#B0A080'; ctx.lineWidth = 3.5; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(cx - 6, yOff + 4); ctx.bezierCurveTo(cx - 10, yOff - 6, cx - 18, yOff - 4, cx - 16, yOff + 4); ctx.bezierCurveTo(cx - 14, yOff + 10, cx - 8, yOff + 10, cx - 8, yOff + 6); ctx.stroke();
@@ -1021,11 +1022,10 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
     ctx.beginPath(); ctx.ellipse(cx + 5, yOff + h * 0.38, 2.8, 1, 0, 0, Math.PI * 2); ctx.fill();
   } else if (char.name === 'Sheep') {
     // Sheep: fluffy cloud body + dark face
-    ctx.fillStyle = char.color;
-    ctx.beginPath(); ctx.arc(cx - 6, yOff + h * 0.48, 8, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx + 6, yOff + h * 0.48, 8, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx, yOff + h * 0.42, 9, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx, yOff + h * 0.55, 7, 0, Math.PI * 2); ctx.fill();
+    fillBodyGradientCircle(ctx, cx - 6, yOff + h * 0.48, 8, char);
+    fillBodyGradientCircle(ctx, cx + 6, yOff + h * 0.48, 8, char);
+    fillBodyGradientCircle(ctx, cx, yOff + h * 0.42, 9, char);
+    fillBodyGradientCircle(ctx, cx, yOff + h * 0.55, 7, char);
     ctx.fillStyle = char.darkColor;
     ctx.beginPath(); ctx.ellipse(cx + 2, yOff + h * 0.44, 5, 6, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#FFF';
@@ -1036,7 +1036,7 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
     ctx.beginPath(); ctx.arc(cx + 4, yOff + h * 0.4, 1, 0, Math.PI * 2); ctx.fill();
   } else if (char.name === 'Monkey') {
     // Monkey: round body + big ears + light face
-    ctx.ellipse(cx, yOff + h * 0.52, w * 0.4, h * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+    fillBodyGradient(ctx, bodyParams, char);
     ctx.beginPath(); ctx.arc(cx - 12, yOff + h * 0.35, 6, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(cx + 12, yOff + h * 0.35, 6, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = char.lightColor;
@@ -1051,7 +1051,7 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
     ctx.beginPath(); ctx.arc(cx + 6, yOff + h * 0.38, 1, 0, Math.PI * 2); ctx.fill();
   } else if (char.name === 'Tiger') {
     // Tiger: muscular body, round ears, stripes
-    ctx.ellipse(cx, yOff + h * 0.52, w * 0.42, h * 0.42, 0, 0, Math.PI * 2); ctx.fill();
+    fillBodyGradient(ctx, bodyParams, char);
     ctx.beginPath(); ctx.arc(cx - 10, yOff + 4, 6, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(cx + 10, yOff + 4, 6, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = char.darkColor;
@@ -1071,7 +1071,7 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
     ctx.beginPath(); ctx.ellipse(cx + 1, yOff + h * 0.48, 3, 2, 0, 0, Math.PI * 2); ctx.fill();
   } else if (char.name === 'Rhino') {
     // Rhino: wide body, small ears, horn
-    ctx.ellipse(cx, yOff + h * 0.55, w * 0.44, h * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+    fillBodyGradient(ctx, bodyParams, char);
     ctx.beginPath(); ctx.arc(cx - 10, yOff + 6, 4, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(cx + 10, yOff + 6, 4, 0, Math.PI * 2); ctx.fill();
     // Horn
@@ -1100,8 +1100,7 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
       ctx.beginPath(); ctx.moveTo(bx - px, by - py); ctx.lineTo(tx, ty); ctx.lineTo(bx + px, by + py); ctx.closePath(); ctx.fill();
     }
     // Body
-    ctx.fillStyle = char.color;
-    ctx.beginPath(); ctx.ellipse(bodyCx, bodyCy, bodyRx, bodyRy, 0, 0, Math.PI * 2); ctx.fill();
+    fillBodyGradient(ctx, bodyParams, char);
     // Face/belly
     ctx.fillStyle = char.lightColor;
     ctx.beginPath(); ctx.ellipse(bodyCx + bodyRx * 0.35, bodyCy + bodyRy * 0.1, bodyRx * 0.55, bodyRy * 0.7, 0, 0, Math.PI * 2); ctx.fill();
@@ -1122,8 +1121,12 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
     ctx.beginPath(); ctx.arc(bodyCx + bodyRx * 0.5 + 0.8, bodyCy - bodyRy * 0.15 - 0.8, 0.8, 0, Math.PI * 2); ctx.fill();
   } else {
     // Fallback
-    ctx.ellipse(cx, yOff + h * 0.5, w * 0.4, h * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+    fillBodyGradient(ctx, bodyParams, char);
   }
+
+  // 3D shading overlays (highlight spot + fur edge)
+  drawHighlightSpot(ctx, bodyParams);
+  drawFurEdge(ctx, bodyParams, char.darkColor, getFurIntensity(char.name));
 
   // Generic eyes for characters without custom ones
   if (!CUSTOM_EYE_CHARS.has(char.name)) {
