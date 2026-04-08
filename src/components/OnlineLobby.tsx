@@ -30,11 +30,6 @@ export function OnlineLobby() {
     resetOnline();
   }, [resetOnline]);
 
-  const goToLobby = useCallback(() => {
-    transitioningToLobby.current = true;
-    setScreen('charSelect');
-  }, [setScreen]);
-
   // Auto-start: create or join based on store state.
   // Single effect handles both setup and cleanup (React Strict Mode safe).
   useEffect(() => {
@@ -67,8 +62,7 @@ export function OnlineLobby() {
             playerName: 'Player',
           });
           if (transport.isHost) {
-            const seed = Math.floor(Math.random() * 0xFFFFFFFF);
-            setOnline({ rngSeed: seed });
+            const currentSeed = useGameStore.getState().online.rngSeed;
             transport.sendReliable({
               type: MsgType.SETTINGS_SYNC,
               arenaId: ms.arenaId,
@@ -76,12 +70,12 @@ export function OnlineLobby() {
               timeLimit: ms.timeLimit,
               goreMode: ms.goreMode,
               mods: ms.mods as unknown as Record<string, boolean>,
-              rngSeed: seed,
+              rngSeed: currentSeed,
               botCount: ms.botCount,
               botDifficulty: ms.botDifficulty,
             });
           }
-          setTimeout(goToLobby, 300);
+          // Already in the lobby — connection status shown as overlay
         }
       },
       onReliableMessage: handleMsg,
@@ -92,6 +86,19 @@ export function OnlineLobby() {
     _activeTransport = transport;
 
     setOnline({ isOnline: true });
+
+    // Generate rngSeed for host immediately (needed for seeded lobby shuffle)
+    if (isHost) {
+      const seed = Math.floor(Math.random() * 0xFFFFFFFF);
+      setOnline({ rngSeed: seed });
+    }
+
+    // Go to lobby immediately — room code/connection status shown as overlay there
+    setTimeout(() => {
+      transitioningToLobby.current = true;
+      setScreen('charSelect');
+    }, 0);
+
     if (isHost) {
       transport.createRoom().then(code => {
         setOnline({ roomCode: code });

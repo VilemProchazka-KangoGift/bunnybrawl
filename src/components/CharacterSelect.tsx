@@ -55,10 +55,18 @@ interface LobbyPlayer {
   squashScale: number; // 1.0 = normal, <1 = squashed vertically (crouch)
 }
 
-// Shuffle array in-place
-function shuffle<T>(arr: T[]): T[] {
+// Shuffle array in-place, optionally with a seed for deterministic results
+function shuffle<T>(arr: T[], seed?: number): T[] {
+  // Simple seeded PRNG (mulberry32) for deterministic shuffle across peers
+  let s = seed ?? 0;
+  const rnd = seed != null ? () => {
+    s = (s + 0x6d2b79f5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  } : Math.random;
   for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(rnd() * (i + 1));
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
   return arr;
@@ -88,8 +96,9 @@ export function CharacterSelect() {
     // In online mode, only P1 is a local human player
     const humanSlots: CharacterSlot[] = isOnline ? ['P1'] : SLOTS;
 
-    // Randomly assign characters to players
-    const shuffled = shuffle([...getAllCharacters()]);
+    // Randomly assign characters — seeded in online mode for determinism across peers
+    const seed = isOnline ? online.rngSeed : undefined;
+    const shuffled = shuffle([...getAllCharacters()], seed);
     const assigned = shuffled.slice(0, humanSlots.length);
     const botAssigned = shuffled.slice(humanSlots.length, humanSlots.length + botCount);
     const extras = shuffled.slice(humanSlots.length + botCount);
@@ -276,6 +285,7 @@ export function CharacterSelect() {
       const dt = lastTimeRef.current ? Math.min((time - lastTimeRef.current) / 1000, 0.05) : 1 / 60;
       lastTimeRef.current = time;
 
+      const onlineNow = useGameStore.getState().online.isOnline;
       const allLobby = [...playersRef.current, ...botPlayersRef.current, ...extraCharsRef.current];
 
       // Update player-controlled characters (always CharacterSlots)
@@ -284,7 +294,7 @@ export function CharacterSelect() {
         const keys = keysRef.current;
 
         // In online mode, all 5 key schemes control the single P1 player
-        const bindingsToCheck = isOnline
+        const bindingsToCheck = onlineNow
           ? Object.values(KEY_BINDINGS)
           : [KEY_BINDINGS[p.slot as CharacterSlot]];
 
@@ -398,7 +408,7 @@ export function CharacterSelect() {
       }
       const humansInZone = inZone.filter(p => !isBotSlot(p.slot));
 
-      if (isOnline) {
+      if (onlineNow) {
         // Online mode: when local player enters START zone, send ready to remote
         const localInZone = humansInZone.length >= 1;
         if (localInZone && !onlineReadySentRef.current) {
@@ -440,7 +450,14 @@ export function CharacterSelect() {
         if (countdownRef.current <= 0) startMatch();
       }
 
-      drawLobby(ctx, playersRef.current, botPlayersRef.current, extraCharsRef.current, countdownRef.current, countdownStartedRef.current, dt);
+      const onlineState = useGameStore.getState().online;
+      drawLobby(ctx, playersRef.current, botPlayersRef.current, extraCharsRef.current, countdownRef.current, countdownStartedRef.current, dt,
+        onlineState.isOnline ? {
+          roomCode: onlineState.roomCode,
+          remoteCharName: onlineState.remoteCharacterName,
+          remoteReady: onlineRemoteReadyRef.current,
+          waitingForRemote: onlineReadySentRef.current && !onlineRemoteReadyRef.current,
+        } : undefined);
       rafRef.current = requestAnimationFrame(loop);
     };
 
@@ -593,6 +610,7 @@ function drawLobby(
   countdown: number,
   countdownActive: boolean,
   dt: number,
+  onlineInfo?: { roomCode: string | null; remoteCharName: string | null; remoteReady: boolean; waitingForRemote: boolean },
 ): void {
   // ---- Sky with gradient (meadow style) ----
   const skyGrad = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
@@ -823,7 +841,7 @@ function drawLobby(
   ctx.stroke();
 
   const displaySlots = players.length < SLOTS.length ? players.map(p => p.slot as CharacterSlot) : SLOTS;
-  const slotWidth = (CANVAS_WIDTH - 40) / displaySlots.length;
+  const slotWidth = Math.min(300, (CANVAS_WIDTH - 40) / displaySlots.length);
   for (let i = 0; i < displaySlots.length; i++) {
     const slot = displaySlots[i];
     const bindings = KEY_BINDINGS[slot];
@@ -954,6 +972,39 @@ function drawLobby(
     ctx.textBaseline = 'middle';
     ctx.fillText(readyText, rx, ry + 12);
     ctx.textBaseline = 'alphabetic';
+  }
+
+  // ---- Online info overlay ----
+  if (onlineInfo) {
+    // Room code (top-right)
+    if (onlineInfo.roomCode) {
+      ctx.save();
+      ctx.font = "bold 14px 'Nunito', sans-serif";
+      ctx.textAlign = 'right';
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillRect(CANVAS_WIDTH - 180, 60, 170, 36);
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.fillText(i18n.t('room_code', 'Room Code') + ':', CANVAS_WIDTH - 20, 78);
+      ctx.font = "bold 22px 'Fredoka One', monospace";
+      ctx.fillStyle = '#FFD700';
+      ctx.fillText(onlineInfo.roomCode, CANVAS_WIDTH - 20, 92);
+      ctx.restore();
+    }
+
+    // Opponent status (top-center)
+    ctx.save();
+    ctx.textAlign = 'center';
+    if (onlineInfo.remoteCharName) {
+      ctx.font = "bold 16px 'Nunito', sans-serif";
+      ctx.fillStyle = 'rgba(255,255,255,0.8)';
+      const status = onlineInfo.remoteReady ? ' - ' + i18n.t('ready', 'READY') : '';
+      ctx.fillText(i18n.t('opponent', 'Opponent') + ': ' + getCharacterDisplayName(onlineInfo.remoteCharName, i18n.language) + status, CANVAS_WIDTH / 2, 78);
+    } else if (onlineInfo.waitingForRemote) {
+      ctx.font = "bold 16px 'Nunito', sans-serif";
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.fillText(i18n.t('waiting_opponent', 'Waiting for opponent...'), CANVAS_WIDTH / 2, 78);
+    }
+    ctx.restore();
   }
 
   // ---- Day/night cycle ----
