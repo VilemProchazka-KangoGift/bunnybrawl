@@ -51,6 +51,9 @@ export class RollbackEngine {
   // Snapshot ring buffer
   private snapshots: (GameSnapshot | null)[] = new Array(MAX_ROLLBACK_FRAMES).fill(null);
 
+  // Track the last frame we confirmed via rollback (avoid redundant resimulation)
+  private lastSyncedFrame = -1;
+
   // Input delay (adaptive)
   private inputDelay = DEFAULT_INPUT_DELAY;
 
@@ -211,31 +214,12 @@ export class RollbackEngine {
   }
 
   private checkRollback(): void {
-    // Find the earliest frame where we have a confirmed remote input that differs from prediction
+    // Only rollback if NEW confirmed inputs have arrived since our last sync
+    if (this.remoteConfirmedFrame <= this.lastSyncedFrame) return;
+
+    // Find the earliest frame that needs resimulation
     let rollbackFrame = -1;
-
-    for (let f = this.localFrame - MAX_ROLLBACK_FRAMES; f < this.localFrame; f++) {
-      if (f < 0) continue;
-      const bufIdx = f % BUFFER_SIZE;
-      if (!this.remoteConfirmed[bufIdx]) continue;
-
-      // Check if we had predicted this frame and the prediction was wrong
-      const snap = this.snapshots[f % MAX_ROLLBACK_FRAMES];
-      if (!snap || snap.frame !== f) continue;
-
-      // We can't easily check "what we predicted" vs "what arrived" without storing predictions.
-      // Instead, just check if any newly confirmed frame forces a resim:
-      // If the confirmed input for frame f differs from what we used, resim from f.
-      // We approximate by checking if the frame was confirmed AFTER we simulated it.
-      // For now, we always rollback if we have any newly confirmed frames behind localFrame.
-    }
-
-    // Simpler approach: rollback if remoteConfirmedFrame has advanced into our history
-    // and we need to verify. We track what we last synced and only rollback when new
-    // confirmed inputs arrive for frames we already simulated.
-
-    // Find earliest unsynced confirmed frame
-    for (let f = Math.max(0, this.localFrame - MAX_ROLLBACK_FRAMES); f < this.localFrame; f++) {
+    for (let f = Math.max(0, this.lastSyncedFrame + 1, this.localFrame - MAX_ROLLBACK_FRAMES); f < this.localFrame; f++) {
       const bufIdx = f % BUFFER_SIZE;
       if (this.remoteConfirmed[bufIdx]) {
         const snap = this.snapshots[f % MAX_ROLLBACK_FRAMES];
@@ -246,32 +230,38 @@ export class RollbackEngine {
       }
     }
 
-    if (rollbackFrame < 0) return;
+    if (rollbackFrame < 0) {
+      this.lastSyncedFrame = this.remoteConfirmedFrame;
+      return;
+    }
 
-    // Rollback: restore snapshot and resimulate
+    // Restore snapshot — snapshot[f] = state at START of frame f (before tick f)
     const snap = this.snapshots[rollbackFrame % MAX_ROLLBACK_FRAMES];
     if (!snap || snap.frame !== rollbackFrame) return;
 
-    // Mute audio during resimulation
     this.gameLoop.setAudioEnabled(false);
-
     restoreSnapshot(snap, this.gameLoop.getState(), this.gameLoop.getRng(), this.gameLoop.getAIControllers());
 
     // Resimulate from rollbackFrame to localFrame
+    // Convention: snapshot[f] = state BEFORE tick f. We take snapshot, then tick.
     for (let f = rollbackFrame; f < this.localFrame; f++) {
       const bufIdx = f % BUFFER_SIZE;
       const inputs = new Map<string, InputState>();
       inputs.set(this.localSlot, this.localInputs[bufIdx]);
       inputs.set(this.remoteSlot, this.remoteInputs[bufIdx]);
 
-      this.gameLoop.fixedUpdate(FIXED_TIMESTEP, inputs);
+      // Snapshot at f = state before tick f (already correct for rollbackFrame from restore)
+      // For subsequent frames, capture state before ticking
+      if (f > rollbackFrame) {
+        this.snapshots[f % MAX_ROLLBACK_FRAMES] =
+          takeSnapshot(f, this.gameLoop.getState(), this.gameLoop.getRng(), this.gameLoop.getAIControllers());
+      }
 
-      // Update snapshot
-      this.snapshots[f % MAX_ROLLBACK_FRAMES] =
-        takeSnapshot(f, this.gameLoop.getState(), this.gameLoop.getRng(), this.gameLoop.getAIControllers());
+      this.gameLoop.fixedUpdate(FIXED_TIMESTEP, inputs);
     }
 
     this.gameLoop.setAudioEnabled(true);
+    this.lastSyncedFrame = this.remoteConfirmedFrame;
   }
 
   private readLocalInput(): InputState {
