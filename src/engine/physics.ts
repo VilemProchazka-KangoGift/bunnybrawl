@@ -269,7 +269,8 @@ export function resolveStuckPlayer(player: Player, platforms: Platform[]): void 
     const minOverlap = Math.min(overlapTop, overlapBottom, overlapLeft, overlapRight);
     if (minOverlap <= 5) continue;
 
-    // Eject via smallest overlap direction
+    // Eject via smallest overlap direction (only once per frame — break after first ejection
+    // to avoid bouncing between adjacent platforms)
     if (minOverlap === overlapTop) {
       player.y = plat.y - player.height;
       player.vy = 0;
@@ -283,5 +284,6 @@ export function resolveStuckPlayer(player: Player, platforms: Platform[]): void 
       player.x = plat.x + plat.width;
       player.vx = 0;
     }
+    return; // one ejection per frame max
   }
 }

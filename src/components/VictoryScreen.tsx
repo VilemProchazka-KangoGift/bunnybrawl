@@ -106,19 +106,21 @@ export function VictoryScreen() {
     return () => cancelAnimationFrame(rafId);
   }, []);
 
-  // Keyboard: Enter=rematch, Escape=menu (or close arena select)
+  // Keyboard: Enter=rematch (host only in online), Escape=menu (or close arena select)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (showArenaSelect) setShowArenaSelect(false);
         else handleMenu();
       } else if (e.key === 'Enter' && !showArenaSelect) {
+        // In online mode, only host can rematch
+        if (online.isOnline && !online.isHost) return;
         handleRematch();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showArenaSelect]);
+  }, [showArenaSelect, handleMenu, handleRematch, online.isOnline, online.isHost]);
 
   const getPlayerStats = (playerId: PlayerSlot): PlayerStats | null => {
     if (!lastMatchState) return null;

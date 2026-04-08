@@ -66,6 +66,9 @@ export class RollbackEngine {
   private rafId = 0;
   private stalled = false;
 
+  // Reusable Map for input injection (avoid GC pressure in hot 60fps loop)
+  private readonly inputMap = new Map<string, InputState>();
+
   // Callbacks
   private onStall?: (stalled: boolean) => void;
 
@@ -102,10 +105,16 @@ export class RollbackEngine {
   /** Process incoming remote input message. */
   handleInputMessage(data: ArrayBuffer): void {
     const decoded = decodeInputMessage(data);
-    if (!decoded) return;
+    if (!decoded) {
+      console.warn('[net] Failed to decode input message');
+      return;
+    }
 
     for (const { frame, input } of decoded.inputs) {
-      // Unwrap frame number (uint16 wrapping)
+      // Bounds check: reject frames too far in past or future
+      if (frame < this.localFrame - BUFFER_SIZE) continue;
+      if (frame > this.localFrame + BUFFER_SIZE) continue;
+
       const bufIdx = frame % BUFFER_SIZE;
 
       // Only accept inputs for frames we haven't passed too far
@@ -195,17 +204,17 @@ export class RollbackEngine {
       this.remoteInputs[bufIdx] = this.getLastConfirmedRemoteInput();
     }
 
-    // 5. Build input map and advance
-    const inputs = new Map<string, InputState>();
-    inputs.set(this.localSlot, this.localInputs[this.localFrame % BUFFER_SIZE]);
-    inputs.set(this.remoteSlot, this.remoteInputs[bufIdx]);
+    // 5. Build input map and advance (reuse Map to avoid GC pressure at 60fps)
+    this.inputMap.clear();
+    this.inputMap.set(this.localSlot, this.localInputs[this.localFrame % BUFFER_SIZE]);
+    this.inputMap.set(this.remoteSlot, this.remoteInputs[bufIdx]);
 
     // Take snapshot before advancing
     this.snapshots[this.localFrame % MAX_ROLLBACK_FRAMES] =
       takeSnapshot(this.localFrame, this.gameLoop.getState(), this.gameLoop.getRng(), this.gameLoop.getAIControllers());
 
     // Advance simulation
-    this.gameLoop.fixedUpdate(FIXED_TIMESTEP, inputs);
+    this.gameLoop.fixedUpdate(FIXED_TIMESTEP, this.inputMap);
 
     // 6. Desync check
     if (this.localFrame > 0 && this.localFrame % DESYNC_CHECK_INTERVAL === 0) {
@@ -251,9 +260,9 @@ export class RollbackEngine {
     // Convention: snapshot[f] = state BEFORE tick f. We take snapshot, then tick.
     for (let f = rollbackFrame; f < this.localFrame; f++) {
       const bufIdx = f % BUFFER_SIZE;
-      const inputs = new Map<string, InputState>();
-      inputs.set(this.localSlot, this.localInputs[bufIdx]);
-      inputs.set(this.remoteSlot, this.remoteInputs[bufIdx]);
+      this.inputMap.clear();
+      this.inputMap.set(this.localSlot, this.localInputs[bufIdx]);
+      this.inputMap.set(this.remoteSlot, this.remoteInputs[bufIdx]);
 
       // Snapshot at f = state before tick f (already correct for rollbackFrame from restore)
       // For subsequent frames, capture state before ticking
@@ -262,7 +271,7 @@ export class RollbackEngine {
           takeSnapshot(f, this.gameLoop.getState(), this.gameLoop.getRng(), this.gameLoop.getAIControllers());
       }
 
-      this.gameLoop.fixedUpdate(FIXED_TIMESTEP, inputs);
+      this.gameLoop.fixedUpdate(FIXED_TIMESTEP, this.inputMap);
     }
 
     this.gameLoop.setAudioEnabled(true);
@@ -271,11 +280,11 @@ export class RollbackEngine {
 
   private readLocalInput(): InputState {
     // Read from the InputManager — use ALL key bindings for online play
-    const input = (this.gameLoop as any).input;
-    if (input && typeof input.getInputAny === 'function') {
-      return input.getInputAny();
+    try {
+      return this.gameLoop.getInputAny();
+    } catch {
+      return { ...NO_INPUT };
     }
-    return { ...NO_INPUT };
   }
 
   private sendInput(frame: number, _input: InputState): void {

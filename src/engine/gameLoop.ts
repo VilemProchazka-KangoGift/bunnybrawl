@@ -400,6 +400,11 @@ export class GameLoop {
     return this.aiControllers;
   }
 
+  /** Read merged input from all key bindings (for online play). */
+  getInputAny(): InputState {
+    return this.input.getInputAny();
+  }
+
   /** Enable network mode: external code drives the loop. */
   setNetworkMode(enabled: boolean): void {
     this._networkMode = enabled;
@@ -413,7 +418,7 @@ export class GameLoop {
   /** Render current frame. Public for network loop. */
   renderFrame(frameDt?: number): void {
     // In network mode, decay real-time timers that are normally handled in loop()
-    if (this._networkMode && frameDt) {
+    if (this._networkMode && frameDt !== undefined && frameDt > 0) {
       if (this.state.slowMotion > 0) this.state.slowMotion -= frameDt;
       if (this.state.screenFlash > 0) this.state.screenFlash -= frameDt;
       if (this.state.hitstopZoom > 0) this.state.hitstopZoom -= frameDt;

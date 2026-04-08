@@ -4,7 +4,6 @@ import { useGameStore } from '../store/gameStore';
 import { GameLoop } from '../engine/gameLoop';
 import { NetMatch } from '../engine/net/netMatch';
 import { MsgType } from '../engine/net/protocol';
-import { getActiveTransport } from './OnlineLobby';
 import { getModalTransport } from './MainMenu';
 import { getArena, listArenas } from '../engine/arena';
 import { listThemes } from '../engine/themes/registry';
@@ -60,7 +59,7 @@ export function Match() {
     }
     gameLoopRef.current?.stop();
     gameLoopRef.current = null;
-    const transport = getModalTransport() || getActiveTransport();
+    const transport = getModalTransport();
     if (transport) transport.destroy();
     resetOnline();
     setActivePlayers([]);
@@ -122,7 +121,7 @@ export function Match() {
     const onMatchEnd = (winner: import('../engine/types').PlayerSlot | null, state: import('../engine/types').MatchState) => {
       // In online mode, host sends match result to guest
       if (online.isOnline && online.isHost) {
-        const transport = getModalTransport() || getActiveTransport();
+        const transport = getModalTransport();
         if (transport) {
           transport.sendReliable({ type: MsgType.MATCH_RESULT, winner: winner } as any);
         }
@@ -134,7 +133,7 @@ export function Match() {
 
     if (online.isOnline) {
       // Network mode
-      const transport = getModalTransport() || getActiveTransport();
+      const transport = getModalTransport();
       if (!transport) {
         console.error('No active transport for online match');
         setScreen('menu');
