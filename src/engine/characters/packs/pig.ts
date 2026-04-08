@@ -69,7 +69,7 @@ export const pig: CharacterPack = {
   emoji: '\uD83D\uDC37', customEyes: false, idleTransform: 'headBob',
   splatShape: 'circle',
   gibs: [{ gibType: 'ear', width: 8, height: 10 }, { gibType: 'ear', width: 8, height: 10 }, { gibType: 'snout', width: 8, height: 6 }, { gibType: 'tail', width: 10, height: 8 }, { gibType: 'body', width: 14, height: 12 }],
-  translations: { en: 'Pig', cs: 'Prase' },
+  translations: { en: 'Pig', cs: 'Prase', hi: 'सूअर', fil: 'Baboy' },
   legStyle: { shape: 'rounded', footStyle: 'hoof', footColor: '#FFD0D8' },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.55, rx: w * 0.4, ry: h * 0.38 }),
   drawSprite, drawGib,
