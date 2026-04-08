@@ -663,15 +663,15 @@ export class GameLoop {
     }
     // Orange/gold particle burst (instant feedback)
     const colors = ['#FF8C00', '#FF6600', '#FFA500', '#FF7700', '#FFD700', '#FF8C00'];
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 16; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const speed = 60 + Math.random() * 100;
-      const life = 0.3 + Math.random() * 0.3;
-      this.emitParticle(cx, cy, Math.cos(angle) * speed, Math.sin(angle) * speed - 40, life, 2 + Math.random() * 4, colors[i % colors.length]);
+      const speed = 80 + Math.random() * 140;
+      const life = 0.3 + Math.random() * 0.4;
+      this.emitParticle(cx, cy, Math.cos(angle) * speed, Math.sin(angle) * speed - 50, life, 2 + Math.random() * 5, colors[i % colors.length]);
     }
     // Upward gold sparkle ring
-    for (let i = 0; i < 6; i++) {
-      const angle = (i / 6) * Math.PI * 2;
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2;
       const speed = 30 + Math.random() * 30;
       this.emitParticle(cx, cy, Math.cos(angle) * speed, -50 - Math.random() * 40, 0.4 + Math.random() * 0.2, 1.5 + Math.random() * 2, '#FFD700');
     }
@@ -1513,6 +1513,9 @@ export class GameLoop {
           player.fatTimer = FAT_DURATION;
           audio.play('crunch');
           audio.playAnimal(player.character.name);
+          // Hitstop — shorter than kill (half duration)
+          player.hitstopTimer = Math.max(player.hitstopTimer, HITSTOP_DURATION * 0.5);
+          this.state.hitstopZoom = HITSTOP_DURATION * 0.5;
           // Score animation for carrot pickup
           this.state.scoreAnimations.push({ playerId: player.id, value: player.score, timer: SCORE_ANIM_DURATION });
           // Pickup VFX — orange burst from carrot position
