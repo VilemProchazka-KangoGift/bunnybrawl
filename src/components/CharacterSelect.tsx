@@ -894,7 +894,7 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
   }
 
   // Legs — shared leg renderer with per-character style
-  drawLegs(ctx, cx, yOff, w, h, state, animFrame, -1, p.squashScale, colors, lobbyPack?.legStyle);
+  drawLegs(ctx, cx, yOff, h, state, animFrame, p.squashScale, colors, lobbyPack?.legStyle);
 
   ctx.restore();
 }

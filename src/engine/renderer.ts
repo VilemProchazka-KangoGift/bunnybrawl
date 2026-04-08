@@ -1654,7 +1654,7 @@ export class Renderer {
     }
 
     // Legs — dispatch to shared leg renderer with per-character style
-    drawLegs(ctx, cx, yOff, w, h, state, animFrame, idleT, squashScale, colors, pack?.legStyle);
+    drawLegs(ctx, cx, yOff, h, state, animFrame, squashScale, colors, pack?.legStyle);
 
     // Motion lines for airborne
     if (isAirborne && !fastFalling) {

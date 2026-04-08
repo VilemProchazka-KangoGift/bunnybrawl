@@ -57,17 +57,16 @@ function drawFootWebbed(
 
 function drawFootClaw(
   ctx: CanvasRenderingContext2D,
-  fx: number, fy: number, fw: number, _fh: number, color: string,
+  fx: number, fy: number, fw: number, fh: number, color: string,
 ): void {
   ctx.strokeStyle = color;
   ctx.lineWidth = 1.5;
   ctx.lineCap = 'round';
   const cx = fx + fw / 2;
-  // Three downward claw lines
   for (let i = -1; i <= 1; i++) {
     ctx.beginPath();
     ctx.moveTo(cx + i * (fw * 0.3), fy);
-    ctx.lineTo(cx + i * (fw * 0.4), fy + 3);
+    ctx.lineTo(cx + i * (fw * 0.4), fy + fh);
     ctx.stroke();
   }
 }
@@ -84,7 +83,7 @@ function drawFootRound(
 
 type FootDrawer = (ctx: CanvasRenderingContext2D, fx: number, fy: number, fw: number, fh: number, color: string) => void;
 
-const FOOT_DRAWERS: Record<string, FootDrawer> = {
+const FOOT_DRAWERS: Record<Exclude<LegStyle['footStyle'], 'none'>, FootDrawer> = {
   paw: drawFootPaw,
   hoof: drawFootHoof,
   webbed: drawFootWebbed,
@@ -168,7 +167,7 @@ function drawLegWide(
 
 type LegDrawer = (ctx: CanvasRenderingContext2D, lx: number, ly: number, lw: number, lh: number, kneeOff: number) => void;
 
-const LEG_DRAWERS: Record<string, LegDrawer> = {
+const LEG_DRAWERS: Record<LegStyle['shape'], LegDrawer> = {
   rounded: drawLegRounded,
   tapered: drawLegTapered,
   stick: drawLegStick,
@@ -188,11 +187,9 @@ export function drawLegs(
   ctx: CanvasRenderingContext2D,
   cx: number,
   yOff: number,
-  _w: number,
   h: number,
   state: string,
   animFrame: number,
-  _idleT: number,
   squashScale: number,
   colors: CharacterColors,
   style?: LegStyle,
@@ -208,25 +205,25 @@ export function drawLegs(
   const isRunning = state === 'run';
   const isIdle = state === 'idle';
 
-  // --- Squash adjustments (F) ---
+  // --- Squash adjustments ---
   const squashFactor = squashScale < 0.9 ? (1 - squashScale) : 0;
   const legW = baseLegW + squashFactor * 4;
   const legH = baseLegH - squashFactor * 3;
 
-  // --- Walk animation (C: horizontal + vertical) ---
+  // --- Walk animation ---
   const animSin = Math.sin(animFrame * Math.PI);
   const animCos = Math.cos(animFrame * Math.PI);
   const vertAnim = isRunning ? animSin * 3 : 0;
   const horizAnim = isRunning ? animCos * 2 : 0;
 
-  // --- Idle weight shift (G) ---
+  // --- Idle weight shift ---
   const idleShift = isIdle ? Math.sin(animFrame * Math.PI * 0.5) * 1.0 : 0;
 
   // --- Airborne spread ---
   const airSpread = isAirborne ? 3 : 0;
   const airExtend = isAirborne ? 2 : 0;
 
-  // --- Knee bend offset (D) ---
+  // --- Knee bend offset ---
   let baseKneeOff: number;
   if (squashFactor > 0) {
     // Landing/crouch: knees splay outward
@@ -252,28 +249,25 @@ export function drawLegs(
 
   // --- Draw each leg (left = -1, right = +1) ---
   for (let side = -1; side <= 1; side += 2) {
-    const sideSign = side; // -1 for left, +1 for right
-
     // Hip position — widen gap for thick legs so they don't blend together
     const halfGap = Math.max(3, legW / 2 + 1);
-    const hipX = cx + sideSign * halfGap - legW / 2
-      + sideSign * (baseSpread + airSpread)
-      + sideSign * horizAnim;
+    const hipX = cx + side * halfGap - legW / 2
+      + side * (baseSpread + airSpread)
+      + side * horizAnim;
 
     const hipY = yOff + h * 0.75
-      - sideSign * vertAnim
-      + sideSign * idleShift;
+      - side * vertAnim
+      + side * idleShift;
 
     const effLegH = legH + airExtend;
 
-    // Knee offset: outward = away from center
-    const kneeOff = baseKneeOff * sideSign;
+    const kneeOff = baseKneeOff * side;
 
     // Draw the leg
     ctx.fillStyle = colors.darkColor;
     legDrawer(ctx, hipX, hipY, legW, effLegH, kneeOff);
 
-    // Draw the foot (B)
+    // Draw the foot
     if (footDrawer) {
       const footX = hipX + legW / 2 - footW / 2 + kneeOff * 0.3;
       const footY = hipY + effLegH - 1;
