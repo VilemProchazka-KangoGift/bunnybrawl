@@ -1,4 +1,10 @@
 import type { AwarenessSnapshot, ActionScores, AIPersonality } from './types';
+import type { SeededRNG } from '../net/prng';
+
+/** Return seeded float if rng provided, else Math.random(). */
+function rnd(rng?: SeededRNG): number {
+  return rng ? rng.nextFloat() : Math.random();
+}
 
 /**
  * Score all possible actions based on awareness and personality.
@@ -9,6 +15,7 @@ export function evaluateActions(
   personality: AIPersonality,
   precisionMult: number = 0,
   carrotChase: boolean = false,
+  rng?: SeededRNG,
 ): ActionScores {
   const scores: ActionScores = { moveLeft: 0, moveRight: 0, jump: 0, drop: 0 };
 
@@ -27,16 +34,16 @@ export function evaluateActions(
     evaluateCarrotPursuit(awareness, scores, personality, false);
   }
   evaluateThreatEvasion(awareness, scores, personality);
-  evaluateAirborneAboveDodge(awareness, scores, personality, precisionMult);
-  evaluatePlatformSeeking(awareness, scores, personality, precisionMult);
+  evaluateAirborneAboveDodge(awareness, scores, personality, precisionMult, rng);
+  evaluatePlatformSeeking(awareness, scores, personality, precisionMult, rng);
   evaluateHazardAvoidance(awareness, scores, personality);
   evaluateEdgeAvoidance(awareness, scores, personality);
   evaluateZoneExploitation(awareness, scores, personality);
   evaluateGeyserEscape(awareness, scores);
   evaluateLandingPrediction(awareness, scores);
   evaluateInvincibilityAggression(awareness, scores, personality);
-  evaluateClustering(awareness, scores);
-  evaluatePanic(awareness, scores, personality);
+  evaluateClustering(awareness, scores, rng);
+  evaluatePanic(awareness, scores, personality, rng);
   evaluateCamping(awareness, scores, personality);
 
   // Roam: always-on baseline so bots keep moving when nothing else is happening
@@ -157,7 +164,7 @@ function evaluateTargetPriority(a: AwarenessSnapshot, s: ActionScores, p: AIPers
   }
 }
 
-function evaluatePlatformSeeking(a: AwarenessSnapshot, s: ActionScores, p: AIPersonality, precisionMult: number = 0): void {
+function evaluatePlatformSeeking(a: AwarenessSnapshot, s: ActionScores, p: AIPersonality, precisionMult: number = 0, rng?: SeededRNG): void {
   if (!a.self.onGround) return;
 
   const hasEnemyAbove = a.nearestEnemy && a.nearestEnemy.dy < -30;
@@ -168,12 +175,12 @@ function evaluatePlatformSeeking(a: AwarenessSnapshot, s: ActionScores, p: AIPer
 
   // Nav-guided pathfinding: use precomputed graph when available
   // Anti-predictability: chaotic bots sometimes ignore nav (fall back to reactive)
-  const useNav = a.navTarget && (p.chaosAffinity < 0.5 || Math.random() > p.chaosAffinity * 0.4);
+  const useNav = a.navTarget && (p.chaosAffinity < 0.5 || rnd(rng) > p.chaosAffinity * 0.4);
 
   if (useNav && a.navTarget) {
     const nav = a.navTarget;
     // Add jitter to approach position for variability (+/- 20px), reduced by precision
-    const jitteredApproach = nav.approachX + (Math.random() - 0.5) * 40 * (1 - precisionMult);
+    const jitteredApproach = nav.approachX + (rnd(rng) - 0.5) * 40 * (1 - precisionMult);
     const dx = jitteredApproach - a.self.x;
 
     if (nav.type === 'j') {
@@ -333,7 +340,7 @@ function evaluateRoam(a: AwarenessSnapshot, s: ActionScores): void {
 }
 
 /** Don't walk under airborne enemies — sidestep with some imprecision */
-function evaluateAirborneAboveDodge(a: AwarenessSnapshot, s: ActionScores, p: AIPersonality, precisionMult: number = 0): void {
+function evaluateAirborneAboveDodge(a: AwarenessSnapshot, s: ActionScores, p: AIPersonality, precisionMult: number = 0, rng?: SeededRNG): void {
   if (a.airborneAbove.length === 0 || !a.self.onGround) return;
   const weight = 0.8 * p.cautiousness;
   for (const ab of a.airborneAbove) {
@@ -341,7 +348,7 @@ function evaluateAirborneAboveDodge(a: AwarenessSnapshot, s: ActionScores, p: AI
     const urgency = Math.max(0, 1 - ab.dist / 200);
     // Move away from their X, but with some randomness (not pixel-perfect dodge)
     const dodgeDir = ab.dx > 0 ? -1 : 1;
-    const jitter = (Math.random() - 0.5) * 0.3 * (1 - precisionMult);
+    const jitter = (rnd(rng) - 0.5) * 0.3 * (1 - precisionMult);
     if (dodgeDir + jitter > 0) s.moveRight += weight * urgency;
     else s.moveLeft += weight * urgency;
   }
@@ -372,23 +379,23 @@ function evaluateInvincibilityAggression(a: AwarenessSnapshot, s: ActionScores, 
 }
 
 /** If 2+ bots are clustered together, add scatter force */
-function evaluateClustering(a: AwarenessSnapshot, s: ActionScores): void {
+function evaluateClustering(a: AwarenessSnapshot, s: ActionScores, rng?: SeededRNG): void {
   if (a.nearbyBotCount < 2) return;
   // Scatter: add random directional force proportional to crowding
   const scatterWeight = 0.3 * Math.min(a.nearbyBotCount, 4);
-  if (Math.random() > 0.5) s.moveRight += scatterWeight;
+  if (rnd(rng) > 0.5) s.moveRight += scatterWeight;
   else s.moveLeft += scatterWeight;
 }
 
 /** When losing badly, increase erratic movement */
-function evaluatePanic(a: AwarenessSnapshot, s: ActionScores, _p: AIPersonality): void {
+function evaluatePanic(a: AwarenessSnapshot, s: ActionScores, _p: AIPersonality, rng?: SeededRNG): void {
   const scoreDiff = a.leaderScore - a.self.score;
   if (scoreDiff < 6) return; // only panic when significantly behind
   const panicLevel = Math.min(1, (scoreDiff - 5) / 10);
   const noise = panicLevel * 0.4;
-  s.moveLeft += (Math.random() - 0.5) * noise;
-  s.moveRight += (Math.random() - 0.5) * noise;
-  s.jump += Math.random() * noise * 0.2;
+  s.moveLeft += (rnd(rng) - 0.5) * noise;
+  s.moveRight += (rnd(rng) - 0.5) * noise;
+  s.jump += rnd(rng) * noise * 0.2;
 }
 
 /** Cautious bots on elevated platforms occasionally camp (idle) */

@@ -1,5 +1,6 @@
 import type { Player, MatchState, Arena, InputState, BotDifficulty } from '../types';
 import type { AIPersonality, DifficultyParams, AwarenessSnapshot } from './types';
+import type { SeededRNG } from '../net/prng';
 import { buildAwareness } from './awareness';
 import { evaluateActions } from './utility';
 import { getPersonality, getDifficultyParams } from './personality';
@@ -29,8 +30,9 @@ export class AIController {
   private frameCounter = 0;
   private botIndex: number;
   private _lastNavTarget: AwarenessSnapshot['navTarget'] = null;
+  private rng?: SeededRNG;
 
-  constructor(_slot: string, characterName: string, difficulty: BotDifficulty, botIndex = 0) { // slot used as map key by caller
+  constructor(_slot: string, characterName: string, difficulty: BotDifficulty, botIndex = 0, rng?: SeededRNG) { // slot used as map key by caller
     this.personality = getPersonality(characterName);
     this.difficulty = getDifficultyParams(difficulty);
     this.botIndex = botIndex;
@@ -43,6 +45,12 @@ export class AIController {
     }
     this.ringWrite = this.difficulty.reactionFrames;
     this.ringRead = 0;
+    this.rng = rng;
+  }
+
+  /** Return seeded float if rng provided, else Math.random(). */
+  private rnd(): number {
+    return this.rng ? this.rng.nextFloat() : Math.random();
   }
 
   getWalkSpeedMult(): number {
@@ -61,7 +69,7 @@ export class AIController {
     // Taunt: freeze briefly after getting a kill
     if (self.score > this.lastScore) {
       const tf = this.difficulty.tauntFrames;
-      this.tauntTimer = Math.floor(tf * 0.6) + Math.floor(Math.random() * Math.ceil(tf * 0.4));
+      this.tauntTimer = Math.floor(tf * 0.6) + Math.floor(this.rnd() * Math.ceil(tf * 0.4));
       this.lastScore = self.score;
     }
     if (this.tauntTimer > 0) {
@@ -80,7 +88,7 @@ export class AIController {
     this.lastY = self.y;
 
     // Hesitation: randomly freeze
-    if (this.difficulty.hesitationChance > 0 && Math.random() < this.difficulty.hesitationChance) {
+    if (this.difficulty.hesitationChance > 0 && this.rnd() < this.difficulty.hesitationChance) {
       return NO_INPUT;
     }
 
@@ -102,7 +110,7 @@ export class AIController {
     if (this.jumpCooldown > 0) this.jumpCooldown--;
 
     // Apply difficulty noise
-    if (Math.random() < this.difficulty.noiseChance) {
+    if (this.rnd() < this.difficulty.noiseChance) {
       return this.randomInput();
     }
 
@@ -137,8 +145,8 @@ export class AIController {
         };
       }
       return {
-        left: Math.random() > 0.5,
-        right: Math.random() > 0.5,
+        left: this.rnd() > 0.5,
+        right: this.rnd() > 0.5,
         jump: true,
         down: false,
       };
@@ -149,7 +157,7 @@ export class AIController {
       && !awareness.nearestCarrot && awareness.airborneAbove.length === 0 && awareness.nearbyHazards.length === 0;
     if (nothingNearby && !this.wasIdle) {
       const sp = this.difficulty.searchPauseFrames;
-      this.searchTimer = sp > 0 ? Math.floor(sp * 0.4) + Math.floor(Math.random() * Math.ceil(sp * 0.6)) : 0;
+      this.searchTimer = sp > 0 ? Math.floor(sp * 0.4) + Math.floor(this.rnd() * Math.ceil(sp * 0.6)) : 0;
       this.wasIdle = true;
     }
     if (!nothingNearby) {
@@ -179,16 +187,16 @@ export class AIController {
       }
     }
 
-    const scores = evaluateActions(awareness, this.personality, this.difficulty.precisionMult, carrotChase);
+    const scores = evaluateActions(awareness, this.personality, this.difficulty.precisionMult, carrotChase, this.rng);
 
     // Add chaos noise (suppressed at high difficulty)
     const effectiveChaos = this.personality.chaosAffinity * (1 - this.difficulty.chaosSuppress);
     if (effectiveChaos > 0) {
       const noise = effectiveChaos * 0.3;
-      scores.moveLeft += (Math.random() - 0.5) * noise;
-      scores.moveRight += (Math.random() - 0.5) * noise;
-      scores.jump += (Math.random() - 0.5) * noise * 0.5;
-      scores.drop += (Math.random() - 0.5) * noise * 0.3;
+      scores.moveLeft += (this.rnd() - 0.5) * noise;
+      scores.moveRight += (this.rnd() - 0.5) * noise;
+      scores.jump += (this.rnd() - 0.5) * noise * 0.5;
+      scores.drop += (this.rnd() - 0.5) * noise * 0.3;
     }
 
     // Precision-adjusted thresholds: impossible bots act on weaker signals
@@ -208,10 +216,10 @@ export class AIController {
 
   private randomInput(): InputState {
     return {
-      left: Math.random() > 0.5,
-      right: Math.random() > 0.5,
-      jump: Math.random() > 0.92,
-      down: Math.random() > 0.95,
+      left: this.rnd() > 0.5,
+      right: this.rnd() > 0.5,
+      jump: this.rnd() > 0.92,
+      down: this.rnd() > 0.95,
     };
   }
 }

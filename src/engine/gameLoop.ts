@@ -4,6 +4,7 @@ import type {
   InputState,
 } from './types';
 import { isBotSlot } from './types';
+import type { SeededRNG } from './net/prng';
 import type { ThemeConfig } from './themes/types';
 import { getTheme } from './themes/registry';
 import { mirrorArena } from './arena';
@@ -93,6 +94,9 @@ export class GameLoop {
   private activeAmbientLoops: string[] = [];
   private periodicAmbientTimers: Map<string, number> = new Map();
 
+  // Deterministic PRNG for network mode (undefined = use Math.random, local play)
+  private rng?: SeededRNG;
+
   constructor(
     bgCanvas: HTMLCanvasElement,
     fgCanvas: HTMLCanvasElement,
@@ -164,7 +168,7 @@ export class GameLoop {
     let botIndex = 0;
     for (const player of players) {
       if (isBotSlot(player.id)) {
-        this.aiControllers.set(player.id, new AIController(player.id, player.character.name, botDifficulty, botIndex++));
+        this.aiControllers.set(player.id, new AIController(player.id, player.character.name, botDifficulty, botIndex++, this.rng));
       }
     }
 
@@ -242,10 +246,10 @@ export class GameLoop {
       scoreAnimations: [],
       ghosts: [],
       lavaRocks: [],
-      lavaRockTimer: this.theme.lavaRockConfig ? randRange(this.theme.lavaRockConfig.spawnInterval) : 9999,
+      lavaRockTimer: this.theme.lavaRockConfig ? this.theme.lavaRockConfig.spawnInterval[0] + this.gameRandom() * (this.theme.lavaRockConfig.spawnInterval[1] - this.theme.lavaRockConfig.spawnInterval[0]) : 9999,
 
       geyserStates: (arena.effectZones || []).filter(z => z.type === 'geyser').map(z => ({
-        timer: (z.interval || 10) * Math.random(),
+        timer: (z.interval || 10) * this.gameRandom(),
         active: false,
         activeTimer: 0,
       })),
@@ -283,12 +287,12 @@ export class GameLoop {
       const gc = this.theme.ghostConfig;
       for (let i = 0; i < gc.count; i++) {
         this.state.ghosts.push({
-          x: Math.random() * CANVAS_WIDTH,
-          y: 300 + Math.random() * 300,
-          vx: (Math.random() < 0.5 ? -1 : 1) * gc.speed * (0.7 + Math.random() * 0.6),
+          x: this.gameRandom() * CANVAS_WIDTH,
+          y: 300 + this.gameRandom() * 300,
+          vx: (this.gameRandom() < 0.5 ? -1 : 1) * gc.speed * (0.7 + this.gameRandom() * 0.6),
           size: gc.size,
-          alpha: 0.5 + Math.random() * 0.3,
-          wobblePhase: Math.random() * Math.PI * 2,
+          alpha: 0.5 + this.gameRandom() * 0.3,
+          wobblePhase: this.gameRandom() * Math.PI * 2,
         });
       }
     }
@@ -358,6 +362,26 @@ export class GameLoop {
       window.removeEventListener('keydown', this._debugKeyHandler);
       this._debugKeyHandler = null;
     }
+  }
+
+  /** Gameplay-affecting random: seeded in network mode, Math.random() in local. */
+  private gameRandom(): number {
+    return this.rng ? this.rng.nextFloat() : Math.random();
+  }
+
+  /** Set a seeded PRNG for deterministic network play. */
+  setRng(rng: SeededRNG): void {
+    this.rng = rng;
+  }
+
+  /** Get the current RNG (for snapshots). */
+  getRng(): SeededRNG | undefined {
+    return this.rng;
+  }
+
+  /** Get AI controllers map (for snapshots). */
+  getAIControllers(): Map<string, AIController> {
+    return this.aiControllers;
   }
 
   getState(): MatchState { return this.state; }
@@ -481,8 +505,8 @@ export class GameLoop {
     if (candidates.length === 0) return;
     // Try a few times to avoid spawning on top of a player
     for (let attempt = 0; attempt < 3; attempt++) {
-      const fp = candidates[Math.floor(Math.random() * candidates.length)];
-      const x = fp.plat.x + 20 + Math.random() * (fp.plat.width - 40);
+      const fp = candidates[Math.floor(this.gameRandom() * candidates.length)];
+      const x = fp.plat.x + 20 + this.gameRandom() * (fp.plat.width - 40);
       if (!this.playerNearSpawn(fp.plat, x)) {
         this.state.springs.push({
           x, y: fp.plat.y, platformIndex: fp.idx,
@@ -497,8 +521,8 @@ export class GameLoop {
     if (this.floatingPlatforms.length === 0) return;
     // Try a few times to avoid spawning on top of a player
     for (let attempt = 0; attempt < 3; attempt++) {
-      const fp = this.floatingPlatforms[Math.floor(Math.random() * this.floatingPlatforms.length)];
-      const x = fp.plat.x + 10 + Math.random() * (fp.plat.width - 44);
+      const fp = this.floatingPlatforms[Math.floor(this.gameRandom() * this.floatingPlatforms.length)];
+      const x = fp.plat.x + 10 + this.gameRandom() * (fp.plat.width - 44);
       if (!this.playerNearSpawn(fp.plat, x)) {
         this.state.thorns.push({
           x, y: fp.plat.y - 12, width: 28, height: 12,
@@ -751,22 +775,22 @@ export class GameLoop {
     for (const plat of this.arena.platforms) {
       // On-platform candidates
       for (let attempt = 0; attempt < 3; attempt++) {
-        const cx = plat.x + 20 + Math.random() * (plat.width - 40);
+        const cx = plat.x + 20 + this.gameRandom() * (plat.width - 40);
         const cy = plat.y - CARROT_SIZE;
         candidates.push({ x: cx, y: cy, distSq: minDistSqTo(cx, cy) });
       }
       // Mid-air candidates above platforms (reachable by jumping)
       for (let attempt = 0; attempt < 2; attempt++) {
-        const cx = plat.x + 20 + Math.random() * (plat.width - 40);
-        const cy = Math.max(CARROT_SIZE, plat.y - 60 - Math.random() * 60);
+        const cx = plat.x + 20 + this.gameRandom() * (plat.width - 40);
+        const cy = Math.max(CARROT_SIZE, plat.y - 60 - this.gameRandom() * 60);
         candidates.push({ x: cx, y: cy, distSq: minDistSqTo(cx, cy) });
       }
     }
     // Extra mid-air candidates inside effect zones (carrots floating in zero-G, etc.)
     for (const zone of this.cachedZeroGZones) {
       for (let attempt = 0; attempt < 5; attempt++) {
-        const cx = zone.x + 30 + Math.random() * (zone.width - 60);
-        const cy = zone.y + 30 + Math.random() * (zone.height - 60);
+        const cx = zone.x + 30 + this.gameRandom() * (zone.width - 60);
+        const cy = zone.y + 30 + this.gameRandom() * (zone.height - 60);
         candidates.push({ x: cx, y: cy, distSq: minDistSqTo(cx, cy) * 2.25 }); // 1.5x bias squared
       }
     }
@@ -774,8 +798,8 @@ export class GameLoop {
     if (this.arena.carrotZones) {
       for (const zone of this.arena.carrotZones) {
         for (let attempt = 0; attempt < 8; attempt++) {
-          const cx = zone.x + 20 + Math.random() * (zone.width - 40);
-          const cy = zone.y + 20 + Math.random() * (zone.height - 40);
+          const cx = zone.x + 20 + this.gameRandom() * (zone.width - 40);
+          const cy = zone.y + 20 + this.gameRandom() * (zone.height - 40);
           candidates.push({ x: cx, y: cy, distSq: minDistSqTo(cx, cy) * 4 }); // 2x bias squared
         }
       }
@@ -973,12 +997,12 @@ export class GameLoop {
     this.state.springSpawnTimer -= dt;
     if (this.state.springSpawnTimer <= 0) {
       this.spawnSpring();
-      this.state.springSpawnTimer = SPRING_SPAWN_INTERVAL + Math.random() * 5;
+      this.state.springSpawnTimer = SPRING_SPAWN_INTERVAL + this.gameRandom() * 5;
     }
     this.state.thornSpawnTimer -= dt;
     if (this.state.thornSpawnTimer <= 0) {
       this.spawnThorn();
-      this.state.thornSpawnTimer = THORN_SPAWN_INTERVAL + Math.random() * 5;
+      this.state.thornSpawnTimer = THORN_SPAWN_INTERVAL + this.gameRandom() * 5;
     }
 
     // Update hazard lifetimes + grow timers
@@ -1018,13 +1042,13 @@ export class GameLoop {
       const lrc = this.theme.lavaRockConfig;
       this.state.lavaRockTimer -= dt;
       if (this.state.lavaRockTimer <= 0) {
-        this.state.lavaRockTimer = randRange(lrc.spawnInterval);
+        this.state.lavaRockTimer = lrc.spawnInterval[0] + this.gameRandom() * (lrc.spawnInterval[1] - lrc.spawnInterval[0]);
         this.state.lavaRocks.push({
-          x: 80 + Math.random() * (CANVAS_WIDTH - 160),
+          x: 80 + this.gameRandom() * (CANVAS_WIDTH - 160),
           y: -20,
-          vy: randRange(lrc.fallSpeed),
-          size: randRange(lrc.sizeRange),
-          rotation: Math.random() * Math.PI * 2,
+          vy: lrc.fallSpeed[0] + this.gameRandom() * (lrc.fallSpeed[1] - lrc.fallSpeed[0]),
+          size: lrc.sizeRange[0] + this.gameRandom() * (lrc.sizeRange[1] - lrc.sizeRange[0]),
+          rotation: this.gameRandom() * Math.PI * 2,
           active: true,
         });
       }
@@ -1503,7 +1527,7 @@ export class GameLoop {
       // Fall-off detection (rooftops, treetops — gaps in ground)
       // No score penalty — just lose ~1 second to respawn in hurt state
       if (this.arena.allowFallOff && player.y > CANVAS_HEIGHT + 50) {
-        const spawn = this.arena.spawnPoints[Math.floor(Math.random() * this.arena.spawnPoints.length)];
+        const spawn = this.arena.spawnPoints[Math.floor(this.gameRandom() * this.arena.spawnPoints.length)];
         player.x = spawn.x - player.width / 2;
         player.y = spawn.y - player.height;
         player.vx = 0;
@@ -1713,7 +1737,7 @@ export class GameLoop {
       if (!player.active || player.state === 'splat' || player.state === 'respawning') continue;
       collidePlatforms(player, this.arena.platforms);
     }
-    updateSplatTimers(this.state.players, this.arena.spawnPoints, dt);
+    updateSplatTimers(this.state.players, this.arena.spawnPoints, dt, this.rng);
     this.updateParticles(dt);
     this.updateGibs(dt);
     this.updateConfetti(dt);

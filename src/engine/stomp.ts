@@ -1,4 +1,5 @@
 import type { Player, SplatMark, KillFeedEntry, SpawnPoint, GibType, GameMods } from './types';
+import type { SeededRNG } from './net/prng';
 import {
   STOMP_VY_THRESHOLD, STOMP_BOUNCE, SPLAT_DURATION,
   RESPAWN_DELAY, INVINCIBLE_DURATION,
@@ -99,6 +100,7 @@ export function updateSplatTimers(
   players: Player[],
   spawnPoints: SpawnPoint[],
   dt: number,
+  rng?: SeededRNG,
 ): void {
   for (const player of players) {
     if (!player.active) continue;
@@ -114,7 +116,7 @@ export function updateSplatTimers(
     if (player.state === 'respawning') {
       player.respawnTimer -= dt;
       if (player.respawnTimer <= 0) {
-        respawnPlayer(player, spawnPoints, players);
+        respawnPlayer(player, spawnPoints, players, rng);
       }
     }
 
@@ -124,8 +126,8 @@ export function updateSplatTimers(
   }
 }
 
-export function respawnPlayer(player: Player, spawnPoints: SpawnPoint[], allPlayers?: Player[]): void {
-  const spawn = pickSafeSpawn(player, spawnPoints, allPlayers);
+export function respawnPlayer(player: Player, spawnPoints: SpawnPoint[], allPlayers?: Player[], rng?: SeededRNG): void {
+  const spawn = pickSafeSpawn(player, spawnPoints, allPlayers, rng);
   player.x = spawn.x - player.width / 2;
   player.y = spawn.y - player.height;
   player.vx = 0;
@@ -141,9 +143,10 @@ export function respawnPlayer(player: Player, spawnPoints: SpawnPoint[], allPlay
   player.hitstopTimer = 0;
 }
 
-function pickSafeSpawn(player: Player, spawnPoints: SpawnPoint[], allPlayers?: Player[]): SpawnPoint {
+function pickSafeSpawn(player: Player, spawnPoints: SpawnPoint[], allPlayers?: Player[], rng?: SeededRNG): SpawnPoint {
   if (!allPlayers || allPlayers.length === 0) {
-    return spawnPoints[Math.floor(Math.random() * spawnPoints.length)];
+    const r = rng ? rng.nextFloat() : Math.random();
+    return spawnPoints[Math.floor(r * spawnPoints.length)];
   }
 
   const others = allPlayers.filter(
