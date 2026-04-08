@@ -50,28 +50,11 @@ export function OnlineLobby() {
   const handleReliableMessage = useCallback((msg: ReliableMessage) => {
     switch (msg.type) {
       case MsgType.HANDSHAKE:
-        // Peer connected, send our handshake back
-        transportRef.current?.sendReliable({
-          type: MsgType.HANDSHAKE,
-          protocolVersion: PROTOCOL_VERSION,
-          playerName: 'Player',
-        });
+        // Acknowledged — no echo (both sides send on connect, echoing would loop)
         break;
-      case MsgType.CHARACTER_SELECT: {
+      case MsgType.CHARACTER_SELECT:
         setOnline({ remoteCharacterName: msg.characterName });
-        // If opponent picked our character, switch to first available
-        if (msg.characterName === localCharRef.current) {
-          const available = allChars.find(c => c.name !== msg.characterName);
-          if (available) {
-            setLocalCharacter(available.name);
-            transportRef.current?.sendReliable({
-              type: MsgType.CHARACTER_SELECT,
-              characterName: available.name,
-            });
-          }
-        }
         break;
-      }
       case MsgType.SETTINGS_SYNC: {
         // Guest receives host's settings
         setMatchSettings({
@@ -210,6 +193,20 @@ export function OnlineLobby() {
     setOnline({ isOnline: true });
     setScreen('match');
   }, [online.isHost, online.remoteCharacterName, localCharacter, allChars, setActivePlayers, setOnline, setScreen]);
+
+  // If opponent took our character, auto-switch to first available
+  useEffect(() => {
+    if (online.remoteCharacterName && online.remoteCharacterName === localCharacter) {
+      const available = allChars.find(c => c.name !== online.remoteCharacterName);
+      if (available) {
+        setLocalCharacter(available.name);
+        transportRef.current?.sendReliable({
+          type: MsgType.CHARACTER_SELECT,
+          characterName: available.name,
+        });
+      }
+    }
+  }, [online.remoteCharacterName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // When both ready and host, send START
   useEffect(() => {
