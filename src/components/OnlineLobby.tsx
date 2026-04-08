@@ -6,7 +6,7 @@ import { Transport } from '../engine/net/transport';
 import type { ConnectionStatus } from '../engine/net/transport';
 import { MsgType, PROTOCOL_VERSION } from '../engine/net/protocol';
 import type { ReliableMessage } from '../engine/net/protocol';
-import { CHARACTERS, getAllCharacters, getCharacterEmoji } from '../engine/characters';
+import { CHARACTERS, getAllCharacters, getCharacterEmoji, getCharacterDisplayName } from '../engine/characters';
 import './OnlineLobby.css';
 
 // Expose transport instance for Match.tsx to use
@@ -14,11 +14,13 @@ let _activeTransport: Transport | null = null;
 export function getActiveTransport(): Transport | null { return _activeTransport; }
 
 export function OnlineLobby() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { setScreen, online, setOnline, matchSettings, setMatchSettings, setActivePlayers, resetOnline } = useGameStore();
   const transportRef = useRef<Transport | null>(null);
   const [joinCode, setJoinCode] = useState('');
   const [localCharacter, setLocalCharacter] = useState(CHARACTERS.P1.name);
+  const localCharRef = useRef(localCharacter);
+  localCharRef.current = localCharacter;
   const [remoteReady, setRemoteReady] = useState(false);
   const [localReady, setLocalReady] = useState(false);
   const allChars = getAllCharacters();
@@ -55,9 +57,21 @@ export function OnlineLobby() {
           playerName: 'Player',
         });
         break;
-      case MsgType.CHARACTER_SELECT:
+      case MsgType.CHARACTER_SELECT: {
         setOnline({ remoteCharacterName: msg.characterName });
+        // If opponent picked our character, switch to first available
+        if (msg.characterName === localCharRef.current) {
+          const available = allChars.find(c => c.name !== msg.characterName);
+          if (available) {
+            setLocalCharacter(available.name);
+            transportRef.current?.sendReliable({
+              type: MsgType.CHARACTER_SELECT,
+              characterName: available.name,
+            });
+          }
+        }
         break;
+      }
       case MsgType.SETTINGS_SYNC: {
         // Guest receives host's settings
         setMatchSettings({
@@ -233,7 +247,7 @@ export function OnlineLobby() {
               placeholder="CODE"
               value={joinCode}
               onChange={(e) => setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z2-9]/g, ''))}
-              onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
+              onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') handleJoin(); }}
             />
             <button className="btn-base menu-btn" onClick={handleJoin} disabled={joinCode.length < 4}>
               {t('join_room', 'Join')}
@@ -283,9 +297,11 @@ export function OnlineLobby() {
                   onChange={(e) => handleCharacterChange(e.target.value)}
                   disabled={localReady}
                 >
-                  {allChars.map(c => (
+                  {allChars
+                    .filter(c => c.name !== online.remoteCharacterName)
+                    .map(c => (
                     <option key={c.name} value={c.name}>
-                      {getCharacterEmoji(c.name)} {c.name}
+                      {getCharacterEmoji(c.name)} {getCharacterDisplayName(c.name, i18n.language)}
                     </option>
                   ))}
                 </select>
@@ -294,7 +310,7 @@ export function OnlineLobby() {
                 <span className="online-label">{t('opponent', 'Opponent')}:</span>
                 <span className="online-char-name">
                   {online.remoteCharacterName
-                    ? `${getCharacterEmoji(online.remoteCharacterName)} ${online.remoteCharacterName}`
+                    ? `${getCharacterEmoji(online.remoteCharacterName)} ${getCharacterDisplayName(online.remoteCharacterName, i18n.language)}`
                     : t('choosing', 'Choosing...')}
                 </span>
                 {remoteReady && <span className="online-ready-badge">{t('ready', 'READY')}</span>}
