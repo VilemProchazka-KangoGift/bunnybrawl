@@ -34,7 +34,7 @@
   "pause_title": "Pauza",
   "pause_resume": "Pokračovat",
   "pause_quit": "Hlavní menu",
-  "pause_change_level": "Změnit úroveň",
+  "pause_change_level": "Změnit arénu",
   "pause_back": "Zpět",
   "pause_hint": "Stiskni ESC pro pokračování",
   "victory_wins": "vyhrává!",
@@ -99,5 +99,8 @@
   "mod_super_bounce": "Super odraz",
   "mod_super_bounce_desc": "Všechny platformy odrážejí",
   "mod_mirror": "Zrcadlový mód",
-  "mod_mirror_desc": "Převrátí arény horizontálně"
+  "mod_mirror_desc": "Převrátí arény horizontálně",
+  "mod_underwater_gravity": "Podmořská gravitace",
+  "mod_underwater_gravity_desc": "Lehká, plovoucí gravitace",
+  "victory_choose_arena": "Změnit arénu"
 }

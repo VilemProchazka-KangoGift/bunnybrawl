@@ -36,9 +36,9 @@ const defaultSettings: MatchSettings = {
   mods: loadStorage<GameMods>('bunnybrawl_mods', v => {
     try {
       const p = JSON.parse(v || '');
-      return { extremeGore: !!p.extremeGore, carrotChase: !!p.carrotChase, giantPlayers: !!p.giantPlayers, turbo: !!p.turbo, superBounce: !!p.superBounce, mirrorArena: !!p.mirrorArena };
+      return { extremeGore: !!p.extremeGore, carrotChase: !!p.carrotChase, giantPlayers: !!p.giantPlayers, turbo: !!p.turbo, superBounce: !!p.superBounce, mirrorArena: !!p.mirrorArena, underwaterGravity: !!p.underwaterGravity };
     } catch { return null as any; }
-  }, { extremeGore: false, carrotChase: false, giantPlayers: false, turbo: false, superBounce: false, mirrorArena: false }),
+  }, { extremeGore: false, carrotChase: false, giantPlayers: false, turbo: false, superBounce: false, mirrorArena: false, underwaterGravity: false }),
 };
 
 export const useGameStore = create<GameStore>((set) => ({

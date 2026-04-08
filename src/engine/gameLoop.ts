@@ -35,6 +35,8 @@ import {
 } from './constants';
 import { getCharacterForSlot } from './characters';
 import { AIController } from './ai';
+import { debugFlags, toggleNavDebug } from './debugFlags';
+import type { BotNavDebugState } from './navDebugOverlay';
 
 export type MatchEndCallback = (winner: PlayerSlot | null, state: MatchState) => void;
 
@@ -75,6 +77,7 @@ export class GameLoop {
   private aiControllers: Map<string, AIController> = new Map();
   private newBloodDripsSinceRender: Array<{ x: number; y: number; radius: number; color: string }> = [];
   private newGroundedGibsSinceRender: Gib[] = [];
+  private _debugKeyHandler: ((e: KeyboardEvent) => void) | null = null;
 
   constructor(
     bgCanvas: HTMLCanvasElement,
@@ -104,6 +107,13 @@ export class GameLoop {
     if (settings.mods.turbo) {
       this.effWalkSpeed *= 2;
       this.effJumpImpulse *= 1.5;
+    }
+
+    // Underwater Gravity: floaty physics (stacks with theme)
+    if (settings.mods.underwaterGravity) {
+      this.effGravity *= 0.6;
+      this.effMaxFallSpeed *= 0.6;
+      this.effJumpImpulse *= 0.9;
     }
 
     // Super Bounce: mark all platforms as bouncy (shallow-copy arena to avoid mutation)
@@ -293,6 +303,10 @@ export class GameLoop {
     audio.playMusic(this.arena.themeId);
     audio.play('ambient');
     if (this.hasWaterfallZones) audio.play('waterfall_ambient');
+    if (debugFlags.navDebugAllowed) {
+      this._debugKeyHandler = (e: KeyboardEvent) => { if (e.key === '`') toggleNavDebug(); };
+      window.addEventListener('keydown', this._debugKeyHandler);
+    }
     this.loop(this.lastTime);
   }
 
@@ -305,6 +319,10 @@ export class GameLoop {
     audio.stop('zero_g');
     audio.stop('crowd');
     audio.stop('waterfall_ambient');
+    if (this._debugKeyHandler) {
+      window.removeEventListener('keydown', this._debugKeyHandler);
+      this._debugKeyHandler = null;
+    }
   }
 
   getState(): MatchState { return this.state; }
@@ -370,6 +388,18 @@ export class GameLoop {
     if (this.newBloodDripsSinceRender.length > 0) {
       this.renderer.renderBloodDrips(this.newBloodDripsSinceRender);
       this.newBloodDripsSinceRender.length = 0;
+    }
+
+    // Collect bot nav debug state (zero cost when overlay is off)
+    if (debugFlags.navDebugEnabled) {
+      const botStates: BotNavDebugState[] = [];
+      for (const player of this.state.players) {
+        const ai = this.aiControllers.get(player.id);
+        if (ai && player.active && player.state !== 'splat' && player.state !== 'respawning') {
+          botStates.push({ slot: player.id, x: player.x, y: player.y, navTarget: ai.getLastNavTarget() });
+        }
+      }
+      this.renderer.setBotNavDebugStates(botStates);
     }
 
     this.renderer.renderFrame(this.state, this.arena, this.particles);

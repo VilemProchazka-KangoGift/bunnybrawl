@@ -10,6 +10,9 @@ import {
 import { drawCloud as drawCloudPrimitive, drawHill, drawPlatformMoss } from './themes/drawPrimitives';
 import { hexToRGB } from './fastMath';
 import { CHAR_EMOJI, CUSTOM_EYE_CHARS } from './characters';
+import { debugFlags } from './debugFlags';
+import { drawNavDebugOverlay } from './navDebugOverlay';
+import type { BotNavDebugState } from './navDebugOverlay';
 import i18n from '../i18n';
 
 interface Cloud {
@@ -62,6 +65,7 @@ export class Renderer {
   private spriteCache = new Map<string, OffscreenCanvas>();
   private mirrored = false;
   private originalArena: Arena | null = null;  // un-mirrored arena for theme draw calls
+  private _botNavDebugStates: BotNavDebugState[] = [];
 
   constructor(bgCanvas: HTMLCanvasElement, fgCanvas: HTMLCanvasElement, theme: ThemeConfig, mirrored = false) {
     this.bgCtx = bgCanvas.getContext('2d')!;
@@ -85,6 +89,10 @@ export class Renderer {
         speed: cc.minSpeed + Math.random() * (cc.maxSpeed - cc.minSpeed),
       });
     }
+  }
+
+  setBotNavDebugStates(states: BotNavDebugState[]): void {
+    this._botNavDebugStates = states;
   }
 
   renderBackground(arena: Arena, originalArena?: Arena): void {
@@ -518,6 +526,11 @@ export class Renderer {
 
     // HUD (not affected by shake)
     this.drawHUD(ctx, matchState);
+
+    // Nav debug overlay (dev only — ?debug=nav)
+    if (debugFlags.navDebugEnabled) {
+      drawNavDebugOverlay(ctx, arena, this.mirrored, this._botNavDebugStates);
+    }
 
     // Screen flash (f) — drawn after everything
     if (matchState.screenFlash > 0) {

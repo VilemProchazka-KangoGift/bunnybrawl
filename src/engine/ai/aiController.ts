@@ -1,5 +1,5 @@
 import type { Player, MatchState, Arena, InputState, BotDifficulty } from '../types';
-import type { AIPersonality, DifficultyParams } from './types';
+import type { AIPersonality, DifficultyParams, AwarenessSnapshot } from './types';
 import { buildAwareness } from './awareness';
 import { evaluateActions } from './utility';
 import { getPersonality, getDifficultyParams } from './personality';
@@ -28,6 +28,7 @@ export class AIController {
   private wasIdle = false;
   private frameCounter = 0;
   private botIndex: number;
+  private _lastNavTarget: AwarenessSnapshot['navTarget'] = null;
 
   constructor(_slot: string, characterName: string, difficulty: BotDifficulty, botIndex = 0) { // slot used as map key by caller
     this.personality = getPersonality(characterName);
@@ -46,6 +47,10 @@ export class AIController {
 
   getWalkSpeedMult(): number {
     return this.difficulty.walkSpeedMult;
+  }
+
+  getLastNavTarget(): AwarenessSnapshot['navTarget'] {
+    return this._lastNavTarget;
   }
 
   getInput(self: Player, state: MatchState, arena: Arena, carrotChase = false, mirrorNav = false): InputState {
@@ -117,6 +122,7 @@ export class AIController {
     // Build awareness ONCE, reuse for stuck recovery and normal path
     const preferSafe = this.personality.cautiousness >= 1.2;
     const awareness = buildAwareness(self, state, arena, this.difficulty.awarenessRadius, this.difficulty.pathfindingDepth, preferSafe, mirrorNav);
+    this._lastNavTarget = awareness.navTarget;
 
     if (this.stuckTimer > 45) {
       this.stuckTimer = 0;

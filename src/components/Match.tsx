@@ -28,7 +28,7 @@ export function Match() {
   const fgCanvasRef = useRef<HTMLCanvasElement>(null);
   const gameLoopRef = useRef<GameLoop | null>(null);
   const victoryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { activePlayers, matchSettings, setMatchResult, setScreen, setActivePlayers } = useGameStore();
+  const { activePlayers, matchSettings, setMatchResult, setScreen, setActivePlayers, setMatchSettings } = useGameStore();
   const [paused, setPaused] = useState(false);
   const [showLevelSelect, setShowLevelSelect] = useState(false);
 
@@ -53,9 +53,10 @@ export function Match() {
   const handleChangeArena = useCallback((newArenaId: string) => {
     lastResolvedArenaId = newArenaId;
     setCurrentArenaId(newArenaId);
+    setMatchSettings({ arenaId: newArenaId });
     setPaused(false);
     setShowLevelSelect(false);
-  }, []);
+  }, [setMatchSettings]);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {

@@ -217,6 +217,7 @@ export interface GameMods {
   turbo: boolean;
   superBounce: boolean;
   mirrorArena: boolean;
+  underwaterGravity: boolean;
 }
 
 export interface MatchSettings {
