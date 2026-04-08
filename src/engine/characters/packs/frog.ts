@@ -49,7 +49,7 @@ export const frog: CharacterPack = {
   splatShape: 'splat',
   gibs: [{ gibType: 'body', width: 12, height: 10 }, { gibType: 'body', width: 10, height: 10 }, { gibType: 'body', width: 11, height: 9 }],
   translations: { en: 'Frog', cs: 'Žába' },
-  legStyle: { shape: 'wide', footStyle: 'webbed', legWidth: 5, footWidth: 10, spreadAngle: 4 },
+  legStyle: { shape: 'wide', footStyle: 'webbed', legWidth: 5, spreadAngle: 4 },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.55, rx: w * 0.42, ry: h * 0.35 }),
   drawSprite, drawGib,
 };

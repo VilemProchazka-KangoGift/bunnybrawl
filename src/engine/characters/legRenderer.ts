@@ -241,7 +241,7 @@ export function drawLegs(
 
   // --- Foot color ---
   const footColor = style?.footColor ?? colors.lightColor;
-  const baseFW = style?.footWidth ?? (baseLegW + 2);
+  const baseFW = style?.footWidth ?? baseLegW;
   const footW = baseFW + squashFactor * 2;
 
   const legDrawer = LEG_DRAWERS[shape] ?? drawLegRounded;
