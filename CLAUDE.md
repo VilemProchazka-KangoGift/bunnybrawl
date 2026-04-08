@@ -98,6 +98,9 @@ Each character is a single self-contained file in `src/engine/characters/packs/`
 - `idleTransform`: `'none'` | `'headTilt'` (Cat) | `'headFlip'` (Owl) | `'headBob'` (most characters) — applied by renderer BEFORE `drawSprite` is called.
 - Sprite caching: keyed by `name_state_animFrame_fastFalling_idleKey`. Same renderer used in game and lobby.
 - Generic legs, motion lines, fast-fall lines, and bubble helmet are drawn AFTER `drawSprite` by the renderer — don't draw these in the pack.
+- `bodyEllipse`: returns `BodyEllipseParams` for the highlight spot overlay. Values must match the body ellipse passed to `fillBodyGradient` inside `drawSprite`.
+- `noHighlight: true` skips the white highlight overlay — use for characters that already draw their own light belly/face (e.g., Hedgehog).
+- **Sheep uses `fillBodyGradientCircle`** instead of `fillBodyGradient` — its body is 6 overlapping circles, not a single ellipse. The circle variant applies per-circle gradients.
 
 ### Adding a new arena / level
 1. Create theme config in `src/engine/themes/newTheme.ts` implementing `ThemeConfig` (see `meadow.ts` as reference)
@@ -219,6 +222,8 @@ npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/
 ## Important Caveats
 
 - **renderer.ts (~2100 lines)** — character sprite drawing is dispatched via `getSpriteRenderer(name)` from the character pack registry. The old if/else chain is gone. Gib drawing dispatches via `getGibRenderer(name)`.
+- **3D sprite shading** — `spriteShading.ts` provides `fillBodyGradient` (radial gradient body fill) and `drawHighlightSpot` (white glint overlay). Each pack's `drawSprite` calls `fillBodyGradient` for the body; the renderer calls `drawHighlightSpot` after `drawSprite` using `pack.bodyEllipse()` params. Gradient edge color is blended 30% toward `darkColor` (not raw `darkColor`) to avoid harsh contrast on characters like Panda/Cow where `darkColor` is their marking color, not a shadow color.
+- **Sprite-scale visual effects need restraint** — at 40px character height, subtle effects become prominent. Gradient shading works well; stipple dots and outer glows looked bad (visible halos/artifacts). Highlight spots must be very low alpha (≤0.18) or they look like glare. When `darkColor` differs dramatically from `color` (Panda, Cow), use a blended edge color, not raw `darkColor`.
 - **Character pack registry must be initialized before use** — `registerBuiltinCharacters()` is called at module scope in `App.tsx`. Any code that calls `getSpriteRenderer`, `getCharacterEmoji`, etc. before this will get fallback values.
 - **Character sounds are NOT in packs** — sound definitions stay in `audio.ts` (`SIMPLE_ANIMAL_SOUNDS` / `SEGMENT_ANIMAL_SOUNDS`). The pack `sound` field was removed to avoid stale duplication. If external packs need sounds, use `audio.registerSound()`.
 - **`legacy.ts` CHARACTERS record is still mutated at lobby exit** — the lobby writes selected characters back to `CHARACTERS`. `getAllCharacters()` derives the full roster from the pack registry; `CHARACTERS` only holds the P1-P5 default slot mapping.
