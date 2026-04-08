@@ -151,6 +151,7 @@
   "code_placeholder": "कोड",
   "cancel_game": "खेल रद्द करें",
   "leave_game": "खेल छोड़ें",
+  "game_ended_disconnect": "खेल समाप्त — एक खिलाड़ी डिस्कनेक्ट हो गया।",
   "opponent_disconnected": "प्रतिद्वंद्वी डिस्कनेक्ट हो गया",
   "return_menu": "मेनू पर वापस",
   "back": "वापस"

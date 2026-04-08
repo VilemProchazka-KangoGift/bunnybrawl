@@ -1,4 +1,4 @@
-import { useRef, useEffect, useMemo, useState } from 'react';
+import { useRef, useEffect, useMemo, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../store/gameStore';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
@@ -23,7 +23,7 @@ interface FireworkParticle {
 
 export function VictoryScreen() {
   const { t, i18n } = useTranslation();
-  const { winner, lastMatchState, setScreen, setActivePlayers, setMatchSettings, online } = useGameStore();
+  const { winner, lastMatchState, setScreen, setActivePlayers, setMatchSettings, online, disconnectWin } = useGameStore();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [showArenaSelect, setShowArenaSelect] = useState(false);
 
@@ -34,7 +34,17 @@ export function VictoryScreen() {
   const charName = (name: string) => getCharacterDisplayName(name, i18n.language);
   const botSuffix = (id: PlayerSlot) => isBotSlot(id) ? ' (BOT)' : '';
 
-  const handleRematch = () => { setScreen('match'); };
+  const handleRematch = useCallback(() => {
+    // Host sends rematch signal to guest
+    if (online.isOnline && online.isHost) {
+      const transport = getModalTransport();
+      if (transport) {
+        transport.sendReliable({ type: 0x08 } as any); // START_MATCH
+      }
+    }
+    setScreen('match');
+  }, [online.isOnline, online.isHost, setScreen]);
+
   const handleMenu = () => {
     // Clean up transport on exit to menu
     const transport = getModalTransport();
@@ -43,14 +53,52 @@ export function VictoryScreen() {
     setActivePlayers([]);
     setScreen('menu');
   };
-  const handleChooseArena = (arenaId: string) => {
+  const handleChooseArena = useCallback((arenaId: string) => {
     setMatchSettings({ arenaId });
     setShowArenaSelect(false);
+    // Host sends arena change + start to guest
+    if (online.isOnline && online.isHost) {
+      const transport = getModalTransport();
+      if (transport) {
+        transport.sendReliable({ type: 0x02, arenaId } as any); // SETTINGS_SYNC (arena only)
+        transport.sendReliable({ type: 0x08 } as any); // START_MATCH
+      }
+    }
     setScreen('match');
-  };
+  }, [setMatchSettings, online.isOnline, online.isHost, setScreen]);
 
   const arenas = listArenas();
   const themes = listThemes();
+
+  // Online guest: listen for host's rematch/arena change signals
+  useEffect(() => {
+    if (!online.isOnline || online.isHost) return;
+    const transport = getModalTransport();
+    if (!transport) return;
+    transport.setEvents({
+      onStatusChange: (status) => {
+        if (status === 'disconnected' || status === 'error') {
+          // Host disconnected from victory — just go to menu
+          transport.destroy();
+          useGameStore.getState().resetOnline();
+          setActivePlayers([]);
+          setScreen('menu');
+        }
+      },
+      onReliableMessage: (msg) => {
+        if (msg.type === 0x02 && 'arenaId' in msg) {
+          // Arena change from host
+          setMatchSettings({ arenaId: (msg as any).arenaId });
+        }
+        if (msg.type === 0x08) {
+          // START_MATCH from host — rematch
+          setScreen('match');
+        }
+      },
+      onUnreliableMessage: () => {},
+      onRttUpdate: () => {},
+    });
+  }, [online.isOnline, online.isHost, setScreen, setMatchSettings, setActivePlayers]);
 
   // Fireworks
   useEffect(() => {
@@ -157,6 +205,11 @@ export function VictoryScreen() {
       <canvas ref={canvasRef} className="fireworks-canvas" />
       <div className="victory-bg">
         <div className="victory-content">
+          {disconnectWin && (
+            <p className="disconnect-info" style={{ color: '#FF6B6B', fontSize: '18px', margin: '0 0 8px' }}>
+              {t('game_ended_disconnect', 'Game ended — a player disconnected.')}
+            </p>
+          )}
           {winnerChar ? (
             <>
               <h1 className="winner-text">
@@ -239,13 +292,13 @@ export function VictoryScreen() {
           </div>
 
           <div className="victory-actions">
-            {(!online.isOnline || online.isHost) && (
+            {!disconnectWin && (!online.isOnline || online.isHost) && (
               <button className="btn-base rematch-btn" onClick={handleRematch} data-testid="rematch-button">{t('victory_rematch')}</button>
             )}
-            {(!online.isOnline || online.isHost) && (
+            {!disconnectWin && (!online.isOnline || online.isHost) && (
               <button className="btn-base arena-btn-v" onClick={() => setShowArenaSelect(true)}>{t('victory_choose_arena')}</button>
             )}
-            <button className="btn-base menu-btn-v" onClick={handleMenu} data-testid="menu-button">{t(online.isOnline && !online.isHost ? 'leave_game' : 'victory_menu')}</button>
+            <button className="btn-base menu-btn-v" onClick={handleMenu} data-testid="menu-button">{t(disconnectWin || (online.isOnline && !online.isHost) ? 'leave_game' : 'victory_menu')}</button>
           </div>
 
           {showArenaSelect && (

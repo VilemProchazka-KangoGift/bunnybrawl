@@ -19,7 +19,7 @@ const MAX_ROLLBACK_FRAMES = 7;    // max frames we'll rewind
 const DEFAULT_INPUT_DELAY = 2;    // frames of local input delay
 const MAX_INPUT_DELAY = 4;
 const INPUT_BUNDLE_SIZE = 10;     // recent inputs to bundle per message
-const DESYNC_CHECK_INTERVAL = 60; // frames between desync checks
+const DESYNC_CHECK_INTERVAL = 30; // frames between state sync checks (0.5s)
 
 const NO_INPUT: InputState = { left: false, right: false, jump: false, down: false };
 

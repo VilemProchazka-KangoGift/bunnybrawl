@@ -25,6 +25,7 @@ export interface NetMatchConfig {
   onDesync?: () => void;
   onStall?: (stalled: boolean) => void;
   onDisconnect?: () => void;
+  onArenaChange?: (arenaId: string) => void;
 }
 
 export class NetMatch {
@@ -33,11 +34,13 @@ export class NetMatch {
   private transport: Transport;
   private onMatchEnd?: MatchEndCallback;
   private onDisconnect?: () => void;
+  private onArenaChange?: (arenaId: string) => void;
 
   constructor(config: NetMatchConfig) {
     this.transport = config.transport;
     this.onMatchEnd = config.onMatchEnd;
     this.onDisconnect = config.onDisconnect;
+    this.onArenaChange = config.onArenaChange;
 
     // Create game loop with seeded PRNG
     this.gameLoop = new GameLoop(
@@ -98,6 +101,12 @@ export class NetMatch {
         this.gameLoop.pause();
       } else {
         this.gameLoop.resume();
+      }
+    } else if (msg.type === MsgType.SETTINGS_SYNC) {
+      // Arena change from host — update match settings
+      const sync = msg as any;
+      if (sync.arenaId) {
+        this.onArenaChange?.(sync.arenaId);
       }
     } else if (msg.type === MsgType.MATCH_RESULT) {
       // Guest receives match result from host — trigger local match end

@@ -134,6 +134,7 @@
   "any_keys": "Any keys",
   "cancel_game": "Cancel Game",
   "leave_game": "Leave Game",
+  "game_ended_disconnect": "Game ended — a player disconnected.",
   "opponent_disconnected": "Opponent Disconnected",
   "return_menu": "Return to Menu",
   "help_online_title": "Online Play",

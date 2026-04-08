@@ -24,7 +24,8 @@ interface GameStore {
   setScreen: (screen: GameScreen) => void;
   setMatchSettings: (settings: Partial<MatchSettings>) => void;
   setActivePlayers: (players: PlayerSlot[]) => void;
-  setMatchResult: (winner: PlayerSlot | null, state: MatchState) => void;
+  disconnectWin: boolean;
+  setMatchResult: (winner: PlayerSlot | null, state: MatchState, disconnected?: boolean) => void;
   setOnline: (state: Partial<OnlineState>) => void;
   resetOnline: () => void;
   reset: () => void;
@@ -73,6 +74,7 @@ export const useGameStore = create<GameStore>((set) => ({
   activePlayers: [],
   lastMatchState: null,
   winner: null,
+  disconnectWin: false,
   online: { ...defaultOnline },
 
   setScreen: (screen) => set({ screen }),
@@ -90,8 +92,8 @@ export const useGameStore = create<GameStore>((set) => ({
 
   setActivePlayers: (players) => set({ activePlayers: players }),
 
-  setMatchResult: (winner, matchState) =>
-    set({ winner, lastMatchState: matchState, screen: 'victory' }),
+  setMatchResult: (winner, matchState, disconnected) =>
+    set({ winner, lastMatchState: matchState, screen: 'victory', disconnectWin: !!disconnected }),
 
   setOnline: (state) =>
     set((prev) => ({ online: { ...prev.online, ...state } })),
@@ -106,6 +108,7 @@ export const useGameStore = create<GameStore>((set) => ({
       activePlayers: [],
       lastMatchState: null,
       winner: null,
+      disconnectWin: false,
       online: { ...defaultOnline },
     }),
 }));

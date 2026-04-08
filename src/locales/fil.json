@@ -151,6 +151,7 @@
   "code_placeholder": "Code",
   "cancel_game": "Kanselahin ang Laro",
   "leave_game": "Umalis sa Laro",
+  "game_ended_disconnect": "Natapos ang laro — nadiskonekta ang isang manlalaro.",
   "opponent_disconnected": "Nadiskonekta ang Kalaban",
   "return_menu": "Bumalik sa Menu",
   "back": "Bumalik"

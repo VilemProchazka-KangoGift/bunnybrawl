@@ -34,7 +34,6 @@ export function Match() {
   const { activePlayers, matchSettings, setMatchResult, setScreen, setActivePlayers, setMatchSettings, online, resetOnline } = useGameStore();
   const [paused, setPaused] = useState(false);
   const [showLevelSelect, setShowLevelSelect] = useState(false);
-  const [disconnected, setDisconnected] = useState(false);
   const netMatchRef = useRef<NetMatch | null>(null);
 
   // Resolve 'random' to a concrete arena; re-resolves each time Match mounts (rematch)
@@ -72,7 +71,14 @@ export function Match() {
     setMatchSettings({ arenaId: newArenaId });
     setPaused(false);
     setShowLevelSelect(false);
-  }, [setMatchSettings]);
+    // In online mode, notify guest of arena change
+    if (online.isOnline && online.isHost) {
+      const transport = getModalTransport();
+      if (transport) {
+        transport.sendReliable({ type: MsgType.SETTINGS_SYNC, arenaId: newArenaId } as any);
+      }
+    }
+  }, [setMatchSettings, online.isOnline, online.isHost]);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -158,7 +164,16 @@ export function Match() {
           if (stalled) console.log('Network stall — waiting for opponent...');
         },
         onDisconnect: () => {
-          setDisconnected(true);
+          // End match as disconnect — show victory screen with disconnect info
+          if (gameLoopRef.current) {
+            setMatchResult(null, gameLoopRef.current.getState(), true);
+          }
+        },
+        onArenaChange: (arenaId: string) => {
+          // Guest: host changed arena — update local state to trigger remount
+          lastResolvedArenaId = arenaId;
+          setCurrentArenaId(arenaId);
+          setMatchSettings({ arenaId });
         },
       });
 
@@ -287,16 +302,6 @@ export function Match() {
                   <p className="pause-hint">{t('pause_hint')}</p>
                 </>
               )}
-            </div>
-          </div>
-        )}
-        {disconnected && (
-          <div className="pause-overlay">
-            <div className="pause-box">
-              <h2 className="pause-title">{t('opponent_disconnected', 'Opponent Disconnected')}</h2>
-              <button className="btn-base pause-btn quit-btn" onClick={handleQuit}>
-                {t('return_menu', 'Return to Menu')}
-              </button>
             </div>
           </div>
         )}
