@@ -51,16 +51,26 @@ P2P WebRTC via PeerJS with GGPO-style rollback netcode. Free signaling at `0.pee
 - Guest compares hash — if mismatch, applies host's snapshot to correct drift.
 - This is a fallback safety net, not a replacement for deterministic simulation. Desyncs should still be investigated and fixed at the source.
 
+## Code Quality Patterns
+- NEVER use hex literals (0x02, 0x08) for message types — always use `MsgType.SETTINGS_SYNC`, `MsgType.START_MATCH` etc. Hex literals silently bypass type checking and are unreadable.
+- Don't duplicate the mulberry32 PRNG inline — import `SeededRNG` from `prng.ts`. It was copy-pasted into `legacy.ts` and `CharacterSelect.tsx`.
+- In 60fps hot paths: reuse objects/arrays via `arr.length = 0` instead of `new Array()`. Return const references (like `NO_INPUT`) instead of spreading copies.
+- `as any` casts should be `as ReliableMessage` or proper type narrowing. Every `as any` is a potential desync bug waiting to happen.
+
 ## Transport Lifecycle
-1. OnlineLobby creates Transport with lobby callbacks
+1. MainMenu modal creates Transport with lobby callbacks
 2. `Transport.setEvents()` re-wires to match callbacks when NetMatch starts (critical — without this, rollback engine never receives input messages → game freezes)
-3. On disconnect/quit: `transport.destroy()` + `resetOnline()`
+3. VictoryScreen re-wires transport for rematch/arena signals from host
+4. On disconnect/quit: `transport.destroy()` + `resetOnline()`
 
 ## Match End / Victory / Rematch
 - `onMatchEnd` only fires locally — host must send MATCH_RESULT to guest so both transition to victory screen. Without this, guest freezes after match ends.
 - NetMatch stores `onMatchEnd` callback and handles incoming MATCH_RESULT by calling it with the guest's local state.
 - Transport must survive across Match → VictoryScreen → Match cycle for rematch. Effect cleanup stops NetMatch but does NOT destroy transport. Transport destroyed only on explicit quit/menu.
 - VictoryScreen "menu" button must `transport.destroy()` + `resetOnline()`.
+- Arena changes (pause menu + victory) must send SETTINGS_SYNC to guest — otherwise peers play in different arenas.
+- Rematch/arena from victory: host sends START_MATCH (+ SETTINGS_SYNC for arena change). Guest VictoryScreen wires transport.setEvents on mount to receive these.
+- Disconnect during match → navigate to victory screen with `disconnectWin` flag. Shows "Game ended — player disconnected" with Leave Game only (no rematch/arena).
 
 ## Online Pause / Victory Role Separation
 - Pause menu differs by role: host gets Resume/Change Level/Cancel Game; guest gets Resume/Leave Game.
