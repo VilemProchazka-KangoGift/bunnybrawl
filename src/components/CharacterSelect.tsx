@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { CHARACTERS, ALL_CHARACTERS, BOT_CHARACTERS, CHAR_EMOJI, CUSTOM_EYE_CHARS, assignBotCharacters } from '../engine/characters';
+import { CHARACTERS, getAllCharacters, BOT_CHARACTERS, assignBotCharacters, getCharacterEmoji, hasCustomEyes, getSpriteRenderer, getCharacterDisplayName, getCharacterPack } from '../engine/characters';
 import { KEY_BINDINGS } from '../engine/input';
 import { audio } from '../engine/audio';
 import i18n from '../i18n';
@@ -10,7 +10,7 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CRO
 import {
   drawTree, drawBush, drawFlower, drawMushroom, drawGrassTuft, drawCloud,
 } from '../engine/themes/drawPrimitives';
-import { getBodyEllipse, fillBodyGradient, fillBodyGradientCircle, drawHighlightSpot, drawFurEdge, getFurIntensity } from '../engine/spriteShading';
+import { drawHighlightSpot } from '../engine/spriteShading';
 import './CharacterSelect.css';
 
 import { initWildlife, updateAndDrawWildlife, drawDayNightCycle } from '../engine/canvasAnimations';
@@ -80,7 +80,7 @@ export function CharacterSelect() {
     const botSlots = ALL_BOT_SLOTS.slice(0, botCount);
 
     // Randomly assign characters to players
-    const shuffled = shuffle([...ALL_CHARACTERS]);
+    const shuffled = shuffle([...getAllCharacters()]);
     const assigned = shuffled.slice(0, SLOTS.length);
     const botAssigned = shuffled.slice(SLOTS.length, SLOTS.length + botCount);
     const extras = shuffled.slice(SLOTS.length + botCount);
@@ -653,7 +653,7 @@ function drawLobby(
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
     ctx.font = "10px 'Nunito', sans-serif";
     ctx.textAlign = 'center';
-    ctx.fillText(i18n.t(`char_${npc.char.name}`, npc.char.name), npc.x + PLAYER_WIDTH / 2, npc.y - 5);
+    ctx.fillText(getCharacterDisplayName(npc.char.name, i18n.language), npc.x + PLAYER_WIDTH / 2, npc.y - 5);
   }
 
   // ---- Draw bots ----
@@ -715,14 +715,14 @@ function drawLobby(
     ctx.font = '28px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(CHAR_EMOJI[player.char.name] ?? '?', emojiX, 32);
+    ctx.fillText(getCharacterEmoji(player.char.name), emojiX, 32);
     ctx.textBaseline = 'alphabetic';
 
     // Name in player color
     ctx.fillStyle = player.char.color;
     ctx.textAlign = 'left';
     ctx.font = "bold 14px 'Nunito', sans-serif";
-    ctx.fillText(`${slot}: ${i18n.t(`char_${player.char.name}`, player.char.name)}`, textX, 26);
+    ctx.fillText(`${slot}: ${getCharacterDisplayName(player.char.name, i18n.language)}`, textX, 26);
 
     // Keys
     ctx.fillStyle = 'rgba(255,255,255,0.6)';
@@ -871,265 +871,20 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
     ctx.translate(-cx, -footY);
   }
 
-  const bodyParams = getBodyEllipse(char.name, cx, yOff, w, h);
-  ctx.fillStyle = char.color;
-  ctx.beginPath();
+  // Body — dispatch to the same sprite renderer used in-game
+  const state = isAirborne ? 'airborne' : isRunning ? 'run' : 'idle';
+  const spriteRenderer = getSpriteRenderer(char.name);
+  const colors = { color: char.color, darkColor: char.darkColor, lightColor: char.lightColor };
+  spriteRenderer(ctx, cx, yOff, w, h, state, animFrame, false, -1, colors);
 
-  if (char.name === 'Bunny') {
-    fillBodyGradient(ctx, bodyParams, char);
-    ctx.beginPath(); ctx.ellipse(cx - 5, yOff + 2, 4, 12, -0.2, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(cx + 5, yOff + 2, 4, 12, 0.2, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#FFB6C1';
-    ctx.beginPath(); ctx.ellipse(cx - 5, yOff + 2, 2, 8, -0.2, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(cx + 5, yOff + 2, 2, 8, 0.2, 0, Math.PI * 2); ctx.fill();
-  } else if (char.name === 'Fox') {
-    fillBodyGradient(ctx, bodyParams, char);
-    ctx.fillStyle = char.color;
-    ctx.beginPath(); ctx.moveTo(cx - 8, yOff + 8); ctx.lineTo(cx - 12, yOff - 6); ctx.lineTo(cx - 2, yOff + 6); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(cx + 8, yOff + 8); ctx.lineTo(cx + 12, yOff - 6); ctx.lineTo(cx + 2, yOff + 6); ctx.fill();
-  } else if (char.name === 'Frog') {
-    fillBodyGradient(ctx, bodyParams, char);
-    ctx.fillStyle = char.lightColor;
-    ctx.beginPath(); ctx.arc(cx - 7, yOff + 8, 6, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx + 7, yOff + 8, 6, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#000';
-    ctx.beginPath(); ctx.arc(cx - 6, yOff + 8, 3, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx + 8, yOff + 8, 3, 0, Math.PI * 2); ctx.fill();
-  } else if (char.name === 'Bear') {
-    fillBodyGradient(ctx, bodyParams, char);
-    ctx.beginPath(); ctx.arc(cx - 10, yOff + 4, 6, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx + 10, yOff + 4, 6, 0, Math.PI * 2); ctx.fill();
-  } else if (char.name === 'Owl') {
-    fillBodyGradient(ctx, bodyParams, char);
-    ctx.fillStyle = char.darkColor;
-    ctx.beginPath(); ctx.moveTo(cx - 8, yOff + 6); ctx.lineTo(cx - 12, yOff - 6); ctx.lineTo(cx - 4, yOff + 4); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(cx + 8, yOff + 6); ctx.lineTo(cx + 12, yOff - 6); ctx.lineTo(cx + 4, yOff + 4); ctx.fill();
-    ctx.fillStyle = '#FFD700';
-    ctx.beginPath(); ctx.arc(cx - 5, yOff + h * 0.36, 4, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx + 5, yOff + h * 0.36, 4, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#000';
-    ctx.beginPath(); ctx.arc(cx - 4.5, yOff + h * 0.36, 2, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx + 5.5, yOff + h * 0.36, 2, 0, Math.PI * 2); ctx.fill();
-  } else if (char.name === 'Cat') {
-    // Wider rounder body
-    fillBodyGradient(ctx, bodyParams, char);
-    // Tall upright ears
-    ctx.beginPath(); ctx.moveTo(cx - 9, yOff + 10); ctx.lineTo(cx - 7, yOff - 8); ctx.lineTo(cx - 2, yOff + 8); ctx.closePath(); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(cx + 9, yOff + 10); ctx.lineTo(cx + 7, yOff - 8); ctx.lineTo(cx + 2, yOff + 8); ctx.closePath(); ctx.fill();
-    // Pink inner ears
-    ctx.fillStyle = '#FF9AAA';
-    ctx.beginPath(); ctx.moveTo(cx - 8, yOff + 8); ctx.lineTo(cx - 7, yOff - 4); ctx.lineTo(cx - 3, yOff + 7); ctx.closePath(); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(cx + 8, yOff + 8); ctx.lineTo(cx + 7, yOff - 4); ctx.lineTo(cx + 3, yOff + 7); ctx.closePath(); ctx.fill();
-    // Pink nose
-    ctx.fillStyle = '#FF8090';
-    ctx.beginPath(); ctx.arc(cx + 1, yOff + h * 0.48, 2, 0, Math.PI * 2); ctx.fill();
-    // Green almond eyes
-    ctx.fillStyle = '#90EE60';
-    ctx.beginPath(); ctx.ellipse(cx - 5, yOff + h * 0.38, 3, 2, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(cx + 5, yOff + h * 0.38, 3, 2, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#000';
-    ctx.beginPath(); ctx.ellipse(cx - 4.5, yOff + h * 0.38, 1, 2, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(cx + 5.5, yOff + h * 0.38, 1, 2, 0, 0, Math.PI * 2); ctx.fill();
-  } else if (char.name === 'Wolf') {
-    fillBodyGradient(ctx, bodyParams, char);
-    ctx.beginPath(); ctx.moveTo(cx - 9, yOff + 6); ctx.lineTo(cx - 11, yOff - 6); ctx.lineTo(cx - 3, yOff + 4); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(cx + 9, yOff + 6); ctx.lineTo(cx + 11, yOff - 6); ctx.lineTo(cx + 3, yOff + 4); ctx.fill();
-    ctx.fillStyle = char.lightColor;
-    ctx.beginPath(); ctx.ellipse(cx + 3, yOff + h * 0.5, 5, 4, 0, 0, Math.PI * 2); ctx.fill();
-  } else if (char.name === 'Panda') {
-    fillBodyGradient(ctx, bodyParams, char);
-    ctx.fillStyle = char.darkColor;
-    ctx.beginPath(); ctx.arc(cx - 10, yOff + 4, 6, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx + 10, yOff + 4, 6, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(cx - 5, yOff + h * 0.38, 5, 4, -0.2, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(cx + 5, yOff + h * 0.38, 5, 4, 0.2, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#FFF';
-    ctx.beginPath(); ctx.arc(cx - 5, yOff + h * 0.38, 2.5, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx + 5, yOff + h * 0.38, 2.5, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#000';
-    ctx.beginPath(); ctx.arc(cx - 4.5, yOff + h * 0.38, 1.2, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx + 5.5, yOff + h * 0.38, 1.2, 0, Math.PI * 2); ctx.fill();
-  } else if (char.name === 'Pig') {
-    // Pig: round pink body + snout
-    fillBodyGradient(ctx, bodyParams, char);
-    ctx.fillStyle = char.lightColor;
-    ctx.beginPath(); ctx.ellipse(cx + 3, yOff + h * 0.52, 6, 4, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = char.darkColor;
-    ctx.beginPath(); ctx.arc(cx + 1, yOff + h * 0.52, 1.5, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx + 5, yOff + h * 0.52, 1.5, 0, Math.PI * 2); ctx.fill();
-  } else if (char.name === 'Cow') {
-    // Cow: cream body + black patches
-    fillBodyGradient(ctx, bodyParams, char);
-    ctx.fillStyle = char.darkColor;
-    ctx.beginPath(); ctx.ellipse(cx - 6, yOff + h * 0.4, 5, 4, -0.3, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(cx + 4, yOff + h * 0.58, 4, 3, 0.4, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#FFB0B0';
-    ctx.beginPath(); ctx.ellipse(cx + 2, yOff + h * 0.52, 4, 3, 0, 0, Math.PI * 2); ctx.fill();
-    // Cow custom eyes
-    ctx.fillStyle = '#000';
-    ctx.beginPath(); ctx.arc(cx - 4, yOff + h * 0.38, 2.5, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx + 6, yOff + h * 0.38, 2.5, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#FFF';
-    ctx.beginPath(); ctx.arc(cx - 3, yOff + h * 0.36, 1, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx + 7, yOff + h * 0.36, 1, 0, Math.PI * 2); ctx.fill();
-  } else if (char.name === 'Horse') {
-    // Horse: elongated body, long face, pointed ears, flowing mane
-    fillBodyGradient(ctx, bodyParams, char);
-    ctx.fillStyle = char.lightColor;
-    ctx.beginPath(); ctx.ellipse(cx + 6, yOff + h * 0.54, 6, 7, 0.15, 0, Math.PI * 2); ctx.fill();
-    // Tall pointed ears
-    ctx.fillStyle = char.color;
-    ctx.beginPath(); ctx.moveTo(cx - 7, yOff + 8); ctx.lineTo(cx - 10, yOff - 6); ctx.lineTo(cx - 3, yOff + 5); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(cx + 5, yOff + 8); ctx.lineTo(cx + 8, yOff - 6); ctx.lineTo(cx + 1, yOff + 5); ctx.fill();
-    // Flowing mane tufts
-    ctx.fillStyle = char.darkColor;
-    ctx.beginPath(); ctx.moveTo(cx - 10, yOff + 4); ctx.lineTo(cx - 14, yOff - 2); ctx.lineTo(cx - 8, yOff + 6); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(cx - 11, yOff + 10); ctx.lineTo(cx - 16, yOff + 4); ctx.lineTo(cx - 9, yOff + 12); ctx.fill();
-    // Nostrils
-    ctx.fillStyle = '#4A3020';
-    ctx.beginPath(); ctx.ellipse(cx + 8, yOff + h * 0.56, 1.5, 1, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(cx + 5, yOff + h * 0.57, 1.5, 1, 0, 0, Math.PI * 2); ctx.fill();
-    // Eyes
-    ctx.fillStyle = '#000';
-    ctx.beginPath(); ctx.arc(cx - 3, yOff + h * 0.4, 2.5, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx + 5, yOff + h * 0.4, 2.5, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#FFF';
-    ctx.beginPath(); ctx.arc(cx - 2, yOff + h * 0.38, 0.8, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx + 6, yOff + h * 0.38, 0.8, 0, Math.PI * 2); ctx.fill();
-  } else if (char.name === 'Goat') {
-    // Goat: stocky body, curved horns, floppy ears, beard, rectangular pupils
-    fillBodyGradient(ctx, bodyParams, char);
-    // Curly ram horns
-    ctx.strokeStyle = '#B0A080'; ctx.lineWidth = 3.5; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(cx - 6, yOff + 4); ctx.bezierCurveTo(cx - 10, yOff - 6, cx - 18, yOff - 4, cx - 16, yOff + 4); ctx.bezierCurveTo(cx - 14, yOff + 10, cx - 8, yOff + 10, cx - 8, yOff + 6); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(cx + 6, yOff + 4); ctx.bezierCurveTo(cx + 10, yOff - 6, cx + 18, yOff - 4, cx + 16, yOff + 4); ctx.bezierCurveTo(cx + 14, yOff + 10, cx + 8, yOff + 10, cx + 8, yOff + 6); ctx.stroke();
-    ctx.lineCap = 'butt';
-    // Floppy ears
-    ctx.fillStyle = char.color;
-    ctx.beginPath(); ctx.ellipse(cx - 12, yOff + h * 0.38, 4, 6, -0.3, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(cx + 12, yOff + h * 0.38, 4, 6, 0.3, 0, Math.PI * 2); ctx.fill();
-    // Snout
-    ctx.fillStyle = char.lightColor;
-    ctx.beginPath(); ctx.ellipse(cx + 2, yOff + h * 0.5, 6, 4, 0, 0, Math.PI * 2); ctx.fill();
-    // Beard
-    ctx.beginPath(); ctx.moveTo(cx - 1, yOff + h * 0.56); ctx.lineTo(cx + 3, yOff + h * 0.56); ctx.lineTo(cx + 1, yOff + h * 0.72); ctx.fill();
-    // Goat horizontal pupils
-    ctx.fillStyle = '#D4B840';
-    ctx.beginPath(); ctx.arc(cx - 5, yOff + h * 0.38, 3.5, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx + 5, yOff + h * 0.38, 3.5, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#000';
-    ctx.beginPath(); ctx.ellipse(cx - 5, yOff + h * 0.38, 2.8, 1, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(cx + 5, yOff + h * 0.38, 2.8, 1, 0, 0, Math.PI * 2); ctx.fill();
-  } else if (char.name === 'Sheep') {
-    // Sheep: fluffy cloud body + dark face
-    fillBodyGradientCircle(ctx, cx - 6, yOff + h * 0.48, 8, char);
-    fillBodyGradientCircle(ctx, cx + 6, yOff + h * 0.48, 8, char);
-    fillBodyGradientCircle(ctx, cx, yOff + h * 0.42, 9, char);
-    fillBodyGradientCircle(ctx, cx, yOff + h * 0.55, 7, char);
-    ctx.fillStyle = char.darkColor;
-    ctx.beginPath(); ctx.ellipse(cx + 2, yOff + h * 0.44, 5, 6, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#FFF';
-    ctx.beginPath(); ctx.arc(cx, yOff + h * 0.4, 2, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx + 4, yOff + h * 0.4, 2, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#000';
-    ctx.beginPath(); ctx.arc(cx, yOff + h * 0.4, 1, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx + 4, yOff + h * 0.4, 1, 0, Math.PI * 2); ctx.fill();
-  } else if (char.name === 'Monkey') {
-    // Monkey: round body + big ears + light face
-    fillBodyGradient(ctx, bodyParams, char);
-    ctx.beginPath(); ctx.arc(cx - 12, yOff + h * 0.35, 6, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx + 12, yOff + h * 0.35, 6, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = char.lightColor;
-    ctx.beginPath(); ctx.arc(cx - 12, yOff + h * 0.35, 3.5, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx + 12, yOff + h * 0.35, 3.5, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(cx + 1, yOff + h * 0.46, 7, 6, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#000';
-    ctx.beginPath(); ctx.arc(cx - 3, yOff + h * 0.4, 2.5, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx + 5, yOff + h * 0.4, 2.5, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#FFF';
-    ctx.beginPath(); ctx.arc(cx - 2, yOff + h * 0.38, 1, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx + 6, yOff + h * 0.38, 1, 0, Math.PI * 2); ctx.fill();
-  } else if (char.name === 'Tiger') {
-    // Tiger: muscular body, round ears, stripes
-    fillBodyGradient(ctx, bodyParams, char);
-    ctx.beginPath(); ctx.arc(cx - 10, yOff + 4, 6, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx + 10, yOff + 4, 6, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = char.darkColor;
-    ctx.beginPath(); ctx.arc(cx - 10, yOff + 4, 3, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx + 10, yOff + 4, 3, 0, Math.PI * 2); ctx.fill();
-    // Upper stripes
-    ctx.strokeStyle = char.darkColor; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(cx - 8, yOff + h * 0.35); ctx.lineTo(cx - 12, yOff + h * 0.45); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(cx + 8, yOff + h * 0.35); ctx.lineTo(cx + 12, yOff + h * 0.45); ctx.stroke();
-    // Lower stripes
-    ctx.beginPath(); ctx.moveTo(cx - 7, yOff + h * 0.5); ctx.lineTo(cx - 11, yOff + h * 0.6); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(cx + 7, yOff + h * 0.5); ctx.lineTo(cx + 11, yOff + h * 0.6); ctx.stroke();
-    // Muzzle
-    ctx.fillStyle = char.lightColor;
-    ctx.beginPath(); ctx.ellipse(cx + 1, yOff + h * 0.52, 6, 5, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#FF6060';
-    ctx.beginPath(); ctx.ellipse(cx + 1, yOff + h * 0.48, 3, 2, 0, 0, Math.PI * 2); ctx.fill();
-  } else if (char.name === 'Rhino') {
-    // Rhino: wide body, small ears, horn
-    fillBodyGradient(ctx, bodyParams, char);
-    ctx.beginPath(); ctx.arc(cx - 10, yOff + 6, 4, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx + 10, yOff + 6, 4, 0, Math.PI * 2); ctx.fill();
-    // Horn
-    ctx.fillStyle = char.lightColor;
-    ctx.beginPath(); ctx.moveTo(cx + 3, yOff + h * 0.35); ctx.lineTo(cx + 6, yOff - 2); ctx.lineTo(cx + 9, yOff + h * 0.38); ctx.closePath(); ctx.fill();
-    // Skin fold
-    ctx.strokeStyle = char.darkColor; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.arc(cx - 2, yOff + h * 0.55, w * 0.3, 0.3, 1.2); ctx.stroke();
-  } else if (char.name === 'Hedgehog') {
-    // Hedgehog: round body, spines radiate outward from back/top surface
-    const bodyCx = cx + 2;
-    const bodyCy = yOff + h * 0.55;
-    const bodyRx = w * 0.34;
-    const bodyRy = h * 0.32;
-    // Spines radiating from body surface (back arc)
-    ctx.fillStyle = char.darkColor;
-    const spineCount = 9;
-    for (let i = 0; i < spineCount; i++) {
-      const angle = Math.PI * 0.6 + (Math.PI * 1.1) * (i / (spineCount - 1));
-      const bx = bodyCx + Math.cos(angle) * bodyRx;
-      const by = bodyCy + Math.sin(angle) * bodyRy;
-      const tipLen = 7 + (i > 1 && i < spineCount - 1 ? 3 : 0);
-      const tx = bodyCx + Math.cos(angle) * (bodyRx + tipLen);
-      const ty = bodyCy + Math.sin(angle) * (bodyRy + tipLen);
-      const px = -Math.sin(angle) * 2, py = Math.cos(angle) * 2;
-      ctx.beginPath(); ctx.moveTo(bx - px, by - py); ctx.lineTo(tx, ty); ctx.lineTo(bx + px, by + py); ctx.closePath(); ctx.fill();
-    }
-    // Body
-    fillBodyGradient(ctx, bodyParams, char);
-    // Face/belly
-    ctx.fillStyle = char.lightColor;
-    ctx.beginPath(); ctx.ellipse(bodyCx + bodyRx * 0.35, bodyCy + bodyRy * 0.1, bodyRx * 0.55, bodyRy * 0.7, 0, 0, Math.PI * 2); ctx.fill();
-    // Snout
-    ctx.fillStyle = char.lightColor;
-    ctx.beginPath(); ctx.moveTo(bodyCx + bodyRx * 0.7, bodyCy - 3); ctx.quadraticCurveTo(bodyCx + bodyRx + 8, bodyCy, bodyCx + bodyRx * 0.7, bodyCy + 3); ctx.closePath(); ctx.fill();
-    // Nose
-    ctx.fillStyle = '#111';
-    ctx.beginPath(); ctx.arc(bodyCx + bodyRx + 5, bodyCy, 2, 0, Math.PI * 2); ctx.fill();
-    // Ears
-    ctx.fillStyle = char.color;
-    ctx.beginPath(); ctx.arc(bodyCx - 2, bodyCy - bodyRy + 2, 3.5, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(bodyCx + 5, bodyCy - bodyRy + 2, 3.5, 0, Math.PI * 2); ctx.fill();
-    // Beady eye
-    ctx.fillStyle = '#000';
-    ctx.beginPath(); ctx.arc(bodyCx + bodyRx * 0.5, bodyCy - bodyRy * 0.15, 2.2, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#FFF';
-    ctx.beginPath(); ctx.arc(bodyCx + bodyRx * 0.5 + 0.8, bodyCy - bodyRy * 0.15 - 0.8, 0.8, 0, Math.PI * 2); ctx.fill();
-  } else {
-    // Fallback
-    fillBodyGradient(ctx, bodyParams, char);
+  // 3D shading overlay (highlight spot)
+  const lobbyPack = getCharacterPack(char.name);
+  if (lobbyPack && !lobbyPack.noHighlight) {
+    drawHighlightSpot(ctx, lobbyPack.bodyEllipse(cx, yOff, w, h));
   }
 
-  // 3D shading overlays (highlight spot + fur edge)
-  drawHighlightSpot(ctx, bodyParams);
-  drawFurEdge(ctx, bodyParams, char.darkColor, getFurIntensity(char.name));
-
   // Generic eyes for characters without custom ones
-  if (!CUSTOM_EYE_CHARS.has(char.name)) {
+  if (!hasCustomEyes(char.name)) {
     ctx.fillStyle = '#000';
     ctx.beginPath(); ctx.arc(cx - 4, yOff + h * 0.4, 2.5, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(cx + 6, yOff + h * 0.4, 2.5, 0, Math.PI * 2); ctx.fill();

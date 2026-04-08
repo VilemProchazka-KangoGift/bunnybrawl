@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { CHARACTERS, getCharacter } from './characters';
+import { CHARACTERS } from './legacy';
 
 describe('Characters', () => {
   it('has all four characters defined', () => {
@@ -37,7 +37,4 @@ describe('Characters', () => {
     }
   });
 
-  it('getCharacter returns correct character', () => {
-    expect(getCharacter('P3')).toBe(CHARACTERS.P3);
-  });
 });

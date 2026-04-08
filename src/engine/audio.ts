@@ -6,7 +6,8 @@ export type SoundName = 'jump' | 'stomp' | 'victory' | 'select' | 'thornhit' | '
 const AUDIO_BASE = import.meta.env.BASE_URL + 'audio/';
 
 class AudioManager {
-  private sounds: Map<SoundName, Howl> = new Map();
+  // Widened to string keys so external character packs can register sounds dynamically
+  private sounds: Map<string, Howl> = new Map();
   private initialized = false;
   private muted = false;
   private musicHowl: Howl | null = null;
@@ -202,13 +203,13 @@ class AudioManager {
     this.initialized = true;
   }
 
-  play(name: SoundName): void {
+  play(name: SoundName | string): void {
     if (this.muted) return;
     if (!this.initialized) this.init();
     this.sounds.get(name)?.play();
   }
 
-  stop(name: SoundName): void {
+  stop(name: SoundName | string): void {
     this.sounds.get(name)?.stop();
   }
 
@@ -232,14 +233,26 @@ class AudioManager {
     return this.muted;
   }
 
-  setVolume(name: SoundName, vol: number): void {
+  setVolume(name: SoundName | string, vol: number): void {
     const sound = this.sounds.get(name);
     if (sound) sound.volume(vol);
   }
 
   playAnimal(characterName: string): void {
-    const soundName = characterName.toLowerCase() as SoundName;
-    this.play(soundName);
+    const soundName = characterName.toLowerCase();
+    if (this.sounds.has(soundName)) {
+      this.play(soundName);
+    }
+  }
+
+  /** Register a sound dynamically (for external character packs). */
+  registerSound(name: string, howl: Howl): void {
+    this.sounds.set(name, howl);
+  }
+
+  /** Check if a sound is registered. */
+  hasSound(name: string): boolean {
+    return this.sounds.has(name);
   }
 
   playMenuMusic(): void {

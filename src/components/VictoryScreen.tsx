@@ -4,7 +4,7 @@ import { useGameStore } from '../store/gameStore';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
 import type { PlayerSlot, PlayerStats } from '../engine/types';
 import { isBotSlot } from '../engine/types';
-import { CHAR_EMOJI } from '../engine/characters';
+import { getCharacterEmoji, getCharacterDisplayName } from '../engine/characters';
 import { listArenas } from '../engine/arena';
 import { listThemes } from '../engine/themes/registry';
 import './VictoryScreen.css';
@@ -21,7 +21,7 @@ interface FireworkParticle {
 }
 
 export function VictoryScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { winner, lastMatchState, setScreen, setActivePlayers, setMatchSettings } = useGameStore();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [showArenaSelect, setShowArenaSelect] = useState(false);
@@ -30,8 +30,7 @@ export function VictoryScreen() {
   const players = lastMatchState?.players.filter(p => p.active) ?? [];
   const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
 
-  const charName = (name: string) => t(`char_${name}`, name);
-  const charEmoji = (name: string) => CHAR_EMOJI[name] ?? '';
+  const charName = (name: string) => getCharacterDisplayName(name, i18n.language);
   const botSuffix = (id: PlayerSlot) => isBotSlot(id) ? ' (BOT)' : '';
 
   const handleRematch = () => { setScreen('match'); };
@@ -154,7 +153,7 @@ export function VictoryScreen() {
                 <span style={{ color: winnerChar.color }}>{charName(winnerChar.name)}{botSuffix(winner!)}</span> {t('victory_wins')}
               </h1>
               <div className="winner-avatar winner-avatar-pose" style={{ borderColor: winnerChar.lightColor }}>
-                <span className="winner-emoji">{CHAR_EMOJI[winnerChar.name] ?? '\uD83C\uDFC6'}</span>
+                <span className="winner-emoji">{getCharacterEmoji(winnerChar.name)}</span>
               </div>
             </>
           ) : (
@@ -168,7 +167,7 @@ export function VictoryScreen() {
                 {sortedPlayers.map((player, idx) => (
                   <div key={player.id} className={`score-row ${idx === 0 ? 'first' : ''}`}>
                     <span className="rank">#{idx + 1}</span>
-                    <span className="row-emoji">{charEmoji(player.character.name)}</span>
+                    <span className="row-emoji">{getCharacterEmoji(player.character.name)}</span>
                     <span className="player-name" style={{ color: player.character.color }}>
                       {charName(player.character.name)}{botSuffix(player.id)}
                     </span>
@@ -200,7 +199,7 @@ export function VictoryScreen() {
                       return (
                         <div key={player.id} className="stats-row">
                           <span className="stats-cell stats-name-cell" style={{ color: player.character.color }}>
-                            <span className="row-emoji">{charEmoji(player.character.name)}</span>{charName(player.character.name)}
+                            <span className="row-emoji">{getCharacterEmoji(player.character.name)}</span>{charName(player.character.name)}
                           </span>
                           <span className="stats-cell">{ps?.bestStreak ?? 0}</span>
                           <span className="stats-cell">{ps ? ps.timeAirborne.toFixed(1) + 's' : '0.0s'}</span>
@@ -220,7 +219,7 @@ export function VictoryScreen() {
                     <div key={idx} className="mvp-row">
                       <span className="mvp-icon">{hl.icon}</span>
                       <span className="mvp-label">{hl.label}</span>
-                      <span className="mvp-player" style={{ color: hl.playerColor }}><span className="row-emoji">{charEmoji(hl.rawName)}</span>{hl.playerName}</span>
+                      <span className="mvp-player" style={{ color: hl.playerColor }}><span className="row-emoji">{getCharacterEmoji(hl.rawName)}</span>{hl.playerName}</span>
                       <span className="mvp-value">{hl.value}</span>
                     </div>
                   ))}
