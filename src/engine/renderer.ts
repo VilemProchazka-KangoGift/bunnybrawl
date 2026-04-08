@@ -1633,7 +1633,7 @@ export class Renderer {
     const pack = getCharacterPack(char.name);
     if (pack) {
       const bodyParams: BodyEllipseParams = pack.bodyEllipse(cx, yOff, w, h);
-      drawHighlightSpot(ctx, bodyParams);
+      drawHighlightSpot(ctx, bodyParams, pack.highlightIntensity ?? 1.0);
     }
 
     // Eyes (generic — for characters without custom eyes)

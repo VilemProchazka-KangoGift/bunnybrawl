@@ -100,7 +100,9 @@ export function fillBodyGradientCircle(
 export function drawHighlightSpot(
   ctx: CanvasRenderingContext2D,
   params: BodyEllipseParams,
+  intensity: number = 1.0,
 ): void {
+  if (intensity <= 0) return;
   const { cx, cy, rx, ry } = params;
   const hx = cx - rx * 0.3;
   const hy = cy - ry * 0.35;

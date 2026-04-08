@@ -881,7 +881,7 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
   const lobbyPack = getCharacterPack(char.name);
   if (lobbyPack) {
     const bodyParams = lobbyPack.bodyEllipse(cx, yOff, w, h);
-    drawHighlightSpot(ctx, bodyParams);
+    drawHighlightSpot(ctx, bodyParams, lobbyPack.highlightIntensity ?? 1.0);
   }
 
   // Generic eyes for characters without custom ones
