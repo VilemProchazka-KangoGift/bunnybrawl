@@ -261,7 +261,14 @@ export function CharacterSelect() {
         }
         setScreen('menu');
       }
-      if (e.key === 'Enter' && countdownStartedRef.current) startMatch();
+      if (e.key === 'Enter') {
+        const ol = useGameStore.getState().online;
+        if (ol.isOnline && ol.isHost && onlineReadySentRef.current && onlineRemoteReadyRef.current) {
+          startMatch();
+        } else if (!ol.isOnline && countdownStartedRef.current) {
+          startMatch();
+        }
+      }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
       e.preventDefault();
@@ -409,7 +416,7 @@ export function CharacterSelect() {
       const humansInZone = inZone.filter(p => !isBotSlot(p.slot));
 
       if (onlineNow) {
-        // Online mode: when local player enters START zone, send ready to remote
+        // Online mode: send ready when local player enters START zone
         const localInZone = humansInZone.length >= 1;
         if (localInZone && !onlineReadySentRef.current) {
           onlineReadySentRef.current = true;
@@ -423,16 +430,7 @@ export function CharacterSelect() {
         if (!localInZone) {
           onlineReadySentRef.current = false;
         }
-        // Start countdown only when both local and remote are ready
-        const bothReady = onlineReadySentRef.current && onlineRemoteReadyRef.current;
-        if (bothReady && !countdownStartedRef.current) {
-          countdownStartedRef.current = true;
-          countdownRef.current = COUNTDOWN_SECONDS;
-        }
-        if (!bothReady) {
-          countdownStartedRef.current = false;
-          countdownRef.current = -1;
-        }
+        // No countdown in online mode — host starts manually via Enter or button
       } else {
         // Local mode: need at least 1 human + total 2 participants to start countdown
         if (inZone.length >= 2 && humansInZone.length >= 1 && !countdownStartedRef.current) {
@@ -455,6 +453,9 @@ export function CharacterSelect() {
         onlineState.isOnline ? {
           roomCode: onlineState.roomCode,
           remoteCharName: onlineState.remoteCharacterName,
+          isHost: onlineState.isHost,
+          localReady: onlineReadySentRef.current,
+          canStart: onlineState.isHost && onlineReadySentRef.current && onlineRemoteReadyRef.current,
           remoteReady: onlineRemoteReadyRef.current,
           waitingForRemote: onlineReadySentRef.current && !onlineRemoteReadyRef.current,
         } : undefined);
@@ -473,6 +474,19 @@ export function CharacterSelect() {
         height={CANVAS_HEIGHT}
         className="lobby-canvas"
         data-testid="lobby-canvas"
+        onClick={(e) => {
+          const rect = (drawLobby as any)._startBtnRect;
+          if (!rect) return;
+          const canvas = canvasRef.current;
+          if (!canvas) return;
+          const scaleX = CANVAS_WIDTH / canvas.clientWidth;
+          const scaleY = CANVAS_HEIGHT / canvas.clientHeight;
+          const cx = e.nativeEvent.offsetX * scaleX;
+          const cy = e.nativeEvent.offsetY * scaleY;
+          if (cx >= rect.x && cx <= rect.x + rect.w && cy >= rect.y && cy <= rect.y + rect.h) {
+            startMatch();
+          }
+        }}
       />
     </div>
   );
@@ -610,7 +624,7 @@ function drawLobby(
   countdown: number,
   countdownActive: boolean,
   dt: number,
-  onlineInfo?: { roomCode: string | null; remoteCharName: string | null; remoteReady: boolean; waitingForRemote: boolean },
+  onlineInfo?: { roomCode: string | null; remoteCharName: string | null; remoteReady: boolean; waitingForRemote: boolean; isHost: boolean; localReady: boolean; canStart: boolean },
 ): void {
   // ---- Sky with gradient (meadow style) ----
   const skyGrad = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
@@ -830,24 +844,44 @@ function drawLobby(
 
   // ---- UI bar at top (polished) ----
   const barH = 52;
+  // Build display entries: local players + remote opponent (if online and known)
+  const displayEntries: Array<{ slot: string; charName: string; displayName: string; color: string; keys: string }> = [];
+  for (const p of players) {
+    const fmtKey = (k: string) => k === 'ArrowLeft' ? '\u2190' : k === 'ArrowRight' ? '\u2192' : k === 'ArrowUp' ? '\u2191' : k === 'ArrowDown' ? '\u2193' : k;
+    const b = KEY_BINDINGS[p.slot as CharacterSlot];
+    displayEntries.push({
+      slot: p.slot,
+      charName: p.char.name,
+      displayName: getCharacterDisplayName(p.char.name, i18n.language),
+      color: p.char.color,
+      keys: players.length === 1 ? '\u2190 \u2192 \u2191 \u2193' : `${fmtKey(b.left)} ${fmtKey(b.right)} ${fmtKey(b.jump)} ${fmtKey(b.down)}`,
+    });
+  }
+  if (onlineInfo?.remoteCharName) {
+    const remoteDef = getAllCharacters().find(c => c.name === onlineInfo.remoteCharName);
+    displayEntries.push({
+      slot: 'P2',
+      charName: onlineInfo.remoteCharName,
+      displayName: getCharacterDisplayName(onlineInfo.remoteCharName, i18n.language),
+      color: remoteDef?.color || '#888',
+      keys: onlineInfo.remoteReady ? i18n.t('ready', 'READY') : '...',
+    });
+  }
+  const slotWidth = Math.min(300, (CANVAS_WIDTH - 40) / Math.max(1, displayEntries.length));
+  const barW = Math.min(CANVAS_WIDTH - 16, displayEntries.length * slotWidth + 40);
+  const barX = (CANVAS_WIDTH - barW) / 2;
   ctx.fillStyle = 'rgba(0,0,0,0.6)';
   ctx.beginPath();
-  ctx.roundRect(8, 6, CANVAS_WIDTH - 16, barH, 10);
+  ctx.roundRect(barX, 6, barW, barH, 10);
   ctx.fill();
   ctx.strokeStyle = 'rgba(255,255,255,0.08)';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.roundRect(9, 7, CANVAS_WIDTH - 18, barH - 2, 9);
+  ctx.roundRect(barX + 1, 7, barW - 2, barH - 2, 9);
   ctx.stroke();
-
-  const displaySlots = players.length < SLOTS.length ? players.map(p => p.slot as CharacterSlot) : SLOTS;
-  const slotWidth = Math.min(300, (CANVAS_WIDTH - 40) / displaySlots.length);
-  for (let i = 0; i < displaySlots.length; i++) {
-    const slot = displaySlots[i];
-    const bindings = KEY_BINDINGS[slot];
-    const player = players[i];
-    if (!player) continue;
-    const sx = 20 + i * slotWidth + slotWidth / 2;
+  for (let i = 0; i < displayEntries.length; i++) {
+    const entry = displayEntries[i];
+    const sx = barX + 20 + i * slotWidth + slotWidth / 2;
     const emojiX = sx - slotWidth * 0.38;
     const textX = emojiX + 22;
 
@@ -855,25 +889,19 @@ function drawLobby(
     ctx.font = '28px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(getCharacterEmoji(player.char.name), emojiX, 32);
+    ctx.fillText(getCharacterEmoji(entry.charName), emojiX, 32);
     ctx.textBaseline = 'alphabetic';
 
     // Name in player color
-    ctx.fillStyle = player.char.color;
+    ctx.fillStyle = entry.color;
     ctx.textAlign = 'left';
     ctx.font = "bold 14px 'Nunito', sans-serif";
-    ctx.fillText(`${slot}: ${getCharacterDisplayName(player.char.name, i18n.language)}`, textX, 26);
+    ctx.fillText(`${entry.slot}: ${entry.displayName}`, textX, 26);
 
-    // Keys
+    // Keys or status
     ctx.fillStyle = 'rgba(255,255,255,0.6)';
     ctx.font = "bold 13px 'Nunito', monospace";
-    if (players.length === 1) {
-      // Online mode: any keys work
-      ctx.fillText(i18n.t('any_keys', 'Any keys'), textX, 42);
-    } else {
-      const fmtKey = (k: string) => k === 'ArrowLeft' ? '\u2190' : k === 'ArrowRight' ? '\u2192' : k === 'ArrowUp' ? '\u2191' : k === 'ArrowDown' ? '\u2193' : k;
-      ctx.fillText(`${fmtKey(bindings.left)} ${fmtKey(bindings.right)} ${fmtKey(bindings.jump)} ${fmtKey(bindings.down)}`, textX, 42);
-    }
+    ctx.fillText(entry.keys, textX, 42);
   }
 
   // ---- Bottom-left: swap instruction ----
@@ -977,26 +1005,27 @@ function drawLobby(
   // ---- Online info overlay ----
   if (onlineInfo) {
     const cx = CANVAS_WIDTH / 2;
+    const boxTop = 80;
 
-    // Room code (center, large)
+    // Room code (center, very large)
     if (onlineInfo.roomCode) {
       ctx.save();
       ctx.textAlign = 'center';
-      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
       ctx.beginPath();
-      ctx.roundRect(cx - 170, 56, 340, 60, 12);
+      ctx.roundRect(cx - 200, boxTop, 400, 80, 14);
       ctx.fill();
-      ctx.font = "bold 16px 'Nunito', sans-serif";
+      ctx.font = "bold 18px 'Nunito', sans-serif";
       ctx.fillStyle = 'rgba(255,255,255,0.7)';
-      ctx.fillText(i18n.t('room_code', 'Room Code'), cx, 76);
-      ctx.font = "bold 40px 'Fredoka One', monospace";
+      ctx.fillText(i18n.t('room_code', 'Room Code'), cx, boxTop + 24);
+      ctx.font = "bold 52px 'Fredoka One', monospace";
       ctx.fillStyle = '#FFD700';
-      ctx.fillText(onlineInfo.roomCode, cx, 110);
+      ctx.fillText(onlineInfo.roomCode, cx, boxTop + 70);
       ctx.restore();
     }
 
     // Opponent status (below room code)
-    const statusY = onlineInfo.roomCode ? 136 : 78;
+    const statusY = boxTop + (onlineInfo.roomCode ? 100 : 20);
     ctx.save();
     ctx.textAlign = 'center';
     if (onlineInfo.remoteCharName) {
@@ -1010,6 +1039,31 @@ function drawLobby(
       ctx.fillText(i18n.t('waiting_opponent', 'Waiting for opponent...'), cx, statusY);
     }
     ctx.restore();
+
+    // Host "Start" button (only when both ready)
+    if (onlineInfo.canStart) {
+      const btnW = 200;
+      const btnH = 44;
+      const btnX = cx - btnW / 2;
+      const btnY = statusY + 14;
+      ctx.save();
+      ctx.fillStyle = '#388E3C';
+      ctx.beginPath();
+      ctx.roundRect(btnX, btnY, btnW, btnH, 10);
+      ctx.fill();
+      ctx.strokeStyle = '#6BD06F';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.font = "bold 22px 'Fredoka One', sans-serif";
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center';
+      ctx.fillText(i18n.t('play', 'Start!'), cx, btnY + 30);
+      ctx.restore();
+      // Store button rect for click detection
+      (drawLobby as any)._startBtnRect = { x: btnX, y: btnY, w: btnW, h: btnH };
+    } else {
+      (drawLobby as any)._startBtnRect = null;
+    }
   }
 
   // ---- Day/night cycle ----

@@ -458,14 +458,14 @@ export function MainMenu() {
                       <input
                         className="online-code-input"
                         type="text"
-                        maxLength={4}
+                        maxLength={3}
                         placeholder={t('code_placeholder', 'Code')}
                         value={onlineJoinCode}
                         autoFocus
                         onChange={(e) => setOnlineJoinCode(e.target.value.toUpperCase().replace(/[^A-Z2-9]/g, ''))}
                         onKeyDown={(e) => {
                           e.stopPropagation();
-                          if (e.key === 'Enter' && onlineJoinCode.length >= 4) {
+                          if (e.key === 'Enter' && onlineJoinCode.length >= 3) {
                             setOnlineOpen(false); setOnlineJoinMode(false); audio.play('select');
                             useGameStore.getState().setOnline({ isHost: false, joinCode: onlineJoinCode });
                             setScreen('onlineLobby');
@@ -473,11 +473,11 @@ export function MainMenu() {
                         }}
                       />
                       <button className="btn-base menu-btn" onClick={() => {
-                        if (onlineJoinCode.length < 4) return;
+                        if (onlineJoinCode.length < 3) return;
                         setOnlineOpen(false); setOnlineJoinMode(false); audio.play('select');
                         useGameStore.getState().setOnline({ isHost: false, joinCode: onlineJoinCode });
                         setScreen('onlineLobby');
-                      }} disabled={onlineJoinCode.length < 4}>
+                      }} disabled={onlineJoinCode.length < 3}>
                         {t('join_room', 'Join')}
                       </button>
                     </div>
