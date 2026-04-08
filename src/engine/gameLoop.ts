@@ -22,7 +22,7 @@ import {
   FAT_DURATION, SPRING_BOUNCE, SPRING_SIZE,
   THORN_SLOW_DURATION, CANVAS_WIDTH, CANVAS_HEIGHT,
   SPRING_SPAWN_INTERVAL, THORN_SPAWN_INTERVAL, HAZARD_LIFETIME, HAZARD_GROW_TIME,
-  SCREEN_SHAKE_DURATION, SLOW_MO_DURATION, SLOW_MO_FACTOR, HITSTOP_DURATION,
+  SCREEN_SHAKE_DURATION, SLOW_MO_DURATION, SLOW_MO_FACTOR, HITSTOP_DURATION, HAZARD_HITSTOP_DURATION,
   SQUASH_ON_LAND, STRETCH_ON_JUMP, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED,
   AFTERIMAGE_INTERVAL, AFTERIMAGE_SPEED_THRESHOLD, AFTERIMAGE_MAX,
   MATCH_COUNTDOWN, IDLE_ANIM_INTERVAL,
@@ -1315,6 +1315,8 @@ export class GameLoop {
           }
           // Small screen shake
           this.state.screenShake = Math.max(this.state.screenShake, 0.15);
+          player.hitstopTimer = Math.max(player.hitstopTimer, HAZARD_HITSTOP_DURATION);
+          this.state.hitstopZoom = Math.max(this.state.hitstopZoom, HAZARD_HITSTOP_DURATION);
         }
       }
 
@@ -1347,6 +1349,8 @@ export class GameLoop {
             player.squashTimer = 0.2;
             this.state.screenShake = Math.max(this.state.screenShake, 0.25);
             this.state.screenFlash = Math.max(this.state.screenFlash, 0.06);
+            player.hitstopTimer = Math.max(player.hitstopTimer, HAZARD_HITSTOP_DURATION);
+            this.state.hitstopZoom = Math.max(this.state.hitstopZoom, HAZARD_HITSTOP_DURATION);
             break;
           }
         }
@@ -1382,6 +1386,8 @@ export class GameLoop {
             player.squashTimer = 0.2;
             this.state.screenShake = Math.max(this.state.screenShake, 0.2);
             this.state.screenFlash = Math.max(this.state.screenFlash, 0.06);
+            player.hitstopTimer = Math.max(player.hitstopTimer, HAZARD_HITSTOP_DURATION);
+            this.state.hitstopZoom = Math.max(this.state.hitstopZoom, HAZARD_HITSTOP_DURATION);
             break;
           }
         }
@@ -1414,6 +1420,8 @@ export class GameLoop {
             player.squashScale = 0.65;
             player.squashTimer = 0.2;
             this.state.screenShake = Math.max(this.state.screenShake, 0.2);
+            player.hitstopTimer = Math.max(player.hitstopTimer, HAZARD_HITSTOP_DURATION);
+            this.state.hitstopZoom = Math.max(this.state.hitstopZoom, HAZARD_HITSTOP_DURATION);
           }
         }
       }
