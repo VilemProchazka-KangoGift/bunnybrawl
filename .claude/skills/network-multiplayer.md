@@ -56,6 +56,17 @@ P2P WebRTC via PeerJS with GGPO-style rollback netcode. Free signaling at `0.pee
 2. `Transport.setEvents()` re-wires to match callbacks when NetMatch starts (critical — without this, rollback engine never receives input messages → game freezes)
 3. On disconnect/quit: `transport.destroy()` + `resetOnline()`
 
+## Match End / Victory / Rematch
+- `onMatchEnd` only fires locally — host must send MATCH_RESULT to guest so both transition to victory screen. Without this, guest freezes after match ends.
+- NetMatch stores `onMatchEnd` callback and handles incoming MATCH_RESULT by calling it with the guest's local state.
+- Transport must survive across Match → VictoryScreen → Match cycle for rematch. Effect cleanup stops NetMatch but does NOT destroy transport. Transport destroyed only on explicit quit/menu.
+- VictoryScreen "menu" button must `transport.destroy()` + `resetOnline()`.
+
+## Online Pause / Victory Role Separation
+- Pause menu differs by role: host gets Resume/Change Level/Cancel Game; guest gets Resume/Leave Game.
+- Victory screen: only host sees Rematch and Change Arena. Guest only sees Leave Game.
+- Game doesn't actually pause in online mode — ESC just shows the overlay while the game continues.
+
 ## Testing
 - Unit tests cover PRNG determinism, protocol encode/decode, CRC32 — 21 tests in `net.test.ts`
 - PeerJS can't be tested in Node (needs WebRTC) — use `public/nettest.html` for browser smoke test
