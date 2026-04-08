@@ -144,6 +144,7 @@
   "help_online_steps": "Oba hráči si vyberou postavu v lobby a pak vejdou do zóny START. Zápas začne, až budou oba připraveni. Nastavení botů se přenáší.",
   "enter_room_code": "Zadej kód místnosti:",
   "your_character": "Tvá postava",
+  "host": "HOSTITEL",
   "players": "Hráči",
   "waiting_players": "Čekám na hráče...",
   "start_game": "Spustit hru!",

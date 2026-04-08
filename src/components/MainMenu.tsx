@@ -643,8 +643,7 @@ export function MainMenu() {
                               <option key={c.name} value={c.name}>{getCharacterEmoji(c.name)} {getCharacterDisplayName(c.name, i18n.language)}</option>
                             )}
                           </select>
-                          <span className="online-you-label">({t('you', 'You')})</span>
-                          {onlineLocalReady && <span className="online-ready-badge">{t('ready', 'READY')}</span>}
+                          {online.isHost && <span className="online-host-badge">{t('host', 'HOST')}</span>}
                         </div>
                         <div className="online-player-row">
                           <span className="online-char-name">
@@ -652,12 +651,13 @@ export function MainMenu() {
                               ? `${getCharacterEmoji(online.remoteCharacterName)} ${getCharacterDisplayName(online.remoteCharacterName, i18n.language)}`
                               : t('choosing', 'Choosing...')}
                           </span>
+                          {!online.isHost && <span className="online-host-badge">{t('host', 'HOST')}</span>}
                           {onlineRemoteReady && <span className="online-ready-badge">{t('ready', 'READY')}</span>}
                         </div>
                       </div>
                     </div>
 
-                    {/* Guest: ready button */}
+                    {/* Guest: ready button or ready badge */}
                     {!online.isHost && !onlineLocalReady && (
                       <button className="btn-base menu-btn play-btn" onClick={() => {
                         audio.play('select'); setOnlineLocalReady(true);
@@ -665,7 +665,7 @@ export function MainMenu() {
                       }}>{t('ready_up', 'Ready!')}</button>
                     )}
                     {!online.isHost && onlineLocalReady && (
-                      <div className="online-waiting">{t('waiting_host_start', 'Waiting for host to start...')}</div>
+                      <div className="online-ready-status"><span className="online-ready-badge">{t('ready', 'READY')}</span></div>
                     )}
 
                     {/* Host: start button */}

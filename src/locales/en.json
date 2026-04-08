@@ -139,6 +139,7 @@
   "help_online_steps": "Both players pick characters in the lobby, then walk to the START zone. The match begins when both are ready. Bot settings carry over.",
   "enter_room_code": "Enter the room code:",
   "your_character": "Your character",
+  "host": "HOST",
   "players": "Players",
   "waiting_players": "Waiting for players to join...",
   "start_game": "Start Game!",
