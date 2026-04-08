@@ -195,25 +195,25 @@ class AudioManager {
     }));
 
     // --- New SFX ---
-    this.sounds.set('land', new Howl({ src: [generateLandSound()], volume: 0.75 }));
-    this.sounds.set('headbonk', new Howl({ src: [generateHeadbonkSound()], volume: 0.75 }));
-    this.sounds.set('bump', new Howl({ src: [generateBumpSound()], volume: 0.6 }));
-    this.sounds.set('spring', new Howl({ src: [generateSpringSound()], volume: 0.8 }));
-    this.sounds.set('crouch', new Howl({ src: [generateCrouchSound()], volume: 0.55 }));
-    this.sounds.set('fastfall', new Howl({ src: [generateFastfallSound()], volume: 0.7 }));
+    this.sounds.set('land', new Howl({ src: [generateLandSound()], volume: 1.0 }));
+    this.sounds.set('headbonk', new Howl({ src: [generateHeadbonkSound()], volume: 1.0 }));
+    this.sounds.set('bump', new Howl({ src: [generateBumpSound()], volume: 0.8 }));
+    this.sounds.set('spring', new Howl({ src: [generateSpringSound()], volume: 1.0 }));
+    this.sounds.set('crouch', new Howl({ src: [generateCrouchSound()], volume: 0.7 }));
+    this.sounds.set('fastfall', new Howl({ src: [generateFastfallSound()], volume: 0.9 }));
 
     // --- Ambient loops ---
-    this.sounds.set('amb_wind', new Howl({ src: [generateAmbWindSound()], volume: 0.4, loop: true }));
-    this.sounds.set('amb_lava', new Howl({ src: [generateAmbLavaSound()], volume: 0.45, loop: true }));
-    this.sounds.set('amb_underwater_bubbles', new Howl({ src: [generateAmbUnderwaterBubblesSound()], volume: 0.4, loop: true }));
-    this.sounds.set('amb_space_hum', new Howl({ src: [generateAmbSpaceHumSound()], volume: 0.4, loop: true }));
+    this.sounds.set('amb_wind', new Howl({ src: [generateAmbWindSound()], volume: 0.55, loop: true }));
+    this.sounds.set('amb_lava', new Howl({ src: [generateAmbLavaSound()], volume: 0.6, loop: true }));
+    this.sounds.set('amb_underwater_bubbles', new Howl({ src: [generateAmbUnderwaterBubblesSound()], volume: 0.55, loop: true }));
+    this.sounds.set('amb_space_hum', new Howl({ src: [generateAmbSpaceHumSound()], volume: 0.55, loop: true }));
 
     // --- Ambient periodic one-shots ---
-    this.sounds.set('amb_bird_chirp', new Howl({ src: [generateAmbBirdChirpSound()], volume: 0.55 }));
-    this.sounds.set('amb_ghost_hoo', new Howl({ src: [generateAmbGhostHooSound()], volume: 0.5 }));
-    this.sounds.set('amb_volcano_burst', new Howl({ src: [generateAmbVolcanoBurstSound()], volume: 0.65 }));
-    this.sounds.set('amb_drip', new Howl({ src: [generateAmbDripSound()], volume: 0.4 }));
-    this.sounds.set('amb_chime', new Howl({ src: [generateAmbChimeSound()], volume: 0.5 }));
+    this.sounds.set('amb_bird_chirp', new Howl({ src: [generateAmbBirdChirpSound()], volume: 0.7 }));
+    this.sounds.set('amb_ghost_hoo', new Howl({ src: [generateAmbGhostHooSound()], volume: 0.65 }));
+    this.sounds.set('amb_volcano_burst', new Howl({ src: [generateAmbVolcanoBurstSound()], volume: 0.8 }));
+    this.sounds.set('amb_drip', new Howl({ src: [generateAmbDripSound()], volume: 0.55 }));
+    this.sounds.set('amb_chime', new Howl({ src: [generateAmbChimeSound()], volume: 0.65 }));
 
     // Preload menu music so it's ready instantly
     this.menuMusicHowl = new Howl({
