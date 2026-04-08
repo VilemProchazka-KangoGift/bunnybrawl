@@ -253,6 +253,11 @@ class AudioManager {
     }
   }
 
+  // MP3 overrides for arena music (theme ID → filename in public/audio/)
+  private static readonly MUSIC_MP3: Record<string, string> = {
+    meadow: 'meadow.mp3',
+  };
+
   /** Start theme-specific music. Lazily generates and caches per theme. */
   playMusic(themeId: string): void {
     this.stopMenuMusic();
@@ -265,8 +270,11 @@ class AudioManager {
     }
     // Stop previous track
     this.stopMusic();
-    // Generate on demand
-    const src = generateThemeMusic(themeId);
+    // Use MP3 override if available, otherwise generate procedurally
+    const mp3 = AudioManager.MUSIC_MP3[themeId];
+    const src = mp3
+      ? import.meta.env.BASE_URL + 'audio/' + mp3
+      : generateThemeMusic(themeId);
     this.musicHowl = new Howl({ src: [src], volume: 0.3, loop: true });
     this.musicThemeId = themeId;
     this.musicHowl.play();
