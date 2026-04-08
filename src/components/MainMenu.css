@@ -40,10 +40,10 @@
 }
 
 .game-logo {
-  width: 340px;
+  width: 306px;
   height: auto;
   display: block;
-  margin: -10px auto -5px;
+  margin: -10px auto 8px;
   animation: logoZoom 3s ease-in-out infinite;
   filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.4));
 }
