@@ -765,4 +765,8 @@ export const ROOFTOPS_THEME: ThemeConfig = {
     ctx.ellipse(x, lidY, halfW * 0.7, size * 0.06, 0, 0, Math.PI * 2);
     ctx.fill();
   }),
+
+  ambientSoundConfig: {
+    loops: ['amb_wind'],
+  },
 };

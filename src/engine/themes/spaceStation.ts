@@ -798,4 +798,8 @@ export const SPACE_STATION_THEME: ThemeConfig = {
     ctx.arc(x + halfW * 0.8, y - 3, 2, 0, Math.PI * 2);
     ctx.fill();
   }),
+
+  ambientSoundConfig: {
+    loops: ['amb_space_hum'],
+  },
 };

@@ -500,4 +500,9 @@ export const VOLCANO_THEME: ThemeConfig = {
     ctx.ellipse(x, y - size * 0.5 / squash, halfW * 0.15, flameH * 0.3, 0, 0, Math.PI * 2);
     ctx.fill();
   }),
+
+  ambientSoundConfig: {
+    loops: ['amb_lava'],
+    periodic: [{ sound: 'amb_volcano_burst', intervalRange: [8, 20] }],
+  },
 };

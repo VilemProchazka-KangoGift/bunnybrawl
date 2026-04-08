@@ -178,4 +178,19 @@ export interface ThemeConfig {
 
   // Optional physics modifiers
   physics?: PhysicsModifiers;
+
+  // Optional per-theme ambient sounds
+  ambientSoundConfig?: AmbientSoundConfig;
+}
+
+// ---- Ambient sound config ----
+
+export interface PeriodicAmbientSound {
+  sound: string;                   // SoundName (string to avoid circular import)
+  intervalRange: [number, number]; // min/max seconds between plays
+}
+
+export interface AmbientSoundConfig {
+  loops?: string[];
+  periodic?: PeriodicAmbientSound[];
 }

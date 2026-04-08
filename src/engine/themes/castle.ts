@@ -637,4 +637,9 @@ export const CASTLE_THEME: ThemeConfig = {
     ctx.fillStyle = '#4A4A55';
     ctx.fillRect(x - halfW * 0.7, y - 3, halfW * 1.4, 3);
   }),
+
+  ambientSoundConfig: {
+    loops: ['amb_wind'],
+    periodic: [{ sound: 'amb_drip', intervalRange: [4, 12] }],
+  },
 };

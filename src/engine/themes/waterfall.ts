@@ -385,4 +385,8 @@ export const WATERFALL_THEME: ThemeConfig = {
     }
     ctx.restore();
   },
+
+  ambientSoundConfig: {
+    periodic: [{ sound: 'amb_bird_chirp', intervalRange: [6, 15] }],
+  },
 };

@@ -236,4 +236,8 @@ export const MEADOW_THEME: ThemeConfig = {
     drawFgWildflower(ctx, 930, gy, '#FFD700', 16);
     drawFgWildflower(ctx, 1180, gy, '#FF69B4', 22);
   },
+
+  ambientSoundConfig: {
+    periodic: [{ sound: 'amb_bird_chirp', intervalRange: [5, 15] }],
+  },
 };

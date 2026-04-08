@@ -463,4 +463,8 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
     ctx.fillRect(x - 5, y - 2, width + 10, 4);
     ctx.restore();
   },
+
+  ambientSoundConfig: {
+    loops: ['amb_wind'],
+  },
 };

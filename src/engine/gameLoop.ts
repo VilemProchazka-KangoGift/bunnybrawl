@@ -82,6 +82,17 @@ export class GameLoop {
   private newGroundedGibsSinceRender: Gib[] = [];
   private _debugKeyHandler: ((e: KeyboardEvent) => void) | null = null;
 
+  // SFX cooldowns (per-player)
+  private landCooldowns: Map<PlayerSlot, number> = new Map();
+  private headbonkCooldowns: Map<PlayerSlot, number> = new Map();
+  private crouchCooldowns: Map<PlayerSlot, number> = new Map();
+  // Global bump cooldown (prevents double-fire from both pushed players)
+  private bumpCooldown = 0;
+
+  // Per-theme ambient sound state
+  private activeAmbientLoops: string[] = [];
+  private periodicAmbientTimers: Map<string, number> = new Map();
+
   constructor(
     bgCanvas: HTMLCanvasElement,
     fgCanvas: HTMLCanvasElement,
@@ -306,6 +317,21 @@ export class GameLoop {
     audio.playMusic(this.arena.themeId);
     audio.play('ambient');
     if (this.hasWaterfallZones) audio.play('waterfall_ambient');
+    // Start theme ambient loops
+    const ambConfig = this.theme.ambientSoundConfig;
+    if (ambConfig?.loops) {
+      for (const loop of ambConfig.loops) {
+        audio.play(loop);
+        this.activeAmbientLoops.push(loop);
+      }
+    }
+    // Initialize periodic ambient timers with random first-fire delay
+    if (ambConfig?.periodic) {
+      for (const p of ambConfig.periodic) {
+        const delay = p.intervalRange[0] + Math.random() * (p.intervalRange[1] - p.intervalRange[0]);
+        this.periodicAmbientTimers.set(p.sound, delay);
+      }
+    }
     if (debugFlags.navDebugAllowed) {
       this._debugKeyHandler = (e: KeyboardEvent) => { if (e.key === '`') toggleNavDebug(); };
       window.addEventListener('keydown', this._debugKeyHandler);
@@ -322,6 +348,12 @@ export class GameLoop {
     audio.stop('zero_g');
     audio.stop('crowd');
     audio.stop('waterfall_ambient');
+    // Stop all theme ambient loops
+    for (const loop of this.activeAmbientLoops) {
+      audio.stop(loop);
+    }
+    this.activeAmbientLoops = [];
+    this.periodicAmbientTimers.clear();
     if (this._debugKeyHandler) {
       window.removeEventListener('keydown', this._debugKeyHandler);
       this._debugKeyHandler = null;
@@ -1112,14 +1144,26 @@ export class GameLoop {
       if (player.springTrailTimer > 0) player.springTrailTimer -= dt;
     }
 
+    // Decay global bump cooldown
+    if (this.bumpCooldown > 0) this.bumpCooldown -= dt;
+
     // Input + physics
     for (const player of this.state.players) {
       if (!player.active) continue;
+      // Decay SFX cooldowns (even during hitstop so they don't accumulate)
+      const lc = this.landCooldowns.get(player.id);
+      if (lc !== undefined && lc > 0) this.landCooldowns.set(player.id, lc - dt);
+      const hc = this.headbonkCooldowns.get(player.id);
+      if (hc !== undefined && hc > 0) this.headbonkCooldowns.set(player.id, hc - dt);
+      const cc = this.crouchCooldowns.get(player.id);
+      if (cc !== undefined && cc > 0) this.crouchCooldowns.set(player.id, cc - dt);
       if (player.hitstopTimer > 0) continue;
       const input = this.getPlayerInput(player);
       const wasAirborne = player.state === 'airborne';
       const prevVy = player.vy;
       const prevVx = player.vx;
+      const wasFastFalling = player.fastFalling;
+      const wasCrouching = player.squashScale <= SQUASH_ON_CROUCH;
 
       // Bot walk speed penalty (easy bots move slower)
       let playerWalkSpeed = this.effWalkSpeed;
@@ -1128,6 +1172,12 @@ export class GameLoop {
         if (ai) playerWalkSpeed *= ai.getWalkSpeedMult();
       }
       applyInput(player, input, dt, playerWalkSpeed, this.effFriction, this.effJumpImpulse);
+
+      // Fast-fall sound: first frame of pressing down while airborne
+      if (!wasFastFalling && player.fastFalling) {
+        audio.play('fastfall');
+      }
+
       if (!wasAirborne && player.state === 'airborne') {
         audio.play('jump');
         // Stretch on jump
@@ -1144,9 +1194,25 @@ export class GameLoop {
       // Landing detection
       const justLanded = wasAirborne && player.state !== 'airborne';
 
-      if (justLanded && prevVy >= DUST_LAND_VY_THRESHOLD) this.spawnDustParticles(player, prevVy);
+      if (justLanded && prevVy >= DUST_LAND_VY_THRESHOLD) {
+        this.spawnDustParticles(player, prevVy);
+        // Landing sound with per-player cooldown
+        const lc = this.landCooldowns.get(player.id) || 0;
+        if (lc <= 0) {
+          audio.play('land');
+          this.landCooldowns.set(player.id, 0.15);
+        }
+      }
       if (player.state === 'run' && Math.abs(player.vx) > 150 && Math.random() < 0.3) this.spawnRunDust(player);
-      if (wasAirborne && prevVy < -50 && player.vy === 0 && player.state === 'airborne') this.spawnImpactDust(player, 'up');
+      if (wasAirborne && prevVy < -50 && player.vy === 0 && player.state === 'airborne') {
+        this.spawnImpactDust(player, 'up');
+        // Headbonk sound with per-player cooldown
+        const hc = this.headbonkCooldowns.get(player.id) || 0;
+        if (hc <= 0) {
+          audio.play('headbonk');
+          this.headbonkCooldowns.set(player.id, 0.15);
+        }
+      }
 
       // Oof sound: when player hits a wall (prevVx was high, now 0)
       if (Math.abs(prevVx) > 100 && player.vx === 0 && prevVx !== 0) {
@@ -1177,6 +1243,14 @@ export class GameLoop {
       // Squash when pressing down on ground (crouch)
       if (input.down && player.state !== 'airborne') {
         player.squashScale = SQUASH_ON_CROUCH;
+        // Crouch sound: only on initial sit-down
+        if (!wasCrouching) {
+          const cc = this.crouchCooldowns.get(player.id) || 0;
+          if (cc <= 0) {
+            audio.play('crouch');
+            this.crouchCooldowns.set(player.id, 0.2);
+          }
+        }
       } else {
         // Squash/stretch decay
         if (player.squashTimer > 0) {
@@ -1282,7 +1356,7 @@ export class GameLoop {
           player.state = 'airborne';
           spring.bounceTimer = 0.3;
           player.springTrailTimer = SPRING_TRAIL_DURATION;
-          audio.play('jump');
+          audio.play('spring');
         }
       }
 
@@ -1623,6 +1697,16 @@ export class GameLoop {
     }
 
     collidePlayersHorizontal(this.state.players);
+    // Bump sound: detect player-player push (sideSquash set to 0.8 by collision)
+    if (this.bumpCooldown <= 0) {
+      for (const player of this.state.players) {
+        if (player.active && player.sideSquash === 0.8) {
+          audio.play('bump');
+          this.bumpCooldown = 0.2;
+          break; // one bump sound per collision event
+        }
+      }
+    }
     // Re-resolve platform collisions after player-player pushes
     // (prevents getting shoved inside solid blocks like the mausoleum)
     for (const player of this.state.players) {
@@ -1736,6 +1820,21 @@ export class GameLoop {
       audio.setVolume('crowd', 0);
       audio.stop('crowd');
       this.crowdStarted = false;
+    }
+
+    // Periodic ambient sounds
+    const ambConfig = this.theme.ambientSoundConfig;
+    if (ambConfig?.periodic) {
+      for (const p of ambConfig.periodic) {
+        const remaining = (this.periodicAmbientTimers.get(p.sound) ?? 0) - dt;
+        if (remaining <= 0) {
+          audio.play(p.sound);
+          const next = p.intervalRange[0] + Math.random() * (p.intervalRange[1] - p.intervalRange[0]);
+          this.periodicAmbientTimers.set(p.sound, next);
+        } else {
+          this.periodicAmbientTimers.set(p.sound, remaining);
+        }
+      }
     }
 
     this.checkMatchEnd();

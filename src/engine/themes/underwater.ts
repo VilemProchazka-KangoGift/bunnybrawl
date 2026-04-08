@@ -650,4 +650,9 @@ export const UNDERWATER_THEME: ThemeConfig = {
 
     ctx.restore();
   },
+
+  ambientSoundConfig: {
+    loops: ['amb_underwater_bubbles'],
+    periodic: [{ sound: 'amb_drip', intervalRange: [3, 10] }],
+  },
 };

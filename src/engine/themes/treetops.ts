@@ -410,4 +410,9 @@ export const TREETOPS_THEME: ThemeConfig = {
 
     ctx.restore();
   },
+
+  ambientSoundConfig: {
+    loops: ['amb_wind'],
+    periodic: [{ sound: 'amb_bird_chirp', intervalRange: [8, 20] }],
+  },
 };

@@ -473,4 +473,8 @@ export const HAUNTED_GRAVEYARD_THEME: ThemeConfig = {
     color: 'rgba(180, 200, 220, 0.6)',
     glowColor: '#6688BB',
   },
+
+  ambientSoundConfig: {
+    periodic: [{ sound: 'amb_ghost_hoo', intervalRange: [10, 25] }],
+  },
 };
