@@ -3,6 +3,8 @@ import { generateThemeMusic } from './music';
 
 export type SoundName = 'jump' | 'stomp' | 'victory' | 'select' | 'thornhit' | 'crunch' | 'bunny' | 'fox' | 'frog' | 'bear' | 'owl' | 'cat' | 'wolf' | 'panda' | 'pig' | 'cow' | 'goat' | 'horse' | 'sheep' | 'monkey' | 'tiger' | 'rhino' | 'hedgehog' | 'footstep_grass' | 'footstep_wood' | 'countdown_beep' | 'countdown_go' | 'oof' | 'splash' | 'ambient' | 'crowd' |'geyser' | 'pigeon_scatter' | 'zero_g' | 'waterfall_ambient';
 
+const AUDIO_BASE = import.meta.env.BASE_URL + 'audio/';
+
 class AudioManager {
   private sounds: Map<SoundName, Howl> = new Map();
   private initialized = false;
@@ -192,7 +194,7 @@ class AudioManager {
 
     // Preload menu music so it's ready instantly
     this.menuMusicHowl = new Howl({
-      src: [import.meta.env.BASE_URL + 'audio/carrot-royale-main.mp3'],
+      src: [AUDIO_BASE + 'carrot-royale-main.mp3'],
       volume: 0.35,
       loop: true,
     });
@@ -256,6 +258,9 @@ class AudioManager {
   // MP3 overrides for arena music (theme ID → filename in public/audio/)
   private static readonly MUSIC_MP3: Record<string, string> = {
     meadow: 'meadow.mp3',
+    waterfall: 'waterfall.mp3',
+    space_station: 'space_station.mp3',
+    rooftops: 'rooftops.mp3',
   };
 
   /** Start theme-specific music. Lazily generates and caches per theme. */
@@ -273,7 +278,7 @@ class AudioManager {
     // Use MP3 override if available, otherwise generate procedurally
     const mp3 = AudioManager.MUSIC_MP3[themeId];
     const src = mp3
-      ? import.meta.env.BASE_URL + 'audio/' + mp3
+      ? AUDIO_BASE + mp3
       : generateThemeMusic(themeId);
     this.musicHowl = new Howl({ src: [src], volume: 0.3, loop: true });
     this.musicThemeId = themeId;
