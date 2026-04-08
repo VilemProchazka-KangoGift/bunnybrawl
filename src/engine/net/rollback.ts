@@ -265,12 +265,10 @@ export class RollbackEngine {
   }
 
   private readLocalInput(): InputState {
-    // Read from the InputManager (keyboard state)
-    // The GameLoop's InputManager is attached and polling
+    // Read from the InputManager — use ALL key bindings for online play
     const input = (this.gameLoop as any).input;
-    if (input && typeof input.getInput === 'function') {
-      // Local player always uses P1 keybindings for online play
-      return input.getInput('P1');
+    if (input && typeof input.getInputAny === 'function') {
+      return input.getInputAny();
     }
     return { ...NO_INPUT };
   }

@@ -69,6 +69,22 @@ export class InputManager {
     };
   }
 
+  /** Read input from ALL key bindings merged (for online play — any keys work). */
+  getInputAny(): InputState {
+    let left = false, right = false, jump = false, down = false;
+    for (const [slot, bindings] of Object.entries(KEY_BINDINGS)) {
+      if (this.keys.has(bindings.left)) left = true;
+      if (this.keys.has(bindings.right)) right = true;
+      if (this.keys.has(bindings.down)) down = true;
+      if (this.keys.has(bindings.jump) && !this.jumpPressed.get(slot as CharacterSlot)) {
+        jump = true;
+        this.jumpPressed.set(slot as CharacterSlot, true);
+      }
+    }
+    return { left, right, jump, down
+    };
+  }
+
   isKeyDown(key: string): boolean {
     return this.keys.has(key);
   }
