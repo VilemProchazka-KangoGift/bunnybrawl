@@ -18,9 +18,12 @@ export function OnlineLobby() {
   const { setScreen, online, setOnline, matchSettings, setMatchSettings, setActivePlayers, resetOnline } = useGameStore();
   const transportRef = useRef<Transport | null>(null);
   const [joinCode, setJoinCode] = useState('');
-  const [localCharacter, setLocalCharacter] = useState(CHARACTERS.P1.name);
-  const localCharRef = useRef(localCharacter);
-  localCharRef.current = localCharacter;
+  const [localCharacter, _setLocalCharacter] = useState(CHARACTERS.P1.name);
+  const localCharRef = useRef(CHARACTERS.P1.name);
+  const setLocalCharacter = useCallback((name: string) => {
+    localCharRef.current = name;
+    _setLocalCharacter(name);
+  }, []);
   const [remoteReady, setRemoteReady] = useState(false);
   const [localReady, setLocalReady] = useState(false);
   const allChars = getAllCharacters();
@@ -89,10 +92,10 @@ export function OnlineLobby() {
             protocolVersion: PROTOCOL_VERSION,
             playerName: 'Player',
           });
-          // Send character selection
+          // Send character selection (use ref for current value, not stale closure)
           transport.sendReliable({
             type: MsgType.CHARACTER_SELECT,
-            characterName: localCharacter,
+            characterName: localCharRef.current,
           });
           // Host sends settings
           if (transport.isHost) {
@@ -138,6 +141,8 @@ export function OnlineLobby() {
     if (joinCode.length < 4) return;
     audio.init();
     audio.play('select');
+    // Guest defaults to P2's character to avoid collision with host's default
+    setLocalCharacter(CHARACTERS.P2.name);
     const transport = setupTransport();
     setOnline({ isHost: false, isOnline: true });
     try {
@@ -193,20 +198,6 @@ export function OnlineLobby() {
     setOnline({ isOnline: true });
     setScreen('match');
   }, [online.isHost, online.remoteCharacterName, localCharacter, allChars, setActivePlayers, setOnline, setScreen]);
-
-  // If opponent took our character, auto-switch to first available
-  useEffect(() => {
-    if (online.remoteCharacterName && online.remoteCharacterName === localCharacter) {
-      const available = allChars.find(c => c.name !== online.remoteCharacterName);
-      if (available) {
-        setLocalCharacter(available.name);
-        transportRef.current?.sendReliable({
-          type: MsgType.CHARACTER_SELECT,
-          characterName: available.name,
-        });
-      }
-    }
-  }, [online.remoteCharacterName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // When both ready and host, send START
   useEffect(() => {
