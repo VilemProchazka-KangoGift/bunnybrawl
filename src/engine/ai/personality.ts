@@ -1,32 +1,19 @@
 import type { AIPersonality, DifficultyParams, BotDifficulty } from './types';
 
-// Each character has a distinct behavioral profile
-const PERSONALITIES: Record<string, AIPersonality> = {
-  Bunny:  { aggressiveness: 1.0, cautiousness: 1.0, greediness: 0.8, chaosAffinity: 0.2, targetLeader: false },
-  Fox:    { aggressiveness: 1.8, cautiousness: 0.5, greediness: 0.4, chaosAffinity: 0.3, targetLeader: false },
-  Frog:   { aggressiveness: 1.0, cautiousness: 0.6, greediness: 0.7, chaosAffinity: 0.8, targetLeader: false },
-  Bear:   { aggressiveness: 0.6, cautiousness: 1.6, greediness: 0.5, chaosAffinity: 0.1, targetLeader: false },
-  Owl:    { aggressiveness: 1.2, cautiousness: 1.2, greediness: 0.3, chaosAffinity: 0.1, targetLeader: false },
-  Cat:    { aggressiveness: 1.4, cautiousness: 1.0, greediness: 0.6, chaosAffinity: 0.3, targetLeader: false },
-  Wolf:   { aggressiveness: 1.6, cautiousness: 0.8, greediness: 0.3, chaosAffinity: 0.2, targetLeader: true },
-  Panda:  { aggressiveness: 0.4, cautiousness: 1.0, greediness: 1.8, chaosAffinity: 0.3, targetLeader: false },
-  Pig:    { aggressiveness: 0.8, cautiousness: 0.8, greediness: 1.6, chaosAffinity: 0.4, targetLeader: false },
-  Cow:    { aggressiveness: 0.6, cautiousness: 1.4, greediness: 0.6, chaosAffinity: 0.1, targetLeader: false },
-  Goat:   { aggressiveness: 0.8, cautiousness: 0.8, greediness: 0.4, chaosAffinity: 0.2, targetLeader: false },
-  Horse:  { aggressiveness: 1.6, cautiousness: 0.4, greediness: 0.4, chaosAffinity: 0.3, targetLeader: false },
-  Sheep:  { aggressiveness: 0.3, cautiousness: 1.8, greediness: 0.8, chaosAffinity: 0.2, targetLeader: false },
-  Monkey: { aggressiveness: 1.0, cautiousness: 0.4, greediness: 1.2, chaosAffinity: 1.0, targetLeader: false },
-  Tiger:  { aggressiveness: 1.8, cautiousness: 0.3, greediness: 0.6, chaosAffinity: 0.5, targetLeader: true },
-  Rhino:  { aggressiveness: 1.4, cautiousness: 1.0, greediness: 0.5, chaosAffinity: 0.2, targetLeader: false },
-  Hedgehog: { aggressiveness: 0.7, cautiousness: 1.6, greediness: 1.0, chaosAffinity: 0.3, targetLeader: false },
-};
+// Character-specific personalities disabled — all bots use DEFAULT_PERSONALITY.
+// Per-character differences caused desync in online play and were too subtle
+// to notice in fast-paced gameplay.
 
 const DEFAULT_PERSONALITY: AIPersonality = {
   aggressiveness: 1.0, cautiousness: 1.0, greediness: 0.8, chaosAffinity: 0.3, targetLeader: false,
 };
 
-export function getPersonality(characterName: string): AIPersonality {
-  return PERSONALITIES[characterName] ?? DEFAULT_PERSONALITY;
+export function getPersonality(_characterName: string): AIPersonality {
+  // All bots use the same neutral personality — character-specific
+  // personalities caused desync in online play (different assignments
+  // → different behavior) and the differences were too subtle to notice
+  // in the fast-paced gameplay.
+  return DEFAULT_PERSONALITY;
 }
 
 const DIFFICULTY_PARAMS: Record<BotDifficulty, DifficultyParams> = {

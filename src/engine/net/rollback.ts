@@ -11,7 +11,7 @@ import {
   MsgType,
   encodeInputMessage, decodeInputMessage,
 } from './protocol';
-import type { ReliableMessage, DesyncCheckMessage } from './protocol';
+import type { ReliableMessage } from './protocol';
 import { FIXED_TIMESTEP } from '../constants';
 
 const BUFFER_SIZE = 128;          // ~2.1 seconds at 60fps
@@ -26,6 +26,7 @@ const NO_INPUT: InputState = { left: false, right: false, jump: false, down: fal
 export interface RollbackConfig {
   localSlot: PlayerSlot;
   remoteSlot: PlayerSlot;
+  isHost: boolean;
   gameLoop: GameLoop;
   transport: Transport;
   onDesync?: (localHash: number, remoteHash: number, frame: number) => void;
@@ -35,6 +36,7 @@ export interface RollbackConfig {
 export class RollbackEngine {
   private localSlot: PlayerSlot;
   private remoteSlot: PlayerSlot;
+  private isHost: boolean;
   private gameLoop: GameLoop;
   private transport: Transport;
 
@@ -65,15 +67,14 @@ export class RollbackEngine {
   private stalled = false;
 
   // Callbacks
-  private onDesync?: (localHash: number, remoteHash: number, frame: number) => void;
   private onStall?: (stalled: boolean) => void;
 
   constructor(config: RollbackConfig) {
     this.localSlot = config.localSlot;
     this.remoteSlot = config.remoteSlot;
+    this.isHost = config.isHost;
     this.gameLoop = config.gameLoop;
     this.transport = config.transport;
-    this.onDesync = config.onDesync;
     this.onStall = config.onStall;
 
     // Fill buffers with no-input
@@ -121,14 +122,18 @@ export class RollbackEngine {
     this._remoteLatestAck = decoded.latestAck;
   }
 
-  /** Process a reliable message (desync check, etc). */
+  /** Process a reliable message (desync check / state sync). */
   handleReliableMessage(msg: ReliableMessage): void {
     if (msg.type === MsgType.DESYNC_CHECK) {
-      const check = msg as DesyncCheckMessage;
-      // Compare with our state at that frame
-      const localHash = hashGameState(this.gameLoop.getState(), this.gameLoop.getRng());
-      if (check.hash !== localHash && this.onDesync) {
-        this.onDesync(localHash, check.hash, check.frame);
+      const check = msg as any;
+      if (!this.isHost && check.snapshot) {
+        // Guest: apply host's authoritative state to correct any drift
+        const localHash = hashGameState(this.gameLoop.getState(), this.gameLoop.getRng());
+        if (check.hash !== localHash) {
+          console.log(`[net] State sync from host at frame ${check.frame} (local hash ${localHash} != host hash ${check.hash})`);
+          restoreSnapshot(check.snapshot, this.gameLoop.getState(), this.gameLoop.getRng(), this.gameLoop.getAIControllers());
+          this.localFrame = check.frame;
+        }
       }
     }
   }
@@ -294,14 +299,17 @@ export class RollbackEngine {
   }
 
   private sendDesyncCheck(): void {
-    const hash = hashGameState(this.gameLoop.getState(), this.gameLoop.getRng());
-    const msg: DesyncCheckMessage = {
-      type: MsgType.DESYNC_CHECK,
-      frame: this.localFrame,
-      hash,
-      rngState: this.gameLoop.getRng()?.getState() ?? 0,
-    };
-    this.transport.sendReliable(msg);
+    if (this.isHost) {
+      // Host sends authoritative state snapshot for guest to apply
+      const snap = takeSnapshot(this.localFrame, this.gameLoop.getState(), this.gameLoop.getRng(), this.gameLoop.getAIControllers());
+      this.transport.sendReliable({
+        type: MsgType.DESYNC_CHECK,
+        frame: this.localFrame,
+        hash: hashGameState(this.gameLoop.getState(), this.gameLoop.getRng()),
+        rngState: this.gameLoop.getRng()?.getState() ?? 0,
+        snapshot: snap,
+      } as any);
+    }
   }
 
   private adaptInputDelay(): void {

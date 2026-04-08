@@ -55,6 +55,7 @@ export class NetMatch {
     this.rollback = new RollbackEngine({
       localSlot: config.localSlot,
       remoteSlot: config.remoteSlot,
+      isHost: config.localSlot === 'P1',
       gameLoop: this.gameLoop,
       transport: config.transport,
       onDesync: config.onDesync ? () => config.onDesync!() : undefined,

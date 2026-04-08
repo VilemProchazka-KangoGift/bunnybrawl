@@ -320,21 +320,8 @@ describe('Personality', () => {
     }
   });
 
-  it('Wolf targets leader', () => {
-    const p = getPersonality('Wolf');
-    expect(p.targetLeader).toBe(true);
-  });
-
-  it('Monkey has high chaos', () => {
-    const p = getPersonality('Monkey');
-    expect(p.chaosAffinity).toBeGreaterThanOrEqual(0.8);
-  });
-
-  it('Fox is highly aggressive', () => {
-    const p = getPersonality('Fox');
-    expect(p.aggressiveness).toBeGreaterThan(1.5);
-    expect(p.cautiousness).toBeLessThan(0.8);
-  });
+  // Per-character personality tests removed — all bots use DEFAULT_PERSONALITY
+  // (character-specific personalities disabled for online determinism)
 });
 
 describe('Difficulty', () => {
