@@ -661,7 +661,15 @@ export class GameLoop {
       this.launchGib(cx, cy, 8, 0.2, 0.8, 60, 160, 5, 3,
         '#4CAF50', '#2E7D32', '#81C784', '', 'body');
     }
-    // Upward gold sparkle ring (instant feedback)
+    // Orange/gold particle burst (instant feedback)
+    const colors = ['#FF8C00', '#FF6600', '#FFA500', '#FF7700', '#FFD700', '#FF8C00'];
+    for (let i = 0; i < 10; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 60 + Math.random() * 100;
+      const life = 0.3 + Math.random() * 0.3;
+      this.emitParticle(cx, cy, Math.cos(angle) * speed, Math.sin(angle) * speed - 40, life, 2 + Math.random() * 4, colors[i % colors.length]);
+    }
+    // Upward gold sparkle ring
     for (let i = 0; i < 6; i++) {
       const angle = (i / 6) * Math.PI * 2;
       const speed = 30 + Math.random() * 30;
