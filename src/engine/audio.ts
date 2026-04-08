@@ -218,7 +218,7 @@ class AudioManager {
     // Preload menu music so it's ready instantly
     this.menuMusicHowl = new Howl({
       src: [AUDIO_BASE + 'carrot-royale-main.mp3'],
-      volume: 0.2,
+      volume: 0.25,
       loop: true,
     });
 
@@ -323,7 +323,7 @@ class AudioManager {
     const src = mp3
       ? AUDIO_BASE + mp3
       : generateThemeMusic(themeId);
-    this.musicHowl = new Howl({ src: [src], volume: 0.18, loop: true });
+    this.musicHowl = new Howl({ src: [src], volume: 0.22, loop: true });
     this.musicThemeId = themeId;
     this.musicHowl.play();
   }
