@@ -17,10 +17,9 @@ export function clearActiveTransport(): void {
 
 export function OnlineLobby() {
   const { t } = useTranslation();
-  const { setScreen, online, setOnline, matchSettings, resetOnline } = useGameStore();
+  const { setScreen, online, setOnline, resetOnline } = useGameStore();
   const transportRef = useRef<Transport | null>(null);
   const transitioningToLobby = useRef(false);
-  const startedRef = useRef(false);
 
   const cleanup = useCallback(() => {
     if (transportRef.current) {
@@ -31,36 +30,33 @@ export function OnlineLobby() {
     resetOnline();
   }, [resetOnline]);
 
-  useEffect(() => {
-    return () => {
-      if (transportRef.current && !transitioningToLobby.current) {
-        transportRef.current.destroy();
-        transportRef.current = null;
-        _activeTransport = null;
-      }
-    };
-  }, []);
-
   const goToLobby = useCallback(() => {
     transitioningToLobby.current = true;
     setScreen('charSelect');
   }, [setScreen]);
 
-  const handleReliableMessage = useCallback((msg: ReliableMessage) => {
-    if (msg.type === MsgType.SETTINGS_SYNC) {
-      useGameStore.getState().setMatchSettings({
-        arenaId: msg.arenaId,
-        killLimit: msg.killLimit,
-        timeLimit: msg.timeLimit,
-        goreMode: msg.goreMode,
-        botCount: msg.botCount,
-        botDifficulty: msg.botDifficulty as 'easy' | 'medium' | 'hard' | 'impossible',
-      });
-      setOnline({ rngSeed: msg.rngSeed });
-    }
-  }, [setOnline]);
+  // Auto-start: create or join based on store state.
+  // Single effect handles both setup and cleanup (React Strict Mode safe).
+  useEffect(() => {
+    audio.init();
 
-  const setupTransport = useCallback(() => {
+    const handleMsg = (msg: ReliableMessage) => {
+      if (msg.type === MsgType.SETTINGS_SYNC) {
+        useGameStore.getState().setMatchSettings({
+          arenaId: msg.arenaId,
+          killLimit: msg.killLimit,
+          timeLimit: msg.timeLimit,
+          goreMode: msg.goreMode,
+          botCount: msg.botCount,
+          botDifficulty: msg.botDifficulty as 'easy' | 'medium' | 'hard' | 'impossible',
+        });
+        setOnline({ rngSeed: msg.rngSeed });
+      }
+    };
+
+    const { isHost, joinCode } = useGameStore.getState().online;
+    const ms = useGameStore.getState().matchSettings;
+
     const transport = new Transport({
       onStatusChange: (status: ConnectionStatus, error?: string) => {
         setOnline({ connectionStatus: status, connectionError: error ?? null });
@@ -75,45 +71,42 @@ export function OnlineLobby() {
             setOnline({ rngSeed: seed });
             transport.sendReliable({
               type: MsgType.SETTINGS_SYNC,
-              arenaId: matchSettings.arenaId,
-              killLimit: matchSettings.killLimit,
-              timeLimit: matchSettings.timeLimit,
-              goreMode: matchSettings.goreMode,
-              mods: matchSettings.mods as unknown as Record<string, boolean>,
+              arenaId: ms.arenaId,
+              killLimit: ms.killLimit,
+              timeLimit: ms.timeLimit,
+              goreMode: ms.goreMode,
+              mods: ms.mods as unknown as Record<string, boolean>,
               rngSeed: seed,
-              botCount: matchSettings.botCount,
-              botDifficulty: matchSettings.botDifficulty,
+              botCount: ms.botCount,
+              botDifficulty: ms.botDifficulty,
             });
           }
           setTimeout(goToLobby, 300);
         }
       },
-      onReliableMessage: handleReliableMessage,
+      onReliableMessage: handleMsg,
       onUnreliableMessage: () => {},
       onRttUpdate: () => {},
     });
     transportRef.current = transport;
     _activeTransport = transport;
-    return transport;
-  }, [matchSettings, setOnline, handleReliableMessage, goToLobby]);
 
-  // Auto-start: create or join based on store state
-  useEffect(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
-    audio.init();
-
-    const transport = setupTransport();
-
-    if (online.isHost) {
-      setOnline({ isOnline: true });
+    setOnline({ isOnline: true });
+    if (isHost) {
       transport.createRoom().then(code => {
         setOnline({ roomCode: code });
       }).catch(() => {});
-    } else if (online.joinCode) {
-      setOnline({ isOnline: true });
-      transport.joinRoom(online.joinCode).catch(() => {});
+    } else if (joinCode) {
+      transport.joinRoom(joinCode).catch(() => {});
     }
+
+    return () => {
+      if (!transitioningToLobby.current) {
+        transport.destroy();
+        transportRef.current = null;
+        _activeTransport = null;
+      }
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
