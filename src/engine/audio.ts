@@ -194,25 +194,25 @@ class AudioManager {
     }));
 
     // --- New SFX ---
-    this.sounds.set('land', new Howl({ src: [generateLandSound()], volume: 0.2 }));
-    this.sounds.set('headbonk', new Howl({ src: [generateHeadbonkSound()], volume: 0.2 }));
-    this.sounds.set('bump', new Howl({ src: [generateBumpSound()], volume: 0.12 }));
-    this.sounds.set('spring', new Howl({ src: [generateSpringSound()], volume: 0.25 }));
-    this.sounds.set('crouch', new Howl({ src: [generateCrouchSound()], volume: 0.1 }));
-    this.sounds.set('fastfall', new Howl({ src: [generateFastfallSound()], volume: 0.15 }));
+    this.sounds.set('land', new Howl({ src: [generateLandSound()], volume: 0.3 }));
+    this.sounds.set('headbonk', new Howl({ src: [generateHeadbonkSound()], volume: 0.3 }));
+    this.sounds.set('bump', new Howl({ src: [generateBumpSound()], volume: 0.2 }));
+    this.sounds.set('spring', new Howl({ src: [generateSpringSound()], volume: 0.35 }));
+    this.sounds.set('crouch', new Howl({ src: [generateCrouchSound()], volume: 0.2 }));
+    this.sounds.set('fastfall', new Howl({ src: [generateFastfallSound()], volume: 0.25 }));
 
     // --- Ambient loops ---
-    this.sounds.set('amb_wind', new Howl({ src: [generateAmbWindSound()], volume: 0.08, loop: true }));
-    this.sounds.set('amb_lava', new Howl({ src: [generateAmbLavaSound()], volume: 0.1, loop: true }));
-    this.sounds.set('amb_underwater_bubbles', new Howl({ src: [generateAmbUnderwaterBubblesSound()], volume: 0.08, loop: true }));
-    this.sounds.set('amb_space_hum', new Howl({ src: [generateAmbSpaceHumSound()], volume: 0.1, loop: true }));
+    this.sounds.set('amb_wind', new Howl({ src: [generateAmbWindSound()], volume: 0.15, loop: true }));
+    this.sounds.set('amb_lava', new Howl({ src: [generateAmbLavaSound()], volume: 0.18, loop: true }));
+    this.sounds.set('amb_underwater_bubbles', new Howl({ src: [generateAmbUnderwaterBubblesSound()], volume: 0.15, loop: true }));
+    this.sounds.set('amb_space_hum', new Howl({ src: [generateAmbSpaceHumSound()], volume: 0.15, loop: true }));
 
     // --- Ambient periodic one-shots ---
-    this.sounds.set('amb_bird_chirp', new Howl({ src: [generateAmbBirdChirpSound()], volume: 0.12 }));
-    this.sounds.set('amb_ghost_hoo', new Howl({ src: [generateAmbGhostHooSound()], volume: 0.1 }));
-    this.sounds.set('amb_volcano_burst', new Howl({ src: [generateAmbVolcanoBurstSound()], volume: 0.15 }));
-    this.sounds.set('amb_drip', new Howl({ src: [generateAmbDripSound()], volume: 0.08 }));
-    this.sounds.set('amb_chime', new Howl({ src: [generateAmbChimeSound()], volume: 0.1 }));
+    this.sounds.set('amb_bird_chirp', new Howl({ src: [generateAmbBirdChirpSound()], volume: 0.2 }));
+    this.sounds.set('amb_ghost_hoo', new Howl({ src: [generateAmbGhostHooSound()], volume: 0.18 }));
+    this.sounds.set('amb_volcano_burst', new Howl({ src: [generateAmbVolcanoBurstSound()], volume: 0.25 }));
+    this.sounds.set('amb_drip', new Howl({ src: [generateAmbDripSound()], volume: 0.15 }));
+    this.sounds.set('amb_chime', new Howl({ src: [generateAmbChimeSound()], volume: 0.18 }));
 
     // Preload menu music so it's ready instantly
     this.menuMusicHowl = new Howl({
@@ -297,6 +297,7 @@ class AudioManager {
     rooftops: 'rooftops.mp3',
     haunted_graveyard: 'haunted_graveyard.mp3',
     underwater: 'underwater.mp3',
+    candy_land: 'candy_land.mp3',
   };
 
   /** Start theme-specific music. Lazily generates and caches per theme. */
@@ -776,10 +777,10 @@ function generateLandSound(): string {
   for (let i = 0; i < numSamples; i++) {
     const t = i / sampleRate;
     const progress = i / numSamples;
-    const freq = 60 + (40 - 60) * progress;
-    const envelope = Math.max(0, 1 - progress * 3) * 0.25;
+    const freq = 150 + (80 - 150) * progress;
+    const envelope = Math.max(0, 1 - progress * 2.5) * 0.5;
     const tone = Math.sin(2 * Math.PI * freq * t);
-    const noise = progress < 0.2 ? (Math.random() * 2 - 1) * 0.3 : 0;
+    const noise = progress < 0.3 ? (Math.random() * 2 - 1) * 0.5 : 0;
     buffer[i] = (tone + noise) * envelope;
   }
   return floatBufferToWavDataUri(buffer, sampleRate);
@@ -793,13 +794,13 @@ function generateHeadbonkSound(): string {
   for (let i = 0; i < numSamples; i++) {
     const t = i / sampleRate;
     const progress = i / numSamples;
-    const freq = 200 + (120 - 200) * progress;
-    const envelope = Math.max(0, 1 - progress * 2.5) * 0.2;
+    const freq = 250 + (150 - 250) * progress;
+    const envelope = Math.max(0, 1 - progress * 2) * 0.45;
     // Triangle wave for hollow character
     const phase = (t * freq) % 1;
     const tri = 4 * Math.abs(phase - 0.5) - 1;
     // Sharp click transient at start
-    const click = progress < 0.05 ? Math.sin(2 * Math.PI * 800 * t) * 0.3 : 0;
+    const click = progress < 0.08 ? Math.sin(2 * Math.PI * 900 * t) * 0.5 : 0;
     buffer[i] = (tri + click) * envelope;
   }
   return floatBufferToWavDataUri(buffer, sampleRate);
@@ -813,9 +814,9 @@ function generateBumpSound(): string {
   for (let i = 0; i < numSamples; i++) {
     const t = i / sampleRate;
     const progress = i / numSamples;
-    const envelope = Math.max(0, 1 - progress * 4) * 0.15;
-    const noise = (Math.random() * 2 - 1) * 0.15;
-    const tone = Math.sin(2 * Math.PI * 100 * t) * 0.1;
+    const envelope = Math.max(0, 1 - progress * 3) * 0.4;
+    const noise = (Math.random() * 2 - 1) * 0.4;
+    const tone = Math.sin(2 * Math.PI * 160 * t) * 0.3;
     buffer[i] = (noise + tone) * envelope;
   }
   return floatBufferToWavDataUri(buffer, sampleRate);
@@ -829,7 +830,7 @@ function generateSpringSound(): string {
   for (let i = 0; i < numSamples; i++) {
     const t = i / sampleRate;
     const progress = i / numSamples;
-    const envelope = Math.max(0, 1 - progress * 1.5) * 0.25;
+    const envelope = Math.max(0, 1 - progress * 1.5) * 0.5;
     // Wobbling frequency for "boing" effect
     const wobble = Math.sin(2 * Math.PI * 25 * t) * 200;
     const freq = 400 + wobble;
@@ -846,9 +847,9 @@ function generateCrouchSound(): string {
   for (let i = 0; i < numSamples; i++) {
     const t = i / sampleRate;
     const progress = i / numSamples;
-    const envelope = Math.max(0, 1 - progress * 5) * 0.15;
-    const noise = (Math.random() * 2 - 1) * 0.2;
-    const thud = Math.sin(2 * Math.PI * 80 * t) * 0.15;
+    const envelope = Math.max(0, 1 - progress * 4) * 0.4;
+    const noise = (Math.random() * 2 - 1) * 0.4;
+    const thud = Math.sin(2 * Math.PI * 130 * t) * 0.3;
     buffer[i] = (noise + thud) * envelope;
   }
   return floatBufferToWavDataUri(buffer, sampleRate);
@@ -862,9 +863,9 @@ function generateFastfallSound(): string {
   for (let i = 0; i < numSamples; i++) {
     const t = i / sampleRate;
     const progress = i / numSamples;
-    const freq = 500 + (200 - 500) * progress;
-    const envelope = Math.max(0, 1 - progress * 2) * 0.2;
-    const tone = Math.sin(2 * Math.PI * freq * t) * 0.6;
+    const freq = 600 + (200 - 600) * progress;
+    const envelope = Math.max(0, 1 - progress * 2) * 0.4;
+    const tone = Math.sin(2 * Math.PI * freq * t) * 0.7;
     const noise = (Math.random() * 2 - 1) * 0.3;
     buffer[i] = (tone + noise) * envelope;
   }
@@ -886,7 +887,7 @@ function generateAmbWindSound(): string {
     brown *= 0.999;
     brown = Math.max(-1, Math.min(1, brown));
     const mod = 0.6 + 0.4 * Math.sin(2 * Math.PI * 0.2 * t);
-    buffer[i] = brown * mod * 0.03;
+    buffer[i] = brown * mod * 0.25;
   }
   return floatBufferToWavDataUri(buffer, sampleRate);
 }
@@ -903,9 +904,9 @@ function generateAmbLavaSound(): string {
     brown += white * 0.02;
     brown *= 0.997;
     brown = Math.max(-1, Math.min(1, brown));
-    const rumble = Math.sin(2 * Math.PI * 35 * t) * 0.06;
+    const rumble = Math.sin(2 * Math.PI * 45 * t) * 0.15;
     const mod = 0.7 + 0.3 * Math.sin(2 * Math.PI * 0.15 * t);
-    buffer[i] = (brown * 0.05 + rumble) * mod * 0.4;
+    buffer[i] = (brown * 0.1 + rumble) * mod * 0.5;
   }
   return floatBufferToWavDataUri(buffer, sampleRate);
 }
@@ -934,11 +935,11 @@ function generateAmbUnderwaterBubblesSound(): string {
     }
     if (bubbleLife > 0) {
       const bp = 1 - bubbleLife / 700;
-      const bEnv = Math.max(0, 1 - bp * 3) * 0.08;
+      const bEnv = Math.max(0, 1 - bp * 3) * 0.25;
       bubbleSample = Math.sin(2 * Math.PI * bubbleFreq * t) * bEnv;
       bubbleLife--;
     }
-    buffer[i] = brown * 0.02 + bubbleSample;
+    buffer[i] = brown * 0.06 + bubbleSample;
   }
   return floatBufferToWavDataUri(buffer, sampleRate);
 }
@@ -950,10 +951,10 @@ function generateAmbSpaceHumSound(): string {
   const buffer = new Float32Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / sampleRate;
-    const hum = Math.sin(2 * Math.PI * 70 * t) * 0.06;
+    const hum = Math.sin(2 * Math.PI * 80 * t) * 0.12;
     const mod = Math.sin(2 * Math.PI * 0.4 * t) * 0.3 + 0.7;
-    const high = Math.sin(2 * Math.PI * 200 * t + Math.sin(2 * Math.PI * 0.25 * t) * 3) * 0.015;
-    buffer[i] = (hum * mod + high) * 0.4;
+    const high = Math.sin(2 * Math.PI * 220 * t + Math.sin(2 * Math.PI * 0.25 * t) * 3) * 0.04;
+    buffer[i] = (hum * mod + high) * 0.5;
   }
   return floatBufferToWavDataUri(buffer, sampleRate);
 }
@@ -973,7 +974,7 @@ function generateAmbBirdChirpSound(): string {
     const freq = i < midPoint
       ? 1000 + (1400 - 1000) * (i / midPoint)
       : 1400 + (1000 - 1400) * ((i - midPoint) / midPoint);
-    const envelope = Math.max(0, 1 - Math.abs(progress - 0.3) * 2) * 0.2;
+    const envelope = Math.max(0, 1 - Math.abs(progress - 0.3) * 2) * 0.5;
     buffer[i] = Math.sin(2 * Math.PI * freq * t) * envelope;
   }
   return floatBufferToWavDataUri(buffer, sampleRate);
@@ -990,7 +991,7 @@ function generateAmbGhostHooSound(): string {
     const baseFreq = 150 + (100 - 150) * progress;
     const vibrato = Math.sin(2 * Math.PI * 4 * t) * 15;
     const freq = baseFreq + vibrato;
-    const envelope = Math.max(0, 1 - progress) * 0.15;
+    const envelope = Math.max(0, 1 - progress) * 0.4;
     buffer[i] = Math.sin(2 * Math.PI * freq * t) * envelope;
   }
   return floatBufferToWavDataUri(buffer, sampleRate);
@@ -1004,8 +1005,8 @@ function generateAmbVolcanoBurstSound(): string {
   for (let i = 0; i < numSamples; i++) {
     const t = i / sampleRate;
     const progress = i / numSamples;
-    const envelope = Math.max(0, 1 - progress * 1.8) * (progress < 0.15 ? progress / 0.15 : 1) * 0.25;
-    const rumble = Math.sin(2 * Math.PI * 50 * t) * 0.4;
+    const envelope = Math.max(0, 1 - progress * 1.8) * (progress < 0.15 ? progress / 0.15 : 1) * 0.5;
+    const rumble = Math.sin(2 * Math.PI * 60 * t) * 0.5;
     const noise = (Math.random() * 2 - 1) * 0.5;
     buffer[i] = (rumble + noise) * envelope;
   }
@@ -1021,9 +1022,9 @@ function generateAmbDripSound(): string {
     const t = i / sampleRate;
     const progress = i / numSamples;
     const freq = 600 + (400 - 600) * progress;
-    const envelope = Math.max(0, 1 - progress * 4) * 0.15;
+    const envelope = Math.max(0, 1 - progress * 3) * 0.4;
     const tone = Math.sin(2 * Math.PI * freq * t);
-    const noise = (Math.random() * 2 - 1) * 0.05;
+    const noise = (Math.random() * 2 - 1) * 0.1;
     buffer[i] = (tone + noise) * envelope;
   }
   return floatBufferToWavDataUri(buffer, sampleRate);
@@ -1037,7 +1038,7 @@ function generateAmbChimeSound(): string {
   for (let i = 0; i < numSamples; i++) {
     const t = i / sampleRate;
     const progress = i / numSamples;
-    const envelope = Math.max(0, 1 - progress) * 0.15;
+    const envelope = Math.max(0, 1 - progress) * 0.4;
     // Triangle wave fundamental + harmonic for shimmer
     const phase1 = (t * 1200) % 1;
     const tri = 4 * Math.abs(phase1 - 0.5) - 1;
