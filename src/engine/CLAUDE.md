@@ -31,6 +31,7 @@
 - Character sounds stay in `audio.ts` (`SIMPLE_ANIMAL_SOUNDS` / `SEGMENT_ANIMAL_SOUNDS`), NOT in packs.
 - `legacy.ts` CHARACTERS record is mutated at lobby exit (intentional). `getAllCharacters()` derives full roster from pack registry.
 - Character emoji: use `getCharacterEmoji(name)` from `characters/registry.ts` — single source of truth. Used in React components with `.row-emoji` CSS class.
+- Legs: shared `drawLegs()` in `characters/legRenderer.ts`, configured by `CharacterPack.legStyle` (shape, footStyle, dimensions). Called from both renderer.ts and CharacterSelect.tsx. Must be a pure function (output is sprite-cached). Characters with `legWidth >= 7` need the auto-gap logic to prevent blending.
 
 ## Arenas & Themes
 - `platforms[0]` is always ground (or first ground segment, detected by `p.y >= 650`).
@@ -53,7 +54,7 @@
 - Lobby bots (`updateBotLobbyAI()` in CharacterSelect) are completely separate from match AI.
 
 ## Performance
-- Sprite cache: keyed by `name_state_animFrame_fastFalling_idleKey`, 600-entry cap. Breathing (2% scale) excluded from key.
+- Sprite cache: keyed by `name_state_animFrame_fastFalling_idleKey_sqKey`, 600-entry cap. `sqKey` = `Math.round(squashScale * 10)`. Breathing (2% scale) excluded from key.
 - Gradient cache: lava, zero-G, ghost, bouncy gradients cached in Maps by position.
 - HUD cache: 1280x90 OffscreenCanvas, redraws on score/timer/player changes.
 - Particle pool: free-list via `emitParticle()`, capped at 300.
