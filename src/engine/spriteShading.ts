@@ -46,13 +46,17 @@ export function fillBodyGradient(
   const { cx, cy, rx, ry } = params;
   const maxR = Math.max(rx, ry);
 
+  // Blend 30% toward darkColor for subtle edge shading (avoids extreme contrast
+  // on characters like Panda/Cow where darkColor is their patch/marking color)
+  const edgeColor = blendColors(char.color, char.darkColor, 0.3);
+
   const grad = ctx.createRadialGradient(
     cx - rx * 0.25, cy - ry * 0.3, maxR * 0.05,
     cx, cy, maxR,
   );
   grad.addColorStop(0, char.lightColor);
-  grad.addColorStop(0.45, char.color);
-  grad.addColorStop(1, char.darkColor);
+  grad.addColorStop(0.5, char.color);
+  grad.addColorStop(1, edgeColor);
 
   ctx.fillStyle = grad;
   ctx.beginPath();
@@ -69,13 +73,14 @@ export function fillBodyGradientCircle(
   radius: number,
   char: { color: string; darkColor: string; lightColor: string },
 ): void {
+  const edgeColor = blendColors(char.color, char.darkColor, 0.3);
   const grad = ctx.createRadialGradient(
     circCx - radius * 0.25, circCy - radius * 0.3, radius * 0.05,
     circCx, circCy, radius,
   );
   grad.addColorStop(0, char.lightColor);
   grad.addColorStop(0.5, char.color);
-  grad.addColorStop(1, char.darkColor);
+  grad.addColorStop(1, edgeColor);
 
   ctx.fillStyle = grad;
   ctx.beginPath();
@@ -102,6 +107,14 @@ export function drawHighlightSpot(
   ctx.beginPath();
   ctx.ellipse(hx, hy, hr, hr * 0.75, -0.3, 0, Math.PI * 2);
   ctx.fill();
+}
+
+function blendColors(hex1: string, hex2: string, t: number): string {
+  const c1 = hexToRGB(hex1), c2 = hexToRGB(hex2);
+  const r = Math.round(c1.r + (c2.r - c1.r) * t);
+  const g = Math.round(c1.g + (c2.g - c1.g) * t);
+  const b = Math.round(c1.b + (c2.b - c1.b) * t);
+  return `rgb(${r},${g},${b})`;
 }
 
 function hexToRGBA(hex: string, alpha: number): string {
