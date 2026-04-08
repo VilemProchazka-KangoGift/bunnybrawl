@@ -246,3 +246,42 @@ export function applyArenaConstraints(player: Player, arena: Arena): void {
 
   wrapHorizontal(player, arena.width);
 }
+
+/**
+ * Failsafe: if a player is deeply embedded in a platform (>5px overlap),
+ * eject them to the nearest surface. Catches desync-related position errors.
+ */
+export function resolveStuckPlayer(player: Player, platforms: Platform[]): void {
+  if (!player.active || player.state === 'splat' || player.state === 'respawning') return;
+
+  for (const plat of platforms) {
+    if (!aabbOverlap(
+      player.x, player.y, player.width, player.height,
+      plat.x, plat.y, plat.width, plat.height
+    )) continue;
+
+    const overlapTop = (player.y + player.height) - plat.y;
+    const overlapBottom = (plat.y + plat.height) - player.y;
+    const overlapLeft = (player.x + player.width) - plat.x;
+    const overlapRight = (plat.x + plat.width) - player.x;
+
+    // Only intervene if deeply embedded (normal collision handles shallow overlap)
+    const minOverlap = Math.min(overlapTop, overlapBottom, overlapLeft, overlapRight);
+    if (minOverlap <= 5) continue;
+
+    // Eject via smallest overlap direction
+    if (minOverlap === overlapTop) {
+      player.y = plat.y - player.height;
+      player.vy = 0;
+    } else if (minOverlap === overlapBottom) {
+      player.y = plat.y + plat.height;
+      player.vy = 0;
+    } else if (minOverlap === overlapLeft) {
+      player.x = plat.x - player.width;
+      player.vx = 0;
+    } else {
+      player.x = plat.x + plat.width;
+      player.vx = 0;
+    }
+  }
+}

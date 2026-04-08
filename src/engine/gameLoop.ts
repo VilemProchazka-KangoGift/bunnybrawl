@@ -13,7 +13,7 @@ import { mirrorArena } from './arena';
 import { randRange, pickWeighted, swapRemove } from './themes/utils';
 import { InputManager } from './input';
 import { Renderer } from './renderer';
-import { applyInput, applyGravity, movePlayer, collidePlatforms, updatePlayerState, applyArenaConstraints, collidePlayersHorizontal, aabbOverlap } from './physics';
+import { applyInput, applyGravity, movePlayer, collidePlatforms, updatePlayerState, applyArenaConstraints, collidePlayersHorizontal, aabbOverlap, resolveStuckPlayer } from './physics';
 import { checkStomps, updateSplatTimers } from './stomp';
 import { getCharacterGibs } from './characters';
 import { audio } from './audio';
@@ -1281,6 +1281,7 @@ export class GameLoop {
       applyGravity(player, dt, this.effGravity, this.effMaxFallSpeed);
       movePlayer(player, dt);
       collidePlatforms(player, this.arena.platforms);
+      resolveStuckPlayer(player, this.arena.platforms);
       applyArenaConstraints(player, this.arena);
       updatePlayerState(player);
 
