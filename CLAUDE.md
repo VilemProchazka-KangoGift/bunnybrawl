@@ -166,6 +166,11 @@ Arena mechanics are a combination of **Arena** fields (structural positions) and
 3. Add rendering in `renderer.ts` (draw method + call in `renderFrame`)
 4. Particles use the shared `Particle` type and `this.particles` array in GameLoop
 
+### Adding arena MP3 music (overriding procedural music)
+1. Place the MP3 file in `public/audio/<themeId>.mp3`
+2. Add entry to `AudioManager.MUSIC_MP3` map in `audio.ts` (e.g., `meadow: 'meadow.mp3'`)
+3. That's it — `playMusic(themeId)` checks `MUSIC_MP3` before falling back to `generateThemeMusic()`
+
 ### Adding a new sound
 1. Add name to `SoundName` union type in `audio.ts`
 2. For animal sounds: add entry to `SIMPLE_ANIMAL_SOUNDS` or `SEGMENT_ANIMAL_SOUNDS` table in `init()`. For other sounds: add `this.sounds.set('name', new Howl({...}))` in `init()`
@@ -236,6 +241,9 @@ npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/
 - **Fat bots flee like hurt bots** — `evaluateActions` gates both `self.slowed` and `self.fat` into `evaluateHurtFlee`, skipping chase/stomp/platformSeeking. `navTarget` is only consulted when healthy.
 - **Never splice/shift `splatMarks` during `fixedUpdate`** — multiple fixedUpdate ticks can run per frame, and `newSplatsSinceRender` stores indices into `splatMarks`. Splicing shifts indices and corrupts pending render references. Cap the array in the render path only (after indices are consumed).
 - **`GameLoop.stop()` must stop ALL looping sounds** — music, ambient, wind, zero_g, crowd. If a new looping sound is added, add a corresponding `audio.stop()` in `stop()`.
+- **Menu music (`menuMusicHowl`) must NOT be tied to component lifecycle** — MainMenu and CharacterSelect both call `playMenuMusic()` on mount (no-ops if already playing), but neither stops it on unmount. Stopping is handled by `playMusic()` (game start), `stopAll()`, or `toggleMute()`. Tying stop to unmount causes the music to restart (from the beginning) on every menu↔lobby transition.
+- **Menu music Howl is preloaded in `init()`** — avoids a loading delay on first play. The MP3 is fetched from `public/audio/` via `import.meta.env.BASE_URL`.
+- **Arena MP3 overrides via `AudioManager.MUSIC_MP3`** — a static map of `themeId → filename`. `playMusic()` checks this before falling back to `generateThemeMusic()`. MP3 files live in `public/audio/`.
 - **Victory screen uses two-column layout** — left column: scoreboard + match stats, right column: stats table + MVP highlights. This fits within 720px viewport. If adding more sections, keep both columns balanced.
 
 ## Workflow Rules
