@@ -6,6 +6,7 @@ interface OnlineState {
   isOnline: boolean;
   isHost: boolean;
   roomCode: string | null;
+  joinCode: string | null;
   connectionStatus: ConnectionStatus;
   connectionError: string | null;
   remoteCharacterName: string | null;
@@ -59,6 +60,7 @@ const defaultOnline: OnlineState = {
   isOnline: false,
   isHost: false,
   roomCode: null,
+  joinCode: null,
   connectionStatus: 'idle',
   connectionError: null,
   remoteCharacterName: null,

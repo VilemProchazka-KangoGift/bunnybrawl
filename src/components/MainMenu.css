@@ -66,13 +66,15 @@
 
 .menu-buttons {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
+  justify-content: center;
   gap: 16px;
 }
 
 .menu-btn {
-  width: 260px;
+  width: auto;
+  min-width: 180px;
   padding: 16px 32px;
   font-size: 24px;
   border: 3px solid rgba(255, 255, 255, 0.25);
@@ -93,9 +95,10 @@
 .play-btn {
   background: linear-gradient(180deg, #5CBF60, #388E3C);
   border-color: #6BD06F;
-  font-size: 30px;
+  font-size: 24px;
   font-weight: 700;
   box-shadow: 0 4px 12px rgba(56, 142, 60, 0.4);
+  white-space: nowrap;
 }
 
 .play-btn:hover {
@@ -122,7 +125,7 @@
 
 .online-info {
   font-size: 16px;
-  opacity: 0.8;
+  color: rgba(255, 255, 255, 0.8);
   margin: 4px 0 16px;
   text-align: center;
 }
@@ -139,6 +142,32 @@
   font-size: 16px;
   opacity: 0.5;
   font-style: italic;
+}
+
+.online-join-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.online-code-input {
+  width: 120px;
+  padding: 14px 16px;
+  font-size: 28px;
+  font-family: 'Fredoka One', monospace;
+  text-align: center;
+  letter-spacing: 6px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.3);
+  color: #fff;
+  text-transform: uppercase;
+  outline: none;
+}
+
+.online-code-input:focus {
+  border-color: rgba(100, 149, 237, 0.8);
+  box-shadow: 0 0 12px rgba(100, 149, 237, 0.3);
 }
 
 .arena-selector {

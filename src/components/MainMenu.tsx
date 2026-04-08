@@ -167,6 +167,8 @@ export function MainMenu() {
   const [modsOpen, setModsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [onlineOpen, setOnlineOpen] = useState(false);
+  const [onlineJoinMode, setOnlineJoinMode] = useState(false);
+  const [onlineJoinCode, setOnlineJoinCode] = useState('');
 
   const handlePlay = useCallback(() => {
     audio.init();
@@ -460,21 +462,62 @@ export function MainMenu() {
             </div>
           )}
           {onlineOpen && (
-            <div className="mods-overlay" onClick={() => setOnlineOpen(false)}>
+            <div className="mods-overlay" onClick={() => { setOnlineOpen(false); setOnlineJoinMode(false); }}>
               <div className="mods-modal online-modal" onClick={e => e.stopPropagation()}>
                 <h2 className="mods-title">{t('online_play', 'Online Play')}</h2>
-                <p className="online-info">{t('online_bots_info', { count: matchSettings.botCount })}</p>
-                <div className="online-modal-actions">
-                  <button className="btn-base menu-btn online-create-btn" onClick={() => { setOnlineOpen(false); audio.play('select'); setScreen('onlineLobby'); useGameStore.getState().setOnline({ isHost: true }); }}>
-                    {t('create_room', 'Create Room')}
-                  </button>
-                  <span className="online-or">{t('or', 'or')}</span>
-                  <button className="btn-base menu-btn" onClick={() => { setOnlineOpen(false); audio.play('select'); setScreen('onlineLobby'); useGameStore.getState().setOnline({ isHost: false }); }}>
-                    {t('join_room_full', 'Join Room')}
-                  </button>
-                </div>
-                <button className="btn-base mods-close-btn" onClick={() => setOnlineOpen(false)}>
-                  {t('help_close')}
+                <p className="online-info">{(() => {
+                  const n = matchSettings.botCount;
+                  if (n === 0) return t('online_bots_info_zero');
+                  if (i18n.language === 'cs') {
+                    if (n === 1) return t('online_bots_info_one');
+                    if (n >= 2 && n <= 4) return t('online_bots_info_few', { count: n });
+                    return t('online_bots_info_other', { count: n });
+                  }
+                  return t('online_bots_info', { count: n });
+                })()}</p>
+                {!onlineJoinMode ? (
+                  <div className="online-modal-actions">
+                    <button className="btn-base menu-btn online-create-btn" onClick={() => { setOnlineOpen(false); setOnlineJoinMode(false); audio.play('select'); setScreen('onlineLobby'); useGameStore.getState().setOnline({ isHost: true }); }}>
+                      {t('create_room', 'Create Room')}
+                    </button>
+                    <span className="online-or">{t('or', 'or')}</span>
+                    <button className="btn-base menu-btn" onClick={() => { audio.play('select'); setOnlineJoinMode(true); }}>
+                      {t('join_room_full', 'Join Room')}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="online-modal-actions">
+                    <div className="online-join-row">
+                      <input
+                        className="online-code-input"
+                        type="text"
+                        maxLength={4}
+                        placeholder={t('code_placeholder', 'Code')}
+                        value={onlineJoinCode}
+                        autoFocus
+                        onChange={(e) => setOnlineJoinCode(e.target.value.toUpperCase().replace(/[^A-Z2-9]/g, ''))}
+                        onKeyDown={(e) => {
+                          e.stopPropagation();
+                          if (e.key === 'Enter' && onlineJoinCode.length >= 4) {
+                            setOnlineOpen(false); setOnlineJoinMode(false); audio.play('select');
+                            useGameStore.getState().setOnline({ isHost: false, joinCode: onlineJoinCode });
+                            setScreen('onlineLobby');
+                          }
+                        }}
+                      />
+                      <button className="btn-base menu-btn" onClick={() => {
+                        if (onlineJoinCode.length < 4) return;
+                        setOnlineOpen(false); setOnlineJoinMode(false); audio.play('select');
+                        useGameStore.getState().setOnline({ isHost: false, joinCode: onlineJoinCode });
+                        setScreen('onlineLobby');
+                      }} disabled={onlineJoinCode.length < 4}>
+                        {t('join_room', 'Join')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <button className="btn-base mods-close-btn" onClick={() => { if (onlineJoinMode) { setOnlineJoinMode(false); } else { setOnlineOpen(false); } }}>
+                  {t('back', 'Back')}
                 </button>
               </div>
             </div>

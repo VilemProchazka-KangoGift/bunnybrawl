@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../store/gameStore';
 import { audio } from '../engine/audio';
@@ -19,8 +19,8 @@ export function OnlineLobby() {
   const { t } = useTranslation();
   const { setScreen, online, setOnline, matchSettings, resetOnline } = useGameStore();
   const transportRef = useRef<Transport | null>(null);
-  const [joinCode, setJoinCode] = useState('');
   const transitioningToLobby = useRef(false);
+  const startedRef = useRef(false);
 
   const cleanup = useCallback(() => {
     if (transportRef.current) {
@@ -41,7 +41,6 @@ export function OnlineLobby() {
     };
   }, []);
 
-  // Once connected, go to charSelect
   const goToLobby = useCallback(() => {
     transitioningToLobby.current = true;
     setScreen('charSelect');
@@ -49,7 +48,6 @@ export function OnlineLobby() {
 
   const handleReliableMessage = useCallback((msg: ReliableMessage) => {
     if (msg.type === MsgType.SETTINGS_SYNC) {
-      // Guest receives host's settings before entering lobby
       useGameStore.getState().setMatchSettings({
         arenaId: msg.arenaId,
         killLimit: msg.killLimit,
@@ -72,7 +70,6 @@ export function OnlineLobby() {
             protocolVersion: PROTOCOL_VERSION,
             playerName: 'Player',
           });
-          // Host sends settings so guest has them before entering lobby
           if (transport.isHost) {
             const seed = Math.floor(Math.random() * 0xFFFFFFFF);
             setOnline({ rngSeed: seed });
@@ -88,7 +85,6 @@ export function OnlineLobby() {
               botDifficulty: matchSettings.botDifficulty,
             });
           }
-          // Transition to lobby after a brief moment (let settings sync)
           setTimeout(goToLobby, 300);
         }
       },
@@ -101,31 +97,25 @@ export function OnlineLobby() {
     return transport;
   }, [matchSettings, setOnline, handleReliableMessage, goToLobby]);
 
-  const handleCreate = useCallback(async () => {
+  // Auto-start: create or join based on store state
+  useEffect(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
     audio.init();
-    audio.play('select');
-    const transport = setupTransport();
-    setOnline({ isHost: true, isOnline: true });
-    try {
-      const code = await transport.createRoom();
-      setOnline({ roomCode: code });
-    } catch {
-      // Error handled via onStatusChange
-    }
-  }, [setupTransport, setOnline]);
 
-  const handleJoin = useCallback(async () => {
-    if (joinCode.length < 4) return;
-    audio.init();
-    audio.play('select');
     const transport = setupTransport();
-    setOnline({ isHost: false, isOnline: true });
-    try {
-      await transport.joinRoom(joinCode.toUpperCase());
-    } catch {
-      // Error handled via onStatusChange
+
+    if (online.isHost) {
+      setOnline({ isOnline: true });
+      transport.createRoom().then(code => {
+        setOnline({ roomCode: code });
+      }).catch(() => {});
+    } else if (online.joinCode) {
+      setOnline({ isOnline: true });
+      transport.joinRoom(online.joinCode).catch(() => {});
     }
-  }, [joinCode, setupTransport, setOnline]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleBack = useCallback(() => {
     audio.play('select');
@@ -137,56 +127,32 @@ export function OnlineLobby() {
     <div className="online-lobby">
       <h1 className="online-title">{t('online_play', 'Online Play')}</h1>
 
-      {!online.isOnline && (
-        <div className="online-actions">
-          <button className="btn-base menu-btn online-create-btn" onClick={handleCreate}>
-            {t('create_room', 'Create Room')}
-          </button>
-          <div className="online-join-row">
-            <input
-              className="online-code-input"
-              type="text"
-              maxLength={4}
-              placeholder={t('code_placeholder', 'Code')}
-              value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z2-9]/g, ''))}
-              onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') handleJoin(); }}
-            />
-            <button className="btn-base menu-btn" onClick={handleJoin} disabled={joinCode.length < 4}>
-              {t('join_room', 'Join')}
-            </button>
+      <div className="online-room-info">
+        {online.roomCode && (
+          <div className="online-room-code">
+            <span className="online-label">{t('room_code', 'Room Code')}:</span>
+            <span className="online-code">{online.roomCode}</span>
           </div>
-        </div>
-      )}
-
-      {online.isOnline && (
-        <div className="online-room-info">
-          {online.roomCode && (
-            <div className="online-room-code">
-              <span className="online-label">{t('room_code', 'Room Code')}:</span>
-              <span className="online-code">{online.roomCode}</span>
-            </div>
+        )}
+        <div className="online-status">
+          {(online.connectionStatus === 'idle' || online.connectionStatus === 'creating') && !online.roomCode && (
+            t('connecting_server', 'Connecting to server...')
           )}
-          <div className="online-status">
-            {(online.connectionStatus === 'idle' || online.connectionStatus === 'creating') && !online.roomCode && (
-              t('connecting_server', 'Connecting to server...')
-            )}
-            {online.roomCode && online.connectionStatus !== 'connected' && online.connectionStatus !== 'error' && (
-              t('waiting_opponent', 'Waiting for opponent...')
-            )}
-            {online.connectionStatus === 'joining' && t('joining_room', 'Joining room...')}
-            {online.connectionStatus === 'connected' && t('entering_lobby', 'Entering lobby...')}
-            {online.connectionStatus === 'error' && (
-              <>
-                <span className="online-error">{online.connectionError || t('connection_error', 'Connection failed')}</span>
-                <button className="btn-base menu-btn" style={{ marginTop: '12px', fontSize: '18px' }} onClick={() => cleanup()}>
-                  {t('try_again', 'Try Again')}
-                </button>
-              </>
-            )}
-          </div>
+          {online.roomCode && online.connectionStatus !== 'connected' && online.connectionStatus !== 'error' && (
+            t('waiting_opponent', 'Waiting for opponent...')
+          )}
+          {online.connectionStatus === 'joining' && t('joining_room', 'Joining room...')}
+          {online.connectionStatus === 'connected' && t('entering_lobby', 'Entering lobby...')}
+          {online.connectionStatus === 'error' && (
+            <>
+              <span className="online-error">{online.connectionError || t('connection_error', 'Connection failed')}</span>
+              <button className="btn-base menu-btn" style={{ marginTop: '12px', fontSize: '18px' }} onClick={() => cleanup()}>
+                {t('try_again', 'Try Again')}
+              </button>
+            </>
+          )}
         </div>
-      )}
+      </div>
 
       <button className="btn-base online-back-btn" onClick={handleBack}>
         {t('back', 'Back')}
