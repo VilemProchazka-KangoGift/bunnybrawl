@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { CHARACTERS, getAllCharacters, BOT_CHARACTERS, assignBotCharacters, getCharacterEmoji, hasCustomEyes, getSpriteRenderer, getCharacterDisplayName, getCharacterPack } from '../engine/characters';
+import { CHARACTERS, getAllCharacters, BOT_CHARACTERS, assignBotCharacters, getCharacterEmoji, hasCustomEyes, getSpriteRenderer, getCharacterDisplayName, getCharacterPack, drawLegs } from '../engine/characters';
 import { KEY_BINDINGS } from '../engine/input';
 import { audio } from '../engine/audio';
 import i18n from '../i18n';
@@ -893,12 +893,8 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
     ctx.beginPath(); ctx.arc(cx + 7, yOff + h * 0.38, 1, 0, Math.PI * 2); ctx.fill();
   }
 
-  // Legs
-  ctx.fillStyle = char.darkColor;
-  const legSpread = isAirborne ? 3 : 0;
-  const legAnim = isRunning ? Math.sin(animFrame * Math.PI) * 3 : 0;
-  ctx.fillRect(cx - 8 - legSpread, yOff + h * 0.75 - legAnim, 6, 8);
-  ctx.fillRect(cx + 2 + legSpread, yOff + h * 0.75 + legAnim, 6, 8);
+  // Legs — shared leg renderer with per-character style
+  drawLegs(ctx, cx, yOff, w, h, state, animFrame, -1, p.squashScale, colors, lobbyPack?.legStyle);
 
   ctx.restore();
 }

@@ -77,6 +77,7 @@ export const owl: CharacterPack = {
   splatShape: 'ring',
   gibs: [{ gibType: 'wing', width: 12, height: 8 }, { gibType: 'wing', width: 12, height: 8 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Owl', cs: 'Sova' },
+  legStyle: { shape: 'stick', footStyle: 'claw', legWidth: 3, legHeight: 10 },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.5, rx: w * 0.4, ry: h * 0.42 }),
   drawSprite, drawGib,
 };

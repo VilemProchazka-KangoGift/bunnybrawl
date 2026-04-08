@@ -49,6 +49,7 @@ export const bunny: CharacterPack = {
   splatShape: 'paw',
   gibs: [{ gibType: 'ear', width: 8, height: 20 }, { gibType: 'ear', width: 8, height: 20 }, { gibType: 'tail', width: 8, height: 8 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Bunny', cs: 'Králík' },
+  legStyle: { shape: 'rounded', footStyle: 'paw', footWidth: 9, footHeight: 4 },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.55, rx: w * 0.4, ry: h * 0.4 }),
   drawSprite, drawGib,
 };

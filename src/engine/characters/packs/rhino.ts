@@ -62,6 +62,7 @@ export const rhino: CharacterPack = {
   splatShape: 'circle',
   gibs: [{ gibType: 'ear', width: 8, height: 8 }, { gibType: 'ear', width: 8, height: 8 }, { gibType: 'horn', width: 8, height: 14 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Rhino', cs: 'Nosorožec' },
+  legStyle: { shape: 'wide', footStyle: 'round', legWidth: 9, legHeight: 7 },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.55, rx: w * 0.44, ry: h * 0.4 }),
   drawSprite, drawGib,
 };

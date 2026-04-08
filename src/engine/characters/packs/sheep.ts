@@ -55,6 +55,7 @@ export const sheep: CharacterPack = {
   splatShape: 'paw',
   gibs: [{ gibType: 'ear', width: 8, height: 8 }, { gibType: 'ear', width: 8, height: 8 }, { gibType: 'wool', width: 14, height: 12 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Sheep', cs: 'Ovce' },
+  legStyle: { shape: 'rounded', footStyle: 'hoof', legWidth: 5 },
   bodyEllipse: (cx, yOff, _w, h) => ({ cx, cy: yOff + h * 0.46, rx: 12, ry: h * 0.18 }),
   drawSprite, drawGib,
 };

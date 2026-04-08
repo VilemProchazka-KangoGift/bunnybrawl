@@ -41,6 +41,27 @@ export interface CharacterColors {
  *  Applied by the renderer before the character's drawSprite is called. */
 export type IdleTransformType = 'none' | 'headTilt' | 'headFlip' | 'headBob';
 
+/** Per-character leg shape and foot configuration.
+ *  Used by the shared drawLegs() renderer in legRenderer.ts. */
+export interface LegStyle {
+  /** Base leg shape: rounded (soft), tapered (wider at hip), stick (thin bird legs), wide (chunky) */
+  shape: 'rounded' | 'tapered' | 'stick' | 'wide';
+  /** Foot type drawn at the bottom of each leg */
+  footStyle: 'paw' | 'hoof' | 'webbed' | 'claw' | 'round' | 'none';
+  /** Leg width in px (default 6) */
+  legWidth?: number;
+  /** Leg height in px (default 8) */
+  legHeight?: number;
+  /** Foot fill color (default: colors.lightColor) */
+  footColor?: string;
+  /** Foot width in px (default: legWidth + 2) */
+  footWidth?: number;
+  /** Foot height in px (default: 3) */
+  footHeight?: number;
+  /** Resting horizontal splay in px, e.g. frog=4 (default 0) */
+  spreadAngle?: number;
+}
+
 /** Complete definition of a character, bundling all data and rendering functions.
  *  Built-in characters populate this from scattered sources; external packs provide it directly. */
 export interface CharacterPack {
@@ -65,4 +86,7 @@ export interface CharacterPack {
   noHighlight?: boolean;
 
   translations?: Record<string, string>;
+
+  /** Leg shape and foot style. If omitted, defaults to rounded legs with round feet. */
+  legStyle?: LegStyle;
 }

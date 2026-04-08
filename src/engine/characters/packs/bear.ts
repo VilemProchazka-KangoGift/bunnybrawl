@@ -55,6 +55,7 @@ export const bear: CharacterPack = {
   splatShape: 'circle',
   gibs: [{ gibType: 'ear', width: 10, height: 10 }, { gibType: 'ear', width: 10, height: 10 }, { gibType: 'snout', width: 10, height: 8 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Bear', cs: 'Medvěd' },
+  legStyle: { shape: 'rounded', footStyle: 'round', legWidth: 8, legHeight: 7 },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.5, rx: w * 0.42, ry: h * 0.42 }),
   drawSprite, drawGib,
 };

@@ -56,6 +56,7 @@ export const panda: CharacterPack = {
   splatShape: 'circle',
   gibs: [{ gibType: 'ear', width: 10, height: 10 }, { gibType: 'ear', width: 10, height: 10 }, { gibType: 'body', width: 14, height: 12 }, { gibType: 'body', width: 10, height: 10 }],
   translations: { en: 'Panda', cs: 'Panda' },
+  legStyle: { shape: 'rounded', footStyle: 'round', legWidth: 8 },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.52, rx: w * 0.42, ry: h * 0.42 }),
   drawSprite, drawGib,
 };
