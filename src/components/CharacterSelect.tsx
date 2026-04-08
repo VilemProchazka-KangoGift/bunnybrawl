@@ -6,9 +6,6 @@ import { audio } from '../engine/audio';
 import i18n from '../i18n';
 import type { CharacterSlot, CharacterDef, PlayerSlot, BotSlot } from '../engine/types';
 import { ALL_BOT_SLOTS, isBotSlot } from '../engine/types';
-import { getActiveTransport } from './OnlineLobby';
-import { MsgType } from '../engine/net/protocol';
-import type { ReliableMessage } from '../engine/net/protocol';
 import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED } from '../engine/constants';
 import {
   drawTree, drawBush, drawFlower, drawMushroom, drawGrassTuft, drawCloud,
@@ -55,26 +52,17 @@ interface LobbyPlayer {
   squashScale: number; // 1.0 = normal, <1 = squashed vertically (crouch)
 }
 
-// Shuffle array in-place, optionally with a seed for deterministic results
-function shuffle<T>(arr: T[], seed?: number): T[] {
-  // Simple seeded PRNG (mulberry32) for deterministic shuffle across peers
-  let s = seed ?? 0;
-  const rnd = seed != null ? () => {
-    s = (s + 0x6d2b79f5) | 0;
-    let t = Math.imul(s ^ (s >>> 15), 1 | s);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  } : Math.random;
+// Shuffle array in-place
+function shuffle<T>(arr: T[]): T[] {
   for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(rnd() * (i + 1));
+    const j = Math.floor(Math.random() * (i + 1));
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
   return arr;
 }
 
 export function CharacterSelect() {
-  const { setScreen, setActivePlayers, setMatchSettings, matchSettings, online, setOnline, resetOnline } = useGameStore();
-  const isOnline = online.isOnline;
+  const { setScreen, setActivePlayers, setMatchSettings, matchSettings } = useGameStore();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const playersRef = useRef<LobbyPlayer[]>([]);
   const botPlayersRef = useRef<LobbyPlayer[]>([]); // AI-controlled bot players
@@ -86,24 +74,18 @@ export function CharacterSelect() {
   const lastTimeRef = useRef<number>(0);
   const startedRef = useRef<boolean>(false);
   const readySoundPlayedRef = useRef<Set<PlayerSlot>>(new Set());
-  const onlineReadySentRef = useRef(false);
-  const onlineRemoteReadyRef = useRef(false);
 
   useEffect(() => {
     const botCount = matchSettings.botCount;
     const botSlots = ALL_BOT_SLOTS.slice(0, botCount);
 
-    // In online mode, only P1 is a local human player
-    const humanSlots: CharacterSlot[] = isOnline ? ['P1'] : SLOTS;
+    // Randomly assign characters to players
+    const shuffled = shuffle([...getAllCharacters()]);
+    const assigned = shuffled.slice(0, SLOTS.length);
+    const botAssigned = shuffled.slice(SLOTS.length, SLOTS.length + botCount);
+    const extras = shuffled.slice(SLOTS.length + botCount);
 
-    // Randomly assign characters — seeded in online mode for determinism across peers
-    const seed = isOnline ? online.rngSeed : undefined;
-    const shuffled = shuffle([...getAllCharacters()], seed);
-    const assigned = shuffled.slice(0, humanSlots.length);
-    const botAssigned = shuffled.slice(humanSlots.length, humanSlots.length + botCount);
-    const extras = shuffled.slice(humanSlots.length + botCount);
-
-    playersRef.current = humanSlots.map((slot, i) => ({
+    playersRef.current = SLOTS.map((slot, i) => ({
       slot,
       char: { ...assigned[i], slot },
       x: 40 + i * 90,
@@ -146,48 +128,6 @@ export function CharacterSelect() {
 
     const allParticipants = [...playersRef.current, ...botPlayersRef.current];
     const inZone = allParticipants.filter(p => p.x + PLAYER_WIDTH > READY_ZONE_X && p.splatTimer <= 0);
-
-    if (isOnline) {
-      // Online mode: P1 = local player's lobby character, P2 = remote player's character
-      const localPlayer = playersRef.current[0];
-      if (!localPlayer) { startedRef.current = false; return; }
-
-      const myChar = localPlayer.char;
-      const remoteCharName = online.remoteCharacterName || 'Fox';
-      const allChars = getAllCharacters();
-      const remoteDef = allChars.find(c => c.name === remoteCharName);
-
-      // Assign P1 = host's character, P2 = guest's character
-      const p1Char = online.isHost ? myChar : (remoteDef || myChar);
-      const p2Char = online.isHost ? (remoteDef || myChar) : myChar;
-
-      CHARACTERS.P1 = { ...p1Char, slot: 'P1' };
-      CHARACTERS.P2 = { ...p2Char, slot: 'P2' };
-
-      // Assign bot characters if any
-      const botInZone = inZone.filter(p => isBotSlot(p.slot));
-      const botSlots = botInZone.map(p => p.slot as BotSlot);
-      assignBotCharacters(['P1', 'P2'], botSlots);
-      for (const bot of botInZone) {
-        BOT_CHARACTERS.set(bot.slot as BotSlot, { ...bot.char, slot: bot.slot });
-      }
-
-      const activePlayers: PlayerSlot[] = ['P1', 'P2', ...botSlots];
-      setActivePlayers(activePlayers);
-      setMatchSettings({ playerCount: activePlayers.length });
-
-      // Host tells guest to start
-      const transport = getActiveTransport();
-      if (online.isHost && transport) {
-        transport.sendReliable({ type: MsgType.START_MATCH } as ReliableMessage);
-      }
-
-      audio.play('select');
-      setScreen('match');
-      return;
-    }
-
-    // Local mode (unchanged)
     if (inZone.length < 2) {
       countdownRef.current = -1;
       countdownStartedRef.current = false;
@@ -195,15 +135,19 @@ export function CharacterSelect() {
       return;
     }
 
+    // Write the chosen characters back into CHARACTERS so the match uses them (humans only)
     const humanInZone = inZone.filter(p => !isBotSlot(p.slot));
     for (const lp of humanInZone) {
       CHARACTERS[lp.slot as CharacterSlot] = { ...lp.char, slot: lp.slot };
     }
 
+    // Assign bot characters
     const humanSlots = humanInZone.map(p => p.slot as CharacterSlot);
     const botInZone = inZone.filter(p => isBotSlot(p.slot));
     const botSlots = botInZone.map(p => p.slot as BotSlot);
+    // Use the characters the bots walked in with
     assignBotCharacters(humanSlots, botSlots);
+    // Override with the actual lobby characters (respecting any lobby swaps)
     for (const bot of botInZone) {
       BOT_CHARACTERS.set(bot.slot as BotSlot, { ...bot.char, slot: bot.slot });
     }
@@ -213,62 +157,19 @@ export function CharacterSelect() {
     setMatchSettings({ playerCount: activePlayers.length });
     audio.play('select');
     setScreen('match');
-  }, [setActivePlayers, setMatchSettings, setScreen, isOnline, online.isHost, online.remoteCharacterName]);
+  }, [setActivePlayers, setMatchSettings, setScreen]);
 
   useEffect(() => {
     audio.playMenuMusic();
   }, []);
-
-  // Online mode: wire transport to receive remote player's messages
-  useEffect(() => {
-    if (!isOnline) return;
-    const transport = getActiveTransport();
-    if (!transport) return;
-
-    transport.setEvents({
-      onStatusChange: (status, error) => {
-        if (status === 'disconnected' || status === 'error') {
-          resetOnline();
-          setScreen('menu');
-        }
-        setOnline({ connectionStatus: status, connectionError: error ?? null });
-      },
-      onReliableMessage: (msg: ReliableMessage) => {
-        if (msg.type === MsgType.CHARACTER_SELECT) {
-          setOnline({ remoteCharacterName: msg.characterName });
-        } else if (msg.type === MsgType.READY) {
-          onlineRemoteReadyRef.current = true;
-        } else if (msg.type === MsgType.START_MATCH) {
-          // Guest receives start signal from host
-          startMatch();
-        }
-      },
-      onUnreliableMessage: () => {},
-      onRttUpdate: () => {},
-    });
-  }, [isOnline, setOnline, setScreen, resetOnline, startMatch]);
 
   useEffect(() => {
     const normalizeKey = (key: string) => key.length === 1 ? key.toLowerCase() : key;
     const handleKeyDown = (e: KeyboardEvent) => {
       e.preventDefault();
       keysRef.current.add(normalizeKey(e.key));
-      if (e.key === 'Escape') {
-        if (isOnline) {
-          const transport = getActiveTransport();
-          if (transport) transport.destroy();
-          resetOnline();
-        }
-        setScreen('menu');
-      }
-      if (e.key === 'Enter') {
-        const ol = useGameStore.getState().online;
-        if (ol.isOnline && ol.isHost && onlineReadySentRef.current && onlineRemoteReadyRef.current) {
-          startMatch();
-        } else if (!ol.isOnline && countdownStartedRef.current) {
-          startMatch();
-        }
-      }
+      if (e.key === 'Escape') setScreen('menu');
+      if (e.key === 'Enter' && countdownStartedRef.current) startMatch();
     };
     const handleKeyUp = (e: KeyboardEvent) => {
       e.preventDefault();
@@ -292,32 +193,22 @@ export function CharacterSelect() {
       const dt = lastTimeRef.current ? Math.min((time - lastTimeRef.current) / 1000, 0.05) : 1 / 60;
       lastTimeRef.current = time;
 
-      const onlineNow = useGameStore.getState().online.isOnline;
       const allLobby = [...playersRef.current, ...botPlayersRef.current, ...extraCharsRef.current];
 
       // Update player-controlled characters (always CharacterSlots)
       for (const p of playersRef.current) {
         if (p.splatTimer > 0) { p.splatTimer -= dt; continue; }
+        const bindings = KEY_BINDINGS[p.slot as CharacterSlot];
         const keys = keysRef.current;
 
-        // In online mode, all 5 key schemes control the single P1 player
-        const bindingsToCheck = onlineNow
-          ? Object.values(KEY_BINDINGS)
-          : [KEY_BINDINGS[p.slot as CharacterSlot]];
-
-        const left = bindingsToCheck.some(b => keys.has(b.left));
-        const right = bindingsToCheck.some(b => keys.has(b.right));
-        const jump = bindingsToCheck.some(b => keys.has(b.jump));
-        const down = bindingsToCheck.some(b => keys.has(b.down));
-
-        if (left) { p.vx = -LOBBY_SPEED; p.facing = 'left'; }
-        else if (right) { p.vx = LOBBY_SPEED; p.facing = 'right'; }
+        if (keys.has(bindings.left)) { p.vx = -LOBBY_SPEED; p.facing = 'left'; }
+        else if (keys.has(bindings.right)) { p.vx = LOBBY_SPEED; p.facing = 'right'; }
         else { p.vx *= 0.85; if (Math.abs(p.vx) < 5) p.vx = 0; }
 
-        if (jump && p.onGround) { p.vy = LOBBY_JUMP; p.onGround = false; }
+        if (keys.has(bindings.jump) && p.onGround) { p.vy = LOBBY_JUMP; p.onGround = false; }
 
         // Fast-fall with down key, or crouch squash on ground
-        const crouching = down;
+        const crouching = keys.has(bindings.down);
         if (crouching) {
           if (!p.onGround) {
             p.vy = Math.max(p.vy, LOBBY_FAST_FALL);
@@ -414,33 +305,14 @@ export function CharacterSelect() {
         }
       }
       const humansInZone = inZone.filter(p => !isBotSlot(p.slot));
-
-      if (onlineNow) {
-        // Online mode: send ready when local player enters START zone
-        const localInZone = humansInZone.length >= 1;
-        if (localInZone && !onlineReadySentRef.current) {
-          onlineReadySentRef.current = true;
-          const myChar = playersRef.current[0]?.char.name || 'Bunny';
-          const transport = getActiveTransport();
-          if (transport) {
-            transport.sendReliable({ type: MsgType.CHARACTER_SELECT, characterName: myChar });
-            transport.sendReliable({ type: MsgType.READY } as ReliableMessage);
-          }
-        }
-        if (!localInZone) {
-          onlineReadySentRef.current = false;
-        }
-        // No countdown in online mode — host starts manually via Enter or button
-      } else {
-        // Local mode: need at least 1 human + total 2 participants to start countdown
-        if (inZone.length >= 2 && humansInZone.length >= 1 && !countdownStartedRef.current) {
-          countdownStartedRef.current = true;
-          countdownRef.current = COUNTDOWN_SECONDS;
-        }
-        if (inZone.length < 2 || humansInZone.length < 1) {
-          countdownStartedRef.current = false;
-          countdownRef.current = -1;
-        }
+      // Need at least 1 human + total 2 participants to start countdown
+      if (inZone.length >= 2 && humansInZone.length >= 1 && !countdownStartedRef.current) {
+        countdownStartedRef.current = true;
+        countdownRef.current = COUNTDOWN_SECONDS;
+      }
+      if (inZone.length < 2 || humansInZone.length < 1) {
+        countdownStartedRef.current = false;
+        countdownRef.current = -1;
       }
 
       if (countdownStartedRef.current) {
@@ -448,17 +320,7 @@ export function CharacterSelect() {
         if (countdownRef.current <= 0) startMatch();
       }
 
-      const onlineState = useGameStore.getState().online;
-      drawLobby(ctx, playersRef.current, botPlayersRef.current, extraCharsRef.current, countdownRef.current, countdownStartedRef.current, dt,
-        onlineState.isOnline ? {
-          roomCode: onlineState.roomCode,
-          remoteCharName: onlineState.remoteCharacterName,
-          isHost: onlineState.isHost,
-          localReady: onlineReadySentRef.current,
-          canStart: onlineState.isHost && onlineReadySentRef.current && onlineRemoteReadyRef.current,
-          remoteReady: onlineRemoteReadyRef.current,
-          waitingForRemote: onlineReadySentRef.current && !onlineRemoteReadyRef.current,
-        } : undefined);
+      drawLobby(ctx, playersRef.current, botPlayersRef.current, extraCharsRef.current, countdownRef.current, countdownStartedRef.current, dt);
       rafRef.current = requestAnimationFrame(loop);
     };
 
@@ -474,19 +336,6 @@ export function CharacterSelect() {
         height={CANVAS_HEIGHT}
         className="lobby-canvas"
         data-testid="lobby-canvas"
-        onClick={(e) => {
-          const rect = (drawLobby as any)._startBtnRect;
-          if (!rect) return;
-          const canvas = canvasRef.current;
-          if (!canvas) return;
-          const scaleX = CANVAS_WIDTH / canvas.clientWidth;
-          const scaleY = CANVAS_HEIGHT / canvas.clientHeight;
-          const cx = e.nativeEvent.offsetX * scaleX;
-          const cy = e.nativeEvent.offsetY * scaleY;
-          if (cx >= rect.x && cx <= rect.x + rect.w && cy >= rect.y && cy <= rect.y + rect.h) {
-            startMatch();
-          }
-        }}
       />
     </div>
   );
@@ -624,7 +473,6 @@ function drawLobby(
   countdown: number,
   countdownActive: boolean,
   dt: number,
-  onlineInfo?: { roomCode: string | null; remoteCharName: string | null; remoteReady: boolean; waitingForRemote: boolean; isHost: boolean; localReady: boolean; canStart: boolean },
 ): void {
   // ---- Sky with gradient (meadow style) ----
   const skyGrad = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
@@ -844,44 +692,22 @@ function drawLobby(
 
   // ---- UI bar at top (polished) ----
   const barH = 52;
-  // Build display entries: local players + remote opponent (if online and known)
-  const displayEntries: Array<{ slot: string; charName: string; displayName: string; color: string; keys: string }> = [];
-  for (const p of players) {
-    const fmtKey = (k: string) => k === 'ArrowLeft' ? '\u2190' : k === 'ArrowRight' ? '\u2192' : k === 'ArrowUp' ? '\u2191' : k === 'ArrowDown' ? '\u2193' : k;
-    const b = KEY_BINDINGS[p.slot as CharacterSlot];
-    displayEntries.push({
-      slot: p.slot,
-      charName: p.char.name,
-      displayName: getCharacterDisplayName(p.char.name, i18n.language),
-      color: p.char.color,
-      keys: players.length === 1 ? '\u2190 \u2192 \u2191 \u2193' : `${fmtKey(b.left)} ${fmtKey(b.right)} ${fmtKey(b.jump)} ${fmtKey(b.down)}`,
-    });
-  }
-  if (onlineInfo?.remoteCharName) {
-    const remoteDef = getAllCharacters().find(c => c.name === onlineInfo.remoteCharName);
-    displayEntries.push({
-      slot: 'P2',
-      charName: onlineInfo.remoteCharName,
-      displayName: getCharacterDisplayName(onlineInfo.remoteCharName, i18n.language),
-      color: remoteDef?.color || '#888',
-      keys: onlineInfo.remoteReady ? i18n.t('ready', 'READY') : '...',
-    });
-  }
-  const slotWidth = Math.min(300, (CANVAS_WIDTH - 40) / Math.max(1, displayEntries.length));
-  const barW = Math.min(CANVAS_WIDTH - 16, displayEntries.length * slotWidth + 40);
-  const barX = (CANVAS_WIDTH - barW) / 2;
   ctx.fillStyle = 'rgba(0,0,0,0.6)';
   ctx.beginPath();
-  ctx.roundRect(barX, 6, barW, barH, 10);
+  ctx.roundRect(8, 6, CANVAS_WIDTH - 16, barH, 10);
   ctx.fill();
   ctx.strokeStyle = 'rgba(255,255,255,0.08)';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.roundRect(barX + 1, 7, barW - 2, barH - 2, 9);
+  ctx.roundRect(9, 7, CANVAS_WIDTH - 18, barH - 2, 9);
   ctx.stroke();
-  for (let i = 0; i < displayEntries.length; i++) {
-    const entry = displayEntries[i];
-    const sx = barX + 20 + i * slotWidth + slotWidth / 2;
+
+  const slotWidth = (CANVAS_WIDTH - 40) / SLOTS.length;
+  for (let i = 0; i < SLOTS.length; i++) {
+    const slot = SLOTS[i];
+    const bindings = KEY_BINDINGS[slot];
+    const player = players[i];
+    const sx = 20 + i * slotWidth + slotWidth / 2;
     const emojiX = sx - slotWidth * 0.38;
     const textX = emojiX + 22;
 
@@ -889,19 +715,20 @@ function drawLobby(
     ctx.font = '28px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(getCharacterEmoji(entry.charName), emojiX, 32);
+    ctx.fillText(getCharacterEmoji(player.char.name), emojiX, 32);
     ctx.textBaseline = 'alphabetic';
 
     // Name in player color
-    ctx.fillStyle = entry.color;
+    ctx.fillStyle = player.char.color;
     ctx.textAlign = 'left';
     ctx.font = "bold 14px 'Nunito', sans-serif";
-    ctx.fillText(`${entry.slot}: ${entry.displayName}`, textX, 26);
+    ctx.fillText(`${slot}: ${getCharacterDisplayName(player.char.name, i18n.language)}`, textX, 26);
 
-    // Keys or status
+    // Keys
     ctx.fillStyle = 'rgba(255,255,255,0.6)';
     ctx.font = "bold 13px 'Nunito', monospace";
-    ctx.fillText(entry.keys, textX, 42);
+    const fmtKey = (k: string) => k === 'ArrowLeft' ? '\u2190' : k === 'ArrowRight' ? '\u2192' : k === 'ArrowUp' ? '\u2191' : k === 'ArrowDown' ? '\u2193' : k;
+    ctx.fillText(`${fmtKey(bindings.left)} ${fmtKey(bindings.right)} ${fmtKey(bindings.jump)} ${fmtKey(bindings.down)}`, textX, 42);
   }
 
   // ---- Bottom-left: swap instruction ----
@@ -1000,70 +827,6 @@ function drawLobby(
     ctx.textBaseline = 'middle';
     ctx.fillText(readyText, rx, ry + 12);
     ctx.textBaseline = 'alphabetic';
-  }
-
-  // ---- Online info overlay ----
-  if (onlineInfo) {
-    const cx = CANVAS_WIDTH / 2;
-    const boxTop = 80;
-
-    // Room code (center, very large)
-    if (onlineInfo.roomCode) {
-      ctx.save();
-      ctx.textAlign = 'center';
-      ctx.fillStyle = 'rgba(0,0,0,0.55)';
-      ctx.beginPath();
-      ctx.roundRect(cx - 200, boxTop, 400, 80, 14);
-      ctx.fill();
-      ctx.font = "bold 18px 'Nunito', sans-serif";
-      ctx.fillStyle = 'rgba(255,255,255,0.7)';
-      ctx.fillText(i18n.t('room_code', 'Room Code'), cx, boxTop + 24);
-      ctx.font = "bold 52px 'Fredoka One', monospace";
-      ctx.fillStyle = '#FFD700';
-      ctx.fillText(onlineInfo.roomCode, cx, boxTop + 70);
-      ctx.restore();
-    }
-
-    // Opponent status (below room code)
-    const statusY = boxTop + (onlineInfo.roomCode ? 100 : 20);
-    ctx.save();
-    ctx.textAlign = 'center';
-    if (onlineInfo.remoteCharName) {
-      ctx.font = "bold 16px 'Nunito', sans-serif";
-      ctx.fillStyle = 'rgba(255,255,255,0.8)';
-      const status = onlineInfo.remoteReady ? ' - ' + i18n.t('ready', 'READY') : '';
-      ctx.fillText(i18n.t('opponent', 'Opponent') + ': ' + getCharacterDisplayName(onlineInfo.remoteCharName, i18n.language) + status, cx, statusY);
-    } else if (onlineInfo.waitingForRemote) {
-      ctx.font = "bold 16px 'Nunito', sans-serif";
-      ctx.fillStyle = 'rgba(255,255,255,0.5)';
-      ctx.fillText(i18n.t('waiting_opponent', 'Waiting for opponent...'), cx, statusY);
-    }
-    ctx.restore();
-
-    // Host "Start" button (only when both ready)
-    if (onlineInfo.canStart) {
-      const btnW = 200;
-      const btnH = 44;
-      const btnX = cx - btnW / 2;
-      const btnY = statusY + 14;
-      ctx.save();
-      ctx.fillStyle = '#388E3C';
-      ctx.beginPath();
-      ctx.roundRect(btnX, btnY, btnW, btnH, 10);
-      ctx.fill();
-      ctx.strokeStyle = '#6BD06F';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      ctx.font = "bold 22px 'Fredoka One', sans-serif";
-      ctx.fillStyle = '#fff';
-      ctx.textAlign = 'center';
-      ctx.fillText(i18n.t('play', 'Start!'), cx, btnY + 30);
-      ctx.restore();
-      // Store button rect for click detection
-      (drawLobby as any)._startBtnRect = { x: btnX, y: btnY, w: btnW, h: btnH };
-    } else {
-      (drawLobby as any)._startBtnRect = null;
-    }
   }
 
   // ---- Day/night cycle ----
