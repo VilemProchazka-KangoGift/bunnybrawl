@@ -3,7 +3,10 @@ export type {
   CharacterRenderer,
   GibRenderer,
   CharacterColors,
+  LegStyle,
 } from './types';
+
+export { drawLegs } from './legRenderer';
 
 export {
   registerCharacter,

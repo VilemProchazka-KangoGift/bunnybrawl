@@ -10,7 +10,7 @@ import {
 } from './constants';
 import { drawCloud as drawCloudPrimitive, drawHill, drawPlatformMoss } from './themes/drawPrimitives';
 import { hexToRGB } from './fastMath';
-import { getCharacterEmoji, hasCustomEyes, getSpriteRenderer, getGibRenderer, getCharacterPack, getCharacterDisplayName } from './characters';
+import { getCharacterEmoji, hasCustomEyes, getSpriteRenderer, getGibRenderer, getCharacterPack, getCharacterDisplayName, drawLegs } from './characters';
 import { drawHighlightSpot } from './spriteShading';
 import { debugFlags } from './debugFlags';
 import { drawNavDebugOverlay } from './navDebugOverlay';
@@ -1484,7 +1484,7 @@ export class Renderer {
     if (state === 'splat') {
       this.drawSplatCharacter(ctx, x, y, width, height, character.color, character.darkColor);
     } else {
-      this.drawCharacterSprite(ctx, x, y, width, height, character, state, animFrame, fastFalling, player.idleAnimTimer);
+      this.drawCharacterSprite(ctx, x, y, width, height, character, state, animFrame, fastFalling, player.idleAnimTimer, player.squashScale);
       this.drawExpression(ctx, player);
     }
 
@@ -1544,12 +1544,13 @@ export class Renderer {
     x: number, y: number, w: number, h: number,
     char: { name: string; color: string; darkColor: string; lightColor: string },
     state: string, animFrame: number, fastFalling: boolean,
-    idleAnimTimer?: number,
+    idleAnimTimer?: number, squashScale = 1,
   ): void {
     const idleKey = (state === 'idle' && idleAnimTimer !== undefined && idleAnimTimer > 0 && idleAnimTimer < 0.5)
       ? Math.floor(idleAnimTimer * 10)
       : -1;
-    const cacheKey = `${char.name}_${state}_${animFrame}_${fastFalling ? 1 : 0}_${idleKey}`;
+    const sqKey = Math.round(squashScale * 10);
+    const cacheKey = `${char.name}_${state}_${animFrame}_${fastFalling ? 1 : 0}_${idleKey}_${sqKey}`;
 
     let cached = this.spriteCache.get(cacheKey);
     if (cached) {
@@ -1566,7 +1567,7 @@ export class Renderer {
     // Translate so the existing draw code (which uses absolute x,y) draws into the padded offscreen canvas
     sctx.translate(-x + pad, -y + pad);
 
-    this._drawCharacterSpriteImpl(sctx, x, y, w, h, char, state, animFrame, fastFalling, idleAnimTimer);
+    this._drawCharacterSpriteImpl(sctx, x, y, w, h, char, state, animFrame, fastFalling, idleAnimTimer, squashScale);
 
     if (this.spriteCache.size > 600) {
       const first = this.spriteCache.keys().next().value;
@@ -1581,7 +1582,7 @@ export class Renderer {
     x: number, y: number, w: number, h: number,
     char: { name: string; color: string; darkColor: string; lightColor: string },
     state: string, animFrame: number, fastFalling: boolean,
-    idleAnimTimer?: number
+    idleAnimTimer?: number, squashScale = 1,
   ): void {
     const cx = x + w / 2;
     const isAirborne = state === 'airborne';
@@ -1652,12 +1653,8 @@ export class Renderer {
       ctx.fill();
     }
 
-    // Legs
-    ctx.fillStyle = char.darkColor;
-    const legSpread = isAirborne ? 3 : 0;
-    const legAnim = isRunning ? Math.sin(animFrame * Math.PI) * 3 : 0;
-    ctx.fillRect(cx - 8 - legSpread, yOff + h * 0.75 - legAnim, 6, 8 + (isAirborne ? 2 : 0));
-    ctx.fillRect(cx + 2 + legSpread, yOff + h * 0.75 + legAnim, 6, 8 + (isAirborne ? 2 : 0));
+    // Legs — dispatch to shared leg renderer with per-character style
+    drawLegs(ctx, cx, yOff, w, h, state, animFrame, idleT, squashScale, colors, pack?.legStyle);
 
     // Motion lines for airborne
     if (isAirborne && !fastFalling) {

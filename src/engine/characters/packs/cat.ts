@@ -117,6 +117,7 @@ export const cat: CharacterPack = {
   splatShape: 'paw',
   gibs: [{ gibType: 'ear', width: 8, height: 10 }, { gibType: 'ear', width: 8, height: 10 }, { gibType: 'tail', width: 14, height: 6 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Cat', cs: 'Kočka' },
+  legStyle: { shape: 'tapered', footStyle: 'paw' },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.55, rx: w * 0.42, ry: h * 0.36 }),
   drawSprite, drawGib,
 };
