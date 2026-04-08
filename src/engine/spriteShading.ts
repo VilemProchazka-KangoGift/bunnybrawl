@@ -134,7 +134,7 @@ export function getFurIntensity(charName: string): number {
   }
 }
 
-/** Draw subtle stipple dots along body perimeter for fur/fluff texture. */
+/** Draw a soft outer glow around the body for a plush/rounded look. */
 export function drawFurEdge(
   ctx: CanvasRenderingContext2D,
   params: BodyEllipseParams,
@@ -144,20 +144,13 @@ export function drawFurEdge(
   if (intensity <= 0) return;
 
   const { cx, cy, rx, ry } = params;
-  const dotCount = 10;
-  const rgba = hexToRGBA(darkColor, 0.1 * intensity);
+  const glowR = Math.max(rx, ry) + 3;
+  const grad = ctx.createRadialGradient(cx, cy, Math.max(rx, ry) - 1, cx, cy, glowR);
+  grad.addColorStop(0, hexToRGBA(darkColor, 0.12 * intensity));
+  grad.addColorStop(1, hexToRGBA(darkColor, 0));
 
-  ctx.fillStyle = rgba;
-  for (let i = 0; i < dotCount; i++) {
-    // Irregular spacing via golden angle (not evenly spaced)
-    const angle = i * 2.399;
-    const outward = 0.5 + ((i * 1.618) % 1) * 2.5;
-    const dotX = cx + Math.cos(angle) * (rx + outward);
-    const dotY = cy + Math.sin(angle) * (ry + outward);
-    const dotR = 0.8 + ((i * 2.414) % 1) * 0.7;
-
-    ctx.beginPath();
-    ctx.arc(dotX, dotY, dotR, 0, Math.PI * 2);
-    ctx.fill();
-  }
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx + 3, ry + 3, 0, 0, Math.PI * 2);
+  ctx.fill();
 }
