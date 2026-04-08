@@ -214,6 +214,42 @@ export class AIController {
     };
   }
 
+  /** Serialize internal state for rollback snapshot. */
+  serialize(): { ringBuffer: InputState[]; ringWrite: number; ringRead: number; stuckTimer: number; lastX: number; lastY: number; jumpCooldown: number; lastScore: number; tauntTimer: number; searchTimer: number; wasIdle: boolean; frameCounter: number } {
+    return {
+      ringBuffer: this.ringBuffer.map(i => ({ ...i })),
+      ringWrite: this.ringWrite,
+      ringRead: this.ringRead,
+      stuckTimer: this.stuckTimer,
+      lastX: this.lastX,
+      lastY: this.lastY,
+      jumpCooldown: this.jumpCooldown,
+      lastScore: this.lastScore,
+      tauntTimer: this.tauntTimer,
+      searchTimer: this.searchTimer,
+      wasIdle: this.wasIdle,
+      frameCounter: this.frameCounter,
+    };
+  }
+
+  /** Restore internal state from rollback snapshot. */
+  restore(snap: { ringBuffer: InputState[]; ringWrite: number; ringRead: number; stuckTimer: number; lastX: number; lastY: number; jumpCooldown: number; lastScore: number; tauntTimer: number; searchTimer: number; wasIdle: boolean; frameCounter: number }): void {
+    for (let i = 0; i < snap.ringBuffer.length && i < this.ringBuffer.length; i++) {
+      this.ringBuffer[i] = { ...snap.ringBuffer[i] };
+    }
+    this.ringWrite = snap.ringWrite;
+    this.ringRead = snap.ringRead;
+    this.stuckTimer = snap.stuckTimer;
+    this.lastX = snap.lastX;
+    this.lastY = snap.lastY;
+    this.jumpCooldown = snap.jumpCooldown;
+    this.lastScore = snap.lastScore;
+    this.tauntTimer = snap.tauntTimer;
+    this.searchTimer = snap.searchTimer;
+    this.wasIdle = snap.wasIdle;
+    this.frameCounter = snap.frameCounter;
+  }
+
   private randomInput(): InputState {
     return {
       left: this.rnd() > 0.5,

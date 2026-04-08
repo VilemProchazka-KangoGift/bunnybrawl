@@ -5,6 +5,8 @@ import type {
 } from './types';
 import { isBotSlot } from './types';
 import type { SeededRNG } from './net/prng';
+import { takeSnapshot as _takeSnapshot, restoreSnapshot as _restoreSnapshot } from './net/serialize';
+import type { GameSnapshot } from './net/serialize';
 import type { ThemeConfig } from './themes/types';
 import { getTheme } from './themes/registry';
 import { mirrorArena } from './arena';
@@ -382,6 +384,16 @@ export class GameLoop {
   /** Get AI controllers map (for snapshots). */
   getAIControllers(): Map<string, AIController> {
     return this.aiControllers;
+  }
+
+  /** Capture a snapshot of all gameplay state for rollback. */
+  takeSnapshot(frame: number): GameSnapshot {
+    return _takeSnapshot(frame, this.state, this.rng, this.aiControllers);
+  }
+
+  /** Restore gameplay state from a snapshot for rollback. */
+  restoreSnapshot(snap: GameSnapshot): void {
+    _restoreSnapshot(snap, this.state, this.rng, this.aiControllers);
   }
 
   getState(): MatchState { return this.state; }
