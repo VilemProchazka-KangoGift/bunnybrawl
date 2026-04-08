@@ -195,7 +195,7 @@ class AudioManager {
     }));
 
     // --- New SFX ---
-    this.sounds.set('land', new Howl({ src: [generateLandSound()], volume: 1.0 }));
+    this.sounds.set('land', new Howl({ src: [generateLandSound()], volume: 0.5 }));
     this.sounds.set('headbonk', new Howl({ src: [generateHeadbonkSound()], volume: 1.0 }));
     this.sounds.set('bump', new Howl({ src: [generateBumpSound()], volume: 0.8 }));
     this.sounds.set('spring', new Howl({ src: [generateSpringSound()], volume: 1.0 }));
