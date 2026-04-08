@@ -31,6 +31,7 @@ export function VictoryScreen() {
   const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
 
   const charName = (name: string) => t(`char_${name}`, name);
+  const charEmoji = (name: string) => CHAR_EMOJI[name] ?? '';
   const botSuffix = (id: PlayerSlot) => isBotSlot(id) ? ' (BOT)' : '';
 
   const handleRematch = () => { setScreen('match'); };
@@ -120,7 +121,7 @@ export function VictoryScreen() {
   };
 
   const mvpHighlights = useMemo(() => {
-    const highlights: Array<{ label: string; icon: string; playerName: string; playerColor: string; value: string }> = [];
+    const highlights: Array<{ label: string; icon: string; rawName: string; playerName: string; playerColor: string; value: string }> = [];
     if (!sortedPlayers.length) return highlights;
 
     let bestAirborne = { name: '', color: '', val: 0 };
@@ -135,9 +136,9 @@ export function VictoryScreen() {
       if (ps.bestStreak > bestStreak.val) bestStreak = { name: player.character.name, color: player.character.color, val: ps.bestStreak };
     }
 
-    if (bestAirborne.val > 0) highlights.push({ label: t('mvp_most_airborne'), icon: '\u2708', playerName: charName(bestAirborne.name), playerColor: bestAirborne.color, value: bestAirborne.val.toFixed(1) + 's' });
-    if (bestCarrots.val > 0) highlights.push({ label: t('mvp_carrot_king'), icon: '\uD83E\uDD55', playerName: charName(bestCarrots.name), playerColor: bestCarrots.color, value: String(bestCarrots.val) });
-    if (bestStreak.val > 0) highlights.push({ label: t('mvp_serial_killer'), icon: '\uD83D\uDD25', playerName: charName(bestStreak.name), playerColor: bestStreak.color, value: String(bestStreak.val) + ' ' + t('mvp_streak') });
+    if (bestAirborne.val > 0) highlights.push({ label: t('mvp_most_airborne'), icon: '\u2708', rawName: bestAirborne.name, playerName: charName(bestAirborne.name), playerColor: bestAirborne.color, value: bestAirborne.val.toFixed(1) + 's' });
+    if (bestCarrots.val > 0) highlights.push({ label: t('mvp_carrot_king'), icon: '\uD83E\uDD55', rawName: bestCarrots.name, playerName: charName(bestCarrots.name), playerColor: bestCarrots.color, value: String(bestCarrots.val) });
+    if (bestStreak.val > 0) highlights.push({ label: t('mvp_serial_killer'), icon: '\uD83D\uDD25', rawName: bestStreak.name, playerName: charName(bestStreak.name), playerColor: bestStreak.color, value: String(bestStreak.val) + ' ' + t('mvp_streak') });
 
     return highlights;
   }, [sortedPlayers, lastMatchState, t]);
@@ -167,6 +168,7 @@ export function VictoryScreen() {
                 {sortedPlayers.map((player, idx) => (
                   <div key={player.id} className={`score-row ${idx === 0 ? 'first' : ''}`}>
                     <span className="rank">#{idx + 1}</span>
+                    <span className="row-emoji">{charEmoji(player.character.name)}</span>
                     <span className="player-name" style={{ color: player.character.color }}>
                       {charName(player.character.name)}{botSuffix(player.id)}
                     </span>
@@ -198,7 +200,7 @@ export function VictoryScreen() {
                       return (
                         <div key={player.id} className="stats-row">
                           <span className="stats-cell stats-name-cell" style={{ color: player.character.color }}>
-                            {charName(player.character.name)}
+                            <span className="row-emoji">{charEmoji(player.character.name)}</span>{charName(player.character.name)}
                           </span>
                           <span className="stats-cell">{ps?.bestStreak ?? 0}</span>
                           <span className="stats-cell">{ps ? ps.timeAirborne.toFixed(1) + 's' : '0.0s'}</span>
@@ -218,7 +220,7 @@ export function VictoryScreen() {
                     <div key={idx} className="mvp-row">
                       <span className="mvp-icon">{hl.icon}</span>
                       <span className="mvp-label">{hl.label}</span>
-                      <span className="mvp-player" style={{ color: hl.playerColor }}>{hl.playerName}</span>
+                      <span className="mvp-player" style={{ color: hl.playerColor }}><span className="row-emoji">{charEmoji(hl.rawName)}</span>{hl.playerName}</span>
                       <span className="mvp-value">{hl.value}</span>
                     </div>
                   ))}
