@@ -100,13 +100,10 @@ export function OnlineLobby() {
       transport.joinRoom(joinCode).catch(() => {});
     }
 
-    return () => {
-      if (!transitioningToLobby.current) {
-        transport.destroy();
-        transportRef.current = null;
-        _activeTransport = null;
-      }
-    };
+    // No cleanup here — transport lifecycle managed by handleBack/goToLobby.
+    // React Strict Mode double-invokes effects; destroying transport here
+    // kills the WebSocket before PeerJS can connect.
+    return () => {};
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
