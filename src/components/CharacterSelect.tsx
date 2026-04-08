@@ -160,7 +160,6 @@ export function CharacterSelect() {
 
   useEffect(() => {
     audio.playMenuMusic();
-    return () => { audio.stopMenuMusic(); };
   }, []);
 
   useEffect(() => {

@@ -186,7 +186,6 @@ export function MainMenu() {
   useEffect(() => {
     audio.init();
     audio.playMenuMusic();
-    return () => { audio.stopMenuMusic(); };
   }, []);
 
   useEffect(() => {

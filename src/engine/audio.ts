@@ -190,6 +190,13 @@ class AudioManager {
       loop: true,
     }));
 
+    // Preload menu music so it's ready instantly
+    this.menuMusicHowl = new Howl({
+      src: [import.meta.env.BASE_URL + 'audio/carrot-royale-main.mp3'],
+      volume: 0.35,
+      loop: true,
+    });
+
     this.initialized = true;
   }
 
@@ -208,6 +215,7 @@ class AudioManager {
       sound.stop();
     }
     this.stopMusic();
+    this.stopMenuMusic();
   }
 
   toggleMute(): boolean {
@@ -235,16 +243,8 @@ class AudioManager {
   playMenuMusic(): void {
     if (this.muted) return;
     if (!this.initialized) this.init();
-    // Already playing
     if (this.menuMusicHowl && this.menuMusicHowl.playing()) return;
-    if (!this.menuMusicHowl) {
-      this.menuMusicHowl = new Howl({
-        src: [import.meta.env.BASE_URL + 'audio/carrot-royale-main.mp3'],
-        volume: 0.35,
-        loop: true,
-      });
-    }
-    this.menuMusicHowl.play();
+    this.menuMusicHowl?.play();
   }
 
   stopMenuMusic(): void {
@@ -255,6 +255,7 @@ class AudioManager {
 
   /** Start theme-specific music. Lazily generates and caches per theme. */
   playMusic(themeId: string): void {
+    this.stopMenuMusic();
     if (this.muted) return;
     if (!this.initialized) this.init();
     // Already playing this theme
