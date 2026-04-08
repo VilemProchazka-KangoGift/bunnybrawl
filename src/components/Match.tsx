@@ -2,6 +2,8 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../store/gameStore';
 import { GameLoop } from '../engine/gameLoop';
+import { NetMatch } from '../engine/net/netMatch';
+import { getActiveTransport } from './OnlineLobby';
 import { getArena, listArenas } from '../engine/arena';
 import { listThemes } from '../engine/themes/registry';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
@@ -28,9 +30,11 @@ export function Match() {
   const fgCanvasRef = useRef<HTMLCanvasElement>(null);
   const gameLoopRef = useRef<GameLoop | null>(null);
   const victoryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { activePlayers, matchSettings, setMatchResult, setScreen, setActivePlayers, setMatchSettings } = useGameStore();
+  const { activePlayers, matchSettings, setMatchResult, setScreen, setActivePlayers, setMatchSettings, online, resetOnline } = useGameStore();
   const [paused, setPaused] = useState(false);
   const [showLevelSelect, setShowLevelSelect] = useState(false);
+  const [disconnected, setDisconnected] = useState(false);
+  const netMatchRef = useRef<NetMatch | null>(null);
 
   // Resolve 'random' to a concrete arena; re-resolves each time Match mounts (rematch)
   const [currentArenaId, setCurrentArenaId] = useState(() =>
@@ -38,17 +42,28 @@ export function Match() {
   );
 
   const handleResume = useCallback(() => {
-    gameLoopRef.current?.resume();
+    if (netMatchRef.current) {
+      netMatchRef.current.resume();
+    } else {
+      gameLoopRef.current?.resume();
+    }
     setPaused(false);
     setShowLevelSelect(false);
   }, []);
 
   const handleQuit = useCallback(() => {
+    if (netMatchRef.current) {
+      netMatchRef.current.stop();
+      netMatchRef.current = null;
+    }
     gameLoopRef.current?.stop();
     gameLoopRef.current = null;
+    const transport = getActiveTransport();
+    if (transport) transport.destroy();
+    resetOnline();
     setActivePlayers([]);
     setScreen('menu');
-  }, [setActivePlayers, setScreen]);
+  }, [setActivePlayers, setScreen, resetOnline]);
 
   const handleChangeArena = useCallback((newArenaId: string) => {
     lastResolvedArenaId = newArenaId;
@@ -72,7 +87,11 @@ export function Match() {
         if (loop.isPaused()) {
           handleResume();
         } else {
-          loop.pause();
+          if (netMatchRef.current) {
+            netMatchRef.current.pause();
+          } else {
+            loop.pause();
+          }
           setPaused(true);
         }
       }
@@ -98,21 +117,70 @@ export function Match() {
     if (!bgCanvas || !fgCanvas) return;
 
     const arena = getArena(currentArenaId);
+    const onMatchEnd = (winner: import('../engine/types').PlayerSlot | null, state: import('../engine/types').MatchState) => {
+      victoryTimeoutRef.current = setTimeout(() => {
+        setMatchResult(winner, state);
+      }, 1500);
+    };
+
+    if (online.isOnline) {
+      // Network mode
+      const transport = getActiveTransport();
+      if (!transport) {
+        console.error('No active transport for online match');
+        setScreen('menu');
+        return;
+      }
+
+      const netMatch = new NetMatch({
+        bgCanvas,
+        fgCanvas,
+        arena,
+        settings: matchSettings,
+        activePlayers,
+        onMatchEnd,
+        transport,
+        localSlot: online.isHost ? 'P1' : 'P2',
+        remoteSlot: online.isHost ? 'P2' : 'P1',
+        rngSeed: online.rngSeed,
+        onDesync: () => {
+          console.warn('Desync detected!');
+        },
+        onStall: (stalled) => {
+          if (stalled) console.log('Network stall — waiting for opponent...');
+        },
+        onDisconnect: () => {
+          setDisconnected(true);
+        },
+      });
+
+      netMatchRef.current = netMatch;
+      gameLoopRef.current = netMatch.getGameLoop();
+      (window as any).__gameLoop = netMatch.getGameLoop();
+      netMatch.start();
+
+      return () => {
+        netMatch.stop();
+        netMatchRef.current = null;
+        gameLoopRef.current = null;
+        if (victoryTimeoutRef.current) {
+          clearTimeout(victoryTimeoutRef.current);
+          victoryTimeoutRef.current = null;
+        }
+      };
+    }
+
+    // Local mode (unchanged)
     const loop = new GameLoop(
       bgCanvas,
       fgCanvas,
       arena,
       matchSettings,
       activePlayers,
-      (winner, state) => {
-        victoryTimeoutRef.current = setTimeout(() => {
-          setMatchResult(winner, state);
-        }, 1500);
-      },
+      onMatchEnd,
     );
 
     gameLoopRef.current = loop;
-    // Expose game state for E2E testing
     (window as any).__gameLoop = loop;
     loop.start();
 
@@ -124,7 +192,8 @@ export function Match() {
         victoryTimeoutRef.current = null;
       }
     };
-  }, [currentArenaId, activePlayers, matchSettings, setMatchResult]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentArenaId, activePlayers, matchSettings, setMatchResult, online.isOnline]);
 
   const arenas = listArenas();
   const themes = listThemes();
@@ -187,6 +256,16 @@ export function Match() {
                   <p className="pause-hint">{t('pause_hint')}</p>
                 </>
               )}
+            </div>
+          </div>
+        )}
+        {disconnected && (
+          <div className="pause-overlay">
+            <div className="pause-box">
+              <h2 className="pause-title">{t('opponent_disconnected', 'Opponent Disconnected')}</h2>
+              <button className="btn-base pause-btn quit-btn" onClick={handleQuit}>
+                {t('return_menu', 'Return to Menu')}
+              </button>
             </div>
           </div>
         )}

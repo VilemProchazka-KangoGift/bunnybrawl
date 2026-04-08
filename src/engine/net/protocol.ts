@@ -179,6 +179,10 @@ export interface ReadyMessage {
   type: 0x03;
 }
 
+export interface DisconnectMessage {
+  type: 0x06;
+}
+
 export interface RematchRequestMessage {
   type: 0x0A;
 }
@@ -191,6 +195,7 @@ export type ReliableMessage =
   | StartMatchMessage
   | DesyncCheckMessage
   | PauseMessage
+  | DisconnectMessage
   | MatchResultMessage
   | RematchRequestMessage;
 
