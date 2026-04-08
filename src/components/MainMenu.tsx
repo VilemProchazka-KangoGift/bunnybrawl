@@ -214,6 +214,9 @@ export function MainMenu() {
             <button className="btn-base menu-btn play-btn" onClick={handlePlay} data-testid="play-button">
               {t('play')}
             </button>
+            <button className="btn-base menu-btn online-btn" onClick={() => { audio.init(); audio.play('select'); setScreen('onlineLobby'); }}>
+              {t('online', 'Online')}
+            </button>
           </div>
 
           <div className="arena-selector" data-testid="arena-selector">

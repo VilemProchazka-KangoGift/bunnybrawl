@@ -207,7 +207,7 @@ export interface ConfettiParticle {
   flutter: number;
 }
 
-export type GameScreen = 'menu' | 'charSelect' | 'match' | 'victory';
+export type GameScreen = 'menu' | 'charSelect' | 'match' | 'victory' | 'onlineLobby';
 
 export type BotDifficulty = 'easy' | 'medium' | 'hard' | 'impossible';
 

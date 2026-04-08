@@ -1,5 +1,16 @@
 import { create } from 'zustand';
 import type { GameScreen, MatchSettings, PlayerSlot, MatchState, GameMods } from '../engine/types';
+import type { ConnectionStatus } from '../engine/net/transport';
+
+interface OnlineState {
+  isOnline: boolean;
+  isHost: boolean;
+  roomCode: string | null;
+  connectionStatus: ConnectionStatus;
+  connectionError: string | null;
+  remoteCharacterName: string | null;
+  rngSeed: number;
+}
 
 interface GameStore {
   screen: GameScreen;
@@ -7,11 +18,14 @@ interface GameStore {
   activePlayers: PlayerSlot[];
   lastMatchState: MatchState | null;
   winner: PlayerSlot | null;
+  online: OnlineState;
 
   setScreen: (screen: GameScreen) => void;
   setMatchSettings: (settings: Partial<MatchSettings>) => void;
   setActivePlayers: (players: PlayerSlot[]) => void;
   setMatchResult: (winner: PlayerSlot | null, state: MatchState) => void;
+  setOnline: (state: Partial<OnlineState>) => void;
+  resetOnline: () => void;
   reset: () => void;
 }
 
@@ -41,12 +55,23 @@ const defaultSettings: MatchSettings = {
   }, { extremeGore: false, carrotChase: false, giantPlayers: false, turbo: false, superBounce: false, mirrorArena: false, underwaterGravity: false }),
 };
 
+const defaultOnline: OnlineState = {
+  isOnline: false,
+  isHost: false,
+  roomCode: null,
+  connectionStatus: 'idle',
+  connectionError: null,
+  remoteCharacterName: null,
+  rngSeed: 0,
+};
+
 export const useGameStore = create<GameStore>((set) => ({
   screen: 'menu',
   matchSettings: { ...defaultSettings },
   activePlayers: [],
   lastMatchState: null,
   winner: null,
+  online: { ...defaultOnline },
 
   setScreen: (screen) => set({ screen }),
 
@@ -66,6 +91,12 @@ export const useGameStore = create<GameStore>((set) => ({
   setMatchResult: (winner, matchState) =>
     set({ winner, lastMatchState: matchState, screen: 'victory' }),
 
+  setOnline: (state) =>
+    set((prev) => ({ online: { ...prev.online, ...state } })),
+
+  resetOnline: () =>
+    set({ online: { ...defaultOnline } }),
+
   reset: () =>
     set({
       screen: 'menu',
@@ -73,5 +104,6 @@ export const useGameStore = create<GameStore>((set) => ({
       activePlayers: [],
       lastMatchState: null,
       winner: null,
+      online: { ...defaultOnline },
     }),
 }));

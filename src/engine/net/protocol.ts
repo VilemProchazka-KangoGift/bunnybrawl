@@ -175,6 +175,10 @@ export interface MatchResultMessage {
   winner: string | null;
 }
 
+export interface ReadyMessage {
+  type: 0x03;
+}
+
 export interface RematchRequestMessage {
   type: 0x0A;
 }
@@ -182,6 +186,7 @@ export interface RematchRequestMessage {
 export type ReliableMessage =
   | HandshakeMessage
   | SettingsSyncMessage
+  | ReadyMessage
   | CharacterSelectMessage
   | StartMatchMessage
   | DesyncCheckMessage

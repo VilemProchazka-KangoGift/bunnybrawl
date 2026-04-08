@@ -4,6 +4,7 @@ import { MainMenu } from './components/MainMenu';
 import { CharacterSelect } from './components/CharacterSelect';
 import { Match } from './components/Match';
 import { VictoryScreen } from './components/VictoryScreen';
+import { OnlineLobby } from './components/OnlineLobby';
 import { GameScaler } from './components/GameScaler';
 import { assignBotCharacters, registerBuiltinCharacters } from './engine/characters';
 import type { PlayerSlot, BotSlot, CharacterSlot } from './engine/types';
@@ -94,6 +95,7 @@ function App() {
     <GameScaler>
       {screen === 'menu' && ready && <MainMenu />}
       {screen === 'charSelect' && <CharacterSelect />}
+      {screen === 'onlineLobby' && <OnlineLobby />}
       {screen === 'match' && <Match />}
       {screen === 'victory' && <VictoryScreen />}
     </GameScaler>
