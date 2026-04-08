@@ -95,7 +95,7 @@
   "help_controls_p3": "Player 3: I J K L",
   "help_controls_p4": "Player 4: T F G H",
   "help_controls_p5": "Player 5: Numpad 8 4 5 6",
-  "help_controls_note": "Up = Jump, Down = Drop down from platform, Left/Right = Move",
+  "help_controls_note": "Up = Jump, Down = Crouch / Super Jump, Left/Right = Move",
   "help_lobby_title": "Lobby",
   "help_lobby": "Walk into a \"START\" zone to enter the match. Stomp another player to swap characters. Game starts when all joined players are ready.",
   "help_options_title": "Options",
