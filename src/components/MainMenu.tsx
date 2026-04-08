@@ -688,16 +688,13 @@ export function MainMenu() {
                       <div className="online-ready-status"><span className="online-ready-badge">{t('ready', 'READY')}</span></div>
                     )}
 
-                    {/* Host: start button */}
-                    {online.isHost && onlineRemoteReady && (
+                    {/* Host: always show start button once connected */}
+                    {online.isHost && (
                       <button className="btn-base menu-btn play-btn" onClick={() => {
                         audio.play('select');
                         onlineTransportRef.current?.sendReliable({ type: MsgType.START_MATCH } as ReliableMessage);
                         onlineStartMatch();
                       }}>{t('start_game', 'Start Game!')}</button>
-                    )}
-                    {online.isHost && !onlineRemoteReady && (
-                      <div className="online-waiting">{t('waiting_ready', 'Waiting for opponent to ready up...')}</div>
                     )}
 
                     <button className="btn-base mods-close-btn" onClick={() => { onlineCleanup(); }}>{t('back', 'Back')}</button>
