@@ -61,7 +61,11 @@ function usePreflight() {
       ? Promise.resolve()
       : new Promise<void>((r) => { img.onload = () => r(); img.onerror = () => r(); });
 
+    let dismissed = false;
     const dismiss = () => {
+      if (dismissed) return;
+      dismissed = true;
+      clearTimeout(fallback);
       setReady(true);
       const el = document.getElementById('loading-screen');
       if (el) {
@@ -75,7 +79,7 @@ function usePreflight() {
     Promise.all([imgLoaded, document.fonts.ready]).then(dismiss);
     // Hard cap so users never stare at a loader forever
     const fallback = setTimeout(dismiss, 4000);
-    return () => clearTimeout(fallback);
+    return () => { dismissed = true; clearTimeout(fallback); };
   }, []);
 
   return ready;

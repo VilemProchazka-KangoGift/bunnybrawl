@@ -348,11 +348,9 @@ export function MainMenu() {
                   <div className="help-section">
                     <h3 className="help-section-title">{t('help_controls_title')}</h3>
                     <div className="help-controls-grid">
-                      <span className="help-control-line">{t('help_controls_p1')}</span>
-                      <span className="help-control-line">{t('help_controls_p2')}</span>
-                      <span className="help-control-line">{t('help_controls_p3')}</span>
-                      <span className="help-control-line">{t('help_controls_p4')}</span>
-                      <span className="help-control-line">{t('help_controls_p5')}</span>
+                      {[1, 2, 3, 4, 5].map(n => (
+                        <span key={n} className="help-control-line">{t(`help_controls_p${n}`)}</span>
+                      ))}
                     </div>
                     <p className="help-text help-controls-note">{t('help_controls_note')}</p>
                   </div>

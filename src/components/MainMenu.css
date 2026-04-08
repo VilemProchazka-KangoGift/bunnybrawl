@@ -387,13 +387,17 @@
   -webkit-backdrop-filter: blur(4px);
 }
 
-.mods-modal {
-  background: rgba(20, 10, 40, 0.9);
+.mods-modal,
+.help-modal {
+  background: rgba(20, 10, 40, 0.92);
   border: 2px solid rgba(255, 255, 255, 0.15);
   border-radius: 20px;
   padding: 32px 44px;
-  text-align: center;
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.mods-modal {
+  text-align: center;
   min-width: 340px;
 }
 
@@ -516,12 +520,7 @@
 }
 
 .help-modal {
-  background: rgba(20, 10, 40, 0.92);
-  border: 2px solid rgba(255, 255, 255, 0.15);
-  border-radius: 20px;
-  padding: 28px 40px;
   text-align: left;
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   max-width: 560px;
   max-height: 620px;
   overflow-y: auto;
