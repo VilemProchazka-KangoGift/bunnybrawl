@@ -166,6 +166,7 @@ export function MainMenu() {
 
   const [modsOpen, setModsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [onlineOpen, setOnlineOpen] = useState(false);
 
   const handlePlay = useCallback(() => {
     audio.init();
@@ -217,9 +218,11 @@ export function MainMenu() {
 
           <div className="menu-buttons">
             <button className="btn-base menu-btn play-btn" onClick={handlePlay} data-testid="play-button">
-              {t('play')}
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: 'middle', marginRight: 8 }}><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+              {t('play_local', 'Play Local')}
             </button>
-            <button className="btn-base menu-btn online-btn" onClick={() => { audio.init(); audio.play('select'); setScreen('onlineLobby'); }}>
+            <button className="btn-base menu-btn online-btn" onClick={() => { audio.init(); audio.play('select'); setOnlineOpen(true); }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: 'middle', marginRight: 8 }}><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
               {t('online', 'Online')}
             </button>
           </div>
@@ -447,6 +450,26 @@ export function MainMenu() {
                 ))}
                 <button className="btn-base mods-close-btn" onClick={() => setModsOpen(false)}>
                   {t('mods_close')}
+                </button>
+              </div>
+            </div>
+          )}
+          {onlineOpen && (
+            <div className="mods-overlay" onClick={() => setOnlineOpen(false)}>
+              <div className="mods-modal online-modal" onClick={e => e.stopPropagation()}>
+                <h2 className="mods-title">{t('online_play', 'Online Play')}</h2>
+                <p className="online-info">{t('online_bots_info', { count: matchSettings.botCount })}</p>
+                <div className="online-modal-actions">
+                  <button className="btn-base menu-btn online-create-btn" onClick={() => { setOnlineOpen(false); audio.play('select'); setScreen('onlineLobby'); useGameStore.getState().setOnline({ isHost: true }); }}>
+                    {t('create_room', 'Create Room')}
+                  </button>
+                  <span className="online-or">{t('or', 'or')}</span>
+                  <button className="btn-base menu-btn" onClick={() => { setOnlineOpen(false); audio.play('select'); setScreen('onlineLobby'); useGameStore.getState().setOnline({ isHost: false }); }}>
+                    {t('join_room_full', 'Join Room')}
+                  </button>
+                </div>
+                <button className="btn-base mods-close-btn" onClick={() => setOnlineOpen(false)}>
+                  {t('help_close')}
                 </button>
               </div>
             </div>

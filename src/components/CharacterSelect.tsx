@@ -822,11 +822,13 @@ function drawLobby(
   ctx.roundRect(9, 7, CANVAS_WIDTH - 18, barH - 2, 9);
   ctx.stroke();
 
-  const slotWidth = (CANVAS_WIDTH - 40) / SLOTS.length;
-  for (let i = 0; i < SLOTS.length; i++) {
-    const slot = SLOTS[i];
+  const displaySlots = players.length < SLOTS.length ? players.map(p => p.slot as CharacterSlot) : SLOTS;
+  const slotWidth = (CANVAS_WIDTH - 40) / displaySlots.length;
+  for (let i = 0; i < displaySlots.length; i++) {
+    const slot = displaySlots[i];
     const bindings = KEY_BINDINGS[slot];
     const player = players[i];
+    if (!player) continue;
     const sx = 20 + i * slotWidth + slotWidth / 2;
     const emojiX = sx - slotWidth * 0.38;
     const textX = emojiX + 22;
@@ -847,8 +849,13 @@ function drawLobby(
     // Keys
     ctx.fillStyle = 'rgba(255,255,255,0.6)';
     ctx.font = "bold 13px 'Nunito', monospace";
-    const fmtKey = (k: string) => k === 'ArrowLeft' ? '\u2190' : k === 'ArrowRight' ? '\u2192' : k === 'ArrowUp' ? '\u2191' : k === 'ArrowDown' ? '\u2193' : k;
-    ctx.fillText(`${fmtKey(bindings.left)} ${fmtKey(bindings.right)} ${fmtKey(bindings.jump)} ${fmtKey(bindings.down)}`, textX, 42);
+    if (players.length === 1) {
+      // Online mode: any keys work
+      ctx.fillText(i18n.t('any_keys', 'Any keys'), textX, 42);
+    } else {
+      const fmtKey = (k: string) => k === 'ArrowLeft' ? '\u2190' : k === 'ArrowRight' ? '\u2192' : k === 'ArrowUp' ? '\u2191' : k === 'ArrowDown' ? '\u2193' : k;
+      ctx.fillText(`${fmtKey(bindings.left)} ${fmtKey(bindings.right)} ${fmtKey(bindings.jump)} ${fmtKey(bindings.down)}`, textX, 42);
+    }
   }
 
   // ---- Bottom-left: swap instruction ----

@@ -147,7 +147,7 @@ export function OnlineLobby() {
               className="online-code-input"
               type="text"
               maxLength={4}
-              placeholder="CODE"
+              placeholder={t('code_placeholder', 'Code')}
               value={joinCode}
               onChange={(e) => setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z2-9]/g, ''))}
               onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') handleJoin(); }}

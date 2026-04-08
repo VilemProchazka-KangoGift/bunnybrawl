@@ -80,6 +80,9 @@
   color: #FFF;
   text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5), 0 0 6px rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(4px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .menu-btn:hover {
@@ -111,6 +114,31 @@
 .online-btn:hover {
   box-shadow: 0 4px 24px rgba(74, 144, 217, 0.5), 0 0 20px rgba(74, 144, 217, 0.3);
   border-color: #8DC8F0;
+}
+
+.online-modal {
+  max-width: 420px;
+}
+
+.online-info {
+  font-size: 16px;
+  opacity: 0.8;
+  margin: 4px 0 16px;
+  text-align: center;
+}
+
+.online-modal-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.online-or {
+  font-size: 16px;
+  opacity: 0.5;
+  font-style: italic;
 }
 
 .arena-selector {
