@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useGameStore } from './store/gameStore';
 import { MainMenu } from './components/MainMenu';
 import { CharacterSelect } from './components/CharacterSelect';
@@ -8,6 +8,7 @@ import { GameScaler } from './components/GameScaler';
 import { assignBotCharacters, registerBuiltinCharacters } from './engine/characters';
 import type { PlayerSlot, BotSlot, CharacterSlot } from './engine/types';
 import { ALL_BOT_SLOTS } from './engine/types';
+import logoUrl from '/logo.png?url';
 
 // Register all built-in characters into the pack registry at module load time
 registerBuiltinCharacters();
@@ -48,13 +49,46 @@ function useDevAutoStart() {
   }, [setScreen, setMatchSettings, setActivePlayers]);
 }
 
+/** Wait for logo image + fonts, then dismiss the HTML loading screen. */
+function usePreflight() {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    const img = new Image();
+    img.src = logoUrl;
+
+    const imgLoaded = img.complete
+      ? Promise.resolve()
+      : new Promise<void>((r) => { img.onload = () => r(); img.onerror = () => r(); });
+
+    const dismiss = () => {
+      setReady(true);
+      const el = document.getElementById('loading-screen');
+      if (el) {
+        el.style.opacity = '0';
+        const remove = () => { try { el.remove(); } catch { /* already gone */ } };
+        el.addEventListener('transitionend', remove, { once: true });
+        setTimeout(remove, 700);
+      }
+    };
+
+    Promise.all([imgLoaded, document.fonts.ready]).then(dismiss);
+    // Hard cap so users never stare at a loader forever
+    const fallback = setTimeout(dismiss, 4000);
+    return () => clearTimeout(fallback);
+  }, []);
+
+  return ready;
+}
+
 function App() {
   const screen = useGameStore((s) => s.screen);
+  const ready = usePreflight();
   useDevAutoStart();
 
   return (
     <GameScaler>
-      {screen === 'menu' && <MainMenu />}
+      {screen === 'menu' && ready && <MainMenu />}
       {screen === 'charSelect' && <CharacterSelect />}
       {screen === 'match' && <Match />}
       {screen === 'victory' && <VictoryScreen />}

@@ -3,10 +3,36 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preload" as="image" href="/logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Carrot Royale</title>
+    <style>
+      #loading-screen {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100vw; height: 100vh;
+        background: #111;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        transition: opacity 0.6s ease;
+      }
+      #loading-screen img {
+        width: 340px;
+        filter: drop-shadow(0 4px 12px rgba(0,0,0,0.4));
+        animation: loading-pulse 3s ease-in-out infinite;
+      }
+      @keyframes loading-pulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.04); }
+      }
+    </style>
   </head>
   <body>
+    <div id="loading-screen">
+      <img src="/logo.png" alt="Carrot Royale" />
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
