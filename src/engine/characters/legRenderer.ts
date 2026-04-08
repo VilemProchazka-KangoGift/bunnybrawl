@@ -254,8 +254,9 @@ export function drawLegs(
   for (let side = -1; side <= 1; side += 2) {
     const sideSign = side; // -1 for left, +1 for right
 
-    // Hip position
-    const hipX = cx + sideSign * 3 - legW / 2
+    // Hip position — widen gap for thick legs so they don't blend together
+    const halfGap = Math.max(3, legW / 2 + 1);
+    const hipX = cx + sideSign * halfGap - legW / 2
       + sideSign * (baseSpread + airSpread)
       + sideSign * horizAnim;
 
