@@ -138,6 +138,7 @@ export function respawnPlayer(player: Player, spawnPoints: SpawnPoint[], allPlay
   player.fatTimer = 0;
   player.slowTimer = 0;
   player.burnTimer = 0;
+  player.hitstopTimer = 0;
 }
 
 function pickSafeSpawn(player: Player, spawnPoints: SpawnPoint[], allPlayers?: Player[]): SpawnPoint {

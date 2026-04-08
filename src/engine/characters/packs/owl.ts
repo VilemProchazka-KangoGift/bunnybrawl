@@ -1,11 +1,9 @@
 import type { CharacterPack } from '../types';
+import { fillBodyGradient } from '../../spriteShading';
 
 const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, state, animFrame, _isIdleAnim, _idleT, colors) => {
   const isAirborne = state === 'airborne';
-  ctx.fillStyle = colors.color;
-  ctx.beginPath();
-  ctx.ellipse(cx, yOff + h * 0.5, w * 0.4, h * 0.42, 0, 0, Math.PI * 2);
-  ctx.fill();
+  fillBodyGradient(ctx, { cx, cy: yOff + h * 0.5, rx: w * 0.4, ry: h * 0.42 }, colors);
   // Ear tufts
   ctx.fillStyle = colors.darkColor;
   ctx.beginPath();
@@ -79,5 +77,6 @@ export const owl: CharacterPack = {
   splatShape: 'ring',
   gibs: [{ gibType: 'wing', width: 12, height: 8 }, { gibType: 'wing', width: 12, height: 8 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Owl', cs: 'Sova' },
+  bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.5, rx: w * 0.4, ry: h * 0.42 }),
   drawSprite, drawGib,
 };

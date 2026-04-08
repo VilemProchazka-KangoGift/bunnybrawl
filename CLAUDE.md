@@ -31,6 +31,8 @@ src/
     renderer.ts   # Canvas 2D rendering (two layers: bg + fg) — dispatches to character pack renderers
     audio.ts      # Procedural audio generation (animal sounds + SFX + music)
     gameLoop.ts   # Main game loop with fixed timestep, all game systems (~1700 lines)
+    debugFlags.ts # Dev-only flags from URL params (?debug=nav)
+    navDebugOverlay.ts # Nav graph debug overlay renderer (edges, platform indices, bot targets)
     ai/           # AI opponent system (utility-based decision making + nav graph)
       types.ts      # AIDifficulty, AIPersonality, AwarenessSnapshot, ActionScores
       aiController.ts # Per-bot brain: reaction buffer, stuck detection, taunt, search pause
@@ -179,6 +181,11 @@ Arena mechanics are a combination of **Arena** fields (structural positions) and
 3. Add rendering in `renderer.ts` (draw method + call in `renderFrame`)
 4. Particles use the shared `Particle` type and `this.particles` array in GameLoop
 
+### Adding arena MP3 music (overriding procedural music)
+1. Place the MP3 file in `public/audio/<themeId>.mp3`
+2. Add entry to `AudioManager.MUSIC_MP3` map in `audio.ts` (e.g., `meadow: 'meadow.mp3'`)
+3. That's it — `playMusic(themeId)` checks `MUSIC_MP3` before falling back to `generateThemeMusic()`
+
 ### Adding a new sound
 1. Add name to `SoundName` union type in `audio.ts`
 2. For animal sounds: add entry to `SIMPLE_ANIMAL_SOUNDS` or `SEGMENT_ANIMAL_SOUNDS` table in `init()`. For other sounds: add `this.sounds.set('name', new Howl({...}))` in `init()`
@@ -201,6 +208,9 @@ npm run build     # Production build (tsc + vite)
 # Dev test link — skip lobby, jump straight into a match:
 # http://localhost:5173/bunnybrawl/?arena=rooftops&bots=2&difficulty=hard
 # Params: arena (required), bots (0-5, default 1), difficulty (easy|medium|hard|impossible)
+# Nav debug overlay — visualize AI navigation graph:
+# http://localhost:5173/bunnybrawl/?arena=meadow&bots=2&debug=nav
+# Toggle with ` (backtick) key during gameplay
 npm test          # Unit/integration tests
 npm run test:e2e  # E2E tests (builds first)
 npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/physics changes)
@@ -242,12 +252,16 @@ npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/
 - **CharacterSelect.tsx canvas text needs i18n** — use `i18n.t('char_Name', name)` for character names displayed in the lobby canvas, not the raw English `char.name`.
 - **Entity cleanup uses `swapRemove`** — dead entities (springs, thorns, carrots, particles, etc.) are removed via `swapRemove(arr, i)` from `themes/utils.ts` in reverse-iterate loops. This is O(1) but does not preserve order. Never use `.filter()` for per-frame entity cleanup.
 - **`navData.ts` is generated** — do not hand-edit. Re-run `npx vite-node scripts/generateNavData.ts` after changing any arena platform layout, hazardZones, effectZones, or physics constants (`JUMP_IMPULSE`, `GRAVITY`, `MAX_WALK_SPEED`, `PLAYER_WIDTH`, `PLAYER_HEIGHT`, `CANVAS_WIDTH`). The generator computes jump/drop/walk/geyser edges with danger scores from hazard proximity, then Floyd-Warshall for `nextHop` (fastest) and `safeHop` (hazard-avoidant) paths.
+- **Nav debug overlay** (`?debug=nav`) — renders the precomputed nav graph on the game canvas. Shows color-coded edges (jump=yellow, drop=red, walk=green, geyser=blue, drift=cyan), platform indices, approach point diamonds, danger thickness, and per-bot nav targets (orange dashed lines). Toggle with backtick (`` ` ``) key. Implementation: `debugFlags.ts` (URL param reader + toggle), `navDebugOverlay.ts` (all drawing), renderer calls it after HUD. `AIController.getLastNavTarget()` exposes the bot's current awareness navTarget for visualization. Zero cost when disabled (single boolean check).
 - **Nav graph doesn't model intra-platform obstacles** — the nav graph treats each platform as a single walkable node. Small obstacles sitting on a platform (headstones, stumps, pillars) block horizontal movement but the nav doesn't know. Bots handle these via directed stuck recovery (jump toward navTarget). For impassable barriers (mausoleum), split the ground manually in the arena definition. Do NOT auto-split all platforms — splitting mid-level platforms at small obstacles creates tiny segments that cause jitter (bots oscillate between segments each frame).
 - **Nav graph doesn't know about blocking ceilings** — `canJumpTo()` only checks physics (height, distance), NOT whether a solid platform blocks the path. If a hallway floor is within MAX_JUMP_HEIGHT (~174px) of an upper building block, the generator creates a phantom edge that bots try and fail to use (they hit the ceiling). Fix: ensure the vertical gap between hallway floor and the platform above exceeds 174px (e.g., rooftops uses 180px gaps).
 - **Solid building blocks need noSpawnZones** — when an arena uses thick building blocks (e.g., rooftops' upper/lower blocks around hallways), add `noSpawnZones` covering the building interiors. Without this, carrots spawn inside unreachable solid blocks. Hazards (springs/thorns) are also blocked by these zones.
 - **Fat bots flee like hurt bots** — `evaluateActions` gates both `self.slowed` and `self.fat` into `evaluateHurtFlee`, skipping chase/stomp/platformSeeking. `navTarget` is only consulted when healthy.
 - **Never splice/shift `splatMarks` during `fixedUpdate`** — multiple fixedUpdate ticks can run per frame, and `newSplatsSinceRender` stores indices into `splatMarks`. Splicing shifts indices and corrupts pending render references. Cap the array in the render path only (after indices are consumed).
 - **`GameLoop.stop()` must stop ALL looping sounds** — music, ambient, wind, zero_g, crowd. If a new looping sound is added, add a corresponding `audio.stop()` in `stop()`.
+- **Menu music (`menuMusicHowl`) must NOT be tied to component lifecycle** — MainMenu and CharacterSelect both call `playMenuMusic()` on mount (no-ops if already playing), but neither stops it on unmount. Stopping is handled by `playMusic()` (game start), `stopAll()`, or `toggleMute()`. Tying stop to unmount causes the music to restart (from the beginning) on every menu↔lobby transition.
+- **Menu music Howl is preloaded in `init()`** — avoids a loading delay on first play. The MP3 is fetched from `public/audio/` via `import.meta.env.BASE_URL`.
+- **Arena MP3 overrides via `AudioManager.MUSIC_MP3`** — a static map of `themeId → filename`. `playMusic()` checks this before falling back to `generateThemeMusic()`. MP3 files live in `public/audio/`.
 - **Victory screen uses two-column layout** — left column: scoreboard + match stats, right column: stats table + MVP highlights. This fits within 720px viewport. If adding more sections, keep both columns balanced.
 
 ## Workflow Rules

@@ -1,14 +1,14 @@
 import type { CharacterPack } from '../types';
+import { fillBodyGradientCircle } from '../../spriteShading';
 
 const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, _w, h, _state, _animFrame, _isIdleAnim, _idleT, colors) => {
   // Fluffy body — multiple overlapping circles
-  ctx.fillStyle = colors.color;
-  ctx.beginPath(); ctx.arc(cx - 6, yOff + h * 0.48, 8, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(cx + 6, yOff + h * 0.48, 8, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(cx, yOff + h * 0.42, 9, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(cx - 4, yOff + h * 0.56, 7, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(cx + 4, yOff + h * 0.56, 7, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(cx, yOff + h * 0.35, 7, 0, Math.PI * 2); ctx.fill();
+  fillBodyGradientCircle(ctx, cx - 6, yOff + h * 0.48, 8, colors);
+  fillBodyGradientCircle(ctx, cx + 6, yOff + h * 0.48, 8, colors);
+  fillBodyGradientCircle(ctx, cx, yOff + h * 0.42, 9, colors);
+  fillBodyGradientCircle(ctx, cx - 4, yOff + h * 0.56, 7, colors);
+  fillBodyGradientCircle(ctx, cx + 4, yOff + h * 0.56, 7, colors);
+  fillBodyGradientCircle(ctx, cx, yOff + h * 0.35, 7, colors);
   // Small dark face
   ctx.fillStyle = colors.darkColor;
   ctx.beginPath();
@@ -55,5 +55,7 @@ export const sheep: CharacterPack = {
   splatShape: 'paw',
   gibs: [{ gibType: 'ear', width: 8, height: 8 }, { gibType: 'ear', width: 8, height: 8 }, { gibType: 'wool', width: 14, height: 12 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Sheep', cs: 'Ovce' },
+  bodyEllipse: (cx, yOff, _w, h) => ({ cx, cy: yOff + h * 0.46, rx: 12, ry: h * 0.18 }),
+  furIntensity: 0.3,
   drawSprite, drawGib,
 };

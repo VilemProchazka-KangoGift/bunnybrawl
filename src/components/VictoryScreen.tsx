@@ -1,10 +1,12 @@
-import { useRef, useEffect, useMemo } from 'react';
+import { useRef, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../store/gameStore';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
 import type { PlayerSlot, PlayerStats } from '../engine/types';
 import { isBotSlot } from '../engine/types';
 import { getCharacterEmoji, getCharacterDisplayName } from '../engine/characters';
+import { listArenas } from '../engine/arena';
+import { listThemes } from '../engine/themes/registry';
 import './VictoryScreen.css';
 
 interface FireworkParticle {
@@ -20,8 +22,9 @@ interface FireworkParticle {
 
 export function VictoryScreen() {
   const { t, i18n } = useTranslation();
-  const { winner, lastMatchState, setScreen, setActivePlayers } = useGameStore();
+  const { winner, lastMatchState, setScreen, setActivePlayers, setMatchSettings } = useGameStore();
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [showArenaSelect, setShowArenaSelect] = useState(false);
 
   const winnerChar = winner ? lastMatchState?.players.find(p => p.id === winner)?.character ?? null : null;
   const players = lastMatchState?.players.filter(p => p.active) ?? [];
@@ -32,6 +35,14 @@ export function VictoryScreen() {
 
   const handleRematch = () => { setScreen('match'); };
   const handleMenu = () => { setActivePlayers([]); setScreen('menu'); };
+  const handleChooseArena = (arenaId: string) => {
+    setMatchSettings({ arenaId });
+    setShowArenaSelect(false);
+    setScreen('match');
+  };
+
+  const arenas = listArenas();
+  const themes = listThemes();
 
   // Fireworks
   useEffect(() => {
@@ -87,15 +98,19 @@ export function VictoryScreen() {
     return () => cancelAnimationFrame(rafId);
   }, []);
 
-  // Keyboard: Enter=rematch, Escape=menu
+  // Keyboard: Enter=rematch, Escape=menu (or close arena select)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Enter') handleRematch();
-      else if (e.key === 'Escape') handleMenu();
+      if (e.key === 'Escape') {
+        if (showArenaSelect) setShowArenaSelect(false);
+        else handleMenu();
+      } else if (e.key === 'Enter' && !showArenaSelect) {
+        handleRematch();
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [showArenaSelect]);
 
   const getPlayerStats = (playerId: PlayerSlot): PlayerStats | null => {
     if (!lastMatchState) return null;
@@ -214,8 +229,37 @@ export function VictoryScreen() {
 
           <div className="victory-actions">
             <button className="btn-base rematch-btn" onClick={handleRematch} data-testid="rematch-button">{t('victory_rematch')}</button>
+            <button className="btn-base arena-btn-v" onClick={() => setShowArenaSelect(true)}>{t('victory_choose_arena')}</button>
             <button className="btn-base menu-btn-v" onClick={handleMenu} data-testid="menu-button">{t('victory_menu')}</button>
           </div>
+
+          {showArenaSelect && (
+            <div className="victory-arena-overlay" onClick={() => setShowArenaSelect(false)}>
+              <div className="victory-arena-modal" onClick={e => e.stopPropagation()}>
+                <h2 className="victory-arena-title">{t('victory_choose_arena')}</h2>
+                <div className="victory-arena-grid">
+                  {arenas.map(a => {
+                    const theme = themes.find(th => th.id === a.themeId);
+                    return (
+                      <button
+                        key={a.id}
+                        className="victory-arena-btn"
+                        onClick={() => handleChooseArena(a.id)}
+                      >
+                        <div className="victory-arena-preview" style={{ background: theme?.previewGradient || '#333' }}>
+                          <span className="victory-arena-icon">{theme?.previewIcon || ''}</span>
+                        </div>
+                        <span className="victory-arena-name">{t(theme?.nameKey || a.name)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <button className="btn-base menu-btn-v" onClick={() => setShowArenaSelect(false)}>
+                  {t('pause_back')}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

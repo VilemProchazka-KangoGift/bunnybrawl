@@ -1,4 +1,5 @@
 import type { CharacterPack } from '../types';
+import { fillBodyGradient } from '../../spriteShading';
 
 const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, _state, _animFrame, _isIdleAnim, _idleT, colors) => {
   const bodyCx = cx + 2;
@@ -25,10 +26,7 @@ const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, _state, _a
     ctx.fill();
   }
   // Body
-  ctx.fillStyle = colors.color;
-  ctx.beginPath();
-  ctx.ellipse(bodyCx, bodyCy, bodyRx, bodyRy, 0, 0, Math.PI * 2);
-  ctx.fill();
+  fillBodyGradient(ctx, { cx: bodyCx, cy: bodyCy, rx: bodyRx, ry: bodyRy }, colors);
   // Face/belly
   ctx.fillStyle = colors.lightColor;
   ctx.beginPath();
@@ -93,5 +91,7 @@ export const hedgehog: CharacterPack = {
   splatShape: 'star',
   gibs: [{ gibType: 'spine', width: 6, height: 10 }, { gibType: 'spine', width: 6, height: 10 }, { gibType: 'snout', width: 8, height: 6 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Hedgehog', cs: 'Ježek' },
+  bodyEllipse: (cx, yOff, w, h) => ({ cx: cx + 2, cy: yOff + h * 0.55, rx: w * 0.34, ry: h * 0.32 }),
+  furIntensity: 0,
   drawSprite, drawGib,
 };

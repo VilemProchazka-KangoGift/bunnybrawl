@@ -1,10 +1,8 @@
 import type { CharacterPack } from '../types';
+import { fillBodyGradient } from '../../spriteShading';
 
 const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, _state, _animFrame, _isIdleAnim, _idleT, colors) => {
-  ctx.fillStyle = colors.color;
-  ctx.beginPath();
-  ctx.ellipse(cx, yOff + h * 0.52, w * 0.4, h * 0.4, 0, 0, Math.PI * 2);
-  ctx.fill();
+  fillBodyGradient(ctx, { cx, cy: yOff + h * 0.52, rx: w * 0.4, ry: h * 0.4 }, colors);
   // Large round ears
   ctx.beginPath();
   ctx.arc(cx - 12, yOff + h * 0.35, 6, 0, Math.PI * 2);
@@ -71,5 +69,6 @@ export const monkey: CharacterPack = {
   splatShape: 'star',
   gibs: [{ gibType: 'ear', width: 10, height: 10 }, { gibType: 'ear', width: 10, height: 10 }, { gibType: 'tail', width: 16, height: 8 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Monkey', cs: 'Opice' },
+  bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.52, rx: w * 0.4, ry: h * 0.4 }),
   drawSprite, drawGib,
 };

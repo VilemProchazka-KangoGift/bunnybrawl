@@ -6,10 +6,16 @@ import {
   CANVAS_WIDTH, CANVAS_HEIGHT, CARROT_SIZE, SPRING_SIZE, FAT_SCALE,
   SCREEN_SHAKE_INTENSITY, HAZARD_GROW_TIME,
   SHOCKWAVE_DURATION, SCREEN_FLASH_DURATION, SPRING_TRAIL_DURATION, SCORE_ANIM_DURATION,
+  HITSTOP_DURATION, HITSTOP_ZOOM,
 } from './constants';
 import { drawCloud as drawCloudPrimitive, drawHill, drawPlatformMoss } from './themes/drawPrimitives';
 import { hexToRGB } from './fastMath';
 import { getCharacterEmoji, hasCustomEyes, getSpriteRenderer, getGibRenderer, getCharacterPack, getCharacterDisplayName } from './characters';
+import { drawHighlightSpot, drawFurEdge } from './spriteShading';
+import type { BodyEllipseParams } from './spriteShading';
+import { debugFlags } from './debugFlags';
+import { drawNavDebugOverlay } from './navDebugOverlay';
+import type { BotNavDebugState } from './navDebugOverlay';
 import i18n from '../i18n';
 
 interface Cloud {
@@ -62,6 +68,7 @@ export class Renderer {
   private spriteCache = new Map<string, OffscreenCanvas>();
   private mirrored = false;
   private originalArena: Arena | null = null;  // un-mirrored arena for theme draw calls
+  private _botNavDebugStates: BotNavDebugState[] = [];
 
   constructor(bgCanvas: HTMLCanvasElement, fgCanvas: HTMLCanvasElement, theme: ThemeConfig, mirrored = false) {
     this.bgCtx = bgCanvas.getContext('2d')!;
@@ -85,6 +92,10 @@ export class Renderer {
         speed: cc.minSpeed + Math.random() * (cc.maxSpeed - cc.minSpeed),
       });
     }
+  }
+
+  setBotNavDebugStates(states: BotNavDebugState[]): void {
+    this._botNavDebugStates = states;
   }
 
   renderBackground(arena: Arena, originalArena?: Arena): void {
@@ -251,6 +262,15 @@ export class Renderer {
     this.frameTime = performance.now();
 
     ctx.save();
+
+    // Hitstop zoom punch — subtle scale centered on screen
+    if (matchState.hitstopZoom > 0) {
+      const t = matchState.hitstopZoom / HITSTOP_DURATION; // 1 → 0
+      const scale = 1 + HITSTOP_ZOOM * t * t;              // ease-out
+      ctx.translate(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+      ctx.scale(scale, scale);
+      ctx.translate(-CANVAS_WIDTH / 2, -CANVAS_HEIGHT / 2);
+    }
 
     // Screen shake offset
     if (matchState.screenShake > 0) {
@@ -518,6 +538,11 @@ export class Renderer {
 
     // HUD (not affected by shake)
     this.drawHUD(ctx, matchState);
+
+    // Nav debug overlay (dev only — ?debug=nav)
+    if (debugFlags.navDebugEnabled) {
+      drawNavDebugOverlay(ctx, arena, this.mirrored, this._botNavDebugStates);
+    }
 
     // Screen flash (f) — drawn after everything
     if (matchState.screenFlash > 0) {
@@ -1464,6 +1489,15 @@ export class Renderer {
       this.drawExpression(ctx, player);
     }
 
+    // White flash on killed character during hitstop
+    if (player.hitstopTimer > 0 && state === 'splat') {
+      const flashAlpha = Math.min(0.85, player.hitstopTimer / HITSTOP_DURATION);
+      ctx.fillStyle = `rgba(255, 255, 255, ${flashAlpha})`;
+      ctx.beginPath();
+      ctx.ellipse(cx, y + height - 4, width * 0.6, 6, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
     // Blush near carrot (c)
     if (nearCarrot && state !== 'splat') {
       ctx.fillStyle = 'rgba(255, 150, 180, 0.45)';
@@ -1594,6 +1628,14 @@ export class Renderer {
     const spriteRenderer = getSpriteRenderer(char.name);
     const colors = { color: char.color, darkColor: char.darkColor, lightColor: char.lightColor };
     spriteRenderer(ctx, cx, yOff, w, h, state, animFrame, isIdleAnim, idleT, colors);
+
+    // 3D shading overlays (highlight spot + fur edge)
+    const pack = getCharacterPack(char.name);
+    if (pack) {
+      const bodyParams: BodyEllipseParams = pack.bodyEllipse(cx, yOff, w, h);
+      drawHighlightSpot(ctx, bodyParams);
+      drawFurEdge(ctx, bodyParams, char.darkColor, pack.furIntensity ?? 1.0);
+    }
 
     // Eyes (generic — for characters without custom eyes)
     if (!hasCustomEyes(char.name)) {

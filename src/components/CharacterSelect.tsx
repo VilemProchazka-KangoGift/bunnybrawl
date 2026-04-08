@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { CHARACTERS, getAllCharacters, BOT_CHARACTERS, assignBotCharacters, getCharacterEmoji, hasCustomEyes, getSpriteRenderer, getCharacterDisplayName } from '../engine/characters';
+import { CHARACTERS, getAllCharacters, BOT_CHARACTERS, assignBotCharacters, getCharacterEmoji, hasCustomEyes, getSpriteRenderer, getCharacterDisplayName, getCharacterPack } from '../engine/characters';
 import { KEY_BINDINGS } from '../engine/input';
 import { audio } from '../engine/audio';
 import i18n from '../i18n';
@@ -10,6 +10,7 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CRO
 import {
   drawTree, drawBush, drawFlower, drawMushroom, drawGrassTuft, drawCloud,
 } from '../engine/themes/drawPrimitives';
+import { drawHighlightSpot, drawFurEdge } from '../engine/spriteShading';
 import './CharacterSelect.css';
 
 import { initWildlife, updateAndDrawWildlife, drawDayNightCycle } from '../engine/canvasAnimations';
@@ -157,6 +158,10 @@ export function CharacterSelect() {
     audio.play('select');
     setScreen('match');
   }, [setActivePlayers, setMatchSettings, setScreen]);
+
+  useEffect(() => {
+    audio.playMenuMusic();
+  }, []);
 
   useEffect(() => {
     const normalizeKey = (key: string) => key.length === 1 ? key.toLowerCase() : key;
@@ -871,6 +876,14 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
   const spriteRenderer = getSpriteRenderer(char.name);
   const colors = { color: char.color, darkColor: char.darkColor, lightColor: char.lightColor };
   spriteRenderer(ctx, cx, yOff, w, h, state, animFrame, false, -1, colors);
+
+  // 3D shading overlays (highlight spot + fur edge)
+  const lobbyPack = getCharacterPack(char.name);
+  if (lobbyPack) {
+    const bodyParams = lobbyPack.bodyEllipse(cx, yOff, w, h);
+    drawHighlightSpot(ctx, bodyParams);
+    drawFurEdge(ctx, bodyParams, char.darkColor, lobbyPack.furIntensity ?? 1.0);
+  }
 
   // Generic eyes for characters without custom ones
   if (!hasCustomEyes(char.name)) {

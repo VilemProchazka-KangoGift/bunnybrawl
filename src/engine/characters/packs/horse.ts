@@ -1,10 +1,8 @@
 import type { CharacterPack } from '../types';
+import { fillBodyGradient } from '../../spriteShading';
 
 const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, _state, _animFrame, _isIdleAnim, _idleT, colors) => {
-  ctx.fillStyle = colors.color;
-  ctx.beginPath();
-  ctx.ellipse(cx, yOff + h * 0.52, w * 0.38, h * 0.42, 0, 0, Math.PI * 2);
-  ctx.fill();
+  fillBodyGradient(ctx, { cx, cy: yOff + h * 0.52, rx: w * 0.38, ry: h * 0.42 }, colors);
   // Long face/muzzle
   ctx.fillStyle = colors.lightColor;
   ctx.beginPath();
@@ -97,5 +95,6 @@ export const horse: CharacterPack = {
   splatShape: 'circle',
   gibs: [{ gibType: 'ear', width: 8, height: 10 }, { gibType: 'ear', width: 8, height: 10 }, { gibType: 'mane', width: 12, height: 14 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Horse', cs: 'Kůň' },
+  bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.52, rx: w * 0.38, ry: h * 0.42 }),
   drawSprite, drawGib,
 };

@@ -55,11 +55,11 @@
 
 .winner-text {
   font-family: 'Nunito', sans-serif;
-  font-size: 42px;
+  font-size: 34px;
   font-weight: 700;
   color: #FFD700;
   text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 215, 0, 0.4), 0 0 60px rgba(255, 215, 0, 0.2);
-  margin: 0 0 8px;
+  margin: 0 0 4px;
   -webkit-text-stroke: 1px rgba(0, 0, 0, 0.2);
 }
 
@@ -80,9 +80,9 @@
 .scoreboard h2 {
   color: rgba(255, 255, 255, 0.6);
   font-family: 'Nunito', sans-serif;
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 600;
-  margin-bottom: 14px;
+  margin-bottom: 8px;
   text-transform: uppercase;
   letter-spacing: 2px;
 }
@@ -90,9 +90,9 @@
 .score-row {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 12px 20px;
-  margin: 6px 0;
+  gap: 12px;
+  padding: 8px 16px;
+  margin: 4px 0;
   background: rgba(255, 255, 255, 0.05);
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -111,7 +111,7 @@
 
 .rank {
   font-family: 'Nunito', sans-serif;
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 700;
   color: rgba(255, 255, 255, 0.5);
   width: 40px;
@@ -123,7 +123,7 @@
 
 .player-name {
   font-family: 'Nunito', sans-serif;
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 600;
   flex: 1;
   text-align: left;
@@ -131,7 +131,7 @@
 
 .player-score {
   font-family: 'Nunito', sans-serif;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.7);
 }
@@ -221,8 +221,8 @@
 }
 
 .rematch-btn {
-  padding: 14px 44px;
-  font-size: 22px;
+  padding: 10px 34px;
+  font-size: 18px;
   font-weight: 700;
   background: linear-gradient(180deg, #5CBF60, #388E3C);
   border: 2px solid #6BD06F;
@@ -236,8 +236,8 @@
 }
 
 .menu-btn-v {
-  padding: 14px 32px;
-  font-size: 18px;
+  padding: 10px 24px;
+  font-size: 15px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.05));
   border: 2px solid rgba(255, 255, 255, 0.25);
   color: #FFF;
@@ -251,10 +251,10 @@
 
 /* Victory pose (u) — larger winner avatar with bounce animation */
 .winner-avatar-pose {
-  width: 120px;
-  height: 120px;
+  width: 90px;
+  height: 90px;
   border-radius: 50%;
-  margin: 0 auto 30px;
+  margin: 0 auto 14px;
   border: 4px solid;
   box-shadow: 0 0 40px rgba(255, 215, 0, 0.5), 0 0 80px rgba(255, 215, 0, 0.25);
   animation: victoryBounce 1.2s ease-in-out infinite;
@@ -265,7 +265,7 @@
 }
 
 .winner-emoji {
-  font-size: 56px;
+  font-size: 42px;
   line-height: 1;
 }
 
@@ -418,4 +418,98 @@
   color: rgba(255, 255, 255, 0.4);
   min-width: 50px;
   text-align: right;
+}
+
+/* Arena chooser button */
+.arena-btn-v {
+  padding: 10px 24px;
+  font-size: 15px;
+  background: linear-gradient(180deg, rgba(68, 136, 255, 0.3), rgba(68, 136, 255, 0.1));
+  border: 2px solid rgba(68, 136, 255, 0.4);
+  color: #FFF;
+}
+
+.arena-btn-v:hover {
+  background: linear-gradient(180deg, rgba(68, 136, 255, 0.45), rgba(68, 136, 255, 0.2));
+  border-color: rgba(68, 136, 255, 0.65);
+  box-shadow: 0 4px 16px rgba(68, 136, 255, 0.2);
+}
+
+/* Arena select overlay */
+.victory-arena-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.victory-arena-modal {
+  background: linear-gradient(180deg, #1a0a2e, #2d1b4e);
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-radius: 16px;
+  padding: 20px 28px;
+  text-align: center;
+}
+
+.victory-arena-title {
+  color: rgba(255, 255, 255, 0.7);
+  font-family: 'Nunito', sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 14px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.victory-arena-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.victory-arena-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 8px 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.victory-arena-btn:hover {
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.victory-arena-preview {
+  width: 56px;
+  height: 36px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.victory-arena-icon {
+  font-size: 18px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+.victory-arena-name {
+  color: rgba(255, 255, 255, 0.8);
+  font-family: 'Nunito', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
 }

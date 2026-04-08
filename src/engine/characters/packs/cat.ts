@@ -1,10 +1,8 @@
 import type { CharacterPack } from '../types';
+import { fillBodyGradient } from '../../spriteShading';
 
 const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, _state, animFrame, _isIdleAnim, _idleT, colors) => {
-  ctx.fillStyle = colors.color;
-  ctx.beginPath();
-  ctx.ellipse(cx, yOff + h * 0.55, w * 0.42, h * 0.36, 0, 0, Math.PI * 2);
-  ctx.fill();
+  fillBodyGradient(ctx, { cx, cy: yOff + h * 0.55, rx: w * 0.42, ry: h * 0.36 }, colors);
   // Tall upright triangular ears
   ctx.beginPath();
   ctx.moveTo(cx - 9, yOff + 10);
@@ -119,5 +117,6 @@ export const cat: CharacterPack = {
   splatShape: 'paw',
   gibs: [{ gibType: 'ear', width: 8, height: 10 }, { gibType: 'ear', width: 8, height: 10 }, { gibType: 'tail', width: 14, height: 6 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Cat', cs: 'Kočka' },
+  bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.55, rx: w * 0.42, ry: h * 0.36 }),
   drawSprite, drawGib,
 };

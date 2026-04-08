@@ -1,10 +1,8 @@
 import type { CharacterPack } from '../types';
+import { fillBodyGradient } from '../../spriteShading';
 
 const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, _state, _animFrame, isIdleAnim, idleT, colors) => {
-  ctx.fillStyle = colors.color;
-  ctx.beginPath();
-  ctx.ellipse(cx, yOff + h * 0.5, w * 0.42, h * 0.42, 0, 0, Math.PI * 2);
-  ctx.fill();
+  fillBodyGradient(ctx, { cx, cy: yOff + h * 0.5, rx: w * 0.42, ry: h * 0.42 }, colors);
   ctx.beginPath();
   ctx.arc(cx - 10, yOff + 4, 6, 0, Math.PI * 2);
   ctx.fill();
@@ -57,5 +55,6 @@ export const bear: CharacterPack = {
   splatShape: 'circle',
   gibs: [{ gibType: 'ear', width: 10, height: 10 }, { gibType: 'ear', width: 10, height: 10 }, { gibType: 'snout', width: 10, height: 8 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Bear', cs: 'Medvěd' },
+  bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.5, rx: w * 0.42, ry: h * 0.42 }),
   drawSprite, drawGib,
 };

@@ -1,10 +1,8 @@
 import type { CharacterPack } from '../types';
+import { fillBodyGradient } from '../../spriteShading';
 
 const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, _state, _animFrame, _isIdleAnim, _idleT, colors) => {
-  ctx.fillStyle = colors.color;
-  ctx.beginPath();
-  ctx.ellipse(cx, yOff + h * 0.55, w * 0.44, h * 0.4, 0, 0, Math.PI * 2);
-  ctx.fill();
+  fillBodyGradient(ctx, { cx, cy: yOff + h * 0.55, rx: w * 0.44, ry: h * 0.4 }, colors);
   // Small rounded ears
   ctx.beginPath();
   ctx.arc(cx - 10, yOff + 6, 4, 0, Math.PI * 2);
@@ -64,5 +62,7 @@ export const rhino: CharacterPack = {
   splatShape: 'circle',
   gibs: [{ gibType: 'ear', width: 8, height: 8 }, { gibType: 'ear', width: 8, height: 8 }, { gibType: 'horn', width: 8, height: 14 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Rhino', cs: 'Nosorožec' },
+  bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.55, rx: w * 0.44, ry: h * 0.4 }),
+  furIntensity: 0.2,
   drawSprite, drawGib,
 };

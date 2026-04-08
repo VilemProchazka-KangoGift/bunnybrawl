@@ -22,7 +22,7 @@ import {
   FAT_DURATION, SPRING_BOUNCE, SPRING_SIZE,
   THORN_SLOW_DURATION, CANVAS_WIDTH, CANVAS_HEIGHT,
   SPRING_SPAWN_INTERVAL, THORN_SPAWN_INTERVAL, HAZARD_LIFETIME, HAZARD_GROW_TIME,
-  SCREEN_SHAKE_DURATION, SLOW_MO_DURATION, SLOW_MO_FACTOR,
+  SCREEN_SHAKE_DURATION, SLOW_MO_DURATION, SLOW_MO_FACTOR, HITSTOP_DURATION,
   SQUASH_ON_LAND, STRETCH_ON_JUMP, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED,
   AFTERIMAGE_INTERVAL, AFTERIMAGE_SPEED_THRESHOLD, AFTERIMAGE_MAX,
   MATCH_COUNTDOWN, IDLE_ANIM_INTERVAL,
@@ -36,6 +36,8 @@ import {
 } from './constants';
 import { getCharacterForSlot } from './characters';
 import { AIController } from './ai';
+import { debugFlags, toggleNavDebug } from './debugFlags';
+import type { BotNavDebugState } from './navDebugOverlay';
 
 export type MatchEndCallback = (winner: PlayerSlot | null, state: MatchState) => void;
 
@@ -76,6 +78,7 @@ export class GameLoop {
   private aiControllers: Map<string, AIController> = new Map();
   private newBloodDripsSinceRender: Array<{ x: number; y: number; radius: number; color: string }> = [];
   private newGroundedGibsSinceRender: Gib[] = [];
+  private _debugKeyHandler: ((e: KeyboardEvent) => void) | null = null;
 
   constructor(
     bgCanvas: HTMLCanvasElement,
@@ -107,6 +110,13 @@ export class GameLoop {
       this.effJumpImpulse *= 1.5;
     }
 
+    // Underwater Gravity: floaty physics (stacks with theme)
+    if (settings.mods.underwaterGravity) {
+      this.effGravity *= 0.6;
+      this.effMaxFallSpeed *= 0.6;
+      this.effJumpImpulse *= 0.9;
+    }
+
     // Super Bounce: mark all platforms as bouncy (shallow-copy arena to avoid mutation)
     if (settings.mods.superBounce) {
       this.arena = { ...arena, bouncyPlatforms: arena.platforms.map((_, i) => i) };
@@ -133,7 +143,7 @@ export class GameLoop {
       fastFalling: false, fatTimer: 0, slowTimer: 0,
       squashScale: 1, squashTimer: 0, sideSquash: 1, afterimages: [], idleAnimTimer: 0,
       expression: 'normal' as const, killStreak: 0,
-      breathTimer: 0, springTrailTimer: 0, damageFlashSide: null, damageFlashTimer: 0, burnTimer: 0,
+      breathTimer: 0, springTrailTimer: 0, damageFlashSide: null, damageFlashTimer: 0, burnTimer: 0, hitstopTimer: 0,
     }));
 
     // Init AI controllers for bot players
@@ -205,7 +215,7 @@ export class GameLoop {
       springs: [], thorns: [],
       springSpawnTimer: 5, // first spring after 5s
       thornSpawnTimer: 8,  // first thorn after 8s
-      screenShake: 0, slowMotion: 0,
+      screenShake: 0, slowMotion: 0, hitstopZoom: 0,
       weather,
       dayPhase: 0,
       countdown: MATCH_COUNTDOWN,
@@ -294,6 +304,10 @@ export class GameLoop {
     audio.playMusic(this.arena.themeId);
     audio.play('ambient');
     if (this.hasWaterfallZones) audio.play('waterfall_ambient');
+    if (debugFlags.navDebugAllowed) {
+      this._debugKeyHandler = (e: KeyboardEvent) => { if (e.key === '`') toggleNavDebug(); };
+      window.addEventListener('keydown', this._debugKeyHandler);
+    }
     this.loop(this.lastTime);
   }
 
@@ -306,6 +320,10 @@ export class GameLoop {
     audio.stop('zero_g');
     audio.stop('crowd');
     audio.stop('waterfall_ambient');
+    if (this._debugKeyHandler) {
+      window.removeEventListener('keydown', this._debugKeyHandler);
+      this._debugKeyHandler = null;
+    }
   }
 
   getState(): MatchState { return this.state; }
@@ -349,6 +367,9 @@ export class GameLoop {
     if (this.state.screenFlash > 0) {
       this.state.screenFlash -= frameTime;
     }
+    if (this.state.hitstopZoom > 0) {
+      this.state.hitstopZoom -= frameTime;
+    }
 
     // Fireworks when match is over
     if (this.state.matchOver) {
@@ -371,6 +392,18 @@ export class GameLoop {
     if (this.newBloodDripsSinceRender.length > 0) {
       this.renderer.renderBloodDrips(this.newBloodDripsSinceRender);
       this.newBloodDripsSinceRender.length = 0;
+    }
+
+    // Collect bot nav debug state (zero cost when overlay is off)
+    if (debugFlags.navDebugEnabled) {
+      const botStates: BotNavDebugState[] = [];
+      for (const player of this.state.players) {
+        const ai = this.aiControllers.get(player.id);
+        if (ai && player.active && player.state !== 'splat' && player.state !== 'respawning') {
+          botStates.push({ slot: player.id, x: player.x, y: player.y, navTarget: ai.getLastNavTarget() });
+        }
+      }
+      this.renderer.setBotNavDebugStates(botStates);
     }
 
     this.renderer.renderFrame(this.state, this.arena, this.particles);
@@ -612,6 +645,36 @@ export class GameLoop {
       const speed = 40 + Math.random() * 60;
       const life = 0.5 + Math.random() * 0.3;
       this.emitParticle(x, y + CARROT_SIZE / 2, Math.cos(angle) * speed, Math.sin(angle) * speed, life, 2 + Math.random() * 3, i % 2 === 0 ? '#FFD700' : '#FF8C00');
+    }
+  }
+
+  private pickupCarrotVFX(x: number, y: number): void {
+    const cx = x;
+    const cy = y + CARROT_SIZE / 2;
+    // Orange carrot chunks — gib-style (bounce + settle on ground)
+    for (let i = 0; i < 4; i++) {
+      const s = 4 + Math.random() * 3;
+      this.launchGib(cx, cy, 10, 0.15, 0.85, 80, 200, s, s,
+        '#FF8C00', '#CC6600', '#FFB040', '', 'body');
+    }
+    // Green leaf pieces
+    for (let i = 0; i < 2; i++) {
+      this.launchGib(cx, cy, 8, 0.2, 0.8, 60, 160, 5, 3,
+        '#4CAF50', '#2E7D32', '#81C784', '', 'body');
+    }
+    // Orange/gold particle burst (instant feedback)
+    const colors = ['#FF8C00', '#FF6600', '#FFA500', '#FF7700', '#FFD700', '#FF8C00'];
+    for (let i = 0; i < 16; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 80 + Math.random() * 140;
+      const life = 0.3 + Math.random() * 0.4;
+      this.emitParticle(cx, cy, Math.cos(angle) * speed, Math.sin(angle) * speed - 50, life, 2 + Math.random() * 5, colors[i % colors.length]);
+    }
+    // Upward gold sparkle ring
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2;
+      const speed = 30 + Math.random() * 30;
+      this.emitParticle(cx, cy, Math.cos(angle) * speed, -50 - Math.random() * 40, 0.4 + Math.random() * 0.2, 1.5 + Math.random() * 2, '#FFD700');
     }
   }
 
@@ -1012,6 +1075,13 @@ export class GameLoop {
     // Animation timers
     for (const player of this.state.players) {
       if (!player.active) continue;
+      // Hitstop: decay timer, let visual timers tick, but skip animation advance
+      if (player.hitstopTimer > 0) {
+        player.hitstopTimer -= dt;
+        if (player.damageFlashTimer > 0) player.damageFlashTimer -= dt;
+        if (player.burnTimer > 0) player.burnTimer -= dt;
+        continue;
+      }
       player.animTimer += dt;
       if (player.animTimer >= ANIM_FRAME_DURATION) {
         player.animTimer -= ANIM_FRAME_DURATION;
@@ -1042,6 +1112,7 @@ export class GameLoop {
     // Input + physics
     for (const player of this.state.players) {
       if (!player.active) continue;
+      if (player.hitstopTimer > 0) continue;
       const input = this.getPlayerInput(player);
       const wasAirborne = player.state === 'airborne';
       const prevVy = player.vy;
@@ -1441,10 +1512,15 @@ export class GameLoop {
           carrot.active = false;
           player.score += 1;
           player.fatTimer = FAT_DURATION;
-          audio.play('select');
+          audio.play('crunch');
           audio.playAnimal(player.character.name);
+          // Hitstop — shorter than kill (half duration)
+          player.hitstopTimer = Math.max(player.hitstopTimer, HITSTOP_DURATION * 0.5);
+          this.state.hitstopZoom = HITSTOP_DURATION * 0.5;
           // Score animation for carrot pickup
           this.state.scoreAnimations.push({ playerId: player.id, value: player.score, timer: SCORE_ANIM_DURATION });
+          // Pickup VFX — orange burst from carrot position
+          this.pickupCarrotVFX(carrot.x, carrot.y);
           // Stats: carrots eaten
           const ps = this.state.stats.perPlayer.get(player.id);
           if (ps) ps.carrotsEaten += 1;
@@ -1487,11 +1563,13 @@ export class GameLoop {
     if (killFeedEntries.length > 0) {
       audio.play('stomp');
       this.state.screenShake = SCREEN_SHAKE_DURATION;
+      this.state.hitstopZoom = HITSTOP_DURATION;
     }
 
     for (const entry of killFeedEntries) {
       const attacker = this.state.players.find(p => p.id === entry.attacker);
       if (attacker) {
+        attacker.hitstopTimer = Math.max(attacker.hitstopTimer, HITSTOP_DURATION);
         audio.playAnimal(attacker.character.name);
         // Stats: kill streak
         attacker.killStreak += 1;
@@ -1502,6 +1580,7 @@ export class GameLoop {
       }
       const victim = this.state.players.find(p => p.id === entry.victim);
       if (victim) {
+        victim.hitstopTimer = Math.max(victim.hitstopTimer, HITSTOP_DURATION);
         this.spawnKillSplatter(victim);
         // Shockwave at victim position
         this.state.shockwaves.push({

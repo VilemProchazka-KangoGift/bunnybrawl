@@ -1,11 +1,9 @@
 import type { CharacterPack } from '../types';
+import { fillBodyGradient } from '../../spriteShading';
 
 const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, state, animFrame, isIdleAnim, idleT, colors) => {
   const isRunning = state === 'run';
-  ctx.fillStyle = colors.color;
-  ctx.beginPath();
-  ctx.ellipse(cx, yOff + h * 0.55, w * 0.38, h * 0.38, 0, 0, Math.PI * 2);
-  ctx.fill();
+  fillBodyGradient(ctx, { cx, cy: yOff + h * 0.55, rx: w * 0.38, ry: h * 0.38 }, colors);
   ctx.fillStyle = colors.color;
   ctx.beginPath();
   ctx.moveTo(cx - 8, yOff + 8);
@@ -63,5 +61,6 @@ export const fox: CharacterPack = {
   splatShape: 'star',
   gibs: [{ gibType: 'ear', width: 10, height: 10 }, { gibType: 'ear', width: 10, height: 10 }, { gibType: 'tail', width: 16, height: 10 }, { gibType: 'snout', width: 8, height: 6 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Fox', cs: 'Liška' },
+  bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.55, rx: w * 0.38, ry: h * 0.38 }),
   drawSprite, drawGib,
 };
