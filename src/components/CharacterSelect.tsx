@@ -6,6 +6,9 @@ import { audio } from '../engine/audio';
 import i18n from '../i18n';
 import type { CharacterSlot, CharacterDef, PlayerSlot, BotSlot } from '../engine/types';
 import { ALL_BOT_SLOTS, isBotSlot } from '../engine/types';
+import { getActiveTransport } from './OnlineLobby';
+import { MsgType } from '../engine/net/protocol';
+import type { ReliableMessage } from '../engine/net/protocol';
 import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED } from '../engine/constants';
 import {
   drawTree, drawBush, drawFlower, drawMushroom, drawGrassTuft, drawCloud,
@@ -62,7 +65,8 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 export function CharacterSelect() {
-  const { setScreen, setActivePlayers, setMatchSettings, matchSettings } = useGameStore();
+  const { setScreen, setActivePlayers, setMatchSettings, matchSettings, online, setOnline, resetOnline } = useGameStore();
+  const isOnline = online.isOnline;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const playersRef = useRef<LobbyPlayer[]>([]);
   const botPlayersRef = useRef<LobbyPlayer[]>([]); // AI-controlled bot players
@@ -74,18 +78,23 @@ export function CharacterSelect() {
   const lastTimeRef = useRef<number>(0);
   const startedRef = useRef<boolean>(false);
   const readySoundPlayedRef = useRef<Set<PlayerSlot>>(new Set());
+  const onlineReadySentRef = useRef(false);
+  const onlineRemoteReadyRef = useRef(false);
 
   useEffect(() => {
     const botCount = matchSettings.botCount;
     const botSlots = ALL_BOT_SLOTS.slice(0, botCount);
 
+    // In online mode, only P1 is a local human player
+    const humanSlots: CharacterSlot[] = isOnline ? ['P1'] : SLOTS;
+
     // Randomly assign characters to players
     const shuffled = shuffle([...getAllCharacters()]);
-    const assigned = shuffled.slice(0, SLOTS.length);
-    const botAssigned = shuffled.slice(SLOTS.length, SLOTS.length + botCount);
-    const extras = shuffled.slice(SLOTS.length + botCount);
+    const assigned = shuffled.slice(0, humanSlots.length);
+    const botAssigned = shuffled.slice(humanSlots.length, humanSlots.length + botCount);
+    const extras = shuffled.slice(humanSlots.length + botCount);
 
-    playersRef.current = SLOTS.map((slot, i) => ({
+    playersRef.current = humanSlots.map((slot, i) => ({
       slot,
       char: { ...assigned[i], slot },
       x: 40 + i * 90,
@@ -128,6 +137,48 @@ export function CharacterSelect() {
 
     const allParticipants = [...playersRef.current, ...botPlayersRef.current];
     const inZone = allParticipants.filter(p => p.x + PLAYER_WIDTH > READY_ZONE_X && p.splatTimer <= 0);
+
+    if (isOnline) {
+      // Online mode: P1 = local player's lobby character, P2 = remote player's character
+      const localPlayer = playersRef.current[0];
+      if (!localPlayer) { startedRef.current = false; return; }
+
+      const myChar = localPlayer.char;
+      const remoteCharName = online.remoteCharacterName || 'Fox';
+      const allChars = getAllCharacters();
+      const remoteDef = allChars.find(c => c.name === remoteCharName);
+
+      // Assign P1 = host's character, P2 = guest's character
+      const p1Char = online.isHost ? myChar : (remoteDef || myChar);
+      const p2Char = online.isHost ? (remoteDef || myChar) : myChar;
+
+      CHARACTERS.P1 = { ...p1Char, slot: 'P1' };
+      CHARACTERS.P2 = { ...p2Char, slot: 'P2' };
+
+      // Assign bot characters if any
+      const botInZone = inZone.filter(p => isBotSlot(p.slot));
+      const botSlots = botInZone.map(p => p.slot as BotSlot);
+      assignBotCharacters(['P1', 'P2'], botSlots);
+      for (const bot of botInZone) {
+        BOT_CHARACTERS.set(bot.slot as BotSlot, { ...bot.char, slot: bot.slot });
+      }
+
+      const activePlayers: PlayerSlot[] = ['P1', 'P2', ...botSlots];
+      setActivePlayers(activePlayers);
+      setMatchSettings({ playerCount: activePlayers.length });
+
+      // Host tells guest to start
+      const transport = getActiveTransport();
+      if (online.isHost && transport) {
+        transport.sendReliable({ type: MsgType.START_MATCH } as ReliableMessage);
+      }
+
+      audio.play('select');
+      setScreen('match');
+      return;
+    }
+
+    // Local mode (unchanged)
     if (inZone.length < 2) {
       countdownRef.current = -1;
       countdownStartedRef.current = false;
@@ -135,19 +186,15 @@ export function CharacterSelect() {
       return;
     }
 
-    // Write the chosen characters back into CHARACTERS so the match uses them (humans only)
     const humanInZone = inZone.filter(p => !isBotSlot(p.slot));
     for (const lp of humanInZone) {
       CHARACTERS[lp.slot as CharacterSlot] = { ...lp.char, slot: lp.slot };
     }
 
-    // Assign bot characters
     const humanSlots = humanInZone.map(p => p.slot as CharacterSlot);
     const botInZone = inZone.filter(p => isBotSlot(p.slot));
     const botSlots = botInZone.map(p => p.slot as BotSlot);
-    // Use the characters the bots walked in with
     assignBotCharacters(humanSlots, botSlots);
-    // Override with the actual lobby characters (respecting any lobby swaps)
     for (const bot of botInZone) {
       BOT_CHARACTERS.set(bot.slot as BotSlot, { ...bot.char, slot: bot.slot });
     }
@@ -157,18 +204,54 @@ export function CharacterSelect() {
     setMatchSettings({ playerCount: activePlayers.length });
     audio.play('select');
     setScreen('match');
-  }, [setActivePlayers, setMatchSettings, setScreen]);
+  }, [setActivePlayers, setMatchSettings, setScreen, isOnline, online.isHost, online.remoteCharacterName]);
 
   useEffect(() => {
     audio.playMenuMusic();
   }, []);
+
+  // Online mode: wire transport to receive remote player's messages
+  useEffect(() => {
+    if (!isOnline) return;
+    const transport = getActiveTransport();
+    if (!transport) return;
+
+    transport.setEvents({
+      onStatusChange: (status, error) => {
+        if (status === 'disconnected' || status === 'error') {
+          resetOnline();
+          setScreen('menu');
+        }
+        setOnline({ connectionStatus: status, connectionError: error ?? null });
+      },
+      onReliableMessage: (msg: ReliableMessage) => {
+        if (msg.type === MsgType.CHARACTER_SELECT) {
+          setOnline({ remoteCharacterName: msg.characterName });
+        } else if (msg.type === MsgType.READY) {
+          onlineRemoteReadyRef.current = true;
+        } else if (msg.type === MsgType.START_MATCH) {
+          // Guest receives start signal from host
+          startMatch();
+        }
+      },
+      onUnreliableMessage: () => {},
+      onRttUpdate: () => {},
+    });
+  }, [isOnline, setOnline, setScreen, resetOnline, startMatch]);
 
   useEffect(() => {
     const normalizeKey = (key: string) => key.length === 1 ? key.toLowerCase() : key;
     const handleKeyDown = (e: KeyboardEvent) => {
       e.preventDefault();
       keysRef.current.add(normalizeKey(e.key));
-      if (e.key === 'Escape') setScreen('menu');
+      if (e.key === 'Escape') {
+        if (isOnline) {
+          const transport = getActiveTransport();
+          if (transport) transport.destroy();
+          resetOnline();
+        }
+        setScreen('menu');
+      }
       if (e.key === 'Enter' && countdownStartedRef.current) startMatch();
     };
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -198,17 +281,26 @@ export function CharacterSelect() {
       // Update player-controlled characters (always CharacterSlots)
       for (const p of playersRef.current) {
         if (p.splatTimer > 0) { p.splatTimer -= dt; continue; }
-        const bindings = KEY_BINDINGS[p.slot as CharacterSlot];
         const keys = keysRef.current;
 
-        if (keys.has(bindings.left)) { p.vx = -LOBBY_SPEED; p.facing = 'left'; }
-        else if (keys.has(bindings.right)) { p.vx = LOBBY_SPEED; p.facing = 'right'; }
+        // In online mode, all 5 key schemes control the single P1 player
+        const bindingsToCheck = isOnline
+          ? Object.values(KEY_BINDINGS)
+          : [KEY_BINDINGS[p.slot as CharacterSlot]];
+
+        const left = bindingsToCheck.some(b => keys.has(b.left));
+        const right = bindingsToCheck.some(b => keys.has(b.right));
+        const jump = bindingsToCheck.some(b => keys.has(b.jump));
+        const down = bindingsToCheck.some(b => keys.has(b.down));
+
+        if (left) { p.vx = -LOBBY_SPEED; p.facing = 'left'; }
+        else if (right) { p.vx = LOBBY_SPEED; p.facing = 'right'; }
         else { p.vx *= 0.85; if (Math.abs(p.vx) < 5) p.vx = 0; }
 
-        if (keys.has(bindings.jump) && p.onGround) { p.vy = LOBBY_JUMP; p.onGround = false; }
+        if (jump && p.onGround) { p.vy = LOBBY_JUMP; p.onGround = false; }
 
         // Fast-fall with down key, or crouch squash on ground
-        const crouching = keys.has(bindings.down);
+        const crouching = down;
         if (crouching) {
           if (!p.onGround) {
             p.vy = Math.max(p.vy, LOBBY_FAST_FALL);
@@ -305,14 +397,42 @@ export function CharacterSelect() {
         }
       }
       const humansInZone = inZone.filter(p => !isBotSlot(p.slot));
-      // Need at least 1 human + total 2 participants to start countdown
-      if (inZone.length >= 2 && humansInZone.length >= 1 && !countdownStartedRef.current) {
-        countdownStartedRef.current = true;
-        countdownRef.current = COUNTDOWN_SECONDS;
-      }
-      if (inZone.length < 2 || humansInZone.length < 1) {
-        countdownStartedRef.current = false;
-        countdownRef.current = -1;
+
+      if (isOnline) {
+        // Online mode: when local player enters START zone, send ready to remote
+        const localInZone = humansInZone.length >= 1;
+        if (localInZone && !onlineReadySentRef.current) {
+          onlineReadySentRef.current = true;
+          const myChar = playersRef.current[0]?.char.name || 'Bunny';
+          const transport = getActiveTransport();
+          if (transport) {
+            transport.sendReliable({ type: MsgType.CHARACTER_SELECT, characterName: myChar });
+            transport.sendReliable({ type: MsgType.READY } as ReliableMessage);
+          }
+        }
+        if (!localInZone) {
+          onlineReadySentRef.current = false;
+        }
+        // Start countdown only when both local and remote are ready
+        const bothReady = onlineReadySentRef.current && onlineRemoteReadyRef.current;
+        if (bothReady && !countdownStartedRef.current) {
+          countdownStartedRef.current = true;
+          countdownRef.current = COUNTDOWN_SECONDS;
+        }
+        if (!bothReady) {
+          countdownStartedRef.current = false;
+          countdownRef.current = -1;
+        }
+      } else {
+        // Local mode: need at least 1 human + total 2 participants to start countdown
+        if (inZone.length >= 2 && humansInZone.length >= 1 && !countdownStartedRef.current) {
+          countdownStartedRef.current = true;
+          countdownRef.current = COUNTDOWN_SECONDS;
+        }
+        if (inZone.length < 2 || humansInZone.length < 1) {
+          countdownStartedRef.current = false;
+          countdownRef.current = -1;
+        }
       }
 
       if (countdownStartedRef.current) {

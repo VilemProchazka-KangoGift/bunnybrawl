@@ -6,28 +6,21 @@ import { Transport } from '../engine/net/transport';
 import type { ConnectionStatus } from '../engine/net/transport';
 import { MsgType, PROTOCOL_VERSION } from '../engine/net/protocol';
 import type { ReliableMessage } from '../engine/net/protocol';
-import { CHARACTERS, getAllCharacters, getCharacterEmoji, getCharacterDisplayName } from '../engine/characters';
 import './OnlineLobby.css';
 
-// Expose transport instance for Match.tsx to use
+// Expose transport instance for Match.tsx and CharacterSelect to use
 let _activeTransport: Transport | null = null;
 export function getActiveTransport(): Transport | null { return _activeTransport; }
+export function clearActiveTransport(): void {
+  if (_activeTransport) { _activeTransport.destroy(); _activeTransport = null; }
+}
 
 export function OnlineLobby() {
-  const { t, i18n } = useTranslation();
-  const { setScreen, online, setOnline, matchSettings, setMatchSettings, setActivePlayers, resetOnline } = useGameStore();
+  const { t } = useTranslation();
+  const { setScreen, online, setOnline, matchSettings, resetOnline } = useGameStore();
   const transportRef = useRef<Transport | null>(null);
   const [joinCode, setJoinCode] = useState('');
-  const [localCharacter, _setLocalCharacter] = useState(CHARACTERS.P1.name);
-  const localCharRef = useRef(CHARACTERS.P1.name);
-  const setLocalCharacter = useCallback((name: string) => {
-    localCharRef.current = name;
-    _setLocalCharacter(name);
-  }, []);
-  const remoteCharRef = useRef<string | null>(null);
-  const [remoteReady, setRemoteReady] = useState(false);
-  const [localReady, setLocalReady] = useState(false);
-  const allChars = getAllCharacters();
+  const transitioningToLobby = useRef(false);
 
   const cleanup = useCallback(() => {
     if (transportRef.current) {
@@ -38,12 +31,9 @@ export function OnlineLobby() {
     resetOnline();
   }, [resetOnline]);
 
-  const transitioningToMatch = useRef(false);
-
   useEffect(() => {
     return () => {
-      // On unmount: destroy transport unless we're transitioning to match
-      if (transportRef.current && !transitioningToMatch.current) {
+      if (transportRef.current && !transitioningToLobby.current) {
         transportRef.current.destroy();
         transportRef.current = null;
         _activeTransport = null;
@@ -51,55 +41,38 @@ export function OnlineLobby() {
     };
   }, []);
 
+  // Once connected, go to charSelect
+  const goToLobby = useCallback(() => {
+    transitioningToLobby.current = true;
+    setScreen('charSelect');
+  }, [setScreen]);
+
   const handleReliableMessage = useCallback((msg: ReliableMessage) => {
-    switch (msg.type) {
-      case MsgType.HANDSHAKE:
-        // Acknowledged — no echo (both sides send on connect, echoing would loop)
-        break;
-      case MsgType.CHARACTER_SELECT:
-        remoteCharRef.current = msg.characterName;
-        setOnline({ remoteCharacterName: msg.characterName });
-        break;
-      case MsgType.SETTINGS_SYNC: {
-        // Guest receives host's settings
-        setMatchSettings({
-          arenaId: msg.arenaId,
-          killLimit: msg.killLimit,
-          timeLimit: msg.timeLimit,
-          goreMode: msg.goreMode,
-          botCount: msg.botCount,
-          botDifficulty: msg.botDifficulty as 'easy' | 'medium' | 'hard' | 'impossible',
-        });
-        setOnline({ rngSeed: msg.rngSeed });
-        break;
-      }
-      case MsgType.READY:
-        setRemoteReady(true);
-        break;
-      case MsgType.START_MATCH:
-        startMatch();
-        break;
+    if (msg.type === MsgType.SETTINGS_SYNC) {
+      // Guest receives host's settings before entering lobby
+      useGameStore.getState().setMatchSettings({
+        arenaId: msg.arenaId,
+        killLimit: msg.killLimit,
+        timeLimit: msg.timeLimit,
+        goreMode: msg.goreMode,
+        botCount: msg.botCount,
+        botDifficulty: msg.botDifficulty as 'easy' | 'medium' | 'hard' | 'impossible',
+      });
+      setOnline({ rngSeed: msg.rngSeed });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setOnline, setMatchSettings]);
+  }, [setOnline]);
 
   const setupTransport = useCallback(() => {
     const transport = new Transport({
       onStatusChange: (status: ConnectionStatus, error?: string) => {
         setOnline({ connectionStatus: status, connectionError: error ?? null });
         if (status === 'connected') {
-          // Send handshake
           transport.sendReliable({
             type: MsgType.HANDSHAKE,
             protocolVersion: PROTOCOL_VERSION,
             playerName: 'Player',
           });
-          // Send character selection (use ref for current value, not stale closure)
-          transport.sendReliable({
-            type: MsgType.CHARACTER_SELECT,
-            characterName: localCharRef.current,
-          });
-          // Host sends settings
+          // Host sends settings so guest has them before entering lobby
           if (transport.isHost) {
             const seed = Math.floor(Math.random() * 0xFFFFFFFF);
             setOnline({ rngSeed: seed });
@@ -115,16 +88,18 @@ export function OnlineLobby() {
               botDifficulty: matchSettings.botDifficulty,
             });
           }
+          // Transition to lobby after a brief moment (let settings sync)
+          setTimeout(goToLobby, 300);
         }
       },
       onReliableMessage: handleReliableMessage,
-      onUnreliableMessage: () => {}, // No input messages in lobby
+      onUnreliableMessage: () => {},
       onRttUpdate: () => {},
     });
     transportRef.current = transport;
     _activeTransport = transport;
     return transport;
-  }, [localCharacter, matchSettings, setOnline, handleReliableMessage]);
+  }, [matchSettings, setOnline, handleReliableMessage, goToLobby]);
 
   const handleCreate = useCallback(async () => {
     audio.init();
@@ -143,8 +118,6 @@ export function OnlineLobby() {
     if (joinCode.length < 4) return;
     audio.init();
     audio.play('select');
-    // Guest defaults to P2's character to avoid collision with host's default
-    setLocalCharacter(CHARACTERS.P2.name);
     const transport = setupTransport();
     setOnline({ isHost: false, isOnline: true });
     try {
@@ -154,70 +127,11 @@ export function OnlineLobby() {
     }
   }, [joinCode, setupTransport, setOnline]);
 
-  const handleCharacterChange = useCallback((name: string) => {
-    setLocalCharacter(name);
-    audio.play('select');
-    transportRef.current?.sendReliable({
-      type: MsgType.CHARACTER_SELECT,
-      characterName: name,
-    });
-  }, []);
-
-  const handleReady = useCallback(() => {
-    audio.play('select');
-    setLocalReady(true);
-    transportRef.current?.sendReliable({ type: MsgType.READY });
-  }, []);
-
-  const startMatch = useCallback(() => {
-    // Set up player slots: host = P1, guest = P2
-    // Each peer must assign characters so P1=host's pick, P2=guest's pick
-    const myChar = localCharRef.current;
-    const theirChar = remoteCharRef.current || online.remoteCharacterName || (online.isHost ? 'Fox' : 'Bunny');
-
-    const p1Name = online.isHost ? myChar : theirChar;
-    const p2Name = online.isHost ? theirChar : myChar;
-
-    const p1Def = allChars.find(c => c.name === p1Name);
-    const p2Def = allChars.find(c => c.name === p2Name);
-
-    if (p1Def) {
-      CHARACTERS.P1.name = p1Def.name;
-      CHARACTERS.P1.color = p1Def.color;
-      CHARACTERS.P1.darkColor = p1Def.darkColor;
-      CHARACTERS.P1.lightColor = p1Def.lightColor;
-    }
-    if (p2Def) {
-      CHARACTERS.P2.name = p2Def.name;
-      CHARACTERS.P2.color = p2Def.color;
-      CHARACTERS.P2.darkColor = p2Def.darkColor;
-      CHARACTERS.P2.lightColor = p2Def.lightColor;
-    }
-
-    transitioningToMatch.current = true;
-    setActivePlayers(['P1', 'P2']);
-    setOnline({ isOnline: true });
-    setScreen('match');
-  }, [online.isHost, online.remoteCharacterName, allChars, setActivePlayers, setOnline, setScreen]);
-
-  // When both ready and host, send START
-  useEffect(() => {
-    if (localReady && remoteReady && online.isHost) {
-      transportRef.current?.sendReliable({ type: MsgType.START_MATCH });
-      startMatch();
-    }
-  }, [localReady, remoteReady, online.isHost, startMatch]);
-
-  // When guest receives START from host
-  // (handled in handleReliableMessage)
-
   const handleBack = useCallback(() => {
     audio.play('select');
     cleanup();
     setScreen('menu');
   }, [cleanup, setScreen]);
-
-  const isConnected = online.connectionStatus === 'connected';
 
   return (
     <div className="online-lobby">
@@ -253,69 +167,24 @@ export function OnlineLobby() {
               <span className="online-code">{online.roomCode}</span>
             </div>
           )}
-
           <div className="online-status">
             {(online.connectionStatus === 'idle' || online.connectionStatus === 'creating') && !online.roomCode && (
               t('connecting_server', 'Connecting to server...')
             )}
-            {online.roomCode && !isConnected && online.connectionStatus !== 'error' && (
+            {online.roomCode && online.connectionStatus !== 'connected' && online.connectionStatus !== 'error' && (
               t('waiting_opponent', 'Waiting for opponent...')
             )}
             {online.connectionStatus === 'joining' && t('joining_room', 'Joining room...')}
-            {isConnected && t('connected', 'Connected!')}
+            {online.connectionStatus === 'connected' && t('entering_lobby', 'Entering lobby...')}
             {online.connectionStatus === 'error' && (
               <>
                 <span className="online-error">{online.connectionError || t('connection_error', 'Connection failed')}</span>
-                <button className="btn-base menu-btn" style={{ marginTop: '12px', fontSize: '18px' }} onClick={() => {
-                  cleanup();
-                }}>
+                <button className="btn-base menu-btn" style={{ marginTop: '12px', fontSize: '18px' }} onClick={() => cleanup()}>
                   {t('try_again', 'Try Again')}
                 </button>
               </>
             )}
-            {online.connectionStatus === 'disconnected' && t('disconnected', 'Disconnected')}
           </div>
-
-          {isConnected && (
-            <div className="online-characters">
-              <div className="online-player-card">
-                <span className="online-label">{t('you', 'You')}:</span>
-                <select
-                  className="online-char-select"
-                  value={localCharacter}
-                  onChange={(e) => handleCharacterChange(e.target.value)}
-                  disabled={localReady}
-                >
-                  {allChars
-                    .filter(c => c.name !== online.remoteCharacterName)
-                    .map(c => (
-                    <option key={c.name} value={c.name}>
-                      {getCharacterEmoji(c.name)} {getCharacterDisplayName(c.name, i18n.language)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="online-player-card">
-                <span className="online-label">{t('opponent', 'Opponent')}:</span>
-                <span className="online-char-name">
-                  {online.remoteCharacterName
-                    ? `${getCharacterEmoji(online.remoteCharacterName)} ${getCharacterDisplayName(online.remoteCharacterName, i18n.language)}`
-                    : t('choosing', 'Choosing...')}
-                </span>
-                {remoteReady && <span className="online-ready-badge">{t('ready', 'READY')}</span>}
-              </div>
-
-              {!localReady ? (
-                <button className="btn-base menu-btn play-btn" onClick={handleReady}>
-                  {t('ready_up', 'Ready!')}
-                </button>
-              ) : (
-                <div className="online-waiting-start">
-                  {t('waiting_ready', 'Waiting for opponent to ready up...')}
-                </div>
-              )}
-            </div>
-          )}
         </div>
       )}
 
