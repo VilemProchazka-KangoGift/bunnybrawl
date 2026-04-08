@@ -16,7 +16,8 @@ import { Transport } from '../engine/net/transport';
 import type { ConnectionStatus } from '../engine/net/transport';
 import { MsgType, PROTOCOL_VERSION } from '../engine/net/protocol';
 import type { ReliableMessage } from '../engine/net/protocol';
-import { CHARACTERS, getAllCharacters, getCharacterEmoji, getCharacterDisplayName } from '../engine/characters';
+import { CHARACTERS, getAllCharacters, getCharacterEmoji, getCharacterDisplayName, assignBotCharacters } from '../engine/characters';
+import { ALL_BOT_SLOTS } from '../engine/types';
 import './MainMenu.css';
 
 // Re-export for Match.tsx — transport lives here now
@@ -217,7 +218,11 @@ export function MainMenu() {
     const p2Def = allChars.find(c => c.name === p2Name);
     if (p1Def) { CHARACTERS.P1.name = p1Def.name; CHARACTERS.P1.color = p1Def.color; CHARACTERS.P1.darkColor = p1Def.darkColor; CHARACTERS.P1.lightColor = p1Def.lightColor; }
     if (p2Def) { CHARACTERS.P2.name = p2Def.name; CHARACTERS.P2.color = p2Def.color; CHARACTERS.P2.darkColor = p2Def.darkColor; CHARACTERS.P2.lightColor = p2Def.lightColor; }
-    setActivePlayers(['P1', 'P2']);
+    // Include bots from settings
+    const ms = useGameStore.getState().matchSettings;
+    const botSlots = ALL_BOT_SLOTS.slice(0, ms.botCount);
+    assignBotCharacters(['P1', 'P2'], botSlots);
+    setActivePlayers(['P1', 'P2', ...botSlots]);
     setOnline({ isOnline: true });
     setOnlineOpen(false);
     setScreen('match');
