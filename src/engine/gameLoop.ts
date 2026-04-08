@@ -377,7 +377,7 @@ export class GameLoop {
 
   /** Play a sound, respecting audio mute (used during rollback resimulation). */
   private playSound(name: Parameters<typeof audio.play>[0]): void {
-    if (this._audioEnabled) this.playSound(name);
+    if (this._audioEnabled) audio.play(name);
   }
 
   /** Gameplay-affecting random: seeded in network mode, Math.random() in local. */
