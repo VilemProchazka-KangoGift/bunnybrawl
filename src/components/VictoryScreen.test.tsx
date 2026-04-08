@@ -14,7 +14,7 @@ function setupVictoryState() {
         width: PLAYER_WIDTH, height: PLAYER_HEIGHT,
         state: 'idle', facing: 'right',
         splatTimer: 0, respawnTimer: 0, invincibleTimer: 0,
-        score: 10, active: true, animFrame: 0, animTimer: 0, fastFalling: false, fatTimer: 0, slowTimer: 0, burnTimer: 0,
+        score: 10, active: true, animFrame: 0, animTimer: 0, fastFalling: false, fatTimer: 0, slowTimer: 0, burnTimer: 0, hitstopTimer: 0,
       },
       {
         id: 'P2', character: CHARACTERS.P2,
@@ -22,7 +22,7 @@ function setupVictoryState() {
         width: PLAYER_WIDTH, height: PLAYER_HEIGHT,
         state: 'idle', facing: 'right',
         splatTimer: 0, respawnTimer: 0, invincibleTimer: 0,
-        score: 7, active: true, animFrame: 0, animTimer: 0, fastFalling: false, fatTimer: 0, slowTimer: 0, burnTimer: 0,
+        score: 7, active: true, animFrame: 0, animTimer: 0, fastFalling: false, fatTimer: 0, slowTimer: 0, burnTimer: 0, hitstopTimer: 0,
       },
     ],
     killFeed: [],

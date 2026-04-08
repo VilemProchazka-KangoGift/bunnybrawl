@@ -40,6 +40,8 @@ import type { BotNavDebugState } from './navDebugOverlay';
 
 export type MatchEndCallback = (winner: PlayerSlot | null, state: MatchState) => void;
 
+const CARROT_PICKUP_COLORS = ['#FF8C00', '#FF6600', '#FFA500', '#FF7700', '#FFD700', '#FF8C00'];
+
 export class GameLoop {
   private arena: Arena;
   private originalArena: Arena;  // un-mirrored arena for theme rendering
@@ -648,32 +650,30 @@ export class GameLoop {
   }
 
   private pickupCarrotVFX(x: number, y: number): void {
-    const cx = x;
     const cy = y + CARROT_SIZE / 2;
     // Orange carrot chunks — gib-style (bounce + settle on ground)
     for (let i = 0; i < 4; i++) {
       const s = 4 + Math.random() * 3;
-      this.launchGib(cx, cy, 10, 0.15, 0.85, 80, 200, s, s,
+      this.launchGib(x, cy, 10, 0.15, 0.85, 80, 200, s, s,
         '#FF8C00', '#CC6600', '#FFB040', '', 'body');
     }
     // Green leaf pieces
     for (let i = 0; i < 2; i++) {
-      this.launchGib(cx, cy, 8, 0.2, 0.8, 60, 160, 5, 3,
+      this.launchGib(x, cy, 8, 0.2, 0.8, 60, 160, 5, 3,
         '#4CAF50', '#2E7D32', '#81C784', '', 'body');
     }
     // Orange/gold particle burst (instant feedback)
-    const colors = ['#FF8C00', '#FF6600', '#FFA500', '#FF7700', '#FFD700', '#FF8C00'];
     for (let i = 0; i < 16; i++) {
       const angle = Math.random() * Math.PI * 2;
       const speed = 80 + Math.random() * 140;
       const life = 0.3 + Math.random() * 0.4;
-      this.emitParticle(cx, cy, Math.cos(angle) * speed, Math.sin(angle) * speed - 50, life, 2 + Math.random() * 5, colors[i % colors.length]);
+      this.emitParticle(x, cy, Math.cos(angle) * speed, Math.sin(angle) * speed - 50, life, 2 + Math.random() * 5, CARROT_PICKUP_COLORS[i % CARROT_PICKUP_COLORS.length]);
     }
     // Upward gold sparkle ring
     for (let i = 0; i < 8; i++) {
       const angle = (i / 8) * Math.PI * 2;
       const speed = 30 + Math.random() * 30;
-      this.emitParticle(cx, cy, Math.cos(angle) * speed, -50 - Math.random() * 40, 0.4 + Math.random() * 0.2, 1.5 + Math.random() * 2, '#FFD700');
+      this.emitParticle(x, cy, Math.cos(angle) * speed, -50 - Math.random() * 40, 0.4 + Math.random() * 0.2, 1.5 + Math.random() * 2, '#FFD700');
     }
   }
 
@@ -1074,11 +1074,14 @@ export class GameLoop {
     // Animation timers
     for (const player of this.state.players) {
       if (!player.active) continue;
-      // Hitstop: decay timer, let visual timers tick, but skip animation advance
+      // Hitstop: decay timer + status timers, but skip animation advance + physics
       if (player.hitstopTimer > 0) {
         player.hitstopTimer -= dt;
-        if (player.damageFlashTimer > 0) player.damageFlashTimer -= dt;
+        if (player.fatTimer > 0) player.fatTimer -= dt;
+        if (player.slowTimer > 0) player.slowTimer -= dt;
         if (player.burnTimer > 0) player.burnTimer -= dt;
+        if (player.damageFlashTimer > 0) player.damageFlashTimer -= dt;
+        if (player.springTrailTimer > 0) player.springTrailTimer -= dt;
         continue;
       }
       player.animTimer += dt;
@@ -1515,7 +1518,7 @@ export class GameLoop {
           audio.playAnimal(player.character.name);
           // Hitstop — shorter than kill (half duration)
           player.hitstopTimer = Math.max(player.hitstopTimer, HITSTOP_DURATION * 0.5);
-          this.state.hitstopZoom = HITSTOP_DURATION * 0.5;
+          this.state.hitstopZoom = Math.max(this.state.hitstopZoom, HITSTOP_DURATION * 0.5);
           // Score animation for carrot pickup
           this.state.scoreAnimations.push({ playerId: player.id, value: player.score, timer: SCORE_ANIM_DURATION });
           // Pickup VFX — orange burst from carrot position
