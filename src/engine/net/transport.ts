@@ -40,6 +40,11 @@ export class Transport {
   get currentRtt(): number { return this.rtt; }
   get connected(): boolean { return this.status === 'connected'; }
 
+  /** Replace event callbacks (used when transitioning from lobby to match). */
+  setEvents(events: TransportEvents): void {
+    this.events = events;
+  }
+
   /** Create a room as host. Returns the room code. */
   async createRoom(): Promise<string> {
     this.setStatus('creating');

@@ -169,35 +169,34 @@ export function OnlineLobby() {
 
   const startMatch = useCallback(() => {
     // Set up player slots: host = P1, guest = P2
-    const host = CHARACTERS.P1;
-    const guest = CHARACTERS.P2;
+    // Each peer must assign characters so P1=host's pick, P2=guest's pick
+    const myChar = localCharRef.current;
+    const theirChar = online.remoteCharacterName || (online.isHost ? 'Fox' : 'Bunny');
 
-    // Assign characters
-    if (online.isHost) {
-      host.name = localCharacter;
-      const charDef = allChars.find(c => c.name === localCharacter);
-      if (charDef) { host.color = charDef.color; host.darkColor = charDef.darkColor; host.lightColor = charDef.lightColor; }
+    const p1Name = online.isHost ? myChar : theirChar;
+    const p2Name = online.isHost ? theirChar : myChar;
 
-      const remoteName = online.remoteCharacterName || 'Fox';
-      guest.name = remoteName;
-      const remoteCharDef = allChars.find(c => c.name === remoteName);
-      if (remoteCharDef) { guest.color = remoteCharDef.color; guest.darkColor = remoteCharDef.darkColor; guest.lightColor = remoteCharDef.lightColor; }
-    } else {
-      guest.name = localCharacter;
-      const charDef = allChars.find(c => c.name === localCharacter);
-      if (charDef) { guest.color = charDef.color; guest.darkColor = charDef.darkColor; guest.lightColor = charDef.lightColor; }
+    const p1Def = allChars.find(c => c.name === p1Name);
+    const p2Def = allChars.find(c => c.name === p2Name);
 
-      const remoteName = online.remoteCharacterName || 'Bunny';
-      host.name = remoteName;
-      const remoteCharDef = allChars.find(c => c.name === remoteName);
-      if (remoteCharDef) { host.color = remoteCharDef.color; host.darkColor = remoteCharDef.darkColor; host.lightColor = remoteCharDef.lightColor; }
+    if (p1Def) {
+      CHARACTERS.P1.name = p1Def.name;
+      CHARACTERS.P1.color = p1Def.color;
+      CHARACTERS.P1.darkColor = p1Def.darkColor;
+      CHARACTERS.P1.lightColor = p1Def.lightColor;
+    }
+    if (p2Def) {
+      CHARACTERS.P2.name = p2Def.name;
+      CHARACTERS.P2.color = p2Def.color;
+      CHARACTERS.P2.darkColor = p2Def.darkColor;
+      CHARACTERS.P2.lightColor = p2Def.lightColor;
     }
 
     transitioningToMatch.current = true;
     setActivePlayers(['P1', 'P2']);
     setOnline({ isOnline: true });
     setScreen('match');
-  }, [online.isHost, online.remoteCharacterName, localCharacter, allChars, setActivePlayers, setOnline, setScreen]);
+  }, [online.isHost, online.remoteCharacterName, allChars, setActivePlayers, setOnline, setScreen]);
 
   // When both ready and host, send START
   useEffect(() => {

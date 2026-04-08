@@ -67,11 +67,17 @@ export class NetMatch {
 
   /** Start the network match. */
   start(): void {
-    // Override transport events to route to rollback
-    // The transport was already created by OnlineLobby, so we need to
-    // re-wire its message handlers for match-time behavior.
-    // Since Transport uses callbacks set at construction time, we need to
-    // handle messages at a higher level.
+    // Re-wire transport callbacks from lobby handlers to match handlers
+    this.transport.setEvents({
+      onStatusChange: (_status, _error) => {
+        if (_status === 'disconnected' || _status === 'error') {
+          this.onDisconnect?.();
+        }
+      },
+      onReliableMessage: (msg) => this.handleReliableMessage(msg),
+      onUnreliableMessage: (data) => this.handleUnreliableMessage(data),
+      onRttUpdate: () => {},
+    });
 
     this.rollback.start();
   }
