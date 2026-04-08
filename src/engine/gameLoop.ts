@@ -411,7 +411,24 @@ export class GameLoop {
   }
 
   /** Render current frame. Public for network loop. */
-  renderFrame(): void {
+  renderFrame(frameDt?: number): void {
+    // In network mode, decay real-time timers that are normally handled in loop()
+    if (this._networkMode && frameDt) {
+      if (this.state.slowMotion > 0) this.state.slowMotion -= frameDt;
+      if (this.state.screenFlash > 0) this.state.screenFlash -= frameDt;
+      if (this.state.hitstopZoom > 0) this.state.hitstopZoom -= frameDt;
+      // Fireworks when match is over
+      if (this.state.matchOver) {
+        this.fireworkTimer -= frameDt;
+        if (this.fireworkTimer <= 0) {
+          this.fireworkTimer = 0.3;
+          this.spawnFirework();
+        }
+        this.updateParticles(frameDt);
+        this.updateGibs(frameDt);
+        this.updateConfetti(frameDt);
+      }
+    }
     // Bake settled gibs/blood
     if (this.newGroundedGibsSinceRender.length > 0) {
       this.renderer.bakeGibs(this.newGroundedGibsSinceRender);

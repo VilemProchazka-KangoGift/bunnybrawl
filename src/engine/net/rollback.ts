@@ -165,8 +165,8 @@ export class RollbackEngine {
       this.accumulator -= FIXED_TIMESTEP;
     }
 
-    // Render
-    this.gameLoop.renderFrame();
+    // Render (pass frameDt for real-time timer decay: slowMotion, screenFlash, hitstopZoom)
+    this.gameLoop.renderFrame(dt);
 
     this.rafId = requestAnimationFrame(this.networkLoop);
   };
