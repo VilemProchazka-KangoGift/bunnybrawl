@@ -24,6 +24,7 @@ export function OnlineLobby() {
     localCharRef.current = name;
     _setLocalCharacter(name);
   }, []);
+  const remoteCharRef = useRef<string | null>(null);
   const [remoteReady, setRemoteReady] = useState(false);
   const [localReady, setLocalReady] = useState(false);
   const allChars = getAllCharacters();
@@ -56,6 +57,7 @@ export function OnlineLobby() {
         // Acknowledged — no echo (both sides send on connect, echoing would loop)
         break;
       case MsgType.CHARACTER_SELECT:
+        remoteCharRef.current = msg.characterName;
         setOnline({ remoteCharacterName: msg.characterName });
         break;
       case MsgType.SETTINGS_SYNC: {
@@ -171,7 +173,7 @@ export function OnlineLobby() {
     // Set up player slots: host = P1, guest = P2
     // Each peer must assign characters so P1=host's pick, P2=guest's pick
     const myChar = localCharRef.current;
-    const theirChar = online.remoteCharacterName || (online.isHost ? 'Fox' : 'Bunny');
+    const theirChar = remoteCharRef.current || online.remoteCharacterName || (online.isHost ? 'Fox' : 'Bunny');
 
     const p1Name = online.isHost ? myChar : theirChar;
     const p2Name = online.isHost ? theirChar : myChar;
