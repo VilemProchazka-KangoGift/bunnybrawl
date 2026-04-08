@@ -34,6 +34,12 @@ P2P WebRTC via PeerJS with GGPO-style rollback netcode. Free signaling at `0.pee
 - START zone sends CHARACTER_SELECT + READY via transport, waits for remote READY before countdown
 - `resolveStuckPlayer()` failsafe catches desync-related geometry embedding (>5px overlap → eject to nearest surface)
 
+## React Strict Mode + Effects
+- React dev mode double-invokes effects: mount → unmount → mount. If setup and cleanup are in SEPARATE `useEffect([], [])` calls, cleanup destroys the transport on first unmount, but the setup ref guard (`startedRef`) stays `true` so the second mount skips recreation → transport is dead.
+- **Fix**: merge setup + cleanup into ONE `useEffect` with matched return. Strict Mode re-invocation then properly tears down and recreates.
+- Never use a `startedRef` guard in effects that need to survive Strict Mode — the ref persists across the unmount/remount cycle.
+- Read store state inside the effect body via `useGameStore.getState()` instead of capturing from render closure — avoids stale values when Strict Mode re-runs the effect.
+
 ## Transport Lifecycle
 1. OnlineLobby creates Transport with lobby callbacks
 2. `Transport.setEvents()` re-wires to match callbacks when NetMatch starts (critical — without this, rollback engine never receives input messages → game freezes)

@@ -87,3 +87,4 @@
 - NEVER echo HANDSHAKE messages — both sides send once on connect. Echoing creates infinite ping-pong.
 - Character selection messages must NOT auto-switch and re-send — creates infinite cascade. Filter the dropdown instead.
 - React `useCallback` closures capture stale Zustand state. Use refs (`localCharRef`, `remoteCharRef`) for values read inside callbacks that fire from network events.
+- React Strict Mode double-invokes effects. Setup + cleanup MUST be in ONE `useEffect` — separate effects cause cleanup to destroy transport while a `startedRef` guard prevents re-creation on re-mount.
