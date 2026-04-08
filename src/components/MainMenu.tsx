@@ -630,10 +630,9 @@ export function MainMenu() {
                     )}
 
                     <div className="online-section">
-                      <span className="online-section-title">{t('players', 'Players')}</span>
-                      <div className="online-player-list">
-                        <div className="online-player-row">
-                          <select className="online-char-select" value={onlineLocalChar} disabled={onlineLocalReady}
+                      <span className="online-section-title">{t('your_character', 'Your character')}</span>
+                      <div className="online-player-row">
+                        <select className="online-char-select" value={onlineLocalChar} disabled={onlineLocalReady}
                             onChange={(e) => {
                               setOnlineLocalChar(e.target.value); onlineLocalCharRef.current = e.target.value;
                               localStorage.setItem('bunnybrawl_online_char', e.target.value);
@@ -644,6 +643,18 @@ export function MainMenu() {
                             )}
                           </select>
                           {online.isHost && <span className="online-host-badge">{t('host', 'HOST')}</span>}
+                      </div>
+                    </div>
+
+                    <div className="online-section">
+                      <span className="online-section-title">{t('players', 'Players')}</span>
+                      <div className="online-player-list">
+                        <div className="online-player-row">
+                          <span className="online-char-name">
+                            {getCharacterEmoji(onlineLocalChar)} {getCharacterDisplayName(onlineLocalChar, i18n.language)}
+                          </span>
+                          {online.isHost && <span className="online-host-badge">{t('host', 'HOST')}</span>}
+                          {onlineLocalReady && <span className="online-ready-badge">{t('ready', 'READY')}</span>}
                         </div>
                         <div className="online-player-row">
                           <span className="online-char-name">
