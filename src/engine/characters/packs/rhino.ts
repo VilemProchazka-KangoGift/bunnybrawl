@@ -61,7 +61,7 @@ export const rhino: CharacterPack = {
   emoji: '\uD83E\uDD8F', customEyes: false, idleTransform: 'headBob',
   splatShape: 'circle',
   gibs: [{ gibType: 'ear', width: 8, height: 8 }, { gibType: 'ear', width: 8, height: 8 }, { gibType: 'horn', width: 8, height: 14 }, { gibType: 'body', width: 14, height: 12 }],
-  translations: { en: 'Rhino', cs: 'Nosorožec' },
+  translations: { en: 'Rhino', cs: 'Nosorožec', hi: 'गैंडा', fil: 'Rinoseros' },
   legStyle: { shape: 'wide', footStyle: 'round', legWidth: 9, legHeight: 7 },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.55, rx: w * 0.44, ry: h * 0.4 }),
   drawSprite, drawGib,

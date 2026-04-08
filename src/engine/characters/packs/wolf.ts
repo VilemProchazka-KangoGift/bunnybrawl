@@ -54,7 +54,7 @@ export const wolf: CharacterPack = {
   emoji: '\uD83D\uDC3A', customEyes: false, idleTransform: 'headBob',
   splatShape: 'star',
   gibs: [{ gibType: 'ear', width: 8, height: 12 }, { gibType: 'ear', width: 8, height: 12 }, { gibType: 'tail', width: 16, height: 10 }, { gibType: 'body', width: 14, height: 12 }],
-  translations: { en: 'Wolf', cs: 'Vlk' },
+  translations: { en: 'Wolf', cs: 'Vlk', hi: 'भेड़िया', fil: 'Lobo' },
   legStyle: { shape: 'tapered', footStyle: 'paw', legWidth: 7 },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.52, rx: w * 0.4, ry: h * 0.4 }),
   drawSprite, drawGib,

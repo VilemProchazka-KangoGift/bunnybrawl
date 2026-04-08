@@ -68,7 +68,7 @@ export const monkey: CharacterPack = {
   emoji: '\uD83D\uDC35', customEyes: true, idleTransform: 'headBob',
   splatShape: 'star',
   gibs: [{ gibType: 'ear', width: 10, height: 10 }, { gibType: 'ear', width: 10, height: 10 }, { gibType: 'tail', width: 16, height: 8 }, { gibType: 'body', width: 14, height: 12 }],
-  translations: { en: 'Monkey', cs: 'Opice' },
+  translations: { en: 'Monkey', cs: 'Opice', hi: 'बंदर', fil: 'Unggoy' },
   legStyle: { shape: 'tapered', footStyle: 'paw' },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.52, rx: w * 0.4, ry: h * 0.4 }),
   drawSprite, drawGib,

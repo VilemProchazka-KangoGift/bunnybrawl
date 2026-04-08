@@ -60,7 +60,7 @@ export const fox: CharacterPack = {
   emoji: '\uD83E\uDD8A', customEyes: false, idleTransform: 'none',
   splatShape: 'star',
   gibs: [{ gibType: 'ear', width: 10, height: 10 }, { gibType: 'ear', width: 10, height: 10 }, { gibType: 'tail', width: 16, height: 10 }, { gibType: 'snout', width: 8, height: 6 }, { gibType: 'body', width: 14, height: 12 }],
-  translations: { en: 'Fox', cs: 'Liška' },
+  translations: { en: 'Fox', cs: 'Liška', hi: 'लोमड़ी', fil: 'Soro' },
   legStyle: { shape: 'tapered', footStyle: 'paw' },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.55, rx: w * 0.38, ry: h * 0.38 }),
   drawSprite, drawGib,

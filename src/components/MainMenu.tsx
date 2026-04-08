@@ -186,8 +186,13 @@ export function MainMenu() {
 
   useEffect(() => {
     audio.init();
+    audio.setMusicDisabled(matchSettings.mods.noMusic);
     audio.playMenuMusic();
   }, []);
+
+  useEffect(() => {
+    audio.setMusicDisabled(matchSettings.mods.noMusic);
+  }, [matchSettings.mods.noMusic]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -328,6 +333,32 @@ export function MainMenu() {
               </svg>
               CS
             </span>
+            {' | '}
+            <span
+              onClick={() => i18n.changeLanguage('hi')}
+              style={{ fontWeight: i18n.language === 'hi' ? 'bold' : 'normal', opacity: i18n.language === 'hi' ? 1 : 0.6 }}
+            >
+              <svg width="18" height="12" viewBox="0 0 60 40" style={{ verticalAlign: 'middle', marginRight: 4 }}>
+                <rect width="60" height="13.3" fill="#FF9933"/>
+                <rect y="13.3" width="60" height="13.4" fill="#fff"/>
+                <rect y="26.7" width="60" height="13.3" fill="#138808"/>
+                <circle cx="30" cy="20" r="4" fill="none" stroke="#000080" strokeWidth="0.8"/>
+              </svg>
+              HI
+            </span>
+            {' | '}
+            <span
+              onClick={() => i18n.changeLanguage('fil')}
+              style={{ fontWeight: i18n.language === 'fil' ? 'bold' : 'normal', opacity: i18n.language === 'fil' ? 1 : 0.6 }}
+            >
+              <svg width="18" height="12" viewBox="0 0 60 40" style={{ verticalAlign: 'middle', marginRight: 4 }}>
+                <rect width="60" height="20" fill="#0038A8"/>
+                <rect y="20" width="60" height="20" fill="#CE1126"/>
+                <polygon points="0,0 28,20 0,40" fill="#fff"/>
+                <circle cx="9" cy="20" r="3" fill="none" stroke="#FCD116" strokeWidth="0.8"/>
+              </svg>
+              FIL
+            </span>
           </div>
           <button className="btn-base help-btn" onClick={() => { audio.init(); audio.play('select'); setHelpOpen(true); }}>
             {t('help_button')}
@@ -356,6 +387,13 @@ export function MainMenu() {
                       ))}
                     </div>
                     <p className="help-text help-controls-note">{t('help_controls_note')}</p>
+                  </div>
+                  <div className="help-section">
+                    <h3 className="help-section-title">{t('help_pickups_title')}</h3>
+                    <p className="help-text">{t('help_pickups_carrots')}</p>
+                    <p className="help-text">{t('help_pickups_springs')}</p>
+                    <p className="help-text">{t('help_pickups_thorns')}</p>
+                    <p className="help-text">{t('help_pickups_falloff')}</p>
                   </div>
                   <div className="help-section">
                     <h3 className="help-section-title">{t('help_lobby_title')}</h3>
@@ -391,6 +429,7 @@ export function MainMenu() {
                   { key: 'superBounce', name: 'mod_super_bounce', desc: 'mod_super_bounce_desc' },
                   { key: 'mirrorArena', name: 'mod_mirror', desc: 'mod_mirror_desc' },
                   { key: 'underwaterGravity', name: 'mod_underwater_gravity', desc: 'mod_underwater_gravity_desc' },
+                  { key: 'noMusic', name: 'mod_no_music', desc: 'mod_no_music_desc' },
                 ] as const).map(mod => (
                   <div className="mod-row" key={mod.key}>
                     <label className="mod-toggle">

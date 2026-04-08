@@ -48,7 +48,7 @@ export const bunny: CharacterPack = {
   emoji: '\uD83D\uDC30', customEyes: false, idleTransform: 'none',
   splatShape: 'paw',
   gibs: [{ gibType: 'ear', width: 8, height: 20 }, { gibType: 'ear', width: 8, height: 20 }, { gibType: 'tail', width: 8, height: 8 }, { gibType: 'body', width: 14, height: 12 }],
-  translations: { en: 'Bunny', cs: 'Králík' },
+  translations: { en: 'Bunny', cs: 'Králík', hi: 'खरगोश', fil: 'Kuneho' },
   legStyle: { shape: 'rounded', footStyle: 'paw', footHeight: 4 },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.55, rx: w * 0.4, ry: h * 0.4 }),
   drawSprite, drawGib,

@@ -90,7 +90,7 @@ export const hedgehog: CharacterPack = {
   emoji: '\uD83E\uDD94', customEyes: true, idleTransform: 'headBob',
   splatShape: 'star',
   gibs: [{ gibType: 'spine', width: 6, height: 10 }, { gibType: 'spine', width: 6, height: 10 }, { gibType: 'snout', width: 8, height: 6 }, { gibType: 'body', width: 14, height: 12 }],
-  translations: { en: 'Hedgehog', cs: 'Ježek' },
+  translations: { en: 'Hedgehog', cs: 'Ježek', hi: 'साही', fil: 'Hedgehog' },
   legStyle: { shape: 'stick', footStyle: 'paw', legWidth: 4, legHeight: 9 },
   bodyEllipse: (cx, yOff, w, h) => ({ cx: cx + 2, cy: yOff + h * 0.55, rx: w * 0.34, ry: h * 0.32 }),
   noHighlight: true,

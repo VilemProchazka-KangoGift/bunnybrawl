@@ -111,7 +111,7 @@ export const goat: CharacterPack = {
   emoji: '\uD83D\uDC10', customEyes: true, idleTransform: 'headBob',
   splatShape: 'star',
   gibs: [{ gibType: 'horn', width: 8, height: 14 }, { gibType: 'horn', width: 8, height: 14 }, { gibType: 'beard', width: 8, height: 10 }, { gibType: 'body', width: 14, height: 12 }],
-  translations: { en: 'Goat', cs: 'Koza' },
+  translations: { en: 'Goat', cs: 'Koza', hi: 'बकरी', fil: 'Kambing' },
   legStyle: { shape: 'tapered', footStyle: 'hoof' },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.52, rx: w * 0.4, ry: h * 0.4 }),
   drawSprite, drawGib,

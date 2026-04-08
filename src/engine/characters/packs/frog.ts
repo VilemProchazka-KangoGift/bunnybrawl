@@ -48,7 +48,7 @@ export const frog: CharacterPack = {
   emoji: '\uD83D\uDC38', customEyes: true, idleTransform: 'none',
   splatShape: 'splat',
   gibs: [{ gibType: 'body', width: 12, height: 10 }, { gibType: 'body', width: 10, height: 10 }, { gibType: 'body', width: 11, height: 9 }],
-  translations: { en: 'Frog', cs: 'Žába' },
+  translations: { en: 'Frog', cs: 'Žába', hi: 'मेंढक', fil: 'Palaka' },
   legStyle: { shape: 'wide', footStyle: 'webbed', legWidth: 5, spreadAngle: 4 },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.55, rx: w * 0.42, ry: h * 0.35 }),
   drawSprite, drawGib,

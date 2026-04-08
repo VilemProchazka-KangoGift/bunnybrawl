@@ -131,3 +131,7 @@ this.state.hitstopZoom = HITSTOP_DURATION * 0.5;
 - **Hitstop timer uses `Math.max()`** — don't overwrite a longer existing hitstop with a shorter one.
 - **`HITSTOP_DURATION` is imported from constants** — already available in gameLoop.ts. Don't hardcode frame counts.
 - **Sound volume stacking** — if multiple sounds play on same frame (e.g. crunch + animal), keep individual volumes moderate (0.3-0.4) to avoid clipping.
+
+## Audio-Disabling Mods
+
+Music disable is centralized in `AudioManager.setMusicDisabled(bool)` — sets `musicDisabled` flag and stops active music. Both `playMenuMusic()` and `playMusic()` early-return when the flag is set (same pattern as `muted`). Call sites don't need guards — just call `audio.setMusicDisabled()` from the mod toggle in `MainMenu.tsx`.
