@@ -165,6 +165,7 @@ export function MainMenu() {
   const rafRef = useRef<number>(0);
 
   const [modsOpen, setModsOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const handlePlay = useCallback(() => {
     audio.init();
@@ -325,9 +326,58 @@ export function MainMenu() {
               CS
             </span>
           </div>
+          <button className="btn-base help-btn" onClick={() => { audio.init(); audio.play('select'); setHelpOpen(true); }}>
+            {t('help_button')}
+          </button>
           <button className="btn-base mods-btn" onClick={() => { audio.init(); audio.play('select'); setModsOpen(true); }}>
             {t('mods_button')}
           </button>
+          {helpOpen && (
+            <div className="mods-overlay" onClick={() => setHelpOpen(false)}>
+              <div className="help-modal" onClick={e => e.stopPropagation()}>
+                <h2 className="mods-title">{t('help_title')}</h2>
+                <div className="help-sections">
+                  <div className="help-section">
+                    <h3 className="help-section-title">{t('help_goal_title')}</h3>
+                    <p className="help-text">{t('help_goal')}</p>
+                  </div>
+                  <div className="help-section">
+                    <h3 className="help-section-title">{t('help_scoring_title')}</h3>
+                    <p className="help-text">{t('help_scoring')}</p>
+                  </div>
+                  <div className="help-section">
+                    <h3 className="help-section-title">{t('help_controls_title')}</h3>
+                    <div className="help-controls-grid">
+                      <span className="help-control-line">{t('help_controls_p1')}</span>
+                      <span className="help-control-line">{t('help_controls_p2')}</span>
+                      <span className="help-control-line">{t('help_controls_p3')}</span>
+                      <span className="help-control-line">{t('help_controls_p4')}</span>
+                      <span className="help-control-line">{t('help_controls_p5')}</span>
+                    </div>
+                    <p className="help-text help-controls-note">{t('help_controls_note')}</p>
+                  </div>
+                  <div className="help-section">
+                    <h3 className="help-section-title">{t('help_lobby_title')}</h3>
+                    <p className="help-text">{t('help_lobby')}</p>
+                  </div>
+                  <div className="help-section">
+                    <h3 className="help-section-title">{t('help_options_title')}</h3>
+                    <p className="help-text">{t('help_options_arena')}</p>
+                    <p className="help-text">{t('help_options_bots')}</p>
+                    <p className="help-text">{t('help_options_blood')}</p>
+                    <p className="help-text">{t('help_options_mods')}</p>
+                  </div>
+                  <div className="help-section">
+                    <h3 className="help-section-title">{t('help_tips_title')}</h3>
+                    <p className="help-text">{t('help_tips')}</p>
+                  </div>
+                </div>
+                <button className="btn-base mods-close-btn" onClick={() => setHelpOpen(false)}>
+                  {t('help_close')}
+                </button>
+              </div>
+            </div>
+          )}
           {modsOpen && (
             <div className="mods-overlay" onClick={() => setModsOpen(false)}>
               <div className="mods-modal" onClick={e => e.stopPropagation()}>
