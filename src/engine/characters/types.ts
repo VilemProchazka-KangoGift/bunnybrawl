@@ -59,10 +59,8 @@ export interface CharacterPack {
   splatShape: SplatShape;
   gibs: GibDef[];
 
-  /** Returns body ellipse params for 3D shading overlays (highlight + fur edge). */
+  /** Returns body ellipse params for 3D shading overlays (highlight spot). */
   bodyEllipse: (cx: number, yOff: number, w: number, h: number) => BodyEllipseParams;
-  /** Fur edge intensity (0 = smooth skin, 1 = full fur). Defaults to 1.0 if omitted. */
-  furIntensity?: number;
 
   translations?: Record<string, string>;
 }

@@ -11,7 +11,7 @@ import {
 import { drawCloud as drawCloudPrimitive, drawHill, drawPlatformMoss } from './themes/drawPrimitives';
 import { hexToRGB } from './fastMath';
 import { getCharacterEmoji, hasCustomEyes, getSpriteRenderer, getGibRenderer, getCharacterPack, getCharacterDisplayName } from './characters';
-import { drawHighlightSpot, drawFurEdge } from './spriteShading';
+import { drawHighlightSpot } from './spriteShading';
 import type { BodyEllipseParams } from './spriteShading';
 import { debugFlags } from './debugFlags';
 import { drawNavDebugOverlay } from './navDebugOverlay';
@@ -1634,7 +1634,6 @@ export class Renderer {
     if (pack) {
       const bodyParams: BodyEllipseParams = pack.bodyEllipse(cx, yOff, w, h);
       drawHighlightSpot(ctx, bodyParams);
-      drawFurEdge(ctx, bodyParams, char.darkColor, pack.furIntensity ?? 1.0);
     }
 
     // Eyes (generic — for characters without custom eyes)

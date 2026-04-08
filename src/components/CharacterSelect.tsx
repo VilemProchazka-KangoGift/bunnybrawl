@@ -10,7 +10,7 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CRO
 import {
   drawTree, drawBush, drawFlower, drawMushroom, drawGrassTuft, drawCloud,
 } from '../engine/themes/drawPrimitives';
-import { drawHighlightSpot, drawFurEdge } from '../engine/spriteShading';
+import { drawHighlightSpot } from '../engine/spriteShading';
 import './CharacterSelect.css';
 
 import { initWildlife, updateAndDrawWildlife, drawDayNightCycle } from '../engine/canvasAnimations';
@@ -882,7 +882,6 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
   if (lobbyPack) {
     const bodyParams = lobbyPack.bodyEllipse(cx, yOff, w, h);
     drawHighlightSpot(ctx, bodyParams);
-    drawFurEdge(ctx, bodyParams, char.darkColor, lobbyPack.furIntensity ?? 1.0);
   }
 
   // Generic eyes for characters without custom ones

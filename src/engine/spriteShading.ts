@@ -37,6 +37,14 @@ export function getBodyEllipse(
   }
 }
 
+function blendColors(hex1: string, hex2: string, t: number): string {
+  const c1 = hexToRGB(hex1), c2 = hexToRGB(hex2);
+  const r = Math.round(c1.r + (c2.r - c1.r) * t);
+  const g = Math.round(c1.g + (c2.g - c1.g) * t);
+  const b = Math.round(c1.b + (c2.b - c1.b) * t);
+  return `rgb(${r},${g},${b})`;
+}
+
 /** Fill a body ellipse with radial gradient shading. Restores fillStyle to char.color after. */
 export function fillBodyGradient(
   ctx: CanvasRenderingContext2D,
@@ -106,51 +114,5 @@ export function drawHighlightSpot(
   ctx.fillStyle = grad;
   ctx.beginPath();
   ctx.ellipse(hx, hy, hr, hr * 0.75, -0.3, 0, Math.PI * 2);
-  ctx.fill();
-}
-
-function blendColors(hex1: string, hex2: string, t: number): string {
-  const c1 = hexToRGB(hex1), c2 = hexToRGB(hex2);
-  const r = Math.round(c1.r + (c2.r - c1.r) * t);
-  const g = Math.round(c1.g + (c2.g - c1.g) * t);
-  const b = Math.round(c1.b + (c2.b - c1.b) * t);
-  return `rgb(${r},${g},${b})`;
-}
-
-function hexToRGBA(hex: string, alpha: number): string {
-  const { r, g, b } = hexToRGB(hex);
-  return `rgba(${r},${g},${b},${alpha})`;
-}
-
-/** Per-character fur edge intensity. */
-export function getFurIntensity(charName: string): number {
-  switch (charName) {
-    case 'Frog': return 0;
-    case 'Hedgehog': return 0;
-    case 'Sheep': return 0.3;
-    case 'Rhino': return 0.2;
-    case 'Pig': return 0.3;
-    default: return 1.0;
-  }
-}
-
-/** Draw a soft outer glow around the body for a plush/rounded look. */
-export function drawFurEdge(
-  ctx: CanvasRenderingContext2D,
-  params: BodyEllipseParams,
-  darkColor: string,
-  intensity: number = 1.0,
-): void {
-  if (intensity <= 0) return;
-
-  const { cx, cy, rx, ry } = params;
-  const glowR = Math.max(rx, ry) + 3;
-  const grad = ctx.createRadialGradient(cx, cy, Math.max(rx, ry) - 1, cx, cy, glowR);
-  grad.addColorStop(0, hexToRGBA(darkColor, 0.12 * intensity));
-  grad.addColorStop(1, hexToRGBA(darkColor, 0));
-
-  ctx.fillStyle = grad;
-  ctx.beginPath();
-  ctx.ellipse(cx, cy, rx + 3, ry + 3, 0, 0, Math.PI * 2);
   ctx.fill();
 }

@@ -50,6 +50,5 @@ export const frog: CharacterPack = {
   gibs: [{ gibType: 'body', width: 12, height: 10 }, { gibType: 'body', width: 10, height: 10 }, { gibType: 'body', width: 11, height: 9 }],
   translations: { en: 'Frog', cs: 'Žába' },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.55, rx: w * 0.42, ry: h * 0.35 }),
-  furIntensity: 0,
   drawSprite, drawGib,
 };

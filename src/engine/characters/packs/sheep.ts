@@ -56,6 +56,6 @@ export const sheep: CharacterPack = {
   gibs: [{ gibType: 'ear', width: 8, height: 8 }, { gibType: 'ear', width: 8, height: 8 }, { gibType: 'wool', width: 14, height: 12 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Sheep', cs: 'Ovce' },
   bodyEllipse: (cx, yOff, _w, h) => ({ cx, cy: yOff + h * 0.46, rx: 12, ry: h * 0.18 }),
-  furIntensity: 0.3,
+
   drawSprite, drawGib,
 };
