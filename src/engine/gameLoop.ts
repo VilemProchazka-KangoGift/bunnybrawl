@@ -1204,7 +1204,7 @@ export class GameLoop {
         }
       }
       if (player.state === 'run' && Math.abs(player.vx) > 150 && Math.random() < 0.3) this.spawnRunDust(player);
-      if (wasAirborne && prevVy < -50 && player.vy === 0 && player.state === 'airborne') {
+      if (wasAirborne && prevVy < -10 && player.vy === 0 && player.state === 'airborne') {
         this.spawnImpactDust(player, 'up');
         // Headbonk sound with per-player cooldown
         const hc = this.headbonkCooldowns.get(player.id) || 0;
@@ -1323,14 +1323,20 @@ export class GameLoop {
         }
       }
 
-      // Footstep sounds
+      // Footstep sounds — interval and volume scale with speed
       if (player.state === 'run') {
+        const speed = Math.abs(player.vx);
+        const speedRatio = Math.min(speed / this.effWalkSpeed, 1);
+        const interval = 0.22 - speedRatio * 0.12; // 0.22s at slow, 0.1s at full speed
         let fAcc = this.footstepAccumulators.get(player.id) || 0;
         fAcc += dt;
-        if (fAcc >= 0.15) {
-          fAcc -= 0.15;
+        if (fAcc >= interval) {
+          fAcc -= interval;
           const playerBottom = player.y + player.height;
-          audio.play(playerBottom > 600 ? 'footstep_grass' : 'footstep_wood');
+          const name = playerBottom > 600 ? 'footstep_grass' : 'footstep_wood';
+          const vol = 0.08 + speedRatio * 0.2; // 0.08 at slow, 0.28 at full speed
+          audio.setVolume(name, vol);
+          audio.play(name);
         }
         this.footstepAccumulators.set(player.id, fAcc);
       } else {
@@ -1537,6 +1543,14 @@ export class GameLoop {
             // Push player horizontally and/or vertically
             player.vx += (zone.vx || 0) * dt;
             player.vy += (zone.vy || 0) * dt;
+            // Splash when entering waterfall (landing or falling in)
+            if (justLanded || (wasAirborne && prevVy >= 200)) {
+              const sc = this.landCooldowns.get(player.id) || 0;
+              if (sc <= 0) {
+                audio.play('splash');
+                this.landCooldowns.set(player.id, 0.3);
+              }
+            }
           } else if (zone.type === 'geyser') {
             // Find matching geyser state
             const geyserIdx = this.geyserIndexMap.get(zone) ?? -1;
