@@ -105,6 +105,7 @@
   "help_pickups_carrots": "Mrkve — Seber za 1 bod, ale po snědění ztloustneš a zpomalíš na pár sekund.",
   "help_pickups_springs": "Pružiny — Odrazové plošiny, které tě vystřelí do vzduchu.",
   "help_pickups_thorns": "Trny a nástrahy — Dotkni se jich a budeš zraněný: zpomalení na 5 sekund.",
+  "help_pickups_falloff": "Pád z mapy — Respawn bez ztráty bodů.",
   "help_lobby_title": "Lobby",
   "help_lobby": "Vejdi do zóny \"START\" pro vstup do zápasu. Skoč na jiného hráče pro výměnu postavy. Hra začne, když jsou všichni připojení hráči připraveni.",
   "help_options_title": "Možnosti",

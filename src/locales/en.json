@@ -102,6 +102,7 @@
   "help_pickups_carrots": "Carrots — Collect for 1 point, but eating makes you fat and slow for a few seconds.",
   "help_pickups_springs": "Springs — Bounce pads that launch you into the air.",
   "help_pickups_thorns": "Thorns & Hazards — Touch them and you get hurt: slowed down for 5 seconds.",
+  "help_pickups_falloff": "Falling off the map — Respawns you with no point loss.",
   "help_lobby_title": "Lobby",
   "help_lobby": "Walk into a \"START\" zone to join the match. Stomp another player to swap characters. Game starts when all joined players are ready.",
   "help_options_title": "Options",

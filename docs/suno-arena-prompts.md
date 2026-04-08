@@ -6,7 +6,7 @@ All prompts are under 200 characters, instrumental, loopable.
 > Peppy winter acoustic instrumental, bright celesta melody, sleigh bells, bouncy pizzicato strings, snappy tambourine, cheerful and frosty, snowball fight energy, loopable, no vocals
 
 ## Volcano
-> High-energy tribal rock instrumental, pounding taiko drums, punchy bass riff, fiery brass hits, fast claps, wild and thrilling, eruption party energy, loopable, no vocals
+> Dark ominous orchestral instrumental, driving percussion, massive low brass drones, thundering timpani, deep cello tremolo, pounding kick drum, volcanic doom energy, powerful and relentless, loopable, no vocals
 
 ## Castle
 > Lively medieval folk instrumental, fast hurdy-gurdy melody, galloping lute, punchy bodhr-n drums, festive and adventurous, castle feast dance energy, loopable, no vocals
@@ -15,7 +15,7 @@ All prompts are under 200 characters, instrumental, loopable.
 > Sugary hyper pop instrumental, bouncy toy piano melody, fast music box runs, bubbly marimba bass, sparkle chimes, sweet and energetic, candy rush party, loopable, no vocals
 
 ## Treetops
-> Upbeat forest folk instrumental, sprightly pan flute melody, fast fingerpicked banjo, chirpy bird calls, bouncy hand drums, sunny treetop adventure, loopable, no vocals
+> Primal jungle tribal instrumental, deep log drums, rhythmic shaker grooves, low didgeridoo drone, wild animal calls, raw percussive energy, dense canopy ritual vibe, loopable, no vocals
 
 ## Underwater
 > Playful tropical instrumental, bright steel drum melody, bouncy marimba arpeggios, bubbly percussion, snappy bongos, colorful coral reef party, loopable, no vocals
