@@ -410,6 +410,11 @@ export function MainMenu() {
                     <p className="help-text">{t('help_options_mods')}</p>
                   </div>
                   <div className="help-section">
+                    <h3 className="help-section-title">{t('help_online_title')}</h3>
+                    <p className="help-text">{t('help_online_desc')}</p>
+                    <p className="help-text">{t('help_online_steps')}</p>
+                  </div>
+                  <div className="help-section">
                     <h3 className="help-section-title">{t('help_tips_title')}</h3>
                     <p className="help-text">{t('help_tips')}</p>
                   </div>

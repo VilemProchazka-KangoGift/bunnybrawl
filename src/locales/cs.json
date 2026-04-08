@@ -136,6 +136,9 @@
   "any_keys": "Jakékoliv klávesy",
   "opponent_disconnected": "Soupeř se odpojil",
   "return_menu": "Zpět do menu",
+  "help_online_title": "Online hra",
+  "help_online_desc": "Online — Hraj proti kamarádovi přes internet. Jeden hráč vytvoří místnost a sdílí 4písmenný kód, druhý se připojí.",
+  "help_online_steps": "Oba hráči si vyberou postavu v lobby a pak vejdou do zóny START. Zápas začne, až budou oba připraveni. Nastavení botů se přenáší.",
   "code_placeholder": "Kód",
   "back": "Zpět"
 }

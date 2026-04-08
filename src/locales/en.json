@@ -133,6 +133,9 @@
   "any_keys": "Any keys",
   "opponent_disconnected": "Opponent Disconnected",
   "return_menu": "Return to Menu",
+  "help_online_title": "Online Play",
+  "help_online_desc": "Online — Play against a friend over the internet. One player creates a room and shares the 4-letter code, the other joins.",
+  "help_online_steps": "Both players pick characters in the lobby, then walk to the START zone. The match begins when both are ready. Bot settings carry over.",
   "code_placeholder": "Code",
   "back": "Back"
 }
