@@ -221,7 +221,8 @@ export function MainMenu() {
     // Include bots from settings
     const ms = useGameStore.getState().matchSettings;
     const botSlots = ALL_BOT_SLOTS.slice(0, ms.botCount);
-    assignBotCharacters(['P1', 'P2'], botSlots);
+    const rngSeed = useGameStore.getState().online.rngSeed;
+    assignBotCharacters(['P1', 'P2'], botSlots, rngSeed);
     setActivePlayers(['P1', 'P2', ...botSlots]);
     setOnline({ isOnline: true });
     setOnlineOpen(false);

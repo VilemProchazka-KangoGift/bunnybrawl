@@ -29,14 +29,23 @@ export function getCharacterForSlot(slot: PlayerSlot): CharacterDef {
   return CHARACTERS[slot];
 }
 
-/** Assign characters from registry to bot slots, avoiding characters already taken by humans. */
-export function assignBotCharacters(humanSlots: CharacterSlot[], botSlots: BotSlot[]): void {
+/** Assign characters from registry to bot slots, avoiding characters already taken by humans.
+ *  Optional seed for deterministic assignment (required for online play). */
+export function assignBotCharacters(humanSlots: CharacterSlot[], botSlots: BotSlot[], seed?: number): void {
   BOT_CHARACTERS.clear();
   const usedNames = new Set(humanSlots.map(s => CHARACTERS[s].name));
   const available = getAllCharacters().filter(c => !usedNames.has(c.name));
   const shuffled = [...available];
+  // Seeded PRNG (mulberry32) when seed provided, Math.random otherwise
+  let st = seed ?? 0;
+  const rnd = seed != null ? () => {
+    st = (st + 0x6d2b79f5) | 0;
+    let t = Math.imul(st ^ (st >>> 15), 1 | st);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  } : Math.random;
   for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(rnd() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
   for (let i = 0; i < botSlots.length; i++) {
