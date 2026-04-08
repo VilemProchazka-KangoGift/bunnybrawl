@@ -119,28 +119,83 @@
 }
 
 .online-modal {
-  max-width: 420px;
+  max-width: 440px;
+  min-width: 380px;
 }
 
-.online-info {
-  font-size: 16px;
-  color: rgba(255, 255, 255, 0.8);
-  margin: 4px 0 16px;
-  text-align: center;
-}
-
-.online-modal-actions {
+.online-step {
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: 16px;
+  padding: 8px 0;
+}
+
+.online-divider {
+  display: flex;
+  align-items: center;
   gap: 12px;
-  margin-bottom: 16px;
+  width: 80%;
+}
+
+.online-divider-line {
+  flex: 1;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.15);
 }
 
 .online-or {
-  font-size: 16px;
-  opacity: 0.5;
+  font-size: 14px;
+  opacity: 0.4;
   font-style: italic;
+}
+
+.online-join-label {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0;
+}
+
+.online-section {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.online-section-title {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.online-status-box {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.6);
+  text-align: center;
+  padding: 12px 0;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.online-player-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.online-player-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+}
+
+.online-you-label {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.4);
 }
 
 .online-join-row {
@@ -173,7 +228,19 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin: 8px 0 12px;
+  gap: 4px;
+  padding: 12px 24px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 12px;
+}
+
+.online-room-code-small .online-code {
+  font-size: 32px;
+  letter-spacing: 6px;
+}
+
+.online-room-code-small {
+  padding: 8px 20px;
 }
 
 .online-code-label {
