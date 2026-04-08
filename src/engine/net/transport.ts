@@ -130,28 +130,32 @@ export class Transport {
         return;
       }
 
+      // Resolve when we reach 'connected' status (set by setupConnection)
+      const origOnStatusChange = this.events.onStatusChange;
+      this.events.onStatusChange = (status, error) => {
+        origOnStatusChange(status, error);
+        if (status === 'connected') {
+          clearTimeout(timeout);
+          this.events.onStatusChange = origOnStatusChange; // restore
+          resolve();
+        } else if (status === 'error') {
+          clearTimeout(timeout);
+          this.events.onStatusChange = origOnStatusChange;
+          reject(new Error(error || 'Connection failed'));
+        }
+      };
+
       this.peer.on('open', () => {
         const conn = this.peer!.connect(hostPeerId, {
           reliable: true,
-          serialization: 'none',
         });
         this.conn = conn;
         this.setupConnection(conn);
-
-        conn.on('open', () => {
-          clearTimeout(timeout);
-          resolve();
-        });
-
-        conn.on('error', (err) => {
-          clearTimeout(timeout);
-          this.setStatus('error', `Connection error: ${err.message}`);
-          reject(err);
-        });
       });
 
       this.peer.on('error', (err) => {
         clearTimeout(timeout);
+        this.events.onStatusChange = origOnStatusChange;
         this.setStatus('error', err.type === 'peer-unavailable'
           ? 'Room not found — check the code and try again'
           : `Signaling error: ${err.type} — ${err.message}`);
@@ -162,17 +166,21 @@ export class Transport {
 
   /** Send a reliable JSON message. */
   sendReliable(msg: ReliableMessage): void {
-    if (!this.conn || this.status !== 'connected') return;
+    if (!this.conn) return;
+    if (!this.conn.open) {
+      console.warn('[Transport] sendReliable called but conn not open, status:', this.status);
+      return;
+    }
     try {
       this.conn.send(JSON.stringify(msg));
-    } catch {
-      // Connection might be closing
+    } catch (e) {
+      console.warn('[Transport] sendReliable error:', e);
     }
   }
 
   /** Send an unreliable binary message (inputs). */
   sendUnreliable(data: ArrayBuffer): void {
-    if (!this.conn || this.status !== 'connected') return;
+    if (!this.conn || !this.conn.open) return;
     try {
       this.conn.send(data);
     } catch {
@@ -198,16 +206,32 @@ export class Transport {
   }
 
   private setupConnection(conn: DataConnection): void {
-    conn.on('open', () => {
-      this.setStatus('connected');
-      this.startPing();
-    });
+    const onOpen = () => {
+      if (this.status !== 'connected') {
+        this.setStatus('connected');
+        this.startPing();
+      }
+    };
+
+    conn.on('open', onOpen);
+
+    // PeerJS race: on the host side, the connection may already be open
+    // by the time peer.on('connection') fires and we attach listeners.
+    if (conn.open) {
+      onOpen();
+    }
 
     conn.on('data', (data: unknown) => {
       if (data instanceof ArrayBuffer) {
         this.handleBinaryMessage(data);
       } else if (typeof data === 'string') {
         this.handleJsonMessage(data);
+      } else if (data && typeof data === 'object') {
+        // PeerJS binary serialization may deliver Uint8Array instead of ArrayBuffer
+        const typed = data as { buffer?: ArrayBuffer };
+        if (typed.buffer instanceof ArrayBuffer) {
+          this.handleBinaryMessage(typed.buffer);
+        }
       }
     });
 
