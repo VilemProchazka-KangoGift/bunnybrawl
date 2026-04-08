@@ -4,6 +4,7 @@ import { useGameStore } from '../store/gameStore';
 import { GameLoop } from '../engine/gameLoop';
 import { NetMatch } from '../engine/net/netMatch';
 import { getActiveTransport } from './OnlineLobby';
+import { getModalTransport } from './MainMenu';
 import { getArena, listArenas } from '../engine/arena';
 import { listThemes } from '../engine/themes/registry';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
@@ -125,7 +126,7 @@ export function Match() {
 
     if (online.isOnline) {
       // Network mode
-      const transport = getActiveTransport();
+      const transport = getModalTransport() || getActiveTransport();
       if (!transport) {
         console.error('No active transport for online match');
         setScreen('menu');

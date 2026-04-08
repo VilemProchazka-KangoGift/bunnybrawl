@@ -169,6 +169,99 @@
   box-shadow: 0 0 12px rgba(100, 149, 237, 0.3);
 }
 
+.online-room-code {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 8px 0 12px;
+}
+
+.online-code-label {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.online-code {
+  font-size: 48px;
+  font-weight: 700;
+  letter-spacing: 10px;
+  color: #FFD700;
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+  font-family: 'Fredoka One', monospace;
+}
+
+.online-status {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 8px 0;
+  text-align: center;
+}
+
+.online-error {
+  color: #FF6B6B;
+}
+
+.online-players {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 12px 0;
+  width: 100%;
+}
+
+.online-char-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+}
+
+.online-char-label {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.7);
+  min-width: 70px;
+  text-align: right;
+}
+
+.online-char-select {
+  padding: 6px 10px;
+  font-size: 16px;
+  font-family: 'Fredoka One', sans-serif;
+  border-radius: 8px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  cursor: pointer;
+}
+
+.online-char-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.online-ready-badge {
+  background: #5CBF60;
+  color: #fff;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.online-waiting {
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 8px 0;
+  text-align: center;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
 .arena-selector {
   margin-top: 20px;
   display: flex;

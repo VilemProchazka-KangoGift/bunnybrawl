@@ -12,7 +12,16 @@ import {
   drawTree, drawBush, drawFlower, drawMushroom, drawGrassTuft, drawCloud,
   drawFgBush, drawTallGrass, drawFern, drawFgWildflower,
 } from '../engine/themes/drawPrimitives';
+import { Transport } from '../engine/net/transport';
+import type { ConnectionStatus } from '../engine/net/transport';
+import { MsgType, PROTOCOL_VERSION } from '../engine/net/protocol';
+import type { ReliableMessage } from '../engine/net/protocol';
+import { CHARACTERS, getAllCharacters, getCharacterEmoji, getCharacterDisplayName } from '../engine/characters';
 import './MainMenu.css';
+
+// Re-export for Match.tsx — transport lives here now
+let _modalTransport: Transport | null = null;
+export function getModalTransport(): Transport | null { return _modalTransport; }
 
 const MENU_GROUND_Y = 580;
 const DAY_CYCLE_DURATION = 90;
@@ -160,7 +169,7 @@ function drawMenuBackground(ctx: CanvasRenderingContext2D): void {
 
 export function MainMenu() {
   const { t, i18n } = useTranslation();
-  const { setScreen, matchSettings, setMatchSettings } = useGameStore();
+  const { setScreen, matchSettings, setMatchSettings, setActivePlayers, setOnline, resetOnline, online } = useGameStore();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number>(0);
 
@@ -169,6 +178,108 @@ export function MainMenu() {
   const [onlineOpen, setOnlineOpen] = useState(false);
   const [onlineJoinMode, setOnlineJoinMode] = useState(false);
   const [onlineJoinCode, setOnlineJoinCode] = useState('');
+
+  // Online flow state (all inside modal)
+  const [onlineStep, setOnlineStep] = useState<'choose' | 'connecting' | 'lobby'>('choose');
+  const [onlineLocalChar, setOnlineLocalChar] = useState(() =>
+    localStorage.getItem('bunnybrawl_online_char') || CHARACTERS.P1.name
+  );
+  const onlineLocalCharRef = useRef(CHARACTERS.P1.name);
+  onlineLocalCharRef.current = onlineLocalChar;
+  const [onlineRemoteReady, setOnlineRemoteReady] = useState(false);
+  const [onlineLocalReady, setOnlineLocalReady] = useState(false);
+  const onlineTransportRef = useRef<Transport | null>(null);
+  const remoteCharRef = useRef<string | null>(null);
+
+  const allChars = getAllCharacters();
+
+  const onlineCleanup = useCallback(() => {
+    if (onlineTransportRef.current) {
+      onlineTransportRef.current.destroy();
+      onlineTransportRef.current = null;
+      _modalTransport = null;
+    }
+    resetOnline();
+    setOnlineStep('choose');
+    setOnlineJoinMode(false);
+    setOnlineJoinCode('');
+    setOnlineLocalReady(false);
+    setOnlineRemoteReady(false);
+    remoteCharRef.current = null;
+  }, [resetOnline]);
+
+  const onlineStartMatch = useCallback(() => {
+    const myChar = onlineLocalCharRef.current;
+    const theirChar = remoteCharRef.current || online.remoteCharacterName || 'Fox';
+    const p1Name = online.isHost ? myChar : theirChar;
+    const p2Name = online.isHost ? theirChar : myChar;
+    const p1Def = allChars.find(c => c.name === p1Name);
+    const p2Def = allChars.find(c => c.name === p2Name);
+    if (p1Def) { CHARACTERS.P1.name = p1Def.name; CHARACTERS.P1.color = p1Def.color; CHARACTERS.P1.darkColor = p1Def.darkColor; CHARACTERS.P1.lightColor = p1Def.lightColor; }
+    if (p2Def) { CHARACTERS.P2.name = p2Def.name; CHARACTERS.P2.color = p2Def.color; CHARACTERS.P2.darkColor = p2Def.darkColor; CHARACTERS.P2.lightColor = p2Def.lightColor; }
+    setActivePlayers(['P1', 'P2']);
+    setOnline({ isOnline: true });
+    setOnlineOpen(false);
+    setScreen('match');
+  }, [online.isHost, online.remoteCharacterName, allChars, setActivePlayers, setOnline, setScreen]);
+
+  const onlineStartMatchRef = useRef(onlineStartMatch);
+  onlineStartMatchRef.current = onlineStartMatch;
+
+  const onlineConnect = useCallback((isHost: boolean, joinCode?: string) => {
+    audio.init();
+    setOnlineStep('connecting');
+    setOnline({ isHost, isOnline: true });
+
+    const ms = matchSettings;
+    const transport = new Transport({
+      onStatusChange: (status: ConnectionStatus, error?: string) => {
+        setOnline({ connectionStatus: status, connectionError: error ?? null });
+        if (status === 'connected') {
+          setOnlineStep('lobby');
+          transport.sendReliable({ type: MsgType.HANDSHAKE, protocolVersion: PROTOCOL_VERSION, playerName: 'Player' });
+          transport.sendReliable({ type: MsgType.CHARACTER_SELECT, characterName: onlineLocalCharRef.current });
+          if (isHost) {
+            const seed = Math.floor(Math.random() * 0xFFFFFFFF);
+            setOnline({ rngSeed: seed });
+            transport.sendReliable({
+              type: MsgType.SETTINGS_SYNC, arenaId: ms.arenaId, killLimit: ms.killLimit,
+              timeLimit: ms.timeLimit, goreMode: ms.goreMode,
+              mods: ms.mods as unknown as Record<string, boolean>,
+              rngSeed: seed, botCount: ms.botCount, botDifficulty: ms.botDifficulty,
+            });
+          }
+        }
+      },
+      onReliableMessage: (msg: ReliableMessage) => {
+        if (msg.type === MsgType.CHARACTER_SELECT) {
+          remoteCharRef.current = msg.characterName;
+          setOnline({ remoteCharacterName: msg.characterName });
+        } else if (msg.type === MsgType.SETTINGS_SYNC) {
+          useGameStore.getState().setMatchSettings({
+            arenaId: msg.arenaId, killLimit: msg.killLimit, timeLimit: msg.timeLimit,
+            goreMode: msg.goreMode, botCount: msg.botCount,
+            botDifficulty: msg.botDifficulty as 'easy' | 'medium' | 'hard' | 'impossible',
+          });
+          setOnline({ rngSeed: msg.rngSeed });
+        } else if (msg.type === MsgType.READY) {
+          setOnlineRemoteReady(true);
+        } else if (msg.type === MsgType.START_MATCH) {
+          onlineStartMatchRef.current();
+        }
+      },
+      onUnreliableMessage: () => {},
+      onRttUpdate: () => {},
+    });
+    onlineTransportRef.current = transport;
+    _modalTransport = transport;
+
+    if (isHost) {
+      transport.createRoom().then(code => setOnline({ roomCode: code })).catch(() => {});
+    } else if (joinCode) {
+      transport.joinRoom(joinCode).catch(() => {});
+    }
+  }, [matchSettings, setOnline]);
 
   const handlePlay = useCallback(() => {
     audio.init();
@@ -429,63 +540,139 @@ export function MainMenu() {
             </div>
           )}
           {onlineOpen && (
-            <div className="mods-overlay" onClick={() => { setOnlineOpen(false); setOnlineJoinMode(false); }}>
+            <div className="mods-overlay" onClick={() => { if (onlineStep === 'choose') { setOnlineOpen(false); setOnlineJoinMode(false); } }}>
               <div className="mods-modal online-modal" onClick={e => e.stopPropagation()}>
                 <h2 className="mods-title">{t('online_play', 'Online Play')}</h2>
-                <p className="online-info">{(() => {
-                  const n = matchSettings.botCount;
-                  if (n === 0) return t('online_bots_info_zero');
-                  if (i18n.language === 'cs') {
-                    if (n === 1) return t('online_bots_info_one');
-                    if (n >= 2 && n <= 4) return t('online_bots_info_few', { count: n });
-                    return t('online_bots_info_other', { count: n });
-                  }
-                  return t('online_bots_info', { count: n });
-                })()}</p>
-                {!onlineJoinMode ? (
-                  <div className="online-modal-actions">
-                    <button className="btn-base menu-btn online-create-btn" onClick={() => { setOnlineOpen(false); setOnlineJoinMode(false); audio.play('select'); setScreen('onlineLobby'); useGameStore.getState().setOnline({ isHost: true }); }}>
-                      {t('create_room', 'Create Room')}
-                    </button>
-                    <span className="online-or">{t('or', 'or')}</span>
-                    <button className="btn-base menu-btn" onClick={() => { audio.play('select'); setOnlineJoinMode(true); }}>
-                      {t('join_room_full', 'Join Room')}
-                    </button>
-                  </div>
-                ) : (
-                  <div className="online-modal-actions">
-                    <div className="online-join-row">
-                      <input
-                        className="online-code-input"
-                        type="text"
-                        maxLength={3}
-                        placeholder={t('code_placeholder', 'Code')}
-                        value={onlineJoinCode}
-                        autoFocus
-                        onChange={(e) => setOnlineJoinCode(e.target.value.toUpperCase().replace(/[^A-Z2-9]/g, ''))}
-                        onKeyDown={(e) => {
-                          e.stopPropagation();
-                          if (e.key === 'Enter' && onlineJoinCode.length >= 3) {
-                            setOnlineOpen(false); setOnlineJoinMode(false); audio.play('select');
-                            useGameStore.getState().setOnline({ isHost: false, joinCode: onlineJoinCode });
-                            setScreen('onlineLobby');
-                          }
-                        }}
-                      />
-                      <button className="btn-base menu-btn" onClick={() => {
-                        if (onlineJoinCode.length < 3) return;
-                        setOnlineOpen(false); setOnlineJoinMode(false); audio.play('select');
-                        useGameStore.getState().setOnline({ isHost: false, joinCode: onlineJoinCode });
-                        setScreen('onlineLobby');
-                      }} disabled={onlineJoinCode.length < 3}>
-                        {t('join_room', 'Join')}
+
+                {/* Step 1: Choose create or join */}
+                {onlineStep === 'choose' && !onlineJoinMode && (
+                  <>
+                    <div className="online-modal-actions">
+                      <button className="btn-base menu-btn online-create-btn" onClick={() => { audio.play('select'); onlineConnect(true); }}>
+                        {t('create_room', 'Create Room')}
+                      </button>
+                      <span className="online-or">{t('or', 'or')}</span>
+                      <button className="btn-base menu-btn" onClick={() => { audio.play('select'); setOnlineJoinMode(true); }}>
+                        {t('join_room_full', 'Join Room')}
                       </button>
                     </div>
-                  </div>
+                    <button className="btn-base mods-close-btn" onClick={() => setOnlineOpen(false)}>{t('back', 'Back')}</button>
+                  </>
                 )}
-                <button className="btn-base mods-close-btn" onClick={() => { if (onlineJoinMode) { setOnlineJoinMode(false); } else { setOnlineOpen(false); } }}>
-                  {t('back', 'Back')}
-                </button>
+
+                {/* Step 1b: Enter join code */}
+                {onlineStep === 'choose' && onlineJoinMode && (
+                  <>
+                    <div className="online-modal-actions">
+                      <div className="online-join-row">
+                        <input className="online-code-input" type="text" maxLength={3} placeholder={t('code_placeholder', 'Code')}
+                          value={onlineJoinCode} autoFocus
+                          onChange={(e) => setOnlineJoinCode(e.target.value.toUpperCase().replace(/[^A-Z2-9]/g, ''))}
+                          onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter' && onlineJoinCode.length >= 3) { audio.play('select'); onlineConnect(false, onlineJoinCode); } }}
+                        />
+                        <button className="btn-base menu-btn" disabled={onlineJoinCode.length < 3}
+                          onClick={() => { audio.play('select'); onlineConnect(false, onlineJoinCode); }}>
+                          {t('join_room', 'Join')}
+                        </button>
+                      </div>
+                    </div>
+                    <button className="btn-base mods-close-btn" onClick={() => setOnlineJoinMode(false)}>{t('back', 'Back')}</button>
+                  </>
+                )}
+
+                {/* Step 2: Connecting */}
+                {onlineStep === 'connecting' && (
+                  <>
+                    {online.roomCode && (
+                      <div className="online-room-code">
+                        <span className="online-code-label">{t('room_code', 'Room Code')}</span>
+                        <span className="online-code">{online.roomCode}</span>
+                      </div>
+                    )}
+                    <div className="online-status">
+                      {!online.roomCode && online.connectionStatus !== 'error' && t('connecting_server', 'Connecting to server...')}
+                      {online.roomCode && t('waiting_opponent', 'Waiting for opponent...')}
+                      {online.connectionStatus === 'error' && (
+                        <span className="online-error">{online.connectionError || t('connection_error', 'Connection failed')}</span>
+                      )}
+                    </div>
+                    {/* Host can already pick character while waiting */}
+                    {online.isHost && (
+                      <div className="online-char-row">
+                        <span className="online-char-label">{t('you', 'You')}:</span>
+                        <select className="online-char-select" value={onlineLocalChar}
+                          onChange={(e) => { setOnlineLocalChar(e.target.value); onlineLocalCharRef.current = e.target.value; localStorage.setItem('bunnybrawl_online_char', e.target.value); }}>
+                          {allChars.map(c => <option key={c.name} value={c.name}>{getCharacterEmoji(c.name)} {getCharacterDisplayName(c.name, i18n.language)}</option>)}
+                        </select>
+                      </div>
+                    )}
+                    <button className="btn-base mods-close-btn" onClick={() => { onlineCleanup(); setOnlineStep('choose'); }}>
+                      {t('back', 'Back')}
+                    </button>
+                  </>
+                )}
+
+                {/* Step 3: Lobby — both connected, pick characters, ready up */}
+                {onlineStep === 'lobby' && (
+                  <>
+                    {online.roomCode && (
+                      <div className="online-room-code">
+                        <span className="online-code-label">{t('room_code', 'Room Code')}</span>
+                        <span className="online-code">{online.roomCode}</span>
+                      </div>
+                    )}
+                    <div className="online-players">
+                      <div className="online-char-row">
+                        <span className="online-char-label">{t('you', 'You')}:</span>
+                        <select className="online-char-select" value={onlineLocalChar} disabled={onlineLocalReady}
+                          onChange={(e) => {
+                            setOnlineLocalChar(e.target.value); onlineLocalCharRef.current = e.target.value;
+                            localStorage.setItem('bunnybrawl_online_char', e.target.value);
+                            onlineTransportRef.current?.sendReliable({ type: MsgType.CHARACTER_SELECT, characterName: e.target.value });
+                          }}>
+                          {allChars.filter(c => c.name !== online.remoteCharacterName).map(c =>
+                            <option key={c.name} value={c.name}>{getCharacterEmoji(c.name)} {getCharacterDisplayName(c.name, i18n.language)}</option>
+                          )}
+                        </select>
+                        {onlineLocalReady && <span className="online-ready-badge">{t('ready', 'READY')}</span>}
+                      </div>
+                      <div className="online-char-row">
+                        <span className="online-char-label">{t('opponent', 'Opponent')}:</span>
+                        <span className="online-char-name">
+                          {online.remoteCharacterName
+                            ? `${getCharacterEmoji(online.remoteCharacterName)} ${getCharacterDisplayName(online.remoteCharacterName, i18n.language)}`
+                            : t('choosing', 'Choosing...')}
+                        </span>
+                        {onlineRemoteReady && <span className="online-ready-badge">{t('ready', 'READY')}</span>}
+                      </div>
+                    </div>
+
+                    {/* Guest: ready button */}
+                    {!online.isHost && !onlineLocalReady && (
+                      <button className="btn-base menu-btn play-btn" onClick={() => {
+                        audio.play('select'); setOnlineLocalReady(true);
+                        onlineTransportRef.current?.sendReliable({ type: MsgType.READY } as ReliableMessage);
+                      }}>{t('ready_up', 'Ready!')}</button>
+                    )}
+                    {!online.isHost && onlineLocalReady && (
+                      <div className="online-waiting">{t('waiting_host_start', 'Waiting for host to start...')}</div>
+                    )}
+
+                    {/* Host: start button (visible when remote is ready) */}
+                    {online.isHost && onlineRemoteReady && (
+                      <button className="btn-base menu-btn play-btn" onClick={() => {
+                        audio.play('select');
+                        onlineTransportRef.current?.sendReliable({ type: MsgType.START_MATCH } as ReliableMessage);
+                        onlineStartMatch();
+                      }}>{t('start_game', 'Start Game!')}</button>
+                    )}
+                    {online.isHost && !onlineRemoteReady && (
+                      <div className="online-waiting">{t('waiting_ready', 'Waiting for opponent to ready up...')}</div>
+                    )}
+
+                    <button className="btn-base mods-close-btn" onClick={() => { onlineCleanup(); }}>{t('back', 'Back')}</button>
+                  </>
+                )}
               </div>
             </div>
           )}
