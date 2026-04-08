@@ -212,7 +212,6 @@ export function OnlineLobby() {
   }, [cleanup, setScreen]);
 
   const isConnected = online.connectionStatus === 'connected';
-  const isWaiting = online.connectionStatus === 'creating' || online.connectionStatus === 'joining';
 
   return (
     <div className="online-lobby">
@@ -250,10 +249,23 @@ export function OnlineLobby() {
           )}
 
           <div className="online-status">
-            {isWaiting && t('waiting_opponent', 'Waiting for opponent...')}
+            {(online.connectionStatus === 'idle' || online.connectionStatus === 'creating') && !online.roomCode && (
+              t('connecting_server', 'Connecting to server...')
+            )}
+            {online.roomCode && !isConnected && online.connectionStatus !== 'error' && (
+              t('waiting_opponent', 'Waiting for opponent...')
+            )}
+            {online.connectionStatus === 'joining' && t('joining_room', 'Joining room...')}
             {isConnected && t('connected', 'Connected!')}
             {online.connectionStatus === 'error' && (
-              <span className="online-error">{online.connectionError || t('connection_error', 'Connection failed')}</span>
+              <>
+                <span className="online-error">{online.connectionError || t('connection_error', 'Connection failed')}</span>
+                <button className="btn-base menu-btn" style={{ marginTop: '12px', fontSize: '18px' }} onClick={() => {
+                  cleanup();
+                }}>
+                  {t('try_again', 'Try Again')}
+                </button>
+              </>
             )}
             {online.connectionStatus === 'disconnected' && t('disconnected', 'Disconnected')}
           </div>

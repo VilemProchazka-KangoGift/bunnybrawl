@@ -49,16 +49,30 @@ export class Transport {
     const peerId = PEER_PREFIX + code;
 
     return new Promise((resolve, reject) => {
-      this.peer = new Peer(peerId, {
-        config: {
-          iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-          ],
-        },
-      });
+      const timeout = setTimeout(() => {
+        this.setStatus('error', 'Connection to signaling server timed out. The free PeerJS server may be down — try again in a moment.');
+        reject(new Error('timeout'));
+      }, 10000);
+
+      try {
+        this.peer = new Peer(peerId, {
+          debug: 1, // log errors only
+          config: {
+            iceServers: [
+              { urls: 'stun:stun.l.google.com:19302' },
+              { urls: 'stun:stun1.l.google.com:19302' },
+            ],
+          },
+        });
+      } catch (e) {
+        clearTimeout(timeout);
+        this.setStatus('error', `Failed to create peer: ${e}`);
+        reject(e);
+        return;
+      }
 
       this.peer.on('open', () => {
+        clearTimeout(timeout);
         resolve(code);
       });
 
@@ -68,13 +82,19 @@ export class Transport {
       });
 
       this.peer.on('error', (err) => {
-        this.setStatus('error', err.message);
+        clearTimeout(timeout);
+        this.setStatus('error', err.type === 'unavailable-id'
+          ? 'Room code already in use — try again'
+          : `Signaling error: ${err.type} — ${err.message}`);
         reject(err);
       });
 
       this.peer.on('disconnected', () => {
+        clearTimeout(timeout);
         if (this.status === 'connected') {
           this.setStatus('disconnected');
+        } else if (this.status === 'creating') {
+          this.setStatus('error', 'Lost connection to signaling server');
         }
       });
     });
@@ -88,35 +108,53 @@ export class Transport {
     const hostPeerId = PEER_PREFIX + code.toUpperCase();
 
     return new Promise((resolve, reject) => {
-      this.peer = new Peer({
-        config: {
-          iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-          ],
-        },
-      });
+      const timeout = setTimeout(() => {
+        this.setStatus('error', 'Connection timed out. Check the room code or try again.');
+        reject(new Error('timeout'));
+      }, 10000);
+
+      try {
+        this.peer = new Peer({
+          debug: 1,
+          config: {
+            iceServers: [
+              { urls: 'stun:stun.l.google.com:19302' },
+              { urls: 'stun:stun1.l.google.com:19302' },
+            ],
+          },
+        });
+      } catch (e) {
+        clearTimeout(timeout);
+        this.setStatus('error', `Failed to create peer: ${e}`);
+        reject(e);
+        return;
+      }
 
       this.peer.on('open', () => {
         const conn = this.peer!.connect(hostPeerId, {
           reliable: true,
-          serialization: 'none', // we handle serialization ourselves
+          serialization: 'none',
         });
         this.conn = conn;
         this.setupConnection(conn);
 
         conn.on('open', () => {
+          clearTimeout(timeout);
           resolve();
         });
 
         conn.on('error', (err) => {
-          this.setStatus('error', err.message);
+          clearTimeout(timeout);
+          this.setStatus('error', `Connection error: ${err.message}`);
           reject(err);
         });
       });
 
       this.peer.on('error', (err) => {
-        this.setStatus('error', err.message);
+        clearTimeout(timeout);
+        this.setStatus('error', err.type === 'peer-unavailable'
+          ? 'Room not found — check the code and try again'
+          : `Signaling error: ${err.type} — ${err.message}`);
         reject(err);
       });
     });
