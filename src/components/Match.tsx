@@ -250,7 +250,30 @@ export function Match() {
                     {t('pause_back')}
                   </button>
                 </>
+              ) : online.isOnline ? (
+                /* Online pause menu */
+                <>
+                  <h2 className="pause-title">{t('pause_title')}</h2>
+                  <button className="btn-base pause-btn resume-btn" onClick={handleResume} data-testid="resume-button">
+                    {t('pause_resume')}
+                  </button>
+                  {online.isHost && (
+                    <button className="btn-base pause-btn level-btn" onClick={() => setShowLevelSelect(true)}>
+                      {t('pause_change_level')}
+                    </button>
+                  )}
+                  {online.isHost ? (
+                    <button className="btn-base pause-btn quit-btn" onClick={handleQuit} data-testid="quit-button">
+                      {t('cancel_game', 'Cancel Game')}
+                    </button>
+                  ) : (
+                    <button className="btn-base pause-btn quit-btn" onClick={handleQuit}>
+                      {t('leave_game', 'Leave Game')}
+                    </button>
+                  )}
+                </>
               ) : (
+                /* Local pause menu */
                 <>
                   <h2 className="pause-title">{t('pause_title')}</h2>
                   <button className="btn-base pause-btn resume-btn" onClick={handleResume} data-testid="resume-button">

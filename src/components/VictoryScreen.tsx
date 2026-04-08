@@ -23,7 +23,7 @@ interface FireworkParticle {
 
 export function VictoryScreen() {
   const { t, i18n } = useTranslation();
-  const { winner, lastMatchState, setScreen, setActivePlayers, setMatchSettings } = useGameStore();
+  const { winner, lastMatchState, setScreen, setActivePlayers, setMatchSettings, online } = useGameStore();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [showArenaSelect, setShowArenaSelect] = useState(false);
 
@@ -237,9 +237,13 @@ export function VictoryScreen() {
           </div>
 
           <div className="victory-actions">
-            <button className="btn-base rematch-btn" onClick={handleRematch} data-testid="rematch-button">{t('victory_rematch')}</button>
-            <button className="btn-base arena-btn-v" onClick={() => setShowArenaSelect(true)}>{t('victory_choose_arena')}</button>
-            <button className="btn-base menu-btn-v" onClick={handleMenu} data-testid="menu-button">{t('victory_menu')}</button>
+            {(!online.isOnline || online.isHost) && (
+              <button className="btn-base rematch-btn" onClick={handleRematch} data-testid="rematch-button">{t('victory_rematch')}</button>
+            )}
+            {(!online.isOnline || online.isHost) && (
+              <button className="btn-base arena-btn-v" onClick={() => setShowArenaSelect(true)}>{t('victory_choose_arena')}</button>
+            )}
+            <button className="btn-base menu-btn-v" onClick={handleMenu} data-testid="menu-button">{t(online.isOnline && !online.isHost ? 'leave_game' : 'victory_menu')}</button>
           </div>
 
           {showArenaSelect && (

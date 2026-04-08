@@ -149,6 +149,8 @@
   "ready": "HANDA",
   "ready_up": "Handa na!",
   "code_placeholder": "Code",
+  "cancel_game": "Kanselahin ang Laro",
+  "leave_game": "Umalis sa Laro",
   "opponent_disconnected": "Nadiskonekta ang Kalaban",
   "return_menu": "Bumalik sa Menu",
   "back": "Bumalik"

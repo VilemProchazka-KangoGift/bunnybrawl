@@ -132,6 +132,8 @@
   "try_again": "Try Again",
   "disconnected": "Disconnected",
   "any_keys": "Any keys",
+  "cancel_game": "Cancel Game",
+  "leave_game": "Leave Game",
   "opponent_disconnected": "Opponent Disconnected",
   "return_menu": "Return to Menu",
   "help_online_title": "Online Play",
