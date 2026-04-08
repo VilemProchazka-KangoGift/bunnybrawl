@@ -99,6 +99,12 @@ export class GameLoop {
   // Deterministic PRNG for network mode (undefined = use Math.random, local play)
   private rng?: SeededRNG;
 
+  // Network mode: when true, external code drives the loop
+  private _networkMode = false;
+  private _audioEnabled = true;
+  // Explicit inputs injected by rollback engine (keyed by PlayerSlot)
+  private _networkInputs?: Map<string, InputState>;
+
   constructor(
     bgCanvas: HTMLCanvasElement,
     fgCanvas: HTMLCanvasElement,
@@ -321,13 +327,13 @@ export class GameLoop {
     this.running = true;
     this.lastTime = performance.now();
     audio.playMusic(this.arena.themeId);
-    audio.play('ambient');
-    if (this.hasWaterfallZones) audio.play('waterfall_ambient');
+    this.playSound('ambient');
+    if (this.hasWaterfallZones) this.playSound('waterfall_ambient');
     // Start theme ambient loops
     const ambConfig = this.theme.ambientSoundConfig;
     if (ambConfig?.loops) {
       for (const loop of ambConfig.loops) {
-        audio.play(loop);
+        this.playSound(loop);
         this.activeAmbientLoops.push(loop);
       }
     }
@@ -342,7 +348,10 @@ export class GameLoop {
       this._debugKeyHandler = (e: KeyboardEvent) => { if (e.key === '`') toggleNavDebug(); };
       window.addEventListener('keydown', this._debugKeyHandler);
     }
-    this.loop(this.lastTime);
+    // In network mode, the external NetMatch drives the loop
+    if (!this._networkMode) {
+      this.loop(this.lastTime);
+    }
   }
 
   stop(): void {
@@ -366,6 +375,11 @@ export class GameLoop {
     }
   }
 
+  /** Play a sound, respecting audio mute (used during rollback resimulation). */
+  private playSound(name: Parameters<typeof audio.play>[0]): void {
+    if (this._audioEnabled) this.playSound(name);
+  }
+
   /** Gameplay-affecting random: seeded in network mode, Math.random() in local. */
   private gameRandom(): number {
     return this.rng ? this.rng.nextFloat() : Math.random();
@@ -386,6 +400,30 @@ export class GameLoop {
     return this.aiControllers;
   }
 
+  /** Enable network mode: external code drives the loop. */
+  setNetworkMode(enabled: boolean): void {
+    this._networkMode = enabled;
+  }
+
+  /** Mute/unmute audio (used during rollback resimulation). */
+  setAudioEnabled(enabled: boolean): void {
+    this._audioEnabled = enabled;
+  }
+
+  /** Render current frame. Public for network loop. */
+  renderFrame(): void {
+    // Bake settled gibs/blood
+    if (this.newGroundedGibsSinceRender.length > 0) {
+      this.renderer.bakeGibs(this.newGroundedGibsSinceRender);
+      this.newGroundedGibsSinceRender.length = 0;
+    }
+    if (this.newBloodDripsSinceRender.length > 0) {
+      this.renderer.renderBloodDrips(this.newBloodDripsSinceRender);
+      this.newBloodDripsSinceRender.length = 0;
+    }
+    this.renderer.renderFrame(this.state, this.arena, this.particles);
+  }
+
   /** Capture a snapshot of all gameplay state for rollback. */
   takeSnapshot(frame: number): GameSnapshot {
     return _takeSnapshot(frame, this.state, this.rng, this.aiControllers);
@@ -403,7 +441,7 @@ export class GameLoop {
   skipCountdown(): void {
     if (this.state.countdown > 0) {
       this.state.countdown = 0;
-      audio.play('countdown_go');
+      this.playSound('countdown_go');
     }
   }
 
@@ -977,7 +1015,9 @@ export class GameLoop {
     }
   }
 
-  private fixedUpdate(dt: number): void {
+  /** Run one fixed-timestep simulation tick. Public for rollback engine. */
+  fixedUpdate(dt: number, networkInputs?: Map<string, InputState>): void {
+    this._networkInputs = networkInputs;
     if (this.state.matchOver) return;
     this.state.timeElapsed += dt;
 
@@ -992,9 +1032,9 @@ export class GameLoop {
       const curSec = Math.ceil(this.state.countdown);
       if (this.state.countdown <= 0) {
         this.state.countdown = 0;
-        audio.play('countdown_go');
+        this.playSound('countdown_go');
       } else if (curSec < prevSec) {
-        audio.play('countdown_beep');
+        this.playSound('countdown_beep');
       }
       // During countdown, still update weather/particles but skip player input
       this.updateWeather(dt);
@@ -1103,7 +1143,7 @@ export class GameLoop {
         if (gs.timer <= 0) {
           gs.active = true;
           gs.activeTimer = gz.duration || 3;
-          audio.play('geyser');
+          this.playSound('geyser');
         }
       } else {
         gs.activeTimer -= dt;
@@ -1211,11 +1251,11 @@ export class GameLoop {
 
       // Fast-fall sound: first frame of pressing down while airborne
       if (!wasFastFalling && player.fastFalling) {
-        audio.play('fastfall');
+        this.playSound('fastfall');
       }
 
       if (!wasAirborne && player.state === 'airborne') {
-        audio.play('jump');
+        this.playSound('jump');
         // Stretch on jump
         player.squashScale = STRETCH_ON_JUMP;
         player.squashTimer = 0.15;
@@ -1235,7 +1275,7 @@ export class GameLoop {
         // Landing sound with per-player cooldown
         const lc = this.landCooldowns.get(player.id) || 0;
         if (lc <= 0) {
-          audio.play('land');
+          this.playSound('land');
           this.landCooldowns.set(player.id, 0.15);
         }
       }
@@ -1245,7 +1285,7 @@ export class GameLoop {
         // Headbonk sound with per-player cooldown
         const hc = this.headbonkCooldowns.get(player.id) || 0;
         if (hc <= 0) {
-          audio.play('headbonk');
+          this.playSound('headbonk');
           this.headbonkCooldowns.set(player.id, 0.15);
         }
       }
@@ -1253,7 +1293,7 @@ export class GameLoop {
       // Oof sound: when player hits a wall (prevVx was high, now 0)
       if (Math.abs(prevVx) > 100 && player.vx === 0 && prevVx !== 0) {
         this.spawnImpactDust(player, prevVx > 0 ? 'right' : 'left');
-        audio.play('oof');
+        this.playSound('oof');
         player.squashScale = 1.3; // stretch vertically = squash horizontally
         player.squashTimer = 0.12;
       }
@@ -1283,7 +1323,7 @@ export class GameLoop {
         if (!wasCrouching) {
           const cc = this.crouchCooldowns.get(player.id) || 0;
           if (cc <= 0) {
-            audio.play('crouch');
+            this.playSound('crouch');
             this.crouchCooldowns.set(player.id, 0.2);
           }
         }
@@ -1366,7 +1406,7 @@ export class GameLoop {
         if (fAcc >= 0.15) {
           fAcc -= 0.15;
           const playerBottom = player.y + player.height;
-          audio.play(playerBottom > 600 ? 'footstep_grass' : 'footstep_wood');
+          this.playSound(playerBottom > 600 ? 'footstep_grass' : 'footstep_wood');
         }
         this.footstepAccumulators.set(player.id, fAcc);
       } else {
@@ -1392,7 +1432,7 @@ export class GameLoop {
           player.state = 'airborne';
           spring.bounceTimer = 0.3;
           player.springTrailTimer = SPRING_TRAIL_DURATION;
-          audio.play('spring');
+          this.playSound('spring');
         }
       }
 
@@ -1402,7 +1442,7 @@ export class GameLoop {
         if (player.slowTimer <= 0 && player.invincibleTimer <= 0 && aabbOverlap(player.x, player.y, player.width, player.height, thorn.x, thorn.y, thorn.width, thorn.height)) {
           player.slowTimer = THORN_SLOW_DURATION;
           thorn.hit = true;
-          audio.play('thornhit');
+          this.playSound('thornhit');
 
           // Big blood splash at player + thorn location
           const px = player.x + player.width / 2;
@@ -1438,7 +1478,7 @@ export class GameLoop {
               aabbOverlap(player.x, player.y, player.width, player.height, hz.x + inset, hz.y, hz.width - inset * 2, hz.height)) {
             player.slowTimer = THORN_SLOW_DURATION;
             if (hz.type === 'lava') player.burnTimer = THORN_SLOW_DURATION;
-            audio.play('thornhit');
+            this.playSound('thornhit');
             const px = player.x + player.width / 2;
             const py = player.y + player.height / 2;
             // Big particle burst
@@ -1478,7 +1518,7 @@ export class GameLoop {
           const dy = pcy - gy;
           if (dx * dx + dy * dy < (gr + player.width * 0.4) * (gr + player.width * 0.4)) {
             player.slowTimer = THORN_SLOW_DURATION;
-            audio.play('thornhit');
+            this.playSound('thornhit');
             // Big ghost hit burst
             for (let i = 0; i < 20; i++) {
               const angle = Math.random() * Math.PI * 2;
@@ -1513,7 +1553,7 @@ export class GameLoop {
           if (dx * dx + dy * dy < hitDist * hitDist) {
             rock.active = false;
             player.slowTimer = THORN_SLOW_DURATION;
-            audio.play('thornhit');
+            this.playSound('thornhit');
             const pcx = player.x + player.width / 2;
             const pcy = player.y + player.height / 2;
             for (let i = 0; i < 16; i++) {
@@ -1549,7 +1589,7 @@ export class GameLoop {
         player.slowTimer = 2.0; // respawn slowed (hurt state)
         player.fastFalling = false;
         player.fatTimer = 0;
-        audio.play('oof');
+        this.playSound('oof');
         this.state.screenShake = Math.max(this.state.screenShake, 0.1);
       }
 
@@ -1596,7 +1636,7 @@ export class GameLoop {
             player.vy = SPRING_BOUNCE * 0.85;
             player.state = 'airborne';
             this.state.bouncyWobble.set(bi, 0.4);
-            audio.play('jump');
+            this.playSound('jump');
             break;
           }
         }
@@ -1610,7 +1650,7 @@ export class GameLoop {
         if (dx * dx + dy * dy < 60 * 60 && player.state !== 'airborne') {
           flock.active = false;
           flock.respawnTimer = this.theme.pigeonConfig?.respawnTime || 12;
-          audio.play('pigeon_scatter');
+          this.playSound('pigeon_scatter');
           // Spawn scatter particles (gray birds flying away)
           for (let pi = 0; pi < 6; pi++) {
             const angle = -Math.PI * 0.5 + (Math.random() - 0.5) * Math.PI * 0.8;
@@ -1633,7 +1673,7 @@ export class GameLoop {
           carrot.active = false;
           player.score += 1;
           player.fatTimer = FAT_DURATION;
-          audio.play('crunch');
+          this.playSound('crunch');
           audio.playAnimal(player.character.name);
           // Hitstop — shorter than kill (half duration)
           player.hitstopTimer = Math.max(player.hitstopTimer, HITSTOP_DURATION * 0.5);
@@ -1670,7 +1710,7 @@ export class GameLoop {
         if (anyInZeroG) break;
       }
       if (anyInZeroG && !this.zeroGSoundPlaying) {
-        audio.play('zero_g');
+        this.playSound('zero_g');
         this.zeroGSoundPlaying = true;
       } else if (!anyInZeroG && this.zeroGSoundPlaying) {
         audio.stop('zero_g');
@@ -1682,7 +1722,7 @@ export class GameLoop {
     const { killFeedEntries } = checkStomps(this.state.players, this.arena.spawnPoints, this.state.timeElapsed, this.settings.mods);
 
     if (killFeedEntries.length > 0) {
-      audio.play('stomp');
+      this.playSound('stomp');
       this.state.screenShake = SCREEN_SHAKE_DURATION;
       this.state.hitstopZoom = HITSTOP_DURATION;
     }
@@ -1737,7 +1777,7 @@ export class GameLoop {
     if (this.bumpCooldown <= 0) {
       for (const player of this.state.players) {
         if (player.active && player.sideSquash === 0.8) {
-          audio.play('bump');
+          this.playSound('bump');
           this.bumpCooldown = 0.2;
           break; // one bump sound per collision event
         }
@@ -1844,7 +1884,7 @@ export class GameLoop {
     for (const p of this.state.players) { if (p.active && p.score > leadScore) leadScore = p.score; }
     if (leadScore >= this.settings.killLimit - 3) {
       if (!this.crowdStarted) {
-        audio.play('crowd');
+        this.playSound('crowd');
         this.crowdStarted = true;
       }
       if (leadScore >= this.settings.killLimit - 1) {
@@ -1864,7 +1904,7 @@ export class GameLoop {
       for (const p of ambConfig.periodic) {
         const remaining = (this.periodicAmbientTimers.get(p.sound) ?? 0) - dt;
         if (remaining <= 0) {
-          audio.play(p.sound);
+          this.playSound(p.sound);
           const next = p.intervalRange[0] + Math.random() * (p.intervalRange[1] - p.intervalRange[0]);
           this.periodicAmbientTimers.set(p.sound, next);
         } else {
@@ -1896,6 +1936,11 @@ export class GameLoop {
   }
 
   private getPlayerInput(player: Player): InputState {
+    // Network mode: use injected inputs for human players
+    if (this._networkInputs) {
+      const netInput = this._networkInputs.get(player.id);
+      if (netInput) return netInput;
+    }
     if (isBotSlot(player.id)) {
       const ai = this.aiControllers.get(player.id);
       if (ai) return ai.getInput(player, this.state, this.arena, this.settings.mods.carrotChase, this.settings.mods.mirrorArena);
@@ -1909,7 +1954,7 @@ export class GameLoop {
     this.state.winner = winner;
     this.state.screenFlash = SCREEN_FLASH_DURATION;
     audio.stopMusic();
-    audio.play('victory');
+    this.playSound('victory');
     this.onMatchEnd(winner, this.state);
   }
 }
