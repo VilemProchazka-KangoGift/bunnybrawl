@@ -877,11 +877,10 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
   const colors = { color: char.color, darkColor: char.darkColor, lightColor: char.lightColor };
   spriteRenderer(ctx, cx, yOff, w, h, state, animFrame, false, -1, colors);
 
-  // 3D shading overlays (highlight spot + fur edge)
+  // 3D shading overlay (highlight spot)
   const lobbyPack = getCharacterPack(char.name);
-  if (lobbyPack) {
-    const bodyParams = lobbyPack.bodyEllipse(cx, yOff, w, h);
-    drawHighlightSpot(ctx, bodyParams, lobbyPack.highlightIntensity ?? 1.0);
+  if (lobbyPack && !lobbyPack.noHighlight) {
+    drawHighlightSpot(ctx, lobbyPack.bodyEllipse(cx, yOff, w, h));
   }
 
   // Generic eyes for characters without custom ones

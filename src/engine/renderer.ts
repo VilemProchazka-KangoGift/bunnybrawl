@@ -12,7 +12,6 @@ import { drawCloud as drawCloudPrimitive, drawHill, drawPlatformMoss } from './t
 import { hexToRGB } from './fastMath';
 import { getCharacterEmoji, hasCustomEyes, getSpriteRenderer, getGibRenderer, getCharacterPack, getCharacterDisplayName } from './characters';
 import { drawHighlightSpot } from './spriteShading';
-import type { BodyEllipseParams } from './spriteShading';
 import { debugFlags } from './debugFlags';
 import { drawNavDebugOverlay } from './navDebugOverlay';
 import type { BotNavDebugState } from './navDebugOverlay';
@@ -1629,11 +1628,10 @@ export class Renderer {
     const colors = { color: char.color, darkColor: char.darkColor, lightColor: char.lightColor };
     spriteRenderer(ctx, cx, yOff, w, h, state, animFrame, isIdleAnim, idleT, colors);
 
-    // 3D shading overlays (highlight spot + fur edge)
+    // 3D shading overlay (highlight spot)
     const pack = getCharacterPack(char.name);
-    if (pack) {
-      const bodyParams: BodyEllipseParams = pack.bodyEllipse(cx, yOff, w, h);
-      drawHighlightSpot(ctx, bodyParams, pack.highlightIntensity ?? 1.0);
+    if (pack && !pack.noHighlight) {
+      drawHighlightSpot(ctx, pack.bodyEllipse(cx, yOff, w, h));
     }
 
     // Eyes (generic — for characters without custom eyes)

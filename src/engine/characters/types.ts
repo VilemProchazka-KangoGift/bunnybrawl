@@ -61,8 +61,8 @@ export interface CharacterPack {
 
   /** Returns body ellipse params for 3D shading overlays (highlight spot). */
   bodyEllipse: (cx: number, yOff: number, w: number, h: number) => BodyEllipseParams;
-  /** Highlight spot intensity (0 = none, 1 = full). Defaults to 1.0 if omitted. */
-  highlightIntensity?: number;
+  /** Skip the white highlight spot overlay (for characters with their own light belly/face). */
+  noHighlight?: boolean;
 
   translations?: Record<string, string>;
 }

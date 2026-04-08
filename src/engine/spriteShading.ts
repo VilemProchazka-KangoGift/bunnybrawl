@@ -7,36 +7,6 @@ export interface BodyEllipseParams {
   ry: number;
 }
 
-/** Returns body ellipse parameters for each character. */
-export function getBodyEllipse(
-  charName: string,
-  cx: number,
-  yOff: number,
-  w: number,
-  h: number,
-): BodyEllipseParams {
-  switch (charName) {
-    case 'Bunny': return { cx, cy: yOff + h * 0.55, rx: w * 0.4, ry: h * 0.4 };
-    case 'Fox': return { cx, cy: yOff + h * 0.55, rx: w * 0.38, ry: h * 0.38 };
-    case 'Frog': return { cx, cy: yOff + h * 0.55, rx: w * 0.42, ry: h * 0.35 };
-    case 'Bear': return { cx, cy: yOff + h * 0.5, rx: w * 0.42, ry: h * 0.42 };
-    case 'Owl': return { cx, cy: yOff + h * 0.5, rx: w * 0.4, ry: h * 0.42 };
-    case 'Cat': return { cx, cy: yOff + h * 0.55, rx: w * 0.42, ry: h * 0.36 };
-    case 'Wolf': return { cx, cy: yOff + h * 0.52, rx: w * 0.4, ry: h * 0.4 };
-    case 'Panda': return { cx, cy: yOff + h * 0.52, rx: w * 0.42, ry: h * 0.42 };
-    case 'Pig': return { cx, cy: yOff + h * 0.55, rx: w * 0.4, ry: h * 0.38 };
-    case 'Cow': return { cx, cy: yOff + h * 0.52, rx: w * 0.42, ry: h * 0.42 };
-    case 'Horse': return { cx, cy: yOff + h * 0.52, rx: w * 0.38, ry: h * 0.42 };
-    case 'Goat': return { cx, cy: yOff + h * 0.52, rx: w * 0.4, ry: h * 0.4 };
-    case 'Sheep': return { cx, cy: yOff + h * 0.46, rx: 12, ry: h * 0.18 };
-    case 'Monkey': return { cx, cy: yOff + h * 0.52, rx: w * 0.4, ry: h * 0.4 };
-    case 'Tiger': return { cx, cy: yOff + h * 0.52, rx: w * 0.42, ry: h * 0.42 };
-    case 'Rhino': return { cx, cy: yOff + h * 0.55, rx: w * 0.44, ry: h * 0.4 };
-    case 'Hedgehog': return { cx: cx + 2, cy: yOff + h * 0.55, rx: w * 0.34, ry: h * 0.32 };
-    default: return { cx, cy: yOff + h * 0.5, rx: w * 0.4, ry: h * 0.4 };
-  }
-}
-
 function blendColors(hex1: string, hex2: string, t: number): string {
   const c1 = hexToRGB(hex1), c2 = hexToRGB(hex2);
   const r = Math.round(c1.r + (c2.r - c1.r) * t);
@@ -100,9 +70,7 @@ export function fillBodyGradientCircle(
 export function drawHighlightSpot(
   ctx: CanvasRenderingContext2D,
   params: BodyEllipseParams,
-  intensity: number = 1.0,
 ): void {
-  if (intensity <= 0) return;
   const { cx, cy, rx, ry } = params;
   const hx = cx - rx * 0.3;
   const hy = cy - ry * 0.35;
