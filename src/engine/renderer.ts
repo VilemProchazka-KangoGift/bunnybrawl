@@ -1801,6 +1801,15 @@ export class Renderer {
       this.drawExpression(ctx, player);
     }
 
+    // White flash on killed character during hitstop
+    if (player.hitstopTimer > 0 && state === 'splat') {
+      const flashAlpha = Math.min(0.85, player.hitstopTimer / HITSTOP_DURATION);
+      ctx.fillStyle = `rgba(255, 255, 255, ${flashAlpha})`;
+      ctx.beginPath();
+      ctx.ellipse(cx, y + height - 4, width * 0.6, 6, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
     // Blush near carrot (c)
     if (nearCarrot && state !== 'splat') {
       ctx.fillStyle = 'rgba(255, 150, 180, 0.45)';
