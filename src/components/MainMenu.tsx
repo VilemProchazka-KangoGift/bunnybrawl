@@ -416,6 +416,11 @@ export function MainMenu() {
             </div>
           )}
         </div>
+        <div className="build-info">
+          {new Date(__BUILD_TIME__).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+          {' '}
+          {new Date(__BUILD_TIME__).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+        </div>
       </div>
     </div>
   );
