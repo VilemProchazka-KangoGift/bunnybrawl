@@ -510,7 +510,4 @@ export const CANDY_LAND_THEME: ThemeConfig = {
     ctx.fill();
   }),
 
-  ambientSoundConfig: {
-    periodic: [{ sound: 'amb_chime', intervalRange: [6, 18] }],
-  },
 };

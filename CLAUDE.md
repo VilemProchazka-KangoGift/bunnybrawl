@@ -20,7 +20,7 @@ src/
     renderer.ts   # Canvas 2D rendering (two layers: bg + fg) — dispatches to character pack renderers
     gameLoop.ts   # Main game loop with fixed timestep, all game systems
     audio.ts      # Procedural audio + Howler.js playback (animal sounds, SFX)
-    music.ts      # MP3-based menu music + procedural arena music generation
+    music.ts      # Procedural arena music generation (fallback — all 11 arenas now use MP3 overrides)
     spriteShading.ts # fillBodyGradient (radial body fill) + drawHighlightSpot (white glint)
     fastMath.ts   # Trig lookup tables (fastSin/fastCos) for hot render paths
     canvasAnimations.ts # Shared canvas utilities (wildlife, day/night) for MainMenu + CharacterSelect
@@ -170,6 +170,14 @@ Themes support ambient sounds via `ThemeConfig.ambientSoundConfig`:
 ### Adding arena MP3 music
 1. Place MP3 in `public/audio/<themeId>.mp3`
 2. Add to `AudioManager.MUSIC_MP3` map in `audio.ts`
+
+### Adding a new language
+1. Create `src/locales/<code>.json` — copy `en.json`, translate all keys. Verify key count matches with a script.
+2. Import in `src/i18n.ts`, add to `resources` object. Language persisted in `bunnybrawl_lang` via `localStorage`.
+3. Add to the `languages` array in `MainMenu.tsx` lang-toggle (data-driven `.map()` loop — code, label, flag SVG).
+4. Add `<code>` key to `translations` in all 17 character packs in `src/engine/characters/packs/`.
+5. **Arena names must fit the selector boxes** — test at runtime, shorten long names.
+6. **Avoid literal translations** — use natural/colloquial phrasing. Gaming terms (gravity, stomp, kills) often stay in English or use loan words. Academic translations (गुरुत्वाकर्षण, भौतिकी, pisika) sound wrong in a game UI.
 
 ## Workflow Rules
 

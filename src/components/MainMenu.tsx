@@ -195,6 +195,7 @@ export function MainMenu() {
 
   useEffect(() => {
     audio.setMusicDisabled(matchSettings.mods.noMusic);
+    if (!matchSettings.mods.noMusic) audio.playMenuMusic();
   }, [matchSettings.mods.noMusic]);
 
   useEffect(() => {
@@ -313,57 +314,23 @@ export function MainMenu() {
             <span>{t('blood_mode')}</span>
           </label>
           <div className="lang-toggle">
-            <span
-              onClick={() => i18n.changeLanguage('en')}
-              style={{ fontWeight: i18n.language === 'en' ? 'bold' : 'normal', opacity: i18n.language === 'en' ? 1 : 0.6 }}
-            >
-              <svg width="18" height="12" viewBox="0 0 60 40" style={{ verticalAlign: 'middle', marginRight: 4 }}>
-                <rect width="60" height="40" fill="#012169"/>
-                <path d="M0,0 L60,40 M60,0 L0,40" stroke="#fff" strokeWidth="7"/>
-                <path d="M0,0 L60,40 M60,0 L0,40" stroke="#C8102E" strokeWidth="4"/>
-                <path d="M30,0 V40 M0,20 H60" stroke="#fff" strokeWidth="10"/>
-                <path d="M30,0 V40 M0,20 H60" stroke="#C8102E" strokeWidth="6"/>
-              </svg>
-              EN
-            </span>
-            {' | '}
-            <span
-              onClick={() => i18n.changeLanguage('cs')}
-              style={{ fontWeight: i18n.language === 'cs' ? 'bold' : 'normal', opacity: i18n.language === 'cs' ? 1 : 0.6 }}
-            >
-              <svg width="18" height="12" viewBox="0 0 60 40" style={{ verticalAlign: 'middle', marginRight: 4 }}>
-                <rect width="60" height="20" fill="#fff"/>
-                <rect y="20" width="60" height="20" fill="#D7141A"/>
-                <polygon points="0,0 30,20 0,40" fill="#11457E"/>
-              </svg>
-              CS
-            </span>
-            {' | '}
-            <span
-              onClick={() => i18n.changeLanguage('hi')}
-              style={{ fontWeight: i18n.language === 'hi' ? 'bold' : 'normal', opacity: i18n.language === 'hi' ? 1 : 0.6 }}
-            >
-              <svg width="18" height="12" viewBox="0 0 60 40" style={{ verticalAlign: 'middle', marginRight: 4 }}>
-                <rect width="60" height="13.3" fill="#FF9933"/>
-                <rect y="13.3" width="60" height="13.4" fill="#fff"/>
-                <rect y="26.7" width="60" height="13.3" fill="#138808"/>
-                <circle cx="30" cy="20" r="4" fill="none" stroke="#000080" strokeWidth="0.8"/>
-              </svg>
-              HI
-            </span>
-            {' | '}
-            <span
-              onClick={() => i18n.changeLanguage('fil')}
-              style={{ fontWeight: i18n.language === 'fil' ? 'bold' : 'normal', opacity: i18n.language === 'fil' ? 1 : 0.6 }}
-            >
-              <svg width="18" height="12" viewBox="0 0 60 40" style={{ verticalAlign: 'middle', marginRight: 4 }}>
-                <rect width="60" height="20" fill="#0038A8"/>
-                <rect y="20" width="60" height="20" fill="#CE1126"/>
-                <polygon points="0,0 28,20 0,40" fill="#fff"/>
-                <circle cx="9" cy="20" r="3" fill="none" stroke="#FCD116" strokeWidth="0.8"/>
-              </svg>
-              FIL
-            </span>
+            {[
+              { code: 'en', label: 'EN', flag: <><rect width="60" height="40" fill="#012169"/><path d="M0,0 L60,40 M60,0 L0,40" stroke="#fff" strokeWidth="7"/><path d="M0,0 L60,40 M60,0 L0,40" stroke="#C8102E" strokeWidth="4"/><path d="M30,0 V40 M0,20 H60" stroke="#fff" strokeWidth="10"/><path d="M30,0 V40 M0,20 H60" stroke="#C8102E" strokeWidth="6"/></> },
+              { code: 'cs', label: 'CS', flag: <><rect width="60" height="20" fill="#fff"/><rect y="20" width="60" height="20" fill="#D7141A"/><polygon points="0,0 30,20 0,40" fill="#11457E"/></> },
+              { code: 'hi', label: 'HI', flag: <><rect width="60" height="13.3" fill="#FF9933"/><rect y="13.3" width="60" height="13.4" fill="#fff"/><rect y="26.7" width="60" height="13.3" fill="#138808"/><circle cx="30" cy="20" r="4" fill="none" stroke="#000080" strokeWidth="0.8"/></> },
+              { code: 'fil', label: 'FIL', flag: <><rect width="60" height="20" fill="#0038A8"/><rect y="20" width="60" height="20" fill="#CE1126"/><polygon points="0,0 28,20 0,40" fill="#fff"/><circle cx="9" cy="20" r="3" fill="none" stroke="#FCD116" strokeWidth="0.8"/></> },
+            ].map((lang, i) => (
+              <span key={lang.code}>
+                {i > 0 && ' | '}
+                <span
+                  onClick={() => i18n.changeLanguage(lang.code)}
+                  style={{ fontWeight: i18n.language === lang.code ? 'bold' : 'normal', opacity: i18n.language === lang.code ? 1 : 0.6 }}
+                >
+                  <svg width="18" height="12" viewBox="0 0 60 40" style={{ verticalAlign: 'middle', marginRight: 4 }}>{lang.flag}</svg>
+                  {lang.label}
+                </span>
+              </span>
+            ))}
           </div>
           <button className="btn-base help-btn" onClick={() => { audio.init(); audio.play('select'); setHelpOpen(true); }}>
             {t('help_button')}

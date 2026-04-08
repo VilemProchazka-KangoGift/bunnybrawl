@@ -27,7 +27,7 @@ class AudioManager {
 
     this.sounds.set('stomp', new Howl({
       src: [generateStompSound()],
-      volume: 0.5,
+      volume: 0.6,
     }));
 
     this.sounds.set('victory', new Howl({
@@ -42,12 +42,12 @@ class AudioManager {
 
     this.sounds.set('thornhit', new Howl({
       src: [generateThornHitSound()],
-      volume: 0.5,
+      volume: 0.8,
     }));
 
     this.sounds.set('crunch', new Howl({
       src: [generateCrunchSound()],
-      volume: 0.4,
+      volume: 0.6,
     }));
 
     // Animal sounds — simple tones
@@ -149,13 +149,13 @@ class AudioManager {
     // Oof: low impact (150Hz->100Hz, 0.15s, noise burst)
     this.sounds.set('oof', new Howl({
       src: [generateOofSound()],
-      volume: 0.3,
+      volume: 0.6,
     }));
 
     // Splash: noise burst with quick decay (0.1s)
     this.sounds.set('splash', new Howl({
       src: [generateSplashSound()],
-      volume: 0.2,
+      volume: 0.5,
     }));
 
     // Ambient: 2-second loop of quiet brownian noise
@@ -197,7 +197,7 @@ class AudioManager {
     // --- New SFX ---
     this.sounds.set('land', new Howl({ src: [generateLandSound()], volume: 0.5 }));
     this.sounds.set('headbonk', new Howl({ src: [generateHeadbonkSound()], volume: 1.0 }));
-    this.sounds.set('bump', new Howl({ src: [generateBumpSound()], volume: 0.8 }));
+    this.sounds.set('bump', new Howl({ src: [generateBumpSound()], volume: 1.0 }));
     this.sounds.set('spring', new Howl({ src: [generateSpringSound()], volume: 1.0 }));
     this.sounds.set('crouch', new Howl({ src: [generateCrouchSound()], volume: 0.7 }));
     this.sounds.set('fastfall', new Howl({ src: [generateFastfallSound()], volume: 0.9 }));
@@ -209,11 +209,11 @@ class AudioManager {
     this.sounds.set('amb_space_hum', new Howl({ src: [generateAmbSpaceHumSound()], volume: 0.55, loop: true }));
 
     // --- Ambient periodic one-shots ---
-    this.sounds.set('amb_bird_chirp', new Howl({ src: [generateAmbBirdChirpSound()], volume: 0.7 }));
+    this.sounds.set('amb_bird_chirp', new Howl({ src: [generateAmbBirdChirpSound()], volume: 0.5 }));
     this.sounds.set('amb_ghost_hoo', new Howl({ src: [generateAmbGhostHooSound()], volume: 0.65 }));
     this.sounds.set('amb_volcano_burst', new Howl({ src: [generateAmbVolcanoBurstSound()], volume: 0.8 }));
     this.sounds.set('amb_drip', new Howl({ src: [generateAmbDripSound()], volume: 0.55 }));
-    this.sounds.set('amb_chime', new Howl({ src: [generateAmbChimeSound()], volume: 0.65 }));
+    this.sounds.set('amb_chime', new Howl({ src: [generateAmbChimeSound()], volume: 0.5 }));
 
     // Preload menu music so it's ready instantly
     this.menuMusicHowl = new Howl({
@@ -304,6 +304,10 @@ class AudioManager {
     haunted_graveyard: 'haunted_graveyard.mp3',
     underwater: 'underwater.mp3',
     candy_land: 'candy_land.mp3',
+    castle: 'castle.mp3',
+    winter_lake: 'winter_lake.mp3',
+    treetops: 'treetops.mp3',
+    volcano: 'volcano.mp3',
   };
 
   /** Start theme-specific music. Lazily generates and caches per theme. */
@@ -471,20 +475,23 @@ function generateJumpSound(): string {
 
 function generateStompSound(): string {
   const sampleRate = 44100;
-  const duration = 0.25;
+  const duration = 0.3;
   const numSamples = Math.floor(sampleRate * duration);
   const buffer = new Float32Array(numSamples);
 
   for (let i = 0; i < numSamples; i++) {
     const t = i / sampleRate;
     const progress = i / numSamples;
-    const envelope = Math.max(0, 1 - progress * 2) * 0.4;
 
-    // Low thud + noise
-    const thud = Math.sin(2 * Math.PI * 80 * t * (1 - progress * 0.5));
-    const noise = (Math.random() * 2 - 1) * Math.max(0, 1 - progress * 4) * 0.3;
+    // Sharp crack at the start (high freq, fast decay)
+    const crack = Math.sin(2 * Math.PI * 800 * t) * Math.max(0, 1 - progress * 12) * 0.4;
+    // Heavy thud (descending frequency for weight)
+    const thudFreq = 120 * (1 - progress * 0.6);
+    const thud = Math.sin(2 * Math.PI * thudFreq * t) * Math.max(0, 1 - progress * 2) * 0.5;
+    // Noise burst for impact texture
+    const noise = (Math.random() * 2 - 1) * Math.max(0, 1 - progress * 5) * 0.35;
 
-    buffer[i] = (thud + noise) * envelope;
+    buffer[i] = crack + thud + noise;
   }
 
   return floatBufferToWavDataUri(buffer, sampleRate);
@@ -571,22 +578,24 @@ function generateFootstepWood(): string {
 
 function generateCrunchSound(): string {
   const sampleRate = 44100;
-  const duration = 0.12;
+  const duration = 0.15;
   const numSamples = Math.floor(sampleRate * duration);
   const buffer = new Float32Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / sampleRate;
     const progress = i / numSamples;
-    // Sharp attack, quick decay — two-phase envelope
-    const envelope = progress < 0.1
-      ? progress / 0.1  // fast ramp up
-      : Math.max(0, 1 - (progress - 0.1) * 1.5);  // quick decay
-    // Layered noise + low crunch tone for body
-    const noise = (Math.random() * 2 - 1) * 0.6;
-    const tone = Math.sin(2 * Math.PI * 300 * t) * 0.3;
-    // High click transient at the start
-    const click = progress < 0.05 ? Math.sin(2 * Math.PI * 2000 * t) * 0.4 : 0;
-    buffer[i] = (noise + tone + click) * envelope * 0.35;
+    // Two-phase envelope: sharp attack, moderate decay
+    const envelope = progress < 0.08
+      ? progress / 0.08
+      : Math.max(0, 1 - (progress - 0.08) * 1.2);
+    // Loud crackly noise (the crunch)
+    const noise = (Math.random() * 2 - 1) * 0.7;
+    // Multiple crunch harmonics for texture
+    const crunch1 = Math.sin(2 * Math.PI * 400 * t) * 0.3;
+    const crunch2 = Math.sin(2 * Math.PI * 900 * t) * 0.15 * Math.max(0, 1 - progress * 3);
+    // Sharp snap at the start
+    const snap = progress < 0.06 ? Math.sin(2 * Math.PI * 2500 * t) * 0.5 : 0;
+    buffer[i] = (noise + crunch1 + crunch2 + snap) * envelope * 0.45;
   }
   return floatBufferToWavDataUri(buffer, sampleRate);
 }
@@ -794,20 +803,22 @@ function generateLandSound(): string {
 
 function generateHeadbonkSound(): string {
   const sampleRate = 44100;
-  const duration = 0.12;
+  const duration = 0.15;
   const numSamples = Math.floor(sampleRate * duration);
   const buffer = new Float32Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / sampleRate;
     const progress = i / numSamples;
-    const freq = 250 + (150 - 250) * progress;
-    const envelope = Math.max(0, 1 - progress * 2) * 0.45;
-    // Triangle wave for hollow character
+    // Hard knock transient
+    const knock = progress < 0.1 ? Math.sin(2 * Math.PI * 1000 * t) * 0.7 : 0;
+    // Hollow bonk body (descending)
+    const freq = 350 + (180 - 350) * progress;
+    const envelope = Math.max(0, 1 - progress * 1.8) * 0.6;
     const phase = (t * freq) % 1;
     const tri = 4 * Math.abs(phase - 0.5) - 1;
-    // Sharp click transient at start
-    const click = progress < 0.08 ? Math.sin(2 * Math.PI * 900 * t) * 0.5 : 0;
-    buffer[i] = (tri + click) * envelope;
+    // Noise for impact texture
+    const noise = (Math.random() * 2 - 1) * Math.max(0, 1 - progress * 6) * 0.25;
+    buffer[i] = (tri * envelope) + knock + noise;
   }
   return floatBufferToWavDataUri(buffer, sampleRate);
 }
@@ -863,16 +874,19 @@ function generateCrouchSound(): string {
 
 function generateFastfallSound(): string {
   const sampleRate = 44100;
-  const duration = 0.1;
+  const duration = 0.25;
   const numSamples = Math.floor(sampleRate * duration);
   const buffer = new Float32Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / sampleRate;
     const progress = i / numSamples;
-    const freq = 600 + (200 - 600) * progress;
-    const envelope = Math.max(0, 1 - progress * 2) * 0.4;
-    const tone = Math.sin(2 * Math.PI * freq * t) * 0.7;
-    const noise = (Math.random() * 2 - 1) * 0.3;
+    // Long descending swoosh
+    const freq = 800 + (150 - 800) * progress;
+    const envelope = Math.max(0, 1 - progress * 1.2) * 0.5;
+    const tone = Math.sin(2 * Math.PI * freq * t) * 0.5;
+    // Rushing air noise that builds then fades
+    const noiseAmt = Math.sin(progress * Math.PI) * 0.5;
+    const noise = (Math.random() * 2 - 1) * noiseAmt;
     buffer[i] = (tone + noise) * envelope;
   }
   return floatBufferToWavDataUri(buffer, sampleRate);
@@ -969,19 +983,30 @@ function generateAmbSpaceHumSound(): string {
 
 function generateAmbBirdChirpSound(): string {
   const sampleRate = 44100;
-  const duration = 0.15;
+  const duration = 0.35;
   const numSamples = Math.floor(sampleRate * duration);
   const buffer = new Float32Array(numSamples);
-  const midPoint = numSamples / 2;
+  // 3-4 quick warbling notes like a songbird
+  const notes = [
+    { start: 0, end: 0.06, freq: 2800, freqEnd: 3200 },
+    { start: 0.08, end: 0.14, freq: 3400, freqEnd: 2600 },
+    { start: 0.16, end: 0.22, freq: 3000, freqEnd: 3600 },
+    { start: 0.25, end: 0.33, freq: 3200, freqEnd: 2400 },
+  ];
   for (let i = 0; i < numSamples; i++) {
     const t = i / sampleRate;
-    const progress = i / numSamples;
-    // Rising then falling frequency
-    const freq = i < midPoint
-      ? 1000 + (1400 - 1000) * (i / midPoint)
-      : 1400 + (1000 - 1400) * ((i - midPoint) / midPoint);
-    const envelope = Math.max(0, 1 - Math.abs(progress - 0.3) * 2) * 0.5;
-    buffer[i] = Math.sin(2 * Math.PI * freq * t) * envelope;
+    let sample = 0;
+    for (const note of notes) {
+      if (t >= note.start && t < note.end) {
+        const np = (t - note.start) / (note.end - note.start);
+        const freq = note.freq + (note.freqEnd - note.freq) * np;
+        // Fast vibrato for warble
+        const vibrato = Math.sin(2 * Math.PI * 45 * t) * freq * 0.05;
+        const env = Math.sin(np * Math.PI) * 0.35;
+        sample = Math.sin(2 * Math.PI * (freq + vibrato) * t) * env;
+      }
+    }
+    buffer[i] = sample;
   }
   return floatBufferToWavDataUri(buffer, sampleRate);
 }
