@@ -142,6 +142,7 @@
   "players": "Players",
   "waiting_players": "Waiting for players to join...",
   "start_game": "Start Game!",
+  "waiting_ready": "Waiting for opponent to ready up...",
   "waiting_host_start": "Waiting for host to start...",
   "choosing": "Choosing...",
   "you": "You",
