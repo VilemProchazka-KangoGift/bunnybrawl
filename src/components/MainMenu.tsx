@@ -631,31 +631,21 @@ export function MainMenu() {
 
                     <div className="online-section">
                       <span className="online-section-title">{t('your_character', 'Your character')}</span>
-                      <div className="online-player-row">
-                        <select className="online-char-select" value={onlineLocalChar} disabled={onlineLocalReady}
-                            onChange={(e) => {
-                              setOnlineLocalChar(e.target.value); onlineLocalCharRef.current = e.target.value;
-                              localStorage.setItem('bunnybrawl_online_char', e.target.value);
-                              onlineTransportRef.current?.sendReliable({ type: MsgType.CHARACTER_SELECT, characterName: e.target.value });
-                            }}>
-                            {allChars.filter(c => c.name !== online.remoteCharacterName).map(c =>
-                              <option key={c.name} value={c.name}>{getCharacterEmoji(c.name)} {getCharacterDisplayName(c.name, i18n.language)}</option>
-                            )}
-                          </select>
-                          {online.isHost && <span className="online-host-badge">{t('host', 'HOST')}</span>}
-                      </div>
+                      <select className="online-char-select" value={onlineLocalChar} disabled={onlineLocalReady}
+                        onChange={(e) => {
+                          setOnlineLocalChar(e.target.value); onlineLocalCharRef.current = e.target.value;
+                          localStorage.setItem('bunnybrawl_online_char', e.target.value);
+                          onlineTransportRef.current?.sendReliable({ type: MsgType.CHARACTER_SELECT, characterName: e.target.value });
+                        }}>
+                        {allChars.filter(c => c.name !== online.remoteCharacterName).map(c =>
+                          <option key={c.name} value={c.name}>{getCharacterEmoji(c.name)} {getCharacterDisplayName(c.name, i18n.language)}</option>
+                        )}
+                      </select>
                     </div>
 
                     <div className="online-section">
                       <span className="online-section-title">{t('players', 'Players')}</span>
                       <div className="online-player-list">
-                        <div className="online-player-row">
-                          <span className="online-char-name">
-                            {getCharacterEmoji(onlineLocalChar)} {getCharacterDisplayName(onlineLocalChar, i18n.language)}
-                          </span>
-                          {online.isHost && <span className="online-host-badge">{t('host', 'HOST')}</span>}
-                          {onlineLocalReady && <span className="online-ready-badge">{t('ready', 'READY')}</span>}
-                        </div>
                         <div className="online-player-row">
                           <span className="online-char-name">
                             {online.remoteCharacterName
