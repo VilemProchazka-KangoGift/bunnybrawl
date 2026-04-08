@@ -69,5 +69,8 @@ Use `Record<LegStyle['shape'], LegDrawer>` instead of `Record<string, LegDrawer>
 ### Don't leave unused function parameters
 Parameters added "for future use" (`_w`, `_idleT`) create noise and mislead readers. Add them when actually needed. The `/simplify` review caught these immediately.
 
+### Foot width defaults should vary by foot style
+Oval foot styles (paw, round, webbed, claw) look good slightly wider than the leg — default `legWidth + 2`. Rectangular foot styles (hoof) look clunky when wider than the leg — default to `legWidth`. The default is conditional on `footStyle` in `legRenderer.ts`. Don't apply a uniform foot width rule across all styles.
+
 ### Keep canvas drawing functions pure
 `drawLegs()` must be a pure function of its inputs because its output is cached to OffscreenCanvas. No external mutable state, no randomness, no side effects. Derive all animation from the explicit parameters (state, animFrame, squashScale).
