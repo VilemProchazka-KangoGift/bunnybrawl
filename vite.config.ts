@@ -7,4 +7,7 @@ export default defineConfig({
   optimizeDeps: {
     include: ['peerjs'],
   },
+  define: {
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+  },
 })
