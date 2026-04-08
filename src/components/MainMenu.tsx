@@ -186,8 +186,13 @@ export function MainMenu() {
 
   useEffect(() => {
     audio.init();
+    audio.setMusicDisabled(matchSettings.mods.noMusic);
     audio.playMenuMusic();
   }, []);
+
+  useEffect(() => {
+    audio.setMusicDisabled(matchSettings.mods.noMusic);
+  }, [matchSettings.mods.noMusic]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -355,6 +360,12 @@ export function MainMenu() {
                     <p className="help-text help-controls-note">{t('help_controls_note')}</p>
                   </div>
                   <div className="help-section">
+                    <h3 className="help-section-title">{t('help_pickups_title')}</h3>
+                    <p className="help-text">{t('help_pickups_carrots')}</p>
+                    <p className="help-text">{t('help_pickups_springs')}</p>
+                    <p className="help-text">{t('help_pickups_thorns')}</p>
+                  </div>
+                  <div className="help-section">
                     <h3 className="help-section-title">{t('help_lobby_title')}</h3>
                     <p className="help-text">{t('help_lobby')}</p>
                   </div>
@@ -388,6 +399,7 @@ export function MainMenu() {
                   { key: 'superBounce', name: 'mod_super_bounce', desc: 'mod_super_bounce_desc' },
                   { key: 'mirrorArena', name: 'mod_mirror', desc: 'mod_mirror_desc' },
                   { key: 'underwaterGravity', name: 'mod_underwater_gravity', desc: 'mod_underwater_gravity_desc' },
+                  { key: 'noMusic', name: 'mod_no_music', desc: 'mod_no_music_desc' },
                 ] as const).map(mod => (
                   <div className="mod-row" key={mod.key}>
                     <label className="mod-toggle">

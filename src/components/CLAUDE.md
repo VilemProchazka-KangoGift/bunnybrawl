@@ -9,5 +9,5 @@
 - Menu music (`menuMusicHowl`) must NOT be tied to component lifecycle — neither MainMenu nor CharacterSelect stops on unmount. Preloaded in `audio.init()`.
 - Gore mode persisted in `bunnybrawl_gore`, arena in `bunnybrawl_arena`, bots in `bunnybrawl_botcount`/`bunnybrawl_botdiff`.
 - MainMenu modals (Mods, Help) use `mods-overlay` CSS class for the backdrop + `onClick` dismiss. Shared panel styles in `.mods-modal, .help-modal` rule — new modals add to that selector and only declare overrides.
-- Down key = crouch / super jump. Players never fall through platforms. Don't describe Down as "drop through" in any text.
+- Down key = crouch (ground) / super stomp (air). Players never fall through platforms. Don't describe Down as "drop through" in any text.
 - Lobby join zones are labeled "START", not "Join".
