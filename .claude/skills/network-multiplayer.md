@@ -40,6 +40,17 @@ P2P WebRTC via PeerJS with GGPO-style rollback netcode. Free signaling at `0.pee
 - Never use a `startedRef` guard in effects that need to survive Strict Mode — the ref persists across the unmount/remount cycle.
 - Read store state inside the effect body via `useGameStore.getState()` instead of capturing from render closure — avoids stale values when Strict Mode re-runs the effect.
 
+## Determinism Desync Sources
+- `assignBotCharacters` used `Math.random()` for shuffle — each peer got different bot characters → different AI personalities → instant desync. Fixed with optional seed parameter.
+- AI personalities (per-character aggressiveness/cautiousness) amplified desync: different character assignments → different bot behavior. Disabled — all bots use neutral DEFAULT_PERSONALITY.
+- `InputManager.getInput('P1')` only reads WASD. Online play needs `getInputAny()` that merges all 5 key bindings.
+- Any function using `Math.random()` that affects game state must use `gameRandom()` or accept a seed. Grep for `Math.random` in engine/ and classify each call.
+
+## Host-Authoritative State Sync
+- Every 60 frames, host sends full `GameSnapshot` via DESYNC_CHECK message.
+- Guest compares hash — if mismatch, applies host's snapshot to correct drift.
+- This is a fallback safety net, not a replacement for deterministic simulation. Desyncs should still be investigated and fixed at the source.
+
 ## Transport Lifecycle
 1. OnlineLobby creates Transport with lobby callbacks
 2. `Transport.setEvents()` re-wires to match callbacks when NetMatch starts (critical — without this, rollback engine never receives input messages → game freezes)
