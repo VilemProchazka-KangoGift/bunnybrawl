@@ -39,6 +39,7 @@
 - SFX cooldowns use per-player `Map<PlayerSlot, number>` (like `footstepAccumulators`) or a global number. Decay with `dt` every frame. Sound plays only when cooldown ≤ 0. Decay cooldowns BEFORE the hitstop `continue` so they don't accumulate during hitstop.
 - Theme ambient sounds: `ThemeConfig.ambientSoundConfig` with `loops` (continuous) and `periodic` (random interval one-shots). Loops tracked in `activeAmbientLoops[]`, all stopped in `stop()`. Periodic timers in `periodicAmbientTimers` Map, ticked at end of `fixedUpdate()`.
 - Player-push bump sound uses global cooldown (not per-player) to prevent double-fire from both pushed players in the same frame. Detects push via `sideSquash === 0.8` (exact value set by `collidePlayersHorizontal`).
+- All 11 arenas + menu have MP3 music. `AudioManager.MUSIC_MP3` maps theme IDs to filenames in `public/audio/`. Procedural music (`music.ts` / `generateThemeMusic`) is now fallback-only for unknown themes. Menu music uses a separate `menuMusicHowl` preloaded in `init()` — not tied to component lifecycle (persists across menu↔lobby). Suno generation prompts are in `docs/suno-arena-prompts.md`.
 
 ## Arenas & Themes
 - `platforms[0]` is always ground (or first ground segment, detected by `p.y >= 650`).

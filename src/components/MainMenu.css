@@ -32,8 +32,7 @@
 
 .menu-content {
   text-align: center;
-  background: rgba(0, 0, 0, 0.35);
-  backdrop-filter: blur(6px);
+  background: rgba(0, 0, 0, 0.45);
   border-radius: 20px;
   padding: 24px 36px 20px;
   position: relative;
