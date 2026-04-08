@@ -125,6 +125,7 @@ export interface Player {
   damageFlashSide: 'left' | 'right' | null; // which side got hit
   damageFlashTimer: number;    // >0 = show red flash
   burnTimer: number;           // >0 = on fire from lava, spawns flame particles
+  hitstopTimer: number;        // >0 = physics frozen (post-kill freeze)
 }
 
 export type SplatShape = 'circle' | 'star' | 'splat' | 'ring' | 'paw';
@@ -288,6 +289,7 @@ export interface MatchState {
   stats: MatchStats;
   shockwaves: Array<{x: number; y: number; radius: number; maxRadius: number; life: number}>;
   screenFlash: number;  // >0 = white flash on screen (for final kill)
+  hitstopZoom: number;  // >0 = camera zoom punch active (eases out)
   wildlife: WildlifeEntity[];
   fogParticles: Array<{x: number; y: number; vx: number; alpha: number}>;
   pollenParticles: Array<{x: number; y: number; vx: number; vy: number; size: number; alpha: number}>;

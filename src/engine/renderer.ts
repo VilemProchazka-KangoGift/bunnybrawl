@@ -6,6 +6,7 @@ import {
   CANVAS_WIDTH, CANVAS_HEIGHT, CARROT_SIZE, SPRING_SIZE, FAT_SCALE,
   SCREEN_SHAKE_INTENSITY, HAZARD_GROW_TIME,
   SHOCKWAVE_DURATION, SCREEN_FLASH_DURATION, SPRING_TRAIL_DURATION, SCORE_ANIM_DURATION,
+  HITSTOP_DURATION, HITSTOP_ZOOM,
 } from './constants';
 import { drawCloud as drawCloudPrimitive, drawHill, drawPlatformMoss } from './themes/drawPrimitives';
 import { hexToRGB } from './fastMath';
@@ -259,6 +260,15 @@ export class Renderer {
     this.frameTime = performance.now();
 
     ctx.save();
+
+    // Hitstop zoom punch — subtle scale centered on screen
+    if (matchState.hitstopZoom > 0) {
+      const t = matchState.hitstopZoom / HITSTOP_DURATION; // 1 → 0
+      const scale = 1 + HITSTOP_ZOOM * t * t;              // ease-out
+      ctx.translate(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+      ctx.scale(scale, scale);
+      ctx.translate(-CANVAS_WIDTH / 2, -CANVAS_HEIGHT / 2);
+    }
 
     // Screen shake offset
     if (matchState.screenShake > 0) {

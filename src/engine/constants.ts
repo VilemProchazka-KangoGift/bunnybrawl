@@ -66,6 +66,8 @@ export const SCREEN_SHAKE_DURATION = 0.3; // seconds
 export const SCREEN_SHAKE_INTENSITY = 6; // pixels
 export const SLOW_MO_DURATION = 1.0; // seconds for final kill slow-mo
 export const SLOW_MO_FACTOR = 0.25; // time scale during slow-mo
+export const HITSTOP_DURATION = 0.067; // ~4 frames at 60fps — per-player physics freeze on kill
+export const HITSTOP_ZOOM = 0.015;     // 1.5% camera zoom punch during hitstop
 
 // Squash/stretch
 export const SQUASH_ON_LAND = 0.7;     // squash scale on landing

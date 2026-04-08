@@ -20,7 +20,7 @@ function makePlayer(overrides: Partial<Player> & { id: PlayerSlot }): Player {
     squashScale: 1, squashTimer: 0, sideSquash: 1, afterimages: [],
     idleAnimTimer: 0, expression: 'normal',
     killStreak: 0, breathTimer: 0, springTrailTimer: 0,
-    damageFlashSide: null, damageFlashTimer: 0, burnTimer: 0,
+    damageFlashSide: null, damageFlashTimer: 0, burnTimer: 0, hitstopTimer: 0,
     ...overrides,
   };
 }
@@ -47,6 +47,7 @@ function makeState(overrides?: Partial<MatchState>): MatchState {
     stats: { perPlayer: new Map() },
     shockwaves: [],
     screenFlash: 0,
+    hitstopZoom: 0,
     wildlife: [],
     fogParticles: [],
     pollenParticles: [],

@@ -21,7 +21,7 @@ import {
   FAT_DURATION, SPRING_BOUNCE, SPRING_SIZE,
   THORN_SLOW_DURATION, CANVAS_WIDTH, CANVAS_HEIGHT,
   SPRING_SPAWN_INTERVAL, THORN_SPAWN_INTERVAL, HAZARD_LIFETIME, HAZARD_GROW_TIME,
-  SCREEN_SHAKE_DURATION, SLOW_MO_DURATION, SLOW_MO_FACTOR,
+  SCREEN_SHAKE_DURATION, SLOW_MO_DURATION, SLOW_MO_FACTOR, HITSTOP_DURATION,
   SQUASH_ON_LAND, STRETCH_ON_JUMP, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED,
   AFTERIMAGE_INTERVAL, AFTERIMAGE_SPEED_THRESHOLD, AFTERIMAGE_MAX,
   MATCH_COUNTDOWN, IDLE_ANIM_INTERVAL,
@@ -142,7 +142,7 @@ export class GameLoop {
       fastFalling: false, fatTimer: 0, slowTimer: 0,
       squashScale: 1, squashTimer: 0, sideSquash: 1, afterimages: [], idleAnimTimer: 0,
       expression: 'normal' as const, killStreak: 0,
-      breathTimer: 0, springTrailTimer: 0, damageFlashSide: null, damageFlashTimer: 0, burnTimer: 0,
+      breathTimer: 0, springTrailTimer: 0, damageFlashSide: null, damageFlashTimer: 0, burnTimer: 0, hitstopTimer: 0,
     }));
 
     // Init AI controllers for bot players
@@ -214,7 +214,7 @@ export class GameLoop {
       springs: [], thorns: [],
       springSpawnTimer: 5, // first spring after 5s
       thornSpawnTimer: 8,  // first thorn after 8s
-      screenShake: 0, slowMotion: 0,
+      screenShake: 0, slowMotion: 0, hitstopZoom: 0,
       weather,
       dayPhase: 0,
       countdown: MATCH_COUNTDOWN,
@@ -365,6 +365,9 @@ export class GameLoop {
     }
     if (this.state.screenFlash > 0) {
       this.state.screenFlash -= frameTime;
+    }
+    if (this.state.hitstopZoom > 0) {
+      this.state.hitstopZoom -= frameTime;
     }
 
     // Fireworks when match is over
@@ -1063,6 +1066,13 @@ export class GameLoop {
     // Animation timers
     for (const player of this.state.players) {
       if (!player.active) continue;
+      // Hitstop: decay timer, let visual timers tick, but skip animation advance
+      if (player.hitstopTimer > 0) {
+        player.hitstopTimer -= dt;
+        if (player.damageFlashTimer > 0) player.damageFlashTimer -= dt;
+        if (player.burnTimer > 0) player.burnTimer -= dt;
+        continue;
+      }
       player.animTimer += dt;
       if (player.animTimer >= ANIM_FRAME_DURATION) {
         player.animTimer -= ANIM_FRAME_DURATION;
@@ -1093,6 +1103,7 @@ export class GameLoop {
     // Input + physics
     for (const player of this.state.players) {
       if (!player.active) continue;
+      if (player.hitstopTimer > 0) continue;
       const input = this.getPlayerInput(player);
       const wasAirborne = player.state === 'airborne';
       const prevVy = player.vy;
@@ -1540,11 +1551,13 @@ export class GameLoop {
     if (killFeedEntries.length > 0) {
       audio.play('stomp');
       this.state.screenShake = SCREEN_SHAKE_DURATION;
+      this.state.hitstopZoom = HITSTOP_DURATION;
     }
 
     for (const entry of killFeedEntries) {
       const attacker = this.state.players.find(p => p.id === entry.attacker);
       if (attacker) {
+        attacker.hitstopTimer = Math.max(attacker.hitstopTimer, HITSTOP_DURATION);
         audio.playAnimal(attacker.character.name);
         // Stats: kill streak
         attacker.killStreak += 1;
@@ -1555,6 +1568,7 @@ export class GameLoop {
       }
       const victim = this.state.players.find(p => p.id === entry.victim);
       if (victim) {
+        victim.hitstopTimer = Math.max(victim.hitstopTimer, HITSTOP_DURATION);
         this.spawnKillSplatter(victim);
         // Shockwave at victim position
         this.state.shockwaves.push({
