@@ -647,15 +647,18 @@ export class GameLoop {
   private pickupCarrotVFX(x: number, y: number): void {
     const cx = x;
     const cy = y + CARROT_SIZE / 2;
-    // Orange/green chunk burst (carrot bits + leaf)
-    const colors = ['#FF8C00', '#FF6600', '#FFA500', '#FF7700', '#4CAF50', '#66BB6A'];
-    for (let i = 0; i < 10; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 60 + Math.random() * 100;
-      const life = 0.3 + Math.random() * 0.3;
-      this.emitParticle(cx, cy, Math.cos(angle) * speed, Math.sin(angle) * speed - 40, life, 2 + Math.random() * 4, colors[i % colors.length]);
+    // Orange carrot chunks — gib-style (bounce + settle on ground)
+    for (let i = 0; i < 4; i++) {
+      const s = 4 + Math.random() * 3;
+      this.launchGib(cx, cy, 10, 0.15, 0.85, 80, 200, s, s,
+        '#FF8C00', '#CC6600', '#FFB040', '', 'body');
     }
-    // Upward sparkle ring
+    // Green leaf pieces
+    for (let i = 0; i < 2; i++) {
+      this.launchGib(cx, cy, 8, 0.2, 0.8, 60, 160, 5, 3,
+        '#4CAF50', '#2E7D32', '#81C784', '', 'body');
+    }
+    // Upward gold sparkle ring (instant feedback)
     for (let i = 0; i < 6; i++) {
       const angle = (i / 6) * Math.PI * 2;
       const speed = 30 + Math.random() * 30;
