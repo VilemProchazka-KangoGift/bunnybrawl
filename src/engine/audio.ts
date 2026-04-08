@@ -9,6 +9,7 @@ class AudioManager {
   private muted = false;
   private musicHowl: Howl | null = null;
   private musicThemeId: string | null = null;
+  private menuMusicHowl: Howl | null = null;
 
   init(): void {
     if (this.initialized) return;
@@ -231,6 +232,27 @@ class AudioManager {
     this.play(soundName);
   }
 
+  playMenuMusic(): void {
+    if (this.muted) return;
+    if (!this.initialized) this.init();
+    // Already playing
+    if (this.menuMusicHowl && this.menuMusicHowl.playing()) return;
+    if (!this.menuMusicHowl) {
+      this.menuMusicHowl = new Howl({
+        src: [import.meta.env.BASE_URL + 'audio/carrot-royale-main.mp3'],
+        volume: 0.35,
+        loop: true,
+      });
+    }
+    this.menuMusicHowl.play();
+  }
+
+  stopMenuMusic(): void {
+    if (this.menuMusicHowl) {
+      this.menuMusicHowl.stop();
+    }
+  }
+
   /** Start theme-specific music. Lazily generates and caches per theme. */
   playMusic(themeId: string): void {
     if (this.muted) return;
@@ -260,6 +282,10 @@ class AudioManager {
       sound.unload();
     }
     this.sounds.clear();
+    if (this.menuMusicHowl) {
+      this.menuMusicHowl.unload();
+      this.menuMusicHowl = null;
+    }
     if (this.musicHowl) {
       this.musicHowl.unload();
       this.musicHowl = null;

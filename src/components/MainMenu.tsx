@@ -184,6 +184,12 @@ export function MainMenu() {
   }, [handlePlay]);
 
   useEffect(() => {
+    audio.init();
+    audio.playMenuMusic();
+    return () => { audio.stopMenuMusic(); };
+  }, []);
+
+  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d')!;

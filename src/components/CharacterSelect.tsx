@@ -159,6 +159,11 @@ export function CharacterSelect() {
   }, [setActivePlayers, setMatchSettings, setScreen]);
 
   useEffect(() => {
+    audio.playMenuMusic();
+    return () => { audio.stopMenuMusic(); };
+  }, []);
+
+  useEffect(() => {
     const normalizeKey = (key: string) => key.length === 1 ? key.toLowerCase() : key;
     const handleKeyDown = (e: KeyboardEvent) => {
       e.preventDefault();
