@@ -32,16 +32,18 @@ export function OnlineLobby() {
     resetOnline();
   }, [resetOnline]);
 
+  const transitioningToMatch = useRef(false);
+
   useEffect(() => {
     return () => {
-      // Only destroy transport if we're actually unmounting (not transitioning to match)
-      if (transportRef.current && online.connectionStatus !== 'connected') {
+      // On unmount: destroy transport unless we're transitioning to match
+      if (transportRef.current && !transitioningToMatch.current) {
         transportRef.current.destroy();
         transportRef.current = null;
         _activeTransport = null;
       }
     };
-  }, [online.connectionStatus]);
+  }, []);
 
   const handleReliableMessage = useCallback((msg: ReliableMessage) => {
     switch (msg.type) {
@@ -189,6 +191,7 @@ export function OnlineLobby() {
       if (remoteCharDef) { host.color = remoteCharDef.color; host.darkColor = remoteCharDef.darkColor; host.lightColor = remoteCharDef.lightColor; }
     }
 
+    transitioningToMatch.current = true;
     setActivePlayers(['P1', 'P2']);
     setOnline({ isOnline: true });
     setScreen('match');
