@@ -558,6 +558,16 @@ export function MainMenu() {
                 {/* Step 1: Choose create or join */}
                 {onlineStep === 'choose' && !onlineJoinMode && (
                   <div className="online-step">
+                    <p className="online-info">{(() => {
+                      const n = matchSettings.botCount;
+                      if (n === 0) return t('online_bots_info_zero');
+                      if (i18n.language === 'cs') {
+                        if (n === 1) return t('online_bots_info_one');
+                        if (n >= 2 && n <= 4) return t('online_bots_info_few', { count: n });
+                        return t('online_bots_info_other', { count: n });
+                      }
+                      return t('online_bots_info', { count: n });
+                    })()}</p>
                     <button className="btn-base menu-btn online-create-btn" onClick={() => { audio.play('select'); onlineConnect(true); }}>
                       {t('create_room', 'Create Room')}
                     </button>
@@ -660,6 +670,11 @@ export function MainMenu() {
                           {!online.isHost && <span className="online-host-badge">{t('host', 'HOST')}</span>}
                           {onlineRemoteReady && <span className="online-ready-badge">{t('ready', 'READY')}</span>}
                         </div>
+                        {matchSettings.botCount > 0 && ALL_BOT_SLOTS.slice(0, matchSettings.botCount).map(slot => (
+                          <div className="online-player-row online-bot-row" key={slot}>
+                            <span className="online-char-name">🤖 {t('bot_label', 'Bot')} ({t(`bot_diff_${matchSettings.botDifficulty}`)})</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
 

@@ -203,6 +203,17 @@
   letter-spacing: 0.5px;
 }
 
+.online-bot-row {
+  opacity: 0.6;
+}
+
+.online-info {
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0;
+  text-align: center;
+}
+
 .online-ready-status {
   text-align: center;
   padding: 8px 0;
