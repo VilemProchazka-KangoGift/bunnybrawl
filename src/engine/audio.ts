@@ -275,6 +275,7 @@ class AudioManager {
     space_station: 'space_station.mp3',
     rooftops: 'rooftops.mp3',
     haunted_graveyard: 'haunted_graveyard.mp3',
+    underwater: 'underwater.mp3',
   };
 
   /** Start theme-specific music. Lazily generates and caches per theme. */
