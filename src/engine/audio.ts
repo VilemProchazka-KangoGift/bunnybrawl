@@ -1,7 +1,7 @@
 import { Howl } from 'howler';
 import { generateThemeMusic } from './music';
 
-export type SoundName = 'jump' | 'stomp' | 'victory' | 'select' | 'thornhit' | 'bunny' | 'fox' | 'frog' | 'bear' | 'owl' | 'cat' | 'wolf' | 'panda' | 'pig' | 'cow' | 'goat' | 'horse' | 'sheep' | 'monkey' | 'tiger' | 'rhino' | 'hedgehog' | 'footstep_grass' | 'footstep_wood' | 'countdown_beep' | 'countdown_go' | 'oof' | 'splash' | 'ambient' | 'crowd' |'geyser' | 'pigeon_scatter' | 'zero_g' | 'waterfall_ambient';
+export type SoundName = 'jump' | 'stomp' | 'victory' | 'select' | 'thornhit' | 'crunch' | 'bunny' | 'fox' | 'frog' | 'bear' | 'owl' | 'cat' | 'wolf' | 'panda' | 'pig' | 'cow' | 'goat' | 'horse' | 'sheep' | 'monkey' | 'tiger' | 'rhino' | 'hedgehog' | 'footstep_grass' | 'footstep_wood' | 'countdown_beep' | 'countdown_go' | 'oof' | 'splash' | 'ambient' | 'crowd' |'geyser' | 'pigeon_scatter' | 'zero_g' | 'waterfall_ambient';
 
 class AudioManager {
   private sounds: Map<SoundName, Howl> = new Map();
@@ -38,6 +38,11 @@ class AudioManager {
     this.sounds.set('thornhit', new Howl({
       src: [generateThornHitSound()],
       volume: 0.5,
+    }));
+
+    this.sounds.set('crunch', new Howl({
+      src: [generateCrunchSound()],
+      volume: 0.4,
     }));
 
     // Animal sounds — simple tones
@@ -477,6 +482,28 @@ function generateFootstepWood(): string {
     const envelope = Math.max(0, 1 - progress * 3) * 0.15;
     const tone = Math.sin(2 * Math.PI * 1200 * t);
     buffer[i] = tone * envelope;
+  }
+  return floatBufferToWavDataUri(buffer, sampleRate);
+}
+
+function generateCrunchSound(): string {
+  const sampleRate = 44100;
+  const duration = 0.12;
+  const numSamples = Math.floor(sampleRate * duration);
+  const buffer = new Float32Array(numSamples);
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / sampleRate;
+    const progress = i / numSamples;
+    // Sharp attack, quick decay — two-phase envelope
+    const envelope = progress < 0.1
+      ? progress / 0.1  // fast ramp up
+      : Math.max(0, 1 - (progress - 0.1) * 1.5);  // quick decay
+    // Layered noise + low crunch tone for body
+    const noise = (Math.random() * 2 - 1) * 0.6;
+    const tone = Math.sin(2 * Math.PI * 300 * t) * 0.3;
+    // High click transient at the start
+    const click = progress < 0.05 ? Math.sin(2 * Math.PI * 2000 * t) * 0.4 : 0;
+    buffer[i] = (noise + tone + click) * envelope * 0.35;
   }
   return floatBufferToWavDataUri(buffer, sampleRate);
 }

@@ -644,6 +644,25 @@ export class GameLoop {
     }
   }
 
+  private pickupCarrotVFX(x: number, y: number): void {
+    const cx = x;
+    const cy = y + CARROT_SIZE / 2;
+    // Orange/green chunk burst (carrot bits + leaf)
+    const colors = ['#FF8C00', '#FF6600', '#FFA500', '#FF7700', '#4CAF50', '#66BB6A'];
+    for (let i = 0; i < 10; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 60 + Math.random() * 100;
+      const life = 0.3 + Math.random() * 0.3;
+      this.emitParticle(cx, cy, Math.cos(angle) * speed, Math.sin(angle) * speed - 40, life, 2 + Math.random() * 4, colors[i % colors.length]);
+    }
+    // Upward sparkle ring
+    for (let i = 0; i < 6; i++) {
+      const angle = (i / 6) * Math.PI * 2;
+      const speed = 30 + Math.random() * 30;
+      this.emitParticle(cx, cy, Math.cos(angle) * speed, -50 - Math.random() * 40, 0.4 + Math.random() * 0.2, 1.5 + Math.random() * 2, '#FFD700');
+    }
+  }
+
   private spawnFirework(): void {
     const fx = Math.random() * CANVAS_WIDTH;
     const fy = Math.random() * (CANVAS_HEIGHT * 0.5); // upper half
@@ -1470,10 +1489,12 @@ export class GameLoop {
           carrot.active = false;
           player.score += 1;
           player.fatTimer = FAT_DURATION;
-          audio.play('select');
+          audio.play('crunch');
           audio.playAnimal(player.character.name);
           // Score animation for carrot pickup
           this.state.scoreAnimations.push({ playerId: player.id, value: player.score, timer: SCORE_ANIM_DURATION });
+          // Pickup VFX — orange burst from carrot position
+          this.pickupCarrotVFX(carrot.x, carrot.y);
           // Stats: carrots eaten
           const ps = this.state.stats.perPlayer.get(player.id);
           if (ps) ps.carrotsEaten += 1;
