@@ -1,6 +1,7 @@
 import type { CharacterDef, CharacterSlot, PlayerSlot, BotSlot } from '../types';
 import { isBotSlot } from '../types';
 import { getAllCharacterDefs } from './registry';
+import { SeededRNG } from '../net/prng';
 
 // Default characters tied to player slots (used before lobby reassignment)
 export const CHARACTERS: Record<CharacterSlot, CharacterDef> = {
@@ -36,14 +37,8 @@ export function assignBotCharacters(humanSlots: CharacterSlot[], botSlots: BotSl
   const usedNames = new Set(humanSlots.map(s => CHARACTERS[s].name));
   const available = getAllCharacters().filter(c => !usedNames.has(c.name));
   const shuffled = [...available];
-  // Seeded PRNG (mulberry32) when seed provided, Math.random otherwise
-  let st = seed ?? 0;
-  const rnd = seed != null ? () => {
-    st = (st + 0x6d2b79f5) | 0;
-    let t = Math.imul(st ^ (st >>> 15), 1 | st);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  } : Math.random;
+  const rng = seed != null ? new SeededRNG(seed) : null;
+  const rnd = rng ? () => rng.nextFloat() : Math.random;
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(rnd() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];

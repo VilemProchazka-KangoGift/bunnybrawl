@@ -66,8 +66,9 @@ export class RollbackEngine {
   private rafId = 0;
   private stalled = false;
 
-  // Reusable Map for input injection (avoid GC pressure in hot 60fps loop)
+  // Reusable objects for hot 60fps loop (avoid GC pressure)
   private readonly inputMap = new Map<string, InputState>();
+  private readonly sendBundle: Array<{ frame: number; input: InputState }> = [];
 
   // Callbacks
   private onStall?: (stalled: boolean) => void;
@@ -283,28 +284,25 @@ export class RollbackEngine {
     try {
       return this.gameLoop.getInputAny();
     } catch {
-      return { ...NO_INPUT };
+      return NO_INPUT;
     }
   }
 
   private sendInput(frame: number, _input: InputState): void {
-    // Bundle recent unacked inputs for redundancy
-    const inputs: Array<{ frame: number; input: InputState }> = [];
+    // Bundle recent unacked inputs for redundancy (reuse array to avoid GC)
+    this.sendBundle.length = 0;
     const startFrame = Math.max(0, frame - INPUT_BUNDLE_SIZE + 1);
     for (let f = startFrame; f <= frame; f++) {
-      inputs.push({
-        frame: f,
-        input: this.localInputs[f % BUFFER_SIZE],
-      });
+      this.sendBundle.push({ frame: f, input: this.localInputs[f % BUFFER_SIZE] });
     }
 
-    const msg = encodeInputMessage(inputs, this.remoteConfirmedFrame);
+    const msg = encodeInputMessage(this.sendBundle, this.remoteConfirmedFrame);
     this.transport.sendUnreliable(msg);
   }
 
   private getLastConfirmedRemoteInput(): InputState {
-    if (this.remoteConfirmedFrame < 0) return { ...NO_INPUT };
-    return { ...this.remoteInputs[this.remoteConfirmedFrame % BUFFER_SIZE] };
+    if (this.remoteConfirmedFrame < 0) return NO_INPUT;
+    return this.remoteInputs[this.remoteConfirmedFrame % BUFFER_SIZE];
   }
 
   private sendDesyncCheck(): void {

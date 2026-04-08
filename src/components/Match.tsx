@@ -75,7 +75,7 @@ export function Match() {
     if (online.isOnline && online.isHost) {
       const transport = getModalTransport();
       if (transport) {
-        transport.sendReliable({ type: MsgType.SETTINGS_SYNC, arenaId: newArenaId } as any);
+        transport.sendReliable({ type: MsgType.SETTINGS_SYNC, arenaId: newArenaId } as import('../engine/net/protocol').ReliableMessage);
       }
     }
   }, [setMatchSettings, online.isOnline, online.isHost]);
@@ -129,7 +129,7 @@ export function Match() {
       if (online.isOnline && online.isHost) {
         const transport = getModalTransport();
         if (transport) {
-          transport.sendReliable({ type: MsgType.MATCH_RESULT, winner: winner } as any);
+          transport.sendReliable({ type: MsgType.MATCH_RESULT, winner } as import('../engine/net/protocol').ReliableMessage);
         }
       }
       victoryTimeoutRef.current = setTimeout(() => {

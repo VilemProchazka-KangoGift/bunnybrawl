@@ -8,6 +8,8 @@ import { getCharacterEmoji, getCharacterDisplayName } from '../engine/characters
 import { listArenas } from '../engine/arena';
 import { listThemes } from '../engine/themes/registry';
 import { getModalTransport } from './MainMenu';
+import { MsgType } from '../engine/net/protocol';
+import type { ReliableMessage } from '../engine/net/protocol';
 import './VictoryScreen.css';
 
 interface FireworkParticle {
@@ -39,7 +41,7 @@ export function VictoryScreen() {
     if (online.isOnline && online.isHost) {
       const transport = getModalTransport();
       if (transport) {
-        transport.sendReliable({ type: 0x08 } as any); // START_MATCH
+        transport.sendReliable({ type: MsgType.START_MATCH } as ReliableMessage); // START_MATCH
       }
     }
     setScreen('match');
@@ -60,8 +62,8 @@ export function VictoryScreen() {
     if (online.isOnline && online.isHost) {
       const transport = getModalTransport();
       if (transport) {
-        transport.sendReliable({ type: 0x02, arenaId } as any); // SETTINGS_SYNC (arena only)
-        transport.sendReliable({ type: 0x08 } as any); // START_MATCH
+        transport.sendReliable({ type: MsgType.SETTINGS_SYNC, arenaId } as ReliableMessage); // SETTINGS_SYNC (arena only)
+        transport.sendReliable({ type: MsgType.START_MATCH } as ReliableMessage); // START_MATCH
       }
     }
     setScreen('match');
@@ -86,11 +88,11 @@ export function VictoryScreen() {
         }
       },
       onReliableMessage: (msg) => {
-        if (msg.type === 0x02 && 'arenaId' in msg) {
+        if (msg.type === MsgType.SETTINGS_SYNC && 'arenaId' in msg) {
           // Arena change from host
           setMatchSettings({ arenaId: (msg as any).arenaId });
         }
-        if (msg.type === 0x08) {
+        if (msg.type === MsgType.START_MATCH) {
           // START_MATCH from host — rematch
           setScreen('match');
         }

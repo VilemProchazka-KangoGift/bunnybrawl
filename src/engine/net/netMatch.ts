@@ -103,15 +103,11 @@ export class NetMatch {
         this.gameLoop.resume();
       }
     } else if (msg.type === MsgType.SETTINGS_SYNC) {
-      // Arena change from host — update match settings
-      const sync = msg as any;
-      if (sync.arenaId) {
-        this.onArenaChange?.(sync.arenaId);
+      if ('arenaId' in msg) {
+        this.onArenaChange?.((msg as { arenaId: string }).arenaId);
       }
     } else if (msg.type === MsgType.MATCH_RESULT) {
-      // Guest receives match result from host — trigger local match end
-      const result = msg as any;
-      this.onMatchEnd?.(result.winner, this.gameLoop.getState());
+      this.onMatchEnd?.((msg as { winner: string | null }).winner as any, this.gameLoop.getState());
     } else if (msg.type === MsgType.DISCONNECT) {
       this.onDisconnect?.();
     }
