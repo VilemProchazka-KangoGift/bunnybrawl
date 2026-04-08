@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../store/gameStore';
 import { GameLoop } from '../engine/gameLoop';
 import { NetMatch } from '../engine/net/netMatch';
+import { MsgType } from '../engine/net/protocol';
 import { getActiveTransport } from './OnlineLobby';
 import { getModalTransport } from './MainMenu';
 import { getArena, listArenas } from '../engine/arena';
@@ -59,7 +60,7 @@ export function Match() {
     }
     gameLoopRef.current?.stop();
     gameLoopRef.current = null;
-    const transport = getActiveTransport();
+    const transport = getModalTransport() || getActiveTransport();
     if (transport) transport.destroy();
     resetOnline();
     setActivePlayers([]);
@@ -119,6 +120,13 @@ export function Match() {
 
     const arena = getArena(currentArenaId);
     const onMatchEnd = (winner: import('../engine/types').PlayerSlot | null, state: import('../engine/types').MatchState) => {
+      // In online mode, host sends match result to guest
+      if (online.isOnline && online.isHost) {
+        const transport = getModalTransport() || getActiveTransport();
+        if (transport) {
+          transport.sendReliable({ type: MsgType.MATCH_RESULT, winner: winner } as any);
+        }
+      }
       victoryTimeoutRef.current = setTimeout(() => {
         setMatchResult(winner, state);
       }, 1500);

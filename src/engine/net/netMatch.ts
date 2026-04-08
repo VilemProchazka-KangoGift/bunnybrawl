@@ -31,10 +31,12 @@ export class NetMatch {
   private gameLoop: GameLoop;
   private rollback: RollbackEngine;
   private transport: Transport;
+  private onMatchEnd?: MatchEndCallback;
   private onDisconnect?: () => void;
 
   constructor(config: NetMatchConfig) {
     this.transport = config.transport;
+    this.onMatchEnd = config.onMatchEnd;
     this.onDisconnect = config.onDisconnect;
 
     // Create game loop with seeded PRNG
@@ -97,6 +99,10 @@ export class NetMatch {
       } else {
         this.gameLoop.resume();
       }
+    } else if (msg.type === MsgType.MATCH_RESULT) {
+      // Guest receives match result from host — trigger local match end
+      const result = msg as any;
+      this.onMatchEnd?.(result.winner, this.gameLoop.getState());
     } else if (msg.type === MsgType.DISCONNECT) {
       this.onDisconnect?.();
     }

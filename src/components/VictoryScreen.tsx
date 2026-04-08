@@ -7,6 +7,7 @@ import { isBotSlot } from '../engine/types';
 import { getCharacterEmoji, getCharacterDisplayName } from '../engine/characters';
 import { listArenas } from '../engine/arena';
 import { listThemes } from '../engine/themes/registry';
+import { getModalTransport } from './MainMenu';
 import './VictoryScreen.css';
 
 interface FireworkParticle {
@@ -34,7 +35,14 @@ export function VictoryScreen() {
   const botSuffix = (id: PlayerSlot) => isBotSlot(id) ? ' (BOT)' : '';
 
   const handleRematch = () => { setScreen('match'); };
-  const handleMenu = () => { setActivePlayers([]); setScreen('menu'); };
+  const handleMenu = () => {
+    // Clean up transport on exit to menu
+    const transport = getModalTransport();
+    if (transport) transport.destroy();
+    useGameStore.getState().resetOnline();
+    setActivePlayers([]);
+    setScreen('menu');
+  };
   const handleChooseArena = (arenaId: string) => {
     setMatchSettings({ arenaId });
     setShowArenaSelect(false);
