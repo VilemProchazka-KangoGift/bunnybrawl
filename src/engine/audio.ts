@@ -261,6 +261,7 @@ class AudioManager {
     waterfall: 'waterfall.mp3',
     space_station: 'space_station.mp3',
     rooftops: 'rooftops.mp3',
+    haunted_graveyard: 'haunted_graveyard.mp3',
   };
 
   /** Start theme-specific music. Lazily generates and caches per theme. */
