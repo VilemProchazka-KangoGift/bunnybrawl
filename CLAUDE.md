@@ -157,6 +157,15 @@ Arena = structural positions, ThemeConfig = behavioral config:
 1. Add to `SoundName` union in `audio.ts`
 2. Add entry to `SIMPLE_ANIMAL_SOUNDS`/`SEGMENT_ANIMAL_SOUNDS` or `this.sounds.set()`
 3. Call `audio.play('name')` in `gameLoop.ts`
+4. **Volume calibration**: test on laptop speakers. Frequencies below 100Hz are inaudible on most laptop speakers — use 130Hz+ for thuds/impacts. Generation amplitude * Howl volume should be ≥0.05 effective for one-shots, ≥0.02 for ambient loops. Reference: existing `jump` sound = square wave 0.25 amplitude * Howl 0.3 = 0.075 effective at 300-600Hz.
+5. **Cooldown for rapid-fire SFX**: use per-player `Map<PlayerSlot, number>` accumulators (like `footstepAccumulators`), or a global cooldown number. Decay every frame. Sound plays only when cooldown ≤ 0.
+
+### Adding per-theme ambient sounds
+Themes support ambient sounds via `ThemeConfig.ambientSoundConfig`:
+- **Loops** (`loops: string[]`): continuous background sounds, started in `GameLoop.start()`, stopped in `stop()`
+- **Periodic** (`periodic: [{sound, intervalRange}]`): one-shots fired at random intervals, ticked in `fixedUpdate()`
+- Sound generators go in `audio.ts`, config in each theme file in `src/engine/themes/`
+- All active loops tracked in `GameLoop.activeAmbientLoops[]` and stopped on match end
 
 ### Adding arena MP3 music
 1. Place MP3 in `public/audio/<themeId>.mp3`
@@ -173,6 +182,6 @@ Arena = structural positions, ThemeConfig = behavioral config:
 Largest files to be aware of when context is limited:
 - `renderer.ts` ~2370 lines — `music.ts` ~980 lines — `gameLoop.ts` ~1770 lines
 - `drawPrimitives.ts` ~990 lines — `CharacterSelect.tsx` ~900 lines
-- `audio.ts` ~750 lines — `VictoryScreen.css` ~520 lines
+- `audio.ts` ~1050 lines — `VictoryScreen.css` ~520 lines
 - Theme files ~250-800 lines each (11 themes)
 - AI: `utility.ts` ~450, `awareness.ts` ~370, `navData.ts` ~300-500 (generated)
