@@ -131,16 +131,17 @@ export function drawFurEdge(
   if (intensity <= 0) return;
 
   const { cx, cy, rx, ry } = params;
-  const dotCount = 18;
-  const rgba = hexToRGBA(darkColor, 0.15 * intensity);
+  const dotCount = 10;
+  const rgba = hexToRGBA(darkColor, 0.1 * intensity);
 
   ctx.fillStyle = rgba;
   for (let i = 0; i < dotCount; i++) {
-    const angle = (i / dotCount) * Math.PI * 2;
-    const outward = 1.5 + ((i * 1.618) % 1) * 1.5;
+    // Irregular spacing via golden angle (not evenly spaced)
+    const angle = i * 2.399;
+    const outward = 0.5 + ((i * 1.618) % 1) * 2.5;
     const dotX = cx + Math.cos(angle) * (rx + outward);
     const dotY = cy + Math.sin(angle) * (ry + outward);
-    const dotR = 1.5 + ((i * 2.414) % 1) * 1.0;
+    const dotR = 0.8 + ((i * 2.414) % 1) * 0.7;
 
     ctx.beginPath();
     ctx.arc(dotX, dotY, dotR, 0, Math.PI * 2);
