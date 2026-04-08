@@ -976,33 +976,38 @@ function drawLobby(
 
   // ---- Online info overlay ----
   if (onlineInfo) {
-    // Room code (top-right)
+    const cx = CANVAS_WIDTH / 2;
+
+    // Room code (center, large)
     if (onlineInfo.roomCode) {
       ctx.save();
-      ctx.font = "bold 14px 'Nunito', sans-serif";
-      ctx.textAlign = 'right';
+      ctx.textAlign = 'center';
       ctx.fillStyle = 'rgba(0,0,0,0.5)';
-      ctx.fillRect(CANVAS_WIDTH - 180, 60, 170, 36);
+      ctx.beginPath();
+      ctx.roundRect(cx - 170, 56, 340, 60, 12);
+      ctx.fill();
+      ctx.font = "bold 16px 'Nunito', sans-serif";
       ctx.fillStyle = 'rgba(255,255,255,0.7)';
-      ctx.fillText(i18n.t('room_code', 'Room Code') + ':', CANVAS_WIDTH - 20, 78);
-      ctx.font = "bold 22px 'Fredoka One', monospace";
+      ctx.fillText(i18n.t('room_code', 'Room Code'), cx, 76);
+      ctx.font = "bold 40px 'Fredoka One', monospace";
       ctx.fillStyle = '#FFD700';
-      ctx.fillText(onlineInfo.roomCode, CANVAS_WIDTH - 20, 92);
+      ctx.fillText(onlineInfo.roomCode, cx, 110);
       ctx.restore();
     }
 
-    // Opponent status (top-center)
+    // Opponent status (below room code)
+    const statusY = onlineInfo.roomCode ? 136 : 78;
     ctx.save();
     ctx.textAlign = 'center';
     if (onlineInfo.remoteCharName) {
       ctx.font = "bold 16px 'Nunito', sans-serif";
       ctx.fillStyle = 'rgba(255,255,255,0.8)';
       const status = onlineInfo.remoteReady ? ' - ' + i18n.t('ready', 'READY') : '';
-      ctx.fillText(i18n.t('opponent', 'Opponent') + ': ' + getCharacterDisplayName(onlineInfo.remoteCharName, i18n.language) + status, CANVAS_WIDTH / 2, 78);
+      ctx.fillText(i18n.t('opponent', 'Opponent') + ': ' + getCharacterDisplayName(onlineInfo.remoteCharName, i18n.language) + status, cx, statusY);
     } else if (onlineInfo.waitingForRemote) {
       ctx.font = "bold 16px 'Nunito', sans-serif";
       ctx.fillStyle = 'rgba(255,255,255,0.5)';
-      ctx.fillText(i18n.t('waiting_opponent', 'Waiting for opponent...'), CANVAS_WIDTH / 2, 78);
+      ctx.fillText(i18n.t('waiting_opponent', 'Waiting for opponent...'), cx, statusY);
     }
     ctx.restore();
   }
