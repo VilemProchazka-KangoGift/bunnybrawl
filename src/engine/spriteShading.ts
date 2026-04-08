@@ -99,8 +99,8 @@ export function drawHighlightSpot(
   const hr = Math.max(rx, ry) * 0.25;
 
   const grad = ctx.createRadialGradient(hx, hy, 0, hx, hy, hr);
-  grad.addColorStop(0, 'rgba(255, 255, 255, 0.35)');
-  grad.addColorStop(0.6, 'rgba(255, 255, 255, 0.1)');
+  grad.addColorStop(0, 'rgba(255, 255, 255, 0.18)');
+  grad.addColorStop(0.7, 'rgba(255, 255, 255, 0.05)');
   grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
 
   ctx.fillStyle = grad;
