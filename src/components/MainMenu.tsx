@@ -558,16 +558,15 @@ export function MainMenu() {
                 {/* Step 1: Choose create or join */}
                 {onlineStep === 'choose' && !onlineJoinMode && (
                   <div className="online-step">
-                    <p className="online-info">{(() => {
+                    {matchSettings.botCount > 0 && <p className="online-info">{(() => {
                       const n = matchSettings.botCount;
-                      if (n === 0) return t('online_bots_info_zero');
                       if (i18n.language === 'cs') {
                         if (n === 1) return t('online_bots_info_one');
                         if (n >= 2 && n <= 4) return t('online_bots_info_few', { count: n });
                         return t('online_bots_info_other', { count: n });
                       }
                       return t('online_bots_info', { count: n });
-                    })()}</p>
+                    })()}</p>}
                     <button className="btn-base menu-btn online-create-btn" onClick={() => { audio.play('select'); onlineConnect(true); }}>
                       {t('create_room', 'Create Room')}
                     </button>
