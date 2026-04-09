@@ -874,7 +874,7 @@ export function MainMenu() {
                           setOnlinePlayerName(v);
                           try { localStorage.setItem('bunnybrawl_player_name', v); } catch {}
                         }}
-                        onKeyDown={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                       />
                     </div>
                     {matchSettings.botCount > 0 && <p className="online-info">{(() => {
@@ -912,7 +912,7 @@ export function MainMenu() {
                     <input className="online-code-input" data-testid="online-code-input" type="text" maxLength={3} placeholder={t('code_placeholder', 'Code')}
                       value={onlineJoinCode} autoFocus
                       onChange={(e) => setOnlineJoinCode(e.target.value.toUpperCase().replace(/[^A-Z2-9]/g, ''))}
-                      onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter' && onlineJoinCode.length >= 3) { audio.play('select'); onlineConnect(false, onlineJoinCode); } }}
+                      onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') { (e.target as HTMLInputElement).blur(); if (onlineJoinCode.length >= 3) { audio.play('select'); onlineConnect(false, onlineJoinCode); } } }}
                     />
                     <button className={`btn-base menu-btn online-create-btn${onlineJoinCode.length >= 3 ? ' play-btn' : ''}`} data-testid="online-join-submit" disabled={onlineJoinCode.length < 3}
                       onClick={() => { audio.play('select'); onlineConnect(false, onlineJoinCode); }}>

@@ -4,8 +4,6 @@ import { CANVAS_WIDTH } from './constants';
 // Tuning constants
 const DEAD_ZONE = 12;
 const MAX_RADIUS = 60;
-const THRESHOLD_X = 0.3;
-const THRESHOLD_DOWN = 0.5;
 const SWIPE_DISTANCE = 40;
 const SWIPE_MAX_TIME = 300;
 
@@ -24,7 +22,6 @@ export class TouchInputManager {
   private joystickBaseY = 0;
   private leftActive = false;
   private rightActive = false;
-  private downFromJoystick = false;
 
   // Jump/fast-fall state (right half)
   private jumpTouchId: number | null = null;
@@ -133,7 +130,7 @@ export class TouchInputManager {
       left: this.leftActive,
       right: this.rightActive,
       jump,
-      down: this.downFromJoystick || this.downFromSwipe,
+      down: this.downFromSwipe,
     };
   }
 
@@ -170,7 +167,7 @@ export class TouchInputManager {
           this.joystickBaseY = pos.y;
           this.leftActive = false;
           this.rightActive = false;
-          this.downFromJoystick = false;
+
           this.onJoystickUpdate?.({
             baseX: pos.x, baseY: pos.y,
             thumbX: pos.x, thumbY: pos.y,
@@ -203,30 +200,24 @@ export class TouchInputManager {
       if (touch.identifier === this.joystickTouchId) {
         const pos = this.toLogicalCoords(touch.clientX, touch.clientY);
         const dx = pos.x - this.joystickBaseX;
-        const dy = pos.y - this.joystickBaseY;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+        const absDx = Math.abs(dx);
 
-        if (distance < DEAD_ZONE) {
+        // Horizontal-only joystick
+        if (absDx < DEAD_ZONE) {
           this.leftActive = false;
           this.rightActive = false;
-          this.downFromJoystick = false;
         } else {
-          const clamped = Math.min(distance, MAX_RADIUS);
-          const nx = (dx / distance) * (clamped / MAX_RADIUS);
-          const ny = (dy / distance) * (clamped / MAX_RADIUS);
-
-          this.leftActive = nx < -THRESHOLD_X;
-          this.rightActive = nx > THRESHOLD_X;
-          this.downFromJoystick = ny > THRESHOLD_DOWN;
+          this.leftActive = dx < 0;
+          this.rightActive = dx > 0;
         }
 
-        // Clamp thumb to max radius (no trig — just scale the delta vector)
-        const ratio = distance > 0 ? Math.min(distance, MAX_RADIUS) / distance : 0;
+        // Clamp thumb horizontally
+        const clampedDx = Math.min(Math.max(dx, -MAX_RADIUS), MAX_RADIUS);
         this.onJoystickUpdate?.({
           baseX: this.joystickBaseX,
           baseY: this.joystickBaseY,
-          thumbX: this.joystickBaseX + dx * ratio,
-          thumbY: this.joystickBaseY + dy * ratio,
+          thumbX: this.joystickBaseX + clampedDx,
+          thumbY: this.joystickBaseY,
           active: true,
         });
       }
@@ -258,7 +249,6 @@ export class TouchInputManager {
     this.joystickTouchId = null;
     this.leftActive = false;
     this.rightActive = false;
-    this.downFromJoystick = false;
     this.onJoystickUpdate?.({ baseX: 0, baseY: 0, thumbX: 0, thumbY: 0, active: false });
   }
 
