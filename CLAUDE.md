@@ -94,6 +94,7 @@ src/
 - **AI via utility scoring + nav graph** — bots produce `InputState` (4 booleans) same as keyboard. Precomputed `navData.ts` provides nextHop/safeHop waypoints.
 - **Death effects are gore-mode gated** — Gore ON: blood, gibs, splat marks. Gore OFF: confetti only.
 - **P2P network multiplayer** — WebRTC DataChannels via PeerJS (free signaling). GGPO-style rollback netcode with seeded PRNG for determinism. 2-player MVP, bots run deterministically on both peers.
+- **Mobile support** — `?mobile` URL param forces mobile mode. `isTouchPrimary()` detects coarse-pointer devices. `.is-mobile` CSS class on `<html>` for platform-conditional styles. Touch controls via `TouchInputManager` (same `InputState` interface as keyboard/AI). Haptic feedback via Vibration API.
 
 ## Build & Run
 
@@ -101,12 +102,14 @@ src/
 npm run dev       # Dev server with HMR
 npm run build     # Production build (tsc + vite)
 npm test          # Unit/integration tests (~130 tests, Vitest)
-npm run test:e2e  # E2E tests (12 tests, Playwright, builds first)
+npm run test:e2e  # E2E tests (27 tests, Playwright, builds first)
 npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/physics changes)
 # Dev shortcut — skip lobby:
 # http://localhost:5173/bunnybrawl/?arena=rooftops&bots=2&difficulty=hard
 # Nav debug overlay:
 # http://localhost:5173/bunnybrawl/?arena=meadow&bots=2&debug=nav (toggle with ` key)
+# Mobile testing (forces touch mode in desktop browser):
+# http://localhost:5173/bunnybrawl/?mobile&arena=meadow&bots=2
 ```
 
 ## Testing

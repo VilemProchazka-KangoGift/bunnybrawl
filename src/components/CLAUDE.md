@@ -13,3 +13,7 @@
 - Lobby join zones are labeled "START", not "Join".
 - Online lobby char-select onChange uses shared `handleOnlineCharChange` callback — don't duplicate the handler inline.
 - In transport callbacks (`onPeerConnected`, `onReliableMessage`, etc.) snapshot `useGameStore.getState()` once and reuse. Multiple reads + interleaved `setOnline` calls cause redundant React re-renders.
+- Mobile lobby: only P1 spawned (not P2-P5). `drawLobby` must iterate `players.length`, NOT the `SLOTS` array — accessing `players[i]` beyond array bounds crashes the canvas loop.
+- Mobile overlay buttons (`.mobile-overlay-btn` in shared.css) are distinct from `.btn-base` — 44x44 translucent touch targets, no hover effects.
+- TouchOverlay uses direct DOM refs (not React state) for joystick position — touch events fire at 60-120Hz, too fast for React reconciliation.
+- Mobile pause/back buttons must NOT be intercepted by TouchInputManager — `handleTouchStart` skips `preventDefault` when target is a `<button>`.

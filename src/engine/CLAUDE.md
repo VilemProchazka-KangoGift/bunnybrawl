@@ -75,6 +75,13 @@
 - Off-screen culling for particles and gibs.
 - `fastMath.ts`: lookup tables for `fastSin`/`fastCos` — visual effects only, keep `Math.sin`/`Math.cos` for physics.
 
+## Mobile / Touch Input
+- `TouchInputManager` follows same `attach()`/`detach()`/`getInput() → InputState` contract as `InputManager`. Integrated via `getPlayerInput()` touch branch in gameLoop.
+- `isTouchPrimary()` result is cached at module scope — safe to call frequently, but `?mobile` URL param override only works on first call.
+- Touch coordinate mapping: cache `getBoundingClientRect()` on attach + resize. NEVER call per-touch-event (causes layout reflow at 60-120Hz).
+- `e.preventDefault()` on touch events blocks synthetic click events on buttons. Always check `target.tagName === 'BUTTON'` before preventing default.
+- `haptics.isLocal(player.id)` gates all vibration calls — only vibrate for events involving the local touch player. Haptic calls are inside event-conditional blocks (stomp, hazard hit, spring, landing) — they do NOT run every frame per player.
+
 ## Network Multiplayer
 - `gameRandom()` wraps seeded PRNG in network mode, `Math.random()` in local. Use for ALL gameplay-affecting randomness (hazard spawning, respawn, AI decisions). Cosmetic randomness (particles, weather, gibs) stays as `Math.random()`.
 - `fixedUpdate` is public in network mode. Accepts optional `networkInputs` map — when provided, `getPlayerInput()` reads from it instead of InputManager/AIController.
