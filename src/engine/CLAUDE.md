@@ -43,6 +43,8 @@
 - Theme ambient sounds: `ThemeConfig.ambientSoundConfig` with `loops` (continuous) and `periodic` (random interval one-shots). Loops tracked in `activeAmbientLoops[]`, all stopped in `stop()`. Periodic timers in `periodicAmbientTimers` Map, ticked at end of `fixedUpdate()`.
 - Player-push bump sound uses global cooldown (not per-player) to prevent double-fire from both pushed players in the same frame. Detects push via `sideSquash === 0.8` (exact value set by `collidePlayersHorizontal`).
 - All 11 arenas + menu have MP3 music. `AudioManager.MUSIC_MP3` maps theme IDs to filenames in `public/audio/`. Procedural music (`music.ts` / `generateThemeMusic`) is now fallback-only for unknown themes. Menu music uses a separate `menuMusicHowl` preloaded in `init()` — not tied to component lifecycle (persists across menu↔lobby). Suno generation prompts are in `docs/suno-arena-prompts.md`.
+- `Howler.mute()` is the global kill switch for all audio. Three independent mute sources: `muted` (user toggle), `backgroundMuted` (tab hidden via visibilitychange), `gamePaused` (pause overlay). All three must be false before calling `Howler.mute(false)`. Adding a new mute source? Check all unmute paths gate on it.
+- Music preference persisted in `bunnybrawl_music_disabled` (localStorage). Loaded at AudioManager field init, not in `init()`. Wrap localStorage access in try/catch for restricted contexts.
 
 ## Arenas & Themes
 - `platforms[0]` is always ground (or first ground segment, detected by `p.y >= 650`).

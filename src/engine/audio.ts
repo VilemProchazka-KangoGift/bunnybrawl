@@ -1,4 +1,4 @@
-import { Howl } from 'howler';
+import { Howl, Howler } from 'howler';
 import { generateThemeMusic } from './music';
 
 export type SoundName = 'jump' | 'stomp' | 'victory' | 'select' | 'thornhit' | 'crunch' | 'bunny' | 'fox' | 'frog' | 'bear' | 'owl' | 'cat' | 'wolf' | 'panda' | 'pig' | 'cow' | 'goat' | 'horse' | 'sheep' | 'monkey' | 'tiger' | 'rhino' | 'hedgehog' | 'footstep_grass' | 'footstep_wood' | 'countdown_beep' | 'countdown_go' | 'oof' | 'splash' | 'ambient' | 'crowd' |'geyser' | 'pigeon_scatter' | 'zero_g' | 'waterfall_ambient' | 'land' | 'headbonk' | 'bump' | 'spring' | 'crouch' | 'fastfall' | 'amb_wind' | 'amb_lava' | 'amb_underwater_bubbles' | 'amb_space_hum' | 'amb_bird_chirp' | 'amb_ghost_hoo' | 'amb_volcano_burst' | 'amb_drip' | 'amb_chime';
@@ -10,7 +10,9 @@ class AudioManager {
   private sounds: Map<string, Howl> = new Map();
   private initialized = false;
   private muted = false;
-  private musicDisabled = false;
+  private musicDisabled = (() => { try { return localStorage.getItem('bunnybrawl_music_disabled') === '1'; } catch { return false; } })();
+  private backgroundMuted = false;
+  private gamePaused = false;
   private musicHowl: Howl | null = null;
   private musicThemeId: string | null = null;
   private menuMusicHowl: Howl | null = null;
@@ -222,11 +224,22 @@ class AudioManager {
       loop: true,
     });
 
+    // Mute all audio when app goes to background (especially important on mobile)
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        this.backgroundMuted = true;
+        Howler.mute(true);
+      } else {
+        this.backgroundMuted = false;
+        if (!this.muted && !this.gamePaused) Howler.mute(false);
+      }
+    });
+
     this.initialized = true;
   }
 
   play(name: SoundName | string): void {
-    if (this.muted) return;
+    if (this.muted || this.backgroundMuted) return;
     if (!this.initialized) this.init();
     this.sounds.get(name)?.play();
   }
@@ -279,7 +292,27 @@ class AudioManager {
 
   setMusicDisabled(disabled: boolean): void {
     this.musicDisabled = disabled;
+    try { localStorage.setItem('bunnybrawl_music_disabled', disabled ? '1' : '0'); } catch { /* restricted context */ }
     if (disabled) { this.stopMusic(); this.stopMenuMusic(); }
+  }
+
+  toggleMusicDisabled(): boolean {
+    this.setMusicDisabled(!this.musicDisabled);
+    return this.musicDisabled;
+  }
+
+  isMusicDisabled(): boolean {
+    return this.musicDisabled;
+  }
+
+  setPaused(paused: boolean, themeId?: string): void {
+    this.gamePaused = paused;
+    if (paused) {
+      Howler.mute(true);
+    } else {
+      if (!this.muted && !this.backgroundMuted) Howler.mute(false);
+      if (themeId) this.playMusic(themeId);
+    }
   }
 
   playMenuMusic(): void {

@@ -222,7 +222,6 @@ export interface GameMods {
   superBounce: boolean;
   mirrorArena: boolean;
   underwaterGravity: boolean;
-  noMusic: boolean;
 }
 
 export interface MatchSettings {

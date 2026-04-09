@@ -25,7 +25,7 @@ export function GameScaler({ children }: GameScalerProps) {
         {children}
       </div>
       <button
-        className="fullscreen-btn"
+        className="overlay-icon-btn fullscreen-btn"
         onClick={toggleFullscreen}
         title={isFullscreen ? t('fullscreen_exit') : t('fullscreen_enter')}
       >

@@ -20,6 +20,33 @@
   transform: none;
 }
 
+/* Translucent icon button for viewport/screen corners (fullscreen, music toggle) */
+.overlay-icon-btn {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  color: white;
+  cursor: pointer;
+  padding: 8px;
+  font-size: 18px;
+  line-height: 1;
+  transition: background 0.2s ease;
+}
+
+.overlay-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.is-mobile .overlay-icon-btn {
+  padding: 12px;
+  font-size: 22px;
+  border-radius: 10px;
+  -webkit-tap-highlight-color: transparent;
+}
+
 /* Mobile floating overlay button (pause, back) — distinct from btn-base */
 .mobile-overlay-btn {
   position: absolute;
