@@ -1,0 +1,25 @@
+{
+  "name": "Carrot Royale",
+  "short_name": "Carrot Royale",
+  "description": "Local multiplayer party game — stomp your friends!",
+  "start_url": "/bunnybrawl/",
+  "scope": "/bunnybrawl/",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "theme_color": "#111111",
+  "background_color": "#111111",
+  "icons": [
+    {
+      "src": "/bunnybrawl/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/bunnybrawl/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
