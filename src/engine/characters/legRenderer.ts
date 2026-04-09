@@ -2,7 +2,7 @@ import type { CharacterColors, LegStyle } from './types';
 
 // ---- Defaults ----
 
-const DEF_LEG_WIDTH = 5;
+const DEF_LEG_WIDTH = 6;
 const DEF_LEG_HEIGHT = 4;
 const DEF_FOOT_HEIGHT = 2;
 
@@ -60,13 +60,13 @@ function drawFootClaw(
   fx: number, fy: number, fw: number, fh: number, color: string,
 ): void {
   ctx.strokeStyle = color;
-  ctx.lineWidth = fh <= 2 ? 1 : 1.5;
+  ctx.lineWidth = 1.5;
   ctx.lineCap = 'round';
   const cx = fx + fw / 2;
   for (let i = -1; i <= 1; i++) {
     ctx.beginPath();
-    ctx.moveTo(cx + i * (fw * 0.3), fy);
-    ctx.lineTo(cx + i * (fw * 0.4), fy + fh);
+    ctx.moveTo(cx + i * (fw * 0.2), fy);
+    ctx.lineTo(cx + i * (fw * 0.45), fy + fh);
     ctx.stroke();
   }
 }
@@ -269,7 +269,7 @@ export function drawLegs(
   // --- Draw each leg (left = -1, right = +1) ---
   for (let side = -1; side <= 1; side += 2) {
     // Hip position — widen gap for thick legs so they don't blend together
-    const halfGap = Math.max(3, legW / 2 + 1);
+    const halfGap = Math.max(4, legW / 2 + 2);
     const hipX = cx + side * halfGap - legW / 2
       + side * (baseSpread + airSpread)
       + side * horizAnim;
