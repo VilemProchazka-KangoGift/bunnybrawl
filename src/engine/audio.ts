@@ -1,5 +1,6 @@
 import { Howl } from 'howler';
 import { generateThemeMusic } from './music';
+import { getArenaPack } from './arenas/registry';
 
 export type SoundName = 'jump' | 'stomp' | 'victory' | 'select' | 'thornhit' | 'crunch' | 'bunny' | 'fox' | 'frog' | 'bear' | 'owl' | 'cat' | 'wolf' | 'panda' | 'pig' | 'cow' | 'goat' | 'horse' | 'sheep' | 'monkey' | 'tiger' | 'rhino' | 'hedgehog' | 'footstep_grass' | 'footstep_wood' | 'countdown_beep' | 'countdown_go' | 'oof' | 'splash' | 'ambient' | 'crowd' |'geyser' | 'pigeon_scatter' | 'zero_g' | 'waterfall_ambient' | 'land' | 'headbonk' | 'bump' | 'spring' | 'crouch' | 'fastfall' | 'amb_wind' | 'amb_lava' | 'amb_underwater_bubbles' | 'amb_space_hum' | 'amb_bird_chirp' | 'amb_ghost_hoo' | 'amb_volcano_burst' | 'amb_drip' | 'amb_chime';
 
@@ -295,9 +296,9 @@ class AudioManager {
     }
   }
 
-  /** Start theme-specific music. If mp3File is provided (from ArenaPack.musicFile),
-   *  uses that directly. Otherwise falls back to procedural generation. */
-  playMusic(themeId: string, mp3File?: string): void {
+  /** Start theme-specific music. Resolves MP3 from arena pack if available,
+   *  otherwise falls back to procedural generation. */
+  playMusic(themeId: string): void {
     this.stopMenuMusic();
     if (this.muted || this.musicDisabled) return;
     if (!this.initialized) this.init();
@@ -308,8 +309,9 @@ class AudioManager {
     }
     // Stop previous track
     this.stopMusic();
-    const src = mp3File
-      ? AUDIO_BASE + mp3File
+    const mp3 = getArenaPack(themeId)?.musicFile;
+    const src = mp3
+      ? AUDIO_BASE + mp3
       : generateThemeMusic(themeId);
     this.musicHowl = new Howl({ src: [src], volume: 0.22, loop: true });
     this.musicThemeId = themeId;

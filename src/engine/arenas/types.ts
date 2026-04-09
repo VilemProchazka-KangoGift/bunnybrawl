@@ -1,4 +1,5 @@
 import type { Arena, Platform, SpawnPoint, HazardZone, EffectZone, AABB, WeatherParticle } from '../types';
+import type { ThemeConfig } from '../themes/types';
 import type {
   GradientStop, CloudConfig, WeatherConfig, WildlifeConfig,
   FogConfig, AmbientParticleConfig, DayNightConfig,
@@ -86,25 +87,10 @@ export interface ArenaPack {
   drawCustomThorn?: (ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, growScale: number, fadeAlpha: number) => void;
   drawCustomSpring?: (ctx: CanvasRenderingContext2D, x: number, y: number, size: number, bounceTimer: number, growScale: number, fadeAlpha: number) => void;
 
-  // ---- Gameplay modifiers ----
-  ghostConfig?: {
-    count: number;
-    speed: number;
-    size: number;
-    color: string;
-    glowColor: string;
-  };
-  lavaRockConfig?: {
-    spawnInterval: [number, number];
-    fallSpeed: [number, number];
-    sizeRange: [number, number];
-    color: string;
-    glowColor: string;
-  };
-  pigeonConfig?: {
-    positions: Array<{ x: number; y: number }>;
-    respawnTime: number;
-  };
+  // ---- Gameplay modifiers (types synced with ThemeConfig) ----
+  ghostConfig?: ThemeConfig['ghostConfig'];
+  lavaRockConfig?: ThemeConfig['lavaRockConfig'];
+  pigeonConfig?: ThemeConfig['pigeonConfig'];
   physics?: PhysicsModifiers;
 
   // ---- Audio ----

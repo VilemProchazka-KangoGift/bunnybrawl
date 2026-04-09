@@ -8,45 +8,39 @@ import type { ArenaNav } from '../ai/navData';
 const PACKS: Map<string, ArenaPack> = new Map();
 const NAV: Map<string, ArenaNav> = new Map();
 
-/** Register an arena pack. Overwrites any existing pack with the same id. */
 export function registerArena(pack: ArenaPack): void {
   PACKS.set(pack.id, pack);
 }
 
-/** Attach auto-generated nav data for an arena. */
 export function setArenaNav(arenaId: string, nav: ArenaNav): void {
   NAV.set(arenaId, nav);
 }
 
 // ---- Lookup ----
 
-/** Get an arena pack by id. Returns undefined for unknown arenas. */
 export function getArenaPack(id: string): ArenaPack | undefined {
   return PACKS.get(id);
 }
 
-/** Get an arena pack by id, throwing if not found. */
 export function getArenaPackOrThrow(id: string): ArenaPack {
   const pack = PACKS.get(id);
   if (!pack) throw new Error(`Unknown arena: ${id}`);
   return pack;
 }
 
-/** Get nav data for an arena. */
 export function getArenaNav(arenaId: string): ArenaNav | undefined {
   return NAV.get(arenaId);
 }
 
 // ---- Convenience lookups ----
 
-/** Get arena display name for given language, falling back to English. */
+/** Falls back to English, then to the raw id. */
 export function getArenaDisplayName(id: string, lang: string): string {
   const pack = PACKS.get(id);
   if (!pack) return id;
   return pack.translations[lang] ?? pack.translations.en ?? id;
 }
 
-/** List all registered arenas with UI metadata. */
 export function listArenaPacks(): Array<{
   id: string;
   previewGradient: string;
@@ -62,9 +56,8 @@ export function listArenaPacks(): Array<{
 }
 
 // ---- Extractors ----
-// Allow consumers that still expect Arena / ThemeConfig to work unchanged.
+// Extract legacy Arena / ThemeConfig from a pack for consumers that still need them.
 
-/** Extract the flat Arena struct from a pack. */
 export function toArena(pack: ArenaPack): Arena {
   return {
     id: pack.id,
@@ -85,7 +78,6 @@ export function toArena(pack: ArenaPack): Arena {
   };
 }
 
-/** Extract the ThemeConfig from a pack. */
 export function toThemeConfig(pack: ArenaPack): ThemeConfig {
   return {
     id: pack.id,
