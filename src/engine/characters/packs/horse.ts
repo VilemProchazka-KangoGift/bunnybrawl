@@ -95,7 +95,7 @@ export const horse: CharacterPack = {
   splatShape: 'circle',
   gibs: [{ gibType: 'ear', width: 8, height: 10 }, { gibType: 'ear', width: 8, height: 10 }, { gibType: 'mane', width: 12, height: 14 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Horse', cs: 'Kůň', hi: 'घोड़ा', fil: 'Kabayo' },
-  legStyle: { shape: 'tapered', footStyle: 'hoof', legHeight: 10, legWidth: 5 },
+  legStyle: { shape: 'tapered', footStyle: 'hoof', legHeight: 5, legWidth: 5 },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.52, rx: w * 0.38, ry: h * 0.42 }),
   drawSprite, drawGib,
 };

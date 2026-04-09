@@ -79,7 +79,7 @@ export const cow: CharacterPack = {
   splatShape: 'splat',
   gibs: [{ gibType: 'horn', width: 8, height: 12 }, { gibType: 'horn', width: 8, height: 12 }, { gibType: 'tail', width: 14, height: 6 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Cow', cs: 'Kráva', hi: 'गाय', fil: 'Baka' },
-  legStyle: { shape: 'rounded', footStyle: 'hoof', legWidth: 7 },
+  legStyle: { shape: 'rounded', footStyle: 'hoof', legWidth: 5 },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.52, rx: w * 0.42, ry: h * 0.42 }),
   drawSprite, drawGib,
 };
