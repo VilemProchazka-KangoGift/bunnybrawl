@@ -6,7 +6,7 @@
 import type { InputState, PlayerSlot, Player } from '../types';
 import type { GameLoop } from '../gameLoop';
 import type { GameSnapshot } from './serialize';
-import { takeSnapshot, restoreSnapshot, hashGameState, takeSnapshotInto, createEmptySnapshot } from './serialize';
+import { takeSnapshot, restoreSnapshot, hashGameState, hashGameStateDetailed, hashSnapshot, takeSnapshotInto, createEmptySnapshot } from './serialize';
 import { Transport } from './transport';
 import {
   MsgType,
@@ -104,6 +104,8 @@ export class RollbackEngine {
   private maxRollbackDepthPerSec = 0;
   private statsResetFrame = 0;
   private _cachedMinRemoteFrame = -1; // cached per-frame to avoid repeated Map iteration
+  private _rollbackOccurredThisFrame = false;
+  private lastDesyncCheckFrame = -999; // frame of last desync check (cooldown for post-rollback checks)
 
   // Reusable objects for hot 60fps loop
   private readonly inputMap = new Map<string, InputState>();
@@ -227,6 +229,9 @@ export class RollbackEngine {
       if (!remState) return;
     }
 
+    // NETCODE SAFETY: Overwriting inputs between confirmedFrame and localFrame is correct —
+    // a newer confirmed input replacing a prediction is the desired behavior. Duplicate
+    // messages for already-confirmed frames are skipped by the guard below.
     for (let i = 0; i < decoded.inputCount; i++) {
       const { frame, input } = decoded.inputs[i];
       if (frame < this.localFrame - BUFFER_SIZE) continue;
@@ -252,9 +257,33 @@ export class RollbackEngine {
     if (msg.type === MsgType.DESYNC_CHECK) {
       if (!this.isHost) {
         const check = msg as DesyncCheckMessage;
-        const localHash = hashGameState(this.gameLoop.getState(), this.gameLoop.getRng());
+        // Use snapshot at host's frame for frame-correct comparison (avoids false positives when guest is ahead)
+        const cached = this.snapshots[check.frame % MAX_ROLLBACK_FRAMES];
+        let localHash: number;
+        let usedCurrentState = false;
+        if (cached.frame === check.frame) {
+          localHash = hashSnapshot(cached);
+        } else if (Math.abs(this.localFrame - check.frame) <= 1) {
+          // Guest is at or very near host frame — compare current state
+          localHash = hashGameState(this.gameLoop.getState(), this.gameLoop.getRng());
+          usedCurrentState = true;
+        } else {
+          // Snapshot overwritten and frames too far apart — skip this check
+          return;
+        }
         if (check.hash !== localHash) {
-          console.log(`[net] Hash mismatch at frame ${check.frame} (local ${localHash} != host ${check.hash}), requesting correction`);
+          // Log which subsystem diverged first (only when we compared current state,
+          // since hashGameStateDetailed operates on live state, not snapshots)
+          if (check.playersHash !== undefined && usedCurrentState) {
+            const localDetailed = hashGameStateDetailed(this.gameLoop.getState(), this.gameLoop.getRng());
+            const diverged: string[] = [];
+            if (check.playersHash !== localDetailed.playersHash) diverged.push('players');
+            if (check.entitiesHash !== localDetailed.entitiesHash) diverged.push('entities');
+            if (check.timersHash !== localDetailed.timersHash) diverged.push('timers');
+            console.log(`[net] Hash mismatch at frame ${check.frame} — diverged subsystem(s): ${diverged.join(', ') || 'unknown (composite only)'}`);
+          } else {
+            console.log(`[net] Hash mismatch at frame ${check.frame} (local ${localHash} != host ${check.hash})`);
+          }
           const req: DesyncRequestMessage = { type: MsgType.DESYNC_REQUEST, frame: check.frame };
           this.transport.sendReliable(req);
         }
@@ -341,6 +370,9 @@ export class RollbackEngine {
     this.localInputs[delayedFrame % BUFFER_SIZE] = localInput;
 
     // 2. Send local input (bundled with recent unacked)
+    // NETCODE SAFETY: sendInput runs BEFORE checkRollback. This is correct because
+    // resimulation in checkRollback only calls fixedUpdate with buffered inputs — it
+    // never calls sendInput or readLocalInput. One input is sent per advanceFrame call.
     this.sendInput(delayedFrame, localInput);
 
     // 3. Check for mispredictions and rollback if needed
@@ -383,10 +415,14 @@ export class RollbackEngine {
       if (Math.abs(p.renderOffsetY) < RENDER_OFFSET_MIN) p.renderOffsetY = 0;
     }
 
-    // 6. Desync check
-    if (this.localFrame > 0 && this.localFrame % DESYNC_CHECK_INTERVAL === 0) {
+    // 6. Desync check — regular interval + tighter checks early match + post-rollback
+    const isRegularCheck = this.localFrame > 0 && this.localFrame % DESYNC_CHECK_INTERVAL === 0;
+    const isEarlyMatchCheck = this.localFrame > 0 && this.localFrame < 300 && this.localFrame % 10 === 0;
+    const isPostRollbackCheck = this._rollbackOccurredThisFrame && (this.localFrame - this.lastDesyncCheckFrame >= 5);
+    if (isRegularCheck || isEarlyMatchCheck || isPostRollbackCheck) {
       this.sendDesyncCheck();
     }
+    this._rollbackOccurredThisFrame = false;
 
     // 7. Adapt input delay based on RTT
     this.adaptInputDelay();
@@ -491,6 +527,7 @@ export class RollbackEngine {
 
     this.gameLoop.setAudioEnabled(true);
     this.gameLoop.setResimulating(false);
+    this._rollbackOccurredThisFrame = true;
 
     // Compute correction offsets for visual smoothing
     const snapDistSq = CORRECTION_SNAP_DISTANCE * CORRECTION_SNAP_DISTANCE;
@@ -589,13 +626,18 @@ export class RollbackEngine {
 
   private sendDesyncCheck(): void {
     if (this.isHost) {
+      const detailed = hashGameStateDetailed(this.gameLoop.getState(), this.gameLoop.getRng());
       const check: DesyncCheckMessage = {
         type: MsgType.DESYNC_CHECK,
         frame: this.localFrame,
-        hash: hashGameState(this.gameLoop.getState(), this.gameLoop.getRng()),
+        hash: detailed.hash,
         rngState: this.gameLoop.getRng()?.getState() ?? 0,
+        playersHash: detailed.playersHash,
+        entitiesHash: detailed.entitiesHash,
+        timersHash: detailed.timersHash,
       };
       this.transport.sendReliable(check);
+      this.lastDesyncCheckFrame = this.localFrame;
     }
   }
 

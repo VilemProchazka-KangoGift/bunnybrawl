@@ -7,6 +7,9 @@ import {
 } from './constants';
 import type { InputState } from './types';
 
+/** Force 32-bit float for cross-architecture determinism (x86 80-bit vs ARM 64-bit). */
+const f = Math.fround;
+
 export function getSpeedMult(player: Player): number {
   if (player.fatTimer > 0) return FAT_SPEED_MULT;
   if (player.slowTimer > 0) return THORN_SPEED_MULT;
@@ -30,27 +33,27 @@ export function applyInput(
 
   // Horizontal movement
   if (input.left) {
-    player.vx -= ACCELERATION * dt;
+    player.vx = f(player.vx - f(ACCELERATION * dt));
     player.facing = 'left';
   } else if (input.right) {
-    player.vx += ACCELERATION * dt;
+    player.vx = f(player.vx + f(ACCELERATION * dt));
     player.facing = 'right';
   } else {
     if (player.vx > 0) {
-      player.vx = Math.max(0, player.vx - friction * dt);
+      player.vx = f(Math.max(0, f(player.vx - f(friction * dt))));
     } else if (player.vx < 0) {
-      player.vx = Math.min(0, player.vx + friction * dt);
+      player.vx = f(Math.min(0, f(player.vx + f(friction * dt))));
     }
   }
 
   // Clamp horizontal speed
-  player.vx = Math.max(-maxSpeed, Math.min(maxSpeed, player.vx));
+  player.vx = f(Math.max(-maxSpeed, Math.min(maxSpeed, player.vx)));
 
   // Fast fall — hold down while airborne: instant direction change
   if (input.down && player.state === 'airborne') {
     if (!player.fastFalling) {
       // First frame of fast-fall: snap velocity downward immediately
-      player.vy = Math.max(player.vy, FAST_FALL_INITIAL);
+      player.vy = f(Math.max(player.vy, FAST_FALL_INITIAL));
     }
     player.fastFalling = true;
   } else {
@@ -59,7 +62,7 @@ export function applyInput(
 
   // Jump (only if on ground)
   if (input.jump && player.state !== 'airborne') {
-    player.vy = jumpImpulse * getJumpMult(player);
+    player.vy = f(jumpImpulse * getJumpMult(player));
     player.state = 'airborne';
   }
 }
@@ -70,14 +73,14 @@ export function applyGravity(player: Player, dt: number, gravity = GRAVITY, maxF
   const g = player.fastFalling ? FAST_FALL_GRAVITY : gravity;
   const maxFall = player.fastFalling ? FAST_FALL_SPEED : maxFallSpeed;
 
-  player.vy += g * dt;
-  player.vy = Math.min(player.vy, maxFall);
+  player.vy = f(player.vy + f(g * dt));
+  player.vy = f(Math.min(player.vy, maxFall));
 }
 
 export function movePlayer(player: Player, dt: number): void {
   if (player.state === 'splat' || player.state === 'respawning') return;
-  player.x += player.vx * dt;
-  player.y += player.vy * dt;
+  player.x = f(player.x + f(player.vx * dt));
+  player.y = f(player.y + f(player.vy * dt));
 }
 
 export function wrapHorizontal(player: Player, arenaWidth: number): void {
@@ -218,9 +221,9 @@ export function collidePlayersHorizontal(players: Player[]): void {
           }
 
           // Velocity exchange: transfer momentum
-          const avgVx = (a.vx + b.vx) / 2;
-          a.vx = avgVx - PLAYER_PUSH_FORCE * (aCx <= bCx ? 0.3 : -0.3);
-          b.vx = avgVx + PLAYER_PUSH_FORCE * (aCx <= bCx ? 0.3 : -0.3);
+          const avgVx = f((a.vx + b.vx) / 2);
+          a.vx = f(avgVx - f(PLAYER_PUSH_FORCE * (aCx <= bCx ? 0.3 : -0.3)));
+          b.vx = f(avgVx + f(PLAYER_PUSH_FORCE * (aCx <= bCx ? 0.3 : -0.3)));
           // Side squash both characters on push
           a.sideSquash = 0.8;
           b.sideSquash = 0.8;

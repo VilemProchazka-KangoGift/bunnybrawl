@@ -16,6 +16,9 @@ export function checkStomps(
   const splatMarks: SplatMark[] = [];
   const killFeedEntries: KillFeedEntry[] = [];
 
+  // NETCODE CONTRACT: Iteration order must be deterministic across peers.
+  // players[] is initialized from activePlayers at match start (same order on all peers)
+  // and is never re-sorted during gameplay. Any future sort MUST include a tiebreaker on player.id.
   for (const attacker of players) {
     if (!attacker.active || attacker.state === 'splat' || attacker.state === 'respawning') continue;
 

@@ -110,3 +110,25 @@
 - **Auto-switch character effect needs a guard ref** to prevent re-entry. The conflict key tracks which collision was already handled; without it, the relay-triggered update fires the effect again.
 - **Stomp preservation (favor the attacker)**: After rollback, if a predicted kill was undone but both attacker and victim corrected by < 25px, and `isStomping()` or `isNearStomp()` (generous 8px H + 10px V margin) still holds at corrected positions, re-apply the kill. Prevents "phantom misses" where tiny corrections silently undo clearly-valid stomps. Kill feed entry is added; splat marks are renderer-managed and not available in rollback.
 - **When re-applying gameplay events after rollback** (stomps, pickups), always add the corresponding state entries (kill feed, score). Don't add renderer-only artifacts (splat marks, particles) — those are managed by the render path, not the simulation.
+- **Any future `.sort()` in simulation code MUST include a tiebreaker on entity ID** for deterministic order across peers. Currently no `.sort()` calls exist in src/engine/ simulation paths.
+- **PeerJS DataChannels are always reliable+ordered** (no true unreliable mode). The `sendUnreliable()` naming is aspirational — all messages arrive in order. Stale packet reordering concerns are moot given this constraint, but head-of-line blocking under packet loss is a tradeoff.
+- **Physics uses `Math.fround()` for cross-architecture determinism.** x86 JIT can use 80-bit extended precision; ARM uses 64-bit doubles. All velocity/position mutations in `physics.ts` are wrapped with `Math.fround()` to force 32-bit float.
+- **`Player.disconnected` must be in snapshots.** It prevents respawn in `stomp.ts` — if missing from serialization, a rollback through a disconnect event resurrects the player.
+- **Desync checks use per-subsystem hashes** (players, entities, timers). When a mismatch occurs, the console log identifies which subsystem diverged first. Guest compares hash at the host's frame (snapshot-based) to avoid false positives from frame skew.
+
+## Desync Debugging Checklist
+
+When investigating a desync, work through these steps in order. Each "no" eliminates a category of bugs.
+
+1. **Are both peers running identical code?** Check for any `if (isHost)` branches that skip or reorder a simulation step.
+2. **Is the tick pipeline order identical?** Both peers call `fixedUpdate()` with the same system order.
+3. **Is the RNG state identical at frame 0?** Print the seed and first 10 values on both peers.
+4. **Does the checksum match at frame 1?** If not, the very first tick is non-deterministic.
+5. **Does the checksum match at frame 60 with no inputs?** Run with empty inputs. Divergence here = simulation bug, not networking.
+6. **Does the checksum match at frame 60 with identical hardcoded inputs?** Bypass the network and feed the same input array. Divergence = simulation, not networking.
+7. **Does adding `Math.fround()` to all arithmetic fix it?** If yes, float precision issue (already applied to physics.ts).
+8. **Does sorting all entity arrays by ID before processing fix it?** If yes, iteration order was the culprit.
+9. **Which subsystem hash diverges first?** Check console log for `[net] Hash mismatch ... diverged subsystem(s):`. Start investigation there.
+10. **Does removing all `Math.sin/cos/atan2` from simulation fix it?** If yes, trig divergence (currently all trig is cosmetic-only).
+11. **Does the "two-tab" test (same machine, mirrored inputs) show divergence?** If yes, the bug is local determinism, not networking.
+12. **Does removing prediction (thin client) fix it?** If yes, the bug is in prediction/reconciliation, not core simulation.

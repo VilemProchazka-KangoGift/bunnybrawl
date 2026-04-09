@@ -41,6 +41,7 @@ export interface PlayerSnapshot {
   damageFlashTimer: number;
   burnTimer: number;
   hitstopTimer: number;
+  disconnected: boolean;
 }
 
 export interface AISnapshot {
@@ -129,6 +130,7 @@ function snapshotPlayer(p: Player): PlayerSnapshot {
     damageFlashTimer: p.damageFlashTimer,
     burnTimer: p.burnTimer,
     hitstopTimer: p.hitstopTimer,
+    disconnected: p.disconnected,
   };
 }
 
@@ -162,6 +164,7 @@ function snapshotPlayerInto(target: PlayerSnapshot, p: Player): void {
   target.damageFlashTimer = p.damageFlashTimer;
   target.burnTimer = p.burnTimer;
   target.hitstopTimer = p.hitstopTimer;
+  target.disconnected = p.disconnected;
 }
 
 function restorePlayer(p: Player, snap: PlayerSnapshot): void {
@@ -192,6 +195,38 @@ function restorePlayer(p: Player, snap: PlayerSnapshot): void {
   p.damageFlashTimer = snap.damageFlashTimer;
   p.burnTimer = snap.burnTimer;
   p.hitstopTimer = snap.hitstopTimer;
+  p.disconnected = snap.disconnected;
+}
+
+// ---- Map iteration helper (deterministic key order across peers) ----
+
+/** Pre-allocated sort buffer to avoid allocation during sorted Map iteration. */
+const _sortBuf: [unknown, unknown][] = [];
+
+/** Iterate a Map in sorted-key order. Ensures deterministic serialization even if
+ *  insertion order differs between peers. Reuses a module-level buffer. */
+function forEachSorted<K extends string | number, V>(
+  map: Map<K, V>,
+  fn: (value: V, key: K, index: number) => void,
+): void {
+  let i = 0;
+  map.forEach((v, k) => {
+    if (i < _sortBuf.length) {
+      _sortBuf[i][0] = k;
+      _sortBuf[i][1] = v;
+    } else {
+      _sortBuf.push([k, v]);
+    }
+    i++;
+  });
+  _sortBuf.length = i;
+  _sortBuf.sort((a, b) => {
+    const ak = a[0] as string | number, bk = b[0] as string | number;
+    return ak < bk ? -1 : ak > bk ? 1 : 0;
+  });
+  for (let j = 0; j < i; j++) {
+    fn(_sortBuf[j][1] as V, _sortBuf[j][0] as K, j);
+  }
 }
 
 // ---- Deep clone helpers (avoid shared references between snapshots) ----
@@ -316,18 +351,16 @@ export function takeSnapshotInto(
     t.x = s.x; t.y = s.y; t.active = s.active; t.respawnTimer = s.respawnTimer;
   }
 
-  // Bouncy wobble (Map → array of tuples, forEach avoids iterator allocation)
-  let wi = 0;
-  state.bouncyWobble.forEach((v, k) => {
-    if (wi < target.bouncyWobble.length) {
-      target.bouncyWobble[wi][0] = k;
-      target.bouncyWobble[wi][1] = v;
+  // Bouncy wobble (Map → sorted tuples for deterministic order across peers)
+  forEachSorted(state.bouncyWobble, (v, k, i) => {
+    if (i < target.bouncyWobble.length) {
+      target.bouncyWobble[i][0] = k;
+      target.bouncyWobble[i][1] = v;
     } else {
       target.bouncyWobble.push([k, v]);
     }
-    wi++;
   });
-  target.bouncyWobble.length = wi;
+  target.bouncyWobble.length = state.bouncyWobble.size;
 
   target.screenShake = state.screenShake;
   target.slowMotion = state.slowMotion;
@@ -337,31 +370,27 @@ export function takeSnapshotInto(
   copyArrayInto(target.scoreAnimations, state.scoreAnimations);
   copyArrayInto(target.shockwaves, state.shockwaves);
 
-  // Stats (Map → array of tuples, forEach avoids iterator allocation)
-  let si = 0;
-  state.stats.perPlayer.forEach((stats, slot) => {
-    if (si < target.stats.length) {
-      target.stats[si][0] = slot;
-      Object.assign(target.stats[si][1], stats);
+  // Stats (Map → sorted tuples for deterministic order across peers)
+  forEachSorted(state.stats.perPlayer, (stats, slot, i) => {
+    if (i < target.stats.length) {
+      target.stats[i][0] = slot;
+      Object.assign(target.stats[i][1], stats);
     } else {
       target.stats.push([slot, { ...stats }]);
     }
-    si++;
   });
-  target.stats.length = si;
+  target.stats.length = state.stats.perPlayer.size;
 
-  // AI states (forEach avoids iterator allocation)
-  let ai = 0;
-  aiControllers.forEach((ctrl, id) => {
-    if (ai < target.aiStates.length) {
-      target.aiStates[ai][0] = id;
-      ctrl.serializeInto(target.aiStates[ai][1]);
+  // AI states (sorted by ID for deterministic order across peers)
+  forEachSorted(aiControllers, (ctrl, id, i) => {
+    if (i < target.aiStates.length) {
+      target.aiStates[i][0] = id;
+      ctrl.serializeInto(target.aiStates[i][1]);
     } else {
       target.aiStates.push([id, ctrl.serialize()]);
     }
-    ai++;
   });
-  target.aiStates.length = ai;
+  target.aiStates.length = aiControllers.size;
 }
 
 // ---- Public API ----
@@ -395,15 +424,15 @@ export function takeSnapshot(
     pigeonFlocks: state.pigeonFlocks.map(p => ({
       x: p.x, y: p.y, active: p.active, respawnTimer: p.respawnTimer,
     })),
-    bouncyWobble: Array.from(state.bouncyWobble.entries()),
+    bouncyWobble: Array.from(state.bouncyWobble.entries()).sort((a, b) => a[0] - b[0]),
     screenShake: state.screenShake,
     slowMotion: state.slowMotion,
     screenFlash: state.screenFlash,
     hitstopZoom: state.hitstopZoom,
     scoreAnimations: state.scoreAnimations.map(s => ({ ...s })),
     shockwaves: state.shockwaves.map(s => ({ ...s })),
-    stats: Array.from(state.stats.perPlayer.entries()).map(([slot, stats]) => [slot, { ...stats }]),
-    aiStates: Array.from(aiControllers.entries()).map(([id, ai]) => [id, ai.serialize()]),
+    stats: Array.from(state.stats.perPlayer.entries()).sort((a, b) => a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0).map(([slot, stats]) => [slot, { ...stats }]),
+    aiStates: Array.from(aiControllers.entries()).sort((a, b) => a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0).map(([id, ai]) => [id, ai.serialize()]),
   };
 }
 
@@ -499,9 +528,10 @@ export function crc32(str: string): number {
 }
 
 /** Compute CRC32 over raw bytes of a Float64Array (no string allocation). */
-function crc32Bytes(buf: Uint8Array, len: number): number {
+function crc32Bytes(buf: Uint8Array, len: number, offset = 0): number {
   let crc = 0xFFFFFFFF;
-  for (let i = 0; i < len; i++) {
+  const end = offset + len;
+  for (let i = offset; i < end; i++) {
     crc = CRC_TABLE[(crc ^ buf[i]) & 0xFF] ^ (crc >>> 8);
   }
   return (crc ^ 0xFFFFFFFF) >>> 0;
@@ -520,6 +550,9 @@ const STATE_HASH: Record<string, number> = {
 /**
  * Compute a fast hash of gameplay-critical state for desync detection. Zero allocation.
  * Covers: player positions/scores, hazard positions, spawn timers, RNG state.
+ *
+ * IMPORTANT: Field order must be identical in hashGameState, hashGameStateDetailed, and
+ * hashSnapshot. If you add fields here, update all three functions.
  */
 export function hashGameState(state: MatchState, rng: SeededRNG | undefined): number {
   let idx = 0;
@@ -558,5 +591,113 @@ export function hashGameState(state: MatchState, rng: SeededRNG | undefined): nu
   HASH_BUF[idx++] = state.springSpawnTimer;
   HASH_BUF[idx++] = state.thornSpawnTimer;
   HASH_BUF[idx++] = rng ? rng.getState() : 0;
+  return crc32Bytes(HASH_BYTES, idx * 8);
+}
+
+/** Per-subsystem hash result (pre-allocated, reused). */
+export interface DetailedHash {
+  hash: number;
+  playersHash: number;
+  entitiesHash: number;
+  timersHash: number;
+}
+
+const DETAILED_RESULT: DetailedHash = { hash: 0, playersHash: 0, entitiesHash: 0, timersHash: 0 };
+
+/**
+ * Compute per-subsystem hashes for desync diagnosis. Same field order as hashGameState.
+ * Zero allocation — returns a reused result object (copy values if you need to keep them).
+ */
+export function hashGameStateDetailed(state: MatchState, rng: SeededRNG | undefined): DetailedHash {
+  let idx = 0;
+  // -- Players subsystem --
+  for (let i = 0; i < state.players.length; i++) {
+    const p = state.players[i];
+    HASH_BUF[idx++] = p.x;
+    HASH_BUF[idx++] = p.y;
+    HASH_BUF[idx++] = p.score;
+    HASH_BUF[idx++] = STATE_HASH[p.state] ?? 0;
+  }
+  const playersEnd = idx;
+  DETAILED_RESULT.playersHash = crc32Bytes(HASH_BYTES, playersEnd * 8);
+
+  // -- Entities subsystem --
+  for (let i = 0; i < state.carrots.length; i++) {
+    HASH_BUF[idx++] = state.carrots[i].x;
+    HASH_BUF[idx++] = state.carrots[i].y;
+  }
+  for (let i = 0; i < state.springs.length; i++) {
+    HASH_BUF[idx++] = state.springs[i].x;
+  }
+  for (let i = 0; i < state.thorns.length; i++) {
+    HASH_BUF[idx++] = state.thorns[i].x;
+  }
+  for (let i = 0; i < state.lavaRocks.length; i++) {
+    HASH_BUF[idx++] = state.lavaRocks[i].x;
+    HASH_BUF[idx++] = state.lavaRocks[i].y;
+  }
+  for (let i = 0; i < state.geyserStates.length; i++) {
+    HASH_BUF[idx++] = state.geyserStates[i].timer;
+    HASH_BUF[idx++] = state.geyserStates[i].active ? 1 : 0;
+  }
+  const entitiesEnd = idx;
+  DETAILED_RESULT.entitiesHash = crc32Bytes(HASH_BYTES, (entitiesEnd - playersEnd) * 8, playersEnd * 8);
+
+  // -- Timers + RNG subsystem --
+  HASH_BUF[idx++] = state.timeElapsed;
+  HASH_BUF[idx++] = state.dayPhase;
+  HASH_BUF[idx++] = state.carrotTimer;
+  HASH_BUF[idx++] = state.springSpawnTimer;
+  HASH_BUF[idx++] = state.thornSpawnTimer;
+  HASH_BUF[idx++] = rng ? rng.getState() : 0;
+  DETAILED_RESULT.timersHash = crc32Bytes(HASH_BYTES, (idx - entitiesEnd) * 8, entitiesEnd * 8);
+
+  // Composite hash over entire buffer
+  DETAILED_RESULT.hash = crc32Bytes(HASH_BYTES, idx * 8);
+  return DETAILED_RESULT;
+}
+
+/**
+ * Compute hash of a GameSnapshot object. Mirrors hashGameState field order exactly
+ * so that hashSnapshot(snap) === hashGameState(state, rng) for the same game state.
+ * Used for frame-correct desync comparison when guest is ahead of host.
+ */
+export function hashSnapshot(snap: GameSnapshot): number {
+  let idx = 0;
+  // Players (same order as hashGameState)
+  for (let i = 0; i < snap.players.length; i++) {
+    const p = snap.players[i];
+    HASH_BUF[idx++] = p.x;
+    HASH_BUF[idx++] = p.y;
+    HASH_BUF[idx++] = p.score;
+    HASH_BUF[idx++] = STATE_HASH[p.state] ?? 0;
+  }
+  // Entities
+  for (let i = 0; i < snap.carrots.length; i++) {
+    HASH_BUF[idx++] = snap.carrots[i].x;
+    HASH_BUF[idx++] = snap.carrots[i].y;
+  }
+  for (let i = 0; i < snap.springs.length; i++) {
+    HASH_BUF[idx++] = snap.springs[i].x;
+  }
+  for (let i = 0; i < snap.thorns.length; i++) {
+    HASH_BUF[idx++] = snap.thorns[i].x;
+  }
+  for (let i = 0; i < snap.lavaRocks.length; i++) {
+    HASH_BUF[idx++] = snap.lavaRocks[i].x;
+    HASH_BUF[idx++] = snap.lavaRocks[i].y;
+  }
+  // Geyser states
+  for (let i = 0; i < snap.geyserStates.length; i++) {
+    HASH_BUF[idx++] = snap.geyserStates[i].timer;
+    HASH_BUF[idx++] = snap.geyserStates[i].active ? 1 : 0;
+  }
+  // Timers + RNG
+  HASH_BUF[idx++] = snap.timeElapsed;
+  HASH_BUF[idx++] = snap.dayPhase;
+  HASH_BUF[idx++] = snap.carrotTimer;
+  HASH_BUF[idx++] = snap.springSpawnTimer;
+  HASH_BUF[idx++] = snap.thornSpawnTimer;
+  HASH_BUF[idx++] = snap.rngState;
   return crc32Bytes(HASH_BYTES, idx * 8);
 }

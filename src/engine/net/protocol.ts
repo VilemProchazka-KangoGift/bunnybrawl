@@ -217,6 +217,10 @@ export interface DesyncCheckMessage {
   frame: number;
   hash: number;
   rngState: number;
+  /** Per-subsystem hashes for desync diagnosis (optional for backwards compat) */
+  playersHash?: number;
+  entitiesHash?: number;
+  timersHash?: number;
 }
 
 export interface PauseMessage {
