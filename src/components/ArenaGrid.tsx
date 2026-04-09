@@ -16,7 +16,7 @@ export function ArenaGrid({ onSelect, currentId, classPrefix, selectedClass = 's
     {listArenaPacks().map(a => (
       <button
         key={a.id}
-        className={`${classPrefix}-btn ${currentId === a.id ? selectedClass : ''}`}
+        className={`${classPrefix}-btn${currentId === a.id ? ` ${selectedClass}` : ''}`}
         onClick={() => onSelect(a.id)}
       >
         <div className={`${classPrefix}-preview`} style={{ background: a.previewGradient }}>
