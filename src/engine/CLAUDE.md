@@ -85,6 +85,7 @@
 - Touch coordinate mapping: cache `getBoundingClientRect()` on attach + resize. NEVER call per-touch-event (causes layout reflow at 60-120Hz).
 - `e.preventDefault()` on touch events blocks synthetic click events on buttons. Always check `target.tagName === 'BUTTON'` before preventing default.
 - `haptics.isLocal(player.id)` gates all vibration calls — only vibrate for events involving the local touch player. Haptic calls are inside event-conditional blocks (stomp, hazard hit, spring, landing) — they do NOT run every frame per player.
+- `touchSlot` defaults to the first human player (P1). For online guests, call `setLocalSlot(slot)` after GameLoop creation — otherwise touch input targets P1 (the host) instead of the guest's actual slot.
 
 ## Network Multiplayer
 - `gameRandom()` wraps seeded PRNG in network mode, `Math.random()` in local. Use for ALL gameplay-affecting randomness (hazard spawning, respawn, AI decisions). Cosmetic randomness (particles, weather, gibs) stays as `Math.random()`.

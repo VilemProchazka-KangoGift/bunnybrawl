@@ -18,3 +18,7 @@
 - Mobile overlay buttons (`.mobile-overlay-btn` in shared.css) are distinct from `.btn-base` — 44x44 translucent touch targets, no hover effects.
 - TouchOverlay uses direct DOM refs (not React state) for joystick position — touch events fire at 60-120Hz, too fast for React reconciliation.
 - Mobile pause/back buttons must NOT be intercepted by TouchInputManager — `handleTouchStart` skips `preventDefault` when target is a `<button>`.
+- `position: fixed` inside GameScaler's CSS-transformed div does NOT escape the transform. Use `createPortal(jsx, document.body)` for truly fullscreen overlays (e.g. MobileTextInput).
+- MobileTextInput must suppress LandscapePrompt via `suppressLandscapePrompt(true)` on mount — otherwise unlocking orientation for typing triggers the "rotate device" blocker.
+- Global Enter→handlePlay() listener must check `!onlineOpen` — otherwise pressing Enter in online name/code inputs navigates to the lobby.
+- Online character auto-switch: only GUEST auto-switches (host is authoritative). One-shot `didAutoSwitch` ref prevents cascade. Reset in `onlineCleanup()`.
