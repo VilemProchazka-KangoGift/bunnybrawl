@@ -5,7 +5,8 @@ import { GameLoop } from '../engine/gameLoop';
 import { NetMatch } from '../engine/net/netMatch';
 import { MsgType } from '../engine/net/protocol';
 import { getModalTransport } from './MainMenu';
-import { getArena, listArenaPacks, getArenaDisplayName } from '../engine/arenas';
+import { getArena, listArenaPacks } from '../engine/arenas';
+import { ArenaGrid } from './ArenaGrid';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
 import type { PlayerSlot } from '../engine/types';
 import './Match.css';
@@ -26,7 +27,7 @@ function resolveArenaId(arenaId: string): string {
 }
 
 export function Match() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
   const fgCanvasRef = useRef<HTMLCanvasElement>(null);
   const gameLoopRef = useRef<GameLoop | null>(null);
@@ -229,8 +230,6 @@ export function Match() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentArenaId, activePlayers, matchSettings, setMatchResult, online.isOnline]);
 
-  const arenas = listArenaPacks();
-
   return (
     <div className="match-container" data-testid="match-screen">
       <div className="canvas-container">
@@ -254,18 +253,12 @@ export function Match() {
                 <>
                   <h2 className="pause-title">{t('pause_change_level')}</h2>
                   <div className="pause-arena-grid">
-                    {arenas.map(a => (
-                        <button
-                          key={a.id}
-                          className={`pause-arena-btn ${a.id === currentArenaId ? 'current' : ''}`}
-                          onClick={() => handleChangeArena(a.id)}
-                        >
-                          <div className="pause-arena-preview" style={{ background: a.previewGradient }}>
-                            <span className="pause-arena-icon">{a.previewIcon}</span>
-                          </div>
-                          <span className="pause-arena-name">{getArenaDisplayName(a.id, i18n.language)}</span>
-                        </button>
-                    ))}
+                    <ArenaGrid
+                      classPrefix="pause-arena"
+                      currentId={currentArenaId}
+                      selectedClass="current"
+                      onSelect={handleChangeArena}
+                    />
                   </div>
                   <button className="btn-base pause-btn quit-btn" onClick={() => setShowLevelSelect(false)}>
                     {t('pause_back')}
