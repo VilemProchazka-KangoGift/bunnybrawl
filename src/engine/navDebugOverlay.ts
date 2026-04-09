@@ -4,7 +4,7 @@
  */
 import type { Arena } from './types';
 import { CANVAS_WIDTH } from './constants';
-import { NAV_DATA } from './ai/navData';
+import { getArenaNav } from './arenas/registry';
 
 export interface BotNavDebugState {
   slot: string;
@@ -56,7 +56,7 @@ export function drawNavDebugOverlay(
   mirrored: boolean,
   botNavStates?: BotNavDebugState[],
 ): void {
-  const nav = NAV_DATA[arena.id];
+  const nav = getArenaNav(arena.id);
   if (!nav) {
     ctx.save();
     ctx.font = 'bold 16px monospace';

@@ -304,7 +304,7 @@ class AudioManager {
     }
     this.stopMusic();
     const mp3 = getArenaPack(themeId)?.musicFile;
-    if (!mp3) return;
+    if (!mp3) { console.warn(`[audio] No musicFile for arena '${themeId}'`); return; }
     this.musicHowl = new Howl({ src: [AUDIO_BASE + mp3], volume: 0.22, loop: true });
     this.musicThemeId = themeId;
     this.musicHowl.play();
@@ -1038,7 +1038,6 @@ function generateAmbDripSound(): string {
   }
   return floatBufferToWavDataUri(buffer, sampleRate);
 }
-
 
 function writeString(view: DataView, offset: number, str: string): void {
   for (let i = 0; i < str.length; i++) {

@@ -28,7 +28,6 @@ src/
     renderer.ts   # Canvas 2D rendering (two layers: bg + fg) — dispatches to character pack renderers
     gameLoop.ts   # Main game loop with fixed timestep, all game systems
     audio.ts      # Procedural audio + Howler.js playback (animal sounds, SFX)
-    music.ts      # Procedural arena music generation (fallback — all 11 arenas now use MP3 overrides)
     spriteShading.ts # fillBodyGradient (radial body fill) + drawHighlightSpot (white glint)
     fastMath.ts   # Trig lookup tables (fastSin/fastCos) for hot render paths
     canvasAnimations.ts # Shared canvas utilities (wildlife, day/night) for MainMenu + CharacterSelect
@@ -237,7 +236,7 @@ Online play uses P2P WebRTC via PeerJS with GGPO-style rollback netcode:
 ## File Size Reference
 
 Largest files to be aware of when context is limited:
-- `renderer.ts` ~2370 lines — `music.ts` ~980 lines — `gameLoop.ts` ~1770 lines
+- `renderer.ts` ~2370 lines — `gameLoop.ts` ~1770 lines
 - `drawPrimitives.ts` ~990 lines — `CharacterSelect.tsx` ~900 lines
 - `audio.ts` ~1050 lines — `VictoryScreen.css` ~520 lines
 - Arena pack files ~200-800 lines each (11 arenas in `arenas/packs/`)
