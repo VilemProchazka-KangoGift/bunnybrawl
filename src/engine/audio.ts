@@ -15,7 +15,12 @@ class AudioManager {
   private gamePaused = false;
   private musicHowl: Howl | null = null;
   private musicThemeId: string | null = null;
-  private menuMusicHowl: Howl | null = null;
+  // Start fetching before first user interaction (init() is heavy)
+  private menuMusicHowl: Howl | null = this.musicDisabled ? null : new Howl({
+    src: [AUDIO_BASE + 'carrot-royale-main.mp3'],
+    volume: 0.25,
+    loop: true,
+  });
 
   init(): void {
     if (this.initialized) return;
@@ -216,13 +221,6 @@ class AudioManager {
     this.sounds.set('amb_volcano_burst', new Howl({ src: [generateAmbVolcanoBurstSound()], volume: 0.8 }));
     this.sounds.set('amb_drip', new Howl({ src: [generateAmbDripSound()], volume: 0.55 }));
 
-    // Preload menu music so it's ready instantly
-    this.menuMusicHowl = new Howl({
-      src: [AUDIO_BASE + 'carrot-royale-main.mp3'],
-      volume: 0.25,
-      loop: true,
-    });
-
     // Mute all audio when app goes to background (especially important on mobile)
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
@@ -316,9 +314,15 @@ class AudioManager {
 
   playMenuMusic(): void {
     if (this.muted || this.musicDisabled) return;
-    if (!this.initialized) this.init();
     if (this.menuMusicHowl && this.menuMusicHowl.playing()) return;
-    this.menuMusicHowl?.play();
+    if (!this.menuMusicHowl) {
+      this.menuMusicHowl = new Howl({
+        src: [AUDIO_BASE + 'carrot-royale-main.mp3'],
+        volume: 0.25,
+        loop: true,
+      });
+    }
+    this.menuMusicHowl.play();
   }
 
   stopMenuMusic(): void {
