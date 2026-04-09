@@ -1338,7 +1338,7 @@ export class GameLoop {
           this.landCooldowns.set(player.id, 0.15);
         }
       }
-      if (player.state === 'run' && Math.abs(player.vx) > 150 && Math.random() < 0.3) this.spawnRunDust(player);
+      if (!this._resimulating && player.state === 'run' && Math.abs(player.vx) > 150 && Math.random() < 0.3) this.spawnRunDust(player);
       if (wasAirborne && prevVy < -10 && player.vy === 0 && player.state === 'airborne') {
         this.spawnImpactDust(player, 'up');
         // Headbonk sound with per-player cooldown

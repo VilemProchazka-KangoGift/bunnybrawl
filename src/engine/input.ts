@@ -11,7 +11,6 @@ export const KEY_BINDINGS: Record<CharacterSlot, KeyBindings> = {
 export class InputManager {
   private keys: Set<string> = new Set();
   private jumpPressed: Map<CharacterSlot, boolean> = new Map();
-  private readonly _anyInput: InputState = { left: false, right: false, jump: false, down: false };
 
   constructor() {
     this.handleKeyDown = this.handleKeyDown.bind(this);
@@ -82,11 +81,7 @@ export class InputManager {
         this.jumpPressed.set(slot as CharacterSlot, true);
       }
     }
-    this._anyInput.left = left;
-    this._anyInput.right = right;
-    this._anyInput.jump = jump;
-    this._anyInput.down = down;
-    return this._anyInput;
+    return { left, right, jump, down };
   }
 
   isKeyDown(key: string): boolean {

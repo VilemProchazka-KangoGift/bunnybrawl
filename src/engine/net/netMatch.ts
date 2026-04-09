@@ -84,7 +84,7 @@ export class NetMatch {
         }
       },
       onReliableMessage: (msg) => this.handleReliableMessage(msg),
-      onUnreliableMessage: (data) => this.handleUnreliableMessage(data),
+      onUnreliableMessage: (data, fromPeerId) => this.handleUnreliableMessage(data, fromPeerId),
       onRttUpdate: () => {},
       onPeerDisconnected: (_peerId) => {
         // Individual peer disconnect — handled per-slot via rollback.removeRemoteSlot
@@ -95,14 +95,13 @@ export class NetMatch {
     this.rollback.start();
   }
 
-  handleUnreliableMessage(data: ArrayBuffer): void {
-    // Host relays input to all other guests
-    if (this.isHost && this.transport.peerCount > 1) {
-      // Forward to all peers except the sender
-      // The source byte in the message identifies the sender
+  handleUnreliableMessage(data: ArrayBuffer, fromPeerId?: string): void {
+    // Host relays input to all other guests (exclude sender to prevent echo)
+    if (this.isHost && this.transport.peerCount > 1 && fromPeerId) {
       for (const peerId of this.transport.getPeerIds()) {
-        // Send to all — receiver filters by source slot
-        this.transport.sendUnreliableTo(peerId, data);
+        if (peerId !== fromPeerId) {
+          this.transport.sendUnreliableTo(peerId, data);
+        }
       }
     }
     this.rollback.handleInputMessage(data);
