@@ -35,6 +35,7 @@ export function Match() {
   const { activePlayers, matchSettings, setMatchResult, setScreen, setActivePlayers, setMatchSettings, online, resetOnline } = useGameStore();
   const [paused, setPaused] = useState(false);
   const [showLevelSelect, setShowLevelSelect] = useState(false);
+  const [connectionUnstable, setConnectionUnstable] = useState(false);
   const netMatchRef = useRef<NetMatch | null>(null);
 
   // Resolve 'random' to a concrete arena; re-resolves each time Match mounts (rematch)
@@ -162,13 +163,22 @@ export function Match() {
           console.warn('Desync detected!');
         },
         onStall: (stalled) => {
-          if (stalled) console.log('Network stall — waiting for opponent...');
+          setConnectionUnstable(stalled);
         },
-        onDisconnect: () => {
-          // End match as disconnect — show victory screen with disconnect info
+        onStallTimeout: () => {
+          // Stall lasted too long — end match
           if (gameLoopRef.current) {
             setMatchResult(null, gameLoopRef.current.getState(), true);
           }
+        },
+        onDisconnect: () => {
+          if (gameLoopRef.current) {
+            setMatchResult(null, gameLoopRef.current.getState(), true);
+          }
+        },
+        onPlayerDisconnect: (slot) => {
+          console.log(`[Match] Player ${slot} disconnected mid-match`);
+          // Player is already killed by removePlayer() in NetMatch
         },
         onArenaChange: (arenaId: string) => {
           // Guest: host changed arena — update local state to trigger remount
@@ -304,6 +314,11 @@ export function Match() {
                 </>
               )}
             </div>
+          </div>
+        )}
+        {connectionUnstable && !paused && online.isOnline && (
+          <div className="connection-unstable-indicator" data-testid="connection-unstable">
+            {t('connection_unstable', 'Connection Unstable')}
           </div>
         )}
       </div>

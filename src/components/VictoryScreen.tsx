@@ -28,6 +28,7 @@ export function VictoryScreen() {
   const { winner, lastMatchState, setScreen, setActivePlayers, setMatchSettings, online, disconnectWin } = useGameStore();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [showArenaSelect, setShowArenaSelect] = useState(false);
+  const [peerConnected, setPeerConnected] = useState(true);
 
   const winnerChar = winner ? lastMatchState?.players.find(p => p.id === winner)?.character ?? null : null;
   const players = lastMatchState?.players.filter(p => p.active) ?? [];
@@ -71,33 +72,39 @@ export function VictoryScreen() {
   const arenas = listArenas();
   const themes = listThemes();
 
-  // Online guest: listen for host's rematch/arena change signals
+  // Online: listen for disconnect + rematch signals
   useEffect(() => {
-    if (!online.isOnline || online.isHost) return;
+    if (!online.isOnline) return;
     const transport = getModalTransport();
     if (!transport) return;
     transport.setEvents({
       onStatusChange: (status) => {
         if (status === 'disconnected' || status === 'error') {
-          // Host disconnected from victory — just go to menu
-          transport.destroy();
-          useGameStore.getState().resetOnline();
-          setActivePlayers([]);
-          setScreen('menu');
+          setPeerConnected(false);
+          if (!online.isHost) {
+            transport.destroy();
+            useGameStore.getState().resetOnline();
+            setActivePlayers([]);
+            setScreen('menu');
+          }
         }
       },
       onReliableMessage: (msg) => {
         if (msg.type === MsgType.SETTINGS_SYNC && 'arenaId' in msg) {
-          // Arena change from host
           setMatchSettings({ arenaId: (msg as any).arenaId });
         }
         if (msg.type === MsgType.START_MATCH) {
-          // START_MATCH from host — rematch
           setScreen('match');
+        }
+        if (msg.type === MsgType.DISCONNECT) {
+          setPeerConnected(false);
         }
       },
       onUnreliableMessage: () => {},
       onRttUpdate: () => {},
+      onPeerDisconnected: () => {
+        setPeerConnected(false);
+      },
     });
   }, [online.isOnline, online.isHost, setScreen, setMatchSettings, setActivePlayers]);
 
@@ -292,11 +299,16 @@ export function VictoryScreen() {
             </div>
           </div>
 
+          {online.isOnline && online.isHost && !peerConnected && !disconnectWin && (
+            <p className="disconnect-info" style={{ color: '#FFB400', fontSize: '16px', margin: '0 0 8px', textAlign: 'center' }}>
+              {t('opponent_left', 'Opponent left the game.')}
+            </p>
+          )}
           <div className="victory-actions">
-            {!disconnectWin && (!online.isOnline || online.isHost) && (
+            {!disconnectWin && (!online.isOnline || online.isHost) && peerConnected && (
               <button className="btn-base rematch-btn" onClick={handleRematch} data-testid="rematch-button">{t('victory_rematch')}</button>
             )}
-            {!disconnectWin && (!online.isOnline || online.isHost) && (
+            {!disconnectWin && (!online.isOnline || online.isHost) && peerConnected && (
               <button className="btn-base arena-btn-v" data-testid="change-arena-button" onClick={() => setShowArenaSelect(true)}>{t('victory_choose_arena')}</button>
             )}
             <button className="btn-base menu-btn-v" onClick={handleMenu} data-testid="menu-button">{t(disconnectWin || (online.isOnline && !online.isHost) ? 'leave_game' : 'victory_menu')}</button>

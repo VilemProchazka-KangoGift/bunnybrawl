@@ -154,5 +154,15 @@
   "ready": "READY",
   "ready_up": "Ready!",
   "code_placeholder": "Code",
-  "back": "Back"
+  "back": "Back",
+  "connection_unstable": "Connection Unstable",
+  "reconnecting": "Reconnecting...",
+  "reconnecting_hint": "Waiting for opponent...",
+  "reconnect_failed": "Could not reconnect.",
+  "opponent_left": "Opponent left the game.",
+  "host_disconnected": "Host disconnected.",
+  "match_in_progress": "Match in progress",
+  "spectating_hint": "You'll join when the current match ends.",
+  "player_disconnected": "Player disconnected",
+  "taken": "taken"
 }
