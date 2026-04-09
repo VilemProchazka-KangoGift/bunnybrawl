@@ -3,7 +3,7 @@
  * Supports multiple remote players (multi-guest star topology).
  * Manages input buffers, predictions, snapshots, and resimulation.
  */
-import type { InputState, PlayerSlot } from '../types';
+import type { InputState, PlayerSlot, Player } from '../types';
 import type { GameLoop } from '../gameLoop';
 import type { GameSnapshot } from './serialize';
 import { takeSnapshot, restoreSnapshot, hashGameState, takeSnapshotInto, createEmptySnapshot } from './serialize';
@@ -13,7 +13,8 @@ import {
   encodeInputMessage, decodeInputMessage, decodeSlot,
 } from './protocol';
 import type { ReliableMessage, DesyncCheckMessage, DesyncRequestMessage, DesyncCorrectionMessage } from './protocol';
-import { FIXED_TIMESTEP } from '../constants';
+import { FIXED_TIMESTEP, STOMP_BOUNCE, SPLAT_DURATION } from '../constants';
+import { isStomping } from '../stomp';
 
 const BUFFER_SIZE = 128;          // ~2.1 seconds at 60fps
 const MAX_ROLLBACK_FRAMES = 7;    // max frames we'll rewind
@@ -29,6 +30,7 @@ const NO_INPUT: InputState = { left: false, right: false, jump: false, down: fal
 const RENDER_OFFSET_DECAY = 0.7;
 const RENDER_OFFSET_MIN = 0.5;
 const CORRECTION_SNAP_DISTANCE = 30;
+const STOMP_PRESERVE_THRESHOLD_SQ = 25 * 25; // preserve stomp if both players corrected < 25px
 const STATS_RESET_INTERVAL = 60;
 
 export interface NetDebugStats {
@@ -109,6 +111,8 @@ export class RollbackEngine {
   );
   private readonly preRollbackX: number[] = [];
   private readonly preRollbackY: number[] = [];
+  private readonly preRollbackState: string[] = [];    // PlayerState before rollback
+  private readonly preRollbackScore: number[] = [];    // score before rollback
   private readonly _statsCache: NetDebugStats = {
     localFrame: 0, remoteConfirmedFrame: 0, remoteLatestAck: 0,
     rtt: 0, jitter: 0, inputDelay: 0, stalled: false,
@@ -447,11 +451,13 @@ export class RollbackEngine {
     this.rollbackCount++;
     if (depth > this.maxRollbackDepth) this.maxRollbackDepth = depth;
 
-    // Capture pre-rollback positions for visual smoothing
+    // Capture pre-rollback state for visual smoothing + stomp preservation
     const state = this.gameLoop.getState();
     for (let i = 0; i < state.players.length; i++) {
       this.preRollbackX[i] = state.players[i].x;
       this.preRollbackY[i] = state.players[i].y;
+      this.preRollbackState[i] = state.players[i].state;
+      this.preRollbackScore[i] = state.players[i].score;
     }
 
     this.gameLoop.setAudioEnabled(false);
@@ -499,7 +505,62 @@ export class RollbackEngine {
         state.players[i].renderOffsetY += dy;
       }
     }
+    // Stomp preservation: if a kill was predicted before rollback but undone after,
+    // and BOTH attacker and victim had small position corrections, re-apply the stomp.
+    // This prevents "phantom misses" where visually-identical positions produce different stomp outcomes.
+    for (let vi = 0; vi < state.players.length; vi++) {
+      const victim = state.players[vi];
+      // Was splatted before, alive now? → stomp was undone by rollback
+      if (this.preRollbackState[vi] === 'splat' && victim.state !== 'splat' && victim.state !== 'respawning') {
+        // Check victim's position correction
+        const vdx = this.preRollbackX[vi] - victim.x;
+        const vdy = this.preRollbackY[vi] - victim.y;
+        if (vdx * vdx + vdy * vdy > STOMP_PRESERVE_THRESHOLD_SQ) continue;
+
+        // Find who had higher score before (the attacker)
+        for (let ai = 0; ai < state.players.length; ai++) {
+          if (ai === vi) continue;
+          const attacker = state.players[ai];
+          // Attacker gained score before rollback but not after
+          if (this.preRollbackScore[ai] <= attacker.score) continue;
+
+          // Check attacker's position correction
+          const adx = this.preRollbackX[ai] - attacker.x;
+          const ady = this.preRollbackY[ai] - attacker.y;
+          if (adx * adx + ady * ady > STOMP_PRESERVE_THRESHOLD_SQ) continue;
+
+          // Both corrections are small — check if stomp geometry is still plausible
+          // Use corrected positions with generous check
+          if (isStomping(attacker, victim) || this.isNearStomp(attacker, victim)) {
+            // Re-apply the stomp
+            victim.state = 'splat';
+            victim.splatTimer = SPLAT_DURATION;
+            victim.vx = 0;
+            victim.vy = 0;
+            attacker.vy = STOMP_BOUNCE;
+            attacker.score += 2;
+            break;
+          }
+        }
+      }
+    }
+
     this.lastSyncedFrame = Math.max(this.lastSyncedFrame, this._cachedMinRemoteFrame);
+  }
+
+  /** Generous stomp check — wider than normal, used for stomp preservation after rollback. */
+  private isNearStomp(attacker: Player, victim: Player): boolean {
+    // Wider horizontal overlap (add 8px margin on each side)
+    const margin = 8;
+    const overlapX = attacker.x + attacker.width + margin > victim.x - margin &&
+                     attacker.x - margin < victim.x + victim.width + margin;
+    if (!overlapX) return false;
+
+    // Attacker's bottom near victim's top (generous vertical window)
+    const attackerBottom = attacker.y + attacker.height;
+    const victimTop = victim.y;
+    const overlap = attackerBottom - victimTop;
+    return overlap > -10 && overlap < victim.height * 0.6;
   }
 
   private readLocalInput(): InputState {
