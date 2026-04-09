@@ -195,6 +195,7 @@ export function MainMenu() {
   const onlinePlayerNameRef = useRef('');
   onlinePlayerNameRef.current = onlinePlayerName;
   const [mobileNameOpen, setMobileNameOpen] = useState(false);
+  const [mobileCodeOpen, setMobileCodeOpen] = useState(false);
   const [onlineRemoteReady, setOnlineRemoteReady] = useState(false);
   const [onlineLocalReady, setOnlineLocalReady] = useState(false);
   const onlineTransportRef = useRef<Transport | null>(null);
@@ -902,11 +903,18 @@ export function MainMenu() {
                 {onlineStep === 'choose' && onlineJoinMode && (
                   <div className="online-step">
                     <p className="online-join-label">{t('enter_room_code', 'Enter the room code:')}</p>
-                    <input className="online-code-input" data-testid="online-code-input" type="text" maxLength={3} placeholder={t('code_placeholder', 'Code')}
-                      value={onlineJoinCode} autoFocus
-                      onChange={(e) => setOnlineJoinCode(e.target.value.toUpperCase().replace(/[^A-Z2-9]/g, ''))}
-                      onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') { (e.target as HTMLInputElement).blur(); if (onlineJoinCode.length >= 3) { audio.play('select'); onlineConnect(false, onlineJoinCode); } } }}
-                    />
+                    {isTouchPrimary() ? (
+                      <button className={`online-code-input online-name-tap${onlineJoinCode ? '' : ' placeholder'}`} data-testid="online-code-input"
+                        onClick={() => setMobileCodeOpen(true)}>
+                        {onlineJoinCode || t('code_placeholder', 'Code')}
+                      </button>
+                    ) : (
+                      <input className="online-code-input" data-testid="online-code-input" type="text" maxLength={3} placeholder={t('code_placeholder', 'Code')}
+                        value={onlineJoinCode} autoFocus
+                        onChange={(e) => setOnlineJoinCode(e.target.value.toUpperCase().replace(/[^A-Z2-9]/g, ''))}
+                        onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') { (e.target as HTMLInputElement).blur(); if (onlineJoinCode.length >= 3) { audio.play('select'); onlineConnect(false, onlineJoinCode); } } }}
+                      />
+                    )}
                     <button className={`btn-base menu-btn online-create-btn${onlineJoinCode.length >= 3 ? ' play-btn' : ''}`} data-testid="online-join-submit" disabled={onlineJoinCode.length < 3}
                       onClick={() => { audio.play('select'); onlineConnect(false, onlineJoinCode); }}>
                       {t('join_room', 'Join')}
@@ -1144,6 +1152,20 @@ export function MainMenu() {
             setMobileNameOpen(false);
           }}
           onCancel={() => setMobileNameOpen(false)}
+        />
+      )}
+      {mobileCodeOpen && (
+        <MobileTextInput
+          value={onlineJoinCode}
+          maxLength={3}
+          label={t('enter_room_code', 'Enter the room code')}
+          onConfirm={(v) => {
+            const code = v.toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, 3);
+            setOnlineJoinCode(code);
+            setMobileCodeOpen(false);
+            if (code.length >= 3) { audio.play('select'); onlineConnect(false, code); }
+          }}
+          onCancel={() => setMobileCodeOpen(false)}
         />
       )}
     </div>

@@ -450,6 +450,12 @@ export class GameLoop {
     this.renderer.setPlayerNames(names);
   }
 
+  /** Override the touch input slot (for online guest who is P2, not P1). */
+  setLocalSlot(slot: PlayerSlot): void {
+    this.touchSlot = slot;
+    if (this.touchInput && slot) haptics.init(slot);
+  }
+
   /** Mark a player as disconnected — kill them and prevent respawn. */
   disconnectPlayer(slot: PlayerSlot): void {
     const player = this.state.players.find(p => p.id === slot);

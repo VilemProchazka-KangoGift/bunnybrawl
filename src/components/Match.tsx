@@ -203,6 +203,7 @@ export function Match() {
       gameLoopRef.current = netMatch.getGameLoop();
       (window as any).__gameLoop = netMatch.getGameLoop();
       netMatch.getGameLoop().setPlayerNames(useGameStore.getState().online.playerNames);
+      netMatch.getGameLoop().setLocalSlot((online.isHost ? 'P1' : online.localSlot) as PlayerSlot);
       netMatch.start();
       setTouchInput(netMatch.getGameLoop().getTouchInput());
 
