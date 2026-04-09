@@ -420,7 +420,7 @@ export class RollbackEngine {
       this.sendBundle[i].input = this.localInputs[f % BUFFER_SIZE];
     }
     // Pass count to encoder instead of truncating array (truncating destroys pre-allocated slots)
-    const msg = encodeInputMessage(this.sendBundle, this.remoteConfirmedFrame, count);
+    const msg = encodeInputMessage(this.sendBundle, this.remoteConfirmedFrame, count, this.localSlot);
     this.transport.sendUnreliable(msg);
   }
 

@@ -19,6 +19,10 @@ export const MsgType = {
   REMATCH_REQUEST: 0x0A,
   DESYNC_REQUEST: 0x0B,    // guest -> host: hash mismatch, send correction
   DESYNC_CORRECTION: 0x0C, // host -> guest: full snapshot for correction
+  PLAYER_JOINED: 0x0D,     // host -> all: new player connected
+  PLAYER_LEFT: 0x0E,       // host -> all: player disconnected
+  SLOT_ASSIGNMENT: 0x0F,   // host -> guest: your assigned player slot
+  MATCH_IN_PROGRESS: 0x14, // host -> late joiner: match is running, spectate
 
   // Unreliable channel (binary)
   INPUT: 0x10,
@@ -51,8 +55,8 @@ export function decodeInput(byte: number): InputState {
 // ---- Pre-allocated encode/decode buffers (avoid 60fps GC pressure) ----
 
 const MAX_BUNDLE = 16; // max inputs per message (10 typical)
-// Max encode size: 1 + 1 + MAX_BUNDLE*5 + 4 = 86 bytes
-const ENCODE_BUF = new ArrayBuffer(1 + 1 + MAX_BUNDLE * 5 + 4);
+// Max encode size: 1 + 1(source) + 1(count) + MAX_BUNDLE*5 + 4 = 87 bytes
+const ENCODE_BUF = new ArrayBuffer(1 + 1 + 1 + MAX_BUNDLE * 5 + 4);
 const ENCODE_VIEW = new DataView(ENCODE_BUF);
 
 // Pre-allocated decode result (reused every call — caller must consume before next decode)
@@ -60,23 +64,40 @@ const DECODE_INPUTS: Array<{ frame: number; input: InputState }> = Array.from(
   { length: MAX_BUNDLE },
   () => ({ frame: 0, input: { left: false, right: false, jump: false, down: false } }),
 );
-const DECODE_RESULT = { inputs: DECODE_INPUTS, inputCount: 0, latestAck: 0 };
+const DECODE_RESULT = { inputs: DECODE_INPUTS, inputCount: 0, latestAck: 0, source: 0 };
+
+/** Encode a PlayerSlot to a single byte for the source field. */
+function encodeSlot(slot: string): number {
+  // P1=1, P2=2, ..., P5=5, B1=6, ..., B5=10
+  if (slot.startsWith('P')) return parseInt(slot[1], 10);
+  if (slot.startsWith('B')) return 5 + parseInt(slot[1], 10);
+  return 0;
+}
+
+/** Decode a source byte back to PlayerSlot string. */
+export function decodeSlot(byte: number): string {
+  if (byte >= 1 && byte <= 5) return `P${byte}`;
+  if (byte >= 6 && byte <= 10) return `B${byte - 5}`;
+  return 'P1';
+}
 
 /**
  * Encode an input message with bundled recent inputs for redundancy.
- * Format: [1B type][1B count][per input: 4B frame + 1B input][4B latest ack]
- * Frames use Uint32 (wraps at ~19.8 hours at 60fps, effectively unlimited).
+ * Format: [1B type][1B source][1B count][per input: 4B frame + 1B input][4B latest ack]
+ * Source byte identifies which player slot sent these inputs (for host relay in multi-guest).
  * Returns a slice of a shared buffer — caller must send before next encode call.
  */
 export function encodeInputMessage(
   inputs: Array<{ frame: number; input: InputState }>,
   latestAck: number,
   inputCount?: number,
+  sourceSlot?: string,
 ): ArrayBuffer {
   const count = Math.min(inputCount ?? inputs.length, MAX_BUNDLE);
   let offset = 0;
 
   ENCODE_VIEW.setUint8(offset++, MsgType.INPUT);
+  ENCODE_VIEW.setUint8(offset++, encodeSlot(sourceSlot ?? 'P1'));
   ENCODE_VIEW.setUint8(offset++, count);
 
   for (let i = 0; i < count; i++) {
@@ -101,18 +122,20 @@ export function decodeInputMessage(buf: ArrayBuffer): {
   inputs: Array<{ frame: number; input: InputState }>;
   inputCount: number;
   latestAck: number;
+  source: number;
 } | null {
   const view = new DataView(buf);
-  if (view.byteLength < 6) return null; // min: 1B type + 1B count + 4B ack
+  if (view.byteLength < 7) return null; // min: 1B type + 1B source + 1B count + 4B ack
 
   let offset = 0;
   const type = view.getUint8(offset++);
   if (type !== MsgType.INPUT) return null;
 
+  const source = view.getUint8(offset++);
   const count = view.getUint8(offset++);
 
   // Bounds validation: prevent reading past buffer
-  const expectedSize = 2 + count * 5 + 4;
+  const expectedSize = 3 + count * 5 + 4;
   if (view.byteLength < expectedSize) return null;
 
   const n = Math.min(count, MAX_BUNDLE);
@@ -128,6 +151,7 @@ export function decodeInputMessage(buf: ArrayBuffer): {
 
   DECODE_RESULT.inputCount = n;
   DECODE_RESULT.latestAck = view.getUint32(offset, true);
+  DECODE_RESULT.source = source;
   return DECODE_RESULT;
 }
 
@@ -227,6 +251,30 @@ export interface DesyncCorrectionMessage {
   snapshot: unknown; // GameSnapshot — typed loosely to avoid circular dep
 }
 
+export interface PlayerJoinedMessage {
+  type: 0x0D;
+  peerId: string;
+  slot: string;       // PlayerSlot assigned by host
+  characterName: string;
+}
+
+export interface PlayerLeftMessage {
+  type: 0x0E;
+  slot: string;       // PlayerSlot that left
+  reason: 'disconnect' | 'leave';
+}
+
+export interface SlotAssignmentMessage {
+  type: 0x0F;
+  slot: string;       // Your assigned PlayerSlot
+  allPlayers: Array<{ slot: string; characterName: string; isHost: boolean }>;
+}
+
+export interface MatchInProgressMessage {
+  type: 0x14;
+  snapshot: unknown;  // Current game state for spectator
+}
+
 export type ReliableMessage =
   | HandshakeMessage
   | SettingsSyncMessage
@@ -239,6 +287,10 @@ export type ReliableMessage =
   | MatchResultMessage
   | RematchRequestMessage
   | DesyncRequestMessage
-  | DesyncCorrectionMessage;
+  | DesyncCorrectionMessage
+  | PlayerJoinedMessage
+  | PlayerLeftMessage
+  | SlotAssignmentMessage
+  | MatchInProgressMessage;
 
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;

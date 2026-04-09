@@ -101,12 +101,13 @@ describe('Protocol encoding', () => {
     ];
     const latestAck = 8;
 
-    const buf = encodeInputMessage(inputs, latestAck);
+    const buf = encodeInputMessage(inputs, latestAck, undefined, 'P1');
     const decoded = decodeInputMessage(buf);
 
     expect(decoded).not.toBeNull();
     expect(decoded!.inputCount).toBe(3);
     expect(decoded!.latestAck).toBe(latestAck);
+    expect(decoded!.source).toBe(1); // P1 = 1
 
     for (let i = 0; i < inputs.length; i++) {
       expect(decoded!.inputs[i].frame).toBe(inputs[i].frame);
@@ -121,13 +122,14 @@ describe('Protocol encoding', () => {
       { frame: 4294967295, input: { left: false, right: false, jump: true, down: false } }, // max uint32
     ];
 
-    const buf = encodeInputMessage(inputs, 99999);
+    const buf = encodeInputMessage(inputs, 99999, undefined, 'P2');
     const decoded = decodeInputMessage(buf);
 
     expect(decoded!.inputs[0].frame).toBe(100000);
     expect(decoded!.inputs[1].frame).toBe(100001);
     expect(decoded!.inputs[2].frame).toBe(4294967295);
     expect(decoded!.latestAck).toBe(99999);
+    expect(decoded!.source).toBe(2); // P2 = 2
   });
 
   it('encodes and decodes ping/pong', () => {
