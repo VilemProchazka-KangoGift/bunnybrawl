@@ -274,7 +274,7 @@ export function MainMenu() {
     const ms = store.matchSettings;
     const botSlots = ALL_BOT_SLOTS.slice(0, ms.botCount);
     const rngSeed = store.online.rngSeed;
-    assignBotCharacters(humanSlots as any, botSlots, rngSeed);
+    assignBotCharacters(humanSlots as any, botSlots, rngSeed, Array.from(slotCharMap.values()));
     setActivePlayers([...humanSlots as PlayerSlot[], ...botSlots]);
     setOnline({ isOnline: true, localSlot: mySlot as PlayerSlot });
     setOnlineOpen(false);

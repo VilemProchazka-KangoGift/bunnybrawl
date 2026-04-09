@@ -32,9 +32,12 @@ export function getCharacterForSlot(slot: PlayerSlot): CharacterDef {
 
 /** Assign characters from registry to bot slots, avoiding characters already taken by humans.
  *  Optional seed for deterministic assignment (required for online play). */
-export function assignBotCharacters(humanSlots: CharacterSlot[], botSlots: BotSlot[], seed?: number): void {
+export function assignBotCharacters(humanSlots: CharacterSlot[], botSlots: BotSlot[], seed?: number, humanCharNames?: string[]): void {
   BOT_CHARACTERS.clear();
-  const usedNames = new Set(humanSlots.map(s => CHARACTERS[s].name));
+  // Use explicit names if provided (for online mode), otherwise read from CHARACTERS
+  const usedNames = humanCharNames
+    ? new Set(humanCharNames)
+    : new Set(humanSlots.map(s => CHARACTERS[s].name));
   const available = getAllCharacters().filter(c => !usedNames.has(c.name));
   const shuffled = [...available];
   const rng = seed != null ? new SeededRNG(seed) : null;
