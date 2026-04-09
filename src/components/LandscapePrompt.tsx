@@ -3,6 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { isTouchPrimary } from '../engine/touchDetect';
 import './LandscapePrompt.css';
 
+/** Set to true to temporarily suppress the landscape prompt (e.g. during text input). */
+let _suppressed = false;
+export function suppressLandscapePrompt(suppress: boolean) { _suppressed = suppress; }
+
 export function LandscapePrompt() {
   const { t } = useTranslation();
   const [showPrompt, setShowPrompt] = useState(false);
@@ -11,11 +15,15 @@ export function LandscapePrompt() {
     if (!isTouchPrimary()) return;
 
     const check = () => {
-      setShowPrompt(window.innerWidth < window.innerHeight);
+      setShowPrompt(!_suppressed && window.innerWidth < window.innerHeight);
     };
     check();
+    const interval = setInterval(check, 300);
     window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
+    return () => {
+      window.removeEventListener('resize', check);
+      clearInterval(interval);
+    };
   }, []);
 
   if (!showPrompt) return null;

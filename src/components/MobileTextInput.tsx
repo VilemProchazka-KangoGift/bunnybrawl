@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { suppressLandscapePrompt } from './LandscapePrompt';
 import './MobileTextInput.css';
 
 interface MobileTextInputProps {
@@ -21,10 +22,13 @@ export function MobileTextInput({ value, maxLength, label, onConfirm, onCancel }
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    // Suppress the "rotate your device" prompt while typing
+    suppressLandscapePrompt(true);
     // Unlock orientation so user can type in portrait
     (screen.orientation as any)?.unlock?.();
     inputRef.current?.focus();
     return () => {
+      suppressLandscapePrompt(false);
       // Re-lock landscape when overlay closes
       (screen.orientation as any)?.lock?.('landscape')?.catch?.(() => {});
     };
