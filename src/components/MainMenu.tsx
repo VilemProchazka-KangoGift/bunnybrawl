@@ -195,15 +195,26 @@ export function MainMenu() {
 
   const allChars = getAllCharacters();
 
-  // If remote picked the same character, force local to a different one
+  // If remote picked the same character, force local to a different one.
+  // Uses a guard ref to prevent echo loops: only auto-switch once per conflict.
+  const autoSwitchGuard = useRef<string | null>(null);
   useEffect(() => {
-    if (online.remoteCharacterName && onlineLocalChar === online.remoteCharacterName) {
-      const alt = allChars.find(c => c.name !== online.remoteCharacterName);
-      if (alt) {
-        setOnlineLocalChar(alt.name);
-        onlineLocalCharRef.current = alt.name;
-        onlineTransportRef.current?.sendReliable({ type: MsgType.CHARACTER_SELECT, characterName: alt.name });
-      }
+    const conflict = online.remoteCharacterName;
+    if (!conflict || onlineLocalChar !== conflict) {
+      autoSwitchGuard.current = null;
+      return;
+    }
+    // Already handled this specific conflict
+    if (autoSwitchGuard.current === conflict) return;
+    autoSwitchGuard.current = conflict;
+
+    const takenNames = new Set(online.remotePlayers.map(rp => rp.characterName));
+    takenNames.add(conflict);
+    const alt = allChars.find(c => !takenNames.has(c.name));
+    if (alt) {
+      setOnlineLocalChar(alt.name);
+      onlineLocalCharRef.current = alt.name;
+      onlineTransportRef.current?.sendReliable({ type: MsgType.CHARACTER_SELECT, characterName: alt.name });
     }
   }, [online.remoteCharacterName]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -410,8 +421,12 @@ export function MainMenu() {
               remoteCharRef.current = updated.length > 0 ? updated[0].characterName : null;
               setOnline({ remoteCharacterName: remoteCharRef.current });
 
-              // Forward to other guests
-              transport.sendReliable(msg);
+              // Forward to other guests (exclude the sender to prevent echo loop)
+              for (const pid of transport.getPeerIds()) {
+                if (pid !== fromPeerId) {
+                  transport.sendReliableTo(pid, msg);
+                }
+              }
             }
           } else if (!isHost) {
             // Guest: received character update (from host or relayed)
