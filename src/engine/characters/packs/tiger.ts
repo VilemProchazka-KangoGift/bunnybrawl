@@ -72,7 +72,7 @@ export const tiger: CharacterPack = {
   splatShape: 'paw',
   gibs: [{ gibType: 'ear', width: 10, height: 10 }, { gibType: 'ear', width: 10, height: 10 }, { gibType: 'snout', width: 8, height: 6 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Tiger', cs: 'Tygr', hi: 'बाघ', fil: 'Tigre' },
-  legStyle: { shape: 'tapered', footStyle: 'paw', legWidth: 7 },
+  legStyle: { shape: 'tapered', footStyle: 'paw', legWidth: 5 },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.52, rx: w * 0.42, ry: h * 0.42 }),
   drawSprite, drawGib,
 };

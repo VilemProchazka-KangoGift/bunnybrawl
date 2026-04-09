@@ -3,8 +3,8 @@ import type { CharacterColors, LegStyle } from './types';
 // ---- Defaults ----
 
 const DEF_LEG_WIDTH = 6;
-const DEF_LEG_HEIGHT = 8;
-const DEF_FOOT_HEIGHT = 3;
+const DEF_LEG_HEIGHT = 4;
+const DEF_FOOT_HEIGHT = 2;
 
 // ---- Helpers ----
 
@@ -65,8 +65,8 @@ function drawFootClaw(
   const cx = fx + fw / 2;
   for (let i = -1; i <= 1; i++) {
     ctx.beginPath();
-    ctx.moveTo(cx + i * (fw * 0.3), fy);
-    ctx.lineTo(cx + i * (fw * 0.4), fy + fh);
+    ctx.moveTo(cx + i * (fw * 0.2), fy);
+    ctx.lineTo(cx + i * (fw * 0.45), fy + fh);
     ctx.stroke();
   }
 }
@@ -97,6 +97,13 @@ function drawLegRounded(
   ctx: CanvasRenderingContext2D,
   lx: number, ly: number, lw: number, lh: number, kneeOff: number,
 ): void {
+  if (lh <= 5) {
+    // Nub: simple ellipse for Rayman-style short legs
+    ctx.beginPath();
+    ctx.ellipse(lx + lw / 2, ly + lh / 2, lw / 2, lh / 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    return;
+  }
   if (Math.abs(kneeOff) < 0.5) {
     // Straight — simple rounded rect
     drawRoundRect(ctx, lx, ly, lw, lh, 2);
@@ -121,6 +128,12 @@ function drawLegTapered(
   ctx: CanvasRenderingContext2D,
   lx: number, ly: number, lw: number, lh: number, kneeOff: number,
 ): void {
+  if (lh <= 5) {
+    ctx.beginPath();
+    ctx.ellipse(lx + lw / 2, ly + lh / 2, lw / 2, lh / 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    return;
+  }
   const narrowW = lw * 0.65;
   const topCx = lx + lw / 2;
   const botCx = topCx + kneeOff * 0.3;
@@ -157,6 +170,12 @@ function drawLegWide(
   ctx: CanvasRenderingContext2D,
   lx: number, ly: number, lw: number, lh: number, kneeOff: number,
 ): void {
+  if (lh <= 5) {
+    ctx.beginPath();
+    ctx.ellipse(lx + lw / 2, ly + lh / 2, lw / 2, lh / 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    return;
+  }
   // Same as rounded but with less border radius for a chunkier look
   if (Math.abs(kneeOff) < 0.5) {
     drawRoundRect(ctx, lx, ly, lw, lh, 1.5);
@@ -207,33 +226,33 @@ export function drawLegs(
 
   // --- Squash adjustments ---
   const squashFactor = squashScale < 0.9 ? (1 - squashScale) : 0;
-  const legW = baseLegW + squashFactor * 4;
-  const legH = baseLegH - squashFactor * 3;
+  const legW = baseLegW + squashFactor * 2;
+  const legH = baseLegH - squashFactor * 1.5;
 
   // --- Walk animation ---
   const animSin = Math.sin(animFrame * Math.PI);
   const animCos = Math.cos(animFrame * Math.PI);
-  const vertAnim = isRunning ? animSin * 3 : 0;
-  const horizAnim = isRunning ? animCos * 2 : 0;
+  const vertAnim = isRunning ? animSin * 1.5 : 0;
+  const horizAnim = isRunning ? animCos * 1 : 0;
 
   // --- Idle weight shift ---
-  const idleShift = isIdle ? Math.sin(animFrame * Math.PI * 0.5) * 1.0 : 0;
+  const idleShift = isIdle ? Math.sin(animFrame * Math.PI * 0.5) * 0.5 : 0;
 
   // --- Airborne spread ---
-  const airSpread = isAirborne ? 3 : 0;
-  const airExtend = isAirborne ? 2 : 0;
+  const airSpread = isAirborne ? 1.5 : 0;
+  const airExtend = isAirborne ? 1 : 0;
 
   // --- Knee bend offset ---
   let baseKneeOff: number;
   if (squashFactor > 0) {
     // Landing/crouch: knees splay outward
-    baseKneeOff = squashFactor * 8;
+    baseKneeOff = squashFactor * 3;
   } else if (isAirborne) {
     // Airborne: knees tuck slightly inward
-    baseKneeOff = -1.5;
+    baseKneeOff = -0.5;
   } else if (isRunning) {
     // Running: knee swings with step
-    baseKneeOff = animCos * 1.5;
+    baseKneeOff = animCos * 0.7;
   } else {
     // Idle: very subtle outward
     baseKneeOff = 0.5;
@@ -242,7 +261,7 @@ export function drawLegs(
   // --- Foot color ---
   const footColor = style?.footColor ?? colors.lightColor;
   const baseFW = style?.footWidth ?? (footStyle === 'hoof' ? baseLegW : baseLegW + 2);
-  const footW = baseFW + squashFactor * 2;
+  const footW = baseFW + squashFactor * 1;
 
   const legDrawer = LEG_DRAWERS[shape] ?? drawLegRounded;
   const footDrawer = footStyle !== 'none' ? FOOT_DRAWERS[footStyle] : null;
@@ -250,12 +269,12 @@ export function drawLegs(
   // --- Draw each leg (left = -1, right = +1) ---
   for (let side = -1; side <= 1; side += 2) {
     // Hip position — widen gap for thick legs so they don't blend together
-    const halfGap = Math.max(3, legW / 2 + 1);
+    const halfGap = Math.max(4, legW / 2 + 2);
     const hipX = cx + side * halfGap - legW / 2
       + side * (baseSpread + airSpread)
       + side * horizAnim;
 
-    const hipY = yOff + h * 0.75
+    const hipY = yOff + h * 0.82
       - side * vertAnim
       + side * idleShift;
 
