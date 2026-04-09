@@ -200,3 +200,17 @@
   0%, 100% { opacity: 0.85; }
   50% { opacity: 0.5; }
 }
+
+/* Mobile pause button */
+.mobile-pause-btn {
+  top: 12px;
+  right: 12px;
+  z-index: 8;
+  font-size: 16px;
+  letter-spacing: -2px;
+}
+
+/* Mobile: 3-column arena grid in pause menu */
+.is-mobile .pause-arena-grid {
+  grid-template-columns: repeat(3, 1fr);
+}

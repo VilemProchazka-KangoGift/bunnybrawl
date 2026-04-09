@@ -1,0 +1,65 @@
+.touch-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.touch-joystick-base {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  transform: translate(-50%, -50%);
+}
+
+.touch-joystick-thumb {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  transform: translate(-50%, -50%);
+}
+
+.touch-jump-hint {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 50%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  animation: touch-hint-fade 3s ease forwards;
+}
+
+@keyframes touch-hint-fade {
+  0% { opacity: 1; }
+  70% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.touch-jump-flash {
+  position: absolute;
+  right: 20px;
+  top: 50%;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  transform: translate(0, -50%);
+  animation: touch-jump-pulse 0.2s ease-out;
+}
+
+@keyframes touch-jump-pulse {
+  0% { transform: translate(0, -50%) scale(0.8); opacity: 0; }
+  50% { transform: translate(0, -50%) scale(1.1); opacity: 1; }
+  100% { transform: translate(0, -50%) scale(1); opacity: 1; }
+}

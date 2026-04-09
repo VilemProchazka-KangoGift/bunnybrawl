@@ -869,3 +869,8 @@
   pointer-events: none;
   font-family: 'Nunito', sans-serif;
 }
+
+/* Mobile: hide "X players, 1 keyboard" hint */
+.is-mobile .controls-hint {
+  display: none;
+}

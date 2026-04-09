@@ -19,3 +19,24 @@
   cursor: not-allowed;
   transform: none;
 }
+
+/* Mobile floating overlay button (pause, back) — distinct from btn-base */
+.mobile-overlay-btn {
+  position: absolute;
+  z-index: 5;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.35);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-overlay-btn:active {
+  background: rgba(0, 0, 0, 0.6);
+}

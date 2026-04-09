@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../store/gameStore';
 import { GameLoop } from '../engine/gameLoop';
@@ -8,6 +8,9 @@ import { getModalTransport } from './MainMenu';
 import { getArena, listArenas } from '../engine/arena';
 import { listThemes } from '../engine/themes/registry';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
+import { isTouchPrimary } from '../engine/touchDetect';
+import { TouchOverlay } from './TouchOverlay';
+import type { TouchInputManager } from '../engine/touchInput';
 import type { PlayerSlot } from '../engine/types';
 import './Match.css';
 
@@ -37,6 +40,8 @@ export function Match() {
   const [showLevelSelect, setShowLevelSelect] = useState(false);
   const [connectionUnstable, setConnectionUnstable] = useState(false);
   const netMatchRef = useRef<NetMatch | null>(null);
+  const [touchInput, setTouchInput] = useState<TouchInputManager | null>(null);
+  const isMobile = useMemo(() => isTouchPrimary(), []);
 
   // Resolve 'random' to a concrete arena; re-resolves each time Match mounts (rematch)
   const [currentArenaId, setCurrentArenaId] = useState(() =>
@@ -51,6 +56,17 @@ export function Match() {
     }
     setPaused(false);
     setShowLevelSelect(false);
+  }, []);
+
+  const handlePause = useCallback(() => {
+    const loop = gameLoopRef.current;
+    if (!loop || loop.isPaused()) return;
+    if (netMatchRef.current) {
+      netMatchRef.current.pause();
+    } else {
+      loop.pause();
+    }
+    setPaused(true);
   }, []);
 
   const handleQuit = useCallback(() => {
@@ -96,12 +112,7 @@ export function Match() {
         if (loop.isPaused()) {
           handleResume();
         } else {
-          if (netMatchRef.current) {
-            netMatchRef.current.pause();
-          } else {
-            loop.pause();
-          }
-          setPaused(true);
+          handlePause();
         }
       }
       if (e.key === 'Enter') {
@@ -118,7 +129,7 @@ export function Match() {
 
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [handleResume, showLevelSelect]);
+  }, [handleResume, handlePause, showLevelSelect]);
 
   useEffect(() => {
     const bgCanvas = bgCanvasRef.current;
@@ -193,11 +204,13 @@ export function Match() {
       (window as any).__gameLoop = netMatch.getGameLoop();
       netMatch.getGameLoop().setPlayerNames(useGameStore.getState().online.playerNames);
       netMatch.start();
+      setTouchInput(netMatch.getGameLoop().getTouchInput());
 
       return () => {
         netMatch.stop();
         netMatchRef.current = null;
         gameLoopRef.current = null;
+        setTouchInput(null);
         if (victoryTimeoutRef.current) {
           clearTimeout(victoryTimeoutRef.current);
           victoryTimeoutRef.current = null;
@@ -218,10 +231,12 @@ export function Match() {
     gameLoopRef.current = loop;
     (window as any).__gameLoop = loop;
     loop.start();
+    setTouchInput(loop.getTouchInput());
 
     return () => {
       loop.stop();
       gameLoopRef.current = null;
+      setTouchInput(null);
       if (victoryTimeoutRef.current) {
         clearTimeout(victoryTimeoutRef.current);
         victoryTimeoutRef.current = null;
@@ -229,6 +244,14 @@ export function Match() {
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentArenaId, activePlayers, matchSettings, setMatchResult, online.isOnline]);
+
+  // Wake lock: prevent screen dimming during match on mobile
+  useEffect(() => {
+    if (!isMobile || !('wakeLock' in navigator)) return;
+    let wakeLock: WakeLockSentinel | null = null;
+    (navigator as any).wakeLock.request('screen').then((wl: WakeLockSentinel) => { wakeLock = wl; }).catch(() => {});
+    return () => { wakeLock?.release(); };
+  }, [isMobile, currentArenaId]);
 
   const arenas = listArenas();
   const themes = listThemes();
@@ -249,6 +272,12 @@ export function Match() {
           height={CANVAS_HEIGHT}
           data-testid="game-canvas"
         />
+        {touchInput && <TouchOverlay touchInput={touchInput} />}
+        {isMobile && !paused && (
+          <button className="mobile-overlay-btn mobile-pause-btn" onClick={handlePause} data-testid="mobile-pause-btn">
+            &#9646;&#9646;
+          </button>
+        )}
         {paused && (
           <div className="pause-overlay" data-testid="pause-menu">
             <div className="pause-box">
