@@ -640,7 +640,7 @@ export function MainMenu() {
       <div className="menu-bg">
         <div className="menu-content">
           <button
-            className="music-toggle-btn"
+            className="overlay-icon-btn music-toggle-btn"
             onClick={() => {
               const disabled = audio.toggleMusicDisabled();
               setMusicOff(disabled);
