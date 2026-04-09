@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
+import { isTouchPrimary } from '../engine/touchDetect';
 
 export function useScaler() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -40,6 +41,16 @@ export function useScaler() {
   useEffect(() => {
     updateScale();
 
+    // Lock to landscape on mobile (progressive — fails silently where unsupported)
+    let autoFullscreen: (() => void) | null = null;
+    if (isTouchPrimary()) {
+      (screen.orientation as any)?.lock?.('landscape')?.catch?.(() => {});
+
+      // Auto-fullscreen on first user tap — reuses toggleFullscreen() which has webkit fallback
+      autoFullscreen = () => { toggleFullscreen(); };
+      document.addEventListener('touchstart', autoFullscreen, { once: true });
+    }
+
     let resizeTimer: ReturnType<typeof setTimeout>;
     const onResize = () => {
       clearTimeout(resizeTimer);
@@ -68,6 +79,7 @@ export function useScaler() {
       document.removeEventListener('fullscreenchange', onFullscreenChange);
       document.removeEventListener('webkitfullscreenchange', onFullscreenChange);
       window.removeEventListener('keydown', onKeyDown);
+      if (autoFullscreen) document.removeEventListener('touchstart', autoFullscreen);
     };
   }, [updateScale, toggleFullscreen]);
 

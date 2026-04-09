@@ -519,3 +519,18 @@
   font-size: 10px;
   font-weight: 600;
 }
+
+/* Mobile: single-column layout + compact grids */
+.is-mobile .victory-columns {
+  flex-direction: column;
+  gap: 15px;
+}
+
+.is-mobile .victory-col-left,
+.is-mobile .victory-col-right {
+  max-width: 100%;
+}
+
+.is-mobile .victory-arena-grid {
+  grid-template-columns: repeat(3, 1fr);
+}

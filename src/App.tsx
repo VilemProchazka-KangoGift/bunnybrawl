@@ -5,7 +5,9 @@ import { CharacterSelect } from './components/CharacterSelect';
 import { Match } from './components/Match';
 import { VictoryScreen } from './components/VictoryScreen';
 import { GameScaler } from './components/GameScaler';
+import { LandscapePrompt } from './components/LandscapePrompt';
 import { assignBotCharacters, registerBuiltinCharacters } from './engine/characters';
+import { isTouchPrimary } from './engine/touchDetect';
 import type { PlayerSlot, BotSlot, CharacterSlot } from './engine/types';
 import { ALL_BOT_SLOTS } from './engine/types';
 import logoUrl from '/logo.png?url';
@@ -94,13 +96,23 @@ function App() {
   const ready = usePreflight();
   useDevAutoStart();
 
+  // Add .is-mobile class to <html> for CSS-based mobile adaptations
+  useEffect(() => {
+    if (isTouchPrimary()) {
+      document.documentElement.classList.add('is-mobile');
+    }
+  }, []);
+
   return (
-    <GameScaler>
-      {screen === 'menu' && ready && <MainMenu />}
-      {screen === 'charSelect' && <CharacterSelect />}
-      {screen === 'match' && <Match />}
-      {screen === 'victory' && <VictoryScreen />}
-    </GameScaler>
+    <>
+      <LandscapePrompt />
+      <GameScaler>
+        {screen === 'menu' && ready && <MainMenu />}
+        {screen === 'charSelect' && <CharacterSelect />}
+        {screen === 'match' && <Match />}
+        {screen === 'victory' && <VictoryScreen />}
+      </GameScaler>
+    </>
   );
 }
 

@@ -34,3 +34,8 @@
 .fullscreen-btn:hover {
   background: rgba(255, 255, 255, 0.3);
 }
+
+/* Hide fullscreen button on mobile — auto-fullscreen handles it */
+.is-mobile .fullscreen-btn {
+  display: none;
+}

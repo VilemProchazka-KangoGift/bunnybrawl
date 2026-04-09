@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useCallback, useMemo } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { CHARACTERS, getAllCharacters, BOT_CHARACTERS, assignBotCharacters, getCharacterEmoji, hasCustomEyes, getSpriteRenderer, getCharacterDisplayName, getCharacterPack, drawLegs } from '../engine/characters';
 import { KEY_BINDINGS } from '../engine/input';
@@ -11,6 +11,8 @@ import {
   drawTree, drawBush, drawFlower, drawMushroom, drawGrassTuft, drawCloud,
 } from '../engine/themes/drawPrimitives';
 import { drawHighlightSpot } from '../engine/spriteShading';
+import { isTouchPrimary } from '../engine/touchDetect';
+import { TouchInputManager } from '../engine/touchInput';
 import './CharacterSelect.css';
 
 import { initWildlife, updateAndDrawWildlife, drawDayNightCycle } from '../engine/canvasAnimations';
@@ -74,18 +76,23 @@ export function CharacterSelect() {
   const lastTimeRef = useRef<number>(0);
   const startedRef = useRef<boolean>(false);
   const readySoundPlayedRef = useRef<Set<PlayerSlot>>(new Set());
+  const lobbyTouchRef = useRef<TouchInputManager | null>(null);
+  const isMobile = useMemo(() => isTouchPrimary(), []);
 
   useEffect(() => {
     const botCount = matchSettings.botCount;
     const botSlots = ALL_BOT_SLOTS.slice(0, botCount);
 
+    // On mobile, only spawn P1 (touch player)
+    const activeSlots = isMobile ? (['P1'] as CharacterSlot[]) : SLOTS;
+
     // Randomly assign characters to players
     const shuffled = shuffle([...getAllCharacters()]);
-    const assigned = shuffled.slice(0, SLOTS.length);
-    const botAssigned = shuffled.slice(SLOTS.length, SLOTS.length + botCount);
-    const extras = shuffled.slice(SLOTS.length + botCount);
+    const assigned = shuffled.slice(0, activeSlots.length);
+    const botAssigned = shuffled.slice(activeSlots.length, activeSlots.length + botCount);
+    const extras = shuffled.slice(activeSlots.length + botCount);
 
-    playersRef.current = SLOTS.map((slot, i) => ({
+    playersRef.current = activeSlots.map((slot, i) => ({
       slot,
       char: { ...assigned[i], slot },
       x: 40 + i * 90,
@@ -178,9 +185,23 @@ export function CharacterSelect() {
 
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
+
+    // Mobile: set up touch input for lobby
+    if (isMobile) {
+      const touch = new TouchInputManager();
+      lobbyTouchRef.current = touch;
+      const container = document.querySelector('.game-scaler-content') as HTMLElement | null;
+      if (container) {
+        const scaleFn = () => container.getBoundingClientRect().width / CANVAS_WIDTH;
+        touch.attach(container, scaleFn);
+      }
+    }
+
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
+      lobbyTouchRef.current?.detach();
+      lobbyTouchRef.current = null;
     };
   }, [setScreen, startMatch]);
 
@@ -198,17 +219,32 @@ export function CharacterSelect() {
       // Update player-controlled characters (always CharacterSlots)
       for (const p of playersRef.current) {
         if (p.splatTimer > 0) { p.splatTimer -= dt; continue; }
-        const bindings = KEY_BINDINGS[p.slot as CharacterSlot];
-        const keys = keysRef.current;
 
-        if (keys.has(bindings.left)) { p.vx = -LOBBY_SPEED; p.facing = 'left'; }
-        else if (keys.has(bindings.right)) { p.vx = LOBBY_SPEED; p.facing = 'right'; }
+        let moveLeft = false, moveRight = false, jump = false, crouching = false;
+
+        // Touch input for P1 on mobile
+        const touch = lobbyTouchRef.current;
+        if (touch && p.slot === 'P1') {
+          const input = touch.getInput();
+          moveLeft = input.left;
+          moveRight = input.right;
+          jump = input.jump;
+          crouching = input.down;
+        } else {
+          const bindings = KEY_BINDINGS[p.slot as CharacterSlot];
+          const keys = keysRef.current;
+          moveLeft = keys.has(bindings.left);
+          moveRight = keys.has(bindings.right);
+          jump = keys.has(bindings.jump);
+          crouching = keys.has(bindings.down);
+        }
+
+        if (moveLeft) { p.vx = -LOBBY_SPEED; p.facing = 'left'; }
+        else if (moveRight) { p.vx = LOBBY_SPEED; p.facing = 'right'; }
         else { p.vx *= 0.85; if (Math.abs(p.vx) < 5) p.vx = 0; }
 
-        if (keys.has(bindings.jump) && p.onGround) { p.vy = LOBBY_JUMP; p.onGround = false; }
+        if (jump && p.onGround) { p.vy = LOBBY_JUMP; p.onGround = false; }
 
-        // Fast-fall with down key, or crouch squash on ground
-        const crouching = keys.has(bindings.down);
         if (crouching) {
           if (!p.onGround) {
             p.vy = Math.max(p.vy, LOBBY_FAST_FALL);
@@ -337,6 +373,14 @@ export function CharacterSelect() {
         className="lobby-canvas"
         data-testid="lobby-canvas"
       />
+      {isMobile && (
+        <button
+          className="mobile-overlay-btn lobby-back-btn"
+          onClick={() => setScreen('menu')}
+        >
+          &#8249;
+        </button>
+      )}
     </div>
   );
 }
@@ -692,22 +736,28 @@ function drawLobby(
 
   // ---- UI bar at top (polished) ----
   const barH = 52;
+  const isMobileView = isTouchPrimary();
+  // On mobile: cap bar width per slot and offset right to avoid back button
+  const maxSlotPx = 260;
+  const slotCount = players.length;
+  const barW = isMobileView
+    ? Math.min(slotCount * maxSlotPx + 40, CANVAS_WIDTH - 16)
+    : CANVAS_WIDTH - 16;
+  const barX = isMobileView ? CANVAS_WIDTH - barW - 8 : 8;
   ctx.fillStyle = 'rgba(0,0,0,0.6)';
   ctx.beginPath();
-  ctx.roundRect(8, 6, CANVAS_WIDTH - 16, barH, 10);
+  ctx.roundRect(barX, 6, barW, barH, 10);
   ctx.fill();
   ctx.strokeStyle = 'rgba(255,255,255,0.08)';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.roundRect(9, 7, CANVAS_WIDTH - 18, barH - 2, 9);
+  ctx.roundRect(barX + 1, 7, barW - 2, barH - 2, 9);
   ctx.stroke();
 
-  const slotWidth = (CANVAS_WIDTH - 40) / SLOTS.length;
-  for (let i = 0; i < SLOTS.length; i++) {
-    const slot = SLOTS[i];
-    const bindings = KEY_BINDINGS[slot];
+  const slotWidth = (barW - 40) / slotCount;
+  for (let i = 0; i < slotCount; i++) {
     const player = players[i];
-    const sx = 20 + i * slotWidth + slotWidth / 2;
+    const sx = barX + 20 + i * slotWidth + slotWidth / 2;
     const emojiX = sx - slotWidth * 0.38;
     const textX = emojiX + 22;
 
@@ -722,13 +772,16 @@ function drawLobby(
     ctx.fillStyle = player.char.color;
     ctx.textAlign = 'left';
     ctx.font = "bold 14px 'Nunito', sans-serif";
-    ctx.fillText(`${slot}: ${getCharacterDisplayName(player.char.name, i18n.language)}`, textX, 26);
+    ctx.fillText(`${player.slot}: ${getCharacterDisplayName(player.char.name, i18n.language)}`, textX, 26);
 
-    // Keys
-    ctx.fillStyle = 'rgba(255,255,255,0.6)';
-    ctx.font = "bold 13px 'Nunito', monospace";
-    const fmtKey = (k: string) => k === 'ArrowLeft' ? '\u2190' : k === 'ArrowRight' ? '\u2192' : k === 'ArrowUp' ? '\u2191' : k === 'ArrowDown' ? '\u2193' : k;
-    ctx.fillText(`${fmtKey(bindings.left)} ${fmtKey(bindings.right)} ${fmtKey(bindings.jump)} ${fmtKey(bindings.down)}`, textX, 42);
+    // Keys (hide on mobile — touch controls instead)
+    if (!isTouchPrimary()) {
+      const bindings = KEY_BINDINGS[player.slot as CharacterSlot];
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      ctx.font = "bold 13px 'Nunito', monospace";
+      const fmtKey = (k: string) => k === 'ArrowLeft' ? '\u2190' : k === 'ArrowRight' ? '\u2192' : k === 'ArrowUp' ? '\u2191' : k === 'ArrowDown' ? '\u2193' : k;
+      ctx.fillText(`${fmtKey(bindings.left)} ${fmtKey(bindings.right)} ${fmtKey(bindings.jump)} ${fmtKey(bindings.down)}`, textX, 42);
+    }
   }
 
   // ---- Bottom-left: swap instruction ----

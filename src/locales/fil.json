@@ -155,5 +155,6 @@
   "game_ended_disconnect": "Natapos ang laro — nadiskonekta ang isang manlalaro.",
   "opponent_disconnected": "Nadiskonekta ang Kalaban",
   "return_menu": "Bumalik sa Menu",
-  "back": "Bumalik"
+  "back": "Bumalik",
+  "rotate_device": "I-rotate ang iyong device"
 }

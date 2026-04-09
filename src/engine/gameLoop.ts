@@ -12,6 +12,9 @@ import { getTheme } from './themes/registry';
 import { mirrorArena } from './arena';
 import { randRange, pickWeighted, swapRemove } from './themes/utils';
 import { InputManager } from './input';
+import { TouchInputManager } from './touchInput';
+import { isTouchPrimary } from './touchDetect';
+import { haptics } from './haptics';
 import { Renderer } from './renderer';
 import { applyInput, applyGravity, movePlayer, collidePlatforms, updatePlayerState, applyArenaConstraints, collidePlayersHorizontal, aabbOverlap, resolveStuckPlayer } from './physics';
 import { checkStomps, updateSplatTimers } from './stomp';
@@ -93,6 +96,10 @@ export class GameLoop {
   private crouchCooldowns: Map<PlayerSlot, number> = new Map();
   // Global bump cooldown (prevents double-fire from both pushed players)
   private bumpCooldown = 0;
+
+  // Touch input for mobile
+  private touchInput: TouchInputManager | null = null;
+  private touchSlot: PlayerSlot | null = null;
 
   // Per-theme ambient sound state
   private activeAmbientLoops: string[] = [];
@@ -308,6 +315,13 @@ export class GameLoop {
         });
       }
     }
+
+    // Touch input for mobile: controls the first human player
+    if (isTouchPrimary()) {
+      this.touchInput = new TouchInputManager();
+      this.touchSlot = activePlayers.find(s => !isBotSlot(s)) ?? null;
+      if (this.touchSlot) haptics.init(this.touchSlot);
+    }
   }
 
   private createWeatherParticle(randomY: boolean): WeatherParticle {
@@ -327,6 +341,13 @@ export class GameLoop {
 
   start(): void {
     this.input.attach();
+    if (this.touchInput) {
+      const container = document.querySelector('.game-scaler-content') as HTMLElement | null;
+      if (container) {
+        const scaleFn = () => container.getBoundingClientRect().width / CANVAS_WIDTH;
+        this.touchInput.attach(container, scaleFn, () => this.paused);
+      }
+    }
     this.renderer.renderBackground(this.arena, this.originalArena);
     this.running = true;
     this.lastTime = performance.now();
@@ -367,6 +388,7 @@ export class GameLoop {
     this.running = false;
     if (this.rafId) cancelAnimationFrame(this.rafId);
     this.input.detach();
+    this.touchInput?.detach();
     audio.stopMusic();
     audio.stop('ambient');
     audio.stop('zero_g');
@@ -1334,6 +1356,7 @@ export class GameLoop {
       // Landing detection
       const justLanded = wasAirborne && player.state !== 'airborne';
 
+      if (justLanded && haptics.isLocal(player.id)) haptics.landing(prevVy);
       if (justLanded && prevVy >= DUST_LAND_VY_THRESHOLD) {
         this.spawnDustParticles(player, prevVy);
         // Landing sound with per-player cooldown
@@ -1503,6 +1526,7 @@ export class GameLoop {
           spring.bounceTimer = 0.3;
           player.springTrailTimer = SPRING_TRAIL_DURATION;
           this.playSound('spring');
+          if (haptics.isLocal(player.id)) haptics.spring();
         }
       }
 
@@ -1537,6 +1561,7 @@ export class GameLoop {
           this.state.screenShake = Math.max(this.state.screenShake, 0.15);
           player.hitstopTimer = Math.max(player.hitstopTimer, HAZARD_HITSTOP_DURATION);
           this.state.hitstopZoom = Math.max(this.state.hitstopZoom, HAZARD_HITSTOP_DURATION);
+          if (haptics.isLocal(player.id)) haptics.hazardHit();
         }
       }
 
@@ -1571,6 +1596,7 @@ export class GameLoop {
             this.state.screenFlash = Math.max(this.state.screenFlash, 0.06);
             player.hitstopTimer = Math.max(player.hitstopTimer, HAZARD_HITSTOP_DURATION);
             this.state.hitstopZoom = Math.max(this.state.hitstopZoom, HAZARD_HITSTOP_DURATION);
+            if (haptics.isLocal(player.id)) haptics.hazardHit();
             break;
           }
         }
@@ -1642,6 +1668,7 @@ export class GameLoop {
             this.state.screenShake = Math.max(this.state.screenShake, 0.2);
             player.hitstopTimer = Math.max(player.hitstopTimer, HAZARD_HITSTOP_DURATION);
             this.state.hitstopZoom = Math.max(this.state.hitstopZoom, HAZARD_HITSTOP_DURATION);
+            if (haptics.isLocal(player.id)) haptics.hazardHit();
           }
         }
       }
@@ -1809,6 +1836,7 @@ export class GameLoop {
       const attacker = this.state.players.find(p => p.id === entry.attacker);
       if (attacker) {
         attacker.hitstopTimer = Math.max(attacker.hitstopTimer, HITSTOP_DURATION);
+        if (haptics.isLocal(attacker.id)) haptics.hitstop();
         audio.playAnimal(attacker.character.name);
         // Stats: kill streak
         attacker.killStreak += 1;
@@ -1820,6 +1848,7 @@ export class GameLoop {
       const victim = this.state.players.find(p => p.id === entry.victim);
       if (victim) {
         victim.hitstopTimer = Math.max(victim.hitstopTimer, HITSTOP_DURATION);
+        if (haptics.isLocal(victim.id)) haptics.hitstop();
         this.spawnKillSplatter(victim);
         // Shockwave at victim position
         this.state.shockwaves.push({
@@ -1856,6 +1885,7 @@ export class GameLoop {
       for (const player of this.state.players) {
         if (player.active && player.sideSquash === 0.8) {
           this.playSound('bump');
+          if (haptics.isLocal(player.id)) haptics.bump();
           this.bumpCooldown = 0.2;
           break; // one bump sound per collision event
         }
@@ -2026,7 +2056,15 @@ export class GameLoop {
       if (ai) return ai.getInput(player, this.state, this.arena, this.settings.mods.carrotChase, this.settings.mods.mirrorArena);
       return { left: false, right: false, jump: false, down: false };
     }
+    // Touch input for the local mobile player
+    if (this.touchInput && player.id === this.touchSlot) {
+      return this.touchInput.getInput();
+    }
     return this.input.getInput(player.id as import('./types').CharacterSlot);
+  }
+
+  getTouchInput(): TouchInputManager | null {
+    return this.touchInput;
   }
 
   private endMatch(winner: PlayerSlot | null): void {

@@ -165,5 +165,6 @@
   "match_in_progress": "Match in progress",
   "spectating_hint": "You'll join when the current match ends.",
   "player_disconnected": "Player disconnected",
-  "taken": "taken"
+  "taken": "taken",
+  "rotate_device": "Rotate your device"
 }

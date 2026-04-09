@@ -5,6 +5,7 @@ import { audio } from '../engine/audio';
 import { listArenas } from '../engine/arena';
 import { listThemes } from '../engine/themes/registry';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
+import { isTouchPrimary } from '../engine/touchDetect';
 import { initWildlife, updateAndDrawWildlife, drawDayNightCycle } from '../engine/canvasAnimations';
 import type { SimpleWildlife } from '../engine/canvasAnimations';
 import logoImg from '/logo.png?url';
@@ -591,6 +592,13 @@ export function MainMenu() {
     }
   }, [matchSettings, setOnline]);
 
+  // Mobile: ensure at least 1 bot (single player needs opponents)
+  useEffect(() => {
+    if (isTouchPrimary() && matchSettings.botCount < 1) {
+      setMatchSettings({ botCount: 1 });
+    }
+  }, []);
+
   const handlePlay = useCallback(() => {
     audio.init();
     audio.play('select');
@@ -699,8 +707,8 @@ export function MainMenu() {
                 <span className="bot-label">{t('bot_label')}</span>
                 <button
                   className="bot-btn"
-                  onClick={() => setMatchSettings({ botCount: Math.max(0, matchSettings.botCount - 1) })}
-                  disabled={matchSettings.botCount <= 0}
+                  onClick={() => setMatchSettings({ botCount: Math.max(isTouchPrimary() ? 1 : 0, matchSettings.botCount - 1) })}
+                  disabled={matchSettings.botCount <= (isTouchPrimary() ? 1 : 0)}
                 >-</button>
                 <span className="bot-count" data-testid="bot-count">{matchSettings.botCount}</span>
                 <button
