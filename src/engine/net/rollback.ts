@@ -435,7 +435,7 @@ export class RollbackEngine {
 
     if (rollbackFrame < 0) {
       // Update synced frame to min confirmed across all remotes
-      this.lastSyncedFrame = Math.max(this.lastSyncedFrame, this.getMinRemoteConfirmedFrame());
+      this.lastSyncedFrame = Math.max(this.lastSyncedFrame, this._cachedMinRemoteFrame);
       return;
     }
 
@@ -499,7 +499,7 @@ export class RollbackEngine {
         state.players[i].renderOffsetY += dy;
       }
     }
-    this.lastSyncedFrame = Math.max(this.lastSyncedFrame, this.getMinRemoteConfirmedFrame());
+    this.lastSyncedFrame = Math.max(this.lastSyncedFrame, this._cachedMinRemoteFrame);
   }
 
   private readLocalInput(): InputState {

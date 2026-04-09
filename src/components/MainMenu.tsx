@@ -356,7 +356,7 @@ export function MainMenu() {
             // Add as pending spectator — they'll join on next rematch
             const current = useGameStore.getState().online.remotePlayers;
             setOnline({
-              remotePlayers: [...current, { peerId, slot, characterName: 'Fox', ready: false }],
+              remotePlayers: [...current, { peerId, slot, characterName: CHARACTERS.P2.name, ready: false }],
             });
             return;
           }
@@ -389,7 +389,7 @@ export function MainMenu() {
             type: MsgType.PLAYER_JOINED,
             peerId,
             slot,
-            characterName: 'Fox', // default, will be updated by CHARACTER_SELECT
+            characterName: CHARACTERS.P2.name, // default, will be updated by CHARACTER_SELECT
           } as ReliableMessage);
 
           setOnlineStep('lobby');
