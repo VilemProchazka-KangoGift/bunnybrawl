@@ -209,6 +209,7 @@ export interface CharacterSelectMessage {
 
 export interface StartMatchMessage {
   type: 0x08;
+  roster?: Array<{ slot: string; characterName: string }>; // authoritative character assignments from host
 }
 
 export interface DesyncCheckMessage {

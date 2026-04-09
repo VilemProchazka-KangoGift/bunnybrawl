@@ -16,7 +16,7 @@ import { Transport } from '../engine/net/transport';
 import type { ConnectionStatus } from '../engine/net/transport';
 import { MsgType, PROTOCOL_VERSION } from '../engine/net/protocol';
 import type { ReliableMessage } from '../engine/net/protocol';
-import { CHARACTERS, getAllCharacters, getCharacterEmoji, getCharacterDisplayName, assignBotCharacters } from '../engine/characters';
+import { CHARACTERS, BOT_CHARACTERS, getAllCharacters, getCharacterEmoji, getCharacterDisplayName, assignBotCharacters } from '../engine/characters';
 import { ALL_BOT_SLOTS } from '../engine/types';
 import type { PlayerSlot } from '../engine/types';
 import './MainMenu.css';
@@ -192,6 +192,7 @@ export function MainMenu() {
   const [onlineLocalReady, setOnlineLocalReady] = useState(false);
   const onlineTransportRef = useRef<Transport | null>(null);
   const remoteCharRef = useRef<string | null>(null);
+  const receivedRosterRef = useRef<Array<{ slot: string; characterName: string }> | null>(null);
 
   const allChars = getAllCharacters();
 
@@ -238,44 +239,62 @@ export function MainMenu() {
 
   const onlineStartMatch = useCallback(() => {
     const store = useGameStore.getState();
-    const myChar = onlineLocalCharRef.current;
     const mySlot = store.online.isHost ? 'P1' : (store.online.localSlot || 'P2');
 
-    // Build human player list: local + all remote players
-    const humanSlots: string[] = [mySlot];
-    const slotCharMap = new Map<string, string>();
-    slotCharMap.set(mySlot, myChar);
-
-    for (const rp of store.online.remotePlayers) {
-      humanSlots.push(rp.slot);
-      slotCharMap.set(rp.slot, rp.characterName);
-    }
-
-    // If 1v1 (legacy path), also check remoteCharacterName
-    if (humanSlots.length === 1 && store.online.remoteCharacterName) {
-      const remSlot = store.online.isHost ? 'P2' : 'P1';
-      humanSlots.push(remSlot);
-      slotCharMap.set(remSlot, store.online.remoteCharacterName);
-    }
-
-    // Set character definitions for all human slots
-    for (const [slot, charName] of slotCharMap) {
-      const def = allChars.find(c => c.name === charName);
-      const charSlot = (CHARACTERS as Record<string, typeof CHARACTERS.P1>)[slot];
-      if (def && charSlot) {
-        charSlot.name = def.name;
-        charSlot.color = def.color;
-        charSlot.darkColor = def.darkColor;
-        charSlot.lightColor = def.lightColor;
+    // If host sent an authoritative roster, apply it directly (no local computation)
+    const roster = receivedRosterRef.current;
+    if (roster && roster.length > 0) {
+      // Apply all character definitions from roster
+      for (const entry of roster) {
+        const def = allChars.find(c => c.name === entry.characterName);
+        const isBot = entry.slot.startsWith('B');
+        if (isBot) {
+          if (def) BOT_CHARACTERS.set(entry.slot as any, { ...def, slot: entry.slot } as any);
+        } else {
+          const charSlot = (CHARACTERS as Record<string, typeof CHARACTERS.P1>)[entry.slot];
+          if (def && charSlot) {
+            charSlot.name = def.name; charSlot.color = def.color;
+            charSlot.darkColor = def.darkColor; charSlot.lightColor = def.lightColor;
+          }
+        }
       }
+      const humanSlots = roster.filter(r => r.slot.startsWith('P')).map(r => r.slot);
+      const botSlots = roster.filter(r => r.slot.startsWith('B')).map(r => r.slot);
+      setActivePlayers([...humanSlots as PlayerSlot[], ...botSlots as any[]]);
+      receivedRosterRef.current = null;
+    } else {
+      // Host path (or legacy): compute roster locally
+      const myChar = onlineLocalCharRef.current;
+      const humanSlots: string[] = [mySlot];
+      const slotCharMap = new Map<string, string>();
+      slotCharMap.set(mySlot, myChar);
+
+      for (const rp of store.online.remotePlayers) {
+        humanSlots.push(rp.slot);
+        slotCharMap.set(rp.slot, rp.characterName);
+      }
+      if (humanSlots.length === 1 && store.online.remoteCharacterName) {
+        const remSlot = store.online.isHost ? 'P2' : 'P1';
+        humanSlots.push(remSlot);
+        slotCharMap.set(remSlot, store.online.remoteCharacterName);
+      }
+
+      for (const [slot, charName] of slotCharMap) {
+        const def = allChars.find(c => c.name === charName);
+        const charSlot = (CHARACTERS as Record<string, typeof CHARACTERS.P1>)[slot];
+        if (def && charSlot) {
+          charSlot.name = def.name; charSlot.color = def.color;
+          charSlot.darkColor = def.darkColor; charSlot.lightColor = def.lightColor;
+        }
+      }
+
+      const ms = store.matchSettings;
+      const botSlots = ALL_BOT_SLOTS.slice(0, ms.botCount);
+      const rngSeed = store.online.rngSeed;
+      assignBotCharacters(humanSlots as any, botSlots, rngSeed, Array.from(slotCharMap.values()));
+      setActivePlayers([...humanSlots as PlayerSlot[], ...botSlots]);
     }
 
-    // Include bots
-    const ms = store.matchSettings;
-    const botSlots = ALL_BOT_SLOTS.slice(0, ms.botCount);
-    const rngSeed = store.online.rngSeed;
-    assignBotCharacters(humanSlots as any, botSlots, rngSeed, Array.from(slotCharMap.values()));
-    setActivePlayers([...humanSlots as PlayerSlot[], ...botSlots]);
     setOnline({ isOnline: true, localSlot: mySlot as PlayerSlot });
     setOnlineOpen(false);
     setScreen('match');
@@ -456,6 +475,8 @@ export function MainMenu() {
           }
           setOnlineRemoteReady(true);
         } else if (msg.type === MsgType.START_MATCH) {
+          const startMsg = msg as import('../engine/net/protocol').StartMatchMessage;
+          receivedRosterRef.current = startMsg.roster ?? null;
           onlineStartMatchRef.current();
         } else if (msg.type === MsgType.PLAYER_JOINED) {
           // Guest: new player joined
@@ -916,19 +937,42 @@ export function MainMenu() {
                     {online.isHost && (
                       <button className="btn-base menu-btn play-btn" data-testid="online-start-btn" onClick={() => {
                         audio.play('select');
-                        // Send authoritative sync before START_MATCH so all peers agree on roster
+                        // Host computes authoritative roster and sends everything before START_MATCH
                         const ms = useGameStore.getState().matchSettings;
                         const seed = useGameStore.getState().online.rngSeed || Math.floor(Math.random() * 0xFFFFFFFF);
                         setOnline({ rngSeed: seed });
+
+                        // Build roster: host + guests + bots
+                        const rosterEntries: Array<{ slot: string; characterName: string }> = [
+                          { slot: 'P1', characterName: onlineLocalCharRef.current },
+                        ];
+                        for (const rp of useGameStore.getState().online.remotePlayers) {
+                          rosterEntries.push({ slot: rp.slot, characterName: rp.characterName });
+                        }
+                        // Legacy 1v1 fallback
+                        if (rosterEntries.length === 1 && useGameStore.getState().online.remoteCharacterName) {
+                          rosterEntries.push({ slot: 'P2', characterName: useGameStore.getState().online.remoteCharacterName! });
+                        }
+                        // Assign bots on host side
+                        const humanNames = rosterEntries.map(r => r.characterName);
+                        const humanSlots = rosterEntries.map(r => r.slot);
+                        const botSlots = ALL_BOT_SLOTS.slice(0, ms.botCount);
+                        assignBotCharacters(humanSlots as any, botSlots, seed, humanNames);
+                        // Add bots to roster for guests
+                        for (const bSlot of botSlots) {
+                          const botChar = BOT_CHARACTERS.get(bSlot);
+                          if (botChar) rosterEntries.push({ slot: bSlot, characterName: botChar.name });
+                        }
+
                         onlineTransportRef.current?.sendReliable({
                           type: MsgType.SETTINGS_SYNC, arenaId: ms.arenaId, killLimit: ms.killLimit,
                           timeLimit: ms.timeLimit, goreMode: ms.goreMode,
                           mods: ms.mods as unknown as Record<string, boolean>,
                           rngSeed: seed, botCount: ms.botCount, botDifficulty: ms.botDifficulty,
                         } as ReliableMessage);
-                        // Send CHARACTER_SELECT with host's final character
-                        onlineTransportRef.current?.sendReliable({ type: MsgType.CHARACTER_SELECT, characterName: onlineLocalCharRef.current });
-                        onlineTransportRef.current?.sendReliable({ type: MsgType.START_MATCH } as ReliableMessage);
+                        onlineTransportRef.current?.sendReliable({
+                          type: MsgType.START_MATCH, roster: rosterEntries,
+                        } as ReliableMessage);
                         onlineStartMatch();
                       }}>{t('start_game', 'Start Game!')}</button>
                     )}
