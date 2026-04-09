@@ -31,6 +31,8 @@ const RENDER_OFFSET_DECAY = 0.7;
 const RENDER_OFFSET_MIN = 0.5;
 const CORRECTION_SNAP_DISTANCE = 30;
 const STOMP_PRESERVE_THRESHOLD_SQ = 25 * 25; // preserve stomp if both players corrected < 25px
+const STOMP_PRESERVE_MARGIN_H = 8;     // extra horizontal margin for generous stomp check
+const STOMP_PRESERVE_MARGIN_TOP = 10;  // extra vertical margin above victim's top
 const STATS_RESET_INTERVAL = 60;
 
 export interface NetDebugStats {
@@ -532,13 +534,14 @@ export class RollbackEngine {
           // Both corrections are small — check if stomp geometry is still plausible
           // Use corrected positions with generous check
           if (isStomping(attacker, victim) || this.isNearStomp(attacker, victim)) {
-            // Re-apply the stomp
+            // Re-apply the stomp with full visual feedback
             victim.state = 'splat';
             victim.splatTimer = SPLAT_DURATION;
             victim.vx = 0;
             victim.vy = 0;
             attacker.vy = STOMP_BOUNCE;
             attacker.score += 2;
+            state.killFeed.push({ attacker: attacker.id, victim: victim.id, timestamp: state.timeElapsed });
             break;
           }
         }
@@ -550,17 +553,13 @@ export class RollbackEngine {
 
   /** Generous stomp check — wider than normal, used for stomp preservation after rollback. */
   private isNearStomp(attacker: Player, victim: Player): boolean {
-    // Wider horizontal overlap (add 8px margin on each side)
-    const margin = 8;
-    const overlapX = attacker.x + attacker.width + margin > victim.x - margin &&
-                     attacker.x - margin < victim.x + victim.width + margin;
+    const overlapX = attacker.x + attacker.width + STOMP_PRESERVE_MARGIN_H > victim.x - STOMP_PRESERVE_MARGIN_H &&
+                     attacker.x - STOMP_PRESERVE_MARGIN_H < victim.x + victim.width + STOMP_PRESERVE_MARGIN_H;
     if (!overlapX) return false;
 
-    // Attacker's bottom near victim's top (generous vertical window)
     const attackerBottom = attacker.y + attacker.height;
-    const victimTop = victim.y;
-    const overlap = attackerBottom - victimTop;
-    return overlap > -10 && overlap < victim.height * 0.6;
+    const overlap = attackerBottom - victim.y;
+    return overlap > -STOMP_PRESERVE_MARGIN_TOP && overlap < victim.height * 0.6;
   }
 
   private readLocalInput(): InputState {
