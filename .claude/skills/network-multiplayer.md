@@ -1,7 +1,7 @@
 # Network Multiplayer — Lessons & Patterns
 
 ## Architecture
-P2P WebRTC via PeerJS with GGPO-style rollback netcode. Free signaling at `0.peerjs.com` (unreliable — add 10s timeout). Room codes: 4 chars from `ABCDEFGHJKMNPQRSTUVWXYZ23456789`.
+P2P WebRTC via PeerJS with GGPO-style rollback netcode. Free signaling at `0.peerjs.com` (unreliable — add 10s timeout). Room codes: 3 chars from `ABCDEFGHJKMNPQRSTUVWXYZ23456789`. Protocol v2 uses Uint32 frame numbers. All online UI lives in MainMenu modal (no separate screen).
 
 ## Determinism
 - 12 gameplay `Math.random()` calls replaced with `this.gameRandom()` (seeded via mulberry32 PRNG)
@@ -47,15 +47,32 @@ P2P WebRTC via PeerJS with GGPO-style rollback netcode. Free signaling at `0.pee
 - Any function using `Math.random()` that affects game state must use `gameRandom()` or accept a seed. Grep for `Math.random` in engine/ and classify each call.
 
 ## Host-Authoritative State Sync
-- Every 60 frames, host sends full `GameSnapshot` via DESYNC_CHECK message.
-- Guest compares hash — if mismatch, applies host's snapshot to correct drift.
+- Every 30 frames, host sends hash via DESYNC_CHECK. Guest compares — if mismatch, sends DESYNC_REQUEST. Host responds with DESYNC_CORRECTION (full snapshot). This 3-step handshake avoids sending full snapshots when in sync (~50B vs ~5-10KB).
+- `hashGameState()` uses `Float64Array` + `crc32Bytes()` — zero string allocation.
 - This is a fallback safety net, not a replacement for deterministic simulation. Desyncs should still be investigated and fixed at the source.
+
+## Zero-Allocation Hot Path Patterns
+- **Snapshot pool**: `takeSnapshotInto()` copies into pre-allocated `GameSnapshot` objects. `createEmptySnapshot()` for ring buffer init. `AIController.serializeInto()` for zero-alloc AI snapshots. `snapshotPlayerInto()` copies player fields in-place. `copyArrayInto()` reuses target array slots.
+- **Input map**: reuse single `Map` with `.clear()` instead of `new Map()` per frame. Same for `sendBundle` array (`.length = 0`).
+- **InputManager._anyInput**: pre-allocated `InputState` object reused by `getInputAny()` — no spread copies.
+- **Return const references** (like `NO_INPUT`) instead of spreading copies in cold paths too.
+- **Protocol v2**: frame numbers use `Uint32` (was `Uint16`). Wraps at ~19.8 hours at 60fps. Message size: 54 bytes for 10 bundled inputs.
+
+## Visual Correction Smoothing
+- `Player.renderOffsetX/Y` are visual-only fields (not in snapshots/hash). Set after rollback to smooth position corrections.
+- Decay: `*= 0.7` per frame (~3-5 frames to settle). Large corrections (>30px) snap instantly.
+- Applied in `drawPlayer()` as render-time offset. Excluded from `snapshotPlayer` and `PlayerSnapshot`.
+- Must be initialized to 0 in player creation.
 
 ## Code Quality Patterns
 - NEVER use hex literals (0x02, 0x08) for message types — always use `MsgType.SETTINGS_SYNC`, `MsgType.START_MATCH` etc. Hex literals silently bypass type checking and are unreadable.
-- Don't duplicate the mulberry32 PRNG inline — import `SeededRNG` from `prng.ts`. It was copy-pasted into `legacy.ts` and `CharacterSelect.tsx`.
-- In 60fps hot paths: reuse objects/arrays via `arr.length = 0` instead of `new Array()`. Return const references (like `NO_INPUT`) instead of spreading copies.
+- Don't duplicate the mulberry32 PRNG inline — import `SeededRNG` from `prng.ts`.
 - `as any` casts should be `as ReliableMessage` or proper type narrowing. Every `as any` is a potential desync bug waiting to happen.
+
+## Network Simulator & Debug
+- `?simLatency=50&simJitter=20&simLoss=5` URL params wrap transport receive path. Ping/pong bypasses simulator for real RTT measurement.
+- `?debug=net` enables net stats overlay (RTT, jitter, frame advantage, rollback count). Toggle with backtick key.
+- Jitter tracking: `Transport.currentJitter` (EMA of |rtt - smoothedRtt|). `adaptInputDelay()` adds up to 2 extra frames when jitter is high.
 
 ## Transport Lifecycle
 1. MainMenu modal creates Transport with lobby callbacks
