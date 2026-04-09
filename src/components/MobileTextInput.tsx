@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { suppressLandscapePrompt } from './LandscapePrompt';
 import './MobileTextInput.css';
@@ -38,7 +39,8 @@ export function MobileTextInput({ value, maxLength, label, onConfirm, onCancel }
     onConfirm(draft);
   };
 
-  return (
+  // Portal to document.body — escapes GameScaler's CSS transform which breaks position:fixed
+  return createPortal(
     <div className="mobile-text-overlay">
       <div className="mobile-text-content">
         <span className="mobile-text-label">{label}</span>
@@ -56,6 +58,7 @@ export function MobileTextInput({ value, maxLength, label, onConfirm, onCancel }
           <button className="btn-base mobile-text-done" onClick={handleDone}>{t('done', 'Done')}</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
