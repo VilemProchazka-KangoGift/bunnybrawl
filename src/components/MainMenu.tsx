@@ -604,14 +604,14 @@ export function MainMenu() {
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Enter') {
+      if (e.key === 'Enter' && !onlineOpen) {
         e.preventDefault();
         handlePlay();
       }
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [handlePlay]);
+  }, [handlePlay, onlineOpen]);
 
   const [musicOff, setMusicOff] = useState(() => audio.isMusicDisabled());
 
