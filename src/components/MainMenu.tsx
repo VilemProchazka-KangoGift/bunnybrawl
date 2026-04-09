@@ -616,8 +616,8 @@ export function MainMenu() {
   const [musicOff, setMusicOff] = useState(() => audio.isMusicDisabled());
 
   useEffect(() => {
-    audio.init();
     audio.playMenuMusic();
+    audio.init();
   }, []);
 
   useEffect(() => {
@@ -635,19 +635,19 @@ export function MainMenu() {
   return (
     <div className="main-menu" data-testid="main-menu">
       <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="menu-bg-canvas" />
-      <button
-        className="overlay-icon-btn music-toggle-btn"
-        onClick={() => {
-          const disabled = audio.toggleMusicDisabled();
-          setMusicOff(disabled);
-          if (!disabled) audio.playMenuMusic();
-        }}
-        title={musicOff ? t('music_on') : t('music_off')}
-      >
-        {musicOff ? '\uD83D\uDD07' : '\uD83C\uDFB5'}
-      </button>
       <div className="menu-bg">
         <div className="menu-content">
+          <button
+            className="music-toggle-btn"
+            onClick={() => {
+              const disabled = audio.toggleMusicDisabled();
+              setMusicOff(disabled);
+              if (!disabled) audio.playMenuMusic();
+            }}
+            title={musicOff ? t('music_on') : t('music_off')}
+          >
+            {musicOff ? '\uD83D\uDD07' : '\uD83C\uDFB5'}
+          </button>
           <img src={logoImg} alt="Carrot Royale" className="game-logo" />
           <p className="tagline">{t('tagline')}</p>
           <p className="controls-hint">{t('credits_players')}</p>
