@@ -182,7 +182,7 @@ export function MainMenu() {
   const [onlineJoinCode, setOnlineJoinCode] = useState('');
 
   // Online flow state (all inside modal)
-  const [onlineStep, setOnlineStep] = useState<'choose' | 'connecting' | 'lobby'>('choose');
+  const [onlineStep, setOnlineStep] = useState<'choose' | 'connecting' | 'lobby' | 'spectating'>('choose');
   const [onlineLocalChar, setOnlineLocalChar] = useState(() =>
     localStorage.getItem('bunnybrawl_online_char') || CHARACTERS.P1.name
   );
@@ -305,11 +305,30 @@ export function MainMenu() {
       },
       onPeerConnected: (peerId: string) => {
         if (isHost) {
-          // Assign slot to new guest
           const slot = `P${nextSlotIdx++}` as PlayerSlot;
           peerSlotMap.set(peerId, slot);
 
-          // Send slot assignment + settings to the new guest
+          // Check if match is in progress — late joiner becomes spectator
+          const currentScreen = useGameStore.getState().screen;
+          if (currentScreen === 'match' || currentScreen === 'victory') {
+            transport.sendReliableTo(peerId, {
+              type: MsgType.MATCH_IN_PROGRESS,
+              snapshot: null, // spectator snapshot not yet implemented
+            } as ReliableMessage);
+            transport.sendReliableTo(peerId, {
+              type: MsgType.SLOT_ASSIGNMENT,
+              slot,
+              allPlayers: [],
+            } as ReliableMessage);
+            // Add as pending spectator — they'll join on next rematch
+            const current = useGameStore.getState().online.remotePlayers;
+            setOnline({
+              remotePlayers: [...current, { peerId, slot, characterName: 'Fox', ready: false }],
+            });
+            return;
+          }
+
+          // Normal lobby join — send slot assignment + settings
           transport.sendReliableTo(peerId, {
             type: MsgType.SLOT_ASSIGNMENT,
             slot,
@@ -432,10 +451,15 @@ export function MainMenu() {
             });
           }
         } else if (msg.type === MsgType.PLAYER_LEFT) {
-          // Guest: player left
           const pl = msg as import('../engine/net/protocol').PlayerLeftMessage;
           const current = useGameStore.getState().online.remotePlayers;
           setOnline({ remotePlayers: current.filter(rp => rp.slot !== pl.slot) });
+        } else if (msg.type === MsgType.MATCH_IN_PROGRESS) {
+          // Guest: match is running, enter spectator/waiting state
+          setOnlineStep('spectating');
+        } else if (msg.type === MsgType.MATCH_RESULT) {
+          // Guest spectator: match ended, transition to lobby for next match
+          setOnlineStep('lobby');
         }
       },
       onUnreliableMessage: () => {},
@@ -881,6 +905,17 @@ export function MainMenu() {
                       }}>{t('start_game', 'Start Game!')}</button>
                     )}
 
+                    <button className="btn-base mods-close-btn" onClick={() => { onlineCleanup(); }}>{t('back', 'Back')}</button>
+                  </div>
+                )}
+
+                {/* Step 4: Spectating — joined while match in progress */}
+                {onlineStep === 'spectating' && (
+                  <div className="online-step">
+                    <div className="online-status-box" style={{ textAlign: 'center', padding: '24px 0' }}>
+                      <p style={{ fontSize: '18px', marginBottom: 8 }}>{t('match_in_progress', 'Match in progress')}</p>
+                      <p style={{ opacity: 0.7 }}>{t('spectating_hint', "You'll join when the current match ends.")}</p>
+                    </div>
                     <button className="btn-base mods-close-btn" onClick={() => { onlineCleanup(); }}>{t('back', 'Back')}</button>
                   </div>
                 )}
