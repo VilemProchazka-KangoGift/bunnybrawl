@@ -42,3 +42,10 @@
   border-radius: 10px;
   -webkit-tap-highlight-color: transparent;
 }
+
+/* Hide when already in PWA standalone/fullscreen mode */
+@media (display-mode: fullscreen), (display-mode: standalone) {
+  .fullscreen-btn {
+    display: none;
+  }
+}
