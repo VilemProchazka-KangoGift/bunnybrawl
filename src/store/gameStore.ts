@@ -6,6 +6,7 @@ export interface RemotePlayerInfo {
   peerId: string;
   slot: PlayerSlot;
   characterName: string;
+  playerName: string;
   ready: boolean;
 }
 
@@ -21,6 +22,7 @@ interface OnlineState {
   remotePlayers: RemotePlayerInfo[];
   localSlot: PlayerSlot;
   rngSeed: number;
+  playerNames: Record<string, string>;
 }
 
 interface GameStore {
@@ -78,6 +80,7 @@ const defaultOnline: OnlineState = {
   remotePlayers: [],
   localSlot: 'P1',
   rngSeed: 0,
+  playerNames: {},
 };
 
 export const useGameStore = create<GameStore>((set) => ({

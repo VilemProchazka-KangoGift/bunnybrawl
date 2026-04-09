@@ -34,7 +34,13 @@ export function VictoryScreen() {
   const players = lastMatchState?.players.filter(p => p.active) ?? [];
   const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
 
-  const charName = (name: string) => getCharacterDisplayName(name, i18n.language);
+  const charName = (name: string, slot?: PlayerSlot) => {
+    if (slot && online.isOnline && !isBotSlot(slot)) {
+      const custom = online.playerNames[slot];
+      if (custom) return custom;
+    }
+    return getCharacterDisplayName(name, i18n.language);
+  };
   const botSuffix = (id: PlayerSlot) => isBotSlot(id) ? ' (BOT)' : '';
 
   const handleRematch = useCallback(() => {
@@ -189,24 +195,24 @@ export function VictoryScreen() {
     const highlights: Array<{ label: string; icon: string; rawName: string; playerName: string; playerColor: string; value: string }> = [];
     if (!sortedPlayers.length) return highlights;
 
-    let bestAirborne = { name: '', color: '', val: 0 };
-    let bestCarrots = { name: '', color: '', val: 0 };
-    let bestStreak = { name: '', color: '', val: 0 };
+    let bestAirborne = { name: '', color: '', slot: '' as PlayerSlot, val: 0 };
+    let bestCarrots = { name: '', color: '', slot: '' as PlayerSlot, val: 0 };
+    let bestStreak = { name: '', color: '', slot: '' as PlayerSlot, val: 0 };
 
     for (const player of sortedPlayers) {
       const ps = getPlayerStats(player.id);
       if (!ps) continue;
-      if (ps.timeAirborne > bestAirborne.val) bestAirborne = { name: player.character.name, color: player.character.color, val: ps.timeAirborne };
-      if (ps.carrotsEaten > bestCarrots.val) bestCarrots = { name: player.character.name, color: player.character.color, val: ps.carrotsEaten };
-      if (ps.bestStreak > bestStreak.val) bestStreak = { name: player.character.name, color: player.character.color, val: ps.bestStreak };
+      if (ps.timeAirborne > bestAirborne.val) bestAirborne = { name: player.character.name, color: player.character.color, slot: player.id, val: ps.timeAirborne };
+      if (ps.carrotsEaten > bestCarrots.val) bestCarrots = { name: player.character.name, color: player.character.color, slot: player.id, val: ps.carrotsEaten };
+      if (ps.bestStreak > bestStreak.val) bestStreak = { name: player.character.name, color: player.character.color, slot: player.id, val: ps.bestStreak };
     }
 
-    if (bestAirborne.val > 0) highlights.push({ label: t('mvp_most_airborne'), icon: '\u2708', rawName: bestAirborne.name, playerName: charName(bestAirborne.name), playerColor: bestAirborne.color, value: bestAirborne.val.toFixed(1) + 's' });
-    if (bestCarrots.val > 0) highlights.push({ label: t('mvp_carrot_king'), icon: '\uD83E\uDD55', rawName: bestCarrots.name, playerName: charName(bestCarrots.name), playerColor: bestCarrots.color, value: String(bestCarrots.val) });
-    if (bestStreak.val > 0) highlights.push({ label: t('mvp_serial_killer'), icon: '\uD83D\uDD25', rawName: bestStreak.name, playerName: charName(bestStreak.name), playerColor: bestStreak.color, value: String(bestStreak.val) + ' ' + t('mvp_streak') });
+    if (bestAirborne.val > 0) highlights.push({ label: t('mvp_most_airborne'), icon: '\u2708', rawName: bestAirborne.name, playerName: charName(bestAirborne.name, bestAirborne.slot), playerColor: bestAirborne.color, value: bestAirborne.val.toFixed(1) + 's' });
+    if (bestCarrots.val > 0) highlights.push({ label: t('mvp_carrot_king'), icon: '\uD83E\uDD55', rawName: bestCarrots.name, playerName: charName(bestCarrots.name, bestCarrots.slot), playerColor: bestCarrots.color, value: String(bestCarrots.val) });
+    if (bestStreak.val > 0) highlights.push({ label: t('mvp_serial_killer'), icon: '\uD83D\uDD25', rawName: bestStreak.name, playerName: charName(bestStreak.name, bestStreak.slot), playerColor: bestStreak.color, value: String(bestStreak.val) + ' ' + t('mvp_streak') });
 
     return highlights;
-  }, [sortedPlayers, lastMatchState, t]);
+  }, [sortedPlayers, lastMatchState, t, online.isOnline, online.playerNames]);
 
   return (
     <div className="victory-screen" data-testid="victory-screen">
@@ -221,7 +227,7 @@ export function VictoryScreen() {
           {winnerChar ? (
             <>
               <h1 className="winner-text">
-                <span style={{ color: winnerChar.color }}>{charName(winnerChar.name)}{botSuffix(winner!)}</span> {t('victory_wins')}
+                <span style={{ color: winnerChar.color }}>{charName(winnerChar.name, winner!)}{botSuffix(winner!)}</span> {t('victory_wins')}
               </h1>
               <div className="winner-avatar winner-avatar-pose" style={{ borderColor: winnerChar.lightColor }}>
                 <span className="winner-emoji">{getCharacterEmoji(winnerChar.name)}</span>
@@ -240,7 +246,7 @@ export function VictoryScreen() {
                     <span className="rank">#{idx + 1}</span>
                     <span className="row-emoji">{getCharacterEmoji(player.character.name)}</span>
                     <span className="player-name" style={{ color: player.character.color }}>
-                      {charName(player.character.name)}{botSuffix(player.id)}
+                      {charName(player.character.name, player.id)}{botSuffix(player.id)}
                     </span>
                     <span className="player-score">{player.score} {t('victory_pts')}</span>
                   </div>
@@ -270,7 +276,7 @@ export function VictoryScreen() {
                       return (
                         <div key={player.id} className="stats-row">
                           <span className="stats-cell stats-name-cell" style={{ color: player.character.color }}>
-                            <span className="row-emoji">{getCharacterEmoji(player.character.name)}</span>{charName(player.character.name)}
+                            <span className="row-emoji">{getCharacterEmoji(player.character.name)}</span>{charName(player.character.name, player.id)}
                           </span>
                           <span className="stats-cell">{ps?.bestStreak ?? 0}</span>
                           <span className="stats-cell">{ps ? ps.timeAirborne.toFixed(1) + 's' : '0.0s'}</span>

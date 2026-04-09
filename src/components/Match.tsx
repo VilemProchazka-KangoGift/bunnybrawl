@@ -191,6 +191,7 @@ export function Match() {
       netMatchRef.current = netMatch;
       gameLoopRef.current = netMatch.getGameLoop();
       (window as any).__gameLoop = netMatch.getGameLoop();
+      netMatch.getGameLoop().setPlayerNames(useGameStore.getState().online.playerNames);
       netMatch.start();
 
       return () => {

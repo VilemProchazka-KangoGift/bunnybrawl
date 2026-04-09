@@ -71,6 +71,7 @@ export class Renderer {
   private originalArena: Arena | null = null;  // un-mirrored arena for theme draw calls
   private _botNavDebugStates: BotNavDebugState[] = [];
   private _netDebugStats: NetDebugStats | null = null;
+  private _playerNames: Record<string, string> | null = null;
 
   constructor(bgCanvas: HTMLCanvasElement, fgCanvas: HTMLCanvasElement, theme: ThemeConfig, mirrored = false) {
     this.bgCtx = bgCanvas.getContext('2d')!;
@@ -102,6 +103,11 @@ export class Renderer {
 
   setNetDebugStats(stats: NetDebugStats | null): void {
     this._netDebugStats = stats;
+  }
+
+  setPlayerNames(names: Record<string, string>): void {
+    this._playerNames = names;
+    this.hudLastPlayerCount = -1; // invalidate HUD cache
   }
 
   renderBackground(arena: Arena, originalArena?: Arena): void {
@@ -2172,7 +2178,8 @@ export class Renderer {
       ctx.fillText(getCharacterEmoji(player.character.name), px + 20, 30);
       ctx.textBaseline = 'alphabetic';
 
-      const translatedName = getCharacterDisplayName(player.character.name, i18n.language);
+      const customName = this._playerNames?.[player.id];
+      const translatedName = customName || getCharacterDisplayName(player.character.name, i18n.language);
       const displayName = compact ? translatedName.slice(0, 4) : translatedName;
       ctx.fillStyle = player.character.color;
       ctx.font = `bold ${compact ? 12 : 16}px "Press Start 2P", monospace`;

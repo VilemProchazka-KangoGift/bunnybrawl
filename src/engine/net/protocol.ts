@@ -209,7 +209,7 @@ export interface CharacterSelectMessage {
 
 export interface StartMatchMessage {
   type: 0x08;
-  roster?: Array<{ slot: string; characterName: string }>; // authoritative character assignments from host
+  roster?: Array<{ slot: string; characterName: string; playerName?: string }>; // authoritative character assignments from host
 }
 
 export interface DesyncCheckMessage {
@@ -261,6 +261,7 @@ export interface PlayerJoinedMessage {
   peerId: string;
   slot: string;       // PlayerSlot assigned by host
   characterName: string;
+  playerName?: string;
 }
 
 export interface PlayerLeftMessage {
@@ -272,7 +273,7 @@ export interface PlayerLeftMessage {
 export interface SlotAssignmentMessage {
   type: 0x0F;
   slot: string;       // Your assigned PlayerSlot
-  allPlayers: Array<{ slot: string; characterName: string; isHost: boolean }>;
+  allPlayers: Array<{ slot: string; characterName: string; isHost: boolean; playerName?: string }>;
 }
 
 export interface MatchInProgressMessage {
@@ -298,4 +299,4 @@ export type ReliableMessage =
   | SlotAssignmentMessage
   | MatchInProgressMessage;
 
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;

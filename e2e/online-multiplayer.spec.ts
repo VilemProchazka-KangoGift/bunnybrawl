@@ -27,8 +27,9 @@ async function openOnlineModal(page: Page) {
   await page.waitForTimeout(200); // modal animation
 }
 
-async function hostCreateRoom(page: Page): Promise<string> {
+async function hostCreateRoom(page: Page, name = 'Host'): Promise<string> {
   await openOnlineModal(page);
+  await page.getByTestId('online-name-input').fill(name);
   await page.getByTestId('online-create-btn').click();
   const codeEl = page.getByTestId('online-room-code');
   await expect(codeEl).toBeVisible({ timeout: 15000 });
@@ -37,8 +38,9 @@ async function hostCreateRoom(page: Page): Promise<string> {
   return code!;
 }
 
-async function guestJoinRoom(page: Page, code: string) {
+async function guestJoinRoom(page: Page, code: string, name = 'Guest') {
   await openOnlineModal(page);
+  await page.getByTestId('online-name-input').fill(name);
   await page.getByTestId('online-join-btn').click();
   await page.getByTestId('online-code-input').fill(code);
   await page.getByTestId('online-join-submit').click();
@@ -122,12 +124,87 @@ test.describe('Online Multiplayer — Connection', { tag: '@online' }, () => {
     }
   });
 
+  test('player names shown in lobby and propagated to match', async ({ browser }) => {
+    const pair = await createPair(browser);
+    try {
+      const code = await hostCreateRoom(pair.host, 'Alice');
+      await guestJoinRoom(pair.guest, code, 'Bob');
+      await waitForLobby(pair.host);
+      await waitForLobby(pair.guest);
+
+      // Host lobby: should show "Alice" (you) and "Bob" for guest
+      await expect(pair.host.locator('.online-player-list')).toContainText('Alice');
+      await expect(pair.host.locator('.online-player-list')).toContainText('Bob');
+
+      // Guest lobby: should show "Bob" (you) and "Alice" for host
+      await expect(pair.guest.locator('.online-player-list')).toContainText('Bob');
+      await expect(pair.guest.locator('.online-player-list')).toContainText('Alice');
+
+      // Start match and verify playerNames in store
+      await pair.host.getByTestId('online-start-btn').click();
+      await expect(pair.host.getByTestId('match-screen')).toBeVisible({ timeout: 10000 });
+      await expect(pair.guest.getByTestId('match-screen')).toBeVisible({ timeout: 10000 });
+
+      // Check playerNames map on both sides
+      const hostNames = await pair.host.evaluate(() => {
+        return (window as any).__gameStore?.getState().online.playerNames;
+      });
+      const guestNames = await pair.guest.evaluate(() => {
+        return (window as any).__gameStore?.getState().online.playerNames;
+      });
+
+      expect(hostNames['P1']).toBe('Alice');
+      expect(hostNames['P2']).toBe('Bob');
+      expect(guestNames['P1']).toBe('Alice');
+      expect(guestNames['P2']).toBe('Bob');
+    } finally {
+      await closePair(pair);
+    }
+  });
+
+  test('create/join buttons hidden without name, visible with name', async ({ browser }) => {
+    const pair = await createPair(browser);
+    try {
+      await openOnlineModal(pair.host);
+      // Buttons should not exist when name is empty
+      await expect(pair.host.getByTestId('online-create-btn')).not.toBeVisible();
+      await expect(pair.host.getByTestId('online-join-btn')).not.toBeVisible();
+
+      // Fill name → buttons appear
+      await pair.host.getByTestId('online-name-input').fill('TestPlayer');
+      await expect(pair.host.getByTestId('online-create-btn')).toBeVisible();
+      await expect(pair.host.getByTestId('online-join-btn')).toBeVisible();
+    } finally {
+      await closePair(pair);
+    }
+  });
+
+  test('player name persists across sessions', async ({ browser }) => {
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    await page.goto('/');
+    try {
+      // Enter a name
+      await openOnlineModal(page);
+      await page.getByTestId('online-name-input').fill('PersistMe');
+
+      // Close modal and reopen — name should be preserved
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(200);
+      await openOnlineModal(page);
+      await expect(page.getByTestId('online-name-input')).toHaveValue('PersistMe');
+    } finally {
+      await ctx.close();
+    }
+  });
+
   test('invalid room code shows error', async ({ browser }) => {
     const guestCtx = await browser.newContext();
     const guest = await guestCtx.newPage();
     await guest.goto('/');
     try {
       await openOnlineModal(guest);
+      await guest.getByTestId('online-name-input').fill('TestPlayer');
       await guest.getByText('Join Room').click();
       await guest.getByTestId('online-code-input').fill('ZZZ');
       await guest.getByTestId('online-join-submit').click();
@@ -262,6 +339,36 @@ test.describe('Online Multiplayer — Victory Screen', { tag: '@online' }, () =>
       // Wait for match to end (3s countdown + 5s match + buffer)
       await expect(pair.host.getByTestId('victory-screen')).toBeVisible({ timeout: 20000 });
       await expect(pair.guest.getByTestId('victory-screen')).toBeVisible({ timeout: 5000 });
+    } finally {
+      await closePair(pair);
+    }
+  });
+
+  test('victory screen shows player names instead of animal names', async ({ browser }) => {
+    const pair = await createPair(browser);
+    try {
+      await setShortTimeLimit(pair.host, 5);
+      // Use specific names
+      const code = await hostCreateRoom(pair.host, 'Zara');
+      await guestJoinRoom(pair.guest, code, 'Kai');
+      await waitForLobby(pair.host);
+      await waitForLobby(pair.guest);
+
+      await pair.host.getByTestId('online-start-btn').click();
+      await expect(pair.host.getByTestId('match-screen')).toBeVisible({ timeout: 10000 });
+
+      // Wait for match to end
+      await expect(pair.host.getByTestId('victory-screen')).toBeVisible({ timeout: 20000 });
+      await expect(pair.guest.getByTestId('victory-screen')).toBeVisible({ timeout: 5000 });
+
+      // Victory screen should show player names
+      const hostVictoryText = await pair.host.getByTestId('victory-screen').textContent();
+      expect(hostVictoryText).toContain('Zara');
+      expect(hostVictoryText).toContain('Kai');
+
+      const guestVictoryText = await pair.guest.getByTestId('victory-screen').textContent();
+      expect(guestVictoryText).toContain('Zara');
+      expect(guestVictoryText).toContain('Kai');
     } finally {
       await closePair(pair);
     }

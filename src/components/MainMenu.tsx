@@ -15,9 +15,9 @@ import {
 import { Transport } from '../engine/net/transport';
 import type { ConnectionStatus } from '../engine/net/transport';
 import { MsgType, PROTOCOL_VERSION } from '../engine/net/protocol';
-import type { ReliableMessage } from '../engine/net/protocol';
+import type { ReliableMessage, HandshakeMessage, SlotAssignmentMessage, StartMatchMessage, PlayerJoinedMessage, PlayerLeftMessage } from '../engine/net/protocol';
 import { CHARACTERS, BOT_CHARACTERS, getAllCharacters, getCharacterEmoji, getCharacterDisplayName, assignBotCharacters } from '../engine/characters';
-import { ALL_BOT_SLOTS } from '../engine/types';
+import { ALL_BOT_SLOTS, isBotSlot } from '../engine/types';
 import type { PlayerSlot } from '../engine/types';
 import './MainMenu.css';
 
@@ -188,11 +188,18 @@ export function MainMenu() {
   );
   const onlineLocalCharRef = useRef(CHARACTERS.P1.name);
   onlineLocalCharRef.current = onlineLocalChar;
+  const [onlinePlayerName, setOnlinePlayerName] = useState(() =>
+    localStorage.getItem('bunnybrawl_player_name') || ''
+  );
+  const onlinePlayerNameRef = useRef('');
+  onlinePlayerNameRef.current = onlinePlayerName;
   const [onlineRemoteReady, setOnlineRemoteReady] = useState(false);
   const [onlineLocalReady, setOnlineLocalReady] = useState(false);
   const onlineTransportRef = useRef<Transport | null>(null);
   const remoteCharRef = useRef<string | null>(null);
-  const receivedRosterRef = useRef<Array<{ slot: string; characterName: string }> | null>(null);
+  const receivedRosterRef = useRef<Array<{ slot: string; characterName: string; playerName?: string }> | null>(null);
+  // Buffer for player names received via HANDSHAKE before the peer is in remotePlayers
+  const pendingPlayerNames = useRef<Map<string, string>>(new Map());
 
   const allChars = getAllCharacters();
 
@@ -235,19 +242,30 @@ export function MainMenu() {
     setOnlineLocalReady(false);
     setOnlineRemoteReady(false);
     remoteCharRef.current = null;
+    pendingPlayerNames.current.clear();
   }, [resetOnline]);
 
   const onlineStartMatch = useCallback(() => {
     const store = useGameStore.getState();
     const mySlot = store.online.isHost ? 'P1' : (store.online.localSlot || 'P2');
 
+    // Build playerNames map — start from store, overlay own name + remote names
+    const names: Record<string, string> = { ...store.online.playerNames, [mySlot]: onlinePlayerNameRef.current };
+    for (const rp of store.online.remotePlayers) {
+      if (rp.playerName) names[rp.slot] = rp.playerName;
+    }
+
     // If host sent an authoritative roster, apply it directly (no local computation)
     const roster = receivedRosterRef.current;
     if (roster && roster.length > 0) {
+      for (const entry of roster) {
+        if (entry.playerName && !isBotSlot(entry.slot as PlayerSlot)) names[entry.slot] = entry.playerName;
+      }
+
       // Apply all character definitions from roster
       for (const entry of roster) {
         const def = allChars.find(c => c.name === entry.characterName);
-        const isBot = entry.slot.startsWith('B');
+        const isBot = isBotSlot(entry.slot as PlayerSlot);
         if (isBot) {
           if (def) BOT_CHARACTERS.set(entry.slot as any, { ...def, slot: entry.slot } as any);
         } else {
@@ -258,20 +276,23 @@ export function MainMenu() {
           }
         }
       }
-      const humanSlots = roster.filter(r => r.slot.startsWith('P')).map(r => r.slot);
-      const botSlots = roster.filter(r => r.slot.startsWith('B')).map(r => r.slot);
+      const humanSlots = [...new Set(roster.filter(r => !isBotSlot(r.slot as PlayerSlot)).map(r => r.slot))];
+      const botSlots = [...new Set(roster.filter(r => isBotSlot(r.slot as PlayerSlot)).map(r => r.slot))];
       setActivePlayers([...humanSlots as PlayerSlot[], ...botSlots as any[]]);
       receivedRosterRef.current = null;
     } else {
-      // Host path (or legacy): compute roster locally
+      // Host path (or legacy): compute roster locally, filtering to connected peers only
+      const connectedPeers = new Set(onlineTransportRef.current?.getPeerIds() ?? []);
       const myChar = onlineLocalCharRef.current;
       const humanSlots: string[] = [mySlot];
       const slotCharMap = new Map<string, string>();
       slotCharMap.set(mySlot, myChar);
 
       for (const rp of store.online.remotePlayers) {
-        humanSlots.push(rp.slot);
-        slotCharMap.set(rp.slot, rp.characterName);
+        if (!humanSlots.includes(rp.slot) && connectedPeers.has(rp.peerId)) {
+          humanSlots.push(rp.slot);
+        }
+        if (connectedPeers.has(rp.peerId)) slotCharMap.set(rp.slot, rp.characterName);
       }
       if (humanSlots.length === 1 && store.online.remoteCharacterName) {
         const remSlot = store.online.isHost ? 'P2' : 'P1';
@@ -295,13 +316,20 @@ export function MainMenu() {
       setActivePlayers([...humanSlots as PlayerSlot[], ...botSlots]);
     }
 
-    setOnline({ isOnline: true, localSlot: mySlot as PlayerSlot });
+    setOnline({ isOnline: true, localSlot: mySlot as PlayerSlot, playerNames: names });
     setOnlineOpen(false);
     setScreen('match');
   }, [allChars, setActivePlayers, setOnline, setScreen]);
 
   const onlineStartMatchRef = useRef(onlineStartMatch);
   onlineStartMatchRef.current = onlineStartMatch;
+
+  const handleOnlineCharChange = useCallback((value: string) => {
+    setOnlineLocalChar(value);
+    onlineLocalCharRef.current = value;
+    localStorage.setItem('bunnybrawl_online_char', value);
+    onlineTransportRef.current?.sendReliable({ type: MsgType.CHARACTER_SELECT, characterName: value });
+  }, []);
 
   const onlineConnect = useCallback((isHost: boolean, joinCode?: string) => {
     // Clean up any previous transport (e.g. retrying after error)
@@ -315,8 +343,13 @@ export function MainMenu() {
     setOnline({ isHost, isOnline: true, roomCode: null });
 
     const ms = matchSettings;
-    let nextSlotIdx = 2; // Host is P1, guests get P2, P3, P4, P5
     const peerSlotMap = new Map<string, string>(); // peerId → PlayerSlot
+    const freedSlots: string[] = []; // slots returned by disconnected peers
+    let nextSlotIdx = 2;
+    const allocateSlot = (): string => {
+      if (freedSlots.length > 0) return freedSlots.shift()!;
+      return `P${nextSlotIdx++}`;
+    };
 
     const transport = new Transport({
       onStatusChange: (status: ConnectionStatus, error?: string) => {
@@ -331,15 +364,29 @@ export function MainMenu() {
           if (!isHost) {
             // Guest: connected to host
             setOnlineStep('lobby');
-            transport.sendReliable({ type: MsgType.HANDSHAKE, protocolVersion: PROTOCOL_VERSION, playerName: 'Player' });
+            transport.sendReliable({ type: MsgType.HANDSHAKE, protocolVersion: PROTOCOL_VERSION, playerName: onlinePlayerNameRef.current });
             transport.sendReliable({ type: MsgType.CHARACTER_SELECT, characterName: onlineLocalCharRef.current });
           }
         }
       },
       onPeerConnected: (peerId: string) => {
         if (isHost) {
-          const slot = `P${nextSlotIdx++}` as PlayerSlot;
+          // Purge stale entries — peers that are no longer connected
+          const connectedNow = new Set(transport.getPeerIds());
+          connectedNow.add(peerId); // new peer is connected but may not be in getPeerIds() yet
+          let currentPlayers = useGameStore.getState().online.remotePlayers;
+          const stale = currentPlayers.filter(rp => !connectedNow.has(rp.peerId));
+          if (stale.length > 0) {
+            for (const s of stale) {
+              const oldSlot = peerSlotMap.get(s.peerId);
+              if (oldSlot) { freedSlots.push(oldSlot); peerSlotMap.delete(s.peerId); }
+            }
+            currentPlayers = currentPlayers.filter(rp => connectedNow.has(rp.peerId));
+          }
+
+          const slot = allocateSlot() as PlayerSlot;
           peerSlotMap.set(peerId, slot);
+          const newPeer = { peerId, slot: slot as PlayerSlot, characterName: CHARACTERS.P2.name, playerName: '', ready: false };
 
           // Check if match is in progress — late joiner becomes spectator
           const currentScreen = useGameStore.getState().screen;
@@ -353,11 +400,7 @@ export function MainMenu() {
               slot,
               allPlayers: [],
             } as ReliableMessage);
-            // Add as pending spectator — they'll join on next rematch
-            const current = useGameStore.getState().online.remotePlayers;
-            setOnline({
-              remotePlayers: [...current, { peerId, slot, characterName: CHARACTERS.P2.name, ready: false }],
-            });
+            setOnline({ remotePlayers: [...currentPlayers, newPeer] });
             return;
           }
 
@@ -366,31 +409,38 @@ export function MainMenu() {
             type: MsgType.SLOT_ASSIGNMENT,
             slot,
             allPlayers: [
-              { slot: 'P1', characterName: onlineLocalCharRef.current, isHost: true },
-              ...useGameStore.getState().online.remotePlayers.map(rp => ({
-                slot: rp.slot as string, characterName: rp.characterName, isHost: false,
+              { slot: 'P1', characterName: onlineLocalCharRef.current, isHost: true, playerName: onlinePlayerNameRef.current },
+              ...currentPlayers.map(rp => ({
+                slot: rp.slot as string, characterName: rp.characterName, isHost: false, playerName: rp.playerName,
               })),
             ],
           } as ReliableMessage);
 
           const seed = useGameStore.getState().online.rngSeed || Math.floor(Math.random() * 0xFFFFFFFF);
-          setOnline({ rngSeed: seed });
           transport.sendReliableTo(peerId, {
             type: MsgType.SETTINGS_SYNC, arenaId: ms.arenaId, killLimit: ms.killLimit,
             timeLimit: ms.timeLimit, goreMode: ms.goreMode,
             mods: ms.mods as unknown as Record<string, boolean>,
             rngSeed: seed, botCount: ms.botCount, botDifficulty: ms.botDifficulty,
           } as ReliableMessage);
-          transport.sendReliable({ type: MsgType.HANDSHAKE, protocolVersion: PROTOCOL_VERSION, playerName: 'Host' });
+          transport.sendReliable({ type: MsgType.HANDSHAKE, protocolVersion: PROTOCOL_VERSION, playerName: onlinePlayerNameRef.current });
           transport.sendReliable({ type: MsgType.CHARACTER_SELECT, characterName: onlineLocalCharRef.current });
 
-          // Notify all existing guests about the new player
-          transport.sendReliable({
-            type: MsgType.PLAYER_JOINED,
-            peerId,
-            slot,
-            characterName: CHARACTERS.P2.name, // default, will be updated by CHARACTER_SELECT
-          } as ReliableMessage);
+          // Notify existing guests about the new player (exclude the new peer itself)
+          for (const pid of transport.getPeerIds()) {
+            if (pid !== peerId) {
+              transport.sendReliableTo(pid, {
+                type: MsgType.PLAYER_JOINED, peerId, slot,
+                characterName: CHARACTERS.P2.name, playerName: '',
+              } as ReliableMessage);
+            }
+          }
+
+          // Add peer to remotePlayers and persist rng seed in single setOnline
+          setOnline({
+            remotePlayers: [...currentPlayers, newPeer],
+            rngSeed: seed,
+          });
 
           setOnlineStep('lobby');
         }
@@ -399,17 +449,14 @@ export function MainMenu() {
         const slot = peerSlotMap.get(peerId);
         peerSlotMap.delete(peerId);
         if (isHost) {
-          // Remove from remote players list
+          if (slot) freedSlots.push(slot);
           const current = useGameStore.getState().online.remotePlayers;
-          setOnline({ remotePlayers: current.filter(rp => rp.peerId !== peerId) });
-          // Notify others
+          const remaining = current.filter(rp => rp.peerId !== peerId);
+          remoteCharRef.current = remaining.length > 0 ? remaining[0].characterName : null;
+          setOnline({ remotePlayers: remaining, remoteCharacterName: remoteCharRef.current });
           if (slot) {
             transport.sendReliable({ type: MsgType.PLAYER_LEFT, slot, reason: 'disconnect' } as ReliableMessage);
           }
-          // Update legacy field
-          const remaining = useGameStore.getState().online.remotePlayers;
-          remoteCharRef.current = remaining.length > 0 ? remaining[0].characterName : null;
-          setOnline({ remoteCharacterName: remoteCharRef.current });
           if (remaining.length === 0) {
             setOnlineRemoteReady(false);
             setOnlineStep('connecting');
@@ -423,7 +470,34 @@ export function MainMenu() {
         }
       },
       onReliableMessage: (msg: ReliableMessage, fromPeerId?: string) => {
-        if (msg.type === MsgType.CHARACTER_SELECT) {
+        if (msg.type === MsgType.HANDSHAKE) {
+          const hsMsg = msg as HandshakeMessage;
+          if (isHost && fromPeerId) {
+            pendingPlayerNames.current.set(fromPeerId, hsMsg.playerName);
+            const { remotePlayers, playerNames } = useGameStore.getState().online;
+            const slot = peerSlotMap.get(fromPeerId);
+            const names = { ...playerNames };
+            if (slot) names[slot] = hsMsg.playerName;
+            const rp = remotePlayers.find(r => r.peerId === fromPeerId);
+            setOnline({
+              remotePlayers: remotePlayers.map(r => r.peerId === fromPeerId ? { ...r, playerName: hsMsg.playerName } : r),
+              playerNames: names,
+            });
+            // Notify other guests about this player's name
+            if (slot && rp) {
+              for (const pid of transport.getPeerIds()) {
+                if (pid !== fromPeerId) {
+                  transport.sendReliableTo(pid, {
+                    type: MsgType.PLAYER_JOINED, peerId: fromPeerId, slot,
+                    characterName: rp.characterName, playerName: hsMsg.playerName,
+                  } as ReliableMessage);
+                }
+              }
+            }
+          } else if (!isHost) {
+            setOnline({ playerNames: { ...useGameStore.getState().online.playerNames, P1: hsMsg.playerName } });
+          }
+        } else if (msg.type === MsgType.CHARACTER_SELECT) {
           if (isHost && fromPeerId) {
             // Host: update the specific guest's character
             const slot = peerSlotMap.get(fromPeerId);
@@ -434,8 +508,9 @@ export function MainMenu() {
                 const updated = current.map((rp, i) => i === idx ? { ...rp, characterName: msg.characterName } : rp);
                 setOnline({ remotePlayers: updated });
               } else {
+                const bufferedName = pendingPlayerNames.current.get(fromPeerId) || '';
                 setOnline({
-                  remotePlayers: [...current, { peerId: fromPeerId, slot: slot as PlayerSlot, characterName: msg.characterName, ready: false }],
+                  remotePlayers: [...current, { peerId: fromPeerId, slot: slot as PlayerSlot, characterName: msg.characterName, playerName: bufferedName, ready: false }],
                 });
               }
               // Update legacy field (first remote player's character)
@@ -457,8 +532,12 @@ export function MainMenu() {
           }
         } else if (msg.type === MsgType.SLOT_ASSIGNMENT) {
           // Guest: received my slot assignment from host
-          const slotMsg = msg as import('../engine/net/protocol').SlotAssignmentMessage;
-          setOnline({ localSlot: slotMsg.slot as PlayerSlot });
+          const slotMsg = msg as SlotAssignmentMessage;
+          const names: Record<string, string> = {};
+          for (const p of slotMsg.allPlayers) {
+            if (p.playerName) names[p.slot] = p.playerName;
+          }
+          setOnline({ localSlot: slotMsg.slot as PlayerSlot, playerNames: names });
         } else if (msg.type === MsgType.SETTINGS_SYNC) {
           useGameStore.getState().setMatchSettings({
             arenaId: msg.arenaId, killLimit: msg.killLimit, timeLimit: msg.timeLimit,
@@ -475,20 +554,20 @@ export function MainMenu() {
           }
           setOnlineRemoteReady(true);
         } else if (msg.type === MsgType.START_MATCH) {
-          const startMsg = msg as import('../engine/net/protocol').StartMatchMessage;
+          const startMsg = msg as StartMatchMessage;
           receivedRosterRef.current = startMsg.roster ?? null;
           onlineStartMatchRef.current();
         } else if (msg.type === MsgType.PLAYER_JOINED) {
-          // Guest: new player joined
-          const pj = msg as import('../engine/net/protocol').PlayerJoinedMessage;
+          const pj = msg as PlayerJoinedMessage;
           const current = useGameStore.getState().online.remotePlayers;
-          if (!current.find(rp => rp.slot === pj.slot)) {
-            setOnline({
-              remotePlayers: [...current, { peerId: pj.peerId, slot: pj.slot as PlayerSlot, characterName: pj.characterName, ready: false }],
-            });
-          }
+          const names = pj.playerName ? { ...useGameStore.getState().online.playerNames, [pj.slot]: pj.playerName } : undefined;
+          const existing = current.find(rp => rp.slot === pj.slot);
+          const updatedPlayers = existing
+            ? current.map(rp => rp.slot === pj.slot ? { ...rp, characterName: pj.characterName, playerName: pj.playerName || rp.playerName } : rp)
+            : [...current, { peerId: pj.peerId, slot: pj.slot as PlayerSlot, characterName: pj.characterName, playerName: pj.playerName || '', ready: false }];
+          setOnline({ remotePlayers: updatedPlayers, ...(names && { playerNames: names }) });
         } else if (msg.type === MsgType.PLAYER_LEFT) {
-          const pl = msg as import('../engine/net/protocol').PlayerLeftMessage;
+          const pl = msg as PlayerLeftMessage;
           const current = useGameStore.getState().online.remotePlayers;
           setOnline({ remotePlayers: current.filter(rp => rp.slot !== pl.slot) });
         } else if (msg.type === MsgType.MATCH_IN_PROGRESS) {
@@ -778,6 +857,18 @@ export function MainMenu() {
                 {/* Step 1: Choose create or join */}
                 {onlineStep === 'choose' && !onlineJoinMode && (
                   <div className="online-step">
+                    <div className="online-section">
+                      <span className="online-section-title">{t('your_name', 'Your name')}</span>
+                      <input className="online-code-input online-name-input" data-testid="online-name-input" type="text" maxLength={16}
+                        value={onlinePlayerName} autoFocus
+                        onChange={(e) => {
+                          const v = e.target.value.replace(/[\p{C}]/gu, '').slice(0, 16);
+                          setOnlinePlayerName(v);
+                          try { localStorage.setItem('bunnybrawl_player_name', v); } catch {}
+                        }}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      />
+                    </div>
                     {matchSettings.botCount > 0 && <p className="online-info">{(() => {
                       const n = matchSettings.botCount;
                       if (i18n.language === 'cs') {
@@ -787,6 +878,7 @@ export function MainMenu() {
                       }
                       return t('online_bots_info', { count: n });
                     })()}</p>}
+                    {onlinePlayerName.trim() && (<>
                     <button className="btn-base menu-btn online-create-btn" data-testid="online-create-btn" onClick={() => { audio.play('select'); onlineConnect(true); }}>
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: 'middle', marginRight: 6 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
                       {t('create_room', 'Create Room')}
@@ -800,6 +892,7 @@ export function MainMenu() {
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: 'middle', marginRight: 6 }}><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
                       {t('join_room_full', 'Join Room')}
                     </button>
+                    </>)}
                     <button className="btn-base mods-close-btn" onClick={() => setOnlineOpen(false)}>{t('back', 'Back')}</button>
                   </div>
                 )}
@@ -831,31 +924,52 @@ export function MainMenu() {
                       </div>
                     )}
 
-                    {online.isHost && (
-                      <div className="online-section">
-                        <span className="online-section-title">{t('your_character', 'Your character')}</span>
-                        <select className="online-char-select" value={onlineLocalChar}
-                          onChange={(e) => {
-                            setOnlineLocalChar(e.target.value); onlineLocalCharRef.current = e.target.value;
-                            localStorage.setItem('bunnybrawl_online_char', e.target.value);
-                            onlineTransportRef.current?.sendReliable({ type: MsgType.CHARACTER_SELECT, characterName: e.target.value });
-                          }}>
-                          {allChars.map(c => <option key={c.name} value={c.name} disabled={c.name === online.remoteCharacterName}>{getCharacterEmoji(c.name)} {getCharacterDisplayName(c.name, i18n.language)}{c.name === online.remoteCharacterName ? ` (${t('taken', 'taken')})` : ''}</option>)}
-                        </select>
+                    {online.isHost ? (
+                      <div className="online-lobby-columns">
+                        <div className="online-lobby-left">
+                          <div className="online-section">
+                            <span className="online-section-title">{t('your_character', 'Your character')}</span>
+                            <select className="online-char-select" value={onlineLocalChar}
+                              onChange={(e) => handleOnlineCharChange(e.target.value)}>
+                              {allChars.map(c => <option key={c.name} value={c.name} disabled={c.name === online.remoteCharacterName}>{getCharacterEmoji(c.name)} {getCharacterDisplayName(c.name, i18n.language)}{c.name === online.remoteCharacterName ? ` (${t('taken', 'taken')})` : ''}</option>)}
+                            </select>
+                          </div>
+                          <div className="online-status-box">
+                            {!online.roomCode && online.connectionStatus !== 'error' && t('connecting_server', 'Connecting to server...')}
+                            {online.roomCode && t('waiting_players', 'Waiting for players to join...')}
+                            {online.connectionStatus === 'error' && (
+                              <span className="online-error">{online.connectionError || t('connection_error', 'Connection failed')}</span>
+                            )}
+                          </div>
+                          <button className="btn-base mods-close-btn" onClick={() => { onlineCleanup(); setOnlineStep('choose'); }}>
+                            {t('back', 'Back')}
+                          </button>
+                        </div>
+                        <div className="online-lobby-right">
+                          <div className="online-section">
+                            <span className="online-section-title">{t('players', 'Players')}</span>
+                            <div className="online-player-list">
+                              <div className="online-player-row">
+                                <span className="online-char-name">{getCharacterEmoji(onlineLocalChar)} {onlinePlayerName}</span>
+                                <span className="online-host-badge">{t('host', 'HOST')}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
+                    ) : (
+                      <>
+                        <div className="online-status-box">
+                          {!online.roomCode && online.connectionStatus !== 'error' && t('connecting_server', 'Connecting to server...')}
+                          {online.connectionStatus === 'error' && (
+                            <span className="online-error">{online.connectionError || t('connection_error', 'Connection failed')}</span>
+                          )}
+                        </div>
+                        <button className="btn-base mods-close-btn" onClick={() => { onlineCleanup(); setOnlineStep('choose'); }}>
+                          {t('back', 'Back')}
+                        </button>
+                      </>
                     )}
-
-                    <div className="online-status-box">
-                      {!online.roomCode && online.connectionStatus !== 'error' && t('connecting_server', 'Connecting to server...')}
-                      {online.roomCode && t('waiting_players', 'Waiting for players to join...')}
-                      {online.connectionStatus === 'error' && (
-                        <span className="online-error">{online.connectionError || t('connection_error', 'Connection failed')}</span>
-                      )}
-                    </div>
-
-                    <button className="btn-base mods-close-btn" onClick={() => { onlineCleanup(); setOnlineStep('choose'); }}>
-                      {t('back', 'Back')}
-                    </button>
                   </div>
                 )}
 
@@ -869,89 +983,59 @@ export function MainMenu() {
                       </div>
                     )}
 
-                    <div className="online-section">
-                      <span className="online-section-title">{t('your_character', 'Your character')}</span>
-                      <select className="online-char-select" value={onlineLocalChar} disabled={onlineLocalReady}
-                        onChange={(e) => {
-                          setOnlineLocalChar(e.target.value); onlineLocalCharRef.current = e.target.value;
-                          localStorage.setItem('bunnybrawl_online_char', e.target.value);
-                          onlineTransportRef.current?.sendReliable({ type: MsgType.CHARACTER_SELECT, characterName: e.target.value });
-                        }}>
-                        {(() => {
-                          const takenNames = new Set(online.remotePlayers.map(rp => rp.characterName));
-                          if (online.remoteCharacterName) takenNames.add(online.remoteCharacterName);
-                          return allChars.map(c => (
-                            <option key={c.name} value={c.name} disabled={takenNames.has(c.name)}>
-                              {getCharacterEmoji(c.name)} {getCharacterDisplayName(c.name, i18n.language)}{takenNames.has(c.name) ? ` (${t('taken', 'taken')})` : ''}
-                            </option>
-                          ));
-                        })()}
-                      </select>
-                    </div>
+                    <div className="online-lobby-columns">
+                      <div className="online-lobby-left">
+                        <div className="online-section">
+                          <span className="online-section-title">{t('your_character', 'Your character')}</span>
+                          <select className="online-char-select" value={onlineLocalChar} disabled={onlineLocalReady}
+                            onChange={(e) => handleOnlineCharChange(e.target.value)}>
+                            {(() => {
+                              const takenNames = new Set(online.remotePlayers.map(rp => rp.characterName));
+                              if (online.remoteCharacterName) takenNames.add(online.remoteCharacterName);
+                              return allChars.map(c => (
+                                <option key={c.name} value={c.name} disabled={takenNames.has(c.name)}>
+                                  {getCharacterEmoji(c.name)} {getCharacterDisplayName(c.name, i18n.language)}{takenNames.has(c.name) ? ` (${t('taken', 'taken')})` : ''}
+                                </option>
+                              ));
+                            })()}
+                          </select>
+                        </div>
 
-                    <div className="online-section">
-                      <span className="online-section-title">{t('players', 'Players')} ({1 + online.remotePlayers.length}/4)</span>
-                      <div className="online-player-list">
-                        {/* Show all remote players */}
-                        {online.remotePlayers.length > 0 ? (
-                          online.remotePlayers.map(rp => (
-                            <div className="online-player-row" key={rp.slot}>
-                              <span className="online-char-name">
-                                {getCharacterEmoji(rp.characterName)} {getCharacterDisplayName(rp.characterName, i18n.language)}
-                                <span style={{ opacity: 0.5, marginLeft: 6, fontSize: '0.85em' }}>({rp.slot})</span>
-                              </span>
-                              {rp.ready && <span className="online-ready-badge">{t('ready', 'READY')}</span>}
-                            </div>
-                          ))
-                        ) : (
-                          <div className="online-player-row">
-                            <span className="online-char-name">
-                              {online.remoteCharacterName
-                                ? `${getCharacterEmoji(online.remoteCharacterName)} ${getCharacterDisplayName(online.remoteCharacterName, i18n.language)}`
-                                : t('choosing', 'Choosing...')}
-                            </span>
-                            {!online.isHost && <span className="online-host-badge">{t('host', 'HOST')}</span>}
-                            {onlineRemoteReady && <span className="online-ready-badge">{t('ready', 'READY')}</span>}
-                          </div>
+                        {/* Guest: ready button or ready badge */}
+                        {!online.isHost && !onlineLocalReady && (
+                          <button className="btn-base menu-btn play-btn" data-testid="online-ready-btn" onClick={() => {
+                            audio.play('select'); setOnlineLocalReady(true);
+                            onlineTransportRef.current?.sendReliable({ type: MsgType.READY } as ReliableMessage);
+                          }}>{t('ready_up', 'Ready!')}</button>
                         )}
-                        {matchSettings.botCount > 0 && ALL_BOT_SLOTS.slice(0, matchSettings.botCount).map(slot => (
-                          <div className="online-player-row online-bot-row" key={slot}>
-                            <span className="online-char-name">🤖 {t('bot_label', 'Bot')} ({t(`bot_diff_${matchSettings.botDifficulty}`)})</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                        {!online.isHost && onlineLocalReady && (
+                          <div className="online-ready-status"><span className="online-ready-badge">{t('ready', 'READY')}</span></div>
+                        )}
 
-                    {/* Guest: ready button or ready badge */}
-                    {!online.isHost && !onlineLocalReady && (
-                      <button className="btn-base menu-btn play-btn" data-testid="online-ready-btn" onClick={() => {
-                        audio.play('select'); setOnlineLocalReady(true);
-                        onlineTransportRef.current?.sendReliable({ type: MsgType.READY } as ReliableMessage);
-                      }}>{t('ready_up', 'Ready!')}</button>
-                    )}
-                    {!online.isHost && onlineLocalReady && (
-                      <div className="online-ready-status"><span className="online-ready-badge">{t('ready', 'READY')}</span></div>
-                    )}
-
-                    {/* Host: always show start button once connected */}
-                    {online.isHost && (
-                      <button className="btn-base menu-btn play-btn" data-testid="online-start-btn" onClick={() => {
-                        audio.play('select');
-                        // Host computes authoritative roster and sends everything before START_MATCH
-                        const ms = useGameStore.getState().matchSettings;
-                        const seed = useGameStore.getState().online.rngSeed || Math.floor(Math.random() * 0xFFFFFFFF);
+                        {/* Host: start button */}
+                        {online.isHost && (
+                          <button className="btn-base menu-btn play-btn" data-testid="online-start-btn" onClick={() => {
+                            audio.play('select');
+                            const state = useGameStore.getState();
+                        const ms = state.matchSettings;
+                        const seed = state.online.rngSeed || Math.floor(Math.random() * 0xFFFFFFFF);
                         setOnline({ rngSeed: seed });
 
-                        // Build roster: host + guests + bots
-                        const rosterEntries: Array<{ slot: string; characterName: string }> = [
-                          { slot: 'P1', characterName: onlineLocalCharRef.current },
+                        // Build roster: host + connected guests + bots
+                        const connectedPeerIds = new Set(onlineTransportRef.current?.getPeerIds() ?? []);
+                        const rosterEntries: Array<{ slot: string; characterName: string; playerName?: string }> = [
+                          { slot: 'P1', characterName: onlineLocalCharRef.current, playerName: onlinePlayerNameRef.current },
                         ];
-                        for (const rp of useGameStore.getState().online.remotePlayers) {
-                          rosterEntries.push({ slot: rp.slot, characterName: rp.characterName });
+                        const seenSlots = new Set(rosterEntries.map(r => r.slot));
+                        for (const rp of state.online.remotePlayers) {
+                          if (!seenSlots.has(rp.slot) && connectedPeerIds.has(rp.peerId)) {
+                            seenSlots.add(rp.slot);
+                            rosterEntries.push({ slot: rp.slot, characterName: rp.characterName, playerName: rp.playerName });
+                          }
                         }
                         // Legacy 1v1 fallback
-                        if (rosterEntries.length === 1 && useGameStore.getState().online.remoteCharacterName) {
-                          rosterEntries.push({ slot: 'P2', characterName: useGameStore.getState().online.remoteCharacterName! });
+                        if (rosterEntries.length === 1 && state.online.remoteCharacterName) {
+                          rosterEntries.push({ slot: 'P2', characterName: state.online.remoteCharacterName! });
                         }
                         // Assign bots on host side
                         const humanNames = rosterEntries.map(r => r.characterName);
@@ -973,11 +1057,58 @@ export function MainMenu() {
                         onlineTransportRef.current?.sendReliable({
                           type: MsgType.START_MATCH, roster: rosterEntries,
                         } as ReliableMessage);
-                        onlineStartMatch();
-                      }}>{t('start_game', 'Start Game!')}</button>
-                    )}
+                            onlineStartMatch();
+                          }}>{t('start_game', 'Start Game!')}</button>
+                        )}
 
-                    <button className="btn-base mods-close-btn" onClick={() => { onlineCleanup(); }}>{t('back', 'Back')}</button>
+                        <button className="btn-base mods-close-btn" onClick={() => { onlineCleanup(); }}>{t('back', 'Back')}</button>
+                      </div>
+
+                      <div className="online-lobby-right">
+                        <div className="online-section">
+                          <span className="online-section-title">{t('players', 'Players')}</span>
+                          <div className="online-player-list">
+                            {/* Host always first */}
+                            {online.isHost ? (
+                              <div className="online-player-row">
+                                <span className="online-char-name">{getCharacterEmoji(onlineLocalChar)} {onlinePlayerName}</span>
+                                <span className="online-host-badge">{t('host', 'HOST')}</span>
+                              </div>
+                            ) : (
+                              <div className="online-player-row">
+                                <span className="online-char-name">
+                                  {online.remoteCharacterName
+                                    ? `${getCharacterEmoji(online.remoteCharacterName)} ${online.playerNames['P1'] || getCharacterDisplayName(online.remoteCharacterName, i18n.language)}`
+                                    : t('choosing', 'Choosing...')}
+                                </span>
+                                <span className="online-host-badge">{t('host', 'HOST')}</span>
+                                {onlineRemoteReady && <span className="online-ready-badge">{t('ready', 'READY')}</span>}
+                              </div>
+                            )}
+                            {/* Guest: local player */}
+                            {!online.isHost && (
+                              <div className="online-player-row">
+                                <span className="online-char-name">{getCharacterEmoji(onlineLocalChar)} {onlinePlayerName}</span>
+                              </div>
+                            )}
+                            {/* Other remote players (multi-guest) */}
+                            {online.remotePlayers.map(rp => (
+                              <div className="online-player-row" key={rp.slot}>
+                                <span className="online-char-name">
+                                  {getCharacterEmoji(rp.characterName)} {rp.playerName || getCharacterDisplayName(rp.characterName, i18n.language)}
+                                </span>
+                                {rp.ready && <span className="online-ready-badge">{t('ready', 'READY')}</span>}
+                              </div>
+                            ))}
+                            {matchSettings.botCount > 0 && ALL_BOT_SLOTS.slice(0, matchSettings.botCount).map(slot => (
+                              <div className="online-player-row online-bot-row" key={slot}>
+                                <span className="online-char-name">🤖 {t('bot_label', 'Bot')}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
 

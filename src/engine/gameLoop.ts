@@ -428,6 +428,11 @@ export class GameLoop {
     this.renderer.setNetDebugStats(stats);
   }
 
+  /** Set custom player display names for online mode (forwarded to renderer for HUD). */
+  setPlayerNames(names: Record<string, string>): void {
+    this.renderer.setPlayerNames(names);
+  }
+
   /** Mark a player as disconnected — kill them and prevent respawn. */
   disconnectPlayer(slot: PlayerSlot): void {
     const player = this.state.players.find(p => p.id === slot);

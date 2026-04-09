@@ -11,3 +11,5 @@
 - MainMenu modals (Mods, Help) use `mods-overlay` CSS class for the backdrop + `onClick` dismiss. Shared panel styles in `.mods-modal, .help-modal` rule — new modals add to that selector and only declare overrides.
 - Down key = crouch (ground) / super stomp (air). Players never fall through platforms. Don't describe Down as "drop through" in any text.
 - Lobby join zones are labeled "START", not "Join".
+- Online lobby char-select onChange uses shared `handleOnlineCharChange` callback — don't duplicate the handler inline.
+- In transport callbacks (`onPeerConnected`, `onReliableMessage`, etc.) snapshot `useGameStore.getState()` once and reuse. Multiple reads + interleaved `setOnline` calls cause redundant React re-renders.

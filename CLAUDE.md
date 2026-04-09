@@ -213,6 +213,8 @@ Online play uses P2P WebRTC via PeerJS with GGPO-style rollback netcode:
 
 **Online lobby (CharacterSelect)**: In online mode, `playersRef.current` has only 1 entry (P1). `drawLobby` must guard against missing players. All 5 key bindings map to P1. START zone sends CHARACTER_SELECT + READY over transport.
 
+**Player names**: `OnlineState.playerNames` maps slot → display name. Set in HANDSHAKE/SLOT_ASSIGNMENT handlers, consumed by `renderer.setPlayerNames()` for HUD and `VictoryScreen.charName()` for results. `RemotePlayerInfo.playerName` carries the canonical name per peer.
+
 ## Workflow Rules
 
 - **PlayerSlot = CharacterSlot | BotSlot** — human P1-P5, bot B1-B5. Use `isBotSlot(slot)`, `getCharacterForSlot(slot)`.
