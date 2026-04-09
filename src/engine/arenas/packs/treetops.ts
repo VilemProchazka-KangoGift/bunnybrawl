@@ -1,13 +1,51 @@
-import type { ThemeConfig } from './types';
-import { getFloatingPlatforms } from './utils';
-import { drawTree, drawHangingVine, drawFgLeafCluster, drawFern } from './drawPrimitives';
+import type { ArenaPack } from '../types';
+import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
+import { drawTree, drawHangingVine, drawFgLeafCluster, drawFern } from '../../themes/drawPrimitives';
+import { getFloatingPlatforms } from '../../themes/utils';
 
-export const TREETOPS_THEME: ThemeConfig = {
+export const treetops: ArenaPack = {
+  // ---- Identity ----
   id: 'treetops',
-  nameKey: 'arena_treetops',
-  previewGradient: 'linear-gradient(to bottom, #1A3A1A 0%, #2D5A2D 40%, #4A8A4A 100%)',
-  previewIcon: '🌳',
 
+  // ---- UI metadata ----
+  previewGradient: 'linear-gradient(to bottom, #1A3A1A 0%, #2D5A2D 40%, #4A8A4A 100%)',
+  previewIcon: '\u{1F333}',
+
+  // ---- Translations ----
+  translations: { en: 'Treetops', cs: 'Koruny strom\u016F', hi: '\u092A\u0947\u0921\u093C\u094B\u0902 \u0915\u0940 \u091A\u094B\u091F\u0940', fil: 'Tuktok ng Puno' },
+
+  // ---- Layout ----
+  width: CANVAS_WIDTH,
+  height: CANVAS_HEIGHT,
+  platforms: [
+    { x: 30, y: 600, width: 180, height: 24 },
+    { x: 400, y: 590, width: 240, height: 24 },
+    { x: 800, y: 600, width: 220, height: 24 },
+    { x: 1100, y: 585, width: 160, height: 24 },
+    { x: 120, y: 490, width: 200, height: 24 },
+    { x: 460, y: 480, width: 180, height: 24 },
+    { x: 700, y: 485, width: 160, height: 24 },
+    { x: 1000, y: 475, width: 200, height: 24 },
+    { x: 310, y: 540, width: 50, height: 20 },
+    { x: 680, y: 545, width: 50, height: 20 },
+    { x: 950, y: 535, width: 50, height: 20 },
+    { x: 50, y: 380, width: 160, height: 24 },
+    { x: 500, y: 370, width: 280, height: 24 },
+    { x: 1050, y: 375, width: 160, height: 24 },
+    { x: 440, y: 260, width: 300, height: 24 },
+    { x: 300, y: 430, width: 70, height: 20 },
+    { x: 880, y: 425, width: 70, height: 20 },
+    { x: 280, y: 320, width: 70, height: 20 },
+    { x: 850, y: 315, width: 70, height: 20 },
+  ],
+  spawnPoints: [
+    { x: 120, y: 580 }, { x: 1180, y: 565 },
+    { x: 500, y: 570 }, { x: 900, y: 580 },
+    { x: 640, y: 240 }, { x: 220, y: 470 },
+  ],
+  allowFallOff: true,
+
+  // ---- Visual config ----
   sky: {
     gradient: [
       { offset: 0, color: '#1A3A1A' },
@@ -18,7 +56,7 @@ export const TREETOPS_THEME: ThemeConfig = {
   },
 
   hills: [
-    // Pushed below screen — treetops has no ground, hills would float in the void
+    // Pushed below screen -- treetops has no ground, hills would float in the void
     { x: -20, baseY: 780, width: 400, height: 50, color: '#1A3A1A' },
     { x: 350, baseY: 780, width: 450, height: 40, color: '#153515' },
     { x: 750, baseY: 780, width: 380, height: 55, color: '#1A3A1A' },
@@ -39,13 +77,13 @@ export const TREETOPS_THEME: ThemeConfig = {
     drawMoss: true,
     customDraw: (ctx, x, y, w, h, isGround) => {
       if (isGround) {
-        // Thick branch base — this is the "danger" zone at bottom
+        // Thick branch base -- this is the "danger" zone at bottom
         ctx.fillStyle = '#2A1A0A';
         ctx.fillRect(x, y + 3, w, h - 3);
         ctx.fillStyle = '#4A3018';
         ctx.fillRect(x, y, w, 4);
       } else {
-        // Branch platform — organic shapes
+        // Branch platform -- organic shapes
         ctx.fillStyle = '#5A3A20';
         // Main branch body
         ctx.beginPath();
@@ -85,6 +123,7 @@ export const TREETOPS_THEME: ThemeConfig = {
     },
   },
 
+  // ---- Ambient systems ----
   clouds: {
     count: 0,
     color: 'rgba(100, 150, 100, 0.3)',
@@ -139,10 +178,11 @@ export const TREETOPS_THEME: ThemeConfig = {
     showShootingStars: false,
   },
 
+  // ---- Custom draw functions ----
   drawFarBackground: (ctx, _arena) => {
     ctx.save();
 
-    // Dense canopy above — dappled light
+    // Dense canopy above -- dappled light
     ctx.globalAlpha = 0.35;
     ctx.fillStyle = '#0A2A0A';
     // Large overlapping leaf clusters forming canopy
@@ -200,7 +240,7 @@ export const TREETOPS_THEME: ThemeConfig = {
   },
 
   drawBackgroundNature: (ctx, arena) => {
-    // No ground in treetops — use bottom of screen as tree root reference
+    // No ground in treetops -- use bottom of screen as tree root reference
     const y = 750;
 
     // Large trees rooted below (trunks visible going down)
@@ -331,7 +371,7 @@ export const TREETOPS_THEME: ThemeConfig = {
       }
     }
 
-    // Bottom fog (deep forest abyss below — at visible screen bottom)
+    // Bottom fog (deep forest abyss below -- at visible screen bottom)
     ctx.save();
     ctx.globalAlpha = 0.4;
     const fogGrd = ctx.createLinearGradient(0, 620, 0, 720);
@@ -342,6 +382,7 @@ export const TREETOPS_THEME: ThemeConfig = {
     ctx.restore();
   },
 
+  // ---- Gameplay modifiers ----
   ghostConfig: {
     count: 4,
     speed: 60,
@@ -374,7 +415,7 @@ export const TREETOPS_THEME: ThemeConfig = {
     ctx.fill();
     ctx.restore();
 
-    // Body — yellow and black stripes
+    // Body -- yellow and black stripes
     ctx.fillStyle = '#DDAA00';
     ctx.beginPath();
     ctx.ellipse(0, 0, s * 0.35, s * 0.5, 0, 0, Math.PI * 2);
@@ -411,8 +452,11 @@ export const TREETOPS_THEME: ThemeConfig = {
     ctx.restore();
   },
 
+  // ---- Audio ----
   ambientSoundConfig: {
     loops: ['amb_wind'],
     periodic: [{ sound: 'amb_bird_chirp', intervalRange: [8, 20] }],
   },
+
+  musicFile: 'treetops.mp3',
 };

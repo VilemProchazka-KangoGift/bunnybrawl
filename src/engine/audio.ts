@@ -295,23 +295,9 @@ class AudioManager {
     }
   }
 
-  // MP3 overrides for arena music (theme ID → filename in public/audio/)
-  private static readonly MUSIC_MP3: Record<string, string> = {
-    meadow: 'meadow.mp3',
-    waterfall: 'waterfall.mp3',
-    space_station: 'space_station.mp3',
-    rooftops: 'rooftops.mp3',
-    haunted_graveyard: 'haunted_graveyard.mp3',
-    underwater: 'underwater.mp3',
-    candy_land: 'candy_land.mp3',
-    castle: 'castle.mp3',
-    winter_lake: 'winter_lake.mp3',
-    treetops: 'treetops.mp3',
-    volcano: 'volcano.mp3',
-  };
-
-  /** Start theme-specific music. Lazily generates and caches per theme. */
-  playMusic(themeId: string): void {
+  /** Start theme-specific music. If mp3File is provided (from ArenaPack.musicFile),
+   *  uses that directly. Otherwise falls back to procedural generation. */
+  playMusic(themeId: string, mp3File?: string): void {
     this.stopMenuMusic();
     if (this.muted || this.musicDisabled) return;
     if (!this.initialized) this.init();
@@ -322,10 +308,8 @@ class AudioManager {
     }
     // Stop previous track
     this.stopMusic();
-    // Use MP3 override if available, otherwise generate procedurally
-    const mp3 = AudioManager.MUSIC_MP3[themeId];
-    const src = mp3
-      ? AUDIO_BASE + mp3
+    const src = mp3File
+      ? AUDIO_BASE + mp3File
       : generateThemeMusic(themeId);
     this.musicHowl = new Howl({ src: [src], volume: 0.22, loop: true });
     this.musicThemeId = themeId;

@@ -8,7 +8,11 @@
  */
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { listArenas, getArena } from '../src/engine/arena';
+import { registerBuiltinArenas } from '../src/engine/arenas/builtin';
+import { getArena, listArenas } from '../src/engine/arenas';
+
+// Must register packs before listing arenas
+registerBuiltinArenas();
 import { canJumpTo, canDropTo, canWalkTo, canGeyserTo, canZeroGTo, computeEdgeDanger } from '../src/engine/ai/reachability';
 import type { Platform, Arena } from '../src/engine/types';
 

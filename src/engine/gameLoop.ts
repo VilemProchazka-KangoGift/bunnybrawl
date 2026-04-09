@@ -8,8 +8,7 @@ import type { SeededRNG } from './net/prng';
 import { takeSnapshot as _takeSnapshot, restoreSnapshot as _restoreSnapshot } from './net/serialize';
 import type { GameSnapshot } from './net/serialize';
 import type { ThemeConfig } from './themes/types';
-import { getTheme } from './themes/registry';
-import { mirrorArena } from './arena';
+import { getTheme, mirrorArena, getArenaPack } from './arenas';
 import { randRange, pickWeighted, swapRemove } from './themes/utils';
 import { InputManager } from './input';
 import { Renderer } from './renderer';
@@ -86,6 +85,7 @@ export class GameLoop {
   private newBloodDripsSinceRender: Array<{ x: number; y: number; radius: number; color: string }> = [];
   private newGroundedGibsSinceRender: Gib[] = [];
   private _debugKeyHandler: ((e: KeyboardEvent) => void) | null = null;
+  private musicFile?: string;
 
   // SFX cooldowns (per-player)
   private landCooldowns: Map<PlayerSlot, number> = new Map();
@@ -121,6 +121,7 @@ export class GameLoop {
     this.settings = settings;
     this.onMatchEnd = onMatchEnd;
     this.theme = getTheme(arena.themeId);
+    this.musicFile = getArenaPack(arena.id)?.musicFile;
     this.input = new InputManager();
     this.renderer = new Renderer(bgCanvas, fgCanvas, this.theme, settings.mods.mirrorArena);
 
@@ -330,7 +331,7 @@ export class GameLoop {
     this.renderer.renderBackground(this.arena, this.originalArena);
     this.running = true;
     this.lastTime = performance.now();
-    audio.playMusic(this.arena.themeId);
+    audio.playMusic(this.arena.themeId, this.musicFile);
     this.playSound('ambient');
     if (this.hasWaterfallZones) this.playSound('waterfall_ambient');
     // Start theme ambient loops
@@ -498,7 +499,7 @@ export class GameLoop {
 
   getState(): MatchState { return this.state; }
   pause(): void { this.paused = true; audio.stopMusic(); }
-  resume(): void { this.paused = false; this.lastTime = performance.now(); audio.playMusic(this.arena.themeId); }
+  resume(): void { this.paused = false; this.lastTime = performance.now(); audio.playMusic(this.arena.themeId, this.musicFile); }
   isPaused(): boolean { return this.paused; }
   skipCountdown(): void {
     if (this.state.countdown > 0) {

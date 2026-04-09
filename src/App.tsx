@@ -6,12 +6,16 @@ import { Match } from './components/Match';
 import { VictoryScreen } from './components/VictoryScreen';
 import { GameScaler } from './components/GameScaler';
 import { assignBotCharacters, registerBuiltinCharacters } from './engine/characters';
+import { registerBuiltinArenas } from './engine/arenas';
+import { registerBuiltinNavData } from './engine/ai/navData';
 import type { PlayerSlot, BotSlot, CharacterSlot } from './engine/types';
 import { ALL_BOT_SLOTS } from './engine/types';
 import logoUrl from '/logo.png?url';
 
-// Register all built-in characters into the pack registry at module load time
+// Register all built-in packs at module load time
 registerBuiltinCharacters();
+registerBuiltinArenas();
+registerBuiltinNavData();
 
 /**
  * Dev test link: skip lobby and jump straight into a match.

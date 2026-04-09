@@ -1,13 +1,54 @@
-import type { ThemeConfig } from './types';
-import { getFloatingPlatforms } from './utils';
-import { createThornRenderer } from './drawPrimitives';
+import type { ArenaPack } from '../types';
+import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
+import { createThornRenderer } from '../../themes/drawPrimitives';
+import { getFloatingPlatforms } from '../../themes/utils';
 
-export const HAUNTED_GRAVEYARD_THEME: ThemeConfig = {
+export const hauntedGraveyard: ArenaPack = {
+  // ---- Identity ----
   id: 'haunted_graveyard',
-  nameKey: 'arena_haunted_graveyard',
-  previewGradient: 'linear-gradient(to bottom, #0A0015 0%, #1A0A30 40%, #2A1540 100%)',
-  previewIcon: '👻',
 
+  // ---- UI metadata ----
+  previewGradient: 'linear-gradient(to bottom, #0A0015 0%, #1A0A30 40%, #2A1540 100%)',
+  previewIcon: '\u{1F47B}',
+
+  // ---- Translations ----
+  translations: { en: 'Haunted Graveyard', cs: 'Stra\u0161ideln\u00FD h\u0159bitov', hi: '\u092D\u0942\u0924\u093F\u092F\u093E \u0915\u092C\u094D\u0930\u093F\u0938\u094D\u0924\u093E\u0928', fil: 'Sementeryo' },
+
+  // ---- Layout ----
+  width: CANVAS_WIDTH,
+  height: CANVAS_HEIGHT,
+  platforms: [
+    { x: 0, y: 660, width: 480, height: 60 },
+    { x: 800, y: 660, width: 480, height: 60 },
+    { x: 120, y: 625, width: 35, height: 35 },
+    { x: 280, y: 625, width: 35, height: 35 },
+    { x: 900, y: 625, width: 35, height: 35 },
+    { x: 1080, y: 625, width: 35, height: 35 },
+    { x: 480, y: 420, width: 320, height: 240 },
+    { x: 30, y: 530, width: 170, height: 24 },
+    { x: 20, y: 390, width: 150, height: 24 },
+    { x: 1080, y: 530, width: 170, height: 24 },
+    { x: 1110, y: 390, width: 150, height: 24 },
+    { x: 250, y: 340, width: 140, height: 24 },
+    { x: 890, y: 340, width: 140, height: 24 },
+    { x: 520, y: 290, width: 240, height: 24 },
+    { x: 200, y: 450, width: 100, height: 24 },
+    { x: 980, y: 450, width: 100, height: 24 },
+  ],
+  spawnPoints: [
+    { x: 100, y: 500 }, { x: 1160, y: 500 },
+    { x: 600, y: 385 }, { x: 350, y: 628 },
+    { x: 320, y: 310 }, { x: 960, y: 310 },
+  ],
+  noSpawnZones: [
+    { x: 480, y: 420, width: 320, height: 240 },
+  ],
+  navHints: [
+    { onPlatform: 0, inZone: { x: 155, width: 325 }, goTo: 3, approachX: 315, type: 'j' },
+    { onPlatform: 1, inZone: { x: 800, width: 100 }, goTo: 4, approachX: 868, type: 'j' },
+  ],
+
+  // ---- Visual config ----
   sky: {
     gradient: [
       { offset: 0, color: '#0A0015' },
@@ -77,6 +118,7 @@ export const HAUNTED_GRAVEYARD_THEME: ThemeConfig = {
     },
   },
 
+  // ---- Ambient systems ----
   clouds: {
     count: 4,
     color: 'rgba(40, 30, 60, 0.4)',
@@ -130,10 +172,11 @@ export const HAUNTED_GRAVEYARD_THEME: ThemeConfig = {
     showShootingStars: false,
   },
 
+  // ---- Custom draw functions ----
   drawFarBackground: (ctx, _arena) => {
     ctx.save();
 
-    // Stars (no moon — day/night disabled)
+    // Stars (no moon -- day/night disabled)
     ctx.fillStyle = '#CCBBDD';
     const stars = [
       [80, 25, 1.2], [200, 55, 0.8], [350, 20, 1.5], [480, 65, 1],
@@ -244,7 +287,7 @@ export const HAUNTED_GRAVEYARD_THEME: ThemeConfig = {
       ctx.beginPath();
       ctx.ellipse(jx, jy - size * 0.5, size * 0.3, size * 0.5, 0, 0, Math.PI * 2);
       ctx.stroke();
-      // Face — glowing eyes
+      // Face -- glowing eyes
       ctx.fillStyle = '#FFCC00';
       // Left eye
       ctx.beginPath();
@@ -414,7 +457,7 @@ export const HAUNTED_GRAVEYARD_THEME: ThemeConfig = {
     // Wrist/forearm taper
     ctx.fillRect(cx - 3, baseY - armH * 0.7, 6, armH * 0.15);
 
-    // Hand — palm
+    // Hand -- palm
     ctx.fillStyle = '#5A7A5A';
     ctx.beginPath();
     ctx.ellipse(cx, baseY - armH * 0.75, 8, 6, 0, 0, Math.PI * 2);
@@ -466,6 +509,7 @@ export const HAUNTED_GRAVEYARD_THEME: ThemeConfig = {
     ctx.fillRect(cx - 25, baseY - armH - 10, 50, armH + 20);
   }),
 
+  // ---- Gameplay modifiers ----
   ghostConfig: {
     count: 3,
     speed: 40,
@@ -474,7 +518,10 @@ export const HAUNTED_GRAVEYARD_THEME: ThemeConfig = {
     glowColor: '#6688BB',
   },
 
+  // ---- Audio ----
   ambientSoundConfig: {
     periodic: [{ sound: 'amb_ghost_hoo', intervalRange: [10, 25] }],
   },
+
+  musicFile: 'haunted_graveyard.mp3',
 };

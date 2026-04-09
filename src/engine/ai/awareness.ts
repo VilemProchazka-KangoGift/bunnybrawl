@@ -2,7 +2,7 @@ import type { Player, MatchState, Arena } from '../types';
 import { isBotSlot } from '../types';
 import type { AwarenessSnapshot } from './types';
 import { PLAYER_WIDTH, PLAYER_HEIGHT, CANVAS_WIDTH } from '../constants';
-import { NAV_DATA } from './navData';
+import { getArenaNav } from '../arenas/registry';
 
 /** Shortest horizontal distance accounting for screen wrap */
 function wrapDx(dx: number): number {
@@ -296,7 +296,7 @@ export function buildAwareness(
   let navTarget: AwarenessSnapshot['navTarget'] = null;
 
   if (pathfindingDepth > 0 && currentPlatformIdx >= 0) {
-    const nav = NAV_DATA[arena.id];
+    const nav = getArenaNav(arena.id);
     if (nav) {
       // Determine goal: nearest enemy, priority target, or roam target
       let goalX = 0, goalY = 0;

@@ -37,17 +37,19 @@
 - All procedural sounds are Float32Array → WAV data URI → Howler.js. No MP3 for SFX.
 - Frequencies below 100Hz are inaudible on laptop speakers. Use 130Hz+ for thuds/impacts. Calibrate: generation amplitude * Howl volume should be ≥0.05 for one-shots.
 - SFX cooldowns use per-player `Map<PlayerSlot, number>` (like `footstepAccumulators`) or a global number. Decay with `dt` every frame. Sound plays only when cooldown ≤ 0. Decay cooldowns BEFORE the hitstop `continue` so they don't accumulate during hitstop.
-- Theme ambient sounds: `ThemeConfig.ambientSoundConfig` with `loops` (continuous) and `periodic` (random interval one-shots). Loops tracked in `activeAmbientLoops[]`, all stopped in `stop()`. Periodic timers in `periodicAmbientTimers` Map, ticked at end of `fixedUpdate()`.
+- Ambient sounds: `ArenaPack.ambientSoundConfig` with `loops` (continuous) and `periodic` (random interval one-shots). Loops tracked in `activeAmbientLoops[]`, all stopped in `stop()`. Periodic timers in `periodicAmbientTimers` Map, ticked at end of `fixedUpdate()`.
 - Player-push bump sound uses global cooldown (not per-player) to prevent double-fire from both pushed players in the same frame. Detects push via `sideSquash === 0.8` (exact value set by `collidePlayersHorizontal`).
-- All 11 arenas + menu have MP3 music. `AudioManager.MUSIC_MP3` maps theme IDs to filenames in `public/audio/`. Procedural music (`music.ts` / `generateThemeMusic`) is now fallback-only for unknown themes. Menu music uses a separate `menuMusicHowl` preloaded in `init()` — not tied to component lifecycle (persists across menu↔lobby). Suno generation prompts are in `docs/suno-arena-prompts.md`.
+- All 11 arenas + menu have MP3 music. Each arena pack specifies `musicFile` (e.g. `'meadow.mp3'`), passed to `audio.playMusic()` by GameLoop. Procedural music (`music.ts` / `generateThemeMusic`) is fallback-only for unknown themes. Menu music uses a separate `menuMusicHowl` preloaded in `init()` — not tied to component lifecycle (persists across menu↔lobby). Suno generation prompts are in `docs/suno-arena-prompts.md`.
 
-## Arenas & Themes
+## Arenas
+- Arena pack registry must be initialized before use — `registerBuiltinArenas()` called at module scope in `App.tsx`. Nav data registered separately via `registerBuiltinNavData()`.
+- `ArenaPack` in `arenas/types.ts` merges layout (platforms, spawns) + visuals (sky, draw functions) + translations + musicFile into one interface. `toArena()` / `toThemeConfig()` extract the old types for consumers that need them.
 - `platforms[0]` is always ground (or first ground segment, detected by `p.y >= 650`).
-- Arena type is flat: `themeId` + platforms/spawns directly. Theme provides visuals, Arena provides structure.
 - `allowFallOff` arenas: set `hills[].baseY` to 780+ to push hills offscreen.
 - Tall narrow platform collision: `landingFromAbove` guard prevents side-approach snapping. Prefer wider-than-tall blocks.
 - Solid building blocks need `noSpawnZones` covering interiors.
 - `arenaId: 'random'` resolved in `Match.tsx` via `resolveArenaId()`, not in store.
+- `themes/` directory still exists for shared infrastructure: `types.ts` (ThemeConfig interface used by Renderer), `drawPrimitives.ts` (shared draw functions), `utils.ts` (utility functions). Individual theme files are gone — visuals live in arena pack files.
 
 ## AI
 - Awareness uses single pass over `state.players` — no `.filter()` loops.

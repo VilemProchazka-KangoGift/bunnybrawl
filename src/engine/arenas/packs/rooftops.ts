@@ -1,12 +1,56 @@
-import type { ThemeConfig } from './types';
-import { createThornRenderer, createSpringRenderer } from './drawPrimitives';
+import type { ArenaPack } from '../types';
+import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
+import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
 
-export const ROOFTOPS_THEME: ThemeConfig = {
+export const rooftops: ArenaPack = {
+  // ---- Identity ----
   id: 'rooftops',
-  nameKey: 'arena_rooftops',
-  previewGradient: 'linear-gradient(to bottom, #FF6B35 0%, #FF8C5A 40%, #3A2A4A 100%)',
-  previewIcon: '🏙️',
 
+  // ---- UI metadata ----
+  previewGradient: 'linear-gradient(to bottom, #FF6B35 0%, #FF8C5A 40%, #3A2A4A 100%)',
+  previewIcon: '\u{1F3D9}\u{FE0F}',
+
+  // ---- Translations ----
+  translations: { en: 'Rooftops', cs: 'St\u0159echy', hi: '\u091B\u0924\u0947\u0902', fil: 'Bubungan' },
+
+  // ---- Layout ----
+  width: CANVAS_WIDTH,
+  height: CANVAS_HEIGHT,
+  platforms: [
+    { x: 80, y: 480, width: 270, height: 240 },
+    { x: 130, y: 440, width: 28, height: 40 },
+    { x: 250, y: 444, width: 28, height: 36 },
+    { x: 350, y: 505, width: 52, height: 20 },
+    { x: 458, y: 430, width: 52, height: 20 },
+    { x: 445, y: 550, width: 65, height: 14 },
+    { x: 510, y: 370, width: 300, height: 80 },
+    { x: 510, y: 550, width: 300, height: 24 },
+    { x: 510, y: 580, width: 300, height: 140 },
+    { x: 555, y: 335, width: 40, height: 35 },
+    { x: 650, y: 330, width: 45, height: 40 },
+    { x: 760, y: 338, width: 38, height: 32 },
+    { x: 810, y: 550, width: 65, height: 14 },
+    { x: 810, y: 430, width: 52, height: 20 },
+    { x: 918, y: 360, width: 52, height: 20 },
+    { x: 905, y: 480, width: 65, height: 14 },
+    { x: 970, y: 300, width: 230, height: 80 },
+    { x: 970, y: 480, width: 230, height: 24 },
+    { x: 970, y: 510, width: 230, height: 210 },
+    { x: 1200, y: 480, width: 65, height: 14 },
+  ],
+  spawnPoints: [
+    { x: 200, y: 460 }, { x: 660, y: 350 }, { x: 1080, y: 280 },
+    { x: 280, y: 460 }, { x: 660, y: 530 }, { x: 1080, y: 460 },
+  ],
+  allowFallOff: true,
+  noSpawnZones: [
+    { x: 510, y: 450, width: 300, height: 130 },
+    { x: 510, y: 575, width: 300, height: 145 },
+    { x: 970, y: 380, width: 230, height: 100 },
+    { x: 970, y: 505, width: 230, height: 215 },
+  ],
+
+  // ---- Visual config ----
   sky: {
     gradient: [
       { offset: 0, color: '#FF6B35' },
@@ -33,7 +77,7 @@ export const ROOFTOPS_THEME: ThemeConfig = {
     drawMoss: false,
     customDraw: (ctx, x, y, w, h, isGround) => {
       if (isGround || (w >= 200 && h >= 25)) {
-        // Solid building block — thin rooftop gravel surface on top only
+        // Solid building block -- thin rooftop gravel surface on top only
         const topH = Math.min(h, 8);
         ctx.fillStyle = '#3A3040';
         ctx.fillRect(x, y, w, topH);
@@ -48,7 +92,7 @@ export const ROOFTOPS_THEME: ThemeConfig = {
         ctx.fillStyle = '#4A4050';
         ctx.fillRect(x, y, w, 2);
       } else if (w <= 35 && h >= 30) {
-        // Chimney — brick + smoke
+        // Chimney -- brick + smoke
         ctx.fillStyle = '#4A3A40';
         ctx.fillRect(x, y, w, h);
         ctx.strokeStyle = 'rgba(60, 45, 50, 0.5)';
@@ -68,7 +112,7 @@ export const ROOFTOPS_THEME: ThemeConfig = {
         ctx.quadraticCurveTo(x + w / 2 + 8, y - 15, x + w / 2 + 3, y - 25);
         ctx.stroke();
       } else if (w >= 60 && w <= 90 && h <= 18) {
-        // Balcony at hallway entrance — concrete ledge + striped awning
+        // Balcony at hallway entrance -- concrete ledge + striped awning
         ctx.fillStyle = '#6A6A78';
         ctx.fillRect(x, y, w, h);
         ctx.fillStyle = '#7A7A88';
@@ -114,11 +158,11 @@ export const ROOFTOPS_THEME: ThemeConfig = {
           ctx.stroke();
         }
       } else if (w <= 55 && h <= 22) {
-        // AC outdoor unit — chunky white box with prominent fan grill
+        // AC outdoor unit -- chunky white box with prominent fan grill
         // Main housing
         ctx.fillStyle = '#D8D8E0';
         ctx.fillRect(x, y, w, h);
-        // 3D depth — darker bottom and right edges
+        // 3D depth -- darker bottom and right edges
         ctx.fillStyle = '#A0A0A8';
         ctx.fillRect(x, y + h - 3, w, 3);
         ctx.fillRect(x + w - 3, y, 3, h);
@@ -126,7 +170,7 @@ export const ROOFTOPS_THEME: ThemeConfig = {
         ctx.strokeStyle = '#808088';
         ctx.lineWidth = 1.5;
         ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-        // Big fan grill circle — the main visual feature
+        // Big fan grill circle -- the main visual feature
         const cx = x + w * 0.55;
         const cy = y + h / 2;
         const r = h * 0.36;
@@ -165,7 +209,7 @@ export const ROOFTOPS_THEME: ThemeConfig = {
         ctx.fillRect(x + 4, y + h, 4, 2);
         ctx.fillRect(x + w - 8, y + h, 4, 2);
       } else if (w >= 200 && h < 25) {
-        // Hallway floor — warm wooden planks + carpet
+        // Hallway floor -- warm wooden planks + carpet
         ctx.fillStyle = '#5A4030';
         ctx.fillRect(x, y, w, h);
         ctx.strokeStyle = 'rgba(40, 25, 15, 0.35)';
@@ -192,7 +236,7 @@ export const ROOFTOPS_THEME: ThemeConfig = {
         ctx.fillStyle = '#6A5040';
         ctx.fillRect(x, y, w, 2);
       } else if (w <= 55 && h >= 25) {
-        // HVAC block — vent slats + exhaust pipe
+        // HVAC block -- vent slats + exhaust pipe
         ctx.fillStyle = '#5A5A68';
         ctx.fillRect(x, y, w, h);
         ctx.strokeStyle = 'rgba(70, 70, 80, 0.5)';
@@ -217,6 +261,7 @@ export const ROOFTOPS_THEME: ThemeConfig = {
     },
   },
 
+  // ---- Ambient systems ----
   clouds: {
     count: 4,
     color: 'rgba(255, 150, 100, 0.35)',
@@ -270,6 +315,7 @@ export const ROOFTOPS_THEME: ThemeConfig = {
     showShootingStars: false,
   },
 
+  // ---- Custom draw functions ----
   drawFarBackground: (ctx, arena) => {
     ctx.save();
 
@@ -280,7 +326,7 @@ export const ROOFTOPS_THEME: ThemeConfig = {
     ctx.fillStyle = sunGrd;
     ctx.fillRect(50, 0, 400, 400);
 
-    // === Background buildings — distant city skyline ===
+    // === Background buildings -- distant city skyline ===
     ctx.globalAlpha = 0.35;
     const bgBuildings = [
       // Left gap (0-80)
@@ -312,7 +358,7 @@ export const ROOFTOPS_THEME: ThemeConfig = {
         }
       }
       ctx.globalAlpha = 0.35;
-      // Varied rooftops — some with antenna, some with water tank
+      // Varied rooftops -- some with antenna, some with water tank
       ctx.fillStyle = bg.color;
       if (Math.sin(bg.x * 0.1) > 0.3) {
         // Antenna
@@ -338,14 +384,14 @@ export const ROOFTOPS_THEME: ThemeConfig = {
 
     for (const b of buildings) {
       ctx.globalAlpha = 0.95;
-      // Main wall — facade starts at rooftop level
+      // Main wall -- facade starts at rooftop level
       ctx.fillStyle = b.color;
       ctx.fillRect(b.x, b.roofY, b.w, 720 - b.roofY);
       // Thick side edges
       ctx.fillStyle = b.dark;
       ctx.fillRect(b.x, b.roofY, 10, 720 - b.roofY);
       ctx.fillRect(b.x + b.w - 10, b.roofY, 10, 720 - b.roofY);
-      // Parapet rim at rooftop edge — sits exactly at building top
+      // Parapet rim at rooftop edge -- sits exactly at building top
       ctx.fillStyle = b.accent;
       ctx.fillRect(b.x, b.roofY - 3, b.w, 5);
       ctx.fillStyle = b.dark;
@@ -393,7 +439,7 @@ export const ROOFTOPS_THEME: ThemeConfig = {
         }
       }
 
-      // Hallway interiors — rich indoor environment (90px tall opening)
+      // Hallway interiors -- rich indoor environment (90px tall opening)
       for (const plat of arena.platforms) {
         if (plat.width >= 200 && plat.height >= 20 && plat.height < 30 &&
             plat.x >= b.x - 5 && plat.x + plat.width <= b.x + b.w + 5) {
@@ -407,7 +453,7 @@ export const ROOFTOPS_THEME: ThemeConfig = {
           ctx.fillStyle = '#3A2520';
           ctx.fillRect(b.x + inset, ceilY, b.w - inset * 2, openH);
 
-          // Wainscoting — darker lower wall panel
+          // Wainscoting -- darker lower wall panel
           const wainH = openH * 0.4;
           ctx.fillStyle = '#2E1C18';
           ctx.fillRect(b.x + inset, floorY - wainH, b.w - inset * 2, wainH);
@@ -592,7 +638,7 @@ export const ROOFTOPS_THEME: ThemeConfig = {
       ctx.moveTo(x1, y1);
       ctx.quadraticCurveTo((x1 + x2) / 2, midY, x2, y2);
       ctx.stroke();
-      // Hanging clothes — windblown with varied shapes
+      // Hanging clothes -- windblown with varied shapes
       const colors = ['#CC4444', '#4444CC', '#44CC44', '#CCCC44', '#CC44CC', '#CC8844'];
       const n = Math.floor((x2 - x1) / 28);
       for (let i = 0; i < n; i++) {
@@ -601,12 +647,12 @@ export const ROOFTOPS_THEME: ThemeConfig = {
         const sagY = Math.min(y1, y2) + (midY - Math.min(y1, y2)) * 4 * t * (1 - t);
         ctx.fillStyle = colors[i % colors.length];
         ctx.globalAlpha = 0.65;
-        // Wind angle — items blow slightly right
+        // Wind angle -- items blow slightly right
         ctx.save();
         ctx.translate(cx, sagY + 2);
         ctx.rotate(0.12 + Math.sin(i * 1.7) * 0.08);
         if (i % 4 === 0) {
-          // Shirt — T shape
+          // Shirt -- T shape
           ctx.fillRect(-4, 0, 8, 11);
           ctx.fillRect(-7, 0, 3, 5);
           ctx.fillRect(4, 0, 3, 5);
@@ -616,7 +662,7 @@ export const ROOFTOPS_THEME: ThemeConfig = {
           ctx.fillRect(-3, 5, 2, 7);
           ctx.fillRect(1, 5, 2, 7);
         } else if (i % 4 === 2) {
-          // Towel / sheet — flapping
+          // Towel / sheet -- flapping
           ctx.fillRect(-3, 0, 6, 14);
           ctx.fillStyle = colors[(i + 2) % colors.length];
           ctx.globalAlpha = 0.25;
@@ -766,7 +812,9 @@ export const ROOFTOPS_THEME: ThemeConfig = {
     ctx.fill();
   }),
 
+  // ---- Audio ----
   ambientSoundConfig: {
     loops: ['amb_wind'],
   },
+  musicFile: 'rooftops.mp3',
 };

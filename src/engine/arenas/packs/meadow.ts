@@ -1,16 +1,48 @@
-import type { ThemeConfig } from './types';
-import { getFloatingPlatforms } from './utils';
+import type { ArenaPack } from '../types';
+import type { Arena } from '../../types';
+import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
+import { getFloatingPlatforms } from '../../themes/utils';
 import {
   drawTree, drawBush, drawFlower, drawMushroom, drawGrassTuft, drawTreeStump,
   drawFgBush, drawTallGrass, drawFern, drawHangingVine, drawFgLeafCluster, drawFgWildflower,
-} from './drawPrimitives';
+} from '../../themes/drawPrimitives';
 
-export const MEADOW_THEME: ThemeConfig = {
+export const meadow: ArenaPack = {
+  // ---- Identity ----
   id: 'meadow',
-  nameKey: 'arena_meadow',
-  previewGradient: 'linear-gradient(to bottom, #4A90D9 0%, #87CEEB 60%, #4a8c3f 100%)',
-  previewIcon: '🌿',
 
+  // ---- UI metadata ----
+  previewGradient: 'linear-gradient(to bottom, #4A90D9 0%, #87CEEB 60%, #4a8c3f 100%)',
+  previewIcon: '\u{1F33F}',
+
+  // ---- Translations ----
+  translations: { en: 'Meadow', cs: 'Louka', hi: '\u0918\u093E\u0938 \u0915\u093E \u092E\u0948\u0926\u093E\u0928', fil: 'Damuhan' },
+
+  // ---- Layout ----
+  width: CANVAS_WIDTH,
+  height: CANVAS_HEIGHT,
+  platforms: [
+    { x: 0, y: 660, width: CANVAS_WIDTH, height: 60 },
+    { x: 90, y: 520, width: 160, height: 24 },
+    { x: 990, y: 535, width: 200, height: 24 },
+    { x: 280, y: 400, width: 200, height: 24 },
+    { x: 760, y: 415, width: 240, height: 24 },
+    { x: 540, y: 480, width: 200, height: 24 },
+    { x: 490, y: 290, width: 300, height: 24 },
+    { x: 110, y: 330, width: 120, height: 24 },
+    { x: 1010, y: 345, width: 160, height: 24 },
+    { x: 340, y: 615, width: 55, height: 45 },
+    { x: 860, y: 615, width: 55, height: 45 },
+    { x: 440, y: 370, width: 45, height: 40 },
+    { x: 800, y: 370, width: 45, height: 40 },
+  ],
+  spawnPoints: [
+    { x: 170, y: 500 }, { x: 1090, y: 515 },
+    { x: 380, y: 380 }, { x: 870, y: 395 },
+    { x: 640, y: 270 }, { x: 640, y: 640 },
+  ],
+
+  // ---- Visual config ----
   sky: {
     gradient: [
       { offset: 0, color: '#4A90D9' },
@@ -45,6 +77,7 @@ export const MEADOW_THEME: ThemeConfig = {
     drawMoss: true,
   },
 
+  // ---- Ambient systems ----
   clouds: {
     count: 5,
     color: 'rgba(255, 255, 255, 0.7)',
@@ -99,8 +132,8 @@ export const MEADOW_THEME: ThemeConfig = {
     showShootingStars: true,
   },
 
-
-  drawFarBackground: (ctx, _arena) => {
+  // ---- Custom draw functions ----
+  drawFarBackground: (ctx: CanvasRenderingContext2D, _arena: Arena) => {
     // Distant forest treeline behind the hills
     ctx.save();
     ctx.globalAlpha = 0.25;
@@ -141,7 +174,7 @@ export const MEADOW_THEME: ThemeConfig = {
     ctx.restore();
   },
 
-  drawBackgroundNature: (ctx, arena) => {
+  drawBackgroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => {
     const ground = arena.platforms[0];
     const y = ground.y;
 
@@ -193,7 +226,7 @@ export const MEADOW_THEME: ThemeConfig = {
     }
   },
 
-  drawForegroundNature: (ctx, arena) => {
+  drawForegroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => {
     const ground = arena.platforms[0];
     const gy = ground.y;
 
@@ -237,7 +270,9 @@ export const MEADOW_THEME: ThemeConfig = {
     drawFgWildflower(ctx, 1180, gy, '#FF69B4', 22);
   },
 
+  // ---- Audio ----
   ambientSoundConfig: {
     periodic: [{ sound: 'amb_bird_chirp', intervalRange: [5, 15] }],
   },
+  musicFile: 'meadow.mp3',
 };

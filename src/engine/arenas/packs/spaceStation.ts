@@ -1,6 +1,7 @@
-import type { ThemeConfig } from './types';
-import { createThornRenderer, createSpringRenderer } from './drawPrimitives';
-import { getFloatingPlatforms } from './utils';
+import type { ArenaPack } from '../types';
+import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
+import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
+import { getFloatingPlatforms } from '../../themes/utils';
 
 let scanLinePattern: CanvasPattern | null = null;
 
@@ -102,7 +103,7 @@ function drawSatellite(ctx: CanvasRenderingContext2D, obj: SpaceObject) {
   ctx.rotate(obj.rotation);
   const s = obj.size;
 
-  // Solar panels — bright blue to stand out against dark space
+  // Solar panels -- bright blue to stand out against dark space
   ctx.fillStyle = '#3355CC';
   ctx.fillRect(-s * 1.4, -s * 0.25, s * 1.0, s * 0.5);
   ctx.fillRect(s * 0.4, -s * 0.25, s * 1.0, s * 0.5);
@@ -120,7 +121,7 @@ function drawSatellite(ctx: CanvasRenderingContext2D, obj: SpaceObject) {
   ctx.strokeRect(-s * 1.4, -s * 0.25, s * 1.0, s * 0.5);
   ctx.strokeRect(s * 0.4, -s * 0.25, s * 1.0, s * 0.5);
 
-  // Body — bright metallic
+  // Body -- bright metallic
   ctx.fillStyle = '#AABBCC';
   ctx.fillRect(-s * 0.35, -s * 0.35, s * 0.7, s * 0.7);
   ctx.strokeStyle = '#CCDDEE';
@@ -147,12 +148,46 @@ function drawSatellite(ctx: CanvasRenderingContext2D, obj: SpaceObject) {
   ctx.restore();
 }
 
-export const SPACE_STATION_THEME: ThemeConfig = {
+export const spaceStation: ArenaPack = {
+  // ---- Identity ----
   id: 'space_station',
-  nameKey: 'arena_space_station',
-  previewGradient: 'linear-gradient(to bottom, #000010 0%, #0A0A2A 40%, #1A1A3A 100%)',
-  previewIcon: '🚀',
 
+  // ---- UI metadata ----
+  previewGradient: 'linear-gradient(to bottom, #000010 0%, #0A0A2A 40%, #1A1A3A 100%)',
+  previewIcon: '\u{1F680}',
+
+  // ---- Translations ----
+  translations: { en: 'Space Station', cs: 'Vesm\u00EDrn\u00E1 stanice', hi: '\u0905\u0902\u0924\u0930\u093F\u0915\u094D\u0937 \u0938\u094D\u091F\u0947\u0936\u0928', fil: 'Kalawakan' },
+
+  // ---- Layout ----
+  width: CANVAS_WIDTH,
+  height: CANVAS_HEIGHT,
+  platforms: [
+    { x: 0, y: 660, width: 220, height: 60 },
+    { x: 1060, y: 660, width: 220, height: 60 },
+    { x: 45, y: 465, width: 165, height: 24 },
+    { x: 25, y: 360, width: 180, height: 24 },
+    { x: 60, y: 270, width: 140, height: 24 },
+    { x: 1070, y: 445, width: 135, height: 24 },
+    { x: 1095, y: 350, width: 155, height: 24 },
+    { x: 1075, y: 260, width: 125, height: 24 },
+    { x: 85, y: 625, width: 50, height: 35 },
+    { x: 1140, y: 625, width: 45, height: 35 },
+  ],
+  spawnPoints: [
+    { x: 100, y: 445 }, { x: 1135, y: 425 },
+    { x: 100, y: 340 }, { x: 1170, y: 330 },
+    { x: 110, y: 640 }, { x: 1160, y: 640 },
+  ],
+  effectZones: [
+    { x: 250, y: 200, width: 780, height: 480, type: 'zero_g' },
+  ],
+  carrotZones: [
+    { x: 300, y: 220, width: 680, height: 440 },
+  ],
+  noSprings: true,
+
+  // ---- Visual config ----
   sky: {
     gradient: [
       { offset: 0, color: '#000008' },
@@ -223,6 +258,7 @@ export const SPACE_STATION_THEME: ThemeConfig = {
     },
   },
 
+  // ---- Ambient systems ----
   clouds: {
     count: 0,
     color: 'rgba(20, 20, 40, 0.3)',
@@ -274,6 +310,7 @@ export const SPACE_STATION_THEME: ThemeConfig = {
     showShootingStars: false,
   },
 
+  // ---- Custom draw functions ----
   drawAnimatedBackground: (ctx, _arena, time) => {
     // Reset on new match (time resets to near 0)
     if (time < lastAnimTime || spaceObjects.length === 0) {
@@ -344,7 +381,7 @@ export const SPACE_STATION_THEME: ThemeConfig = {
       ctx.stroke();
     }
 
-    // === Large open hangar doors in center — space visible through them ===
+    // === Large open hangar doors in center -- space visible through them ===
     // Door frame
     ctx.fillStyle = '#1A1A2A';
     ctx.fillRect(260, 20, 20, 640);   // Left door frame
@@ -444,7 +481,7 @@ export const SPACE_STATION_THEME: ThemeConfig = {
   drawBackgroundNature: (ctx, arena) => {
     const y = arena.platforms[0].y;
 
-    // Control panels — only on side decks
+    // Control panels -- only on side decks
     const drawControlPanel = (px: number, py: number, pw: number, ph: number) => {
       ctx.fillStyle = '#2A2A3A';
       ctx.fillRect(px, py - ph, pw, ph);
@@ -497,7 +534,7 @@ export const SPACE_STATION_THEME: ThemeConfig = {
     drawCable(1100, y - 45, 1240, y - 35, '#FFAA00');
     drawCable(1105, y - 40, 1235, y - 30, '#00CC44');
 
-    // Platform decorations — only on side stack platforms
+    // Platform decorations -- only on side stack platforms
     const floats = getFloatingPlatforms(arena.platforms).filter(p => p.x < 250 || p.x > 1000);
     for (let i = 0; i < floats.length; i++) {
       const plat = floats[i];
@@ -543,7 +580,7 @@ export const SPACE_STATION_THEME: ThemeConfig = {
     ctx.fillRect(0, 0, 1280, 720);
     ctx.restore();
 
-    // Large foreground structural beam — left side
+    // Large foreground structural beam -- left side
     ctx.save();
     ctx.globalAlpha = 0.5;
     ctx.fillStyle = '#0D0D1A';
@@ -572,7 +609,7 @@ export const SPACE_STATION_THEME: ThemeConfig = {
     ctx.fill();
     ctx.restore();
 
-    // Large foreground structural beam — right side
+    // Large foreground structural beam -- right side
     ctx.save();
     ctx.globalAlpha = 0.5;
     ctx.fillStyle = '#0D0D1A';
@@ -598,7 +635,7 @@ export const SPACE_STATION_THEME: ThemeConfig = {
     ctx.fill();
     ctx.restore();
 
-    // Foreground control console silhouette — center-right
+    // Foreground control console silhouette -- center-right
     ctx.save();
     ctx.globalAlpha = 0.45;
     ctx.fillStyle = '#0D0D1A';
@@ -674,6 +711,7 @@ export const SPACE_STATION_THEME: ThemeConfig = {
     ctx.restore();
   },
 
+  // ---- Gameplay modifiers ----
   physics: {
     gravity: 0.5,
     jumpImpulse: 0.8,
@@ -693,7 +731,7 @@ export const SPACE_STATION_THEME: ThemeConfig = {
       ctx.fillRect(sx, y + height * 0.7 + 2, 4, height * 0.3 - 4);
     }
 
-    // Electric sparks — cyan lightning bolts (double-stroke glow, no shadowBlur)
+    // Electric sparks -- cyan lightning bolts (double-stroke glow, no shadowBlur)
     const boltCount = 3;
     // Glow pass (wide, translucent)
     ctx.strokeStyle = '#00CCFF';
@@ -799,7 +837,9 @@ export const SPACE_STATION_THEME: ThemeConfig = {
     ctx.fill();
   }),
 
+  // ---- Audio ----
   ambientSoundConfig: {
     loops: ['amb_space_hum'],
   },
+  musicFile: 'space_station.mp3',
 };
