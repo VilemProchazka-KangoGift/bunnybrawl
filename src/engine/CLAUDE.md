@@ -47,7 +47,7 @@
 - Music preference persisted in `bunnybrawl_music_disabled` (localStorage). Loaded at AudioManager field init, not in `init()`. Wrap localStorage access in try/catch for restricted contexts.
 
 ## Arenas
-- Arena pack registry must be initialized before use — `registerBuiltinArenas()` called at module scope in `App.tsx`. Nav data registered separately via `registerBuiltinNavData()`.
+- Arena pack registry must be initialized before use — `registerBuiltinArenas()` called at module scope in `App.tsx`. Nav data is embedded in each pack's `navData` field and auto-registered.
 - `ArenaPack` in `arenas/types.ts` merges layout (platforms, spawns) + visuals (sky, draw functions) + translations + musicFile into one interface. `toArena()` / `toThemeConfig()` extract the old types for consumers that need them.
 - `platforms[0]` is always ground (or first ground segment, detected by `p.y >= 650`).
 - `allowFallOff` arenas: set `hills[].baseY` to 780+ to push hills offscreen.
@@ -63,7 +63,7 @@
 - Stuck recovery: nav-directed jump after 45 frames of <2px movement.
 - Chase/priority evaluators defer to nav when enemy on different level (|dy| > 40).
 - Fat bots flee like hurt bots (skip chase/stomp/platformSeeking).
-- `navData.ts` is generated — never hand-edit. Re-run after arena/physics changes.
+- Nav data in pack files (between `NAV-DATA-START`/`NAV-DATA-END` markers) is generated — never hand-edit. Re-run `npx vite-node scripts/generateNavData.ts` after arena/physics changes.
 - Nav graph doesn't model intra-platform obstacles or blocking ceilings. Small obstacles handled by stuck recovery; impassable barriers require splitting ground in arena definition.
 - Nav ceiling gap must exceed 174px (MAX_JUMP_HEIGHT) or phantom edges are created.
 - Lobby bots (`updateBotLobbyAI()` in CharacterSelect) are completely separate from match AI.

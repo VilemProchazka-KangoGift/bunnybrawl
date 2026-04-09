@@ -11,7 +11,6 @@ export {
   registerArena,
   getArenaPack,
   getArenaPackOrThrow,
-  setArenaNav,
   getArenaNav,
   getArenaDisplayName,
   listArenaPacks,

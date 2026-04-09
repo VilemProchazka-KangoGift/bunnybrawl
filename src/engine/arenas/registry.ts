@@ -12,10 +12,6 @@ export function registerArena(pack: ArenaPack): void {
   if (pack.navData) NAV.set(pack.id, pack.navData);
 }
 
-export function setArenaNav(arenaId: string, nav: ArenaNav): void {
-  NAV.set(arenaId, nav);
-}
-
 // ---- Lookup ----
 
 export function getArenaPack(id: string): ArenaPack | undefined {

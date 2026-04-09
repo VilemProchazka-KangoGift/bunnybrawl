@@ -225,11 +225,13 @@ for (const { id } of allArenas) {
   const startIdx = content.indexOf(MARKER_START);
   const endIdx = content.indexOf(MARKER_END);
 
+  if ((startIdx >= 0) !== (endIdx >= 0)) {
+    throw new Error(`Unpaired NAV-DATA marker in ${packPath}`);
+  }
+
   if (startIdx >= 0 && endIdx >= 0) {
-    // Replace existing nav data between markers
     content = content.substring(0, startIdx) + navBlock + content.substring(endIdx + MARKER_END.length);
   } else {
-    // Insert before the closing `};` of the pack export
     const lastBrace = content.lastIndexOf('};');
     if (lastBrace < 0) throw new Error(`Cannot find closing }; in ${packPath}`);
     content = content.substring(0, lastBrace) + navBlock + '\n' + content.substring(lastBrace);

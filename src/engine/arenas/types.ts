@@ -106,6 +106,7 @@ export interface ArenaPack {
 
 // ---- Navigation graph types ----
 
+/** Compact nav edge: t=target platform, y=type (j/d/w/g/z), x=approachX, d=danger (0-100). */
 export interface NavEdge {
   t: number;
   y: 'j' | 'd' | 'w' | 'g' | 'z';
@@ -114,7 +115,10 @@ export interface NavEdge {
 }
 
 export interface ArenaNav {
+  /** edges[platformIdx] = outgoing edges from that platform */
   edges: NavEdge[][];
+  /** nextHop[from][to] = fastest next platform. -1 = same platform, -2 = unreachable */
   nextHop: number[][];
+  /** safeHop[from][to] = safest path (avoids hazards). Same encoding as nextHop */
   safeHop: number[][];
 }

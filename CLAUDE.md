@@ -50,7 +50,6 @@ src/
       utility.ts    # 15 evaluators scoring moveLeft/moveRight/jump/drop
       personality.ts # 11 character profiles + 4 difficulty presets
       reachability.ts # Physics-based jump/drop/walk platform reachability functions
-      navData.ts    # Auto-generated per-arena navigation graphs (nextHop tables)
       index.ts      # Barrel export
     themes/       # Shared theme infrastructure (types + drawing primitives)
       types.ts      # ThemeConfig interface + all sub-interfaces (used by Renderer)
@@ -94,7 +93,7 @@ src/
 - **i18n via i18next** — Czech default. Canvas text uses `i18n.t()` directly (not the React hook).
 - **Character pack registry** — `CharacterPack` objects bundle colors, emoji, renderers, gibs, AI personality. Registered at startup via `registerBuiltinCharacters()`. Renderer dispatches via `getSpriteRenderer(name)`.
 - **Arena pack registry** — `ArenaPack` objects bundle layout + visuals + translations + music + physics mods. Registered at startup via `registerBuiltinArenas()`. Mirrors the character pack pattern. Shared drawing primitives in `themes/drawPrimitives.ts`.
-- **AI via utility scoring + nav graph** — bots produce `InputState` (4 booleans) same as keyboard. Precomputed `navData.ts` provides nextHop/safeHop waypoints.
+- **AI via utility scoring + nav graph** — bots produce `InputState` (4 booleans) same as keyboard. Precomputed nav data (in each arena pack's `navData` field) provides nextHop/safeHop waypoints.
 - **Death effects are gore-mode gated** — Gore ON: blood, gibs, splat marks. Gore OFF: confetti only.
 - **P2P network multiplayer** — WebRTC DataChannels via PeerJS (free signaling). GGPO-style rollback netcode with seeded PRNG for determinism. 2-player MVP, bots run deterministically on both peers.
 - **Mobile support** — `?mobile` URL param forces mobile mode. `isTouchPrimary()` detects coarse-pointer devices. `.is-mobile` CSS class on `<html>` for platform-conditional styles. Touch controls via `TouchInputManager` (same `InputState` interface as keyboard/AI). Haptic feedback via Vibration API.
@@ -244,5 +243,5 @@ Largest files to be aware of when context is limited:
 - `drawPrimitives.ts` ~990 lines — `CharacterSelect.tsx` ~900 lines
 - `audio.ts` ~1050 lines — `VictoryScreen.css` ~520 lines
 - Arena pack files ~200-800 lines each (11 arenas in `arenas/packs/`)
-- AI: `utility.ts` ~450, `awareness.ts` ~370, `navData.ts` ~300-500 (generated)
+- AI: `utility.ts` ~450, `awareness.ts` ~370
 - Net: `rollback.ts` ~340, `serialize.ts` ~320, `transport.ts` ~260, `protocol.ts` ~200
