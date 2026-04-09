@@ -841,5 +841,6 @@ export const spaceStation: ArenaPack = {
   ambientSoundConfig: {
     loops: ['amb_space_hum'],
   },
+  bubbleHelmet: true,
   musicFile: 'space_station.mp3',
 };

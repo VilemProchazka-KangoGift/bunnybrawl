@@ -4,7 +4,7 @@ export { InputManager, KEY_BINDINGS } from './input';
 export { Renderer } from './renderer';
 export { audio } from './audio';
 export { CHARACTERS, getCharacterForSlot, BOT_CHARACTERS, assignBotCharacters, getCharacterEmoji, hasCustomEyes, registerBuiltinCharacters, getAllCharacters } from './characters';
-export { getArena, listArenas, getTheme, listThemes, mirrorArena, registerBuiltinArenas } from './arenas';
+export { getArena, getTheme, mirrorArena, registerBuiltinArenas, listArenaPacks, getArenaDisplayName } from './arenas';
 export type { ArenaPack } from './arenas';
 export * from './types';
 export * from './constants';

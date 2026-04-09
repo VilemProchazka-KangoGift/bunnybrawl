@@ -698,5 +698,6 @@ export const underwater: ArenaPack = {
     periodic: [{ sound: 'amb_drip', intervalRange: [3, 10] }],
   },
 
+  bubbleHelmet: true,
   musicFile: 'underwater.mp3',
 };

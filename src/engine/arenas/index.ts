@@ -23,4 +23,4 @@ export {
 export { registerBuiltinArenas } from './builtin';
 
 // ---- Legacy backward-compat ----
-export { getArena, listArenas, getTheme, listThemes, mirrorArena } from './legacy';
+export { getArena, getTheme, mirrorArena } from './legacy';

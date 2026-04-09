@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../store/gameStore';
 import { audio } from '../engine/audio';
-import { listArenas, listThemes } from '../engine/arenas';
+import { listArenaPacks, getArenaDisplayName } from '../engine/arenas';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
 import { initWildlife, updateAndDrawWildlife, drawDayNightCycle } from '../engine/canvasAnimations';
 import type { SimpleWildlife } from '../engine/canvasAnimations';
@@ -653,12 +653,7 @@ export function MainMenu() {
           <div className="arena-selector" data-testid="arena-selector">
             <span className="arena-label">{t('arena_label')}</span>
             <div className="arena-options">
-              {(() => {
-                const arenas = listArenas();
-                const themes = listThemes();
-                return arenas.map(a => {
-                  const theme = themes.find(th => th.id === a.themeId);
-                  return (
+              {listArenaPacks().map(a => (
                     <button
                       key={a.id}
                       className={`arena-option ${matchSettings.arenaId === a.id ? 'selected' : ''}`}
@@ -668,14 +663,12 @@ export function MainMenu() {
                         setMatchSettings({ arenaId: a.id });
                       }}
                     >
-                      <div className="arena-preview" style={{ background: theme?.previewGradient || '#333' }}>
-                        <span className="arena-icon">{theme?.previewIcon || ''}</span>
+                      <div className="arena-preview" style={{ background: a.previewGradient }}>
+                        <span className="arena-icon">{a.previewIcon}</span>
                       </div>
-                      <span className="arena-name">{t(theme?.nameKey || a.name)}</span>
+                      <span className="arena-name">{getArenaDisplayName(a.id, i18n.language)}</span>
                     </button>
-                  );
-                });
-              })()}
+              ))}
               <button
                 className={`arena-option ${matchSettings.arenaId === 'random' ? 'selected' : ''}`}
                 onClick={() => {

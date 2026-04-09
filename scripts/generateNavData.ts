@@ -9,7 +9,7 @@
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { registerBuiltinArenas } from '../src/engine/arenas/builtin';
-import { getArena, listArenas } from '../src/engine/arenas';
+import { getArena, listArenaPacks } from '../src/engine/arenas';
 import { canJumpTo, canDropTo, canWalkTo, canGeyserTo, canZeroGTo, computeEdgeDanger } from '../src/engine/ai/reachability';
 import type { Platform, Arena } from '../src/engine/types';
 
@@ -151,7 +151,7 @@ function buildGraph(arena: Arena): ArenaNav {
 }
 
 // Generate nav data for all arenas
-const allArenas = listArenas();
+const allArenas = listArenaPacks();
 const navEntries: string[] = [];
 
 console.log('Generating nav data for', allArenas.length, 'arenas...\n');

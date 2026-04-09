@@ -181,6 +181,9 @@ export interface ThemeConfig {
 
   // Optional per-theme ambient sounds
   ambientSoundConfig?: AmbientSoundConfig;
+
+  /** Render a glass bubble helmet on all characters. */
+  bubbleHelmet?: boolean;
 }
 
 // ---- Ambient sound config ----

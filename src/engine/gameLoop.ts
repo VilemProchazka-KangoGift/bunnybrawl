@@ -76,7 +76,6 @@ export class GameLoop {
   private footstepAccumulators: Map<PlayerSlot, number> = new Map();
   private crowdStarted = false;
   private zeroGSoundPlaying = false;
-  private hasWaterfallZones = false;
   private cachedGeyserZones: EffectZone[] = [];
   private cachedZeroGZones: EffectZone[] = [];
   private geyserIndexMap: Map<EffectZone, number> = new Map();
@@ -277,7 +276,6 @@ export class GameLoop {
     this.cachedGeyserZones = (arena.effectZones || []).filter(z => z.type === 'geyser');
     this.cachedZeroGZones = (arena.effectZones || []).filter(z => z.type === 'zero_g');
     this.geyserIndexMap = new Map(this.cachedGeyserZones.map((z, i) => [z, i]));
-    this.hasWaterfallZones = (arena.effectZones || []).some(z => z.type === 'current' && z.vy && z.vy > 0);
     // Cache floating platforms with indices for hazard spawning
     const noSpawn = this.arena.noSpawnZones ?? [];
     this.floatingPlatforms = this.arena.platforms
@@ -331,7 +329,6 @@ export class GameLoop {
     this.lastTime = performance.now();
     audio.playMusic(this.arena.themeId);
     this.playSound('ambient');
-    if (this.hasWaterfallZones) this.playSound('waterfall_ambient');
     // Start theme ambient loops
     const ambConfig = this.theme.ambientSoundConfig;
     if (ambConfig?.loops) {
@@ -370,7 +367,6 @@ export class GameLoop {
     audio.stop('ambient');
     audio.stop('zero_g');
     audio.stop('crowd');
-    audio.stop('waterfall_ambient');
     // Stop all theme ambient loops
     for (const loop of this.activeAmbientLoops) {
       audio.stop(loop);

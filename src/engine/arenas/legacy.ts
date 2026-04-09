@@ -5,36 +5,15 @@
  */
 import type { Arena } from '../types';
 import type { ThemeConfig } from '../themes/types';
-import { getArenaPackOrThrow, listArenaPacks, toArena, toThemeConfig } from './registry';
+import { getArenaPackOrThrow, toArena, toThemeConfig } from './registry';
 import { CANVAS_WIDTH } from '../constants';
 
-/** Drop-in replacement for old getArena(id) from arena.ts */
 export function getArena(id: string = 'meadow'): Arena {
   return toArena(getArenaPackOrThrow(id));
 }
 
-/** Drop-in replacement for old listArenas() from arena.ts */
-export function listArenas(): Array<{ id: string; name: string; themeId: string }> {
-  return listArenaPacks().map(p => ({
-    id: p.id,
-    name: p.translations.en ?? p.id,
-    themeId: p.id,
-  }));
-}
-
-/** Drop-in replacement for old getTheme(id) from themes/registry.ts */
 export function getTheme(id: string): ThemeConfig {
   return toThemeConfig(getArenaPackOrThrow(id));
-}
-
-/** Drop-in replacement for old listThemes() from themes/registry.ts */
-export function listThemes(): Array<{ id: string; nameKey: string; previewGradient: string; previewIcon: string }> {
-  return listArenaPacks().map(p => ({
-    id: p.id,
-    nameKey: `arena_${p.id}`,
-    previewGradient: p.previewGradient,
-    previewIcon: p.previewIcon,
-  }));
 }
 
 /** Create a horizontally mirrored copy of an arena. Never mutates the original. */

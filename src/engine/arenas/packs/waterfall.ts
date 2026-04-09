@@ -437,6 +437,7 @@ export const waterfall: ArenaPack = {
 
   // ---- Audio ----
   ambientSoundConfig: {
+    loops: ['waterfall_ambient'],
     periodic: [{ sound: 'amb_bird_chirp', intervalRange: [6, 15] }],
   },
   musicFile: 'waterfall.mp3',

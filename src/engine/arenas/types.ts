@@ -88,6 +88,8 @@ export interface ArenaPack {
   drawCustomSpring?: (ctx: CanvasRenderingContext2D, x: number, y: number, size: number, bounceTimer: number, growScale: number, fadeAlpha: number) => void;
 
   // ---- Gameplay modifiers (types synced with ThemeConfig) ----
+  /** Render a glass bubble helmet on all characters in this arena. */
+  bubbleHelmet?: boolean;
   ghostConfig?: ThemeConfig['ghostConfig'];
   lavaRockConfig?: ThemeConfig['lavaRockConfig'];
   pigeonConfig?: ThemeConfig['pigeonConfig'];

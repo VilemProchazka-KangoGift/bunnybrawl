@@ -108,5 +108,6 @@ export function toThemeConfig(pack: ArenaPack): ThemeConfig {
     pigeonConfig: pack.pigeonConfig,
     physics: pack.physics,
     ambientSoundConfig: pack.ambientSoundConfig,
+    bubbleHelmet: pack.bubbleHelmet,
   };
 }
