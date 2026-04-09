@@ -112,3 +112,8 @@ export const useGameStore = create<GameStore>((set) => ({
       online: { ...defaultOnline },
     }),
 }));
+
+// Expose store for E2E testing
+if (typeof window !== 'undefined') {
+  (window as any).__gameStore = useGameStore;
+}

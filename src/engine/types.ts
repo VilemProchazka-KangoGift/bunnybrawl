@@ -126,6 +126,8 @@ export interface Player {
   damageFlashTimer: number;    // >0 = show red flash
   burnTimer: number;           // >0 = on fire from lava, spawns flame particles
   hitstopTimer: number;        // >0 = physics frozen (post-kill freeze)
+  renderOffsetX: number;       // visual-only offset from rollback correction, decays to 0
+  renderOffsetY: number;       // visual-only offset from rollback correction, decays to 0
 }
 
 export type SplatShape = 'circle' | 'star' | 'splat' | 'ring' | 'paw';

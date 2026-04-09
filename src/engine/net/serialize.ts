@@ -132,6 +132,38 @@ function snapshotPlayer(p: Player): PlayerSnapshot {
   };
 }
 
+/** Copy player fields into an existing PlayerSnapshot (zero allocation). */
+function snapshotPlayerInto(target: PlayerSnapshot, p: Player): void {
+  target.id = p.id;
+  target.x = p.x; target.y = p.y;
+  target.vx = p.vx; target.vy = p.vy;
+  target.width = p.width; target.height = p.height;
+  target.state = p.state;
+  target.facing = p.facing;
+  target.splatTimer = p.splatTimer;
+  target.respawnTimer = p.respawnTimer;
+  target.invincibleTimer = p.invincibleTimer;
+  target.score = p.score;
+  target.active = p.active;
+  target.animFrame = p.animFrame;
+  target.animTimer = p.animTimer;
+  target.fastFalling = p.fastFalling;
+  target.fatTimer = p.fatTimer;
+  target.slowTimer = p.slowTimer;
+  target.squashScale = p.squashScale;
+  target.squashTimer = p.squashTimer;
+  target.sideSquash = p.sideSquash;
+  target.idleAnimTimer = p.idleAnimTimer;
+  target.expression = p.expression;
+  target.killStreak = p.killStreak;
+  target.breathTimer = p.breathTimer;
+  target.springTrailTimer = p.springTrailTimer;
+  target.damageFlashSide = p.damageFlashSide;
+  target.damageFlashTimer = p.damageFlashTimer;
+  target.burnTimer = p.burnTimer;
+  target.hitstopTimer = p.hitstopTimer;
+}
+
 function restorePlayer(p: Player, snap: PlayerSnapshot): void {
   p.x = snap.x; p.y = snap.y;
   p.vx = snap.vx; p.vy = snap.vy;
@@ -166,6 +198,170 @@ function restorePlayer(p: Player, snap: PlayerSnapshot): void {
 
 function cloneArray<T>(arr: T[]): T[] {
   return arr.map(item => ({ ...item }));
+}
+
+/**
+ * Copy array of plain objects into a target array in-place.
+ * Reuses existing target slots, pushes new objects only when source is larger.
+ */
+function copyArrayInto<T extends object>(target: T[], source: T[]): void {
+  // Copy existing slots
+  const min = Math.min(target.length, source.length);
+  for (let i = 0; i < min; i++) {
+    Object.assign(target[i], source[i]);
+  }
+  // Grow: push new copies
+  for (let i = min; i < source.length; i++) {
+    target.push({ ...source[i] });
+  }
+  // Shrink
+  target.length = source.length;
+}
+
+/** Create an empty GameSnapshot for pre-allocation. */
+export function createEmptySnapshot(): GameSnapshot {
+  return {
+    frame: -1,
+    rngState: 0,
+    players: [],
+    killFeed: [],
+    timeElapsed: 0,
+    matchOver: false,
+    winner: null,
+    countdown: 0,
+    dayPhase: 0,
+    carrots: [],
+    carrotTimer: 0,
+    springs: [],
+    thorns: [],
+    springSpawnTimer: 0,
+    thornSpawnTimer: 0,
+    ghosts: [],
+    lavaRocks: [],
+    lavaRockTimer: 0,
+    geyserStates: [],
+    pigeonFlocks: [],
+    bouncyWobble: [],
+    screenShake: 0,
+    slowMotion: 0,
+    screenFlash: 0,
+    hitstopZoom: 0,
+    scoreAnimations: [],
+    shockwaves: [],
+    stats: [],
+    aiStates: [],
+  };
+}
+
+/**
+ * Copy game state into an existing GameSnapshot in-place (zero allocation in steady state).
+ * Only allocates when arrays grow beyond their pre-existing capacity.
+ */
+export function takeSnapshotInto(
+  target: GameSnapshot,
+  frame: number,
+  state: MatchState,
+  rng: SeededRNG | undefined,
+  aiControllers: Map<string, AIController>,
+): void {
+  target.frame = frame;
+  target.rngState = rng ? rng.getState() : 0;
+
+  // Players — grow target array if needed, copy fields in-place
+  while (target.players.length < state.players.length) {
+    target.players.push(snapshotPlayer(state.players[target.players.length]));
+  }
+  target.players.length = state.players.length;
+  for (let i = 0; i < state.players.length; i++) {
+    snapshotPlayerInto(target.players[i], state.players[i]);
+  }
+
+  copyArrayInto(target.killFeed, state.killFeed);
+
+  target.timeElapsed = state.timeElapsed;
+  target.matchOver = state.matchOver;
+  target.winner = state.winner;
+  target.countdown = state.countdown;
+  target.dayPhase = state.dayPhase;
+
+  copyArrayInto(target.carrots, state.carrots);
+  target.carrotTimer = state.carrotTimer;
+  copyArrayInto(target.springs, state.springs);
+  copyArrayInto(target.thorns, state.thorns);
+  target.springSpawnTimer = state.springSpawnTimer;
+  target.thornSpawnTimer = state.thornSpawnTimer;
+  copyArrayInto(target.ghosts, state.ghosts);
+  copyArrayInto(target.lavaRocks, state.lavaRocks);
+  target.lavaRockTimer = state.lavaRockTimer;
+
+  // Geyser states
+  const geyserSrc = state.geyserStates;
+  while (target.geyserStates.length < geyserSrc.length) {
+    target.geyserStates.push({ timer: 0, active: false, activeTimer: 0 });
+  }
+  target.geyserStates.length = geyserSrc.length;
+  for (let i = 0; i < geyserSrc.length; i++) {
+    const t = target.geyserStates[i], s = geyserSrc[i];
+    t.timer = s.timer; t.active = s.active; t.activeTimer = s.activeTimer;
+  }
+
+  // Pigeon flocks
+  const pigeonSrc = state.pigeonFlocks;
+  while (target.pigeonFlocks.length < pigeonSrc.length) {
+    target.pigeonFlocks.push({ x: 0, y: 0, active: false, respawnTimer: 0 });
+  }
+  target.pigeonFlocks.length = pigeonSrc.length;
+  for (let i = 0; i < pigeonSrc.length; i++) {
+    const t = target.pigeonFlocks[i], s = pigeonSrc[i];
+    t.x = s.x; t.y = s.y; t.active = s.active; t.respawnTimer = s.respawnTimer;
+  }
+
+  // Bouncy wobble (Map → array of tuples, forEach avoids iterator allocation)
+  let wi = 0;
+  state.bouncyWobble.forEach((v, k) => {
+    if (wi < target.bouncyWobble.length) {
+      target.bouncyWobble[wi][0] = k;
+      target.bouncyWobble[wi][1] = v;
+    } else {
+      target.bouncyWobble.push([k, v]);
+    }
+    wi++;
+  });
+  target.bouncyWobble.length = wi;
+
+  target.screenShake = state.screenShake;
+  target.slowMotion = state.slowMotion;
+  target.screenFlash = state.screenFlash;
+  target.hitstopZoom = state.hitstopZoom;
+
+  copyArrayInto(target.scoreAnimations, state.scoreAnimations);
+  copyArrayInto(target.shockwaves, state.shockwaves);
+
+  // Stats (Map → array of tuples, forEach avoids iterator allocation)
+  let si = 0;
+  state.stats.perPlayer.forEach((stats, slot) => {
+    if (si < target.stats.length) {
+      target.stats[si][0] = slot;
+      Object.assign(target.stats[si][1], stats);
+    } else {
+      target.stats.push([slot, { ...stats }]);
+    }
+    si++;
+  });
+  target.stats.length = si;
+
+  // AI states (forEach avoids iterator allocation)
+  let ai = 0;
+  aiControllers.forEach((ctrl, id) => {
+    if (ai < target.aiStates.length) {
+      target.aiStates[ai][0] = id;
+      ctrl.serializeInto(target.aiStates[ai][1]);
+    } else {
+      target.aiStates.push([id, ctrl.serialize()]);
+    }
+    ai++;
+  });
+  target.aiStates.length = ai;
 }
 
 // ---- Public API ----
@@ -224,8 +420,7 @@ export function restoreSnapshot(
     restorePlayer(state.players[i], snap.players[i]);
   }
 
-  state.killFeed.length = 0;
-  state.killFeed.push(...cloneArray(snap.killFeed));
+  copyArrayInto(state.killFeed, snap.killFeed);
 
   state.timeElapsed = snap.timeElapsed;
   state.matchOver = snap.matchOver;
@@ -233,25 +428,19 @@ export function restoreSnapshot(
   state.countdown = snap.countdown;
   state.dayPhase = snap.dayPhase;
 
-  state.carrots.length = 0;
-  state.carrots.push(...cloneArray(snap.carrots));
+  copyArrayInto(state.carrots, snap.carrots);
   state.carrotTimer = snap.carrotTimer;
 
-  state.springs.length = 0;
-  state.springs.push(...cloneArray(snap.springs));
-  state.thorns.length = 0;
-  state.thorns.push(...cloneArray(snap.thorns));
+  copyArrayInto(state.springs, snap.springs);
+  copyArrayInto(state.thorns, snap.thorns);
   state.springSpawnTimer = snap.springSpawnTimer;
   state.thornSpawnTimer = snap.thornSpawnTimer;
 
-  state.ghosts.length = 0;
-  state.ghosts.push(...cloneArray(snap.ghosts));
-  state.lavaRocks.length = 0;
-  state.lavaRocks.push(...cloneArray(snap.lavaRocks));
+  copyArrayInto(state.ghosts, snap.ghosts);
+  copyArrayInto(state.lavaRocks, snap.lavaRocks);
   state.lavaRockTimer = snap.lavaRockTimer;
 
-  state.geyserStates.length = 0;
-  state.geyserStates.push(...snap.geyserStates.map(g => ({ ...g })));
+  copyArrayInto(state.geyserStates, snap.geyserStates);
 
   // Restore pigeon flocks (preserve scatterParticles — cosmetic)
   for (let i = 0; i < state.pigeonFlocks.length && i < snap.pigeonFlocks.length; i++) {
@@ -270,13 +459,13 @@ export function restoreSnapshot(
   state.screenFlash = snap.screenFlash;
   state.hitstopZoom = snap.hitstopZoom;
 
-  state.scoreAnimations.length = 0;
-  state.scoreAnimations.push(...snap.scoreAnimations.map(s => ({ ...s })));
-  state.shockwaves.length = 0;
-  state.shockwaves.push(...snap.shockwaves.map(s => ({ ...s })));
+  copyArrayInto(state.scoreAnimations, snap.scoreAnimations);
+  copyArrayInto(state.shockwaves, snap.shockwaves);
 
+  // Stats — copy snapshot values into state map (must not share references with snapshot)
   state.stats.perPlayer.clear();
-  for (const [slot, stats] of snap.stats) {
+  for (let i = 0; i < snap.stats.length; i++) {
+    const [slot, stats] = snap.stats[i];
     state.stats.perPlayer.set(slot, { ...stats });
   }
 
@@ -309,14 +498,65 @@ export function crc32(str: string): number {
   return (crc ^ 0xFFFFFFFF) >>> 0;
 }
 
-/** Compute a fast hash of gameplay-critical state for desync detection. */
-export function hashGameState(state: MatchState, rng: SeededRNG | undefined): number {
-  // Hash player positions, scores, and key timers — fast approximation
-  let str = '';
-  for (const p of state.players) {
-    str += `${p.id}:${p.x.toFixed(2)},${p.y.toFixed(2)},${p.score},${p.state};`;
+/** Compute CRC32 over raw bytes of a Float64Array (no string allocation). */
+function crc32Bytes(buf: Uint8Array, len: number): number {
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < len; i++) {
+    crc = CRC_TABLE[(crc ^ buf[i]) & 0xFF] ^ (crc >>> 8);
   }
-  str += `t=${state.timeElapsed.toFixed(3)},c=${state.carrots.length},s=${state.springs.length}`;
-  str += `,r=${rng ? rng.getState() : 0}`;
-  return crc32(str);
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+// Pre-allocated buffer for numeric hashing
+// Capacity: 5 players * 4 + entities + timers + RNG ≈ 128 floats max
+const HASH_BUF = new Float64Array(128);
+const HASH_BYTES = new Uint8Array(HASH_BUF.buffer);
+
+/** Player state enum → numeric value for hashing. */
+const STATE_HASH: Record<string, number> = {
+  alive: 1, splatted: 2, respawning: 3,
+};
+
+/**
+ * Compute a fast hash of gameplay-critical state for desync detection. Zero allocation.
+ * Covers: player positions/scores, hazard positions, spawn timers, RNG state.
+ */
+export function hashGameState(state: MatchState, rng: SeededRNG | undefined): number {
+  let idx = 0;
+  // Players
+  for (let i = 0; i < state.players.length; i++) {
+    const p = state.players[i];
+    HASH_BUF[idx++] = p.x;
+    HASH_BUF[idx++] = p.y;
+    HASH_BUF[idx++] = p.score;
+    HASH_BUF[idx++] = STATE_HASH[p.state] ?? 0;
+  }
+  // Hazard & pickup positions (catch spawn desync)
+  for (let i = 0; i < state.carrots.length; i++) {
+    HASH_BUF[idx++] = state.carrots[i].x;
+    HASH_BUF[idx++] = state.carrots[i].y;
+  }
+  for (let i = 0; i < state.springs.length; i++) {
+    HASH_BUF[idx++] = state.springs[i].x;
+  }
+  for (let i = 0; i < state.thorns.length; i++) {
+    HASH_BUF[idx++] = state.thorns[i].x;
+  }
+  for (let i = 0; i < state.lavaRocks.length; i++) {
+    HASH_BUF[idx++] = state.lavaRocks[i].x;
+    HASH_BUF[idx++] = state.lavaRocks[i].y;
+  }
+  // Geyser states
+  for (let i = 0; i < state.geyserStates.length; i++) {
+    HASH_BUF[idx++] = state.geyserStates[i].timer;
+    HASH_BUF[idx++] = state.geyserStates[i].active ? 1 : 0;
+  }
+  // Global timers + RNG
+  HASH_BUF[idx++] = state.timeElapsed;
+  HASH_BUF[idx++] = state.dayPhase;
+  HASH_BUF[idx++] = state.carrotTimer;
+  HASH_BUF[idx++] = state.springSpawnTimer;
+  HASH_BUF[idx++] = state.thornSpawnTimer;
+  HASH_BUF[idx++] = rng ? rng.getState() : 0;
+  return crc32Bytes(HASH_BYTES, idx * 8);
 }

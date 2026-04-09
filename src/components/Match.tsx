@@ -281,7 +281,7 @@ export function Match() {
                       {t('cancel_game', 'Cancel Game')}
                     </button>
                   ) : (
-                    <button className="btn-base pause-btn quit-btn" onClick={handleQuit}>
+                    <button className="btn-base pause-btn quit-btn" onClick={handleQuit} data-testid="quit-button">
                       {t('leave_game', 'Leave Game')}
                     </button>
                   )}

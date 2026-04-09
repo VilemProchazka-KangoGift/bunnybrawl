@@ -194,6 +194,18 @@ export function MainMenu() {
 
   const allChars = getAllCharacters();
 
+  // If remote picked the same character, force local to a different one
+  useEffect(() => {
+    if (online.remoteCharacterName && onlineLocalChar === online.remoteCharacterName) {
+      const alt = allChars.find(c => c.name !== online.remoteCharacterName);
+      if (alt) {
+        setOnlineLocalChar(alt.name);
+        onlineLocalCharRef.current = alt.name;
+        onlineTransportRef.current?.sendReliable({ type: MsgType.CHARACTER_SELECT, characterName: alt.name });
+      }
+    }
+  }, [online.remoteCharacterName]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const onlineCleanup = useCallback(() => {
     if (onlineTransportRef.current) {
       onlineTransportRef.current.destroy();
@@ -247,6 +259,13 @@ export function MainMenu() {
     const transport = new Transport({
       onStatusChange: (status: ConnectionStatus, error?: string) => {
         setOnline({ connectionStatus: status, connectionError: error ?? null });
+        if (status === 'disconnected') {
+          // Remote peer disconnected — clear their character and ready state
+          remoteCharRef.current = null;
+          setOnline({ remoteCharacterName: null });
+          setOnlineRemoteReady(false);
+          setOnlineStep('connecting'); // back to waiting
+        }
         if (status === 'connected') {
           setOnlineStep('lobby');
           transport.sendReliable({ type: MsgType.HANDSHAKE, protocolVersion: PROTOCOL_VERSION, playerName: 'Player' });
@@ -267,6 +286,16 @@ export function MainMenu() {
         if (msg.type === MsgType.CHARACTER_SELECT) {
           remoteCharRef.current = msg.characterName;
           setOnline({ remoteCharacterName: msg.characterName });
+          // If remote picked the same character as local (e.g. same-browser testing),
+          // auto-switch local to the first available different character
+          if (msg.characterName === onlineLocalCharRef.current) {
+            const alt = allChars.find(c => c.name !== msg.characterName);
+            if (alt) {
+              setOnlineLocalChar(alt.name);
+              onlineLocalCharRef.current = alt.name;
+              transport.sendReliable({ type: MsgType.CHARACTER_SELECT, characterName: alt.name });
+            }
+          }
         } else if (msg.type === MsgType.SETTINGS_SYNC) {
           useGameStore.getState().setMatchSettings({
             arenaId: msg.arenaId, killLimit: msg.killLimit, timeLimit: msg.timeLimit,
@@ -287,9 +316,9 @@ export function MainMenu() {
     _modalTransport = transport;
 
     if (isHost) {
-      transport.createRoom().then(code => setOnline({ roomCode: code })).catch(() => {});
+      transport.createRoom().then(code => setOnline({ roomCode: code })).catch(() => { onlineCleanup(); });
     } else if (joinCode) {
-      transport.joinRoom(joinCode).catch(() => {});
+      transport.joinRoom(joinCode).catch(() => { onlineCleanup(); });
     }
   }, [matchSettings, setOnline]);
 
@@ -347,7 +376,7 @@ export function MainMenu() {
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: 'middle', marginRight: 8 }}><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
               {t('play_local', 'Play Local')}
             </button>
-            <button className="btn-base menu-btn online-btn" onClick={() => { audio.init(); audio.play('select'); setOnlineOpen(true); }}>
+            <button className="btn-base menu-btn online-btn" data-testid="online-btn" onClick={() => { audio.init(); audio.play('select'); setOnlineOpen(true); }}>
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: 'middle', marginRight: 8 }}><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
               {t('online', 'Online')}
             </button>
@@ -568,7 +597,8 @@ export function MainMenu() {
                       }
                       return t('online_bots_info', { count: n });
                     })()}</p>}
-                    <button className="btn-base menu-btn online-create-btn" onClick={() => { audio.play('select'); onlineConnect(true); }}>
+                    <button className="btn-base menu-btn online-create-btn" data-testid="online-create-btn" onClick={() => { audio.play('select'); onlineConnect(true); }}>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: 'middle', marginRight: 6 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
                       {t('create_room', 'Create Room')}
                     </button>
                     <div className="online-divider">
@@ -576,7 +606,8 @@ export function MainMenu() {
                       <span className="online-or">{t('or', 'or')}</span>
                       <span className="online-divider-line" />
                     </div>
-                    <button className="btn-base menu-btn" onClick={() => { audio.play('select'); setOnlineJoinMode(true); }}>
+                    <button className="btn-base menu-btn" data-testid="online-join-btn" onClick={() => { audio.play('select'); setOnlineJoinMode(true); }}>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: 'middle', marginRight: 6 }}><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
                       {t('join_room_full', 'Join Room')}
                     </button>
                     <button className="btn-base mods-close-btn" onClick={() => setOnlineOpen(false)}>{t('back', 'Back')}</button>
@@ -587,12 +618,12 @@ export function MainMenu() {
                 {onlineStep === 'choose' && onlineJoinMode && (
                   <div className="online-step">
                     <p className="online-join-label">{t('enter_room_code', 'Enter the room code:')}</p>
-                    <input className="online-code-input" type="text" maxLength={3} placeholder={t('code_placeholder', 'Code')}
+                    <input className="online-code-input" data-testid="online-code-input" type="text" maxLength={3} placeholder={t('code_placeholder', 'Code')}
                       value={onlineJoinCode} autoFocus
                       onChange={(e) => setOnlineJoinCode(e.target.value.toUpperCase().replace(/[^A-Z2-9]/g, ''))}
                       onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter' && onlineJoinCode.length >= 3) { audio.play('select'); onlineConnect(false, onlineJoinCode); } }}
                     />
-                    <button className="btn-base menu-btn online-create-btn" disabled={onlineJoinCode.length < 3}
+                    <button className={`btn-base menu-btn online-create-btn${onlineJoinCode.length >= 3 ? ' play-btn' : ''}`} data-testid="online-join-submit" disabled={onlineJoinCode.length < 3}
                       onClick={() => { audio.play('select'); onlineConnect(false, onlineJoinCode); }}>
                       {t('join_room', 'Join')}
                     </button>
@@ -606,7 +637,7 @@ export function MainMenu() {
                     {online.roomCode && (
                       <div className="online-room-code">
                         <span className="online-code-label">{t('room_code', 'Room Code')}</span>
-                        <span className="online-code">{online.roomCode}</span>
+                        <span className="online-code" data-testid="online-room-code">{online.roomCode}</span>
                       </div>
                     )}
 
@@ -614,8 +645,12 @@ export function MainMenu() {
                       <div className="online-section">
                         <span className="online-section-title">{t('your_character', 'Your character')}</span>
                         <select className="online-char-select" value={onlineLocalChar}
-                          onChange={(e) => { setOnlineLocalChar(e.target.value); onlineLocalCharRef.current = e.target.value; localStorage.setItem('bunnybrawl_online_char', e.target.value); }}>
-                          {allChars.map(c => <option key={c.name} value={c.name}>{getCharacterEmoji(c.name)} {getCharacterDisplayName(c.name, i18n.language)}</option>)}
+                          onChange={(e) => {
+                            setOnlineLocalChar(e.target.value); onlineLocalCharRef.current = e.target.value;
+                            localStorage.setItem('bunnybrawl_online_char', e.target.value);
+                            onlineTransportRef.current?.sendReliable({ type: MsgType.CHARACTER_SELECT, characterName: e.target.value });
+                          }}>
+                          {allChars.map(c => <option key={c.name} value={c.name} disabled={c.name === online.remoteCharacterName}>{getCharacterEmoji(c.name)} {getCharacterDisplayName(c.name, i18n.language)}{c.name === online.remoteCharacterName ? ` (${t('taken', 'taken')})` : ''}</option>)}
                         </select>
                       </div>
                     )}
@@ -680,7 +715,7 @@ export function MainMenu() {
 
                     {/* Guest: ready button or ready badge */}
                     {!online.isHost && !onlineLocalReady && (
-                      <button className="btn-base menu-btn play-btn" onClick={() => {
+                      <button className="btn-base menu-btn play-btn" data-testid="online-ready-btn" onClick={() => {
                         audio.play('select'); setOnlineLocalReady(true);
                         onlineTransportRef.current?.sendReliable({ type: MsgType.READY } as ReliableMessage);
                       }}>{t('ready_up', 'Ready!')}</button>
@@ -691,7 +726,7 @@ export function MainMenu() {
 
                     {/* Host: always show start button once connected */}
                     {online.isHost && (
-                      <button className="btn-base menu-btn play-btn" onClick={() => {
+                      <button className="btn-base menu-btn play-btn" data-testid="online-start-btn" onClick={() => {
                         audio.play('select');
                         onlineTransportRef.current?.sendReliable({ type: MsgType.START_MATCH } as ReliableMessage);
                         onlineStartMatch();

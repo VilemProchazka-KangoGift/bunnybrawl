@@ -47,14 +47,13 @@ export function VictoryScreen() {
     setScreen('match');
   }, [online.isOnline, online.isHost, setScreen]);
 
-  const handleMenu = () => {
-    // Clean up transport on exit to menu
+  const handleMenu = useCallback(() => {
     const transport = getModalTransport();
     if (transport) transport.destroy();
     useGameStore.getState().resetOnline();
     setActivePlayers([]);
     setScreen('menu');
-  };
+  }, [setActivePlayers, setScreen]);
   const handleChooseArena = useCallback((arenaId: string) => {
     setMatchSettings({ arenaId });
     setShowArenaSelect(false);
@@ -208,7 +207,7 @@ export function VictoryScreen() {
       <div className="victory-bg">
         <div className="victory-content">
           {disconnectWin && (
-            <p className="disconnect-info" style={{ color: '#FF6B6B', fontSize: '18px', margin: '0 0 8px' }}>
+            <p className="disconnect-info" data-testid="disconnect-info" style={{ color: '#FF6B6B', fontSize: '18px', margin: '0 0 8px' }}>
               {t('game_ended_disconnect', 'Game ended — a player disconnected.')}
             </p>
           )}
@@ -298,14 +297,14 @@ export function VictoryScreen() {
               <button className="btn-base rematch-btn" onClick={handleRematch} data-testid="rematch-button">{t('victory_rematch')}</button>
             )}
             {!disconnectWin && (!online.isOnline || online.isHost) && (
-              <button className="btn-base arena-btn-v" onClick={() => setShowArenaSelect(true)}>{t('victory_choose_arena')}</button>
+              <button className="btn-base arena-btn-v" data-testid="change-arena-button" onClick={() => setShowArenaSelect(true)}>{t('victory_choose_arena')}</button>
             )}
             <button className="btn-base menu-btn-v" onClick={handleMenu} data-testid="menu-button">{t(disconnectWin || (online.isOnline && !online.isHost) ? 'leave_game' : 'victory_menu')}</button>
           </div>
 
           {showArenaSelect && (
             <div className="victory-arena-overlay" onClick={() => setShowArenaSelect(false)}>
-              <div className="victory-arena-modal" onClick={e => e.stopPropagation()}>
+              <div className="victory-arena-modal" data-testid="arena-select-modal" onClick={e => e.stopPropagation()}>
                 <h2 className="victory-arena-title">{t('victory_choose_arena')}</h2>
                 <div className="victory-arena-grid">
                   {arenas.map(a => {

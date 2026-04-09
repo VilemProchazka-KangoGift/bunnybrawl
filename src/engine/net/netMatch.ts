@@ -94,7 +94,7 @@ export class NetMatch {
   }
 
   handleReliableMessage(msg: ReliableMessage): void {
-    if (msg.type === MsgType.DESYNC_CHECK) {
+    if (msg.type === MsgType.DESYNC_CHECK || msg.type === MsgType.DESYNC_REQUEST || msg.type === MsgType.DESYNC_CORRECTION) {
       this.rollback.handleReliableMessage(msg);
     } else if (msg.type === MsgType.PAUSE) {
       if (msg.paused) {

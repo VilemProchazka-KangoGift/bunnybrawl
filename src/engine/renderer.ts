@@ -15,6 +15,8 @@ import { drawHighlightSpot } from './spriteShading';
 import { debugFlags } from './debugFlags';
 import { drawNavDebugOverlay } from './navDebugOverlay';
 import type { BotNavDebugState } from './navDebugOverlay';
+import { drawNetDebugOverlay } from './net/debugOverlay';
+import type { NetDebugStats } from './net/rollback';
 import i18n from '../i18n';
 
 interface Cloud {
@@ -68,6 +70,7 @@ export class Renderer {
   private mirrored = false;
   private originalArena: Arena | null = null;  // un-mirrored arena for theme draw calls
   private _botNavDebugStates: BotNavDebugState[] = [];
+  private _netDebugStats: NetDebugStats | null = null;
 
   constructor(bgCanvas: HTMLCanvasElement, fgCanvas: HTMLCanvasElement, theme: ThemeConfig, mirrored = false) {
     this.bgCtx = bgCanvas.getContext('2d')!;
@@ -95,6 +98,10 @@ export class Renderer {
 
   setBotNavDebugStates(states: BotNavDebugState[]): void {
     this._botNavDebugStates = states;
+  }
+
+  setNetDebugStats(stats: NetDebugStats | null): void {
+    this._netDebugStats = stats;
   }
 
   renderBackground(arena: Arena, originalArena?: Arena): void {
@@ -541,6 +548,11 @@ export class Renderer {
     // Nav debug overlay (dev only — ?debug=nav)
     if (debugFlags.navDebugEnabled) {
       drawNavDebugOverlay(ctx, arena, this.mirrored, this._botNavDebugStates);
+    }
+
+    // Net debug overlay (dev only — ?debug=net)
+    if (debugFlags.netDebugEnabled && this._netDebugStats) {
+      drawNetDebugOverlay(ctx, this._netDebugStats, CANVAS_WIDTH);
     }
 
     // Screen flash (f) — drawn after everything
@@ -1396,7 +1408,10 @@ export class Renderer {
   // ---- Player drawing ----
 
   private drawPlayer(ctx: CanvasRenderingContext2D, player: Player, nearCarrot: boolean = false): void {
-    const { x, y, width, height, character, state, facing, invincibleTimer, animFrame, fastFalling, fatTimer, slowTimer } = player;
+    const { width, height, character, state, facing, invincibleTimer, animFrame, fastFalling, fatTimer, slowTimer } = player;
+    // Apply visual correction offset from rollback smoothing
+    const x = player.x + player.renderOffsetX;
+    const y = player.y + player.renderOffsetY;
 
     const cx = x + width / 2;
     const cy = y + height;

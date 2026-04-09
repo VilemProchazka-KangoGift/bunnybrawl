@@ -8,10 +8,9 @@ describe('MainMenu', () => {
     useGameStore.getState().reset();
   });
 
-  it('renders the game title', () => {
+  it('renders the game logo', () => {
     render(<MainMenu />);
-    expect(screen.getByText('Carrot')).toBeInTheDocument();
-    expect(screen.getByText('Royale')).toBeInTheDocument();
+    expect(screen.getByAltText('Carrot Royale')).toBeInTheDocument();
   });
 
   it('renders Play button', () => {

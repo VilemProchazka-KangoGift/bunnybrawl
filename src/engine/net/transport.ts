@@ -9,6 +9,7 @@ import {
   encodePing, encodePong, decodePingPong,
 } from './protocol';
 import type { ReliableMessage } from './protocol';
+import { NetworkSimulator, readSimConfigFromUrl } from './networkSimulator';
 
 export type ConnectionStatus = 'idle' | 'creating' | 'joining' | 'connected' | 'disconnected' | 'error';
 
@@ -21,6 +22,7 @@ export interface TransportEvents {
 
 const PEER_PREFIX = 'brawl-';
 const PING_INTERVAL = 500;
+const PONG_TIMEOUT_MS = 5000; // disconnect if no pong for this long
 const RTT_ALPHA = 0.1; // EMA smoothing
 
 export class Transport {
@@ -30,14 +32,29 @@ export class Transport {
   private status: ConnectionStatus = 'idle';
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private rtt = 0;
+  private _jitter = 0;        // EMA of |sample - smoothedRtt|
+  private _rttMin = Infinity;
+  private _rttMax = 0;
   private _isHost = false;
+  private lastPongTime = 0;
+  private simulator: NetworkSimulator | null = null;
+  private simFlushTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(events: TransportEvents) {
     this.events = events;
+    // Auto-configure simulator from URL params (?simLatency=50&simJitter=20&simLoss=5)
+    const simConfig = readSimConfigFromUrl();
+    if (simConfig) {
+      this.simulator = new NetworkSimulator(simConfig);
+      console.log('[Transport] Network simulator active:', simConfig);
+    }
   }
 
   get isHost(): boolean { return this._isHost; }
   get currentRtt(): number { return this.rtt; }
+  get currentJitter(): number { return this._jitter; }
+  get rttMin(): number { return this._rttMin; }
+  get rttMax(): number { return this._rttMax; }
   get connected(): boolean { return this.status === 'connected'; }
 
   /** Replace event callbacks (used when transitioning from lobby to match). */
@@ -195,6 +212,10 @@ export class Transport {
 
   /** Clean up all resources. */
   destroy(): void {
+    if (this.simFlushTimer) {
+      clearInterval(this.simFlushTimer);
+      this.simFlushTimer = null;
+    }
     if (this.pingTimer) {
       clearInterval(this.pingTimer);
       this.pingTimer = null;
@@ -227,18 +248,13 @@ export class Transport {
     }
 
     conn.on('data', (data: unknown) => {
-      if (data instanceof ArrayBuffer) {
-        this.handleBinaryMessage(data);
-      } else if (typeof data === 'string') {
-        this.handleJsonMessage(data);
-      } else if (data && typeof data === 'object') {
-        // PeerJS binary serialization may deliver Uint8Array instead of ArrayBuffer
-        const typed = data as { buffer?: ArrayBuffer };
-        if (typed.buffer instanceof ArrayBuffer) {
-          this.handleBinaryMessage(typed.buffer);
-        }
-      }
+      this.onIncomingData(data);
     });
+
+    // Start simulator flush loop if active
+    if (this.simulator?.enabled && !this.simFlushTimer) {
+      this.simFlushTimer = setInterval(() => this.flushSimulator(), 2);
+    }
 
     conn.on('close', () => {
       this.setStatus('disconnected');
@@ -250,6 +266,57 @@ export class Transport {
     });
   }
 
+  /** Route incoming data through simulator (if active) or handle directly. */
+  private onIncomingData(data: unknown): void {
+    if (this.simulator?.enabled) {
+      // Determine if binary (unreliable) or string (reliable)
+      let isBinary = false;
+      if (data instanceof ArrayBuffer) {
+        isBinary = true;
+      } else if (data && typeof data === 'object' && !Array.isArray(data) && typeof data !== 'string') {
+        const typed = data as { buffer?: ArrayBuffer };
+        if (typed.buffer instanceof ArrayBuffer) {
+          isBinary = true;
+          data = typed.buffer; // normalize to ArrayBuffer
+        }
+      }
+      // Ping/pong bypass simulator (they measure real RTT)
+      if (isBinary) {
+        const pp = decodePingPong(data as ArrayBuffer);
+        if (pp) {
+          this.handleBinaryMessage(data as ArrayBuffer);
+          return;
+        }
+      }
+      this.simulator.enqueue(data, !isBinary);
+    } else {
+      this.deliverData(data);
+    }
+  }
+
+  /** Deliver data directly to the appropriate handler. */
+  private deliverData(data: unknown): void {
+    if (data instanceof ArrayBuffer) {
+      this.handleBinaryMessage(data);
+    } else if (typeof data === 'string') {
+      this.handleJsonMessage(data);
+    } else if (data && typeof data === 'object') {
+      const typed = data as { buffer?: ArrayBuffer };
+      if (typed.buffer instanceof ArrayBuffer) {
+        this.handleBinaryMessage(typed.buffer);
+      }
+    }
+  }
+
+  /** Flush delayed messages from the simulator. */
+  private flushSimulator(): void {
+    if (!this.simulator) return;
+    const ready = this.simulator.flush();
+    for (const msg of ready) {
+      this.deliverData(msg.data);
+    }
+  }
+
   private handleBinaryMessage(data: ArrayBuffer): void {
     // Check if it's a ping/pong
     const pp = decodePingPong(data);
@@ -258,10 +325,15 @@ export class Transport {
         // Reply with pong
         this.sendUnreliable(encodePong(pp.timestamp));
       } else if (pp.type === MsgType.PONG) {
-        // Calculate RTT
+        // Calculate RTT + jitter
         const rtt = performance.now() - pp.timestamp;
         if (rtt >= 0 && rtt < 10000) { // sanity check
+          const deviation = Math.abs(rtt - this.rtt);
           this.rtt = this.rtt === 0 ? rtt : this.rtt * (1 - RTT_ALPHA) + rtt * RTT_ALPHA;
+          this._jitter = this._jitter === 0 ? deviation : this._jitter * 0.9 + deviation * 0.1;
+          this._rttMin = Math.min(this._rttMin, rtt);
+          this._rttMax = Math.max(this._rttMax, rtt);
+          this.lastPongTime = performance.now();
           this.events.onRttUpdate(this.rtt);
         }
       }
@@ -282,9 +354,16 @@ export class Transport {
   }
 
   private startPing(): void {
+    this.lastPongTime = performance.now();
     this.pingTimer = setInterval(() => {
       if (this.status === 'connected') {
         this.sendUnreliable(encodePing(performance.now()));
+        // Detect peer timeout: no pong received for 5 seconds
+        if (this.lastPongTime > 0 && performance.now() - this.lastPongTime > PONG_TIMEOUT_MS) {
+          console.warn('[Transport] Peer timeout — no pong received');
+          this.setStatus('disconnected');
+          this.stopPing();
+        }
       }
     }, PING_INTERVAL);
   }

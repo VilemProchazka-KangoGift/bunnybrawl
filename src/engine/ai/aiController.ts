@@ -1,6 +1,7 @@
 import type { Player, MatchState, Arena, InputState, BotDifficulty } from '../types';
 import type { AIPersonality, DifficultyParams, AwarenessSnapshot } from './types';
 import type { SeededRNG } from '../net/prng';
+import type { AISnapshot } from '../net/serialize';
 import { buildAwareness } from './awareness';
 import { evaluateActions } from './utility';
 import { getPersonality, getDifficultyParams } from './personality';
@@ -45,6 +46,11 @@ export class AIController {
     }
     this.ringWrite = this.difficulty.reactionFrames;
     this.ringRead = 0;
+    this.rng = rng;
+  }
+
+  /** Inject seeded RNG (called when GameLoop.setRng propagates to AI controllers). */
+  setRng(rng: SeededRNG): void {
     this.rng = rng;
   }
 
@@ -232,10 +238,39 @@ export class AIController {
     };
   }
 
+  /** Serialize internal state into an existing target (zero allocation in steady state). */
+  serializeInto(target: AISnapshot): void {
+    for (let i = 0; i < this.ringBuffer.length; i++) {
+      if (i < target.ringBuffer.length) {
+        target.ringBuffer[i].left = this.ringBuffer[i].left;
+        target.ringBuffer[i].right = this.ringBuffer[i].right;
+        target.ringBuffer[i].jump = this.ringBuffer[i].jump;
+        target.ringBuffer[i].down = this.ringBuffer[i].down;
+      } else {
+        target.ringBuffer.push({ ...this.ringBuffer[i] });
+      }
+    }
+    target.ringBuffer.length = this.ringBuffer.length;
+    target.ringWrite = this.ringWrite;
+    target.ringRead = this.ringRead;
+    target.stuckTimer = this.stuckTimer;
+    target.lastX = this.lastX;
+    target.lastY = this.lastY;
+    target.jumpCooldown = this.jumpCooldown;
+    target.lastScore = this.lastScore;
+    target.tauntTimer = this.tauntTimer;
+    target.searchTimer = this.searchTimer;
+    target.wasIdle = this.wasIdle;
+    target.frameCounter = this.frameCounter;
+  }
+
   /** Restore internal state from rollback snapshot. */
-  restore(snap: { ringBuffer: InputState[]; ringWrite: number; ringRead: number; stuckTimer: number; lastX: number; lastY: number; jumpCooldown: number; lastScore: number; tauntTimer: number; searchTimer: number; wasIdle: boolean; frameCounter: number }): void {
+  restore(snap: AISnapshot): void {
     for (let i = 0; i < snap.ringBuffer.length && i < this.ringBuffer.length; i++) {
-      this.ringBuffer[i] = { ...snap.ringBuffer[i] };
+      this.ringBuffer[i].left = snap.ringBuffer[i].left;
+      this.ringBuffer[i].right = snap.ringBuffer[i].right;
+      this.ringBuffer[i].jump = snap.ringBuffer[i].jump;
+      this.ringBuffer[i].down = snap.ringBuffer[i].down;
     }
     this.ringWrite = snap.ringWrite;
     this.ringRead = snap.ringRead;

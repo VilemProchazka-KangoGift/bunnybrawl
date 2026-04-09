@@ -2,7 +2,7 @@ export { SeededRNG } from './prng';
 export { Transport } from './transport';
 export type { ConnectionStatus, TransportEvents } from './transport';
 export { RollbackEngine } from './rollback';
-export type { RollbackConfig } from './rollback';
+export type { RollbackConfig, NetDebugStats } from './rollback';
 export { NetMatch } from './netMatch';
 export type { NetMatchConfig } from './netMatch';
 export { MsgType, PROTOCOL_VERSION } from './protocol';
@@ -13,7 +13,7 @@ export {
   encodePing, encodePong, decodePingPong,
 } from './protocol';
 export {
-  takeSnapshot, restoreSnapshot,
+  takeSnapshot, restoreSnapshot, takeSnapshotInto, createEmptySnapshot,
   hashGameState, crc32,
 } from './serialize';
 export type { GameSnapshot, PlayerSnapshot, AISnapshot } from './serialize';

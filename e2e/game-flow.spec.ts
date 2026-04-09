@@ -7,8 +7,7 @@ test.describe('Carrot Royale E2E', () => {
 
   test('shows main menu on load', async ({ page }) => {
     await expect(page.getByTestId('main-menu')).toBeVisible();
-    await expect(page.getByText('Bunny')).toBeVisible();
-    await expect(page.getByText('Brawl')).toBeVisible();
+    await expect(page.getByAltText('Carrot Royale')).toBeVisible();
     await expect(page.getByTestId('play-button')).toBeVisible();
   });
 

@@ -15,10 +15,12 @@ registerBuiltinCharacters();
 
 /**
  * Dev test link: skip lobby and jump straight into a match.
- * Usage: ?arena=rooftops&bots=2&difficulty=hard
+ * Usage: ?arena=rooftops&bots=2&difficulty=hard&killLimit=4&timeLimit=30
  *   arena: arena id (e.g. rooftops, meadow, volcano)
  *   bots: number of bots (0-5, default 1)
  *   difficulty: easy|medium|hard|impossible (default medium)
+ *   killLimit: score to win (default 16)
+ *   timeLimit: match time in seconds (0 = no limit, default 0)
  */
 function useDevAutoStart() {
   const setScreen = useGameStore((s) => s.setScreen);
@@ -44,7 +46,9 @@ function useDevAutoStart() {
 
     const activePlayers: PlayerSlot[] = [...humanSlots, ...botSlots];
     setActivePlayers(activePlayers);
-    setMatchSettings({ arenaId: arena, botCount, botDifficulty: diff, playerCount: activePlayers.length });
+    const killLimit = parseInt(params.get('killLimit') || '', 10) || 16;
+    const timeLimit = parseInt(params.get('timeLimit') || '', 10) || 0;
+    setMatchSettings({ arenaId: arena, botCount, botDifficulty: diff, playerCount: activePlayers.length, killLimit, timeLimit });
     setScreen('match');
   }, [setScreen, setMatchSettings, setActivePlayers]);
 }

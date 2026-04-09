@@ -105,7 +105,7 @@ describe('Protocol encoding', () => {
     const decoded = decodeInputMessage(buf);
 
     expect(decoded).not.toBeNull();
-    expect(decoded!.inputs).toHaveLength(3);
+    expect(decoded!.inputCount).toBe(3);
     expect(decoded!.latestAck).toBe(latestAck);
 
     for (let i = 0; i < inputs.length; i++) {
@@ -114,19 +114,20 @@ describe('Protocol encoding', () => {
     }
   });
 
-  it('handles frame number wrapping (uint16)', () => {
+  it('handles large frame numbers (uint32)', () => {
     const inputs = [
-      { frame: 65534, input: { left: true, right: false, jump: false, down: false } },
-      { frame: 65535, input: { left: false, right: true, jump: false, down: false } },
-      { frame: 0, input: { left: false, right: false, jump: true, down: false } }, // wrapped
+      { frame: 100000, input: { left: true, right: false, jump: false, down: false } },
+      { frame: 100001, input: { left: false, right: true, jump: false, down: false } },
+      { frame: 4294967295, input: { left: false, right: false, jump: true, down: false } }, // max uint32
     ];
 
-    const buf = encodeInputMessage(inputs, 65533);
+    const buf = encodeInputMessage(inputs, 99999);
     const decoded = decodeInputMessage(buf);
 
-    expect(decoded!.inputs[0].frame).toBe(65534);
-    expect(decoded!.inputs[1].frame).toBe(65535);
-    expect(decoded!.inputs[2].frame).toBe(0);
+    expect(decoded!.inputs[0].frame).toBe(100000);
+    expect(decoded!.inputs[1].frame).toBe(100001);
+    expect(decoded!.inputs[2].frame).toBe(4294967295);
+    expect(decoded!.latestAck).toBe(99999);
   });
 
   it('encodes and decodes ping/pong', () => {

@@ -39,12 +39,14 @@ import {
 } from './constants';
 import { getCharacterForSlot } from './characters';
 import { AIController } from './ai';
-import { debugFlags, toggleNavDebug } from './debugFlags';
+import { debugFlags, toggleNavDebug, toggleNetDebug } from './debugFlags';
 import type { BotNavDebugState } from './navDebugOverlay';
+import type { NetDebugStats } from './net/rollback';
 
 export type MatchEndCallback = (winner: PlayerSlot | null, state: MatchState) => void;
 
 const CARROT_PICKUP_COLORS = ['#FF8C00', '#FF6600', '#FFA500', '#FF7700', '#FFD700', '#FF8C00'];
+const FIRE_COLORS = ['#FF4400', '#FF8800', '#FFCC00', '#FFAA00'];
 
 export class GameLoop {
   private arena: Arena;
@@ -102,6 +104,7 @@ export class GameLoop {
   // Network mode: when true, external code drives the loop
   private _networkMode = false;
   private _audioEnabled = true;
+  private _resimulating = false; // true during rollback resimulation — skip cosmetic systems
   // Explicit inputs injected by rollback engine (keyed by PlayerSlot)
   private _networkInputs?: Map<string, InputState>;
 
@@ -169,6 +172,7 @@ export class GameLoop {
       squashScale: 1, squashTimer: 0, sideSquash: 1, afterimages: [], idleAnimTimer: 0,
       expression: 'normal' as const, killStreak: 0,
       breathTimer: 0, springTrailTimer: 0, damageFlashSide: null, damageFlashTimer: 0, burnTimer: 0, hitstopTimer: 0,
+      renderOffsetX: 0, renderOffsetY: 0,
     }));
 
     // Init AI controllers for bot players
@@ -344,8 +348,13 @@ export class GameLoop {
         this.periodicAmbientTimers.set(p.sound, delay);
       }
     }
-    if (debugFlags.navDebugAllowed) {
-      this._debugKeyHandler = (e: KeyboardEvent) => { if (e.key === '`') toggleNavDebug(); };
+    if (debugFlags.navDebugAllowed || debugFlags.netDebugAllowed) {
+      this._debugKeyHandler = (e: KeyboardEvent) => {
+        if (e.key === '`') {
+          if (debugFlags.navDebugAllowed) toggleNavDebug();
+          if (debugFlags.netDebugAllowed) toggleNetDebug();
+        }
+      };
       window.addEventListener('keydown', this._debugKeyHandler);
     }
     // In network mode, the external NetMatch drives the loop
@@ -388,6 +397,10 @@ export class GameLoop {
   /** Set a seeded PRNG for deterministic network play. */
   setRng(rng: SeededRNG): void {
     this.rng = rng;
+    // Propagate to AI controllers so bots use the seeded RNG (not Math.random())
+    for (const ai of this.aiControllers.values()) {
+      ai.setRng(rng);
+    }
   }
 
   /** Get the current RNG (for snapshots). */
@@ -410,9 +423,19 @@ export class GameLoop {
     this._networkMode = enabled;
   }
 
+  /** Update net debug stats (forwarded to renderer for overlay). */
+  setNetDebugStats(stats: NetDebugStats | null): void {
+    this.renderer.setNetDebugStats(stats);
+  }
+
   /** Mute/unmute audio (used during rollback resimulation). */
   setAudioEnabled(enabled: boolean): void {
     this._audioEnabled = enabled;
+  }
+
+  /** Mark that we're in rollback resimulation — cosmetic systems will be skipped. */
+  setResimulating(resim: boolean): void {
+    this._resimulating = resim;
   }
 
   /** Render current frame. Public for network loop. */
@@ -1058,9 +1081,11 @@ export class GameLoop {
       } else if (curSec < prevSec) {
         this.playSound('countdown_beep');
       }
-      // During countdown, still update weather/particles but skip player input
-      this.updateWeather(dt);
-      this.updateParticles(dt);
+      // During countdown, still update weather/particles but skip during rollback resim
+      if (!this._resimulating) {
+        this.updateWeather(dt);
+        this.updateParticles(dt);
+      }
       return;
     }
 
@@ -1108,8 +1133,8 @@ export class GameLoop {
       this.state.carrotTimer = this.settings.mods.carrotChase ? CARROT_CHASE_SPAWN_INTERVAL : CARROT_SPAWN_INTERVAL;
     }
 
-    // Weather
-    this.updateWeather(dt);
+    // Weather (cosmetic — skip during rollback resimulation)
+    if (!this._resimulating) this.updateWeather(dt);
 
     // Update lava rocks
     if (this.theme.lavaRockConfig) {
@@ -1143,13 +1168,13 @@ export class GameLoop {
       ghost.x += ghost.vx * dt;
       ghost.wobblePhase += dt * 2;
       ghost.y += Math.sin(ghost.wobblePhase) * 20 * dt;
-      // Wrap around screen
+      // Wrap around screen (must use seeded RNG for network determinism)
       if (ghost.vx > 0 && ghost.x > CANVAS_WIDTH + ghost.size) {
         ghost.x = -ghost.size;
-        ghost.y = 300 + Math.random() * 300;
+        ghost.y = 300 + this.gameRandom() * 300;
       } else if (ghost.vx < 0 && ghost.x < -ghost.size) {
         ghost.x = CANVAS_WIDTH + ghost.size;
-        ghost.y = 300 + Math.random() * 300;
+        ghost.y = 300 + this.gameRandom() * 300;
       }
     }
 
@@ -1232,8 +1257,7 @@ export class GameLoop {
             const fx = cx + (Math.random() - 0.5) * player.width * 0.8;
             const fy = baseY - Math.random() * player.height * 0.6;
             const life = 0.25 + Math.random() * 0.3;
-            const colors = ['#FF4400', '#FF8800', '#FFCC00', '#FFAA00'];
-            this.emitParticle(fx, fy, (Math.random() - 0.5) * 40, -60 - Math.random() * 80, life, 2 + Math.random() * 4, colors[Math.floor(Math.random() * colors.length)]);
+            this.emitParticle(fx, fy, (Math.random() - 0.5) * 40, -60 - Math.random() * 80, life, 2 + Math.random() * 4, FIRE_COLORS[Math.floor(Math.random() * FIRE_COLORS.length)]);
           }
         }
       }
@@ -1827,9 +1851,11 @@ export class GameLoop {
       collidePlatforms(player, this.arena.platforms);
     }
     updateSplatTimers(this.state.players, this.arena.spawnPoints, dt, this.rng);
-    this.updateParticles(dt);
-    this.updateGibs(dt);
-    this.updateConfetti(dt);
+    if (!this._resimulating) {
+      this.updateParticles(dt);
+      this.updateGibs(dt);
+      this.updateConfetti(dt);
+    }
 
     // Decay shockwaves
     for (const sw of this.state.shockwaves) {
@@ -1853,102 +1879,102 @@ export class GameLoop {
       }
     }
 
-    // Update wildlife
-    for (const w of this.state.wildlife) {
-      w.wingPhase += dt * 8;
-      if (w.type === 'butterfly') {
-        w.x += w.vx * dt;
-        w.vy = Math.sin(w.wingPhase * 0.5) * 20;
-        w.y += w.vy * dt;
-        // Wrap around screen
-        if (w.x > CANVAS_WIDTH + 20) w.x = -20;
-        if (w.x < -20) w.x = CANVAS_WIDTH + 20;
-        if (w.y < -20) w.y = CANVAS_HEIGHT * 0.6;
-        if (w.y > CANVAS_HEIGHT * 0.6) w.y = 0;
-      } else {
-        // Bird: fly right, respawn left
-        w.x += w.vx * dt;
-        w.y += Math.sin(w.wingPhase * 0.3) * 5 * dt;
-        if (w.x > CANVAS_WIDTH + 50) {
-          w.x = -50 - Math.random() * 100;
-          w.y = Math.random() * CANVAS_HEIGHT * 0.4;
-          w.vx = 40 + Math.random() * 40;
-        }
-      }
-    }
-
-    // Update fog particles
-    for (const f of this.state.fogParticles) {
-      f.x += f.vx * dt;
-      if (f.x > CANVAS_WIDTH + 30) f.x = -30;
-    }
-
-    // Update pollen particles
-    for (const p of this.state.pollenParticles) {
-      p.x += p.vx * dt;
-      p.y += p.vy * dt;
-      // Respawn at bottom when off top
-      if (p.y < -10) {
-        p.y = CANVAS_HEIGHT + 10;
-        p.x = Math.random() * CANVAS_WIDTH;
-      }
-    }
-
-    // Shooting stars (rare spawn during night phase > 0.4, if enabled by theme)
-    if (this.theme.dayNight.showShootingStars && this.state.dayPhase > 0.4 && Math.random() < 0.005) {
-      const svx = 300 + Math.random() * 200;
-      const svy = 50 + Math.random() * 50;
-      this.state.shootingStars.push({
-        x: Math.random() * CANVAS_WIDTH * 0.5,
-        y: Math.random() * CANVAS_HEIGHT * 0.3,
-        vx: svx, vy: svy, life: 0.4,
-        tailLen: Math.min(40, Math.sqrt(svx * svx + svy * svy) * 0.1),
-      });
-    }
-    for (const star of this.state.shootingStars) {
-      star.x += star.vx * dt;
-      star.y += star.vy * dt;
-      star.life -= dt;
-    }
-    for (let i = this.state.shootingStars.length - 1; i >= 0; i--) {
-      if (this.state.shootingStars[i].life <= 0) {
-        swapRemove(this.state.shootingStars, i);
-      }
-    }
-
-    // Crowd cheering: ramp up volume near end of match
-    let leadScore = 0;
-    for (const p of this.state.players) { if (p.active && p.score > leadScore) leadScore = p.score; }
-    if (leadScore >= this.settings.killLimit - 3) {
-      if (!this.crowdStarted) {
-        this.playSound('crowd');
-        this.crowdStarted = true;
-      }
-      if (leadScore >= this.settings.killLimit - 1) {
-        audio.setVolume('crowd', 0.3);
-      } else {
-        audio.setVolume('crowd', 0.15);
-      }
-    } else if (this.crowdStarted) {
-      audio.setVolume('crowd', 0);
-      audio.stop('crowd');
-      this.crowdStarted = false;
-    }
-
-    // Periodic ambient sounds
-    const ambConfig = this.theme.ambientSoundConfig;
-    if (ambConfig?.periodic) {
-      for (const p of ambConfig.periodic) {
-        const remaining = (this.periodicAmbientTimers.get(p.sound) ?? 0) - dt;
-        if (remaining <= 0) {
-          this.playSound(p.sound);
-          const next = p.intervalRange[0] + Math.random() * (p.intervalRange[1] - p.intervalRange[0]);
-          this.periodicAmbientTimers.set(p.sound, next);
+    // Skip all cosmetic systems during rollback resimulation (not in snapshots, no gameplay effect)
+    if (!this._resimulating) {
+      // Update wildlife
+      for (const w of this.state.wildlife) {
+        w.wingPhase += dt * 8;
+        if (w.type === 'butterfly') {
+          w.x += w.vx * dt;
+          w.vy = Math.sin(w.wingPhase * 0.5) * 20;
+          w.y += w.vy * dt;
+          if (w.x > CANVAS_WIDTH + 20) w.x = -20;
+          if (w.x < -20) w.x = CANVAS_WIDTH + 20;
+          if (w.y < -20) w.y = CANVAS_HEIGHT * 0.6;
+          if (w.y > CANVAS_HEIGHT * 0.6) w.y = 0;
         } else {
-          this.periodicAmbientTimers.set(p.sound, remaining);
+          w.x += w.vx * dt;
+          w.y += Math.sin(w.wingPhase * 0.3) * 5 * dt;
+          if (w.x > CANVAS_WIDTH + 50) {
+            w.x = -50 - Math.random() * 100;
+            w.y = Math.random() * CANVAS_HEIGHT * 0.4;
+            w.vx = 40 + Math.random() * 40;
+          }
         }
       }
-    }
+
+      // Update fog particles
+      for (const f of this.state.fogParticles) {
+        f.x += f.vx * dt;
+        if (f.x > CANVAS_WIDTH + 30) f.x = -30;
+      }
+
+      // Update pollen particles
+      for (const p of this.state.pollenParticles) {
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        if (p.y < -10) {
+          p.y = CANVAS_HEIGHT + 10;
+          p.x = Math.random() * CANVAS_WIDTH;
+        }
+      }
+
+      // Shooting stars
+      if (this.theme.dayNight.showShootingStars && this.state.dayPhase > 0.4 && Math.random() < 0.005) {
+        const svx = 300 + Math.random() * 200;
+        const svy = 50 + Math.random() * 50;
+        this.state.shootingStars.push({
+          x: Math.random() * CANVAS_WIDTH * 0.5,
+          y: Math.random() * CANVAS_HEIGHT * 0.3,
+          vx: svx, vy: svy, life: 0.4,
+          tailLen: Math.min(40, Math.sqrt(svx * svx + svy * svy) * 0.1),
+        });
+      }
+      for (const star of this.state.shootingStars) {
+        star.x += star.vx * dt;
+        star.y += star.vy * dt;
+        star.life -= dt;
+      }
+      for (let i = this.state.shootingStars.length - 1; i >= 0; i--) {
+        if (this.state.shootingStars[i].life <= 0) {
+          swapRemove(this.state.shootingStars, i);
+        }
+      }
+
+      // Crowd cheering
+      let leadScore = 0;
+      for (const p of this.state.players) { if (p.active && p.score > leadScore) leadScore = p.score; }
+      if (leadScore >= this.settings.killLimit - 3) {
+        if (!this.crowdStarted) {
+          this.playSound('crowd');
+          this.crowdStarted = true;
+        }
+        if (leadScore >= this.settings.killLimit - 1) {
+          audio.setVolume('crowd', 0.3);
+        } else {
+          audio.setVolume('crowd', 0.15);
+        }
+      } else if (this.crowdStarted) {
+        audio.setVolume('crowd', 0);
+        audio.stop('crowd');
+        this.crowdStarted = false;
+      }
+
+      // Periodic ambient sounds
+      const ambConfig = this.theme.ambientSoundConfig;
+      if (ambConfig?.periodic) {
+        for (const p of ambConfig.periodic) {
+          const remaining = (this.periodicAmbientTimers.get(p.sound) ?? 0) - dt;
+          if (remaining <= 0) {
+            this.playSound(p.sound);
+            const next = p.intervalRange[0] + Math.random() * (p.intervalRange[1] - p.intervalRange[0]);
+            this.periodicAmbientTimers.set(p.sound, next);
+          } else {
+            this.periodicAmbientTimers.set(p.sound, remaining);
+          }
+        }
+      }
+    } // end cosmetic skip
 
     this.checkMatchEnd();
   }
