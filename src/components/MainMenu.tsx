@@ -195,28 +195,31 @@ export function MainMenu() {
 
   const allChars = getAllCharacters();
 
-  // If remote picked the same character, force local to a different one.
-  // Uses a guard ref to prevent echo loops: only auto-switch once per conflict.
+  // If local character conflicts with any remote player, auto-switch to an available one.
+  // Guard ref prevents echo loops: only auto-switch once per conflict set.
   const autoSwitchGuard = useRef<string | null>(null);
   useEffect(() => {
-    const conflict = online.remoteCharacterName;
-    if (!conflict || onlineLocalChar !== conflict) {
+    const takenNames = new Set<string>();
+    if (online.remoteCharacterName) takenNames.add(online.remoteCharacterName);
+    for (const rp of online.remotePlayers) takenNames.add(rp.characterName);
+
+    if (!takenNames.has(onlineLocalChar)) {
       autoSwitchGuard.current = null;
       return;
     }
-    // Already handled this specific conflict
-    if (autoSwitchGuard.current === conflict) return;
-    autoSwitchGuard.current = conflict;
 
-    const takenNames = new Set(online.remotePlayers.map(rp => rp.characterName));
-    takenNames.add(conflict);
+    // Build a key from all taken names to detect new conflicts
+    const conflictKey = Array.from(takenNames).sort().join(',');
+    if (autoSwitchGuard.current === conflictKey) return;
+    autoSwitchGuard.current = conflictKey;
+
     const alt = allChars.find(c => !takenNames.has(c.name));
     if (alt) {
       setOnlineLocalChar(alt.name);
       onlineLocalCharRef.current = alt.name;
       onlineTransportRef.current?.sendReliable({ type: MsgType.CHARACTER_SELECT, characterName: alt.name });
     }
-  }, [online.remoteCharacterName]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [online.remoteCharacterName, online.remotePlayers]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onlineCleanup = useCallback(() => {
     if (onlineTransportRef.current) {
