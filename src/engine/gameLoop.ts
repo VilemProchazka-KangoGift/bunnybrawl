@@ -385,14 +385,7 @@ export class GameLoop {
     if (this.rafId) cancelAnimationFrame(this.rafId);
     this.input.detach();
     this.touchInput?.detach();
-    audio.stopMusic();
-    audio.stop('ambient');
-    audio.stop('zero_g');
-    audio.stop('crowd');
-    // Stop all theme ambient loops
-    for (const loop of this.activeAmbientLoops) {
-      audio.stop(loop);
-    }
+    audio.stopAllGameSounds();
     this.activeAmbientLoops = [];
     this.periodicAmbientTimers.clear();
     if (this._debugKeyHandler) {
