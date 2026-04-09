@@ -5,8 +5,7 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
 import type { PlayerSlot, PlayerStats } from '../engine/types';
 import { isBotSlot } from '../engine/types';
 import { getCharacterEmoji, getCharacterDisplayName } from '../engine/characters';
-import { listArenas } from '../engine/arena';
-import { listThemes } from '../engine/themes/registry';
+import { ArenaGrid } from './ArenaGrid';
 import { getModalTransport } from './MainMenu';
 import { MsgType } from '../engine/net/protocol';
 import type { ReliableMessage } from '../engine/net/protocol';
@@ -74,9 +73,6 @@ export function VictoryScreen() {
     }
     setScreen('match');
   }, [setMatchSettings, online.isOnline, online.isHost, setScreen]);
-
-  const arenas = listArenas();
-  const themes = listThemes();
 
   // Online: listen for disconnect + rematch signals
   useEffect(() => {
@@ -325,21 +321,10 @@ export function VictoryScreen() {
               <div className="victory-arena-modal" data-testid="arena-select-modal" onClick={e => e.stopPropagation()}>
                 <h2 className="victory-arena-title">{t('victory_choose_arena')}</h2>
                 <div className="victory-arena-grid">
-                  {arenas.map(a => {
-                    const theme = themes.find(th => th.id === a.themeId);
-                    return (
-                      <button
-                        key={a.id}
-                        className="victory-arena-btn"
-                        onClick={() => handleChooseArena(a.id)}
-                      >
-                        <div className="victory-arena-preview" style={{ background: theme?.previewGradient || '#333' }}>
-                          <span className="victory-arena-icon">{theme?.previewIcon || ''}</span>
-                        </div>
-                        <span className="victory-arena-name">{t(theme?.nameKey || a.name)}</span>
-                      </button>
-                    );
-                  })}
+                  <ArenaGrid
+                    classPrefix="victory-arena"
+                    onSelect={handleChooseArena}
+                  />
                 </div>
                 <button className="btn-base menu-btn-v" onClick={() => setShowArenaSelect(false)}>
                   {t('pause_back')}

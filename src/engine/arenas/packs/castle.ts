@@ -1,13 +1,57 @@
-import type { ThemeConfig } from './types';
-import { createThornRenderer, createSpringRenderer } from './drawPrimitives';
-import { getFloatingPlatforms } from './utils';
+import type { ArenaPack } from '../types';
+import type { Arena, WeatherParticle } from '../../types';
+import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
+import { getFloatingPlatforms } from '../../themes/utils';
+import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
 
-export const CASTLE_THEME: ThemeConfig = {
+export const castle: ArenaPack = {
+  // ---- Identity ----
   id: 'castle',
-  nameKey: 'arena_castle',
-  previewGradient: 'linear-gradient(to bottom, #0A0A2E 0%, #1A1A4E 40%, #3A3A5E 100%)',
-  previewIcon: '🏰',
 
+  // ---- UI metadata ----
+  previewGradient: 'linear-gradient(to bottom, #0A0A2E 0%, #1A1A4E 40%, #3A3A5E 100%)',
+  previewIcon: '\u{1F3F0}',
+
+  // ---- Translations ----
+  translations: { en: 'Castle', cs: 'Hrad', hi: '\u0915\u093F\u0932\u093E', fil: 'Kastilyo' },
+
+  // ---- Layout ----
+  width: CANVAS_WIDTH,
+  height: CANVAS_HEIGHT,
+  platforms: [
+    { x: 0, y: 660, width: 240, height: 60 },
+    { x: 380, y: 660, width: 520, height: 60 },
+    { x: 1040, y: 660, width: 240, height: 60 },
+    { x: 240, y: 700, width: 140, height: 20 },
+    { x: 900, y: 700, width: 140, height: 20 },
+    { x: 30, y: 580, width: 130, height: 24 },
+    { x: 120, y: 500, width: 140, height: 24 },
+    { x: 30, y: 420, width: 130, height: 24 },
+    { x: 120, y: 340, width: 140, height: 24 },
+    { x: 1120, y: 580, width: 130, height: 24 },
+    { x: 1040, y: 495, width: 105, height: 24 },
+    { x: 1120, y: 420, width: 130, height: 24 },
+    { x: 1045, y: 330, width: 105, height: 24 },
+    { x: 250, y: 280, width: 780, height: 24 },
+    { x: 480, y: 480, width: 180, height: 24 },
+    { x: 520, y: 380, width: 240, height: 24 },
+    { x: 430, y: 590, width: 40, height: 70 },
+    { x: 630, y: 600, width: 40, height: 60 },
+    { x: 820, y: 590, width: 40, height: 70 },
+    { x: 270, y: 440, width: 115, height: 24 },
+    { x: 910, y: 435, width: 85, height: 24 },
+  ],
+  spawnPoints: [
+    { x: 100, y: 560 }, { x: 1180, y: 560 },
+    { x: 90, y: 400 }, { x: 1150, y: 390 },
+    { x: 640, y: 260 }, { x: 640, y: 640 },
+  ],
+  hazardZones: [
+    { x: 255, y: 694, width: 110, height: 6, type: 'lava' },
+    { x: 915, y: 694, width: 110, height: 6, type: 'lava' },
+  ],
+
+  // ---- Visual config ----
   sky: {
     gradient: [
       { offset: 0, color: '#0A0A1E' },
@@ -77,6 +121,7 @@ export const CASTLE_THEME: ThemeConfig = {
     },
   },
 
+  // ---- Ambient systems ----
   clouds: {
     count: 0,
     color: 'rgba(30, 30, 60, 0.3)',
@@ -129,7 +174,8 @@ export const CASTLE_THEME: ThemeConfig = {
     showShootingStars: false,
   },
 
-  drawFarBackground: (ctx, _arena) => {
+  // ---- Custom draw functions ----
+  drawFarBackground: (ctx: CanvasRenderingContext2D, _arena: Arena) => {
     ctx.save();
 
     // Stone wall background — fill entire background with wall texture
@@ -268,7 +314,7 @@ export const CASTLE_THEME: ThemeConfig = {
     ctx.restore();
   },
 
-  drawBackgroundNature: (ctx, arena) => {
+  drawBackgroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => {
     const ground = arena.platforms[0];
     const y = ground.y;
 
@@ -358,7 +404,7 @@ export const CASTLE_THEME: ThemeConfig = {
     drawPillar(820, y, 40, 70);
   },
 
-  drawForegroundNature: (ctx, arena) => {
+  drawForegroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => {
     const ground = arena.platforms[0];
     const gy = ground.y;
 
@@ -503,7 +549,7 @@ export const CASTLE_THEME: ThemeConfig = {
     });
   },
 
-  drawWeatherParticle: (ctx, w) => {
+  drawWeatherParticle: (ctx: CanvasRenderingContext2D, w: WeatherParticle) => {
     ctx.save();
     ctx.translate(w.x, w.y);
     // Torch spark particles
@@ -519,6 +565,7 @@ export const CASTLE_THEME: ThemeConfig = {
     ctx.restore();
   },
 
+  // ---- Gameplay modifiers ----
   ghostConfig: {
     count: 2,
     speed: 30,
@@ -638,8 +685,10 @@ export const CASTLE_THEME: ThemeConfig = {
     ctx.fillRect(x - halfW * 0.7, y - 3, halfW * 1.4, 3);
   }),
 
+  // ---- Audio ----
   ambientSoundConfig: {
     loops: ['amb_wind'],
     periodic: [{ sound: 'amb_drip', intervalRange: [4, 12] }],
   },
+  musicFile: 'castle.mp3',
 };

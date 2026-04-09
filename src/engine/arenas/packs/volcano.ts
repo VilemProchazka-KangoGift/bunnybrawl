@@ -1,13 +1,63 @@
-import type { ThemeConfig } from './types';
-import { createThornRenderer, createSpringRenderer } from './drawPrimitives';
-import { getFloatingPlatforms } from './utils';
+import type { ArenaPack } from '../types';
+import type { Arena, WeatherParticle } from '../../types';
+import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
+import { getFloatingPlatforms } from '../../themes/utils';
+import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
 
-export const VOLCANO_THEME: ThemeConfig = {
+export const volcano: ArenaPack = {
+  // ---- Identity ----
   id: 'volcano',
-  nameKey: 'arena_volcano',
-  previewGradient: 'linear-gradient(to bottom, #1A0505 0%, #8B2500 50%, #FF4500 100%)',
-  previewIcon: '🌋',
 
+  // ---- UI metadata ----
+  previewGradient: 'linear-gradient(to bottom, #1A0505 0%, #8B2500 50%, #FF4500 100%)',
+  previewIcon: '\u{1F30B}',
+
+  // ---- Translations ----
+  translations: { en: 'Volcano', cs: 'Sopka', hi: '\u091C\u094D\u0935\u093E\u0932\u093E\u092E\u0941\u0916\u0940', fil: 'Bulkan' },
+
+  // ---- Layout ----
+  width: CANVAS_WIDTH,
+  height: CANVAS_HEIGHT,
+  platforms: [
+    { x: 0, y: 660, width: 260, height: 60 },
+    { x: 420, y: 660, width: 400, height: 60 },
+    { x: 980, y: 660, width: 300, height: 60 },
+    { x: 260, y: 700, width: 160, height: 20 },
+    { x: 820, y: 700, width: 160, height: 20 },
+    { x: 200, y: 600, width: 40, height: 60 },
+    { x: 600, y: 605, width: 35, height: 55 },
+    { x: 900, y: 595, width: 40, height: 65 },
+    { x: 60, y: 580, width: 80, height: 24 },
+    { x: 320, y: 570, width: 70, height: 24 },
+    { x: 540, y: 575, width: 80, height: 24 },
+    { x: 750, y: 570, width: 70, height: 24 },
+    { x: 1050, y: 580, width: 80, height: 24 },
+    { x: 30, y: 480, width: 90, height: 24 },
+    { x: 200, y: 470, width: 80, height: 24 },
+    { x: 440, y: 480, width: 90, height: 24 },
+    { x: 700, y: 475, width: 80, height: 24 },
+    { x: 1000, y: 485, width: 90, height: 24 },
+    { x: 1160, y: 470, width: 80, height: 24 },
+    { x: 100, y: 370, width: 90, height: 24 },
+    { x: 350, y: 380, width: 80, height: 24 },
+    { x: 830, y: 375, width: 80, height: 24 },
+    { x: 1060, y: 370, width: 90, height: 24 },
+    { x: 530, y: 300, width: 220, height: 24 },
+    { x: 530, y: 390, width: 80, height: 24 },
+    { x: 680, y: 385, width: 80, height: 24 },
+  ],
+  spawnPoints: [
+    { x: 130, y: 560 }, { x: 1110, y: 560 },
+    { x: 320, y: 460 }, { x: 1060, y: 460 },
+    { x: 640, y: 280 }, { x: 640, y: 640 },
+  ],
+  hazardZones: [
+    { x: 275, y: 694, width: 130, height: 6, type: 'lava' },
+    { x: 835, y: 694, width: 130, height: 6, type: 'lava' },
+    { x: 580, y: 654, width: 60, height: 6, type: 'lava' },
+  ],
+
+  // ---- Visual config ----
   sky: {
     gradient: [
       { offset: 0, color: '#1A0505' },
@@ -80,6 +130,7 @@ export const VOLCANO_THEME: ThemeConfig = {
     },
   },
 
+  // ---- Ambient systems ----
   clouds: {
     count: 3,
     color: 'rgba(80, 40, 20, 0.4)',
@@ -132,7 +183,8 @@ export const VOLCANO_THEME: ThemeConfig = {
     showShootingStars: false,
   },
 
-  drawFarBackground: (ctx, _arena) => {
+  // ---- Custom draw functions ----
+  drawFarBackground: (ctx: CanvasRenderingContext2D, _arena: Arena) => {
     ctx.save();
     // Distant volcano silhouette
     ctx.fillStyle = '#1A0808';
@@ -172,7 +224,7 @@ export const VOLCANO_THEME: ThemeConfig = {
     ctx.restore();
   },
 
-  drawBackgroundNature: (ctx, arena) => {
+  drawBackgroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => {
     const ground = arena.platforms[0];
     const y = ground.y;
 
@@ -277,7 +329,7 @@ export const VOLCANO_THEME: ThemeConfig = {
     }
   },
 
-  drawForegroundNature: (ctx, arena) => {
+  drawForegroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => {
     const ground = arena.platforms[0];
     const gy = ground.y;
 
@@ -379,7 +431,7 @@ export const VOLCANO_THEME: ThemeConfig = {
     ctx.restore();
   },
 
-  drawWeatherParticle: (ctx, w) => {
+  drawWeatherParticle: (ctx: CanvasRenderingContext2D, w: WeatherParticle) => {
     ctx.save();
     ctx.translate(w.x, w.y);
     ctx.rotate(w.rotation);
@@ -410,6 +462,7 @@ export const VOLCANO_THEME: ThemeConfig = {
     ctx.restore();
   },
 
+  // ---- Gameplay modifiers ----
   lavaRockConfig: {
     spawnInterval: [2, 5],
     fallSpeed: [150, 300],
@@ -501,8 +554,10 @@ export const VOLCANO_THEME: ThemeConfig = {
     ctx.fill();
   }),
 
+  // ---- Audio ----
   ambientSoundConfig: {
     loops: ['amb_lava'],
     periodic: [{ sound: 'amb_volcano_burst', intervalRange: [8, 20] }],
   },
+  musicFile: 'volcano.mp3',
 };

@@ -1,7 +1,7 @@
 import { Howl, Howler } from 'howler';
-import { generateThemeMusic } from './music';
+import { getArenaPack } from './arenas/registry';
 
-export type SoundName = 'jump' | 'stomp' | 'victory' | 'select' | 'thornhit' | 'crunch' | 'bunny' | 'fox' | 'frog' | 'bear' | 'owl' | 'cat' | 'wolf' | 'panda' | 'pig' | 'cow' | 'goat' | 'horse' | 'sheep' | 'monkey' | 'tiger' | 'rhino' | 'hedgehog' | 'footstep_grass' | 'footstep_wood' | 'countdown_beep' | 'countdown_go' | 'oof' | 'splash' | 'ambient' | 'crowd' |'geyser' | 'pigeon_scatter' | 'zero_g' | 'waterfall_ambient' | 'land' | 'headbonk' | 'bump' | 'spring' | 'crouch' | 'fastfall' | 'amb_wind' | 'amb_lava' | 'amb_underwater_bubbles' | 'amb_space_hum' | 'amb_bird_chirp' | 'amb_ghost_hoo' | 'amb_volcano_burst' | 'amb_drip' | 'amb_chime';
+export type SoundName = 'jump' | 'stomp' | 'victory' | 'select' | 'thornhit' | 'crunch' | 'bunny' | 'fox' | 'frog' | 'bear' | 'owl' | 'cat' | 'wolf' | 'panda' | 'pig' | 'cow' | 'goat' | 'horse' | 'sheep' | 'monkey' | 'tiger' | 'rhino' | 'hedgehog' | 'footstep_grass' | 'footstep_wood' | 'countdown_beep' | 'countdown_go' | 'oof' | 'splash' | 'ambient' | 'crowd' |'geyser' | 'pigeon_scatter' | 'zero_g' | 'waterfall_ambient' | 'land' | 'headbonk' | 'bump' | 'spring' | 'crouch' | 'fastfall' | 'amb_wind' | 'amb_lava' | 'amb_underwater_bubbles' | 'amb_space_hum' | 'amb_bird_chirp' | 'amb_ghost_hoo' | 'amb_volcano_burst' | 'amb_drip';
 
 const AUDIO_BASE = import.meta.env.BASE_URL + 'audio/';
 
@@ -215,7 +215,6 @@ class AudioManager {
     this.sounds.set('amb_ghost_hoo', new Howl({ src: [generateAmbGhostHooSound()], volume: 0.65 }));
     this.sounds.set('amb_volcano_burst', new Howl({ src: [generateAmbVolcanoBurstSound()], volume: 0.8 }));
     this.sounds.set('amb_drip', new Howl({ src: [generateAmbDripSound()], volume: 0.55 }));
-    this.sounds.set('amb_chime', new Howl({ src: [generateAmbChimeSound()], volume: 0.5 }));
 
     // Preload menu music so it's ready instantly
     this.menuMusicHowl = new Howl({
@@ -328,39 +327,18 @@ class AudioManager {
     }
   }
 
-  // MP3 overrides for arena music (theme ID → filename in public/audio/)
-  private static readonly MUSIC_MP3: Record<string, string> = {
-    meadow: 'meadow.mp3',
-    waterfall: 'waterfall.mp3',
-    space_station: 'space_station.mp3',
-    rooftops: 'rooftops.mp3',
-    haunted_graveyard: 'haunted_graveyard.mp3',
-    underwater: 'underwater.mp3',
-    candy_land: 'candy_land.mp3',
-    castle: 'castle.mp3',
-    winter_lake: 'winter_lake.mp3',
-    treetops: 'treetops.mp3',
-    volcano: 'volcano.mp3',
-  };
-
-  /** Start theme-specific music. Lazily generates and caches per theme. */
   playMusic(themeId: string): void {
     this.stopMenuMusic();
     if (this.muted || this.musicDisabled) return;
     if (!this.initialized) this.init();
-    // Already playing this theme
     if (this.musicHowl && this.musicThemeId === themeId) {
       this.musicHowl.play();
       return;
     }
-    // Stop previous track
     this.stopMusic();
-    // Use MP3 override if available, otherwise generate procedurally
-    const mp3 = AudioManager.MUSIC_MP3[themeId];
-    const src = mp3
-      ? AUDIO_BASE + mp3
-      : generateThemeMusic(themeId);
-    this.musicHowl = new Howl({ src: [src], volume: 0.22, loop: true });
+    const mp3 = getArenaPack(themeId)?.musicFile;
+    if (!mp3) { console.warn(`[audio] No musicFile for arena '${themeId}'`); return; }
+    this.musicHowl = new Howl({ src: [AUDIO_BASE + mp3], volume: 0.22, loop: true });
     this.musicThemeId = themeId;
     this.musicHowl.play();
   }
@@ -1090,24 +1068,6 @@ function generateAmbDripSound(): string {
     const tone = Math.sin(2 * Math.PI * freq * t);
     const noise = (Math.random() * 2 - 1) * 0.1;
     buffer[i] = (tone + noise) * envelope;
-  }
-  return floatBufferToWavDataUri(buffer, sampleRate);
-}
-
-function generateAmbChimeSound(): string {
-  const sampleRate = 44100;
-  const duration = 0.3;
-  const numSamples = Math.floor(sampleRate * duration);
-  const buffer = new Float32Array(numSamples);
-  for (let i = 0; i < numSamples; i++) {
-    const t = i / sampleRate;
-    const progress = i / numSamples;
-    const envelope = Math.max(0, 1 - progress) * 0.4;
-    // Triangle wave fundamental + harmonic for shimmer
-    const phase1 = (t * 1200) % 1;
-    const tri = 4 * Math.abs(phase1 - 0.5) - 1;
-    const harmonic = Math.sin(2 * Math.PI * 2400 * t) * 0.3;
-    buffer[i] = (tri + harmonic) * envelope;
   }
   return floatBufferToWavDataUri(buffer, sampleRate);
 }

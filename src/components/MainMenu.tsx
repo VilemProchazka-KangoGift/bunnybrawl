@@ -2,8 +2,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../store/gameStore';
 import { audio } from '../engine/audio';
-import { listArenas } from '../engine/arena';
-import { listThemes } from '../engine/themes/registry';
+import { ArenaGrid } from './ArenaGrid';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
 import { isTouchPrimary } from '../engine/touchDetect';
 import { MobileTextInput } from './MobileTextInput';
@@ -667,31 +666,13 @@ export function MainMenu() {
           <div className="arena-selector" data-testid="arena-selector">
             <span className="arena-label">{t('arena_label')}</span>
             <div className="arena-options">
-              {(() => {
-                const arenas = listArenas();
-                const themes = listThemes();
-                return arenas.map(a => {
-                  const theme = themes.find(th => th.id === a.themeId);
-                  return (
-                    <button
-                      key={a.id}
-                      className={`arena-option ${matchSettings.arenaId === a.id ? 'selected' : ''}`}
-                      onClick={() => {
-                        audio.init();
-                        audio.play('select');
-                        setMatchSettings({ arenaId: a.id });
-                      }}
-                    >
-                      <div className="arena-preview" style={{ background: theme?.previewGradient || '#333' }}>
-                        <span className="arena-icon">{theme?.previewIcon || ''}</span>
-                      </div>
-                      <span className="arena-name">{t(theme?.nameKey || a.name)}</span>
-                    </button>
-                  );
-                });
-              })()}
+              <ArenaGrid
+                classPrefix="arena"
+                currentId={matchSettings.arenaId}
+                onSelect={(id) => { audio.init(); audio.play('select'); setMatchSettings({ arenaId: id }); }}
+              />
               <button
-                className={`arena-option ${matchSettings.arenaId === 'random' ? 'selected' : ''}`}
+                className={`arena-btn ${matchSettings.arenaId === 'random' ? 'selected' : ''}`}
                 onClick={() => {
                   audio.init();
                   audio.play('select');

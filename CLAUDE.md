@@ -16,11 +16,18 @@ src/
     physics.ts    # Movement, gravity, collision, player pushing
     stomp.ts      # Stomp detection, splat marks, respawn
     input.ts      # 5-player keyboard input with case-insensitive normalization
-    arena.ts      # Arena layouts (platforms, spawn points) + getArena(id) + listArenas()
+    arenas/       # Arena pack system (registry-based, mirrors characters/)
+      types.ts      # ArenaPack interface (merges Arena layout + ThemeConfig visuals)
+      registry.ts   # Pack registry: register/get/list + nav data + toArena/toThemeConfig extractors
+      builtin.ts    # Registers all 11 built-in arenas at app startup
+      legacy.ts     # Backward-compat: getArena(), getTheme(), mirrorArena()
+      index.ts      # Barrel export
+      packs/        # One file per arena — layout + visuals + translations + musicFile
+        meadow.ts winterLake.ts volcano.ts castle.ts candyLand.ts
+        treetops.ts underwater.ts hauntedGraveyard.ts rooftops.ts spaceStation.ts waterfall.ts
     renderer.ts   # Canvas 2D rendering (two layers: bg + fg) — dispatches to character pack renderers
     gameLoop.ts   # Main game loop with fixed timestep, all game systems
     audio.ts      # Procedural audio + Howler.js playback (animal sounds, SFX)
-    music.ts      # Procedural arena music generation (fallback — all 11 arenas now use MP3 overrides)
     spriteShading.ts # fillBodyGradient (radial body fill) + drawHighlightSpot (white glint)
     fastMath.ts   # Trig lookup tables (fastSin/fastCos) for hot render paths
     canvasAnimations.ts # Shared canvas utilities (wildlife, day/night) for MainMenu + CharacterSelect
@@ -45,14 +52,10 @@ src/
       reachability.ts # Physics-based jump/drop/walk platform reachability functions
       navData.ts    # Auto-generated per-arena navigation graphs (nextHop tables)
       index.ts      # Barrel export
-    themes/       # Data-driven arena theme system (11 themes)
-      types.ts      # ThemeConfig interface + all sub-interfaces
+    themes/       # Shared theme infrastructure (types + drawing primitives)
+      types.ts      # ThemeConfig interface + all sub-interfaces (used by Renderer)
       drawPrimitives.ts  # Shared drawing functions (trees, bushes, flowers, etc.) + hazard renderer factories
-      utils.ts      # Shared utilities (randRange, pickWeighted, swapRemove)
-      registry.ts   # Theme registry map + getTheme() + listThemes()
-      index.ts      # Barrel export
-      meadow.ts winterLake.ts volcano.ts castle.ts candyLand.ts
-      treetops.ts underwater.ts hauntedGraveyard.ts rooftops.ts spaceStation.ts waterfall.ts
+      utils.ts      # Shared utilities (randRange, pickWeighted, swapRemove, getFloatingPlatforms)
     net/          # P2P network multiplayer (WebRTC/PeerJS rollback netcode)
       prng.ts       # SeededRNG (mulberry32) for deterministic simulation
       serialize.ts  # GameSnapshot take/restore + CRC32 desync detection
@@ -90,7 +93,7 @@ src/
 - **CSS transform scaling** — fixed 1280x720 logical resolution, `GameScaler` scales to viewport. Fullscreen via F11.
 - **i18n via i18next** — Czech default. Canvas text uses `i18n.t()` directly (not the React hook).
 - **Character pack registry** — `CharacterPack` objects bundle colors, emoji, renderers, gibs, AI personality. Registered at startup via `registerBuiltinCharacters()`. Renderer dispatches via `getSpriteRenderer(name)`.
-- **Data-driven arena themes** — `ThemeConfig` controls all visuals + optional physics modifiers. Shared primitives in `drawPrimitives.ts`.
+- **Arena pack registry** — `ArenaPack` objects bundle layout + visuals + translations + music + physics mods. Registered at startup via `registerBuiltinArenas()`. Mirrors the character pack pattern. Shared drawing primitives in `themes/drawPrimitives.ts`.
 - **AI via utility scoring + nav graph** — bots produce `InputState` (4 booleans) same as keyboard. Precomputed `navData.ts` provides nextHop/safeHop waypoints.
 - **Death effects are gore-mode gated** — Gore ON: blood, gibs, splat marks. Gore OFF: confetti only.
 - **P2P network multiplayer** — WebRTC DataChannels via PeerJS (free signaling). GGPO-style rollback netcode with seeded PRNG for determinism. 2-player MVP, bots run deterministically on both peers.
@@ -139,23 +142,33 @@ Each character is a single file in `src/engine/characters/packs/` exporting a `C
 - Sheep uses `fillBodyGradientCircle` (6 overlapping circles, not ellipse).
 
 ### Adding a new arena / level
-1. Create theme in `src/engine/themes/newTheme.ts` implementing `ThemeConfig` (see `meadow.ts`)
-2. Register in `themes/registry.ts` (add to `THEMES` map)
-3. Add arena layout in `arena.ts` — platforms + spawn points + `themeId`
-4. Add to `ARENA_LIST` in `arena.ts` and register in `getArena()`
-5. Add localized name in `en.json` and `cs.json` (`arena_new_theme`)
-6. Re-run `npx vite-node scripts/generateNavData.ts`
+Each arena is a single file in `src/engine/arenas/packs/` exporting an `ArenaPack`.
+
+1. Create `packs/newArena.ts` — copy an existing pack (e.g. `meadow.ts`). Provide:
+   - Layout: `platforms`, `spawnPoints`, `width`, `height`
+   - Visuals: `sky`, `hills`, `ground`, `platform`, `clouds`, `weather`, `wildlife`, `fog`, `ambientParticles`, `dayNight`
+   - Draw functions: `drawBackgroundNature`, `drawForegroundNature`, optionally `drawFarBackground`, `drawAnimatedBackground`
+   - `translations: { en: 'Name', cs: 'Jméno' }` — arena names live in the pack, not in locale JSON
+   - `previewGradient` + `previewIcon` for arena selector UI
+   - `musicFile: 'new_arena.mp3'` (place MP3 in `public/audio/`)
+   - Optional: `bubbleHelmet: true`, `ghostConfig`, `physics`, `ambientSoundConfig`, etc.
+2. Import and add to array in `arenas/builtin.ts`
+3. Re-run `npx vite-node scripts/generateNavData.ts`
+
+**ArenaPack bundles everything**: layout + visuals + translations + music + physics mods + hazard configs + ambient sounds. No separate theme file or locale keys needed.
 
 ### Adding arena-specific mechanics
-Arena = structural positions, ThemeConfig = behavioral config:
-- **Hazard zones** (`Arena.hazardZones`): static danger, nav graph danger scores
-- **Effect zones** (`Arena.effectZones`): `zero_g`, `current`, `geyser` — applied to players AND gibs
-- **No-spawn zones** (`Arena.noSpawnZones`): exclude springs/thorns/carrots/characters
-- **Bouncy platforms** (`Arena.bouncyPlatforms`): platform indices, jelly overlay
-- **Fall-off** (`Arena.allowFallOff`): gaps in ground, respawn on fall
-- **Ghosts/Wind/Pigeons**: via `ThemeConfig.ghostConfig`/`windConfig`/`pigeonConfig`
-- **Carrot zones** (`Arena.carrotZones`): boosted carrot spawn likelihood
-- **No springs** (`Arena.noSprings`), custom hazard skins (`drawCustomThorn`/`drawCustomSpring`)
+All mechanics are configured directly in the `ArenaPack`:
+- **Hazard zones** (`hazardZones`): static danger, nav graph danger scores
+- **Effect zones** (`effectZones`): `zero_g`, `current`, `geyser` — applied to players AND gibs
+- **No-spawn zones** (`noSpawnZones`): exclude springs/thorns/carrots/characters
+- **Bouncy platforms** (`bouncyPlatforms`): platform indices, jelly overlay
+- **Fall-off** (`allowFallOff`): gaps in ground, respawn on fall
+- **Ghosts/Pigeons**: via `ghostConfig`/`pigeonConfig`
+- **Carrot zones** (`carrotZones`): boosted carrot spawn likelihood
+- **No springs** (`noSprings`), custom hazard skins (`drawCustomThorn`/`drawCustomSpring`)
+- **Physics modifiers** (`physics`): gravity, friction, walkSpeed, jumpImpulse multipliers
+- **Bubble helmet** (`bubbleHelmet: true`): glass dome on all characters (used by underwater + space station)
 
 ### Adding a new game mechanic / pickup
 1. Define interface in `types.ts`, add constants in `constants.ts`
@@ -175,22 +188,22 @@ Arena = structural positions, ThemeConfig = behavioral config:
 4. **Volume calibration**: test on laptop speakers. Frequencies below 100Hz are inaudible on most laptop speakers — use 130Hz+ for thuds/impacts. Generation amplitude * Howl volume should be ≥0.05 effective for one-shots, ≥0.02 for ambient loops. Reference: existing `jump` sound = square wave 0.25 amplitude * Howl 0.3 = 0.075 effective at 300-600Hz.
 5. **Cooldown for rapid-fire SFX**: use per-player `Map<PlayerSlot, number>` accumulators (like `footstepAccumulators`), or a global cooldown number. Decay every frame. Sound plays only when cooldown ≤ 0.
 
-### Adding per-theme ambient sounds
-Themes support ambient sounds via `ThemeConfig.ambientSoundConfig`:
+### Adding per-arena ambient sounds
+Arena packs support ambient sounds via `ArenaPack.ambientSoundConfig`:
 - **Loops** (`loops: string[]`): continuous background sounds, started in `GameLoop.start()`, stopped in `stop()`
 - **Periodic** (`periodic: [{sound, intervalRange}]`): one-shots fired at random intervals, ticked in `fixedUpdate()`
-- Sound generators go in `audio.ts`, config in each theme file in `src/engine/themes/`
+- Sound generators go in `audio.ts`, config in each arena pack file in `src/engine/arenas/packs/`
 - All active loops tracked in `GameLoop.activeAmbientLoops[]` and stopped on match end
 
 ### Adding arena MP3 music
-1. Place MP3 in `public/audio/<themeId>.mp3`
-2. Add to `AudioManager.MUSIC_MP3` map in `audio.ts`
+1. Place MP3 in `public/audio/<arenaId>.mp3`
+2. Set `musicFile: '<arenaId>.mp3'` in the arena pack file
 
 ### Adding a new language
 1. Create `src/locales/<code>.json` — copy `en.json`, translate all keys. Verify key count matches with a script.
 2. Import in `src/i18n.ts`, add to `resources` object. Language persisted in `bunnybrawl_lang` via `localStorage`.
 3. Add to the `languages` array in `MainMenu.tsx` lang-toggle (data-driven `.map()` loop — code, label, flag SVG).
-4. Add `<code>` key to `translations` in all 17 character packs in `src/engine/characters/packs/`.
+4. Add `<code>` key to `translations` in all 17 character packs in `src/engine/characters/packs/` and all 11 arena packs in `src/engine/arenas/packs/`.
 5. **Arena names must fit the selector boxes** — test at runtime, shorten long names.
 6. **Avoid literal translations** — use natural/colloquial phrasing. Gaming terms (gravity, stomp, kills) often stay in English or use loan words. Academic translations (गुरुत्वाकर्षण, भौतिकी, pisika) sound wrong in a game UI.
 
@@ -227,9 +240,9 @@ Online play uses P2P WebRTC via PeerJS with GGPO-style rollback netcode:
 ## File Size Reference
 
 Largest files to be aware of when context is limited:
-- `renderer.ts` ~2370 lines — `music.ts` ~980 lines — `gameLoop.ts` ~1770 lines
+- `renderer.ts` ~2370 lines — `gameLoop.ts` ~1770 lines
 - `drawPrimitives.ts` ~990 lines — `CharacterSelect.tsx` ~900 lines
 - `audio.ts` ~1050 lines — `VictoryScreen.css` ~520 lines
-- Theme files ~250-800 lines each (11 themes)
+- Arena pack files ~200-800 lines each (11 arenas in `arenas/packs/`)
 - AI: `utility.ts` ~450, `awareness.ts` ~370, `navData.ts` ~300-500 (generated)
 - Net: `rollback.ts` ~340, `serialize.ts` ~320, `transport.ts` ~260, `protocol.ts` ~200

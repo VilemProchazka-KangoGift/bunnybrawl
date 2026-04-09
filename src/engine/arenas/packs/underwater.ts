@@ -1,13 +1,51 @@
-import type { ThemeConfig } from './types';
-import { createThornRenderer, createSpringRenderer } from './drawPrimitives';
-import { getFloatingPlatforms } from './utils';
+import type { ArenaPack } from '../types';
+import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
+import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
+import { getFloatingPlatforms } from '../../themes/utils';
 
-export const UNDERWATER_THEME: ThemeConfig = {
+export const underwater: ArenaPack = {
+  // ---- Identity ----
   id: 'underwater',
-  nameKey: 'arena_underwater',
-  previewGradient: 'linear-gradient(to bottom, #0A3A6B 0%, #0E4A8B 40%, #1A6AAA 100%)',
-  previewIcon: '🐠',
 
+  // ---- UI metadata ----
+  previewGradient: 'linear-gradient(to bottom, #0A3A6B 0%, #0E4A8B 40%, #1A6AAA 100%)',
+  previewIcon: '\u{1F420}',
+
+  // ---- Translations ----
+  translations: { en: 'Underwater', cs: 'Pod vodou', hi: '\u092A\u093E\u0928\u0940 \u0915\u0947 \u0928\u0940\u091A\u0947', fil: 'Ilalim ng Tubig' },
+
+  // ---- Layout ----
+  width: CANVAS_WIDTH,
+  height: CANVAS_HEIGHT,
+  platforms: [
+    { x: 0, y: 660, width: CANVAS_WIDTH, height: 60 },
+    { x: 100, y: 410, width: 130, height: 24 },
+    { x: 200, y: 275, width: 120, height: 24 },
+    { x: 60, y: 150, width: 120, height: 24 },
+    { x: 1070, y: 390, width: 110, height: 24 },
+    { x: 975, y: 260, width: 100, height: 24 },
+    { x: 1100, y: 150, width: 120, height: 24 },
+    { x: 330, y: 345, width: 95, height: 24 },
+    { x: 865, y: 330, width: 85, height: 24 },
+    { x: 290, y: 170, width: 100, height: 24 },
+    { x: 890, y: 170, width: 100, height: 24 },
+    { x: 540, y: 80, width: 200, height: 24 },
+  ],
+  spawnPoints: [
+    { x: 200, y: 640 }, { x: 1080, y: 640 },
+    { x: 400, y: 640 }, { x: 880, y: 640 },
+    { x: 640, y: 640 }, { x: 120, y: 390 },
+  ],
+  noSpawnZones: [
+    { x: 540, y: 56, width: 200, height: 48 },
+  ],
+  effectZones: [
+    { x: 440, y: 0, width: 400, height: 660, type: 'geyser', strength: -500, interval: 0.1, duration: 9999 },
+    { x: 200, y: 400, width: 200, height: 260, type: 'current', vx: 70 },
+    { x: 880, y: 400, width: 200, height: 260, type: 'current', vx: -70 },
+  ],
+
+  // ---- Visual config ----
   sky: {
     gradient: [
       { offset: 0, color: '#0A2A4B' },
@@ -80,6 +118,7 @@ export const UNDERWATER_THEME: ThemeConfig = {
     },
   },
 
+  // ---- Ambient systems ----
   clouds: {
     count: 0,
     color: 'rgba(40, 100, 150, 0.3)',
@@ -134,6 +173,7 @@ export const UNDERWATER_THEME: ThemeConfig = {
     showShootingStars: false,
   },
 
+  // ---- Custom draw functions ----
   drawFarBackground: (ctx, _arena) => {
     ctx.save();
 
@@ -314,7 +354,7 @@ export const UNDERWATER_THEME: ThemeConfig = {
     const ground = arena.platforms[0];
     const gy = ground.y;
 
-    // Large foreground coral formation — left side
+    // Large foreground coral formation -- left side
     ctx.save();
     ctx.globalAlpha = 0.5;
     // Main coral trunk
@@ -333,7 +373,7 @@ export const UNDERWATER_THEME: ThemeConfig = {
     ctx.lineTo(105, gy + 30);
     ctx.closePath();
     ctx.fill();
-    // Coral branch tips — brighter
+    // Coral branch tips -- brighter
     ctx.globalAlpha = 0.35;
     ctx.fillStyle = '#CC4488';
     ctx.beginPath();
@@ -347,7 +387,7 @@ export const UNDERWATER_THEME: ThemeConfig = {
     ctx.fill();
     ctx.restore();
 
-    // Large foreground coral formation — right side
+    // Large foreground coral formation -- right side
     ctx.save();
     ctx.globalAlpha = 0.5;
     ctx.fillStyle = '#CC6622';
@@ -463,6 +503,7 @@ export const UNDERWATER_THEME: ThemeConfig = {
     ctx.restore();
   },
 
+  // ---- Gameplay modifiers ----
   physics: {
     gravity: 0.6,
     friction: 1.2,
@@ -471,7 +512,7 @@ export const UNDERWATER_THEME: ThemeConfig = {
   },
 
   drawCustomThorn: createThornRenderer((ctx, x, y, width, height, _fadeAlpha) => {
-    // Sea urchin — dark spiky ball
+    // Sea urchin -- dark spiky ball
     const urchinCX = x + width / 2;
     const urchinCY = y + height * 0.5;
     const urchinR = Math.min(width, height) * 0.35;
@@ -594,7 +635,7 @@ export const UNDERWATER_THEME: ThemeConfig = {
     ctx.translate(x, y);
     ctx.globalAlpha = alpha * (0.6 + Math.sin(time * 1.2) * 0.15);
 
-    // Jellyfish bell — pulsing dome
+    // Jellyfish bell -- pulsing dome
     const pulse = 1 + Math.sin(time * 2.5) * 0.08;
     const bellW = size * 0.5 * pulse;
     const bellH = size * 0.35;
@@ -625,7 +666,7 @@ export const UNDERWATER_THEME: ThemeConfig = {
     ctx.closePath();
     ctx.fill();
 
-    // Tentacles — wavy strands hanging down
+    // Tentacles -- wavy strands hanging down
     ctx.lineWidth = 1.5;
     const tentCount = 5;
     for (let t = 0; t < tentCount; t++) {
@@ -651,8 +692,12 @@ export const UNDERWATER_THEME: ThemeConfig = {
     ctx.restore();
   },
 
+  // ---- Audio ----
   ambientSoundConfig: {
     loops: ['amb_underwater_bubbles'],
     periodic: [{ sound: 'amb_drip', intervalRange: [3, 10] }],
   },
+
+  bubbleHelmet: true,
+  musicFile: 'underwater.mp3',
 };

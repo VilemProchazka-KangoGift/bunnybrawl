@@ -1,16 +1,63 @@
-import type { ThemeConfig } from './types';
-import { getFloatingPlatforms } from './utils';
+import type { ArenaPack } from '../types';
+import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
+import { getFloatingPlatforms } from '../../themes/utils';
 import {
   drawTree, drawBush, drawFlower, drawGrassTuft,
   drawFgBush, drawTallGrass, drawFern, drawHangingVine, drawFgLeafCluster, drawFgWildflower,
-} from './drawPrimitives';
+} from '../../themes/drawPrimitives';
 
-export const WATERFALL_THEME: ThemeConfig = {
+export const waterfall: ArenaPack = {
+  // ---- Identity ----
   id: 'waterfall',
-  nameKey: 'arena_waterfall',
+
+  // ---- UI metadata ----
   previewGradient: 'linear-gradient(to bottom, #3A80C9 0%, #6ABED8 40%, #3A7A5A 100%)',
   previewIcon: '\u{1F4A7}',
 
+  // ---- Translations ----
+  translations: { en: 'Waterfall', cs: 'Vodop\u00E1d', hi: '\u091D\u0930\u0928\u093E', fil: 'Talon' },
+
+  // ---- Layout ----
+  width: CANVAS_WIDTH,
+  height: CANVAS_HEIGHT,
+  platforms: [
+    { x: 0, y: 660, width: CANVAS_WIDTH, height: 60 },
+    { x: 30, y: 570, width: 170, height: 24 },
+    { x: 100, y: 470, width: 120, height: 24 },
+    { x: 20, y: 370, width: 160, height: 24 },
+    { x: 110, y: 280, width: 130, height: 24 },
+    { x: 1100, y: 550, width: 140, height: 24 },
+    { x: 1050, y: 440, width: 110, height: 24 },
+    { x: 1120, y: 340, width: 130, height: 24 },
+    { x: 1040, y: 240, width: 115, height: 24 },
+    { x: 260, y: 190, width: 180, height: 24 },
+    { x: 860, y: 170, width: 160, height: 24 },
+    { x: 510, y: 120, width: 45, height: 16 },
+    { x: 630, y: 95, width: 40, height: 16 },
+    { x: 740, y: 115, width: 42, height: 16 },
+    { x: 300, y: 430, width: 110, height: 24 },
+    { x: 920, y: 400, width: 90, height: 24 },
+    { x: 530, y: 612, width: 48, height: 48 },
+    { x: 710, y: 618, width: 42, height: 42 },
+  ],
+  spawnPoints: [
+    { x: 100, y: 550 },
+    { x: 1160, y: 530 },
+    { x: 80, y: 350 },
+    { x: 1140, y: 320 },
+    { x: 320, y: 640 },
+    { x: 960, y: 640 },
+  ],
+  effectZones: [
+    { x: 440, y: 160, width: 400, height: 500, type: 'current', vy: 900 },
+    { x: 220, y: 500, width: 180, height: 160, type: 'current', vx: 50 },
+    { x: 880, y: 500, width: 180, height: 160, type: 'current', vx: -50 },
+  ],
+  carrotZones: [
+    { x: 420, y: 60, width: 440, height: 600 },
+  ],
+
+  // ---- Visual config ----
   sky: {
     gradient: [
       { offset: 0, color: '#3A80C9' },
@@ -45,6 +92,7 @@ export const WATERFALL_THEME: ThemeConfig = {
     drawMoss: true,
   },
 
+  // ---- Ambient systems ----
   clouds: {
     count: 3,
     color: 'rgba(255, 255, 255, 0.5)',
@@ -100,10 +148,11 @@ export const WATERFALL_THEME: ThemeConfig = {
     showShootingStars: true,
   },
 
+  // ---- Custom draw functions ----
   drawFarBackground: (ctx, _arena) => {
     ctx.save();
 
-    // ── Left rocky hillside rising toward the waterfall source ──
+    // -- Left rocky hillside rising toward the waterfall source --
     // Large mossy cliff on left
     ctx.fillStyle = '#5A6A50';
     ctx.beginPath();
@@ -146,7 +195,7 @@ export const WATERFALL_THEME: ThemeConfig = {
     ctx.closePath();
     ctx.fill();
 
-    // Rocky texture layers — darker stone underneath
+    // Rocky texture layers -- darker stone underneath
     ctx.fillStyle = '#4D5D45';
     ctx.globalAlpha = 0.6;
     // Left inner rock face
@@ -176,7 +225,7 @@ export const WATERFALL_THEME: ThemeConfig = {
     ctx.closePath();
     ctx.fill();
 
-    // Craggy rock details — individual stone ledges and outcroppings
+    // Craggy rock details -- individual stone ledges and outcroppings
     ctx.globalAlpha = 0.4;
     ctx.fillStyle = '#6B7B5A';
     // Left outcroppings
@@ -386,7 +435,10 @@ export const WATERFALL_THEME: ThemeConfig = {
     ctx.restore();
   },
 
+  // ---- Audio ----
   ambientSoundConfig: {
+    loops: ['waterfall_ambient'],
     periodic: [{ sound: 'amb_bird_chirp', intervalRange: [6, 15] }],
   },
+  musicFile: 'waterfall.mp3',
 };

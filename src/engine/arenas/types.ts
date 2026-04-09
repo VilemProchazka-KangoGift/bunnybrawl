@@ -1,0 +1,102 @@
+import type { Arena, Platform, SpawnPoint, HazardZone, EffectZone, AABB, WeatherParticle } from '../types';
+import type { ThemeConfig } from '../themes/types';
+import type {
+  GradientStop, CloudConfig, WeatherConfig, WildlifeConfig,
+  FogConfig, AmbientParticleConfig, DayNightConfig,
+  PhysicsModifiers, AmbientSoundConfig,
+} from '../themes/types';
+
+// Re-export sub-config types so pack files can import from here
+export type {
+  GradientStop, CloudConfig, WeatherConfig, WeatherTypeConfig,
+  WildlifeConfig, WildlifeTypeConfig, FogConfig, AmbientParticleConfig,
+  DayNightConfig, PhysicsModifiers, AmbientSoundConfig, PeriodicAmbientSound,
+} from '../themes/types';
+
+/**
+ * A self-contained arena definition, combining structural layout (platforms,
+ * spawns, hazards) with visual theme (sky, hills, draw functions) and metadata
+ * (translations, music, preview).
+ *
+ * Mirrors the CharacterPack pattern — one file per arena in `arenas/packs/`.
+ */
+export interface ArenaPack {
+  // ---- Identity ----
+  id: string;
+
+  // ---- UI metadata ----
+  previewGradient: string;   // CSS gradient for menu thumbnail
+  previewIcon: string;       // Unicode icon for arena tile
+
+  // ---- Translations (like CharacterPack.translations) ----
+  /** Display name per language code. Must include at least `en`. */
+  translations: Record<string, string>;
+
+  // ---- Layout (structural / gameplay) ----
+  width: number;
+  height: number;
+  platforms: Platform[];
+  spawnPoints: SpawnPoint[];
+  hazardZones?: HazardZone[];
+  effectZones?: EffectZone[];
+  bouncyPlatforms?: number[];
+  allowFallOff?: boolean;
+  noSpawnZones?: AABB[];
+  carrotZones?: AABB[];
+  noSprings?: boolean;
+  navHints?: Arena['navHints'];
+
+  // ---- Visual config ----
+  sky: { gradient: GradientStop[] };
+  hills: Array<{ x: number; baseY: number; width: number; height: number; color: string }>;
+  ground: {
+    surfaceColor: string;
+    surfaceThickness: number;
+    grassBlades?: {
+      color: string;
+      spacing: number;
+      heightRange: [number, number];
+    };
+  };
+  platform: {
+    floatingBodyColor: string;
+    floatingTopColor: string;
+    floatingAccentColor?: string;
+    groundBodyColor: string;
+    groundTopColor: string;
+    drawMoss: boolean;
+    customDraw?: (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, isGround: boolean) => void;
+  };
+
+  // ---- Ambient systems ----
+  clouds: CloudConfig;
+  weather: WeatherConfig;
+  wildlife: WildlifeConfig;
+  fog: FogConfig;
+  ambientParticles: AmbientParticleConfig;
+  dayNight: DayNightConfig;
+
+  // ---- Custom draw functions ----
+  drawFarBackground?: (ctx: CanvasRenderingContext2D, arena: Arena) => void;
+  drawBackgroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => void;
+  drawForegroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => void;
+  drawAnimatedBackground?: (ctx: CanvasRenderingContext2D, arena: Arena, time: number) => void;
+  drawWeatherParticle?: (ctx: CanvasRenderingContext2D, particle: WeatherParticle) => void;
+  drawCustomHazardZone?: (ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, time: number) => void;
+  drawCustomGhost?: (ctx: CanvasRenderingContext2D, x: number, y: number, size: number, alpha: number, time: number) => void;
+  drawCustomThorn?: (ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, growScale: number, fadeAlpha: number) => void;
+  drawCustomSpring?: (ctx: CanvasRenderingContext2D, x: number, y: number, size: number, bounceTimer: number, growScale: number, fadeAlpha: number) => void;
+
+  // ---- Gameplay modifiers (types synced with ThemeConfig) ----
+  /** Render a glass bubble helmet on all characters in this arena. */
+  bubbleHelmet?: boolean;
+  ghostConfig?: ThemeConfig['ghostConfig'];
+  lavaRockConfig?: ThemeConfig['lavaRockConfig'];
+  pigeonConfig?: ThemeConfig['pigeonConfig'];
+  physics?: PhysicsModifiers;
+
+  // ---- Audio ----
+  ambientSoundConfig?: AmbientSoundConfig;
+  /** MP3 filename relative to public/audio/, e.g. 'meadow.mp3' */
+  musicFile?: string;
+}

@@ -1701,8 +1701,8 @@ export class Renderer {
       }
     }
 
-    // Bubble helmet for space station and underwater arenas
-    if (this.theme.id === 'space_station' || this.theme.id === 'underwater') {
+    // Bubble helmet (enabled per-arena via bubbleHelmet flag)
+    if (this.theme.bubbleHelmet) {
       const hCx = cx + 1;
       const hCy = yOff + h * 0.38;
       const hRx = w * 0.52;
@@ -1710,13 +1710,9 @@ export class Renderer {
       // Glass dome
       ctx.beginPath();
       ctx.ellipse(hCx, hCy, hRx, hRy, 0, 0, Math.PI * 2);
-      ctx.fillStyle = this.theme.id === 'underwater'
-        ? 'rgba(180, 220, 255, 0.12)'
-        : 'rgba(200, 230, 255, 0.10)';
+      ctx.fillStyle = 'rgba(200, 230, 255, 0.10)';
       ctx.fill();
-      ctx.strokeStyle = this.theme.id === 'underwater'
-        ? 'rgba(140, 200, 255, 0.50)'
-        : 'rgba(180, 210, 255, 0.45)';
+      ctx.strokeStyle = 'rgba(180, 210, 255, 0.45)';
       ctx.lineWidth = 1.5;
       ctx.stroke();
       // Highlight reflection arc (upper-left)

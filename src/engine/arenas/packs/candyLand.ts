@@ -1,13 +1,41 @@
-import type { ThemeConfig } from './types';
-import { createThornRenderer, createSpringRenderer } from './drawPrimitives';
-import { getFloatingPlatforms } from './utils';
+import type { ArenaPack } from '../types';
+import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
+import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
+import { getFloatingPlatforms } from '../../themes/utils';
 
-export const CANDY_LAND_THEME: ThemeConfig = {
+export const candyLand: ArenaPack = {
+  // ---- Identity ----
   id: 'candy_land',
-  nameKey: 'arena_candy_land',
-  previewGradient: 'linear-gradient(to bottom, #FFB6C1 0%, #FFDAB9 50%, #FFE4E1 100%)',
-  previewIcon: '🍭',
 
+  // ---- UI metadata ----
+  previewGradient: 'linear-gradient(to bottom, #FFB6C1 0%, #FFDAB9 50%, #FFE4E1 100%)',
+  previewIcon: '\u{1F36D}',
+
+  // ---- Translations ----
+  translations: { en: 'Candy Land', cs: 'Cukr\u00E1rna', hi: '\u0915\u0948\u0902\u0921\u0940 \u0932\u0948\u0902\u0921', fil: 'Candy Land' },
+
+  // ---- Layout ----
+  width: CANVAS_WIDTH,
+  height: CANVAS_HEIGHT,
+  platforms: [
+    { x: 0, y: 660, width: CANVAS_WIDTH, height: 60 },
+    { x: 460, y: 530, width: 360, height: 24 },
+    { x: 510, y: 390, width: 260, height: 24 },
+    { x: 560, y: 260, width: 160, height: 24 },
+    { x: 30, y: 530, width: 180, height: 24 },
+    { x: 1090, y: 510, width: 140, height: 24 },
+    { x: 50, y: 350, width: 145, height: 24 },
+    { x: 1100, y: 325, width: 115, height: 24 },
+  ],
+  spawnPoints: [
+    { x: 130, y: 510 }, { x: 1160, y: 490 },
+    { x: 640, y: 510 }, { x: 640, y: 240 },
+    { x: 120, y: 330 }, { x: 1155, y: 305 },
+  ],
+  bouncyPlatforms: [0, 1, 2, 3, 4, 5, 6, 7],
+  noSprings: true,
+
+  // ---- Visual config ----
   sky: {
     gradient: [
       { offset: 0, color: '#FFB6C1' },
@@ -100,6 +128,7 @@ export const CANDY_LAND_THEME: ThemeConfig = {
     },
   },
 
+  // ---- Ambient systems ----
   clouds: {
     count: 5,
     color: 'rgba(255, 255, 255, 0.6)',
@@ -153,6 +182,7 @@ export const CANDY_LAND_THEME: ThemeConfig = {
     showShootingStars: false,
   },
 
+  // ---- Custom draw functions ----
   drawFarBackground: (ctx, _arena) => {
     ctx.save();
     ctx.globalAlpha = 0.3;
@@ -199,7 +229,7 @@ export const CANDY_LAND_THEME: ThemeConfig = {
 
     // Lollipops
     const drawLollipop = (lx: number, ly: number, size: number, color1: string, color2: string) => {
-      // Stick — reaches from ground up to candy
+      // Stick -- reaches from ground up to candy
       ctx.fillStyle = '#F5F5DC';
       ctx.fillRect(lx - 2, ly - size * 2, 4, size * 2);
       // Candy circle
@@ -365,7 +395,7 @@ export const CANDY_LAND_THEME: ThemeConfig = {
       const angle = Math.sin(sx * 0.1) * 0.8;
       const cos = Math.cos(angle), sin = Math.sin(angle);
       const cx = sx, cy = gy - 2;
-      // Rotated rect (6×2) centered at (cx, cy)
+      // Rotated rect (6x2) centered at (cx, cy)
       ctx.beginPath();
       ctx.moveTo(cx - 3 * cos + 1 * sin, cy - 3 * sin - 1 * cos);
       ctx.lineTo(cx + 3 * cos + 1 * sin, cy + 3 * sin - 1 * cos);
@@ -405,7 +435,7 @@ export const CANDY_LAND_THEME: ThemeConfig = {
   drawCustomThorn: createThornRenderer((ctx, x, y, width, height, _fadeAlpha) => {
     const by = y + height;
 
-    // Candy cane spikes — red/white striped pointed sticks
+    // Candy cane spikes -- red/white striped pointed sticks
     const canes = [
       { sx: 0.15, sh: 0.65 },
       { sx: 0.35, sh: 0.9 },
@@ -510,4 +540,6 @@ export const CANDY_LAND_THEME: ThemeConfig = {
     ctx.fill();
   }),
 
+  // ---- Audio ----
+  musicFile: 'candy_land.mp3',
 };

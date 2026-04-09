@@ -5,8 +5,8 @@ import { GameLoop } from '../engine/gameLoop';
 import { NetMatch } from '../engine/net/netMatch';
 import { MsgType } from '../engine/net/protocol';
 import { getModalTransport } from './MainMenu';
-import { getArena, listArenas } from '../engine/arena';
-import { listThemes } from '../engine/themes/registry';
+import { getArena, listArenaPacks } from '../engine/arenas';
+import { ArenaGrid } from './ArenaGrid';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
 import { isTouchPrimary } from '../engine/touchDetect';
 import { TouchOverlay } from './TouchOverlay';
@@ -22,9 +22,9 @@ function resolveArenaId(arenaId: string): string {
     lastResolvedArenaId = arenaId;
     return arenaId;
   }
-  const arenas = listArenas();
-  const available = arenas.filter(a => a.id !== lastResolvedArenaId);
-  const pick = available[Math.floor(Math.random() * available.length)] || arenas[0];
+  const allArenas = listArenaPacks();
+  const available = allArenas.filter(a => a.id !== lastResolvedArenaId);
+  const pick = available[Math.floor(Math.random() * available.length)] || allArenas[0];
   lastResolvedArenaId = pick.id;
   return pick.id;
 }
@@ -253,9 +253,6 @@ export function Match() {
     return () => { wakeLock?.release(); };
   }, [isMobile, currentArenaId]);
 
-  const arenas = listArenas();
-  const themes = listThemes();
-
   return (
     <div className="match-container" data-testid="match-screen">
       <div className="canvas-container">
@@ -285,21 +282,12 @@ export function Match() {
                 <>
                   <h2 className="pause-title">{t('pause_change_level')}</h2>
                   <div className="pause-arena-grid">
-                    {arenas.map(a => {
-                      const theme = themes.find(th => th.id === a.themeId);
-                      return (
-                        <button
-                          key={a.id}
-                          className={`pause-arena-btn ${a.id === currentArenaId ? 'current' : ''}`}
-                          onClick={() => handleChangeArena(a.id)}
-                        >
-                          <div className="pause-arena-preview" style={{ background: theme?.previewGradient || '#333' }}>
-                            <span className="pause-arena-icon">{theme?.previewIcon || ''}</span>
-                          </div>
-                          <span className="pause-arena-name">{t(theme?.nameKey || a.name)}</span>
-                        </button>
-                      );
-                    })}
+                    <ArenaGrid
+                      classPrefix="pause-arena"
+                      currentId={currentArenaId}
+                      selectedClass="current"
+                      onSelect={handleChangeArena}
+                    />
                   </div>
                   <button className="btn-base pause-btn quit-btn" onClick={() => setShowLevelSelect(false)}>
                     {t('pause_back')}

@@ -1,12 +1,14 @@
-import type { ThemeConfig } from './types';
-import { getFloatingPlatforms } from './utils';
+import type { ArenaPack } from '../types';
+import type { Arena } from '../../types';
+import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
+import { getFloatingPlatforms } from '../../themes/utils';
 import {
   drawPineTree, drawChristmasTree, drawSnowDrift, drawIcePatch, drawIcicle, drawIceCube,
   drawBigSnowman, drawIgloo, drawSnowman, drawSnowball,
   drawSnowballPyramid, drawLargeSnowballPyramid,
   drawFgBush,
   createThornRenderer, createSpringRenderer,
-} from './drawPrimitives';
+} from '../../themes/drawPrimitives';
 
 // Platform colors — shared between config fields and customDraw
 const FLOAT_BODY = '#5A7A8C';
@@ -14,12 +16,54 @@ const FLOAT_TOP = '#D8E8F0';
 const GROUND_BODY = '#4A6A7C';
 const GROUND_TOP = '#E0EEF5';
 
-export const WINTER_LAKE_THEME: ThemeConfig = {
+export const winterLake: ArenaPack = {
+  // ---- Identity ----
   id: 'winter_lake',
-  nameKey: 'arena_winter_lake',
-  previewGradient: 'linear-gradient(to bottom, #2C3E6B 0%, #8FA8C8 60%, #D8E8F0 100%)',
-  previewIcon: '❄️',
 
+  // ---- UI metadata ----
+  previewGradient: 'linear-gradient(to bottom, #2C3E6B 0%, #8FA8C8 60%, #D8E8F0 100%)',
+  previewIcon: '\u2744\uFE0F',
+
+  // ---- Translations ----
+  translations: { en: 'Winter Lake', cs: 'Zamrzl\u00E9 jezero', hi: '\u0938\u0930\u094D\u0926\u0940 \u0915\u0940 \u091D\u0940\u0932', fil: 'Lawa sa Taglamig' },
+
+  // ---- Layout ----
+  width: CANVAS_WIDTH,
+  height: CANVAS_HEIGHT,
+  platforms: [
+    { x: 0, y: 660, width: CANVAS_WIDTH, height: 60 },
+    { x: 35, y: 575, width: 115, height: 24 },
+    { x: 95, y: 490, width: 110, height: 24 },
+    { x: 30, y: 415, width: 120, height: 24 },
+    { x: 1095, y: 585, width: 145, height: 24 },
+    { x: 1050, y: 505, width: 140, height: 24 },
+    { x: 1100, y: 425, width: 140, height: 24 },
+    { x: 440, y: 360, width: 400, height: 24 },
+    { x: 45, y: 330, width: 100, height: 24 },
+    { x: 520, y: 500, width: 240, height: 24 },
+    { x: 370, y: 610, width: 65, height: 50 },
+    { x: 870, y: 610, width: 65, height: 50 },
+    { x: 270, y: 440, width: 90, height: 24 },
+    { x: 920, y: 440, width: 90, height: 24 },
+    { x: 380, y: 280, width: 45, height: 18 },
+    { x: 855, y: 280, width: 45, height: 18 },
+    { x: 600, y: 230, width: 50, height: 18 },
+    { x: 200, y: 350, width: 40, height: 18 },
+    { x: 1040, y: 350, width: 40, height: 18 },
+  ],
+  spawnPoints: [
+    { x: 95, y: 555 }, { x: 1170, y: 565 },
+    { x: 90, y: 395 }, { x: 1170, y: 405 },
+    { x: 640, y: 340 }, { x: 640, y: 640 },
+  ],
+  hazardZones: [
+    { x: 455, y: 384, width: 80, height: 14, type: 'lava' },
+    { x: 580, y: 384, width: 80, height: 14, type: 'lava' },
+    { x: 705, y: 384, width: 80, height: 14, type: 'lava' },
+    { x: 570, y: 524, width: 70, height: 10, type: 'lava' },
+  ],
+
+  // ---- Visual config ----
   sky: {
     gradient: [
       { offset: 0, color: '#2C3E6B' },
@@ -75,6 +119,7 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
     },
   },
 
+  // ---- Ambient systems ----
   clouds: {
     count: 4,
     color: 'rgba(200, 215, 230, 0.5)',
@@ -127,7 +172,69 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
     showShootingStars: true,
   },
 
-  drawBackgroundNature: (ctx, arena) => {
+  // ---- Custom draw functions ----
+  drawFarBackground: (ctx: CanvasRenderingContext2D, _arena: Arena) => {
+    // Distant snowy mountain range
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+
+    // Far mountains — tall, faded
+    ctx.fillStyle = '#9AB0C8';
+    ctx.beginPath();
+    ctx.moveTo(-20, 660);
+    ctx.lineTo(80, 380);
+    ctx.lineTo(200, 480);
+    ctx.lineTo(320, 350);
+    ctx.lineTo(440, 460);
+    ctx.lineTo(520, 370);
+    ctx.lineTo(640, 420);
+    ctx.lineTo(780, 340);
+    ctx.lineTo(900, 440);
+    ctx.lineTo(1000, 360);
+    ctx.lineTo(1120, 450);
+    ctx.lineTo(1220, 380);
+    ctx.lineTo(1300, 660);
+    ctx.closePath();
+    ctx.fill();
+
+    // Snow caps on peaks
+    ctx.fillStyle = '#D0E0F0';
+    ctx.globalAlpha = 0.3;
+    const peaks = [
+      { x: 80, y: 380, w: 60 }, { x: 320, y: 350, w: 55 },
+      { x: 520, y: 370, w: 50 }, { x: 780, y: 340, w: 60 },
+      { x: 1000, y: 360, w: 55 }, { x: 1220, y: 380, w: 45 },
+    ];
+    for (const p of peaks) {
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(p.x - p.w * 0.4, p.y + 35);
+      ctx.lineTo(p.x + p.w * 0.4, p.y + 35);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Nearer foothills
+    ctx.fillStyle = '#8AA0B8';
+    ctx.globalAlpha = 0.25;
+    ctx.beginPath();
+    ctx.moveTo(-20, 660);
+    ctx.lineTo(100, 500);
+    ctx.lineTo(250, 540);
+    ctx.lineTo(400, 490);
+    ctx.lineTo(550, 530);
+    ctx.lineTo(700, 480);
+    ctx.lineTo(850, 520);
+    ctx.lineTo(1000, 490);
+    ctx.lineTo(1150, 530);
+    ctx.lineTo(1300, 660);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.restore();
+  },
+
+  drawBackgroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => {
     const ground = arena.platforms[0];
     const y = ground.y;
     const floats = getFloatingPlatforms(arena.platforms);
@@ -205,68 +312,7 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
     }
   },
 
-  drawFarBackground: (ctx, _arena) => {
-    // Distant snowy mountain range
-    ctx.save();
-    ctx.globalAlpha = 0.35;
-
-    // Far mountains — tall, faded
-    ctx.fillStyle = '#9AB0C8';
-    ctx.beginPath();
-    ctx.moveTo(-20, 660);
-    ctx.lineTo(80, 380);
-    ctx.lineTo(200, 480);
-    ctx.lineTo(320, 350);
-    ctx.lineTo(440, 460);
-    ctx.lineTo(520, 370);
-    ctx.lineTo(640, 420);
-    ctx.lineTo(780, 340);
-    ctx.lineTo(900, 440);
-    ctx.lineTo(1000, 360);
-    ctx.lineTo(1120, 450);
-    ctx.lineTo(1220, 380);
-    ctx.lineTo(1300, 660);
-    ctx.closePath();
-    ctx.fill();
-
-    // Snow caps on peaks
-    ctx.fillStyle = '#D0E0F0';
-    ctx.globalAlpha = 0.3;
-    const peaks = [
-      { x: 80, y: 380, w: 60 }, { x: 320, y: 350, w: 55 },
-      { x: 520, y: 370, w: 50 }, { x: 780, y: 340, w: 60 },
-      { x: 1000, y: 360, w: 55 }, { x: 1220, y: 380, w: 45 },
-    ];
-    for (const p of peaks) {
-      ctx.beginPath();
-      ctx.moveTo(p.x, p.y);
-      ctx.lineTo(p.x - p.w * 0.4, p.y + 35);
-      ctx.lineTo(p.x + p.w * 0.4, p.y + 35);
-      ctx.closePath();
-      ctx.fill();
-    }
-
-    // Nearer foothills
-    ctx.fillStyle = '#8AA0B8';
-    ctx.globalAlpha = 0.25;
-    ctx.beginPath();
-    ctx.moveTo(-20, 660);
-    ctx.lineTo(100, 500);
-    ctx.lineTo(250, 540);
-    ctx.lineTo(400, 490);
-    ctx.lineTo(550, 530);
-    ctx.lineTo(700, 480);
-    ctx.lineTo(850, 520);
-    ctx.lineTo(1000, 490);
-    ctx.lineTo(1150, 530);
-    ctx.lineTo(1300, 660);
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.restore();
-  },
-
-  drawForegroundNature: (ctx, arena) => {
+  drawForegroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => {
     const ground = arena.platforms[0];
     const gy = ground.y;
     const floats = getFloatingPlatforms(arena.platforms);
@@ -321,6 +367,7 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
     drawSnowDrift(ctx, 1250, gy, 40, 5);
   },
 
+  // ---- Gameplay modifiers ----
   physics: {
     friction: 0.15,
   },
@@ -434,7 +481,7 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
     }
   }),
 
-  drawCustomHazardZone: (ctx, x, y, width, height, _time) => {
+  drawCustomHazardZone: (ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, _time: number) => {
     ctx.save();
     // Icicle spikes hanging downward
     const icicleCount = Math.floor(width / 12);
@@ -464,7 +511,9 @@ export const WINTER_LAKE_THEME: ThemeConfig = {
     ctx.restore();
   },
 
+  // ---- Audio ----
   ambientSoundConfig: {
     loops: ['amb_wind'],
   },
+  musicFile: 'winter_lake.mp3',
 };
