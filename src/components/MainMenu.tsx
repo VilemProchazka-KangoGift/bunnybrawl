@@ -913,6 +913,18 @@ export function MainMenu() {
                     {online.isHost && (
                       <button className="btn-base menu-btn play-btn" data-testid="online-start-btn" onClick={() => {
                         audio.play('select');
+                        // Send authoritative sync before START_MATCH so all peers agree on roster
+                        const ms = useGameStore.getState().matchSettings;
+                        const seed = useGameStore.getState().online.rngSeed || Math.floor(Math.random() * 0xFFFFFFFF);
+                        setOnline({ rngSeed: seed });
+                        onlineTransportRef.current?.sendReliable({
+                          type: MsgType.SETTINGS_SYNC, arenaId: ms.arenaId, killLimit: ms.killLimit,
+                          timeLimit: ms.timeLimit, goreMode: ms.goreMode,
+                          mods: ms.mods as unknown as Record<string, boolean>,
+                          rngSeed: seed, botCount: ms.botCount, botDifficulty: ms.botDifficulty,
+                        } as ReliableMessage);
+                        // Send CHARACTER_SELECT with host's final character
+                        onlineTransportRef.current?.sendReliable({ type: MsgType.CHARACTER_SELECT, characterName: onlineLocalCharRef.current });
                         onlineTransportRef.current?.sendReliable({ type: MsgType.START_MATCH } as ReliableMessage);
                         onlineStartMatch();
                       }}>{t('start_game', 'Start Game!')}</button>
