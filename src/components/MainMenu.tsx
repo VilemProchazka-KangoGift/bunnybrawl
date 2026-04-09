@@ -204,31 +204,26 @@ export function MainMenu() {
 
   const allChars = getAllCharacters();
 
-  // If local character conflicts with any remote player, auto-switch to an available one.
-  // Guard ref prevents echo loops: only auto-switch once per conflict set.
-  const autoSwitchGuard = useRef<string | null>(null);
+  // If local character conflicts with a remote player, the GUEST auto-switches once.
+  // Host never auto-switches (authoritative). One-shot flag prevents cascade.
+  const didAutoSwitch = useRef(false);
   useEffect(() => {
+    if (online.isHost) return; // host is authoritative — never auto-switch
     const takenNames = new Set<string>();
     if (online.remoteCharacterName) takenNames.add(online.remoteCharacterName);
     for (const rp of online.remotePlayers) takenNames.add(rp.characterName);
 
-    if (!takenNames.has(onlineLocalChar)) {
-      autoSwitchGuard.current = null;
-      return;
-    }
+    if (!takenNames.has(onlineLocalChar)) return;
+    if (didAutoSwitch.current) return;
+    didAutoSwitch.current = true;
 
-    // Build a key from all taken names to detect new conflicts
-    const conflictKey = Array.from(takenNames).sort().join(',');
-    if (autoSwitchGuard.current === conflictKey) return;
-    autoSwitchGuard.current = conflictKey;
-
-    const alt = allChars.find(c => !takenNames.has(c.name));
+    const alt = allChars.find(c => !takenNames.has(c.name) && c.name !== onlineLocalChar);
     if (alt) {
       setOnlineLocalChar(alt.name);
       onlineLocalCharRef.current = alt.name;
       onlineTransportRef.current?.sendReliable({ type: MsgType.CHARACTER_SELECT, characterName: alt.name });
     }
-  }, [online.remoteCharacterName, online.remotePlayers]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [online.isHost, online.remoteCharacterName, online.remotePlayers]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onlineCleanup = useCallback(() => {
     if (onlineTransportRef.current) {
@@ -244,6 +239,7 @@ export function MainMenu() {
     setOnlineRemoteReady(false);
     remoteCharRef.current = null;
     pendingPlayerNames.current.clear();
+    didAutoSwitch.current = false;
   }, [resetOnline]);
 
   const onlineStartMatch = useCallback(() => {
@@ -616,16 +612,12 @@ export function MainMenu() {
     return () => window.removeEventListener('keydown', handleKey);
   }, [handlePlay]);
 
-  useEffect(() => {
-    audio.init();
-    audio.setMusicDisabled(matchSettings.mods.noMusic);
-    audio.playMenuMusic();
-  }, []);
+  const [musicOff, setMusicOff] = useState(() => audio.isMusicDisabled());
 
   useEffect(() => {
-    audio.setMusicDisabled(matchSettings.mods.noMusic);
-    if (!matchSettings.mods.noMusic) audio.playMenuMusic();
-  }, [matchSettings.mods.noMusic]);
+    audio.init();
+    audio.playMenuMusic();
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -642,6 +634,17 @@ export function MainMenu() {
   return (
     <div className="main-menu" data-testid="main-menu">
       <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="menu-bg-canvas" />
+      <button
+        className="music-toggle-btn"
+        onClick={() => {
+          const disabled = audio.toggleMusicDisabled();
+          setMusicOff(disabled);
+          if (!disabled) audio.playMenuMusic();
+        }}
+        title={musicOff ? t('music_on') : t('music_off')}
+      >
+        {musicOff ? '\uD83D\uDD07' : '\uD83C\uDFB5'}
+      </button>
       <div className="menu-bg">
         <div className="menu-content">
           <img src={logoImg} alt="Carrot Royale" className="game-logo" />
@@ -835,7 +838,6 @@ export function MainMenu() {
                   { key: 'superBounce', name: 'mod_super_bounce', desc: 'mod_super_bounce_desc' },
                   { key: 'mirrorArena', name: 'mod_mirror', desc: 'mod_mirror_desc' },
                   { key: 'underwaterGravity', name: 'mod_underwater_gravity', desc: 'mod_underwater_gravity_desc' },
-                  { key: 'noMusic', name: 'mod_no_music', desc: 'mod_no_music_desc' },
                 ] as const).map(mod => (
                   <div className="mod-row" key={mod.key}>
                     <label className="mod-toggle">

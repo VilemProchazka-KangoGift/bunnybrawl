@@ -715,3 +715,33 @@ test.describe('Online Multiplayer — Disconnect', { tag: '@online' }, () => {
     }
   });
 });
+
+test.describe('Online Multiplayer — Character Select Stability', { tag: '@online' }, () => {
+  test.setTimeout(60000);
+
+  test('no infinite character select cascade when both peers have same default', async ({ browser }) => {
+    const pair = await createPair(browser);
+    try {
+      // Both peers will start with the same default character.
+      // After connecting, one should auto-switch exactly once — no infinite loop.
+      const code = await hostCreateRoom(pair.host);
+      await guestJoinRoom(pair.guest, code);
+      await waitForLobby(pair.host);
+      await waitForLobby(pair.guest);
+
+      // If we reach here without timeout, the cascade didn't happen.
+      // Verify both peers have different characters (auto-switch resolved the conflict).
+      const hostChar = await pair.host.locator('.online-char-select').inputValue();
+      const guestChar = await pair.guest.locator('.online-char-select').inputValue();
+      expect(hostChar).not.toBe(guestChar);
+
+      // Wait an additional 2s to confirm no further switching happens
+      const hostCharAfter = await pair.host.locator('.online-char-select').inputValue();
+      await pair.host.waitForTimeout(2000);
+      const hostCharFinal = await pair.host.locator('.online-char-select').inputValue();
+      expect(hostCharFinal).toBe(hostCharAfter); // no further changes
+    } finally {
+      await closePair(pair);
+    }
+  });
+});
