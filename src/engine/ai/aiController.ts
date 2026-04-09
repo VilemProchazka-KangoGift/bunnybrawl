@@ -2,7 +2,7 @@ import type { Player, MatchState, Arena, InputState, BotDifficulty } from '../ty
 import type { AIPersonality, DifficultyParams, AwarenessSnapshot } from './types';
 import type { SeededRNG } from '../net/prng';
 import type { AISnapshot } from '../net/serialize';
-import { buildAwareness } from './awareness';
+import { buildAwarenessInto, createEmptyAwareness } from './awareness';
 import { evaluateActions } from './utility';
 import { getPersonality, getDifficultyParams } from './personality';
 
@@ -31,6 +31,7 @@ export class AIController {
   private frameCounter = 0;
   private botIndex: number;
   private _lastNavTarget: AwarenessSnapshot['navTarget'] = null;
+  private _pooledAwareness = createEmptyAwareness();
   private rng?: SeededRNG;
 
   constructor(_slot: string, characterName: string, difficulty: BotDifficulty, botIndex = 0, rng?: SeededRNG) { // slot used as map key by caller
@@ -133,9 +134,10 @@ export class AIController {
   }
 
   private computeIdealInput(self: Player, state: MatchState, arena: Arena, carrotChase = false, mirrorNav = false): InputState {
-    // Build awareness ONCE, reuse for stuck recovery and normal path
+    // Build awareness ONCE into pooled object, reuse for stuck recovery and normal path
     const preferSafe = this.personality.cautiousness >= 1.2;
-    const awareness = buildAwareness(self, state, arena, this.difficulty.awarenessRadius, this.difficulty.pathfindingDepth, preferSafe, mirrorNav);
+    buildAwarenessInto(this._pooledAwareness, self, state, arena, this.difficulty.awarenessRadius, this.difficulty.pathfindingDepth, preferSafe, mirrorNav);
+    const awareness = this._pooledAwareness;
     this._lastNavTarget = awareness.navTarget;
 
     if (this.stuckTimer > 45) {

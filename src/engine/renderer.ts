@@ -1575,6 +1575,9 @@ export class Renderer {
 
     let cached = this.spriteCache.get(cacheKey);
     if (cached) {
+      // LRU: delete+re-insert moves entry to end of Map iteration order
+      this.spriteCache.delete(cacheKey);
+      this.spriteCache.set(cacheKey, cached);
       ctx.drawImage(cached, x - 10, y - 10);
       return;
     }
