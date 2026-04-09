@@ -617,7 +617,8 @@ export function MainMenu() {
 
   useEffect(() => {
     audio.playMenuMusic();
-    audio.init();
+    // Defer heavy procedural sound generation so it doesn't block music start
+    setTimeout(() => audio.init(), 0);
   }, []);
 
   useEffect(() => {
