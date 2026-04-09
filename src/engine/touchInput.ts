@@ -81,7 +81,7 @@ export class TouchInputManager {
     document.body.style.touchAction = 'none';
     document.body.style.overscrollBehavior = 'none';
     containerEl.style.userSelect = 'none';
-    (containerEl.style as any).webkitUserSelect = 'none';
+    containerEl.style.webkitUserSelect = 'none';
   }
 
   setCallbacks(
@@ -109,7 +109,7 @@ export class TouchInputManager {
     if (this.containerEl) {
       this.containerEl.removeEventListener('contextmenu', this.boundContextMenu);
       this.containerEl.style.userSelect = '';
-      (this.containerEl.style as any).webkitUserSelect = '';
+      this.containerEl.style.webkitUserSelect = '';
     }
     document.body.style.touchAction = '';
     document.body.style.overscrollBehavior = '';

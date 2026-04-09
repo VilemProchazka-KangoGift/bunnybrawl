@@ -121,7 +121,7 @@ export class NetMatch {
         this.onArenaChange?.((msg as { arenaId: string }).arenaId);
       }
     } else if (msg.type === MsgType.MATCH_RESULT) {
-      this.onMatchEnd?.((msg as { winner: string | null }).winner as any, this.gameLoop.getState());
+      this.onMatchEnd?.(msg.winner as PlayerSlot | null, this.gameLoop.getState());
     } else if (msg.type === MsgType.DISCONNECT) {
       this.onDisconnect?.();
     }

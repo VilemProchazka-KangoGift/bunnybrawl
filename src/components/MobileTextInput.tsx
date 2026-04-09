@@ -26,12 +26,12 @@ export function MobileTextInput({ value, maxLength, label, onConfirm, onCancel }
     // Suppress the "rotate your device" prompt while typing
     suppressLandscapePrompt(true);
     // Unlock orientation so user can type in portrait
-    (screen.orientation as any)?.unlock?.();
+    screen.orientation?.unlock?.();
     inputRef.current?.focus();
     return () => {
       suppressLandscapePrompt(false);
       // Re-lock landscape when overlay closes
-      (screen.orientation as any)?.lock?.('landscape')?.catch?.(() => {});
+      screen.orientation?.lock?.('landscape')?.catch?.(() => {});
     };
   }, []);
 
