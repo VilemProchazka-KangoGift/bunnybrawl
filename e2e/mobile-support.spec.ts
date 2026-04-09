@@ -10,8 +10,8 @@ test.describe('Mobile support (@mobile)', () => {
     await expect(page.locator('html.is-mobile')).toBeAttached();
   });
 
-  test('hides fullscreen button on mobile', async ({ page }) => {
-    await expect(page.locator('.fullscreen-btn')).toBeHidden();
+  test('shows fullscreen button on mobile', async ({ page }) => {
+    await expect(page.locator('.fullscreen-btn')).toBeVisible();
   });
 
   test('hides keyboard controls hint on menu', async ({ page }) => {
