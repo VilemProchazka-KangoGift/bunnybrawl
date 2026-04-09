@@ -128,6 +128,7 @@ export interface Player {
   hitstopTimer: number;        // >0 = physics frozen (post-kill freeze)
   renderOffsetX: number;       // visual-only offset from rollback correction, decays to 0
   renderOffsetY: number;       // visual-only offset from rollback correction, decays to 0
+  disconnected: boolean;       // true = player disconnected mid-match, don't respawn
 }
 
 export type SplatShape = 'circle' | 'star' | 'splat' | 'ring' | 'paw';

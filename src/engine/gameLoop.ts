@@ -172,7 +172,7 @@ export class GameLoop {
       squashScale: 1, squashTimer: 0, sideSquash: 1, afterimages: [], idleAnimTimer: 0,
       expression: 'normal' as const, killStreak: 0,
       breathTimer: 0, springTrailTimer: 0, damageFlashSide: null, damageFlashTimer: 0, burnTimer: 0, hitstopTimer: 0,
-      renderOffsetX: 0, renderOffsetY: 0,
+      renderOffsetX: 0, renderOffsetY: 0, disconnected: false,
     }));
 
     // Init AI controllers for bot players
@@ -426,6 +426,18 @@ export class GameLoop {
   /** Update net debug stats (forwarded to renderer for overlay). */
   setNetDebugStats(stats: NetDebugStats | null): void {
     this.renderer.setNetDebugStats(stats);
+  }
+
+  /** Mark a player as disconnected — kill them and prevent respawn. */
+  disconnectPlayer(slot: PlayerSlot): void {
+    const player = this.state.players.find(p => p.id === slot);
+    if (!player) return;
+    player.disconnected = true;
+    // Kill the player if alive — they'll show as a corpse
+    if (player.state !== 'splat' && player.state !== 'respawning') {
+      player.state = 'splat';
+      player.splatTimer = 999999; // never auto-advance to respawning
+    }
   }
 
   /** Mute/unmute audio (used during rollback resimulation). */

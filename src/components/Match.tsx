@@ -8,6 +8,7 @@ import { getModalTransport } from './MainMenu';
 import { getArena, listArenas } from '../engine/arena';
 import { listThemes } from '../engine/themes/registry';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
+import type { PlayerSlot } from '../engine/types';
 import './Match.css';
 
 // Track last resolved arena so random doesn't repeat on rematch
@@ -155,7 +156,7 @@ export function Match() {
         onMatchEnd,
         transport,
         localSlot: online.isHost ? 'P1' : 'P2',
-        remoteSlot: online.isHost ? 'P2' : 'P1',
+        remoteSlots: activePlayers.filter(s => s !== (online.isHost ? 'P1' : 'P2') && s.startsWith('P')) as PlayerSlot[],
         rngSeed: online.rngSeed,
         onDesync: () => {
           console.warn('Desync detected!');

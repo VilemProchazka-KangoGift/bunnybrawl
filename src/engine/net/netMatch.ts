@@ -1,8 +1,10 @@
 /**
  * NetMatch: orchestrates Transport + RollbackEngine + GameLoop for online play.
+ * Supports multi-guest: host relays inputs, each guest connects only to host.
  */
 import type { PlayerSlot, MatchState } from '../types';
 import type { MatchSettings, Arena } from '../types';
+import { isBotSlot } from '../types';
 import { GameLoop } from '../gameLoop';
 import type { MatchEndCallback } from '../gameLoop';
 import { SeededRNG } from './prng';
@@ -20,11 +22,13 @@ export interface NetMatchConfig {
   onMatchEnd: MatchEndCallback;
   transport: Transport;
   localSlot: PlayerSlot;
-  remoteSlot: PlayerSlot;
+  remoteSlots: PlayerSlot[];   // all remote human player slots
   rngSeed: number;
   onDesync?: () => void;
   onStall?: (stalled: boolean) => void;
+  onStallTimeout?: () => void;
   onDisconnect?: () => void;
+  onPlayerDisconnect?: (slot: PlayerSlot) => void;
   onArenaChange?: (arenaId: string) => void;
 }
 
@@ -32,12 +36,14 @@ export class NetMatch {
   private gameLoop: GameLoop;
   private rollback: RollbackEngine;
   private transport: Transport;
+  private isHost: boolean;
   private onMatchEnd?: MatchEndCallback;
   private onDisconnect?: () => void;
   private onArenaChange?: (arenaId: string) => void;
 
   constructor(config: NetMatchConfig) {
     this.transport = config.transport;
+    this.isHost = !isBotSlot(config.localSlot) && config.localSlot === 'P1';
     this.onMatchEnd = config.onMatchEnd;
     this.onDisconnect = config.onDisconnect;
     this.onArenaChange = config.onArenaChange;
@@ -52,28 +58,25 @@ export class NetMatch {
       config.onMatchEnd,
     );
 
-    // Inject seeded PRNG
     const rng = new SeededRNG(config.rngSeed);
     this.gameLoop.setRng(rng);
 
-    // Create rollback engine
+    // Create rollback engine with all remote human slots
     this.rollback = new RollbackEngine({
       localSlot: config.localSlot,
-      remoteSlot: config.remoteSlot,
-      isHost: config.localSlot === 'P1',
+      remoteSlots: config.remoteSlots,
+      isHost: this.isHost,
       gameLoop: this.gameLoop,
       transport: config.transport,
       onDesync: config.onDesync ? () => config.onDesync!() : undefined,
       onStall: config.onStall,
+      onStallTimeout: config.onStallTimeout,
+      onPlayerDisconnect: config.onPlayerDisconnect,
     });
-
-    // Wire transport events to rollback engine
-    this.transport = config.transport;
   }
 
   /** Start the network match. */
   start(): void {
-    // Re-wire transport callbacks from lobby handlers to match handlers
     this.transport.setEvents({
       onStatusChange: (_status, _error) => {
         if (_status === 'disconnected' || _status === 'error') {
@@ -83,13 +86,25 @@ export class NetMatch {
       onReliableMessage: (msg) => this.handleReliableMessage(msg),
       onUnreliableMessage: (data) => this.handleUnreliableMessage(data),
       onRttUpdate: () => {},
+      onPeerDisconnected: (_peerId) => {
+        // Individual peer disconnect — handled per-slot via rollback.removeRemoteSlot
+        // The overall disconnect (all peers gone) is handled by onStatusChange
+      },
     });
 
     this.rollback.start();
   }
 
-  /** Wire incoming transport messages to the rollback engine. */
   handleUnreliableMessage(data: ArrayBuffer): void {
+    // Host relays input to all other guests
+    if (this.isHost && this.transport.peerCount > 1) {
+      // Forward to all peers except the sender
+      // The source byte in the message identifies the sender
+      for (const peerId of this.transport.getPeerIds()) {
+        // Send to all — receiver filters by source slot
+        this.transport.sendUnreliableTo(peerId, data);
+      }
+    }
     this.rollback.handleInputMessage(data);
   }
 
@@ -111,6 +126,12 @@ export class NetMatch {
     } else if (msg.type === MsgType.DISCONNECT) {
       this.onDisconnect?.();
     }
+  }
+
+  /** Remove a remote player mid-match (disconnect handling). */
+  removePlayer(slot: PlayerSlot): void {
+    this.rollback.removeRemoteSlot(slot);
+    this.gameLoop.disconnectPlayer(slot);
   }
 
   stop(): void {

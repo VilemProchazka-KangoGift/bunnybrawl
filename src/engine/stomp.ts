@@ -106,6 +106,7 @@ export function updateSplatTimers(
     if (!player.active) continue;
 
     if (player.state === 'splat') {
+      if (player.disconnected) continue; // disconnected players stay as corpse
       player.splatTimer -= dt;
       if (player.splatTimer <= 0) {
         player.state = 'respawning';

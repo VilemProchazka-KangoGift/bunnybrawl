@@ -1,5 +1,6 @@
 /**
  * GGPO-style rollback netcode engine.
+ * Supports multiple remote players (multi-guest star topology).
  * Manages input buffers, predictions, snapshots, and resimulation.
  */
 import type { InputState, PlayerSlot } from '../types';
@@ -9,7 +10,7 @@ import { takeSnapshot, restoreSnapshot, hashGameState, takeSnapshotInto, createE
 import { Transport } from './transport';
 import {
   MsgType,
-  encodeInputMessage, decodeInputMessage,
+  encodeInputMessage, decodeInputMessage, decodeSlot,
 } from './protocol';
 import type { ReliableMessage, DesyncCheckMessage, DesyncRequestMessage, DesyncCorrectionMessage } from './protocol';
 import { FIXED_TIMESTEP } from '../constants';
@@ -20,18 +21,19 @@ const DEFAULT_INPUT_DELAY = 2;    // frames of local input delay
 const MAX_INPUT_DELAY = 4;
 const INPUT_BUNDLE_SIZE = 10;     // recent inputs to bundle per message
 const DESYNC_CHECK_INTERVAL = 30; // frames between state sync checks (0.5s)
+const STALL_TIMEOUT_MS = 8000;    // disconnect after 8s of stall
 
 const NO_INPUT: InputState = { left: false, right: false, jump: false, down: false };
 
 // Visual correction smoothing constants
 const RENDER_OFFSET_DECAY = 0.7;
-const RENDER_OFFSET_MIN = 0.5;        // threshold below which offset snaps to 0
-const CORRECTION_SNAP_DISTANCE = 30;   // corrections larger than this snap (no lerp)
-const STATS_RESET_INTERVAL = 60;       // frames between stats window reset (1 second)
+const RENDER_OFFSET_MIN = 0.5;
+const CORRECTION_SNAP_DISTANCE = 30;
+const STATS_RESET_INTERVAL = 60;
 
 export interface NetDebugStats {
   localFrame: number;
-  remoteConfirmedFrame: number;
+  remoteConfirmedFrame: number; // min across all remotes
   remoteLatestAck: number;
   rtt: number;
   jitter: number;
@@ -41,38 +43,44 @@ export interface NetDebugStats {
   maxRollbackDepth: number;
 }
 
+/** Per-remote-slot input tracking state. */
+interface RemoteSlotState {
+  inputs: InputState[];
+  confirmed: boolean[];
+  confirmedFrame: number;
+  latestAck: number;
+  disconnected: boolean;
+}
+
 export interface RollbackConfig {
   localSlot: PlayerSlot;
-  remoteSlot: PlayerSlot;
+  remoteSlots: PlayerSlot[];
   isHost: boolean;
   gameLoop: GameLoop;
   transport: Transport;
   onDesync?: (localHash: number, remoteHash: number, frame: number) => void;
   onStall?: (stalled: boolean) => void;
+  onStallTimeout?: () => void;
+  onPlayerDisconnect?: (slot: PlayerSlot) => void;
 }
 
 export class RollbackEngine {
   private localSlot: PlayerSlot;
-  private remoteSlot: PlayerSlot;
+  private remoteSlots: PlayerSlot[];
+  private remoteState: Map<PlayerSlot, RemoteSlotState> = new Map();
   private isHost: boolean;
   private gameLoop: GameLoop;
   private transport: Transport;
 
-  // Input buffers (ring buffer, indexed by frame % BUFFER_SIZE)
+  // Local input buffer (ring buffer, indexed by frame % BUFFER_SIZE)
   private localInputs: InputState[] = new Array(BUFFER_SIZE);
-  private remoteInputs: InputState[] = new Array(BUFFER_SIZE);
-  private remoteConfirmed: boolean[] = new Array(BUFFER_SIZE);
 
   // Frame tracking
   private localFrame = 0;
-  private remoteConfirmedFrame = -1;
-  private _remoteLatestAck = -1; // latest local frame the remote has acknowledged
-
-  // Snapshot ring buffer (pre-allocated to avoid GC pressure)
-  private snapshots: GameSnapshot[] = Array.from({ length: MAX_ROLLBACK_FRAMES }, () => createEmptySnapshot());
-
-  // Track the last frame we confirmed via rollback (avoid redundant resimulation)
   private lastSyncedFrame = -1;
+
+  // Snapshot ring buffer (pre-allocated)
+  private snapshots: GameSnapshot[] = Array.from({ length: MAX_ROLLBACK_FRAMES }, () => createEmptySnapshot());
 
   // Input delay (adaptive)
   private inputDelay = DEFAULT_INPUT_DELAY;
@@ -83,6 +91,7 @@ export class RollbackEngine {
   private running = false;
   private rafId = 0;
   private stalled = false;
+  private stallStartTime = 0;
 
   // Rollback stats (for debug overlay)
   private rollbackCount = 0;
@@ -91,7 +100,7 @@ export class RollbackEngine {
   private maxRollbackDepthPerSec = 0;
   private statsResetFrame = 0;
 
-  // Reusable objects for hot 60fps loop (avoid GC pressure)
+  // Reusable objects for hot 60fps loop
   private readonly inputMap = new Map<string, InputState>();
   private readonly sendBundle: Array<{ frame: number; input: InputState }> = Array.from(
     { length: INPUT_BUNDLE_SIZE },
@@ -107,21 +116,73 @@ export class RollbackEngine {
 
   // Callbacks
   private onStall?: (stalled: boolean) => void;
+  private onStallTimeout?: () => void;
+  private onPlayerDisconnect?: (slot: PlayerSlot) => void;
 
   constructor(config: RollbackConfig) {
     this.localSlot = config.localSlot;
-    this.remoteSlot = config.remoteSlot;
+    this.remoteSlots = [...config.remoteSlots];
     this.isHost = config.isHost;
     this.gameLoop = config.gameLoop;
     this.transport = config.transport;
     this.onStall = config.onStall;
+    this.onStallTimeout = config.onStallTimeout;
+    this.onPlayerDisconnect = config.onPlayerDisconnect;
 
-    // Fill buffers with no-input
+    // Fill local input buffer
     for (let i = 0; i < BUFFER_SIZE; i++) {
       this.localInputs[i] = { ...NO_INPUT };
-      this.remoteInputs[i] = { ...NO_INPUT };
-      this.remoteConfirmed[i] = false;
     }
+
+    // Initialize per-remote-slot state
+    for (const slot of this.remoteSlots) {
+      this.initRemoteSlot(slot);
+    }
+  }
+
+  private initRemoteSlot(slot: PlayerSlot): void {
+    const inputs = new Array<InputState>(BUFFER_SIZE);
+    const confirmed = new Array<boolean>(BUFFER_SIZE);
+    for (let i = 0; i < BUFFER_SIZE; i++) {
+      inputs[i] = { ...NO_INPUT };
+      confirmed[i] = false;
+    }
+    this.remoteState.set(slot, {
+      inputs,
+      confirmed,
+      confirmedFrame: -1,
+      latestAck: -1,
+      disconnected: false,
+    });
+  }
+
+  /** Add a new remote slot (for late-joining players). */
+  addRemoteSlot(slot: PlayerSlot): void {
+    if (this.remoteState.has(slot)) return;
+    this.remoteSlots.push(slot);
+    this.initRemoteSlot(slot);
+  }
+
+  /** Remove a remote slot (player disconnected mid-match). Stop expecting their inputs. */
+  removeRemoteSlot(slot: PlayerSlot): void {
+    const state = this.remoteState.get(slot);
+    if (!state) return;
+    state.disconnected = true;
+    // Set confirmed frame to localFrame so this slot never causes stall
+    state.confirmedFrame = this.localFrame;
+    this.onPlayerDisconnect?.(slot);
+  }
+
+  /** Get the minimum confirmed frame across all active (non-disconnected) remote slots. */
+  private getMinRemoteConfirmedFrame(): number {
+    let minFrame = Infinity;
+    let anyActive = false;
+    for (const state of this.remoteState.values()) {
+      if (state.disconnected) continue;
+      anyActive = true;
+      if (state.confirmedFrame < minFrame) minFrame = state.confirmedFrame;
+    }
+    return anyActive ? minFrame : this.localFrame;
   }
 
   start(): void {
@@ -138,7 +199,7 @@ export class RollbackEngine {
     this.gameLoop.stop();
   }
 
-  /** Process incoming remote input message. */
+  /** Process incoming remote input message. Routes by source slot. */
   handleInputMessage(data: ArrayBuffer): void {
     const decoded = decodeInputMessage(data);
     if (!decoded) {
@@ -146,32 +207,42 @@ export class RollbackEngine {
       return;
     }
 
+    const sourceSlot = decodeSlot(decoded.source) as PlayerSlot;
+
+    // Find the remote state for this source
+    let remState = this.remoteState.get(sourceSlot);
+    if (!remState) {
+      // Unknown slot — might be a relay from host for a slot we don't track yet
+      // In 1v1 mode, try the first remote slot as fallback
+      if (this.remoteSlots.length === 1) {
+        remState = this.remoteState.get(this.remoteSlots[0]);
+      }
+      if (!remState) return;
+    }
+
     for (let i = 0; i < decoded.inputCount; i++) {
       const { frame, input } = decoded.inputs[i];
-      // Bounds check: reject frames too far in past or future
       if (frame < this.localFrame - BUFFER_SIZE) continue;
       if (frame > this.localFrame + BUFFER_SIZE) continue;
 
       const bufIdx = frame % BUFFER_SIZE;
 
-      // Only accept inputs for frames we haven't passed too far
-      if (this.remoteConfirmed[bufIdx] && frame <= this.remoteConfirmedFrame) continue;
+      if (remState.confirmed[bufIdx] && frame <= remState.confirmedFrame) continue;
 
-      this.remoteInputs[bufIdx] = input;
-      this.remoteConfirmed[bufIdx] = true;
+      remState.inputs[bufIdx] = input;
+      remState.confirmed[bufIdx] = true;
 
-      if (frame > this.remoteConfirmedFrame) {
-        this.remoteConfirmedFrame = frame;
+      if (frame > remState.confirmedFrame) {
+        remState.confirmedFrame = frame;
       }
     }
 
-    this._remoteLatestAck = decoded.latestAck;
+    remState.latestAck = decoded.latestAck;
   }
 
   /** Process a reliable message (desync check / state sync). */
   handleReliableMessage(msg: ReliableMessage): void {
     if (msg.type === MsgType.DESYNC_CHECK) {
-      // Guest: compare hashes, request correction only on mismatch
       if (!this.isHost) {
         const check = msg as DesyncCheckMessage;
         const localHash = hashGameState(this.gameLoop.getState(), this.gameLoop.getRng());
@@ -182,18 +253,15 @@ export class RollbackEngine {
         }
       }
     } else if (msg.type === MsgType.DESYNC_REQUEST) {
-      // Host: guest reported mismatch, send snapshot from the check frame if available
       if (this.isHost) {
         const reqFrame = (msg as DesyncRequestMessage).frame;
         const cached = this.snapshots[reqFrame % MAX_ROLLBACK_FRAMES];
         let snap: GameSnapshot;
         let correctionFrame: number;
         if (cached.frame === reqFrame) {
-          // Use the exact snapshot from the desync check frame
           snap = cached;
           correctionFrame = reqFrame;
         } else {
-          // Frame aged out of ring buffer — fall back to current state
           snap = takeSnapshot(this.localFrame, this.gameLoop.getState(), this.gameLoop.getRng(), this.gameLoop.getAIControllers());
           correctionFrame = this.localFrame;
         }
@@ -205,7 +273,6 @@ export class RollbackEngine {
         this.transport.sendReliable(correction);
       }
     } else if (msg.type === MsgType.DESYNC_CORRECTION) {
-      // Guest: apply host's authoritative state
       if (!this.isHost) {
         const correction = msg as DesyncCorrectionMessage;
         console.log(`[net] Applying host correction at frame ${correction.frame}`);
@@ -222,18 +289,20 @@ export class RollbackEngine {
     this.lastTime = currentTime;
     this.accumulator += dt;
 
-    // Process incoming messages (transport delivers via callbacks, already handled)
-
-    // Advance simulation
     while (this.accumulator >= FIXED_TIMESTEP) {
-      // Check if we're too far ahead of the remote (stall check)
-      // Skip stall during startup grace period (remoteConfirmedFrame == -1 means no inputs received yet)
-      const frameAdvantage = this.localFrame - this.remoteConfirmedFrame;
-      if (this.remoteConfirmedFrame >= 0 && frameAdvantage >= MAX_ROLLBACK_FRAMES) {
-        // Stalled — don't advance, wait for remote
+      const minRemoteFrame = this.getMinRemoteConfirmedFrame();
+      const frameAdvantage = this.localFrame - minRemoteFrame;
+
+      // Skip stall during startup grace period (no inputs received yet from any remote)
+      if (minRemoteFrame >= 0 && frameAdvantage >= MAX_ROLLBACK_FRAMES) {
         if (!this.stalled) {
           this.stalled = true;
+          this.stallStartTime = performance.now();
           this.onStall?.(true);
+        }
+        // Stall timeout: end match if stalled too long
+        if (performance.now() - this.stallStartTime > STALL_TIMEOUT_MS) {
+          this.onStallTimeout?.();
         }
         this.accumulator = 0;
         break;
@@ -251,7 +320,7 @@ export class RollbackEngine {
     // Push net debug stats to renderer before drawing
     this.gameLoop.setNetDebugStats(this.getStats());
 
-    // Render (pass frameDt for real-time timer decay: slowMotion, screenFlash, hitstopZoom)
+    // Render
     this.gameLoop.renderFrame(dt);
 
     this.rafId = requestAnimationFrame(this.networkLoop);
@@ -269,19 +338,27 @@ export class RollbackEngine {
     // 3. Check for mispredictions and rollback if needed
     this.checkRollback();
 
-    // 4. Predict remote input for current frame if not confirmed
+    // 4. Predict remote inputs for current frame if not confirmed
     const bufIdx = this.localFrame % BUFFER_SIZE;
-    if (!this.remoteConfirmed[bufIdx]) {
-      // Predict: repeat last confirmed input
-      this.remoteInputs[bufIdx] = this.getLastConfirmedRemoteInput();
+    for (const [, remState] of this.remoteState) {
+      if (remState.disconnected) continue;
+      if (!remState.confirmed[bufIdx]) {
+        remState.inputs[bufIdx] = this.getLastConfirmedInput(remState);
+      }
     }
 
-    // 5. Build input map and advance (reuse Map to avoid GC pressure at 60fps)
+    // 5. Build input map and advance
     this.inputMap.clear();
     this.inputMap.set(this.localSlot, this.localInputs[this.localFrame % BUFFER_SIZE]);
-    this.inputMap.set(this.remoteSlot, this.remoteInputs[bufIdx]);
+    for (const [slot, remState] of this.remoteState) {
+      if (remState.disconnected) {
+        this.inputMap.set(slot, NO_INPUT);
+      } else {
+        this.inputMap.set(slot, remState.inputs[bufIdx]);
+      }
+    }
 
-    // Take snapshot before advancing (in-place into pre-allocated slot)
+    // Take snapshot before advancing (in-place)
     takeSnapshotInto(
       this.snapshots[this.localFrame % MAX_ROLLBACK_FRAMES],
       this.localFrame, this.gameLoop.getState(), this.gameLoop.getRng(), this.gameLoop.getAIControllers(),
@@ -290,7 +367,7 @@ export class RollbackEngine {
     // Advance simulation
     this.gameLoop.fixedUpdate(FIXED_TIMESTEP, this.inputMap);
 
-    // Decay visual correction offsets (~3-5 frames to settle)
+    // Decay visual correction offsets
     for (const p of this.gameLoop.getState().players) {
       p.renderOffsetX *= RENDER_OFFSET_DECAY;
       p.renderOffsetY *= RENDER_OFFSET_DECAY;
@@ -319,16 +396,35 @@ export class RollbackEngine {
   }
 
   private checkRollback(): void {
-    // Only rollback if NEW confirmed inputs have arrived since our last sync
-    if (this.remoteConfirmedFrame <= this.lastSyncedFrame) return;
+    // Find earliest frame with new confirmed input across any remote slot
+    const minSyncedFrame = this.lastSyncedFrame;
+    let earliestNewConfirm = Infinity;
+
+    for (const remState of this.remoteState.values()) {
+      if (remState.disconnected) continue;
+      if (remState.confirmedFrame > minSyncedFrame && remState.confirmedFrame < earliestNewConfirm) {
+        earliestNewConfirm = remState.confirmedFrame;
+      }
+    }
+
+    // No new confirmed inputs
+    if (earliestNewConfirm === Infinity) return;
 
     // Find the earliest frame that needs resimulation
     let rollbackFrame = -1;
-    for (let f = Math.max(0, this.lastSyncedFrame + 1, this.localFrame - MAX_ROLLBACK_FRAMES); f < this.localFrame; f++) {
+    for (let f = Math.max(0, minSyncedFrame + 1, this.localFrame - MAX_ROLLBACK_FRAMES); f < this.localFrame; f++) {
       const bufIdx = f % BUFFER_SIZE;
-      if (this.remoteConfirmed[bufIdx]) {
+      let hasNewConfirm = false;
+      for (const remState of this.remoteState.values()) {
+        if (remState.disconnected) continue;
+        if (remState.confirmed[bufIdx]) {
+          hasNewConfirm = true;
+          break;
+        }
+      }
+      if (hasNewConfirm) {
         const snap = this.snapshots[f % MAX_ROLLBACK_FRAMES];
-        if (snap && snap.frame === f) {
+        if (snap.frame === f) {
           rollbackFrame = f;
           break;
         }
@@ -336,15 +432,15 @@ export class RollbackEngine {
     }
 
     if (rollbackFrame < 0) {
-      this.lastSyncedFrame = this.remoteConfirmedFrame;
+      // Update synced frame to min confirmed across all remotes
+      this.lastSyncedFrame = Math.max(this.lastSyncedFrame, this.getMinRemoteConfirmedFrame());
       return;
     }
 
-    // Restore snapshot — snapshot[f] = state at START of frame f (before tick f)
     const snap = this.snapshots[rollbackFrame % MAX_ROLLBACK_FRAMES];
     if (snap.frame !== rollbackFrame) return;
 
-    // Track rollback stats for debug overlay
+    // Track rollback stats
     const depth = this.localFrame - rollbackFrame;
     this.rollbackCount++;
     if (depth > this.maxRollbackDepth) this.maxRollbackDepth = depth;
@@ -360,16 +456,19 @@ export class RollbackEngine {
     this.gameLoop.setResimulating(true);
     restoreSnapshot(snap, state, this.gameLoop.getRng(), this.gameLoop.getAIControllers());
 
-    // Resimulate from rollbackFrame to localFrame
-    // Convention: snapshot[f] = state BEFORE tick f. We take snapshot, then tick.
+    // Resimulate
     for (let f = rollbackFrame; f < this.localFrame; f++) {
       const bufIdx = f % BUFFER_SIZE;
       this.inputMap.clear();
       this.inputMap.set(this.localSlot, this.localInputs[bufIdx]);
-      this.inputMap.set(this.remoteSlot, this.remoteInputs[bufIdx]);
+      for (const [slot, remState] of this.remoteState) {
+        if (remState.disconnected) {
+          this.inputMap.set(slot, NO_INPUT);
+        } else {
+          this.inputMap.set(slot, remState.inputs[bufIdx]);
+        }
+      }
 
-      // Snapshot at f = state before tick f (already correct for rollbackFrame from restore)
-      // For subsequent frames, capture state before ticking (in-place)
       if (f > rollbackFrame) {
         takeSnapshotInto(
           this.snapshots[f % MAX_ROLLBACK_FRAMES],
@@ -398,11 +497,10 @@ export class RollbackEngine {
         state.players[i].renderOffsetY += dy;
       }
     }
-    this.lastSyncedFrame = this.remoteConfirmedFrame;
+    this.lastSyncedFrame = Math.max(this.lastSyncedFrame, this.getMinRemoteConfirmedFrame());
   }
 
   private readLocalInput(): InputState {
-    // Read from the InputManager — use ALL key bindings for online play
     try {
       return this.gameLoop.getInputAny();
     } catch {
@@ -411,7 +509,6 @@ export class RollbackEngine {
   }
 
   private sendInput(frame: number, _input: InputState): void {
-    // Bundle recent unacked inputs into pre-allocated objects (zero allocation)
     const startFrame = Math.max(0, frame - INPUT_BUNDLE_SIZE + 1);
     const count = frame - startFrame + 1;
     for (let i = 0; i < count; i++) {
@@ -419,19 +516,18 @@ export class RollbackEngine {
       this.sendBundle[i].frame = f;
       this.sendBundle[i].input = this.localInputs[f % BUFFER_SIZE];
     }
-    // Pass count to encoder instead of truncating array (truncating destroys pre-allocated slots)
-    const msg = encodeInputMessage(this.sendBundle, this.remoteConfirmedFrame, count, this.localSlot);
+    // Use min remote confirmed frame for ack
+    const msg = encodeInputMessage(this.sendBundle, this.getMinRemoteConfirmedFrame(), count, this.localSlot);
     this.transport.sendUnreliable(msg);
   }
 
-  private getLastConfirmedRemoteInput(): InputState {
-    if (this.remoteConfirmedFrame < 0) return NO_INPUT;
-    return this.remoteInputs[this.remoteConfirmedFrame % BUFFER_SIZE];
+  private getLastConfirmedInput(remState: RemoteSlotState): InputState {
+    if (remState.confirmedFrame < 0) return NO_INPUT;
+    return remState.inputs[remState.confirmedFrame % BUFFER_SIZE];
   }
 
   private sendDesyncCheck(): void {
     if (this.isHost) {
-      // Host sends hash only — guest requests full snapshot only on mismatch
       const check: DesyncCheckMessage = {
         type: MsgType.DESYNC_CHECK,
         frame: this.localFrame,
@@ -447,10 +543,8 @@ export class RollbackEngine {
     if (rtt <= 0) return;
     const tickMs = FIXED_TIMESTEP * 1000;
     const rttFrames = Math.ceil(rtt / 2 / tickMs);
-    // Add up to 2 extra frames for high jitter to prevent constant rollback churn
     const jitterPad = Math.min(Math.ceil(this.transport.currentJitter / tickMs), 2);
     const target = Math.max(1, Math.min(MAX_INPUT_DELAY, rttFrames + jitterPad));
-    // Hysteresis: only change if difference is meaningful (prevents oscillation on jitter spikes)
     if (target > this.inputDelay || target < this.inputDelay - 1) {
       this.inputDelay = target;
     }
@@ -460,8 +554,13 @@ export class RollbackEngine {
   getStats(): NetDebugStats {
     const s = this._statsCache;
     s.localFrame = this.localFrame;
-    s.remoteConfirmedFrame = this.remoteConfirmedFrame;
-    s.remoteLatestAck = this._remoteLatestAck;
+    s.remoteConfirmedFrame = this.getMinRemoteConfirmedFrame();
+    s.remoteLatestAck = -1;
+    for (const remState of this.remoteState.values()) {
+      if (!remState.disconnected && remState.latestAck > s.remoteLatestAck) {
+        s.remoteLatestAck = remState.latestAck;
+      }
+    }
     s.rtt = this.transport.currentRtt;
     s.jitter = this.transport.currentJitter;
     s.inputDelay = this.inputDelay;
