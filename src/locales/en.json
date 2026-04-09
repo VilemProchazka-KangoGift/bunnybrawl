@@ -82,8 +82,8 @@
   "mod_mirror_desc": "Flip arenas horizontally",
   "mod_underwater_gravity": "Underwater Gravity",
   "mod_underwater_gravity_desc": "Floaty, low-gravity physics",
-  "mod_no_music": "No Music",
-  "mod_no_music_desc": "Disable all music",
+  "music_on": "Turn music on",
+  "music_off": "Turn music off",
   "victory_choose_arena": "Change Arena",
   "help_button": "?",
   "help_title": "How to Play",
@@ -166,5 +166,7 @@
   "spectating_hint": "You'll join when the current match ends.",
   "player_disconnected": "Player disconnected",
   "taken": "taken",
-  "rotate_device": "Rotate your device"
+  "rotate_device": "Rotate your device",
+  "tap_to_enter_name": "Tap to enter name...",
+  "done": "Done"
 }

@@ -85,8 +85,8 @@
   "mod_mirror_desc": "Převrátí arény horizontálně",
   "mod_underwater_gravity": "Podmořská gravitace",
   "mod_underwater_gravity_desc": "Lehká, plovoucí gravitace",
-  "mod_no_music": "Bez hudby",
-  "mod_no_music_desc": "Vypne veškerou hudbu",
+  "music_on": "Zapnout hudbu",
+  "music_off": "Vypnout hudbu",
   "victory_choose_arena": "Změnit arénu",
   "help_button": "?",
   "help_title": "Jak hrát",
@@ -161,5 +161,7 @@
   "ready_up": "Připraven!",
   "code_placeholder": "Kód",
   "back": "Zpět",
-  "rotate_device": "Otočte zařízení"
+  "rotate_device": "Otočte zařízení",
+  "tap_to_enter_name": "Klepněte pro zadání jména...",
+  "done": "Hotovo"
 }

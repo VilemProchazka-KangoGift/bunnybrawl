@@ -6,6 +6,7 @@ import { listArenas } from '../engine/arena';
 import { listThemes } from '../engine/themes/registry';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
 import { isTouchPrimary } from '../engine/touchDetect';
+import { MobileTextInput } from './MobileTextInput';
 import { initWildlife, updateAndDrawWildlife, drawDayNightCycle } from '../engine/canvasAnimations';
 import type { SimpleWildlife } from '../engine/canvasAnimations';
 import logoImg from '/logo.png?url';
@@ -194,6 +195,7 @@ export function MainMenu() {
   );
   const onlinePlayerNameRef = useRef('');
   onlinePlayerNameRef.current = onlinePlayerName;
+  const [mobileNameOpen, setMobileNameOpen] = useState(false);
   const [onlineRemoteReady, setOnlineRemoteReady] = useState(false);
   const [onlineLocalReady, setOnlineLocalReady] = useState(false);
   const onlineTransportRef = useRef<Transport | null>(null);
@@ -635,7 +637,7 @@ export function MainMenu() {
     <div className="main-menu" data-testid="main-menu">
       <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="menu-bg-canvas" />
       <button
-        className="music-toggle-btn"
+        className="overlay-icon-btn music-toggle-btn"
         onClick={() => {
           const disabled = audio.toggleMusicDisabled();
           setMusicOff(disabled);
@@ -869,15 +871,22 @@ export function MainMenu() {
                   <div className="online-step">
                     <div className="online-section">
                       <span className="online-section-title">{t('your_name', 'Your name')}</span>
-                      <input className="online-code-input online-name-input" data-testid="online-name-input" type="text" maxLength={16}
-                        value={onlinePlayerName} autoFocus
-                        onChange={(e) => {
-                          const v = e.target.value.replace(/[\p{C}]/gu, '').slice(0, 16);
-                          setOnlinePlayerName(v);
-                          try { localStorage.setItem('bunnybrawl_player_name', v); } catch {}
-                        }}
-                        onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                      />
+                      {isTouchPrimary() ? (
+                        <button className={`online-code-input online-name-input online-name-tap${onlinePlayerName ? '' : ' placeholder'}`} data-testid="online-name-input"
+                          onClick={() => setMobileNameOpen(true)}>
+                          {onlinePlayerName || t('tap_to_enter_name', 'Tap to enter name...')}
+                        </button>
+                      ) : (
+                        <input className="online-code-input online-name-input" data-testid="online-name-input" type="text" maxLength={16}
+                          value={onlinePlayerName} autoFocus
+                          onChange={(e) => {
+                            const v = e.target.value.replace(/[\p{C}]/gu, '').slice(0, 16);
+                            setOnlinePlayerName(v);
+                            try { localStorage.setItem('bunnybrawl_player_name', v); } catch {}
+                          }}
+                          onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                        />
+                      )}
                     </div>
                     {matchSettings.botCount > 0 && <p className="online-info">{(() => {
                       const n = matchSettings.botCount;
@@ -1142,6 +1151,19 @@ export function MainMenu() {
           {new Date(__BUILD_TIME__).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
         </div>
       </div>
+      {mobileNameOpen && (
+        <MobileTextInput
+          value={onlinePlayerName}
+          maxLength={16}
+          label={t('your_name', 'Your name')}
+          onConfirm={(v) => {
+            setOnlinePlayerName(v);
+            try { localStorage.setItem('bunnybrawl_player_name', v); } catch {}
+            setMobileNameOpen(false);
+          }}
+          onCancel={() => setMobileNameOpen(false)}
+        />
+      )}
     </div>
   );
 }

@@ -82,8 +82,8 @@
   "mod_mirror_desc": "I-flip ang mga arena",
   "mod_underwater_gravity": "Gravity sa Ilalim ng Tubig",
   "mod_underwater_gravity_desc": "Lumulutang, magaan ang gravity",
-  "mod_no_music": "Walang Musika",
-  "mod_no_music_desc": "I-off ang lahat ng musika",
+  "music_on": "I-on ang musika",
+  "music_off": "I-off ang musika",
   "victory_choose_arena": "Palitan ang Arena",
   "help_button": "?",
   "help_title": "Paano Maglaro",
@@ -156,5 +156,7 @@
   "opponent_disconnected": "Nadiskonekta ang Kalaban",
   "return_menu": "Bumalik sa Menu",
   "back": "Bumalik",
-  "rotate_device": "I-rotate ang iyong device"
+  "rotate_device": "I-rotate ang iyong device",
+  "tap_to_enter_name": "I-tap para maglagay ng pangalan...",
+  "done": "Tapos na"
 }

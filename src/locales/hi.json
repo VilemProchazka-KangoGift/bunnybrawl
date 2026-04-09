@@ -82,8 +82,8 @@
   "mod_mirror_desc": "सब कुछ उल्टा",
   "mod_underwater_gravity": "पानी वाली ग्रैविटी",
   "mod_underwater_gravity_desc": "हल्की ग्रैविटी, तैरते रहो",
-  "mod_no_music": "संगीत बंद",
-  "mod_no_music_desc": "सारा संगीत बंद करें",
+  "music_on": "संगीत चालू करें",
+  "music_off": "संगीत बंद करें",
   "victory_choose_arena": "अखाड़ा बदलें",
   "help_button": "?",
   "help_title": "कैसे खेलें",
@@ -156,5 +156,7 @@
   "opponent_disconnected": "प्रतिद्वंद्वी डिस्कनेक्ट हो गया",
   "return_menu": "मेनू पर वापस",
   "back": "वापस",
-  "rotate_device": "अपना फ़ोन घुमाएँ"
+  "rotate_device": "अपना फ़ोन घुमाएँ",
+  "tap_to_enter_name": "नाम डालने के लिए टैप करें...",
+  "done": "हो गया"
 }
