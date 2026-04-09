@@ -66,11 +66,11 @@ const DECODE_INPUTS: Array<{ frame: number; input: InputState }> = Array.from(
 );
 const DECODE_RESULT = { inputs: DECODE_INPUTS, inputCount: 0, latestAck: 0, source: 0 };
 
-/** Encode a PlayerSlot to a single byte for the source field. */
+/** Encode a PlayerSlot to a single byte. P1-P5 → 1-5, B1-B5 → 6-10. */
 function encodeSlot(slot: string): number {
-  // P1=1, P2=2, ..., P5=5, B1=6, ..., B5=10
-  if (slot.startsWith('P')) return parseInt(slot[1], 10);
-  if (slot.startsWith('B')) return 5 + parseInt(slot[1], 10);
+  const num = parseInt(slot.substring(1), 10);
+  if (slot.startsWith('P')) return Math.min(num, 5);
+  if (slot.startsWith('B')) return 5 + Math.min(num, 5);
   return 0;
 }
 

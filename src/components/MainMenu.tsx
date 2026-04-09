@@ -396,10 +396,10 @@ export function MainMenu() {
             const slot = peerSlotMap.get(fromPeerId);
             if (slot) {
               const current = useGameStore.getState().online.remotePlayers;
-              const existing = current.find(rp => rp.peerId === fromPeerId);
-              if (existing) {
-                existing.characterName = msg.characterName;
-                setOnline({ remotePlayers: [...current] });
+              const idx = current.findIndex(rp => rp.peerId === fromPeerId);
+              if (idx >= 0) {
+                const updated = current.map((rp, i) => i === idx ? { ...rp, characterName: msg.characterName } : rp);
+                setOnline({ remotePlayers: updated });
               } else {
                 setOnline({
                   remotePlayers: [...current, { peerId: fromPeerId, slot: slot as PlayerSlot, characterName: msg.characterName, ready: false }],
@@ -432,11 +432,9 @@ export function MainMenu() {
         } else if (msg.type === MsgType.READY) {
           if (isHost && fromPeerId) {
             const current = useGameStore.getState().online.remotePlayers;
-            const player = current.find(rp => rp.peerId === fromPeerId);
-            if (player) {
-              player.ready = true;
-              setOnline({ remotePlayers: [...current] });
-            }
+            setOnline({
+              remotePlayers: current.map(rp => rp.peerId === fromPeerId ? { ...rp, ready: true } : rp),
+            });
           }
           setOnlineRemoteReady(true);
         } else if (msg.type === MsgType.START_MATCH) {

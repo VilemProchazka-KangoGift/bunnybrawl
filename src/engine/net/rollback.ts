@@ -99,6 +99,7 @@ export class RollbackEngine {
   private maxRollbackDepth = 0;
   private maxRollbackDepthPerSec = 0;
   private statsResetFrame = 0;
+  private _cachedMinRemoteFrame = -1; // cached per-frame to avoid repeated Map iteration
 
   // Reusable objects for hot 60fps loop
   private readonly inputMap = new Map<string, InputState>();
@@ -290,7 +291,8 @@ export class RollbackEngine {
     this.accumulator += dt;
 
     while (this.accumulator >= FIXED_TIMESTEP) {
-      const minRemoteFrame = this.getMinRemoteConfirmedFrame();
+      this._cachedMinRemoteFrame = this.getMinRemoteConfirmedFrame();
+      const minRemoteFrame = this._cachedMinRemoteFrame;
       const frameAdvantage = this.localFrame - minRemoteFrame;
 
       // Skip stall during startup grace period (no inputs received yet from any remote)
@@ -516,8 +518,7 @@ export class RollbackEngine {
       this.sendBundle[i].frame = f;
       this.sendBundle[i].input = this.localInputs[f % BUFFER_SIZE];
     }
-    // Use min remote confirmed frame for ack
-    const msg = encodeInputMessage(this.sendBundle, this.getMinRemoteConfirmedFrame(), count, this.localSlot);
+    const msg = encodeInputMessage(this.sendBundle, this._cachedMinRemoteFrame, count, this.localSlot);
     this.transport.sendUnreliable(msg);
   }
 
@@ -554,7 +555,7 @@ export class RollbackEngine {
   getStats(): NetDebugStats {
     const s = this._statsCache;
     s.localFrame = this.localFrame;
-    s.remoteConfirmedFrame = this.getMinRemoteConfirmedFrame();
+    s.remoteConfirmedFrame = this._cachedMinRemoteFrame;
     s.remoteLatestAck = -1;
     for (const remState of this.remoteState.values()) {
       if (!remState.disconnected && remState.latestAck > s.remoteLatestAck) {
