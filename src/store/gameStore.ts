@@ -2,6 +2,13 @@ import { create } from 'zustand';
 import type { GameScreen, MatchSettings, PlayerSlot, MatchState, GameMods } from '../engine/types';
 import type { ConnectionStatus } from '../engine/net/transport';
 
+export interface RemotePlayerInfo {
+  peerId: string;
+  slot: PlayerSlot;
+  characterName: string;
+  ready: boolean;
+}
+
 interface OnlineState {
   isOnline: boolean;
   isHost: boolean;
@@ -9,7 +16,10 @@ interface OnlineState {
   joinCode: string | null;
   connectionStatus: ConnectionStatus;
   connectionError: string | null;
+  /** @deprecated Use remotePlayers for multi-guest. Kept for backward compat with 1v1 code paths. */
   remoteCharacterName: string | null;
+  remotePlayers: RemotePlayerInfo[];
+  localSlot: PlayerSlot;
   rngSeed: number;
 }
 
@@ -65,6 +75,8 @@ const defaultOnline: OnlineState = {
   connectionStatus: 'idle',
   connectionError: null,
   remoteCharacterName: null,
+  remotePlayers: [],
+  localSlot: 'P1',
   rngSeed: 0,
 };
 
