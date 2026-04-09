@@ -1,7 +1,6 @@
-import type { ArenaPack } from './types';
+import type { ArenaPack, ArenaNav } from './types';
 import type { Arena } from '../types';
 import type { ThemeConfig } from '../themes/types';
-import type { ArenaNav } from '../ai/navData';
 
 // ---- Registry ----
 
@@ -10,6 +9,7 @@ const NAV: Map<string, ArenaNav> = new Map();
 
 export function registerArena(pack: ArenaPack): void {
   PACKS.set(pack.id, pack);
+  if (pack.navData) NAV.set(pack.id, pack.navData);
 }
 
 export function setArenaNav(arenaId: string, nav: ArenaNav): void {

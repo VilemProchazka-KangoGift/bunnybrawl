@@ -9,7 +9,6 @@ import { LandscapePrompt } from './components/LandscapePrompt';
 import { assignBotCharacters, registerBuiltinCharacters } from './engine/characters';
 import { isTouchPrimary } from './engine/touchDetect';
 import { registerBuiltinArenas } from './engine/arenas';
-import { registerBuiltinNavData } from './engine/ai/navData';
 import type { PlayerSlot, BotSlot, CharacterSlot } from './engine/types';
 import { ALL_BOT_SLOTS } from './engine/types';
 import logoUrl from '/logo.png?url';
@@ -17,7 +16,6 @@ import logoUrl from '/logo.png?url';
 // Register all built-in packs at module load time
 registerBuiltinCharacters();
 registerBuiltinArenas();
-registerBuiltinNavData();
 
 /**
  * Dev test link: skip lobby and jump straight into a match.

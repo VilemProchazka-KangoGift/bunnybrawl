@@ -1,5 +1,5 @@
 // ---- Types ----
-export type { ArenaPack } from './types';
+export type { ArenaPack, ArenaNav, NavEdge } from './types';
 export type {
   GradientStop, CloudConfig, WeatherConfig, WeatherTypeConfig,
   WildlifeConfig, WildlifeTypeConfig, FogConfig, AmbientParticleConfig,
