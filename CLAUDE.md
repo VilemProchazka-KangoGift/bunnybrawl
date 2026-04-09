@@ -20,7 +20,7 @@ src/
       types.ts      # ArenaPack interface (merges Arena layout + ThemeConfig visuals)
       registry.ts   # Pack registry: register/get/list + nav data + toArena/toThemeConfig extractors
       builtin.ts    # Registers all 11 built-in arenas at app startup
-      legacy.ts     # Backward-compat: getArena(), getTheme(), listArenas(), listThemes(), mirrorArena()
+      legacy.ts     # Backward-compat: getArena(), getTheme(), mirrorArena()
       index.ts      # Barrel export
       packs/        # One file per arena — layout + visuals + translations + musicFile
         meadow.ts winterLake.ts volcano.ts castle.ts candyLand.ts
@@ -145,14 +145,14 @@ Each arena is a single file in `src/engine/arenas/packs/` exporting an `ArenaPac
    - Layout: `platforms`, `spawnPoints`, `width`, `height`
    - Visuals: `sky`, `hills`, `ground`, `platform`, `clouds`, `weather`, `wildlife`, `fog`, `ambientParticles`, `dayNight`
    - Draw functions: `drawBackgroundNature`, `drawForegroundNature`, optionally `drawFarBackground`, `drawAnimatedBackground`
-   - `translations: { en: 'Name', cs: 'Jméno' }`
+   - `translations: { en: 'Name', cs: 'Jméno' }` — arena names live in the pack, not in locale JSON
    - `previewGradient` + `previewIcon` for arena selector UI
    - `musicFile: 'new_arena.mp3'` (place MP3 in `public/audio/`)
+   - Optional: `bubbleHelmet: true`, `ghostConfig`, `physics`, `ambientSoundConfig`, etc.
 2. Import and add to array in `arenas/builtin.ts`
-3. Add localized name keys in `en.json` and `cs.json` (`arena_new_arena`) for backward compat
-4. Re-run `npx vite-node scripts/generateNavData.ts`
+3. Re-run `npx vite-node scripts/generateNavData.ts`
 
-**ArenaPack bundles everything**: layout + visuals + translations + music + physics mods + hazard configs. No separate theme file needed.
+**ArenaPack bundles everything**: layout + visuals + translations + music + physics mods + hazard configs + ambient sounds. No separate theme file or locale keys needed.
 
 ### Adding arena-specific mechanics
 All mechanics are configured directly in the `ArenaPack`:
@@ -165,6 +165,7 @@ All mechanics are configured directly in the `ArenaPack`:
 - **Carrot zones** (`carrotZones`): boosted carrot spawn likelihood
 - **No springs** (`noSprings`), custom hazard skins (`drawCustomThorn`/`drawCustomSpring`)
 - **Physics modifiers** (`physics`): gravity, friction, walkSpeed, jumpImpulse multipliers
+- **Bubble helmet** (`bubbleHelmet: true`): glass dome on all characters (used by underwater + space station)
 
 ### Adding a new game mechanic / pickup
 1. Define interface in `types.ts`, add constants in `constants.ts`
