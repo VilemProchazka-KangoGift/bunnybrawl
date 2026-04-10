@@ -38,7 +38,26 @@ const PEER_PREFIX = 'brawl-';
 const PING_INTERVAL = 500;
 const PONG_TIMEOUT_MS = 5000;
 const DEGRADED_THRESHOLD_MS = 2000;
+const SIGNALING_TIMEOUT_MS = 15000;
 const RTT_ALPHA = 0.1;
+
+/** TURN relay enables mobile-to-mobile behind symmetric NAT / hairpin-unfriendly routers.
+ *  Free metered.ca Open Relay — best-effort, may have usage limits.
+ *  For production, replace with your own TURN credentials (metered.ca, Twilio, or Xirsys). */
+const ICE_SERVERS: RTCIceServer[] = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:global.stun.twilio.com:3478' },
+  {
+    urls: [
+      'turn:openrelay.metered.ca:80',
+      'turn:openrelay.metered.ca:80?transport=tcp',
+      'turn:openrelay.metered.ca:443',
+      'turns:openrelay.metered.ca:443',
+    ],
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
+];
 
 export class Transport {
   private peer: Peer | null = null;
@@ -116,17 +135,12 @@ export class Transport {
       const timeout = setTimeout(() => {
         this.setStatus('error', 'Connection to signaling server timed out. The free PeerJS server may be down — try again in a moment.');
         reject(new Error('timeout'));
-      }, 10000);
+      }, SIGNALING_TIMEOUT_MS);
 
       try {
         this.peer = new Peer(peerId, {
           debug: 1,
-          config: {
-            iceServers: [
-              { urls: 'stun:stun.l.google.com:19302' },
-              { urls: 'stun:stun1.l.google.com:19302' },
-            ],
-          },
+          config: { iceServers: ICE_SERVERS },
         });
       } catch (e) {
         clearTimeout(timeout);
@@ -135,7 +149,12 @@ export class Transport {
         return;
       }
 
+      let signalingOpen = false;
+      let reconnectAttempts = 0;
+
       this.peer.on('open', () => {
+        signalingOpen = true;
+        reconnectAttempts = 0;
         clearTimeout(timeout);
         resolve(code);
       });
@@ -155,10 +174,10 @@ export class Transport {
 
       this.peer.on('disconnected', () => {
         clearTimeout(timeout);
-        if (this.status === 'connected') {
-          // Try to reconnect signaling (data channels may still work)
+        if ((this.status === 'connected' || signalingOpen) && reconnectAttempts < 3) {
+          reconnectAttempts++;
           try { this.peer?.reconnect(); } catch { /* ignore */ }
-        } else if (this.status === 'creating') {
+        } else if (this.status === 'creating' || reconnectAttempts >= 3) {
           this.setStatus('error', 'Lost connection to signaling server');
         }
       });
@@ -177,17 +196,12 @@ export class Transport {
       const timeout = setTimeout(() => {
         this.setStatus('error', 'Connection timed out. Check the room code or try again.');
         reject(new Error('timeout'));
-      }, 10000);
+      }, SIGNALING_TIMEOUT_MS);
 
       try {
         this.peer = new Peer({
           debug: 1,
-          config: {
-            iceServers: [
-              { urls: 'stun:stun.l.google.com:19302' },
-              { urls: 'stun:stun1.l.google.com:19302' },
-            ],
-          },
+          config: { iceServers: ICE_SERVERS },
         });
       } catch (e) {
         clearTimeout(timeout);
