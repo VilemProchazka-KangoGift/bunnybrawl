@@ -22,3 +22,4 @@
 - MobileTextInput must suppress LandscapePrompt via `suppressLandscapePrompt(true)` on mount — otherwise unlocking orientation for typing triggers the "rotate device" blocker.
 - Global Enter→handlePlay() listener must check `!onlineOpen` — otherwise pressing Enter in online name/code inputs navigates to the lobby.
 - Online character auto-switch: only GUEST auto-switches (host is authoritative). One-shot `didAutoSwitch` ref prevents cascade. Reset in `onlineCleanup()`.
+- SETTINGS_SYNC handler must apply ALL fields from the message, including `mods`. The host is authoritative for match settings — guests must use the host's values, not their own localStorage. Any new field added to `SettingsSyncMessage` must also be applied in the receive handler (line ~540).
