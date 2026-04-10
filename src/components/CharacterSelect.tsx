@@ -228,8 +228,13 @@ export function CharacterSelect() {
           const input = touch.getInput();
           moveLeft = input.left;
           moveRight = input.right;
-          jump = input.jump;
-          crouching = input.down;
+          // Airborne tap = fast-fall (same as match controls)
+          if (input.jump && !p.onGround) {
+            crouching = true;
+          } else {
+            jump = input.jump;
+            crouching = input.down;
+          }
         } else {
           const bindings = KEY_BINDINGS[p.slot as CharacterSlot];
           const keys = keysRef.current;
