@@ -245,11 +245,16 @@ class AudioManager {
     this.sounds.get(name)?.stop();
   }
 
-  stopAll(): void {
-    for (const sound of this.sounds.values()) {
+  /** Stop all in-game sounds (SFX, ambient loops, arena music). Menu music is preserved. */
+  stopAllGameSounds(): void {
+    for (const [, sound] of this.sounds) {
       sound.stop();
     }
     this.stopMusic();
+  }
+
+  stopAll(): void {
+    this.stopAllGameSounds();
     this.stopMenuMusic();
   }
 
