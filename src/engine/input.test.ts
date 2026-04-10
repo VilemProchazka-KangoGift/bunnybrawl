@@ -124,4 +124,86 @@ describe('InputManager', () => {
     expect(input.getInput('P3').left).toBe(true);
     expect(input.getInput('P4').left).toBe(true);
   });
+
+  it('P5 uses numpad keys', () => {
+    pressKey('4'); // P5 left
+    pressKey('6'); // P5 right
+    const state = input.getInput('P5');
+    expect(state.left).toBe(true);
+    expect(state.right).toBe(true);
+  });
+
+  it('case-insensitive: uppercase A registers as P1 left', () => {
+    pressKey('A');
+    expect(input.getInput('P1').left).toBe(true);
+  });
+
+  it('case-insensitive: uppercase W registers as P1 jump', () => {
+    pressKey('W');
+    expect(input.getInput('P1').jump).toBe(true);
+  });
+
+  it('arrow keys are not lowercased', () => {
+    pressKey('ArrowUp');
+    expect(input.getInput('P2').jump).toBe(true);
+  });
+
+  it('getInputAny merges all key bindings', () => {
+    pressKey('a');        // P1 left
+    pressKey('ArrowUp');  // P2 jump
+    const state = input.getInputAny();
+    expect(state.left).toBe(true);
+    expect(state.jump).toBe(true);
+  });
+
+  it('getInputAny consumes jump for all bindings', () => {
+    pressKey('w'); // P1 jump
+    const first = input.getInputAny();
+    expect(first.jump).toBe(true);
+    const second = input.getInputAny();
+    expect(second.jump).toBe(false); // consumed
+  });
+
+  it('getInputAny down from any binding', () => {
+    pressKey('s');        // P1 down
+    const state = input.getInputAny();
+    expect(state.down).toBe(true);
+  });
+
+  it('detach removes all listeners and clears state', () => {
+    pressKey('a');
+    expect(input.getInput('P1').left).toBe(true);
+    input.detach();
+    // After detach, new key presses don't register
+    pressKey('d');
+    // Re-attach to query
+    input.attach();
+    expect(input.getInput('P1').right).toBe(false);
+    expect(input.getInput('P1').left).toBe(false); // cleared on detach
+  });
+
+  it('all 5 players have all 4 key bindings defined', () => {
+    const slots = ['P1', 'P2', 'P3', 'P4', 'P5'] as const;
+    for (const slot of slots) {
+      const bindings = KEY_BINDINGS[slot];
+      expect(bindings.left).toBeDefined();
+      expect(bindings.right).toBeDefined();
+      expect(bindings.jump).toBeDefined();
+      expect(bindings.down).toBeDefined();
+    }
+  });
+
+  it('no key binding conflicts between players', () => {
+    const allKeys = new Set<string>();
+    const slots = ['P1', 'P2', 'P3', 'P4', 'P5'] as const;
+    for (const slot of slots) {
+      const bindings = KEY_BINDINGS[slot];
+      for (const key of [bindings.left, bindings.right, bindings.jump, bindings.down]) {
+        expect(allKeys.has(key), `key '${key}' used by multiple players`).toBe(false);
+        allKeys.add(key);
+      }
+    }
+    // Total: 5 players × 4 keys = 20 unique keys
+    expect(allKeys.size).toBe(20);
+  });
 });
