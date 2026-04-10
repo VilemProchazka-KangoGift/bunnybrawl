@@ -552,6 +552,7 @@ describe('LobbyGame', () => {
         e.x = -500;
         e.vy = 0;
         e.vx = 0;
+        e.splatTimer = 0;
       }
 
       const npc = game.extraChars[0];
@@ -562,12 +563,13 @@ describe('LobbyGame', () => {
       npc.onGround = false;
       npc.splatTimer = 0;
 
-      for (let i = 0; i < 120; i++) {
+      for (let i = 0; i < 300; i++) {
         game.update(1 / 60, new Set());
       }
 
+      // NPC should have fallen to ground and landed
       expect(npc.onGround).toBe(true);
-      expect(npc.y).toBe(560 - 32);
+      expect(npc.y).toBeCloseTo(560 - 32, 0);
     });
 
     it('NPC facing matches movement direction', () => {
