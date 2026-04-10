@@ -10,6 +10,32 @@ import type { InputState } from './types';
 /** Force 32-bit float for cross-architecture determinism (x86 80-bit vs ARM 64-bit). */
 const f = Math.fround;
 
+// ---------------------------------------------------------------------------
+// Generic physics primitives (no Math.fround)
+// Used by non-deterministic contexts like the lobby. Match physics functions
+// (applyGravity, movePlayer) use fround for network determinism — don't replace.
+// ---------------------------------------------------------------------------
+
+/** Minimal physics entity — shared between match Player and lobby LobbyPlayer. */
+export interface PhysicsBody {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+}
+
+/** Apply gravity to any physics body. No fround — use applyGravity for deterministic match physics. */
+export function applySimpleGravity(body: PhysicsBody, gravity: number, maxFallSpeed: number, dt: number): void {
+  body.vy += gravity * dt;
+  if (body.vy > maxFallSpeed) body.vy = maxFallSpeed;
+}
+
+/** Move any physics body by its velocity. No fround — use movePlayer for deterministic match physics. */
+export function moveSimple(body: PhysicsBody, dt: number): void {
+  body.x += body.vx * dt;
+  body.y += body.vy * dt;
+}
+
 export function getSpeedMult(player: Player): number {
   if (player.fatTimer > 0) return FAT_SPEED_MULT;
   if (player.slowTimer > 0) return THORN_SPEED_MULT;
