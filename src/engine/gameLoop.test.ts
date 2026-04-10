@@ -1,0 +1,511 @@
+import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
+import type { MatchSettings, Arena, PlayerSlot, InputState } from './types';
+import {
+  FIXED_TIMESTEP, MATCH_COUNTDOWN,
+  CARROT_FIRST_SPAWN_DELAY, SPRING_SPAWN_INTERVAL, THORN_SPAWN_INTERVAL,
+  HAZARD_LIFETIME,
+} from './constants';
+
+// --- Mocks ---
+
+vi.mock('./audio', () => ({
+  audio: {
+    init: vi.fn(),
+    play: vi.fn(),
+    playMusic: vi.fn(),
+    stopMusic: vi.fn(),
+    stop: vi.fn(),
+    setMute: vi.fn(),
+    setPaused: vi.fn(),
+    setVolume: vi.fn(),
+    stopAllGameSounds: vi.fn(),
+    playMenuMusic: vi.fn(),
+    playAnimal: vi.fn(),
+  },
+}));
+
+vi.mock('./renderer', () => ({
+  Renderer: class MockRenderer {
+    renderBackground = vi.fn();
+    renderFrame = vi.fn();
+    setBotNavDebugStates = vi.fn();
+    setNetDebugStats = vi.fn();
+    setPlayerNames = vi.fn();
+    setTimeLimit = vi.fn();
+  },
+}));
+
+vi.mock('howler', () => ({
+  Howl: vi.fn(),
+  Howler: { mute: vi.fn() },
+}));
+
+// Mock canvas getContext since happy-dom may not support Canvas 2D
+const mockCtx = {
+  fillRect: vi.fn(), clearRect: vi.fn(), beginPath: vi.fn(), arc: vi.fn(),
+  fill: vi.fn(), stroke: vi.fn(), moveTo: vi.fn(), lineTo: vi.fn(),
+  save: vi.fn(), restore: vi.fn(), translate: vi.fn(), rotate: vi.fn(),
+  scale: vi.fn(), drawImage: vi.fn(), createLinearGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
+  createRadialGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
+  measureText: vi.fn(() => ({ width: 50 })),
+  fillText: vi.fn(), strokeText: vi.fn(), closePath: vi.fn(),
+  setTransform: vi.fn(), resetTransform: vi.fn(), clip: vi.fn(),
+  rect: vi.fn(), ellipse: vi.fn(), quadraticCurveTo: vi.fn(), bezierCurveTo: vi.fn(),
+  canvas: { width: 1280, height: 720 },
+  globalAlpha: 1, globalCompositeOperation: 'source-over',
+  fillStyle: '', strokeStyle: '', lineWidth: 1, lineCap: 'butt',
+  lineJoin: 'miter', font: '', textAlign: 'start', textBaseline: 'alphabetic',
+  shadowColor: '', shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0,
+};
+
+const origGetContext = HTMLCanvasElement.prototype.getContext;
+HTMLCanvasElement.prototype.getContext = function (type: string) {
+  if (type === '2d') return mockCtx as unknown as CanvasRenderingContext2D;
+  return origGetContext.call(this, type as any);
+} as any;
+
+// Import after mocks are set up
+import { GameLoop } from './gameLoop';
+import { registerBuiltinArenas } from './arenas';
+import { registerBuiltinCharacters } from './characters';
+
+// --- Factories ---
+
+function makeSettings(overrides?: Partial<MatchSettings>): MatchSettings {
+  return {
+    killLimit: 16,
+    timeLimit: 0,
+    playerCount: 2,
+    goreMode: false,
+    arenaId: 'meadow',
+    botCount: 0,
+    botDifficulty: 'medium' as const,
+    mods: {
+      extremeGore: false,
+      carrotChase: false,
+      giantPlayers: false,
+      turbo: false,
+      superBounce: false,
+      mirrorArena: false,
+      underwaterGravity: false,
+    },
+    ...overrides,
+  };
+}
+
+function makeArena(overrides?: Partial<Arena>): Arena {
+  return {
+    id: 'test',
+    name: 'Test',
+    themeId: 'meadow',
+    width: 1280,
+    height: 720,
+    platforms: [
+      { x: 0, y: 660, width: 1280, height: 60 },
+      { x: 400, y: 500, width: 200, height: 20 },
+    ],
+    spawnPoints: [
+      { x: 100, y: 620 },
+      { x: 1100, y: 620 },
+    ],
+    ...overrides,
+  };
+}
+
+function createLoop(opts?: {
+  settings?: Partial<MatchSettings>;
+  arena?: Partial<Arena>;
+  players?: PlayerSlot[];
+}) {
+  const bgCanvas = document.createElement('canvas');
+  bgCanvas.width = 1280;
+  bgCanvas.height = 720;
+  const fgCanvas = document.createElement('canvas');
+  fgCanvas.width = 1280;
+  fgCanvas.height = 720;
+  const arena = makeArena(opts?.arena);
+  const settings = makeSettings(opts?.settings);
+  const onMatchEnd = vi.fn();
+  const loop = new GameLoop(
+    bgCanvas,
+    fgCanvas,
+    arena,
+    settings,
+    opts?.players ?? (['P1', 'P2'] as PlayerSlot[]),
+    onMatchEnd,
+  );
+  return { loop, onMatchEnd, arena, settings };
+}
+
+// --- Setup ---
+
+beforeAll(() => {
+  registerBuiltinArenas();
+  registerBuiltinCharacters();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+// ===================================================================
+// 1. Lifecycle
+// ===================================================================
+
+describe('Lifecycle', () => {
+  it('constructor creates players matching activePlayers count', () => {
+    const { loop } = createLoop({ players: ['P1', 'P2', 'P3'] as PlayerSlot[] });
+    const state = loop.getState();
+    expect(state.players).toHaveLength(3);
+    expect(state.players.map(p => p.id)).toEqual(['P1', 'P2', 'P3']);
+  });
+
+  it('getState() returns valid MatchState with players', () => {
+    const { loop } = createLoop();
+    const state = loop.getState();
+    expect(state).toBeDefined();
+    expect(state.players).toHaveLength(2);
+    expect(state.matchOver).toBe(false);
+    expect(state.winner).toBeNull();
+    expect(state.countdown).toBe(MATCH_COUNTDOWN);
+    expect(state.timeElapsed).toBe(0);
+    expect(Array.isArray(state.carrots)).toBe(true);
+    expect(Array.isArray(state.springs)).toBe(true);
+    expect(Array.isArray(state.thorns)).toBe(true);
+  });
+
+  it('pause() and resume() toggle isPaused()', () => {
+    const { loop } = createLoop();
+    expect(loop.isPaused()).toBe(false);
+    loop.pause();
+    expect(loop.isPaused()).toBe(true);
+    loop.resume();
+    expect(loop.isPaused()).toBe(false);
+  });
+
+  it('skipCountdown() zeroes countdown', () => {
+    const { loop } = createLoop();
+    expect(loop.getState().countdown).toBe(MATCH_COUNTDOWN);
+    loop.skipCountdown();
+    expect(loop.getState().countdown).toBe(0);
+  });
+
+  it('stop() can be called without error', () => {
+    const { loop } = createLoop();
+    expect(() => loop.stop()).not.toThrow();
+  });
+});
+
+// ===================================================================
+// 2. fixedUpdate
+// ===================================================================
+
+describe('fixedUpdate', () => {
+  it('increments timeElapsed by dt', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const before = loop.getState().timeElapsed;
+    loop.fixedUpdate(FIXED_TIMESTEP);
+    // timeElapsed is incremented even during countdown (since we skipped it, it's one tick)
+    expect(loop.getState().timeElapsed).toBeCloseTo(before + FIXED_TIMESTEP, 6);
+  });
+
+  it('returns early when matchOver is true', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    loop.fixedUpdate(FIXED_TIMESTEP);
+    const elapsed = loop.getState().timeElapsed;
+
+    // Force matchOver
+    loop.getState().matchOver = true;
+    loop.fixedUpdate(FIXED_TIMESTEP);
+    // timeElapsed should NOT have changed
+    expect(loop.getState().timeElapsed).toBeCloseTo(elapsed, 6);
+  });
+
+  it('countdown decrements during fixedUpdate', () => {
+    const { loop } = createLoop();
+    const initial = loop.getState().countdown;
+    expect(initial).toBe(MATCH_COUNTDOWN);
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+    expect(loop.getState().countdown).toBeCloseTo(MATCH_COUNTDOWN - FIXED_TIMESTEP, 6);
+  });
+
+  it('carrot spawns after timer expires', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    // Initial carrot timer is CARROT_FIRST_SPAWN_DELAY (10s)
+    expect(state.carrotTimer).toBe(CARROT_FIRST_SPAWN_DELAY);
+
+    // Advance past the carrot timer
+    const steps = Math.ceil(CARROT_FIRST_SPAWN_DELAY / FIXED_TIMESTEP) + 1;
+    for (let i = 0; i < steps; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+    }
+    // At least one carrot should have spawned
+    expect(state.carrots.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('spring spawns after timer expires', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const initialTimer = state.springSpawnTimer; // 5s for first spring
+
+    // Advance past the initial spring timer
+    const steps = Math.ceil(initialTimer / FIXED_TIMESTEP) + 2;
+    for (let i = 0; i < steps; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+    }
+    expect(state.springs.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('thorn spawns after timer expires', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const initialTimer = state.thornSpawnTimer; // 8s for first thorn
+
+    // Advance past the initial thorn timer
+    const steps = Math.ceil(initialTimer / FIXED_TIMESTEP) + 2;
+    for (let i = 0; i < steps; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+    }
+    expect(state.thorns.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+// ===================================================================
+// 3. Match End
+// ===================================================================
+
+describe('Match End', () => {
+  it('kill limit reached triggers onMatchEnd', () => {
+    const { loop, onMatchEnd } = createLoop({ settings: { killLimit: 5 } });
+    loop.skipCountdown();
+    const state = loop.getState();
+
+    // Set player 0 score to killLimit
+    state.players[0].score = 5;
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(onMatchEnd).toHaveBeenCalledTimes(1);
+    expect(onMatchEnd).toHaveBeenCalledWith('P1', expect.objectContaining({ matchOver: true }));
+    expect(state.matchOver).toBe(true);
+    expect(state.winner).toBe('P1');
+  });
+
+  it('time limit reached triggers onMatchEnd', () => {
+    const { loop, onMatchEnd } = createLoop({ settings: { timeLimit: 10 } });
+    loop.skipCountdown();
+
+    // Advance close to 10 seconds
+    const almostSteps = Math.floor(9.9 / FIXED_TIMESTEP);
+    for (let i = 0; i < almostSteps; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+    }
+    expect(onMatchEnd).not.toHaveBeenCalled();
+
+    // Push past 10 seconds
+    const remainingSteps = Math.ceil(0.2 / FIXED_TIMESTEP) + 1;
+    for (let i = 0; i < remainingSteps; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+    }
+    expect(onMatchEnd).toHaveBeenCalledTimes(1);
+  });
+
+  it('time limit: highest scorer wins', () => {
+    const { loop, onMatchEnd } = createLoop({ settings: { timeLimit: 5 } });
+    loop.skipCountdown();
+    const state = loop.getState();
+
+    // Give P2 a higher score
+    state.players[0].score = 2;
+    state.players[1].score = 7;
+
+    // Advance past time limit
+    const steps = Math.ceil(5.1 / FIXED_TIMESTEP);
+    for (let i = 0; i < steps; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+    }
+
+    expect(onMatchEnd).toHaveBeenCalledTimes(1);
+    expect(onMatchEnd).toHaveBeenCalledWith('P2', expect.objectContaining({ matchOver: true }));
+  });
+
+  it('no match end when conditions not met', () => {
+    const { loop, onMatchEnd } = createLoop({ settings: { killLimit: 16, timeLimit: 0 } });
+    loop.skipCountdown();
+
+    // Run a few ticks — no one at kill limit, no time limit
+    for (let i = 0; i < 60; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+    }
+    expect(onMatchEnd).not.toHaveBeenCalled();
+    expect(loop.getState().matchOver).toBe(false);
+  });
+});
+
+// ===================================================================
+// 4. Network Mode
+// ===================================================================
+
+describe('Network Mode', () => {
+  it('setNetworkMode(true) sets network mode without error', () => {
+    const { loop } = createLoop();
+    expect(() => loop.setNetworkMode(true)).not.toThrow();
+  });
+
+  it('fixedUpdate accepts networkInputs map', () => {
+    const { loop } = createLoop();
+    loop.setNetworkMode(true);
+    loop.skipCountdown();
+
+    const inputs = new Map<string, InputState>();
+    inputs.set('P1', { left: false, right: true, jump: false, down: false });
+    inputs.set('P2', { left: true, right: false, jump: false, down: false });
+
+    expect(() => loop.fixedUpdate(FIXED_TIMESTEP, inputs)).not.toThrow();
+  });
+
+  it('takeSnapshot returns a GameSnapshot with players', () => {
+    const { loop } = createLoop();
+    loop.setNetworkMode(true);
+
+    const snap = loop.takeSnapshot(0);
+    expect(snap).toBeDefined();
+    expect(snap.frame).toBe(0);
+    expect(snap.players).toHaveLength(2);
+    expect(snap.players[0].id).toBe('P1');
+    expect(snap.players[1].id).toBe('P2');
+  });
+
+  it('restoreSnapshot restores state', () => {
+    const { loop } = createLoop();
+    loop.setNetworkMode(true);
+    loop.skipCountdown();
+
+    // Take snapshot at initial state
+    const snap = loop.takeSnapshot(0);
+    const originalTimeElapsed = loop.getState().timeElapsed;
+
+    // Advance state
+    for (let i = 0; i < 30; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+    }
+    expect(loop.getState().timeElapsed).toBeGreaterThan(originalTimeElapsed);
+
+    // Restore
+    loop.restoreSnapshot(snap);
+    expect(loop.getState().timeElapsed).toBeCloseTo(originalTimeElapsed, 6);
+  });
+});
+
+// ===================================================================
+// 5. Entity Lifecycle
+// ===================================================================
+
+describe('Entity Lifecycle', () => {
+  it('carrot pickup increases player score', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+    const initialScore = player.score;
+
+    // Manually place a carrot right on top of the player
+    state.carrots.push({
+      x: player.x + player.width / 2,
+      y: player.y,
+      active: true,
+      spawnTime: 0,
+    });
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+    expect(player.score).toBe(initialScore + 1);
+  });
+
+  it('spring removal when life expires', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+
+    // Manually add a spring with nearly-expired life
+    state.springs.push({
+      x: 500,
+      y: 500,
+      platformIndex: 1,
+      bounceTimer: 0,
+      life: FIXED_TIMESTEP * 0.5, // will expire in less than one tick
+      growTimer: 0,
+    });
+    expect(state.springs).toHaveLength(1);
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+    // Spring should be removed because its life dropped <= 0
+    expect(state.springs).toHaveLength(0);
+  });
+
+  it('thorn removal when life expires', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+
+    // Manually add a thorn with nearly-expired life
+    state.thorns.push({
+      x: 500,
+      y: 488,
+      width: 28,
+      height: 12,
+      platformIndex: 1,
+      life: FIXED_TIMESTEP * 0.5,
+      growTimer: 0,
+      hit: false,
+    });
+    expect(state.thorns).toHaveLength(1);
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+    expect(state.thorns).toHaveLength(0);
+  });
+
+  it('countdown blocks gameplay logic (spawn timers do not tick)', () => {
+    const { loop } = createLoop();
+    const state = loop.getState();
+    expect(state.countdown).toBe(MATCH_COUNTDOWN);
+
+    const initialSpringTimer = state.springSpawnTimer;
+    const initialThornTimer = state.thornSpawnTimer;
+    const initialCarrotTimer = state.carrotTimer;
+
+    // Advance one tick during countdown
+    loop.fixedUpdate(FIXED_TIMESTEP);
+    // Spawn timers should NOT have decremented during countdown
+    expect(state.springSpawnTimer).toBe(initialSpringTimer);
+    expect(state.thornSpawnTimer).toBe(initialThornTimer);
+    expect(state.carrotTimer).toBe(initialCarrotTimer);
+  });
+
+  it('thorn removal when hit', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+
+    // Manually add a thorn that has been hit
+    state.thorns.push({
+      x: 500,
+      y: 488,
+      width: 28,
+      height: 12,
+      platformIndex: 1,
+      life: HAZARD_LIFETIME,
+      growTimer: 0,
+      hit: true,
+    });
+    expect(state.thorns).toHaveLength(1);
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+    expect(state.thorns).toHaveLength(0);
+  });
+});
