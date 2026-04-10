@@ -339,7 +339,7 @@ export function MainMenu() {
     }
     audio.init();
     setOnlineStep('connecting');
-    setOnline({ isHost, isOnline: true, roomCode: null });
+    setOnline({ isHost, isOnline: true, roomCode: null, connectionStatus: 'idle', connectionError: null });
 
     const ms = matchSettings;
     const peerSlotMap = new Map<string, string>(); // peerId → PlayerSlot
@@ -584,9 +584,13 @@ export function MainMenu() {
     _modalTransport = transport;
 
     if (isHost) {
-      transport.createRoom().then(code => setOnline({ roomCode: code })).catch(() => { onlineCleanup(); });
+      transport.createRoom().then(code => setOnline({ roomCode: code })).catch((err) => {
+        setOnline({ connectionStatus: 'error', connectionError: err?.message || t('connection_error') });
+      });
     } else if (joinCode) {
-      transport.joinRoom(joinCode).catch(() => { onlineCleanup(); });
+      transport.joinRoom(joinCode).catch((err) => {
+        setOnline({ connectionStatus: 'error', connectionError: err?.message || t('connection_error') });
+      });
     }
   }, [matchSettings, setOnline]);
 
