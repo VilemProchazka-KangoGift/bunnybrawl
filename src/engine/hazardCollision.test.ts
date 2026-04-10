@@ -6,38 +6,9 @@ import {
   checkGhostCollision,
   checkLavaRockCollision,
 } from './hazardCollision';
-import type { Player, SpringMushroom, Thorn, GhostEntity, LavaRock, HazardZone } from './types';
+import type { SpringMushroom, Thorn, GhostEntity, LavaRock, HazardZone } from './types';
 import { PLAYER_WIDTH, PLAYER_HEIGHT, SPRING_SIZE } from './constants';
-import { CHARACTERS } from './characters';
-
-function makePlayer(overrides: Partial<Player> = {}): Player {
-  return {
-    id: 'P1',
-    character: CHARACTERS.P1,
-    x: 100,
-    y: 400,
-    vx: 0,
-    vy: 0,
-    width: PLAYER_WIDTH,
-    height: PLAYER_HEIGHT,
-    state: 'idle',
-    facing: 'right',
-    splatTimer: 0,
-    respawnTimer: 0,
-    invincibleTimer: 0,
-    score: 0,
-    active: true,
-    animFrame: 0,
-    animTimer: 0,
-    fastFalling: false,
-    fatTimer: 0,
-    slowTimer: 0,
-    sideSquash: 1,
-    burnTimer: 0,
-    hitstopTimer: 0,
-    ...overrides,
-  };
-}
+import { makePlayer } from './__tests__/testHelpers';
 
 function makeSpring(overrides: Partial<SpringMushroom> = {}): SpringMushroom {
   return {

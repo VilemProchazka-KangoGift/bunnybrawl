@@ -1,36 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { isStomping, checkStomps, createSplatMark, updateSplatTimers, respawnPlayer } from './stomp';
-import type { Player, SpawnPoint } from './types';
+import type { SpawnPoint } from './types';
 import { CHARACTERS } from './characters';
 import { PLAYER_WIDTH, PLAYER_HEIGHT, SPLAT_DURATION, RESPAWN_DELAY, INVINCIBLE_DURATION } from './constants';
-
-function makePlayer(overrides: Partial<Player> = {}): Player {
-  return {
-    id: 'P1',
-    character: CHARACTERS.P1,
-    x: 100,
-    y: 400,
-    vx: 0,
-    vy: 0,
-    width: PLAYER_WIDTH,
-    height: PLAYER_HEIGHT,
-    state: 'idle',
-    facing: 'right',
-    splatTimer: 0,
-    respawnTimer: 0,
-    invincibleTimer: 0,
-    score: 0,
-    active: true,
-    animFrame: 0,
-    animTimer: 0,
-    fastFalling: false,
-    fatTimer: 0,
-    slowTimer: 0,
-    burnTimer: 0,
-    hitstopTimer: 0,
-    ...overrides,
-  };
-}
+import { makePlayer } from './__tests__/testHelpers';
 
 const spawnPoints: SpawnPoint[] = [
   { x: 200, y: 500 },

@@ -3,41 +3,12 @@ import {
   applyInput, applyGravity, movePlayer, wrapHorizontal,
   collidePlatforms, updatePlayerState, aabbOverlap, applyArenaConstraints,
 } from './physics';
-import type { Player, Platform, Arena, InputState } from './types';
+import type { Platform, Arena, InputState } from './types';
 import {
   GRAVITY, MAX_WALK_SPEED, ACCELERATION, FRICTION,
   JUMP_IMPULSE, PLAYER_WIDTH, PLAYER_HEIGHT, CANVAS_WIDTH, CANVAS_HEIGHT,
 } from './constants';
-import { CHARACTERS } from './characters';
-
-function makePlayer(overrides: Partial<Player> = {}): Player {
-  return {
-    id: 'P1',
-    character: CHARACTERS.P1,
-    x: 100,
-    y: 400,
-    vx: 0,
-    vy: 0,
-    width: PLAYER_WIDTH,
-    height: PLAYER_HEIGHT,
-    state: 'idle',
-    facing: 'right',
-    splatTimer: 0,
-    respawnTimer: 0,
-    invincibleTimer: 0,
-    score: 0,
-    active: true,
-    animFrame: 0,
-    animTimer: 0,
-    fastFalling: false,
-    fatTimer: 0,
-    slowTimer: 0,
-    sideSquash: 1,
-    burnTimer: 0,
-    hitstopTimer: 0,
-    ...overrides,
-  };
-}
+import { makePlayer } from './__tests__/testHelpers';
 
 const noInput: InputState = { left: false, right: false, jump: false, down: false };
 

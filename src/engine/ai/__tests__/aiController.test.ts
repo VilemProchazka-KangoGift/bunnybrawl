@@ -3,27 +3,8 @@ import { AIController } from '../aiController';
 import { buildAwareness } from '../awareness';
 import { evaluateActions } from '../utility';
 import { getPersonality, getDifficultyParams } from '../personality';
-import type { Player, MatchState, Arena, PlayerSlot } from '../../types';
-import { PLAYER_WIDTH, PLAYER_HEIGHT } from '../../constants';
-
-// Helper to create a minimal player
-function makePlayer(overrides: Partial<Player> & { id: PlayerSlot }): Player {
-  return {
-    id: overrides.id,
-    character: { slot: overrides.id, name: 'Bunny', color: '#FFF', darkColor: '#CCC', lightColor: '#FFF' },
-    x: 200, y: 500, vx: 0, vy: 0,
-    width: PLAYER_WIDTH, height: PLAYER_HEIGHT,
-    state: 'idle', facing: 'right',
-    splatTimer: 0, respawnTimer: 0, invincibleTimer: 0,
-    score: 0, active: true, animFrame: 0, animTimer: 0,
-    fastFalling: false, fatTimer: 0, slowTimer: 0,
-    squashScale: 1, squashTimer: 0, sideSquash: 1, afterimages: [],
-    idleAnimTimer: 0, expression: 'normal',
-    killStreak: 0, breathTimer: 0, springTrailTimer: 0,
-    damageFlashSide: null, damageFlashTimer: 0, burnTimer: 0, hitstopTimer: 0,
-    ...overrides,
-  };
-}
+import type { MatchState, Arena, PlayerSlot } from '../../types';
+import { makePlayer } from '../../__tests__/testHelpers';
 
 // Helper to create a minimal match state
 function makeState(overrides?: Partial<MatchState>): MatchState {
