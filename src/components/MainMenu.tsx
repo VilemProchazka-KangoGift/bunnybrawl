@@ -19,8 +19,7 @@ import { MsgType, PROTOCOL_VERSION } from '../engine/net/protocol';
 import type { ReliableMessage, HandshakeMessage, SlotAssignmentMessage, StartMatchMessage, PlayerJoinedMessage, PlayerLeftMessage } from '../engine/net/protocol';
 import { CHARACTERS, BOT_CHARACTERS, getAllCharacters, getCharacterEmoji, getCharacterDisplayName, assignBotCharacters } from '../engine/characters';
 import { ALL_BOT_SLOTS, isBotSlot } from '../engine/types';
-import type { BotSlot, CharacterSlot } from '../engine/types';
-import type { PlayerSlot } from '../engine/types';
+import type { BotSlot, CharacterSlot, PlayerSlot } from '../engine/types';
 import './MainMenu.css';
 
 // Re-export for Match.tsx — transport lives here now
@@ -543,6 +542,7 @@ export function MainMenu() {
             arenaId: msg.arenaId, killLimit: msg.killLimit, timeLimit: msg.timeLimit,
             goreMode: msg.goreMode, botCount: msg.botCount,
             botDifficulty: msg.botDifficulty as 'easy' | 'medium' | 'hard' | 'impossible',
+            mods: msg.mods,
           });
           setOnline({ rngSeed: msg.rngSeed });
         } else if (msg.type === MsgType.READY) {

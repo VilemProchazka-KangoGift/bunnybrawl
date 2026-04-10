@@ -2053,12 +2053,7 @@ export class GameLoop {
     }
     // Touch input for the local mobile player
     if (this.touchInput && player.id === this.touchSlot) {
-      const raw = this.touchInput.getInput();
-      // Airborne tap = fast-fall stomp (double-tap = jump then instant stomp)
-      if (raw.jump && player.state === 'airborne') {
-        return { left: raw.left, right: raw.right, jump: false, down: true };
-      }
-      return raw;
+      return this.touchInput.getInputForPlayer(player.state === 'airborne');
     }
     return this.input.getInput(player.id as import('./types').CharacterSlot);
   }

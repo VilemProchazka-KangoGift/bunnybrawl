@@ -225,7 +225,7 @@ export function CharacterSelect() {
         // Touch input for P1 on mobile
         const touch = lobbyTouchRef.current;
         if (touch && p.slot === 'P1') {
-          const input = touch.getInput();
+          const input = touch.getInputForPlayer(!p.onGround);
           moveLeft = input.left;
           moveRight = input.right;
           jump = input.jump;

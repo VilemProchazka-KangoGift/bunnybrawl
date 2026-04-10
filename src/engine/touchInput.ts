@@ -134,6 +134,15 @@ export class TouchInputManager {
     };
   }
 
+  /** Get input with airborne-tap→fast-fall conversion applied. */
+  getInputForPlayer(airborne: boolean): InputState {
+    const raw = this.getInput();
+    if (raw.jump && airborne) {
+      return { left: raw.left, right: raw.right, jump: false, down: true };
+    }
+    return raw;
+  }
+
   private updateCachedLayout(): void {
     if (this.containerEl && this.scaleFn) {
       this.cachedRect = this.containerEl.getBoundingClientRect();
