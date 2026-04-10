@@ -225,16 +225,11 @@ export function CharacterSelect() {
         // Touch input for P1 on mobile
         const touch = lobbyTouchRef.current;
         if (touch && p.slot === 'P1') {
-          const input = touch.getInput();
+          const input = touch.getInputForPlayer(!p.onGround);
           moveLeft = input.left;
           moveRight = input.right;
-          // Airborne tap = fast-fall (same as match controls)
-          if (input.jump && !p.onGround) {
-            crouching = true;
-          } else {
-            jump = input.jump;
-            crouching = input.down;
-          }
+          jump = input.jump;
+          crouching = input.down;
         } else {
           const bindings = KEY_BINDINGS[p.slot as CharacterSlot];
           const keys = keysRef.current;
