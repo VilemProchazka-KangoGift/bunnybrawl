@@ -23,6 +23,7 @@ import {
   drawDayNightCycle,
   drawHUD, drawCountdown, invalidateHudCache,
   drawPlayer,
+  clearRenderingCaches,
 } from './rendering';
 
 interface Cloud {
@@ -53,6 +54,7 @@ export class Renderer {
   private _timeLimit: number = 0;
 
   constructor(bgCanvas: HTMLCanvasElement, fgCanvas: HTMLCanvasElement, theme: ThemeConfig, mirrored = false) {
+    clearRenderingCaches();
     this.bgCtx = bgCanvas.getContext('2d')!;
     this.fgCtx = fgCanvas.getContext('2d')!;
     this.theme = theme;
@@ -311,7 +313,7 @@ export class Renderer {
       for (let zi = 0; zi < arena.effectZones.length; zi++) {
         const zone = arena.effectZones[zi];
         if (zone.type === 'zero_g') {
-          drawZeroGZone(ctx, zone, matchState.timeElapsed, this.fgCtx);
+          drawZeroGZone(ctx, zone, matchState.timeElapsed);
         } else if (zone.type === 'current') {
           drawCurrentZone(ctx, zone, matchState.timeElapsed);
         } else if (zone.type === 'geyser') {
@@ -328,7 +330,7 @@ export class Renderer {
         const bp = arena.platforms[bi];
         if (!bp) continue;
         const wobble = matchState.bouncyWobble.get(bi) || 0;
-        drawBouncyPlatformOverlay(ctx, bp, wobble, matchState.timeElapsed, this.fgCtx);
+        drawBouncyPlatformOverlay(ctx, bp, wobble, matchState.timeElapsed);
       }
     }
 

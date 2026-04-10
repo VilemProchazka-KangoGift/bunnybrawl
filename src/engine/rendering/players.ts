@@ -7,6 +7,10 @@ import { drawHighlightSpot } from '../spriteShading';
 // Sprite cache: key -> OffscreenCanvas with pre-drawn character sprite
 const spriteCache = new Map<string, OffscreenCanvas>();
 
+export function clearSpriteCache(): void {
+  spriteCache.clear();
+}
+
 export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player, nearCarrot: boolean, frameTime: number, theme: ThemeConfig): void {
   const { width, height, character, state, facing, invincibleTimer, animFrame, fastFalling, fatTimer, slowTimer } = player;
   // Apply visual correction offset from rollback smoothing

@@ -6,6 +6,13 @@ const cachedZeroGBgGradients = new Map<string, CanvasGradient>();
 const cachedGhostGlowGradients = new Map<string, CanvasGradient>();
 const cachedJellyGradients = new Map<string, CanvasGradient>();
 
+export function clearHazardCaches(): void {
+  cachedLavaGradients.clear();
+  cachedZeroGBgGradients.clear();
+  cachedGhostGlowGradients.clear();
+  cachedJellyGradients.clear();
+}
+
 export function drawHazardZone(
   ctx: CanvasRenderingContext2D,
   hz: { x: number; y: number; width: number; height: number; type: string },
@@ -181,7 +188,6 @@ export function drawZeroGZone(
   ctx: CanvasRenderingContext2D,
   zone: { x: number; y: number; width: number; height: number },
   time: number,
-  fgCtx: CanvasRenderingContext2D,
 ): void {
   ctx.save();
 
@@ -190,7 +196,7 @@ export function drawZeroGZone(
   const zKey = `${zone.x}_${zone.y}`;
   let bgGrad = cachedZeroGBgGradients.get(zKey);
   if (!bgGrad) {
-    bgGrad = fgCtx.createLinearGradient(zone.x, zone.y, zone.x, zone.y + zone.height);
+    bgGrad = ctx.createLinearGradient(zone.x, zone.y, zone.x, zone.y + zone.height);
     bgGrad.addColorStop(0, 'rgba(0, 180, 255, 0.2)');
     bgGrad.addColorStop(0.5, 'rgba(0, 220, 255, 0.08)');
     bgGrad.addColorStop(1, 'rgba(0, 180, 255, 0.2)');
@@ -421,7 +427,6 @@ export function drawBouncyPlatformOverlay(
   bp: { x: number; y: number; width: number; height: number },
   wobble: number,
   time: number,
-  fgCtx: CanvasRenderingContext2D,
 ): void {
   ctx.save();
 
@@ -431,7 +436,7 @@ export function drawBouncyPlatformOverlay(
   const jellyKey = `${bp.x}_${bp.y}_${bp.height}`;
   let jellyGrad = cachedJellyGradients.get(jellyKey);
   if (!jellyGrad) {
-    jellyGrad = fgCtx.createLinearGradient(bp.x, bp.y - 4, bp.x, bp.y + bp.height);
+    jellyGrad = ctx.createLinearGradient(bp.x, bp.y - 4, bp.x, bp.y + bp.height);
     jellyGrad.addColorStop(0, '#FF69B4');
     jellyGrad.addColorStop(0.5, '#FF99CC');
     jellyGrad.addColorStop(1, '#FF69B4');

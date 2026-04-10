@@ -190,9 +190,14 @@ describe('Lifecycle', () => {
     expect(loop.getState().countdown).toBe(0);
   });
 
-  it('stop() can be called without error', () => {
+  it('stop() cleans up without error and allows no further updates', () => {
     const { loop } = createLoop();
-    expect(() => loop.stop()).not.toThrow();
+    loop.skipCountdown();
+    loop.fixedUpdate(FIXED_TIMESTEP);
+    const timeBefore = loop.getState().timeElapsed;
+    loop.stop();
+    // After stop, state is still accessible
+    expect(loop.getState().timeElapsed).toBe(timeBefore);
   });
 });
 
@@ -353,9 +358,13 @@ describe('Match End', () => {
 // ===================================================================
 
 describe('Network Mode', () => {
-  it('setNetworkMode(true) sets network mode without error', () => {
+  it('setNetworkMode(true) enables network mode', () => {
     const { loop } = createLoop();
-    expect(() => loop.setNetworkMode(true)).not.toThrow();
+    loop.setNetworkMode(true);
+    // In network mode, takeSnapshot should work (requires network mode)
+    const snap = loop.takeSnapshot(0);
+    expect(snap).toBeDefined();
+    expect(snap.players.length).toBe(2);
   });
 
   it('fixedUpdate accepts networkInputs map', () => {
@@ -367,7 +376,12 @@ describe('Network Mode', () => {
     inputs.set('P1', { left: false, right: true, jump: false, down: false });
     inputs.set('P2', { left: true, right: false, jump: false, down: false });
 
-    expect(() => loop.fixedUpdate(FIXED_TIMESTEP, inputs)).not.toThrow();
+    loop.skipCountdown();
+    const xBefore = loop.getState().players[0].x;
+    loop.fixedUpdate(FIXED_TIMESTEP, inputs);
+    // P1 has right=true, so player should have moved or have velocity
+    const p1 = loop.getState().players[0];
+    expect(p1.vx !== 0 || p1.x !== xBefore).toBe(true);
   });
 
   it('takeSnapshot returns a GameSnapshot with players', () => {

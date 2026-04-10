@@ -5,11 +5,11 @@ import { getGibRenderer } from '../characters';
 
 export function drawWeather(ctx: CanvasRenderingContext2D, weather: WeatherParticle[], theme: ThemeConfig): void {
   const customDraw = theme.drawWeatherParticle;
+  if (customDraw) {
+    for (const w of weather) customDraw(ctx, w);
+    return;
+  }
   for (const w of weather) {
-    if (customDraw) {
-      customDraw(ctx, w);
-      continue;
-    }
     ctx.save();
     ctx.translate(w.x, w.y);
     ctx.rotate(w.rotation);

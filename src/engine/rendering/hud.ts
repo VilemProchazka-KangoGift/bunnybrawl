@@ -20,6 +20,16 @@ export function invalidateHudCache(): void {
   hudLastPlayerCount = -1;
 }
 
+export function resetHudState(): void {
+  hudCache = null;
+  hudCacheCtx = null;
+  hudLastTimer = -1;
+  hudLastPlayerCount = -1;
+  _hudActivePlayers = [];
+  for (const k in _hudPlayerScores) delete _hudPlayerScores[k];
+  for (const k in _hudPlayerActive) delete _hudPlayerActive[k];
+}
+
 export function drawHUD(ctx: CanvasRenderingContext2D, state: MatchState, frameTime: number, playerNames: Record<string, string> | null, timeLimit = 0): void {
   // Check if HUD needs redraw (no allocations -- simple loop comparison)
   const timerSec = Math.floor(state.timeElapsed);
