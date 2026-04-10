@@ -74,6 +74,7 @@ export class GameLoop {
   private accumulator = 0;
   private rafId = 0;
   private running = false;
+  private stopped = false;
   private paused = false;
   private particles: Particle[] = [];
   private particleFreeList: Particle[] = [];  // Recycled particle objects to reduce GC
@@ -386,6 +387,7 @@ export class GameLoop {
 
   stop(): void {
     this.running = false;
+    this.stopped = true;
     if (this.rafId) cancelAnimationFrame(this.rafId);
     this.input.detach();
     this.touchInput?.detach();
@@ -1097,7 +1099,7 @@ export class GameLoop {
   /** Run one fixed-timestep simulation tick. Public for rollback engine. */
   fixedUpdate(dt: number, networkInputs?: Map<string, InputState>): void {
     this._networkInputs = networkInputs;
-    if (this.state.matchOver) return;
+    if (this.stopped || this.state.matchOver) return;
     this.state.timeElapsed += dt;
 
     // Day/night cycle

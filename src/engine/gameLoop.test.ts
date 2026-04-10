@@ -202,6 +202,9 @@ describe('Lifecycle', () => {
     loop.stop();
     // After stop, state is still accessible
     expect(loop.getState().timeElapsed).toBe(timeBefore);
+    // Further updates should be blocked
+    loop.fixedUpdate(FIXED_TIMESTEP);
+    expect(loop.getState().timeElapsed).toBe(timeBefore);
   });
 });
 
@@ -553,7 +556,7 @@ describe('Hazard Collision', () => {
 
     loop.fixedUpdate(FIXED_TIMESTEP);
 
-    expect(player.slowTimer).toBeGreaterThan(0);
+    expect(player.slowTimer).toBe(THORN_SLOW_DURATION);
     expect(state.thorns[0]?.hit ?? true).toBe(true);
   });
 
@@ -574,8 +577,8 @@ describe('Hazard Collision', () => {
 
     loop.fixedUpdate(FIXED_TIMESTEP);
 
-    expect(player.burnTimer).toBeGreaterThan(0);
-    expect(player.slowTimer).toBeGreaterThan(0);
+    expect(player.burnTimer).toBe(THORN_SLOW_DURATION);
+    expect(player.slowTimer).toBe(THORN_SLOW_DURATION);
   });
 
   it('ghost collision applies slowTimer', () => {
@@ -601,7 +604,7 @@ describe('Hazard Collision', () => {
 
     loop.fixedUpdate(FIXED_TIMESTEP);
 
-    expect(player.slowTimer).toBeGreaterThan(0);
+    expect(player.slowTimer).toBe(THORN_SLOW_DURATION);
   });
 
   it('invincible player ignores thorn collision', () => {
@@ -705,7 +708,7 @@ describe('Effect Zones', () => {
     loop.fixedUpdate(FIXED_TIMESTEP);
 
     // Geyser sets vy to min(current, strength) = -550, launching player upward
-    expect(player.vy).toBeLessThan(-100);
+    expect(player.vy).toBeLessThanOrEqual(-550);
     expect(player.state).toBe('airborne');
   });
 });
