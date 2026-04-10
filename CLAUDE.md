@@ -25,7 +25,15 @@ src/
       packs/        # One file per arena — layout + visuals + translations + musicFile
         meadow.ts winterLake.ts volcano.ts castle.ts candyLand.ts
         treetops.ts underwater.ts hauntedGraveyard.ts rooftops.ts spaceStation.ts waterfall.ts
-    renderer.ts   # Canvas 2D rendering (two layers: bg + fg) — dispatches to character pack renderers
+    renderer.ts   # Canvas 2D orchestrator (two layers: bg + fg) — delegates to rendering/ modules
+    rendering/    # Extracted rendering modules (from renderer.ts split)
+      collectibles.ts  # Carrot, spring, thorn drawing
+      particles.ts     # Weather, dust, gibs, confetti, wildlife, fireworks
+      hazards.ts       # Lava, ghosts, zero-G, geysers, bouncy platforms, pigeons
+      effects.ts       # Day/night cycle, lighting
+      hud.ts           # Score display, kill feed, countdown, HUD caching
+      players.ts       # Character sprites, sprite caching, expressions
+      index.ts         # Barrel export + clearRenderingCaches()
     gameLoop.ts   # Main game loop with fixed timestep, all game systems
     audio.ts      # Procedural audio + Howler.js playback (animal sounds, SFX)
     spriteShading.ts # fillBodyGradient (radial body fill) + drawHighlightSpot (white glint)
@@ -239,7 +247,7 @@ Online play uses P2P WebRTC via PeerJS with GGPO-style rollback netcode:
 ## File Size Reference
 
 Largest files to be aware of when context is limited:
-- `renderer.ts` ~2370 lines — `gameLoop.ts` ~1770 lines
+- `renderer.ts` ~560 lines (orchestrator) + `rendering/` modules ~1900 lines total — `gameLoop.ts` ~1770 lines
 - `drawPrimitives.ts` ~990 lines — `CharacterSelect.tsx` ~900 lines
 - `audio.ts` ~1050 lines — `VictoryScreen.css` ~520 lines
 - Arena pack files ~200-800 lines each (11 arenas in `arenas/packs/`)
