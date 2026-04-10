@@ -3,7 +3,11 @@ import type { MatchSettings, Arena, PlayerSlot, InputState } from './types';
 import {
   FIXED_TIMESTEP, MATCH_COUNTDOWN,
   CARROT_FIRST_SPAWN_DELAY, SPRING_SPAWN_INTERVAL, THORN_SPAWN_INTERVAL,
-  HAZARD_LIFETIME,
+  HAZARD_LIFETIME, THORN_SLOW_DURATION,
+  STOMP_VY_THRESHOLD, STOMP_BOUNCE,
+  CANVAS_WIDTH, CANVAS_HEIGHT,
+  DUST_LAND_VY_THRESHOLD,
+  PLAYER_WIDTH, PLAYER_HEIGHT,
 } from './constants';
 
 // --- Mocks ---
@@ -521,5 +525,328 @@ describe('Entity Lifecycle', () => {
 
     loop.fixedUpdate(FIXED_TIMESTEP);
     expect(state.thorns).toHaveLength(0);
+  });
+});
+
+// ===================================================================
+// 6. Hazard Collision
+// ===================================================================
+
+describe('Hazard Collision', () => {
+  it('thorn collision applies slowTimer', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    // Place a fully-grown thorn directly on the player
+    state.thorns.push({
+      x: player.x,
+      y: player.y,
+      width: 28,
+      height: 12,
+      platformIndex: 0,
+      life: HAZARD_LIFETIME,
+      growTimer: 0,
+      hit: false,
+    });
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(player.slowTimer).toBeGreaterThan(0);
+    expect(state.thorns[0]?.hit ?? true).toBe(true);
+  });
+
+  it('lava hazard zone collision applies burnTimer', () => {
+    // Lava hazard zones (not lava rocks) set burnTimer
+    const { loop } = createLoop({
+      arena: {
+        hazardZones: [{ x: 0, y: 0, width: 1280, height: 720, type: 'lava' }],
+      },
+    });
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    // Ensure player is not already slowed or invincible
+    player.slowTimer = 0;
+    player.invincibleTimer = 0;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(player.burnTimer).toBeGreaterThan(0);
+    expect(player.slowTimer).toBeGreaterThan(0);
+  });
+
+  it('ghost collision applies slowTimer', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    // Place a ghost directly on the player
+    const pcx = player.x + player.width / 2;
+    const pcy = player.y + player.height / 2;
+    state.ghosts.push({
+      x: pcx,
+      y: pcy,
+      vx: 0,
+      size: 40,
+      alpha: 1,
+      wobblePhase: 0,
+    });
+
+    player.slowTimer = 0;
+    player.invincibleTimer = 0;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(player.slowTimer).toBeGreaterThan(0);
+  });
+
+  it('invincible player ignores thorn collision', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    player.invincibleTimer = 1.0;
+    player.slowTimer = 0;
+
+    // Place a fully-grown thorn directly on the player
+    state.thorns.push({
+      x: player.x,
+      y: player.y,
+      width: 28,
+      height: 12,
+      platformIndex: 0,
+      life: HAZARD_LIFETIME,
+      growTimer: 0,
+      hit: false,
+    });
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(player.slowTimer).toBe(0);
+    expect(state.thorns[0].hit).toBe(false);
+  });
+});
+
+// ===================================================================
+// 7. Effect Zones
+// ===================================================================
+
+describe('Effect Zones', () => {
+  it('zero-G zone slows falling player', () => {
+    const { loop } = createLoop({
+      arena: {
+        effectZones: [{ type: 'zero_g', x: 0, y: 0, width: 1280, height: 720 }],
+      },
+    });
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    // Make player airborne and falling (positive vy = downward)
+    player.state = 'airborne';
+    player.vy = 200;
+    const vyBefore = player.vy;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    // Zero-G slows falling: vy *= 0.92 (plus gravity adds some),
+    // but the vy should be less than what gravity alone would produce
+    // Zero-G effect is applied, so the vy should have been reduced from the
+    // baseline by the 0.92 multiplier at some point during the tick
+    // We just verify the zone was processed — player's vy should differ
+    // from pure gravity (GRAVITY * dt + vyBefore)
+    expect(player.vy).toBeDefined();
+    // The zero-G zone applies 0.92 multiplier to positive vy, so the result
+    // should be less than vyBefore + GRAVITY * dt (what pure gravity would give)
+    const pureGravityVy = vyBefore + 900 * FIXED_TIMESTEP;
+    expect(player.vy).toBeLessThan(pureGravityVy);
+  });
+
+  it('current zone applies vx force', () => {
+    // Use a strong current that overcomes friction (800 px/s²)
+    const { loop } = createLoop({
+      arena: {
+        effectZones: [{ type: 'current', x: 0, y: 0, width: 1280, height: 720, vx: 2000 }],
+      },
+    });
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+    const xBefore = player.x;
+
+    // Run several ticks to let the current overcome friction and push the player
+    for (let i = 0; i < 30; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+    }
+
+    expect(player.x).toBeGreaterThan(xBefore);
+  });
+
+  it('geyser zone launches player when active', () => {
+    const { loop } = createLoop({
+      arena: {
+        effectZones: [{ type: 'geyser', x: 0, y: 0, width: 1280, height: 720, strength: -550, interval: 10, duration: 3 }],
+      },
+    });
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    // Force geyser state to active
+    state.geyserStates[0].active = true;
+    state.geyserStates[0].activeTimer = 2;
+
+    player.vy = 0;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    // Geyser sets vy to min(current, strength) = -550, launching player upward
+    expect(player.vy).toBeLessThan(-100);
+    expect(player.state).toBe('airborne');
+  });
+});
+
+// ===================================================================
+// 8. Stomp
+// ===================================================================
+
+describe('Stomp', () => {
+  it('stomp from above grants 2 points', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const attacker = state.players[0];
+    const victim = state.players[1];
+
+    const initialScore = attacker.score;
+
+    // Position attacker directly above victim, falling down
+    victim.x = 500;
+    victim.y = 600;
+    victim.state = 'idle';
+    victim.invincibleTimer = 0;
+    victim.active = true;
+
+    attacker.x = 500;
+    // Attacker's bottom edge should be just entering victim's top half
+    attacker.y = victim.y - attacker.height + 5;
+    attacker.vy = STOMP_VY_THRESHOLD + 100; // well above threshold
+    attacker.state = 'airborne';
+    attacker.active = true;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(attacker.score).toBe(initialScore + 2);
+    expect(victim.state).toBe('splat');
+  });
+
+  it('invincible player cannot be stomped', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const attacker = state.players[0];
+    const victim = state.players[1];
+
+    // Position same as above
+    victim.x = 500;
+    victim.y = 600;
+    victim.state = 'idle';
+    victim.invincibleTimer = 1.0; // invincible!
+    victim.active = true;
+
+    attacker.x = 500;
+    attacker.y = victim.y - attacker.height + 5;
+    attacker.vy = STOMP_VY_THRESHOLD + 100;
+    attacker.state = 'airborne';
+    attacker.active = true;
+
+    const initialScore = attacker.score;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(victim.state).not.toBe('splat');
+    expect(attacker.score).toBe(initialScore);
+  });
+});
+
+// ===================================================================
+// 9. Fall-off & Wrap
+// ===================================================================
+
+describe('Fall-off & Wrap', () => {
+  it('player wraps horizontally', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    // Place player beyond the right edge
+    player.x = CANVAS_WIDTH + 10;
+    player.y = 620;
+    player.state = 'idle';
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    // wrapHorizontal: if player.x > arenaWidth, player.x = -player.width
+    expect(player.x).toBeLessThan(CANVAS_WIDTH);
+  });
+
+  it('player below arena with allowFallOff respawns', () => {
+    const { loop } = createLoop({
+      arena: {
+        allowFallOff: true,
+      },
+    });
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    // Position player far below the screen
+    player.y = CANVAS_HEIGHT + 100;
+    player.state = 'airborne';
+    player.vy = 200;
+    player.active = true;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    // Fall-off respawn: player repositioned to a spawn point, slowed, invincible
+    expect(player.y).toBeLessThan(CANVAS_HEIGHT);
+    expect(player.invincibleTimer).toBeGreaterThan(0);
+    expect(player.slowTimer).toBeGreaterThan(0);
+    expect(player.state).toBe('idle');
+  });
+});
+
+// ===================================================================
+// 10. Landing Dust
+// ===================================================================
+
+describe('Landing Dust', () => {
+  it('landing dust spawns on hard landing', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    // Position player just above the ground platform (y=660),
+    // moving down fast enough to trigger dust
+    player.x = 200;
+    player.y = 660 - player.height - 2; // just above ground
+    player.vy = DUST_LAND_VY_THRESHOLD + 100; // well above dust threshold
+    player.state = 'airborne';
+    player.active = true;
+
+    // Access private particles via any-cast
+    const particlesBefore = (loop as any).particles.length;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    // After landing with high velocity, dust particles should have been emitted
+    expect((loop as any).particles.length).toBeGreaterThan(particlesBefore);
   });
 });
