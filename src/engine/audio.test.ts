@@ -430,4 +430,87 @@ describe('floatBufferToWavDataUri', () => {
     const binary = atob(base64);
     expect(binary.length).toBe(44);
   });
+
+  it('mono channel (1 channel) in header', () => {
+    const uri = floatBufferToWavDataUri(new Float32Array([0.5]), 44100);
+    const base64 = uri.split(',')[1];
+    const binary = atob(base64);
+    // Channels at byte offset 22 (little-endian uint16)
+    const channels = binary.charCodeAt(22) | (binary.charCodeAt(23) << 8);
+    expect(channels).toBe(1);
+  });
+
+  it('16-bit samples in header', () => {
+    const uri = floatBufferToWavDataUri(new Float32Array([0.5]), 44100);
+    const base64 = uri.split(',')[1];
+    const binary = atob(base64);
+    // Bits per sample at byte offset 34 (little-endian uint16)
+    const bps = binary.charCodeAt(34) | (binary.charCodeAt(35) << 8);
+    expect(bps).toBe(16);
+  });
+
+  it('data chunk size matches sample count', () => {
+    const samples = new Float32Array([0, 0.5, -0.5, 1.0]);
+    const uri = floatBufferToWavDataUri(samples, 44100);
+    const base64 = uri.split(',')[1];
+    const binary = atob(base64);
+    // Data size at byte offset 40 (little-endian uint32)
+    const dataSize = binary.charCodeAt(40) | (binary.charCodeAt(41) << 8) |
+                     (binary.charCodeAt(42) << 16) | (binary.charCodeAt(43) << 24);
+    expect(dataSize).toBe(4 * 2); // 4 samples * 2 bytes each
+  });
+
+  it('total file size = header + data', () => {
+    const samples = new Float32Array(100);
+    const uri = floatBufferToWavDataUri(samples, 44100);
+    const base64 = uri.split(',')[1];
+    const binary = atob(base64);
+    expect(binary.length).toBe(44 + 100 * 2); // 44 header + 200 data bytes
+  });
+
+  it('different sample rates produce different headers', () => {
+    const uri1 = floatBufferToWavDataUri(new Float32Array([0]), 44100);
+    const uri2 = floatBufferToWavDataUri(new Float32Array([0]), 22050);
+    expect(uri1).not.toBe(uri2);
+  });
+});
+
+describe('AudioManager - edge cases', () => {
+  it('stopAll stops both game sounds and menu music', () => {
+    audio.init();
+    audio.playMenuMusic();
+    for (const h of getInstances()) h.stop.mockClear();
+    (audio as any).stopAll();
+    const stoppedCount = getInstances().filter((h: any) => h.stop.mock.calls.length > 0).length;
+    expect(stoppedCount).toBeGreaterThan(0);
+  });
+
+  it('play after unmute works', () => {
+    audio.init();
+    audio.toggleMute(); // mute
+    audio.toggleMute(); // unmute
+    for (const h of getInstances()) h.play.mockClear();
+    audio.play('jump');
+    const anyPlayed = getInstances().some((h: any) => h.play.mock.calls.length > 0);
+    expect(anyPlayed).toBe(true);
+  });
+
+  it('setVolume to 0 does not throw', () => {
+    audio.init();
+    expect(() => audio.setVolume('jump', 0)).not.toThrow();
+  });
+
+  it('destroy is idempotent', () => {
+    audio.init();
+    audio.destroy();
+    expect(() => audio.destroy()).not.toThrow();
+  });
+
+  it('playAnimal is case-insensitive via lowercase conversion', () => {
+    audio.init();
+    for (const h of getInstances()) h.play.mockClear();
+    audio.playAnimal('BUNNY');
+    const anyPlayed = getInstances().some((h: any) => h.play.mock.calls.length > 0);
+    expect(anyPlayed).toBe(true);
+  });
 });

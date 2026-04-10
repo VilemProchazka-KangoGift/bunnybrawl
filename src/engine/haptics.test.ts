@@ -102,5 +102,47 @@ describe('haptics', () => {
       const ms = vibrateMock.mock.calls[0][0];
       expect(ms).toBeLessThanOrEqual(80);
     });
+
+    it('landing at vy=200 produces minimum vibration (~10ms)', () => {
+      haptics.enabled = true;
+      haptics.landing(200);
+      const ms = vibrateMock.mock.calls[0][0];
+      expect(ms).toBeCloseTo(10, 0);
+    });
+
+    it('landing at vy=600 produces maximum vibration (~80ms)', () => {
+      haptics.enabled = true;
+      haptics.landing(600);
+      const ms = vibrateMock.mock.calls[0][0];
+      expect(ms).toBeCloseTo(80, 0);
+    });
+  });
+
+  describe('init', () => {
+    it('sets localSlot', () => {
+      // isTouchPrimary returns false in test env, so enabled stays false
+      haptics.init('P2');
+      expect(haptics.localSlot).toBe('P2');
+    });
+  });
+
+  describe('all methods are no-op when disabled', () => {
+    it('hazardHit', () => {
+      haptics.enabled = false;
+      haptics.hazardHit();
+      expect(vibrateMock).not.toHaveBeenCalled();
+    });
+
+    it('spring', () => {
+      haptics.enabled = false;
+      haptics.spring();
+      expect(vibrateMock).not.toHaveBeenCalled();
+    });
+
+    it('bump', () => {
+      haptics.enabled = false;
+      haptics.bump();
+      expect(vibrateMock).not.toHaveBeenCalled();
+    });
   });
 });

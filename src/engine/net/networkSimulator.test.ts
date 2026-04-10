@@ -126,5 +126,51 @@ describe('NetworkSimulator', () => {
       expect(config.jitterMs).toBe(10);
       expect(config.packetLossPercent).toBe(5);
     });
+
+    it('reflects updates from configure()', () => {
+      const sim = new NetworkSimulator();
+      sim.configure({ latencyMs: 99, jitterMs: 33 });
+      const config = sim.getConfig();
+      expect(config.latencyMs).toBe(99);
+      expect(config.jitterMs).toBe(33);
+      expect(config.packetLossPercent).toBe(0); // unchanged
+    });
+  });
+
+  describe('message ordering', () => {
+    it('preserves message data through queue', () => {
+      const sim = new NetworkSimulator({ latencyMs: 0 });
+      sim.enqueue({ type: 'test', value: 42 }, true);
+      const ready = sim.flush();
+      expect(ready[0].data).toEqual({ type: 'test', value: 42 });
+    });
+
+    it('tracks isReliable flag', () => {
+      const sim = new NetworkSimulator({ latencyMs: 0 });
+      sim.enqueue('reliable', true);
+      sim.enqueue('unreliable', false);
+      const ready = sim.flush();
+      expect(ready[0].isReliable).toBe(true);
+      expect(ready[1].isReliable).toBe(false);
+    });
+  });
+
+  describe('edge cases', () => {
+    it('partial config merge (only latencyMs)', () => {
+      const sim = new NetworkSimulator({ latencyMs: 50, jitterMs: 20, packetLossPercent: 10 });
+      sim.configure({ latencyMs: 0 });
+      expect(sim.getConfig().jitterMs).toBe(20); // unchanged
+      expect(sim.getConfig().packetLossPercent).toBe(10); // unchanged
+    });
+
+    it('100% loss still delivers reliable messages', () => {
+      const sim = new NetworkSimulator({ packetLossPercent: 100, latencyMs: 0 });
+      let delivered = 0;
+      for (let i = 0; i < 100; i++) {
+        if (sim.enqueue(i, true)) delivered++;
+      }
+      expect(delivered).toBe(100);
+      expect(sim.flush()).toHaveLength(100);
+    });
   });
 });

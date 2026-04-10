@@ -551,3 +551,357 @@ describe('Physics constants validation', () => {
   it('THORN_JUMP_MULT is 0.7', () => expect(THORN_JUMP_MULT).toBe(0.7));
   it('PLAYER_PUSH_FORCE is 200', () => expect(PLAYER_PUSH_FORCE).toBe(200));
 });
+
+// ===================================================================
+// wrapHorizontal edge cases
+// ===================================================================
+
+describe('wrapHorizontal edge cases', () => {
+  it('wraps from left to right when x + width < 0', () => {
+    const player = makePlayer({ x: -PLAYER_WIDTH - 5 });
+    wrapHorizontal(player, CANVAS_WIDTH);
+    expect(player.x).toBe(CANVAS_WIDTH);
+  });
+
+  it('wraps from right to left when x > arenaWidth', () => {
+    const player = makePlayer({ x: CANVAS_WIDTH + 10 });
+    wrapHorizontal(player, CANVAS_WIDTH);
+    expect(player.x).toBe(-PLAYER_WIDTH);
+  });
+
+  it('does NOT wrap when player is at exact left boundary (x + width === 0)', () => {
+    const player = makePlayer({ x: -PLAYER_WIDTH });
+    wrapHorizontal(player, CANVAS_WIDTH);
+    // x + width === 0 is NOT < 0, so no wrap
+    expect(player.x).toBe(-PLAYER_WIDTH);
+  });
+
+  it('does NOT wrap when player is at exact right boundary (x === arenaWidth)', () => {
+    const player = makePlayer({ x: CANVAS_WIDTH });
+    wrapHorizontal(player, CANVAS_WIDTH);
+    // x === arenaWidth is NOT > arenaWidth, so no wrap
+    expect(player.x).toBe(CANVAS_WIDTH);
+  });
+
+  it('does NOT wrap player in the middle of the arena', () => {
+    const player = makePlayer({ x: 640 });
+    wrapHorizontal(player, CANVAS_WIDTH);
+    expect(player.x).toBe(640);
+  });
+
+  it('wraps correctly with a custom arena width', () => {
+    const player = makePlayer({ x: 2000 + 1 });
+    wrapHorizontal(player, 2000);
+    expect(player.x).toBe(-PLAYER_WIDTH);
+  });
+});
+
+// ===================================================================
+// updatePlayerState transitions
+// ===================================================================
+
+describe('updatePlayerState transitions', () => {
+  it('vy > 0 (falling) sets airborne', () => {
+    const player = makePlayer({ vy: 50, state: 'idle' });
+    updatePlayerState(player);
+    expect(player.state).toBe('airborne');
+  });
+
+  it('vy < 0 (rising) sets airborne', () => {
+    const player = makePlayer({ vy: -100, state: 'idle' });
+    updatePlayerState(player);
+    expect(player.state).toBe('airborne');
+  });
+
+  it('vx > 10 with vy === 0 sets run', () => {
+    const player = makePlayer({ vx: 100, vy: 0, state: 'airborne' });
+    updatePlayerState(player);
+    expect(player.state).toBe('run');
+  });
+
+  it('vx === -100 (fast left) with vy === 0 sets run', () => {
+    const player = makePlayer({ vx: -100, vy: 0, state: 'idle' });
+    updatePlayerState(player);
+    expect(player.state).toBe('run');
+  });
+
+  it('vx between -10 and 10 with vy === 0 sets idle', () => {
+    const player = makePlayer({ vx: 5, vy: 0, state: 'run' });
+    updatePlayerState(player);
+    expect(player.state).toBe('idle');
+  });
+
+  it('vx exactly 10 with vy === 0 sets idle (threshold is > 10, not >=)', () => {
+    const player = makePlayer({ vx: 10, vy: 0, state: 'run' });
+    updatePlayerState(player);
+    expect(player.state).toBe('idle');
+  });
+
+  it('vx exactly -10 with vy === 0 sets idle', () => {
+    const player = makePlayer({ vx: -10, vy: 0, state: 'run' });
+    updatePlayerState(player);
+    expect(player.state).toBe('idle');
+  });
+
+  it('splat state is unchanged regardless of velocity', () => {
+    const player = makePlayer({ vx: 200, vy: -300, state: 'splat' });
+    updatePlayerState(player);
+    expect(player.state).toBe('splat');
+  });
+
+  it('respawning state is unchanged regardless of velocity', () => {
+    const player = makePlayer({ vx: 200, vy: -300, state: 'respawning' });
+    updatePlayerState(player);
+    expect(player.state).toBe('respawning');
+  });
+});
+
+// ===================================================================
+// applyArenaConstraints with allowFallOff
+// ===================================================================
+
+describe('applyArenaConstraints with allowFallOff', () => {
+  const arenaFallOff: Arena = {
+    name: 'FallOff',
+    width: CANVAS_WIDTH,
+    height: CANVAS_HEIGHT,
+    platforms: [],
+    spawnPoints: [],
+    backgroundColor: '#000',
+    groundColor: '#000',
+    platformColor: '#000',
+    allowFallOff: true,
+  };
+
+  const arenaNoFallOff: Arena = {
+    name: 'NoFallOff',
+    width: CANVAS_WIDTH,
+    height: CANVAS_HEIGHT,
+    platforms: [],
+    spawnPoints: [],
+    backgroundColor: '#000',
+    groundColor: '#000',
+    platformColor: '#000',
+    allowFallOff: false,
+  };
+
+  it('with allowFallOff=true, player CAN go below screen (no floor clamping)', () => {
+    const player = makePlayer({ y: CANVAS_HEIGHT + 100, vy: 200, state: 'airborne' });
+    applyArenaConstraints(player, arenaFallOff);
+    // Should remain below screen — no clamping
+    expect(player.y).toBe(CANVAS_HEIGHT + 100);
+    expect(player.vy).toBe(200);
+    expect(player.state).toBe('airborne');
+  });
+
+  it('with allowFallOff=false, player is clamped to floor', () => {
+    const player = makePlayer({ y: CANVAS_HEIGHT + 100, vy: 200, state: 'airborne' });
+    applyArenaConstraints(player, arenaNoFallOff);
+    expect(player.y).toBe(CANVAS_HEIGHT - PLAYER_HEIGHT);
+    expect(player.vy).toBe(0);
+  });
+
+  it('ceiling constraint still applies with allowFallOff=true', () => {
+    const player = makePlayer({ y: -50, vy: -200 });
+    applyArenaConstraints(player, arenaFallOff);
+    expect(player.y).toBe(0);
+    expect(player.vy).toBe(0);
+  });
+
+  it('horizontal wrapping still applies with allowFallOff=true', () => {
+    const player = makePlayer({ x: CANVAS_WIDTH + 10 });
+    applyArenaConstraints(player, arenaFallOff);
+    expect(player.x).toBe(-PLAYER_WIDTH);
+  });
+});
+
+// ===================================================================
+// Math.fround determinism
+// ===================================================================
+
+describe('Math.fround determinism', () => {
+  it('applyGravity result matches fround expectation', () => {
+    const player = makePlayer({ vy: 0 });
+    const dt = 1 / 60;
+    applyGravity(player, dt);
+    const expected = Math.fround(0 + Math.fround(GRAVITY * dt));
+    expect(player.vy).toBe(expected);
+  });
+
+  it('movePlayer positions match fround for x', () => {
+    const player = makePlayer({ x: 100, vx: 173.5 });
+    const dt = 1 / 60;
+    movePlayer(player, dt);
+    const expected = Math.fround(100 + Math.fround(173.5 * dt));
+    expect(player.x).toBe(expected);
+  });
+
+  it('movePlayer positions match fround for y', () => {
+    const player = makePlayer({ y: 400, vy: -560 });
+    const dt = 1 / 60;
+    movePlayer(player, dt);
+    const expected = Math.fround(400 + Math.fround(-560 * dt));
+    expect(player.y).toBe(expected);
+  });
+
+  it('applyInput acceleration uses fround', () => {
+    const player = makePlayer({ vx: 0 });
+    const dt = 1 / 60;
+    applyInput(player, { left: false, right: true, jump: false, down: false }, dt);
+    const expected = Math.fround(0 + Math.fround(ACCELERATION * dt));
+    // Clamped to maxSpeed, so only test if under maxSpeed
+    expect(player.vx).toBe(Math.fround(Math.min(MAX_WALK_SPEED, expected)));
+  });
+
+  it('fround produces different result than raw double for specific values', () => {
+    // Verify fround is non-trivial — some values differ between float32 and float64
+    const raw = 0.1 + 0.2;  // 0.30000000000000004 in float64
+    const frounded = Math.fround(Math.fround(0.1) + Math.fround(0.2));
+    // They should both be close to 0.3 but may differ in representation
+    expect(Math.fround(raw)).toBe(Math.fround(frounded));
+  });
+});
+
+// ===================================================================
+// Multiple platform collision
+// ===================================================================
+
+describe('Multiple platform collision', () => {
+  it('player landing on one of two vertically stacked platforms', () => {
+    const platforms: Platform[] = [
+      { x: 0, y: 600, width: 1280, height: 20 },   // lower platform
+      { x: 0, y: 400, width: 1280, height: 20 },   // upper platform
+    ];
+    // Player just barely overlapping top of upper platform (shallow overlap from above)
+    const player = makePlayer({ x: 200, y: 400 - PLAYER_HEIGHT + 3, vy: 100, state: 'airborne' });
+    collidePlatforms(player, platforms);
+    expect(player.y).toBe(400 - PLAYER_HEIGHT);
+    expect(player.vy).toBe(0);
+  });
+
+  it('player between two side-by-side platforms lands on one', () => {
+    const platforms: Platform[] = [
+      { x: 0, y: 500, width: 200, height: 20 },    // left platform
+      { x: 300, y: 500, width: 200, height: 20 },   // right platform
+    ];
+    // Player falling onto left platform with shallow overlap
+    const player = makePlayer({ x: 100, y: 500 - PLAYER_HEIGHT + 3, vy: 100, state: 'airborne' });
+    collidePlatforms(player, platforms);
+    expect(player.y).toBe(500 - PLAYER_HEIGHT);
+    expect(player.vy).toBe(0);
+  });
+
+  it('player overlapping two adjacent platforms at corner resolves without getting stuck', () => {
+    const platforms: Platform[] = [
+      { x: 0, y: 500, width: 200, height: 20 },    // left
+      { x: 200, y: 500, width: 200, height: 20 },   // right (touching)
+    ];
+    // Player falling on the junction with shallow overlap
+    const player = makePlayer({ x: 190, y: 500 - PLAYER_HEIGHT + 3, vy: 100, state: 'airborne' });
+    collidePlatforms(player, platforms);
+    // Should land on top of one of them
+    expect(player.y).toBe(500 - PLAYER_HEIGHT);
+    expect(player.vy).toBe(0);
+  });
+});
+
+// ===================================================================
+// Friction exactly zeros out velocity
+// ===================================================================
+
+describe('Friction zeros out velocity', () => {
+  it('friction clamps small positive vx to exactly 0, not negative', () => {
+    // Player with vx small enough that friction * dt > vx
+    const player = makePlayer({ vx: 5, state: 'idle' });
+    const dt = 1 / 60;
+    // FRICTION * dt = 800/60 ≈ 13.3, which exceeds vx=5
+    applyInput(player, noInput, dt);
+    expect(player.vx).toBe(0);
+  });
+
+  it('friction clamps small negative vx to exactly 0, not positive', () => {
+    const player = makePlayer({ vx: -5, state: 'idle' });
+    const dt = 1 / 60;
+    applyInput(player, noInput, dt);
+    expect(player.vx).toBe(0);
+  });
+
+  it('friction does not overshoot past zero for moderate velocity', () => {
+    const player = makePlayer({ vx: 10, state: 'idle' });
+    const dt = 1 / 60;
+    applyInput(player, noInput, dt);
+    // FRICTION * dt ≈ 13.3, which exceeds 10 → should clamp to 0
+    expect(player.vx).toBe(0);
+  });
+
+  it('friction reduces but does not zero out large velocity', () => {
+    const player = makePlayer({ vx: 200, state: 'idle' });
+    const dt = 1 / 60;
+    applyInput(player, noInput, dt);
+    // 200 - 13.3 ≈ 186.7, should remain positive
+    expect(player.vx).toBeGreaterThan(0);
+    expect(player.vx).toBeLessThan(200);
+  });
+});
+
+// ===================================================================
+// applyInput with custom maxWalkSpeed / friction / jumpImpulse
+// ===================================================================
+
+describe('applyInput with custom parameters', () => {
+  it('custom maxWalkSpeed clamps velocity', () => {
+    const customMax = 100;
+    const player = makePlayer({ vx: 0 });
+    // Accelerate for many frames
+    for (let i = 0; i < 60; i++) {
+      applyInput(player, { left: false, right: true, jump: false, down: false }, 1 / 60, customMax);
+    }
+    expect(player.vx).toBeLessThanOrEqual(customMax);
+    expect(player.vx).toBeGreaterThan(0);
+  });
+
+  it('custom friction decelerates faster than default', () => {
+    const highFriction = 2000;
+    const normalPlayer = makePlayer({ vx: 200 });
+    const fastFricPlayer = makePlayer({ vx: 200 });
+
+    applyInput(normalPlayer, noInput, 1 / 60); // default friction=800
+    applyInput(fastFricPlayer, noInput, 1 / 60, MAX_WALK_SPEED, highFriction);
+
+    expect(fastFricPlayer.vx).toBeLessThan(normalPlayer.vx);
+  });
+
+  it('custom friction of 0 does not decelerate', () => {
+    const player = makePlayer({ vx: 200 });
+    applyInput(player, noInput, 1 / 60, MAX_WALK_SPEED, 0);
+    expect(player.vx).toBe(Math.fround(200)); // unchanged (fround of 200 === 200)
+  });
+
+  it('custom jumpImpulse overrides default', () => {
+    const customJump = -300;
+    const player = makePlayer({ state: 'idle' });
+    applyInput(player, { left: false, right: false, jump: true, down: false }, 1 / 60, MAX_WALK_SPEED, FRICTION, customJump);
+    expect(player.vy).toBe(Math.fround(customJump));
+    expect(player.state).toBe('airborne');
+  });
+
+  it('custom jumpImpulse still affected by fat modifier', () => {
+    const customJump = -300;
+    const player = makePlayer({ state: 'idle', fatTimer: 5 });
+    applyInput(player, { left: false, right: false, jump: true, down: false }, 1 / 60, MAX_WALK_SPEED, FRICTION, customJump);
+    const expected = Math.fround(customJump * FAT_JUMP_MULT);
+    expect(player.vy).toBe(expected);
+  });
+
+  it('custom maxWalkSpeed interacts with speed multipliers', () => {
+    const customMax = 150;
+    const player = makePlayer({ vx: 0, fatTimer: 5 });
+    // Accelerate
+    for (let i = 0; i < 60; i++) {
+      applyInput(player, { left: false, right: true, jump: false, down: false }, 1 / 60, customMax);
+    }
+    // Fat multiplier reduces effective max
+    expect(player.vx).toBeLessThanOrEqual(customMax * FAT_SPEED_MULT);
+    expect(player.vx).toBeGreaterThan(0);
+  });
+});

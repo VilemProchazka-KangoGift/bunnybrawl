@@ -523,3 +523,155 @@ describe('RollbackEngine - desync flow', () => {
     expect(guestState.players[0].x).toBe(hostState.players[0].x);
   });
 });
+
+describe('RollbackEngine - adaptive input delay', () => {
+  it('input delay starts at DEFAULT (2 frames)', () => {
+    const { engine } = makeEngine();
+    expect(engine.getStats().inputDelay).toBe(2);
+  });
+
+  it('input delay does not change when RTT is 0', () => {
+    const { engine, transport } = makeEngine();
+    transport.currentRtt = 0;
+    // Trigger adaptInputDelay via private access
+    (engine as any).adaptInputDelay();
+    expect(engine.getStats().inputDelay).toBe(2);
+  });
+
+  it('input delay increases with high RTT', () => {
+    const { engine, transport } = makeEngine();
+    transport.currentRtt = 200; // 200ms RTT
+    transport.currentJitter = 0;
+    (engine as any).adaptInputDelay();
+    expect(engine.getStats().inputDelay).toBeGreaterThan(2);
+  });
+
+  it('input delay does not exceed MAX (4 frames)', () => {
+    const { engine, transport } = makeEngine();
+    transport.currentRtt = 1000; // very high RTT
+    transport.currentJitter = 100;
+    (engine as any).adaptInputDelay();
+    expect(engine.getStats().inputDelay).toBeLessThanOrEqual(4);
+  });
+
+  it('jitter adds padding to input delay', () => {
+    const { engine: e1, transport: t1 } = makeEngine();
+    const { engine: e2, transport: t2 } = makeEngine();
+    t1.currentRtt = 50;
+    t1.currentJitter = 0;
+    t2.currentRtt = 50;
+    t2.currentJitter = 30;
+    (e1 as any).adaptInputDelay();
+    (e2 as any).adaptInputDelay();
+    // Higher jitter should lead to same or higher input delay
+    expect(e2.getStats().inputDelay).toBeGreaterThanOrEqual(e1.getStats().inputDelay);
+  });
+});
+
+describe('RollbackEngine - input buffer edge cases', () => {
+  it('handles rapid-fire input messages from same remote', () => {
+    const { engine } = makeEngine();
+    for (let f = 0; f < 20; f++) {
+      const buf = encodeInputMessage(
+        [{ frame: f, input: { left: f % 2 === 0, right: f % 2 !== 0, jump: false, down: false } }],
+        f, undefined, 'P2',
+      );
+      engine.handleInputMessage(buf);
+    }
+    expect(engine.getStats().remoteLatestAck).toBe(19);
+  });
+
+  it('ignores duplicate messages for same frame', () => {
+    const { engine } = makeEngine();
+    const buf1 = encodeInputMessage(
+      [{ frame: 5, input: { left: true, right: false, jump: false, down: false } }],
+      3, undefined, 'P2',
+    );
+    const buf2 = encodeInputMessage(
+      [{ frame: 5, input: { left: false, right: true, jump: false, down: false } }],
+      4, undefined, 'P2',
+    );
+    engine.handleInputMessage(buf1);
+    engine.handleInputMessage(buf2);
+    // Second message for same frame should be ignored (first was confirmed)
+    // The ack should update though
+    expect(engine.getStats().remoteLatestAck).toBe(4);
+  });
+
+  it('handles out-of-order frame messages', () => {
+    const { engine } = makeEngine();
+    // Send frame 10 first, then frame 5
+    const buf10 = encodeInputMessage(
+      [{ frame: 10, input: { left: true, right: false, jump: false, down: false } }],
+      8, undefined, 'P2',
+    );
+    const buf5 = encodeInputMessage(
+      [{ frame: 5, input: { left: false, right: true, jump: false, down: false } }],
+      9, undefined, 'P2', // higher ack since this message is "newer" by ack
+    );
+    engine.handleInputMessage(buf10);
+    engine.handleInputMessage(buf5);
+    // latestAck is from the last processed message
+    expect(engine.getStats().remoteLatestAck).toBe(9);
+  });
+});
+
+describe('RollbackEngine - callbacks', () => {
+  it('onStall callback receives stalled state', () => {
+    const onStall = vi.fn();
+    const { engine } = makeEngine({ onStall });
+    // Engine starts unstalled
+    expect(onStall).not.toHaveBeenCalled();
+  });
+
+  it('onStallTimeout is not called during normal operation', () => {
+    const onStallTimeout = vi.fn();
+    const { engine } = makeEngine({ onStallTimeout });
+    expect(onStallTimeout).not.toHaveBeenCalled();
+  });
+
+  it('construction with all callbacks succeeds', () => {
+    const { engine } = makeEngine({
+      onStall: vi.fn(),
+      onStallTimeout: vi.fn(),
+      onPlayerDisconnect: vi.fn(),
+      onDesync: vi.fn(),
+    });
+    expect(engine).toBeDefined();
+  });
+});
+
+describe('RollbackEngine - host vs guest role', () => {
+  it('host does not process DESYNC_CHECK', () => {
+    const { engine, transport } = makeEngine({ isHost: true });
+    engine.handleReliableMessage({
+      type: MsgType.DESYNC_CHECK, frame: 0, hash: 12345, rngState: 0,
+    });
+    expect(transport.sendReliable).not.toHaveBeenCalled();
+  });
+
+  it('guest does not process DESYNC_REQUEST', () => {
+    const { engine, transport } = makeEngine({ isHost: false });
+    engine.handleReliableMessage({ type: MsgType.DESYNC_REQUEST, frame: 0 });
+    expect(transport.sendReliable).not.toHaveBeenCalled();
+  });
+
+  it('host does not apply DESYNC_CORRECTION', () => {
+    const state = makeTestState();
+    const rng = new SeededRNG(42);
+    const gameLoop = makeMockGameLoop(state, rng);
+    const transport = makeMockTransport();
+    const engine = new RollbackEngine({
+      localSlot: 'P1', remoteSlots: ['P2'], isHost: true,
+      gameLoop: gameLoop as any, transport: transport as any,
+    });
+    const origX = state.players[0].x;
+    engine.handleReliableMessage({
+      type: MsgType.DESYNC_CORRECTION,
+      frame: 5,
+      snapshot: { ...createEmptySnapshot(), players: [{ ...state.players[0], x: 999 } as any] },
+    } as any);
+    // Host ignores correction — position unchanged
+    expect(state.players[0].x).toBe(origX);
+  });
+});

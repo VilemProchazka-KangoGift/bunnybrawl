@@ -785,3 +785,502 @@ describe('Player.disconnected in snapshots', () => {
     expect(snap2.players[0].disconnected).toBe(true);
   });
 });
+
+// ===================================================================
+// Additional edge-case tests
+// ===================================================================
+
+describe('takeSnapshotInto vs takeSnapshot equivalence under mutation', () => {
+  it('updates all fields correctly after mutating every field in state', () => {
+    const state = makeTestMatchState();
+    const rng = new SeededRNG(42);
+    const target = createEmptySnapshot();
+
+    // Initial snapshot into target
+    takeSnapshotInto(target, 0, state, rng, new Map());
+
+    // Mutate EVERY field in state
+    state.players[0].x = 999;
+    state.players[0].y = 888;
+    state.players[0].vx = 77;
+    state.players[0].vy = -66;
+    state.players[0].score = 99;
+    state.players[0].state = 'splatted';
+    state.players[0].facing = 'left';
+    state.players[0].splatTimer = 9.9;
+    state.players[0].respawnTimer = 8.8;
+    state.players[0].invincibleTimer = 7.7;
+    state.players[0].active = false;
+    state.players[0].animFrame = 10;
+    state.players[0].animTimer = 5.5;
+    state.players[0].fastFalling = false;
+    state.players[0].fatTimer = 0;
+    state.players[0].slowTimer = 0;
+    state.players[0].squashScale = 1.0;
+    state.players[0].squashTimer = 0;
+    state.players[0].sideSquash = 1.0;
+    state.players[0].idleAnimTimer = 0;
+    state.players[0].expression = 'dizzy';
+    state.players[0].killStreak = 0;
+    state.players[0].breathTimer = 0;
+    state.players[0].springTrailTimer = 0;
+    state.players[0].damageFlashSide = 'right';
+    state.players[0].damageFlashTimer = 0;
+    state.players[0].burnTimer = 0;
+    state.players[0].hitstopTimer = 0;
+    state.players[0].disconnected = false;
+
+    state.timeElapsed = 999;
+    state.matchOver = true;
+    state.winner = 'P2';
+    state.countdown = 10;
+    state.dayPhase = 0.99;
+    state.carrotTimer = 99;
+    state.springSpawnTimer = 88;
+    state.thornSpawnTimer = 77;
+    state.lavaRockTimer = 66;
+    state.screenShake = 5;
+    state.slowMotion = 4;
+    state.screenFlash = 3;
+    state.hitstopZoom = 2;
+
+    state.carrots[0].x = 1;
+    state.springs[0].x = 2;
+    state.thorns[0].x = 3;
+    state.lavaRocks[0].x = 4;
+    state.geyserStates[0].timer = 0.1;
+    state.pigeonFlocks[0].x = 5;
+    state.bouncyWobble.clear();
+    state.bouncyWobble.set(10, 1.0);
+
+    // Re-snapshot into same target
+    takeSnapshotInto(target, 1, state, rng, new Map());
+
+    // Verify all fields updated
+    expect(target.frame).toBe(1);
+    expect(target.players[0].x).toBe(999);
+    expect(target.players[0].y).toBe(888);
+    expect(target.players[0].vx).toBe(77);
+    expect(target.players[0].vy).toBe(-66);
+    expect(target.players[0].score).toBe(99);
+    expect(target.players[0].state).toBe('splatted');
+    expect(target.players[0].facing).toBe('left');
+    expect(target.players[0].splatTimer).toBe(9.9);
+    expect(target.players[0].respawnTimer).toBe(8.8);
+    expect(target.players[0].invincibleTimer).toBe(7.7);
+    expect(target.players[0].active).toBe(false);
+    expect(target.players[0].animFrame).toBe(10);
+    expect(target.players[0].animTimer).toBe(5.5);
+    expect(target.players[0].fastFalling).toBe(false);
+    expect(target.players[0].fatTimer).toBe(0);
+    expect(target.players[0].slowTimer).toBe(0);
+    expect(target.players[0].squashScale).toBe(1.0);
+    expect(target.players[0].squashTimer).toBe(0);
+    expect(target.players[0].sideSquash).toBe(1.0);
+    expect(target.players[0].idleAnimTimer).toBe(0);
+    expect(target.players[0].expression).toBe('dizzy');
+    expect(target.players[0].killStreak).toBe(0);
+    expect(target.players[0].breathTimer).toBe(0);
+    expect(target.players[0].springTrailTimer).toBe(0);
+    expect(target.players[0].damageFlashSide).toBe('right');
+    expect(target.players[0].damageFlashTimer).toBe(0);
+    expect(target.players[0].burnTimer).toBe(0);
+    expect(target.players[0].hitstopTimer).toBe(0);
+    expect(target.players[0].disconnected).toBe(false);
+
+    expect(target.timeElapsed).toBe(999);
+    expect(target.matchOver).toBe(true);
+    expect(target.winner).toBe('P2');
+    expect(target.countdown).toBe(10);
+    expect(target.dayPhase).toBe(0.99);
+    expect(target.carrotTimer).toBe(99);
+    expect(target.springSpawnTimer).toBe(88);
+    expect(target.thornSpawnTimer).toBe(77);
+    expect(target.lavaRockTimer).toBe(66);
+    expect(target.screenShake).toBe(5);
+    expect(target.slowMotion).toBe(4);
+    expect(target.screenFlash).toBe(3);
+    expect(target.hitstopZoom).toBe(2);
+
+    expect(target.carrots[0].x).toBe(1);
+    expect(target.springs[0].x).toBe(2);
+    expect(target.thorns[0].x).toBe(3);
+    expect(target.lavaRocks[0].x).toBe(4);
+    expect(target.geyserStates[0].timer).toBe(0.1);
+    expect(target.pigeonFlocks[0].x).toBe(5);
+    expect(target.bouncyWobble).toEqual([[10, 1.0]]);
+
+    // Also verify consistency: fresh takeSnapshot should produce same values
+    const fresh = takeSnapshot(1, state, rng, new Map());
+    expect(target.players[0].x).toBe(fresh.players[0].x);
+    expect(target.timeElapsed).toBe(fresh.timeElapsed);
+    expect(target.carrots).toEqual(fresh.carrots);
+    expect(target.bouncyWobble).toEqual(fresh.bouncyWobble);
+  });
+});
+
+describe('restoreSnapshot with mismatched player counts', () => {
+  it('restores only min(snapshot, state) players when snapshot has more', () => {
+    const state = makeTestMatchState();
+    // state has 2 players
+    const rng = new SeededRNG(42);
+
+    // Create snapshot with 3 players
+    state.players.push(makeTestPlayer('P3'));
+    state.players[2].x = 777;
+    state.players[2].score = 50;
+    const snap = takeSnapshot(0, state, rng, new Map());
+    expect(snap.players).toHaveLength(3);
+
+    // Now shrink state back to 2 players
+    state.players.pop();
+    expect(state.players).toHaveLength(2);
+
+    // Mutate both remaining players
+    state.players[0].x = 0;
+    state.players[1].x = 0;
+
+    // Restore: should only restore 2 players (min of 3 snapshot, 2 state)
+    restoreSnapshot(snap, state, rng, new Map());
+    expect(state.players).toHaveLength(2);
+    expect(state.players[0].x).toBe(100.5); // restored from snapshot
+    expect(state.players[1].x).toBe(100.5); // restored from snapshot
+  });
+
+  it('restores only min(snapshot, state) players when state has more', () => {
+    const state = makeTestMatchState();
+    // state has 2 players
+    const rng = new SeededRNG(42);
+
+    // Snapshot with 2 players
+    const snap = takeSnapshot(0, state, rng, new Map());
+
+    // Grow state to 3 players
+    state.players.push(makeTestPlayer('P3'));
+    state.players[0].x = 0;
+    state.players[1].x = 0;
+    state.players[2].x = 0;
+
+    // Restore: restores first 2 (min of 2 snapshot, 3 state), P3 untouched
+    restoreSnapshot(snap, state, rng, new Map());
+    expect(state.players[0].x).toBe(100.5); // restored
+    expect(state.players[1].x).toBe(100.5); // restored
+    expect(state.players[2].x).toBe(0);     // not in snapshot, untouched
+  });
+});
+
+describe('hashGameState with 5 players', () => {
+  it('hash changes when adding players from 2 to 5', () => {
+    const state = makeTestMatchState();
+    const rng = new SeededRNG(42);
+
+    const hash2 = hashGameState(state, rng);
+
+    state.players.push(makeTestPlayer('P3'));
+    const hash3 = hashGameState(state, rng);
+    expect(hash3).not.toBe(hash2);
+
+    state.players.push(makeTestPlayer('P4'));
+    const hash4 = hashGameState(state, rng);
+    expect(hash4).not.toBe(hash3);
+    expect(hash4).not.toBe(hash2);
+
+    state.players.push(makeTestPlayer('P5'));
+    const hash5 = hashGameState(state, rng);
+    expect(hash5).not.toBe(hash4);
+    expect(hash5).not.toBe(hash3);
+    expect(hash5).not.toBe(hash2);
+  });
+
+  it('hash is identical for two independently constructed 5-player states', () => {
+    const s1 = makeTestMatchState();
+    s1.players.push(makeTestPlayer('P3'), makeTestPlayer('P4'), makeTestPlayer('P5'));
+    const s2 = makeTestMatchState();
+    s2.players.push(makeTestPlayer('P3'), makeTestPlayer('P4'), makeTestPlayer('P5'));
+    const rng1 = new SeededRNG(42);
+    const rng2 = new SeededRNG(42);
+    expect(hashGameState(s1, rng1)).toBe(hashGameState(s2, rng2));
+  });
+});
+
+describe('hashGameStateDetailed all subsystems change', () => {
+  it('mutating player, entity, and timer simultaneously changes all 3 subsystem hashes', () => {
+    const state = makeTestMatchState();
+    const rng = new SeededRNG(1);
+    const before = { ...hashGameStateDetailed(state, rng) };
+
+    // Mutate player (players subsystem)
+    state.players[0].x += 50;
+    // Mutate entity (entities subsystem)
+    state.carrots[0].x += 100;
+    // Mutate timer (timers subsystem)
+    state.timeElapsed += 10;
+
+    const after = hashGameStateDetailed(state, rng);
+
+    expect(after.playersHash).not.toBe(before.playersHash);
+    expect(after.entitiesHash).not.toBe(before.entitiesHash);
+    expect(after.timersHash).not.toBe(before.timersHash);
+    expect(after.hash).not.toBe(before.hash);
+  });
+
+  it('mutating only one subsystem leaves others unchanged', () => {
+    const state = makeTestMatchState();
+    const rng = new SeededRNG(1);
+
+    // Only mutate player
+    const before = { ...hashGameStateDetailed(state, rng) };
+    state.players[0].score += 5;
+    const after = hashGameStateDetailed(state, rng);
+
+    expect(after.playersHash).not.toBe(before.playersHash);
+    expect(after.entitiesHash).toBe(before.entitiesHash);
+    expect(after.timersHash).toBe(before.timersHash);
+  });
+});
+
+describe('crc32 collision resistance', () => {
+  it('1000 unique short strings produce no hash collisions', () => {
+    const hashes = new Set<number>();
+    for (let i = 0; i < 1000; i++) {
+      const str = `test_string_${i}_${String.fromCharCode(65 + (i % 26))}`;
+      hashes.add(crc32(str));
+    }
+    expect(hashes.size).toBe(1000);
+  });
+
+  it('sequential integers as strings produce unique hashes', () => {
+    const hashes = new Set<number>();
+    for (let i = 0; i < 1000; i++) {
+      hashes.add(crc32(String(i)));
+    }
+    expect(hashes.size).toBe(1000);
+  });
+
+  it('similar strings with single character difference produce different hashes', () => {
+    const base = 'the quick brown fox jumps over the lazy dog';
+    const baseHash = crc32(base);
+    for (let i = 0; i < base.length; i++) {
+      const modified = base.slice(0, i) + String.fromCharCode(base.charCodeAt(i) + 1) + base.slice(i + 1);
+      expect(crc32(modified)).not.toBe(baseHash);
+    }
+  });
+});
+
+describe('takeSnapshot with many entities', () => {
+  it('captures and deep-clones many carrots, springs, thorns, lava rocks, and geyser states', () => {
+    const state = makeTestMatchState();
+
+    // Set up 10 carrots
+    state.carrots = [];
+    for (let i = 0; i < 10; i++) {
+      state.carrots.push({ x: i * 100, y: i * 50, collected: i % 2 === 0 } as any);
+    }
+    // 5 springs
+    state.springs = [];
+    for (let i = 0; i < 5; i++) {
+      state.springs.push({ x: i * 200, y: 600, bounceTimer: i * 0.1 } as any);
+    }
+    // 8 thorns
+    state.thorns = [];
+    for (let i = 0; i < 8; i++) {
+      state.thorns.push({ x: i * 150, y: 650, hitTimer: i * 0.05 } as any);
+    }
+    // 3 lava rocks
+    state.lavaRocks = [];
+    for (let i = 0; i < 3; i++) {
+      state.lavaRocks.push({ x: i * 300, y: i * 100, active: true } as any);
+    }
+    // 2 geyser states
+    state.geyserStates = [
+      { timer: 5.0, active: true, activeTimer: 2.0 },
+      { timer: 8.0, active: false, activeTimer: 0 },
+    ];
+
+    const snap = takeSnapshot(0, state, undefined, new Map());
+
+    // Verify counts
+    expect(snap.carrots).toHaveLength(10);
+    expect(snap.springs).toHaveLength(5);
+    expect(snap.thorns).toHaveLength(8);
+    expect(snap.lavaRocks).toHaveLength(3);
+    expect(snap.geyserStates).toHaveLength(2);
+
+    // Verify values
+    expect(snap.carrots[0].x).toBe(0);
+    expect(snap.carrots[9].x).toBe(900);
+    expect(snap.springs[4].bounceTimer).toBe(0.4);
+    expect(snap.thorns[7].x).toBe(1050);
+    expect(snap.lavaRocks[2].x).toBe(600);
+    expect(snap.geyserStates[1].timer).toBe(8.0);
+
+    // Verify deep clone: mutating source should not affect snapshot
+    state.carrots[0].x = 9999;
+    state.springs[0].x = 9999;
+    state.thorns[0].x = 9999;
+    state.lavaRocks[0].x = 9999;
+    state.geyserStates[0].timer = 9999;
+
+    expect(snap.carrots[0].x).toBe(0);
+    expect(snap.springs[0].x).toBe(0);
+    expect(snap.thorns[0].x).toBe(0);
+    expect(snap.lavaRocks[0].x).toBe(0);
+    expect(snap.geyserStates[0].timer).toBe(5.0);
+  });
+});
+
+describe('bouncyWobble with many entries', () => {
+  it('Map with 10 entries is sorted correctly in snapshot', () => {
+    const state = makeTestMatchState();
+    state.bouncyWobble.clear();
+
+    // Insert in reverse order
+    for (let i = 9; i >= 0; i--) {
+      state.bouncyWobble.set(i, (i + 1) * 0.1);
+    }
+
+    const snap = takeSnapshot(0, state, undefined, new Map());
+    expect(snap.bouncyWobble).toHaveLength(10);
+
+    // Verify sorted order (keys 0..9)
+    for (let i = 0; i < 10; i++) {
+      expect(snap.bouncyWobble[i][0]).toBe(i);
+      expect(snap.bouncyWobble[i][1]).toBeCloseTo((i + 1) * 0.1);
+    }
+  });
+
+  it('takeSnapshotInto correctly handles growing bouncyWobble from 2 to 10 entries', () => {
+    const state = makeTestMatchState();
+    const rng = new SeededRNG(42);
+    const target = createEmptySnapshot();
+
+    // Start with 2 entries (from makeTestMatchState)
+    takeSnapshotInto(target, 0, state, rng, new Map());
+    expect(target.bouncyWobble).toHaveLength(2);
+
+    // Grow to 10 entries
+    state.bouncyWobble.clear();
+    for (let i = 0; i < 10; i++) {
+      state.bouncyWobble.set(i * 3, i * 0.05);
+    }
+    takeSnapshotInto(target, 1, state, rng, new Map());
+    expect(target.bouncyWobble).toHaveLength(10);
+
+    // Verify sorted by key
+    for (let i = 0; i < 10; i++) {
+      expect(target.bouncyWobble[i][0]).toBe(i * 3);
+    }
+  });
+
+  it('bouncyWobble round-trips through snapshot and restore', () => {
+    const state = makeTestMatchState();
+    state.bouncyWobble.clear();
+    for (let i = 9; i >= 0; i--) {
+      state.bouncyWobble.set(i, (i + 1) * 0.1);
+    }
+
+    const snap = takeSnapshot(0, state, undefined, new Map());
+
+    // Clear and restore
+    state.bouncyWobble.clear();
+    expect(state.bouncyWobble.size).toBe(0);
+
+    restoreSnapshot(snap, state, undefined, new Map());
+    expect(state.bouncyWobble.size).toBe(10);
+    for (let i = 0; i < 10; i++) {
+      expect(state.bouncyWobble.get(i)).toBeCloseTo((i + 1) * 0.1);
+    }
+  });
+});
+
+describe('stats with multiple players', () => {
+  it('Map with P1-P5 stats is sorted in snapshot', () => {
+    const state = makeTestMatchState();
+    // Clear and add in reverse order
+    state.stats.perPlayer.clear();
+    const slots: PlayerSlot[] = ['P5', 'P3', 'P1', 'P4', 'P2'];
+    for (const slot of slots) {
+      state.stats.perPlayer.set(slot, {
+        bestStreak: slot.charCodeAt(1) - 48, // '1'->1, '2'->2, etc.
+        timeAirborne: 10,
+        distanceTraveled: 500,
+        carrotsEaten: 0,
+      });
+    }
+
+    const snap = takeSnapshot(0, state, undefined, new Map());
+
+    // Should be sorted P1, P2, P3, P4, P5
+    expect(snap.stats).toHaveLength(5);
+    expect(snap.stats[0][0]).toBe('P1');
+    expect(snap.stats[1][0]).toBe('P2');
+    expect(snap.stats[2][0]).toBe('P3');
+    expect(snap.stats[3][0]).toBe('P4');
+    expect(snap.stats[4][0]).toBe('P5');
+
+    // Verify values match the slot number
+    expect(snap.stats[0][1].bestStreak).toBe(1);
+    expect(snap.stats[4][1].bestStreak).toBe(5);
+  });
+
+  it('stats round-trip preserves all 5 players without reference aliasing', () => {
+    const state = makeTestMatchState();
+    state.stats.perPlayer.clear();
+    for (let i = 1; i <= 5; i++) {
+      const slot = `P${i}` as PlayerSlot;
+      state.stats.perPlayer.set(slot, {
+        bestStreak: i,
+        timeAirborne: i * 10,
+        distanceTraveled: i * 100,
+        carrotsEaten: i,
+      });
+    }
+
+    const snap = takeSnapshot(0, state, undefined, new Map());
+
+    // Clear and restore
+    state.stats.perPlayer.clear();
+    restoreSnapshot(snap, state, undefined, new Map());
+
+    expect(state.stats.perPlayer.size).toBe(5);
+    for (let i = 1; i <= 5; i++) {
+      const slot = `P${i}` as PlayerSlot;
+      const stats = state.stats.perPlayer.get(slot)!;
+      expect(stats.bestStreak).toBe(i);
+      expect(stats.timeAirborne).toBe(i * 10);
+      expect(stats.distanceTraveled).toBe(i * 100);
+      expect(stats.carrotsEaten).toBe(i);
+    }
+
+    // Verify no reference aliasing: mutating snapshot should not affect restored state
+    snap.stats[0][1].bestStreak = 999;
+    expect(state.stats.perPlayer.get('P1')!.bestStreak).toBe(1);
+  });
+});
+
+describe('GameSnapshot type completeness', () => {
+  it('createEmptySnapshot has every field that takeSnapshot produces', () => {
+    const state = makeTestMatchState();
+    const rng = new SeededRNG(42);
+    const taken = takeSnapshot(0, state, rng, new Map());
+    const empty = createEmptySnapshot();
+
+    const takenKeys = Object.keys(taken).sort();
+    const emptyKeys = Object.keys(empty).sort();
+
+    expect(emptyKeys).toEqual(takenKeys);
+  });
+
+  it('createEmptySnapshot fields have correct default types matching takeSnapshot', () => {
+    const state = makeTestMatchState();
+    const rng = new SeededRNG(42);
+    const taken = takeSnapshot(0, state, rng, new Map());
+    const empty = createEmptySnapshot();
+
+    for (const key of Object.keys(taken)) {
+      const takenType = Array.isArray(taken[key as keyof GameSnapshot]) ? 'array' : typeof taken[key as keyof GameSnapshot];
+      const emptyType = Array.isArray(empty[key as keyof GameSnapshot]) ? 'array' : typeof empty[key as keyof GameSnapshot];
+      expect(emptyType).toBe(takenType);
+    }
+  });
+});
