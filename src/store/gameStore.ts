@@ -17,8 +17,6 @@ interface OnlineState {
   joinCode: string | null;
   connectionStatus: ConnectionStatus;
   connectionError: string | null;
-  /** @deprecated Use remotePlayers for multi-guest. Kept for backward compat with 1v1 code paths. */
-  remoteCharacterName: string | null;
   remotePlayers: RemotePlayerInfo[];
   localSlot: PlayerSlot;
   rngSeed: number;
@@ -74,7 +72,6 @@ const defaultOnline: OnlineState = {
   joinCode: null,
   connectionStatus: 'idle',
   connectionError: null,
-  remoteCharacterName: null,
   remotePlayers: [],
   localSlot: 'P1',
   rngSeed: 0,

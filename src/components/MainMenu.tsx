@@ -200,7 +200,6 @@ export function MainMenu() {
   const [onlineRemoteReady, setOnlineRemoteReady] = useState(false);
   const [onlineLocalReady, setOnlineLocalReady] = useState(false);
   const onlineTransportRef = useRef<Transport | null>(null);
-  const remoteCharRef = useRef<string | null>(null);
   const receivedRosterRef = useRef<Array<{ slot: string; characterName: string; playerName?: string }> | null>(null);
   // Buffer for player names received via HANDSHAKE before the peer is in remotePlayers
   const pendingPlayerNames = useRef<Map<string, string>>(new Map());
@@ -213,7 +212,6 @@ export function MainMenu() {
   useEffect(() => {
     if (online.isHost) return; // host is authoritative — never auto-switch
     const takenNames = new Set<string>();
-    if (online.remoteCharacterName) takenNames.add(online.remoteCharacterName);
     for (const rp of online.remotePlayers) takenNames.add(rp.characterName);
 
     if (!takenNames.has(onlineLocalChar)) return;
@@ -226,7 +224,7 @@ export function MainMenu() {
       onlineLocalCharRef.current = alt.name;
       onlineTransportRef.current?.sendReliable({ type: MsgType.CHARACTER_SELECT, characterName: alt.name });
     }
-  }, [online.isHost, online.remoteCharacterName, online.remotePlayers]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [online.isHost, online.remotePlayers]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onlineCleanup = useCallback(() => {
     if (onlineTransportRef.current) {
@@ -240,7 +238,6 @@ export function MainMenu() {
     setOnlineJoinCode('');
     setOnlineLocalReady(false);
     setOnlineRemoteReady(false);
-    remoteCharRef.current = null;
     pendingPlayerNames.current.clear();
     didAutoSwitch.current = false;
   }, [resetOnline]);
@@ -293,11 +290,6 @@ export function MainMenu() {
           humanSlots.push(rp.slot);
         }
         if (connectedPeers.has(rp.peerId)) slotCharMap.set(rp.slot, rp.characterName);
-      }
-      if (humanSlots.length === 1 && store.online.remoteCharacterName) {
-        const remSlot = store.online.isHost ? 'P2' : 'P1';
-        humanSlots.push(remSlot);
-        slotCharMap.set(remSlot, store.online.remoteCharacterName);
       }
 
       for (const [slot, charName] of slotCharMap) {
@@ -355,8 +347,7 @@ export function MainMenu() {
       onStatusChange: (status: ConnectionStatus, error?: string) => {
         setOnline({ connectionStatus: status, connectionError: error ?? null });
         if (status === 'disconnected') {
-          remoteCharRef.current = null;
-          setOnline({ remoteCharacterName: null, remotePlayers: [] });
+          setOnline({ remotePlayers: [] });
           setOnlineRemoteReady(false);
           setOnlineStep('connecting');
         }
@@ -452,8 +443,7 @@ export function MainMenu() {
           if (slot) freedSlots.push(slot);
           const current = useGameStore.getState().online.remotePlayers;
           const remaining = current.filter(rp => rp.peerId !== peerId);
-          remoteCharRef.current = remaining.length > 0 ? remaining[0].characterName : null;
-          setOnline({ remotePlayers: remaining, remoteCharacterName: remoteCharRef.current });
+          setOnline({ remotePlayers: remaining });
           if (slot) {
             transport.sendReliable({ type: MsgType.PLAYER_LEFT, slot, reason: 'disconnect' } as ReliableMessage);
           }
@@ -463,8 +453,7 @@ export function MainMenu() {
           }
         } else {
           // Guest: host disconnected
-          remoteCharRef.current = null;
-          setOnline({ remoteCharacterName: null, remotePlayers: [] });
+          setOnline({ remotePlayers: [] });
           setOnlineRemoteReady(false);
           setOnlineStep('connecting');
         }
@@ -513,10 +502,6 @@ export function MainMenu() {
                   remotePlayers: [...current, { peerId: fromPeerId, slot: slot as PlayerSlot, characterName: msg.characterName, playerName: bufferedName, ready: false }],
                 });
               }
-              // Update legacy field (first remote player's character)
-              const updated = useGameStore.getState().online.remotePlayers;
-              remoteCharRef.current = updated.length > 0 ? updated[0].characterName : null;
-              setOnline({ remoteCharacterName: remoteCharRef.current });
 
               // Forward to other guests (exclude the sender to prevent echo loop)
               for (const pid of transport.getPeerIds()) {
@@ -527,8 +512,17 @@ export function MainMenu() {
             }
           } else if (!isHost) {
             // Guest: received character update (from host or relayed)
-            remoteCharRef.current = msg.characterName;
-            setOnline({ remoteCharacterName: msg.characterName });
+            const current = useGameStore.getState().online.remotePlayers;
+            const idx = current.findIndex(rp => rp.slot === 'P1'); // host is always P1
+            if (idx >= 0) {
+              const updated = current.map((rp, i) => i === idx ? { ...rp, characterName: msg.characterName } : rp);
+              setOnline({ remotePlayers: updated });
+            } else {
+              // Host not yet in remotePlayers — add a placeholder entry
+              setOnline({
+                remotePlayers: [...current, { peerId: '', slot: 'P1' as PlayerSlot, characterName: msg.characterName, playerName: '', ready: false }],
+              });
+            }
           }
         } else if (msg.type === MsgType.SLOT_ASSIGNMENT) {
           // Guest: received my slot assignment from host
@@ -945,7 +939,10 @@ export function MainMenu() {
                             <span className="online-section-title">{t('your_character', 'Your character')}</span>
                             <select className="online-char-select" value={onlineLocalChar}
                               onChange={(e) => handleOnlineCharChange(e.target.value)}>
-                              {allChars.map(c => <option key={c.name} value={c.name} disabled={c.name === online.remoteCharacterName}>{getCharacterEmoji(c.name)} {getCharacterDisplayName(c.name, i18n.language)}{c.name === online.remoteCharacterName ? ` (${t('taken', 'taken')})` : ''}</option>)}
+                              {(() => {
+                                const takenNames = new Set(online.remotePlayers.map(rp => rp.characterName));
+                                return allChars.map(c => <option key={c.name} value={c.name} disabled={takenNames.has(c.name)}>{getCharacterEmoji(c.name)} {getCharacterDisplayName(c.name, i18n.language)}{takenNames.has(c.name) ? ` (${t('taken', 'taken')})` : ''}</option>);
+                              })()}
                             </select>
                           </div>
                           <div className="online-status-box">
@@ -1005,7 +1002,6 @@ export function MainMenu() {
                             onChange={(e) => handleOnlineCharChange(e.target.value)}>
                             {(() => {
                               const takenNames = new Set(online.remotePlayers.map(rp => rp.characterName));
-                              if (online.remoteCharacterName) takenNames.add(online.remoteCharacterName);
                               return allChars.map(c => (
                                 <option key={c.name} value={c.name} disabled={takenNames.has(c.name)}>
                                   {getCharacterEmoji(c.name)} {getCharacterDisplayName(c.name, i18n.language)}{takenNames.has(c.name) ? ` (${t('taken', 'taken')})` : ''}
@@ -1047,10 +1043,6 @@ export function MainMenu() {
                             rosterEntries.push({ slot: rp.slot, characterName: rp.characterName, playerName: rp.playerName });
                           }
                         }
-                        // Legacy 1v1 fallback
-                        if (rosterEntries.length === 1 && state.online.remoteCharacterName) {
-                          rosterEntries.push({ slot: 'P2', characterName: state.online.remoteCharacterName! });
-                        }
                         // Assign bots on host side
                         const humanNames = rosterEntries.map(r => r.characterName);
                         const humanSlots = rosterEntries.map(r => r.slot);
@@ -1091,9 +1083,12 @@ export function MainMenu() {
                             ) : (
                               <div className="online-player-row">
                                 <span className="online-char-name">
-                                  {online.remoteCharacterName
-                                    ? `${getCharacterEmoji(online.remoteCharacterName)} ${online.playerNames['P1'] || getCharacterDisplayName(online.remoteCharacterName, i18n.language)}`
-                                    : t('choosing', 'Choosing...')}
+                                  {(() => {
+                                    const hostPlayer = online.remotePlayers.find(rp => rp.slot === 'P1');
+                                    return hostPlayer
+                                      ? `${getCharacterEmoji(hostPlayer.characterName)} ${online.playerNames['P1'] || getCharacterDisplayName(hostPlayer.characterName, i18n.language)}`
+                                      : t('choosing', 'Choosing...');
+                                  })()}
                                 </span>
                                 <span className="online-host-badge">{t('host', 'HOST')}</span>
                                 {onlineRemoteReady && <span className="online-ready-badge">{t('ready', 'READY')}</span>}
