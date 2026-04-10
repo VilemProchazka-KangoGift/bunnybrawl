@@ -95,4 +95,82 @@ describe('GameStore', () => {
     expect(matchSettings.mods.turbo).toBe(true);
     expect(matchSettings.mods.extremeGore).toBe(false);
   });
+
+  // --- Online state ---
+
+  it('setOnline merges partial online state', () => {
+    useGameStore.getState().setOnline({ isOnline: true, isHost: true, roomCode: 'ABC' });
+    const { online } = useGameStore.getState();
+    expect(online.isOnline).toBe(true);
+    expect(online.isHost).toBe(true);
+    expect(online.roomCode).toBe('ABC');
+    // Other fields unchanged
+    expect(online.connectionStatus).toBe('idle');
+  });
+
+  it('resetOnline returns online to default state', () => {
+    useGameStore.getState().setOnline({ isOnline: true, roomCode: 'XYZ' });
+    useGameStore.getState().resetOnline();
+    const { online } = useGameStore.getState();
+    expect(online.isOnline).toBe(false);
+    expect(online.roomCode).toBeNull();
+  });
+
+  it('setMatchResult sets disconnectWin flag', () => {
+    const mockState = { players: [], killFeed: [], timeElapsed: 30, matchOver: true, winner: 'P1' as const } as any;
+    useGameStore.getState().setMatchResult('P1', mockState, true);
+    expect(useGameStore.getState().disconnectWin).toBe(true);
+  });
+
+  it('setMatchResult defaults disconnectWin to false', () => {
+    const mockState = { players: [], killFeed: [], timeElapsed: 30, matchOver: true, winner: 'P1' as const } as any;
+    useGameStore.getState().setMatchResult('P1', mockState);
+    expect(useGameStore.getState().disconnectWin).toBe(false);
+  });
+
+  // --- Screen flow ---
+
+  it('screen transitions: menu → charSelect → match → victory → menu', () => {
+    const store = useGameStore.getState();
+    expect(store.screen).toBe('menu');
+
+    useGameStore.getState().setScreen('charSelect');
+    expect(useGameStore.getState().screen).toBe('charSelect');
+
+    useGameStore.getState().setScreen('match');
+    expect(useGameStore.getState().screen).toBe('match');
+
+    useGameStore.getState().setScreen('victory');
+    expect(useGameStore.getState().screen).toBe('victory');
+
+    useGameStore.getState().setScreen('menu');
+    expect(useGameStore.getState().screen).toBe('menu');
+  });
+
+  // --- Settings persistence ---
+
+  it('setMatchSettings persists goreMode to localStorage', () => {
+    useGameStore.getState().setMatchSettings({ goreMode: true });
+    expect(localStorage.getItem('bunnybrawl_gore')).toBe('true');
+  });
+
+  it('setMatchSettings persists arenaId to localStorage', () => {
+    useGameStore.getState().setMatchSettings({ arenaId: 'volcano' });
+    expect(localStorage.getItem('bunnybrawl_arena')).toBe('volcano');
+  });
+
+  it('setMatchSettings persists botCount to localStorage', () => {
+    useGameStore.getState().setMatchSettings({ botCount: 3 });
+    expect(localStorage.getItem('bunnybrawl_botcount')).toBe('3');
+  });
+
+  it('setMatchSettings persists botDifficulty to localStorage', () => {
+    useGameStore.getState().setMatchSettings({ botDifficulty: 'hard' });
+    expect(localStorage.getItem('bunnybrawl_botdiff')).toBe('hard');
+  });
+
+  it('default timeLimit is 180 seconds', () => {
+    const { matchSettings } = useGameStore.getState();
+    expect(matchSettings.timeLimit).toBe(180);
+  });
 });
