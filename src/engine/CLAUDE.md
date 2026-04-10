@@ -88,6 +88,8 @@
 - `touchSlot` defaults to the first human player (P1). For online guests, call `setLocalSlot(slot)` after GameLoop creation — otherwise touch input targets P1 (the host) instead of the guest's actual slot.
 
 ## Network Multiplayer
+- **ICE servers**: `ICE_SERVERS` in transport.ts configures STUN (NAT discovery) + TURN (relay fallback). TURN is required for mobile-to-mobile — both peers behind symmetric NAT (cellular) or hairpin-unfriendly routers can't connect via STUN alone. Currently uses free metered.ca Open Relay (best-effort). For production, replace with paid TURN credentials. Only 2 STUN servers needed (one Google, one Twilio) — extra STUN entries slow ICE gathering without meaningful benefit.
+- **Host signaling reconnection**: After `createRoom` resolves, the Transport status stays `'creating'` until a guest connects. If PeerJS signaling drops in this window (common on mobile when screen locks or browser backgrounds), the `disconnected` handler tries `peer.reconnect()` (capped at 3 attempts) instead of immediately erroring out.
 - `gameRandom()` wraps seeded PRNG in network mode, `Math.random()` in local. Use for ALL gameplay-affecting randomness (hazard spawning, respawn, AI decisions). Cosmetic randomness (particles, weather, gibs) stays as `Math.random()`.
 - `fixedUpdate` is public in network mode. Accepts optional `networkInputs` map — when provided, `getPlayerInput()` reads from it instead of InputManager/AIController.
 - `playSound()` wrapper gates all audio in fixedUpdate. Set `setAudioEnabled(false)` during rollback resimulation to prevent replay sounds.
