@@ -38,6 +38,8 @@ import {
   GIB_GRAVITY, GIB_LAUNCH_SPEED_MIN, GIB_LAUNCH_SPEED_MAX, GIB_ROTATION_MAX,
   GIB_BOUNCE_FACTOR, GIB_GEYSER_STRENGTH_MULT, GIB_MAX_FLIGHT, GIB_MAX_COUNT,
   CONFETTI_COUNT, CONFETTI_GRAVITY, CONFETTI_FLUTTER, CONFETTI_LIFE_MIN, CONFETTI_LIFE_MAX,
+  SPAWN_EXCLUSION_MARGIN, SPRING_VERTICAL_CLEARANCE, SPAWN_RETRY_ATTEMPTS,
+  THORN_WIDTH, THORN_HEIGHT, THORN_Y_OFFSET,
 } from './constants';
 import { getCharacterForSlot } from './characters';
 import { AIController } from './ai';
@@ -601,7 +603,7 @@ export class GameLoop {
 
   /** Check if any active player is standing on the given platform near x */
   private playerNearSpawn(plat: Platform, spawnX: number): boolean {
-    const margin = 48; // don't spawn within 48px of a player
+    const margin = SPAWN_EXCLUSION_MARGIN;
     for (const p of this.state.players) {
       if (!p.active || p.state === 'splat' || p.state === 'respawning') continue;
       const feetY = p.y + p.height;
@@ -618,8 +620,7 @@ export class GameLoop {
   private spawnSpring(): void {
     if (this.arena.noSprings) return;
     if (this.floatingPlatforms.length === 0) return;
-    // Filter to platforms with enough vertical clearance for a spring bounce (~200px)
-    const minClearance = 200;
+    const minClearance = SPRING_VERTICAL_CLEARANCE;
     const candidates = this.floatingPlatforms.filter(({ plat }) => {
       for (const other of this.arena.platforms) {
         if (other === plat) continue;
@@ -632,8 +633,7 @@ export class GameLoop {
       return true;
     });
     if (candidates.length === 0) return;
-    // Try a few times to avoid spawning on top of a player
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < SPAWN_RETRY_ATTEMPTS; attempt++) {
       const fp = candidates[Math.floor(this.gameRandom() * candidates.length)];
       const x = fp.plat.x + 20 + this.gameRandom() * (fp.plat.width - 40);
       if (!this.playerNearSpawn(fp.plat, x)) {
@@ -648,13 +648,12 @@ export class GameLoop {
 
   private spawnThorn(): void {
     if (this.floatingPlatforms.length === 0) return;
-    // Try a few times to avoid spawning on top of a player
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < SPAWN_RETRY_ATTEMPTS; attempt++) {
       const fp = this.floatingPlatforms[Math.floor(this.gameRandom() * this.floatingPlatforms.length)];
       const x = fp.plat.x + 10 + this.gameRandom() * (fp.plat.width - 44);
       if (!this.playerNearSpawn(fp.plat, x)) {
         this.state.thorns.push({
-          x, y: fp.plat.y - 12, width: 28, height: 12,
+          x, y: fp.plat.y - THORN_Y_OFFSET, width: THORN_WIDTH, height: THORN_HEIGHT,
           platformIndex: fp.idx, life: HAZARD_LIFETIME, growTimer: HAZARD_GROW_TIME, hit: false,
         });
         return;
