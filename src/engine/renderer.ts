@@ -303,7 +303,7 @@ export class Renderer {
     // Hazard zones (lava pools etc.)
     if (arena.hazardZones) {
       for (const hz of arena.hazardZones) {
-        drawHazardZone(ctx, hz, matchState.timeElapsed, this.theme);
+        drawHazardZone(ctx, hz, this.theme, matchState.timeElapsed);
       }
     }
 
@@ -427,7 +427,7 @@ export class Renderer {
     for (const player of matchState.players) {
       if (!player.active) continue;
       if (player.state === 'respawning') continue;
-      drawPlayer(ctx, player, nearCarrotSet.has(player.id), this.frameTime, this.theme);
+      drawPlayer(ctx, player, nearCarrotSet.has(player.id), this.theme, this.frameTime);
     }
 
     // Spring spiral trail (h) -- drawn near players
@@ -497,7 +497,7 @@ export class Renderer {
 
     // Ghosts (drawn over foreground, semi-transparent)
     for (const ghost of matchState.ghosts) {
-      drawGhost(ctx, ghost, matchState.timeElapsed, this.theme);
+      drawGhost(ctx, ghost, this.theme, matchState.timeElapsed);
     }
 
     // Ambient particles (pollen / snow drift / sparkles)
@@ -523,7 +523,7 @@ export class Renderer {
 
     // Day/night cycle overlay (only if theme has it enabled)
     if (this.theme.dayNight.enabled && matchState.dayPhase !== undefined) {
-      drawDayNightCycle(ctx, matchState.dayPhase, matchState, this.frameTime, this.theme);
+      drawDayNightCycle(ctx, matchState.dayPhase, matchState, this.theme, this.frameTime);
     }
 
     ctx.restore();

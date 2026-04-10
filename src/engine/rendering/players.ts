@@ -11,7 +11,7 @@ export function clearSpriteCache(): void {
   spriteCache.clear();
 }
 
-export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player, nearCarrot: boolean, frameTime: number, theme: ThemeConfig): void {
+export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player, nearCarrot: boolean, theme: ThemeConfig, frameTime: number): void {
   const { width, height, character, state, facing, invincibleTimer, animFrame, fastFalling, fatTimer, slowTimer } = player;
   // Apply visual correction offset from rollback smoothing
   const x = player.x + player.renderOffsetX;
