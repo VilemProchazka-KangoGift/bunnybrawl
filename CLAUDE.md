@@ -125,7 +125,7 @@ npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/
 ## Testing
 
 - Tests force `i18n.changeLanguage('en')` so string assertions work regardless of default language.
-- When adding new Player fields, update `makePlayer()` in `physics.test.ts` and `stomp.test.ts`, and mock players in `VictoryScreen.test.tsx`.
+- When adding new Player fields, update `makePlayer()` in `src/engine/__tests__/testHelpers.ts` and mock players in `VictoryScreen.test.tsx`.
 - The lobby walk-to-zone E2E test is inherently flaky (random NPC placement). Tagged `@flaky`, uses retries.
 
 ## Common Patterns
