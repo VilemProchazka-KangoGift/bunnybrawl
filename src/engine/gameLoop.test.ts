@@ -15,6 +15,9 @@ import {
   SQUASH_ON_LAND, SQUASH_DECAY_SPEED,
   FAT_DURATION, FAT_SPEED_MULT,
   THORN_SPEED_MULT, CARROT_SIZE,
+  SHOCKWAVE_MAX_RADIUS, SHOCKWAVE_DURATION,
+  SCORE_ANIM_DURATION,
+  SPLAT_DURATION, RESPAWN_DELAY, INVINCIBLE_DURATION,
 } from './constants';
 
 // --- Mocks ---
@@ -1810,5 +1813,629 @@ describe('No-Spawn Zones', () => {
 
     // No thorns should have spawned
     expect(state.thorns.length).toBe(0);
+  });
+});
+
+// ===================================================================
+// 21. Wrap-around Movement
+// ===================================================================
+
+describe('Wrap-around Movement', () => {
+  it('player moving past CANVAS_WIDTH wraps to the left side', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    // Place player beyond the right edge of the arena
+    player.x = CANVAS_WIDTH + 5;
+    player.y = 660 - PLAYER_HEIGHT;
+    player.state = 'idle';
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    // wrapHorizontal: if player.x > arenaWidth, player.x = -player.width
+    expect(player.x).toBe(-PLAYER_WIDTH);
+  });
+
+  it('player moving past x=0 (left edge) wraps to the right side', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    // Place player so that player.x + player.width < 0 (fully off left edge)
+    player.x = -PLAYER_WIDTH - 5;
+    player.y = 660 - PLAYER_HEIGHT;
+    player.state = 'idle';
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    // wrapHorizontal: if player.x + player.width < 0, player.x = arenaWidth
+    expect(player.x).toBe(CANVAS_WIDTH);
+  });
+
+  it('player within bounds does not wrap', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    player.x = 640;
+    player.y = 660 - PLAYER_HEIGHT;
+    player.vx = 0;
+    player.state = 'idle';
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    // Player should stay at roughly the same x (only friction might affect slightly)
+    expect(player.x).toBeCloseTo(640, 0);
+  });
+});
+
+// ===================================================================
+// 22. Kill Feed
+// ===================================================================
+
+describe('Kill Feed', () => {
+  it('after a stomp, killFeed has an entry with attacker and victim', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const attacker = state.players[0];
+    const victim = state.players[1];
+
+    victim.x = 500;
+    victim.y = 600;
+    victim.state = 'idle';
+    victim.invincibleTimer = 0;
+    victim.active = true;
+
+    attacker.x = 500;
+    attacker.y = victim.y - attacker.height + 5;
+    attacker.vy = STOMP_VY_THRESHOLD + 100;
+    attacker.state = 'airborne';
+    attacker.active = true;
+
+    expect(state.killFeed).toHaveLength(0);
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(state.killFeed).toHaveLength(1);
+    expect(state.killFeed[0].attacker).toBe('P1');
+    expect(state.killFeed[0].victim).toBe('P2');
+    expect(state.killFeed[0].timestamp).toBeGreaterThan(0);
+  });
+
+  it('kill feed is capped at 10 entries', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+
+    // Manually fill killFeed with 10 entries
+    for (let i = 0; i < 10; i++) {
+      state.killFeed.push({ attacker: 'P1' as PlayerSlot, victim: 'P2' as PlayerSlot, timestamp: i });
+    }
+    expect(state.killFeed).toHaveLength(10);
+
+    // Perform a stomp to add one more entry
+    const attacker = state.players[0];
+    const victim = state.players[1];
+
+    victim.x = 500;
+    victim.y = 600;
+    victim.state = 'idle';
+    victim.invincibleTimer = 0;
+    victim.active = true;
+
+    attacker.x = 500;
+    attacker.y = victim.y - attacker.height + 5;
+    attacker.vy = STOMP_VY_THRESHOLD + 100;
+    attacker.state = 'airborne';
+    attacker.active = true;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    // Kill feed should still be capped at 10 (oldest evicted)
+    expect(state.killFeed.length).toBeLessThanOrEqual(10);
+  });
+});
+
+// ===================================================================
+// 23. Score Animations
+// ===================================================================
+
+describe('Score Animations', () => {
+  it('after a stomp kill, scoreAnimations has an entry for the attacker', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const attacker = state.players[0];
+    const victim = state.players[1];
+
+    victim.x = 500;
+    victim.y = 600;
+    victim.state = 'idle';
+    victim.invincibleTimer = 0;
+    victim.active = true;
+
+    attacker.x = 500;
+    attacker.y = victim.y - attacker.height + 5;
+    attacker.vy = STOMP_VY_THRESHOLD + 100;
+    attacker.state = 'airborne';
+    attacker.active = true;
+
+    expect(state.scoreAnimations).toHaveLength(0);
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(state.scoreAnimations.length).toBeGreaterThanOrEqual(1);
+    const anim = state.scoreAnimations.find(sa => sa.playerId === 'P1');
+    expect(anim).toBeDefined();
+    expect(anim!.value).toBe(2); // stomp grants 2 points
+    expect(anim!.timer).toBeGreaterThan(0);
+  });
+
+  it('score animation timer decays over subsequent ticks', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+
+    // Manually insert a score animation
+    state.scoreAnimations.push({ playerId: 'P1' as PlayerSlot, value: 2, timer: SCORE_ANIM_DURATION });
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    // Timer should have decayed
+    expect(state.scoreAnimations[0].timer).toBeLessThan(SCORE_ANIM_DURATION);
+  });
+
+  it('score animation is removed when timer reaches 0', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+
+    // Insert a score animation that's almost expired
+    state.scoreAnimations.push({ playerId: 'P1' as PlayerSlot, value: 2, timer: FIXED_TIMESTEP * 0.5 });
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    // Should have been removed
+    expect(state.scoreAnimations).toHaveLength(0);
+  });
+});
+
+// ===================================================================
+// 24. Shockwaves
+// ===================================================================
+
+describe('Shockwaves', () => {
+  it('after a stomp, shockwaves array has an entry', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const attacker = state.players[0];
+    const victim = state.players[1];
+
+    victim.x = 500;
+    victim.y = 600;
+    victim.state = 'idle';
+    victim.invincibleTimer = 0;
+    victim.active = true;
+
+    attacker.x = 500;
+    attacker.y = victim.y - attacker.height + 5;
+    attacker.vy = STOMP_VY_THRESHOLD + 100;
+    attacker.state = 'airborne';
+    attacker.active = true;
+
+    expect(state.shockwaves).toHaveLength(0);
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(state.shockwaves.length).toBeGreaterThanOrEqual(1);
+    const sw = state.shockwaves[0];
+    expect(sw.x).toBeCloseTo(victim.x + victim.width / 2, 0);
+    expect(sw.y).toBeCloseTo(victim.y + victim.height / 2, 0);
+    expect(sw.life).toBeGreaterThan(0);
+    expect(sw.maxRadius).toBe(SHOCKWAVE_MAX_RADIUS);
+  });
+
+  it('shockwave life decays over time', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+
+    // Manually add a shockwave
+    state.shockwaves.push({ x: 500, y: 500, radius: 0, maxRadius: SHOCKWAVE_MAX_RADIUS, life: SHOCKWAVE_DURATION });
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(state.shockwaves[0].life).toBeLessThan(SHOCKWAVE_DURATION);
+  });
+
+  it('shockwave is removed when life reaches 0', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+
+    // Add a shockwave that's almost expired
+    state.shockwaves.push({ x: 500, y: 500, radius: 50, maxRadius: SHOCKWAVE_MAX_RADIUS, life: FIXED_TIMESTEP * 0.5 });
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(state.shockwaves).toHaveLength(0);
+  });
+});
+
+// ===================================================================
+// 25. Time Limit
+// ===================================================================
+
+describe('Time Limit', () => {
+  it('match ends when timeElapsed exceeds timeLimit', () => {
+    const { loop, onMatchEnd } = createLoop({ settings: { timeLimit: 3 } });
+    loop.skipCountdown();
+
+    // Advance just under 3 seconds
+    const almostSteps = Math.floor(2.9 / FIXED_TIMESTEP);
+    for (let i = 0; i < almostSteps; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+    }
+    expect(loop.getState().matchOver).toBe(false);
+    expect(onMatchEnd).not.toHaveBeenCalled();
+
+    // Push past 3 seconds
+    const extraSteps = Math.ceil(0.2 / FIXED_TIMESTEP) + 1;
+    for (let i = 0; i < extraSteps; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+    }
+    expect(loop.getState().matchOver).toBe(true);
+    expect(onMatchEnd).toHaveBeenCalledTimes(1);
+  });
+
+  it('time limit of 0 means no time limit (match does not auto-end)', () => {
+    const { loop, onMatchEnd } = createLoop({ settings: { timeLimit: 0, killLimit: 999 } });
+    loop.skipCountdown();
+
+    // Advance a lot of time — should not end
+    const steps = Math.ceil(60 / FIXED_TIMESTEP);
+    for (let i = 0; i < steps; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+    }
+    expect(loop.getState().matchOver).toBe(false);
+    expect(onMatchEnd).not.toHaveBeenCalled();
+  });
+});
+
+// ===================================================================
+// 26. Multiple Simultaneous Stomps
+// ===================================================================
+
+describe('Multiple Simultaneous Stomps', () => {
+  it('two attackers on same victim — only first in iteration registers', () => {
+    const { loop } = createLoop({ players: ['P1', 'P2', 'P3'] as PlayerSlot[] });
+    loop.skipCountdown();
+    const state = loop.getState();
+    const attacker1 = state.players[0]; // P1
+    const attacker2 = state.players[1]; // P2
+    const victim = state.players[2];    // P3
+
+    // Place victim on the ground
+    victim.x = 500;
+    victim.y = 600;
+    victim.state = 'idle';
+    victim.invincibleTimer = 0;
+    victim.active = true;
+
+    // Position both attackers directly above victim, falling down
+    attacker1.x = 500;
+    attacker1.y = victim.y - attacker1.height + 5;
+    attacker1.vy = STOMP_VY_THRESHOLD + 100;
+    attacker1.state = 'airborne';
+    attacker1.active = true;
+    attacker1.score = 0;
+
+    attacker2.x = 505;
+    attacker2.y = victim.y - attacker2.height + 5;
+    attacker2.vy = STOMP_VY_THRESHOLD + 100;
+    attacker2.state = 'airborne';
+    attacker2.active = true;
+    attacker2.score = 0;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    // Victim should be splatted
+    expect(victim.state).toBe('splat');
+
+    // Only one attacker should have gotten credit (the first in iteration order: P1)
+    // After P1 stomps, victim.state becomes 'splat', so P2's stomp check skips the victim
+    expect(attacker1.score).toBe(2);
+    expect(attacker2.score).toBe(0);
+
+    // Only one kill feed entry
+    const killEntries = state.killFeed.filter(kf => kf.victim === 'P3');
+    expect(killEntries).toHaveLength(1);
+    expect(killEntries[0].attacker).toBe('P1');
+  });
+});
+
+// ===================================================================
+// 27. Invincibility after Respawn
+// ===================================================================
+
+describe('Invincibility after Respawn', () => {
+  it('respawned player has invincibleTimer set and is immune to stomps', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const attacker = state.players[0];
+    const victim = state.players[1];
+
+    // First: perform a stomp to splat the victim
+    victim.x = 500;
+    victim.y = 600;
+    victim.state = 'idle';
+    victim.invincibleTimer = 0;
+    victim.active = true;
+
+    attacker.x = 500;
+    attacker.y = victim.y - attacker.height + 5;
+    attacker.vy = STOMP_VY_THRESHOLD + 100;
+    attacker.state = 'airborne';
+    attacker.active = true;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+    expect(victim.state).toBe('splat');
+
+    // Now advance through splat duration + respawn delay to get victim respawned
+    const totalRespawnTime = SPLAT_DURATION + RESPAWN_DELAY;
+    const steps = Math.ceil(totalRespawnTime / FIXED_TIMESTEP) + 5;
+    for (let i = 0; i < steps; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+    }
+
+    // Victim should have respawned with invincibility (may be airborne from spawn position)
+    expect(victim.state).not.toBe('splat');
+    expect(victim.state).not.toBe('respawning');
+    expect(victim.invincibleTimer).toBeGreaterThan(0);
+
+    // Now try to stomp the invincible victim — it should NOT work
+    const scoreBeforeSecondStomp = attacker.score;
+
+    // Place victim on the ground for a clean stomp attempt
+    victim.x = 500;
+    victim.y = 600;
+    victim.state = 'idle';
+    // Keep invincibility active
+    victim.invincibleTimer = INVINCIBLE_DURATION;
+
+    attacker.x = victim.x;
+    attacker.y = victim.y - attacker.height + 5;
+    attacker.vy = STOMP_VY_THRESHOLD + 100;
+    attacker.state = 'airborne';
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    // Victim should still be alive (not splatted)
+    expect(victim.state).not.toBe('splat');
+    // Attacker should not have gained score
+    expect(attacker.score).toBe(scoreBeforeSecondStomp);
+  });
+});
+
+// ===================================================================
+// 28. Network Mode — Extended
+// ===================================================================
+
+describe('Network Mode — Extended', () => {
+  it('setNetworkMode(true) + fixedUpdate with explicit inputMap moves correct players', () => {
+    const { loop } = createLoop();
+    loop.setNetworkMode(true);
+    loop.skipCountdown();
+    const state = loop.getState();
+
+    // Set players to known positions on the ground
+    const p1 = state.players[0];
+    const p2 = state.players[1];
+    p1.x = 200; p1.y = 660 - PLAYER_HEIGHT; p1.vx = 0; p1.state = 'idle';
+    p2.x = 800; p2.y = 660 - PLAYER_HEIGHT; p2.vx = 0; p2.state = 'idle';
+
+    const p1XBefore = p1.x;
+    const p2XBefore = p2.x;
+
+    // P1 moves right, P2 moves left
+    const inputs = new Map<string, InputState>();
+    inputs.set('P1', { left: false, right: true, jump: false, down: false });
+    inputs.set('P2', { left: true, right: false, jump: false, down: false });
+
+    // Run several ticks so movement accumulates
+    for (let i = 0; i < 10; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP, inputs);
+    }
+
+    // P1 should have moved right
+    expect(p1.x).toBeGreaterThan(p1XBefore);
+    // P2 should have moved left
+    expect(p2.x).toBeLessThan(p2XBefore);
+  });
+
+  it('network mode input overrides are per-frame (not sticky)', () => {
+    const { loop } = createLoop();
+    loop.setNetworkMode(true);
+    loop.skipCountdown();
+    const state = loop.getState();
+
+    const p1 = state.players[0];
+    p1.x = 400; p1.y = 660 - PLAYER_HEIGHT; p1.vx = 0; p1.state = 'idle';
+
+    // First tick: move right
+    const rightInputs = new Map<string, InputState>();
+    rightInputs.set('P1', { left: false, right: true, jump: false, down: false });
+    rightInputs.set('P2', { left: false, right: false, jump: false, down: false });
+    loop.fixedUpdate(FIXED_TIMESTEP, rightInputs);
+
+    const vxAfterRight = p1.vx;
+    expect(vxAfterRight).toBeGreaterThan(0);
+
+    // Next ticks: no inputs provided (undefined) — should use neutral input
+    // for keyboard (no network inputs), player should decelerate from friction
+    for (let i = 0; i < 30; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+    }
+
+    // After many frames with no input, friction should have slowed/stopped the player
+    expect(Math.abs(p1.vx)).toBeLessThan(vxAfterRight);
+  });
+
+  it('jump input in network mode makes player airborne', () => {
+    const { loop } = createLoop();
+    loop.setNetworkMode(true);
+    loop.skipCountdown();
+    const state = loop.getState();
+
+    const p1 = state.players[0];
+    p1.x = 300; p1.y = 660 - PLAYER_HEIGHT; p1.vx = 0; p1.vy = 0; p1.state = 'idle';
+
+    const jumpInputs = new Map<string, InputState>();
+    jumpInputs.set('P1', { left: false, right: false, jump: true, down: false });
+    jumpInputs.set('P2', { left: false, right: false, jump: false, down: false });
+
+    loop.fixedUpdate(FIXED_TIMESTEP, jumpInputs);
+
+    // Player should be airborne with negative vy (upward)
+    expect(p1.state).toBe('airborne');
+    expect(p1.vy).toBeLessThan(0);
+  });
+});
+
+// ===================================================================
+// 29. resolveStuckPlayer
+// ===================================================================
+
+describe('resolveStuckPlayer', () => {
+  it('player deeply embedded in platform gets ejected', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    // Place player deeply inside the ground platform (y=660, height=60)
+    // Ground platform: { x: 0, y: 660, width: 1280, height: 60 }
+    // "Deeply embedded" means > 5px overlap
+    player.x = 200;
+    player.y = 660 - PLAYER_HEIGHT + 15; // 15px overlap into the platform top (> 5px threshold)
+    player.state = 'idle';
+    player.active = true;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    // resolveStuckPlayer should eject the player above the platform
+    // Player's bottom edge (player.y + player.height) should be at or above platform top (660)
+    expect(player.y + player.height).toBeLessThanOrEqual(660 + 1); // allow 1px tolerance
+  });
+
+  it('player slightly overlapping platform is not ejected (< 5px)', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    // Place player with only 3px overlap (under the 5px threshold)
+    player.x = 200;
+    player.y = 660 - PLAYER_HEIGHT + 3;
+    player.state = 'idle';
+    player.active = true;
+
+    const yBefore = player.y;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    // Normal collidePlatforms handles shallow overlap; resolveStuckPlayer skips it
+    // Player should still be handled by normal collision (placed on top of platform)
+    expect(player.y + player.height).toBeLessThanOrEqual(660 + 1);
+  });
+});
+
+// ===================================================================
+// 30. Countdown Freeze
+// ===================================================================
+
+describe('Countdown Freeze', () => {
+  it('during countdown, player velocity does not change from input', () => {
+    const { loop } = createLoop();
+    loop.setNetworkMode(true);
+    // Do NOT skip countdown — we want to test during it
+    const state = loop.getState();
+    expect(state.countdown).toBe(MATCH_COUNTDOWN);
+
+    const player = state.players[0];
+    const vxBefore = player.vx;
+    const vyBefore = player.vy;
+
+    // Provide movement input during countdown
+    const inputs = new Map<string, InputState>();
+    inputs.set('P1', { left: false, right: true, jump: true, down: false });
+    inputs.set('P2', { left: false, right: false, jump: false, down: false });
+
+    loop.fixedUpdate(FIXED_TIMESTEP, inputs);
+
+    // During countdown, fixedUpdate returns early — no player physics
+    expect(player.vx).toBe(vxBefore);
+    expect(player.vy).toBe(vyBefore);
+  });
+
+  it('during countdown, players do not change position', () => {
+    const { loop } = createLoop();
+    loop.setNetworkMode(true);
+    const state = loop.getState();
+    expect(state.countdown).toBe(MATCH_COUNTDOWN);
+
+    const player = state.players[0];
+    const xBefore = player.x;
+    const yBefore = player.y;
+
+    const inputs = new Map<string, InputState>();
+    inputs.set('P1', { left: false, right: true, jump: true, down: false });
+    inputs.set('P2', { left: false, right: false, jump: false, down: false });
+
+    // Run several ticks during countdown
+    for (let i = 0; i < 10; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP, inputs);
+    }
+
+    expect(player.x).toBe(xBefore);
+    expect(player.y).toBe(yBefore);
+  });
+
+  it('after countdown expires, players can move normally', () => {
+    const { loop } = createLoop();
+    loop.setNetworkMode(true);
+    const state = loop.getState();
+
+    // Exhaust the countdown
+    const countdownSteps = Math.ceil(MATCH_COUNTDOWN / FIXED_TIMESTEP) + 1;
+    const noInput = new Map<string, InputState>();
+    noInput.set('P1', { left: false, right: false, jump: false, down: false });
+    noInput.set('P2', { left: false, right: false, jump: false, down: false });
+    for (let i = 0; i < countdownSteps; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP, noInput);
+    }
+    expect(state.countdown).toBe(0);
+
+    // Now provide right input — player should move
+    const player = state.players[0];
+    player.x = 300; player.y = 660 - PLAYER_HEIGHT; player.vx = 0; player.state = 'idle';
+    const xBefore = player.x;
+
+    const rightInput = new Map<string, InputState>();
+    rightInput.set('P1', { left: false, right: true, jump: false, down: false });
+    rightInput.set('P2', { left: false, right: false, jump: false, down: false });
+
+    for (let i = 0; i < 10; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP, rightInput);
+    }
+
+    expect(player.x).toBeGreaterThan(xBefore);
   });
 });
