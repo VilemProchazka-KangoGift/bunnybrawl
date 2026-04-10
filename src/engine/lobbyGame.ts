@@ -10,6 +10,7 @@ import type { CharacterDef, CharacterSlot, PlayerSlot, InputState } from './type
 import { ALL_BOT_SLOTS, isBotSlot } from './types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED, STOMP_VY_THRESHOLD } from './constants';
 import { KEY_BINDINGS } from './input';
+import { applySimpleGravity, moveSimple } from './physics';
 import { getAllCharacters, getCharacterEmoji, hasCustomEyes, getSpriteRenderer, getCharacterDisplayName, getCharacterPack, drawLegs } from './characters';
 import {
   drawTree, drawBush, drawFlower, drawMushroom, drawGrassTuft, drawCloud,
@@ -410,9 +411,8 @@ function updateBotLobbyAI(bot: LobbyPlayer, _dt: number): void {
 // ---- Physics ----
 
 function updateLobbyPhysics(p: LobbyPlayer, dt: number, holdingCrouch = false): void {
-  p.vy += LOBBY_GRAVITY * dt;
-  p.y += p.vy * dt;
-  p.x += p.vx * dt;
+  applySimpleGravity(p, LOBBY_GRAVITY, 800, dt);
+  moveSimple(p, dt);
 
   if (p.y + PLAYER_HEIGHT >= GROUND_Y) {
     p.y = GROUND_Y - PLAYER_HEIGHT;
