@@ -15,6 +15,7 @@ class AudioManager {
   private gamePaused = false;
   private musicHowl: Howl | null = null;
   private musicThemeId: string | null = null;
+  private _visibilityHandler: (() => void) | null = null;
   // Start fetching before first user interaction (init() is heavy)
   private menuMusicHowl: Howl | null = this.musicDisabled ? null : new Howl({
     src: [AUDIO_BASE + 'carrot-royale-main.mp3'],
@@ -222,7 +223,7 @@ class AudioManager {
     this.sounds.set('amb_drip', new Howl({ src: [generateAmbDripSound()], volume: 0.55 }));
 
     // Mute all audio when app goes to background (especially important on mobile)
-    document.addEventListener('visibilitychange', () => {
+    this._visibilityHandler = () => {
       if (document.hidden) {
         this.backgroundMuted = true;
         Howler.mute(true);
@@ -230,7 +231,8 @@ class AudioManager {
         this.backgroundMuted = false;
         if (!this.muted && !this.gamePaused) Howler.mute(false);
       }
-    });
+    };
+    document.addEventListener('visibilitychange', this._visibilityHandler);
 
     this.initialized = true;
   }
@@ -340,6 +342,7 @@ class AudioManager {
       return;
     }
     this.stopMusic();
+    this.musicHowl?.unload();
     const mp3 = getArenaPack(themeId)?.musicFile;
     if (!mp3) { console.warn(`[audio] No musicFile for arena '${themeId}'`); return; }
     this.musicHowl = new Howl({ src: [AUDIO_BASE + mp3], volume: 0.22, loop: true });
@@ -354,6 +357,10 @@ class AudioManager {
   }
 
   destroy(): void {
+    if (this._visibilityHandler) {
+      document.removeEventListener('visibilitychange', this._visibilityHandler);
+      this._visibilityHandler = null;
+    }
     for (const sound of this.sounds.values()) {
       sound.unload();
     }
