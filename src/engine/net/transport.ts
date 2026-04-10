@@ -73,6 +73,7 @@ export class Transport {
   // Aggregate RTT/jitter (average across all peers, or single peer for guest)
   private _rtt = 0;
   private _jitter = 0;
+  private _iceState: string = '';
 
   constructor(events: TransportEvents) {
     this.events = events;
@@ -108,6 +109,7 @@ export class Transport {
   get connected(): boolean { return this.status === 'connected'; }
   get roomCode(): string | null { return this._roomCode; }
   get peerCount(): number { return this.peers.size; }
+  get iceState(): string { return this._iceState; }
 
   /** Get all connected peer IDs. */
   getPeerIds(): string[] { return Array.from(this.peers.keys()); }
@@ -318,17 +320,18 @@ export class Transport {
   private setupConnection(conn: DataConnection): void {
     const peerId = conn.peer;
 
-    // ICE diagnostic logging — helps diagnose mobile-to-mobile connection failures
+    // Detect ICE failure early — surface a clear error instead of waiting for timeout
     const pc = (conn as unknown as { peerConnection?: RTCPeerConnection }).peerConnection;
     if (pc) {
       pc.addEventListener('iceconnectionstatechange', () => {
-        console.log(`[Transport] ICE: ${pc.iceConnectionState} (peer: ${peerId})`);
+        this._iceState = pc.iceConnectionState;
         if (pc.iceConnectionState === 'failed') {
-          console.warn('[Transport] ICE failed — if both peers are mobile, TURN relay may be needed. Set VITE_TURN_URLS, VITE_TURN_USERNAME, VITE_TURN_CREDENTIAL.');
+          console.warn('[Transport] ICE failed — TURN relay may be needed for this network.');
+          this.removePeer(peerId);
+          if (this.peers.size === 0 && this.status !== 'error') {
+            this.setStatus('error', 'Connection failed — devices cannot reach each other directly. A TURN relay server may be needed for mobile-to-mobile play.');
+          }
         }
-      });
-      pc.addEventListener('icegatheringstatechange', () => {
-        console.log(`[Transport] ICE gathering: ${pc.iceGatheringState}`);
       });
     }
 
