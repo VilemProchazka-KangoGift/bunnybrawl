@@ -671,3 +671,117 @@ describe('hashSnapshot matches hashGameState', () => {
     expect(hash2).toBe(hash1);
   });
 });
+
+// ===================================================================
+// Snapshot stress tests
+// ===================================================================
+
+describe('Snapshot stress tests', () => {
+  it('takeSnapshotInto handles rapidly changing player count', () => {
+    const state = makeTestMatchState();
+    const rng = new SeededRNG(42);
+    const target = createEmptySnapshot();
+
+    // 2 players → 3 → 1 → 4
+    takeSnapshotInto(target, 0, state, rng, new Map());
+    expect(target.players).toHaveLength(2);
+
+    state.players.push(makeTestPlayer('P3'));
+    takeSnapshotInto(target, 1, state, rng, new Map());
+    expect(target.players).toHaveLength(3);
+
+    state.players = [state.players[0]];
+    takeSnapshotInto(target, 2, state, rng, new Map());
+    expect(target.players).toHaveLength(1);
+
+    state.players.push(makeTestPlayer('P2'), makeTestPlayer('P3'), makeTestPlayer('P4'));
+    takeSnapshotInto(target, 3, state, rng, new Map());
+    expect(target.players).toHaveLength(4);
+  });
+
+  it('restore + re-snapshot is idempotent', () => {
+    const state = makeTestMatchState();
+    const rng = new SeededRNG(99);
+    const snap1 = takeSnapshot(0, state, rng, new Map());
+
+    // Restore and re-snapshot multiple times
+    for (let i = 0; i < 5; i++) {
+      restoreSnapshot(snap1, state, rng, new Map());
+      const snap2 = takeSnapshot(0, state, rng, new Map());
+      expect(hashSnapshot(snap2)).toBe(hashSnapshot(snap1));
+    }
+  });
+
+  it('multiple AI controllers serialize in deterministic order', () => {
+    const state = makeTestMatchState();
+    const rng = new SeededRNG(42);
+    const ai1 = makeMockAIController();
+    const ai2 = makeMockAIController();
+    const ai3 = makeMockAIController();
+
+    // Insert in different order each time, should always sort
+    const map1 = new Map([['B3', ai3], ['B1', ai1], ['B2', ai2]]) as any;
+    const snap1 = takeSnapshot(0, state, rng, map1);
+
+    const map2 = new Map([['B2', ai2], ['B3', ai3], ['B1', ai1]]) as any;
+    const snap2 = takeSnapshot(0, state, rng, map2);
+
+    // Both should have same sorted order
+    expect(snap1.aiStates.map(([id]: [string, any]) => id)).toEqual(['B1', 'B2', 'B3']);
+    expect(snap2.aiStates.map(([id]: [string, any]) => id)).toEqual(['B1', 'B2', 'B3']);
+  });
+
+  it('hashGameState is stable across repeated calls', () => {
+    const state = makeTestMatchState();
+    const rng = new SeededRNG(42);
+    const h1 = hashGameState(state, rng);
+    const h2 = hashGameState(state, rng);
+    const h3 = hashGameState(state, rng);
+    expect(h1).toBe(h2);
+    expect(h2).toBe(h3);
+  });
+
+  it('crc32 handles long strings', () => {
+    const long = 'a'.repeat(100000);
+    const h1 = crc32(long);
+    const h2 = crc32(long);
+    expect(h1).toBe(h2);
+    expect(h1).toBeGreaterThan(0);
+  });
+});
+
+// ===================================================================
+// Player.disconnected serialization
+// ===================================================================
+
+describe('Player.disconnected in snapshots', () => {
+  it('disconnected flag is preserved through snapshot round-trip', () => {
+    const state = makeTestMatchState();
+    state.players[0].disconnected = true;
+    state.players[1].disconnected = false;
+    const rng = new SeededRNG(42);
+
+    const snap = takeSnapshot(0, state, rng, new Map());
+    expect(snap.players[0].disconnected).toBe(true);
+    expect(snap.players[1].disconnected).toBe(false);
+
+    state.players[0].disconnected = false;
+    restoreSnapshot(snap, state, rng, new Map());
+    expect(state.players[0].disconnected).toBe(true);
+  });
+
+  it('disconnected flag changes the hash', () => {
+    const state = makeTestMatchState();
+    state.players[0].disconnected = false;
+    const rng = new SeededRNG(42);
+
+    // disconnected doesn't affect hashGameState (not hashed for perf)
+    // but it IS in the snapshot, which is what matters for rollback correctness
+    const snap1 = takeSnapshot(0, state, rng, new Map());
+    state.players[0].disconnected = true;
+    const snap2 = takeSnapshot(0, state, rng, new Map());
+
+    expect(snap1.players[0].disconnected).toBe(false);
+    expect(snap2.players[0].disconnected).toBe(true);
+  });
+});

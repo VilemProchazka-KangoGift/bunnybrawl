@@ -431,3 +431,95 @@ describe('RollbackEngine - start / stop', () => {
     expect(() => engine.stop()).not.toThrow();
   });
 });
+
+describe('RollbackEngine - multiple remotes', () => {
+  it('handles 3 remotes simultaneously', () => {
+    const { engine } = makeEngine({ remoteSlots: ['P2', 'P3', 'P4'] as PlayerSlot[] });
+    // Send inputs from each remote
+    for (const slot of ['P2', 'P3', 'P4']) {
+      const buf = encodeInputMessage(
+        [{ frame: 0, input: { left: false, right: false, jump: false, down: false } }],
+        0, undefined, slot as PlayerSlot,
+      );
+      engine.handleInputMessage(buf);
+    }
+    const stats = engine.getStats();
+    expect(stats.remoteLatestAck).toBe(0);
+  });
+
+  it('dynamically adds and removes remotes', () => {
+    const onDisconnect = vi.fn();
+    const { engine } = makeEngine({
+      remoteSlots: ['P2'] as PlayerSlot[],
+      onPlayerDisconnect: onDisconnect,
+    });
+
+    // Add P3 dynamically
+    engine.addRemoteSlot('P3' as PlayerSlot);
+
+    // Send input from P3
+    const buf = encodeInputMessage(
+      [{ frame: 0, input: { left: true, right: false, jump: false, down: false } }],
+      5, undefined, 'P3' as PlayerSlot,
+    );
+    engine.handleInputMessage(buf);
+    expect(engine.getStats().remoteLatestAck).toBe(5);
+
+    // Disconnect P3
+    engine.removeRemoteSlot('P3' as PlayerSlot);
+    expect(onDisconnect).toHaveBeenCalledWith('P3');
+  });
+});
+
+describe('RollbackEngine - desync flow', () => {
+  it('full desync check → request → correction flow', () => {
+    // Set up host
+    const hostState = makeTestState();
+    const hostRng = new SeededRNG(42);
+    const hostGL = makeMockGameLoop(hostState, hostRng);
+    const hostTransport = makeMockTransport();
+    const host = new RollbackEngine({
+      localSlot: 'P1', remoteSlots: ['P2'], isHost: true,
+      gameLoop: hostGL as any, transport: hostTransport as any,
+    });
+
+    // Set up guest with slightly different state (desync)
+    const guestState = makeTestState();
+    guestState.players[0].x = 999; // different from host!
+    const guestRng = new SeededRNG(42);
+    const guestGL = makeMockGameLoop(guestState, guestRng);
+    const guestTransport = makeMockTransport();
+    const guest = new RollbackEngine({
+      localSlot: 'P2', remoteSlots: ['P1'], isHost: false,
+      gameLoop: guestGL as any, transport: guestTransport as any,
+    });
+
+    // Host sends DESYNC_CHECK with its hash
+    const hostHash = hashGameState(hostState, hostRng);
+    const check = {
+      type: MsgType.DESYNC_CHECK,
+      frame: 0,
+      hash: hostHash,
+      rngState: hostRng.getState(),
+    };
+
+    // Guest processes — hashes differ → sends DESYNC_REQUEST
+    guest.handleReliableMessage(check);
+    expect(guestTransport.sendReliable).toHaveBeenCalledWith(
+      expect.objectContaining({ type: MsgType.DESYNC_REQUEST }),
+    );
+
+    // Host processes DESYNC_REQUEST → sends DESYNC_CORRECTION
+    const request = guestTransport.sendReliable.mock.calls[0][0];
+    host.handleReliableMessage(request);
+    expect(hostTransport.sendReliable).toHaveBeenCalledWith(
+      expect.objectContaining({ type: MsgType.DESYNC_CORRECTION }),
+    );
+
+    // Guest applies DESYNC_CORRECTION → state should match host
+    const correction = hostTransport.sendReliable.mock.calls[0][0];
+    guest.handleReliableMessage(correction);
+    // Guest's state should now have the host's player position
+    expect(guestState.players[0].x).toBe(hostState.players[0].x);
+  });
+});
