@@ -93,7 +93,7 @@ export function VictoryScreen() {
       },
       onReliableMessage: (msg) => {
         if (msg.type === MsgType.SETTINGS_SYNC && 'arenaId' in msg) {
-          setMatchSettings({ arenaId: (msg as any).arenaId });
+          setMatchSettings({ arenaId: msg.arenaId });
         }
         if (msg.type === MsgType.START_MATCH) {
           setScreen('match');

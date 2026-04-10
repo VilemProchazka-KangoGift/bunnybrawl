@@ -1,7 +1,7 @@
 /**
  * Network protocol: message types and binary encoding for P2P input exchange.
  */
-import type { InputState } from '../types';
+import type { InputState, GameMods } from '../types';
 
 // ---- Message types ----
 
@@ -196,7 +196,7 @@ export interface SettingsSyncMessage {
   killLimit: number;
   timeLimit: number;
   goreMode: boolean;
-  mods: Record<string, boolean>;
+  mods: GameMods;
   rngSeed: number;
   botCount: number;
   botDifficulty: string;

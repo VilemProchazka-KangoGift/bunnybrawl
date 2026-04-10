@@ -19,6 +19,7 @@ import { MsgType, PROTOCOL_VERSION } from '../engine/net/protocol';
 import type { ReliableMessage, HandshakeMessage, SlotAssignmentMessage, StartMatchMessage, PlayerJoinedMessage, PlayerLeftMessage } from '../engine/net/protocol';
 import { CHARACTERS, BOT_CHARACTERS, getAllCharacters, getCharacterEmoji, getCharacterDisplayName, assignBotCharacters } from '../engine/characters';
 import { ALL_BOT_SLOTS, isBotSlot } from '../engine/types';
+import type { BotSlot, CharacterSlot } from '../engine/types';
 import type { PlayerSlot } from '../engine/types';
 import './MainMenu.css';
 
@@ -266,7 +267,7 @@ export function MainMenu() {
         const def = allChars.find(c => c.name === entry.characterName);
         const isBot = isBotSlot(entry.slot as PlayerSlot);
         if (isBot) {
-          if (def) BOT_CHARACTERS.set(entry.slot as any, { ...def, slot: entry.slot } as any);
+          if (def) BOT_CHARACTERS.set(entry.slot as BotSlot, { ...def, slot: entry.slot as BotSlot });
         } else {
           const charSlot = (CHARACTERS as Record<string, typeof CHARACTERS.P1>)[entry.slot];
           if (def && charSlot) {
@@ -275,9 +276,9 @@ export function MainMenu() {
           }
         }
       }
-      const humanSlots = [...new Set(roster.filter(r => !isBotSlot(r.slot as PlayerSlot)).map(r => r.slot))];
-      const botSlots = [...new Set(roster.filter(r => isBotSlot(r.slot as PlayerSlot)).map(r => r.slot))];
-      setActivePlayers([...humanSlots as PlayerSlot[], ...botSlots as any[]]);
+      const humanSlots = [...new Set(roster.filter(r => !isBotSlot(r.slot as PlayerSlot)).map(r => r.slot as CharacterSlot))];
+      const botSlots = [...new Set(roster.filter(r => isBotSlot(r.slot as PlayerSlot)).map(r => r.slot as BotSlot))];
+      setActivePlayers([...humanSlots, ...botSlots]);
       receivedRosterRef.current = null;
     } else {
       // Host path (or legacy): compute roster locally, filtering to connected peers only
@@ -311,8 +312,8 @@ export function MainMenu() {
       const ms = store.matchSettings;
       const botSlots = ALL_BOT_SLOTS.slice(0, ms.botCount);
       const rngSeed = store.online.rngSeed;
-      assignBotCharacters(humanSlots as any, botSlots, rngSeed, Array.from(slotCharMap.values()));
-      setActivePlayers([...humanSlots as PlayerSlot[], ...botSlots]);
+      assignBotCharacters(humanSlots as CharacterSlot[], botSlots, rngSeed, Array.from(slotCharMap.values()));
+      setActivePlayers([...humanSlots as CharacterSlot[], ...botSlots]);
     }
 
     setOnline({ isOnline: true, localSlot: mySlot as PlayerSlot, playerNames: names });
@@ -419,7 +420,7 @@ export function MainMenu() {
           transport.sendReliableTo(peerId, {
             type: MsgType.SETTINGS_SYNC, arenaId: ms.arenaId, killLimit: ms.killLimit,
             timeLimit: ms.timeLimit, goreMode: ms.goreMode,
-            mods: ms.mods as unknown as Record<string, boolean>,
+            mods: ms.mods,
             rngSeed: seed, botCount: ms.botCount, botDifficulty: ms.botDifficulty,
           } as ReliableMessage);
           transport.sendReliable({ type: MsgType.HANDSHAKE, protocolVersion: PROTOCOL_VERSION, playerName: onlinePlayerNameRef.current });
@@ -1054,7 +1055,7 @@ export function MainMenu() {
                         const humanNames = rosterEntries.map(r => r.characterName);
                         const humanSlots = rosterEntries.map(r => r.slot);
                         const botSlots = ALL_BOT_SLOTS.slice(0, ms.botCount);
-                        assignBotCharacters(humanSlots as any, botSlots, seed, humanNames);
+                        assignBotCharacters(humanSlots as CharacterSlot[], botSlots, seed, humanNames);
                         // Add bots to roster for guests
                         for (const bSlot of botSlots) {
                           const botChar = BOT_CHARACTERS.get(bSlot);
@@ -1064,7 +1065,7 @@ export function MainMenu() {
                         onlineTransportRef.current?.sendReliable({
                           type: MsgType.SETTINGS_SYNC, arenaId: ms.arenaId, killLimit: ms.killLimit,
                           timeLimit: ms.timeLimit, goreMode: ms.goreMode,
-                          mods: ms.mods as unknown as Record<string, boolean>,
+                          mods: ms.mods,
                           rngSeed: seed, botCount: ms.botCount, botDifficulty: ms.botDifficulty,
                         } as ReliableMessage);
                         onlineTransportRef.current?.sendReliable({

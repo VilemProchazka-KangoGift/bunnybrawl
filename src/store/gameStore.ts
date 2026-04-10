@@ -25,7 +25,7 @@ interface OnlineState {
   playerNames: Record<string, string>;
 }
 
-interface GameStore {
+export interface GameStore {
   screen: GameScreen;
   matchSettings: MatchSettings;
   activePlayers: PlayerSlot[];
@@ -62,10 +62,8 @@ const defaultSettings: MatchSettings = {
     return v === 'easy' || v === 'medium' || v === 'hard' || v === 'impossible' ? v : 'medium';
   }, 'medium'),
   mods: loadStorage<GameMods>('bunnybrawl_mods', v => {
-    try {
-      const p = JSON.parse(v || '');
-      return { extremeGore: !!p.extremeGore, carrotChase: !!p.carrotChase, giantPlayers: !!p.giantPlayers, turbo: !!p.turbo, superBounce: !!p.superBounce, mirrorArena: !!p.mirrorArena, underwaterGravity: !!p.underwaterGravity };
-    } catch { return null as any; }
+    const p = JSON.parse(v || '');
+    return { extremeGore: !!p.extremeGore, carrotChase: !!p.carrotChase, giantPlayers: !!p.giantPlayers, turbo: !!p.turbo, superBounce: !!p.superBounce, mirrorArena: !!p.mirrorArena, underwaterGravity: !!p.underwaterGravity };
   }, { extremeGore: false, carrotChase: false, giantPlayers: false, turbo: false, superBounce: false, mirrorArena: false, underwaterGravity: false }),
 };
 
@@ -130,5 +128,5 @@ export const useGameStore = create<GameStore>((set) => ({
 
 // Expose store for E2E testing
 if (typeof window !== 'undefined') {
-  (window as any).__gameStore = useGameStore;
+  window.__gameStore = useGameStore;
 }

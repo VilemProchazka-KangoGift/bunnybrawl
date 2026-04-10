@@ -44,7 +44,7 @@ export function useScaler() {
     // Lock to landscape on mobile (progressive — fails silently where unsupported)
     let autoFullscreen: (() => void) | null = null;
     if (isTouchPrimary()) {
-      (screen.orientation as any)?.lock?.('landscape')?.catch?.(() => {});
+      screen.orientation?.lock?.('landscape')?.catch?.(() => {});
 
       // Auto-fullscreen on first user tap — reuses toggleFullscreen() which has webkit fallback
       autoFullscreen = () => { toggleFullscreen(); };

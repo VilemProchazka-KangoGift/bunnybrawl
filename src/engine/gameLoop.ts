@@ -128,6 +128,7 @@ export class GameLoop {
     this.theme = getTheme(arena.themeId);
     this.input = new InputManager();
     this.renderer = new Renderer(bgCanvas, fgCanvas, this.theme, settings.mods.mirrorArena);
+    this.renderer.setTimeLimit(settings.timeLimit);
 
     // Compute effective physics from theme modifiers
     const pm = this.theme.physics;

@@ -72,6 +72,7 @@ export class Renderer {
   private _botNavDebugStates: BotNavDebugState[] = [];
   private _netDebugStats: NetDebugStats | null = null;
   private _playerNames: Record<string, string> | null = null;
+  private _timeLimit: number = 0;
 
   constructor(bgCanvas: HTMLCanvasElement, fgCanvas: HTMLCanvasElement, theme: ThemeConfig, mirrored = false) {
     this.bgCtx = bgCanvas.getContext('2d')!;
@@ -108,6 +109,10 @@ export class Renderer {
   setPlayerNames(names: Record<string, string>): void {
     this._playerNames = names;
     this.hudLastPlayerCount = -1; // invalidate HUD cache
+  }
+
+  setTimeLimit(timeLimit: number): void {
+    this._timeLimit = timeLimit;
   }
 
   renderBackground(arena: Arena, originalArena?: Arena): void {
@@ -2201,9 +2206,8 @@ export class Renderer {
       ctx.roundRect(CANVAS_WIDTH / 2 - 40, 55, 80, 30, 6);
       ctx.fill();
 
-      // Timer red pulse when < 30 seconds remaining (k)
-      const settings = (state as any).settings as { timeLimit?: number } | undefined;
-      const timeLimit = settings?.timeLimit ?? 0;
+      // Timer red pulse when < 30 seconds remaining
+      const timeLimit = this._timeLimit;
       const remaining = timeLimit > 0 ? timeLimit - state.timeElapsed : Infinity;
       if (remaining < 30 && remaining > 0) {
         const pulse = 1 + Math.sin(this.frameTime / 200) * 0.1;

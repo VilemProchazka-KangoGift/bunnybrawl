@@ -201,7 +201,7 @@ export function Match() {
 
       netMatchRef.current = netMatch;
       gameLoopRef.current = netMatch.getGameLoop();
-      (window as any).__gameLoop = netMatch.getGameLoop();
+      window.__gameLoop = netMatch.getGameLoop();
       netMatch.getGameLoop().setPlayerNames(useGameStore.getState().online.playerNames);
       netMatch.getGameLoop().setLocalSlot((online.isHost ? 'P1' : online.localSlot) as PlayerSlot);
       netMatch.start();
@@ -230,7 +230,7 @@ export function Match() {
     );
 
     gameLoopRef.current = loop;
-    (window as any).__gameLoop = loop;
+    window.__gameLoop = loop;
     loop.start();
     setTouchInput(loop.getTouchInput());
 
@@ -250,7 +250,7 @@ export function Match() {
   useEffect(() => {
     if (!isMobile || !('wakeLock' in navigator)) return;
     let wakeLock: WakeLockSentinel | null = null;
-    (navigator as any).wakeLock.request('screen').then((wl: WakeLockSentinel) => { wakeLock = wl; }).catch(() => {});
+    navigator.wakeLock.request('screen').then((wl) => { wakeLock = wl; }).catch(() => {});
     return () => { wakeLock?.release(); };
   }, [isMobile, currentArenaId]);
 
