@@ -260,3 +260,87 @@ describe('Stomp constants', () => {
   it('RESPAWN_DELAY is 1.0', () => expect(RESPAWN_DELAY).toBe(1));
   it('INVINCIBLE_DURATION is 1.5', () => expect(INVINCIBLE_DURATION).toBe(1.5));
 });
+
+// ===================================================================
+// checkStomps edge cases
+// ===================================================================
+
+describe('checkStomps - edge cases', () => {
+  it('attacker state is set to airborne after stomp', () => {
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 380, vy: 200, state: 'airborne' });
+    const victim = makePlayer({ id: 'P2', character: CHARACTERS.P2, x: 100, y: 400, state: 'idle' });
+    checkStomps([attacker, victim], spawnPoints, 10);
+    expect(attacker.state).toBe('airborne');
+  });
+
+  it('victim velocity is zeroed on stomp', () => {
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 380, vy: 200, state: 'airborne' });
+    const victim = makePlayer({ id: 'P2', character: CHARACTERS.P2, x: 100, y: 400, state: 'idle', vx: 100, vy: -50 });
+    checkStomps([attacker, victim], spawnPoints, 10);
+    expect(victim.vx).toBe(0);
+    expect(victim.vy).toBe(0);
+  });
+
+  it('killFeedEntry includes correct timestamp', () => {
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 380, vy: 200, state: 'airborne' });
+    const victim = makePlayer({ id: 'P2', character: CHARACTERS.P2, x: 100, y: 400, state: 'idle' });
+    const { killFeedEntries } = checkStomps([attacker, victim], spawnPoints, 42.5);
+    expect(killFeedEntries[0].timestamp).toBe(42.5);
+  });
+
+  it('carrotChase mod: stomp does not award points', () => {
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 380, vy: 200, state: 'airborne', score: 0 });
+    const victim = makePlayer({ id: 'P2', character: CHARACTERS.P2, x: 100, y: 400, state: 'idle' });
+    checkStomps([attacker, victim], spawnPoints, 10, { carrotChase: true, extremeGore: false, giantPlayers: false, turbo: false, superBounce: false, mirrorArena: false, underwaterGravity: false });
+    expect(attacker.score).toBe(0); // no points in carrot chase
+    expect(victim.state).toBe('splat'); // but still splats
+  });
+
+  it('splatMark is created at victim center', () => {
+    const attacker = makePlayer({ id: 'P1', x: 200, y: 380, vy: 200, state: 'airborne' });
+    const victim = makePlayer({ id: 'P2', character: CHARACTERS.P2, x: 200, y: 400, state: 'idle' });
+    const { splatMarks } = checkStomps([attacker, victim], spawnPoints, 10);
+    expect(splatMarks[0].x).toBe(200 + PLAYER_WIDTH / 2);
+    expect(splatMarks[0].y).toBe(400 + PLAYER_HEIGHT / 2);
+  });
+
+  it('three-player multi-kill in one frame', () => {
+    // P1 stomps P2, P3 stomps P1 (simultaneously)
+    const p1 = makePlayer({ id: 'P1', x: 100, y: 380, vy: 200, state: 'airborne' });
+    const p2 = makePlayer({ id: 'P2', character: CHARACTERS.P2, x: 100, y: 400, state: 'idle' });
+    const p3 = makePlayer({ id: 'P3', character: CHARACTERS.P3, x: 100, y: 360, vy: 200, state: 'airborne' });
+    // P3 above P1 (stomps P1), P1 above P2 (stomps P2)
+    const { killFeedEntries } = checkStomps([p3, p1, p2], spawnPoints, 10);
+    // At least one kill should register
+    expect(killFeedEntries.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('self-stomp is impossible', () => {
+    const p = makePlayer({ id: 'P1', x: 100, y: 400, vy: 200, state: 'airborne' });
+    const { killFeedEntries } = checkStomps([p], spawnPoints, 10);
+    expect(killFeedEntries).toHaveLength(0);
+  });
+});
+
+// ===================================================================
+// createSplatMark details
+// ===================================================================
+
+describe('createSplatMark - details', () => {
+  it('splat mark has color from victim character', () => {
+    const victim = makePlayer({ character: CHARACTERS.P2 });
+    const mark = createSplatMark(victim);
+    expect(mark.color).toBe(CHARACTERS.P2.color);
+  });
+
+  it('splat mark has particles array with > 0 entries', () => {
+    const mark = createSplatMark(makePlayer());
+    expect(mark.particles.length).toBeGreaterThan(0);
+    expect(mark.particles.length).toBeLessThanOrEqual(16); // 8 + random(0-7)
+  });
+
+  it('splat mark has radius > 0', () => {
+    const mark = createSplatMark(makePlayer());
+    expect(mark.radius).toBeGreaterThan(0);
+  });
+});

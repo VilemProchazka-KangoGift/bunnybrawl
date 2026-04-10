@@ -857,5 +857,128 @@ describe('buildAwareness', () => {
       expect(snap.nearestEnemy!.dx).toBeCloseTo(-100);
       expect(snap.nearestEnemy!.dist).toBeCloseTo(100);
     });
+
+    it('computes wrapped dx ~60 when enemy at x=1250 and bot at x=30', () => {
+      // Raw dx = 1250 - 30 = 1220 > CANVAS_WIDTH/2 (640)
+      // Wrapped dx = 1220 - 1280 = -60 → enemy is 60px to the left via wrap
+      const bot = makePlayer({ id: 'B1' as PlayerSlot, x: 30, y: 628 });
+      const enemy = makePlayer({ id: 'P1' as PlayerSlot, x: 1250, y: 628 });
+      const state = makeState({ players: [bot, enemy] });
+      const arena = makeArena();
+
+      const snap = buildAwareness(bot, state, arena, Infinity);
+      expect(snap.nearestEnemy).not.toBeNull();
+      expect(snap.nearestEnemy!.dx).toBeCloseTo(-60);
+      expect(snap.nearestEnemy!.dist).toBeCloseTo(60);
+    });
+  });
+
+  // ── Priority target with multiple candidates ─────────────────────────
+
+  describe('priority target selection', () => {
+    it('picks highest juiciness among multiple candidates', () => {
+      const bot = makePlayer({ id: 'B1' as PlayerSlot, x: 500, y: 628 });
+      // Slowed enemy (juiciness base = 2) at same distance
+      const slowed = makePlayer({ id: 'P1' as PlayerSlot, x: 600, y: 628, slowTimer: 3, invincibleTimer: 0 });
+      // Fat enemy (juiciness base = 3) at same distance
+      const fat = makePlayer({ id: 'P2' as PlayerSlot, x: 400, y: 628, fatTimer: 5, invincibleTimer: 0 });
+      const state = makeState({ players: [bot, slowed, fat] });
+      const arena = makeArena();
+
+      const snap = buildAwareness(bot, state, arena, Infinity);
+      expect(snap.priorityTarget).not.toBeNull();
+      // Fat (base 3) > slowed (base 2), both at ~100px distance
+      expect(snap.priorityTarget!.x).toBe(400); // fat enemy position
+    });
+  });
+
+  // ── Geyser escape direction sign ─────────────────────────────────────
+
+  describe('geyser escape direction', () => {
+    it('returns positive geyserEscapeDx when zone edge is to the right', () => {
+      // Bot center closer to left edge → escape right (positive)
+      // Zone x=400, width=200, so zone spans 400-600
+      // Bot at x=560, center at 560+16=576. distToLeft = 576-400=176, distToRight = 600-576=24
+      // distToRight < distToLeft → geyserEscapeDx = +(24+30) = +54
+      const bot = makePlayer({ id: 'B1' as PlayerSlot, x: 560, y: 550 });
+      const state = makeState({
+        players: [bot],
+        geyserStates: [{ timer: 0, active: true, activeTimer: 1 }],
+      });
+      const arena = makeArena({
+        effectZones: [{ x: 400, y: 500, width: 200, height: 200, type: 'geyser' }],
+      });
+
+      const snap = buildAwareness(bot, state, arena, Infinity);
+      expect(snap.geyserEscapeDx).toBeGreaterThan(0);
+    });
+
+    it('returns negative geyserEscapeDx when zone edge is to the left', () => {
+      // Bot center closer to left edge → escape left (negative)
+      // Zone x=400, width=200. Bot at x=410, center at 426.
+      // distToLeft = 426-400=26, distToRight = 600-426=174
+      // distToLeft < distToRight → geyserEscapeDx = -(26+30) = -56
+      const bot = makePlayer({ id: 'B1' as PlayerSlot, x: 410, y: 550 });
+      const state = makeState({
+        players: [bot],
+        geyserStates: [{ timer: 0, active: true, activeTimer: 1 }],
+      });
+      const arena = makeArena({
+        effectZones: [{ x: 400, y: 500, width: 200, height: 200, type: 'geyser' }],
+      });
+
+      const snap = buildAwareness(bot, state, arena, Infinity);
+      expect(snap.geyserEscapeDx).toBeLessThan(0);
+    });
+  });
+
+  // ── Nearest platform considers all floating platforms ─────────────────
+
+  describe('nearest platform above considers all platforms', () => {
+    it('picks the nearest platform above among multiple floating platforms', () => {
+      const arena = makeArena({
+        platforms: [
+          { x: 0, y: 660, width: 1280, height: 60 },     // ground
+          { x: 300, y: 400, width: 200, height: 20 },     // high platform (dy=-228)
+          { x: 350, y: 550, width: 200, height: 20 },     // lower platform (dy=-78)
+        ],
+      });
+      const bot = makePlayer({ id: 'B1' as PlayerSlot, x: 400, y: 628, state: 'idle' });
+      const state = makeState({ players: [bot] });
+
+      const snap = buildAwareness(bot, state, arena, Infinity);
+      expect(snap.nearestPlatformAbove).not.toBeNull();
+      // Bot feet at 660. Platform at 550: dy = 550-660=-110. Platform at 400: dy=400-660=-260.
+      // -110 is closer than -260, so nearest above should be y=550
+      expect(snap.nearestPlatformAbove!.y).toBe(550);
+    });
+  });
+
+  // ── Self score correctly read ─────────────────────────────────────────
+
+  describe('self score', () => {
+    it('correctly reads score from the player', () => {
+      const bot = makePlayer({ id: 'B1' as PlayerSlot, x: 200, y: 628, score: 13 });
+      const state = makeState({ players: [bot] });
+      const arena = makeArena();
+
+      const snap = buildAwareness(bot, state, arena, Infinity);
+      expect(snap.self.score).toBe(13);
+    });
+  });
+
+  // ── Navigation target with pathfindingDepth=0 ─────────────────────────
+
+  describe('nav target with pathfindingDepth=0', () => {
+    it('returns null navTarget when pathfindingDepth is 0', () => {
+      const bot = makePlayer({ id: 'B1' as PlayerSlot, x: 200, y: 628, state: 'idle' });
+      const enemy = makePlayer({ id: 'P1' as PlayerSlot, x: 500, y: 468 });
+      const state = makeState({ players: [bot, enemy] });
+      const arena = makeArena();
+
+      // pathfindingDepth=0 means no nav graph lookup
+      const snap = buildAwareness(bot, state, arena, Infinity, 0);
+      expect(snap.navTarget).toBeNull();
+    });
   });
 });

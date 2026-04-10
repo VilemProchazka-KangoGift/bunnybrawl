@@ -608,4 +608,136 @@ describe('evaluateActions', () => {
       expect(chase.moveRight).toBeGreaterThan(normal.moveRight);
     });
   });
+
+  // ── Additional edge case tests ──────────────────────────────────────
+
+  describe('all-zero scores', () => {
+    it('returns all-zero scores when awareness has no targets and no zones', () => {
+      // Completely empty awareness: no enemies, no carrots, no hazards, no zones
+      const a = makeAwareness();
+      const scores = evaluateActions(a, personality());
+      expect(scores.moveLeft).toBe(0);
+      expect(scores.moveRight).toBe(0);
+      expect(scores.jump).toBe(0);
+      expect(scores.drop).toBe(0);
+    });
+  });
+
+  describe('evaluateRoam edge cases', () => {
+    it('biases dropping when target is far below on elevated platform', () => {
+      const a = makeAwareness({
+        roamTarget: { x: 400, y: 700, dx: 0 }, // target far below
+        self: { x: 400, y: 400, vx: 0, vy: 0, onGround: true, score: 5, slowed: false, fat: false, invincible: false },
+        onElevatedPlatform: true,
+      });
+      const scores = evaluateActions(a, personality());
+      // Target 300px below on elevated platform → roam evaluator adds drop bias
+      // With dx=0, it adds moveRight * 0.5 * 0.5 (walk either direction to reach edge)
+      expect(scores.moveRight).toBeGreaterThan(0);
+    });
+  });
+
+  describe('evaluateChaseTarget edge cases', () => {
+    it('does not add horizontal chase when dy > 40 and airborne', () => {
+      const a = makeAwareness({
+        nearestEnemy: { x: 600, y: 500, vx: 0, vy: 0, dx: 200, dy: -100, dist: 220, score: 3 },
+        self: { x: 400, y: 600, vx: 0, vy: -50, onGround: false, score: 5, slowed: false, fat: false, invincible: false },
+      });
+      const scores = evaluateActions(a, personality());
+
+      // Compare with same scenario but on ground + no nav + no platform above
+      const aOnGround = makeAwareness({
+        nearestEnemy: { x: 600, y: 600, vx: 0, vy: 0, dx: 200, dy: 0, dist: 200, score: 3 },
+        self: { x: 400, y: 600, vx: 0, vy: 0, onGround: true, score: 5, slowed: false, fat: false, invincible: false },
+      });
+      const scoresGround = evaluateActions(aOnGround, personality());
+
+      // On ground with dy=0, chase adds moveRight; airborne with |dy|>40, chase returns early
+      // The airborne case should have less moveRight from chase
+      expect(scoresGround.moveRight).toBeGreaterThan(scores.moveRight);
+    });
+  });
+
+  describe('evaluateCarrotPursuit edge cases', () => {
+    it('biases jump toward elevated carrot', () => {
+      const a = makeAwareness({
+        nearestCarrot: { x: 420, y: 500, dist: 100 },
+        self: { x: 400, y: 600, vx: 0, vy: 0, onGround: true, score: 5, slowed: false, fat: false, invincible: false },
+      });
+      const scores = evaluateActions(a, personality());
+      // Carrot at y=500 is above self at y=600 (diff of 100 > 30) → jump bias
+      expect(scores.jump).toBeGreaterThan(0);
+    });
+  });
+
+  describe('evaluateHazardAvoidance edge cases', () => {
+    it('applies ghost avoidance at wider range than lava', () => {
+      // Ghost at dist=100 — within the ghost's 120px range
+      const aGhost = makeAwareness({
+        nearbyHazards: [{ type: 'ghost', x: 500, y: 600, dist: 100 }],
+      });
+      const ghostScores = evaluateActions(aGhost, personality());
+
+      // Lava at same dist=100 — lava's extra jump check only at dist<50
+      const aLava = makeAwareness({
+        nearbyHazards: [{ type: 'lava', x: 500, y: 660, dist: 100 }],
+      });
+      const lavaScores = evaluateActions(aLava, personality());
+
+      // Ghost adds extra avoidance (ghostAvoid = 0.6 * avoidWeight) at dist<120
+      // Both have base avoidance, but ghost adds additional directional avoidance
+      expect(ghostScores.moveLeft).toBeGreaterThan(lavaScores.moveLeft);
+    });
+  });
+
+  describe('evaluatePlatformSeeking edge cases', () => {
+    it('geyser nav type does not add jump score', () => {
+      const rng = new SeededRNG(42);
+      const a = makeAwareness({
+        navTarget: { x: 300, y: 500, width: 200, approachX: 420, type: 'g' },
+        self: { x: 400, y: 600, vx: 0, vy: 0, onGround: true, score: 5, slowed: false, fat: false, invincible: false },
+      });
+      const scores = evaluateActions(a, personality(), 1.0, false, rng);
+      // Geyser nav type: walks to approach, but no jump added (geyser launches automatically)
+      // Other evaluators might add jump, so compare against a 'j' type to confirm difference
+      const rng2 = new SeededRNG(42);
+      const aJump = makeAwareness({
+        navTarget: { x: 300, y: 500, width: 200, approachX: 420, type: 'j' },
+        self: { x: 400, y: 600, vx: 0, vy: 0, onGround: true, score: 5, slowed: false, fat: false, invincible: false },
+      });
+      const scoresJump = evaluateActions(aJump, personality(), 1.0, false, rng2);
+      // 'j' type adds jump, 'g' type does not — so jump should be less for geyser
+      expect(scores.jump).toBeLessThan(scoresJump.jump);
+    });
+
+    it('zero-G nav type adds jump score', () => {
+      const rng = new SeededRNG(42);
+      const a = makeAwareness({
+        navTarget: { x: 300, y: 500, width: 200, approachX: 420, type: 'z' },
+        self: { x: 400, y: 600, vx: 0, vy: 0, onGround: true, score: 5, slowed: false, fat: false, invincible: false },
+      });
+      const scores = evaluateActions(a, personality(), 1.0, false, rng);
+      // 'z' type adds jump when close enough (|dx| < 60): approachX=420, self=400, dx=20 < 60
+      expect(scores.jump).toBeGreaterThan(0);
+    });
+  });
+
+  describe('evaluateZoneExploitation edge cases', () => {
+    it('does not move toward geyser if timer >= 2', () => {
+      // Geyser with timer=5 (>= 2) — too far from eruption, should not be exploited
+      const a = makeAwareness({
+        nearGeyser: { x: 600, y: 400, active: false, timer: 5.0 },
+      });
+      const scores = evaluateActions(a, personality());
+
+      // With timer >= 2, geyser exploitation is skipped — compare with timer < 2
+      const aClose = makeAwareness({
+        nearGeyser: { x: 600, y: 400, active: false, timer: 1.0 },
+      });
+      const scoresClose = evaluateActions(aClose, personality());
+
+      // Timer >= 2: no geyser movement. Timer < 2: adds moveRight
+      expect(scoresClose.moveRight).toBeGreaterThan(scores.moveRight);
+    });
+  });
 });
