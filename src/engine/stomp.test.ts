@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { isStomping, checkStomps, createSplatMark, updateSplatTimers, respawnPlayer } from './stomp';
 import type { SpawnPoint } from './types';
 import { CHARACTERS } from './characters';
-import { PLAYER_WIDTH, PLAYER_HEIGHT, SPLAT_DURATION, RESPAWN_DELAY, INVINCIBLE_DURATION } from './constants';
+import { PLAYER_WIDTH, PLAYER_HEIGHT, SPLAT_DURATION, RESPAWN_DELAY, INVINCIBLE_DURATION, STOMP_VY_THRESHOLD, STOMP_BOUNCE } from './constants';
 import { makePlayer } from './__tests__/testHelpers';
 
 const spawnPoints: SpawnPoint[] = [
@@ -135,4 +135,128 @@ describe('Stomp - respawnPlayer', () => {
     expect(player.splatTimer).toBe(0);
     expect(player.respawnTimer).toBe(0);
   });
+
+  it('clears fastFalling on respawn', () => {
+    const player = makePlayer({ state: 'splat', fastFalling: true });
+    respawnPlayer(player, spawnPoints);
+    expect(player.fastFalling).toBe(false);
+  });
+
+  it('places player at one of the available spawn points', () => {
+    const player = makePlayer({ state: 'splat' });
+    respawnPlayer(player, spawnPoints);
+    // Player center should be at one of the spawn points
+    const playerCx = player.x + PLAYER_WIDTH / 2;
+    const matchesAny = spawnPoints.some(sp => Math.abs(sp.x - playerCx) < 1);
+    expect(matchesAny).toBe(true);
+  });
+});
+
+// ===================================================================
+// Stomp threshold edge cases
+// ===================================================================
+
+describe('Stomp - threshold edge cases', () => {
+  it('STOMP_VY_THRESHOLD boundary: vy just below threshold does NOT stomp', () => {
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 380, vy: STOMP_VY_THRESHOLD - 1 });
+    const victim = makePlayer({ id: 'P2', character: CHARACTERS.P2, x: 100, y: 400 });
+    expect(isStomping(attacker, victim)).toBe(false);
+  });
+
+  it('STOMP_VY_THRESHOLD boundary: vy at exactly threshold DOES stomp', () => {
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 380, vy: STOMP_VY_THRESHOLD });
+    const victim = makePlayer({ id: 'P2', character: CHARACTERS.P2, x: 100, y: 400 });
+    expect(isStomping(attacker, victim)).toBe(true);
+  });
+
+  it('attacker bounces with STOMP_BOUNCE velocity after kill', () => {
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 380, vy: 200, state: 'airborne' });
+    const victim = makePlayer({ id: 'P2', character: CHARACTERS.P2, x: 100, y: 400, state: 'idle' });
+    checkStomps([attacker, victim], spawnPoints, 10);
+    expect(attacker.vy).toBe(STOMP_BOUNCE);
+  });
+
+  it('victim gets SPLAT_DURATION timer on stomp', () => {
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 380, vy: 200, state: 'airborne' });
+    const victim = makePlayer({ id: 'P2', character: CHARACTERS.P2, x: 100, y: 400, state: 'idle' });
+    checkStomps([attacker, victim], spawnPoints, 10);
+    expect(victim.splatTimer).toBe(SPLAT_DURATION);
+  });
+
+  it('does not stomp inactive players', () => {
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 380, vy: 200, state: 'airborne' });
+    const victim = makePlayer({ id: 'P2', character: CHARACTERS.P2, x: 100, y: 400, state: 'idle', active: false });
+    const { killFeedEntries } = checkStomps([attacker, victim], spawnPoints, 10);
+    expect(killFeedEntries).toHaveLength(0);
+  });
+
+  it('does not stomp respawning players', () => {
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 380, vy: 200, state: 'airborne' });
+    const victim = makePlayer({ id: 'P2', character: CHARACTERS.P2, x: 100, y: 400, state: 'respawning' });
+    const { killFeedEntries } = checkStomps([attacker, victim], spawnPoints, 10);
+    expect(killFeedEntries).toHaveLength(0);
+  });
+
+  it('can stomp disconnected players (they remain as targets)', () => {
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 380, vy: 200, state: 'airborne' });
+    const victim = makePlayer({ id: 'P2', character: CHARACTERS.P2, x: 100, y: 400, state: 'idle', disconnected: true });
+    const { killFeedEntries } = checkStomps([attacker, victim], spawnPoints, 10);
+    // Disconnected players can still be killed — they just don't respawn
+    expect(killFeedEntries).toHaveLength(1);
+  });
+});
+
+// ===================================================================
+// Timer transitions
+// ===================================================================
+
+describe('Stomp - full lifecycle', () => {
+  it('splat → respawning → idle transition', () => {
+    const player = makePlayer({ state: 'splat', splatTimer: 0.01, active: true });
+
+    // Step 1: small tick to push splatTimer to <=0 → respawning
+    updateSplatTimers([player], spawnPoints, 0.02);
+    expect(player.state).toBe('respawning');
+
+    // Step 2: set respawnTimer directly, then tick to trigger respawn
+    player.respawnTimer = 0.01;
+    updateSplatTimers([player], spawnPoints, 0.02);
+    expect(player.state).toBe('idle');
+    expect(player.invincibleTimer).toBeCloseTo(INVINCIBLE_DURATION, 1);
+  });
+
+  it('disconnected players stay as corpse (no respawn)', () => {
+    const player = makePlayer({ state: 'splat', splatTimer: SPLAT_DURATION, active: true, disconnected: true });
+    updateSplatTimers([player], spawnPoints, SPLAT_DURATION + 1);
+    // disconnected players skip splatTimer decay
+    expect(player.state).toBe('splat');
+  });
+
+  it('invincibleTimer decays to 0 and stops', () => {
+    const player = makePlayer({ invincibleTimer: 0.5 });
+    updateSplatTimers([player], spawnPoints, 0.5);
+    expect(player.invincibleTimer).toBeCloseTo(0, 1);
+    updateSplatTimers([player], spawnPoints, 0.5);
+    // Should not go below 0
+    expect(player.invincibleTimer).toBeLessThanOrEqual(0);
+  });
+
+  it('inactive players are skipped in timer updates', () => {
+    const player = makePlayer({ state: 'splat', splatTimer: SPLAT_DURATION, active: false });
+    updateSplatTimers([player], spawnPoints, SPLAT_DURATION + 1);
+    // inactive = skipped entirely
+    expect(player.state).toBe('splat');
+  });
+});
+
+// ===================================================================
+// Constants validation
+// ===================================================================
+
+describe('Stomp constants', () => {
+  it('STOMP_VY_THRESHOLD is 50', () => expect(STOMP_VY_THRESHOLD).toBe(50));
+  it('STOMP_BOUNCE is -400', () => expect(STOMP_BOUNCE).toBe(-400));
+  it('SPLAT_DURATION is 0.4', () => expect(SPLAT_DURATION).toBe(0.4));
+  it('RESPAWN_DELAY is 1.0', () => expect(RESPAWN_DELAY).toBe(1));
+  it('INVINCIBLE_DURATION is 1.5', () => expect(INVINCIBLE_DURATION).toBe(1.5));
 });

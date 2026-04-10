@@ -11,5 +11,12 @@ export default defineConfig({
     environment: 'happy-dom',
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
+    coverage: {
+      provider: 'v8',
+      include: ['src/engine/**/*.ts'],
+      exclude: ['src/engine/**/index.ts', 'src/engine/rendering/**', 'src/engine/themes/drawPrimitives.ts', 'src/engine/arenas/packs/**', 'src/engine/characters/packs/**'],
+      reporter: ['text', 'json-summary'],
+      reportsDirectory: './coverage',
+    },
   },
 })

@@ -10,6 +10,11 @@ import {
   DUST_LAND_VY_THRESHOLD,
   PLAYER_WIDTH, PLAYER_HEIGHT,
   SPRING_BOUNCE, GRAVITY,
+  HITSTOP_DURATION, SCREEN_SHAKE_DURATION,
+  SLOW_MO_DURATION, SCREEN_FLASH_DURATION,
+  SQUASH_ON_LAND, SQUASH_DECAY_SPEED,
+  FAT_DURATION, FAT_SPEED_MULT,
+  THORN_SPEED_MULT, CARROT_SIZE,
 } from './constants';
 
 // --- Mocks ---
@@ -1233,5 +1238,577 @@ describe('Bouncy Platforms', () => {
 
     expect(player.vy).toBeCloseTo(SPRING_BOUNCE * 0.85, 0);
     expect(player.state).toBe('airborne');
+  });
+});
+
+// ===================================================================
+// 13. Hitstop
+// ===================================================================
+
+describe('Hitstop', () => {
+  /** Helper: set up a stomp scenario and run one tick to trigger it. */
+  function setupStomp(loop: ReturnType<typeof createLoop>['loop']) {
+    const state = loop.getState();
+    const attacker = state.players[0];
+    const victim = state.players[1];
+
+    victim.x = 500;
+    victim.y = 600;
+    victim.state = 'idle';
+    victim.invincibleTimer = 0;
+    victim.active = true;
+
+    attacker.x = 500;
+    attacker.y = victim.y - attacker.height + 5;
+    attacker.vy = STOMP_VY_THRESHOLD + 100;
+    attacker.state = 'airborne';
+    attacker.active = true;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+    return { attacker, victim, state };
+  }
+
+  it('after a stomp, the victim has hitstopTimer > 0', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const { victim } = setupStomp(loop);
+
+    expect(victim.hitstopTimer).toBeGreaterThan(0);
+    expect(victim.hitstopTimer).toBeCloseTo(HITSTOP_DURATION, 2);
+  });
+
+  it('during hitstop, player physics are frozen (vx/vy do not change from gravity)', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const { attacker } = setupStomp(loop);
+
+    // Attacker should have hitstopTimer set after stomp
+    expect(attacker.hitstopTimer).toBeGreaterThan(0);
+
+    // Record velocities after the stomp tick
+    const vxAfterStomp = attacker.vx;
+    const vyAfterStomp = attacker.vy;
+
+    // Run another tick while hitstop is still active
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    // Physics should be frozen: vx/vy unchanged (gravity not applied)
+    expect(attacker.vx).toBe(vxAfterStomp);
+    expect(attacker.vy).toBe(vyAfterStomp);
+  });
+
+  it('during hitstop, damageFlashTimer still decays (visual timers tick)', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const { victim } = setupStomp(loop);
+
+    // Victim should have both hitstopTimer and damageFlashTimer set
+    expect(victim.hitstopTimer).toBeGreaterThan(0);
+    expect(victim.damageFlashTimer).toBeGreaterThan(0);
+    const flashBefore = victim.damageFlashTimer;
+
+    // Run one more tick while hitstop is still active
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    // damageFlashTimer should have decayed even during hitstop
+    expect(victim.damageFlashTimer).toBeLessThan(flashBefore);
+  });
+
+  it('after hitstop expires, physics resume normally', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const { attacker } = setupStomp(loop);
+
+    // Attacker got STOMP_BOUNCE so vy is negative (upward). Wait for hitstop to expire.
+    const hitstopFrames = Math.ceil(HITSTOP_DURATION / FIXED_TIMESTEP) + 2;
+    for (let i = 0; i < hitstopFrames; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+    }
+
+    // Hitstop should have expired
+    expect(attacker.hitstopTimer).toBeLessThanOrEqual(0);
+
+    // Record velocity, then tick once more — gravity should now apply
+    const vyBefore = attacker.vy;
+    loop.fixedUpdate(FIXED_TIMESTEP);
+    // Gravity adds positive vy each tick, so vy should increase (become less negative or more positive)
+    expect(attacker.vy).toBeGreaterThan(vyBefore);
+  });
+});
+
+// ===================================================================
+// 14. Screen Effects
+// ===================================================================
+
+describe('Screen Effects', () => {
+  it('after a stomp, screenShake should be > 0', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const attacker = state.players[0];
+    const victim = state.players[1];
+
+    victim.x = 500;
+    victim.y = 600;
+    victim.state = 'idle';
+    victim.invincibleTimer = 0;
+    victim.active = true;
+
+    attacker.x = 500;
+    attacker.y = victim.y - attacker.height + 5;
+    attacker.vy = STOMP_VY_THRESHOLD + 100;
+    attacker.state = 'airborne';
+    attacker.active = true;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(state.screenShake).toBeGreaterThan(0);
+    expect(state.screenShake).toBeCloseTo(SCREEN_SHAKE_DURATION, 2);
+  });
+
+  it('screenShake decays toward 0 over subsequent frames', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+
+    // Manually set screenShake
+    state.screenShake = SCREEN_SHAKE_DURATION;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+    expect(state.screenShake).toBeLessThan(SCREEN_SHAKE_DURATION);
+    expect(state.screenShake).toBeGreaterThan(0);
+
+    // Run more frames until it reaches 0
+    const frames = Math.ceil(SCREEN_SHAKE_DURATION / FIXED_TIMESTEP) + 2;
+    for (let i = 0; i < frames; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+    }
+    expect(state.screenShake).toBeLessThanOrEqual(0);
+  });
+
+  it('after a match-ending kill, slowMotion is set', () => {
+    const { loop } = createLoop({ settings: { killLimit: 3 } });
+    loop.skipCountdown();
+    const state = loop.getState();
+    const attacker = state.players[0];
+    const victim = state.players[1];
+
+    // Give attacker score just below killLimit, so the stomp kill reaches it
+    attacker.score = 1; // stomp gives +2, total = 3 = killLimit
+
+    victim.x = 500;
+    victim.y = 600;
+    victim.state = 'idle';
+    victim.invincibleTimer = 0;
+    victim.active = true;
+
+    attacker.x = 500;
+    attacker.y = victim.y - attacker.height + 5;
+    attacker.vy = STOMP_VY_THRESHOLD + 100;
+    attacker.state = 'airborne';
+    attacker.active = true;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(state.slowMotion).toBe(SLOW_MO_DURATION);
+    expect(state.matchOver).toBe(true);
+  });
+
+  it('screenFlash is set > 0 on lava hazard hit', () => {
+    const { loop } = createLoop({
+      arena: {
+        hazardZones: [{ x: 0, y: 0, width: 1280, height: 720, type: 'lava' }],
+      },
+    });
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    player.slowTimer = 0;
+    player.invincibleTimer = 0;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(state.screenFlash).toBeGreaterThan(0);
+  });
+});
+
+// ===================================================================
+// 15. Player Push
+// ===================================================================
+
+describe('Player Push', () => {
+  it('two overlapping players get pushed apart', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const p1 = state.players[0];
+    const p2 = state.players[1];
+
+    // Place both players at the same position on the ground
+    p1.x = 400;
+    p1.y = 660 - PLAYER_HEIGHT;
+    p1.vx = 0;
+    p1.state = 'idle';
+    p1.active = true;
+    p1.invincibleTimer = 0;
+
+    p2.x = 405; // slightly overlapping
+    p2.y = 660 - PLAYER_HEIGHT;
+    p2.vx = 0;
+    p2.state = 'idle';
+    p2.active = true;
+    p2.invincibleTimer = 0;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    // Players should have been pushed apart
+    expect(Math.abs(p1.x - p2.x)).toBeGreaterThan(5);
+  });
+
+  it('side squash changes from 1.0 when players collide', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const p1 = state.players[0];
+    const p2 = state.players[1];
+
+    // Position overlapping
+    p1.x = 400;
+    p1.y = 660 - PLAYER_HEIGHT;
+    p1.vx = 0;
+    p1.state = 'idle';
+    p1.active = true;
+    p1.invincibleTimer = 0;
+    p1.sideSquash = 1;
+
+    p2.x = 405;
+    p2.y = 660 - PLAYER_HEIGHT;
+    p2.vx = 0;
+    p2.state = 'idle';
+    p2.active = true;
+    p2.invincibleTimer = 0;
+    p2.sideSquash = 1;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    // sideSquash should be 0.8 right after collision (set by collidePlayersHorizontal),
+    // but squash decay may have already started, so check it's not 1.0
+    expect(p1.sideSquash).not.toBe(1);
+    expect(p2.sideSquash).not.toBe(1);
+  });
+});
+
+// ===================================================================
+// 16. Landing Squash
+// ===================================================================
+
+describe('Landing Squash', () => {
+  it('squashScale drops below 1.0 on hard landing', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const player = loop.getState().players[0];
+
+    // Position player just above the ground, falling fast
+    player.x = 200;
+    player.y = 660 - player.height - 2;
+    player.vy = DUST_LAND_VY_THRESHOLD + 100;
+    player.state = 'airborne';
+    player.active = true;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    // After landing, squashScale should be at SQUASH_ON_LAND (0.7)
+    expect(player.squashScale).toBeLessThan(1.0);
+    expect(player.squashScale).toBeCloseTo(SQUASH_ON_LAND, 1);
+  });
+
+  it('squashScale decays back toward 1.0 over time', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const player = loop.getState().players[0];
+
+    // Position player just above ground, falling fast
+    player.x = 200;
+    player.y = 660 - player.height - 2;
+    player.vy = DUST_LAND_VY_THRESHOLD + 100;
+    player.state = 'airborne';
+    player.active = true;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    const squashAfterLand = player.squashScale;
+    expect(squashAfterLand).toBeLessThan(1.0);
+
+    // Run several more ticks to let squash decay
+    for (let i = 0; i < 20; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+    }
+
+    // squashScale should be closer to 1.0 after decay
+    expect(player.squashScale).toBeGreaterThan(squashAfterLand);
+  });
+});
+
+// ===================================================================
+// 17. Fat and Slow Effects
+// ===================================================================
+
+describe('Fat and Slow Effects', () => {
+  it('eating a carrot sets fatTimer > 0', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    expect(player.fatTimer).toBe(0);
+
+    // Place a carrot directly on the player
+    state.carrots.push({
+      x: player.x + player.width / 2,
+      y: player.y,
+      active: true,
+      spawnTime: 0,
+    });
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(player.fatTimer).toBeGreaterThan(0);
+    // fatTimer is set to FAT_DURATION during carrot pickup, which happens after
+    // the timer decay section, so it stays at exactly FAT_DURATION this tick
+    expect(player.fatTimer).toBe(FAT_DURATION);
+  });
+
+  it('fat player moves slower than normal player', () => {
+    // Create two separate loops to compare movement
+    const { loop: fatLoop } = createLoop();
+    const { loop: normalLoop } = createLoop();
+
+    fatLoop.skipCountdown();
+    normalLoop.skipCountdown();
+
+    fatLoop.setNetworkMode(true);
+    normalLoop.setNetworkMode(true);
+
+    const fatPlayer = fatLoop.getState().players[0];
+    const normalPlayer = normalLoop.getState().players[0];
+
+    // Make the fat player fat
+    fatPlayer.fatTimer = FAT_DURATION;
+
+    // Set identical starting positions
+    fatPlayer.x = 200;
+    fatPlayer.y = 660 - PLAYER_HEIGHT;
+    fatPlayer.vx = 0;
+    fatPlayer.state = 'idle';
+
+    normalPlayer.x = 200;
+    normalPlayer.y = 660 - PLAYER_HEIGHT;
+    normalPlayer.vx = 0;
+    normalPlayer.state = 'idle';
+
+    // Both players walk right
+    const rightInput = new Map<string, InputState>();
+    rightInput.set('P1', { left: false, right: true, jump: false, down: false });
+    rightInput.set('P2', { left: false, right: false, jump: false, down: false });
+
+    // Run many ticks
+    for (let i = 0; i < 60; i++) {
+      fatLoop.fixedUpdate(FIXED_TIMESTEP, new Map(rightInput));
+      normalLoop.fixedUpdate(FIXED_TIMESTEP, new Map(rightInput));
+    }
+
+    // Fat player should have covered less distance
+    expect(fatPlayer.x).toBeLessThan(normalPlayer.x);
+  });
+
+  it('slowed player (from thorn) moves slower', () => {
+    const { loop: slowLoop } = createLoop();
+    const { loop: normalLoop } = createLoop();
+
+    slowLoop.skipCountdown();
+    normalLoop.skipCountdown();
+
+    slowLoop.setNetworkMode(true);
+    normalLoop.setNetworkMode(true);
+
+    const slowPlayer = slowLoop.getState().players[0];
+    const normalPlayer = normalLoop.getState().players[0];
+
+    // Make the slow player slowed
+    slowPlayer.slowTimer = THORN_SLOW_DURATION;
+
+    // Set identical starting positions
+    slowPlayer.x = 200;
+    slowPlayer.y = 660 - PLAYER_HEIGHT;
+    slowPlayer.vx = 0;
+    slowPlayer.state = 'idle';
+
+    normalPlayer.x = 200;
+    normalPlayer.y = 660 - PLAYER_HEIGHT;
+    normalPlayer.vx = 0;
+    normalPlayer.state = 'idle';
+
+    const rightInput = new Map<string, InputState>();
+    rightInput.set('P1', { left: false, right: true, jump: false, down: false });
+    rightInput.set('P2', { left: false, right: false, jump: false, down: false });
+
+    for (let i = 0; i < 60; i++) {
+      slowLoop.fixedUpdate(FIXED_TIMESTEP, new Map(rightInput));
+      normalLoop.fixedUpdate(FIXED_TIMESTEP, new Map(rightInput));
+    }
+
+    expect(slowPlayer.x).toBeLessThan(normalPlayer.x);
+  });
+});
+
+// ===================================================================
+// 18. Match Timing
+// ===================================================================
+
+describe('Match Timing', () => {
+  it('fixedUpdate returns early when matchOver is true', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    loop.fixedUpdate(FIXED_TIMESTEP);
+    const elapsed = loop.getState().timeElapsed;
+
+    loop.getState().matchOver = true;
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    // timeElapsed should NOT have changed
+    expect(loop.getState().timeElapsed).toBeCloseTo(elapsed, 6);
+  });
+
+  it('countdown decrements each tick from MATCH_COUNTDOWN to 0', () => {
+    const { loop } = createLoop();
+    expect(loop.getState().countdown).toBe(MATCH_COUNTDOWN);
+
+    // Tick enough times to exhaust the countdown
+    const steps = Math.ceil(MATCH_COUNTDOWN / FIXED_TIMESTEP) + 1;
+    for (let i = 0; i < steps; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+    }
+
+    expect(loop.getState().countdown).toBe(0);
+  });
+
+  it('match ends when a player reaches killLimit score', () => {
+    const { loop, onMatchEnd } = createLoop({ settings: { killLimit: 5 } });
+    loop.skipCountdown();
+    const state = loop.getState();
+
+    state.players[0].score = 5;
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(state.matchOver).toBe(true);
+    expect(state.winner).toBe('P1');
+    expect(onMatchEnd).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ===================================================================
+// 19. Carrot Spawning
+// ===================================================================
+
+describe('Carrot Spawning', () => {
+  it('carrots spawn after CARROT_FIRST_SPAWN_DELAY seconds', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+
+    // Initially no carrots
+    expect(state.carrots.length).toBe(0);
+
+    // Run just short of the delay — no carrots yet
+    const almostSteps = Math.floor((CARROT_FIRST_SPAWN_DELAY - 0.1) / FIXED_TIMESTEP);
+    for (let i = 0; i < almostSteps; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+    }
+    expect(state.carrots.length).toBe(0);
+
+    // Push past the delay
+    const extraSteps = Math.ceil(0.3 / FIXED_TIMESTEP);
+    for (let i = 0; i < extraSteps; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+    }
+    expect(state.carrots.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('carrot collected sets active=false and is removed from array', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    // Place a carrot on the player
+    const carrot = {
+      x: player.x + player.width / 2,
+      y: player.y,
+      active: true,
+      spawnTime: 0,
+    };
+    state.carrots.push(carrot);
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    // Carrot is set inactive during pickup, then swapRemoved from the array
+    expect(carrot.active).toBe(false);
+    expect(state.carrots.length).toBe(0);
+  });
+});
+
+// ===================================================================
+// 20. No-Spawn Zones
+// ===================================================================
+
+describe('No-Spawn Zones', () => {
+  it('springs do not spawn inside noSpawnZones', () => {
+    // Create an arena where the only floating platform is inside a no-spawn zone
+    const { loop } = createLoop({
+      arena: {
+        platforms: [
+          { x: 0, y: 660, width: 1280, height: 60 },   // ground
+          { x: 400, y: 500, width: 200, height: 20 },   // floating platform inside no-spawn
+        ],
+        noSpawnZones: [{ x: 350, y: 450, width: 300, height: 100 }],
+      },
+    });
+    loop.skipCountdown();
+    const state = loop.getState();
+
+    // Advance past the spring spawn timer (initial ~5s, then every 12s)
+    const steps = Math.ceil(20 / FIXED_TIMESTEP);
+    for (let i = 0; i < steps; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+    }
+
+    // No springs should have spawned because the only floating platform
+    // is inside a no-spawn zone
+    expect(state.springs.length).toBe(0);
+  });
+
+  it('thorns do not spawn inside noSpawnZones', () => {
+    // Same setup: only floating platform is inside a no-spawn zone
+    const { loop } = createLoop({
+      arena: {
+        platforms: [
+          { x: 0, y: 660, width: 1280, height: 60 },   // ground
+          { x: 400, y: 500, width: 200, height: 20 },   // floating platform inside no-spawn
+        ],
+        noSpawnZones: [{ x: 350, y: 450, width: 300, height: 100 }],
+      },
+    });
+    loop.skipCountdown();
+    const state = loop.getState();
+
+    // Advance past the thorn spawn timer
+    const steps = Math.ceil(25 / FIXED_TIMESTEP);
+    for (let i = 0; i < steps; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+    }
+
+    // No thorns should have spawned
+    expect(state.thorns.length).toBe(0);
   });
 });
