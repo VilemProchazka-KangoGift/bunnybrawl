@@ -170,6 +170,9 @@ function drawCharacterSprite(
 
   let cached = spriteCache.get(cacheKey);
   if (cached) {
+    // LRU: delete+re-insert moves entry to end of Map iteration order
+    spriteCache.delete(cacheKey);
+    spriteCache.set(cacheKey, cached);
     ctx.drawImage(cached, x - 10, y - 10);
     return;
   }
