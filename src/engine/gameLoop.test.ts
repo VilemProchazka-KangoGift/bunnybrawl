@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
 import type { MatchSettings, Arena, PlayerSlot, InputState } from './types';
+import { makeArena } from './__tests__/testHelpers';
 import {
   FIXED_TIMESTEP, MATCH_COUNTDOWN,
   CARROT_FIRST_SPAWN_DELAY, SPRING_SPAWN_INTERVAL, THORN_SPAWN_INTERVAL,
@@ -93,25 +94,6 @@ function makeSettings(overrides?: Partial<MatchSettings>): MatchSettings {
       mirrorArena: false,
       underwaterGravity: false,
     },
-    ...overrides,
-  };
-}
-
-function makeArena(overrides?: Partial<Arena>): Arena {
-  return {
-    id: 'test',
-    name: 'Test',
-    themeId: 'meadow',
-    width: 1280,
-    height: 720,
-    platforms: [
-      { x: 0, y: 660, width: 1280, height: 60 },
-      { x: 400, y: 500, width: 200, height: 20 },
-    ],
-    spawnPoints: [
-      { x: 100, y: 620 },
-      { x: 1100, y: 620 },
-    ],
     ...overrides,
   };
 }
