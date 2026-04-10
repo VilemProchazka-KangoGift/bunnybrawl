@@ -124,6 +124,16 @@ export class LobbyGame {
   private wildlife: SimpleWildlife[] | null = null;
   private isMobile: boolean;
 
+  // Pre-allocated combined arrays (rebuilt in update, avoid per-frame spread)
+  private _allLobby: LobbyPlayer[] = [];
+  private _participants: LobbyPlayer[] = [];  // players + bots (no extras)
+  private _extrasSet = new Set<LobbyPlayer>();
+
+  // Ready-zone counts (computed in updateReadyZone, read in drawLobby)
+  private _inZoneCount = 0;
+  private _humanInZoneCount = 0;
+  private _botInZoneCount = 0;
+
   constructor(config: LobbyGameConfig) {
     this.isMobile = config.isMobile;
     const botCount = config.botCount;
@@ -182,7 +192,18 @@ export class LobbyGame {
    * @param touchInput optional P1 touch input (mobile)
    */
   update(dt: number, keys: Set<string>, touchInput?: InputState): void {
-    const allLobby = [...this.players, ...this.bots, ...this.extraChars];
+    // Rebuild cached combined arrays (avoids per-frame spread allocations)
+    this._allLobby.length = 0;
+    for (const p of this.players) this._allLobby.push(p);
+    for (const b of this.bots) this._allLobby.push(b);
+    for (const e of this.extraChars) this._allLobby.push(e);
+
+    this._participants.length = 0;
+    for (const p of this.players) this._participants.push(p);
+    for (const b of this.bots) this._participants.push(b);
+
+    this._extrasSet.clear();
+    for (const e of this.extraChars) this._extrasSet.add(e);
 
     // --- Player-controlled characters ---
     for (const p of this.players) {
@@ -237,7 +258,7 @@ export class LobbyGame {
     }
 
     // --- Stomp detection ---
-    this.processStomps(allLobby);
+    this.processStomps(this._allLobby);
 
     // --- Ready zone check ---
     this.updateReadyZone(dt);
@@ -246,8 +267,7 @@ export class LobbyGame {
   // ---- Stomp / swap logic ----
 
   private processStomps(allLobby: LobbyPlayer[]): void {
-    const stompAttackers = [...this.players, ...this.bots];
-    for (const attacker of stompAttackers) {
+    for (const attacker of this._participants) {
       if (attacker.splatTimer > 0) continue;
       if (attacker.vy < STOMP_VY_THRESHOLD) continue;
       const attackerIsBot = isBotSlot(attacker.slot);
@@ -255,7 +275,7 @@ export class LobbyGame {
       for (const victim of allLobby) {
         if (victim === attacker) continue;
         if (victim.splatTimer > 0) continue;
-        if (attackerIsBot && !this.extraChars.includes(victim)) continue;
+        if (attackerIsBot && !this._extrasSet.has(victim)) continue;
 
         if (
           attacker.x + PLAYER_WIDTH > victim.x &&
@@ -270,7 +290,7 @@ export class LobbyGame {
           attacker.vy = -300;
           audio.play('stomp');
 
-          const isNPC = this.extraChars.includes(victim);
+          const isNPC = this._extrasSet.has(victim);
           if (isNPC) {
             let bestX = 40;
             let bestDist = 0;
@@ -294,31 +314,33 @@ export class LobbyGame {
   // ---- Ready zone + countdown ----
 
   private updateReadyZone(dt: number): void {
-    const allParticipants = [...this.players, ...this.bots];
-    const inZone = allParticipants.filter(p => p.x + PLAYER_WIDTH > READY_ZONE_X && p.splatTimer <= 0);
+    // Count zone membership with a single pass (no filter allocations)
+    this._inZoneCount = 0;
+    this._humanInZoneCount = 0;
+    this._botInZoneCount = 0;
+    for (const p of this._participants) {
+      if (p.x + PLAYER_WIDTH > READY_ZONE_X && p.splatTimer <= 0) {
+        this._inZoneCount++;
+        if (isBotSlot(p.slot)) this._botInZoneCount++;
+        else this._humanInZoneCount++;
 
-    // Play animal sound when player/bot enters ready zone for the first time
-    for (const p of inZone) {
-      if (!this.readySoundPlayed.has(p.slot)) {
-        this.readySoundPlayed.add(p.slot);
-        audio.playAnimal(p.char.name);
-      }
-    }
-    // Remove players who left the zone so they can trigger again if they re-enter
-    for (const p of allParticipants) {
-      if (p.x + PLAYER_WIDTH <= READY_ZONE_X || p.splatTimer > 0) {
+        // Play animal sound when player/bot enters ready zone for the first time
+        if (!this.readySoundPlayed.has(p.slot)) {
+          this.readySoundPlayed.add(p.slot);
+          audio.playAnimal(p.char.name);
+        }
+      } else {
+        // Remove players who left the zone so they can trigger again if they re-enter
         this.readySoundPlayed.delete(p.slot);
       }
     }
 
-    const humansInZone = inZone.filter(p => !isBotSlot(p.slot));
-
     // Need at least 1 human + total 2 participants to start countdown
-    if (inZone.length >= 2 && humansInZone.length >= 1 && !this.countdownStarted) {
+    if (this._inZoneCount >= 2 && this._humanInZoneCount >= 1 && !this.countdownStarted) {
       this.countdownStarted = true;
       this.countdown = COUNTDOWN_SECONDS;
     }
-    if (inZone.length < 2 || humansInZone.length < 1) {
+    if (this._inZoneCount < 2 || this._humanInZoneCount < 1) {
       this.countdownStarted = false;
       this.countdown = -1;
     }
@@ -332,8 +354,16 @@ export class LobbyGame {
 
   /** All participants (human + bot) currently in the ready zone and not splatted. */
   getReadyPlayers(): LobbyPlayer[] {
-    return [...this.players, ...this.bots]
-      .filter(p => p.x + PLAYER_WIDTH > READY_ZONE_X && p.splatTimer <= 0);
+    // Not a hot path — called once at countdown end. Iterate source arrays
+    // directly so this works even before the first update() call.
+    const result: LobbyPlayer[] = [];
+    for (const p of this.players) {
+      if (p.x + PLAYER_WIDTH > READY_ZONE_X && p.splatTimer <= 0) result.push(p);
+    }
+    for (const b of this.bots) {
+      if (b.x + PLAYER_WIDTH > READY_ZONE_X && b.splatTimer <= 0) result.push(b);
+    }
+    return result;
   }
 
   /** True when the countdown has elapsed. */
@@ -347,7 +377,11 @@ export class LobbyGame {
     if (!this.wildlife) {
       this.wildlife = initWildlife(6, GROUND_Y, 0.67);
     }
-    drawLobby(ctx, this.players, this.bots, this.extraChars, this.countdown, this.countdownStarted, dt, this.wildlife, this.isMobile);
+    drawLobby(
+      ctx, this.players, this.bots, this.extraChars,
+      this.countdown, this.countdownStarted, dt, this.wildlife, this.isMobile,
+      this._inZoneCount, this._humanInZoneCount, this._botInZoneCount,
+    );
   }
 
   // ---- Cleanup ----
@@ -475,6 +509,9 @@ function drawLobby(
   dt: number,
   wildlife: SimpleWildlife[] | null,
   isMobile: boolean,
+  inZoneCount: number,
+  humanInZoneCount: number,
+  botInZoneCount: number,
 ): void {
   const grads = getLobbyGradients(ctx);
   ctx.fillStyle = grads.sky;
@@ -778,14 +815,11 @@ function drawLobby(
     ctx.globalAlpha = 1;
   }
 
-  // ---- Player count in zone ----
-  const inZone = [...players, ...bots].filter(p => p.x + PLAYER_WIDTH > READY_ZONE_X && p.splatTimer <= 0);
-  if (inZone.length > 0) {
-    const humanCount = inZone.filter(p => !isBotSlot(p.slot)).length;
-    const botCount = inZone.filter(p => isBotSlot(p.slot)).length;
+  // ---- Player count in zone (uses cached counts from updateReadyZone) ----
+  if (inZoneCount > 0) {
     const parts: string[] = [];
-    if (humanCount > 0) parts.push(i18n.t('lobby_humans_ready', { count: humanCount }));
-    if (botCount > 0) parts.push(i18n.t('lobby_bots_ready', { count: botCount }));
+    if (humanInZoneCount > 0) parts.push(i18n.t('lobby_humans_ready', { count: humanInZoneCount }));
+    if (botInZoneCount > 0) parts.push(i18n.t('lobby_bots_ready', { count: botInZoneCount }));
     const readyText = parts.join(' + ');
     ctx.font = "bold 16px 'Nunito', sans-serif";
     ctx.textAlign = 'center';
