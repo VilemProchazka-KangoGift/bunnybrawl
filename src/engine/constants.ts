@@ -120,3 +120,11 @@ export const CONFETTI_FLUTTER = 80;       // px/s horizontal drift amplitude
 export const CONFETTI_LIFE_MIN = 1.0;
 export const CONFETTI_LIFE_MAX = 2.0;
 
+// Hazard spawning geometry
+export const SPAWN_EXCLUSION_MARGIN = 48;      // px — don't spawn hazards within this distance of a player
+export const SPRING_VERTICAL_CLEARANCE = 200;   // px — minimum clearance above platform for spring bounce
+export const SPAWN_RETRY_ATTEMPTS = 3;          // times to retry hazard spawn before giving up
+export const THORN_WIDTH = 28;                  // px
+export const THORN_HEIGHT = 12;                 // px
+export const THORN_Y_OFFSET = 12;              // px above platform surface
+
