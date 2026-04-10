@@ -9,6 +9,7 @@ import {
   CANVAS_WIDTH, CANVAS_HEIGHT,
   DUST_LAND_VY_THRESHOLD,
   PLAYER_WIDTH, PLAYER_HEIGHT,
+  SPRING_BOUNCE, GRAVITY,
 } from './constants';
 
 // --- Mocks ---
@@ -832,5 +833,405 @@ describe('Landing Dust', () => {
 
     // After landing with high velocity, dust particles should have been emitted
     expect((loop as any).particles.length).toBeGreaterThan(particlesBefore);
+  });
+});
+
+// ===================================================================
+// 11. Effect Zones — Extended
+// ===================================================================
+
+describe('Effect Zones — Extended', () => {
+  it('zero-G zone boosts rising player (vy *= 1.03)', () => {
+    const { loop } = createLoop({
+      arena: {
+        effectZones: [{ type: 'zero_g', x: 0, y: 0, width: 1280, height: 720 }],
+      },
+    });
+    loop.skipCountdown();
+    const player = loop.getState().players[0];
+    player.state = 'airborne';
+    player.vy = -200; // rising upward
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    // With zero-G boost (1.03x on negative vy) and gravity, the upward velocity
+    // should be MORE negative than simple gravity alone would produce
+    const pureGravityVy = -200 + GRAVITY * FIXED_TIMESTEP;
+    expect(player.vy).toBeLessThan(pureGravityVy);
+  });
+
+  it('zero-G zone only affects players inside the zone', () => {
+    const { loop } = createLoop({
+      arena: {
+        effectZones: [{ type: 'zero_g', x: 500, y: 0, width: 200, height: 720 }],
+      },
+    });
+    loop.skipCountdown();
+    const state = loop.getState();
+    const outsidePlayer = state.players[0];
+    const insidePlayer = state.players[1];
+
+    outsidePlayer.x = 100; // outside zone (zone is 500-700)
+    outsidePlayer.state = 'airborne';
+    outsidePlayer.vy = 200;
+
+    insidePlayer.x = 550; // inside zone
+    insidePlayer.state = 'airborne';
+    insidePlayer.vy = 200;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    // Both get gravity, but inside player also gets 0.92 multiplier
+    // so inside player should fall slower than outside player
+    expect(insidePlayer.vy).toBeLessThan(outsidePlayer.vy);
+  });
+
+  it('current zone applies vy force', () => {
+    const { loop } = createLoop({
+      arena: {
+        effectZones: [{ type: 'current', x: 0, y: 0, width: 1280, height: 720, vy: -3000 }],
+      },
+    });
+    loop.skipCountdown();
+    const player = loop.getState().players[0];
+    // Start airborne at a position with room above
+    player.state = 'airborne';
+    player.y = 400;
+    player.vy = 0;
+    const yBefore = player.y;
+
+    for (let i = 0; i < 30; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+    }
+
+    // Strong upward current (vy=-3000) should push player up despite gravity (900)
+    expect(player.y).toBeLessThan(yBefore);
+  });
+
+  it('current zone with zero vx/vy has no effect', () => {
+    const { loop: loopWithCurrent } = createLoop({
+      arena: {
+        effectZones: [{ type: 'current', x: 0, y: 0, width: 1280, height: 720, vx: 0, vy: 0 }],
+      },
+    });
+    const { loop: loopWithout } = createLoop();
+
+    loopWithCurrent.skipCountdown();
+    loopWithout.skipCountdown();
+
+    const p1 = loopWithCurrent.getState().players[0];
+    const p2 = loopWithout.getState().players[0];
+
+    // Give both same starting conditions
+    p1.x = 300; p1.y = 400; p1.vx = 50; p1.vy = 100; p1.state = 'airborne';
+    p2.x = 300; p2.y = 400; p2.vx = 50; p2.vy = 100; p2.state = 'airborne';
+
+    loopWithCurrent.fixedUpdate(FIXED_TIMESTEP);
+    loopWithout.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(p1.vx).toBeCloseTo(p2.vx, 1);
+    expect(p1.vy).toBeCloseTo(p2.vy, 1);
+  });
+
+  it('geyser does not launch player when inactive', () => {
+    const { loop } = createLoop({
+      arena: {
+        effectZones: [{ type: 'geyser', x: 0, y: 0, width: 1280, height: 720, strength: -550, interval: 10, duration: 3 }],
+      },
+    });
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    // Ensure geyser is inactive
+    state.geyserStates[0].active = false;
+    player.vy = 0;
+    player.state = 'idle';
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    // Player should NOT be launched (vy should not be strongly negative)
+    expect(player.vy).toBeGreaterThan(-100);
+  });
+
+  it('geyser uses zone.strength as launch velocity', () => {
+    const { loop } = createLoop({
+      arena: {
+        effectZones: [{ type: 'geyser', x: 0, y: 0, width: 1280, height: 720, strength: -800, interval: 10, duration: 3 }],
+      },
+    });
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    state.geyserStates[0].active = true;
+    state.geyserStates[0].activeTimer = 2;
+    player.vy = 0;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(player.vy).toBeLessThanOrEqual(-800);
+  });
+
+  it('geyser sets player state to airborne', () => {
+    const { loop } = createLoop({
+      arena: {
+        effectZones: [{ type: 'geyser', x: 0, y: 0, width: 1280, height: 720, strength: -550, interval: 10, duration: 3 }],
+      },
+    });
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    state.geyserStates[0].active = true;
+    state.geyserStates[0].activeTimer = 2;
+    player.state = 'idle';
+    player.vy = 0;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(player.state).toBe('airborne');
+  });
+
+  it('geyser Math.min preserves stronger upward velocity', () => {
+    const { loop } = createLoop({
+      arena: {
+        effectZones: [{ type: 'geyser', x: 0, y: 0, width: 1280, height: 720, strength: -550, interval: 10, duration: 3 }],
+      },
+    });
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    state.geyserStates[0].active = true;
+    state.geyserStates[0].activeTimer = 2;
+    player.vy = -900; // already faster than geyser
+    player.state = 'airborne';
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    // Math.min(-900 + gravity*dt, -550) — the player should retain strong upward velocity
+    // The key point is vy should still be very negative
+    expect(player.vy).toBeLessThanOrEqual(-550);
+  });
+
+  it('overlapping zero-G and current both apply', () => {
+    const { loop } = createLoop({
+      arena: {
+        effectZones: [
+          { type: 'zero_g', x: 0, y: 0, width: 1280, height: 720 },
+          { type: 'current', x: 0, y: 0, width: 1280, height: 720, vx: 2000 },
+        ],
+      },
+    });
+    loop.skipCountdown();
+    const player = loop.getState().players[0];
+    player.state = 'airborne';
+    player.vy = 200; // falling
+    player.vx = 0;
+    const vxBefore = player.vx;
+    const vyBefore = player.vy;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    // Zero-G should have slowed the fall (vy < pure gravity)
+    const pureGravityVy = vyBefore + GRAVITY * FIXED_TIMESTEP;
+    expect(player.vy).toBeLessThan(pureGravityVy);
+    // Current should have pushed horizontally
+    expect(player.vx).toBeGreaterThan(vxBefore);
+  });
+});
+
+// ===================================================================
+// 12. Bouncy Platforms
+// ===================================================================
+
+describe('Bouncy Platforms', () => {
+  it('player bounces when landing on a bouncy platform', () => {
+    const { loop } = createLoop({
+      arena: {
+        bouncyPlatforms: [0], // ground platform is bouncy
+      },
+    });
+    loop.skipCountdown();
+    const player = loop.getState().players[0];
+
+    // Position player just above the ground (platforms[0] at y=660)
+    player.x = 200;
+    player.y = 660 - player.height - 2;
+    player.vy = 150; // falling
+    player.state = 'airborne';
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    // Player should have bounced (vy = SPRING_BOUNCE * 0.85)
+    expect(player.vy).toBeCloseTo(SPRING_BOUNCE * 0.85, 0);
+    expect(player.state).toBe('airborne');
+  });
+
+  it('bouncy platform sets bouncyWobble timer', () => {
+    const { loop } = createLoop({
+      arena: {
+        bouncyPlatforms: [0],
+      },
+    });
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    player.x = 200;
+    player.y = 660 - player.height - 2;
+    player.vy = 150;
+    player.state = 'airborne';
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(state.bouncyWobble.get(0)).toBeCloseTo(0.4, 1);
+  });
+
+  it('player does not bounce on non-bouncy platform', () => {
+    const { loop } = createLoop({
+      arena: {
+        bouncyPlatforms: [1], // only platform index 1 is bouncy, not ground (0)
+      },
+    });
+    loop.skipCountdown();
+    const player = loop.getState().players[0];
+
+    player.x = 200;
+    player.y = 660 - player.height - 2;
+    player.vy = 150;
+    player.state = 'airborne';
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    // Should land normally, no bounce
+    expect(player.vy).not.toBeCloseTo(SPRING_BOUNCE * 0.85, 0);
+    expect(player.state).toBe('idle');
+  });
+
+  it('holding down on slow landing suppresses bounce', () => {
+    const { loop } = createLoop({
+      arena: {
+        bouncyPlatforms: [0],
+      },
+    });
+    loop.skipCountdown();
+    loop.setNetworkMode(true);
+    const player = loop.getState().players[0];
+
+    player.x = 200;
+    player.y = 660 - player.height - 2;
+    player.vy = 50; // slow fall (< 100)
+    player.state = 'airborne';
+
+    const inputs = new Map<string, InputState>();
+    inputs.set('P1', { left: false, right: false, jump: false, down: true });
+    inputs.set('P2', { left: false, right: false, jump: false, down: false });
+
+    loop.fixedUpdate(FIXED_TIMESTEP, inputs);
+
+    // Bounce should be suppressed (down held + prevVy < 100)
+    expect(player.vy).not.toBeCloseTo(SPRING_BOUNCE * 0.85, 0);
+  });
+
+  it('holding down on fast landing does NOT suppress bounce', () => {
+    const { loop } = createLoop({
+      arena: {
+        bouncyPlatforms: [0],
+      },
+    });
+    loop.skipCountdown();
+    loop.setNetworkMode(true);
+    const player = loop.getState().players[0];
+
+    player.x = 200;
+    player.y = 660 - player.height - 2;
+    player.vy = 300; // fast fall (> 100)
+    player.state = 'airborne';
+
+    const inputs = new Map<string, InputState>();
+    inputs.set('P1', { left: false, right: false, jump: false, down: true });
+    inputs.set('P2', { left: false, right: false, jump: false, down: false });
+
+    loop.fixedUpdate(FIXED_TIMESTEP, inputs);
+
+    // Bounce should still happen (prevVy >= 100 overrides down)
+    expect(player.vy).toBeCloseTo(SPRING_BOUNCE * 0.85, 0);
+    expect(player.state).toBe('airborne');
+  });
+
+  it('bouncyWobble timer decays over time', () => {
+    const { loop } = createLoop({
+      arena: {
+        bouncyPlatforms: [0],
+      },
+    });
+    loop.skipCountdown();
+    const state = loop.getState();
+
+    // Manually set a wobble
+    state.bouncyWobble.set(0, 0.4);
+
+    // Tick several frames
+    for (let i = 0; i < 10; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+    }
+
+    // Timer should have decayed
+    const remaining = state.bouncyWobble.get(0);
+    if (remaining !== undefined) {
+      expect(remaining).toBeLessThan(0.4);
+    }
+    // If enough ticks passed, the entry is deleted entirely
+  });
+
+  it('bouncyWobble entry is deleted when timer reaches 0', () => {
+    const { loop } = createLoop({
+      arena: {
+        bouncyPlatforms: [0],
+      },
+    });
+    loop.skipCountdown();
+    const state = loop.getState();
+
+    state.bouncyWobble.set(0, 0.02); // nearly expired
+
+    // Tick enough to expire
+    for (let i = 0; i < 5; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+    }
+
+    // Entry should be deleted
+    expect(state.bouncyWobble.has(0)).toBe(false);
+  });
+
+  it('superBounce mod makes all platforms bouncy', () => {
+    const { loop } = createLoop({
+      settings: {
+        mods: {
+          extremeGore: false,
+          carrotChase: false,
+          giantPlayers: false,
+          turbo: false,
+          superBounce: true,
+          mirrorArena: false,
+          underwaterGravity: false,
+        },
+      },
+    });
+    loop.skipCountdown();
+    const player = loop.getState().players[0];
+
+    // Land on ground (platform 0 — should be bouncy due to superBounce)
+    player.x = 200;
+    player.y = 660 - player.height - 2;
+    player.vy = 150;
+    player.state = 'airborne';
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(player.vy).toBeCloseTo(SPRING_BOUNCE * 0.85, 0);
+    expect(player.state).toBe('airborne');
   });
 });

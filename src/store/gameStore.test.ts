@@ -65,4 +65,34 @@ describe('GameStore', () => {
     expect(state.activePlayers).toEqual([]);
     expect(state.winner).toBeNull();
   });
+
+  it('all game mods default to false', () => {
+    const { matchSettings } = useGameStore.getState();
+    expect(matchSettings.mods).toEqual({
+      extremeGore: false,
+      carrotChase: false,
+      giantPlayers: false,
+      turbo: false,
+      superBounce: false,
+      mirrorArena: false,
+      underwaterGravity: false,
+    });
+  });
+
+  it('setMatchSettings preserves mod changes', () => {
+    useGameStore.getState().setMatchSettings({
+      mods: {
+        extremeGore: false,
+        carrotChase: false,
+        giantPlayers: false,
+        turbo: true,
+        superBounce: false,
+        mirrorArena: false,
+        underwaterGravity: false,
+      },
+    });
+    const { matchSettings } = useGameStore.getState();
+    expect(matchSettings.mods.turbo).toBe(true);
+    expect(matchSettings.mods.extremeGore).toBe(false);
+  });
 });
