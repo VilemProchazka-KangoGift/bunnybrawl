@@ -660,7 +660,6 @@ describe('Effect Zones', () => {
     // baseline by the 0.92 multiplier at some point during the tick
     // We just verify the zone was processed — player's vy should differ
     // from pure gravity (GRAVITY * dt + vyBefore)
-    expect(player.vy).toBeDefined();
     // The zero-G zone applies 0.92 multiplier to positive vy, so the result
     // should be less than vyBefore + GRAVITY * dt (what pure gravity would give)
     const pureGravityVy = vyBefore + 900 * FIXED_TIMESTEP;

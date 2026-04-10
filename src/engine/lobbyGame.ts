@@ -8,7 +8,7 @@
 
 import type { CharacterDef, CharacterSlot, PlayerSlot, InputState } from './types';
 import { ALL_BOT_SLOTS, isBotSlot } from './types';
-import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED } from './constants';
+import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED, STOMP_VY_THRESHOLD } from './constants';
 import { KEY_BINDINGS } from './input';
 import { getAllCharacters, getCharacterEmoji, hasCustomEyes, getSpriteRenderer, getCharacterDisplayName, getCharacterPack, drawLegs } from './characters';
 import {
@@ -32,7 +32,6 @@ const LOBBY_GRAVITY = 600;
 const LOBBY_SPEED = 200;
 const LOBBY_JUMP = -400;
 const LOBBY_FAST_FALL = 500;
-const STOMP_VY = 50;
 
 // Wall obstacle at ~2/3 of screen — forces players to jump to reach the ready zone
 const WALL_X = CANVAS_WIDTH * 0.58;
@@ -41,6 +40,39 @@ const WALL_HEIGHT = 120;
 const WALL_Y = GROUND_Y - WALL_HEIGHT;
 
 // ---- Public types ----
+
+const FLOWER_COLORS = ['#FF6B8A', '#FFD700', '#FF69B4', '#DDA0DD', '#87CEEB', '#FFA07A'];
+const FLOWER_POSITIONS = [100, 190, 260, 340, 430, 520, 580, 670];
+
+// Cached gradients (static coordinates, created once per canvas context)
+let _cachedCtx: CanvasRenderingContext2D | null = null;
+let _skyGrad: CanvasGradient | null = null;
+let _groundGrad: CanvasGradient | null = null;
+let _wallGrad: CanvasGradient | null = null;
+let _zoneGrad: CanvasGradient | null = null;
+
+function getLobbyGradients(ctx: CanvasRenderingContext2D) {
+  if (_cachedCtx !== ctx) {
+    _cachedCtx = ctx;
+    _skyGrad = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+    _skyGrad.addColorStop(0, '#4A90D9');
+    _skyGrad.addColorStop(0.6, '#87CEEB');
+    _skyGrad.addColorStop(1, '#B0E0E6');
+    _groundGrad = ctx.createLinearGradient(0, GROUND_Y, 0, CANVAS_HEIGHT);
+    _groundGrad.addColorStop(0, '#4A7C3F');
+    _groundGrad.addColorStop(0.3, '#3D6B35');
+    _groundGrad.addColorStop(1, '#2D5025');
+    _wallGrad = ctx.createLinearGradient(WALL_X, WALL_Y, WALL_X + WALL_WIDTH, WALL_Y + WALL_HEIGHT);
+    _wallGrad.addColorStop(0, '#8B7355');
+    _wallGrad.addColorStop(0.5, '#A0896B');
+    _wallGrad.addColorStop(1, '#7A6548');
+    _zoneGrad = ctx.createLinearGradient(READY_ZONE_X, 0, CANVAS_WIDTH, 0);
+    _zoneGrad.addColorStop(0, 'rgba(255, 215, 0, 0)');
+    _zoneGrad.addColorStop(0.15, 'rgba(255, 215, 0, 0.05)');
+    _zoneGrad.addColorStop(1, 'rgba(255, 215, 0, 0.12)');
+  }
+  return { sky: _skyGrad!, ground: _groundGrad!, wall: _wallGrad!, zone: _zoneGrad! };
+}
 
 export interface LobbyPlayer {
   slot: PlayerSlot;
@@ -217,7 +249,7 @@ export class LobbyGame {
     const stompAttackers = [...this.players, ...this.bots];
     for (const attacker of stompAttackers) {
       if (attacker.splatTimer > 0) continue;
-      if (attacker.vy < STOMP_VY) continue;
+      if (attacker.vy < STOMP_VY_THRESHOLD) continue;
       const attackerIsBot = isBotSlot(attacker.slot);
 
       for (const victim of allLobby) {
@@ -444,12 +476,8 @@ function drawLobby(
   wildlife: SimpleWildlife[] | null,
   isMobile: boolean,
 ): void {
-  // ---- Sky with gradient (meadow style) ----
-  const skyGrad = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-  skyGrad.addColorStop(0, '#4A90D9');
-  skyGrad.addColorStop(0.6, '#87CEEB');
-  skyGrad.addColorStop(1, '#B0E0E6');
-  ctx.fillStyle = skyGrad;
+  const grads = getLobbyGradients(ctx);
+  ctx.fillStyle = grads.sky;
   ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
   // ---- Distant forest treeline ----
@@ -500,11 +528,7 @@ function drawLobby(
   }
 
   // ---- Ground ----
-  const groundGrad = ctx.createLinearGradient(0, GROUND_Y, 0, CANVAS_HEIGHT);
-  groundGrad.addColorStop(0, '#4a8c3f');
-  groundGrad.addColorStop(0.15, '#3a7030');
-  groundGrad.addColorStop(1, '#2a5520');
-  ctx.fillStyle = groundGrad;
+  ctx.fillStyle = grads.ground;
   ctx.fillRect(0, GROUND_Y, CANVAS_WIDTH, CANVAS_HEIGHT - GROUND_Y);
   ctx.fillStyle = '#6BBF59';
   ctx.fillRect(0, GROUND_Y, CANVAS_WIDTH, 4);
@@ -529,10 +553,8 @@ function drawLobby(
   drawBush(ctx, 500, GROUND_Y, 25);
 
   // ---- Flowers ----
-  const flowerColors = ['#FF6B8A', '#FFD700', '#FF69B4', '#DDA0DD', '#87CEEB', '#FFA07A'];
-  const flowerPositions = [100, 190, 260, 340, 430, 520, 580, 670];
-  for (const fx of flowerPositions) {
-    drawFlower(ctx, fx, GROUND_Y, flowerColors[Math.floor(fx * 0.01) % flowerColors.length]);
+  for (const fx of FLOWER_POSITIONS) {
+    drawFlower(ctx, fx, GROUND_Y, FLOWER_COLORS[Math.floor(fx * 0.01) % FLOWER_COLORS.length]);
   }
 
   // ---- Mushrooms ----
@@ -552,11 +574,7 @@ function drawLobby(
   // ---- Wall obstacle (nicer) ----
   ctx.fillStyle = 'rgba(0,0,0,0.15)';
   ctx.fillRect(WALL_X + 4, WALL_Y + 4, WALL_WIDTH, WALL_HEIGHT);
-  const wallGrad = ctx.createLinearGradient(WALL_X, WALL_Y, WALL_X + WALL_WIDTH, WALL_Y + WALL_HEIGHT);
-  wallGrad.addColorStop(0, '#7D6D5F');
-  wallGrad.addColorStop(0.5, '#6B5B4F');
-  wallGrad.addColorStop(1, '#5A4A3E');
-  ctx.fillStyle = wallGrad;
+  ctx.fillStyle = grads.wall;
   ctx.fillRect(WALL_X, WALL_Y, WALL_WIDTH, WALL_HEIGHT);
   ctx.strokeStyle = 'rgba(0,0,0,0.2)';
   ctx.lineWidth = 1;
@@ -579,11 +597,7 @@ function drawLobby(
   }
 
   // ---- Ready zone (highly visible) ----
-  const zoneGrad = ctx.createLinearGradient(READY_ZONE_X, 0, CANVAS_WIDTH, 0);
-  zoneGrad.addColorStop(0, 'rgba(76, 175, 80, 0.08)');
-  zoneGrad.addColorStop(0.3, 'rgba(76, 175, 80, 0.2)');
-  zoneGrad.addColorStop(1, 'rgba(76, 175, 80, 0.3)');
-  ctx.fillStyle = zoneGrad;
+  ctx.fillStyle = grads.zone;
   ctx.fillRect(READY_ZONE_X, 55, CANVAS_WIDTH - READY_ZONE_X, GROUND_Y - 55);
 
   ctx.strokeStyle = 'rgba(76, 200, 80, 0.7)';
@@ -648,13 +662,12 @@ function drawLobby(
 
   // ---- UI bar at top (polished) ----
   const barH = 52;
-  const isMobileView = isMobile;
   const maxSlotPx = 260;
   const slotCount = players.length;
-  const barW = isMobileView
+  const barW = isMobile
     ? Math.min(slotCount * maxSlotPx + 40, CANVAS_WIDTH - 16)
     : CANVAS_WIDTH - 16;
-  const barX = isMobileView ? CANVAS_WIDTH - barW - 8 : 8;
+  const barX = isMobile ? CANVAS_WIDTH - barW - 8 : 8;
   ctx.fillStyle = 'rgba(0,0,0,0.6)';
   ctx.beginPath();
   ctx.roundRect(barX, 6, barW, barH, 10);
