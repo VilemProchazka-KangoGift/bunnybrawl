@@ -17,6 +17,7 @@ import { haptics } from './haptics';
 import { Renderer } from './renderer';
 import { applyInput, applyGravity, movePlayer, collidePlatforms, updatePlayerState, applyArenaConstraints, collidePlayersHorizontal, aabbOverlap, resolveStuckPlayer } from './physics';
 import { checkStomps, updateSplatTimers } from './stomp';
+import { checkSpringCollision, checkThornCollision, checkHazardZoneCollision, checkGhostCollision, checkLavaRockCollision } from './hazardCollision';
 import { getCharacterGibs } from './characters';
 import { audio } from './audio';
 import {
@@ -24,7 +25,7 @@ import {
   PLAYER_WIDTH, PLAYER_HEIGHT, ANIM_FRAME_DURATION, RUN_FRAMES,
   DUST_LAND_VY_THRESHOLD, CARROT_SPAWN_INTERVAL, CARROT_CHASE_SPAWN_INTERVAL,
   CARROT_FIRST_SPAWN_DELAY, CARROT_CHASE_FIRST_SPAWN_DELAY, CARROT_SIZE, GIANT_SCALE,
-  FAT_DURATION, SPRING_BOUNCE, SPRING_SIZE,
+  FAT_DURATION, SPRING_BOUNCE,
   THORN_SLOW_DURATION, CANVAS_WIDTH, CANVAS_HEIGHT,
   SPRING_SPAWN_INTERVAL, THORN_SPAWN_INTERVAL, HAZARD_LIFETIME, HAZARD_GROW_TIME,
   SCREEN_SHAKE_DURATION, SLOW_MO_DURATION, SLOW_MO_FACTOR, HITSTOP_DURATION, HAZARD_HITSTOP_DURATION,
@@ -1512,9 +1513,10 @@ export class GameLoop {
       }
 
       // Spring collision (only fully grown, not already bouncing)
-      for (const spring of this.state.springs) {
-        if (spring.growTimer > 0 || spring.bounceTimer > 0) continue;
-        if (aabbOverlap(player.x, player.y, player.width, player.height, spring.x - SPRING_SIZE / 2, spring.y - SPRING_SIZE, SPRING_SIZE, SPRING_SIZE) && player.vy >= 0) {
+      {
+        const springHit = checkSpringCollision(player, this.state.springs);
+        if (springHit) {
+          const spring = this.state.springs[springHit.springIndex];
           player.vy = SPRING_BOUNCE;
           player.state = 'airborne';
           spring.bounceTimer = 0.3;
@@ -1525,9 +1527,10 @@ export class GameLoop {
       }
 
       // Thorn collision (only fully grown)
-      for (const thorn of this.state.thorns) {
-        if (thorn.growTimer > 0 || thorn.hit) continue;
-        if (player.slowTimer <= 0 && player.invincibleTimer <= 0 && aabbOverlap(player.x, player.y, player.width, player.height, thorn.x, thorn.y, thorn.width, thorn.height)) {
+      {
+        const thornHit = checkThornCollision(player, this.state.thorns);
+        if (thornHit) {
+          const thorn = this.state.thorns[thornHit.thornIndex];
           player.slowTimer = THORN_SLOW_DURATION;
           thorn.hit = true;
           this.playSound('thornhit');
@@ -1561,109 +1564,94 @@ export class GameLoop {
 
       // Hazard zone collision (lava pools etc.) — inset hitbox by 12px on sides to allow edge stepping
       if (this.arena.hazardZones) {
-        for (const hz of this.arena.hazardZones) {
-          const inset = 12;
-          if (player.slowTimer <= 0 && player.invincibleTimer <= 0 &&
-              aabbOverlap(player.x, player.y, player.width, player.height, hz.x + inset, hz.y, hz.width - inset * 2, hz.height)) {
-            player.slowTimer = THORN_SLOW_DURATION;
-            if (hz.type === 'lava') player.burnTimer = THORN_SLOW_DURATION;
-            this.playSound('thornhit');
-            const px = player.x + player.width / 2;
-            const py = player.y + player.height / 2;
-            // Big particle burst
-            for (let i = 0; i < 24; i++) {
-              const angle = Math.random() * Math.PI * 2;
-              const speed = 80 + Math.random() * 200;
-              const life = 0.4 + Math.random() * 0.6;
-              const color = hz.type === 'lava' ? (i % 3 === 0 ? '#FFCC00' : i % 3 === 1 ? '#FF4400' : '#FF8800') : BLOOD_COLOR;
-              this.emitParticle(px + (Math.random() - 0.5) * 12, py + (Math.random() - 0.5) * 12, Math.cos(angle) * speed, Math.sin(angle) * speed - 100, life, 3 + Math.random() * 5, color);
-            }
-            // Knockback away from hazard center
-            const hcx = hz.x + hz.width / 2;
-            player.vx += (px > hcx ? 1 : -1) * 150;
-            player.vy = -200;
-            player.damageFlashSide = px > hcx ? 'left' : 'right';
-            player.damageFlashTimer = 0.4;
-            player.squashScale = 0.6;
-            player.squashTimer = 0.2;
-            this.state.screenShake = Math.max(this.state.screenShake, 0.25);
-            this.state.screenFlash = Math.max(this.state.screenFlash, 0.06);
-            player.hitstopTimer = Math.max(player.hitstopTimer, HAZARD_HITSTOP_DURATION);
-            this.state.hitstopZoom = Math.max(this.state.hitstopZoom, HAZARD_HITSTOP_DURATION);
-            if (haptics.isLocal(player.id)) haptics.hazardHit();
-            break;
+        const hzHit = checkHazardZoneCollision(player, this.arena.hazardZones);
+        if (hzHit) {
+          const hz = hzHit.zone;
+          player.slowTimer = THORN_SLOW_DURATION;
+          if (hz.type === 'lava') player.burnTimer = THORN_SLOW_DURATION;
+          this.playSound('thornhit');
+          const px = player.x + player.width / 2;
+          const py = player.y + player.height / 2;
+          // Big particle burst
+          for (let i = 0; i < 24; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 80 + Math.random() * 200;
+            const life = 0.4 + Math.random() * 0.6;
+            const color = hz.type === 'lava' ? (i % 3 === 0 ? '#FFCC00' : i % 3 === 1 ? '#FF4400' : '#FF8800') : BLOOD_COLOR;
+            this.emitParticle(px + (Math.random() - 0.5) * 12, py + (Math.random() - 0.5) * 12, Math.cos(angle) * speed, Math.sin(angle) * speed - 100, life, 3 + Math.random() * 5, color);
           }
+          // Knockback away from hazard center
+          player.vx += hzHit.knockbackDir * 150;
+          player.vy = -200;
+          player.damageFlashSide = hzHit.knockbackDir > 0 ? 'left' : 'right';
+          player.damageFlashTimer = 0.4;
+          player.squashScale = 0.6;
+          player.squashTimer = 0.2;
+          this.state.screenShake = Math.max(this.state.screenShake, 0.25);
+          this.state.screenFlash = Math.max(this.state.screenFlash, 0.06);
+          player.hitstopTimer = Math.max(player.hitstopTimer, HAZARD_HITSTOP_DURATION);
+          this.state.hitstopZoom = Math.max(this.state.hitstopZoom, HAZARD_HITSTOP_DURATION);
+          if (haptics.isLocal(player.id)) haptics.hazardHit();
         }
       }
 
       // Ghost collision
-      for (const ghost of this.state.ghosts) {
-        if (player.slowTimer <= 0 && player.invincibleTimer <= 0) {
-          const gx = ghost.x;
-          const gy = ghost.y;
-          const gr = ghost.size * 0.5;
+      {
+        const ghostHit = checkGhostCollision(player, this.state.ghosts);
+        if (ghostHit) {
+          player.slowTimer = THORN_SLOW_DURATION;
+          this.playSound('thornhit');
           const pcx = player.x + player.width / 2;
           const pcy = player.y + player.height / 2;
-          const dx = pcx - gx;
-          const dy = pcy - gy;
-          if (dx * dx + dy * dy < (gr + player.width * 0.4) * (gr + player.width * 0.4)) {
-            player.slowTimer = THORN_SLOW_DURATION;
-            this.playSound('thornhit');
-            // Big ghost hit burst
-            for (let i = 0; i < 20; i++) {
-              const angle = Math.random() * Math.PI * 2;
-              const speed = 60 + Math.random() * 160;
-              const life = 0.4 + Math.random() * 0.5;
-              const color = i % 2 === 0 ? '#8855CC' : '#AA77EE';
-              this.emitParticle(pcx, pcy, Math.cos(angle) * speed, Math.sin(angle) * speed - 80, life, 3 + Math.random() * 4, color);
-            }
-            // Knockback away from ghost
-            player.vx += (dx > 0 ? 1 : -1) * 180;
-            player.vy = -180;
-            player.damageFlashSide = dx > 0 ? 'left' : 'right';
-            player.damageFlashTimer = 0.4;
-            player.squashScale = 0.6;
-            player.squashTimer = 0.2;
-            this.state.screenShake = Math.max(this.state.screenShake, 0.2);
-            this.state.screenFlash = Math.max(this.state.screenFlash, 0.06);
-            player.hitstopTimer = Math.max(player.hitstopTimer, HAZARD_HITSTOP_DURATION);
-            this.state.hitstopZoom = Math.max(this.state.hitstopZoom, HAZARD_HITSTOP_DURATION);
-            break;
+          // Big ghost hit burst
+          for (let i = 0; i < 20; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 60 + Math.random() * 160;
+            const life = 0.4 + Math.random() * 0.5;
+            const color = i % 2 === 0 ? '#8855CC' : '#AA77EE';
+            this.emitParticle(pcx, pcy, Math.cos(angle) * speed, Math.sin(angle) * speed - 80, life, 3 + Math.random() * 4, color);
           }
+          // Knockback away from ghost
+          player.vx += ghostHit.knockbackDir * 180;
+          player.vy = -180;
+          player.damageFlashSide = ghostHit.knockbackDir > 0 ? 'left' : 'right'; // flash on side facing the ghost
+          player.damageFlashTimer = 0.4;
+          player.squashScale = 0.6;
+          player.squashTimer = 0.2;
+          this.state.screenShake = Math.max(this.state.screenShake, 0.2);
+          this.state.screenFlash = Math.max(this.state.screenFlash, 0.06);
+          player.hitstopTimer = Math.max(player.hitstopTimer, HAZARD_HITSTOP_DURATION);
+          this.state.hitstopZoom = Math.max(this.state.hitstopZoom, HAZARD_HITSTOP_DURATION);
         }
       }
 
       // Lava rock collision
-      for (const rock of this.state.lavaRocks) {
-        if (!rock.active) continue;
-        if (player.slowTimer <= 0 && player.invincibleTimer <= 0) {
-          const dx = (player.x + player.width / 2) - rock.x;
-          const dy = (player.y + player.height / 2) - rock.y;
-          const hitDist = rock.size + player.width * 0.3;
-          if (dx * dx + dy * dy < hitDist * hitDist) {
-            rock.active = false;
-            player.slowTimer = THORN_SLOW_DURATION;
-            this.playSound('thornhit');
-            const pcx = player.x + player.width / 2;
-            const pcy = player.y + player.height / 2;
-            for (let i = 0; i < 16; i++) {
-              const angle = Math.random() * Math.PI * 2;
-              const speed = 60 + Math.random() * 150;
-              const life = 0.3 + Math.random() * 0.5;
-              const color = i % 2 === 0 ? '#FF6600' : '#FFAA00';
-              this.emitParticle(pcx, pcy, Math.cos(angle) * speed, Math.sin(angle) * speed - 60, life, 2.5 + Math.random() * 4, color);
-            }
-            player.vx += dx > 0 ? -120 : 120;
-            player.vy = -150;
-            player.damageFlashSide = dx > 0 ? 'left' : 'right';
-            player.damageFlashTimer = 0.3;
-            player.squashScale = 0.65;
-            player.squashTimer = 0.2;
-            this.state.screenShake = Math.max(this.state.screenShake, 0.2);
-            player.hitstopTimer = Math.max(player.hitstopTimer, HAZARD_HITSTOP_DURATION);
-            this.state.hitstopZoom = Math.max(this.state.hitstopZoom, HAZARD_HITSTOP_DURATION);
-            if (haptics.isLocal(player.id)) haptics.hazardHit();
+      {
+        const rockHit = checkLavaRockCollision(player, this.state.lavaRocks);
+        if (rockHit) {
+          const rock = this.state.lavaRocks[rockHit.rockIndex];
+          rock.active = false;
+          player.slowTimer = THORN_SLOW_DURATION;
+          this.playSound('thornhit');
+          const pcx = player.x + player.width / 2;
+          const pcy = player.y + player.height / 2;
+          for (let i = 0; i < 16; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 60 + Math.random() * 150;
+            const life = 0.3 + Math.random() * 0.5;
+            const color = i % 2 === 0 ? '#FF6600' : '#FFAA00';
+            this.emitParticle(pcx, pcy, Math.cos(angle) * speed, Math.sin(angle) * speed - 60, life, 2.5 + Math.random() * 4, color);
           }
+          player.vx += rockHit.knockbackDir > 0 ? -120 : 120;
+          player.vy = -150;
+          player.damageFlashSide = rockHit.knockbackDir > 0 ? 'left' : 'right';
+          player.damageFlashTimer = 0.3;
+          player.squashScale = 0.65;
+          player.squashTimer = 0.2;
+          this.state.screenShake = Math.max(this.state.screenShake, 0.2);
+          player.hitstopTimer = Math.max(player.hitstopTimer, HAZARD_HITSTOP_DURATION);
+          this.state.hitstopZoom = Math.max(this.state.hitstopZoom, HAZARD_HITSTOP_DURATION);
+          if (haptics.isLocal(player.id)) haptics.hazardHit();
         }
       }
 
