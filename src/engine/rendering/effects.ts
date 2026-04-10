@@ -8,8 +8,8 @@ export function drawDayNightCycle(
   ctx: CanvasRenderingContext2D,
   dayPhase: number,
   matchState: MatchState | undefined,
-  frameTime: number,
   theme: ThemeConfig,
+  frameTime: number,
 ): void {
   // dayPhase: 0 = noon, 0.5 = midnight, 1.0 = noon again
   // Use cosine so darkness peaks smoothly at 0.5

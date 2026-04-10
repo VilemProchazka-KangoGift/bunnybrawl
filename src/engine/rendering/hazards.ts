@@ -16,8 +16,8 @@ export function clearHazardCaches(): void {
 export function drawHazardZone(
   ctx: CanvasRenderingContext2D,
   hz: { x: number; y: number; width: number; height: number; type: string },
-  time: number,
   theme: ThemeConfig,
+  time: number,
 ): void {
   if (theme.drawCustomHazardZone) {
     theme.drawCustomHazardZone(ctx, hz.x, hz.y, hz.width, hz.height, time);
@@ -77,8 +77,8 @@ export function drawHazardZone(
 export function drawGhost(
   ctx: CanvasRenderingContext2D,
   ghost: { x: number; y: number; size: number; alpha: number; wobblePhase: number },
-  time: number,
   theme: ThemeConfig,
+  time: number,
 ): void {
   // Custom ghost renderer (e.g. wasps)
   if (theme.drawCustomGhost) {
