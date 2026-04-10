@@ -11,11 +11,11 @@ import { ALL_BOT_SLOTS, isBotSlot } from './types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED, STOMP_VY_THRESHOLD } from './constants';
 import { KEY_BINDINGS } from './input';
 import { applySimpleGravity, moveSimple } from './physics';
-import { getAllCharacters, getCharacterEmoji, hasCustomEyes, getSpriteRenderer, getCharacterDisplayName, getCharacterPack, drawLegs } from './characters';
+import { getAllCharacters, getCharacterEmoji, getCharacterDisplayName } from './characters';
 import {
   drawTree, drawBush, drawFlower, drawMushroom, drawGrassTuft, drawCloud,
 } from './themes/drawPrimitives';
-import { drawHighlightSpot } from './spriteShading';
+import { drawCharacterCore } from './rendering/players';
 import { audio } from './audio';
 import i18n from '../i18n';
 import { initWildlife, updateAndDrawWildlife, drawDayNightCycle } from './canvasAnimations';
@@ -878,25 +878,8 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
   }
 
   const state = isAirborne ? 'airborne' : isRunning ? 'run' : 'idle';
-  const spriteRenderer = getSpriteRenderer(char.name);
   const colors = { color: char.color, darkColor: char.darkColor, lightColor: char.lightColor };
-  spriteRenderer(ctx, cx, yOff, w, h, state, animFrame, false, -1, colors);
-
-  const lobbyPack = getCharacterPack(char.name);
-  if (lobbyPack && !lobbyPack.noHighlight) {
-    drawHighlightSpot(ctx, lobbyPack.bodyEllipse(cx, yOff, w, h));
-  }
-
-  if (!hasCustomEyes(char.name)) {
-    ctx.fillStyle = '#000';
-    ctx.beginPath(); ctx.arc(cx - 4, yOff + h * 0.4, 2.5, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx + 6, yOff + h * 0.4, 2.5, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#FFF';
-    ctx.beginPath(); ctx.arc(cx - 3, yOff + h * 0.38, 1, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx + 7, yOff + h * 0.38, 1, 0, Math.PI * 2); ctx.fill();
-  }
-
-  drawLegs(ctx, cx, yOff, h, state, animFrame, p.squashScale, colors, lobbyPack?.legStyle);
+  drawCharacterCore(ctx, cx, yOff, w, h, char.name, state, animFrame, p.squashScale, colors);
 
   ctx.restore();
 }

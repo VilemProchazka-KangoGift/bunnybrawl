@@ -200,6 +200,36 @@ function drawCharacterSprite(
   ctx.drawImage(cached, x - pad, y - pad);
 }
 
+/** Core character drawing: sprite + highlight + eyes + legs. Shared by match and lobby. */
+export function drawCharacterCore(
+  ctx: CanvasRenderingContext2D,
+  cx: number, yOff: number, w: number, h: number,
+  charName: string, state: string, animFrame: number,
+  squashScale: number,
+  colors: { color: string; darkColor: string; lightColor: string },
+  isIdleAnim = false, idleT = -1,
+): ReturnType<typeof getCharacterPack> {
+  const spriteRenderer = getSpriteRenderer(charName);
+  spriteRenderer(ctx, cx, yOff, w, h, state, animFrame, isIdleAnim, idleT >= 0 ? idleT : 0, colors);
+
+  const pack = getCharacterPack(charName);
+  if (pack && !pack.noHighlight) {
+    drawHighlightSpot(ctx, pack.bodyEllipse(cx, yOff, w, h));
+  }
+
+  if (!hasCustomEyes(charName)) {
+    ctx.fillStyle = '#000';
+    ctx.beginPath(); ctx.arc(cx - 4, yOff + h * 0.4, 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 6, yOff + h * 0.4, 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#FFF';
+    ctx.beginPath(); ctx.arc(cx - 3, yOff + h * 0.38, 1, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 7, yOff + h * 0.38, 1, 0, Math.PI * 2); ctx.fill();
+  }
+
+  drawLegs(ctx, cx, yOff, h, state, animFrame, squashScale, colors, pack?.legStyle);
+  return pack;
+}
+
 function _drawCharacterSpriteImpl(
   ctx: CanvasRenderingContext2D,
   x: number, y: number, w: number, h: number,
@@ -248,37 +278,8 @@ function _drawCharacterSpriteImpl(
     // 'none' -- no transform
   }
 
-  // Body -- dispatch to character-specific renderer from pack registry
-  const spriteRenderer = getSpriteRenderer(char.name);
   const colors = { color: char.color, darkColor: char.darkColor, lightColor: char.lightColor };
-  spriteRenderer(ctx, cx, yOff, w, h, state, animFrame, isIdleAnim, idleT, colors);
-
-  // 3D shading overlay (highlight spot)
-  const pack = getCharacterPack(char.name);
-  if (pack && !pack.noHighlight) {
-    drawHighlightSpot(ctx, pack.bodyEllipse(cx, yOff, w, h));
-  }
-
-  // Eyes (generic -- for characters without custom eyes)
-  if (!hasCustomEyes(char.name)) {
-    ctx.fillStyle = '#000';
-    ctx.beginPath();
-    ctx.arc(cx - 4, yOff + h * 0.4, 2.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(cx + 6, yOff + h * 0.4, 2.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#FFF';
-    ctx.beginPath();
-    ctx.arc(cx - 3, yOff + h * 0.38, 1, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(cx + 7, yOff + h * 0.38, 1, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // Legs -- dispatch to shared leg renderer with per-character style
-  drawLegs(ctx, cx, yOff, h, state, animFrame, squashScale, colors, pack?.legStyle);
+  drawCharacterCore(ctx, cx, yOff, w, h, char.name, state, animFrame, squashScale, colors, isIdleAnim, idleT);
 
   // Motion lines for airborne
   if (isAirborne && !fastFalling) {

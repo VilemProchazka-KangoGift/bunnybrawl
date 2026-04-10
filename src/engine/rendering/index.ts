@@ -3,7 +3,7 @@ export { drawWeather, drawParticles, drawGibs, drawGibShape, drawConfetti, drawF
 export { drawHazardZone, drawGhost, drawLavaRock, drawZeroGZone, drawCurrentZone, drawGeyser, drawBouncyPlatformOverlay, drawPigeonFlock, clearHazardCaches } from './hazards';
 export { drawDayNightCycle } from './effects';
 export { drawHUD, drawCountdown, invalidateHudCache, resetHudState } from './hud';
-export { drawPlayer, clearSpriteCache } from './players';
+export { drawPlayer, clearSpriteCache, drawCharacterCore } from './players';
 
 import { clearHazardCaches } from './hazards';
 import { clearSpriteCache } from './players';
