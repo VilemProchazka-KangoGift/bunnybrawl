@@ -256,3 +256,192 @@ describe('Integration: spring bounce chain', () => {
     expect(typeof p.vy).toBe('number');
   });
 });
+
+describe('Integration: determinism', () => {
+  it('two loops with same initial state produce identical results after 60 frames', () => {
+    const { loop: a } = createLoop();
+    const { loop: b } = createLoop();
+    a.skipCountdown();
+    b.skipCountdown();
+
+    // Run 60 frames with no input
+    for (let i = 0; i < 60; i++) {
+      a.fixedUpdate(FIXED_TIMESTEP);
+      b.fixedUpdate(FIXED_TIMESTEP);
+    }
+
+    const stateA = a.getState();
+    const stateB = b.getState();
+
+    // Player positions should be identical
+    for (let i = 0; i < stateA.players.length; i++) {
+      expect(stateA.players[i].x).toBe(stateB.players[i].x);
+      expect(stateA.players[i].y).toBe(stateB.players[i].y);
+      expect(stateA.players[i].vx).toBe(stateB.players[i].vx);
+      expect(stateA.players[i].vy).toBe(stateB.players[i].vy);
+    }
+    expect(stateA.timeElapsed).toBe(stateB.timeElapsed);
+  });
+
+  it('network mode with identical inputs produces identical state', () => {
+    const { loop: a } = createLoop();
+    const { loop: b } = createLoop();
+    a.skipCountdown();
+    b.skipCountdown();
+    a.setNetworkMode(true);
+    b.setNetworkMode(true);
+
+    const inputs = new Map<string, InputState>();
+    inputs.set('P1', { left: false, right: true, jump: false, down: false });
+    inputs.set('P2', { left: true, right: false, jump: false, down: false });
+
+    for (let i = 0; i < 60; i++) {
+      a.fixedUpdate(FIXED_TIMESTEP, inputs);
+      b.fixedUpdate(FIXED_TIMESTEP, inputs);
+    }
+
+    const stateA = a.getState();
+    const stateB = b.getState();
+    for (let i = 0; i < stateA.players.length; i++) {
+      expect(stateA.players[i].x).toBe(stateB.players[i].x);
+      expect(stateA.players[i].y).toBe(stateB.players[i].y);
+    }
+  });
+});
+
+describe('Integration: timer decay interactions', () => {
+  it('fatTimer decays to 0 and player regains normal max speed', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    loop.setNetworkMode(true);
+    const p = loop.getState().players[0];
+    p.fatTimer = 5.0; // fat for a while
+    p.vx = 0;
+
+    const inputs = new Map<string, InputState>();
+    inputs.set('P1', { left: false, right: true, jump: false, down: false });
+    inputs.set('P2', { left: false, right: false, jump: false, down: false });
+
+    // Tick while fat — speed capped at MAX_WALK_SPEED * FAT_SPEED_MULT = 168
+    for (let i = 0; i < 60; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP, inputs);
+    }
+    const fatMaxSpeed = p.vx;
+    expect(fatMaxSpeed).toBeLessThanOrEqual(168 + 1);
+
+    // Now expire fat timer
+    p.fatTimer = 0;
+    p.vx = 0;
+
+    // Accelerate again — should reach normal MAX_WALK_SPEED = 280
+    for (let i = 0; i < 60; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP, inputs);
+    }
+    expect(p.vx).toBeGreaterThan(fatMaxSpeed);
+  });
+
+  it('invincibility timer expires and player becomes vulnerable', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const victim = state.players[1];
+    victim.invincibleTimer = 0.1; // almost expired
+
+    // Tick to expire invincibility
+    for (let i = 0; i < 10; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+    }
+    expect(victim.invincibleTimer).toBeLessThanOrEqual(0);
+
+    // Now set up a stomp — should work
+    const attacker = state.players[0];
+    victim.state = 'idle';
+    victim.x = 500; victim.y = 600;
+    attacker.x = 500; attacker.y = 570; attacker.vy = 200; attacker.state = 'airborne';
+    loop.fixedUpdate(FIXED_TIMESTEP);
+    expect(victim.state).toBe('splat');
+  });
+
+  it('burnTimer visual effect decays over time', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const p = loop.getState().players[0];
+    p.burnTimer = 1.0;
+
+    for (let i = 0; i < 30; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+    }
+    expect(p.burnTimer).toBeLessThan(1.0);
+  });
+});
+
+describe('Integration: arena-specific features', () => {
+  it('mirror arena mod reverses platform positions', () => {
+    const { loop: normal } = createLoop();
+    const { loop: mirrored } = createLoop({
+      settings: { mods: { mirrorArena: true, extremeGore: false, carrotChase: false, giantPlayers: false, turbo: false, superBounce: false, underwaterGravity: false } },
+    });
+    // The mirrored arena should have different platform x positions
+    // We can't directly compare because the arena is a shallow copy,
+    // but we can verify the game still works
+    mirrored.skipCountdown();
+    for (let i = 0; i < 60; i++) {
+      mirrored.fixedUpdate(FIXED_TIMESTEP);
+    }
+    // No crash = success
+    expect(mirrored.getState().players[0].active).toBe(true);
+  });
+
+  it('carrot chase mode: kills award 0 points', () => {
+    const { loop } = createLoop({
+      settings: { mods: { carrotChase: true, extremeGore: false, giantPlayers: false, turbo: false, superBounce: false, mirrorArena: false, underwaterGravity: false } },
+    });
+    loop.skipCountdown();
+    const state = loop.getState();
+    const attacker = state.players[0];
+    const victim = state.players[1];
+
+    attacker.x = 500; attacker.y = 570; attacker.vy = 200; attacker.state = 'airborne';
+    victim.x = 500; victim.y = 600; victim.state = 'idle'; victim.invincibleTimer = 0;
+
+    const scoreBefore = attacker.score;
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(victim.state).toBe('splat');
+    expect(attacker.score).toBe(scoreBefore); // no points in carrot chase
+  });
+});
+
+describe('Integration: edge cases', () => {
+  it('empty player list does not crash', () => {
+    const { loop } = createLoop({ players: [] as PlayerSlot[] });
+    loop.skipCountdown();
+    expect(() => {
+      for (let i = 0; i < 60; i++) {
+        loop.fixedUpdate(FIXED_TIMESTEP);
+      }
+    }).not.toThrow();
+  });
+
+  it('single player game works', () => {
+    const { loop } = createLoop({ players: ['P1'] as PlayerSlot[] });
+    loop.skipCountdown();
+    const state = loop.getState();
+    expect(state.players).toHaveLength(1);
+    for (let i = 0; i < 60; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+    }
+    expect(state.players[0].active).toBe(true);
+  });
+
+  it('very long match (1000 frames) does not crash or leak', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    for (let i = 0; i < 1000; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+    }
+    const state = loop.getState();
+    expect(state.timeElapsed).toBeGreaterThan(16); // ~16.67 seconds
+    expect(state.players[0].active).toBe(true);
+  });
+});

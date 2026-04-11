@@ -675,3 +675,54 @@ describe('RollbackEngine - host vs guest role', () => {
     expect(state.players[0].x).toBe(origX);
   });
 });
+
+describe('RollbackEngine - desync check with subsystem hashes', () => {
+  it('guest logs diverged subsystems when playersHash provided', () => {
+    const state = makeTestState();
+    const rng = new SeededRNG(42);
+    const gameLoop = makeMockGameLoop(state, rng);
+    const transport = makeMockTransport();
+    const engine = new RollbackEngine({
+      localSlot: 'P2', remoteSlots: ['P1'], isHost: false,
+      gameLoop: gameLoop as any, transport: transport as any,
+    });
+
+    const wrongHash = hashGameState(state, rng) + 1;
+    const check = {
+      type: MsgType.DESYNC_CHECK,
+      frame: 0,
+      hash: wrongHash,
+      rngState: rng.getState(),
+      playersHash: 12345, // subsystem hashes
+      entitiesHash: 67890,
+      timersHash: 11111,
+    };
+
+    // Should send DESYNC_REQUEST with subsystem logging
+    engine.handleReliableMessage(check);
+    expect(transport.sendReliable).toHaveBeenCalled();
+  });
+});
+
+describe('RollbackEngine - construction edge cases', () => {
+  it('works with empty remoteSlots (solo mode)', () => {
+    const { engine } = makeEngine({ remoteSlots: [] as PlayerSlot[] });
+    expect(engine.getStats().localFrame).toBe(0);
+    expect(engine.getStats().remoteLatestAck).toBe(-1);
+  });
+
+  it('removeRemoteSlot on already-removed slot is safe', () => {
+    const { engine } = makeEngine();
+    engine.removeRemoteSlot('P2');
+    expect(() => engine.removeRemoteSlot('P2')).not.toThrow();
+  });
+
+  it('handleInputMessage with no remotes drops silently', () => {
+    const { engine } = makeEngine({ remoteSlots: [] as PlayerSlot[] });
+    const buf = encodeInputMessage(
+      [{ frame: 0, input: { left: false, right: false, jump: false, down: false } }],
+      0, undefined, 'P2',
+    );
+    expect(() => engine.handleInputMessage(buf)).not.toThrow();
+  });
+});

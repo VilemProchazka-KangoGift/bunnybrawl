@@ -127,4 +127,71 @@ describe('SeededRNG - edge cases', () => {
     const rng = new SeededRNG(42);
     expect(rng.nextRange(3.5, 3.5)).toBe(3.5);
   });
+
+  it('1000 sequential nextFloat calls all in [0,1)', () => {
+    const rng = new SeededRNG(777);
+    for (let i = 0; i < 1000; i++) {
+      const v = rng.nextFloat();
+      expect(v).toBeGreaterThanOrEqual(0);
+      expect(v).toBeLessThan(1);
+    }
+  });
+
+  it('adjacent seeds produce different sequences', () => {
+    for (let seed = 0; seed < 10; seed++) {
+      const a = new SeededRNG(seed);
+      const b = new SeededRNG(seed + 1);
+      const aVals = [a.nextFloat(), a.nextFloat(), a.nextFloat()];
+      const bVals = [b.nextFloat(), b.nextFloat(), b.nextFloat()];
+      expect(aVals).not.toEqual(bVals);
+    }
+  });
+
+  it('getState returns current internal state', () => {
+    const rng = new SeededRNG(42);
+    const s0 = rng.getState();
+    rng.nextFloat();
+    const s1 = rng.getState();
+    expect(s0).not.toBe(s1); // state advanced
+  });
+
+  it('setState + nextFloat matches original sequence', () => {
+    const rng1 = new SeededRNG(42);
+    for (let i = 0; i < 100; i++) rng1.nextFloat();
+    const saved = rng1.getState();
+    const expected = [rng1.nextFloat(), rng1.nextFloat(), rng1.nextFloat()];
+
+    const rng2 = new SeededRNG(0);
+    rng2.setState(saved);
+    const actual = [rng2.nextFloat(), rng2.nextFloat(), rng2.nextFloat()];
+    expect(actual).toEqual(expected);
+  });
+
+  it('clone produces independent copy', () => {
+    const rng = new SeededRNG(42);
+    for (let i = 0; i < 50; i++) rng.nextFloat();
+    const clone = rng.clone();
+
+    // Advance original many times
+    for (let i = 0; i < 100; i++) rng.nextFloat();
+
+    // Clone should still be at position 50
+    const cloneState = clone.getState();
+    const freshRng = new SeededRNG(42);
+    for (let i = 0; i < 50; i++) freshRng.nextFloat();
+    expect(cloneState).toBe(freshRng.getState());
+  });
+
+  it('nextInt distribution is roughly uniform', () => {
+    const rng = new SeededRNG(42);
+    const counts = [0, 0, 0, 0, 0, 0]; // 0-5
+    for (let i = 0; i < 60000; i++) {
+      counts[rng.nextInt(0, 5)]++;
+    }
+    // Each bucket should be ~10000 ± 1500
+    for (const c of counts) {
+      expect(c).toBeGreaterThan(8000);
+      expect(c).toBeLessThan(12000);
+    }
+  });
 });

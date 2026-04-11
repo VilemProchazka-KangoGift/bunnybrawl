@@ -4,6 +4,7 @@ import type { SpawnPoint } from './types';
 import { CHARACTERS } from './characters';
 import { PLAYER_WIDTH, PLAYER_HEIGHT, SPLAT_DURATION, RESPAWN_DELAY, INVINCIBLE_DURATION, STOMP_VY_THRESHOLD, STOMP_BOUNCE } from './constants';
 import { makePlayer } from './__tests__/testHelpers';
+import { SeededRNG } from './net/prng';
 
 const spawnPoints: SpawnPoint[] = [
   { x: 200, y: 500 },
@@ -342,5 +343,231 @@ describe('createSplatMark - details', () => {
   it('splat mark has radius > 0', () => {
     const mark = createSplatMark(makePlayer());
     expect(mark.radius).toBeGreaterThan(0);
+  });
+});
+
+// ===================================================================
+// isStomping geometry precision
+// ===================================================================
+
+describe('isStomping - geometry precision', () => {
+  // overlap = (attacker.y + attacker.height) - victim.y
+  // Stomp requires: overlap > 0 && overlap < victim.height * 0.5
+  // victim.height * 0.5 = 16 (PLAYER_HEIGHT = 32)
+
+  it('overlap exactly at victim.height * 0.5 boundary returns false (not strictly <)', () => {
+    // overlap = attackerBottom - victimTop = (attacker.y + 32) - victim.y
+    // We want overlap = 32 * 0.5 = 16 exactly
+    // So attacker.y + 32 - victim.y = 16 → attacker.y = victim.y - 16
+    const victim = makePlayer({ id: 'P2', x: 100, y: 400 });
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 400 - PLAYER_HEIGHT * 0.5, vy: STOMP_VY_THRESHOLD });
+    // overlap = (384 + 32) - 400 = 16 = victim.height * 0.5 → NOT < 0.5*h → false
+    expect(isStomping(attacker, victim)).toBe(false);
+  });
+
+  it('overlap = victim.height * 0.5 - 1 returns true', () => {
+    // overlap = 15 < 16 → true
+    const victim = makePlayer({ id: 'P2', x: 100, y: 400 });
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 400 - PLAYER_HEIGHT * 0.5 - 1, vy: STOMP_VY_THRESHOLD });
+    // overlap = (383 + 32) - 400 = 15 → true
+    expect(isStomping(attacker, victim)).toBe(true);
+  });
+
+  it('no horizontal overlap returns false', () => {
+    // Place attacker completely to the right of victim with a gap
+    const victim = makePlayer({ id: 'P2', x: 100, y: 400 });
+    const attacker = makePlayer({ id: 'P1', x: 100 + PLAYER_WIDTH + 10, y: 390, vy: 200 });
+    expect(isStomping(attacker, victim)).toBe(false);
+  });
+
+  it('edge-touching horizontally (attacker right == victim left) returns false (strict <)', () => {
+    // aabbOverlap uses strict < : ax < bx + bw && ax + aw > bx
+    // attacker.x + attacker.width == victim.x → ax + aw > bx is false (equal, not >)
+    // Wait: ax + aw > bx → 132 + 32 > 164? No: attacker right = victim left
+    // Actually: attacker to the left, attacker.x + width = victim.x
+    const victim = makePlayer({ id: 'P2', x: 100 + PLAYER_WIDTH, y: 400 });
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 390, vy: 200 });
+    // attacker: x=100, width=32 → right=132. victim: x=132 → ax + aw = 132, bx = 132 → 132 > 132 is false
+    expect(isStomping(attacker, victim)).toBe(false);
+  });
+
+  it('1px horizontal overlap returns true (with valid stomp geometry)', () => {
+    // attacker right = victim left + 1 → overlap of 1px
+    const victim = makePlayer({ id: 'P2', x: 100 + PLAYER_WIDTH - 1, y: 400 });
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 395, vy: 200 });
+    // attacker right = 132, victim left = 131 → 132 > 131 ✓
+    // vertical overlap = (395 + 32) - 400 = 27 → but 27 >= 16 → too deep
+    // Need less vertical overlap: attacker.y such that overlap < 16
+    // overlap = attacker.y + 32 - 400 < 16 → attacker.y < 384
+    // overlap > 0 → attacker.y + 32 > 400 → attacker.y > 368
+    // Use attacker.y = 378 → overlap = 410 - 400 = 10 ✓
+    const attacker2 = makePlayer({ id: 'P1', x: 100, y: 378, vy: 200 });
+    const victim2 = makePlayer({ id: 'P2', x: 100 + PLAYER_WIDTH - 1, y: 400 });
+    expect(isStomping(attacker2, victim2)).toBe(true);
+  });
+
+  it('attacker fully inside victim vertically returns false (overlap >= 0.5 * height)', () => {
+    // If attacker is inside victim, overlap = attacker.y + height - victim.y
+    // Attacker at same y as victim → overlap = 32 (full height) ≥ 16 → false
+    const victim = makePlayer({ id: 'P2', x: 100, y: 400 });
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 400, vy: 200 });
+    // overlap = (400 + 32) - 400 = 32 ≥ 16 → false
+    expect(isStomping(attacker, victim)).toBe(false);
+  });
+
+  it('attacker below victim (negative overlap) returns false', () => {
+    // attacker.y > victim.y + victim.height → overlap negative
+    const victim = makePlayer({ id: 'P2', x: 100, y: 400 });
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 420, vy: 200 });
+    // overlap = (420 + 32) - 400 = 52 ≥ 16 → false (also not a stomp position)
+    expect(isStomping(attacker, victim)).toBe(false);
+  });
+
+  it('overlap of exactly 1px returns true (minimum valid stomp)', () => {
+    // overlap = 1 → attacker.y + 32 - victim.y = 1 → attacker.y = victim.y - 31
+    const victim = makePlayer({ id: 'P2', x: 100, y: 400 });
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 400 - PLAYER_HEIGHT + 1, vy: 200 });
+    // overlap = (369 + 32) - 400 = 1 → 1 > 0 && 1 < 16 → true
+    // But we also need AABB overlap: vertical check: ay < by + bh → 369 < 432 ✓, ay + ah > by → 401 > 400 ✓
+    expect(isStomping(attacker, victim)).toBe(true);
+  });
+
+  it('overlap of exactly 0 returns false (just touching top edge)', () => {
+    // overlap = 0 → attacker.y + 32 = victim.y → attacker.y = victim.y - 32
+    const victim = makePlayer({ id: 'P2', x: 100, y: 400 });
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 400 - PLAYER_HEIGHT, vy: 200 });
+    // overlap = (368 + 32) - 400 = 0 → 0 > 0 is false → false
+    // Also AABB: ay + ah > by → 400 > 400 is false → no overlap
+    expect(isStomping(attacker, victim)).toBe(false);
+  });
+});
+
+// ===================================================================
+// respawnPlayer with allPlayers avoidance
+// ===================================================================
+
+describe('respawnPlayer - spawn avoidance and determinism', () => {
+  const wideSpawns: SpawnPoint[] = [
+    { x: 100, y: 500 },
+    { x: 600, y: 500 },
+    { x: 1100, y: 500 },
+  ];
+
+  it('picks spawn farthest from other players', () => {
+    const player = makePlayer({ id: 'P1', state: 'splat' });
+    // Other player sits near spawn at x=100
+    const other = makePlayer({ id: 'P2', x: 100 - PLAYER_WIDTH / 2, y: 500 - PLAYER_HEIGHT, state: 'idle' });
+    respawnPlayer(player, wideSpawns, [player, other]);
+    // Should pick spawn at x=1100 (farthest from other at x~100)
+    const playerCx = player.x + PLAYER_WIDTH / 2;
+    expect(playerCx).toBe(1100);
+  });
+
+  it('avoids multiple nearby players by maximizing minimum distance', () => {
+    const player = makePlayer({ id: 'P1', state: 'splat' });
+    // Two other players near spawns at x=100 and x=1100
+    const other1 = makePlayer({ id: 'P2', x: 100 - PLAYER_WIDTH / 2, y: 500 - PLAYER_HEIGHT, state: 'idle' });
+    const other2 = makePlayer({ id: 'P3', x: 1100 - PLAYER_WIDTH / 2, y: 500 - PLAYER_HEIGHT, state: 'idle' });
+    respawnPlayer(player, wideSpawns, [player, other1, other2]);
+    // Should pick middle spawn at x=600 (farthest from both)
+    const playerCx = player.x + PLAYER_WIDTH / 2;
+    expect(playerCx).toBe(600);
+  });
+
+  it('with seeded RNG and no other players, produces deterministic placement', () => {
+    // With no other active players (all splatted), pickSafeSpawn falls through to random pick
+    const spawns: SpawnPoint[] = [
+      { x: 100, y: 500 },
+      { x: 400, y: 500 },
+      { x: 700, y: 500 },
+      { x: 1000, y: 500 },
+    ];
+
+    // Run twice with same seed — should pick same spawn
+    const p1 = makePlayer({ id: 'P1', state: 'splat' });
+    const p2 = makePlayer({ id: 'P1', state: 'splat' });
+    // No other active players — allPlayers is empty array
+    respawnPlayer(p1, spawns, [], new SeededRNG(42));
+    respawnPlayer(p2, spawns, [], new SeededRNG(42));
+    expect(p1.x).toBe(p2.x);
+    expect(p1.y).toBe(p2.y);
+  });
+
+  it('resets all expected fields on respawn', () => {
+    const player = makePlayer({
+      id: 'P1',
+      state: 'splat',
+      vx: 150,
+      vy: 300,
+      splatTimer: 0.2,
+      respawnTimer: 0.1,
+      fastFalling: true,
+      fatTimer: 1.5,
+      slowTimer: 2.0,
+      burnTimer: 0.8,
+      hitstopTimer: 0.3,
+      killStreak: 5,
+      expression: 'hurt' as Player['expression'],
+    });
+    respawnPlayer(player, wideSpawns);
+
+    expect(player.state).toBe('idle');
+    expect(player.vx).toBe(0);
+    expect(player.vy).toBe(0);
+    expect(player.invincibleTimer).toBe(INVINCIBLE_DURATION);
+    expect(player.splatTimer).toBe(0);
+    expect(player.respawnTimer).toBe(0);
+    expect(player.fastFalling).toBe(false);
+    expect(player.fatTimer).toBe(0);
+    expect(player.slowTimer).toBe(0);
+    expect(player.burnTimer).toBe(0);
+    expect(player.hitstopTimer).toBe(0);
+    // killStreak and expression are NOT reset by respawnPlayer (verified by reading source)
+    // killStreak is preserved across respawns intentionally
+    expect(player.killStreak).toBe(5);
+  });
+});
+
+// ===================================================================
+// updateSplatTimers with multiple players
+// ===================================================================
+
+describe('updateSplatTimers - multiple players', () => {
+  it('two players splatted simultaneously both transition to respawning', () => {
+    const p1 = makePlayer({ id: 'P1', state: 'splat', splatTimer: SPLAT_DURATION });
+    const p2 = makePlayer({ id: 'P2', state: 'splat', splatTimer: SPLAT_DURATION });
+
+    const dt = SPLAT_DURATION + 0.01;
+    updateSplatTimers([p1, p2], spawnPoints, dt);
+
+    expect(p1.state).toBe('respawning');
+    expect(p2.state).toBe('respawning');
+    // respawnTimer is set to RESPAWN_DELAY then immediately decremented by dt in the same tick
+    expect(p1.respawnTimer).toBeCloseTo(RESPAWN_DELAY - dt, 5);
+    expect(p2.respawnTimer).toBeCloseTo(RESPAWN_DELAY - dt, 5);
+  });
+
+  it('one splatted and one respawning tick independently', () => {
+    const splatted = makePlayer({ id: 'P1', state: 'splat', splatTimer: SPLAT_DURATION });
+    const respawning = makePlayer({ id: 'P2', state: 'respawning', respawnTimer: RESPAWN_DELAY });
+
+    // Tick a small amount — neither should transition yet
+    const dt = 0.1;
+    updateSplatTimers([splatted, respawning], spawnPoints, dt);
+
+    expect(splatted.state).toBe('splat');
+    expect(splatted.splatTimer).toBeCloseTo(SPLAT_DURATION - dt, 5);
+    expect(respawning.state).toBe('respawning');
+    expect(respawning.respawnTimer).toBeCloseTo(RESPAWN_DELAY - dt, 5);
+  });
+
+  it('very small dt still decrements timer (precision)', () => {
+    const player = makePlayer({ id: 'P1', state: 'splat', splatTimer: SPLAT_DURATION });
+    const tinyDt = 0.0001;
+
+    updateSplatTimers([player], spawnPoints, tinyDt);
+
+    expect(player.splatTimer).toBeCloseTo(SPLAT_DURATION - tinyDt, 8);
+    expect(player.state).toBe('splat'); // Should NOT have transitioned
   });
 });
