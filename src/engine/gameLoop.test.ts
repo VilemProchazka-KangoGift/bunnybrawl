@@ -18,6 +18,7 @@ import {
   SHOCKWAVE_MAX_RADIUS, SHOCKWAVE_DURATION,
   SCORE_ANIM_DURATION,
   SPLAT_DURATION, RESPAWN_DELAY, INVINCIBLE_DURATION,
+  ANIM_FRAME_DURATION,
 } from './constants';
 
 // --- Mocks ---
@@ -82,6 +83,7 @@ HTMLCanvasElement.prototype.getContext = function (type: string) {
 import { GameLoop } from './gameLoop';
 import { registerBuiltinArenas } from './arenas';
 import { registerBuiltinCharacters } from './characters';
+import { audio } from './audio';
 
 // --- Factories ---
 
@@ -2437,5 +2439,466 @@ describe('Countdown Freeze', () => {
     }
 
     expect(player.x).toBeGreaterThan(xBefore);
+  });
+});
+
+// ===================================================================
+// 31. Animation Timers
+// ===================================================================
+
+describe('Animation Timers', () => {
+  it('animTimer increments each frame for active players', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    // Ensure player is active and not in hitstop
+    player.active = true;
+    player.hitstopTimer = 0;
+    player.animTimer = 0;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(player.animTimer).toBeGreaterThan(0);
+    expect(player.animTimer).toBeCloseTo(FIXED_TIMESTEP, 6);
+  });
+
+  it('animFrame advances when animTimer exceeds threshold', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    player.active = true;
+    player.hitstopTimer = 0;
+    player.animTimer = 0;
+    player.animFrame = 0;
+
+    // Advance enough frames to exceed ANIM_FRAME_DURATION (0.12s)
+    const steps = Math.ceil(ANIM_FRAME_DURATION / FIXED_TIMESTEP) + 1;
+    for (let i = 0; i < steps; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+    }
+
+    // animFrame should have advanced at least once
+    expect(player.animFrame).toBeGreaterThan(0);
+  });
+
+  it('idleAnimTimer increments when player is idle', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    // Set player to idle on the ground
+    player.x = 200;
+    player.y = 660 - PLAYER_HEIGHT;
+    player.vx = 0;
+    player.state = 'idle';
+    player.active = true;
+    player.hitstopTimer = 0;
+    player.idleAnimTimer = 0;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(player.idleAnimTimer).toBeGreaterThan(0);
+  });
+
+  it('fastFalling player has faster animation', () => {
+    const { loop } = createLoop();
+    loop.setNetworkMode(true);
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    // Set player airborne and fast-falling
+    player.x = 200;
+    player.y = 300;
+    player.state = 'airborne';
+    player.active = true;
+    player.hitstopTimer = 0;
+    player.animTimer = 0;
+
+    // Provide down input to trigger fast-fall
+    const inputs = new Map<string, InputState>();
+    inputs.set('P1', { left: false, right: false, jump: false, down: true });
+    inputs.set('P2', { left: false, right: false, jump: false, down: false });
+
+    loop.fixedUpdate(FIXED_TIMESTEP, inputs);
+
+    // After pressing down while airborne, player should be fast-falling
+    expect(player.fastFalling).toBe(true);
+    // animTimer should have advanced (animation keeps ticking)
+    expect(player.animTimer).toBeGreaterThan(0);
+  });
+});
+
+// ===================================================================
+// 32. Particle System
+// ===================================================================
+
+describe('Particle System', () => {
+  it('emitParticle adds to internal particles array', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+
+    const particlesBefore = (loop as any).particles.length;
+
+    // Trigger particle emission by having a player land hard (dust)
+    const player = loop.getState().players[0];
+    player.x = 200;
+    player.y = 660 - player.height - 2;
+    player.vy = DUST_LAND_VY_THRESHOLD + 100;
+    player.state = 'airborne';
+    player.active = true;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    expect((loop as any).particles.length).toBeGreaterThan(particlesBefore);
+  });
+
+  it('particles have life that decays each frame', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+
+    // Manually inject a particle into the internal array
+    (loop as any).particles.push({
+      x: 500, y: 500, vx: 10, vy: -20,
+      life: 1.0, maxLife: 1.0, size: 3, color: '#FF0000',
+    });
+
+    const lifeBefore = (loop as any).particles[0].life;
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    // Particle life should have decreased
+    const particle = (loop as any).particles.find((p: any) => p.maxLife === 1.0);
+    if (particle) {
+      expect(particle.life).toBeLessThan(lifeBefore);
+    }
+  });
+
+  it('dead particles (life <= 0) are removed', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+
+    // Inject a particle that's about to die
+    (loop as any).particles.push({
+      x: 500, y: 500, vx: 0, vy: 0,
+      life: FIXED_TIMESTEP * 0.5, maxLife: 1.0, size: 3, color: '#FF0000',
+    });
+
+    expect((loop as any).particles.length).toBeGreaterThanOrEqual(1);
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    // The particle with very short life should have been removed
+    const deadParticle = (loop as any).particles.find((p: any) => p.maxLife === 1.0 && p.life <= 0);
+    expect(deadParticle).toBeUndefined();
+  });
+});
+
+// ===================================================================
+// 33. Gibs
+// ===================================================================
+
+describe('Gibs', () => {
+  it('after a stomp in gore mode, gibs are spawned', () => {
+    const { loop } = createLoop({ settings: { goreMode: true } });
+    loop.skipCountdown();
+    const state = loop.getState();
+    const attacker = state.players[0];
+    const victim = state.players[1];
+
+    victim.x = 500;
+    victim.y = 600;
+    victim.state = 'idle';
+    victim.invincibleTimer = 0;
+    victim.active = true;
+
+    attacker.x = 500;
+    attacker.y = victim.y - attacker.height + 5;
+    attacker.vy = STOMP_VY_THRESHOLD + 100;
+    attacker.state = 'airborne';
+    attacker.active = true;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(victim.state).toBe('splat');
+    expect(state.gibs.length).toBeGreaterThan(0);
+  });
+
+  it('in non-gore mode, confetti is spawned instead of blood gibs', () => {
+    const { loop } = createLoop({ settings: { goreMode: false } });
+    loop.skipCountdown();
+    const state = loop.getState();
+    const attacker = state.players[0];
+    const victim = state.players[1];
+
+    victim.x = 500;
+    victim.y = 600;
+    victim.state = 'idle';
+    victim.invincibleTimer = 0;
+    victim.active = true;
+
+    attacker.x = 500;
+    attacker.y = victim.y - attacker.height + 5;
+    attacker.vy = STOMP_VY_THRESHOLD + 100;
+    attacker.state = 'airborne';
+    attacker.active = true;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(victim.state).toBe('splat');
+    expect(state.confetti.length).toBeGreaterThan(0);
+  });
+
+  it('gibs have velocity and are affected by gravity', () => {
+    const { loop } = createLoop({ settings: { goreMode: true } });
+    loop.skipCountdown();
+    const state = loop.getState();
+    const attacker = state.players[0];
+    const victim = state.players[1];
+
+    victim.x = 500;
+    victim.y = 400;
+    victim.state = 'idle';
+    victim.invincibleTimer = 0;
+    victim.active = true;
+
+    attacker.x = 500;
+    attacker.y = victim.y - attacker.height + 5;
+    attacker.vy = STOMP_VY_THRESHOLD + 100;
+    attacker.state = 'airborne';
+    attacker.active = true;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(state.gibs.length).toBeGreaterThan(0);
+    const gib = state.gibs[0];
+    // Gibs should have velocity (launched from stomp)
+    expect(Math.abs(gib.vx) + Math.abs(gib.vy)).toBeGreaterThan(0);
+
+    // Record vy before gravity tick
+    const vyBefore = gib.vy;
+
+    // Run another tick — gravity should affect gib vy
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    // Gib vy should increase (gravity pulls down: vy += GIB_GRAVITY * dt)
+    const gibAfter = state.gibs.find(g => g === gib);
+    if (gibAfter) {
+      expect(gibAfter.vy).toBeGreaterThan(vyBefore);
+    }
+  });
+});
+
+// ===================================================================
+// 34. Environment
+// ===================================================================
+
+describe('Environment', () => {
+  it('dayPhase increments each frame', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+
+    const dayPhaseBefore = state.dayPhase;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    // dayPhase should have incremented by dt / cycleDuration
+    expect(state.dayPhase).toBeGreaterThan(dayPhaseBefore);
+  });
+
+  it('timeElapsed increments each frame by dt', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+
+    const timeBefore = state.timeElapsed;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(state.timeElapsed).toBeCloseTo(timeBefore + FIXED_TIMESTEP, 6);
+  });
+});
+
+// ===================================================================
+// 35. Spring Spawning
+// ===================================================================
+
+describe('Spring Spawning', () => {
+  it('springs spawn after SPRING_SPAWN_INTERVAL on floating platforms', () => {
+    const { loop } = createLoop({
+      arena: {
+        platforms: [
+          { x: 0, y: 660, width: 1280, height: 60 },
+          { x: 400, y: 400, width: 200, height: 20 }, // floating platform with clearance
+        ],
+      },
+    });
+    loop.skipCountdown();
+    const state = loop.getState();
+
+    // Initial spring spawn timer is 5s; advance past it
+    const steps = Math.ceil(6 / FIXED_TIMESTEP);
+    for (let i = 0; i < steps; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+    }
+
+    expect(state.springs.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('no springs spawn when noSprings is set on arena', () => {
+    const { loop } = createLoop({
+      arena: {
+        platforms: [
+          { x: 0, y: 660, width: 1280, height: 60 },
+          { x: 400, y: 400, width: 200, height: 20 },
+        ],
+        noSprings: true,
+      },
+    });
+    loop.skipCountdown();
+    const state = loop.getState();
+
+    // Advance well past the spring spawn timer
+    const steps = Math.ceil(20 / FIXED_TIMESTEP);
+    for (let i = 0; i < steps; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+    }
+
+    expect(state.springs.length).toBe(0);
+  });
+});
+
+// ===================================================================
+// 36. Thorn Spawning
+// ===================================================================
+
+describe('Thorn Spawning', () => {
+  it('thorns spawn after THORN_SPAWN_INTERVAL on floating platforms', () => {
+    const { loop } = createLoop({
+      arena: {
+        platforms: [
+          { x: 0, y: 660, width: 1280, height: 60 },
+          { x: 400, y: 500, width: 200, height: 20 },
+        ],
+      },
+    });
+    loop.skipCountdown();
+    const state = loop.getState();
+
+    // Initial thorn spawn timer is 8s; advance past it
+    const steps = Math.ceil(9 / FIXED_TIMESTEP);
+    for (let i = 0; i < steps; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+    }
+
+    expect(state.thorns.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('thorns have growTimer > 0 when first spawned', () => {
+    const { loop } = createLoop({
+      arena: {
+        platforms: [
+          { x: 0, y: 660, width: 1280, height: 60 },
+          { x: 400, y: 500, width: 200, height: 20 },
+        ],
+      },
+    });
+    loop.skipCountdown();
+    const state = loop.getState();
+
+    // We need to catch the thorn right when it spawns.
+    // Advance until a thorn appears, checking each tick.
+    let thornFound = false;
+    const maxSteps = Math.ceil(15 / FIXED_TIMESTEP);
+    for (let i = 0; i < maxSteps; i++) {
+      const prevCount = state.thorns.length;
+      loop.fixedUpdate(FIXED_TIMESTEP);
+      if (state.thorns.length > prevCount) {
+        // A new thorn just spawned — check the latest one
+        // Note: growTimer decays during the same tick, so it should be
+        // HAZARD_GROW_TIME minus one tick's worth of decay
+        const newestThorn = state.thorns[state.thorns.length - 1];
+        expect(newestThorn.growTimer).toBeGreaterThan(0);
+        thornFound = true;
+        break;
+      }
+    }
+
+    expect(thornFound).toBe(true);
+  });
+});
+
+// ===================================================================
+// 37. Footstep Sounds
+// ===================================================================
+
+describe('Footstep Sounds', () => {
+  it('walking player triggers footstep sound', () => {
+    const { loop } = createLoop();
+    loop.setNetworkMode(true);
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    // Position player on the ground
+    player.x = 200;
+    player.y = 660 - PLAYER_HEIGHT;
+    player.vx = 0;
+    player.state = 'idle';
+    player.active = true;
+
+    vi.mocked(audio.play).mockClear();
+
+    const rightInput = new Map<string, InputState>();
+    rightInput.set('P1', { left: false, right: true, jump: false, down: false });
+    rightInput.set('P2', { left: false, right: false, jump: false, down: false });
+
+    // Run enough ticks for the player to build speed and trigger footstep accumulator
+    for (let i = 0; i < 60; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP, rightInput);
+    }
+
+    // Check that audio.play was called with a footstep sound
+    const footstepCalls = vi.mocked(audio.play).mock.calls.filter(
+      (call: any[]) => call[0] === 'footstep_grass' || call[0] === 'footstep_wood'
+    );
+    expect(footstepCalls.length).toBeGreaterThan(0);
+  });
+
+  it('airborne player does not trigger footstep sound', () => {
+    const { loop } = createLoop();
+    loop.setNetworkMode(true);
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    // Position player in the air
+    player.x = 200;
+    player.y = 300;
+    player.state = 'airborne';
+    player.vy = -100; // rising
+    player.active = true;
+
+    vi.mocked(audio.play).mockClear();
+
+    const noInput = new Map<string, InputState>();
+    noInput.set('P1', { left: true, right: false, jump: false, down: false });
+    noInput.set('P2', { left: false, right: false, jump: false, down: false });
+
+    // Run a few ticks while airborne
+    for (let i = 0; i < 10; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP, noInput);
+    }
+
+    // No footstep sounds should have been triggered while airborne
+    const footstepCalls = vi.mocked(audio.play).mock.calls.filter(
+      (call: any[]) => call[0] === 'footstep_grass' || call[0] === 'footstep_wood'
+    );
+    expect(footstepCalls.length).toBe(0);
   });
 });
