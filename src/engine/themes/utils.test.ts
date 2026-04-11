@@ -113,4 +113,74 @@ describe('pickWeighted', () => {
     // With 100:1 weight ratio, common should be picked ~99% of the time
     expect(commonCount).toBeGreaterThan(80);
   });
+
+  it('equal weights produce roughly equal distribution', () => {
+    const items = [
+      { name: 'a', weight: 1 },
+      { name: 'b', weight: 1 },
+      { name: 'c', weight: 1 },
+    ];
+    const counts: Record<string, number> = { a: 0, b: 0, c: 0 };
+    for (let i = 0; i < 3000; i++) {
+      counts[pickWeighted(items).name]++;
+    }
+    // Each should be ~1000 ± 200
+    for (const c of Object.values(counts)) {
+      expect(c).toBeGreaterThan(700);
+      expect(c).toBeLessThan(1300);
+    }
+  });
+
+  it('zero-weight items are never picked when others have weight', () => {
+    const items = [
+      { name: 'zero', weight: 0 },
+      { name: 'positive', weight: 10 },
+    ];
+    for (let i = 0; i < 100; i++) {
+      expect(pickWeighted(items).name).toBe('positive');
+    }
+  });
+});
+
+describe('swapRemove - additional cases', () => {
+  it('preserves other elements', () => {
+    const arr = [1, 2, 3, 4, 5];
+    swapRemove(arr, 2); // remove 3, replaced by 5
+    expect(arr).toHaveLength(4);
+    expect(arr).toContain(1);
+    expect(arr).toContain(2);
+    expect(arr).toContain(4);
+    expect(arr).toContain(5);
+    expect(arr).not.toContain(3);
+  });
+
+  it('works with objects', () => {
+    const arr = [{ id: 1 }, { id: 2 }, { id: 3 }];
+    swapRemove(arr, 0);
+    expect(arr).toHaveLength(2);
+    expect(arr.find(o => o.id === 1)).toBeUndefined();
+  });
+});
+
+describe('getFloatingPlatforms - edge cases', () => {
+  it('platform at exactly y=650 is excluded', () => {
+    const platforms: Platform[] = [
+      { x: 0, y: 650, width: 200, height: 20 },
+    ];
+    expect(getFloatingPlatforms(platforms)).toHaveLength(0);
+  });
+
+  it('platform at y=649 with width=80 is included', () => {
+    const platforms: Platform[] = [
+      { x: 0, y: 649, width: 80, height: 20 },
+    ];
+    expect(getFloatingPlatforms(platforms)).toHaveLength(1);
+  });
+
+  it('platform at y=649 with width=79 is excluded (too narrow)', () => {
+    const platforms: Platform[] = [
+      { x: 0, y: 649, width: 79, height: 20 },
+    ];
+    expect(getFloatingPlatforms(platforms)).toHaveLength(0);
+  });
 });

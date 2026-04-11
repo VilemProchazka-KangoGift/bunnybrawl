@@ -905,3 +905,158 @@ describe('applyInput with custom parameters', () => {
     expect(player.vx).toBeGreaterThan(0);
   });
 });
+
+// ===================================================================
+// applyGravity with custom gravity / maxFallSpeed overrides
+// ===================================================================
+
+describe('applyGravity custom overrides', () => {
+  it('uses custom gravity value when provided', () => {
+    const player = makePlayer({ vy: 0 });
+    const customGravity = 450; // half of default GRAVITY (900)
+    const dt = 1 / 60;
+    applyGravity(player, dt, customGravity);
+    const expected = Math.fround(0 + Math.fround(customGravity * dt));
+    expect(player.vy).toBe(expected);
+    // Should be roughly half the default gravity result
+    const defaultPlayer = makePlayer({ vy: 0 });
+    applyGravity(defaultPlayer, dt);
+    expect(player.vy).toBeLessThan(defaultPlayer.vy);
+  });
+
+  it('uses custom maxFallSpeed when provided', () => {
+    const customMax = 300; // half of default MAX_FALL_SPEED (600)
+    const player = makePlayer({ vy: 290 });
+    applyGravity(player, 1, GRAVITY, customMax);
+    expect(player.vy).toBe(customMax);
+  });
+});
+
+// ===================================================================
+// movePlayer with negative velocities and inactive states
+// ===================================================================
+
+describe('movePlayer edge cases', () => {
+  it('moves player left when vx is negative', () => {
+    const player = makePlayer({ x: 500, vx: -100 });
+    movePlayer(player, 0.5);
+    expect(player.x).toBeLessThan(500);
+    const expected = Math.fround(500 + Math.fround(-100 * 0.5));
+    expect(player.x).toBe(expected);
+  });
+
+  it('moves player up when vy is negative', () => {
+    const player = makePlayer({ y: 400, vy: -200 });
+    movePlayer(player, 0.5);
+    expect(player.y).toBeLessThan(400);
+    const expected = Math.fround(400 + Math.fround(-200 * 0.5));
+    expect(player.y).toBe(expected);
+  });
+
+  it('does nothing for splat state', () => {
+    const player = makePlayer({ state: 'splat', x: 300, y: 400, vx: 200, vy: -100 });
+    movePlayer(player, 1 / 60);
+    expect(player.x).toBe(300);
+    expect(player.y).toBe(400);
+  });
+
+  it('does nothing for respawning state', () => {
+    const player = makePlayer({ state: 'respawning', x: 300, y: 400, vx: 200, vy: -100 });
+    movePlayer(player, 1 / 60);
+    expect(player.x).toBe(300);
+    expect(player.y).toBe(400);
+  });
+});
+
+// ===================================================================
+// collidePlatforms: landing sets state correctly and clears fastFalling
+// ===================================================================
+
+describe('collidePlatforms landing behavior', () => {
+  const platforms: Platform[] = [
+    { x: 0, y: 500, width: 1280, height: 60 },
+  ];
+
+  it('sets state to idle when landing with vx === 0', () => {
+    const player = makePlayer({ x: 200, y: 500 - PLAYER_HEIGHT + 3, vy: 100, vx: 0, state: 'airborne' });
+    collidePlatforms(player, platforms);
+    expect(player.y).toBe(500 - PLAYER_HEIGHT);
+    expect(player.state).toBe('idle');
+  });
+
+  it('sets state to run when landing with vx !== 0', () => {
+    const player = makePlayer({ x: 200, y: 500 - PLAYER_HEIGHT + 3, vy: 100, vx: 150, state: 'airborne' });
+    collidePlatforms(player, platforms);
+    expect(player.y).toBe(500 - PLAYER_HEIGHT);
+    expect(player.state).toBe('run');
+  });
+
+  it('clears fastFalling on landing', () => {
+    const player = makePlayer({ x: 200, y: 500 - PLAYER_HEIGHT + 3, vy: 200, vx: 0, state: 'airborne', fastFalling: true });
+    collidePlatforms(player, platforms);
+    expect(player.y).toBe(500 - PLAYER_HEIGHT);
+    expect(player.fastFalling).toBe(false);
+  });
+});
+
+// ===================================================================
+// collidePlayersHorizontal with 3 players: chain overlap
+// ===================================================================
+
+describe('collidePlayersHorizontal chain overlap', () => {
+  it('resolves A overlaps B and B overlaps C', () => {
+    // Place three players very close together so A-B overlap and B-C overlap
+    const a = makePlayer({ id: 'P1', x: 100, y: 600, state: 'idle', active: true, invincibleTimer: 0 });
+    const b = makePlayer({ id: 'P2', x: 110, y: 600, state: 'idle', active: true, invincibleTimer: 0 });
+    const c = makePlayer({ id: 'P3', x: 120, y: 600, state: 'idle', active: true, invincibleTimer: 0 });
+
+    const origAx = a.x;
+    const origBx = b.x;
+    const origCx = c.x;
+
+    collidePlayersHorizontal([a, b, c]);
+
+    // After collision: A should be pushed left, C should be pushed right.
+    // B is in the middle so gets pushed from both sides.
+    expect(a.x).toBeLessThan(origAx);
+    expect(c.x).toBeGreaterThan(origCx);
+    // All three should have sideSquash set
+    expect(a.sideSquash).toBe(0.8);
+    expect(b.sideSquash).toBe(0.8);
+    expect(c.sideSquash).toBe(0.8);
+  });
+});
+
+// ===================================================================
+// aabbOverlap edge cases
+// ===================================================================
+
+describe('aabbOverlap edge cases', () => {
+  it('returns false for zero-width box at boundary', () => {
+    // Zero-width box at x=0: ax+aw > bx => 0+0 > 0 => false
+    expect(aabbOverlap(0, 5, 0, 10, 0, 0, 10, 10)).toBe(false);
+  });
+
+  it('returns false for zero-height box at boundary', () => {
+    // Zero-height box at y=0: ay+ah > by => 0+0 > 0 => false
+    expect(aabbOverlap(5, 0, 10, 0, 0, 0, 10, 10)).toBe(false);
+  });
+
+  it('zero-width box inside another still overlaps (degenerate point)', () => {
+    // Zero-width box at x=5 (interior): ax < bx+bw => 5 < 10 AND ax+aw > bx => 5 > 0
+    expect(aabbOverlap(5, 5, 0, 10, 0, 0, 10, 10)).toBe(true);
+  });
+
+  it('handles negative coordinates correctly', () => {
+    // Two boxes overlapping in negative coordinate space
+    expect(aabbOverlap(-10, -10, 20, 20, -5, -5, 20, 20)).toBe(true);
+  });
+
+  it('handles one box entirely inside another', () => {
+    expect(aabbOverlap(2, 2, 3, 3, 0, 0, 10, 10)).toBe(true);
+  });
+
+  it('returns false when boxes are far apart in negative space', () => {
+    expect(aabbOverlap(-100, -100, 10, 10, 100, 100, 10, 10)).toBe(false);
+  });
+});

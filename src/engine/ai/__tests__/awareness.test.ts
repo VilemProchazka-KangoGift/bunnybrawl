@@ -981,4 +981,115 @@ describe('buildAwareness', () => {
       expect(snap.navTarget).toBeNull();
     });
   });
+
+  // ── 5-enemy nearest pick ─────────────────────────────────────────────
+
+  describe('nearest enemy with 5 enemies', () => {
+    it('picks the closest among 5 enemies', () => {
+      const bot = makePlayer({ id: 'B1' as PlayerSlot, x: 500, y: 628 });
+      const e1 = makePlayer({ id: 'P1' as PlayerSlot, x: 200, y: 628 }); // dist ~300
+      const e2 = makePlayer({ id: 'P2' as PlayerSlot, x: 400, y: 628 }); // dist ~100
+      const e3 = makePlayer({ id: 'P3' as PlayerSlot, x: 700, y: 628 }); // dist ~200
+      const e4 = makePlayer({ id: 'P4' as PlayerSlot, x: 900, y: 628 }); // dist ~400
+      const e5 = makePlayer({ id: 'P5' as PlayerSlot, x: 480, y: 628 }); // dist ~20 (closest)
+      const state = makeState({ players: [bot, e1, e2, e3, e4, e5] });
+      const arena = makeArena();
+
+      const snap = buildAwareness(bot, state, arena, Infinity);
+      expect(snap.nearestEnemy).not.toBeNull();
+      expect(snap.nearestEnemy!.x).toBe(480); // e5 is closest
+    });
+  });
+
+  // ── All enemies splatted ─────────────────────────────────────────────
+
+  describe('all enemies splatted', () => {
+    it('returns null nearestEnemy when all enemies are splatted', () => {
+      const bot = makePlayer({ id: 'B1' as PlayerSlot, x: 500, y: 628 });
+      const s1 = makePlayer({ id: 'P1' as PlayerSlot, x: 300, y: 628, state: 'splat', splatTimer: 1 });
+      const s2 = makePlayer({ id: 'P2' as PlayerSlot, x: 700, y: 628, state: 'splat', splatTimer: 0.5 });
+      const s3 = makePlayer({ id: 'P3' as PlayerSlot, x: 400, y: 628, state: 'splat', splatTimer: 2 });
+      const state = makeState({ players: [bot, s1, s2, s3] });
+      const arena = makeArena();
+
+      const snap = buildAwareness(bot, state, arena, Infinity);
+      expect(snap.nearestEnemy).toBeNull();
+    });
+  });
+
+  // ── Carrot at exact awareness radius boundary ─────────────────────────
+
+  describe('carrot at awareness radius boundary', () => {
+    it('finds carrot at exactly the awareness radius distance', () => {
+      // Bot at x=100, y=628. Carrot at x=350, y=628.
+      // Distance = 250 (exactly at awareness radius)
+      const bot = makePlayer({ id: 'B1' as PlayerSlot, x: 100, y: 628 });
+      const state = makeState({
+        players: [bot],
+        carrots: [{ x: 350, y: 628, active: true, spawnTime: 0 }],
+      });
+      const arena = makeArena();
+
+      // Awareness radius = 250. Distance is 250. Condition is dist < 250, so it should NOT be found
+      const snap = buildAwareness(bot, state, arena, 250);
+      expect(snap.nearestCarrot).toBeNull();
+    });
+
+    it('finds carrot just inside the awareness radius', () => {
+      const bot = makePlayer({ id: 'B1' as PlayerSlot, x: 100, y: 628 });
+      const state = makeState({
+        players: [bot],
+        carrots: [{ x: 349, y: 628, active: true, spawnTime: 0 }],
+      });
+      const arena = makeArena();
+
+      // Distance ~249 < 250, so it SHOULD be found
+      const snap = buildAwareness(bot, state, arena, 250);
+      expect(snap.nearestCarrot).not.toBeNull();
+      expect(snap.nearestCarrot!.x).toBe(349);
+    });
+  });
+
+  // ── Zero platforms ────────────────────────────────────────────────────
+
+  describe('zero platforms', () => {
+    it('returns null nearestPlatformAbove and nearestPlatformBelow with no platforms', () => {
+      const arena = makeArena({ platforms: [] });
+      const bot = makePlayer({ id: 'B1' as PlayerSlot, x: 500, y: 400, state: 'airborne' });
+      const state = makeState({ players: [bot] });
+
+      const snap = buildAwareness(bot, state, arena, Infinity);
+      expect(snap.nearestPlatformAbove).toBeNull();
+      expect(snap.nearestPlatformBelow).toBeNull();
+    });
+  });
+
+  // ── currentPlatformIdx when airborne ──────────────────────────────────
+
+  describe('currentPlatformIdx airborne', () => {
+    it('is -1 when player is airborne', () => {
+      const bot = makePlayer({ id: 'B1' as PlayerSlot, x: 450, y: 300, state: 'airborne' });
+      const state = makeState({ players: [bot] });
+      const arena = makeArena();
+
+      const snap = buildAwareness(bot, state, arena, Infinity);
+      expect(snap.currentPlatformIdx).toBe(-1);
+    });
+  });
+
+  // ── Leader score when all scores are 0 ────────────────────────────────
+
+  describe('leader score all zero', () => {
+    it('returns leaderScore 0 when all players have score 0', () => {
+      const bot = makePlayer({ id: 'B1' as PlayerSlot, x: 100, y: 628, score: 0 });
+      const e1 = makePlayer({ id: 'P1' as PlayerSlot, x: 400, y: 628, score: 0 });
+      const e2 = makePlayer({ id: 'P2' as PlayerSlot, x: 700, y: 628, score: 0 });
+      const e3 = makePlayer({ id: 'P3' as PlayerSlot, x: 900, y: 628, score: 0 });
+      const state = makeState({ players: [bot, e1, e2, e3] });
+      const arena = makeArena();
+
+      const snap = buildAwareness(bot, state, arena, Infinity);
+      expect(snap.leaderScore).toBe(0);
+    });
+  });
 });

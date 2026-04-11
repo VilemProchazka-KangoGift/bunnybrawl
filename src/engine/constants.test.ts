@@ -119,4 +119,53 @@ describe('Derived physics relationships', () => {
   it('thorn jump impulse = -392 px/s', () => {
     expect(JUMP_IMPULSE * THORN_JUMP_MULT).toBeCloseTo(-392, 0);
   });
+
+  it('fast fall is 2.67x normal gravity', () => {
+    expect(FAST_FALL_GRAVITY / GRAVITY).toBeCloseTo(2.67, 1);
+  });
+
+  it('fast fall max speed is 1.5x normal max fall speed', () => {
+    expect(FAST_FALL_SPEED / MAX_FALL_SPEED).toBe(1.5);
+  });
+
+  it('spring bounce exceeds jump impulse (more powerful than jump)', () => {
+    expect(Math.abs(SPRING_BOUNCE)).toBeGreaterThan(Math.abs(JUMP_IMPULSE));
+  });
+
+  it('stomp bounce is weaker than jump impulse', () => {
+    expect(Math.abs(STOMP_BOUNCE)).toBeLessThan(Math.abs(JUMP_IMPULSE));
+  });
+
+  it('total respawn time = SPLAT_DURATION + RESPAWN_DELAY = 1.4s', () => {
+    expect(SPLAT_DURATION + RESPAWN_DELAY).toBe(1.4);
+  });
+
+  it('invincibility exceeds total respawn time', () => {
+    expect(INVINCIBLE_DURATION).toBeGreaterThan(SPLAT_DURATION + RESPAWN_DELAY);
+  });
+
+  it('60fps timestep is approximately 16.67ms', () => {
+    expect(FIXED_TIMESTEP * 1000).toBeCloseTo(16.67, 0);
+  });
+
+  it('friction stops a max-speed player in ~0.35s', () => {
+    // time = speed / friction
+    const stopTime = MAX_WALK_SPEED / FRICTION;
+    expect(stopTime).toBeCloseTo(0.35, 1);
+  });
+
+  it('player is square (width == height)', () => {
+    expect(PLAYER_WIDTH).toBe(PLAYER_HEIGHT);
+  });
+});
+
+describe('Spawn timing constants', () => {
+  it('CARROT_FIRST_SPAWN_DELAY < SPRING_SPAWN_INTERVAL', () => {
+    expect(CARROT_FIRST_SPAWN_DELAY).toBeLessThan(SPRING_SPAWN_INTERVAL);
+  });
+
+  it('HAZARD_LIFETIME is finite', () => {
+    expect(HAZARD_LIFETIME).toBeGreaterThan(0);
+    expect(HAZARD_LIFETIME).toBeLessThan(Infinity);
+  });
 });

@@ -1284,3 +1284,162 @@ describe('GameSnapshot type completeness', () => {
     }
   });
 });
+
+// ===================================================================
+// Additional gap-coverage tests
+// ===================================================================
+
+describe('takeSnapshot with ghosts array', () => {
+  it('captures and deep-clones ghosts', () => {
+    const state = makeTestMatchState();
+    state.ghosts = [
+      { x: 100, y: 200, vx: 1.5, size: 30, alpha: 0.8, wobblePhase: 0.3 },
+      { x: 400, y: 150, vx: -2.0, size: 25, alpha: 0.6, wobblePhase: 1.2 },
+    ];
+    const snap = takeSnapshot(0, state, undefined, new Map());
+
+    expect(snap.ghosts).toHaveLength(2);
+    expect(snap.ghosts[0].x).toBe(100);
+    expect(snap.ghosts[0].vx).toBe(1.5);
+    expect(snap.ghosts[1].x).toBe(400);
+    expect(snap.ghosts[1].alpha).toBe(0.6);
+
+    // Verify deep clone: mutating source should not affect snapshot
+    state.ghosts[0].x = 9999;
+    state.ghosts[1].alpha = 0;
+    expect(snap.ghosts[0].x).toBe(100);
+    expect(snap.ghosts[1].alpha).toBe(0.6);
+  });
+});
+
+describe('takeSnapshot with 5 players', () => {
+  it('captures all 5 players with correct IDs', () => {
+    const state = makeTestMatchState();
+    state.players = [
+      makeTestPlayer('P1'),
+      makeTestPlayer('P2'),
+      makeTestPlayer('P3'),
+      makeTestPlayer('P4'),
+      makeTestPlayer('P5'),
+    ];
+    // Give each distinct x so we can verify ordering
+    state.players[0].x = 10;
+    state.players[1].x = 20;
+    state.players[2].x = 30;
+    state.players[3].x = 40;
+    state.players[4].x = 50;
+
+    const snap = takeSnapshot(0, state, undefined, new Map());
+
+    expect(snap.players).toHaveLength(5);
+    expect(snap.players[0].id).toBe('P1');
+    expect(snap.players[1].id).toBe('P2');
+    expect(snap.players[2].id).toBe('P3');
+    expect(snap.players[3].id).toBe('P4');
+    expect(snap.players[4].id).toBe('P5');
+    expect(snap.players[0].x).toBe(10);
+    expect(snap.players[4].x).toBe(50);
+  });
+});
+
+describe('restoreSnapshot preserves player order', () => {
+  it('P1 stays at index 0 and P2 at index 1 after restore', () => {
+    const state = makeTestMatchState();
+    state.players[0].x = 111;
+    state.players[1].x = 222;
+
+    const snap = takeSnapshot(0, state, undefined, new Map());
+
+    // Mutate positions
+    state.players[0].x = 0;
+    state.players[1].x = 0;
+
+    restoreSnapshot(snap, state, undefined, new Map());
+
+    expect(state.players[0].id).toBe('P1');
+    expect(state.players[0].x).toBe(111);
+    expect(state.players[1].id).toBe('P2');
+    expect(state.players[1].x).toBe(222);
+  });
+});
+
+describe('restoreSnapshot with empty killFeed', () => {
+  it('clears state killFeed when snapshot killFeed is empty', () => {
+    const state = makeTestMatchState();
+    // State starts with 1 kill feed entry from makeTestMatchState
+    expect(state.killFeed.length).toBeGreaterThan(0);
+
+    // Take snapshot with empty killFeed
+    state.killFeed = [];
+    const snap = takeSnapshot(0, state, undefined, new Map());
+    expect(snap.killFeed).toHaveLength(0);
+
+    // Add entries back to state
+    state.killFeed = [
+      { attackerId: 'P1', victimId: 'P2', time: 5, character: 'bunny', victimCharacter: 'fox' } as any,
+      { attackerId: 'P2', victimId: 'P1', time: 8, character: 'fox', victimCharacter: 'bunny' } as any,
+    ];
+    expect(state.killFeed).toHaveLength(2);
+
+    // Restore from empty snapshot should clear killFeed
+    restoreSnapshot(snap, state, undefined, new Map());
+    expect(state.killFeed).toHaveLength(0);
+  });
+});
+
+describe('takeSnapshotInto reuses stats array slots', () => {
+  it('reuses existing stats tuple slots on second call', () => {
+    const state = makeTestMatchState();
+    const rng = new SeededRNG(42);
+    const target = createEmptySnapshot();
+
+    // First call populates stats
+    takeSnapshotInto(target, 0, state, rng, new Map());
+    expect(target.stats).toHaveLength(1);
+    const statsRef = target.stats[0];
+
+    // Mutate stats value and re-snapshot
+    state.stats.perPlayer.get('P1')!.bestStreak = 10;
+    takeSnapshotInto(target, 1, state, rng, new Map());
+
+    // Same tuple reference should be reused
+    expect(target.stats[0]).toBe(statsRef);
+    expect(target.stats[0][1].bestStreak).toBe(10);
+  });
+});
+
+describe('hashGameState with zero players', () => {
+  it('produces a valid hash', () => {
+    const state = makeTestMatchState();
+    state.players = [];
+    const rng = new SeededRNG(42);
+    const hash = hashGameState(state, rng);
+    expect(typeof hash).toBe('number');
+    expect(hash).toBeGreaterThanOrEqual(0);
+    expect(hash).toBeLessThanOrEqual(0xFFFFFFFF);
+    expect(Number.isInteger(hash)).toBe(true);
+  });
+});
+
+describe('hashSnapshot with zero players', () => {
+  it('produces a valid hash', () => {
+    const state = makeTestMatchState();
+    state.players = [];
+    const rng = new SeededRNG(42);
+    const snap = takeSnapshot(0, state, rng, new Map());
+    const hash = hashSnapshot(snap);
+    expect(typeof hash).toBe('number');
+    expect(hash).toBeGreaterThanOrEqual(0);
+    expect(hash).toBeLessThanOrEqual(0xFFFFFFFF);
+    expect(Number.isInteger(hash)).toBe(true);
+  });
+
+  it('matches hashGameState for zero-player state', () => {
+    const state = makeTestMatchState();
+    state.players = [];
+    const rng = new SeededRNG(42);
+    const liveHash = hashGameState(state, rng);
+    const snap = takeSnapshot(0, state, rng, new Map());
+    expect(hashSnapshot(snap)).toBe(liveHash);
+  });
+});

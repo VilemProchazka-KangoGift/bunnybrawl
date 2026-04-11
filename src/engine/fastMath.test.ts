@@ -92,4 +92,40 @@ describe('hexToRGB', () => {
   it('parses uppercase hex #FF8800', () => {
     expect(hexToRGB('#FF8800')).toEqual({ r: 255, g: 136, b: 0 });
   });
+
+  it('parses gray #808080', () => {
+    expect(hexToRGB('#808080')).toEqual({ r: 128, g: 128, b: 128 });
+  });
+});
+
+describe('fastSin/fastCos identity', () => {
+  it('sin² + cos² ≈ 1 for all angles', () => {
+    for (let deg = 0; deg < 360; deg += 5) {
+      const rad = deg * Math.PI / 180;
+      const s = fastSin(rad);
+      const c = fastCos(rad);
+      expect(s * s + c * c).toBeCloseTo(1, 1);
+    }
+  });
+
+  it('cos(x) ≈ sin(x + π/2)', () => {
+    for (let deg = 0; deg < 360; deg += 15) {
+      const rad = deg * Math.PI / 180;
+      expect(fastCos(rad)).toBeCloseTo(fastSin(rad + Math.PI / 2), 1);
+    }
+  });
+
+  it('sin(-x) ≈ -sin(x)', () => {
+    for (let deg = 10; deg < 360; deg += 30) {
+      const rad = deg * Math.PI / 180;
+      expect(fastSin(-rad)).toBeCloseTo(-fastSin(rad), 1);
+    }
+  });
+
+  it('cos(-x) ≈ cos(x)', () => {
+    for (let deg = 10; deg < 360; deg += 30) {
+      const rad = deg * Math.PI / 180;
+      expect(fastCos(-rad)).toBeCloseTo(fastCos(rad), 1);
+    }
+  });
 });

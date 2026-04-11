@@ -165,3 +165,125 @@ describe('Ping/Pong timestamps', () => {
     expect(ping!.type).not.toBe(pong!.type);
   });
 });
+
+// ===================================================================
+// Additional gap-coverage tests
+// ===================================================================
+
+describe('encodeInput edge cases', () => {
+  it('all-true produces non-zero byte', () => {
+    const byte = encodeInput({ left: true, right: true, jump: true, down: true });
+    expect(byte).not.toBe(0);
+    expect(byte).toBe(0b1111); // 15
+  });
+
+  it('all-false produces zero byte', () => {
+    const byte = encodeInput({ left: false, right: false, jump: false, down: false });
+    expect(byte).toBe(0);
+  });
+});
+
+describe('decodeSlot round-trip for all P1-P5 and B1-B5', () => {
+  it('round-trips P1 through P5', () => {
+    for (let i = 1; i <= 5; i++) {
+      expect(decodeSlot(i)).toBe(`P${i}`);
+    }
+  });
+
+  it('round-trips B1 through B5', () => {
+    for (let i = 1; i <= 5; i++) {
+      expect(decodeSlot(5 + i)).toBe(`B${i}`);
+    }
+  });
+
+  it('covers all 10 valid slot bytes without overlap', () => {
+    const results = new Set<string>();
+    for (let i = 1; i <= 10; i++) {
+      results.add(decodeSlot(i));
+    }
+    expect(results.size).toBe(10);
+  });
+});
+
+describe('encodePing buffer size', () => {
+  it('is exactly 9 bytes', () => {
+    const buf = encodePing(12345.678);
+    expect(buf.byteLength).toBe(9);
+  });
+
+  it('encodePong is also exactly 9 bytes', () => {
+    const buf = encodePong(12345.678);
+    expect(buf.byteLength).toBe(9);
+  });
+});
+
+describe('decodeInputMessage returns null for wrong message type', () => {
+  it('returns null when first byte is PING type', () => {
+    const buf = encodePing(100);
+    const result = decodeInputMessage(buf);
+    expect(result).toBeNull();
+  });
+
+  it('returns null when first byte is PONG type', () => {
+    const buf = encodePong(100);
+    const result = decodeInputMessage(buf);
+    expect(result).toBeNull();
+  });
+
+  it('returns null for a buffer with HANDSHAKE type byte', () => {
+    const buf = new ArrayBuffer(8);
+    const view = new DataView(buf);
+    view.setUint8(0, MsgType.HANDSHAKE);
+    const result = decodeInputMessage(buf);
+    expect(result).toBeNull();
+  });
+});
+
+describe('encodeInputMessage with 0 inputs', () => {
+  it('encodes and decodes with zero input count', () => {
+    const buf = encodeInputMessage([], 0, 0, 'P1');
+    const decoded = decodeInputMessage(buf);
+    expect(decoded).not.toBeNull();
+    expect(decoded!.inputCount).toBe(0);
+    expect(decoded!.latestAck).toBe(0);
+  });
+});
+
+describe('Large frame numbers round-trip', () => {
+  it('near uint32 max round-trips correctly', () => {
+    const maxFrame = 0xFFFFFFFE; // 4294967294
+    const inputs = [{ frame: maxFrame, input: { left: true, right: false, jump: true, down: false } }];
+    const buf = encodeInputMessage(inputs, maxFrame, undefined, 'P1');
+    const decoded = decodeInputMessage(buf);
+    expect(decoded).not.toBeNull();
+    expect(decoded!.inputs[0].frame).toBe(maxFrame);
+    expect(decoded!.latestAck).toBe(maxFrame);
+    expect(decoded!.inputs[0].input.left).toBe(true);
+    expect(decoded!.inputs[0].input.jump).toBe(true);
+  });
+
+  it('uint32 max (0xFFFFFFFF) round-trips correctly', () => {
+    const maxFrame = 0xFFFFFFFF; // 4294967295
+    const inputs = [{ frame: maxFrame, input: { left: false, right: true, jump: false, down: true } }];
+    const buf = encodeInputMessage(inputs, maxFrame, undefined, 'P2');
+    const decoded = decodeInputMessage(buf);
+    expect(decoded).not.toBeNull();
+    expect(decoded!.inputs[0].frame).toBe(maxFrame);
+    expect(decoded!.latestAck).toBe(maxFrame);
+  });
+
+  it('frame 0 and large frame in same bundle', () => {
+    const inputs = [
+      { frame: 0, input: { left: true, right: false, jump: false, down: false } },
+      { frame: 0xFFFFFFFF, input: { left: false, right: true, jump: false, down: false } },
+    ];
+    const buf = encodeInputMessage(inputs, 0xFFFFFFFF, undefined, 'P1');
+    const decoded = decodeInputMessage(buf);
+    expect(decoded).not.toBeNull();
+    expect(decoded!.inputCount).toBe(2);
+    expect(decoded!.inputs[0].frame).toBe(0);
+    expect(decoded!.inputs[0].input.left).toBe(true);
+    expect(decoded!.inputs[1].frame).toBe(0xFFFFFFFF);
+    expect(decoded!.inputs[1].input.right).toBe(true);
+  });
+});
