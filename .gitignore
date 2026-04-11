@@ -30,3 +30,4 @@ src/fullscreen-check.png
 *.sln
 *.sw?
 .claude/worktrees/
+test-results/
