@@ -41,20 +41,24 @@ const DEGRADED_THRESHOLD_MS = 2000;
 const SIGNALING_TIMEOUT_MS = 15000;
 const RTT_ALPHA = 0.1;
 
-const ICE_SERVERS: RTCIceServer[] = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun.relay.metered.ca:80' },
-  {
-    urls: [
-      'turn:global.relay.metered.ca:80',
-      'turn:global.relay.metered.ca:80?transport=tcp',
-      'turn:global.relay.metered.ca:443',
-      'turns:global.relay.metered.ca:443?transport=tcp',
-    ],
-    username: 'c3df312aef92720b59dfd78e',
-    credential: 'fiR6/CHXZdpjR4cC',
-  },
-];
+const TURN_DISABLED = typeof location !== 'undefined' && new URLSearchParams(location.search).has('noturn');
+
+const ICE_SERVERS: RTCIceServer[] = TURN_DISABLED
+  ? [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun.relay.metered.ca:80' }]
+  : [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun.relay.metered.ca:80' },
+      {
+        urls: [
+          'turn:global.relay.metered.ca:80',
+          'turn:global.relay.metered.ca:80?transport=tcp',
+          'turn:global.relay.metered.ca:443',
+          'turns:global.relay.metered.ca:443?transport=tcp',
+        ],
+        username: 'c3df312aef92720b59dfd78e',
+        credential: 'fiR6/CHXZdpjR4cC',
+      },
+    ];
 
 export class Transport {
   private peer: Peer | null = null;
@@ -73,6 +77,7 @@ export class Transport {
   private _rtt = 0;
   private _jitter = 0;
   private _iceState: string = '';
+  private _isRelay = false;
 
   constructor(events: TransportEvents) {
     this.events = events;
@@ -109,6 +114,7 @@ export class Transport {
   get roomCode(): string | null { return this._roomCode; }
   get peerCount(): number { return this.peers.size; }
   get iceState(): string { return this._iceState; }
+  get isRelay(): boolean { return this._isRelay; }
 
   /** Get all connected peer IDs. */
   getPeerIds(): string[] { return Array.from(this.peers.keys()); }
@@ -319,13 +325,24 @@ export class Transport {
   private setupConnection(conn: DataConnection): void {
     const peerId = conn.peer;
 
-    // Detect ICE failure early — surface a clear error instead of waiting for timeout
+    // ICE diagnostics: detect relay vs direct, surface failures early
     const pc = (conn as unknown as { peerConnection?: RTCPeerConnection }).peerConnection;
     if (pc) {
       pc.addEventListener('iceconnectionstatechange', () => {
         this._iceState = pc.iceConnectionState;
-        if (pc.iceConnectionState === 'failed') {
-          console.warn('[Transport] ICE failed — TURN relay may be needed for this network.');
+        if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+          // Check if connection goes through TURN relay
+          pc.getStats().then(stats => {
+            for (const report of stats.values()) {
+              if (report.type === 'candidate-pair' && (report.selected || (report.nominated && report.state === 'succeeded'))) {
+                const local = stats.get(report.localCandidateId);
+                this._isRelay = local?.candidateType === 'relay';
+                console.log(`[Transport] Connection type: ${this._isRelay ? 'RELAY (TURN)' : 'DIRECT'}, local candidate: ${local?.candidateType ?? 'unknown'}`);
+                break;
+              }
+            }
+          }).catch(() => {});
+        } else if (pc.iceConnectionState === 'failed') {
           this.removePeer(peerId);
           if (this.peers.size === 0 && this.status !== 'error') {
             this.setStatus('error', 'Connection failed — devices cannot reach each other directly. A TURN relay server may be needed for mobile-to-mobile play.');

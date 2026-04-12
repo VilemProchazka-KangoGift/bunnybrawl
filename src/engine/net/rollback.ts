@@ -45,6 +45,7 @@ export interface NetDebugStats {
   stalled: boolean;
   rollbacksPerSec: number;
   maxRollbackDepth: number;
+  isRelay: boolean;
 }
 
 /** Per-remote-slot input tracking state. */
@@ -120,7 +121,7 @@ export class RollbackEngine {
   private readonly _statsCache: NetDebugStats = {
     localFrame: 0, remoteConfirmedFrame: 0, remoteLatestAck: 0,
     rtt: 0, jitter: 0, inputDelay: 0, stalled: false,
-    rollbacksPerSec: 0, maxRollbackDepth: 0,
+    rollbacksPerSec: 0, maxRollbackDepth: 0, isRelay: false,
   };
 
   // Callbacks
@@ -670,6 +671,7 @@ export class RollbackEngine {
     s.stalled = this.stalled;
     s.rollbacksPerSec = this.rollbackCountPerSec;
     s.maxRollbackDepth = this.maxRollbackDepthPerSec;
+    s.isRelay = this.transport.isRelay;
     return s;
   }
 }
