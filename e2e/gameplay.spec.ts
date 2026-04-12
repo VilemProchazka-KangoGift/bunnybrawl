@@ -140,13 +140,18 @@ test.describe('Gameplay Mechanics', () => {
     await startMatch(page, { bots: 3 });
     await waitForCountdown(page);
 
-    // Let bots fight for 10 seconds
-    await page.waitForTimeout(10000);
+    // Wait for at least one kill (polls game state instead of fixed wait)
+    await page.waitForFunction(() => {
+      const loop = (window as any).__gameLoop;
+      if (!loop) return false;
+      const state = loop.getState();
+      return state.players.some((p: any) => p.score > 0);
+    }, { timeout: 15000 });
 
     const state = await getState(page);
     expect(state).not.toBeNull();
     const totalScore = state!.players.reduce((sum: number, p: any) => sum + p.score, 0);
-    expect(totalScore, 'at least one kill should have happened after 10s').toBeGreaterThanOrEqual(1);
+    expect(totalScore).toBeGreaterThanOrEqual(1);
   });
 
   test('kill feed has entries after gameplay', async ({ page }) => {

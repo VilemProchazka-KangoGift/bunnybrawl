@@ -14,7 +14,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/engine/**/*.ts'],
-      exclude: ['src/engine/**/index.ts', 'src/engine/rendering/**', 'src/engine/themes/drawPrimitives.ts', 'src/engine/arenas/packs/**', 'src/engine/characters/packs/**'],
+      exclude: ['src/engine/**/index.ts', 'src/engine/rendering/**', 'src/engine/themes/drawPrimitives.ts'],
       reporter: ['text', 'json-summary'],
       reportsDirectory: './coverage',
     },

@@ -4,6 +4,12 @@ import { registerBuiltinCharacters } from './builtin';
 import { registerBuiltinArenas } from '../arenas/builtin';
 import type { BotSlot, CharacterSlot } from '../types';
 
+// Register once for all tests in this file
+beforeAll(() => {
+  registerBuiltinArenas();
+  registerBuiltinCharacters();
+});
+
 describe('Characters', () => {
   it('has all four characters defined', () => {
     expect(CHARACTERS.P1).toBeDefined();
@@ -64,8 +70,6 @@ describe('getCharacterForSlot', () => {
   });
 
   it('returns bot character for assigned bot slot', () => {
-    registerBuiltinArenas();
-    registerBuiltinCharacters();
     assignBotCharacters(['P1', 'P2'] as CharacterSlot[], ['B1'] as BotSlot[]);
     const bot = getCharacterForSlot('B1' as any);
     expect(bot).toBeDefined();
@@ -75,11 +79,6 @@ describe('getCharacterForSlot', () => {
 });
 
 describe('assignBotCharacters', () => {
-  beforeAll(() => {
-    try { registerBuiltinArenas(); } catch { /* ok */ }
-    registerBuiltinCharacters();
-  });
-
   beforeEach(() => {
     BOT_CHARACTERS.clear();
   });

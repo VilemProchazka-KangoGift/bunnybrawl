@@ -70,6 +70,8 @@ function makeSettings(overrides?: Partial<MatchSettings>): MatchSettings {
   };
 }
 
+let _lastLoop: GameLoop | null = null;
+
 function createLoop(opts?: { settings?: Partial<MatchSettings>; arena?: Partial<Arena>; players?: PlayerSlot[] }) {
   const bgCanvas = document.createElement('canvas');
   bgCanvas.width = 1280; bgCanvas.height = 720;
@@ -79,12 +81,18 @@ function createLoop(opts?: { settings?: Partial<MatchSettings>; arena?: Partial<
   const settings = makeSettings(opts?.settings);
   const onMatchEnd = vi.fn();
   const loop = new GameLoop(bgCanvas, fgCanvas, arena, settings, opts?.players ?? (['P1', 'P2'] as PlayerSlot[]), onMatchEnd);
+  _lastLoop = loop;
   return { loop, onMatchEnd, arena, settings };
 }
 
 beforeAll(() => {
   registerBuiltinArenas();
   registerBuiltinCharacters();
+});
+
+afterEach(() => {
+  _lastLoop?.stop();
+  _lastLoop = null;
 });
 
 describe('Integration: full match lifecycle', () => {

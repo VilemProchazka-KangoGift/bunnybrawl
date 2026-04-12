@@ -109,6 +109,8 @@ function makeSettings(overrides?: Partial<MatchSettings>): MatchSettings {
   };
 }
 
+let _lastLoop: GameLoop | null = null;
+
 function createLoop(opts?: {
   settings?: Partial<MatchSettings>;
   arena?: Partial<Arena>;
@@ -131,6 +133,7 @@ function createLoop(opts?: {
     opts?.players ?? (['P1', 'P2'] as PlayerSlot[]),
     onMatchEnd,
   );
+  _lastLoop = loop;
   return { loop, onMatchEnd, arena, settings };
 }
 
@@ -142,6 +145,8 @@ beforeAll(() => {
 });
 
 afterEach(() => {
+  _lastLoop?.stop();
+  _lastLoop = null;
   vi.restoreAllMocks();
 });
 
