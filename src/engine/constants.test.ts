@@ -64,7 +64,6 @@ describe('Stomp/kill constants', () => {
   it('SPLAT_DURATION = 0.4s', () => expect(SPLAT_DURATION).toBe(0.4));
   it('RESPAWN_DELAY = 1.0s', () => expect(RESPAWN_DELAY).toBe(1));
   it('INVINCIBLE_DURATION = 1.5s', () => expect(INVINCIBLE_DURATION).toBe(1.5));
-  // Kill score (2 points) is hardcoded in checkStomps, not a named constant
 });
 
 describe('Hazard constants', () => {

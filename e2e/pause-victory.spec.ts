@@ -11,8 +11,11 @@ test.describe('Pause Menu', () => {
     // Start a match directly via URL params (meadow, 2 bots, high kill limit so match doesn't end too fast)
     await page.goto('/?arena=meadow&bots=2&killLimit=99');
     await expect(page.getByTestId('match-screen')).toBeVisible({ timeout: 10000 });
-    // Wait for countdown to finish and game to be active
-    await page.waitForTimeout(4000);
+    // Wait for countdown to finish (polls game state)
+    await page.waitForFunction(() => {
+      const loop = (window as any).__gameLoop;
+      return loop?.getState()?.countdown === 0;
+    }, { timeout: 8000 });
   });
 
   test('Escape key opens pause menu during match', async ({ page }) => {

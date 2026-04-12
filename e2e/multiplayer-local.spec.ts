@@ -26,7 +26,11 @@ test.describe('Local Multiplayer', () => {
     test.setTimeout(30000);
     await page.goto('/?arena=meadow&bots=1');
     await expect(page.getByTestId('match-screen')).toBeVisible({ timeout: 10000 });
-    await page.waitForTimeout(4000); // wait for 3s countdown + buffer
+    // Wait for countdown to finish (polls game state instead of hardcoded wait)
+    await page.waitForFunction(() => {
+      const loop = (window as any).__gameLoop;
+      return loop?.getState()?.countdown === 0;
+    }, { timeout: 8000 });
 
     const xBefore = await page.evaluate(() => {
       const loop = (window as any).__gameLoop;
