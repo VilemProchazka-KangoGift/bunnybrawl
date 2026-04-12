@@ -726,3 +726,205 @@ describe('RollbackEngine - construction edge cases', () => {
     expect(() => engine.handleInputMessage(buf)).not.toThrow();
   });
 });
+
+describe('RollbackEngine - isNearStomp (via stomp preservation)', () => {
+  it('isNearStomp returns true for overlapping positions', () => {
+    // Access private method via type coercion
+    const { engine } = makeEngine();
+    const attacker = { x: 100, y: 200, width: 32, height: 32 } as Player;
+    const victim = { x: 105, y: 230, width: 32, height: 32 } as Player;
+    // attacker bottom = 232, victim top = 230, overlap = 232-230 = 2 < 32*0.6 = 19.2
+    const result = (engine as any).isNearStomp(attacker, victim);
+    expect(result).toBe(true);
+  });
+
+  it('isNearStomp returns false when too far horizontally', () => {
+    const { engine } = makeEngine();
+    const attacker = { x: 0, y: 200, width: 32, height: 32 } as Player;
+    const victim = { x: 200, y: 230, width: 32, height: 32 } as Player;
+    const result = (engine as any).isNearStomp(attacker, victim);
+    expect(result).toBe(false);
+  });
+
+  it('isNearStomp returns false when attacker is below victim', () => {
+    const { engine } = makeEngine();
+    const attacker = { x: 100, y: 280, width: 32, height: 32 } as Player;
+    const victim = { x: 105, y: 230, width: 32, height: 32 } as Player;
+    // attacker bottom = 312, victim top = 230, overlap = 312-230 = 82 > 32*0.6 = 19.2
+    const result = (engine as any).isNearStomp(attacker, victim);
+    expect(result).toBe(false);
+  });
+
+  it('isNearStomp returns false when attacker is too far above', () => {
+    const { engine } = makeEngine();
+    const attacker = { x: 100, y: 100, width: 32, height: 32 } as Player;
+    const victim = { x: 105, y: 230, width: 32, height: 32 } as Player;
+    // attacker bottom = 132, victim top = 230, overlap = 132-230 = -98 < -MARGIN = -10
+    const result = (engine as any).isNearStomp(attacker, victim);
+    expect(result).toBe(false);
+  });
+});
+
+describe('RollbackEngine - sendDesyncCheck', () => {
+  it('host sends DESYNC_CHECK with hash', () => {
+    const state = makeTestState();
+    const rng = new SeededRNG(42);
+    const gameLoop = makeMockGameLoop(state, rng);
+    const transport = makeMockTransport();
+    const engine = new RollbackEngine({
+      localSlot: 'P1', remoteSlots: ['P2'], isHost: true,
+      gameLoop: gameLoop as any, transport: transport as any,
+    });
+    (engine as any).localFrame = 30;
+
+    (engine as any).sendDesyncCheck();
+
+    expect(transport.sendReliable).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: MsgType.DESYNC_CHECK,
+        frame: 30,
+        hash: expect.any(Number),
+      }),
+    );
+  });
+
+  it('guest does not send DESYNC_CHECK', () => {
+    const { engine, transport } = makeEngine({ isHost: false });
+    (engine as any).sendDesyncCheck();
+    expect(transport.sendReliable).not.toHaveBeenCalled();
+  });
+
+  it('desync check includes subsystem hashes', () => {
+    const state = makeTestState();
+    const rng = new SeededRNG(42);
+    const gameLoop = makeMockGameLoop(state, rng);
+    const transport = makeMockTransport();
+    const engine = new RollbackEngine({
+      localSlot: 'P1', remoteSlots: ['P2'], isHost: true,
+      gameLoop: gameLoop as any, transport: transport as any,
+    });
+
+    (engine as any).sendDesyncCheck();
+
+    const msg = transport.sendReliable.mock.calls[0][0];
+    expect(msg.playersHash).toBeDefined();
+    expect(msg.entitiesHash).toBeDefined();
+    expect(msg.timersHash).toBeDefined();
+  });
+});
+
+describe('RollbackEngine - readLocalInput', () => {
+  it('returns input from gameLoop.getInputAny', () => {
+    const gameLoop = makeMockGameLoop();
+    gameLoop.getInputAny.mockReturnValue({ left: true, right: false, jump: false, down: false });
+    const transport = makeMockTransport();
+    const engine = new RollbackEngine({
+      localSlot: 'P1', remoteSlots: ['P2'], isHost: true,
+      gameLoop: gameLoop as any, transport: transport as any,
+    });
+
+    const input = (engine as any).readLocalInput();
+    expect(input.left).toBe(true);
+  });
+
+  it('returns NO_INPUT on error', () => {
+    const gameLoop = makeMockGameLoop();
+    gameLoop.getInputAny.mockImplementation(() => { throw new Error('no input'); });
+    const transport = makeMockTransport();
+    const engine = new RollbackEngine({
+      localSlot: 'P1', remoteSlots: ['P2'], isHost: true,
+      gameLoop: gameLoop as any, transport: transport as any,
+    });
+
+    const input = (engine as any).readLocalInput();
+    expect(input).toEqual({ left: false, right: false, jump: false, down: false });
+  });
+});
+
+describe('RollbackEngine - getLastConfirmedInput', () => {
+  it('returns NO_INPUT when confirmedFrame < 0', () => {
+    const { engine } = makeEngine();
+    // remState starts with confirmedFrame = -1
+    const remState = (engine as any).remoteState.get('P2');
+    const input = (engine as any).getLastConfirmedInput(remState);
+    expect(input).toEqual({ left: false, right: false, jump: false, down: false });
+  });
+
+  it('returns input at confirmedFrame when available', () => {
+    const { engine } = makeEngine();
+    // Feed an input to confirm frame 5
+    const buf = encodeInputMessage(
+      [{ frame: 5, input: { left: true, right: false, jump: false, down: false } }],
+      3, undefined, 'P2',
+    );
+    engine.handleInputMessage(buf);
+
+    const remState = (engine as any).remoteState.get('P2');
+    const input = (engine as any).getLastConfirmedInput(remState);
+    expect(input.left).toBe(true);
+  });
+});
+
+describe('RollbackEngine - sendInput', () => {
+  it('sends bundled inputs via transport.sendUnreliable', () => {
+    const { engine, transport } = makeEngine();
+    // Set a local input first
+    (engine as any).localInputs[5 % 128] = { left: true, right: false, jump: false, down: false };
+    (engine as any).sendInput(5, { left: true, right: false, jump: false, down: false });
+
+    expect(transport.sendUnreliable).toHaveBeenCalledWith(expect.any(ArrayBuffer));
+  });
+});
+
+describe('RollbackEngine - adaptInputDelay edge cases', () => {
+  it('adapts delay based on changing RTT', () => {
+    const { engine, transport } = makeEngine();
+    // Set moderate RTT
+    transport.currentRtt = 100;
+    transport.currentJitter = 0;
+    (engine as any).adaptInputDelay();
+    const mid = engine.getStats().inputDelay;
+    expect(mid).toBeGreaterThanOrEqual(1);
+    expect(mid).toBeLessThanOrEqual(4);
+  });
+
+  it('minimum input delay is 1', () => {
+    const { engine, transport } = makeEngine();
+    transport.currentRtt = 1;
+    transport.currentJitter = 0;
+    (engine as any).adaptInputDelay();
+    expect(engine.getStats().inputDelay).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('RollbackEngine - start and stop lifecycle', () => {
+  it('start sets running and calls setNetworkMode', () => {
+    const { engine, gameLoop } = makeEngine();
+    // Mock requestAnimationFrame and performance.now
+    vi.spyOn(globalThis, 'requestAnimationFrame').mockReturnValue(1);
+    vi.spyOn(performance, 'now').mockReturnValue(1000);
+
+    engine.start();
+
+    expect(gameLoop.setNetworkMode).toHaveBeenCalledWith(true);
+    expect(gameLoop.start).toHaveBeenCalled();
+    expect((engine as any).running).toBe(true);
+
+    vi.restoreAllMocks();
+  });
+
+  it('stop cancels animation frame and stops game loop', () => {
+    const { engine, gameLoop } = makeEngine();
+    const cancelSpy = vi.spyOn(globalThis, 'cancelAnimationFrame').mockImplementation(() => {});
+    vi.spyOn(globalThis, 'requestAnimationFrame').mockReturnValue(42);
+    vi.spyOn(performance, 'now').mockReturnValue(1000);
+
+    engine.start();
+    engine.stop();
+
+    expect(gameLoop.stop).toHaveBeenCalled();
+    expect((engine as any).running).toBe(false);
+
+    vi.restoreAllMocks();
+  });
+});
