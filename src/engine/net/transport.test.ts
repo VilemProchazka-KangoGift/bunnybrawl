@@ -772,3 +772,160 @@ describe('Transport — getIceServers', () => {
     t.destroy();
   });
 });
+
+describe('Transport — startPing health degradation', () => {
+  it('marks peer as degraded after threshold', () => {
+    vi.useFakeTimers();
+    const events = makeEvents();
+    const t = new Transport(events);
+    const safeNow = 100000;
+    vi.spyOn(performance, 'now').mockReturnValue(safeNow);
+
+    // Manually add peer with old lastPongTime
+    (t as any).peers.set('peer-1', {
+      peerId: 'peer-1', conn: mockConn, rtt: 0, jitter: 0,
+      lastPongTime: safeNow - 3000, // 3s ago > DEGRADED_THRESHOLD_MS (2000)
+      health: 'healthy',
+    });
+    (t as any).status = 'connected';
+
+    // Start ping timer
+    (t as any).startPing();
+
+    // Advance past PING_INTERVAL (500ms)
+    vi.advanceTimersByTime(600);
+
+    const info = t.getPeerInfo('peer-1');
+    expect(info?.health).toBe('degraded');
+    expect(events.onPeerHealthChange).toHaveBeenCalledWith('peer-1', 'degraded');
+
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    t.destroy();
+  });
+
+  it('removes peer after pong timeout', () => {
+    vi.useFakeTimers();
+    const events = makeEvents();
+    const t = new Transport(events);
+    const safeNow = 100000;
+    vi.spyOn(performance, 'now').mockReturnValue(safeNow);
+
+    (t as any).peers.set('peer-1', {
+      peerId: 'peer-1', conn: mockConn, rtt: 0, jitter: 0,
+      lastPongTime: safeNow - 6000, // 6s ago > PONG_TIMEOUT_MS (5000)
+      health: 'degraded',
+    });
+    (t as any).status = 'connected';
+    (t as any).startPing();
+
+    vi.advanceTimersByTime(600);
+
+    // Peer should be removed
+    expect(t.peerCount).toBe(0);
+    expect(events.onPeerHealthChange).toHaveBeenCalledWith('peer-1', 'lost');
+
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    t.destroy();
+  });
+
+  it('startPing is idempotent', () => {
+    const t = new Transport(makeEvents());
+    (t as any).startPing();
+    const timer1 = (t as any).pingTimer;
+    (t as any).startPing(); // second call
+    expect((t as any).pingTimer).toBe(timer1); // same timer
+    t.destroy();
+  });
+
+  it('stopPing clears timer', () => {
+    const t = new Transport(makeEvents());
+    (t as any).startPing();
+    expect((t as any).pingTimer).not.toBeNull();
+    (t as any).stopPing();
+    expect((t as any).pingTimer).toBeNull();
+    t.destroy();
+  });
+});
+
+describe('Transport — PONG updates peer health to healthy', () => {
+  it('restores degraded peer to healthy on pong', () => {
+    const events = makeEvents();
+    const t = new Transport(events);
+
+    (t as any).peers.set('peer-1', {
+      peerId: 'peer-1', conn: mockConn, rtt: 50, jitter: 5,
+      lastPongTime: performance.now() - 3000,
+      health: 'degraded',
+    });
+    (t as any).status = 'connected';
+
+    // Simulate receiving pong with recent timestamp
+    const timestamp = performance.now() - 50;
+    const pongData = encodePong(timestamp);
+    (t as any).handleBinaryMessage(pongData, 'peer-1');
+
+    const info = t.getPeerInfo('peer-1');
+    expect(info?.health).toBe('healthy');
+    expect(events.onPeerHealthChange).toHaveBeenCalledWith('peer-1', 'healthy');
+
+    t.destroy();
+  });
+});
+
+describe('Transport — onIncomingData with simulator', () => {
+  it('routes binary data through simulator when enabled', () => {
+    const events = makeEvents();
+    const t = new Transport(events);
+    const mockSim = { enabled: true, enqueue: vi.fn(() => true), flush: vi.fn(() => []) };
+    (t as any).simulator = mockSim;
+
+    // Binary data that is NOT ping/pong
+    const buf = new ArrayBuffer(10);
+    new Uint8Array(buf)[0] = 99;
+    (t as any).onIncomingData(buf, 'peer-1');
+
+    expect(mockSim.enqueue).toHaveBeenCalled();
+    t.destroy();
+  });
+
+  it('ping/pong bypasses simulator for accurate RTT', () => {
+    const events = makeEvents();
+    const t = new Transport(events);
+    const mockSim = { enabled: true, enqueue: vi.fn(), flush: vi.fn(() => []) };
+    (t as any).simulator = mockSim;
+
+    (t as any).peers.set('peer-1', {
+      peerId: 'peer-1', conn: mockConn, rtt: 0, jitter: 0,
+      lastPongTime: performance.now(), health: 'healthy',
+    });
+
+    // Send a PING — should be handled directly, not enqueued
+    const pingData = encodePing(performance.now());
+    (t as any).onIncomingData(pingData, 'peer-1');
+
+    // Ping was handled directly (pong sent), not enqueued
+    expect(mockConn.send).toHaveBeenCalled();
+
+    t.destroy();
+  });
+
+  it('flushSimulator delivers queued messages', () => {
+    const events = makeEvents();
+    const t = new Transport(events);
+    const mockSim = {
+      enabled: true,
+      enqueue: vi.fn(),
+      flush: vi.fn(() => [
+        { data: { data: JSON.stringify({ type: MsgType.PAUSE, paused: true }), fromPeerId: 'peer-1' } },
+      ]),
+    };
+    (t as any).simulator = mockSim;
+
+    (t as any).flushSimulator();
+
+    expect(events.onReliableMessage).toHaveBeenCalled();
+    t.destroy();
+  });
+});
