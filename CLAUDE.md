@@ -111,8 +111,8 @@ src/
 ```bash
 npm run dev       # Dev server with HMR
 npm run build     # Production build (tsc + vite)
-npm test          # Unit/integration tests (~130 tests, Vitest)
-npm run test:e2e  # E2E tests (27 tests, Playwright, builds first)
+npm test          # Unit/integration tests (~1600 tests, Vitest)
+npm run test:e2e  # E2E tests (~120 tests, Playwright, builds first)
 npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/physics changes)
 # Dev shortcut — skip lobby:
 # http://localhost:5173/bunnybrawl/?arena=rooftops&bots=2&difficulty=hard
@@ -127,6 +127,14 @@ npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/
 - Tests force `i18n.changeLanguage('en')` so string assertions work regardless of default language.
 - When adding new Player fields, update `makePlayer()` in `src/engine/__tests__/testHelpers.ts` and mock players in `VictoryScreen.test.tsx`.
 - The lobby walk-to-zone E2E test is inherently flaky (random NPC placement). Tagged `@flaky`, uses retries.
+- `MainMenu.test.tsx` and `VictoryScreen.test.tsx` have a known pre-existing failure (logo.png import denied by Vite test transform).
+- **GameLoop tests** require mocking `audio`, `renderer`, `howler`, and `HTMLCanvasElement.prototype.getContext`. See `gameLoop.test.ts` top for the full mock block. Always call `loop.stop()` in `afterEach` to prevent keydown listener leaks.
+- **Audio tests** — the `AudioManager` singleton creates a `menuMusicHowl` at field init time (before tests run), so the `Howl` mock must be a real constructor function (not arrow), and tracking instances requires `globalThis` (vi.mock factories run before `const` declarations).
+- **Registry tests** — character/arena registries use module-scoped Maps with no `clear()`. Use unique pack names per test to avoid collisions. Count-based assertions should use `toBeGreaterThanOrEqual`, not exact counts.
+- **Character pack names are capitalized** — `getCharacterPack('Bunny')` not `'bunny'`.
+- **E2E shortcuts** — `/?arena=meadow&bots=2&killLimit=4` auto-starts a match (skips lobby). Requires `arena` param to trigger. Use `window.__gameLoop.getState()` and `window.__gameStore.getState()` for in-match assertions.
+- **E2E countdown waits** — use `page.waitForFunction(() => window.__gameLoop?.getState()?.countdown === 0)` instead of `waitForTimeout(4000)`.
+- **E2E flakiness** — online multiplayer tests (`@online`) are inherently flaky due to PeerJS signaling. New E2E tests should use URL param auto-start and `waitForFunction` polling over hardcoded waits.
 
 ## Common Patterns
 
