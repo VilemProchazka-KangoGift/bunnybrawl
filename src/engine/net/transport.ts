@@ -41,21 +41,20 @@ const DEGRADED_THRESHOLD_MS = 2000;
 const SIGNALING_TIMEOUT_MS = 15000;
 const RTT_ALPHA = 0.1;
 
-// TURN relay required for mobile-to-mobile behind symmetric NAT.
-// Configure via env vars: VITE_TURN_URLS, VITE_TURN_USERNAME, VITE_TURN_CREDENTIAL.
-function getIceServers(): RTCIceServer[] {
-  const servers: RTCIceServer[] = [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:global.stun.twilio.com:3478' },
-  ];
-  const turnUrls = import.meta.env.VITE_TURN_URLS;
-  const turnUser = import.meta.env.VITE_TURN_USERNAME;
-  const turnCred = import.meta.env.VITE_TURN_CREDENTIAL;
-  if (turnUrls && turnUser && turnCred) {
-    servers.push({ urls: turnUrls.split(','), username: turnUser, credential: turnCred });
-  }
-  return servers;
-}
+const ICE_SERVERS: RTCIceServer[] = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun.relay.metered.ca:80' },
+  {
+    urls: [
+      'turn:global.relay.metered.ca:80',
+      'turn:global.relay.metered.ca:80?transport=tcp',
+      'turn:global.relay.metered.ca:443',
+      'turns:global.relay.metered.ca:443?transport=tcp',
+    ],
+    username: 'c3df312aef92720b59dfd78e',
+    credential: 'fiR6/CHXZdpjR4cC',
+  },
+];
 
 export class Transport {
   private peer: Peer | null = null;
@@ -130,7 +129,7 @@ export class Transport {
     const code = generateRoomCode();
     this._roomCode = code;
     const peerId = PEER_PREFIX + code;
-    const iceServers = getIceServers();
+    const iceServers = ICE_SERVERS;
 
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
@@ -192,7 +191,7 @@ export class Transport {
     this._roomCode = code;
 
     const hostPeerId = PEER_PREFIX + code.toUpperCase();
-    const iceServers = getIceServers();
+    const iceServers = ICE_SERVERS;
 
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
