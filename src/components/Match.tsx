@@ -202,6 +202,7 @@ export function Match() {
       netMatchRef.current = netMatch;
       gameLoopRef.current = netMatch.getGameLoop();
       window.__gameLoop = netMatch.getGameLoop();
+      (window as any).__netMatch = netMatch;
       netMatch.getGameLoop().setPlayerNames(useGameStore.getState().online.playerNames);
       netMatch.getGameLoop().setLocalSlot((online.isHost ? 'P1' : online.localSlot) as PlayerSlot);
       netMatch.start();

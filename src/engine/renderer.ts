@@ -35,6 +35,50 @@ interface Cloud {
 
 const _nearCarrotSet = new Set<PlayerSlot>();
 
+/** Diagnostic flags tracking which rendering branches fired each frame. */
+export interface RenderDiagnostics {
+  clouds: boolean;
+  weather: boolean;
+  wildlife: boolean;
+  animatedBg: boolean;
+  hazardZones: boolean;
+  effectZones: boolean;
+  bouncyPlatforms: boolean;
+  pigeons: boolean;
+  lavaRocks: boolean;
+  springs: boolean;
+  thorns: boolean;
+  carrots: boolean;
+  gibs: boolean;
+  confetti: boolean;
+  shockwaves: boolean;
+  afterimages: boolean;
+  fog: boolean;
+  ambient: boolean;
+  fireworks: boolean;
+  dayNight: boolean;
+  countdown: boolean;
+  navDebug: boolean;
+  netDebug: boolean;
+  screenFlash: boolean;
+  hitstop: boolean;
+  screenShake: boolean;
+  zeroGShimmer: boolean;
+  playersDrawn: number;
+}
+
+function freshDiag(): RenderDiagnostics {
+  return {
+    clouds: false, weather: false, wildlife: false, animatedBg: false,
+    hazardZones: false, effectZones: false, bouncyPlatforms: false, pigeons: false,
+    lavaRocks: false, springs: false, thorns: false, carrots: false,
+    gibs: false, confetti: false, shockwaves: false, afterimages: false,
+    fog: false, ambient: false, fireworks: false, dayNight: false,
+    countdown: false, navDebug: false, netDebug: false, screenFlash: false,
+    hitstop: false, screenShake: false, zeroGShimmer: false, playersDrawn: 0,
+  };
+}
+
 export class Renderer {
   private bgCtx: CanvasRenderingContext2D;
   private fgCtx: CanvasRenderingContext2D;
@@ -52,6 +96,7 @@ export class Renderer {
   private _netDebugStats: NetDebugStats | null = null;
   private _playerNames: Record<string, string> | null = null;
   private _timeLimit: number = 0;
+  private _diag: RenderDiagnostics = freshDiag();
 
   constructor(bgCanvas: HTMLCanvasElement, fgCanvas: HTMLCanvasElement, theme: ThemeConfig, mirrored = false) {
     clearRenderingCaches();
@@ -94,6 +139,9 @@ export class Renderer {
   setTimeLimit(timeLimit: number): void {
     this._timeLimit = timeLimit;
   }
+
+  /** E2E diagnostic: which rendering branches fired last frame. */
+  getDiagnostics(): RenderDiagnostics { return this._diag; }
 
   renderBackground(arena: Arena, originalArena?: Arena): void {
     if (originalArena) this.originalArena = originalArena;
@@ -255,6 +303,18 @@ export class Renderer {
     const ctx = this.fgCtx;
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
+    // Reset diagnostics each frame
+    const d = this._diag; d.clouds = false; d.weather = false; d.wildlife = false;
+    d.animatedBg = false; d.hazardZones = false; d.effectZones = false;
+    d.bouncyPlatforms = false; d.pigeons = false; d.lavaRocks = false;
+    d.springs = false; d.thorns = false; d.carrots = false;
+    d.gibs = false; d.confetti = false; d.shockwaves = false;
+    d.afterimages = false; d.fog = false; d.ambient = false;
+    d.fireworks = false; d.dayNight = false; d.countdown = false;
+    d.navDebug = false; d.netDebug = false; d.screenFlash = false;
+    d.hitstop = false; d.screenShake = false; d.zeroGShimmer = false;
+    d.playersDrawn = 0;
+
     // Cache time once per frame
     this.frameTime = performance.now();
 
@@ -262,6 +322,7 @@ export class Renderer {
 
     // Hitstop zoom punch -- subtle scale centered on screen
     if (matchState.hitstopZoom > 0) {
+      d.hitstop = true;
       const t = matchState.hitstopZoom / HITSTOP_DURATION; // 1 -> 0
       const scale = 1 + HITSTOP_ZOOM * t * t;              // ease-out
       ctx.translate(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
@@ -271,6 +332,7 @@ export class Renderer {
 
     // Screen shake offset
     if (matchState.screenShake > 0) {
+      d.screenShake = true;
       const intensity = SCREEN_SHAKE_INTENSITY * (matchState.screenShake / 0.3);
       ctx.translate(
         (Math.random() - 0.5) * intensity * 2,
@@ -283,13 +345,16 @@ export class Renderer {
     const dt = now - (this.lastCloudTime || now);
     this.lastCloudTime = now;
     this.updateAndDrawClouds(ctx, dt);
+    d.clouds = true;
 
     // Weather (leaves, petals)
     drawWeather(ctx, matchState.weather, this.theme);
+    if (matchState.weather.length > 0) d.weather = true;
 
     // Wildlife: butterflies + birds (q) -- drawn after clouds/weather, before springs
     if (matchState.wildlife) {
       drawWildlife(ctx, matchState.wildlife);
+      d.wildlife = true;
     }
 
     // Theme-specific animated background (e.g. space objects through windows)
@@ -298,6 +363,7 @@ export class Renderer {
       if (this.mirrored) { ctx.save(); ctx.scale(-1, 1); ctx.translate(-CANVAS_WIDTH, 0); }
       this.theme.drawAnimatedBackground(ctx, thA, matchState.timeElapsed);
       if (this.mirrored) { ctx.restore(); }
+      d.animatedBg = true;
     }
 
     // Hazard zones (lava pools etc.)
@@ -305,6 +371,7 @@ export class Renderer {
       for (const hz of arena.hazardZones) {
         drawHazardZone(ctx, hz, this.theme, matchState.timeElapsed);
       }
+      d.hazardZones = true;
     }
 
     // Effect zones (zero-G, currents, geysers)
@@ -322,6 +389,7 @@ export class Renderer {
           geyserIdx++;
         }
       }
+      d.effectZones = true;
     }
 
     // Bouncy platform wobble
@@ -332,11 +400,13 @@ export class Renderer {
         const wobble = matchState.bouncyWobble.get(bi) || 0;
         drawBouncyPlatformOverlay(ctx, bp, wobble, matchState.timeElapsed);
       }
+      d.bouncyPlatforms = true;
     }
 
     // Pigeon flocks
     for (const flock of matchState.pigeonFlocks) {
       drawPigeonFlock(ctx, flock, matchState.timeElapsed);
+      d.pigeons = true;
     }
 
 
@@ -344,26 +414,28 @@ export class Renderer {
     for (const rock of matchState.lavaRocks) {
       if (!rock.active) continue;
       drawLavaRock(ctx, rock, this.theme);
+      d.lavaRocks = true;
     }
 
     // Springs and thorns (behind players)
-    for (const spring of matchState.springs) drawSpringMushroom(ctx, spring, this.theme);
-    for (const thorn of matchState.thorns) drawThorn(ctx, thorn, this.theme);
+    for (const spring of matchState.springs) { drawSpringMushroom(ctx, spring, this.theme); d.springs = true; }
+    for (const thorn of matchState.thorns) { drawThorn(ctx, thorn, this.theme); d.thorns = true; }
 
     // Carrots
     for (const carrot of matchState.carrots) {
-      if (carrot.active) drawCarrot(ctx, carrot, matchState.timeElapsed, this.frameTime);
+      if (carrot.active) { drawCarrot(ctx, carrot, matchState.timeElapsed, this.frameTime); d.carrots = true; }
     }
 
     // Particles
     drawParticles(ctx, particles);
 
     // Gibs and confetti
-    if (matchState.gibs.length > 0) drawGibs(ctx, matchState.gibs);
-    if (matchState.confetti.length > 0) drawConfetti(ctx, matchState.confetti);
+    if (matchState.gibs.length > 0) { drawGibs(ctx, matchState.gibs); d.gibs = true; }
+    if (matchState.confetti.length > 0) { drawConfetti(ctx, matchState.confetti); d.confetti = true; }
 
     // Stomp shockwaves (e) -- after particles, before players
     if (matchState.shockwaves) {
+      if (matchState.shockwaves.length > 0) d.shockwaves = true;
       for (const sw of matchState.shockwaves) {
         const progress = 1 - sw.life / SHOCKWAVE_DURATION;
         const alpha = sw.life / SHOCKWAVE_DURATION;
@@ -385,6 +457,7 @@ export class Renderer {
       if (player.state === 'respawning') continue;
       const afterimages = player.afterimages;
       if (afterimages && afterimages.length > 0) {
+        d.afterimages = true;
         const isInvincible = player.invincibleTimer > 0;
         const trailColor = isInvincible ? '#88BBFF' : player.character.color;
         for (const img of afterimages) {
@@ -428,6 +501,7 @@ export class Renderer {
       if (!player.active) continue;
       if (player.state === 'respawning') continue;
       drawPlayer(ctx, player, nearCarrotSet.has(player.id), this.theme, this.frameTime);
+      d.playersDrawn++;
     }
 
     // Spring spiral trail (h) -- drawn near players
@@ -468,6 +542,7 @@ export class Renderer {
               ctx.fill();
             }
             ctx.restore();
+            d.zeroGShimmer = true;
             break;
           }
         }
@@ -476,6 +551,7 @@ export class Renderer {
 
     // Ground fog (o) -- after players, before foreground nature
     if (matchState.fogParticles) {
+      d.fog = true;
       const fogCfg = this.theme.fog;
       if (!this._fogRGB) {
         this._fogRGB = hexToRGB(fogCfg.color);
@@ -502,6 +578,7 @@ export class Renderer {
 
     // Ambient particles (pollen / snow drift / sparkles)
     if (matchState.pollenParticles) {
+      d.ambient = true;
       const ambCfg = this.theme.ambientParticles;
       if (!this._ambientRGBs) {
         this._ambientRGBs = ambCfg.colors.map(hexToRGB);
@@ -519,11 +596,13 @@ export class Renderer {
     // Fireworks when match is over
     if (matchState.matchOver) {
       drawFireworks(ctx, particles, this.frameTime);
+      d.fireworks = true;
     }
 
     // Day/night cycle overlay (only if theme has it enabled)
     if (this.theme.dayNight.enabled && matchState.dayPhase !== undefined) {
       drawDayNightCycle(ctx, matchState.dayPhase, matchState, this.theme, this.frameTime);
+      d.dayNight = true;
     }
 
     ctx.restore();
@@ -531,6 +610,7 @@ export class Renderer {
     // Countdown overlay
     if (matchState.countdown !== undefined && matchState.countdown > 0) {
       drawCountdown(ctx, matchState.countdown);
+      d.countdown = true;
     }
 
     // HUD (not affected by shake)
@@ -539,15 +619,18 @@ export class Renderer {
     // Nav debug overlay (dev only -- ?debug=nav)
     if (debugFlags.navDebugEnabled) {
       drawNavDebugOverlay(ctx, arena, this.mirrored, this._botNavDebugStates);
+      d.navDebug = true;
     }
 
     // Net debug overlay (dev only -- ?debug=net)
     if (debugFlags.netDebugEnabled && this._netDebugStats) {
       drawNetDebugOverlay(ctx, this._netDebugStats, CANVAS_WIDTH);
+      d.netDebug = true;
     }
 
     // Screen flash (f) -- drawn after everything
     if (matchState.screenFlash > 0) {
+      d.screenFlash = true;
       const flashAlpha = Math.min(1, matchState.screenFlash / SCREEN_FLASH_DURATION);
       ctx.save();
       ctx.fillStyle = `rgba(255, 255, 255, ${flashAlpha})`;

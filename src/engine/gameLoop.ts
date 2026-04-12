@@ -519,6 +519,7 @@ export class GameLoop {
   }
 
   getState(): MatchState { return this.state; }
+  getRendererDiagnostics() { return this.renderer.getDiagnostics(); }
   pause(): void { this.paused = true; audio.setPaused(true); }
   resume(): void { this.paused = false; this.lastTime = performance.now(); audio.setPaused(false, this.arena.themeId); }
   isPaused(): boolean { return this.paused; }
