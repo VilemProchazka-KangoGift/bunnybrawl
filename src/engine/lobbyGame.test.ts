@@ -927,4 +927,168 @@ describe('LobbyGame', () => {
       expect(game.extraChars).toHaveLength(0);
     });
   });
+
+  // ---- Wall collision details ----
+
+  describe('wall collision — right side push', () => {
+    it('player approaching wall from right side is pushed out', () => {
+      // Isolate player
+      for (const e of [...game.players, ...game.bots, ...game.extraChars]) {
+        e.x = -500; e.vy = 0; e.vx = 0; e.splatTimer = 0;
+      }
+      const p = game.players[0];
+      // WALL_X=742.4, WALL_WIDTH=24 → right edge at 766.4
+      p.x = 770; // just right of wall
+      p.vx = -200; // moving left into wall
+      p.y = 560 - 32; // at ground level
+      p.onGround = true;
+      p.sideSquash = 1;
+
+      for (let i = 0; i < 5; i++) {
+        game.update(1 / 60, new Set());
+      }
+
+      // Player should be pushed to wall right edge
+      expect(p.x).toBeGreaterThanOrEqual(742.4 + 24 - 1);
+    });
+  });
+
+  // ---- NPC random jumping ----
+
+  describe('NPC random jumping', () => {
+    it('NPCs can randomly jump', () => {
+      // Run many ticks — with 0.5% chance per frame, some NPC should jump
+      let anyJumped = false;
+      for (let i = 0; i < 500; i++) {
+        game.update(1 / 60, new Set());
+        if (game.extraChars.some(npc => npc.vy < 0)) {
+          anyJumped = true;
+          break;
+        }
+      }
+      expect(anyJumped).toBe(true);
+    });
+  });
+
+  // ---- Stomp between participants and extras ----
+
+  describe('bot-to-NPC stomp', () => {
+    it('bot can stomp an NPC and swap characters', () => {
+      // Isolate
+      for (const e of [...game.players, ...game.bots, ...game.extraChars]) {
+        e.x = -500; e.vy = 0; e.vx = 0; e.splatTimer = 0;
+      }
+
+      const bot = game.bots[0];
+      const npc = game.extraChars[0];
+
+      const botCharBefore = bot.char.name;
+      const npcCharBefore = npc.char.name;
+
+      // Position bot directly above NPC, falling fast
+      npc.x = 300;
+      npc.y = 560 - 32;
+      npc.onGround = true;
+      npc.splatTimer = 0;
+
+      bot.x = 300;
+      bot.y = 500;
+      bot.vy = 200;
+      bot.onGround = false;
+
+      game.update(1 / 60, new Set());
+
+      // Characters should be swapped
+      expect(bot.char.name).toBe(npcCharBefore);
+      expect(npc.char.name).toBe(botCharBefore);
+      expect(npc.splatTimer).toBeGreaterThan(0);
+    });
+
+    it('bot cannot stomp another human player', () => {
+      for (const e of [...game.players, ...game.bots, ...game.extraChars]) {
+        e.x = -500; e.vy = 0; e.vx = 0; e.splatTimer = 0;
+      }
+
+      const bot = game.bots[0];
+      const human = game.players[1];
+
+      const humanCharBefore = human.char.name;
+
+      // Position bot above human
+      human.x = 300;
+      human.y = 560 - 32;
+      human.onGround = true;
+      human.splatTimer = 0;
+
+      bot.x = 300;
+      bot.y = 500;
+      bot.vy = 200;
+      bot.onGround = false;
+
+      game.update(1 / 60, new Set());
+
+      // Bot cannot stomp human — char should remain unchanged
+      expect(human.char.name).toBe(humanCharBefore);
+      expect(human.splatTimer).toBe(0);
+    });
+  });
+
+  // ---- Crouch hold keeps squash ----
+
+  describe('crouch hold squash', () => {
+    it('holding crouch on ground maintains squash scale', () => {
+      const p = game.players[0];
+      p.onGround = true;
+      p.squashScale = 1;
+      p.x = 200;
+
+      // Hold down (crouch)
+      game.update(1 / 60, new Set(['s']));
+      expect(p.squashScale).toBeLessThan(1);
+
+      const squashAfterFirst = p.squashScale;
+
+      // Continue holding — should not decay back to 1
+      game.update(1 / 60, new Set(['s']));
+      expect(p.squashScale).toBeLessThanOrEqual(squashAfterFirst);
+    });
+  });
+
+  // ---- Bot AI in ready zone ----
+
+  describe('bot AI in ready zone behavior', () => {
+    it('bot settles near target position in ready zone', () => {
+      const bot = game.bots[0];
+      bot.x = READY_ZONE_X + 100;
+      bot.onGround = true;
+      bot.vx = 0;
+
+      // Run many ticks — bot should slow down near target
+      for (let i = 0; i < 60; i++) {
+        game.update(1 / 60, new Set());
+      }
+
+      // Bot should have very low velocity (settled)
+      expect(Math.abs(bot.vx)).toBeLessThan(50);
+    });
+  });
+
+  // ---- Bot climbing over wall ----
+
+  describe('bot wall traversal', () => {
+    it('bot above wall maintains rightward movement', () => {
+      const bot = game.bots[0];
+      // WALL_X=742.4, WALL_Y=440, WALL_WIDTH=24
+      // Position bot above the wall, in the air
+      bot.x = 745; // over the wall
+      bot.y = 400; // above wall top (440)
+      bot.onGround = false;
+      bot.vy = -100; // still going up from jump
+
+      game.update(1 / 60, new Set());
+
+      // Bot should maintain rightward movement while above wall
+      expect(bot.facing).toBe('right');
+    });
+  });
 });

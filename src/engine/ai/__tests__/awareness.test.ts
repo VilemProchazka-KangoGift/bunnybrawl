@@ -3,6 +3,7 @@ import { buildAwareness } from '../awareness';
 import type { MatchState, Arena, PlayerSlot } from '../../types';
 import { makePlayer, makeArena } from '../../__tests__/testHelpers';
 import { PLAYER_WIDTH, PLAYER_HEIGHT, CANVAS_WIDTH } from '../../constants';
+import { registerArena, getArenaNav } from '../../arenas/registry';
 
 /** Minimal MatchState factory for awareness tests. */
 function makeState(overrides?: Partial<MatchState>): MatchState {
@@ -1090,6 +1091,163 @@ describe('buildAwareness', () => {
 
       const snap = buildAwareness(bot, state, arena, Infinity);
       expect(snap.leaderScore).toBe(0);
+    });
+  });
+
+  // ── Nav graph pathfinding ──────────────────────────────────────────────
+
+  describe('nav graph pathfinding', () => {
+    const NAV_ARENA_ID = 'test_nav_arena';
+    const navData = {
+      nodes: [
+        { x: 640, y: 660, w: 1280 },   // platform 0 (ground)
+        { x: 500, y: 500, w: 200 },     // platform 1 (floating)
+        { x: 800, y: 400, w: 200 },     // platform 2
+      ],
+      edges: [
+        [{ t: 1, x: 450, y: 'j' as any, d: 0 }],  // from ground, jump to platform 1
+        [{ t: 0, x: 500, y: 'd' as any, d: 0 }],   // from platform 1, drop to ground
+        [],
+      ],
+      nextHop: [[0, 1, 1], [0, 1, 2], [0, 1, 2]],
+      safeHop: [[0, 1, 1], [0, 1, 2], [0, 1, 2]],
+    };
+
+    // Register a test arena pack with nav data so getArenaNav() finds it
+    registerArena({
+      id: NAV_ARENA_ID,
+      platforms: [
+        { x: 0, y: 660, width: 1280, height: 60 },
+        { x: 400, y: 500, width: 200, height: 20 },
+        { x: 700, y: 400, width: 200, height: 20 },
+      ],
+      spawnPoints: [{ x: 100, y: 660 }],
+      width: 1280, height: 720,
+      navData,
+      translations: { en: 'Test Nav' },
+      previewGradient: ['#000', '#000'],
+      previewIcon: '',
+      sky: { gradient: [{ offset: 0, color: '#000' }] },
+      hills: [],
+      ground: { color: '#000', surfaceColor: '#000', surfaceThickness: 2 },
+      platform: { groundTopColor: '#000', groundBodyColor: '#000', floatingTopColor: '#000', floatingBodyColor: '#000' },
+      clouds: { count: 0, color: '#fff', minSize: 20, maxSize: 40, minSpeed: 5, maxSpeed: 10, yRange: [20, 80] },
+      weather: { type: 'none' as any, count: 0 },
+      fog: { color: '#fff', sizeX: 40, sizeY: 15 },
+      ambientParticles: { colors: ['#fff'], count: 0, sizeRange: [1, 3], speedRange: [5, 15] },
+      dayNight: { enabled: false },
+      drawBackgroundNature: () => {},
+      drawForegroundNature: () => {},
+    } as any);
+
+    it('computes navTarget from hop table when enemy is on different platform', () => {
+      const bot = makePlayer({ id: 'B1' as PlayerSlot, x: 100, y: 628, score: 0 });
+      const enemy = makePlayer({ id: 'P1' as PlayerSlot, x: 500, y: 480, score: 0 });
+      const state = makeState({ players: [bot, enemy] });
+      const arena = makeArena({ id: NAV_ARENA_ID });
+
+      const snap = buildAwareness(bot, state, arena, Infinity, 2);
+      expect(snap.navTarget).not.toBeNull();
+      expect(snap.navTarget!.type).toBe('j');
+    });
+
+    it('returns null navTarget when enemy is on same platform', () => {
+      const bot = makePlayer({ id: 'B1' as PlayerSlot, x: 100, y: 628, score: 0 });
+      const enemy = makePlayer({ id: 'P1' as PlayerSlot, x: 800, y: 628, score: 0 });
+      const state = makeState({ players: [bot, enemy] });
+      const arena = makeArena({ id: NAV_ARENA_ID });
+
+      const snap = buildAwareness(bot, state, arena, Infinity, 2);
+      expect(snap.navTarget).toBeNull();
+    });
+
+    it('returns null navTarget when pathfindingDepth is 0', () => {
+      const bot = makePlayer({ id: 'B1' as PlayerSlot, x: 100, y: 628, score: 0 });
+      const enemy = makePlayer({ id: 'P1' as PlayerSlot, x: 500, y: 480, score: 0 });
+      const state = makeState({ players: [bot, enemy] });
+      const arena = makeArena({ id: NAV_ARENA_ID });
+
+      const snap = buildAwareness(bot, state, arena, Infinity, 0);
+      expect(snap.navTarget).toBeNull();
+    });
+
+    it('uses safeHop when preferSafe is true', () => {
+      const bot = makePlayer({ id: 'B1' as PlayerSlot, x: 100, y: 628, score: 0 });
+      const enemy = makePlayer({ id: 'P1' as PlayerSlot, x: 500, y: 480, score: 0 });
+      const state = makeState({ players: [bot, enemy] });
+      const arena = makeArena({ id: NAV_ARENA_ID });
+
+      const snap = buildAwareness(bot, state, arena, Infinity, 2, true);
+      expect(snap.navTarget).not.toBeNull();
+    });
+
+    it('mirrors approachX when mirrorNav is true', () => {
+      const bot = makePlayer({ id: 'B1' as PlayerSlot, x: 100, y: 628, score: 0 });
+      const enemy = makePlayer({ id: 'P1' as PlayerSlot, x: 500, y: 480, score: 0 });
+      const state = makeState({ players: [bot, enemy] });
+      const arena = makeArena({ id: NAV_ARENA_ID });
+
+      const normal = buildAwareness(bot, state, arena, Infinity, 2, false, false);
+      const mirrored = buildAwareness(bot, state, arena, Infinity, 2, false, true);
+
+      if (normal.navTarget && mirrored.navTarget) {
+        expect(mirrored.navTarget.approachX).toBe(CANVAS_WIDTH - normal.navTarget.approachX);
+      }
+    });
+  });
+
+  // ── Nav hints ──────────────────────────────────────────────────────────
+
+  describe('nav hints', () => {
+    it('overrides navTarget when player is in hint zone', () => {
+      const NAV_HINT_ID = 'test_nav_hint_arena';
+      registerArena({
+        id: NAV_HINT_ID,
+        platforms: [
+          { x: 0, y: 660, width: 1280, height: 60 },
+          { x: 400, y: 500, width: 200, height: 20 },
+        ],
+        spawnPoints: [{ x: 100, y: 660 }],
+        width: 1280, height: 720,
+        navData: {
+          nodes: [{ x: 640, y: 660, w: 1280 }, { x: 500, y: 500, w: 200 }],
+          edges: [[{ t: 1, x: 450, y: 'j' as any, d: 0 }], []],
+          nextHop: [[0, 1], [0, 1]],
+          safeHop: [[0, 1], [0, 1]],
+        },
+        translations: { en: 'Hint Test' },
+        previewGradient: ['#000', '#000'], previewIcon: '',
+        sky: { gradient: [{ offset: 0, color: '#000' }] },
+        hills: [],
+        ground: { color: '#000', surfaceColor: '#000', surfaceThickness: 2 },
+        platform: { groundTopColor: '#000', groundBodyColor: '#000', floatingTopColor: '#000', floatingBodyColor: '#000' },
+        clouds: { count: 0, color: '#fff', minSize: 20, maxSize: 40, minSpeed: 5, maxSpeed: 10, yRange: [20, 80] },
+        weather: { type: 'none' as any, count: 0 },
+        fog: { color: '#fff', sizeX: 40, sizeY: 15 },
+        ambientParticles: { colors: ['#fff'], count: 0, sizeRange: [1, 3], speedRange: [5, 15] },
+        dayNight: { enabled: false },
+        drawBackgroundNature: () => {}, drawForegroundNature: () => {},
+      } as any);
+
+      const bot = makePlayer({ id: 'B1' as PlayerSlot, x: 200, y: 628, score: 0 });
+      const enemy = makePlayer({ id: 'P1' as PlayerSlot, x: 500, y: 480, score: 0 });
+      const state = makeState({ players: [bot, enemy] });
+      const arena = makeArena({
+        id: NAV_HINT_ID,
+        navHints: [
+          {
+            onPlatform: 0,
+            inZone: { x: 150, width: 100 },
+            goTo: 1,
+            approachX: 550,
+            type: 'j' as any,
+          },
+        ],
+      });
+
+      const snap = buildAwareness(bot, state, arena, Infinity, 2);
+      expect(snap.navTarget).not.toBeNull();
+      expect(snap.navTarget!.approachX).toBe(550);
     });
   });
 });

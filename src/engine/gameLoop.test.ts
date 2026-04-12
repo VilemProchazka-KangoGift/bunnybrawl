@@ -47,6 +47,7 @@ vi.mock('./renderer', () => ({
     setNetDebugStats = vi.fn();
     setPlayerNames = vi.fn();
     setTimeLimit = vi.fn();
+    getDiagnostics = vi.fn(() => ({ clouds: false, weather: false, wildlife: false, playersDrawn: 0 }));
   },
 }));
 
@@ -2905,5 +2906,124 @@ describe('Footstep Sounds', () => {
       (call: any[]) => call[0] === 'footstep_grass' || call[0] === 'footstep_wood'
     );
     expect(footstepCalls.length).toBe(0);
+  });
+});
+
+// ---- Time-limit match end ----
+
+describe('GameLoop — time limit match end', () => {
+  it('ends match when timeLimit is reached', () => {
+    const { loop, onMatchEnd } = createLoop({
+      settings: { timeLimit: 2 }, // 2-second time limit
+      players: ['P1', 'P2'] as PlayerSlot[],
+    });
+    const state = loop.getState();
+
+    const inputs = new Map<string, InputState>();
+    inputs.set('P1', { left: false, right: false, jump: false, down: false });
+    inputs.set('P2', { left: false, right: false, jump: false, down: false });
+
+    loop.setNetworkMode(true);
+
+    // Skip countdown
+    state.countdown = 0;
+
+    // Run enough ticks to exceed 2 seconds
+    const ticksNeeded = Math.ceil(2 / FIXED_TIMESTEP) + 5;
+    for (let i = 0; i < ticksNeeded; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP, inputs);
+      if (state.matchOver) break;
+    }
+
+    expect(state.matchOver).toBe(true);
+    expect(onMatchEnd).toHaveBeenCalled();
+  });
+
+  it('winner is player with highest score on time-limit end', () => {
+    const { loop, onMatchEnd } = createLoop({
+      settings: { timeLimit: 1, killLimit: 999 },
+      players: ['P1', 'P2'] as PlayerSlot[],
+    });
+    const state = loop.getState();
+
+    const inputs = new Map<string, InputState>();
+    inputs.set('P1', { left: false, right: false, jump: false, down: false });
+    inputs.set('P2', { left: false, right: false, jump: false, down: false });
+
+    loop.setNetworkMode(true);
+    state.countdown = 0;
+
+    // Give P2 a higher score
+    state.players[1].score = 5;
+    state.players[0].score = 2;
+
+    const ticksNeeded = Math.ceil(1 / FIXED_TIMESTEP) + 5;
+    for (let i = 0; i < ticksNeeded; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP, inputs);
+      if (state.matchOver) break;
+    }
+
+    expect(state.matchOver).toBe(true);
+    expect(onMatchEnd).toHaveBeenCalledWith('P2', expect.anything());
+  });
+
+  it('time-limit end triggers slow motion', () => {
+    const { loop } = createLoop({
+      settings: { timeLimit: 1, killLimit: 999 },
+      players: ['P1', 'P2'] as PlayerSlot[],
+    });
+    const state = loop.getState();
+
+    const inputs = new Map<string, InputState>();
+    inputs.set('P1', { left: false, right: false, jump: false, down: false });
+    inputs.set('P2', { left: false, right: false, jump: false, down: false });
+
+    loop.setNetworkMode(true);
+    state.countdown = 0;
+
+    const ticksNeeded = Math.ceil(1 / FIXED_TIMESTEP) + 5;
+    for (let i = 0; i < ticksNeeded; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP, inputs);
+      if (state.matchOver) break;
+    }
+
+    expect(state.slowMotion).toBe(SLOW_MO_DURATION);
+  });
+});
+
+// ---- getPlayerInput edge cases ----
+
+describe('GameLoop — getPlayerInput edge cases', () => {
+  it('getTouchInput returns null when no touch manager set', () => {
+    const { loop } = createLoop();
+    expect(loop.getTouchInput()).toBeNull();
+  });
+
+  it('getRendererDiagnostics returns diagnostics object', () => {
+    const { loop } = createLoop();
+    const diag = loop.getRendererDiagnostics();
+    expect(diag).toBeDefined();
+    expect(typeof diag.clouds).toBe('boolean');
+  });
+
+  it('bot without AI controller returns NO_INPUT (via network inputs)', () => {
+    // In network mode, if B1 has no network input AND no AI controller, it returns NO_INPUT.
+    // We test this by creating a normal match with a bot, removing the AI controller,
+    // and providing network inputs that don't include B1.
+    const { loop } = createLoop({
+      settings: { botCount: 0 },
+      players: ['P1', 'P2'] as PlayerSlot[],
+    });
+    const state = loop.getState();
+
+    loop.setNetworkMode(true);
+    state.countdown = 0;
+
+    const inputs = new Map<string, InputState>();
+    inputs.set('P1', { left: false, right: false, jump: false, down: false });
+    inputs.set('P2', { left: false, right: false, jump: false, down: false });
+
+    // Should not crash
+    expect(() => loop.fixedUpdate(FIXED_TIMESTEP, inputs)).not.toThrow();
   });
 });

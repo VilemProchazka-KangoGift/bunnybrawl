@@ -709,3 +709,82 @@ describe('AIController - Jump Cooldown', () => {
     expect(gotSecondJump).toBe(true);
   });
 });
+
+describe('AIController — wolf targetLeader personality', () => {
+  it('wolf targets highest-scoring opponent instead of nearest', () => {
+    const ai = new AIController('B1', 'Wolf', 'hard');
+    const bot = makePlayer({ id: 'B1', x: 500, y: 628, score: 0 });
+    // P1 is close but low score; P2 is far but high score
+    const nearEnemy = makePlayer({ id: 'P1', x: 550, y: 628, score: 2 });
+    const farLeader = makePlayer({ id: 'P2', x: 1100, y: 628, score: 10 });
+    const state = makeState({ players: [bot, nearEnemy, farLeader] });
+    const arena = makeArena();
+
+    // Run many frames to get a statistical picture
+    let rightCount = 0;
+    let leftCount = 0;
+    for (let i = 0; i < 120; i++) {
+      const input = ai.getInput(bot, state, arena);
+      if (input.right) rightCount++;
+      if (input.left) leftCount++;
+    }
+
+    // Wolf should move right toward the far leader (P2 at x=1100) more often
+    // than left (away from both enemies)
+    expect(rightCount).toBeGreaterThan(leftCount);
+  });
+
+  it('wolf falls back to nearest enemy when no one has higher score', () => {
+    const ai = new AIController('B1', 'Wolf', 'hard');
+    const bot = makePlayer({ id: 'B1', x: 500, y: 628, score: 10 });
+    const enemy = makePlayer({ id: 'P1', x: 200, y: 628, score: 5 });
+    const state = makeState({ players: [bot, enemy] });
+    const arena = makeArena();
+
+    // Wolf has highest score — no leader to target, falls back to nearest
+    let leftCount = 0;
+    for (let i = 0; i < 120; i++) {
+      const input = ai.getInput(bot, state, arena);
+      if (input.left) leftCount++;
+    }
+
+    // Should move toward the nearest enemy (left, toward P1 at x=200)
+    expect(leftCount).toBeGreaterThan(20);
+  });
+});
+
+describe('AIController — stuck recovery with nav target', () => {
+  it('uses nav target direction when stuck with nav data available', () => {
+    const ai = new AIController('B1', 'Fox', 'hard');
+    const bot = makePlayer({ id: 'B1', x: 400, y: 628, score: 0 });
+    const enemy = makePlayer({ id: 'P1', x: 800, y: 400, score: 0 });
+    const state = makeState({ players: [bot, enemy] });
+    const arena = makeArena({
+      navData: {
+        nodes: [
+          { x: 640, y: 660, w: 1280 },
+          { x: 500, y: 500, w: 200 },
+          { x: 800, y: 400, w: 200 },
+        ],
+        edges: [
+          [{ t: 1, x: 400, y: 'j' as any, d: 0 }],
+          [{ t: 2, x: 600, y: 'j' as any, d: 0 }],
+          [],
+        ],
+        nextHop: [[0, 1, 1], [0, 1, 2], [0, 1, 2]],
+        safeHop: [[0, 1, 1], [0, 1, 2], [0, 1, 2]],
+      },
+    });
+
+    // Run 50 frames without moving bot to trigger stuck (threshold = 45)
+    for (let i = 0; i < 50; i++) {
+      ai.getInput(bot, state, arena);
+    }
+
+    // Next input should be the stuck recovery — with nav target, it should pick a direction
+    const input = ai.getInput(bot, state, arena);
+    // Should have jump or movement (not all-false)
+    const hasAction = input.left || input.right || input.jump || input.down;
+    expect(hasAction).toBe(true);
+  });
+});

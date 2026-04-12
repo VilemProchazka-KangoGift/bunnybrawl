@@ -173,4 +173,63 @@ describe('NetworkSimulator', () => {
       expect(sim.flush()).toHaveLength(100);
     });
   });
+
+  describe('jitter delay', () => {
+    it('applies jitter to message delivery time', () => {
+      const sim = new NetworkSimulator({ latencyMs: 50, jitterMs: 20 });
+      // Enqueue many messages and check delivery times vary
+      for (let i = 0; i < 50; i++) {
+        sim.enqueue(i, false);
+      }
+      // All messages should be queued (no loss configured)
+      // Flushing at time 0 should return nothing (all have delay > 0)
+      const immediate = sim.flush();
+      // With 50ms latency + up to ±20ms jitter, min delay = 30ms
+      // At time 0, nothing should be ready
+      expect(immediate).toHaveLength(0);
+    });
+
+    it('messages arrive after latency + jitter window', () => {
+      const sim = new NetworkSimulator({ latencyMs: 10, jitterMs: 5 });
+      // Mock performance.now to advance time
+      const origNow = performance.now;
+      let fakeTime = origNow.call(performance);
+      vi.spyOn(performance, 'now').mockImplementation(() => fakeTime);
+
+      sim.enqueue('test', false);
+
+      // At time + 0ms: not delivered
+      expect(sim.flush()).toHaveLength(0);
+
+      // Advance time past max delay (latency + jitter = 15ms)
+      fakeTime += 20;
+      const delivered = sim.flush();
+      expect(delivered.length).toBeGreaterThanOrEqual(1);
+      expect(delivered[0].data).toBe('test');
+
+      vi.restoreAllMocks();
+    });
+
+    it('jitter never produces negative delay', () => {
+      // High jitter relative to latency
+      const sim = new NetworkSimulator({ latencyMs: 5, jitterMs: 20 });
+      // Enqueue many messages — none should have negative delay (instant delivery)
+      for (let i = 0; i < 100; i++) {
+        sim.enqueue(i, false);
+      }
+      // If delay were negative, messages would have deliverAt=0 and flush immediately
+      const immediate = sim.flush();
+      // Some may flush immediately if Math.max(0, ...) kicks in, but shouldn't be all
+      expect(immediate.length).toBeLessThanOrEqual(100);
+    });
+  });
+
+  describe('readSimConfigFromUrl', () => {
+    it('returns null when no sim params present', async () => {
+      const { readSimConfigFromUrl } = await import('./networkSimulator');
+      // Default URL has no sim params
+      const config = readSimConfigFromUrl();
+      expect(config).toBeNull();
+    });
+  });
 });

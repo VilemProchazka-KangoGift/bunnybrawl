@@ -740,4 +740,97 @@ describe('evaluateActions', () => {
       expect(scoresClose.moveRight).toBeGreaterThan(scores.moveRight);
     });
   });
+
+  // ── Zero-G zone exploitation ────────────────────────────────────────────
+
+  describe('zero-G zone exploitation', () => {
+    it('steers toward nav target platform when airborne in zero-G', () => {
+      const a = makeAwareness({
+        inZeroG: true,
+        self: { x: 400, y: 400, vx: 0, vy: -20, onGround: false, score: 5, slowed: false, fat: false, invincible: false },
+        navTarget: { x: 700, y: 300, width: 200, approachX: 800, type: 'z' },
+      });
+      const scores = evaluateActions(a, personality());
+      // Should steer right toward target (x=800 center)
+      expect(scores.moveRight).toBeGreaterThan(scores.moveLeft);
+    });
+
+    it('steers left toward nav target when target is to the left', () => {
+      const a = makeAwareness({
+        inZeroG: true,
+        self: { x: 800, y: 400, vx: 0, vy: -20, onGround: false, score: 5, slowed: false, fat: false, invincible: false },
+        navTarget: { x: 200, y: 300, width: 200, approachX: 300, type: 'z' },
+      });
+      const scores = evaluateActions(a, personality());
+      expect(scores.moveLeft).toBeGreaterThan(scores.moveRight);
+    });
+
+    it('adds jump impulse when on ground in zero-G', () => {
+      const a = makeAwareness({
+        inZeroG: true,
+        self: { x: 400, y: 600, vx: 0, vy: 0, onGround: true, score: 5, slowed: false, fat: false, invincible: false },
+      });
+      const baseline = makeAwareness({
+        inZeroG: false,
+        self: { x: 400, y: 600, vx: 0, vy: 0, onGround: true, score: 5, slowed: false, fat: false, invincible: false },
+      });
+      const zeroGScores = evaluateActions(a, personality());
+      const normalScores = evaluateActions(baseline, personality());
+      // Zero-G on ground adds a small jump score
+      expect(zeroGScores.jump).toBeGreaterThan(normalScores.jump);
+    });
+  });
+
+  // ── Current compensation ────────────────────────────────────────────────
+
+  describe('current compensation', () => {
+    it('compensates rightward current by moving left', () => {
+      const a = makeAwareness({
+        inCurrent: 1, // rightward current
+      });
+      const baseline = makeAwareness({
+        inCurrent: 0,
+      });
+      const currentScores = evaluateActions(a, personality());
+      const normalScores = evaluateActions(baseline, personality());
+      expect(currentScores.moveLeft).toBeGreaterThan(normalScores.moveLeft);
+    });
+
+    it('compensates leftward current by moving right', () => {
+      const a = makeAwareness({
+        inCurrent: -1, // leftward current
+      });
+      const baseline = makeAwareness({
+        inCurrent: 0,
+      });
+      const currentScores = evaluateActions(a, personality());
+      const normalScores = evaluateActions(baseline, personality());
+      expect(currentScores.moveRight).toBeGreaterThan(normalScores.moveRight);
+    });
+  });
+
+  // ── Geyser exploitation (timer edge) ────────────────────────────────────
+
+  describe('geyser exploitation edge cases', () => {
+    it('does not exploit geyser when active', () => {
+      const a = makeAwareness({
+        nearGeyser: { x: 600, y: 400, active: true, timer: 0.5 },
+      });
+      const baseline = makeAwareness({ nearGeyser: null });
+      const activeScores = evaluateActions(a, personality());
+      const noGeyserScores = evaluateActions(baseline, personality());
+      // Active geyser → no exploitation movement
+      expect(activeScores.moveRight).toBe(noGeyserScores.moveRight);
+    });
+
+    it('moves left toward geyser on the left when timer < 2', () => {
+      const a = makeAwareness({
+        self: { x: 700, y: 600, vx: 0, vy: 0, onGround: true, score: 5, slowed: false, fat: false, invincible: false },
+        nearGeyser: { x: 400, y: 400, active: false, timer: 1.0 },
+      });
+      const scores = evaluateActions(a, personality());
+      // Geyser is to the left → adds moveLeft
+      expect(scores.moveLeft).toBeGreaterThan(0);
+    });
+  });
 });
