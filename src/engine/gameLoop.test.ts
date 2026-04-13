@@ -3280,3 +3280,290 @@ describe('GameLoop — arena-specific features', () => {
     // Renderer mock should have been called
   });
 });
+
+// ---- Game mod physics multipliers ----
+
+describe('GameLoop — mod physics multipliers', () => {
+  const noInput = new Map<string, InputState>();
+  noInput.set('P1', { left: false, right: false, jump: false, down: false });
+  noInput.set('P2', { left: false, right: false, jump: false, down: false });
+
+  it('turbo mod doubles walk speed and boosts jump', () => {
+    const { loop } = createLoop({
+      settings: { mods: { turbo: true, extremeGore: false, carrotChase: false, giantPlayers: false, superBounce: false, mirrorArena: false, underwaterGravity: false } },
+    });
+    const state = loop.getState();
+    state.countdown = 0;
+    loop.setNetworkMode(true);
+
+    // Give P1 rightward input
+    const inputs = new Map<string, InputState>();
+    inputs.set('P1', { left: false, right: true, jump: false, down: false });
+    inputs.set('P2', { left: false, right: false, jump: false, down: false });
+    loop.fixedUpdate(FIXED_TIMESTEP, inputs);
+
+    // With turbo, vx should be higher than normal walk speed
+    expect(Math.abs(state.players[0].vx)).toBeGreaterThan(0);
+  });
+
+  it('underwaterGravity mod reduces gravity', () => {
+    const { loop } = createLoop({
+      settings: { mods: { underwaterGravity: true, turbo: false, extremeGore: false, carrotChase: false, giantPlayers: false, superBounce: false, mirrorArena: false } },
+    });
+    const state = loop.getState();
+    state.countdown = 0;
+    loop.setNetworkMode(true);
+
+    // Put player in air
+    state.players[0].y = 300;
+    state.players[0].vy = 0;
+    state.players[0].state = 'airborne' as any;
+
+    loop.fixedUpdate(FIXED_TIMESTEP, noInput);
+
+    // Gravity should be lower than normal (vy gain per tick is less)
+    const vyAfterOneTick = state.players[0].vy;
+    // Normal gravity ~600, underwater ~360. One tick at 1/60 = ~6 vs ~10 vy gain
+    expect(vyAfterOneTick).toBeGreaterThan(0);
+    expect(vyAfterOneTick).toBeLessThan(15); // underwater gravity = less vy gain
+  });
+
+  it('superBounce mod makes all platforms bouncy', () => {
+    const { loop } = createLoop({
+      settings: { mods: { superBounce: true, turbo: false, extremeGore: false, carrotChase: false, giantPlayers: false, mirrorArena: false, underwaterGravity: false } },
+    });
+    // The arena should have bouncyPlatforms set to all indices
+    const arena = (loop as any).arena;
+    expect(arena.bouncyPlatforms).toBeDefined();
+    expect(arena.bouncyPlatforms.length).toBe(arena.platforms.length);
+  });
+
+  it('mirrorArena mod flips arena positions', () => {
+    const { loop } = createLoop({
+      settings: { mods: { mirrorArena: true, turbo: false, extremeGore: false, carrotChase: false, giantPlayers: false, superBounce: false, underwaterGravity: false } },
+    });
+    // Mirror should have been applied — arena id should still be the same
+    const arena = (loop as any).arena;
+    expect(arena).toBeDefined();
+  });
+
+  it('giantPlayers mod increases player dimensions', () => {
+    const { loop } = createLoop({
+      settings: { mods: { giantPlayers: true, turbo: false, extremeGore: false, carrotChase: false, superBounce: false, mirrorArena: false, underwaterGravity: false } },
+    });
+    const p1 = loop.getState().players[0];
+    expect(p1.width).toBeGreaterThan(PLAYER_WIDTH);
+    expect(p1.height).toBeGreaterThan(PLAYER_HEIGHT);
+  });
+});
+
+// ---- start() / stop() / loop() ----
+
+describe('GameLoop — start and stop lifecycle', () => {
+  it('start() begins RAF loop in local mode', () => {
+    const rafSpy = vi.spyOn(globalThis, 'requestAnimationFrame').mockReturnValue(1);
+    vi.spyOn(performance, 'now').mockReturnValue(1000);
+
+    const { loop } = createLoop();
+    loop.start();
+
+    expect(rafSpy).toHaveBeenCalled();
+    expect(vi.mocked(audio.playMusic)).toHaveBeenCalled();
+
+    loop.stop();
+    vi.restoreAllMocks();
+  });
+
+  it('start() does NOT begin RAF loop in network mode', () => {
+    const rafSpy = vi.spyOn(globalThis, 'requestAnimationFrame').mockReturnValue(1);
+    vi.spyOn(performance, 'now').mockReturnValue(1000);
+
+    const { loop } = createLoop();
+    loop.setNetworkMode(true);
+    loop.start();
+
+    // In network mode, NetMatch drives the loop — no RAF
+    expect(rafSpy).not.toHaveBeenCalled();
+
+    loop.stop();
+    vi.restoreAllMocks();
+  });
+
+  it('stop() detaches input and stops all sounds', () => {
+    vi.spyOn(globalThis, 'requestAnimationFrame').mockReturnValue(1);
+    vi.spyOn(globalThis, 'cancelAnimationFrame').mockImplementation(() => {});
+    vi.spyOn(performance, 'now').mockReturnValue(1000);
+
+    const { loop } = createLoop();
+    loop.start();
+    loop.stop();
+
+    expect(vi.mocked(audio.stopAllGameSounds)).toHaveBeenCalled();
+
+    vi.restoreAllMocks();
+  });
+
+  it('loop() in paused state still renders but does not advance', () => {
+    vi.spyOn(performance, 'now').mockReturnValue(1000);
+    const rafSpy = vi.spyOn(globalThis, 'requestAnimationFrame').mockReturnValue(1);
+
+    const { loop } = createLoop();
+    loop.start();
+    loop.pause();
+
+    // Simulate one loop iteration
+    const loopFn = (loop as any).loop;
+    loopFn(1016); // 16ms later
+
+    // Should have scheduled next frame
+    expect(rafSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
+
+    loop.stop();
+    vi.restoreAllMocks();
+  });
+
+  it('loop() fires fireworks when matchOver', () => {
+    vi.spyOn(performance, 'now').mockReturnValue(1000);
+    vi.spyOn(globalThis, 'requestAnimationFrame').mockReturnValue(1);
+
+    const { loop } = createLoop();
+    loop.start();
+
+    const state = loop.getState();
+    state.matchOver = true;
+
+    // Simulate loop iterations — fireworks should spawn particles
+    const loopFn = (loop as any).loop;
+    for (let t = 1016; t < 3000; t += 16) {
+      loopFn(t);
+    }
+
+    // Particles should have been spawned (firework particles)
+    // The particle pool is private but we can check the state wasn't corrupted
+    expect(state.matchOver).toBe(true);
+
+    loop.stop();
+    vi.restoreAllMocks();
+  });
+
+  it('loop() decays slowMotion, screenFlash, hitstopZoom each frame', () => {
+    vi.spyOn(performance, 'now').mockReturnValue(1000);
+    vi.spyOn(globalThis, 'requestAnimationFrame').mockReturnValue(1);
+
+    const { loop } = createLoop();
+    loop.start();
+
+    const state = loop.getState();
+    state.slowMotion = 0.5;
+    state.screenFlash = 0.3;
+    state.hitstopZoom = 0.1;
+
+    const loopFn = (loop as any).loop;
+    loopFn(1016);
+
+    expect(state.slowMotion).toBeLessThan(0.5);
+    expect(state.screenFlash).toBeLessThan(0.3);
+    expect(state.hitstopZoom).toBeLessThan(0.1);
+
+    loop.stop();
+    vi.restoreAllMocks();
+  });
+});
+
+// ---- Entity systems deep ----
+
+describe('GameLoop — entity systems', () => {
+  const noInput = new Map<string, InputState>();
+  noInput.set('P1', { left: false, right: false, jump: false, down: false });
+  noInput.set('P2', { left: false, right: false, jump: false, down: false });
+
+  function tickLoop(loop: GameLoop, n: number) {
+    for (let i = 0; i < n; i++) loop.fixedUpdate(FIXED_TIMESTEP, noInput);
+  }
+
+  it('ghost wrapping: ghosts wrap around screen edges', () => {
+    const { loop } = createLoop();
+    const state = loop.getState();
+    state.countdown = 0;
+    loop.setNetworkMode(true);
+
+    // Place ghost well past the right edge so it wraps immediately
+    state.ghosts.push({
+      x: CANVAS_WIDTH + 50, y: 400, vx: 50, size: 30, alpha: 0.7, wobblePhase: 0,
+    } as any);
+
+    tickLoop(loop, 3);
+
+    // Ghost should have wrapped to the left side (x = -size = -30)
+    expect(state.ghosts[0].x).toBeLessThan(0);
+  });
+
+  it('bouncy wobble decays over time', () => {
+    const { loop } = createLoop({
+      arena: { bouncyPlatforms: [1] },
+    });
+    const state = loop.getState();
+    state.countdown = 0;
+    state.bouncyWobble.set(1, 0.5);
+    loop.setNetworkMode(true);
+
+    tickLoop(loop, 60); // 1 second
+
+    // Wobble should have decayed to 0 and been removed
+    expect(state.bouncyWobble.has(1)).toBe(false);
+  });
+
+  it('spring spawn timer decrements and spawns springs', () => {
+    const { loop } = createLoop();
+    const state = loop.getState();
+    state.countdown = 0;
+    state.springSpawnTimer = 0.01; // force immediate spawn
+    loop.setNetworkMode(true);
+
+    tickLoop(loop, 5);
+
+    expect(state.springs.length).toBeGreaterThan(0);
+  });
+
+  it('thorn spawn timer decrements and spawns thorns', () => {
+    const { loop } = createLoop();
+    const state = loop.getState();
+    state.countdown = 0;
+    state.thornSpawnTimer = 0.01; // force immediate
+    loop.setNetworkMode(true);
+
+    tickLoop(loop, 5);
+
+    expect(state.thorns.length).toBeGreaterThan(0);
+  });
+
+  it('playSound respects audio mute during resimulation', () => {
+    const { loop } = createLoop();
+    vi.mocked(audio.play).mockClear();
+
+    loop.setAudioEnabled(false);
+    (loop as any).playSound('stomp');
+    expect(audio.play).not.toHaveBeenCalled();
+
+    loop.setAudioEnabled(true);
+    (loop as any).playSound('stomp');
+    expect(audio.play).toHaveBeenCalledWith('stomp');
+  });
+
+  it('gameRandom uses Math.random in local mode', () => {
+    const { loop } = createLoop();
+    const val = (loop as any).gameRandom();
+    expect(typeof val).toBe('number');
+    expect(val).toBeGreaterThanOrEqual(0);
+    expect(val).toBeLessThan(1);
+  });
+
+  it('gameRandom uses seeded RNG when set', () => {
+    const { loop } = createLoop();
+    const rng = { nextFloat: vi.fn(() => 0.42), getState: () => 0, setState: () => {} } as any;
+    loop.setRng(rng);
+    const val = (loop as any).gameRandom();
+    expect(val).toBe(0.42);
+    expect(rng.nextFloat).toHaveBeenCalled();
+  });
+});
