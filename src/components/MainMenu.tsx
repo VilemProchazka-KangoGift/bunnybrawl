@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useGameStore } from '../store/gameStore';
+import { useGameStore, type RemotePlayerInfo } from '../store/gameStore';
 import { audio } from '../engine/audio';
 import { ArenaGrid } from './ArenaGrid';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
@@ -516,21 +516,22 @@ export function MainMenu() {
             if (idx >= 0) {
               const updated = current.map((rp, i) => i === idx ? { ...rp, characterName: msg.characterName } : rp);
               setOnline({ remotePlayers: updated });
-            } else {
-              // Host not yet in remotePlayers — add a placeholder entry
-              setOnline({
-                remotePlayers: [...current, { peerId: '', slot: 'P1' as PlayerSlot, characterName: msg.characterName, playerName: '', ready: false }],
-              });
             }
+            // No placeholder creation — SLOT_ASSIGNMENT populates remotePlayers
           }
         } else if (msg.type === MsgType.SLOT_ASSIGNMENT) {
           // Guest: received my slot assignment from host
           const slotMsg = msg as SlotAssignmentMessage;
           const names: Record<string, string> = {};
+          const newRemotePlayers: RemotePlayerInfo[] = [];
           for (const p of slotMsg.allPlayers) {
             if (p.playerName) names[p.slot] = p.playerName;
+            newRemotePlayers.push({
+              peerId: '', slot: p.slot as PlayerSlot,
+              characterName: p.characterName, playerName: p.playerName || '', ready: false,
+            });
           }
-          setOnline({ localSlot: slotMsg.slot as PlayerSlot, playerNames: names });
+          setOnline({ localSlot: slotMsg.slot as PlayerSlot, playerNames: names, remotePlayers: newRemotePlayers });
         } else if (msg.type === MsgType.SETTINGS_SYNC) {
           useGameStore.getState().setMatchSettings({
             arenaId: msg.arenaId, killLimit: msg.killLimit, timeLimit: msg.timeLimit,
@@ -1100,8 +1101,8 @@ export function MainMenu() {
                                 <span className="online-char-name">{getCharacterEmoji(onlineLocalChar)} {onlinePlayerName}</span>
                               </div>
                             )}
-                            {/* Other remote players (multi-guest) */}
-                            {online.remotePlayers.map(rp => (
+                            {/* Other remote players (multi-guest, excluding host already shown above) */}
+                            {online.remotePlayers.filter(rp => online.isHost || rp.slot !== 'P1').map(rp => (
                               <div className="online-player-row" key={rp.slot}>
                                 <span className="online-char-name">
                                   {getCharacterEmoji(rp.characterName)} {rp.playerName || getCharacterDisplayName(rp.characterName, i18n.language)}
