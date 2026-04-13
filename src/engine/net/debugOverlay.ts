@@ -10,7 +10,7 @@ const PAD = 8;
 const BG_ALPHA = 0.7;
 // Fixed box width — monospace font, longest line is ~35 chars at 12px ≈ 250px
 const BOX_WIDTH = 260;
-const MAX_LINES = 5;
+const MAX_LINES = 6;
 
 // Pre-allocated lines array to avoid per-frame allocation
 const lines: string[] = new Array(MAX_LINES);
@@ -26,7 +26,8 @@ export function drawNetDebugOverlay(
   lines[1] = `Delay: ${stats.inputDelay}F | Adv: ${adv > 0 ? '+' : ''}${adv}F`;
   lines[2] = `Rollback: ${stats.rollbacksPerSec}/s (max ${stats.maxRollbackDepth})`;
   lines[3] = `Frame: ${stats.localFrame} / ${stats.remoteConfirmedFrame}`;
-  let lineCount = 4;
+  lines[4] = `Route: ${stats.isRelay ? 'RELAY (TURN)' : 'DIRECT (P2P)'}`;
+  let lineCount = 5;
   if (stats.stalled) {
     lines[lineCount++] = '** STALLED **';
   }
