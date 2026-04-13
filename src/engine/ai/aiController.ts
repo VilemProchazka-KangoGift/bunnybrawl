@@ -140,6 +140,9 @@ export class AIController {
 
     if (this.stuckTimer > 45) {
       this.stuckTimer = 0;
+      // Pre-consume rnd() so RNG advances identically regardless of navTarget
+      const escapeR1 = this.rnd();
+      const escapeR2 = this.rnd();
       // Use nav target to escape in the right direction (jump over obstacles, drop off edges)
       if (awareness.navTarget) {
         const dx = awareness.navTarget.approachX - self.x;
@@ -151,19 +154,20 @@ export class AIController {
         };
       }
       return {
-        left: this.rnd() > 0.5,
-        right: this.rnd() > 0.5,
+        left: escapeR1 > 0.5,
+        right: escapeR2 > 0.5,
         jump: true,
         down: false,
       };
     }
 
     // Search pause: when nothing is in immediate radius, pause briefly before roaming
+    const searchRnd = this.rnd(); // always consume so RNG advances identically
     const nothingNearby = !awareness.nearestEnemy && !awareness.stompTarget && !awareness.stompThreat
       && !awareness.nearestCarrot && awareness.airborneAbove.length === 0 && awareness.nearbyHazards.length === 0;
     if (nothingNearby && !this.wasIdle) {
       const sp = this.difficulty.searchPauseFrames;
-      this.searchTimer = sp > 0 ? Math.floor(sp * 0.4) + Math.floor(this.rnd() * Math.ceil(sp * 0.6)) : 0;
+      this.searchTimer = sp > 0 ? Math.floor(sp * 0.4) + Math.floor(searchRnd * Math.ceil(sp * 0.6)) : 0;
       this.wasIdle = true;
     }
     if (!nothingNearby) {

@@ -538,8 +538,8 @@ function crc32Bytes(buf: Uint8Array, len: number, offset = 0): number {
 }
 
 // Pre-allocated buffer for numeric hashing
-// Capacity: 5 players * 4 + entities + timers + RNG ≈ 128 floats max
-const HASH_BUF = new Float64Array(128);
+// Capacity: 7 players * 8 + entities + ghosts + timers + RNG ≈ 160 floats max
+const HASH_BUF = new Float64Array(192);
 const HASH_BYTES = new Uint8Array(HASH_BUF.buffer);
 
 /** Player state enum → numeric value for hashing. */
@@ -556,13 +556,17 @@ const STATE_HASH: Record<string, number> = {
  */
 export function hashGameState(state: MatchState, rng: SeededRNG | undefined): number {
   let idx = 0;
-  // Players
+  // Players (position + velocity + key timers for early divergence detection)
   for (let i = 0; i < state.players.length; i++) {
     const p = state.players[i];
     HASH_BUF[idx++] = p.x;
     HASH_BUF[idx++] = p.y;
+    HASH_BUF[idx++] = p.vx;
+    HASH_BUF[idx++] = p.vy;
     HASH_BUF[idx++] = p.score;
     HASH_BUF[idx++] = STATE_HASH[p.state] ?? 0;
+    HASH_BUF[idx++] = p.hitstopTimer;
+    HASH_BUF[idx++] = p.fastFalling ? 1 : 0;
   }
   // Hazard & pickup positions (catch spawn desync)
   for (let i = 0; i < state.carrots.length; i++) {
@@ -579,6 +583,11 @@ export function hashGameState(state: MatchState, rng: SeededRNG | undefined): nu
     HASH_BUF[idx++] = state.lavaRocks[i].x;
     HASH_BUF[idx++] = state.lavaRocks[i].y;
   }
+  // Ghost positions (collision affects player knockback; wrap triggers gameRandom)
+  for (let i = 0; i < state.ghosts.length; i++) {
+    HASH_BUF[idx++] = state.ghosts[i].x;
+    HASH_BUF[idx++] = state.ghosts[i].y;
+  }
   // Geyser states
   for (let i = 0; i < state.geyserStates.length; i++) {
     HASH_BUF[idx++] = state.geyserStates[i].timer;
@@ -590,6 +599,7 @@ export function hashGameState(state: MatchState, rng: SeededRNG | undefined): nu
   HASH_BUF[idx++] = state.carrotTimer;
   HASH_BUF[idx++] = state.springSpawnTimer;
   HASH_BUF[idx++] = state.thornSpawnTimer;
+  HASH_BUF[idx++] = state.lavaRockTimer;
   HASH_BUF[idx++] = rng ? rng.getState() : 0;
   return crc32Bytes(HASH_BYTES, idx * 8);
 }
@@ -615,8 +625,12 @@ export function hashGameStateDetailed(state: MatchState, rng: SeededRNG | undefi
     const p = state.players[i];
     HASH_BUF[idx++] = p.x;
     HASH_BUF[idx++] = p.y;
+    HASH_BUF[idx++] = p.vx;
+    HASH_BUF[idx++] = p.vy;
     HASH_BUF[idx++] = p.score;
     HASH_BUF[idx++] = STATE_HASH[p.state] ?? 0;
+    HASH_BUF[idx++] = p.hitstopTimer;
+    HASH_BUF[idx++] = p.fastFalling ? 1 : 0;
   }
   const playersEnd = idx;
   DETAILED_RESULT.playersHash = crc32Bytes(HASH_BYTES, playersEnd * 8);
@@ -636,6 +650,10 @@ export function hashGameStateDetailed(state: MatchState, rng: SeededRNG | undefi
     HASH_BUF[idx++] = state.lavaRocks[i].x;
     HASH_BUF[idx++] = state.lavaRocks[i].y;
   }
+  for (let i = 0; i < state.ghosts.length; i++) {
+    HASH_BUF[idx++] = state.ghosts[i].x;
+    HASH_BUF[idx++] = state.ghosts[i].y;
+  }
   for (let i = 0; i < state.geyserStates.length; i++) {
     HASH_BUF[idx++] = state.geyserStates[i].timer;
     HASH_BUF[idx++] = state.geyserStates[i].active ? 1 : 0;
@@ -649,6 +667,7 @@ export function hashGameStateDetailed(state: MatchState, rng: SeededRNG | undefi
   HASH_BUF[idx++] = state.carrotTimer;
   HASH_BUF[idx++] = state.springSpawnTimer;
   HASH_BUF[idx++] = state.thornSpawnTimer;
+  HASH_BUF[idx++] = state.lavaRockTimer;
   HASH_BUF[idx++] = rng ? rng.getState() : 0;
   DETAILED_RESULT.timersHash = crc32Bytes(HASH_BYTES, (idx - entitiesEnd) * 8, entitiesEnd * 8);
 
@@ -669,8 +688,12 @@ export function hashSnapshot(snap: GameSnapshot): number {
     const p = snap.players[i];
     HASH_BUF[idx++] = p.x;
     HASH_BUF[idx++] = p.y;
+    HASH_BUF[idx++] = p.vx;
+    HASH_BUF[idx++] = p.vy;
     HASH_BUF[idx++] = p.score;
     HASH_BUF[idx++] = STATE_HASH[p.state] ?? 0;
+    HASH_BUF[idx++] = p.hitstopTimer;
+    HASH_BUF[idx++] = p.fastFalling ? 1 : 0;
   }
   // Entities
   for (let i = 0; i < snap.carrots.length; i++) {
@@ -687,6 +710,11 @@ export function hashSnapshot(snap: GameSnapshot): number {
     HASH_BUF[idx++] = snap.lavaRocks[i].x;
     HASH_BUF[idx++] = snap.lavaRocks[i].y;
   }
+  // Ghosts
+  for (let i = 0; i < snap.ghosts.length; i++) {
+    HASH_BUF[idx++] = snap.ghosts[i].x;
+    HASH_BUF[idx++] = snap.ghosts[i].y;
+  }
   // Geyser states
   for (let i = 0; i < snap.geyserStates.length; i++) {
     HASH_BUF[idx++] = snap.geyserStates[i].timer;
@@ -698,6 +726,7 @@ export function hashSnapshot(snap: GameSnapshot): number {
   HASH_BUF[idx++] = snap.carrotTimer;
   HASH_BUF[idx++] = snap.springSpawnTimer;
   HASH_BUF[idx++] = snap.thornSpawnTimer;
+  HASH_BUF[idx++] = snap.lavaRockTimer;
   HASH_BUF[idx++] = snap.rngState;
   return crc32Bytes(HASH_BYTES, idx * 8);
 }

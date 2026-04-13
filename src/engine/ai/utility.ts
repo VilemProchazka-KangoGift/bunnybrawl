@@ -173,14 +173,18 @@ function evaluatePlatformSeeking(a: AwarenessSnapshot, s: ActionScores, p: AIPer
 
   const weight = climbing ? 1.0 : 0.75;
 
+  // Pre-consume 2 rnd() values so RNG advances identically regardless of navTarget
+  const navRnd = rnd(rng);
+  const jitterRnd = rnd(rng);
+
   // Nav-guided pathfinding: use precomputed graph when available
   // Anti-predictability: chaotic bots sometimes ignore nav (fall back to reactive)
-  const useNav = a.navTarget && (p.chaosAffinity < 0.5 || rnd(rng) > p.chaosAffinity * 0.4);
+  const useNav = a.navTarget && (p.chaosAffinity < 0.5 || navRnd > p.chaosAffinity * 0.4);
 
   if (useNav && a.navTarget) {
     const nav = a.navTarget;
     // Add jitter to approach position for variability (+/- 20px), reduced by precision
-    const jitteredApproach = nav.approachX + (rnd(rng) - 0.5) * 40 * (1 - precisionMult);
+    const jitteredApproach = nav.approachX + (jitterRnd - 0.5) * 40 * (1 - precisionMult);
     const dx = jitteredApproach - a.self.x;
 
     if (nav.type === 'j') {
@@ -341,15 +345,19 @@ function evaluateRoam(a: AwarenessSnapshot, s: ActionScores): void {
 
 /** Don't walk under airborne enemies — sidestep with some imprecision */
 function evaluateAirborneAboveDodge(a: AwarenessSnapshot, s: ActionScores, p: AIPersonality, precisionMult: number = 0, rng?: SeededRNG): void {
+  // Pre-consume fixed rnd() count so RNG advances identically regardless of airborneAbove filtering
+  const jitters: number[] = [];
+  for (let i = 0; i < a.airborneAbove.length; i++) {
+    jitters.push((rnd(rng) - 0.5) * 0.3 * (1 - precisionMult));
+  }
   if (a.airborneAbove.length === 0 || !a.self.onGround) return;
   const weight = 0.8 * p.cautiousness;
-  for (const ab of a.airborneAbove) {
+  for (let i = 0; i < a.airborneAbove.length; i++) {
+    const ab = a.airborneAbove[i];
     if (ab.dist > 200) continue;
     const urgency = Math.max(0, 1 - ab.dist / 200);
-    // Move away from their X, but with some randomness (not pixel-perfect dodge)
     const dodgeDir = ab.dx > 0 ? -1 : 1;
-    const jitter = (rnd(rng) - 0.5) * 0.3 * (1 - precisionMult);
-    if (dodgeDir + jitter > 0) s.moveRight += weight * urgency;
+    if (dodgeDir + jitters[i] > 0) s.moveRight += weight * urgency;
     else s.moveLeft += weight * urgency;
   }
 }
@@ -380,10 +388,10 @@ function evaluateInvincibilityAggression(a: AwarenessSnapshot, s: ActionScores, 
 
 /** If 2+ bots are clustered together, add scatter force */
 function evaluateClustering(a: AwarenessSnapshot, s: ActionScores, rng?: SeededRNG): void {
+  const scatterRnd = rnd(rng); // always consume so RNG advances identically
   if (a.nearbyBotCount < 2) return;
-  // Scatter: add random directional force proportional to crowding
   const scatterWeight = 0.3 * Math.min(a.nearbyBotCount, 4);
-  if (rnd(rng) > 0.5) s.moveRight += scatterWeight;
+  if (scatterRnd > 0.5) s.moveRight += scatterWeight;
   else s.moveLeft += scatterWeight;
 }
 
