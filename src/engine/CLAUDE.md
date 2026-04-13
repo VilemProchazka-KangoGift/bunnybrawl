@@ -105,7 +105,7 @@
 - Character selection messages must NOT auto-switch and re-send — creates infinite cascade. Filter the dropdown instead.
 - React `useCallback` closures capture stale Zustand state. Use refs (`localCharRef`) for values read inside callbacks that fire from network events.
 - React Strict Mode double-invokes effects. Setup + cleanup MUST be in ONE `useEffect` — separate effects cause cleanup to destroy transport while a `startedRef` guard prevents re-creation on re-mount.
-- Desync checks send hash-only every 30 frames. Guest requests full snapshot only on mismatch via `DESYNC_REQUEST` / `DESYNC_CORRECTION` messages. This reduces bandwidth from ~5-10KB/check to ~50B when in sync.
+- Desync checks send hash-only every 60 frames (~1s). Guest requests full snapshot only on mismatch via `DESYNC_REQUEST` / `DESYNC_CORRECTION` messages. Intentionally infrequent — rollback handles frame-by-frame input correction; desync checks are for catastrophic drift only. Too frequent = constant snapshot corrections that teleport characters.
 - `hashGameState()` uses `Float64Array` + `crc32Bytes()` — zero string allocation. Pre-allocated buffer at module scope.
 - Jitter tracking: `Transport.currentJitter` (EMA of |rtt - smoothedRtt|). `adaptInputDelay()` adds up to 2 extra frames of delay when jitter is high.
 - Debug overlay: `?debug=net` URL param enables net stats overlay (RTT, jitter, frame advantage, rollback count). Toggle with `` ` `` key.
@@ -114,6 +114,9 @@
 - Network simulator: `?simLatency=50&simJitter=20&simLoss=5` URL params. Wraps transport receive path, ping/pong bypasses simulator for real RTT measurement. Flush interval 2ms.
 - Protocol v2: frame numbers use `Uint32` (was `Uint16`). Wraps at ~19.8 hours at 60fps. Message size: 54 bytes for 10 bundled inputs (was 34).
 - `Player.renderOffsetX/Y` must be initialized to 0 in player creation and EXCLUDED from `snapshotPlayer` / `PlayerSnapshot` interface — they are cosmetic.
+- **Rollback constants are latency-critical** — `MAX_ROLLBACK_FRAMES` (15), `MAX_INPUT_DELAY` (8), `INPUT_BUNDLE_SIZE` (16), and `DESYNC_CHECK_INTERVAL` (60) must be tuned together. The snapshot ring buffer depth is the hard ceiling: RTT > `MAX_ROLLBACK_FRAMES * 16.67ms * 2` (~500ms) = stall. Raising the buffer costs ~10KB per slot (pre-allocated snapshots).
+- **Desync hash comparison must be frame-matched.** Comparing guest's current state (localFrame) vs host's hash (check.frame) when localFrame != check.frame causes false positives — `timeElapsed` differs by FIXED_TIMESTEP per frame, changing the timers hash. Only compare when snapshot at exact check.frame is available, or localFrame === check.frame.
+- **Network simulator inflates RTT getters** (`currentRtt`, `currentJitter`) by the simulator's configured latency so `adaptInputDelay()` responds to `?simLatency` params. Without this, input delay stays at 2F regardless of simulated conditions.
 - Stall check must skip startup grace period: when `remoteConfirmedFrame == -1` (no inputs received yet), don't stall. Without this, both peers deadlock after 7 frames (~117ms) because neither has sent inputs yet.
 - **MANDATORY**: Do not ship netcode changes without running the E2E online test suite (`npm run test:e2e -- --grep @online`). The online flow has multi-peer timing dependencies that unit tests cannot catch. The startup freeze bug (stall deadlock) was only visible with two actual browser tabs connecting.
 - E2E online tests live in `e2e/online-multiplayer.spec.ts`. They use two `BrowserContext`s connecting via PeerJS. Test IDs: `online-btn`, `online-create-btn`, `online-code-input`, `online-join-submit`, `online-room-code`, `online-start-btn`, `online-ready-btn`.

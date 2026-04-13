@@ -135,6 +135,12 @@ npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/
 - **E2E shortcuts** — `/?arena=meadow&bots=2&killLimit=4` auto-starts a match (skips lobby). Requires `arena` param to trigger. Use `window.__gameLoop.getState()` and `window.__gameStore.getState()` for in-match assertions.
 - **E2E countdown waits** — use `page.waitForFunction(() => window.__gameLoop?.getState()?.countdown === 0)` instead of `waitForTimeout(4000)`.
 - **E2E flakiness** — online multiplayer tests (`@online`) are inherently flaky due to PeerJS signaling. New E2E tests should use URL param auto-start and `waitForFunction` polling over hardcoded waits.
+- **Vitest mock constructors** — `vi.fn(() => instance)` fails with `new`. Use `class MockX { constructor() { Object.assign(this, mockInstance); } }` instead.
+- **Vitest partial mocks** — `vi.mock('./mod', async (importOriginal) => ({ ...(await importOriginal()), fn: vi.fn() }))` preserves un-mocked exports. Access mocked fns via `const mod = await import('./mod'); vi.mocked(mod.fn)`.
+- **Arena IDs are snake_case** in URL params and registry: `space_station`, `candy_land`, `haunted_graveyard`.
+- **Nav data tests** must call `registerArena()` with `navData` — `getArenaNav(id)` reads from the registry Map, not from the arena object.
+- **Coverage config** (`vitest.config.ts`) excludes `arenas/packs/**` and `characters/packs/**` — canvas drawing code, not meaningful to unit test.
+- **E2E online diagnostics** — `window.__netMatch.getRollbackStats()` for RTT/relay/rollback stats. `?simLatency=80&simJitter=20` simulates network conditions (RTT getters inflate by simulator config). `?noturn` disables TURN for A/B comparison. `?debug=net` shows overlay.
 
 ## Common Patterns
 
