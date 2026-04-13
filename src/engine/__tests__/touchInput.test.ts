@@ -226,14 +226,14 @@ describe('TouchInputManager', () => {
       expect(input.jump).toBe(false);
     });
 
-    it('second tap while first jump active re-triggers jump (for airborne fast-fall)', () => {
+    it('ignores second jump touch while first is active', () => {
       tapRight(800, 400, 1);
       manager.getInput(); // consume jump from id 1
 
-      // Second touch on right half re-triggers jump
+      // Second touch on right half should be ignored
       tapRight(900, 400, 2);
       const input = manager.getInput();
-      expect(input.jump).toBe(true); // re-triggered for fast-fall conversion
+      expect(input.jump).toBe(false); // still consumed from first, second ignored
     });
   });
 
