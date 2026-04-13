@@ -546,7 +546,7 @@ function crc32Bytes(buf: Uint8Array, len: number, offset = 0): number {
 }
 
 // Pre-allocated buffer for numeric hashing
-// Capacity: 7 players * 8 + entities + ghosts + timers + RNG ≈ 160 floats max
+// Capacity: 10 players * 8 + entities + ghosts + timers + RNG ≈ 160 floats max
 const HASH_BUF = new Float64Array(192);
 const HASH_BYTES = new Uint8Array(HASH_BUF.buffer);
 

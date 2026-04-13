@@ -453,8 +453,7 @@ export class GameLoop {
       const touchPlayer = this.touchSlot
         ? this.state.players.find(p => p.id === this.touchSlot)
         : null;
-      const airborne = touchPlayer?.state === 'airborne';
-      const ti = this.touchInput.getInputForPlayer(!!airborne);
+      const ti = this.touchInput.getInputForPlayer(touchPlayer?.state === 'airborne' ?? false);
       return {
         left: kb.left || ti.left,
         right: kb.right || ti.right,

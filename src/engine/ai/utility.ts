@@ -6,6 +6,9 @@ function rnd(rng?: SeededRNG): number {
   return rng ? rng.nextFloat() : Math.random();
 }
 
+// Pre-allocated buffer for airborne-above dodge jitter (avoids per-call array allocation)
+const _jitterBuf = new Float64Array(10);
+
 /**
  * Score all possible actions based on awareness and personality.
  * Each evaluator adds positive/negative values to moveLeft, moveRight, jump, drop.
@@ -346,9 +349,8 @@ function evaluateRoam(a: AwarenessSnapshot, s: ActionScores): void {
 /** Don't walk under airborne enemies — sidestep with some imprecision */
 function evaluateAirborneAboveDodge(a: AwarenessSnapshot, s: ActionScores, p: AIPersonality, precisionMult: number = 0, rng?: SeededRNG): void {
   // Pre-consume fixed rnd() count so RNG advances identically regardless of airborneAbove filtering
-  const jitters: number[] = [];
   for (let i = 0; i < a.airborneAbove.length; i++) {
-    jitters.push((rnd(rng) - 0.5) * 0.3 * (1 - precisionMult));
+    _jitterBuf[i] = (rnd(rng) - 0.5) * 0.3 * (1 - precisionMult);
   }
   if (a.airborneAbove.length === 0 || !a.self.onGround) return;
   const weight = 0.8 * p.cautiousness;
@@ -357,7 +359,7 @@ function evaluateAirborneAboveDodge(a: AwarenessSnapshot, s: ActionScores, p: AI
     if (ab.dist > 200) continue;
     const urgency = Math.max(0, 1 - ab.dist / 200);
     const dodgeDir = ab.dx > 0 ? -1 : 1;
-    if (dodgeDir + jitters[i] > 0) s.moveRight += weight * urgency;
+    if (dodgeDir + _jitterBuf[i] > 0) s.moveRight += weight * urgency;
     else s.moveLeft += weight * urgency;
   }
 }
