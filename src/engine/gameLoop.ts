@@ -439,7 +439,13 @@ export class GameLoop {
   getInputAny(): InputState {
     const kb = this.input.getInputAny();
     if (this.touchInput) {
-      const ti = this.touchInput.getInput();
+      // Use getInputForPlayer so airborne tap→fast-fall conversion applies
+      // before the rollback engine captures the input
+      const touchPlayer = this.touchSlot
+        ? this.state.players.find(p => p.id === this.touchSlot)
+        : null;
+      const airborne = touchPlayer?.state === 'airborne';
+      const ti = this.touchInput.getInputForPlayer(!!airborne);
       return {
         left: kb.left || ti.left,
         right: kb.right || ti.right,
