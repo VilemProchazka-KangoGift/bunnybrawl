@@ -44,7 +44,7 @@
 - Player-push bump sound uses global cooldown (not per-player) to prevent double-fire from both pushed players in the same frame. Detects push via `sideSquash === 0.8` (exact value set by `collidePlayersHorizontal`).
 - All 11 arenas + menu have MP3 music. Each arena pack specifies `musicFile` (e.g. `'meadow.mp3'`), resolved by `audio.playMusic()` via `getArenaPack()`. Menu music uses a separate `menuMusicHowl` preloaded in `init()` — not tied to component lifecycle (persists across menu↔lobby). Suno generation prompts are in `docs/suno-arena-prompts.md`.
 - `Howler.mute()` is the global kill switch for all audio. Three independent mute sources: `muted` (user toggle), `backgroundMuted` (tab hidden via visibilitychange), `gamePaused` (pause overlay). All three must be false before calling `Howler.mute(false)`. Adding a new mute source? Check all unmute paths gate on it.
-- Music preference persisted in `bunnybrawl_music_disabled` (localStorage). Loaded at AudioManager field init, not in `init()`. Wrap localStorage access in try/catch for restricted contexts.
+- Music preference persisted in `carrotroyale_music_disabled` (localStorage). Loaded at AudioManager field init, not in `init()`. Wrap localStorage access in try/catch for restricted contexts.
 
 ## Arenas
 - Arena pack registry must be initialized before use — `registerBuiltinArenas()` called at module scope in `App.tsx`. Nav data is embedded in each pack's `navData` field and auto-registered.
@@ -86,6 +86,7 @@
 - `e.preventDefault()` on touch events blocks synthetic click events on buttons. Always check `target.tagName === 'BUTTON'` before preventing default.
 - `haptics.isLocal(player.id)` gates all vibration calls — only vibrate for events involving the local touch player. Haptic calls are inside event-conditional blocks (stomp, hazard hit, spring, landing) — they do NOT run every frame per player.
 - `touchSlot` defaults to the first human player (P1). For online guests, call `setLocalSlot(slot)` after GameLoop creation — otherwise touch input targets P1 (the host) instead of the guest's actual slot.
+- **`getInputAny()` must use `getInputForPlayer(airborne)`, not raw `getInput()`.** The rollback engine calls `getInputAny()` to sample local input for network transmission. If it reads raw input, the airborne-tap→fast-fall conversion is lost — physics receives `{jump: true}` on an airborne player (ignored) instead of `{down: true}` (fast-fall). The touch player's airborne state is looked up via `touchSlot` from `state.players`.
 
 ## Network Multiplayer
 - **ICE servers**: `ICE_SERVERS` in transport.ts configures STUN (NAT discovery) + TURN (relay fallback). TURN is required for mobile-to-mobile — both peers behind symmetric NAT (cellular) or hairpin-unfriendly routers can't connect via STUN alone. Currently uses free metered.ca Open Relay (best-effort). For production, replace with paid TURN credentials. Only 2 STUN servers needed (one Google, one Twilio) — extra STUN entries slow ICE gathering without meaningful benefit.
