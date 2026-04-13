@@ -16,7 +16,7 @@ import { isTouchPrimary } from './touchDetect';
 import { haptics } from './haptics';
 import { Renderer } from './renderer';
 import { applyInput, applyGravity, movePlayer, collidePlatforms, updatePlayerState, applyArenaConstraints, collidePlayersHorizontal, aabbOverlap, resolveStuckPlayer } from './physics';
-import { checkStomps, updateSplatTimers } from './stomp';
+import { checkStomps, updateSplatTimers, respawnPlayer } from './stomp';
 import { checkSpringCollision, checkThornCollision, checkHazardZoneCollision, checkGhostCollision, checkLavaRockCollision } from './hazardCollision';
 import { getCharacterGibs } from './characters';
 import { audio } from './audio';
@@ -453,7 +453,7 @@ export class GameLoop {
       const touchPlayer = this.touchSlot
         ? this.state.players.find(p => p.id === this.touchSlot)
         : null;
-      const ti = this.touchInput.getInputForPlayer(touchPlayer?.state === 'airborne' ?? false);
+      const ti = this.touchInput.getInputForPlayer(touchPlayer?.state === 'airborne');
       return {
         left: kb.left || ti.left,
         right: kb.right || ti.right,
@@ -1176,12 +1176,12 @@ export class GameLoop {
     this.state.springSpawnTimer = f(this.state.springSpawnTimer - dt);
     if (this.state.springSpawnTimer <= 0) {
       this.spawnSpring();
-      this.state.springSpawnTimer = f(SPRING_SPAWN_INTERVAL + this.gameRandom() * 5);
+      this.state.springSpawnTimer = SPRING_SPAWN_INTERVAL; // fixed interval — no RNG call
     }
     this.state.thornSpawnTimer = f(this.state.thornSpawnTimer - dt);
     if (this.state.thornSpawnTimer <= 0) {
       this.spawnThorn();
-      this.state.thornSpawnTimer = f(THORN_SPAWN_INTERVAL + this.gameRandom() * 5);
+      this.state.thornSpawnTimer = THORN_SPAWN_INTERVAL; // fixed interval — no RNG call
     }
 
     // Update hazard lifetimes + grow timers (fround: zero-crossing divergence changes array length in hash)
@@ -1248,13 +1248,13 @@ export class GameLoop {
       ghost.x = f(ghost.x + f(ghost.vx * dt));
       ghost.wobblePhase = f(ghost.wobblePhase + f(dt * 2));
       ghost.y = f(ghost.y + f(fastSin(ghost.wobblePhase) * f(20 * dt)));
-      // Wrap around screen (must use seeded RNG for network determinism)
+      // Wrap around screen — use wobblePhase for Y (deterministic, no RNG call)
       if (ghost.vx > 0 && ghost.x > CANVAS_WIDTH + ghost.size) {
         ghost.x = -ghost.size;
-        ghost.y = f(300 + this.gameRandom() * 300);
+        ghost.y = f(300 + (ghost.wobblePhase % 1) * 300);
       } else if (ghost.vx < 0 && ghost.x < -ghost.size) {
         ghost.x = CANVAS_WIDTH + ghost.size;
-        ghost.y = f(300 + this.gameRandom() * 300);
+        ghost.y = f(300 + (ghost.wobblePhase % 1) * 300);
       }
     }
 
@@ -1711,16 +1711,10 @@ export class GameLoop {
       // Fall-off detection (rooftops, treetops — gaps in ground)
       // No score penalty — just lose ~1 second to respawn in hurt state
       if (this.arena.allowFallOff && player.y > CANVAS_HEIGHT + 50) {
-        const spawn = this.arena.spawnPoints[Math.floor(this.gameRandom() * this.arena.spawnPoints.length)];
-        player.x = spawn.x - player.width / 2;
-        player.y = spawn.y - player.height;
-        player.vx = 0;
-        player.vy = 0;
-        player.state = 'idle';
-        player.invincibleTimer = 1.5;
+        // Distance-based spawn picker (no RNG call — same as stomp respawn)
+        respawnPlayer(player, this.arena.spawnPoints, this.state.players);
+        player.invincibleTimer = 1.5; // shorter than stomp respawn
         player.slowTimer = 2.0; // respawn slowed (hurt state)
-        player.fastFalling = false;
-        player.fatTimer = 0;
         this.playSound('oof');
         if (!this._resimulating) this.state.screenShake = Math.max(this.state.screenShake, 0.1);
       }
