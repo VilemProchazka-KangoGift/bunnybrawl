@@ -6,7 +6,7 @@
 import type { InputState, PlayerSlot, Player } from '../types';
 import type { GameLoop } from '../gameLoop';
 import type { GameSnapshot } from './serialize';
-import { takeSnapshot, restoreSnapshot, hashGameState, hashGameStateDetailed, hashSnapshot, takeSnapshotInto, createEmptySnapshot } from './serialize';
+import { takeSnapshot, restoreSnapshot, hashGameStateDetailed, hashSnapshot, takeSnapshotInto, createEmptySnapshot } from './serialize';
 import { Transport } from './transport';
 import {
   MsgType,
@@ -257,33 +257,29 @@ export class RollbackEngine {
     if (msg.type === MsgType.DESYNC_CHECK) {
       if (!this.isHost) {
         const check = msg as DesyncCheckMessage;
-        // Use snapshot at host's frame for frame-correct comparison (avoids false positives when guest is ahead)
+        // Use snapshot at host's frame for frame-correct comparison.
+        // Only compare when we have the exact snapshot — using current state
+        // at a different frame causes false positives (timeElapsed/timers differ
+        // by 1-2 frames, triggering unnecessary corrections every check interval).
+        // Use snapshot at host's frame for frame-correct comparison (avoids false positives when guest is ahead).
+        // The old ±1 frame tolerance caused constant false positives because timeElapsed
+        // differs by FIXED_TIMESTEP between adjacent frames. Now we only compare when we
+        // have the exact frame snapshot, or the guest is at the exact same frame.
         const cached = this.snapshots[check.frame % MAX_ROLLBACK_FRAMES];
         let localHash: number;
-        let usedCurrentState = false;
         if (cached.frame === check.frame) {
           localHash = hashSnapshot(cached);
-        } else if (Math.abs(this.localFrame - check.frame) <= 1) {
-          // Guest is at or very near host frame — compare current state
-          localHash = hashGameState(this.gameLoop.getState(), this.gameLoop.getRng());
-          usedCurrentState = true;
+        } else if (this.localFrame === check.frame) {
+          // Guest is at the exact same frame as host — current state is correct
+          localHash = hashSnapshot(
+            takeSnapshot(this.localFrame, this.gameLoop.getState(), this.gameLoop.getRng(), this.gameLoop.getAIControllers()),
+          );
         } else {
-          // Snapshot overwritten and frames too far apart — skip this check
+          // Snapshot overwritten and frames don't match — skip this check
           return;
         }
         if (check.hash !== localHash) {
-          // Log which subsystem diverged first (only when we compared current state,
-          // since hashGameStateDetailed operates on live state, not snapshots)
-          if (check.playersHash !== undefined && usedCurrentState) {
-            const localDetailed = hashGameStateDetailed(this.gameLoop.getState(), this.gameLoop.getRng());
-            const diverged: string[] = [];
-            if (check.playersHash !== localDetailed.playersHash) diverged.push('players');
-            if (check.entitiesHash !== localDetailed.entitiesHash) diverged.push('entities');
-            if (check.timersHash !== localDetailed.timersHash) diverged.push('timers');
-            console.log(`[net] Hash mismatch at frame ${check.frame} — diverged subsystem(s): ${diverged.join(', ') || 'unknown (composite only)'}`);
-          } else {
-            console.log(`[net] Hash mismatch at frame ${check.frame} (local ${localHash} != host ${check.hash})`);
-          }
+          console.log(`[net] Hash mismatch at frame ${check.frame} (local ${localHash} != host ${check.hash})`);
           const req: DesyncRequestMessage = { type: MsgType.DESYNC_REQUEST, frame: check.frame };
           this.transport.sendReliable(req);
         }

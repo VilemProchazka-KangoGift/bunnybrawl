@@ -5,7 +5,7 @@ import type { MatchState, PlayerSlot, InputState, Player } from '../types';
 import { SeededRNG } from './prng';
 import { MsgType, encodeInputMessage } from './protocol';
 import type { DesyncCheckMessage, DesyncRequestMessage, DesyncCorrectionMessage } from './protocol';
-import { createEmptySnapshot, hashGameState, takeSnapshot } from './serialize';
+import { createEmptySnapshot, hashGameState, hashSnapshot, takeSnapshot } from './serialize';
 
 // ---- Mock infrastructure ----
 
@@ -235,19 +235,22 @@ describe('RollbackEngine - handleReliableMessage (desync)', () => {
       transport: transport as any,
     });
 
-    // Compute the actual hash for frame 0 state — then send a different hash
-    const actualHash = hashGameState(state, rng);
-    const wrongHash = actualHash + 1; // deliberately wrong
+    // Pre-populate snapshot at frame 0 so the frame-matched comparison works
+    const snap = takeSnapshot(0, state, rng, new Map());
+    (engine as any).snapshots[0] = snap;
+
+    // Send a hash that differs from the snapshot hash
+    const localHash = hashSnapshot(snap);
+    const wrongHash = localHash + 1;
 
     const check: DesyncCheckMessage = {
       type: MsgType.DESYNC_CHECK,
-      frame: 0, // localFrame is 0, close enough
+      frame: 0,
       hash: wrongHash,
       rngState: rng.getState(),
     };
 
     engine.handleReliableMessage(check);
-    // Guest should send a DESYNC_REQUEST
     expect(transport.sendReliable).toHaveBeenCalledWith(
       expect.objectContaining({ type: MsgType.DESYNC_REQUEST })
     );
@@ -266,7 +269,11 @@ describe('RollbackEngine - handleReliableMessage (desync)', () => {
       transport: transport as any,
     });
 
-    const correctHash = hashGameState(state, rng);
+    // Pre-populate snapshot at frame 0
+    const snap = takeSnapshot(0, state, rng, new Map());
+    (engine as any).snapshots[0] = snap;
+
+    const correctHash = hashSnapshot(snap);
     const check: DesyncCheckMessage = {
       type: MsgType.DESYNC_CHECK,
       frame: 0,
@@ -494,8 +501,13 @@ describe('RollbackEngine - desync flow', () => {
       gameLoop: guestGL as any, transport: guestTransport as any,
     });
 
-    // Host sends DESYNC_CHECK with its hash
-    const hostHash = hashGameState(hostState, hostRng);
+    // Pre-populate guest snapshot at frame 0 (with desynced state)
+    const guestSnap = takeSnapshot(0, guestState, guestRng, new Map());
+    (guest as any).snapshots[0] = guestSnap;
+
+    // Host sends DESYNC_CHECK with its hash (from host's state)
+    const hostSnap = takeSnapshot(0, hostState, hostRng, new Map());
+    const hostHash = hashSnapshot(hostSnap);
     const check = {
       type: MsgType.DESYNC_CHECK,
       frame: 0,
@@ -503,7 +515,7 @@ describe('RollbackEngine - desync flow', () => {
       rngState: hostRng.getState(),
     };
 
-    // Guest processes — hashes differ → sends DESYNC_REQUEST
+    // Guest processes — snapshot hashes differ → sends DESYNC_REQUEST
     guest.handleReliableMessage(check);
     expect(guestTransport.sendReliable).toHaveBeenCalledWith(
       expect.objectContaining({ type: MsgType.DESYNC_REQUEST }),
@@ -677,7 +689,7 @@ describe('RollbackEngine - host vs guest role', () => {
 });
 
 describe('RollbackEngine - desync check with subsystem hashes', () => {
-  it('guest logs diverged subsystems when playersHash provided', () => {
+  it('guest sends DESYNC_REQUEST when snapshot hash differs', () => {
     const state = makeTestState();
     const rng = new SeededRNG(42);
     const gameLoop = makeMockGameLoop(state, rng);
@@ -687,20 +699,48 @@ describe('RollbackEngine - desync check with subsystem hashes', () => {
       gameLoop: gameLoop as any, transport: transport as any,
     });
 
-    const wrongHash = hashGameState(state, rng) + 1;
+    // Pre-populate snapshot at frame 0
+    const snap = takeSnapshot(0, state, rng, new Map());
+    (engine as any).snapshots[0] = snap;
+
+    const wrongHash = hashSnapshot(snap) + 1;
     const check = {
       type: MsgType.DESYNC_CHECK,
       frame: 0,
       hash: wrongHash,
       rngState: rng.getState(),
-      playersHash: 12345, // subsystem hashes
+      playersHash: 12345,
       entitiesHash: 67890,
       timersHash: 11111,
     };
 
-    // Should send DESYNC_REQUEST with subsystem logging
     engine.handleReliableMessage(check);
-    expect(transport.sendReliable).toHaveBeenCalled();
+    expect(transport.sendReliable).toHaveBeenCalledWith(
+      expect.objectContaining({ type: MsgType.DESYNC_REQUEST }),
+    );
+  });
+
+  it('guest skips check when snapshot at requested frame is overwritten', () => {
+    const state = makeTestState();
+    const rng = new SeededRNG(42);
+    const gameLoop = makeMockGameLoop(state, rng);
+    const transport = makeMockTransport();
+    const engine = new RollbackEngine({
+      localSlot: 'P2', remoteSlots: ['P1'], isHost: false,
+      gameLoop: gameLoop as any, transport: transport as any,
+    });
+
+    // Don't populate snapshot — cached.frame won't match check.frame
+    const check = {
+      type: MsgType.DESYNC_CHECK,
+      frame: 50, // no snapshot at this frame
+      hash: 12345,
+      rngState: 0,
+    };
+
+    engine.handleReliableMessage(check);
+    // Should skip — no DESYNC_REQUEST sent
+    expect(transport.sendReliable).not.toHaveBeenCalled();
   });
 });
 
