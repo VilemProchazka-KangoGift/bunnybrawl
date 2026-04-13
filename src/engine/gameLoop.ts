@@ -1170,11 +1170,11 @@ export class GameLoop {
       this.state.thornSpawnTimer = f(THORN_SPAWN_INTERVAL + this.gameRandom() * 5);
     }
 
-    // Update hazard lifetimes + grow timers
+    // Update hazard lifetimes + grow timers (fround: zero-crossing divergence changes array length in hash)
     for (const s of this.state.springs) {
-      s.life -= dt;
-      if (s.growTimer > 0) s.growTimer -= dt;
-      if (s.bounceTimer > 0) s.bounceTimer -= dt;
+      s.life = f(s.life - dt);
+      if (s.growTimer > 0) s.growTimer = f(s.growTimer - dt);
+      if (s.bounceTimer > 0) s.bounceTimer = f(s.bounceTimer - dt);
     }
     for (let i = this.state.springs.length - 1; i >= 0; i--) {
       if (this.state.springs[i].life <= 0) {
@@ -1183,8 +1183,8 @@ export class GameLoop {
     }
 
     for (const t of this.state.thorns) {
-      t.life -= dt;
-      if (t.growTimer > 0) t.growTimer -= dt;
+      t.life = f(t.life - dt);
+      if (t.growTimer > 0) t.growTimer = f(t.growTimer - dt);
     }
     for (let i = this.state.thorns.length - 1; i >= 0; i--) {
       if (this.state.thorns[i].life <= 0 || this.state.thorns[i].hit) {
@@ -1270,10 +1270,10 @@ export class GameLoop {
     // Update pigeon flocks
     for (const flock of this.state.pigeonFlocks) {
       if (!flock.active) {
-        flock.respawnTimer -= dt;
+        flock.respawnTimer = f(flock.respawnTimer - dt);
         if (flock.respawnTimer <= 0) flock.active = true;
       }
-      // Decay scatter particles
+      // Decay scatter particles (cosmetic — no fround needed)
       for (let i = flock.scatterParticles.length - 1; i >= 0; i--) {
         const sp = flock.scatterParticles[i];
         sp.x += sp.vx * dt;
@@ -1288,7 +1288,7 @@ export class GameLoop {
 
     // Decay bouncy wobble timers
     for (const [idx, timer] of this.state.bouncyWobble) {
-      const newTimer = timer - dt;
+      const newTimer = f(timer - dt);
       if (newTimer <= 0) this.state.bouncyWobble.delete(idx);
       else this.state.bouncyWobble.set(idx, newTimer);
     }
@@ -1444,8 +1444,8 @@ export class GameLoop {
       } else {
         // Squash/stretch decay
         if (player.squashTimer > 0) {
-          player.squashTimer -= dt;
-          player.squashScale += (1.0 - player.squashScale) * SQUASH_DECAY_SPEED * dt;
+          player.squashTimer = f(player.squashTimer - dt);
+          player.squashScale = f(player.squashScale + f(f(1.0 - player.squashScale) * f(SQUASH_DECAY_SPEED * dt)));
         } else {
           player.squashScale = 1.0;
         }
@@ -1453,13 +1453,13 @@ export class GameLoop {
 
       // Side squash decay (wall/push squash recovers to 1.0)
       if (player.sideSquash !== 1) {
-        player.sideSquash += (1.0 - player.sideSquash) * SQUASH_DECAY_SPEED * dt;
+        player.sideSquash = f(player.sideSquash + f(f(1.0 - player.sideSquash) * f(SQUASH_DECAY_SPEED * dt)));
         if (Math.abs(player.sideSquash - 1) < 0.02) player.sideSquash = 1;
       }
 
-      // Size wobble when fat
+      // Size wobble when fat (fastSin for cross-architecture determinism)
       if (player.fatTimer > 0) {
-        player.squashScale *= 1 + Math.sin(this.state.timeElapsed * 6) * 0.05;
+        player.squashScale = f(player.squashScale * f(1 + f(fastSin(f(this.state.timeElapsed * 6)) * 0.05)));
       }
 
       // Expressions
