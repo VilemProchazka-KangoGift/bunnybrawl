@@ -290,7 +290,7 @@ export class RollbackEngine {
           snap = cached;
           correctionFrame = reqFrame;
         } else {
-          snap = takeSnapshot(this.localFrame, this.gameLoop.getState(), this.gameLoop.getRng(), this.gameLoop.getAIControllers());
+          snap = takeSnapshot(this.localFrame, this.gameLoop.getState(), this.gameLoop.getRng(), this.gameLoop.getAIControllers(), this.gameLoop.getAiRng());
           correctionFrame = this.localFrame;
         }
         const correction: DesyncCorrectionMessage = {
