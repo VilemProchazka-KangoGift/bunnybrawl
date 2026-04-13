@@ -258,10 +258,6 @@ export class RollbackEngine {
       if (!this.isHost) {
         const check = msg as DesyncCheckMessage;
         // Use snapshot at host's frame for frame-correct comparison.
-        // Only compare when we have the exact snapshot — using current state
-        // at a different frame causes false positives (timeElapsed/timers differ
-        // by 1-2 frames, triggering unnecessary corrections every check interval).
-        // Use snapshot at host's frame for frame-correct comparison (avoids false positives when guest is ahead).
         // The old ±1 frame tolerance caused constant false positives because timeElapsed
         // differs by FIXED_TIMESTEP between adjacent frames. Now we only compare when we
         // have the exact frame snapshot, or the guest is at the exact same frame.

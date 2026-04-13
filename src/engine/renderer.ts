@@ -304,16 +304,8 @@ export class Renderer {
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
     // Reset diagnostics each frame
-    const d = this._diag; d.clouds = false; d.weather = false; d.wildlife = false;
-    d.animatedBg = false; d.hazardZones = false; d.effectZones = false;
-    d.bouncyPlatforms = false; d.pigeons = false; d.lavaRocks = false;
-    d.springs = false; d.thorns = false; d.carrots = false;
-    d.gibs = false; d.confetti = false; d.shockwaves = false;
-    d.afterimages = false; d.fog = false; d.ambient = false;
-    d.fireworks = false; d.dayNight = false; d.countdown = false;
-    d.navDebug = false; d.netDebug = false; d.screenFlash = false;
-    d.hitstop = false; d.screenShake = false; d.zeroGShimmer = false;
-    d.playersDrawn = 0;
+    this._diag = freshDiag();
+    const d = this._diag;
 
     // Cache time once per frame
     this.frameTime = performance.now();
