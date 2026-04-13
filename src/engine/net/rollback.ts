@@ -304,7 +304,7 @@ export class RollbackEngine {
       if (!this.isHost) {
         const correction = msg as DesyncCorrectionMessage;
         console.log(`[net] Applying host correction at frame ${correction.frame}`);
-        restoreSnapshot(correction.snapshot as GameSnapshot, this.gameLoop.getState(), this.gameLoop.getRng(), this.gameLoop.getAIControllers());
+        restoreSnapshot(correction.snapshot as GameSnapshot, this.gameLoop.getState(), this.gameLoop.getRng(), this.gameLoop.getAIControllers(), this.gameLoop.getAiRng());
         this.localFrame = correction.frame;
       }
     }
@@ -393,7 +393,7 @@ export class RollbackEngine {
     // Take snapshot before advancing (in-place)
     takeSnapshotInto(
       this.snapshots[this.localFrame % MAX_ROLLBACK_FRAMES],
-      this.localFrame, this.gameLoop.getState(), this.gameLoop.getRng(), this.gameLoop.getAIControllers(),
+      this.localFrame, this.gameLoop.getState(), this.gameLoop.getRng(), this.gameLoop.getAIControllers(), this.gameLoop.getAiRng(),
     );
 
     // Advance simulation
@@ -492,7 +492,7 @@ export class RollbackEngine {
 
     this.gameLoop.setAudioEnabled(false);
     this.gameLoop.setResimulating(true);
-    restoreSnapshot(snap, state, this.gameLoop.getRng(), this.gameLoop.getAIControllers());
+    restoreSnapshot(snap, state, this.gameLoop.getRng(), this.gameLoop.getAIControllers(), this.gameLoop.getAiRng());
 
     // Resimulate
     for (let f = rollbackFrame; f < this.localFrame; f++) {
@@ -510,7 +510,7 @@ export class RollbackEngine {
       if (f > rollbackFrame) {
         takeSnapshotInto(
           this.snapshots[f % MAX_ROLLBACK_FRAMES],
-          f, state, this.gameLoop.getRng(), this.gameLoop.getAIControllers(),
+          f, state, this.gameLoop.getRng(), this.gameLoop.getAIControllers(), this.gameLoop.getAiRng(),
         );
       }
 

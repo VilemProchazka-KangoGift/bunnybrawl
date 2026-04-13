@@ -62,6 +62,7 @@ export interface AISnapshot {
 export interface GameSnapshot {
   frame: number;
   rngState: number;
+  aiRngState: number;
   // Core gameplay
   players: PlayerSnapshot[];
   killFeed: KillFeedEntry[];
@@ -258,6 +259,7 @@ export function createEmptySnapshot(): GameSnapshot {
   return {
     frame: -1,
     rngState: 0,
+    aiRngState: 0,
     players: [],
     killFeed: [],
     timeElapsed: 0,
@@ -298,9 +300,11 @@ export function takeSnapshotInto(
   state: MatchState,
   rng: SeededRNG | undefined,
   aiControllers: Map<string, AIController>,
+  aiRng?: SeededRNG,
 ): void {
   target.frame = frame;
   target.rngState = rng ? rng.getState() : 0;
+  target.aiRngState = aiRng ? aiRng.getState() : 0;
 
   // Players — grow target array if needed, copy fields in-place
   while (target.players.length < state.players.length) {
@@ -400,10 +404,12 @@ export function takeSnapshot(
   state: MatchState,
   rng: SeededRNG | undefined,
   aiControllers: Map<string, AIController>,
+  aiRng?: SeededRNG,
 ): GameSnapshot {
   return {
     frame,
     rngState: rng ? rng.getState() : 0,
+    aiRngState: aiRng ? aiRng.getState() : 0,
     players: state.players.map(snapshotPlayer),
     killFeed: cloneArray(state.killFeed),
     timeElapsed: state.timeElapsed,
@@ -441,8 +447,10 @@ export function restoreSnapshot(
   state: MatchState,
   rng: SeededRNG | undefined,
   aiControllers: Map<string, AIController>,
+  aiRng?: SeededRNG,
 ): void {
   if (rng) rng.setState(snap.rngState);
+  if (aiRng) aiRng.setState(snap.aiRngState);
 
   // Restore players (match by index — order is stable)
   for (let i = 0; i < state.players.length && i < snap.players.length; i++) {

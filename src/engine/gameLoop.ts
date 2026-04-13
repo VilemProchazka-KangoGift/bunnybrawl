@@ -4,7 +4,7 @@ import type {
   InputState,
 } from './types';
 import { isBotSlot } from './types';
-import type { SeededRNG } from './net/prng';
+import { SeededRNG } from './net/prng';
 import { takeSnapshot as _takeSnapshot, restoreSnapshot as _restoreSnapshot, hashGameStateDetailed } from './net/serialize';
 import type { GameSnapshot } from './net/serialize';
 import type { ThemeConfig } from './themes/types';
@@ -112,7 +112,9 @@ export class GameLoop {
   private periodicAmbientTimers: Map<string, number> = new Map();
 
   // Deterministic PRNG for network mode (undefined = use Math.random, local play)
+  // Split into two streams so AI conditional calls can't desync spawn RNG
   private rng?: SeededRNG;
+  private aiRng?: SeededRNG;
 
   // Network mode: when true, external code drives the loop
   private _networkMode = false;
@@ -131,6 +133,8 @@ export class GameLoop {
     rng?: SeededRNG,
   ) {
     this.rng = rng; // Set before any gameRandom() calls in init
+    // Derive separate AI RNG stream so AI conditional calls can't desync spawn RNG
+    if (rng) this.aiRng = new SeededRNG(rng.getState() ^ 0x41495F52); // 'AI_R' xor
     this.arena = arena;
     this.originalArena = arena;
     this.settings = settings;
@@ -196,7 +200,7 @@ export class GameLoop {
     let botIndex = 0;
     for (const player of players) {
       if (isBotSlot(player.id)) {
-        this.aiControllers.set(player.id, new AIController(player.id, player.character.name, botDifficulty, botIndex++, this.rng));
+        this.aiControllers.set(player.id, new AIController(player.id, player.character.name, botDifficulty, botIndex++, this.aiRng));
       }
     }
 
@@ -419,15 +423,20 @@ export class GameLoop {
   /** Set a seeded PRNG for deterministic network play. */
   setRng(rng: SeededRNG): void {
     this.rng = rng;
-    // Propagate to AI controllers so bots use the seeded RNG (not Math.random())
+    // AI uses separate stream — propagate aiRng, not main rng
     for (const ai of this.aiControllers.values()) {
-      ai.setRng(rng);
+      ai.setRng(this.aiRng ?? rng);
     }
   }
 
   /** Get the current RNG (for snapshots). */
   getRng(): SeededRNG | undefined {
     return this.rng;
+  }
+
+  /** Get the AI RNG (for snapshots). */
+  getAiRng(): SeededRNG | undefined {
+    return this.aiRng;
   }
 
   /** Get AI controllers map (for snapshots). */
@@ -532,12 +541,12 @@ export class GameLoop {
 
   /** Capture a snapshot of all gameplay state for rollback. */
   takeSnapshot(frame: number): GameSnapshot {
-    return _takeSnapshot(frame, this.state, this.rng, this.aiControllers);
+    return _takeSnapshot(frame, this.state, this.rng, this.aiControllers, this.aiRng);
   }
 
   /** Restore gameplay state from a snapshot for rollback. */
   restoreSnapshot(snap: GameSnapshot): void {
-    _restoreSnapshot(snap, this.state, this.rng, this.aiControllers);
+    _restoreSnapshot(snap, this.state, this.rng, this.aiControllers, this.aiRng);
   }
 
   getState(): MatchState { return this.state; }

@@ -61,6 +61,7 @@ function makeMockGameLoop(state?: MatchState, rng?: SeededRNG) {
   return {
     getState: vi.fn(() => s),
     getRng: vi.fn(() => r),
+    getAiRng: vi.fn(() => undefined),
     getAIControllers: vi.fn(() => new Map()),
     getInputAny: vi.fn(() => ({ left: false, right: false, jump: false, down: false })),
     fixedUpdate: vi.fn(),
