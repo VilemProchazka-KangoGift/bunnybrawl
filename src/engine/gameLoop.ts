@@ -1169,8 +1169,8 @@ export class GameLoop {
       return;
     }
 
-    // Screen shake decay
-    if (this.state.screenShake > 0) this.state.screenShake -= dt;
+    // Screen shake decay (skip during resimulation — writes are also guarded)
+    if (!this._resimulating && this.state.screenShake > 0) this.state.screenShake -= dt;
 
     // Hazard spawn timers (fround prevents cross-arch zero-crossing divergence → RNG desync)
     this.state.springSpawnTimer = f(this.state.springSpawnTimer - dt);

@@ -550,9 +550,9 @@ function crc32Bytes(buf: Uint8Array, len: number, offset = 0): number {
 const HASH_BUF = new Float64Array(192);
 const HASH_BYTES = new Uint8Array(HASH_BUF.buffer);
 
-/** Player state enum → numeric value for hashing. */
+/** Player state enum → numeric value for hashing. Must match PlayerState type exactly. */
 const STATE_HASH: Record<string, number> = {
-  alive: 1, splatted: 2, respawning: 3,
+  idle: 1, run: 2, airborne: 3, splat: 4, respawning: 5,
 };
 
 /**

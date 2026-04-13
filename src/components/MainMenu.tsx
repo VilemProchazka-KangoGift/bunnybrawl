@@ -19,8 +19,16 @@ import { MsgType, PROTOCOL_VERSION } from '../engine/net/protocol';
 import type { ReliableMessage, HandshakeMessage, SlotAssignmentMessage, StartMatchMessage, PlayerJoinedMessage, PlayerLeftMessage } from '../engine/net/protocol';
 import { CHARACTERS, BOT_CHARACTERS, getAllCharacters, getCharacterEmoji, getCharacterDisplayName, assignBotCharacters } from '../engine/characters';
 import { ALL_BOT_SLOTS, isBotSlot } from '../engine/types';
+import { listArenaPacks } from '../engine/arenas';
 import type { BotSlot, CharacterSlot, PlayerSlot } from '../engine/types';
 import './MainMenu.css';
+
+/** Resolve 'random' arenaId to a concrete ID so both peers use the same arena. */
+function resolveRandomArena(arenaId: string): string {
+  if (arenaId !== 'random') return arenaId;
+  const all = listArenaPacks();
+  return all[Math.floor(Math.random() * all.length)]?.id ?? 'meadow';
+}
 
 // Re-export for Match.tsx — transport lives here now
 let _modalTransport: Transport | null = null;
@@ -185,12 +193,12 @@ export function MainMenu() {
   // Online flow state (all inside modal)
   const [onlineStep, setOnlineStep] = useState<'choose' | 'connecting' | 'lobby' | 'spectating'>('choose');
   const [onlineLocalChar, setOnlineLocalChar] = useState(() =>
-    localStorage.getItem('bunnybrawl_online_char') || CHARACTERS.P1.name
+    localStorage.getItem('carrotroyale_online_char') || CHARACTERS.P1.name
   );
   const onlineLocalCharRef = useRef(CHARACTERS.P1.name);
   onlineLocalCharRef.current = onlineLocalChar;
   const [onlinePlayerName, setOnlinePlayerName] = useState(() =>
-    localStorage.getItem('bunnybrawl_player_name') || ''
+    localStorage.getItem('carrotroyale_player_name') || ''
   );
   const onlinePlayerNameRef = useRef('');
   onlinePlayerNameRef.current = onlinePlayerName;
@@ -318,7 +326,7 @@ export function MainMenu() {
   const handleOnlineCharChange = useCallback((value: string) => {
     setOnlineLocalChar(value);
     onlineLocalCharRef.current = value;
-    localStorage.setItem('bunnybrawl_online_char', value);
+    localStorage.setItem('carrotroyale_online_char', value);
     onlineTransportRef.current?.sendReliable({ type: MsgType.CHARACTER_SELECT, characterName: value });
   }, []);
 
@@ -407,8 +415,9 @@ export function MainMenu() {
           } as ReliableMessage);
 
           const seed = useGameStore.getState().online.rngSeed || Math.floor(Math.random() * 0xFFFFFFFF);
+          const resolvedArenaId = resolveRandomArena(ms.arenaId);
           transport.sendReliableTo(peerId, {
-            type: MsgType.SETTINGS_SYNC, arenaId: ms.arenaId, killLimit: ms.killLimit,
+            type: MsgType.SETTINGS_SYNC, arenaId: resolvedArenaId, killLimit: ms.killLimit,
             timeLimit: ms.timeLimit, goreMode: ms.goreMode,
             mods: ms.mods,
             rngSeed: seed, botCount: ms.botCount, botDifficulty: ms.botDifficulty,
@@ -865,7 +874,7 @@ export function MainMenu() {
                           onChange={(e) => {
                             const v = e.target.value.replace(/[\p{C}]/gu, '').slice(0, 16);
                             setOnlinePlayerName(v);
-                            try { localStorage.setItem('bunnybrawl_player_name', v); } catch {}
+                            try { localStorage.setItem('carrotroyale_player_name', v); } catch {}
                           }}
                           onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                         />
@@ -1055,8 +1064,13 @@ export function MainMenu() {
                           if (botChar) rosterEntries.push({ slot: bSlot, characterName: botChar.name });
                         }
 
+                        const resolvedArena = resolveRandomArena(ms.arenaId);
+                        // Update host's own settings so Match.tsx uses the resolved arena
+                        if (resolvedArena !== ms.arenaId) {
+                          useGameStore.getState().setMatchSettings({ arenaId: resolvedArena });
+                        }
                         onlineTransportRef.current?.sendReliable({
-                          type: MsgType.SETTINGS_SYNC, arenaId: ms.arenaId, killLimit: ms.killLimit,
+                          type: MsgType.SETTINGS_SYNC, arenaId: resolvedArena, killLimit: ms.killLimit,
                           timeLimit: ms.timeLimit, goreMode: ms.goreMode,
                           mods: ms.mods,
                           rngSeed: seed, botCount: ms.botCount, botDifficulty: ms.botDifficulty,
@@ -1149,7 +1163,7 @@ export function MainMenu() {
           label={t('your_name', 'Your name')}
           onConfirm={(v) => {
             setOnlinePlayerName(v);
-            try { localStorage.setItem('bunnybrawl_player_name', v); } catch {}
+            try { localStorage.setItem('carrotroyale_player_name', v); } catch {}
             setMobileNameOpen(false);
           }}
           onCancel={() => setMobileNameOpen(false)}
