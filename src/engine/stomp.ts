@@ -5,6 +5,8 @@ import {
   RESPAWN_DELAY, INVINCIBLE_DURATION,
 } from './constants';
 import { aabbOverlap } from './physics';
+
+const f = Math.fround;
 import { getCharacterSplatShape } from './characters';
 
 export function checkStomps(
@@ -110,7 +112,7 @@ export function updateSplatTimers(
 
     if (player.state === 'splat') {
       if (player.disconnected) continue; // disconnected players stay as corpse
-      player.splatTimer -= dt;
+      player.splatTimer = f(player.splatTimer - dt);
       if (player.splatTimer <= 0) {
         player.state = 'respawning';
         player.respawnTimer = RESPAWN_DELAY;
@@ -118,14 +120,14 @@ export function updateSplatTimers(
     }
 
     if (player.state === 'respawning') {
-      player.respawnTimer -= dt;
+      player.respawnTimer = f(player.respawnTimer - dt);
       if (player.respawnTimer <= 0) {
         respawnPlayer(player, spawnPoints, players, rng);
       }
     }
 
     if (player.invincibleTimer > 0) {
-      player.invincibleTimer -= dt;
+      player.invincibleTimer = f(player.invincibleTimer - dt);
     }
   }
 }

@@ -567,7 +567,7 @@ describe('updateSplatTimers - multiple players', () => {
 
     updateSplatTimers([player], spawnPoints, tinyDt);
 
-    expect(player.splatTimer).toBeCloseTo(SPLAT_DURATION - tinyDt, 8);
+    expect(player.splatTimer).toBeCloseTo(SPLAT_DURATION - tinyDt, 5); // fround for network determinism reduces precision
     expect(player.state).toBe('splat'); // Should NOT have transitioned
   });
 });

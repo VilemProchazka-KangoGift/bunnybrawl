@@ -45,6 +45,7 @@ import {
 import { getCharacterForSlot } from './characters';
 import { AIController } from './ai';
 import { debugFlags, toggleNavDebug, toggleNetDebug } from './debugFlags';
+import { fastSin } from './fastMath';
 import type { BotNavDebugState } from './navDebugOverlay';
 import type { NetDebugStats } from './net/rollback';
 
@@ -1129,16 +1130,16 @@ export class GameLoop {
   fixedUpdate(dt: number, networkInputs?: Map<string, InputState>): void {
     this._networkInputs = networkInputs;
     if (this.stopped || this.state.matchOver) return;
-    this.state.timeElapsed += dt;
+    this.state.timeElapsed = f(this.state.timeElapsed + dt);
 
     // Day/night cycle
-    this.state.dayPhase += dt / this.theme.dayNight.cycleDuration;
-    if (this.state.dayPhase > 1) this.state.dayPhase -= 1;
+    this.state.dayPhase = f(this.state.dayPhase + f(dt / this.theme.dayNight.cycleDuration));
+    if (this.state.dayPhase > 1) this.state.dayPhase = f(this.state.dayPhase - 1);
 
     // Countdown logic
     if (this.state.countdown > 0) {
       const prevSec = Math.ceil(this.state.countdown);
-      this.state.countdown -= dt;
+      this.state.countdown = f(this.state.countdown - dt);
       const curSec = Math.ceil(this.state.countdown);
       if (this.state.countdown <= 0) {
         this.state.countdown = 0;
@@ -1157,16 +1158,16 @@ export class GameLoop {
     // Screen shake decay
     if (this.state.screenShake > 0) this.state.screenShake -= dt;
 
-    // Hazard spawn timers
-    this.state.springSpawnTimer -= dt;
+    // Hazard spawn timers (fround prevents cross-arch zero-crossing divergence → RNG desync)
+    this.state.springSpawnTimer = f(this.state.springSpawnTimer - dt);
     if (this.state.springSpawnTimer <= 0) {
       this.spawnSpring();
-      this.state.springSpawnTimer = SPRING_SPAWN_INTERVAL + this.gameRandom() * 5;
+      this.state.springSpawnTimer = f(SPRING_SPAWN_INTERVAL + this.gameRandom() * 5);
     }
-    this.state.thornSpawnTimer -= dt;
+    this.state.thornSpawnTimer = f(this.state.thornSpawnTimer - dt);
     if (this.state.thornSpawnTimer <= 0) {
       this.spawnThorn();
-      this.state.thornSpawnTimer = THORN_SPAWN_INTERVAL + this.gameRandom() * 5;
+      this.state.thornSpawnTimer = f(THORN_SPAWN_INTERVAL + this.gameRandom() * 5);
     }
 
     // Update hazard lifetimes + grow timers
@@ -1192,7 +1193,7 @@ export class GameLoop {
     }
 
     // Carrot timer
-    this.state.carrotTimer -= dt;
+    this.state.carrotTimer = f(this.state.carrotTimer - dt);
     if (this.state.carrotTimer <= 0) {
       this.spawnCarrot();
       this.state.carrotTimer = this.settings.mods.carrotChase ? CARROT_CHASE_SPAWN_INTERVAL : CARROT_SPAWN_INTERVAL;
@@ -1204,21 +1205,21 @@ export class GameLoop {
     // Update lava rocks
     if (this.theme.lavaRockConfig) {
       const lrc = this.theme.lavaRockConfig;
-      this.state.lavaRockTimer -= dt;
+      this.state.lavaRockTimer = f(this.state.lavaRockTimer - dt);
       if (this.state.lavaRockTimer <= 0) {
-        this.state.lavaRockTimer = lrc.spawnInterval[0] + this.gameRandom() * (lrc.spawnInterval[1] - lrc.spawnInterval[0]);
+        this.state.lavaRockTimer = f(lrc.spawnInterval[0] + this.gameRandom() * (lrc.spawnInterval[1] - lrc.spawnInterval[0]));
         this.state.lavaRocks.push({
-          x: 80 + this.gameRandom() * (CANVAS_WIDTH - 160),
+          x: f(80 + this.gameRandom() * (CANVAS_WIDTH - 160)),
           y: -20,
-          vy: lrc.fallSpeed[0] + this.gameRandom() * (lrc.fallSpeed[1] - lrc.fallSpeed[0]),
-          size: lrc.sizeRange[0] + this.gameRandom() * (lrc.sizeRange[1] - lrc.sizeRange[0]),
-          rotation: this.gameRandom() * Math.PI * 2,
+          vy: f(lrc.fallSpeed[0] + this.gameRandom() * (lrc.fallSpeed[1] - lrc.fallSpeed[0])),
+          size: f(lrc.sizeRange[0] + this.gameRandom() * (lrc.sizeRange[1] - lrc.sizeRange[0])),
+          rotation: f(this.gameRandom() * Math.PI * 2),
           active: true,
         });
       }
       for (const rock of this.state.lavaRocks) {
-        rock.y += rock.vy * dt;
-        rock.rotation += dt * 3;
+        rock.y = f(rock.y + f(rock.vy * dt));
+        rock.rotation = f(rock.rotation + f(dt * 3));
         if (rock.y > CANVAS_HEIGHT + 30) rock.active = false;
       }
       for (let i = this.state.lavaRocks.length - 1; i >= 0; i--) {
@@ -1228,18 +1229,18 @@ export class GameLoop {
       }
     }
 
-    // Update ghosts
+    // Update ghosts (fround + fastSin for cross-architecture determinism)
     for (const ghost of this.state.ghosts) {
-      ghost.x += ghost.vx * dt;
-      ghost.wobblePhase += dt * 2;
-      ghost.y += Math.sin(ghost.wobblePhase) * 20 * dt;
+      ghost.x = f(ghost.x + f(ghost.vx * dt));
+      ghost.wobblePhase = f(ghost.wobblePhase + f(dt * 2));
+      ghost.y = f(ghost.y + f(fastSin(ghost.wobblePhase) * f(20 * dt)));
       // Wrap around screen (must use seeded RNG for network determinism)
       if (ghost.vx > 0 && ghost.x > CANVAS_WIDTH + ghost.size) {
         ghost.x = -ghost.size;
-        ghost.y = 300 + this.gameRandom() * 300;
+        ghost.y = f(300 + this.gameRandom() * 300);
       } else if (ghost.vx < 0 && ghost.x < -ghost.size) {
         ghost.x = CANVAS_WIDTH + ghost.size;
-        ghost.y = 300 + this.gameRandom() * 300;
+        ghost.y = f(300 + this.gameRandom() * 300);
       }
     }
 
@@ -1251,14 +1252,14 @@ export class GameLoop {
       const gz = geyserZones[gi];
       if (!gz) continue;
       if (!gs.active) {
-        gs.timer -= dt;
+        gs.timer = f(gs.timer - dt);
         if (gs.timer <= 0) {
           gs.active = true;
           gs.activeTimer = gz.duration || 3;
           this.playSound('geyser');
         }
       } else {
-        gs.activeTimer -= dt;
+        gs.activeTimer = f(gs.activeTimer - dt);
         if (gs.activeTimer <= 0) {
           gs.active = false;
           gs.timer = gz.interval || 10;
@@ -1297,10 +1298,10 @@ export class GameLoop {
       if (!player.active) continue;
       // Hitstop: decay timer + status timers, but skip animation advance + physics
       if (player.hitstopTimer > 0) {
-        player.hitstopTimer -= dt;
-        if (player.fatTimer > 0) player.fatTimer -= dt;
-        if (player.slowTimer > 0) player.slowTimer -= dt;
-        if (player.burnTimer > 0) player.burnTimer -= dt;
+        player.hitstopTimer = f(player.hitstopTimer - dt);
+        if (player.fatTimer > 0) player.fatTimer = f(player.fatTimer - dt);
+        if (player.slowTimer > 0) player.slowTimer = f(player.slowTimer - dt);
+        if (player.burnTimer > 0) player.burnTimer = f(player.burnTimer - dt);
         if (player.damageFlashTimer > 0) player.damageFlashTimer -= dt;
         if (player.springTrailTimer > 0) player.springTrailTimer -= dt;
         continue;
@@ -1310,10 +1311,10 @@ export class GameLoop {
         player.animTimer -= ANIM_FRAME_DURATION;
         player.animFrame = (player.animFrame + 1) % RUN_FRAMES;
       }
-      if (player.fatTimer > 0) player.fatTimer -= dt;
-      if (player.slowTimer > 0) player.slowTimer -= dt;
+      if (player.fatTimer > 0) player.fatTimer = f(player.fatTimer - dt);
+      if (player.slowTimer > 0) player.slowTimer = f(player.slowTimer - dt);
       if (player.burnTimer > 0) {
-        player.burnTimer -= dt;
+        player.burnTimer = f(player.burnTimer - dt);
         // Spawn fire particles while burning
         if (player.state !== 'splat' && player.state !== 'respawning') {
           const cx = player.x + player.width / 2;
