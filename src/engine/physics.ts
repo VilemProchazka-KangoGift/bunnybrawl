@@ -237,13 +237,13 @@ export function collidePlayersHorizontal(players: Player[]): void {
         const overlap = halfW - dist;
 
         if (overlap > 0) {
-          const half = overlap / 2 + 0.5;
+          const half = f(f(overlap / 2) + 0.5);
           if (aCx <= bCx) {
-            a.x -= half;
-            b.x += half;
+            a.x = f(a.x - half);
+            b.x = f(b.x + half);
           } else {
-            a.x += half;
-            b.x -= half;
+            a.x = f(a.x + half);
+            b.x = f(b.x - half);
           }
 
           // Velocity exchange: transfer momentum
@@ -262,7 +262,7 @@ export function collidePlayersHorizontal(players: Player[]): void {
 export function applyArenaConstraints(player: Player, arena: Arena): void {
   if (player.y < 0) {
     player.y = 0;
-    player.vy = Math.max(player.vy, 0);
+    player.vy = f(Math.max(player.vy, 0));
   }
   if (!arena.allowFallOff && player.y + player.height > arena.height) {
     player.y = arena.height - player.height;

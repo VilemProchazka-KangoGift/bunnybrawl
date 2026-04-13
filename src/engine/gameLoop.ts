@@ -48,6 +48,9 @@ import { debugFlags, toggleNavDebug, toggleNetDebug } from './debugFlags';
 import type { BotNavDebugState } from './navDebugOverlay';
 import type { NetDebugStats } from './net/rollback';
 
+/** Force 32-bit float for cross-architecture determinism (x86 80-bit vs ARM 64-bit). */
+const f = Math.fround;
+
 export type MatchEndCallback = (winner: PlayerSlot | null, state: MatchState) => void;
 
 const CARROT_PICKUP_COLORS = ['#FF8C00', '#FF6600', '#FFA500', '#FF7700', '#FFD700', '#FF8C00'];
@@ -429,9 +432,19 @@ export class GameLoop {
     return this.aiControllers;
   }
 
-  /** Read merged input from all key bindings (for online play). */
+  /** Read merged input from all key bindings + touch (for online play). */
   getInputAny(): InputState {
-    return this.input.getInputAny();
+    const kb = this.input.getInputAny();
+    if (this.touchInput) {
+      const ti = this.touchInput.getInput();
+      return {
+        left: kb.left || ti.left,
+        right: kb.right || ti.right,
+        jump: kb.jump || ti.jump,
+        down: kb.down || ti.down,
+      };
+    }
+    return kb;
   }
 
   /** Enable network mode: external code drives the loop. */
@@ -1559,11 +1572,12 @@ export class GameLoop {
             const life = 0.3 + Math.random() * 0.3;
             this.emitParticle(tx, ty, Math.cos(angle) * speed, Math.sin(angle) * speed, life, 1.5 + Math.random() * 2, '#5C3A1E');
           }
-          // Small screen shake
-          this.state.screenShake = Math.max(this.state.screenShake, 0.15);
           player.hitstopTimer = Math.max(player.hitstopTimer, HAZARD_HITSTOP_DURATION);
-          this.state.hitstopZoom = Math.max(this.state.hitstopZoom, HAZARD_HITSTOP_DURATION);
-          if (haptics.isLocal(player.id)) haptics.hazardHit();
+          if (!this._resimulating) {
+            this.state.screenShake = Math.max(this.state.screenShake, 0.15);
+            this.state.hitstopZoom = Math.max(this.state.hitstopZoom, HAZARD_HITSTOP_DURATION);
+            if (haptics.isLocal(player.id)) haptics.hazardHit();
+          }
         }
       }
 
@@ -1586,17 +1600,19 @@ export class GameLoop {
             this.emitParticle(px + (Math.random() - 0.5) * 12, py + (Math.random() - 0.5) * 12, Math.cos(angle) * speed, Math.sin(angle) * speed - 100, life, 3 + Math.random() * 5, color);
           }
           // Knockback away from hazard center
-          player.vx += hzHit.knockbackDir * 150;
+          player.vx = f(player.vx + hzHit.knockbackDir * 150);
           player.vy = -200;
           player.damageFlashSide = hzHit.knockbackDir > 0 ? 'left' : 'right';
           player.damageFlashTimer = 0.4;
           player.squashScale = 0.6;
           player.squashTimer = 0.2;
-          this.state.screenShake = Math.max(this.state.screenShake, 0.25);
-          this.state.screenFlash = Math.max(this.state.screenFlash, 0.06);
+          if (!this._resimulating) {
+            this.state.screenShake = Math.max(this.state.screenShake, 0.25);
+            this.state.screenFlash = Math.max(this.state.screenFlash, 0.06);
+            this.state.hitstopZoom = Math.max(this.state.hitstopZoom, HAZARD_HITSTOP_DURATION);
+            if (haptics.isLocal(player.id)) haptics.hazardHit();
+          }
           player.hitstopTimer = Math.max(player.hitstopTimer, HAZARD_HITSTOP_DURATION);
-          this.state.hitstopZoom = Math.max(this.state.hitstopZoom, HAZARD_HITSTOP_DURATION);
-          if (haptics.isLocal(player.id)) haptics.hazardHit();
         }
       }
 
@@ -1617,16 +1633,18 @@ export class GameLoop {
             this.emitParticle(pcx, pcy, Math.cos(angle) * speed, Math.sin(angle) * speed - 80, life, 3 + Math.random() * 4, color);
           }
           // Knockback away from ghost
-          player.vx += ghostHit.knockbackDir * 180;
+          player.vx = f(player.vx + ghostHit.knockbackDir * 180);
           player.vy = -180;
           player.damageFlashSide = ghostHit.knockbackDir > 0 ? 'left' : 'right'; // flash on side facing the ghost
           player.damageFlashTimer = 0.4;
           player.squashScale = 0.6;
           player.squashTimer = 0.2;
-          this.state.screenShake = Math.max(this.state.screenShake, 0.2);
-          this.state.screenFlash = Math.max(this.state.screenFlash, 0.06);
           player.hitstopTimer = Math.max(player.hitstopTimer, HAZARD_HITSTOP_DURATION);
-          this.state.hitstopZoom = Math.max(this.state.hitstopZoom, HAZARD_HITSTOP_DURATION);
+          if (!this._resimulating) {
+            this.state.screenShake = Math.max(this.state.screenShake, 0.2);
+            this.state.screenFlash = Math.max(this.state.screenFlash, 0.06);
+            this.state.hitstopZoom = Math.max(this.state.hitstopZoom, HAZARD_HITSTOP_DURATION);
+          }
         }
       }
 
@@ -1647,16 +1665,18 @@ export class GameLoop {
             const color = i % 2 === 0 ? '#FF6600' : '#FFAA00';
             this.emitParticle(pcx, pcy, Math.cos(angle) * speed, Math.sin(angle) * speed - 60, life, 2.5 + Math.random() * 4, color);
           }
-          player.vx += rockHit.knockbackDir > 0 ? -120 : 120;
+          player.vx = f(player.vx + (rockHit.knockbackDir > 0 ? -120 : 120));
           player.vy = -150;
           player.damageFlashSide = rockHit.knockbackDir > 0 ? 'left' : 'right';
           player.damageFlashTimer = 0.3;
           player.squashScale = 0.65;
           player.squashTimer = 0.2;
-          this.state.screenShake = Math.max(this.state.screenShake, 0.2);
           player.hitstopTimer = Math.max(player.hitstopTimer, HAZARD_HITSTOP_DURATION);
-          this.state.hitstopZoom = Math.max(this.state.hitstopZoom, HAZARD_HITSTOP_DURATION);
-          if (haptics.isLocal(player.id)) haptics.hazardHit();
+          if (!this._resimulating) {
+            this.state.screenShake = Math.max(this.state.screenShake, 0.2);
+            this.state.hitstopZoom = Math.max(this.state.hitstopZoom, HAZARD_HITSTOP_DURATION);
+            if (haptics.isLocal(player.id)) haptics.hazardHit();
+          }
         }
       }
 
@@ -1674,7 +1694,7 @@ export class GameLoop {
         player.fastFalling = false;
         player.fatTimer = 0;
         this.playSound('oof');
-        this.state.screenShake = Math.max(this.state.screenShake, 0.1);
+        if (!this._resimulating) this.state.screenShake = Math.max(this.state.screenShake, 0.1);
       }
 
 
@@ -1688,15 +1708,15 @@ export class GameLoop {
             // Low gravity field — boost upward movement, slow falls
             if (player.vy > 0) {
               // Falling — slow down significantly
-              player.vy *= 0.92;
+              player.vy = f(player.vy * 0.92);
             } else if (player.vy < 0) {
               // Rising — boost upward (amplify jumps)
-              player.vy *= 1.03;
+              player.vy = f(player.vy * 1.03);
             }
           } else if (zone.type === 'current') {
             // Push player horizontally and/or vertically
-            player.vx += (zone.vx || 0) * dt;
-            player.vy += (zone.vy || 0) * dt;
+            player.vx = f(player.vx + f((zone.vx || 0) * dt));
+            player.vy = f(player.vy + f((zone.vy || 0) * dt));
             // Splash when entering waterfall (landing or falling in)
             if (justLanded || (wasAirborne && prevVy >= 200)) {
               const sc = this.landCooldowns.get(player.id) || 0;
@@ -1709,7 +1729,7 @@ export class GameLoop {
             // Find matching geyser state
             const geyserIdx = this.geyserIndexMap.get(zone) ?? -1;
             if (geyserIdx >= 0 && this.state.geyserStates[geyserIdx]?.active) {
-              player.vy = Math.min(player.vy, zone.strength || -550);
+              player.vy = f(Math.min(player.vy, zone.strength || -550));
               player.state = 'airborne';
             }
           }
@@ -1725,7 +1745,7 @@ export class GameLoop {
           const playerCx = player.x + player.width / 2;
           if (playerBottom >= bp.y && playerBottom <= bp.y + bp.height + 4 &&
               playerCx >= bp.x && playerCx <= bp.x + bp.width) {
-            player.vy = SPRING_BOUNCE * 0.85;
+            player.vy = f(SPRING_BOUNCE * 0.85);
             player.state = 'airborne';
             this.state.bouncyWobble.set(bi, 0.4);
             this.playSound('jump');
@@ -1769,7 +1789,7 @@ export class GameLoop {
           audio.playAnimal(player.character.name);
           // Hitstop — shorter than kill (half duration)
           player.hitstopTimer = Math.max(player.hitstopTimer, HITSTOP_DURATION * 0.5);
-          this.state.hitstopZoom = Math.max(this.state.hitstopZoom, HITSTOP_DURATION * 0.5);
+          if (!this._resimulating) this.state.hitstopZoom = Math.max(this.state.hitstopZoom, HITSTOP_DURATION * 0.5);
           // Score animation for carrot pickup
           this.state.scoreAnimations.push({ playerId: player.id, value: player.score, timer: SCORE_ANIM_DURATION });
           // Pickup VFX — orange burst from carrot position
@@ -1815,8 +1835,10 @@ export class GameLoop {
 
     if (killFeedEntries.length > 0) {
       this.playSound('stomp');
-      this.state.screenShake = SCREEN_SHAKE_DURATION;
-      this.state.hitstopZoom = HITSTOP_DURATION;
+      if (!this._resimulating) {
+        this.state.screenShake = SCREEN_SHAKE_DURATION;
+        this.state.hitstopZoom = HITSTOP_DURATION;
+      }
     }
 
     for (const entry of killFeedEntries) {
@@ -2057,7 +2079,7 @@ export class GameLoop {
   private endMatch(winner: PlayerSlot | null): void {
     this.state.matchOver = true;
     this.state.winner = winner;
-    this.state.screenFlash = SCREEN_FLASH_DURATION;
+    if (!this._resimulating) this.state.screenFlash = SCREEN_FLASH_DURATION;
     audio.stopMusic();
     this.playSound('victory');
     this.onMatchEnd(winner, this.state);

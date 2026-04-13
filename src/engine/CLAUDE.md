@@ -93,6 +93,8 @@
 - `gameRandom()` wraps seeded PRNG in network mode, `Math.random()` in local. Use for ALL gameplay-affecting randomness (hazard spawning, respawn, AI decisions). Cosmetic randomness (particles, weather, gibs) stays as `Math.random()`.
 - `fixedUpdate` is public in network mode. Accepts optional `networkInputs` map — when provided, `getPlayerInput()` reads from it instead of InputManager/AIController.
 - `playSound()` wrapper gates all audio in fixedUpdate. Set `setAudioEnabled(false)` during rollback resimulation to prevent replay sounds.
+- **Visual effects (`screenFlash`/`screenShake`/`hitstopZoom`) must be gated by `!this._resimulating`** in fixedUpdate. These are in snapshots (for restore) but NOT in the hash. During resimulation, renderFrame doesn't run, so they never decay — accumulating across rollback frames causes white-blinking and camera shake amplification. `player.hitstopTimer` (gameplay-affecting, skips physics) is NOT gated.
+- **`getInputAny()` must merge touch + keyboard input.** The rollback engine calls `getInputAny()` to sample local input for network transmission. If touch input isn't merged, mobile guests send empty inputs.
 - `renderFrame(frameDt)` must receive frame delta in network mode to decay `slowMotion`/`screenFlash`/`hitstopZoom` timers (normally decayed in `loop()` which doesn't run in network mode).
 - `resolveStuckPlayer()` runs after `collidePlatforms()` — ejects players deeply embedded (>5px) in platforms. Catches desync-related position errors.
 - Snapshot convention: `snapshot[f]` = state BEFORE tick f. Taking snapshots AFTER `fixedUpdate` and storing at the same frame index causes compounding timer drift (each rollback adds +1dt). Always take before tick.
@@ -132,7 +134,7 @@
 - **When re-applying gameplay events after rollback** (stomps, pickups), always add the corresponding state entries (kill feed, score). Don't add renderer-only artifacts (splat marks, particles) — those are managed by the render path, not the simulation.
 - **Any future `.sort()` in simulation code MUST include a tiebreaker on entity ID** for deterministic order across peers. Currently no `.sort()` calls exist in src/engine/ simulation paths.
 - **PeerJS DataChannels are always reliable+ordered** (no true unreliable mode). The `sendUnreliable()` naming is aspirational — all messages arrive in order. Stale packet reordering concerns are moot given this constraint, but head-of-line blocking under packet loss is a tradeoff.
-- **Physics uses `Math.fround()` for cross-architecture determinism.** x86 JIT can use 80-bit extended precision; ARM uses 64-bit doubles. All velocity/position mutations in `physics.ts` are wrapped with `Math.fround()` to force 32-bit float.
+- **Physics uses `Math.fround()` for cross-architecture determinism.** x86 JIT can use 80-bit extended precision; ARM uses 64-bit doubles. All velocity/position mutations in `physics.ts` AND gameplay velocity modifications in `gameLoop.ts` (effect zones, knockback, bouncy platforms) are wrapped with `Math.fround()` to force 32-bit float. Both files declare `const f = Math.fround` at module scope.
 - **`Player.disconnected` must be in snapshots.** It prevents respawn in `stomp.ts` — if missing from serialization, a rollback through a disconnect event resurrects the player.
 - **Desync checks use per-subsystem hashes** (players, entities, timers). When a mismatch occurs, the console log identifies which subsystem diverged first. Guest compares hash at the host's frame (snapshot-based) to avoid false positives from frame skew.
 

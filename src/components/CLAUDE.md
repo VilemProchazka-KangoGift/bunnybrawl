@@ -23,3 +23,5 @@
 - Global Enter→handlePlay() listener must check `!onlineOpen` — otherwise pressing Enter in online name/code inputs navigates to the lobby.
 - Online character auto-switch: only GUEST auto-switches (host is authoritative). One-shot `didAutoSwitch` ref prevents cascade. Reset in `onlineCleanup()`.
 - SETTINGS_SYNC handler must apply ALL fields from the message, including `mods`. The host is authoritative for match settings — guests must use the host's values, not their own localStorage. Any new field added to `SettingsSyncMessage` must also be applied in the receive handler (line ~540).
+- **SLOT_ASSIGNMENT handler must populate `remotePlayers`** from the `allPlayers` array, not just `playerNames`. Without this, the host doesn't appear in the guest's remotePlayers until CHARACTER_SELECT creates a placeholder — causing phantom duplicate entries in the player list.
+- **Lobby player list `remotePlayers.map()` must filter out P1** when rendering on the guest side (`online.isHost || rp.slot !== 'P1'`). The host row is already rendered explicitly above the loop — without the filter, P1 appears twice.
