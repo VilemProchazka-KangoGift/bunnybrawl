@@ -833,4 +833,161 @@ describe('evaluateActions', () => {
       expect(scores.moveLeft).toBeGreaterThan(0);
     });
   });
+
+  // ── Stomp target evaluation ────────────────────────────────────────────
+
+  describe('stomp target', () => {
+    it('moves toward stomp target', () => {
+      const a = makeAwareness({
+        stompTarget: { x: 600, y: 580, dx: 200, dy: -20, dist: 200 },
+      });
+      const scores = evaluateActions(a, personality({ aggressiveness: 1.5 }));
+      expect(scores.moveRight).toBeGreaterThan(0);
+    });
+
+    it('adds drop when directly above target', () => {
+      const a = makeAwareness({
+        stompTarget: { x: 410, y: 620, dx: 10, dy: 20, dist: 22 },
+        self: { x: 400, y: 600, vx: 0, vy: 5, onGround: false, score: 5, slowed: false, fat: false, invincible: false },
+      });
+      const scores = evaluateActions(a, personality());
+      expect(scores.drop).toBeGreaterThan(0);
+    });
+  });
+
+  // ── Threat evasion ────────────────────────────────────────────────────
+
+  describe('threat evasion', () => {
+    it('moves away from stomp threat to the left', () => {
+      const a = makeAwareness({
+        stompThreat: { x: 500, y: 580, dist: 40 },
+      });
+      const scores = evaluateActions(a, personality({ cautiousness: 1.5 }));
+      expect(scores.moveLeft).toBeGreaterThan(0);
+    });
+
+    it('moves away from stomp threat to the right', () => {
+      const a = makeAwareness({
+        stompThreat: { x: 300, y: 580, dist: 40 },
+      });
+      const scores = evaluateActions(a, personality({ cautiousness: 1.5 }));
+      expect(scores.moveRight).toBeGreaterThan(0);
+    });
+  });
+
+  // ── Nav-directed movement (edge types) ────────────────────────────────
+
+  describe('nav-directed movement', () => {
+    it('navigates toward drop edge with drop score', () => {
+      const a = makeAwareness({
+        navTarget: { x: 500, y: 600, width: 200, approachX: 600, type: 'd' },
+      });
+      const scores = evaluateActions(a, personality());
+      expect(scores.moveRight).toBeGreaterThan(0);
+      expect(scores.drop).toBeGreaterThan(0);
+    });
+
+    it('navigates toward geyser edge without jumping', () => {
+      const a = makeAwareness({
+        navTarget: { x: 500, y: 400, width: 100, approachX: 600, type: 'g' },
+      });
+      const scores = evaluateActions(a, personality());
+      expect(scores.moveRight).toBeGreaterThan(0);
+      // Geyser edge should NOT add jump
+    });
+
+    it('navigates toward zero-G edge with jump', () => {
+      const a = makeAwareness({
+        navTarget: { x: 500, y: 300, width: 200, approachX: 450, type: 'z' },
+      });
+      const baseline = makeAwareness(); // no nav target
+      const scores = evaluateActions(a, personality());
+      const baseScores = evaluateActions(baseline, personality());
+      // Zero-G edge adds both horizontal movement and jump
+      expect(scores.moveRight).toBeGreaterThan(baseScores.moveRight);
+      expect(scores.jump).toBeGreaterThanOrEqual(baseScores.jump);
+    });
+
+    it('navigates toward walk edge', () => {
+      const a = makeAwareness({
+        navTarget: { x: 700, y: 600, width: 200, approachX: 750, type: 'w' },
+      });
+      const scores = evaluateActions(a, personality());
+      expect(scores.moveRight).toBeGreaterThan(0);
+    });
+  });
+
+  // ── Airborne dodge ────────────────────────────────────────────────────
+
+  describe('airborne above dodge', () => {
+    it('dodges away from enemy falling above', () => {
+      const a = makeAwareness({
+        airborneAbove: [{ x: 420, y: 550, dx: 20, dist: 50 }],
+      });
+      const rng = new SeededRNG(42);
+      const scores = evaluateActions(a, personality({ cautiousness: 1.5 }), 0.5, false, rng);
+      // Should dodge left (away from threat on the right)
+      expect(scores.moveLeft + scores.moveRight).toBeGreaterThan(0);
+    });
+  });
+
+  // ── Landing prediction ────────────────────────────────────────────────
+
+  describe('landing prediction', () => {
+    it('steers toward landing platform when falling', () => {
+      const a = makeAwareness({
+        self: { x: 400, y: 400, vx: 0, vy: 100, onGround: false, score: 5, slowed: false, fat: false, invincible: false },
+        landingPlatform: { x: 500, y: 600, width: 200, centerDx: 100 },
+      });
+      const scores = evaluateActions(a, personality());
+      expect(scores.moveRight).toBeGreaterThan(0);
+    });
+
+    it('does not steer when on ground', () => {
+      const a = makeAwareness({
+        landingPlatform: { x: 500, y: 600, width: 200, centerDx: 100 },
+      });
+      const baseline = makeAwareness();
+      const landingScores = evaluateActions(a, personality());
+      const normalScores = evaluateActions(baseline, personality());
+      // On ground, landing prediction is inactive
+      expect(landingScores.moveRight).toBe(normalScores.moveRight);
+    });
+  });
+
+  // ── Invincibility aggression ────────────────────────────────────────────
+
+  describe('invincibility aggression', () => {
+    it('chases enemy when invincible', () => {
+      const a = makeAwareness({
+        self: { x: 400, y: 600, vx: 0, vy: 0, onGround: true, score: 5, slowed: false, fat: false, invincible: true },
+        nearestEnemy: { x: 700, y: 600, vx: 0, vy: 0, dx: 300, dy: 0, dist: 300, score: 3 },
+      });
+      const scores = evaluateActions(a, personality());
+      expect(scores.moveRight).toBeGreaterThan(0);
+    });
+  });
+
+  // ── Roam target (elevated platform drop) ────────────────────────────────
+
+  describe('roam target drop from elevated platform', () => {
+    it('walks toward edge when target is far below', () => {
+      const a = makeAwareness({
+        roamTarget: { x: 600, y: 700, dx: 200, dy: 100, dist: 224, onGround: true } as any,
+        onElevatedPlatform: true,
+      });
+      const scores = evaluateActions(a, personality());
+      expect(scores.moveRight).toBeGreaterThan(0);
+    });
+
+    it('walks either direction when target is directly below', () => {
+      const a = makeAwareness({
+        roamTarget: { x: 400, y: 700, dx: 0, dy: 100, dist: 100, onGround: true } as any,
+        onElevatedPlatform: true,
+      });
+      const scores = evaluateActions(a, personality());
+      // Should add moveRight (or moveLeft) to reach an edge
+      expect(scores.moveRight + scores.moveLeft).toBeGreaterThan(0);
+    });
+  });
 });

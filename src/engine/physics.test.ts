@@ -1060,3 +1060,69 @@ describe('aabbOverlap edge cases', () => {
     expect(aabbOverlap(-100, -100, 10, 10, 100, 100, 10, 10)).toBe(false);
   });
 });
+
+// ---- collidePlatforms — deeply embedded fallback ejection ----
+
+describe('Physics - collidePlatforms deep embedding fallback', () => {
+  it('ejects player deeply embedded from top', () => {
+    // Create a scenario where the player is deeply embedded in a platform
+    // and the fallback path (overlapTop <= overlapBottom) fires
+    const player = makePlayer({ x: 500, y: 658, vy: 0, vx: 0 });
+    // Platform covers 500-700, 660-720 — player at y=658 has bottom at 690
+    // but is embedded only 2px from top → ejects upward
+    const platforms: Platform[] = [
+      { x: 480, y: 660, width: 240, height: 60 },
+    ];
+    collidePlatforms(player, platforms);
+    // Player should be ejected above the platform
+    expect(player.y).toBeLessThanOrEqual(660 - PLAYER_HEIGHT + 1);
+  });
+});
+
+// ---- resolveStuckPlayer — all 4 ejection directions ----
+
+describe('Physics - resolveStuckPlayer ejection directions', () => {
+  it('ejects upward when closest to top edge', () => {
+    const player = makePlayer({ x: 500, y: 652, vy: 0, vx: 0 });
+    // Player embedded 8px into platform (bottom at 684, plat top at 660)
+    const platforms: Platform[] = [
+      { x: 480, y: 660, width: 240, height: 60 },
+    ];
+    resolveStuckPlayer(player, platforms);
+    expect(player.y).toBe(660 - PLAYER_HEIGHT);
+  });
+
+  it('ejects downward when closest to bottom edge', () => {
+    const player = makePlayer({ x: 500, y: 710, vy: 0, vx: 0 });
+    // Player top at 710, inside platform 660-720. Closest to bottom (720).
+    const platforms: Platform[] = [
+      { x: 480, y: 660, width: 240, height: 60 },
+    ];
+    resolveStuckPlayer(player, platforms);
+    expect(player.y).toBe(720);
+  });
+
+  it('ejects left when closest to left edge', () => {
+    const player = makePlayer({ x: 485, y: 670, vy: 0, vx: 0 });
+    // Player right at 485+32=517, inside platform 480-720. Closest to left (480).
+    // Overlap: left = 517-480=37, right = 720-485=235, top = 702-660=42, bottom = 720-670=50
+    // But this is a wide platform so left is not smallest...
+    // Use a narrow platform instead:
+    const platforms: Platform[] = [
+      { x: 490, y: 650, width: 40, height: 80 },
+    ];
+    // Player at x=485, right=517. Platform 490-530. overlapLeft=517-490=27, overlapRight=530-485=45
+    resolveStuckPlayer(player, platforms);
+    expect(player.x).toBe(490 - PLAYER_WIDTH);
+  });
+
+  it('ejects right when closest to right edge', () => {
+    const player = makePlayer({ x: 520, y: 670, vy: 0, vx: 0 });
+    // Platform 490-530 (width 40). Player at 520, right=552. overlapLeft=552-490=62, overlapRight=530-520=10
+    const platforms: Platform[] = [
+      { x: 490, y: 650, width: 40, height: 80 },
+    ];
+    resolveStuckPlayer(player, platforms);
+    expect(player.x).toBe(530);
+  });
+});
