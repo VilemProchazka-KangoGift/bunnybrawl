@@ -6,7 +6,7 @@
 import type { InputState, PlayerSlot, Player } from '../types';
 import type { GameLoop } from '../gameLoop';
 import type { GameSnapshot } from './serialize';
-import { takeSnapshot, restoreSnapshot, hashGameStateDetailed, hashSnapshot, takeSnapshotInto, createEmptySnapshot } from './serialize';
+import { takeSnapshot, restoreSnapshot, hashGameState, hashGameStateDetailed, hashSnapshot, takeSnapshotInto, createEmptySnapshot } from './serialize';
 import { Transport } from './transport';
 import {
   MsgType,
@@ -21,7 +21,7 @@ const MAX_ROLLBACK_FRAMES = 15;   // max frames we'll rewind (~250ms at 60fps)
 const DEFAULT_INPUT_DELAY = 2;    // frames of local input delay
 const MAX_INPUT_DELAY = 8;        // max adaptive delay (~133ms) — covers TURN relay RTT
 const INPUT_BUNDLE_SIZE = 16;     // recent inputs to bundle per message (covers MAX_ROLLBACK_FRAMES + 1)
-const DESYNC_CHECK_INTERVAL = 60; // frames between state sync checks (~1s) — give rollback time to self-correct
+const DESYNC_CHECK_INTERVAL = 30; // frames between state sync checks (0.5s)
 const STALL_TIMEOUT_MS = 8000;    // disconnect after 8s of stall
 
 const NO_INPUT: InputState = { left: false, right: false, jump: false, down: false };
@@ -259,20 +259,19 @@ export class RollbackEngine {
       if (!this.isHost) {
         const check = msg as DesyncCheckMessage;
         // Use snapshot at host's frame for frame-correct comparison.
-        // The old ±1 frame tolerance caused constant false positives because timeElapsed
-        // differs by FIXED_TIMESTEP between adjacent frames. Now we only compare when we
-        // have the exact frame snapshot, or the guest is at the exact same frame.
+        // Fall back to current-state comparison when snapshot is overwritten (common
+        // since desync check interval > snapshot ring buffer). The ±1 frame tolerance
+        // causes some false positives (timeElapsed differs by FIXED_TIMESTEP) but this
+        // is preferable to never detecting real desyncs.
         const cached = this.snapshots[check.frame % MAX_ROLLBACK_FRAMES];
         let localHash: number;
         if (cached.frame === check.frame) {
           localHash = hashSnapshot(cached);
-        } else if (this.localFrame === check.frame) {
-          // Guest is at the exact same frame as host — current state is correct
-          localHash = hashSnapshot(
-            takeSnapshot(this.localFrame, this.gameLoop.getState(), this.gameLoop.getRng(), this.gameLoop.getAIControllers()),
-          );
+        } else if (Math.abs(this.localFrame - check.frame) <= 1) {
+          // Guest is at or very near host frame — compare current state
+          localHash = hashGameState(this.gameLoop.getState(), this.gameLoop.getRng());
         } else {
-          // Snapshot overwritten and frames don't match — skip this check
+          // Snapshot overwritten and frames too far apart — skip this check
           return;
         }
         if (check.hash !== localHash) {
@@ -409,12 +408,9 @@ export class RollbackEngine {
     }
 
     // 6. Desync check — regular interval + tighter checks early match + post-rollback
-    // Intentionally infrequent: rollback handles frame-by-frame input correction.
-    // Desync checks are only for catastrophic drift (score/state mismatch). Too frequent
-    // = constant snapshot corrections that teleport characters, worse than the desync.
     const isRegularCheck = this.localFrame > 0 && this.localFrame % DESYNC_CHECK_INTERVAL === 0;
-    const isEarlyMatchCheck = this.localFrame > 0 && this.localFrame < 300 && this.localFrame % 30 === 0;
-    const isPostRollbackCheck = this._rollbackOccurredThisFrame && (this.localFrame - this.lastDesyncCheckFrame >= 15);
+    const isEarlyMatchCheck = this.localFrame > 0 && this.localFrame < 300 && this.localFrame % 10 === 0;
+    const isPostRollbackCheck = this._rollbackOccurredThisFrame && (this.localFrame - this.lastDesyncCheckFrame >= 5);
     if (isRegularCheck || isEarlyMatchCheck || isPostRollbackCheck) {
       this.sendDesyncCheck();
     }
