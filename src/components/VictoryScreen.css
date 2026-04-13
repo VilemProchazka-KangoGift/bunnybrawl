@@ -520,9 +520,8 @@
   font-weight: 600;
 }
 
-/* Mobile: compact single-column layout that fits 720px */
+/* Mobile: keep horizontal two-column layout, compact sizes */
 .is-mobile .victory-content {
-  overflow-y: auto;
   padding: 4px 16px;
 }
 
@@ -532,9 +531,9 @@
 }
 
 .is-mobile .winner-avatar-pose {
-  width: 52px;
-  height: 52px;
-  margin: 0 auto 6px;
+  width: 50px;
+  height: 50px;
+  margin: 0 auto 4px;
   border-width: 3px;
 }
 
@@ -543,13 +542,7 @@
 }
 
 .is-mobile .victory-columns {
-  flex-direction: column;
-  gap: 6px;
-}
-
-.is-mobile .victory-col-left,
-.is-mobile .victory-col-right {
-  max-width: 100%;
+  gap: 16px;
 }
 
 .is-mobile .scoreboard {
@@ -634,7 +627,7 @@
 }
 
 .is-mobile .victory-actions {
-  margin-top: 8px;
+  margin-top: 6px;
   gap: 12px;
 }
 
