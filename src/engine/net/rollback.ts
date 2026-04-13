@@ -46,6 +46,11 @@ export interface NetDebugStats {
   rollbacksPerSec: number;
   maxRollbackDepth: number;
   isRelay: boolean;
+  desyncChecks: number;      // total hash checks performed
+  desyncMismatches: number;  // total hash mismatches detected
+  desyncCorrections: number; // total corrections applied
+  lastDesyncFrame: number;   // frame of last detected mismatch (-1 if none)
+  lastDesyncSubsystem: string; // which subsystem diverged ('players', 'entities', 'timers', '')
 }
 
 /** Per-remote-slot input tracking state. */
@@ -118,10 +123,17 @@ export class RollbackEngine {
   private readonly preRollbackY: number[] = [];
   private readonly preRollbackState: string[] = [];    // PlayerState before rollback
   private readonly preRollbackScore: number[] = [];    // score before rollback
+  private _desyncChecks = 0;
+  private _desyncMismatches = 0;
+  private _desyncCorrections = 0;
+  private _lastDesyncFrame = -1;
+  private _lastDesyncSubsystem = '';
   private readonly _statsCache: NetDebugStats = {
     localFrame: 0, remoteConfirmedFrame: 0, remoteLatestAck: 0,
     rtt: 0, jitter: 0, inputDelay: 0, stalled: false,
     rollbacksPerSec: 0, maxRollbackDepth: 0, isRelay: false,
+    desyncChecks: 0, desyncMismatches: 0, desyncCorrections: 0,
+    lastDesyncFrame: -1, lastDesyncSubsystem: '',
   };
 
   // Callbacks
@@ -274,8 +286,22 @@ export class RollbackEngine {
           // Snapshot overwritten and frames too far apart — skip this check
           return;
         }
+        this._desyncChecks++;
         if (check.hash !== localHash) {
-          console.log(`[net] Hash mismatch at frame ${check.frame} (local ${localHash} != host ${check.hash})`);
+          this._desyncMismatches++;
+          this._lastDesyncFrame = check.frame;
+          // Identify diverged subsystem via detailed hash if available
+          if (check.playersHash !== undefined) {
+            const detailed = hashGameStateDetailed(this.gameLoop.getState(), this.gameLoop.getRng());
+            const parts: string[] = [];
+            if (check.playersHash !== detailed.playersHash) parts.push('players');
+            if (check.entitiesHash !== detailed.entitiesHash) parts.push('entities');
+            if (check.timersHash !== detailed.timersHash) parts.push('timers');
+            this._lastDesyncSubsystem = parts.join('+') || 'composite';
+            console.log(`[net] Hash mismatch at frame ${check.frame} (local ${localHash} != host ${check.hash}) diverged: ${this._lastDesyncSubsystem}`);
+          } else {
+            console.log(`[net] Hash mismatch at frame ${check.frame} (local ${localHash} != host ${check.hash})`);
+          }
           const req: DesyncRequestMessage = { type: MsgType.DESYNC_REQUEST, frame: check.frame };
           this.transport.sendReliable(req);
         }
@@ -303,7 +329,8 @@ export class RollbackEngine {
     } else if (msg.type === MsgType.DESYNC_CORRECTION) {
       if (!this.isHost) {
         const correction = msg as DesyncCorrectionMessage;
-        console.log(`[net] Applying host correction at frame ${correction.frame}`);
+        this._desyncCorrections++;
+        console.log(`[net] Applying host correction at frame ${correction.frame} (localFrame was ${this.localFrame}, delta=${this.localFrame - correction.frame})`);
         restoreSnapshot(correction.snapshot as GameSnapshot, this.gameLoop.getState(), this.gameLoop.getRng(), this.gameLoop.getAIControllers(), this.gameLoop.getAiRng());
         this.localFrame = correction.frame;
       }
@@ -663,6 +690,11 @@ export class RollbackEngine {
     s.rollbacksPerSec = this.rollbackCountPerSec;
     s.maxRollbackDepth = this.maxRollbackDepthPerSec;
     s.isRelay = this.transport.isRelay;
+    s.desyncChecks = this._desyncChecks;
+    s.desyncMismatches = this._desyncMismatches;
+    s.desyncCorrections = this._desyncCorrections;
+    s.lastDesyncFrame = this._lastDesyncFrame;
+    s.lastDesyncSubsystem = this._lastDesyncSubsystem;
     return s;
   }
 }

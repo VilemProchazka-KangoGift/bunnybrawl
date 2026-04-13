@@ -9,8 +9,8 @@ const LINE_HEIGHT = 16;
 const PAD = 8;
 const BG_ALPHA = 0.7;
 // Fixed box width — monospace font, longest line is ~35 chars at 12px ≈ 250px
-const BOX_WIDTH = 260;
-const MAX_LINES = 6;
+const BOX_WIDTH = 280;
+const MAX_LINES = 9;
 
 // Pre-allocated lines array to avoid per-frame allocation
 const lines: string[] = new Array(MAX_LINES);
@@ -27,7 +27,11 @@ export function drawNetDebugOverlay(
   lines[2] = `Rollback: ${stats.rollbacksPerSec}/s (max ${stats.maxRollbackDepth})`;
   lines[3] = `Frame: ${stats.localFrame} / ${stats.remoteConfirmedFrame}`;
   lines[4] = `Route: ${stats.isRelay ? 'RELAY (TURN)' : 'DIRECT (P2P)'}`;
-  let lineCount = 5;
+  lines[5] = `Desync: ${stats.desyncMismatches}/${stats.desyncChecks} checks, ${stats.desyncCorrections} corr`;
+  let lineCount = 6;
+  if (stats.lastDesyncFrame >= 0) {
+    lines[lineCount++] = `Last: F${stats.lastDesyncFrame} [${stats.lastDesyncSubsystem || '?'}]`;
+  }
   if (stats.stalled) {
     lines[lineCount++] = '** STALLED **';
   }
@@ -44,11 +48,15 @@ export function drawNetDebugOverlay(
   ctx.fillRect(x, y, BOX_WIDTH, boxH);
 
   // Text
-  ctx.fillStyle = stats.stalled ? '#ff4444' : '#00ff88';
+  const hasDesync = stats.desyncMismatches > 0;
+  ctx.fillStyle = stats.stalled ? '#ff4444' : hasDesync ? '#ffaa00' : '#00ff88';
   ctx.textBaseline = 'top';
   ctx.textAlign = 'left';
   for (let i = 0; i < lineCount; i++) {
+    // Highlight desync lines in red
+    if (i === 5 && hasDesync) ctx.fillStyle = '#ff4444';
     ctx.fillText(lines[i], x + PAD, y + PAD + i * LINE_HEIGHT);
+    if (i === 5 && hasDesync) ctx.fillStyle = stats.stalled ? '#ff4444' : '#ffaa00';
   }
 
   ctx.restore();
