@@ -129,7 +129,7 @@ export class GameLoop {
     onMatchEnd: MatchEndCallback,
     rng?: SeededRNG,
   ) {
-    if (rng) this.rng = rng; // Set before any gameRandom() calls in init
+    this.rng = rng; // Set before any gameRandom() calls in init
     this.arena = arena;
     this.originalArena = arena;
     this.settings = settings;
@@ -654,9 +654,15 @@ export class GameLoop {
       return true;
     });
     if (candidates.length === 0) return;
-    for (let attempt = 0; attempt < SPAWN_RETRY_ATTEMPTS; attempt++) {
+    // Pre-generate all candidates to consume a fixed number of gameRandom() calls
+    // regardless of playerNearSpawn() results (avoids RNG desync from float precision)
+    const attempts: Array<{ fp: typeof candidates[0]; x: number }> = [];
+    for (let i = 0; i < SPAWN_RETRY_ATTEMPTS; i++) {
       const fp = candidates[Math.floor(this.gameRandom() * candidates.length)];
       const x = fp.plat.x + 20 + this.gameRandom() * (fp.plat.width - 40);
+      attempts.push({ fp, x });
+    }
+    for (const { fp, x } of attempts) {
       if (!this.playerNearSpawn(fp.plat, x)) {
         this.state.springs.push({
           x, y: fp.plat.y, platformIndex: fp.idx,
@@ -669,9 +675,14 @@ export class GameLoop {
 
   private spawnThorn(): void {
     if (this.floatingPlatforms.length === 0) return;
-    for (let attempt = 0; attempt < SPAWN_RETRY_ATTEMPTS; attempt++) {
+    // Pre-generate all candidates to consume a fixed number of gameRandom() calls
+    const attempts: Array<{ fp: { plat: Platform; idx: number }; x: number }> = [];
+    for (let i = 0; i < SPAWN_RETRY_ATTEMPTS; i++) {
       const fp = this.floatingPlatforms[Math.floor(this.gameRandom() * this.floatingPlatforms.length)];
       const x = fp.plat.x + 10 + this.gameRandom() * (fp.plat.width - 44);
+      attempts.push({ fp, x });
+    }
+    for (const { fp, x } of attempts) {
       if (!this.playerNearSpawn(fp.plat, x)) {
         this.state.thorns.push({
           x, y: fp.plat.y - THORN_Y_OFFSET, width: THORN_WIDTH, height: THORN_HEIGHT,

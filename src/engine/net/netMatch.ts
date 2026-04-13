@@ -60,7 +60,6 @@ export class NetMatch {
       config.onMatchEnd,
       rng,
     );
-    this.gameLoop.setRng(rng);
 
     // Create rollback engine with all remote human slots
     this.rollback = new RollbackEngine({
