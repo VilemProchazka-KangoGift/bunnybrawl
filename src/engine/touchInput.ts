@@ -192,6 +192,10 @@ export class TouchInputManager {
           this.jumpConsumed = false;
           this.downFromSwipe = false;
           this.onJumpFeedback?.(true);
+        } else {
+          // Second tap while jump touch active → re-trigger (becomes fast-fall when airborne)
+          this.jumpTriggered = true;
+          this.jumpConsumed = false;
         }
       }
     }
