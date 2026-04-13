@@ -5,7 +5,7 @@ import type {
 } from './types';
 import { isBotSlot } from './types';
 import type { SeededRNG } from './net/prng';
-import { takeSnapshot as _takeSnapshot, restoreSnapshot as _restoreSnapshot } from './net/serialize';
+import { takeSnapshot as _takeSnapshot, restoreSnapshot as _restoreSnapshot, hashGameStateDetailed } from './net/serialize';
 import type { GameSnapshot } from './net/serialize';
 import type { ThemeConfig } from './themes/types';
 import { getTheme, mirrorArena } from './arenas';
@@ -520,6 +520,8 @@ export class GameLoop {
 
   getState(): MatchState { return this.state; }
   getRendererDiagnostics() { return this.renderer.getDiagnostics(); }
+  /** E2E diagnostic: per-subsystem state hash for desync detection. */
+  getStateHash() { return hashGameStateDetailed(this.state, this.rng); }
   pause(): void { this.paused = true; audio.setPaused(true); }
   resume(): void { this.paused = false; this.lastTime = performance.now(); audio.setPaused(false, this.arena.themeId); }
   isPaused(): boolean { return this.paused; }
