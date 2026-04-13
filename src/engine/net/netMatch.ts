@@ -137,6 +137,11 @@ export class NetMatch {
     this.rollback.stop();
   }
 
+  /** Signal match ended — suppresses stall detection during the victory transition. */
+  setMatchOver(): void {
+    this.rollback.setMatchOver();
+  }
+
   getState(): MatchState {
     return this.gameLoop.getState();
   }

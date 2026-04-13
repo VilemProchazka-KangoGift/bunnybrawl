@@ -137,7 +137,12 @@ export function Match() {
     if (!bgCanvas || !fgCanvas) return;
 
     const arena = getArena(currentArenaId);
+    let matchEnded = false;
     const onMatchEnd = (winner: import('../engine/types').PlayerSlot | null, state: import('../engine/types').MatchState) => {
+      if (matchEnded) return; // guard against double-fire (GameLoop + MATCH_RESULT)
+      matchEnded = true;
+      // Suppress stall detection during victory transition
+      if (netMatchRef.current) netMatchRef.current.setMatchOver();
       // In online mode, host sends match result to guest
       if (online.isOnline && online.isHost) {
         const transport = getModalTransport();

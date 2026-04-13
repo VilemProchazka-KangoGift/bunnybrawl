@@ -102,6 +102,7 @@ export class RollbackEngine {
   private rafId = 0;
   private stalled = false;
   private stallStartTime = 0;
+  private _matchOver = false;
 
   // Rollback stats (for debug overlay)
   private rollbackCount = 0;
@@ -349,8 +350,8 @@ export class RollbackEngine {
       const minRemoteFrame = this._cachedMinRemoteFrame;
       const frameAdvantage = this.localFrame - minRemoteFrame;
 
-      // Skip stall during startup grace period (no inputs received yet from any remote)
-      if (minRemoteFrame >= 0 && frameAdvantage >= MAX_ROLLBACK_FRAMES) {
+      // Skip stall during startup grace period or after match end
+      if (!this._matchOver && minRemoteFrame >= 0 && frameAdvantage >= MAX_ROLLBACK_FRAMES) {
         if (!this.stalled) {
           this.stalled = true;
           this.stallStartTime = performance.now();
@@ -673,6 +674,9 @@ export class RollbackEngine {
   }
 
   /** Get current stats for debug display (returns cached object — no allocation). */
+  /** Signal match is over — suppresses stall detection so the peer doesn't falsely disconnect. */
+  setMatchOver(): void { this._matchOver = true; }
+
   getStats(): NetDebugStats {
     const s = this._statsCache;
     s.localFrame = this.localFrame;
