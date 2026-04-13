@@ -114,6 +114,7 @@ async function grabSnapshot(page: Page) {
         rollbacksPerSec: rollback.rollbacksPerSec,
         maxRollbackDepth: rollback.maxRollbackDepth,
         stalled: rollback.stalled,
+        isRelay: rollback.isRelay ?? false,
       } : null,
     };
   });
@@ -272,6 +273,7 @@ test.describe('Desync Detection @online @desync', () => {
       console.log('');
       if (finalHost?.rollback) {
         console.log('--- Host Rollback Stats ---');
+        console.log(`  Route: ${finalHost.rollback.isRelay ? 'RELAY (TURN)' : 'DIRECT (P2P)'}`);
         console.log(`  Frame: ${finalHost.rollback.localFrame}`);
         console.log(`  RTT: ${finalHost.rollback.rtt}ms | Jitter: ${finalHost.rollback.jitter}ms`);
         console.log(`  Input delay: ${finalHost.rollback.inputDelay}F`);
@@ -280,6 +282,7 @@ test.describe('Desync Detection @online @desync', () => {
       }
       if (finalGuest?.rollback) {
         console.log('--- Guest Rollback Stats ---');
+        console.log(`  Route: ${finalGuest.rollback.isRelay ? 'RELAY (TURN)' : 'DIRECT (P2P)'}`);
         console.log(`  Frame: ${finalGuest.rollback.localFrame}`);
         console.log(`  RTT: ${finalGuest.rollback.rtt}ms | Jitter: ${finalGuest.rollback.jitter}ms`);
         console.log(`  Input delay: ${finalGuest.rollback.inputDelay}F`);
@@ -376,6 +379,75 @@ test.describe('Desync Detection @online @desync', () => {
       expect(secondRate).toBeGreaterThanOrEqual(firstRate - 0.3);
     } finally {
       await closePair(pair);
+    }
+  });
+
+  test('TURN relay diagnostic: compare RTT and route with ?noturn', async ({ browser }) => {
+    // Run two pairs: one with default ICE (may use TURN), one with ?noturn (STUN only)
+    const results: Record<string, { rtt: number; jitter: number; isRelay: boolean; rollbacksPerSec: number }> = {};
+
+    for (const mode of ['default', 'noturn'] as const) {
+      const hostCtx = await browser.newContext();
+      const guestCtx = await browser.newContext();
+      const host = await hostCtx.newPage();
+      const guest = await guestCtx.newPage();
+      const suffix = mode === 'noturn' ? '?noturn' : '';
+
+      try {
+        await host.goto('/' + suffix);
+        await guest.goto('/' + suffix);
+
+        await host.evaluate(() => {
+          (window as any).__gameStore?.getState().setMatchSettings({
+            botCount: 2, botDifficulty: 'medium', killLimit: 99, timeLimit: 15,
+          });
+        });
+
+        const code = await hostCreateRoom(host);
+        await guestJoinRoom(guest, code);
+        await waitForLobby(host);
+        await waitForLobby(guest);
+        await host.getByTestId('online-start-btn').click();
+        await expect(host.getByTestId('match-screen')).toBeVisible({ timeout: 15000 });
+        await expect(guest.getByTestId('match-screen')).toBeVisible({ timeout: 15000 });
+
+        // Wait for connection to stabilize + get stats
+        await host.waitForTimeout(8000);
+
+        const snap = await grabSnapshot(host);
+        if (snap?.rollback) {
+          results[mode] = {
+            rtt: snap.rollback.rtt,
+            jitter: snap.rollback.jitter,
+            isRelay: snap.rollback.isRelay,
+            rollbacksPerSec: snap.rollback.rollbacksPerSec,
+          };
+        }
+      } finally {
+        await hostCtx.close().catch(() => {});
+        await guestCtx.close().catch(() => {});
+      }
+    }
+
+    console.log('\n========== TURN RELAY DIAGNOSTIC ==========');
+    if (results.default) {
+      console.log(`Default ICE: Route=${results.default.isRelay ? 'RELAY' : 'DIRECT'} RTT=${results.default.rtt}ms Jitter=${results.default.jitter}ms Rollbacks=${results.default.rollbacksPerSec}/s`);
+    }
+    if (results.noturn) {
+      console.log(`?noturn ICE: Route=${results.noturn.isRelay ? 'RELAY' : 'DIRECT'} RTT=${results.noturn.rtt}ms Jitter=${results.noturn.jitter}ms Rollbacks=${results.noturn.rollbacksPerSec}/s`);
+    }
+    if (results.default && results.noturn) {
+      const rttDelta = results.default.rtt - results.noturn.rtt;
+      console.log(`RTT delta (default - noturn): ${rttDelta > 0 ? '+' : ''}${rttDelta}ms`);
+      if (results.default.isRelay && !results.noturn.isRelay) {
+        console.log('*** TURN IS ADDING LATENCY: default uses RELAY, noturn uses DIRECT ***');
+      }
+    }
+    console.log('============================================\n');
+
+    // On same machine, default should NOT use relay (both peers are local)
+    if (results.default) {
+      expect(results.default.isRelay).toBe(false);
     }
   });
 });
