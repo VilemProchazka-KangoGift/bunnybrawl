@@ -127,7 +127,9 @@ export class GameLoop {
     settings: MatchSettings,
     activePlayers: PlayerSlot[],
     onMatchEnd: MatchEndCallback,
+    rng?: SeededRNG,
   ) {
+    if (rng) this.rng = rng; // Set before any gameRandom() calls in init
     this.arena = arena;
     this.originalArena = arena;
     this.settings = settings;

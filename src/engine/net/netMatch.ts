@@ -48,7 +48,9 @@ export class NetMatch {
     this.onDisconnect = config.onDisconnect;
     this.onArenaChange = config.onArenaChange;
 
-    // Create game loop with seeded PRNG
+    // Create seeded PRNG BEFORE GameLoop — constructor uses gameRandom() for entity init
+    const rng = new SeededRNG(config.rngSeed);
+
     this.gameLoop = new GameLoop(
       config.bgCanvas,
       config.fgCanvas,
@@ -56,9 +58,8 @@ export class NetMatch {
       config.settings,
       config.activePlayers,
       config.onMatchEnd,
+      rng,
     );
-
-    const rng = new SeededRNG(config.rngSeed);
     this.gameLoop.setRng(rng);
 
     // Create rollback engine with all remote human slots
