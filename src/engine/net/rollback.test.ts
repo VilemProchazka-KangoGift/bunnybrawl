@@ -558,12 +558,12 @@ describe('RollbackEngine - adaptive input delay', () => {
     expect(engine.getStats().inputDelay).toBeGreaterThan(2);
   });
 
-  it('input delay does not exceed MAX (4 frames)', () => {
+  it('input delay does not exceed MAX (8 frames)', () => {
     const { engine, transport } = makeEngine();
     transport.currentRtt = 1000; // very high RTT
     transport.currentJitter = 100;
     (engine as any).adaptInputDelay();
-    expect(engine.getStats().inputDelay).toBeLessThanOrEqual(4);
+    expect(engine.getStats().inputDelay).toBeLessThanOrEqual(8);
   });
 
   it('jitter adds padding to input delay', () => {
@@ -1079,12 +1079,12 @@ describe('RollbackEngine - advanceFrame internals', () => {
       gameLoop: gameLoop as any, transport: transport as any,
     });
 
-    // Advance to frame 30 (DESYNC_CHECK_INTERVAL)
-    for (let i = 0; i < 30; i++) {
+    // Advance past DESYNC_CHECK_INTERVAL (60 frames) and early-match interval (30 frames)
+    for (let i = 0; i < 31; i++) {
       (engine as any).advanceFrame();
     }
 
-    // Should have sent at least one desync check
+    // Should have sent at least one desync check (early-match check at frame 30)
     expect(transport.sendReliable).toHaveBeenCalled();
 
     vi.restoreAllMocks();

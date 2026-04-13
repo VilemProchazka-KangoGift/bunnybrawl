@@ -17,11 +17,11 @@ import { FIXED_TIMESTEP, STOMP_BOUNCE, SPLAT_DURATION } from '../constants';
 import { isStomping } from '../stomp';
 
 const BUFFER_SIZE = 128;          // ~2.1 seconds at 60fps
-const MAX_ROLLBACK_FRAMES = 7;    // max frames we'll rewind
+const MAX_ROLLBACK_FRAMES = 15;   // max frames we'll rewind (~250ms at 60fps)
 const DEFAULT_INPUT_DELAY = 2;    // frames of local input delay
-const MAX_INPUT_DELAY = 4;
-const INPUT_BUNDLE_SIZE = 10;     // recent inputs to bundle per message
-const DESYNC_CHECK_INTERVAL = 30; // frames between state sync checks (0.5s)
+const MAX_INPUT_DELAY = 8;        // max adaptive delay (~133ms) — covers TURN relay RTT
+const INPUT_BUNDLE_SIZE = 16;     // recent inputs to bundle per message (covers MAX_ROLLBACK_FRAMES + 1)
+const DESYNC_CHECK_INTERVAL = 60; // frames between state sync checks (~1s) — give rollback time to self-correct
 const STALL_TIMEOUT_MS = 8000;    // disconnect after 8s of stall
 
 const NO_INPUT: InputState = { left: false, right: false, jump: false, down: false };
@@ -45,7 +45,6 @@ export interface NetDebugStats {
   stalled: boolean;
   rollbacksPerSec: number;
   maxRollbackDepth: number;
-  isRelay: boolean;
 }
 
 /** Per-remote-slot input tracking state. */
@@ -121,7 +120,7 @@ export class RollbackEngine {
   private readonly _statsCache: NetDebugStats = {
     localFrame: 0, remoteConfirmedFrame: 0, remoteLatestAck: 0,
     rtt: 0, jitter: 0, inputDelay: 0, stalled: false,
-    rollbacksPerSec: 0, maxRollbackDepth: 0, isRelay: false,
+    rollbacksPerSec: 0, maxRollbackDepth: 0,
   };
 
   // Callbacks
@@ -409,9 +408,12 @@ export class RollbackEngine {
     }
 
     // 6. Desync check — regular interval + tighter checks early match + post-rollback
+    // Intentionally infrequent: rollback handles frame-by-frame input correction.
+    // Desync checks are only for catastrophic drift (score/state mismatch). Too frequent
+    // = constant snapshot corrections that teleport characters, worse than the desync.
     const isRegularCheck = this.localFrame > 0 && this.localFrame % DESYNC_CHECK_INTERVAL === 0;
-    const isEarlyMatchCheck = this.localFrame > 0 && this.localFrame < 300 && this.localFrame % 10 === 0;
-    const isPostRollbackCheck = this._rollbackOccurredThisFrame && (this.localFrame - this.lastDesyncCheckFrame >= 5);
+    const isEarlyMatchCheck = this.localFrame > 0 && this.localFrame < 300 && this.localFrame % 30 === 0;
+    const isPostRollbackCheck = this._rollbackOccurredThisFrame && (this.localFrame - this.lastDesyncCheckFrame >= 15);
     if (isRegularCheck || isEarlyMatchCheck || isPostRollbackCheck) {
       this.sendDesyncCheck();
     }
@@ -663,7 +665,6 @@ export class RollbackEngine {
     s.stalled = this.stalled;
     s.rollbacksPerSec = this.rollbackCountPerSec;
     s.maxRollbackDepth = this.maxRollbackDepthPerSec;
-    s.isRelay = this.transport.isRelay;
     return s;
   }
 }
