@@ -16,10 +16,7 @@ import {
   encodePing, encodePong, decodePingPong,
 } from './protocol';
 import type { ReliableMessage } from './protocol';
-import { takeAuthSnapshot, encodeSnapshot, createDelta } from './snapshot';
-
-// Send a full (non-delta) snapshot every N ticks for baseline recovery
-const FULL_SNAPSHOT_INTERVAL = 120; // every 2 seconds
+import { takeAuthSnapshot, encodeSnapshot } from './snapshot';
 
 export interface HostAuthorityConfig {
   gameLoop: GameLoop;
@@ -114,18 +111,13 @@ export class HostAuthority {
 
     const snap = takeAuthSnapshot(this.localFrame, state);
     const { buffer: encodeBuf, length: encodeLen } = encodeSnapshot(snap);
-    // Copy once for this frame (shared buffer is reused next call)
-    const encoded = encodeBuf.slice(0, encodeLen);
-    const isFull = this.localFrame % FULL_SNAPSHOT_INTERVAL === 0;
+    // Send full snapshot with 0x20 type prefix (delta compression TODO)
+    const msg = new Uint8Array(1 + encodeLen);
+    msg[0] = 0x20; // MsgType.SNAPSHOT
+    msg.set(new Uint8Array(encodeBuf, 0, encodeLen), 1);
 
     for (const peerId of this.transport.getPeerIds()) {
-      const baseline = isFull ? null : (this.guestBaselines.get(peerId) ?? null);
-      const delta = createDelta(encoded, baseline);
-      this.transport.sendUnreliableTo(peerId, delta);
-
-      if (isFull || !baseline) {
-        this.guestBaselines.set(peerId, encoded);
-      }
+      this.transport.sendUnreliableTo(peerId, msg.buffer);
     }
 
     this.lastSnapshotBytes = encodeLen;
