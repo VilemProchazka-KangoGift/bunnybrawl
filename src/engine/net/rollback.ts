@@ -321,6 +321,7 @@ export class RollbackEngine {
       }
     } else if (msg.type === MsgType.DESYNC_REQUEST) {
       if (this.isHost) {
+        this._desyncCorrections++; // host counts corrections sent
         const reqFrame = (msg as DesyncRequestMessage).frame;
         const cached = this.snapshots[reqFrame % MAX_ROLLBACK_FRAMES];
         let snap: GameSnapshot;
@@ -670,8 +671,8 @@ export class RollbackEngine {
       };
       this.transport.sendReliable(check);
       this.lastDesyncCheckFrame = this.localFrame;
-      // Log host state at check for comparison with guest logs
-      if (this._desyncMismatches > 0 && this._desyncMismatches <= 3) {
+      // Log host state periodically for comparison with guest logs
+      if (this.localFrame % 600 === 0) {
         const s = this.gameLoop.getState();
         const rng = this.gameLoop.getRng();
         console.log(`[net] HOST CHECK frame=${this.localFrame} hash=${detailed.hash} rng=${rng?.getState()} aiRng=${this.gameLoop.getAiRng()?.getState()}`);

@@ -63,13 +63,13 @@ export function isStomping(attacker: Player, victim: Player): boolean {
     victim.x, victim.y, victim.width, victim.height
   )) return false;
 
-  // Attacker's bottom edge must be near victim's top edge
-  const attackerBottom = attacker.y + attacker.height;
+  // Attacker's bottom edge must be near victim's top edge (fround for cross-arch determinism)
+  const attackerBottom = f(attacker.y + attacker.height);
   const victimTop = victim.y;
-  const overlap = attackerBottom - victimTop;
+  const overlap = f(attackerBottom - victimTop);
 
   // The stomp zone: attacker's feet are within top portion of victim
-  return overlap > 0 && overlap < victim.height * 0.5;
+  return overlap > 0 && overlap < f(victim.height * 0.5);
 }
 
 // GibDef interface — kept here as it's used by types outside the character pack system

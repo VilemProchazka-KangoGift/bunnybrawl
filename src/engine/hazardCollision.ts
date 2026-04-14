@@ -7,6 +7,8 @@ import type { Player, SpringMushroom, Thorn, GhostEntity, LavaRock, HazardZone }
 import { aabbOverlap } from './physics';
 import { SPRING_SIZE } from './constants';
 
+const f = Math.fround;
+
 /** Result of a spring collision check. */
 export interface SpringCollisionResult {
   springIndex: number;
@@ -99,7 +101,7 @@ export function checkHazardZoneCollision(
 ): HazardZoneCollisionResult | null {
   if (player.slowTimer > 0 || player.invincibleTimer > 0) return null;
   const inset = 12;
-  const pcx = player.x + player.width / 2;
+  const pcx = f(player.x + f(player.width / 2));
   for (const hz of hazardZones) {
     if (
       aabbOverlap(
@@ -127,17 +129,17 @@ export function checkGhostCollision(
   ghosts: GhostEntity[],
 ): GhostCollisionResult | null {
   if (player.slowTimer > 0 || player.invincibleTimer > 0) return null;
-  const pcx = player.x + player.width / 2;
-  const pcy = player.y + player.height / 2;
+  const pcx = f(player.x + f(player.width / 2));
+  const pcy = f(player.y + f(player.height / 2));
   for (let i = 0; i < ghosts.length; i++) {
     const ghost = ghosts[i];
     const gx = ghost.x;
     const gy = ghost.y;
-    const gr = ghost.size * 0.5;
-    const dx = pcx - gx;
-    const dy = pcy - gy;
-    const hitRadius = gr + player.width * 0.4;
-    if (dx * dx + dy * dy < hitRadius * hitRadius) {
+    const gr = f(ghost.size * 0.5);
+    const dx = f(pcx - gx);
+    const dy = f(pcy - gy);
+    const hitRadius = f(gr + f(player.width * 0.4));
+    if (f(f(dx * dx) + f(dy * dy)) < f(hitRadius * hitRadius)) {
       return {
         ghostIndex: i,
         knockbackDir: dx > 0 ? 1 : -1,
@@ -157,15 +159,15 @@ export function checkLavaRockCollision(
   lavaRocks: LavaRock[],
 ): LavaRockCollisionResult | null {
   if (player.slowTimer > 0 || player.invincibleTimer > 0) return null;
-  const pcx = player.x + player.width / 2;
-  const pcy = player.y + player.height / 2;
+  const pcx = f(player.x + f(player.width / 2));
+  const pcy = f(player.y + f(player.height / 2));
   for (let i = 0; i < lavaRocks.length; i++) {
     const rock = lavaRocks[i];
     if (!rock.active) continue;
-    const dx = pcx - rock.x;
-    const dy = pcy - rock.y;
-    const hitDist = rock.size + player.width * 0.3;
-    if (dx * dx + dy * dy < hitDist * hitDist) {
+    const dx = f(pcx - rock.x);
+    const dy = f(pcy - rock.y);
+    const hitDist = f(rock.size + f(player.width * 0.3));
+    if (f(f(dx * dx) + f(dy * dy)) < f(hitDist * hitDist)) {
       return {
         rockIndex: i,
         knockbackDir: dx > 0 ? 1 : -1,
