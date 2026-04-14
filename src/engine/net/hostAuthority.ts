@@ -158,13 +158,6 @@ export class HostAuthority {
       if (pp && fromPeerId) {
         this.transport.sendUnreliableTo(fromPeerId, encodePong(pp.timestamp));
       }
-    } else if (type === MsgType.SNAPSHOT_ACK) {
-      // Guest acknowledged a snapshot — update their baseline
-      if (fromPeerId && data.byteLength >= 5) {
-        // The ack tells us which frame they received. For simplicity,
-        // we update baseline on next full snapshot send.
-        // (Advanced: track per-guest acked encoded snapshot for finer deltas)
-      }
     }
   }
 
@@ -197,15 +190,9 @@ export class HostAuthority {
     return this.guestInputs.get(slot) ?? { left: false, right: false, jump: false, down: false };
   }
 
-  /** Build the network inputs map for GameLoop.fixedUpdate(). */
+  /** Return guest inputs map for GameLoop.fixedUpdate(). Host input comes from keyboard/touch. */
   getNetworkInputs(): Map<string, InputState> {
-    const inputs = new Map<string, InputState>();
-    // Host input comes from keyboard/touch (not overridden)
-    // Guest inputs come from network
-    for (const [slot, input] of this.guestInputs) {
-      inputs.set(slot, input);
-    }
-    return inputs;
+    return this.guestInputs;
   }
 
   getStats(): HostDebugStats {

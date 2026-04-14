@@ -86,7 +86,11 @@ const decodeSlotByte = (b: number) => decodeSlot(b) as PlayerSlot;
 const MAX_SNAPSHOT_BYTES = 4096;
 const ENCODE_BUF = new ArrayBuffer(MAX_SNAPSHOT_BYTES);
 const ENCODE_VIEW = new DataView(ENCODE_BUF);
-// const ENCODE_BYTES = new Uint8Array(ENCODE_BUF); // available for direct byte access if needed
+
+/** Encode a timer (seconds) as a uint8 frame count (0-255). */
+function encodeTimer(timer: number): number {
+  return Math.min(Math.round(timer * 60), 255);
+}
 
 /**
  * Encode an AuthSnapshot into a compact binary format.
@@ -118,13 +122,13 @@ export function encodeSnapshot(snap: AuthSnapshot): { buffer: ArrayBuffer; lengt
     ENCODE_VIEW.setUint8(o++, flags);
     ENCODE_VIEW.setUint8(o++, p.animFrame & 0xFF);
     ENCODE_VIEW.setUint8(o++, Math.min(p.score, 255));
-    ENCODE_VIEW.setUint8(o++, Math.min(Math.round(p.hitstopTimer * 60), 255)); // frames
-    ENCODE_VIEW.setUint8(o++, Math.min(Math.round(p.invincibleTimer * 60), 255));
-    ENCODE_VIEW.setUint8(o++, Math.min(Math.round(p.splatTimer * 60), 255));
-    ENCODE_VIEW.setUint8(o++, Math.min(Math.round(p.respawnTimer * 60), 255));
-    ENCODE_VIEW.setUint8(o++, Math.min(Math.round(p.fatTimer * 60), 255));
-    ENCODE_VIEW.setUint8(o++, Math.min(Math.round(p.slowTimer * 60), 255));
-    ENCODE_VIEW.setUint8(o++, Math.min(Math.round(p.burnTimer * 60), 255));
+    ENCODE_VIEW.setUint8(o++, encodeTimer(p.hitstopTimer));
+    ENCODE_VIEW.setUint8(o++, encodeTimer(p.invincibleTimer));
+    ENCODE_VIEW.setUint8(o++, encodeTimer(p.splatTimer));
+    ENCODE_VIEW.setUint8(o++, encodeTimer(p.respawnTimer));
+    ENCODE_VIEW.setUint8(o++, encodeTimer(p.fatTimer));
+    ENCODE_VIEW.setUint8(o++, encodeTimer(p.slowTimer));
+    ENCODE_VIEW.setUint8(o++, encodeTimer(p.burnTimer));
     ENCODE_VIEW.setUint8(o++, Math.round(p.squashScale * 50) & 0xFF); // 50 = 1.0 normal
     ENCODE_VIEW.setUint8(o++, Math.min(p.killStreak, 255));
     ENCODE_VIEW.setUint8(o++, Math.min(Math.round(p.width), 255));

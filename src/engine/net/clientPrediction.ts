@@ -13,6 +13,7 @@
  */
 import type { InputState, PlayerSlot, Arena } from '../types';
 import type { SnapshotPlayer } from './snapshot';
+import { MAX_WALK_SPEED, GRAVITY, JUMP_IMPULSE, FAST_FALL_GRAVITY } from '../constants';
 
 // Visual smoothing constants
 const CORRECTION_SNAP_THRESHOLD = 30; // px — snap if correction > this
@@ -160,27 +161,18 @@ export class ClientPrediction {
     x: number, y: number, vx: number, vy: number,
     input: InputState, dt: number,
   ): { x: number; y: number; vx: number; vy: number } {
-    // Apply input to velocity (simplified — no acceleration curves, just direction)
-    const WALK_SPEED = 280; // approximate from constants.ts
-    const GRAVITY = 980;
-    const JUMP_IMPULSE = -420;
-
-    // Horizontal input
-    if (input.left) vx = -WALK_SPEED;
-    else if (input.right) vx = WALK_SPEED;
+    if (input.left) vx = -MAX_WALK_SPEED;
+    else if (input.right) vx = MAX_WALK_SPEED;
     else vx *= 0.85; // friction
 
-    // Jump (only if on ground — approximate by checking if vy ≈ 0)
     if (input.jump && Math.abs(vy) < 1) {
       vy = JUMP_IMPULSE;
     }
 
-    // Fast fall
     if (input.down && vy > 0) {
-      vy += GRAVITY * dt * 0.5;
+      vy += FAST_FALL_GRAVITY * dt;
     }
 
-    // Gravity
     vy += GRAVITY * dt;
 
     // Move

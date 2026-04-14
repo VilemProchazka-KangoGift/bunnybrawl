@@ -58,6 +58,23 @@ const TURN_SERVERS = TURN_DISABLED ? [] : [
   },
 ];
 
+function getRoomConfig(roomId: string) {
+  return {
+    config: {
+      appId: APP_ID,
+      rtcConfig: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun.relay.metered.ca:80' },
+          ...TURN_SERVERS,
+        ],
+      },
+      turnConfig: TURN_SERVERS.length > 0 ? TURN_SERVERS : undefined,
+    },
+    roomId,
+  };
+}
+
 export class Transport {
   private room: Room | null = null;
   private peers: Map<string, PeerInfo> = new Map();
@@ -141,20 +158,8 @@ export class Transport {
     this._roomCode = code;
 
     try {
-      this.room = joinRoom(
-        {
-          appId: APP_ID,
-          rtcConfig: {
-            iceServers: [
-              { urls: 'stun:stun.l.google.com:19302' },
-              { urls: 'stun:stun.relay.metered.ca:80' },
-              ...TURN_SERVERS,
-            ],
-          },
-          turnConfig: TURN_SERVERS.length > 0 ? TURN_SERVERS : undefined,
-        },
-        `room-${code.toUpperCase()}`,
-      );
+      const { config, roomId } = getRoomConfig(`room-${code.toUpperCase()}`);
+      this.room = joinRoom(config, roomId);
     } catch (e) {
       this.setStatus('error', `Failed to create room: ${e}`);
       throw e;
@@ -180,20 +185,8 @@ export class Transport {
       }, 20000); // 20s timeout for Nostr discovery
 
       try {
-        this.room = joinRoom(
-          {
-            appId: APP_ID,
-            rtcConfig: {
-              iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun.relay.metered.ca:80' },
-                ...TURN_SERVERS,
-              ],
-            },
-            turnConfig: TURN_SERVERS.length > 0 ? TURN_SERVERS : undefined,
-          },
-          `room-${code.toUpperCase()}`,
-        );
+        const { config, roomId } = getRoomConfig(`room-${code.toUpperCase()}`);
+        this.room = joinRoom(config, roomId);
       } catch (e) {
         clearTimeout(timeout);
         this.setStatus('error', `Failed to join room: ${e}`);
