@@ -457,7 +457,7 @@ const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
 function generateRoomCode(): string {
   let code = '';
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 3; i++) {
     code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
   }
   return code;
