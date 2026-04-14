@@ -1,17 +1,28 @@
 /**
- * NetMatch: orchestrates Transport + RollbackEngine + GameLoop for online play.
- * Supports multi-guest: host relays inputs, each guest connects only to host.
+ * NetMatch: orchestrates Transport + host-authoritative netcode for online play.
+ *
+ * Host mode: runs GameLoop locally, broadcasts state snapshots to guests.
+ * Guest mode: receives snapshots, applies interpolation, predicts local player.
+ *
+ * Replaces the old rollback-based orchestrator with a simpler host-authoritative model.
  */
 import type { PlayerSlot, MatchState } from '../types';
-import type { MatchSettings, Arena } from '../types';
+import type { Arena, MatchSettings } from '../types';
 import { isBotSlot } from '../types';
 import { GameLoop } from '../gameLoop';
 import type { MatchEndCallback } from '../gameLoop';
-import { SeededRNG } from './prng';
-import { RollbackEngine } from './rollback';
 import { Transport } from './transport';
 import { MsgType } from './protocol';
 import type { ReliableMessage } from './protocol';
+import { HostAuthority } from './hostAuthority';
+import type { HostDebugStats } from './hostAuthority';
+import { EntityInterpolation, applySnapshotToState } from './interpolation';
+import { ClientPrediction } from './clientPrediction';
+import { decodeSnapshot } from './snapshot';
+import {
+  decodePingPong,
+  encodePing, encodePong,
+} from './protocol';
 
 export interface NetMatchConfig {
   bgCanvas: HTMLCanvasElement;
@@ -22,7 +33,7 @@ export interface NetMatchConfig {
   onMatchEnd: MatchEndCallback;
   transport: Transport;
   localSlot: PlayerSlot;
-  remoteSlots: PlayerSlot[];   // all remote human player slots
+  remoteSlots: PlayerSlot[];
   rngSeed: number;
   onDesync?: () => void;
   onStall?: (stalled: boolean) => void;
@@ -33,24 +44,41 @@ export interface NetMatchConfig {
 }
 
 export class NetMatch {
-  private gameLoop: GameLoop;
-  private rollback: RollbackEngine;
   private transport: Transport;
-  private isHost: boolean;
+  private _isHost: boolean;
   private onMatchEnd?: MatchEndCallback;
   private onDisconnect?: () => void;
   private onArenaChange?: (arenaId: string) => void;
 
+  // Host-specific
+  private hostAuthority: HostAuthority | null = null;
+  private gameLoop: GameLoop | null = null;
+
+  // Guest-specific
+  private interpolation: EntityInterpolation | null = null;
+  private prediction: ClientPrediction | null = null;
+  private guestRafId = 0;
+  private guestState: MatchState | null = null;
+  private localSlot: PlayerSlot;
+  private pingTimer: ReturnType<typeof setInterval> | null = null;
+
   constructor(config: NetMatchConfig) {
     this.transport = config.transport;
-    this.isHost = !isBotSlot(config.localSlot) && config.localSlot === 'P1';
+    this._isHost = config.transport.isHost;
     this.onMatchEnd = config.onMatchEnd;
     this.onDisconnect = config.onDisconnect;
     this.onArenaChange = config.onArenaChange;
+    this.localSlot = config.localSlot;
 
-    // Create seeded PRNG BEFORE GameLoop — constructor uses gameRandom() for entity init
-    const rng = new SeededRNG(config.rngSeed);
+    if (this._isHost) {
+      this.initHost(config);
+    } else {
+      this.initGuest(config);
+    }
+  }
 
+  private initHost(config: NetMatchConfig): void {
+    // Host runs GameLoop in normal local mode — no seeded RNG, no Math.fround
     this.gameLoop = new GameLoop(
       config.bgCanvas,
       config.fgCanvas,
@@ -58,117 +86,248 @@ export class NetMatch {
       config.settings,
       config.activePlayers,
       config.onMatchEnd,
-      rng,
     );
 
-    // Create rollback engine with all remote human slots
-    this.rollback = new RollbackEngine({
-      localSlot: config.localSlot,
-      remoteSlots: config.remoteSlots,
-      isHost: this.isHost,
+    this.hostAuthority = new HostAuthority({
       gameLoop: this.gameLoop,
       transport: config.transport,
-      onDesync: config.onDesync ? () => config.onDesync!() : undefined,
-      onStall: config.onStall,
-      onStallTimeout: config.onStallTimeout,
+      localSlot: config.localSlot,
+      onMatchEnd: config.onMatchEnd,
       onPlayerDisconnect: config.onPlayerDisconnect,
     });
+
+    // Register remote human players
+    for (const slot of config.remoteSlots) {
+      if (!isBotSlot(slot)) {
+        // Map each remote slot to a peer — for now, first guest is first peer
+        const peerIds = config.transport.getPeerIds();
+        const peerIdx = config.remoteSlots.indexOf(slot);
+        if (peerIdx < peerIds.length) {
+          this.hostAuthority.addGuest(peerIds[peerIdx], slot);
+        }
+      }
+    }
+  }
+
+  private initGuest(config: NetMatchConfig): void {
+    this.interpolation = new EntityInterpolation();
+    this.prediction = new ClientPrediction(config.localSlot, config.arena);
   }
 
   /** Start the network match. */
   start(): void {
     this.transport.setEvents({
-      onStatusChange: (_status, _error) => {
+      onStatusChange: (_status) => {
         if (_status === 'disconnected' || _status === 'error') {
           this.onDisconnect?.();
         }
       },
-      onReliableMessage: (msg) => this.handleReliableMessage(msg),
+      onReliableMessage: (msg, fromPeerId) => this.handleReliableMessage(msg, fromPeerId),
       onUnreliableMessage: (data, fromPeerId) => this.handleUnreliableMessage(data, fromPeerId),
       onRttUpdate: () => {},
-      onPeerDisconnected: (_peerId) => {
-        // Individual peer disconnect — handled per-slot via rollback.removeRemoteSlot
-        // The overall disconnect (all peers gone) is handled by onStatusChange
+      onPeerDisconnected: (peerId) => {
+        if (this._isHost && this.hostAuthority) {
+          this.hostAuthority.removeGuest(peerId);
+        } else {
+          // Guest lost connection to host
+          this.onDisconnect?.();
+        }
       },
     });
 
-    this.rollback.start();
+    if (this._isHost && this.hostAuthority && this.gameLoop) {
+      // Host: set up network input injection, then start game loop + authority
+      this.gameLoop.setNetworkMode(true);
+      this.hostAuthority.start();
+
+      // Drive the host game loop with guest input injection
+      this.startHostLoop();
+    } else {
+      // Guest: start render loop driven by incoming snapshots
+      this.startGuestLoop();
+    }
+  }
+
+  /** Host: run the game loop with guest inputs injected each tick. */
+  private startHostLoop(): void {
+    if (!this.gameLoop || !this.hostAuthority) return;
+
+    let lastTime = performance.now();
+    const FIXED_DT = 1 / 60;
+    let accumulator = 0;
+
+    const loop = (now: number) => {
+      if (!this.gameLoop || !this.hostAuthority) return;
+
+      const dt = Math.min((now - lastTime) / 1000, 0.1);
+      lastTime = now;
+      accumulator += dt;
+
+      while (accumulator >= FIXED_DT) {
+        // Inject guest inputs into game loop
+        const networkInputs = this.hostAuthority.getNetworkInputs();
+        this.gameLoop.fixedUpdate(FIXED_DT, networkInputs);
+        accumulator -= FIXED_DT;
+      }
+
+      this.gameLoop.renderFrame(dt);
+      this.guestRafId = requestAnimationFrame(loop);
+    };
+    this.guestRafId = requestAnimationFrame(loop);
+  }
+
+  /** Guest: render loop driven by host snapshots. */
+  private startGuestLoop(): void {
+    // Start ping loop for RTT measurement
+    this.pingTimer = setInterval(() => {
+      this.transport.sendUnreliable(encodePing(performance.now()));
+    }, 500);
+
+    const loop = () => {
+      if (!this.interpolation) return;
+
+      // Get interpolated state
+      const snap = this.interpolation.getInterpolatedState();
+      if (snap && this.guestState) {
+        applySnapshotToState(snap, this.guestState);
+      }
+
+      // TODO: Apply client prediction for local player override
+      // TODO: Render the state using the guest's canvas
+
+      this.guestRafId = requestAnimationFrame(loop);
+    };
+    this.guestRafId = requestAnimationFrame(loop);
   }
 
   handleUnreliableMessage(data: ArrayBuffer, fromPeerId?: string): void {
-    // Host relays input to all other guests (exclude sender to prevent echo)
-    if (this.isHost && this.transport.peerCount > 1 && fromPeerId) {
-      for (const peerId of this.transport.getPeerIds()) {
-        if (peerId !== fromPeerId) {
-          this.transport.sendUnreliableTo(peerId, data);
+    const view = new DataView(data);
+    if (view.byteLength < 1) return;
+    const type = view.getUint8(0);
+
+    if (this._isHost && this.hostAuthority) {
+      // Host: forward to HostAuthority (handles inputs, ping/pong)
+      this.hostAuthority.handleUnreliableMessage(data, fromPeerId);
+    } else {
+      // Guest: handle snapshots and ping/pong
+      if (type === 0x20) { // MsgType.SNAPSHOT
+        this.handleGuestSnapshot(data);
+      } else if (type === MsgType.PING || type === MsgType.PONG) {
+        const pp = decodePingPong(data);
+        if (pp?.type === MsgType.PING && fromPeerId) {
+          this.transport.sendUnreliableTo(fromPeerId, encodePong(pp.timestamp));
+        }
+        // Pong handling is in transport layer
+      }
+    }
+  }
+
+  private handleGuestSnapshot(data: ArrayBuffer): void {
+    if (!this.interpolation) return;
+
+    // Strip the snapshot type prefix and decode
+    // For full snapshots: [0x20][snapshot data]
+    // For delta snapshots: [0x20][lengths][rle data] — need baseline
+    // For now, handle full snapshots (delta requires baseline tracking)
+    const snapBuf = data.slice(1); // strip type byte
+    const snap = decodeSnapshot(snapBuf);
+    if (snap) {
+      this.interpolation.pushSnapshot(snap);
+
+      // Initialize prediction from first snapshot
+      if (this.prediction) {
+        const localPlayer = snap.players.find(p => p.id === this.localSlot);
+        if (localPlayer) {
+          this.prediction.reconcile(localPlayer, snap.frame);
         }
       }
     }
-    this.rollback.handleInputMessage(data);
   }
 
-  handleReliableMessage(msg: ReliableMessage): void {
-    if (msg.type === MsgType.DESYNC_CHECK || msg.type === MsgType.DESYNC_REQUEST || msg.type === MsgType.DESYNC_CORRECTION) {
-      this.rollback.handleReliableMessage(msg);
-    } else if (msg.type === MsgType.PAUSE) {
-      if (msg.paused) {
-        this.gameLoop.pause();
+  handleReliableMessage(msg: ReliableMessage, fromPeerId?: string): void {
+    if (this._isHost && this.hostAuthority) {
+      this.hostAuthority.handleReliableMessage(msg, fromPeerId);
+    }
+
+    // Both host and guest handle these:
+    if (msg.type === MsgType.PAUSE) {
+      if ((msg as { paused: boolean }).paused) {
+        this.gameLoop?.pause();
       } else {
-        this.gameLoop.resume();
+        this.gameLoop?.resume();
       }
     } else if (msg.type === MsgType.SETTINGS_SYNC) {
       if ('arenaId' in msg) {
         this.onArenaChange?.((msg as { arenaId: string }).arenaId);
       }
     } else if (msg.type === MsgType.MATCH_RESULT) {
-      this.onMatchEnd?.(msg.winner as PlayerSlot | null, this.gameLoop.getState());
+      const state = this.gameLoop?.getState() ?? this.guestState;
+      if (state) {
+        this.onMatchEnd?.((msg as { winner: string | null }).winner as PlayerSlot | null, state);
+      }
     } else if (msg.type === MsgType.DISCONNECT) {
       this.onDisconnect?.();
     }
   }
 
-  /** Remove a remote player mid-match (disconnect handling). */
   removePlayer(slot: PlayerSlot): void {
-    this.rollback.removeRemoteSlot(slot);
-    this.gameLoop.disconnectPlayer(slot);
+    if (this._isHost) {
+      this.gameLoop?.disconnectPlayer(slot);
+    }
   }
 
   stop(): void {
-    this.rollback.stop();
+    if (this.guestRafId) {
+      cancelAnimationFrame(this.guestRafId);
+      this.guestRafId = 0;
+    }
+    if (this.pingTimer) {
+      clearInterval(this.pingTimer);
+      this.pingTimer = null;
+    }
+    this.hostAuthority?.stop();
+    this.gameLoop?.stop();
   }
 
-  /** Signal match ended — suppresses stall detection during the victory transition. */
   setMatchOver(): void {
-    this.rollback.setMatchOver();
+    this.hostAuthority?.setMatchOver();
   }
 
   getState(): MatchState {
-    return this.gameLoop.getState();
+    return this.gameLoop?.getState() ?? this.guestState!;
   }
 
-  getGameLoop(): GameLoop {
+  getGameLoop(): GameLoop | null {
     return this.gameLoop;
   }
 
   pause(): void {
-    this.gameLoop.pause();
+    this.gameLoop?.pause();
     this.transport.sendReliable({ type: MsgType.PAUSE, paused: true });
   }
 
   resume(): void {
-    this.gameLoop.resume();
+    this.gameLoop?.resume();
     this.transport.sendReliable({ type: MsgType.PAUSE, paused: false });
   }
 
   isPaused(): boolean {
-    return this.gameLoop.isPaused();
+    return this.gameLoop?.isPaused() ?? false;
   }
 
   skipCountdown(): void {
-    this.gameLoop.skipCountdown();
+    this.gameLoop?.skipCountdown();
   }
 
-  getRollbackStats() {
-    return this.rollback.getStats();
+  /** Debug stats — host gets authority stats, guest gets transport stats. */
+  getDebugStats(): HostDebugStats | null {
+    if (this._isHost && this.hostAuthority) {
+      return this.hostAuthority.getStats();
+    }
+    return null;
+  }
+
+  get isHost(): boolean {
+    return this._isHost;
   }
 }
