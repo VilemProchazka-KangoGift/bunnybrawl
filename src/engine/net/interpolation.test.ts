@@ -1,0 +1,177 @@
+import { describe, it, expect } from 'vitest';
+import { EntityInterpolation, applySnapshotToState } from './interpolation';
+import type { AuthSnapshot } from './snapshot';
+import type { MatchState, PlayerSlot } from '../types';
+
+function makeSnap(frame: number, px = 100, py = 200): AuthSnapshot {
+  return {
+    frame,
+    players: [
+      { id: 'P1' as PlayerSlot, x: px, y: py, vx: 10, vy: 0, state: 'run', facing: 'right', animFrame: 0, score: 0, hitstopTimer: 0, invincibleTimer: 0, fastFalling: false, splatTimer: 0, respawnTimer: 0, fatTimer: 0, slowTimer: 0, burnTimer: 0, squashScale: 1, expression: 'normal', killStreak: 0, disconnected: false, active: true, width: 32, height: 32 },
+      { id: 'P2' as PlayerSlot, x: px + 100, y: py, vx: -5, vy: 0, state: 'idle', facing: 'left', animFrame: 0, score: 1, hitstopTimer: 0, invincibleTimer: 0, fastFalling: false, splatTimer: 0, respawnTimer: 0, fatTimer: 0, slowTimer: 0, burnTimer: 0, squashScale: 1, expression: 'normal', killStreak: 0, disconnected: false, active: true, width: 32, height: 32 },
+    ],
+    carrots: [{ x: 300, y: 400, active: true }],
+    springs: [],
+    thorns: [],
+    ghosts: [],
+    lavaRocks: [],
+    geyserStates: [],
+    killFeed: [],
+    timeElapsed: frame / 60,
+    countdown: 0,
+    dayPhase: 0,
+    matchOver: false,
+    winner: null,
+    screenShake: 0,
+    slowMotion: 0,
+    screenFlash: 0,
+    hitstopZoom: 0,
+    scoreAnimations: [],
+  };
+}
+
+describe('EntityInterpolation', () => {
+  it('returns null before any snapshots', () => {
+    const interp = new EntityInterpolation();
+    expect(interp.getInterpolatedState()).toBeNull();
+  });
+
+  it('returns first snapshot when only one buffered', () => {
+    const interp = new EntityInterpolation();
+    const snap = makeSnap(1, 100, 200);
+    interp.pushSnapshot(snap);
+    expect(interp.getInterpolatedState()).toBe(snap);
+  });
+
+  it('interpolates between two snapshots', () => {
+    const interp = new EntityInterpolation();
+    // Push frames 1, 2, 3, 4, 5
+    for (let i = 1; i <= 5; i++) {
+      interp.pushSnapshot(makeSnap(i, 100 + i * 10, 200));
+    }
+    // With interpDelay=2, target = 5-2 = 3, between frame 3 (x=130) and frame 4 (x=140)
+    const result = interp.getInterpolatedState();
+    expect(result).not.toBeNull();
+    // Should be at or near frame 3's position
+    const p1 = result!.players.find(p => p.id === 'P1');
+    expect(p1!.x).toBeGreaterThanOrEqual(130);
+    expect(p1!.x).toBeLessThanOrEqual(140);
+  });
+
+  it('returns latest when target is ahead of all snapshots', () => {
+    const interp = new EntityInterpolation();
+    interp.pushSnapshot(makeSnap(1, 100, 200));
+    interp.pushSnapshot(makeSnap(2, 110, 200));
+    // latestHostFrame=2, target=0 (2-2), which is before frame 1
+    // Should return earliest
+    const result = interp.getInterpolatedState();
+    expect(result).not.toBeNull();
+  });
+
+  it('trims old snapshots beyond maxBuffer', () => {
+    const interp = new EntityInterpolation();
+    for (let i = 1; i <= 50; i++) {
+      interp.pushSnapshot(makeSnap(i));
+    }
+    expect(interp.getBufferDepth()).toBeLessThanOrEqual(30);
+  });
+
+  it('getLatestSnapshot returns most recent', () => {
+    const interp = new EntityInterpolation();
+    const s1 = makeSnap(1);
+    const s2 = makeSnap(2);
+    interp.pushSnapshot(s1);
+    interp.pushSnapshot(s2);
+    expect(interp.getLatestSnapshot()).toBe(s2);
+  });
+});
+
+describe('applySnapshotToState', () => {
+  function makeMinimalState(): MatchState {
+    return {
+      players: [
+        { id: 'P1', x: 0, y: 0, vx: 0, vy: 0, width: 32, height: 32, state: 'idle', facing: 'right', splatTimer: 0, respawnTimer: 0, invincibleTimer: 0, score: 0, active: true, animFrame: 0, animTimer: 0, fastFalling: false, fatTimer: 0, slowTimer: 0, squashScale: 1, squashTimer: 0, sideSquash: 1, afterimages: [], idleAnimTimer: 0, expression: 'normal', killStreak: 0, breathTimer: 0, springTrailTimer: 0, damageFlashSide: null, damageFlashTimer: 0, burnTimer: 0, hitstopTimer: 0, renderOffsetX: 0, renderOffsetY: 0, disconnected: false, character: { slot: 'P1', name: 'Bunny', color: '#fff', darkColor: '#ccc', lightColor: '#fff' } },
+        { id: 'P2', x: 0, y: 0, vx: 0, vy: 0, width: 32, height: 32, state: 'idle', facing: 'right', splatTimer: 0, respawnTimer: 0, invincibleTimer: 0, score: 0, active: true, animFrame: 0, animTimer: 0, fastFalling: false, fatTimer: 0, slowTimer: 0, squashScale: 1, squashTimer: 0, sideSquash: 1, afterimages: [], idleAnimTimer: 0, expression: 'normal', killStreak: 0, breathTimer: 0, springTrailTimer: 0, damageFlashSide: null, damageFlashTimer: 0, burnTimer: 0, hitstopTimer: 0, renderOffsetX: 0, renderOffsetY: 0, disconnected: false, character: { slot: 'P2', name: 'Fox', color: '#f80', darkColor: '#a40', lightColor: '#fc0' } },
+      ],
+      killFeed: [], timeElapsed: 0, matchOver: false, winner: null,
+      carrots: [], carrotTimer: 0, springs: [], thorns: [],
+      springSpawnTimer: 0, thornSpawnTimer: 0, screenShake: 0, slowMotion: 0,
+      weather: [], dayPhase: 0, countdown: 0,
+      stats: { perPlayer: new Map() },
+      shockwaves: [], screenFlash: 0, hitstopZoom: 0,
+      wildlife: [], fogParticles: [], pollenParticles: [], shootingStars: [],
+      scoreAnimations: [], ghosts: [], lavaRocks: [], lavaRockTimer: 0,
+      geyserStates: [], pigeonFlocks: [],
+      bouncyWobble: new Map(), gibs: [], confetti: [],
+    } as unknown as MatchState;
+  }
+
+  it('updates player positions from snapshot', () => {
+    const state = makeMinimalState();
+    const snap = makeSnap(1, 500, 300);
+    applySnapshotToState(snap, state);
+    expect(state.players[0].x).toBe(500);
+    expect(state.players[0].y).toBe(300);
+    expect(state.players[1].x).toBe(600);
+  });
+
+  it('updates global state', () => {
+    const state = makeMinimalState();
+    const snap = makeSnap(60);
+    snap.timeElapsed = 1.5;
+    snap.countdown = 2;
+    snap.matchOver = true;
+    snap.winner = 'P1' as PlayerSlot;
+    applySnapshotToState(snap, state);
+    expect(state.timeElapsed).toBe(1.5);
+    expect(state.countdown).toBe(2);
+    expect(state.matchOver).toBe(true);
+    expect(state.winner).toBe('P1');
+  });
+
+  it('grows entity arrays when snapshot has more', () => {
+    const state = makeMinimalState();
+    const snap = makeSnap(1);
+    snap.carrots = [
+      { x: 100, y: 200, active: true },
+      { x: 300, y: 400, active: false },
+    ];
+    applySnapshotToState(snap, state);
+    expect(state.carrots.length).toBe(2);
+    expect(state.carrots[1].x).toBe(300);
+  });
+
+  it('shrinks entity arrays when snapshot has fewer', () => {
+    const state = makeMinimalState();
+    state.carrots = [
+      { x: 1, y: 2, active: true, spawnTime: 0 },
+      { x: 3, y: 4, active: true, spawnTime: 0 },
+      { x: 5, y: 6, active: true, spawnTime: 0 },
+    ];
+    const snap = makeSnap(1);
+    snap.carrots = [{ x: 100, y: 200, active: true }];
+    applySnapshotToState(snap, state);
+    expect(state.carrots.length).toBe(1);
+    expect(state.carrots[0].x).toBe(100);
+  });
+
+  it('applies local player override when provided', () => {
+    const state = makeMinimalState();
+    const snap = makeSnap(1, 500, 300);
+    applySnapshotToState(snap, state, 'P1' as PlayerSlot, { x: 999, y: 888 });
+    // P1 should use the override position
+    expect(state.players[0].x).toBe(999);
+    expect(state.players[0].y).toBe(888);
+    // P2 should use snapshot position
+    expect(state.players[1].x).toBe(600);
+  });
+
+  it('does not apply override to non-local players', () => {
+    const state = makeMinimalState();
+    const snap = makeSnap(1, 500, 300);
+    applySnapshotToState(snap, state, 'P1' as PlayerSlot, { x: 999, y: 888 });
+    // P2 should NOT get the override
+    expect(state.players[1].x).toBe(600);
+    expect(state.players[1].y).toBe(300);
+  });
+});

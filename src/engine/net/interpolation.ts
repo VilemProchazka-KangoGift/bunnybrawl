@@ -4,165 +4,106 @@
  * Guests render remote entities between two known host snapshots,
  * producing smooth movement even when snapshots arrive irregularly.
  *
- * Design based on DDNet's IntraGameTick system:
- * - Buffer the two most recent snapshots
- * - Render at a position interpolated between them
- * - Effectively shows the game ~1-2 frames behind the host
- * - On gaps: brief extrapolation, then freeze
+ * Design: DDNet-style interpolation with wall-clock time tracking.
+ * - Buffer recent snapshots with timestamps
+ * - Render at a position interpolated between two bracketing snapshots
+ * - renderTime advances by real dt each frame, stays ~2 frames behind latest
  */
 import type { PlayerSlot, MatchState } from '../types';
-import type { AuthSnapshot, SnapshotPlayer } from './snapshot';
+import type { AuthSnapshot } from './snapshot';
 
+// Interpolation delay: render this many frames behind the latest snapshot.
+// Higher = smoother (more buffer), lower = less latency.
+const INTERP_DELAY_FRAMES = 2;
 
-export interface InterpolatedPlayer {
-  id: PlayerSlot;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  state: SnapshotPlayer['state'];
-  facing: SnapshotPlayer['facing'];
-  animFrame: number;
-  score: number;
-  hitstopTimer: number;
-  invincibleTimer: number;
-  fastFalling: boolean;
-  splatTimer: number;
-  respawnTimer: number;
-  fatTimer: number;
-  slowTimer: number;
-  burnTimer: number;
-  squashScale: number;
-  expression: SnapshotPlayer['expression'];
-  killStreak: number;
-  disconnected: boolean;
-  active: boolean;
-  width: number;
-  height: number;
+interface TimestampedSnapshot {
+  snap: AuthSnapshot;
+  receiveTime: number; // performance.now() when received
 }
 
 export class EntityInterpolation {
-  // Snapshot buffer (ring)
-  private snapshots: AuthSnapshot[] = [];
-  private maxSnapshots = 30; // ~0.5s at 60Hz
+  private buffer: TimestampedSnapshot[] = [];
+  private maxBuffer = 30;
 
-  // Current interpolation time
-  private renderTime = 0;
+  private latestHostFrame = 0;
   private initialized = false;
-
-  // Interpolation delay in frames (trades latency for smoothness)
-  private interpDelay = 2; // render 2 frames behind latest snapshot
-
-  // Last interpolated state for rendering
-  private lastInterpolated: AuthSnapshot | null = null;
 
   /** Push a new snapshot from the host. */
   pushSnapshot(snap: AuthSnapshot): void {
-    this.snapshots.push(snap);
+    const now = performance.now();
+    this.buffer.push({ snap, receiveTime: now });
 
     // Trim old snapshots
-    while (this.snapshots.length > this.maxSnapshots) {
-      this.snapshots.shift();
+    while (this.buffer.length > this.maxBuffer) {
+      this.buffer.shift();
     }
 
-    // Calibrate time offset from first snapshot
-    if (!this.initialized && this.snapshots.length >= 2) {
-      this.initialized = true;
-      // Set render time to be interpDelay frames behind the latest snapshot
-      this.renderTime = snap.frame - this.interpDelay;
-    } else if (this.initialized) {
-      // Track the latest server frame and stay interpDelay behind
-      this.renderTime = snap.frame - this.interpDelay;
-    }
+    this.latestHostFrame = snap.frame;
+    this.initialized = true;
   }
 
   /**
-   * Get the interpolated state at the current render time.
-   * Returns null if not enough snapshots buffered yet.
+   * Get the interpolated state for the current render frame.
+   * Call this once per render frame.
    */
   getInterpolatedState(): AuthSnapshot | null {
-    if (this.snapshots.length < 2) return this.snapshots[0] ?? null;
+    if (!this.initialized || this.buffer.length < 1) return null;
+    if (this.buffer.length < 2) return this.buffer[0].snap;
 
-    const targetFrame = this.renderTime;
+    // Target: render INTERP_DELAY_FRAMES behind the latest snapshot
+    const targetFrame = this.latestHostFrame - INTERP_DELAY_FRAMES;
 
-    // Find the two snapshots that bracket the target frame
+    // Find two snapshots bracketing the target frame
     let before: AuthSnapshot | null = null;
     let after: AuthSnapshot | null = null;
 
-    for (let i = 0; i < this.snapshots.length - 1; i++) {
-      if (this.snapshots[i].frame <= targetFrame && this.snapshots[i + 1].frame >= targetFrame) {
-        before = this.snapshots[i];
-        after = this.snapshots[i + 1];
+    for (let i = 0; i < this.buffer.length - 1; i++) {
+      if (this.buffer[i].snap.frame <= targetFrame && this.buffer[i + 1].snap.frame >= targetFrame) {
+        before = this.buffer[i].snap;
+        after = this.buffer[i + 1].snap;
         break;
       }
     }
 
     // If target is before all snapshots, use earliest
-    if (!before && this.snapshots.length > 0) {
-      return this.snapshots[0];
+    if (!before && !after) {
+      return this.buffer[0].snap;
     }
 
-    // If target is after all snapshots, use latest (slight extrapolation)
+    // If target is after all snapshots (sparse arrival), use latest
     if (!after) {
-      return this.snapshots[this.snapshots.length - 1];
+      return this.buffer[this.buffer.length - 1].snap;
     }
 
     if (!before) return after;
 
-    // Interpolation factor (0 = before, 1 = after)
+    // Interpolation factor
     const range = after.frame - before.frame;
-    const t = range > 0 ? (targetFrame - before.frame) / range : 0;
-    const alpha = Math.max(0, Math.min(1, t));
+    const t = range > 0 ? Math.max(0, Math.min(1, (targetFrame - before.frame) / range)) : 0;
 
-    this.lastInterpolated = this.interpolateSnapshots(before, after, alpha);
-    return this.lastInterpolated;
+    return interpolateSnapshots(before, after, t);
   }
 
   /** Get the latest raw snapshot (no interpolation). */
   getLatestSnapshot(): AuthSnapshot | null {
-    return this.snapshots.length > 0 ? this.snapshots[this.snapshots.length - 1] : null;
+    return this.buffer.length > 0 ? this.buffer[this.buffer.length - 1].snap : null;
   }
 
-  /** Get all buffered snapshots (for debug display). */
   getBufferDepth(): number {
-    return this.snapshots.length;
+    return this.buffer.length;
   }
+}
 
-  /** Interpolate between two snapshots. */
-  private interpolateSnapshots(a: AuthSnapshot, b: AuthSnapshot, t: number): AuthSnapshot {
-    return {
-      frame: Math.round(a.frame + (b.frame - a.frame) * t),
-      players: this.interpolatePlayers(a.players, b.players, t),
-      // Entities: use the "after" snapshot for discrete state (spawn/despawn)
-      carrots: b.carrots,
-      springs: b.springs,
-      thorns: b.thorns,
-      ghosts: this.interpolateGhosts(a.ghosts, b.ghosts, t),
-      lavaRocks: this.interpolateLavaRocks(a.lavaRocks, b.lavaRocks, t),
-      geyserStates: b.geyserStates,
-      killFeed: b.killFeed,
-      timeElapsed: lerp(a.timeElapsed, b.timeElapsed, t),
-      countdown: lerp(a.countdown, b.countdown, t),
-      dayPhase: lerp(a.dayPhase, b.dayPhase, t),
-      matchOver: b.matchOver,
-      winner: b.winner,
-      screenShake: lerp(a.screenShake, b.screenShake, t),
-      slowMotion: lerp(a.slowMotion, b.slowMotion, t),
-      screenFlash: lerp(a.screenFlash, b.screenFlash, t),
-      hitstopZoom: lerp(a.hitstopZoom, b.hitstopZoom, t),
-      scoreAnimations: b.scoreAnimations,
-    };
-  }
+/** Interpolate between two snapshots. */
+function interpolateSnapshots(a: AuthSnapshot, b: AuthSnapshot, t: number): AuthSnapshot {
+  // Build player lookup for a (O(1) per player instead of O(n) .find)
+  const aById = new Map(a.players.map(p => [p.id, p]));
 
-  /** Interpolate player positions between two snapshot states. */
-  private interpolatePlayers(a: SnapshotPlayer[], b: SnapshotPlayer[], t: number): SnapshotPlayer[] {
-    // O(n) lookup map instead of O(n²) .find() per player
-    const aById = new Map(a.map(p => [p.id, p]));
-
-    return b.map(bp => {
+  return {
+    frame: Math.round(a.frame + (b.frame - a.frame) * t),
+    players: b.players.map(bp => {
       const ap = aById.get(bp.id);
       if (!ap) return bp;
-
       return {
         ...bp,
         x: lerp(ap.x, bp.x, t),
@@ -170,43 +111,44 @@ export class EntityInterpolation {
         vx: lerp(ap.vx, bp.vx, t),
         vy: lerp(ap.vy, bp.vy, t),
       };
-    });
-  }
+    }),
+    // Discrete state: use "after" snapshot (entities spawn/despawn instantly)
+    carrots: b.carrots,
+    springs: b.springs,
+    thorns: b.thorns,
+    ghosts: interpolateByIndex(a.ghosts, b.ghosts, t, (ag, bg) => ({
+      x: lerp(ag.x, bg.x, t),
+      y: lerp(ag.y, bg.y, t),
+      vx: lerp(ag.vx, bg.vx, t),
+      wobblePhase: lerp(ag.wobblePhase, bg.wobblePhase, t),
+    })),
+    lavaRocks: interpolateByIndex(a.lavaRocks, b.lavaRocks, t, (ar, br) => ({
+      x: lerp(ar.x, br.x, t),
+      y: lerp(ar.y, br.y, t),
+      vy: lerp(ar.vy, br.vy, t),
+      active: br.active,
+    })),
+    geyserStates: b.geyserStates,
+    killFeed: b.killFeed,
+    timeElapsed: lerp(a.timeElapsed, b.timeElapsed, t),
+    countdown: lerp(a.countdown, b.countdown, t),
+    dayPhase: lerp(a.dayPhase, b.dayPhase, t),
+    matchOver: b.matchOver,
+    winner: b.winner,
+    screenShake: lerp(a.screenShake, b.screenShake, t),
+    slowMotion: lerp(a.slowMotion, b.slowMotion, t),
+    screenFlash: lerp(a.screenFlash, b.screenFlash, t),
+    hitstopZoom: lerp(a.hitstopZoom, b.hitstopZoom, t),
+    scoreAnimations: b.scoreAnimations,
+  };
+}
 
-  private interpolateGhosts(
-    a: AuthSnapshot['ghosts'],
-    b: AuthSnapshot['ghosts'],
-    t: number,
-  ): AuthSnapshot['ghosts'] {
-    // Match ghosts by index (they don't have IDs)
-    return b.map((bg, i) => {
-      const ag = a[i];
-      if (!ag) return bg;
-      return {
-        x: lerp(ag.x, bg.x, t),
-        y: lerp(ag.y, bg.y, t),
-        vx: lerp(ag.vx, bg.vx, t),
-        wobblePhase: lerp(ag.wobblePhase, bg.wobblePhase, t),
-      };
-    });
-  }
-
-  private interpolateLavaRocks(
-    a: AuthSnapshot['lavaRocks'],
-    b: AuthSnapshot['lavaRocks'],
-    t: number,
-  ): AuthSnapshot['lavaRocks'] {
-    return b.map((br, i) => {
-      const ar = a[i];
-      if (!ar) return br;
-      return {
-        x: lerp(ar.x, br.x, t),
-        y: lerp(ar.y, br.y, t),
-        vy: lerp(ar.vy, br.vy, t),
-        active: br.active,
-      };
-    });
-  }
+/** Interpolate arrays matched by index (ghosts, lava rocks). */
+function interpolateByIndex<T>(a: T[], b: T[], _t: number, fn: (a: T, b: T) => T): T[] {
+  return b.map((bi, i) => {
+    const ai = a[i];
+    return ai ? fn(ai, bi) : bi;
+  });
 }
 
 function lerp(a: number, b: number, t: number): number {
@@ -215,18 +157,28 @@ function lerp(a: number, b: number, t: number): number {
 
 /**
  * Apply an AuthSnapshot to a MatchState for rendering on the guest.
- * Updates player positions, entity positions, and global state.
- * Does NOT create new Player objects — updates existing ones in-place.
+ * Updates player positions, entity states, and global timers in-place.
  */
-export function applySnapshotToState(snap: AuthSnapshot, state: MatchState): void {
-  // Update players (O(n) map lookup instead of O(n²) .find())
+export function applySnapshotToState(
+  snap: AuthSnapshot,
+  state: MatchState,
+  localSlot?: PlayerSlot,
+  localOverride?: { x: number; y: number },
+): void {
+  // Update players (O(1) lookup)
   const playerById = new Map(state.players.map(p => [p.id, p]));
   for (const sp of snap.players) {
     const player = playerById.get(sp.id);
     if (!player) continue;
 
-    player.x = sp.x;
-    player.y = sp.y;
+    // If this is the local player and we have a prediction override, use it
+    if (localSlot && sp.id === localSlot && localOverride) {
+      player.x = localOverride.x;
+      player.y = localOverride.y;
+    } else {
+      player.x = sp.x;
+      player.y = sp.y;
+    }
     player.vx = sp.vx;
     player.vy = sp.vy;
     player.state = sp.state;
@@ -250,7 +202,7 @@ export function applySnapshotToState(snap: AuthSnapshot, state: MatchState): voi
     player.height = sp.height;
   }
 
-  // Update global state
+  // Global state
   state.timeElapsed = snap.timeElapsed;
   state.countdown = snap.countdown;
   state.dayPhase = snap.dayPhase;
@@ -263,103 +215,50 @@ export function applySnapshotToState(snap: AuthSnapshot, state: MatchState): voi
   state.killFeed = snap.killFeed;
   state.scoreAnimations = snap.scoreAnimations;
 
-  // Update entities — resize arrays to match snapshot
-  // Carrots
-  while (state.carrots.length > snap.carrots.length) state.carrots.pop();
-  for (let i = 0; i < snap.carrots.length; i++) {
-    if (i >= state.carrots.length) {
-      state.carrots.push({ x: snap.carrots[i].x, y: snap.carrots[i].y, active: snap.carrots[i].active, spawnTime: 0 });
-    } else {
-      state.carrots[i].x = snap.carrots[i].x;
-      state.carrots[i].y = snap.carrots[i].y;
-      state.carrots[i].active = snap.carrots[i].active;
-    }
-  }
+  // Sync entity arrays
+  syncArray(state.carrots, snap.carrots, (s) => ({ x: s.x, y: s.y, active: s.active, spawnTime: 0 }), (dst, src) => {
+    dst.x = src.x; dst.y = src.y; dst.active = src.active;
+  });
+  syncArray(state.springs, snap.springs, (s) => ({
+    x: s.x, y: s.y, platformIndex: 0, bounceTimer: s.bounceTimer, life: s.life, growTimer: s.growTimer,
+  }), (dst, src) => {
+    dst.x = src.x; dst.y = src.y; dst.bounceTimer = src.bounceTimer; dst.life = src.life; dst.growTimer = src.growTimer;
+  });
+  syncArray(state.thorns, snap.thorns, (s) => ({
+    x: s.x, y: s.y, width: 20, height: 20, platformIndex: 0, life: s.life, growTimer: s.growTimer, hit: s.hit,
+  }), (dst, src) => {
+    dst.x = src.x; dst.y = src.y; dst.life = src.life; dst.growTimer = src.growTimer; dst.hit = src.hit;
+  });
+  syncArray(state.ghosts, snap.ghosts, (s) => ({
+    x: s.x, y: s.y, vx: s.vx, size: 30, alpha: 0.6, wobblePhase: s.wobblePhase,
+  }), (dst, src) => {
+    dst.x = src.x; dst.y = src.y; dst.vx = src.vx; dst.wobblePhase = src.wobblePhase;
+  });
+  syncArray(state.lavaRocks, snap.lavaRocks, (s) => ({
+    x: s.x, y: s.y, vy: s.vy, size: 10, rotation: 0, active: s.active,
+  }), (dst, src) => {
+    dst.x = src.x; dst.y = src.y; dst.vy = src.vy; dst.active = src.active;
+  });
+  syncArray(state.geyserStates, snap.geyserStates, (s) => ({
+    timer: s.timer, active: s.active, activeTimer: s.activeTimer,
+  }), (dst, src) => {
+    dst.timer = src.timer; dst.active = src.active; dst.activeTimer = src.activeTimer;
+  });
+}
 
-  // Springs
-  while (state.springs.length > snap.springs.length) state.springs.pop();
-  for (let i = 0; i < snap.springs.length; i++) {
-    if (i >= state.springs.length) {
-      state.springs.push({
-        x: snap.springs[i].x, y: snap.springs[i].y,
-        platformIndex: 0, bounceTimer: snap.springs[i].bounceTimer,
-        life: snap.springs[i].life, growTimer: snap.springs[i].growTimer,
-      });
+/** Sync a state array to match a snapshot array — reuse existing objects, grow/shrink as needed. */
+function syncArray<TState, TSnap>(
+  stateArr: TState[],
+  snapArr: TSnap[],
+  factory: (snap: TSnap) => TState,
+  update: (state: TState, snap: TSnap) => void,
+): void {
+  while (stateArr.length > snapArr.length) stateArr.pop();
+  for (let i = 0; i < snapArr.length; i++) {
+    if (i >= stateArr.length) {
+      stateArr.push(factory(snapArr[i]));
     } else {
-      state.springs[i].x = snap.springs[i].x;
-      state.springs[i].y = snap.springs[i].y;
-      state.springs[i].bounceTimer = snap.springs[i].bounceTimer;
-      state.springs[i].life = snap.springs[i].life;
-      state.springs[i].growTimer = snap.springs[i].growTimer;
-    }
-  }
-
-  // Thorns
-  while (state.thorns.length > snap.thorns.length) state.thorns.pop();
-  for (let i = 0; i < snap.thorns.length; i++) {
-    if (i >= state.thorns.length) {
-      state.thorns.push({
-        x: snap.thorns[i].x, y: snap.thorns[i].y,
-        width: 20, height: 20, platformIndex: 0,
-        life: snap.thorns[i].life, growTimer: snap.thorns[i].growTimer,
-        hit: snap.thorns[i].hit,
-      });
-    } else {
-      state.thorns[i].x = snap.thorns[i].x;
-      state.thorns[i].y = snap.thorns[i].y;
-      state.thorns[i].life = snap.thorns[i].life;
-      state.thorns[i].growTimer = snap.thorns[i].growTimer;
-      state.thorns[i].hit = snap.thorns[i].hit;
-    }
-  }
-
-  // Ghosts
-  while (state.ghosts.length > snap.ghosts.length) state.ghosts.pop();
-  for (let i = 0; i < snap.ghosts.length; i++) {
-    if (i >= state.ghosts.length) {
-      state.ghosts.push({
-        x: snap.ghosts[i].x, y: snap.ghosts[i].y,
-        vx: snap.ghosts[i].vx, size: 30, alpha: 0.6,
-        wobblePhase: snap.ghosts[i].wobblePhase,
-      });
-    } else {
-      state.ghosts[i].x = snap.ghosts[i].x;
-      state.ghosts[i].y = snap.ghosts[i].y;
-      state.ghosts[i].vx = snap.ghosts[i].vx;
-      state.ghosts[i].wobblePhase = snap.ghosts[i].wobblePhase;
-    }
-  }
-
-  // Lava rocks
-  while (state.lavaRocks.length > snap.lavaRocks.length) state.lavaRocks.pop();
-  for (let i = 0; i < snap.lavaRocks.length; i++) {
-    if (i >= state.lavaRocks.length) {
-      state.lavaRocks.push({
-        x: snap.lavaRocks[i].x, y: snap.lavaRocks[i].y,
-        vy: snap.lavaRocks[i].vy, size: 10, rotation: 0,
-        active: snap.lavaRocks[i].active,
-      });
-    } else {
-      state.lavaRocks[i].x = snap.lavaRocks[i].x;
-      state.lavaRocks[i].y = snap.lavaRocks[i].y;
-      state.lavaRocks[i].vy = snap.lavaRocks[i].vy;
-      state.lavaRocks[i].active = snap.lavaRocks[i].active;
-    }
-  }
-
-  // Geyser states
-  while (state.geyserStates.length > snap.geyserStates.length) state.geyserStates.pop();
-  for (let i = 0; i < snap.geyserStates.length; i++) {
-    if (i >= state.geyserStates.length) {
-      state.geyserStates.push({
-        timer: snap.geyserStates[i].timer,
-        active: snap.geyserStates[i].active,
-        activeTimer: snap.geyserStates[i].activeTimer,
-      });
-    } else {
-      state.geyserStates[i].timer = snap.geyserStates[i].timer;
-      state.geyserStates[i].active = snap.geyserStates[i].active;
-      state.geyserStates[i].activeTimer = snap.geyserStates[i].activeTimer;
+      update(stateArr[i], snapArr[i]);
     }
   }
 }

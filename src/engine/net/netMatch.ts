@@ -179,7 +179,7 @@ export class NetMatch {
     this.rafId = requestAnimationFrame(loop);
   }
 
-  /** Guest: send inputs + receive snapshots → apply to state → render. */
+  /** Guest: send inputs + predict local + receive snapshots → render. */
   private startGuestLoop(): void {
     this.pingTimer = setInterval(() => {
       this.transport.sendUnreliable(encodePing(performance.now()));
@@ -187,14 +187,16 @@ export class NetMatch {
 
     let lastTime = performance.now();
     let guestFrame = 0;
-    // Reusable input bundle for sending (avoids allocation)
-    const inputBundle: Array<{ frame: number; input: import('../types').InputState }> = [{ frame: 0, input: { left: false, right: false, jump: false, down: false } }];
+    const FIXED_DT = 1 / 60;
+    const inputBundle: Array<{ frame: number; input: import('../types').InputState }> = [
+      { frame: 0, input: { left: false, right: false, jump: false, down: false } },
+    ];
 
     const loop = (now: number) => {
       const dt = Math.min((now - lastTime) / 1000, 0.1);
       lastTime = now;
 
-      // Send local input to host every frame
+      // 1. Read local input and send to host
       const localInput = this.gameLoop.getInputAny();
       guestFrame++;
       inputBundle[0].frame = guestFrame;
@@ -203,14 +205,23 @@ export class NetMatch {
         encodeInputMessage(inputBundle, 0, 1, this.localSlot),
       );
 
-      // Apply the latest interpolated snapshot to the GameLoop's state
+      // 2. Client prediction: predict local player movement for instant feel
+      let localOverride: { x: number; y: number } | undefined;
+      if (this.prediction) {
+        this.prediction.predict(localInput, FIXED_DT);
+        this.prediction.decayVisualOffset();
+        localOverride = this.prediction.getDisplayPosition();
+      }
+
+      // 3. Apply interpolated host snapshot to state (with local player override)
       if (this.interpolation) {
         const snap = this.interpolation.getInterpolatedState();
         if (snap) {
-          applySnapshotToState(snap, this.gameLoop.getState());
+          applySnapshotToState(snap, this.gameLoop.getState(), this.localSlot, localOverride);
         }
       }
 
+      // 4. Render
       this.gameLoop.renderFrame(dt);
       this.rafId = requestAnimationFrame(loop);
     };
