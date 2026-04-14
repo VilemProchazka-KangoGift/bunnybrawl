@@ -182,12 +182,13 @@ export function Match() {
           setConnectionUnstable(stalled);
         },
         onStallTimeout: () => {
-          // Stall lasted too long — end match
+          if (matchEnded) return; // don't override normal victory with disconnect
           if (gameLoopRef.current) {
             setMatchResult(null, gameLoopRef.current.getState(), true);
           }
         },
         onDisconnect: () => {
+          if (matchEnded) return; // don't override normal victory with disconnect
           if (gameLoopRef.current) {
             setMatchResult(null, gameLoopRef.current.getState(), true);
           }
