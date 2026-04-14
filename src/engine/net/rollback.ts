@@ -124,7 +124,8 @@ export class RollbackEngine {
   private readonly preRollbackY: number[] = [];
   private readonly preRollbackState: string[] = [];    // PlayerState before rollback
   private readonly preRollbackScore: number[] = [];    // score before rollback
-  private _desyncChecks = 0;
+  private _desyncChecksSent = 0;  // host: checks sent
+  private _desyncChecks = 0;     // guest: checks received
   private _desyncMismatches = 0;
   private _desyncCorrections = 0;
   private _lastDesyncFrame = -1;
@@ -669,6 +670,7 @@ export class RollbackEngine {
         entitiesHash: detailed.entitiesHash,
         timersHash: detailed.timersHash,
       };
+      this._desyncChecksSent++;
       this.transport.sendReliable(check);
       this.lastDesyncCheckFrame = this.localFrame;
       // Log host state periodically for comparison with guest logs
@@ -718,7 +720,7 @@ export class RollbackEngine {
     s.rollbacksPerSec = this.rollbackCountPerSec;
     s.maxRollbackDepth = this.maxRollbackDepthPerSec;
     s.isRelay = this.transport.isRelay;
-    s.desyncChecks = this._desyncChecks;
+    s.desyncChecks = this.isHost ? this._desyncChecksSent : this._desyncChecks;
     s.desyncMismatches = this._desyncMismatches;
     s.desyncCorrections = this._desyncCorrections;
     s.lastDesyncFrame = this._lastDesyncFrame;
