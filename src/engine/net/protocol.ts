@@ -28,6 +28,8 @@ export const MsgType = {
   INPUT: 0x10,
   PING: 0x12,
   PONG: 0x13,
+  SNAPSHOT: 0x20,       // host -> guest: binary state snapshot (full or delta)
+  SNAPSHOT_ACK: 0x21,   // guest -> host: acknowledge received snapshot frame
 } as const;
 
 // ---- Input encoding (binary, compact) ----
@@ -299,4 +301,23 @@ export type ReliableMessage =
   | SlotAssignmentMessage
   | MatchInProgressMessage;
 
-export const PROTOCOL_VERSION = 4;
+// ---- Snapshot ACK encoding ----
+
+/** Encode a snapshot acknowledgment (guest → host). */
+export function encodeSnapshotAck(frame: number): ArrayBuffer {
+  const buf = new ArrayBuffer(5);
+  const view = new DataView(buf);
+  view.setUint8(0, MsgType.SNAPSHOT_ACK);
+  view.setUint32(1, frame, true);
+  return buf;
+}
+
+/** Decode a snapshot acknowledgment. Returns frame number or null. */
+export function decodeSnapshotAck(buf: ArrayBuffer): number | null {
+  const view = new DataView(buf);
+  if (view.byteLength < 5) return null;
+  if (view.getUint8(0) !== MsgType.SNAPSHOT_ACK) return null;
+  return view.getUint32(1, true);
+}
+
+export const PROTOCOL_VERSION = 5;
