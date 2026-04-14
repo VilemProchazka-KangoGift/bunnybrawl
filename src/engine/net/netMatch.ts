@@ -187,7 +187,6 @@ export class NetMatch {
 
     let lastTime = performance.now();
     let guestFrame = 0;
-    const PREDICT_DT = 1 / 60; // fixed step for deterministic prediction
     const inputBundle: Array<{ frame: number; input: import('../types').InputState }> = [
       { frame: 0, input: { left: false, right: false, jump: false, down: false } },
     ];
@@ -208,19 +207,11 @@ export class NetMatch {
         encodeInputMessage(inputBundle, 0, 1, this.localSlot),
       );
 
-      // 2. Client prediction with fixed timestep for frame-rate independence
-      let localOverride: { x: number; y: number } | undefined;
-      if (this.prediction) {
-        this.prediction.predict(localInput, PREDICT_DT);
-        this.prediction.decayVisualOffset();
-        localOverride = this.prediction.getDisplayPosition();
-      }
-
-      // 3. Apply interpolated host snapshot to state (with local player override)
+      // 2. Apply interpolated host snapshot to state
       if (this.interpolation) {
         const snap = this.interpolation.getInterpolatedState();
         if (snap) {
-          applySnapshotToState(snap, this.gameLoop.getState(), this.localSlot, localOverride);
+          applySnapshotToState(snap, this.gameLoop.getState());
         }
       }
 
