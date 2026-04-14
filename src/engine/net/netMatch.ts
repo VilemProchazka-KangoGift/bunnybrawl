@@ -24,6 +24,7 @@ import { decodeSnapshot } from './snapshot';
 import {
   decodePingPong,
   encodePing, encodePong,
+  encodeInputMessage,
 } from './protocol';
 
 export interface NetMatchConfig {
@@ -163,9 +164,11 @@ export class NetMatch {
       accumulator += dt;
 
       while (accumulator >= FIXED_DT) {
+        // Build inputs: host reads from any key binding, guests from network
         const networkInputs = this.hostAuthority!.getNetworkInputs();
+        // Host's own input: merge all key bindings (online = any keys control your character)
+        networkInputs.set(this.localSlot, this.gameLoop.getInputAny());
         this.gameLoop.fixedUpdate(FIXED_DT, networkInputs);
-        // Broadcast state to guests after each tick
         this.hostAuthority!.broadcastSnapshot(this.gameLoop.getState());
         accumulator -= FIXED_DT;
       }
@@ -176,17 +179,29 @@ export class NetMatch {
     this.rafId = requestAnimationFrame(loop);
   }
 
-  /** Guest: receive snapshots → apply to state → render. */
+  /** Guest: send inputs + receive snapshots → apply to state → render. */
   private startGuestLoop(): void {
     this.pingTimer = setInterval(() => {
       this.transport.sendUnreliable(encodePing(performance.now()));
     }, 500);
 
     let lastTime = performance.now();
+    let guestFrame = 0;
+    // Reusable input bundle for sending (avoids allocation)
+    const inputBundle: Array<{ frame: number; input: import('../types').InputState }> = [{ frame: 0, input: { left: false, right: false, jump: false, down: false } }];
 
     const loop = (now: number) => {
       const dt = Math.min((now - lastTime) / 1000, 0.1);
       lastTime = now;
+
+      // Send local input to host every frame
+      const localInput = this.gameLoop.getInputAny();
+      guestFrame++;
+      inputBundle[0].frame = guestFrame;
+      inputBundle[0].input = localInput;
+      this.transport.sendUnreliable(
+        encodeInputMessage(inputBundle, 0, 1, this.localSlot),
+      );
 
       // Apply the latest interpolated snapshot to the GameLoop's state
       if (this.interpolation) {
@@ -196,7 +211,6 @@ export class NetMatch {
         }
       }
 
-      // Render using the GameLoop's renderer (state was just updated from host)
       this.gameLoop.renderFrame(dt);
       this.rafId = requestAnimationFrame(loop);
     };
