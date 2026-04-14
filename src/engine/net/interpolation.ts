@@ -18,7 +18,6 @@ const INTERP_DELAY_FRAMES = 2;
 
 interface TimestampedSnapshot {
   snap: AuthSnapshot;
-  receiveTime: number; // performance.now() when received
 }
 
 export class EntityInterpolation {
@@ -30,8 +29,7 @@ export class EntityInterpolation {
 
   /** Push a new snapshot from the host. */
   pushSnapshot(snap: AuthSnapshot): void {
-    const now = performance.now();
-    this.buffer.push({ snap, receiveTime: now });
+    this.buffer.push({ snap });
 
     // Trim old snapshots
     while (this.buffer.length > this.maxBuffer) {
@@ -116,13 +114,13 @@ function interpolateSnapshots(a: AuthSnapshot, b: AuthSnapshot, t: number): Auth
     carrots: b.carrots,
     springs: b.springs,
     thorns: b.thorns,
-    ghosts: interpolateByIndex(a.ghosts, b.ghosts, t, (ag, bg) => ({
+    ghosts: interpolateByIndex(a.ghosts, b.ghosts, (ag, bg) => ({
       x: lerp(ag.x, bg.x, t),
       y: lerp(ag.y, bg.y, t),
       vx: lerp(ag.vx, bg.vx, t),
       wobblePhase: lerp(ag.wobblePhase, bg.wobblePhase, t),
     })),
-    lavaRocks: interpolateByIndex(a.lavaRocks, b.lavaRocks, t, (ar, br) => ({
+    lavaRocks: interpolateByIndex(a.lavaRocks, b.lavaRocks, (ar, br) => ({
       x: lerp(ar.x, br.x, t),
       y: lerp(ar.y, br.y, t),
       vy: lerp(ar.vy, br.vy, t),
@@ -144,7 +142,7 @@ function interpolateSnapshots(a: AuthSnapshot, b: AuthSnapshot, t: number): Auth
 }
 
 /** Interpolate arrays matched by index (ghosts, lava rocks). */
-function interpolateByIndex<T>(a: T[], b: T[], _t: number, fn: (a: T, b: T) => T): T[] {
+function interpolateByIndex<T>(a: T[], b: T[], fn: (a: T, b: T) => T): T[] {
   return b.map((bi, i) => {
     const ai = a[i];
     return ai ? fn(ai, bi) : bi;

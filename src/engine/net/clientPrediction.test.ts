@@ -32,23 +32,6 @@ describe('ClientPrediction', () => {
     expect(pred.localSlot).toBe('P2');
   });
 
-  it('records inputs and returns sequence numbers', () => {
-    const pred = new ClientPrediction('P2' as PlayerSlot, mockArena);
-    const seq0 = pred.recordInput({ left: true, right: false, jump: false, down: false });
-    const seq1 = pred.recordInput({ left: false, right: true, jump: false, down: false });
-    expect(seq0).toBe(0);
-    expect(seq1).toBe(1);
-  });
-
-  it('caps input history at 120 entries', () => {
-    const pred = new ClientPrediction('P2' as PlayerSlot, mockArena);
-    for (let i = 0; i < 150; i++) {
-      pred.recordInput({ left: false, right: false, jump: false, down: false });
-    }
-    // Can't directly access inputHistory, but seq should be 150
-    expect(pred.recordInput({ left: false, right: false, jump: false, down: false })).toBe(150);
-  });
-
   it('predict moves position with input', () => {
     const pred = new ClientPrediction('P2' as PlayerSlot, mockArena);
     // Initialize at a known position
@@ -107,13 +90,15 @@ describe('ClientPrediction', () => {
     pred.initFromSnapshot(makeAuthPlayer(200, 620));
     pred.reconcile(makeAuthPlayer(210, 620)); // small correction, creates offset
 
-    const before = pred.getDisplayPosition();
-    pred.decayVisualOffset();
-    const after = pred.getDisplayPosition();
+    // Copy display x before decay (getDisplayPosition reuses cached object)
+    const xBefore = pred.getDisplayPosition().x;
+    const offsetBefore = Math.abs(xBefore - 210);
 
-    // Offset should have decayed
-    const offsetBefore = Math.abs(before.x - 210);
-    const offsetAfter = Math.abs(after.x - 210);
+    pred.decayVisualOffset();
+
+    const xAfter = pred.getDisplayPosition().x;
+    const offsetAfter = Math.abs(xAfter - 210);
+
     expect(offsetAfter).toBeLessThan(offsetBefore);
   });
 

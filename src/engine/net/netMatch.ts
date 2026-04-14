@@ -187,7 +187,7 @@ export class NetMatch {
 
     let lastTime = performance.now();
     let guestFrame = 0;
-    const FIXED_DT = 1 / 60;
+    const PREDICT_DT = 1 / 60; // fixed step for deterministic prediction
     const inputBundle: Array<{ frame: number; input: import('../types').InputState }> = [
       { frame: 0, input: { left: false, right: false, jump: false, down: false } },
     ];
@@ -196,19 +196,22 @@ export class NetMatch {
       const dt = Math.min((now - lastTime) / 1000, 0.1);
       lastTime = now;
 
-      // 1. Read local input and send to host
+      // 1. Read local input and send to host (field-copy avoids object allocation)
       const localInput = this.gameLoop.getInputAny();
       guestFrame++;
       inputBundle[0].frame = guestFrame;
-      inputBundle[0].input = localInput;
+      inputBundle[0].input.left = localInput.left;
+      inputBundle[0].input.right = localInput.right;
+      inputBundle[0].input.jump = localInput.jump;
+      inputBundle[0].input.down = localInput.down;
       this.transport.sendUnreliable(
         encodeInputMessage(inputBundle, 0, 1, this.localSlot),
       );
 
-      // 2. Client prediction: predict local player movement for instant feel
+      // 2. Client prediction with fixed timestep for frame-rate independence
       let localOverride: { x: number; y: number } | undefined;
       if (this.prediction) {
-        this.prediction.predict(localInput, FIXED_DT);
+        this.prediction.predict(localInput, PREDICT_DT);
         this.prediction.decayVisualOffset();
         localOverride = this.prediction.getDisplayPosition();
       }

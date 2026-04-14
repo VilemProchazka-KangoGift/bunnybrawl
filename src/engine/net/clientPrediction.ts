@@ -19,11 +19,6 @@ import { MAX_WALK_SPEED, GRAVITY, JUMP_IMPULSE, FAST_FALL_GRAVITY } from '../con
 const CORRECTION_SNAP_THRESHOLD = 30; // px — snap if correction > this
 const SMOOTH_FACTOR = 0.3; // lerp factor per frame for small corrections
 
-export interface PredictionInput {
-  seq: number;
-  input: InputState;
-}
-
 export class ClientPrediction {
   readonly localSlot: PlayerSlot;
   private arena: Arena;
@@ -38,25 +33,12 @@ export class ClientPrediction {
   private visualOffsetX = 0;
   private visualOffsetY = 0;
 
-  // Input history for replay after reconciliation
-  private inputHistory: PredictionInput[] = [];
-  private nextSeq = 0;
+  // Cached return objects (avoid per-frame allocation)
+  private _displayPos = { x: 0, y: 0 };
+
   constructor(localSlot: PlayerSlot, arena: Arena) {
     this.localSlot = localSlot;
     this.arena = arena;
-  }
-
-  /** Record a local input and return the sequence number. */
-  recordInput(input: InputState): number {
-    const seq = this.nextSeq++;
-    this.inputHistory.push({ seq, input });
-
-    // Cap history at 120 entries (~2 seconds at 60Hz)
-    if (this.inputHistory.length > 120) {
-      this.inputHistory.shift();
-    }
-
-    return seq;
   }
 
   /**
@@ -126,12 +108,11 @@ export class ClientPrediction {
     if (Math.abs(this.visualOffsetY) < 0.5) this.visualOffsetY = 0;
   }
 
-  /** Get the display position (predicted + visual offset for smoothing). */
+  /** Get the display position (predicted + visual offset for smoothing). Reuses cached object. */
   getDisplayPosition(): { x: number; y: number } {
-    return {
-      x: this.predictedX + this.visualOffsetX,
-      y: this.predictedY + this.visualOffsetY,
-    };
+    this._displayPos.x = this.predictedX + this.visualOffsetX;
+    this._displayPos.y = this.predictedY + this.visualOffsetY;
+    return this._displayPos;
   }
 
   /** Get raw predicted position (for physics). */
