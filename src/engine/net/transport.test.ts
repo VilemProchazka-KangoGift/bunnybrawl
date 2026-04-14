@@ -1,73 +1,56 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// ---- Event-emitter mock for PeerJS objects ----
+// ---- Mock Trystero ----
 
-function makeEmitter() {
-  const handlers = new Map<string, Function[]>();
-  return {
-    on(event: string, fn: Function) { handlers.set(event, [...(handlers.get(event) || []), fn]); },
-    emit(event: string, ...args: any[]) { for (const fn of handlers.get(event) || []) fn(...args); },
-    _handlers: handlers,
-  };
-}
+const mockSendBinary = vi.fn(async () => []);
+const mockSendJson = vi.fn(async () => []);
+let onBinaryCallback: ((data: ArrayBuffer, peerId: string) => void) | null = null;
+let onJsonCallback: ((data: string, peerId: string) => void) | null = null;
+let onPeerJoinCallback: ((peerId: string) => void) | null = null;
+let onPeerLeaveCallback: ((peerId: string) => void) | null = null;
 
-function makeMockConn(peerId = 'remote-peer-1') {
-  const emitter = makeEmitter();
-  return {
-    peer: peerId,
-    open: false,
-    send: vi.fn(),
-    close: vi.fn(),
-    on: emitter.on.bind(emitter),
-    _emit: emitter.emit.bind(emitter),
-    // Fake peerConnection for ICE logging
-    peerConnection: null as any,
-  };
-}
-
-let _lastPeerEmitter: ReturnType<typeof makeEmitter>;
-let _lastPeerInstance: any;
-
-vi.mock('peerjs', () => ({
-  default: class MockPeer {
-    constructor(..._args: any[]) {
-      const emitter = makeEmitter();
-      _lastPeerEmitter = emitter;
-      const inst = {
-        on: emitter.on.bind(emitter),
-        connect: vi.fn(() => {
-          const conn = makeMockConn('host-peer');
-          setTimeout(() => { conn.open = true; conn._emit('open'); }, 0);
-          return conn;
-        }),
-        reconnect: vi.fn(),
-        destroy: vi.fn(),
-        _emit: emitter.emit.bind(emitter),
-      };
-      _lastPeerInstance = inst;
-      Object.assign(this, inst);
+const mockRoom = {
+  makeAction: vi.fn((namespace: string) => {
+    if (namespace === 'bin') {
+      return [
+        mockSendBinary,
+        (cb: (data: ArrayBuffer, peerId: string) => void) => { onBinaryCallback = cb; },
+        vi.fn(),
+      ];
     }
-  },
-}));
-
-// Simple static mock conn for tests that don't need events
-const mockConn = {
-  peer: 'remote-peer-1',
-  open: true,
-  send: vi.fn(),
-  close: vi.fn(),
-  on: vi.fn(),
+    return [
+      mockSendJson,
+      (cb: (data: string, peerId: string) => void) => { onJsonCallback = cb; },
+      vi.fn(),
+    ];
+  }),
+  onPeerJoin: vi.fn((fn: (id: string) => void) => { onPeerJoinCallback = fn; }),
+  onPeerLeave: vi.fn((fn: (id: string) => void) => { onPeerLeaveCallback = fn; }),
+  leave: vi.fn(async () => {}),
+  getPeers: vi.fn(() => ({})),
+  ping: vi.fn(async () => 0),
+  addStream: vi.fn(() => []),
+  removeStream: vi.fn(),
+  addTrack: vi.fn(() => []),
+  removeTrack: vi.fn(),
+  replaceTrack: vi.fn(() => []),
+  onPeerStream: vi.fn(),
+  onPeerTrack: vi.fn(),
 };
 
-// Mock networkSimulator
+vi.mock('trystero/nostr', () => ({
+  joinRoom: vi.fn(() => mockRoom),
+  selfId: 'self-id',
+}));
+
 vi.mock('./networkSimulator', () => ({
-  NetworkSimulator: vi.fn(() => ({ enabled: false, enqueue: vi.fn(), flush: vi.fn(() => []) })),
+  NetworkSimulator: vi.fn(() => ({ enabled: false, enqueue: vi.fn(), flush: vi.fn(() => []), getConfig: vi.fn(() => ({ latencyMs: 0, jitterMs: 0 })) })),
   readSimConfigFromUrl: vi.fn(() => null),
 }));
 
 import { Transport } from './transport';
 import type { TransportEvents } from './transport';
-import { MsgType, encodePing, encodePong, decodePingPong } from './protocol';
+import { MsgType, encodePing, encodePong } from './protocol';
 
 function makeEvents(overrides?: Partial<TransportEvents>): TransportEvents {
   return {
@@ -81,6 +64,16 @@ function makeEvents(overrides?: Partial<TransportEvents>): TransportEvents {
     ...overrides,
   };
 }
+
+function resetMocks() {
+  vi.clearAllMocks();
+  onBinaryCallback = null;
+  onJsonCallback = null;
+  onPeerJoinCallback = null;
+  onPeerLeaveCallback = null;
+}
+
+// ---- Tests ----
 
 describe('Transport — construction', () => {
   it('creates in idle state', () => {
@@ -116,7 +109,6 @@ describe('Transport — setEvents', () => {
     const events2 = makeEvents();
     const t = new Transport(events1);
     t.setEvents(events2);
-    // Internal events reference should be updated
     expect((t as any).events).toBe(events2);
     t.destroy();
   });
@@ -148,76 +140,55 @@ describe('Transport — send methods (with no peers)', () => {
   });
 });
 
-describe('Transport — send methods (with mock peer)', () => {
+describe('Transport — send methods (with connected peer)', () => {
   let transport: Transport;
   let events: TransportEvents;
 
-  beforeEach(() => {
-    vi.clearAllMocks();
+  beforeEach(async () => {
+    resetMocks();
     events = makeEvents();
     transport = new Transport(events);
-
-    // Manually add a peer to simulate connected state
-    (transport as any).peers.set('peer-1', {
-      peerId: 'peer-1',
-      conn: mockConn,
-      rtt: 0,
-      jitter: 0,
-      lastPongTime: performance.now(),
-      health: 'healthy',
-    });
-    (transport as any).status = 'connected';
+    await transport.createRoom();
+    // Simulate peer joining
+    onPeerJoinCallback?.('guest-1');
   });
 
   afterEach(() => {
     transport.destroy();
   });
 
-  it('sendReliable sends JSON to connected peer', () => {
+  it('sendReliable sends JSON via action sender', () => {
     const msg = { type: MsgType.PAUSE, paused: true };
     transport.sendReliable(msg as any);
-    expect(mockConn.send).toHaveBeenCalledWith(JSON.stringify(msg));
+    expect(mockSendJson).toHaveBeenCalledWith(JSON.stringify(msg));
   });
 
   it('sendReliableTo sends to specific peer', () => {
     const msg = { type: MsgType.DISCONNECT };
-    transport.sendReliableTo('peer-1', msg as any);
-    expect(mockConn.send).toHaveBeenCalledWith(JSON.stringify(msg));
+    transport.sendReliableTo('guest-1', msg as any);
+    expect(mockSendJson).toHaveBeenCalledWith(JSON.stringify(msg), 'guest-1');
   });
 
-  it('sendReliableTo skips unknown peer', () => {
-    mockConn.send.mockClear();
-    transport.sendReliableTo('unknown', { type: MsgType.DISCONNECT } as any);
-    expect(mockConn.send).not.toHaveBeenCalled();
-  });
-
-  it('sendUnreliable sends binary to all peers', () => {
+  it('sendUnreliable sends binary via action sender', () => {
     const data = new ArrayBuffer(10);
     transport.sendUnreliable(data);
-    expect(mockConn.send).toHaveBeenCalledWith(data);
+    expect(mockSendBinary).toHaveBeenCalledWith(data);
   });
 
-  it('sendUnreliableTo sends to specific peer', () => {
+  it('sendUnreliableTo sends binary to specific peer', () => {
     const data = new ArrayBuffer(10);
-    transport.sendUnreliableTo('peer-1', data);
-    expect(mockConn.send).toHaveBeenCalledWith(data);
-  });
-
-  it('sendReliable skips closed connections', () => {
-    mockConn.open = false;
-    transport.sendReliable({ type: MsgType.DISCONNECT } as any);
-    expect(mockConn.send).not.toHaveBeenCalled();
-    mockConn.open = true;
+    transport.sendUnreliableTo('guest-1', data);
+    expect(mockSendBinary).toHaveBeenCalledWith(data, 'guest-1');
   });
 
   it('getPeerIds returns peer IDs', () => {
-    expect(transport.getPeerIds()).toEqual(['peer-1']);
+    expect(transport.getPeerIds()).toEqual(['guest-1']);
   });
 
   it('getPeerInfo returns info for known peer', () => {
-    const info = transport.getPeerInfo('peer-1');
+    const info = transport.getPeerInfo('guest-1');
     expect(info).toBeDefined();
-    expect(info!.peerId).toBe('peer-1');
+    expect(info!.peerId).toBe('guest-1');
   });
 
   it('peerCount reflects number of peers', () => {
@@ -226,47 +197,35 @@ describe('Transport — send methods (with mock peer)', () => {
 });
 
 describe('Transport — gracefulDisconnect', () => {
-  it('sends DISCONNECT and schedules destroy', () => {
+  it('sends DISCONNECT and schedules destroy', async () => {
     vi.useFakeTimers();
+    resetMocks();
     const events = makeEvents();
     const t = new Transport(events);
-
-    // Add a mock peer
-    (t as any).peers.set('peer-1', {
-      peerId: 'peer-1', conn: mockConn, rtt: 0, jitter: 0,
-      lastPongTime: performance.now(), health: 'healthy',
-    });
+    await t.createRoom();
+    onPeerJoinCallback?.('guest-1');
 
     t.gracefulDisconnect();
+    expect(mockSendJson).toHaveBeenCalled();
 
-    // DISCONNECT should have been sent
-    expect(mockConn.send).toHaveBeenCalled();
-
-    // Destroy is scheduled after 100ms
     vi.advanceTimersByTime(150);
-
     vi.useRealTimers();
   });
 });
 
 describe('Transport — destroy', () => {
-  it('clears all resources and sets idle status', () => {
+  it('clears all resources and sets idle status', async () => {
+    resetMocks();
     const events = makeEvents();
     const t = new Transport(events);
-
-    (t as any).peers.set('peer-1', {
-      peerId: 'peer-1', conn: mockConn, rtt: 0, jitter: 0,
-      lastPongTime: performance.now(), health: 'healthy',
-    });
-    (t as any).peer = { destroy: vi.fn() };
-    (t as any).pingTimer = setInterval(() => {}, 1000);
+    await t.createRoom();
+    onPeerJoinCallback?.('guest-1');
 
     t.destroy();
 
     expect(t.peerCount).toBe(0);
-    expect((t as any).peer).toBeNull();
-    expect((t as any).pingTimer).toBeNull();
     expect(events.onStatusChange).toHaveBeenCalledWith('idle', undefined);
+    expect(mockRoom.leave).toHaveBeenCalled();
   });
 });
 
@@ -274,16 +233,12 @@ describe('Transport — message handling', () => {
   let transport: Transport;
   let events: TransportEvents;
 
-  beforeEach(() => {
-    vi.clearAllMocks();
+  beforeEach(async () => {
+    resetMocks();
     events = makeEvents();
     transport = new Transport(events);
-
-    (transport as any).peers.set('peer-1', {
-      peerId: 'peer-1', conn: mockConn, rtt: 50, jitter: 5,
-      lastPongTime: performance.now(), health: 'healthy',
-    });
-    (transport as any).status = 'connected';
+    await transport.createRoom();
+    onPeerJoinCallback?.('guest-1');
   });
 
   afterEach(() => {
@@ -292,103 +247,133 @@ describe('Transport — message handling', () => {
 
   it('delivers JSON string as reliable message', () => {
     const msg = { type: MsgType.PAUSE, paused: true };
-    (transport as any).deliverData(JSON.stringify(msg), 'peer-1');
+    onJsonCallback?.(JSON.stringify(msg), 'guest-1');
     expect(events.onReliableMessage).toHaveBeenCalled();
   });
 
   it('delivers ArrayBuffer as unreliable message (non-ping/pong)', () => {
-    // Create a binary message that's NOT a ping/pong
     const data = new ArrayBuffer(20);
-    const view = new Uint8Array(data);
-    view[0] = 99; // Not a ping/pong marker
-    (transport as any).deliverData(data, 'peer-1');
-    expect(events.onUnreliableMessage).toHaveBeenCalledWith(data, 'peer-1');
+    new Uint8Array(data)[0] = 99;
+    onBinaryCallback?.(data, 'guest-1');
+    expect(events.onUnreliableMessage).toHaveBeenCalledWith(data, 'guest-1');
   });
 
   it('handles PING by responding with PONG', () => {
     const pingData = encodePing(1000);
-    (transport as any).handleBinaryMessage(pingData, 'peer-1');
-    // Should send pong back
-    expect(mockConn.send).toHaveBeenCalled();
+    onBinaryCallback?.(pingData, 'guest-1');
+    expect(mockSendBinary).toHaveBeenCalled();
   });
 
   it('handles PONG by updating RTT', () => {
-    const timestamp = performance.now() - 50; // 50ms ago
+    const timestamp = performance.now() - 50;
     const pongData = encodePong(timestamp);
-    (transport as any).handleBinaryMessage(pongData, 'peer-1');
-    // RTT should be updated
+    onBinaryCallback?.(pongData, 'guest-1');
     expect(events.onRttUpdate).toHaveBeenCalled();
     expect(transport.currentRtt).toBeGreaterThan(0);
   });
 
   it('ignores PONG with invalid RTT (negative or > 10s)', () => {
-    // Timestamp in the future → negative RTT
     const futureTimestamp = performance.now() + 20000;
     const pongData = encodePong(futureTimestamp);
-    (transport as any).handleBinaryMessage(pongData, 'peer-1');
-    // Should not crash, RTT should stay at previous value
-  });
-
-  it('updates aggregate RTT across multiple peers', () => {
-    // Add a second peer
-    (transport as any).peers.set('peer-2', {
-      peerId: 'peer-2', conn: { ...mockConn, peer: 'peer-2' },
-      rtt: 100, jitter: 10,
-      lastPongTime: performance.now(), health: 'healthy',
-    });
-
-    (transport as any).updateAggregateRtt();
-
-    // Aggregate should be average of both peers
-    expect(transport.currentRtt).toBeGreaterThan(0);
+    onBinaryCallback?.(pongData, 'guest-1');
+    // Should not crash
   });
 
   it('handles malformed JSON gracefully', () => {
     expect(() => {
-      (transport as any).handleJsonMessage('not json {{{', 'peer-1');
+      (transport as any).handleJsonMessage('not json {{{', 'guest-1');
     }).not.toThrow();
-    // onReliableMessage should NOT have been called
     expect(events.onReliableMessage).not.toHaveBeenCalled();
   });
 
-  it('handles typed array buffer data (Uint8Array wrapper)', () => {
-    const buf = new ArrayBuffer(10);
-    const typed = { buffer: buf };
-    (transport as any).deliverData(typed, 'peer-1');
-    // Should deliver the underlying buffer
-    expect(events.onUnreliableMessage).toHaveBeenCalled();
+  it('updates aggregate RTT across multiple peers', () => {
+    (transport as any).peers.set('guest-2', {
+      peerId: 'guest-2', rtt: 100, jitter: 10,
+      lastPongTime: performance.now(), health: 'healthy',
+    });
+    (transport as any).updateAggregateRtt();
+    expect(transport.currentRtt).toBeGreaterThan(0);
+  });
+});
+
+describe('Transport — createRoom lifecycle', () => {
+  it('creates a room and resolves with room code', async () => {
+    resetMocks();
+    const events = makeEvents();
+    const t = new Transport(events);
+
+    const code = await t.createRoom();
+
+    expect(code).toMatch(/^[A-Z2-9]{3}$/);
+    expect(t.roomCode).toBe(code);
+    expect(t.isHost).toBe(true);
+    expect(events.onStatusChange).toHaveBeenCalledWith('creating', undefined);
+
+    t.destroy();
+  });
+
+  it('handles incoming guest connection', async () => {
+    resetMocks();
+    const events = makeEvents();
+    const t = new Transport(events);
+    await t.createRoom();
+
+    onPeerJoinCallback?.('guest-1');
+
+    expect(t.peerCount).toBe(1);
+    expect(events.onPeerConnected).toHaveBeenCalledWith('guest-1');
+    expect(events.onStatusChange).toHaveBeenCalledWith('connected', undefined);
+
+    t.destroy();
+  });
+});
+
+describe('Transport — joinRoom lifecycle', () => {
+  it('joins a room and sets roomCode', async () => {
+    resetMocks();
+    const events = makeEvents();
+    const t = new Transport(events);
+
+    // Start join — won't resolve until peer connects
+    const joinPromise = t.joinRoom('ABC');
+
+    expect(t.roomCode).toBe('ABC');
+    expect(t.isHost).toBe(false);
+    expect(events.onStatusChange).toHaveBeenCalledWith('joining', undefined);
+
+    // Simulate host connecting
+    onPeerJoinCallback?.('host-peer');
+
+    await joinPromise;
+
+    expect(t.peerCount).toBe(1);
+    t.destroy();
   });
 });
 
 describe('Transport — peer lifecycle', () => {
-  it('removePeer fires onPeerDisconnected', () => {
+  it('removePeer fires onPeerDisconnected', async () => {
+    resetMocks();
     const events = makeEvents();
     const t = new Transport(events);
+    await t.createRoom();
+    onPeerJoinCallback?.('guest-1');
 
-    (t as any).peers.set('peer-1', {
-      peerId: 'peer-1', conn: mockConn, rtt: 0, jitter: 0,
-      lastPongTime: performance.now(), health: 'healthy',
-    });
-    (t as any).status = 'connected';
+    (t as any).removePeer('guest-1');
 
-    (t as any).removePeer('peer-1');
-
-    expect(events.onPeerDisconnected).toHaveBeenCalledWith('peer-1');
+    expect(events.onPeerDisconnected).toHaveBeenCalledWith('guest-1');
     expect(t.peerCount).toBe(0);
     t.destroy();
   });
 
-  it('removePeer sets disconnected when no peers left', () => {
+  it('removePeer sets disconnected when no peers left', async () => {
+    resetMocks();
     const events = makeEvents();
     const t = new Transport(events);
+    await t.createRoom();
+    onPeerJoinCallback?.('guest-1');
 
-    (t as any).peers.set('peer-1', {
-      peerId: 'peer-1', conn: mockConn, rtt: 0, jitter: 0,
-      lastPongTime: performance.now(), health: 'healthy',
-    });
-    (t as any).status = 'connected';
-
-    (t as any).removePeer('peer-1');
+    (t as any).removePeer('guest-1');
 
     expect(events.onStatusChange).toHaveBeenCalledWith('disconnected', undefined);
     t.destroy();
@@ -397,6 +382,21 @@ describe('Transport — peer lifecycle', () => {
   it('removePeer is safe for unknown peer', () => {
     const t = new Transport(makeEvents());
     expect(() => (t as any).removePeer('unknown')).not.toThrow();
+    t.destroy();
+  });
+
+  it('onPeerLeave triggers removePeer', async () => {
+    resetMocks();
+    const events = makeEvents();
+    const t = new Transport(events);
+    await t.createRoom();
+    onPeerJoinCallback?.('guest-1');
+    expect(t.peerCount).toBe(1);
+
+    onPeerLeaveCallback?.('guest-1');
+    expect(t.peerCount).toBe(0);
+    expect(events.onPeerDisconnected).toHaveBeenCalledWith('guest-1');
+
     t.destroy();
   });
 });
@@ -411,52 +411,46 @@ describe('Transport — visibility change handling', () => {
     t.destroy();
   });
 
-  it('resets pong times when returning from long background', () => {
+  it('resets pong times when returning from long background', async () => {
+    resetMocks();
     const events = makeEvents();
     const t = new Transport(events);
+    await t.createRoom();
+    onPeerJoinCallback?.('guest-1');
 
-    // Use absolute timestamps that are positive and realistic
     const now = performance.now();
-    const safeNow = Math.max(now, 50000); // ensure large enough for subtraction
+    const safeNow = Math.max(now, 50000);
     vi.spyOn(performance, 'now').mockReturnValue(safeNow);
 
-    (t as any).peers.set('peer-1', {
-      peerId: 'peer-1', conn: mockConn, rtt: 0, jitter: 0,
-      lastPongTime: safeNow - 10000, health: 'healthy',
-    });
-    (t as any).status = 'connected';
-    (t as any).hiddenAt = safeNow - 3000; // was hidden 3s ago (hiddenAt > 0)
+    const info = t.getPeerInfo('guest-1')!;
+    info.lastPongTime = safeNow - 10000;
+    (t as any).hiddenAt = safeNow - 3000;
 
     Object.defineProperty(document, 'hidden', { value: false, configurable: true });
     (t as any).handleVisibilityChange();
 
-    // lastPongTime should be refreshed to safeNow
-    const info = t.getPeerInfo('peer-1');
-    expect(info!.lastPongTime).toBe(safeNow);
+    expect(info.lastPongTime).toBe(safeNow);
 
     vi.restoreAllMocks();
     t.destroy();
   });
 
-  it('does not reset pong times for short background duration', () => {
+  it('does not reset pong times for short background duration', async () => {
+    resetMocks();
     const events = makeEvents();
     const t = new Transport(events);
+    await t.createRoom();
+    onPeerJoinCallback?.('guest-1');
 
     const oldPongTime = performance.now() - 500;
-    (t as any).peers.set('peer-1', {
-      peerId: 'peer-1', conn: mockConn, rtt: 0, jitter: 0,
-      lastPongTime: oldPongTime, health: 'healthy',
-    });
-    (t as any).status = 'connected';
-    (t as any).hiddenAt = performance.now() - 500; // only hidden 0.5s
+    const info = t.getPeerInfo('guest-1')!;
+    info.lastPongTime = oldPongTime;
+    (t as any).hiddenAt = performance.now() - 500;
 
     Object.defineProperty(document, 'hidden', { value: false, configurable: true });
     (t as any).handleVisibilityChange();
 
-    // lastPongTime should NOT be refreshed (short duration)
-    const info = t.getPeerInfo('peer-1');
-    expect(info!.lastPongTime).toBe(oldPongTime);
-
+    expect(info.lastPongTime).toBe(oldPongTime);
     t.destroy();
   });
 });
@@ -487,8 +481,8 @@ describe('Transport — updateAggregateRtt', () => {
 
   it('averages RTT across peers', () => {
     const t = new Transport(makeEvents());
-    (t as any).peers.set('a', { rtt: 40, jitter: 5 });
-    (t as any).peers.set('b', { rtt: 60, jitter: 15 });
+    (t as any).peers.set('a', { rtt: 40, jitter: 5, lastPongTime: 0, health: 'healthy', peerId: 'a' });
+    (t as any).peers.set('b', { rtt: 60, jitter: 15, lastPongTime: 0, health: 'healthy', peerId: 'b' });
     (t as any).updateAggregateRtt();
     expect(t.currentRtt).toBe(50);
     expect(t.currentJitter).toBe(10);
@@ -496,303 +490,24 @@ describe('Transport — updateAggregateRtt', () => {
   });
 });
 
-// ---- Async lifecycle tests (createRoom / joinRoom / setupConnection) ----
-
-describe('Transport — createRoom lifecycle', () => {
-  it('creates a room and resolves with room code on peer open', async () => {
-    const events = makeEvents();
-    const t = new Transport(events);
-
-    const promise = t.createRoom();
-
-    // Simulate PeerJS signaling server connection
-    _lastPeerEmitter.emit('open');
-
-    const code = await promise;
-    expect(code).toMatch(/^[A-Z2-9]{3}$/);
-    expect(t.roomCode).toBe(code);
-    expect(t.isHost).toBe(true);
-    expect(events.onStatusChange).toHaveBeenCalledWith('creating', undefined);
-
-    t.destroy();
-  });
-
-  it('rejects on peer error', async () => {
-    const events = makeEvents();
-    const t = new Transport(events);
-
-    const promise = t.createRoom();
-
-    _lastPeerEmitter.emit('error', { type: 'unavailable-id', message: 'test' });
-
-    await expect(promise).rejects.toThrow();
-    expect(events.onStatusChange).toHaveBeenCalledWith('error', expect.stringContaining('Room code'));
-
-    t.destroy();
-  });
-
-  it('rejects on generic signaling error', async () => {
-    const events = makeEvents();
-    const t = new Transport(events);
-
-    const promise = t.createRoom();
-    _lastPeerEmitter.emit('error', { type: 'server-error', message: 'fail' });
-
-    await expect(promise).rejects.toThrow();
-    expect(events.onStatusChange).toHaveBeenCalledWith('error', expect.stringContaining('Signaling'));
-
-    t.destroy();
-  });
-
-  it('handles incoming guest connection', async () => {
-    const events = makeEvents();
-    const t = new Transport(events);
-
-    const promise = t.createRoom();
-    _lastPeerEmitter.emit('open');
-    await promise;
-
-    // Simulate guest connecting
-    const guestConn = makeMockConn('guest-1');
-    _lastPeerEmitter.emit('connection', guestConn);
-
-    // Simulate connection open
-    guestConn.open = true;
-    guestConn._emit('open');
-
-    expect(t.peerCount).toBe(1);
-    expect(events.onPeerConnected).toHaveBeenCalledWith('guest-1');
-    expect(events.onStatusChange).toHaveBeenCalledWith('connected', undefined);
-
-    t.destroy();
-  });
-
-  it('handles disconnected event with reconnect', async () => {
-    const events = makeEvents();
-    const t = new Transport(events);
-
-    const promise = t.createRoom();
-    _lastPeerEmitter.emit('open');
-    await promise;
-
-    // Set status to connected
-    (t as any).status = 'connected';
-
-    // Simulate signaling disconnect
-    _lastPeerEmitter.emit('disconnected');
-
-    // Should attempt reconnect
-    expect(_lastPeerInstance.reconnect).toHaveBeenCalled();
-
-    t.destroy();
-  });
-
-  it('gives up reconnect after 3 attempts', async () => {
-    const events = makeEvents();
-    const t = new Transport(events);
-
-    const promise = t.createRoom();
-    _lastPeerEmitter.emit('open');
-    await promise;
-
-    (t as any).status = 'connected';
-
-    // Simulate 4 disconnects (exceeds 3 retry limit)
-    for (let i = 0; i < 4; i++) {
-      _lastPeerEmitter.emit('disconnected');
-    }
-
-    // After 3+ attempts, should set error status
-    const statusCalls = (events.onStatusChange as any).mock.calls;
-    const hasError = statusCalls.some((c: any[]) => c[0] === 'error');
-    expect(hasError).toBe(true);
-
-    t.destroy();
-  });
-});
-
-describe('Transport — joinRoom lifecycle', () => {
-  it('joins a room and resolves on connection', async () => {
-    const events = makeEvents();
-    const t = new Transport(events);
-
-    const promise = t.joinRoom('ABC');
-
-    // Simulate peer open → connects to host
-    _lastPeerEmitter.emit('open');
-
-    // The mock connect() auto-opens after setTimeout(0)
-    await new Promise(r => setTimeout(r, 10));
-
-    // onStatusChange('connected') should have been called, resolving the promise
-    // Trigger the connected status manually through the event chain
-    (events.onStatusChange as any).mockImplementation((status: string) => {
-      // The real implementation resolves the promise here
-    });
-
-    // joinRoom's onStatusChange wrapper resolves/rejects based on status
-    // Since our mock auto-opens, let's verify the transport tried to connect
-    expect(_lastPeerInstance.connect).toHaveBeenCalled();
-    expect(t.roomCode).toBe('ABC');
-    expect(t.isHost).toBe(false);
-
-    t.destroy();
-  });
-
-  it('rejects on peer error with unavailable code', async () => {
-    const events = makeEvents();
-    const t = new Transport(events);
-
-    const promise = t.joinRoom('ZZZ');
-    _lastPeerEmitter.emit('error', { type: 'peer-unavailable', message: 'not found' });
-
-    await expect(promise).rejects.toThrow();
-    expect(events.onStatusChange).toHaveBeenCalledWith('error', expect.stringContaining('Room not found'));
-
-    t.destroy();
-  });
-});
-
-describe('Transport — setupConnection details', () => {
-  it('handles data events from connected peer', async () => {
-    const events = makeEvents();
-    const t = new Transport(events);
-
-    const promise = t.createRoom();
-    _lastPeerEmitter.emit('open');
-    await promise;
-
-    const conn = makeMockConn('guest-1');
-    _lastPeerEmitter.emit('connection', conn);
-    conn.open = true;
-    conn._emit('open');
-
-    // Simulate receiving JSON data
-    conn._emit('data', JSON.stringify({ type: MsgType.PAUSE, paused: true }));
-    expect(events.onReliableMessage).toHaveBeenCalled();
-
-    t.destroy();
-  });
-
-  it('handles binary data events from connected peer', async () => {
-    const events = makeEvents();
-    const t = new Transport(events);
-
-    const promise = t.createRoom();
-    _lastPeerEmitter.emit('open');
-    await promise;
-
-    const conn = makeMockConn('guest-1');
-    _lastPeerEmitter.emit('connection', conn);
-    conn.open = true;
-    conn._emit('open');
-
-    // Simulate receiving binary (non-ping) data
-    const buf = new ArrayBuffer(20);
-    new Uint8Array(buf)[0] = 99;
-    conn._emit('data', buf);
-    expect(events.onUnreliableMessage).toHaveBeenCalled();
-
-    t.destroy();
-  });
-
-  it('handles connection close', async () => {
-    const events = makeEvents();
-    const t = new Transport(events);
-
-    const promise = t.createRoom();
-    _lastPeerEmitter.emit('open');
-    await promise;
-
-    const conn = makeMockConn('guest-1');
-    _lastPeerEmitter.emit('connection', conn);
-    conn.open = true;
-    conn._emit('open');
-    expect(t.peerCount).toBe(1);
-
-    // Simulate connection close
-    conn._emit('close');
-    expect(t.peerCount).toBe(0);
-    expect(events.onPeerDisconnected).toHaveBeenCalledWith('guest-1');
-
-    t.destroy();
-  });
-
-  it('handles connection error', async () => {
-    const events = makeEvents();
-    const t = new Transport(events);
-
-    const promise = t.createRoom();
-    _lastPeerEmitter.emit('open');
-    await promise;
-
-    const conn = makeMockConn('guest-1');
-    _lastPeerEmitter.emit('connection', conn);
-    conn.open = true;
-    conn._emit('open');
-
-    conn._emit('error', { message: 'data channel error' });
-    expect(t.peerCount).toBe(0);
-
-    t.destroy();
-  });
-
-  it('starts ping timer on first connection', async () => {
-    const events = makeEvents();
-    const t = new Transport(events);
-
-    const promise = t.createRoom();
-    _lastPeerEmitter.emit('open');
-    await promise;
-
-    expect((t as any).pingTimer).toBeNull();
-
-    const conn = makeMockConn('guest-1');
-    _lastPeerEmitter.emit('connection', conn);
-    conn.open = true;
-    conn._emit('open');
-
-    // Ping timer should now be active
-    expect((t as any).pingTimer).not.toBeNull();
-
-    t.destroy();
-  });
-});
-
-describe('Transport — getIceServers', () => {
-  it('createRoom invokes PeerJS constructor', async () => {
-    const events = makeEvents();
-    const t = new Transport(events);
-    const promise = t.createRoom();
-    // Peer was constructed (our mock class was instantiated)
-    expect(_lastPeerInstance).toBeDefined();
-    // Clean up
-    _lastPeerEmitter.emit('error', { type: 'test', message: 'test' });
-    await promise.catch(() => {});
-    t.destroy();
-  });
-});
-
 describe('Transport — startPing health degradation', () => {
-  it('marks peer as degraded after threshold', () => {
+  it('marks peer as degraded after threshold', async () => {
     vi.useFakeTimers();
+    resetMocks();
     const events = makeEvents();
     const t = new Transport(events);
+    await t.createRoom();
+
     const safeNow = 100000;
     vi.spyOn(performance, 'now').mockReturnValue(safeNow);
 
-    // Manually add peer with old lastPongTime
     (t as any).peers.set('peer-1', {
-      peerId: 'peer-1', conn: mockConn, rtt: 0, jitter: 0,
-      lastPongTime: safeNow - 3000, // 3s ago > DEGRADED_THRESHOLD_MS (2000)
-      health: 'healthy',
+      peerId: 'peer-1', rtt: 0, jitter: 0,
+      lastPongTime: safeNow - 3000, health: 'healthy',
     });
     (t as any).status = 'connected';
-
-    // Start ping timer
     (t as any).startPing();
 
-    // Advance past PING_INTERVAL (500ms)
     vi.advanceTimersByTime(600);
 
     const info = t.getPeerInfo('peer-1');
@@ -804,24 +519,25 @@ describe('Transport — startPing health degradation', () => {
     t.destroy();
   });
 
-  it('removes peer after pong timeout', () => {
+  it('removes peer after pong timeout', async () => {
     vi.useFakeTimers();
+    resetMocks();
     const events = makeEvents();
     const t = new Transport(events);
+    await t.createRoom();
+
     const safeNow = 100000;
     vi.spyOn(performance, 'now').mockReturnValue(safeNow);
 
     (t as any).peers.set('peer-1', {
-      peerId: 'peer-1', conn: mockConn, rtt: 0, jitter: 0,
-      lastPongTime: safeNow - 6000, // 6s ago > PONG_TIMEOUT_MS (5000)
-      health: 'degraded',
+      peerId: 'peer-1', rtt: 0, jitter: 0,
+      lastPongTime: safeNow - 6000, health: 'degraded',
     });
     (t as any).status = 'connected';
     (t as any).startPing();
 
     vi.advanceTimersByTime(600);
 
-    // Peer should be removed
     expect(t.peerCount).toBe(0);
     expect(events.onPeerHealthChange).toHaveBeenCalledWith('peer-1', 'lost');
 
@@ -834,8 +550,8 @@ describe('Transport — startPing health degradation', () => {
     const t = new Transport(makeEvents());
     (t as any).startPing();
     const timer1 = (t as any).pingTimer;
-    (t as any).startPing(); // second call
-    expect((t as any).pingTimer).toBe(timer1); // same timer
+    (t as any).startPing();
+    expect((t as any).pingTimer).toBe(timer1);
     t.destroy();
   });
 
@@ -850,63 +566,60 @@ describe('Transport — startPing health degradation', () => {
 });
 
 describe('Transport — PONG updates peer health to healthy', () => {
-  it('restores degraded peer to healthy on pong', () => {
+  it('restores degraded peer to healthy on pong', async () => {
+    resetMocks();
     const events = makeEvents();
     const t = new Transport(events);
+    await t.createRoom();
+    onPeerJoinCallback?.('guest-1');
 
-    (t as any).peers.set('peer-1', {
-      peerId: 'peer-1', conn: mockConn, rtt: 50, jitter: 5,
-      lastPongTime: performance.now() - 3000,
-      health: 'degraded',
-    });
-    (t as any).status = 'connected';
+    const info = t.getPeerInfo('guest-1')!;
+    info.health = 'degraded';
+    info.rtt = 50;
+    info.lastPongTime = performance.now() - 3000;
 
-    // Simulate receiving pong with recent timestamp
     const timestamp = performance.now() - 50;
     const pongData = encodePong(timestamp);
-    (t as any).handleBinaryMessage(pongData, 'peer-1');
+    (t as any).handleBinaryMessage(pongData, 'guest-1');
 
-    const info = t.getPeerInfo('peer-1');
-    expect(info?.health).toBe('healthy');
-    expect(events.onPeerHealthChange).toHaveBeenCalledWith('peer-1', 'healthy');
+    expect(info.health).toBe('healthy');
+    expect(events.onPeerHealthChange).toHaveBeenCalledWith('guest-1', 'healthy');
 
     t.destroy();
   });
 });
 
 describe('Transport — onIncomingData with simulator', () => {
-  it('routes binary data through simulator when enabled', () => {
+  it('routes binary data through simulator when enabled', async () => {
+    resetMocks();
     const events = makeEvents();
     const t = new Transport(events);
-    const mockSim = { enabled: true, enqueue: vi.fn(() => true), flush: vi.fn(() => []) };
+    const mockSim = { enabled: true, enqueue: vi.fn(() => true), flush: vi.fn(() => []), getConfig: vi.fn(() => ({ latencyMs: 0, jitterMs: 0 })) };
     (t as any).simulator = mockSim;
 
-    // Binary data that is NOT ping/pong
     const buf = new ArrayBuffer(10);
     new Uint8Array(buf)[0] = 99;
-    (t as any).onIncomingData(buf, 'peer-1');
+    (t as any).onIncomingData(buf, 'peer-1', true);
 
     expect(mockSim.enqueue).toHaveBeenCalled();
     t.destroy();
   });
 
-  it('ping/pong bypasses simulator for accurate RTT', () => {
+  it('ping/pong bypasses simulator for accurate RTT', async () => {
+    resetMocks();
     const events = makeEvents();
     const t = new Transport(events);
-    const mockSim = { enabled: true, enqueue: vi.fn(), flush: vi.fn(() => []) };
+    await t.createRoom();
+    onPeerJoinCallback?.('guest-1');
+
+    const mockSim = { enabled: true, enqueue: vi.fn(), flush: vi.fn(() => []), getConfig: vi.fn(() => ({ latencyMs: 0, jitterMs: 0 })) };
     (t as any).simulator = mockSim;
 
-    (t as any).peers.set('peer-1', {
-      peerId: 'peer-1', conn: mockConn, rtt: 0, jitter: 0,
-      lastPongTime: performance.now(), health: 'healthy',
-    });
-
-    // Send a PING — should be handled directly, not enqueued
     const pingData = encodePing(performance.now());
-    (t as any).onIncomingData(pingData, 'peer-1');
+    (t as any).onIncomingData(pingData, 'guest-1', true);
 
     // Ping was handled directly (pong sent), not enqueued
-    expect(mockConn.send).toHaveBeenCalled();
+    expect(mockSendBinary).toHaveBeenCalled();
 
     t.destroy();
   });
@@ -920,6 +633,7 @@ describe('Transport — onIncomingData with simulator', () => {
       flush: vi.fn(() => [
         { data: { data: JSON.stringify({ type: MsgType.PAUSE, paused: true }), fromPeerId: 'peer-1' } },
       ]),
+      getConfig: vi.fn(() => ({ latencyMs: 0, jitterMs: 0 })),
     };
     (t as any).simulator = mockSim;
 

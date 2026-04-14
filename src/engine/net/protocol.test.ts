@@ -76,8 +76,8 @@ describe('Input message source slot round-trip', () => {
 });
 
 describe('PROTOCOL_VERSION', () => {
-  it('is version 4', () => {
-    expect(PROTOCOL_VERSION).toBe(4);
+  it('is version 5', () => {
+    expect(PROTOCOL_VERSION).toBe(5);
   });
 });
 
