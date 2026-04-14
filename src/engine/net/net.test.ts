@@ -279,12 +279,12 @@ describe('Message loop prevention', () => {
   });
 });
 
-describe('PeerJS import', () => {
-  it('can import peerjs module', async () => {
-    // Just verify the module resolves — can't create actual peers without a browser
-    const peerjs = await import('peerjs');
-    expect(peerjs).toBeDefined();
-    expect(peerjs.default).toBeDefined(); // Peer constructor
+describe('Trystero import', () => {
+  it('can import trystero module', async () => {
+    // Just verify the module resolves — can't create actual rooms without a browser
+    const trystero = await import('trystero/nostr');
+    expect(trystero).toBeDefined();
+    expect(trystero.joinRoom).toBeDefined();
   });
 });
 
