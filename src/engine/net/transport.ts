@@ -273,8 +273,10 @@ export class Transport {
     this.sendJsonAction = sendJson;
 
     // Handle incoming binary data
-    onBinary((data: ArrayBuffer, peerId: string) => {
-      this.onIncomingData(data, peerId, true);
+    onBinary((data: ArrayBuffer | Uint8Array, peerId: string) => {
+      // Trystero may deliver Uint8Array instead of ArrayBuffer
+      const buf = data instanceof ArrayBuffer ? data : data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+      this.onIncomingData(buf, peerId, true);
     });
 
     // Handle incoming JSON data
