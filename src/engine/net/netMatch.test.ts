@@ -47,6 +47,7 @@ const mockHostAuthorityInstance = {
   getNetworkInputs: vi.fn(() => new Map()),
   getStats: vi.fn(() => ({ localFrame: 0, rtt: 0, jitter: 0, snapshotBytes: 0, guestCount: 1, isRelay: false })),
   setMatchOver: vi.fn(),
+  broadcastSnapshot: vi.fn(),
 };
 
 vi.mock('./hostAuthority', () => ({
@@ -143,13 +144,13 @@ describe('NetMatch', () => {
   });
 
   describe('guest construction', () => {
-    it('getGameLoop() returns null for guest', () => {
+    it('getGameLoop() returns a GameLoop for guest (used for rendering)', () => {
       const guestTransport = makeMockTransport(false);
       const guestMatch = new NetMatch(makeConfig(guestTransport, {
         localSlot: 'P2' as PlayerSlot,
         remoteSlots: ['P1'] as PlayerSlot[],
       }));
-      expect(guestMatch.getGameLoop()).toBeNull();
+      expect(guestMatch.getGameLoop()).toBeDefined();
     });
 
     it('isHost is false for guest', () => {

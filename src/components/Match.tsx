@@ -206,16 +206,13 @@ export function Match() {
       });
 
       netMatchRef.current = netMatch;
-      const loop = netMatch.getGameLoop();
-      gameLoopRef.current = loop ?? null;
-      window.__gameLoop = loop ?? undefined;
+      gameLoopRef.current = netMatch.getGameLoop();
+      window.__gameLoop = netMatch.getGameLoop();
       (window as any).__netMatch = netMatch;
-      if (loop) {
-        loop.setPlayerNames(useGameStore.getState().online.playerNames);
-        loop.setLocalSlot((online.isHost ? 'P1' : online.localSlot) as PlayerSlot);
-        setTouchInput(loop.getTouchInput());
-      }
+      netMatch.getGameLoop().setPlayerNames(useGameStore.getState().online.playerNames);
+      netMatch.getGameLoop().setLocalSlot((online.isHost ? 'P1' : online.localSlot) as PlayerSlot);
       netMatch.start();
+      setTouchInput(netMatch.getGameLoop().getTouchInput());
 
       return () => {
         netMatch.stop();

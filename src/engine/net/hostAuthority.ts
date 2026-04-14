@@ -42,11 +42,9 @@ export class HostAuthority {
   private gameLoop: GameLoop;
   private transport: Transport;
   readonly localSlot: PlayerSlot;
-  private onMatchEnd?: (winner: PlayerSlot | null, state: MatchState) => void;
   private onPlayerDisconnect?: (slot: PlayerSlot) => void;
 
   private localFrame = 0;
-  private rafId = 0;
   private running = false;
 
   // Guest input buffers: slot → latest input
@@ -67,7 +65,6 @@ export class HostAuthority {
     this.gameLoop = config.gameLoop;
     this.transport = config.transport;
     this.localSlot = config.localSlot;
-    this.onMatchEnd = config.onMatchEnd;
     this.onPlayerDisconnect = config.onPlayerDisconnect;
   }
 
@@ -94,63 +91,25 @@ export class HostAuthority {
     this.running = true;
     this.localFrame = 0;
 
-    // Start ping loop
+    // Start ping loop for RTT measurement
     this.pingInterval = setInterval(() => {
       this.transport.sendUnreliable(encodePing(performance.now()));
     }, 500);
 
-    this.gameLoop.start();
-    // Override the game loop's internal RAF — we drive it ourselves
-    // Actually, the game loop runs its own RAF in local mode, which is what we want.
-    // We just need to inject guest inputs before each tick.
-    // Hook into the game loop's input path by providing network inputs.
-    this.setupInputInjection();
+    // Note: GameLoop.start() and the RAF loop are managed by NetMatch,
+    // not by HostAuthority. We only handle input buffering + snapshot broadcast.
   }
 
   stop(): void {
     this.running = false;
-    if (this.rafId) {
-      cancelAnimationFrame(this.rafId);
-      this.rafId = 0;
-    }
     if (this.pingInterval) {
       clearInterval(this.pingInterval);
       this.pingInterval = null;
     }
-    this.gameLoop.stop();
   }
 
-  /**
-   * The host's game loop runs normally (local mode).
-   * We hook in by setting network inputs that override bot/keyboard for guest slots.
-   *
-   * Instead of driving the loop externally, we let GameLoop run its own RAF loop
-   * and use setNetworkMode(false) so it works like local play.
-   * We intercept the tick by providing a callback that injects guest inputs
-   * and broadcasts snapshots after each tick.
-   */
-  private setupInputInjection(): void {
-    // Use the gameLoop's per-tick callback to broadcast state
-    // The gameLoop calls fixedUpdate internally in its RAF loop.
-    // We use a RAF-based observer to broadcast snapshots after each tick.
-    const broadcastLoop = () => {
-      if (!this.running) return;
-
-      const state = this.gameLoop.getState();
-      // Broadcast snapshot to all guests
-      this.broadcastSnapshot(state);
-
-      // Check match end
-      if (state.matchOver && this.onMatchEnd) {
-        this.onMatchEnd(state.winner, state);
-      }
-
-      this.rafId = requestAnimationFrame(broadcastLoop);
-    };
-    this.rafId = requestAnimationFrame(broadcastLoop);
-  }
-
-  private broadcastSnapshot(state: MatchState): void {
+  /** Broadcast current state to all guests. Called by NetMatch after each fixedUpdate. */
+  broadcastSnapshot(state: MatchState): void {
     this.localFrame++;
 
     const snap = takeAuthSnapshot(this.localFrame, state);
