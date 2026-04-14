@@ -27,7 +27,7 @@ export const CANVAS_WIDTH = 1280;
 export const CANVAS_HEIGHT = 720;
 
 // Game loop
-export const FIXED_TIMESTEP = 1 / 60; // 60fps fixed step
+export const FIXED_TIMESTEP = Math.fround(1 / 60); // 60fps fixed step, fround for cross-arch determinism
 export const MAX_FRAME_TIME = 0.1; // prevent spiral of death
 
 // Animation

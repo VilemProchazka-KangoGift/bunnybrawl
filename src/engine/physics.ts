@@ -125,22 +125,27 @@ export function collidePlatforms(player: Player, platforms: Platform[]): void {
       player.x, player.y, player.width, player.height,
       plat.x, plat.y, plat.width, plat.height
     )) {
-      // Determine collision direction (fround all intermediates for cross-arch determinism)
+      // Determine collision direction via index-based min selection.
+      // NEVER use float === float (Math.min can return 1-ULP different value).
       const overlapLeft = f(f(player.x + player.width) - plat.x);
       const overlapRight = f(f(plat.x + plat.width) - player.x);
       const overlapTop = f(f(player.y + player.height) - plat.y);
       const overlapBottom = f(f(plat.y + plat.height) - player.y);
 
-      // Prefer top landing when player feet are near platform top —
-      // prevents shaking at platform edges where side and top overlap compete.
-      // But only when horizontal penetration exceeds vertical (came from above,
-      // not walking into the side of a tall block).
-      const feetNearTop = overlapTop < f(player.height * 0.5);
-      const sideOverlap = f(Math.min(overlapLeft, overlapRight));
-      const landingFromAbove = feetNearTop && sideOverlap > overlapTop;
-      const minOverlap = f(Math.min(overlapLeft, overlapRight, overlapTop, overlapBottom));
+      // Index-based min: 0=left, 1=right, 2=top, 3=bottom
+      let minDir = 0;
+      let minVal = overlapLeft;
+      if (overlapRight < minVal) { minVal = overlapRight; minDir = 1; }
+      if (overlapTop < minVal) { minVal = overlapTop; minDir = 2; }
+      if (overlapBottom < minVal) { minVal = overlapBottom; minDir = 3; }
 
-      if ((minOverlap === overlapTop || landingFromAbove) && player.vy >= 0 && overlapTop < overlapBottom) {
+      // Prefer top landing when player feet are near platform top
+      // and horizontal penetration exceeds vertical (came from above)
+      const feetNearTop = overlapTop < f(player.height * 0.5);
+      const sideOverlap = overlapLeft < overlapRight ? overlapLeft : overlapRight;
+      const landingFromAbove = feetNearTop && sideOverlap > overlapTop;
+
+      if ((minDir === 2 || landingFromAbove) && player.vy >= 0 && overlapTop < overlapBottom) {
         // Landing on top
         player.y = plat.y - player.height;
         player.vy = 0;
@@ -148,18 +153,18 @@ export function collidePlatforms(player: Player, platforms: Platform[]): void {
           player.state = player.vx !== 0 ? 'run' : 'idle';
         }
         player.fastFalling = false;
-      } else if (minOverlap === overlapBottom && player.vy < 0) {
-        // Hitting bottom (head bump) — just stop upward motion
+      } else if (minDir === 3 && player.vy < 0) {
+        // Hitting bottom (head bump)
         player.y = plat.y + plat.height;
         player.vy = 0;
-      } else if (minOverlap === overlapLeft) {
+      } else if (minDir === 0) {
         player.x = plat.x - player.width;
         if (player.vx > 0) { player.sideSquash = 0.75; player.vx = 0; }
-      } else if (minOverlap === overlapRight) {
+      } else if (minDir === 1) {
         player.x = plat.x + plat.width;
         if (player.vx < 0) { player.sideSquash = 0.75; player.vx = 0; }
       } else {
-        // Fallback: deeply embedded or ambiguous — eject via smallest overlap
+        // Fallback: eject via smallest overlap
         if (overlapTop <= overlapBottom) {
           player.y = plat.y - player.height;
           player.vy = 0;
@@ -294,19 +299,24 @@ export function resolveStuckPlayer(player: Player, platforms: Platform[]): void 
     const overlapLeft = f(f(player.x + player.width) - plat.x);
     const overlapRight = f(f(plat.x + plat.width) - player.x);
 
-    // Only intervene if deeply embedded (normal collision handles shallow overlap)
-    const minOverlap = f(Math.min(overlapTop, overlapBottom, overlapLeft, overlapRight));
-    if (minOverlap <= 5) continue;
+    // Index-based min: 0=top, 1=bottom, 2=left, 3=right
+    let minDir = 0;
+    let minVal = overlapTop;
+    if (overlapBottom < minVal) { minVal = overlapBottom; minDir = 1; }
+    if (overlapLeft < minVal) { minVal = overlapLeft; minDir = 2; }
+    if (overlapRight < minVal) { minVal = overlapRight; minDir = 3; }
 
-    // Eject via smallest overlap direction (only once per frame — break after first ejection
-    // to avoid bouncing between adjacent platforms)
-    if (minOverlap === overlapTop) {
+    // Only intervene if deeply embedded (normal collision handles shallow overlap)
+    if (minVal <= 5) continue;
+
+    // Eject via smallest overlap direction (index-based, no float ===)
+    if (minDir === 0) {
       player.y = plat.y - player.height;
       player.vy = 0;
-    } else if (minOverlap === overlapBottom) {
+    } else if (minDir === 1) {
       player.y = plat.y + plat.height;
       player.vy = 0;
-    } else if (minOverlap === overlapLeft) {
+    } else if (minDir === 2) {
       player.x = plat.x - player.width;
       player.vx = 0;
     } else {
