@@ -158,16 +158,50 @@ export class NetMatch {
     const FIXED_DT = 1 / 60;
     let accumulator = 0;
 
+    // Fairness delay: buffer host inputs to match guest round-trip latency.
+    // Without this, host has 0ms input lag while guest has RTT/2 + interpolation delay.
+    // Ring buffer stores recent inputs; we read from delayFrames behind.
+    const MAX_DELAY = 8; // max frames of delay (~133ms)
+    const inputRing: import('../types').InputState[] = Array.from(
+      { length: MAX_DELAY },
+      () => ({ left: false, right: false, jump: false, down: false }),
+    );
+    let writeIdx = 0;
+    let delayFrames = 2; // initial delay (updated from RTT)
+    let rttCheckTimer = 0;
+
     const loop = (now: number) => {
       const dt = Math.min((now - lastTime) / 1000, 0.1);
       lastTime = now;
       accumulator += dt;
 
+      // Periodically adapt delay to match guest RTT (every ~1s)
+      rttCheckTimer += dt;
+      if (rttCheckTimer > 1) {
+        rttCheckTimer = 0;
+        const rtt = this.transport.currentRtt;
+        // Target: half RTT (one-way) + 2 frames interpolation delay, in frames
+        // Guest sees: RTT/2 (input to host) + RTT/2 (snapshot back) + 2 frames interp
+        // Host should delay by: RTT/2 + 1 frame (to roughly match guest's total)
+        const targetDelay = Math.round((rtt / 2) / (FIXED_DT * 1000)) + 1;
+        delayFrames = Math.max(1, Math.min(MAX_DELAY, targetDelay));
+      }
+
       while (accumulator >= FIXED_DT) {
-        // Build inputs: host reads from any key binding, guests from network
+        // Write current input into ring buffer
+        const currentInput = this.gameLoop.getInputAny();
+        inputRing[writeIdx % MAX_DELAY].left = currentInput.left;
+        inputRing[writeIdx % MAX_DELAY].right = currentInput.right;
+        inputRing[writeIdx % MAX_DELAY].jump = currentInput.jump;
+        inputRing[writeIdx % MAX_DELAY].down = currentInput.down;
+        writeIdx++;
+
+        // Read delayed input from ring buffer
+        const readIdx = Math.max(0, writeIdx - delayFrames);
+        const delayedInput = inputRing[readIdx % MAX_DELAY];
+
         const networkInputs = this.hostAuthority!.getNetworkInputs();
-        // Host's own input: merge all key bindings (online = any keys control your character)
-        networkInputs.set(this.localSlot, this.gameLoop.getInputAny());
+        networkInputs.set(this.localSlot, delayedInput);
         this.gameLoop.fixedUpdate(FIXED_DT, networkInputs);
         this.hostAuthority!.broadcastSnapshot(this.gameLoop.getState());
         accumulator -= FIXED_DT;
