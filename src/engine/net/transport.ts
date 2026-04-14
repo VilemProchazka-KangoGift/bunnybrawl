@@ -58,10 +58,24 @@ const TURN_SERVERS = TURN_DISABLED ? [] : [
   },
 ];
 
+// Nostr relays that accept ephemeral events (kind 20000+) used for WebRTC signaling.
+// Must be strfry-based — pyramid/khatru relays reject non-standard kinds.
+const NOSTR_RELAYS = [
+  'wss://relay.damus.io',
+  'wss://nos.lol',
+  'wss://relay.primal.net',
+  'wss://offchain.pub',
+  'wss://relay.nostr.place',
+  'wss://nostr.data.haus',
+  'wss://purplerelay.com',
+  'wss://nostrue.com',
+];
+
 function getRoomConfig(roomId: string) {
   return {
     config: {
       appId: APP_ID,
+      relayUrls: NOSTR_RELAYS,
       rtcConfig: {
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
