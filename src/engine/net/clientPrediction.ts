@@ -40,9 +40,6 @@ export class ClientPrediction {
   // Input history for replay after reconciliation
   private inputHistory: PredictionInput[] = [];
   private nextSeq = 0;
-  // lastAckedSeq reserved for input-replay reconciliation
-  lastAckedSeq = -1;
-
   constructor(localSlot: PlayerSlot, arena: Arena) {
     this.localSlot = localSlot;
     this.arena = arena;
@@ -83,7 +80,7 @@ export class ClientPrediction {
    * Reconcile with host's authoritative snapshot.
    * Called when a new snapshot arrives from the host.
    */
-  reconcile(authPlayer: SnapshotPlayer, _hostFrame: number): void {
+  reconcile(authPlayer: SnapshotPlayer): void {
 
     // Calculate correction from predicted to authoritative
     const dx = authPlayer.x - this.predictedX;

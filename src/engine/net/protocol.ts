@@ -69,7 +69,7 @@ const DECODE_INPUTS: Array<{ frame: number; input: InputState }> = Array.from(
 const DECODE_RESULT = { inputs: DECODE_INPUTS, inputCount: 0, latestAck: 0, source: 0 };
 
 /** Encode a PlayerSlot to a single byte. P1-P5 → 1-5, B1-B5 → 6-10. */
-function encodeSlot(slot: string): number {
+export function encodeSlot(slot: string): number {
   const num = parseInt(slot.substring(1), 10);
   if (slot.startsWith('P')) return Math.min(num, 5);
   if (slot.startsWith('B')) return 5 + Math.min(num, 5);

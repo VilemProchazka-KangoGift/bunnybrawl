@@ -48,7 +48,6 @@ export class HostAuthority {
   private localFrame = 0;
   private rafId = 0;
   private running = false;
-  // (accumulator/lastTime reserved for future use if we drive the loop externally)
 
   // Guest input buffers: slot → latest input
   private guestInputs = new Map<string, InputState>();
@@ -155,22 +154,22 @@ export class HostAuthority {
     this.localFrame++;
 
     const snap = takeAuthSnapshot(this.localFrame, state);
-    const encoded = encodeSnapshot(snap);
+    const { buffer: encodeBuf, length: encodeLen } = encodeSnapshot(snap);
+    // Copy once for this frame (shared buffer is reused next call)
+    const encoded = encodeBuf.slice(0, encodeLen);
     const isFull = this.localFrame % FULL_SNAPSHOT_INTERVAL === 0;
 
-    // Send to each guest with per-guest delta compression
     for (const peerId of this.transport.getPeerIds()) {
       const baseline = isFull ? null : (this.guestBaselines.get(peerId) ?? null);
       const delta = createDelta(encoded, baseline);
       this.transport.sendUnreliableTo(peerId, delta);
 
-      // If this was a full snapshot, set it as the new baseline
       if (isFull || !baseline) {
-        this.guestBaselines.set(peerId, encoded.slice(0));
+        this.guestBaselines.set(peerId, encoded);
       }
     }
 
-    this.lastSnapshotBytes = encoded.byteLength;
+    this.lastSnapshotBytes = encodeLen;
   }
 
   /** Handle incoming binary messages from guests (inputs, ping/pong, snapshot acks). */

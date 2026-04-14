@@ -11,6 +11,7 @@
 import type {
   PlayerSlot, PlayerState, KillFeedEntry, MatchState,
 } from '../types';
+import { encodeSlot, decodeSlot } from './protocol';
 
 // ---- Snapshot data structures ----
 
@@ -75,15 +76,9 @@ const EXPRESSION_MAP: Record<string, number> = {
 };
 const EXPRESSION_REVERSE = ['normal', 'scared', 'angry', 'dizzy'] as const;
 
-function encodeSlotByte(slot: PlayerSlot): number {
-  const n = parseInt(slot.substring(1), 10);
-  return slot.startsWith('P') ? n : 5 + n;
-}
-
-function decodeSlotByte(b: number): PlayerSlot {
-  if (b >= 1 && b <= 5) return `P${b}` as PlayerSlot;
-  return `B${b - 5}` as PlayerSlot;
-}
+// Slot encoding reused from protocol.ts: encodeSlot() / decodeSlot()
+const encodeSlotByte = (slot: PlayerSlot) => encodeSlot(slot);
+const decodeSlotByte = (b: number) => decodeSlot(b) as PlayerSlot;
 
 // ---- Binary encoding ----
 
@@ -95,9 +90,10 @@ const ENCODE_VIEW = new DataView(ENCODE_BUF);
 
 /**
  * Encode an AuthSnapshot into a compact binary format.
- * Returns a new ArrayBuffer sized to actual content.
+ * Returns { buffer, length } where buffer is a shared pre-allocated buffer.
+ * Caller must consume or copy before the next encodeSnapshot() call.
  */
-export function encodeSnapshot(snap: AuthSnapshot): ArrayBuffer {
+export function encodeSnapshot(snap: AuthSnapshot): { buffer: ArrayBuffer; length: number } {
   let o = 0; // offset
 
   // Header
@@ -224,7 +220,7 @@ export function encodeSnapshot(snap: AuthSnapshot): ArrayBuffer {
     ENCODE_VIEW.setFloat32(o, sa.timer, true); o += 4;
   }
 
-  return ENCODE_BUF.slice(0, o);
+  return { buffer: ENCODE_BUF, length: o };
 }
 
 /**

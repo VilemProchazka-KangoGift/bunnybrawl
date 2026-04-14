@@ -153,7 +153,7 @@ export class Transport {
           },
           turnConfig: TURN_SERVERS.length > 0 ? TURN_SERVERS : undefined,
         },
-        `room-${code}`,
+        `room-${code.toUpperCase()}`,
       );
     } catch (e) {
       this.setStatus('error', `Failed to create room: ${e}`);

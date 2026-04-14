@@ -117,8 +117,8 @@ export class NetMatch {
   /** Start the network match. */
   start(): void {
     this.transport.setEvents({
-      onStatusChange: (_status) => {
-        if (_status === 'disconnected' || _status === 'error') {
+      onStatusChange: (status) => {
+        if (status === 'disconnected' || status === 'error') {
           this.onDisconnect?.();
         }
       },
@@ -210,7 +210,7 @@ export class NetMatch {
       this.hostAuthority.handleUnreliableMessage(data, fromPeerId);
     } else {
       // Guest: handle snapshots and ping/pong
-      if (type === 0x20) { // MsgType.SNAPSHOT
+      if (type === MsgType.SNAPSHOT) {
         this.handleGuestSnapshot(data);
       } else if (type === MsgType.PING || type === MsgType.PONG) {
         const pp = decodePingPong(data);
@@ -238,7 +238,7 @@ export class NetMatch {
       if (this.prediction) {
         const localPlayer = snap.players.find(p => p.id === this.localSlot);
         if (localPlayer) {
-          this.prediction.reconcile(localPlayer, snap.frame);
+          this.prediction.reconcile(localPlayer);
         }
       }
     }

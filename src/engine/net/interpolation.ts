@@ -13,7 +13,6 @@
 import type { PlayerSlot, MatchState } from '../types';
 import type { AuthSnapshot, SnapshotPlayer } from './snapshot';
 
-// (INTERP_BUFFER_SIZE and MAX_EXTRAP_MS reserved for future tuning)
 
 export interface InterpolatedPlayer {
   id: PlayerSlot;
@@ -49,7 +48,6 @@ export class EntityInterpolation {
 
   // Current interpolation time
   private renderTime = 0;
-  // (serverTimeOffset reserved for future adaptive sync)
   private initialized = false;
 
   // Interpolation delay in frames (trades latency for smoothness)
@@ -59,7 +57,7 @@ export class EntityInterpolation {
   private lastInterpolated: AuthSnapshot | null = null;
 
   /** Push a new snapshot from the host. */
-  pushSnapshot(snap: AuthSnapshot, _receiveTime?: number): void {
+  pushSnapshot(snap: AuthSnapshot): void {
     this.snapshots.push(snap);
 
     // Trim old snapshots
@@ -158,22 +156,19 @@ export class EntityInterpolation {
 
   /** Interpolate player positions between two snapshot states. */
   private interpolatePlayers(a: SnapshotPlayer[], b: SnapshotPlayer[], t: number): SnapshotPlayer[] {
+    // O(n) lookup map instead of O(n²) .find() per player
+    const aById = new Map(a.map(p => [p.id, p]));
+
     return b.map(bp => {
-      const ap = a.find(p => p.id === bp.id);
-      if (!ap) return bp; // New player, no interpolation
+      const ap = aById.get(bp.id);
+      if (!ap) return bp;
 
       return {
         ...bp,
-        // Interpolate continuous values
         x: lerp(ap.x, bp.x, t),
         y: lerp(ap.y, bp.y, t),
         vx: lerp(ap.vx, bp.vx, t),
         vy: lerp(ap.vy, bp.vy, t),
-        // Discrete values: use "after" snapshot
-        state: bp.state,
-        facing: bp.facing,
-        animFrame: bp.animFrame,
-        expression: bp.expression,
       };
     });
   }
@@ -224,9 +219,10 @@ function lerp(a: number, b: number, t: number): number {
  * Does NOT create new Player objects — updates existing ones in-place.
  */
 export function applySnapshotToState(snap: AuthSnapshot, state: MatchState): void {
-  // Update players
+  // Update players (O(n) map lookup instead of O(n²) .find())
+  const playerById = new Map(state.players.map(p => [p.id, p]));
   for (const sp of snap.players) {
-    const player = state.players.find(p => p.id === sp.id);
+    const player = playerById.get(sp.id);
     if (!player) continue;
 
     player.x = sp.x;
