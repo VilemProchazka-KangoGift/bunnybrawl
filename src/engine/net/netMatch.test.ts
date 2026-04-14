@@ -6,10 +6,8 @@ import type { PlayerSlot } from '../types';
 
 // ---- Mock infrastructure ----
 
-// Mock GameLoop constructor + instance
 const mockGameLoopInstance = {
   setNetworkMode: vi.fn(),
-  setRng: vi.fn(),
   start: vi.fn(),
   stop: vi.fn(),
   pause: vi.fn(),
@@ -17,15 +15,19 @@ const mockGameLoopInstance = {
   isPaused: vi.fn(() => false),
   getState: vi.fn(() => ({ players: [], matchOver: false, winner: null })),
   getInputAny: vi.fn(() => ({ left: false, right: false, jump: false, down: false })),
-  getRng: vi.fn(() => null),
-  getAIControllers: vi.fn(() => new Map()),
   fixedUpdate: vi.fn(),
-  setAudioEnabled: vi.fn(),
-  setResimulating: vi.fn(),
-  setNetDebugStats: vi.fn(),
+  setPlayerNames: vi.fn(),
+  setLocalSlot: vi.fn(),
+  getTouchInput: vi.fn(() => null),
   renderFrame: vi.fn(),
   disconnectPlayer: vi.fn(),
   skipCountdown: vi.fn(),
+  setNetDebugStats: vi.fn(),
+  setAudioEnabled: vi.fn(),
+  setResimulating: vi.fn(),
+  getRng: vi.fn(() => null),
+  getAIControllers: vi.fn(() => new Map()),
+  getAiRng: vi.fn(() => undefined),
 };
 
 vi.mock('../gameLoop', () => ({
@@ -34,36 +36,55 @@ vi.mock('../gameLoop', () => ({
   },
 }));
 
-// Mock RollbackEngine
-const mockRollbackInstance = {
+// Mock HostAuthority
+const mockHostAuthorityInstance = {
   start: vi.fn(),
   stop: vi.fn(),
-  handleInputMessage: vi.fn(),
+  addGuest: vi.fn(),
+  removeGuest: vi.fn(),
+  handleUnreliableMessage: vi.fn(),
   handleReliableMessage: vi.fn(),
-  removeRemoteSlot: vi.fn(),
-  getStats: vi.fn(() => ({
-    localFrame: 0, remoteConfirmedFrame: 0, remoteLatestAck: 0,
-    rtt: 0, jitter: 0, inputDelay: 2, stalled: false,
-    rollbacksPerSec: 0, maxRollbackDepth: 0,
-  })),
+  getNetworkInputs: vi.fn(() => new Map()),
+  getStats: vi.fn(() => ({ localFrame: 0, rtt: 0, jitter: 0, snapshotBytes: 0, guestCount: 1, isRelay: false })),
+  setMatchOver: vi.fn(),
 };
 
-vi.mock('./rollback', () => ({
-  RollbackEngine: class MockRollbackEngine {
-    constructor() { Object.assign(this, mockRollbackInstance); }
+vi.mock('./hostAuthority', () => ({
+  HostAuthority: class MockHostAuthority {
+    constructor() { Object.assign(this, mockHostAuthorityInstance); }
   },
 }));
 
-function makeMockTransport() {
+vi.mock('./interpolation', () => ({
+  EntityInterpolation: class MockEntityInterpolation {
+    pushSnapshot = vi.fn();
+    getInterpolatedState = vi.fn(() => null);
+    getLatestSnapshot = vi.fn(() => null);
+  },
+  applySnapshotToState: vi.fn(),
+}));
+
+vi.mock('./clientPrediction', () => ({
+  ClientPrediction: class MockClientPrediction {
+    reconcile = vi.fn();
+    predict = vi.fn();
+    decayVisualOffset = vi.fn();
+  },
+}));
+
+function makeMockTransport(isHost = true) {
   return {
     setEvents: vi.fn(),
     sendReliable: vi.fn(),
+    sendReliableTo: vi.fn(),
     sendUnreliable: vi.fn(),
     sendUnreliableTo: vi.fn(),
-    getPeerIds: vi.fn(() => ['peer-a', 'peer-b']),
-    peerCount: 2,
+    getPeerIds: vi.fn(() => ['peer-a']),
+    peerCount: 1,
     currentRtt: 0,
     currentJitter: 0,
+    isHost,
+    isRelay: false,
   };
 }
 
@@ -75,7 +96,7 @@ function makeConfig(transport: ReturnType<typeof makeMockTransport>, overrides?:
   return {
     bgCanvas: makeCanvas(),
     fgCanvas: makeCanvas(),
-    arena: { platforms: [{ x: 0, y: 650, width: 1280, height: 70, isGround: true }], spawnPoints: [{ x: 200, y: 600 }], width: 1280, height: 720, navData: { nodes: [], edges: [] } } as any,
+    arena: { platforms: [{ x: 0, y: 650, width: 1280, height: 70 }], spawnPoints: [{ x: 200, y: 600 }], width: 1280, height: 720, id: 'meadow', name: 'Meadow', themeId: 'meadow' } as any,
     settings: { killLimit: 16, timeLimit: 0, mods: {} } as any,
     activePlayers: ['P1', 'P2'] as PlayerSlot[],
     onMatchEnd: vi.fn(),
@@ -93,7 +114,7 @@ describe('NetMatch', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    transport = makeMockTransport();
+    transport = makeMockTransport(true);
     netMatch = new NetMatch(makeConfig(transport));
   });
 
@@ -102,18 +123,42 @@ describe('NetMatch', () => {
       expect(netMatch).toBeDefined();
     });
 
-    it('exposes getState() from game loop', () => {
+    it('exposes getState() from game loop (host)', () => {
       expect(netMatch.getState()).toBeDefined();
     });
 
-    it('exposes getGameLoop()', () => {
+    it('exposes getGameLoop() for host', () => {
       expect(netMatch.getGameLoop()).toBeDefined();
     });
 
-    it('getRollbackStats() returns stats object', () => {
-      const stats = netMatch.getRollbackStats();
+    it('getDebugStats() returns stats (host)', () => {
+      const stats = netMatch.getDebugStats();
       expect(stats).toBeDefined();
-      expect(stats.localFrame).toBe(0);
+      expect(stats!.localFrame).toBe(0);
+    });
+
+    it('isHost reflects transport isHost', () => {
+      expect(netMatch.isHost).toBe(true);
+    });
+  });
+
+  describe('guest construction', () => {
+    it('getGameLoop() returns null for guest', () => {
+      const guestTransport = makeMockTransport(false);
+      const guestMatch = new NetMatch(makeConfig(guestTransport, {
+        localSlot: 'P2' as PlayerSlot,
+        remoteSlots: ['P1'] as PlayerSlot[],
+      }));
+      expect(guestMatch.getGameLoop()).toBeNull();
+    });
+
+    it('isHost is false for guest', () => {
+      const guestTransport = makeMockTransport(false);
+      const guestMatch = new NetMatch(makeConfig(guestTransport, {
+        localSlot: 'P2' as PlayerSlot,
+        remoteSlots: ['P1'] as PlayerSlot[],
+      }));
+      expect(guestMatch.isHost).toBe(false);
     });
   });
 
@@ -128,78 +173,27 @@ describe('NetMatch', () => {
       }));
     });
 
-    it('starts rollback engine', () => {
+    it('starts host authority for host', () => {
       netMatch.start();
-      expect(mockRollbackInstance.start).toHaveBeenCalled();
+      expect(mockHostAuthorityInstance.start).toHaveBeenCalled();
     });
   });
 
   describe('handleUnreliableMessage()', () => {
-    it('forwards input to rollback engine', () => {
-      const data = new ArrayBuffer(10);
-      netMatch.handleUnreliableMessage(data);
-      expect(mockRollbackInstance.handleInputMessage).toHaveBeenCalledWith(data);
-    });
-
-    it('host relays input to other guests (excluding sender)', () => {
-      transport.peerCount = 2;
+    it('host forwards to HostAuthority', () => {
       const data = new ArrayBuffer(10);
       netMatch.handleUnreliableMessage(data, 'peer-a');
-
-      // Should relay to peer-b but not peer-a
-      expect(transport.sendUnreliableTo).toHaveBeenCalledWith('peer-b', data);
-      expect(transport.sendUnreliableTo).not.toHaveBeenCalledWith('peer-a', data);
-    });
-
-    it('host does not relay when only 1 peer', () => {
-      transport.peerCount = 1;
-      const data = new ArrayBuffer(10);
-      netMatch.handleUnreliableMessage(data, 'peer-a');
-      expect(transport.sendUnreliableTo).not.toHaveBeenCalled();
-    });
-
-    it('does not relay without fromPeerId', () => {
-      transport.peerCount = 2;
-      const data = new ArrayBuffer(10);
-      netMatch.handleUnreliableMessage(data);
-      expect(transport.sendUnreliableTo).not.toHaveBeenCalled();
-    });
-
-    it('guest does not relay (isHost=false)', () => {
-      const guestTransport = makeMockTransport();
-      guestTransport.peerCount = 2;
-      const guestMatch = new NetMatch(makeConfig(guestTransport, {
-        localSlot: 'P2' as PlayerSlot,
-        remoteSlots: ['P1'] as PlayerSlot[],
-      }));
-      const data = new ArrayBuffer(10);
-      guestMatch.handleUnreliableMessage(data, 'peer-a');
-      expect(guestTransport.sendUnreliableTo).not.toHaveBeenCalled();
+      expect(mockHostAuthorityInstance.handleUnreliableMessage).toHaveBeenCalledWith(data, 'peer-a');
     });
   });
 
   describe('handleReliableMessage()', () => {
-    it('routes DESYNC_CHECK to rollback', () => {
-      netMatch.handleReliableMessage({ type: MsgType.DESYNC_CHECK, frame: 0, hash: 123, rngState: 0 });
-      expect(mockRollbackInstance.handleReliableMessage).toHaveBeenCalled();
-    });
-
-    it('routes DESYNC_REQUEST to rollback', () => {
-      netMatch.handleReliableMessage({ type: MsgType.DESYNC_REQUEST, frame: 0 });
-      expect(mockRollbackInstance.handleReliableMessage).toHaveBeenCalled();
-    });
-
-    it('routes DESYNC_CORRECTION to rollback', () => {
-      netMatch.handleReliableMessage({ type: MsgType.DESYNC_CORRECTION, frame: 0, snapshot: {} as any });
-      expect(mockRollbackInstance.handleReliableMessage).toHaveBeenCalled();
-    });
-
-    it('PAUSE message pauses game loop', () => {
+    it('PAUSE message pauses game loop (host)', () => {
       netMatch.handleReliableMessage({ type: MsgType.PAUSE, paused: true } as any);
       expect(mockGameLoopInstance.pause).toHaveBeenCalled();
     });
 
-    it('PAUSE message with paused=false resumes game loop', () => {
+    it('PAUSE with paused=false resumes game loop', () => {
       netMatch.handleReliableMessage({ type: MsgType.PAUSE, paused: false } as any);
       expect(mockGameLoopInstance.resume).toHaveBeenCalled();
     });
@@ -227,15 +221,14 @@ describe('NetMatch', () => {
   });
 
   describe('removePlayer()', () => {
-    it('removes remote slot from rollback + disconnects in gameLoop', () => {
+    it('disconnects player in game loop (host)', () => {
       netMatch.removePlayer('P2' as PlayerSlot);
-      expect(mockRollbackInstance.removeRemoteSlot).toHaveBeenCalledWith('P2');
       expect(mockGameLoopInstance.disconnectPlayer).toHaveBeenCalledWith('P2');
     });
   });
 
   describe('pause() / resume()', () => {
-    it('pause() pauses game loop and broadcasts PAUSE', () => {
+    it('pause() pauses game loop and broadcasts', () => {
       netMatch.pause();
       expect(mockGameLoopInstance.pause).toHaveBeenCalled();
       expect(transport.sendReliable).toHaveBeenCalledWith(
@@ -243,7 +236,7 @@ describe('NetMatch', () => {
       );
     });
 
-    it('resume() resumes game loop and broadcasts un-PAUSE', () => {
+    it('resume() resumes game loop and broadcasts', () => {
       netMatch.resume();
       expect(mockGameLoopInstance.resume).toHaveBeenCalled();
       expect(transport.sendReliable).toHaveBeenCalledWith(
@@ -258,9 +251,10 @@ describe('NetMatch', () => {
   });
 
   describe('stop()', () => {
-    it('stops rollback engine', () => {
+    it('stops host authority and game loop', () => {
       netMatch.stop();
-      expect(mockRollbackInstance.stop).toHaveBeenCalled();
+      expect(mockHostAuthorityInstance.stop).toHaveBeenCalled();
+      expect(mockGameLoopInstance.stop).toHaveBeenCalled();
     });
   });
 
@@ -309,12 +303,12 @@ describe('NetMatch', () => {
       expect(mockGameLoopInstance.pause).toHaveBeenCalled();
     });
 
-    it('onUnreliableMessage routes through handleUnreliableMessage', () => {
+    it('onUnreliableMessage routes to host authority', () => {
       netMatch.start();
       const events = transport.setEvents.mock.calls[0][0];
       const data = new ArrayBuffer(10);
       events.onUnreliableMessage(data, 'peer-a');
-      expect(mockRollbackInstance.handleInputMessage).toHaveBeenCalledWith(data);
+      expect(mockHostAuthorityInstance.handleUnreliableMessage).toHaveBeenCalledWith(data, 'peer-a');
     });
   });
 });
