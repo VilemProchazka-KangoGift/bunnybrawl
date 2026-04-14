@@ -1,13 +1,13 @@
 /**
- * WebRTC transport layer using Trystero (serverless signaling via Nostr).
+ * WebRTC transport layer using Trystero (serverless signaling via MQTT).
  * Supports multi-guest star topology: host accepts N guests, relays inputs.
  * Each guest connects only to the host.
  *
- * Replaces PeerJS with Trystero for zero-server-dependency signaling.
- * Room-based API maps directly to game lobby create/join flow.
+ * Uses MQTT public brokers for signaling — no rate limits, no pubkey
+ * restrictions, no kind filtering. More reliable than Nostr relays.
  */
-import { joinRoom } from 'trystero/nostr';
-import type { Room, ActionSender } from 'trystero/nostr';
+import { joinRoom } from '@trystero-p2p/mqtt';
+import type { Room, ActionSender } from '@trystero-p2p/mqtt';
 import {
   MsgType,
   encodePing, encodePong, decodePingPong,
@@ -58,24 +58,10 @@ const TURN_SERVERS = TURN_DISABLED ? [] : [
   },
 ];
 
-// Nostr relays that accept ephemeral events (kind 20000+) used for WebRTC signaling.
-// Must be strfry-based — pyramid/khatru relays reject non-standard kinds.
-const NOSTR_RELAYS = [
-  'wss://relay.damus.io',
-  'wss://nos.lol',
-  'wss://relay.primal.net',
-  'wss://offchain.pub',
-  'wss://relay.nostr.place',
-  'wss://nostr.data.haus',
-  'wss://purplerelay.com',
-  'wss://nostrue.com',
-];
-
 function getRoomConfig(roomId: string) {
   return {
     config: {
       appId: APP_ID,
-      relayUrls: NOSTR_RELAYS,
       rtcConfig: {
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },

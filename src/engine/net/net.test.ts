@@ -282,7 +282,7 @@ describe('Message loop prevention', () => {
 describe('Trystero import', () => {
   it('can import trystero module', async () => {
     // Just verify the module resolves — can't create actual rooms without a browser
-    const trystero = await import('trystero/nostr');
+    const trystero = await import('@trystero-p2p/mqtt');
     expect(trystero).toBeDefined();
     expect(trystero.joinRoom).toBeDefined();
   });

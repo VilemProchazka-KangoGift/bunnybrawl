@@ -38,7 +38,7 @@ const mockRoom = {
   onPeerTrack: vi.fn(),
 };
 
-vi.mock('trystero/nostr', () => ({
+vi.mock('@trystero-p2p/mqtt', () => ({
   joinRoom: vi.fn(() => mockRoom),
   selfId: 'self-id',
 }));
