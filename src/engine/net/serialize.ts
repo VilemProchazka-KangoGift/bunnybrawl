@@ -565,12 +565,13 @@ const STATE_HASH: Record<string, number> = {
 export function hashGameState(state: MatchState, rng: SeededRNG | undefined): number {
   let idx = 0;
   // Players (position + velocity + key timers for early divergence detection)
+  // Use +0 normalization to avoid -0/+0 hash divergence (different bit patterns)
   for (let i = 0; i < state.players.length; i++) {
     const p = state.players[i];
-    HASH_BUF[idx++] = p.x;
-    HASH_BUF[idx++] = p.y;
-    HASH_BUF[idx++] = p.vx;
-    HASH_BUF[idx++] = p.vy;
+    HASH_BUF[idx++] = p.x || 0;
+    HASH_BUF[idx++] = p.y || 0;
+    HASH_BUF[idx++] = p.vx || 0;
+    HASH_BUF[idx++] = p.vy || 0;
     HASH_BUF[idx++] = p.score;
     HASH_BUF[idx++] = STATE_HASH[p.state] ?? 0;
     HASH_BUF[idx++] = p.hitstopTimer;
@@ -628,16 +629,16 @@ const DETAILED_RESULT: DetailedHash = { hash: 0, playersHash: 0, entitiesHash: 0
  */
 export function hashGameStateDetailed(state: MatchState, rng: SeededRNG | undefined): DetailedHash {
   let idx = 0;
-  // -- Players subsystem --
+  // -- Players subsystem (|| 0 normalizes -0 to +0 for consistent hashing) --
   for (let i = 0; i < state.players.length; i++) {
     const p = state.players[i];
-    HASH_BUF[idx++] = p.x;
-    HASH_BUF[idx++] = p.y;
-    HASH_BUF[idx++] = p.vx;
-    HASH_BUF[idx++] = p.vy;
+    HASH_BUF[idx++] = p.x || 0;
+    HASH_BUF[idx++] = p.y || 0;
+    HASH_BUF[idx++] = p.vx || 0;
+    HASH_BUF[idx++] = p.vy || 0;
     HASH_BUF[idx++] = p.score;
     HASH_BUF[idx++] = STATE_HASH[p.state] ?? 0;
-    HASH_BUF[idx++] = p.hitstopTimer;
+    HASH_BUF[idx++] = p.hitstopTimer || 0;
     HASH_BUF[idx++] = p.fastFalling ? 1 : 0;
   }
   const playersEnd = idx;
@@ -694,13 +695,13 @@ export function hashSnapshot(snap: GameSnapshot): number {
   // Players (same order as hashGameState)
   for (let i = 0; i < snap.players.length; i++) {
     const p = snap.players[i];
-    HASH_BUF[idx++] = p.x;
-    HASH_BUF[idx++] = p.y;
-    HASH_BUF[idx++] = p.vx;
-    HASH_BUF[idx++] = p.vy;
+    HASH_BUF[idx++] = p.x || 0;
+    HASH_BUF[idx++] = p.y || 0;
+    HASH_BUF[idx++] = p.vx || 0;
+    HASH_BUF[idx++] = p.vy || 0;
     HASH_BUF[idx++] = p.score;
     HASH_BUF[idx++] = STATE_HASH[p.state] ?? 0;
-    HASH_BUF[idx++] = p.hitstopTimer;
+    HASH_BUF[idx++] = p.hitstopTimer || 0;
     HASH_BUF[idx++] = p.fastFalling ? 1 : 0;
   }
   // Entities

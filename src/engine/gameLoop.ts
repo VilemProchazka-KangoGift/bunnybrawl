@@ -1392,6 +1392,10 @@ export class GameLoop {
       collidePlatforms(player, this.arena.platforms);
       resolveStuckPlayer(player, this.arena.platforms);
       applyArenaConstraints(player, this.arena);
+      // Snap tiny values to zero: prevents ARM Flush-to-Zero (FTZ) subnormal
+      // divergence and signed-zero hash mismatches (-0 vs +0)
+      if (player.vx !== 0 && player.vx > -1e-4 && player.vx < 1e-4) player.vx = 0;
+      if (player.vy !== 0 && player.vy > -1e-4 && player.vy < 1e-4) player.vy = 0;
       updatePlayerState(player);
 
       // Landing detection
