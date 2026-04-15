@@ -89,6 +89,7 @@ const ENCODE_VIEW = new DataView(ENCODE_BUF);
 
 /** Encode a timer (seconds) as a uint8 frame count (0-255). */
 function encodeTimer(timer: number): number {
+  if (timer <= 0) return 0;
   return Math.min(Math.round(timer * 60), 255);
 }
 

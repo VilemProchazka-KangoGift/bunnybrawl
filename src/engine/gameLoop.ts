@@ -511,9 +511,9 @@ export class GameLoop {
   renderFrame(frameDt?: number): void {
     // In network mode, decay real-time timers that are normally handled in loop()
     if (this._networkMode && frameDt !== undefined && frameDt > 0) {
-      if (this.state.slowMotion > 0) this.state.slowMotion -= frameDt;
-      if (this.state.screenFlash > 0) this.state.screenFlash -= frameDt;
-      if (this.state.hitstopZoom > 0) this.state.hitstopZoom -= frameDt;
+      if (this.state.slowMotion > 0) this.state.slowMotion = Math.max(0, this.state.slowMotion - frameDt);
+      if (this.state.screenFlash > 0) this.state.screenFlash = Math.max(0, this.state.screenFlash - frameDt);
+      if (this.state.hitstopZoom > 0) this.state.hitstopZoom = Math.max(0, this.state.hitstopZoom - frameDt);
       // Fireworks when match is over
       if (this.state.matchOver) {
         this.fireworkTimer -= frameDt;
@@ -587,13 +587,13 @@ export class GameLoop {
 
     // Timers that run in real time (not affected by fixedUpdate early return)
     if (this.state.slowMotion > 0) {
-      this.state.slowMotion -= frameTime;
+      this.state.slowMotion = Math.max(0, this.state.slowMotion - frameTime);
     }
     if (this.state.screenFlash > 0) {
-      this.state.screenFlash -= frameTime;
+      this.state.screenFlash = Math.max(0, this.state.screenFlash - frameTime);
     }
     if (this.state.hitstopZoom > 0) {
-      this.state.hitstopZoom -= frameTime;
+      this.state.hitstopZoom = Math.max(0, this.state.hitstopZoom - frameTime);
     }
 
     // Fireworks when match is over
@@ -1170,7 +1170,7 @@ export class GameLoop {
     }
 
     // Screen shake decay (skip during resimulation — writes are also guarded)
-    if (!this._resimulating && this.state.screenShake > 0) this.state.screenShake -= dt;
+    if (!this._resimulating && this.state.screenShake > 0) this.state.screenShake = Math.max(0, this.state.screenShake - dt);
 
     // Hazard spawn timers (fround prevents cross-arch zero-crossing divergence → RNG desync)
     this.state.springSpawnTimer = f(this.state.springSpawnTimer - dt);
@@ -1312,12 +1312,12 @@ export class GameLoop {
       if (!player.active) continue;
       // Hitstop: decay timer + status timers, but skip animation advance + physics
       if (player.hitstopTimer > 0) {
-        player.hitstopTimer = f(player.hitstopTimer - dt);
-        if (player.fatTimer > 0) player.fatTimer = f(player.fatTimer - dt);
-        if (player.slowTimer > 0) player.slowTimer = f(player.slowTimer - dt);
-        if (player.burnTimer > 0) player.burnTimer = f(player.burnTimer - dt);
-        if (player.damageFlashTimer > 0) player.damageFlashTimer -= dt;
-        if (player.springTrailTimer > 0) player.springTrailTimer -= dt;
+        player.hitstopTimer = Math.max(0, f(player.hitstopTimer - dt));
+        if (player.fatTimer > 0) player.fatTimer = Math.max(0, f(player.fatTimer - dt));
+        if (player.slowTimer > 0) player.slowTimer = Math.max(0, f(player.slowTimer - dt));
+        if (player.burnTimer > 0) player.burnTimer = Math.max(0, f(player.burnTimer - dt));
+        if (player.damageFlashTimer > 0) player.damageFlashTimer = Math.max(0, player.damageFlashTimer - dt);
+        if (player.springTrailTimer > 0) player.springTrailTimer = Math.max(0, player.springTrailTimer - dt);
         continue;
       }
       player.animTimer += dt;
@@ -1325,10 +1325,10 @@ export class GameLoop {
         player.animTimer -= ANIM_FRAME_DURATION;
         player.animFrame = (player.animFrame + 1) % RUN_FRAMES;
       }
-      if (player.fatTimer > 0) player.fatTimer = f(player.fatTimer - dt);
-      if (player.slowTimer > 0) player.slowTimer = f(player.slowTimer - dt);
+      if (player.fatTimer > 0) player.fatTimer = Math.max(0, f(player.fatTimer - dt));
+      if (player.slowTimer > 0) player.slowTimer = Math.max(0, f(player.slowTimer - dt));
       if (player.burnTimer > 0) {
-        player.burnTimer = f(player.burnTimer - dt);
+        player.burnTimer = Math.max(0, f(player.burnTimer - dt));
         // Spawn fire particles while burning
         if (player.state !== 'splat' && player.state !== 'respawning') {
           const cx = player.x + player.width / 2;
@@ -1342,8 +1342,8 @@ export class GameLoop {
         }
       }
       // Decay damage flash and spring trail
-      if (player.damageFlashTimer > 0) player.damageFlashTimer -= dt;
-      if (player.springTrailTimer > 0) player.springTrailTimer -= dt;
+      if (player.damageFlashTimer > 0) player.damageFlashTimer = Math.max(0, player.damageFlashTimer - dt);
+      if (player.springTrailTimer > 0) player.springTrailTimer = Math.max(0, player.springTrailTimer - dt);
     }
 
     // Decay global bump cooldown

@@ -127,7 +127,7 @@ export function updateSplatTimers(
     }
 
     if (player.invincibleTimer > 0) {
-      player.invincibleTimer = f(player.invincibleTimer - dt);
+      player.invincibleTimer = Math.max(0, f(player.invincibleTimer - dt));
     }
   }
 }

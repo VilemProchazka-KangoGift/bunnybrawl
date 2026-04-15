@@ -208,7 +208,7 @@ export class LobbyGame {
 
     // --- Player-controlled characters ---
     for (const p of this.players) {
-      if (p.splatTimer > 0) { p.splatTimer -= dt; continue; }
+      if (p.splatTimer > 0) { p.splatTimer = Math.max(0, p.splatTimer - dt); continue; }
 
       let moveLeft = false, moveRight = false, jump = false, crouching = false;
 
@@ -244,7 +244,7 @@ export class LobbyGame {
 
     // --- NPC extras — simple wandering AI ---
     for (const npc of this.extraChars) {
-      if (npc.splatTimer > 0) { npc.splatTimer -= dt; continue; }
+      if (npc.splatTimer > 0) { npc.splatTimer = Math.max(0, npc.splatTimer - dt); continue; }
       if (Math.random() < 0.01) npc.vx = (Math.random() - 0.5) * 80;
       if (Math.random() < 0.005 && npc.onGround) { npc.vy = LOBBY_JUMP * 0.6; npc.onGround = false; }
       npc.facing = npc.vx > 0 ? 'right' : npc.vx < 0 ? 'left' : npc.facing;
@@ -253,7 +253,7 @@ export class LobbyGame {
 
     // --- Bot players — directed AI walking toward ready zone ---
     for (const bot of this.bots) {
-      if (bot.splatTimer > 0) { bot.splatTimer -= dt; continue; }
+      if (bot.splatTimer > 0) { bot.splatTimer = Math.max(0, bot.splatTimer - dt); continue; }
       updateBotLobbyAI(bot, dt);
       updateLobbyPhysics(bot, dt);
     }
