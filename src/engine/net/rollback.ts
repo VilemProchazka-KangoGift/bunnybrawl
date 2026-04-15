@@ -355,7 +355,7 @@ export class RollbackEngine {
   private networkLoop = (currentTime: number): void => {
     if (!this.running) return;
 
-    const dt = Math.min((currentTime - this.lastTime) / 1000, 0.1);
+    const dt = Math.min((currentTime - this.lastTime) / 1000, FIXED_TIMESTEP * 3);
     this.lastTime = currentTime;
     this.accumulator += dt;
 
