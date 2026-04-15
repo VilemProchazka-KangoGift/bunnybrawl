@@ -191,7 +191,7 @@ export class HostAuthority {
       } else {
         // No baseline or too old — send full snapshot with type prefix
         const msg = new Uint8Array(1 + encodeLen);
-        msg[0] = 0x20; // MsgType.SNAPSHOT
+        msg[0] = MsgType.SNAPSHOT;
         msg.set(new Uint8Array(encodeBuf, 0, encodeLen), 1);
         this.transport.sendUnreliableTo(peerId, msg.buffer);
       }
@@ -294,7 +294,7 @@ export class HostAuthority {
           const snap = takeAuthSnapshot(this.localFrame, this.gameLoop.getState());
           const { buffer: buf, length: len } = encodeSnapshot(snap);
           const fullMsg = new Uint8Array(1 + len);
-          fullMsg[0] = 0x20;
+          fullMsg[0] = MsgType.SNAPSHOT;
           fullMsg.set(new Uint8Array(buf, 0, len), 1);
           this.transport.sendUnreliableTo(fromPeerId, fullMsg.buffer);
         }

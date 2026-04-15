@@ -11,6 +11,7 @@
 import type { PlayerSlot, MatchState } from '../types';
 import type { Arena, MatchSettings } from '../types';
 import { isBotSlot } from '../types';
+import { FIXED_TIMESTEP } from '../constants';
 import { GameLoop } from '../gameLoop';
 import type { MatchEndCallback } from '../gameLoop';
 import { Transport } from './transport';
@@ -79,7 +80,6 @@ export class NetMatch {
   private reconnectTimer: ReturnType<typeof setInterval> | null = null;
   private onReconnecting?: (reconnecting: boolean) => void;
   private onStall?: (stalled: boolean) => void;
-  private roomCode: string | null = null;
 
   // Shared
   private rafId = 0;
@@ -94,7 +94,6 @@ export class NetMatch {
     this.onReconnecting = config.onReconnecting;
     this.onStall = config.onStall;
     this.localSlot = config.localSlot;
-    this.roomCode = config.transport.roomCode;
 
     // Both host and guest create a GameLoop (needed for canvas rendering)
     this.gameLoop = new GameLoop(
@@ -189,7 +188,7 @@ export class NetMatch {
   /** Host: simulate + broadcast + render. */
   private startHostLoop(): void {
     let lastTime = performance.now();
-    const FIXED_DT = 1 / 60;
+    const FIXED_DT = FIXED_TIMESTEP;
     let accumulator = 0;
 
     // Fairness delay: buffer host inputs to match guest round-trip latency.
@@ -262,7 +261,7 @@ export class NetMatch {
       this.transport.sendUnreliable(encodePing(performance.now()));
     }, 500);
 
-    const FIXED_DT = 1 / 60;
+    const FIXED_DT = FIXED_TIMESTEP;
     let lastTime = performance.now();
     let guestFrame = 0;
 
@@ -274,6 +273,11 @@ export class NetMatch {
       () => ({ frame: 0, input: { left: false, right: false, jump: false, down: false } }),
     );
     let inputRingCount = 0;
+    // Pre-allocated array for ordered input encoding (avoids per-frame allocation)
+    const orderedSlice: Array<{ frame: number; input: import('../types').InputState }> = Array.from(
+      { length: INPUT_RING_SIZE },
+      () => ({ frame: 0, input: { left: false, right: false, jump: false, down: false } }),
+    );
 
     const loop = (now: number) => {
       // Cap dt to 3 ticks — prevents tick burst after fullscreen/tab-switch pauses
@@ -291,15 +295,19 @@ export class NetMatch {
       inputRing[ringIdx].input.down = localInput.down;
       if (inputRingCount < INPUT_RING_SIZE) inputRingCount++;
 
-      // Build ordered slice (oldest → newest) for encoding
+      // Build ordered slice (oldest → newest) for encoding — reuses pre-allocated array
       const sendCount = inputRingCount;
-      const orderedInputs: Array<{ frame: number; input: import('../types').InputState }> = [];
       for (let i = sendCount - 1; i >= 0; i--) {
-        const idx = ((guestFrame - i) % INPUT_RING_SIZE + INPUT_RING_SIZE) % INPUT_RING_SIZE;
-        orderedInputs.push(inputRing[idx]);
+        const src = inputRing[((guestFrame - i) % INPUT_RING_SIZE + INPUT_RING_SIZE) % INPUT_RING_SIZE];
+        const dst = orderedSlice[sendCount - 1 - i];
+        dst.frame = src.frame;
+        dst.input.left = src.input.left;
+        dst.input.right = src.input.right;
+        dst.input.jump = src.input.jump;
+        dst.input.down = src.input.down;
       }
       this.transport.sendUnreliable(
-        encodeInputMessage(orderedInputs, 0, sendCount, this.localSlot),
+        encodeInputMessage(orderedSlice, 0, sendCount, this.localSlot),
       );
 
       // 2. Apply interpolated host snapshot to state
@@ -334,8 +342,8 @@ export class NetMatch {
       // 4. Tick cosmetic systems (weather, particles, gibs, confetti)
       this.gameLoop.tickCosmetics(dt);
 
-      // 4.5 Stall detection: check time since last snapshot
-      if (this.lastSnapshotTime > 0 && !this.reconnecting) {
+      // 4.5 Stall detection: check time since last snapshot (suppressed after match end)
+      if (this.lastSnapshotTime > 0 && !this.reconnecting && !state.matchOver) {
         const elapsed = now - this.lastSnapshotTime;
         if (elapsed > 3000) {
           // Hard stall — trigger reconnection
@@ -386,19 +394,28 @@ export class NetMatch {
       this.onStall?.(false);
     }
 
-    // Try delta decode first (uses lastSnapshotBuf as baseline), fall back to full decode
+    // Try delta decode against baseline, then fall back to full snapshot.
+    // Delta can produce garbage if the host fell back to full for this peer,
+    // so we validate the decode result before accepting it.
+    let snap = null;
     let snapBuf: ArrayBuffer | null = null;
-    const deltaResult = applyDelta(data, this.lastSnapshotBuf);
-    if (deltaResult) {
-      snapBuf = deltaResult;
-    } else {
-      // Full snapshot — strip the type prefix byte
+    if (this.lastSnapshotBuf) {
+      const deltaResult = applyDelta(data, this.lastSnapshotBuf);
+      if (deltaResult) {
+        const candidate = decodeSnapshot(deltaResult);
+        if (candidate && candidate.players.length > 0) {
+          snap = candidate;
+          snapBuf = deltaResult;
+        }
+      }
+    }
+    // Fall back to full snapshot decode
+    if (!snap) {
       snapBuf = data.slice(1);
+      snap = decodeSnapshot(snapBuf);
     }
 
-    const snap = decodeSnapshot(snapBuf);
-    if (snap) {
-      // Store decoded raw buffer as baseline for future delta decoding
+    if (snap && snapBuf) {
       this.lastSnapshotBuf = snapBuf;
 
       this.interpolation.pushSnapshot(snap);
@@ -456,8 +473,9 @@ export class NetMatch {
         return;
       }
       // Try to rejoin the room
-      if (this.roomCode) {
-        this.transport.joinRoom(this.roomCode).then(() => {
+      const code = this.transport.roomCode;
+      if (code) {
+        this.transport.joinRoom(code).then(() => {
           // Reconnected — send reclaim request
           this.transport.sendReliable({
             type: MsgType.RECONNECT_REQUEST,

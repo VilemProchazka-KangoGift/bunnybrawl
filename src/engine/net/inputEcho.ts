@@ -37,6 +37,7 @@ export class InputEcho {
   private prevInput: InputState = { left: false, right: false, jump: false, down: false };
   private prevFacing: 'left' | 'right' | null = null;
   private prevX = 0;
+  private hasPrevX = false;
 
   // Suppression (during death/respawn/teleport)
   private suppressedUntil = 0;
@@ -63,19 +64,20 @@ export class InputEcho {
         this.reset(now);
       }
       this.prevState = player.state;
-      this.prevInput = { ...input };
+      this.copyInput(input);
       return;
     }
 
     // Detect large position discontinuity (respawn teleport) — reset echo
-    if (this.prevX !== 0 && Math.abs(player.x - this.prevX) > 100) {
+    if (this.hasPrevX && Math.abs(player.x - this.prevX) > 100) {
       this.reset(now);
     }
     this.prevX = player.x;
+    this.hasPrevX = true;
 
     if (now < this.suppressedUntil) {
       this.prevState = player.state;
-      this.prevInput = { ...input };
+      this.copyInput(input);
       return;
     }
 
@@ -86,7 +88,7 @@ export class InputEcho {
     const lockDuration = rtt + 50;
 
     this.applyFacing(input, player, now, lockDuration);
-    this.applyAnimation(input, player, now, lockDuration);
+    this.applyAnimation(input, player, now, lockDuration, dt);
     this.applyJumpSquash(input, player);
     this.applyReversalSquash(input, player);
     this.applyFastFall(input, player);
@@ -94,6 +96,10 @@ export class InputEcho {
 
     // Store for next frame edge detection
     this.prevState = player.state;
+    this.copyInput(input);
+  }
+
+  private copyInput(input: InputState): void {
     this.prevInput.left = input.left;
     this.prevInput.right = input.right;
     this.prevInput.jump = input.jump;
@@ -109,6 +115,7 @@ export class InputEcho {
     this.jumpSquashTimer = 0;
     this.reversalSquashTimer = 0;
     this.prevFacing = null;
+    this.hasPrevX = false;
     this.suppressedUntil = (now ?? performance.now()) + SUPPRESS_DURATION_MS;
   }
 
@@ -130,11 +137,11 @@ export class InputEcho {
     // After lock expires with no input: snapshot facing takes over naturally
   }
 
-  private applyAnimation(input: InputState, player: Player, now: number, lockDuration: number): void {
+  private applyAnimation(input: InputState, player: Player, now: number, lockDuration: number, dt: number): void {
     if ((input.left || input.right) && (player.state === 'idle' || player.state === 'run')) {
-      // Locally drive walk cycle
-      this.walkCycleFrame++;
-      player.animFrame = this.walkCycleFrame;
+      // Locally drive walk cycle (frame-rate independent)
+      this.walkCycleFrame += dt * 60;
+      player.animFrame = Math.floor(this.walkCycleFrame);
       this.animLockUntil = now + lockDuration;
     } else if (now < this.animLockUntil) {
       // During lock, keep the local anim frame (don't let snapshot reset to idle)

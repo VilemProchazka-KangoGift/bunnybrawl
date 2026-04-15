@@ -12,10 +12,10 @@
  */
 import type { PlayerSlot, MatchState } from '../types';
 import type { AuthSnapshot } from './snapshot';
-import { GRAVITY } from '../constants';
+import { GRAVITY, FIXED_TIMESTEP } from '../constants';
 
 // Jitter buffer limits (in frames, converted to ms internally)
-const FRAME_DURATION = 1000 / 60; // ~16.67ms
+const FRAME_DURATION = FIXED_TIMESTEP * 1000;
 const MIN_BUFFER_FRAMES = 1;
 const MAX_BUFFER_FRAMES = 5;
 const JITTER_ALPHA = 0.1;          // EMA smoothing for jitter estimate
@@ -42,7 +42,6 @@ export class EntityInterpolation {
   private jitterEstimate = 0;       // ms — running EMA of arrival interval deviation
   private targetDelayMs = 2 * FRAME_DURATION; // start at 2 frames
   private currentDelayMs = 2 * FRAME_DURATION;
-  private expectedIntervalMs = FRAME_DURATION; // updated from snapshot sendInterval
 
   private initialized = false;
 
@@ -61,9 +60,7 @@ export class EntityInterpolation {
     // Update jitter estimate from arrival interval variance
     if (this.lastArrivalTime > 0) {
       const interval = now - this.lastArrivalTime;
-      // Use sendInterval from snapshot if available (for adaptive rate compatibility)
-      const expected = this.expectedIntervalMs;
-      const deviation = Math.abs(interval - expected);
+      const deviation = Math.abs(interval - FRAME_DURATION);
       this.jitterEstimate = this.jitterEstimate === 0
         ? deviation
         : this.jitterEstimate * (1 - JITTER_ALPHA) + deviation * JITTER_ALPHA;
@@ -77,13 +74,7 @@ export class EntityInterpolation {
     }
     this.lastArrivalTime = now;
 
-    // Update expected interval from snapshot's sendInterval field (Layer 3 compatibility)
-    if ('sendInterval' in snap && typeof (snap as any).sendInterval === 'number') {
-      const si = (snap as any).sendInterval as number;
-      if (si >= 1 && si <= 5) {
-        this.expectedIntervalMs = si * FRAME_DURATION;
-      }
-    }
+
 
     // Write to ring buffer
     const entry: BufferedSnapshot = { snapshot: snap, arrivalTime: now };
