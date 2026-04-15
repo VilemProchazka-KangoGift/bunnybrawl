@@ -1,8 +1,8 @@
-# BunnyBrawl — Claude Development Guide
+# Carrot Royale — Claude Development Guide
 
 ## Project Overview
 
-BunnyBrawl is a local-multiplayer party game inspired by Jump'n'Bump (1998). Up to 5 players share one keyboard, controlling cartoon animals on a 2D platformer arena. The goal: land on opponents' heads to splat them.
+Carrot Royale is a local-multiplayer party game inspired by Jump'n'Bump (1998). Up to 5 players share one keyboard, controlling cartoon animals on a 2D platformer arena. The goal: land on opponents' heads to splat them.
 
 **Tech stack**: React 19 + Vite 8 + TypeScript + HTML5 Canvas + Howler.js + Zustand + i18next
 
@@ -72,6 +72,8 @@ src/
       snapshot.ts       # Binary snapshot encode/decode, Uint8 timer compression
       netMatch.ts       # Orchestrator: host loop (simulate+broadcast) or guest loop (interpolate+render)
       networkSimulator.ts # Dev: simulated latency/jitter/loss (?simLatency, ?simJitter, ?simLoss)
+      inputEcho.ts        # Guest visual feedback without position prediction (facing, anim, squash)
+      guestSfx.ts         # Guest-side SFX detection from snapshot transitions
       debugOverlay.ts   # Dev: network stats overlay (?debug=net)
       rollback.ts       # Legacy rollback engine (preserved, unused by host-authoritative)
       prng.ts           # SeededRNG (legacy, used for local-mode determinism)
@@ -121,11 +123,11 @@ npm test          # Unit/integration tests (~1600 tests, Vitest)
 npm run test:e2e  # E2E tests (~120 tests, Playwright, builds first)
 npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/physics changes)
 # Dev shortcut — skip lobby:
-# http://localhost:5173/bunnybrawl/?arena=rooftops&bots=2&difficulty=hard
+# http://localhost:5173/carrot-royale/?arena=rooftops&bots=2&difficulty=hard
 # Nav debug overlay:
-# http://localhost:5173/bunnybrawl/?arena=meadow&bots=2&debug=nav (toggle with ` key)
+# http://localhost:5173/carrot-royale/?arena=meadow&bots=2&debug=nav (toggle with ` key)
 # Mobile testing (forces touch mode in desktop browser):
-# http://localhost:5173/bunnybrawl/?mobile&arena=meadow&bots=2
+# http://localhost:5173/carrot-royale/?mobile&arena=meadow&bots=2
 ```
 
 ## Testing
@@ -141,6 +143,7 @@ npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/
 - **E2E shortcuts** — `/?arena=meadow&bots=2&killLimit=4` auto-starts a match (skips lobby). Requires `arena` param to trigger. Use `window.__gameLoop.getState()` and `window.__gameStore.getState()` for in-match assertions.
 - **E2E countdown waits** — use `page.waitForFunction(() => window.__gameLoop?.getState()?.countdown === 0)` instead of `waitForTimeout(4000)`.
 - **E2E flakiness** — online multiplayer tests (`@online`) are inherently flaky due to PeerJS signaling. New E2E tests should use URL param auto-start and `waitForFunction` polling over hardcoded waits.
+- **Interpolation tests** cannot assert exact positions with wall-clock interpolation — snapshots pushed in rapid succession have near-identical arrival times. Assert value ranges, not exact lerp results.
 - **Vitest mock constructors** — `vi.fn(() => instance)` fails with `new`. Use `class MockX { constructor() { Object.assign(this, mockInstance); } }` instead.
 - **Vitest partial mocks** — `vi.mock('./mod', async (importOriginal) => ({ ...(await importOriginal()), fn: vi.fn() }))` preserves un-mocked exports. Access mocked fns via `const mod = await import('./mod'); vi.mocked(mod.fn)`.
 - **Arena IDs are snake_case** in URL params and registry: `space_station`, `candy_land`, `haunted_graveyard`.
@@ -228,7 +231,7 @@ Arena packs support ambient sounds via `ArenaPack.ambientSoundConfig`:
 
 ### Adding a new language
 1. Create `src/locales/<code>.json` — copy `en.json`, translate all keys. Verify key count matches with a script.
-2. Import in `src/i18n.ts`, add to `resources` object. Language persisted in `bunnybrawl_lang` via `localStorage`.
+2. Import in `src/i18n.ts`, add to `resources` object. Language persisted in `carrotroyale_lang` via `localStorage`.
 3. Add to the `languages` array in `MainMenu.tsx` lang-toggle (data-driven `.map()` loop — code, label, flag SVG).
 4. Add `<code>` key to `translations` in all 17 character packs in `src/engine/characters/packs/` and all 11 arena packs in `src/engine/arenas/packs/`.
 5. **Arena names must fit the selector boxes** — test at runtime, shorten long names.

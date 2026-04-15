@@ -99,7 +99,15 @@
 - **Host input fairness delay**: Host buffers own inputs in a ring buffer, reads `delayFrames` behind. Delay adapts to guest RTT.
 - **Guest loop**: No fixedUpdate — only interpolate snapshots + render. Decays visual timers locally between snapshots.
 - **Snapshot encoding**: Player timers as Uint8 frame counts (`Math.round(timer * 60)`, 0-255). Positions as Float32.
-- **Interpolation**: `EntityInterpolation` buffers snapshots, renders 2 frames behind latest. Only x/y/vx/vy are lerped; timers/state use "after" snapshot.
+- **Interpolation**: `EntityInterpolation` uses wall-clock timestamps (not frame numbers) with adaptive jitter buffer (1-5 frame delay based on arrival variance). Extrapolates up to 4 frames using velocity + gravity when snapshots are late. Only x/y/vx/vy are lerped; timers/state use "after" snapshot.
+- **Client prediction was tried and abandoned** — constant rubber-banding due to physics divergence in complex arenas (springs, geysers, player pushing, zero-G, etc.). `ClientPrediction` class still exists for reconciliation but `predict()` is dead code.
+- **Input Echo system** (`net/inputEcho.ts`): instant visual feedback for the guest's local player WITHOUT position prediction. Overrides facing, animFrame, squashScale, sideSquash, fastFalling, expression based on raw input. Position always from host snapshots. Hysteresis locks (RTT + 50ms) prevent snapshot-vs-echo flicker. Suppressed during death/respawn. Kill switch: `?noecho` URL param.
+- **Input redundancy**: Guest sends last 8 inputs per packet (ring buffer). Host iterates all bundled inputs with per-slot `lastConsumedFrame` tracking to recover from burst packet loss. Protocol already supported 16 bundled inputs.
+- **Delta compression + ACKs**: Guest sends `SNAPSHOT_ACK` after each snapshot. Host stores recent encoded snapshots (ring of 10), uses `createDelta()`/`applyDelta()` (XOR+RLE) against last ACKed baseline. **Guest must validate delta decode** — if host falls back to full snapshot for a peer with existing baseline, `applyDelta` will produce garbage. Always try delta, check `players.length > 0`, fall back to full decode.
+- **Reconnection window** (20s grace): On guest disconnect, `startReconnection()` retries `transport.joinRoom()` every 2s (9 attempts). Host enters grace period (`disconnectedSlots` Map) instead of immediate removal. `RECONNECT_REQUEST` (0x15) / `RECONNECT_SYNC` (0x16) protocol messages. Match.tsx shows "Reconnecting..." overlay.
+- **Stall detection** (guest-side): Tracks `lastSnapshotTime`. 500ms → `onStall(true)` ("Connection Unstable" banner). 3s → triggers reconnection. **Must check `!state.matchOver`** — host stops sending snapshots after match end.
+- **Connection quality HUD**: 3-bar signal icon (top-right, guest only). Green/yellow/red based on RTT + jitter thresholds. Wired through `gameLoop.setConnectionQuality()` → `renderer.setConnectionQuality()`.
+- **`FIXED_TIMESTEP` must be used in NetMatch loops** — never use raw `1/60`. The existing constant is `Math.fround(1/60)` for cross-architecture determinism.
 - `Transport.setEvents()` re-wires callbacks when transitioning from OnlineLobby to Match.
 - NEVER echo HANDSHAKE messages — creates infinite ping-pong.
 - Character selection messages must NOT auto-switch and re-send — creates infinite cascade.
