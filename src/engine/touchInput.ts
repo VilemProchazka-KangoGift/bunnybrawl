@@ -263,8 +263,13 @@ export class TouchInputManager {
 
   private resetJump(): void {
     this.jumpTouchId = null;
-    this.jumpTriggered = false;
-    this.jumpConsumed = false;
+    // If the jump was already consumed by the game loop, clear fully.
+    // If NOT consumed yet (quick tap finished before game read it),
+    // keep jumpTriggered=true so the next getInput() still returns the jump.
+    if (this.jumpConsumed) {
+      this.jumpTriggered = false;
+      this.jumpConsumed = false;
+    }
     this.downFromSwipe = false;
     this.onJumpFeedback?.(false);
   }
