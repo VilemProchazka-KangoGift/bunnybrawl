@@ -33,7 +33,7 @@ test.describe('Arena Selector', () => {
     await volcanoBtn.click();
 
     // Check localStorage
-    const stored = await page.evaluate(() => localStorage.getItem('bunnybrawl_arena'));
+    const stored = await page.evaluate(() => localStorage.getItem('carrotroyale_arena'));
     expect(stored).toBe('volcano');
   });
 });
@@ -65,11 +65,11 @@ test.describe('Gore Toggle', () => {
     // Enable gore
     const isChecked = await toggle.isChecked();
     if (!isChecked) await toggle.click();
-    expect(await page.evaluate(() => localStorage.getItem('bunnybrawl_gore'))).toBe('true');
+    expect(await page.evaluate(() => localStorage.getItem('carrotroyale_gore'))).toBe('true');
 
     // Disable gore
     await toggle.click();
-    expect(await page.evaluate(() => localStorage.getItem('bunnybrawl_gore'))).toBe('false');
+    expect(await page.evaluate(() => localStorage.getItem('carrotroyale_gore'))).toBe('false');
   });
 });
 
@@ -89,14 +89,14 @@ test.describe('Bot Difficulty Selection', () => {
     await expect(hardBtn).toHaveClass(/selected/);
 
     // Check localStorage
-    const stored = await page.evaluate(() => localStorage.getItem('bunnybrawl_botdiff'));
+    const stored = await page.evaluate(() => localStorage.getItem('carrotroyale_botdiff'));
     expect(stored).toBe('hard');
   });
 
   test('difficulty selector only appears when bots > 0', async ({ page }) => {
     await page.goto('/');
     // Clear any stored bot count
-    await page.evaluate(() => localStorage.removeItem('bunnybrawl_botcount'));
+    await page.evaluate(() => localStorage.removeItem('carrotroyale_botcount'));
     await page.reload();
 
     await expect(page.locator('.bot-difficulty-row')).not.toBeVisible();
@@ -126,7 +126,7 @@ test.describe('URL Params', () => {
       const store = (window as any).__gameStore;
       if (store) return store.getState().matchSettings.arenaId;
       // Fallback: check localStorage (set by setMatchSettings)
-      return localStorage.getItem('bunnybrawl_arena');
+      return localStorage.getItem('carrotroyale_arena');
     });
     expect(arenaId).toBe('rooftops');
   });
@@ -139,7 +139,7 @@ test.describe('URL Params', () => {
     const difficulty = await page.evaluate(() => {
       const store = (window as any).__gameStore;
       if (store) return store.getState().matchSettings.botDifficulty;
-      return localStorage.getItem('bunnybrawl_botdiff');
+      return localStorage.getItem('carrotroyale_botdiff');
     });
     expect(difficulty).toBe('hard');
   });

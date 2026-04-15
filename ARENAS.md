@@ -1,4 +1,4 @@
-# BunnyBrawl — Arena Levels
+# Carrot Royale — Arena Levels
 
 ## Architecture
 

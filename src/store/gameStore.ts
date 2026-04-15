@@ -53,13 +53,13 @@ const defaultSettings: MatchSettings = {
   killLimit: 16,
   timeLimit: 180, // 3 minutes
   playerCount: 2,
-  goreMode: loadStorage('bunnybrawl_gore', v => v === 'true', false),
-  arenaId: loadStorage('bunnybrawl_arena', v => v || 'meadow', 'meadow'),
-  botCount: loadStorage('bunnybrawl_botcount', v => parseInt(v || '0', 10) || 0, 0),
-  botDifficulty: loadStorage<'easy' | 'medium' | 'hard' | 'impossible'>('bunnybrawl_botdiff', v => {
+  goreMode: loadStorage('carrotroyale_gore', v => v === 'true', false),
+  arenaId: loadStorage('carrotroyale_arena', v => v || 'meadow', 'meadow'),
+  botCount: loadStorage('carrotroyale_botcount', v => parseInt(v || '0', 10) || 0, 0),
+  botDifficulty: loadStorage<'easy' | 'medium' | 'hard' | 'impossible'>('carrotroyale_botdiff', v => {
     return v === 'easy' || v === 'medium' || v === 'hard' || v === 'impossible' ? v : 'medium';
   }, 'medium'),
-  mods: loadStorage<GameMods>('bunnybrawl_mods', v => {
+  mods: loadStorage<GameMods>('carrotroyale_mods', v => {
     const p = JSON.parse(v || '');
     return { extremeGore: !!p.extremeGore, carrotChase: !!p.carrotChase, giantPlayers: !!p.giantPlayers, turbo: !!p.turbo, superBounce: !!p.superBounce, mirrorArena: !!p.mirrorArena, underwaterGravity: !!p.underwaterGravity };
   }, { extremeGore: false, carrotChase: false, giantPlayers: false, turbo: false, superBounce: false, mirrorArena: false, underwaterGravity: false }),
@@ -92,11 +92,11 @@ export const useGameStore = create<GameStore>((set) => ({
   setMatchSettings: (settings) =>
     set((state) => {
       const next = { ...state.matchSettings, ...settings };
-      if ('goreMode' in settings) saveStorage('bunnybrawl_gore', String(next.goreMode));
-      if ('arenaId' in settings) saveStorage('bunnybrawl_arena', next.arenaId);
-      if ('botCount' in settings) saveStorage('bunnybrawl_botcount', String(next.botCount));
-      if ('botDifficulty' in settings) saveStorage('bunnybrawl_botdiff', next.botDifficulty);
-      if ('mods' in settings) saveStorage('bunnybrawl_mods', JSON.stringify(next.mods));
+      if ('goreMode' in settings) saveStorage('carrotroyale_gore', String(next.goreMode));
+      if ('arenaId' in settings) saveStorage('carrotroyale_arena', next.arenaId);
+      if ('botCount' in settings) saveStorage('carrotroyale_botcount', String(next.botCount));
+      if ('botDifficulty' in settings) saveStorage('carrotroyale_botdiff', next.botDifficulty);
+      if ('mods' in settings) saveStorage('carrotroyale_mods', JSON.stringify(next.mods));
       return { matchSettings: next };
     }),
 

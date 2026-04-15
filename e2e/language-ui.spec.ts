@@ -101,12 +101,12 @@ test.describe('Arena Selector', () => {
   test('arena selection persists in localStorage', async ({ page }) => {
     // Set arena via localStorage and verify it loads
     await page.evaluate(() => {
-      localStorage.setItem('bunnybrawl_arena', 'volcano');
+      localStorage.setItem('carrotroyale_arena', 'volcano');
     });
     await page.reload();
 
     const storedArena = await page.evaluate(() => {
-      return localStorage.getItem('bunnybrawl_arena');
+      return localStorage.getItem('carrotroyale_arena');
     });
     expect(storedArena).toBe('volcano');
   });
@@ -130,7 +130,7 @@ test.describe('Gore Toggle', () => {
     await page.getByTestId('gore-toggle').click();
     // Check localStorage
     const goreValue = await page.evaluate(() => {
-      return localStorage.getItem('bunnybrawl_gore');
+      return localStorage.getItem('carrotroyale_gore');
     });
     // Should be either 'true' or 'false' (toggled from default)
     expect(['true', 'false']).toContain(goreValue);

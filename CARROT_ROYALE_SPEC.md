@@ -1,11 +1,11 @@
-# BunnyBrawl — Game Design Specification
+# Carrot Royale — Game Design Specification
 **Version 1.0 | March 2026**
 
 ---
 
 ## Overview
 
-BunnyBrawl is a local-multiplayer party game loosely inspired by Jump 'n Bump (1998). Up to 4 players share a single keyboard, controlling cartoon animals on a 2D platformer arena. The goal: land on opponents' heads to splat them. Last bunny standing (or highest score at time limit) wins.
+Carrot Royale is a local-multiplayer party game loosely inspired by Jump 'n Bump (1998). Up to 4 players share a single keyboard, controlling cartoon animals on a 2D platformer arena. The goal: land on opponents' heads to splat them. Last bunny standing (or highest score at time limit) wins.
 
 Phase 1 is a React + HTML5 Canvas prototype focused on core feel. Phase 2 ports to Unity with network play and extended content.
 
@@ -230,7 +230,7 @@ React is used for menus/HUD only. The canvas loop is imperative and lives outsid
 
 ## Open Questions
 
-1. **Name** — BunnyBrawl is a placeholder. Confirm or pick.
+1. **Name** — Confirmed: Carrot Royale.
 2. **Art style** — Pixel art vs. vector/cartoon? Pixel is faster for prototype; cartoon scales better to Unity.
 3. **Splat tone** — Cartoonish (confetti/paint) vs. mildly gory (blood blobs)? Affects rating and audience.
 4. **Phase 1 CPU players** — Placeholder bots for solo testing, or always require 2 human players?

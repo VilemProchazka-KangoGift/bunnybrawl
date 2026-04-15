@@ -90,7 +90,7 @@ test.describe('Bot In-Match Behavior', () => {
 
     // Set arena
     await page.evaluate((id: string) => {
-      localStorage.setItem('bunnybrawl_arena', id);
+      localStorage.setItem('carrotroyale_arena', id);
     }, arenaId);
     await page.reload();
 

@@ -4,7 +4,7 @@ Use when adding visual effects, screen effects, hit feedback, or "juice" to make
 
 ## Per-Player vs Global Effects
 
-BunnyBrawl supports up to 10 concurrent players. Effects that freeze or slow physics must be **per-player**, not global, to avoid disrupting uninvolved players.
+Carrot Royale supports up to 10 concurrent players. Effects that freeze or slow physics must be **per-player**, not global, to avoid disrupting uninvolved players.
 
 | Effect scope | When to use | Example |
 |-------------|-------------|---------|

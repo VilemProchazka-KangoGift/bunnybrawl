@@ -275,9 +275,9 @@ describe('AudioManager', () => {
   describe('Music preference persistence', () => {
     it('setMusicDisabled persists to localStorage', () => {
       audio.setMusicDisabled(true);
-      expect(localStorage.getItem('bunnybrawl_music_disabled')).toBe('1');
+      expect(localStorage.getItem('carrotroyale_music_disabled')).toBe('1');
       audio.setMusicDisabled(false);
-      expect(localStorage.getItem('bunnybrawl_music_disabled')).toBe('0');
+      expect(localStorage.getItem('carrotroyale_music_disabled')).toBe('0');
     });
 
     it('toggleMusicDisabled toggles and returns new state', () => {

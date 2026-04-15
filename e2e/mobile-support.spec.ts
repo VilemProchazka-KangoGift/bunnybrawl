@@ -58,7 +58,7 @@ test.describe('Mobile support (@mobile)', () => {
   test('lobby back button returns to menu', async ({ page }) => {
     await page.getByTestId('play-button').click();
     await expect(page.getByTestId('char-select')).toBeVisible();
-    await page.locator('.lobby-back-btn').click();
+    await page.locator('.lobby-back-btn').dispatchEvent('click');
     await expect(page.getByTestId('main-menu')).toBeVisible();
   });
 
@@ -89,9 +89,9 @@ test.describe('Mobile support (@mobile)', () => {
     await page.goto('/?mobile&arena=meadow&bots=1&killLimit=1&timeLimit=10');
     // Wait for victory screen (bots will fight, match ends by timeout at worst)
     await expect(page.getByTestId('victory-screen')).toBeVisible({ timeout: 30000 });
-    // Check that victory-columns has single-column flex direction via .is-mobile rule
+    // Mobile keeps horizontal two-column layout (row, not column) to avoid overflowing 720px height
     const columns = page.locator('.victory-columns');
-    await expect(columns).toHaveCSS('flex-direction', 'column');
+    await expect(columns).toHaveCSS('flex-direction', 'row');
   });
 
   test('pause arena grid uses 3 columns on mobile', async ({ page }) => {

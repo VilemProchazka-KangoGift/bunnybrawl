@@ -1,4 +1,4 @@
-# BunnyBrawl — Progress Log
+# Carrot Royale — Progress Log
 
 ## Stats
 - **28 commits** across 2 sessions

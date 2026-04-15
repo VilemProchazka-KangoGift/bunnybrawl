@@ -151,22 +151,22 @@ describe('GameStore', () => {
 
   it('setMatchSettings persists goreMode to localStorage', () => {
     useGameStore.getState().setMatchSettings({ goreMode: true });
-    expect(localStorage.getItem('bunnybrawl_gore')).toBe('true');
+    expect(localStorage.getItem('carrotroyale_gore')).toBe('true');
   });
 
   it('setMatchSettings persists arenaId to localStorage', () => {
     useGameStore.getState().setMatchSettings({ arenaId: 'volcano' });
-    expect(localStorage.getItem('bunnybrawl_arena')).toBe('volcano');
+    expect(localStorage.getItem('carrotroyale_arena')).toBe('volcano');
   });
 
   it('setMatchSettings persists botCount to localStorage', () => {
     useGameStore.getState().setMatchSettings({ botCount: 3 });
-    expect(localStorage.getItem('bunnybrawl_botcount')).toBe('3');
+    expect(localStorage.getItem('carrotroyale_botcount')).toBe('3');
   });
 
   it('setMatchSettings persists botDifficulty to localStorage', () => {
     useGameStore.getState().setMatchSettings({ botDifficulty: 'hard' });
-    expect(localStorage.getItem('bunnybrawl_botdiff')).toBe('hard');
+    expect(localStorage.getItem('carrotroyale_botdiff')).toBe('hard');
   });
 
   it('default timeLimit is 180 seconds', () => {

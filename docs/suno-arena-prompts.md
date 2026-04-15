@@ -1,4 +1,4 @@
-# BunnyBrawl — Suno Music Prompts per Arena
+# Carrot Royale — Suno Music Prompts per Arena
 
 All prompts are under 200 characters, instrumental, loopable.
 

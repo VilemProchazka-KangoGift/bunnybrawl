@@ -5,7 +5,7 @@ import en from './locales/en.json';
 import fil from './locales/fil.json';
 import hi from './locales/hi.json';
 
-const savedLng = (() => { try { return localStorage.getItem('bunnybrawl_lang'); } catch { return null; } })();
+const savedLng = (() => { try { return localStorage.getItem('carrotroyale_lang'); } catch { return null; } })();
 
 i18n.use(initReactI18next).init({
   resources: {
@@ -20,7 +20,7 @@ i18n.use(initReactI18next).init({
 });
 
 i18n.on('languageChanged', (lng) => {
-  try { localStorage.setItem('bunnybrawl_lang', lng); } catch { /* noop */ }
+  try { localStorage.setItem('carrotroyale_lang', lng); } catch { /* noop */ }
 });
 
 export default i18n;

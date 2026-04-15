@@ -10,7 +10,7 @@ class AudioManager {
   private sounds: Map<string, Howl> = new Map();
   private initialized = false;
   private muted = false;
-  private musicDisabled = (() => { try { return localStorage.getItem('bunnybrawl_music_disabled') === '1'; } catch { return false; } })();
+  private musicDisabled = (() => { try { return localStorage.getItem('carrotroyale_music_disabled') === '1'; } catch { return false; } })();
   private backgroundMuted = false;
   private gamePaused = false;
   private musicHowl: Howl | null = null;
@@ -296,7 +296,7 @@ class AudioManager {
 
   setMusicDisabled(disabled: boolean): void {
     this.musicDisabled = disabled;
-    try { localStorage.setItem('bunnybrawl_music_disabled', disabled ? '1' : '0'); } catch { /* restricted context */ }
+    try { localStorage.setItem('carrotroyale_music_disabled', disabled ? '1' : '0'); } catch { /* restricted context */ }
     if (disabled) { this.stopMusic(); this.stopMenuMusic(); }
   }
 

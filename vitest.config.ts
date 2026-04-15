@@ -6,6 +6,11 @@ export default defineConfig({
   define: {
     __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
   },
+  resolve: {
+    alias: {
+      '/logo.png?url': new URL('./src/test/logo-stub.ts', import.meta.url).pathname,
+    },
+  },
   test: {
     globals: true,
     environment: 'happy-dom',
