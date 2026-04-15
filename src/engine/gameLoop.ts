@@ -2084,7 +2084,15 @@ export class GameLoop {
     // Network mode: use injected inputs for human players
     if (this._networkInputs) {
       const netInput = this._networkInputs.get(player.id);
-      if (netInput) return netInput;
+      if (netInput) {
+        // Host-side airborne conversion: remote players may send jump while
+        // actually airborne (their snapshot is delayed so they don't know yet).
+        // Convert to fast-fall using the host's authoritative state.
+        if (netInput.jump && player.state === 'airborne') {
+          return { left: netInput.left, right: netInput.right, jump: false, down: true };
+        }
+        return netInput;
+      }
     }
     if (isBotSlot(player.id)) {
       const ai = this.aiControllers.get(player.id);
