@@ -13,6 +13,9 @@ import { getCharacterForSlot } from '../characters';
 interface PrevPlayerState {
   state: PlayerState;
   vy: number;
+  sideSquash: number;
+  burnTimer: number;
+  footstepAccum: number; // accumulated walk time for footstep sounds
 }
 
 export class GuestSFX {
@@ -52,14 +55,51 @@ export class GuestSFX {
         if ((prev.state === 'idle' || prev.state === 'run') && player.state === 'airborne') {
           audio.play('jump');
         }
+
+        // Respawn: respawning → idle
+        if (prev.state === 'respawning' && player.state === 'idle') {
+          audio.play('land');
+        }
+
+        // Push bump: sideSquash dropped to 0.8 (push) or 0.75 (wall)
+        if (prev.sideSquash >= 0.95 && player.sideSquash < 0.85) {
+          audio.play('bump');
+        }
+
+        // Burn damage: burnTimer went from 0 to > 0
+        if (prev.burnTimer <= 0 && player.burnTimer > 0) {
+          audio.play('oof');
+        }
+
+        // Geyser launch: sudden strong upward impulse (vy dropped by > 300 in one tick)
+        if (prev.vy - player.vy > 300) {
+          audio.play('geyser');
+        }
+
+        // Footsteps: accumulate walk time, play sound at intervals
+        if (player.state === 'run') {
+          prev.footstepAccum += 1 / 60; // approximate dt
+          if (prev.footstepAccum > 0.22) { // ~4.5 steps/sec
+            audio.play('land'); // reuse landing as soft footstep
+            prev.footstepAccum = 0;
+          }
+        } else {
+          prev.footstepAccum = 0;
+        }
       }
 
       // Mutate in-place to avoid per-frame allocation
       if (prev) {
         prev.state = player.state;
         prev.vy = player.vy;
+        prev.sideSquash = player.sideSquash;
+        prev.burnTimer = player.burnTimer;
       } else {
-        this.prevPlayers.set(player.id, { state: player.state, vy: player.vy });
+        this.prevPlayers.set(player.id, {
+          state: player.state, vy: player.vy,
+          sideSquash: player.sideSquash, burnTimer: player.burnTimer,
+          footstepAccum: 0,
+        });
       }
     }
 

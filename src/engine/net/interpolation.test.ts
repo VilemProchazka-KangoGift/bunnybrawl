@@ -40,7 +40,10 @@ describe('EntityInterpolation', () => {
     const interp = new EntityInterpolation();
     const snap = makeSnap(1, 100, 200);
     interp.pushSnapshot(snap);
-    expect(interp.getInterpolatedState()).toBe(snap);
+    const result = interp.getInterpolatedState();
+    expect(result).not.toBeNull();
+    expect(result!.frame).toBe(1);
+    expect(result!.players[0].x).toBe(100);
   });
 
   it('interpolates between two snapshots', () => {
@@ -49,23 +52,34 @@ describe('EntityInterpolation', () => {
     for (let i = 1; i <= 5; i++) {
       interp.pushSnapshot(makeSnap(i, 100 + i * 10, 200));
     }
-    // With interpDelay=2, target = 5-2 = 3, between frame 3 (x=130) and frame 4 (x=140)
+    // Wall-clock interpolation: in tests snapshots arrive near-simultaneously,
+    // so the result is from the earliest buffered region. Verify we get a valid
+    // interpolated snapshot with correct player structure.
     const result = interp.getInterpolatedState();
     expect(result).not.toBeNull();
-    // Should be at or near frame 3's position
     const p1 = result!.players.find(p => p.id === 'P1');
-    expect(p1!.x).toBeGreaterThanOrEqual(130);
-    expect(p1!.x).toBeLessThanOrEqual(140);
+    expect(p1).toBeDefined();
+    // Position should be within the range of all pushed snapshots (110-150)
+    expect(p1!.x).toBeGreaterThanOrEqual(110);
+    expect(p1!.x).toBeLessThanOrEqual(150);
   });
 
-  it('returns latest when target is ahead of all snapshots', () => {
+  it('returns a valid result when few snapshots buffered', () => {
     const interp = new EntityInterpolation();
     interp.pushSnapshot(makeSnap(1, 100, 200));
     interp.pushSnapshot(makeSnap(2, 110, 200));
-    // latestHostFrame=2, target=0 (2-2), which is before frame 1
-    // Should return earliest
     const result = interp.getInterpolatedState();
     expect(result).not.toBeNull();
+    expect(result!.players.length).toBe(2);
+  });
+
+  it('discards out-of-order snapshots (sequence validation)', () => {
+    const interp = new EntityInterpolation();
+    interp.pushSnapshot(makeSnap(5, 150, 200));
+    interp.pushSnapshot(makeSnap(3, 130, 200)); // stale — should be discarded
+    interp.pushSnapshot(makeSnap(6, 160, 200));
+    // Buffer should have 2 entries (frame 5 and 6), not 3
+    expect(interp.getBufferDepth()).toBe(2);
   });
 
   it('trims old snapshots beyond maxBuffer', () => {
@@ -79,10 +93,13 @@ describe('EntityInterpolation', () => {
   it('getLatestSnapshot returns most recent', () => {
     const interp = new EntityInterpolation();
     const s1 = makeSnap(1);
-    const s2 = makeSnap(2);
+    const s2 = makeSnap(2, 200, 300);
     interp.pushSnapshot(s1);
     interp.pushSnapshot(s2);
-    expect(interp.getLatestSnapshot()).toBe(s2);
+    const latest = interp.getLatestSnapshot();
+    expect(latest).not.toBeNull();
+    expect(latest!.frame).toBe(2);
+    expect(latest!.players[0].x).toBe(200);
   });
 });
 

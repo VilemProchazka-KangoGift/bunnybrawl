@@ -14,9 +14,10 @@ import {
   MsgType,
   decodeInputMessage, decodeSlot,
   encodePing, encodePong, decodePingPong,
+  decodeSnapshotAck,
 } from './protocol';
 import type { ReliableMessage } from './protocol';
-import { takeAuthSnapshot, encodeSnapshot } from './snapshot';
+import { takeAuthSnapshot, encodeSnapshot, createDelta } from './snapshot';
 
 export interface HostAuthorityConfig {
   gameLoop: GameLoop;
@@ -49,8 +50,15 @@ export class HostAuthority {
   // Peer → slot mapping
   private peerSlotMap = new Map<string, PlayerSlot>();
 
-  // Per-guest acked baseline for delta compression
+  // Delta compression: per-peer ACKed baselines + recent snapshot history
   private guestBaselines = new Map<string, ArrayBuffer>();
+  private guestAckedFrame = new Map<string, number>();
+  // Ring of recent encoded snapshots for ACK→baseline lookup
+  private recentSnapshots: Array<{ frame: number; encoded: ArrayBuffer }> = [];
+  private readonly SNAPSHOT_HISTORY_SIZE = 10;
+
+  // Per-slot frame tracking for input redundancy
+  private lastConsumedFrame = new Map<string, number>();
 
   // Ping/pong
   private pingInterval: ReturnType<typeof setInterval> | null = null;
@@ -76,6 +84,7 @@ export class HostAuthority {
     const slot = this.peerSlotMap.get(peerId);
     this.peerSlotMap.delete(peerId);
     this.guestBaselines.delete(peerId);
+    this.guestAckedFrame.delete(peerId);
     if (slot) {
       this.guestInputs.delete(slot);
       this.gameLoop.disconnectPlayer(slot);
@@ -111,13 +120,32 @@ export class HostAuthority {
 
     const snap = takeAuthSnapshot(this.localFrame, state);
     const { buffer: encodeBuf, length: encodeLen } = encodeSnapshot(snap);
-    // Send full snapshot with 0x20 type prefix (delta compression TODO)
-    const msg = new Uint8Array(1 + encodeLen);
-    msg[0] = 0x20; // MsgType.SNAPSHOT
-    msg.set(new Uint8Array(encodeBuf, 0, encodeLen), 1);
+    // Keep a copy of the raw encoded snapshot for delta baselines
+    const currentEncoded = encodeBuf.slice(0, encodeLen);
+
+    // Store in recent history for ACK→baseline lookup
+    this.recentSnapshots.push({ frame: this.localFrame, encoded: currentEncoded });
+    if (this.recentSnapshots.length > this.SNAPSHOT_HISTORY_SIZE) {
+      this.recentSnapshots.shift();
+    }
 
     for (const peerId of this.transport.getPeerIds()) {
-      this.transport.sendUnreliableTo(peerId, msg.buffer);
+      // Try delta compression against this peer's last ACKed baseline
+      const ackedFrame = this.guestAckedFrame.get(peerId) ?? 0;
+      const baseline = this.guestBaselines.get(peerId);
+      const frameDiff = this.localFrame - ackedFrame;
+
+      if (baseline && frameDiff > 0 && frameDiff < 60) {
+        // Delta compress against baseline
+        const delta = createDelta(currentEncoded, baseline);
+        this.transport.sendUnreliableTo(peerId, delta);
+      } else {
+        // No baseline or too old — send full snapshot with type prefix
+        const msg = new Uint8Array(1 + encodeLen);
+        msg[0] = 0x20; // MsgType.SNAPSHOT
+        msg.set(new Uint8Array(encodeBuf, 0, encodeLen), 1);
+        this.transport.sendUnreliableTo(peerId, msg.buffer);
+      }
     }
 
     this.lastSnapshotBytes = encodeLen;
@@ -132,22 +160,28 @@ export class HostAuthority {
     if (type === MsgType.INPUT) {
       const decoded = decodeInputMessage(data);
       if (!decoded || decoded.inputCount === 0) return;
-      // Use the most recent input from the bundle
-      const latest = decoded.inputs[decoded.inputCount - 1];
       const slot = decodeSlot(decoded.source);
+      const lastFrame = this.lastConsumedFrame.get(slot) ?? 0;
       const existing = this.guestInputs.get(slot);
-      if (existing) {
-        // Latch jump: if a previous message set jump=true and the host tick
-        // hasn't consumed it yet, don't let a subsequent jump=false overwrite it.
-        // Jump is edge-triggered (true for exactly one guest frame), so two
-        // guest messages arriving in the same host rAF gap would otherwise lose it.
-        const pendingJump = existing.jump;
-        existing.left = latest.input.left;
-        existing.right = latest.input.right;
-        existing.jump = latest.input.jump || pendingJump;
-        existing.down = latest.input.down;
-      } else {
-        this.guestInputs.set(slot, { ...latest.input });
+
+      // Iterate all bundled inputs (oldest → newest) to recover from packet loss.
+      // Only apply inputs newer than the last consumed frame.
+      for (let i = 0; i < decoded.inputCount; i++) {
+        const entry = decoded.inputs[i];
+        if (entry.frame <= lastFrame) continue; // already consumed or stale
+
+        if (existing) {
+          // Latch jump: if a previous input set jump=true and the host tick
+          // hasn't consumed it yet, don't let a subsequent jump=false overwrite it.
+          const pendingJump = existing.jump;
+          existing.left = entry.input.left;
+          existing.right = entry.input.right;
+          existing.jump = entry.input.jump || pendingJump;
+          existing.down = entry.input.down;
+        } else {
+          this.guestInputs.set(slot, { ...entry.input });
+        }
+        this.lastConsumedFrame.set(slot, entry.frame);
       }
 
       // Relay input to other guests for their interpolation
@@ -156,6 +190,16 @@ export class HostAuthority {
           if (pid !== fromPeerId) {
             this.transport.sendUnreliableTo(pid, data);
           }
+        }
+      }
+    } else if (type === MsgType.SNAPSHOT_ACK) {
+      // Guest acknowledged receiving a snapshot — look up encoded bytes and store as baseline
+      const ackedFrame = decodeSnapshotAck(data);
+      if (ackedFrame !== null && fromPeerId) {
+        const entry = this.recentSnapshots.find(s => s.frame === ackedFrame);
+        if (entry) {
+          this.guestAckedFrame.set(fromPeerId, ackedFrame);
+          this.guestBaselines.set(fromPeerId, entry.encoded);
         }
       }
     } else if (type === MsgType.PING) {

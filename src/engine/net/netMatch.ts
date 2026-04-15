@@ -26,7 +26,9 @@ import {
   decodePingPong,
   encodePing, encodePong,
   encodeInputMessage,
+  encodeSnapshotAck,
 } from './protocol';
+import { applyDelta } from './snapshot';
 
 export interface NetMatchConfig {
   bgCanvas: HTMLCanvasElement;
@@ -65,6 +67,7 @@ export class NetMatch {
   private prediction: ClientPrediction | null = null;
   private guestSfx: GuestSFX | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
+  private lastSnapshotBuf: ArrayBuffer | null = null; // baseline for delta decode
 
   // Shared
   private rafId = 0;
@@ -232,25 +235,41 @@ export class NetMatch {
     const FIXED_DT = 1 / 60;
     let lastTime = performance.now();
     let guestFrame = 0;
-    const inputBundle: Array<{ frame: number; input: import('../types').InputState }> = [
-      { frame: 0, input: { left: false, right: false, jump: false, down: false } },
-    ];
+
+    // Input redundancy: ring buffer of last 8 inputs (~133ms coverage).
+    // Each packet bundles all 8 so the host can recover from burst packet loss.
+    const INPUT_RING_SIZE = 8;
+    const inputRing: Array<{ frame: number; input: import('../types').InputState }> = Array.from(
+      { length: INPUT_RING_SIZE },
+      () => ({ frame: 0, input: { left: false, right: false, jump: false, down: false } }),
+    );
+    let inputRingCount = 0;
 
     const loop = (now: number) => {
       // Cap dt to 3 ticks — prevents tick burst after fullscreen/tab-switch pauses
       const dt = Math.min((now - lastTime) / 1000, FIXED_DT * 3);
       lastTime = now;
 
-      // 1. Read local input and send to host (field-copy avoids object allocation)
+      // 1. Read local input, push to ring buffer, send bundled to host
       const localInput = this.gameLoop.getInputAny();
       guestFrame++;
-      inputBundle[0].frame = guestFrame;
-      inputBundle[0].input.left = localInput.left;
-      inputBundle[0].input.right = localInput.right;
-      inputBundle[0].input.jump = localInput.jump;
-      inputBundle[0].input.down = localInput.down;
+      const ringIdx = guestFrame % INPUT_RING_SIZE;
+      inputRing[ringIdx].frame = guestFrame;
+      inputRing[ringIdx].input.left = localInput.left;
+      inputRing[ringIdx].input.right = localInput.right;
+      inputRing[ringIdx].input.jump = localInput.jump;
+      inputRing[ringIdx].input.down = localInput.down;
+      if (inputRingCount < INPUT_RING_SIZE) inputRingCount++;
+
+      // Build ordered slice (oldest → newest) for encoding
+      const sendCount = inputRingCount;
+      const orderedInputs: Array<{ frame: number; input: import('../types').InputState }> = [];
+      for (let i = sendCount - 1; i >= 0; i--) {
+        const idx = ((guestFrame - i) % INPUT_RING_SIZE + INPUT_RING_SIZE) % INPUT_RING_SIZE;
+        orderedInputs.push(inputRing[idx]);
+      }
       this.transport.sendUnreliable(
-        encodeInputMessage(inputBundle, 0, 1, this.localSlot),
+        encodeInputMessage(orderedInputs, 0, sendCount, this.localSlot),
       );
 
       // 2. Apply interpolated host snapshot to state
@@ -309,11 +328,25 @@ export class NetMatch {
   private handleGuestSnapshot(data: ArrayBuffer): void {
     if (!this.interpolation) return;
 
-    // Strip the snapshot type prefix and decode
-    const snapBuf = data.slice(1);
+    // Try delta decode first (uses lastSnapshotBuf as baseline), fall back to full decode
+    let snapBuf: ArrayBuffer | null = null;
+    const deltaResult = applyDelta(data, this.lastSnapshotBuf);
+    if (deltaResult) {
+      snapBuf = deltaResult;
+    } else {
+      // Full snapshot — strip the type prefix byte
+      snapBuf = data.slice(1);
+    }
+
     const snap = decodeSnapshot(snapBuf);
     if (snap) {
+      // Store decoded raw buffer as baseline for future delta decoding
+      this.lastSnapshotBuf = snapBuf;
+
       this.interpolation.pushSnapshot(snap);
+
+      // Send ACK so host can use this frame as delta baseline
+      this.transport.sendUnreliable(encodeSnapshotAck(snap.frame));
 
       if (this.prediction) {
         const localPlayer = snap.players.find(p => p.id === this.localSlot);
