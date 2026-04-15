@@ -196,8 +196,8 @@ export class NetMatch {
         inputRing[writeIdx % MAX_DELAY].down = currentInput.down;
         writeIdx++;
 
-        // Read delayed input from ring buffer
-        const readIdx = Math.max(0, writeIdx - delayFrames);
+        // Read delayed input (or current if buffer not full yet)
+        const readIdx = writeIdx > delayFrames ? writeIdx - delayFrames : writeIdx - 1;
         const delayedInput = inputRing[readIdx % MAX_DELAY];
 
         const networkInputs = this.hostAuthority!.getNetworkInputs();
