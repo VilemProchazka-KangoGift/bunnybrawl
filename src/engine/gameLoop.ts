@@ -448,12 +448,8 @@ export class GameLoop {
   getInputAny(): InputState {
     const kb = this.input.getInputAny();
     if (this.touchInput) {
-      // In network mode (guest), skip airborne conversion — send raw jump input.
-      // The host applies the conversion using its authoritative state in getPlayerInput().
-      // This avoids the guest's stale snapshot causing wrong conversion, and the
-      // host's jump latch preserves the input across message overwrites.
-      // In host mode, the host reads its own input via this method too, but the
-      // host has correct state so the conversion is valid.
+      // Network mode: skip airborne conversion — host applies it in getPlayerInput()
+      // using authoritative state. Jump latch preserves across message overwrites.
       const touchPlayer = this.touchSlot
         ? this.state.players.find(p => p.id === this.touchSlot)
         : null;
@@ -522,24 +518,12 @@ export class GameLoop {
     this.updateConfetti(dt);
   }
 
-  /** Emit a particle from external code (guest SFX). */
-  emitParticlePublic(x: number, y: number, vx: number, vy: number, life: number, size: number, color: string): void {
-    this.emitParticle(x, y, vx, vy, life, size, color);
-  }
-
-  /** Spawn dust particles for landing (guest SFX). */
+  /** Spawn dust particles for landing. Accepts any object with position+size. */
   spawnDustPublic(player: { x: number; y: number; width: number; height: number }, landVy: number): void {
-    const cx = player.x + player.width / 2;
-    const groundY = player.y + player.height;
-    const intensity = Math.min(landVy / 300, 3);
-    const count = Math.floor(8 + intensity * 6);
-    for (let i = 0; i < count; i++) {
-      const life = 0.3 + Math.random() * 0.4 * intensity;
-      this.emitParticle(cx + (Math.random() - 0.5) * player.width * 1.5, groundY - Math.random() * 4, (Math.random() - 0.5) * 150 * intensity, -Math.random() * 80 * intensity - 20, life, 2 + Math.random() * 4 * intensity, '#C8B896');
-    }
+    this.spawnDustParticles(player as Player, landVy);
   }
 
-  /** Spawn stomp blood/confetti particles (guest SFX). */
+  /** Spawn stomp blood/confetti particles. */
   spawnStompVfxPublic(victim: { x: number; y: number; width: number; height: number }): void {
     const cx = victim.x + victim.width / 2;
     const cy = victim.y + victim.height / 2;
@@ -547,19 +531,18 @@ export class GameLoop {
       for (let i = 0; i < 12; i++) {
         const angle = Math.random() * Math.PI * 2;
         const speed = 100 + Math.random() * 200;
-        this.emitParticle(cx, cy, Math.cos(angle) * speed, Math.sin(angle) * speed - 100, 0.5 + Math.random() * 0.5, 2 + Math.random() * 5, '#8B0000');
+        this.emitParticle(cx, cy, Math.cos(angle) * speed, Math.sin(angle) * speed - 100, 0.5 + Math.random() * 0.5, 2 + Math.random() * 5, BLOOD_COLOR);
       }
     } else {
       for (let i = 0; i < 15; i++) {
         const angle = Math.random() * Math.PI * 2;
         const speed = 80 + Math.random() * 150;
-        const colors = ['#FF6B6B', '#4ECDC4', '#FFE66D', '#A8E6CF', '#FF8B94'];
-        this.emitParticle(cx, cy, Math.cos(angle) * speed, Math.sin(angle) * speed - 120, 0.6 + Math.random() * 0.4, 2 + Math.random() * 4, colors[i % colors.length]);
+        this.emitParticle(cx, cy, Math.cos(angle) * speed, Math.sin(angle) * speed - 120, 0.6 + Math.random() * 0.4, 2 + Math.random() * 4, GameLoop.CONFETTI_COLORS[i % GameLoop.CONFETTI_COLORS.length]);
       }
     }
   }
 
-  /** Spawn carrot pickup burst (guest SFX). */
+  /** Spawn carrot pickup burst. */
   spawnCarrotVfxPublic(x: number, y: number): void {
     for (let i = 0; i < 8; i++) {
       const angle = (i / 8) * Math.PI * 2;

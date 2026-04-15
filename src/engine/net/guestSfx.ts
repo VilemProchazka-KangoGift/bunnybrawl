@@ -13,7 +13,6 @@ import { getCharacterForSlot } from '../characters';
 interface PrevPlayerState {
   state: PlayerState;
   vy: number;
-  score: number;
 }
 
 export class GuestSFX {
@@ -31,7 +30,6 @@ export class GuestSFX {
 
   /** Call after applying snapshot to MatchState. Detects transitions and fires SFX + particles. */
   update(state: MatchState): void {
-    // --- Player transitions ---
     for (const player of state.players) {
       if (!player.active) continue;
       const prev = this.prevPlayers.get(player.id);
@@ -40,8 +38,7 @@ export class GuestSFX {
         // Stomp: player just got splatted
         if (prev.state !== 'splat' && prev.state !== 'respawning' && player.state === 'splat') {
           audio.play('stomp');
-          const charDef = getCharacterForSlot(player.id);
-          audio.playAnimal(charDef.name);
+          audio.playAnimal(getCharacterForSlot(player.id).name);
           this.gameLoop.spawnStompVfxPublic(player);
         }
 
@@ -57,67 +54,73 @@ export class GuestSFX {
         }
       }
 
-      // Store for next frame
-      this.prevPlayers.set(player.id, {
-        state: player.state,
-        vy: player.vy,
-        score: player.score,
-      });
-    }
-
-    // --- Carrots: active → inactive = pickup ---
-    for (let i = 0; i < state.carrots.length; i++) {
-      const wasActive = this.prevCarrotActives[i] ?? true;
-      if (wasActive && !state.carrots[i].active) {
-        audio.play('crunch');
-        this.gameLoop.spawnCarrotVfxPublic(state.carrots[i].x, state.carrots[i].y);
+      // Mutate in-place to avoid per-frame allocation
+      if (prev) {
+        prev.state = player.state;
+        prev.vy = player.vy;
+      } else {
+        this.prevPlayers.set(player.id, { state: player.state, vy: player.vy });
       }
     }
-    this.prevCarrotActives.length = state.carrots.length;
-    for (let i = 0; i < state.carrots.length; i++) {
-      this.prevCarrotActives[i] = state.carrots[i].active;
-    }
 
-    // --- Springs: bounceTimer went from 0 to >0 ---
-    for (let i = 0; i < state.springs.length; i++) {
-      const prevBounce = this.prevSpringBounces[i] ?? 0;
-      if (prevBounce <= 0 && state.springs[i].bounceTimer > 0) {
-        audio.play('spring');
-      }
-    }
-    this.prevSpringBounces.length = state.springs.length;
-    for (let i = 0; i < state.springs.length; i++) {
-      this.prevSpringBounces[i] = state.springs[i].bounceTimer;
-    }
+    // Carrots: active → inactive = pickup
+    this.detectArrayTransition(
+      this.prevCarrotActives, state.carrots.length,
+      i => state.carrots[i].active,
+      (prev, cur) => prev && !cur,
+      i => { audio.play('crunch'); this.gameLoop.spawnCarrotVfxPublic(state.carrots[i].x, state.carrots[i].y); },
+    );
 
-    // --- Thorns: hit became true ---
-    for (let i = 0; i < state.thorns.length; i++) {
-      const wasHit = this.prevThornHits[i] ?? false;
-      if (!wasHit && state.thorns[i].hit) {
-        audio.play('thornhit');
-      }
-    }
-    this.prevThornHits.length = state.thorns.length;
-    for (let i = 0; i < state.thorns.length; i++) {
-      this.prevThornHits[i] = state.thorns[i].hit;
-    }
+    // Springs: bounceTimer went from 0 to >0
+    this.detectArrayTransition(
+      this.prevSpringBounces, state.springs.length,
+      i => state.springs[i].bounceTimer,
+      (prev, cur) => prev <= 0 && cur > 0,
+      () => { audio.play('spring'); },
+    );
 
-    // --- Countdown ---
+    // Thorns: hit became true
+    this.detectArrayTransition(
+      this.prevThornHits, state.thorns.length,
+      i => state.thorns[i].hit,
+      (prev, cur) => !prev && cur,
+      () => { audio.play('thornhit'); },
+    );
+
+    // Countdown
     if (state.countdown > 0) {
       const curSec = Math.ceil(state.countdown);
-      if (curSec < this.prevCountdown) {
-        audio.play('countdown_beep');
-      }
+      if (curSec < this.prevCountdown) audio.play('countdown_beep');
       this.prevCountdown = curSec;
     } else if (this.prevCountdown > 0) {
       audio.play('countdown_go');
       this.prevCountdown = 0;
     }
 
-    // --- Match over ---
-    if (state.matchOver && !this.prevMatchOver) {
-      audio.play('victory');
-    }
+    // Match over
+    if (state.matchOver && !this.prevMatchOver) audio.play('victory');
     this.prevMatchOver = state.matchOver;
+  }
+
+  /** Generic array transition detector — compare previous vs current, fire callback on match. */
+  private detectArrayTransition<T>(
+    prevArr: T[], length: number,
+    getCurrent: (i: number) => T,
+    changed: (prev: T, cur: T) => boolean,
+    onTrigger: (i: number) => void,
+  ): void {
+    for (let i = 0; i < length; i++) {
+      const cur = getCurrent(i);
+      if (i < prevArr.length && changed(prevArr[i], cur)) {
+        onTrigger(i);
+      }
+      // Grow or update
+      if (i >= prevArr.length) {
+        prevArr.push(cur);
+      } else {
+        prevArr[i] = cur;
+      }
+    }
+    prevArr.length = length;
   }
 }

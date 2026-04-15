@@ -119,7 +119,7 @@ function interpolateSnapshots(a: AuthSnapshot, b: AuthSnapshot, t: number): Auth
   r.frame = Math.round(a.frame + (b.frame - a.frame) * t);
 
   // Players: reuse or grow array
-  while (r.players.length > b.players.length) r.players.pop();
+  if (r.players.length > b.players.length) r.players.length = b.players.length;
   for (let i = 0; i < b.players.length; i++) {
     const bp = b.players[i];
     const ap = _interpAById.get(bp.id);
@@ -178,7 +178,7 @@ function interpArrayInPlace<T extends Record<string, any>>(
   out: T[], aArr: T[], bArr: T[],
   fn: (a: T, b: T, out: T) => void,
 ): void {
-  while (out.length > bArr.length) out.pop();
+  if (out.length > bArr.length) out.length = bArr.length;
   for (let i = 0; i < bArr.length; i++) {
     if (i >= out.length) {
       out.push({ ...bArr[i] });
