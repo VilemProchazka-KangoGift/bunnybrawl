@@ -5,7 +5,7 @@ export default defineConfig({
   plugins: [react()],
   base: '/bunnybrawl/',
   optimizeDeps: {
-    include: ['trystero'],
+    include: ['@trystero-p2p/mqtt'],
   },
   define: {
     __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
