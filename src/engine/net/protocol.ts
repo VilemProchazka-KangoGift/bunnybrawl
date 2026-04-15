@@ -23,6 +23,8 @@ export const MsgType = {
   PLAYER_LEFT: 0x0E,       // host -> all: player disconnected
   SLOT_ASSIGNMENT: 0x0F,   // host -> guest: your assigned player slot
   MATCH_IN_PROGRESS: 0x14, // host -> late joiner: match is running, spectate
+  RECONNECT_REQUEST: 0x15, // guest -> host: reconnection request
+  RECONNECT_SYNC: 0x16,   // host -> guest: state sync after reconnect
 
   // Unreliable channel (binary)
   INPUT: 0x10,
@@ -283,6 +285,18 @@ export interface MatchInProgressMessage {
   snapshot: unknown;  // Current game state for spectator
 }
 
+export interface ReconnectRequestMessage {
+  type: 0x15;
+  slot: string;       // PlayerSlot the guest wants to reclaim
+  playerName: string;
+}
+
+export interface ReconnectSyncMessage {
+  type: 0x16;
+  slot: string;       // Confirmed slot assignment
+  snapshotFrame: number;
+}
+
 export type ReliableMessage =
   | HandshakeMessage
   | SettingsSyncMessage
@@ -299,7 +313,9 @@ export type ReliableMessage =
   | PlayerJoinedMessage
   | PlayerLeftMessage
   | SlotAssignmentMessage
-  | MatchInProgressMessage;
+  | MatchInProgressMessage
+  | ReconnectRequestMessage
+  | ReconnectSyncMessage;
 
 // ---- Snapshot ACK encoding ----
 

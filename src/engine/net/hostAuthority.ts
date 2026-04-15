@@ -60,6 +60,10 @@ export class HostAuthority {
   // Per-slot frame tracking for input redundancy
   private lastConsumedFrame = new Map<string, number>();
 
+  // Reconnection grace period: slot → { timer, oldPeerId }
+  private disconnectedSlots = new Map<PlayerSlot, { timer: number; peerId: string }>();
+  private readonly GRACE_PERIOD = 20; // seconds
+
   // Ping/pong
   private pingInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -79,7 +83,7 @@ export class HostAuthority {
     this.guestInputs.set(slot, { left: false, right: false, jump: false, down: false });
   }
 
-  /** Remove a disconnected guest. */
+  /** Remove a disconnected guest — enters grace period for reconnection. */
   removeGuest(peerId: string): void {
     const slot = this.peerSlotMap.get(peerId);
     this.peerSlotMap.delete(peerId);
@@ -87,9 +91,54 @@ export class HostAuthority {
     this.guestAckedFrame.delete(peerId);
     if (slot) {
       this.guestInputs.delete(slot);
+      // Enter grace period instead of immediate full removal
+      this.disconnectedSlots.set(slot, { timer: this.GRACE_PERIOD, peerId });
       this.gameLoop.disconnectPlayer(slot);
       this.onPlayerDisconnect?.(slot);
     }
+  }
+
+  /** Permanently remove a guest after grace period expires. */
+  private finalRemoveGuest(slot: PlayerSlot): void {
+    this.disconnectedSlots.delete(slot);
+    this.lastConsumedFrame.delete(slot);
+  }
+
+  /** Tick grace period timers. Called from host loop each tick. */
+  tickGraceTimers(dt: number): void {
+    for (const [slot, info] of this.disconnectedSlots) {
+      info.timer -= dt;
+      if (info.timer <= 0) {
+        this.finalRemoveGuest(slot);
+      }
+    }
+  }
+
+  /** Handle reconnection request from a guest reclaiming a slot. */
+  handleReconnectRequest(slot: PlayerSlot, newPeerId: string): boolean {
+    const graceInfo = this.disconnectedSlots.get(slot);
+    if (!graceInfo) return false; // No grace period active for this slot
+
+    // Reclaim the slot
+    this.disconnectedSlots.delete(slot);
+    this.peerSlotMap.set(newPeerId, slot);
+    this.guestInputs.set(slot, { left: false, right: false, jump: false, down: false });
+    this.lastConsumedFrame.delete(slot);
+
+    // Reactivate the player
+    const player = this.gameLoop.getState().players.find(p => p.id === slot);
+    if (player) {
+      player.disconnected = false;
+      player.active = true;
+      // Trigger respawn if dead
+      if (player.state === 'splat') {
+        player.state = 'respawning';
+        player.respawnTimer = 1.5;
+        player.splatTimer = 0;
+      }
+    }
+
+    return true;
   }
 
   start(): void {
@@ -231,6 +280,26 @@ export class HostAuthority {
       case MsgType.DISCONNECT:
         if (fromPeerId) this.removeGuest(fromPeerId);
         break;
+      case MsgType.RECONNECT_REQUEST: {
+        // Guest wants to reclaim a slot during grace period
+        const reqSlot = (msg as { slot: string }).slot as PlayerSlot;
+        if (fromPeerId && this.handleReconnectRequest(reqSlot, fromPeerId)) {
+          // Send sync confirmation with current frame
+          this.transport.sendReliableTo(fromPeerId, {
+            type: MsgType.RECONNECT_SYNC,
+            slot: reqSlot,
+            snapshotFrame: this.localFrame,
+          } as ReliableMessage);
+          // Also send a full snapshot immediately so guest has fresh state
+          const snap = takeAuthSnapshot(this.localFrame, this.gameLoop.getState());
+          const { buffer: buf, length: len } = encodeSnapshot(snap);
+          const fullMsg = new Uint8Array(1 + len);
+          fullMsg[0] = 0x20;
+          fullMsg.set(new Uint8Array(buf, 0, len), 1);
+          this.transport.sendUnreliableTo(fromPeerId, fullMsg.buffer);
+        }
+        break;
+      }
     }
   }
 

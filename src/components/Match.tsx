@@ -39,6 +39,7 @@ export function Match() {
   const [paused, setPaused] = useState(false);
   const [showLevelSelect, setShowLevelSelect] = useState(false);
   const [connectionUnstable, setConnectionUnstable] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(false);
   const netMatchRef = useRef<NetMatch | null>(null);
   const [touchInput, setTouchInput] = useState<TouchInputManager | null>(null);
   const isMobile = useMemo(() => isTouchPrimary(), []);
@@ -193,6 +194,9 @@ export function Match() {
             setMatchResult(null, gameLoopRef.current.getState(), true);
           }
         },
+        onReconnecting: (reconnecting) => {
+          setIsReconnecting(reconnecting);
+        },
         onPlayerDisconnect: (slot) => {
           console.log(`[Match] Player ${slot} disconnected mid-match`);
           // Player is already killed by removePlayer() in NetMatch
@@ -342,9 +346,19 @@ export function Match() {
             </div>
           </div>
         )}
-        {connectionUnstable && !paused && online.isOnline && (
+        {connectionUnstable && !paused && !isReconnecting && online.isOnline && (
           <div className="connection-unstable-indicator" data-testid="connection-unstable">
             {t('connection_unstable', 'Connection Unstable')}
+          </div>
+        )}
+        {isReconnecting && online.isOnline && (
+          <div className="reconnecting-overlay">
+            <div className="reconnecting-box">
+              <div className="reconnecting-spinner" />
+              <div className="reconnecting-text">
+                {t('reconnecting', 'Reconnecting...')}
+              </div>
+            </div>
           </div>
         )}
       </div>

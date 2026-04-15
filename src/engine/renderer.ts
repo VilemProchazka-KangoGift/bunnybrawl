@@ -21,7 +21,7 @@ import {
   drawWeather, drawParticles, drawGibs, drawGibShape, drawConfetti, drawFireworks, drawWildlife, drawSpringTrail,
   drawHazardZone, drawGhost, drawLavaRock, drawZeroGZone, drawCurrentZone, drawGeyser, drawBouncyPlatformOverlay, drawPigeonFlock,
   drawDayNightCycle,
-  drawHUD, drawCountdown, invalidateHudCache,
+  drawHUD, drawCountdown, drawConnectionQuality, invalidateHudCache,
   drawPlayer,
   clearRenderingCaches,
 } from './rendering';
@@ -97,6 +97,9 @@ export class Renderer {
   private _playerNames: Record<string, string> | null = null;
   private _timeLimit: number = 0;
   private _diag: RenderDiagnostics = freshDiag();
+  private _netRtt = 0;
+  private _netJitter = 0;
+  private _isNetworkGuest = false;
 
   constructor(bgCanvas: HTMLCanvasElement, fgCanvas: HTMLCanvasElement, theme: ThemeConfig, mirrored = false) {
     clearRenderingCaches();
@@ -138,6 +141,12 @@ export class Renderer {
 
   setTimeLimit(timeLimit: number): void {
     this._timeLimit = timeLimit;
+  }
+
+  setConnectionQuality(rtt: number, jitter: number): void {
+    this._netRtt = rtt;
+    this._netJitter = jitter;
+    this._isNetworkGuest = true;
   }
 
   /** E2E diagnostic: which rendering branches fired last frame. */
@@ -607,6 +616,11 @@ export class Renderer {
 
     // HUD (not affected by shake)
     drawHUD(ctx, matchState, this.frameTime, this._playerNames, this._timeLimit);
+
+    // Connection quality indicator for online guests
+    if (this._isNetworkGuest) {
+      drawConnectionQuality(ctx, this._netRtt, this._netJitter, CANVAS_WIDTH);
+    }
 
     // Nav debug overlay (dev only -- ?debug=nav)
     if (debugFlags.navDebugEnabled) {

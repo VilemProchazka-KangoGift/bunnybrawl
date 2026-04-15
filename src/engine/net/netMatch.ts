@@ -48,6 +48,7 @@ export interface NetMatchConfig {
   onDisconnect?: () => void;
   onPlayerDisconnect?: (slot: PlayerSlot) => void;
   onArenaChange?: (arenaId: string) => void;
+  onReconnecting?: (reconnecting: boolean) => void;
 }
 
 export class NetMatch {
@@ -70,6 +71,15 @@ export class NetMatch {
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private lastSnapshotBuf: ArrayBuffer | null = null; // baseline for delta decode
   private inputEcho: InputEcho | null = null;
+  private lastSnapshotTime = 0;    // wall-clock time of last received snapshot
+  private stallNotified = false;    // whether onStall(true) has been fired
+
+  // Reconnection state (guest only)
+  private reconnecting = false;
+  private reconnectTimer: ReturnType<typeof setInterval> | null = null;
+  private onReconnecting?: (reconnecting: boolean) => void;
+  private onStall?: (stalled: boolean) => void;
+  private roomCode: string | null = null;
 
   // Shared
   private rafId = 0;
@@ -81,7 +91,10 @@ export class NetMatch {
     this.onMatchEnd = config.onMatchEnd;
     this.onDisconnect = config.onDisconnect;
     this.onArenaChange = config.onArenaChange;
+    this.onReconnecting = config.onReconnecting;
+    this.onStall = config.onStall;
     this.localSlot = config.localSlot;
+    this.roomCode = config.transport.roomCode;
 
     // Both host and guest create a GameLoop (needed for canvas rendering)
     this.gameLoop = new GameLoop(
@@ -139,7 +152,12 @@ export class NetMatch {
     this.transport.setEvents({
       onStatusChange: (status) => {
         if (status === 'disconnected' || status === 'error') {
-          this.onDisconnect?.();
+          if (this._isHost) {
+            this.onDisconnect?.();
+          } else {
+            // Guest: attempt reconnection instead of immediate disconnect
+            this.startReconnection();
+          }
         }
       },
       onReliableMessage: (msg, fromPeerId) => this.handleReliableMessage(msg, fromPeerId),
@@ -149,7 +167,8 @@ export class NetMatch {
         if (this._isHost && this.hostAuthority) {
           this.hostAuthority.removeGuest(peerId);
         } else {
-          this.onDisconnect?.();
+          // Guest: attempt reconnection instead of immediate disconnect
+          this.startReconnection();
         }
       },
     });
@@ -221,6 +240,8 @@ export class NetMatch {
         this.gameLoop.fixedUpdate(FIXED_DT, networkInputs);
         // Clear latched guest jump flags — jump is edge-triggered, fire once per tap
         this.hostAuthority!.consumeGuestJumps();
+        // Tick reconnection grace timers
+        this.hostAuthority!.tickGraceTimers(FIXED_DT);
         accumulator -= FIXED_DT;
       }
 
@@ -313,8 +334,24 @@ export class NetMatch {
       // 4. Tick cosmetic systems (weather, particles, gibs, confetti)
       this.gameLoop.tickCosmetics(dt);
 
+      // 4.5 Stall detection: check time since last snapshot
+      if (this.lastSnapshotTime > 0 && !this.reconnecting) {
+        const elapsed = now - this.lastSnapshotTime;
+        if (elapsed > 3000) {
+          // Hard stall — trigger reconnection
+          this.startReconnection();
+        } else if (elapsed > 500 && !this.stallNotified) {
+          this.stallNotified = true;
+          this.onStall?.(true);
+        }
+      }
+
       // 5. Render
       this.gameLoop.renderFrame(dt);
+
+      // Update connection quality indicator for HUD
+      this.gameLoop.setConnectionQuality(this.transport.currentRtt, this.transport.currentJitter);
+
       this.rafId = requestAnimationFrame(loop);
     };
     this.rafId = requestAnimationFrame(loop);
@@ -341,6 +378,13 @@ export class NetMatch {
 
   private handleGuestSnapshot(data: ArrayBuffer): void {
     if (!this.interpolation) return;
+
+    // Track snapshot arrival for stall detection
+    this.lastSnapshotTime = performance.now();
+    if (this.stallNotified) {
+      this.stallNotified = false;
+      this.onStall?.(false);
+    }
 
     // Try delta decode first (uses lastSnapshotBuf as baseline), fall back to full decode
     let snapBuf: ArrayBuffer | null = null;
@@ -390,7 +434,65 @@ export class NetMatch {
       this.onMatchEnd?.((msg as { winner: string | null }).winner as PlayerSlot | null, this.gameLoop.getState());
     } else if (msg.type === MsgType.DISCONNECT) {
       this.onDisconnect?.();
+    } else if (msg.type === MsgType.RECONNECT_SYNC) {
+      // Host confirmed our reconnection — resume match
+      this.completeReconnection();
     }
+  }
+
+  /** Start reconnection attempt after disconnect/hard stall (guest only). */
+  private startReconnection(): void {
+    if (this.reconnecting || this._isHost) return;
+    this.reconnecting = true;
+    this.onReconnecting?.(true);
+
+    let attempts = 0;
+    const MAX_ATTEMPTS = 9; // 9 attempts * 2s = 18s, within 20s grace
+
+    this.reconnectTimer = setInterval(() => {
+      attempts++;
+      if (attempts > MAX_ATTEMPTS) {
+        this.abortReconnection();
+        return;
+      }
+      // Try to rejoin the room
+      if (this.roomCode) {
+        this.transport.joinRoom(this.roomCode).then(() => {
+          // Reconnected — send reclaim request
+          this.transport.sendReliable({
+            type: MsgType.RECONNECT_REQUEST,
+            slot: this.localSlot,
+            playerName: '',
+          } as import('./protocol').ReliableMessage);
+        }).catch(() => {
+          // Will retry on next interval
+        });
+      }
+    }, 2000);
+  }
+
+  /** Complete reconnection after host confirms. */
+  private completeReconnection(): void {
+    this.reconnecting = false;
+    if (this.reconnectTimer) {
+      clearInterval(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.lastSnapshotTime = performance.now();
+    this.stallNotified = false;
+    this.onReconnecting?.(false);
+    this.onStall?.(false);
+  }
+
+  /** Abort reconnection after timeout — disconnect as before. */
+  private abortReconnection(): void {
+    if (this.reconnectTimer) {
+      clearInterval(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.reconnecting = false;
+    this.onReconnecting?.(false);
+    this.onDisconnect?.();
   }
 
   removePlayer(slot: PlayerSlot): void {
@@ -405,6 +507,10 @@ export class NetMatch {
     if (this.pingTimer) {
       clearInterval(this.pingTimer);
       this.pingTimer = null;
+    }
+    if (this.reconnectTimer) {
+      clearInterval(this.reconnectTimer);
+      this.reconnectTimer = null;
     }
     this.hostAuthority?.stop();
     this.gameLoop.stop();

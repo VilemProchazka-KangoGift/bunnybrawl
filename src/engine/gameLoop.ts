@@ -482,6 +482,11 @@ export class GameLoop {
     this.renderer.setPlayerNames(names);
   }
 
+  /** Update connection quality stats for online guest HUD indicator. */
+  setConnectionQuality(rtt: number, jitter: number): void {
+    this.renderer.setConnectionQuality(rtt, jitter);
+  }
+
   /** Override the touch input slot (for online guest who is P2, not P1). */
   setLocalSlot(slot: PlayerSlot): void {
     this.touchSlot = slot;

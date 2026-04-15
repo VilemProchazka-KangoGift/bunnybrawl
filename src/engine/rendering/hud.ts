@@ -181,6 +181,40 @@ function _drawScoreAnimations(ctx: CanvasRenderingContext2D, state: MatchState):
   }
 }
 
+export function drawConnectionQuality(ctx: CanvasRenderingContext2D, rtt: number, jitter: number, canvasWidth: number): void {
+  ctx.save();
+
+  // Determine quality level
+  let litBars: number;
+  let color: string;
+  if (rtt > 150 || jitter > 60) {
+    litBars = 1;
+    color = '#ff4444';
+  } else if (rtt >= 80 || jitter >= 30) {
+    litBars = 2;
+    color = '#ffcc00';
+  } else {
+    litBars = 3;
+    color = '#00ff88';
+  }
+
+  const baseX = canvasWidth - 40;
+  const baseY = 12;
+  const barWidth = 5;
+  const gap = 2;
+  const barHeights = [5, 9, 14];
+
+  for (let i = 0; i < 3; i++) {
+    const x = baseX + i * (barWidth + gap);
+    const h = barHeights[i];
+    const y = baseY + (14 - h); // align bottoms
+    ctx.fillStyle = i < litBars ? color : 'rgba(255,255,255,0.15)';
+    ctx.fillRect(x, y, barWidth, h);
+  }
+
+  ctx.restore();
+}
+
 export function drawCountdown(ctx: CanvasRenderingContext2D, countdown: number): void {
   const secs = Math.ceil(countdown);
   const frac = countdown - Math.floor(countdown);
