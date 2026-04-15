@@ -171,7 +171,8 @@ export class NetMatch {
     let rttCheckTimer = 0;
 
     const loop = (now: number) => {
-      const dt = Math.min((now - lastTime) / 1000, 0.1);
+      // Cap dt to 3 ticks — prevents tick burst after fullscreen/tab-switch pauses
+      const dt = Math.min((now - lastTime) / 1000, FIXED_DT * 3);
       lastTime = now;
       accumulator += dt;
 
@@ -219,6 +220,7 @@ export class NetMatch {
       this.transport.sendUnreliable(encodePing(performance.now()));
     }, 500);
 
+    const FIXED_DT = 1 / 60;
     let lastTime = performance.now();
     let guestFrame = 0;
     const inputBundle: Array<{ frame: number; input: import('../types').InputState }> = [
@@ -226,7 +228,8 @@ export class NetMatch {
     ];
 
     const loop = (now: number) => {
-      const dt = Math.min((now - lastTime) / 1000, 0.1);
+      // Cap dt to 3 ticks — prevents tick burst after fullscreen/tab-switch pauses
+      const dt = Math.min((now - lastTime) / 1000, FIXED_DT * 3);
       lastTime = now;
 
       // 1. Read local input and send to host (field-copy avoids object allocation)
@@ -248,6 +251,17 @@ export class NetMatch {
           applySnapshotToState(snap, this.gameLoop.getState());
         }
       }
+
+      // 3. Decay visual timers locally between snapshots (smooth blinking/effects)
+      const state = this.gameLoop.getState();
+      for (const p of state.players) {
+        if (p.invincibleTimer > 0) p.invincibleTimer = Math.max(0, p.invincibleTimer - dt);
+        if (p.slowTimer > 0) p.slowTimer = Math.max(0, p.slowTimer - dt);
+        if (p.splatTimer > 0) p.splatTimer = Math.max(0, p.splatTimer - dt);
+        if (p.respawnTimer > 0) p.respawnTimer = Math.max(0, p.respawnTimer - dt);
+        if (p.burnTimer > 0) p.burnTimer = Math.max(0, p.burnTimer - dt);
+      }
+      if (state.screenShake > 0) state.screenShake = Math.max(0, state.screenShake - dt);
 
       // 4. Render
       this.gameLoop.renderFrame(dt);
