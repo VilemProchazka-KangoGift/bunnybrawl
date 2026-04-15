@@ -86,84 +86,40 @@
 - `e.preventDefault()` on touch events blocks synthetic click events on buttons. Always check `target.tagName === 'BUTTON'` before preventing default.
 - `haptics.isLocal(player.id)` gates all vibration calls — only vibrate for events involving the local touch player. Haptic calls are inside event-conditional blocks (stomp, hazard hit, spring, landing) — they do NOT run every frame per player.
 - `touchSlot` defaults to the first human player (P1). For online guests, call `setLocalSlot(slot)` after GameLoop creation — otherwise touch input targets P1 (the host) instead of the guest's actual slot.
-- **`getInputAny()` must use `getInputForPlayer(airborne)`, not raw `getInput()`.** The rollback engine calls `getInputAny()` to sample local input for network transmission. If it reads raw input, the airborne-tap→fast-fall conversion is lost — physics receives `{jump: true}` on an airborne player (ignored) instead of `{down: true}` (fast-fall). The touch player's airborne state is looked up via `touchSlot` from `state.players`.
+- **`getInputAny()` must use `getInputForPlayer(airborne)`, not raw `getInput()`.** Guests send `getInputAny()` to the host for network input. If it reads raw input, the airborne-tap→fast-fall conversion is lost — physics receives `{jump: true}` on an airborne player (ignored) instead of `{down: true}` (fast-fall). The touch player's airborne state is looked up via `touchSlot` from `state.players`.
 
-## Network Multiplayer
-- **ICE servers**: `ICE_SERVERS` in transport.ts configures STUN (NAT discovery) + TURN (relay fallback). TURN is required for mobile-to-mobile — both peers behind symmetric NAT (cellular) or hairpin-unfriendly routers can't connect via STUN alone. Currently uses free metered.ca Open Relay (best-effort). For production, replace with paid TURN credentials. Only 2 STUN servers needed (one Google, one Twilio) — extra STUN entries slow ICE gathering without meaningful benefit.
-- **Host signaling reconnection**: After `createRoom` resolves, the Transport status stays `'creating'` until a guest connects. If PeerJS signaling drops in this window (common on mobile when screen locks or browser backgrounds), the `disconnected` handler tries `peer.reconnect()` (capped at 3 attempts) instead of immediately erroring out.
-- `gameRandom()` wraps seeded PRNG in network mode, `Math.random()` in local. Use for ALL gameplay-affecting randomness (hazard spawning, respawn, AI decisions). Cosmetic randomness (particles, weather, gibs) stays as `Math.random()`.
-- `fixedUpdate` is public in network mode. Accepts optional `networkInputs` map — when provided, `getPlayerInput()` reads from it instead of InputManager/AIController.
-- `playSound()` wrapper gates all audio in fixedUpdate. Set `setAudioEnabled(false)` during rollback resimulation to prevent replay sounds.
-- **Visual effects (`screenFlash`/`screenShake`/`hitstopZoom`) must be gated by `!this._resimulating`** in fixedUpdate. These are in snapshots (for restore) but NOT in the hash. During resimulation, renderFrame doesn't run, so they never decay — accumulating across rollback frames causes white-blinking and camera shake amplification. `player.hitstopTimer` (gameplay-affecting, skips physics) is NOT gated.
-- **`getInputAny()` must merge touch + keyboard input.** The rollback engine calls `getInputAny()` to sample local input for network transmission. If touch input isn't merged, mobile guests send empty inputs.
-- **SeededRNG must be passed to GameLoop constructor, not set after.** The constructor calls `gameRandom()` to initialize ghosts, lava rocks, geyser timers. If `this.rng` is undefined during construction, these calls fall back to `Math.random()` — producing different initial state on each peer. The `rng` parameter in the constructor sets `this.rng` before any `gameRandom()` calls.
+## Network Multiplayer (Host-Authoritative)
+- **Architecture**: Host runs full GameLoop (identical to local play), broadcasts binary snapshots to guests every tick. Guests interpolate between snapshots and send inputs to host. No determinism requirements — host is the single source of truth.
+- **ICE servers**: `ICE_SERVERS` in transport.ts configures STUN + TURN. TURN required for mobile-to-mobile (symmetric NAT). Currently uses free metered.ca Open Relay.
+- **Trystero MQTT signaling**: Replaced PeerJS. Serverless, zero infrastructure. Vite config needs `optimizeDeps.include: ['trystero']`.
+- `fixedUpdate` is public in network mode. Accepts optional `networkInputs` map — host provides guest inputs via `HostAuthority.getNetworkInputs()`.
+- `renderFrame(frameDt)` must receive frame delta in network mode to decay `slowMotion`/`screenFlash`/`hitstopZoom` (normally decayed in `loop()`).
+- **`getInputAny()` must merge touch + keyboard input.** Guests send `getInputAny()` to host. If touch input isn't merged, mobile guests send empty inputs.
+- **Timer decrements MUST use `Math.max(0, ...)`** to prevent negative values. `Math.fround()` can produce small negatives (e.g. -0.017). Negative timers encoded as Uint8 wrap to 255 in snapshots, causing permanent visual artifacts on guests. `encodeTimer()` has defense-in-depth `if (timer <= 0) return 0`.
+- **Host input fairness delay**: Host buffers own inputs in a ring buffer, reads `delayFrames` behind. Delay adapts to guest RTT.
+- **Guest loop**: No fixedUpdate — only interpolate snapshots + render. Decays visual timers locally between snapshots.
+- **Snapshot encoding**: Player timers as Uint8 frame counts (`Math.round(timer * 60)`, 0-255). Positions as Float32.
+- **Interpolation**: `EntityInterpolation` buffers snapshots, renders 2 frames behind latest. Only x/y/vx/vy are lerped; timers/state use "after" snapshot.
+- `Transport.setEvents()` re-wires callbacks when transitioning from OnlineLobby to Match.
+- NEVER echo HANDSHAKE messages — creates infinite ping-pong.
+- Character selection messages must NOT auto-switch and re-send — creates infinite cascade.
+- React `useCallback` closures capture stale Zustand state. Use refs for network callbacks.
+- React Strict Mode double-invokes effects. Setup + cleanup MUST be in ONE `useEffect`.
+- **Host must send authoritative roster in START_MATCH.** Guest applies `roster` directly.
+- **CHARACTER_SELECT relay must exclude sender.** Otherwise creates echo loops.
+- **Host relay must exclude the sender** when forwarding unreliable messages.
+- **SETTINGS_SYNC must resolve `arenaId: 'random'`** to a concrete ID before sending.
+- **Match end must suppress stall detection** (`netMatch.setMatchOver()`). Guard callbacks with `matchEnded` flag.
+- Network simulator: `?simLatency=50&simJitter=20&simLoss=5` URL params.
+- Debug overlay: `?debug=net` URL param. Toggle with `` ` `` key.
+- E2E online tests in `e2e/online-multiplayer.spec.ts`.
+- `window.__gameStore`, `window.__gameLoop`, `window.__netMatch` exposed for E2E.
+- **`Math.fround()` covers all simulation-affecting arithmetic.** Nest fround for FMA prevention: `f(a + f(b * c))`. `const f = Math.fround` in physics.ts, gameLoop.ts, stomp.ts, hazardCollision.ts.
+- **ARM FTZ**: Snap `|vx|, |vy| < 1e-4` to 0 after physics, before `updatePlayerState()`.
+- **NEVER use float `===` float in collision.** Use index-based selection instead of value comparison.
+- **`FIXED_TIMESTEP` must be pre-frounded** (`Math.fround(1/60)`). The constructor calls `gameRandom()` to initialize ghosts, lava rocks, geyser timers. If `this.rng` is undefined during construction, these calls fall back to `Math.random()` — producing different initial state on each peer. The `rng` parameter in the constructor sets `this.rng` before any `gameRandom()` calls.
 - **Spawn retry loops must consume a fixed number of `gameRandom()` calls.** `spawnSpring`/`spawnThorn` retry up to `SPAWN_RETRY_ATTEMPTS` times, calling `gameRandom()` per attempt. If `playerNearSpawn()` returns different results on each peer (due to float precision in player positions), different retry counts consume different RNG calls — permanently desyncing the PRNG. Fix: pre-generate all random candidates before validation, so RNG call count is always `SPAWN_RETRY_ATTEMPTS * 2`.
 - `renderFrame(frameDt)` must receive frame delta in network mode to decay `slowMotion`/`screenFlash`/`hitstopZoom` timers (normally decayed in `loop()` which doesn't run in network mode).
 - `resolveStuckPlayer()` runs after `collidePlatforms()` — ejects players deeply embedded (>5px) in platforms. Catches desync-related position errors.
 - Snapshot convention: `snapshot[f]` = state BEFORE tick f. Taking snapshots AFTER `fixedUpdate` and storing at the same frame index causes compounding timer drift (each rollback adds +1dt). Always take before tick.
-- `MatchState.bouncyWobble` is a Map — serialize to `[key, value][]` for snapshots.
-- `AIController.serialize()`/`restore()` must capture ring buffer, all timers, and frame counter for correct rollback.
-- PeerJS `serialization: 'none'` breaks Vite builds (sdp module is CJS-only). Use default `'binary'` serialization.
-- `Transport.setEvents()` re-wires callbacks when transitioning from OnlineLobby to Match (transport created in lobby, message routing changes for match).
-- In `setupConnection()`, check `conn.open` immediately after attaching listeners — PeerJS may fire `peer.on('connection')` after the DataChannel is already open.
-- NEVER echo HANDSHAKE messages — both sides send once on connect. Echoing creates infinite ping-pong.
-- Character selection messages must NOT auto-switch and re-send — creates infinite cascade. Filter the dropdown instead.
-- React `useCallback` closures capture stale Zustand state. Use refs (`localCharRef`) for values read inside callbacks that fire from network events.
-- React Strict Mode double-invokes effects. Setup + cleanup MUST be in ONE `useEffect` — separate effects cause cleanup to destroy transport while a `startedRef` guard prevents re-creation on re-mount.
-- Desync checks send hash-only every 60 frames (~1s). Guest requests full snapshot only on mismatch via `DESYNC_REQUEST` / `DESYNC_CORRECTION` messages. Intentionally infrequent — rollback handles frame-by-frame input correction; desync checks are for catastrophic drift only. Too frequent = constant snapshot corrections that teleport characters.
-- `hashGameState()` uses `Float64Array` + `crc32Bytes()` — zero string allocation. Pre-allocated buffer at module scope.
-- Jitter tracking: `Transport.currentJitter` (EMA of |rtt - smoothedRtt|). `adaptInputDelay()` adds up to 2 extra frames of delay when jitter is high.
-- Debug overlay: `?debug=net` URL param enables net stats overlay (RTT, jitter, frame advantage, rollback count). Toggle with `` ` `` key.
-- Snapshot pool: `takeSnapshotInto()` copies into pre-allocated `GameSnapshot` objects. `createEmptySnapshot()` for ring buffer init. `AIController.serializeInto()` for zero-alloc AI snapshots.
-- Visual correction smoothing: `Player.renderOffsetX/Y` are visual-only fields (not in snapshots/hash). Set after rollback, decay *= 0.7/frame. Large corrections (>30px) snap. Applied in `drawPlayer()`.
-- Network simulator: `?simLatency=50&simJitter=20&simLoss=5` URL params. Wraps transport receive path, ping/pong bypasses simulator for real RTT measurement. Flush interval 2ms.
-- Protocol v2: frame numbers use `Uint32` (was `Uint16`). Wraps at ~19.8 hours at 60fps. Message size: 54 bytes for 10 bundled inputs (was 34).
-- `Player.renderOffsetX/Y` must be initialized to 0 in player creation and EXCLUDED from `snapshotPlayer` / `PlayerSnapshot` interface — they are cosmetic.
-- **Rollback constants are latency-critical** — `MAX_ROLLBACK_FRAMES` (15), `MAX_INPUT_DELAY` (8), `INPUT_BUNDLE_SIZE` (16), and `DESYNC_CHECK_INTERVAL` (60) must be tuned together. The snapshot ring buffer depth is the hard ceiling: RTT > `MAX_ROLLBACK_FRAMES * 16.67ms * 2` (~500ms) = stall. Raising the buffer costs ~10KB per slot (pre-allocated snapshots).
-- **Desync hash comparison must be frame-matched.** Comparing guest's current state (localFrame) vs host's hash (check.frame) when localFrame != check.frame causes false positives — `timeElapsed` differs by FIXED_TIMESTEP per frame, changing the timers hash. Only compare when snapshot at exact check.frame is available, or localFrame === check.frame.
-- **Network simulator inflates RTT getters** (`currentRtt`, `currentJitter`) by the simulator's configured latency so `adaptInputDelay()` responds to `?simLatency` params. Without this, input delay stays at 2F regardless of simulated conditions.
-- Stall check must skip startup grace period: when `remoteConfirmedFrame == -1` (no inputs received yet), don't stall. Without this, both peers deadlock after 7 frames (~117ms) because neither has sent inputs yet.
-- **MANDATORY**: Do not ship netcode changes without running the E2E online test suite (`npm run test:e2e -- --grep @online`). The online flow has multi-peer timing dependencies that unit tests cannot catch. The startup freeze bug (stall deadlock) was only visible with two actual browser tabs connecting.
-- E2E online tests live in `e2e/online-multiplayer.spec.ts`. They use two `BrowserContext`s connecting via PeerJS. Test IDs: `online-btn`, `online-create-btn`, `online-code-input`, `online-join-submit`, `online-room-code`, `online-start-btn`, `online-ready-btn`.
-- `window.__gameStore` exposes the Zustand store for E2E tests. `window.__gameLoop` exposes the active GameLoop instance.
-- Debug URL params for testing: `?arena=meadow&bots=1&killLimit=4&timeLimit=30` skips lobby with short match. `?debug=net` shows network overlay. `?simLatency=100&simJitter=30&simLoss=5` simulates bad network.
-- **NEVER return a cached mutable object from a function called in the input hot path.** `getInputAny()` previously returned a shared `_anyInput` object — rollback buffer stored references to it, so all slots aliased. Any per-frame mutation corrupted past frames. Always return a new object or deep-copy before storing.
-- **Host relay must exclude the sender.** When forwarding unreliable messages, filter `fromPeerId` from the target list. Otherwise the sender receives their own input echoed back as "remote" input, causing conflicts.
-- **Every `Math.random()` in fixedUpdate is a desync source during rollback.** Even cosmetic calls (dust spawn probability) must be gated by `if (!this._resimulating)` because they run during rollback resimulation and desynchronize the call count for subsequent `gameRandom()` invocations.
-- **Host must send authoritative roster in START_MATCH.** Each peer independently computing bot characters produces different results due to RNG timing. The `roster` field in START_MATCH contains all slot→character mappings; guest applies it directly.
-- **CHARACTER_SELECT relay must exclude sender** (same pattern as input relay). Otherwise creates echo loops that cascade through the auto-switch effect.
-- **Auto-switch character effect needs a guard ref** to prevent re-entry. The conflict key tracks which collision was already handled; without it, the relay-triggered update fires the effect again.
-- **Stomp preservation (favor the attacker)**: After rollback, if a predicted kill was undone but both attacker and victim corrected by < 25px, and `isStomping()` or `isNearStomp()` (generous 8px H + 10px V margin) still holds at corrected positions, re-apply the kill. Prevents "phantom misses" where tiny corrections silently undo clearly-valid stomps. Kill feed entry is added; splat marks are renderer-managed and not available in rollback.
-- **When re-applying gameplay events after rollback** (stomps, pickups), always add the corresponding state entries (kill feed, score). Don't add renderer-only artifacts (splat marks, particles) — those are managed by the render path, not the simulation.
-- **Any future `.sort()` in simulation code MUST include a tiebreaker on entity ID** for deterministic order across peers. Currently no `.sort()` calls exist in src/engine/ simulation paths.
-- **PeerJS DataChannels are always reliable+ordered** (no true unreliable mode). The `sendUnreliable()` naming is aspirational — all messages arrive in order. Stale packet reordering concerns are moot given this constraint, but head-of-line blocking under packet loss is a tradeoff.
-- **`Math.fround()` covers ALL simulation-affecting arithmetic AND all collision intermediates.** `Math.fround` is a rounding step, NOT an optimization fence — V8's JIT can fuse multiply-add into FMA instructions across `fround` calls on ARM, producing 1-ULP different results. To prevent this, nest fround: `f(a + f(b * c))`, not `f(a + b * c)`. Coverage: physics.ts (all velocity/position math, all collision overlap calculations, aabbOverlap edge sums), gameLoop.ts (effect zones, knockback, entity positions, all spawn/game/player timers), stomp.ts (stomp zone detection, player timers), hazardCollision.ts (distance checks, knockback direction). `const f = Math.fround` declared in physics.ts, gameLoop.ts, stomp.ts, hazardCollision.ts.
-- **ARM Flush-to-Zero (FTZ) subnormal divergence.** ARM mobile CPUs snap subnormal floats (< 1.2e-38 for float32) to 0, while x86 keeps them non-zero. Velocities that decay to tiny values appear as "still moving" on PC but "stopped" on mobile. Fix: snap `|vx|, |vy| < 1e-4` to 0 after physics, before `updatePlayerState()`.
-- **Signed-zero hash mismatch.** `-0` and `+0` have different IEEE 754 bit patterns. Hash functions normalize with `value || 0` to convert `-0` to `+0`.
-- **Ghost wobble uses `fastSin()` (lookup table), not `Math.sin()`.** `Math.sin()` is NOT guaranteed bit-identical across architectures. Ghost Y affects collision detection → player knockback → position hash. `fastSin` from `fastMath.ts` is deterministic.
-- **NEVER use float `===` float in collision direction detection.** `Math.min(a,b,c,d)` can return a value 1-ULP different from the original variable on different architectures (different microcode for variadic min). Use index-based selection instead: track which index had the minimum, not which value matches.
-- **`FIXED_TIMESTEP` must be pre-frounded** (`Math.fround(1/60)`). Raw `1/60` is a double; using it in `f(val * dt)` creates float32 * double intermediate precision. Pre-frounding ensures float32 * float32 = float32 consistently.
-- **STATE_HASH keys must match PlayerState type exactly.** `idle`, `run`, `airborne`, `splat`, `respawning` — NOT `alive`/`splatted`. Wrong keys cause the hash to return 0 (via `?? 0` fallback) for most states, making desync detection blind to stomp/death differences.
-- **SETTINGS_SYNC must resolve `arenaId: 'random'` to a concrete ID** before sending. Each peer independently resolving 'random' with `Math.random()` produces different arenas.
-- **Match end must suppress stall detection** (`rollback.setMatchOver()`). Without this, one peer transitioning to the victory screen (stopping its rollback loop) triggers "connection unstable" on the other. Also guard `onMatchEnd`, `onDisconnect`, `onStallTimeout` with a `matchEnded` flag to prevent double-fire and post-match disconnect overriding normal victory.
-- **AI uses a separate `aiRng` stream** (derived from main seed via XOR). AI conditional `rnd()` calls can't desync the main spawn/entity RNG even if call counts diverge. Both streams are independently snapshotted/restored (`rngState` + `aiRngState` in `GameSnapshot`). AI evaluators also pre-consume `rnd()` before conditional branches as defense-in-depth.
-- **Desync hash covers: player x/y/vx/vy/score/state/hitstopTimer/fastFalling**, entity positions (carrots/springs/thorns/lava rocks), ghost x/y, geyser states, all spawn timers (including lavaRockTimer), timeElapsed, dayPhase, and RNG state. Adding player velocity + key timers catches divergence before it cascades to positions.
-- **`Player.disconnected` must be in snapshots.** It prevents respawn in `stomp.ts` — if missing from serialization, a rollback through a disconnect event resurrects the player.
-- **Desync checks use per-subsystem hashes** (players, entities, timers). When a mismatch occurs, the console log identifies which subsystem diverged first. Guest compares hash at the host's frame (snapshot-based) to avoid false positives from frame skew.
-
-## Desync Debugging Checklist
-
-When investigating a desync, work through these steps in order. Each "no" eliminates a category of bugs.
-
-1. **Are both peers running identical code?** Check for any `if (isHost)` branches that skip or reorder a simulation step.
-2. **Is the tick pipeline order identical?** Both peers call `fixedUpdate()` with the same system order.
-3. **Is the RNG state identical at frame 0?** Print the seed and first 10 values on both peers.
-4. **Does the checksum match at frame 1?** If not, the very first tick is non-deterministic.
-5. **Does the checksum match at frame 60 with no inputs?** Run with empty inputs. Divergence here = simulation bug, not networking.
-6. **Does the checksum match at frame 60 with identical hardcoded inputs?** Bypass the network and feed the same input array. Divergence = simulation, not networking.
-7. **Does adding `Math.fround()` to all arithmetic fix it?** If yes, float precision issue (already applied to physics.ts).
-8. **Does sorting all entity arrays by ID before processing fix it?** If yes, iteration order was the culprit.
-9. **Which subsystem hash diverges first?** Check console log for `[net] Hash mismatch ... diverged subsystem(s):`. Start investigation there.
-10. **Does removing all `Math.sin/cos/atan2` from simulation fix it?** If yes, trig divergence (currently all trig is cosmetic-only).
-11. **Does the "two-tab" test (same machine, mirrored inputs) show divergence?** If yes, the bug is local determinism, not networking.
-12. **Does removing prediction (thin client) fix it?** If yes, the bug is in prediction/reconciliation, not core simulation.
+- `Player.disconnected` must be in snapshots — prevents respawn in `stomp.ts`.

@@ -63,14 +63,20 @@ src/
       types.ts      # ThemeConfig interface + all sub-interfaces (used by Renderer)
       drawPrimitives.ts  # Shared drawing functions (trees, bushes, flowers, etc.) + hazard renderer factories
       utils.ts      # Shared utilities (randRange, pickWeighted, swapRemove, getFloatingPlatforms)
-    net/          # P2P network multiplayer (WebRTC/PeerJS rollback netcode)
-      prng.ts       # SeededRNG (mulberry32) for deterministic simulation
-      serialize.ts  # GameSnapshot take/restore + CRC32 desync detection
-      protocol.ts   # Binary input encoding + typed JSON control messages
-      transport.ts  # WebRTC P2P via PeerJS, room codes, RTT measurement
-      rollback.ts   # GGPO-style rollback engine (input buffer, prediction, rewind+resimulate)
-      netMatch.ts   # Orchestrator wiring Transport + RollbackEngine + GameLoop
-      index.ts      # Barrel export
+    net/          # Host-authoritative network multiplayer (WebRTC via Trystero MQTT)
+      protocol.ts       # Binary message encoding (inputs, snapshots, pings)
+      transport.ts      # Trystero MQTT signaling, WebRTC data channels, RTT/jitter
+      hostAuthority.ts  # Host: runs simulation, buffers guest inputs, broadcasts snapshots
+      clientPrediction.ts # Guest: local prediction + snapshot reconciliation
+      interpolation.ts  # Guest: smooth entity animation between host snapshots
+      snapshot.ts       # Binary snapshot encode/decode, Uint8 timer compression
+      netMatch.ts       # Orchestrator: host loop (simulate+broadcast) or guest loop (interpolate+render)
+      networkSimulator.ts # Dev: simulated latency/jitter/loss (?simLatency, ?simJitter, ?simLoss)
+      debugOverlay.ts   # Dev: network stats overlay (?debug=net)
+      rollback.ts       # Legacy rollback engine (preserved, unused by host-authoritative)
+      prng.ts           # SeededRNG (legacy, used for local-mode determinism)
+      serialize.ts      # Legacy GameSnapshot take/restore (local-mode snapshots)
+      index.ts          # Barrel export
     index.ts      # Public API barrel export
   hooks/
     useScaler.ts  # Viewport scaling + fullscreen API hook
@@ -103,7 +109,7 @@ src/
 - **Arena pack registry** — `ArenaPack` objects bundle layout + visuals + translations + music + physics mods. Registered at startup via `registerBuiltinArenas()`. Mirrors the character pack pattern. Shared drawing primitives in `themes/drawPrimitives.ts`.
 - **AI via utility scoring + nav graph** — bots produce `InputState` (4 booleans) same as keyboard. Precomputed nav data (in each arena pack's `navData` field) provides nextHop/safeHop waypoints.
 - **Death effects are gore-mode gated** — Gore ON: blood, gibs, splat marks. Gore OFF: confetti only.
-- **P2P network multiplayer** — WebRTC DataChannels via PeerJS (free signaling). GGPO-style rollback netcode with seeded PRNG for determinism. 2-player MVP, bots run deterministically on both peers.
+- **Host-authoritative network multiplayer** — WebRTC DataChannels via Trystero (serverless MQTT signaling). Host runs full simulation and broadcasts binary snapshots every tick. Guests interpolate between snapshots and send inputs to host. No determinism requirements — host is the single source of truth. 2-player MVP, bots run on host only.
 - **Mobile support** — `?mobile` URL param forces mobile mode. `isTouchPrimary()` detects coarse-pointer devices. `.is-mobile` CSS class on `<html>` for platform-conditional styles. Touch controls via `TouchInputManager` (same `InputState` interface as keyboard/AI). Haptic feedback via Vibration API.
 
 ## Build & Run
@@ -140,7 +146,7 @@ npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/
 - **Arena IDs are snake_case** in URL params and registry: `space_station`, `candy_land`, `haunted_graveyard`.
 - **Nav data tests** must call `registerArena()` with `navData` — `getArenaNav(id)` reads from the registry Map, not from the arena object.
 - **Coverage config** (`vitest.config.ts`) excludes `arenas/packs/**` and `characters/packs/**` — canvas drawing code, not meaningful to unit test.
-- **E2E online diagnostics** — `window.__netMatch.getRollbackStats()` for RTT/relay/rollback stats. `?simLatency=80&simJitter=20` simulates network conditions (RTT getters inflate by simulator config). `?noturn` disables TURN for A/B comparison. `?debug=net` shows overlay.
+- **E2E online diagnostics** — `window.__netMatch.getStats()` for RTT/frame/snapshot stats. `?simLatency=80&simJitter=20` simulates network conditions. `?debug=net` shows overlay.
 
 ## Common Patterns
 
@@ -229,24 +235,30 @@ Arena packs support ambient sounds via `ArenaPack.ambientSoundConfig`:
 6. **Avoid literal translations** — use natural/colloquial phrasing. Gaming terms (gravity, stomp, kills) often stay in English or use loan words. Academic translations (गुरुत्वाकर्षण, भौतिकी, pisika) sound wrong in a game UI.
 
 ### Network multiplayer architecture
-Online play uses P2P WebRTC via PeerJS with GGPO-style rollback netcode:
+Online play uses host-authoritative architecture with Trystero MQTT signaling for P2P WebRTC:
 
-**Flow**: MainMenu (Online modal) → OnlineLobby (auto-create/join) → CharacterSelect (1 player, any keys) → Match (NetMatch drives GameLoop)
+**Flow**: MainMenu (Online modal) → OnlineLobby (auto-create/join) → CharacterSelect (1 player, any keys) → Match (NetMatch drives host or guest loop)
 
-**Key files**: `net/prng.ts` (seeded PRNG), `net/serialize.ts` (snapshots), `net/transport.ts` (WebRTC), `net/rollback.ts` (input buffer + resimulation), `net/netMatch.ts` (orchestrator)
+**Architecture**: Host runs full GameLoop (identical to local play), broadcasts compact binary snapshots to guests every tick. Guests send inputs to host, interpolate between received snapshots for smooth rendering. No determinism requirements — host is the single source of truth.
 
-**Determinism**: 12 gameplay-affecting `Math.random()` calls replaced with `this.gameRandom()` (seeded in network mode, `Math.random()` in local). Cosmetic randomness (~234 calls) left as `Math.random()`.
+**Key files**: `net/transport.ts` (Trystero signaling + WebRTC), `net/hostAuthority.ts` (host input buffering + snapshot broadcast), `net/interpolation.ts` (guest entity interpolation), `net/snapshot.ts` (binary snapshot encode/decode), `net/netMatch.ts` (orchestrator)
 
-**GameLoop network mode**:
-- `setNetworkMode(true)` → `start()` skips internal RAF loop
-- `fixedUpdate(dt, networkInputs?)` → accepts explicit inputs from rollback engine
-- `playSound()` wrapper → muted during rollback resimulation via `setAudioEnabled(false)`
-- `renderFrame(frameDt?)` → decays `slowMotion`/`screenFlash`/`hitstopZoom` (normally done in `loop()`)
-- `resolveStuckPlayer()` failsafe runs after `collidePlatforms()` every frame
+**Host loop** (`NetMatch.startHostLoop`):
+- Fixed-timestep accumulator drives `gameLoop.fixedUpdate()`
+- After each tick: `hostAuthority.broadcastSnapshot(state)` sends binary snapshot to all guests
+- Input fairness delay: host buffers own inputs by RTT/2 frames to match guest latency
+- Guest inputs buffered in `HostAuthority.guestInputs` Map, read via `getNetworkInputs()`
 
-**Snapshot convention**: `snapshot[f]` = state at START of frame f (before tick). Snapshots taken BEFORE `fixedUpdate`, never after.
+**Guest loop** (`NetMatch.startGuestLoop`):
+- No fixedUpdate — guest only interpolates and renders
+- Sends local input to host every frame via `transport.sendUnreliable()`
+- Applies interpolated snapshot via `applySnapshotToState()` before rendering
+- Decays visual timers locally between snapshots (invincible blink, slow tint, screen shake)
+- `renderFrame(dt)` decays `slowMotion`/`screenFlash`/`hitstopZoom`
 
-**Transport**: `Transport.setEvents()` re-wires callbacks when transitioning from lobby to match. PeerJS uses default `'binary'` serialization (NOT `'none'` — causes ESM/CJS issues with `sdp` module). Vite config needs `optimizeDeps.include: ['peerjs']`.
+**Snapshot encoding**: Timers encoded as Uint8 frame counts (`timer * 60`, clamped 0-255). Positions as Float32. All timer decrements use `Math.max(0, ...)` to prevent negative values wrapping to 255 in Uint8.
+
+**Transport**: Trystero MQTT signaling (serverless, zero infrastructure). `Transport.setEvents()` re-wires callbacks when transitioning from lobby to match. Vite config needs `optimizeDeps.include: ['trystero']`.
 
 **Online lobby (CharacterSelect)**: In online mode, `playersRef.current` has only 1 entry (P1). `drawLobby` must guard against missing players. All 5 key bindings map to P1. START zone sends CHARACTER_SELECT + READY over transport.
 
@@ -266,4 +278,4 @@ Largest files to be aware of when context is limited:
 - `audio.ts` ~1050 lines — `VictoryScreen.css` ~520 lines
 - Arena pack files ~200-800 lines each (11 arenas in `arenas/packs/`)
 - AI: `utility.ts` ~450, `awareness.ts` ~370
-- Net: `rollback.ts` ~340, `serialize.ts` ~320, `transport.ts` ~260, `protocol.ts` ~200
+- Net: `snapshot.ts` ~575, `netMatch.ts` ~370, `transport.ts` ~350, `interpolation.ts` ~260
