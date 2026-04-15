@@ -135,7 +135,20 @@ export class HostAuthority {
       // Use the most recent input from the bundle
       const latest = decoded.inputs[decoded.inputCount - 1];
       const slot = decodeSlot(decoded.source);
-      this.guestInputs.set(slot, { ...latest.input });
+      const existing = this.guestInputs.get(slot);
+      if (existing) {
+        // Latch jump: if a previous message set jump=true and the host tick
+        // hasn't consumed it yet, don't let a subsequent jump=false overwrite it.
+        // Jump is edge-triggered (true for exactly one guest frame), so two
+        // guest messages arriving in the same host rAF gap would otherwise lose it.
+        const pendingJump = existing.jump;
+        existing.left = latest.input.left;
+        existing.right = latest.input.right;
+        existing.jump = latest.input.jump || pendingJump;
+        existing.down = latest.input.down;
+      } else {
+        this.guestInputs.set(slot, { ...latest.input });
+      }
 
       // Relay input to other guests for their interpolation
       if (fromPeerId) {
@@ -185,6 +198,13 @@ export class HostAuthority {
   /** Return guest inputs map for GameLoop.fixedUpdate(). Host input comes from keyboard/touch. */
   getNetworkInputs(): Map<string, InputState> {
     return this.guestInputs;
+  }
+
+  /** Clear latched jump flags after the host tick consumed them. */
+  consumeGuestJumps(): void {
+    for (const input of this.guestInputs.values()) {
+      input.jump = false;
+    }
   }
 
   getStats(): HostDebugStats {

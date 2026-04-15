@@ -204,6 +204,8 @@ export class NetMatch {
         const networkInputs = this.hostAuthority!.getNetworkInputs();
         networkInputs.set(this.localSlot, delayedInput);
         this.gameLoop.fixedUpdate(FIXED_DT, networkInputs);
+        // Clear latched guest jump flags — jump is edge-triggered, fire once per tap
+        this.hostAuthority!.consumeGuestJumps();
         this.hostAuthority!.broadcastSnapshot(this.gameLoop.getState());
         accumulator -= FIXED_DT;
       }
