@@ -21,6 +21,7 @@ import type { HostDebugStats } from './hostAuthority';
 import { EntityInterpolation, applySnapshotToState } from './interpolation';
 import { ClientPrediction } from './clientPrediction';
 import { GuestSFX } from './guestSfx';
+import { InputEcho } from './inputEcho';
 import { decodeSnapshot } from './snapshot';
 import {
   decodePingPong,
@@ -68,6 +69,7 @@ export class NetMatch {
   private guestSfx: GuestSFX | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private lastSnapshotBuf: ArrayBuffer | null = null; // baseline for delta decode
+  private inputEcho: InputEcho | null = null;
 
   // Shared
   private rafId = 0;
@@ -123,6 +125,13 @@ export class NetMatch {
     this.interpolation = new EntityInterpolation();
     this.prediction = new ClientPrediction(config.localSlot, config.arena);
     this.guestSfx = new GuestSFX(this.gameLoop);
+    // Input echo: instant visual feedback without position prediction.
+    // Disable with ?noecho URL param.
+    const noEcho = typeof location !== 'undefined'
+      && new URLSearchParams(location.search).has('noecho');
+    if (!noEcho) {
+      this.inputEcho = new InputEcho(config.localSlot);
+    }
   }
 
   /** Start the network match. */
@@ -278,6 +287,11 @@ export class NetMatch {
         if (snap) {
           applySnapshotToState(snap, this.gameLoop.getState());
         }
+      }
+
+      // 2.5 Apply input echo for local player visual responsiveness
+      if (this.inputEcho) {
+        this.inputEcho.apply(localInput, this.gameLoop.getState(), this.transport.currentRtt, dt);
       }
 
       // 3. Detect state transitions → trigger local SFX + particles

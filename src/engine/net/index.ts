@@ -29,6 +29,7 @@ export type { HostAuthorityConfig, HostDebugStats } from './hostAuthority';
 
 export { ClientPrediction } from './clientPrediction';
 export { EntityInterpolation, applySnapshotToState } from './interpolation';
+export { InputEcho } from './inputEcho';
 
 export {
   encodeSnapshot, decodeSnapshot, takeAuthSnapshot,
