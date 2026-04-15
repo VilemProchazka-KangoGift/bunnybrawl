@@ -32,7 +32,6 @@ export class EntityInterpolation {
   private initialized = false;
 
   // Jitter tracking for adaptive delay
-  private lastArrivalTime = 0;
   private consecutiveLateCount = 0;
   private consecutiveOnTimeCount = 0;
   private readonly TIGHTEN_THRESHOLD = 120; // ~2s of on-time arrivals before tightening
@@ -67,9 +66,6 @@ export class EntityInterpolation {
           this.consecutiveOnTimeCount = 0;
         }
       }
-      this.lastArrivalTime = performance.now();
-    } else {
-      this.lastArrivalTime = performance.now();
     }
 
     this.lastReceivedFrame = snap.frame;

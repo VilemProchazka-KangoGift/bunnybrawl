@@ -240,6 +240,7 @@ export function encodeSnapshot(snap: AuthSnapshot): { buffer: ArrayBuffer; lengt
  */
 export function decodeSnapshot(buf: ArrayBuffer): AuthSnapshot | null {
   if (buf.byteLength < 5) return null;
+  try {
   const view = new DataView(buf);
   let o = 0;
 
@@ -425,6 +426,10 @@ export function decodeSnapshot(buf: ArrayBuffer): AuthSnapshot | null {
     hitstopZoom,
     scoreAnimations,
   };
+  } catch {
+    // Corrupted or truncated buffer — return null instead of crashing
+    return null;
+  }
 }
 
 /**

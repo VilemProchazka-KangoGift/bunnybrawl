@@ -681,11 +681,13 @@ describe('HostAuthority', () => {
       expect(host.getNetworkInputs().has('P2')).toBe(true);
     });
 
-    it('RECONNECT_REQUEST fails if no grace period active', () => {
+    it('RECONNECT_REQUEST fails if slot has an active peer', () => {
       const transport = makeMockTransport();
+      transport.getPeerIds.mockReturnValue(['peer-a']);
       const { host } = makeHostAuthority({ transport: transport as any });
+      // P2 is actively connected — another peer can't claim it
+      host.addGuest('peer-a', 'P2' as PlayerSlot);
 
-      // No guest was added/removed, so no grace period
       host.handleReliableMessage(
         { type: MsgType.RECONNECT_REQUEST, slot: 'P2' } as any,
         'peer-new',
@@ -756,7 +758,7 @@ describe('HostAuthority', () => {
       expect(result).toBe(true);
     });
 
-    it('fully removes guest after grace period expires', () => {
+    it('cleans up grace state after grace period expires', () => {
       const onPlayerDisconnect = vi.fn();
       const { host } = makeHostAuthority({ onPlayerDisconnect });
       host.addGuest('peer-a', 'P2' as PlayerSlot);
@@ -765,17 +767,27 @@ describe('HostAuthority', () => {
       // Tick past the 20s grace period
       host.tickGraceTimers(21);
 
-      // Reconnection should now fail (grace expired)
+      // Grace expired, but reconnection still works since no active peer owns the slot
+      // (defensive reconnection — prevents edge case where grace timer races with reconnect)
+      mockGameLoopInstance.getState.mockReturnValue({
+        ...makeMinimalMatchState(),
+        players: [{ id: 'P2', disconnected: true, active: false, state: 'idle', respawnTimer: 0, splatTimer: 0 }],
+      });
       const result = host.handleReconnectRequest('P2' as PlayerSlot, 'peer-new');
-      expect(result).toBe(false);
+      expect(result).toBe(true);
     });
   });
 
   describe('handleReconnectRequest', () => {
-    it('returns false if no grace period is active for the slot', () => {
+    it('succeeds even without grace period if slot has no active peer', () => {
       const { host } = makeHostAuthority();
+      mockGameLoopInstance.getState.mockReturnValue({
+        ...makeMinimalMatchState(),
+        players: [{ id: 'P2', disconnected: true, active: false, state: 'idle', respawnTimer: 0, splatTimer: 0 }],
+      });
+      // No grace period, but no active peer either — defensive reconnection
       const result = host.handleReconnectRequest('P2' as PlayerSlot, 'peer-new');
-      expect(result).toBe(false);
+      expect(result).toBe(true);
     });
 
     it('returns true and reclaims the slot during grace period', () => {

@@ -560,6 +560,17 @@ export class GameLoop {
         p.x = Math.random() * CANVAS_WIDTH;
       }
     }
+    // Spawn new shooting stars (night phase)
+    if (this.theme.dayNight.showShootingStars && this.state.dayPhase > 0.4 && Math.random() < 0.005) {
+      const svx = 300 + Math.random() * 200;
+      const svy = 50 + Math.random() * 50;
+      this.state.shootingStars.push({
+        x: Math.random() * CANVAS_WIDTH * 0.5,
+        y: Math.random() * CANVAS_HEIGHT * 0.3,
+        vx: svx, vy: svy, life: 0.4,
+        tailLen: Math.min(40, Math.sqrt(svx * svx + svy * svy) * 0.1),
+      });
+    }
     for (let i = this.state.shootingStars.length - 1; i >= 0; i--) {
       const star = this.state.shootingStars[i];
       star.x += star.vx * dt;

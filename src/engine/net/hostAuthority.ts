@@ -113,8 +113,13 @@ export class HostAuthority {
 
   /** Handle reconnection request from a guest reclaiming a slot. */
   handleReconnectRequest(slot: PlayerSlot, newPeerId: string): boolean {
+    // Accept if in grace period, OR if grace expired but no other peer claimed the slot
     const graceInfo = this.disconnectedSlots.get(slot);
-    if (!graceInfo) return false; // No grace period active for this slot
+    if (!graceInfo) {
+      // Grace expired — still allow if the slot has no active peer mapping
+      const hasActivePeer = [...this.peerSlotMap.values()].includes(slot);
+      if (hasActivePeer) return false;
+    }
 
     // Reclaim the slot
     this.disconnectedSlots.delete(slot);

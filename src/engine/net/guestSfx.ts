@@ -9,6 +9,7 @@ import type { MatchState, PlayerSlot, PlayerState } from '../types';
 import { audio } from '../audio';
 import type { GameLoop } from '../gameLoop';
 import { getCharacterForSlot } from '../characters';
+import { SHOCKWAVE_MAX_RADIUS, SHOCKWAVE_DURATION, SPRING_TRAIL_DURATION } from '../constants';
 
 interface PrevPlayerState {
   state: PlayerState;
@@ -44,6 +45,14 @@ export class GuestSFX {
           audio.playAnimal(getCharacterForSlot(player.id).name);
           this.gameLoop.spawnStompVfxPublic(player);
           this.gameLoop.spawnGibsPublic(player);
+          // Shockwave ring at victim position (not in snapshot, generated locally)
+          state.shockwaves.push({
+            x: player.x + player.width / 2,
+            y: player.y + player.height / 2,
+            radius: 0,
+            maxRadius: SHOCKWAVE_MAX_RADIUS,
+            life: SHOCKWAVE_DURATION,
+          });
         }
 
         // Landing: airborne → grounded
@@ -117,7 +126,22 @@ export class GuestSFX {
       this.prevSpringBounces, state.springs.length,
       i => state.springs[i].bounceTimer,
       (prev, cur) => prev <= 0 && cur > 0,
-      () => { audio.play('spring'); },
+      (i) => {
+        audio.play('spring');
+        // Set springTrailTimer on the nearest active player (not in snapshot)
+        const sx = state.springs[i].x;
+        const sy = state.springs[i].y;
+        let closest: typeof state.players[0] | null = null;
+        let minDist = 60; // only consider players within 60px of the spring
+        for (const p of state.players) {
+          if (!p.active || p.state === 'splat') continue;
+          const dx = p.x + p.width / 2 - sx;
+          const dy = p.y + p.height - sy;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < minDist) { minDist = dist; closest = p; }
+        }
+        if (closest) closest.springTrailTimer = SPRING_TRAIL_DURATION;
+      },
     );
 
     // Thorns: hit became true
