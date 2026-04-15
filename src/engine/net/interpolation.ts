@@ -4,46 +4,36 @@
  * Guests render remote entities between two known host snapshots,
  * producing smooth movement even when snapshots arrive irregularly.
  *
- * Design: Wall-clock interpolation with adaptive jitter buffer.
- * - Buffer recent snapshots with local arrival timestamps
- * - Adaptive delay: widens on jitter, tightens on stable connections
- * - Render at a wall-clock position interpolated between bracketing snapshots
+ * Design: Frame-based interpolation with adaptive delay.
+ * - Buffer recent snapshots in a ring buffer
+ * - Render at a frame position behind the latest snapshot (adaptive delay)
  * - Sequence validation discards out-of-order packets
+ * - Extrapolation when next snapshot is late (capped at 4 frames)
  */
 import type { PlayerSlot, MatchState } from '../types';
 import type { AuthSnapshot } from './snapshot';
-import { GRAVITY, FIXED_TIMESTEP } from '../constants';
+import { GRAVITY } from '../constants';
 
-// Jitter buffer limits (in frames, converted to ms internally)
-const FRAME_DURATION = FIXED_TIMESTEP * 1000;
-const MIN_BUFFER_FRAMES = 1;
-const MAX_BUFFER_FRAMES = 5;
-const JITTER_ALPHA = 0.1;          // EMA smoothing for jitter estimate
-const DELAY_LERP_SPEED = 2.0;      // frames/sec for smooth delay transitions
-const MAX_EXTRAP_MS = 67;          // 4 frames — max extrapolation before freeze
-
-interface BufferedSnapshot {
-  snapshot: AuthSnapshot;
-  arrivalTime: number;  // performance.now() when received
-}
+// Adaptive interpolation delay (in frames)
+const MIN_DELAY_FRAMES = 2;
+const MAX_DELAY_FRAMES = 5;
+const MAX_EXTRAP_FRAMES = 4;
 
 export class EntityInterpolation {
-  // Ring buffer of snapshots with arrival timestamps
-  private ring: (BufferedSnapshot | null)[];
+  // Ring buffer of snapshots
+  private ring: (AuthSnapshot | null)[];
   private ringHead = 0;
   private ringCount = 0;
   private maxBuffer = 30;
 
-  // Sequence validation
-  private lastReceivedFrame = -1;
-
-  // Adaptive jitter buffer
-  private lastArrivalTime = 0;
-  private jitterEstimate = 0;       // ms — running EMA of arrival interval deviation
-  private targetDelayMs = 2 * FRAME_DURATION; // start at 2 frames
-  private currentDelayMs = 2 * FRAME_DURATION;
-
+  private latestHostFrame = 0;
+  private lastReceivedFrame = -1; // sequence validation
+  private interpDelayFrames = MIN_DELAY_FRAMES;
   private initialized = false;
+
+  // Jitter tracking for adaptive delay
+  private lastArrivalTime = 0;
+  private consecutiveLateCount = 0;
 
   constructor() {
     this.ring = new Array(this.maxBuffer).fill(null);
@@ -53,32 +43,38 @@ export class EntityInterpolation {
   pushSnapshot(snap: AuthSnapshot): void {
     // Sequence validation: discard stale/reordered snapshots
     if (snap.frame <= this.lastReceivedFrame) return;
-    this.lastReceivedFrame = snap.frame;
 
-    const now = performance.now();
-
-    // Update jitter estimate from arrival interval variance
-    if (this.lastArrivalTime > 0) {
-      const interval = now - this.lastArrivalTime;
-      const deviation = Math.abs(interval - FRAME_DURATION);
-      this.jitterEstimate = this.jitterEstimate === 0
-        ? deviation
-        : this.jitterEstimate * (1 - JITTER_ALPHA) + deviation * JITTER_ALPHA;
-
-      // Adapt target delay based on jitter
-      const targetFrames = Math.max(
-        MIN_BUFFER_FRAMES,
-        Math.min(MAX_BUFFER_FRAMES, Math.ceil(this.jitterEstimate / FRAME_DURATION)),
-      );
-      this.targetDelayMs = targetFrames * FRAME_DURATION;
+    // Detect gaps (missed snapshots) to adapt delay
+    if (this.lastReceivedFrame > 0) {
+      const gap = snap.frame - this.lastReceivedFrame;
+      if (gap > 1) {
+        // Missed snapshots — widen buffer
+        this.consecutiveLateCount += gap - 1;
+        if (this.consecutiveLateCount > 3 && this.interpDelayFrames < MAX_DELAY_FRAMES) {
+          this.interpDelayFrames++;
+          this.consecutiveLateCount = 0;
+        }
+      } else {
+        // Normal delivery — slowly tighten buffer
+        this.consecutiveLateCount = Math.max(0, this.consecutiveLateCount - 1);
+        if (this.consecutiveLateCount === 0 && this.interpDelayFrames > MIN_DELAY_FRAMES) {
+          // Only tighten every ~60 consecutive good arrivals
+          const now = performance.now();
+          if (this.lastArrivalTime > 0 && now - this.lastArrivalTime < 25) {
+            // Arrival was on-time (< 25ms = ~1.5 frames) — count toward tightening
+          }
+        }
+      }
+      this.lastArrivalTime = performance.now();
+    } else {
+      this.lastArrivalTime = performance.now();
     }
-    this.lastArrivalTime = now;
 
-
+    this.lastReceivedFrame = snap.frame;
+    this.latestHostFrame = snap.frame;
 
     // Write to ring buffer
-    const entry: BufferedSnapshot = { snapshot: snap, arrivalTime: now };
-    this.ring[this.ringHead] = entry;
+    this.ring[this.ringHead] = snap;
     this.ringHead = (this.ringHead + 1) % this.maxBuffer;
     if (this.ringCount < this.maxBuffer) this.ringCount++;
 
@@ -86,95 +82,72 @@ export class EntityInterpolation {
   }
 
   /** Read ring entry by logical index (0 = oldest). */
-  private entryAt(i: number): BufferedSnapshot {
+  private ringAt(i: number): AuthSnapshot {
     const start = (this.ringHead - this.ringCount + this.maxBuffer) % this.maxBuffer;
     return this.ring[(start + i) % this.maxBuffer]!;
   }
 
   /**
    * Get the interpolated state for the current render frame.
-   * Uses wall-clock time with adaptive jitter buffer delay.
+   * Uses frame-number-based interpolation with adaptive delay.
    */
   getInterpolatedState(): AuthSnapshot | null {
     if (!this.initialized || this.ringCount < 1) return null;
+    if (this.ringCount < 2) return this.ringAt(0);
 
-    // Smooth delay transitions (lerp toward target)
-    const dt = FRAME_DURATION / 1000; // approximate per-frame dt
-    if (this.currentDelayMs < this.targetDelayMs) {
-      this.currentDelayMs = Math.min(
-        this.targetDelayMs,
-        this.currentDelayMs + DELAY_LERP_SPEED * FRAME_DURATION * dt,
-      );
-    } else if (this.currentDelayMs > this.targetDelayMs) {
-      this.currentDelayMs = Math.max(
-        this.targetDelayMs,
-        this.currentDelayMs - DELAY_LERP_SPEED * FRAME_DURATION * dt,
-      );
-    }
+    // Target: render interpDelayFrames behind the latest snapshot
+    const targetFrame = this.latestHostFrame - this.interpDelayFrames;
 
-    if (this.ringCount < 2) return this.entryAt(0).snapshot;
-
-    const now = performance.now();
-    const targetTime = now - this.currentDelayMs;
-
-    // Find two snapshots bracketing the target wall-clock time
-    let before: BufferedSnapshot | null = null;
-    let after: BufferedSnapshot | null = null;
+    // Find two snapshots bracketing the target frame
+    let before: AuthSnapshot | null = null;
+    let after: AuthSnapshot | null = null;
 
     for (let i = 0; i < this.ringCount - 1; i++) {
-      const a = this.entryAt(i);
-      const b = this.entryAt(i + 1);
-      if (a.arrivalTime <= targetTime && b.arrivalTime >= targetTime) {
+      const a = this.ringAt(i);
+      const b = this.ringAt(i + 1);
+      if (a.frame <= targetFrame && b.frame >= targetFrame) {
         before = a;
         after = b;
         break;
       }
     }
 
-    // Target is before all buffered snapshots — use earliest
+    // Target is before all snapshots — use earliest
     if (!before && !after) {
-      return this.entryAt(0).snapshot;
+      return this.ringAt(0);
     }
 
-    // Target is after all buffered snapshots — extrapolate from latest
+    // Target is after all snapshots — extrapolate from latest
     if (!after) {
-      const latest = this.entryAt(this.ringCount - 1);
-      const overshootMs = targetTime - latest.arrivalTime;
-      if (overshootMs > 0 && overshootMs < MAX_EXTRAP_MS) {
-        return extrapolateSnapshot(latest.snapshot, overshootMs / 1000);
+      const latest = this.ringAt(this.ringCount - 1);
+      const overshootFrames = targetFrame - latest.frame;
+      if (overshootFrames > 0 && overshootFrames <= MAX_EXTRAP_FRAMES) {
+        return extrapolateSnapshot(latest, overshootFrames / 60);
       }
-      // Beyond max extrapolation or exactly at latest — return as-is
-      return latest.snapshot;
+      return latest;
     }
 
-    if (!before) return after.snapshot;
+    if (!before) return after;
 
-    // Wall-clock lerp factor
-    const range = after.arrivalTime - before.arrivalTime;
-    const t = range > 0
-      ? Math.max(0, Math.min(1, (targetTime - before.arrivalTime) / range))
-      : 0;
+    // Frame-based interpolation factor
+    const range = after.frame - before.frame;
+    const t = range > 0 ? Math.max(0, Math.min(1, (targetFrame - before.frame) / range)) : 0;
 
-    return interpolateSnapshots(before.snapshot, after.snapshot, t);
+    return interpolateSnapshots(before, after, t);
   }
 
   /** Get the latest raw snapshot (no interpolation). */
   getLatestSnapshot(): AuthSnapshot | null {
-    return this.ringCount > 0 ? this.entryAt(this.ringCount - 1).snapshot : null;
+    return this.ringCount > 0 ? this.ringAt(this.ringCount - 1) : null;
   }
 
   getBufferDepth(): number {
     return this.ringCount;
   }
 
-  /** Current adaptive buffer delay in ms (for debug overlay). */
-  getBufferDelayMs(): number {
-    return this.currentDelayMs;
-  }
-
-  /** Current jitter estimate in ms (for debug overlay). */
-  getJitterEstimate(): number {
-    return this.jitterEstimate;
+  /** Current interpolation delay in frames (for debug). */
+  getDelayFrames(): number {
+    return this.interpDelayFrames;
   }
 }
 

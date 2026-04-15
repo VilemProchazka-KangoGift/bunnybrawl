@@ -43,6 +43,7 @@ export class GuestSFX {
           audio.play('stomp');
           audio.playAnimal(getCharacterForSlot(player.id).name);
           this.gameLoop.spawnStompVfxPublic(player);
+          this.gameLoop.spawnGibsPublic(player);
         }
 
         // Landing: airborne → grounded

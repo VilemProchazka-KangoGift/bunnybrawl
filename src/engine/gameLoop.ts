@@ -5,7 +5,7 @@ import type {
 } from './types';
 import { isBotSlot } from './types';
 import { SeededRNG } from './net/prng';
-import { takeSnapshot as _takeSnapshot, restoreSnapshot as _restoreSnapshot, hashGameStateDetailed } from './net/serialize';
+import { takeSnapshot as _takeSnapshot, restoreSnapshot as _restoreSnapshot } from './net/serialize';
 import type { GameSnapshot } from './net/serialize';
 import type { ThemeConfig } from './themes/types';
 import { getTheme, mirrorArena } from './arenas';
@@ -47,7 +47,7 @@ import { AIController } from './ai';
 import { debugFlags, toggleNavDebug, toggleNetDebug } from './debugFlags';
 import { fastSin } from './fastMath';
 import type { BotNavDebugState } from './navDebugOverlay';
-import type { NetDebugStats } from './net/rollback';
+import type { NetDebugStats } from './net/debugOverlay';
 
 /** Force 32-bit float for cross-architecture determinism (x86 80-bit vs ARM 64-bit). */
 const f = Math.fround;
@@ -515,12 +515,58 @@ export class GameLoop {
     this._resimulating = resim;
   }
 
-  /** Tick cosmetic-only systems (weather, particles, gibs, confetti). Public for guest loop. */
+  /** Tick cosmetic-only systems. Public for guest loop (which skips fixedUpdate). */
   tickCosmetics(dt: number): void {
     this.updateWeather(dt);
     this.updateParticles(dt);
     this.updateGibs(dt);
     this.updateConfetti(dt);
+    // Wildlife, fog, pollen, shooting stars are normally updated in fixedUpdate
+    // but guests never call fixedUpdate, so tick them here too.
+    this.tickEnvironment(dt);
+  }
+
+  /** Update wildlife, fog particles, pollen, and shooting stars. */
+  private tickEnvironment(dt: number): void {
+    for (const w of this.state.wildlife) {
+      w.wingPhase += dt * 8;
+      if (w.type === 'butterfly') {
+        w.x += w.vx * dt;
+        w.vy = Math.sin(w.wingPhase * 0.5) * 20;
+        w.y += w.vy * dt;
+        if (w.x > CANVAS_WIDTH + 20) w.x = -20;
+        if (w.x < -20) w.x = CANVAS_WIDTH + 20;
+        if (w.y < -20) w.y = CANVAS_HEIGHT * 0.6;
+        if (w.y > CANVAS_HEIGHT * 0.6) w.y = 0;
+      } else {
+        w.x += w.vx * dt;
+        w.y += Math.sin(w.wingPhase * 0.3) * 5 * dt;
+        if (w.x > CANVAS_WIDTH + 50) {
+          w.x = -50 - Math.random() * 100;
+          w.y = Math.random() * CANVAS_HEIGHT * 0.4;
+          w.vx = 40 + Math.random() * 40;
+        }
+      }
+    }
+    for (const f of this.state.fogParticles) {
+      f.x += f.vx * dt;
+      if (f.x > CANVAS_WIDTH + 30) f.x = -30;
+    }
+    for (const p of this.state.pollenParticles) {
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      if (p.y < -10) {
+        p.y = CANVAS_HEIGHT + 10;
+        p.x = Math.random() * CANVAS_WIDTH;
+      }
+    }
+    for (let i = this.state.shootingStars.length - 1; i >= 0; i--) {
+      const star = this.state.shootingStars[i];
+      star.x += star.vx * dt;
+      star.y += star.vy * dt;
+      star.life -= dt;
+      if (star.life <= 0) this.state.shootingStars.splice(i, 1);
+    }
   }
 
   /** Spawn dust particles for landing. Accepts any object with position+size. */
@@ -544,6 +590,14 @@ export class GameLoop {
         const speed = 80 + Math.random() * 150;
         this.emitParticle(cx, cy, Math.cos(angle) * speed, Math.sin(angle) * speed - 120, 0.6 + Math.random() * 0.4, 2 + Math.random() * 4, GameLoop.CONFETTI_COLORS[i % GameLoop.CONFETTI_COLORS.length]);
       }
+    }
+  }
+
+  /** Spawn gibs for a splatted player (guest SFX). */
+  spawnGibsPublic(victim: Player): void {
+    this.spawnGibs(victim);
+    if (!this.settings.goreMode) {
+      this.spawnConfetti(victim);
     }
   }
 
@@ -599,8 +653,6 @@ export class GameLoop {
 
   getState(): MatchState { return this.state; }
   getRendererDiagnostics() { return this.renderer.getDiagnostics(); }
-  /** E2E diagnostic: per-subsystem state hash for desync detection. */
-  getStateHash() { return hashGameStateDetailed(this.state, this.rng); }
   pause(): void { this.paused = true; audio.setPaused(true); }
   resume(): void { this.paused = false; this.lastTime = performance.now(); audio.setPaused(false, this.arena.themeId); }
   isPaused(): boolean { return this.paused; }
