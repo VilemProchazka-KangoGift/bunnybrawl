@@ -27,7 +27,7 @@ export function drawNetDebugOverlay(
   lines[2] = `Rollback: ${stats.rollbacksPerSec}/s (max ${stats.maxRollbackDepth})`;
   lines[3] = `Frame: ${stats.localFrame} / ${stats.remoteConfirmedFrame}`;
   lines[4] = `Route: ${stats.isRelay ? 'RELAY (TURN)' : 'DIRECT (P2P)'}`;
-  lines[5] = `Desync: ${stats.desyncMismatches}/${stats.desyncChecks} checks, ${stats.desyncCorrections} corr`;
+  lines[5] = `Dsync: ${stats.desyncMismatches}miss/${stats.desyncChecks}chk ${stats.desyncCorrections}corr`;
   let lineCount = 6;
   if (stats.lastDesyncFrame >= 0) {
     lines[lineCount++] = `Last: F${stats.lastDesyncFrame} [${stats.lastDesyncSubsystem || '?'}]`;

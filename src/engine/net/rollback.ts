@@ -124,7 +124,8 @@ export class RollbackEngine {
   private readonly preRollbackY: number[] = [];
   private readonly preRollbackState: string[] = [];    // PlayerState before rollback
   private readonly preRollbackScore: number[] = [];    // score before rollback
-  private _desyncChecks = 0;
+  private _desyncChecksSent = 0;  // host: checks sent
+  private _desyncChecks = 0;     // guest: checks received
   private _desyncMismatches = 0;
   private _desyncCorrections = 0;
   private _lastDesyncFrame = -1;
@@ -303,12 +304,25 @@ export class RollbackEngine {
           } else {
             console.log(`[net] Hash mismatch at frame ${check.frame} (local ${localHash} != host ${check.hash})`);
           }
+          // Detailed state dump on first few mismatches for diagnosis
+          if (this._desyncMismatches <= 3) {
+            const s = this.gameLoop.getState();
+            const rng = this.gameLoop.getRng();
+            console.log(`[net] DESYNC DETAIL frame=${check.frame} rng=${rng?.getState()} aiRng=${this.gameLoop.getAiRng()?.getState()}`);
+            for (const p of s.players) {
+              console.log(`[net]   ${p.id}: x=${p.x} y=${p.y} vx=${p.vx} vy=${p.vy} state=${p.state} score=${p.score} hit=${p.hitstopTimer.toFixed(4)} fat=${p.fatTimer.toFixed(4)} slow=${p.slowTimer.toFixed(4)}`);
+            }
+            console.log(`[net]   timers: t=${s.timeElapsed.toFixed(6)} day=${s.dayPhase.toFixed(6)} carrot=${s.carrotTimer.toFixed(6)} spring=${s.springSpawnTimer.toFixed(6)} thorn=${s.thornSpawnTimer.toFixed(6)} lava=${s.lavaRockTimer.toFixed(6)}`);
+            console.log(`[net]   entities: carrots=${s.carrots.filter(c => c.active).length} springs=${s.springs.length} thorns=${s.thorns.length} rocks=${s.lavaRocks.length} ghosts=${s.ghosts.length}`);
+            if (s.ghosts.length > 0) console.log(`[net]   ghost0: x=${s.ghosts[0].x.toFixed(4)} y=${s.ghosts[0].y.toFixed(4)} phase=${s.ghosts[0].wobblePhase.toFixed(4)}`);
+          }
           const req: DesyncRequestMessage = { type: MsgType.DESYNC_REQUEST, frame: check.frame };
           this.transport.sendReliable(req);
         }
       }
     } else if (msg.type === MsgType.DESYNC_REQUEST) {
       if (this.isHost) {
+        this._desyncCorrections++; // host counts corrections sent
         const reqFrame = (msg as DesyncRequestMessage).frame;
         const cached = this.snapshots[reqFrame % MAX_ROLLBACK_FRAMES];
         let snap: GameSnapshot;
@@ -341,7 +355,7 @@ export class RollbackEngine {
   private networkLoop = (currentTime: number): void => {
     if (!this.running) return;
 
-    const dt = Math.min((currentTime - this.lastTime) / 1000, 0.1);
+    const dt = Math.min((currentTime - this.lastTime) / 1000, FIXED_TIMESTEP * 3);
     this.lastTime = currentTime;
     this.accumulator += dt;
 
@@ -656,8 +670,20 @@ export class RollbackEngine {
         entitiesHash: detailed.entitiesHash,
         timersHash: detailed.timersHash,
       };
+      this._desyncChecksSent++;
       this.transport.sendReliable(check);
       this.lastDesyncCheckFrame = this.localFrame;
+      // Log host state periodically for comparison with guest logs
+      if (this.localFrame % 600 === 0) {
+        const s = this.gameLoop.getState();
+        const rng = this.gameLoop.getRng();
+        console.log(`[net] HOST CHECK frame=${this.localFrame} hash=${detailed.hash} rng=${rng?.getState()} aiRng=${this.gameLoop.getAiRng()?.getState()}`);
+        for (const p of s.players) {
+          console.log(`[net]   ${p.id}: x=${p.x} y=${p.y} vx=${p.vx} vy=${p.vy} state=${p.state} score=${p.score}`);
+        }
+        console.log(`[net]   timers: t=${s.timeElapsed.toFixed(6)} spring=${s.springSpawnTimer.toFixed(6)} thorn=${s.thornSpawnTimer.toFixed(6)} lava=${s.lavaRockTimer.toFixed(6)}`);
+        console.log(`[net]   entities: carrots=${s.carrots.filter((c: any) => c.active).length} springs=${s.springs.length} thorns=${s.thorns.length} rocks=${s.lavaRocks.length} ghosts=${s.ghosts.length}`);
+      }
     }
   }
 
@@ -694,7 +720,7 @@ export class RollbackEngine {
     s.rollbacksPerSec = this.rollbackCountPerSec;
     s.maxRollbackDepth = this.maxRollbackDepthPerSec;
     s.isRelay = this.transport.isRelay;
-    s.desyncChecks = this._desyncChecks;
+    s.desyncChecks = this.isHost ? this._desyncChecksSent : this._desyncChecks;
     s.desyncMismatches = this._desyncMismatches;
     s.desyncCorrections = this._desyncCorrections;
     s.lastDesyncFrame = this._lastDesyncFrame;
