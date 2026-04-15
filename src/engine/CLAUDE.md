@@ -117,9 +117,6 @@
 - **`Math.fround()` covers all simulation-affecting arithmetic.** Nest fround for FMA prevention: `f(a + f(b * c))`. `const f = Math.fround` in physics.ts, gameLoop.ts, stomp.ts, hazardCollision.ts.
 - **ARM FTZ**: Snap `|vx|, |vy| < 1e-4` to 0 after physics, before `updatePlayerState()`.
 - **NEVER use float `===` float in collision.** Use index-based selection instead of value comparison.
-- **`FIXED_TIMESTEP` must be pre-frounded** (`Math.fround(1/60)`). The constructor calls `gameRandom()` to initialize ghosts, lava rocks, geyser timers. If `this.rng` is undefined during construction, these calls fall back to `Math.random()` — producing different initial state on each peer. The `rng` parameter in the constructor sets `this.rng` before any `gameRandom()` calls.
-- **Spawn retry loops must consume a fixed number of `gameRandom()` calls.** `spawnSpring`/`spawnThorn` retry up to `SPAWN_RETRY_ATTEMPTS` times, calling `gameRandom()` per attempt. If `playerNearSpawn()` returns different results on each peer (due to float precision in player positions), different retry counts consume different RNG calls — permanently desyncing the PRNG. Fix: pre-generate all random candidates before validation, so RNG call count is always `SPAWN_RETRY_ATTEMPTS * 2`.
-- `renderFrame(frameDt)` must receive frame delta in network mode to decay `slowMotion`/`screenFlash`/`hitstopZoom` timers (normally decayed in `loop()` which doesn't run in network mode).
-- `resolveStuckPlayer()` runs after `collidePlatforms()` — ejects players deeply embedded (>5px) in platforms. Catches desync-related position errors.
-- Snapshot convention: `snapshot[f]` = state BEFORE tick f. Taking snapshots AFTER `fixedUpdate` and storing at the same frame index causes compounding timer drift (each rollback adds +1dt). Always take before tick.
+- **`FIXED_TIMESTEP` must be pre-frounded** (`Math.fround(1/60)`).
+- `resolveStuckPlayer()` runs after `collidePlatforms()` — ejects players deeply embedded (>5px) in platforms.
 - `Player.disconnected` must be in snapshots — prevents respawn in `stomp.ts`.
