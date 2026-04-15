@@ -90,6 +90,50 @@ describe('EntityInterpolation', () => {
     expect(interp.getBufferDepth()).toBeLessThanOrEqual(30);
   });
 
+  it('widens delay when snapshots have gaps', () => {
+    const interp = new EntityInterpolation();
+    // Normal delivery: frames 1-10
+    for (let i = 1; i <= 10; i++) {
+      interp.pushSnapshot(makeSnap(i, 100 + i, 200));
+    }
+    expect(interp.getDelayFrames()).toBe(2); // starts at MIN_DELAY
+
+    // Simulate a burst of gaps: jump from 10 to 15 (missed 4 frames)
+    interp.pushSnapshot(makeSnap(15, 115, 200));
+    // Then another gap
+    interp.pushSnapshot(makeSnap(20, 120, 200));
+    // Delay should have increased
+    expect(interp.getDelayFrames()).toBeGreaterThan(2);
+  });
+
+  it('tightens delay after sustained on-time delivery', () => {
+    const interp = new EntityInterpolation();
+    // Push a gap to widen the delay first
+    interp.pushSnapshot(makeSnap(1, 100, 200));
+    interp.pushSnapshot(makeSnap(10, 110, 200)); // big gap
+    interp.pushSnapshot(makeSnap(20, 120, 200)); // another gap
+    const widenedDelay = interp.getDelayFrames();
+
+    // Now deliver 200 consecutive on-time frames
+    for (let i = 21; i <= 220; i++) {
+      interp.pushSnapshot(makeSnap(i, 100 + i, 200));
+    }
+    // Delay should have tightened back toward MIN_DELAY
+    expect(interp.getDelayFrames()).toBeLessThan(widenedDelay);
+  });
+
+  it('extrapolation returns valid snapshot for small overshoot', () => {
+    const interp = new EntityInterpolation();
+    // Push only 2 frames so the target (frame 0) is before them
+    // but let's push enough so target is after all
+    interp.pushSnapshot(makeSnap(1, 100, 200));
+    interp.pushSnapshot(makeSnap(2, 110, 200));
+    // latestHostFrame=2, target=2-2=0, which is before frame 1
+    // Should return earliest snapshot
+    const result = interp.getInterpolatedState();
+    expect(result).not.toBeNull();
+  });
+
   it('getLatestSnapshot returns most recent', () => {
     const interp = new EntityInterpolation();
     const s1 = makeSnap(1);

@@ -32,7 +32,7 @@ export class GuestSFX {
   }
 
   /** Call after applying snapshot to MatchState. Detects transitions and fires SFX + particles. */
-  update(state: MatchState): void {
+  update(state: MatchState, dt = 1 / 60): void {
     for (const player of state.players) {
       if (!player.active) continue;
       const prev = this.prevPlayers.get(player.id);
@@ -79,7 +79,7 @@ export class GuestSFX {
 
         // Footsteps: accumulate walk time, play sound at intervals
         if (player.state === 'run') {
-          prev.footstepAccum += 1 / 60; // approximate dt
+          prev.footstepAccum += dt;
           if (prev.footstepAccum > 0.22) { // ~4.5 steps/sec
             audio.play('land'); // reuse landing as soft footstep
             prev.footstepAccum = 0;

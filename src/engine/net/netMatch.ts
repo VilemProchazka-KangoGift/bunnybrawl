@@ -313,14 +313,14 @@ export class NetMatch {
         }
       }
 
-      // 2.5 Apply input echo for local player visual responsiveness
-      if (this.inputEcho) {
-        this.inputEcho.apply(localInput, this.gameLoop.getState(), this.transport.currentRtt, dt);
+      // 3. Detect SFX BEFORE echo (so snapshot sideSquash is read for bump detection)
+      if (this.guestSfx) {
+        this.guestSfx.update(this.gameLoop.getState(), dt);
       }
 
-      // 3. Detect state transitions → trigger local SFX + particles
-      if (this.guestSfx) {
-        this.guestSfx.update(this.gameLoop.getState());
+      // 4. Apply input echo for local player visual responsiveness
+      if (this.inputEcho) {
+        this.inputEcho.apply(localInput, this.gameLoop.getState(), this.transport.currentRtt, dt);
       }
 
       // 4. Decay visual timers locally between snapshots (smooth blinking/effects)
@@ -334,8 +334,10 @@ export class NetMatch {
       }
       if (state.screenShake > 0) state.screenShake = Math.max(0, state.screenShake - dt);
 
-      // 4. Tick cosmetic systems (weather, particles, gibs, confetti)
-      this.gameLoop.tickCosmetics(dt);
+      // 4. Tick cosmetic systems (skip if matchOver — renderFrame handles victory cosmetics)
+      if (!state.matchOver) {
+        this.gameLoop.tickCosmetics(dt);
+      }
 
       // 4.5 Stall detection: check time since last snapshot (suppressed after match end)
       if (this.lastSnapshotTime > 0 && !this.reconnecting && !state.matchOver) {

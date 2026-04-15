@@ -34,6 +34,8 @@ export class EntityInterpolation {
   // Jitter tracking for adaptive delay
   private lastArrivalTime = 0;
   private consecutiveLateCount = 0;
+  private consecutiveOnTimeCount = 0;
+  private readonly TIGHTEN_THRESHOLD = 120; // ~2s of on-time arrivals before tightening
 
   constructor() {
     this.ring = new Array(this.maxBuffer).fill(null);
@@ -50,19 +52,19 @@ export class EntityInterpolation {
       if (gap > 1) {
         // Missed snapshots — widen buffer
         this.consecutiveLateCount += gap - 1;
+        this.consecutiveOnTimeCount = 0;
         if (this.consecutiveLateCount > 3 && this.interpDelayFrames < MAX_DELAY_FRAMES) {
           this.interpDelayFrames++;
           this.consecutiveLateCount = 0;
         }
       } else {
-        // Normal delivery — slowly tighten buffer
+        // Normal delivery — count toward tightening
         this.consecutiveLateCount = Math.max(0, this.consecutiveLateCount - 1);
-        if (this.consecutiveLateCount === 0 && this.interpDelayFrames > MIN_DELAY_FRAMES) {
-          // Only tighten every ~60 consecutive good arrivals
-          const now = performance.now();
-          if (this.lastArrivalTime > 0 && now - this.lastArrivalTime < 25) {
-            // Arrival was on-time (< 25ms = ~1.5 frames) — count toward tightening
-          }
+        this.consecutiveOnTimeCount++;
+        if (this.consecutiveOnTimeCount >= this.TIGHTEN_THRESHOLD
+            && this.interpDelayFrames > MIN_DELAY_FRAMES) {
+          this.interpDelayFrames--;
+          this.consecutiveOnTimeCount = 0;
         }
       }
       this.lastArrivalTime = performance.now();
