@@ -30,8 +30,9 @@ export const MsgType = {
   INPUT: 0x10,
   PING: 0x12,
   PONG: 0x13,
-  SNAPSHOT: 0x20,       // host -> guest: binary state snapshot (full or delta)
+  SNAPSHOT: 0x20,       // host -> guest: full binary state snapshot
   SNAPSHOT_ACK: 0x21,   // guest -> host: acknowledge received snapshot frame
+  SNAPSHOT_DELTA: 0x22, // host -> guest: delta-compressed snapshot (XOR+RLE against ACKed baseline)
 } as const;
 
 // ---- Input encoding (binary, compact) ----

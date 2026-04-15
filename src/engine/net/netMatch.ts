@@ -20,7 +20,6 @@ import type { ReliableMessage } from './protocol';
 import { HostAuthority } from './hostAuthority';
 import type { HostDebugStats } from './hostAuthority';
 import { EntityInterpolation, applySnapshotToState } from './interpolation';
-import { ClientPrediction } from './clientPrediction';
 import { GuestSFX } from './guestSfx';
 import { InputEcho } from './inputEcho';
 import { decodeSnapshot } from './snapshot';
@@ -67,7 +66,6 @@ export class NetMatch {
 
   // Guest-specific
   private interpolation: EntityInterpolation | null = null;
-  private prediction: ClientPrediction | null = null;
   private guestSfx: GuestSFX | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private lastSnapshotBuf: ArrayBuffer | null = null; // baseline for delta decode
@@ -135,7 +133,6 @@ export class NetMatch {
 
   private initGuest(config: NetMatchConfig): void {
     this.interpolation = new EntityInterpolation();
-    this.prediction = new ClientPrediction(config.localSlot, config.arena);
     this.guestSfx = new GuestSFX(this.gameLoop);
     // Input echo: instant visual feedback without position prediction.
     // Disable with ?noecho URL param.
@@ -374,7 +371,9 @@ export class NetMatch {
       this.hostAuthority.handleUnreliableMessage(data, fromPeerId);
     } else {
       if (type === MsgType.SNAPSHOT) {
-        this.handleGuestSnapshot(data);
+        this.handleGuestSnapshot(data, false);
+      } else if (type === MsgType.SNAPSHOT_DELTA) {
+        this.handleGuestSnapshot(data, true);
       } else if (type === MsgType.PING || type === MsgType.PONG) {
         const pp = decodePingPong(data);
         if (pp?.type === MsgType.PING && fromPeerId) {
@@ -384,7 +383,7 @@ export class NetMatch {
     }
   }
 
-  private handleGuestSnapshot(data: ArrayBuffer): void {
+  private handleGuestSnapshot(data: ArrayBuffer, isDelta: boolean): void {
     if (!this.interpolation) return;
 
     // Track snapshot arrival for stall detection
@@ -394,41 +393,22 @@ export class NetMatch {
       this.onStall?.(false);
     }
 
-    // Try delta decode against baseline, then fall back to full snapshot.
-    // Delta can produce garbage if the host fell back to full for this peer,
-    // so we validate the decode result before accepting it.
-    let snap = null;
-    let snapBuf: ArrayBuffer | null = null;
-    if (this.lastSnapshotBuf) {
-      const deltaResult = applyDelta(data, this.lastSnapshotBuf);
-      if (deltaResult) {
-        const candidate = decodeSnapshot(deltaResult);
-        if (candidate && candidate.players.length > 0) {
-          snap = candidate;
-          snapBuf = deltaResult;
-        }
-      }
-    }
-    // Fall back to full snapshot decode
-    if (!snap) {
+    let snapBuf: ArrayBuffer;
+    if (isDelta && this.lastSnapshotBuf) {
+      // Delta: reconstruct full snapshot from XOR+RLE against baseline
+      const reconstructed = applyDelta(data, this.lastSnapshotBuf);
+      if (!reconstructed) return;
+      snapBuf = reconstructed;
+    } else {
+      // Full snapshot: strip the 1-byte type prefix
       snapBuf = data.slice(1);
-      snap = decodeSnapshot(snapBuf);
     }
 
-    if (snap && snapBuf) {
+    const snap = decodeSnapshot(snapBuf);
+    if (snap) {
       this.lastSnapshotBuf = snapBuf;
-
       this.interpolation.pushSnapshot(snap);
-
-      // Send ACK so host can use this frame as delta baseline
       this.transport.sendUnreliable(encodeSnapshotAck(snap.frame));
-
-      if (this.prediction) {
-        const localPlayer = snap.players.find(p => p.id === this.localSlot);
-        if (localPlayer) {
-          this.prediction.reconcile(localPlayer);
-        }
-      }
     }
   }
 

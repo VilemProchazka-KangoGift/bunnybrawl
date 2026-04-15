@@ -498,13 +498,13 @@ export function takeAuthSnapshot(frame: number, state: MatchState): AuthSnapshot
 /**
  * Create a delta between two encoded snapshots.
  * Uses XOR + simple RLE: [0x00 count] for runs of zeros, [byte] for non-zero.
- * Returns a compact delta buffer prefixed with MsgType.SNAPSHOT (0x20).
+ * Returns a compact delta buffer prefixed with 0x22 (SNAPSHOT_DELTA).
  */
 export function createDelta(current: ArrayBuffer, baseline: ArrayBuffer | null): ArrayBuffer {
   if (!baseline) {
     // No baseline — send full snapshot with type prefix
     const result = new Uint8Array(1 + current.byteLength);
-    result[0] = 0x20; // SNAPSHOT message type
+    result[0] = 0x20; // SNAPSHOT (full)
     result.set(new Uint8Array(current), 1);
     return result.buffer;
   }
@@ -523,7 +523,7 @@ export function createDelta(current: ArrayBuffer, baseline: ArrayBuffer | null):
   // Worst case: maxLen * 1 (no zeros) + 1 (type) + 2 (lengths)
   const rle = new Uint8Array(1 + 4 + maxLen * 2);
   let ro = 0;
-  rle[ro++] = 0x20; // SNAPSHOT message type
+  rle[ro++] = 0x22; // SNAPSHOT_DELTA — distinct from 0x20 (full) so guest knows the format
   // Store current length so decoder knows output size
   rle[ro++] = (cur.length >> 8) & 0xFF;
   rle[ro++] = cur.length & 0xFF;
@@ -550,17 +550,13 @@ export function createDelta(current: ArrayBuffer, baseline: ArrayBuffer | null):
 }
 
 /**
- * Apply a delta to a baseline to reconstruct the current snapshot.
- * Returns the decoded AuthSnapshot, or null if the delta is a full snapshot.
+ * Apply a delta (0x22 prefix) to a baseline to reconstruct the current snapshot.
+ * Returns the reconstructed raw snapshot buffer, or null if not a delta message.
  */
-export function applyDelta(deltaBuf: ArrayBuffer, baseline: ArrayBuffer | null): ArrayBuffer | null {
+export function applyDelta(deltaBuf: ArrayBuffer, baseline: ArrayBuffer): ArrayBuffer | null {
   const delta = new Uint8Array(deltaBuf);
-  if (delta.length < 1 || delta[0] !== 0x20) return null;
-
-  if (!baseline) {
-    // Full snapshot (no baseline) — strip the type prefix
-    return deltaBuf.slice(1);
-  }
+  // Only process messages with the SNAPSHOT_DELTA (0x22) prefix
+  if (delta.length < 5 || delta[0] !== 0x22) return null;
 
   // Delta decode
   const curLen = (delta[1] << 8) | delta[2];
