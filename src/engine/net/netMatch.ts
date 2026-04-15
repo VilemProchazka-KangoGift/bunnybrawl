@@ -20,6 +20,7 @@ import { HostAuthority } from './hostAuthority';
 import type { HostDebugStats } from './hostAuthority';
 import { EntityInterpolation, applySnapshotToState } from './interpolation';
 import { ClientPrediction } from './clientPrediction';
+import { GuestSFX } from './guestSfx';
 import { decodeSnapshot } from './snapshot';
 import {
   decodePingPong,
@@ -62,6 +63,7 @@ export class NetMatch {
   // Guest-specific
   private interpolation: EntityInterpolation | null = null;
   private prediction: ClientPrediction | null = null;
+  private guestSfx: GuestSFX | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
 
   // Shared
@@ -117,6 +119,7 @@ export class NetMatch {
   private initGuest(config: NetMatchConfig): void {
     this.interpolation = new EntityInterpolation();
     this.prediction = new ClientPrediction(config.localSlot, config.arena);
+    this.guestSfx = new GuestSFX(this.gameLoop);
   }
 
   /** Start the network match. */
@@ -258,7 +261,12 @@ export class NetMatch {
         }
       }
 
-      // 3. Decay visual timers locally between snapshots (smooth blinking/effects)
+      // 3. Detect state transitions → trigger local SFX + particles
+      if (this.guestSfx) {
+        this.guestSfx.update(this.gameLoop.getState());
+      }
+
+      // 4. Decay visual timers locally between snapshots (smooth blinking/effects)
       const state = this.gameLoop.getState();
       for (const p of state.players) {
         if (p.invincibleTimer > 0) p.invincibleTimer = Math.max(0, p.invincibleTimer - dt);
@@ -269,7 +277,10 @@ export class NetMatch {
       }
       if (state.screenShake > 0) state.screenShake = Math.max(0, state.screenShake - dt);
 
-      // 4. Render
+      // 4. Tick cosmetic systems (weather, particles, gibs, confetti)
+      this.gameLoop.tickCosmetics(dt);
+
+      // 5. Render
       this.gameLoop.renderFrame(dt);
       this.rafId = requestAnimationFrame(loop);
     };

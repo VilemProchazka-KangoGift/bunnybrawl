@@ -40,6 +40,9 @@ export interface SnapshotPlayer {
   active: boolean;
   width: number;
   height: number;
+  sideSquash: number;
+  damageFlashTimer: number;
+  damageFlashSide: 'left' | 'right' | null;
 }
 
 export interface AuthSnapshot {
@@ -134,6 +137,10 @@ export function encodeSnapshot(snap: AuthSnapshot): { buffer: ArrayBuffer; lengt
     ENCODE_VIEW.setUint8(o++, Math.min(p.killStreak, 255));
     ENCODE_VIEW.setUint8(o++, Math.min(Math.round(p.width), 255));
     ENCODE_VIEW.setUint8(o++, Math.min(Math.round(p.height), 255));
+    ENCODE_VIEW.setUint8(o++, Math.round(p.sideSquash * 50) & 0xFF); // 50 = 1.0 normal
+    ENCODE_VIEW.setUint8(o++, encodeTimer(p.damageFlashTimer));
+    // damageFlashSide: 0=null, 1=left, 2=right
+    ENCODE_VIEW.setUint8(o++, p.damageFlashSide === 'left' ? 1 : p.damageFlashSide === 'right' ? 2 : 0);
   }
 
   // Carrots
@@ -262,6 +269,10 @@ export function decodeSnapshot(buf: ArrayBuffer): AuthSnapshot | null {
     const killStreak = view.getUint8(o++);
     const width = view.getUint8(o++);
     const height = view.getUint8(o++);
+    const sideSquash = view.getUint8(o++) / 50;
+    const damageFlashTimer = view.getUint8(o++) / 60;
+    const damageFlashSideByte = view.getUint8(o++);
+    const damageFlashSide: 'left' | 'right' | null = damageFlashSideByte === 1 ? 'left' : damageFlashSideByte === 2 ? 'right' : null;
 
     players.push({
       id,
@@ -284,6 +295,9 @@ export function decodeSnapshot(buf: ArrayBuffer): AuthSnapshot | null {
       squashScale,
       killStreak,
       width, height,
+      sideSquash,
+      damageFlashTimer,
+      damageFlashSide,
     });
   }
 
@@ -443,6 +457,9 @@ export function takeAuthSnapshot(frame: number, state: MatchState): AuthSnapshot
       active: p.active,
       width: p.width,
       height: p.height,
+      sideSquash: p.sideSquash,
+      damageFlashTimer: p.damageFlashTimer,
+      damageFlashSide: p.damageFlashSide,
     })),
     carrots: state.carrots.map(c => ({ x: c.x, y: c.y, active: c.active })),
     springs: state.springs.map(s => ({

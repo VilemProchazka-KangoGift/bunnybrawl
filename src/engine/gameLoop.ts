@@ -448,12 +448,19 @@ export class GameLoop {
   getInputAny(): InputState {
     const kb = this.input.getInputAny();
     if (this.touchInput) {
-      // Use getInputForPlayer so airborne tap→fast-fall conversion applies
-      // before the rollback engine captures the input
+      // In network mode (guest), skip airborne conversion — send raw jump input.
+      // The host applies the conversion using its authoritative state in getPlayerInput().
+      // This avoids the guest's stale snapshot causing wrong conversion, and the
+      // host's jump latch preserves the input across message overwrites.
+      // In host mode, the host reads its own input via this method too, but the
+      // host has correct state so the conversion is valid.
       const touchPlayer = this.touchSlot
         ? this.state.players.find(p => p.id === this.touchSlot)
         : null;
-      const ti = this.touchInput.getInputForPlayer(touchPlayer?.state === 'airborne');
+      const airborne = this._networkMode
+        ? false  // network mode: never convert, host applies conversion in getPlayerInput()
+        : touchPlayer?.state === 'airborne';
+      const ti = this.touchInput.getInputForPlayer(airborne);
       return {
         left: kb.left || ti.left,
         right: kb.right || ti.right,
@@ -505,6 +512,60 @@ export class GameLoop {
   /** Mark that we're in rollback resimulation — cosmetic systems will be skipped. */
   setResimulating(resim: boolean): void {
     this._resimulating = resim;
+  }
+
+  /** Tick cosmetic-only systems (weather, particles, gibs, confetti). Public for guest loop. */
+  tickCosmetics(dt: number): void {
+    this.updateWeather(dt);
+    this.updateParticles(dt);
+    this.updateGibs(dt);
+    this.updateConfetti(dt);
+  }
+
+  /** Emit a particle from external code (guest SFX). */
+  emitParticlePublic(x: number, y: number, vx: number, vy: number, life: number, size: number, color: string): void {
+    this.emitParticle(x, y, vx, vy, life, size, color);
+  }
+
+  /** Spawn dust particles for landing (guest SFX). */
+  spawnDustPublic(player: { x: number; y: number; width: number; height: number }, landVy: number): void {
+    const cx = player.x + player.width / 2;
+    const groundY = player.y + player.height;
+    const intensity = Math.min(landVy / 300, 3);
+    const count = Math.floor(8 + intensity * 6);
+    for (let i = 0; i < count; i++) {
+      const life = 0.3 + Math.random() * 0.4 * intensity;
+      this.emitParticle(cx + (Math.random() - 0.5) * player.width * 1.5, groundY - Math.random() * 4, (Math.random() - 0.5) * 150 * intensity, -Math.random() * 80 * intensity - 20, life, 2 + Math.random() * 4 * intensity, '#C8B896');
+    }
+  }
+
+  /** Spawn stomp blood/confetti particles (guest SFX). */
+  spawnStompVfxPublic(victim: { x: number; y: number; width: number; height: number }): void {
+    const cx = victim.x + victim.width / 2;
+    const cy = victim.y + victim.height / 2;
+    if (this.settings.goreMode) {
+      for (let i = 0; i < 12; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 100 + Math.random() * 200;
+        this.emitParticle(cx, cy, Math.cos(angle) * speed, Math.sin(angle) * speed - 100, 0.5 + Math.random() * 0.5, 2 + Math.random() * 5, '#8B0000');
+      }
+    } else {
+      for (let i = 0; i < 15; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 80 + Math.random() * 150;
+        const colors = ['#FF6B6B', '#4ECDC4', '#FFE66D', '#A8E6CF', '#FF8B94'];
+        this.emitParticle(cx, cy, Math.cos(angle) * speed, Math.sin(angle) * speed - 120, 0.6 + Math.random() * 0.4, 2 + Math.random() * 4, colors[i % colors.length]);
+      }
+    }
+  }
+
+  /** Spawn carrot pickup burst (guest SFX). */
+  spawnCarrotVfxPublic(x: number, y: number): void {
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2;
+      const speed = 60 + Math.random() * 80;
+      this.emitParticle(x, y, Math.cos(angle) * speed, Math.sin(angle) * speed - 50, 0.4 + Math.random() * 0.2, 2 + Math.random() * 3, i % 2 === 0 ? '#FFD700' : '#FF8C00');
+    }
   }
 
   /** Render current frame. Public for network loop. */

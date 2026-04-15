@@ -101,61 +101,95 @@ export class EntityInterpolation {
   }
 }
 
-/** Interpolate between two snapshots. */
-function interpolateSnapshots(a: AuthSnapshot, b: AuthSnapshot, t: number): AuthSnapshot {
-  // Build player lookup for a (O(1) per player instead of O(n) .find)
-  const aById = new Map(a.players.map(p => [p.id, p]));
+// Reusable structures to avoid per-frame allocations in interpolateSnapshots
+const _interpAById = new Map<string, import('./snapshot').SnapshotPlayer>();
+let _interpResult: AuthSnapshot | null = null;
 
-  return {
-    frame: Math.round(a.frame + (b.frame - a.frame) * t),
-    players: b.players.map(bp => {
-      const ap = aById.get(bp.id);
-      if (!ap) return bp;
-      return {
-        ...bp,
-        x: lerp(ap.x, bp.x, t),
-        y: lerp(ap.y, bp.y, t),
-        vx: lerp(ap.vx, bp.vx, t),
-        vy: lerp(ap.vy, bp.vy, t),
-      };
-    }),
-    // Discrete state: use "after" snapshot (entities spawn/despawn instantly)
-    carrots: b.carrots,
-    springs: b.springs,
-    thorns: b.thorns,
-    ghosts: interpolateByIndex(a.ghosts, b.ghosts, (ag, bg) => ({
-      x: lerp(ag.x, bg.x, t),
-      y: lerp(ag.y, bg.y, t),
-      vx: lerp(ag.vx, bg.vx, t),
-      wobblePhase: lerp(ag.wobblePhase, bg.wobblePhase, t),
-    })),
-    lavaRocks: interpolateByIndex(a.lavaRocks, b.lavaRocks, (ar, br) => ({
-      x: lerp(ar.x, br.x, t),
-      y: lerp(ar.y, br.y, t),
-      vy: lerp(ar.vy, br.vy, t),
-      active: br.active,
-    })),
-    geyserStates: b.geyserStates,
-    killFeed: b.killFeed,
-    timeElapsed: lerp(a.timeElapsed, b.timeElapsed, t),
-    countdown: lerp(a.countdown, b.countdown, t),
-    dayPhase: lerp(a.dayPhase, b.dayPhase, t),
-    matchOver: b.matchOver,
-    winner: b.winner,
-    screenShake: lerp(a.screenShake, b.screenShake, t),
-    slowMotion: lerp(a.slowMotion, b.slowMotion, t),
-    screenFlash: lerp(a.screenFlash, b.screenFlash, t),
-    hitstopZoom: lerp(a.hitstopZoom, b.hitstopZoom, t),
-    scoreAnimations: b.scoreAnimations,
-  };
+/** Interpolate between two snapshots. Reuses objects to minimize GC pressure. */
+function interpolateSnapshots(a: AuthSnapshot, b: AuthSnapshot, t: number): AuthSnapshot {
+  // Build player lookup for a (reuse Map)
+  _interpAById.clear();
+  for (const p of a.players) _interpAById.set(p.id, p);
+
+  // Reuse result object — mutate players array in-place
+  if (!_interpResult) {
+    _interpResult = { ...b, players: [], ghosts: [], lavaRocks: [] };
+  }
+  const r = _interpResult;
+  r.frame = Math.round(a.frame + (b.frame - a.frame) * t);
+
+  // Players: reuse or grow array
+  while (r.players.length > b.players.length) r.players.pop();
+  for (let i = 0; i < b.players.length; i++) {
+    const bp = b.players[i];
+    const ap = _interpAById.get(bp.id);
+    if (i >= r.players.length) {
+      r.players.push({ ...bp });
+    } else {
+      Object.assign(r.players[i], bp);
+    }
+    if (ap) {
+      r.players[i].x = lerp(ap.x, bp.x, t);
+      r.players[i].y = lerp(ap.y, bp.y, t);
+      r.players[i].vx = lerp(ap.vx, bp.vx, t);
+      r.players[i].vy = lerp(ap.vy, bp.vy, t);
+    }
+  }
+
+  // Discrete state: use "after" snapshot
+  r.carrots = b.carrots;
+  r.springs = b.springs;
+  r.thorns = b.thorns;
+  r.geyserStates = b.geyserStates;
+  r.killFeed = b.killFeed;
+  r.scoreAnimations = b.scoreAnimations;
+  r.matchOver = b.matchOver;
+  r.winner = b.winner;
+
+  // Ghosts: reuse array
+  interpArrayInPlace(r.ghosts, a.ghosts, b.ghosts, (ag, bg, out) => {
+    out.x = lerp(ag.x, bg.x, t);
+    out.y = lerp(ag.y, bg.y, t);
+    out.vx = lerp(ag.vx, bg.vx, t);
+    out.wobblePhase = lerp(ag.wobblePhase, bg.wobblePhase, t);
+  });
+  // Lava rocks: reuse array
+  interpArrayInPlace(r.lavaRocks, a.lavaRocks, b.lavaRocks, (ar, br, out) => {
+    out.x = lerp(ar.x, br.x, t);
+    out.y = lerp(ar.y, br.y, t);
+    out.vy = lerp(ar.vy, br.vy, t);
+    out.active = br.active;
+  });
+
+  // Scalars
+  r.timeElapsed = lerp(a.timeElapsed, b.timeElapsed, t);
+  r.countdown = lerp(a.countdown, b.countdown, t);
+  r.dayPhase = lerp(a.dayPhase, b.dayPhase, t);
+  r.screenShake = lerp(a.screenShake, b.screenShake, t);
+  r.slowMotion = lerp(a.slowMotion, b.slowMotion, t);
+  r.screenFlash = lerp(a.screenFlash, b.screenFlash, t);
+  r.hitstopZoom = lerp(a.hitstopZoom, b.hitstopZoom, t);
+
+  return r;
 }
 
-/** Interpolate arrays matched by index (ghosts, lava rocks). */
-function interpolateByIndex<T>(a: T[], b: T[], fn: (a: T, b: T) => T): T[] {
-  return b.map((bi, i) => {
-    const ai = a[i];
-    return ai ? fn(ai, bi) : bi;
-  });
+/** Interpolate arrays in-place — reuses existing objects, grows/shrinks as needed. */
+function interpArrayInPlace<T extends Record<string, any>>(
+  out: T[], aArr: T[], bArr: T[],
+  fn: (a: T, b: T, out: T) => void,
+): void {
+  while (out.length > bArr.length) out.pop();
+  for (let i = 0; i < bArr.length; i++) {
+    if (i >= out.length) {
+      out.push({ ...bArr[i] });
+    }
+    const ai = aArr[i];
+    if (ai) {
+      fn(ai, bArr[i], out[i]);
+    } else {
+      Object.assign(out[i], bArr[i]);
+    }
+  }
 }
 
 function lerp(a: number, b: number, t: number): number {
@@ -212,6 +246,9 @@ export function applySnapshotToState(
     player.active = sp.active;
     player.width = sp.width;
     player.height = sp.height;
+    player.sideSquash = sp.sideSquash;
+    player.damageFlashTimer = sp.damageFlashTimer;
+    player.damageFlashSide = sp.damageFlashSide;
   }
 
   // Global state
