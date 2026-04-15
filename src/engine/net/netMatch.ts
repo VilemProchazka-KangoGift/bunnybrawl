@@ -206,9 +206,13 @@ export class NetMatch {
         this.gameLoop.fixedUpdate(FIXED_DT, networkInputs);
         // Clear latched guest jump flags — jump is edge-triggered, fire once per tap
         this.hostAuthority!.consumeGuestJumps();
-        this.hostAuthority!.broadcastSnapshot(this.gameLoop.getState());
         accumulator -= FIXED_DT;
       }
+
+      // Broadcast snapshot once per render frame (not per tick) —
+      // multiple ticks in one frame would spam guests with snapshots,
+      // causing decode/GC pressure that tanks mobile framerate.
+      this.hostAuthority!.broadcastSnapshot(this.gameLoop.getState());
 
       this.gameLoop.renderFrame(dt);
       this.rafId = requestAnimationFrame(loop);

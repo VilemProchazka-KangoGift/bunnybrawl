@@ -38,8 +38,8 @@ export interface TransportEvents {
 
 const APP_ID = 'carrot-royale-v1';
 const PING_INTERVAL = 500;
-const PONG_TIMEOUT_MS = 5000;
-const DEGRADED_THRESHOLD_MS = 2000;
+const PONG_TIMEOUT_MS = 10000;   // 10s — mobile networks need longer grace periods
+const DEGRADED_THRESHOLD_MS = 4000;
 const RTT_ALPHA = 0.1;
 
 // TURN config (free relay for symmetric NAT fallback)

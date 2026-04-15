@@ -16,28 +16,35 @@ import type { AuthSnapshot } from './snapshot';
 // Higher = smoother (more buffer), lower = less latency.
 const INTERP_DELAY_FRAMES = 2;
 
-interface TimestampedSnapshot {
-  snap: AuthSnapshot;
-}
 
 export class EntityInterpolation {
-  private buffer: TimestampedSnapshot[] = [];
+  // Ring buffer avoids O(n) shift() on every push
+  private ring: (AuthSnapshot | null)[];
+  private ringHead = 0;   // next write position
+  private ringCount = 0;  // number of valid entries
   private maxBuffer = 30;
 
   private latestHostFrame = 0;
   private initialized = false;
 
+  constructor() {
+    this.ring = new Array(this.maxBuffer).fill(null);
+  }
+
   /** Push a new snapshot from the host. */
   pushSnapshot(snap: AuthSnapshot): void {
-    this.buffer.push({ snap });
-
-    // Trim old snapshots
-    while (this.buffer.length > this.maxBuffer) {
-      this.buffer.shift();
-    }
+    this.ring[this.ringHead] = snap;
+    this.ringHead = (this.ringHead + 1) % this.maxBuffer;
+    if (this.ringCount < this.maxBuffer) this.ringCount++;
 
     this.latestHostFrame = snap.frame;
     this.initialized = true;
+  }
+
+  /** Read ring entry by logical index (0 = oldest). */
+  private ringAt(i: number): AuthSnapshot {
+    const start = (this.ringHead - this.ringCount + this.maxBuffer) % this.maxBuffer;
+    return this.ring[(start + i) % this.maxBuffer]!;
   }
 
   /**
@@ -45,8 +52,8 @@ export class EntityInterpolation {
    * Call this once per render frame.
    */
   getInterpolatedState(): AuthSnapshot | null {
-    if (!this.initialized || this.buffer.length < 1) return null;
-    if (this.buffer.length < 2) return this.buffer[0].snap;
+    if (!this.initialized || this.ringCount < 1) return null;
+    if (this.ringCount < 2) return this.ringAt(0);
 
     // Target: render INTERP_DELAY_FRAMES behind the latest snapshot
     const targetFrame = this.latestHostFrame - INTERP_DELAY_FRAMES;
@@ -55,22 +62,24 @@ export class EntityInterpolation {
     let before: AuthSnapshot | null = null;
     let after: AuthSnapshot | null = null;
 
-    for (let i = 0; i < this.buffer.length - 1; i++) {
-      if (this.buffer[i].snap.frame <= targetFrame && this.buffer[i + 1].snap.frame >= targetFrame) {
-        before = this.buffer[i].snap;
-        after = this.buffer[i + 1].snap;
+    for (let i = 0; i < this.ringCount - 1; i++) {
+      const a = this.ringAt(i);
+      const b = this.ringAt(i + 1);
+      if (a.frame <= targetFrame && b.frame >= targetFrame) {
+        before = a;
+        after = b;
         break;
       }
     }
 
     // If target is before all snapshots, use earliest
     if (!before && !after) {
-      return this.buffer[0].snap;
+      return this.ringAt(0);
     }
 
     // If target is after all snapshots (sparse arrival), use latest
     if (!after) {
-      return this.buffer[this.buffer.length - 1].snap;
+      return this.ringAt(this.ringCount - 1);
     }
 
     if (!before) return after;
@@ -84,11 +93,11 @@ export class EntityInterpolation {
 
   /** Get the latest raw snapshot (no interpolation). */
   getLatestSnapshot(): AuthSnapshot | null {
-    return this.buffer.length > 0 ? this.buffer[this.buffer.length - 1].snap : null;
+    return this.ringCount > 0 ? this.ringAt(this.ringCount - 1) : null;
   }
 
   getBufferDepth(): number {
-    return this.buffer.length;
+    return this.ringCount;
   }
 }
 
@@ -153,6 +162,9 @@ function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
+// Reusable Map to avoid allocation per frame in applySnapshotToState
+const _playerLookup = new Map<string, import('../types').Player>();
+
 /**
  * Apply an AuthSnapshot to a MatchState for rendering on the guest.
  * Updates player positions, entity states, and global timers in-place.
@@ -163,8 +175,10 @@ export function applySnapshotToState(
   localSlot?: PlayerSlot,
   localOverride?: { x: number; y: number },
 ): void {
-  // Update players (O(1) lookup)
-  const playerById = new Map(state.players.map(p => [p.id, p]));
+  // Update players (O(1) lookup, reused Map to avoid GC pressure)
+  _playerLookup.clear();
+  for (const p of state.players) _playerLookup.set(p.id, p);
+  const playerById = _playerLookup;
   for (const sp of snap.players) {
     const player = playerById.get(sp.id);
     if (!player) continue;

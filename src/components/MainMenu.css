@@ -378,7 +378,7 @@
 .online-char-select {
   width: 100%;
   min-width: 240px;
-  padding: 6px 10px;
+  padding: 12px 10px;
   font-size: 16px;
   font-family: 'Fredoka One', sans-serif;
   border-radius: 8px;
@@ -386,6 +386,8 @@
   background: rgba(0, 0, 0, 0.4);
   color: #fff;
   cursor: pointer;
+  -webkit-appearance: menulist;
+  appearance: menulist;
 }
 
 .online-char-name {
