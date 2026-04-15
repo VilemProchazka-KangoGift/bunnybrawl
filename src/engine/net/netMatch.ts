@@ -29,7 +29,6 @@ import {
   encodeInputMessage,
   encodeSnapshotAck,
 } from './protocol';
-import { applyDelta } from './snapshot';
 
 export interface NetMatchConfig {
   bgCanvas: HTMLCanvasElement;
@@ -68,7 +67,6 @@ export class NetMatch {
   private interpolation: EntityInterpolation | null = null;
   private guestSfx: GuestSFX | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
-  private lastSnapshotBuf: ArrayBuffer | null = null; // baseline for delta decode
   private inputEcho: InputEcho | null = null;
   private lastSnapshotTime = 0;    // wall-clock time of last received snapshot
   private stallNotified = false;    // whether onStall(true) has been fired
@@ -371,9 +369,7 @@ export class NetMatch {
       this.hostAuthority.handleUnreliableMessage(data, fromPeerId);
     } else {
       if (type === MsgType.SNAPSHOT) {
-        this.handleGuestSnapshot(data, false);
-      } else if (type === MsgType.SNAPSHOT_DELTA) {
-        this.handleGuestSnapshot(data, true);
+        this.handleGuestSnapshot(data);
       } else if (type === MsgType.PING || type === MsgType.PONG) {
         const pp = decodePingPong(data);
         if (pp?.type === MsgType.PING && fromPeerId) {
@@ -383,7 +379,7 @@ export class NetMatch {
     }
   }
 
-  private handleGuestSnapshot(data: ArrayBuffer, isDelta: boolean): void {
+  private handleGuestSnapshot(data: ArrayBuffer): void {
     if (!this.interpolation) return;
 
     // Track snapshot arrival for stall detection
@@ -393,20 +389,10 @@ export class NetMatch {
       this.onStall?.(false);
     }
 
-    let snapBuf: ArrayBuffer;
-    if (isDelta && this.lastSnapshotBuf) {
-      // Delta: reconstruct full snapshot from XOR+RLE against baseline
-      const reconstructed = applyDelta(data, this.lastSnapshotBuf);
-      if (!reconstructed) return;
-      snapBuf = reconstructed;
-    } else {
-      // Full snapshot: strip the 1-byte type prefix
-      snapBuf = data.slice(1);
-    }
-
+    // Strip the 1-byte type prefix (0x20) and decode
+    const snapBuf = data.slice(1);
     const snap = decodeSnapshot(snapBuf);
     if (snap) {
-      this.lastSnapshotBuf = snapBuf;
       this.interpolation.pushSnapshot(snap);
       this.transport.sendUnreliable(encodeSnapshotAck(snap.frame));
     }

@@ -17,7 +17,7 @@ import {
   decodeSnapshotAck,
 } from './protocol';
 import type { ReliableMessage } from './protocol';
-import { takeAuthSnapshot, encodeSnapshot, createDelta } from './snapshot';
+import { takeAuthSnapshot, encodeSnapshot } from './snapshot';
 
 export interface HostAuthorityConfig {
   gameLoop: GameLoop;
@@ -50,12 +50,9 @@ export class HostAuthority {
   // Peer → slot mapping
   private peerSlotMap = new Map<string, PlayerSlot>();
 
-  // Delta compression: per-peer ACKed baselines + recent snapshot history
+  // Delta compression infrastructure (disabled — baseline mismatch from unreliable ACKs)
   private guestBaselines = new Map<string, ArrayBuffer>();
   private guestAckedFrame = new Map<string, number>();
-  // Ring of recent encoded snapshots for ACK→baseline lookup
-  private recentSnapshots: Array<{ frame: number; encoded: ArrayBuffer }> = [];
-  private readonly SNAPSHOT_HISTORY_SIZE = 10;
 
   // Per-slot frame tracking for input redundancy
   private lastConsumedFrame = new Map<string, number>();
@@ -169,32 +166,18 @@ export class HostAuthority {
 
     const snap = takeAuthSnapshot(this.localFrame, state);
     const { buffer: encodeBuf, length: encodeLen } = encodeSnapshot(snap);
-    // Keep a copy of the raw encoded snapshot for delta baselines
-    const currentEncoded = encodeBuf.slice(0, encodeLen);
 
-    // Store in recent history for ACK→baseline lookup
-    this.recentSnapshots.push({ frame: this.localFrame, encoded: currentEncoded });
-    if (this.recentSnapshots.length > this.SNAPSHOT_HISTORY_SIZE) {
-      this.recentSnapshots.shift();
-    }
+    // Always send full snapshots. Delta compression is disabled because
+    // unreliable ACK delivery causes host/guest baseline mismatch — when an
+    // ACK is lost, the host's XOR baseline diverges from the guest's, and
+    // every subsequent delta produces garbage. Proper fix needs base frame
+    // number in the delta header + guest-side snapshot history.
+    const msg = new Uint8Array(1 + encodeLen);
+    msg[0] = MsgType.SNAPSHOT;
+    msg.set(new Uint8Array(encodeBuf, 0, encodeLen), 1);
 
     for (const peerId of this.transport.getPeerIds()) {
-      // Try delta compression against this peer's last ACKed baseline
-      const ackedFrame = this.guestAckedFrame.get(peerId) ?? 0;
-      const baseline = this.guestBaselines.get(peerId);
-      const frameDiff = this.localFrame - ackedFrame;
-
-      if (baseline && frameDiff > 0 && frameDiff < 60) {
-        // Delta compress against baseline
-        const delta = createDelta(currentEncoded, baseline);
-        this.transport.sendUnreliableTo(peerId, delta);
-      } else {
-        // No baseline or too old — send full snapshot with type prefix
-        const msg = new Uint8Array(1 + encodeLen);
-        msg[0] = MsgType.SNAPSHOT;
-        msg.set(new Uint8Array(encodeBuf, 0, encodeLen), 1);
-        this.transport.sendUnreliableTo(peerId, msg.buffer);
-      }
+      this.transport.sendUnreliableTo(peerId, msg.buffer);
     }
 
     this.lastSnapshotBytes = encodeLen;
@@ -242,14 +225,11 @@ export class HostAuthority {
         }
       }
     } else if (type === MsgType.SNAPSHOT_ACK) {
-      // Guest acknowledged receiving a snapshot — look up encoded bytes and store as baseline
+      // Guest acknowledged receiving a snapshot (delta compression disabled,
+      // but ACK tracking kept for future use / adaptive rate)
       const ackedFrame = decodeSnapshotAck(data);
       if (ackedFrame !== null && fromPeerId) {
-        const entry = this.recentSnapshots.find(s => s.frame === ackedFrame);
-        if (entry) {
-          this.guestAckedFrame.set(fromPeerId, ackedFrame);
-          this.guestBaselines.set(fromPeerId, entry.encoded);
-        }
+        this.guestAckedFrame.set(fromPeerId, ackedFrame);
       }
     } else if (type === MsgType.PING) {
       const pp = decodePingPong(data);
