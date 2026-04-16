@@ -28,7 +28,7 @@
 
 ## Characters
 - Pack registry must be initialized before use — `registerBuiltinCharacters()` called at module scope in `App.tsx`.
-- Character sounds stay in `audio.ts` (`SIMPLE_ANIMAL_SOUNDS` / `SEGMENT_ANIMAL_SOUNDS`), NOT in packs.
+- Character sounds live in each pack via `createSound?: () => Howl` — called once at AudioManager init. Simple tones use `generateToneBuffer()`, multi-segment use `generateMultiSegmentTone()`, custom synthesis (frog) uses `floatBufferToWavDataUri()` directly. Future packs can return MP3-backed Howls.
 - `legacy.ts` CHARACTERS record is mutated at lobby exit (intentional). `getAllCharacters()` derives full roster from pack registry.
 - Character emoji: use `getCharacterEmoji(name)` from `characters/registry.ts` — single source of truth. Used in React components with `.row-emoji` CSS class.
 - Legs: shared `drawLegs()` in `characters/legRenderer.ts`, configured by `CharacterPack.legStyle` (shape, footStyle, dimensions). Called from both renderer.ts and CharacterSelect.tsx. Must be a pure function (output is sprite-cached).
@@ -37,6 +37,7 @@
 - Owl claws use explicit `footWidth`/`footHeight` overrides to stay prominent at nub scale. The claw renderer's stroke width and splay angles matter more than leg size for visual identity.
 
 ## Audio
+- Audio system decomposed into `audio/` directory: `AudioManager.ts` (play/stop/mute/pause), `MusicManager.ts` (menu + arena music), `soundRegistry.ts` (declarative SFX table), `synthesis/` (pure generators grouped by category). Old `audio.ts` is a re-export shim.
 - All procedural sounds are Float32Array → WAV data URI → Howler.js. No MP3 for SFX.
 - Frequencies below 100Hz are inaudible on laptop speakers. Use 130Hz+ for thuds/impacts. Calibrate: generation amplitude * Howl volume should be ≥0.05 for one-shots.
 - SFX cooldowns use per-player `Map<PlayerSlot, number>` (like `footstepAccumulators`) or a global number. Decay with `dt` every frame. Sound plays only when cooldown ≤ 0. Decay cooldowns BEFORE the hitstop `continue` so they don't accumulate during hitstop.
@@ -114,7 +115,9 @@
 - **Delta compression disabled** — unreliable ACK delivery causes host/guest XOR baseline mismatch. Infrastructure preserved (`SNAPSHOT_DELTA` 0x22, `createDelta`/`applyDelta` in core/). Re-enable requires base frame number in delta header + guest-side snapshot history.
 - **Wall-clock interpolation failed** — network jitter makes arrival timestamps noisy, producing jittery lerp factors. Frame-based interpolation (targetFrame = latest - delay) is stable.
 - **Touch gesture disambiguation**: `JUMP_COMMIT_DELAY_MS = 80` delays jump reporting to allow swipe-down (crouch) to cancel. `SWIPE_DISTANCE = 25`. Without this, online guests send jump before swipe is recognized.
-- **`net/core/`**: Generic netcode extracted from game-specific code. `protocol.ts` (MsgType, ping/pong, slot encoding), `interpolation.ts` (SnapshotInterpolation ring buffer + adaptive delay), `debugOverlay.ts`, `deltaCompression.ts`, `networkSimulator.ts`, `types.ts`. Game-specific code (input encoding, snapshot format, reliable messages) stays in `net/`.
+- **`net/core/`**: Generic netcode with zero game imports (`grep -r "from '\.\./" core/` = 0 matches). `CoreMsgType` (6 transport-level IDs) in `protocol.ts`, game extends via `MsgType = { ...CoreMsgType, ...gameTypes }` in `net/protocol.ts`. `GenericHostAuthority<TInput,TState,TSnapshot>` in `hostAuthority.ts` — delegates game-specific behavior via callbacks (`onInputReceived` for jump latching, `onPlayerReconnect` for respawn). Uses narrow `HostSimulation<TState>` interface (getState + disconnectPlayer only), not the full `Simulation`. Also: `SnapshotInterpolation<T>` ring buffer, `deltaCompression`, `networkSimulator`, `debugOverlay`, `types.ts`.
+- **Ping/pong ownership**: Transport handles all ping/pong RTT measurement. Do NOT add ping intervals to HostAuthority or other modules — double pings waste bandwidth and confuse jitter measurement.
+- **Player array order is stable**: `takeAuthSnapshot` iterates `state.players` in insertion order. `interpolateSnapshots` and `applySnapshotToState` use index-based access (`a.players[i]`), not Map lookups. Don't reorder `state.players` or break this invariant.
 - `Transport.setEvents()` re-wires callbacks when transitioning from OnlineLobby to Match.
 - NEVER echo HANDSHAKE messages — creates infinite ping-pong.
 - Character selection messages must NOT auto-switch and re-send — creates infinite cascade.

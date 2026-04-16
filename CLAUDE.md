@@ -35,7 +35,18 @@ src/
       players.ts       # Character sprites, sprite caching, expressions
       index.ts         # Barrel export + clearRenderingCaches()
     gameLoop.ts   # Main game loop with fixed timestep, all game systems
-    audio.ts      # Procedural audio + Howler.js playback (animal sounds, SFX)
+    audio.ts      # Re-export shim → audio/ directory
+    audio/        # Audio system (decomposed from monolithic audio.ts)
+      AudioManager.ts   # Singleton: play/stop/mute/pause + Howl map + visibility
+      MusicManager.ts   # Menu + arena music lifecycle (delegates from AudioManager)
+      soundRegistry.ts  # Declarative SFX table + character pack sound init
+      types.ts          # SoundName union, ToneSegment interface
+      synthesis/        # Pure procedural audio generators (no Howler dependency)
+        core.ts         # generateToneBuffer, generateMultiSegmentTone
+        wav.ts          # floatBufferToWavDataUri (Float32Array → WAV data URI)
+        sfx.ts          # Gameplay SFX generators (jump, stomp, land, etc.)
+        ambient.ts      # Ambient loop generators (wind, lava, underwater, etc.)
+        periodic.ts     # Periodic one-shot generators (bird chirp, ghost, etc.)
     spriteShading.ts # fillBodyGradient (radial body fill) + drawHighlightSpot (white glint)
     fastMath.ts   # Trig lookup tables (fastSin/fastCos) for hot render paths
     canvasAnimations.ts # Shared canvas utilities (wildlife, day/night) for MainMenu + CharacterSelect
@@ -166,7 +177,7 @@ Each character is a single file in `src/engine/characters/packs/` exporting a `C
    - Data: `name`, `color/darkColor/lightColor`, `emoji`, `customEyes`, `idleTransform`, `splatShape`, `gibs[]`
    - `translations: { en: 'Name', cs: 'Jméno' }`
 2. Import and add to `BUILTINS` array in `characters/builtin.ts`
-3. Add animal sound in `audio.ts` — add to `SoundName` type + `SIMPLE_ANIMAL_SOUNDS` or `SEGMENT_ANIMAL_SOUNDS`
+3. Add `createSound` field — returns `new Howl(...)`. Use `generateToneBuffer()` or `generateMultiSegmentTone()` from `audio/synthesis/core`, or custom synthesis with `floatBufferToWavDataUri()` from `audio/synthesis/wav`. Add the character name to `SoundName` union in `audio/types.ts`.
 
 **Rendering contract:**
 - `customEyes: true` = renderer draws its own eyes; `false` = generic dots drawn after sprite.
@@ -216,9 +227,10 @@ All mechanics are configured directly in the `ArenaPack`:
 3. Add to mods array in `MainMenu.tsx`, add i18n keys (`mod_xxx`, `mod_xxx_desc`)
 
 ### Adding a new sound
-1. Add to `SoundName` union in `audio.ts`
-2. Add entry to `SIMPLE_ANIMAL_SOUNDS`/`SEGMENT_ANIMAL_SOUNDS` or `this.sounds.set()`
-3. Call `audio.play('name')` in `gameLoop.ts`
+1. Add to `SoundName` union in `audio/types.ts`
+2. Write the generator function in the appropriate `audio/synthesis/` file (sfx, ambient, or periodic)
+3. Add entry to the declarative table in `audio/soundRegistry.ts`
+4. Call `audio.play('name')` in `gameLoop.ts`
 4. **Volume calibration**: test on laptop speakers. Frequencies below 100Hz are inaudible on most laptop speakers — use 130Hz+ for thuds/impacts. Generation amplitude * Howl volume should be ≥0.05 effective for one-shots, ≥0.02 for ambient loops. Reference: existing `jump` sound = square wave 0.25 amplitude * Howl 0.3 = 0.075 effective at 300-600Hz.
 5. **Cooldown for rapid-fire SFX**: use per-player `Map<PlayerSlot, number>` accumulators (like `footstepAccumulators`), or a global cooldown number. Decay every frame. Sound plays only when cooldown ≤ 0.
 
@@ -226,7 +238,7 @@ All mechanics are configured directly in the `ArenaPack`:
 Arena packs support ambient sounds via `ArenaPack.ambientSoundConfig`:
 - **Loops** (`loops: string[]`): continuous background sounds, started in `GameLoop.start()`, stopped in `stop()`
 - **Periodic** (`periodic: [{sound, intervalRange}]`): one-shots fired at random intervals, ticked in `fixedUpdate()`
-- Sound generators go in `audio.ts`, config in each arena pack file in `src/engine/arenas/packs/`
+- Sound generators go in `audio/synthesis/` files, config in each arena pack file in `src/engine/arenas/packs/`
 - All active loops tracked in `GameLoop.activeAmbientLoops[]` and stopped on match end
 
 ### Adding arena MP3 music
@@ -282,7 +294,7 @@ Online play uses host-authoritative architecture with Trystero MQTT signaling fo
 Largest files to be aware of when context is limited:
 - `renderer.ts` ~560 lines (orchestrator) + `rendering/` modules ~1900 lines total — `gameLoop.ts` ~1770 lines
 - `drawPrimitives.ts` ~990 lines — `CharacterSelect.tsx` ~900 lines
-- `audio.ts` ~1050 lines — `VictoryScreen.css` ~520 lines
+- `audio/` directory total ~1050 lines (split: AudioManager ~140, MusicManager ~90, soundRegistry ~80, synthesis/ ~700) — `VictoryScreen.css` ~520 lines
 - Arena pack files ~200-800 lines each (11 arenas in `arenas/packs/`)
 - AI: `utility.ts` ~450, `awareness.ts` ~370
 - Net: `snapshot.ts` ~575, `netMatch.ts` ~370, `transport.ts` ~350, `interpolation.ts` ~260

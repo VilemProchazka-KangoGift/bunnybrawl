@@ -1,5 +1,7 @@
+import { Howl } from 'howler';
 import type { CharacterPack } from '../types';
 import { fillBodyGradient } from '../../spriteShading';
+import { floatBufferToWavDataUri } from '../../audio/synthesis/wav';
 
 const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, _state, _animFrame, isIdleAnim, idleT, colors) => {
   fillBodyGradient(ctx, { cx, cy: yOff + h * 0.55, rx: w * 0.42, ry: h * 0.35 }, colors);
@@ -52,4 +54,22 @@ export const frog: CharacterPack = {
   legStyle: { shape: 'wide', footStyle: 'webbed', legWidth: 5, spreadAngle: 4 },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.55, rx: w * 0.42, ry: h * 0.35 }),
   drawSprite, drawGib,
+  createSound: () => {
+    const sampleRate = 44100;
+    const duration = 0.2;
+    const numSamples = Math.floor(sampleRate * duration);
+    const buffer = new Float32Array(numSamples);
+    for (let i = 0; i < numSamples; i++) {
+      const t = i / sampleRate;
+      const progress = i / numSamples;
+      const freq = 200 + (150 - 200) * progress;
+      const wobble = Math.sin(2 * Math.PI * 30 * t) * 20;
+      const actualFreq = freq + wobble;
+      const envelope = Math.max(0, 1 - progress) * 0.4;
+      const phase = (t * actualFreq) % 1;
+      const sample = phase < 0.5 ? 1 : -1;
+      buffer[i] = sample * envelope;
+    }
+    return new Howl({ src: [floatBufferToWavDataUri(buffer, sampleRate)], volume: 0.4 });
+  },
 };

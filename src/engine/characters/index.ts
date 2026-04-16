@@ -19,6 +19,7 @@ export {
   getSpriteRenderer,
   getGibRenderer,
   getAllCharacterDefs,
+  listCharacterPacks,
 } from './registry';
 
 export {

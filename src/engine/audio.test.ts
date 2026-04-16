@@ -32,6 +32,29 @@ vi.mock('./arenas/registry', () => ({
   getArenaPack: vi.fn().mockReturnValue({ musicFile: 'test-arena.mp3' }),
 }));
 
+// Mock character registry — provide packs with createSound for animal sound registration
+vi.mock('./characters/registry', () => {
+  const instances: any[] = (globalThis as any).__howlInstances ??= [];
+  const animals = ['Bunny', 'Fox', 'Frog', 'Bear', 'Owl', 'Cat', 'Wolf', 'Panda',
+    'Pig', 'Cow', 'Goat', 'Horse', 'Sheep', 'Monkey', 'Tiger', 'Rhino', 'Hedgehog'];
+  return {
+    listCharacterPacks: () => animals.map(name => ({
+      name,
+      createSound: () => {
+        const h: any = {
+          play: vi.fn(),
+          stop: vi.fn(),
+          volume: vi.fn().mockReturnValue(0.5),
+          unload: vi.fn(),
+          playing: vi.fn().mockReturnValue(false),
+        };
+        instances.push(h);
+        return h;
+      },
+    })),
+  };
+});
+
 import { audio, floatBufferToWavDataUri } from './audio';
 import { Howler } from 'howler';
 
@@ -47,7 +70,7 @@ beforeEach(() => {
   (audio as any).muted = false;
   (audio as any).backgroundMuted = false;
   (audio as any).gamePaused = false;
-  (audio as any).musicDisabled = false;
+  (audio as any).music.musicDisabled = false;
   // Restore document.hidden to default
   Object.defineProperty(document, 'hidden', { value: false, writable: true, configurable: true });
 });

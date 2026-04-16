@@ -1,5 +1,7 @@
+import { Howl } from 'howler';
 import type { CharacterPack } from '../types';
 import { fillBodyGradient } from '../../spriteShading';
+import { generateMultiSegmentTone } from '../../audio/synthesis/core';
 
 const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, _state, _animFrame, _isIdleAnim, _idleT, colors) => {
   fillBodyGradient(ctx, { cx, cy: yOff + h * 0.55, rx: w * 0.4, ry: h * 0.38 }, colors);
@@ -73,4 +75,11 @@ export const pig: CharacterPack = {
   legStyle: { shape: 'rounded', footStyle: 'hoof', footColor: '#FFD0D8' },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.55, rx: w * 0.4, ry: h * 0.38 }),
   drawSprite, drawGib,
+  createSound: () => new Howl({
+    src: [generateMultiSegmentTone([
+      { freq: 250, freqEnd: 350, duration: 0.07, type: 'square' },
+      { freq: 350, freqEnd: 200, duration: 0.13, type: 'square' },
+    ], 0.4)],
+    volume: 0.4,
+  }),
 };

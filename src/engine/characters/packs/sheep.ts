@@ -1,5 +1,7 @@
+import { Howl } from 'howler';
 import type { CharacterPack } from '../types';
 import { fillBodyGradientCircle } from '../../spriteShading';
+import { generateToneBuffer } from '../../audio/synthesis/core';
 
 const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, _w, h, _state, _animFrame, _isIdleAnim, _idleT, colors) => {
   // Fluffy body — multiple overlapping circles
@@ -58,4 +60,8 @@ export const sheep: CharacterPack = {
   legStyle: { shape: 'rounded', footStyle: 'hoof', legWidth: 5 },
   bodyEllipse: (cx, yOff, _w, h) => ({ cx, cy: yOff + h * 0.46, rx: 12, ry: h * 0.18 }),
   drawSprite, drawGib,
+  createSound: () => new Howl({
+    src: [generateToneBuffer(350, 0.3, 'sine', 0.4, 250)],
+    volume: 0.4,
+  }),
 };
