@@ -5,7 +5,7 @@ import { TouchInputManager } from '../touchInput';
 const CANVAS_WIDTH = 1280;
 const DEAD_ZONE = 12;
 const MAX_RADIUS = 60;
-const SWIPE_DISTANCE = 40;
+const SWIPE_DISTANCE = 25;
 
 // ---------- helpers ----------
 
@@ -92,9 +92,9 @@ describe('TouchInputManager', () => {
     vi.restoreAllMocks();
   });
 
-  /** Advance mock time past the 50ms gesture disambiguation delay. */
+  /** Advance mock time past the 80ms gesture disambiguation delay. */
   function advancePastJumpDelay() {
-    mockNow += 60;
+    mockNow += 100;
   }
 
   // ---- 1. Initial state ----

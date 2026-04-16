@@ -4,12 +4,12 @@ import { CANVAS_WIDTH } from './constants';
 // Tuning constants
 const DEAD_ZONE = 12;
 const MAX_RADIUS = 60;
-const SWIPE_DISTANCE = 40;
+const SWIPE_DISTANCE = 25;  // reduced from 40 — 40px was too far for reliable swipe-to-crouch
 const SWIPE_MAX_TIME = 300;
 // Gesture disambiguation: delay jump commit to give swipe detection time to cancel.
 // Without this, online guests send jump before the swipe is recognized (getInputAny
 // reads touch every RAF frame, but touchmove fires after the finger has traveled).
-const JUMP_COMMIT_DELAY_MS = 50;
+const JUMP_COMMIT_DELAY_MS = 80;  // 80ms gives enough time for a deliberate swipe
 
 export interface JoystickCallbackData {
   baseX: number;
