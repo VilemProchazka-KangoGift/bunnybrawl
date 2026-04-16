@@ -160,7 +160,11 @@ const BOT_PAUSE_CHANCE = [0.003, 0.002, 0.004, 0.001, 0.003];
 function applyInputToLobbyPlayer(p: LobbyPlayer, input: InputState): void {
   if (input.left) { p.vx = -LOBBY_SPEED; p.facing = 'left'; }
   else if (input.right) { p.vx = LOBBY_SPEED; p.facing = 'right'; }
-  else { p.vx *= 0.85; if (Math.abs(p.vx) < 5) p.vx = 0; }
+  else {
+    p.vx *= 0.85; if (Math.abs(p.vx) < 5) p.vx = 0;
+    if (p.vx > 0) p.facing = 'right';
+    else if (p.vx < 0) p.facing = 'left';
+  }
   if (input.jump && p.onGround) { p.vy = LOBBY_JUMP; p.onGround = false; }
   if (input.down && !p.onGround) p.vy = Math.max(p.vy, LOBBY_FAST_FALL);
 }
