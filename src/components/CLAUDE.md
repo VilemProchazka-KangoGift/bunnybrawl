@@ -1,6 +1,6 @@
 # Component Caveats
 
-- `CharacterSelect.tsx` has its own physics loop — separate from engine `physics.ts`. `LobbyPlayer` has `sideSquash` and `squashScale`, both decaying at rate 8.
+- `CharacterSelect.tsx` delegates lobby simulation to `LobbyGame` (`src/engine/lobbyGame.ts`), which uses the engine's `Player` type, `applyInput`/`collidePlatforms` against a 2-platform synthetic `LOBBY_ARENA` (ground + wall), `isStomping()` for stomp detection, and `drawPlayer` for rendering. Swap-on-stomp, walk-to-zone bot AI, and bespoke lobby art remain lobby-specific. Squash decay is inline (no fround — lobby is not network-replicated).
 - Canvas text in CharacterSelect needs i18n: `i18n.t('char_Name', name)`, not raw `char.name`.
 - Screen containers must use `width/height: 100%` — they inherit from `GameScaler`'s 1280x720 div. Never set fixed pixel dimensions.
 - Buttons use `.btn-base` from `shared.css` (hover scale 1.06, active 0.97). New buttons should include `btn-base`.

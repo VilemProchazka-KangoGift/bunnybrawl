@@ -524,7 +524,8 @@ function drawLobby(
   ctx.restore();
 
   // ---- Clouds (animated, using drawCloud) ----
-  const now = performance.now() / 1000;
+  const frameTime = performance.now();
+  const now = frameTime / 1000;
   const cloudDefs = [
     { speed: 8, offset: 0, y: 80, size: 70 },
     { speed: 5, offset: 400, y: 50, size: 85 },
@@ -642,7 +643,7 @@ function drawLobby(
 
   // ---- Draw NPCs (behind players) ----
   for (const npc of extras) {
-    drawPlayer(ctx, npc, false /*nearCarrot*/, LOBBY_THEME, performance.now());
+    drawPlayer(ctx, npc, false /*nearCarrot*/, LOBBY_THEME, frameTime);
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
     ctx.font = "10px 'Nunito', sans-serif";
     ctx.textAlign = 'center';
@@ -651,7 +652,7 @@ function drawLobby(
 
   // ---- Draw bots ----
   for (const bot of bots) {
-    drawPlayer(ctx, bot, false /*nearCarrot*/, LOBBY_THEME, performance.now());
+    drawPlayer(ctx, bot, false /*nearCarrot*/, LOBBY_THEME, frameTime);
     const tagX = bot.x + PLAYER_WIDTH / 2;
     const tagW = 36;
     ctx.fillStyle = 'rgba(80, 60, 120, 0.6)';
@@ -666,7 +667,7 @@ function drawLobby(
 
   // ---- Draw players ----
   for (const p of players) {
-    drawPlayer(ctx, p, false /*nearCarrot*/, LOBBY_THEME, performance.now());
+    drawPlayer(ctx, p, false /*nearCarrot*/, LOBBY_THEME, frameTime);
     const tagX = p.x + PLAYER_WIDTH / 2;
     const tagW = 36;
     ctx.fillStyle = 'rgba(0,0,0,0.45)';
