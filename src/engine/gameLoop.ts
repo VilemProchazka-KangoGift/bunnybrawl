@@ -570,6 +570,107 @@ export class GameLoop {
       if (player.damageFlashTimer > 0) player.damageFlashTimer = Math.max(0, player.damageFlashTimer - dt);
       if (player.springTrailTimer > 0) player.springTrailTimer = Math.max(0, player.springTrailTimer - dt);
 
+      // --- Transition-triggered effects (must fire even during hitstop, e.g. stomp) ---
+      {
+        const prev = this.prevCosmeticState.get(player.id);
+        if (prev) {
+          const wasGrounded = prev.state === 'idle' || prev.state === 'run';
+          const wasAirborne = prev.state === 'airborne';
+          const isAirborne = player.state === 'airborne';
+          const isGrounded = player.state === 'idle' || player.state === 'run';
+
+          // Jump: grounded → airborne
+          if (wasGrounded && isAirborne) {
+            this.playSound('jump');
+          }
+
+          // Fast-fall start
+          if (!prev.fastFalling && player.fastFalling) {
+            this.playSound('fastfall');
+          }
+
+          // Landing: airborne → grounded
+          if (wasAirborne && isGrounded && Math.abs(prev.vy) >= DUST_LAND_VY_THRESHOLD) {
+            const landCD = this.landCooldowns.get(player.id) ?? 0;
+            if (landCD <= 0) {
+              this.playSound('land');
+              this.landCooldowns.set(player.id, 0.1);
+            }
+            this.spawnDustParticles(player as Player, Math.abs(prev.vy));
+          }
+
+          // Headbonk: was going up, now vy ≈ 0, still airborne
+          if (wasAirborne && isAirborne && prev.vy < -10 && Math.abs(player.vy) < 5) {
+            const bonkCD = this.headbonkCooldowns.get(player.id) ?? 0;
+            if (bonkCD <= 0) {
+              this.playSound('headbonk');
+              this.headbonkCooldowns.set(player.id, 0.15);
+            }
+          }
+
+          // Wall hit: was moving fast horizontally, now stopped
+          if (Math.abs(prev.vx) > 100 && Math.abs(player.vx) < 5 && isGrounded) {
+            this.playSound('oof');
+          }
+
+          // Stomp: alive → splat
+          if (prev.state !== 'splat' && prev.state !== 'respawning' && player.state === 'splat') {
+            this.playSound('stomp');
+            audio.playAnimal(player.character.name);
+            this.spawnKillSplatter(player as Player);
+            this.state.shockwaves.push({
+              x: player.x + player.width / 2,
+              y: player.y + player.height / 2,
+              radius: 0, maxRadius: SHOCKWAVE_MAX_RADIUS, life: SHOCKWAVE_DURATION,
+            });
+          }
+
+          // Respawn
+          if (prev.state === 'respawning' && player.state === 'idle') {
+            this.playSound('land');
+          }
+
+          // Push bump
+          if (prev.sideSquash >= 0.95 && player.sideSquash < 0.85) {
+            this.playSound('bump');
+          }
+
+          // Burn start
+          if (prev.burnTimer <= 0 && player.burnTimer > 0) {
+            this.playSound('oof');
+          }
+
+          // Geyser launch
+          if (prev.vy - player.vy > 300) {
+            this.playSound('geyser');
+          }
+
+          // Score change → score animation
+          if (player.score > prev.score) {
+            this.state.scoreAnimations.push({
+              playerId: player.id, value: player.score - prev.score, timer: SCORE_ANIM_DURATION,
+            });
+          }
+
+          // Update prev state
+          prev.state = player.state;
+          prev.vx = player.vx;
+          prev.vy = player.vy;
+          prev.score = player.score;
+          prev.sideSquash = player.sideSquash;
+          prev.burnTimer = player.burnTimer;
+          prev.fastFalling = player.fastFalling;
+          prev.invincibleTimer = player.invincibleTimer;
+        } else {
+          this.prevCosmeticState.set(player.id, {
+            state: player.state, vx: player.vx, vy: player.vy,
+            score: player.score, sideSquash: player.sideSquash,
+            burnTimer: player.burnTimer, fastFalling: player.fastFalling,
+            invincibleTimer: player.invincibleTimer,
+          });
+        }
+      }
+
       // Skip remaining cosmetic systems during hitstop (player is frozen)
       if (player.hitstopTimer > 0) continue;
 
@@ -664,7 +765,77 @@ export class GameLoop {
       if (player.fatTimer > 0) {
         player.squashScale = f(player.squashScale * f(1 + f(fastSin(f(this.state.timeElapsed * 6)) * 0.05)));
       }
+
     }
+
+    // --- Entity transition detection ---
+    const pes = this.prevEntityState;
+
+    // Carrots: active → inactive = pickup
+    for (let i = 0; i < this.state.carrots.length; i++) {
+      const cur = this.state.carrots[i].active;
+      if (i < pes.carrotActives.length && pes.carrotActives[i] && !cur) {
+        this.playSound('crunch');
+        this.pickupCarrotVFX(this.state.carrots[i].x, this.state.carrots[i].y);
+      }
+      pes.carrotActives[i] = cur;
+    }
+    pes.carrotActives.length = this.state.carrots.length;
+
+    // Springs: bounceTimer 0 → >0
+    for (let i = 0; i < this.state.springs.length; i++) {
+      const cur = this.state.springs[i].bounceTimer;
+      const prevBounce = pes.springBounces[i] ?? 0;
+      if (prevBounce <= 0 && cur > 0) {
+        this.playSound('spring');
+        // Set springTrailTimer on nearest player
+        const sx = this.state.springs[i].x;
+        const sy = this.state.springs[i].y;
+        let closest: Player | null = null;
+        let minDist = 60;
+        for (const p of this.state.players) {
+          if (!p.active || p.state === 'splat') continue;
+          const dist = Math.sqrt((p.x + p.width / 2 - sx) ** 2 + (p.y + p.height - sy) ** 2);
+          if (dist < minDist) { minDist = dist; closest = p; }
+        }
+        if (closest) closest.springTrailTimer = SPRING_TRAIL_DURATION;
+      }
+      pes.springBounces[i] = cur;
+    }
+    pes.springBounces.length = this.state.springs.length;
+
+    // Thorns: hit false → true
+    for (let i = 0; i < this.state.thorns.length; i++) {
+      const cur = this.state.thorns[i].hit;
+      if (i < pes.thornHits.length && !pes.thornHits[i] && cur) {
+        this.playSound('thornhit');
+      }
+      pes.thornHits[i] = cur;
+    }
+    pes.thornHits.length = this.state.thorns.length;
+
+    // Countdown
+    if (this.state.countdown > 0) {
+      const curSec = Math.ceil(this.state.countdown);
+      if (curSec < pes.countdownSec) this.playSound('countdown_beep');
+      pes.countdownSec = curSec;
+    } else if (pes.countdownSec > 0) {
+      this.playSound('countdown_go');
+      pes.countdownSec = 0;
+    }
+
+    // Match over
+    if (this.state.matchOver && !pes.matchOver) this.playSound('victory');
+    pes.matchOver = this.state.matchOver;
+
+    // NOTE: The following minor effects remain in fixedUpdate (host-only, acceptable):
+    // - crouch sound (depends on input.down + wasCrouching local var)
+    // - zero_g loop (depends on zone occupancy check + start/stop)
+    // - splash sound (depends on landing-in-waterfall-zone detection)
+    // - pigeon_scatter (depends on proximity check with pigeon flocks)
+    // - crowd cheering (depends on score proximity to kill limit + volume ramp)
+    // - periodic ambient sounds (depends on timer-based random intervals)
+    // - collision particles for thorn/hazard/ghost/lava rock (depend on exact collision position)
 
     // --- Particle systems ---
     this.updateWeather(dt);
@@ -856,7 +1027,7 @@ export class GameLoop {
   skipCountdown(): void {
     if (this.state.countdown > 0) {
       this.state.countdown = 0;
-      this.playSound('countdown_go');
+      // countdown_go sound will fire from cosmeticStep transition detection
     }
   }
 
@@ -1034,25 +1205,6 @@ export class GameLoop {
     for (let i = 0; i < count; i++) {
       const life = 0.3 + Math.random() * 0.4 * intensity;
       this.emitParticle(cx + (Math.random() - 0.5) * player.width * 1.5, groundY - Math.random() * 4, (Math.random() - 0.5) * 150 * intensity, -Math.random() * 80 * intensity - 20, life, 2 + Math.random() * 4 * intensity, '#C8B896');
-    }
-  }
-
-  private spawnRunDust(player: Player): void {
-    const groundY = player.y + player.height;
-    const behindX = player.facing === 'right' ? player.x - 2 : player.x + player.width + 2;
-    const life = 0.15 + Math.random() * 0.15;
-    this.emitParticle(behindX + (Math.random() - 0.5) * 6, groundY - Math.random() * 3, (player.facing === 'right' ? -1 : 1) * (20 + Math.random() * 30), -Math.random() * 20 - 5, life, 1.5 + Math.random() * 2, '#C8B896');
-  }
-
-  private spawnImpactDust(player: Player, direction: 'up' | 'left' | 'right'): void {
-    const cx = player.x + player.width / 2;
-    const cy = player.y + player.height / 2;
-    for (let i = 0; i < 4; i++) {
-      let px: number, py: number, pvx: number, pvy: number;
-      if (direction === 'up') { px = cx + (Math.random() - 0.5) * player.width; py = player.y + 2; pvx = (Math.random() - 0.5) * 60; pvy = Math.random() * 40 + 10; }
-      else { const side = direction === 'right' ? player.x + player.width : player.x; px = side; py = cy + (Math.random() - 0.5) * player.height * 0.6; pvx = (direction === 'right' ? -1 : 1) * (20 + Math.random() * 40); pvy = -Math.random() * 30; }
-      const life = 0.2 + Math.random() * 0.2;
-      this.emitParticle(px, py, pvx, pvy, life, 1.5 + Math.random() * 2.5, '#C8B896');
     }
   }
 
@@ -1456,15 +1608,11 @@ export class GameLoop {
 
     // Countdown logic
     if (this.state.countdown > 0) {
-      const prevSec = Math.ceil(this.state.countdown);
       this.state.countdown = f(this.state.countdown - dt);
-      const curSec = Math.ceil(this.state.countdown);
       if (this.state.countdown <= 0) {
         this.state.countdown = 0;
-        this.playSound('countdown_go');
-      } else if (curSec < prevSec) {
-        this.playSound('countdown_beep');
       }
+      // countdown_beep and countdown_go sounds moved to cosmeticStep
       // During countdown, still update weather/particles but skip during rollback resim
       if (!this._resimulating) {
         this.updateWeather(dt);
@@ -1574,7 +1722,7 @@ export class GameLoop {
         if (gs.timer <= 0) {
           gs.active = true;
           gs.activeTimer = gz.duration || 3;
-          this.playSound('geyser');
+          // geyser sound moved to cosmeticStep (vy delta detection)
         }
       } else {
         gs.activeTimer = f(gs.activeTimer - dt);
@@ -1622,7 +1770,6 @@ export class GameLoop {
       const wasAirborne = player.state === 'airborne';
       const prevVy = player.vy;
       const prevVx = player.vx;
-      const wasFastFalling = player.fastFalling;
       const wasCrouching = player.squashScale <= SQUASH_ON_CROUCH;
 
       // Bot walk speed penalty (easy bots move slower)
@@ -1633,13 +1780,7 @@ export class GameLoop {
       }
       applyInput(player, input, dt, playerWalkSpeed, this.effFriction, this.effJumpImpulse);
 
-      // Fast-fall sound: first frame of pressing down while airborne
-      if (!wasFastFalling && player.fastFalling) {
-        this.playSound('fastfall');
-      }
-
       if (!wasAirborne && player.state === 'airborne') {
-        this.playSound('jump');
         // Stretch on jump
         player.squashScale = STRETCH_ON_JUMP;
         player.squashTimer = 0.15;
@@ -1660,30 +1801,9 @@ export class GameLoop {
       const justLanded = wasAirborne && player.state !== 'airborne';
 
       if (justLanded && haptics.isLocal(player.id)) haptics.landing(prevVy);
-      if (justLanded && prevVy >= DUST_LAND_VY_THRESHOLD) {
-        this.spawnDustParticles(player, prevVy);
-        // Landing sound with per-player cooldown
-        const lc = this.landCooldowns.get(player.id) || 0;
-        if (lc <= 0) {
-          this.playSound('land');
-          this.landCooldowns.set(player.id, 0.15);
-        }
-      }
-      if (!this._resimulating && player.state === 'run' && Math.abs(player.vx) > 150 && Math.random() < 0.3) this.spawnRunDust(player);
-      if (wasAirborne && prevVy < -10 && player.vy === 0 && player.state === 'airborne') {
-        this.spawnImpactDust(player, 'up');
-        // Headbonk sound with per-player cooldown
-        const hc = this.headbonkCooldowns.get(player.id) || 0;
-        if (hc <= 0) {
-          this.playSound('headbonk');
-          this.headbonkCooldowns.set(player.id, 0.15);
-        }
-      }
 
-      // Oof sound: when player hits a wall (prevVx was high, now 0)
+      // Wall hit: squash/stretch (sound moved to cosmeticStep)
       if (Math.abs(prevVx) > 100 && player.vx === 0 && prevVx !== 0) {
-        this.spawnImpactDust(player, prevVx > 0 ? 'right' : 'left');
-        this.playSound('oof');
         player.squashScale = 1.3; // stretch vertically = squash horizontally
         player.squashTimer = 0.12;
       }
@@ -1762,7 +1882,7 @@ export class GameLoop {
           player.state = 'airborne';
           spring.bounceTimer = 0.3;
           player.springTrailTimer = SPRING_TRAIL_DURATION;
-          this.playSound('spring');
+          // spring sound moved to cosmeticStep (bounceTimer transition detection)
           if (haptics.isLocal(player.id)) haptics.spring();
         }
       }
@@ -1774,9 +1894,9 @@ export class GameLoop {
           const thorn = this.state.thorns[thornHit.thornIndex];
           player.slowTimer = THORN_SLOW_DURATION;
           thorn.hit = true;
-          this.playSound('thornhit');
+          // thornhit sound moved to cosmeticStep (thorn.hit transition detection)
 
-          // Big blood splash at player + thorn location
+          // Big blood splash at player + thorn location (stays — depends on collision position)
           const px = player.x + player.width / 2;
           const py = player.y + player.height / 2;
           const tx = thorn.x + thorn.width / 2;
@@ -1811,10 +1931,10 @@ export class GameLoop {
           const hz = hzHit.zone;
           player.slowTimer = THORN_SLOW_DURATION;
           if (hz.type === 'lava') player.burnTimer = THORN_SLOW_DURATION;
-          this.playSound('thornhit');
+          // thornhit sound moved to cosmeticStep (thorn.hit transition detection)
           const px = player.x + player.width / 2;
           const py = player.y + player.height / 2;
-          // Big particle burst
+          // Big particle burst (stays — depends on collision position)
           for (let i = 0; i < 24; i++) {
             const angle = Math.random() * Math.PI * 2;
             const speed = 80 + Math.random() * 200;
@@ -1844,10 +1964,10 @@ export class GameLoop {
         const ghostHit = checkGhostCollision(player, this.state.ghosts);
         if (ghostHit) {
           player.slowTimer = THORN_SLOW_DURATION;
-          this.playSound('thornhit');
+          // thornhit sound moved to cosmeticStep
           const pcx = player.x + player.width / 2;
           const pcy = player.y + player.height / 2;
-          // Big ghost hit burst
+          // Big ghost hit burst (stays — depends on collision position)
           for (let i = 0; i < 20; i++) {
             const angle = Math.random() * Math.PI * 2;
             const speed = 60 + Math.random() * 160;
@@ -1878,9 +1998,10 @@ export class GameLoop {
           const rock = this.state.lavaRocks[rockHit.rockIndex];
           rock.active = false;
           player.slowTimer = THORN_SLOW_DURATION;
-          this.playSound('thornhit');
+          // thornhit sound moved to cosmeticStep
           const pcx = player.x + player.width / 2;
           const pcy = player.y + player.height / 2;
+          // Lava rock burst particles (stays — depends on collision position)
           for (let i = 0; i < 16; i++) {
             const angle = Math.random() * Math.PI * 2;
             const speed = 60 + Math.random() * 150;
@@ -1910,7 +2031,7 @@ export class GameLoop {
         respawnPlayer(player, this.arena.spawnPoints, this.state.players);
         player.invincibleTimer = 1.5; // shorter than stomp respawn
         player.slowTimer = 2.0; // respawn slowed (hurt state)
-        this.playSound('oof');
+        // oof sound moved to cosmeticStep (burn start transition detection covers this)
         if (!this._resimulating) this.state.screenShake = Math.max(this.state.screenShake, 0.1);
       }
 
@@ -1965,7 +2086,7 @@ export class GameLoop {
             player.vy = f(SPRING_BOUNCE * 0.85);
             player.state = 'airborne';
             this.state.bouncyWobble.set(bi, 0.4);
-            this.playSound('jump');
+            // jump sound moved to cosmeticStep (grounded→airborne transition)
             break;
           }
         }
@@ -2002,15 +2123,10 @@ export class GameLoop {
           carrot.active = false;
           player.score += 1;
           player.fatTimer = FAT_DURATION;
-          this.playSound('crunch');
-          audio.playAnimal(player.character.name);
+          // crunch sound, animal sound, score animation, pickup VFX moved to cosmeticStep
           // Hitstop — shorter than kill (half duration)
           player.hitstopTimer = Math.max(player.hitstopTimer, HITSTOP_DURATION * 0.5);
           if (!this._resimulating) this.state.hitstopZoom = Math.max(this.state.hitstopZoom, HITSTOP_DURATION * 0.5);
-          // Score animation for carrot pickup
-          this.state.scoreAnimations.push({ playerId: player.id, value: player.score, timer: SCORE_ANIM_DURATION });
-          // Pickup VFX — orange burst from carrot position
-          this.pickupCarrotVFX(carrot.x, carrot.y);
           // Stats: carrots eaten
           const ps = this.state.stats.perPlayer.get(player.id);
           if (ps) ps.carrotsEaten += 1;
@@ -2050,8 +2166,8 @@ export class GameLoop {
     // Stomps
     const { killFeedEntries } = checkStomps(this.state.players, this.arena.spawnPoints, this.state.timeElapsed, this.settings.mods);
 
+    // stomp sound, animal sound, kill splatter, shockwaves, score animations moved to cosmeticStep
     if (killFeedEntries.length > 0) {
-      this.playSound('stomp');
       if (!this._resimulating) {
         this.state.screenShake = SCREEN_SHAKE_DURATION;
         this.state.hitstopZoom = HITSTOP_DURATION;
@@ -2063,27 +2179,15 @@ export class GameLoop {
       if (attacker) {
         attacker.hitstopTimer = Math.max(attacker.hitstopTimer, HITSTOP_DURATION);
         if (haptics.isLocal(attacker.id)) haptics.hitstop();
-        audio.playAnimal(attacker.character.name);
         // Stats: kill streak
         attacker.killStreak += 1;
         const aps = this.state.stats.perPlayer.get(attacker.id);
         if (aps && attacker.killStreak > aps.bestStreak) aps.bestStreak = attacker.killStreak;
-        // Score animation for attacker
-        this.state.scoreAnimations.push({ playerId: attacker.id, value: attacker.score, timer: SCORE_ANIM_DURATION });
       }
       const victim = this.state.players.find(p => p.id === entry.victim);
       if (victim) {
         victim.hitstopTimer = Math.max(victim.hitstopTimer, HITSTOP_DURATION);
         if (haptics.isLocal(victim.id)) haptics.hitstop();
-        this.spawnKillSplatter(victim);
-        // Shockwave at victim position
-        this.state.shockwaves.push({
-          x: victim.x + victim.width / 2,
-          y: victim.y + victim.height / 2,
-          radius: 0,
-          maxRadius: SHOCKWAVE_MAX_RADIUS,
-          life: SHOCKWAVE_DURATION,
-        });
         // Damage flash on victim
         if (attacker) {
           victim.damageFlashSide = attacker.x < victim.x ? 'left' : 'right';
@@ -2106,17 +2210,7 @@ export class GameLoop {
     }
 
     collidePlayersHorizontal(this.state.players);
-    // Bump sound: detect player-player push (sideSquash set to 0.8 by collision)
-    if (this.bumpCooldown <= 0) {
-      for (const player of this.state.players) {
-        if (player.active && player.sideSquash === 0.8) {
-          this.playSound('bump');
-          if (haptics.isLocal(player.id)) haptics.bump();
-          this.bumpCooldown = 0.2;
-          break; // one bump sound per collision event
-        }
-      }
-    }
+    // bump sound moved to cosmeticStep (sideSquash transition detection)
     // Re-resolve platform collisions after player-player pushes
     // (prevents getting shoved inside solid blocks like the mausoleum)
     for (const player of this.state.players) {
@@ -2125,7 +2219,7 @@ export class GameLoop {
     }
     updateSplatTimers(this.state.players, this.arena.spawnPoints, dt, this.rng);
 
-    // Sound triggers (still in fixedUpdate — will move to cosmeticStep in Task 4)
+    // Minor sound effects that remain in fixedUpdate (host-only, depend on complex fixedUpdate context)
     if (!this._resimulating) {
       // Crowd cheering
       let leadScore = 0;
@@ -2219,7 +2313,7 @@ export class GameLoop {
     this.state.winner = winner;
     if (!this._resimulating) this.state.screenFlash = SCREEN_FLASH_DURATION;
     audio.stopMusic();
-    this.playSound('victory');
+    // victory sound moved to cosmeticStep (matchOver transition detection)
     this.onMatchEnd(winner, this.state);
   }
 }

@@ -1979,6 +1979,7 @@ describe('Score Animations', () => {
     expect(state.scoreAnimations).toHaveLength(0);
 
     loop.fixedUpdate(FIXED_TIMESTEP);
+    loop.cosmeticStep(FIXED_TIMESTEP);
 
     expect(state.scoreAnimations.length).toBeGreaterThanOrEqual(1);
     const anim = state.scoreAnimations.find(sa => sa.playerId === 'P1');
@@ -2045,6 +2046,7 @@ describe('Shockwaves', () => {
     expect(state.shockwaves).toHaveLength(0);
 
     loop.fixedUpdate(FIXED_TIMESTEP);
+    loop.cosmeticStep(FIXED_TIMESTEP);
 
     expect(state.shockwaves.length).toBeGreaterThanOrEqual(1);
     const sw = state.shockwaves[0];
@@ -2641,6 +2643,7 @@ describe('Gibs', () => {
     attacker.active = true;
 
     loop.fixedUpdate(FIXED_TIMESTEP);
+    loop.cosmeticStep(FIXED_TIMESTEP);
 
     expect(victim.state).toBe('splat');
     expect(state.gibs.length).toBeGreaterThan(0);
@@ -2666,6 +2669,7 @@ describe('Gibs', () => {
     attacker.active = true;
 
     loop.fixedUpdate(FIXED_TIMESTEP);
+    loop.cosmeticStep(FIXED_TIMESTEP);
 
     expect(victim.state).toBe('splat');
     expect(state.confetti.length).toBeGreaterThan(0);
@@ -2691,6 +2695,7 @@ describe('Gibs', () => {
     attacker.active = true;
 
     loop.fixedUpdate(FIXED_TIMESTEP);
+    loop.cosmeticStep(FIXED_TIMESTEP);
 
     expect(state.gibs.length).toBeGreaterThan(0);
     const gib = state.gibs[0];
