@@ -17,7 +17,7 @@ import { getAllCharacters, getCharacterEmoji, getCharacterDisplayName } from './
 import {
   drawTree, drawBush, drawFlower, drawMushroom, drawGrassTuft, drawCloud,
 } from './themes/drawPrimitives';
-import { drawCharacterCore } from './rendering/players';
+import { drawPlayer } from './rendering/players';
 import { audio } from './audio';
 import i18n from '../i18n';
 import { initWildlife, updateAndDrawWildlife, drawDayNightCycle } from './canvasAnimations';
@@ -61,7 +61,7 @@ const LOBBY_ARENA: Arena = {
 
 // Minimal theme stub for drawPlayer — it only reads theme.bubbleHelmet.
 // Other fields set to satisfy the type but never consulted in the lobby render path.
-export const LOBBY_THEME = { bubbleHelmet: false } as unknown as ThemeConfig;
+const LOBBY_THEME = { bubbleHelmet: false } as unknown as ThemeConfig;
 
 function makeLobbyPlayer(slot: PlayerSlot, char: CharacterDef, x: number, y: number): Player {
   return {
@@ -642,8 +642,7 @@ function drawLobby(
 
   // ---- Draw NPCs (behind players) ----
   for (const npc of extras) {
-    if (npc.splatTimer > 0) { drawSquishedChar(ctx, npc); }
-    else { drawLobbyCharacter(ctx, npc); }
+    drawPlayer(ctx, npc, false /*nearCarrot*/, LOBBY_THEME, performance.now());
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
     ctx.font = "10px 'Nunito', sans-serif";
     ctx.textAlign = 'center';
@@ -652,8 +651,7 @@ function drawLobby(
 
   // ---- Draw bots ----
   for (const bot of bots) {
-    if (bot.splatTimer > 0) { drawSquishedChar(ctx, bot); }
-    else { drawLobbyCharacter(ctx, bot); }
+    drawPlayer(ctx, bot, false /*nearCarrot*/, LOBBY_THEME, performance.now());
     const tagX = bot.x + PLAYER_WIDTH / 2;
     const tagW = 36;
     ctx.fillStyle = 'rgba(80, 60, 120, 0.6)';
@@ -668,8 +666,7 @@ function drawLobby(
 
   // ---- Draw players ----
   for (const p of players) {
-    if (p.splatTimer > 0) { drawSquishedChar(ctx, p); }
-    else { drawLobbyCharacter(ctx, p); }
+    drawPlayer(ctx, p, false /*nearCarrot*/, LOBBY_THEME, performance.now());
     const tagX = p.x + PLAYER_WIDTH / 2;
     const tagW = 36;
     ctx.fillStyle = 'rgba(0,0,0,0.45)';
@@ -825,47 +822,3 @@ function drawLobby(
   drawDayNightCycle(ctx, performance.now() / 1000, LOBBY_DAY_CYCLE);
 }
 
-function drawSquishedChar(ctx: CanvasRenderingContext2D, p: Player): void {
-  const cx = p.x + PLAYER_WIDTH / 2;
-  const by = p.y + PLAYER_HEIGHT;
-  ctx.fillStyle = p.character.color;
-  ctx.beginPath();
-  ctx.ellipse(cx, by - 4, PLAYER_WIDTH * 0.5, 4, 0, 0, Math.PI * 2);
-  ctx.fill();
-}
-
-function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: Player): void {
-  const { x, y, character, facing, animFrame, vx } = p;
-  const onGround = p.state !== 'airborne';
-  const w = PLAYER_WIDTH;
-  const h = PLAYER_HEIGHT;
-  const cx = x + w / 2;
-  const isRunning = Math.abs(vx) > 10 && onGround;
-  const isAirborne = !onGround;
-  const bounce = isRunning ? Math.sin(animFrame * Math.PI / 2) * 2 : 0;
-  const yOff = y - bounce;
-
-  ctx.save();
-  if (facing === 'left') {
-    ctx.translate(cx, 0);
-    ctx.scale(-1, 1);
-    ctx.translate(-cx, 0);
-  }
-
-  const ss = p.sideSquash;
-  const sq = p.squashScale;
-  if (ss !== 1 || sq !== 1) {
-    const ssX = (1 + (1 - sq) * 0.5) * (ss !== 1 ? ss : 1);
-    const ssY = sq * (ss !== 1 ? 1 + (1 - ss) * 0.4 : 1);
-    const footY = y + h;
-    ctx.translate(cx, footY);
-    ctx.scale(ssX, ssY);
-    ctx.translate(-cx, -footY);
-  }
-
-  const state = isAirborne ? 'airborne' : isRunning ? 'run' : 'idle';
-  const colors = { color: character.color, darkColor: character.darkColor, lightColor: character.lightColor };
-  drawCharacterCore(ctx, cx, yOff, w, h, character.name, state, animFrame, p.squashScale, colors);
-
-  ctx.restore();
-}

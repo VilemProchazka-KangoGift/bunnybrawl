@@ -20,7 +20,7 @@ vi.mock('./audio', () => ({
 // Mock rendering modules that drawLobby imports (use importOriginal for complete exports)
 vi.mock('./rendering/players', async (importOriginal) => {
   const actual = await importOriginal() as any;
-  return { ...actual, drawCharacterCore: vi.fn() };
+  return { ...actual, drawCharacterCore: vi.fn(), drawPlayer: vi.fn() };
 });
 
 vi.mock('./themes/drawPrimitives', async (importOriginal) => {
@@ -1234,7 +1234,7 @@ describe('LobbyGame', () => {
       const ctx = makeMockCtx();
       game.render(ctx, 1 / 60);
       const mod = await import('./rendering/players');
-      expect(vi.mocked(mod.drawCharacterCore)).toHaveBeenCalled();
+      expect(vi.mocked(mod.drawPlayer)).toHaveBeenCalled();
     });
 
     it('render() draws wall', () => {
