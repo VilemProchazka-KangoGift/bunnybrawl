@@ -65,6 +65,7 @@ interface PrevPlayerCosmeticState {
   score: number;
   sideSquash: number;
   burnTimer: number;
+  slowTimer: number;
   fastFalling: boolean;
   invincibleTimer: number;
 }
@@ -361,7 +362,7 @@ export class GameLoop {
     for (const p of this.state.players) {
       this.prevCosmeticState.set(p.id, {
         state: p.state, vx: p.vx, vy: p.vy, score: p.score,
-        sideSquash: p.sideSquash, burnTimer: p.burnTimer,
+        sideSquash: p.sideSquash, burnTimer: p.burnTimer, slowTimer: p.slowTimer,
         fastFalling: p.fastFalling, invincibleTimer: p.invincibleTimer,
       });
     }
@@ -647,11 +648,24 @@ export class GameLoop {
             this.playSound('geyser');
           }
 
-          // Score change → score animation
+          // Score change → score animation + carrot pickup sound
           if (player.score > prev.score) {
             this.state.scoreAnimations.push({
               playerId: player.id, value: player.score - prev.score, timer: SCORE_ANIM_DURATION,
             });
+            // Carrot crunch — fixedUpdate also plays it inline (for the host), but on
+            // the guest the entity is removed before cosmeticStep runs, so this
+            // transition-based trigger is the only way guests hear the pickup.
+            this.playSound('crunch');
+            audio.playAnimal(player.character.name);
+            this.pickupCarrotVFX(player.x + player.width / 2, player.y);
+          }
+
+          // Slow start → thorn/hazard/ghost/lava rock hit sound
+          // All collision types that set slowTimer play 'thornhit' on the host.
+          // Guest detects via slowTimer transition since entities are removed before cosmeticStep.
+          if (prev.slowTimer <= 0 && player.slowTimer > 0) {
+            this.playSound('thornhit');
           }
 
           // Update prev state
@@ -661,13 +675,14 @@ export class GameLoop {
           prev.score = player.score;
           prev.sideSquash = player.sideSquash;
           prev.burnTimer = player.burnTimer;
+          prev.slowTimer = player.slowTimer;
           prev.fastFalling = player.fastFalling;
           prev.invincibleTimer = player.invincibleTimer;
         } else {
           this.prevCosmeticState.set(player.id, {
             state: player.state, vx: player.vx, vy: player.vy,
             score: player.score, sideSquash: player.sideSquash,
-            burnTimer: player.burnTimer, fastFalling: player.fastFalling,
+            burnTimer: player.burnTimer, slowTimer: player.slowTimer, fastFalling: player.fastFalling,
             invincibleTimer: player.invincibleTimer,
           });
         }
@@ -1838,7 +1853,7 @@ export class GameLoop {
           const thorn = this.state.thorns[thornHit.thornIndex];
           player.slowTimer = THORN_SLOW_DURATION;
           thorn.hit = true;
-          this.playSound('thornhit'); // stays in fixedUpdate — entity removed before cosmeticStep
+          // thornhit sound fired by cosmeticStep via slowTimer transition detection
 
           // Big blood splash at player + thorn location (stays — depends on collision position)
           const px = player.x + player.width / 2;
@@ -1875,7 +1890,7 @@ export class GameLoop {
           const hz = hzHit.zone;
           player.slowTimer = THORN_SLOW_DURATION;
           if (hz.type === 'lava') player.burnTimer = THORN_SLOW_DURATION;
-          this.playSound('thornhit'); // stays in fixedUpdate — entity removed before cosmeticStep
+          // thornhit sound fired by cosmeticStep via slowTimer transition detection
           const px = player.x + player.width / 2;
           const py = player.y + player.height / 2;
           // Big particle burst (stays — depends on collision position)
@@ -1908,7 +1923,7 @@ export class GameLoop {
         const ghostHit = checkGhostCollision(player, this.state.ghosts);
         if (ghostHit) {
           player.slowTimer = THORN_SLOW_DURATION;
-          this.playSound('thornhit'); // stays in fixedUpdate — collision context needed
+          // thornhit sound fired by cosmeticStep via slowTimer transition detection
           const pcx = player.x + player.width / 2;
           const pcy = player.y + player.height / 2;
           // Big ghost hit burst (stays — depends on collision position)
@@ -1942,7 +1957,7 @@ export class GameLoop {
           const rock = this.state.lavaRocks[rockHit.rockIndex];
           rock.active = false;
           player.slowTimer = THORN_SLOW_DURATION;
-          this.playSound('thornhit'); // stays in fixedUpdate — collision context needed
+          // thornhit sound fired by cosmeticStep via slowTimer transition detection
           const pcx = player.x + player.width / 2;
           const pcy = player.y + player.height / 2;
           // Lava rock burst particles (stays — depends on collision position)
@@ -2067,10 +2082,8 @@ export class GameLoop {
           carrot.active = false;
           player.score += 1;
           player.fatTimer = FAT_DURATION;
-          // Sound + VFX here (not cosmeticStep) — entity is removed before next cosmeticStep call
-          this.playSound('crunch');
-          audio.playAnimal(player.character.name);
-          this.pickupCarrotVFX(carrot.x, carrot.y);
+          // Crunch sound + VFX fired by cosmeticStep via score-change transition detection
+          // (works on both host and guest — entity removal doesn't matter since score is in snapshot)
           // Hitstop — shorter than kill (half duration)
           player.hitstopTimer = Math.max(player.hitstopTimer, HITSTOP_DURATION * 0.5);
           if (!this._resimulating) this.state.hitstopZoom = Math.max(this.state.hitstopZoom, HITSTOP_DURATION * 0.5);
