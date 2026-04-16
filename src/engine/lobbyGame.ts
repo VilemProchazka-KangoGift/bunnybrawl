@@ -6,8 +6,9 @@
  * React wrapper that feeds keyboard/touch input and reads query methods.
  */
 
-import type { CharacterDef, CharacterSlot, PlayerSlot, InputState } from './types';
+import type { Arena, CharacterDef, CharacterSlot, Player, PlayerSlot, InputState } from './types';
 import { ALL_BOT_SLOTS, isBotSlot } from './types';
+import type { ThemeConfig } from './themes/types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED, STOMP_VY_THRESHOLD } from './constants';
 import { KEY_BINDINGS } from './input';
 import { applySimpleGravity, moveSimple } from './physics';
@@ -39,6 +40,48 @@ const WALL_X = CANVAS_WIDTH * 0.58;
 const WALL_WIDTH = 24;
 const WALL_HEIGHT = 120;
 const WALL_Y = GROUND_Y - WALL_HEIGHT;
+
+// ---- Engine-compat helpers (unused for now; later tasks wire these in) ----
+
+// Synthetic arena used by engine physics (collidePlatforms needs a Platform[]).
+// Ground spans full width; wall obstacle matches the visual WALL_X/WALL_Y/WALL_WIDTH/WALL_HEIGHT.
+export const LOBBY_ARENA: Arena = {
+  id: 'lobby',
+  name: 'Lobby',
+  themeId: 'lobby',
+  width: CANVAS_WIDTH,
+  height: CANVAS_HEIGHT,
+  platforms: [
+    { x: 0, y: GROUND_Y, width: CANVAS_WIDTH, height: CANVAS_HEIGHT - GROUND_Y },
+    { x: WALL_X, y: WALL_Y, width: WALL_WIDTH, height: WALL_HEIGHT },
+  ],
+  spawnPoints: [],
+  allowFallOff: false,
+};
+
+// Minimal theme stub for drawPlayer — it only reads theme.bubbleHelmet.
+// Other fields set to satisfy the type but never consulted in the lobby render path.
+export const LOBBY_THEME = { bubbleHelmet: false } as unknown as ThemeConfig;
+
+export function makeLobbyPlayer(slot: PlayerSlot, char: CharacterDef, x: number, y: number): Player {
+  return {
+    id: slot,
+    character: { ...char, slot },
+    x, y, vx: 0, vy: 0,
+    width: PLAYER_WIDTH, height: PLAYER_HEIGHT,
+    state: 'idle', facing: 'right',
+    splatTimer: 0, respawnTimer: 0, invincibleTimer: 0,
+    score: 0, active: true,
+    animFrame: 0, animTimer: 0, fastFalling: false,
+    fatTimer: 0, slowTimer: 0,
+    squashScale: 1, squashTimer: 0, sideSquash: 1,
+    afterimages: [], idleAnimTimer: 0,
+    expression: 'normal', killStreak: 0,
+    breathTimer: 0, springTrailTimer: 0,
+    damageFlashSide: null, damageFlashTimer: 0, burnTimer: 0, hitstopTimer: 0,
+    renderOffsetX: 0, renderOffsetY: 0, disconnected: false,
+  };
+}
 
 // ---- Public types ----
 
