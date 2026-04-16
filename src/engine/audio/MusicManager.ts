@@ -5,6 +5,7 @@ const AUDIO_BASE = import.meta.env.BASE_URL + 'audio/';
 
 export class MusicManager {
   private musicDisabled = (() => { try { return localStorage.getItem('carrotroyale_music_disabled') === '1'; } catch { return false; } })();
+  private muted = false;
   private musicHowl: Howl | null = null;
   private musicThemeId: string | null = null;
   // Start fetching before first user interaction (init() is heavy)
@@ -13,6 +14,10 @@ export class MusicManager {
     volume: 0.25,
     loop: true,
   });
+
+  setMuted(muted: boolean): void {
+    this.muted = muted;
+  }
 
   isMusicDisabled(): boolean {
     return this.musicDisabled;
@@ -29,8 +34,8 @@ export class MusicManager {
     return this.musicDisabled;
   }
 
-  playMenuMusic(muted: boolean): void {
-    if (muted || this.musicDisabled) return;
+  playMenuMusic(): void {
+    if (this.muted || this.musicDisabled) return;
     if (this.menuMusicHowl && this.menuMusicHowl.playing()) return;
     if (!this.menuMusicHowl) {
       this.menuMusicHowl = new Howl({
@@ -48,10 +53,9 @@ export class MusicManager {
     }
   }
 
-  playMusic(themeId: string, muted: boolean, initialized: boolean, init: () => void): void {
+  playMusic(themeId: string): void {
     this.stopMenuMusic();
-    if (muted || this.musicDisabled) return;
-    if (!initialized) init();
+    if (this.muted || this.musicDisabled) return;
     if (this.musicHowl && this.musicThemeId === themeId) {
       this.musicHowl.play();
       return;

@@ -13,20 +13,22 @@ class AudioManager {
   private _visibilityHandler: (() => void) | null = null;
   private music = new MusicManager();
 
+  private updateHowlerMute(): void {
+    Howler.mute(this.muted || this.backgroundMuted || this.gamePaused);
+  }
+
+  private syncMusicMute(): void {
+    this.music.setMuted(this.muted);
+  }
+
   init(): void {
     if (this.initialized) return;
 
     registerAllSounds(this.sounds);
 
-    // Mute all audio when app goes to background (especially important on mobile)
     this._visibilityHandler = () => {
-      if (document.hidden) {
-        this.backgroundMuted = true;
-        Howler.mute(true);
-      } else {
-        this.backgroundMuted = false;
-        if (!this.muted && !this.gamePaused) Howler.mute(false);
-      }
+      this.backgroundMuted = document.hidden;
+      this.updateHowlerMute();
     };
     document.addEventListener('visibilitychange', this._visibilityHandler);
 
@@ -58,6 +60,7 @@ class AudioManager {
 
   toggleMute(): boolean {
     this.muted = !this.muted;
+    this.syncMusicMute();
     if (this.muted) {
       this.stopAll();
     }
@@ -106,16 +109,13 @@ class AudioManager {
 
   setPaused(paused: boolean, themeId?: string): void {
     this.gamePaused = paused;
-    if (paused) {
-      Howler.mute(true);
-    } else {
-      if (!this.muted && !this.backgroundMuted) Howler.mute(false);
-      if (themeId) this.playMusic(themeId);
-    }
+    this.updateHowlerMute();
+    if (!paused && themeId) this.playMusic(themeId);
   }
 
   playMenuMusic(): void {
-    this.music.playMenuMusic(this.muted);
+    this.syncMusicMute();
+    this.music.playMenuMusic();
   }
 
   stopMenuMusic(): void {
@@ -123,7 +123,9 @@ class AudioManager {
   }
 
   playMusic(themeId: string): void {
-    this.music.playMusic(themeId, this.muted, this.initialized, () => this.init());
+    if (!this.initialized) this.init();
+    this.syncMusicMute();
+    this.music.playMusic(themeId);
   }
 
   stopMusic(): void {

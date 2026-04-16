@@ -71,6 +71,7 @@ beforeEach(() => {
   (audio as any).backgroundMuted = false;
   (audio as any).gamePaused = false;
   (audio as any).music.musicDisabled = false;
+  (audio as any).music.muted = false;
   // Restore document.hidden to default
   Object.defineProperty(document, 'hidden', { value: false, writable: true, configurable: true });
 });

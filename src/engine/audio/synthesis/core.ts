@@ -1,6 +1,15 @@
 import type { ToneSegment } from '../types';
 import { floatBufferToWavDataUri } from './wav';
 
+function oscillatorSample(type: OscillatorType, phase: number, freq: number, t: number): number {
+  switch (type) {
+    case 'square': return phase < 0.5 ? 1 : -1;
+    case 'sawtooth': return 2 * phase - 1;
+    case 'triangle': return 4 * Math.abs(phase - 0.5) - 1;
+    default: return Math.sin(2 * Math.PI * freq * t);
+  }
+}
+
 export function generateToneBuffer(
   frequency: number,
   duration: number,
@@ -17,24 +26,8 @@ export function generateToneBuffer(
     const progress = i / numSamples;
     const freq = frequencyEnd ? frequency + (frequencyEnd - frequency) * progress : frequency;
     const envelope = Math.max(0, 1 - progress) * volume;
-
-    let sample: number;
     const phase = (t * freq) % 1;
-    switch (type) {
-      case 'square':
-        sample = phase < 0.5 ? 1 : -1;
-        break;
-      case 'sawtooth':
-        sample = 2 * phase - 1;
-        break;
-      case 'triangle':
-        sample = 4 * Math.abs(phase - 0.5) - 1;
-        break;
-      default:
-        sample = Math.sin(2 * Math.PI * freq * t);
-    }
-
-    buffer[i] = sample * envelope;
+    buffer[i] = oscillatorSample(type, phase, freq, t) * envelope;
   }
 
   return floatBufferToWavDataUri(buffer, sampleRate);
@@ -55,24 +48,8 @@ export function generateMultiSegmentTone(segments: ToneSegment[], volume = 0.3):
       const globalProgress = (offset + i) / totalSamples;
       const freq = seg.freqEnd ? seg.freq + (seg.freqEnd - seg.freq) * progress : seg.freq;
       const envelope = Math.max(0, 1 - globalProgress) * volume;
-
-      let sample: number;
       const phase = (t * freq) % 1;
-      switch (seg.type) {
-        case 'square':
-          sample = phase < 0.5 ? 1 : -1;
-          break;
-        case 'sawtooth':
-          sample = 2 * phase - 1;
-          break;
-        case 'triangle':
-          sample = 4 * Math.abs(phase - 0.5) - 1;
-          break;
-        default:
-          sample = Math.sin(2 * Math.PI * freq * t);
-      }
-
-      buffer[offset + i] = sample * envelope;
+      buffer[offset + i] = oscillatorSample(seg.type, phase, freq, t) * envelope;
     }
     offset += numSamples;
   }
