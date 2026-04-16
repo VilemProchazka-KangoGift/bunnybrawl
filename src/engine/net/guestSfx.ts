@@ -33,7 +33,7 @@ export class GuestSFX {
   }
 
   /** Call after applying snapshot to MatchState. Detects transitions and fires SFX + particles. */
-  update(state: MatchState, _dt = 1 / 60): void {
+  update(state: MatchState, dt = 1 / 60): void {
     for (const player of state.players) {
       if (!player.active) continue;
       const prev = this.prevPlayers.get(player.id);
@@ -91,7 +91,7 @@ export class GuestSFX {
           const speed = Math.abs(player.vx);
           const speedRatio = Math.min(speed / 260, 1); // ~MAX_WALK_SPEED
           const interval = 0.22 - speedRatio * 0.12;
-          prev.footstepAccum += 1 / 60; // approximate dt
+          prev.footstepAccum += dt;
           if (prev.footstepAccum >= interval) {
             prev.footstepAccum -= interval;
             const surface = (player.y + player.height) > 600 ? 'footstep_grass' : 'footstep_wood';
