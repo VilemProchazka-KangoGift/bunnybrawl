@@ -46,10 +46,10 @@ import { PlayerCosmeticSystem } from './cosmetics/PlayerCosmeticSystem';
 import { HazardSystem } from './gameplay/HazardSystem';
 import { CarrotSystem } from './gameplay/CarrotSystem';
 import { ArenaEntitySystem } from './gameplay/ArenaEntitySystem';
-import { applyEffectZones, updateZeroGSound } from './gameplay/effectZones';
+import { EffectZoneSystem } from './gameplay/EffectZoneSystem';
+import { PlayerCollisionSystem } from './gameplay/PlayerCollisionSystem';
+import { StompSystem } from './gameplay/StompSystem';
 import { checkMatchEnd as _checkMatchEnd, getPlayerInput as _getPlayerInput } from './gameplay/match';
-import { handleSpringCollision, handleThornCollision, handleHazardZoneCollision, handleGhostCollision, handleLavaRockCollision, handleFallOff } from './gameplay/playerCollisions';
-import { processStompsAndCollisions } from './gameplay/stomps';
 
 /** Force 32-bit float for cross-architecture determinism (x86 80-bit vs ARM 64-bit). */
 const f = Math.fround;
@@ -81,13 +81,15 @@ export class GameLoop {
   private paused = false;
   particleSystem!: ParticleSystem;
   private crowdStarted = false;
-  private zeroGSoundPlaying = false;
   private aiControllers: Map<string, AIController> = new Map();
 
   // Gameplay systems
   private hazardSystem!: HazardSystem;
   private carrotSystem!: CarrotSystem;
   private arenaEntitySystem!: ArenaEntitySystem;
+  private effectZoneSystem!: EffectZoneSystem;
+  private playerCollisionSystem!: PlayerCollisionSystem;
+  private stompSystem!: StompSystem;
   private _debugKeyHandler: ((e: KeyboardEvent) => void) | null = null;
 
   // Global bump cooldown (prevents double-fire from both pushed players)
@@ -326,6 +328,22 @@ export class GameLoop {
     this.entityTransitionSystem = new EntityTransitionSystem(this.state, this._boundPlaySound);
     this.playerTransitionSystem.init();
     this.entityTransitionSystem.init();
+
+    // Instantiate new gameplay systems after arenaEntitySystem and playerTransitionSystem
+    this.effectZoneSystem = new EffectZoneSystem(
+      this.state, this.arena, this.arenaEntitySystem,
+      () => this.playerTransitionSystem.getSfxCooldowns(),
+      this._boundPlaySound,
+    );
+    this.playerCollisionSystem = new PlayerCollisionSystem(
+      this.state, this.arena, this.particleSystem,
+      () => this._resimulating,
+    );
+    this.stompSystem = new StompSystem(
+      this.state, this.arena, this.settings,
+      () => this._resimulating,
+      () => this.rng,
+    );
   }
 
   private createWeatherParticle(randomY: boolean): WeatherParticle {
@@ -802,29 +820,10 @@ export class GameLoop {
       }
 
       // Hazard collisions
-      const springHit = handleSpringCollision(player, this.state);
-      if (springHit) this.particleSystem.applyHazardHitVFX(springHit, player.id, this.state, this._resimulating);
-
-      const thornHit = handleThornCollision(player, this.state);
-      if (thornHit) this.particleSystem.applyHazardHitVFX(thornHit, player.id, this.state, this._resimulating);
-
-      const hzHit = handleHazardZoneCollision(player, this.arena);
-      if (hzHit) this.particleSystem.applyHazardHitVFX(hzHit, player.id, this.state, this._resimulating);
-
-      const ghostHit = handleGhostCollision(player, this.state);
-      if (ghostHit) this.particleSystem.applyHazardHitVFX(ghostHit, player.id, this.state, this._resimulating);
-
-      const rockHit = handleLavaRockCollision(player, this.state);
-      if (rockHit) this.particleSystem.applyHazardHitVFX(rockHit, player.id, this.state, this._resimulating);
-
-      const fell = handleFallOff(player, this.arena, this.state);
-      if (fell) this.particleSystem.applyHazardHitVFX(fell, player.id, this.state, this._resimulating);
-
+      this.playerCollisionSystem.checkCollisions(player);
 
       // Effect zone interactions (zero-G, current, geyser)
-      if (this.arena.effectZones) {
-        applyEffectZones(player, this.arena.effectZones, this.arenaEntitySystem.getGeyserIndexMap(), this.state.geyserStates, justLanded, wasAirborne, prevVy, this.playerTransitionSystem.getSfxCooldowns(), this._boundPlaySound, dt);
-      }
+      this.effectZoneSystem.applyToPlayer(player, justLanded, wasAirborne, prevVy, dt);
 
       // Bouncy platform check (on landing — skip if holding down on ground to avoid repeat bouncing)
       if (this.arena.bouncyPlatforms && justLanded && !(input.down && prevVy < 100)) {
@@ -894,10 +893,10 @@ export class GameLoop {
     }
 
     // Zero-G ambient sound management
-    this.zeroGSoundPlaying = updateZeroGSound(this.state.players, this.arenaEntitySystem.getCachedZeroGZones(), this.zeroGSoundPlaying, this._boundPlaySound);
+    this.effectZoneSystem.fixedUpdate(dt);
 
     // Stomps, kill feed, player-player collision, splat timers
-    processStompsAndCollisions(this.state, this.arena, this.settings, dt, this._resimulating, this.rng);
+    this.stompSystem.fixedUpdate(dt);
 
     // Minor sound effects that remain in fixedUpdate (host-only, depend on complex fixedUpdate context)
     if (!this._resimulating) {
