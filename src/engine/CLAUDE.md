@@ -8,12 +8,18 @@
 - Day/night rendering must check `this.theme.dayNight.enabled` before drawing. "Remove day/night" also means hide sun/moon from `drawFarBackground`.
 
 ## Game Loop
+- **System architecture**: GameLoop owns two system arrays (`GameplaySystem[]` for `fixedUpdate`, `CosmeticSystem[]` for `cosmeticStep`). Each system implements `init(state) / update(dt) / cleanup()`. Systems receive shared state via constructor and call pure functions from the `cosmetics/` and `gameplay/` subdirectories.
+- **ParticleSystem** is the central VFX hub — other systems reference it for `emitParticle()`, `spawnKillSplatter()`, `applyHazardHitVFX()`, etc. Created first in GameLoop constructor.
+- **Per-player systems** (EffectZoneSystem, PlayerCollisionSystem) have `applyToPlayer()`/`checkCollisions()` methods called from GameLoop's per-player loop, NOT from the system array iteration.
+- **`erasableSyntaxOnly: true`** in tsconfig — cannot use constructor parameter properties (`private foo: T` in constructor). Use explicit field declarations + constructor body assignment.
+- **Avoid `.bind(this)` in hot paths** — creates new function per call. Use cached arrow fields: `private readonly _boundFn = (): T => this.fn()`.
+- **`audio.playAnimal(name)`** is separate from `audio.play(name)` — both must be gated by `_audioEnabled` for rollback resimulation. Route through callbacks, not direct imports.
 - `fixedUpdate` returns early when `matchOver` — timers that should keep running (screenFlash, slowMotion) must be decayed in `loop()` instead.
 - Stomps must be checked BEFORE `collidePlayersHorizontal`; collision skips when vertical overlap < 50% (stomp zone).
 - Never splice/shift `splatMarks` during `fixedUpdate` — multiple ticks per frame + `newSplatsSinceRender` stores indices. Cap array in render path only.
 - `GameLoop.stop()` must stop ALL looping sounds — music, ambient, wind, zero_g, crowd, plus all theme `activeAmbientLoops`.
 - Entity cleanup uses `swapRemove(arr, i)` in reverse-iterate loops. O(1), no order. Never `.filter()` per frame.
-- New particles: always use `this.emitParticle()`, never `this.particles.push({})`.
+- New particles: always use `particleSystem.emitParticle()`, never push to the array directly.
 
 ## Physics & Mechanics
 - Hitstop is per-player (`Player.hitstopTimer`, ~7 frames). Physics skipped but visual timers (`damageFlashTimer`, `burnTimer`) still tick. Multi-kills use `Math.max`.

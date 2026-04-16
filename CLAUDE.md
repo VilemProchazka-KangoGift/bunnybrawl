@@ -34,7 +34,28 @@ src/
       hud.ts           # Score display, kill feed, countdown, HUD caching
       players.ts       # Character sprites, sprite caching, expressions
       index.ts         # Barrel export + clearRenderingCaches()
-    gameLoop.ts   # Main game loop with fixed timestep, all game systems
+    gameLoop/     # Game loop system (decomposed from monolithic gameLoop.ts)
+      GameLoop.ts   # Orchestrator: fixed timestep, per-player physics, system iteration
+      types.ts      # GameplaySystem + CosmeticSystem interfaces (init/update/cleanup)
+      index.ts      # Barrel export
+      cosmetics/    # Cosmetic systems (driven by cosmeticStep)
+        ParticleSystem.ts      # Owns particle pool, gibs, VFX emission, collision particles
+        PlayerTransitionSystem.ts # Owns prevCosmeticState, sfxCooldowns, transition detection
+        PlayerCosmeticSystem.ts   # Owns afterimage/footstep accumulators
+        EntityTransitionSystem.ts # Owns prevEntityState, spring/countdown/matchOver sounds
+        EnvironmentSystem.ts      # Wildlife, fog, pollen, shooting stars, shockwaves
+        particles.ts  gibs.ts  environment.ts  sfx.ts  # Pure functions (used by systems)
+        playerTransitions.ts  playerCosmetics.ts  entityTransitions.ts
+      gameplay/     # Gameplay systems (driven by fixedUpdate)
+        HazardSystem.ts        # Owns floatingPlatforms, spring/thorn spawn
+        CarrotSystem.ts        # Carrot spawn + VFX
+        ArenaEntitySystem.ts   # Owns cached zones, lava rocks, ghosts, geysers, pigeons
+        EffectZoneSystem.ts    # Zero-G, currents, geysers per-player + zero-G sound
+        PlayerCollisionSystem.ts # All hazard collision handlers per-player
+        StompSystem.ts         # Stomp detection, kill feed, player-player collision
+        MatchSystem.ts         # Crowd cheering, ambient sounds, match end
+        hazards.ts  carrots.ts  arenaEntities.ts  effectZones.ts  # Pure functions
+        playerCollisions.ts  stomps.ts  match.ts
     audio.ts      # Re-export shim → audio/ directory
     audio/        # Audio system (decomposed from monolithic audio.ts)
       AudioManager.ts   # Singleton: play/stop/mute/pause + Howl map + visibility
