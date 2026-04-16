@@ -77,7 +77,11 @@ describe('TouchInputManager', () => {
   let manager: TouchInputManager;
   let container: HTMLElement;
 
+  let mockNow = 0;
+
   beforeEach(() => {
+    mockNow = 1000;
+    vi.spyOn(performance, 'now').mockImplementation(() => mockNow);
     manager = new TouchInputManager();
     container = makeContainer();
     manager.attach(container, () => 1);
@@ -85,7 +89,13 @@ describe('TouchInputManager', () => {
 
   afterEach(() => {
     manager.detach();
+    vi.restoreAllMocks();
   });
+
+  /** Advance mock time past the 50ms gesture disambiguation delay. */
+  function advancePastJumpDelay() {
+    mockNow += 60;
+  }
 
   // ---- 1. Initial state ----
 
@@ -205,12 +215,14 @@ describe('TouchInputManager', () => {
 
     it('triggers jump on tap in right half', () => {
       tapRight(800, 400);
+      advancePastJumpDelay();
       const input = manager.getInput();
       expect(input.jump).toBe(true);
     });
 
     it('consumes jump after first getInput read', () => {
       tapRight(800, 400);
+      advancePastJumpDelay();
       manager.getInput(); // first read -> consumes jump
 
       const input2 = manager.getInput();
@@ -286,6 +298,7 @@ describe('TouchInputManager', () => {
       priv(manager).boundTouchStart(fakeTouchEvent('touchstart', [
         { identifier: 1, clientX: 800, clientY: 400 },
       ]));
+      advancePastJumpDelay();
 
       const input = manager.getInput();
       expect(input.right).toBe(true);
@@ -361,6 +374,7 @@ describe('TouchInputManager', () => {
       priv(manager).boundTouchStart(fakeTouchEvent('touchstart', [
         { identifier: 0, clientX: 740, clientY: 400 },
       ]));
+      advancePastJumpDelay();
 
       const input = manager.getInput();
       expect(input.jump).toBe(true); // right half -> jump
@@ -473,6 +487,7 @@ describe('TouchInputManager', () => {
       priv(manager).boundTouchStart(fakeTouchEvent('touchstart', [
         { identifier: 0, clientX: 800, clientY: 400 },
       ]));
+      advancePastJumpDelay();
 
       const input = manager.getInput();
       expect(input.jump).toBe(true);
@@ -487,6 +502,7 @@ describe('TouchInputManager', () => {
       priv(manager).boundTouchStart(fakeTouchEvent('touchstart', [
         { identifier: 1, clientX: 800, clientY: 400 },
       ]));
+      advancePastJumpDelay();
 
       const input = manager.getInputForPlayer(true); // airborne
       expect(input.jump).toBe(false);
@@ -497,6 +513,7 @@ describe('TouchInputManager', () => {
       priv(manager).boundTouchStart(fakeTouchEvent('touchstart', [
         { identifier: 1, clientX: 800, clientY: 400 },
       ]));
+      advancePastJumpDelay();
 
       const input = manager.getInputForPlayer(false); // grounded
       expect(input.jump).toBe(true);

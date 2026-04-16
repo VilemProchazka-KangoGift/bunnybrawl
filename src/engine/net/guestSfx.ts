@@ -16,6 +16,7 @@ interface PrevPlayerState {
   vy: number;
   sideSquash: number;
   burnTimer: number;
+  footstepAccum: number;
 }
 
 export class GuestSFX {
@@ -85,8 +86,21 @@ export class GuestSFX {
           audio.play('geyser');
         }
 
-        // Note: footstep sounds intentionally NOT played — the host doesn't
-        // play them either. Walk sounds are visual-only (dust particles).
+        // Footsteps: surface-aware, speed-scaled (matches host logic in fixedUpdate)
+        if (player.state === 'run') {
+          const speed = Math.abs(player.vx);
+          const speedRatio = Math.min(speed / 260, 1); // ~MAX_WALK_SPEED
+          const interval = 0.22 - speedRatio * 0.12;
+          prev.footstepAccum += 1 / 60; // approximate dt
+          if (prev.footstepAccum >= interval) {
+            prev.footstepAccum -= interval;
+            const surface = (player.y + player.height) > 600 ? 'footstep_grass' : 'footstep_wood';
+            audio.setVolume(surface, 0.08 + speedRatio * 0.2);
+            audio.play(surface);
+          }
+        } else {
+          prev.footstepAccum = 0;
+        }
       }
 
       // Mutate in-place to avoid per-frame allocation
@@ -98,7 +112,7 @@ export class GuestSFX {
       } else {
         this.prevPlayers.set(player.id, {
           state: player.state, vy: player.vy,
-          sideSquash: player.sideSquash, burnTimer: player.burnTimer,
+          sideSquash: player.sideSquash, burnTimer: player.burnTimer, footstepAccum: 0,
         });
       }
     }

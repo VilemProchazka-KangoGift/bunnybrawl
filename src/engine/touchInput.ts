@@ -6,6 +6,10 @@ const DEAD_ZONE = 12;
 const MAX_RADIUS = 60;
 const SWIPE_DISTANCE = 40;
 const SWIPE_MAX_TIME = 300;
+// Gesture disambiguation: delay jump commit to give swipe detection time to cancel.
+// Without this, online guests send jump before the swipe is recognized (getInputAny
+// reads touch every RAF frame, but touchmove fires after the finger has traveled).
+const JUMP_COMMIT_DELAY_MS = 50;
 
 export interface JoystickCallbackData {
   baseX: number;
@@ -123,13 +127,17 @@ export class TouchInputManager {
   }
 
   getInput(): InputState {
-    const jump = this.jumpTriggered && !this.jumpConsumed;
-    if (jump) this.jumpConsumed = true;
+    // Delay jump commit to allow swipe-down gesture to cancel it.
+    // If a swipe is detected within JUMP_COMMIT_DELAY_MS, downFromSwipe
+    // overrides and jumpTriggered is cleared by the touchmove handler.
+    const elapsed = performance.now() - this.jumpStartTime;
+    const jumpReady = this.jumpTriggered && !this.jumpConsumed && elapsed >= JUMP_COMMIT_DELAY_MS;
+    if (jumpReady) this.jumpConsumed = true;
 
     return {
       left: this.leftActive,
       right: this.rightActive,
-      jump,
+      jump: jumpReady,
       down: this.downFromSwipe,
     };
   }
