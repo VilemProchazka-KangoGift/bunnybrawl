@@ -25,6 +25,7 @@ const mockGameLoopInstance = {
   setNetDebugStats: vi.fn(),
   setAudioEnabled: vi.fn(),
   setResimulating: vi.fn(),
+  cosmeticStep: vi.fn(),
   getRng: vi.fn(() => null),
   getAIControllers: vi.fn(() => new Map()),
   getAiRng: vi.fn(() => undefined),
@@ -48,6 +49,8 @@ const mockHostAuthorityInstance = {
   getStats: vi.fn(() => ({ localFrame: 0, rtt: 0, jitter: 0, snapshotBytes: 0, guestCount: 1, isRelay: false })),
   setMatchOver: vi.fn(),
   broadcastSnapshot: vi.fn(),
+  consumeGuestJumps: vi.fn(),
+  tickGraceTimers: vi.fn(),
 };
 
 vi.mock('./hostAuthority', () => ({

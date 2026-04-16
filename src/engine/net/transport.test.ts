@@ -43,7 +43,7 @@ vi.mock('@trystero-p2p/mqtt', () => ({
   selfId: 'self-id',
 }));
 
-vi.mock('./networkSimulator', () => ({
+vi.mock('./core/networkSimulator', () => ({
   NetworkSimulator: vi.fn(() => ({ enabled: false, enqueue: vi.fn(), flush: vi.fn(() => []), getConfig: vi.fn(() => ({ latencyMs: 0, jitterMs: 0 })) })),
   readSimConfigFromUrl: vi.fn(() => null),
 }));
@@ -503,7 +503,7 @@ describe('Transport — startPing health degradation', () => {
 
     (t as any).peers.set('peer-1', {
       peerId: 'peer-1', rtt: 0, jitter: 0,
-      lastPongTime: safeNow - 3000, health: 'healthy',
+      lastPongTime: safeNow - 5000, health: 'healthy',
     });
     (t as any).status = 'connected';
     (t as any).startPing();
@@ -531,7 +531,7 @@ describe('Transport — startPing health degradation', () => {
 
     (t as any).peers.set('peer-1', {
       peerId: 'peer-1', rtt: 0, jitter: 0,
-      lastPongTime: safeNow - 6000, health: 'degraded',
+      lastPongTime: safeNow - 11000, health: 'degraded',
     });
     (t as any).status = 'connected';
     (t as any).startPing();

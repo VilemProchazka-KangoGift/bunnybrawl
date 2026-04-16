@@ -138,3 +138,5 @@
 - `resolveStuckPlayer()` runs after `collidePlatforms()` — ejects players deeply embedded (>5px) in platforms. Catches desync-related position errors.
 - Snapshot convention: `snapshot[f]` = state BEFORE tick f. Taking snapshots AFTER `fixedUpdate` and storing at the same frame index causes compounding timer drift (each rollback adds +1dt). Always take before tick.
 - `Player.disconnected` must be in snapshots — prevents respawn in `stomp.ts`.
+- **Mock maintenance**: `netMatch.test.ts` mocks `GameLoop`, `HostAuthority`, and `EntityInterpolation` via `Object.assign`. When adding methods to these classes, update the corresponding `mock*Instance` objects in the test or `vi.mock` factory — otherwise tests pass but emit unhandled `TypeError` exceptions (which can mask real failures). Similarly, `transport.test.ts` mocks must match the actual import paths (e.g. `./core/networkSimulator`, not `./networkSimulator`).
+- **Transport health thresholds**: `DEGRADED_THRESHOLD_MS` and `PONG_TIMEOUT_MS` are in `transport.ts`. If changed, update the `lastPongTime` offsets in the `startPing health degradation` tests in `transport.test.ts`.
