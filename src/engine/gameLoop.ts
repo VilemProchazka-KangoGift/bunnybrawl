@@ -47,7 +47,8 @@ import type { NetDebugStats } from './net/core/debugOverlay';
 import { emitParticle, spawnDustParticles, spawnGoreParticles, spawnConfetti, spawnCarrotVFX, spawnFirework, updateParticles, updateConfetti } from './gameLoop/cosmetics/particles';
 import { launchGib, spawnGibs, updateGibs } from './gameLoop/cosmetics/gibs';
 import { createWeatherParticle, updateWeather, updateWildlife, updateFog, updatePollen, updateShootingStars, updateShockwaves, updateScoreAnimations, updateBouncyWobble, updatePigeonScatterParticles } from './gameLoop/cosmetics/environment';
-import { decaySfxCooldowns, updateCrowdCheering, tickPeriodicAmbient } from './gameLoop/cosmetics/sfx';
+import { decaySfxCooldowns, getOrCreateCooldowns, updateCrowdCheering, tickPeriodicAmbient } from './gameLoop/cosmetics/sfx';
+import type { SfxCooldowns } from './gameLoop/cosmetics/sfx';
 import { spawnSpring, spawnThorn, updateHazardLifetimes } from './gameLoop/gameplay/hazards';
 import { spawnCarrot } from './gameLoop/gameplay/carrots';
 import { updateLavaRocks, updateGhosts, updateGeyserTimers, updatePigeonFlocks } from './gameLoop/gameplay/arenaEntities';
@@ -114,10 +115,8 @@ export class GameLoop {
   private newGroundedGibsSinceRender: Gib[] = [];
   private _debugKeyHandler: ((e: KeyboardEvent) => void) | null = null;
 
-  // SFX cooldowns (per-player)
-  private landCooldowns: Map<PlayerSlot, number> = new Map();
-  private headbonkCooldowns: Map<PlayerSlot, number> = new Map();
-  private crouchCooldowns: Map<PlayerSlot, number> = new Map();
+  // SFX cooldowns (per-player, consolidated)
+  private sfxCooldowns: Map<PlayerSlot, SfxCooldowns> = new Map();
   // Global bump cooldown (prevents double-fire from both pushed players)
   // bumpCooldown removed — bump detection now uses sideSquash transition in cosmeticStep
 
@@ -558,7 +557,7 @@ export class GameLoop {
       if (!player.active) continue;
 
       // SFX cooldown decay (must tick even during hitstop so cooldowns don't accumulate)
-      decaySfxCooldowns(this.landCooldowns, this.headbonkCooldowns, this.crouchCooldowns, player.id, dt);
+      decaySfxCooldowns(this.sfxCooldowns, player.id, dt);
 
       // Cosmetic timer decay (runs even during hitstop for smooth visuals)
       if (player.damageFlashTimer > 0) player.damageFlashTimer = Math.max(0, player.damageFlashTimer - dt);
@@ -585,10 +584,10 @@ export class GameLoop {
 
           // Landing: airborne → grounded
           if (wasAirborne && isGrounded && Math.abs(prev.vy) >= DUST_LAND_VY_THRESHOLD) {
-            const landCD = this.landCooldowns.get(player.id) ?? 0;
-            if (landCD <= 0) {
+            const cd = getOrCreateCooldowns(this.sfxCooldowns, player.id);
+            if (cd.land <= 0) {
               this.playSound('land');
-              this.landCooldowns.set(player.id, 0.1);
+              cd.land = 0.1;
             }
             this.spawnDustParticles(player, Math.abs(prev.vy));
           }
@@ -1185,10 +1184,10 @@ export class GameLoop {
 
       // Headbonk: ceiling collision clamped vy to 0 while going up
       if (wasAirborne && player.state === 'airborne' && prevVy < -10 && player.vy === 0) {
-        const bonkCD = this.headbonkCooldowns.get(player.id) ?? 0;
-        if (bonkCD <= 0) {
+        const cd = getOrCreateCooldowns(this.sfxCooldowns, player.id);
+        if (cd.headbonk <= 0) {
           this.playSound('headbonk');
-          this.headbonkCooldowns.set(player.id, 0.15);
+          cd.headbonk = 0.15;
         }
       }
 
@@ -1226,10 +1225,10 @@ export class GameLoop {
         player.squashScale = SQUASH_ON_CROUCH;
         // Crouch sound: only on initial sit-down
         if (!wasCrouching) {
-          const cc = this.crouchCooldowns.get(player.id) || 0;
-          if (cc <= 0) {
+          const cd = getOrCreateCooldowns(this.sfxCooldowns, player.id);
+          if (cd.crouch <= 0) {
             this.playSound('crouch');
-            this.crouchCooldowns.set(player.id, 0.2);
+            cd.crouch = 0.2;
           }
         }
       } else {
@@ -1433,7 +1432,7 @@ export class GameLoop {
 
       // Effect zone interactions (zero-G, current, geyser)
       if (this.arena.effectZones) {
-        applyEffectZones(player, this.arena.effectZones, this.geyserIndexMap, this.state.geyserStates, justLanded, wasAirborne, prevVy, this.landCooldowns, this._boundPlaySound, dt);
+        applyEffectZones(player, this.arena.effectZones, this.geyserIndexMap, this.state.geyserStates, justLanded, wasAirborne, prevVy, this.sfxCooldowns, this._boundPlaySound, dt);
       }
 
       // Bouncy platform check (on landing — skip if holding down on ground to avoid repeat bouncing)

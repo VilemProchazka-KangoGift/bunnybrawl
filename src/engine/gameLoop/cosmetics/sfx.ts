@@ -3,18 +3,28 @@ import type { ThemeConfig } from '../../themes/types';
 import { audio } from '../../audio';
 import { randRange } from '../../themes/utils';
 
+/** Per-player SFX cooldown state. All values decay toward 0; sound plays when <= 0. */
+export interface SfxCooldowns {
+  land: number;
+  headbonk: number;
+  crouch: number;
+}
+
+export function getOrCreateCooldowns(map: Map<PlayerSlot, SfxCooldowns>, id: PlayerSlot): SfxCooldowns {
+  let cd = map.get(id);
+  if (!cd) { cd = { land: 0, headbonk: 0, crouch: 0 }; map.set(id, cd); }
+  return cd;
+}
+
 export function decaySfxCooldowns(
-  landCooldowns: Map<PlayerSlot, number>,
-  headbonkCooldowns: Map<PlayerSlot, number>,
-  crouchCooldowns: Map<PlayerSlot, number>,
+  sfxCooldowns: Map<PlayerSlot, SfxCooldowns>,
   playerId: PlayerSlot, dt: number,
 ): void {
-  const lc = landCooldowns.get(playerId);
-  if (lc !== undefined && lc > 0) landCooldowns.set(playerId, lc - dt);
-  const hc = headbonkCooldowns.get(playerId);
-  if (hc !== undefined && hc > 0) headbonkCooldowns.set(playerId, hc - dt);
-  const cc = crouchCooldowns.get(playerId);
-  if (cc !== undefined && cc > 0) crouchCooldowns.set(playerId, cc - dt);
+  const cd = sfxCooldowns.get(playerId);
+  if (!cd) return;
+  if (cd.land > 0) cd.land -= dt;
+  if (cd.headbonk > 0) cd.headbonk -= dt;
+  if (cd.crouch > 0) cd.crouch -= dt;
 }
 
 export function updateCrowdCheering(

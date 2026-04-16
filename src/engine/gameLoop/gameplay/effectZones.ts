@@ -1,6 +1,8 @@
 import type { Player, PlayerSlot, EffectZone } from '../../types';
 import { aabbOverlap } from '../../physics';
 import { audio } from '../../audio';
+import type { SfxCooldowns } from '../cosmetics/sfx';
+import { getOrCreateCooldowns } from '../cosmetics/sfx';
 
 const f = Math.fround;
 
@@ -10,7 +12,7 @@ export function applyEffectZones(
   geyserIndexMap: ReadonlyMap<EffectZone, number>,
   geyserStates: ReadonlyArray<{ active: boolean }>,
   justLanded: boolean, wasAirborne: boolean, prevVy: number,
-  landCooldowns: Map<PlayerSlot, number>,
+  sfxCooldowns: Map<PlayerSlot, SfxCooldowns>,
   playSound: (name: string) => void,
   dt: number,
 ): void {
@@ -29,10 +31,10 @@ export function applyEffectZones(
       player.vy = f(player.vy + f((zone.vy || 0) * dt));
       // Splash when entering waterfall
       if (justLanded || (wasAirborne && prevVy >= 200)) {
-        const sc = landCooldowns.get(player.id) || 0;
-        if (sc <= 0) {
+        const cd = getOrCreateCooldowns(sfxCooldowns, player.id);
+        if (cd.land <= 0) {
           playSound('splash');
-          landCooldowns.set(player.id, 0.3);
+          cd.land = 0.3;
         }
       }
     } else if (zone.type === 'geyser') {
