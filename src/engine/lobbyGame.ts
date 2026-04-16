@@ -9,9 +9,10 @@
 import type { Arena, CharacterDef, CharacterSlot, Player, PlayerSlot, InputState } from './types';
 import { ALL_BOT_SLOTS, isBotSlot } from './types';
 import type { ThemeConfig } from './themes/types';
-import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED, STOMP_VY_THRESHOLD } from './constants';
+import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED } from './constants';
 import { KEY_BINDINGS } from './input';
 import { applyInput, applyGravity, movePlayer, collidePlatforms, updatePlayerState } from './physics';
+import { isStomping } from './stomp';
 import { getAllCharacters, getCharacterEmoji, getCharacterDisplayName } from './characters';
 import {
   drawTree, drawBush, drawFlower, drawMushroom, drawGrassTuft, drawCloud,
@@ -308,7 +309,6 @@ export class LobbyGame {
   private processStomps(allLobby: Player[]): void {
     for (const attacker of this._participants) {
       if (attacker.splatTimer > 0) continue;
-      if (attacker.vy < STOMP_VY_THRESHOLD) continue;
       const attackerIsBot = isBotSlot(attacker.id);
 
       for (const victim of allLobby) {
@@ -316,16 +316,12 @@ export class LobbyGame {
         if (victim.splatTimer > 0) continue;
         if (attackerIsBot && !this._extrasSet.has(victim)) continue;
 
-        if (
-          attacker.x + PLAYER_WIDTH > victim.x &&
-          attacker.x < victim.x + PLAYER_WIDTH &&
-          attacker.y + PLAYER_HEIGHT > victim.y &&
-          attacker.y + PLAYER_HEIGHT < victim.y + PLAYER_HEIGHT * 0.5 + 4
-        ) {
+        if (isStomping(attacker, victim)) {
           const tempChar = attacker.character;
           attacker.character = { ...victim.character, slot: attacker.id };
           victim.character = { ...tempChar, slot: victim.id };
           victim.splatTimer = 0.8;
+          victim.state = 'splat';
           attacker.vy = -300;
           audio.play('stomp');
 
