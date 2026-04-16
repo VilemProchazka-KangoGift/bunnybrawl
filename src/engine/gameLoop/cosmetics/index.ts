@@ -5,3 +5,5 @@ export { decaySfxCooldowns, getOrCreateCooldowns, updateCrowdCheering, tickPerio
 export type { SfxCooldowns } from './sfx';
 export { detectEntityTransitions, createPrevEntityState } from './entityTransitions';
 export type { PrevEntityState } from './entityTransitions';
+export { detectPlayerTransitions, snapshotPlayerCosmeticState } from './playerTransitions';
+export type { PrevPlayerCosmeticState, TransitionCallbacks } from './playerTransitions';

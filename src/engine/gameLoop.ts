@@ -1,5 +1,5 @@
 import type {
-  MatchState, MatchSettings, Arena, PlayerSlot, Player, PlayerState, Particle, Gib,
+  MatchState, MatchSettings, Arena, PlayerSlot, Player, Particle, Gib,
   WeatherParticle, MatchStats, PlayerStats, WildlifeEntity, EffectZone, Platform,
   InputState,
 } from './types';
@@ -22,7 +22,7 @@ import { audio } from './audio';
 import {
   FIXED_TIMESTEP, MAX_FRAME_TIME,
   PLAYER_WIDTH, PLAYER_HEIGHT, ANIM_FRAME_DURATION, RUN_FRAMES,
-  DUST_LAND_VY_THRESHOLD, CARROT_SPAWN_INTERVAL, CARROT_CHASE_SPAWN_INTERVAL,
+  CARROT_SPAWN_INTERVAL, CARROT_CHASE_SPAWN_INTERVAL,
   CARROT_FIRST_SPAWN_DELAY, CARROT_CHASE_FIRST_SPAWN_DELAY, CARROT_SIZE, GIANT_SCALE,
   FAT_DURATION, SPRING_BOUNCE,
   THORN_SLOW_DURATION, CANVAS_WIDTH, CANVAS_HEIGHT,
@@ -31,8 +31,8 @@ import {
   SQUASH_ON_LAND, STRETCH_ON_JUMP, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED,
   AFTERIMAGE_INTERVAL, AFTERIMAGE_SPEED_THRESHOLD, AFTERIMAGE_MAX,
   MATCH_COUNTDOWN, IDLE_ANIM_INTERVAL,
-  SHOCKWAVE_MAX_RADIUS, SHOCKWAVE_DURATION, SCREEN_FLASH_DURATION,
-  SPRING_TRAIL_DURATION, SCORE_ANIM_DURATION,
+  SCREEN_FLASH_DURATION,
+  SPRING_TRAIL_DURATION,
   GRAVITY, FRICTION, MAX_WALK_SPEED, JUMP_IMPULSE, MAX_FALL_SPEED,
   BLOOD_COLOR,
 } from './constants';
@@ -51,6 +51,8 @@ import { decaySfxCooldowns, getOrCreateCooldowns, updateCrowdCheering, tickPerio
 import type { SfxCooldowns } from './gameLoop/cosmetics/sfx';
 import { detectEntityTransitions } from './gameLoop/cosmetics/entityTransitions';
 import type { PrevEntityState } from './gameLoop/cosmetics/entityTransitions';
+import { detectPlayerTransitions, snapshotPlayerCosmeticState } from './gameLoop/cosmetics/playerTransitions';
+import type { PrevPlayerCosmeticState, TransitionCallbacks } from './gameLoop/cosmetics/playerTransitions';
 import { spawnSpring, spawnThorn, updateHazardLifetimes } from './gameLoop/gameplay/hazards';
 import { spawnCarrot } from './gameLoop/gameplay/carrots';
 import { updateLavaRocks, updateGhosts, updateGeyserTimers, updatePigeonFlocks } from './gameLoop/gameplay/arenaEntities';
@@ -65,18 +67,6 @@ export type MatchEndCallback = (winner: PlayerSlot | null, state: MatchState) =>
 const CARROT_PICKUP_COLORS = ['#FF8C00', '#FF6600', '#FFA500', '#FF7700', '#FFD700', '#FF8C00'];
 const FIRE_COLORS = ['#FF4400', '#FF8800', '#FFCC00', '#FFAA00'];
 
-/** Previous-frame player state for cosmetic transition detection in cosmeticStep(). */
-interface PrevPlayerCosmeticState {
-  state: PlayerState;
-  vx: number;
-  vy: number;
-  score: number;
-  sideSquash: number;
-  burnTimer: number;
-  slowTimer: number;
-  fastFalling: boolean;
-  invincibleTimer: number;
-}
 
 export class GameLoop {
   private arena: Arena;
@@ -145,6 +135,12 @@ export class GameLoop {
   // Bound callbacks for extracted submodules (avoids .bind() allocations in hot paths)
   private readonly _boundGameRandom = (): number => this.gameRandom();
   private readonly _boundPlaySound = (name: string): void => this.playSound(name as Parameters<typeof audio.play>[0]);
+  private readonly _transitionCallbacks: TransitionCallbacks = {
+    playSound: this._boundPlaySound,
+    spawnDustParticles: (p, vy) => this.spawnDustParticles(p, vy),
+    spawnKillSplatter: (v) => this.spawnKillSplatter(v),
+    pickupCarrotVFX: (x, y) => this.pickupCarrotVFX(x, y),
+  };
 
   // Previous-frame state for cosmetic transition detection (cosmeticStep)
   private prevCosmeticState: Map<PlayerSlot, PrevPlayerCosmeticState> = new Map();
@@ -370,11 +366,7 @@ export class GameLoop {
 
     // Initialize prev-state tracking for cosmeticStep transition detection
     for (const p of this.state.players) {
-      this.prevCosmeticState.set(p.id, {
-        state: p.state, vx: p.vx, vy: p.vy, score: p.score,
-        sideSquash: p.sideSquash, burnTimer: p.burnTimer, slowTimer: p.slowTimer,
-        fastFalling: p.fastFalling, invincibleTimer: p.invincibleTimer,
-      });
+      this.prevCosmeticState.set(p.id, snapshotPlayerCosmeticState(p));
     }
     this.prevEntityState.carrotActives = this.state.carrots.map(c => c.active);
     this.prevEntityState.springBounces = this.state.springs.map(s => s.bounceTimer);
@@ -569,111 +561,9 @@ export class GameLoop {
       {
         const prev = this.prevCosmeticState.get(player.id);
         if (prev) {
-          const wasGrounded = prev.state === 'idle' || prev.state === 'run';
-          const wasAirborne = prev.state === 'airborne';
-          const isAirborne = player.state === 'airborne';
-          const isGrounded = player.state === 'idle' || player.state === 'run';
-
-          // Jump: grounded → airborne
-          if (wasGrounded && isAirborne) {
-            this.playSound('jump');
-          }
-
-          // Fast-fall start
-          if (!prev.fastFalling && player.fastFalling) {
-            this.playSound('fastfall');
-          }
-
-          // Landing: airborne → grounded
-          if (wasAirborne && isGrounded && Math.abs(prev.vy) >= DUST_LAND_VY_THRESHOLD) {
-            const cd = getOrCreateCooldowns(this.sfxCooldowns, player.id);
-            if (cd.land <= 0) {
-              this.playSound('land');
-              cd.land = 0.1;
-            }
-            this.spawnDustParticles(player, Math.abs(prev.vy));
-          }
-
-          // Headbonk stays in fixedUpdate (after collidePlatforms) where the
-          // ceiling collision is directly known. Velocity heuristics here are fragile.
-
-          // Wall hit: was moving fast horizontally, now stopped
-          if (Math.abs(prev.vx) > 100 && Math.abs(player.vx) < 5 && isGrounded) {
-            this.playSound('oof');
-          }
-
-          // Stomp: alive → splat (but not disconnect — disconnectPlayer sets splat directly)
-          if (prev.state !== 'splat' && prev.state !== 'respawning' && player.state === 'splat' && !player.disconnected) {
-            this.playSound('stomp');
-            audio.playAnimal(player.character.name);
-            this.spawnKillSplatter(player);
-            this.state.shockwaves.push({
-              x: player.x + player.width / 2,
-              y: player.y + player.height / 2,
-              radius: 0, maxRadius: SHOCKWAVE_MAX_RADIUS, life: SHOCKWAVE_DURATION,
-            });
-          }
-
-          // Respawn
-          if (prev.state === 'respawning' && player.state === 'idle') {
-            this.playSound('land');
-          }
-
-          // Push bump
-          // Push bump: sideSquash === 0.8 is the exact collision marker for player push.
-          // Wall hits set 0.75 — don't fire bump sound for those.
-          if (prev.sideSquash >= 0.95 && Math.abs(player.sideSquash - 0.8) < 0.01) {
-            this.playSound('bump');
-            if (haptics.isLocal(player.id)) haptics.bump();
-          }
-
-          // Burn start
-          if (prev.burnTimer <= 0 && player.burnTimer > 0) {
-            this.playSound('oof');
-          }
-
-          // Geyser launch
-          if (prev.vy - player.vy > 300) {
-            this.playSound('geyser');
-          }
-
-          // Score change → score animation + carrot pickup sound
-          if (player.score > prev.score) {
-            this.state.scoreAnimations.push({
-              playerId: player.id, value: player.score - prev.score, timer: SCORE_ANIM_DURATION,
-            });
-            // Carrot crunch — fixedUpdate also plays it inline (for the host), but on
-            // the guest the entity is removed before cosmeticStep runs, so this
-            // transition-based trigger is the only way guests hear the pickup.
-            this.playSound('crunch');
-            audio.playAnimal(player.character.name);
-            this.pickupCarrotVFX(player.x + player.width / 2, player.y);
-          }
-
-          // Slow start → thorn/hazard/ghost/lava rock hit sound
-          // All collision types that set slowTimer play 'thornhit' on the host.
-          // Guest detects via slowTimer transition since entities are removed before cosmeticStep.
-          if (prev.slowTimer <= 0 && player.slowTimer > 0) {
-            this.playSound('thornhit');
-          }
-
-          // Update prev state
-          prev.state = player.state;
-          prev.vx = player.vx;
-          prev.vy = player.vy;
-          prev.score = player.score;
-          prev.sideSquash = player.sideSquash;
-          prev.burnTimer = player.burnTimer;
-          prev.slowTimer = player.slowTimer;
-          prev.fastFalling = player.fastFalling;
-          prev.invincibleTimer = player.invincibleTimer;
+          detectPlayerTransitions(player, prev, this.state, this.sfxCooldowns, this._transitionCallbacks);
         } else {
-          this.prevCosmeticState.set(player.id, {
-            state: player.state, vx: player.vx, vy: player.vy,
-            score: player.score, sideSquash: player.sideSquash,
-            burnTimer: player.burnTimer, slowTimer: player.slowTimer, fastFalling: player.fastFalling,
-            invincibleTimer: player.invincibleTimer,
-          });
+          this.prevCosmeticState.set(player.id, snapshotPlayerCosmeticState(player));
         }
       }
 
