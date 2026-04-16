@@ -11,3 +11,5 @@ export { updatePlayerCosmetics } from './playerCosmetics';
 export { EnvironmentSystem } from './EnvironmentSystem';
 export { EntityTransitionSystem } from './EntityTransitionSystem';
 export { ParticleSystem } from './ParticleSystem';
+export { PlayerTransitionSystem } from './PlayerTransitionSystem';
+export { PlayerCosmeticSystem } from './PlayerCosmeticSystem';

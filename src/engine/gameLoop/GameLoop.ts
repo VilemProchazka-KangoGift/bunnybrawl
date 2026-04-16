@@ -39,14 +39,12 @@ import type { NetDebugStats } from '../net/core/debugOverlay';
 
 // Extracted submodules
 import { createWeatherParticle } from './cosmetics/environment';
-import { decaySfxCooldowns, getOrCreateCooldowns, updateCrowdCheering, tickPeriodicAmbient } from './cosmetics/sfx';
-import type { SfxCooldowns } from './cosmetics/sfx';
-import { detectPlayerTransitions, snapshotPlayerCosmeticState } from './cosmetics/playerTransitions';
+import { getOrCreateCooldowns, updateCrowdCheering, tickPeriodicAmbient } from './cosmetics/sfx';
 import { EnvironmentSystem } from './cosmetics/EnvironmentSystem';
 import { EntityTransitionSystem } from './cosmetics/EntityTransitionSystem';
 import { ParticleSystem } from './cosmetics/ParticleSystem';
-import type { PrevPlayerCosmeticState, TransitionCallbacks } from './cosmetics/playerTransitions';
-import { updatePlayerCosmetics } from './cosmetics/playerCosmetics';
+import { PlayerTransitionSystem } from './cosmetics/PlayerTransitionSystem';
+import { PlayerCosmeticSystem } from './cosmetics/PlayerCosmeticSystem';
 import { spawnSpring, spawnThorn, updateHazardLifetimes } from './gameplay/hazards';
 import { spawnCarrot } from './gameplay/carrots';
 import { updateLavaRocks, updateGhosts, updateGeyserTimers, updatePigeonFlocks } from './gameplay/arenaEntities';
@@ -84,8 +82,6 @@ export class GameLoop {
   private stopped = false;
   private paused = false;
   particleSystem!: ParticleSystem;
-  private afterimageAccumulators: Map<PlayerSlot, number> = new Map();
-  private footstepAccumulators: Map<PlayerSlot, number> = new Map();
   private crowdStarted = false;
   private zeroGSoundPlaying = false;
   private cachedGeyserZones: EffectZone[] = [];
@@ -95,8 +91,6 @@ export class GameLoop {
   private aiControllers: Map<string, AIController> = new Map();
   private _debugKeyHandler: ((e: KeyboardEvent) => void) | null = null;
 
-  // SFX cooldowns (per-player, consolidated)
-  private sfxCooldowns: Map<PlayerSlot, SfxCooldowns> = new Map();
   // Global bump cooldown (prevents double-fire from both pushed players)
   // bumpCooldown removed — bump detection now uses sideSquash transition in cosmeticStep
 
@@ -123,20 +117,12 @@ export class GameLoop {
   // Bound callbacks for extracted submodules (avoids .bind() allocations in hot paths)
   private readonly _boundGameRandom = (): number => this.gameRandom();
   private readonly _boundPlaySound = (name: string): void => this.playSound(name as Parameters<typeof audio.play>[0]);
-  private readonly _transitionCallbacks: TransitionCallbacks = {
-    playSound: this._boundPlaySound,
-    playAnimal: (name) => { if (this._audioEnabled) audio.playAnimal(name); },
-    spawnDustParticles: (p, vy) => this.particleSystem.spawnDustParticles(p, vy),
-    spawnKillSplatter: (v) => this.particleSystem.spawnKillSplatter(v, this.settings),
-    pickupCarrotVFX: (x, y) => this.particleSystem.pickupCarrotVFX(x, y),
-  };
-
-  // Previous-frame state for cosmetic transition detection (cosmeticStep)
-  private prevCosmeticState: Map<PlayerSlot, PrevPlayerCosmeticState> = new Map();
 
   // CosmeticSystem instances
   private environmentSystem!: EnvironmentSystem;
   private entityTransitionSystem!: EntityTransitionSystem;
+  private playerTransitionSystem!: PlayerTransitionSystem;
+  private playerCosmeticSystem!: PlayerCosmeticSystem;
 
   constructor(
     bgCanvas: HTMLCanvasElement,
@@ -350,13 +336,18 @@ export class GameLoop {
       if (this.touchSlot) haptics.init(this.touchSlot);
     }
 
-    // Initialize prev-state tracking for cosmeticStep transition detection
-    for (const p of this.state.players) {
-      this.prevCosmeticState.set(p.id, snapshotPlayerCosmeticState(p));
-    }
     this.particleSystem = new ParticleSystem(this.state, this.arena, this.theme, this.settings, this.geyserIndexMap);
+    this.playerTransitionSystem = new PlayerTransitionSystem(
+      this.state, this.settings, this._boundPlaySound,
+      (name: string) => { if (this._audioEnabled) audio.playAnimal(name); },
+      this.particleSystem,
+    );
+    this.playerCosmeticSystem = new PlayerCosmeticSystem(
+      this.state, this.effWalkSpeed, this.particleSystem, this._boundPlaySound,
+    );
     this.environmentSystem = new EnvironmentSystem(this.state, this.theme);
     this.entityTransitionSystem = new EntityTransitionSystem(this.state, this._boundPlaySound);
+    this.playerTransitionSystem.init();
     this.entityTransitionSystem.init();
   }
 
@@ -532,37 +523,8 @@ export class GameLoop {
    *  Called once per frame from local loop(), host loop, and guest loop. */
   cosmeticStep(dt: number): void {
     // --- Per-player cosmetic systems ---
-    for (const player of this.state.players) {
-      if (!player.active) continue;
-
-      // SFX cooldown decay (must tick even during hitstop so cooldowns don't accumulate)
-      decaySfxCooldowns(this.sfxCooldowns, player.id, dt);
-
-      // Cosmetic timer decay (runs even during hitstop for smooth visuals)
-      if (player.damageFlashTimer > 0) player.damageFlashTimer = Math.max(0, player.damageFlashTimer - dt);
-      if (player.springTrailTimer > 0) player.springTrailTimer = Math.max(0, player.springTrailTimer - dt);
-
-      // --- Transition-triggered effects (must fire even during hitstop, e.g. stomp) ---
-      {
-        const prev = this.prevCosmeticState.get(player.id);
-        if (prev) {
-          detectPlayerTransitions(player, prev, this.state, this.sfxCooldowns, this._transitionCallbacks);
-        } else {
-          this.prevCosmeticState.set(player.id, snapshotPlayerCosmeticState(player));
-        }
-      }
-
-      // Skip remaining cosmetic systems during hitstop (player is frozen)
-      if (player.hitstopTimer > 0) continue;
-
-      updatePlayerCosmetics(
-        player, dt, this.state.timeElapsed, this.effWalkSpeed,
-        this.afterimageAccumulators, this.footstepAccumulators,
-        (x, y, vx, vy, life, size, color) => this.particleSystem.emitParticle(x, y, vx, vy, life, size, color),
-        this._boundPlaySound,
-      );
-
-    }
+    this.playerTransitionSystem.cosmeticUpdate(dt);
+    this.playerCosmeticSystem.cosmeticUpdate(dt);
 
     // --- Entity transition detection ---
     this.entityTransitionSystem.cosmeticUpdate(dt);
@@ -820,7 +782,7 @@ export class GameLoop {
 
       // Headbonk: ceiling collision clamped vy to 0 while going up
       if (wasAirborne && player.state === 'airborne' && prevVy < -10 && player.vy === 0) {
-        const cd = getOrCreateCooldowns(this.sfxCooldowns, player.id);
+        const cd = getOrCreateCooldowns(this.playerTransitionSystem.getSfxCooldowns(), player.id);
         if (cd.headbonk <= 0) {
           this.playSound('headbonk');
           cd.headbonk = 0.15;
@@ -861,7 +823,7 @@ export class GameLoop {
         player.squashScale = SQUASH_ON_CROUCH;
         // Crouch sound: only on initial sit-down
         if (!wasCrouching) {
-          const cd = getOrCreateCooldowns(this.sfxCooldowns, player.id);
+          const cd = getOrCreateCooldowns(this.playerTransitionSystem.getSfxCooldowns(), player.id);
           if (cd.crouch <= 0) {
             this.playSound('crouch');
             cd.crouch = 0.2;
@@ -925,7 +887,7 @@ export class GameLoop {
 
       // Effect zone interactions (zero-G, current, geyser)
       if (this.arena.effectZones) {
-        applyEffectZones(player, this.arena.effectZones, this.geyserIndexMap, this.state.geyserStates, justLanded, wasAirborne, prevVy, this.sfxCooldowns, this._boundPlaySound, dt);
+        applyEffectZones(player, this.arena.effectZones, this.geyserIndexMap, this.state.geyserStates, justLanded, wasAirborne, prevVy, this.playerTransitionSystem.getSfxCooldowns(), this._boundPlaySound, dt);
       }
 
       // Bouncy platform check (on landing — skip if holding down on ground to avoid repeat bouncing)
