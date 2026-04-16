@@ -143,7 +143,8 @@ npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/
 - **E2E shortcuts** — `/?arena=meadow&bots=2&killLimit=4` auto-starts a match (skips lobby). Requires `arena` param to trigger. Use `window.__gameLoop.getState()` and `window.__gameStore.getState()` for in-match assertions.
 - **E2E countdown waits** — use `page.waitForFunction(() => window.__gameLoop?.getState()?.countdown === 0)` instead of `waitForTimeout(4000)`.
 - **E2E flakiness** — online multiplayer tests (`@online`) are inherently flaky due to PeerJS signaling. New E2E tests should use URL param auto-start and `waitForFunction` polling over hardcoded waits.
-- **Interpolation tests** cannot assert exact positions with wall-clock interpolation — snapshots pushed in rapid succession have near-identical arrival times. Assert value ranges, not exact lerp results.
+- **Interpolation tests** — snapshots pushed in rapid succession have near-identical frame numbers relative to delay. Assert value ranges, not exact lerp results.
+- **E2e tests require `npm install`** — `@trystero-p2p/mqtt` types must be installed for `tsc -b && vite build` to succeed. CI handles this automatically but local runs fail without it.
 - **Vitest mock constructors** — `vi.fn(() => instance)` fails with `new`. Use `class MockX { constructor() { Object.assign(this, mockInstance); } }` instead.
 - **Vitest partial mocks** — `vi.mock('./mod', async (importOriginal) => ({ ...(await importOriginal()), fn: vi.fn() }))` preserves un-mocked exports. Access mocked fns via `const mod = await import('./mod'); vi.mocked(mod.fn)`.
 - **Arena IDs are snake_case** in URL params and registry: `space_station`, `candy_land`, `haunted_graveyard`.
