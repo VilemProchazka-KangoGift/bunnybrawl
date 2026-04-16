@@ -11,7 +11,7 @@ import { ALL_BOT_SLOTS, isBotSlot } from './types';
 import type { ThemeConfig } from './themes/types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED, STOMP_VY_THRESHOLD } from './constants';
 import { KEY_BINDINGS } from './input';
-import { applySimpleGravity, moveSimple } from './physics';
+import { applyInput, applyGravity, movePlayer, collidePlatforms, updatePlayerState } from './physics';
 import { getAllCharacters, getCharacterEmoji, getCharacterDisplayName } from './characters';
 import {
   drawTree, drawBush, drawFlower, drawMushroom, drawGrassTuft, drawCloud,
@@ -33,7 +33,6 @@ const GROUND_Y = 560;
 const LOBBY_GRAVITY = 600;
 const LOBBY_SPEED = 200;
 const LOBBY_JUMP = -400;
-const LOBBY_FAST_FALL = 500;
 
 // Wall obstacle at ~2/3 of screen — forces players to jump to reach the ready zone
 const WALL_X = CANVAS_WIDTH * 0.58;
@@ -41,11 +40,11 @@ const WALL_WIDTH = 24;
 const WALL_HEIGHT = 120;
 const WALL_Y = GROUND_Y - WALL_HEIGHT;
 
-// ---- Engine-compat helpers (unused for now; later tasks wire these in) ----
+// ---- Engine-compat helpers ----
 
 // Synthetic arena used by engine physics (collidePlatforms needs a Platform[]).
 // Ground spans full width; wall obstacle matches the visual WALL_X/WALL_Y/WALL_WIDTH/WALL_HEIGHT.
-export const LOBBY_ARENA: Arena = {
+const LOBBY_ARENA: Arena = {
   id: 'lobby',
   name: 'Lobby',
   themeId: 'lobby',
@@ -81,6 +80,24 @@ function makeLobbyPlayer(slot: PlayerSlot, char: CharacterDef, x: number, y: num
     damageFlashSide: null, damageFlashTimer: 0, burnTimer: 0, hitstopTimer: 0,
     renderOffsetX: 0, renderOffsetY: 0, disconnected: false,
   };
+}
+
+function clampLobbyBounds(p: Player): void {
+  // Horizontal clamp (NOT wrap — we don't want players teleporting across the canvas)
+  if (p.x < 0) {
+    if (p.vx < 0) p.sideSquash = 0.75;
+    p.x = 0;
+    p.vx = 0;
+  } else if (p.x + p.width > CANVAS_WIDTH) {
+    if (p.vx > 0) p.sideSquash = 0.75;
+    p.x = CANVAS_WIDTH - p.width;
+    p.vx = 0;
+  }
+  // Vertical ceiling
+  if (p.y < 0) {
+    p.y = 0;
+    if (p.vy < 0) p.vy = 0;
+  }
 }
 
 // ---- Public types ----
@@ -137,21 +154,6 @@ function shuffle<T>(arr: T[]): T[] {
 
 const BOT_SPEED_VARIANCE = [0.85, 1.0, 0.9, 1.1, 0.95];
 const BOT_PAUSE_CHANCE = [0.003, 0.002, 0.004, 0.001, 0.003];
-
-// ---- Input helpers (transitional — Task 4 replaces applyInputToLobbyPlayer
-// with engine physics via applyInput/collidePlatforms) ----
-
-function applyInputToLobbyPlayer(p: Player, input: InputState): void {
-  if (input.left) { p.vx = -LOBBY_SPEED; p.facing = 'left'; }
-  else if (input.right) { p.vx = LOBBY_SPEED; p.facing = 'right'; }
-  else {
-    p.vx *= 0.85; if (Math.abs(p.vx) < 5) p.vx = 0;
-    if (p.vx > 0) p.facing = 'right';
-    else if (p.vx < 0) p.facing = 'left';
-  }
-  if (input.jump && p.state !== 'airborne') { p.vy = LOBBY_JUMP; p.state = 'airborne'; }
-  if (input.down && p.state === 'airborne') p.vy = Math.max(p.vy, LOBBY_FAST_FALL);
-}
 
 // ---- LobbyGame class ----
 
@@ -229,10 +231,38 @@ export class LobbyGame {
     this._extrasSet.clear();
     for (const e of this.extraChars) this._extrasSet.add(e);
 
+    const step = (p: Player, input: InputState): void => {
+      if (p.splatTimer > 0) { p.splatTimer = Math.max(0, p.splatTimer - dt); return; }
+
+      applyInput(p, input, dt, LOBBY_SPEED, 1500 /* friction */, LOBBY_JUMP);
+      applyGravity(p, dt, LOBBY_GRAVITY, 800);
+      movePlayer(p, dt);
+      collidePlatforms(p, LOBBY_ARENA.platforms);
+      clampLobbyBounds(p);
+      updatePlayerState(p);
+
+      // Squash decay (engine decays these inside GameLoop with fround — lobby doesn't need determinism)
+      if (p.squashScale !== 1) {
+        p.squashScale += (1 - p.squashScale) * SQUASH_DECAY_SPEED * dt;
+        if (Math.abs(p.squashScale - 1) < 0.02) p.squashScale = 1;
+      }
+      if (p.sideSquash !== 1) {
+        p.sideSquash += (1 - p.sideSquash) * SQUASH_DECAY_SPEED * dt;
+        if (Math.abs(p.sideSquash - 1) < 0.02) p.sideSquash = 1;
+      }
+
+      // Anim frame tick
+      if (Math.abs(p.vx) > 10) {
+        p.animTimer += dt;
+        if (p.animTimer > 0.12) { p.animTimer = 0; p.animFrame = (p.animFrame + 1) % 4; }
+      }
+
+      // Lobby-specific: crouch-on-ground squat
+      if (input.down && p.state !== 'airborne') p.squashScale = SQUASH_ON_CROUCH;
+    };
+
     // --- Player-controlled characters ---
     for (const p of this.players) {
-      if (p.splatTimer > 0) { p.splatTimer = Math.max(0, p.splatTimer - dt); continue; }
-
       let input: InputState;
       if (touchInput && p.id === 'P1') {
         input = touchInput;
@@ -245,29 +275,17 @@ export class LobbyGame {
           down: keys.has(bindings.down),
         };
       }
-
-      applyInputToLobbyPlayer(p, input);
-
-      // Crouch-on-ground squat (lobby-specific — stays here even after Task 4)
-      if (input.down && p.state !== 'airborne') p.squashScale = SQUASH_ON_CROUCH;
-
-      updateLobbyPhysics(p, dt, input.down && p.state !== 'airborne');
+      step(p, input);
     }
 
     // --- NPC extras — simple wandering AI ---
     for (const npc of this.extraChars) {
-      if (npc.splatTimer > 0) { npc.splatTimer = Math.max(0, npc.splatTimer - dt); continue; }
-      const input = wanderInput();
-      applyInputToLobbyPlayer(npc, input);
-      updateLobbyPhysics(npc, dt);
+      step(npc, wanderInput());
     }
 
     // --- Bot players — directed AI walking toward ready zone ---
     for (const bot of this.bots) {
-      if (bot.splatTimer > 0) { bot.splatTimer = Math.max(0, bot.splatTimer - dt); continue; }
-      const input = botLobbyInput(bot);
-      applyInputToLobbyPlayer(bot, input);
-      updateLobbyPhysics(bot, dt);
+      step(bot, botLobbyInput(bot));
     }
 
     // --- Stomp detection ---
@@ -454,61 +472,6 @@ function wanderInput(): InputState {
   const right = Math.random() < 0.005;
   const jump = Math.random() < 0.005;
   return { left: left && !right, right: right && !left, jump, down: false };
-}
-
-// ---- Physics ----
-
-function updateLobbyPhysics(p: Player, dt: number, holdingCrouch = false): void {
-  applySimpleGravity(p, LOBBY_GRAVITY, 800, dt);
-  moveSimple(p, dt);
-
-  if (p.y + PLAYER_HEIGHT >= GROUND_Y) {
-    p.y = GROUND_Y - PLAYER_HEIGHT;
-    p.vy = 0;
-    p.state = p.vx !== 0 ? 'run' : 'idle';
-  }
-
-  if (
-    p.x + PLAYER_WIDTH > WALL_X &&
-    p.x < WALL_X + WALL_WIDTH &&
-    p.y + PLAYER_HEIGHT > WALL_Y &&
-    p.y < GROUND_Y
-  ) {
-    const overlapLeft = (p.x + PLAYER_WIDTH) - WALL_X;
-    const overlapRight = (WALL_X + WALL_WIDTH) - p.x;
-    const overlapTop = (p.y + PLAYER_HEIGHT) - WALL_Y;
-
-    if (overlapTop < Math.min(overlapLeft, overlapRight) && p.vy >= 0) {
-      p.y = WALL_Y - PLAYER_HEIGHT;
-      p.vy = 0;
-      p.state = p.vx !== 0 ? 'run' : 'idle';
-    } else if (overlapLeft < overlapRight) {
-      if (p.vx > 0) p.sideSquash = 0.75;
-      p.x = WALL_X - PLAYER_WIDTH;
-      p.vx = 0;
-    } else {
-      if (p.vx < 0) p.sideSquash = 0.75;
-      p.x = WALL_X + WALL_WIDTH;
-      p.vx = 0;
-    }
-  }
-
-  if (p.x < 0) { if (p.vx < 0) p.sideSquash = 0.75; p.x = 0; p.vx = 0; }
-  if (p.x + PLAYER_WIDTH > CANVAS_WIDTH) { if (p.vx > 0) p.sideSquash = 0.75; p.x = CANVAS_WIDTH - PLAYER_WIDTH; p.vx = 0; }
-
-  if (Math.abs(p.vx) > 10) {
-    p.animTimer += dt;
-    if (p.animTimer > 0.12) { p.animTimer = 0; p.animFrame = (p.animFrame + 1) % 4; }
-  }
-
-  if (!holdingCrouch && p.squashScale !== 1) {
-    p.squashScale += (1.0 - p.squashScale) * SQUASH_DECAY_SPEED * dt;
-    if (Math.abs(p.squashScale - 1) < 0.02) p.squashScale = 1;
-  }
-  if (p.sideSquash !== 1) {
-    p.sideSquash += (1.0 - p.sideSquash) * SQUASH_DECAY_SPEED * dt;
-    if (Math.abs(p.sideSquash - 1) < 0.02) p.sideSquash = 1;
-  }
 }
 
 // ---- Drawing ----

@@ -16,7 +16,7 @@ const f = Math.fround;
 // (applyGravity, movePlayer) use fround for network determinism — don't replace.
 // ---------------------------------------------------------------------------
 
-/** Minimal physics entity — shared between match Player and lobby LobbyPlayer. */
+/** Minimal physics entity — shared between match Player and lobby entities. */
 export interface PhysicsBody {
   x: number;
   y: number;
