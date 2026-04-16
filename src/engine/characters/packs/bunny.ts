@@ -1,5 +1,7 @@
+import { Howl } from 'howler';
 import type { CharacterPack } from '../types';
 import { fillBodyGradient } from '../../spriteShading';
+import { generateToneBuffer } from '../../audio/synthesis/core';
 
 const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, _state, _animFrame, isIdleAnim, idleT, colors) => {
   fillBodyGradient(ctx, { cx, cy: yOff + h * 0.55, rx: w * 0.4, ry: h * 0.4 }, colors);
@@ -52,4 +54,8 @@ export const bunny: CharacterPack = {
   legStyle: { shape: 'rounded', footStyle: 'paw', footHeight: 2 },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.55, rx: w * 0.4, ry: h * 0.4 }),
   drawSprite, drawGib,
+  createSound: () => new Howl({
+    src: [generateToneBuffer(800, 0.1, 'square', 0.4, 1200)],
+    volume: 0.4,
+  }),
 };

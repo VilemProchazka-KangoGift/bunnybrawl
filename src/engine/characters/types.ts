@@ -1,3 +1,4 @@
+import type { Howl } from 'howler';
 import type { SplatShape, GibType, PlayerState } from '../types';
 import type { GibDef } from '../stomp';
 import type { BodyEllipseParams } from '../spriteShading';
@@ -89,4 +90,8 @@ export interface CharacterPack {
 
   /** Leg shape and foot style. If omitted, defaults to rounded legs with round feet. */
   legStyle?: LegStyle;
+
+  /** Factory: returns a Howl instance for this character's voice sound.
+   *  Called once at AudioManager init. Can use procedural synthesis or MP3. */
+  createSound?: () => Howl;
 }

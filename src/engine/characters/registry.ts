@@ -17,6 +17,11 @@ export function getCharacterPack(name: string): CharacterPack | undefined {
   return PACKS.get(name);
 }
 
+/** Get all registered character packs. */
+export function listCharacterPacks(): CharacterPack[] {
+  return Array.from(PACKS.values());
+}
+
 // ---- Convenience lookups ----
 
 export function getCharacterEmoji(name: string): string {
