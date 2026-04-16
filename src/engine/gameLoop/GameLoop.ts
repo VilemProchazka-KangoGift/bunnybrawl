@@ -1,5 +1,5 @@
 import type {
-  MatchState, MatchSettings, Arena, PlayerSlot, Player, Particle, Gib,
+  MatchState, MatchSettings, Arena, PlayerSlot, Player,
   WeatherParticle, MatchStats, PlayerStats, WildlifeEntity, EffectZone, Platform,
   InputState,
 } from '../types';
@@ -30,7 +30,6 @@ import {
   MATCH_COUNTDOWN,
   SCREEN_FLASH_DURATION,
   GRAVITY, FRICTION, MAX_WALK_SPEED, JUMP_IMPULSE, MAX_FALL_SPEED,
-  BLOOD_COLOR,
 } from '../constants';
 import { getCharacterForSlot } from '../characters';
 import { AIController } from '../ai';
@@ -39,14 +38,13 @@ import type { BotNavDebugState } from '../navDebugOverlay';
 import type { NetDebugStats } from '../net/core/debugOverlay';
 
 // Extracted submodules
-import { emitParticle, spawnDustParticles, spawnGoreParticles, spawnConfetti, spawnCarrotVFX, spawnFirework, updateParticles, updateConfetti } from './cosmetics/particles';
-import { launchGib, spawnGibs, updateGibs } from './cosmetics/gibs';
-import { createWeatherParticle, updateWeather } from './cosmetics/environment';
+import { createWeatherParticle } from './cosmetics/environment';
 import { decaySfxCooldowns, getOrCreateCooldowns, updateCrowdCheering, tickPeriodicAmbient } from './cosmetics/sfx';
 import type { SfxCooldowns } from './cosmetics/sfx';
 import { detectPlayerTransitions, snapshotPlayerCosmeticState } from './cosmetics/playerTransitions';
 import { EnvironmentSystem } from './cosmetics/EnvironmentSystem';
 import { EntityTransitionSystem } from './cosmetics/EntityTransitionSystem';
+import { ParticleSystem } from './cosmetics/ParticleSystem';
 import type { PrevPlayerCosmeticState, TransitionCallbacks } from './cosmetics/playerTransitions';
 import { updatePlayerCosmetics } from './cosmetics/playerCosmetics';
 import { spawnSpring, spawnThorn, updateHazardLifetimes } from './gameplay/hazards';
@@ -55,16 +53,12 @@ import { updateLavaRocks, updateGhosts, updateGeyserTimers, updatePigeonFlocks }
 import { applyEffectZones, updateZeroGSound } from './gameplay/effectZones';
 import { checkMatchEnd as _checkMatchEnd, getPlayerInput as _getPlayerInput } from './gameplay/match';
 import { handleSpringCollision, handleThornCollision, handleHazardZoneCollision, handleGhostCollision, handleLavaRockCollision, handleFallOff } from './gameplay/playerCollisions';
-import type { HazardHitResult } from './gameplay/playerCollisions';
 import { processStompsAndCollisions } from './gameplay/stomps';
 
 /** Force 32-bit float for cross-architecture determinism (x86 80-bit vs ARM 64-bit). */
 const f = Math.fround;
 
 export type MatchEndCallback = (winner: PlayerSlot | null, state: MatchState) => void;
-
-const CARROT_PICKUP_COLORS = ['#FF8C00', '#FF6600', '#FFA500', '#FF7700', '#FFD700', '#FF8C00'];
-
 
 export class GameLoop {
   private arena: Arena;
@@ -89,9 +83,7 @@ export class GameLoop {
   private running = false;
   private stopped = false;
   private paused = false;
-  private particles: Particle[] = [];
-  private particleFreeList: Particle[] = [];  // Recycled particle objects to reduce GC
-  private fireworkTimer = 0;
+  particleSystem!: ParticleSystem;
   private afterimageAccumulators: Map<PlayerSlot, number> = new Map();
   private footstepAccumulators: Map<PlayerSlot, number> = new Map();
   private crowdStarted = false;
@@ -101,8 +93,6 @@ export class GameLoop {
   private geyserIndexMap: Map<EffectZone, number> = new Map();
   private floatingPlatforms: Array<{ plat: Platform; idx: number }> = [];
   private aiControllers: Map<string, AIController> = new Map();
-  private newBloodDripsSinceRender: Array<{ x: number; y: number; radius: number; color: string }> = [];
-  private newGroundedGibsSinceRender: Gib[] = [];
   private _debugKeyHandler: ((e: KeyboardEvent) => void) | null = null;
 
   // SFX cooldowns (per-player, consolidated)
@@ -133,14 +123,12 @@ export class GameLoop {
   // Bound callbacks for extracted submodules (avoids .bind() allocations in hot paths)
   private readonly _boundGameRandom = (): number => this.gameRandom();
   private readonly _boundPlaySound = (name: string): void => this.playSound(name as Parameters<typeof audio.play>[0]);
-  private readonly _boundEmitParticle = (x: number, y: number, vx: number, vy: number, life: number, size: number, color: string): void =>
-    this.emitParticle(x, y, vx, vy, life, size, color);
   private readonly _transitionCallbacks: TransitionCallbacks = {
     playSound: this._boundPlaySound,
     playAnimal: (name) => { if (this._audioEnabled) audio.playAnimal(name); },
-    spawnDustParticles: (p, vy) => this.spawnDustParticles(p, vy),
-    spawnKillSplatter: (v) => this.spawnKillSplatter(v),
-    pickupCarrotVFX: (x, y) => this.pickupCarrotVFX(x, y),
+    spawnDustParticles: (p, vy) => this.particleSystem.spawnDustParticles(p, vy),
+    spawnKillSplatter: (v) => this.particleSystem.spawnKillSplatter(v, this.settings),
+    pickupCarrotVFX: (x, y) => this.particleSystem.pickupCarrotVFX(x, y),
   };
 
   // Previous-frame state for cosmetic transition detection (cosmeticStep)
@@ -366,6 +354,7 @@ export class GameLoop {
     for (const p of this.state.players) {
       this.prevCosmeticState.set(p.id, snapshotPlayerCosmeticState(p));
     }
+    this.particleSystem = new ParticleSystem(this.state, this.arena, this.theme, this.settings, this.geyserIndexMap);
     this.environmentSystem = new EnvironmentSystem(this.state, this.theme);
     this.entityTransitionSystem = new EntityTransitionSystem(this.state, this._boundPlaySound);
     this.entityTransitionSystem.init();
@@ -569,7 +558,8 @@ export class GameLoop {
       updatePlayerCosmetics(
         player, dt, this.state.timeElapsed, this.effWalkSpeed,
         this.afterimageAccumulators, this.footstepAccumulators,
-        this._boundEmitParticle, this._boundPlaySound,
+        (x, y, vx, vy, life, size, color) => this.particleSystem.emitParticle(x, y, vx, vy, life, size, color),
+        this._boundPlaySound,
       );
 
     }
@@ -586,11 +576,8 @@ export class GameLoop {
     // - periodic ambient sounds (depends on timer-based random intervals)
     // - collision particles for thorn/hazard/ghost/lava rock (depend on exact collision position)
 
-    // --- Particle systems (moves to ParticleSystem in Task 3) ---
-    this._updateWeather(dt);
-    this._updateParticles(dt);
-    this._updateGibs(dt);
-    this._updateConfetti(dt);
+    // --- Particle systems ---
+    this.particleSystem.cosmeticUpdate(dt);
 
     // --- Environment ---
     this.environmentSystem.cosmeticUpdate(dt);
@@ -607,26 +594,12 @@ export class GameLoop {
       if (this.state.hitstopZoom > 0) this.state.hitstopZoom = Math.max(0, this.state.hitstopZoom - frameDt);
       // Fireworks when match is over
       if (this.state.matchOver) {
-        this.fireworkTimer -= frameDt;
-        if (this.fireworkTimer <= 0) {
-          this.fireworkTimer = 0.3;
-          this.spawnFirework();
-        }
-        this._updateParticles(frameDt);
-        this._updateGibs(frameDt);
-        this._updateConfetti(frameDt);
+        this.particleSystem.updateFireworks(frameDt);
       }
     }
     // Bake settled gibs/blood
-    if (this.newGroundedGibsSinceRender.length > 0) {
-      this.renderer.bakeGibs(this.newGroundedGibsSinceRender);
-      this.newGroundedGibsSinceRender.length = 0;
-    }
-    if (this.newBloodDripsSinceRender.length > 0) {
-      this.renderer.renderBloodDrips(this.newBloodDripsSinceRender);
-      this.newBloodDripsSinceRender.length = 0;
-    }
-    this.renderer.renderFrame(this.state, this.arena, this.particles);
+    this.particleSystem.bakeToRenderer(this.renderer);
+    this.renderer.renderFrame(this.state, this.arena, this.particleSystem.getParticles());
   }
 
   /** Capture a snapshot of all gameplay state for rollback. */
@@ -656,7 +629,7 @@ export class GameLoop {
 
     if (this.paused) {
       this.lastTime = currentTime;
-      this.renderer.renderFrame(this.state, this.arena, this.particles);
+      this.renderer.renderFrame(this.state, this.arena, this.particleSystem.getParticles());
       this.rafId = requestAnimationFrame(this.loop);
       return;
     }
@@ -693,25 +666,11 @@ export class GameLoop {
 
     // Fireworks when match is over
     if (this.state.matchOver) {
-      this.fireworkTimer -= frameTime;
-      if (this.fireworkTimer <= 0) {
-        this.fireworkTimer = 0.3;
-        this.spawnFirework();
-      }
-      this._updateParticles(frameTime);
-      this._updateGibs(frameTime);
-      this._updateConfetti(frameTime);
+      this.particleSystem.updateFireworks(frameTime);
     }
 
     // Render — bake settled gibs and blood drips onto persistent background canvas
-    if (this.newGroundedGibsSinceRender.length > 0) {
-      this.renderer.bakeGibs(this.newGroundedGibsSinceRender);
-      this.newGroundedGibsSinceRender.length = 0;
-    }
-    if (this.newBloodDripsSinceRender.length > 0) {
-      this.renderer.renderBloodDrips(this.newBloodDripsSinceRender);
-      this.newBloodDripsSinceRender.length = 0;
-    }
+    this.particleSystem.bakeToRenderer(this.renderer);
 
     // Collect bot nav debug state (zero cost when overlay is off)
     if (debugFlags.navDebugEnabled) {
@@ -725,7 +684,7 @@ export class GameLoop {
       this.renderer.setBotNavDebugStates(botStates);
     }
 
-    this.renderer.renderFrame(this.state, this.arena, this.particles);
+    this.renderer.renderFrame(this.state, this.arena, this.particleSystem.getParticles());
     this.rafId = requestAnimationFrame(this.loop);
   };
 
@@ -739,59 +698,6 @@ export class GameLoop {
     spawnThorn(this.state, this.floatingPlatforms, this._boundGameRandom);
   }
 
-  /** Emit a particle via the pool. */
-  private emitParticle(x: number, y: number, vx: number, vy: number, life: number, size: number, color: string): void {
-    emitParticle(this.particles, this.particleFreeList, x, y, vx, vy, life, size, color);
-  }
-
-  // ---- Particle spawners (delegates to cosmetics/) ----
-
-  private spawnDustParticles(player: Player, landVy: number): void {
-    spawnDustParticles(this.particles, this.particleFreeList, player, landVy);
-  }
-
-  /** Orchestration: connects gore particles, gibs, and confetti modules. */
-  private spawnKillSplatter(victim: Player): void {
-    if (this.settings.goreMode) {
-      spawnGoreParticles(this.particles, this.particleFreeList, victim, this.settings.mods.extremeGore);
-    }
-    spawnGibs(this.state.gibs, victim, this.settings);
-    if (!this.settings.goreMode) {
-      spawnConfetti(this.state.confetti, victim);
-    }
-  }
-
-  /** Orchestration: connects gib launcher + particle emitter for carrot pickup. */
-  private pickupCarrotVFX(x: number, y: number): void {
-    const cy = y + CARROT_SIZE / 2;
-    // Orange carrot chunks
-    for (let i = 0; i < 4; i++) {
-      const s = 4 + Math.random() * 3;
-      launchGib(this.state.gibs, x, cy, 10, 0.15, 0.85, 80, 200, s, s, '#FF8C00', '#CC6600', '#FFB040', '', 'body');
-    }
-    // Green leaf pieces
-    for (let i = 0; i < 2; i++) {
-      launchGib(this.state.gibs, x, cy, 8, 0.2, 0.8, 60, 160, 5, 3, '#4CAF50', '#2E7D32', '#81C784', '', 'body');
-    }
-    // Orange/gold particle burst
-    for (let i = 0; i < 16; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 80 + Math.random() * 140;
-      const life = 0.3 + Math.random() * 0.4;
-      this.emitParticle(x, cy, Math.cos(angle) * speed, Math.sin(angle) * speed - 50, life, 2 + Math.random() * 5, CARROT_PICKUP_COLORS[i % CARROT_PICKUP_COLORS.length]);
-    }
-    // Upward gold sparkle ring
-    for (let i = 0; i < 8; i++) {
-      const angle = (i / 8) * Math.PI * 2;
-      const speed = 30 + Math.random() * 30;
-      this.emitParticle(x, cy, Math.cos(angle) * speed, -50 - Math.random() * 40, 0.4 + Math.random() * 0.2, 1.5 + Math.random() * 2, '#FFD700');
-    }
-  }
-
-  private spawnFirework(): void {
-    spawnFirework(this.particles, this.particleFreeList);
-  }
-
   // ---- Carrot spawning (delegates to gameplay/carrots) ----
 
   private _spawnCarrot(): void {
@@ -800,26 +706,8 @@ export class GameLoop {
     // Spawn VFX if a carrot was added
     if (this.state.carrots.length > prevCount) {
       const newCarrot = this.state.carrots[this.state.carrots.length - 1];
-      spawnCarrotVFX(this.particles, this.particleFreeList, newCarrot.x, newCarrot.y);
+      this.particleSystem.spawnCarrotVFX(newCarrot.x, newCarrot.y);
     }
-  }
-
-  // ---- Updates ----
-
-  private _updateParticles(dt: number): void {
-    updateParticles(this.particles, this.particleFreeList, this.arena.platforms, this.settings.goreMode, this.newBloodDripsSinceRender, dt);
-  }
-
-  private _updateGibs(dt: number): void {
-    updateGibs(this.state.gibs, this.arena.platforms, this.arena.effectZones, this.geyserIndexMap, this.state.geyserStates, this.newGroundedGibsSinceRender, dt);
-  }
-
-  private _updateConfetti(dt: number): void {
-    updateConfetti(this.state.confetti, this.state.timeElapsed, dt);
-  }
-
-  private _updateWeather(dt: number): void {
-    updateWeather(this.state, this.theme, dt);
   }
 
   /** Run one fixed-timestep simulation tick. Public for rollback engine. */
@@ -963,7 +851,7 @@ export class GameLoop {
           const count = Math.floor(8 + intensity * 5);
           for (let i = 0; i < count; i++) {
             const life = 0.3 + Math.random() * 0.4;
-            this.emitParticle(cx + (Math.random() - 0.5) * player.width * 1.5, groundY - Math.random() * 3, (Math.random() - 0.5) * 100 * intensity, -(Math.random() * 60 + 30) * intensity, life, 2 + Math.random() * 3, i % 3 === 0 ? this.theme.platform.floatingBodyColor : this.theme.platform.groundTopColor);
+            this.particleSystem.emitParticle(cx + (Math.random() - 0.5) * player.width * 1.5, groundY - Math.random() * 3, (Math.random() - 0.5) * 100 * intensity, -(Math.random() * 60 + 30) * intensity, life, 2 + Math.random() * 3, i % 3 === 0 ? this.theme.platform.floatingBodyColor : this.theme.platform.groundTopColor);
           }
         }
       }
@@ -1017,22 +905,22 @@ export class GameLoop {
 
       // Hazard collisions
       const springHit = handleSpringCollision(player, this.state);
-      if (springHit) this.applyHazardHitVFX(springHit, player.id);
+      if (springHit) this.particleSystem.applyHazardHitVFX(springHit, player.id, this.state, this._resimulating);
 
       const thornHit = handleThornCollision(player, this.state);
-      if (thornHit) this.applyHazardHitVFX(thornHit, player.id);
+      if (thornHit) this.particleSystem.applyHazardHitVFX(thornHit, player.id, this.state, this._resimulating);
 
       const hzHit = handleHazardZoneCollision(player, this.arena);
-      if (hzHit) this.applyHazardHitVFX(hzHit, player.id);
+      if (hzHit) this.particleSystem.applyHazardHitVFX(hzHit, player.id, this.state, this._resimulating);
 
       const ghostHit = handleGhostCollision(player, this.state);
-      if (ghostHit) this.applyHazardHitVFX(ghostHit, player.id);
+      if (ghostHit) this.particleSystem.applyHazardHitVFX(ghostHit, player.id, this.state, this._resimulating);
 
       const rockHit = handleLavaRockCollision(player, this.state);
-      if (rockHit) this.applyHazardHitVFX(rockHit, player.id);
+      if (rockHit) this.particleSystem.applyHazardHitVFX(rockHit, player.id, this.state, this._resimulating);
 
       const fell = handleFallOff(player, this.arena, this.state);
-      if (fell) this.applyHazardHitVFX(fell, player.id);
+      if (fell) this.particleSystem.applyHazardHitVFX(fell, player.id, this.state, this._resimulating);
 
 
       // Effect zone interactions (zero-G, current, geyser)
@@ -1120,82 +1008,6 @@ export class GameLoop {
     }
 
     this.checkMatchEnd();
-  }
-
-  /** Apply visual effects (particles, screen shake/flash, haptics) for a hazard collision result. */
-  private applyHazardHitVFX(hit: HazardHitResult, playerId: PlayerSlot): void {
-    // Screen effects (gated by resimulation)
-    if (!this._resimulating) {
-      if (hit.screenShake !== undefined) {
-        this.state.screenShake = Math.max(this.state.screenShake, hit.screenShake);
-      }
-      if (hit.screenFlash !== undefined) {
-        this.state.screenFlash = Math.max(this.state.screenFlash, hit.screenFlash);
-      }
-      if (hit.hitstopZoom !== undefined) {
-        this.state.hitstopZoom = Math.max(this.state.hitstopZoom, hit.hitstopZoom);
-      }
-      // Haptics
-      if (hit.haptic && haptics.isLocal(playerId)) {
-        if (hit.haptic === 'spring') haptics.spring();
-        else haptics.hazardHit();
-      }
-    }
-
-    // Particles based on collision type
-    const { px, py } = hit;
-    switch (hit.type) {
-      case 'thorn': {
-        // Blood from player
-        for (let i = 0; i < 18; i++) {
-          const angle = Math.random() * Math.PI * 2;
-          const speed = 60 + Math.random() * 160;
-          const life = 0.4 + Math.random() * 0.5;
-          this.emitParticle(px + (Math.random() - 0.5) * 8, py + (Math.random() - 0.5) * 8, Math.cos(angle) * speed, Math.sin(angle) * speed - 80, life, 2.5 + Math.random() * 4, BLOOD_COLOR);
-        }
-        // Thorn shrapnel
-        if (hit.sx !== undefined && hit.sy !== undefined) {
-          for (let i = 0; i < 8; i++) {
-            const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI;
-            const speed = 30 + Math.random() * 80;
-            const life = 0.3 + Math.random() * 0.3;
-            this.emitParticle(hit.sx, hit.sy, Math.cos(angle) * speed, Math.sin(angle) * speed, life, 1.5 + Math.random() * 2, '#5C3A1E');
-          }
-        }
-        break;
-      }
-      case 'hazardZone': {
-        for (let i = 0; i < 24; i++) {
-          const angle = Math.random() * Math.PI * 2;
-          const speed = 80 + Math.random() * 200;
-          const life = 0.4 + Math.random() * 0.6;
-          const color = hit.hazardType === 'lava' ? (i % 3 === 0 ? '#FFCC00' : i % 3 === 1 ? '#FF4400' : '#FF8800') : BLOOD_COLOR;
-          this.emitParticle(px + (Math.random() - 0.5) * 12, py + (Math.random() - 0.5) * 12, Math.cos(angle) * speed, Math.sin(angle) * speed - 100, life, 3 + Math.random() * 5, color);
-        }
-        break;
-      }
-      case 'ghost': {
-        for (let i = 0; i < 20; i++) {
-          const angle = Math.random() * Math.PI * 2;
-          const speed = 60 + Math.random() * 160;
-          const life = 0.4 + Math.random() * 0.5;
-          const color = i % 2 === 0 ? '#8855CC' : '#AA77EE';
-          this.emitParticle(px, py, Math.cos(angle) * speed, Math.sin(angle) * speed - 80, life, 3 + Math.random() * 4, color);
-        }
-        break;
-      }
-      case 'lavaRock': {
-        for (let i = 0; i < 16; i++) {
-          const angle = Math.random() * Math.PI * 2;
-          const speed = 60 + Math.random() * 150;
-          const life = 0.3 + Math.random() * 0.5;
-          const color = i % 2 === 0 ? '#FF6600' : '#FFAA00';
-          this.emitParticle(px, py, Math.cos(angle) * speed, Math.sin(angle) * speed - 60, life, 2.5 + Math.random() * 4, color);
-        }
-        break;
-      }
-      // spring, fallOff: no particles
-    }
   }
 
   private checkMatchEnd(): void {
