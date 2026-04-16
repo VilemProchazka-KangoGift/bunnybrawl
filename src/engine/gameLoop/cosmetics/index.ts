@@ -8,3 +8,5 @@ export type { PrevEntityState } from './entityTransitions';
 export { detectPlayerTransitions, snapshotPlayerCosmeticState } from './playerTransitions';
 export type { PrevPlayerCosmeticState, TransitionCallbacks } from './playerTransitions';
 export { updatePlayerCosmetics } from './playerCosmetics';
+export { EnvironmentSystem } from './EnvironmentSystem';
+export { EntityTransitionSystem } from './EntityTransitionSystem';

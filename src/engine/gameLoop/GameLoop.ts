@@ -41,12 +41,12 @@ import type { NetDebugStats } from '../net/core/debugOverlay';
 // Extracted submodules
 import { emitParticle, spawnDustParticles, spawnGoreParticles, spawnConfetti, spawnCarrotVFX, spawnFirework, updateParticles, updateConfetti } from './cosmetics/particles';
 import { launchGib, spawnGibs, updateGibs } from './cosmetics/gibs';
-import { createWeatherParticle, updateWeather, updateWildlife, updateFog, updatePollen, updateShootingStars, updateShockwaves, updateScoreAnimations, updateBouncyWobble, updatePigeonScatterParticles } from './cosmetics/environment';
+import { createWeatherParticle, updateWeather } from './cosmetics/environment';
 import { decaySfxCooldowns, getOrCreateCooldowns, updateCrowdCheering, tickPeriodicAmbient } from './cosmetics/sfx';
 import type { SfxCooldowns } from './cosmetics/sfx';
-import { detectEntityTransitions } from './cosmetics/entityTransitions';
-import type { PrevEntityState } from './cosmetics/entityTransitions';
 import { detectPlayerTransitions, snapshotPlayerCosmeticState } from './cosmetics/playerTransitions';
+import { EnvironmentSystem } from './cosmetics/EnvironmentSystem';
+import { EntityTransitionSystem } from './cosmetics/EntityTransitionSystem';
 import type { PrevPlayerCosmeticState, TransitionCallbacks } from './cosmetics/playerTransitions';
 import { updatePlayerCosmetics } from './cosmetics/playerCosmetics';
 import { spawnSpring, spawnThorn, updateHazardLifetimes } from './gameplay/hazards';
@@ -145,11 +145,10 @@ export class GameLoop {
 
   // Previous-frame state for cosmetic transition detection (cosmeticStep)
   private prevCosmeticState: Map<PlayerSlot, PrevPlayerCosmeticState> = new Map();
-  private prevEntityState: PrevEntityState = {
-    springBounces: [],
-    countdownSec: 4,
-    matchOver: false,
-  };
+
+  // CosmeticSystem instances
+  private environmentSystem!: EnvironmentSystem;
+  private entityTransitionSystem!: EntityTransitionSystem;
 
   constructor(
     bgCanvas: HTMLCanvasElement,
@@ -367,9 +366,9 @@ export class GameLoop {
     for (const p of this.state.players) {
       this.prevCosmeticState.set(p.id, snapshotPlayerCosmeticState(p));
     }
-    this.prevEntityState.springBounces = this.state.springs.map(s => s.bounceTimer);
-    this.prevEntityState.countdownSec = Math.ceil(this.state.countdown);
-    this.prevEntityState.matchOver = this.state.matchOver;
+    this.environmentSystem = new EnvironmentSystem(this.state, this.theme);
+    this.entityTransitionSystem = new EntityTransitionSystem(this.state, this._boundPlaySound);
+    this.entityTransitionSystem.init();
   }
 
   private createWeatherParticle(randomY: boolean): WeatherParticle {
@@ -576,7 +575,7 @@ export class GameLoop {
     }
 
     // --- Entity transition detection ---
-    detectEntityTransitions(this.state, this.prevEntityState, this._boundPlaySound);
+    this.entityTransitionSystem.cosmeticUpdate(dt);
 
     // NOTE: The following minor effects remain in fixedUpdate (host-only, acceptable):
     // - crouch sound (depends on input.down + wasCrouching local var)
@@ -587,23 +586,14 @@ export class GameLoop {
     // - periodic ambient sounds (depends on timer-based random intervals)
     // - collision particles for thorn/hazard/ghost/lava rock (depend on exact collision position)
 
-    // --- Particle systems ---
+    // --- Particle systems (moves to ParticleSystem in Task 3) ---
     this._updateWeather(dt);
     this._updateParticles(dt);
     this._updateGibs(dt);
     this._updateConfetti(dt);
 
-    // --- Environment (wildlife, fog, pollen, shooting stars) ---
-    updateWildlife(this.state, dt);
-    updateFog(this.state, dt);
-    updatePollen(this.state, dt);
-    updateShootingStars(this.state, this.theme, dt);
-
-    // --- Visual decay systems ---
-    updateShockwaves(this.state, dt);
-    updateScoreAnimations(this.state, dt);
-    updateBouncyWobble(this.state, dt);
-    updatePigeonScatterParticles(this.state, dt);
+    // --- Environment ---
+    this.environmentSystem.cosmeticUpdate(dt);
   }
 
   // Public VFX methods removed — cosmeticStep() calls private methods directly.
