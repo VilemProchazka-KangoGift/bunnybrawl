@@ -63,7 +63,7 @@ export const LOBBY_ARENA: Arena = {
 // Other fields set to satisfy the type but never consulted in the lobby render path.
 export const LOBBY_THEME = { bubbleHelmet: false } as unknown as ThemeConfig;
 
-export function makeLobbyPlayer(slot: PlayerSlot, char: CharacterDef, x: number, y: number): Player {
+function makeLobbyPlayer(slot: PlayerSlot, char: CharacterDef, x: number, y: number): Player {
   return {
     id: slot,
     character: { ...char, slot },
@@ -118,22 +118,6 @@ function getLobbyGradients(ctx: CanvasRenderingContext2D) {
   return { sky: _skyGrad!, ground: _groundGrad!, wall: _wallGrad!, zone: _zoneGrad! };
 }
 
-export interface LobbyPlayer {
-  slot: PlayerSlot;
-  char: CharacterDef;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  facing: 'left' | 'right';
-  animFrame: number;
-  animTimer: number;
-  onGround: boolean;
-  splatTimer: number;
-  sideSquash: number;
-  squashScale: number;
-}
-
 export interface LobbyGameConfig {
   botCount: number;
   isMobile: boolean;
@@ -157,7 +141,7 @@ const BOT_PAUSE_CHANCE = [0.003, 0.002, 0.004, 0.001, 0.003];
 // ---- Input helpers (transitional — Task 4 replaces applyInputToLobbyPlayer
 // with engine physics via applyInput/collidePlatforms) ----
 
-function applyInputToLobbyPlayer(p: LobbyPlayer, input: InputState): void {
+function applyInputToLobbyPlayer(p: Player, input: InputState): void {
   if (input.left) { p.vx = -LOBBY_SPEED; p.facing = 'left'; }
   else if (input.right) { p.vx = LOBBY_SPEED; p.facing = 'right'; }
   else {
@@ -165,16 +149,16 @@ function applyInputToLobbyPlayer(p: LobbyPlayer, input: InputState): void {
     if (p.vx > 0) p.facing = 'right';
     else if (p.vx < 0) p.facing = 'left';
   }
-  if (input.jump && p.onGround) { p.vy = LOBBY_JUMP; p.onGround = false; }
-  if (input.down && !p.onGround) p.vy = Math.max(p.vy, LOBBY_FAST_FALL);
+  if (input.jump && p.state !== 'airborne') { p.vy = LOBBY_JUMP; p.state = 'airborne'; }
+  if (input.down && p.state === 'airborne') p.vy = Math.max(p.vy, LOBBY_FAST_FALL);
 }
 
 // ---- LobbyGame class ----
 
 export class LobbyGame {
-  players: LobbyPlayer[] = [];
-  bots: LobbyPlayer[] = [];
-  extraChars: LobbyPlayer[] = [];
+  players: Player[] = [];
+  bots: Player[] = [];
+  extraChars: Player[] = [];
 
   countdown = -1;
   countdownStarted = false;
@@ -184,9 +168,9 @@ export class LobbyGame {
   private isMobile: boolean;
 
   // Pre-allocated combined arrays (rebuilt in update, avoid per-frame spread)
-  private _allLobby: LobbyPlayer[] = [];
-  private _participants: LobbyPlayer[] = [];  // players + bots (no extras)
-  private _extrasSet = new Set<LobbyPlayer>();
+  private _allLobby: Player[] = [];
+  private _participants: Player[] = [];  // players + bots (no extras)
+  private _extrasSet = new Set<Player>();
 
   // Ready-zone counts (computed in updateReadyZone, read in drawLobby)
   private _inZoneCount = 0;
@@ -207,39 +191,20 @@ export class LobbyGame {
     const botAssigned = shuffled.slice(activeSlots.length, activeSlots.length + botCount);
     const extras = shuffled.slice(activeSlots.length + botCount);
 
-    this.players = activeSlots.map((slot, i) => ({
-      slot,
-      char: { ...assigned[i], slot },
-      x: 40 + i * 90,
-      y: GROUND_Y - PLAYER_HEIGHT,
-      vx: 0, vy: 0,
-      facing: 'right' as const,
-      animFrame: 0, animTimer: 0,
-      onGround: true, splatTimer: 0, sideSquash: 1, squashScale: 1,
-    }));
+    this.players = activeSlots.map((slot, i) =>
+      makeLobbyPlayer(slot, assigned[i], 40 + i * 90, GROUND_Y - PLAYER_HEIGHT)
+    );
 
-    this.bots = botSlots.map((slot, i) => ({
-      slot,
-      char: { ...botAssigned[i], slot },
-      x: 40 + (SLOTS.length + i) * 60,
-      y: GROUND_Y - PLAYER_HEIGHT,
-      vx: 0, vy: 0,
-      facing: 'right' as const,
-      animFrame: 0, animTimer: 0,
-      onGround: true, splatTimer: 0, sideSquash: 1, squashScale: 1,
-    }));
+    this.bots = botSlots.map((slot, i) =>
+      makeLobbyPlayer(slot, botAssigned[i], 40 + (SLOTS.length + i) * 60, GROUND_Y - PLAYER_HEIGHT)
+    );
 
-    this.extraChars = extras.map((ch) => ({
-      slot: 'P1' as CharacterSlot,
-      char: ch,
-      x: 40 + Math.random() * (WALL_X - 80),
-      y: GROUND_Y - PLAYER_HEIGHT,
-      vx: (Math.random() - 0.5) * 60,
-      vy: 0,
-      facing: (Math.random() > 0.5 ? 'right' : 'left') as 'left' | 'right',
-      animFrame: 0, animTimer: 0,
-      onGround: true, splatTimer: 0, sideSquash: 1, squashScale: 1,
-    }));
+    this.extraChars = extras.map((ch) => {
+      const p = makeLobbyPlayer('P1' as CharacterSlot, ch, 40 + Math.random() * (WALL_X - 80), GROUND_Y - PLAYER_HEIGHT);
+      p.vx = (Math.random() - 0.5) * 60;
+      p.facing = Math.random() > 0.5 ? 'right' : 'left';
+      return p;
+    });
   }
 
   // ---- Update (called every frame) ----
@@ -269,10 +234,10 @@ export class LobbyGame {
       if (p.splatTimer > 0) { p.splatTimer = Math.max(0, p.splatTimer - dt); continue; }
 
       let input: InputState;
-      if (touchInput && p.slot === 'P1') {
+      if (touchInput && p.id === 'P1') {
         input = touchInput;
       } else {
-        const bindings = KEY_BINDINGS[p.slot as CharacterSlot];
+        const bindings = KEY_BINDINGS[p.id as CharacterSlot];
         input = {
           left: keys.has(bindings.left),
           right: keys.has(bindings.right),
@@ -284,9 +249,9 @@ export class LobbyGame {
       applyInputToLobbyPlayer(p, input);
 
       // Crouch-on-ground squat (lobby-specific — stays here even after Task 4)
-      if (input.down && p.onGround) p.squashScale = SQUASH_ON_CROUCH;
+      if (input.down && p.state !== 'airborne') p.squashScale = SQUASH_ON_CROUCH;
 
-      updateLobbyPhysics(p, dt, input.down && p.onGround);
+      updateLobbyPhysics(p, dt, input.down && p.state !== 'airborne');
     }
 
     // --- NPC extras — simple wandering AI ---
@@ -314,11 +279,11 @@ export class LobbyGame {
 
   // ---- Stomp / swap logic ----
 
-  private processStomps(allLobby: LobbyPlayer[]): void {
+  private processStomps(allLobby: Player[]): void {
     for (const attacker of this._participants) {
       if (attacker.splatTimer > 0) continue;
       if (attacker.vy < STOMP_VY_THRESHOLD) continue;
-      const attackerIsBot = isBotSlot(attacker.slot);
+      const attackerIsBot = isBotSlot(attacker.id);
 
       for (const victim of allLobby) {
         if (victim === attacker) continue;
@@ -331,9 +296,9 @@ export class LobbyGame {
           attacker.y + PLAYER_HEIGHT > victim.y &&
           attacker.y + PLAYER_HEIGHT < victim.y + PLAYER_HEIGHT * 0.5 + 4
         ) {
-          const tempChar = attacker.char;
-          attacker.char = { ...victim.char, slot: attacker.slot };
-          victim.char = { ...tempChar, slot: victim.slot };
+          const tempChar = attacker.character;
+          attacker.character = { ...victim.character, slot: attacker.id };
+          victim.character = { ...tempChar, slot: victim.id };
           victim.splatTimer = 0.8;
           attacker.vy = -300;
           audio.play('stomp');
@@ -352,7 +317,7 @@ export class LobbyGame {
             victim.y = GROUND_Y - PLAYER_HEIGHT;
             victim.vx = 0;
             victim.vy = 0;
-            victim.onGround = true;
+            victim.state = 'idle';
           }
         }
       }
@@ -369,17 +334,17 @@ export class LobbyGame {
     for (const p of this._participants) {
       if (p.x + PLAYER_WIDTH > READY_ZONE_X && p.splatTimer <= 0) {
         this._inZoneCount++;
-        if (isBotSlot(p.slot)) this._botInZoneCount++;
+        if (isBotSlot(p.id)) this._botInZoneCount++;
         else this._humanInZoneCount++;
 
         // Play animal sound when player/bot enters ready zone for the first time
-        if (!this.readySoundPlayed.has(p.slot)) {
-          this.readySoundPlayed.add(p.slot);
-          audio.playAnimal(p.char.name);
+        if (!this.readySoundPlayed.has(p.id)) {
+          this.readySoundPlayed.add(p.id);
+          audio.playAnimal(p.character.name);
         }
       } else {
         // Remove players who left the zone so they can trigger again if they re-enter
-        this.readySoundPlayed.delete(p.slot);
+        this.readySoundPlayed.delete(p.id);
       }
     }
 
@@ -401,10 +366,10 @@ export class LobbyGame {
   // ---- Query methods ----
 
   /** All participants (human + bot) currently in the ready zone and not splatted. */
-  getReadyPlayers(): LobbyPlayer[] {
+  getReadyPlayers(): Player[] {
     // Not a hot path — called once at countdown end. Iterate source arrays
     // directly so this works even before the first update() call.
-    const result: LobbyPlayer[] = [];
+    const result: Player[] = [];
     for (const p of this.players) {
       if (p.x + PLAYER_WIDTH > READY_ZONE_X && p.splatTimer <= 0) result.push(p);
     }
@@ -445,8 +410,8 @@ export class LobbyGame {
 
 // ---- Bot Lobby AI ----
 
-function botLobbyInput(bot: LobbyPlayer): InputState {
-  const slotIdx = parseInt(bot.slot[1]) - 1;
+function botLobbyInput(bot: Player): InputState {
+  const slotIdx = parseInt(bot.id[1]) - 1;
   const speedMult = BOT_SPEED_VARIANCE[slotIdx % BOT_SPEED_VARIANCE.length];
   const pauseChance = BOT_PAUSE_CHANCE[slotIdx % BOT_PAUSE_CHANCE.length];
 
@@ -473,10 +438,11 @@ function botLobbyInput(bot: LobbyPlayer): InputState {
 
   let jump = false;
   // Jump near wall
-  if (bot.onGround && bot.x + PLAYER_WIDTH > WALL_X - 60 && bot.x < WALL_X + WALL_WIDTH + 20) {
+  const onGround = bot.state !== 'airborne';
+  if (onGround && bot.x + PLAYER_WIDTH > WALL_X - 60 && bot.x < WALL_X + WALL_WIDTH + 20) {
     jump = true;
   }
-  if (bot.onGround && Math.abs(bot.x - (WALL_X - PLAYER_WIDTH)) < 4) {
+  if (onGround && Math.abs(bot.x - (WALL_X - PLAYER_WIDTH)) < 4) {
     jump = true;
   }
 
@@ -492,14 +458,14 @@ function wanderInput(): InputState {
 
 // ---- Physics ----
 
-function updateLobbyPhysics(p: LobbyPlayer, dt: number, holdingCrouch = false): void {
+function updateLobbyPhysics(p: Player, dt: number, holdingCrouch = false): void {
   applySimpleGravity(p, LOBBY_GRAVITY, 800, dt);
   moveSimple(p, dt);
 
   if (p.y + PLAYER_HEIGHT >= GROUND_Y) {
     p.y = GROUND_Y - PLAYER_HEIGHT;
     p.vy = 0;
-    p.onGround = true;
+    p.state = p.vx !== 0 ? 'run' : 'idle';
   }
 
   if (
@@ -515,7 +481,7 @@ function updateLobbyPhysics(p: LobbyPlayer, dt: number, holdingCrouch = false): 
     if (overlapTop < Math.min(overlapLeft, overlapRight) && p.vy >= 0) {
       p.y = WALL_Y - PLAYER_HEIGHT;
       p.vy = 0;
-      p.onGround = true;
+      p.state = p.vx !== 0 ? 'run' : 'idle';
     } else if (overlapLeft < overlapRight) {
       if (p.vx > 0) p.sideSquash = 0.75;
       p.x = WALL_X - PLAYER_WIDTH;
@@ -549,9 +515,9 @@ function updateLobbyPhysics(p: LobbyPlayer, dt: number, holdingCrouch = false): 
 
 function drawLobby(
   ctx: CanvasRenderingContext2D,
-  players: LobbyPlayer[],
-  bots: LobbyPlayer[],
-  extras: LobbyPlayer[],
+  players: Player[],
+  bots: Player[],
+  extras: Player[],
   countdown: number,
   countdownActive: boolean,
   dt: number,
@@ -710,7 +676,7 @@ function drawLobby(
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
     ctx.font = "10px 'Nunito', sans-serif";
     ctx.textAlign = 'center';
-    ctx.fillText(getCharacterDisplayName(npc.char.name, i18n.language), npc.x + PLAYER_WIDTH / 2, npc.y - 5);
+    ctx.fillText(getCharacterDisplayName(npc.character.name, i18n.language), npc.x + PLAYER_WIDTH / 2, npc.y - 5);
   }
 
   // ---- Draw bots ----
@@ -739,10 +705,10 @@ function drawLobby(
     ctx.beginPath();
     ctx.roundRect(tagX - tagW / 2, p.y - 22, tagW, 16, 4);
     ctx.fill();
-    ctx.fillStyle = p.char.color;
+    ctx.fillStyle = p.character.color;
     ctx.font = "bold 10px 'Nunito', sans-serif";
     ctx.textAlign = 'center';
-    ctx.fillText(`${p.slot}`, tagX, p.y - 10);
+    ctx.fillText(`${p.id}`, tagX, p.y - 10);
   }
 
   // ---- UI bar at top (polished) ----
@@ -773,16 +739,16 @@ function drawLobby(
     ctx.font = '28px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(getCharacterEmoji(player.char.name), emojiX, 32);
+    ctx.fillText(getCharacterEmoji(player.character.name), emojiX, 32);
     ctx.textBaseline = 'alphabetic';
 
-    ctx.fillStyle = player.char.color;
+    ctx.fillStyle = player.character.color;
     ctx.textAlign = 'left';
     ctx.font = "bold 14px 'Nunito', sans-serif";
-    ctx.fillText(`${player.slot}: ${getCharacterDisplayName(player.char.name, i18n.language)}`, textX, 26);
+    ctx.fillText(`${player.id}: ${getCharacterDisplayName(player.character.name, i18n.language)}`, textX, 26);
 
     if (!isMobile) {
-      const bindings = KEY_BINDINGS[player.slot as CharacterSlot];
+      const bindings = KEY_BINDINGS[player.id as CharacterSlot];
       ctx.fillStyle = 'rgba(255,255,255,0.6)';
       ctx.font = "bold 13px 'Nunito', monospace";
       const fmtKey = (k: string) => k === 'ArrowLeft' ? '\u2190' : k === 'ArrowRight' ? '\u2192' : k === 'ArrowUp' ? '\u2191' : k === 'ArrowDown' ? '\u2193' : k;
@@ -888,17 +854,18 @@ function drawLobby(
   drawDayNightCycle(ctx, performance.now() / 1000, LOBBY_DAY_CYCLE);
 }
 
-function drawSquishedChar(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void {
+function drawSquishedChar(ctx: CanvasRenderingContext2D, p: Player): void {
   const cx = p.x + PLAYER_WIDTH / 2;
   const by = p.y + PLAYER_HEIGHT;
-  ctx.fillStyle = p.char.color;
+  ctx.fillStyle = p.character.color;
   ctx.beginPath();
   ctx.ellipse(cx, by - 4, PLAYER_WIDTH * 0.5, 4, 0, 0, Math.PI * 2);
   ctx.fill();
 }
 
-function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void {
-  const { x, y, char, facing, animFrame, onGround, vx } = p;
+function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: Player): void {
+  const { x, y, character, facing, animFrame, vx } = p;
+  const onGround = p.state !== 'airborne';
   const w = PLAYER_WIDTH;
   const h = PLAYER_HEIGHT;
   const cx = x + w / 2;
@@ -926,8 +893,8 @@ function drawLobbyCharacter(ctx: CanvasRenderingContext2D, p: LobbyPlayer): void
   }
 
   const state = isAirborne ? 'airborne' : isRunning ? 'run' : 'idle';
-  const colors = { color: char.color, darkColor: char.darkColor, lightColor: char.lightColor };
-  drawCharacterCore(ctx, cx, yOff, w, h, char.name, state, animFrame, p.squashScale, colors);
+  const colors = { color: character.color, darkColor: character.darkColor, lightColor: character.lightColor };
+  drawCharacterCore(ctx, cx, yOff, w, h, character.name, state, animFrame, p.squashScale, colors);
 
   ctx.restore();
 }
