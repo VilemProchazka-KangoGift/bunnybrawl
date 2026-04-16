@@ -10,7 +10,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { MatchState, MatchSettings, Arena, Player, PlayerSlot } from '../../types';
-import { makePlayer } from '../../__tests__/testHelpers';
+import { makePlayer, makeArena, makeState, makeSettings } from '../../__tests__/testHelpers';
 
 // ── Mocks (must be declared before any import that transitively loads them) ──
 
@@ -77,76 +77,32 @@ const mockTheme = {
   physics: {},
 } as any;
 
-const mockSettings: MatchSettings = {
-  killLimit: 5,
-  timeLimit: 0,
-  playerCount: 2,
-  goreMode: false,
-  arenaId: 'test',
-  botCount: 0,
-  botDifficulty: 'medium',
-  mods: {
-    extremeGore: false,
-    carrotChase: false,
-    giantPlayers: false,
-    turbo: false,
-    superBounce: false,
-    mirrorArena: false,
-    underwaterGravity: false,
-  },
-};
+const mockSettings = makeSettings({ killLimit: 5 });
 
-/** Minimal MatchState with all required fields. */
-function makeState(overrides?: Partial<MatchState>): MatchState {
-  return {
+/** Systems.test.ts default: two players, countdown=3, high timers to prevent accidental spawns. */
+function makeSystemState(overrides?: Partial<MatchState>): MatchState {
+  return makeState({
     players: [makePlayer({ id: 'P1' }), makePlayer({ id: 'P2' })],
-    killFeed: [],
-    timeElapsed: 0,
-    matchOver: false,
-    winner: null,
-    carrots: [],
+    countdown: 3,
     carrotTimer: 99,
-    springs: [],
-    thorns: [],
     springSpawnTimer: 99,
     thornSpawnTimer: 99,
-    screenShake: 0,
-    slowMotion: 0,
-    weather: [],
-    dayPhase: 0,
-    countdown: 3,
-    stats: { perPlayer: new Map() },
-    shockwaves: [],
-    screenFlash: 0,
-    hitstopZoom: 0,
-    wildlife: [],
-    fogParticles: [],
-    pollenParticles: [],
-    shootingStars: [],
-    scoreAnimations: [],
-    ghosts: [],
-    lavaRocks: [],
     lavaRockTimer: 99,
-    geyserStates: [],
-    pigeonFlocks: [],
-    bouncyWobble: new Map(),
-    gibs: [],
-    confetti: [],
     ...overrides,
-  };
+  });
 }
 
 // ── EnvironmentSystem ────────────────────────────────────────────────────────
 
 describe('EnvironmentSystem', () => {
   it('init() is a no-op (returns without error)', () => {
-    const state = makeState();
+    const state = makeSystemState();
     const sys = new EnvironmentSystem(state, mockTheme);
     expect(() => sys.init()).not.toThrow();
   });
 
   it('cosmeticUpdate() advances wildlife wingPhase', () => {
-    const state = makeState({
+    const state = makeSystemState({
       wildlife: [{ type: 'butterfly', x: 100, y: 200, vx: 20, vy: 0, wingPhase: 0, color: '#fff' }],
     });
     const sys = new EnvironmentSystem(state, mockTheme);
@@ -158,7 +114,7 @@ describe('EnvironmentSystem', () => {
 
   it('cosmeticUpdate() advances shockwave radius', () => {
     // life must be < SHOCKWAVE_DURATION (0.4) so that progress = 1 - life/duration > 0
-    const state = makeState({
+    const state = makeSystemState({
       shockwaves: [{ x: 100, y: 100, radius: 0, maxRadius: 200, life: 0.2 }],
     });
     const sys = new EnvironmentSystem(state, mockTheme);
@@ -169,7 +125,7 @@ describe('EnvironmentSystem', () => {
   });
 
   it('cleanup() is a no-op (returns without error)', () => {
-    const state = makeState();
+    const state = makeSystemState();
     const sys = new EnvironmentSystem(state, mockTheme);
     expect(() => sys.cleanup()).not.toThrow();
   });
@@ -179,7 +135,7 @@ describe('EnvironmentSystem', () => {
 
 describe('EntityTransitionSystem', () => {
   it('init() seeds springBounces from state.springs', () => {
-    const state = makeState({
+    const state = makeSystemState({
       springs: [
         { x: 300, y: 400, platformIndex: 1, bounceTimer: 0.2, life: 5, growTimer: 0 },
         { x: 500, y: 400, platformIndex: 1, bounceTimer: 0, life: 5, growTimer: 0 },
@@ -196,7 +152,7 @@ describe('EntityTransitionSystem', () => {
   });
 
   it('init() captures countdownSec from state.countdown', () => {
-    const state = makeState({ countdown: 2.7 });
+    const state = makeSystemState({ countdown: 2.7 });
     const playSound = vi.fn();
     const sys = new EntityTransitionSystem(state, playSound);
     sys.init();
@@ -208,7 +164,7 @@ describe('EntityTransitionSystem', () => {
   });
 
   it('cosmeticUpdate() plays "spring" sound when bounceTimer rises from 0', () => {
-    const state = makeState({
+    const state = makeSystemState({
       springs: [{ x: 300, y: 400, platformIndex: 1, bounceTimer: 0, life: 5, growTimer: 0 }],
     });
     const playSound = vi.fn();
@@ -223,7 +179,7 @@ describe('EntityTransitionSystem', () => {
   });
 
   it('cosmeticUpdate() plays "countdown_go" when countdown transitions from >0 to 0', () => {
-    const state = makeState({ countdown: 0.5 });
+    const state = makeSystemState({ countdown: 0.5 });
     const playSound = vi.fn();
     const sys = new EntityTransitionSystem(state, playSound);
     sys.init();
@@ -235,7 +191,7 @@ describe('EntityTransitionSystem', () => {
   });
 
   it('cosmeticUpdate() plays "victory" when matchOver transitions false → true', () => {
-    const state = makeState({ matchOver: false });
+    const state = makeSystemState({ matchOver: false });
     const playSound = vi.fn();
     const sys = new EntityTransitionSystem(state, playSound);
     sys.init();
@@ -247,7 +203,7 @@ describe('EntityTransitionSystem', () => {
   });
 
   it('cleanup() is a no-op', () => {
-    const state = makeState();
+    const state = makeSystemState();
     const sys = new EntityTransitionSystem(state, vi.fn());
     expect(() => sys.cleanup()).not.toThrow();
   });
@@ -267,13 +223,13 @@ describe('ParticleSystem', () => {
   }
 
   it('init() is a no-op', () => {
-    const state = makeState();
+    const state = makeSystemState();
     const sys = makeParticleSystem(state);
     expect(() => sys.init()).not.toThrow();
   });
 
   it('emitParticle() adds to internal particle pool', () => {
-    const state = makeState();
+    const state = makeSystemState();
     const sys = makeParticleSystem(state);
     sys.init();
     sys.emitParticle(100, 200, 0, -50, 0.5, 3, '#ff0000');
@@ -281,7 +237,7 @@ describe('ParticleSystem', () => {
   });
 
   it('cosmeticUpdate() decays particle life', () => {
-    const state = makeState();
+    const state = makeSystemState();
     const sys = makeParticleSystem(state);
     sys.init();
     sys.emitParticle(100, 200, 0, -50, 0.5, 3, '#ff0000');
@@ -294,7 +250,7 @@ describe('ParticleSystem', () => {
   });
 
   it('cosmeticUpdate() removes expired particles from pool', () => {
-    const state = makeState();
+    const state = makeSystemState();
     const sys = makeParticleSystem(state);
     sys.init();
     sys.emitParticle(100, 200, 0, 0, 0.001, 3, '#ff0000'); // nearly dead
@@ -304,7 +260,7 @@ describe('ParticleSystem', () => {
   });
 
   it('cleanup() clears particle arrays', () => {
-    const state = makeState();
+    const state = makeSystemState();
     const sys = makeParticleSystem(state);
     sys.init();
     sys.emitParticle(100, 200, 0, -50, 0.5, 3, '#ff0000');
@@ -326,7 +282,7 @@ describe('PlayerTransitionSystem', () => {
   }
 
   it('init() populates prevCosmeticState for each player', () => {
-    const state = makeState();
+    const state = makeSystemState();
     const { sys } = makePlayerTransitionSystem(state);
     sys.init();
 
@@ -338,7 +294,7 @@ describe('PlayerTransitionSystem', () => {
 
   it('cosmeticUpdate() fires jump sound on grounded → airborne transition', () => {
     const player = makePlayer({ id: 'P1', state: 'idle' });
-    const state = makeState({ players: [player] });
+    const state = makeSystemState({ players: [player] });
     const { sys, playSound } = makePlayerTransitionSystem(state);
     sys.init();
 
@@ -351,7 +307,7 @@ describe('PlayerTransitionSystem', () => {
 
   it('cosmeticUpdate() decays damageFlashTimer', () => {
     const player = makePlayer({ id: 'P1', state: 'idle', damageFlashTimer: 0.3 });
-    const state = makeState({ players: [player] });
+    const state = makeSystemState({ players: [player] });
     const { sys } = makePlayerTransitionSystem(state);
     sys.init();
 
@@ -361,7 +317,7 @@ describe('PlayerTransitionSystem', () => {
   });
 
   it('cleanup() clears prevCosmeticState and sfxCooldowns', () => {
-    const state = makeState();
+    const state = makeSystemState();
     const { sys } = makePlayerTransitionSystem(state);
     sys.init();
     sys.cleanup();
@@ -380,14 +336,14 @@ describe('PlayerCosmeticSystem', () => {
   }
 
   it('init() is a no-op', () => {
-    const state = makeState();
+    const state = makeSystemState();
     const sys = makePlayerCosmeticSystem(state);
     expect(() => sys.init()).not.toThrow();
   });
 
   it('cosmeticUpdate() advances animTimer for active players', () => {
     const player = makePlayer({ id: 'P1', state: 'run', animTimer: 0 });
-    const state = makeState({ players: [player] });
+    const state = makeSystemState({ players: [player] });
     const sys = makePlayerCosmeticSystem(state);
     sys.init();
 
@@ -398,7 +354,7 @@ describe('PlayerCosmeticSystem', () => {
 
   it('cosmeticUpdate() skips players in hitstop', () => {
     const player = makePlayer({ id: 'P1', state: 'run', animTimer: 0, hitstopTimer: 0.1 });
-    const state = makeState({ players: [player] });
+    const state = makeSystemState({ players: [player] });
     const sys = makePlayerCosmeticSystem(state);
     sys.init();
 
@@ -412,7 +368,7 @@ describe('PlayerCosmeticSystem', () => {
     // PlayerCosmeticSystem only modifies squashScale for fat wobble (fatTimer > 0).
     // Squash decay toward 1 is handled in GameLoop's fixedUpdate per-player physics block.
     const player = makePlayer({ id: 'P1', state: 'idle', squashScale: 0.7, squashTimer: 0.3, fatTimer: 0 });
-    const state = makeState({ players: [player] });
+    const state = makeSystemState({ players: [player] });
     const sys = makePlayerCosmeticSystem(state);
     sys.init();
 
@@ -423,7 +379,7 @@ describe('PlayerCosmeticSystem', () => {
   });
 
   it('cleanup() clears afterimage and footstep accumulators', () => {
-    const state = makeState();
+    const state = makeSystemState();
     const sys = makePlayerCosmeticSystem(state);
     // Run a few frames to populate accumulator Maps internally
     sys.init();
@@ -438,7 +394,7 @@ describe('PlayerCosmeticSystem', () => {
 
 describe('HazardSystem', () => {
   it('init() populates floatingPlatforms from arena (excludes ground platforms)', () => {
-    const state = makeState();
+    const state = makeSystemState();
     const sys = new HazardSystem(state, mockArena, Math.random);
     sys.init();
 
@@ -452,7 +408,7 @@ describe('HazardSystem', () => {
       ...mockArena,
       noSpawnZones: [{ x: 190, y: 390, width: 220, height: 40 }], // covers the floating plat
     };
-    const state = makeState();
+    const state = makeSystemState();
     const sys = new HazardSystem(state, arenaWithNoSpawn, Math.random);
     sys.init();
 
@@ -460,7 +416,7 @@ describe('HazardSystem', () => {
   });
 
   it('fixedUpdate() decrements springSpawnTimer', () => {
-    const state = makeState({ springSpawnTimer: 10 });
+    const state = makeSystemState({ springSpawnTimer: 10 });
     const sys = new HazardSystem(state, mockArena, Math.random);
     sys.init();
 
@@ -470,7 +426,7 @@ describe('HazardSystem', () => {
   });
 
   it('fixedUpdate() decrements thornSpawnTimer', () => {
-    const state = makeState({ thornSpawnTimer: 10 });
+    const state = makeSystemState({ thornSpawnTimer: 10 });
     const sys = new HazardSystem(state, mockArena, Math.random);
     sys.init();
 
@@ -480,7 +436,7 @@ describe('HazardSystem', () => {
   });
 
   it('cleanup() is a no-op', () => {
-    const state = makeState();
+    const state = makeSystemState();
     const sys = new HazardSystem(state, mockArena, Math.random);
     sys.init();
     expect(() => sys.cleanup()).not.toThrow();
@@ -497,20 +453,20 @@ describe('CarrotSystem', () => {
   }
 
   it('init() is a no-op', () => {
-    const state = makeState();
+    const state = makeSystemState();
     const sys = makeCarrotSystem(state);
     expect(() => sys.init()).not.toThrow();
   });
 
   it('fixedUpdate() decrements carrotTimer each tick', () => {
-    const state = makeState({ carrotTimer: 5 });
+    const state = makeSystemState({ carrotTimer: 5 });
     const sys = makeCarrotSystem(state, 5);
     sys.fixedUpdate(1 / 60);
     expect(state.carrotTimer).toBeLessThan(5);
   });
 
   it('fixedUpdate() resets carrotTimer and attempts to spawn a carrot when timer expires', () => {
-    const state = makeState({ carrotTimer: 0.001 });
+    const state = makeSystemState({ carrotTimer: 0.001 });
     const sys = makeCarrotSystem(state, 0.001);
     sys.fixedUpdate(1); // big dt to push timer below zero
     // Timer should have been reset (positive again)
@@ -518,7 +474,7 @@ describe('CarrotSystem', () => {
   });
 
   it('cleanup() is a no-op', () => {
-    const state = makeState();
+    const state = makeSystemState();
     const sys = makeCarrotSystem(state);
     expect(() => sys.cleanup()).not.toThrow();
   });
@@ -537,7 +493,7 @@ describe('ArenaEntitySystem', () => {
   };
 
   it('init() caches geyser and zero-G zone arrays', () => {
-    const state = makeState();
+    const state = makeSystemState();
     const sys = new ArenaEntitySystem(state, arenaWithZones, mockTheme, Math.random);
     sys.init();
 
@@ -546,7 +502,7 @@ describe('ArenaEntitySystem', () => {
   });
 
   it('init() builds geyserIndexMap', () => {
-    const state = makeState();
+    const state = makeSystemState();
     const sys = new ArenaEntitySystem(state, arenaWithZones, mockTheme, Math.random);
     sys.init();
 
@@ -556,7 +512,7 @@ describe('ArenaEntitySystem', () => {
   });
 
   it('init() initializes geyserStates from state (empty when no geyser zones use array)', () => {
-    const state = makeState({ geyserStates: [] });
+    const state = makeSystemState({ geyserStates: [] });
     const sys = new ArenaEntitySystem(state, arenaWithZones, mockTheme, Math.random);
     sys.init();
     // No crash; geyserStates remains whatever the caller set up
@@ -568,7 +524,7 @@ describe('ArenaEntitySystem', () => {
       ...mockTheme,
       ghostConfig: { count: 3, speed: 60, size: 30 },
     };
-    const state = makeState();
+    const state = makeSystemState();
     const sys = new ArenaEntitySystem(state, mockArena, themeWithGhosts, Math.random);
     sys.init();
 
@@ -576,21 +532,21 @@ describe('ArenaEntitySystem', () => {
   });
 
   it('getCachedGeyserZones() returns same reference set during init()', () => {
-    const state = makeState();
+    const state = makeSystemState();
     const sys = new ArenaEntitySystem(state, arenaWithZones, mockTheme, Math.random);
     sys.init();
     expect(sys.getCachedGeyserZones()).toBe(sys.cachedGeyserZones);
   });
 
   it('getCachedZeroGZones() returns same reference set during init()', () => {
-    const state = makeState();
+    const state = makeSystemState();
     const sys = new ArenaEntitySystem(state, arenaWithZones, mockTheme, Math.random);
     sys.init();
     expect(sys.getCachedZeroGZones()).toBe(sys.cachedZeroGZones);
   });
 
   it('cleanup() is a no-op', () => {
-    const state = makeState();
+    const state = makeSystemState();
     const sys = new ArenaEntitySystem(state, mockArena, mockTheme, Math.random);
     sys.init();
     expect(() => sys.cleanup()).not.toThrow();
@@ -622,14 +578,14 @@ describe('EffectZoneSystem', () => {
   }
 
   it('init() is a no-op', () => {
-    const state = makeState();
+    const state = makeSystemState();
     const { sys } = makeEffectZoneSystem(state);
     expect(() => sys.init()).not.toThrow();
   });
 
   it('applyToPlayer() applies zero-g effect when player is inside zone', () => {
     const player = makePlayer({ id: 'P1', x: 100, y: 100, vy: 50 });
-    const state = makeState({ players: [player] });
+    const state = makeSystemState({ players: [player] });
     const { sys } = makeEffectZoneSystem(state);
     sys.init();
 
@@ -640,14 +596,14 @@ describe('EffectZoneSystem', () => {
   });
 
   it('fixedUpdate() does not throw', () => {
-    const state = makeState();
+    const state = makeSystemState();
     const { sys } = makeEffectZoneSystem(state);
     sys.init();
     expect(() => sys.fixedUpdate(1 / 60)).not.toThrow();
   });
 
   it('cleanup() is a no-op', () => {
-    const state = makeState();
+    const state = makeSystemState();
     const { sys } = makeEffectZoneSystem(state);
     expect(() => sys.cleanup()).not.toThrow();
   });
@@ -662,28 +618,28 @@ describe('PlayerCollisionSystem', () => {
   }
 
   it('init() is a no-op', () => {
-    const state = makeState();
+    const state = makeSystemState();
     const sys = makePlayerCollisionSystem(state);
     expect(() => sys.init()).not.toThrow();
   });
 
   it('checkCollisions() runs without error for an ordinary player', () => {
     const player = makePlayer({ id: 'P1', x: 640, y: 600, state: 'idle' });
-    const state = makeState({ players: [player] });
+    const state = makeSystemState({ players: [player] });
     const sys = makePlayerCollisionSystem(state);
     sys.init();
     expect(() => sys.checkCollisions(player)).not.toThrow();
   });
 
   it('fixedUpdate() is a no-op', () => {
-    const state = makeState();
+    const state = makeSystemState();
     const sys = makePlayerCollisionSystem(state);
     sys.init();
     expect(() => sys.fixedUpdate(1 / 60)).not.toThrow();
   });
 
   it('cleanup() is a no-op', () => {
-    const state = makeState();
+    const state = makeSystemState();
     const sys = makePlayerCollisionSystem(state);
     expect(() => sys.cleanup()).not.toThrow();
   });
@@ -697,13 +653,13 @@ describe('StompSystem', () => {
   }
 
   it('init() is a no-op', () => {
-    const state = makeState();
+    const state = makeSystemState();
     const sys = makeStompSystem(state);
     expect(() => sys.init()).not.toThrow();
   });
 
   it('fixedUpdate() processes state without throwing', () => {
-    const state = makeState({ countdown: 0 });
+    const state = makeSystemState({ countdown: 0 });
     const sys = makeStompSystem(state);
     sys.init();
     expect(() => sys.fixedUpdate(1 / 60)).not.toThrow();
@@ -725,16 +681,15 @@ describe('StompSystem', () => {
       vy: 200, // falling fast
       state: 'airborne',
     });
-    const state = makeState({ players: [victim, stomper], countdown: 0 });
+    const state = makeSystemState({ players: [victim, stomper], countdown: 0 });
     const sys = makeStompSystem(state);
     sys.init();
     sys.fixedUpdate(1 / 60);
-    // Either the stomp was detected (hitstopTimer set) or no crash at minimum
-    expect(stomper.hitstopTimer).toBeGreaterThanOrEqual(0);
+    expect(stomper.hitstopTimer).toBeGreaterThan(0);
   });
 
   it('cleanup() is a no-op', () => {
-    const state = makeState();
+    const state = makeSystemState();
     const sys = makeStompSystem(state);
     expect(() => sys.cleanup()).not.toThrow();
   });
@@ -754,7 +709,7 @@ describe('MatchSystem', () => {
   }
 
   it('init() with no ambientSoundConfig does not call playSound', () => {
-    const state = makeState();
+    const state = makeSystemState();
     const { sys, playSound } = makeMatchSystem(state);
     sys.init();
     expect(playSound).not.toHaveBeenCalled();
@@ -768,7 +723,7 @@ describe('MatchSystem', () => {
         periodic: [],
       },
     };
-    const state = makeState();
+    const state = makeSystemState();
     const playSound = vi.fn();
     const sys = new MatchSystem(state, mockSettings, themeWithAmbient, playSound, () => false, vi.fn());
     sys.init();
@@ -779,7 +734,7 @@ describe('MatchSystem', () => {
 
   it('fixedUpdate() invokes checkMatchEnd and fires onMatchEnd when score limit reached', () => {
     const winner = makePlayer({ id: 'P1', score: 5 }); // equals killLimit=5
-    const state = makeState({ players: [winner], countdown: 0 });
+    const state = makeSystemState({ players: [winner], countdown: 0 });
     const { sys, onMatchEnd } = makeMatchSystem(state);
     sys.init();
     sys.fixedUpdate(1 / 60);
@@ -789,7 +744,7 @@ describe('MatchSystem', () => {
   });
 
   it('fixedUpdate() does not fire onMatchEnd when no player has reached killLimit', () => {
-    const state = makeState({ countdown: 0 });
+    const state = makeSystemState({ countdown: 0 });
     const { sys, onMatchEnd } = makeMatchSystem(state);
     sys.init();
     sys.fixedUpdate(1 / 60);
@@ -798,7 +753,7 @@ describe('MatchSystem', () => {
   });
 
   it('fixedUpdate() skips crowd + ambient tick when resimulating', () => {
-    const state = makeState({ countdown: 0 });
+    const state = makeSystemState({ countdown: 0 });
     const playSound = vi.fn();
     const sys = new MatchSystem(state, mockSettings, mockTheme, playSound, () => true, vi.fn());
     sys.init();
@@ -816,7 +771,7 @@ describe('MatchSystem', () => {
         periodic: [{ sound: 'bird', intervalRange: [5, 10] as [number, number] }],
       },
     };
-    const state = makeState();
+    const state = makeSystemState();
     const sys = new MatchSystem(state, mockSettings, themeWithAmbient, vi.fn(), () => false, vi.fn());
     sys.init();
     sys.cleanup();

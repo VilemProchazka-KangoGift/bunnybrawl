@@ -41,73 +41,12 @@ import { audio } from '../../audio';
 import type { MatchState, MatchSettings, Player, PlayerSlot, InputState, Arena } from '../../types';
 import type { ThemeConfig } from '../../themes/types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
-import { makePlayer, makeArena } from '../../__tests__/testHelpers';
+import { makePlayer, makeArena, makeState, makeSettings } from '../../__tests__/testHelpers';
 
 // ── Shared helpers ───────────────────────────────────────────────────────────
 
 const f = Math.fround;
 
-/** Minimal MatchState — only the fields the tested functions read. */
-function makeState(overrides: Partial<MatchState> = {}): MatchState {
-  return {
-    players: [],
-    killFeed: [],
-    timeElapsed: 10,
-    matchOver: false,
-    winner: null,
-    carrots: [],
-    carrotTimer: 5,
-    springs: [],
-    thorns: [],
-    springSpawnTimer: 5,
-    thornSpawnTimer: 5,
-    screenShake: 0,
-    slowMotion: 0,
-    weather: [],
-    dayPhase: 0,
-    countdown: 0,
-    stats: { perPlayer: new Map() },
-    shockwaves: [],
-    screenFlash: 0,
-    hitstopZoom: 0,
-    wildlife: [],
-    fogParticles: [],
-    pollenParticles: [],
-    shootingStars: [],
-    scoreAnimations: [],
-    ghosts: [],
-    lavaRocks: [],
-    lavaRockTimer: 5,
-    geyserStates: [],
-    pigeonFlocks: [],
-    bouncyWobble: new Map(),
-    gibs: [],
-    confetti: [],
-    ...overrides,
-  } as MatchState;
-}
-
-function makeSettings(overrides: Partial<MatchSettings> = {}): MatchSettings {
-  return {
-    killLimit: 16,
-    timeLimit: 0,
-    playerCount: 2,
-    goreMode: false,
-    arenaId: 'meadow',
-    botCount: 0,
-    botDifficulty: 'medium',
-    mods: {
-      extremeGore: false,
-      carrotChase: false,
-      giantPlayers: false,
-      turbo: false,
-      superBounce: false,
-      mirrorArena: false,
-      underwaterGravity: false,
-    },
-    ...overrides,
-  };
-}
 
 /** Minimal ThemeConfig — just enough for lava rock tests. */
 function makeThemeWithLavaRock(overrides: Partial<ThemeConfig['lavaRockConfig']> = {}): ThemeConfig {
@@ -696,7 +635,7 @@ describe('decaySfxCooldowns', () => {
 describe('updateCrowdCheering', () => {
   const playSound = vi.fn();
 
-  beforeAll(() => {
+  beforeEach(() => {
     vi.mocked(audio.setVolume).mockReset();
     vi.mocked(audio.stop).mockReset();
     playSound.mockReset();

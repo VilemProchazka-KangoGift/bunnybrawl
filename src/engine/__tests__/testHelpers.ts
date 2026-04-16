@@ -1,4 +1,4 @@
-import type { Player, PlayerSlot, Arena } from '../types';
+import type { Player, PlayerSlot, Arena, MatchState, MatchSettings } from '../types';
 import { PLAYER_WIDTH, PLAYER_HEIGHT } from '../constants';
 
 /** Canonical test factory for Player objects. Includes ALL Player fields with sensible defaults. */
@@ -61,6 +61,69 @@ export function makeArena(overrides?: Partial<Arena>): Arena {
       { x: 100, y: 620 },
       { x: 1100, y: 620 },
     ],
+    ...overrides,
+  };
+}
+
+/** Minimal MatchState with sensible defaults. Override what your test needs. */
+export function makeState(overrides: Partial<MatchState> = {}): MatchState {
+  return {
+    players: [],
+    killFeed: [],
+    timeElapsed: 0,
+    matchOver: false,
+    winner: null,
+    carrots: [],
+    carrotTimer: 5,
+    springs: [],
+    thorns: [],
+    springSpawnTimer: 5,
+    thornSpawnTimer: 5,
+    screenShake: 0,
+    slowMotion: 0,
+    weather: [],
+    dayPhase: 0,
+    countdown: 0,
+    stats: { perPlayer: new Map() },
+    shockwaves: [],
+    screenFlash: 0,
+    hitstopZoom: 0,
+    wildlife: [],
+    fogParticles: [],
+    pollenParticles: [],
+    shootingStars: [],
+    scoreAnimations: [],
+    ghosts: [],
+    lavaRocks: [],
+    lavaRockTimer: 5,
+    geyserStates: [],
+    pigeonFlocks: [],
+    bouncyWobble: new Map(),
+    gibs: [],
+    confetti: [],
+    ...overrides,
+  } as MatchState;
+}
+
+/** Minimal MatchSettings with sensible defaults. Override what your test needs. */
+export function makeSettings(overrides: Partial<MatchSettings> = {}): MatchSettings {
+  return {
+    killLimit: 16,
+    timeLimit: 0,
+    playerCount: 2,
+    goreMode: false,
+    arenaId: 'meadow',
+    botCount: 0,
+    botDifficulty: 'medium',
+    mods: {
+      extremeGore: false,
+      carrotChase: false,
+      giantPlayers: false,
+      turbo: false,
+      superBounce: false,
+      mirrorArena: false,
+      underwaterGravity: false,
+    },
     ...overrides,
   };
 }
