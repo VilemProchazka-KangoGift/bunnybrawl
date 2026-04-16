@@ -853,8 +853,9 @@ describe('LobbyGame', () => {
   describe('bot AI details', () => {
     it('bot slows down once in ready zone', () => {
       const bot = game.bots[0];
-      // Place bot well into ready zone, past target
-      bot.x = READY_ZONE_X + 200;
+      // Place bot at its target position inside the ready zone (slotIdx 0 → READY_ZONE_X + 30).
+      // Within 30px of target, botLobbyInput returns no-input, friction decays vx toward 0.
+      bot.x = READY_ZONE_X + 30;
       bot.onGround = true;
       bot.vx = 100;
 

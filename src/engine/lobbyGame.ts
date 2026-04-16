@@ -154,6 +154,17 @@ function shuffle<T>(arr: T[]): T[] {
 const BOT_SPEED_VARIANCE = [0.85, 1.0, 0.9, 1.1, 0.95];
 const BOT_PAUSE_CHANCE = [0.003, 0.002, 0.004, 0.001, 0.003];
 
+// ---- Input helpers (transitional — Task 4 replaces applyInputToLobbyPlayer
+// with engine physics via applyInput/collidePlatforms) ----
+
+function applyInputToLobbyPlayer(p: LobbyPlayer, input: InputState): void {
+  if (input.left) { p.vx = -LOBBY_SPEED; p.facing = 'left'; }
+  else if (input.right) { p.vx = LOBBY_SPEED; p.facing = 'right'; }
+  else { p.vx *= 0.85; if (Math.abs(p.vx) < 5) p.vx = 0; }
+  if (input.jump && p.onGround) { p.vy = LOBBY_JUMP; p.onGround = false; }
+  if (input.down && !p.onGround) p.vy = Math.max(p.vy, LOBBY_FAST_FALL);
+}
+
 // ---- LobbyGame class ----
 
 export class LobbyGame {
@@ -253,51 +264,40 @@ export class LobbyGame {
     for (const p of this.players) {
       if (p.splatTimer > 0) { p.splatTimer = Math.max(0, p.splatTimer - dt); continue; }
 
-      let moveLeft = false, moveRight = false, jump = false, crouching = false;
-
+      let input: InputState;
       if (touchInput && p.slot === 'P1') {
-        moveLeft = touchInput.left;
-        moveRight = touchInput.right;
-        jump = touchInput.jump;
-        crouching = touchInput.down;
+        input = touchInput;
       } else {
         const bindings = KEY_BINDINGS[p.slot as CharacterSlot];
-        moveLeft = keys.has(bindings.left);
-        moveRight = keys.has(bindings.right);
-        jump = keys.has(bindings.jump);
-        crouching = keys.has(bindings.down);
+        input = {
+          left: keys.has(bindings.left),
+          right: keys.has(bindings.right),
+          jump: keys.has(bindings.jump),
+          down: keys.has(bindings.down),
+        };
       }
 
-      if (moveLeft) { p.vx = -LOBBY_SPEED; p.facing = 'left'; }
-      else if (moveRight) { p.vx = LOBBY_SPEED; p.facing = 'right'; }
-      else { p.vx *= 0.85; if (Math.abs(p.vx) < 5) p.vx = 0; }
+      applyInputToLobbyPlayer(p, input);
 
-      if (jump && p.onGround) { p.vy = LOBBY_JUMP; p.onGround = false; }
+      // Crouch-on-ground squat (lobby-specific — stays here even after Task 4)
+      if (input.down && p.onGround) p.squashScale = SQUASH_ON_CROUCH;
 
-      if (crouching) {
-        if (!p.onGround) {
-          p.vy = Math.max(p.vy, LOBBY_FAST_FALL);
-        } else {
-          p.squashScale = SQUASH_ON_CROUCH;
-        }
-      }
-
-      updateLobbyPhysics(p, dt, crouching && p.onGround);
+      updateLobbyPhysics(p, dt, input.down && p.onGround);
     }
 
     // --- NPC extras — simple wandering AI ---
     for (const npc of this.extraChars) {
       if (npc.splatTimer > 0) { npc.splatTimer = Math.max(0, npc.splatTimer - dt); continue; }
-      if (Math.random() < 0.01) npc.vx = (Math.random() - 0.5) * 80;
-      if (Math.random() < 0.005 && npc.onGround) { npc.vy = LOBBY_JUMP * 0.6; npc.onGround = false; }
-      npc.facing = npc.vx > 0 ? 'right' : npc.vx < 0 ? 'left' : npc.facing;
+      const input = wanderInput();
+      applyInputToLobbyPlayer(npc, input);
       updateLobbyPhysics(npc, dt);
     }
 
     // --- Bot players — directed AI walking toward ready zone ---
     for (const bot of this.bots) {
       if (bot.splatTimer > 0) { bot.splatTimer = Math.max(0, bot.splatTimer - dt); continue; }
-      updateBotLobbyAI(bot, dt);
+      const input = botLobbyInput(bot);
+      applyInputToLobbyPlayer(bot, input);
       updateLobbyPhysics(bot, dt);
     }
 
@@ -441,7 +441,7 @@ export class LobbyGame {
 
 // ---- Bot Lobby AI ----
 
-function updateBotLobbyAI(bot: LobbyPlayer, _dt: number): void {
+function botLobbyInput(bot: LobbyPlayer): InputState {
   const slotIdx = parseInt(bot.slot[1]) - 1;
   const speedMult = BOT_SPEED_VARIANCE[slotIdx % BOT_SPEED_VARIANCE.length];
   const pauseChance = BOT_PAUSE_CHANCE[slotIdx % BOT_PAUSE_CHANCE.length];
@@ -449,40 +449,41 @@ function updateBotLobbyAI(bot: LobbyPlayer, _dt: number): void {
   const zoneWidth = CANVAS_WIDTH - READY_ZONE_X - 20;
   const botTargetX = READY_ZONE_X + 30 + (slotIdx / 5) * zoneWidth;
 
+  // Past the zone entrance: fine-tune to target x
   if (bot.x + PLAYER_WIDTH > READY_ZONE_X + 20) {
     const dxToTarget = botTargetX - bot.x;
     if (Math.abs(dxToTarget) > 30) {
-      bot.vx = Math.sign(dxToTarget) * 40;
-      bot.facing = dxToTarget > 0 ? 'right' : 'left';
-    } else {
-      bot.vx *= 0.85;
-      if (Math.abs(bot.vx) < 5) bot.vx = 0;
+      return { left: dxToTarget < 0, right: dxToTarget > 0, jump: false, down: false };
     }
-    return;
+    return { left: false, right: false, jump: false, down: false };
   }
 
+  // Random pause
   if (Math.random() < pauseChance) {
-    bot.vx = 0;
-    return;
+    return { left: false, right: false, jump: false, down: false };
   }
 
-  bot.vx = LOBBY_SPEED * 0.7 * speedMult;
-  bot.facing = 'right';
+  // speedMult is currently unused in InputState form (can't vary speed via booleans).
+  // Task 4 will wire bots through applyInput which caps at LOBBY_SPEED; speedMult is dropped.
+  void speedMult;
 
+  let jump = false;
+  // Jump near wall
   if (bot.onGround && bot.x + PLAYER_WIDTH > WALL_X - 60 && bot.x < WALL_X + WALL_WIDTH + 20) {
-    bot.vy = LOBBY_JUMP;
-    bot.onGround = false;
+    jump = true;
+  }
+  if (bot.onGround && Math.abs(bot.x - (WALL_X - PLAYER_WIDTH)) < 4) {
+    jump = true;
   }
 
-  if (bot.onGround && bot.vx > 0 && Math.abs(bot.x - (WALL_X - PLAYER_WIDTH)) < 4) {
-    bot.vy = LOBBY_JUMP;
-    bot.onGround = false;
-  }
+  return { left: false, right: true, jump, down: false };
+}
 
-  if (bot.y < WALL_Y && bot.x > WALL_X - PLAYER_WIDTH && bot.x < WALL_X + WALL_WIDTH + PLAYER_WIDTH) {
-    bot.vx = LOBBY_SPEED * 0.8 * speedMult;
-    bot.facing = 'right';
-  }
+function wanderInput(): InputState {
+  const left = Math.random() < 0.005;
+  const right = Math.random() < 0.005;
+  const jump = Math.random() < 0.005;
+  return { left: left && !right, right: right && !left, jump, down: false };
 }
 
 // ---- Physics ----
