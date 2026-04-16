@@ -5,3 +5,4 @@ export { applyEffectZones, updateZeroGSound } from './effectZones';
 export { checkMatchEnd, getPlayerInput } from './match';
 export { handleSpringCollision, handleThornCollision, handleHazardZoneCollision, handleGhostCollision, handleLavaRockCollision, handleFallOff } from './playerCollisions';
 export type { HazardHitResult } from './playerCollisions';
+export { processStompsAndCollisions } from './stomps';

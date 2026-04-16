@@ -15,8 +15,7 @@ import { TouchInputManager } from './touchInput';
 import { isTouchPrimary } from './touchDetect';
 import { haptics } from './haptics';
 import { Renderer } from './renderer';
-import { applyInput, applyGravity, movePlayer, collidePlatforms, updatePlayerState, applyArenaConstraints, collidePlayersHorizontal, aabbOverlap, resolveStuckPlayer } from './physics';
-import { checkStomps, updateSplatTimers } from './stomp';
+import { applyInput, applyGravity, movePlayer, collidePlatforms, updatePlayerState, applyArenaConstraints, aabbOverlap, resolveStuckPlayer } from './physics';
 import { audio } from './audio';
 import {
   FIXED_TIMESTEP, MAX_FRAME_TIME,
@@ -26,7 +25,7 @@ import {
   FAT_DURATION, SPRING_BOUNCE,
   CANVAS_WIDTH, CANVAS_HEIGHT,
   SPRING_SPAWN_INTERVAL, THORN_SPAWN_INTERVAL,
-  SCREEN_SHAKE_DURATION, SLOW_MO_DURATION, SLOW_MO_FACTOR, HITSTOP_DURATION,
+  SLOW_MO_DURATION, SLOW_MO_FACTOR, HITSTOP_DURATION,
   SQUASH_ON_LAND, STRETCH_ON_JUMP, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED,
   MATCH_COUNTDOWN,
   SCREEN_FLASH_DURATION,
@@ -57,6 +56,7 @@ import { applyEffectZones, updateZeroGSound } from './gameLoop/gameplay/effectZo
 import { checkMatchEnd as _checkMatchEnd, getPlayerInput as _getPlayerInput } from './gameLoop/gameplay/match';
 import { handleSpringCollision, handleThornCollision, handleHazardZoneCollision, handleGhostCollision, handleLavaRockCollision, handleFallOff } from './gameLoop/gameplay/playerCollisions';
 import type { HazardHitResult } from './gameLoop/gameplay/playerCollisions';
+import { processStompsAndCollisions } from './gameLoop/gameplay/stomps';
 
 /** Force 32-bit float for cross-architecture determinism (x86 80-bit vs ARM 64-bit). */
 const f = Math.fround;
@@ -1123,61 +1123,8 @@ export class GameLoop {
     // Zero-G ambient sound management
     this.zeroGSoundPlaying = updateZeroGSound(this.state.players, this.cachedZeroGZones, this.zeroGSoundPlaying, this._boundPlaySound);
 
-    // Stomps
-    const { killFeedEntries } = checkStomps(this.state.players, this.arena.spawnPoints, this.state.timeElapsed, this.settings.mods);
-
-    // stomp sound, animal sound, kill splatter, shockwaves, score animations moved to cosmeticStep
-    if (killFeedEntries.length > 0) {
-      if (!this._resimulating) {
-        this.state.screenShake = SCREEN_SHAKE_DURATION;
-        this.state.hitstopZoom = HITSTOP_DURATION;
-      }
-    }
-
-    for (const entry of killFeedEntries) {
-      const attacker = this.state.players.find(p => p.id === entry.attacker);
-      if (attacker) {
-        attacker.hitstopTimer = Math.max(attacker.hitstopTimer, HITSTOP_DURATION);
-        if (haptics.isLocal(attacker.id)) haptics.hitstop();
-        // Stats: kill streak
-        attacker.killStreak += 1;
-        const aps = this.state.stats.perPlayer.get(attacker.id);
-        if (aps && attacker.killStreak > aps.bestStreak) aps.bestStreak = attacker.killStreak;
-      }
-      const victim = this.state.players.find(p => p.id === entry.victim);
-      if (victim) {
-        victim.hitstopTimer = Math.max(victim.hitstopTimer, HITSTOP_DURATION);
-        if (haptics.isLocal(victim.id)) haptics.hitstop();
-        // Damage flash on victim
-        if (attacker) {
-          victim.damageFlashSide = attacker.x < victim.x ? 'left' : 'right';
-        } else {
-          victim.damageFlashSide = null;
-        }
-        victim.damageFlashTimer = 0.3;
-        // Stats: reset kill streak on death
-        victim.killStreak = 0;
-      }
-    }
-    if (killFeedEntries.length > 0) {
-      this.state.killFeed.push(...killFeedEntries);
-      // Cap kill feed — keep newest 10 via copyWithin + truncate (avoids O(n) splice from front)
-      const excess = this.state.killFeed.length - 10;
-      if (excess > 0) {
-        this.state.killFeed.copyWithin(0, excess);
-        this.state.killFeed.length = 10;
-      }
-    }
-
-    collidePlayersHorizontal(this.state.players);
-    // bump sound moved to cosmeticStep (sideSquash transition detection)
-    // Re-resolve platform collisions after player-player pushes
-    // (prevents getting shoved inside solid blocks like the mausoleum)
-    for (const player of this.state.players) {
-      if (!player.active || player.state === 'splat' || player.state === 'respawning') continue;
-      collidePlatforms(player, this.arena.platforms);
-    }
-    updateSplatTimers(this.state.players, this.arena.spawnPoints, dt, this.rng);
+    // Stomps, kill feed, player-player collision, splat timers
+    processStompsAndCollisions(this.state, this.arena, this.settings, dt, this._resimulating, this.rng);
 
     // Minor sound effects that remain in fixedUpdate (host-only, depend on complex fixedUpdate context)
     if (!this._resimulating) {
