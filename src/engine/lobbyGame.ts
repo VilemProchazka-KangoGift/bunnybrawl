@@ -153,12 +153,15 @@ function shuffle<T>(arr: T[]): T[] {
 
 // ---- Bot AI parameters ----
 
-const BOT_SPEED_VARIANCE = [0.85, 1.0, 0.9, 1.1, 0.95];
 const BOT_PAUSE_CHANCE = [0.003, 0.002, 0.004, 0.001, 0.003];
 
 // ---- LobbyGame class ----
 
 export class LobbyGame {
+  // Behavioral notes vs. pre-refactor lobby:
+  // - Bot speed: all bots walk at LOBBY_SPEED (pre-refactor varied 119-200 px/s per slot).
+  // - Stomp splat visual: X-eyed splat (drawPlayer → drawSplatCharacter). Was a flat ellipse.
+  // - Character shadows: drawn under all entities (drawPlayer adds them). Was no shadow.
   players: Player[] = [];
   bots: Player[] = [];
   extraChars: Player[] = [];
@@ -438,7 +441,6 @@ export class LobbyGame {
 
 function botLobbyInput(bot: Player): InputState {
   const slotIdx = parseInt(bot.id[1]) - 1;
-  const speedMult = BOT_SPEED_VARIANCE[slotIdx % BOT_SPEED_VARIANCE.length];
   const pauseChance = BOT_PAUSE_CHANCE[slotIdx % BOT_PAUSE_CHANCE.length];
 
   const zoneWidth = CANVAS_WIDTH - READY_ZONE_X - 20;
@@ -457,10 +459,6 @@ function botLobbyInput(bot: Player): InputState {
   if (Math.random() < pauseChance) {
     return { left: false, right: false, jump: false, down: false };
   }
-
-  // speedMult is currently unused in InputState form (can't vary speed via booleans).
-  // Task 4 will wire bots through applyInput which caps at LOBBY_SPEED; speedMult is dropped.
-  void speedMult;
 
   let jump = false;
   // Jump near wall
