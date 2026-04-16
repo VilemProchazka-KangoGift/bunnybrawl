@@ -2,15 +2,9 @@ import type { MatchState, Player } from '../../types';
 import { SPRING_TRAIL_DURATION } from '../../constants';
 
 export interface PrevEntityState {
-  carrotActives: boolean[];
   springBounces: number[];
-  thornHits: boolean[];
   countdownSec: number;
   matchOver: boolean;
-}
-
-export function createPrevEntityState(): PrevEntityState {
-  return { carrotActives: [], springBounces: [], thornHits: [], countdownSec: 4, matchOver: false };
 }
 
 export function detectEntityTransitions(
@@ -18,11 +12,6 @@ export function detectEntityTransitions(
   pes: PrevEntityState,
   playSound: (name: string) => void,
 ): void {
-  // Carrots: active → inactive = pickup
-  // Note: carrot pickup sounds/VFX stay in fixedUpdate — entities are removed
-  // before cosmeticStep runs, making transition detection impossible here.
-  // On guest, carrot pickup is detected via score change (line 650).
-
   // Springs: bounceTimer 0 → >0 (springs survive the bounce, so detection works)
   for (let i = 0; i < state.springs.length; i++) {
     const cur = state.springs[i].bounceTimer;

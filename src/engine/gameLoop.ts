@@ -137,6 +137,7 @@ export class GameLoop {
     this.emitParticle(x, y, vx, vy, life, size, color);
   private readonly _transitionCallbacks: TransitionCallbacks = {
     playSound: this._boundPlaySound,
+    playAnimal: (name) => { if (this._audioEnabled) audio.playAnimal(name); },
     spawnDustParticles: (p, vy) => this.spawnDustParticles(p, vy),
     spawnKillSplatter: (v) => this.spawnKillSplatter(v),
     pickupCarrotVFX: (x, y) => this.pickupCarrotVFX(x, y),
@@ -145,9 +146,7 @@ export class GameLoop {
   // Previous-frame state for cosmetic transition detection (cosmeticStep)
   private prevCosmeticState: Map<PlayerSlot, PrevPlayerCosmeticState> = new Map();
   private prevEntityState: PrevEntityState = {
-    carrotActives: [],
     springBounces: [],
-    thornHits: [],
     countdownSec: 4,
     matchOver: false,
   };
@@ -368,9 +367,7 @@ export class GameLoop {
     for (const p of this.state.players) {
       this.prevCosmeticState.set(p.id, snapshotPlayerCosmeticState(p));
     }
-    this.prevEntityState.carrotActives = this.state.carrots.map(c => c.active);
     this.prevEntityState.springBounces = this.state.springs.map(s => s.bounceTimer);
-    this.prevEntityState.thornHits = this.state.thorns.map(t => t.hit);
     this.prevEntityState.countdownSec = Math.ceil(this.state.countdown);
     this.prevEntityState.matchOver = this.state.matchOver;
   }

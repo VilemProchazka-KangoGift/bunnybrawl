@@ -135,7 +135,7 @@ export function handleGhostCollision(player: Player, state: MatchState): HazardH
   // Knockback away from ghost
   player.vx = f(player.vx + ghostHit.knockbackDir * 180);
   player.vy = -180;
-  player.damageFlashSide = ghostHit.knockbackDir > 0 ? 'left' : 'right'; // flash on side facing the ghost
+  player.damageFlashSide = ghostHit.knockbackDir > 0 ? 'left' : 'right';
   player.damageFlashTimer = 0.4;
   player.squashScale = 0.6;
   player.squashTimer = 0.2;

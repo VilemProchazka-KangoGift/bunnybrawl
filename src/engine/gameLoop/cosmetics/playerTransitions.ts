@@ -1,6 +1,5 @@
 import type { Player, PlayerSlot, PlayerState, MatchState } from '../../types';
 import { DUST_LAND_VY_THRESHOLD, SHOCKWAVE_MAX_RADIUS, SHOCKWAVE_DURATION, SCORE_ANIM_DURATION } from '../../constants';
-import { audio } from '../../audio';
 import { haptics } from '../../haptics';
 import type { SfxCooldowns } from './sfx';
 import { getOrCreateCooldowns } from './sfx';
@@ -15,7 +14,6 @@ export interface PrevPlayerCosmeticState {
   burnTimer: number;
   slowTimer: number;
   fastFalling: boolean;
-  invincibleTimer: number;
 }
 
 export function snapshotPlayerCosmeticState(player: Player): PrevPlayerCosmeticState {
@@ -23,13 +21,14 @@ export function snapshotPlayerCosmeticState(player: Player): PrevPlayerCosmeticS
     state: player.state, vx: player.vx, vy: player.vy,
     score: player.score, sideSquash: player.sideSquash,
     burnTimer: player.burnTimer, slowTimer: player.slowTimer,
-    fastFalling: player.fastFalling, invincibleTimer: player.invincibleTimer,
+    fastFalling: player.fastFalling,
   };
 }
 
 /** Callbacks for side effects that cross module boundaries. */
 export interface TransitionCallbacks {
   playSound: (name: string) => void;
+  playAnimal: (characterName: string) => void;
   spawnDustParticles: (player: Player, landVy: number) => void;
   spawnKillSplatter: (victim: Player) => void;
   pickupCarrotVFX: (x: number, y: number) => void;
@@ -74,7 +73,7 @@ export function detectPlayerTransitions(
   // Stomp: alive → splat (but not disconnect — disconnectPlayer sets splat directly)
   if (prev.state !== 'splat' && prev.state !== 'respawning' && player.state === 'splat' && !player.disconnected) {
     cb.playSound('stomp');
-    audio.playAnimal(player.character.name);
+    cb.playAnimal(player.character.name);
     cb.spawnKillSplatter(player);
     state.shockwaves.push({
       x: player.x + player.width / 2, y: player.y + player.height / 2,
@@ -101,7 +100,7 @@ export function detectPlayerTransitions(
   if (player.score > prev.score) {
     state.scoreAnimations.push({ playerId: player.id, value: player.score - prev.score, timer: SCORE_ANIM_DURATION });
     cb.playSound('crunch');
-    audio.playAnimal(player.character.name);
+    cb.playAnimal(player.character.name);
     cb.pickupCarrotVFX(player.x + player.width / 2, player.y);
   }
 
@@ -117,5 +116,4 @@ export function detectPlayerTransitions(
   prev.burnTimer = player.burnTimer;
   prev.slowTimer = player.slowTimer;
   prev.fastFalling = player.fastFalling;
-  prev.invincibleTimer = player.invincibleTimer;
 }
