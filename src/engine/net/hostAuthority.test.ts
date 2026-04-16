@@ -698,47 +698,22 @@ describe('HostAuthority', () => {
   });
 
   describe('start / stop', () => {
-    it('start() begins a ping interval', () => {
-      const transport = makeMockTransport();
-      const { host } = makeHostAuthority({ transport: transport as any });
+    it('start() initializes without error', () => {
+      const { host } = makeHostAuthority();
       host.start();
-
-      // Advance time to trigger ping interval (500ms)
-      vi.advanceTimersByTime(500);
-
-      expect(transport.sendUnreliable).toHaveBeenCalled();
-      const sentBuf = transport.sendUnreliable.mock.calls[0][0] as ArrayBuffer;
-      const view = new DataView(sentBuf);
-      expect(view.getUint8(0)).toBe(MsgType.PING);
-
       host.stop();
     });
 
-    it('stop() clears the ping interval', () => {
-      const transport = makeMockTransport();
-      const { host } = makeHostAuthority({ transport: transport as any });
+    it('start() is idempotent', () => {
+      const { host } = makeHostAuthority();
       host.start();
+      host.start(); // should not throw
       host.stop();
-
-      transport.sendUnreliable.mockClear();
-      vi.advanceTimersByTime(1000);
-
-      // No pings should fire after stop
-      expect(transport.sendUnreliable).not.toHaveBeenCalled();
     });
 
-    it('start() is idempotent — calling twice does not create duplicate intervals', () => {
-      const transport = makeMockTransport();
-      const { host } = makeHostAuthority({ transport: transport as any });
-      host.start();
-      host.start();
-
-      vi.advanceTimersByTime(500);
-
-      // Should only have 1 ping, not 2
-      expect(transport.sendUnreliable).toHaveBeenCalledTimes(1);
-
-      host.stop();
+    it('stop() is safe to call without start()', () => {
+      const { host } = makeHostAuthority();
+      host.stop(); // should not throw
     });
   });
 

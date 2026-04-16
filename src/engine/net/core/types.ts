@@ -68,7 +68,7 @@ export interface InputCodec<TInput> {
 
 /** Configuration for the generic host authority engine. */
 export interface HostAuthorityConfig<TInput, TState, TSnapshot> {
-  simulation: Simulation<TInput, TState>;
+  simulation: { getState(): TState; disconnectPlayer(id: string): void };
   snapshotCodec: SnapshotCodec<TSnapshot, TState>;
   inputCodec: InputCodec<TInput>;
   localSlot: string;

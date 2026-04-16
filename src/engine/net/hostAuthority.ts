@@ -57,7 +57,7 @@ export class HostAuthority {
 
     this.core = new GenericHostAuthority(
       {
-        simulation: config.gameLoop as any, // GameLoop implements Simulation interface
+        simulation: config.gameLoop,
         snapshotCodec: crSnapshotCodec,
         inputCodec: crInputCodec,
         localSlot: config.localSlot,
@@ -109,7 +109,7 @@ export class HostAuthority {
   /** Clear latched jump flags after the host tick consumed them. */
   consumeGuestJumps(): void {
     for (const input of this.core.getNetworkInputs().values()) {
-      (input as InputState).jump = false;
+      input.jump = false;
     }
   }
 

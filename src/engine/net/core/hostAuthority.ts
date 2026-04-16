@@ -4,11 +4,16 @@
  * Buffers guest inputs, broadcasts snapshots, manages peer connections.
  * Game-specific logic (input latching, reconnect respawn) is injected via callbacks.
  */
-import type { Simulation, SnapshotCodec, InputCodec, HostAuthorityConfig } from './types';
-import { CoreMsgType, encodePing, encodePong, decodePingPong, decodeSnapshotAck } from './protocol';
+import type { SnapshotCodec, InputCodec, HostAuthorityConfig } from './types';
+import { CoreMsgType, encodePong, decodePingPong, decodeSnapshotAck } from './protocol';
 
-// Re-use Transport type from the same core directory — but Transport is still game-side.
-// For now, we define a minimal transport interface that core needs.
+/** Minimal simulation interface — only what the host authority actually calls. */
+export interface HostSimulation<TState> {
+  getState(): TState;
+  disconnectPlayer(id: string): void;
+}
+
+/** Minimal transport interface — only what the host authority actually calls. */
 export interface HostTransport {
   sendUnreliable(data: ArrayBuffer): void;
   sendUnreliableTo(peerId: string, data: ArrayBuffer): void;
@@ -29,7 +34,7 @@ export interface HostDebugStats {
 }
 
 export class GenericHostAuthority<TInput, TState, TSnapshot> {
-  private simulation: Simulation<TInput, TState>;
+  private simulation: HostSimulation<TState>;
   private snapshotCodec: SnapshotCodec<TSnapshot, TState>;
   private inputCodec: InputCodec<TInput>;
   private transport: HostTransport;
@@ -56,9 +61,6 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
   // Reconnection grace period
   private disconnectedSlots = new Map<string, { timer: number; peerId: string }>();
   private readonly GRACE_PERIOD = 20; // seconds
-
-  // Ping/pong
-  private pingInterval: ReturnType<typeof setInterval> | null = null;
 
   // Stats
   private lastSnapshotBytes = 0;
@@ -142,17 +144,11 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
     if (this.running) return;
     this.running = true;
     this.localFrame = 0;
-    this.pingInterval = setInterval(() => {
-      this.transport.sendUnreliable(encodePing(performance.now()));
-    }, 500);
+    // Ping/pong for RTT measurement is handled by the Transport layer.
   }
 
   stop(): void {
     this.running = false;
-    if (this.pingInterval) {
-      clearInterval(this.pingInterval);
-      this.pingInterval = null;
-    }
   }
 
   broadcastSnapshot(state: TState): void {
