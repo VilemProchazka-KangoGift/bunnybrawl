@@ -256,6 +256,58 @@ describe('LobbyGame', () => {
     expect(victim.splatTimer).toBeGreaterThan(0);
   });
 
+  it('stomped human victim recovers after splatTimer expires', () => {
+    // Isolate: move all others far away so only this pair can stomp
+    for (const p of [...game.players, ...game.bots, ...game.extraChars]) {
+      p.x = -200;
+      p.vy = 0;
+    }
+    const attacker = game.players[0];
+    const victim = game.players[1];
+
+    // Position attacker directly above victim, falling fast enough to stomp.
+    // GROUND_Y = 560, PLAYER_HEIGHT = 32
+    victim.x = 300;
+    victim.y = 560 - 32; // 528 — on the ground
+    victim.vx = 0;
+    victim.vy = 0;
+    victim.splatTimer = 0;
+    victim.state = 'idle';
+    attacker.x = 300;
+    attacker.y = 500;
+    attacker.vy = 200;
+    attacker.state = 'airborne';
+
+    game.update(1 / 60, new Set());
+
+    // Stomp happened: victim is splatted
+    expect(victim.state).toBe('splat');
+    expect(victim.splatTimer).toBeGreaterThan(0);
+
+    // Move attacker far away so it can't re-stomp victim during recovery
+    attacker.x = -500;
+    attacker.y = 0;
+    attacker.vx = 0;
+    attacker.vy = 0;
+
+    // Run 60 more ticks (1 second) — well past the 0.8s splatTimer
+    for (let i = 0; i < 60; i++) {
+      game.update(1 / 60, new Set());
+    }
+
+    // Victim should no longer be frozen in 'splat' state
+    expect(victim.state).not.toBe('splat');
+    expect(victim.splatTimer).toBe(0);
+
+    // Victim can now accept input — press P2 left key five times
+    const xBefore = victim.x;
+    for (let i = 0; i < 5; i++) {
+      game.update(1 / 60, new Set(['ArrowLeft']));
+    }
+    // Either velocity or position should reflect the input
+    expect(victim.vx !== 0 || victim.x < xBefore).toBe(true);
+  });
+
   // ---- Destroy ----
 
   it('cleans up on destroy', () => {

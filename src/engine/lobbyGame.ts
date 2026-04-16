@@ -233,7 +233,11 @@ export class LobbyGame {
     for (const e of this.extraChars) this._extrasSet.add(e);
 
     const step = (p: Player, input: InputState): void => {
-      if (p.splatTimer > 0) { p.splatTimer = Math.max(0, p.splatTimer - dt); return; }
+      if (p.splatTimer > 0) {
+        p.splatTimer = Math.max(0, p.splatTimer - dt);
+        if (p.splatTimer === 0 && p.state === 'splat') p.state = 'idle';
+        return;
+      }
 
       applyInput(p, input, dt, LOBBY_SPEED, 1500 /* friction */, LOBBY_JUMP);
 
