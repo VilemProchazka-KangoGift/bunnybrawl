@@ -236,6 +236,7 @@ export class NetMatch {
         this.hostAuthority!.consumeGuestJumps();
         // Tick reconnection grace timers
         this.hostAuthority!.tickGraceTimers(FIXED_DT);
+        this.gameLoop.cosmeticStep(FIXED_DT);
         accumulator -= FIXED_DT;
       }
 
@@ -356,7 +357,7 @@ export class NetMatch {
 
       // 4. Tick cosmetic systems (skip if matchOver — renderFrame handles victory cosmetics)
       if (!state.matchOver) {
-        this.gameLoop.tickCosmetics(dt);
+        this.gameLoop.cosmeticStep(dt);
       }
 
       // 4.5 Stall detection: check time since last snapshot (suppressed after match end)

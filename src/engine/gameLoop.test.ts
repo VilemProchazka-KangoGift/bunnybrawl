@@ -1189,9 +1189,10 @@ describe('Bouncy Platforms', () => {
     // Manually set a wobble
     state.bouncyWobble.set(0, 0.4);
 
-    // Tick several frames
+    // Tick several frames (cosmeticStep decays wobble timers)
     for (let i = 0; i < 10; i++) {
       loop.fixedUpdate(FIXED_TIMESTEP);
+      loop.cosmeticStep(FIXED_TIMESTEP);
     }
 
     // Timer should have decayed
@@ -1213,9 +1214,10 @@ describe('Bouncy Platforms', () => {
 
     state.bouncyWobble.set(0, 0.02); // nearly expired
 
-    // Tick enough to expire
+    // Tick enough to expire (cosmeticStep decays wobble timers)
     for (let i = 0; i < 5; i++) {
       loop.fixedUpdate(FIXED_TIMESTEP);
+      loop.cosmeticStep(FIXED_TIMESTEP);
     }
 
     // Entry should be deleted
@@ -1993,6 +1995,7 @@ describe('Score Animations', () => {
     state.scoreAnimations.push({ playerId: 'P1' as PlayerSlot, value: 2, timer: SCORE_ANIM_DURATION });
 
     loop.fixedUpdate(FIXED_TIMESTEP);
+    loop.cosmeticStep(FIXED_TIMESTEP);
 
     // Timer should have decayed
     expect(state.scoreAnimations[0].timer).toBeLessThan(SCORE_ANIM_DURATION);
@@ -2007,6 +2010,7 @@ describe('Score Animations', () => {
     state.scoreAnimations.push({ playerId: 'P1' as PlayerSlot, value: 2, timer: FIXED_TIMESTEP * 0.5 });
 
     loop.fixedUpdate(FIXED_TIMESTEP);
+    loop.cosmeticStep(FIXED_TIMESTEP);
 
     // Should have been removed
     expect(state.scoreAnimations).toHaveLength(0);
@@ -2058,6 +2062,7 @@ describe('Shockwaves', () => {
     state.shockwaves.push({ x: 500, y: 500, radius: 0, maxRadius: SHOCKWAVE_MAX_RADIUS, life: SHOCKWAVE_DURATION });
 
     loop.fixedUpdate(FIXED_TIMESTEP);
+    loop.cosmeticStep(FIXED_TIMESTEP);
 
     expect(state.shockwaves[0].life).toBeLessThan(SHOCKWAVE_DURATION);
   });
@@ -2071,6 +2076,7 @@ describe('Shockwaves', () => {
     state.shockwaves.push({ x: 500, y: 500, radius: 50, maxRadius: SHOCKWAVE_MAX_RADIUS, life: FIXED_TIMESTEP * 0.5 });
 
     loop.fixedUpdate(FIXED_TIMESTEP);
+    loop.cosmeticStep(FIXED_TIMESTEP);
 
     expect(state.shockwaves).toHaveLength(0);
   });
@@ -2576,6 +2582,7 @@ describe('Particle System', () => {
 
     const lifeBefore = (loop as any).particles[0].life;
     loop.fixedUpdate(FIXED_TIMESTEP);
+    loop.cosmeticStep(FIXED_TIMESTEP);
 
     // Particle life should have decreased
     const particle = (loop as any).particles.find((p: any) => p.maxLife === 1.0);
@@ -2688,8 +2695,9 @@ describe('Gibs', () => {
     // Record vy before gravity tick
     const vyBefore = gib.vy;
 
-    // Run another tick — gravity should affect gib vy
+    // Run another tick — gravity should affect gib vy (gib physics in cosmeticStep)
     loop.fixedUpdate(FIXED_TIMESTEP);
+    loop.cosmeticStep(FIXED_TIMESTEP);
 
     // Gib vy should increase (gravity pulls down: vy += GIB_GRAVITY * dt)
     const gibAfter = state.gibs.find(g => g === gib);
@@ -3507,7 +3515,11 @@ describe('GameLoop — entity systems', () => {
     state.bouncyWobble.set(1, 0.5);
     loop.setNetworkMode(true);
 
-    tickLoop(loop, 60); // 1 second
+    // cosmeticStep now handles wobble decay (moved from fixedUpdate)
+    for (let i = 0; i < 60; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP, noInput);
+      loop.cosmeticStep(FIXED_TIMESTEP);
+    }
 
     // Wobble should have decayed to 0 and been removed
     expect(state.bouncyWobble.has(1)).toBe(false);
@@ -3637,7 +3649,11 @@ describe('GameLoop — collision and interaction paths', () => {
       ],
     } as any);
 
-    tickLoop(loop, 5);
+    // cosmeticStep now handles scatter particle decay (moved from fixedUpdate)
+    for (let i = 0; i < 5; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP, noInput);
+      loop.cosmeticStep(FIXED_TIMESTEP);
+    }
 
     // Scatter particle should have been removed (life expired)
     expect(state.pigeonFlocks[0].scatterParticles.length).toBe(0);

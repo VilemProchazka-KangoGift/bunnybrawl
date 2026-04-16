@@ -551,19 +551,16 @@ export class GameLoop {
     this._resimulating = resim;
   }
 
-  /** Tick cosmetic-only systems. Public for guest loop (which skips fixedUpdate). */
-  tickCosmetics(dt: number): void {
+  /** Tick all cosmetic-only systems (particles, environment, visual decays).
+   *  Called once per frame from local loop(), host loop, and guest loop. */
+  cosmeticStep(dt: number): void {
+    // --- Particle systems ---
     this.updateWeather(dt);
     this.updateParticles(dt);
     this.updateGibs(dt);
     this.updateConfetti(dt);
-    // Wildlife, fog, pollen, shooting stars are normally updated in fixedUpdate
-    // but guests never call fixedUpdate, so tick them here too.
-    this.tickEnvironment(dt);
-  }
 
-  /** Update wildlife, fog particles, pollen, and shooting stars. */
-  private tickEnvironment(dt: number): void {
+    // --- Environment (wildlife, fog, pollen, shooting stars) ---
     for (const w of this.state.wildlife) {
       w.wingPhase += dt * 8;
       if (w.type === 'butterfly') {
@@ -584,9 +581,9 @@ export class GameLoop {
         }
       }
     }
-    for (const f of this.state.fogParticles) {
-      f.x += f.vx * dt;
-      if (f.x > CANVAS_WIDTH + 30) f.x = -30;
+    for (const fg of this.state.fogParticles) {
+      fg.x += fg.vx * dt;
+      if (fg.x > CANVAS_WIDTH + 30) fg.x = -30;
     }
     for (const p of this.state.pollenParticles) {
       p.x += p.vx * dt;
@@ -612,7 +609,48 @@ export class GameLoop {
       star.x += star.vx * dt;
       star.y += star.vy * dt;
       star.life -= dt;
-      if (star.life <= 0) this.state.shootingStars.splice(i, 1);
+      if (star.life <= 0) swapRemove(this.state.shootingStars, i);
+    }
+
+    // --- Shockwave decay ---
+    for (const sw of this.state.shockwaves) {
+      const progress = 1 - sw.life / SHOCKWAVE_DURATION;
+      sw.radius = sw.maxRadius * progress;
+      sw.life -= dt;
+    }
+    for (let i = this.state.shockwaves.length - 1; i >= 0; i--) {
+      if (this.state.shockwaves[i].life <= 0) {
+        swapRemove(this.state.shockwaves, i);
+      }
+    }
+
+    // --- Score animation decay ---
+    for (const sa of this.state.scoreAnimations) {
+      sa.timer -= dt;
+    }
+    for (let i = this.state.scoreAnimations.length - 1; i >= 0; i--) {
+      if (this.state.scoreAnimations[i].timer <= 0) {
+        swapRemove(this.state.scoreAnimations, i);
+      }
+    }
+
+    // --- Bouncy wobble decay ---
+    for (const [bi, timer] of this.state.bouncyWobble) {
+      const next = timer - dt;
+      if (next <= 0) this.state.bouncyWobble.delete(bi);
+      else this.state.bouncyWobble.set(bi, next);
+    }
+
+    // --- Pigeon scatter particle decay ---
+    for (const flock of this.state.pigeonFlocks) {
+      for (let si = flock.scatterParticles.length - 1; si >= 0; si--) {
+        const sp = flock.scatterParticles[si];
+        sp.x += sp.vx * dt;
+        sp.y += sp.vy * dt;
+        sp.vy += 100 * dt;
+        sp.life -= dt;
+        if (sp.life <= 0) swapRemove(flock.scatterParticles, si);
+      }
     }
   }
 
@@ -731,6 +769,12 @@ export class GameLoop {
     while (this.accumulator >= FIXED_TIMESTEP) {
       this.fixedUpdate(FIXED_TIMESTEP);
       this.accumulator -= FIXED_TIMESTEP;
+    }
+
+    // Cosmetic systems (particles, environment, visual decays) — local play only.
+    // Network mode: host and guest call cosmeticStep from their own loops (netMatch.ts).
+    if (!this._networkMode) {
+      this.cosmeticStep(FIXED_TIMESTEP);
     }
 
     // Timers that run in real time (not affected by fixedUpdate early return)
@@ -1435,24 +1479,6 @@ export class GameLoop {
         flock.respawnTimer = f(flock.respawnTimer - dt);
         if (flock.respawnTimer <= 0) flock.active = true;
       }
-      // Decay scatter particles (cosmetic — no fround needed)
-      for (let i = flock.scatterParticles.length - 1; i >= 0; i--) {
-        const sp = flock.scatterParticles[i];
-        sp.x += sp.vx * dt;
-        sp.y += sp.vy * dt;
-        sp.vy += 100 * dt;
-        sp.life -= dt;
-        if (sp.life <= 0) {
-          swapRemove(flock.scatterParticles, i);
-        }
-      }
-    }
-
-    // Decay bouncy wobble timers
-    for (const [idx, timer] of this.state.bouncyWobble) {
-      const newTimer = f(timer - dt);
-      if (newTimer <= 0) this.state.bouncyWobble.delete(idx);
-      else this.state.bouncyWobble.set(idx, newTimer);
     }
 
     // Animation timers
@@ -2081,96 +2107,9 @@ export class GameLoop {
       collidePlatforms(player, this.arena.platforms);
     }
     updateSplatTimers(this.state.players, this.arena.spawnPoints, dt, this.rng);
+
+    // Sound triggers (still in fixedUpdate — will move to cosmeticStep in Task 4)
     if (!this._resimulating) {
-      this.updateParticles(dt);
-      this.updateGibs(dt);
-      this.updateConfetti(dt);
-    }
-
-    // Decay shockwaves
-    for (const sw of this.state.shockwaves) {
-      const progress = 1 - sw.life / SHOCKWAVE_DURATION;
-      sw.radius = sw.maxRadius * progress;
-      sw.life -= dt;
-    }
-    for (let i = this.state.shockwaves.length - 1; i >= 0; i--) {
-      if (this.state.shockwaves[i].life <= 0) {
-        swapRemove(this.state.shockwaves, i);
-      }
-    }
-
-    // Decay score animations
-    for (const sa of this.state.scoreAnimations) {
-      sa.timer -= dt;
-    }
-    for (let i = this.state.scoreAnimations.length - 1; i >= 0; i--) {
-      if (this.state.scoreAnimations[i].timer <= 0) {
-        swapRemove(this.state.scoreAnimations, i);
-      }
-    }
-
-    // Skip all cosmetic systems during rollback resimulation (not in snapshots, no gameplay effect)
-    if (!this._resimulating) {
-      // Update wildlife
-      for (const w of this.state.wildlife) {
-        w.wingPhase += dt * 8;
-        if (w.type === 'butterfly') {
-          w.x += w.vx * dt;
-          w.vy = Math.sin(w.wingPhase * 0.5) * 20;
-          w.y += w.vy * dt;
-          if (w.x > CANVAS_WIDTH + 20) w.x = -20;
-          if (w.x < -20) w.x = CANVAS_WIDTH + 20;
-          if (w.y < -20) w.y = CANVAS_HEIGHT * 0.6;
-          if (w.y > CANVAS_HEIGHT * 0.6) w.y = 0;
-        } else {
-          w.x += w.vx * dt;
-          w.y += Math.sin(w.wingPhase * 0.3) * 5 * dt;
-          if (w.x > CANVAS_WIDTH + 50) {
-            w.x = -50 - Math.random() * 100;
-            w.y = Math.random() * CANVAS_HEIGHT * 0.4;
-            w.vx = 40 + Math.random() * 40;
-          }
-        }
-      }
-
-      // Update fog particles
-      for (const f of this.state.fogParticles) {
-        f.x += f.vx * dt;
-        if (f.x > CANVAS_WIDTH + 30) f.x = -30;
-      }
-
-      // Update pollen particles
-      for (const p of this.state.pollenParticles) {
-        p.x += p.vx * dt;
-        p.y += p.vy * dt;
-        if (p.y < -10) {
-          p.y = CANVAS_HEIGHT + 10;
-          p.x = Math.random() * CANVAS_WIDTH;
-        }
-      }
-
-      // Shooting stars
-      if (this.theme.dayNight.showShootingStars && this.state.dayPhase > 0.4 && Math.random() < 0.005) {
-        const svx = 300 + Math.random() * 200;
-        const svy = 50 + Math.random() * 50;
-        this.state.shootingStars.push({
-          x: Math.random() * CANVAS_WIDTH * 0.5,
-          y: Math.random() * CANVAS_HEIGHT * 0.3,
-          vx: svx, vy: svy, life: 0.4,
-          tailLen: Math.min(40, Math.sqrt(svx * svx + svy * svy) * 0.1),
-        });
-      }
-      for (const star of this.state.shootingStars) {
-        star.x += star.vx * dt;
-        star.y += star.vy * dt;
-        star.life -= dt;
-      }
-      for (let i = this.state.shootingStars.length - 1; i >= 0; i--) {
-        if (this.state.shootingStars[i].life <= 0) {
-          swapRemove(this.state.shootingStars, i);
-        }
-      }
-
       // Crowd cheering
       let leadScore = 0;
       for (const p of this.state.players) { if (p.active && p.score > leadScore) leadScore = p.score; }
@@ -2204,7 +2143,7 @@ export class GameLoop {
           }
         }
       }
-    } // end cosmetic skip
+    }
 
     this.checkMatchEnd();
   }
