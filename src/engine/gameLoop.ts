@@ -600,8 +600,12 @@ export class GameLoop {
             this.spawnDustParticles(player, Math.abs(prev.vy));
           }
 
-          // Headbonk: was going up, now vy ≈ 0, still airborne
-          if (wasAirborne && isAirborne && prev.vy < -10 && Math.abs(player.vy) < 5) {
+          // Headbonk: was going up fast, velocity suddenly clamped by ceiling collision.
+          // Normal jump apex: vy changes by ~15/tick (gravity). Bonk: vy jumps from
+          // large negative to ~0 in one tick (collision clamp). Require velocity change
+          // much larger than gravity to distinguish.
+          if (wasAirborne && isAirborne && prev.vy < -50 && Math.abs(player.vy) < 10
+              && Math.abs(player.vy - prev.vy) > 30) {
             const bonkCD = this.headbonkCooldowns.get(player.id) ?? 0;
             if (bonkCD <= 0) {
               this.playSound('headbonk');
