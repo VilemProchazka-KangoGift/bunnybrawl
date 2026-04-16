@@ -630,6 +630,7 @@ export class GameLoop {
           // Wall hits set 0.75 — don't fire bump sound for those.
           if (prev.sideSquash >= 0.95 && Math.abs(player.sideSquash - 0.8) < 0.01) {
             this.playSound('bump');
+            if (haptics.isLocal(player.id)) haptics.bump();
           }
 
           // Burn start

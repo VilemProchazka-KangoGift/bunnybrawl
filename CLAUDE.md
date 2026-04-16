@@ -64,20 +64,23 @@ src/
       drawPrimitives.ts  # Shared drawing functions (trees, bushes, flowers, etc.) + hazard renderer factories
       utils.ts      # Shared utilities (randRange, pickWeighted, swapRemove, getFloatingPlatforms)
     net/          # Host-authoritative network multiplayer (WebRTC via Trystero MQTT)
-      protocol.ts       # Binary message encoding (inputs, snapshots, pings)
+      core/             # Generic netcode core (zero game imports — reusable library foundation)
+        types.ts          # Generic interfaces: Simulation, SnapshotCodec, InterpolationConfig, InputCodec
+        protocol.ts       # CoreMsgType constants, ping/pong/snapshot-ack encoding
+        interpolation.ts  # SnapshotInterpolation<T> ring buffer with adaptive delay
+        deltaCompression.ts # XOR+RLE delta codec for binary snapshots
+        networkSimulator.ts # Latency/jitter/loss simulator (?simLatency, ?simJitter, ?simLoss)
+        debugOverlay.ts   # NetDebugStats type + canvas debug overlay (?debug=net)
+        index.ts          # Barrel export
+      protocol.ts       # Game-specific: MsgType (extends CoreMsgType), input encoding, message interfaces
       transport.ts      # Trystero MQTT signaling, WebRTC data channels, RTT/jitter
       hostAuthority.ts  # Host: runs simulation, buffers guest inputs, broadcasts snapshots
-      clientPrediction.ts # Guest: local prediction + snapshot reconciliation
-      interpolation.ts  # Guest: smooth entity animation between host snapshots
+      interpolation.ts  # Game-specific: entity interpolation, extrapolation, applySnapshotToState
       snapshot.ts       # Binary snapshot encode/decode, Uint8 timer compression
       netMatch.ts       # Orchestrator: host loop (simulate+broadcast) or guest loop (interpolate+render)
-      networkSimulator.ts # Dev: simulated latency/jitter/loss (?simLatency, ?simJitter, ?simLoss)
-      inputEcho.ts        # Guest visual feedback without position prediction (facing, anim, squash)
-      guestSfx.ts         # Guest-side SFX detection from snapshot transitions
-      debugOverlay.ts   # Dev: network stats overlay (?debug=net)
-      rollback.ts       # Legacy rollback engine (preserved, unused by host-authoritative)
-      prng.ts           # SeededRNG (legacy, used for local-mode determinism)
-      serialize.ts      # Legacy GameSnapshot take/restore (local-mode snapshots)
+      inputEcho.ts      # Guest visual feedback without position prediction (facing, anim, squash)
+      prng.ts           # SeededRNG (used for local-mode determinism)
+      serialize.ts      # Legacy GameSnapshot take/restore (local-mode, test-only)
       index.ts          # Barrel export
     index.ts      # Public API barrel export
   hooks/
