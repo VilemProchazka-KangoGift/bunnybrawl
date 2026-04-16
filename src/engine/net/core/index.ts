@@ -34,6 +34,13 @@ export {
 export { SnapshotInterpolation } from './interpolation';
 export type { InterpolationResult } from './interpolation';
 
+// Host authority (generic input buffering + snapshot broadcast)
+export { GenericHostAuthority } from './hostAuthority';
+export type { HostTransport, HostDebugStats } from './hostAuthority';
+
+// Config types
+export type { HostAuthorityConfig, OrchestratorConfig } from './types';
+
 // Debug overlay
 export { drawNetDebugOverlay } from './debugOverlay';
 export type { NetDebugStats } from './debugOverlay';

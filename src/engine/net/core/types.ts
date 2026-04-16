@@ -12,94 +12,107 @@
  */
 
 // ---- Simulation ----
-// TODO: Not yet consumed — these interfaces define the target API for Phase 4
-// (hostAuthority + orchestrator extraction). No code uses them as type constraints yet.
 
-export interface Simulation<TInput, TState, TPlayerId extends string> {
+/** Game simulation loop — the core orchestrator calls these to drive host and guest. */
+export interface Simulation<TInput, TState> {
   fixedUpdate(dt: number, networkInputs: Map<string, TInput>): void;
   getState(): TState;
-  getLocalInput(): TInput;
-  disconnectPlayer(id: TPlayerId): void;
+  /** Read merged local input (keyboard + touch + gamepad). */
+  getInputAny(): TInput;
+  disconnectPlayer(id: string): void;
   /** dt is frame delta — used to decay visual timers between simulation ticks. */
   renderFrame(dt: number): void;
-  cosmeticStep?(dt: number): void;
+  cosmeticStep(dt: number): void;
   /** Switch to external RAF control (no internal requestAnimationFrame loop). */
   setNetworkMode(enabled: boolean): void;
   start(): void;
   stop(): void;
   pause(): void;
   resume(): void;
+  isPaused(): boolean;
+  skipCountdown(): void;
+  /** Optional: update HUD with connection quality. */
+  setConnectionQuality?(rtt: number, jitter: number): void;
 }
 
 // ---- Snapshot Codec ----
 
-/**
- * Handles serialization/deserialization of game state snapshots.
- * The game provides the binary format — the core just transports bytes.
- */
+/** Game-specific snapshot serialization. The core just transports bytes. */
 export interface SnapshotCodec<TSnapshot, TState> {
-  /** Extract a snapshot from the current game state (host, every tick). */
   takeSnapshot(frame: number, state: TState): TSnapshot;
-
-  /** Encode a snapshot to a compact binary ArrayBuffer. */
   encode(snapshot: TSnapshot): ArrayBuffer;
-
-  /** Decode a binary ArrayBuffer back into a snapshot. */
   decode(buffer: ArrayBuffer): TSnapshot | null;
-
-  /** Apply a snapshot to the mutable game state for rendering (guest-side). */
   applyToState(snapshot: TSnapshot, state: TState): void;
 }
 
 // ---- Interpolation Config ----
 
-/**
- * Tells the interpolation engine how to lerp between two snapshots.
- * The game defines which fields lerp (positions) vs snap (state enums).
- */
 export interface InterpolationConfig<TSnapshot> {
   getFrame(snapshot: TSnapshot): number;
-  /** Optional: used by getInterpolatedState() convenience method. Not needed if using getRawResult(). */
+  /** Optional: used by getInterpolatedState() convenience method. */
   interpolate?(before: TSnapshot, after: TSnapshot, t: number): TSnapshot;
 }
 
 // ---- Input Codec ----
 
-/**
- * Serializes/deserializes game input for network transport.
- * Inputs are sent every frame so encoding must be compact.
- */
+/** Compact input serialization for network transport (called every frame). */
 export interface InputCodec<TInput> {
-  /** Encode input into a single byte (or small number of bytes). */
   encode(input: TInput): number;
-
-  /** Decode a byte back to input. */
   decode(byte: number): TInput;
-
-  /** Return a "no input" / idle input value. */
+  /** Return a neutral / idle input value. */
   noInput(): TInput;
-
-  /** Number of bytes per input (default: 1). */
   bytesPerInput?: number;
+}
+
+// ---- Host Authority Config ----
+
+/** Configuration for the generic host authority engine. */
+export interface HostAuthorityConfig<TInput, TState, TSnapshot> {
+  simulation: Simulation<TInput, TState>;
+  snapshotCodec: SnapshotCodec<TSnapshot, TState>;
+  inputCodec: InputCodec<TInput>;
+  localSlot: string;
+  /** Called when a guest input arrives — game can latch edge-triggered inputs. */
+  onInputReceived?(slot: string, existing: TInput, incoming: TInput): TInput;
+  /** Called when a player reconnects in splatted state — game can trigger respawn. */
+  onPlayerReconnect?(state: TState, slot: string): void;
+  onPlayerDisconnect?(slot: string): void;
+}
+
+// ---- Orchestrator Config ----
+
+/** Configuration for the generic host/guest loop orchestrator. */
+export interface OrchestratorConfig<TInput, TState, TSnapshot> {
+  simulation: Simulation<TInput, TState>;
+  snapshotCodec: SnapshotCodec<TSnapshot, TState>;
+  inputCodec: InputCodec<TInput>;
+  interpolationConfig: InterpolationConfig<TSnapshot>;
+  localSlot: string;
+  remoteSlots: string[];
+  isHost: boolean;
+  fixedTimestep: number;
+  /** Called every guest frame after snapshot apply — game decays visual timers. */
+  onGuestTick?(dt: number, state: TState): void;
+  /** Called every guest frame with local input — game applies cosmetic echo. */
+  onGuestInput?(input: TInput, state: TState, rtt: number, dt: number): void;
+  /** Extrapolate a snapshot forward by dt (for late arrivals). */
+  extrapolateSnapshot?(snapshot: TSnapshot, dt: number): TSnapshot;
+  onMatchEnd?(winner: string | null, state: TState): void;
+  onStall?(stalled: boolean): void;
+  onStallTimeout?(): void;
+  onDisconnect?(): void;
+  onPlayerDisconnect?(slot: string): void;
+  onReconnecting?(reconnecting: boolean): void;
+  /** Check if a slot is a bot (bots don't get network treatment). */
+  isBotSlot?(slot: string): boolean;
 }
 
 // ---- Transport Config ----
 
-/** Configuration for the WebRTC transport layer. */
 export interface TransportConfig {
-  /** Application identifier for room isolation (e.g. 'my-game-v1'). */
   appId: string;
-
-  /** ICE servers for STUN/TURN (WebRTC connectivity). */
   iceServers?: RTCIceServer[];
-
-  /** Ping interval in ms (default: 500). */
   pingInterval?: number;
-
-  /** Pong timeout in ms before marking peer as lost (default: 10000). */
   pongTimeout?: number;
-
-  /** RTT threshold in ms before marking peer as degraded (default: 4000). */
   degradedThreshold?: number;
 }
-
