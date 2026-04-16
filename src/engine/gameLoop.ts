@@ -113,7 +113,7 @@ export class GameLoop {
   private headbonkCooldowns: Map<PlayerSlot, number> = new Map();
   private crouchCooldowns: Map<PlayerSlot, number> = new Map();
   // Global bump cooldown (prevents double-fire from both pushed players)
-  private bumpCooldown = 0;
+  // bumpCooldown removed — bump detection now uses sideSquash transition in cosmeticStep
 
   // Touch input for mobile
   private touchInput: TouchInputManager | null = null;
@@ -774,17 +774,11 @@ export class GameLoop {
     const pes = this.prevEntityState;
 
     // Carrots: active → inactive = pickup
-    for (let i = 0; i < this.state.carrots.length; i++) {
-      const cur = this.state.carrots[i].active;
-      if (i < pes.carrotActives.length && pes.carrotActives[i] && !cur) {
-        this.playSound('crunch');
-        this.pickupCarrotVFX(this.state.carrots[i].x, this.state.carrots[i].y);
-      }
-      pes.carrotActives[i] = cur;
-    }
-    pes.carrotActives.length = this.state.carrots.length;
+    // Note: carrot pickup sounds/VFX stay in fixedUpdate — entities are removed
+    // before cosmeticStep runs, making transition detection impossible here.
+    // On guest, carrot pickup is detected via score change (line 650).
 
-    // Springs: bounceTimer 0 → >0
+    // Springs: bounceTimer 0 → >0 (springs survive the bounce, so detection works)
     for (let i = 0; i < this.state.springs.length; i++) {
       const cur = this.state.springs[i].bounceTimer;
       const prevBounce = pes.springBounces[i] ?? 0;
@@ -806,15 +800,9 @@ export class GameLoop {
     }
     pes.springBounces.length = this.state.springs.length;
 
-    // Thorns: hit false → true
-    for (let i = 0; i < this.state.thorns.length; i++) {
-      const cur = this.state.thorns[i].hit;
-      if (i < pes.thornHits.length && !pes.thornHits[i] && cur) {
-        this.playSound('thornhit');
-      }
-      pes.thornHits[i] = cur;
-    }
-    pes.thornHits.length = this.state.thorns.length;
+    // Note: thorn/hazard/ghost/lava rock hit sounds stay in fixedUpdate —
+    // entities are removed before cosmeticStep runs. On guest, these are
+    // minor effects and acceptable to miss.
 
     // Countdown
     if (this.state.countdown > 0) {
@@ -1623,8 +1611,7 @@ export class GameLoop {
       this.state.carrotTimer = this.settings.mods.carrotChase ? CARROT_CHASE_SPAWN_INTERVAL : CARROT_SPAWN_INTERVAL;
     }
 
-    // Weather (cosmetic — skip during rollback resimulation)
-    if (!this._resimulating) this.updateWeather(dt);
+    // Weather moved to cosmeticStep
 
     // Update lava rocks
     if (this.theme.lavaRockConfig) {
@@ -1716,8 +1703,7 @@ export class GameLoop {
       if (player.burnTimer > 0) player.burnTimer = Math.max(0, f(player.burnTimer - dt));
     }
 
-    // Decay global bump cooldown
-    if (this.bumpCooldown > 0) this.bumpCooldown -= dt;
+    // bumpCooldown removed — bump detection uses sideSquash transition in cosmeticStep
 
     // Input + physics
     for (const player of this.state.players) {
@@ -1852,7 +1838,7 @@ export class GameLoop {
           const thorn = this.state.thorns[thornHit.thornIndex];
           player.slowTimer = THORN_SLOW_DURATION;
           thorn.hit = true;
-          // thornhit sound moved to cosmeticStep (thorn.hit transition detection)
+          this.playSound('thornhit'); // stays in fixedUpdate — entity removed before cosmeticStep
 
           // Big blood splash at player + thorn location (stays — depends on collision position)
           const px = player.x + player.width / 2;
@@ -1889,7 +1875,7 @@ export class GameLoop {
           const hz = hzHit.zone;
           player.slowTimer = THORN_SLOW_DURATION;
           if (hz.type === 'lava') player.burnTimer = THORN_SLOW_DURATION;
-          // thornhit sound moved to cosmeticStep (thorn.hit transition detection)
+          this.playSound('thornhit'); // stays in fixedUpdate — entity removed before cosmeticStep
           const px = player.x + player.width / 2;
           const py = player.y + player.height / 2;
           // Big particle burst (stays — depends on collision position)
@@ -1922,7 +1908,7 @@ export class GameLoop {
         const ghostHit = checkGhostCollision(player, this.state.ghosts);
         if (ghostHit) {
           player.slowTimer = THORN_SLOW_DURATION;
-          // thornhit sound moved to cosmeticStep
+          this.playSound('thornhit'); // stays in fixedUpdate — collision context needed
           const pcx = player.x + player.width / 2;
           const pcy = player.y + player.height / 2;
           // Big ghost hit burst (stays — depends on collision position)
@@ -1956,7 +1942,7 @@ export class GameLoop {
           const rock = this.state.lavaRocks[rockHit.rockIndex];
           rock.active = false;
           player.slowTimer = THORN_SLOW_DURATION;
-          // thornhit sound moved to cosmeticStep
+          this.playSound('thornhit'); // stays in fixedUpdate — collision context needed
           const pcx = player.x + player.width / 2;
           const pcy = player.y + player.height / 2;
           // Lava rock burst particles (stays — depends on collision position)
@@ -2081,7 +2067,10 @@ export class GameLoop {
           carrot.active = false;
           player.score += 1;
           player.fatTimer = FAT_DURATION;
-          // crunch sound, animal sound, score animation, pickup VFX moved to cosmeticStep
+          // Sound + VFX here (not cosmeticStep) — entity is removed before next cosmeticStep call
+          this.playSound('crunch');
+          audio.playAnimal(player.character.name);
+          this.pickupCarrotVFX(carrot.x, carrot.y);
           // Hitstop — shorter than kill (half duration)
           player.hitstopTimer = Math.max(player.hitstopTimer, HITSTOP_DURATION * 0.5);
           if (!this._resimulating) this.state.hitstopZoom = Math.max(this.state.hitstopZoom, HITSTOP_DURATION * 0.5);
