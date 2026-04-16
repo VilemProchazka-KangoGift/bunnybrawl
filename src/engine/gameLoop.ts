@@ -1,5 +1,5 @@
 import type {
-  MatchState, MatchSettings, Arena, PlayerSlot, Player, PlayerState, Particle, Gib, GibType,
+  MatchState, MatchSettings, Arena, PlayerSlot, Player, PlayerState, Particle, Gib,
   WeatherParticle, MatchStats, PlayerStats, WildlifeEntity, EffectZone, Platform,
   InputState,
 } from './types';
@@ -18,7 +18,6 @@ import { Renderer } from './renderer';
 import { applyInput, applyGravity, movePlayer, collidePlatforms, updatePlayerState, applyArenaConstraints, collidePlayersHorizontal, aabbOverlap, resolveStuckPlayer } from './physics';
 import { checkStomps, updateSplatTimers, respawnPlayer } from './stomp';
 import { checkSpringCollision, checkThornCollision, checkHazardZoneCollision, checkGhostCollision, checkLavaRockCollision } from './hazardCollision';
-import { getCharacterGibs } from './characters';
 import { audio } from './audio';
 import {
   FIXED_TIMESTEP, MAX_FRAME_TIME,
@@ -27,7 +26,7 @@ import {
   CARROT_FIRST_SPAWN_DELAY, CARROT_CHASE_FIRST_SPAWN_DELAY, CARROT_SIZE, GIANT_SCALE,
   FAT_DURATION, SPRING_BOUNCE,
   THORN_SLOW_DURATION, CANVAS_WIDTH, CANVAS_HEIGHT,
-  SPRING_SPAWN_INTERVAL, THORN_SPAWN_INTERVAL, HAZARD_LIFETIME, HAZARD_GROW_TIME,
+  SPRING_SPAWN_INTERVAL, THORN_SPAWN_INTERVAL,
   SCREEN_SHAKE_DURATION, SLOW_MO_DURATION, SLOW_MO_FACTOR, HITSTOP_DURATION, HAZARD_HITSTOP_DURATION,
   SQUASH_ON_LAND, STRETCH_ON_JUMP, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED,
   AFTERIMAGE_INTERVAL, AFTERIMAGE_SPEED_THRESHOLD, AFTERIMAGE_MAX,
@@ -36,11 +35,6 @@ import {
   SPRING_TRAIL_DURATION, SCORE_ANIM_DURATION,
   GRAVITY, FRICTION, MAX_WALK_SPEED, JUMP_IMPULSE, MAX_FALL_SPEED,
   BLOOD_COLOR,
-  GIB_GRAVITY, GIB_LAUNCH_SPEED_MIN, GIB_LAUNCH_SPEED_MAX, GIB_ROTATION_MAX,
-  GIB_BOUNCE_FACTOR, GIB_GEYSER_STRENGTH_MULT, GIB_MAX_FLIGHT, GIB_MAX_COUNT,
-  CONFETTI_COUNT, CONFETTI_GRAVITY, CONFETTI_FLUTTER, CONFETTI_LIFE_MIN, CONFETTI_LIFE_MAX,
-  SPAWN_EXCLUSION_MARGIN, SPRING_VERTICAL_CLEARANCE, SPAWN_RETRY_ATTEMPTS,
-  THORN_WIDTH, THORN_HEIGHT, THORN_Y_OFFSET,
 } from './constants';
 import { getCharacterForSlot } from './characters';
 import { AIController } from './ai';
@@ -48,6 +42,18 @@ import { debugFlags, toggleNavDebug, toggleNetDebug } from './debugFlags';
 import { fastSin } from './fastMath';
 import type { BotNavDebugState } from './navDebugOverlay';
 import type { NetDebugStats } from './net/core/debugOverlay';
+
+// Extracted submodules
+import { emitParticle, spawnDustParticles, spawnGoreParticles, spawnConfetti, spawnCarrotVFX, spawnFirework, updateParticles, updateConfetti } from './gameLoop/cosmetics/particles';
+import { launchGib, spawnGibs, updateGibs } from './gameLoop/cosmetics/gibs';
+import { createWeatherParticle, updateWeather, updateWildlife, updateFog, updatePollen, updateShootingStars, updateShockwaves, updateScoreAnimations, updateBouncyWobble, updatePigeonScatterParticles } from './gameLoop/cosmetics/environment';
+import { decaySfxCooldowns, getOrCreateCooldowns, updateCrowdCheering, tickPeriodicAmbient } from './gameLoop/cosmetics/sfx';
+import type { SfxCooldowns } from './gameLoop/cosmetics/sfx';
+import { spawnSpring, spawnThorn, updateHazardLifetimes } from './gameLoop/gameplay/hazards';
+import { spawnCarrot } from './gameLoop/gameplay/carrots';
+import { updateLavaRocks, updateGhosts, updateGeyserTimers, updatePigeonFlocks } from './gameLoop/gameplay/arenaEntities';
+import { applyEffectZones, updateZeroGSound } from './gameLoop/gameplay/effectZones';
+import { checkMatchEnd as _checkMatchEnd, getPlayerInput as _getPlayerInput } from './gameLoop/gameplay/match';
 
 /** Force 32-bit float for cross-architecture determinism (x86 80-bit vs ARM 64-bit). */
 const f = Math.fround;
@@ -109,10 +115,8 @@ export class GameLoop {
   private newGroundedGibsSinceRender: Gib[] = [];
   private _debugKeyHandler: ((e: KeyboardEvent) => void) | null = null;
 
-  // SFX cooldowns (per-player)
-  private landCooldowns: Map<PlayerSlot, number> = new Map();
-  private headbonkCooldowns: Map<PlayerSlot, number> = new Map();
-  private crouchCooldowns: Map<PlayerSlot, number> = new Map();
+  // SFX cooldowns (per-player, consolidated)
+  private sfxCooldowns: Map<PlayerSlot, SfxCooldowns> = new Map();
   // Global bump cooldown (prevents double-fire from both pushed players)
   // bumpCooldown removed — bump detection now uses sideSquash transition in cosmeticStep
 
@@ -135,6 +139,10 @@ export class GameLoop {
   private _resimulating = false; // true during rollback resimulation — skip cosmetic systems
   // Explicit inputs injected by rollback engine (keyed by PlayerSlot)
   private _networkInputs?: Map<string, InputState>;
+
+  // Bound callbacks for extracted submodules (avoids .bind() allocations in hot paths)
+  private readonly _boundGameRandom = (): number => this.gameRandom();
+  private readonly _boundPlaySound = (name: string): void => this.playSound(name as Parameters<typeof audio.play>[0]);
 
   // Previous-frame state for cosmetic transition detection (cosmeticStep)
   private prevCosmeticState: Map<PlayerSlot, PrevPlayerCosmeticState> = new Map();
@@ -374,18 +382,7 @@ export class GameLoop {
   }
 
   private createWeatherParticle(randomY: boolean): WeatherParticle {
-    const chosen = pickWeighted(this.theme.weather.types);
-    return {
-      x: Math.random() * CANVAS_WIDTH,
-      y: randomY ? Math.random() * CANVAS_HEIGHT : -10,
-      vx: randRange(chosen.vxRange),
-      vy: randRange(chosen.vyRange),
-      size: randRange(chosen.sizeRange),
-      type: chosen.type,
-      rotation: Math.random() * Math.PI * 2,
-      rotSpeed: randRange(chosen.rotSpeedRange),
-      color: chosen.color,
-    };
+    return createWeatherParticle(this.theme, randomY);
   }
 
   start(): void {
@@ -560,12 +557,7 @@ export class GameLoop {
       if (!player.active) continue;
 
       // SFX cooldown decay (must tick even during hitstop so cooldowns don't accumulate)
-      const lc = this.landCooldowns.get(player.id);
-      if (lc !== undefined && lc > 0) this.landCooldowns.set(player.id, lc - dt);
-      const hc = this.headbonkCooldowns.get(player.id);
-      if (hc !== undefined && hc > 0) this.headbonkCooldowns.set(player.id, hc - dt);
-      const cc = this.crouchCooldowns.get(player.id);
-      if (cc !== undefined && cc > 0) this.crouchCooldowns.set(player.id, cc - dt);
+      decaySfxCooldowns(this.sfxCooldowns, player.id, dt);
 
       // Cosmetic timer decay (runs even during hitstop for smooth visuals)
       if (player.damageFlashTimer > 0) player.damageFlashTimer = Math.max(0, player.damageFlashTimer - dt);
@@ -592,10 +584,10 @@ export class GameLoop {
 
           // Landing: airborne → grounded
           if (wasAirborne && isGrounded && Math.abs(prev.vy) >= DUST_LAND_VY_THRESHOLD) {
-            const landCD = this.landCooldowns.get(player.id) ?? 0;
-            if (landCD <= 0) {
+            const cd = getOrCreateCooldowns(this.sfxCooldowns, player.id);
+            if (cd.land <= 0) {
               this.playSound('land');
-              this.landCooldowns.set(player.id, 0.1);
+              cd.land = 0.1;
             }
             this.spawnDustParticles(player, Math.abs(prev.vy));
           }
@@ -838,103 +830,22 @@ export class GameLoop {
     // - collision particles for thorn/hazard/ghost/lava rock (depend on exact collision position)
 
     // --- Particle systems ---
-    this.updateWeather(dt);
-    this.updateParticles(dt);
-    this.updateGibs(dt);
-    this.updateConfetti(dt);
+    this._updateWeather(dt);
+    this._updateParticles(dt);
+    this._updateGibs(dt);
+    this._updateConfetti(dt);
 
     // --- Environment (wildlife, fog, pollen, shooting stars) ---
-    for (const w of this.state.wildlife) {
-      w.wingPhase += dt * 8;
-      if (w.type === 'butterfly') {
-        w.x += w.vx * dt;
-        w.vy = Math.sin(w.wingPhase * 0.5) * 20;
-        w.y += w.vy * dt;
-        if (w.x > CANVAS_WIDTH + 20) w.x = -20;
-        if (w.x < -20) w.x = CANVAS_WIDTH + 20;
-        if (w.y < -20) w.y = CANVAS_HEIGHT * 0.6;
-        if (w.y > CANVAS_HEIGHT * 0.6) w.y = 0;
-      } else {
-        w.x += w.vx * dt;
-        w.y += Math.sin(w.wingPhase * 0.3) * 5 * dt;
-        if (w.x > CANVAS_WIDTH + 50) {
-          w.x = -50 - Math.random() * 100;
-          w.y = Math.random() * CANVAS_HEIGHT * 0.4;
-          w.vx = 40 + Math.random() * 40;
-        }
-      }
-    }
-    for (const fg of this.state.fogParticles) {
-      fg.x += fg.vx * dt;
-      if (fg.x > CANVAS_WIDTH + 30) fg.x = -30;
-    }
-    for (const p of this.state.pollenParticles) {
-      p.x += p.vx * dt;
-      p.y += p.vy * dt;
-      if (p.y < -10) {
-        p.y = CANVAS_HEIGHT + 10;
-        p.x = Math.random() * CANVAS_WIDTH;
-      }
-    }
-    // Spawn new shooting stars (night phase)
-    if (this.theme.dayNight.showShootingStars && this.state.dayPhase > 0.4 && Math.random() < 0.005) {
-      const svx = 300 + Math.random() * 200;
-      const svy = 50 + Math.random() * 50;
-      this.state.shootingStars.push({
-        x: Math.random() * CANVAS_WIDTH * 0.5,
-        y: Math.random() * CANVAS_HEIGHT * 0.3,
-        vx: svx, vy: svy, life: 0.4,
-        tailLen: Math.min(40, Math.sqrt(svx * svx + svy * svy) * 0.1),
-      });
-    }
-    for (let i = this.state.shootingStars.length - 1; i >= 0; i--) {
-      const star = this.state.shootingStars[i];
-      star.x += star.vx * dt;
-      star.y += star.vy * dt;
-      star.life -= dt;
-      if (star.life <= 0) swapRemove(this.state.shootingStars, i);
-    }
+    updateWildlife(this.state, dt);
+    updateFog(this.state, dt);
+    updatePollen(this.state, dt);
+    updateShootingStars(this.state, this.theme, dt);
 
-    // --- Shockwave decay ---
-    for (const sw of this.state.shockwaves) {
-      const progress = 1 - sw.life / SHOCKWAVE_DURATION;
-      sw.radius = sw.maxRadius * progress;
-      sw.life -= dt;
-    }
-    for (let i = this.state.shockwaves.length - 1; i >= 0; i--) {
-      if (this.state.shockwaves[i].life <= 0) {
-        swapRemove(this.state.shockwaves, i);
-      }
-    }
-
-    // --- Score animation decay ---
-    for (const sa of this.state.scoreAnimations) {
-      sa.timer -= dt;
-    }
-    for (let i = this.state.scoreAnimations.length - 1; i >= 0; i--) {
-      if (this.state.scoreAnimations[i].timer <= 0) {
-        swapRemove(this.state.scoreAnimations, i);
-      }
-    }
-
-    // --- Bouncy wobble decay ---
-    for (const [bi, timer] of this.state.bouncyWobble) {
-      const next = timer - dt;
-      if (next <= 0) this.state.bouncyWobble.delete(bi);
-      else this.state.bouncyWobble.set(bi, next);
-    }
-
-    // --- Pigeon scatter particle decay ---
-    for (const flock of this.state.pigeonFlocks) {
-      for (let si = flock.scatterParticles.length - 1; si >= 0; si--) {
-        const sp = flock.scatterParticles[si];
-        sp.x += sp.vx * dt;
-        sp.y += sp.vy * dt;
-        sp.vy += 100 * dt;
-        sp.life -= dt;
-        if (sp.life <= 0) swapRemove(flock.scatterParticles, si);
-      }
-    }
+    // --- Visual decay systems ---
+    updateShockwaves(this.state, dt);
+    updateScoreAnimations(this.state, dt);
+    updateBouncyWobble(this.state, dt);
+    updatePigeonScatterParticles(this.state, dt);
   }
 
   // Public VFX methods removed — cosmeticStep() calls private methods directly.
@@ -953,9 +864,9 @@ export class GameLoop {
           this.fireworkTimer = 0.3;
           this.spawnFirework();
         }
-        this.updateParticles(frameDt);
-        this.updateGibs(frameDt);
-        this.updateConfetti(frameDt);
+        this._updateParticles(frameDt);
+        this._updateGibs(frameDt);
+        this._updateConfetti(frameDt);
       }
     }
     // Bake settled gibs/blood
@@ -1039,10 +950,9 @@ export class GameLoop {
         this.fireworkTimer = 0.3;
         this.spawnFirework();
       }
-      // Update firework particles with gravity
-      this.updateParticles(frameTime);
-      this.updateGibs(frameTime);
-      this.updateConfetti(frameTime);
+      this._updateParticles(frameTime);
+      this._updateGibs(frameTime);
+      this._updateConfetti(frameTime);
     }
 
     // Render — bake settled gibs and blood drips onto persistent background canvas
@@ -1071,247 +981,51 @@ export class GameLoop {
     this.rafId = requestAnimationFrame(this.loop);
   };
 
-  // ---- Hazard spawning ----
+  // ---- Hazard spawning (delegates to gameplay/hazards) ----
 
-  /** Check if any active player is standing on the given platform near x */
-  private playerNearSpawn(plat: Platform, spawnX: number): boolean {
-    const margin = SPAWN_EXCLUSION_MARGIN;
-    for (const p of this.state.players) {
-      if (!p.active || p.state === 'splat' || p.state === 'respawning') continue;
-      const feetY = p.y + p.height;
-      // Player is on this platform and near the spawn x
-      if (feetY >= plat.y - 4 && feetY <= plat.y + 6 &&
-          p.x + p.width > plat.x && p.x < plat.x + plat.width &&
-          Math.abs((p.x + p.width / 2) - spawnX) < margin) {
-        return true;
-      }
-    }
-    return false;
+  private _spawnSpring(): void {
+    spawnSpring(this.state, this.floatingPlatforms, this.arena.platforms, this.arena.noSprings, this._boundGameRandom);
   }
 
-  private spawnSpring(): void {
-    if (this.arena.noSprings) return;
-    if (this.floatingPlatforms.length === 0) return;
-    const minClearance = SPRING_VERTICAL_CLEARANCE;
-    const candidates = this.floatingPlatforms.filter(({ plat }) => {
-      for (const other of this.arena.platforms) {
-        if (other === plat) continue;
-        // Check if another platform is directly above within clearance range
-        if (other.y < plat.y && plat.y - other.y < minClearance &&
-            other.x < plat.x + plat.width && other.x + other.width > plat.x) {
-          return false;
-        }
-      }
-      return true;
-    });
-    if (candidates.length === 0) return;
-    // Pre-generate all candidates to consume a fixed number of gameRandom() calls
-    // regardless of playerNearSpawn() results (avoids RNG desync from float precision)
-    const attempts: Array<{ fp: typeof candidates[0]; x: number }> = [];
-    for (let i = 0; i < SPAWN_RETRY_ATTEMPTS; i++) {
-      const fp = candidates[Math.floor(this.gameRandom() * candidates.length)];
-      const x = fp.plat.x + 20 + this.gameRandom() * (fp.plat.width - 40);
-      attempts.push({ fp, x });
-    }
-    for (const { fp, x } of attempts) {
-      if (!this.playerNearSpawn(fp.plat, x)) {
-        this.state.springs.push({
-          x, y: fp.plat.y, platformIndex: fp.idx,
-          bounceTimer: 0, life: HAZARD_LIFETIME, growTimer: HAZARD_GROW_TIME,
-        });
-        return;
-      }
-    }
+  private _spawnThorn(): void {
+    spawnThorn(this.state, this.floatingPlatforms, this._boundGameRandom);
   }
 
-  private spawnThorn(): void {
-    if (this.floatingPlatforms.length === 0) return;
-    // Pre-generate all candidates to consume a fixed number of gameRandom() calls
-    const attempts: Array<{ fp: { plat: Platform; idx: number }; x: number }> = [];
-    for (let i = 0; i < SPAWN_RETRY_ATTEMPTS; i++) {
-      const fp = this.floatingPlatforms[Math.floor(this.gameRandom() * this.floatingPlatforms.length)];
-      const x = fp.plat.x + 10 + this.gameRandom() * (fp.plat.width - 44);
-      attempts.push({ fp, x });
-    }
-    for (const { fp, x } of attempts) {
-      if (!this.playerNearSpawn(fp.plat, x)) {
-        this.state.thorns.push({
-          x, y: fp.plat.y - THORN_Y_OFFSET, width: THORN_WIDTH, height: THORN_HEIGHT,
-          platformIndex: fp.idx, life: HAZARD_LIFETIME, growTimer: HAZARD_GROW_TIME, hit: false,
-        });
-        return;
-      }
-    }
-  }
-
-  /** Emit a particle, reusing a recycled object if available to reduce GC pressure. */
+  /** Emit a particle via the pool. */
   private emitParticle(x: number, y: number, vx: number, vy: number, life: number, size: number, color: string): void {
-    const recycled = this.particleFreeList.pop();
-    if (recycled) {
-      recycled.x = x; recycled.y = y; recycled.vx = vx; recycled.vy = vy;
-      recycled.life = life; recycled.maxLife = life; recycled.size = size; recycled.color = color;
-      this.particles.push(recycled);
-    } else {
-      this.particles.push({ x, y, vx, vy, life, maxLife: life, size, color });
-    }
+    emitParticle(this.particles, this.particleFreeList, x, y, vx, vy, life, size, color);
   }
 
-  // ---- Particle spawners ----
+  // ---- Particle spawners (delegates to cosmetics/) ----
 
   private spawnDustParticles(player: Player, landVy: number): void {
-    const cx = player.x + player.width / 2;
-    const groundY = player.y + player.height;
-    const intensity = Math.min(landVy / 300, 3);
-    const count = Math.floor(8 + intensity * 6);
-    for (let i = 0; i < count; i++) {
-      const life = 0.3 + Math.random() * 0.4 * intensity;
-      this.emitParticle(cx + (Math.random() - 0.5) * player.width * 1.5, groundY - Math.random() * 4, (Math.random() - 0.5) * 150 * intensity, -Math.random() * 80 * intensity - 20, life, 2 + Math.random() * 4 * intensity, '#C8B896');
-    }
+    spawnDustParticles(this.particles, this.particleFreeList, player, landVy);
   }
 
+  /** Orchestration: connects gore particles, gibs, and confetti modules. */
   private spawnKillSplatter(victim: Player): void {
     if (this.settings.goreMode) {
-      this.spawnGoreParticles(victim);
+      spawnGoreParticles(this.particles, this.particleFreeList, victim, this.settings.mods.extremeGore);
     }
-    this.spawnGibs(victim);
+    spawnGibs(this.state.gibs, victim, this.settings);
     if (!this.settings.goreMode) {
-      this.spawnConfetti(victim);
+      spawnConfetti(this.state.confetti, victim);
     }
   }
 
-  private spawnGoreParticles(victim: Player): void {
-    const cx = victim.x + victim.width / 2;
-    const cy = victim.y + victim.height / 2;
-    const baseCnt = 35 + Math.floor(Math.random() * 15);
-    const count = this.settings.mods.extremeGore ? baseCnt * 3 : baseCnt;
-    for (let i = 0; i < count; i++) {
-      const side = Math.random() < 0.5 ? -1 : 1;
-      const hSpeed = (120 + Math.random() * 220) * side;
-      const vSpeed = -(40 + Math.random() * 180);
-      const life = 0.6 + Math.random() * 0.8;
-      this.emitParticle(cx + (Math.random() - 0.5) * 14, cy + (Math.random() - 0.5) * 10, hSpeed + (Math.random() - 0.5) * 60, vSpeed, life, 2 + Math.random() * 5, BLOOD_COLOR);
-    }
-  }
-
-  private launchGib(
-    cx: number, cy: number, spread: number,
-    angleMin: number, angleMax: number, speedMin: number, speedMax: number,
-    w: number, h: number,
-    color: string, darkColor: string, lightColor: string,
-    characterName: string, gibType: GibType,
-  ): void {
-    const angle = -Math.PI * (angleMin + Math.random() * (angleMax - angleMin));
-    const speed = speedMin + Math.random() * (speedMax - speedMin);
-    this.state.gibs.push({
-      x: cx + (Math.random() - 0.5) * spread,
-      y: cy + (Math.random() - 0.5) * spread * 0.7,
-      vx: Math.cos(angle) * speed * (Math.random() < 0.5 ? 1 : -1),
-      vy: Math.sin(angle) * speed,
-      rotation: Math.random() * Math.PI * 2,
-      rotationSpeed: (Math.random() - 0.5) * 2 * GIB_ROTATION_MAX,
-      width: w, height: h,
-      color, darkColor, lightColor,
-      characterName, gibType,
-      bounced: false,
-      life: GIB_MAX_FLIGHT,
-    });
-  }
-
-  private spawnGibs(victim: Player): void {
-    const cx = victim.x + victim.width / 2;
-    const cy = victim.y + victim.height / 2;
-    const { color, darkColor, lightColor, name } = victim.character;
-    const gore = this.settings.goreMode;
-    const extreme = this.settings.mods.extremeGore;
-    const mult = extreme ? 10 : 1;
-    const confettiColors = GameLoop.CONFETTI_COLORS;
-    const pickConfetti = () => confettiColors[Math.floor(Math.random() * confettiColors.length)];
-    // Character body part gibs
-    const gibDefs = getCharacterGibs(name);
-    if (gibDefs) {
-      for (let r = 0; r < mult; r++) {
-        for (const def of gibDefs) {
-          this.launchGib(cx, cy, 12 + r * 3, 0.15, 0.85, GIB_LAUNCH_SPEED_MIN, GIB_LAUNCH_SPEED_MAX,
-            def.width, def.height, color, darkColor, lightColor, name, def.gibType);
-        }
-      }
-    }
-    // Chunk gibs: blood in gore mode, confetti-colored in non-gore
-    const chunkCount = (5 + Math.floor(Math.random() * 4)) * mult;
-    for (let i = 0; i < chunkCount; i++) {
-      const size = 4 + Math.random() * 6;
-      const c = gore ? BLOOD_COLOR : pickConfetti();
-      this.launchGib(cx, cy, 16, 0.1, 0.9, GIB_LAUNCH_SPEED_MIN * 0.8, GIB_LAUNCH_SPEED_MAX,
-        size, size * (0.6 + Math.random() * 0.4), c, c, c, '', 'body');
-    }
-    // Micro drop gibs: blood specks in gore mode, confetti specks in non-gore
-    const microCount = (25 + Math.floor(Math.random() * 15)) * mult;
-    for (let i = 0; i < microCount; i++) {
-      const size = 1.5 + Math.random() * 2.5;
-      const c = gore ? BLOOD_COLOR : pickConfetti();
-      this.launchGib(cx, cy, 20, 0.05, 0.95, GIB_LAUNCH_SPEED_MIN * 0.5, GIB_LAUNCH_SPEED_MAX * 1.2,
-        size, size, c, c, c, '', 'body');
-    }
-    // Cap airborne gibs (grounded ones are baked to bgCtx)
-    const gibCap = extreme ? GIB_MAX_COUNT * 10 : GIB_MAX_COUNT;
-    while (this.state.gibs.length > gibCap) {
-      swapRemove(this.state.gibs, 0);
-    }
-  }
-
-  private static readonly CONFETTI_COLORS = ['#FFD700', '#FF69B4', '#00FFFF', '#7CFC00', '#FF6347', '#DA70D6', '#FFA500'];
-  private static readonly CONFETTI_SHAPES: Array<'star' | 'diamond' | 'circle' | 'ribbon'> = ['star', 'diamond', 'circle', 'ribbon'];
-
-  private spawnConfetti(victim: Player): void {
-    const cx = victim.x + victim.width / 2;
-    const cy = victim.y + victim.height / 2;
-    const colors = GameLoop.CONFETTI_COLORS;
-    const shapes = GameLoop.CONFETTI_SHAPES;
-    for (let i = 0; i < CONFETTI_COUNT; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 60 + Math.random() * 190;
-      const life = CONFETTI_LIFE_MIN + Math.random() * (CONFETTI_LIFE_MAX - CONFETTI_LIFE_MIN);
-      this.state.confetti.push({
-        x: cx + (Math.random() - 0.5) * 10,
-        y: cy + (Math.random() - 0.5) * 10,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - 80,
-        life,
-        maxLife: life,
-        size: 3 + Math.random() * 4,
-        color: colors[Math.floor(Math.random() * colors.length)],
-        shape: shapes[Math.floor(Math.random() * shapes.length)],
-        rotation: Math.random() * Math.PI * 2,
-        rotationSpeed: (Math.random() - 0.5) * 10,
-        flutter: Math.random() * Math.PI * 2,
-      });
-    }
-  }
-
-  private spawnCarrotVFX(x: number, y: number): void {
-    // Sparkle burst when carrot appears
-    for (let i = 0; i < 12; i++) {
-      const angle = (i / 12) * Math.PI * 2;
-      const speed = 40 + Math.random() * 60;
-      const life = 0.5 + Math.random() * 0.3;
-      this.emitParticle(x, y + CARROT_SIZE / 2, Math.cos(angle) * speed, Math.sin(angle) * speed, life, 2 + Math.random() * 3, i % 2 === 0 ? '#FFD700' : '#FF8C00');
-    }
-  }
-
+  /** Orchestration: connects gib launcher + particle emitter for carrot pickup. */
   private pickupCarrotVFX(x: number, y: number): void {
     const cy = y + CARROT_SIZE / 2;
-    // Orange carrot chunks — gib-style (bounce + settle on ground)
+    // Orange carrot chunks
     for (let i = 0; i < 4; i++) {
       const s = 4 + Math.random() * 3;
-      this.launchGib(x, cy, 10, 0.15, 0.85, 80, 200, s, s,
-        '#FF8C00', '#CC6600', '#FFB040', '', 'body');
+      launchGib(this.state.gibs, x, cy, 10, 0.15, 0.85, 80, 200, s, s, '#FF8C00', '#CC6600', '#FFB040', '', 'body');
     }
     // Green leaf pieces
     for (let i = 0; i < 2; i++) {
-      this.launchGib(x, cy, 8, 0.2, 0.8, 60, 160, 5, 3,
-        '#4CAF50', '#2E7D32', '#81C784', '', 'body');
+      launchGib(this.state.gibs, x, cy, 8, 0.2, 0.8, 60, 160, 5, 3, '#4CAF50', '#2E7D32', '#81C784', '', 'body');
     }
-    // Orange/gold particle burst (instant feedback)
+    // Orange/gold particle burst
     for (let i = 0; i < 16; i++) {
       const angle = Math.random() * Math.PI * 2;
       const speed = 80 + Math.random() * 140;
@@ -1327,234 +1041,37 @@ export class GameLoop {
   }
 
   private spawnFirework(): void {
-    const fx = Math.random() * CANVAS_WIDTH;
-    const fy = Math.random() * (CANVAS_HEIGHT * 0.5); // upper half
-    const count = 20 + Math.floor(Math.random() * 11); // 20-30
-    const brightColors = ['#FF4444', '#44FF44', '#4444FF', '#FFFF44', '#FF44FF', '#44FFFF', '#FFD700', '#FF8C00', '#FF69B4'];
-    const color = brightColors[Math.floor(Math.random() * brightColors.length)];
-    for (let i = 0; i < count; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 60 + Math.random() * 140;
-      const life = 0.6 + Math.random() * 0.6;
-      this.emitParticle(fx, fy, Math.cos(angle) * speed, Math.sin(angle) * speed - 50, life, 2 + Math.random() * 4, color);
-    }
+    spawnFirework(this.particles, this.particleFreeList);
   }
 
-  // ---- Carrot spawning ----
+  // ---- Carrot spawning (delegates to gameplay/carrots) ----
 
-  private spawnCarrot(): void {
-    const candidates: Array<{ x: number; y: number; distSq: number }> = [];
-
-    const minDistSqTo = (cx: number, cy: number): number => {
-      let minSq = Infinity;
-      for (const p of this.state.players) {
-        if (!p.active || p.state === 'splat' || p.state === 'respawning') continue;
-        const dx = cx - (p.x + p.width / 2);
-        const dy = cy - (p.y + p.height / 2);
-        const sq = dx * dx + dy * dy;
-        if (sq < minSq) minSq = sq;
-      }
-      for (const c of this.state.carrots) {
-        if (!c.active) continue;
-        const dx = cx - c.x;
-        const dy = cy - c.y;
-        const sq = dx * dx + dy * dy;
-        if (sq < minSq) minSq = sq;
-      }
-      return minSq;
-    };
-
-    for (const plat of this.arena.platforms) {
-      // On-platform candidates
-      for (let attempt = 0; attempt < 3; attempt++) {
-        const cx = plat.x + 20 + this.gameRandom() * (plat.width - 40);
-        const cy = plat.y - CARROT_SIZE;
-        candidates.push({ x: cx, y: cy, distSq: minDistSqTo(cx, cy) });
-      }
-      // Mid-air candidates above platforms (reachable by jumping)
-      for (let attempt = 0; attempt < 2; attempt++) {
-        const cx = plat.x + 20 + this.gameRandom() * (plat.width - 40);
-        const cy = Math.max(CARROT_SIZE, plat.y - 60 - this.gameRandom() * 60);
-        candidates.push({ x: cx, y: cy, distSq: minDistSqTo(cx, cy) });
-      }
-    }
-    // Extra mid-air candidates inside effect zones (carrots floating in zero-G, etc.)
-    for (const zone of this.cachedZeroGZones) {
-      for (let attempt = 0; attempt < 5; attempt++) {
-        const cx = zone.x + 30 + this.gameRandom() * (zone.width - 60);
-        const cy = zone.y + 30 + this.gameRandom() * (zone.height - 60);
-        candidates.push({ x: cx, y: cy, distSq: minDistSqTo(cx, cy) * 2.25 }); // 1.5x bias squared
-      }
-    }
-    // Extra candidates inside carrot zones (increased spawn likelihood)
-    if (this.arena.carrotZones) {
-      for (const zone of this.arena.carrotZones) {
-        for (let attempt = 0; attempt < 8; attempt++) {
-          const cx = zone.x + 20 + this.gameRandom() * (zone.width - 40);
-          const cy = zone.y + 20 + this.gameRandom() * (zone.height - 40);
-          candidates.push({ x: cx, y: cy, distSq: minDistSqTo(cx, cy) * 4 }); // 2x bias squared
-        }
-      }
-    }
-    // Filter out candidates inside noSpawnZones (unreachable building interiors)
-    const noSpawn = this.arena.noSpawnZones;
-    if (noSpawn) {
-      for (let i = candidates.length - 1; i >= 0; i--) {
-        const c = candidates[i];
-        for (const z of noSpawn) {
-          if (c.x >= z.x && c.x <= z.x + z.width && c.y >= z.y && c.y <= z.y + z.height) {
-            swapRemove(candidates, i);
-            break;
-          }
-        }
-      }
-    }
-    // Pick candidate farthest from players/carrots
-    let bestIdx = 0;
-    let bestDistSq = -1;
-    for (let i = 0; i < candidates.length; i++) {
-      if (candidates[i].distSq > bestDistSq) {
-        bestDistSq = candidates[i].distSq;
-        bestIdx = i;
-      }
-    }
-    if (candidates.length > 0) {
-      const spot = candidates[bestIdx];
-      this.state.carrots.push({ x: spot.x, y: spot.y, active: true, spawnTime: this.state.timeElapsed });
-      this.spawnCarrotVFX(spot.x, spot.y);
+  private _spawnCarrot(): void {
+    const prevCount = this.state.carrots.length;
+    spawnCarrot(this.state, this.arena, this.cachedZeroGZones, this._boundGameRandom);
+    // Spawn VFX if a carrot was added
+    if (this.state.carrots.length > prevCount) {
+      const newCarrot = this.state.carrots[this.state.carrots.length - 1];
+      spawnCarrotVFX(this.particles, this.particleFreeList, newCarrot.x, newCarrot.y);
     }
   }
 
   // ---- Updates ----
 
-  private updateParticles(dt: number): void {
-    const platforms = this.arena.platforms;
-    const gore = this.settings.goreMode;
-    for (let i = this.particles.length - 1; i >= 0; i--) {
-      const p = this.particles[i];
-      p.life -= dt;
-      if (p.life <= 0) {
-        swapRemove(this.particles, i);
-        if (this.particleFreeList.length < 300) this.particleFreeList.push(p);
-        continue;
-      }
-      const prevY = p.y;
-      p.x += p.vx * dt;
-      p.y += p.vy * dt;
-      p.vy += 80 * dt;
-      // Blood particles leave drip marks on platform surfaces
-      if (gore && p.color === BLOOD_COLOR && p.vy > 0) {
-        for (let pi = 0; pi < platforms.length; pi++) {
-          const plat = platforms[pi];
-          if (prevY < plat.y && p.y >= plat.y && p.x >= plat.x && p.x <= plat.x + plat.width) {
-            this.newBloodDripsSinceRender.push({
-              x: p.x, y: plat.y,
-              radius: 2 + Math.random() * 3,
-              color: BLOOD_COLOR,
-            });
-            p.life = 0;
-            break;
-          }
-        }
-      }
-    }
+  private _updateParticles(dt: number): void {
+    updateParticles(this.particles, this.particleFreeList, this.arena.platforms, this.settings.goreMode, this.newBloodDripsSinceRender, dt);
   }
 
-  private updateGibs(dt: number): void {
-    const platforms = this.arena.platforms;
-    const gibs = this.state.gibs;
-    const effectZones = this.arena.effectZones;
-    for (let i = gibs.length - 1; i >= 0; i--) {
-      const g = gibs[i];
-      // Airborne gib physics
-      g.x += g.vx * dt;
-      g.y += g.vy * dt;
-      g.vy += GIB_GRAVITY * dt;
-      g.rotation += g.rotationSpeed * dt;
-      g.life -= dt;
-      // Effect zone interactions (zero-G, geyser, current)
-      if (effectZones) {
-        for (let zi = 0; zi < effectZones.length; zi++) {
-          const zone: EffectZone = effectZones[zi];
-          if (g.x < zone.x || g.x > zone.x + zone.width || g.y < zone.y || g.y > zone.y + zone.height) continue;
-          if (zone.type === 'zero_g') {
-            if (g.vy > 0) g.vy *= 0.92;
-            else if (g.vy < 0) g.vy *= 1.03;
-          } else if (zone.type === 'current') {
-            g.vx += (zone.vx || 0) * dt;
-            g.vy += (zone.vy || 0) * dt;
-          } else if (zone.type === 'geyser') {
-            const geyserIdx = this.geyserIndexMap.get(zone) ?? -1;
-            if (geyserIdx >= 0 && this.state.geyserStates[geyserIdx]?.active) {
-              g.vy = Math.min(g.vy, (zone.strength || -550) * GIB_GEYSER_STRENGTH_MULT);
-            }
-          }
-        }
-      }
-      // Platform collision
-      let settled = false;
-      const gibBottom = g.y + g.height / 2;
-      const prevBottom = gibBottom - g.vy * dt;
-      for (let pi = 0; pi < platforms.length; pi++) {
-        const plat = platforms[pi];
-        if (prevBottom < plat.y && gibBottom >= plat.y &&
-            g.x + g.width / 2 > plat.x && g.x - g.width / 2 < plat.x + plat.width) {
-          if (!g.bounced) {
-            g.vy = -Math.abs(g.vy) * GIB_BOUNCE_FACTOR;
-            g.vx *= 0.6;
-            g.rotationSpeed *= 0.5;
-            g.bounced = true;
-            g.y = plat.y - g.height / 2;
-          } else {
-            // Settle: bake to background canvas and remove from active array
-            g.y = plat.y - g.height / 2;
-            g.vx = 0;
-            g.vy = 0;
-            g.rotationSpeed = 0;
-            this.newGroundedGibsSinceRender.push(g);
-            swapRemove(gibs, i);
-            settled = true;
-          }
-          break;
-        }
-      }
-      if (settled) continue;
-      // Remove if max flight time exceeded without landing
-      if (g.life <= 0) {
-        swapRemove(gibs, i);
-      }
-    }
+  private _updateGibs(dt: number): void {
+    updateGibs(this.state.gibs, this.arena.platforms, this.arena.effectZones, this.geyserIndexMap, this.state.geyserStates, this.newGroundedGibsSinceRender, dt);
   }
 
-  private updateConfetti(dt: number): void {
-    const confetti = this.state.confetti;
-    const time = this.state.timeElapsed;
-    for (let i = confetti.length - 1; i >= 0; i--) {
-      const c = confetti[i];
-      c.life -= dt;
-      if (c.life <= 0) {
-        swapRemove(confetti, i);
-        continue;
-      }
-      c.x += c.vx * dt + Math.sin(time * 6 + c.flutter) * CONFETTI_FLUTTER * dt;
-      c.y += c.vy * dt;
-      c.vy += CONFETTI_GRAVITY * dt;
-      c.rotation += c.rotationSpeed * dt;
-    }
+  private _updateConfetti(dt: number): void {
+    updateConfetti(this.state.confetti, this.state.timeElapsed, dt);
   }
 
-  private updateWeather(dt: number): void {
-    for (let i = this.state.weather.length - 1; i >= 0; i--) {
-      const w = this.state.weather[i];
-      w.x += w.vx * dt;
-      w.y += w.vy * dt;
-      w.rotation += w.rotSpeed * dt;
-      // Gentle sway
-      w.vx += (Math.random() - 0.5) * 20 * dt;
-      if (w.y > CANVAS_HEIGHT + 10 || w.x > CANVAS_WIDTH + 10) {
-        this.state.weather[i] = this.createWeatherParticle(false);
-      }
-    }
+  private _updateWeather(dt: number): void {
+    updateWeather(this.state, this.theme, dt);
   }
 
   /** Run one fixed-timestep simulation tick. Public for rollback engine. */
@@ -1583,118 +1100,32 @@ export class GameLoop {
     // Hazard spawn timers (fround prevents cross-arch zero-crossing divergence → RNG desync)
     this.state.springSpawnTimer = f(this.state.springSpawnTimer - dt);
     if (this.state.springSpawnTimer <= 0) {
-      this.spawnSpring();
-      this.state.springSpawnTimer = SPRING_SPAWN_INTERVAL; // fixed interval — no RNG call
+      this._spawnSpring();
+      this.state.springSpawnTimer = SPRING_SPAWN_INTERVAL;
     }
     this.state.thornSpawnTimer = f(this.state.thornSpawnTimer - dt);
     if (this.state.thornSpawnTimer <= 0) {
-      this.spawnThorn();
-      this.state.thornSpawnTimer = THORN_SPAWN_INTERVAL; // fixed interval — no RNG call
+      this._spawnThorn();
+      this.state.thornSpawnTimer = THORN_SPAWN_INTERVAL;
     }
 
-    // Update hazard lifetimes + grow timers (fround: zero-crossing divergence changes array length in hash)
-    for (const s of this.state.springs) {
-      s.life = f(s.life - dt);
-      if (s.growTimer > 0) s.growTimer = f(s.growTimer - dt);
-      if (s.bounceTimer > 0) s.bounceTimer = f(s.bounceTimer - dt);
-    }
-    for (let i = this.state.springs.length - 1; i >= 0; i--) {
-      if (this.state.springs[i].life <= 0) {
-        swapRemove(this.state.springs, i);
-      }
-    }
-
-    for (const t of this.state.thorns) {
-      t.life = f(t.life - dt);
-      if (t.growTimer > 0) t.growTimer = f(t.growTimer - dt);
-    }
-    for (let i = this.state.thorns.length - 1; i >= 0; i--) {
-      if (this.state.thorns[i].life <= 0 || this.state.thorns[i].hit) {
-        swapRemove(this.state.thorns, i);
-      }
-    }
+    // Update hazard lifetimes + grow timers
+    updateHazardLifetimes(this.state, dt);
 
     // Carrot timer
     this.state.carrotTimer = f(this.state.carrotTimer - dt);
     if (this.state.carrotTimer <= 0) {
-      this.spawnCarrot();
+      this._spawnCarrot();
       this.state.carrotTimer = this.settings.mods.carrotChase ? CARROT_CHASE_SPAWN_INTERVAL : CARROT_SPAWN_INTERVAL;
     }
 
     // Weather moved to cosmeticStep
 
-    // Update lava rocks
-    if (this.theme.lavaRockConfig) {
-      const lrc = this.theme.lavaRockConfig;
-      this.state.lavaRockTimer = f(this.state.lavaRockTimer - dt);
-      if (this.state.lavaRockTimer <= 0) {
-        this.state.lavaRockTimer = f(lrc.spawnInterval[0] + this.gameRandom() * (lrc.spawnInterval[1] - lrc.spawnInterval[0]));
-        this.state.lavaRocks.push({
-          x: f(80 + this.gameRandom() * (CANVAS_WIDTH - 160)),
-          y: -20,
-          vy: f(lrc.fallSpeed[0] + this.gameRandom() * (lrc.fallSpeed[1] - lrc.fallSpeed[0])),
-          size: f(lrc.sizeRange[0] + this.gameRandom() * (lrc.sizeRange[1] - lrc.sizeRange[0])),
-          rotation: f(this.gameRandom() * Math.PI * 2),
-          active: true,
-        });
-      }
-      for (const rock of this.state.lavaRocks) {
-        rock.y = f(rock.y + f(rock.vy * dt));
-        rock.rotation = f(rock.rotation + f(dt * 3));
-        if (rock.y > CANVAS_HEIGHT + 30) rock.active = false;
-      }
-      for (let i = this.state.lavaRocks.length - 1; i >= 0; i--) {
-        if (!this.state.lavaRocks[i].active) {
-          swapRemove(this.state.lavaRocks, i);
-        }
-      }
-    }
-
-    // Update ghosts (fround + fastSin for cross-architecture determinism)
-    for (const ghost of this.state.ghosts) {
-      ghost.x = f(ghost.x + f(ghost.vx * dt));
-      ghost.wobblePhase = f(ghost.wobblePhase + f(dt * 2));
-      ghost.y = f(ghost.y + f(fastSin(ghost.wobblePhase) * f(20 * dt)));
-      // Wrap around screen — use wobblePhase for Y (deterministic, no RNG call)
-      if (ghost.vx > 0 && ghost.x > CANVAS_WIDTH + ghost.size) {
-        ghost.x = -ghost.size;
-        ghost.y = f(300 + (ghost.wobblePhase % 1) * 300);
-      } else if (ghost.vx < 0 && ghost.x < -ghost.size) {
-        ghost.x = CANVAS_WIDTH + ghost.size;
-        ghost.y = f(300 + (ghost.wobblePhase % 1) * 300);
-      }
-    }
-
-
-    // Update geyser timers
-    const geyserZones = this.cachedGeyserZones;
-    for (let gi = 0; gi < this.state.geyserStates.length; gi++) {
-      const gs = this.state.geyserStates[gi];
-      const gz = geyserZones[gi];
-      if (!gz) continue;
-      if (!gs.active) {
-        gs.timer = f(gs.timer - dt);
-        if (gs.timer <= 0) {
-          gs.active = true;
-          gs.activeTimer = gz.duration || 3;
-          // geyser sound moved to cosmeticStep (vy delta detection)
-        }
-      } else {
-        gs.activeTimer = f(gs.activeTimer - dt);
-        if (gs.activeTimer <= 0) {
-          gs.active = false;
-          gs.timer = gz.interval || 10;
-        }
-      }
-    }
-
-    // Update pigeon flocks
-    for (const flock of this.state.pigeonFlocks) {
-      if (!flock.active) {
-        flock.respawnTimer = f(flock.respawnTimer - dt);
-        if (flock.respawnTimer <= 0) flock.active = true;
-      }
-    }
+    // Update arena entities (lava rocks, ghosts, geysers, pigeons)
+    updateLavaRocks(this.state, this.theme, dt, this._boundGameRandom);
+    updateGhosts(this.state, dt);
+    updateGeyserTimers(this.state, this.cachedGeyserZones, dt);
+    updatePigeonFlocks(this.state, dt);
 
     // Gameplay timers (hitstop gates physics; fat/slow/burn affect gameplay)
     // Cosmetic timers (animFrame, damageFlash, springTrail, fire particles) moved to cosmeticStep()
@@ -1753,10 +1184,10 @@ export class GameLoop {
 
       // Headbonk: ceiling collision clamped vy to 0 while going up
       if (wasAirborne && player.state === 'airborne' && prevVy < -10 && player.vy === 0) {
-        const bonkCD = this.headbonkCooldowns.get(player.id) ?? 0;
-        if (bonkCD <= 0) {
+        const cd = getOrCreateCooldowns(this.sfxCooldowns, player.id);
+        if (cd.headbonk <= 0) {
           this.playSound('headbonk');
-          this.headbonkCooldowns.set(player.id, 0.15);
+          cd.headbonk = 0.15;
         }
       }
 
@@ -1794,10 +1225,10 @@ export class GameLoop {
         player.squashScale = SQUASH_ON_CROUCH;
         // Crouch sound: only on initial sit-down
         if (!wasCrouching) {
-          const cc = this.crouchCooldowns.get(player.id) || 0;
-          if (cc <= 0) {
+          const cd = getOrCreateCooldowns(this.sfxCooldowns, player.id);
+          if (cd.crouch <= 0) {
             this.playSound('crouch');
-            this.crouchCooldowns.set(player.id, 0.2);
+            cd.crouch = 0.2;
           }
         }
       } else {
@@ -1999,42 +1430,9 @@ export class GameLoop {
       }
 
 
-      // Effect zone interactions
+      // Effect zone interactions (zero-G, current, geyser)
       if (this.arena.effectZones) {
-        for (let zi = 0; zi < this.arena.effectZones.length; zi++) {
-          const zone: EffectZone = this.arena.effectZones[zi];
-          if (!aabbOverlap(player.x, player.y, player.width, player.height, zone.x, zone.y, zone.width, zone.height)) continue;
-
-          if (zone.type === 'zero_g') {
-            // Low gravity field — boost upward movement, slow falls
-            if (player.vy > 0) {
-              // Falling — slow down significantly
-              player.vy = f(player.vy * 0.92);
-            } else if (player.vy < 0) {
-              // Rising — boost upward (amplify jumps)
-              player.vy = f(player.vy * 1.03);
-            }
-          } else if (zone.type === 'current') {
-            // Push player horizontally and/or vertically
-            player.vx = f(player.vx + f((zone.vx || 0) * dt));
-            player.vy = f(player.vy + f((zone.vy || 0) * dt));
-            // Splash when entering waterfall (landing or falling in)
-            if (justLanded || (wasAirborne && prevVy >= 200)) {
-              const sc = this.landCooldowns.get(player.id) || 0;
-              if (sc <= 0) {
-                audio.play('splash');
-                this.landCooldowns.set(player.id, 0.3);
-              }
-            }
-          } else if (zone.type === 'geyser') {
-            // Find matching geyser state
-            const geyserIdx = this.geyserIndexMap.get(zone) ?? -1;
-            if (geyserIdx >= 0 && this.state.geyserStates[geyserIdx]?.active) {
-              player.vy = f(Math.min(player.vy, zone.strength || -550));
-              player.state = 'airborne';
-            }
-          }
-        }
+        applyEffectZones(player, this.arena.effectZones, this.geyserIndexMap, this.state.geyserStates, justLanded, wasAirborne, prevVy, this.sfxCooldowns, this._boundPlaySound, dt);
       }
 
       // Bouncy platform check (on landing — skip if holding down on ground to avoid repeat bouncing)
@@ -2105,27 +1503,7 @@ export class GameLoop {
     }
 
     // Zero-G ambient sound management
-    const zeroGZones = this.cachedZeroGZones;
-    if (zeroGZones.length > 0) {
-      let anyInZeroG = false;
-      for (const p of this.state.players) {
-        if (!p.active || p.state === 'splat' || p.state === 'respawning') continue;
-        for (const z of zeroGZones) {
-          if (aabbOverlap(p.x, p.y, p.width, p.height, z.x, z.y, z.width, z.height)) {
-            anyInZeroG = true;
-            break;
-          }
-        }
-        if (anyInZeroG) break;
-      }
-      if (anyInZeroG && !this.zeroGSoundPlaying) {
-        this.playSound('zero_g');
-        this.zeroGSoundPlaying = true;
-      } else if (!anyInZeroG && this.zeroGSoundPlaying) {
-        audio.stop('zero_g');
-        this.zeroGSoundPlaying = false;
-      }
-    }
+    this.zeroGSoundPlaying = updateZeroGSound(this.state.players, this.cachedZeroGZones, this.zeroGSoundPlaying, this._boundPlaySound);
 
     // Stomps
     const { killFeedEntries } = checkStomps(this.state.players, this.arena.spawnPoints, this.state.timeElapsed, this.settings.mods);
@@ -2185,87 +1563,23 @@ export class GameLoop {
 
     // Minor sound effects that remain in fixedUpdate (host-only, depend on complex fixedUpdate context)
     if (!this._resimulating) {
-      // Crowd cheering
-      let leadScore = 0;
-      for (const p of this.state.players) { if (p.active && p.score > leadScore) leadScore = p.score; }
-      if (leadScore >= this.settings.killLimit - 3) {
-        if (!this.crowdStarted) {
-          this.playSound('crowd');
-          this.crowdStarted = true;
-        }
-        if (leadScore >= this.settings.killLimit - 1) {
-          audio.setVolume('crowd', 0.3);
-        } else {
-          audio.setVolume('crowd', 0.15);
-        }
-      } else if (this.crowdStarted) {
-        audio.setVolume('crowd', 0);
-        audio.stop('crowd');
-        this.crowdStarted = false;
-      }
-
-      // Periodic ambient sounds
-      const ambConfig = this.theme.ambientSoundConfig;
-      if (ambConfig?.periodic) {
-        for (const p of ambConfig.periodic) {
-          const remaining = (this.periodicAmbientTimers.get(p.sound) ?? 0) - dt;
-          if (remaining <= 0) {
-            this.playSound(p.sound);
-            const next = p.intervalRange[0] + Math.random() * (p.intervalRange[1] - p.intervalRange[0]);
-            this.periodicAmbientTimers.set(p.sound, next);
-          } else {
-            this.periodicAmbientTimers.set(p.sound, remaining);
-          }
-        }
-      }
+      this.crowdStarted = updateCrowdCheering(this.state, this.settings, this.crowdStarted, this._boundPlaySound);
+      tickPeriodicAmbient(this.theme, this.periodicAmbientTimers, dt, this._boundPlaySound);
     }
 
     this.checkMatchEnd();
   }
 
   private checkMatchEnd(): void {
-    for (const player of this.state.players) {
-      if (player.active && player.score >= this.settings.killLimit) {
-        this.state.slowMotion = SLOW_MO_DURATION; // slow-mo on final kill
-        this.endMatch(player.id);
-        return;
-      }
-    }
-    if (this.settings.timeLimit > 0 && this.state.timeElapsed >= this.settings.timeLimit) {
-      let winner: PlayerSlot | null = null;
-      let maxScore = -1;
-      for (const player of this.state.players) {
-        if (player.active && player.score > maxScore) { maxScore = player.score; winner = player.id; }
-      }
+    const winner = _checkMatchEnd(this.state, this.settings);
+    if (winner !== null) {
       this.state.slowMotion = SLOW_MO_DURATION;
       this.endMatch(winner);
     }
   }
 
   private getPlayerInput(player: Player): InputState {
-    // Network mode: use injected inputs for human players
-    if (this._networkInputs) {
-      const netInput = this._networkInputs.get(player.id);
-      if (netInput) {
-        // Host-side airborne conversion: remote players may send jump while
-        // actually airborne (their snapshot is delayed so they don't know yet).
-        // Convert to fast-fall using the host's authoritative state.
-        if (netInput.jump && player.state === 'airborne') {
-          return { left: netInput.left, right: netInput.right, jump: false, down: true };
-        }
-        return netInput;
-      }
-    }
-    if (isBotSlot(player.id)) {
-      const ai = this.aiControllers.get(player.id);
-      if (ai) return ai.getInput(player, this.state, this.arena, this.settings.mods.carrotChase, this.settings.mods.mirrorArena);
-      return { left: false, right: false, jump: false, down: false };
-    }
-    // Touch input for the local mobile player
-    if (this.touchInput && player.id === this.touchSlot) {
-      return this.touchInput.getInputForPlayer(player.state === 'airborne');
-    }
-    return this.input.getInput(player.id as import('./types').CharacterSlot);
+    return _getPlayerInput(player, this.input, this.touchInput, this.touchSlot, this._networkInputs, this.aiControllers, this.state, this.arena, this.settings);
   }
 
   getTouchInput(): TouchInputManager | null {
