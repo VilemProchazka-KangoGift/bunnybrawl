@@ -3,3 +3,5 @@ export { launchGib, spawnGibs, updateGibs } from './gibs';
 export { createWeatherParticle, updateWeather, updateWildlife, updateFog, updatePollen, updateShootingStars, updateShockwaves, updateScoreAnimations, updateBouncyWobble, updatePigeonScatterParticles } from './environment';
 export { decaySfxCooldowns, getOrCreateCooldowns, updateCrowdCheering, tickPeriodicAmbient } from './sfx';
 export type { SfxCooldowns } from './sfx';
+export { detectEntityTransitions, createPrevEntityState } from './entityTransitions';
+export type { PrevEntityState } from './entityTransitions';

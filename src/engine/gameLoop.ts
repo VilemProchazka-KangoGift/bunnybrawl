@@ -49,6 +49,8 @@ import { launchGib, spawnGibs, updateGibs } from './gameLoop/cosmetics/gibs';
 import { createWeatherParticle, updateWeather, updateWildlife, updateFog, updatePollen, updateShootingStars, updateShockwaves, updateScoreAnimations, updateBouncyWobble, updatePigeonScatterParticles } from './gameLoop/cosmetics/environment';
 import { decaySfxCooldowns, getOrCreateCooldowns, updateCrowdCheering, tickPeriodicAmbient } from './gameLoop/cosmetics/sfx';
 import type { SfxCooldowns } from './gameLoop/cosmetics/sfx';
+import { detectEntityTransitions } from './gameLoop/cosmetics/entityTransitions';
+import type { PrevEntityState } from './gameLoop/cosmetics/entityTransitions';
 import { spawnSpring, spawnThorn, updateHazardLifetimes } from './gameLoop/gameplay/hazards';
 import { spawnCarrot } from './gameLoop/gameplay/carrots';
 import { updateLavaRocks, updateGhosts, updateGeyserTimers, updatePigeonFlocks } from './gameLoop/gameplay/arenaEntities';
@@ -146,10 +148,10 @@ export class GameLoop {
 
   // Previous-frame state for cosmetic transition detection (cosmeticStep)
   private prevCosmeticState: Map<PlayerSlot, PrevPlayerCosmeticState> = new Map();
-  private prevEntityState = {
-    carrotActives: [] as boolean[],
-    springBounces: [] as number[],
-    thornHits: [] as boolean[],
+  private prevEntityState: PrevEntityState = {
+    carrotActives: [],
+    springBounces: [],
+    thornHits: [],
     countdownSec: 4,
     matchOver: false,
   };
@@ -773,52 +775,7 @@ export class GameLoop {
     }
 
     // --- Entity transition detection ---
-    const pes = this.prevEntityState;
-
-    // Carrots: active → inactive = pickup
-    // Note: carrot pickup sounds/VFX stay in fixedUpdate — entities are removed
-    // before cosmeticStep runs, making transition detection impossible here.
-    // On guest, carrot pickup is detected via score change (line 650).
-
-    // Springs: bounceTimer 0 → >0 (springs survive the bounce, so detection works)
-    for (let i = 0; i < this.state.springs.length; i++) {
-      const cur = this.state.springs[i].bounceTimer;
-      const prevBounce = pes.springBounces[i] ?? 0;
-      if (prevBounce <= 0 && cur > 0) {
-        this.playSound('spring');
-        // Set springTrailTimer on nearest player
-        const sx = this.state.springs[i].x;
-        const sy = this.state.springs[i].y;
-        let closest: Player | null = null;
-        let minDist = 60;
-        for (const p of this.state.players) {
-          if (!p.active || p.state === 'splat') continue;
-          const dist = Math.sqrt((p.x + p.width / 2 - sx) ** 2 + (p.y + p.height - sy) ** 2);
-          if (dist < minDist) { minDist = dist; closest = p; }
-        }
-        if (closest) closest.springTrailTimer = SPRING_TRAIL_DURATION;
-      }
-      pes.springBounces[i] = cur;
-    }
-    pes.springBounces.length = this.state.springs.length;
-
-    // Note: thorn/hazard/ghost/lava rock hit sounds stay in fixedUpdate —
-    // entities are removed before cosmeticStep runs. On guest, these are
-    // minor effects and acceptable to miss.
-
-    // Countdown
-    if (this.state.countdown > 0) {
-      const curSec = Math.ceil(this.state.countdown);
-      if (curSec < pes.countdownSec) this.playSound('countdown_beep');
-      pes.countdownSec = curSec;
-    } else if (pes.countdownSec > 0) {
-      this.playSound('countdown_go');
-      pes.countdownSec = 0;
-    }
-
-    // Match over
-    if (this.state.matchOver && !pes.matchOver) this.playSound('victory');
-    pes.matchOver = this.state.matchOver;
+    detectEntityTransitions(this.state, this.prevEntityState, this._boundPlaySound);
 
     // NOTE: The following minor effects remain in fixedUpdate (host-only, acceptable):
     // - crouch sound (depends on input.down + wasCrouching local var)
