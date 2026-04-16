@@ -6,11 +6,11 @@ import { updatePlayerCosmetics } from './playerCosmetics';
 export class PlayerCosmeticSystem implements CosmeticSystem {
   private state: MatchState;
   private effWalkSpeed: number;
-  private particleSystem: ParticleSystem;
   private playSound: (name: string) => void;
 
   private afterimageAccumulators: Map<PlayerSlot, number> = new Map();
   private footstepAccumulators: Map<PlayerSlot, number> = new Map();
+  private readonly _emitParticle: (x: number, y: number, vx: number, vy: number, life: number, size: number, color: string) => void;
 
   constructor(
     state: MatchState,
@@ -20,8 +20,8 @@ export class PlayerCosmeticSystem implements CosmeticSystem {
   ) {
     this.state = state;
     this.effWalkSpeed = effWalkSpeed;
-    this.particleSystem = particleSystem;
     this.playSound = playSound;
+    this._emitParticle = (x, y, vx, vy, life, size, color) => particleSystem.emitParticle(x, y, vx, vy, life, size, color);
   }
 
   init(): void {}
@@ -36,7 +36,7 @@ export class PlayerCosmeticSystem implements CosmeticSystem {
       updatePlayerCosmetics(
         player, dt, this.state.timeElapsed, this.effWalkSpeed,
         this.afterimageAccumulators, this.footstepAccumulators,
-        (x, y, vx, vy, life, size, color) => this.particleSystem.emitParticle(x, y, vx, vy, life, size, color),
+        this._emitParticle,
         this.playSound,
       );
     }

@@ -843,12 +843,12 @@ describe('Landing Dust', () => {
     player.active = true;
 
     // Access particles via public particleSystem
-    const particlesBefore = loop.particleSystem.particles.length;
+    const particlesBefore = loop.particleSystem.getParticles().length;
 
     loop.fixedUpdate(FIXED_TIMESTEP);
 
     // After landing with high velocity, dust particles should have been emitted
-    expect(loop.particleSystem.particles.length).toBeGreaterThan(particlesBefore);
+    expect(loop.particleSystem.getParticles().length).toBeGreaterThan(particlesBefore);
   });
 });
 
@@ -2562,7 +2562,7 @@ describe('Particle System', () => {
     const { loop } = createLoop();
     loop.skipCountdown();
 
-    const particlesBefore = loop.particleSystem.particles.length;
+    const particlesBefore = loop.particleSystem.getParticles().length;
 
     // Trigger particle emission by having a player land hard (dust)
     const player = loop.getState().players[0];
@@ -2574,7 +2574,7 @@ describe('Particle System', () => {
 
     loop.fixedUpdate(FIXED_TIMESTEP);
 
-    expect(loop.particleSystem.particles.length).toBeGreaterThan(particlesBefore);
+    expect(loop.particleSystem.getParticles().length).toBeGreaterThan(particlesBefore);
   });
 
   it('particles have life that decays each frame', () => {
@@ -2582,17 +2582,17 @@ describe('Particle System', () => {
     loop.skipCountdown();
 
     // Manually inject a particle into the internal array
-    loop.particleSystem.particles.push({
+    loop.particleSystem.getParticles().push({
       x: 500, y: 500, vx: 10, vy: -20,
       life: 1.0, maxLife: 1.0, size: 3, color: '#FF0000',
     });
 
-    const lifeBefore = loop.particleSystem.particles[0].life;
+    const lifeBefore = loop.particleSystem.getParticles()[0].life;
     loop.fixedUpdate(FIXED_TIMESTEP);
     loop.cosmeticStep(FIXED_TIMESTEP);
 
     // Particle life should have decreased
-    const particle = loop.particleSystem.particles.find((p: any) => p.maxLife === 1.0);
+    const particle = loop.particleSystem.getParticles().find((p: any) => p.maxLife === 1.0);
     if (particle) {
       expect(particle.life).toBeLessThan(lifeBefore);
     }
@@ -2603,17 +2603,17 @@ describe('Particle System', () => {
     loop.skipCountdown();
 
     // Inject a particle that's about to die
-    loop.particleSystem.particles.push({
+    loop.particleSystem.getParticles().push({
       x: 500, y: 500, vx: 0, vy: 0,
       life: FIXED_TIMESTEP * 0.5, maxLife: 1.0, size: 3, color: '#FF0000',
     });
 
-    expect(loop.particleSystem.particles.length).toBeGreaterThanOrEqual(1);
+    expect(loop.particleSystem.getParticles().length).toBeGreaterThanOrEqual(1);
 
     loop.fixedUpdate(FIXED_TIMESTEP);
 
     // The particle with very short life should have been removed
-    const deadParticle = loop.particleSystem.particles.find((p: any) => p.maxLife === 1.0 && p.life <= 0);
+    const deadParticle = loop.particleSystem.getParticles().find((p: any) => p.maxLife === 1.0 && p.life <= 0);
     expect(deadParticle).toBeUndefined();
   });
 });

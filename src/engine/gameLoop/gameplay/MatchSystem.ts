@@ -4,6 +4,7 @@ import type { GameplaySystem } from '../types';
 import { updateCrowdCheering, tickPeriodicAmbient } from '../cosmetics/sfx';
 import { checkMatchEnd } from './match';
 import { SLOW_MO_DURATION } from '../../constants';
+import { randRange } from '../../themes/utils';
 
 export class MatchSystem implements GameplaySystem {
   private state: MatchState;
@@ -48,7 +49,7 @@ export class MatchSystem implements GameplaySystem {
     // Initialize periodic ambient timers with random first-fire delay
     if (ambConfig?.periodic) {
       for (const p of ambConfig.periodic) {
-        const delay = p.intervalRange[0] + Math.random() * (p.intervalRange[1] - p.intervalRange[0]);
+        const delay = randRange(p.intervalRange);
         this.periodicAmbientTimers.set(p.sound, delay);
       }
     }

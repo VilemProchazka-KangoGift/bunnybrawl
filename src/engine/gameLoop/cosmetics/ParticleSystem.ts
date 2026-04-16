@@ -17,11 +17,11 @@ export class ParticleSystem implements CosmeticSystem {
   private theme: ThemeConfig;
   private settings: MatchSettings;
 
-  particles: Particle[] = [];
+  private _particles: Particle[] = [];
   private particleFreeList: Particle[] = [];
   private newBloodDripsSinceRender: Array<{ x: number; y: number; radius: number; color: string }> = [];
   private newGroundedGibsSinceRender: Gib[] = [];
-  fireworkTimer: number = 0;
+  private fireworkTimer: number = 0;
 
   // Cached zone data (set once from arena)
   private geyserIndexMap: ReadonlyMap<EffectZone, number>;
@@ -42,40 +42,34 @@ export class ParticleSystem implements CosmeticSystem {
 
   init(): void {}
 
-  /** Emit a particle via the pool. */
   emitParticle(x: number, y: number, vx: number, vy: number, life: number, size: number, color: string): void {
-    _emitParticle(this.particles, this.particleFreeList, x, y, vx, vy, life, size, color);
+    _emitParticle(this._particles, this.particleFreeList, x, y, vx, vy, life, size, color);
   }
 
-  /** Spawn dust on landing. */
   spawnDustParticles(player: Player, landVy: number): void {
-    _spawnDustParticles(this.particles, this.particleFreeList, player, landVy);
+    _spawnDustParticles(this._particles, this.particleFreeList, player, landVy);
   }
 
-  /** Spawn gore particles on kill. */
   spawnGoreParticles(victim: Player, extremeGore: boolean): void {
-    _spawnGoreParticles(this.particles, this.particleFreeList, victim, extremeGore);
+    _spawnGoreParticles(this._particles, this.particleFreeList, victim, extremeGore);
   }
 
-  /** Spawn confetti on kill (gore-off mode). */
   spawnConfettiVFX(victim: Player): void {
     _spawnConfetti(this.state.confetti, victim);
   }
 
-  /** Spawn carrot appearance sparkles. */
   spawnCarrotVFX(x: number, y: number): void {
-    _spawnCarrotVFX(this.particles, this.particleFreeList, x, y);
+    _spawnCarrotVFX(this._particles, this.particleFreeList, x, y);
   }
 
-  /** Spawn a firework burst. */
   spawnFirework(): void {
-    _spawnFirework(this.particles, this.particleFreeList);
+    _spawnFirework(this._particles, this.particleFreeList);
   }
 
   /** Orchestration: connects gore particles, gibs, and confetti modules for a kill. */
   spawnKillSplatter(victim: Player, settings: MatchSettings): void {
     if (settings.goreMode) {
-      _spawnGoreParticles(this.particles, this.particleFreeList, victim, settings.mods.extremeGore);
+      _spawnGoreParticles(this._particles, this.particleFreeList, victim, settings.mods.extremeGore);
     }
     spawnGibs(this.state.gibs, victim, settings);
     if (!settings.goreMode) {
@@ -186,15 +180,14 @@ export class ParticleSystem implements CosmeticSystem {
     }
   }
 
-  /** Returns particles array (needed by renderer). */
   getParticles(): Particle[] {
-    return this.particles;
+    return this._particles;
   }
 
   /** Update weather, particles, gibs, confetti. */
   cosmeticUpdate(dt: number): void {
     updateWeather(this.state, this.theme, dt);
-    updateParticles(this.particles, this.particleFreeList, this.arena.platforms, this.settings.goreMode, this.newBloodDripsSinceRender, dt);
+    updateParticles(this._particles, this.particleFreeList, this.arena.platforms, this.settings.goreMode, this.newBloodDripsSinceRender, dt);
     updateGibs(this.state.gibs, this.arena.platforms, this.arena.effectZones, this.geyserIndexMap, this.state.geyserStates, this.newGroundedGibsSinceRender, dt);
     updateConfetti(this.state.confetti, this.state.timeElapsed, dt);
   }
@@ -206,7 +199,7 @@ export class ParticleSystem implements CosmeticSystem {
       this.fireworkTimer = 0.3;
       this.spawnFirework();
     }
-    updateParticles(this.particles, this.particleFreeList, this.arena.platforms, this.settings.goreMode, this.newBloodDripsSinceRender, dt);
+    updateParticles(this._particles, this.particleFreeList, this.arena.platforms, this.settings.goreMode, this.newBloodDripsSinceRender, dt);
     updateGibs(this.state.gibs, this.arena.platforms, this.arena.effectZones, this.geyserIndexMap, this.state.geyserStates, this.newGroundedGibsSinceRender, dt);
     updateConfetti(this.state.confetti, this.state.timeElapsed, dt);
   }
@@ -224,7 +217,7 @@ export class ParticleSystem implements CosmeticSystem {
   }
 
   cleanup(): void {
-    this.particles.length = 0;
+    this._particles.length = 0;
     this.particleFreeList.length = 0;
     this.newBloodDripsSinceRender.length = 0;
     this.newGroundedGibsSinceRender.length = 0;
