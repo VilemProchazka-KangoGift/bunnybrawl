@@ -23,7 +23,7 @@ import {
   CARROT_FIRST_SPAWN_DELAY, CARROT_CHASE_FIRST_SPAWN_DELAY, CARROT_SIZE, GIANT_SCALE,
   FAT_DURATION, SPRING_BOUNCE,
   CANVAS_WIDTH, CANVAS_HEIGHT,
-  SLOW_MO_DURATION, SLOW_MO_FACTOR, HITSTOP_DURATION,
+  SLOW_MO_FACTOR, HITSTOP_DURATION,
   SQUASH_ON_LAND, STRETCH_ON_JUMP, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED,
   MATCH_COUNTDOWN,
   SCREEN_FLASH_DURATION,
@@ -37,7 +37,7 @@ import type { NetDebugStats } from '../net/core/debugOverlay';
 
 // Extracted submodules
 import { createWeatherParticle } from './cosmetics/environment';
-import { getOrCreateCooldowns, updateCrowdCheering, tickPeriodicAmbient } from './cosmetics/sfx';
+import { getOrCreateCooldowns } from './cosmetics/sfx';
 import { EnvironmentSystem } from './cosmetics/EnvironmentSystem';
 import { EntityTransitionSystem } from './cosmetics/EntityTransitionSystem';
 import { ParticleSystem } from './cosmetics/ParticleSystem';
@@ -49,7 +49,8 @@ import { ArenaEntitySystem } from './gameplay/ArenaEntitySystem';
 import { EffectZoneSystem } from './gameplay/EffectZoneSystem';
 import { PlayerCollisionSystem } from './gameplay/PlayerCollisionSystem';
 import { StompSystem } from './gameplay/StompSystem';
-import { checkMatchEnd as _checkMatchEnd, getPlayerInput as _getPlayerInput } from './gameplay/match';
+import { getPlayerInput as _getPlayerInput } from './gameplay/match';
+import { MatchSystem } from './gameplay/MatchSystem';
 
 /** Force 32-bit float for cross-architecture determinism (x86 80-bit vs ARM 64-bit). */
 const f = Math.fround;
@@ -80,7 +81,6 @@ export class GameLoop {
   private stopped = false;
   private paused = false;
   particleSystem!: ParticleSystem;
-  private crowdStarted = false;
   private aiControllers: Map<string, AIController> = new Map();
 
   // Gameplay systems
@@ -90,6 +90,7 @@ export class GameLoop {
   private effectZoneSystem!: EffectZoneSystem;
   private playerCollisionSystem!: PlayerCollisionSystem;
   private stompSystem!: StompSystem;
+  private matchSystem!: MatchSystem;
   private _debugKeyHandler: ((e: KeyboardEvent) => void) | null = null;
 
   // Global bump cooldown (prevents double-fire from both pushed players)
@@ -98,10 +99,6 @@ export class GameLoop {
   // Touch input for mobile
   private touchInput: TouchInputManager | null = null;
   private touchSlot: PlayerSlot | null = null;
-
-  // Per-theme ambient sound state
-  private activeAmbientLoops: string[] = [];
-  private periodicAmbientTimers: Map<string, number> = new Map();
 
   // Deterministic PRNG for network mode (undefined = use Math.random, local play)
   // Split into two streams so AI conditional calls can't desync spawn RNG
@@ -344,6 +341,11 @@ export class GameLoop {
       () => this._resimulating,
       () => this.rng,
     );
+    this.matchSystem = new MatchSystem(
+      this.state, this.settings, this.theme, this._boundPlaySound,
+      () => this._resimulating,
+      (winner) => this.endMatch(winner),
+    );
   }
 
   private createWeatherParticle(randomY: boolean): WeatherParticle {
@@ -364,21 +366,7 @@ export class GameLoop {
     this.lastTime = performance.now();
     audio.playMusic(this.arena.themeId);
     this.playSound('ambient');
-    // Start theme ambient loops
-    const ambConfig = this.theme.ambientSoundConfig;
-    if (ambConfig?.loops) {
-      for (const loop of ambConfig.loops) {
-        this.playSound(loop);
-        this.activeAmbientLoops.push(loop);
-      }
-    }
-    // Initialize periodic ambient timers with random first-fire delay
-    if (ambConfig?.periodic) {
-      for (const p of ambConfig.periodic) {
-        const delay = p.intervalRange[0] + Math.random() * (p.intervalRange[1] - p.intervalRange[0]);
-        this.periodicAmbientTimers.set(p.sound, delay);
-      }
-    }
+    this.matchSystem.init();
     if (debugFlags.navDebugAllowed || debugFlags.netDebugAllowed) {
       this._debugKeyHandler = (e: KeyboardEvent) => {
         if (e.key === '`') {
@@ -401,8 +389,7 @@ export class GameLoop {
     this.input.detach();
     this.touchInput?.detach();
     audio.stopAllGameSounds();
-    this.activeAmbientLoops = [];
-    this.periodicAmbientTimers.clear();
+    this.matchSystem.cleanup();
     if (this._debugKeyHandler) {
       window.removeEventListener('keydown', this._debugKeyHandler);
       this._debugKeyHandler = null;
@@ -898,21 +885,8 @@ export class GameLoop {
     // Stomps, kill feed, player-player collision, splat timers
     this.stompSystem.fixedUpdate(dt);
 
-    // Minor sound effects that remain in fixedUpdate (host-only, depend on complex fixedUpdate context)
-    if (!this._resimulating) {
-      this.crowdStarted = updateCrowdCheering(this.state, this.settings, this.crowdStarted, this._boundPlaySound);
-      tickPeriodicAmbient(this.theme, this.periodicAmbientTimers, dt, this._boundPlaySound);
-    }
-
-    this.checkMatchEnd();
-  }
-
-  private checkMatchEnd(): void {
-    const winner = _checkMatchEnd(this.state, this.settings);
-    if (winner !== null) {
-      this.state.slowMotion = SLOW_MO_DURATION;
-      this.endMatch(winner);
-    }
+    // Crowd cheering, periodic ambient sounds, match end check
+    this.matchSystem.fixedUpdate(dt);
   }
 
   private getPlayerInput(player: Player): InputState {
