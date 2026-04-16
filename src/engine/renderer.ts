@@ -13,7 +13,7 @@ import { debugFlags } from './debugFlags';
 import { drawNavDebugOverlay } from './navDebugOverlay';
 import type { BotNavDebugState } from './navDebugOverlay';
 import { drawNetDebugOverlay } from './net/debugOverlay';
-import type { NetDebugStats } from './net/rollback';
+import type { NetDebugStats } from './net/debugOverlay';
 
 // Extracted rendering modules
 import {

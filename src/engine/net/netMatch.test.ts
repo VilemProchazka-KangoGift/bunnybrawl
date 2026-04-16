@@ -65,13 +65,7 @@ vi.mock('./interpolation', () => ({
   applySnapshotToState: vi.fn(),
 }));
 
-vi.mock('./clientPrediction', () => ({
-  ClientPrediction: class MockClientPrediction {
-    reconcile = vi.fn();
-    predict = vi.fn();
-    decayVisualOffset = vi.fn();
-  },
-}));
+
 
 function makeMockTransport(isHost = true) {
   return {

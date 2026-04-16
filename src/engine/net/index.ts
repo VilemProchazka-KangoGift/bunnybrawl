@@ -1,12 +1,12 @@
-// Legacy exports (still used by gameLoop.ts, ai/, stomp.ts — will be cleaned up later)
+// Legacy exports (still used by gameLoop.ts, ai/, stomp.ts)
 export { SeededRNG } from './prng';
 export {
-  takeSnapshot, restoreSnapshot, takeSnapshotInto, createEmptySnapshot,
-  hashGameState, crc32,
+  takeSnapshot, restoreSnapshot,
+  hashGameState,
 } from './serialize';
 export type { GameSnapshot, PlayerSnapshot, AISnapshot } from './serialize';
 
-// Transport (rewritten to use Trystero)
+// Transport (Trystero MQTT signaling)
 export { Transport } from './transport';
 export type { ConnectionStatus, ConnectionHealth, TransportEvents, PeerInfo } from './transport';
 
@@ -20,16 +20,18 @@ export {
   encodeSnapshotAck, decodeSnapshotAck,
 } from './protocol';
 
-// New host-authoritative architecture
+// Host-authoritative architecture
 export { NetMatch } from './netMatch';
 export type { NetMatchConfig } from './netMatch';
 
 export { HostAuthority } from './hostAuthority';
 export type { HostAuthorityConfig, HostDebugStats } from './hostAuthority';
 
-export { ClientPrediction } from './clientPrediction';
 export { EntityInterpolation, applySnapshotToState } from './interpolation';
 export { InputEcho } from './inputEcho';
+
+export { drawNetDebugOverlay } from './debugOverlay';
+export type { NetDebugStats } from './debugOverlay';
 
 export {
   encodeSnapshot, decodeSnapshot, takeAuthSnapshot,
