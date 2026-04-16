@@ -39,7 +39,7 @@ vi.mock('./navDebugOverlay', () => ({
   drawNavDebugOverlay: vi.fn(),
 }));
 
-vi.mock('./net/debugOverlay', () => ({
+vi.mock('./net/core/debugOverlay', () => ({
   drawNetDebugOverlay: vi.fn(),
 }));
 
@@ -59,7 +59,7 @@ import {
   drawPlayer,
 } from './rendering';
 import { drawNavDebugOverlay } from './navDebugOverlay';
-import { drawNetDebugOverlay } from './net/debugOverlay';
+import { drawNetDebugOverlay } from './net/core/debugOverlay';
 
 // ---- Canvas mock ----
 

@@ -1,12 +1,20 @@
 /**
- * Network protocol: message types and binary encoding for P2P input exchange.
+ * Network protocol: game-specific message types + input encoding.
+ * Re-exports generic transport-level protocol from core/.
  */
 import type { InputState, GameMods } from '../types';
 
-// ---- Message types ----
+// Re-export transport-level protocol from core
+export {
+  encodePing, encodePong, decodePingPong,
+  encodeSnapshotAck, decodeSnapshotAck,
+  PROTOCOL_VERSION,
+} from './core/protocol';
+import { CoreMsgType } from './core/protocol';
 
+// Full MsgType: transport-level (from core) + game-specific lobby/match messages
 export const MsgType = {
-  // Reliable channel (JSON)
+  ...CoreMsgType,
   HANDSHAKE: 0x01,
   SETTINGS_SYNC: 0x02,
   READY: 0x03,
@@ -17,25 +25,34 @@ export const MsgType = {
   START_MATCH: 0x08,
   MATCH_RESULT: 0x09,
   REMATCH_REQUEST: 0x0A,
-  DESYNC_REQUEST: 0x0B,    // guest -> host: hash mismatch, send correction
-  DESYNC_CORRECTION: 0x0C, // host -> guest: full snapshot for correction
-  PLAYER_JOINED: 0x0D,     // host -> all: new player connected
-  PLAYER_LEFT: 0x0E,       // host -> all: player disconnected
-  SLOT_ASSIGNMENT: 0x0F,   // host -> guest: your assigned player slot
-  MATCH_IN_PROGRESS: 0x14, // host -> late joiner: match is running, spectate
-  RECONNECT_REQUEST: 0x15, // guest -> host: reconnection request
-  RECONNECT_SYNC: 0x16,   // host -> guest: state sync after reconnect
-
-  // Unreliable channel (binary)
-  INPUT: 0x10,
-  PING: 0x12,
-  PONG: 0x13,
-  SNAPSHOT: 0x20,       // host -> guest: full binary state snapshot
-  SNAPSHOT_ACK: 0x21,   // guest -> host: acknowledge received snapshot frame
-  SNAPSHOT_DELTA: 0x22, // host -> guest: delta-compressed snapshot (XOR+RLE against ACKed baseline)
+  DESYNC_REQUEST: 0x0B,
+  DESYNC_CORRECTION: 0x0C,
+  PLAYER_JOINED: 0x0D,
+  PLAYER_LEFT: 0x0E,
+  SLOT_ASSIGNMENT: 0x0F,
+  MATCH_IN_PROGRESS: 0x14,
+  RECONNECT_REQUEST: 0x15,
+  RECONNECT_SYNC: 0x16,
 } as const;
 
-// ---- Input encoding (binary, compact) ----
+// ---- Slot encoding (game-specific: P1-P5 / B1-B5 convention) ----
+
+/** Encode a PlayerSlot string to a single byte. P1-P5 → 1-5, B1-B5 → 6-10. */
+export function encodeSlot(slot: string): number {
+  const num = parseInt(slot.substring(1), 10);
+  if (slot.startsWith('P')) return Math.min(num, 5);
+  if (slot.startsWith('B')) return 5 + Math.min(num, 5);
+  return 0;
+}
+
+/** Decode a source byte back to PlayerSlot string. */
+export function decodeSlot(byte: number): string {
+  if (byte >= 1 && byte <= 5) return `P${byte}`;
+  if (byte >= 6 && byte <= 10) return `B${byte - 5}`;
+  return 'P1';
+}
+
+// ---- Input encoding (game-specific: uses InputState) ----
 
 /** Encode InputState to a single byte bitfield. */
 export function encodeInput(input: InputState): number {
@@ -59,38 +76,19 @@ export function decodeInput(byte: number): InputState {
 
 // ---- Pre-allocated encode/decode buffers (avoid 60fps GC pressure) ----
 
-const MAX_BUNDLE = 16; // max inputs per message (10 typical)
-// Max encode size: 1 + 1(source) + 1(count) + MAX_BUNDLE*5 + 4 = 87 bytes
+const MAX_BUNDLE = 16;
 const ENCODE_BUF = new ArrayBuffer(1 + 1 + 1 + MAX_BUNDLE * 5 + 4);
 const ENCODE_VIEW = new DataView(ENCODE_BUF);
 
-// Pre-allocated decode result (reused every call — caller must consume before next decode)
 const DECODE_INPUTS: Array<{ frame: number; input: InputState }> = Array.from(
   { length: MAX_BUNDLE },
   () => ({ frame: 0, input: { left: false, right: false, jump: false, down: false } }),
 );
 const DECODE_RESULT = { inputs: DECODE_INPUTS, inputCount: 0, latestAck: 0, source: 0 };
 
-/** Encode a PlayerSlot to a single byte. P1-P5 → 1-5, B1-B5 → 6-10. */
-export function encodeSlot(slot: string): number {
-  const num = parseInt(slot.substring(1), 10);
-  if (slot.startsWith('P')) return Math.min(num, 5);
-  if (slot.startsWith('B')) return 5 + Math.min(num, 5);
-  return 0;
-}
-
-/** Decode a source byte back to PlayerSlot string. */
-export function decodeSlot(byte: number): string {
-  if (byte >= 1 && byte <= 5) return `P${byte}`;
-  if (byte >= 6 && byte <= 10) return `B${byte - 5}`;
-  return 'P1';
-}
-
 /**
  * Encode an input message with bundled recent inputs for redundancy.
  * Format: [1B type][1B source][1B count][per input: 4B frame + 1B input][4B latest ack]
- * Source byte identifies which player slot sent these inputs (for host relay in multi-guest).
- * Returns a slice of a shared buffer — caller must send before next encode call.
  */
 export function encodeInputMessage(
   inputs: Array<{ frame: number; input: InputState }>,
@@ -114,14 +112,12 @@ export function encodeInputMessage(
   ENCODE_VIEW.setUint32(offset, latestAck >>> 0, true);
   offset += 4;
 
-  // Return a copy sized to actual content (WebRTC needs ownership)
   return ENCODE_BUF.slice(0, offset);
 }
 
 /**
  * Decode an input message into pre-allocated result.
  * Returns shared result object — caller must consume before next decode call.
- * result.inputCount indicates how many entries in result.inputs are valid.
  */
 export function decodeInputMessage(buf: ArrayBuffer): {
   inputs: Array<{ frame: number; input: InputState }>;
@@ -130,7 +126,7 @@ export function decodeInputMessage(buf: ArrayBuffer): {
   source: number;
 } | null {
   const view = new DataView(buf);
-  if (view.byteLength < 7) return null; // min: 1B type + 1B source + 1B count + 4B ack
+  if (view.byteLength < 7) return null;
 
   let offset = 0;
   const type = view.getUint8(offset++);
@@ -139,7 +135,6 @@ export function decodeInputMessage(buf: ArrayBuffer): {
   const source = view.getUint8(offset++);
   const count = view.getUint8(offset++);
 
-  // Bounds validation: prevent reading past buffer
   const expectedSize = 3 + count * 5 + 4;
   if (view.byteLength < expectedSize) return null;
 
@@ -160,34 +155,7 @@ export function decodeInputMessage(buf: ArrayBuffer): {
   return DECODE_RESULT;
 }
 
-/** Encode a ping message with timestamp. */
-export function encodePing(timestamp: number): ArrayBuffer {
-  const buf = new ArrayBuffer(9);
-  const view = new DataView(buf);
-  view.setUint8(0, MsgType.PING);
-  view.setFloat64(1, timestamp, true);
-  return buf;
-}
-
-/** Encode a pong message echoing timestamp. */
-export function encodePong(timestamp: number): ArrayBuffer {
-  const buf = new ArrayBuffer(9);
-  const view = new DataView(buf);
-  view.setUint8(0, MsgType.PONG);
-  view.setFloat64(1, timestamp, true);
-  return buf;
-}
-
-/** Decode a ping or pong message. Returns timestamp or null. */
-export function decodePingPong(buf: ArrayBuffer): { type: 0x12 | 0x13; timestamp: number } | null {
-  const view = new DataView(buf);
-  if (view.byteLength < 9) return null;
-  const type = view.getUint8(0);
-  if (type !== MsgType.PING && type !== MsgType.PONG) return null;
-  return { type: type as 0x12 | 0x13, timestamp: view.getFloat64(1, true) };
-}
-
-// ---- Reliable channel (JSON messages) ----
+// ---- Reliable channel (JSON messages) — game-specific ----
 
 export interface HandshakeMessage {
   type: 0x01;
@@ -214,7 +182,7 @@ export interface CharacterSelectMessage {
 
 export interface StartMatchMessage {
   type: 0x08;
-  roster?: Array<{ slot: string; characterName: string; playerName?: string }>; // authoritative character assignments from host
+  roster?: Array<{ slot: string; characterName: string; playerName?: string }>;
 }
 
 export interface DesyncCheckMessage {
@@ -222,7 +190,6 @@ export interface DesyncCheckMessage {
   frame: number;
   hash: number;
   rngState: number;
-  /** Per-subsystem hashes for desync diagnosis (optional for backwards compat) */
   playersHash?: number;
   entitiesHash?: number;
   timersHash?: number;
@@ -258,43 +225,43 @@ export interface DesyncRequestMessage {
 export interface DesyncCorrectionMessage {
   type: 0x0C;
   frame: number;
-  snapshot: unknown; // GameSnapshot — typed loosely to avoid circular dep
+  snapshot: unknown;
 }
 
 export interface PlayerJoinedMessage {
   type: 0x0D;
   peerId: string;
-  slot: string;       // PlayerSlot assigned by host
+  slot: string;
   characterName: string;
   playerName?: string;
 }
 
 export interface PlayerLeftMessage {
   type: 0x0E;
-  slot: string;       // PlayerSlot that left
+  slot: string;
   reason: 'disconnect' | 'leave';
 }
 
 export interface SlotAssignmentMessage {
   type: 0x0F;
-  slot: string;       // Your assigned PlayerSlot
+  slot: string;
   allPlayers: Array<{ slot: string; characterName: string; isHost: boolean; playerName?: string }>;
 }
 
 export interface MatchInProgressMessage {
   type: 0x14;
-  snapshot: unknown;  // Current game state for spectator
+  snapshot: unknown;
 }
 
 export interface ReconnectRequestMessage {
   type: 0x15;
-  slot: string;       // PlayerSlot the guest wants to reclaim
+  slot: string;
   playerName: string;
 }
 
 export interface ReconnectSyncMessage {
   type: 0x16;
-  slot: string;       // Confirmed slot assignment
+  slot: string;
   snapshotFrame: number;
 }
 
@@ -317,24 +284,3 @@ export type ReliableMessage =
   | MatchInProgressMessage
   | ReconnectRequestMessage
   | ReconnectSyncMessage;
-
-// ---- Snapshot ACK encoding ----
-
-/** Encode a snapshot acknowledgment (guest → host). */
-export function encodeSnapshotAck(frame: number): ArrayBuffer {
-  const buf = new ArrayBuffer(5);
-  const view = new DataView(buf);
-  view.setUint8(0, MsgType.SNAPSHOT_ACK);
-  view.setUint32(1, frame, true);
-  return buf;
-}
-
-/** Decode a snapshot acknowledgment. Returns frame number or null. */
-export function decodeSnapshotAck(buf: ArrayBuffer): number | null {
-  const view = new DataView(buf);
-  if (view.byteLength < 5) return null;
-  if (view.getUint8(0) !== MsgType.SNAPSHOT_ACK) return null;
-  return view.getUint32(1, true);
-}
-
-export const PROTOCOL_VERSION = 5;

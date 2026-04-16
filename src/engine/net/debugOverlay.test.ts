@@ -1,34 +1,31 @@
 import { describe, it, expect, vi } from 'vitest';
-import { drawNetDebugOverlay } from './debugOverlay';
-import type { NetDebugStats } from './debugOverlay';
+import { drawNetDebugOverlay } from './core/debugOverlay';
+import type { NetDebugStats } from './core/debugOverlay';
 
 function makeMockCtx() {
   return {
     fillStyle: '' as string,
-    strokeStyle: '' as string,
     font: '' as string,
     textAlign: '' as string,
     textBaseline: '' as string,
-    globalAlpha: 1,
     save: vi.fn(),
     restore: vi.fn(),
     fillRect: vi.fn(),
     fillText: vi.fn(),
-    measureText: vi.fn(() => ({ width: 100 })),
   } as any;
 }
 
 function makeStats(overrides?: Partial<NetDebugStats>): NetDebugStats {
   return {
     localFrame: 100,
-    remoteConfirmedFrame: 95,
-    remoteLatestAck: 98,
     rtt: 45,
     jitter: 8,
-    inputDelay: 2,
     stalled: false,
-    rollbacksPerSec: 3,
-    maxRollbackDepth: 2,
+    isRelay: false,
+    snapshotBytes: 320,
+    guestCount: 1,
+    interpDelayFrames: 2,
+    bufferDepth: 5,
     ...overrides,
   };
 }
@@ -55,7 +52,7 @@ describe('drawNetDebugOverlay', () => {
     expect(hasStalled).toBe(true);
   });
 
-  it('uses save/restore for alpha', () => {
+  it('uses save/restore', () => {
     const ctx = makeMockCtx();
     drawNetDebugOverlay(ctx, makeStats(), 1280);
     expect(ctx.save).toHaveBeenCalled();
@@ -65,10 +62,8 @@ describe('drawNetDebugOverlay', () => {
   it('positions overlay based on canvasWidth', () => {
     const ctx = makeMockCtx();
     drawNetDebugOverlay(ctx, makeStats(), 800);
-    // Should use right-aligned position relative to 800px width
-    expect(ctx.fillRect).toHaveBeenCalled();
     const rectCall = ctx.fillRect.mock.calls[0];
-    expect(rectCall[0]).toBeLessThan(800); // x < canvas width
+    expect(rectCall[0]).toBeLessThan(800);
   });
 
   it('displays RTT and jitter values', () => {
@@ -79,10 +74,18 @@ describe('drawNetDebugOverlay', () => {
     expect(textCalls).toContain('45');
   });
 
-  it('displays rollback count and depth', () => {
+  it('displays snapshot size and guest count', () => {
     const ctx = makeMockCtx();
-    drawNetDebugOverlay(ctx, makeStats({ rollbacksPerSec: 7, maxRollbackDepth: 4 }), 1280);
+    drawNetDebugOverlay(ctx, makeStats({ snapshotBytes: 512, guestCount: 3 }), 1280);
     const textCalls = ctx.fillText.mock.calls.map((c: any[]) => c[0]).join(' ');
-    expect(textCalls).toContain('7');
+    expect(textCalls).toContain('512');
+    expect(textCalls).toContain('3');
+  });
+
+  it('shows RELAY when isRelay is true', () => {
+    const ctx = makeMockCtx();
+    drawNetDebugOverlay(ctx, makeStats({ isRelay: true }), 1280);
+    const textCalls = ctx.fillText.mock.calls.map((c: any[]) => c[0]).join(' ');
+    expect(textCalls).toContain('RELAY');
   });
 });

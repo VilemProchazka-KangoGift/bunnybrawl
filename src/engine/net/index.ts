@@ -30,8 +30,8 @@ export type { HostAuthorityConfig, HostDebugStats } from './hostAuthority';
 export { EntityInterpolation, applySnapshotToState } from './interpolation';
 export { InputEcho } from './inputEcho';
 
-export { drawNetDebugOverlay } from './debugOverlay';
-export type { NetDebugStats } from './debugOverlay';
+export { drawNetDebugOverlay } from './core/debugOverlay';
+export type { NetDebugStats } from './core/debugOverlay';
 
 export {
   encodeSnapshot, decodeSnapshot, takeAuthSnapshot,

@@ -45,7 +45,6 @@ vi.mock('@trystero-p2p/mqtt', () => ({
 
 vi.mock('./core/networkSimulator', () => ({
   NetworkSimulator: vi.fn(() => ({ enabled: false, enqueue: vi.fn(), flush: vi.fn(() => []), getConfig: vi.fn(() => ({ latencyMs: 0, jitterMs: 0 })) })),
-  readSimConfigFromUrl: vi.fn(() => null),
 }));
 
 import { Transport } from './transport';

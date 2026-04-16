@@ -102,18 +102,3 @@ export class NetworkSimulator {
   }
 }
 
-/** Read simulator config from URL params. Returns null if no sim params present. */
-export function readSimConfigFromUrl(): SimulatorConfig | null {
-  const params = new URLSearchParams(window.location.search);
-  const latency = params.get('simLatency');
-  const jitter = params.get('simJitter');
-  const loss = params.get('simLoss');
-
-  if (!latency && !jitter && !loss) return null;
-
-  return {
-    latencyMs: latency ? parseInt(latency, 10) || 0 : 0,
-    jitterMs: jitter ? parseInt(jitter, 10) || 0 : 0,
-    packetLossPercent: loss ? parseFloat(loss) || 0 : 0,
-  };
-}

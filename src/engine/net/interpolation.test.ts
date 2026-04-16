@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { EntityInterpolation, applySnapshotToState } from './interpolation';
 import type { AuthSnapshot } from './snapshot';
-import type { MatchState, PlayerSlot } from '../types';
+import type { MatchState } from '../types';
 
 function makeSnap(frame: number, px = 100, py = 200): AuthSnapshot {
   return {
@@ -216,23 +216,4 @@ describe('applySnapshotToState', () => {
     expect(state.carrots[0].x).toBe(100);
   });
 
-  it('applies local player override when provided', () => {
-    const state = makeMinimalState();
-    const snap = makeSnap(1, 500, 300);
-    applySnapshotToState(snap, state, 'P1' as PlayerSlot, { x: 999, y: 888 });
-    // P1 should use the override position
-    expect(state.players[0].x).toBe(999);
-    expect(state.players[0].y).toBe(888);
-    // P2 should use snapshot position
-    expect(state.players[1].x).toBe(600);
-  });
-
-  it('does not apply override to non-local players', () => {
-    const state = makeMinimalState();
-    const snap = makeSnap(1, 500, 300);
-    applySnapshotToState(snap, state, 'P1' as PlayerSlot, { x: 999, y: 888 });
-    // P2 should NOT get the override
-    expect(state.players[1].x).toBe(600);
-    expect(state.players[1].y).toBe(300);
-  });
 });

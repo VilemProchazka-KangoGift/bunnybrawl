@@ -79,9 +79,8 @@ const EXPRESSION_MAP: Record<string, number> = {
 };
 const EXPRESSION_REVERSE = ['normal', 'scared', 'angry', 'dizzy'] as const;
 
-// Slot encoding reused from protocol.ts: encodeSlot() / decodeSlot()
-const encodeSlotByte = (slot: PlayerSlot) => encodeSlot(slot);
-const decodeSlotByte = (b: number) => decodeSlot(b) as PlayerSlot;
+/** Decode slot byte to PlayerSlot (type-narrowing wrapper around decodeSlot). */
+const decodeSlotAs = (b: number) => decodeSlot(b) as PlayerSlot;
 
 // ---- Binary encoding ----
 
@@ -110,7 +109,7 @@ export function encodeSnapshot(snap: AuthSnapshot): { buffer: ArrayBuffer; lengt
   // Player count + players
   ENCODE_VIEW.setUint8(o++, snap.players.length);
   for (const p of snap.players) {
-    ENCODE_VIEW.setUint8(o++, encodeSlotByte(p.id));
+    ENCODE_VIEW.setUint8(o++, encodeSlot(p.id));
     ENCODE_VIEW.setFloat32(o, p.x, true); o += 4;
     ENCODE_VIEW.setFloat32(o, p.y, true); o += 4;
     ENCODE_VIEW.setFloat32(o, p.vx, true); o += 4;
@@ -202,8 +201,8 @@ export function encodeSnapshot(snap: AuthSnapshot): { buffer: ArrayBuffer; lengt
   ENCODE_VIEW.setUint8(o++, kfLen);
   for (let i = snap.killFeed.length - kfLen; i < snap.killFeed.length; i++) {
     const kf = snap.killFeed[i];
-    ENCODE_VIEW.setUint8(o++, encodeSlotByte(kf.attacker));
-    ENCODE_VIEW.setUint8(o++, encodeSlotByte(kf.victim));
+    ENCODE_VIEW.setUint8(o++, encodeSlot(kf.attacker));
+    ENCODE_VIEW.setUint8(o++, encodeSlot(kf.victim));
     ENCODE_VIEW.setFloat32(o, kf.timestamp, true); o += 4;
   }
 
@@ -219,7 +218,7 @@ export function encodeSnapshot(snap: AuthSnapshot): { buffer: ArrayBuffer; lengt
   // Match state flags
   ENCODE_VIEW.setUint8(o++, (snap.matchOver ? 1 : 0) | (snap.winner ? 2 : 0));
   if (snap.winner) {
-    ENCODE_VIEW.setUint8(o++, encodeSlotByte(snap.winner));
+    ENCODE_VIEW.setUint8(o++, encodeSlot(snap.winner));
   }
 
   // Score animations
@@ -227,7 +226,7 @@ export function encodeSnapshot(snap: AuthSnapshot): { buffer: ArrayBuffer; lengt
   ENCODE_VIEW.setUint8(o++, saLen);
   for (let i = 0; i < saLen; i++) {
     const sa = snap.scoreAnimations[i];
-    ENCODE_VIEW.setUint8(o++, encodeSlotByte(sa.playerId));
+    ENCODE_VIEW.setUint8(o++, encodeSlot(sa.playerId));
     ENCODE_VIEW.setUint8(o++, sa.value & 0xFF);
     ENCODE_VIEW.setFloat32(o, sa.timer, true); o += 4;
   }
@@ -250,7 +249,7 @@ export function decodeSnapshot(buf: ArrayBuffer): AuthSnapshot | null {
   const playerCount = view.getUint8(o++);
   const players: SnapshotPlayer[] = [];
   for (let i = 0; i < playerCount; i++) {
-    const id = decodeSlotByte(view.getUint8(o++));
+    const id = decodeSlotAs(view.getUint8(o++));
     const x = view.getFloat32(o, true); o += 4;
     const y = view.getFloat32(o, true); o += 4;
     const vx = view.getFloat32(o, true); o += 4;
@@ -372,8 +371,8 @@ export function decodeSnapshot(buf: ArrayBuffer): AuthSnapshot | null {
   const kfLen = view.getUint8(o++);
   const killFeed: KillFeedEntry[] = [];
   for (let i = 0; i < kfLen; i++) {
-    const attacker = decodeSlotByte(view.getUint8(o++));
-    const victim = decodeSlotByte(view.getUint8(o++));
+    const attacker = decodeSlotAs(view.getUint8(o++));
+    const victim = decodeSlotAs(view.getUint8(o++));
     const timestamp = view.getFloat32(o, true); o += 4;
     killFeed.push({ attacker, victim, timestamp });
   }
@@ -392,14 +391,14 @@ export function decodeSnapshot(buf: ArrayBuffer): AuthSnapshot | null {
   const matchOver = !!(matchFlags & 1);
   let winner: PlayerSlot | null = null;
   if (matchFlags & 2) {
-    winner = decodeSlotByte(view.getUint8(o++));
+    winner = decodeSlotAs(view.getUint8(o++));
   }
 
   // Score animations
   const saLen = view.getUint8(o++);
   const scoreAnimations: AuthSnapshot['scoreAnimations'] = [];
   for (let i = 0; i < saLen; i++) {
-    const playerId = decodeSlotByte(view.getUint8(o++));
+    const playerId = decodeSlotAs(view.getUint8(o++));
     const value = view.getUint8(o++);
     const timer = view.getFloat32(o, true); o += 4;
     scoreAnimations.push({ playerId, value, timer });
@@ -498,96 +497,5 @@ export function takeAuthSnapshot(frame: number, state: MatchState): AuthSnapshot
   };
 }
 
-// ---- Delta compression ----
-
-/**
- * Create a delta between two encoded snapshots.
- * Uses XOR + simple RLE: [0x00 count] for runs of zeros, [byte] for non-zero.
- * Returns a compact delta buffer prefixed with 0x22 (SNAPSHOT_DELTA).
- */
-export function createDelta(current: ArrayBuffer, baseline: ArrayBuffer | null): ArrayBuffer {
-  if (!baseline) {
-    // No baseline — send full snapshot with type prefix
-    const result = new Uint8Array(1 + current.byteLength);
-    result[0] = 0x20; // SNAPSHOT (full)
-    result.set(new Uint8Array(current), 1);
-    return result.buffer;
-  }
-
-  const cur = new Uint8Array(current);
-  const base = new Uint8Array(baseline);
-  const maxLen = Math.max(cur.length, base.length);
-
-  // XOR the two snapshots
-  const xor = new Uint8Array(maxLen);
-  for (let i = 0; i < maxLen; i++) {
-    xor[i] = (cur[i] ?? 0) ^ (base[i] ?? 0);
-  }
-
-  // RLE encode: runs of 0x00 as [0x00, count], non-zero bytes as-is
-  // Worst case: maxLen * 1 (no zeros) + 1 (type) + 2 (lengths)
-  const rle = new Uint8Array(1 + 4 + maxLen * 2);
-  let ro = 0;
-  rle[ro++] = 0x22; // SNAPSHOT_DELTA — distinct from 0x20 (full) so guest knows the format
-  // Store current length so decoder knows output size
-  rle[ro++] = (cur.length >> 8) & 0xFF;
-  rle[ro++] = cur.length & 0xFF;
-  rle[ro++] = (base.length >> 8) & 0xFF;
-  rle[ro++] = base.length & 0xFF;
-
-  let i = 0;
-  while (i < maxLen) {
-    if (xor[i] === 0) {
-      // Count consecutive zeros
-      let count = 0;
-      while (i < maxLen && xor[i] === 0 && count < 255) {
-        count++;
-        i++;
-      }
-      rle[ro++] = 0x00;
-      rle[ro++] = count;
-    } else {
-      rle[ro++] = xor[i++];
-    }
-  }
-
-  return rle.buffer.slice(0, ro);
-}
-
-/**
- * Apply a delta (0x22 prefix) to a baseline to reconstruct the current snapshot.
- * Returns the reconstructed raw snapshot buffer, or null if not a delta message.
- */
-export function applyDelta(deltaBuf: ArrayBuffer, baseline: ArrayBuffer): ArrayBuffer | null {
-  const delta = new Uint8Array(deltaBuf);
-  // Only process messages with the SNAPSHOT_DELTA (0x22) prefix
-  if (delta.length < 5 || delta[0] !== 0x22) return null;
-
-  // Delta decode
-  const curLen = (delta[1] << 8) | delta[2];
-  const baseLen = (delta[3] << 8) | delta[4];
-  const base = new Uint8Array(baseline);
-  const maxLen = Math.max(curLen, baseLen);
-  const xor = new Uint8Array(maxLen);
-
-  let di = 5; // skip type + lengths
-  let xi = 0;
-  while (di < delta.length && xi < maxLen) {
-    if (delta[di] === 0x00) {
-      di++;
-      const count = delta[di++] ?? 0;
-      // Zeros in XOR = unchanged bytes
-      xi += count;
-    } else {
-      xor[xi++] = delta[di++];
-    }
-  }
-
-  // Reconstruct: current = xor ^ baseline
-  const result = new Uint8Array(curLen);
-  for (let i = 0; i < curLen; i++) {
-    result[i] = (xor[i] ?? 0) ^ (base[i] ?? 0);
-  }
-
-  return result.buffer;
-}
+// ---- Delta compression (re-exported from core) ----
+export { createDelta, applyDelta } from './core/deltaCompression';

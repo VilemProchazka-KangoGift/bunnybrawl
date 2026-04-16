@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { NetworkSimulator } from './networkSimulator';
+import { NetworkSimulator } from './core/networkSimulator';
 
 describe('NetworkSimulator', () => {
   describe('construction', () => {
@@ -224,12 +224,4 @@ describe('NetworkSimulator', () => {
     });
   });
 
-  describe('readSimConfigFromUrl', () => {
-    it('returns null when no sim params present', async () => {
-      const { readSimConfigFromUrl } = await import('./networkSimulator');
-      // Default URL has no sim params
-      const config = readSimConfigFromUrl();
-      expect(config).toBeNull();
-    });
-  });
 });

@@ -1,151 +1,57 @@
 /**
  * Entity interpolation for remote players and world state on guest clients.
  *
- * Guests render remote entities between two known host snapshots,
- * producing smooth movement even when snapshots arrive irregularly.
- *
- * Design: Frame-based interpolation with adaptive delay.
- * - Buffer recent snapshots in a ring buffer
- * - Render at a frame position behind the latest snapshot (adaptive delay)
- * - Sequence validation discards out-of-order packets
- * - Extrapolation when next snapshot is late (capped at 4 frames)
+ * Uses the generic SnapshotInterpolation from core/ for the ring buffer,
+ * adaptive delay, and frame targeting. Game-specific interpolation (which
+ * fields to lerp vs snap) and applySnapshotToState are defined here.
  */
-import type { PlayerSlot, MatchState } from '../types';
+import type { MatchState } from '../types';
 import type { AuthSnapshot } from './snapshot';
 import { GRAVITY } from '../constants';
+import { SnapshotInterpolation } from './core/interpolation';
+import type { InterpolationConfig } from './core/types';
 
-// Adaptive interpolation delay (in frames)
-const MIN_DELAY_FRAMES = 2;
-const MAX_DELAY_FRAMES = 5;
-const MAX_EXTRAP_FRAMES = 4;
+// ---- Game-specific interpolation config ----
+
+const crInterpolationConfig: InterpolationConfig<AuthSnapshot> = {
+  getFrame(snap) { return snap.frame; },
+};
 
 export class EntityInterpolation {
-  // Ring buffer of snapshots
-  private ring: (AuthSnapshot | null)[];
-  private ringHead = 0;
-  private ringCount = 0;
-  private maxBuffer = 30;
-
-  private latestHostFrame = 0;
-  private lastReceivedFrame = -1; // sequence validation
-  private interpDelayFrames = MIN_DELAY_FRAMES;
-  private initialized = false;
-
-  // Jitter tracking for adaptive delay
-  private consecutiveLateCount = 0;
-  private consecutiveOnTimeCount = 0;
-  private readonly TIGHTEN_THRESHOLD = 120; // ~2s of on-time arrivals before tightening
+  private engine: SnapshotInterpolation<AuthSnapshot>;
 
   constructor() {
-    this.ring = new Array(this.maxBuffer).fill(null);
+    this.engine = new SnapshotInterpolation(crInterpolationConfig);
   }
 
-  /** Push a new snapshot from the host. Discards out-of-order packets. */
   pushSnapshot(snap: AuthSnapshot): void {
-    // Sequence validation: discard stale/reordered snapshots
-    if (snap.frame <= this.lastReceivedFrame) return;
-
-    // Detect gaps (missed snapshots) to adapt delay
-    if (this.lastReceivedFrame > 0) {
-      const gap = snap.frame - this.lastReceivedFrame;
-      if (gap > 1) {
-        // Missed snapshots — widen buffer
-        this.consecutiveLateCount += gap - 1;
-        this.consecutiveOnTimeCount = 0;
-        if (this.consecutiveLateCount > 3 && this.interpDelayFrames < MAX_DELAY_FRAMES) {
-          this.interpDelayFrames++;
-          this.consecutiveLateCount = 0;
-        }
-      } else {
-        // Normal delivery — count toward tightening
-        this.consecutiveLateCount = Math.max(0, this.consecutiveLateCount - 1);
-        this.consecutiveOnTimeCount++;
-        if (this.consecutiveOnTimeCount >= this.TIGHTEN_THRESHOLD
-            && this.interpDelayFrames > MIN_DELAY_FRAMES) {
-          this.interpDelayFrames--;
-          this.consecutiveOnTimeCount = 0;
-        }
-      }
-    }
-
-    this.lastReceivedFrame = snap.frame;
-    this.latestHostFrame = snap.frame;
-
-    // Write to ring buffer
-    this.ring[this.ringHead] = snap;
-    this.ringHead = (this.ringHead + 1) % this.maxBuffer;
-    if (this.ringCount < this.maxBuffer) this.ringCount++;
-
-    this.initialized = true;
+    this.engine.pushSnapshot(snap);
   }
 
-  /** Read ring entry by logical index (0 = oldest). */
-  private ringAt(i: number): AuthSnapshot {
-    const start = (this.ringHead - this.ringCount + this.maxBuffer) % this.maxBuffer;
-    return this.ring[(start + i) % this.maxBuffer]!;
-  }
-
-  /**
-   * Get the interpolated state for the current render frame.
-   * Uses frame-number-based interpolation with adaptive delay.
-   */
   getInterpolatedState(): AuthSnapshot | null {
-    if (!this.initialized || this.ringCount < 1) return null;
-    if (this.ringCount < 2) return this.ringAt(0);
+    const result = this.engine.getRawResult();
+    if (!result) return null;
 
-    // Target: render interpDelayFrames behind the latest snapshot
-    const targetFrame = this.latestHostFrame - this.interpDelayFrames;
-
-    // Find two snapshots bracketing the target frame
-    let before: AuthSnapshot | null = null;
-    let after: AuthSnapshot | null = null;
-
-    for (let i = 0; i < this.ringCount - 1; i++) {
-      const a = this.ringAt(i);
-      const b = this.ringAt(i + 1);
-      if (a.frame <= targetFrame && b.frame >= targetFrame) {
-        before = a;
-        after = b;
-        break;
-      }
+    switch (result.kind) {
+      case 'single':
+        return result.snapshot;
+      case 'interpolate':
+        return interpolateSnapshots(result.before, result.after, result.t);
+      case 'extrapolate':
+        return extrapolateSnapshot(result.snapshot, result.overshootFrames / 60);
     }
-
-    // Target is before all snapshots — use earliest
-    if (!before && !after) {
-      return this.ringAt(0);
-    }
-
-    // Target is after all snapshots — extrapolate from latest
-    if (!after) {
-      const latest = this.ringAt(this.ringCount - 1);
-      const overshootFrames = targetFrame - latest.frame;
-      if (overshootFrames > 0 && overshootFrames <= MAX_EXTRAP_FRAMES) {
-        return extrapolateSnapshot(latest, overshootFrames / 60);
-      }
-      return latest;
-    }
-
-    if (!before) return after;
-
-    // Frame-based interpolation factor
-    const range = after.frame - before.frame;
-    const t = range > 0 ? Math.max(0, Math.min(1, (targetFrame - before.frame) / range)) : 0;
-
-    return interpolateSnapshots(before, after, t);
   }
 
-  /** Get the latest raw snapshot (no interpolation). */
   getLatestSnapshot(): AuthSnapshot | null {
-    return this.ringCount > 0 ? this.ringAt(this.ringCount - 1) : null;
+    return this.engine.getLatestSnapshot();
   }
 
   getBufferDepth(): number {
-    return this.ringCount;
+    return this.engine.getBufferDepth();
   }
 
-  /** Current interpolation delay in frames (for debug). */
   getDelayFrames(): number {
-    return this.interpDelayFrames;
+    return this.engine.getDelayFrames();
   }
 }
 
@@ -153,7 +59,6 @@ export class EntityInterpolation {
 
 let _extrapResult: AuthSnapshot | null = null;
 
-/** Extrapolate a snapshot forward by dt seconds using entity velocities + gravity. */
 function extrapolateSnapshot(snap: AuthSnapshot, dt: number): AuthSnapshot {
   if (!_extrapResult) {
     _extrapResult = { ...snap, players: [], ghosts: [], lavaRocks: [] };
@@ -161,7 +66,6 @@ function extrapolateSnapshot(snap: AuthSnapshot, dt: number): AuthSnapshot {
   const r = _extrapResult;
   r.frame = snap.frame;
 
-  // Copy and extrapolate players
   if (r.players.length > snap.players.length) r.players.length = snap.players.length;
   for (let i = 0; i < snap.players.length; i++) {
     if (i >= r.players.length) {
@@ -176,7 +80,6 @@ function extrapolateSnapshot(snap: AuthSnapshot, dt: number): AuthSnapshot {
     }
   }
 
-  // Copy and extrapolate ghosts
   if (r.ghosts.length > snap.ghosts.length) r.ghosts.length = snap.ghosts.length;
   for (let i = 0; i < snap.ghosts.length; i++) {
     if (i >= r.ghosts.length) {
@@ -187,7 +90,6 @@ function extrapolateSnapshot(snap: AuthSnapshot, dt: number): AuthSnapshot {
     r.ghosts[i].x += r.ghosts[i].vx * dt;
   }
 
-  // Copy and extrapolate lava rocks
   if (r.lavaRocks.length > snap.lavaRocks.length) r.lavaRocks.length = snap.lavaRocks.length;
   for (let i = 0; i < snap.lavaRocks.length; i++) {
     if (i >= r.lavaRocks.length) {
@@ -200,7 +102,6 @@ function extrapolateSnapshot(snap: AuthSnapshot, dt: number): AuthSnapshot {
     }
   }
 
-  // Non-extrapolated fields: copy from source
   r.carrots = snap.carrots;
   r.springs = snap.springs;
   r.thorns = snap.thorns;
@@ -222,42 +123,63 @@ function extrapolateSnapshot(snap: AuthSnapshot, dt: number): AuthSnapshot {
 
 // ---- Interpolation ----
 
-// Reusable structures to avoid per-frame allocations in interpolateSnapshots
-const _interpAById = new Map<string, import('./snapshot').SnapshotPlayer>();
 let _interpResult: AuthSnapshot | null = null;
 
-/** Interpolate between two snapshots. Reuses objects to minimize GC pressure. */
 function interpolateSnapshots(a: AuthSnapshot, b: AuthSnapshot, t: number): AuthSnapshot {
-  // Build player lookup for a (reuse Map)
-  _interpAById.clear();
-  for (const p of a.players) _interpAById.set(p.id, p);
-
-  // Reuse result object — mutate players array in-place
   if (!_interpResult) {
     _interpResult = { ...b, players: [], ghosts: [], lavaRocks: [] };
   }
   const r = _interpResult;
   r.frame = Math.round(a.frame + (b.frame - a.frame) * t);
 
-  // Players: reuse or grow array
+  // Player arrays have stable order (from takeAuthSnapshot iterating state.players),
+  // so index-based access works and avoids Map rebuild every frame.
   if (r.players.length > b.players.length) r.players.length = b.players.length;
   for (let i = 0; i < b.players.length; i++) {
     const bp = b.players[i];
-    const ap = _interpAById.get(bp.id);
+    const ap = a.players[i]; // same index — stable order guaranteed by host
     if (i >= r.players.length) {
       r.players.push({ ...bp });
-    } else {
-      Object.assign(r.players[i], bp);
     }
+    const rp = r.players[i];
+    // Explicit field copy (faster than Object.assign for known shapes)
+    rp.id = bp.id;
+    rp.state = bp.state;
+    rp.facing = bp.facing;
+    rp.animFrame = bp.animFrame;
+    rp.score = bp.score;
+    rp.hitstopTimer = bp.hitstopTimer;
+    rp.invincibleTimer = bp.invincibleTimer;
+    rp.fastFalling = bp.fastFalling;
+    rp.splatTimer = bp.splatTimer;
+    rp.respawnTimer = bp.respawnTimer;
+    rp.fatTimer = bp.fatTimer;
+    rp.slowTimer = bp.slowTimer;
+    rp.burnTimer = bp.burnTimer;
+    rp.squashScale = bp.squashScale;
+    rp.expression = bp.expression;
+    rp.killStreak = bp.killStreak;
+    rp.disconnected = bp.disconnected;
+    rp.active = bp.active;
+    rp.width = bp.width;
+    rp.height = bp.height;
+    rp.sideSquash = bp.sideSquash;
+    rp.damageFlashTimer = bp.damageFlashTimer;
+    rp.damageFlashSide = bp.damageFlashSide;
+    // Lerp positions/velocities
     if (ap) {
-      r.players[i].x = lerp(ap.x, bp.x, t);
-      r.players[i].y = lerp(ap.y, bp.y, t);
-      r.players[i].vx = lerp(ap.vx, bp.vx, t);
-      r.players[i].vy = lerp(ap.vy, bp.vy, t);
+      rp.x = lerp(ap.x, bp.x, t);
+      rp.y = lerp(ap.y, bp.y, t);
+      rp.vx = lerp(ap.vx, bp.vx, t);
+      rp.vy = lerp(ap.vy, bp.vy, t);
+    } else {
+      rp.x = bp.x;
+      rp.y = bp.y;
+      rp.vx = bp.vx;
+      rp.vy = bp.vy;
     }
   }
 
-  // Discrete state: use "after" snapshot
   r.carrots = b.carrots;
   r.springs = b.springs;
   r.thorns = b.thorns;
@@ -267,14 +189,12 @@ function interpolateSnapshots(a: AuthSnapshot, b: AuthSnapshot, t: number): Auth
   r.matchOver = b.matchOver;
   r.winner = b.winner;
 
-  // Ghosts: reuse array
   interpArrayInPlace(r.ghosts, a.ghosts, b.ghosts, (ag, bg, out) => {
     out.x = lerp(ag.x, bg.x, t);
     out.y = lerp(ag.y, bg.y, t);
     out.vx = lerp(ag.vx, bg.vx, t);
     out.wobblePhase = lerp(ag.wobblePhase, bg.wobblePhase, t);
   });
-  // Lava rocks: reuse array
   interpArrayInPlace(r.lavaRocks, a.lavaRocks, b.lavaRocks, (ar, br, out) => {
     out.x = lerp(ar.x, br.x, t);
     out.y = lerp(ar.y, br.y, t);
@@ -282,7 +202,6 @@ function interpolateSnapshots(a: AuthSnapshot, b: AuthSnapshot, t: number): Auth
     out.active = br.active;
   });
 
-  // Scalars
   r.timeElapsed = lerp(a.timeElapsed, b.timeElapsed, t);
   r.countdown = lerp(a.countdown, b.countdown, t);
   r.dayPhase = lerp(a.dayPhase, b.dayPhase, t);
@@ -294,7 +213,6 @@ function interpolateSnapshots(a: AuthSnapshot, b: AuthSnapshot, t: number): Auth
   return r;
 }
 
-/** Interpolate arrays in-place — reuses existing objects, grows/shrinks as needed. */
 function interpArrayInPlace<T extends Record<string, any>>(
   out: T[], aArr: T[], bArr: T[],
   fn: (a: T, b: T, out: T) => void,
@@ -317,35 +235,24 @@ function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
-// Reusable Map to avoid allocation per frame in applySnapshotToState
-const _playerLookup = new Map<string, import('../types').Player>();
+// ---- Apply snapshot to state (game-specific) ----
 
 /**
  * Apply an AuthSnapshot to a MatchState for rendering on the guest.
- * Updates player positions, entity states, and global timers in-place.
+ * Player arrays have stable order, so index-based access avoids Map overhead.
  */
 export function applySnapshotToState(
   snap: AuthSnapshot,
   state: MatchState,
-  localSlot?: PlayerSlot,
-  localOverride?: { x: number; y: number },
 ): void {
-  // Update players (O(1) lookup, reused Map to avoid GC pressure)
-  _playerLookup.clear();
-  for (const p of state.players) _playerLookup.set(p.id, p);
-  const playerById = _playerLookup;
-  for (const sp of snap.players) {
-    const player = playerById.get(sp.id);
-    if (!player) continue;
-
-    // If this is the local player and we have a prediction override, use it
-    if (localSlot && sp.id === localSlot && localOverride) {
-      player.x = localOverride.x;
-      player.y = localOverride.y;
-    } else {
-      player.x = sp.x;
-      player.y = sp.y;
-    }
+  // Index-based: snap.players and state.players have the same order
+  // (both derived from the host's state.players array)
+  const len = Math.min(snap.players.length, state.players.length);
+  for (let i = 0; i < len; i++) {
+    const sp = snap.players[i];
+    const player = state.players[i];
+    player.x = sp.x;
+    player.y = sp.y;
     player.vx = sp.vx;
     player.vy = sp.vy;
     player.state = sp.state;
@@ -372,7 +279,6 @@ export function applySnapshotToState(
     player.damageFlashSide = sp.damageFlashSide;
   }
 
-  // Global state
   state.timeElapsed = snap.timeElapsed;
   state.countdown = snap.countdown;
   state.dayPhase = snap.dayPhase;
@@ -385,7 +291,6 @@ export function applySnapshotToState(
   state.killFeed = snap.killFeed;
   state.scoreAnimations = snap.scoreAnimations;
 
-  // Sync entity arrays
   syncArray(state.carrots, snap.carrots, (s) => ({ x: s.x, y: s.y, active: s.active, spawnTime: 0 }), (dst, src) => {
     dst.x = src.x; dst.y = src.y; dst.active = src.active;
   });
@@ -416,7 +321,6 @@ export function applySnapshotToState(
   });
 }
 
-/** Sync a state array to match a snapshot array — reuse existing objects, grow/shrink as needed. */
 function syncArray<TState, TSnap>(
   stateArr: TState[],
   snapArr: TSnap[],

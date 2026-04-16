@@ -47,7 +47,7 @@ import { AIController } from './ai';
 import { debugFlags, toggleNavDebug, toggleNetDebug } from './debugFlags';
 import { fastSin } from './fastMath';
 import type { BotNavDebugState } from './navDebugOverlay';
-import type { NetDebugStats } from './net/debugOverlay';
+import type { NetDebugStats } from './net/core/debugOverlay';
 
 /** Force 32-bit float for cross-architecture determinism (x86 80-bit vs ARM 64-bit). */
 const f = Math.fround;

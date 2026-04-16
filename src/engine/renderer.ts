@@ -12,8 +12,8 @@ import { hexToRGB } from './fastMath';
 import { debugFlags } from './debugFlags';
 import { drawNavDebugOverlay } from './navDebugOverlay';
 import type { BotNavDebugState } from './navDebugOverlay';
-import { drawNetDebugOverlay } from './net/debugOverlay';
-import type { NetDebugStats } from './net/debugOverlay';
+import { drawNetDebugOverlay } from './net/core/debugOverlay';
+import type { NetDebugStats } from './net/core/debugOverlay';
 
 // Extracted rendering modules
 import {
