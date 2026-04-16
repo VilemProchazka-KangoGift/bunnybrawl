@@ -235,6 +235,14 @@ export class LobbyGame {
       if (p.splatTimer > 0) { p.splatTimer = Math.max(0, p.splatTimer - dt); return; }
 
       applyInput(p, input, dt, LOBBY_SPEED, 1500 /* friction */, LOBBY_JUMP);
+
+      // Passive facing sync — applyInput only sets facing on directional input;
+      // coast velocity (bumps, stomps, initial NPC vx) needs its own sync.
+      if (!input.left && !input.right) {
+        if (p.vx > 0) p.facing = 'right';
+        else if (p.vx < 0) p.facing = 'left';
+      }
+
       applyGravity(p, dt, LOBBY_GRAVITY, 800);
       movePlayer(p, dt);
       collidePlatforms(p, LOBBY_ARENA.platforms);
