@@ -7,3 +7,4 @@ export { detectEntityTransitions, createPrevEntityState } from './entityTransiti
 export type { PrevEntityState } from './entityTransitions';
 export { detectPlayerTransitions, snapshotPlayerCosmeticState } from './playerTransitions';
 export type { PrevPlayerCosmeticState, TransitionCallbacks } from './playerTransitions';
+export { updatePlayerCosmetics } from './playerCosmetics';

@@ -21,7 +21,7 @@ import { checkSpringCollision, checkThornCollision, checkHazardZoneCollision, ch
 import { audio } from './audio';
 import {
   FIXED_TIMESTEP, MAX_FRAME_TIME,
-  PLAYER_WIDTH, PLAYER_HEIGHT, ANIM_FRAME_DURATION, RUN_FRAMES,
+  PLAYER_WIDTH, PLAYER_HEIGHT,
   CARROT_SPAWN_INTERVAL, CARROT_CHASE_SPAWN_INTERVAL,
   CARROT_FIRST_SPAWN_DELAY, CARROT_CHASE_FIRST_SPAWN_DELAY, CARROT_SIZE, GIANT_SCALE,
   FAT_DURATION, SPRING_BOUNCE,
@@ -29,8 +29,7 @@ import {
   SPRING_SPAWN_INTERVAL, THORN_SPAWN_INTERVAL,
   SCREEN_SHAKE_DURATION, SLOW_MO_DURATION, SLOW_MO_FACTOR, HITSTOP_DURATION, HAZARD_HITSTOP_DURATION,
   SQUASH_ON_LAND, STRETCH_ON_JUMP, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED,
-  AFTERIMAGE_INTERVAL, AFTERIMAGE_SPEED_THRESHOLD, AFTERIMAGE_MAX,
-  MATCH_COUNTDOWN, IDLE_ANIM_INTERVAL,
+  MATCH_COUNTDOWN,
   SCREEN_FLASH_DURATION,
   SPRING_TRAIL_DURATION,
   GRAVITY, FRICTION, MAX_WALK_SPEED, JUMP_IMPULSE, MAX_FALL_SPEED,
@@ -39,7 +38,6 @@ import {
 import { getCharacterForSlot } from './characters';
 import { AIController } from './ai';
 import { debugFlags, toggleNavDebug, toggleNetDebug } from './debugFlags';
-import { fastSin } from './fastMath';
 import type { BotNavDebugState } from './navDebugOverlay';
 import type { NetDebugStats } from './net/core/debugOverlay';
 
@@ -53,6 +51,7 @@ import { detectEntityTransitions } from './gameLoop/cosmetics/entityTransitions'
 import type { PrevEntityState } from './gameLoop/cosmetics/entityTransitions';
 import { detectPlayerTransitions, snapshotPlayerCosmeticState } from './gameLoop/cosmetics/playerTransitions';
 import type { PrevPlayerCosmeticState, TransitionCallbacks } from './gameLoop/cosmetics/playerTransitions';
+import { updatePlayerCosmetics } from './gameLoop/cosmetics/playerCosmetics';
 import { spawnSpring, spawnThorn, updateHazardLifetimes } from './gameLoop/gameplay/hazards';
 import { spawnCarrot } from './gameLoop/gameplay/carrots';
 import { updateLavaRocks, updateGhosts, updateGeyserTimers, updatePigeonFlocks } from './gameLoop/gameplay/arenaEntities';
@@ -65,7 +64,6 @@ const f = Math.fround;
 export type MatchEndCallback = (winner: PlayerSlot | null, state: MatchState) => void;
 
 const CARROT_PICKUP_COLORS = ['#FF8C00', '#FF6600', '#FFA500', '#FF7700', '#FFD700', '#FF8C00'];
-const FIRE_COLORS = ['#FF4400', '#FF8800', '#FFCC00', '#FFAA00'];
 
 
 export class GameLoop {
@@ -135,6 +133,8 @@ export class GameLoop {
   // Bound callbacks for extracted submodules (avoids .bind() allocations in hot paths)
   private readonly _boundGameRandom = (): number => this.gameRandom();
   private readonly _boundPlaySound = (name: string): void => this.playSound(name as Parameters<typeof audio.play>[0]);
+  private readonly _boundEmitParticle = (x: number, y: number, vx: number, vy: number, life: number, size: number, color: string): void =>
+    this.emitParticle(x, y, vx, vy, life, size, color);
   private readonly _transitionCallbacks: TransitionCallbacks = {
     playSound: this._boundPlaySound,
     spawnDustParticles: (p, vy) => this.spawnDustParticles(p, vy),
@@ -570,97 +570,11 @@ export class GameLoop {
       // Skip remaining cosmetic systems during hitstop (player is frozen)
       if (player.hitstopTimer > 0) continue;
 
-      // Run animation frame advance
-      player.animTimer += dt;
-      if (player.animTimer >= ANIM_FRAME_DURATION) {
-        player.animTimer -= ANIM_FRAME_DURATION;
-        player.animFrame = (player.animFrame + 1) % RUN_FRAMES;
-      }
-
-      // Fire particles while burning
-      if (player.burnTimer > 0 && player.state !== 'splat' && player.state !== 'respawning') {
-        const cx = player.x + player.width / 2;
-        const baseY = player.y + player.height;
-        for (let i = 0; i < 2; i++) {
-          const fx = cx + (Math.random() - 0.5) * player.width * 0.8;
-          const fy = baseY - Math.random() * player.height * 0.6;
-          const life = 0.25 + Math.random() * 0.3;
-          this.emitParticle(fx, fy, (Math.random() - 0.5) * 40, -60 - Math.random() * 80, life, 2 + Math.random() * 4, FIRE_COLORS[Math.floor(Math.random() * FIRE_COLORS.length)]);
-        }
-      }
-
-      // Idle animation timer
-      if (player.state === 'idle') {
-        player.idleAnimTimer += dt;
-        if (player.idleAnimTimer >= IDLE_ANIM_INTERVAL) {
-          player.idleAnimTimer = 0;
-        }
-      } else {
-        player.idleAnimTimer = 0;
-      }
-
-      // Afterimages — spawn at speed threshold or during invincibility
-      const speed = Math.max(Math.abs(player.vx), Math.abs(player.vy));
-      const spawnAfterimage = speed > AFTERIMAGE_SPEED_THRESHOLD || player.invincibleTimer > 0;
-      if (spawnAfterimage) {
-        let acc = this.afterimageAccumulators.get(player.id) || 0;
-        acc += dt;
-        while (acc >= AFTERIMAGE_INTERVAL) {
-          acc -= AFTERIMAGE_INTERVAL;
-          if (player.afterimages.length < AFTERIMAGE_MAX) {
-            player.afterimages.push({ x: player.x, y: player.y, facing: player.facing, alpha: 1 });
-          }
-        }
-        this.afterimageAccumulators.set(player.id, acc);
-      } else {
-        this.afterimageAccumulators.set(player.id, 0);
-      }
-      // Decay afterimage alpha
-      for (let i = player.afterimages.length - 1; i >= 0; i--) {
-        player.afterimages[i].alpha -= dt * 4;
-        if (player.afterimages[i].alpha <= 0) {
-          swapRemove(player.afterimages, i);
-        }
-      }
-
-      // Footstep sounds — interval and volume scale with speed
-      if (player.state === 'run') {
-        const runSpeed = Math.abs(player.vx);
-        const speedRatio = Math.min(runSpeed / this.effWalkSpeed, 1);
-        const interval = 0.22 - speedRatio * 0.12; // 0.22s at slow, 0.1s at full speed
-        let fAcc = this.footstepAccumulators.get(player.id) || 0;
-        fAcc += dt;
-        if (fAcc >= interval) {
-          fAcc -= interval;
-          const playerBottom = player.y + player.height;
-          const name = playerBottom > 600 ? 'footstep_grass' : 'footstep_wood';
-          const vol = 0.08 + speedRatio * 0.2; // 0.08 at slow, 0.28 at full speed
-          audio.setVolume(name, vol);
-          this.playSound(name);
-        }
-        this.footstepAccumulators.set(player.id, fAcc);
-      } else {
-        this.footstepAccumulators.set(player.id, 0);
-      }
-
-      // Expressions: dizzy (invincible) and scared (fast fall)
-      // Note: angry expression (proximity check) stays in fixedUpdate
-      if (player.invincibleTimer > 0) {
-        player.expression = 'dizzy';
-      } else if (player.vy > 400) {
-        player.expression = 'scared';
-      }
-
-      // Side squash decay (wall/push squash recovers to 1.0)
-      if (player.sideSquash !== 1) {
-        player.sideSquash = f(player.sideSquash + f(f(1.0 - player.sideSquash) * f(SQUASH_DECAY_SPEED * dt)));
-        if (Math.abs(player.sideSquash - 1) < 0.02) player.sideSquash = 1;
-      }
-
-      // Size wobble when fat
-      if (player.fatTimer > 0) {
-        player.squashScale = f(player.squashScale * f(1 + f(fastSin(f(this.state.timeElapsed * 6)) * 0.05)));
-      }
+      updatePlayerCosmetics(
+        player, dt, this.state.timeElapsed, this.effWalkSpeed,
+        this.afterimageAccumulators, this.footstepAccumulators,
+        this._boundEmitParticle, this._boundPlaySound,
+      );
 
     }
 
