@@ -600,18 +600,8 @@ export class GameLoop {
             this.spawnDustParticles(player, Math.abs(prev.vy));
           }
 
-          // Headbonk: was going up fast, velocity suddenly clamped by ceiling collision.
-          // Normal jump apex: vy changes by ~15/tick (gravity). Bonk: vy jumps from
-          // large negative to ~0 in one tick (collision clamp). Require velocity change
-          // much larger than gravity to distinguish.
-          if (wasAirborne && isAirborne && prev.vy < -50 && Math.abs(player.vy) < 10
-              && Math.abs(player.vy - prev.vy) > 30) {
-            const bonkCD = this.headbonkCooldowns.get(player.id) ?? 0;
-            if (bonkCD <= 0) {
-              this.playSound('headbonk');
-              this.headbonkCooldowns.set(player.id, 0.15);
-            }
-          }
+          // Headbonk stays in fixedUpdate (after collidePlatforms) where the
+          // ceiling collision is directly known. Velocity heuristics here are fragile.
 
           // Wall hit: was moving fast horizontally, now stopped
           if (Math.abs(prev.vx) > 100 && Math.abs(player.vx) < 5 && isGrounded) {
@@ -1759,6 +1749,15 @@ export class GameLoop {
       if (player.vx !== 0 && player.vx > -1e-4 && player.vx < 1e-4) player.vx = 0;
       if (player.vy !== 0 && player.vy > -1e-4 && player.vy < 1e-4) player.vy = 0;
       updatePlayerState(player);
+
+      // Headbonk: ceiling collision clamped vy to 0 while going up
+      if (wasAirborne && player.state === 'airborne' && prevVy < -10 && player.vy === 0) {
+        const bonkCD = this.headbonkCooldowns.get(player.id) ?? 0;
+        if (bonkCD <= 0) {
+          this.playSound('headbonk');
+          this.headbonkCooldowns.set(player.id, 0.15);
+        }
+      }
 
       // Landing detection
       const justLanded = wasAirborne && player.state !== 'airborne';
