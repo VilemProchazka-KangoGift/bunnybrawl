@@ -1,5 +1,5 @@
 import type {
-  MatchState, MatchSettings, Arena, PlayerSlot, Player, Particle, Gib, GibType,
+  MatchState, MatchSettings, Arena, PlayerSlot, Player, PlayerState, Particle, Gib, GibType,
   WeatherParticle, MatchStats, PlayerStats, WildlifeEntity, EffectZone, Platform,
   InputState,
 } from './types';
@@ -56,6 +56,18 @@ export type MatchEndCallback = (winner: PlayerSlot | null, state: MatchState) =>
 
 const CARROT_PICKUP_COLORS = ['#FF8C00', '#FF6600', '#FFA500', '#FF7700', '#FFD700', '#FF8C00'];
 const FIRE_COLORS = ['#FF4400', '#FF8800', '#FFCC00', '#FFAA00'];
+
+/** Previous-frame player state for cosmetic transition detection in cosmeticStep(). */
+interface PrevPlayerCosmeticState {
+  state: PlayerState;
+  vx: number;
+  vy: number;
+  score: number;
+  sideSquash: number;
+  burnTimer: number;
+  fastFalling: boolean;
+  invincibleTimer: number;
+}
 
 export class GameLoop {
   private arena: Arena;
@@ -122,6 +134,16 @@ export class GameLoop {
   private _resimulating = false; // true during rollback resimulation — skip cosmetic systems
   // Explicit inputs injected by rollback engine (keyed by PlayerSlot)
   private _networkInputs?: Map<string, InputState>;
+
+  // Previous-frame state for cosmetic transition detection (cosmeticStep)
+  private prevCosmeticState: Map<PlayerSlot, PrevPlayerCosmeticState> = new Map();
+  private prevEntityState = {
+    carrotActives: [] as boolean[],
+    springBounces: [] as number[],
+    thornHits: [] as boolean[],
+    countdownSec: 4,
+    matchOver: false,
+  };
 
   constructor(
     bgCanvas: HTMLCanvasElement,
@@ -334,6 +356,20 @@ export class GameLoop {
       this.touchSlot = activePlayers.find(s => !isBotSlot(s)) ?? null;
       if (this.touchSlot) haptics.init(this.touchSlot);
     }
+
+    // Initialize prev-state tracking for cosmeticStep transition detection
+    for (const p of this.state.players) {
+      this.prevCosmeticState.set(p.id, {
+        state: p.state, vx: p.vx, vy: p.vy, score: p.score,
+        sideSquash: p.sideSquash, burnTimer: p.burnTimer,
+        fastFalling: p.fastFalling, invincibleTimer: p.invincibleTimer,
+      });
+    }
+    this.prevEntityState.carrotActives = this.state.carrots.map(c => c.active);
+    this.prevEntityState.springBounces = this.state.springs.map(s => s.bounceTimer);
+    this.prevEntityState.thornHits = this.state.thorns.map(t => t.hit);
+    this.prevEntityState.countdownSec = Math.ceil(this.state.countdown);
+    this.prevEntityState.matchOver = this.state.matchOver;
   }
 
   private createWeatherParticle(randomY: boolean): WeatherParticle {
