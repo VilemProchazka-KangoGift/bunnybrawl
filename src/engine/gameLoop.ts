@@ -937,46 +937,7 @@ export class GameLoop {
     }
   }
 
-  /** Spawn dust particles for landing. Accepts any object with position+size. */
-  spawnDustPublic(player: { x: number; y: number; width: number; height: number }, landVy: number): void {
-    this.spawnDustParticles(player as Player, landVy);
-  }
-
-  /** Spawn stomp blood/confetti particles. */
-  spawnStompVfxPublic(victim: { x: number; y: number; width: number; height: number }): void {
-    const cx = victim.x + victim.width / 2;
-    const cy = victim.y + victim.height / 2;
-    if (this.settings.goreMode) {
-      for (let i = 0; i < 12; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const speed = 100 + Math.random() * 200;
-        this.emitParticle(cx, cy, Math.cos(angle) * speed, Math.sin(angle) * speed - 100, 0.5 + Math.random() * 0.5, 2 + Math.random() * 5, BLOOD_COLOR);
-      }
-    } else {
-      for (let i = 0; i < 15; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const speed = 80 + Math.random() * 150;
-        this.emitParticle(cx, cy, Math.cos(angle) * speed, Math.sin(angle) * speed - 120, 0.6 + Math.random() * 0.4, 2 + Math.random() * 4, GameLoop.CONFETTI_COLORS[i % GameLoop.CONFETTI_COLORS.length]);
-      }
-    }
-  }
-
-  /** Spawn gibs for a splatted player (guest SFX). */
-  spawnGibsPublic(victim: Player): void {
-    this.spawnGibs(victim);
-    if (!this.settings.goreMode) {
-      this.spawnConfetti(victim);
-    }
-  }
-
-  /** Spawn carrot pickup burst. */
-  spawnCarrotVfxPublic(x: number, y: number): void {
-    for (let i = 0; i < 8; i++) {
-      const angle = (i / 8) * Math.PI * 2;
-      const speed = 60 + Math.random() * 80;
-      this.emitParticle(x, y, Math.cos(angle) * speed, Math.sin(angle) * speed - 50, 0.4 + Math.random() * 0.2, 2 + Math.random() * 3, i % 2 === 0 ? '#FFD700' : '#FF8C00');
-    }
-  }
+  // Public VFX methods removed — cosmeticStep() calls private methods directly.
 
   /** Render current frame. Public for network loop. */
   renderFrame(frameDt?: number): void {

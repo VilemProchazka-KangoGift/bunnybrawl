@@ -20,7 +20,6 @@ import type { ReliableMessage } from './protocol';
 import { HostAuthority } from './hostAuthority';
 import type { HostDebugStats } from './hostAuthority';
 import { EntityInterpolation, applySnapshotToState } from './interpolation';
-import { GuestSFX } from './guestSfx';
 import { InputEcho } from './inputEcho';
 import { decodeSnapshot } from './snapshot';
 import {
@@ -65,7 +64,6 @@ export class NetMatch {
 
   // Guest-specific
   private interpolation: EntityInterpolation | null = null;
-  private guestSfx: GuestSFX | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private inputEcho: InputEcho | null = null;
   private lastSnapshotTime = 0;    // wall-clock time of last received snapshot
@@ -131,7 +129,6 @@ export class NetMatch {
 
   private initGuest(config: NetMatchConfig): void {
     this.interpolation = new EntityInterpolation();
-    this.guestSfx = new GuestSFX(this.gameLoop);
     // Input echo: instant visual feedback without position prediction.
     // Disable with ?noecho URL param.
     const noEcho = typeof location !== 'undefined'
@@ -314,9 +311,10 @@ export class NetMatch {
         }
       }
 
-      // 3. Detect SFX BEFORE echo (so snapshot sideSquash is read for bump detection)
-      if (this.guestSfx) {
-        this.guestSfx.update(this.gameLoop.getState(), dt);
+      // 3. Tick cosmetics (SFX, particles, visual effects via state-transition detection)
+      const state = this.gameLoop.getState();
+      if (!state.matchOver) {
+        this.gameLoop.cosmeticStep(dt);
       }
 
       // 4. Apply input echo for local player visual responsiveness
@@ -324,8 +322,7 @@ export class NetMatch {
         this.inputEcho.apply(localInput, this.gameLoop.getState(), this.transport.currentRtt, dt);
       }
 
-      // 5. Decay visual timers + drive local cosmetic state
-      const state = this.gameLoop.getState();
+      // 5. Decay visual timers for smooth interpolation between snapshots
       for (const p of state.players) {
         if (p.invincibleTimer > 0) p.invincibleTimer = Math.max(0, p.invincibleTimer - dt);
         if (p.slowTimer > 0) p.slowTimer = Math.max(0, p.slowTimer - dt);
@@ -355,12 +352,7 @@ export class NetMatch {
       }
       if (state.screenShake > 0) state.screenShake = Math.max(0, state.screenShake - dt);
 
-      // 4. Tick cosmetic systems (skip if matchOver — renderFrame handles victory cosmetics)
-      if (!state.matchOver) {
-        this.gameLoop.cosmeticStep(dt);
-      }
-
-      // 4.5 Stall detection: check time since last snapshot (suppressed after match end)
+      // 6. Stall detection: check time since last snapshot (suppressed after match end)
       if (this.lastSnapshotTime > 0 && !this.reconnecting && !state.matchOver) {
         const elapsed = now - this.lastSnapshotTime;
         if (elapsed > 3000) {
@@ -372,10 +364,10 @@ export class NetMatch {
         }
       }
 
-      // 5. Render
+      // 7. Render
       this.gameLoop.renderFrame(dt);
 
-      // Update connection quality indicator for HUD
+      // 8. Update connection quality indicator for HUD
       this.gameLoop.setConnectionQuality(this.transport.currentRtt, this.transport.currentJitter);
 
       this.rafId = requestAnimationFrame(loop);
