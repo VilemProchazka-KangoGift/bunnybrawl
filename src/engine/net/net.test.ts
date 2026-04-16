@@ -6,7 +6,7 @@ import {
   encodePing, decodePingPong,
   MsgType,
 } from './protocol';
-import { crc32, takeSnapshot, restoreSnapshot, hashGameState, hashGameStateDetailed, hashSnapshot } from './serialize';
+import { takeSnapshot, restoreSnapshot, hashGameState } from './serialize';
 import type { MatchState, Player, PlayerSlot } from '../types';
 
 describe('SeededRNG', () => {
@@ -153,24 +153,6 @@ describe('Protocol encoding', () => {
   });
 });
 
-describe('CRC32', () => {
-  it('produces consistent hashes', () => {
-    expect(crc32('hello')).toBe(crc32('hello'));
-    expect(crc32('')).toBe(crc32(''));
-  });
-
-  it('produces different hashes for different inputs', () => {
-    expect(crc32('hello')).not.toBe(crc32('world'));
-    expect(crc32('abc')).not.toBe(crc32('abd'));
-  });
-
-  it('returns a positive 32-bit integer', () => {
-    const hash = crc32('test string');
-    expect(hash).toBeGreaterThanOrEqual(0);
-    expect(hash).toBeLessThanOrEqual(0xFFFFFFFF);
-    expect(Number.isInteger(hash)).toBe(true);
-  });
-});
 
 describe('Message loop prevention', () => {
   /**
@@ -455,40 +437,3 @@ describe('Snapshot field coverage', () => {
   });
 });
 
-describe('Per-subsystem hash', () => {
-  it('detailed hash composite matches simple hash', () => {
-    const state = makeTestMatchState();
-    const rng = new SeededRNG(789);
-
-    const simple = hashGameState(state, rng);
-    const detailed = hashGameStateDetailed(state, rng);
-
-    expect(detailed.hash).toBe(simple);
-  });
-
-  it('player mutation changes playersHash but not timersHash', () => {
-    const state = makeTestMatchState();
-    const rng = new SeededRNG(789);
-
-    const before = hashGameStateDetailed(state, rng);
-    const beforePlayers = before.playersHash;
-    const beforeTimers = before.timersHash;
-
-    state.players[0].x += 10;
-    const after = hashGameStateDetailed(state, rng);
-
-    expect(after.playersHash).not.toBe(beforePlayers);
-    expect(after.timersHash).toBe(beforeTimers);
-  });
-
-  it('hashSnapshot matches hashGameState for same state', () => {
-    const state = makeTestMatchState();
-    const rng = new SeededRNG(101);
-
-    const liveHash = hashGameState(state, rng);
-    const snap = takeSnapshot(0, state, rng, new Map());
-    const snapHash = hashSnapshot(snap);
-
-    expect(snapHash).toBe(liveHash);
-  });
-});

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { drawNetDebugOverlay } from './debugOverlay';
-import type { NetDebugStats } from './rollback';
+import type { NetDebugStats } from './debugOverlay';
 
 function makeMockCtx() {
   return {

@@ -2,8 +2,24 @@
  * Network debug overlay — draws RTT, jitter, rollback stats on the canvas.
  * Activated via ?debug=net URL param, toggled with ` key.
  */
-import type { NetDebugStats } from './rollback';
-export type { NetDebugStats };
+
+export interface NetDebugStats {
+  localFrame: number;
+  remoteConfirmedFrame: number;
+  remoteLatestAck: number;
+  rtt: number;
+  jitter: number;
+  inputDelay: number;
+  stalled: boolean;
+  rollbacksPerSec: number;
+  maxRollbackDepth: number;
+  isRelay: boolean;
+  desyncChecks: number;
+  desyncMismatches: number;
+  desyncCorrections: number;
+  lastDesyncFrame: number;
+  lastDesyncSubsystem: string;
+}
 
 const FONT = '12px monospace';
 const LINE_HEIGHT = 16;
