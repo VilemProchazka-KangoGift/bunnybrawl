@@ -554,6 +554,118 @@ export class GameLoop {
   /** Tick all cosmetic-only systems (particles, environment, visual decays).
    *  Called once per frame from local loop(), host loop, and guest loop. */
   cosmeticStep(dt: number): void {
+    // --- Per-player cosmetic systems ---
+    for (const player of this.state.players) {
+      if (!player.active) continue;
+
+      // SFX cooldown decay (must tick even during hitstop so cooldowns don't accumulate)
+      const lc = this.landCooldowns.get(player.id);
+      if (lc !== undefined && lc > 0) this.landCooldowns.set(player.id, lc - dt);
+      const hc = this.headbonkCooldowns.get(player.id);
+      if (hc !== undefined && hc > 0) this.headbonkCooldowns.set(player.id, hc - dt);
+      const cc = this.crouchCooldowns.get(player.id);
+      if (cc !== undefined && cc > 0) this.crouchCooldowns.set(player.id, cc - dt);
+
+      // Cosmetic timer decay (runs even during hitstop for smooth visuals)
+      if (player.damageFlashTimer > 0) player.damageFlashTimer = Math.max(0, player.damageFlashTimer - dt);
+      if (player.springTrailTimer > 0) player.springTrailTimer = Math.max(0, player.springTrailTimer - dt);
+
+      // Skip remaining cosmetic systems during hitstop (player is frozen)
+      if (player.hitstopTimer > 0) continue;
+
+      // Run animation frame advance
+      player.animTimer += dt;
+      if (player.animTimer >= ANIM_FRAME_DURATION) {
+        player.animTimer -= ANIM_FRAME_DURATION;
+        player.animFrame = (player.animFrame + 1) % RUN_FRAMES;
+      }
+
+      // Fire particles while burning
+      if (player.burnTimer > 0 && player.state !== 'splat' && player.state !== 'respawning') {
+        const cx = player.x + player.width / 2;
+        const baseY = player.y + player.height;
+        for (let i = 0; i < 2; i++) {
+          const fx = cx + (Math.random() - 0.5) * player.width * 0.8;
+          const fy = baseY - Math.random() * player.height * 0.6;
+          const life = 0.25 + Math.random() * 0.3;
+          this.emitParticle(fx, fy, (Math.random() - 0.5) * 40, -60 - Math.random() * 80, life, 2 + Math.random() * 4, FIRE_COLORS[Math.floor(Math.random() * FIRE_COLORS.length)]);
+        }
+      }
+
+      // Idle animation timer
+      if (player.state === 'idle') {
+        player.idleAnimTimer += dt;
+        if (player.idleAnimTimer >= IDLE_ANIM_INTERVAL) {
+          player.idleAnimTimer = 0;
+        }
+      } else {
+        player.idleAnimTimer = 0;
+      }
+
+      // Afterimages — spawn at speed threshold or during invincibility
+      const speed = Math.max(Math.abs(player.vx), Math.abs(player.vy));
+      const spawnAfterimage = speed > AFTERIMAGE_SPEED_THRESHOLD || player.invincibleTimer > 0;
+      if (spawnAfterimage) {
+        let acc = this.afterimageAccumulators.get(player.id) || 0;
+        acc += dt;
+        while (acc >= AFTERIMAGE_INTERVAL) {
+          acc -= AFTERIMAGE_INTERVAL;
+          if (player.afterimages.length < AFTERIMAGE_MAX) {
+            player.afterimages.push({ x: player.x, y: player.y, facing: player.facing, alpha: 1 });
+          }
+        }
+        this.afterimageAccumulators.set(player.id, acc);
+      } else {
+        this.afterimageAccumulators.set(player.id, 0);
+      }
+      // Decay afterimage alpha
+      for (let i = player.afterimages.length - 1; i >= 0; i--) {
+        player.afterimages[i].alpha -= dt * 4;
+        if (player.afterimages[i].alpha <= 0) {
+          swapRemove(player.afterimages, i);
+        }
+      }
+
+      // Footstep sounds — interval and volume scale with speed
+      if (player.state === 'run') {
+        const runSpeed = Math.abs(player.vx);
+        const speedRatio = Math.min(runSpeed / this.effWalkSpeed, 1);
+        const interval = 0.22 - speedRatio * 0.12; // 0.22s at slow, 0.1s at full speed
+        let fAcc = this.footstepAccumulators.get(player.id) || 0;
+        fAcc += dt;
+        if (fAcc >= interval) {
+          fAcc -= interval;
+          const playerBottom = player.y + player.height;
+          const name = playerBottom > 600 ? 'footstep_grass' : 'footstep_wood';
+          const vol = 0.08 + speedRatio * 0.2; // 0.08 at slow, 0.28 at full speed
+          audio.setVolume(name, vol);
+          this.playSound(name);
+        }
+        this.footstepAccumulators.set(player.id, fAcc);
+      } else {
+        this.footstepAccumulators.set(player.id, 0);
+      }
+
+      // Expressions: dizzy (invincible) and scared (fast fall)
+      // Note: angry expression (proximity check) stays in fixedUpdate
+      if (player.invincibleTimer > 0) {
+        player.expression = 'dizzy';
+      } else if (player.vy > 400) {
+        player.expression = 'scared';
+      }
+
+      // Side squash decay (wall/push squash recovers to 1.0)
+      if (player.sideSquash !== 1) {
+        player.sideSquash = f(player.sideSquash + f(f(1.0 - player.sideSquash) * f(SQUASH_DECAY_SPEED * dt)));
+        if (Math.abs(player.sideSquash - 1) < 0.02) player.sideSquash = 1;
+      }
+
+      // Size wobble when fat
+      if (player.fatTimer > 0) {
+        player.squashScale = f(player.squashScale * f(1 + f(fastSin(f(this.state.timeElapsed * 6)) * 0.05)));
+      }
+    }
+
     // --- Particle systems ---
     this.updateWeather(dt);
     this.updateParticles(dt);
@@ -1481,43 +1593,21 @@ export class GameLoop {
       }
     }
 
-    // Animation timers
+    // Gameplay timers (hitstop gates physics; fat/slow/burn affect gameplay)
+    // Cosmetic timers (animFrame, damageFlash, springTrail, fire particles) moved to cosmeticStep()
     for (const player of this.state.players) {
       if (!player.active) continue;
-      // Hitstop: decay timer + status timers, but skip animation advance + physics
+      // Hitstop: decay timer + status timers, but skip physics
       if (player.hitstopTimer > 0) {
         player.hitstopTimer = Math.max(0, f(player.hitstopTimer - dt));
         if (player.fatTimer > 0) player.fatTimer = Math.max(0, f(player.fatTimer - dt));
         if (player.slowTimer > 0) player.slowTimer = Math.max(0, f(player.slowTimer - dt));
         if (player.burnTimer > 0) player.burnTimer = Math.max(0, f(player.burnTimer - dt));
-        if (player.damageFlashTimer > 0) player.damageFlashTimer = Math.max(0, player.damageFlashTimer - dt);
-        if (player.springTrailTimer > 0) player.springTrailTimer = Math.max(0, player.springTrailTimer - dt);
         continue;
-      }
-      player.animTimer += dt;
-      if (player.animTimer >= ANIM_FRAME_DURATION) {
-        player.animTimer -= ANIM_FRAME_DURATION;
-        player.animFrame = (player.animFrame + 1) % RUN_FRAMES;
       }
       if (player.fatTimer > 0) player.fatTimer = Math.max(0, f(player.fatTimer - dt));
       if (player.slowTimer > 0) player.slowTimer = Math.max(0, f(player.slowTimer - dt));
-      if (player.burnTimer > 0) {
-        player.burnTimer = Math.max(0, f(player.burnTimer - dt));
-        // Spawn fire particles while burning
-        if (player.state !== 'splat' && player.state !== 'respawning') {
-          const cx = player.x + player.width / 2;
-          const baseY = player.y + player.height;
-          for (let i = 0; i < 2; i++) {
-            const fx = cx + (Math.random() - 0.5) * player.width * 0.8;
-            const fy = baseY - Math.random() * player.height * 0.6;
-            const life = 0.25 + Math.random() * 0.3;
-            this.emitParticle(fx, fy, (Math.random() - 0.5) * 40, -60 - Math.random() * 80, life, 2 + Math.random() * 4, FIRE_COLORS[Math.floor(Math.random() * FIRE_COLORS.length)]);
-          }
-        }
-      }
-      // Decay damage flash and spring trail
-      if (player.damageFlashTimer > 0) player.damageFlashTimer = Math.max(0, player.damageFlashTimer - dt);
-      if (player.springTrailTimer > 0) player.springTrailTimer = Math.max(0, player.springTrailTimer - dt);
+      if (player.burnTimer > 0) player.burnTimer = Math.max(0, f(player.burnTimer - dt));
     }
 
     // Decay global bump cooldown
@@ -1526,13 +1616,7 @@ export class GameLoop {
     // Input + physics
     for (const player of this.state.players) {
       if (!player.active) continue;
-      // Decay SFX cooldowns (even during hitstop so they don't accumulate)
-      const lc = this.landCooldowns.get(player.id);
-      if (lc !== undefined && lc > 0) this.landCooldowns.set(player.id, lc - dt);
-      const hc = this.headbonkCooldowns.get(player.id);
-      if (hc !== undefined && hc > 0) this.headbonkCooldowns.set(player.id, hc - dt);
-      const cc = this.crouchCooldowns.get(player.id);
-      if (cc !== undefined && cc > 0) this.crouchCooldowns.set(player.id, cc - dt);
+      // SFX cooldown decay moved to cosmeticStep()
       if (player.hitstopTimer > 0) continue;
       const input = this.getPlayerInput(player);
       const wasAirborne = player.state === 'airborne';
@@ -1643,24 +1727,11 @@ export class GameLoop {
         }
       }
 
-      // Side squash decay (wall/push squash recovers to 1.0)
-      if (player.sideSquash !== 1) {
-        player.sideSquash = f(player.sideSquash + f(f(1.0 - player.sideSquash) * f(SQUASH_DECAY_SPEED * dt)));
-        if (Math.abs(player.sideSquash - 1) < 0.02) player.sideSquash = 1;
-      }
+      // Side squash decay, fat wobble, expressions (dizzy/scared), idle anim,
+      // afterimages, footstep sounds all moved to cosmeticStep()
 
-      // Size wobble when fat (fastSin for cross-architecture determinism)
-      if (player.fatTimer > 0) {
-        player.squashScale = f(player.squashScale * f(1 + f(fastSin(f(this.state.timeElapsed * 6)) * 0.05)));
-      }
-
-      // Expressions
-      if (player.invincibleTimer > 0) {
-        player.expression = 'dizzy';
-      } else if (player.vy > 400) {
-        player.expression = 'scared';
-      } else {
-        // Check for nearby enemy
+      // Angry expression (proximity check requires iterating other players — stays in fixedUpdate)
+      if (player.invincibleTimer <= 0 && player.vy <= 400) {
         let angry = false;
         for (const other of this.state.players) {
           if (other.id === player.id || !other.active || other.state === 'splat' || other.state === 'respawning') continue;
@@ -1669,60 +1740,6 @@ export class GameLoop {
           if (dx < 80 && dy < 60) { angry = true; break; }
         }
         player.expression = angry ? 'angry' : 'normal';
-      }
-
-      // Idle animations
-      if (player.state === 'idle') {
-        player.idleAnimTimer += dt;
-        if (player.idleAnimTimer >= IDLE_ANIM_INTERVAL) {
-          player.idleAnimTimer = 0;
-        }
-      } else {
-        player.idleAnimTimer = 0;
-      }
-
-      // Afterimages
-      const speed = Math.max(Math.abs(player.vx), Math.abs(player.vy));
-      const spawnAfterimage = speed > AFTERIMAGE_SPEED_THRESHOLD || player.invincibleTimer > 0;
-      if (spawnAfterimage) {
-        let acc = this.afterimageAccumulators.get(player.id) || 0;
-        acc += dt;
-        while (acc >= AFTERIMAGE_INTERVAL) {
-          acc -= AFTERIMAGE_INTERVAL;
-          if (player.afterimages.length < AFTERIMAGE_MAX) {
-            player.afterimages.push({ x: player.x, y: player.y, facing: player.facing, alpha: 1 });
-          }
-        }
-        this.afterimageAccumulators.set(player.id, acc);
-      } else {
-        this.afterimageAccumulators.set(player.id, 0);
-      }
-      // Decay afterimage alpha
-      for (let i = player.afterimages.length - 1; i >= 0; i--) {
-        player.afterimages[i].alpha -= dt * 4;
-        if (player.afterimages[i].alpha <= 0) {
-          swapRemove(player.afterimages, i);
-        }
-      }
-
-      // Footstep sounds — interval and volume scale with speed
-      if (player.state === 'run') {
-        const speed = Math.abs(player.vx);
-        const speedRatio = Math.min(speed / this.effWalkSpeed, 1);
-        const interval = 0.22 - speedRatio * 0.12; // 0.22s at slow, 0.1s at full speed
-        let fAcc = this.footstepAccumulators.get(player.id) || 0;
-        fAcc += dt;
-        if (fAcc >= interval) {
-          fAcc -= interval;
-          const playerBottom = player.y + player.height;
-          const name = playerBottom > 600 ? 'footstep_grass' : 'footstep_wood';
-          const vol = 0.08 + speedRatio * 0.2; // 0.08 at slow, 0.28 at full speed
-          audio.setVolume(name, vol);
-          this.playSound(name);
-        }
-        this.footstepAccumulators.set(player.id, fAcc);
-      } else {
-        this.footstepAccumulators.set(player.id, 0);
       }
 
       // Stats: airborne time

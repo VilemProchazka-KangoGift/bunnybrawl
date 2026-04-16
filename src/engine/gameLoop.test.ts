@@ -1322,6 +1322,7 @@ describe('Hitstop', () => {
 
     // Run one more tick while hitstop is still active
     loop.fixedUpdate(FIXED_TIMESTEP);
+    loop.cosmeticStep(FIXED_TIMESTEP); // damageFlashTimer decay now in cosmeticStep
 
     // damageFlashTimer should have decayed even during hitstop
     expect(victim.damageFlashTimer).toBeLessThan(flashBefore);
@@ -2471,6 +2472,7 @@ describe('Animation Timers', () => {
     player.animTimer = 0;
 
     loop.fixedUpdate(FIXED_TIMESTEP);
+    loop.cosmeticStep(FIXED_TIMESTEP); // animTimer advance now in cosmeticStep
 
     expect(player.animTimer).toBeGreaterThan(0);
     expect(player.animTimer).toBeCloseTo(FIXED_TIMESTEP, 6);
@@ -2491,6 +2493,7 @@ describe('Animation Timers', () => {
     const steps = Math.ceil(ANIM_FRAME_DURATION / FIXED_TIMESTEP) + 1;
     for (let i = 0; i < steps; i++) {
       loop.fixedUpdate(FIXED_TIMESTEP);
+      loop.cosmeticStep(FIXED_TIMESTEP); // animFrame advance now in cosmeticStep
     }
 
     // animFrame should have advanced at least once
@@ -2513,6 +2516,7 @@ describe('Animation Timers', () => {
     player.idleAnimTimer = 0;
 
     loop.fixedUpdate(FIXED_TIMESTEP);
+    loop.cosmeticStep(FIXED_TIMESTEP); // idleAnimTimer now in cosmeticStep
 
     expect(player.idleAnimTimer).toBeGreaterThan(0);
   });
@@ -2538,6 +2542,7 @@ describe('Animation Timers', () => {
     inputs.set('P2', { left: false, right: false, jump: false, down: false });
 
     loop.fixedUpdate(FIXED_TIMESTEP, inputs);
+    loop.cosmeticStep(FIXED_TIMESTEP); // animTimer advance now in cosmeticStep
 
     // After pressing down while airborne, player should be fast-falling
     expect(player.fastFalling).toBe(true);
@@ -2875,6 +2880,7 @@ describe('Footstep Sounds', () => {
     // Run enough ticks for the player to build speed and trigger footstep accumulator
     for (let i = 0; i < 60; i++) {
       loop.fixedUpdate(FIXED_TIMESTEP, rightInput);
+      loop.cosmeticStep(FIXED_TIMESTEP); // footstep sounds now in cosmeticStep
     }
 
     // Check that audio.play was called with a footstep sound
