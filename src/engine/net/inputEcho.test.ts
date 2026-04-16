@@ -153,60 +153,14 @@ describe('InputEcho', () => {
     });
   });
 
-  // ---- Animation frame override ----
+  // ---- Animation frame (NOT echoed) ----
 
-  describe('animation frame override', () => {
-    it('drives walk cycle when moving left on ground', () => {
-      const state = makeState({ state: 'run', animFrame: 0 });
-      echo.apply(leftInput(), state, rtt, dt);
-      expect(getPlayer(state).animFrame).toBeGreaterThan(0);
-    });
-
-    it('drives walk cycle when moving right on ground', () => {
-      const state = makeState({ state: 'idle', animFrame: 0 });
+  describe('animation frame', () => {
+    it('does not override animFrame — uses snapshot values (echo removed to fix walk shake)', () => {
+      const state = makeState({ state: 'run', animFrame: 7 });
       echo.apply(rightInput(), state, rtt, dt);
-      expect(getPlayer(state).animFrame).toBeGreaterThan(0);
-    });
-
-    it('accumulates walk cycle across frames', () => {
-      const state = makeState({ state: 'run', animFrame: 0 });
-      echo.apply(rightInput(), state, rtt, dt);
-      const frame1 = getPlayer(state).animFrame;
-
-      echo.apply(rightInput(), state, rtt, dt);
-      const frame2 = getPlayer(state).animFrame;
-
-      expect(frame2).toBeGreaterThan(frame1);
-    });
-
-    it('resets walk cycle when no movement input and lock expired', () => {
-      const state = makeState({ state: 'run', animFrame: 5 });
-
-      // Move to build up walk cycle
-      vi.spyOn(performance, 'now').mockReturnValue(10000);
-      echo.apply(rightInput(), state, rtt, dt);
-
-      // Stop moving after lock expires
-      vi.spyOn(performance, 'now').mockReturnValue(10200);
-      echo.apply(noInput(), state, rtt, dt);
-
-      // Walk cycle frame is internally reset to 0
-      // Next movement should start from 0
-      vi.spyOn(performance, 'now').mockReturnValue(10300);
-      const state2 = makeState({ state: 'run', animFrame: 0 });
-      const echo2 = new InputEcho('P1' as PlayerSlot);
-      echo2.apply(rightInput(), state2, rtt, dt);
-      const freshFrame = getPlayer(state2).animFrame;
-
-      // Should be just 1 frame's worth of walk
-      expect(freshFrame).toBe(Math.floor(dt * 60));
-    });
-
-    it('does not drive walk cycle when airborne', () => {
-      const state = makeState({ state: 'airborne', animFrame: 0 });
-      echo.apply(rightInput(), state, rtt, dt);
-      // airborne is not 'idle' or 'run', so walk cycle should not apply
-      expect(getPlayer(state).animFrame).toBe(0);
+      // animFrame should stay at the snapshot value
+      expect(getPlayer(state).animFrame).toBe(7);
     });
   });
 

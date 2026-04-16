@@ -28,8 +28,6 @@ export class InputEcho {
   // Echo state
   private echoFacing: 'left' | 'right' | null = null;
   private facingLockUntil = 0;
-  private walkCycleFrame = 0;
-  private animLockUntil = 0;
   private jumpSquashTimer = 0;
   private reversalSquashTimer = 0;
 
@@ -88,7 +86,8 @@ export class InputEcho {
     const lockDuration = rtt + 50;
 
     this.applyFacing(input, player, now, lockDuration);
-    this.applyAnimation(input, player, now, lockDuration, dt);
+    // Note: animFrame echo removed — local walk cycle didn't match host timing,
+    // causing visible shake. The 2-frame interpolation delay on animFrame is acceptable.
     this.applyJumpSquash(input, player);
     this.applyReversalSquash(input, player);
     this.applyFastFall(input, player);
@@ -110,8 +109,6 @@ export class InputEcho {
   reset(now?: number): void {
     this.echoFacing = null;
     this.facingLockUntil = 0;
-    this.walkCycleFrame = 0;
-    this.animLockUntil = 0;
     this.jumpSquashTimer = 0;
     this.reversalSquashTimer = 0;
     this.prevFacing = null;
@@ -135,21 +132,6 @@ export class InputEcho {
       player.facing = this.echoFacing;
     }
     // After lock expires with no input: snapshot facing takes over naturally
-  }
-
-  private applyAnimation(input: InputState, player: Player, now: number, lockDuration: number, dt: number): void {
-    if ((input.left || input.right) && (player.state === 'idle' || player.state === 'run')) {
-      // Locally drive walk cycle (frame-rate independent)
-      this.walkCycleFrame += dt * 60;
-      player.animFrame = Math.floor(this.walkCycleFrame);
-      this.animLockUntil = now + lockDuration;
-    } else if (now < this.animLockUntil) {
-      // During lock, keep the local anim frame (don't let snapshot reset to idle)
-      player.animFrame = this.walkCycleFrame;
-    } else {
-      // Lock expired, no movement input — reset local cycle
-      this.walkCycleFrame = 0;
-    }
   }
 
   private applyJumpSquash(input: InputState, player: Player): void {

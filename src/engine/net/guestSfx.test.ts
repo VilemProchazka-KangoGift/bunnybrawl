@@ -357,42 +357,6 @@ describe('GuestSFX', () => {
     });
   });
 
-  describe('footstep sounds', () => {
-    it('accumulates footstep time when player is running', () => {
-      sfx.update(makeState({ players: [makePlayer({ id: 'P1', state: 'run' })] }));
-      vi.clearAllMocks();
-
-      // Each update adds 1/60 ≈ 0.0167s. Need > 0.22s → ~14 updates
-      for (let i = 0; i < 13; i++) {
-        sfx.update(makeState({ players: [makePlayer({ id: 'P1', state: 'run' })] }));
-      }
-      expect(audio.play).not.toHaveBeenCalledWith('land');
-
-      // One more should cross the threshold (14 * 1/60 ≈ 0.233 > 0.22)
-      sfx.update(makeState({ players: [makePlayer({ id: 'P1', state: 'run' })] }));
-      expect(audio.play).toHaveBeenCalledWith('land');
-    });
-
-    it('resets footstep accumulator when player stops running', () => {
-      sfx.update(makeState({ players: [makePlayer({ id: 'P1', state: 'run' })] }));
-
-      // Accumulate partway
-      for (let i = 0; i < 10; i++) {
-        sfx.update(makeState({ players: [makePlayer({ id: 'P1', state: 'run' })] }));
-      }
-
-      // Switch to idle — should reset accumulator
-      sfx.update(makeState({ players: [makePlayer({ id: 'P1', state: 'idle' })] }));
-      vi.clearAllMocks();
-
-      // Should need full 14 again after reset
-      for (let i = 0; i < 13; i++) {
-        sfx.update(makeState({ players: [makePlayer({ id: 'P1', state: 'run' })] }));
-      }
-      expect(audio.play).not.toHaveBeenCalledWith('land');
-    });
-  });
-
   describe('carrot pickup detection', () => {
     it('carrot active → inactive triggers crunch sound and VFX', () => {
       const carrot = makeCarrot({ active: true, x: 50, y: 60 });

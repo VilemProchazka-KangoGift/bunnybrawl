@@ -16,7 +16,6 @@ interface PrevPlayerState {
   vy: number;
   sideSquash: number;
   burnTimer: number;
-  footstepAccum: number; // accumulated walk time for footstep sounds
 }
 
 export class GuestSFX {
@@ -33,7 +32,7 @@ export class GuestSFX {
   }
 
   /** Call after applying snapshot to MatchState. Detects transitions and fires SFX + particles. */
-  update(state: MatchState, dt = 1 / 60): void {
+  update(state: MatchState, _dt = 1 / 60): void {
     for (const player of state.players) {
       if (!player.active) continue;
       const prev = this.prevPlayers.get(player.id);
@@ -86,16 +85,8 @@ export class GuestSFX {
           audio.play('geyser');
         }
 
-        // Footsteps: accumulate walk time, play sound at intervals
-        if (player.state === 'run') {
-          prev.footstepAccum += dt;
-          if (prev.footstepAccum > 0.22) { // ~4.5 steps/sec
-            audio.play('land'); // reuse landing as soft footstep
-            prev.footstepAccum = 0;
-          }
-        } else {
-          prev.footstepAccum = 0;
-        }
+        // Note: footstep sounds intentionally NOT played — the host doesn't
+        // play them either. Walk sounds are visual-only (dust particles).
       }
 
       // Mutate in-place to avoid per-frame allocation
@@ -108,7 +99,6 @@ export class GuestSFX {
         this.prevPlayers.set(player.id, {
           state: player.state, vy: player.vy,
           sideSquash: player.sideSquash, burnTimer: player.burnTimer,
-          footstepAccum: 0,
         });
       }
     }
