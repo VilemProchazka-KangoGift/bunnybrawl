@@ -2,21 +2,21 @@ import type {
   MatchState, MatchSettings, Arena, PlayerSlot, Player, Particle, Gib,
   WeatherParticle, MatchStats, PlayerStats, WildlifeEntity, EffectZone, Platform,
   InputState,
-} from './types';
-import { isBotSlot } from './types';
-import { SeededRNG } from './net/prng';
-import { takeSnapshot as _takeSnapshot, restoreSnapshot as _restoreSnapshot } from './net/serialize';
-import type { GameSnapshot } from './net/serialize';
-import type { ThemeConfig } from './themes/types';
-import { getTheme, mirrorArena } from './arenas';
-import { randRange, pickWeighted, swapRemove } from './themes/utils';
-import { InputManager } from './input';
-import { TouchInputManager } from './touchInput';
-import { isTouchPrimary } from './touchDetect';
-import { haptics } from './haptics';
-import { Renderer } from './renderer';
-import { applyInput, applyGravity, movePlayer, collidePlatforms, updatePlayerState, applyArenaConstraints, aabbOverlap, resolveStuckPlayer } from './physics';
-import { audio } from './audio';
+} from '../types';
+import { isBotSlot } from '../types';
+import { SeededRNG } from '../net/prng';
+import { takeSnapshot as _takeSnapshot, restoreSnapshot as _restoreSnapshot } from '../net/serialize';
+import type { GameSnapshot } from '../net/serialize';
+import type { ThemeConfig } from '../themes/types';
+import { getTheme, mirrorArena } from '../arenas';
+import { randRange, pickWeighted, swapRemove } from '../themes/utils';
+import { InputManager } from '../input';
+import { TouchInputManager } from '../touchInput';
+import { isTouchPrimary } from '../touchDetect';
+import { haptics } from '../haptics';
+import { Renderer } from '../renderer';
+import { applyInput, applyGravity, movePlayer, collidePlatforms, updatePlayerState, applyArenaConstraints, aabbOverlap, resolveStuckPlayer } from '../physics';
+import { audio } from '../audio';
 import {
   FIXED_TIMESTEP, MAX_FRAME_TIME,
   PLAYER_WIDTH, PLAYER_HEIGHT,
@@ -31,32 +31,32 @@ import {
   SCREEN_FLASH_DURATION,
   GRAVITY, FRICTION, MAX_WALK_SPEED, JUMP_IMPULSE, MAX_FALL_SPEED,
   BLOOD_COLOR,
-} from './constants';
-import { getCharacterForSlot } from './characters';
-import { AIController } from './ai';
-import { debugFlags, toggleNavDebug, toggleNetDebug } from './debugFlags';
-import type { BotNavDebugState } from './navDebugOverlay';
-import type { NetDebugStats } from './net/core/debugOverlay';
+} from '../constants';
+import { getCharacterForSlot } from '../characters';
+import { AIController } from '../ai';
+import { debugFlags, toggleNavDebug, toggleNetDebug } from '../debugFlags';
+import type { BotNavDebugState } from '../navDebugOverlay';
+import type { NetDebugStats } from '../net/core/debugOverlay';
 
 // Extracted submodules
-import { emitParticle, spawnDustParticles, spawnGoreParticles, spawnConfetti, spawnCarrotVFX, spawnFirework, updateParticles, updateConfetti } from './gameLoop/cosmetics/particles';
-import { launchGib, spawnGibs, updateGibs } from './gameLoop/cosmetics/gibs';
-import { createWeatherParticle, updateWeather, updateWildlife, updateFog, updatePollen, updateShootingStars, updateShockwaves, updateScoreAnimations, updateBouncyWobble, updatePigeonScatterParticles } from './gameLoop/cosmetics/environment';
-import { decaySfxCooldowns, getOrCreateCooldowns, updateCrowdCheering, tickPeriodicAmbient } from './gameLoop/cosmetics/sfx';
-import type { SfxCooldowns } from './gameLoop/cosmetics/sfx';
-import { detectEntityTransitions } from './gameLoop/cosmetics/entityTransitions';
-import type { PrevEntityState } from './gameLoop/cosmetics/entityTransitions';
-import { detectPlayerTransitions, snapshotPlayerCosmeticState } from './gameLoop/cosmetics/playerTransitions';
-import type { PrevPlayerCosmeticState, TransitionCallbacks } from './gameLoop/cosmetics/playerTransitions';
-import { updatePlayerCosmetics } from './gameLoop/cosmetics/playerCosmetics';
-import { spawnSpring, spawnThorn, updateHazardLifetimes } from './gameLoop/gameplay/hazards';
-import { spawnCarrot } from './gameLoop/gameplay/carrots';
-import { updateLavaRocks, updateGhosts, updateGeyserTimers, updatePigeonFlocks } from './gameLoop/gameplay/arenaEntities';
-import { applyEffectZones, updateZeroGSound } from './gameLoop/gameplay/effectZones';
-import { checkMatchEnd as _checkMatchEnd, getPlayerInput as _getPlayerInput } from './gameLoop/gameplay/match';
-import { handleSpringCollision, handleThornCollision, handleHazardZoneCollision, handleGhostCollision, handleLavaRockCollision, handleFallOff } from './gameLoop/gameplay/playerCollisions';
-import type { HazardHitResult } from './gameLoop/gameplay/playerCollisions';
-import { processStompsAndCollisions } from './gameLoop/gameplay/stomps';
+import { emitParticle, spawnDustParticles, spawnGoreParticles, spawnConfetti, spawnCarrotVFX, spawnFirework, updateParticles, updateConfetti } from './cosmetics/particles';
+import { launchGib, spawnGibs, updateGibs } from './cosmetics/gibs';
+import { createWeatherParticle, updateWeather, updateWildlife, updateFog, updatePollen, updateShootingStars, updateShockwaves, updateScoreAnimations, updateBouncyWobble, updatePigeonScatterParticles } from './cosmetics/environment';
+import { decaySfxCooldowns, getOrCreateCooldowns, updateCrowdCheering, tickPeriodicAmbient } from './cosmetics/sfx';
+import type { SfxCooldowns } from './cosmetics/sfx';
+import { detectEntityTransitions } from './cosmetics/entityTransitions';
+import type { PrevEntityState } from './cosmetics/entityTransitions';
+import { detectPlayerTransitions, snapshotPlayerCosmeticState } from './cosmetics/playerTransitions';
+import type { PrevPlayerCosmeticState, TransitionCallbacks } from './cosmetics/playerTransitions';
+import { updatePlayerCosmetics } from './cosmetics/playerCosmetics';
+import { spawnSpring, spawnThorn, updateHazardLifetimes } from './gameplay/hazards';
+import { spawnCarrot } from './gameplay/carrots';
+import { updateLavaRocks, updateGhosts, updateGeyserTimers, updatePigeonFlocks } from './gameplay/arenaEntities';
+import { applyEffectZones, updateZeroGSound } from './gameplay/effectZones';
+import { checkMatchEnd as _checkMatchEnd, getPlayerInput as _getPlayerInput } from './gameplay/match';
+import { handleSpringCollision, handleThornCollision, handleHazardZoneCollision, handleGhostCollision, handleLavaRockCollision, handleFallOff } from './gameplay/playerCollisions';
+import type { HazardHitResult } from './gameplay/playerCollisions';
+import { processStompsAndCollisions } from './gameplay/stomps';
 
 /** Force 32-bit float for cross-architecture determinism (x86 80-bit vs ARM 64-bit). */
 const f = Math.fround;
