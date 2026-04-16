@@ -596,7 +596,7 @@ export class GameLoop {
               this.playSound('land');
               this.landCooldowns.set(player.id, 0.1);
             }
-            this.spawnDustParticles(player as Player, Math.abs(prev.vy));
+            this.spawnDustParticles(player, Math.abs(prev.vy));
           }
 
           // Headbonk: was going up, now vy ≈ 0, still airborne
@@ -613,11 +613,11 @@ export class GameLoop {
             this.playSound('oof');
           }
 
-          // Stomp: alive → splat
-          if (prev.state !== 'splat' && prev.state !== 'respawning' && player.state === 'splat') {
+          // Stomp: alive → splat (but not disconnect — disconnectPlayer sets splat directly)
+          if (prev.state !== 'splat' && prev.state !== 'respawning' && player.state === 'splat' && !player.disconnected) {
             this.playSound('stomp');
             audio.playAnimal(player.character.name);
-            this.spawnKillSplatter(player as Player);
+            this.spawnKillSplatter(player);
             this.state.shockwaves.push({
               x: player.x + player.width / 2,
               y: player.y + player.height / 2,
@@ -631,7 +631,9 @@ export class GameLoop {
           }
 
           // Push bump
-          if (prev.sideSquash >= 0.95 && player.sideSquash < 0.85) {
+          // Push bump: sideSquash === 0.8 is the exact collision marker for player push.
+          // Wall hits set 0.75 — don't fire bump sound for those.
+          if (prev.sideSquash >= 0.95 && Math.abs(player.sideSquash - 0.8) < 0.01) {
             this.playSound('bump');
           }
 
@@ -1573,12 +1575,7 @@ export class GameLoop {
       if (this.state.countdown <= 0) {
         this.state.countdown = 0;
       }
-      // countdown_beep and countdown_go sounds moved to cosmeticStep
-      // During countdown, still update weather/particles but skip during rollback resim
-      if (!this._resimulating) {
-        this.updateWeather(dt);
-        this.updateParticles(dt);
-      }
+      // Countdown sounds moved to cosmeticStep. Particles/weather handled by cosmeticStep too.
       return;
     }
 

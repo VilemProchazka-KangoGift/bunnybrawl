@@ -312,43 +312,26 @@ export class NetMatch {
       }
 
       // 3. Tick cosmetics (SFX, particles, visual effects via state-transition detection)
-      const state = this.gameLoop.getState();
-      if (!state.matchOver) {
-        this.gameLoop.cosmeticStep(dt);
-      }
+      // No matchOver guard — cosmeticStep needs to run the frame matchOver flips
+      // to detect the transition and play the victory sound.
+      this.gameLoop.cosmeticStep(dt);
 
       // 4. Apply input echo for local player visual responsiveness
+      const state = this.gameLoop.getState();
       if (this.inputEcho) {
-        this.inputEcho.apply(localInput, this.gameLoop.getState(), this.transport.currentRtt, dt);
+        this.inputEcho.apply(localInput, state, this.transport.currentRtt, dt);
       }
 
-      // 5. Decay visual timers for smooth interpolation between snapshots
+      // 5. Decay gameplay timers for smooth visual interpolation between snapshots.
+      // Only timers NOT handled by cosmeticStep — these affect gameplay (stomp immunity,
+      // respawn timing) and are driven by fixedUpdate on the host / snapshots on the guest.
       for (const p of state.players) {
         if (p.invincibleTimer > 0) p.invincibleTimer = Math.max(0, p.invincibleTimer - dt);
         if (p.slowTimer > 0) p.slowTimer = Math.max(0, p.slowTimer - dt);
         if (p.splatTimer > 0) p.splatTimer = Math.max(0, p.splatTimer - dt);
         if (p.respawnTimer > 0) p.respawnTimer = Math.max(0, p.respawnTimer - dt);
         if (p.burnTimer > 0) p.burnTimer = Math.max(0, p.burnTimer - dt);
-        if (p.damageFlashTimer > 0) p.damageFlashTimer = Math.max(0, p.damageFlashTimer - dt);
         if (p.hitstopTimer > 0) p.hitstopTimer = Math.max(0, p.hitstopTimer - dt);
-        if (p.springTrailTimer > 0) p.springTrailTimer = Math.max(0, p.springTrailTimer - dt);
-        // Advance idle animation timer locally (not in snapshot)
-        if (p.state === 'idle' && p.active) {
-          p.idleAnimTimer += dt;
-        } else {
-          p.idleAnimTimer = 0;
-        }
-        // Generate afterimage trails from velocity (not in snapshot)
-        const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
-        if (speed > 200 && p.state !== 'splat' && p.state !== 'respawning' && p.active) {
-          p.afterimages.push({ x: p.x, y: p.y, alpha: 0.4, facing: p.facing });
-          if (p.afterimages.length > 5) p.afterimages.shift();
-        }
-        // Decay afterimage alpha
-        for (let ai = p.afterimages.length - 1; ai >= 0; ai--) {
-          p.afterimages[ai].alpha -= dt * 2;
-          if (p.afterimages[ai].alpha <= 0) p.afterimages.splice(ai, 1);
-        }
       }
       if (state.screenShake > 0) state.screenShake = Math.max(0, state.screenShake - dt);
 
