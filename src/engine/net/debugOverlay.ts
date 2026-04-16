@@ -3,6 +3,7 @@
  * Activated via ?debug=net URL param, toggled with ` key.
  */
 import type { NetDebugStats } from './rollback';
+export type { NetDebugStats };
 
 const FONT = '12px monospace';
 const LINE_HEIGHT = 16;
