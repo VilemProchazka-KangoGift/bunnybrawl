@@ -126,6 +126,7 @@ src/
 - **AI via utility scoring + nav graph** — bots produce `InputState` (4 booleans) same as keyboard. Precomputed nav data (in each arena pack's `navData` field) provides nextHop/safeHop waypoints.
 - **Death effects are gore-mode gated** — Gore ON: blood, gibs, splat marks. Gore OFF: confetti only.
 - **Host-authoritative network multiplayer** — WebRTC DataChannels via Trystero (serverless MQTT signaling). Host runs full simulation and broadcasts binary snapshots every tick. Guests interpolate between snapshots and send inputs to host. No determinism requirements — host is the single source of truth. 2-player MVP, bots run on host only.
+- **cosmeticStep architecture** — Both host and guest call `gameLoop.cosmeticStep(dt)` for all SFX, particles, VFX. Host calls after `fixedUpdate()`, guest calls after `applySnapshotToState()`. Transition detection via prev-state comparison. No separate GuestSFX module.
 - **Mobile support** — `?mobile` URL param forces mobile mode. `isTouchPrimary()` detects coarse-pointer devices. `.is-mobile` CSS class on `<html>` for platform-conditional styles. Touch controls via `TouchInputManager` (same `InputState` interface as keyboard/AI). Haptic feedback via Vibration API.
 
 ## Build & Run
