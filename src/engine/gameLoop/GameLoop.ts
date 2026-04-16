@@ -1,6 +1,6 @@
 import type {
   MatchState, MatchSettings, Arena, PlayerSlot, Player,
-  WeatherParticle, MatchStats, PlayerStats, WildlifeEntity, EffectZone, Platform,
+  WeatherParticle, MatchStats, PlayerStats, WildlifeEntity,
   InputState,
 } from '../types';
 import { isBotSlot } from '../types';
@@ -20,11 +20,9 @@ import { audio } from '../audio';
 import {
   FIXED_TIMESTEP, MAX_FRAME_TIME,
   PLAYER_WIDTH, PLAYER_HEIGHT,
-  CARROT_SPAWN_INTERVAL, CARROT_CHASE_SPAWN_INTERVAL,
   CARROT_FIRST_SPAWN_DELAY, CARROT_CHASE_FIRST_SPAWN_DELAY, CARROT_SIZE, GIANT_SCALE,
   FAT_DURATION, SPRING_BOUNCE,
   CANVAS_WIDTH, CANVAS_HEIGHT,
-  SPRING_SPAWN_INTERVAL, THORN_SPAWN_INTERVAL,
   SLOW_MO_DURATION, SLOW_MO_FACTOR, HITSTOP_DURATION,
   SQUASH_ON_LAND, STRETCH_ON_JUMP, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED,
   MATCH_COUNTDOWN,
@@ -45,9 +43,9 @@ import { EntityTransitionSystem } from './cosmetics/EntityTransitionSystem';
 import { ParticleSystem } from './cosmetics/ParticleSystem';
 import { PlayerTransitionSystem } from './cosmetics/PlayerTransitionSystem';
 import { PlayerCosmeticSystem } from './cosmetics/PlayerCosmeticSystem';
-import { spawnSpring, spawnThorn, updateHazardLifetimes } from './gameplay/hazards';
-import { spawnCarrot } from './gameplay/carrots';
-import { updateLavaRocks, updateGhosts, updateGeyserTimers, updatePigeonFlocks } from './gameplay/arenaEntities';
+import { HazardSystem } from './gameplay/HazardSystem';
+import { CarrotSystem } from './gameplay/CarrotSystem';
+import { ArenaEntitySystem } from './gameplay/ArenaEntitySystem';
 import { applyEffectZones, updateZeroGSound } from './gameplay/effectZones';
 import { checkMatchEnd as _checkMatchEnd, getPlayerInput as _getPlayerInput } from './gameplay/match';
 import { handleSpringCollision, handleThornCollision, handleHazardZoneCollision, handleGhostCollision, handleLavaRockCollision, handleFallOff } from './gameplay/playerCollisions';
@@ -84,11 +82,12 @@ export class GameLoop {
   particleSystem!: ParticleSystem;
   private crowdStarted = false;
   private zeroGSoundPlaying = false;
-  private cachedGeyserZones: EffectZone[] = [];
-  private cachedZeroGZones: EffectZone[] = [];
-  private geyserIndexMap: Map<EffectZone, number> = new Map();
-  private floatingPlatforms: Array<{ plat: Platform; idx: number }> = [];
   private aiControllers: Map<string, AIController> = new Map();
+
+  // Gameplay systems
+  private hazardSystem!: HazardSystem;
+  private carrotSystem!: CarrotSystem;
+  private arenaEntitySystem!: ArenaEntitySystem;
   private _debugKeyHandler: ((e: KeyboardEvent) => void) | null = null;
 
   // Global bump cooldown (prevents double-fire from both pushed players)
@@ -295,39 +294,12 @@ export class GameLoop {
       confetti: [],
     };
 
-    // Cache filtered zone arrays (arena-static, avoids per-frame allocations)
-    this.cachedGeyserZones = (arena.effectZones || []).filter(z => z.type === 'geyser');
-    this.cachedZeroGZones = (arena.effectZones || []).filter(z => z.type === 'zero_g');
-    this.geyserIndexMap = new Map(this.cachedGeyserZones.map((z, i) => [z, i]));
-    // Cache floating platforms with indices for hazard spawning
-    const noSpawn = this.arena.noSpawnZones ?? [];
-    this.floatingPlatforms = this.arena.platforms
-      .map((p, i) => ({ plat: p, idx: i }))
-      .filter(({ plat }) => {
-        if (plat.y >= 650) return false; // ground platforms
-        // Exclude platforms inside no-spawn zones (e.g. mausoleum)
-        const cx = plat.x + plat.width / 2;
-        const cy = plat.y + plat.height / 2;
-        for (const z of noSpawn) {
-          if (cx >= z.x && cx <= z.x + z.width && cy >= z.y && cy <= z.y + z.height) return false;
-        }
-        return true;
-      });
+    // Instantiate arena entity system first — others need its cached zones
+    this.arenaEntitySystem = new ArenaEntitySystem(this.state, this.arena, this.theme, this._boundGameRandom);
+    this.arenaEntitySystem.init();
 
-    // Initialize ghosts from theme config
-    if (this.theme.ghostConfig) {
-      const gc = this.theme.ghostConfig;
-      for (let i = 0; i < gc.count; i++) {
-        this.state.ghosts.push({
-          x: this.gameRandom() * CANVAS_WIDTH,
-          y: 300 + this.gameRandom() * 300,
-          vx: (this.gameRandom() < 0.5 ? -1 : 1) * gc.speed * (0.7 + this.gameRandom() * 0.6),
-          size: gc.size,
-          alpha: 0.5 + this.gameRandom() * 0.3,
-          wobblePhase: this.gameRandom() * Math.PI * 2,
-        });
-      }
-    }
+    this.hazardSystem = new HazardSystem(this.state, this.arena, this._boundGameRandom);
+    this.hazardSystem.init();
 
     // Touch input for mobile: controls the first human player
     if (isTouchPrimary()) {
@@ -336,7 +308,12 @@ export class GameLoop {
       if (this.touchSlot) haptics.init(this.touchSlot);
     }
 
-    this.particleSystem = new ParticleSystem(this.state, this.arena, this.theme, this.settings, this.geyserIndexMap);
+    this.particleSystem = new ParticleSystem(this.state, this.arena, this.theme, this.settings, this.arenaEntitySystem.getGeyserIndexMap());
+    this.carrotSystem = new CarrotSystem(
+      this.state, this.arena, this.settings,
+      this.arenaEntitySystem.getCachedZeroGZones(),
+      this._boundGameRandom, this.particleSystem,
+    );
     this.playerTransitionSystem = new PlayerTransitionSystem(
       this.state, this.settings, this._boundPlaySound,
       (name: string) => { if (this._audioEnabled) audio.playAnimal(name); },
@@ -650,28 +627,6 @@ export class GameLoop {
     this.rafId = requestAnimationFrame(this.loop);
   };
 
-  // ---- Hazard spawning (delegates to gameplay/hazards) ----
-
-  private _spawnSpring(): void {
-    spawnSpring(this.state, this.floatingPlatforms, this.arena.platforms, this.arena.noSprings, this._boundGameRandom);
-  }
-
-  private _spawnThorn(): void {
-    spawnThorn(this.state, this.floatingPlatforms, this._boundGameRandom);
-  }
-
-  // ---- Carrot spawning (delegates to gameplay/carrots) ----
-
-  private _spawnCarrot(): void {
-    const prevCount = this.state.carrots.length;
-    spawnCarrot(this.state, this.arena, this.cachedZeroGZones, this._boundGameRandom);
-    // Spawn VFX if a carrot was added
-    if (this.state.carrots.length > prevCount) {
-      const newCarrot = this.state.carrots[this.state.carrots.length - 1];
-      this.particleSystem.spawnCarrotVFX(newCarrot.x, newCarrot.y);
-    }
-  }
-
   /** Run one fixed-timestep simulation tick. Public for rollback engine. */
   fixedUpdate(dt: number, networkInputs?: Map<string, InputState>): void {
     this._networkInputs = networkInputs;
@@ -695,35 +650,16 @@ export class GameLoop {
     // Screen shake decay (skip during resimulation — writes are also guarded)
     if (!this._resimulating && this.state.screenShake > 0) this.state.screenShake = Math.max(0, this.state.screenShake - dt);
 
-    // Hazard spawn timers (fround prevents cross-arch zero-crossing divergence → RNG desync)
-    this.state.springSpawnTimer = f(this.state.springSpawnTimer - dt);
-    if (this.state.springSpawnTimer <= 0) {
-      this._spawnSpring();
-      this.state.springSpawnTimer = SPRING_SPAWN_INTERVAL;
-    }
-    this.state.thornSpawnTimer = f(this.state.thornSpawnTimer - dt);
-    if (this.state.thornSpawnTimer <= 0) {
-      this._spawnThorn();
-      this.state.thornSpawnTimer = THORN_SPAWN_INTERVAL;
-    }
+    // Hazard spawn timers + lifetimes
+    this.hazardSystem.fixedUpdate(dt);
 
-    // Update hazard lifetimes + grow timers
-    updateHazardLifetimes(this.state, dt);
-
-    // Carrot timer
-    this.state.carrotTimer = f(this.state.carrotTimer - dt);
-    if (this.state.carrotTimer <= 0) {
-      this._spawnCarrot();
-      this.state.carrotTimer = this.settings.mods.carrotChase ? CARROT_CHASE_SPAWN_INTERVAL : CARROT_SPAWN_INTERVAL;
-    }
+    // Carrot timer + spawn
+    this.carrotSystem.fixedUpdate(dt);
 
     // Weather moved to cosmeticStep
 
     // Update arena entities (lava rocks, ghosts, geysers, pigeons)
-    updateLavaRocks(this.state, this.theme, dt, this._boundGameRandom);
-    updateGhosts(this.state, dt);
-    updateGeyserTimers(this.state, this.cachedGeyserZones, dt);
-    updatePigeonFlocks(this.state, dt);
+    this.arenaEntitySystem.fixedUpdate(dt);
 
     // Gameplay timers (hitstop gates physics; fat/slow/burn affect gameplay)
     // Cosmetic timers (animFrame, damageFlash, springTrail, fire particles) moved to cosmeticStep()
@@ -887,7 +823,7 @@ export class GameLoop {
 
       // Effect zone interactions (zero-G, current, geyser)
       if (this.arena.effectZones) {
-        applyEffectZones(player, this.arena.effectZones, this.geyserIndexMap, this.state.geyserStates, justLanded, wasAirborne, prevVy, this.playerTransitionSystem.getSfxCooldowns(), this._boundPlaySound, dt);
+        applyEffectZones(player, this.arena.effectZones, this.arenaEntitySystem.getGeyserIndexMap(), this.state.geyserStates, justLanded, wasAirborne, prevVy, this.playerTransitionSystem.getSfxCooldowns(), this._boundPlaySound, dt);
       }
 
       // Bouncy platform check (on landing — skip if holding down on ground to avoid repeat bouncing)
@@ -958,7 +894,7 @@ export class GameLoop {
     }
 
     // Zero-G ambient sound management
-    this.zeroGSoundPlaying = updateZeroGSound(this.state.players, this.cachedZeroGZones, this.zeroGSoundPlaying, this._boundPlaySound);
+    this.zeroGSoundPlaying = updateZeroGSound(this.state.players, this.arenaEntitySystem.getCachedZeroGZones(), this.zeroGSoundPlaying, this._boundPlaySound);
 
     // Stomps, kill feed, player-player collision, splat timers
     processStompsAndCollisions(this.state, this.arena, this.settings, dt, this._resimulating, this.rng);

@@ -3112,8 +3112,8 @@ describe('GameLoop — arena-specific features', () => {
       },
     });
     const state = loop.getState();
-    // Current zones are cached for per-frame use
-    expect((loop as any).cachedGeyserZones).toBeDefined();
+    // Current zones are cached for per-frame use (now owned by ArenaEntitySystem)
+    expect((loop as any).arenaEntitySystem.getCachedGeyserZones()).toBeDefined();
   });
 
   it('processes geyser timer cycling', () => {
