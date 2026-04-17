@@ -205,6 +205,7 @@ export class LobbyGame {
       makeLobbyPlayer(slot, botAssigned[i], 40 + (SLOTS.length + i) * 60, GROUND_Y - PLAYER_HEIGHT)
     );
 
+    // NPC extras all carry a dummy id='P1'. Filter via `_extrasSet.has(entity)`, NEVER by id.
     this.extraChars = extras.map((ch) => {
       const p = makeLobbyPlayer('P1' as CharacterSlot, ch, 40 + Math.random() * (WALL_X - 80), GROUND_Y - PLAYER_HEIGHT);
       p.vx = (Math.random() - 0.5) * 60;
