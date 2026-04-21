@@ -30,4 +30,7 @@ src/fullscreen-check.png
 *.sln
 *.sw?
 .claude/worktrees/
+.worktrees/
 test-results/
+playwright-report/
+coverage/
