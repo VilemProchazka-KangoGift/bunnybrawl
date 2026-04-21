@@ -32,9 +32,8 @@ export function drawNetDebugOverlay(
 ): void {
   lines[0] = `RTT: ${stats.rtt.toFixed(0)}ms | Jit: ${stats.jitter.toFixed(0)}ms`;
   lines[1] = `Frame: ${stats.localFrame} | Snap: ${stats.snapshotBytes}B`;
-  lines[2] = `Route: ${stats.isRelay ? 'RELAY (TURN)' : 'DIRECT (P2P)'}`;
-  lines[3] = `Guests: ${stats.guestCount} | Interp: ${stats.interpDelayFrames}F buf:${stats.bufferDepth}`;
-  let lineCount = 4;
+  lines[2] = `Guests: ${stats.guestCount} | Interp: ${stats.interpDelayFrames}F buf:${stats.bufferDepth}`;
+  let lineCount = 3;
   if (stats.stalled) {
     lines[lineCount++] = '** STALLED **';
   }
