@@ -6,6 +6,8 @@ import { ArenaGrid } from './ArenaGrid';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
 import { isTouchPrimary } from '../engine/touchDetect';
 import { drawMenuBackground } from './menuBackground';
+import { HelpModal } from './HelpModal';
+import { ModsModal } from './ModsModal';
 import { OnlineModal } from './OnlineModal';
 import logoImg from '/logo.png?url';
 import './MainMenu.css';
@@ -185,95 +187,8 @@ export function MainMenu() {
           <button className="btn-base mods-btn" onClick={() => { audio.init(); audio.play('select'); setModsOpen(true); }}>
             {t('mods_button')}
           </button>
-          {helpOpen && (
-            <div className="mods-overlay" onClick={() => setHelpOpen(false)}>
-              <div className="help-modal" onClick={e => e.stopPropagation()}>
-                <h2 className="mods-title">{t('help_title')}</h2>
-                <div className="help-sections">
-                  <div className="help-section">
-                    <h3 className="help-section-title">{t('help_goal_title')}</h3>
-                    <p className="help-text">{t('help_goal')}</p>
-                  </div>
-                  <div className="help-section">
-                    <h3 className="help-section-title">{t('help_scoring_title')}</h3>
-                    <p className="help-text">{t('help_scoring')}</p>
-                  </div>
-                  <div className="help-section">
-                    <h3 className="help-section-title">{t('help_controls_title')}</h3>
-                    <div className="help-controls-grid">
-                      {[1, 2, 3, 4, 5].map(n => (
-                        <span key={n} className="help-control-line">{t(`help_controls_p${n}`)}</span>
-                      ))}
-                    </div>
-                    <p className="help-text help-controls-note">{t('help_controls_note')}</p>
-                  </div>
-                  <div className="help-section">
-                    <h3 className="help-section-title">{t('help_pickups_title')}</h3>
-                    <p className="help-text">{t('help_pickups_carrots')}</p>
-                    <p className="help-text">{t('help_pickups_springs')}</p>
-                    <p className="help-text">{t('help_pickups_thorns')}</p>
-                    <p className="help-text">{t('help_pickups_falloff')}</p>
-                  </div>
-                  <div className="help-section">
-                    <h3 className="help-section-title">{t('help_lobby_title')}</h3>
-                    <p className="help-text">{t('help_lobby')}</p>
-                  </div>
-                  <div className="help-section">
-                    <h3 className="help-section-title">{t('help_options_title')}</h3>
-                    <p className="help-text">{t('help_options_arena')}</p>
-                    <p className="help-text">{t('help_options_bots')}</p>
-                    <p className="help-text">{t('help_options_blood')}</p>
-                    <p className="help-text">{t('help_options_mods')}</p>
-                  </div>
-                  <div className="help-section">
-                    <h3 className="help-section-title">{t('help_online_title')}</h3>
-                    <p className="help-text">{t('help_online_desc')}</p>
-                    <p className="help-text">{t('help_online_steps')}</p>
-                  </div>
-                  <div className="help-section">
-                    <h3 className="help-section-title">{t('help_tips_title')}</h3>
-                    <p className="help-text">{t('help_tips')}</p>
-                  </div>
-                </div>
-                <button className="btn-base mods-close-btn" onClick={() => setHelpOpen(false)}>
-                  {t('help_close')}
-                </button>
-              </div>
-            </div>
-          )}
-          {modsOpen && (
-            <div className="mods-overlay" onClick={() => setModsOpen(false)}>
-              <div className="mods-modal" onClick={e => e.stopPropagation()}>
-                <h2 className="mods-title">{t('mods_title')}</h2>
-                {([
-                  { key: 'extremeGore', name: 'mod_extreme_gore', desc: 'mod_extreme_gore_desc' },
-                  { key: 'carrotChase', name: 'mod_carrot_chase', desc: 'mod_carrot_chase_desc' },
-                  { key: 'giantPlayers', name: 'mod_giant_players', desc: 'mod_giant_players_desc' },
-                  { key: 'turbo', name: 'mod_turbo', desc: 'mod_turbo_desc' },
-                  { key: 'superBounce', name: 'mod_super_bounce', desc: 'mod_super_bounce_desc' },
-                  { key: 'mirrorArena', name: 'mod_mirror', desc: 'mod_mirror_desc' },
-                  { key: 'underwaterGravity', name: 'mod_underwater_gravity', desc: 'mod_underwater_gravity_desc' },
-                ] as const).map(mod => (
-                  <div className="mod-row" key={mod.key}>
-                    <label className="mod-toggle">
-                      <input
-                        type="checkbox"
-                        checked={matchSettings.mods[mod.key as keyof typeof matchSettings.mods]}
-                        onChange={(e) => setMatchSettings({ mods: { ...matchSettings.mods, [mod.key]: e.target.checked } })}
-                      />
-                      <div className="mod-info">
-                        <span className="mod-name">{t(mod.name)}</span>
-                        <span className="mod-desc">{t(mod.desc)}</span>
-                      </div>
-                    </label>
-                  </div>
-                ))}
-                <button className="btn-base mods-close-btn" onClick={() => setModsOpen(false)}>
-                  {t('mods_close')}
-                </button>
-              </div>
-            </div>
-          )}
+          {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
+          {modsOpen && <ModsModal onClose={() => setModsOpen(false)} />}
           {onlineOpen && <OnlineModal onClose={() => setOnlineOpen(false)} />}
         </div>
         <div className="build-info">
