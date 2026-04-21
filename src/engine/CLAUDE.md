@@ -51,6 +51,8 @@
 - Player-push bump sound uses global cooldown (not per-player) to prevent double-fire from both pushed players in the same frame. Detects push via `sideSquash === 0.8` (exact value set by `collidePlayersHorizontal`).
 - All 11 arenas + menu have MP3 music. Each arena pack specifies `musicFile` (e.g. `'meadow.mp3'`), resolved by `audio.playMusic()` via `getArenaPack()`. Menu music uses a separate `menuMusicHowl` preloaded in `init()` — not tied to component lifecycle (persists across menu↔lobby). Suno generation prompts are in `docs/suno-arena-prompts.md`.
 - `Howler.mute()` is the global kill switch for all audio. Three independent mute sources: `muted` (user toggle), `backgroundMuted` (tab hidden via visibilitychange), `gamePaused` (pause overlay). All three must be false before calling `Howler.mute(false)`. Adding a new mute source? Check all unmute paths gate on it.
+- `gamePaused` is reset inside `audio.stopAllGameSounds()` — `GameLoop.stop()` runs that, so all game-exit paths (quit-from-pause, match-end cleanup, stall timeout) clear the mute automatically. New exit paths don't need explicit `setPaused(false)`, but must go through `stopAllGameSounds()` or call it directly.
+- All MP3 music Howls (menu + arena) use `html5: true` — streams playback as bytes arrive instead of stalling on `decodeAudioData` behind the ~40 WAV SFX buffers that `registerAllSounds()` decodes at menu mount. New arena music Howls must set `html5: true` too. Procedural WAV SFX stay on Web Audio (no `html5` flag).
 - Music preference persisted in `carrotroyale_music_disabled` (localStorage). Loaded at AudioManager field init, not in `init()`. Wrap localStorage access in try/catch for restricted contexts.
 
 ## Arenas
