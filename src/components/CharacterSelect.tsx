@@ -49,21 +49,21 @@ export function CharacterSelect() {
     }
 
     // Write the chosen characters back into CHARACTERS so the match uses them (humans only)
-    const humanInZone = inZone.filter(p => !isBotSlot(p.slot));
+    const humanInZone = inZone.filter(p => !isBotSlot(p.id));
     for (const lp of humanInZone) {
-      CHARACTERS[lp.slot as CharacterSlot] = { ...lp.char, slot: lp.slot };
+      CHARACTERS[lp.id as CharacterSlot] = { ...lp.character, slot: lp.id };
     }
 
     // Assign bot characters
-    const humanSlots = humanInZone.map(p => p.slot as CharacterSlot);
-    const botInZone = inZone.filter(p => isBotSlot(p.slot));
-    const botSlots = botInZone.map(p => p.slot as BotSlot);
+    const humanSlots = humanInZone.map(p => p.id as CharacterSlot);
+    const botInZone = inZone.filter(p => isBotSlot(p.id));
+    const botSlots = botInZone.map(p => p.id as BotSlot);
     assignBotCharacters(humanSlots, botSlots);
     for (const bot of botInZone) {
-      BOT_CHARACTERS.set(bot.slot as BotSlot, { ...bot.char, slot: bot.slot });
+      BOT_CHARACTERS.set(bot.id as BotSlot, { ...bot.character, slot: bot.id });
     }
 
-    const activePlayers: PlayerSlot[] = inZone.map(p => p.slot);
+    const activePlayers: PlayerSlot[] = inZone.map(p => p.id);
     setActivePlayers(activePlayers);
     setMatchSettings({ playerCount: activePlayers.length });
     audio.play('select');

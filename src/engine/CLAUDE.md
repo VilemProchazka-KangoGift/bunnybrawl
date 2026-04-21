@@ -73,7 +73,7 @@
 - Nav data in pack files (between `NAV-DATA-START`/`NAV-DATA-END` markers) is generated — never hand-edit. Re-run `npx vite-node scripts/generateNavData.ts` after arena/physics changes.
 - Nav graph doesn't model intra-platform obstacles or blocking ceilings. Small obstacles handled by stuck recovery; impassable barriers require splitting ground in arena definition.
 - Nav ceiling gap must exceed 174px (MAX_JUMP_HEIGHT) or phantom edges are created.
-- Lobby bots (`updateBotLobbyAI()` in CharacterSelect) are completely separate from match AI.
+- Lobby bots (`botLobbyInput()` in `lobbyGame.ts`) return `InputState` and go through `applyInput` like humans. Behavior (walk-to-zone + wall-jump) remains lobby-specific and does not share code with match AI.
 
 ## Performance
 - Sprite cache: keyed by `name_state_animFrame_fastFalling_idleKey_sqKey`, 600-entry cap. `sqKey` = `Math.round(squashScale * 10)`. Breathing (2% scale) excluded from key.

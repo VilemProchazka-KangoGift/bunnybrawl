@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { LobbyGame, READY_ZONE_X } from './lobbyGame';
-import type { LobbyPlayer } from './lobbyGame';
 import { PLAYER_WIDTH } from './constants';
 import { registerBuiltinCharacters, getAllCharacters } from './characters';
 import { registerBuiltinArenas } from './arenas';
@@ -21,7 +20,7 @@ vi.mock('./audio', () => ({
 // Mock rendering modules that drawLobby imports (use importOriginal for complete exports)
 vi.mock('./rendering/players', async (importOriginal) => {
   const actual = await importOriginal() as any;
-  return { ...actual, drawCharacterCore: vi.fn() };
+  return { ...actual, drawCharacterCore: vi.fn(), drawPlayer: vi.fn() };
 });
 
 vi.mock('./themes/drawPrimitives', async (importOriginal) => {
@@ -61,14 +60,14 @@ describe('LobbyGame', () => {
 
   it('creates 5 human players in desktop mode', () => {
     expect(game.players).toHaveLength(5);
-    const slots = game.players.map(p => p.slot);
+    const slots = game.players.map(p => p.id);
     expect(slots).toEqual(['P1', 'P2', 'P3', 'P4', 'P5']);
   });
 
   it('creates correct number of bots', () => {
     expect(game.bots).toHaveLength(2);
-    expect(game.bots[0].slot).toBe('B1');
-    expect(game.bots[1].slot).toBe('B2');
+    expect(game.bots[0].id).toBe('B1');
+    expect(game.bots[1].id).toBe('B2');
   });
 
   it('creates extra NPC characters from remaining roster', () => {
@@ -79,7 +78,7 @@ describe('LobbyGame', () => {
   it('mobile mode creates only P1', () => {
     const mobile = makeLobbyGame({ isMobile: true, botCount: 1 });
     expect(mobile.players).toHaveLength(1);
-    expect(mobile.players[0].slot).toBe('P1');
+    expect(mobile.players[0].id).toBe('P1');
   });
 
   // ---- Physics / update ----
@@ -88,7 +87,7 @@ describe('LobbyGame', () => {
     const p = game.players[0];
     // Lift player above ground
     p.y = 200;
-    p.onGround = false;
+    p.state = 'airborne';
     p.vy = 0;
     const yBefore = p.y;
 
@@ -118,12 +117,12 @@ describe('LobbyGame', () => {
 
   it('player jumps when jump key pressed while on ground', () => {
     const p = game.players[0];
-    p.onGround = true;
+    p.state = 'idle';
     p.vy = 0;
     // P1 jump key is 'w'
     game.update(1 / 60, new Set(['w']));
     expect(p.vy).toBeLessThan(0); // negative = upward
-    expect(p.onGround).toBe(false);
+    expect(p.state).toBe('airborne');
   });
 
   it('clamps player to screen bounds', () => {
@@ -139,7 +138,7 @@ describe('LobbyGame', () => {
   it('bots move toward the ready zone', () => {
     const bot = game.bots[0];
     bot.x = 100;
-    bot.onGround = true;
+    bot.state = 'idle';
     const xBefore = bot.x;
 
     // Run several ticks so bot walks right
@@ -162,8 +161,8 @@ describe('LobbyGame', () => {
 
     const ready = game.getReadyPlayers();
     expect(ready.length).toBeGreaterThanOrEqual(2);
-    expect(ready.some(p => p.slot === 'P1')).toBe(true);
-    expect(ready.some(p => p.slot === 'P2')).toBe(true);
+    expect(ready.some(p => p.id === 'P1')).toBe(true);
+    expect(ready.some(p => p.id === 'P2')).toBe(true);
   });
 
   it('excludes splatted players from ready zone', () => {
@@ -172,7 +171,7 @@ describe('LobbyGame', () => {
     game.players[1].x = READY_ZONE_X + 50;
 
     const ready = game.getReadyPlayers();
-    expect(ready.some(p => p.slot === 'P1')).toBe(false);
+    expect(ready.some(p => p.id === 'P1')).toBe(false);
   });
 
   // ---- Countdown ----
@@ -233,28 +232,80 @@ describe('LobbyGame', () => {
     const attacker = game.players[0];
     const victim = game.extraChars[0];
 
-    const attackerCharBefore = attacker.char.name;
-    const victimCharBefore = victim.char.name;
+    const attackerCharBefore = attacker.character.name;
+    const victimCharBefore = victim.character.name;
 
     // Position attacker directly above victim, falling fast enough to stomp.
     // GROUND_Y = 560, PLAYER_HEIGHT = 32
     victim.x = 300;
     victim.y = 560 - 32; // 528 — on the ground
     victim.splatTimer = 0;
-    victim.onGround = true;
+    victim.state = 'idle';
     attacker.x = 300;
     // attacker bottom = attacker.y + 32. After physics: vy += 10, y += ~3.5
     // So place attacker so that AFTER physics, bottom is in (528, 548)
     attacker.y = 500;
     attacker.vy = 200;
-    attacker.onGround = false;
+    attacker.state = 'airborne';
 
     game.update(1 / 60, new Set());
 
     // Characters should be swapped
-    expect(attacker.char.name).toBe(victimCharBefore);
-    expect(victim.char.name).toBe(attackerCharBefore);
+    expect(attacker.character.name).toBe(victimCharBefore);
+    expect(victim.character.name).toBe(attackerCharBefore);
     expect(victim.splatTimer).toBeGreaterThan(0);
+  });
+
+  it('stomped human victim recovers after splatTimer expires', () => {
+    // Isolate: move all others far away so only this pair can stomp
+    for (const p of [...game.players, ...game.bots, ...game.extraChars]) {
+      p.x = -200;
+      p.vy = 0;
+    }
+    const attacker = game.players[0];
+    const victim = game.players[1];
+
+    // Position attacker directly above victim, falling fast enough to stomp.
+    // GROUND_Y = 560, PLAYER_HEIGHT = 32
+    victim.x = 300;
+    victim.y = 560 - 32; // 528 — on the ground
+    victim.vx = 0;
+    victim.vy = 0;
+    victim.splatTimer = 0;
+    victim.state = 'idle';
+    attacker.x = 300;
+    attacker.y = 500;
+    attacker.vy = 200;
+    attacker.state = 'airborne';
+
+    game.update(1 / 60, new Set());
+
+    // Stomp happened: victim is splatted
+    expect(victim.state).toBe('splat');
+    expect(victim.splatTimer).toBeGreaterThan(0);
+
+    // Move attacker far away so it can't re-stomp victim during recovery
+    attacker.x = -500;
+    attacker.y = 0;
+    attacker.vx = 0;
+    attacker.vy = 0;
+
+    // Run 60 more ticks (1 second) — well past the 0.8s splatTimer
+    for (let i = 0; i < 60; i++) {
+      game.update(1 / 60, new Set());
+    }
+
+    // Victim should no longer be frozen in 'splat' state
+    expect(victim.state).not.toBe('splat');
+    expect(victim.splatTimer).toBe(0);
+
+    // Victim can now accept input — press P2 left key five times
+    const xBefore = victim.x;
+    for (let i = 0; i < 5; i++) {
+      game.update(1 / 60, new Set(['ArrowLeft']));
+    }
+    // Either velocity or position should reflect the input
+    expect(victim.vx !== 0 || victim.x < xBefore).toBe(true);
   });
 
   // ---- Destroy ----
@@ -275,7 +326,7 @@ describe('LobbyGame', () => {
       game.players[0].splatTimer = 0;
 
       const ready = game.getReadyPlayers();
-      expect(ready.some(p => p.slot === 'P1')).toBe(true);
+      expect(ready.some(p => p.id === 'P1')).toBe(true);
     });
 
     it('getReadyPlayers includes bots in the ready zone', () => {
@@ -283,7 +334,7 @@ describe('LobbyGame', () => {
       game.bots[0].splatTimer = 0;
 
       const ready = game.getReadyPlayers();
-      expect(ready.some(p => p.slot === 'B1')).toBe(true);
+      expect(ready.some(p => p.id === 'B1')).toBe(true);
     });
 
     it('getReadyPlayers returns empty when nobody is in the zone', () => {
@@ -321,7 +372,7 @@ describe('LobbyGame', () => {
     it('creates 1 bot when botCount is 1', () => {
       const g = makeLobbyGame({ botCount: 1 });
       expect(g.bots).toHaveLength(1);
-      expect(g.bots[0].slot).toBe('B1');
+      expect(g.bots[0].id).toBe('B1');
       // 17 - 5 - 1 = 11 extras
       expect(g.extraChars.length).toBe(11);
     });
@@ -329,7 +380,7 @@ describe('LobbyGame', () => {
     it('creates 5 bots when botCount is 5', () => {
       const g = makeLobbyGame({ botCount: 5 });
       expect(g.bots).toHaveLength(5);
-      const botSlots = g.bots.map(b => b.slot);
+      const botSlots = g.bots.map(b => b.id);
       expect(botSlots).toEqual(['B1', 'B2', 'B3', 'B4', 'B5']);
       // 17 - 5 - 5 = 7 extras
       expect(g.extraChars.length).toBe(7);
@@ -355,7 +406,7 @@ describe('LobbyGame', () => {
     it('each player, bot, and extra has a unique character', () => {
       const names = new Set<string>();
       for (const p of [...game.players, ...game.bots, ...game.extraChars]) {
-        names.add(p.char.name);
+        names.add(p.character.name);
       }
       // All characters should be unique (no duplicates)
       expect(names.size).toBe(game.players.length + game.bots.length + game.extraChars.length);
@@ -415,7 +466,7 @@ describe('LobbyGame', () => {
     it('P2 moves right with the correct key binding', () => {
       const p2 = game.players[1]; // P2
       p2.x = 200;
-      p2.onGround = true;
+      p2.state = 'idle';
       // P2 right key is 'ArrowRight' per KEY_BINDINGS
       game.update(1 / 60, new Set(['ArrowRight']));
       expect(p2.x).toBeGreaterThan(200);
@@ -425,7 +476,7 @@ describe('LobbyGame', () => {
     it('P2 moves left with the correct key binding', () => {
       const p2 = game.players[1]; // P2
       p2.x = 200;
-      p2.onGround = true;
+      p2.state = 'idle';
       // P2 left key is 'ArrowLeft' per KEY_BINDINGS
       game.update(1 / 60, new Set(['ArrowLeft']));
       expect(p2.x).toBeLessThan(200);
@@ -436,7 +487,7 @@ describe('LobbyGame', () => {
       const p = game.players[0];
       p.x = 200;
       p.vx = 100;
-      p.onGround = true;
+      p.state = 'idle';
 
       game.update(1 / 60, new Set());
 
@@ -447,7 +498,7 @@ describe('LobbyGame', () => {
     it('player x changes over multiple frames with key held', () => {
       const p = game.players[0];
       p.x = 100;
-      p.onGround = true;
+      p.state = 'idle';
       const xBefore = p.x;
 
       for (let i = 0; i < 30; i++) {
@@ -463,13 +514,13 @@ describe('LobbyGame', () => {
   describe('jump physics', () => {
     it('player goes airborne after jump', () => {
       const p = game.players[0];
-      p.onGround = true;
+      p.state = 'idle';
       p.y = 560 - 32; // at ground level
       p.vy = 0;
 
       game.update(1 / 60, new Set(['w']));
 
-      expect(p.onGround).toBe(false);
+      expect(p.state).toBe('airborne');
       expect(p.vy).toBeLessThan(0);
     });
 
@@ -485,7 +536,7 @@ describe('LobbyGame', () => {
       const p = game.players[0];
       p.x = 100;
       p.vx = 0;
-      p.onGround = true;
+      p.state = 'idle';
       p.y = 560 - 32;
       p.vy = 0;
       p.splatTimer = 0;
@@ -500,19 +551,19 @@ describe('LobbyGame', () => {
         game.update(1 / 60, new Set());
       }
 
-      // Player should have landed (y at ground, onGround true)
-      expect(p.onGround).toBe(true);
+      // Player should have landed (y at ground, state not airborne)
+      expect(p.state).not.toBe('airborne');
       expect(p.y).toBeCloseTo(560 - 32, 0);
     });
 
     it('player cannot double-jump', () => {
       const p = game.players[0];
-      p.onGround = true;
+      p.state = 'idle';
       p.y = 560 - 32;
 
       // Jump
       game.update(1 / 60, new Set(['w']));
-      expect(p.onGround).toBe(false);
+      expect(p.state).toBe('airborne');
       const vyAfterJump = p.vy;
 
       // Try to jump again mid-air — vy should not reset
@@ -523,7 +574,7 @@ describe('LobbyGame', () => {
 
     it('fast-fall applies when pressing down while airborne', () => {
       const p = game.players[0];
-      p.onGround = false;
+      p.state = 'airborne';
       p.y = 300;
       p.vy = 0;
 
@@ -549,7 +600,7 @@ describe('LobbyGame', () => {
       const npc = game.extraChars[0];
       npc.x = 5;
       npc.vx = -200;
-      npc.onGround = true;
+      npc.state = 'idle';
 
       for (let i = 0; i < 30; i++) {
         game.update(1 / 60, new Set());
@@ -562,7 +613,7 @@ describe('LobbyGame', () => {
       const npc = game.extraChars[0];
       npc.x = 1270;
       npc.vx = 200;
-      npc.onGround = true;
+      npc.state = 'idle';
 
       for (let i = 0; i < 30; i++) {
         game.update(1 / 60, new Set());
@@ -575,7 +626,7 @@ describe('LobbyGame', () => {
       const npc = game.extraChars[0];
       npc.y = 300;
       npc.vy = 0;
-      npc.onGround = false;
+      npc.state = 'airborne';
 
       game.update(1 / 60, new Set());
 
@@ -586,7 +637,7 @@ describe('LobbyGame', () => {
     it('NPC facing matches movement direction', () => {
       const npc = game.extraChars[0];
       npc.vx = 50;
-      npc.onGround = true;
+      npc.state = 'idle';
 
       game.update(1 / 60, new Set());
 
@@ -603,7 +654,7 @@ describe('LobbyGame', () => {
       const mobile = makeLobbyGame({ isMobile: true, botCount: 1 });
       const p = mobile.players[0];
       p.x = 100;
-      p.onGround = true;
+      p.state = 'idle';
 
       mobile.update(1 / 60, new Set(), { left: false, right: true, jump: false, down: false });
       expect(p.x).toBeGreaterThan(100);
@@ -614,7 +665,7 @@ describe('LobbyGame', () => {
       const mobile = makeLobbyGame({ isMobile: true, botCount: 1 });
       const p = mobile.players[0];
       p.x = 200;
-      p.onGround = true;
+      p.state = 'idle';
 
       mobile.update(1 / 60, new Set(), { left: true, right: false, jump: false, down: false });
       expect(p.x).toBeLessThan(200);
@@ -624,18 +675,18 @@ describe('LobbyGame', () => {
     it('P1 jumps with touch jump input', () => {
       const mobile = makeLobbyGame({ isMobile: true, botCount: 1 });
       const p = mobile.players[0];
-      p.onGround = true;
+      p.state = 'idle';
       p.vy = 0;
 
       mobile.update(1 / 60, new Set(), { left: false, right: false, jump: true, down: false });
       expect(p.vy).toBeLessThan(0);
-      expect(p.onGround).toBe(false);
+      expect(p.state).toBe('airborne');
     });
 
     it('P1 fast-falls with touch down input while airborne', () => {
       const mobile = makeLobbyGame({ isMobile: true, botCount: 1 });
       const p = mobile.players[0];
-      p.onGround = false;
+      p.state = 'airborne';
       p.y = 300;
       p.vy = 0;
 
@@ -646,7 +697,7 @@ describe('LobbyGame', () => {
     it('P1 crouches with touch down input while on ground', () => {
       const mobile = makeLobbyGame({ isMobile: true, botCount: 1 });
       const p = mobile.players[0];
-      p.onGround = true;
+      p.state = 'idle';
       p.squashScale = 1;
 
       mobile.update(1 / 60, new Set(), { left: false, right: false, jump: false, down: true });
@@ -662,7 +713,7 @@ describe('LobbyGame', () => {
       // WALL_X = CANVAS_WIDTH * 0.58 = 742.4
       p.x = 720;
       p.vx = 200;
-      p.onGround = true;
+      p.state = 'idle';
 
       for (let i = 0; i < 10; i++) {
         game.update(1 / 60, new Set());
@@ -682,14 +733,14 @@ describe('LobbyGame', () => {
       p.x = 750; // on top of wall
       p.y = 300; // above wall
       p.vy = 200; // falling
-      p.onGround = false;
+      p.state = 'airborne';
 
       for (let i = 0; i < 60; i++) {
         game.update(1 / 60, new Set());
       }
 
       // Player should land on top of the wall
-      expect(p.onGround).toBe(true);
+      expect(p.state).not.toBe('airborne');
       expect(p.y).toBeCloseTo(440 - 32, 0); // WALL_Y - PLAYER_HEIGHT
     });
 
@@ -697,7 +748,7 @@ describe('LobbyGame', () => {
       const p = game.players[0];
       p.x = 720;
       p.vx = 200; // fast rightward
-      p.onGround = true;
+      p.state = 'idle';
       p.sideSquash = 1;
 
       game.update(1 / 60, new Set(['d']));
@@ -720,7 +771,7 @@ describe('LobbyGame', () => {
       p.sideSquash = 0.75;
       p.x = 200;
       p.vx = 0;
-      p.onGround = true;
+      p.state = 'idle';
 
       for (let i = 0; i < 30; i++) {
         game.update(1 / 60, new Set());
@@ -733,7 +784,7 @@ describe('LobbyGame', () => {
       const p = game.players[0];
       p.squashScale = 0.8;
       p.x = 200;
-      p.onGround = true;
+      p.state = 'idle';
 
       for (let i = 0; i < 30; i++) {
         game.update(1 / 60, new Set());
@@ -797,7 +848,7 @@ describe('LobbyGame', () => {
     it('animFrame advances when player is moving', () => {
       const p = game.players[0];
       p.x = 200;
-      p.onGround = true;
+      p.state = 'idle';
       p.animFrame = 0;
 
       for (let i = 0; i < 30; i++) {
@@ -811,7 +862,7 @@ describe('LobbyGame', () => {
       const p = game.players[0];
       p.x = 200;
       p.vx = 0;
-      p.onGround = true;
+      p.state = 'idle';
       p.animFrame = 0;
 
       game.update(1 / 60, new Set());
@@ -827,7 +878,7 @@ describe('LobbyGame', () => {
       const p = game.players[0];
       p.x = 1270;
       p.vx = 200;
-      p.onGround = true;
+      p.state = 'idle';
 
       game.update(1 / 60, new Set());
 
@@ -839,7 +890,7 @@ describe('LobbyGame', () => {
       p.x = 1270;
       p.vx = 200;
       p.sideSquash = 1;
-      p.onGround = true;
+      p.state = 'idle';
 
       game.update(1 / 60, new Set());
 
@@ -853,9 +904,10 @@ describe('LobbyGame', () => {
   describe('bot AI details', () => {
     it('bot slows down once in ready zone', () => {
       const bot = game.bots[0];
-      // Place bot well into ready zone, past target
-      bot.x = READY_ZONE_X + 200;
-      bot.onGround = true;
+      // Place bot at its target position inside the ready zone (slotIdx 0 → READY_ZONE_X + 30).
+      // Within 30px of target, botLobbyInput returns no-input, friction decays vx toward 0.
+      bot.x = READY_ZONE_X + 30;
+      bot.state = 'idle';
       bot.vx = 100;
 
       for (let i = 0; i < 10; i++) {
@@ -871,7 +923,7 @@ describe('LobbyGame', () => {
       // Position bot just before the wall
       // WALL_X = 742.4, PLAYER_WIDTH = 32
       bot.x = 742.4 - 32 - 50; // approaching wall
-      bot.onGround = true;
+      bot.state = 'idle';
       bot.vy = 0;
 
       // Run several ticks
@@ -882,7 +934,7 @@ describe('LobbyGame', () => {
       // Bot should have jumped at some point (vy was set to LOBBY_JUMP)
       // After landing, vy=0, but y might show they cleared the wall
       // Just verify the bot moved past the wall or is in air
-      expect(bot.x > 742.4 - 60 || bot.vy < 0 || !bot.onGround || bot.y < 528).toBe(true);
+      expect(bot.x > 742.4 - 60 || bot.vy < 0 || bot.state === 'airborne' || bot.y < 528).toBe(true);
     });
   });
 
@@ -966,7 +1018,7 @@ describe('LobbyGame', () => {
       p.x = 770; // just right of wall
       p.vx = -200; // moving left into wall
       p.y = 560 - 32; // at ground level
-      p.onGround = true;
+      p.state = 'idle';
       p.sideSquash = 1;
 
       for (let i = 0; i < 5; i++) {
@@ -1007,25 +1059,25 @@ describe('LobbyGame', () => {
       const bot = game.bots[0];
       const npc = game.extraChars[0];
 
-      const botCharBefore = bot.char.name;
-      const npcCharBefore = npc.char.name;
+      const botCharBefore = bot.character.name;
+      const npcCharBefore = npc.character.name;
 
       // Position bot directly above NPC, falling fast
       npc.x = 300;
       npc.y = 560 - 32;
-      npc.onGround = true;
+      npc.state = 'idle';
       npc.splatTimer = 0;
 
       bot.x = 300;
       bot.y = 500;
       bot.vy = 200;
-      bot.onGround = false;
+      bot.state = 'airborne';
 
       game.update(1 / 60, new Set());
 
       // Characters should be swapped
-      expect(bot.char.name).toBe(npcCharBefore);
-      expect(npc.char.name).toBe(botCharBefore);
+      expect(bot.character.name).toBe(npcCharBefore);
+      expect(npc.character.name).toBe(botCharBefore);
       expect(npc.splatTimer).toBeGreaterThan(0);
     });
 
@@ -1037,23 +1089,23 @@ describe('LobbyGame', () => {
       const bot = game.bots[0];
       const human = game.players[1];
 
-      const humanCharBefore = human.char.name;
+      const humanCharBefore = human.character.name;
 
       // Position bot above human
       human.x = 300;
       human.y = 560 - 32;
-      human.onGround = true;
+      human.state = 'idle';
       human.splatTimer = 0;
 
       bot.x = 300;
       bot.y = 500;
       bot.vy = 200;
-      bot.onGround = false;
+      bot.state = 'airborne';
 
       game.update(1 / 60, new Set());
 
       // Bot cannot stomp human — char should remain unchanged
-      expect(human.char.name).toBe(humanCharBefore);
+      expect(human.character.name).toBe(humanCharBefore);
       expect(human.splatTimer).toBe(0);
     });
   });
@@ -1063,7 +1115,7 @@ describe('LobbyGame', () => {
   describe('crouch hold squash', () => {
     it('holding crouch on ground maintains squash scale', () => {
       const p = game.players[0];
-      p.onGround = true;
+      p.state = 'idle';
       p.squashScale = 1;
       p.x = 200;
 
@@ -1085,7 +1137,7 @@ describe('LobbyGame', () => {
     it('bot settles near target position in ready zone', () => {
       const bot = game.bots[0];
       bot.x = READY_ZONE_X + 100;
-      bot.onGround = true;
+      bot.state = 'idle';
       bot.vx = 0;
 
       // Run many ticks — bot should slow down near target
@@ -1107,7 +1159,7 @@ describe('LobbyGame', () => {
       // Position bot above the wall, in the air
       bot.x = 745; // over the wall
       bot.y = 400; // above wall top (440)
-      bot.onGround = false;
+      bot.state = 'airborne';
       bot.vy = -100; // still going up from jump
 
       game.update(1 / 60, new Set());
@@ -1182,7 +1234,7 @@ describe('LobbyGame', () => {
       const ctx = makeMockCtx();
       game.render(ctx, 1 / 60);
       const mod = await import('./rendering/players');
-      expect(vi.mocked(mod.drawCharacterCore)).toHaveBeenCalled();
+      expect(vi.mocked(mod.drawPlayer)).toHaveBeenCalled();
     });
 
     it('render() draws wall', () => {
