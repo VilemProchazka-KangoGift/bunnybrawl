@@ -155,7 +155,7 @@ src/
 ```bash
 npm run dev       # Dev server with HMR
 npm run build     # Production build (tsc + vite)
-npm test          # Unit/integration tests (~1600 tests, Vitest)
+npm test          # Unit/integration tests (~2000 tests, Vitest)
 npm run test:e2e  # E2E tests (~120 tests, Playwright, builds first)
 npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/physics changes)
 # Dev shortcut — skip lobby:
@@ -178,7 +178,7 @@ npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/
 - **Character pack names are capitalized** — `getCharacterPack('Bunny')` not `'bunny'`.
 - **E2E shortcuts** — `/?arena=meadow&bots=2&killLimit=4` auto-starts a match (skips lobby). Requires `arena` param to trigger. Use `window.__gameLoop.getState()` and `window.__gameStore.getState()` for in-match assertions.
 - **E2E countdown waits** — use `page.waitForFunction(() => window.__gameLoop?.getState()?.countdown === 0)` instead of `waitForTimeout(4000)`.
-- **E2E flakiness** — online multiplayer tests (`@online`) are inherently flaky due to PeerJS signaling. New E2E tests should use URL param auto-start and `waitForFunction` polling over hardcoded waits.
+- **E2E flakiness** — online multiplayer tests (`@online`) are inherently flaky due to Trystero MQTT signaling. New E2E tests should use URL param auto-start and `waitForFunction` polling over hardcoded waits.
 - **Interpolation tests** — snapshots pushed in rapid succession have near-identical frame numbers relative to delay. Assert value ranges, not exact lerp results.
 - **E2e tests require `npm install`** — `@trystero-p2p/mqtt` types must be installed for `tsc -b && vite build` to succeed. CI handles this automatically but local runs fail without it.
 - **Vitest mock constructors** — `vi.fn(() => instance)` fails with `new`. Use `class MockX { constructor() { Object.assign(this, mockInstance); } }` instead.
