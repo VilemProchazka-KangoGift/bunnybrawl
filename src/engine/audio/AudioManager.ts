@@ -51,6 +51,8 @@ class AudioManager {
       sound.stop();
     }
     this.stopMusic();
+    // Quit-from-pause would otherwise leave Howler globally muted.
+    if (this.gamePaused) this.setPaused(false);
   }
 
   stopAll(): void {

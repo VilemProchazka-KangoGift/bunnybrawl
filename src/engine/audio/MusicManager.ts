@@ -8,12 +8,20 @@ export class MusicManager {
   private muted = false;
   private musicHowl: Howl | null = null;
   private musicThemeId: string | null = null;
-  // Start fetching before first user interaction (init() is heavy)
-  private menuMusicHowl: Howl | null = this.musicDisabled ? null : new Howl({
-    src: [AUDIO_BASE + 'carrot-royale-main.mp3'],
-    volume: 0.25,
-    loop: true,
-  });
+  // Start fetching before first user interaction (init() is heavy).
+  private menuMusicHowl: Howl | null = this.musicDisabled ? null : this.createMenuHowl();
+
+  // html5: true streams the MP3 — playback starts as bytes arrive instead of
+  // waiting for a full fetch + decodeAudioData (which can stall behind the
+  // procedural SFX decode batch run by registerAllSounds()).
+  private createMenuHowl(): Howl {
+    return new Howl({
+      src: [AUDIO_BASE + 'carrot-royale-main.mp3'],
+      volume: 0.25,
+      loop: true,
+      html5: true,
+    });
+  }
 
   setMuted(muted: boolean): void {
     this.muted = muted;
@@ -38,11 +46,7 @@ export class MusicManager {
     if (this.muted || this.musicDisabled) return;
     if (this.menuMusicHowl && this.menuMusicHowl.playing()) return;
     if (!this.menuMusicHowl) {
-      this.menuMusicHowl = new Howl({
-        src: [AUDIO_BASE + 'carrot-royale-main.mp3'],
-        volume: 0.25,
-        loop: true,
-      });
+      this.menuMusicHowl = this.createMenuHowl();
     }
     this.menuMusicHowl.play();
   }
@@ -64,7 +68,7 @@ export class MusicManager {
     this.musicHowl?.unload();
     const mp3 = getArenaPack(themeId)?.musicFile;
     if (!mp3) { console.warn(`[audio] No musicFile for arena '${themeId}'`); return; }
-    this.musicHowl = new Howl({ src: [AUDIO_BASE + mp3], volume: 0.22, loop: true });
+    this.musicHowl = new Howl({ src: [AUDIO_BASE + mp3], volume: 0.22, loop: true, html5: true });
     this.musicThemeId = themeId;
     this.musicHowl.play();
   }
