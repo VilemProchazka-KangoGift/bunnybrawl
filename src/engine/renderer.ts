@@ -21,7 +21,7 @@ import {
   drawWeather, drawParticles, drawGibs, drawGibShape, drawConfetti, drawFireworks, drawWildlife, drawSpringTrail,
   drawHazardZone, drawGhost, drawLavaRock, drawZeroGZone, drawCurrentZone, drawGeyser, drawBouncyPlatformOverlay, drawPigeonFlock,
   drawDayNightCycle,
-  drawHUD, drawCountdown, drawConnectionQuality, invalidateHudCache,
+  drawHUD, drawCountdown, drawConnectionQuality, invalidateHudCache, isHudDirty,
   drawPlayer,
   clearRenderingCaches,
 } from './rendering';
@@ -82,6 +82,7 @@ function freshDiag(): RenderDiagnostics {
 export class Renderer {
   private bgCtx: CanvasRenderingContext2D;
   private fgCtx: CanvasRenderingContext2D;
+  private hudCtx: CanvasRenderingContext2D | null = null;
   private clouds: Cloud[] = [];
   private lastCloudTime = 0;
   private theme: ThemeConfig;
@@ -101,7 +102,12 @@ export class Renderer {
   private _netJitter = 0;
   private _isNetworkGuest = false;
 
-  constructor(bgCanvas: HTMLCanvasElement, fgCanvas: HTMLCanvasElement, theme: ThemeConfig, mirrored = false) {
+  // Overlay-layer dirty tracking (only used when hudCtx is set)
+  private _overlayHadContent = false;
+  private _overlayLastRtt = -1;
+  private _overlayLastJitter = -1;
+
+  constructor(bgCanvas: HTMLCanvasElement, fgCanvas: HTMLCanvasElement, theme: ThemeConfig, mirrored = false, hudCanvas?: HTMLCanvasElement) {
     clearRenderingCaches();
     this.bgCtx = bgCanvas.getContext('2d')!;
     this.fgCtx = fgCanvas.getContext('2d')!;
@@ -112,6 +118,12 @@ export class Renderer {
     bgCanvas.height = CANVAS_HEIGHT;
     fgCanvas.width = CANVAS_WIDTH;
     fgCanvas.height = CANVAS_HEIGHT;
+
+    if (hudCanvas) {
+      this.hudCtx = hudCanvas.getContext('2d')!;
+      hudCanvas.width = CANVAS_WIDTH;
+      hudCanvas.height = CANVAS_HEIGHT;
+    }
 
     // Init clouds from theme config
     const cc = theme.clouds;
@@ -608,40 +620,73 @@ export class Renderer {
 
     ctx.restore();
 
-    // Countdown overlay
+    // Overlay layer: HUD, countdown, connection quality, debug overlays, screen flash.
+    // When hudCtx is set, these go on a dedicated canvas above fg, redrawn only when
+    // state changes (saving a per-frame blit). Otherwise fall back to drawing on fg.
+    const hudDirty = isHudDirty(matchState);
+    if (this.hudCtx) {
+      this._renderOverlayLayer(matchState, arena, hudDirty);
+    } else {
+      this._drawOverlayContent(this.fgCtx, matchState, arena, hudDirty);
+    }
+  }
+
+  /** Draw HUD + overlays on the dedicated hud canvas, skipping clear+redraw when nothing changed. */
+  private _renderOverlayLayer(matchState: MatchState, arena: Arena, hudDirty: boolean): void {
+    const hctx = this.hudCtx!;
+
+    const hasCountdown = matchState.countdown !== undefined && matchState.countdown > 0;
+    const hasFlash = matchState.screenFlash > 0;
+    const hasAnimations = !!(matchState.scoreAnimations && matchState.scoreAnimations.length > 0);
+    const hasNavDebug = debugFlags.navDebugEnabled;
+    const hasNetDebug = debugFlags.netDebugEnabled && !!this._netDebugStats;
+    const hasOverlayContent = hasCountdown || hasFlash || hasAnimations || hasNavDebug || hasNetDebug;
+
+    const rttRounded = this._isNetworkGuest ? Math.round(this._netRtt) : -1;
+    const jitterRounded = this._isNetworkGuest ? Math.round(this._netJitter) : -1;
+    const qualityChanged = rttRounded !== this._overlayLastRtt || jitterRounded !== this._overlayLastJitter;
+
+    // Redraw if: cache dirty, transient content active, content just ended (clear residue), or quality indicator changed.
+    if (hudDirty || hasOverlayContent || this._overlayHadContent || qualityChanged) {
+      hctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      this._drawOverlayContent(hctx, matchState, arena, hudDirty);
+    }
+
+    this._overlayHadContent = hasOverlayContent;
+    this._overlayLastRtt = rttRounded;
+    this._overlayLastJitter = jitterRounded;
+  }
+
+  /** Draw the HUD, connection quality, countdown, debug overlays, and screen flash onto a target ctx. */
+  private _drawOverlayContent(ctx: CanvasRenderingContext2D, matchState: MatchState, arena: Arena, hudDirty: boolean): void {
+    const d = this._diag;
+
     if (matchState.countdown !== undefined && matchState.countdown > 0) {
       drawCountdown(ctx, matchState.countdown);
       d.countdown = true;
     }
 
-    // HUD (not affected by shake)
-    drawHUD(ctx, matchState, this.frameTime, this._playerNames, this._timeLimit);
+    drawHUD(ctx, matchState, this.frameTime, this._playerNames, this._timeLimit, hudDirty);
 
-    // Connection quality indicator for online guests
     if (this._isNetworkGuest) {
       drawConnectionQuality(ctx, this._netRtt, this._netJitter, CANVAS_WIDTH);
     }
 
-    // Nav debug overlay (dev only -- ?debug=nav)
     if (debugFlags.navDebugEnabled) {
       drawNavDebugOverlay(ctx, arena, this.mirrored, this._botNavDebugStates);
       d.navDebug = true;
     }
 
-    // Net debug overlay (dev only -- ?debug=net)
     if (debugFlags.netDebugEnabled && this._netDebugStats) {
       drawNetDebugOverlay(ctx, this._netDebugStats, CANVAS_WIDTH);
       d.netDebug = true;
     }
 
-    // Screen flash (f) -- drawn after everything
     if (matchState.screenFlash > 0) {
       d.screenFlash = true;
       const flashAlpha = Math.min(1, matchState.screenFlash / SCREEN_FLASH_DURATION);
-      ctx.save();
       ctx.fillStyle = `rgba(255, 255, 255, ${flashAlpha})`;
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-      ctx.restore();
     }
   }
 }

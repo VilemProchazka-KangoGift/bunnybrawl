@@ -32,6 +32,7 @@ import {
 export interface NetMatchConfig {
   bgCanvas: HTMLCanvasElement;
   fgCanvas: HTMLCanvasElement;
+  hudCanvas?: HTMLCanvasElement;
   arena: Arena;
   settings: MatchSettings;
   activePlayers: PlayerSlot[];
@@ -97,6 +98,7 @@ export class NetMatch {
       config.settings,
       config.activePlayers,
       config.onMatchEnd,
+      config.hudCanvas,
     );
 
     if (this._isHost) {

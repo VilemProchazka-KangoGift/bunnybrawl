@@ -27,6 +27,11 @@
   z-index: 2;
 }
 
+.hud-canvas {
+  z-index: 3;
+  pointer-events: none;
+}
+
 .pause-overlay {
   position: absolute;
   top: 0;

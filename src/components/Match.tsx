@@ -33,6 +33,7 @@ export function Match() {
   const { t } = useTranslation();
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
   const fgCanvasRef = useRef<HTMLCanvasElement>(null);
+  const hudCanvasRef = useRef<HTMLCanvasElement>(null);
   const gameLoopRef = useRef<GameLoop | null>(null);
   const victoryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { activePlayers, matchSettings, setMatchResult, setScreen, setActivePlayers, setMatchSettings, online, resetOnline } = useGameStore();
@@ -135,7 +136,8 @@ export function Match() {
   useEffect(() => {
     const bgCanvas = bgCanvasRef.current;
     const fgCanvas = fgCanvasRef.current;
-    if (!bgCanvas || !fgCanvas) return;
+    const hudCanvas = hudCanvasRef.current;
+    if (!bgCanvas || !fgCanvas || !hudCanvas) return;
 
     const arena = getArena(currentArenaId);
     let matchEnded = false;
@@ -168,6 +170,7 @@ export function Match() {
       const netMatch = new NetMatch({
         bgCanvas,
         fgCanvas,
+        hudCanvas,
         arena,
         settings: matchSettings,
         activePlayers,
@@ -238,6 +241,7 @@ export function Match() {
       matchSettings,
       activePlayers,
       onMatchEnd,
+      hudCanvas,
     );
 
     gameLoopRef.current = loop;
@@ -280,6 +284,12 @@ export function Match() {
           width={CANVAS_WIDTH}
           height={CANVAS_HEIGHT}
           data-testid="game-canvas"
+        />
+        <canvas
+          ref={hudCanvasRef}
+          className="game-canvas hud-canvas"
+          width={CANVAS_WIDTH}
+          height={CANVAS_HEIGHT}
         />
         {touchInput && <TouchOverlay touchInput={touchInput} />}
         {isMobile && !paused && (

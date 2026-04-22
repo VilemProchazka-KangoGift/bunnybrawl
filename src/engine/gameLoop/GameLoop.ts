@@ -124,6 +124,7 @@ export class GameLoop {
     settings: MatchSettings,
     activePlayers: PlayerSlot[],
     onMatchEnd: MatchEndCallback,
+    hudCanvas?: HTMLCanvasElement,
     rng?: SeededRNG,
   ) {
     this.rng = rng; // Set before any gameRandom() calls in init
@@ -135,7 +136,7 @@ export class GameLoop {
     this.onMatchEnd = onMatchEnd;
     this.theme = getTheme(arena.themeId);
     this.input = new InputManager();
-    this.renderer = new Renderer(bgCanvas, fgCanvas, this.theme, settings.mods.mirrorArena);
+    this.renderer = new Renderer(bgCanvas, fgCanvas, this.theme, settings.mods.mirrorArena, hudCanvas);
     this.renderer.setTimeLimit(settings.timeLimit);
 
     // Compute effective physics from theme + mod modifiers
@@ -508,13 +509,12 @@ export class GameLoop {
   fixedUpdate(dt: number, networkInputs?: Map<string, InputState>): void {
     this._networkInputs = networkInputs;
     if (this.stopped || this.state.matchOver) return;
-    this.state.timeElapsed = f(this.state.timeElapsed + dt);
 
     // Day/night cycle
     this.state.dayPhase = f(this.state.dayPhase + f(dt / this.theme.dayNight.cycleDuration));
     if (this.state.dayPhase > 1) this.state.dayPhase = f(this.state.dayPhase - 1);
 
-    // Countdown logic
+    // Countdown logic — match timer (timeElapsed) is frozen until countdown hits 0.
     if (this.state.countdown > 0) {
       this.state.countdown = f(this.state.countdown - dt);
       if (this.state.countdown <= 0) {
@@ -523,6 +523,8 @@ export class GameLoop {
       // Countdown sounds moved to cosmeticStep. Particles/weather handled by cosmeticStep too.
       return;
     }
+
+    this.state.timeElapsed = f(this.state.timeElapsed + dt);
 
     // Screen shake decay (skip during resimulation — writes are also guarded)
     if (!this._resimulating && this.state.screenShake > 0) this.state.screenShake = Math.max(0, this.state.screenShake - dt);

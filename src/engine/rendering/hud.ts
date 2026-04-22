@@ -30,19 +30,22 @@ export function resetHudState(): void {
   for (const k in _hudPlayerActive) delete _hudPlayerActive[k];
 }
 
-export function drawHUD(ctx: CanvasRenderingContext2D, state: MatchState, frameTime: number, playerNames: Record<string, string> | null, timeLimit = 0): void {
-  // Check if HUD needs redraw (no allocations -- simple loop comparison)
+/** Check whether the HUD cache needs rebuild. No side effects. */
+export function isHudDirty(state: MatchState): boolean {
   const timerSec = Math.floor(state.timeElapsed);
-  let needsRedraw = timerSec !== hudLastTimer || !hudCache;
-  if (!needsRedraw) {
-    let activeCount = 0;
-    for (const p of state.players) {
-      if (p.active) activeCount++;
-      if (p.score !== (_hudPlayerScores?.[p.id as string] ?? -1)) { needsRedraw = true; break; }
-      if (p.active !== (_hudPlayerActive?.[p.id as string] ?? false)) { needsRedraw = true; break; }
-    }
-    if (!needsRedraw && activeCount !== hudLastPlayerCount) needsRedraw = true;
+  if (timerSec !== hudLastTimer || !hudCache) return true;
+  let activeCount = 0;
+  for (const p of state.players) {
+    if (p.active) activeCount++;
+    if (p.score !== (_hudPlayerScores?.[p.id as string] ?? -1)) return true;
+    if (p.active !== (_hudPlayerActive?.[p.id as string] ?? false)) return true;
   }
+  if (activeCount !== hudLastPlayerCount) return true;
+  return false;
+}
+
+export function drawHUD(ctx: CanvasRenderingContext2D, state: MatchState, frameTime: number, playerNames: Record<string, string> | null, timeLimit = 0, precomputedDirty?: boolean): void {
+  const needsRedraw = precomputedDirty !== undefined ? precomputedDirty : isHudDirty(state);
 
   if (needsRedraw) {
     if (!hudCache) {
@@ -55,7 +58,7 @@ export function drawHUD(ctx: CanvasRenderingContext2D, state: MatchState, frameT
     // Draw HUD content to cache
     _drawHUDImpl(hctx as unknown as CanvasRenderingContext2D, state, frameTime, playerNames, timeLimit);
 
-    hudLastTimer = timerSec;
+    hudLastTimer = Math.floor(state.timeElapsed);
     let ac = 0;
     for (const p of state.players) {
       _hudPlayerScores[p.id as string] = p.score;

@@ -24,7 +24,9 @@ vi.mock('./rendering', () => ({
   drawDayNightCycle: vi.fn(),
   drawHUD: vi.fn(),
   drawCountdown: vi.fn(),
+  drawConnectionQuality: vi.fn(),
   invalidateHudCache: vi.fn(),
+  isHudDirty: vi.fn(() => false),
   drawPlayer: vi.fn(),
   clearRenderingCaches: vi.fn(),
 }));
