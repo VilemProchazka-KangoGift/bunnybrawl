@@ -1,8 +1,5 @@
-/**
- * Backward-compatible wrappers for the old arena/theme API.
- * Drop-in replacements so existing consumers can switch import paths
- * without changing any call sites.
- */
+// Arena lookup + transformation helpers (layered on top of the pack registry).
+
 import type { Arena } from '../types';
 import type { ThemeConfig } from '../themes/types';
 import { getArenaPackOrThrow, toArena, toThemeConfig } from './registry';

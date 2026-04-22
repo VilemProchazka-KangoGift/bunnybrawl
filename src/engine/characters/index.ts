@@ -35,4 +35,4 @@ export {
   BOT_CHARACTERS,
   getCharacterForSlot,
   assignBotCharacters,
-} from './legacy';
+} from './defaults';

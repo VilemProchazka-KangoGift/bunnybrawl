@@ -1,6 +1,5 @@
 import type {
   MatchState, MatchSettings, Arena, PlayerSlot, Player,
-  WeatherParticle, MatchStats, PlayerStats, WildlifeEntity,
   InputState,
 } from '../types';
 import { isBotSlot } from '../types';
@@ -9,7 +8,7 @@ import { takeSnapshot as _takeSnapshot, restoreSnapshot as _restoreSnapshot } fr
 import type { GameSnapshot } from '../net/serialize';
 import type { ThemeConfig } from '../themes/types';
 import { getTheme, mirrorArena } from '../arenas';
-import { randRange, pickWeighted, swapRemove } from '../themes/utils';
+import { swapRemove } from '../themes/utils';
 import { InputManager } from '../input';
 import { TouchInputManager } from '../touchInput';
 import { isTouchPrimary } from '../touchDetect';
@@ -19,24 +18,20 @@ import { applyInput, applyGravity, movePlayer, collidePlatforms, updatePlayerSta
 import { audio } from '../audio';
 import {
   FIXED_TIMESTEP, MAX_FRAME_TIME,
-  PLAYER_WIDTH, PLAYER_HEIGHT,
-  CARROT_FIRST_SPAWN_DELAY, CARROT_CHASE_FIRST_SPAWN_DELAY, CARROT_SIZE, GIANT_SCALE,
+  CARROT_SIZE,
   FAT_DURATION, SPRING_BOUNCE,
-  CANVAS_WIDTH, CANVAS_HEIGHT,
+  CANVAS_WIDTH,
   SLOW_MO_FACTOR, HITSTOP_DURATION,
   SQUASH_ON_LAND, STRETCH_ON_JUMP, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED,
-  MATCH_COUNTDOWN,
   SCREEN_FLASH_DURATION,
-  GRAVITY, FRICTION, MAX_WALK_SPEED, JUMP_IMPULSE, MAX_FALL_SPEED,
 } from '../constants';
-import { getCharacterForSlot } from '../characters';
 import { AIController } from '../ai';
+import { computeEffectivePhysics, createInitialPlayers, createInitialMatchState } from './initialState';
 import { debugFlags, toggleNavDebug, toggleNetDebug } from '../debugFlags';
 import type { BotNavDebugState } from '../navDebugOverlay';
 import type { NetDebugStats } from '../net/core/debugOverlay';
 
 // Extracted submodules
-import { createWeatherParticle } from './cosmetics/environment';
 import { getOrCreateCooldowns } from './cosmetics/sfx';
 import { EnvironmentSystem } from './cosmetics/EnvironmentSystem';
 import { EntityTransitionSystem } from './cosmetics/EntityTransitionSystem';
@@ -143,26 +138,13 @@ export class GameLoop {
     this.renderer = new Renderer(bgCanvas, fgCanvas, this.theme, settings.mods.mirrorArena);
     this.renderer.setTimeLimit(settings.timeLimit);
 
-    // Compute effective physics from theme modifiers
-    const pm = this.theme.physics;
-    this.effGravity = GRAVITY * (pm?.gravity ?? 1);
-    this.effFriction = FRICTION * (pm?.friction ?? 1);
-    this.effWalkSpeed = MAX_WALK_SPEED * (pm?.walkSpeed ?? 1);
-    this.effJumpImpulse = JUMP_IMPULSE * (pm?.jumpImpulse ?? 1);
-    this.effMaxFallSpeed = MAX_FALL_SPEED * (pm?.gravity ?? 1); // scale with gravity
-
-    // Apply mod physics multipliers (stacks with theme)
-    if (settings.mods.turbo) {
-      this.effWalkSpeed *= 2;
-      this.effJumpImpulse *= 1.5;
-    }
-
-    // Underwater Gravity: floaty physics (stacks with theme)
-    if (settings.mods.underwaterGravity) {
-      this.effGravity *= 0.6;
-      this.effMaxFallSpeed *= 0.6;
-      this.effJumpImpulse *= 0.9;
-    }
+    // Compute effective physics from theme + mod modifiers
+    const phys = computeEffectivePhysics(this.theme, settings.mods);
+    this.effGravity = phys.gravity;
+    this.effFriction = phys.friction;
+    this.effWalkSpeed = phys.walkSpeed;
+    this.effJumpImpulse = phys.jumpImpulse;
+    this.effMaxFallSpeed = phys.maxFallSpeed;
 
     // Super Bounce: mark all platforms as bouncy (shallow-copy arena to avoid mutation)
     if (settings.mods.superBounce) {
@@ -174,25 +156,7 @@ export class GameLoop {
       this.arena = mirrorArena(this.arena);
     }
 
-    const pw = settings.mods.giantPlayers ? PLAYER_WIDTH * GIANT_SCALE : PLAYER_WIDTH;
-    const ph = settings.mods.giantPlayers ? PLAYER_HEIGHT * GIANT_SCALE : PLAYER_HEIGHT;
-
-    const players: Player[] = activePlayers.map((slot, index) => ({
-      id: slot,
-      character: getCharacterForSlot(slot),
-      x: this.arena.spawnPoints[index % this.arena.spawnPoints.length].x - pw / 2,
-      y: this.arena.spawnPoints[index % this.arena.spawnPoints.length].y - ph,
-      vx: 0, vy: 0,
-      width: pw, height: ph,
-      state: 'idle' as const, facing: 'right' as const,
-      splatTimer: 0, respawnTimer: 0, invincibleTimer: 0,
-      score: 0, active: true, animFrame: 0, animTimer: 0,
-      fastFalling: false, fatTimer: 0, slowTimer: 0,
-      squashScale: 1, squashTimer: 0, sideSquash: 1, afterimages: [], idleAnimTimer: 0,
-      expression: 'normal' as const, killStreak: 0,
-      breathTimer: 0, springTrailTimer: 0, damageFlashSide: null, damageFlashTimer: 0, burnTimer: 0, hitstopTimer: 0,
-      renderOffsetX: 0, renderOffsetY: 0, disconnected: false,
-    }));
+    const players = createInitialPlayers(activePlayers, this.arena, settings.mods.giantPlayers);
 
     // Init AI controllers for bot players
     const botDifficulty = settings.botDifficulty ?? 'medium';
@@ -203,95 +167,7 @@ export class GameLoop {
       }
     }
 
-    // Init weather particles from theme config
-    const weather: WeatherParticle[] = [];
-    for (let i = 0; i < this.theme.weather.particleCount; i++) {
-      weather.push(this.createWeatherParticle(true));
-    }
-
-    // Init stats
-    const statsMap = new Map<PlayerSlot, PlayerStats>();
-    for (const slot of activePlayers) {
-      statsMap.set(slot, { bestStreak: 0, timeAirborne: 0, distanceTraveled: 0, carrotsEaten: 0 });
-    }
-    const stats: MatchStats = { perPlayer: statsMap };
-
-    const wildlife: WildlifeEntity[] = [];
-    const wc = this.theme.wildlife;
-    for (let i = 0; i < wc.count; i++) {
-      const chosen = pickWeighted(wc.types);
-      wildlife.push({
-        type: chosen.type,
-        x: chosen.type === 'bird' ? -50 - Math.random() * 100 : Math.random() * CANVAS_WIDTH,
-        y: randRange(chosen.yRange) * CANVAS_HEIGHT,
-        vx: randRange(chosen.speedRange),
-        vy: 0,
-        wingPhase: Math.random() * Math.PI * 2,
-        color: chosen.colors[Math.floor(Math.random() * chosen.colors.length)],
-      });
-    }
-
-    const fc = this.theme.fog;
-    const fogParticles: Array<{x: number; y: number; vx: number; alpha: number}> = [];
-    for (let i = 0; i < fc.count; i++) {
-      fogParticles.push({
-        x: Math.random() * CANVAS_WIDTH,
-        y: fc.baseY + (Math.random() * 2 - 1) * fc.yVariance,
-        vx: randRange(fc.speedRange),
-        alpha: randRange(fc.alphaRange),
-      });
-    }
-
-    const ac = this.theme.ambientParticles;
-    const pollenParticles: Array<{x: number; y: number; vx: number; vy: number; size: number; alpha: number}> = [];
-    for (let i = 0; i < ac.count; i++) {
-      pollenParticles.push({
-        x: Math.random() * CANVAS_WIDTH,
-        y: Math.random() * CANVAS_HEIGHT,
-        vx: randRange(ac.vxRange),
-        vy: randRange(ac.vyRange),
-        size: randRange(ac.sizeRange),
-        alpha: randRange(ac.alphaRange),
-      });
-    }
-
-    this.state = {
-      players,
-      killFeed: [],
-      timeElapsed: 0, matchOver: false, winner: null,
-      carrots: [], carrotTimer: settings.mods.carrotChase ? CARROT_CHASE_FIRST_SPAWN_DELAY : CARROT_FIRST_SPAWN_DELAY,
-      springs: [], thorns: [],
-      springSpawnTimer: 5, // first spring after 5s
-      thornSpawnTimer: 8,  // first thorn after 8s
-      screenShake: 0, slowMotion: 0, hitstopZoom: 0,
-      weather,
-      dayPhase: 0,
-      countdown: MATCH_COUNTDOWN,
-      stats,
-      shockwaves: [],
-      screenFlash: 0,
-      wildlife,
-      fogParticles,
-      pollenParticles,
-      shootingStars: [],
-      scoreAnimations: [],
-      ghosts: [],
-      lavaRocks: [],
-      lavaRockTimer: this.theme.lavaRockConfig ? this.theme.lavaRockConfig.spawnInterval[0] + this.gameRandom() * (this.theme.lavaRockConfig.spawnInterval[1] - this.theme.lavaRockConfig.spawnInterval[0]) : 9999,
-
-      geyserStates: (arena.effectZones || []).filter(z => z.type === 'geyser').map(z => ({
-        timer: (z.interval || 10) * this.gameRandom(),
-        active: false,
-        activeTimer: 0,
-      })),
-      pigeonFlocks: (this.theme.pigeonConfig?.positions || []).map(p => ({
-        x: p.x, y: p.y, active: true, respawnTimer: 0,
-        scatterParticles: [],
-      })),
-      bouncyWobble: new Map(),
-      gibs: [],
-      confetti: [],
-    };
+    this.state = createInitialMatchState(this.arena, this.theme, settings, players, activePlayers, this._boundGameRandom);
 
     // Instantiate arena entity system first — others need its cached zones
     this.arenaEntitySystem = new ArenaEntitySystem(this.state, this.arena, this.theme, this._boundGameRandom);
@@ -346,10 +222,6 @@ export class GameLoop {
       () => this._resimulating,
       (winner) => this.endMatch(winner),
     );
-  }
-
-  private createWeatherParticle(randomY: boolean): WeatherParticle {
-    return createWeatherParticle(this.theme, randomY);
   }
 
   start(): void {

@@ -21,5 +21,5 @@ export {
 // ---- Initialization ----
 export { registerBuiltinArenas } from './builtin';
 
-// ---- Legacy backward-compat ----
-export { getArena, getTheme, mirrorArena } from './legacy';
+// ---- Public API (lookup + arena transformations) ----
+export { getArena, getTheme, mirrorArena } from './operations';

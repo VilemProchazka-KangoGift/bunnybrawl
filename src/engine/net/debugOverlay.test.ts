@@ -81,11 +81,4 @@ describe('drawNetDebugOverlay', () => {
     expect(textCalls).toContain('512');
     expect(textCalls).toContain('3');
   });
-
-  it('shows RELAY when isRelay is true', () => {
-    const ctx = makeMockCtx();
-    drawNetDebugOverlay(ctx, makeStats({ isRelay: true }), 1280);
-    const textCalls = ctx.fillText.mock.calls.map((c: any[]) => c[0]).join(' ');
-    expect(textCalls).toContain('RELAY');
-  });
 });

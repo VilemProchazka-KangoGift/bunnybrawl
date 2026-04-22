@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
-import { CHARACTERS, getCharacterForSlot, assignBotCharacters, BOT_CHARACTERS, getAllCharacters } from './legacy';
+import { CHARACTERS, getCharacterForSlot, assignBotCharacters, BOT_CHARACTERS, getAllCharacters } from './defaults';
 import { registerBuiltinCharacters } from './builtin';
 import { registerBuiltinArenas } from '../arenas/builtin';
 import type { BotSlot, CharacterSlot } from '../types';

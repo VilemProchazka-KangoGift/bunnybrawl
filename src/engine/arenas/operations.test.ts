@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { mirrorArena } from './legacy';
+import { mirrorArena } from './operations';
 import { makeArena } from '../__tests__/testHelpers';
 import { registerBuiltinArenas } from './builtin';
 import { CANVAS_WIDTH } from '../constants';
