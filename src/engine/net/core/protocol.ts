@@ -64,4 +64,4 @@ export function decodeSnapshotAck(buf: ArrayBuffer): number | null {
   return view.getUint32(1, true);
 }
 
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 6;

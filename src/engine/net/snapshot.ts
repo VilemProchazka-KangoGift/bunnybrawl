@@ -95,6 +95,36 @@ function encodeTimer(timer: number): number {
   return Math.min(Math.round(timer * 60), 255);
 }
 
+/** Write N booleans as ceil(N/8) bitfield bytes into ENCODE_VIEW. Returns new offset. */
+function writePackedBools(o: number, n: number, get: (i: number) => boolean): number {
+  const byteCount = (n + 7) >> 3;
+  for (let b = 0; b < byteCount; b++) {
+    let byte = 0;
+    const base = b * 8;
+    const end = base + 8 <= n ? 8 : n - base;
+    for (let bit = 0; bit < end; bit++) {
+      if (get(base + bit)) byte |= (1 << bit);
+    }
+    ENCODE_VIEW.setUint8(o++, byte);
+  }
+  return o;
+}
+
+/** Read N booleans from ceil(N/8) bitfield bytes. Returns [bools, newOffset]. */
+function readPackedBools(view: DataView, o: number, n: number): [boolean[], number] {
+  const byteCount = (n + 7) >> 3;
+  const bools: boolean[] = new Array(n);
+  for (let b = 0; b < byteCount; b++) {
+    const byte = view.getUint8(o + b);
+    const base = b * 8;
+    const end = base + 8 <= n ? 8 : n - base;
+    for (let bit = 0; bit < end; bit++) {
+      bools[base + bit] = !!(byte & (1 << bit));
+    }
+  }
+  return [bools, o + byteCount];
+}
+
 /**
  * Encode an AuthSnapshot into a compact binary format.
  * Returns { buffer, length } where buffer is a shared pre-allocated buffer.
@@ -115,39 +145,61 @@ export function encodeSnapshot(snap: AuthSnapshot): { buffer: ArrayBuffer; lengt
     ENCODE_VIEW.setFloat32(o, p.vx, true); o += 4;
     ENCODE_VIEW.setFloat32(o, p.vy, true); o += 4;
     ENCODE_VIEW.setUint8(o++, PLAYER_STATE_MAP[p.state] ?? 0);
-    // Pack: facing(1 bit) + fastFalling(1) + disconnected(1) + active(1) + expression(2) = 6 bits
+    // Flags byte: facing(1) + fastFalling(1) + disconnected(1) + active(1) + expression(2) + damageFlashSide(2) = 8 bits
+    const dfSide = p.damageFlashSide === 'left' ? 1 : p.damageFlashSide === 'right' ? 2 : 0;
     const flags =
       (p.facing === 'right' ? 1 : 0) |
       (p.fastFalling ? 2 : 0) |
       (p.disconnected ? 4 : 0) |
       (p.active ? 8 : 0) |
-      ((EXPRESSION_MAP[p.expression] ?? 0) << 4);
+      ((EXPRESSION_MAP[p.expression] ?? 0) << 4) |
+      (dfSide << 6);
     ENCODE_VIEW.setUint8(o++, flags);
     ENCODE_VIEW.setUint8(o++, p.animFrame & 0xFF);
     ENCODE_VIEW.setUint8(o++, Math.min(p.score, 255));
-    ENCODE_VIEW.setUint8(o++, encodeTimer(p.hitstopTimer));
-    ENCODE_VIEW.setUint8(o++, encodeTimer(p.invincibleTimer));
-    ENCODE_VIEW.setUint8(o++, encodeTimer(p.splatTimer));
-    ENCODE_VIEW.setUint8(o++, encodeTimer(p.respawnTimer));
-    ENCODE_VIEW.setUint8(o++, encodeTimer(p.fatTimer));
-    ENCODE_VIEW.setUint8(o++, encodeTimer(p.slowTimer));
-    ENCODE_VIEW.setUint8(o++, encodeTimer(p.burnTimer));
+
+    // Timer presence mask + only non-zero timers.
+    // Bits: 0=hitstop 1=invincible 2=splat 3=respawn 4=fat 5=slow 6=burn 7=damageFlash
+    const hitstop = encodeTimer(p.hitstopTimer);
+    const invinc = encodeTimer(p.invincibleTimer);
+    const splat = encodeTimer(p.splatTimer);
+    const respawn = encodeTimer(p.respawnTimer);
+    const fat = encodeTimer(p.fatTimer);
+    const slow = encodeTimer(p.slowTimer);
+    const burn = encodeTimer(p.burnTimer);
+    const dfTimer = encodeTimer(p.damageFlashTimer);
+    const timerMask =
+      (hitstop ? 1 : 0) |
+      (invinc ? 2 : 0) |
+      (splat ? 4 : 0) |
+      (respawn ? 8 : 0) |
+      (fat ? 16 : 0) |
+      (slow ? 32 : 0) |
+      (burn ? 64 : 0) |
+      (dfTimer ? 128 : 0);
+    ENCODE_VIEW.setUint8(o++, timerMask);
+    if (hitstop) ENCODE_VIEW.setUint8(o++, hitstop);
+    if (invinc) ENCODE_VIEW.setUint8(o++, invinc);
+    if (splat) ENCODE_VIEW.setUint8(o++, splat);
+    if (respawn) ENCODE_VIEW.setUint8(o++, respawn);
+    if (fat) ENCODE_VIEW.setUint8(o++, fat);
+    if (slow) ENCODE_VIEW.setUint8(o++, slow);
+    if (burn) ENCODE_VIEW.setUint8(o++, burn);
+    if (dfTimer) ENCODE_VIEW.setUint8(o++, dfTimer);
+
     ENCODE_VIEW.setUint8(o++, Math.round(p.squashScale * 50) & 0xFF); // 50 = 1.0 normal
     ENCODE_VIEW.setUint8(o++, Math.min(p.killStreak, 255));
     ENCODE_VIEW.setUint8(o++, Math.min(Math.round(p.width), 255));
     ENCODE_VIEW.setUint8(o++, Math.min(Math.round(p.height), 255));
     ENCODE_VIEW.setUint8(o++, Math.round(p.sideSquash * 50) & 0xFF); // 50 = 1.0 normal
-    ENCODE_VIEW.setUint8(o++, encodeTimer(p.damageFlashTimer));
-    // damageFlashSide: 0=null, 1=left, 2=right
-    ENCODE_VIEW.setUint8(o++, p.damageFlashSide === 'left' ? 1 : p.damageFlashSide === 'right' ? 2 : 0);
   }
 
-  // Carrots
+  // Carrots — bitfield of active flags, then positions
   ENCODE_VIEW.setUint8(o++, snap.carrots.length);
+  o = writePackedBools(o, snap.carrots.length, i => snap.carrots[i].active);
   for (const c of snap.carrots) {
     ENCODE_VIEW.setFloat32(o, c.x, true); o += 4;
     ENCODE_VIEW.setFloat32(o, c.y, true); o += 4;
-    ENCODE_VIEW.setUint8(o++, c.active ? 1 : 0);
   }
 
   // Springs
@@ -160,14 +212,14 @@ export function encodeSnapshot(snap: AuthSnapshot): { buffer: ArrayBuffer; lengt
     ENCODE_VIEW.setFloat32(o, s.growTimer, true); o += 4;
   }
 
-  // Thorns
+  // Thorns — bitfield of hit flags, then bodies
   ENCODE_VIEW.setUint8(o++, snap.thorns.length);
+  o = writePackedBools(o, snap.thorns.length, i => snap.thorns[i].hit);
   for (const t of snap.thorns) {
     ENCODE_VIEW.setFloat32(o, t.x, true); o += 4;
     ENCODE_VIEW.setFloat32(o, t.y, true); o += 4;
     ENCODE_VIEW.setFloat32(o, t.life, true); o += 4;
     ENCODE_VIEW.setFloat32(o, t.growTimer, true); o += 4;
-    ENCODE_VIEW.setUint8(o++, t.hit ? 1 : 0);
   }
 
   // Ghosts
@@ -179,21 +231,21 @@ export function encodeSnapshot(snap: AuthSnapshot): { buffer: ArrayBuffer; lengt
     ENCODE_VIEW.setFloat32(o, g.wobblePhase, true); o += 4;
   }
 
-  // Lava rocks
+  // Lava rocks — bitfield of active flags, then bodies
   ENCODE_VIEW.setUint8(o++, snap.lavaRocks.length);
+  o = writePackedBools(o, snap.lavaRocks.length, i => snap.lavaRocks[i].active);
   for (const r of snap.lavaRocks) {
     ENCODE_VIEW.setFloat32(o, r.x, true); o += 4;
     ENCODE_VIEW.setFloat32(o, r.y, true); o += 4;
     ENCODE_VIEW.setFloat32(o, r.vy, true); o += 4;
-    ENCODE_VIEW.setUint8(o++, r.active ? 1 : 0);
   }
 
-  // Geyser states
+  // Geyser states — bitfield of active flags, then bodies
   ENCODE_VIEW.setUint8(o++, snap.geyserStates.length);
+  o = writePackedBools(o, snap.geyserStates.length, i => snap.geyserStates[i].active);
   for (const gs of snap.geyserStates) {
     ENCODE_VIEW.setFloat32(o, gs.timer, true); o += 4;
     ENCODE_VIEW.setFloat32(o, gs.activeTimer, true); o += 4;
-    ENCODE_VIEW.setUint8(o++, gs.active ? 1 : 0);
   }
 
   // Kill feed (last 5 entries max)
@@ -258,21 +310,25 @@ export function decodeSnapshot(buf: ArrayBuffer): AuthSnapshot | null {
     const flags = view.getUint8(o++);
     const animFrame = view.getUint8(o++);
     const score = view.getUint8(o++);
-    const hitstopTimer = view.getUint8(o++) / 60;
-    const invincibleTimer = view.getUint8(o++) / 60;
-    const splatTimer = view.getUint8(o++) / 60;
-    const respawnTimer = view.getUint8(o++) / 60;
-    const fatTimer = view.getUint8(o++) / 60;
-    const slowTimer = view.getUint8(o++) / 60;
-    const burnTimer = view.getUint8(o++) / 60;
+
+    const timerMask = view.getUint8(o++);
+    const hitstopTimer = (timerMask & 1) ? view.getUint8(o++) / 60 : 0;
+    const invincibleTimer = (timerMask & 2) ? view.getUint8(o++) / 60 : 0;
+    const splatTimer = (timerMask & 4) ? view.getUint8(o++) / 60 : 0;
+    const respawnTimer = (timerMask & 8) ? view.getUint8(o++) / 60 : 0;
+    const fatTimer = (timerMask & 16) ? view.getUint8(o++) / 60 : 0;
+    const slowTimer = (timerMask & 32) ? view.getUint8(o++) / 60 : 0;
+    const burnTimer = (timerMask & 64) ? view.getUint8(o++) / 60 : 0;
+    const damageFlashTimer = (timerMask & 128) ? view.getUint8(o++) / 60 : 0;
+
     const squashScale = view.getUint8(o++) / 50;
     const killStreak = view.getUint8(o++);
     const width = view.getUint8(o++);
     const height = view.getUint8(o++);
     const sideSquash = view.getUint8(o++) / 50;
-    const damageFlashTimer = view.getUint8(o++) / 60;
-    const damageFlashSideByte = view.getUint8(o++);
-    const damageFlashSide: 'left' | 'right' | null = damageFlashSideByte === 1 ? 'left' : damageFlashSideByte === 2 ? 'right' : null;
+
+    const dfSide = (flags >> 6) & 3;
+    const damageFlashSide: 'left' | 'right' | null = dfSide === 1 ? 'left' : dfSide === 2 ? 'right' : null;
 
     players.push({
       id,
@@ -303,12 +359,13 @@ export function decodeSnapshot(buf: ArrayBuffer): AuthSnapshot | null {
 
   // Carrots
   const carrotCount = view.getUint8(o++);
+  let carrotActives: boolean[];
+  [carrotActives, o] = readPackedBools(view, o, carrotCount);
   const carrots: AuthSnapshot['carrots'] = [];
   for (let i = 0; i < carrotCount; i++) {
     const x = view.getFloat32(o, true); o += 4;
     const y = view.getFloat32(o, true); o += 4;
-    const active = view.getUint8(o++) !== 0;
-    carrots.push({ x, y, active });
+    carrots.push({ x, y, active: carrotActives[i] });
   }
 
   // Springs
@@ -325,14 +382,15 @@ export function decodeSnapshot(buf: ArrayBuffer): AuthSnapshot | null {
 
   // Thorns
   const thornCount = view.getUint8(o++);
+  let thornHits: boolean[];
+  [thornHits, o] = readPackedBools(view, o, thornCount);
   const thorns: AuthSnapshot['thorns'] = [];
   for (let i = 0; i < thornCount; i++) {
     const x = view.getFloat32(o, true); o += 4;
     const y = view.getFloat32(o, true); o += 4;
     const life = view.getFloat32(o, true); o += 4;
     const growTimer = view.getFloat32(o, true); o += 4;
-    const hit = view.getUint8(o++) !== 0;
-    thorns.push({ x, y, life, growTimer, hit });
+    thorns.push({ x, y, life, growTimer, hit: thornHits[i] });
   }
 
   // Ghosts
@@ -348,23 +406,25 @@ export function decodeSnapshot(buf: ArrayBuffer): AuthSnapshot | null {
 
   // Lava rocks
   const lrCount = view.getUint8(o++);
+  let lrActives: boolean[];
+  [lrActives, o] = readPackedBools(view, o, lrCount);
   const lavaRocks: AuthSnapshot['lavaRocks'] = [];
   for (let i = 0; i < lrCount; i++) {
     const x = view.getFloat32(o, true); o += 4;
     const y = view.getFloat32(o, true); o += 4;
     const vy = view.getFloat32(o, true); o += 4;
-    const active = view.getUint8(o++) !== 0;
-    lavaRocks.push({ x, y, vy, active });
+    lavaRocks.push({ x, y, vy, active: lrActives[i] });
   }
 
   // Geyser states
   const gsCount = view.getUint8(o++);
+  let gsActives: boolean[];
+  [gsActives, o] = readPackedBools(view, o, gsCount);
   const geyserStates: AuthSnapshot['geyserStates'] = [];
   for (let i = 0; i < gsCount; i++) {
     const timer = view.getFloat32(o, true); o += 4;
     const activeTimer = view.getFloat32(o, true); o += 4;
-    const active = view.getUint8(o++) !== 0;
-    geyserStates.push({ timer, active, activeTimer });
+    geyserStates.push({ timer, active: gsActives[i], activeTimer });
   }
 
   // Kill feed
