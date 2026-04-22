@@ -452,15 +452,12 @@ export class Renderer {
       for (const sw of matchState.shockwaves) {
         const progress = 1 - sw.life / SHOCKWAVE_DURATION;
         const alpha = sw.life / SHOCKWAVE_DURATION;
-        const radius = sw.radius;
         const lineW = Math.max(1, 4 * (1 - progress));
-        ctx.save();
         ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
         ctx.lineWidth = lineW;
         ctx.beginPath();
-        ctx.arc(sw.x, sw.y, radius, 0, Math.PI * 2);
+        ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
         ctx.stroke();
-        ctx.restore();
       }
     }
 
@@ -473,10 +470,9 @@ export class Renderer {
         d.afterimages = true;
         const isInvincible = player.invincibleTimer > 0;
         const trailColor = isInvincible ? '#88BBFF' : player.character.color;
+        const { r, g, b } = hexToRGB(trailColor);
         for (const img of afterimages) {
-          ctx.save();
-          ctx.globalAlpha = img.alpha;
-          ctx.fillStyle = trailColor;
+          ctx.fillStyle = `rgba(${r},${g},${b},${img.alpha})`;
           ctx.beginPath();
           ctx.ellipse(
             img.x + player.width / 2,
@@ -486,7 +482,6 @@ export class Renderer {
             0, 0, Math.PI * 2
           );
           ctx.fill();
-          ctx.restore();
         }
       }
     }

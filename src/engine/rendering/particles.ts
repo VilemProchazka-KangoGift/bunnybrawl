@@ -2,6 +2,7 @@ import type { Particle, WeatherParticle, WildlifeEntity, Gib, ConfettiParticle, 
 import type { ThemeConfig } from '../themes/types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT, SPRING_TRAIL_DURATION } from '../constants';
 import { getGibRenderer } from '../characters';
+import { hexToRGB } from '../fastMath';
 
 export function drawWeather(ctx: CanvasRenderingContext2D, weather: WeatherParticle[], theme: ThemeConfig): void {
   const customDraw = theme.drawWeatherParticle;
@@ -104,12 +105,12 @@ export function drawGibShape(ctx: CanvasRenderingContext2D, gib: Gib): void {
 
 export function drawConfetti(ctx: CanvasRenderingContext2D, confetti: ConfettiParticle[]): void {
   for (const c of confetti) {
-    const alpha = c.life / c.maxLife;
+    const alpha = (c.life / c.maxLife) * 0.9;
+    const { r, g, b } = hexToRGB(c.color);
     ctx.save();
-    ctx.globalAlpha = alpha * 0.9;
     ctx.translate(c.x, c.y);
     ctx.rotate(c.rotation);
-    ctx.fillStyle = c.color;
+    ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
 
     switch (c.shape) {
       case 'star': {

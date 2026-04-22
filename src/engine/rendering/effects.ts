@@ -33,25 +33,23 @@ export function drawDayNightCycle(
     const sunRedshift = Math.max(0, (sunT - 0.55) / 0.45);
 
     if (sunAlpha > 0.05) {
-      ctx.save();
+      const glowAlpha = sunAlpha * (0.3 + sunRedshift * 0.2);
+      const bodyAlpha = sunAlpha * 0.9;
       // Glow (gold -> deep red, grows during sunset)
-      ctx.globalAlpha = sunAlpha * (0.3 + sunRedshift * 0.2);
-      ctx.fillStyle = `rgb(${lerpCh(255,240,sunRedshift)}, ${lerpCh(215,50,sunRedshift)}, ${lerpCh(0,10,sunRedshift)})`;
+      ctx.fillStyle = `rgba(${lerpCh(255,240,sunRedshift)}, ${lerpCh(215,50,sunRedshift)}, ${lerpCh(0,10,sunRedshift)}, ${glowAlpha})`;
       ctx.beginPath();
       ctx.arc(sunX, sunY, 32 + sunRedshift * 16, 0, Math.PI * 2);
       ctx.fill();
       // Body (orange -> crimson)
-      ctx.globalAlpha = sunAlpha * 0.9;
-      ctx.fillStyle = `rgb(${lerpCh(255,220,sunRedshift)}, ${lerpCh(165,30,sunRedshift)}, ${lerpCh(0,10,sunRedshift)})`;
+      ctx.fillStyle = `rgba(${lerpCh(255,220,sunRedshift)}, ${lerpCh(165,30,sunRedshift)}, ${lerpCh(0,10,sunRedshift)}, ${bodyAlpha})`;
       ctx.beginPath();
       ctx.arc(sunX, sunY, 15, 0, Math.PI * 2);
       ctx.fill();
-      // Bright center (gold -> deep orange)
-      ctx.fillStyle = `rgb(${lerpCh(255,255,sunRedshift)}, ${lerpCh(215,80,sunRedshift)}, ${lerpCh(0,10,sunRedshift)})`;
+      // Bright center (gold -> deep orange) -- inherits body alpha
+      ctx.fillStyle = `rgba(${lerpCh(255,255,sunRedshift)}, ${lerpCh(215,80,sunRedshift)}, ${lerpCh(0,10,sunRedshift)}, ${bodyAlpha})`;
       ctx.beginPath();
       ctx.arc(sunX, sunY, 9, 0, Math.PI * 2);
       ctx.fill();
-      ctx.restore();
 
       // Light rays from sun (m) -- during daytime, warmed during sunset
       if (nightIntensity < 0.3) {
@@ -110,25 +108,22 @@ export function drawDayNightCycle(
     const moonAlpha = Math.min(1, nightIntensity * 2);
 
     if (moonAlpha > 0.05) {
-      ctx.save();
       // Glow
-      ctx.globalAlpha = moonAlpha * 0.15;
-      ctx.fillStyle = '#AABBDD';
+      ctx.fillStyle = `rgba(170, 187, 221, ${moonAlpha * 0.15})`;
       ctx.beginPath();
       ctx.arc(moonX, moonY, 22, 0, Math.PI * 2);
       ctx.fill();
       // Moon body
-      ctx.globalAlpha = moonAlpha * 0.9;
-      ctx.fillStyle = '#E8E8F0';
+      ctx.fillStyle = `rgba(232, 232, 240, ${moonAlpha * 0.9})`;
       ctx.beginPath();
       ctx.arc(moonX, moonY, 12, 0, Math.PI * 2);
       ctx.fill();
-      // Crescent shadow
-      ctx.fillStyle = `rgba(10, 12, 45, ${overlayAlpha + 0.3})`;
+      // Crescent shadow -- inherits body alpha through globalAlpha multiply originally.
+      // Effective: rgba(10,12,45,overlayAlpha+0.3) * (moonAlpha*0.9)
+      ctx.fillStyle = `rgba(10, 12, 45, ${(overlayAlpha + 0.3) * moonAlpha * 0.9})`;
       ctx.beginPath();
       ctx.arc(moonX + 5, moonY - 2, 10, 0, Math.PI * 2);
       ctx.fill();
-      ctx.restore();
     }
   }
 
@@ -173,26 +168,22 @@ export function drawDayNightCycle(
 
   // Shooting stars (n)
   if (matchState?.shootingStars) {
-    ctx.save();
+    ctx.lineWidth = 2;
     for (const star of matchState.shootingStars) {
       const alpha = Math.min(1, star.life * 2);
       // Tail: line from current pos back along velocity
       const tailLen = star.tailLen;
       const angle = Math.atan2(star.vy, star.vx);
       ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.6})`;
-      ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(star.x, star.y);
       ctx.lineTo(star.x - Math.cos(angle) * tailLen, star.y - Math.sin(angle) * tailLen);
       ctx.stroke();
       // Head: bright dot
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = '#FFF';
+      ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
       ctx.beginPath();
       ctx.arc(star.x, star.y, 2, 0, Math.PI * 2);
       ctx.fill();
-      ctx.globalAlpha = 1;
     }
-    ctx.restore();
   }
 }
