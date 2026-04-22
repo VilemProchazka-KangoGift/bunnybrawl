@@ -23,6 +23,8 @@ function makeStats(overrides?: Partial<NetDebugStats>): NetDebugStats {
     stalled: false,
     isRelay: false,
     snapshotBytes: 320,
+    snapshotBytesMean: 280,
+    snapshotBytesMax: 400,
     guestCount: 1,
     interpDelayFrames: 2,
     bufferDepth: 5,

@@ -29,6 +29,8 @@ export interface HostDebugStats {
   rtt: number;
   jitter: number;
   snapshotBytes: number;
+  snapshotBytesMean: number;
+  snapshotBytesMax: number;
   guestCount: number;
   isRelay: boolean;
 }
@@ -62,8 +64,12 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
   private disconnectedSlots = new Map<string, { timer: number; peerId: string }>();
   private readonly GRACE_PERIOD = 20; // seconds
 
-  // Stats
+  // Stats — ring buffer of last 120 snapshot sizes (~2s at 60Hz)
   private lastSnapshotBytes = 0;
+  private static readonly SNAPSHOT_HISTORY_SIZE = 120;
+  private snapshotHistory = new Uint16Array(GenericHostAuthority.SNAPSHOT_HISTORY_SIZE);
+  private snapshotHistoryIdx = 0;
+  private snapshotHistoryCount = 0;
 
   // Decode helpers (injected since encoding is game-specific)
   private decodeInputMessage: (data: ArrayBuffer) => {
@@ -165,6 +171,9 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
     }
 
     this.lastSnapshotBytes = encodeBuf.byteLength;
+    this.snapshotHistory[this.snapshotHistoryIdx] = Math.min(encodeBuf.byteLength, 65535);
+    this.snapshotHistoryIdx = (this.snapshotHistoryIdx + 1) % GenericHostAuthority.SNAPSHOT_HISTORY_SIZE;
+    if (this.snapshotHistoryCount < GenericHostAuthority.SNAPSHOT_HISTORY_SIZE) this.snapshotHistoryCount++;
   }
 
   handleUnreliableMessage(data: ArrayBuffer, fromPeerId?: string): void {
@@ -222,11 +231,22 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
   }
 
   getStats(): HostDebugStats {
+    let sum = 0;
+    let max = 0;
+    const n = this.snapshotHistoryCount;
+    for (let i = 0; i < n; i++) {
+      const v = this.snapshotHistory[i];
+      sum += v;
+      if (v > max) max = v;
+    }
+    const mean = n > 0 ? sum / n : 0;
     return {
       localFrame: this.localFrame,
       rtt: this.transport.currentRtt,
       jitter: this.transport.currentJitter,
       snapshotBytes: this.lastSnapshotBytes,
+      snapshotBytesMean: mean,
+      snapshotBytesMax: max,
       guestCount: this.peerSlotMap.size,
       isRelay: this.transport.isRelay,
     };

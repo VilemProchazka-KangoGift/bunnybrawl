@@ -10,6 +10,8 @@ export interface NetDebugStats {
   stalled: boolean;
   isRelay: boolean;
   snapshotBytes: number;
+  snapshotBytesMean: number;
+  snapshotBytesMax: number;
   guestCount: number;
   interpDelayFrames: number;
   bufferDepth: number;
@@ -20,7 +22,7 @@ const LINE_HEIGHT = 16;
 const PAD = 8;
 const BG_ALPHA = 0.7;
 const BOX_WIDTH = 280;
-const MAX_LINES = 7;
+const MAX_LINES = 8;
 
 const lines: string[] = new Array(MAX_LINES);
 
@@ -32,8 +34,9 @@ export function drawNetDebugOverlay(
 ): void {
   lines[0] = `RTT: ${stats.rtt.toFixed(0)}ms | Jit: ${stats.jitter.toFixed(0)}ms`;
   lines[1] = `Frame: ${stats.localFrame} | Snap: ${stats.snapshotBytes}B`;
-  lines[2] = `Guests: ${stats.guestCount} | Interp: ${stats.interpDelayFrames}F buf:${stats.bufferDepth}`;
-  let lineCount = 3;
+  lines[2] = `Snap avg: ${stats.snapshotBytesMean.toFixed(0)}B | max: ${stats.snapshotBytesMax}B`;
+  lines[3] = `Guests: ${stats.guestCount} | Interp: ${stats.interpDelayFrames}F buf:${stats.bufferDepth}`;
+  let lineCount = 4;
   if (stats.stalled) {
     lines[lineCount++] = '** STALLED **';
   }

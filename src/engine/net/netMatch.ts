@@ -12,6 +12,7 @@ import type { PlayerSlot, MatchState } from '../types';
 import type { Arena, MatchSettings } from '../types';
 import { isBotSlot } from '../types';
 import { FIXED_TIMESTEP } from '../constants';
+import { debugFlags } from '../debugFlags';
 import { GameLoop } from '../gameLoop';
 import type { MatchEndCallback } from '../gameLoop';
 import { Transport } from './transport';
@@ -243,6 +244,23 @@ export class NetMatch {
       // multiple ticks in one frame would spam guests with snapshots,
       // causing decode/GC pressure that tanks mobile framerate.
       this.hostAuthority!.broadcastSnapshot(this.gameLoop.getState());
+
+      if (debugFlags.netDebugEnabled) {
+        const s = this.hostAuthority!.getStats();
+        this.gameLoop.setNetDebugStats({
+          localFrame: s.localFrame,
+          rtt: s.rtt,
+          jitter: s.jitter,
+          stalled: false,
+          isRelay: s.isRelay,
+          snapshotBytes: s.snapshotBytes,
+          snapshotBytesMean: s.snapshotBytesMean,
+          snapshotBytesMax: s.snapshotBytesMax,
+          guestCount: s.guestCount,
+          interpDelayFrames: delayFrames,
+          bufferDepth: 0,
+        });
+      }
 
       this.gameLoop.renderFrame(dt);
       this.rafId = requestAnimationFrame(loop);

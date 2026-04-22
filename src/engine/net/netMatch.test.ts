@@ -46,7 +46,7 @@ const mockHostAuthorityInstance = {
   handleUnreliableMessage: vi.fn(),
   handleReliableMessage: vi.fn(),
   getNetworkInputs: vi.fn(() => new Map()),
-  getStats: vi.fn(() => ({ localFrame: 0, rtt: 0, jitter: 0, snapshotBytes: 0, guestCount: 1, isRelay: false })),
+  getStats: vi.fn(() => ({ localFrame: 0, rtt: 0, jitter: 0, snapshotBytes: 0, snapshotBytesMean: 0, snapshotBytesMax: 0, guestCount: 1, isRelay: false })),
   setMatchOver: vi.fn(),
   broadcastSnapshot: vi.fn(),
   consumeGuestJumps: vi.fn(),
