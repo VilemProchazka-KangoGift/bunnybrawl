@@ -142,8 +142,9 @@ export function encodeSnapshot(snap: AuthSnapshot): { buffer: ArrayBuffer; lengt
     ENCODE_VIEW.setUint8(o++, encodeSlot(p.id));
     ENCODE_VIEW.setFloat32(o, p.x, true); o += 4;
     ENCODE_VIEW.setFloat32(o, p.y, true); o += 4;
-    ENCODE_VIEW.setFloat32(o, p.vx, true); o += 4;
-    ENCODE_VIEW.setFloat32(o, p.vy, true); o += 4;
+    // Velocity is visual/extrapolation data; int16 (±32767, 1-unit precision) is plenty.
+    ENCODE_VIEW.setInt16(o, Math.max(-32767, Math.min(32767, Math.round(p.vx))), true); o += 2;
+    ENCODE_VIEW.setInt16(o, Math.max(-32767, Math.min(32767, Math.round(p.vy))), true); o += 2;
     ENCODE_VIEW.setUint8(o++, PLAYER_STATE_MAP[p.state] ?? 0);
     // Flags byte: facing(1) + fastFalling(1) + disconnected(1) + active(1) + expression(2) + damageFlashSide(2) = 8 bits
     const dfSide = p.damageFlashSide === 'left' ? 1 : p.damageFlashSide === 'right' ? 2 : 0;
@@ -304,8 +305,8 @@ export function decodeSnapshot(buf: ArrayBuffer): AuthSnapshot | null {
     const id = decodeSlotAs(view.getUint8(o++));
     const x = view.getFloat32(o, true); o += 4;
     const y = view.getFloat32(o, true); o += 4;
-    const vx = view.getFloat32(o, true); o += 4;
-    const vy = view.getFloat32(o, true); o += 4;
+    const vx = view.getInt16(o, true); o += 2;
+    const vy = view.getInt16(o, true); o += 2;
     const stateIdx = view.getUint8(o++);
     const flags = view.getUint8(o++);
     const animFrame = view.getUint8(o++);
