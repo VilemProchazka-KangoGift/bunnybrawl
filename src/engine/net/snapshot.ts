@@ -95,6 +95,12 @@ function encodeTimer(timer: number): number {
   return Math.min(Math.round(timer * 60), 255);
 }
 
+/** Clamp a number to int16 range with rounding. */
+function encodeInt16(v: number): number {
+  const r = Math.round(v);
+  return r < -32767 ? -32767 : r > 32767 ? 32767 : r;
+}
+
 /** Write N booleans as ceil(N/8) bitfield bytes into ENCODE_VIEW. Returns new offset. */
 function writePackedBools(o: number, n: number, get: (i: number) => boolean): number {
   const byteCount = (n + 7) >> 3;
@@ -143,8 +149,8 @@ export function encodeSnapshot(snap: AuthSnapshot): { buffer: ArrayBuffer; lengt
     ENCODE_VIEW.setFloat32(o, p.x, true); o += 4;
     ENCODE_VIEW.setFloat32(o, p.y, true); o += 4;
     // Velocity is visual/extrapolation data; int16 (±32767, 1-unit precision) is plenty.
-    ENCODE_VIEW.setInt16(o, Math.max(-32767, Math.min(32767, Math.round(p.vx))), true); o += 2;
-    ENCODE_VIEW.setInt16(o, Math.max(-32767, Math.min(32767, Math.round(p.vy))), true); o += 2;
+    ENCODE_VIEW.setInt16(o, encodeInt16(p.vx), true); o += 2;
+    ENCODE_VIEW.setInt16(o, encodeInt16(p.vy), true); o += 2;
     ENCODE_VIEW.setUint8(o++, PLAYER_STATE_MAP[p.state] ?? 0);
     // Flags byte: facing(1) + fastFalling(1) + disconnected(1) + active(1) + expression(2) + damageFlashSide(2) = 8 bits
     const dfSide = p.damageFlashSide === 'left' ? 1 : p.damageFlashSide === 'right' ? 2 : 0;
