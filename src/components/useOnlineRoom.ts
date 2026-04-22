@@ -52,9 +52,19 @@ export interface UseOnlineRoomResult {
   startMatchAsHost: () => void;
 }
 
+type RosterEntry = { slot: PlayerSlot; characterName: string; playerName?: string };
+
+function buildSettingsSyncMsg(ms: ReturnType<typeof useGameStore.getState>['matchSettings'], seed: number, arenaId: string): ReliableMessage {
+  return {
+    type: MsgType.SETTINGS_SYNC, arenaId,
+    killLimit: ms.killLimit, timeLimit: ms.timeLimit, goreMode: ms.goreMode,
+    mods: ms.mods, rngSeed: seed, botCount: ms.botCount, botDifficulty: ms.botDifficulty,
+  } as ReliableMessage;
+}
+
 export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoomResult {
   const { t } = useTranslation();
-  const { setScreen, matchSettings, setActivePlayers, setOnline, resetOnline } = useGameStore();
+  const { setScreen, matchSettings, setActivePlayers, setOnline, resetOnline, online } = useGameStore();
 
   const [step, setStep] = useState<OnlineStep>('choose');
   const [localChar, setLocalChar] = useState(() =>
@@ -70,7 +80,7 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
   const [remoteReady, setRemoteReady] = useState(false);
   const [localReady, setLocalReady] = useState(false);
   const transportRef = useRef<Transport | null>(null);
-  const receivedRosterRef = useRef<Array<{ slot: string; characterName: string; playerName?: string }> | null>(null);
+  const receivedRosterRef = useRef<RosterEntry[] | null>(null);
   // Buffer for player names received via HANDSHAKE before the peer is in remotePlayers
   const pendingPlayerNames = useRef<Map<string, string>>(new Map());
 
@@ -82,10 +92,9 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
     try { localStorage.setItem('carrotroyale_player_name', name); } catch {}
   }, []);
 
-  // Auto-switch: GUEST only. If local character conflicts with a remote player, pick an alt once.
-  // Host never auto-switches (authoritative). One-shot flag prevents cascade.
+  // Guest-only one-shot: if local character conflicts with a remote player, pick an alt.
+  // Host never auto-switches (authoritative).
   const didAutoSwitch = useRef(false);
-  const online = useGameStore(s => s.online);
   useEffect(() => {
     if (online.isHost) return;
     const takenNames = new Set<string>();
@@ -119,25 +128,22 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
 
   const startMatchAsGuest = useCallback(() => {
     const store = useGameStore.getState();
-    const mySlot = store.online.isHost ? 'P1' : (store.online.localSlot || 'P2');
+    const mySlot: PlayerSlot = store.online.isHost ? 'P1' : (store.online.localSlot || 'P2');
 
-    // Build playerNames map — start from store, overlay own name + remote names
     const names: Record<string, string> = { ...store.online.playerNames, [mySlot]: playerNameRef.current };
     for (const rp of store.online.remotePlayers) {
       if (rp.playerName) names[rp.slot] = rp.playerName;
     }
 
-    // If host sent an authoritative roster, apply it directly (no local computation)
     const roster = receivedRosterRef.current;
     if (roster && roster.length > 0) {
       for (const entry of roster) {
-        if (entry.playerName && !isBotSlot(entry.slot as PlayerSlot)) names[entry.slot] = entry.playerName;
+        if (entry.playerName && !isBotSlot(entry.slot)) names[entry.slot] = entry.playerName;
       }
 
       for (const entry of roster) {
         const def = allChars.find(c => c.name === entry.characterName);
-        const isBot = isBotSlot(entry.slot as PlayerSlot);
-        if (isBot) {
+        if (isBotSlot(entry.slot)) {
           if (def) BOT_CHARACTERS.set(entry.slot as BotSlot, { ...def, slot: entry.slot as BotSlot });
         } else {
           const charSlot = (CHARACTERS as Record<string, typeof CHARACTERS.P1>)[entry.slot];
@@ -147,22 +153,19 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
           }
         }
       }
-      const humanSlots = [...new Set(roster.filter(r => !isBotSlot(r.slot as PlayerSlot)).map(r => r.slot as CharacterSlot))];
-      const botSlots = [...new Set(roster.filter(r => isBotSlot(r.slot as PlayerSlot)).map(r => r.slot as BotSlot))];
+      const humanSlots = [...new Set(roster.filter(r => !isBotSlot(r.slot)).map(r => r.slot as CharacterSlot))];
+      const botSlots = [...new Set(roster.filter(r => isBotSlot(r.slot)).map(r => r.slot as BotSlot))];
       setActivePlayers([...humanSlots, ...botSlots]);
       receivedRosterRef.current = null;
     } else {
-      // Host path (or legacy): compute roster locally, filtering to connected peers only
+      // Legacy path: guest with no roster from host (should not normally happen — host always sends roster)
       const connectedPeers = new Set(transportRef.current?.getPeerIds() ?? []);
-      const myChar = localCharRef.current;
-      const humanSlots: string[] = [mySlot];
-      const slotCharMap = new Map<string, string>();
-      slotCharMap.set(mySlot, myChar);
+      const humanSlots: PlayerSlot[] = [mySlot];
+      const slotCharMap = new Map<PlayerSlot, string>();
+      slotCharMap.set(mySlot, localCharRef.current);
 
       for (const rp of store.online.remotePlayers) {
-        if (!humanSlots.includes(rp.slot) && connectedPeers.has(rp.peerId)) {
-          humanSlots.push(rp.slot);
-        }
+        if (!humanSlots.includes(rp.slot) && connectedPeers.has(rp.peerId)) humanSlots.push(rp.slot);
         if (connectedPeers.has(rp.peerId)) slotCharMap.set(rp.slot, rp.characterName);
       }
 
@@ -177,12 +180,11 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
 
       const ms = store.matchSettings;
       const botSlots = ALL_BOT_SLOTS.slice(0, ms.botCount);
-      const rngSeed = store.online.rngSeed;
-      assignBotCharacters(humanSlots as CharacterSlot[], botSlots, rngSeed, Array.from(slotCharMap.values()));
+      assignBotCharacters(humanSlots as CharacterSlot[], botSlots, store.online.rngSeed, Array.from(slotCharMap.values()));
       setActivePlayers([...humanSlots as CharacterSlot[], ...botSlots]);
     }
 
-    setOnline({ isOnline: true, localSlot: mySlot as PlayerSlot, playerNames: names });
+    setOnline({ isOnline: true, localSlot: mySlot, playerNames: names });
     onMatchStart();
     setScreen('match');
   }, [allChars, setActivePlayers, setOnline, setScreen, onMatchStart]);
@@ -208,23 +210,21 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
     const seed = state.online.rngSeed || Math.floor(Math.random() * 0xFFFFFFFF);
     setOnline({ rngSeed: seed });
 
-    // Build roster: host + connected guests + bots
     const connectedPeerIds = new Set(transportRef.current?.getPeerIds() ?? []);
-    const rosterEntries: Array<{ slot: string; characterName: string; playerName?: string }> = [
+    const rosterEntries: RosterEntry[] = [
       { slot: 'P1', characterName: localCharRef.current, playerName: playerNameRef.current },
     ];
-    const seenSlots = new Set(rosterEntries.map(r => r.slot));
+    const seenSlots = new Set<PlayerSlot>(rosterEntries.map(r => r.slot));
     for (const rp of state.online.remotePlayers) {
       if (!seenSlots.has(rp.slot) && connectedPeerIds.has(rp.peerId)) {
         seenSlots.add(rp.slot);
         rosterEntries.push({ slot: rp.slot, characterName: rp.characterName, playerName: rp.playerName });
       }
     }
-    // Assign bots on host side
     const humanNames = rosterEntries.map(r => r.characterName);
-    const humanSlots = rosterEntries.map(r => r.slot);
+    const humanSlots = rosterEntries.map(r => r.slot) as CharacterSlot[];
     const botSlots = ALL_BOT_SLOTS.slice(0, ms.botCount);
-    assignBotCharacters(humanSlots as CharacterSlot[], botSlots, seed, humanNames);
+    assignBotCharacters(humanSlots, botSlots, seed, humanNames);
     for (const bSlot of botSlots) {
       const botChar = BOT_CHARACTERS.get(bSlot);
       if (botChar) rosterEntries.push({ slot: bSlot, characterName: botChar.name });
@@ -234,15 +234,11 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
     if (resolvedArena !== ms.arenaId) {
       useGameStore.getState().setMatchSettings({ arenaId: resolvedArena });
     }
-    transportRef.current?.sendReliable({
-      type: MsgType.SETTINGS_SYNC, arenaId: resolvedArena, killLimit: ms.killLimit,
-      timeLimit: ms.timeLimit, goreMode: ms.goreMode,
-      mods: ms.mods,
-      rngSeed: seed, botCount: ms.botCount, botDifficulty: ms.botDifficulty,
-    } as ReliableMessage);
-    transportRef.current?.sendReliable({
-      type: MsgType.START_MATCH, roster: rosterEntries,
-    } as ReliableMessage);
+    transportRef.current?.sendReliable(buildSettingsSyncMsg(ms, seed, resolvedArena));
+    transportRef.current?.sendReliable({ type: MsgType.START_MATCH, roster: rosterEntries } as ReliableMessage);
+
+    // Reuse the roster we just built instead of rebuilding it in startMatchAsGuest's else branch.
+    receivedRosterRef.current = rosterEntries;
     startMatchAsGuest();
   }, [setOnline, startMatchAsGuest]);
 
@@ -306,7 +302,6 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
           return;
         }
 
-        // Normal lobby join — send slot assignment + settings
         transport.sendReliableTo(peerId, {
           type: MsgType.SLOT_ASSIGNMENT,
           slot,
@@ -320,16 +315,11 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
 
         const seed = useGameStore.getState().online.rngSeed || Math.floor(Math.random() * 0xFFFFFFFF);
         const resolvedArenaId = resolveRandomArena(ms.arenaId);
-        transport.sendReliableTo(peerId, {
-          type: MsgType.SETTINGS_SYNC, arenaId: resolvedArenaId, killLimit: ms.killLimit,
-          timeLimit: ms.timeLimit, goreMode: ms.goreMode,
-          mods: ms.mods,
-          rngSeed: seed, botCount: ms.botCount, botDifficulty: ms.botDifficulty,
-        } as ReliableMessage);
+        transport.sendReliableTo(peerId, buildSettingsSyncMsg(ms, seed, resolvedArenaId));
         transport.sendReliable({ type: MsgType.HANDSHAKE, protocolVersion: PROTOCOL_VERSION, playerName: playerNameRef.current });
         transport.sendReliable({ type: MsgType.CHARACTER_SELECT, characterName: localCharRef.current });
 
-        // Notify existing guests about the new player (exclude the new peer itself)
+        // Exclude the new peer so it doesn't receive an echo of itself
         for (const pid of transport.getPeerIds()) {
           if (pid !== peerId) {
             transport.sendReliableTo(pid, {
@@ -450,7 +440,7 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
           setRemoteReady(true);
         } else if (msg.type === MsgType.START_MATCH) {
           const startMsg = msg as StartMatchMessage;
-          receivedRosterRef.current = startMsg.roster ?? null;
+          receivedRosterRef.current = (startMsg.roster as RosterEntry[] | undefined) ?? null;
           startMatchRef.current();
         } else if (msg.type === MsgType.PLAYER_JOINED) {
           const pj = msg as PlayerJoinedMessage;
