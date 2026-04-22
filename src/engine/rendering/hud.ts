@@ -1,6 +1,6 @@
 import type { Player, MatchState } from '../types';
 import { isBotSlot } from '../types';
-import { CANVAS_WIDTH, CANVAS_HEIGHT, SCORE_ANIM_DURATION } from '../constants';
+import { CANVAS_WIDTH, CANVAS_HEIGHT, SCORE_ANIM_DURATION, MATCH_COUNTDOWN } from '../constants';
 import { getCharacterEmoji, getCharacterDisplayName } from '../characters';
 import i18n from '../../i18n';
 
@@ -30,9 +30,14 @@ export function resetHudState(): void {
   for (const k in _hudPlayerActive) delete _hudPlayerActive[k];
 }
 
+/** Displayed match time excludes the pre-match countdown. */
+function matchTimeSec(state: MatchState): number {
+  return Math.max(0, state.timeElapsed - MATCH_COUNTDOWN);
+}
+
 /** Check whether the HUD cache needs rebuild. No side effects. */
 export function isHudDirty(state: MatchState): boolean {
-  const timerSec = Math.floor(state.timeElapsed);
+  const timerSec = Math.floor(matchTimeSec(state));
   if (timerSec !== hudLastTimer || !hudCache) return true;
   let activeCount = 0;
   for (const p of state.players) {
@@ -58,7 +63,7 @@ export function drawHUD(ctx: CanvasRenderingContext2D, state: MatchState, frameT
     // Draw HUD content to cache
     _drawHUDImpl(hctx as unknown as CanvasRenderingContext2D, state, frameTime, playerNames, timeLimit);
 
-    hudLastTimer = Math.floor(state.timeElapsed);
+    hudLastTimer = Math.floor(matchTimeSec(state));
     let ac = 0;
     for (const p of state.players) {
       _hudPlayerScores[p.id as string] = p.score;
@@ -126,15 +131,16 @@ function _drawHUDImpl(ctx: CanvasRenderingContext2D, state: MatchState, frameTim
   }
 
   if (state.timeElapsed >= 0) {
-    const minutes = Math.floor(state.timeElapsed / 60);
-    const seconds = Math.floor(state.timeElapsed % 60);
+    const displayed = matchTimeSec(state);
+    const minutes = Math.floor(displayed / 60);
+    const seconds = Math.floor(displayed % 60);
     ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
     ctx.beginPath();
     ctx.roundRect(CANVAS_WIDTH / 2 - 40, 55, 80, 30, 6);
     ctx.fill();
 
     // Timer red pulse when < 30 seconds remaining
-    const remaining = timeLimit > 0 ? timeLimit - state.timeElapsed : Infinity;
+    const remaining = timeLimit > 0 ? timeLimit - displayed : Infinity;
     if (remaining < 30 && remaining > 0) {
       const pulse = 1 + Math.sin(frameTime / 200) * 0.1;
       ctx.save();

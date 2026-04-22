@@ -1,5 +1,6 @@
 import type { MatchState, MatchSettings, Player, PlayerSlot, InputState, Arena, CharacterSlot } from '../../types';
 import { isBotSlot } from '../../types';
+import { MATCH_COUNTDOWN } from '../../constants';
 import type { InputManager } from '../../input';
 import type { TouchInputManager } from '../../touchInput';
 import type { AIController } from '../../ai';
@@ -11,7 +12,7 @@ export function checkMatchEnd(state: MatchState, settings: MatchSettings): Playe
       return player.id;
     }
   }
-  if (settings.timeLimit > 0 && state.timeElapsed >= settings.timeLimit) {
+  if (settings.timeLimit > 0 && state.timeElapsed - MATCH_COUNTDOWN >= settings.timeLimit) {
     let winner: PlayerSlot | null = null;
     let maxScore = -1;
     for (const player of state.players) {

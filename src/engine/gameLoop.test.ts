@@ -217,7 +217,6 @@ describe('fixedUpdate', () => {
     loop.skipCountdown();
     const before = loop.getState().timeElapsed;
     loop.fixedUpdate(FIXED_TIMESTEP);
-    // timeElapsed is incremented even during countdown (since we skipped it, it's one tick)
     expect(loop.getState().timeElapsed).toBeCloseTo(before + FIXED_TIMESTEP, 6);
   });
 
@@ -312,14 +311,13 @@ describe('Match End', () => {
     const { loop, onMatchEnd } = createLoop({ settings: { timeLimit: 10 } });
     loop.skipCountdown();
 
-    // Advance close to 10 seconds
-    const almostSteps = Math.floor(9.9 / FIXED_TIMESTEP);
+    // Match ends at timeElapsed ≈ timeLimit + MATCH_COUNTDOWN (13s).
+    const almostSteps = Math.floor(12.9 / FIXED_TIMESTEP);
     for (let i = 0; i < almostSteps; i++) {
       loop.fixedUpdate(FIXED_TIMESTEP);
     }
     expect(onMatchEnd).not.toHaveBeenCalled();
 
-    // Push past 10 seconds
     const remainingSteps = Math.ceil(0.2 / FIXED_TIMESTEP) + 1;
     for (let i = 0; i < remainingSteps; i++) {
       loop.fixedUpdate(FIXED_TIMESTEP);
@@ -336,8 +334,8 @@ describe('Match End', () => {
     state.players[0].score = 2;
     state.players[1].score = 7;
 
-    // Advance past time limit
-    const steps = Math.ceil(5.1 / FIXED_TIMESTEP);
+    // Match ends at timeElapsed ≈ timeLimit + MATCH_COUNTDOWN (8s).
+    const steps = Math.ceil(8.1 / FIXED_TIMESTEP);
     for (let i = 0; i < steps; i++) {
       loop.fixedUpdate(FIXED_TIMESTEP);
     }
@@ -2094,15 +2092,14 @@ describe('Time Limit', () => {
     const { loop, onMatchEnd } = createLoop({ settings: { timeLimit: 3 } });
     loop.skipCountdown();
 
-    // Advance just under 3 seconds
-    const almostSteps = Math.floor(2.9 / FIXED_TIMESTEP);
+    // timeLimit excludes the 3s countdown, so match ends at timeElapsed ≈ timeLimit + MATCH_COUNTDOWN = 6s.
+    const almostSteps = Math.floor(5.9 / FIXED_TIMESTEP);
     for (let i = 0; i < almostSteps; i++) {
       loop.fixedUpdate(FIXED_TIMESTEP);
     }
     expect(loop.getState().matchOver).toBe(false);
     expect(onMatchEnd).not.toHaveBeenCalled();
 
-    // Push past 3 seconds
     const extraSteps = Math.ceil(0.2 / FIXED_TIMESTEP) + 1;
     for (let i = 0; i < extraSteps; i++) {
       loop.fixedUpdate(FIXED_TIMESTEP);
@@ -2947,8 +2944,8 @@ describe('GameLoop — time limit match end', () => {
     // Skip countdown
     state.countdown = 0;
 
-    // Run enough ticks to exceed 2 seconds
-    const ticksNeeded = Math.ceil(2 / FIXED_TIMESTEP) + 5;
+    // Match ends at timeElapsed ≈ timeLimit + MATCH_COUNTDOWN (5s).
+    const ticksNeeded = Math.ceil(5 / FIXED_TIMESTEP) + 5;
     for (let i = 0; i < ticksNeeded; i++) {
       loop.fixedUpdate(FIXED_TIMESTEP, inputs);
       if (state.matchOver) break;
@@ -2976,7 +2973,8 @@ describe('GameLoop — time limit match end', () => {
     state.players[1].score = 5;
     state.players[0].score = 2;
 
-    const ticksNeeded = Math.ceil(1 / FIXED_TIMESTEP) + 5;
+    // Match ends at timeElapsed ≈ timeLimit + MATCH_COUNTDOWN (4s).
+    const ticksNeeded = Math.ceil(4 / FIXED_TIMESTEP) + 5;
     for (let i = 0; i < ticksNeeded; i++) {
       loop.fixedUpdate(FIXED_TIMESTEP, inputs);
       if (state.matchOver) break;
@@ -3000,7 +2998,8 @@ describe('GameLoop — time limit match end', () => {
     loop.setNetworkMode(true);
     state.countdown = 0;
 
-    const ticksNeeded = Math.ceil(1 / FIXED_TIMESTEP) + 5;
+    // Match ends at timeElapsed ≈ timeLimit + MATCH_COUNTDOWN (4s).
+    const ticksNeeded = Math.ceil(4 / FIXED_TIMESTEP) + 5;
     for (let i = 0; i < ticksNeeded; i++) {
       loop.fixedUpdate(FIXED_TIMESTEP, inputs);
       if (state.matchOver) break;
