@@ -34,18 +34,15 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player, nearCa
     const heightAboveShadow = Math.max(0, shadowY - cy);
     const shadowScale = Math.max(0.3, 1 - heightAboveShadow / 200);
     const shadowAlpha = 0.2 * shadowScale;
-    ctx.save();
     ctx.fillStyle = `rgba(0, 0, 0, ${shadowAlpha})`;
     ctx.beginPath();
     ctx.ellipse(cx, shadowY, 10 * shadowScale, 2 * shadowScale, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.restore();
   }
 
   // Kill streak flame aura (d) -- drawn behind character sprite
   if (player.killStreak >= 3) {
     const now = frameTime / 1000;
-    ctx.save();
     for (let i = 0; i < 4; i++) {
       const angle = now * 3 + i * 1.5;
       const flameX = cx + Math.sin(angle) * 8;
@@ -57,7 +54,6 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player, nearCa
       ctx.arc(flameX, flameY, flameR, 0, Math.PI * 2);
       ctx.fill();
     }
-    ctx.restore();
   }
 
   ctx.save();
@@ -376,8 +372,6 @@ export function drawExpression(ctx: CanvasRenderingContext2D, player: Player, fr
   const bounce = isRunning ? Math.sin(player.animFrame * Math.PI / 2) * 2 : 0;
   const yOff = y - bounce;
 
-  ctx.save();
-
   if (expression === 'angry') {
     // Two red-tinted angled lines above eyes (angry eyebrows)
     ctx.strokeStyle = 'rgba(200, 40, 40, 0.8)';
@@ -421,6 +415,4 @@ export function drawExpression(ctx: CanvasRenderingContext2D, player: Player, fr
       ctx.fill();
     }
   }
-
-  ctx.restore();
 }

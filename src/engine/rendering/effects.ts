@@ -55,7 +55,6 @@ export function drawDayNightCycle(
 
       // Light rays from sun (m) -- during daytime, warmed during sunset
       if (nightIntensity < 0.3) {
-        ctx.save();
         const rayAlpha = 0.04 * (1 - nightIntensity / 0.3);
         ctx.fillStyle = `rgba(255, ${lerpCh(215,60,sunRedshift)}, ${lerpCh(100,15,sunRedshift)}, ${rayAlpha})`;
         for (let r = 0; r < 4; r++) {
@@ -68,7 +67,6 @@ export function drawDayNightCycle(
           ctx.closePath();
           ctx.fill();
         }
-        ctx.restore();
       }
     }
   }
@@ -86,7 +84,6 @@ export function drawDayNightCycle(
     afterglowIntensity = afterglowIntensity * afterglowIntensity * (3 - 2 * afterglowIntensity);
   }
   if (afterglowIntensity > 0.01) {
-    ctx.save();
     // Gradient overlay: warm orange-red, stronger near horizon
     const agGrad = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
     agGrad.addColorStop(0, `rgba(220, 40, 10, ${afterglowIntensity * 0.10})`);
@@ -95,15 +92,12 @@ export function drawDayNightCycle(
     agGrad.addColorStop(1.0, `rgba(200, 35, 10, ${afterglowIntensity * 0.22})`);
     ctx.fillStyle = agGrad;
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    ctx.restore();
   }
 
   // Darkness overlay
   if (overlayAlpha > 0.02) {
-    ctx.save();
     ctx.fillStyle = `rgba(10, 12, 45, ${overlayAlpha})`;
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    ctx.restore();
   }
 
   // Moon: visible when nightIntensity > 0.2, arcs during night half (0.25->0.5->0.75)

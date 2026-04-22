@@ -78,7 +78,6 @@ export function drawGibs(ctx: CanvasRenderingContext2D, gibs: Gib[]): void {
     // Off-screen culling
     if (gib.x < -40 || gib.x > CANVAS_WIDTH + 40 || gib.y < -40 || gib.y > CANVAS_HEIGHT + 40) continue;
     ctx.save();
-    ctx.globalAlpha = 1;
     ctx.translate(gib.x, gib.y);
     ctx.rotate(gib.rotation);
     drawGibShape(ctx, gib);
