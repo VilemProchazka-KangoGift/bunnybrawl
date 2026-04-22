@@ -35,7 +35,7 @@
 ## Characters
 - Pack registry must be initialized before use — `registerBuiltinCharacters()` called at module scope in `App.tsx`.
 - Character sounds live in each pack via `createSound?: () => Howl` — called once at AudioManager init. Simple tones use `generateToneBuffer()`, multi-segment use `generateMultiSegmentTone()`, custom synthesis (frog) uses `floatBufferToWavDataUri()` directly. Future packs can return MP3-backed Howls.
-- `legacy.ts` CHARACTERS record is mutated at lobby exit (intentional). `getAllCharacters()` derives full roster from pack registry.
+- `defaults.ts` CHARACTERS record is mutated at lobby exit (intentional). `getAllCharacters()` derives full roster from pack registry.
 - Character emoji: use `getCharacterEmoji(name)` from `characters/registry.ts` — single source of truth. Used in React components with `.row-emoji` CSS class.
 - Legs: shared `drawLegs()` in `characters/legRenderer.ts`, configured by `CharacterPack.legStyle` (shape, footStyle, dimensions). Called from both renderer.ts and CharacterSelect.tsx. Must be a pure function (output is sprite-cached).
 - Rayman-style nub legs: defaults are 6px wide × 4px tall × 2px foot. When `legH <= 5`, all filled shapes (rounded/tapered/wide) render as ellipses — quad curves are invisible at this scale. Animation amplitudes are halved vs. original long-leg values. Hip attachment at `h * 0.82`.

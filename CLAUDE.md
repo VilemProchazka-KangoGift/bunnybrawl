@@ -20,7 +20,7 @@ src/
       types.ts      # ArenaPack interface (merges Arena layout + ThemeConfig visuals)
       registry.ts   # Pack registry: register/get/list + nav data + toArena/toThemeConfig extractors
       builtin.ts    # Registers all 11 built-in arenas at app startup
-      legacy.ts     # Backward-compat: getArena(), getTheme(), mirrorArena()
+      operations.ts # Arena lookup + transformations: getArena(), getTheme(), mirrorArena()
       index.ts      # Barrel export
       packs/        # One file per arena — layout + visuals + translations + musicFile
         meadow.ts winterLake.ts volcano.ts castle.ts candyLand.ts
@@ -37,6 +37,7 @@ src/
     gameLoop/     # Game loop system (decomposed from monolithic gameLoop.ts)
       GameLoop.ts   # Orchestrator: fixed timestep, per-player physics, system iteration
       types.ts      # GameplaySystem + CosmeticSystem interfaces (init/update/cleanup)
+      initialState.ts # Pure MatchState + Player[] constructors + computeEffectivePhysics()
       index.ts      # Barrel export
       cosmetics/    # Cosmetic systems (driven by cosmeticStep)
         ParticleSystem.ts      # Owns particle pool, gibs, VFX emission, collision particles
@@ -71,6 +72,10 @@ src/
     spriteShading.ts # fillBodyGradient (radial body fill) + drawHighlightSpot (white glint)
     fastMath.ts   # Trig lookup tables (fastSin/fastCos) for hot render paths
     canvasAnimations.ts # Shared canvas utilities (wildlife, day/night) for MainMenu + CharacterSelect
+    lobbyGame.ts  # Lobby simulation orchestrator — LobbyGame class, stomp/swap, ready-zone countdown
+    lobbyConstants.ts # Layout constants, LOBBY_ARENA stub, READY_ZONE_X, BOT_PAUSE_CHANCE
+    lobbyBots.ts  # botLobbyInput + wanderInput (pure input generators)
+    lobbyRender.ts # drawLobby + gradient cache — all canvas rendering for the lobby
     debugFlags.ts # Dev-only flags from URL params (?debug=nav)
     navDebugOverlay.ts # Nav graph debug overlay renderer
     characters/   # Character pack system (registry-based, extensible)
@@ -78,7 +83,7 @@ src/
       registry.ts   # Pack registry: register/get/list + convenience lookups (emoji, eyes, splat, gibs)
       builtin.ts    # Registers all 17 built-in characters at app startup
       fallbacks.ts  # Fallback pill-shape renderer for unknown/unregistered characters
-      legacy.ts     # CHARACTERS record (P1-P5 defaults), assignBotCharacters, getCharacterForSlot
+      defaults.ts   # CHARACTERS record (P1-P5 defaults), assignBotCharacters, getCharacterForSlot
       index.ts      # Barrel export
       packs/        # One file per character — self-contained with renderer, gibs, data, translations
         bunny.ts fox.ts frog.ts bear.ts owl.ts cat.ts wolf.ts panda.ts
@@ -93,7 +98,12 @@ src/
       index.ts      # Barrel export
     themes/       # Shared theme infrastructure (types + drawing primitives)
       types.ts      # ThemeConfig interface + all sub-interfaces (used by Renderer)
-      drawPrimitives.ts  # Shared drawing functions (trees, bushes, flowers, etc.) + hazard renderer factories
+      drawPrimitives/ # Shared drawing functions (split by category, re-exported via index.ts)
+        background.ts # Trees, bushes, flowers, mushrooms, grass, hills, clouds, moss
+        foreground.ts # Tall grass, ferns, hanging vines, leaf clusters, stumps
+        winter.ts     # Pine, christmas trees, snowballs, ice, snow drifts, igloos, snowmen
+        hazardFactories.ts # createThornRenderer, createSpringRenderer
+        index.ts      # Barrel export
       utils.ts      # Shared utilities (randRange, pickWeighted, swapRemove, getFloatingPlatforms)
     net/          # Host-authoritative network multiplayer (WebRTC via Trystero MQTT)
       core/             # Generic netcode core (zero game imports — reusable library foundation)
@@ -119,7 +129,12 @@ src/
     useScaler.ts  # Viewport scaling + fullscreen API hook
   components/     # React components (menus/HUD only — canvas is imperative)
     GameScaler.tsx      # Viewport-responsive wrapper (CSS transform scaling)
-    MainMenu.tsx        # Title screen with Play/Online buttons, blood toggle, language switch, online modal
+    MainMenu.tsx        # Title screen with Play/Online buttons, blood toggle, language switch
+    menuBackground.ts   # Procedural animated background for MainMenu (hills, trees, wildlife, day/night)
+    HelpModal.tsx       # How-to-play modal (static, presentational)
+    ModsModal.tsx       # Match mods toggles modal
+    OnlineModal.tsx     # Online multiplayer lobby modal (UI only — network logic in useOnlineRoom)
+    useOnlineRoom.ts    # Hook: Transport lifecycle + protocol handlers + host/guest startMatch
     CharacterSelect.tsx # Canvas-based JnB-style lobby (supports online mode: 1 player, any keys)
     OnlineLobby.tsx     # Room create/join connection screen, auto-transitions to CharacterSelect
     Match.tsx           # Game canvas mount + pause overlay + network match support
@@ -314,8 +329,11 @@ Online play uses host-authoritative architecture with Trystero MQTT signaling fo
 ## File Size Reference
 
 Largest files to be aware of when context is limited:
-- `renderer.ts` ~560 lines (orchestrator) + `rendering/` modules ~1900 lines total — `gameLoop.ts` ~1770 lines
-- `drawPrimitives.ts` ~990 lines — `CharacterSelect.tsx` ~900 lines
+- `renderer.ts` ~560 lines (orchestrator) + `rendering/` modules ~1900 lines total
+- `gameLoop/GameLoop.ts` ~780 lines + `gameplay/` and `cosmetics/` systems ~2000 lines total (`initialState.ts` ~175)
+- `themes/drawPrimitives/` ~990 lines across 4 files (winter.ts ~540 is largest)
+- `lobbyGame.ts` ~330 + `lobbyRender.ts` ~390 + `lobbyConstants.ts` ~45 + `lobbyBots.ts` ~45
+- `OnlineModal.tsx` ~320 (UI) + `useOnlineRoom.ts` ~490 (network) — `CharacterSelect.tsx` ~160 (lobby logic moved to engine/)
 - `audio/` directory total ~1050 lines (split: AudioManager ~140, MusicManager ~90, soundRegistry ~80, synthesis/ ~700) — `VictoryScreen.css` ~520 lines
 - Arena pack files ~200-800 lines each (11 arenas in `arenas/packs/`)
 - AI: `utility.ts` ~450, `awareness.ts` ~370
