@@ -320,7 +320,7 @@ export class Renderer {
 
   // ---- Frame rendering ----
 
-  renderFrame(matchState: MatchState, arena: Arena, particles: Particle[]): void {
+  renderFrame(matchState: MatchState, arena: Arena, particles: Particle[], cosmeticLead = 0): void {
     const ctx = this.fgCtx;
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
@@ -361,7 +361,7 @@ export class Renderer {
     d.clouds = true;
 
     // Weather (leaves, petals)
-    drawWeather(ctx, matchState.weather, this.theme);
+    drawWeather(ctx, matchState.weather, this.theme, cosmeticLead);
     if (matchState.weather.length > 0) d.weather = true;
 
     // Wildlife: butterflies + birds (q) -- drawn after clouds/weather, before springs
@@ -440,11 +440,11 @@ export class Renderer {
     }
 
     // Particles
-    drawParticles(ctx, particles);
+    drawParticles(ctx, particles, cosmeticLead);
 
     // Gibs and confetti
-    if (matchState.gibs.length > 0) { drawGibs(ctx, matchState.gibs); d.gibs = true; }
-    if (matchState.confetti.length > 0) { drawConfetti(ctx, matchState.confetti); d.confetti = true; }
+    if (matchState.gibs.length > 0) { drawGibs(ctx, matchState.gibs, cosmeticLead); d.gibs = true; }
+    if (matchState.confetti.length > 0) { drawConfetti(ctx, matchState.confetti, cosmeticLead); d.confetti = true; }
 
     // Stomp shockwaves (e) -- after particles, before players
     if (matchState.shockwaves) {
@@ -603,7 +603,7 @@ export class Renderer {
 
     // Fireworks when match is over
     if (matchState.matchOver) {
-      drawFireworks(ctx, particles, this.frameTime);
+      drawFireworks(ctx, particles, this.frameTime, cosmeticLead);
       d.fireworks = true;
     }
 

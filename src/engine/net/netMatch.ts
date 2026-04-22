@@ -236,7 +236,7 @@ export class NetMatch {
         this.hostAuthority!.consumeGuestJumps();
         // Tick reconnection grace timers
         this.hostAuthority!.tickGraceTimers(FIXED_DT);
-        this.gameLoop.cosmeticStep(FIXED_DT);
+        this.gameLoop.tickCosmetic(FIXED_DT);
         accumulator -= FIXED_DT;
       }
 
@@ -334,7 +334,7 @@ export class NetMatch {
       // 3. Tick cosmetics (SFX, particles, visual effects via state-transition detection)
       // No matchOver guard — cosmeticStep needs to run the frame matchOver flips
       // to detect the transition and play the victory sound.
-      this.gameLoop.cosmeticStep(dt);
+      this.gameLoop.tickCosmetic(dt);
 
       // 4. Apply input echo for local player visual responsiveness
       const state = this.gameLoop.getState();

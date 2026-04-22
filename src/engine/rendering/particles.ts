@@ -4,7 +4,7 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT, SPRING_TRAIL_DURATION } from '../constants
 import { getGibRenderer } from '../characters';
 import { hexToRGB } from '../fastMath';
 
-export function drawWeather(ctx: CanvasRenderingContext2D, weather: WeatherParticle[], theme: ThemeConfig): void {
+export function drawWeather(ctx: CanvasRenderingContext2D, weather: WeatherParticle[], theme: ThemeConfig, lead = 0): void {
   const customDraw = theme.drawWeatherParticle;
   if (customDraw) {
     for (const w of weather) customDraw(ctx, w);
@@ -12,8 +12,8 @@ export function drawWeather(ctx: CanvasRenderingContext2D, weather: WeatherParti
   }
   for (const w of weather) {
     ctx.save();
-    ctx.translate(w.x, w.y);
-    ctx.rotate(w.rotation);
+    ctx.translate(w.x + w.vx * lead, w.y + w.vy * lead);
+    ctx.rotate(w.rotation + w.rotSpeed * lead);
     if (w.type === 'leaf') {
       ctx.fillStyle = 'rgba(90, 160, 60, 0.4)';
       ctx.beginPath();
@@ -60,27 +60,31 @@ export function drawWeather(ctx: CanvasRenderingContext2D, weather: WeatherParti
   }
 }
 
-export function drawParticles(ctx: CanvasRenderingContext2D, particles: Particle[]): void {
+export function drawParticles(ctx: CanvasRenderingContext2D, particles: Particle[], lead = 0): void {
   for (const p of particles) {
+    const dx = p.x + p.vx * lead;
+    const dy = p.y + p.vy * lead;
     // Off-screen culling
-    if (p.x < -20 || p.x > CANVAS_WIDTH + 20 || p.y < -20 || p.y > CANVAS_HEIGHT + 20) continue;
+    if (dx < -20 || dx > CANVAS_WIDTH + 20 || dy < -20 || dy > CANVAS_HEIGHT + 20) continue;
     const alpha = p.life / p.maxLife;
     ctx.globalAlpha = alpha * 0.7;
     ctx.fillStyle = p.color;
     ctx.beginPath();
-    ctx.arc(p.x, p.y, p.size * alpha, 0, Math.PI * 2);
+    ctx.arc(dx, dy, p.size * alpha, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.globalAlpha = 1;
 }
 
-export function drawGibs(ctx: CanvasRenderingContext2D, gibs: Gib[]): void {
+export function drawGibs(ctx: CanvasRenderingContext2D, gibs: Gib[], lead = 0): void {
   for (const gib of gibs) {
+    const dx = gib.x + gib.vx * lead;
+    const dy = gib.y + gib.vy * lead;
     // Off-screen culling
-    if (gib.x < -40 || gib.x > CANVAS_WIDTH + 40 || gib.y < -40 || gib.y > CANVAS_HEIGHT + 40) continue;
+    if (dx < -40 || dx > CANVAS_WIDTH + 40 || dy < -40 || dy > CANVAS_HEIGHT + 40) continue;
     ctx.save();
-    ctx.translate(gib.x, gib.y);
-    ctx.rotate(gib.rotation);
+    ctx.translate(dx, dy);
+    ctx.rotate(gib.rotation + gib.rotationSpeed * lead);
     drawGibShape(ctx, gib);
     ctx.restore();
   }
@@ -103,13 +107,13 @@ export function drawGibShape(ctx: CanvasRenderingContext2D, gib: Gib): void {
   gibRenderer(ctx, gibType, gib.width, gib.height, { color, darkColor, lightColor });
 }
 
-export function drawConfetti(ctx: CanvasRenderingContext2D, confetti: ConfettiParticle[]): void {
+export function drawConfetti(ctx: CanvasRenderingContext2D, confetti: ConfettiParticle[], lead = 0): void {
   for (const c of confetti) {
     const alpha = (c.life / c.maxLife) * 0.9;
     const { r, g, b } = hexToRGB(c.color);
     ctx.save();
-    ctx.translate(c.x, c.y);
-    ctx.rotate(c.rotation);
+    ctx.translate(c.x + c.vx * lead, c.y + c.vy * lead);
+    ctx.rotate(c.rotation + c.rotationSpeed * lead);
     ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
 
     switch (c.shape) {
@@ -156,11 +160,13 @@ export function drawConfetti(ctx: CanvasRenderingContext2D, confetti: ConfettiPa
   }
 }
 
-export function drawFireworks(ctx: CanvasRenderingContext2D, particles: Particle[], frameTime: number): void {
+export function drawFireworks(ctx: CanvasRenderingContext2D, particles: Particle[], frameTime: number, lead = 0): void {
   const now = frameTime / 1000;
   for (const p of particles) {
     const alpha = p.life / p.maxLife;
     const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+    const dx = p.x + p.vx * lead;
+    const dy = p.y + p.vy * lead;
 
     // Trail lines behind fast-moving particles
     if (speed > 50) {
@@ -170,8 +176,8 @@ export function drawFireworks(ctx: CanvasRenderingContext2D, particles: Particle
       ctx.globalAlpha = alpha * 0.4;
       ctx.lineWidth = p.size * alpha * 0.6;
       ctx.beginPath();
-      ctx.moveTo(p.x, p.y);
-      ctx.lineTo(p.x - Math.cos(angle) * trailLen, p.y - Math.sin(angle) * trailLen);
+      ctx.moveTo(dx, dy);
+      ctx.lineTo(dx - Math.cos(angle) * trailLen, dy - Math.sin(angle) * trailLen);
       ctx.stroke();
     }
 
@@ -179,10 +185,10 @@ export function drawFireworks(ctx: CanvasRenderingContext2D, particles: Particle
     ctx.globalAlpha = alpha * 0.8;
     ctx.fillStyle = p.color;
     ctx.beginPath();
-    ctx.arc(p.x, p.y, p.size * alpha * 1.2, 0, Math.PI * 2);
+    ctx.arc(dx, dy, p.size * alpha * 1.2, 0, Math.PI * 2);
     ctx.fill();
 
-    // Sparkle dots near particles
+    // Sparkle dots near particles — keyed off stable position to avoid jitter
     const sparklePhase = Math.sin(now * 12 + p.x * 0.1 + p.y * 0.1);
     if (sparklePhase > 0.6) {
       ctx.globalAlpha = alpha * (sparklePhase - 0.6) * 2;
@@ -190,16 +196,16 @@ export function drawFireworks(ctx: CanvasRenderingContext2D, particles: Particle
       const sparkleOffX = Math.sin(now * 7 + p.x) * 6;
       const sparkleOffY = Math.cos(now * 9 + p.y) * 6;
       ctx.beginPath();
-      ctx.arc(p.x + sparkleOffX, p.y + sparkleOffY, 1.5, 0, Math.PI * 2);
+      ctx.arc(dx + sparkleOffX, dy + sparkleOffY, 1.5, 0, Math.PI * 2);
       ctx.fill();
       // Cross sparkle shape
       ctx.strokeStyle = '#FFF';
       ctx.lineWidth = 0.8;
       ctx.beginPath();
-      ctx.moveTo(p.x + sparkleOffX - 3, p.y + sparkleOffY);
-      ctx.lineTo(p.x + sparkleOffX + 3, p.y + sparkleOffY);
-      ctx.moveTo(p.x + sparkleOffX, p.y + sparkleOffY - 3);
-      ctx.lineTo(p.x + sparkleOffX, p.y + sparkleOffY + 3);
+      ctx.moveTo(dx + sparkleOffX - 3, dy + sparkleOffY);
+      ctx.lineTo(dx + sparkleOffX + 3, dy + sparkleOffY);
+      ctx.moveTo(dx + sparkleOffX, dy + sparkleOffY - 3);
+      ctx.lineTo(dx + sparkleOffX, dy + sparkleOffY + 3);
       ctx.stroke();
     }
   }

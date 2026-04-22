@@ -50,6 +50,11 @@ import { MatchSystem } from './gameplay/MatchSystem';
 /** Force 32-bit float for cross-architecture determinism (x86 80-bit vs ARM 64-bit). */
 const f = Math.fround;
 
+/** Half-rate cosmetic threshold: particles/SFX/VFX tick at ~30Hz while render stays at 60Hz. */
+const COSMETIC_INTERVAL = FIXED_TIMESTEP * 2;
+/** Cap per-step cosmetic dt so tab-switch recovery doesn't dump seconds of work into one step. */
+const COSMETIC_MAX_STEP = FIXED_TIMESTEP * 4;
+
 export type MatchEndCallback = (winner: PlayerSlot | null, state: MatchState) => void;
 
 export class GameLoop {
@@ -116,6 +121,8 @@ export class GameLoop {
   private entityTransitionSystem!: EntityTransitionSystem;
   private playerTransitionSystem!: PlayerTransitionSystem;
   private playerCosmeticSystem!: PlayerCosmeticSystem;
+
+  private _cosmeticLead = 0;
 
   constructor(
     bgCanvas: HTMLCanvasElement,
@@ -374,6 +381,22 @@ export class GameLoop {
     this._resimulating = resim;
   }
 
+  /** Half-rate wrapper around cosmeticStep. Tests call cosmeticStep directly
+   *  so assertions run at the un-throttled per-tick rate. */
+  tickCosmetic(dt: number): void {
+    this._cosmeticLead += dt;
+    if (this._cosmeticLead < COSMETIC_INTERVAL) return;
+    const stepDt = Math.min(this._cosmeticLead, COSMETIC_MAX_STEP);
+    this._cosmeticLead = 0;
+    this.cosmeticStep(stepDt);
+  }
+
+  /** Seconds since the last cosmeticStep fired; renderer uses this to extrapolate
+   *  particle/gib positions forward by `vx * lead` so half-rate motion stays smooth. */
+  getCosmeticLead(): number {
+    return this._cosmeticLead;
+  }
+
   /** Tick all cosmetic-only systems (particles, environment, visual decays).
    *  Called once per frame from local loop(), host loop, and guest loop. */
   cosmeticStep(dt: number): void {
@@ -416,7 +439,7 @@ export class GameLoop {
     }
     // Bake settled gibs/blood
     this.particleSystem.bakeToRenderer(this.renderer);
-    this.renderer.renderFrame(this.state, this.arena, this.particleSystem.getParticles());
+    this.renderer.renderFrame(this.state, this.arena, this.particleSystem.getParticles(), this._cosmeticLead);
   }
 
   /** Capture a snapshot of all gameplay state for rollback. */
@@ -446,7 +469,7 @@ export class GameLoop {
 
     if (this.paused) {
       this.lastTime = currentTime;
-      this.renderer.renderFrame(this.state, this.arena, this.particleSystem.getParticles());
+      this.renderer.renderFrame(this.state, this.arena, this.particleSystem.getParticles(), 0);
       this.rafId = requestAnimationFrame(this.loop);
       return;
     }
@@ -464,10 +487,10 @@ export class GameLoop {
       this.accumulator -= FIXED_TIMESTEP;
     }
 
-    // Cosmetic systems (particles, environment, visual decays) — local play only.
-    // Network mode: host and guest call cosmeticStep from their own loops (netMatch.ts).
+    // Pass FIXED_TIMESTEP (not frameTime) so cosmetic motion stays tied to simulation
+    // ticks, matching the old once-per-render-frame contract. Network loops use dt directly.
     if (!this._networkMode) {
-      this.cosmeticStep(FIXED_TIMESTEP);
+      this.tickCosmetic(FIXED_TIMESTEP);
     }
 
     // Timers that run in real time (not affected by fixedUpdate early return)
@@ -501,7 +524,7 @@ export class GameLoop {
       this.renderer.setBotNavDebugStates(botStates);
     }
 
-    this.renderer.renderFrame(this.state, this.arena, this.particleSystem.getParticles());
+    this.renderer.renderFrame(this.state, this.arena, this.particleSystem.getParticles(), this._cosmeticLead);
     this.rafId = requestAnimationFrame(this.loop);
   };
 
