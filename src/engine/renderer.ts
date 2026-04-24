@@ -108,6 +108,12 @@ export class Renderer {
   private _overlayLastRtt = -1;
   private _overlayLastJitter = -1;
 
+  // Sprite-cache warm tracking — the cache itself is module-scoped and keyed
+  // by name+state+animFrame+flags (no theme). setTheme() calls
+  // clearRenderingCaches() so the invariant "warmed under current theme" is
+  // maintained. Consumers use hasWarmedAll() to verify preload coverage.
+  private _warmedNames: Set<string> = new Set();
+
   constructor(bgCanvas: HTMLCanvasElement, fgCanvas: HTMLCanvasElement, theme: ThemeConfig, mirrored = false, hudCanvas?: HTMLCanvasElement) {
     clearRenderingCaches();
     this.bgCtx = bgCanvas.getContext('2d')!;
@@ -171,6 +177,17 @@ export class Renderer {
    *  bitmap — otherwise cache-miss at render time poisons the cache without it. */
   warmSpriteCache(names: string[]): void {
     warmSpriteCacheForCharacters(names, this.theme);
+    for (const name of names) this._warmedNames.add(name);
+  }
+
+  /** True when every name has been warmed under the current theme. Used by
+   *  the loading orchestrator to verify sprite-cache coverage before flipping
+   *  phase to 'playing'. Any name not yet warmed would cause first-frame jank. */
+  hasWarmedAll(names: string[]): boolean {
+    for (const name of names) {
+      if (!this._warmedNames.has(name)) return false;
+    }
+    return true;
   }
 
   /** Swap the active theme without tearing down the renderer. Used by
@@ -193,6 +210,8 @@ export class Renderer {
     }
     clearRenderingCaches();
     invalidateHudCache();
+    // Sprite cache was cleared; warmup invariants are reset too.
+    this._warmedNames.clear();
   }
 
   renderBackground(arena: Arena, originalArena?: Arena): void {

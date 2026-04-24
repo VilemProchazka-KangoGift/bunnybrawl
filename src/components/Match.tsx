@@ -44,7 +44,17 @@ export function Match() {
   const [isReconnecting, setIsReconnecting] = useState(false);
   const netMatchRef = useRef<NetMatch | null>(null);
   const [touchInput, setTouchInput] = useState<TouchInputManager | null>(null);
-  const [loadingPhase, setLoadingPhase] = useState(true);
+  // Two sources drive the loading overlay:
+  //   - `phaseIsLoading`: the authoritative gameplay phase (from setPhase on
+  //     host OR from snapshot on guest). False once the match can be played.
+  //   - `localTasksDone`: THIS client has finished its runLoadingTasks
+  //     (music buffered, background painted, sprites warmed).
+  // Overlay shows while either is still "not ready" — prevents the guest
+  // from hiding the overlay the moment host flips phase if the guest's own
+  // asset preload hasn't finished yet.
+  const [phaseIsLoading, setPhaseIsLoading] = useState(true);
+  const [localTasksDone, setLocalTasksDone] = useState(false);
+  const showLoadingOverlay = phaseIsLoading || !localTasksDone;
   const isMobile = useMemo(() => isTouchPrimary(), []);
 
   // Resolve 'random' to a concrete arena; re-resolves each time Match mounts (rematch)
@@ -104,7 +114,9 @@ export function Match() {
     }
     if (!loop) return;
     // In-place arena swap — no remount, no transport wiring loss. Scores reset.
+    setLocalTasksDone(false);
     loop.switchArena(newArenaId);
+    const startGen = loop.getLoadingGeneration();
     // Run loading tasks for the new arena (music preload, background, sprite warm)
     runLoadingTasks({
       arenaId: newArenaId,
@@ -113,7 +125,12 @@ export function Match() {
       arena: loop.getArena(),
       originalArena: loop.getOriginalArena(),
     }).finally(() => {
-      if (gameLoopRef.current === loop) loop.setPhase('playing');
+      if (gameLoopRef.current !== loop) return;
+      // Stale-promise guard: if the user rapid-fired arena changes, only the
+      // most recent one flips phase back to playing.
+      if (loop.getLoadingGeneration() !== startGen) return;
+      setLocalTasksDone(true);
+      loop.setPhase('playing');
     });
   }, [setMatchSettings, online.isOnline, online.isHost]);
 
@@ -177,7 +194,8 @@ export function Match() {
 
     if (online.isOnline) {
       // Network mode
-      setLoadingPhase(true);
+      setPhaseIsLoading(true);
+      setLocalTasksDone(false);
       const transport = getModalTransport();
       if (!transport) {
         console.error('No active transport for online match');
@@ -230,7 +248,9 @@ export function Match() {
           const loop = gameLoopRef.current;
           const nm = netMatchRef.current;
           if (!loop || !nm) return;
+          setLocalTasksDone(false);
           loop.switchArena(arenaId);
+          const startGen = loop.getLoadingGeneration();
           runLoadingTasks({
             arenaId,
             characterNames: loop.getActiveCharacterNames(),
@@ -239,6 +259,8 @@ export function Match() {
             originalArena: loop.getOriginalArena(),
           }).finally(() => {
             if (netMatchRef.current !== nm) return;
+            if (loop.getLoadingGeneration() !== startGen) return;
+            setLocalTasksDone(true);
             if (online.isHost) {
               nm.markHostLoaded();
             } else {
@@ -250,7 +272,7 @@ export function Match() {
           });
         },
         onPhaseChange: (phase) => {
-          setLoadingPhase(phase === 'loading');
+          setPhaseIsLoading(phase === 'loading');
         },
         onGuestConnectionUnstable: (_slot, stalled) => {
           // Host-side banner: reuse the same "Connection Unstable" indicator
@@ -272,23 +294,31 @@ export function Match() {
       // Online loading: both sides preload, then signal readiness. Host flips
       // phase to 'playing' only after all guests report LOADED (or after the
       // 15s hard timeout in NetMatch).
-      runLoadingTasks({
-        arenaId: arena.themeId,
-        characterNames: netMatch.getGameLoop().getActiveCharacterNames(),
-        renderer: netMatch.getGameLoop().getRenderer(),
-        arena: netMatch.getGameLoop().getArena(),
-        originalArena: netMatch.getGameLoop().getOriginalArena(),
-      }).finally(() => {
-        if (netMatchRef.current !== netMatch) return;
-        if (online.isHost) {
-          netMatch.markHostLoaded();
-        } else {
-          transport.sendReliable({
-            type: MsgType.LOADED,
-            slot: (online.localSlot || 'P2') as PlayerSlot,
-          } as import('../engine/net/protocol').ReliableMessage);
-        }
-      });
+      {
+        const loop = netMatch.getGameLoop();
+        const startGen = loop.getLoadingGeneration();
+        runLoadingTasks({
+          arenaId: arena.themeId,
+          characterNames: loop.getActiveCharacterNames(),
+          renderer: loop.getRenderer(),
+          arena: loop.getArena(),
+          originalArena: loop.getOriginalArena(),
+        }).finally(() => {
+          if (netMatchRef.current !== netMatch) return;
+          // Stale-promise guard — if switchArena happened while we were
+          // loading, don't signal readiness for the OLD arena's assets.
+          if (loop.getLoadingGeneration() !== startGen) return;
+          setLocalTasksDone(true);
+          if (online.isHost) {
+            netMatch.markHostLoaded();
+          } else {
+            transport.sendReliable({
+              type: MsgType.LOADED,
+              slot: (online.localSlot || 'P2') as PlayerSlot,
+            } as import('../engine/net/protocol').ReliableMessage);
+          }
+        });
+      }
 
       return () => {
         netMatch.stop();
@@ -303,7 +333,8 @@ export function Match() {
     }
 
     // Local mode
-    setLoadingPhase(true);
+    setPhaseIsLoading(true);
+    setLocalTasksDone(false);
     const loop = new GameLoop(
       bgCanvas,
       fgCanvas,
@@ -317,12 +348,13 @@ export function Match() {
     gameLoopRef.current = loop;
     window.__gameLoop = loop;
     loop.setOnPhaseChange((phase: MatchPhase) => {
-      setLoadingPhase(phase === 'loading');
+      setPhaseIsLoading(phase === 'loading');
     });
     loop.start();
     setTouchInput(loop.getTouchInput());
 
     // Kick off loading — music preload + background render + sprite warmup
+    const localStartGen = loop.getLoadingGeneration();
     runLoadingTasks({
       arenaId: arena.themeId,
       characterNames: loop.getActiveCharacterNames(),
@@ -330,12 +362,15 @@ export function Match() {
       arena: loop.getArena(),
       originalArena: loop.getOriginalArena(),
     }).then(() => {
-      if (gameLoopRef.current === loop) {
+      if (gameLoopRef.current === loop && loop.getLoadingGeneration() === localStartGen) {
+        setLocalTasksDone(true);
         loop.setPhase('playing');
       }
     }).catch(() => {
-      // Loading timeout — proceed anyway
-      if (gameLoopRef.current === loop) {
+      // Loading timeout — proceed anyway (graceful degradation; first frames
+      // may hitch while assets lazy-load)
+      if (gameLoopRef.current === loop && loop.getLoadingGeneration() === localStartGen) {
+        setLocalTasksDone(true);
         loop.setPhase('playing');
       }
     });
@@ -388,7 +423,7 @@ export function Match() {
             &#9646;&#9646;
           </button>
         )}
-        {loadingPhase && (
+        {showLoadingOverlay && (
           <div className="match-loading-overlay" data-testid="match-loading-overlay">
             <div className="match-loading-spinner" />
             <div className="match-loading-text">{t('loading', 'Loading...')}</div>

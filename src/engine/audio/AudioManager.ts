@@ -139,6 +139,12 @@ class AudioManager {
     return this.music.preloadArena(themeId);
   }
 
+  /** True when the preloaded music matches `themeId`. Loading screens use
+   *  this to verify readiness before flipping phase to 'playing'. */
+  hasPreloadedArena(themeId: string): boolean {
+    return this.music.hasPreloadedArena(themeId);
+  }
+
   destroy(): void {
     if (this._visibilityHandler) {
       document.removeEventListener('visibilitychange', this._visibilityHandler);

@@ -115,6 +115,12 @@ export class GameLoop {
   // Phase change callback (loading → playing → over). Fires on transition only.
   private onPhaseChange?: (phase: MatchPhase) => void;
 
+  // Incremented every time a loading session begins (construction + switchArena).
+  // Callers that kick off async preload work capture this at start and compare
+  // on resolution — stale promises (superseded by a rapid arena change) won't
+  // flip phase into 'playing' with the wrong arena's assets preloaded.
+  private _loadingGeneration = 0;
+
   // Bound callbacks for extracted submodules (avoids .bind() allocations in hot paths)
   private readonly _boundGameRandom = (): number => this.gameRandom();
   private readonly _boundPlaySound = (name: string): void => this.playSound(name as Parameters<typeof audio.play>[0]);
@@ -346,6 +352,13 @@ export class GameLoop {
     this.onPhaseChange = cb;
   }
 
+  /** Snapshot the current loading-session generation. Async preload callers
+   *  capture this before their work starts and compare on resolution; a
+   *  different value means a rapid arena swap has made the result stale. */
+  getLoadingGeneration(): number {
+    return this._loadingGeneration;
+  }
+
   /** Transition the match to a new phase. No-op if already in that phase.
    *  On first entry into 'playing', starts arena music + ambient loop. */
   setPhase(phase: MatchPhase): void {
@@ -458,6 +471,10 @@ export class GameLoop {
     // next via runLoadingTasks.
     this.renderer.setTheme(this.theme);
     this.renderer.setTimeLimit(this.settings.timeLimit);
+
+    // Bump the generation so in-flight preload promises from the previous
+    // arena don't incorrectly flip us back to 'playing'.
+    this._loadingGeneration++;
 
     // Emit the phase transition (Match.tsx listens to re-show the loading overlay).
     this.onPhaseChange?.('loading');

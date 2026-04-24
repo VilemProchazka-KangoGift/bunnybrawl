@@ -6,6 +6,7 @@ import type { Renderer } from '../renderer';
 vi.mock('../audio', () => ({
   audio: {
     preloadArena: vi.fn(() => Promise.resolve()),
+    hasPreloadedArena: vi.fn(() => true),
   },
 }));
 
@@ -17,6 +18,7 @@ function makeRendererStub(): Renderer {
   return {
     renderBackground: vi.fn(),
     warmSpriteCache: vi.fn(),
+    hasWarmedAll: vi.fn(() => true),
   } as unknown as Renderer;
 }
 
@@ -57,6 +59,53 @@ describe('runLoadingTasks', () => {
     expect(renderer.warmSpriteCache).toHaveBeenCalledTimes(1);
     expect(renderer.warmSpriteCache).toHaveBeenCalledWith(['Bunny', 'Fox']);
     expect(audio.preloadArena).toHaveBeenCalledWith('meadow');
+  });
+
+  it('retries preloadArena if verification says the right theme is not loaded', async () => {
+    // Simulate: initial preload completes (e.g. for a DIFFERENT theme, or was
+    // superseded), verification says we don't have what we need, retry runs.
+    vi.mocked(audio.hasPreloadedArena).mockReturnValue(false);
+
+    const renderer = makeRendererStub();
+    const arena = makeArenaStub();
+    const originalArena = makeArenaStub();
+
+    await runLoadingTasks({
+      arenaId: 'meadow',
+      characterNames: ['Bunny'],
+      renderer,
+      arena,
+      originalArena,
+      minDurationMs: 10,
+      timeoutMs: 5000,
+    });
+
+    // Called once in the initial task + once in verification retry.
+    expect(audio.preloadArena).toHaveBeenCalledTimes(2);
+  });
+
+  it('re-warms sprite cache if verification finds missing characters', async () => {
+    const renderer = makeRendererStub();
+    // First hasWarmedAll call (inside the verification block) returns false to
+    // trigger the retry. In real usage this would happen if a setTheme() call
+    // cleared the cache between warm and verify.
+    vi.mocked(renderer.hasWarmedAll).mockReturnValue(false);
+
+    const arena = makeArenaStub();
+    const originalArena = makeArenaStub();
+
+    await runLoadingTasks({
+      arenaId: 'meadow',
+      characterNames: ['Bunny', 'Fox'],
+      renderer,
+      arena,
+      originalArena,
+      minDurationMs: 10,
+      timeoutMs: 5000,
+    });
+
+    // Called once in the initial task + once in verification retry.
+    expect(renderer.warmSpriteCache).toHaveBeenCalledTimes(2);
   });
 
   it('rejects with loading_timeout when a task never resolves', async () => {

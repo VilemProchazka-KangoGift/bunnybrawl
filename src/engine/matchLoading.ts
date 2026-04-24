@@ -74,6 +74,20 @@ export async function runLoadingTasks(opts: RunLoadingTasksOpts): Promise<void> 
   } finally {
     if (timeoutId !== undefined) clearTimeout(timeoutId);
   }
+
+  // Verification pass — the individual tasks can be superseded mid-flight
+  // (e.g. a concurrent arena swap reassigning MusicManager's in-flight preload
+  // target). Re-check the observable state and heal any gaps so the loading
+  // screen never hides while the asset it was supposed to prepare isn't ready.
+  // Each pass is cheap when the work is already done: preloadArena early-
+  // returns on same-theme cache hit, warmSpriteCache hits the OffscreenCanvas
+  // cache for previously-drawn sprites.
+  if (!audio.hasPreloadedArena(opts.arenaId)) {
+    try { await audio.preloadArena(opts.arenaId); } catch { /* never block startup */ }
+  }
+  if (!opts.renderer.hasWarmedAll(opts.characterNames)) {
+    opts.renderer.warmSpriteCache(opts.characterNames);
+  }
 }
 
 function warmSpriteCache(renderer: Renderer, names: string[]): void {
