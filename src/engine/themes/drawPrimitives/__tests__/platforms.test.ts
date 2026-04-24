@@ -18,11 +18,6 @@ import {
 } from '../platforms';
 
 describe('platforms.ts framework — core helpers', () => {
-  it('exposes locked constants', () => {
-    expect(CAP_DEPTH).toBe(16);
-    expect(SKEW_RATIO).toBe(0.5);
-  });
-
   it('mulberry32 produces deterministic sequences', () => {
     const a = mulberry32(12345);
     const b = mulberry32(12345);

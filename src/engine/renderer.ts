@@ -239,9 +239,8 @@ export class Renderer {
       this.drawPlatform(ctx, plat, plat.y >= 650);
     }
 
-    // Legacy ground-top decorations — skip when the pack owns platform rendering (drawPlatform handles the full 3D ground cap)
+    // Ground-top grass blades + surface line — packs that own drawPlatform render their own ground cap.
     if (!this.theme.drawPlatform) {
-      // Ground surface line
       const ground = arena.platforms[0];
       ctx.fillStyle = theme.ground.surfaceColor;
       ctx.fillRect(ground.x, ground.y, ground.width, theme.ground.surfaceThickness);
@@ -283,21 +282,17 @@ export class Renderer {
 
 
   private drawPlatform(ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean): void {
-    // Pack-owned override — new architecture (see docs/superpowers/specs/2026-04-24-arena-platforms-design.md)
     if (this.theme.drawPlatform) {
       this.theme.drawPlatform(ctx, platform, isGround);
       return;
     }
 
     const tp = this.theme.platform;
-
-    // Legacy theme.platform.customDraw escape hatch (pre-framework)
     if (tp.customDraw) {
       tp.customDraw(ctx, platform.x, platform.y, platform.width, platform.height, isGround);
       return;
     }
 
-    // Default flat-rect fallback — used by 10 unmigrated packs until they adopt drawPlatform
     const { x, y, width: w, height: h } = platform;
     if (isGround) {
       ctx.fillStyle = tp.groundBodyColor;

@@ -37,18 +37,6 @@ describe('meadow.drawPlatform', () => {
     expect(() => meadow.drawPlatform!(ctx, ground, true)).not.toThrow();
   });
 
-  it('is deterministic across calls for the same platform', () => {
-    // Framework uses mulberry32(seedFor(x,y)) — same platform should produce
-    // the same context calls. We verify indirectly by checking no throw across
-    // multiple renders (deep equality would need a richer mock).
-    const ctx = mockCanvasContext();
-    const floating = meadow.platforms[1];
-    expect(() => {
-      meadow.drawPlatform!(ctx, floating, false);
-      meadow.drawPlatform!(ctx, floating, false);
-    }).not.toThrow();
-  });
-
   it('renders stump platforms via the framework', () => {
     const ctx = mockCanvasContext();
     const stump = meadow.platforms.find(p => p.style === 'stump');

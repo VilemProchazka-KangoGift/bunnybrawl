@@ -12,26 +12,34 @@ import {
   drawStone, wavyDown, backWavyUp,
 } from '../../themes/drawPrimitives';
 
+// Shared decoration data — hoisted so we don't realloc per bake.
+const FOREST_TREE_POSITIONS = [
+  0, 530, 30, 510, 55, 530, 80, 495, 110, 525, 140, 500,
+  170, 520, 200, 490, 235, 515, 265, 485, 300, 510, 330, 495,
+  365, 520, 395, 480, 430, 505, 460, 490, 500, 515, 535, 485,
+  570, 510, 600, 475, 635, 500, 665, 490, 700, 510, 740, 480,
+  775, 505, 810, 495, 845, 515, 880, 475, 920, 500, 955, 490,
+  990, 510, 1025, 485, 1060, 505, 1095, 480, 1130, 500, 1165, 490,
+  1200, 510, 1235, 485, 1270, 505, 1300, 520,
+];
+const FLOWER_COLORS = ['#FF6B8A', '#FFD700', '#FF69B4', '#87CEEB', '#DDA0DD', '#FFA07A'];
+const STONE_PALETTE = [
+  { base: '#8a8278', dark: '#5a5450', light: '#b0a89c' },
+  { base: '#706860', dark: '#3a3430', light: '#9a9288' },
+  { base: '#9a9080', dark: '#6a6258', light: '#c0b8a8' },
+  { base: '#787068', dark: '#484038', light: '#a89888' },
+];
+
 function drawMeadowStump(ctx: CanvasRenderingContext2D, platform: Platform): void {
   const rng = mulberry32(seedFor(platform.x, platform.y));
   const cF = platform.y + CAP_DEPTH / 2;
   const cB = platform.y - CAP_DEPTH / 2;
   const bodyTop = cF;
-  const bodyH = platform.height;  // extends CAP_DEPTH/2 past collision bottom to meet host's cap front
+  const bodyH = platform.height;
   const sp = CAP_DEPTH * SKEW_RATIO;
 
-  // Right face — inlined so it extends down to match the stump body
-  // (which visually sits on the host platform's cap front, not its own collision bottom)
-  const stumpSp = CAP_DEPTH * SKEW_RATIO;
-  const stumpBodyBottom = bodyTop + bodyH;
-  ctx.fillStyle = '#2a1608';
-  ctx.beginPath();
-  ctx.moveTo(platform.x + platform.width, bodyTop);
-  ctx.lineTo(platform.x + platform.width + stumpSp, bodyTop - CAP_DEPTH);
-  ctx.lineTo(platform.x + platform.width + stumpSp, stumpBodyBottom - CAP_DEPTH);
-  ctx.lineTo(platform.x + platform.width, stumpBodyBottom);
-  ctx.closePath();
-  ctx.fill();
+  // Stump body extends past collision bottom to visually meet the host platform's cap front.
+  drawPlatformRightFace(ctx, platform, '#2a1608', bodyTop + bodyH);
 
   // Body front — bark: warm brown gradient with vertical ridges
   const g = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
@@ -42,12 +50,10 @@ function drawMeadowStump(ctx: CanvasRenderingContext2D, platform: Platform): voi
   ctx.fillRect(platform.x, bodyTop, platform.width, bodyH);
 
   // Vertical bark ridges
-  ctx.save();
-  ctx.globalAlpha = 0.55;
   const ridgeN = Math.max(3, Math.floor(platform.width / 7));
   for (let i = 0; i < ridgeN; i++) {
     const bx = platform.x + (i + 0.5) / ridgeN * platform.width + Math.sin(i * 3.7 + rng() * 2) * 1.5;
-    const d = 0.6 + rng() * 0.7;
+    const d = (0.6 + rng() * 0.7) * 0.55;
     ctx.strokeStyle = `rgba(25,15,6,${d})`;
     ctx.lineWidth = 1 + rng() * 0.5;
     ctx.beginPath();
@@ -57,7 +63,6 @@ function drawMeadowStump(ctx: CanvasRenderingContext2D, platform: Platform): voi
     }
     ctx.stroke();
   }
-  ctx.restore();
 
   // Body bottom bevel
   ctx.fillStyle = 'rgba(0,0,0,0.30)';
@@ -223,44 +228,27 @@ export const meadow: ArenaPack = {
 
   // ---- Custom draw functions ----
   drawFarBackground: (ctx: CanvasRenderingContext2D, _arena: Arena) => {
-    // Distant forest treeline behind the hills
-    ctx.save();
-    ctx.globalAlpha = 0.25;
-
     // Dark treeline — jagged tops suggesting a dense forest
-    ctx.fillStyle = '#3A6A3A';
+    ctx.fillStyle = 'rgba(58,106,58,0.25)';
     ctx.beginPath();
     ctx.moveTo(-10, 660);
-    // Generate a forest silhouette with varying tree heights
-    const treePositions = [
-      0, 530, 30, 510, 55, 530, 80, 495, 110, 525, 140, 500,
-      170, 520, 200, 490, 235, 515, 265, 485, 300, 510, 330, 495,
-      365, 520, 395, 480, 430, 505, 460, 490, 500, 515, 535, 485,
-      570, 510, 600, 475, 635, 500, 665, 490, 700, 510, 740, 480,
-      775, 505, 810, 495, 845, 515, 880, 475, 920, 500, 955, 490,
-      990, 510, 1025, 485, 1060, 505, 1095, 480, 1130, 500, 1165, 490,
-      1200, 510, 1235, 485, 1270, 505, 1300, 520,
-    ];
-    for (let i = 0; i < treePositions.length; i += 2) {
-      ctx.lineTo(treePositions[i], treePositions[i + 1]);
+    for (let i = 0; i < FOREST_TREE_POSITIONS.length; i += 2) {
+      ctx.lineTo(FOREST_TREE_POSITIONS[i], FOREST_TREE_POSITIONS[i + 1]);
     }
     ctx.lineTo(1300, 660);
     ctx.closePath();
     ctx.fill();
 
     // Lighter layer in front — slightly higher, more detail
-    ctx.fillStyle = '#4A7A4A';
-    ctx.globalAlpha = 0.18;
+    ctx.fillStyle = 'rgba(74,122,74,0.18)';
     ctx.beginPath();
     ctx.moveTo(-10, 660);
-    for (let i = 0; i < treePositions.length; i += 2) {
-      ctx.lineTo(treePositions[i] + 15, treePositions[i + 1] + 25);
+    for (let i = 0; i < FOREST_TREE_POSITIONS.length; i += 2) {
+      ctx.lineTo(FOREST_TREE_POSITIONS[i] + 15, FOREST_TREE_POSITIONS[i + 1] + 25);
     }
     ctx.lineTo(1300, 660);
     ctx.closePath();
     ctx.fill();
-
-    ctx.restore();
   },
 
   drawBackgroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => {
@@ -280,10 +268,9 @@ export const meadow: ArenaPack = {
     drawBush(ctx, 1100, y, 20);
 
     // Flowers
-    const flowerColors = ['#FF6B8A', '#FFD700', '#FF69B4', '#87CEEB', '#DDA0DD', '#FFA07A'];
     const flowerPositions = [150, 280, 420, 500, 580, 750, 930, 980, 1050, 1200];
     for (const fx of flowerPositions) {
-      const color = flowerColors[Math.floor(fx * 0.01) % flowerColors.length];
+      const color = FLOWER_COLORS[Math.floor(fx * 0.01) % FLOWER_COLORS.length];
       drawFlower(ctx, fx, y, color);
     }
 
@@ -369,18 +356,12 @@ export const meadow: ArenaPack = {
     drawPlatformRightFace(ctx, platform, '#1e130a');
 
     // Left-side decoration: one stone + a few root tendrils
-    const stonePalette = [
-      { base: '#8a8278', dark: '#5a5450', light: '#b0a89c' },
-      { base: '#706860', dark: '#3a3430', light: '#9a9288' },
-      { base: '#9a9080', dark: '#6a6258', light: '#c0b8a8' },
-      { base: '#787068', dark: '#484038', light: '#a89888' },
-    ];
     const stoneRx = 3.5 + rng() * 1.8;
     const stoneRy = stoneRx * (0.75 + rng() * 0.15);
     const stoneCy = bodyTop + 5 + rng() * Math.max(4, (bodyH - 14) * 0.4);
     const stoneCx = platform.x - stoneRx * 0.3;
     const stoneAngle = (rng() - 0.5) * 0.6;
-    const stonePick = stonePalette[Math.floor(rng() * stonePalette.length)];
+    const stonePick = STONE_PALETTE[Math.floor(rng() * STONE_PALETTE.length)];
     drawStone(ctx, stoneCx, stoneCy, stoneRx, stoneRy, stoneAngle, stonePick.base, stonePick.dark, stonePick.light);
 
     // Root tendrils — thin dark-brown curves extending down/left from below the stone

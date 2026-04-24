@@ -15,8 +15,7 @@ export const CAP_DEPTH = 16;
 export const SKEW_RATIO = 0.5;
 
 // ---- Deterministic PRNG ----
-// Standard mulberry32. Same implementation as the v9 mockup so per-platform
-// variation matches the visual target exactly.
+/** mulberry32 — fast 32-bit PRNG for per-platform visual variation. */
 export function mulberry32(seed: number): () => number {
   let s = seed;
   return () => {
@@ -217,11 +216,15 @@ export function drawPlatformDropShadow(ctx: CanvasRenderingContext2D, platform: 
   ctx.restore();
 }
 
-/** The right-side face — parallelogram connecting body's front-right to cap's back-right. */
-export function drawPlatformRightFace(ctx: CanvasRenderingContext2D, platform: Platform, fillStyle: string): void {
+/**
+ * The right-side face — parallelogram connecting body's front-right to cap's back-right.
+ * `bottomY` overrides the body's bottom edge (defaults to platform.y + platform.height);
+ * useful for shapes whose visual body extends past their collision rect (e.g. stumps).
+ */
+export function drawPlatformRightFace(ctx: CanvasRenderingContext2D, platform: Platform, fillStyle: string, bottomY?: number): void {
   const sp = skewPx();
   const bt = capFrontY(platform);
-  const bb = platform.y + platform.height;
+  const bb = bottomY ?? (platform.y + platform.height);
   ctx.fillStyle = fillStyle;
   ctx.beginPath();
   ctx.moveTo(platform.x + platform.width, bt);
