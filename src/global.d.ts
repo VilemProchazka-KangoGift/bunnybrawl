@@ -18,6 +18,14 @@ declare global {
     lock(orientation: OrientationLockType): Promise<void>;
     unlock(): void;
   }
+
+  // Keyboard Lock API (Chromium-only; absent in Firefox/Safari — hence optional)
+  interface Navigator {
+    keyboard?: {
+      lock(keyCodes?: string[]): Promise<void>;
+      unlock(): void;
+    };
+  }
 }
 
 export {};

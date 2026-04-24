@@ -134,6 +134,15 @@ export function Match() {
   }, [handleResume, handlePause, showLevelSelect]);
 
   useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, []);
+
+  useEffect(() => {
     const bgCanvas = bgCanvasRef.current;
     const fgCanvas = fgCanvasRef.current;
     const hudCanvas = hudCanvasRef.current;

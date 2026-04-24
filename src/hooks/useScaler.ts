@@ -59,7 +59,15 @@ export function useScaler() {
     window.addEventListener('resize', onResize);
 
     const onFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
+      const fs = !!document.fullscreenElement;
+      setIsFullscreen(fs);
+      // Capture system shortcuts (Win, Alt+Tab, Ctrl+W, F5, Esc, etc.) while in fullscreen.
+      // Chromium-only; Firefox/Safari silently no-op. Exit via long-press Esc.
+      if (fs) {
+        navigator.keyboard?.lock().catch(() => {});
+      } else {
+        navigator.keyboard?.unlock();
+      }
       requestAnimationFrame(updateScale);
     };
     document.addEventListener('fullscreenchange', onFullscreenChange);
@@ -80,6 +88,7 @@ export function useScaler() {
       document.removeEventListener('webkitfullscreenchange', onFullscreenChange);
       window.removeEventListener('keydown', onKeyDown);
       if (autoFullscreen) document.removeEventListener('touchstart', autoFullscreen);
+      if (document.fullscreenElement) navigator.keyboard?.unlock();
     };
   }, [updateScale, toggleFullscreen]);
 
