@@ -35,7 +35,6 @@ function makePack(overrides: Partial<CharacterPack> = {}): CharacterPack {
     darkColor: '#555',
     lightColor: '#EEE',
     customEyes: false,
-    idleTransform: 'none',
     drawSprite: noopSprite,
     drawGib: noopGib,
     splatShape: 'circle',

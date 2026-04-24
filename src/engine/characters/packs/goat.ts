@@ -110,7 +110,7 @@ const drawGib: CharacterPack['drawGib'] = (ctx, gibType, _w, _h, colors) => {
 export const goat: CharacterPack = {
   name: 'Goat',
   color: '#C8B896', darkColor: '#8A7A60', lightColor: '#E8D8C0',
-  emoji: '\uD83D\uDC10', customEyes: true, idleTransform: 'headBob',
+  emoji: '\uD83D\uDC10', customEyes: true,
   splatShape: 'star',
   gibs: [{ gibType: 'horn', width: 8, height: 14 }, { gibType: 'horn', width: 8, height: 14 }, { gibType: 'beard', width: 8, height: 10 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Goat', cs: 'Koza', hi: 'बकरी', fil: 'Kambing' },

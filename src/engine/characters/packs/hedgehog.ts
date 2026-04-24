@@ -89,7 +89,7 @@ const drawGib: CharacterPack['drawGib'] = (ctx, gibType, _w, _h, colors) => {
 export const hedgehog: CharacterPack = {
   name: 'Hedgehog',
   color: '#8B6B4A', darkColor: '#5C3D1E', lightColor: '#D4B896',
-  emoji: '\uD83E\uDD94', customEyes: true, idleTransform: 'headBob',
+  emoji: '\uD83E\uDD94', customEyes: true,
   splatShape: 'star',
   gibs: [{ gibType: 'spine', width: 6, height: 10 }, { gibType: 'spine', width: 6, height: 10 }, { gibType: 'snout', width: 8, height: 6 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Hedgehog', cs: 'Ježek', hi: 'साही', fil: 'Hedgehog' },

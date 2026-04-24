@@ -8,8 +8,6 @@ const CHARACTER_NAMES = [
   'Pig', 'Cow', 'Goat', 'Horse', 'Sheep', 'Monkey', 'Tiger', 'Rhino', 'Hedgehog', 'Chick',
 ];
 
-const VALID_IDLE_TRANSFORMS = ['none', 'headTilt', 'headFlip', 'headBob'];
-
 beforeAll(() => {
   registerBuiltinCharacters();
 });
@@ -64,9 +62,9 @@ describe('Character Pack Validation', () => {
       expect(pack.translations!.cs.length).toBeGreaterThan(0);
     });
 
-    it('has idleTransform in valid set', () => {
-      const pack = getCharacterPack(name)!;
-      expect(VALID_IDLE_TRANSFORMS).toContain(pack.idleTransform);
+    it('does not have legacy idleTransform field', () => {
+      const pack = getCharacterPack(name)! as unknown as Record<string, unknown>;
+      expect(pack.idleTransform).toBeUndefined();
     });
 
     it('has splatShape defined', () => {

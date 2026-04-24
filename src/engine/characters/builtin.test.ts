@@ -80,10 +80,10 @@ describe('Builtin character registration', () => {
     }
   });
 
-  it('all characters have an idleTransform', () => {
+  it('no character has the legacy idleTransform field', () => {
     for (const name of EXPECTED_CHARACTERS) {
-      const pack = getCharacterPack(name)!;
-      expect(['none', 'headTilt', 'headFlip', 'headBob']).toContain(pack.idleTransform);
+      const pack = getCharacterPack(name)! as unknown as Record<string, unknown>;
+      expect(pack.idleTransform).toBeUndefined();
     }
   });
 

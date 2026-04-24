@@ -38,10 +38,6 @@ export interface CharacterColors {
   lightColor: string;
 }
 
-/** How the character transforms during idle animation.
- *  Applied by the renderer before the character's drawSprite is called. */
-export type IdleTransformType = 'none' | 'headTilt' | 'headFlip' | 'headBob';
-
 /** Per-character leg shape and foot configuration.
  *  Used by the shared drawLegs() renderer in legRenderer.ts. */
 export interface LegStyle {
@@ -74,7 +70,6 @@ export interface CharacterPack {
   lightColor: string;
 
   customEyes: boolean;
-  idleTransform: IdleTransformType;
   /** Optional config: weight overrides for shared idle actions, plus custom signatures. */
   idleActions?: import('../rendering/idleActions').PackIdleActionsConfig;
   drawSprite: CharacterRenderer;

@@ -268,28 +268,9 @@ function _drawCharacterSpriteImpl(
     ctx.translate(-cx, -(yOff + h / 2));
   }
 
-  // Idle animation -- apply transform based on character pack's idleTransform setting
+  // Idle animation -- legacy transform path removed; Task 9 wires the new idleActions dispatch.
   const idleT = idleAnimTimer ?? -1;
   const isIdleAnim = idleT >= 0 && idleT < 0.5;
-  if (isIdleAnim && state !== 'run' && state !== 'airborne') {
-    const t = idleT / 0.5;
-    const pulse = Math.sin(t * Math.PI);
-    const pack = getCharacterPack(char.name);
-    const idleType = pack?.idleTransform ?? 'headBob';
-    if (idleType === 'headTilt') {
-      ctx.translate(cx, yOff + h * 0.5);
-      ctx.rotate(pulse * 0.12);
-      ctx.translate(-cx, -(yOff + h * 0.5));
-    } else if (idleType === 'headFlip') {
-      const flipScale = 1 - pulse * 0.15;
-      ctx.translate(cx, yOff + h * 0.5);
-      ctx.scale(flipScale, 1);
-      ctx.translate(-cx, -(yOff + h * 0.5));
-    } else if (idleType === 'headBob') {
-      ctx.translate(0, -pulse * 2);
-    }
-    // 'none' -- no transform
-  }
 
   const colors = { color: char.color, darkColor: char.darkColor, lightColor: char.lightColor };
   drawCharacterCore(ctx, cx, yOff, w, h, char.name, state, animFrame, squashScale, colors, isIdleAnim, idleT);

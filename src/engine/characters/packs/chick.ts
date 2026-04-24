@@ -71,7 +71,7 @@ const drawGib: CharacterPack['drawGib'] = (ctx, gibType, _w, _h, colors) => {
 export const chick: CharacterPack = {
   name: 'Chick',
   color: '#FFE44D', darkColor: '#F2B90D', lightColor: '#FFF3A0',
-  emoji: '🐥', customEyes: true, idleTransform: 'headBob',
+  emoji: '🐥', customEyes: true,
   splatShape: 'paw',
   gibs: [
     { gibType: 'wing', width: 8, height: 12 },

@@ -47,7 +47,7 @@ const drawGib: CharacterPack['drawGib'] = (_ctx, _gibType, _w, _h, _colors) => {
 export const frog: CharacterPack = {
   name: 'Frog',
   color: '#32CD32', darkColor: '#228B22', lightColor: '#7CFC00',
-  emoji: '\uD83D\uDC38', customEyes: true, idleTransform: 'none',
+  emoji: '\uD83D\uDC38', customEyes: true,
   splatShape: 'splat',
   gibs: [{ gibType: 'body', width: 12, height: 10 }, { gibType: 'body', width: 10, height: 10 }, { gibType: 'body', width: 11, height: 9 }],
   translations: { en: 'Frog', cs: 'Žába', hi: 'मेंढक', fil: 'Palaka' },

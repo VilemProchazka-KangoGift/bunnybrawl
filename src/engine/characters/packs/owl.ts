@@ -75,7 +75,8 @@ const drawGib: CharacterPack['drawGib'] = (ctx, gibType, _w, _h, colors) => {
 export const owl: CharacterPack = {
   name: 'Owl',
   color: '#9370DB', darkColor: '#6A4DB0', lightColor: '#B8A0E8',
-  emoji: '\uD83E\uDD89', customEyes: true, idleTransform: 'headFlip',
+  emoji: '\uD83E\uDD89', customEyes: true,
+  idleActions: { weights: { stretch: 0 } },
   splatShape: 'ring',
   gibs: [{ gibType: 'wing', width: 12, height: 8 }, { gibType: 'wing', width: 12, height: 8 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Owl', cs: 'Sova', hi: 'उल्लू', fil: 'Kuwago' },

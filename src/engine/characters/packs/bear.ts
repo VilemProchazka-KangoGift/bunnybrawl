@@ -53,7 +53,7 @@ const drawGib: CharacterPack['drawGib'] = (ctx, gibType, _w, _h, colors) => {
 export const bear: CharacterPack = {
   name: 'Bear',
   color: '#8B4513', darkColor: '#654321', lightColor: '#D2691E',
-  emoji: '\uD83D\uDC3B', customEyes: false, idleTransform: 'none',
+  emoji: '\uD83D\uDC3B', customEyes: false,
   splatShape: 'circle',
   gibs: [{ gibType: 'ear', width: 10, height: 10 }, { gibType: 'ear', width: 10, height: 10 }, { gibType: 'snout', width: 10, height: 8 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Bear', cs: 'Medvěd', hi: 'भालू', fil: 'Oso' },
