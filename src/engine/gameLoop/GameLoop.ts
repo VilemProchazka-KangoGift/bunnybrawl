@@ -94,7 +94,6 @@ export class GameLoop {
   private _debugKeyHandler: ((e: KeyboardEvent) => void) | null = null;
 
   // Global bump cooldown (prevents double-fire from both pushed players)
-  // bumpCooldown removed — bump detection now uses sideSquash transition in cosmeticStep
 
   // Touch input for mobile
   private touchInput: TouchInputManager | null = null;
@@ -186,19 +185,27 @@ export class GameLoop {
 
     this.state = createInitialMatchState(this.arena, this.theme, settings, players, activePlayers, this._boundGameRandom);
 
-    // Instantiate arena entity system first — others need its cached zones
-    this.arenaEntitySystem = new ArenaEntitySystem(this.state, this.arena, this.theme, this._boundGameRandom);
-    this.arenaEntitySystem.init();
-
-    this.hazardSystem = new HazardSystem(this.state, this.arena, this._boundGameRandom);
-    this.hazardSystem.init();
-
     // Touch input for mobile: controls the first human player
     if (isTouchPrimary()) {
       this.touchInput = new TouchInputManager();
       this.touchSlot = activePlayers.find(s => !isBotSlot(s)) ?? null;
       if (this.touchSlot) haptics.init(this.touchSlot);
     }
+
+    this.buildSystems();
+  }
+
+  /** Build (or rebuild) all gameplay + cosmetic systems. Called from the
+   *  constructor and from `switchArena()` — the two paths that need a fresh
+   *  system graph bound to the current arena/theme/state. Order matters:
+   *  arenaEntitySystem first (others read its cached zones), then gameplay
+   *  that depends on particleSystem/playerTransitionSystem. */
+  private buildSystems(): void {
+    this.arenaEntitySystem = new ArenaEntitySystem(this.state, this.arena, this.theme, this._boundGameRandom);
+    this.arenaEntitySystem.init();
+
+    this.hazardSystem = new HazardSystem(this.state, this.arena, this._boundGameRandom);
+    this.hazardSystem.init();
 
     this.particleSystem = new ParticleSystem(this.state, this.arena, this.theme, this.settings, this.arenaEntitySystem.getGeyserIndexMap());
     this.carrotSystem = new CarrotSystem(
@@ -219,7 +226,6 @@ export class GameLoop {
     this.playerTransitionSystem.init();
     this.entityTransitionSystem.init();
 
-    // Instantiate new gameplay systems after arenaEntitySystem and playerTransitionSystem
     this.effectZoneSystem = new EffectZoneSystem(
       this.state, this.arena, this.arenaEntitySystem,
       () => this.playerTransitionSystem.getSfxCooldowns(),
@@ -420,55 +426,14 @@ export class GameLoop {
     // Replace every field on the existing state object so any external holder
     // of the reference keeps pointing at live data.
     Object.assign(this.state, fresh);
-    // Force loading phase on the fresh state (createInitialMatchState already
-    // defaults to 'loading' — but be defensive in case that default changes).
-    this.state.phase = 'loading';
 
-    // Re-init all arena-dependent systems (same construction order as the constructor).
-    this.arenaEntitySystem = new ArenaEntitySystem(this.state, this.arena, this.theme, this._boundGameRandom);
-    this.arenaEntitySystem.init();
-    this.hazardSystem = new HazardSystem(this.state, this.arena, this._boundGameRandom);
-    this.hazardSystem.init();
-    this.particleSystem = new ParticleSystem(this.state, this.arena, this.theme, this.settings, this.arenaEntitySystem.getGeyserIndexMap());
-    this.carrotSystem = new CarrotSystem(
-      this.state, this.arena, this.settings,
-      this.arenaEntitySystem.getCachedZeroGZones(),
-      this._boundGameRandom, this.particleSystem,
-    );
-    this.playerTransitionSystem = new PlayerTransitionSystem(
-      this.state, this.settings, this._boundPlaySound,
-      (name: string) => { if (this._audioEnabled) audio.playAnimal(name); },
-      this.particleSystem,
-    );
-    this.playerCosmeticSystem = new PlayerCosmeticSystem(
-      this.state, this.effWalkSpeed, this.particleSystem, this._boundPlaySound,
-    );
-    this.environmentSystem = new EnvironmentSystem(this.state, this.theme);
-    this.entityTransitionSystem = new EntityTransitionSystem(this.state, this._boundPlaySound);
-    this.playerTransitionSystem.init();
-    this.entityTransitionSystem.init();
-    this.effectZoneSystem = new EffectZoneSystem(
-      this.state, this.arena, this.arenaEntitySystem,
-      () => this.playerTransitionSystem.getSfxCooldowns(),
-      this._boundPlaySound,
-    );
-    this.playerCollisionSystem = new PlayerCollisionSystem(
-      this.state, this.arena, this.particleSystem,
-      () => this._resimulating,
-    );
-    this.stompSystem = new StompSystem(
-      this.state, this.arena, this.settings,
-      () => this._resimulating,
-      () => this.rng,
-    );
-    this.matchSystem = new MatchSystem(
-      this.state, this.settings, this.theme, this._boundPlaySound,
-      () => this._resimulating,
-      (winner) => this.endMatch(winner),
-    );
+    // Rebuild all arena-dependent systems. The old instances are replaced by
+    // reassignment — they hold only `this.state`/`this.theme` refs, no timers
+    // or listeners, so GC reclaims them without explicit cleanup. (matchSystem
+    // already had its periodic-ambient timers cleared above via
+    // `matchSystem.cleanup()` before rebuild.)
+    this.buildSystems();
 
-    // Update renderer theme + clear derived caches. Background repaint happens
-    // next via runLoadingTasks.
     this.renderer.setTheme(this.theme);
     this.renderer.setTimeLimit(this.settings.timeLimit);
 
@@ -749,7 +714,6 @@ export class GameLoop {
       if (player.burnTimer > 0) player.burnTimer = Math.max(0, f(player.burnTimer - dt));
     }
 
-    // bumpCooldown removed — bump detection uses sideSquash transition in cosmeticStep
 
     // Input + physics
     for (const player of this.state.players) {

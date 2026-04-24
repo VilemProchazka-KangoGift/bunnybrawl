@@ -25,6 +25,7 @@ import {
   drawPlayer,
   warmSpriteCacheForCharacters,
   clearRenderingCaches,
+  clearArenaCaches,
 } from './rendering';
 
 interface Cloud {
@@ -132,17 +133,7 @@ export class Renderer {
       hudCanvas.height = CANVAS_HEIGHT;
     }
 
-    // Init clouds from theme config
-    const cc = theme.clouds;
-    this.clouds = [];
-    for (let i = 0; i < cc.count; i++) {
-      this.clouds.push({
-        x: (i / cc.count) * CANVAS_WIDTH + Math.random() * 100,
-        y: cc.yRange[0] + Math.random() * (cc.yRange[1] - cc.yRange[0]),
-        size: cc.minSize + Math.random() * (cc.maxSize - cc.minSize),
-        speed: cc.minSpeed + Math.random() * (cc.maxSpeed - cc.minSpeed),
-      });
-    }
+    this.initClouds();
   }
 
   setBotNavDebugStates(states: BotNavDebugState[]): void {
@@ -192,13 +183,24 @@ export class Renderer {
 
   /** Swap the active theme without tearing down the renderer. Used by
    *  `GameLoop.switchArena()` for in-place arena changes. Resets cloud layout
-   *  and derived color caches so the next render picks up the new theme. */
+   *  and derived color caches; leaves the sprite cache intact (the cache key
+   *  includes a bubble-helmet bit, so cross-arena sprite reuse is safe). */
   setTheme(theme: ThemeConfig): void {
     this.theme = theme;
     this._fogRGB = null;
     this._ambientRGBs = null;
-    // Re-init clouds from new theme (same pattern as constructor)
-    const cc = theme.clouds;
+    this.initClouds();
+    clearArenaCaches();
+    invalidateHudCache();
+    // Characters warmed under the old theme may have used different helmet
+    // settings — force re-warm under the new theme (cheap: cache hits for
+    // entries already keyed with the current helmet bit).
+    this._warmedNames.clear();
+  }
+
+  /** Populate `this.clouds` from the current theme's cloud config. */
+  private initClouds(): void {
+    const cc = this.theme.clouds;
     this.clouds = [];
     for (let i = 0; i < cc.count; i++) {
       this.clouds.push({
@@ -208,10 +210,6 @@ export class Renderer {
         speed: cc.minSpeed + Math.random() * (cc.maxSpeed - cc.minSpeed),
       });
     }
-    clearRenderingCaches();
-    invalidateHudCache();
-    // Sprite cache was cleared; warmup invariants are reset too.
-    this._warmedNames.clear();
   }
 
   renderBackground(arena: Arena, originalArena?: Arena): void {

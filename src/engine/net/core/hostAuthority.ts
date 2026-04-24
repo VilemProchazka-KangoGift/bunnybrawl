@@ -261,5 +261,11 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
     return [...this.peerSlotMap.values()];
   }
 
+  /** Resolve a transport peerId to its assigned slot, or undefined if the
+   *  peer has no slot (not yet joined or already removed). */
+  getSlotForPeer(peerId: string): string | undefined {
+    return this.peerSlotMap.get(peerId);
+  }
+
   setMatchOver(): void {}
 }

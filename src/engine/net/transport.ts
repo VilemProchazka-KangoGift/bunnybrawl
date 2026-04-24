@@ -53,10 +53,9 @@ export interface TransportEvents {
 
 const APP_ID = 'carrot-royale-v1';
 const PING_INTERVAL = 500;
-// Tightened from 10s/4s to 5s/2.5s: with the 3s stall→reconnect trigger
-// removed (Task 11), the transport's pong timeout is now the sole source of
-// truth for peer death. Faster detection → faster recovery, without the false
-// positives that came from the gap-based trigger on mobile Wi-Fi jitter.
+// Transport's pong timeout is the sole source of truth for peer death —
+// snapshot-gap detection no longer triggers reconnect (mobile Wi-Fi jitter
+// produced too many false positives). Faster detection → faster recovery.
 const PONG_TIMEOUT_MS = 5000;
 const DEGRADED_THRESHOLD_MS = 2500;
 const RTT_ALPHA = 0.1;

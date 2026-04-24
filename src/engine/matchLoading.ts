@@ -59,7 +59,7 @@ export async function runLoadingTasks(opts: RunLoadingTasksOpts): Promise<void> 
 
   const spriteTask = new Promise<void>((resolve) => {
     setTimeout(() => {
-      warmSpriteCache(opts.renderer, opts.characterNames);
+      opts.renderer.warmSpriteCache(opts.characterNames);
       resolve();
     }, 0);
   });
@@ -90,6 +90,3 @@ export async function runLoadingTasks(opts: RunLoadingTasksOpts): Promise<void> 
   }
 }
 
-function warmSpriteCache(renderer: Renderer, names: string[]): void {
-  renderer.warmSpriteCache(names);
-}

@@ -99,6 +99,7 @@ export class HostAuthority {
   getNetworkInputs(): Map<string, InputState> { return this.core.getNetworkInputs(); }
   getStats(): HostDebugStats { return this.core.getStats(); }
   getExpectedGuestSlots(): PlayerSlot[] { return this.core.getExpectedGuestSlots() as PlayerSlot[]; }
+  getSlotForPeer(peerId: string): PlayerSlot | undefined { return this.core.getSlotForPeer(peerId) as PlayerSlot | undefined; }
   setMatchOver(): void { this.core.setMatchOver(); }
 
   broadcastSnapshot(state: MatchState): void { this.core.broadcastSnapshot(state); }

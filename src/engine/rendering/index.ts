@@ -15,3 +15,11 @@ export function clearRenderingCaches(): void {
   clearSpriteCache();
   resetHudState();
 }
+
+/** Clear only arena-dependent caches (hazards + HUD). Sprite cache is keyed
+ *  by helmet-bit so it survives arena swaps — used by `Renderer.setTheme()`
+ *  to avoid re-warming characters on every pause-menu arena change. */
+export function clearArenaCaches(): void {
+  clearHazardCaches();
+  resetHudState();
+}

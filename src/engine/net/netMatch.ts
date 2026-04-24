@@ -137,7 +137,13 @@ export class NetMatch {
       transport: config.transport,
       localSlot: config.localSlot,
       onMatchEnd: config.onMatchEnd,
-      onPlayerDisconnect: config.onPlayerDisconnect,
+      onPlayerDisconnect: (slot) => {
+        // Drop any stale LOADED signal for a slot that's disconnecting —
+        // otherwise a later reconnect would skip the handshake because its
+        // slot is still marked "loaded" from the original session.
+        this.loadedGuests.delete(slot as PlayerSlot);
+        config.onPlayerDisconnect?.(slot as PlayerSlot);
+      },
     });
 
     // Register remote human players
@@ -227,6 +233,16 @@ export class NetMatch {
     if (!this._isHost) return;
     this.hostSelfLoaded = true;
     this.checkAllLoaded();
+  }
+
+  /** Guest: tell host that our local loading is done. Host broadcasts a
+   *  new snapshot with phase='playing' once all guests have signalled. */
+  signalGuestLoaded(): void {
+    if (this._isHost) return;
+    this.transport.sendReliable({
+      type: MsgType.LOADED,
+      slot: this.localSlot,
+    } as ReliableMessage);
   }
 
   /** Host: check whether all expected guests + host itself have completed
@@ -527,14 +543,10 @@ export class NetMatch {
       this.loadedGuests.add(slot);
       this.checkAllLoaded();
     } else if (this._isHost && msg.type === MsgType.CONNECTION_UNSTABLE) {
-      // Host-only hint from a guest that its snapshot stream is lagging.
       const stalled = (msg as { stalled: boolean }).stalled;
-      // Resolve peer to a slot via HostAuthority (only way from fromPeerId).
       if (fromPeerId && this.hostAuthority) {
-        // The generic host authority doesn't expose peer→slot lookup, so just
-        // pass the peerId; higher-level consumer can resolve if needed. For
-        // the banner use case a single boolean per host is enough.
-        this.onGuestConnectionUnstable?.(fromPeerId as PlayerSlot, stalled);
+        const slot = this.hostAuthority.getSlotForPeer(fromPeerId);
+        if (slot) this.onGuestConnectionUnstable?.(slot, stalled);
       }
     }
   }
@@ -546,9 +558,8 @@ export class NetMatch {
     this.onReconnecting?.(true);
 
     let attempts = 0;
-    // Tightened from 9 attempts @ 2s (18s total) to 4 @ 1.5s (6s total). With
-    // the pong timeout at 5s (Task 13), the host always detects peer loss
-    // before the guest exhausts retries — no need for the old 18s budget.
+    // 4 attempts × 1.5s = 6s total. Pong timeout (5s) detects peer loss
+    // before the guest exhausts retries, so a longer budget isn't useful.
     const MAX_ATTEMPTS = 4;
 
     this.reconnectTimer = setInterval(() => {

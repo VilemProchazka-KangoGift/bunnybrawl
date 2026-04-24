@@ -204,7 +204,11 @@ function drawCharacterSprite(
     ? Math.floor(idleAnimTimer * 10)
     : -1;
   const sqKey = Math.round(squashScale * 10);
-  const cacheKey = `${char.name}_${state}_${animFrame}_${fastFalling ? 1 : 0}_${idleKey}_${sqKey}`;
+  // `helmet` bit makes bubble-helmet arenas (underwater, space_station) cache
+  // their own copies of sprites. Without it, a non-helmet arena rendering
+  // first would poison the cache and helmet arenas would show bare heads.
+  const helmetKey = theme?.bubbleHelmet ? 1 : 0;
+  const cacheKey = `${char.name}_${state}_${animFrame}_${fastFalling ? 1 : 0}_${idleKey}_${sqKey}_${helmetKey}`;
 
   let cached = spriteCache.get(cacheKey);
   if (cached) {

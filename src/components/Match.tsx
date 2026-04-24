@@ -30,6 +30,32 @@ function resolveArenaId(arenaId: string): string {
   return pick.id;
 }
 
+/** Run loading tasks for a GameLoop, applying a stale-promise guard so a
+ *  rapid arena swap can't mis-signal readiness for an outdated arena.
+ *  `onReady` fires only when both:
+ *    - the GameLoop is still the current one (`isCurrent()`)
+ *    - no switchArena has bumped the loading generation since we started
+ *  Catch-branch fires too on timeout (graceful degradation — match starts
+ *  anyway with whatever assets made it in). */
+function kickoffLoading(
+  loop: GameLoop,
+  isCurrent: () => boolean,
+  onReady: () => void,
+): void {
+  const startGen = loop.getLoadingGeneration();
+  runLoadingTasks({
+    arenaId: loop.getArena().themeId,
+    characterNames: loop.getActiveCharacterNames(),
+    renderer: loop.getRenderer(),
+    arena: loop.getArena(),
+    originalArena: loop.getOriginalArena(),
+  }).finally(() => {
+    if (!isCurrent()) return;
+    if (loop.getLoadingGeneration() !== startGen) return;
+    onReady();
+  });
+}
+
 export function Match() {
   const { t } = useTranslation();
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -104,8 +130,8 @@ export function Match() {
     setMatchSettings({ arenaId: newArenaId });
     setPaused(false);
     setShowLevelSelect(false);
-    // In online mode, notify guest of arena change (sent regardless — guest's
-    // own switchArena will be driven by SETTINGS_SYNC handler in Task 10)
+    // Online: notify guest of arena change (the guest's SETTINGS_SYNC handler
+    // drives its own switchArena + runLoadingTasks).
     if (online.isOnline && online.isHost) {
       const transport = getModalTransport();
       if (transport) {
@@ -116,19 +142,7 @@ export function Match() {
     // In-place arena swap — no remount, no transport wiring loss. Scores reset.
     setLocalTasksDone(false);
     loop.switchArena(newArenaId);
-    const startGen = loop.getLoadingGeneration();
-    // Run loading tasks for the new arena (music preload, background, sprite warm)
-    runLoadingTasks({
-      arenaId: newArenaId,
-      characterNames: loop.getActiveCharacterNames(),
-      renderer: loop.getRenderer(),
-      arena: loop.getArena(),
-      originalArena: loop.getOriginalArena(),
-    }).finally(() => {
-      if (gameLoopRef.current !== loop) return;
-      // Stale-promise guard: if the user rapid-fired arena changes, only the
-      // most recent one flips phase back to playing.
-      if (loop.getLoadingGeneration() !== startGen) return;
+    kickoffLoading(loop, () => gameLoopRef.current === loop, () => {
       setLocalTasksDone(true);
       loop.setPhase('playing');
     });
@@ -250,25 +264,10 @@ export function Match() {
           if (!loop || !nm) return;
           setLocalTasksDone(false);
           loop.switchArena(arenaId);
-          const startGen = loop.getLoadingGeneration();
-          runLoadingTasks({
-            arenaId,
-            characterNames: loop.getActiveCharacterNames(),
-            renderer: loop.getRenderer(),
-            arena: loop.getArena(),
-            originalArena: loop.getOriginalArena(),
-          }).finally(() => {
-            if (netMatchRef.current !== nm) return;
-            if (loop.getLoadingGeneration() !== startGen) return;
+          kickoffLoading(loop, () => netMatchRef.current === nm, () => {
             setLocalTasksDone(true);
-            if (online.isHost) {
-              nm.markHostLoaded();
-            } else {
-              transport.sendReliable({
-                type: MsgType.LOADED,
-                slot: online.localSlot || 'P2',
-              } as import('../engine/net/protocol').ReliableMessage);
-            }
+            if (online.isHost) nm.markHostLoaded();
+            else nm.signalGuestLoaded();
           });
         },
         onPhaseChange: (phase) => {
@@ -294,31 +293,15 @@ export function Match() {
       // Online loading: both sides preload, then signal readiness. Host flips
       // phase to 'playing' only after all guests report LOADED (or after the
       // 15s hard timeout in NetMatch).
-      {
-        const loop = netMatch.getGameLoop();
-        const startGen = loop.getLoadingGeneration();
-        runLoadingTasks({
-          arenaId: arena.themeId,
-          characterNames: loop.getActiveCharacterNames(),
-          renderer: loop.getRenderer(),
-          arena: loop.getArena(),
-          originalArena: loop.getOriginalArena(),
-        }).finally(() => {
-          if (netMatchRef.current !== netMatch) return;
-          // Stale-promise guard — if switchArena happened while we were
-          // loading, don't signal readiness for the OLD arena's assets.
-          if (loop.getLoadingGeneration() !== startGen) return;
+      kickoffLoading(
+        netMatch.getGameLoop(),
+        () => netMatchRef.current === netMatch,
+        () => {
           setLocalTasksDone(true);
-          if (online.isHost) {
-            netMatch.markHostLoaded();
-          } else {
-            transport.sendReliable({
-              type: MsgType.LOADED,
-              slot: (online.localSlot || 'P2') as PlayerSlot,
-            } as import('../engine/net/protocol').ReliableMessage);
-          }
-        });
-      }
+          if (online.isHost) netMatch.markHostLoaded();
+          else netMatch.signalGuestLoaded();
+        },
+      );
 
       return () => {
         netMatch.stop();
@@ -353,26 +336,12 @@ export function Match() {
     loop.start();
     setTouchInput(loop.getTouchInput());
 
-    // Kick off loading — music preload + background render + sprite warmup
-    const localStartGen = loop.getLoadingGeneration();
-    runLoadingTasks({
-      arenaId: arena.themeId,
-      characterNames: loop.getActiveCharacterNames(),
-      renderer: loop.getRenderer(),
-      arena: loop.getArena(),
-      originalArena: loop.getOriginalArena(),
-    }).then(() => {
-      if (gameLoopRef.current === loop && loop.getLoadingGeneration() === localStartGen) {
-        setLocalTasksDone(true);
-        loop.setPhase('playing');
-      }
-    }).catch(() => {
-      // Loading timeout — proceed anyway (graceful degradation; first frames
-      // may hitch while assets lazy-load)
-      if (gameLoopRef.current === loop && loop.getLoadingGeneration() === localStartGen) {
-        setLocalTasksDone(true);
-        loop.setPhase('playing');
-      }
+    // Kick off loading — music preload + background render + sprite warmup.
+    // `.finally` path also covers timeout (graceful degradation; match
+    // starts with whatever assets made it in).
+    kickoffLoading(loop, () => gameLoopRef.current === loop, () => {
+      setLocalTasksDone(true);
+      loop.setPhase('playing');
     });
 
     return () => {
