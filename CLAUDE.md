@@ -333,8 +333,10 @@ Largest files to be aware of when context is limited:
 - `gameLoop/GameLoop.ts` ~780 lines + `gameplay/` and `cosmetics/` systems ~2000 lines total (`initialState.ts` ~175)
 - `themes/drawPrimitives/` ~990 lines across 4 files (winter.ts ~540 is largest)
 - `lobbyGame.ts` ~330 + `lobbyRender.ts` ~390 + `lobbyConstants.ts` ~45 + `lobbyBots.ts` ~45
-- `OnlineModal.tsx` ~320 (UI) + `useOnlineRoom.ts` ~490 (network) — `CharacterSelect.tsx` ~160 (lobby logic moved to engine/)
+- `Match.tsx` ~600 (canvas mount + online/local lifecycle + pause/reconnect overlays)
+- `OnlineModal.tsx` ~365 (UI) + `useOnlineRoom.ts` ~515 (network) — `CharacterSelect.tsx` ~160 (lobby logic moved to engine/)
 - `audio/` directory total ~1050 lines (split: AudioManager ~140, MusicManager ~90, soundRegistry ~80, synthesis/ ~700) — `VictoryScreen.css` ~520 lines
 - Arena pack files ~200-800 lines each (11 arenas in `arenas/packs/`)
 - AI: `utility.ts` ~450, `awareness.ts` ~370
-- Net: `snapshot.ts` ~575, `netMatch.ts` ~370, `transport.ts` ~350, `interpolation.ts` ~260
+- Net: `snapshot.ts` ~575, `netMatch.ts` ~770, `transport.ts` ~500, `interpolation.ts` ~350
+- Hooks: `useTransientBanner.ts` ~30, `useDelayedFlag.ts` ~15

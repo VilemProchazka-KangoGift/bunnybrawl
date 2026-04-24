@@ -318,9 +318,9 @@
   letter-spacing: 0.5px;
 }
 
-.match-loading-cancel {
+.pause-btn.match-loading-cancel {
   margin-top: 24px;
-  width: auto !important;
+  width: auto;
   min-width: 180px;
 }
 

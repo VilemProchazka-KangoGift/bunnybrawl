@@ -69,7 +69,12 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
           <h2 className="mods-title">{t('online_play', 'Online Play')}</h2>
 
           {autoSwitchNotice && (
-            <div className="online-auto-switch-notice" data-testid="online-auto-switch-notice">
+            <div
+              className="online-auto-switch-notice"
+              data-testid="online-auto-switch-notice"
+              role="status"
+              aria-live="polite"
+            >
               {t('char_auto_switched', '{{prev}} was taken — you\'re {{next}}', {
                 prev: getCharacterDisplayName(autoSwitchNotice.prev, i18n.language),
                 next: getCharacterDisplayName(autoSwitchNotice.next, i18n.language),

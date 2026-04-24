@@ -39,7 +39,6 @@ export interface NetMatchConfig {
   transport: Transport;
   localSlot: PlayerSlot;
   remoteSlots: PlayerSlot[];
-  rngSeed: number;
   onStall?: (stalled: boolean) => void;
   onDisconnect?: () => void;
   onPlayerDisconnect?: (slot: PlayerSlot) => void;

@@ -56,6 +56,12 @@ export class EntityInterpolation {
 
   reset(): void {
     this.engine.reset();
+    // Drop the module-scoped interp/extrap scratch buffers: their `players`
+    // arrays grow to the largest snapshot seen and never shrink. A fresh
+    // match may have fewer entities; better to reallocate than keep stale
+    // players entries as zombies.
+    _extrapResult = null;
+    _interpResult = null;
   }
 }
 

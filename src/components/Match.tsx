@@ -14,6 +14,7 @@ import type { TouchInputManager } from '../engine/touchInput';
 import type { PlayerSlot, MatchPhase } from '../engine/types';
 import { runLoadingTasks } from '../engine/matchLoading';
 import { useTransientBanner } from '../hooks/useTransientBanner';
+import { useDelayedFlag } from '../hooks/useDelayedFlag';
 import './Match.css';
 
 // Track last resolved arena so random doesn't repeat on rematch
@@ -90,34 +91,14 @@ export function Match() {
   const [phaseIsLoading, setPhaseIsLoading] = useState(true);
   const [localTasksDone, setLocalTasksDone] = useState(false);
   const showLoadingOverlay = phaseIsLoading || !localTasksDone;
-  useEffect(() => {
-    if (showLoadingOverlay) {
-      if (loadingCancelTimerRef.current) clearTimeout(loadingCancelTimerRef.current);
-      setShowLoadingCancel(false);
-      loadingCancelTimerRef.current = setTimeout(() => setShowLoadingCancel(true), 3000);
-    } else {
-      setShowLoadingCancel(false);
-      if (loadingCancelTimerRef.current) {
-        clearTimeout(loadingCancelTimerRef.current);
-        loadingCancelTimerRef.current = null;
-      }
-    }
-    return () => {
-      if (loadingCancelTimerRef.current) {
-        clearTimeout(loadingCancelTimerRef.current);
-        loadingCancelTimerRef.current = null;
-      }
-    };
-  }, [showLoadingOverlay]);
+  // Cancel button only appears after a delay so brief loads don't flicker it.
+  const showLoadingCancel = useDelayedFlag(showLoadingOverlay, 3000);
   // Reconnect progress for the overlay. `attempt` goes 0..max as retries fire.
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
   const [reconnectMax, setReconnectMax] = useState(12);
   // One shared banner slot used for player-left / player-reconnected /
   // "starting without X" / "Reconnected!" — all short, mutually overriding.
   const [banner, flashBanner] = useTransientBanner<string>();
-  // Cancel button appears 3s into loading so brief loads don't flicker it.
-  const [showLoadingCancel, setShowLoadingCancel] = useState(false);
-  const loadingCancelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMobile = useMemo(() => isTouchPrimary(), []);
 
   // Resolve 'random' to a concrete arena; re-resolves each time Match mounts (rematch)
@@ -285,7 +266,6 @@ export function Match() {
         transport,
         localSlot: online.isHost ? 'P1' : 'P2',
         remoteSlots: activePlayers.filter(s => s !== (online.isHost ? 'P1' : 'P2') && s.startsWith('P')) as PlayerSlot[],
-        rngSeed: online.rngSeed,
         onStall: (stalled) => {
           setUnstable(stalled ? { kind: 'mine' } : null);
         },
@@ -448,7 +428,7 @@ export function Match() {
     let wakeLock: WakeLockSentinel | null = null;
     navigator.wakeLock.request('screen').then((wl) => { wakeLock = wl; }).catch(() => {});
     return () => { wakeLock?.release(); };
-  }, [isMobile, currentArenaId]);
+  }, [isMobile]);
 
   return (
     <div className="match-container" data-testid="match-screen">
@@ -479,7 +459,13 @@ export function Match() {
           </button>
         )}
         {showLoadingOverlay && (
-          <div className="match-loading-overlay" data-testid="match-loading-overlay">
+          <div
+            className="match-loading-overlay"
+            data-testid="match-loading-overlay"
+            role="status"
+            aria-live="polite"
+            aria-busy="true"
+          >
             <div className="match-loading-spinner" />
             <div className="match-loading-text">{t('loading', 'Loading...')}</div>
             <div className="match-loading-sub" data-testid="match-loading-sub">
@@ -557,23 +543,30 @@ export function Match() {
             </div>
           </div>
         )}
-        {unstable && !paused && !isReconnecting && online.isOnline && (
-          <div
-            className="connection-unstable-indicator"
-            data-testid={unstable.kind === 'mine' ? 'connection-unstable' : 'connection-unstable-them'}
-          >
-            {unstable.kind === 'mine'
-              ? t('connection_unstable_mine', 'Your connection is unstable')
-              : t('connection_unstable_them', '{{name}} has a slow connection', { name: unstable.name })}
-          </div>
-        )}
-        {banner && !paused && online.isOnline && (
-          <div className="connection-unstable-indicator" data-testid="disconnect-banner">
-            {banner}
-          </div>
-        )}
+        {!paused && online.isOnline && (() => {
+          // Unstable-indicator slot: unstable takes priority over the transient
+          // banner when both would show simultaneously.
+          if (unstable && !isReconnecting) return (
+            <div
+              className="connection-unstable-indicator"
+              data-testid={unstable.kind === 'mine' ? 'connection-unstable' : 'connection-unstable-them'}
+              role="status"
+              aria-live="polite"
+            >
+              {unstable.kind === 'mine'
+                ? t('connection_unstable_mine', 'Your connection is unstable')
+                : t('connection_unstable_them', '{{name}} has a slow connection', { name: unstable.name })}
+            </div>
+          );
+          if (banner) return (
+            <div className="connection-unstable-indicator" data-testid="disconnect-banner" role="status" aria-live="polite">
+              {banner}
+            </div>
+          );
+          return null;
+        })()}
         {isReconnecting && online.isOnline && (
-          <div className="reconnecting-overlay">
+          <div className="reconnecting-overlay" role="status" aria-live="polite">
             <div className="reconnecting-box">
               <div className="reconnecting-spinner" />
               <div className="reconnecting-text">
@@ -591,7 +584,7 @@ export function Match() {
           </div>
         )}
         {reconnectFailed && online.isOnline && (
-          <div className="reconnecting-overlay" data-testid="reconnect-failed">
+          <div className="reconnecting-overlay" data-testid="reconnect-failed" role="alert" aria-live="assertive">
             <div className="reconnecting-box">
               <div className="reconnecting-text">
                 {t('reconnect_failed', 'Could not reconnect.')}

@@ -116,6 +116,9 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
       transportRef.current?.sendReliable({ type: MsgType.CHARACTER_SELECT, characterName: alt.name });
       flashAutoSwitchNotice({ prev, next: alt.name }, 4500);
     }
+  // `localChar` / `allChars` / `flashAutoSwitchNotice` are intentionally omitted:
+  // the didAutoSwitch.current guard short-circuits after one fire, so later
+  // changes to those deps can't cause a second switch.
   }, [online.isHost, online.remotePlayers]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const cleanup = useCallback(() => {
