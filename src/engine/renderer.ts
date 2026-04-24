@@ -1,4 +1,4 @@
-import type { Arena, MatchState, Particle, PlayerSlot, Gib } from './types';
+import type { Arena, MatchState, Particle, Platform, PlayerSlot, Gib } from './types';
 import type { ThemeConfig } from './themes/types';
 import { aabbOverlap } from './physics';
 import {
@@ -236,7 +236,7 @@ export class Renderer {
 
     // Platforms (use mirrored arena data, no canvas transform needed)
     for (const plat of arena.platforms) {
-      this.drawPlatform(ctx, plat.x, plat.y, plat.width, plat.height, plat.y >= 650);
+      this.drawPlatform(ctx, plat, plat.y >= 650);
     }
 
     // Ground surface line
@@ -279,21 +279,28 @@ export class Renderer {
   }
 
 
-  private drawPlatform(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, isGround: boolean): void {
-    const tp = this.theme.platform;
-
-    // Allow theme to completely override platform drawing
-    if (tp.customDraw) {
-      tp.customDraw(ctx, x, y, w, h, isGround);
+  private drawPlatform(ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean): void {
+    // Pack-owned override — new architecture (see docs/superpowers/specs/2026-04-24-arena-platforms-design.md)
+    if (this.theme.drawPlatform) {
+      this.theme.drawPlatform(ctx, platform, isGround);
       return;
     }
 
+    const tp = this.theme.platform;
+
+    // Legacy theme.platform.customDraw escape hatch (pre-framework)
+    if (tp.customDraw) {
+      tp.customDraw(ctx, platform.x, platform.y, platform.width, platform.height, isGround);
+      return;
+    }
+
+    // Default flat-rect fallback — used by 10 unmigrated packs until they adopt drawPlatform
+    const { x, y, width: w, height: h } = platform;
     if (isGround) {
       ctx.fillStyle = tp.groundBodyColor;
       ctx.fillRect(x, y + 4, w, h - 4);
       ctx.fillStyle = tp.groundTopColor;
       ctx.fillRect(x, y, w, 8);
-      // Ground texture spots
       const spotColor = this.blendColor(tp.groundBodyColor, '#FFFFFF', 0.15);
       ctx.fillStyle = spotColor;
       for (let dx = 10; dx < w; dx += 30 + Math.random() * 20) {
@@ -308,7 +315,6 @@ export class Renderer {
         ctx.fillStyle = tp.floatingAccentColor;
         ctx.fillRect(x, y, w, 3);
       }
-
       if (tp.drawMoss) {
         drawPlatformMoss(ctx, x, y, h);
         drawPlatformMoss(ctx, x + w, y, h);
