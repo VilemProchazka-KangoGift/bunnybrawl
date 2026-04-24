@@ -94,15 +94,31 @@ No new overlay primitives (`drawSpiderwebOverlay`, `drawBannerOverlay`, `drawSat
 
 ## Implementation order
 
-One natural split:
+This phase stops after meadow ships and reads right in playtest. The remaining 10 arenas are a separate phase, unblocked by meadow's validation.
 
-1. **Framework + helpers** — `drawPrimitives/platforms.ts` with shared helpers (`drawStone`, `drawLeafCluster`, cap/body/right-face rendering, edge-profile generators, `mulberry32` reuse). `ArenaPack` interface gains `drawPlatform`. Renderer delegates to the pack. Remove `ThemeConfig.platform.*` fields.
-2. **Migrate first pack — meadow** — prove the full pipeline end-to-end. Verify cached background still invalidates correctly on splat. Verify collision/AI unchanged (nav data, spawn positions).
-3. **Migrate remaining 10 packs** — one at a time; each commit is self-contained. Skip the existing roof-tile v1 — rooftops gets house+hallway only, platform `style` tag added to the arena layout.
-4. **Testing** — existing vitest config already excludes `arenas/packs/**` from coverage. Add a small regression test ensuring `drawPlatform` is callable for every registered pack (doesn't throw on a mock canvas).
-5. **Visual verification** — load each arena in dev server, eyeball against the v9 mockup reference.
+**In scope for this phase:**
 
-This keeps each commit small and reviewable. Steps 2–3 could ship incrementally if needed.
+1. **Framework + helpers** — `drawPrimitives/platforms.ts` with shared helpers (`drawStone`, `drawLeafCluster`, cap/body/right-face rendering, edge-profile generators, `mulberry32` reuse). `ArenaPack` interface gains `drawPlatform(ctx, platform, isGround)`. `Platform` interface gains optional `style?: string`. Renderer delegates to the pack. Remove `ThemeConfig.platform.*` fields from the interface.
+2. **Transitional rendering for unmigrated packs** — during the meadow-only window, the other 10 packs don't have `drawPlatform` yet. Provide a default implementation (either a pack-level fallback `drawPlatform` that renders the current flat-rect behavior, or a renderer-level fallback when `pack.drawPlatform` is undefined) so the other 10 arenas keep rendering exactly as they do today. This keeps the codebase shippable at all times.
+3. **Migrate meadow** — port meadow.ts to implement `drawPlatform` using the framework + its material. Verify:
+   - Cached background still invalidates correctly on splat events.
+   - Collision/AI unchanged (nav data, spawn positions, physics).
+   - `tsc -b` passes.
+   - Existing tests pass.
+4. **Smoke test for framework** — unit test that exercises the shared helpers (`drawStone`, edge profile generators) and meadow's `drawPlatform` against a mock 2d context without throwing. Canvas packs excluded from coverage per existing config.
+5. **PLAYTEST CHECKPOINT** — manually play meadow in dev server, verify:
+   - 3D cap reads as intended mid-character
+   - Varied stones on left side look good
+   - Front/back edge irregularity feels right
+   - No collision mismatch visible in the top-right triangle
+   - Performance unchanged (splat triggers bg re-render, should feel instant)
+   - No visual artifacts at different platform sizes (tiny stumps, wide ground, mid floating)
+   - Other 10 arenas still render exactly as before (unchanged)
+
+**Out of scope — future phase(s):**
+
+- Migrating the remaining 10 arenas (winter, volcano, castle, candy, treetops, underwater, haunted, rooftops w/ house+hallway, space, waterfall). Each is a self-contained migration using the framework. The order within that phase can be driven by which materials are most-played or most-visually-impactful.
+- Cleanup: removing the transitional fallback once all 11 packs have `drawPlatform`. At that point `drawPlatform` becomes required on `ArenaPack`.
 
 ## Testing approach
 
