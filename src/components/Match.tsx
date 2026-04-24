@@ -128,6 +128,9 @@ export function Match() {
   }, []);
 
   const handleQuit = useCallback(() => {
+    // Pending timers would fire after navigation and re-enter victory state.
+    if (victoryTimeoutRef.current) { clearTimeout(victoryTimeoutRef.current); victoryTimeoutRef.current = null; }
+    if (disconnectDelayRef.current) { clearTimeout(disconnectDelayRef.current); disconnectDelayRef.current = null; }
     if (netMatchRef.current) {
       netMatchRef.current.stop();
       netMatchRef.current = null;
@@ -422,12 +425,19 @@ export function Match() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePlayers, matchSettings, setMatchResult, online.isOnline]);
 
-  // Wake lock: prevent screen dimming during match on mobile
+  // Wake lock: prevent screen dimming during match on mobile.
+  // `cancelled` flag covers the race where cleanup fires before the async
+  // request resolves — without it, the sentinel would be assigned post-cleanup
+  // and leaked until GC.
   useEffect(() => {
     if (!isMobile || !('wakeLock' in navigator)) return;
+    let cancelled = false;
     let wakeLock: WakeLockSentinel | null = null;
-    navigator.wakeLock.request('screen').then((wl) => { wakeLock = wl; }).catch(() => {});
-    return () => { wakeLock?.release(); };
+    navigator.wakeLock.request('screen').then((wl) => {
+      if (cancelled) { wl.release().catch(() => {}); return; }
+      wakeLock = wl;
+    }).catch(() => {});
+    return () => { cancelled = true; wakeLock?.release().catch(() => {}); };
   }, [isMobile]);
 
   return (

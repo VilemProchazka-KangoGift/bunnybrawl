@@ -115,6 +115,12 @@ export class Transport {
   private _jitter = 0;
   private _isRelay = false;
 
+  // One-shot hooks for the in-flight joinRoom() promise. Tracked as instance
+  // fields (not closure state) so `destroy()`/`cleanupPriorRoom()` can cancel
+  // a pending join and `setEvents()` won't clobber the resolver.
+  private joinTimeout: ReturnType<typeof setTimeout> | null = null;
+  private joinResolvedOnPeer: ((peerId: string) => void) | null = null;
+
   constructor(events: TransportEvents) {
     this.events = events;
     const simConfig = readSimConfigFromUrl();
@@ -175,6 +181,7 @@ export class Transport {
    *  (tests depend on that timing, as do UI subscribers that read roomCode
    *  immediately after the call). */
   private cleanupPriorRoom(): void {
+    this.cancelPendingJoin();
     if (!this.room) return;
     // Fire-and-forget room.leave() — Trystero cleans up WebRTC channels
     // asynchronously; we don't need to block the new room's creation on it.
@@ -186,6 +193,11 @@ export class Transport {
     this._rtt = 0;
     this._jitter = 0;
     this.stopPing();
+  }
+
+  private cancelPendingJoin(): void {
+    if (this.joinTimeout) { clearTimeout(this.joinTimeout); this.joinTimeout = null; }
+    this.joinResolvedOnPeer = null;
   }
 
   /** Create a room as host. Returns the room code. */
@@ -219,7 +231,9 @@ export class Transport {
     this._roomCode = code;
 
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
+      this.joinTimeout = setTimeout(() => {
+        this.joinTimeout = null;
+        this.joinResolvedOnPeer = null;
         this.setStatus('error', 'Connection timed out. Check the room code or try again.');
         reject(new Error('timeout'));
       }, 20000); // 20s timeout for Nostr discovery
@@ -228,7 +242,7 @@ export class Transport {
         const { config, roomId } = getRoomConfig(`room-${code.toUpperCase()}`);
         this.room = joinRoom(config, roomId);
       } catch (e) {
-        clearTimeout(timeout);
+        this.cancelPendingJoin();
         this.setStatus('error', `Failed to join room: ${e}`);
         reject(e);
         return;
@@ -236,15 +250,15 @@ export class Transport {
 
       this.setupRoom();
 
-      // Wait for at least one peer (the host) to connect
-      const origOnPeerConnected = this.events.onPeerConnected;
-      const checkConnected = (peerId: string) => {
-        clearTimeout(timeout);
-        this.events.onPeerConnected = origOnPeerConnected;
-        origOnPeerConnected?.(peerId);
+      // One-shot resolver — `setupRoom`'s onPeerJoin invokes this alongside
+      // the regular `events.onPeerConnected`, so we never mutate `this.events`
+      // (a later `setEvents()` call would otherwise clobber the caller's
+      // handler with a stale reference).
+      this.joinResolvedOnPeer = () => {
+        if (this.joinTimeout) { clearTimeout(this.joinTimeout); this.joinTimeout = null; }
+        this.joinResolvedOnPeer = null;
         resolve();
       };
-      this.events.onPeerConnected = checkConnected;
     });
   }
 
@@ -284,6 +298,7 @@ export class Transport {
 
   /** Clean up all resources. */
   destroy(): void {
+    this.cancelPendingJoin();
     if (this.simFlushTimer) {
       clearInterval(this.simFlushTimer);
       this.simFlushTimer = null;
@@ -346,6 +361,7 @@ export class Transport {
       }
 
       this.events.onPeerConnected?.(peerId);
+      if (this.joinResolvedOnPeer) this.joinResolvedOnPeer(peerId);
     });
 
     this.room.onPeerLeave((peerId: string) => {
