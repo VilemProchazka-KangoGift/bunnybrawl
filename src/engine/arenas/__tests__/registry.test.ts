@@ -213,10 +213,12 @@ describe('Arena registry', () => {
   it('extracts ThemeConfig shape from an ArenaPack', () => {
     const drawBg = () => {};
     const drawFg = () => {};
+    const drawPlat = () => {};
     const pack = makeMockPack({
       id: 'test_to_theme',
       drawBackgroundNature: drawBg as ArenaPack['drawBackgroundNature'],
       drawForegroundNature: drawFg as ArenaPack['drawForegroundNature'],
+      drawPlatform: drawPlat as ArenaPack['drawPlatform'],
       bubbleHelmet: true,
       physics: { gravity: 1.5 },
     });
@@ -231,6 +233,7 @@ describe('Arena registry', () => {
     expect(theme.sky).toBe(pack.sky);
     expect(theme.drawBackgroundNature).toBe(drawBg);
     expect(theme.drawForegroundNature).toBe(drawFg);
+    expect(theme.drawPlatform).toBe(drawPlat);
     expect(theme.bubbleHelmet).toBe(true);
     expect(theme.physics).toEqual({ gravity: 1.5 });
     // Should NOT carry over layout fields
