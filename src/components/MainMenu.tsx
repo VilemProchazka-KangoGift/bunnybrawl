@@ -50,8 +50,17 @@ export function MainMenu() {
 
   useEffect(() => {
     audio.playMenuMusic();
+    // Mobile browsers block autoplay until a user gesture. Retry on first
+    // interaction — playMenuMusic() no-ops if music already started.
+    const retry = () => audio.playMenuMusic();
+    document.addEventListener('pointerdown', retry, { once: true });
+    document.addEventListener('keydown', retry, { once: true });
     // Defer heavy procedural sound generation so it doesn't block music start
     setTimeout(() => audio.init(), 0);
+    return () => {
+      document.removeEventListener('pointerdown', retry);
+      document.removeEventListener('keydown', retry);
+    };
   }, []);
 
   useEffect(() => {

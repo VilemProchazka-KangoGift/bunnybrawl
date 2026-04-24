@@ -7,6 +7,7 @@
 - Victory screen: two-column layout (scoreboard+stats left, stats+MVP right). "Change Arena" button opens overlay. Mobile keeps the same horizontal two-column layout — do NOT switch to `flex-direction: column` (overflows 720px logical height). Compact via smaller fonts/padding instead.
 - Pause screen arena selector must update both `currentArenaId` local state AND `matchSettings.arenaId` in store.
 - Menu music (`menuMusicHowl`) must NOT be tied to component lifecycle — neither MainMenu nor CharacterSelect stops on unmount. Preloaded in `audio.init()`.
+- MainMenu registers one-shot `pointerdown`+`keydown` listeners on `document` to retry `audio.playMenuMusic()` on first user gesture — mobile browsers block autoplay on mount. `playMenuMusic` no-ops once playback has actually started (tracked via Howl events, not `.playing()`).
 - Gore mode persisted in `carrotroyale_gore`, arena in `carrotroyale_arena`, bots in `carrotroyale_botcount`/`carrotroyale_botdiff`, music disabled in `carrotroyale_music_disabled`.
 - MainMenu modals (Mods, Help) use `mods-overlay` CSS class for the backdrop + `onClick` dismiss. Shared panel styles in `.mods-modal, .help-modal` rule — new modals add to that selector and only declare overrides.
 - Down key = crouch (ground) / super stomp (air). Players never fall through platforms. Don't describe Down as "drop through" in any text.

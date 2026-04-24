@@ -55,6 +55,9 @@
 - `gamePaused` is reset inside `audio.stopAllGameSounds()` — `GameLoop.stop()` runs that, so all game-exit paths (quit-from-pause, match-end cleanup, stall timeout) clear the mute automatically. New exit paths don't need explicit `setPaused(false)`, but must go through `stopAllGameSounds()` or call it directly.
 - All MP3 music Howls (menu + arena) use `html5: true` — streams playback as bytes arrive instead of stalling on `decodeAudioData` behind the ~40 WAV SFX buffers that `registerAllSounds()` decodes at menu mount. New arena music Howls must set `html5: true` too. Procedural WAV SFX stay on Web Audio (no `html5` flag).
 - Music preference persisted in `carrotroyale_music_disabled` (localStorage). Loaded at AudioManager field init, not in `init()`. Wrap localStorage access in try/catch for restricted contexts.
+- `Howler.playing()` is unreliable after a blocked autoplay (mobile) — set optimistically even when the browser silently rejects `play()`. For anything that runs outside a user gesture (menu music on MainMenu mount), track actual playback via Howl `on('play')/on('stop')/on('playerror')`. Arena music is safe (always post-gesture).
+- Pause only calls `Howler.mute(true)` — the arena Howl keeps running silently. Guard same-theme resume with `if (!musicHowl.playing()) musicHowl.play()`, otherwise a second concurrent instance starts at offset 0 (Howler allows concurrent playback by default).
+- Audio tests: the `MockHowl` constructor in `src/engine/audio.test.ts` must stub `.on()` and `.once()` alongside `play/stop/volume/unload/playing`. MusicManager attaches event listeners in `createMenuHowl()`, so missing stubs throw at test-time.
 
 ## Arenas
 - Arena pack registry must be initialized before use — `registerBuiltinArenas()` called at module scope in `App.tsx`. Nav data is embedded in each pack's `navData` field and auto-registered.

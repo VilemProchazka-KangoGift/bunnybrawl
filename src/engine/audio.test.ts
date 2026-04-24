@@ -19,6 +19,8 @@ vi.mock('howler', () => {
     this.volume = vi.fn().mockReturnValue(0.5);
     this.unload = vi.fn();
     this.playing = vi.fn().mockReturnValue(false);
+    this.on = vi.fn();
+    this.once = vi.fn();
     this._src = arguments[0]?.src;
     instances.push(this);
   }

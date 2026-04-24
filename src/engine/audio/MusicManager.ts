@@ -8,6 +8,11 @@ export class MusicManager {
   private muted = false;
   private musicHowl: Howl | null = null;
   private musicThemeId: string | null = null;
+  // Tracks whether menu music has actually started playing. Mobile browsers
+  // block autoplay until a user gesture; Howler's internal `.playing()` flag
+  // can report true even when the browser silently rejected play(), so we
+  // track real playback via Howl events instead.
+  private menuMusicActuallyPlaying = false;
   // Start fetching before first user interaction (init() is heavy).
   private menuMusicHowl: Howl | null = this.musicDisabled ? null : this.createMenuHowl();
 
@@ -15,12 +20,17 @@ export class MusicManager {
   // waiting for a full fetch + decodeAudioData (which can stall behind the
   // procedural SFX decode batch run by registerAllSounds()).
   private createMenuHowl(): Howl {
-    return new Howl({
+    const howl = new Howl({
       src: [AUDIO_BASE + 'carrot-royale-main.mp3'],
       volume: 0.25,
       loop: true,
       html5: true,
     });
+    const clearPlaying = () => { this.menuMusicActuallyPlaying = false; };
+    howl.on('play', () => { this.menuMusicActuallyPlaying = true; });
+    howl.on('stop', clearPlaying);
+    howl.on('playerror', clearPlaying);
+    return howl;
   }
 
   setMuted(muted: boolean): void {
@@ -44,10 +54,10 @@ export class MusicManager {
 
   playMenuMusic(): void {
     if (this.muted || this.musicDisabled) return;
-    if (this.menuMusicHowl && this.menuMusicHowl.playing()) return;
     if (!this.menuMusicHowl) {
       this.menuMusicHowl = this.createMenuHowl();
     }
+    if (this.menuMusicActuallyPlaying) return;
     this.menuMusicHowl.play();
   }
 
@@ -61,7 +71,10 @@ export class MusicManager {
     this.stopMenuMusic();
     if (this.muted || this.musicDisabled) return;
     if (this.musicHowl && this.musicThemeId === themeId) {
-      this.musicHowl.play();
+      // Pause only mutes Howler globally — the arena Howl keeps running
+      // silently. Calling play() again on an already-playing Howl starts
+      // a second concurrent instance (offset doubling). Guard with playing().
+      if (!this.musicHowl.playing()) this.musicHowl.play();
       return;
     }
     this.stopMusic();
