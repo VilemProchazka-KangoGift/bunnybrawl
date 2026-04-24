@@ -146,7 +146,13 @@ export function candyDrips(x: number, w: number, cF: number, rng: () => number):
   return pts;
 }
 
-/** Mirror of wavyDown for back edges. Points go up from cB into sky. */
+/**
+ * Mirror of wavyDown for back edges. Points go up from cB into sky.
+ *
+ * Default bumps/resolution are lower than wavyDown's: back edges sit
+ * further from the viewer in 3D perspective, so sparser detail reads
+ * as more visually cohesive.
+ */
 export function backWavyUp(x: number, w: number, cB: number, sp: number, rng: () => number, opts: WavyOpts): EdgePoint[] {
   const bumps = opts.bumps ?? 4;
   const ampMin = opts.ampMin ?? 2;

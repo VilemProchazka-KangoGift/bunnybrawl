@@ -1,11 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import {
+  backFlat,
+  backWavyUp,
   CAP_DEPTH,
-  SKEW_RATIO,
+  candyDrips,
+  jaggedDown,
   mulberry32,
   seedFor,
+  SKEW_RATIO,
+  subtleDown,
+  wavyDown,
 } from '../platforms';
-import { wavyDown, jaggedDown, subtleDown, candyDrips, backWavyUp, backFlat } from '../platforms';
 
 describe('platforms.ts framework — core helpers', () => {
   it('exposes locked constants', () => {
