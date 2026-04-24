@@ -662,26 +662,21 @@ describe('HostAuthority', () => {
       host.addGuest('peer-a', 'P2' as PlayerSlot);
       host.removeGuest('peer-a'); // enters grace period
 
-      // New peer tries to reclaim P2
-      host.handleReliableMessage(
-        { type: MsgType.RECONNECT_REQUEST, slot: 'P2' } as any,
-        'peer-new',
-      );
+      // New peer tries to reclaim P2 — returns true on success
+      const ok = host.handleReconnectRequest('P2' as PlayerSlot, 'peer-new');
+      expect(ok).toBe(true);
 
-      // Should send RECONNECT_SYNC to the new peer
-      expect(transport.sendReliableTo).toHaveBeenCalledWith(
-        'peer-new',
-        expect.objectContaining({ type: MsgType.RECONNECT_SYNC, slot: 'P2' }),
-      );
+      // Guest input is re-established on reclaim (the SYNC ack + fresh
+      // snapshot are sent by NetMatch, not by HostAuthority directly)
+      expect(host.getNetworkInputs().has('P2')).toBe(true);
 
-      // Should also send a full snapshot
+      // sendSnapshotTo can be used by the orchestrator to push a one-off
+      // snapshot to the reclaiming peer.
+      host.sendSnapshotTo('peer-new', mockGameLoopInstance.getState() as any);
       expect(transport.sendUnreliableTo).toHaveBeenCalledWith(
         'peer-new',
         expect.any(ArrayBuffer),
       );
-
-      // Guest input should be re-established
-      expect(host.getNetworkInputs().has('P2')).toBe(true);
     });
 
     it('RECONNECT_REQUEST fails if slot has an active peer', () => {
@@ -691,12 +686,8 @@ describe('HostAuthority', () => {
       // P2 is actively connected — another peer can't claim it
       host.addGuest('peer-a', 'P2' as PlayerSlot);
 
-      host.handleReliableMessage(
-        { type: MsgType.RECONNECT_REQUEST, slot: 'P2' } as any,
-        'peer-new',
-      );
-
-      expect(transport.sendReliableTo).not.toHaveBeenCalled();
+      const ok = host.handleReconnectRequest('P2' as PlayerSlot, 'peer-new');
+      expect(ok).toBe(false);
     });
   });
 

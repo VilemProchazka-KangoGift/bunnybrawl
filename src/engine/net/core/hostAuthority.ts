@@ -184,6 +184,18 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
     if (this.snapshotHistoryCount < GenericHostAuthority.SNAPSHOT_HISTORY_SIZE) this.snapshotHistoryCount++;
   }
 
+  /** One-off snapshot to a single peer — used for reconnect sync where the
+   *  reclaimed guest needs a fresh full state outside the broadcast cadence.
+   *  Does not advance localFrame or touch the match-over tail. */
+  sendSnapshotTo(peerId: string, state: TState): void {
+    const snap = this.snapshotCodec.takeSnapshot(this.localFrame, state);
+    const encodeBuf = this.snapshotCodec.encode(snap);
+    const msg = new Uint8Array(1 + encodeBuf.byteLength);
+    msg[0] = CoreMsgType.SNAPSHOT;
+    msg.set(new Uint8Array(encodeBuf), 1);
+    this.transport.sendUnreliableTo(peerId, msg.buffer);
+  }
+
   handleUnreliableMessage(data: ArrayBuffer, fromPeerId?: string): void {
     const view = new DataView(data);
     if (view.byteLength < 1) return;

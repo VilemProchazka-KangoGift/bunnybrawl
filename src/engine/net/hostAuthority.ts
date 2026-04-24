@@ -5,7 +5,7 @@
  * - Jump latching (edge-triggered jump preserved across rapid input messages)
  * - consumeGuestJumps() to clear latched jumps after each tick
  * - Reconnect respawn (dead players respawn when reconnecting)
- * - Reliable message handling (pause/disconnect/reconnect with game protocol)
+ * - Pause/disconnect reliable message handling
  */
 import type { InputState, PlayerSlot, MatchState } from '../types';
 import type { GameLoop } from '../gameLoop';
@@ -103,6 +103,8 @@ export class HostAuthority {
   setMatchOver(): void { this.core.setMatchOver(); }
 
   broadcastSnapshot(state: MatchState): void { this.core.broadcastSnapshot(state); }
+  sendSnapshotTo(peerId: string, state: MatchState): void { this.core.sendSnapshotTo(peerId, state); }
+  getLocalFrame(): number { return this.core.getLocalFrame(); }
 
   handleUnreliableMessage(data: ArrayBuffer, fromPeerId?: string): void {
     this.core.handleUnreliableMessage(data, fromPeerId);
@@ -122,7 +124,8 @@ export class HostAuthority {
     return this.core.handleReconnectRequest(slot, newPeerId);
   }
 
-  /** Handle reliable messages — game-specific protocol (pause/disconnect/reconnect). */
+  /** Handle reliable messages — pause relay + disconnect teardown. Reconnect
+   *  sync lives in NetMatch since it needs host-wide state (pause flag). */
   handleReliableMessage(msg: ReliableMessage, fromPeerId?: string): void {
     switch (msg.type) {
       case MsgType.PAUSE:
@@ -142,25 +145,6 @@ export class HostAuthority {
       case MsgType.DISCONNECT:
         if (fromPeerId) this.core.removeGuest(fromPeerId);
         break;
-      case MsgType.RECONNECT_REQUEST: {
-        const reqSlot = (msg as { slot: string }).slot as PlayerSlot;
-        if (fromPeerId && this.core.handleReconnectRequest(reqSlot, fromPeerId)) {
-          this.transport.sendReliableTo(fromPeerId, {
-            type: MsgType.RECONNECT_SYNC,
-            slot: reqSlot,
-            snapshotFrame: this.core.getLocalFrame(),
-            paused: this.gameLoop.isPaused(),
-          } as ReliableMessage);
-          // Send fresh snapshot
-          const snap = takeAuthSnapshot(this.core.getLocalFrame(), this.gameLoop.getState());
-          const { buffer: buf, length: len } = encodeSnapshot(snap);
-          const fullMsg = new Uint8Array(1 + len);
-          fullMsg[0] = MsgType.SNAPSHOT;
-          fullMsg.set(new Uint8Array(buf, 0, len), 1);
-          this.transport.sendUnreliableTo(fromPeerId, fullMsg.buffer);
-        }
-        break;
-      }
     }
   }
 }

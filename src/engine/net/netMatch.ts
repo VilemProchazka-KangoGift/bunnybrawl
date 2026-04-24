@@ -624,17 +624,20 @@ export class NetMatch {
         if (slot) this.onGuestConnectionUnstable?.(slot, stalled);
       }
     } else if (this._isHost && msg.type === MsgType.RECONNECT_REQUEST) {
-      // hostAuthority already ran its half of the protocol (delegated at the
-      // top of this method). If the reclaim succeeded, the peer is now back
-      // in peerSlotMap. Purge any stale LOADED and notify Match.tsx so it
-      // can resend SETTINGS_SYNC for the current arena.
-      if (fromPeerId && this.hostAuthority) {
-        const slot = this.hostAuthority.getSlotForPeer(fromPeerId);
-        if (slot) {
-          this.loadedGuests.delete(slot);
-          this.onGuestReconnected?.(slot);
-        }
-      }
+      if (!fromPeerId || !this.hostAuthority) return;
+      const reqSlot = (msg as { slot: string }).slot as PlayerSlot;
+      if (!this.hostAuthority.handleReconnectRequest(reqSlot, fromPeerId)) return;
+      // Ack with current pause state so the guest's render doesn't diverge
+      // from a suspended host sim.
+      this.transport.sendReliableTo(fromPeerId, {
+        type: MsgType.RECONNECT_SYNC,
+        slot: reqSlot,
+        snapshotFrame: this.hostAuthority.getLocalFrame(),
+        paused: this.gameLoop.isPaused(),
+      } as ReliableMessage);
+      this.hostAuthority.sendSnapshotTo(fromPeerId, this.gameLoop.getState());
+      this.loadedGuests.delete(reqSlot);
+      this.onGuestReconnected?.(reqSlot);
     }
   }
 
