@@ -4,6 +4,7 @@ import { FAT_SCALE, HITSTOP_DURATION } from '../constants';
 import { hasCustomEyes, getSpriteRenderer, getCharacterPack, drawLegs } from '../characters';
 import { drawHighlightSpot } from '../spriteShading';
 import { getSlowDevice } from '../perfFlags';
+import { getIdleAction } from './idleActions';
 
 // Sprite cache: key -> OffscreenCanvas with pre-drawn character sprite.
 // Backing-store dims include the current render scale; cleared on scale change.
@@ -113,7 +114,7 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player, nearCa
   if (state === 'splat') {
     drawSplatCharacter(ctx, x, y, width, height, character.color, character.darkColor);
   } else {
-    drawCharacterSprite(ctx, x, y, width, height, character, state, animFrame, fastFalling, player.idleAnimTimer, player.squashScale, theme);
+    drawCharacterSprite(ctx, x, y, width, height, character, state, animFrame, fastFalling, player.idleAction, player.idleActionTimer, player.idleActionDuration, player.squashScale, theme, player);
     drawExpression(ctx, player, frameTime);
   }
 
@@ -173,12 +174,13 @@ function drawCharacterSprite(
   x: number, y: number, w: number, h: number,
   char: { name: string; color: string; darkColor: string; lightColor: string },
   state: string, animFrame: number, fastFalling: boolean,
-  idleAnimTimer?: number, squashScale = 1,
-  theme?: ThemeConfig,
+  idleAction: number, idleActionTimer: number, idleActionDuration: number,
+  squashScale: number,
+  theme: ThemeConfig | undefined,
+  player: Player,
 ): void {
-  const idleKey = (state === 'idle' && idleAnimTimer !== undefined && idleAnimTimer > 0 && idleAnimTimer < 0.5)
-    ? Math.floor(idleAnimTimer * 10)
-    : -1;
+  // 1-bit idle flag — covers the four packs (bunny/bear/fox/frog) whose drawSprite reads isIdleAnim.
+  const idleKey = idleAction >= 0 ? 1 : 0;
   const sqKey = Math.round(squashScale * 10);
   const cacheKey = `${char.name}_${state}_${animFrame}_${fastFalling ? 1 : 0}_${idleKey}_${sqKey}`;
 
@@ -203,7 +205,7 @@ function drawCharacterSprite(
   sctx.scale(s, s);
   sctx.translate(-x + pad, -y + pad);
 
-  _drawCharacterSpriteImpl(sctx, x, y, w, h, char, state, animFrame, fastFalling, idleAnimTimer, squashScale, theme);
+  _drawCharacterSpriteImpl(sctx, x, y, w, h, char, state, animFrame, fastFalling, idleAction, idleActionTimer, idleActionDuration, squashScale, theme, player);
 
   if (spriteCache.size > _spriteCacheCap) {
     const first = spriteCache.keys().next().value;
@@ -248,8 +250,10 @@ function _drawCharacterSpriteImpl(
   x: number, y: number, w: number, h: number,
   char: { name: string; color: string; darkColor: string; lightColor: string },
   state: string, animFrame: number, fastFalling: boolean,
-  idleAnimTimer?: number, squashScale = 1,
-  theme?: ThemeConfig,
+  idleAction: number, idleActionTimer: number, idleActionDuration: number,
+  squashScale: number,
+  theme: ThemeConfig | undefined,
+  player: Player,
 ): void {
   const cx = x + w / 2;
   const isAirborne = state === 'airborne';
@@ -268,12 +272,18 @@ function _drawCharacterSpriteImpl(
     ctx.translate(-cx, -(yOff + h / 2));
   }
 
-  // Idle animation -- legacy transform path removed; Task 9 wires the new idleActions dispatch.
-  const idleT = idleAnimTimer ?? -1;
-  const isIdleAnim = idleT >= 0 && idleT < 0.5;
-
+  // Idle action: dispatch to the action's apply fn (ctx transform applied before sprite draw).
+  const isIdleAnimFlag = idleAction >= 0;
+  const idleT = idleActionDuration > 0 ? 1 - (idleActionTimer / idleActionDuration) : 0;
   const colors = { color: char.color, darkColor: char.darkColor, lightColor: char.lightColor };
-  drawCharacterCore(ctx, cx, yOff, w, h, char.name, state, animFrame, squashScale, colors, isIdleAnim, idleT);
+  if (isIdleAnimFlag && state !== 'run' && state !== 'airborne') {
+    const action = getIdleAction(char.name, idleAction);
+    if (action) {
+      action.apply(ctx, cx, yOff, w, h, idleT, colors, player);
+    }
+  }
+
+  drawCharacterCore(ctx, cx, yOff, w, h, char.name, state, animFrame, squashScale, colors, isIdleAnimFlag, idleT);
 
   // Motion lines for airborne
   if (isAirborne && !fastFalling) {
