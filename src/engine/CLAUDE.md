@@ -14,6 +14,10 @@
 - `matchMedia('(resolution: Xdppx)')` only fires the transition AWAY from X — `renderScale.ts` re-creates the listener on each change.
 - `Renderer.setRenderScale()` re-runs `renderBackground()` with the cached arena. Baked gibs/blood drips on the bg canvas are lost on scale change (rare event).
 
+## Local-Device Preferences vs Match Mods
+- **Match mods** (`matchSettings.mods.*`): host-authoritative, synced to guests via `SETTINGS_SYNC`, persisted in `gameStore` localStorage. Add via `MOD_LIST` in `ModsModal.tsx`.
+- **Local-device prefs**: never synced to peers. Pattern: module-scope state + localStorage + `Set<Listener>` pub/sub (see `perfFlags.ts`, `renderScale.ts`). Read by engine via `getX()`, subscribed by React via `useSyncExternalStore(subscribeX, getX)` — never `useState(getX())` (stale snapshot).
+
 ## Game Loop
 - **System architecture**: GameLoop owns two system arrays (`GameplaySystem[]` for `fixedUpdate`, `CosmeticSystem[]` for `cosmeticStep`). Each system implements `init(state) / update(dt) / cleanup()`. Systems receive shared state via constructor and call pure functions from the `cosmetics/` and `gameplay/` subdirectories.
 - **ParticleSystem** is the central VFX hub — other systems reference it for `emitParticle()`, `spawnKillSplatter()`, `applyHazardHitVFX()`, etc. Created first in GameLoop constructor.
@@ -87,6 +91,7 @@
 - Nav graph doesn't model intra-platform obstacles or blocking ceilings. Small obstacles handled by stuck recovery; impassable barriers require splitting ground in arena definition.
 - Nav ceiling gap must exceed 174px (MAX_JUMP_HEIGHT) or phantom edges are created.
 - Lobby bots (`botLobbyInput()` in `lobbyGame.ts`) return `InputState` and go through `applyInput` like humans. Behavior (walk-to-zone + wall-jump) remains lobby-specific and does not share code with match AI.
+- Lobby runs no `cosmeticStep` — any renderer-consumed cosmetic timer (`idleAnimTimer`, `animFrame`, `squashScale`) must be ticked manually inside `LobbyGame.step()`. Mirror the logic from `gameLoop/cosmetics/playerCosmetics.ts`.
 
 ## Performance
 - Sprite cache: keyed by `name_state_animFrame_fastFalling_idleKey_sqKey`, 600-entry cap. `sqKey` = `Math.round(squashScale * 10)`. Breathing (2% scale) excluded from key.
