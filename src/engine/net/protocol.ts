@@ -33,6 +33,8 @@ export const MsgType = {
   MATCH_IN_PROGRESS: 0x14,
   RECONNECT_REQUEST: 0x15,
   RECONNECT_SYNC: 0x16,
+  LOADED: 0x17,
+  CONNECTION_UNSTABLE: 0x18,
 } as const;
 
 // ---- Slot encoding (game-specific: P1-P5 / B1-B5 convention) ----
@@ -265,6 +267,16 @@ export interface ReconnectSyncMessage {
   snapshotFrame: number;
 }
 
+export interface LoadedMessage {
+  type: 0x17;
+  slot: string;
+}
+
+export interface ConnectionUnstableMessage {
+  type: 0x18;
+  stalled: boolean;
+}
+
 export type ReliableMessage =
   | HandshakeMessage
   | SettingsSyncMessage
@@ -283,4 +295,6 @@ export type ReliableMessage =
   | SlotAssignmentMessage
   | MatchInProgressMessage
   | ReconnectRequestMessage
-  | ReconnectSyncMessage;
+  | ReconnectSyncMessage
+  | LoadedMessage
+  | ConnectionUnstableMessage;
