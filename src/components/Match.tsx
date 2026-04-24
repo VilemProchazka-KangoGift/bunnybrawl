@@ -235,6 +235,15 @@ export function Match() {
     const hudCanvas = hudCanvasRef.current;
     if (!bgCanvas || !fgCanvas || !hudCanvas) return;
 
+    const clearTimer = (ref: { current: ReturnType<typeof setTimeout> | null }) => {
+      if (ref.current) { clearTimeout(ref.current); ref.current = null; }
+    };
+    const commonCleanup = () => {
+      gameLoopRef.current = null;
+      setTouchInput(null);
+      clearTimer(victoryTimeoutRef);
+    };
+
     const arena = getArena(currentArenaId);
     let matchEnded = false;
     const onMatchEnd = (winner: import('../engine/types').PlayerSlot | null, state: import('../engine/types').MatchState) => {
@@ -392,16 +401,8 @@ export function Match() {
       return () => {
         netMatch.stop();
         netMatchRef.current = null;
-        gameLoopRef.current = null;
-        setTouchInput(null);
-        if (victoryTimeoutRef.current) {
-          clearTimeout(victoryTimeoutRef.current);
-          victoryTimeoutRef.current = null;
-        }
-        if (disconnectDelayRef.current) {
-          clearTimeout(disconnectDelayRef.current);
-          disconnectDelayRef.current = null;
-        }
+        commonCleanup();
+        clearTimer(disconnectDelayRef);
       };
     }
 
@@ -436,12 +437,7 @@ export function Match() {
 
     return () => {
       loop.stop();
-      gameLoopRef.current = null;
-      setTouchInput(null);
-      if (victoryTimeoutRef.current) {
-        clearTimeout(victoryTimeoutRef.current);
-        victoryTimeoutRef.current = null;
-      }
+      commonCleanup();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePlayers, matchSettings, setMatchResult, online.isOnline]);
