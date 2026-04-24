@@ -48,4 +48,12 @@ describe('meadow.drawPlatform', () => {
       meadow.drawPlatform!(ctx, floating, false);
     }).not.toThrow();
   });
+
+  it('no-ops for style=stump platforms', () => {
+    const ctx = mockCanvasContext();
+    // Find a stump platform in the meadow layout
+    const stump = meadow.platforms.find(p => p.style === 'stump');
+    expect(stump).toBeDefined();
+    expect(() => meadow.drawPlatform!(ctx, stump!, false)).not.toThrow();
+  });
 });

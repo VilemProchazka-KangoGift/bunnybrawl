@@ -36,10 +36,10 @@ export const meadow: ArenaPack = {
     { x: 490, y: 290, width: 300, height: 24 },
     { x: 110, y: 330, width: 120, height: 24 },
     { x: 1010, y: 345, width: 160, height: 24 },
-    { x: 340, y: 615, width: 55, height: 45 },
-    { x: 860, y: 615, width: 55, height: 45 },
-    { x: 440, y: 370, width: 45, height: 40 },
-    { x: 800, y: 370, width: 45, height: 40 },
+    { x: 340, y: 615, width: 55, height: 45, style: 'stump' },
+    { x: 860, y: 615, width: 55, height: 45, style: 'stump' },
+    { x: 440, y: 370, width: 45, height: 40, style: 'stump' },
+    { x: 800, y: 370, width: 45, height: 40, style: 'stump' },
   ],
   spawnPoints: [
     { x: 170, y: 500 }, { x: 1090, y: 515 },
@@ -276,6 +276,9 @@ export const meadow: ArenaPack = {
   },
 
   drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
+    // Stump platforms are drawn by drawBackgroundNature's drawTreeStump — skip the 3D cap/body here.
+    if (platform.style === 'stump') return;
+
     const rng = mulberry32(seedFor(platform.x, platform.y));
     const cF = platform.y + CAP_DEPTH / 2;
     const cB = platform.y - CAP_DEPTH / 2;
