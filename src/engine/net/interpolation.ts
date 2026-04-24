@@ -108,6 +108,7 @@ function extrapolateSnapshot(snap: AuthSnapshot, dt: number): AuthSnapshot {
   r.geyserStates = snap.geyserStates;
   r.killFeed = snap.killFeed;
   r.scoreAnimations = snap.scoreAnimations;
+  r.phase = snap.phase;
   r.matchOver = snap.matchOver;
   r.winner = snap.winner;
   r.timeElapsed = snap.timeElapsed;
@@ -186,6 +187,7 @@ function interpolateSnapshots(a: AuthSnapshot, b: AuthSnapshot, t: number): Auth
   r.geyserStates = b.geyserStates;
   r.killFeed = b.killFeed;
   r.scoreAnimations = b.scoreAnimations;
+  r.phase = b.phase;
   r.matchOver = b.matchOver;
   r.winner = b.winner;
 
@@ -279,6 +281,7 @@ export function applySnapshotToState(
     player.damageFlashSide = sp.damageFlashSide;
   }
 
+  state.phase = snap.phase;
   state.timeElapsed = snap.timeElapsed;
   state.countdown = snap.countdown;
   state.dayPhase = snap.dayPhase;

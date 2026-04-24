@@ -9,7 +9,7 @@
  * - Delta compression: unchanged frames ≈ 40-80 bytes
  */
 import type {
-  PlayerSlot, PlayerState, KillFeedEntry, MatchState,
+  PlayerSlot, PlayerState, KillFeedEntry, MatchState, MatchPhase,
 } from '../types';
 import { encodeSlot, decodeSlot } from './protocol';
 
@@ -47,6 +47,7 @@ export interface SnapshotPlayer {
 
 export interface AuthSnapshot {
   frame: number;
+  phase: MatchPhase;
   players: SnapshotPlayer[];
   carrots: Array<{ x: number; y: number; active: boolean }>;
   springs: Array<{ x: number; y: number; bounceTimer: number; life: number; growTimer: number }>;
@@ -275,7 +276,9 @@ export function encodeSnapshot(snap: AuthSnapshot): { buffer: ArrayBuffer; lengt
   ENCODE_VIEW.setFloat32(o, snap.hitstopZoom, true); o += 4;
 
   // Match state flags
-  ENCODE_VIEW.setUint8(o++, (snap.matchOver ? 1 : 0) | (snap.winner ? 2 : 0));
+  // Bits: 0=matchOver, 1=winner-present, 2-3=phase (0=loading, 1=playing, 2=over)
+  const phaseBits = snap.phase === 'loading' ? 0 : snap.phase === 'playing' ? 1 : 2;
+  ENCODE_VIEW.setUint8(o++, (snap.matchOver ? 1 : 0) | (snap.winner ? 2 : 0) | (phaseBits << 2));
   if (snap.winner) {
     ENCODE_VIEW.setUint8(o++, encodeSlot(snap.winner));
   }
@@ -460,6 +463,8 @@ export function decodeSnapshot(buf: ArrayBuffer): AuthSnapshot | null {
   if (matchFlags & 2) {
     winner = decodeSlotAs(view.getUint8(o++));
   }
+  const phaseBits = (matchFlags >> 2) & 3;
+  const phase: MatchPhase = phaseBits === 0 ? 'loading' : phaseBits === 1 ? 'playing' : 'over';
 
   // Score animations
   const saLen = view.getUint8(o++);
@@ -473,6 +478,7 @@ export function decodeSnapshot(buf: ArrayBuffer): AuthSnapshot | null {
 
   return {
     frame,
+    phase,
     players,
     carrots,
     springs,
@@ -505,6 +511,7 @@ export function decodeSnapshot(buf: ArrayBuffer): AuthSnapshot | null {
 export function takeAuthSnapshot(frame: number, state: MatchState): AuthSnapshot {
   return {
     frame,
+    phase: state.phase,
     players: state.players.map(p => ({
       id: p.id,
       x: p.x, y: p.y,
