@@ -259,7 +259,7 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
                   {/* Host: "waiting to ready up" hint + Start button. Host
                       can still force-start; the hint just explains the wait. */}
                   {online.isHost && online.remotePlayers.length > 0 && !online.remotePlayers.some(rp => rp.ready) && (
-                    <div className="online-status-box" data-testid="waiting-ready-hint" style={{ marginTop: 8 }}>
+                    <div className="online-status-box online-status-box--ready-hint" data-testid="waiting-ready-hint">
                       {t('waiting_ready', 'Waiting for opponent to ready up...')}
                     </div>
                   )}
@@ -327,9 +327,9 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
           {/* Step 4: Spectating — joined while match in progress */}
           {step === 'spectating' && (
             <div className="online-step">
-              <div className="online-status-box" style={{ textAlign: 'center', padding: '24px 0' }}>
-                <p style={{ fontSize: '18px', marginBottom: 8 }}>{t('match_in_progress', 'Match in progress')}</p>
-                <p style={{ opacity: 0.7 }}>{t('spectating_hint', "You'll join when the current match ends.")}</p>
+              <div className="online-status-box online-status-box--spectating">
+                <p className="online-spectating-title">{t('match_in_progress', 'Match in progress')}</p>
+                <p className="online-spectating-hint">{t('spectating_hint', "You'll join when the current match ends.")}</p>
               </div>
               <button className="btn-base mods-close-btn" onClick={cleanup}>{t('back', 'Back')}</button>
             </div>

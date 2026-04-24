@@ -372,6 +372,11 @@
   100% { opacity: 1; transform: translateY(0); }
 }
 
+.online-status-box--ready-hint { margin-top: 8px; }
+.online-status-box--spectating { text-align: center; padding: 24px 0; }
+.online-spectating-title { font-size: 18px; margin-bottom: 8px; }
+.online-spectating-hint  { opacity: 0.7; }
+
 .online-players {
   display: flex;
   flex-direction: column;
