@@ -239,22 +239,25 @@ export class Renderer {
       this.drawPlatform(ctx, plat, plat.y >= 650);
     }
 
-    // Ground surface line
-    const ground = arena.platforms[0];
-    ctx.fillStyle = theme.ground.surfaceColor;
-    ctx.fillRect(ground.x, ground.y, ground.width, theme.ground.surfaceThickness);
+    // Legacy ground-top decorations — skip when the pack owns platform rendering (drawPlatform handles the full 3D ground cap)
+    if (!this.theme.drawPlatform) {
+      // Ground surface line
+      const ground = arena.platforms[0];
+      ctx.fillStyle = theme.ground.surfaceColor;
+      ctx.fillRect(ground.x, ground.y, ground.width, theme.ground.surfaceThickness);
 
-    // Grass blades (if enabled by theme)
-    if (theme.ground.grassBlades) {
-      const gb = theme.ground.grassBlades;
-      ctx.strokeStyle = gb.color;
-      ctx.lineWidth = 2;
-      for (let x = 10; x < CANVAS_WIDTH; x += gb.spacing + Math.random() * (gb.spacing * 0.67)) {
-        const h = gb.heightRange[0] + Math.random() * (gb.heightRange[1] - gb.heightRange[0]);
-        ctx.beginPath();
-        ctx.moveTo(x, ground.y);
-        ctx.lineTo(x - 3, ground.y - h);
-        ctx.stroke();
+      // Grass blades (if enabled by theme)
+      if (theme.ground.grassBlades) {
+        const gb = theme.ground.grassBlades;
+        ctx.strokeStyle = gb.color;
+        ctx.lineWidth = 2;
+        for (let x = 10; x < CANVAS_WIDTH; x += gb.spacing + Math.random() * (gb.spacing * 0.67)) {
+          const h = gb.heightRange[0] + Math.random() * (gb.heightRange[1] - gb.heightRange[0]);
+          ctx.beginPath();
+          ctx.moveTo(x, ground.y);
+          ctx.lineTo(x - 3, ground.y - h);
+          ctx.stroke();
+        }
       }
     }
 

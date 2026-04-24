@@ -49,9 +49,8 @@ describe('meadow.drawPlatform', () => {
     }).not.toThrow();
   });
 
-  it('no-ops for style=stump platforms', () => {
+  it('renders stump platforms via the framework', () => {
     const ctx = mockCanvasContext();
-    // Find a stump platform in the meadow layout
     const stump = meadow.platforms.find(p => p.style === 'stump');
     expect(stump).toBeDefined();
     expect(() => meadow.drawPlatform!(ctx, stump!, false)).not.toThrow();

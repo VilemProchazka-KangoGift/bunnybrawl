@@ -3,7 +3,7 @@ import type { Arena, Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { getFloatingPlatforms } from '../../themes/utils';
 import {
-  drawTree, drawBush, drawFlower, drawMushroom, drawGrassTuft, drawTreeStump,
+  drawTree, drawBush, drawFlower, drawMushroom, drawGrassTuft,
   drawFgBush, drawTallGrass, drawFern, drawHangingVine, drawFgLeafCluster, drawFgWildflower,
 } from '../../themes/drawPrimitives';
 import {
@@ -11,6 +11,82 @@ import {
   drawPlatformDropShadow, drawPlatformRightFace, drawPlatformCap,
   drawLeftStones, wavyDown, backWavyUp,
 } from '../../themes/drawPrimitives';
+
+function drawMeadowStump(ctx: CanvasRenderingContext2D, platform: Platform): void {
+  const rng = mulberry32(seedFor(platform.x, platform.y));
+  const cF = platform.y + CAP_DEPTH / 2;
+  const cB = platform.y - CAP_DEPTH / 2;
+  const bodyTop = cF;
+  const bodyH = platform.height - CAP_DEPTH / 2;
+  const sp = CAP_DEPTH * SKEW_RATIO;
+
+  drawPlatformDropShadow(ctx, platform);
+
+  // Right face — darker bark tone
+  drawPlatformRightFace(ctx, platform, '#2a1608');
+
+  // Body front — bark: warm brown gradient with vertical ridges
+  const g = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
+  g.addColorStop(0, '#6a4a28');
+  g.addColorStop(0.5, '#4a3218');
+  g.addColorStop(1, '#2a1a0a');
+  ctx.fillStyle = g;
+  ctx.fillRect(platform.x, bodyTop, platform.width, bodyH);
+
+  // Vertical bark ridges
+  ctx.save();
+  ctx.globalAlpha = 0.55;
+  const ridgeN = Math.max(3, Math.floor(platform.width / 7));
+  for (let i = 0; i < ridgeN; i++) {
+    const bx = platform.x + (i + 0.5) / ridgeN * platform.width + Math.sin(i * 3.7 + rng() * 2) * 1.5;
+    const d = 0.6 + rng() * 0.7;
+    ctx.strokeStyle = `rgba(25,15,6,${d})`;
+    ctx.lineWidth = 1 + rng() * 0.5;
+    ctx.beginPath();
+    ctx.moveTo(bx, bodyTop);
+    for (let py = 0; py <= bodyH; py += 3) {
+      ctx.lineTo(bx + Math.sin(py * 0.35 + i * 1.2) * 1.2 + Math.sin(py * 0.12) * 0.6, bodyTop + py);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // Body bottom bevel
+  ctx.fillStyle = 'rgba(0,0,0,0.30)';
+  ctx.fillRect(platform.x, bodyTop + bodyH - 4, platform.width, 4);
+
+  // Edge profiles — gentle wavy for natural rough-cut stump top
+  const frontPts = wavyDown(platform.x, platform.width, cF, rng, { bumps: 3, ampMin: 1.5, ampMax: 3, valleyBase: 0.3 });
+  const backPts = backWavyUp(platform.x, platform.width, cB, sp, rng, { bumps: 3, ampMin: 1.5, ampMax: 2.8 });
+
+  // Cap — wood with concentric tree-ring ellipses
+  drawPlatformCap(ctx, platform, frontPts, backPts, {
+    capColor: '#9a6e3c',
+    capLight: 'rgba(255,220,160,0.2)',
+    drawCapTexture: (ctx2, capFront, capBack, skew) => {
+      // Center of the cap parallelogram (for ring centering)
+      const cx = platform.x + platform.width / 2 + skew / 2;
+      const cy = (capFront + capBack) / 2;
+      // Tree rings — concentric ellipses matching the cap's aspect
+      const rxMax = platform.width * 0.4;
+      const ryMax = CAP_DEPTH * 0.38;
+      const ringCount = 4;
+      for (let i = ringCount; i >= 1; i--) {
+        const t = i / ringCount;
+        ctx2.strokeStyle = `rgba(60,36,14,${0.45 + (1 - t) * 0.25})`;
+        ctx2.lineWidth = 0.8;
+        ctx2.beginPath();
+        ctx2.ellipse(cx, cy, rxMax * t, ryMax * t, 0, 0, Math.PI * 2);
+        ctx2.stroke();
+      }
+      // Small center pith dot
+      ctx2.fillStyle = '#3a2410';
+      ctx2.beginPath();
+      ctx2.ellipse(cx, cy, 1.2, 0.8, 0, 0, Math.PI * 2);
+      ctx2.fill();
+    },
+  });
+}
 
 export const meadow: ArenaPack = {
   // ---- Identity ----
@@ -207,13 +283,6 @@ export const meadow: ArenaPack = {
     drawMushroom(ctx, 240, y);
     drawMushroom(ctx, 720, y);
 
-    // Tree stumps — solid obstacles matching platforms
-    drawTreeStump(ctx, 340, 615, 55, 45);
-    drawTreeStump(ctx, 860, 615, 55, 45);
-    // Platform stumps (on mid-left and mid-right)
-    drawTreeStump(ctx, 440, 370, 45, 40);
-    drawTreeStump(ctx, 800, 370, 45, 40);
-
     // Nature on floating platforms (exclude small obstacle platforms)
     const floats = getFloatingPlatforms(arena.platforms);
     for (const plat of floats) {
@@ -276,8 +345,10 @@ export const meadow: ArenaPack = {
   },
 
   drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
-    // Stump platforms are drawn by drawBackgroundNature's drawTreeStump — skip the 3D cap/body here.
-    if (platform.style === 'stump') return;
+    if (platform.style === 'stump') {
+      drawMeadowStump(ctx, platform);
+      return;
+    }
 
     const rng = mulberry32(seedFor(platform.x, platform.y));
     const cF = platform.y + CAP_DEPTH / 2;
