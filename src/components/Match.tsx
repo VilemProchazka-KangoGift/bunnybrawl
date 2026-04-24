@@ -177,6 +177,7 @@ export function Match() {
 
     if (online.isOnline) {
       // Network mode
+      setLoadingPhase(true);
       const transport = getModalTransport();
       if (!transport) {
         console.error('No active transport for online match');
@@ -222,10 +223,34 @@ export function Match() {
           // Player is already killed by removePlayer() in NetMatch
         },
         onArenaChange: (arenaId: string) => {
-          // Guest: host changed arena — update local state to trigger remount
+          // Guest: host changed arena — switch in place and rerun loading
           lastResolvedArenaId = arenaId;
           setCurrentArenaId(arenaId);
           setMatchSettings({ arenaId });
+          const loop = gameLoopRef.current;
+          const nm = netMatchRef.current;
+          if (!loop || !nm) return;
+          loop.switchArena(arenaId);
+          runLoadingTasks({
+            arenaId,
+            characterNames: loop.getActiveCharacterNames(),
+            renderer: loop.getRenderer(),
+            arena: loop.getArena(),
+            originalArena: loop.getOriginalArena(),
+          }).finally(() => {
+            if (netMatchRef.current !== nm) return;
+            if (online.isHost) {
+              nm.markHostLoaded();
+            } else {
+              transport.sendReliable({
+                type: MsgType.LOADED,
+                slot: online.localSlot || 'P2',
+              } as import('../engine/net/protocol').ReliableMessage);
+            }
+          });
+        },
+        onPhaseChange: (phase) => {
+          setLoadingPhase(phase === 'loading');
         },
       });
 
@@ -237,6 +262,27 @@ export function Match() {
       netMatch.getGameLoop().setLocalSlot((online.isHost ? 'P1' : online.localSlot) as PlayerSlot);
       netMatch.start();
       setTouchInput(netMatch.getGameLoop().getTouchInput());
+
+      // Online loading: both sides preload, then signal readiness. Host flips
+      // phase to 'playing' only after all guests report LOADED (or after the
+      // 15s hard timeout in NetMatch).
+      runLoadingTasks({
+        arenaId: arena.themeId,
+        characterNames: netMatch.getGameLoop().getActiveCharacterNames(),
+        renderer: netMatch.getGameLoop().getRenderer(),
+        arena: netMatch.getGameLoop().getArena(),
+        originalArena: netMatch.getGameLoop().getOriginalArena(),
+      }).finally(() => {
+        if (netMatchRef.current !== netMatch) return;
+        if (online.isHost) {
+          netMatch.markHostLoaded();
+        } else {
+          transport.sendReliable({
+            type: MsgType.LOADED,
+            slot: (online.localSlot || 'P2') as PlayerSlot,
+          } as import('../engine/net/protocol').ReliableMessage);
+        }
+      });
 
       return () => {
         netMatch.stop();
