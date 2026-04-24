@@ -117,7 +117,10 @@ export interface Player {
   squashTimer: number;   // decay timer for squash/stretch
   sideSquash: number;    // 1.0 = normal, <1 = squashed horizontally (wall/push)
   afterimages: Array<{x: number; y: number; facing: 'left'|'right'; alpha: number}>;
-  idleAnimTimer: number; // for character-specific idle animations
+  idleAnimTimer: number; // legacy — derived from idleAction state for backward compat
+  idleAction: number;        // index into pack's idle action pool, -1 = none (resting)
+  idleActionTimer: number;   // seconds remaining in current action or rest gap
+  idleActionDuration: number;// total duration of current action; 0 during rest
   expression: 'normal' | 'scared' | 'angry' | 'dizzy';
   killStreak: number;    // current consecutive kills without dying
   breathTimer: number;         // for idle breathing animation
