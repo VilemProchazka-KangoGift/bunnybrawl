@@ -52,6 +52,10 @@ export interface NetMatchConfig {
   /** Fired when the match phase transitions. On host, driven by the LOADED
    *  handshake; on guest, driven by the applied snapshot's phase field. */
   onPhaseChange?: (phase: MatchPhase) => void;
+  /** Host-side hook: fires when a guest sends CONNECTION_UNSTABLE. The UI
+   *  layer uses this to show a banner "X has a slow connection" — no game
+   *  behavior changes. */
+  onGuestConnectionUnstable?: (slot: PlayerSlot, stalled: boolean) => void;
 }
 
 export class NetMatch {
@@ -83,6 +87,8 @@ export class NetMatch {
   // Phase callback forwarder (fired from gameLoop.setPhase or, for guests,
   // from snapshot-driven phase transitions detected in the guest loop).
   private onPhaseChange?: (phase: MatchPhase) => void;
+  // Host-side only: fires when a guest sends CONNECTION_UNSTABLE.
+  private onGuestConnectionUnstable?: (slot: PlayerSlot, stalled: boolean) => void;
   // Previous phase seen in guest snapshots — drives onPhaseChange on transition.
   private _prevGuestPhase: MatchPhase = 'loading';
 
@@ -107,6 +113,7 @@ export class NetMatch {
     this.onReconnecting = config.onReconnecting;
     this.onStall = config.onStall;
     this.onPhaseChange = config.onPhaseChange;
+    this.onGuestConnectionUnstable = config.onGuestConnectionUnstable;
     this.localSlot = config.localSlot;
 
     // Both host and guest create a GameLoop (needed for canvas rendering)
@@ -439,6 +446,13 @@ export class NetMatch {
         if (elapsed > 500 && !this.stallNotified) {
           this.stallNotified = true;
           this.onStall?.(true);
+          // Reliable hint to host: "my snapshot stream is lagging." Host will
+          // show a banner so the human running the host knows why the guest
+          // is misbehaving, without waiting for the pong timeout.
+          this.transport.sendReliable({
+            type: MsgType.CONNECTION_UNSTABLE,
+            stalled: true,
+          } as ReliableMessage);
         }
       }
 
@@ -480,6 +494,11 @@ export class NetMatch {
     if (this.stallNotified) {
       this.stallNotified = false;
       this.onStall?.(false);
+      // Let host know we're healthy again so it can drop the banner.
+      this.transport.sendReliable({
+        type: MsgType.CONNECTION_UNSTABLE,
+        stalled: false,
+      } as ReliableMessage);
     }
 
     // Strip the 1-byte type prefix (0x20) and decode
@@ -517,6 +536,16 @@ export class NetMatch {
       const slot = (msg as { slot: string }).slot as PlayerSlot;
       this.loadedGuests.add(slot);
       this.checkAllLoaded();
+    } else if (this._isHost && msg.type === MsgType.CONNECTION_UNSTABLE) {
+      // Host-only hint from a guest that its snapshot stream is lagging.
+      const stalled = (msg as { stalled: boolean }).stalled;
+      // Resolve peer to a slot via HostAuthority (only way from fromPeerId).
+      if (fromPeerId && this.hostAuthority) {
+        // The generic host authority doesn't expose peer→slot lookup, so just
+        // pass the peerId; higher-level consumer can resolve if needed. For
+        // the banner use case a single boolean per host is enough.
+        this.onGuestConnectionUnstable?.(fromPeerId as PlayerSlot, stalled);
+      }
     }
   }
 

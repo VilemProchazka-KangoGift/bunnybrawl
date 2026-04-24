@@ -252,6 +252,12 @@ export function Match() {
         onPhaseChange: (phase) => {
           setLoadingPhase(phase === 'loading');
         },
+        onGuestConnectionUnstable: (_slot, stalled) => {
+          // Host-side banner: reuse the same "Connection Unstable" indicator
+          // that guests show for their own snapshot stalls. Gives the host a
+          // clue that a guest is laggy without waiting for the pong timeout.
+          setConnectionUnstable(stalled);
+        },
       });
 
       netMatchRef.current = netMatch;
