@@ -41,15 +41,54 @@ function drawMeadowStump(ctx: CanvasRenderingContext2D, platform: Platform): voi
   // Stump body extends past collision bottom to visually meet the host platform's cap front.
   drawPlatformRightFace(ctx, platform, '#2a1608', bodyTop + bodyH);
 
+  // Left-edge profile — 1-2 outward burls (knots/thickenings) so the silhouette
+  // doesn't read as a straight saw-cut. Cosine-falloff bulges, max ~5px outward.
+  const burlCount = 1 + Math.floor(rng() * 2);
+  const burls: Array<{ ty: number; depth: number; spread: number }> = [];
+  for (let i = 0; i < burlCount; i++) {
+    burls.push({
+      ty: 0.15 + (i + rng() * 0.5) / burlCount * 0.75,
+      depth: 2.5 + rng() * 3,
+      spread: 0.1 + rng() * 0.08,
+    });
+  }
+  const leftSteps = Math.max(8, Math.floor(bodyH / 3));
+  const leftPts: Array<{ x: number; y: number }> = [];
+  for (let s = 0; s <= leftSteps; s++) {
+    const t = s / leftSteps;
+    let dx = 0;
+    for (const b of burls) {
+      const dist = Math.abs(t - b.ty);
+      if (dist < b.spread * 2) {
+        dx -= b.depth * Math.cos(Math.min(1, dist / b.spread) * Math.PI / 2);
+      }
+    }
+    leftPts.push({ x: platform.x + dx, y: bodyTop + t * bodyH });
+  }
+
+  const traceBodyPath = () => {
+    ctx.beginPath();
+    ctx.moveTo(platform.x + platform.width, bodyTop);
+    ctx.lineTo(leftPts[0].x, leftPts[0].y);
+    for (let i = 1; i < leftPts.length; i++) ctx.lineTo(leftPts[i].x, leftPts[i].y);
+    ctx.lineTo(platform.x + platform.width, bodyTop + bodyH);
+    ctx.closePath();
+  };
+
   // Body front — bark: warm brown gradient with vertical ridges
   const g = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
   g.addColorStop(0, '#6a4a28');
   g.addColorStop(0.5, '#4a3218');
   g.addColorStop(1, '#2a1a0a');
   ctx.fillStyle = g;
-  ctx.fillRect(platform.x, bodyTop, platform.width, bodyH);
+  traceBodyPath();
+  ctx.fill();
 
-  // Vertical bark ridges
+  // Bark ridges + bottom bevel — clip to body silhouette so they don't escape past burls.
+  ctx.save();
+  traceBodyPath();
+  ctx.clip();
+
   const ridgeN = Math.max(3, Math.floor(platform.width / 7));
   for (let i = 0; i < ridgeN; i++) {
     const bx = platform.x + (i + 0.5) / ridgeN * platform.width + Math.sin(i * 3.7 + rng() * 2) * 1.5;
@@ -66,7 +105,9 @@ function drawMeadowStump(ctx: CanvasRenderingContext2D, platform: Platform): voi
 
   // Body bottom bevel
   ctx.fillStyle = 'rgba(0,0,0,0.30)';
-  ctx.fillRect(platform.x, bodyTop + bodyH - 4, platform.width, 4);
+  ctx.fillRect(platform.x - 6, bodyTop + bodyH - 4, platform.width + 6, 4);
+
+  ctx.restore();
 
   // Edge profiles — gentle wavy for natural rough-cut stump top
   const frontPts = wavyDown(platform.x, platform.width, cF, rng, { bumps: 3, ampMin: 1.5, ampMax: 3, valleyBase: 0.3 });
