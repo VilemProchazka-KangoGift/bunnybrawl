@@ -216,7 +216,9 @@ export function drawPlatformDropShadow(ctx: CanvasRenderingContext2D, platform: 
 export function drawPlatformRightFace(ctx: CanvasRenderingContext2D, platform: Platform, fillStyle: string): void {
   const sp = skewPx();
   const bt = capFrontY(platform);
-  const bb = platform.y + platform.height;
+  // Body extends CAP_DEPTH/2 past collision bottom so character headbonk
+  // overlaps the visible body — mirrors the cap straddling collision top.
+  const bb = platform.y + platform.height + CAP_DEPTH / 2;
   ctx.fillStyle = fillStyle;
   ctx.beginPath();
   ctx.moveTo(platform.x + platform.width, bt);

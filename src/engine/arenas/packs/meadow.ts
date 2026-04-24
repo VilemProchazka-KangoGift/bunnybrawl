@@ -8,7 +8,7 @@ import {
 } from '../../themes/drawPrimitives';
 import {
   CAP_DEPTH, SKEW_RATIO, mulberry32, seedFor,
-  drawPlatformDropShadow, drawPlatformRightFace, drawPlatformCap,
+  drawPlatformRightFace, drawPlatformCap,
   drawStone, wavyDown, backWavyUp,
 } from '../../themes/drawPrimitives';
 
@@ -20,17 +20,8 @@ function drawMeadowStump(ctx: CanvasRenderingContext2D, platform: Platform): voi
   const bodyH = platform.height;  // extends CAP_DEPTH/2 past collision bottom to meet host's cap front
   const sp = CAP_DEPTH * SKEW_RATIO;
 
-  // Right face — inlined so it extends down to the same bodyBottom as the body
-  const sp2 = CAP_DEPTH * SKEW_RATIO;
-  const bodyBottom = bodyTop + bodyH;
-  ctx.fillStyle = '#2a1608';
-  ctx.beginPath();
-  ctx.moveTo(platform.x + platform.width, bodyTop);
-  ctx.lineTo(platform.x + platform.width + sp2, bodyTop - CAP_DEPTH);
-  ctx.lineTo(platform.x + platform.width + sp2, bodyBottom - CAP_DEPTH);
-  ctx.lineTo(platform.x + platform.width, bodyBottom);
-  ctx.closePath();
-  ctx.fill();
+  // Right face — bark tone
+  drawPlatformRightFace(ctx, platform, '#2a1608');
 
   // Body front — bark: warm brown gradient with vertical ridges
   const g = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
@@ -361,10 +352,8 @@ export const meadow: ArenaPack = {
     const cF = platform.y + CAP_DEPTH / 2;
     const cB = platform.y - CAP_DEPTH / 2;
     const bodyTop = cF;
-    const bodyH = platform.height - CAP_DEPTH / 2;  // body's visible front face
+    const bodyH = platform.height;
     const sp = CAP_DEPTH * SKEW_RATIO;
-
-    drawPlatformDropShadow(ctx, platform);
 
     // Right face — dark dirt tone
     drawPlatformRightFace(ctx, platform, '#1e130a');
