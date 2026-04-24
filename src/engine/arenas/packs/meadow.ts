@@ -1,10 +1,15 @@
 import type { ArenaPack } from '../types';
-import type { Arena } from '../../types';
+import type { Arena, Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { getFloatingPlatforms } from '../../themes/utils';
 import {
   drawTree, drawBush, drawFlower, drawMushroom, drawGrassTuft, drawTreeStump,
   drawFgBush, drawTallGrass, drawFern, drawHangingVine, drawFgLeafCluster, drawFgWildflower,
+} from '../../themes/drawPrimitives';
+import {
+  CAP_DEPTH, SKEW_RATIO, mulberry32, seedFor,
+  drawPlatformDropShadow, drawPlatformRightFace, drawPlatformCap,
+  drawLeftStones, wavyDown, backWavyUp,
 } from '../../themes/drawPrimitives';
 
 export const meadow: ArenaPack = {
@@ -268,6 +273,79 @@ export const meadow: ArenaPack = {
     drawFgWildflower(ctx, 580, gy, '#DDA0DD', 20);
     drawFgWildflower(ctx, 930, gy, '#FFD700', 16);
     drawFgWildflower(ctx, 1180, gy, '#FF69B4', 22);
+  },
+
+  drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
+    const rng = mulberry32(seedFor(platform.x, platform.y));
+    const cF = platform.y + CAP_DEPTH / 2;
+    const cB = platform.y - CAP_DEPTH / 2;
+    const bodyTop = cF;
+    const bodyH = platform.height - CAP_DEPTH / 2;  // body's visible front face
+    const sp = CAP_DEPTH * SKEW_RATIO;
+
+    drawPlatformDropShadow(ctx, platform);
+
+    // Right face — dark dirt tone
+    drawPlatformRightFace(ctx, platform, '#1e130a');
+
+    // Left-side stones (varied gray-brown palette)
+    const stonePalette = [
+      { base: '#8a8278', dark: '#5a5450', light: '#b0a89c' },
+      { base: '#706860', dark: '#3a3430', light: '#9a9288' },
+      { base: '#9a9080', dark: '#6a6258', light: '#c0b8a8' },
+      { base: '#787068', dark: '#484038', light: '#a89888' },
+    ];
+    drawLeftStones(ctx, platform, stonePalette, rng, { count: 3, rxMin: 2, rxMax: 5, elongateChance: 0.5 });
+
+    // Body front face — soil gradient with clumps, pebbles, one exposed root
+    const g = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
+    g.addColorStop(0, '#5a3a20');
+    g.addColorStop(0.5, '#4a2e18');
+    g.addColorStop(1, '#2e1e10');
+    ctx.fillStyle = g;
+    ctx.fillRect(platform.x, bodyTop, platform.width, bodyH);
+    // Dirt clumps
+    ctx.fillStyle = 'rgba(20,10,5,0.45)';
+    const clumpCount = Math.floor(platform.width / 12);
+    for (let i = 0; i < clumpCount; i++) {
+      const px = platform.x + rng() * platform.width;
+      const py = bodyTop + 3 + rng() * (bodyH - 5);
+      ctx.beginPath();
+      ctx.ellipse(px, py, 2 + rng() * 1.5, 1.2 + rng() * 0.8, rng() * Math.PI, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Pebbles
+    ctx.fillStyle = 'rgba(180,160,140,0.6)';
+    const pebbleCount = Math.floor(platform.width / 25);
+    for (let i = 0; i < pebbleCount; i++) {
+      ctx.beginPath();
+      ctx.ellipse(platform.x + rng() * platform.width, bodyTop + 4 + rng() * (bodyH - 6), 1.4, 1, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Body bottom bevel — dark strip at the bottom of the front face
+    ctx.fillStyle = 'rgba(0,0,0,0.30)';
+    ctx.fillRect(platform.x, bodyTop + bodyH - 4, platform.width, 4);
+
+    // Edge profiles
+    const frontPts = wavyDown(platform.x, platform.width, cF, rng, { bumps: 5, ampMin: 2, ampMax: 4, valleyBase: 0.3 });
+    const backPts = backWavyUp(platform.x, platform.width, cB, sp, rng, { bumps: 4, ampMin: 2, ampMax: 3.5 });
+
+    // Cap — grass with tufted dots
+    drawPlatformCap(ctx, platform, frontPts, backPts, {
+      capColor: '#5a8f3a',
+      capLight: 'rgba(255,255,220,0.15)',
+      drawCapTexture: (ctx2, capFront, _capBack, skew) => {
+        ctx2.fillStyle = '#4a7a2e';
+        const n = Math.floor(platform.width / 7);
+        for (let i = 0; i < n; i++) {
+          const u = (i + 0.5) / n + Math.sin(i * 2.3 + platform.x * 0.01) * 0.04;
+          const v = 0.15 + (Math.sin(i * 7.1 + platform.x * 0.02) + 1) * 0.35;
+          ctx2.beginPath();
+          ctx2.arc(platform.x + u * platform.width + v * skew, capFront - v * CAP_DEPTH, 0.85, 0, Math.PI * 2);
+          ctx2.fill();
+        }
+      },
+    });
   },
 
   // ---- Audio ----
