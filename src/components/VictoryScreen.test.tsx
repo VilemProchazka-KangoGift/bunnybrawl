@@ -25,6 +25,7 @@ function setupVictoryState() {
         score: 7, active: true, animFrame: 0, animTimer: 0, fastFalling: false, fatTimer: 0, slowTimer: 0, burnTimer: 0, hitstopTimer: 0,
       },
     ],
+    phase: 'playing',
     killFeed: [],
     timeElapsed: 90,
     matchOver: true,

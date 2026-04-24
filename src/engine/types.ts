@@ -272,8 +272,11 @@ export interface Thorn {
   hit: boolean;
 }
 
+export type MatchPhase = 'loading' | 'playing' | 'over';
+
 export interface MatchState {
   players: Player[];
+  phase: MatchPhase;
   killFeed: KillFeedEntry[];
   timeElapsed: number;
   matchOver: boolean;

@@ -135,6 +135,7 @@ export function createInitialMatchState(
 
   return {
     players,
+    phase: 'loading',
     killFeed: [],
     timeElapsed: 0, matchOver: false, winner: null,
     carrots: [],
