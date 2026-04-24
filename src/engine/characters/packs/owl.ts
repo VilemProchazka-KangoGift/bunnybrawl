@@ -55,7 +55,7 @@ const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, state, ani
   const wingFlap = isAirborne ? Math.sin(animFrame * Math.PI) * 5 : 0;
   ctx.fillStyle = colors.darkColor;
   ctx.beginPath();
-  ctx.ellipse(cx - w * 0.3, yOff + h * 0.45 - wingFlap, 6, 10, -0.3, 0, Math.PI * 2);
+  ctx.ellipse(cx - w * 0.42, yOff + h * 0.5 - wingFlap, 5, 9, -0.3, 0, Math.PI * 2);
   ctx.fill();
 };
 

@@ -33,7 +33,7 @@ const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, _state, _a
   ctx.strokeStyle = colors.darkColor;
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.arc(cx - w * 0.35, yOff + h * 0.45, 5, 0, Math.PI * 1.5);
+  ctx.arc(cx - w * 0.48, yOff + h * 0.45, 4, 0, Math.PI * 1.5);
   ctx.stroke();
 };
 

@@ -5,6 +5,12 @@ import { generateMultiSegmentTone } from '../../audio/synthesis/core';
 
 const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, _state, _animFrame, _isIdleAnim, _idleT, colors) => {
   fillBodyGradient(ctx, { cx, cy: yOff + h * 0.52, rx: w * 0.4, ry: h * 0.4 }, colors);
+  // Curling tail (drawn before face so eyes/face cover any overlap)
+  ctx.strokeStyle = colors.color;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.arc(cx - w * 0.48, yOff + h * 0.4, 6, -Math.PI * 0.3, Math.PI * 1.3);
+  ctx.stroke();
   // Large round ears
   ctx.beginPath();
   ctx.arc(cx - 12, yOff + h * 0.35, 6, 0, Math.PI * 2);
@@ -36,12 +42,6 @@ const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, _state, _a
   ctx.beginPath();
   ctx.ellipse(cx + 1, yOff + h * 0.5, 2, 1.5, 0, 0, Math.PI * 2);
   ctx.fill();
-  // Curling tail
-  ctx.strokeStyle = colors.color;
-  ctx.lineWidth = 2.5;
-  ctx.beginPath();
-  ctx.arc(cx - w * 0.35, yOff + h * 0.4, 7, -Math.PI * 0.3, Math.PI * 1.3);
-  ctx.stroke();
 };
 
 const drawGib: CharacterPack['drawGib'] = (ctx, gibType, _w, _h, colors) => {
