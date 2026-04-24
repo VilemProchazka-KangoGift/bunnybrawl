@@ -9,7 +9,7 @@ import {
 import {
   CAP_DEPTH, SKEW_RATIO, mulberry32, seedFor,
   drawPlatformDropShadow, drawPlatformRightFace, drawPlatformCap,
-  drawLeftStones, wavyDown, backWavyUp,
+  drawStone, wavyDown, backWavyUp,
 } from '../../themes/drawPrimitives';
 
 function drawMeadowStump(ctx: CanvasRenderingContext2D, platform: Platform): void {
@@ -369,14 +369,37 @@ export const meadow: ArenaPack = {
     // Right face — dark dirt tone
     drawPlatformRightFace(ctx, platform, '#1e130a');
 
-    // Left-side stones (varied gray-brown palette)
+    // Left-side decoration: one stone + a few root tendrils
     const stonePalette = [
       { base: '#8a8278', dark: '#5a5450', light: '#b0a89c' },
       { base: '#706860', dark: '#3a3430', light: '#9a9288' },
       { base: '#9a9080', dark: '#6a6258', light: '#c0b8a8' },
       { base: '#787068', dark: '#484038', light: '#a89888' },
     ];
-    drawLeftStones(ctx, platform, stonePalette, rng, { count: 3, rxMin: 2, rxMax: 5, elongateChance: 0.5 });
+    const stoneRx = 3.5 + rng() * 1.8;
+    const stoneRy = stoneRx * (0.75 + rng() * 0.15);
+    const stoneCy = bodyTop + 5 + rng() * Math.max(4, (bodyH - 14) * 0.4);
+    const stoneCx = platform.x - stoneRx * 0.3;
+    const stoneAngle = (rng() - 0.5) * 0.6;
+    const stonePick = stonePalette[Math.floor(rng() * stonePalette.length)];
+    drawStone(ctx, stoneCx, stoneCy, stoneRx, stoneRy, stoneAngle, stonePick.base, stonePick.dark, stonePick.light);
+
+    // Root tendrils — thin dark-brown curves extending down/left from below the stone
+    const rootN = 2 + Math.floor(rng() * 2);
+    ctx.strokeStyle = '#2e1a08';
+    ctx.lineWidth = 1.2;
+    for (let i = 0; i < rootN; i++) {
+      const ry0 = stoneCy + stoneRy + 1 + i * 3 + rng() * 2;
+      const rootLen = 5 + rng() * 6;
+      const curl = (rng() - 0.5) * 3;
+      ctx.beginPath();
+      ctx.moveTo(platform.x + 0.5, ry0);
+      ctx.quadraticCurveTo(
+        platform.x - rootLen * 0.45 + curl, ry0 + rootLen * 0.55,
+        platform.x - rootLen * 0.15, ry0 + rootLen
+      );
+      ctx.stroke();
+    }
 
     // Body front face — soil gradient with clumps, pebbles, one exposed root
     const g = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
