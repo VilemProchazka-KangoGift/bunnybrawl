@@ -2574,7 +2574,7 @@ describe('Animation Timers', () => {
     expect(player.idleAnimTimer).toBeGreaterThan(0);
   });
 
-  it('fastFalling player has faster animation', () => {
+  it('fastFalling airborne player does NOT tick animTimer (gated on run state)', () => {
     const { loop } = createLoop();
     loop.setNetworkMode(true);
     loop.skipCountdown();
