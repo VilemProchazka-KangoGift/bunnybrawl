@@ -9,6 +9,7 @@ let hudCache: OffscreenCanvas | null = null;
 let hudCacheCtx: OffscreenCanvasRenderingContext2D | null = null;
 let hudLastTimer = -1;
 let hudLastPlayerCount = -1;
+let _hudScale = 1;
 const _hudPlayerScores: Record<string, number> = {};
 const _hudPlayerActive: Record<string, boolean> = {};
 // Shared between drawHUDImpl and drawScoreAnimations
@@ -17,6 +18,15 @@ let _hudStartX = 0;
 let _hudScoreWidth = 0;
 
 export function invalidateHudCache(): void {
+  hudLastPlayerCount = -1;
+}
+
+/** Set HUD render scale. Drops the cache if the scale changed so the next draw rebuilds at the new pixel dims. */
+export function setHudScale(scale: number): void {
+  if (scale === _hudScale) return;
+  _hudScale = scale;
+  hudCache = null;
+  hudCacheCtx = null;
   hudLastPlayerCount = -1;
 }
 
@@ -54,8 +64,10 @@ export function drawHUD(ctx: CanvasRenderingContext2D, state: MatchState, frameT
 
   if (needsRedraw) {
     if (!hudCache) {
-      hudCache = new OffscreenCanvas(CANVAS_WIDTH, 90);
+      const s = _hudScale;
+      hudCache = new OffscreenCanvas(Math.max(1, Math.ceil(CANVAS_WIDTH * s)), Math.max(1, Math.ceil(90 * s)));
       hudCacheCtx = hudCache.getContext('2d')!;
+      hudCacheCtx.scale(s, s);
     }
     const hctx = hudCacheCtx!;
     hctx.clearRect(0, 0, CANVAS_WIDTH, 90);
@@ -73,8 +85,8 @@ export function drawHUD(ctx: CanvasRenderingContext2D, state: MatchState, frameT
     hudLastPlayerCount = ac;
   }
 
-  // Blit cached HUD
-  ctx.drawImage(hudCache!, 0, 0);
+  // Blit cached HUD — explicit logical dest size since the bitmap is at scaled px dims.
+  ctx.drawImage(hudCache!, 0, 0, CANVAS_WIDTH, 90);
 
   // Score animations are drawn on main ctx (they're transient)
   if (state.scoreAnimations && state.scoreAnimations.length > 0) {

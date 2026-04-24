@@ -8,6 +8,7 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
 import { isTouchPrimary } from '../engine/touchDetect';
 import { TouchInputManager } from '../engine/touchInput';
 import { LobbyGame, READY_ZONE_X } from '../engine/lobbyGame';
+import { useCanvasRenderScale } from '../hooks/useCanvasRenderScale';
 import './CharacterSelect.css';
 
 export function CharacterSelect() {
@@ -145,6 +146,8 @@ export function CharacterSelect() {
       canvas.removeEventListener('touchstart', handleTouchStart);
     };
   }, [startMatch]);
+
+  useCanvasRenderScale(canvasRef);
 
   // Main RAF loop — delegates to LobbyGame
   useEffect(() => {

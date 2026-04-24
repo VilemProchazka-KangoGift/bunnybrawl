@@ -2,6 +2,7 @@ import { useRef, useEffect, useMemo, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../store/gameStore';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
+import { useCanvasRenderScale } from '../hooks/useCanvasRenderScale';
 import type { PlayerSlot, PlayerStats } from '../engine/types';
 import { isBotSlot } from '../engine/types';
 import { getCharacterEmoji, getCharacterDisplayName } from '../engine/characters';
@@ -110,13 +111,13 @@ export function VictoryScreen() {
     });
   }, [online.isOnline, online.isHost, setScreen, setMatchSettings, setActivePlayers]);
 
+  useCanvasRenderScale(canvasRef);
+
   // Fireworks
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d')!;
-    canvas.width = CANVAS_WIDTH;
-    canvas.height = CANVAS_HEIGHT;
 
     const particles: FireworkParticle[] = [];
     let lastSpawn = 0;

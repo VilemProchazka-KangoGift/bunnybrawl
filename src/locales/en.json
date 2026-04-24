@@ -4,6 +4,8 @@
   "tagline": "Locally sourced violence.",
   "play": "Play",
   "blood_mode": "Blood mode",
+  "slow_device": "Slow device",
+  "slow_device_desc": "Lower resolution, fewer effects.",
   "arena_label": "Arena",
   "arena_random": "Random",
   "credits_players": "Up to 5 players on one keyboard!",

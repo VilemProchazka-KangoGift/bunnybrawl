@@ -5,6 +5,7 @@ import { audio } from '../engine/audio';
 import { ArenaGrid } from './ArenaGrid';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
 import { isTouchPrimary } from '../engine/touchDetect';
+import { useCanvasRenderScale } from '../hooks/useCanvasRenderScale';
 import { drawMenuBackground } from './menuBackground';
 import { HelpModal } from './HelpModal';
 import { ModsModal } from './ModsModal';
@@ -62,6 +63,8 @@ export function MainMenu() {
       document.removeEventListener('keydown', retry);
     };
   }, []);
+
+  useCanvasRenderScale(canvasRef);
 
   useEffect(() => {
     const canvas = canvasRef.current;
