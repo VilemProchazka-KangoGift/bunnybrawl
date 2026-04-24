@@ -81,6 +81,12 @@ export function Match() {
   const [phaseIsLoading, setPhaseIsLoading] = useState(true);
   const [localTasksDone, setLocalTasksDone] = useState(false);
   const showLoadingOverlay = phaseIsLoading || !localTasksDone;
+  // Reconnect progress for the overlay. `attempt` goes 0..max as retries fire.
+  const [reconnectAttempt, setReconnectAttempt] = useState(0);
+  const [reconnectMax, setReconnectMax] = useState(12);
+  // Transient banner: "<name> left the match". Auto-clears after 4 seconds.
+  const [disconnectBanner, setDisconnectBanner] = useState<string | null>(null);
+  const disconnectBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMobile = useMemo(() => isTouchPrimary(), []);
 
   // Resolve 'random' to a concrete arena; re-resolves each time Match mounts (rematch)
@@ -142,9 +148,20 @@ export function Match() {
     // In-place arena swap — no remount, no transport wiring loss. Scores reset.
     setLocalTasksDone(false);
     loop.switchArena(newArenaId);
+    // In online mode, host must re-run the LOADED handshake so guests can't
+    // be treated as pre-loaded based on the PREVIOUS arena's signals.
+    const nm = netMatchRef.current;
+    if (nm && online.isOnline && online.isHost) {
+      nm.resetLoadingHandshake();
+    }
     kickoffLoading(loop, () => gameLoopRef.current === loop, () => {
       setLocalTasksDone(true);
-      loop.setPhase('playing');
+      if (online.isOnline && nm) {
+        if (online.isHost) nm.markHostLoaded();
+        else nm.signalGuestLoaded();
+      } else {
+        loop.setPhase('playing');
+      }
     });
   }, [setMatchSettings, online.isOnline, online.isHost]);
 
@@ -249,10 +266,37 @@ export function Match() {
         },
         onReconnecting: (reconnecting) => {
           setIsReconnecting(reconnecting);
+          if (!reconnecting) setReconnectAttempt(0);
+        },
+        onReconnectAttempt: (current, max) => {
+          setReconnectAttempt(current);
+          setReconnectMax(max);
         },
         onPlayerDisconnect: (slot) => {
-          console.log(`[Match] Player ${slot} disconnected mid-match`);
-          // Player is already killed by removePlayer() in NetMatch
+          const name = useGameStore.getState().online.playerNames[slot] || slot;
+          setDisconnectBanner(t('player_disconnected_name', '{{name}} left the match', { name }));
+          if (disconnectBannerTimerRef.current) clearTimeout(disconnectBannerTimerRef.current);
+          disconnectBannerTimerRef.current = setTimeout(() => setDisconnectBanner(null), 4000);
+        },
+        onGuestReconnected: (slot) => {
+          // Guest reclaimed their slot — re-send SETTINGS_SYNC so they see
+          // any arena change that happened while they were disconnected.
+          if (!online.isHost) return;
+          const ms = useGameStore.getState().matchSettings;
+          const transport = getModalTransport();
+          if (transport) {
+            transport.sendReliableTo(slot, {
+              type: MsgType.SETTINGS_SYNC, arenaId: ms.arenaId,
+              killLimit: ms.killLimit, timeLimit: ms.timeLimit,
+              goreMode: ms.goreMode, mods: ms.mods,
+              rngSeed: useGameStore.getState().online.rngSeed,
+              botCount: ms.botCount, botDifficulty: ms.botDifficulty,
+            } as import('../engine/net/protocol').ReliableMessage);
+          }
+          const name = useGameStore.getState().online.playerNames[slot] || slot;
+          setDisconnectBanner(t('player_reconnected_name', '{{name}} reconnected', { name }));
+          if (disconnectBannerTimerRef.current) clearTimeout(disconnectBannerTimerRef.current);
+          disconnectBannerTimerRef.current = setTimeout(() => setDisconnectBanner(null), 3000);
         },
         onArenaChange: (arenaId: string) => {
           // Guest: host changed arena — switch in place and rerun loading
@@ -462,6 +506,11 @@ export function Match() {
             {t('connection_unstable', 'Connection Unstable')}
           </div>
         )}
+        {disconnectBanner && !paused && online.isOnline && (
+          <div className="connection-unstable-indicator" data-testid="disconnect-banner">
+            {disconnectBanner}
+          </div>
+        )}
         {isReconnecting && online.isOnline && (
           <div className="reconnecting-overlay">
             <div className="reconnecting-box">
@@ -469,6 +518,14 @@ export function Match() {
               <div className="reconnecting-text">
                 {t('reconnecting', 'Reconnecting...')}
               </div>
+              {reconnectAttempt > 0 && (
+                <div className="reconnecting-sub">
+                  {t('reconnecting_attempt', 'Attempt {{n}}/{{max}}', { n: reconnectAttempt, max: reconnectMax })}
+                </div>
+              )}
+              <button className="btn-base pause-btn quit-btn" onClick={handleQuit} data-testid="reconnect-give-up">
+                {t('give_up', 'Give Up')}
+              </button>
             </div>
           </div>
         )}

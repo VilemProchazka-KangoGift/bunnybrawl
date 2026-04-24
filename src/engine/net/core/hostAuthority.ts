@@ -48,6 +48,10 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
 
   private localFrame = 0;
   private running = false;
+  // After `setMatchOver()`, the host sends this many more snapshots (so late
+  // guests see matchOver=true even if the first copy is lost), then stops.
+  private matchOverSnapshotsLeft = -1;
+  private static readonly MATCH_OVER_TAIL = 20;
 
   // Guest input buffers: slot → latest input
   private guestInputs = new Map<string, TInput>();
@@ -158,6 +162,10 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
   }
 
   broadcastSnapshot(state: TState): void {
+    // After match end, send a finite tail so guests reliably see matchOver=true
+    // then stop — no point burning bandwidth on a dead simulation.
+    if (this.matchOverSnapshotsLeft === 0) return;
+    if (this.matchOverSnapshotsLeft > 0) this.matchOverSnapshotsLeft--;
     this.localFrame++;
     const snap = this.snapshotCodec.takeSnapshot(this.localFrame, state);
     const encodeBuf = this.snapshotCodec.encode(snap);
@@ -267,5 +275,12 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
     return this.peerSlotMap.get(peerId);
   }
 
-  setMatchOver(): void {}
+  /** Arm the finite match-over broadcast tail. After MATCH_OVER_TAIL more
+   *  snapshots, broadcastSnapshot becomes a no-op until the authority is
+   *  destroyed. */
+  setMatchOver(): void {
+    if (this.matchOverSnapshotsLeft < 0) {
+      this.matchOverSnapshotsLeft = GenericHostAuthority.MATCH_OVER_TAIL;
+    }
+  }
 }

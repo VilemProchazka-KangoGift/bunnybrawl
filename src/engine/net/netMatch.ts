@@ -54,6 +54,14 @@ export interface NetMatchConfig {
    *  layer uses this to show a banner "X has a slow connection" — no game
    *  behavior changes. */
   onGuestConnectionUnstable?: (slot: PlayerSlot, stalled: boolean) => void;
+  /** Guest-side hook: fires every reconnection attempt with (current, max).
+   *  UI layer uses it to show an attempt counter and enable a Give Up button. */
+  onReconnectAttempt?: (current: number, max: number) => void;
+  /** Host-side hook: fires when a guest successfully reclaims their slot via
+   *  RECONNECT_REQUEST. The UI layer uses it to send a fresh SETTINGS_SYNC so
+   *  a guest that missed an arena change during the disconnect still ends up
+   *  on the right arena. */
+  onGuestReconnected?: (slot: PlayerSlot) => void;
 }
 
 export class NetMatch {
@@ -86,8 +94,15 @@ export class NetMatch {
   private onPhaseChange?: (phase: MatchPhase) => void;
   // Host-side only: fires when a guest sends CONNECTION_UNSTABLE.
   private onGuestConnectionUnstable?: (slot: PlayerSlot, stalled: boolean) => void;
+  // Guest-side only: fires per reconnect attempt so the UI can show progress.
+  private onReconnectAttempt?: (current: number, max: number) => void;
+  // Host-side only: fires after a guest reclaims their slot via RECONNECT_REQUEST.
+  private onGuestReconnected?: (slot: PlayerSlot) => void;
   // Previous phase seen in guest snapshots — drives onPhaseChange on transition.
   private _prevGuestPhase: MatchPhase = 'loading';
+  // Latches on the first snapshot where matchOver=true so guest-side match-end
+  // fires exactly once, even if MATCH_RESULT reliable message is dropped.
+  private _guestMatchOverFired = false;
 
   // Host-side LOADED handshake state
   private loadedGuests = new Set<PlayerSlot>();
@@ -111,6 +126,8 @@ export class NetMatch {
     this.onStall = config.onStall;
     this.onPhaseChange = config.onPhaseChange;
     this.onGuestConnectionUnstable = config.onGuestConnectionUnstable;
+    this.onReconnectAttempt = config.onReconnectAttempt;
+    this.onGuestReconnected = config.onGuestReconnected;
     this.localSlot = config.localSlot;
 
     // Both host and guest create a GameLoop (needed for canvas rendering)
@@ -243,6 +260,27 @@ export class NetMatch {
       type: MsgType.LOADED,
       slot: this.localSlot,
     } as ReliableMessage);
+  }
+
+  /** Host: reset loading-handshake state when re-entering the 'loading'
+   *  phase (rematch, arena change). Without this, a stale LOADED from the
+   *  first match would cause checkAllLoaded to flip phase back to 'playing'
+   *  before guests finish warming the new arena. */
+  resetLoadingHandshake(): void {
+    if (!this._isHost) return;
+    this.loadedGuests.clear();
+    this.hostSelfLoaded = false;
+    // Also re-arm the loading timeout since we're back in loading.
+    if (this.loadingTimeout) clearTimeout(this.loadingTimeout);
+    this.loadingTimeout = setTimeout(() => {
+      if (this.gameLoop.getState().phase !== 'loading') return;
+      console.warn('[NetMatch] loading timeout — forcing phase=playing');
+      const expected = this.hostAuthority!.getExpectedGuestSlots();
+      for (const slot of expected) {
+        if (!this.loadedGuests.has(slot)) this.gameLoop.disconnectPlayer(slot);
+      }
+      this.gameLoop.setPhase('playing');
+    }, NetMatch.LOADING_TIMEOUT_MS);
   }
 
   /** Host: check whether all expected guests + host itself have completed
@@ -415,10 +453,20 @@ export class NetMatch {
       // 2b. Detect host-driven phase changes arriving via snapshot. Guest's
       // gameLoop.setPhase is never called (phase is mutated directly by
       // applySnapshotToState), so onPhaseChange must be forwarded here.
-      const curPhase = this.gameLoop.getState().phase;
+      const state = this.gameLoop.getState();
+      const curPhase = state.phase;
       if (curPhase !== this._prevGuestPhase) {
         this._prevGuestPhase = curPhase;
         this.onPhaseChange?.(curPhase);
+      }
+      // 2c. Snapshot-driven match-end fallback. The MATCH_RESULT reliable
+      // message is defensive but can be lost if the host's connection closes
+      // mid-send. The match-over tail of 20 snapshots (core/hostAuthority.ts)
+      // gives us redundant delivery — as soon as any of them lands with
+      // matchOver=true, synthesize the onMatchEnd callback locally.
+      if (!this._guestMatchOverFired && state.matchOver) {
+        this._guestMatchOverFired = true;
+        this.onMatchEnd?.(state.winner as PlayerSlot | null, state);
       }
 
       // 3. Tick cosmetics (SFX, particles, visual effects via state-transition detection)
@@ -427,7 +475,6 @@ export class NetMatch {
       this.gameLoop.tickCosmetic(dt);
 
       // 4. Apply input echo for local player visual responsiveness
-      const state = this.gameLoop.getState();
       if (this.inputEcho) {
         this.inputEcho.apply(localInput, state, this.transport.currentRtt, dt);
       }
@@ -548,6 +595,18 @@ export class NetMatch {
         const slot = this.hostAuthority.getSlotForPeer(fromPeerId);
         if (slot) this.onGuestConnectionUnstable?.(slot, stalled);
       }
+    } else if (this._isHost && msg.type === MsgType.RECONNECT_REQUEST) {
+      // hostAuthority already ran its half of the protocol (delegated at the
+      // top of this method). If the reclaim succeeded, the peer is now back
+      // in peerSlotMap. Purge any stale LOADED and notify Match.tsx so it
+      // can resend SETTINGS_SYNC for the current arena.
+      if (fromPeerId && this.hostAuthority) {
+        const slot = this.hostAuthority.getSlotForPeer(fromPeerId);
+        if (slot) {
+          this.loadedGuests.delete(slot);
+          this.onGuestReconnected?.(slot);
+        }
+      }
     }
   }
 
@@ -558,31 +617,33 @@ export class NetMatch {
     this.onReconnecting?.(true);
 
     let attempts = 0;
-    // 4 attempts × 1.5s = 6s total. Pong timeout (5s) detects peer loss
-    // before the guest exhausts retries, so a longer budget isn't useful.
-    const MAX_ATTEMPTS = 4;
+    // 12 attempts × 1.5s = 18s total. Must stay within host's 20s
+    // GRACE_PERIOD so the same slot can be reclaimed — otherwise the user
+    // rejoins as a brand-new peer with lost state.
+    const MAX_ATTEMPTS = 12;
+    this.onReconnectAttempt?.(attempts, MAX_ATTEMPTS);
 
-    this.reconnectTimer = setInterval(() => {
+    const tryAttempt = () => {
       attempts++;
       if (attempts > MAX_ATTEMPTS) {
         this.abortReconnection();
         return;
       }
-      // Try to rejoin the room
+      this.onReconnectAttempt?.(attempts, MAX_ATTEMPTS);
       const code = this.transport.roomCode;
-      if (code) {
-        this.transport.joinRoom(code).then(() => {
-          // Reconnected — send reclaim request
-          this.transport.sendReliable({
-            type: MsgType.RECONNECT_REQUEST,
-            slot: this.localSlot,
-            playerName: '',
-          } as import('./protocol').ReliableMessage);
-        }).catch(() => {
-          // Will retry on next interval
-        });
-      }
-    }, 1500);
+      if (!code) return;
+      this.transport.joinRoom(code).then(() => {
+        // Re-send on every tick after a successful joinRoom — if
+        // RECONNECT_SYNC was lost, the next RECONNECT_REQUEST will produce
+        // another response from the host (handler is idempotent).
+        this.transport.sendReliable({
+          type: MsgType.RECONNECT_REQUEST,
+          slot: this.localSlot,
+          playerName: '',
+        } as import('./protocol').ReliableMessage);
+      }).catch(() => { /* retry next tick */ });
+    };
+    this.reconnectTimer = setInterval(tryAttempt, 1500);
   }
 
   /** Complete reconnection after host confirms. */

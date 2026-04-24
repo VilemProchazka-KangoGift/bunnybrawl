@@ -249,6 +249,18 @@
   animation: pulse-indicator 1.5s ease-in-out infinite;
 }
 
+.reconnecting-sub {
+  color: rgba(255, 255, 255, 0.7);
+  font-family: 'Nunito', sans-serif;
+  font-size: 13px;
+  margin-top: 6px;
+  margin-bottom: 12px;
+}
+
+.reconnecting-box .pause-btn {
+  margin-top: 4px;
+}
+
 @keyframes reconnect-spin {
   to { transform: rotate(360deg); }
 }
