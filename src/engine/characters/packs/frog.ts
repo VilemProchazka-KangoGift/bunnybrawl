@@ -13,7 +13,7 @@ const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, _state, _a
   ctx.arc(cx + 7, yOff + 8, 6, 0, Math.PI * 2);
   ctx.fill();
   // Frog idle blink: draw lines instead of circle eyes
-  const frogBlink = isIdleAnim && (idleT / 0.5) > 0.3 && (idleT / 0.5) < 0.7;
+  const frogBlink = isIdleAnim && idleT > 0.3 && idleT < 0.7;
   if (frogBlink) {
     ctx.strokeStyle = '#000';
     ctx.lineWidth = 2;

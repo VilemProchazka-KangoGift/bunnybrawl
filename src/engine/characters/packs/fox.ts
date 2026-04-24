@@ -19,7 +19,7 @@ const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, state, ani
   ctx.fill();
   ctx.fillStyle = colors.lightColor;
   ctx.beginPath();
-  const tailWag = isRunning ? Math.sin(animFrame * Math.PI) * 5 : (isIdleAnim ? Math.sin((idleT / 0.5) * Math.PI * 2) * 4 : 0);
+  const tailWag = isRunning ? Math.sin(animFrame * Math.PI) * 5 : (isIdleAnim ? Math.sin(idleT * Math.PI * 2) * 4 : 0);
   ctx.moveTo(cx - w * 0.3, yOff + h * 0.5);
   ctx.quadraticCurveTo(cx - w * 0.7, yOff + h * 0.2 + tailWag, cx - w * 0.5, yOff + h * 0.1);
   ctx.quadraticCurveTo(cx - w * 0.3, yOff + h * 0.3, cx - w * 0.3, yOff + h * 0.5);

@@ -24,7 +24,7 @@ const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, _state, _a
   ctx.fill();
   // Bear scratch idle: small paw near ear
   if (isIdleAnim) {
-    const scratchY = Math.sin((idleT / 0.5) * Math.PI * 3) * 3;
+    const scratchY = Math.sin(idleT * Math.PI * 3) * 3;
     ctx.fillStyle = colors.darkColor;
     ctx.beginPath();
     ctx.arc(cx + 13, yOff + 6 + scratchY, 3, 0, Math.PI * 2);

@@ -5,7 +5,7 @@ import { generateToneBuffer } from '../../audio/synthesis/core';
 
 const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, _state, _animFrame, isIdleAnim, idleT, colors) => {
   fillBodyGradient(ctx, { cx, cy: yOff + h * 0.55, rx: w * 0.4, ry: h * 0.4 }, colors);
-  const earTwitch = isIdleAnim ? Math.sin((idleT / 0.5) * Math.PI) * 0.25 : 0;
+  const earTwitch = isIdleAnim ? Math.sin(idleT * Math.PI) * 0.25 : 0;
   ctx.fillStyle = colors.color;
   ctx.beginPath();
   ctx.ellipse(cx - 5, yOff + 2, 4, 12, -0.2, 0, Math.PI * 2);
