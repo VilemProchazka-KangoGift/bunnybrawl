@@ -532,6 +532,7 @@ export class GameLoop {
   fixedUpdate(dt: number, networkInputs?: Map<string, InputState>): void {
     this._networkInputs = networkInputs;
     if (this.stopped || this.state.matchOver) return;
+    if (this.state.phase === 'loading') return;
     this.state.timeElapsed = f(this.state.timeElapsed + dt);
 
     // Day/night cycle

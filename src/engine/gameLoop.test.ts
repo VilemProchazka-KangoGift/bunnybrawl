@@ -134,6 +134,10 @@ function createLoop(opts?: {
     opts?.players ?? (['P1', 'P2'] as PlayerSlot[]),
     onMatchEnd,
   );
+  // Default to 'playing' phase so fixedUpdate runs. New loops construct in
+  // 'loading' phase (gated in fixedUpdate); tests that need pre-match semantics
+  // can override by flipping state.phase back to 'loading'.
+  loop.getState().phase = 'playing';
   _lastLoop = loop;
   return { loop, onMatchEnd, arena, settings };
 }
