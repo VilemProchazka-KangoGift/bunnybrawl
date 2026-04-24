@@ -75,6 +75,8 @@ export interface CharacterPack {
 
   customEyes: boolean;
   idleTransform: IdleTransformType;
+  /** Optional config: weight overrides for shared idle actions, plus custom signatures. */
+  idleActions?: import('../rendering/idleActions').PackIdleActionsConfig;
   drawSprite: CharacterRenderer;
   drawGib: GibRenderer;
 
