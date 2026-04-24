@@ -85,7 +85,10 @@ export const AFTERIMAGE_MAX = 5;
 export const MATCH_COUNTDOWN = 3;       // seconds before match starts
 
 // Idle animation
-export const IDLE_ANIM_INTERVAL = 3;    // seconds between idle animations
+export const IDLE_ANIM_INTERVAL = 3;    // legacy — retained while idleAnimTimer transitional field still exists
+export const IDLE_FIRST_DELAY  = 0.8;   // seconds standing still before first idle action
+export const IDLE_REST_MIN     = 0.6;   // min seconds between idle actions
+export const IDLE_REST_MAX     = 1.4;   // max seconds between idle actions
 
 // Shockwave
 export const SHOCKWAVE_MAX_RADIUS = 60;
