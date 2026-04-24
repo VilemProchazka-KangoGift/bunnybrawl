@@ -153,10 +153,13 @@ export class Renderer {
     this._timeLimit = timeLimit;
   }
 
+  setNetworkMode(isNetwork: boolean): void {
+    this._isNetworkMatch = isNetwork;
+  }
+
   setConnectionQuality(rtt: number, jitter: number): void {
     this._netRtt = rtt;
     this._netJitter = jitter;
-    this._isNetworkMatch = true;
   }
 
   /** E2E diagnostic: which rendering branches fired last frame. */

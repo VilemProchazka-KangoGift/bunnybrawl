@@ -114,7 +114,7 @@ export function Match() {
   const [reconnectMax, setReconnectMax] = useState(12);
   // One shared banner slot used for player-left / player-reconnected /
   // "starting without X" / "Reconnected!" — all short, mutually overriding.
-  const [banner, flashBanner] = useTransientBanner();
+  const [banner, flashBanner] = useTransientBanner<string>();
   // Cancel button appears 3s into loading so brief loads don't flicker it.
   const [showLoadingCancel, setShowLoadingCancel] = useState(false);
   const loadingCancelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -277,17 +277,8 @@ export function Match() {
         localSlot: online.isHost ? 'P1' : 'P2',
         remoteSlots: activePlayers.filter(s => s !== (online.isHost ? 'P1' : 'P2') && s.startsWith('P')) as PlayerSlot[],
         rngSeed: online.rngSeed,
-        onDesync: () => {
-          console.warn('Desync detected!');
-        },
         onStall: (stalled) => {
           setUnstable(stalled ? { kind: 'mine' } : null);
-        },
-        onStallTimeout: () => {
-          if (matchEnded) return; // don't override normal victory with disconnect
-          if (gameLoopRef.current) {
-            setMatchResult(null, gameLoopRef.current.getState(), true);
-          }
         },
         onDisconnect: () => {
           if (matchEnded) return;

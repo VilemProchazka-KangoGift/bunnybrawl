@@ -19,6 +19,11 @@ const CONNECTING_STAGE_KEYS: Record<ConnectingStage, string> = {
   check: 'connecting_check_code',
   slow: 'connecting_slow',
 };
+const CONNECTING_STAGE_TIMINGS: Array<{ at: number; key: ConnectingStage }> = [
+  { at: 3000,  key: 'searching' },
+  { at: 8000,  key: 'check' },
+  { at: 15000, key: 'slow' },
+];
 
 export { getModalTransport } from './useOnlineRoom';
 
@@ -45,18 +50,13 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
   const [mobileNameOpen, setMobileNameOpen] = useState(false);
   const [mobileCodeOpen, setMobileCodeOpen] = useState(false);
 
-  // Guest-only staged messaging: the MQTT → signaling → WebRTC handshake can
-  // take 10-20s on cold start. Static "Connecting..." makes the app feel hung.
-  const CONNECTING_STAGES: Array<{ at: number; key: ConnectingStage }> = [
-    { at: 3000,  key: 'searching' },
-    { at: 8000,  key: 'check' },
-    { at: 15000, key: 'slow' },
-  ];
+  // Guest-only staged messaging: MQTT → signaling → WebRTC can take 10-20s
+  // on cold start. Staged copy reassures the user that work is happening.
   const [connectingStage, setConnectingStage] = useState<ConnectingStage>('initial');
   useEffect(() => {
     setConnectingStage('initial');
     if (step !== 'connecting' || online.isHost) return;
-    const timers = CONNECTING_STAGES.map(s => setTimeout(() => setConnectingStage(s.key), s.at));
+    const timers = CONNECTING_STAGE_TIMINGS.map(s => setTimeout(() => setConnectingStage(s.key), s.at));
     return () => timers.forEach(clearTimeout);
   }, [step, online.isHost]);
 
@@ -151,7 +151,11 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
           )}
 
           {/* Step 2: Connecting — room code, character select, waiting */}
-          {step === 'connecting' && (
+          {step === 'connecting' && (() => {
+            const errorBlock = online.connectionStatus === 'error' && (
+              <span className="online-error">{online.connectionError || t('connection_error', 'Connection failed')}</span>
+            );
+            return (
             <div className="online-step">
               {online.roomCode && (
                 <div className="online-room-code">
@@ -176,9 +180,7 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
                     <div className="online-status-box">
                       {!online.roomCode && online.connectionStatus !== 'error' && t('connecting_server', 'Connecting to server...')}
                       {online.roomCode && t('waiting_players', 'Waiting for players to join...')}
-                      {online.connectionStatus === 'error' && (
-                        <span className="online-error">{online.connectionError || t('connection_error', 'Connection failed')}</span>
-                      )}
+                      {errorBlock}
                     </div>
                     <button className="btn-base mods-close-btn" onClick={() => { cleanup(); setStep('choose'); }}>
                       {t('back', 'Back')}
@@ -199,12 +201,8 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
               ) : (
                 <>
                   <div className="online-status-box">
-                    {online.connectionStatus !== 'error' && (
-                      t(CONNECTING_STAGE_KEYS[connectingStage], { code: joinCode })
-                    )}
-                    {online.connectionStatus === 'error' && (
-                      <span className="online-error">{online.connectionError || t('connection_error', 'Connection failed')}</span>
-                    )}
+                    {online.connectionStatus !== 'error' && t(CONNECTING_STAGE_KEYS[connectingStage], { code: joinCode })}
+                    {errorBlock}
                   </div>
                   <button className="btn-base mods-close-btn" onClick={() => { cleanup(); setStep('choose'); }}>
                     {t('back', 'Back')}
@@ -212,7 +210,8 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
                 </>
               )}
             </div>
-          )}
+            );
+          })()}
 
           {/* Step 3: Lobby — both connected */}
           {step === 'lobby' && (
@@ -252,27 +251,19 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
                     <div className="online-ready-status"><span className="online-ready-badge">{t('ready', 'READY')}</span></div>
                   )}
 
-                  {/* Host: hint + start button. Hint only appears when there
-                      are peers but none are ready — the host can still
-                      force-start, but the cue tells them why the round feels
-                      stuck if the guest forgot to hit Ready. */}
-                  {online.isHost && (() => {
-                    const anyGuestConnected = online.remotePlayers.length > 0;
-                    const anyGuestReady = online.remotePlayers.some(rp => rp.ready);
-                    return (
-                      <>
-                        {anyGuestConnected && !anyGuestReady && (
-                          <div className="online-status-box" data-testid="waiting-ready-hint" style={{ marginTop: 8 }}>
-                            {t('waiting_ready', 'Waiting for opponent to ready up...')}
-                          </div>
-                        )}
-                        <button className="btn-base menu-btn play-btn" data-testid="online-start-btn" onClick={() => {
-                          audio.play('select');
-                          startMatchAsHost();
-                        }}>{t('start_game', 'Start Game!')}</button>
-                      </>
-                    );
-                  })()}
+                  {/* Host: "waiting to ready up" hint + Start button. Host
+                      can still force-start; the hint just explains the wait. */}
+                  {online.isHost && online.remotePlayers.length > 0 && !online.remotePlayers.some(rp => rp.ready) && (
+                    <div className="online-status-box" data-testid="waiting-ready-hint" style={{ marginTop: 8 }}>
+                      {t('waiting_ready', 'Waiting for opponent to ready up...')}
+                    </div>
+                  )}
+                  {online.isHost && (
+                    <button className="btn-base menu-btn play-btn" data-testid="online-start-btn" onClick={() => {
+                      audio.play('select');
+                      startMatchAsHost();
+                    }}>{t('start_game', 'Start Game!')}</button>
+                  )}
 
                   <button className="btn-base mods-close-btn" onClick={cleanup}>{t('back', 'Back')}</button>
                 </div>

@@ -99,7 +99,6 @@ export interface OrchestratorConfig<TInput, TState, TSnapshot> {
   extrapolateSnapshot?(snapshot: TSnapshot, dt: number): TSnapshot;
   onMatchEnd?(winner: string | null, state: TState): void;
   onStall?(stalled: boolean): void;
-  onStallTimeout?(): void;
   onDisconnect?(): void;
   onPlayerDisconnect?(slot: string): void;
   onReconnecting?(reconnecting: boolean): void;

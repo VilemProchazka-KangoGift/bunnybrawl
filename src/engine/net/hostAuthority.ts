@@ -108,19 +108,13 @@ export class HostAuthority {
     this.core.handleUnreliableMessage(data, fromPeerId);
   }
 
-  /** Clear latched jump flags after the tick consumed them. With a slot list,
-   *  only those are cleared — preserves jumps latched after fixedUpdate. */
-  consumeGuestJumps(slots?: Iterable<PlayerSlot>): void {
+  /** Clear latched jump flags only for the slots fixedUpdate consumed,
+   *  preserving jumps latched by inputs that arrived mid-tick. */
+  consumeGuestJumps(slots: Iterable<PlayerSlot>): void {
     const inputs = this.core.getNetworkInputs();
-    if (slots) {
-      for (const slot of slots) {
-        const input = inputs.get(slot);
-        if (input) input.jump = false;
-      }
-    } else {
-      for (const input of inputs.values()) {
-        input.jump = false;
-      }
+    for (const slot of slots) {
+      const input = inputs.get(slot);
+      if (input) input.jump = false;
     }
   }
 

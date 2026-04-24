@@ -40,9 +40,7 @@ export interface NetMatchConfig {
   localSlot: PlayerSlot;
   remoteSlots: PlayerSlot[];
   rngSeed: number;
-  onDesync?: () => void;
   onStall?: (stalled: boolean) => void;
-  onStallTimeout?: () => void;
   onDisconnect?: () => void;
   onPlayerDisconnect?: (slot: PlayerSlot) => void;
   onArenaChange?: (arenaId: string) => void;

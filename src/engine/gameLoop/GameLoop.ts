@@ -351,6 +351,7 @@ export class GameLoop {
   /** Enable network mode: external code drives the loop. */
   setNetworkMode(enabled: boolean): void {
     this._networkMode = enabled;
+    this.renderer.setNetworkMode(enabled);
   }
 
   /** Register a callback that fires whenever the match phase changes. */

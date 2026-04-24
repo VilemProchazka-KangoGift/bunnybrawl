@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGameStore, type RemotePlayerInfo } from '../store/gameStore';
+import { useTransientBanner } from '../hooks/useTransientBanner';
 import { Transport } from '../engine/net/transport';
 import type { ConnectionStatus } from '../engine/net/transport';
 import { MsgType, PROTOCOL_VERSION } from '../engine/net/protocol';
@@ -96,8 +97,8 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
   // Guest-only one-shot: if local character conflicts with a remote player, pick an alt.
   // Host never auto-switches (authoritative).
   const didAutoSwitch = useRef(false);
-  const [autoSwitchNotice, setAutoSwitchNotice] = useState<{ prev: string; next: string } | null>(null);
-  const autoSwitchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [autoSwitchNotice, flashAutoSwitchNotice] =
+    useTransientBanner<{ prev: string; next: string }>();
   useEffect(() => {
     if (online.isHost) return;
     const takenNames = new Set<string>();
@@ -113,9 +114,7 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
       setLocalChar(alt.name);
       localCharRef.current = alt.name;
       transportRef.current?.sendReliable({ type: MsgType.CHARACTER_SELECT, characterName: alt.name });
-      setAutoSwitchNotice({ prev, next: alt.name });
-      if (autoSwitchTimerRef.current) clearTimeout(autoSwitchTimerRef.current);
-      autoSwitchTimerRef.current = setTimeout(() => setAutoSwitchNotice(null), 4500);
+      flashAutoSwitchNotice({ prev, next: alt.name }, 4500);
     }
   }, [online.isHost, online.remotePlayers]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -131,12 +130,8 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
     setRemoteReady(false);
     pendingPlayerNames.current.clear();
     didAutoSwitch.current = false;
-    if (autoSwitchTimerRef.current) {
-      clearTimeout(autoSwitchTimerRef.current);
-      autoSwitchTimerRef.current = null;
-    }
-    setAutoSwitchNotice(null);
-  }, [resetOnline]);
+    flashAutoSwitchNotice(null);
+  }, [resetOnline, flashAutoSwitchNotice]);
 
   const startMatchAsGuest = useCallback(() => {
     const store = useGameStore.getState();

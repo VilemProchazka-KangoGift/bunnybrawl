@@ -314,7 +314,7 @@ describe('HostAuthority', () => {
       inputs.get('P2')!.jump = true;
       inputs.get('P3')!.jump = true;
 
-      host.consumeGuestJumps();
+      host.consumeGuestJumps(['P2' as PlayerSlot, 'P3' as PlayerSlot]);
 
       expect(inputs.get('P2')!.jump).toBe(false);
       expect(inputs.get('P3')!.jump).toBe(false);
@@ -330,7 +330,7 @@ describe('HostAuthority', () => {
       inputs.get('P2')!.jump = true;
       inputs.get('P2')!.down = true;
 
-      host.consumeGuestJumps();
+      host.consumeGuestJumps(['P2' as PlayerSlot]);
 
       expect(inputs.get('P2')!.left).toBe(true);
       expect(inputs.get('P2')!.right).toBe(true);

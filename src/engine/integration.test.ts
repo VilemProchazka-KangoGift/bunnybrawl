@@ -24,6 +24,7 @@ vi.mock('./renderer', () => ({
     renderBackground = vi.fn(); renderFrame = vi.fn();
     setBotNavDebugStates = vi.fn(); setNetDebugStats = vi.fn();
     setPlayerNames = vi.fn(); setTimeLimit = vi.fn();
+    setNetworkMode = vi.fn();
   },
 }));
 

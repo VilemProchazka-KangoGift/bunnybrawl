@@ -1,20 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-/** Show a message, auto-clearing after `ms`. Clearing an active banner to
- *  show a new one cancels the previous timer. Unmount cleans up the timer. */
-export function useTransientBanner(): [string | null, (msg: string | null, ms?: number) => void] {
-  const [message, setMessage] = useState<string | null>(null);
+/** Show a value, auto-clearing after `ms`. A new flash cancels the prior
+ *  timer. Unmount clears the pending timer. */
+export function useTransientBanner<T>(): [T | null, (value: T | null, ms?: number) => void] {
+  const [value, setValue] = useState<T | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const flash = useCallback((msg: string | null, ms = 3000) => {
+  const flash = useCallback((next: T | null, ms = 3000) => {
     if (timerRef.current) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
-    setMessage(msg);
-    if (msg !== null && ms > 0) {
+    setValue(next);
+    if (next !== null && ms > 0) {
       timerRef.current = setTimeout(() => {
-        setMessage(null);
+        setValue(null);
         timerRef.current = null;
       }, ms);
     }
@@ -24,5 +24,5 @@ export function useTransientBanner(): [string | null, (msg: string | null, ms?: 
     if (timerRef.current) clearTimeout(timerRef.current);
   }, []);
 
-  return [message, flash];
+  return [value, flash];
 }
