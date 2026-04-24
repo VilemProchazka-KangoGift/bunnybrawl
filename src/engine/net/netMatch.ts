@@ -426,13 +426,17 @@ export class NetMatch {
       }
       if (state.screenShake > 0) state.screenShake = Math.max(0, state.screenShake - dt);
 
-      // 6. Stall detection: check time since last snapshot (suppressed after match end)
+      // 6. Stall detection (soft banner only). A snapshot-stream gap no longer
+      // triggers reconnection — the transport's pong timeout is the single
+      // source of truth for peer liveness. Forcing reconnection on brief
+      // Wi-Fi blips while the WebRTC channel is still alive caused all
+      // reconnect attempts to be rejected by the host (hasActivePeer=true)
+      // until the pong timeout caught up ~7s later. Now we just flash a
+      // "Connection Unstable" banner; actual reconnect fires from
+      // onPeerDisconnected in setEvents.
       if (this.lastSnapshotTime > 0 && !this.reconnecting && !state.matchOver) {
         const elapsed = now - this.lastSnapshotTime;
-        if (elapsed > 3000) {
-          // Hard stall — trigger reconnection
-          this.startReconnection();
-        } else if (elapsed > 500 && !this.stallNotified) {
+        if (elapsed > 500 && !this.stallNotified) {
           this.stallNotified = true;
           this.onStall?.(true);
         }
