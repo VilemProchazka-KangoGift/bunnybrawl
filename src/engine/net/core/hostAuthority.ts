@@ -254,5 +254,12 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
 
   getLocalFrame(): number { return this.localFrame; }
 
+  /** Return the slot IDs of all currently-connected guests. Used by
+   *  host-level LOADED handshake to know which slots are expected to signal
+   *  readiness. Excludes slots in the reconnection grace period. */
+  getExpectedGuestSlots(): string[] {
+    return [...this.peerSlotMap.values()];
+  }
+
   setMatchOver(): void {}
 }

@@ -13,7 +13,7 @@ const mockGameLoopInstance = {
   pause: vi.fn(),
   resume: vi.fn(),
   isPaused: vi.fn(() => false),
-  getState: vi.fn(() => ({ players: [], matchOver: false, winner: null })),
+  getState: vi.fn(() => ({ players: [], matchOver: false, winner: null, phase: 'loading' })),
   getInputAny: vi.fn(() => ({ left: false, right: false, jump: false, down: false })),
   fixedUpdate: vi.fn(),
   setPlayerNames: vi.fn(),
@@ -30,6 +30,8 @@ const mockGameLoopInstance = {
   getRng: vi.fn(() => null),
   getAIControllers: vi.fn(() => new Map()),
   getAiRng: vi.fn(() => undefined),
+  setOnPhaseChange: vi.fn(),
+  setPhase: vi.fn(),
 };
 
 vi.mock('../gameLoop', () => ({
@@ -52,6 +54,7 @@ const mockHostAuthorityInstance = {
   broadcastSnapshot: vi.fn(),
   consumeGuestJumps: vi.fn(),
   tickGraceTimers: vi.fn(),
+  getExpectedGuestSlots: vi.fn(() => [] as string[]),
 };
 
 vi.mock('./hostAuthority', () => ({
@@ -308,6 +311,55 @@ describe('NetMatch', () => {
       const data = new ArrayBuffer(10);
       events.onUnreliableMessage(data, 'peer-a');
       expect(mockHostAuthorityInstance.handleUnreliableMessage).toHaveBeenCalledWith(data, 'peer-a');
+    });
+  });
+
+  describe('LOADED handshake (host)', () => {
+    let transport: ReturnType<typeof makeMockTransport>;
+    let netMatch: NetMatch;
+
+    beforeEach(() => {
+      transport = makeMockTransport(true);
+      mockHostAuthorityInstance.getExpectedGuestSlots.mockReturnValue(['P2']);
+      netMatch = new NetMatch(makeConfig(transport));
+    });
+
+    it('does NOT flip phase when only host loaded, no guests in', () => {
+      netMatch.start();
+      mockGameLoopInstance.setPhase.mockClear();
+      netMatch.markHostLoaded();
+      // P2 hasn't sent LOADED → still loading
+      expect(mockGameLoopInstance.setPhase).not.toHaveBeenCalled();
+    });
+
+    it('does NOT flip phase when only guest loaded, host not loaded', () => {
+      netMatch.start();
+      mockGameLoopInstance.setPhase.mockClear();
+      const events = transport.setEvents.mock.calls[0][0];
+      events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' });
+      // Host hasn't marked self loaded → still loading
+      expect(mockGameLoopInstance.setPhase).not.toHaveBeenCalled();
+    });
+
+    it('flips phase to "playing" when host and all expected guests loaded', () => {
+      netMatch.start();
+      mockGameLoopInstance.setPhase.mockClear();
+      netMatch.markHostLoaded();
+      const events = transport.setEvents.mock.calls[0][0];
+      events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' });
+      expect(mockGameLoopInstance.setPhase).toHaveBeenCalledWith('playing');
+    });
+
+    it('flips phase only once even if LOADED arrives twice', () => {
+      netMatch.start();
+      netMatch.markHostLoaded();
+      const events = transport.setEvents.mock.calls[0][0];
+      events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' });
+      // Simulate phase already flipped
+      mockGameLoopInstance.getState.mockReturnValueOnce({ players: [], matchOver: false, winner: null, phase: 'playing' });
+      mockGameLoopInstance.setPhase.mockClear();
+      events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' });
+      expect(mockGameLoopInstance.setPhase).not.toHaveBeenCalled();
     });
   });
 });

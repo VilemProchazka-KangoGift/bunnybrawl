@@ -8,7 +8,7 @@
  * - Host: runs fixedUpdate() with guest inputs injected
  * - Guest: receives host snapshots and overwrites its MatchState before rendering
  */
-import type { PlayerSlot, MatchState } from '../types';
+import type { PlayerSlot, MatchState, MatchPhase } from '../types';
 import type { Arena, MatchSettings } from '../types';
 import { isBotSlot } from '../types';
 import { FIXED_TIMESTEP } from '../constants';
@@ -49,6 +49,9 @@ export interface NetMatchConfig {
   onPlayerDisconnect?: (slot: PlayerSlot) => void;
   onArenaChange?: (arenaId: string) => void;
   onReconnecting?: (reconnecting: boolean) => void;
+  /** Fired when the match phase transitions. On host, driven by the LOADED
+   *  handshake; on guest, driven by the applied snapshot's phase field. */
+  onPhaseChange?: (phase: MatchPhase) => void;
 }
 
 export class NetMatch {
@@ -77,6 +80,20 @@ export class NetMatch {
   private onReconnecting?: (reconnecting: boolean) => void;
   private onStall?: (stalled: boolean) => void;
 
+  // Phase callback forwarder (fired from gameLoop.setPhase or, for guests,
+  // from snapshot-driven phase transitions detected in the guest loop).
+  private onPhaseChange?: (phase: MatchPhase) => void;
+  // Previous phase seen in guest snapshots — drives onPhaseChange on transition.
+  private _prevGuestPhase: MatchPhase = 'loading';
+
+  // Host-side LOADED handshake state
+  private loadedGuests = new Set<PlayerSlot>();
+  private hostSelfLoaded = false;
+  private loadingTimeout: ReturnType<typeof setTimeout> | null = null;
+  /** Maximum time host waits for all guests to signal LOADED before force-
+   *  advancing phase to 'playing' (and treating laggards as disconnected). */
+  private static readonly LOADING_TIMEOUT_MS = 15000;
+
   // Shared
   private rafId = 0;
   private localSlot: PlayerSlot;
@@ -89,6 +106,7 @@ export class NetMatch {
     this.onArenaChange = config.onArenaChange;
     this.onReconnecting = config.onReconnecting;
     this.onStall = config.onStall;
+    this.onPhaseChange = config.onPhaseChange;
     this.localSlot = config.localSlot;
 
     // Both host and guest create a GameLoop (needed for canvas rendering)
@@ -169,15 +187,59 @@ export class NetMatch {
 
     // Both: put GameLoop in network mode (external RAF, no internal loop)
     this.gameLoop.setNetworkMode(true);
+    // Forward gameLoop phase changes (host-driven) to the NetMatchConfig caller.
+    // Guest-driven phase changes (from snapshots) fire via _fireGuestPhaseChange
+    // in startGuestLoop, since applySnapshotToState bypasses setPhase.
+    this.gameLoop.setOnPhaseChange((phase) => this.onPhaseChange?.(phase));
     // start() in network mode attaches input handlers + audio but skips internal RAF
     this.gameLoop.start();
 
     if (this._isHost && this.hostAuthority) {
       this.hostAuthority.start();
+      // Host: start a hard timeout for LOADED handshake. If any guest fails to
+      // signal within LOADING_TIMEOUT_MS, force the match forward and treat
+      // non-responding slots as disconnected.
+      this.loadingTimeout = setTimeout(() => {
+        if (this.gameLoop.getState().phase === 'loading') {
+          console.warn('[NetMatch] loading timeout — forcing phase=playing');
+          const expected = this.hostAuthority!.getExpectedGuestSlots();
+          for (const slot of expected) {
+            if (!this.loadedGuests.has(slot)) {
+              this.gameLoop.disconnectPlayer(slot);
+            }
+          }
+          this.gameLoop.setPhase('playing');
+        }
+      }, NetMatch.LOADING_TIMEOUT_MS);
       this.startHostLoop();
     } else {
       this.startGuestLoop();
     }
+  }
+
+  /** Host: signal that this side's own loading tasks have completed. When
+   *  combined with LOADED messages from all guests, flips phase to 'playing'. */
+  markHostLoaded(): void {
+    if (!this._isHost) return;
+    this.hostSelfLoaded = true;
+    this.checkAllLoaded();
+  }
+
+  /** Host: check whether all expected guests + host itself have completed
+   *  loading. If so, flip phase to 'playing' — the next broadcast snapshot
+   *  carries the new phase, auto-syncing all guests. */
+  private checkAllLoaded(): void {
+    if (!this._isHost || !this.hostAuthority) return;
+    if (!this.hostSelfLoaded) return;
+    const expected = this.hostAuthority.getExpectedGuestSlots();
+    const allIn = expected.every(s => this.loadedGuests.has(s));
+    if (!allIn) return;
+    if (this.gameLoop.getState().phase !== 'loading') return;
+    if (this.loadingTimeout) {
+      clearTimeout(this.loadingTimeout);
+      this.loadingTimeout = null;
+    }
+    this.gameLoop.setPhase('playing');
   }
 
   /** Host: simulate + broadcast + render. */
@@ -331,6 +393,15 @@ export class NetMatch {
         }
       }
 
+      // 2b. Detect host-driven phase changes arriving via snapshot. Guest's
+      // gameLoop.setPhase is never called (phase is mutated directly by
+      // applySnapshotToState), so onPhaseChange must be forwarded here.
+      const curPhase = this.gameLoop.getState().phase;
+      if (curPhase !== this._prevGuestPhase) {
+        this._prevGuestPhase = curPhase;
+        this.onPhaseChange?.(curPhase);
+      }
+
       // 3. Tick cosmetics (SFX, particles, visual effects via state-transition detection)
       // No matchOver guard — cosmeticStep needs to run the frame matchOver flips
       // to detect the transition and play the victory sound.
@@ -438,6 +509,10 @@ export class NetMatch {
     } else if (msg.type === MsgType.RECONNECT_SYNC) {
       // Host confirmed our reconnection — resume match
       this.completeReconnection();
+    } else if (this._isHost && msg.type === MsgType.LOADED) {
+      const slot = (msg as { slot: string }).slot as PlayerSlot;
+      this.loadedGuests.add(slot);
+      this.checkAllLoaded();
     }
   }
 
@@ -513,6 +588,10 @@ export class NetMatch {
     if (this.reconnectTimer) {
       clearInterval(this.reconnectTimer);
       this.reconnectTimer = null;
+    }
+    if (this.loadingTimeout) {
+      clearTimeout(this.loadingTimeout);
+      this.loadingTimeout = null;
     }
     this.hostAuthority?.stop();
     this.gameLoop.stop();

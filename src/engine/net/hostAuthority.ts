@@ -98,6 +98,7 @@ export class HostAuthority {
   getGuestInput(slot: PlayerSlot): InputState { return this.core.getGuestInput(slot); }
   getNetworkInputs(): Map<string, InputState> { return this.core.getNetworkInputs(); }
   getStats(): HostDebugStats { return this.core.getStats(); }
+  getExpectedGuestSlots(): PlayerSlot[] { return this.core.getExpectedGuestSlots() as PlayerSlot[]; }
   setMatchOver(): void { this.core.setMatchOver(); }
 
   broadcastSnapshot(state: MatchState): void { this.core.broadcastSnapshot(state); }
