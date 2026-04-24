@@ -7,7 +7,7 @@ import { isBotSlot } from '../engine/types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
 import { isTouchPrimary } from '../engine/touchDetect';
 import { TouchInputManager } from '../engine/touchInput';
-import { LobbyGame } from '../engine/lobbyGame';
+import { LobbyGame, READY_ZONE_X } from '../engine/lobbyGame';
 import './CharacterSelect.css';
 
 export function CharacterSelect() {
@@ -108,6 +108,43 @@ export function CharacterSelect() {
       lobbyTouchRef.current = null;
     };
   }, [setScreen, startMatch]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    // Separate click + touchstart (rather than one pointerdown) so that on mobile
+    // stopPropagation can suppress the document-level TouchInputManager's joystick
+    // activation mid-tap while the lobby→match transition is in flight.
+    const tryStartFromPoint = (clientX: number): boolean => {
+      const game = lobbyGameRef.current;
+      if (!game?.countdownStarted) return false;
+      const rect = canvas.getBoundingClientRect();
+      const lx = (clientX - rect.left) / (rect.width / CANVAS_WIDTH);
+      if (lx < READY_ZONE_X) return false;
+      startMatch();
+      return true;
+    };
+
+    const handleClick = (e: MouseEvent) => {
+      tryStartFromPoint(e.clientX);
+    };
+    const handleTouchStart = (e: TouchEvent) => {
+      const t = e.changedTouches[0];
+      if (t && tryStartFromPoint(t.clientX)) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
+    canvas.addEventListener('click', handleClick);
+    canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+
+    return () => {
+      canvas.removeEventListener('click', handleClick);
+      canvas.removeEventListener('touchstart', handleTouchStart);
+    };
+  }, [startMatch]);
 
   // Main RAF loop — delegates to LobbyGame
   useEffect(() => {
