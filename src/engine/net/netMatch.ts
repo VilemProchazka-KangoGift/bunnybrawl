@@ -527,7 +527,10 @@ export class NetMatch {
     this.onReconnecting?.(true);
 
     let attempts = 0;
-    const MAX_ATTEMPTS = 9; // 9 attempts * 2s = 18s, within 20s grace
+    // Tightened from 9 attempts @ 2s (18s total) to 4 @ 1.5s (6s total). With
+    // the pong timeout at 5s (Task 13), the host always detects peer loss
+    // before the guest exhausts retries — no need for the old 18s budget.
+    const MAX_ATTEMPTS = 4;
 
     this.reconnectTimer = setInterval(() => {
       attempts++;
@@ -549,7 +552,7 @@ export class NetMatch {
           // Will retry on next interval
         });
       }
-    }, 2000);
+    }, 1500);
   }
 
   /** Complete reconnection after host confirms. */
