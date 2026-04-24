@@ -1,6 +1,6 @@
 import type {
   MatchState, MatchSettings, Arena, PlayerSlot, Player,
-  InputState,
+  InputState, MatchPhase,
 } from '../types';
 import { isBotSlot } from '../types';
 import { SeededRNG } from '../net/prng';
@@ -111,6 +111,9 @@ export class GameLoop {
   private _resimulating = false; // true during rollback resimulation — skip cosmetic systems
   // Explicit inputs injected by rollback engine (keyed by PlayerSlot)
   private _networkInputs?: Map<string, InputState>;
+
+  // Phase change callback (loading → playing → over). Fires on transition only.
+  private onPhaseChange?: (phase: MatchPhase) => void;
 
   // Bound callbacks for extracted submodules (avoids .bind() allocations in hot paths)
   private readonly _boundGameRandom = (): number => this.gameRandom();
@@ -241,12 +244,12 @@ export class GameLoop {
         this.touchInput.attach(container, scaleFn, () => this.paused);
       }
     }
-    this.renderer.renderBackground(this.arena, this.originalArena);
+    // Music + ambient + renderBackground are NO LONGER started here. They run
+    // during the loading phase (via runLoadingTasks → preloadArena + renderBackground)
+    // and via setPhase('playing') → audio.playMusic + playSound('ambient')
+    // + matchSystem.init() (arena ambient loops).
     this.running = true;
     this.lastTime = performance.now();
-    audio.playMusic(this.arena.themeId);
-    this.playSound('ambient');
-    this.matchSystem.init();
     if (debugFlags.navDebugAllowed || debugFlags.netDebugAllowed) {
       this._debugKeyHandler = (e: KeyboardEvent) => {
         if (e.key === '`') {
@@ -338,6 +341,51 @@ export class GameLoop {
     this._networkMode = enabled;
   }
 
+  /** Register a callback that fires whenever the match phase changes. */
+  setOnPhaseChange(cb: (phase: MatchPhase) => void): void {
+    this.onPhaseChange = cb;
+  }
+
+  /** Transition the match to a new phase. No-op if already in that phase.
+   *  On first entry into 'playing', starts arena music + ambient loop. */
+  setPhase(phase: MatchPhase): void {
+    const prev = this.state.phase;
+    if (prev === phase) return;
+    this.state.phase = phase;
+    if (phase === 'playing' && prev !== 'playing') {
+      // First entry into playing — kick off music + ambient. Preloaded by
+      // runLoadingTasks, so this should start instantly.
+      audio.playMusic(this.arena.themeId);
+      this.playSound('ambient');
+      // Start per-arena ambient loops (wind, lava, underwater bubbles, etc.)
+      // Gated here so they don't play during the loading phase.
+      this.matchSystem.init();
+    }
+    this.onPhaseChange?.(phase);
+  }
+
+  /** Get the renderer instance. Used by matchLoading to render the background
+   *  and warm the sprite cache during the loading phase. */
+  getRenderer(): Renderer {
+    return this.renderer;
+  }
+
+  /** Get the (possibly mirrored) arena — passed to matchLoading.renderBackground. */
+  getArena(): Arena {
+    return this.arena;
+  }
+
+  /** Get the un-mirrored arena — needed by matchLoading for theme draw calls. */
+  getOriginalArena(): Arena {
+    return this.originalArena;
+  }
+
+  /** Get the list of character names active in this match (including bots).
+   *  Used by matchLoading to know which sprites to warm. */
+  getActiveCharacterNames(): string[] {
+    return this.state.players.map(p => p.character.name);
+  }
+
   /** Update net debug stats (forwarded to renderer for overlay). */
   setNetDebugStats(stats: NetDebugStats | null): void {
     this.renderer.setNetDebugStats(stats);
@@ -400,6 +448,11 @@ export class GameLoop {
   /** Tick all cosmetic-only systems (particles, environment, visual decays).
    *  Called once per frame from local loop(), host loop, and guest loop. */
   cosmeticStep(dt: number): void {
+    // Skip cosmetic updates during loading — snapshots received here would
+    // otherwise trigger spurious transition sounds as prev-state vs. snapshot-state
+    // flips on the guest.
+    if (this.state.phase === 'loading') return;
+
     // --- Per-player cosmetic systems ---
     this.playerTransitionSystem.cosmeticUpdate(dt);
     this.playerCosmeticSystem.cosmeticUpdate(dt);

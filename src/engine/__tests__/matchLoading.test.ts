@@ -16,6 +16,7 @@ import { audio } from '../audio';
 function makeRendererStub(): Renderer {
   return {
     renderBackground: vi.fn(),
+    warmSpriteCache: vi.fn(),
   } as unknown as Renderer;
 }
 
@@ -53,6 +54,8 @@ describe('runLoadingTasks', () => {
 
     expect(renderer.renderBackground).toHaveBeenCalledTimes(1);
     expect(renderer.renderBackground).toHaveBeenCalledWith(arena, originalArena);
+    expect(renderer.warmSpriteCache).toHaveBeenCalledTimes(1);
+    expect(renderer.warmSpriteCache).toHaveBeenCalledWith(['Bunny', 'Fox']);
     expect(audio.preloadArena).toHaveBeenCalledWith('meadow');
   });
 

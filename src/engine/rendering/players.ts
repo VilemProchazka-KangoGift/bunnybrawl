@@ -1,6 +1,6 @@
 import type { Player } from '../types';
 import type { ThemeConfig } from '../themes/types';
-import { FAT_SCALE, HITSTOP_DURATION } from '../constants';
+import { FAT_SCALE, HITSTOP_DURATION, PLAYER_WIDTH, PLAYER_HEIGHT } from '../constants';
 import { hasCustomEyes, getSpriteRenderer, getCharacterPack, drawLegs } from '../characters';
 import { drawHighlightSpot } from '../spriteShading';
 
@@ -9,6 +9,44 @@ const spriteCache = new Map<string, OffscreenCanvas>();
 
 export function clearSpriteCache(): void {
   spriteCache.clear();
+}
+
+/** Pre-populate the sprite cache for the given character names by drawing a
+ *  handful of common (state, animFrame) combinations into a throwaway canvas.
+ *  First-render sprite-cache misses are the #1 source of first-frame hitches,
+ *  so the loading phase does this work up front.
+ *
+ *  `theme` MUST match the theme used at match render time. Bubble-helmet arenas
+ *  (underwater, space_station) bake the glass dome into the cached bitmap on
+ *  cache-miss; the cache key does NOT include the helmet bit, so warming with
+ *  a helmet-less theme would poison the cache and render players without
+ *  helmets during the match. */
+export function warmSpriteCacheForCharacters(names: string[], theme?: ThemeConfig): void {
+  // Common states + animFrames. squashScale=1 (sqKey=10), fastFalling=false,
+  // idleAnimTimer=undefined (idleKey=-1). These match the typical first-frame
+  // keys encountered at match start.
+  const states: Array<string> = ['idle', 'run', 'airborne'];
+  const animFrames = [0, 2, 4];
+
+  // Throwaway offscreen canvas; drawCharacterSprite writes to the sprite cache
+  // as a side effect on cache miss, which is what we want.
+  const cw = PLAYER_WIDTH + 20; // +20 for padding (matches pad * 2 in drawCharacterSprite)
+  const ch = PLAYER_HEIGHT + 20;
+  const scratch = new OffscreenCanvas(cw, ch);
+  const sctx = scratch.getContext('2d');
+  if (!sctx) return;
+  const ctx = sctx as unknown as CanvasRenderingContext2D;
+
+  for (const name of names) {
+    const pack = getCharacterPack(name);
+    if (!pack) continue;
+    const char = { name, color: pack.color, darkColor: pack.darkColor, lightColor: pack.lightColor };
+    for (const state of states) {
+      for (const frame of animFrames) {
+        drawCharacterSprite(ctx, 0, 0, PLAYER_WIDTH, PLAYER_HEIGHT, char, state, frame, false, undefined, 1, theme);
+      }
+    }
+  }
 }
 
 export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player, nearCarrot: boolean, theme: ThemeConfig, frameTime: number): void {

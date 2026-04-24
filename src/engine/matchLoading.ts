@@ -33,8 +33,9 @@ export interface RunLoadingTasksOpts {
  * 1. Music preload — streams the arena MP3 so `playMusic()` starts instantly.
  * 2. Background render — paints the static bg layer (hills, ground, platforms)
  *    so the first visible frame is fully drawn.
- * 3. Sprite cache warmup — currently a no-op placeholder; Task 5 will wire
- *    this to `renderer.warmSpriteCache(names)`.
+ * 3. Sprite cache warmup — pre-renders each active character's common
+ *    (state, animFrame) combinations to the sprite cache so the first
+ *    visible frame doesn't hitch on OffscreenCanvas creation.
  *
  * A minimum duration (`minDurationMs`) ensures the loading overlay is on screen
  * long enough to be perceived even when all tasks finish instantly.
@@ -58,7 +59,7 @@ export async function runLoadingTasks(opts: RunLoadingTasksOpts): Promise<void> 
 
   const spriteTask = new Promise<void>((resolve) => {
     setTimeout(() => {
-      warmSpriteCachePlaceholder(opts.renderer, opts.characterNames);
+      warmSpriteCache(opts.renderer, opts.characterNames);
       resolve();
     }, 0);
   });
@@ -75,10 +76,6 @@ export async function runLoadingTasks(opts: RunLoadingTasksOpts): Promise<void> 
   }
 }
 
-/**
- * Placeholder for future sprite-cache warmup. Task 5 will replace the body
- * with `renderer.warmSpriteCache(names)` once the renderer exposes that API.
- */
-function warmSpriteCachePlaceholder(_renderer: Renderer, _names: string[]): void {
-  // no-op
+function warmSpriteCache(renderer: Renderer, names: string[]): void {
+  renderer.warmSpriteCache(names);
 }

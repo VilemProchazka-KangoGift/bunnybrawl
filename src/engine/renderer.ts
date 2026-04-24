@@ -23,6 +23,7 @@ import {
   drawDayNightCycle,
   drawHUD, drawCountdown, drawConnectionQuality, invalidateHudCache, isHudDirty,
   drawPlayer,
+  warmSpriteCacheForCharacters,
   clearRenderingCaches,
 } from './rendering';
 
@@ -163,6 +164,14 @@ export class Renderer {
 
   /** E2E diagnostic: which rendering branches fired last frame. */
   getDiagnostics(): RenderDiagnostics { return this._diag; }
+
+  /** Pre-populate the sprite cache for the given character names. Called during
+   *  the loading phase so the first visible frame doesn't hitch on cache misses.
+   *  Passes `this.theme` so bubble-helmet arenas bake the helmet into the cached
+   *  bitmap — otherwise cache-miss at render time poisons the cache without it. */
+  warmSpriteCache(names: string[]): void {
+    warmSpriteCacheForCharacters(names, this.theme);
+  }
 
   renderBackground(arena: Arena, originalArena?: Arena): void {
     if (originalArena) this.originalArena = originalArena;

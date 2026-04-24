@@ -3390,7 +3390,21 @@ describe('GameLoop — start and stop lifecycle', () => {
     loop.start();
 
     expect(rafSpy).toHaveBeenCalled();
-    expect(vi.mocked(audio.playMusic)).toHaveBeenCalled();
+    // Music no longer plays on start() — it plays on setPhase('playing').
+
+    loop.stop();
+    vi.restoreAllMocks();
+  });
+
+  it('start() does NOT play music (music is gated on setPhase("playing"))', () => {
+    vi.spyOn(globalThis, 'requestAnimationFrame').mockReturnValue(1);
+    vi.spyOn(performance, 'now').mockReturnValue(1000);
+    vi.mocked(audio.playMusic).mockClear();
+
+    const { loop } = createLoop();
+    loop.start();
+
+    expect(vi.mocked(audio.playMusic)).not.toHaveBeenCalled();
 
     loop.stop();
     vi.restoreAllMocks();

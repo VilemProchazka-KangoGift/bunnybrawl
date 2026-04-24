@@ -116,6 +116,9 @@ function createLoop(opts?: {
     opts?.players ?? (['P1', 'P2'] as PlayerSlot[]),
     onMatchEnd,
   );
+  // Default to 'playing' phase so cosmeticStep runs. Tests can flip to
+  // 'loading' to exercise the early-return.
+  loop.getState().phase = 'playing';
   _lastLoop = loop;
   return { loop, onMatchEnd, arena, settings };
 }

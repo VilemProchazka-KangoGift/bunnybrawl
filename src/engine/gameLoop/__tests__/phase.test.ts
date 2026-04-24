@@ -75,6 +75,7 @@ HTMLCanvasElement.prototype.getContext = function (type: string) {
 import { GameLoop } from '../GameLoop';
 import { registerBuiltinArenas } from '../../arenas';
 import { registerBuiltinCharacters } from '../../characters';
+import { audio } from '../../audio';
 
 // --- Factories ---
 
@@ -181,5 +182,180 @@ describe('MatchPhase gating in fixedUpdate', () => {
     expect(state.timeElapsed).toBeGreaterThan(0);
     // Countdown should have decreased (initial 3s, after 10 frames at 1/60s ≈ 0.167s elapsed)
     expect(state.countdown).toBeLessThan(startCountdown);
+  });
+});
+
+// ===================================================================
+// setPhase API
+// ===================================================================
+
+describe('GameLoop.setPhase', () => {
+  it('setPhase("playing") triggers playMusic + ambient', () => {
+    const { loop } = createLoop();
+    vi.mocked(audio.playMusic).mockClear();
+    vi.mocked(audio.play).mockClear();
+
+    loop.setPhase('playing');
+
+    expect(vi.mocked(audio.playMusic)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(audio.play)).toHaveBeenCalledWith('ambient');
+  });
+
+  it('setPhase to same value is idempotent — no re-trigger of playMusic', () => {
+    const { loop } = createLoop();
+    loop.setPhase('playing');
+    vi.mocked(audio.playMusic).mockClear();
+
+    loop.setPhase('playing'); // same value again
+
+    expect(vi.mocked(audio.playMusic)).not.toHaveBeenCalled();
+  });
+
+  it('setPhase fires onPhaseChange callback on transition', () => {
+    const { loop } = createLoop();
+    const cb = vi.fn();
+    loop.setOnPhaseChange(cb);
+
+    loop.setPhase('playing');
+
+    expect(cb).toHaveBeenCalledWith('playing');
+  });
+
+  it('setPhase to same value does NOT fire onPhaseChange', () => {
+    const { loop } = createLoop();
+    loop.setPhase('playing');
+    const cb = vi.fn();
+    loop.setOnPhaseChange(cb);
+
+    loop.setPhase('playing'); // same value
+
+    expect(cb).not.toHaveBeenCalled();
+  });
+
+  it('setPhase("over") fires callback but does NOT trigger music', () => {
+    const { loop } = createLoop();
+    loop.setPhase('playing'); // first play to get into non-loading state
+    vi.mocked(audio.playMusic).mockClear();
+    const cb = vi.fn();
+    loop.setOnPhaseChange(cb);
+
+    loop.setPhase('over');
+
+    expect(cb).toHaveBeenCalledWith('over');
+    expect(vi.mocked(audio.playMusic)).not.toHaveBeenCalled();
+  });
+
+  it('state.phase is updated synchronously by setPhase', () => {
+    const { loop } = createLoop();
+    const state = loop.getState();
+    expect(state.phase).toBe('loading');
+
+    loop.setPhase('playing');
+    expect(state.phase).toBe('playing');
+
+    loop.setPhase('over');
+    expect(state.phase).toBe('over');
+  });
+});
+
+// ===================================================================
+// Arena ambient loops are gated on setPhase('playing'), not start()
+// ===================================================================
+
+describe('arena ambient loops are gated on setPhase("playing")', () => {
+  // Volcano arena has amb_lava as a continuous ambient loop. If start() starts
+  // the arena ambient loops, this sound plays during the loading phase — which
+  // is wrong: the plan intent is that NO audio plays until we leave loading.
+  it('start() does NOT play volcano amb_lava (ambient loops gated on setPhase)', () => {
+    vi.spyOn(globalThis, 'requestAnimationFrame').mockReturnValue(1);
+    vi.spyOn(performance, 'now').mockReturnValue(1000);
+    vi.mocked(audio.play).mockClear();
+
+    const { loop } = createLoop({ arena: { themeId: 'volcano' } });
+    loop.start();
+
+    const calls = vi.mocked(audio.play).mock.calls.map(c => c[0]);
+    expect(calls).not.toContain('amb_lava');
+  });
+
+  it('setPhase("playing") starts volcano amb_lava', () => {
+    vi.mocked(audio.play).mockClear();
+
+    const { loop } = createLoop({ arena: { themeId: 'volcano' } });
+    loop.setPhase('playing');
+
+    const calls = vi.mocked(audio.play).mock.calls.map(c => c[0]);
+    expect(calls).toContain('amb_lava');
+  });
+});
+
+// ===================================================================
+// cosmeticStep gating on phase
+// ===================================================================
+
+describe('cosmeticStep gating on phase', () => {
+  it('cosmeticStep during "loading" returns early (no particle/environment update)', () => {
+    const { loop } = createLoop();
+    const state = loop.getState();
+    state.phase = 'loading';
+
+    // Seed a player state transition that would normally fire a sound/particle
+    // on cosmeticStep (grounded → airborne triggers jump sound).
+    const player = state.players[0];
+    player.state = 'idle';
+    player.vy = 0;
+    // Advance one step to establish prev-state baseline.
+    loop.cosmeticStep(FIXED_TIMESTEP);
+
+    vi.mocked(audio.play).mockClear();
+
+    // Trigger transition: airborne. If cosmeticStep runs, it would fire 'jump'.
+    player.state = 'airborne';
+    player.vy = -400;
+    loop.cosmeticStep(FIXED_TIMESTEP);
+
+    // Phase is still 'loading' → cosmeticStep should early-return → no sound.
+    expect(vi.mocked(audio.play)).not.toHaveBeenCalledWith('jump');
+  });
+
+  it('cosmeticStep during "playing" runs normally', () => {
+    const { loop } = createLoop();
+    const state = loop.getState();
+    state.phase = 'playing';
+
+    // Establish prev-state: grounded
+    const player = state.players[0];
+    player.state = 'idle';
+    player.vy = 0;
+    loop.cosmeticStep(FIXED_TIMESTEP);
+
+    vi.mocked(audio.play).mockClear();
+
+    // Transition: airborne
+    player.state = 'airborne';
+    player.vy = -400;
+    loop.cosmeticStep(FIXED_TIMESTEP);
+
+    expect(vi.mocked(audio.play)).toHaveBeenCalledWith('jump');
+  });
+});
+
+// ===================================================================
+// getRenderer / getActiveCharacterNames
+// ===================================================================
+
+describe('GameLoop loading-phase accessors', () => {
+  it('getRenderer returns the renderer instance', () => {
+    const { loop } = createLoop();
+    const r = loop.getRenderer();
+    expect(r).toBeDefined();
+  });
+
+  it('getActiveCharacterNames returns one name per player', () => {
+    const { loop } = createLoop({ players: ['P1', 'P2'] as PlayerSlot[] });
+    const names = loop.getActiveCharacterNames();
+    expect(names).toHaveLength(2);
+    // Each name should be a non-empty string (character pack name)
+    expect(names.every(n => typeof n === 'string' && n.length > 0)).toBe(true);
   });
 });
