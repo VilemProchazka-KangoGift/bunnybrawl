@@ -309,6 +309,21 @@
   letter-spacing: 1px;
 }
 
+.match-loading-sub {
+  margin-top: 8px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.65);
+  letter-spacing: 0.5px;
+}
+
+.match-loading-cancel {
+  margin-top: 24px;
+  width: auto !important;
+  min-width: 180px;
+}
+
 /* Mobile: 3-column arena grid in pause menu */
 .is-mobile .pause-arena-grid {
   grid-template-columns: repeat(3, 1fr);

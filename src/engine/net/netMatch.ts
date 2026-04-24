@@ -62,6 +62,11 @@ export interface NetMatchConfig {
    *  a guest that missed an arena change during the disconnect still ends up
    *  on the right arena. */
   onGuestReconnected?: (slot: PlayerSlot) => void;
+  /** Host-side hook: fires when the LOADING_TIMEOUT_MS hard cap is reached
+   *  and one or more guest slots never sent LOADED. The UI layer uses this
+   *  to flash a "Starting without X" banner. Fires with the laggard slot
+   *  list (may be empty if all guests loaded but host self-load was slow). */
+  onLoadingTimeout?: (slots: PlayerSlot[]) => void;
 }
 
 export class NetMatch {
@@ -98,6 +103,9 @@ export class NetMatch {
   private onReconnectAttempt?: (current: number, max: number) => void;
   // Host-side only: fires after a guest reclaims their slot via RECONNECT_REQUEST.
   private onGuestReconnected?: (slot: PlayerSlot) => void;
+  // Host-side only: fires when LOADING_TIMEOUT_MS forces the match to start
+  // without some guests.
+  private onLoadingTimeout?: (slots: PlayerSlot[]) => void;
   // Previous phase seen in guest snapshots — drives onPhaseChange on transition.
   private _prevGuestPhase: MatchPhase = 'loading';
   // Latches on the first snapshot where matchOver=true so guest-side match-end
@@ -128,6 +136,7 @@ export class NetMatch {
     this.onGuestConnectionUnstable = config.onGuestConnectionUnstable;
     this.onReconnectAttempt = config.onReconnectAttempt;
     this.onGuestReconnected = config.onGuestReconnected;
+    this.onLoadingTimeout = config.onLoadingTimeout;
     this.localSlot = config.localSlot;
 
     // Both host and guest create a GameLoop (needed for canvas rendering)
@@ -230,11 +239,14 @@ export class NetMatch {
         if (this.gameLoop.getState().phase === 'loading') {
           console.warn('[NetMatch] loading timeout — forcing phase=playing');
           const expected = this.hostAuthority!.getExpectedGuestSlots();
+          const laggards: PlayerSlot[] = [];
           for (const slot of expected) {
             if (!this.loadedGuests.has(slot)) {
+              laggards.push(slot);
               this.gameLoop.disconnectPlayer(slot);
             }
           }
+          this.onLoadingTimeout?.(laggards);
           this.gameLoop.setPhase('playing');
         }
       }, NetMatch.LOADING_TIMEOUT_MS);
@@ -276,9 +288,14 @@ export class NetMatch {
       if (this.gameLoop.getState().phase !== 'loading') return;
       console.warn('[NetMatch] loading timeout — forcing phase=playing');
       const expected = this.hostAuthority!.getExpectedGuestSlots();
+      const laggards: PlayerSlot[] = [];
       for (const slot of expected) {
-        if (!this.loadedGuests.has(slot)) this.gameLoop.disconnectPlayer(slot);
+        if (!this.loadedGuests.has(slot)) {
+          laggards.push(slot);
+          this.gameLoop.disconnectPlayer(slot);
+        }
       }
+      this.onLoadingTimeout?.(laggards);
       this.gameLoop.setPhase('playing');
     }, NetMatch.LOADING_TIMEOUT_MS);
   }
@@ -317,6 +334,11 @@ export class NetMatch {
     let writeIdx = 0;
     let delayFrames = 2; // initial delay (updated from RTT)
     let rttCheckTimer = 0;
+    // Reused per-tick scratch buffer for the set of slots whose jump flag was
+    // read by this tick's fixedUpdate. We only clear those via
+    // consumeGuestJumps — a jump latched by an INPUT message that arrived
+    // *after* fixedUpdate stays in the ring for the next tick to consume.
+    const consumedJumpSlots: PlayerSlot[] = [];
 
     const loop = (now: number) => {
       // Cap dt to 3 ticks — prevents tick burst after fullscreen/tab-switch pauses
@@ -351,9 +373,16 @@ export class NetMatch {
 
         const networkInputs = this.hostAuthority!.getNetworkInputs();
         networkInputs.set(this.localSlot, delayedInput);
+        // Snapshot which slots have jump=true right now — these are the jumps
+        // fixedUpdate is about to see. Any jump latched by a new INPUT message
+        // that arrives mid-tick won't be in this set and survives to next tick.
+        consumedJumpSlots.length = 0;
+        for (const [slot, input] of networkInputs) {
+          if (input.jump) consumedJumpSlots.push(slot as PlayerSlot);
+        }
         this.gameLoop.fixedUpdate(FIXED_DT, networkInputs);
-        // Clear latched guest jump flags — jump is edge-triggered, fire once per tap
-        this.hostAuthority!.consumeGuestJumps();
+        // Clear only the jumps we just consumed — jump is edge-triggered, fire once per tap
+        this.hostAuthority!.consumeGuestJumps(consumedJumpSlots);
         // Tick reconnection grace timers
         this.hostAuthority!.tickGraceTimers(FIXED_DT);
         this.gameLoop.tickCosmetic(FIXED_DT);
@@ -364,6 +393,11 @@ export class NetMatch {
       // multiple ticks in one frame would spam guests with snapshots,
       // causing decode/GC pressure that tanks mobile framerate.
       this.hostAuthority!.broadcastSnapshot(this.gameLoop.getState());
+
+      // Keep the 3-bar signal HUD accurate on the host too — the host sees
+      // RTT from pong replies just like the guest, and a degraded link should
+      // be visible to both sides.
+      this.gameLoop.setConnectionQuality(this.transport.currentRtt, this.transport.currentJitter);
 
       if (debugFlags.netDebugEnabled) {
         const s = this.hostAuthority!.getStats();

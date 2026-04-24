@@ -102,7 +102,7 @@ export class Renderer {
   private _diag: RenderDiagnostics = freshDiag();
   private _netRtt = 0;
   private _netJitter = 0;
-  private _isNetworkGuest = false;
+  private _isNetworkMatch = false;
 
   // Overlay-layer dirty tracking (only used when hudCtx is set)
   private _overlayHadContent = false;
@@ -156,7 +156,7 @@ export class Renderer {
   setConnectionQuality(rtt: number, jitter: number): void {
     this._netRtt = rtt;
     this._netJitter = jitter;
-    this._isNetworkGuest = true;
+    this._isNetworkMatch = true;
   }
 
   /** E2E diagnostic: which rendering branches fired last frame. */
@@ -685,8 +685,8 @@ export class Renderer {
     const hasNetDebug = debugFlags.netDebugEnabled && !!this._netDebugStats;
     const hasOverlayContent = hasCountdown || hasFlash || hasAnimations || hasNavDebug || hasNetDebug;
 
-    const rttRounded = this._isNetworkGuest ? Math.round(this._netRtt) : -1;
-    const jitterRounded = this._isNetworkGuest ? Math.round(this._netJitter) : -1;
+    const rttRounded = this._isNetworkMatch ? Math.round(this._netRtt) : -1;
+    const jitterRounded = this._isNetworkMatch ? Math.round(this._netJitter) : -1;
     const qualityChanged = rttRounded !== this._overlayLastRtt || jitterRounded !== this._overlayLastJitter;
 
     // Redraw if: cache dirty, transient content active, content just ended (clear residue), or quality indicator changed.
@@ -711,7 +711,7 @@ export class Renderer {
 
     drawHUD(ctx, matchState, this.frameTime, this._playerNames, this._timeLimit, hudDirty);
 
-    if (this._isNetworkGuest) {
+    if (this._isNetworkMatch) {
       drawConnectionQuality(ctx, this._netRtt, this._netJitter, CANVAS_WIDTH);
     }
 

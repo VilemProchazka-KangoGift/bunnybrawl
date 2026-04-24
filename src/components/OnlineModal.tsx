@@ -1,7 +1,7 @@
 // Online multiplayer lobby modal — host/join room, character select, ready-up.
 // Network/protocol logic lives in useOnlineRoom; this file is UI only.
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../store/gameStore';
 import { audio } from '../engine/audio';
@@ -34,6 +34,25 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
   const [joinCode, setJoinCode] = useState('');
   const [mobileNameOpen, setMobileNameOpen] = useState(false);
   const [mobileCodeOpen, setMobileCodeOpen] = useState(false);
+
+  // Guest connecting stage: the MQTT → signaling → WebRTC handshake can take
+  // 10-20s on a cold start. A single static "Connecting..." string makes the
+  // user think the app hung; staged messages reassure them work is happening.
+  // Stages: 'initial' (0-3s) → 'searching' (3-8s) → 'check' (8-15s) → 'slow' (15s+).
+  // Only applies to guests — host gets a roomCode fast and moves on.
+  const [connectingStage, setConnectingStage] =
+    useState<'initial' | 'searching' | 'check' | 'slow'>('initial');
+  useEffect(() => {
+    if (step !== 'connecting' || online.isHost) {
+      setConnectingStage('initial');
+      return;
+    }
+    setConnectingStage('initial');
+    const t1 = setTimeout(() => setConnectingStage('searching'), 3000);
+    const t2 = setTimeout(() => setConnectingStage('check'), 8000);
+    const t3 = setTimeout(() => setConnectingStage('slow'), 15000);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+  }, [step, online.isHost]);
 
   const allChars = getAllCharacters();
 
@@ -165,7 +184,12 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
               ) : (
                 <>
                   <div className="online-status-box">
-                    {!online.roomCode && online.connectionStatus !== 'error' && t('connecting_server', 'Connecting to server...')}
+                    {online.connectionStatus !== 'error' && (
+                      connectingStage === 'initial' ? t('connecting_server', 'Connecting to server...')
+                      : connectingStage === 'searching' ? t('connecting_searching', 'Looking for room {{code}}...', { code: joinCode })
+                      : connectingStage === 'check' ? t('connecting_check_code', 'Still searching — check the code is correct')
+                      : t('connecting_slow', 'Taking longer than usual...')
+                    )}
                     {online.connectionStatus === 'error' && (
                       <span className="online-error">{online.connectionError || t('connection_error', 'Connection failed')}</span>
                     )}

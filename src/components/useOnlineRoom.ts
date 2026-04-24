@@ -357,6 +357,20 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
       onReliableMessage: (msg: ReliableMessage, fromPeerId?: string) => {
         if (msg.type === MsgType.HANDSHAKE) {
           const hsMsg = msg as HandshakeMessage;
+          // Validate protocol version — cross-version builds silently corrupt
+          // snapshots. Reject mismatch with a user-facing error and disconnect.
+          if (hsMsg.protocolVersion !== PROTOCOL_VERSION) {
+            const err = t('version_mismatch', 'Version mismatch — please reload the page');
+            setOnline({ connectionStatus: 'error', connectionError: err });
+            if (isHost && fromPeerId) {
+              transport.sendReliableTo(fromPeerId, { type: MsgType.DISCONNECT } as ReliableMessage);
+            }
+            transport.destroy();
+            transportRef.current = null;
+            _modalTransport = null;
+            setStep('choose');
+            return;
+          }
           if (isHost && fromPeerId) {
             pendingPlayerNames.current.set(fromPeerId, hsMsg.playerName);
             const { remotePlayers, playerNames } = useGameStore.getState().online;

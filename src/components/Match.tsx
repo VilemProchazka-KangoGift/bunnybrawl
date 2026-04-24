@@ -66,8 +66,16 @@ export function Match() {
   const { activePlayers, matchSettings, setMatchResult, setScreen, setActivePlayers, setMatchSettings, online, resetOnline } = useGameStore();
   const [paused, setPaused] = useState(false);
   const [showLevelSelect, setShowLevelSelect] = useState(false);
-  const [connectionUnstable, setConnectionUnstable] = useState(false);
+  // Connection-unstable banner has two flavors so players know which side is
+  // slow: `mine` = this client's snapshot stream lagged; `them` = a remote
+  // peer told us they lagged (name attached when known).
+  const [unstableMine, setUnstableMine] = useState(false);
+  const [unstableThem, setUnstableThem] = useState<string | null>(null);
   const [isReconnecting, setIsReconnecting] = useState(false);
+  // Flashed after the reconnect budget runs out, right before we transition
+  // to the disconnect victory screen. Gives the player a moment to register
+  // why the match ended instead of a jarring instant cut.
+  const [reconnectFailed, setReconnectFailed] = useState(false);
   const netMatchRef = useRef<NetMatch | null>(null);
   const [touchInput, setTouchInput] = useState<TouchInputManager | null>(null);
   // Two sources drive the loading overlay:
@@ -81,12 +89,36 @@ export function Match() {
   const [phaseIsLoading, setPhaseIsLoading] = useState(true);
   const [localTasksDone, setLocalTasksDone] = useState(false);
   const showLoadingOverlay = phaseIsLoading || !localTasksDone;
+  // Drive the 3-second delay on the Cancel button: arm when overlay appears,
+  // disarm when it disappears. Avoids flashing Cancel on instant loads.
+  useEffect(() => {
+    if (showLoadingOverlay) {
+      if (loadingCancelTimerRef.current) clearTimeout(loadingCancelTimerRef.current);
+      setShowLoadingCancel(false);
+      loadingCancelTimerRef.current = setTimeout(() => setShowLoadingCancel(true), 3000);
+    } else {
+      setShowLoadingCancel(false);
+      if (loadingCancelTimerRef.current) {
+        clearTimeout(loadingCancelTimerRef.current);
+        loadingCancelTimerRef.current = null;
+      }
+    }
+    return () => {
+      if (loadingCancelTimerRef.current) {
+        clearTimeout(loadingCancelTimerRef.current);
+        loadingCancelTimerRef.current = null;
+      }
+    };
+  }, [showLoadingOverlay]);
   // Reconnect progress for the overlay. `attempt` goes 0..max as retries fire.
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
   const [reconnectMax, setReconnectMax] = useState(12);
   // Transient banner: "<name> left the match". Auto-clears after 4 seconds.
   const [disconnectBanner, setDisconnectBanner] = useState<string | null>(null);
   const disconnectBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Cancel button appears 3s into loading so brief loads don't flicker it.
+  const [showLoadingCancel, setShowLoadingCancel] = useState(false);
+  const loadingCancelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMobile = useMemo(() => isTouchPrimary(), []);
 
   // Resolve 'random' to a concrete arena; re-resolves each time Match mounts (rematch)
@@ -250,7 +282,7 @@ export function Match() {
           console.warn('Desync detected!');
         },
         onStall: (stalled) => {
-          setConnectionUnstable(stalled);
+          setUnstableMine(stalled);
         },
         onStallTimeout: () => {
           if (matchEnded) return; // don't override normal victory with disconnect
@@ -260,9 +292,16 @@ export function Match() {
         },
         onDisconnect: () => {
           if (matchEnded) return; // don't override normal victory with disconnect
-          if (gameLoopRef.current) {
-            setMatchResult(null, gameLoopRef.current.getState(), true);
-          }
+          // Flash "reconnect failed" for ~1.8s so the player understands why
+          // the match is ending. Then transition to the disconnect victory.
+          setReconnectFailed(true);
+          setTimeout(() => {
+            setReconnectFailed(false);
+            if (matchEnded) return;
+            if (gameLoopRef.current) {
+              setMatchResult(null, gameLoopRef.current.getState(), true);
+            }
+          }, 1800);
         },
         onReconnecting: (reconnecting) => {
           setIsReconnecting(reconnecting);
@@ -317,11 +356,27 @@ export function Match() {
         onPhaseChange: (phase) => {
           setPhaseIsLoading(phase === 'loading');
         },
-        onGuestConnectionUnstable: (_slot, stalled) => {
-          // Host-side banner: reuse the same "Connection Unstable" indicator
-          // that guests show for their own snapshot stalls. Gives the host a
-          // clue that a guest is laggy without waiting for the pong timeout.
-          setConnectionUnstable(stalled);
+        onLoadingTimeout: (slots) => {
+          if (!slots.length) return;
+          const names = slots
+            .map(s => useGameStore.getState().online.playerNames[s] || s)
+            .join(', ');
+          setDisconnectBanner(
+            t('loading_starting_without', 'Starting without {{names}}', { names }),
+          );
+          if (disconnectBannerTimerRef.current) clearTimeout(disconnectBannerTimerRef.current);
+          disconnectBannerTimerRef.current = setTimeout(() => setDisconnectBanner(null), 4000);
+        },
+        onGuestConnectionUnstable: (slot, stalled) => {
+          // Host-side banner: "X has a slow connection" (distinct from the
+          // host's own snapshot stall). Gives the host a clue that a guest is
+          // laggy without waiting for the pong timeout.
+          if (!stalled) {
+            setUnstableThem(null);
+            return;
+          }
+          const name = useGameStore.getState().online.playerNames[slot] || slot;
+          setUnstableThem(name);
         },
       });
 
@@ -440,6 +495,20 @@ export function Match() {
           <div className="match-loading-overlay" data-testid="match-loading-overlay">
             <div className="match-loading-spinner" />
             <div className="match-loading-text">{t('loading', 'Loading...')}</div>
+            <div className="match-loading-sub" data-testid="match-loading-sub">
+              {online.isOnline && localTasksDone && phaseIsLoading
+                ? t('loading_waiting_others', 'Waiting for other players...')
+                : t('loading_arena', 'Loading arena...')}
+            </div>
+            {showLoadingCancel && (
+              <button
+                className="btn-base pause-btn quit-btn match-loading-cancel"
+                onClick={handleQuit}
+                data-testid="match-loading-cancel"
+              >
+                {t('loading_cancel', 'Cancel')}
+              </button>
+            )}
           </div>
         )}
         {paused && (
@@ -501,9 +570,14 @@ export function Match() {
             </div>
           </div>
         )}
-        {connectionUnstable && !paused && !isReconnecting && online.isOnline && (
+        {unstableMine && !paused && !isReconnecting && online.isOnline && (
           <div className="connection-unstable-indicator" data-testid="connection-unstable">
-            {t('connection_unstable', 'Connection Unstable')}
+            {t('connection_unstable_mine', 'Your connection is unstable')}
+          </div>
+        )}
+        {!unstableMine && unstableThem && !paused && !isReconnecting && online.isOnline && (
+          <div className="connection-unstable-indicator" data-testid="connection-unstable-them">
+            {t('connection_unstable_them', '{{name}} has a slow connection', { name: unstableThem })}
           </div>
         )}
         {disconnectBanner && !paused && online.isOnline && (
@@ -526,6 +600,15 @@ export function Match() {
               <button className="btn-base pause-btn quit-btn" onClick={handleQuit} data-testid="reconnect-give-up">
                 {t('give_up', 'Give Up')}
               </button>
+            </div>
+          </div>
+        )}
+        {reconnectFailed && online.isOnline && (
+          <div className="reconnecting-overlay" data-testid="reconnect-failed">
+            <div className="reconnecting-box">
+              <div className="reconnecting-text">
+                {t('reconnect_failed', 'Could not reconnect.')}
+              </div>
             </div>
           </div>
         )}

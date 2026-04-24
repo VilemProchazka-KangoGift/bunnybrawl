@@ -32,6 +32,7 @@ const mockGameLoopInstance = {
   getAiRng: vi.fn(() => undefined),
   setOnPhaseChange: vi.fn(),
   setPhase: vi.fn(),
+  setConnectionQuality: vi.fn(),
 };
 
 vi.mock('../gameLoop', () => ({
@@ -55,6 +56,7 @@ const mockHostAuthorityInstance = {
   consumeGuestJumps: vi.fn(),
   tickGraceTimers: vi.fn(),
   getExpectedGuestSlots: vi.fn(() => [] as string[]),
+  getSlotForPeer: vi.fn(() => undefined),
 };
 
 vi.mock('./hostAuthority', () => ({
