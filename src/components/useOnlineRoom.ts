@@ -50,8 +50,6 @@ export interface UseOnlineRoomResult {
   connect: (isHost: boolean, joinCode?: string) => void;
   cleanup: () => void;
   startMatchAsHost: () => void;
-  /** Transient "your character was auto-switched" notice. Null when no
-   *  notice is active. Carries {prev, next} character names. */
   autoSwitchNotice: { prev: string; next: string } | null;
 }
 
@@ -115,7 +113,6 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
       setLocalChar(alt.name);
       localCharRef.current = alt.name;
       transportRef.current?.sendReliable({ type: MsgType.CHARACTER_SELECT, characterName: alt.name });
-      // Surface the switch so the guest doesn't wonder why their sprite changed.
       setAutoSwitchNotice({ prev, next: alt.name });
       if (autoSwitchTimerRef.current) clearTimeout(autoSwitchTimerRef.current);
       autoSwitchTimerRef.current = setTimeout(() => setAutoSwitchNotice(null), 4500);

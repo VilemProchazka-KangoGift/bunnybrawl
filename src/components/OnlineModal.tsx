@@ -12,6 +12,14 @@ import { ALL_BOT_SLOTS } from '../engine/types';
 import { useOnlineRoom } from './useOnlineRoom';
 import { ROOM_CODE_LENGTH } from '../engine/net/transport';
 
+type ConnectingStage = 'initial' | 'searching' | 'check' | 'slow';
+const CONNECTING_STAGE_KEYS: Record<ConnectingStage, string> = {
+  initial: 'connecting_server',
+  searching: 'connecting_searching',
+  check: 'connecting_check_code',
+  slow: 'connecting_slow',
+};
+
 export { getModalTransport } from './useOnlineRoom';
 
 interface OnlineModalProps {
@@ -37,23 +45,19 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
   const [mobileNameOpen, setMobileNameOpen] = useState(false);
   const [mobileCodeOpen, setMobileCodeOpen] = useState(false);
 
-  // Guest connecting stage: the MQTT → signaling → WebRTC handshake can take
-  // 10-20s on a cold start. A single static "Connecting..." string makes the
-  // user think the app hung; staged messages reassure them work is happening.
-  // Stages: 'initial' (0-3s) → 'searching' (3-8s) → 'check' (8-15s) → 'slow' (15s+).
-  // Only applies to guests — host gets a roomCode fast and moves on.
-  const [connectingStage, setConnectingStage] =
-    useState<'initial' | 'searching' | 'check' | 'slow'>('initial');
+  // Guest-only staged messaging: the MQTT → signaling → WebRTC handshake can
+  // take 10-20s on cold start. Static "Connecting..." makes the app feel hung.
+  const CONNECTING_STAGES: Array<{ at: number; key: ConnectingStage }> = [
+    { at: 3000,  key: 'searching' },
+    { at: 8000,  key: 'check' },
+    { at: 15000, key: 'slow' },
+  ];
+  const [connectingStage, setConnectingStage] = useState<ConnectingStage>('initial');
   useEffect(() => {
-    if (step !== 'connecting' || online.isHost) {
-      setConnectingStage('initial');
-      return;
-    }
     setConnectingStage('initial');
-    const t1 = setTimeout(() => setConnectingStage('searching'), 3000);
-    const t2 = setTimeout(() => setConnectingStage('check'), 8000);
-    const t3 = setTimeout(() => setConnectingStage('slow'), 15000);
-    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+    if (step !== 'connecting' || online.isHost) return;
+    const timers = CONNECTING_STAGES.map(s => setTimeout(() => setConnectingStage(s.key), s.at));
+    return () => timers.forEach(clearTimeout);
   }, [step, online.isHost]);
 
   const allChars = getAllCharacters();
@@ -196,10 +200,7 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
                 <>
                   <div className="online-status-box">
                     {online.connectionStatus !== 'error' && (
-                      connectingStage === 'initial' ? t('connecting_server', 'Connecting to server...')
-                      : connectingStage === 'searching' ? t('connecting_searching', 'Looking for room {{code}}...', { code: joinCode })
-                      : connectingStage === 'check' ? t('connecting_check_code', 'Still searching — check the code is correct')
-                      : t('connecting_slow', 'Taking longer than usual...')
+                      t(CONNECTING_STAGE_KEYS[connectingStage], { code: joinCode })
                     )}
                     {online.connectionStatus === 'error' && (
                       <span className="online-error">{online.connectionError || t('connection_error', 'Connection failed')}</span>

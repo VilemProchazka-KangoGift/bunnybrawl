@@ -148,7 +148,6 @@
   "opponent_disconnected": "Nadiskonekta ang Kalaban",
   "return_menu": "Bumalik sa Menu",
   "back": "Bumalik",
-  "connection_unstable": "Hindi Stable ang Koneksyon",
   "connection_unstable_mine": "Hindi stable ang iyong koneksyon",
   "connection_unstable_them": "Mabagal ang koneksyon ni {{name}}",
   "version_mismatch": "Magkaibang bersyon — i-reload ang pahina",

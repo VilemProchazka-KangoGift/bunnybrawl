@@ -148,7 +148,6 @@
   "opponent_disconnected": "प्रतिद्वंद्वी डिस्कनेक्ट हो गया",
   "return_menu": "मेनू पर वापस",
   "back": "वापस",
-  "connection_unstable": "कनेक्शन अस्थिर है",
   "connection_unstable_mine": "आपका कनेक्शन अस्थिर है",
   "connection_unstable_them": "{{name}} का कनेक्शन धीमा है",
   "version_mismatch": "संस्करण मेल नहीं खाता — पेज रीलोड करें",

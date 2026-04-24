@@ -185,12 +185,11 @@ export class SnapshotInterpolation<TSnapshot> {
     return this.interpDelayFrames;
   }
 
-  /** Drop every buffered snapshot and reset sequencing state. Call after a
-   *  reconnection where the host may reuse earlier frame numbers — the old
-   *  ring would otherwise reject every "new" snapshot as out-of-order, or
-   *  interpolate between a pre-disconnect frame and a post-reconnect one. */
+  /** Drop every buffered snapshot and reset sequencing state. Call on reconnect —
+   *  the old ring would otherwise reject fresh frames as out-of-order, or lerp
+   *  across a giant frame gap. */
   reset(): void {
-    for (let i = 0; i < this.ring.length; i++) this.ring[i] = null;
+    this.ring.fill(null);
     this.ringHead = 0;
     this.ringCount = 0;
     this.latestHostFrame = 0;

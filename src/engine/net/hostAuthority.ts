@@ -108,11 +108,8 @@ export class HostAuthority {
     this.core.handleUnreliableMessage(data, fromPeerId);
   }
 
-  /** Clear latched jump flags after the host tick consumed them. When a slot
-   *  list is provided, only those are cleared — used by the host loop to avoid
-   *  eating a jump that was latched by a newly-arrived INPUT message *after*
-   *  `fixedUpdate` already read the ring. Calling with no argument (legacy /
-   *  tests) clears every slot. */
+  /** Clear latched jump flags after the tick consumed them. With a slot list,
+   *  only those are cleared — preserves jumps latched after fixedUpdate. */
   consumeGuestJumps(slots?: Iterable<PlayerSlot>): void {
     const inputs = this.core.getNetworkInputs();
     if (slots) {

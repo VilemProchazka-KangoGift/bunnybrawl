@@ -148,7 +148,6 @@
   "ready_up": "Ready!",
   "code_placeholder": "Code",
   "back": "Back",
-  "connection_unstable": "Connection Unstable",
   "connection_unstable_mine": "Your connection is unstable",
   "connection_unstable_them": "{{name}} has a slow connection",
   "version_mismatch": "Version mismatch — please reload the page",

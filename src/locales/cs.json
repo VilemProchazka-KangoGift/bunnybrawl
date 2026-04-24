@@ -154,7 +154,6 @@
   "ready_up": "Připraven!",
   "code_placeholder": "Kód",
   "back": "Zpět",
-  "connection_unstable": "Nestabilní připojení",
   "connection_unstable_mine": "Tvé připojení je nestabilní",
   "connection_unstable_them": "{{name}} má pomalé připojení",
   "version_mismatch": "Různé verze hry — obnovte stránku prosím",
