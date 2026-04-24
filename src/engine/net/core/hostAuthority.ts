@@ -5,7 +5,7 @@
  * Game-specific logic (input latching, reconnect respawn) is injected via callbacks.
  */
 import type { SnapshotCodec, InputCodec, HostAuthorityConfig } from './types';
-import { CoreMsgType, encodePong, decodePingPong, decodeSnapshotAck } from './protocol';
+import { CoreMsgType, encodePong, decodePingPong } from './protocol';
 
 /** Minimal simulation interface — only what the host authority actually calls. */
 export interface HostSimulation<TState> {
@@ -58,9 +58,6 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
   // Peer → slot mapping
   private peerSlotMap = new Map<string, string>();
 
-  // Delta compression infrastructure (disabled — kept for future)
-  private guestAckedFrame = new Map<string, number>();
-
   // Per-slot frame tracking for input redundancy
   private lastConsumedFrame = new Map<string, number>();
 
@@ -109,7 +106,6 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
   removeGuest(peerId: string): void {
     const slot = this.peerSlotMap.get(peerId);
     this.peerSlotMap.delete(peerId);
-    this.guestAckedFrame.delete(peerId);
     if (slot) {
       this.guestInputs.delete(slot);
       this.disconnectedSlots.set(slot, { timer: this.GRACE_PERIOD, peerId });
@@ -228,11 +224,6 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
             this.transport.sendUnreliableTo(pid, data);
           }
         }
-      }
-    } else if (type === CoreMsgType.SNAPSHOT_ACK) {
-      const frame = decodeSnapshotAck(data);
-      if (frame !== null && fromPeerId) {
-        this.guestAckedFrame.set(fromPeerId, frame);
       }
     } else if (type === CoreMsgType.PING) {
       const pp = decodePingPong(data);

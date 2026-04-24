@@ -23,10 +23,7 @@ import type { HostDebugStats } from './hostAuthority';
 import { EntityInterpolation, applySnapshotToState } from './interpolation';
 import { InputEcho } from './inputEcho';
 import { decodeSnapshot } from './snapshot';
-import {
-  encodeInputMessage,
-  encodeSnapshotAck,
-} from './protocol';
+import { encodeInputMessage } from './protocol';
 
 export interface NetMatchConfig {
   bgCanvas: HTMLCanvasElement;
@@ -583,7 +580,6 @@ export class NetMatch {
     const snap = decodeSnapshot(snapBuf);
     if (snap) {
       this.interpolation.pushSnapshot(snap);
-      this.transport.sendUnreliable(encodeSnapshotAck(snap.frame));
     }
   }
 

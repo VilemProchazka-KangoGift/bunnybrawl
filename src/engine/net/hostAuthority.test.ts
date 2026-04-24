@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { PlayerSlot, InputState, MatchState } from '../types';
-import { MsgType, encodeInputMessage, encodePing, encodeSnapshotAck } from './protocol';
+import { MsgType, encodeInputMessage, encodePing } from './protocol';
 
 // ---- Mock infrastructure ----
 
@@ -491,31 +491,6 @@ describe('HostAuthority', () => {
       host.handleUnreliableMessage(pingData); // no fromPeerId
 
       expect(transport.sendUnreliableTo).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('handleUnreliableMessage — SNAPSHOT_ACK', () => {
-    it('stores ACKed frame number from guest', () => {
-      const transport = makeMockTransport();
-      transport.getPeerIds.mockReturnValue(['peer-a']);
-      const { host } = makeHostAuthority({ transport: transport as any });
-      host.addGuest('peer-a', 'P2' as PlayerSlot);
-      host.start();
-
-      const state = makeMinimalMatchState();
-      host.broadcastSnapshot(state);
-
-      // Send a SNAPSHOT_ACK for frame 1 from peer-a
-      const ackData = encodeSnapshotAck(1);
-      host.handleUnreliableMessage(ackData, 'peer-a');
-
-      // Delta compression is disabled (baseline mismatch from unreliable ACKs),
-      // but ACK tracking is preserved for future adaptive rate support.
-      // Just verify no crash and broadcast still works.
-      host.broadcastSnapshot(state);
-      expect(transport.sendUnreliableTo).toHaveBeenCalled();
-
-      host.stop();
     });
   });
 
