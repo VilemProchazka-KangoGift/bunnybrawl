@@ -2459,18 +2459,20 @@ describe('Countdown Freeze', () => {
 // ===================================================================
 
 describe('Animation Timers', () => {
-  it('animTimer increments each frame for active players', () => {
+  it('animTimer increments each frame for running players', () => {
     const { loop } = createLoop();
     loop.skipCountdown();
     const state = loop.getState();
     const player = state.players[0];
 
-    // Ensure player is active and not in hitstop
+    // Ensure player is active, not in hitstop, and in 'run' state.
+    // Post-fix, animTimer only ticks while running.
     player.active = true;
     player.hitstopTimer = 0;
     player.animTimer = 0;
 
     loop.fixedUpdate(FIXED_TIMESTEP);
+    player.state = 'run';
     loop.cosmeticStep(FIXED_TIMESTEP); // animTimer advance now in cosmeticStep
 
     expect(player.animTimer).toBeGreaterThan(0);
@@ -2483,20 +2485,72 @@ describe('Animation Timers', () => {
     const state = loop.getState();
     const player = state.players[0];
 
+    player.x = 200;
+    player.y = 660 - PLAYER_HEIGHT;
     player.active = true;
     player.hitstopTimer = 0;
     player.animTimer = 0;
     player.animFrame = 0;
 
-    // Advance enough frames to exceed ANIM_FRAME_DURATION (0.12s)
+    // Advance enough frames to exceed ANIM_FRAME_DURATION (0.12s).
+    // animFrame only ticks while in 'run' state (post-fix), so force the
+    // state each tick — physics will reset to 'idle' if vx ~ 0.
     const steps = Math.ceil(ANIM_FRAME_DURATION / FIXED_TIMESTEP) + 1;
     for (let i = 0; i < steps; i++) {
       loop.fixedUpdate(FIXED_TIMESTEP);
+      player.state = 'run';
       loop.cosmeticStep(FIXED_TIMESTEP); // animFrame advance now in cosmeticStep
     }
 
     // animFrame should have advanced at least once
     expect(player.animFrame).toBeGreaterThan(0);
+  });
+
+  it('animFrame stays at 0 when player is idle (not running)', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    player.x = 200;
+    player.y = 660 - PLAYER_HEIGHT;
+    player.vx = 0;
+    player.state = 'idle';
+    player.active = true;
+    player.hitstopTimer = 0;
+    player.animFrame = 0;
+    player.animTimer = 0;
+
+    for (let i = 0; i < 30; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+      loop.cosmeticStep(FIXED_TIMESTEP);
+      // animFrame must never advance past 0 while idle. Asserting only at the
+      // end is fragile because animFrame is modulo RUN_FRAMES — it wraps back
+      // to 0 periodically under the buggy code.
+      expect(player.animFrame).toBe(0);
+    }
+  });
+
+  it('animFrame resets to 0 when state transitions from run to idle', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    player.x = 200;
+    player.y = 660 - PLAYER_HEIGHT;
+    player.state = 'run';
+    player.animFrame = 2;
+    player.animTimer = 0.05;
+
+    // Now switch to idle
+    player.state = 'idle';
+    player.vx = 0;
+    loop.fixedUpdate(FIXED_TIMESTEP);
+    loop.cosmeticStep(FIXED_TIMESTEP);
+
+    expect(player.animFrame).toBe(0);
+    expect(player.animTimer).toBe(0);
   });
 
   it('idleAnimTimer increments when player is idle', () => {
@@ -2545,8 +2599,8 @@ describe('Animation Timers', () => {
 
     // After pressing down while airborne, player should be fast-falling
     expect(player.fastFalling).toBe(true);
-    // animTimer should have advanced (animation keeps ticking)
-    expect(player.animTimer).toBeGreaterThan(0);
+    // animTimer is gated on 'run' state — airborne players don't tick it
+    expect(player.animTimer).toBe(0);
   });
 });
 

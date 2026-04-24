@@ -24,11 +24,16 @@ export function updatePlayerCosmetics(
   emitParticle: (x: number, y: number, vx: number, vy: number, life: number, size: number, color: string) => void,
   playSound: (name: string) => void,
 ): void {
-  // Animation frame advance
-  player.animTimer += dt;
-  if (player.animTimer >= ANIM_FRAME_DURATION) {
-    player.animTimer -= ANIM_FRAME_DURATION;
-    player.animFrame = (player.animFrame + 1) % RUN_FRAMES;
+  // Animation frame advance — only while running. Reset on transition out.
+  if (player.state === 'run') {
+    player.animTimer += dt;
+    if (player.animTimer >= ANIM_FRAME_DURATION) {
+      player.animTimer -= ANIM_FRAME_DURATION;
+      player.animFrame = (player.animFrame + 1) % RUN_FRAMES;
+    }
+  } else {
+    player.animFrame = 0;
+    player.animTimer = 0;
   }
 
   // Fire particles while burning
