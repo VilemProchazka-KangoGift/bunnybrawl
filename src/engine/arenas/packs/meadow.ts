@@ -20,8 +20,18 @@ function drawMeadowStump(ctx: CanvasRenderingContext2D, platform: Platform): voi
   const bodyH = platform.height;  // extends CAP_DEPTH/2 past collision bottom to meet host's cap front
   const sp = CAP_DEPTH * SKEW_RATIO;
 
-  // Right face — bark tone
-  drawPlatformRightFace(ctx, platform, '#2a1608');
+  // Right face — inlined so it extends down to match the stump body
+  // (which visually sits on the host platform's cap front, not its own collision bottom)
+  const stumpSp = CAP_DEPTH * SKEW_RATIO;
+  const stumpBodyBottom = bodyTop + bodyH;
+  ctx.fillStyle = '#2a1608';
+  ctx.beginPath();
+  ctx.moveTo(platform.x + platform.width, bodyTop);
+  ctx.lineTo(platform.x + platform.width + stumpSp, bodyTop - CAP_DEPTH);
+  ctx.lineTo(platform.x + platform.width + stumpSp, stumpBodyBottom - CAP_DEPTH);
+  ctx.lineTo(platform.x + platform.width, stumpBodyBottom);
+  ctx.closePath();
+  ctx.fill();
 
   // Body front — bark: warm brown gradient with vertical ridges
   const g = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
@@ -352,7 +362,7 @@ export const meadow: ArenaPack = {
     const cF = platform.y + CAP_DEPTH / 2;
     const cB = platform.y - CAP_DEPTH / 2;
     const bodyTop = cF;
-    const bodyH = platform.height;
+    const bodyH = platform.height - CAP_DEPTH / 2;
     const sp = CAP_DEPTH * SKEW_RATIO;
 
     // Right face — dark dirt tone

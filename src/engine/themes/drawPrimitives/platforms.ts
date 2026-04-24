@@ -151,6 +151,10 @@ export function candyDrips(x: number, w: number, cF: number, rng: () => number):
 /**
  * Mirror of wavyDown for back edges. Points go up from cB into sky.
  *
+ * Back-left corner sits at (x, cB) so the cap's left side reads as a
+ * vertical edge (aligned with collision left). The back spans the full
+ * cap width (w + sp) because the right side remains skewed by sp.
+ *
  * Default bumps/resolution are lower than wavyDown's: back edges sit
  * further from the viewer in 3D perspective, so sparser detail reads
  * as more visually cohesive.
@@ -169,7 +173,8 @@ export function backWavyUp(x: number, w: number, cB: number, sp: number, rng: ()
       spread: 0.5 / N + rng() * 0.2 / N,
     });
   }
-  const pts: EdgePoint[] = [{ x: x + sp, y: cB }];
+  const backWidth = w + sp;
+  const pts: EdgePoint[] = [{ x, y: cB }];
   const steps = resolution * N;
   for (let s = 1; s < steps; s++) {
     const t = s / steps;
@@ -180,7 +185,7 @@ export function backWavyUp(x: number, w: number, cB: number, sp: number, rng: ()
         dy -= c.amp * Math.cos(Math.min(1, dist / c.spread) * Math.PI / 2);
       }
     }
-    pts.push({ x: x + sp + t * w, y: cB + dy });
+    pts.push({ x: x + t * backWidth, y: cB + dy });
   }
   pts.push({ x: x + w + sp, y: cB });
   return pts;
@@ -188,7 +193,7 @@ export function backWavyUp(x: number, w: number, cB: number, sp: number, rng: ()
 
 /** Straight back edge — for man-made materials that keep a clean horizon line. */
 export function backFlat(x: number, w: number, cB: number, sp: number): EdgePoint[] {
-  return [{ x: x + sp, y: cB }, { x: x + w + sp, y: cB }];
+  return [{ x, y: cB }, { x: x + w + sp, y: cB }];
 }
 
 // ---- Derived geometry ----
@@ -216,9 +221,7 @@ export function drawPlatformDropShadow(ctx: CanvasRenderingContext2D, platform: 
 export function drawPlatformRightFace(ctx: CanvasRenderingContext2D, platform: Platform, fillStyle: string): void {
   const sp = skewPx();
   const bt = capFrontY(platform);
-  // Body extends CAP_DEPTH/2 past collision bottom so character headbonk
-  // overlaps the visible body — mirrors the cap straddling collision top.
-  const bb = platform.y + platform.height + CAP_DEPTH / 2;
+  const bb = platform.y + platform.height;
   ctx.fillStyle = fillStyle;
   ctx.beginPath();
   ctx.moveTo(platform.x + platform.width, bt);

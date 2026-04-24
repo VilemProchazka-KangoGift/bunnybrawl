@@ -76,16 +76,16 @@ describe('platforms.ts — front-edge profile generators', () => {
 describe('platforms.ts — back-edge profile generators', () => {
   const x = 100, w = 200, cB = 50, sp = 8;
 
-  it('backWavyUp starts at (x+sp, cB) and only bulges up (y <= cB)', () => {
+  it('backWavyUp starts at (x, cB), ends at (x+w+sp, cB), only bulges up (y <= cB)', () => {
     const pts = backWavyUp(x, w, cB, sp, mulberry32(1), {});
-    expect(pts[0]).toEqual({ x: x + sp, y: cB });
+    expect(pts[0]).toEqual({ x, y: cB });
     expect(pts[pts.length - 1]).toEqual({ x: x + w + sp, y: cB });
     for (const p of pts) expect(p.y).toBeLessThanOrEqual(cB);
   });
 
   it('backFlat returns exactly 2 straight points', () => {
     const pts = backFlat(x, w, cB, sp);
-    expect(pts).toEqual([{ x: x + sp, y: cB }, { x: x + w + sp, y: cB }]);
+    expect(pts).toEqual([{ x, y: cB }, { x: x + w + sp, y: cB }]);
   });
 });
 
