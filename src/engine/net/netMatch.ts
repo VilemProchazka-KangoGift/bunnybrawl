@@ -24,8 +24,6 @@ import { EntityInterpolation, applySnapshotToState } from './interpolation';
 import { InputEcho } from './inputEcho';
 import { decodeSnapshot } from './snapshot';
 import {
-  decodePingPong,
-  encodePing, encodePong,
   encodeInputMessage,
   encodeSnapshotAck,
 } from './protocol';
@@ -73,7 +71,6 @@ export class NetMatch {
 
   // Guest-specific
   private interpolation: EntityInterpolation | null = null;
-  private pingTimer: ReturnType<typeof setInterval> | null = null;
   private inputEcho: InputEcho | null = null;
   private lastSnapshotTime = 0;    // wall-clock time of last received snapshot
   private stallNotified = false;    // whether onStall(true) has been fired
@@ -339,10 +336,9 @@ export class NetMatch {
 
   /** Guest: send inputs + predict local + receive snapshots → render. */
   private startGuestLoop(): void {
-    this.pingTimer = setInterval(() => {
-      this.transport.sendUnreliable(encodePing(performance.now()));
-    }, 500);
-
+    // Transport owns all ping/pong RTT measurement. NetMatch used to start its
+    // own 500ms ping interval here — dead code because Transport intercepts
+    // ping/pong before they reach NetMatch's handleUnreliableMessage.
     const FIXED_DT = FIXED_TIMESTEP;
     let lastTime = performance.now();
     let guestFrame = 0;
@@ -474,16 +470,10 @@ export class NetMatch {
 
     if (this._isHost && this.hostAuthority) {
       this.hostAuthority.handleUnreliableMessage(data, fromPeerId);
-    } else {
-      if (type === MsgType.SNAPSHOT) {
-        this.handleGuestSnapshot(data);
-      } else if (type === MsgType.PING || type === MsgType.PONG) {
-        const pp = decodePingPong(data);
-        if (pp?.type === MsgType.PING && fromPeerId) {
-          this.transport.sendUnreliableTo(fromPeerId, encodePong(pp.timestamp));
-        }
-      }
+    } else if (type === MsgType.SNAPSHOT) {
+      this.handleGuestSnapshot(data);
     }
+    // Ping/pong handled by Transport — it intercepts before dispatching here.
   }
 
   private handleGuestSnapshot(data: ArrayBuffer): void {
@@ -616,10 +606,6 @@ export class NetMatch {
     if (this.rafId) {
       cancelAnimationFrame(this.rafId);
       this.rafId = 0;
-    }
-    if (this.pingTimer) {
-      clearInterval(this.pingTimer);
-      this.pingTimer = null;
     }
     if (this.reconnectTimer) {
       clearInterval(this.reconnectTimer);
