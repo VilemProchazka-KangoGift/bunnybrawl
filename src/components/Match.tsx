@@ -11,7 +11,8 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
 import { isTouchPrimary } from '../engine/touchDetect';
 import { TouchOverlay } from './TouchOverlay';
 import type { TouchInputManager } from '../engine/touchInput';
-import type { PlayerSlot } from '../engine/types';
+import type { PlayerSlot, MatchPhase } from '../engine/types';
+import { runLoadingTasks } from '../engine/matchLoading';
 import './Match.css';
 
 // Track last resolved arena so random doesn't repeat on rematch
@@ -43,6 +44,7 @@ export function Match() {
   const [isReconnecting, setIsReconnecting] = useState(false);
   const netMatchRef = useRef<NetMatch | null>(null);
   const [touchInput, setTouchInput] = useState<TouchInputManager | null>(null);
+  const [loadingPhase, setLoadingPhase] = useState(true);
   const isMobile = useMemo(() => isTouchPrimary(), []);
 
   // Resolve 'random' to a concrete arena; re-resolves each time Match mounts (rematch)
@@ -233,7 +235,8 @@ export function Match() {
       };
     }
 
-    // Local mode (unchanged)
+    // Local mode
+    setLoadingPhase(true);
     const loop = new GameLoop(
       bgCanvas,
       fgCanvas,
@@ -246,8 +249,29 @@ export function Match() {
 
     gameLoopRef.current = loop;
     window.__gameLoop = loop;
+    loop.setOnPhaseChange((phase: MatchPhase) => {
+      setLoadingPhase(phase === 'loading');
+    });
     loop.start();
     setTouchInput(loop.getTouchInput());
+
+    // Kick off loading — music preload + background render + sprite warmup
+    runLoadingTasks({
+      arenaId: arena.themeId,
+      characterNames: loop.getActiveCharacterNames(),
+      renderer: loop.getRenderer(),
+      arena: loop.getArena(),
+      originalArena: loop.getOriginalArena(),
+    }).then(() => {
+      if (gameLoopRef.current === loop) {
+        loop.setPhase('playing');
+      }
+    }).catch(() => {
+      // Loading timeout — proceed anyway
+      if (gameLoopRef.current === loop) {
+        loop.setPhase('playing');
+      }
+    });
 
     return () => {
       loop.stop();
@@ -296,6 +320,12 @@ export function Match() {
           <button className="mobile-overlay-btn mobile-pause-btn" onClick={handlePause} data-testid="mobile-pause-btn">
             &#9646;&#9646;
           </button>
+        )}
+        {loadingPhase && (
+          <div className="match-loading-overlay" data-testid="match-loading-overlay">
+            <div className="match-loading-spinner" />
+            <div className="match-loading-text">{t('loading', 'Loading...')}</div>
+          </div>
         )}
         {paused && (
           <div className="pause-overlay" data-testid="pause-menu">

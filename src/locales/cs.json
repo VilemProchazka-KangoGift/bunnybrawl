@@ -152,6 +152,7 @@
   "code_placeholder": "Kód",
   "back": "Zpět",
   "connection_unstable": "Nestabilní připojení",
+  "loading": "Načítání...",
   "reconnecting": "Připojuji znovu...",
   "reconnecting_hint": "Čekám na soupeře...",
   "reconnect_failed": "Připojení se nezdařilo.",

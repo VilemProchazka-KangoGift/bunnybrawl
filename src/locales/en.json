@@ -146,6 +146,7 @@
   "code_placeholder": "Code",
   "back": "Back",
   "connection_unstable": "Connection Unstable",
+  "loading": "Loading...",
   "reconnecting": "Reconnecting...",
   "reconnecting_hint": "Waiting for opponent...",
   "reconnect_failed": "Could not reconnect.",

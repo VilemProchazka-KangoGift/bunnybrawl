@@ -146,6 +146,7 @@
   "return_menu": "मेनू पर वापस",
   "back": "वापस",
   "connection_unstable": "कनेक्शन अस्थिर है",
+  "loading": "Loading...",
   "reconnecting": "फिर से कनेक्ट हो रहा है...",
   "reconnecting_hint": "प्रतिद्वंद्वी की प्रतीक्षा...",
   "reconnect_failed": "फिर से कनेक्ट नहीं हो पाया।",
