@@ -4,6 +4,8 @@
   "tagline": "Bez chemie, bez slitování.",
   "play": "Hrát",
   "blood_mode": "Krvavý režim",
+  "slow_device": "Slabé zařízení",
+  "slow_device_desc": "Nižší rozlišení, méně efektů.",
   "arena_label": "Aréna",
   "arena_random": "Náhodná",
   "credits_players": "Až 5 hráčů na jedné klávesnici!",

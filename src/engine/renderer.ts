@@ -25,6 +25,10 @@ import {
   drawPlayer,
   clearRenderingCaches,
 } from './rendering';
+import { setSpriteCacheScale } from './rendering/players';
+import { setHudScale } from './rendering/hud';
+import { applyRenderScaleToCanvas, getRenderScale } from './renderScale';
+import { getSlowDevice } from './perfFlags';
 
 interface Cloud {
   x: number;
@@ -80,9 +84,15 @@ function freshDiag(): RenderDiagnostics {
 }
 
 export class Renderer {
+  private bgCanvas: HTMLCanvasElement;
+  private fgCanvas: HTMLCanvasElement;
+  private hudCanvas: HTMLCanvasElement | null = null;
   private bgCtx: CanvasRenderingContext2D;
   private fgCtx: CanvasRenderingContext2D;
   private hudCtx: CanvasRenderingContext2D | null = null;
+  private _renderScale = 1;
+  private _lastBgArena: Arena | null = null;
+  private _lastBgOriginalArena: Arena | undefined;
   private clouds: Cloud[] = [];
   private lastCloudTime = 0;
   private theme: ThemeConfig;
@@ -109,21 +119,23 @@ export class Renderer {
 
   constructor(bgCanvas: HTMLCanvasElement, fgCanvas: HTMLCanvasElement, theme: ThemeConfig, mirrored = false, hudCanvas?: HTMLCanvasElement) {
     clearRenderingCaches();
+    this.bgCanvas = bgCanvas;
+    this.fgCanvas = fgCanvas;
     this.bgCtx = bgCanvas.getContext('2d')!;
     this.fgCtx = fgCanvas.getContext('2d')!;
     this.theme = theme;
     this.mirrored = mirrored;
 
-    bgCanvas.width = CANVAS_WIDTH;
-    bgCanvas.height = CANVAS_HEIGHT;
-    fgCanvas.width = CANVAS_WIDTH;
-    fgCanvas.height = CANVAS_HEIGHT;
-
     if (hudCanvas) {
+      this.hudCanvas = hudCanvas;
       this.hudCtx = hudCanvas.getContext('2d')!;
-      hudCanvas.width = CANVAS_WIDTH;
-      hudCanvas.height = CANVAS_HEIGHT;
     }
+
+    // Apply initial render scale to all canvases (sets backing-store dims + ctx transform)
+    this._renderScale = getRenderScale();
+    this._applyScaleToCanvases();
+    setSpriteCacheScale(this._renderScale);
+    setHudScale(this._renderScale);
 
     // Init clouds from theme config
     const cc = theme.clouds;
@@ -135,6 +147,32 @@ export class Renderer {
         size: cc.minSize + Math.random() * (cc.maxSize - cc.minSize),
         speed: cc.minSpeed + Math.random() * (cc.maxSpeed - cc.minSpeed),
       });
+    }
+  }
+
+  private _applyScaleToCanvases(): void {
+    const s = this._renderScale;
+    applyRenderScaleToCanvas(this.bgCanvas, this.bgCtx, s);
+    applyRenderScaleToCanvas(this.fgCanvas, this.fgCtx, s);
+    if (this.hudCanvas && this.hudCtx) {
+      applyRenderScaleToCanvas(this.hudCanvas, this.hudCtx, s);
+    }
+  }
+
+  /**
+   * Update the render scale. Resizes all backing stores, re-applies ctx transforms,
+   * invalidates sprite + HUD caches, and re-draws the static background — baked
+   * gibs and blood drips on the bg canvas are lost (acceptable for a rare event
+   * like a fullscreen toggle or monitor swap).
+   */
+  setRenderScale(scale: number): void {
+    if (scale === this._renderScale) return;
+    this._renderScale = scale;
+    this._applyScaleToCanvases();
+    setSpriteCacheScale(scale);
+    setHudScale(scale);
+    if (this._lastBgArena) {
+      this.renderBackground(this._lastBgArena, this._lastBgOriginalArena);
     }
   }
 
@@ -166,6 +204,8 @@ export class Renderer {
 
   renderBackground(arena: Arena, originalArena?: Arena): void {
     if (originalArena) this.originalArena = originalArena;
+    this._lastBgArena = arena;
+    this._lastBgOriginalArena = originalArena;
     const themeArena = this.originalArena ?? arena; // un-mirrored arena for theme draw calls
     const ctx = this.bgCtx;
     const theme = this.theme;
@@ -360,12 +400,16 @@ export class Renderer {
     this.updateAndDrawClouds(ctx, dt);
     d.clouds = true;
 
+    const slow = getSlowDevice();
+
     // Weather (leaves, petals)
-    drawWeather(ctx, matchState.weather, this.theme, cosmeticLead);
-    if (matchState.weather.length > 0) d.weather = true;
+    if (!slow) {
+      drawWeather(ctx, matchState.weather, this.theme, cosmeticLead);
+      if (matchState.weather.length > 0) d.weather = true;
+    }
 
     // Wildlife: butterflies + birds (q) -- drawn after clouds/weather, before springs
-    if (matchState.wildlife) {
+    if (!slow && matchState.wildlife) {
       drawWildlife(ctx, matchState.wildlife);
       d.wildlife = true;
     }
@@ -462,26 +506,28 @@ export class Renderer {
     }
 
     // Afterimage ghost trails (drawn behind players)
-    for (const player of matchState.players) {
-      if (!player.active) continue;
-      if (player.state === 'respawning') continue;
-      const afterimages = player.afterimages;
-      if (afterimages && afterimages.length > 0) {
-        d.afterimages = true;
-        const isInvincible = player.invincibleTimer > 0;
-        const trailColor = isInvincible ? '#88BBFF' : player.character.color;
-        const { r, g, b } = hexToRGB(trailColor);
-        for (const img of afterimages) {
-          ctx.fillStyle = `rgba(${r},${g},${b},${img.alpha})`;
-          ctx.beginPath();
-          ctx.ellipse(
-            img.x + player.width / 2,
-            img.y + player.height * 0.55,
-            player.width * 0.38,
-            player.height * 0.38,
-            0, 0, Math.PI * 2
-          );
-          ctx.fill();
+    if (!slow) {
+      for (const player of matchState.players) {
+        if (!player.active) continue;
+        if (player.state === 'respawning') continue;
+        const afterimages = player.afterimages;
+        if (afterimages && afterimages.length > 0) {
+          d.afterimages = true;
+          const isInvincible = player.invincibleTimer > 0;
+          const trailColor = isInvincible ? '#88BBFF' : player.character.color;
+          const { r, g, b } = hexToRGB(trailColor);
+          for (const img of afterimages) {
+            ctx.fillStyle = `rgba(${r},${g},${b},${img.alpha})`;
+            ctx.beginPath();
+            ctx.ellipse(
+              img.x + player.width / 2,
+              img.y + player.height * 0.55,
+              player.width * 0.38,
+              player.height * 0.38,
+              0, 0, Math.PI * 2
+            );
+            ctx.fill();
+          }
         }
       }
     }
@@ -585,7 +631,7 @@ export class Renderer {
     }
 
     // Ambient particles (pollen / snow drift / sparkles)
-    if (matchState.pollenParticles) {
+    if (!slow && matchState.pollenParticles) {
       d.ambient = true;
       const ambCfg = this.theme.ambientParticles;
       if (!this._ambientRGBs) {
@@ -608,7 +654,7 @@ export class Renderer {
     }
 
     // Day/night cycle overlay (only if theme has it enabled)
-    if (this.theme.dayNight.enabled && matchState.dayPhase !== undefined) {
+    if (!slow && this.theme.dayNight.enabled && matchState.dayPhase !== undefined) {
       drawDayNightCycle(ctx, matchState.dayPhase, matchState, this.theme, this.frameTime);
       d.dayNight = true;
     }

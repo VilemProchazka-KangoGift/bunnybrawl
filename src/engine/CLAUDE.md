@@ -7,6 +7,13 @@
 - Bubble helmet drawn at end of `drawCharacterSprite` for `space_station` and `underwater` themes only.
 - Day/night rendering must check `this.theme.dayNight.enabled` before drawing. "Remove day/night" also means hide sun/moon from `drawFarBackground`.
 
+## Render Scale
+- Backing store grows to `1280×720 × min(devicePixelRatio, 2)` on desktop; touch stays at 1×. Use `applyRenderScaleToCanvas(canvas, ctx, scale)` from `renderScale.ts` — never set `canvas.width/height` directly.
+- **Setting `canvas.width` resets the ctx transform AND the canvas's intrinsic layout size.** The helper does both: re-applies `setTransform(s,0,0,s,0,0)` and pins `canvas.style.width/height` to logical dims (otherwise the canvas overflows its parent — see "completely broken, zoomed in").
+- Sprite cache (`players.ts`) and HUD cache (`hud.ts`) backing stores include scale; both expose `setSpriteCacheScale()` / `setHudScale()` which clear the cache on change. Sprite cache cap shrinks quadratically with scale to bound memory.
+- `matchMedia('(resolution: Xdppx)')` only fires the transition AWAY from X — `renderScale.ts` re-creates the listener on each change.
+- `Renderer.setRenderScale()` re-runs `renderBackground()` with the cached arena. Baked gibs/blood drips on the bg canvas are lost on scale change (rare event).
+
 ## Game Loop
 - **System architecture**: GameLoop owns two system arrays (`GameplaySystem[]` for `fixedUpdate`, `CosmeticSystem[]` for `cosmeticStep`). Each system implements `init(state) / update(dt) / cleanup()`. Systems receive shared state via constructor and call pure functions from the `cosmetics/` and `gameplay/` subdirectories.
 - **ParticleSystem** is the central VFX hub — other systems reference it for `emitParticle()`, `spawnKillSplatter()`, `applyHazardHitVFX()`, etc. Created first in GameLoop constructor.

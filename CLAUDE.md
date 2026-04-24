@@ -71,6 +71,7 @@ src/
         periodic.ts     # Periodic one-shot generators (bird chirp, ghost, etc.)
     spriteShading.ts # fillBodyGradient (radial body fill) + drawHighlightSpot (white glint)
     fastMath.ts   # Trig lookup tables (fastSin/fastCos) for hot render paths
+    renderScale.ts # Backing-store scale (1×–2×). applyRenderScaleToCanvas() helper + subscribeRenderScale()
     canvasAnimations.ts # Shared canvas utilities (wildlife, day/night) for MainMenu + CharacterSelect
     lobbyGame.ts  # Lobby simulation orchestrator — LobbyGame class, stomp/swap, ready-zone countdown
     lobbyConstants.ts # Layout constants, LOBBY_ARENA stub, READY_ZONE_X, BOT_PAUSE_CHANCE
@@ -127,6 +128,7 @@ src/
     index.ts      # Public API barrel export
   hooks/
     useScaler.ts  # Viewport scaling + fullscreen API hook
+    useCanvasRenderScale.ts # Wires a canvas backing-store to global render scale
   components/     # React components (menus/HUD only — canvas is imperative)
     GameScaler.tsx      # Viewport-responsive wrapper (CSS transform scaling)
     MainMenu.tsx        # Title screen with Play/Online buttons, blood toggle, language switch
@@ -156,6 +158,7 @@ src/
 - **All character sprites are procedural** — Canvas 2D primitives, no sprite sheets. Sprite-cached to OffscreenCanvas.
 - **React is for menus only** — game and lobby canvases use imperative requestAnimationFrame loops.
 - **CSS transform scaling** — fixed 1280x720 logical resolution, `GameScaler` scales to viewport. Fullscreen via F11.
+- **High-DPI render scale** — canvas backing stores are `1280×720 × min(devicePixelRatio, 2)` on desktop, 1× on touch. Logical coords stay 1280×720 via `ctx.setTransform`. New canvases must use `useCanvasRenderScale(ref)` (React) or `applyRenderScaleToCanvas(canvas, ctx, scale)` (engine).
 - **i18n via i18next** — Czech default. Canvas text uses `i18n.t()` directly (not the React hook).
 - **Character pack registry** — `CharacterPack` objects bundle colors, emoji, renderers, gibs, AI personality. Registered at startup via `registerBuiltinCharacters()`. Renderer dispatches via `getSpriteRenderer(name)`.
 - **Arena pack registry** — `ArenaPack` objects bundle layout + visuals + translations + music + physics mods. Registered at startup via `registerBuiltinArenas()`. Mirrors the character pack pattern. Shared drawing primitives in `themes/drawPrimitives.ts`.

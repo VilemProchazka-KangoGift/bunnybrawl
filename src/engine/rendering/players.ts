@@ -3,11 +3,25 @@ import type { ThemeConfig } from '../themes/types';
 import { FAT_SCALE, HITSTOP_DURATION } from '../constants';
 import { hasCustomEyes, getSpriteRenderer, getCharacterPack, drawLegs } from '../characters';
 import { drawHighlightSpot } from '../spriteShading';
+import { getSlowDevice } from '../perfFlags';
 
-// Sprite cache: key -> OffscreenCanvas with pre-drawn character sprite
+// Sprite cache: key -> OffscreenCanvas with pre-drawn character sprite.
+// Backing-store dims include the current render scale; cleared on scale change.
 const spriteCache = new Map<string, OffscreenCanvas>();
+let _spriteScale = 1;
+// Cap entries at scale=1; shrink quadratically with scale so total bytes stay bounded.
+const SPRITE_CACHE_CAP_BASE = 600;
+let _spriteCacheCap = SPRITE_CACHE_CAP_BASE;
 
 export function clearSpriteCache(): void {
+  spriteCache.clear();
+}
+
+/** Set the current render scale for new sprite cache entries. Clears the cache if the scale changed. */
+export function setSpriteCacheScale(scale: number): void {
+  if (scale === _spriteScale) return;
+  _spriteScale = scale;
+  _spriteCacheCap = Math.max(50, Math.round(SPRITE_CACHE_CAP_BASE / (scale * scale)));
   spriteCache.clear();
 }
 
@@ -41,7 +55,7 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player, nearCa
   }
 
   // Kill streak flame aura (d) -- drawn behind character sprite
-  if (player.killStreak >= 3) {
+  if (player.killStreak >= 3 && !getSlowDevice()) {
     const now = frameTime / 1000;
     for (let i = 0; i < 4; i++) {
       const angle = now * 3 + i * 1.5;
@@ -168,32 +182,35 @@ function drawCharacterSprite(
   const sqKey = Math.round(squashScale * 10);
   const cacheKey = `${char.name}_${state}_${animFrame}_${fastFalling ? 1 : 0}_${idleKey}_${sqKey}`;
 
+  const pad = 10;
+  const cw = Math.ceil(w) + pad * 2;
+  const ch = Math.ceil(h) + pad * 2;
+
   let cached = spriteCache.get(cacheKey);
   if (cached) {
     // LRU: delete+re-insert moves entry to end of Map iteration order
     spriteCache.delete(cacheKey);
     spriteCache.set(cacheKey, cached);
-    ctx.drawImage(cached, x - 10, y - 10);
+    // Explicit logical dest size — cached bitmap is at scaled px dims; main ctx transform maps logical → pixel.
+    ctx.drawImage(cached, x - pad, y - pad, cw, ch);
     return;
   }
 
-  // Cache miss: render to offscreen canvas with padding for ears/tails/legs
-  const pad = 10;
-  const cw = Math.ceil(w) + pad * 2;
-  const ch = Math.ceil(h) + pad * 2;
-  cached = new OffscreenCanvas(cw, ch);
+  // Backing store at scaled pixel dims so the bitmap stays sharp when blitted into a scaled main ctx.
+  const s = _spriteScale;
+  cached = new OffscreenCanvas(Math.max(1, Math.ceil(cw * s)), Math.max(1, Math.ceil(ch * s)));
   const sctx = cached.getContext('2d')! as unknown as CanvasRenderingContext2D;
-  // Translate so the existing draw code (which uses absolute x,y) draws into the padded offscreen canvas
+  sctx.scale(s, s);
   sctx.translate(-x + pad, -y + pad);
 
   _drawCharacterSpriteImpl(sctx, x, y, w, h, char, state, animFrame, fastFalling, idleAnimTimer, squashScale, theme);
 
-  if (spriteCache.size > 600) {
+  if (spriteCache.size > _spriteCacheCap) {
     const first = spriteCache.keys().next().value;
     if (first !== undefined) spriteCache.delete(first);
   }
   spriteCache.set(cacheKey, cached);
-  ctx.drawImage(cached, x - pad, y - pad);
+  ctx.drawImage(cached, x - pad, y - pad, cw, ch);
 }
 
 /** Core character drawing: sprite + highlight + eyes + legs. Shared by match and lobby. */

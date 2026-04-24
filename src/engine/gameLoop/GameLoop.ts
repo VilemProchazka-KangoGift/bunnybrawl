@@ -14,6 +14,7 @@ import { TouchInputManager } from '../touchInput';
 import { isTouchPrimary } from '../touchDetect';
 import { haptics } from '../haptics';
 import { Renderer } from '../renderer';
+import { subscribeRenderScale } from '../renderScale';
 import { applyInput, applyGravity, movePlayer, collidePlatforms, updatePlayerState, applyArenaConstraints, aabbOverlap, resolveStuckPlayer } from '../physics';
 import { audio } from '../audio';
 import {
@@ -92,6 +93,7 @@ export class GameLoop {
   private stompSystem!: StompSystem;
   private matchSystem!: MatchSystem;
   private _debugKeyHandler: ((e: KeyboardEvent) => void) | null = null;
+  private _unsubRenderScale: (() => void) | null = null;
 
   // Global bump cooldown (prevents double-fire from both pushed players)
   // bumpCooldown removed — bump detection now uses sideSquash transition in cosmeticStep
@@ -242,6 +244,8 @@ export class GameLoop {
       }
     }
     this.renderer.renderBackground(this.arena, this.originalArena);
+    // Renderer.setRenderScale auto-redraws bg from cached arena (baked gibs/blood lost).
+    this._unsubRenderScale = subscribeRenderScale((s) => this.renderer.setRenderScale(s));
     this.running = true;
     this.lastTime = performance.now();
     audio.playMusic(this.arena.themeId);
@@ -273,6 +277,10 @@ export class GameLoop {
     if (this._debugKeyHandler) {
       window.removeEventListener('keydown', this._debugKeyHandler);
       this._debugKeyHandler = null;
+    }
+    if (this._unsubRenderScale) {
+      this._unsubRenderScale();
+      this._unsubRenderScale = null;
     }
   }
 

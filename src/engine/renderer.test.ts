@@ -31,6 +31,14 @@ vi.mock('./rendering', () => ({
   clearRenderingCaches: vi.fn(),
 }));
 
+vi.mock('./rendering/players', () => ({
+  setSpriteCacheScale: vi.fn(),
+}));
+
+vi.mock('./rendering/hud', () => ({
+  setHudScale: vi.fn(),
+}));
+
 vi.mock('./themes/drawPrimitives', () => ({
   drawCloud: vi.fn(),
   drawHill: vi.fn(),
@@ -83,6 +91,7 @@ function makeMockCtx() {
     translate: vi.fn(),
     scale: vi.fn(),
     rotate: vi.fn(),
+    setTransform: vi.fn(),
     beginPath: vi.fn(),
     moveTo: vi.fn(),
     lineTo: vi.fn(),
