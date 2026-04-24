@@ -50,6 +50,9 @@ export interface UseOnlineRoomResult {
   connect: (isHost: boolean, joinCode?: string) => void;
   cleanup: () => void;
   startMatchAsHost: () => void;
+  /** Transient "your character was auto-switched" notice. Null when no
+   *  notice is active. Carries {prev, next} character names. */
+  autoSwitchNotice: { prev: string; next: string } | null;
 }
 
 type RosterEntry = { slot: PlayerSlot; characterName: string; playerName?: string };
@@ -95,6 +98,8 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
   // Guest-only one-shot: if local character conflicts with a remote player, pick an alt.
   // Host never auto-switches (authoritative).
   const didAutoSwitch = useRef(false);
+  const [autoSwitchNotice, setAutoSwitchNotice] = useState<{ prev: string; next: string } | null>(null);
+  const autoSwitchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (online.isHost) return;
     const takenNames = new Set<string>();
@@ -106,9 +111,14 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
 
     const alt = allChars.find(c => !takenNames.has(c.name) && c.name !== localChar);
     if (alt) {
+      const prev = localChar;
       setLocalChar(alt.name);
       localCharRef.current = alt.name;
       transportRef.current?.sendReliable({ type: MsgType.CHARACTER_SELECT, characterName: alt.name });
+      // Surface the switch so the guest doesn't wonder why their sprite changed.
+      setAutoSwitchNotice({ prev, next: alt.name });
+      if (autoSwitchTimerRef.current) clearTimeout(autoSwitchTimerRef.current);
+      autoSwitchTimerRef.current = setTimeout(() => setAutoSwitchNotice(null), 4500);
     }
   }, [online.isHost, online.remotePlayers]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -124,6 +134,11 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
     setRemoteReady(false);
     pendingPlayerNames.current.clear();
     didAutoSwitch.current = false;
+    if (autoSwitchTimerRef.current) {
+      clearTimeout(autoSwitchTimerRef.current);
+      autoSwitchTimerRef.current = null;
+    }
+    setAutoSwitchNotice(null);
   }, [resetOnline]);
 
   const startMatchAsGuest = useCallback(() => {
@@ -499,5 +514,6 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
     localReady, markLocalReady,
     remoteReady,
     connect, cleanup, startMatchAsHost,
+    autoSwitchNotice,
   };
 }

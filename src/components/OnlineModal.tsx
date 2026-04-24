@@ -10,6 +10,7 @@ import { MobileTextInput } from './MobileTextInput';
 import { getAllCharacters, getCharacterEmoji, getCharacterDisplayName } from '../engine/characters';
 import { ALL_BOT_SLOTS } from '../engine/types';
 import { useOnlineRoom } from './useOnlineRoom';
+import { ROOM_CODE_LENGTH } from '../engine/net/transport';
 
 export { getModalTransport } from './useOnlineRoom';
 
@@ -28,6 +29,7 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
     localReady, markLocalReady,
     remoteReady,
     connect, cleanup, startMatchAsHost,
+    autoSwitchNotice,
   } = useOnlineRoom({ onMatchStart: onClose });
 
   const [joinMode, setJoinMode] = useState(false);
@@ -61,6 +63,15 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
       <div className="mods-overlay" onClick={() => { if (step === 'choose') { onClose(); setJoinMode(false); } }}>
         <div className="mods-modal online-modal" onClick={e => e.stopPropagation()}>
           <h2 className="mods-title">{t('online_play', 'Online Play')}</h2>
+
+          {autoSwitchNotice && (
+            <div className="online-auto-switch-notice" data-testid="online-auto-switch-notice">
+              {t('char_auto_switched', '{{prev}} was taken — you\'re {{next}}', {
+                prev: getCharacterDisplayName(autoSwitchNotice.prev, i18n.language),
+                next: getCharacterDisplayName(autoSwitchNotice.next, i18n.language),
+              })}
+            </div>
+          )}
 
           {/* Step 1: Choose create or join */}
           {step === 'choose' && !joinMode && (
@@ -121,13 +132,13 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
                   {joinCode || t('code_placeholder', 'Code')}
                 </button>
               ) : (
-                <input className="online-code-input" data-testid="online-code-input" type="text" maxLength={3} placeholder={t('code_placeholder', 'Code')}
+                <input className="online-code-input" data-testid="online-code-input" type="text" maxLength={ROOM_CODE_LENGTH} placeholder={t('code_placeholder', 'Code')}
                   value={joinCode} autoFocus
                   onChange={(e) => setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z2-9]/g, ''))}
-                  onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') { (e.target as HTMLInputElement).blur(); if (joinCode.length >= 3) { audio.play('select'); audio.init(); connect(false, joinCode); } } }}
+                  onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') { (e.target as HTMLInputElement).blur(); if (joinCode.length >= ROOM_CODE_LENGTH) { audio.play('select'); audio.init(); connect(false, joinCode); } } }}
                 />
               )}
-              <button className={`btn-base menu-btn online-create-btn${joinCode.length >= 3 ? ' play-btn' : ''}`} data-testid="online-join-submit" disabled={joinCode.length < 3}
+              <button className={`btn-base menu-btn online-create-btn${joinCode.length >= ROOM_CODE_LENGTH ? ' play-btn' : ''}`} data-testid="online-join-submit" disabled={joinCode.length < ROOM_CODE_LENGTH}
                 onClick={() => { audio.play('select'); audio.init(); connect(false, joinCode); }}>
                 {t('join_room', 'Join')}
               </button>
@@ -240,13 +251,27 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
                     <div className="online-ready-status"><span className="online-ready-badge">{t('ready', 'READY')}</span></div>
                   )}
 
-                  {/* Host: start button */}
-                  {online.isHost && (
-                    <button className="btn-base menu-btn play-btn" data-testid="online-start-btn" onClick={() => {
-                      audio.play('select');
-                      startMatchAsHost();
-                    }}>{t('start_game', 'Start Game!')}</button>
-                  )}
+                  {/* Host: hint + start button. Hint only appears when there
+                      are peers but none are ready — the host can still
+                      force-start, but the cue tells them why the round feels
+                      stuck if the guest forgot to hit Ready. */}
+                  {online.isHost && (() => {
+                    const anyGuestConnected = online.remotePlayers.length > 0;
+                    const anyGuestReady = online.remotePlayers.some(rp => rp.ready);
+                    return (
+                      <>
+                        {anyGuestConnected && !anyGuestReady && (
+                          <div className="online-status-box" data-testid="waiting-ready-hint" style={{ marginTop: 8 }}>
+                            {t('waiting_ready', 'Waiting for opponent to ready up...')}
+                          </div>
+                        )}
+                        <button className="btn-base menu-btn play-btn" data-testid="online-start-btn" onClick={() => {
+                          audio.play('select');
+                          startMatchAsHost();
+                        }}>{t('start_game', 'Start Game!')}</button>
+                      </>
+                    );
+                  })()}
 
                   <button className="btn-base mods-close-btn" onClick={cleanup}>{t('back', 'Back')}</button>
                 </div>
@@ -329,13 +354,13 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
       {mobileCodeOpen && (
         <MobileTextInput
           value={joinCode}
-          maxLength={3}
+          maxLength={ROOM_CODE_LENGTH}
           label={t('enter_room_code', 'Enter the room code')}
           onConfirm={(v) => {
-            const code = v.toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, 3);
+            const code = v.toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, ROOM_CODE_LENGTH);
             setJoinCode(code);
             setMobileCodeOpen(false);
-            if (code.length >= 3) { audio.play('select'); audio.init(); connect(false, code); }
+            if (code.length >= ROOM_CODE_LENGTH) { audio.play('select'); audio.init(); connect(false, code); }
           }}
           onCancel={() => setMobileCodeOpen(false)}
         />

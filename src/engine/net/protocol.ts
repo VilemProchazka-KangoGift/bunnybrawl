@@ -265,6 +265,10 @@ export interface ReconnectSyncMessage {
   type: 0x16;
   slot: string;
   snapshotFrame: number;
+  /** Host's pause state at the moment of reclaim. A guest reconnecting into
+   *  a paused match must stay paused until the host resumes, otherwise its
+   *  local render loop diverges from the host's suspended simulation. */
+  paused?: boolean;
 }
 
 export interface LoadedMessage {

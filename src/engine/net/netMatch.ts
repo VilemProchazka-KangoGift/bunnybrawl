@@ -106,6 +106,10 @@ export class NetMatch {
   // Host-side only: fires when LOADING_TIMEOUT_MS forces the match to start
   // without some guests.
   private onLoadingTimeout?: (slots: PlayerSlot[]) => void;
+  // Visibility listener — installed in start(), removed in stop(). Resets
+  // stall-detection timestamps when the tab returns so a long backgrounded
+  // period doesn't fire a spurious "Connection Unstable" banner.
+  private _visibilityHandler: (() => void) | null = null;
   // Previous phase seen in guest snapshots — drives onPhaseChange on transition.
   private _prevGuestPhase: MatchPhase = 'loading';
   // Latches on the first snapshot where matchOver=true so guest-side match-end
@@ -229,6 +233,21 @@ export class NetMatch {
     this.gameLoop.setOnPhaseChange((phase) => this.onPhaseChange?.(phase));
     // start() in network mode attaches input handlers + audio but skips internal RAF
     this.gameLoop.start();
+
+    // Refresh stall-detection timestamps when the tab returns — rAF stops
+    // while hidden, so `now - lastSnapshotTime` would be in the thousands
+    // of ms and trip the 500ms stall banner on the first frame back even
+    // though the WebRTC connection is healthy. Transport already primes its
+    // own ping/pong on visibility; mirror that here for the snapshot path.
+    if (typeof document !== 'undefined') {
+      this._visibilityHandler = () => {
+        if (document.hidden) return;
+        if (this.lastSnapshotTime > 0) {
+          this.lastSnapshotTime = performance.now();
+        }
+      };
+      document.addEventListener('visibilitychange', this._visibilityHandler);
+    }
 
     if (this._isHost && this.hostAuthority) {
       this.hostAuthority.start();
@@ -617,7 +636,15 @@ export class NetMatch {
     } else if (msg.type === MsgType.DISCONNECT) {
       this.onDisconnect?.();
     } else if (msg.type === MsgType.RECONNECT_SYNC) {
-      // Host confirmed our reconnection — resume match
+      // Host confirmed our reconnection — resume match (and honor host's
+      // pause state: if it was paused when we reclaimed, stay paused until
+      // the host broadcasts MsgType.PAUSE{paused:false}).
+      const syncMsg = msg as { paused?: boolean };
+      if (syncMsg.paused) {
+        this.gameLoop.pause();
+      } else {
+        this.gameLoop.resume();
+      }
       this.completeReconnection();
     } else if (this._isHost && msg.type === MsgType.LOADED) {
       const slot = (msg as { slot: string }).slot as PlayerSlot;
@@ -687,6 +714,18 @@ export class NetMatch {
       clearInterval(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+    // Flush the pre-disconnect snapshot ring. Old snapshots would otherwise
+    // either win the out-of-order guard (blocking fresh ones) or get lerped
+    // against new post-reconnect snapshots with a giant frame gap, producing
+    // position teleports for every entity.
+    this.interpolation?.reset();
+    // Reset match-over latch too — if the host reclaimed us during the
+    // match-over tail, the next snapshot's matchOver=true should fire
+    // onMatchEnd exactly once more (the latch is a per-run guard).
+    this._guestMatchOverFired = false;
+    // Also clear the prev-phase tracker so the first post-reconnect snapshot
+    // fires onPhaseChange even if the match is still in the same phase.
+    this._prevGuestPhase = 'loading';
     this.lastSnapshotTime = performance.now();
     this.stallNotified = false;
     this.onReconnecting?.(false);
@@ -720,6 +759,10 @@ export class NetMatch {
     if (this.loadingTimeout) {
       clearTimeout(this.loadingTimeout);
       this.loadingTimeout = null;
+    }
+    if (this._visibilityHandler && typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', this._visibilityHandler);
+      this._visibilityHandler = null;
     }
     this.hostAuthority?.stop();
     this.gameLoop.stop();

@@ -65,6 +65,7 @@ const mockGameLoopInstance = {
   stop: vi.fn(),
   pause: vi.fn(),
   resume: vi.fn(),
+  isPaused: vi.fn(() => false),
   getState: vi.fn(() => makeMinimalMatchState()),
   getInputAny: vi.fn(() => ({ left: false, right: false, jump: false, down: false })),
   fixedUpdate: vi.fn(),

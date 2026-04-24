@@ -53,6 +53,13 @@ export class EntityInterpolation {
   getDelayFrames(): number {
     return this.engine.getDelayFrames();
   }
+
+  /** Flush the ring. Used on reconnect so stale pre-disconnect snapshots
+   *  don't get lerped against fresh post-reconnect ones, or block new
+   *  snapshots via the out-of-order sequence guard. */
+  reset(): void {
+    this.engine.reset();
+  }
 }
 
 // ---- Extrapolation (for late snapshots) ----

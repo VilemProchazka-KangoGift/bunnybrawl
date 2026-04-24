@@ -164,6 +164,7 @@
   "loading_cancel": "Zrušit",
   "loading_starting_without": "Začínáme bez {{names}}",
   "reconnecting": "Připojuji znovu...",
+  "reconnected": "Připojeno!",
   "reconnecting_attempt": "Pokus {{n}}/{{max}}",
   "give_up": "Vzdát to",
   "player_disconnected_name": "{{name}} opustil zápas",
@@ -176,6 +177,7 @@
   "spectating_hint": "Připojíš se po skončení aktuálního zápasu.",
   "player_disconnected": "Hráč se odpojil",
   "taken": "obsazeno",
+  "char_auto_switched": "{{prev}} je obsazený — hraješ za {{next}}",
   "rotate_device": "Otočte zařízení",
   "tap_to_enter_name": "Klepněte pro zadání jména...",
   "done": "Hotovo"

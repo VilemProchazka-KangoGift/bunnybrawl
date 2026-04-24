@@ -158,6 +158,7 @@ export class HostAuthority {
             type: MsgType.RECONNECT_SYNC,
             slot: reqSlot,
             snapshotFrame: this.core.getLocalFrame(),
+            paused: this.gameLoop.isPaused(),
           } as ReliableMessage);
           // Send fresh snapshot
           const snap = takeAuthSnapshot(this.core.getLocalFrame(), this.gameLoop.getState());

@@ -76,6 +76,11 @@ export function Match() {
   // to the disconnect victory screen. Gives the player a moment to register
   // why the match ended instead of a jarring instant cut.
   const [reconnectFailed, setReconnectFailed] = useState(false);
+  // Mirror reconnectFailed + isReconnecting into refs so onReconnecting
+  // (which closes over mount-time state) can read the *current* values when
+  // deciding whether to flash the "Reconnected!" toast.
+  const reconnectFailedRef = useRef(false);
+  const isReconnectingRef = useRef(false);
   const netMatchRef = useRef<NetMatch | null>(null);
   const [touchInput, setTouchInput] = useState<TouchInputManager | null>(null);
   // Two sources drive the loading overlay:
@@ -294,8 +299,10 @@ export function Match() {
           if (matchEnded) return; // don't override normal victory with disconnect
           // Flash "reconnect failed" for ~1.8s so the player understands why
           // the match is ending. Then transition to the disconnect victory.
+          reconnectFailedRef.current = true;
           setReconnectFailed(true);
           setTimeout(() => {
+            reconnectFailedRef.current = false;
             setReconnectFailed(false);
             if (matchEnded) return;
             if (gameLoopRef.current) {
@@ -304,8 +311,18 @@ export function Match() {
           }, 1800);
         },
         onReconnecting: (reconnecting) => {
+          const wasReconnecting = isReconnectingRef.current;
+          isReconnectingRef.current = reconnecting;
           setIsReconnecting(reconnecting);
           if (!reconnecting) setReconnectAttempt(0);
+          // Flash "Reconnected!" on success: true→false transition AND we're
+          // not currently showing the reconnect-failed overlay (abortReconnection
+          // also flips reconnecting to false on budget exhaustion).
+          if (wasReconnecting && !reconnecting && !reconnectFailedRef.current) {
+            setDisconnectBanner(t('reconnected', 'Reconnected!'));
+            if (disconnectBannerTimerRef.current) clearTimeout(disconnectBannerTimerRef.current);
+            disconnectBannerTimerRef.current = setTimeout(() => setDisconnectBanner(null), 2000);
+          }
         },
         onReconnectAttempt: (current, max) => {
           setReconnectAttempt(current);

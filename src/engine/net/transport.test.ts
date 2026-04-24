@@ -303,7 +303,7 @@ describe('Transport — createRoom lifecycle', () => {
 
     const code = await t.createRoom();
 
-    expect(code).toMatch(/^[A-Z2-9]{3}$/);
+    expect(code).toMatch(/^[A-Z2-9]{4}$/);
     expect(t.roomCode).toBe(code);
     expect(t.isHost).toBe(true);
     expect(events.onStatusChange).toHaveBeenCalledWith('creating', undefined);

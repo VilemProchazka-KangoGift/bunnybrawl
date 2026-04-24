@@ -489,10 +489,11 @@ export class Transport {
 // ---- Room code generation ----
 
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+export const ROOM_CODE_LENGTH = 4;
 
 function generateRoomCode(): string {
   let code = '';
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < ROOM_CODE_LENGTH; i++) {
     code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
   }
   return code;
