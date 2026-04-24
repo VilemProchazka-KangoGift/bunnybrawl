@@ -7,7 +7,7 @@ import { SeededRNG } from '../net/prng';
 import { takeSnapshot as _takeSnapshot, restoreSnapshot as _restoreSnapshot } from '../net/serialize';
 import type { GameSnapshot } from '../net/serialize';
 import type { ThemeConfig } from '../themes/types';
-import { getTheme, mirrorArena } from '../arenas';
+import { getArena, getTheme, mirrorArena } from '../arenas';
 import { swapRemove } from '../themes/utils';
 import { InputManager } from '../input';
 import { TouchInputManager } from '../touchInput';
@@ -362,6 +362,105 @@ export class GameLoop {
       this.matchSystem.init();
     }
     this.onPhaseChange?.(phase);
+  }
+
+  /** Swap to a different arena in place — scores reset (no carry-over), state is
+   *  reinitialized, phase flips back to 'loading'. Used by the pause-menu arena
+   *  picker so we don't unmount the Match component (which would lose transport
+   *  wiring on the online path). */
+  switchArena(arenaId: string, settingsOverrides?: Partial<MatchSettings>): void {
+    // Stop prior arena audio: music, ambient, theme-specific loops + periodic timers.
+    audio.stopAllGameSounds();
+    this.matchSystem.cleanup();
+
+    // Resolve new arena + theme
+    const newArena = getArena(arenaId);
+    this.originalArena = newArena;
+    if (settingsOverrides) {
+      this.settings = { ...this.settings, ...settingsOverrides };
+    }
+    let effectiveArena = newArena;
+    if (this.settings.mods.superBounce) {
+      effectiveArena = { ...effectiveArena, bouncyPlatforms: effectiveArena.platforms.map((_, i) => i) };
+    }
+    if (this.settings.mods.mirrorArena) {
+      effectiveArena = mirrorArena(effectiveArena);
+    }
+    this.arena = effectiveArena;
+    this.theme = getTheme(newArena.themeId);
+
+    // Recompute effective physics from new theme + mods
+    const phys = computeEffectivePhysics(this.theme, this.settings.mods);
+    this.effGravity = phys.gravity;
+    this.effFriction = phys.friction;
+    this.effWalkSpeed = phys.walkSpeed;
+    this.effJumpImpulse = phys.jumpImpulse;
+    this.effMaxFallSpeed = phys.maxFallSpeed;
+
+    // Reset state to fresh match-initial — reuses existing player slots
+    const activePlayers = this.state.players.map(p => p.id);
+    const fresh = createInitialMatchState(
+      this.arena, this.theme, this.settings,
+      createInitialPlayers(activePlayers, this.arena, this.settings.mods.giantPlayers),
+      activePlayers, this._boundGameRandom,
+    );
+    // Replace every field on the existing state object so any external holder
+    // of the reference keeps pointing at live data.
+    Object.assign(this.state, fresh);
+    // Force loading phase on the fresh state (createInitialMatchState already
+    // defaults to 'loading' — but be defensive in case that default changes).
+    this.state.phase = 'loading';
+
+    // Re-init all arena-dependent systems (same construction order as the constructor).
+    this.arenaEntitySystem = new ArenaEntitySystem(this.state, this.arena, this.theme, this._boundGameRandom);
+    this.arenaEntitySystem.init();
+    this.hazardSystem = new HazardSystem(this.state, this.arena, this._boundGameRandom);
+    this.hazardSystem.init();
+    this.particleSystem = new ParticleSystem(this.state, this.arena, this.theme, this.settings, this.arenaEntitySystem.getGeyserIndexMap());
+    this.carrotSystem = new CarrotSystem(
+      this.state, this.arena, this.settings,
+      this.arenaEntitySystem.getCachedZeroGZones(),
+      this._boundGameRandom, this.particleSystem,
+    );
+    this.playerTransitionSystem = new PlayerTransitionSystem(
+      this.state, this.settings, this._boundPlaySound,
+      (name: string) => { if (this._audioEnabled) audio.playAnimal(name); },
+      this.particleSystem,
+    );
+    this.playerCosmeticSystem = new PlayerCosmeticSystem(
+      this.state, this.effWalkSpeed, this.particleSystem, this._boundPlaySound,
+    );
+    this.environmentSystem = new EnvironmentSystem(this.state, this.theme);
+    this.entityTransitionSystem = new EntityTransitionSystem(this.state, this._boundPlaySound);
+    this.playerTransitionSystem.init();
+    this.entityTransitionSystem.init();
+    this.effectZoneSystem = new EffectZoneSystem(
+      this.state, this.arena, this.arenaEntitySystem,
+      () => this.playerTransitionSystem.getSfxCooldowns(),
+      this._boundPlaySound,
+    );
+    this.playerCollisionSystem = new PlayerCollisionSystem(
+      this.state, this.arena, this.particleSystem,
+      () => this._resimulating,
+    );
+    this.stompSystem = new StompSystem(
+      this.state, this.arena, this.settings,
+      () => this._resimulating,
+      () => this.rng,
+    );
+    this.matchSystem = new MatchSystem(
+      this.state, this.settings, this.theme, this._boundPlaySound,
+      () => this._resimulating,
+      (winner) => this.endMatch(winner),
+    );
+
+    // Update renderer theme + clear derived caches. Background repaint happens
+    // next via runLoadingTasks.
+    this.renderer.setTheme(this.theme);
+    this.renderer.setTimeLimit(this.settings.timeLimit);
+
+    // Emit the phase transition (Match.tsx listens to re-show the loading overlay).
+    this.onPhaseChange?.('loading');
   }
 
   /** Get the renderer instance. Used by matchLoading to render the background

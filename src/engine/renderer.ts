@@ -173,6 +173,28 @@ export class Renderer {
     warmSpriteCacheForCharacters(names, this.theme);
   }
 
+  /** Swap the active theme without tearing down the renderer. Used by
+   *  `GameLoop.switchArena()` for in-place arena changes. Resets cloud layout
+   *  and derived color caches so the next render picks up the new theme. */
+  setTheme(theme: ThemeConfig): void {
+    this.theme = theme;
+    this._fogRGB = null;
+    this._ambientRGBs = null;
+    // Re-init clouds from new theme (same pattern as constructor)
+    const cc = theme.clouds;
+    this.clouds = [];
+    for (let i = 0; i < cc.count; i++) {
+      this.clouds.push({
+        x: (i / cc.count) * CANVAS_WIDTH + Math.random() * 100,
+        y: cc.yRange[0] + Math.random() * (cc.yRange[1] - cc.yRange[0]),
+        size: cc.minSize + Math.random() * (cc.maxSize - cc.minSize),
+        speed: cc.minSpeed + Math.random() * (cc.maxSpeed - cc.minSpeed),
+      });
+    }
+    clearRenderingCaches();
+    invalidateHudCache();
+  }
+
   renderBackground(arena: Arena, originalArena?: Arena): void {
     if (originalArena) this.originalArena = originalArena;
     const themeArena = this.originalArena ?? arena; // un-mirrored arena for theme draw calls

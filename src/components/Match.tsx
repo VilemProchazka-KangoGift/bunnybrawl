@@ -88,18 +88,33 @@ export function Match() {
   }, [setActivePlayers, setScreen, resetOnline]);
 
   const handleChangeArena = useCallback((newArenaId: string) => {
+    const loop = gameLoopRef.current;
     lastResolvedArenaId = newArenaId;
     setCurrentArenaId(newArenaId);
     setMatchSettings({ arenaId: newArenaId });
     setPaused(false);
     setShowLevelSelect(false);
-    // In online mode, notify guest of arena change
+    // In online mode, notify guest of arena change (sent regardless — guest's
+    // own switchArena will be driven by SETTINGS_SYNC handler in Task 10)
     if (online.isOnline && online.isHost) {
       const transport = getModalTransport();
       if (transport) {
         transport.sendReliable({ type: MsgType.SETTINGS_SYNC, arenaId: newArenaId } as import('../engine/net/protocol').ReliableMessage);
       }
     }
+    if (!loop) return;
+    // In-place arena swap — no remount, no transport wiring loss. Scores reset.
+    loop.switchArena(newArenaId);
+    // Run loading tasks for the new arena (music preload, background, sprite warm)
+    runLoadingTasks({
+      arenaId: newArenaId,
+      characterNames: loop.getActiveCharacterNames(),
+      renderer: loop.getRenderer(),
+      arena: loop.getArena(),
+      originalArena: loop.getOriginalArena(),
+    }).finally(() => {
+      if (gameLoopRef.current === loop) loop.setPhase('playing');
+    });
   }, [setMatchSettings, online.isOnline, online.isHost]);
 
   useEffect(() => {
@@ -283,7 +298,7 @@ export function Match() {
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentArenaId, activePlayers, matchSettings, setMatchResult, online.isOnline]);
+  }, [activePlayers, matchSettings, setMatchResult, online.isOnline]);
 
   // Wake lock: prevent screen dimming during match on mobile
   useEffect(() => {
