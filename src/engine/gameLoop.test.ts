@@ -2553,25 +2553,73 @@ describe('Animation Timers', () => {
     expect(player.animTimer).toBe(0);
   });
 
-  it('idleAnimTimer increments when player is idle', () => {
+  it('entering idle seeds idleActionTimer to IDLE_FIRST_DELAY', () => {
     const { loop } = createLoop();
     loop.skipCountdown();
     const state = loop.getState();
     const player = state.players[0];
 
-    // Set player to idle on the ground
     player.x = 200;
     player.y = 660 - PLAYER_HEIGHT;
     player.vx = 0;
     player.state = 'idle';
     player.active = true;
     player.hitstopTimer = 0;
-    player.idleAnimTimer = 0;
+    player.idleAction = -1;
+    player.idleActionTimer = 0;
+    player.idleActionDuration = 0;
 
     loop.fixedUpdate(FIXED_TIMESTEP);
-    loop.cosmeticStep(FIXED_TIMESTEP); // idleAnimTimer now in cosmeticStep
+    loop.cosmeticStep(FIXED_TIMESTEP);
 
-    expect(player.idleAnimTimer).toBeGreaterThan(0);
+    // After 1 tick (~16.67ms): timer was seeded to 0.8s, then ticked down by ~0.0167.
+    expect(player.idleAction).toBe(-1);
+    expect(player.idleActionTimer).toBeGreaterThan(0.7);
+    expect(player.idleActionTimer).toBeLessThan(0.81);
+  });
+
+  it('idle action fires after IDLE_FIRST_DELAY of standing still', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+    player.x = 200; player.y = 660 - PLAYER_HEIGHT; player.vx = 0;
+    player.state = 'idle'; player.active = true; player.hitstopTimer = 0;
+    player.idleAction = -1; player.idleActionTimer = 0; player.idleActionDuration = 0;
+
+    // Tick for ~1 second (>0.8s first delay)
+    for (let i = 0; i < 60; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+      loop.cosmeticStep(FIXED_TIMESTEP);
+    }
+
+    expect(player.idleAction).toBeGreaterThanOrEqual(0);
+    expect(player.idleActionDuration).toBeGreaterThan(0);
+  });
+
+  it('leaving idle clears idleAction state', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+    player.x = 200; player.y = 660 - PLAYER_HEIGHT; player.vx = 0;
+    player.state = 'idle'; player.active = true; player.hitstopTimer = 0;
+
+    // Run long enough to be in an action
+    for (let i = 0; i < 90; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+      loop.cosmeticStep(FIXED_TIMESTEP);
+    }
+
+    // Now switch to running (vx > 10 so updatePlayerState keeps state='run')
+    player.state = 'run';
+    player.vx = 200;
+    loop.fixedUpdate(FIXED_TIMESTEP);
+    loop.cosmeticStep(FIXED_TIMESTEP);
+
+    expect(player.idleAction).toBe(-1);
+    expect(player.idleActionTimer).toBe(0);
+    expect(player.idleActionDuration).toBe(0);
   });
 
   it('fastFalling airborne player does NOT tick animTimer (gated on run state)', () => {
