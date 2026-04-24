@@ -4,7 +4,7 @@
 
 import type { CharacterDef, CharacterSlot, Player, PlayerSlot, InputState } from './types';
 import { ALL_BOT_SLOTS, isBotSlot } from './types';
-import { CANVAS_WIDTH, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED } from './constants';
+import { CANVAS_WIDTH, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED, IDLE_ANIM_INTERVAL } from './constants';
 import { KEY_BINDINGS } from './input';
 import { applyInput, applyGravity, movePlayer, collidePlatforms, updatePlayerState } from './physics';
 import { isStomping } from './stomp';
@@ -187,6 +187,13 @@ export class LobbyGame {
         if (p.animTimer > 0.12) { p.animTimer = 0; p.animFrame = (p.animFrame + 1) % 4; }
       }
 
+      if (p.state === 'idle') {
+        p.idleAnimTimer += dt;
+        if (p.idleAnimTimer >= IDLE_ANIM_INTERVAL) p.idleAnimTimer = 0;
+      } else {
+        p.idleAnimTimer = 0;
+      }
+
       // Lobby-specific: crouch-on-ground squat
       if (input.down && p.state !== 'airborne') p.squashScale = SQUASH_ON_CROUCH;
     };
@@ -208,7 +215,7 @@ export class LobbyGame {
     }
 
     for (const npc of this.extraChars) {
-      step(npc, wanderInput(npc, this._allLobby));
+      step(npc, wanderInput(npc, this.extraChars));
     }
 
     for (const bot of this.bots) {

@@ -38,32 +38,31 @@ export function botLobbyInput(bot: Player): InputState {
 
 const AVOID_RADIUS_X = 50;
 const AVOID_RADIUS_Y = PLAYER_WIDTH * 1.2;
+// Deadzone on the summed repulsion so NPCs at a local spacing equilibrium stop
+// instead of oscillating between neighbors on opposite sides.
+const REPULSION_DEADZONE = 0.15;
 
-export function wanderInput(npc: Player, others: Player[]): InputState {
+export function wanderInput(npc: Player, npcs: Player[]): InputState {
   const npcCx = npc.x + PLAYER_WIDTH / 2;
-  let nearestDx = 0;
-  let nearestAbs = AVOID_RADIUS_X;
-  for (const o of others) {
+  let repulsion = 0;
+  for (const o of npcs) {
     if (o === npc) continue;
     if (o.splatTimer > 0) continue;
     const dy = Math.abs(o.y - npc.y);
     if (dy > AVOID_RADIUS_Y) continue;
     const dx = (o.x + PLAYER_WIDTH / 2) - npcCx;
     const abs = Math.abs(dx);
-    if (abs < nearestAbs) {
-      nearestAbs = abs;
-      nearestDx = dx;
-    }
+    if (abs >= AVOID_RADIUS_X) continue;
+    const strength = 1 - abs / AVOID_RADIUS_X;
+    if (dx > 0) repulsion -= strength;
+    else if (dx < 0) repulsion += strength;
   }
-  if (nearestAbs < AVOID_RADIUS_X) {
-    let away = nearestDx < 0 ? 1 : nearestDx > 0 ? -1 : 0;
-    // Stable per-NPC tiebreak for exact overlap — character name is unique across extras.
-    if (away === 0) away = (npc.character.name.charCodeAt(0) & 1) === 0 ? 1 : -1;
-    return { left: away < 0, right: away > 0, jump: false, down: false };
-  }
+  if (repulsion > REPULSION_DEADZONE) return { left: false, right: true, jump: false, down: false };
+  if (repulsion < -REPULSION_DEADZONE) return { left: true, right: false, jump: false, down: false };
 
   const left = Math.random() < 0.005;
   const right = Math.random() < 0.005;
-  const jump = Math.random() < 0.005;
-  return { left: left && !right, right: right && !left, jump, down: false };
+  const jump = Math.random() < 0.003;
+  const down = !jump && Math.random() < 0.003;
+  return { left: left && !right, right: right && !left, jump, down };
 }
