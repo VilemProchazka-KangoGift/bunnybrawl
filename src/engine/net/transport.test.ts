@@ -327,6 +327,29 @@ describe('Transport — createRoom lifecycle', () => {
   });
 });
 
+describe('Transport — cleanup on joinRoom reuse', () => {
+  it('leaves the prior room before joining a new one', async () => {
+    resetMocks();
+    const events = makeEvents();
+    const t = new Transport(events);
+
+    const firstJoin = t.joinRoom('ABC');
+    onPeerJoinCallback?.('host-peer-1');
+    await firstJoin;
+    expect(t.peerCount).toBe(1);
+
+    // Second joinRoom should leave() the old room + clear peers
+    mockRoom.leave.mockClear();
+    const secondJoin = t.joinRoom('XYZ');
+    expect(mockRoom.leave).toHaveBeenCalled();
+    expect(t.peerCount).toBe(0);
+
+    onPeerJoinCallback?.('host-peer-2');
+    await secondJoin;
+    t.destroy();
+  });
+});
+
 describe('Transport — joinRoom lifecycle', () => {
   it('joins a room and sets roomCode', async () => {
     resetMocks();

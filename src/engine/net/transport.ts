@@ -164,13 +164,34 @@ export class Transport {
     this.events = events;
   }
 
+  /** Tear down any prior Room instance + associated state. Called by both
+   *  createRoom and joinRoom so reconnection attempts don't leak WebRTC
+   *  channels or leave stale peer entries in `this.peers`. No-op + instant
+   *  return on a fresh Transport with no existing Room, so callers of
+   *  createRoom/joinRoom continue to run their critical setup synchronously
+   *  (tests depend on that timing, as do UI subscribers that read roomCode
+   *  immediately after the call). */
+  private cleanupPriorRoom(): void {
+    if (!this.room) return;
+    // Fire-and-forget room.leave() — Trystero cleans up WebRTC channels
+    // asynchronously; we don't need to block the new room's creation on it.
+    try { this.room.leave().catch(() => {}); } catch { /* ignore */ }
+    this.room = null;
+    this.peers.clear();
+    this.sendBinaryAction = null;
+    this.sendJsonAction = null;
+    this._rtt = 0;
+    this._jitter = 0;
+    this.stopPing();
+  }
+
   /** Create a room as host. Returns the room code. */
   async createRoom(): Promise<string> {
-    this.setStatus('creating');
-    this._isHost = true;
-
+    this.cleanupPriorRoom();
     const code = generateRoomCode();
     this._roomCode = code;
+    this.setStatus('creating');
+    this._isHost = true;
 
     try {
       const { config, roomId } = getRoomConfig(`room-${code.toUpperCase()}`);
@@ -189,6 +210,7 @@ export class Transport {
 
   /** Join a room as guest by room code. */
   async joinRoom(code: string): Promise<void> {
+    this.cleanupPriorRoom();
     this.setStatus('joining');
     this._isHost = false;
     this._roomCode = code;
