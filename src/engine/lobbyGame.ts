@@ -4,7 +4,8 @@
 
 import type { CharacterDef, CharacterSlot, Player, PlayerSlot, InputState } from './types';
 import { ALL_BOT_SLOTS, isBotSlot } from './types';
-import { CANVAS_WIDTH, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED, IDLE_ANIM_INTERVAL } from './constants';
+import { CANVAS_WIDTH, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED, IDLE_FIRST_DELAY, IDLE_REST_MIN, IDLE_REST_MAX } from './constants';
+import { pickIdleAction } from './rendering/idleActions';
 import { KEY_BINDINGS } from './input';
 import { applyInput, applyGravity, movePlayer, collidePlatforms, updatePlayerState } from './physics';
 import { isStomping } from './stomp';
@@ -188,10 +189,29 @@ export class LobbyGame {
         if (p.animTimer > 0.12) { p.animTimer = 0; p.animFrame = (p.animFrame + 1) % 4; }
       }
 
+      // Idle action state machine — mirrors playerCosmetics.ts.
       if (p.state === 'idle') {
-        p.idleAnimTimer += dt;
-        if (p.idleAnimTimer >= IDLE_ANIM_INTERVAL) p.idleAnimTimer = 0;
+        if (p.idleActionTimer === 0 && p.idleAction === -1 && p.idleActionDuration === 0) {
+          p.idleActionTimer = IDLE_FIRST_DELAY;
+        }
+        p.idleActionTimer -= dt;
+        if (p.idleActionTimer <= 0) {
+          if (p.idleAction >= 0) {
+            p.idleAction = -1;
+            p.idleActionDuration = 0;
+            p.idleActionTimer = IDLE_REST_MIN + Math.random() * (IDLE_REST_MAX - IDLE_REST_MIN);
+          } else {
+            const pick = pickIdleAction(p.character.name);
+            p.idleAction = pick.index;
+            p.idleActionDuration = pick.action.duration;
+            p.idleActionTimer = pick.action.duration;
+          }
+        }
+        p.idleAnimTimer = p.idleAction >= 0 ? p.idleActionTimer : 0;
       } else {
+        p.idleAction = -1;
+        p.idleActionTimer = 0;
+        p.idleActionDuration = 0;
         p.idleAnimTimer = 0;
       }
 

@@ -869,6 +869,38 @@ describe('LobbyGame', () => {
 
       expect(p.animFrame).toBe(0);
     });
+
+    it('idle action timer is seeded on first idle frame', () => {
+      const p = game.players[0];
+      p.state = 'idle';
+      p.vx = 0;
+      p.idleAction = -1;
+      p.idleActionTimer = 0;
+      p.idleActionDuration = 0;
+
+      game.update(1 / 60, new Set());
+
+      // Seeded to IDLE_FIRST_DELAY=0.8 then decremented by ~0.016
+      expect(p.idleActionTimer).toBeGreaterThan(0.7);
+      expect(p.idleActionTimer).toBeLessThan(0.8);
+    });
+
+    it('lobby idle picks an action after IDLE_FIRST_DELAY', () => {
+      const p = game.players[0];
+      p.state = 'idle';
+      p.vx = 0;
+      p.idleAction = -1;
+      p.idleActionTimer = 0;
+      p.idleActionDuration = 0;
+
+      // Tick ~1s (>0.8s first delay)
+      for (let i = 0; i < 60; i++) {
+        game.update(1 / 60, new Set());
+      }
+
+      expect(p.idleAction).toBeGreaterThanOrEqual(0);
+      expect(p.idleActionDuration).toBeGreaterThan(0);
+    });
   });
 
   // ---- Right screen boundary ----
