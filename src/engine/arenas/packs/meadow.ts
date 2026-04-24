@@ -73,7 +73,7 @@ function drawMeadowStump(ctx: CanvasRenderingContext2D, platform: Platform): voi
     capLight: 'rgba(255,220,160,0.2)',
     drawCapTexture: (ctx2, capFront, capBack, skew) => {
       // Center of the cap parallelogram (for ring centering)
-      const cx = platform.x + platform.width / 2 + skew / 2;
+      const cx = platform.x + platform.width / 2 + skew / 4;
       const cy = (capFront + capBack) / 2;
       // Tree rings — concentric ellipses matching the cap's aspect
       const rxMax = platform.width * 0.4;
