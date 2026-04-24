@@ -67,9 +67,14 @@ export function updatePlayerCosmetics(
       } else {
         // rest (or first delay) just ended → pick next action
         const pick = pickIdleAction(player.character.name);
-        player.idleAction = pick.index;
-        player.idleActionDuration = pick.action.duration;
-        player.idleActionTimer = pick.action.duration;
+        if (pick) {
+          player.idleAction = pick.index;
+          player.idleActionDuration = pick.action.duration;
+          player.idleActionTimer = pick.action.duration;
+        } else {
+          // Empty pool (misconfigured pack) — stay resting forever.
+          player.idleActionTimer = IDLE_REST_MAX;
+        }
       }
     }
     // Legacy field — derive from new state for backward compat with bunny/bear/fox/frog drawSprite tweaks

@@ -202,9 +202,13 @@ export class LobbyGame {
             p.idleActionTimer = IDLE_REST_MIN + Math.random() * (IDLE_REST_MAX - IDLE_REST_MIN);
           } else {
             const pick = pickIdleAction(p.character.name);
-            p.idleAction = pick.index;
-            p.idleActionDuration = pick.action.duration;
-            p.idleActionTimer = pick.action.duration;
+            if (pick) {
+              p.idleAction = pick.index;
+              p.idleActionDuration = pick.action.duration;
+              p.idleActionTimer = pick.action.duration;
+            } else {
+              p.idleActionTimer = IDLE_REST_MAX;
+            }
           }
         }
         p.idleAnimTimer = p.idleAction >= 0 ? p.idleActionTimer : 0;

@@ -86,16 +86,13 @@ const SHARED_ACTIONS: Record<SharedActionId, IdleAction> = {
   lookAround: {
     id: 'lookAround',
     duration: 1.0,
-    apply: (_ctx, _cx, _yOff, _w, _h, t, _colors, player) => {
-      // 0.0..0.33: original facing
-      // 0.33..0.66: flipped
-      // 0.66..1.0: flipped back (toggle again restores original)
-      if (t < 0.33) {
-        // leave as-is
-      } else if (t < 0.66) {
-        player.facing = player.facing === 'right' ? 'left' : 'right';
-      } else {
-        player.facing = player.facing === 'right' ? 'left' : 'right';
+    // Pure ctx transform — mirror the sprite around cx during the middle window
+    // so the character "looks the other way" without touching player.facing.
+    apply: (ctx, cx, _yOff, _w, _h, t) => {
+      if (t >= 0.33 && t < 0.66) {
+        ctx.translate(cx, 0);
+        ctx.scale(-1, 1);
+        ctx.translate(-cx, 0);
       }
     },
   },
@@ -150,12 +147,14 @@ function getWeights(charName: string): number[] {
   return weights;
 }
 
-export function pickIdleAction(charName: string): { action: IdleAction; index: number } {
+export function pickIdleAction(charName: string): { action: IdleAction; index: number } | null {
   const pool = getActionPool(charName);
+  if (pool.length === 0) return null;
   const weights = getWeights(charName);
 
   let total = 0;
   for (let i = 0; i < weights.length; i++) total += weights[i];
+  if (total <= 0) return null;
 
   let r = Math.random() * total;
   for (let i = 0; i < weights.length; i++) {

@@ -73,8 +73,33 @@ describe('idleActions', () => {
 
   it('pickIdleAction returns an entry from the pool with its index', () => {
     const result = pickIdleAction('Bunny');
-    expect(result.index).toBeGreaterThanOrEqual(0);
-    expect(result.action.duration).toBeGreaterThan(0);
+    expect(result).not.toBeNull();
+    expect(result!.index).toBeGreaterThanOrEqual(0);
+    expect(result!.action.duration).toBeGreaterThan(0);
+  });
+
+  it('pickIdleAction returns null for an empty pool', () => {
+    registerCharacter({
+      name: 'TestEmpty', emoji: '!', color: '#fff', darkColor: '#888', lightColor: '#fff',
+      customEyes: false,
+      idleActions: { weights: { headBob: 0, headTilt: 0, headShake: 0, littleHop: 0, stretch: 0, lookAround: 0 } },
+      drawSprite: () => {}, drawGib: () => {},
+      splatShape: 'circle', gibs: [],
+      bodyEllipse: () => ({ cx: 0, cy: 0, rx: 1, ry: 1 }),
+    } as Parameters<typeof registerCharacter>[0]);
+    clearIdleActionCache();
+    expect(pickIdleAction('TestEmpty')).toBeNull();
+  });
+
+  it('lookAround does not mutate player.facing', () => {
+    const ctx = makeFakeCtx();
+    const colors = { color: '#fff', darkColor: '#888', lightColor: '#fff' };
+    const player = { facing: 'right' as const };
+    const lookAround = getSharedAction('lookAround')!;
+    for (const t of [0, 0.2, 0.4, 0.5, 0.6, 0.8, 1.0]) {
+      lookAround.apply(ctx, 100, 100, 32, 40, t, colors, player);
+    }
+    expect(player.facing).toBe('right');
   });
 
   it('getIdleAction returns the action at the given index', () => {
