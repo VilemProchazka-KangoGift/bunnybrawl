@@ -80,6 +80,12 @@ export interface ArenaPack {
   drawFarBackground?: (ctx: CanvasRenderingContext2D, arena: Arena) => void;
   drawBackgroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => void;
   drawForegroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => void;
+  /**
+   * Optional full override of platform rendering. When defined, the renderer
+   * calls this instead of the built-in flat-rect fallback. Receives the full
+   * Platform object so packs can dispatch on `platform.style` if needed.
+   */
+  drawPlatform?: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => void;
   drawAnimatedBackground?: (ctx: CanvasRenderingContext2D, arena: Arena, time: number) => void;
   drawWeatherParticle?: (ctx: CanvasRenderingContext2D, particle: WeatherParticle) => void;
   drawCustomHazardZone?: (ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, time: number) => void;
