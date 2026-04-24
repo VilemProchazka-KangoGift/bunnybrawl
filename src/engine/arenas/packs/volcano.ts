@@ -1,8 +1,164 @@
 import type { ArenaPack } from '../types';
-import type { Arena, WeatherParticle } from '../../types';
+import type { Arena, Platform, WeatherParticle } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { getFloatingPlatforms } from '../../themes/utils';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
+import {
+  CAP_DEPTH, mulberry32, seedFor,
+  capFrontY, capBackY, skewPx,
+  drawPlatformRightFace, drawPlatformCap,
+  jaggedDown, backWavyUp, drawLeftStones,
+} from '../../themes/drawPrimitives';
+
+// Near-black volcanic stone palette for left protrusions.
+const VOLCANO_STONE_PALETTE = [
+  { base: '#1c1414', dark: '#080404', light: '#3a2e2a' },
+  { base: '#231818', dark: '#0a0606', light: '#42342e' },
+  { base: '#181010', dark: '#050202', light: '#33282a' },
+  { base: '#221a1a', dark: '#0c0606', light: '#3e3030' },
+];
+
+function drawVolcanoPlatform(ctx: CanvasRenderingContext2D, platform: Platform): void {
+  const rng = mulberry32(seedFor(platform.x, platform.y));
+  const cF = capFrontY(platform);
+  const cB = capBackY(platform);
+  const bodyTop = cF;
+  const bodyH = platform.height - CAP_DEPTH / 2;
+  const sp = skewPx();
+
+  // Right face — very dark rock shadow.
+  drawPlatformRightFace(ctx, platform, '#0a0606');
+
+  // Left-side decoration: column of dark volcanic stones.
+  drawLeftStones(ctx, platform, VOLCANO_STONE_PALETTE, rng, {
+    count: 3,
+    rxMin: 2.8,
+    rxMax: 5,
+    elongateChance: 0.35,
+  });
+
+  // Body front — charred black rock gradient.
+  const g = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
+  g.addColorStop(0, '#1a0f0a');
+  g.addColorStop(0.6, '#0d0706');
+  g.addColorStop(1, '#000000');
+  ctx.fillStyle = g;
+  ctx.fillRect(platform.x, bodyTop, platform.width, bodyH);
+
+  // Clip body texture so glows don't leak past the front face rectangle.
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(platform.x, bodyTop);
+  ctx.lineTo(platform.x + platform.width, bodyTop);
+  ctx.lineTo(platform.x + platform.width, bodyTop + bodyH);
+  ctx.lineTo(platform.x, bodyTop + bodyH);
+  ctx.closePath();
+  ctx.clip();
+
+  // Hot pools — 2-3 radial gradients glowing red/orange across the body.
+  const poolCount = 2 + (rng() < 0.5 ? 1 : 0);
+  for (let i = 0; i < poolCount; i++) {
+    const px = platform.x + (0.15 + (i + rng() * 0.5) / poolCount * 0.7) * platform.width;
+    const py = bodyTop + 3 + rng() * Math.max(2, bodyH - 6);
+    const pr = 6 + rng() * Math.min(10, platform.width * 0.15);
+    const pool = ctx.createRadialGradient(px, py, 0.5, px, py, pr);
+    pool.addColorStop(0, 'rgba(255,120,20,0.7)');
+    pool.addColorStop(0.55, 'rgba(220,60,10,0.35)');
+    pool.addColorStop(1, 'rgba(180,30,0,0)');
+    ctx.fillStyle = pool;
+    ctx.fillRect(px - pr, py - pr, pr * 2, pr * 2);
+  }
+
+  // Branching glowing cracks — 1-2 seed anchors, 2-3 segments each.
+  const crackAnchors = 1 + (rng() < 0.6 ? 1 : 0);
+  for (let a = 0; a < crackAnchors; a++) {
+    const ax = platform.x + (0.2 + rng() * 0.6) * platform.width;
+    const ay = bodyTop + 2 + rng() * Math.max(2, bodyH - 4);
+    const segments = 2 + Math.floor(rng() * 2);
+    const points: Array<{ x: number; y: number }> = [{ x: ax, y: ay }];
+    let cx = ax;
+    let cy = ay;
+    let dir = (rng() - 0.5) * Math.PI;
+    for (let s = 0; s < segments; s++) {
+      const len = 4 + rng() * 7;
+      dir += (rng() - 0.5) * 1.4;
+      cx += Math.cos(dir) * len;
+      cy += Math.sin(dir) * len * 0.6;
+      points.push({ x: cx, y: cy });
+    }
+    // Outer orange-red stroke
+    ctx.strokeStyle = 'rgba(255,90,26,0.8)';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let p = 1; p < points.length; p++) ctx.lineTo(points[p].x, points[p].y);
+    ctx.stroke();
+    // Inner pale glow stroke
+    ctx.strokeStyle = 'rgba(255,228,170,0.7)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let p = 1; p < points.length; p++) ctx.lineTo(points[p].x, points[p].y);
+    ctx.stroke();
+
+    // Optional branch off mid-point
+    if (segments >= 2 && rng() < 0.6) {
+      const mid = points[1];
+      const branchLen = 3 + rng() * 5;
+      const branchDir = dir + (rng() < 0.5 ? -1 : 1) * (0.7 + rng() * 0.6);
+      const bx = mid.x + Math.cos(branchDir) * branchLen;
+      const by = mid.y + Math.sin(branchDir) * branchLen * 0.6;
+      ctx.strokeStyle = 'rgba(255,90,26,0.8)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(mid.x, mid.y);
+      ctx.lineTo(bx, by);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,228,170,0.6)';
+      ctx.lineWidth = 0.4;
+      ctx.beginPath();
+      ctx.moveTo(mid.x, mid.y);
+      ctx.lineTo(bx, by);
+      ctx.stroke();
+    }
+  }
+
+  // Bottom bevel — deep shadow at the base of the rock.
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.fillRect(platform.x, bodyTop + bodyH - 4, platform.width, 4);
+  ctx.restore();
+
+  // Edge profiles — sharp jagged peaks on front, small back wave.
+  const frontPts = jaggedDown(platform.x, platform.width, cF, rng, {
+    bumps: 4,
+    ampMin: 3,
+    ampMax: 5,
+  });
+  const backPts = backWavyUp(platform.x, platform.width, cB, sp, rng, {
+    bumps: 3,
+    ampMin: 2,
+    ampMax: 3,
+  });
+
+  // Cap — near-black with ember flecks scattered across.
+  drawPlatformCap(ctx, platform, frontPts, backPts, {
+    capColor: '#1a1410',
+    capLight: 'rgba(255,180,100,0.15)',
+    drawCapTexture: (ctx2, capFront, _capBack, skew) => {
+      const flecks = Math.max(4, Math.floor(platform.width / 6));
+      for (let i = 0; i < flecks; i++) {
+        const u = (i + 0.3 + rng() * 0.4) / flecks;
+        const v = 0.15 + rng() * 0.7;
+        const fx = platform.x + u * platform.width + v * skew;
+        const fy = capFront - v * CAP_DEPTH;
+        ctx2.fillStyle = 'rgba(255,100,20,0.7)';
+        ctx2.beginPath();
+        ctx2.arc(fx, fy, 0.7, 0, Math.PI * 2);
+        ctx2.fill();
+      }
+    },
+  });
+}
 
 export const volcano: ArenaPack = {
   // ---- Identity ----
@@ -86,48 +242,6 @@ export const volcano: ArenaPack = {
     groundBodyColor: '#1A1010',
     groundTopColor: '#3A2A2A',
     drawMoss: false,
-    customDraw: (ctx, x, y, w, h, isGround) => {
-      if (isGround) {
-        ctx.fillStyle = '#1A1010';
-        ctx.fillRect(x, y + 5, w, h - 5);
-        ctx.fillStyle = '#3A2A2A';
-        ctx.fillRect(x, y, w, 6);
-        // Lava cracks in ground
-        ctx.strokeStyle = '#FF4400';
-        ctx.lineWidth = 1;
-        ctx.globalAlpha = 0.4;
-        for (let dx = 40; dx < w; dx += 80 + Math.random() * 60) {
-          ctx.beginPath();
-          ctx.moveTo(x + dx, y + 8);
-          ctx.lineTo(x + dx + 10, y + 20);
-          ctx.lineTo(x + dx + 5, y + 30);
-          ctx.stroke();
-        }
-        ctx.globalAlpha = 1;
-      } else {
-        // Obsidian platform with lava glow
-        ctx.fillStyle = '#2A2020';
-        ctx.fillRect(x, y + 4, w, h - 4);
-        ctx.fillStyle = '#4A3535';
-        ctx.fillRect(x, y, w, 5);
-        // Lava glow underneath
-        ctx.fillStyle = 'rgba(255, 80, 0, 0.3)';
-        ctx.fillRect(x + 2, y + h - 3, w - 4, 3);
-        // Cracks
-        ctx.strokeStyle = 'rgba(255, 100, 0, 0.35)';
-        ctx.lineWidth = 1;
-        if (w > 120) {
-          ctx.beginPath();
-          ctx.moveTo(x + w * 0.3, y + 2);
-          ctx.lineTo(x + w * 0.35, y + h - 2);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.moveTo(x + w * 0.7, y + 3);
-          ctx.lineTo(x + w * 0.65, y + h - 1);
-          ctx.stroke();
-        }
-      }
-    },
   },
 
   // ---- Ambient systems ----
@@ -429,6 +543,10 @@ export const volcano: ArenaPack = {
       ctx.fill();
     }
     ctx.restore();
+  },
+
+  drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
+    drawVolcanoPlatform(ctx, platform);
   },
 
   drawWeatherParticle: (ctx: CanvasRenderingContext2D, w: WeatherParticle) => {

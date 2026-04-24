@@ -1,7 +1,212 @@
 import type { ArenaPack } from '../types';
+import type { Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
+import {
+  CAP_DEPTH, mulberry32, seedFor,
+  capFrontY, capBackY, skewPx,
+  drawPlatformRightFace, drawPlatformCap,
+  drawLeftStones, wavyDown, backWavyUp,
+} from '../../themes/drawPrimitives';
+import type { StonePaletteRow } from '../../themes/drawPrimitives';
 import { getFloatingPlatforms } from '../../themes/utils';
+
+// Algae-tinted cool-gray stone palette for left-side protrusions.
+const UNDERWATER_STONE_PALETTE: StonePaletteRow[] = [
+  { base: '#6a7a72', dark: '#3a4a42', light: '#8a9a92' },
+  { base: '#5a6a62', dark: '#2a3a32', light: '#7a8a82' },
+  { base: '#748478', dark: '#3e4e46', light: '#98a89c' },
+  { base: '#627268', dark: '#32423a', light: '#82928a' },
+];
+
+function drawUnderwaterPlatform(ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean): void {
+  const rng = mulberry32(seedFor(platform.x, platform.y));
+  const cF = capFrontY(platform);
+  const cB = capBackY(platform);
+  const bodyTop = cF;
+  const bodyH = platform.height - CAP_DEPTH / 2;
+  const sp = skewPx();
+
+  // Right face — deep teal shadow.
+  drawPlatformRightFace(ctx, platform, '#082028');
+
+  // Left-side stones — only on floating platforms (ground stones would stick out past screen edge).
+  if (!isGround) {
+    drawLeftStones(ctx, platform, UNDERWATER_STONE_PALETTE, rng, { count: 3, rxMin: 2.5, rxMax: 4.5 });
+  }
+
+  // Body front face — deep teal gradient.
+  const g = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
+  g.addColorStop(0, '#1a4450');
+  g.addColorStop(0.5, '#123640');
+  g.addColorStop(1, '#0a2830');
+  ctx.fillStyle = g;
+  ctx.fillRect(platform.x, bodyTop, platform.width, bodyH);
+
+  // --- Coral: seed-picked single type per platform ---
+  const coralRoll = rng();
+  // Distribution: 40% branching, 35% tube, 25% anemone
+  const coralType = coralRoll < 0.4 ? 'branching' : (coralRoll < 0.75 ? 'tube' : 'anemone');
+
+  if (coralType === 'branching') {
+    const stalkCount = 2 + Math.floor(rng() * 2); // 2-3
+    for (let i = 0; i < stalkCount; i++) {
+      const sx = platform.x + 6 + (i + rng() * 0.5) * (platform.width - 12) / stalkCount;
+      const stalkH = bodyH * (0.4 + rng() * 0.3);
+      const sy = bodyTop + rng() * (bodyH * 0.2);
+      ctx.strokeStyle = '#c94a5a';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy + stalkH);
+      ctx.quadraticCurveTo(sx + (rng() - 0.5) * 3, sy + stalkH * 0.5, sx + (rng() - 0.5) * 2, sy);
+      ctx.stroke();
+      // Side branches (1-2)
+      const branchN = 1 + Math.floor(rng() * 2);
+      for (let b = 0; b < branchN; b++) {
+        const bt = 0.3 + rng() * 0.5;
+        const side = rng() < 0.5 ? -1 : 1;
+        const bx = sx + side * 1;
+        const by = sy + stalkH * (1 - bt);
+        const blen = 3 + rng() * 3;
+        ctx.beginPath();
+        ctx.moveTo(bx, by);
+        ctx.lineTo(bx + side * blen, by - blen * 0.5);
+        ctx.stroke();
+        // small circle cap on tip
+        ctx.fillStyle = '#c94a5a';
+        ctx.beginPath();
+        ctx.arc(bx + side * blen, by - blen * 0.5, 1.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // Cap on main stalk tip
+      ctx.fillStyle = '#c94a5a';
+      ctx.beginPath();
+      ctx.arc(sx + (rng() - 0.5) * 2, sy, 1.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (coralType === 'tube') {
+    const tubeCount = 3 + Math.floor(rng() * 3); // 3-5
+    for (let i = 0; i < tubeCount; i++) {
+      const tx = platform.x + 4 + (i + 0.5) * (platform.width - 8) / tubeCount + (rng() - 0.5) * 2;
+      const th = 6 + rng() * 6; // 6-12
+      const tyBase = bodyTop + bodyH - 1;
+      ctx.fillStyle = '#e07a3a';
+      ctx.fillRect(tx - 1.5, tyBase - th, 3, th);
+      // Darker opening dot at the top
+      ctx.fillStyle = '#7a3a14';
+      ctx.beginPath();
+      ctx.ellipse(tx, tyBase - th, 1.2, 0.7, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else {
+    // anemone: 1-2 bulbous bases with wavy tentacles
+    const baseCount = 1 + Math.floor(rng() * 2);
+    for (let i = 0; i < baseCount; i++) {
+      const ax = platform.x + (i + 0.5 + rng() * 0.3) * platform.width / baseCount;
+      const ay = bodyTop + bodyH * (0.55 + rng() * 0.2);
+      // Bulbous base
+      ctx.fillStyle = '#e890b0';
+      ctx.beginPath();
+      ctx.ellipse(ax, ay, 3.5, 2.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Tentacles (~8 wavy strokes radiating outward)
+      ctx.strokeStyle = 'rgba(232,144,176,0.7)';
+      ctx.lineWidth = 1;
+      const tentCount = 8;
+      for (let t = 0; t < tentCount; t++) {
+        const angle = Math.PI + (t / (tentCount - 1)) * Math.PI + (rng() - 0.5) * 0.15;
+        const tlen = 4 + rng() * 3;
+        const ex = ax + Math.cos(angle) * tlen;
+        const ey = ay + Math.sin(angle) * tlen;
+        const mx = ax + Math.cos(angle) * tlen * 0.5 + (rng() - 0.5) * 2;
+        const my = ay + Math.sin(angle) * tlen * 0.5 + (rng() - 0.5) * 1.2;
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.quadraticCurveTo(mx, my, ex, ey);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // Barnacles — 2-5 small off-white ellipses scattered on the body.
+  const barnacleCount = 2 + Math.floor(rng() * 4);
+  ctx.fillStyle = '#d8d0b8';
+  for (let i = 0; i < barnacleCount; i++) {
+    const bx = platform.x + 3 + rng() * (platform.width - 6);
+    const by = bodyTop + 3 + rng() * Math.max(1, bodyH - 6);
+    ctx.beginPath();
+    ctx.ellipse(bx, by, 1.4 + rng() * 0.6, 1 + rng() * 0.4, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Edge profiles — gentle wavy.
+  const frontPts = wavyDown(platform.x, platform.width, cF, rng, { bumps: 3, ampMin: 2, ampMax: 3.5, valleyBase: 0.4 });
+  const backPts = backWavyUp(platform.x, platform.width, cB, sp, rng, { bumps: 3, ampMin: 2, ampMax: 3 });
+
+  // Cap — sandy tan with caustic ripples.
+  drawPlatformCap(ctx, platform, frontPts, backPts, {
+    capColor: '#d4b890',
+    capLight: 'rgba(255,245,220,0.2)',
+    drawCapTexture: (ctx2, capFront, capBack, skew) => {
+      // Caustic ripples — 2-3 thin curved light-blue lines.
+      const rippleN = 2 + Math.floor(rng() * 2);
+      ctx2.strokeStyle = 'rgba(180,230,255,0.5)';
+      ctx2.lineWidth = 0.8;
+      for (let i = 0; i < rippleN; i++) {
+        const rw = platform.width * 0.4;
+        const rx = platform.x + rng() * (platform.width - rw);
+        const v = 0.25 + rng() * 0.5;
+        const midY = capBack + v * (capFront - capBack);
+        const y0 = midY + (rng() - 0.5) * 2;
+        const y1 = midY + (rng() - 0.5) * 2;
+        const ymid = midY - 1.5 - rng() * 1.5;
+        ctx2.beginPath();
+        ctx2.moveTo(rx + v * skew, y0);
+        ctx2.quadraticCurveTo(rx + rw * 0.5 + v * skew, ymid, rx + rw + v * skew, y1);
+        ctx2.stroke();
+      }
+    },
+  });
+
+  // Signature — kelp strands hanging from body bottom (floating only).
+  if (!isGround) {
+    const bb = platform.y + platform.height;
+    const kelpCount = 2 + Math.floor(rng() * 2); // 2-3
+    for (let k = 0; k < kelpCount; k++) {
+      const kx = platform.x + (k + 0.5 + (rng() - 0.5) * 0.3) * platform.width / kelpCount;
+      const klen = 18 + rng() * 10; // 18-28
+      const phase = rng() * Math.PI * 2;
+      const swayAmp = 3 + rng() * 2;
+
+      // Strand — sine-curve sway
+      ctx.strokeStyle = '#2a6838';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(kx, bb);
+      const steps = 6;
+      for (let s = 1; s <= steps; s++) {
+        const t = s / steps;
+        const px = kx + Math.sin(phase + t * Math.PI * 1.5) * swayAmp * t;
+        const py = bb + t * klen;
+        ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+
+      // Leaves along the strand (3-4 alternating)
+      const leafN = 3 + Math.floor(rng() * 2);
+      ctx.fillStyle = '#3a7848';
+      for (let l = 0; l < leafN; l++) {
+        const t = (l + 0.6) / leafN;
+        const px = kx + Math.sin(phase + t * Math.PI * 1.5) * swayAmp * t;
+        const py = bb + t * klen;
+        const side = l % 2 === 0 ? 1 : -1;
+        ctx.beginPath();
+        ctx.ellipse(px + side * 3, py, 3, 1.4, side * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+}
 
 export const underwater: ArenaPack = {
   // ---- Identity ----
@@ -74,48 +279,6 @@ export const underwater: ArenaPack = {
     groundBodyColor: '#8A7A50',
     groundTopColor: '#C2A868',
     drawMoss: false,
-    customDraw: (ctx, x, y, w, h, isGround) => {
-      if (isGround) {
-        // Sandy ocean floor
-        ctx.fillStyle = '#8A7A50';
-        ctx.fillRect(x, y + 4, w, h - 4);
-        ctx.fillStyle = '#C2A868';
-        ctx.fillRect(x, y, w, 5);
-        // Sand ripples
-        ctx.strokeStyle = 'rgba(160, 140, 80, 0.3)';
-        ctx.lineWidth = 1;
-        for (let sx = x; sx < x + w; sx += 25) {
-          ctx.beginPath();
-          ctx.moveTo(sx, y + 8);
-          ctx.quadraticCurveTo(sx + 12, y + 6, sx + 24, y + 8);
-          ctx.stroke();
-        }
-        // Shell decorations
-        ctx.fillStyle = '#E8D8C8';
-        for (let sx = x + 50; sx < x + w; sx += 120 + Math.random() * 80) {
-          ctx.beginPath();
-          ctx.arc(sx, y + 2, 4, Math.PI, 0);
-          ctx.fill();
-        }
-      } else {
-        // Coral/rock platform
-        ctx.fillStyle = '#3A7A6A';
-        ctx.fillRect(x, y + 3, w, h - 3);
-        ctx.fillStyle = '#5AA08A';
-        ctx.fillRect(x, y, w, 4);
-        // Coral bumps on top
-        ctx.fillStyle = '#FF6B6B';
-        for (let cx = x + 8; cx < x + w - 8; cx += 18 + Math.random() * 10) {
-          const ch = 3 + Math.random() * 4;
-          ctx.beginPath();
-          ctx.ellipse(cx, y - 1, 4, ch, 0, Math.PI, 0);
-          ctx.fill();
-        }
-        // Underside detail
-        ctx.fillStyle = 'rgba(20, 80, 60, 0.4)';
-        ctx.fillRect(x, y + h - 2, w, 2);
-      }
-    },
   },
 
   // ---- Ambient systems ----
@@ -227,21 +390,99 @@ export const underwater: ArenaPack = {
     const ground = arena.platforms[0];
     const y = ground.y;
 
-    // Seaweed
+    // Seaweed — 2-3 stalks from a shared holdfast, each with alternating leaves,
+    // a faint outer glow, and tapered thickness so it reads as organic plant life
+    // rather than a single painted stroke.
     const drawSeaweed = (sx: number, sy: number, h: number, color: string) => {
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 4;
+      // Darker shade derived from the base color by dimming each channel ~60%.
+      const darker = color.replace(/#(..)(..)(..)/, (_m, r, g, b) => {
+        const d = (hex: string) => Math.max(0, Math.floor(parseInt(hex, 16) * 0.6)).toString(16).padStart(2, '0');
+        return `#${d(r)}${d(g)}${d(b)}`;
+      });
+      // Small dark holdfast where the seaweed anchors
+      ctx.fillStyle = darker;
       ctx.beginPath();
-      ctx.moveTo(sx, sy);
-      for (let t = 0; t < h; t += 8) {
-        ctx.lineTo(sx + Math.sin(t * 0.15) * 8, sy - t);
-      }
-      ctx.stroke();
-      // Leaves
-      ctx.fillStyle = color;
-      for (let t = 15; t < h; t += 20) {
+      ctx.ellipse(sx, sy - 0.5, Math.max(3, h * 0.08), Math.max(1.5, h * 0.04), 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      const stalkCount = h > 35 ? 3 : 2;
+      for (let s = 0; s < stalkCount; s++) {
+        const phase = s * 1.7 + (s * s) * 0.4;
+        const stalkH = h * (0.7 + (s === 0 ? 0.3 : (s === 1 ? 0.2 : 0.05)));
+        const baseOffset = (s - (stalkCount - 1) / 2) * Math.max(1.5, h * 0.05);
+        const sway = Math.min(9, h * 0.22);
+        const pointAt = (t: number) => {
+          const ny = t / stalkH;
+          const x = sx + baseOffset + Math.sin(phase + t * 0.18) * sway * (0.3 + ny * 0.9);
+          const y = sy - t;
+          return { x, y };
+        };
+        // Outer glow pass — translucent, wider stroke
+        ctx.strokeStyle = color + 'cc'; // 80% alpha suffix works for #RGB/#RRGGBB hex
+        ctx.lineCap = 'round';
+        ctx.lineWidth = 4;
         ctx.beginPath();
-        ctx.ellipse(sx + Math.sin(t * 0.15) * 8 + 6, sy - t, 8, 3, 0.4, 0, Math.PI * 2);
+        let p = pointAt(0);
+        ctx.moveTo(p.x, p.y);
+        for (let t = 2; t <= stalkH; t += 3) {
+          p = pointAt(t);
+          ctx.lineTo(p.x, p.y);
+        }
+        ctx.stroke();
+        // Inner core — thinner darker stroke for depth
+        ctx.strokeStyle = darker;
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        p = pointAt(0);
+        ctx.moveTo(p.x, p.y);
+        for (let t = 2; t <= stalkH; t += 3) {
+          p = pointAt(t);
+          ctx.lineTo(p.x, p.y);
+        }
+        ctx.stroke();
+        ctx.lineCap = 'butt';
+
+        // Leaves — alternate sides, taper toward the top
+        ctx.fillStyle = color;
+        for (let t = Math.max(10, stalkH * 0.2); t < stalkH - 4; t += Math.max(10, stalkH * 0.2)) {
+          const anchor = pointAt(t);
+          const ny = t / stalkH;
+          const side = (Math.floor(t / 8) % 2) === 0 ? 1 : -1;
+          const leafLen = 5 + (1 - ny) * 4;
+          const leafW = 1.8 + (1 - ny) * 1.2;
+          const angle = Math.atan2(anchor.y - pointAt(Math.max(0, t - 2)).y, anchor.x - pointAt(Math.max(0, t - 2)).x) + side * 0.6;
+          ctx.beginPath();
+          ctx.ellipse(
+            anchor.x + Math.cos(angle) * leafLen * 0.55,
+            anchor.y + Math.sin(angle) * leafLen * 0.55,
+            leafLen * 0.6,
+            leafW,
+            angle,
+            0,
+            Math.PI * 2,
+          );
+          ctx.fill();
+          // Leaf highlight
+          ctx.fillStyle = 'rgba(255,255,255,0.15)';
+          ctx.beginPath();
+          ctx.ellipse(
+            anchor.x + Math.cos(angle) * leafLen * 0.55 - Math.sin(angle) * leafW * 0.4,
+            anchor.y + Math.sin(angle) * leafLen * 0.55 + Math.cos(angle) * leafW * 0.4,
+            leafLen * 0.35,
+            leafW * 0.45,
+            angle,
+            0,
+            Math.PI * 2,
+          );
+          ctx.fill();
+          ctx.fillStyle = color;
+        }
+
+        // Tiny bright tip — suggests a polyp or bubble
+        const tip = pointAt(stalkH);
+        ctx.fillStyle = 'rgba(220,255,240,0.7)';
+        ctx.beginPath();
+        ctx.arc(tip.x, tip.y, 1.1, 0, Math.PI * 2);
         ctx.fill();
       }
     };
@@ -476,6 +717,10 @@ export const underwater: ArenaPack = {
       ctx.fill();
     }
     ctx.restore();
+  },
+
+  drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => {
+    drawUnderwaterPlatform(ctx, platform, isGround);
   },
 
   drawWeatherParticle: (ctx, w) => {

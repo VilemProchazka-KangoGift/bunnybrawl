@@ -1,7 +1,206 @@
 import type { ArenaPack } from '../types';
+import type { Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { createThornRenderer } from '../../themes/drawPrimitives';
 import { getFloatingPlatforms } from '../../themes/utils';
+import {
+  CAP_DEPTH, mulberry32, seedFor,
+  capFrontY, capBackY, skewPx,
+  drawPlatformRightFace, drawPlatformCap,
+  jaggedDown, backWavyUp, drawLeftStones,
+  type StonePaletteRow,
+} from '../../themes/drawPrimitives';
+
+const HAUNTED_STONE_PALETTE: StonePaletteRow[] = [
+  { base: '#5a5060', dark: '#302838', light: '#7a707e' },
+  { base: '#4a4250', dark: '#28202e', light: '#6a6072' },
+  { base: '#605668', dark: '#352c3e', light: '#867c90' },
+  { base: '#534858', dark: '#2c2434', light: '#74687e' },
+];
+
+/**
+ * Cobweb in a body-front-face corner. (cornerX, cornerY) is the corner anchor;
+ * (dirX, dirY) (each ±1) is the diagonal direction the web fans into the body.
+ * Five radial strands ~14px long + three concentric arc chords between them.
+ */
+function drawCobweb(
+  ctx: CanvasRenderingContext2D,
+  cornerX: number,
+  cornerY: number,
+  dirX: number,
+  dirY: number,
+): void {
+  const len = 14;
+  // Fan angles span the inward 90° quadrant: from "along the horizontal edge"
+  // to "along the vertical edge", offset by the corner's quadrant.
+  const baseAngle = Math.atan2(dirY, dirX); // diagonal axis into body
+  const halfSpread = Math.PI / 4;            // ±45° around diagonal -> covers full 90° quadrant
+  const strands = 5;
+
+  ctx.save();
+  ctx.strokeStyle = 'rgba(220,220,230,0.5)';
+  ctx.lineWidth = 0.7;
+
+  // Radial strands
+  const angles: number[] = [];
+  for (let i = 0; i < strands; i++) {
+    const t = i / (strands - 1);
+    const a = baseAngle - halfSpread + t * (halfSpread * 2);
+    angles.push(a);
+    ctx.beginPath();
+    ctx.moveTo(cornerX, cornerY);
+    ctx.lineTo(cornerX + Math.cos(a) * len, cornerY + Math.sin(a) * len);
+    ctx.stroke();
+  }
+
+  // Three cross-strand arc chords at increasing radii
+  for (let r = 1; r <= 3; r++) {
+    const radius = (r / 3.5) * len;
+    ctx.beginPath();
+    for (let i = 0; i < strands; i++) {
+      const px = cornerX + Math.cos(angles[i]) * radius;
+      const py = cornerY + Math.sin(angles[i]) * radius;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+function drawHauntedPlatform(ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean): void {
+  const rng = mulberry32(seedFor(platform.x, platform.y));
+  const cF = capFrontY(platform);
+  const cB = capBackY(platform);
+  const bodyTop = cF;
+  const bodyH = platform.height - CAP_DEPTH / 2;
+  const sp = skewPx();
+
+  // Right face — very dark purple-gray
+  drawPlatformRightFace(ctx, platform, '#1a1522');
+
+  // Body front face — cold gray-purple gradient
+  const g = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
+  g.addColorStop(0, '#4a4050');
+  g.addColorStop(1, '#2a2030');
+  ctx.fillStyle = g;
+  ctx.fillRect(platform.x, bodyTop, platform.width, bodyH);
+
+  // 1-3 deep cracks with ghostly green seepage. Each crack: main stem of 2-3
+  // segments (8-14px each), with 0-2 short side branches (4-8px).
+  const crackCount = 1 + Math.floor(rng() * 3); // 1..3
+  type Seg = { x1: number; y1: number; x2: number; y2: number };
+  const segs: Seg[] = [];
+  for (let c = 0; c < crackCount; c++) {
+    const ax = platform.x + 6 + rng() * Math.max(1, platform.width - 12);
+    const ay = bodyTop + 4 + rng() * Math.max(1, bodyH - 8);
+    let cx = ax;
+    let cy = ay;
+    const stemSegs = 2 + Math.floor(rng() * 2); // 2..3
+    // Bias direction roughly downward but jittery
+    let dir = (rng() - 0.5) * 1.6 + Math.PI * 0.5;
+    for (let s = 0; s < stemSegs; s++) {
+      const len = 8 + rng() * 6;
+      const nx = cx + Math.cos(dir) * len;
+      const ny = cy + Math.sin(dir) * len;
+      segs.push({ x1: cx, y1: cy, x2: nx, y2: ny });
+      // Side branches off this segment
+      const branchN = Math.floor(rng() * 3); // 0..2
+      for (let b = 0; b < branchN; b++) {
+        const t = 0.3 + rng() * 0.5;
+        const bx = cx + (nx - cx) * t;
+        const by = cy + (ny - cy) * t;
+        const bDir = dir + (rng() - 0.5) * 1.8;
+        const bLen = 4 + rng() * 4;
+        segs.push({
+          x1: bx, y1: by,
+          x2: bx + Math.cos(bDir) * bLen,
+          y2: by + Math.sin(bDir) * bLen,
+        });
+      }
+      cx = nx;
+      cy = ny;
+      dir += (rng() - 0.5) * 1.0;
+    }
+  }
+  // Glow pass first (wider, soft green)
+  ctx.strokeStyle = 'rgba(100,200,140,0.35)';
+  ctx.lineWidth = 4;
+  ctx.lineCap = 'round';
+  for (const s of segs) {
+    ctx.beginPath();
+    ctx.moveTo(s.x1, s.y1);
+    ctx.lineTo(s.x2, s.y2);
+    ctx.stroke();
+  }
+  // Dark core stroke
+  ctx.strokeStyle = '#15101a';
+  ctx.lineWidth = 1.5 + rng() * 0.5;
+  for (const s of segs) {
+    ctx.beginPath();
+    ctx.moveTo(s.x1, s.y1);
+    ctx.lineTo(s.x2, s.y2);
+    ctx.stroke();
+  }
+  ctx.lineCap = 'butt';
+
+  // Bottom bevel — slight darkening at the base of the front face
+  ctx.fillStyle = 'rgba(0,0,0,0.30)';
+  ctx.fillRect(platform.x, bodyTop + bodyH - 3, platform.width, 3);
+
+  // Cobwebs in front-face corners — 70% chance per corner, but never both
+  // corners on the same vertical side (they overflow into each other on tall
+  // platforms). If both would fire on a side, drop one via a coinflip.
+  // Floating only, and only on platforms with bodyH >= 10 (skip tiny tombstones).
+  if (!isGround && bodyH >= 10) {
+    const bb = bodyTop + bodyH;
+    let leftTop = rng() < 0.7;
+    let leftBot = rng() < 0.7;
+    let rightTop = rng() < 0.7;
+    let rightBot = rng() < 0.7;
+    if (leftTop && leftBot) {
+      if (rng() < 0.5) leftBot = false; else leftTop = false;
+    }
+    if (rightTop && rightBot) {
+      if (rng() < 0.5) rightBot = false; else rightTop = false;
+    }
+    if (leftTop)  drawCobweb(ctx, platform.x, bodyTop, +1, +1);
+    if (rightTop) drawCobweb(ctx, platform.x + platform.width, bodyTop, -1, +1);
+    if (leftBot)  drawCobweb(ctx, platform.x, bb, +1, -1);
+    if (rightBot) drawCobweb(ctx, platform.x + platform.width, bb, -1, -1);
+  }
+
+  // Edge profiles — jagged broken stone, both front and back
+  const frontPts = jaggedDown(platform.x, platform.width, cF, rng, { bumps: 4, ampMin: 3, ampMax: 5 });
+  const backPts = backWavyUp(platform.x, platform.width, cB, sp, rng, { bumps: 3, ampMin: 2, ampMax: 3.5 });
+
+  // Cap — dusty lichen-gray with grime patches
+  drawPlatformCap(ctx, platform, frontPts, backPts, {
+    capColor: '#7a7580',
+    capLight: 'rgba(220,215,225,0.18)',
+    drawCapTexture: (ctx2, capFront, _capBack, skew) => {
+      const patchN = 3 + Math.floor(rng() * 2); // 3..4
+      ctx2.fillStyle = 'rgba(50,40,55,0.4)';
+      for (let i = 0; i < patchN; i++) {
+        const u = (i + 0.3 + rng() * 0.4) / patchN;
+        const v = 0.2 + rng() * 0.6;
+        const px = platform.x + u * platform.width + v * skew;
+        const py = capFront - v * CAP_DEPTH;
+        const rx = 3 + rng() * 2;
+        const ry = (1.2 + rng() * 0.8);
+        ctx2.beginPath();
+        ctx2.ellipse(px, py, rx, ry, rng() * Math.PI, 0, Math.PI * 2);
+        ctx2.fill();
+      }
+    },
+  });
+
+  // Left protrusions — varied dusky purple-gray stones (floating only)
+  if (!isGround) {
+    drawLeftStones(ctx, platform, HAUNTED_STONE_PALETTE, rng);
+  }
+}
 
 export const hauntedGraveyard: ArenaPack = {
   // ---- Identity ----
@@ -82,40 +281,6 @@ export const hauntedGraveyard: ArenaPack = {
     groundBodyColor: '#2A2530',
     groundTopColor: '#3A3530',
     drawMoss: false,
-    customDraw: (ctx, x, y, w, h, isGround) => {
-      if (isGround) {
-        // Muddy graveyard ground
-        ctx.fillStyle = '#2A2530';
-        ctx.fillRect(x, y + 4, w, h - 4);
-        ctx.fillStyle = '#3A3530';
-        ctx.fillRect(x, y, w, 5);
-        // Dirt patches
-        ctx.fillStyle = '#2A2018';
-        for (let dx = x + 30; dx < x + w; dx += 60 + Math.random() * 50) {
-          ctx.beginPath();
-          ctx.ellipse(dx, y + 15, 12, 6, 0, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      } else {
-        // Worn stone platform
-        ctx.fillStyle = '#3A3040';
-        ctx.fillRect(x, y + 3, w, h - 3);
-        ctx.fillStyle = '#5A4A60';
-        ctx.fillRect(x, y, w, 4);
-        // Cracks
-        ctx.strokeStyle = 'rgba(20, 15, 25, 0.4)';
-        ctx.lineWidth = 1;
-        if (w > 100) {
-          ctx.beginPath();
-          ctx.moveTo(x + w * 0.4, y + 2);
-          ctx.lineTo(x + w * 0.45, y + h);
-          ctx.stroke();
-        }
-        // Moss
-        ctx.fillStyle = 'rgba(40, 60, 30, 0.3)';
-        ctx.fillRect(x, y + h - 3, w * 0.3, 3);
-      }
-    },
   },
 
   // ---- Ambient systems ----
@@ -438,6 +603,10 @@ export const hauntedGraveyard: ArenaPack = {
       ctx.fill();
     }
     ctx.restore();
+  },
+
+  drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => {
+    drawHauntedPlatform(ctx, platform, isGround);
   },
 
   drawCustomThorn: createThornRenderer((ctx, x, y, width, height, fadeAlpha) => {

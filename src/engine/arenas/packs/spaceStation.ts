@@ -1,7 +1,147 @@
 import type { ArenaPack } from '../types';
+import type { Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
 import { getFloatingPlatforms } from '../../themes/utils';
+import {
+  CAP_DEPTH, mulberry32, seedFor,
+  capFrontY, capBackY, skewPx,
+  drawPlatformRightFace, drawPlatformCap,
+  subtleDown, backFlat,
+} from '../../themes/drawPrimitives';
+
+function drawSpacePlatform(ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean): void {
+  const rng = mulberry32(seedFor(platform.x, platform.y));
+  const cF = capFrontY(platform);
+  const cB = capBackY(platform);
+  const bodyTop = cF;
+  const bodyH = platform.height - CAP_DEPTH / 2;
+  const sp = skewPx();
+
+  // Right face — darker metal shadow with a few status LEDs (signature)
+  drawPlatformRightFace(ctx, platform, '#14141E');
+  // Status LEDs on the right face — small colored dots with faint halo
+  const ledPalette: Array<{ solid: string; glow: string }> = [
+    { solid: '#FF4444', glow: 'rgba(255,68,68,0.3)' },
+    { solid: '#00FF88', glow: 'rgba(0,255,136,0.3)' },
+    { solid: '#00CCFF', glow: 'rgba(0,204,255,0.3)' },
+    { solid: '#FFAA00', glow: 'rgba(255,170,0,0.3)' },
+  ];
+  // Place LEDs along the right-face centerline (midway between front and back edges of the parallelogram).
+  const ledN = 2 + Math.floor(rng() * 2);
+  const faceCenterX = platform.x + platform.width + sp * 0.5;
+  const faceCenterYShift = -CAP_DEPTH * 0.25; // back edge sits higher than front
+  for (let i = 0; i < ledN; i++) {
+    const t = (i + 0.5) / ledN;
+    const ly = bodyTop + 2 + t * Math.max(1, bodyH - 4) + faceCenterYShift;
+    const led = ledPalette[Math.floor(rng() * ledPalette.length)];
+    ctx.fillStyle = led.glow;
+    ctx.beginPath();
+    ctx.arc(faceCenterX, ly, 2.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = led.solid;
+    ctx.beginPath();
+    ctx.arc(faceCenterX, ly, 1.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Body front face — metal gradient (light top → dark bottom)
+  const g = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
+  g.addColorStop(0, '#3C3C50');
+  g.addColorStop(0.5, '#2A2A3A');
+  g.addColorStop(1, '#16161E');
+  ctx.fillStyle = g;
+  ctx.fillRect(platform.x, bodyTop, platform.width, bodyH);
+
+  // Horizontal seam line — bright top / dark bottom hairline mid-body
+  if (bodyH >= 10) {
+    const seamY = Math.round(bodyTop + bodyH * 0.5);
+    ctx.fillStyle = 'rgba(90,100,120,0.55)';
+    ctx.fillRect(platform.x, seamY, platform.width, 1);
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.fillRect(platform.x, seamY + 1, platform.width, 1);
+  }
+
+  // Bolt heads — darker dot + metallic highlight, at seam height and corners
+  const boltN = Math.max(2, Math.floor(platform.width / 60));
+  const boltY = bodyTop + bodyH * 0.5;
+  for (let i = 0; i < boltN; i++) {
+    const t = (i + 0.5) / boltN;
+    const bx = platform.x + 6 + t * (platform.width - 12);
+    ctx.fillStyle = '#0A0A12';
+    ctx.beginPath();
+    ctx.arc(bx, boltY, 1.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(150,165,190,0.6)';
+    ctx.beginPath();
+    ctx.arc(bx - 0.4, boltY - 0.5, 0.7, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Hazard stripe — diagonal yellow/black bar along the bottom edge
+  const stripeH = Math.min(4, bodyH * 0.18);
+  if (stripeH >= 2) {
+    const stripeY = bodyTop + bodyH - stripeH;
+    // Base yellow
+    ctx.fillStyle = '#C9A514';
+    ctx.fillRect(platform.x, stripeY, platform.width, stripeH);
+    // Black diagonal hatching
+    ctx.fillStyle = 'rgba(14,14,22,0.9)';
+    const step = 8;
+    for (let sx = platform.x - stripeH; sx < platform.x + platform.width; sx += step) {
+      ctx.beginPath();
+      ctx.moveTo(sx, stripeY + stripeH);
+      ctx.lineTo(sx + stripeH, stripeY);
+      ctx.lineTo(sx + stripeH + step * 0.45, stripeY);
+      ctx.lineTo(sx + step * 0.45, stripeY + stripeH);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  // Edge profiles — minimal wear (man-made metal)
+  const frontPts = subtleDown(platform.x, platform.width, cF, rng, { count: 1, amp: 0.8 });
+  const backPts = backFlat(platform.x, platform.width, cB, sp);
+
+  // Cap — dark metal with cyan LED strips along its edges.
+  // Ground decks: back edge only (far-wall rim light).
+  // Floating platforms: front edge (lit leading lip) + back edge (far rim) for a framed look.
+  drawPlatformCap(ctx, platform, frontPts, backPts, {
+    capColor: '#25252F',
+    capLight: 'rgba(60,70,90,0.3)',
+    drawCapTexture: (ctx2, capFront, capBack, skew) => {
+      const stripX0 = platform.x + 2;
+      const stripX1 = platform.x + platform.width + skew - 2;
+      const drawStrip = (stripY: number, direction: 'up' | 'down') => {
+        if (direction === 'down') {
+          const glow = ctx2.createLinearGradient(0, stripY, 0, stripY + 4);
+          glow.addColorStop(0, 'rgba(0,204,255,0.35)');
+          glow.addColorStop(1, 'rgba(0,204,255,0)');
+          ctx2.fillStyle = glow;
+          ctx2.fillRect(stripX0, stripY, stripX1 - stripX0, 4);
+        } else {
+          const glow = ctx2.createLinearGradient(0, stripY - 4, 0, stripY + 1);
+          glow.addColorStop(0, 'rgba(0,204,255,0)');
+          glow.addColorStop(1, 'rgba(0,204,255,0.35)');
+          ctx2.fillStyle = glow;
+          ctx2.fillRect(stripX0 - 1, stripY - 4, stripX1 - stripX0 + 2, 5);
+        }
+        ctx2.fillStyle = '#7AE8FF';
+        ctx2.fillRect(stripX0, stripY, stripX1 - stripX0, 1);
+        ctx2.fillStyle = '#0A1418';
+        const segW = 12;
+        for (let tx = stripX0 + segW - 2; tx < stripX1; tx += segW) {
+          ctx2.fillRect(tx, stripY, 2, 1);
+        }
+      };
+
+      // Back-edge strip — present on every platform.
+      drawStrip(capBack + 1, 'down');
+      // Front-edge strip — floating platforms only.
+      if (!isGround) drawStrip(capFront - 2, 'up');
+    },
+  });
+}
 
 let scanLinePattern: CanvasPattern | null = null;
 
@@ -211,51 +351,6 @@ export const spaceStation: ArenaPack = {
     groundBodyColor: '#1A1A2A',
     groundTopColor: '#3A3A4A',
     drawMoss: false,
-    customDraw: (ctx, x, y, w, h, isGround) => {
-      if (isGround) {
-        // Metal floor plating
-        ctx.fillStyle = '#1A1A2A';
-        ctx.fillRect(x, y + 3, w, h - 3);
-        ctx.fillStyle = '#3A3A4A';
-        ctx.fillRect(x, y, w, 4);
-        // Grid pattern
-        ctx.strokeStyle = 'rgba(60, 60, 80, 0.3)';
-        ctx.lineWidth = 1;
-        for (let gx = x; gx < x + w; gx += 20) {
-          ctx.beginPath();
-          ctx.moveTo(gx, y + 5);
-          ctx.lineTo(gx, y + h);
-          ctx.stroke();
-        }
-        for (let gy = y + 10; gy < y + h; gy += 12) {
-          ctx.beginPath();
-          ctx.moveTo(x, gy);
-          ctx.lineTo(x + w, gy);
-          ctx.stroke();
-        }
-        // LED strips
-        ctx.fillStyle = 'rgba(0, 200, 255, 0.15)';
-        ctx.fillRect(x, y, w, 2);
-      } else {
-        // Metal grating platform
-        ctx.fillStyle = '#2A2A3A';
-        ctx.fillRect(x, y + 2, w, h - 2);
-        ctx.fillStyle = '#4A4A5A';
-        ctx.fillRect(x, y, w, 3);
-        // Grating holes
-        ctx.fillStyle = 'rgba(10, 10, 20, 0.4)';
-        for (let gx = x + 4; gx < x + w - 4; gx += 8) {
-          ctx.fillRect(gx, y + 4, 4, h - 6);
-        }
-        // Edge LEDs
-        ctx.fillStyle = 'rgba(0, 200, 255, 0.2)';
-        ctx.fillRect(x, y, 2, h);
-        ctx.fillRect(x + w - 2, y, 2, h);
-        // Bottom glow
-        ctx.fillStyle = 'rgba(0, 150, 255, 0.08)';
-        ctx.fillRect(x, y + h, w, 5);
-      }
-    },
   },
 
   // ---- Ambient systems ----
@@ -684,6 +779,10 @@ export const spaceStation: ArenaPack = {
     }
     ctx.fill();
     ctx.restore();
+  },
+
+  drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => {
+    drawSpacePlatform(ctx, platform, isGround);
   },
 
   drawWeatherParticle: (ctx, w) => {

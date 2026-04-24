@@ -1,7 +1,109 @@
 import type { ArenaPack } from '../types';
+import type { Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { drawTree, drawHangingVine, drawFgLeafCluster, drawFern } from '../../themes/drawPrimitives';
 import { getFloatingPlatforms } from '../../themes/utils';
+import {
+  CAP_DEPTH, mulberry32, seedFor,
+  capFrontY, capBackY, skewPx,
+  drawPlatformRightFace, drawPlatformCap,
+  wavyDown, backWavyUp, drawLeafCluster,
+} from '../../themes/drawPrimitives';
+
+const MOSS_TUFT_COLORS = ['#4a7828', '#6a9a3a', '#8fa84f'];
+
+function drawTreetopsPlatform(ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean): void {
+  const rng = mulberry32(seedFor(platform.x, platform.y));
+  const cF = capFrontY(platform);
+  const cB = capBackY(platform);
+  const bodyTop = cF;
+  const bodyH = platform.height - CAP_DEPTH / 2;
+  const sp = skewPx();
+
+  // Right face — darker wood (shadow side)
+  drawPlatformRightFace(ctx, platform, '#3a2208');
+
+  // Left-side leaf clusters — only on platforms wide enough that the foliage
+  // doesn't overwhelm them. Skip tiny branch platforms (width < 70).
+  if (platform.width >= 70) {
+    const clusterN = 2 + Math.floor(rng() * 2); // 2-3 clusters
+    for (let i = 0; i < clusterN; i++) {
+      const t = (i + 0.3 + rng() * 0.4) / clusterN;
+      const cy = bodyTop + 4 + t * (bodyH - 8);
+      const size = 5 + rng() * 2;
+      const cx = platform.x - size * (0.25 + rng() * 0.4);
+      drawLeafCluster(ctx, cx, cy, size, rng);
+    }
+  }
+
+  // Body front face — warm wood gradient
+  const g = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
+  g.addColorStop(0, '#8a5a2a');
+  g.addColorStop(0.5, '#6a3e1c');
+  g.addColorStop(1, '#4a2810');
+  ctx.fillStyle = g;
+  ctx.fillRect(platform.x, bodyTop, platform.width, bodyH);
+
+  // Vertical bark ridges — 3-5 thin slightly-wobbly strokes, top to bottom
+  const ridgeN = 3 + Math.floor(rng() * 3);
+  ctx.strokeStyle = 'rgba(40,20,10,0.45)';
+  for (let i = 0; i < ridgeN; i++) {
+    const baseX = platform.x + (i + 0.5 + (rng() - 0.5) * 0.3) / ridgeN * platform.width;
+    const wobblePhase = rng() * Math.PI * 2;
+    ctx.lineWidth = 1 + rng() * 0.3;
+    ctx.beginPath();
+    ctx.moveTo(baseX, bodyTop);
+    for (let py = 2; py <= bodyH; py += 3) {
+      const wobble = Math.sin(py * 0.28 + wobblePhase) * 1.0 + Math.sin(py * 0.11 + wobblePhase * 1.7) * 0.5;
+      ctx.lineTo(baseX + wobble, bodyTop + py);
+    }
+    ctx.stroke();
+  }
+
+  // Knots — 1-2 small radial gradient circles per platform
+  const knotN = 1 + Math.floor(rng() * 2);
+  for (let i = 0; i < knotN; i++) {
+    const kx = platform.x + 4 + rng() * Math.max(1, platform.width - 8);
+    const ky = bodyTop + 3 + rng() * Math.max(1, bodyH - 6);
+    const kr = 3 + rng() * 1.5;
+    const kg = ctx.createRadialGradient(kx, ky, 0, kx, ky, kr);
+    kg.addColorStop(0, '#3a2008');
+    kg.addColorStop(1, '#6a4020');
+    ctx.fillStyle = kg;
+    ctx.beginPath();
+    ctx.ellipse(kx, ky, kr, kr * 0.85, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Bottom bevel — dark strip
+  ctx.fillStyle = 'rgba(0,0,0,0.32)';
+  ctx.fillRect(platform.x, bodyTop + bodyH - 4, platform.width, 4);
+
+  // Edge profiles — wavy rounded (front + back)
+  const frontPts = wavyDown(platform.x, platform.width, cF, rng, { bumps: 4, ampMin: 2, ampMax: 4, valleyBase: 0.3 });
+  const backPts = backWavyUp(platform.x, platform.width, cB, sp, rng, { bumps: 3, ampMin: 2, ampMax: 3.5 });
+
+  // Cap — mossy green with scattered tufts
+  drawPlatformCap(ctx, platform, frontPts, backPts, {
+    capColor: '#5a8a3a',
+    capLight: 'rgba(240,255,200,0.18)',
+    drawCapTexture: (ctx2, capFront, _capBack, skew) => {
+      // Mossy tufts — small arc blobs in 3 greens, ~1 per 10px of width
+      const n = Math.max(2, Math.floor(platform.width / 10));
+      for (let i = 0; i < n; i++) {
+        const u = (i + 0.3 + rng() * 0.4) / n;
+        const v = 0.15 + rng() * 0.7;
+        const tx = platform.x + u * platform.width + v * skew;
+        const ty = capFront - v * CAP_DEPTH;
+        ctx2.fillStyle = MOSS_TUFT_COLORS[Math.floor(rng() * MOSS_TUFT_COLORS.length)];
+        const r = 0.9 + rng() * 0.6;
+        ctx2.beginPath();
+        ctx2.arc(tx, ty, r, 0, Math.PI * 2);
+        ctx2.fill();
+      }
+    },
+  });
+}
 
 export const treetops: ArenaPack = {
   // ---- Identity ----
@@ -75,52 +177,6 @@ export const treetops: ArenaPack = {
     groundBodyColor: '#4A3018',
     groundTopColor: '#6A4A28',
     drawMoss: true,
-    customDraw: (ctx, x, y, w, h, isGround) => {
-      if (isGround) {
-        // Thick branch base -- this is the "danger" zone at bottom
-        ctx.fillStyle = '#2A1A0A';
-        ctx.fillRect(x, y + 3, w, h - 3);
-        ctx.fillStyle = '#4A3018';
-        ctx.fillRect(x, y, w, 4);
-      } else {
-        // Branch platform -- organic shapes
-        ctx.fillStyle = '#5A3A20';
-        // Main branch body
-        ctx.beginPath();
-        ctx.moveTo(x - 5, y + h);
-        ctx.quadraticCurveTo(x + w * 0.2, y - 2, x + w * 0.5, y);
-        ctx.quadraticCurveTo(x + w * 0.8, y - 1, x + w + 5, y + h);
-        ctx.lineTo(x + w + 3, y + h + 3);
-        ctx.lineTo(x - 3, y + h + 3);
-        ctx.closePath();
-        ctx.fill();
-        // Bark texture on top
-        ctx.fillStyle = '#7A5A30';
-        ctx.fillRect(x + 3, y, w - 6, 3);
-        // Moss patches
-        ctx.fillStyle = '#4A8A3A';
-        ctx.globalAlpha = 0.6;
-        for (let mx = x + 8; mx < x + w - 8; mx += 20 + Math.random() * 15) {
-          ctx.beginPath();
-          ctx.ellipse(mx, y, 6, 3, 0, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.globalAlpha = 1;
-        // Bark detail
-        ctx.strokeStyle = '#4A2A10';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(x + w * 0.3, y + 4);
-        ctx.lineTo(x + w * 0.32, y + h - 2);
-        ctx.stroke();
-        if (w > 120) {
-          ctx.beginPath();
-          ctx.moveTo(x + w * 0.7, y + 3);
-          ctx.lineTo(x + w * 0.68, y + h - 1);
-          ctx.stroke();
-        }
-      }
-    },
   },
 
   // ---- Ambient systems ----
@@ -380,6 +436,10 @@ export const treetops: ArenaPack = {
     ctx.fillStyle = fogGrd;
     ctx.fillRect(0, 620, 1280, 100);
     ctx.restore();
+  },
+
+  drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => {
+    drawTreetopsPlatform(ctx, platform, isGround);
   },
 
   // ---- Gameplay modifiers ----

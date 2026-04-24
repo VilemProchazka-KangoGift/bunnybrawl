@@ -1,8 +1,193 @@
 import type { ArenaPack } from '../types';
-import type { Arena, WeatherParticle } from '../../types';
+import type { Arena, Platform, WeatherParticle } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { getFloatingPlatforms } from '../../themes/utils';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
+import {
+  CAP_DEPTH, mulberry32, seedFor,
+  capFrontY, capBackY, skewPx,
+  drawPlatformRightFace, drawPlatformCap,
+  subtleDown, backFlat,
+} from '../../themes/drawPrimitives';
+
+/**
+ * Cobweb in a body-front-face corner. (cornerX, cornerY) is the corner anchor;
+ * (dirX, dirY) (each ±1) is the diagonal direction the web fans into the body.
+ * Matches the haunted-graveyard web shape so both packs feel consistent.
+ */
+function drawCastleCobweb(
+  ctx: CanvasRenderingContext2D,
+  cornerX: number,
+  cornerY: number,
+  dirX: number,
+  dirY: number,
+): void {
+  const len = 13;
+  const baseAngle = Math.atan2(dirY, dirX);
+  const halfSpread = Math.PI / 4;
+  const strands = 5;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(230,230,230,0.55)';
+  ctx.lineWidth = 0.7;
+  const angles: number[] = [];
+  for (let i = 0; i < strands; i++) {
+    const a = baseAngle - halfSpread + (i / (strands - 1)) * (halfSpread * 2);
+    angles.push(a);
+    ctx.beginPath();
+    ctx.moveTo(cornerX, cornerY);
+    ctx.lineTo(cornerX + Math.cos(a) * len, cornerY + Math.sin(a) * len);
+    ctx.stroke();
+  }
+  for (let r = 1; r <= 3; r++) {
+    const radius = (r / 4) * len;
+    ctx.beginPath();
+    for (let i = 0; i < strands; i++) {
+      const x1 = cornerX + Math.cos(angles[i]) * radius;
+      const y1 = cornerY + Math.sin(angles[i]) * radius;
+      if (i === 0) ctx.moveTo(x1, y1);
+      else {
+        const a0 = angles[i - 1];
+        const x0 = cornerX + Math.cos(a0) * radius;
+        const y0 = cornerY + Math.sin(a0) * radius;
+        // Slight catenary sag toward the corner
+        const mx = (x0 + x1) * 0.5 + (cornerX - (x0 + x1) * 0.5) * 0.15;
+        const my = (y0 + y1) * 0.5 + (cornerY - (y0 + y1) * 0.5) * 0.15;
+        ctx.quadraticCurveTo(mx, my, x1, y1);
+      }
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawCastlePlatform(ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean): void {
+  const rng = mulberry32(seedFor(platform.x, platform.y));
+  const cF = capFrontY(platform);
+  const cB = capBackY(platform);
+  const bodyTop = cF;
+  const bodyH = platform.height - CAP_DEPTH / 2;
+  const sp = skewPx();
+
+  // Right face — dark stone shadow
+  drawPlatformRightFace(ctx, platform, '#2a2a2a');
+
+  // Body front face — gray stone gradient (light top → dark bottom)
+  const bodyGrad = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
+  bodyGrad.addColorStop(0, '#7a7a7a');
+  bodyGrad.addColorStop(1, '#3a3a3a');
+  ctx.fillStyle = bodyGrad;
+  ctx.fillRect(platform.x, bodyTop, platform.width, bodyH);
+
+  // Brick mortar pattern — staggered courses
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(platform.x, bodyTop, platform.width, bodyH);
+  ctx.clip();
+
+  const brickH = 12;
+  const brickW = 40;
+  ctx.fillStyle = 'rgba(42,42,42,0.5)';
+
+  // Horizontal mortar lines every ~12px
+  let row = 0;
+  for (let by = bodyTop + brickH; by < bodyTop + bodyH; by += brickH) {
+    ctx.fillRect(platform.x, by, platform.width, 1);
+    row++;
+  }
+
+  // Vertical mortar ticks — staggered. Odd rows offset by half-brick.
+  row = 0;
+  for (let by = bodyTop; by < bodyTop + bodyH; by += brickH) {
+    const offset = (row % 2 === 1) ? brickW * 0.5 : 0;
+    for (let bx = platform.x + offset; bx <= platform.x + platform.width; bx += brickW) {
+      ctx.fillRect(bx, by, 1, brickH);
+    }
+    row++;
+  }
+
+  // Weathering blotches — 3-4 darker ellipses
+  const blotchCount = 3 + Math.floor(rng() * 2);
+  ctx.fillStyle = 'rgba(40,40,40,0.3)';
+  for (let i = 0; i < blotchCount; i++) {
+    const bx = platform.x + rng() * platform.width;
+    const by = bodyTop + rng() * bodyH;
+    const brx = 4 + rng() * 6;
+    const bry = 2 + rng() * 4;
+    ctx.beginPath();
+    ctx.ellipse(bx, by, brx, bry, rng() * Math.PI, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+
+  // Edge profiles — subtle inward chip notches on front, flat horizon on back
+  const frontPts = subtleDown(platform.x, platform.width, cF, rng, { count: 2, amp: 1.2 });
+  const backPts = backFlat(platform.x, platform.width, cB, sp);
+
+  // Cap — weathered stone with worn speckles + brick-direction mortar
+  drawPlatformCap(ctx, platform, frontPts, backPts, {
+    capColor: '#8a8a8a',
+    capLight: 'rgba(255,255,255,0.12)',
+    drawCapTexture: (ctx2, capFront, capBack, skew) => {
+      // Worn darker speckles
+      ctx2.fillStyle = 'rgba(60,60,60,0.4)';
+      const speckleCount = 8 + Math.floor(rng() * 6);
+      for (let i = 0; i < speckleCount; i++) {
+        const t = rng();
+        const sx = platform.x + skew * (1 - t) + t * platform.width + (rng() - 0.5) * 4;
+        const sy = capBack + rng() * (capFront - capBack);
+        const sr = 0.4 + rng() * 0.7;
+        ctx2.beginPath();
+        ctx2.arc(sx, sy, sr, 0, Math.PI * 2);
+        ctx2.fill();
+      }
+
+      // Brick-direction mortar visible on top — two horizontal lines at 30% / 70% of cap depth
+      ctx2.fillStyle = 'rgba(42,42,42,0.55)';
+      const capDepthY = capFront - capBack;
+      for (const frac of [0.3, 0.7]) {
+        const ly = capBack + capDepthY * frac;
+        // Skewed line: starts at (platform.x + skew * (1-frac), ly), ends at (platform.x + width + skew * (1-frac), ly)
+        const lx0 = platform.x + skew * (1 - frac);
+        const lx1 = lx0 + platform.width;
+        ctx2.fillRect(lx0, ly, lx1 - lx0, 1);
+      }
+
+      // Vertical ticks matching body's pattern — staggered per row
+      let r = 0;
+      for (const frac of [0.3, 0.7]) {
+        const ly = capBack + capDepthY * frac;
+        const offset = (r % 2 === 1) ? brickW * 0.5 : 0;
+        const lx0 = platform.x + skew * (1 - frac);
+        for (let tx = lx0 + offset; tx <= lx0 + platform.width; tx += brickW) {
+          ctx2.fillRect(tx, ly - capDepthY * 0.2, 1, capDepthY * 0.4);
+        }
+        r++;
+      }
+    },
+  });
+
+  // Cobwebs in front-face corners — 45% chance per corner. Never both corners
+  // on the same vertical side (they'd overflow into each other on tall platforms);
+  // if both would fire, a coinflip drops one. Floating only, bodyH >= 10 only.
+  if (!isGround && bodyH >= 10) {
+    const bb = bodyTop + bodyH;
+    let leftTop = rng() < 0.45;
+    let leftBot = rng() < 0.45;
+    let rightTop = rng() < 0.45;
+    let rightBot = rng() < 0.45;
+    if (leftTop && leftBot) {
+      if (rng() < 0.5) leftBot = false; else leftTop = false;
+    }
+    if (rightTop && rightBot) {
+      if (rng() < 0.5) rightBot = false; else rightTop = false;
+    }
+    if (leftTop)  drawCastleCobweb(ctx, platform.x, bodyTop, +1, +1);
+    if (rightTop) drawCastleCobweb(ctx, platform.x + platform.width, bodyTop, -1, +1);
+    if (leftBot)  drawCastleCobweb(ctx, platform.x, bb, +1, -1);
+    if (rightBot) drawCastleCobweb(ctx, platform.x + platform.width, bb, -1, -1);
+  }
+}
 
 export const castle: ArenaPack = {
   // ---- Identity ----
@@ -80,45 +265,6 @@ export const castle: ArenaPack = {
     groundBodyColor: '#2A2A40',
     groundTopColor: '#4A4A5E',
     drawMoss: false,
-    customDraw: (ctx, x, y, w, h, isGround) => {
-      if (isGround) {
-        // Stone brick floor
-        ctx.fillStyle = '#2A2A40';
-        ctx.fillRect(x, y + 4, w, h - 4);
-        ctx.fillStyle = '#4A4A5E';
-        ctx.fillRect(x, y, w, 5);
-        // Brick pattern
-        ctx.strokeStyle = 'rgba(20, 20, 35, 0.5)';
-        ctx.lineWidth = 1;
-        const brickW = 32;
-        const brickH = 14;
-        for (let by = y + 6; by < y + h; by += brickH) {
-          const off = ((by - y) / brickH) % 2 === 0 ? 0 : brickW / 2;
-          for (let bx = x + off; bx < x + w; bx += brickW) {
-            ctx.strokeRect(bx, by, brickW, brickH);
-          }
-        }
-      } else {
-        // Stone brick platform
-        ctx.fillStyle = '#3A3A50';
-        ctx.fillRect(x, y + 3, w, h - 3);
-        ctx.fillStyle = '#5A5A70';
-        ctx.fillRect(x, y, w, 4);
-        // Brick lines
-        ctx.strokeStyle = 'rgba(20, 20, 40, 0.4)';
-        ctx.lineWidth = 1;
-        const brickW = 24;
-        for (let bx = x; bx < x + w; bx += brickW) {
-          ctx.beginPath();
-          ctx.moveTo(bx, y + 4);
-          ctx.lineTo(bx, y + h);
-          ctx.stroke();
-        }
-        // Bottom edge detail
-        ctx.fillStyle = '#2A2A3E';
-        ctx.fillRect(x, y + h - 2, w, 2);
-      }
-    },
   },
 
   // ---- Ambient systems ----
@@ -547,6 +693,10 @@ export const castle: ArenaPack = {
 
       ctx.restore();
     });
+  },
+
+  drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => {
+    drawCastlePlatform(ctx, platform, isGround);
   },
 
   drawWeatherParticle: (ctx: CanvasRenderingContext2D, w: WeatherParticle) => {

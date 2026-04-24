@@ -1,7 +1,96 @@
 import type { ArenaPack } from '../types';
+import type { Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
 import { getFloatingPlatforms } from '../../themes/utils';
+import {
+  CAP_DEPTH, mulberry32, seedFor,
+  capFrontY, capBackY, skewPx,
+  drawPlatformRightFace, drawPlatformCap,
+  candyDrips, backWavyUp,
+} from '../../themes/drawPrimitives';
+
+const SPRINKLE_COLORS = ['#FF69B4', '#FFD700', '#87CEEB', '#98FB98', '#DDA0DD', '#FF6347'];
+
+function drawCandyPlatform(ctx: CanvasRenderingContext2D, platform: Platform): void {
+  const rng = mulberry32(seedFor(platform.x, platform.y));
+  const cF = capFrontY(platform);
+  const cB = capBackY(platform);
+  const bodyTop = cF;
+  const bodyH = platform.height - CAP_DEPTH / 2;
+  const sp = skewPx();
+
+  // Right face — darker pink (shadow side)
+  drawPlatformRightFace(ctx, platform, '#D06A98');
+
+  // Body front face — pink layer cake gradient
+  const g = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
+  g.addColorStop(0, '#FFB6CF');
+  g.addColorStop(0.5, '#F590B0');
+  g.addColorStop(1, '#D76894');
+  ctx.fillStyle = g;
+  ctx.fillRect(platform.x, bodyTop, platform.width, bodyH);
+
+  // Horizontal layer line — cream filling stripe across the cake
+  if (bodyH >= 10) {
+    const layerY = bodyTop + bodyH * 0.55;
+    const layerH = Math.max(2, Math.min(4, bodyH * 0.15));
+    ctx.fillStyle = '#FFE8D4';
+    ctx.fillRect(platform.x, layerY, platform.width, layerH);
+    // Soft shadow below the cream stripe
+    ctx.fillStyle = 'rgba(160,70,100,0.25)';
+    ctx.fillRect(platform.x, layerY + layerH, platform.width, 1);
+  }
+
+  // Crumb texture — tiny dark and light flecks across the cake body
+  const crumbN = Math.max(3, Math.floor(platform.width / 9));
+  for (let i = 0; i < crumbN; i++) {
+    const px = platform.x + rng() * platform.width;
+    const py = bodyTop + 2 + rng() * Math.max(1, bodyH - 4);
+    const dark = rng() < 0.6;
+    ctx.fillStyle = dark ? 'rgba(120,50,80,0.45)' : 'rgba(255,220,230,0.65)';
+    ctx.beginPath();
+    ctx.arc(px, py, 0.7 + rng() * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Bottom bevel — deeper pink shadow at the cake's base
+  ctx.fillStyle = 'rgba(120,40,70,0.3)';
+  ctx.fillRect(platform.x, bodyTop + bodyH - 3, platform.width, 3);
+
+  // Edge profiles — sum-of-triangles drips on front (signature candy look); rounded sine on back.
+  const frontPts = candyDrips(platform.x, platform.width, cF, rng);
+  const backPts = backWavyUp(platform.x, platform.width, cB, sp, rng, { bumps: 3, ampMin: 2, ampMax: 3.5 });
+
+  // Cap — white frosting with rainbow sprinkles
+  drawPlatformCap(ctx, platform, frontPts, backPts, {
+    capColor: '#FFFDF7',
+    capLight: 'rgba(255,255,255,0.4)',
+    drawCapTexture: (ctx2, capFront, _capBack, skew) => {
+      // Sprinkles — short rotated capsule shapes in varied pastel colors
+      const n = Math.max(3, Math.floor(platform.width / 12));
+      for (let i = 0; i < n; i++) {
+        const u = (i + 0.3 + rng() * 0.4) / n;
+        const v = 0.15 + rng() * 0.7;
+        const sx = platform.x + u * platform.width + v * skew;
+        const sy = capFront - v * CAP_DEPTH;
+        const angle = rng() * Math.PI;
+        const color = SPRINKLE_COLORS[Math.floor(rng() * SPRINKLE_COLORS.length)];
+        ctx2.save();
+        ctx2.translate(sx, sy);
+        ctx2.rotate(angle);
+        ctx2.fillStyle = color;
+        // capsule: rect with rounded ends
+        ctx2.fillRect(-1.8, -0.55, 3.6, 1.1);
+        ctx2.beginPath();
+        ctx2.arc(-1.8, 0, 0.55, 0, Math.PI * 2);
+        ctx2.arc(1.8, 0, 0.55, 0, Math.PI * 2);
+        ctx2.fill();
+        ctx2.restore();
+      }
+    },
+  });
+}
 
 export const candyLand: ArenaPack = {
   // ---- Identity ----
@@ -69,63 +158,6 @@ export const candyLand: ArenaPack = {
     groundBodyColor: '#F5C49C',
     groundTopColor: '#FFD4B8',
     drawMoss: false,
-    customDraw: (ctx, x, y, w, h, isGround) => {
-      if (isGround) {
-        // Cookie/wafer ground
-        ctx.fillStyle = '#F5C49C';
-        ctx.fillRect(x, y + 5, w, h - 5);
-        ctx.fillStyle = '#FFD4B8';
-        ctx.fillRect(x, y, w, 6);
-        // Wafer pattern
-        ctx.strokeStyle = 'rgba(200, 150, 100, 0.3)';
-        ctx.lineWidth = 1;
-        for (let dx = 0; dx < w; dx += 20) {
-          ctx.beginPath();
-          ctx.moveTo(x + dx, y + 6);
-          ctx.lineTo(x + dx + 10, y + h);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.moveTo(x + dx + 10, y + 6);
-          ctx.lineTo(x + dx, y + h);
-          ctx.stroke();
-        }
-        // Frosting on top
-        ctx.fillStyle = '#FFFFFF';
-        ctx.globalAlpha = 0.5;
-        for (let fx = x; fx < x + w; fx += 30) {
-          ctx.beginPath();
-          ctx.arc(fx + 15, y + 2, 8, Math.PI, 0);
-          ctx.fill();
-        }
-        ctx.globalAlpha = 1;
-      } else {
-        // Wafer platform
-        ctx.fillStyle = '#FFD4A8';
-        ctx.fillRect(x, y + 3, w, h - 3);
-        ctx.fillStyle = '#FFE8CC';
-        ctx.fillRect(x, y, w, 4);
-        // Wafer cross pattern
-        ctx.strokeStyle = 'rgba(200, 160, 120, 0.3)';
-        ctx.lineWidth = 1;
-        for (let dx = 0; dx < w; dx += 14) {
-          ctx.beginPath();
-          ctx.moveTo(x + dx, y + 4);
-          ctx.lineTo(x + dx + 7, y + h);
-          ctx.stroke();
-        }
-        // Pink frosting drips
-        ctx.fillStyle = '#FF9ECE';
-        const dripCount = Math.floor(w / 25);
-        for (let d = 0; d < dripCount; d++) {
-          const dx = x + 10 + d * 25 + Math.random() * 10;
-          const dh = 6 + Math.random() * 8;
-          ctx.beginPath();
-          ctx.arc(dx, y + h + dh * 0.3, 3, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillRect(dx - 2, y + h - 1, 4, dh * 0.3);
-        }
-      }
-    },
   },
 
   // ---- Ambient systems ----
@@ -404,6 +436,10 @@ export const candyLand: ArenaPack = {
       ctx.fill();
     }
     ctx.restore();
+  },
+
+  drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
+    drawCandyPlatform(ctx, platform);
   },
 
   drawWeatherParticle: (ctx, w) => {
