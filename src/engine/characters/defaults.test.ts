@@ -142,9 +142,9 @@ describe('getAllCharacters', () => {
     registerBuiltinCharacters();
   });
 
-  it('returns at least 17 characters', () => {
+  it('returns at least 18 characters', () => {
     const chars = getAllCharacters();
-    expect(chars.length).toBeGreaterThanOrEqual(17);
+    expect(chars.length).toBeGreaterThanOrEqual(18);
   });
 
   it('each character has required fields', () => {

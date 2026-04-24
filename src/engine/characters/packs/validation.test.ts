@@ -2,10 +2,10 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { registerBuiltinCharacters } from '../builtin';
 import { getCharacterPack } from '../registry';
 
-// All 17 built-in character names
+// All 18 built-in character names
 const CHARACTER_NAMES = [
   'Bunny', 'Fox', 'Frog', 'Bear', 'Owl', 'Cat', 'Wolf', 'Panda',
-  'Pig', 'Cow', 'Goat', 'Horse', 'Sheep', 'Monkey', 'Tiger', 'Rhino', 'Hedgehog',
+  'Pig', 'Cow', 'Goat', 'Horse', 'Sheep', 'Monkey', 'Tiger', 'Rhino', 'Hedgehog', 'Chick',
 ];
 
 const VALID_IDLE_TRANSFORMS = ['none', 'headTilt', 'headFlip', 'headBob'];
@@ -15,7 +15,7 @@ beforeAll(() => {
 });
 
 describe('Character Pack Validation', () => {
-  it('all 17 character packs are registered', () => {
+  it('all 18 character packs are registered', () => {
     for (const name of CHARACTER_NAMES) {
       expect(getCharacterPack(name), `${name} should be registered`).toBeDefined();
     }

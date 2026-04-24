@@ -11,10 +11,10 @@ beforeAll(() => {
 describe('Builtin character registration', () => {
   const EXPECTED_CHARACTERS = [
     'Bunny', 'Fox', 'Frog', 'Bear', 'Owl', 'Cat', 'Wolf', 'Panda',
-    'Pig', 'Cow', 'Goat', 'Horse', 'Sheep', 'Monkey', 'Tiger', 'Rhino', 'Hedgehog',
+    'Pig', 'Cow', 'Goat', 'Horse', 'Sheep', 'Monkey', 'Tiger', 'Rhino', 'Hedgehog', 'Chick',
   ];
 
-  it('registers all 17 builtin characters', () => {
+  it('registers all 18 builtin characters', () => {
     for (const name of EXPECTED_CHARACTERS) {
       expect(getCharacterPack(name), `${name} should be registered`).toBeDefined();
     }
@@ -87,8 +87,8 @@ describe('Builtin character registration', () => {
     }
   });
 
-  it('getAllCharacterDefs returns at least 17 entries', () => {
+  it('getAllCharacterDefs returns at least 18 entries', () => {
     const defs = getAllCharacterDefs();
-    expect(defs.length).toBeGreaterThanOrEqual(17);
+    expect(defs.length).toBeGreaterThanOrEqual(18);
   });
 });
