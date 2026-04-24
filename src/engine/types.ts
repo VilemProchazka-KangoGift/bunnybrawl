@@ -17,6 +17,12 @@ export interface Platform {
   y: number;
   width: number;
   height: number;
+  /**
+   * Optional per-platform style tag. Used by arena packs whose drawPlatform
+   * function varies rendering per platform (e.g. rooftops: 'house' | 'hallway').
+   * Arenas that don't use style can ignore it.
+   */
+  style?: string;
 }
 
 export interface SpawnPoint {
