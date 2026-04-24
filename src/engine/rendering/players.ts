@@ -184,6 +184,16 @@ function drawCharacterSprite(
   const sqKey = Math.round(squashScale * 10);
   const cacheKey = `${char.name}_${state}_${animFrame}_${fastFalling ? 1 : 0}_${idleKey}_${sqKey}`;
 
+  // Idle action ctx transform — applied to main ctx, OUTSIDE the cached bitmap, so the
+  // animated transform doesn't get baked into the (1-bit-keyed) sprite cache entry.
+  const cx = x + w / 2;
+  const yOff = y;
+  const idleT = idleActionDuration > 0 ? 1 - (idleActionTimer / idleActionDuration) : 0;
+  const idleAnimAction = (idleAction >= 0 && state !== 'run' && state !== 'airborne')
+    ? getIdleAction(char.name, idleAction)
+    : null;
+  const colors = { color: char.color, darkColor: char.darkColor, lightColor: char.lightColor };
+
   const pad = 10;
   const cw = Math.ceil(w) + pad * 2;
   const ch = Math.ceil(h) + pad * 2;
@@ -194,7 +204,10 @@ function drawCharacterSprite(
     spriteCache.delete(cacheKey);
     spriteCache.set(cacheKey, cached);
     // Explicit logical dest size — cached bitmap is at scaled px dims; main ctx transform maps logical → pixel.
+    ctx.save();
+    if (idleAnimAction) idleAnimAction.apply(ctx, cx, yOff, w, h, idleT, colors, player);
     ctx.drawImage(cached, x - pad, y - pad, cw, ch);
+    ctx.restore();
     return;
   }
 
@@ -205,14 +218,17 @@ function drawCharacterSprite(
   sctx.scale(s, s);
   sctx.translate(-x + pad, -y + pad);
 
-  _drawCharacterSpriteImpl(sctx, x, y, w, h, char, state, animFrame, fastFalling, idleAction, idleActionTimer, idleActionDuration, squashScale, theme, player);
+  _drawCharacterSpriteImpl(sctx, x, y, w, h, char, state, animFrame, fastFalling, idleAction, idleActionTimer, idleActionDuration, squashScale, theme);
 
   if (spriteCache.size > _spriteCacheCap) {
     const first = spriteCache.keys().next().value;
     if (first !== undefined) spriteCache.delete(first);
   }
   spriteCache.set(cacheKey, cached);
+  ctx.save();
+  if (idleAnimAction) idleAnimAction.apply(ctx, cx, yOff, w, h, idleT, colors, player);
   ctx.drawImage(cached, x - pad, y - pad, cw, ch);
+  ctx.restore();
 }
 
 /** Core character drawing: sprite + highlight + eyes + legs. Shared by match and lobby. */
@@ -253,7 +269,6 @@ function _drawCharacterSpriteImpl(
   idleAction: number, idleActionTimer: number, idleActionDuration: number,
   squashScale: number,
   theme: ThemeConfig | undefined,
-  player: Player,
 ): void {
   const cx = x + w / 2;
   const isAirborne = state === 'airborne';
@@ -272,16 +287,11 @@ function _drawCharacterSpriteImpl(
     ctx.translate(-cx, -(yOff + h / 2));
   }
 
-  // Idle action: dispatch to the action's apply fn (ctx transform applied before sprite draw).
+  // Action transform is NOT applied here — it's applied to the main ctx in drawCharacterSprite,
+  // outside the sprite cache. Otherwise the per-frame transform would be baked into the cached bitmap.
   const isIdleAnimFlag = idleAction >= 0;
   const idleT = idleActionDuration > 0 ? 1 - (idleActionTimer / idleActionDuration) : 0;
   const colors = { color: char.color, darkColor: char.darkColor, lightColor: char.lightColor };
-  if (isIdleAnimFlag && state !== 'run' && state !== 'airborne') {
-    const action = getIdleAction(char.name, idleAction);
-    if (action) {
-      action.apply(ctx, cx, yOff, w, h, idleT, colors, player);
-    }
-  }
 
   drawCharacterCore(ctx, cx, yOff, w, h, char.name, state, animFrame, squashScale, colors, isIdleAnimFlag, idleT);
 
