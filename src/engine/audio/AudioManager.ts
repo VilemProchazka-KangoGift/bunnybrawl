@@ -134,6 +134,11 @@ class AudioManager {
     this.music.stopMusic();
   }
 
+  /** Preload an arena's music Howl. A later `playMusic(themeId)` will reuse it. */
+  preloadArena(themeId: string): Promise<void> {
+    return this.music.preloadArena(themeId);
+  }
+
   destroy(): void {
     if (this._visibilityHandler) {
       document.removeEventListener('visibilitychange', this._visibilityHandler);

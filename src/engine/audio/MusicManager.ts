@@ -86,6 +86,38 @@ export class MusicManager {
     this.musicHowl.play();
   }
 
+  /**
+   * Preload the arena music so a later `playMusic(themeId)` can start without
+   * fetch+decode latency. Resolves on load success or error (never rejects —
+   * a failed preload must not block the loading screen).
+   */
+  preloadArena(themeId: string): Promise<void> {
+    if (this.musicDisabled) return Promise.resolve();
+    if (this.musicHowl && this.musicThemeId === themeId) return Promise.resolve();
+    const mp3 = getArenaPack(themeId)?.musicFile;
+    if (!mp3) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      this.musicHowl?.unload();
+      const howl = new Howl({
+        src: [AUDIO_BASE + mp3],
+        volume: 0.22,
+        loop: true,
+        html5: true,
+        onload: () => {
+          this.musicHowl = howl;
+          this.musicThemeId = themeId;
+          resolve();
+        },
+        onloaderror: () => {
+          this.musicHowl = null;
+          this.musicThemeId = null;
+          resolve();
+        },
+      });
+      howl.load();
+    });
+  }
+
   stopMusic(): void {
     if (this.musicHowl) {
       this.musicHowl.stop();
