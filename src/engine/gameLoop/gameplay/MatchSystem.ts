@@ -1,4 +1,5 @@
 import type { MatchState, MatchSettings, PlayerSlot } from '../../types';
+import { isBotSlot } from '../../types';
 import type { ThemeConfig } from '../../themes/types';
 import type { GameplaySystem } from '../types';
 import { updateCrowdCheering, tickPeriodicAmbient } from '../cosmetics/sfx';
@@ -67,6 +68,32 @@ export class MatchSystem implements GameplaySystem {
     if (winner !== null) {
       this.state.slowMotion = SLOW_MO_DURATION;
       this.onMatchEnd(winner);
+      return;
+    }
+
+    // Host match-end guard: if every human left the match (disconnected) AND
+    // no bots remain, stop the simulation rather than let it run forever with
+    // no opponents. Online-only edge case: in local play, player.disconnected
+    // never flips. If the lone survivor is a human, award them the win; if
+    // only bots remain (unusual), end with no winner.
+    if (!this.resimulatingGetter() && !this.state.matchOver) {
+      let activeHumans = 0;
+      let activeBots = 0;
+      let lastActiveHuman: PlayerSlot | null = null;
+      for (const p of this.state.players) {
+        if (p.disconnected || !p.active) continue;
+        if (isBotSlot(p.id)) {
+          activeBots++;
+        } else {
+          activeHumans++;
+          lastActiveHuman = p.id;
+        }
+      }
+      if (activeHumans + activeBots === 0) {
+        this.onMatchEnd(null);
+      } else if (activeHumans === 1 && activeBots === 0) {
+        this.onMatchEnd(lastActiveHuman);
+      }
     }
   }
 

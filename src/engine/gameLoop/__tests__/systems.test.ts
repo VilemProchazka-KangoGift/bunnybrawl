@@ -778,4 +778,46 @@ describe('MatchSystem', () => {
     // No throw; internal maps reset
     expect(() => sys.fixedUpdate(1 / 60)).not.toThrow();
   });
+
+  // --- host match-end guard: no-humans-remaining ---
+
+  it('ends match as self-winner when only one human remains and no bots', () => {
+    const p1 = makePlayer({ id: 'P1', score: 0 });
+    const p2 = makePlayer({ id: 'P2', score: 0, disconnected: true });
+    const state = makeSystemState({ players: [p1, p2], countdown: 0 });
+    const { sys, onMatchEnd } = makeMatchSystem(state);
+    sys.init();
+    sys.fixedUpdate(1 / 60);
+    expect(onMatchEnd).toHaveBeenCalledWith('P1');
+  });
+
+  it('ends match with null winner when all players disconnected', () => {
+    const p1 = makePlayer({ id: 'P1', score: 0, disconnected: true });
+    const p2 = makePlayer({ id: 'P2', score: 0, disconnected: true });
+    const state = makeSystemState({ players: [p1, p2], countdown: 0 });
+    const { sys, onMatchEnd } = makeMatchSystem(state);
+    sys.init();
+    sys.fixedUpdate(1 / 60);
+    expect(onMatchEnd).toHaveBeenCalledWith(null);
+  });
+
+  it('does NOT end match when one human + one bot remain (match continues)', () => {
+    const p1 = makePlayer({ id: 'P1', score: 0 });
+    const b1 = makePlayer({ id: 'B1', score: 0 });
+    const state = makeSystemState({ players: [p1, b1], countdown: 0 });
+    const { sys, onMatchEnd } = makeMatchSystem(state);
+    sys.init();
+    sys.fixedUpdate(1 / 60);
+    expect(onMatchEnd).not.toHaveBeenCalled();
+  });
+
+  it('does NOT end match when two humans both active', () => {
+    const p1 = makePlayer({ id: 'P1', score: 0 });
+    const p2 = makePlayer({ id: 'P2', score: 0 });
+    const state = makeSystemState({ players: [p1, p2], countdown: 0 });
+    const { sys, onMatchEnd } = makeMatchSystem(state);
+    sys.init();
+    sys.fixedUpdate(1 / 60);
+    expect(onMatchEnd).not.toHaveBeenCalled();
+  });
 });
