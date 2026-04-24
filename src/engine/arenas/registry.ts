@@ -92,6 +92,7 @@ export function toThemeConfig(pack: ArenaPack): ThemeConfig {
     dayNight: pack.dayNight,
     drawFarBackground: pack.drawFarBackground,
     drawBackgroundNature: pack.drawBackgroundNature,
+    drawPlatform: pack.drawPlatform,
     drawForegroundNature: pack.drawForegroundNature,
     drawAnimatedBackground: pack.drawAnimatedBackground,
     drawWeatherParticle: pack.drawWeatherParticle,
