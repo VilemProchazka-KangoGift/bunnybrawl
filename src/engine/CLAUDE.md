@@ -41,6 +41,7 @@
 - Rayman-style nub legs: defaults are 6px wide × 4px tall × 2px foot. When `legH <= 5`, all filled shapes (rounded/tapered/wide) render as ellipses — quad curves are invisible at this scale. Animation amplitudes are halved vs. original long-leg values. Hip attachment at `h * 0.82`.
 - When scaling leg dimensions, scale animation amplitudes proportionally — large bounce/swing on tiny legs looks jittery. Also reduce squash expansion factors.
 - Owl claws use explicit `footWidth`/`footHeight` overrides to stay prominent at nub scale. The claw renderer's stroke width and splay angles matter more than leg size for visual identity.
+- Appendage anchors (tails, wings): use `cx - w * 0.45+`, not `cx - w * 0.3`. Body ellipse extends to `cx ± w * 0.4`, so closer anchors clip into the face. For `customEyes: true` packs, draw the appendage before the face circle/eyes so face details mask any residual overlap.
 
 ## Audio
 - Audio system decomposed into `audio/` directory: `AudioManager.ts` (play/stop/mute/pause), `MusicManager.ts` (menu + arena music), `soundRegistry.ts` (declarative SFX table), `synthesis/` (pure generators grouped by category). Old `audio.ts` is a re-export shim.

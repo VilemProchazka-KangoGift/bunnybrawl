@@ -5,7 +5,7 @@ import { generateMultiSegmentTone } from '../../audio/synthesis/core';
 
 const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, _state, _animFrame, _isIdleAnim, _idleT, colors) => {
   fillBodyGradient(ctx, { cx, cy: yOff + h * 0.52, rx: w * 0.4, ry: h * 0.4 }, colors);
-  // Curling tail (drawn before face so eyes/face cover any overlap)
+  // Curling tail
   ctx.strokeStyle = colors.color;
   ctx.lineWidth = 2.5;
   ctx.beginPath();
