@@ -36,7 +36,32 @@ export function botLobbyInput(bot: Player): InputState {
   return { left: false, right: true, jump, down: false };
 }
 
-export function wanderInput(): InputState {
+const AVOID_RADIUS_X = 50;
+const AVOID_RADIUS_Y = PLAYER_WIDTH * 1.2;
+
+export function wanderInput(npc: Player, others: Player[]): InputState {
+  const npcCx = npc.x + PLAYER_WIDTH / 2;
+  let nearestDx = 0;
+  let nearestAbs = AVOID_RADIUS_X;
+  for (const o of others) {
+    if (o === npc) continue;
+    if (o.splatTimer > 0) continue;
+    const dy = Math.abs(o.y - npc.y);
+    if (dy > AVOID_RADIUS_Y) continue;
+    const dx = (o.x + PLAYER_WIDTH / 2) - npcCx;
+    const abs = Math.abs(dx);
+    if (abs < nearestAbs) {
+      nearestAbs = abs;
+      nearestDx = dx;
+    }
+  }
+  if (nearestAbs < AVOID_RADIUS_X) {
+    let away = nearestDx < 0 ? 1 : nearestDx > 0 ? -1 : 0;
+    // Stable per-NPC tiebreak for exact overlap — character name is unique across extras.
+    if (away === 0) away = (npc.character.name.charCodeAt(0) & 1) === 0 ? 1 : -1;
+    return { left: away < 0, right: away > 0, jump: false, down: false };
+  }
+
   const left = Math.random() < 0.005;
   const right = Math.random() < 0.005;
   const jump = Math.random() < 0.005;

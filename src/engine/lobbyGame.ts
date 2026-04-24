@@ -208,7 +208,7 @@ export class LobbyGame {
     }
 
     for (const npc of this.extraChars) {
-      step(npc, wanderInput());
+      step(npc, wanderInput(npc, this._allLobby));
     }
 
     for (const bot of this.bots) {
