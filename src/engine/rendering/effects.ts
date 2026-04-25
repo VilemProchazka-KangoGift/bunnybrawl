@@ -1,8 +1,37 @@
 import type { MatchState } from '../types';
 import type { ThemeConfig } from '../themes/types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../constants';
+import { fastSin, fastCos } from '../fastMath';
 
 function lerpCh(a: number, b: number, t: number): number { return Math.round(a + (b - a) * t); }
+
+// Precomputed static star positions — i*K+J formulas were re-evaluated every
+// frame for 30 stars. Now they're frozen at module load.
+const STAR_COUNT = 30;
+const STAR_X = new Float32Array(STAR_COUNT);
+const STAR_Y = new Float32Array(STAR_COUNT);
+const STAR_SIZE = new Float32Array(STAR_COUNT);
+const STAR_PHASE = new Float32Array(STAR_COUNT); // i * 1.7 baked in
+{
+  const skyMaxY = CANVAS_HEIGHT * 0.35;
+  for (let i = 0; i < STAR_COUNT; i++) {
+    STAR_X[i] = (i * 137 + 83) % CANVAS_WIDTH;
+    STAR_Y[i] = (i * 97 + 41) % skyMaxY;
+    STAR_SIZE[i] = 1 + (i % 3) * 0.5;
+    STAR_PHASE[i] = i * 1.7;
+  }
+}
+
+const FIREFLY_COUNT = 8;
+const FIREFLY_BASE_X = new Float32Array(FIREFLY_COUNT);
+const FIREFLY_BASE_Y = new Float32Array(FIREFLY_COUNT);
+{
+  const skyHeight = CANVAS_HEIGHT * 0.6;
+  for (let i = 0; i < FIREFLY_COUNT; i++) {
+    FIREFLY_BASE_X[i] = (i * 173 + 57) % CANVAS_WIDTH;
+    FIREFLY_BASE_Y[i] = 100 + ((i * 211 + 29) % skyHeight);
+  }
+}
 
 export function drawDayNightCycle(
   ctx: CanvasRenderingContext2D,
@@ -11,6 +40,9 @@ export function drawDayNightCycle(
   theme: ThemeConfig,
   frameTime: number,
 ): void {
+  // Wrap in save/restore so per-star/per-firefly globalAlpha mutations don't
+  // leak to subsequent renderFrame stages. Entry globalAlpha is preserved.
+  ctx.save();
   // dayPhase: 0 = noon, 0.5 = midnight, 1.0 = noon again
   // Use cosine so darkness peaks smoothly at 0.5
   const nightIntensity = Math.max(0, (1 - Math.cos(dayPhase * Math.PI * 2)) / 2);
@@ -51,20 +83,22 @@ export function drawDayNightCycle(
       ctx.arc(sunX, sunY, 9, 0, Math.PI * 2);
       ctx.fill();
 
-      // Light rays from sun (m) -- during daytime, warmed during sunset
+      // Light rays from sun -- combine 4 rays into single path, single fill
+      // (same color across all rays).
       if (nightIntensity < 0.3) {
         const rayAlpha = 0.04 * (1 - nightIntensity / 0.3);
         ctx.fillStyle = `rgba(255, ${lerpCh(215,60,sunRedshift)}, ${lerpCh(100,15,sunRedshift)}, ${rayAlpha})`;
+        ctx.beginPath();
         for (let r = 0; r < 4; r++) {
           const angle = -0.3 + r * 0.2;
           const rayW = 60 + r * 20;
-          ctx.beginPath();
+          const rayDx = fastCos(angle) * 400;
           ctx.moveTo(sunX, sunY);
-          ctx.lineTo(sunX + Math.cos(angle) * 400 - rayW / 2, CANVAS_HEIGHT);
-          ctx.lineTo(sunX + Math.cos(angle) * 400 + rayW / 2, CANVAS_HEIGHT);
+          ctx.lineTo(sunX + rayDx - rayW / 2, CANVAS_HEIGHT);
+          ctx.lineTo(sunX + rayDx + rayW / 2, CANVAS_HEIGHT);
           ctx.closePath();
-          ctx.fill();
         }
+        ctx.fill();
       }
     }
   }
@@ -127,63 +161,70 @@ export function drawDayNightCycle(
     }
   }
 
-  // Stars
+  // Stars — set fillStyle once, modulate per-star alpha via globalAlpha.
+  // 30 fills/frame is unavoidable (per-star twinkle), but eliminating the
+  // per-star rgba template literal allocation is a clear win.
   if (nightIntensity > 0.25) {
     const starAlpha = Math.min((nightIntensity - 0.25) / 0.5, 1) * 0.8;
-    for (let i = 0; i < 30; i++) {
-      const sx = ((i * 137 + 83) % CANVAS_WIDTH);
-      const sy = ((i * 97 + 41) % (CANVAS_HEIGHT * 0.35));
-      const size = 1 + (i % 3) * 0.5;
-      const twinkle = Math.sin(frameTime / 500 + i * 1.7) * 0.3 + 0.7;
-      const a = starAlpha * twinkle;
-      ctx.fillStyle = `rgba(255,255,255,${a})`;
+    const twinkleT = frameTime / 500;
+    ctx.fillStyle = '#FFFFFF';
+    for (let i = 0; i < STAR_COUNT; i++) {
+      const twinkle = fastSin(twinkleT + STAR_PHASE[i]) * 0.3 + 0.7;
+      ctx.globalAlpha = starAlpha * twinkle;
       ctx.beginPath();
-      ctx.arc(sx, sy, size, 0, Math.PI * 2);
+      ctx.arc(STAR_X[i], STAR_Y[i], STAR_SIZE[i], 0, Math.PI * 2);
       ctx.fill();
     }
   }
 
-  // Fireflies (conditional on theme)
+  // Fireflies (conditional on theme) — same trick: fillStyle set once per
+  // ring, alpha via globalAlpha.
   if (nightIntensity > 0.4 && theme.dayNight.showFireflies) {
     const fireflyAlpha = Math.min((nightIntensity - 0.4) / 0.4, 1) * 0.7;
     const now = frameTime / 1000;
-    for (let i = 0; i < 8; i++) {
-      const baseX = ((i * 173 + 57) % CANVAS_WIDTH);
-      const baseY = 100 + ((i * 211 + 29) % (CANVAS_HEIGHT * 0.6));
-      const fx = baseX + Math.sin(now * 0.5 + i * 2.3) * 30;
-      const fy = baseY + Math.cos(now * 0.4 + i * 1.7) * 20;
-      const pulse = Math.sin(now * 2 + i * 1.1) * 0.3 + 0.7;
-      const a1 = fireflyAlpha * pulse * 0.3;
-      ctx.fillStyle = `rgba(170,255,68,${a1})`;
+    // Glow pass (outer halo)
+    ctx.fillStyle = '#AAFF44';
+    for (let i = 0; i < FIREFLY_COUNT; i++) {
+      const fx = FIREFLY_BASE_X[i] + fastSin(now * 0.5 + i * 2.3) * 30;
+      const fy = FIREFLY_BASE_Y[i] + fastCos(now * 0.4 + i * 1.7) * 20;
+      const pulse = fastSin(now * 2 + i * 1.1) * 0.3 + 0.7;
+      ctx.globalAlpha = fireflyAlpha * pulse * 0.3;
       ctx.beginPath();
       ctx.arc(fx, fy, 6, 0, Math.PI * 2);
       ctx.fill();
-      const a2 = fireflyAlpha * pulse;
-      ctx.fillStyle = `rgba(204,255,102,${a2})`;
+    }
+    // Body pass (bright core)
+    ctx.fillStyle = '#CCFF66';
+    for (let i = 0; i < FIREFLY_COUNT; i++) {
+      const fx = FIREFLY_BASE_X[i] + fastSin(now * 0.5 + i * 2.3) * 30;
+      const fy = FIREFLY_BASE_Y[i] + fastCos(now * 0.4 + i * 1.7) * 20;
+      const pulse = fastSin(now * 2 + i * 1.1) * 0.3 + 0.7;
+      ctx.globalAlpha = fireflyAlpha * pulse;
       ctx.beginPath();
       ctx.arc(fx, fy, 2, 0, Math.PI * 2);
       ctx.fill();
     }
   }
 
-  // Shooting stars (n)
+  // Shooting stars
   if (matchState?.shootingStars) {
     ctx.lineWidth = 2;
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.fillStyle = '#FFFFFF';
     for (const star of matchState.shootingStars) {
       const alpha = Math.min(1, star.life * 2);
-      // Tail: line from current pos back along velocity
       const tailLen = star.tailLen;
       const angle = Math.atan2(star.vy, star.vx);
-      ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.6})`;
+      ctx.globalAlpha = alpha * 0.6;
       ctx.beginPath();
       ctx.moveTo(star.x, star.y);
-      ctx.lineTo(star.x - Math.cos(angle) * tailLen, star.y - Math.sin(angle) * tailLen);
+      ctx.lineTo(star.x - fastCos(angle) * tailLen, star.y - fastSin(angle) * tailLen);
       ctx.stroke();
-      // Head: bright dot
-      ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+      ctx.globalAlpha = alpha;
       ctx.beginPath();
       ctx.arc(star.x, star.y, 2, 0, Math.PI * 2);
       ctx.fill();
     }
   }
+  ctx.restore();
 }
