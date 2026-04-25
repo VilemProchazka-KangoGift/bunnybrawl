@@ -811,6 +811,31 @@ describe('StompSystem', () => {
     expect(stomper.hitstopTimer).toBeGreaterThan(0);
   });
 
+  it('increments totalKills on each stomp (uncapped, distinct from trimmed killFeed)', () => {
+    // VictoryScreen "Total Splats" reads state.totalKills; killFeed is trimmed
+    // to last 10. Verify the counter advances by one stomp event regardless of
+    // whether the killFeed slice wraps.
+    const victim = makePlayer({
+      id: 'P1',
+      x: 640, y: 600,
+      state: 'idle',
+      score: 0,
+      invincibleTimer: 0,
+      splatTimer: 0,
+    });
+    const stomper = makePlayer({
+      id: 'P2',
+      x: 640, y: victim.y - victim.height + 2,
+      vy: 200,
+      state: 'airborne',
+    });
+    const state = makeSystemState({ players: [victim, stomper], countdown: 0, totalKills: 0 });
+    const sys = makeStompSystem(state);
+    sys.init();
+    sys.fixedUpdate(1 / 60);
+    expect(state.totalKills).toBe(1);
+  });
+
   it('cleanup() is a no-op', () => {
     const state = makeSystemState();
     const sys = makeStompSystem(state);

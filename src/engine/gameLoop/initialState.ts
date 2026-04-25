@@ -137,6 +137,7 @@ export function createInitialMatchState(
     players,
     phase: 'loading',
     killFeed: [],
+    totalKills: 0,
     timeElapsed: 0, matchOver: false, winner: null,
     carrots: [],
     carrotTimer: settings.mods.carrotChase ? CARROT_CHASE_FIRST_SPAWN_DELAY : CARROT_FIRST_SPAWN_DELAY,

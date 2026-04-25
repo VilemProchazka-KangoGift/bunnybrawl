@@ -147,6 +147,7 @@ function extrapolateSnapshot(snap: AuthSnapshot, dt: number): AuthSnapshot {
   r.thorns = snap.thorns;
   r.geyserStates = snap.geyserStates;
   r.killFeed = snap.killFeed;
+  r.totalKills = snap.totalKills;
   r.scoreAnimations = snap.scoreAnimations;
   r.phase = snap.phase;
   r.matchOver = snap.matchOver;
@@ -203,6 +204,7 @@ function interpolateSnapshots(a: AuthSnapshot, b: AuthSnapshot, t: number): Auth
   r.thorns = b.thorns;
   r.geyserStates = b.geyserStates;
   r.killFeed = b.killFeed;
+  r.totalKills = b.totalKills;
   r.scoreAnimations = b.scoreAnimations;
   r.phase = b.phase;
   r.matchOver = b.matchOver;
@@ -288,6 +290,7 @@ export function applySnapshotToState(
   state.screenFlash = snap.screenFlash;
   state.hitstopZoom = snap.hitstopZoom;
   state.killFeed = snap.killFeed;
+  state.totalKills = snap.totalKills;
   state.scoreAnimations = snap.scoreAnimations;
 
   syncArray(state.carrots, snap.carrots, (s) => ({ x: s.x, y: s.y, active: s.active, spawnTime: 0 }), (dst, src) => {

@@ -276,7 +276,7 @@ export function VictoryScreen() {
 
               <div className="match-stats">
                 <span>{t('victory_match_time')}: {formatTime(lastMatchState?.timeElapsed ?? 0)}</span>
-                <span>{t('victory_total_splats')}: {lastMatchState?.killFeed.length ?? 0}</span>
+                <span>{t('victory_total_splats')}: {lastMatchState?.totalKills ?? 0}</span>
               </div>
             </div>
 

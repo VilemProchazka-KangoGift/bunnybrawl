@@ -71,6 +71,7 @@ export function makeState(overrides: Partial<MatchState> = {}): MatchState {
     players: [],
     phase: 'playing',
     killFeed: [],
+    totalKills: 0,
     timeElapsed: 0,
     matchOver: false,
     winner: null,

@@ -45,6 +45,7 @@ export function processStompsAndCollisions(
   }
   if (killFeedEntries.length > 0) {
     state.killFeed.push(...killFeedEntries);
+    state.totalKills += killFeedEntries.length;
     const excess = state.killFeed.length - 10;
     if (excess > 0) {
       state.killFeed.copyWithin(0, excess);

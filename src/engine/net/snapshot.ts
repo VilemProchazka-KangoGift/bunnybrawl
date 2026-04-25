@@ -56,6 +56,10 @@ export interface AuthSnapshot {
   lavaRocks: Array<{ x: number; y: number; vy: number; active: boolean }>;
   geyserStates: Array<{ timer: number; active: boolean; activeTimer: number }>;
   killFeed: KillFeedEntry[];
+  /** Match-wide stomp counter (uncapped; killFeed is the last-10 HUD slice).
+   *  Source of truth for VictoryScreen "Total Splats". Encoded as Uint16 —
+   *  caps at 65535 stomps which is far beyond any practical match length. */
+  totalKills: number;
   timeElapsed: number;
   countdown: number;
   dayPhase: number;
@@ -268,6 +272,11 @@ export function encodeSnapshot(snap: AuthSnapshot): { buffer: ArrayBuffer; lengt
     ENCODE_VIEW.setFloat32(o, kf.timestamp, true); o += 4;
   }
 
+  // Match-wide stomp counter — separate from the trimmed killFeed slice above
+  // so guests can show an accurate "Total Splats" count without us having to
+  // wire all kills onto the wire.
+  ENCODE_VIEW.setUint16(o, Math.min(snap.totalKills, 65535), true); o += 2;
+
   // Global state
   ENCODE_VIEW.setFloat32(o, snap.timeElapsed, true); o += 4;
   ENCODE_VIEW.setFloat32(o, snap.countdown, true); o += 4;
@@ -458,6 +467,9 @@ export function decodeSnapshot(buf: ArrayBuffer): AuthSnapshot | null {
     killFeed.push({ attacker, victim, timestamp });
   }
 
+  // Match-wide stomp counter (Uint16) — accurate "Total Splats" for guests.
+  const totalKills = view.getUint16(o, true); o += 2;
+
   // Global state
   const timeElapsed = view.getFloat32(o, true); o += 4;
   const countdown = view.getFloat32(o, true); o += 4;
@@ -498,6 +510,7 @@ export function decodeSnapshot(buf: ArrayBuffer): AuthSnapshot | null {
     lavaRocks,
     geyserStates,
     killFeed,
+    totalKills,
     timeElapsed,
     countdown,
     dayPhase,
@@ -569,6 +582,7 @@ export function takeAuthSnapshot(frame: number, state: MatchState): AuthSnapshot
       timer: gs.timer, active: gs.active, activeTimer: gs.activeTimer,
     })),
     killFeed: state.killFeed,
+    totalKills: state.totalKills,
     timeElapsed: state.timeElapsed,
     countdown: state.countdown,
     dayPhase: state.dayPhase,

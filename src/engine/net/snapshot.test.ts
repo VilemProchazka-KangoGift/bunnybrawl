@@ -214,6 +214,25 @@ describe('snapshot encode/decode round-trip', () => {
     expect(decodeSnapshot(buf)).toBeNull();
   });
 
+  it('round-trips totalKills (the source of truth for VictoryScreen total-splats)', () => {
+    // Counter must survive the wire — host shows trimmed killFeed (10),
+    // guest shows trimmed killFeed (5), but VictoryScreen reads totalKills
+    // which should equal the actual stomp count regardless of trimming.
+    const snap = makeTestSnapshot(1);
+    snap.totalKills = 27;
+    const { buffer, length } = encodeSnapshot(snap);
+    const decoded = decodeSnapshot(buffer.slice(0, length));
+    expect(decoded!.totalKills).toBe(27);
+  });
+
+  it('clamps totalKills to Uint16 max on encode', () => {
+    const snap = makeTestSnapshot(1);
+    snap.totalKills = 70000; // beyond Uint16
+    const { buffer, length } = encodeSnapshot(snap);
+    const decoded = decodeSnapshot(buffer.slice(0, length));
+    expect(decoded!.totalKills).toBe(65535);
+  });
+
   it('encodeSnapshot returns shared buffer (caller must copy)', () => {
     const snap1 = makeTestSnapshot(1);
     const snap2 = makeTestSnapshot(2);
