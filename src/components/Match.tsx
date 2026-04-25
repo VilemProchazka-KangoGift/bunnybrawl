@@ -9,6 +9,8 @@ import { getArena, listArenaPacks } from '../engine/arenas';
 import { ArenaGrid } from './ArenaGrid';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
 import { isTouchPrimary } from '../engine/touchDetect';
+import { perfTrace } from '../engine/perfTrace';
+import * as fpsCounter from '../engine/fpsCounter';
 import { TouchOverlay } from './TouchOverlay';
 import type { TouchInputManager } from '../engine/touchInput';
 import type { PlayerSlot, MatchPhase } from '../engine/types';
@@ -273,6 +275,9 @@ export function Match() {
         setMatchResult(winner, state);
       }, 1500);
     };
+
+    window.__perfTrace = perfTrace;
+    window.__fpsCounter = fpsCounter;
 
     if (online.isOnline) {
       // Network mode

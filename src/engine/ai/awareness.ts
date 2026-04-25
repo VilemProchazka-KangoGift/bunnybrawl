@@ -3,6 +3,7 @@ import { isBotSlot } from '../types';
 import type { AwarenessSnapshot } from './types';
 import { PLAYER_WIDTH, PLAYER_HEIGHT, CANVAS_WIDTH } from '../constants';
 import { getArenaNav } from '../arenas/registry';
+import { perfTrace } from '../perfTrace';
 
 /** Shortest horizontal distance accounting for screen wrap */
 function wrapDx(dx: number): number {
@@ -53,6 +54,23 @@ function nearestPlatformIdx(x: number, y: number, arena: Arena): number {
 }
 
 export function buildAwareness(
+  self: Player,
+  state: MatchState,
+  arena: Arena,
+  awarenessRadius: number,
+  pathfindingDepth: number = 0,
+  preferSafePath: boolean = false,
+  mirrorNav: boolean = false,
+): AwarenessSnapshot {
+  const _t = perfTrace.begin('awareness');
+  try {
+    return _buildAwarenessImpl(self, state, arena, awarenessRadius, pathfindingDepth, preferSafePath, mirrorNav);
+  } finally {
+    perfTrace.end('awareness', _t);
+  }
+}
+
+function _buildAwarenessImpl(
   self: Player,
   state: MatchState,
   arena: Arena,

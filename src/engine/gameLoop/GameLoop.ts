@@ -29,6 +29,7 @@ import {
 import { AIController } from '../ai';
 import { computeEffectivePhysics, createInitialPlayers, createInitialMatchState } from './initialState';
 import { debugFlags, toggleNavDebug, toggleNetDebug, toggleFpsDebug } from '../debugFlags';
+import { perfTrace } from '../perfTrace';
 import { sampleFps } from '../fpsCounter';
 import type { BotNavDebugState } from '../navDebugOverlay';
 import type { NetDebugStats } from '../net/core/debugOverlay';
@@ -547,21 +548,26 @@ export class GameLoop {
   /** Half-rate wrapper around cosmeticStep. Tests call cosmeticStep directly
    *  so assertions run at the un-throttled per-tick rate. */
   tickCosmetic(dt: number): void {
-    // Defend against pathological dt: negative (clock-warp), NaN, Infinity.
-    // NaN poisoning here would silently kill all cosmetic updates for the
-    // rest of the session — every subsequent comparison returns false.
-    if (!Number.isFinite(dt) || dt <= 0) return;
-    this._cosmeticLead += dt;
-    if (this._cosmeticLead < COSMETIC_INTERVAL) return;
-    const stepDt = Math.min(this._cosmeticLead, COSMETIC_MAX_STEP);
-    // Subtract the consumed dt instead of zeroing — after a long tab-switch,
-    // _cosmeticLead can be 5+ seconds; clamping the step but discarding the
-    // residual means accumulators bound to elapsed time stutter. We still
-    // cap the catch-up at COSMETIC_MAX_STEP per tick, but the residual is
-    // drained on subsequent frames at most ~1s/frame (60fps × 4 ticks) so
-    // we recover within ~16 frames after a big gap rather than dropping it.
-    this._cosmeticLead = Math.max(0, this._cosmeticLead - stepDt);
-    this.cosmeticStep(stepDt);
+    const _t = perfTrace.begin('tickCosmetic');
+    try {
+      // Defend against pathological dt: negative (clock-warp), NaN, Infinity.
+      // NaN poisoning here would silently kill all cosmetic updates for the
+      // rest of the session — every subsequent comparison returns false.
+      if (!Number.isFinite(dt) || dt <= 0) return;
+      this._cosmeticLead += dt;
+      if (this._cosmeticLead < COSMETIC_INTERVAL) return;
+      const stepDt = Math.min(this._cosmeticLead, COSMETIC_MAX_STEP);
+      // Subtract the consumed dt instead of zeroing — after a long tab-switch,
+      // _cosmeticLead can be 5+ seconds; clamping the step but discarding the
+      // residual means accumulators bound to elapsed time stutter. We still
+      // cap the catch-up at COSMETIC_MAX_STEP per tick, but the residual is
+      // drained on subsequent frames at most ~1s/frame (60fps × 4 ticks) so
+      // we recover within ~16 frames after a big gap rather than dropping it.
+      this._cosmeticLead = Math.max(0, this._cosmeticLead - stepDt);
+      this.cosmeticStep(stepDt);
+    } finally {
+      perfTrace.end('tickCosmetic', _t);
+    }
   }
 
   /** Re-prime cosmetic baselines (prevCosmeticState + spring map) against the
@@ -585,32 +591,37 @@ export class GameLoop {
   /** Tick all cosmetic-only systems (particles, environment, visual decays).
    *  Called once per frame from local loop(), host loop, and guest loop. */
   cosmeticStep(dt: number): void {
-    // Skip cosmetic updates during loading — snapshots received here would
-    // otherwise trigger spurious transition sounds as prev-state vs. snapshot-state
-    // flips on the guest.
-    if (this.state.phase === 'loading') return;
+    const _t = perfTrace.begin('cosmeticStep');
+    try {
+      // Skip cosmetic updates during loading — snapshots received here would
+      // otherwise trigger spurious transition sounds as prev-state vs. snapshot-state
+      // flips on the guest.
+      if (this.state.phase === 'loading') return;
 
-    // --- Per-player cosmetic systems ---
-    this.playerTransitionSystem.cosmeticUpdate(dt);
-    this.playerCosmeticSystem.cosmeticUpdate(dt);
+      // --- Per-player cosmetic systems ---
+      this.playerTransitionSystem.cosmeticUpdate(dt);
+      this.playerCosmeticSystem.cosmeticUpdate(dt);
 
-    // --- Entity transition detection ---
-    this.entityTransitionSystem.cosmeticUpdate(dt);
+      // --- Entity transition detection ---
+      this.entityTransitionSystem.cosmeticUpdate(dt);
 
-    // NOTE: The following minor effects remain in fixedUpdate (host-only, acceptable):
-    // - crouch sound (depends on input.down + wasCrouching local var)
-    // - zero_g loop (depends on zone occupancy check + start/stop)
-    // - splash sound (depends on landing-in-waterfall-zone detection)
-    // - pigeon_scatter (depends on proximity check with pigeon flocks)
-    // - crowd cheering (depends on score proximity to kill limit + volume ramp)
-    // - periodic ambient sounds (depends on timer-based random intervals)
-    // - collision particles for thorn/hazard/ghost/lava rock (depend on exact collision position)
+      // NOTE: The following minor effects remain in fixedUpdate (host-only, acceptable):
+      // - crouch sound (depends on input.down + wasCrouching local var)
+      // - zero_g loop (depends on zone occupancy check + start/stop)
+      // - splash sound (depends on landing-in-waterfall-zone detection)
+      // - pigeon_scatter (depends on proximity check with pigeon flocks)
+      // - crowd cheering (depends on score proximity to kill limit + volume ramp)
+      // - periodic ambient sounds (depends on timer-based random intervals)
+      // - collision particles for thorn/hazard/ghost/lava rock (depend on exact collision position)
 
-    // --- Particle systems ---
-    this.particleSystem.cosmeticUpdate(dt);
+      // --- Particle systems ---
+      this.particleSystem.cosmeticUpdate(dt);
 
-    // --- Environment ---
-    this.environmentSystem.cosmeticUpdate(dt);
+      // --- Environment ---
+      this.environmentSystem.cosmeticUpdate(dt);
+    } finally {
+      perfTrace.end('cosmeticStep', _t);
+    }
   }
 
   // Public VFX methods removed — cosmeticStep() calls private methods directly.
@@ -721,6 +732,8 @@ export class GameLoop {
 
   /** Run one fixed-timestep simulation tick. Public for rollback engine. */
   fixedUpdate(dt: number, networkInputs?: Map<string, InputState>): void {
+    const _t = perfTrace.begin('fixedUpdate');
+    try {
     this._networkInputs = networkInputs;
     if (this.stopped || this.state.matchOver) return;
     if (this.state.phase === 'loading') return;
@@ -974,6 +987,9 @@ export class GameLoop {
 
     // Crowd cheering, periodic ambient sounds, match end check
     this.matchSystem.fixedUpdate(dt);
+    } finally {
+      perfTrace.end('fixedUpdate', _t);
+    }
   }
 
   private getPlayerInput(player: Player): InputState {

@@ -31,6 +31,20 @@ export function resetFpsCounter(): void {
   lastSampleTime = 0;
 }
 
+/** Dump the raw frame-time samples (newest-first) for E2E perf collection.
+ *  Returns up to MAX_SAMPLES dt values in milliseconds, plus the
+ *  performance.now() timestamp of the most recent sample. The timestamp lets
+ *  consumers reconstruct absolute (page-time) timestamps per frame so they
+ *  align with longTask / CDP timelines. */
+export function dumpSamples(): { dts: number[]; count: number; lastSampleTime: number } {
+  const dts: number[] = [];
+  for (let i = 0; i < total; i++) {
+    const idx = (writeIdx - 1 - i + MAX_SAMPLES) % MAX_SAMPLES;
+    dts.push(frameDts[idx]);
+  }
+  return { dts, count: total, lastSampleTime };
+}
+
 interface FpsStats {
   current: number;
   avg: number;
@@ -77,6 +91,11 @@ function colorForFps(fps: number): string {
   return '#FF6B6B';
 }
 
+// Per-character width for `bold 12px monospace`, measured once on first
+// draw. Lets us replace per-frame ctx.measureText calls (3–7% of perf
+// profiles when fpsCounter is on) with `text.length * _charWidth`.
+let _charWidth = 0;
+
 export function drawFpsCounter(ctx: CanvasRenderingContext2D, canvasWidth: number): void {
   if (!debugFlags.fpsEnabled) return;
   const stats = computeStats();
@@ -86,10 +105,12 @@ export function drawFpsCounter(ctx: CanvasRenderingContext2D, canvasWidth: numbe
   ctx.font = 'bold 12px monospace';
   ctx.textBaseline = 'top';
 
+  if (_charWidth === 0) _charWidth = ctx.measureText('M').width;
+
   const line1 = `${stats.current.toFixed(0)} fps  ${stats.lastDtMs.toFixed(1)}ms`;
   const line2 = `avg ${stats.avg.toFixed(0)}  1%low ${stats.low1pct.toFixed(0)}`;
-  const w1 = ctx.measureText(line1).width;
-  const w2 = ctx.measureText(line2).width;
+  const w1 = line1.length * _charWidth;
+  const w2 = line2.length * _charWidth;
   const padX = 8;
   const padY = 6;
   const lineH = 14;

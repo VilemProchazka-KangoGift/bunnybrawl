@@ -1,10 +1,15 @@
 import type { ThemeConfig } from '../themes/types';
+import { fastSin } from '../fastMath';
 
 // Gradient caches (avoid per-frame creation)
 const cachedLavaGradients = new Map<string, { body: CanvasGradient; halo: CanvasGradient }>();
 const cachedZeroGBgGradients = new Map<string, CanvasGradient>();
 const cachedGhostGlowGradients = new Map<string, CanvasGradient>();
 const cachedJellyGradients = new Map<string, CanvasGradient>();
+
+// Hoisted dash patterns — setLineDash takes a fresh array otherwise.
+const ZEROG_DASH: number[] = [8, 5];
+const NO_DASH: number[] = [];
 
 export function clearHazardCaches(): void {
   cachedLavaGradients.clear();
@@ -209,40 +214,49 @@ export function drawZeroGZone(
   ctx.globalAlpha = 0.35;
   ctx.strokeStyle = '#00CCFF';
   ctx.lineWidth = 2;
-  ctx.setLineDash([8, 5]);
+  ctx.setLineDash(ZEROG_DASH);
   ctx.lineDashOffset = -time * 30;
   ctx.strokeRect(zone.x + 1, zone.y + 1, zone.width - 2, zone.height - 2);
-  ctx.setLineDash([]);
+  ctx.setLineDash(NO_DASH);
 
-  // Corner brackets for emphasis
-  ctx.lineWidth = 2;
+  // Corner brackets share lineWidth/strokeStyle with the dashed border above.
   ctx.globalAlpha = 0.4;
   const bLen = 15;
-  const corners = [
-    [zone.x, zone.y], [zone.x + zone.width, zone.y],
-    [zone.x, zone.y + zone.height], [zone.x + zone.width, zone.y + zone.height],
-  ];
-  for (const [cx, cy] of corners) {
-    const sx = cx === zone.x ? 1 : -1;
-    const sy = cy === zone.y ? 1 : -1;
-    ctx.beginPath();
-    ctx.moveTo(cx + sx * bLen, cy);
-    ctx.lineTo(cx, cy);
-    ctx.lineTo(cx, cy + sy * bLen);
-    ctx.stroke();
-  }
+  const x0 = zone.x, x1 = zone.x + zone.width;
+  const y0 = zone.y, y1 = zone.y + zone.height;
+  ctx.beginPath();
+  ctx.moveTo(x0 + bLen, y0); ctx.lineTo(x0, y0); ctx.lineTo(x0, y0 + bLen);
+  ctx.moveTo(x1 - bLen, y0); ctx.lineTo(x1, y0); ctx.lineTo(x1, y0 + bLen);
+  ctx.moveTo(x0 + bLen, y1); ctx.lineTo(x0, y1); ctx.lineTo(x0, y1 - bLen);
+  ctx.moveTo(x1 - bLen, y1); ctx.lineTo(x1, y1); ctx.lineTo(x1, y1 - bLen);
+  ctx.stroke();
 
-  // Floating particles drifting upward
+  // Floating particles — group by color into 2 batched fills instead of 12
+  // individual ones. moveTo before each arc starts a new sub-path so circles
+  // don't connect with lines.
   ctx.globalAlpha = 0.3;
-  for (let i = 0; i < 12; i++) {
+  ctx.fillStyle = '#44EEFF';
+  ctx.beginPath();
+  for (let i = 0; i < 12; i += 2) {
     const px = zone.x + 15 + (i * 47) % zone.width;
     const py = zone.y + zone.height - ((time * 25 + i * 30) % zone.height);
     const pSize = 1.5 + Math.sin(time + i) * 0.5;
-    ctx.fillStyle = i % 2 === 0 ? '#44EEFF' : '#88CCFF';
-    ctx.beginPath();
-    ctx.arc(px + Math.sin(time * 1.5 + i) * 5, py, pSize, 0, Math.PI * 2);
-    ctx.fill();
+    const ax = px + Math.sin(time * 1.5 + i) * 5;
+    ctx.moveTo(ax + pSize, py);
+    ctx.arc(ax, py, pSize, 0, Math.PI * 2);
   }
+  ctx.fill();
+  ctx.fillStyle = '#88CCFF';
+  ctx.beginPath();
+  for (let i = 1; i < 12; i += 2) {
+    const px = zone.x + 15 + (i * 47) % zone.width;
+    const py = zone.y + zone.height - ((time * 25 + i * 30) % zone.height);
+    const pSize = 1.5 + Math.sin(time + i) * 0.5;
+    const ax = px + Math.sin(time * 1.5 + i) * 5;
+    ctx.moveTo(ax + pSize, py);
+    ctx.arc(ax, py, pSize, 0, Math.PI * 2);
+  }
+  ctx.fill();
 
   // "0G" label
   ctx.globalAlpha = 0.2;
@@ -426,8 +440,9 @@ export function drawBouncyPlatformOverlay(
 ): void {
   ctx.save();
 
-  // Wobbly jelly surface -- always visible
-  const wobbleY = Math.sin(time * 3) * 2;
+  // Wobbly jelly surface — always visible. fastSin precision is fine for
+  // pure-visual displacement.
+  const wobbleY = fastSin(time * 3) * 2;
   ctx.globalAlpha = 0.25;
   const jellyKey = `${bp.x}_${bp.y}_${bp.height}`;
   let jellyGrad = cachedJellyGradients.get(jellyKey);
@@ -443,42 +458,46 @@ export function drawBouncyPlatformOverlay(
   ctx.moveTo(bp.x, bp.y + bp.height);
   ctx.lineTo(bp.x, bp.y);
   // Wavy top edge
-  for (let wx = bp.x; wx <= bp.x + bp.width; wx += 10) {
-    const wy = bp.y - 2 + Math.sin(time * 4 + wx * 0.1) * 2 + wobbleY;
+  const xEnd = bp.x + bp.width;
+  const t4 = time * 4;
+  for (let wx = bp.x; wx <= xEnd; wx += 10) {
+    const wy = bp.y - 2 + fastSin(t4 + wx * 0.1) * 2 + wobbleY;
     ctx.lineTo(wx, wy);
   }
-  ctx.lineTo(bp.x + bp.width, bp.y + bp.height);
+  ctx.lineTo(xEnd, bp.y + bp.height);
   ctx.closePath();
   ctx.fill();
 
   // Bounce wobble -- big jiggle effect
   if (wobble > 0) {
     const intensity = wobble * 5;
-    const squash = Math.sin(wobble * 30) * intensity;
+    const absSquash = Math.abs(fastSin(wobble * 30) * intensity);
     ctx.globalAlpha = 0.3;
     ctx.fillStyle = '#FFB6C1';
-    ctx.fillRect(bp.x - 2, bp.y - Math.abs(squash) - 2, bp.width + 4, bp.height + Math.abs(squash) + 2);
+    ctx.fillRect(bp.x - 2, bp.y - absSquash - 2, bp.width + 4, bp.height + absSquash + 2);
   }
 
   // Pulsing glow underneath
-  ctx.globalAlpha = 0.1 + Math.sin(time * 2) * 0.05;
+  ctx.globalAlpha = 0.1 + fastSin(time * 2) * 0.05;
   ctx.fillStyle = '#FF69B4';
   ctx.fillRect(bp.x, bp.y + bp.height, bp.width, 4);
 
-  // Up-arrow indicators
+  // Up-arrow indicators — typically 2–5 arrows per platform, all same color.
   ctx.globalAlpha = 0.3;
   ctx.fillStyle = '#FFFFFF';
   const arrowCount = Math.max(2, Math.floor(bp.width / 35));
+  const t3 = time * 3;
+  const cy = bp.y + bp.height / 2;
+  ctx.beginPath();
   for (let a = 0; a < arrowCount; a++) {
     const ax = bp.x + bp.width * (a + 0.5) / arrowCount;
-    const ay = bp.y + bp.height / 2 + Math.sin(time * 3 + a) * 2;
-    ctx.beginPath();
+    const ay = cy + fastSin(t3 + a) * 2;
     ctx.moveTo(ax - 4, ay + 3);
     ctx.lineTo(ax, ay - 3);
     ctx.lineTo(ax + 4, ay + 3);
     ctx.closePath();
-    ctx.fill();
   }
+  ctx.fill();
 
   ctx.restore();
 }

@@ -1,4 +1,6 @@
 import type { GameLoop } from './engine/gameLoop';
+import type { perfTrace } from './engine/perfTrace';
+import type * as fpsCounter from './engine/fpsCounter';
 
 /**
  * Global type extensions for E2E test hooks, vendor-prefixed CSS, and Screen Orientation API.
@@ -7,6 +9,8 @@ declare global {
   interface Window {
     __gameStore?: import('zustand').UseBoundStore<import('zustand').StoreApi<import('./store/gameStore').GameStore>>;
     __gameLoop?: GameLoop;
+    __perfTrace?: typeof perfTrace;
+    __fpsCounter?: typeof fpsCounter;
   }
 
   interface CSSStyleDeclaration {
