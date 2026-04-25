@@ -39,12 +39,16 @@ export class PlayerTransitionSystem implements CosmeticSystem {
       spawnDustParticles: (p, vy) => this.particleSystem.spawnDustParticles(p, vy),
       spawnKillSplatter: (v) => this.particleSystem.spawnKillSplatter(v, this.settings),
       pickupCarrotVFX: (x, y) => this.particleSystem.pickupCarrotVFX(x, y),
+      spawnPlayerSpawnVFX: (x, y) => this.particleSystem.spawnRingVFX(x, y),
     };
   }
 
   init(): void {
     for (const p of this.state.players) {
       this.prevCosmeticState.set(p.id, snapshotPlayerCosmeticState(p));
+      if (p.active && p.state !== 'splat' && p.state !== 'respawning') {
+        this.callbacks.spawnPlayerSpawnVFX(p.x + p.width / 2, p.y + p.height / 2);
+      }
     }
   }
 

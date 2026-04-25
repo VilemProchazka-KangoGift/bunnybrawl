@@ -77,16 +77,23 @@ export function spawnConfetti(
   }
 }
 
-export function spawnCarrotVFX(
+export function spawnRingVFX(
   particles: Particle[], freeList: Particle[],
-  x: number, y: number,
+  cx: number, cy: number,
 ): void {
   for (let i = 0; i < 12; i++) {
     const angle = (i / 12) * Math.PI * 2;
     const speed = 40 + Math.random() * 60;
     const life = 0.5 + Math.random() * 0.3;
-    emitParticle(particles, freeList, x, y + CARROT_SIZE / 2, Math.cos(angle) * speed, Math.sin(angle) * speed, life, 2 + Math.random() * 3, i % 2 === 0 ? '#FFD700' : '#FF8C00');
+    emitParticle(particles, freeList, cx, cy, Math.cos(angle) * speed, Math.sin(angle) * speed, life, 2 + Math.random() * 3, i % 2 === 0 ? '#FFD700' : '#FF8C00');
   }
+}
+
+export function spawnCarrotVFX(
+  particles: Particle[], freeList: Particle[],
+  x: number, y: number,
+): void {
+  spawnRingVFX(particles, freeList, x, y + CARROT_SIZE / 2);
 }
 
 export function spawnFirework(particles: Particle[], freeList: Particle[]): void {

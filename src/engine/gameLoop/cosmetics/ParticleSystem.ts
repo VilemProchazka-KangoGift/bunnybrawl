@@ -5,7 +5,7 @@ import type { HazardHitResult } from '../gameplay/playerCollisions';
 import type { Renderer } from '../../renderer';
 import { BLOOD_COLOR, CARROT_SIZE } from '../../constants';
 import { haptics } from '../../haptics';
-import { emitParticle as _emitParticle, spawnDustParticles as _spawnDustParticles, spawnGoreParticles as _spawnGoreParticles, spawnConfetti as _spawnConfetti, spawnCarrotVFX as _spawnCarrotVFX, spawnFirework as _spawnFirework, updateParticles, updateConfetti } from './particles';
+import { emitParticle as _emitParticle, spawnDustParticles as _spawnDustParticles, spawnGoreParticles as _spawnGoreParticles, spawnConfetti as _spawnConfetti, spawnCarrotVFX as _spawnCarrotVFX, spawnRingVFX as _spawnRingVFX, spawnFirework as _spawnFirework, updateParticles, updateConfetti } from './particles';
 import { launchGib, spawnGibs, updateGibs } from './gibs';
 import { updateWeather } from './environment';
 
@@ -60,6 +60,10 @@ export class ParticleSystem implements CosmeticSystem {
 
   spawnCarrotVFX(x: number, y: number): void {
     _spawnCarrotVFX(this._particles, this.particleFreeList, x, y);
+  }
+
+  spawnRingVFX(cx: number, cy: number): void {
+    _spawnRingVFX(this._particles, this.particleFreeList, cx, cy);
   }
 
   spawnFirework(): void {

@@ -32,6 +32,7 @@ export interface TransitionCallbacks {
   spawnDustParticles: (player: Player, landVy: number) => void;
   spawnKillSplatter: (victim: Player) => void;
   pickupCarrotVFX: (x: number, y: number) => void;
+  spawnPlayerSpawnVFX: (x: number, y: number) => void;
 }
 
 /**
@@ -82,7 +83,10 @@ export function detectPlayerTransitions(
   }
 
   // Respawn
-  if (prev.state === 'respawning' && player.state === 'idle') cb.playSound('land');
+  if (prev.state === 'respawning' && player.state === 'idle') {
+    cb.playSound('land');
+    cb.spawnPlayerSpawnVFX(player.x + player.width / 2, player.y + player.height / 2);
+  }
 
   // Push bump (sideSquash === 0.8 is exact collision marker; wall hits set 0.75)
   if (prev.sideSquash >= 0.95 && Math.abs(player.sideSquash - 0.8) < 0.01) {

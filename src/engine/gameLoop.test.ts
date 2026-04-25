@@ -2680,21 +2680,17 @@ describe('Particle System', () => {
     const { loop } = createLoop();
     loop.skipCountdown();
 
-    // Manually inject a particle into the internal array
-    loop.particleSystem.getParticles().push({
+    const injected = {
       x: 500, y: 500, vx: 10, vy: -20,
       life: 1.0, maxLife: 1.0, size: 3, color: '#FF0000',
-    });
+    };
+    loop.particleSystem.getParticles().push(injected);
 
-    const lifeBefore = loop.particleSystem.getParticles()[0].life;
+    const lifeBefore = injected.life;
     loop.fixedUpdate(FIXED_TIMESTEP);
     loop.cosmeticStep(FIXED_TIMESTEP);
 
-    // Particle life should have decreased
-    const particle = loop.particleSystem.getParticles().find((p: any) => p.maxLife === 1.0);
-    if (particle) {
-      expect(particle.life).toBeLessThan(lifeBefore);
-    }
+    expect(injected.life).toBeLessThan(lifeBefore);
   });
 
   it('dead particles (life <= 0) are removed', () => {
