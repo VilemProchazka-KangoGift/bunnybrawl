@@ -15,6 +15,21 @@ import { CoreMsgType, encodePong, decodePingPong } from './protocol';
  */
 const COUNTER_RESET_GAP = 1_000_000;
 
+/** Generate a cryptographically random reclaim token. Uses crypto when
+ *  available (browsers, Node 19+); falls back to Math.random() in test
+ *  envs that don't expose crypto.getRandomValues. 128 bits of entropy. */
+function generateReclaimToken(): string {
+  const bytes = new Uint8Array(16);
+  if (typeof globalThis !== 'undefined' && globalThis.crypto?.getRandomValues) {
+    globalThis.crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < 16; i++) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  let s = '';
+  for (let i = 0; i < 16; i++) s += bytes[i].toString(16).padStart(2, '0');
+  return s;
+}
+
 /** Minimal simulation interface — only what the host authority actually calls. */
 export interface HostSimulation<TState> {
   getState(): TState;
@@ -71,6 +86,12 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
 
   // Reconnection grace period (seconds before a disconnected slot is final-evicted).
   private disconnectedSlots = new Map<string, { timer: number; peerId: string }>();
+  /** Per-slot reclaim secret. Generated on addGuest and presented by the
+   *  reconnecting peer in RECONNECT_REQUEST. Without this, any peer in the
+   *  room could claim a disconnected slot and steal the original player's
+   *  score. Survives across the disconnect grace period; cleared only on
+   *  finalRemoveGuest (slot truly gone). */
+  private reclaimTokens = new Map<string, string>();
   private readonly gracePeriodSec: number;
   private static readonly DEFAULT_GRACE_PERIOD_SEC = 20;
 
@@ -108,9 +129,23 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
     this.decodeSlot = decodeSlot;
   }
 
-  addGuest(peerId: string, slot: string): void {
+  /** Register a guest. Optionally accept a pre-issued reclaim token (e.g. a
+   *  token already sent to the guest in lobby SLOT_ASSIGNMENT). When omitted,
+   *  generates a fresh token. Use getReclaimToken(slot) to retrieve. */
+  addGuest(peerId: string, slot: string, reclaimToken?: string): void {
     this.peerSlotMap.set(peerId, slot);
     this.guestInputs.set(slot, this.inputCodec.noInput());
+    if (reclaimToken) {
+      this.reclaimTokens.set(slot, reclaimToken);
+    } else if (!this.reclaimTokens.has(slot)) {
+      this.reclaimTokens.set(slot, generateReclaimToken());
+    }
+  }
+
+  /** Returns the reclaim token for a slot, or null if none is registered.
+   *  Used by the host to send the token to the guest in SLOT_ASSIGNMENT. */
+  getReclaimToken(slot: string): string | null {
+    return this.reclaimTokens.get(slot) ?? null;
   }
 
   removeGuest(peerId: string): void {
@@ -135,6 +170,9 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
   private finalRemoveGuest(slot: string): void {
     this.disconnectedSlots.delete(slot);
     this.lastConsumedFrame.delete(slot);
+    // Slot is truly gone — drop the reclaim token. A peer presenting the old
+    // token in a future RECONNECT_REQUEST gets rejected (slot has no entry).
+    this.reclaimTokens.delete(slot);
   }
 
   tickGraceTimers(dt: number): void {
@@ -146,12 +184,18 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
     }
   }
 
-  handleReconnectRequest(slot: string, newPeerId: string): boolean {
+  handleReconnectRequest(slot: string, newPeerId: string, presentedToken?: string): boolean {
     // Never let a remote peer reclaim the host's own slot. The host's localSlot
     // is never in peerSlotMap (which only tracks remote peers), so without this
     // check a malicious guest could send RECONNECT_REQUEST{slot: hostSlot} and
     // hijack input authority over the host's player.
     if (slot === this.localSlot) return false;
+
+    // Token validation: if we issued a token for this slot, the reclaiming
+    // peer must present a matching one. This prevents a malicious peer in
+    // the room from claiming a disconnected stranger's slot to steal score.
+    const storedToken = this.reclaimTokens.get(slot);
+    if (storedToken && storedToken !== presentedToken) return false;
 
     const graceInfo = this.disconnectedSlots.get(slot);
     if (!graceInfo) {

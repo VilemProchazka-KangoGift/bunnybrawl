@@ -790,11 +790,11 @@ describe('HostAuthority', () => {
         players: [playerP2],
       });
 
-      host.addGuest('peer-a', 'P2' as PlayerSlot);
+      host.addGuest('peer-a', 'P2' as PlayerSlot, 'tok');
       host.removeGuest('peer-a'); // enters grace period
 
       // New peer tries to reclaim P2 — returns true on success
-      const ok = host.handleReconnectRequest('P2' as PlayerSlot, 'peer-new');
+      const ok = host.handleReconnectRequest('P2' as PlayerSlot, 'peer-new', 'tok');
       expect(ok).toBe(true);
 
       // Guest input is re-established on reclaim (the SYNC ack + fresh
@@ -846,7 +846,7 @@ describe('HostAuthority', () => {
     it('counts down grace timers', () => {
       const onPlayerDisconnect = vi.fn();
       const { host } = makeHostAuthority({ onPlayerDisconnect });
-      host.addGuest('peer-a', 'P2' as PlayerSlot);
+      host.addGuest('peer-a', 'P2' as PlayerSlot, 'tok');
       host.removeGuest('peer-a'); // enters 20s grace period
 
       // Tick 10 seconds — should still be in grace
@@ -854,21 +854,22 @@ describe('HostAuthority', () => {
 
       // The slot is in grace period, not yet fully removed
       // Reconnection should still work
-      const result = host.handleReconnectRequest('P2' as PlayerSlot, 'peer-new');
+      const result = host.handleReconnectRequest('P2' as PlayerSlot, 'peer-new', 'tok');
       expect(result).toBe(true);
     });
 
     it('cleans up grace state after grace period expires', () => {
       const onPlayerDisconnect = vi.fn();
       const { host } = makeHostAuthority({ onPlayerDisconnect });
-      host.addGuest('peer-a', 'P2' as PlayerSlot);
+      host.addGuest('peer-a', 'P2' as PlayerSlot, 'tok');
       host.removeGuest('peer-a');
 
       // Tick past the 20s grace period
       host.tickGraceTimers(21);
 
-      // Grace expired, but reconnection still works since no active peer owns the slot
-      // (defensive reconnection — prevents edge case where grace timer races with reconnect)
+      // Grace expired — token AND grace state are gone (finalRemoveGuest deletes
+      // the reclaim token). Defensive reconnection still works since no active
+      // peer owns the slot AND no stored token to validate against.
       mockGameLoopInstance.getState.mockReturnValue({
         ...makeMinimalMatchState(),
         players: [{ id: 'P2', disconnected: true, active: false, state: 'idle', respawnTimer: 0, splatTimer: 0 }],
@@ -879,6 +880,40 @@ describe('HostAuthority', () => {
   });
 
   describe('handleReconnectRequest', () => {
+    it('rejects reclaim with wrong token (security)', () => {
+      // Without token validation, any peer in the room could claim a
+      // disconnected stranger's slot to steal their score.
+      const { host } = makeHostAuthority();
+      mockGameLoopInstance.getState.mockReturnValue({
+        ...makeMinimalMatchState(),
+        players: [{ id: 'P2', disconnected: true, active: false, state: 'idle', respawnTimer: 0, splatTimer: 0 }],
+      });
+
+      host.addGuest('peer-a', 'P2' as PlayerSlot, 'real-token');
+      host.removeGuest('peer-a');
+
+      // Wrong token rejected.
+      expect(host.handleReconnectRequest('P2' as PlayerSlot, 'attacker-peer', 'guess')).toBe(false);
+      // No token rejected.
+      expect(host.handleReconnectRequest('P2' as PlayerSlot, 'attacker-peer')).toBe(false);
+      // Right token accepted.
+      expect(host.handleReconnectRequest('P2' as PlayerSlot, 'real-peer', 'real-token')).toBe(true);
+    });
+
+    it('getReclaimToken returns the token issued in addGuest', () => {
+      const { host } = makeHostAuthority();
+      host.addGuest('peer-a', 'P2' as PlayerSlot, 'preset-token');
+      expect(host.getReclaimToken('P2' as PlayerSlot)).toBe('preset-token');
+    });
+
+    it('addGuest auto-generates a token when none is provided', () => {
+      const { host } = makeHostAuthority();
+      host.addGuest('peer-a', 'P2' as PlayerSlot);
+      const token = host.getReclaimToken('P2' as PlayerSlot);
+      expect(token).toBeTruthy();
+      expect(token!.length).toBeGreaterThanOrEqual(32);
+    });
+
     it('rejects reclaim attempt for the host\'s own localSlot (security)', () => {
       // A malicious or buggy guest could send RECONNECT_REQUEST{slot: localSlot}
       // and hijack input authority over the host's player. localSlot is never
@@ -915,10 +950,10 @@ describe('HostAuthority', () => {
         players: [{ id: 'P2', disconnected: true, active: false, state: 'idle', respawnTimer: 0, splatTimer: 0 }],
       });
 
-      host.addGuest('peer-a', 'P2' as PlayerSlot);
+      host.addGuest('peer-a', 'P2' as PlayerSlot, 'token-abc');
       host.removeGuest('peer-a');
 
-      const result = host.handleReconnectRequest('P2' as PlayerSlot, 'peer-new');
+      const result = host.handleReconnectRequest('P2' as PlayerSlot, 'peer-new', 'token-abc');
       expect(result).toBe(true);
 
       // Input should be re-established
@@ -943,9 +978,9 @@ describe('HostAuthority', () => {
         players: [player],
       });
 
-      host.addGuest('peer-a', 'P2' as PlayerSlot);
+      host.addGuest('peer-a', 'P2' as PlayerSlot, 'token-xyz');
       host.removeGuest('peer-a');
-      host.handleReconnectRequest('P2' as PlayerSlot, 'peer-new');
+      host.handleReconnectRequest('P2' as PlayerSlot, 'peer-new', 'token-xyz');
 
       expect(player.disconnected).toBe(false);
       expect(player.active).toBe(true);

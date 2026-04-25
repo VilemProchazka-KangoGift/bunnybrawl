@@ -328,6 +328,13 @@ export class Transport {
   private setupRoom(): void {
     if (!this.room) return;
 
+    // Capture the current room ref so callbacks fired by an asynchronously-
+    // dying room (room.leave() is fire-and-forget) don't mutate state for
+    // the new room. Without this, a late onPeerJoin from the old room would
+    // add a phantom peer to `this.peers` of the new transport state, and a
+    // late onPeerLeave would corrupt connection tracking.
+    const capturedRoom = this.room;
+
     // Create actions for binary and JSON channels
     const [sendBinary, onBinary] = this.room.makeAction<ArrayBuffer>('bin');
     const [sendJson, onJson] = this.room.makeAction<string>('json');
@@ -337,6 +344,7 @@ export class Transport {
 
     // Handle incoming binary data
     onBinary((data: ArrayBuffer | Uint8Array, peerId: string) => {
+      if (this.room !== capturedRoom) return;
       // Trystero may deliver Uint8Array instead of ArrayBuffer
       const buf = data instanceof ArrayBuffer ? data : data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
       this.onIncomingData(buf, peerId, true);
@@ -344,11 +352,13 @@ export class Transport {
 
     // Handle incoming JSON data
     onJson((data: string, peerId: string) => {
+      if (this.room !== capturedRoom) return;
       this.onIncomingData(data, peerId, false);
     });
 
     // Peer join/leave
     this.room.onPeerJoin((peerId: string) => {
+      if (this.room !== capturedRoom) return;
       const info: PeerInfo = {
         peerId,
         rtt: 0,
@@ -373,6 +383,7 @@ export class Transport {
     });
 
     this.room.onPeerLeave((peerId: string) => {
+      if (this.room !== capturedRoom) return;
       this.removePeer(peerId);
     });
   }

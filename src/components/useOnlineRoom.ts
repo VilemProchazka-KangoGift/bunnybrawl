@@ -38,6 +38,33 @@ export function getModalTransport(): Transport | null { return _modalTransport; 
  *  returned a destroyed instance. */
 export function clearModalTransport(): void { _modalTransport = null; }
 
+// Reclaim tokens issued by the host in lobby SLOT_ASSIGNMENT. Picked up by
+// Match.tsx when starting NetMatch. Host: full Map<slot, token>. Guest:
+// only its own token.
+let _hostReclaimTokens: Map<string, string> = new Map();
+let _guestOwnReclaimToken: string | null = null;
+export function getHostReclaimTokens(): Map<string, string> { return _hostReclaimTokens; }
+export function getGuestOwnReclaimToken(): string | null { return _guestOwnReclaimToken; }
+export function clearReclaimTokens(): void {
+  _hostReclaimTokens = new Map();
+  _guestOwnReclaimToken = null;
+}
+
+/** Generate a 128-bit hex reclaim token. Mirrors core/hostAuthority's
+ *  generator; defined here so the lobby can issue tokens before
+ *  HostAuthority is constructed (HostAuthority is built at match start). */
+function newReclaimToken(): string {
+  const bytes = new Uint8Array(16);
+  if (typeof globalThis !== 'undefined' && globalThis.crypto?.getRandomValues) {
+    globalThis.crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < 16; i++) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  let s = '';
+  for (let i = 0; i < 16; i++) s += bytes[i].toString(16).padStart(2, '0');
+  return s;
+}
+
 export type OnlineStep = 'choose' | 'connecting' | 'lobby' | 'spectating';
 
 interface UseOnlineRoomArgs {
@@ -140,6 +167,7 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
     pendingPlayerNames.current.clear();
     didAutoSwitch.current = false;
     flashAutoSwitchNotice(null);
+    clearReclaimTokens();
   }, [resetOnline, flashAutoSwitchNotice]);
 
   // Guarantee cleanup on hook unmount — guards against future paths that
@@ -323,12 +351,17 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
         const slot = allocateSlot() as PlayerSlot;
         peerSlotMap.set(peerId, slot);
         const newPeer = { peerId, slot: slot as PlayerSlot, characterName: CHARACTERS.P2.name, playerName: '', ready: false };
+        // Issue this guest's reclaim token. Stored host-side for validation
+        // when they later send RECONNECT_REQUEST. Sent to the guest only —
+        // SLOT_ASSIGNMENT goes via sendReliableTo (per-peer), not broadcast.
+        const reclaimToken = newReclaimToken();
+        _hostReclaimTokens.set(slot, reclaimToken);
 
         // Match in progress → late joiner becomes spectator
         const currentScreen = useGameStore.getState().screen;
         if (currentScreen === 'match' || currentScreen === 'victory') {
           transport.sendReliableTo(peerId, { type: MsgType.MATCH_IN_PROGRESS, snapshot: null } as ReliableMessage);
-          transport.sendReliableTo(peerId, { type: MsgType.SLOT_ASSIGNMENT, slot, allPlayers: [] } as ReliableMessage);
+          transport.sendReliableTo(peerId, { type: MsgType.SLOT_ASSIGNMENT, slot, reclaimToken, allPlayers: [] } as ReliableMessage);
           setOnline({ remotePlayers: [...currentPlayers, newPeer] });
           return;
         }
@@ -336,6 +369,7 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
         transport.sendReliableTo(peerId, {
           type: MsgType.SLOT_ASSIGNMENT,
           slot,
+          reclaimToken,
           allPlayers: [
             { slot: 'P1', characterName: localCharRef.current, isHost: true, playerName: playerNameRef.current },
             ...currentPlayers.map(rp => ({
@@ -367,6 +401,10 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
         const slot = peerSlotMap.get(peerId);
         peerSlotMap.delete(peerId);
         pendingPlayerNames.current.delete(peerId);
+        // Drop the slot's reclaim token — when allocateSlot reuses this slot
+        // for a fresh peer, a new token will be issued. This keeps a stale
+        // token from authenticating a different peer's RECONNECT_REQUEST.
+        if (slot) _hostReclaimTokens.delete(slot);
         if (isHost) {
           if (slot) freedSlots.push(slot);
           const current = useGameStore.getState().online.remotePlayers;
@@ -462,6 +500,10 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
           }
         } else if (msg.type === MsgType.SLOT_ASSIGNMENT) {
           const slotMsg = msg as SlotAssignmentMessage;
+          // Store the reclaim token issued by host for our slot. Match.tsx
+          // hands it to NetMatch via config.ownReclaimToken so a future
+          // RECONNECT_REQUEST authenticates the reclaim attempt.
+          if (slotMsg.reclaimToken) _guestOwnReclaimToken = slotMsg.reclaimToken;
           const names: Record<string, string> = {};
           const newRemotePlayers: RemotePlayerInfo[] = [];
           for (const p of slotMsg.allPlayers) {

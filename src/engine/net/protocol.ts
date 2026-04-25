@@ -247,6 +247,10 @@ export interface PlayerLeftMessage {
 export interface SlotAssignmentMessage {
   type: 0x0F;
   slot: string;
+  /** Per-guest secret issued by host. Must be presented in RECONNECT_REQUEST
+   *  to reclaim this slot — without authentication, any peer in the room
+   *  could claim a disconnected slot and steal the original player's score. */
+  reclaimToken: string;
   allPlayers: Array<{ slot: string; characterName: string; isHost: boolean; playerName?: string }>;
 }
 
@@ -259,6 +263,9 @@ export interface ReconnectRequestMessage {
   type: 0x15;
   slot: string;
   playerName: string;
+  /** Token previously issued to this guest in SLOT_ASSIGNMENT. Host validates
+   *  against the stored token for the slot before accepting reclaim. */
+  reclaimToken: string;
 }
 
 export interface ReconnectSyncMessage {

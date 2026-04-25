@@ -5,11 +5,17 @@ import { swapRemove } from '../../themes/utils';
 export const CONFETTI_COLORS = ['#FFD700', '#FF69B4', '#00FFFF', '#7CFC00', '#FF6347', '#DA70D6', '#FFA500'];
 const CONFETTI_SHAPES: Array<'star' | 'diamond' | 'circle' | 'ribbon'> = ['star', 'diamond', 'circle', 'ribbon'];
 
+/** Soft cap on simultaneous live particles. Bulk emitters (gore splatter,
+ *  fireworks) can produce hundreds per call and matchOver fireworks accrete
+ *  across the celebration. Beyond this, GC pressure visibly stutters mobile. */
+const MAX_LIVE_PARTICLES = 600;
+
 /** Emit a particle, reusing a recycled object if available to reduce GC pressure. */
 export function emitParticle(
   particles: Particle[], freeList: Particle[],
   x: number, y: number, vx: number, vy: number, life: number, size: number, color: string,
 ): void {
+  if (particles.length >= MAX_LIVE_PARTICLES) return;
   const recycled = freeList.pop();
   if (recycled) {
     recycled.x = x; recycled.y = y; recycled.vx = vx; recycled.vy = vy;

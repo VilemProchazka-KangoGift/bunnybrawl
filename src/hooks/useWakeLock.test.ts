@@ -102,4 +102,34 @@ describe('useWakeLock', () => {
     rerender({ active: false });
     expect(releaseMock).toHaveBeenCalledTimes(1);
   });
+
+  it('re-requests the wake lock on visibilitychange when sentinel was released', async () => {
+    // Browsers auto-release wake locks when the tab is hidden. After the user
+    // returns, the lock must be re-acquired — without this, mid-match suspends
+    // result in a screen that turns off again.
+    const { unmount } = renderHook(() => useWakeLock(true));
+    expect(requestMock).toHaveBeenCalledTimes(1);
+    // Simulate the browser releasing the lock + the page becoming visible.
+    // The hook attaches a visibilitychange listener that re-requests when
+    // visible & no sentinel held.
+    let releaseHandler: (() => void) | null = null;
+    const fakeWl = {
+      release: releaseMock,
+      addEventListener: (evt: string, h: () => void) => {
+        if (evt === 'release') releaseHandler = h;
+      },
+    };
+    await act(async () => {
+      pendingResolve!(fakeWl as unknown as { release: typeof releaseMock });
+    });
+    // Browser releases lock (e.g. tab hidden).
+    releaseHandler?.();
+    // Page becomes visible again.
+    Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    expect(requestMock).toHaveBeenCalledTimes(2);
+    unmount();
+  });
 });

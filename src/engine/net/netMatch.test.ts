@@ -396,6 +396,7 @@ describe('NetMatch', () => {
 
     it('fires onLoadingTimeout with laggard slots after 15s', () => {
       netMatch.start();
+      netMatch.markHostLoaded();
       // Only P2 sent LOADED; P3 is the laggard
       const events = transport.setEvents.mock.calls[0][0];
       events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' });
@@ -410,12 +411,30 @@ describe('NetMatch', () => {
 
     it('disconnects laggards and forces phase=playing on timeout', () => {
       netMatch.start();
+      netMatch.markHostLoaded();
       mockGameLoopInstance.disconnectPlayer.mockClear();
       mockGameLoopInstance.setPhase.mockClear();
       vi.advanceTimersByTime(15001);
       // Both expected guests are laggards (no LOADED arrived)
       expect(mockGameLoopInstance.disconnectPlayer).toHaveBeenCalledWith('P2');
       expect(mockGameLoopInstance.disconnectPlayer).toHaveBeenCalledWith('P3');
+      expect(mockGameLoopInstance.setPhase).toHaveBeenCalledWith('playing');
+    });
+
+    it('extends the timer (not force-flip) when host is still loading at timeout', () => {
+      netMatch.start();
+      // hostSelfLoaded stays false — simulating a slow host preload.
+      mockGameLoopInstance.disconnectPlayer.mockClear();
+      mockGameLoopInstance.setPhase.mockClear();
+      onLoadingTimeout.mockClear();
+
+      // First 15s: should extend, not force-flip.
+      vi.advanceTimersByTime(15001);
+      expect(mockGameLoopInstance.setPhase).not.toHaveBeenCalled();
+      expect(onLoadingTimeout).not.toHaveBeenCalled();
+
+      // After the extension's 15s, force-flip even with host still not loaded.
+      vi.advanceTimersByTime(15001);
       expect(mockGameLoopInstance.setPhase).toHaveBeenCalledWith('playing');
     });
 
@@ -431,8 +450,12 @@ describe('NetMatch', () => {
 
     it('resetLoadingHandshake() re-arms the timer', () => {
       netMatch.start();
+      netMatch.markHostLoaded();
       vi.advanceTimersByTime(10000);
       netMatch.resetLoadingHandshake();
+      // resetLoadingHandshake clears hostSelfLoaded — re-mark to skip the
+      // host-not-loaded extension branch.
+      netMatch.markHostLoaded();
       onLoadingTimeout.mockClear();
       // 5s more from original start would have tripped the original timer;
       // resetLoadingHandshake should have restarted the clock.

@@ -88,7 +88,10 @@ export class HostAuthority {
     );
   }
 
-  addGuest(peerId: string, slot: PlayerSlot): void { this.core.addGuest(peerId, slot); }
+  addGuest(peerId: string, slot: PlayerSlot, reclaimToken?: string): void {
+    this.core.addGuest(peerId, slot, reclaimToken);
+  }
+  getReclaimToken(slot: PlayerSlot): string | null { return this.core.getReclaimToken(slot); }
   removeGuest(peerId: string): void { this.core.removeGuest(peerId); }
   tickGraceTimers(dt: number): void { this.core.tickGraceTimers(dt); }
   start(): void { this.core.start(); }
@@ -118,8 +121,8 @@ export class HostAuthority {
     }
   }
 
-  handleReconnectRequest(slot: PlayerSlot, newPeerId: string): boolean {
-    return this.core.handleReconnectRequest(slot, newPeerId);
+  handleReconnectRequest(slot: PlayerSlot, newPeerId: string, presentedToken?: string): boolean {
+    return this.core.handleReconnectRequest(slot, newPeerId, presentedToken);
   }
 
   /** Handle reliable messages — pause relay + disconnect teardown. Reconnect

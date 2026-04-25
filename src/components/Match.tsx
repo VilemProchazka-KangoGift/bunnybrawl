@@ -4,7 +4,7 @@ import { useGameStore } from '../store/gameStore';
 import { GameLoop } from '../engine/gameLoop';
 import { NetMatch } from '../engine/net/netMatch';
 import { MsgType } from '../engine/net/protocol';
-import { getModalTransport, clearModalTransport } from './OnlineModal';
+import { getModalTransport, clearModalTransport, getHostReclaimTokens, getGuestOwnReclaimToken } from './OnlineModal';
 import { getArena, listArenaPacks } from '../engine/arenas';
 import { ArenaGrid } from './ArenaGrid';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
@@ -286,6 +286,11 @@ export function Match() {
         transport,
         localSlot: online.isHost ? 'P1' : 'P2',
         remoteSlots: activePlayers.filter(s => s !== (online.isHost ? 'P1' : 'P2') && s.startsWith('P')) as PlayerSlot[],
+        // Reclaim tokens issued during the lobby. Host: full Map<slot,token>;
+        // guest: own token only. Used to authenticate RECONNECT_REQUEST so a
+        // malicious peer in the room can't claim a disconnected stranger's slot.
+        reclaimTokens: online.isHost ? getHostReclaimTokens() as Map<PlayerSlot, string> : undefined,
+        ownReclaimToken: !online.isHost ? (getGuestOwnReclaimToken() ?? undefined) : undefined,
         onStall: (stalled) => {
           setUnstable(stalled ? { kind: 'mine' } : null);
         },

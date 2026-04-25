@@ -58,6 +58,15 @@ export interface NetMatchConfig {
   onGuestReconnected?: (slot: PlayerSlot) => void;
   /** Fires with the slot list that never sent LOADED within LOADING_TIMEOUT_MS. */
   onLoadingTimeout?: (slots: PlayerSlot[]) => void;
+  /** HOST: per-slot reclaim tokens issued in lobby SLOT_ASSIGNMENT. Passed
+   *  to HostAuthority.addGuest so the same token validates a future
+   *  RECONNECT_REQUEST. Slots not in the map get a fresh token at addGuest. */
+  reclaimTokens?: Map<PlayerSlot, string>;
+  /** GUEST: this peer's own reclaim token, received from host in
+   *  SLOT_ASSIGNMENT. Sent in RECONNECT_REQUEST to authenticate the reclaim
+   *  attempt. Without this, any peer in the room could claim a disconnected
+   *  slot and steal the original player's score. */
+  ownReclaimToken?: string;
 }
 
 export class NetMatch {
@@ -76,6 +85,7 @@ export class NetMatch {
   // Guest-specific
   private interpolation: EntityInterpolation | null = null;
   private inputEcho: InputEcho | null = null;
+  private ownReclaimToken: string | null = null;  // token to authenticate RECONNECT_REQUEST
   private lastSnapshotTime = 0;    // wall-clock time of last received snapshot
   private stallNotified = false;    // whether onStall(true) has been fired
 
@@ -110,6 +120,10 @@ export class NetMatch {
   // Host-side LOADED handshake state
   private loadedGuests = new Set<PlayerSlot>();
   private hostSelfLoaded = false;
+  // One-shot flag: if loading timeout fires while hostSelfLoaded is false,
+  // re-arm the timer once instead of force-flipping. Reset on each new
+  // loading session via resetLoadingHandshake().
+  private _loadingTimeoutExtended = false;
   private loadingTimeout: ReturnType<typeof setTimeout> | null = null;
   /** Maximum time host waits for all guests to signal LOADED before force-
    *  advancing phase to 'playing' (and treating laggards as disconnected). */
@@ -173,7 +187,11 @@ export class NetMatch {
         const peerIds = config.transport.getPeerIds();
         const peerIdx = config.remoteSlots.indexOf(slot);
         if (peerIdx < peerIds.length) {
-          this.hostAuthority.addGuest(peerIds[peerIdx], slot);
+          // Pass the lobby-issued token through so the same token validates
+          // future RECONNECT_REQUEST. If absent (e.g. test path), HostAuthority
+          // generates a fresh one at addGuest time.
+          const token = config.reclaimTokens?.get(slot);
+          this.hostAuthority.addGuest(peerIds[peerIdx], slot, token);
         }
       }
     }
@@ -181,6 +199,7 @@ export class NetMatch {
 
   private initGuest(config: NetMatchConfig): void {
     this.interpolation = new EntityInterpolation();
+    this.ownReclaimToken = config.ownReclaimToken ?? null;
     // Input echo: instant visual feedback without position prediction.
     // Disable with ?noecho URL param.
     const noEcho = typeof location !== 'undefined'
@@ -254,6 +273,16 @@ export class NetMatch {
     if (this.loadingTimeout) clearTimeout(this.loadingTimeout);
     this.loadingTimeout = setTimeout(() => {
       if (this.gameLoop.getState().phase !== 'loading') return;
+      // Defer the force-flip if our own preload is still in flight — flipping
+      // before host's assets are warm makes audio + sprites pop in over the
+      // first few seconds of play. The check has a single retry budget so a
+      // permanently-stuck host preload still progresses.
+      if (!this.hostSelfLoaded && !this._loadingTimeoutExtended) {
+        console.warn('[NetMatch] loading timeout fired but host not loaded — extending');
+        this._loadingTimeoutExtended = true;
+        this.armLoadingTimeout();
+        return;
+      }
       console.warn('[NetMatch] loading timeout — forcing phase=playing');
       const expected = this.hostAuthority!.getExpectedGuestSlots();
       const laggards: PlayerSlot[] = [];
@@ -294,6 +323,7 @@ export class NetMatch {
     if (!this._isHost) return;
     this.loadedGuests.clear();
     this.hostSelfLoaded = false;
+    this._loadingTimeoutExtended = false;
     this.armLoadingTimeout();
   }
 
@@ -641,7 +671,8 @@ export class NetMatch {
     } else if (this._isHost && msg.type === MsgType.RECONNECT_REQUEST) {
       if (!fromPeerId || !this.hostAuthority) return;
       const reqSlot = (msg as { slot: string }).slot as PlayerSlot;
-      if (!this.hostAuthority.handleReconnectRequest(reqSlot, fromPeerId)) return;
+      const presentedToken = (msg as { reclaimToken?: string }).reclaimToken;
+      if (!this.hostAuthority.handleReconnectRequest(reqSlot, fromPeerId, presentedToken)) return;
       // Ack with current pause state so the guest's render doesn't diverge
       // from a suspended host sim.
       this.transport.sendReliableTo(fromPeerId, {
@@ -686,6 +717,7 @@ export class NetMatch {
           type: MsgType.RECONNECT_REQUEST,
           slot: this.localSlot,
           playerName: '',
+          reclaimToken: this.ownReclaimToken ?? '',
         } as import('./protocol').ReliableMessage);
       }).catch(() => { /* retry next tick */ });
     };
@@ -710,7 +742,11 @@ export class NetMatch {
     // while we were gone, possibly a duplicate victory sound).
     this.gameLoop.resetCosmeticBaselines();
     this._guestMatchOverFired = false;
-    this._prevGuestPhase = 'loading';
+    // Sync prev-phase to current state so the next snapshot tick doesn't see
+    // a synthetic loading→playing edge and re-fire onEnterPlayingPhase. That
+    // would double-start non-idempotent ambient loops (wind/lava/etc.) and
+    // append duplicate entries to MatchSystem.activeAmbientLoops.
+    this._prevGuestPhase = this.gameLoop.getState().phase;
     this.lastSnapshotTime = performance.now();
     this.stallNotified = false;
     this.onReconnecting?.(false);

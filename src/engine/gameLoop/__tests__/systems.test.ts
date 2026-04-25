@@ -322,6 +322,18 @@ describe('ParticleSystem', () => {
     sys.cleanup();
     expect(sys.getParticles().length).toBe(0);
   });
+
+  it('emitParticle enforces a soft cap so bulk emitters cannot grow live count unbounded', () => {
+    // Regression: spawnGoreParticles + matchOver firework spam could push the
+    // live array into the thousands and stutter mobile GC. Cap is 600.
+    const state = makeSystemState();
+    const sys = makeParticleSystem(state);
+    sys.init();
+    for (let i = 0; i < 1500; i++) {
+      sys.emitParticle(0, 0, 0, 0, 1.0, 3, '#fff');
+    }
+    expect(sys.getParticles().length).toBeLessThanOrEqual(600);
+  });
 });
 
 // ── PlayerTransitionSystem ───────────────────────────────────────────────────
