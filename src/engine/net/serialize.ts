@@ -32,7 +32,6 @@ export interface PlayerSnapshot {
   squashScale: number;
   squashTimer: number;
   sideSquash: number;
-  idleAnimTimer: number;
   idleAction: number;
   idleActionTimer: number;
   idleActionDuration: number;
@@ -118,7 +117,6 @@ function snapshotPlayer(p: Player): PlayerSnapshot {
     squashScale: p.squashScale,
     squashTimer: p.squashTimer,
     sideSquash: p.sideSquash,
-    idleAnimTimer: p.idleAnimTimer,
     idleAction: p.idleAction,
     idleActionTimer: p.idleActionTimer,
     idleActionDuration: p.idleActionDuration,
@@ -153,7 +151,6 @@ function restorePlayer(p: Player, snap: PlayerSnapshot): void {
   p.squashScale = snap.squashScale;
   p.squashTimer = snap.squashTimer;
   p.sideSquash = snap.sideSquash;
-  p.idleAnimTimer = snap.idleAnimTimer;
   p.idleAction = snap.idleAction;
   p.idleActionTimer = snap.idleActionTimer;
   p.idleActionDuration = snap.idleActionDuration;

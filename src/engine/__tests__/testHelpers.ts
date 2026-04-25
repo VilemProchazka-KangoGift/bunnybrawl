@@ -29,7 +29,6 @@ export function makePlayer(overrides: Partial<Player> & { id?: PlayerSlot } = {}
     squashTimer: 0,
     sideSquash: 1,
     afterimages: [],
-    idleAnimTimer: 0,
     idleAction: -1,
     idleActionTimer: 0,
     idleActionDuration: 0,

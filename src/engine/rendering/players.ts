@@ -4,7 +4,7 @@ import { FAT_SCALE, HITSTOP_DURATION } from '../constants';
 import { hasCustomEyes, getSpriteRenderer, getCharacterPack, drawLegs } from '../characters';
 import { drawHighlightSpot } from '../spriteShading';
 import { getSlowDevice } from '../perfFlags';
-import { getIdleAction } from './idleActions';
+import { getIdleAction, type IdleAction } from './idleActions';
 
 // Sprite cache: key -> OffscreenCanvas with pre-drawn character sprite.
 // Backing-store dims include the current render scale; cleared on scale change.
@@ -186,13 +186,10 @@ function drawCharacterSprite(
 
   // Idle action ctx transform — applied to main ctx, OUTSIDE the cached bitmap, so the
   // animated transform doesn't get baked into the (1-bit-keyed) sprite cache entry.
-  const cx = x + w / 2;
-  const yOff = y;
-  const idleT = idleActionDuration > 0 ? 1 - (idleActionTimer / idleActionDuration) : 0;
+  // Resolved lazily so non-idle players (the common case) skip allocation + save/restore.
   const idleAnimAction = (idleAction >= 0 && state !== 'run' && state !== 'airborne')
     ? getIdleAction(char.name, idleAction)
     : null;
-  const colors = { color: char.color, darkColor: char.darkColor, lightColor: char.lightColor };
 
   const pad = 10;
   const cw = Math.ceil(w) + pad * 2;
@@ -204,10 +201,7 @@ function drawCharacterSprite(
     spriteCache.delete(cacheKey);
     spriteCache.set(cacheKey, cached);
     // Explicit logical dest size — cached bitmap is at scaled px dims; main ctx transform maps logical → pixel.
-    ctx.save();
-    if (idleAnimAction) idleAnimAction.apply(ctx, cx, yOff, w, h, idleT, colors, player);
-    ctx.drawImage(cached, x - pad, y - pad, cw, ch);
-    ctx.restore();
+    blitWithIdleTransform(ctx, cached, x, y, w, h, pad, cw, ch, char, idleAnimAction, idleActionTimer, idleActionDuration, player);
     return;
   }
 
@@ -225,8 +219,29 @@ function drawCharacterSprite(
     if (first !== undefined) spriteCache.delete(first);
   }
   spriteCache.set(cacheKey, cached);
+  blitWithIdleTransform(ctx, cached, x, y, w, h, pad, cw, ch, char, idleAnimAction, idleActionTimer, idleActionDuration, player);
+}
+
+/** Blit cached sprite, optionally with an idle-action ctx transform around it. */
+function blitWithIdleTransform(
+  ctx: CanvasRenderingContext2D,
+  cached: OffscreenCanvas,
+  x: number, y: number, w: number, h: number,
+  pad: number, cw: number, ch: number,
+  char: { name: string; color: string; darkColor: string; lightColor: string },
+  idleAnimAction: IdleAction | null,
+  idleActionTimer: number, idleActionDuration: number,
+  player: Player,
+): void {
+  if (!idleAnimAction) {
+    ctx.drawImage(cached, x - pad, y - pad, cw, ch);
+    return;
+  }
+  const cx = x + w / 2;
+  const idleT = idleActionDuration > 0 ? 1 - (idleActionTimer / idleActionDuration) : 0;
+  const colors = { color: char.color, darkColor: char.darkColor, lightColor: char.lightColor };
   ctx.save();
-  if (idleAnimAction) idleAnimAction.apply(ctx, cx, yOff, w, h, idleT, colors, player);
+  idleAnimAction.apply(ctx, cx, y, w, h, idleT, colors, player);
   ctx.drawImage(cached, x - pad, y - pad, cw, ch);
   ctx.restore();
 }

@@ -4,8 +4,8 @@
 
 import type { CharacterDef, CharacterSlot, Player, PlayerSlot, InputState } from './types';
 import { ALL_BOT_SLOTS, isBotSlot } from './types';
-import { CANVAS_WIDTH, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED, IDLE_FIRST_DELAY, IDLE_REST_MIN, IDLE_REST_MAX } from './constants';
-import { pickIdleAction } from './rendering/idleActions';
+import { CANVAS_WIDTH, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED } from './constants';
+import { tickIdleStateMachine } from './rendering/idleActions';
 import { KEY_BINDINGS } from './input';
 import { applyInput, applyGravity, movePlayer, collidePlatforms, updatePlayerState } from './physics';
 import { isStomping } from './stomp';
@@ -35,7 +35,7 @@ function makeLobbyPlayer(slot: PlayerSlot, char: CharacterDef, x: number, y: num
     animFrame: 0, animTimer: 0, fastFalling: false,
     fatTimer: 0, slowTimer: 0,
     squashScale: 1, squashTimer: 0, sideSquash: 1,
-    afterimages: [], idleAnimTimer: 0,
+    afterimages: [],
     idleAction: -1, idleActionTimer: 0, idleActionDuration: 0,
     expression: 'normal', killStreak: 0,
     breathTimer: 0, springTrailTimer: 0,
@@ -189,35 +189,7 @@ export class LobbyGame {
         if (p.animTimer > 0.12) { p.animTimer = 0; p.animFrame = (p.animFrame + 1) % 4; }
       }
 
-      // Idle action state machine — mirrors playerCosmetics.ts.
-      if (p.state === 'idle') {
-        if (p.idleActionTimer === 0 && p.idleAction === -1 && p.idleActionDuration === 0) {
-          p.idleActionTimer = IDLE_FIRST_DELAY;
-        }
-        p.idleActionTimer -= dt;
-        if (p.idleActionTimer <= 0) {
-          if (p.idleAction >= 0) {
-            p.idleAction = -1;
-            p.idleActionDuration = 0;
-            p.idleActionTimer = IDLE_REST_MIN + Math.random() * (IDLE_REST_MAX - IDLE_REST_MIN);
-          } else {
-            const pick = pickIdleAction(p.character.name);
-            if (pick) {
-              p.idleAction = pick.index;
-              p.idleActionDuration = pick.action.duration;
-              p.idleActionTimer = pick.action.duration;
-            } else {
-              p.idleActionTimer = IDLE_REST_MAX;
-            }
-          }
-        }
-        p.idleAnimTimer = p.idleAction >= 0 ? p.idleActionTimer : 0;
-      } else {
-        p.idleAction = -1;
-        p.idleActionTimer = 0;
-        p.idleActionDuration = 0;
-        p.idleAnimTimer = 0;
-      }
+      tickIdleStateMachine(p, dt);
 
       // Lobby-specific: crouch-on-ground squat
       if (input.down && p.state !== 'airborne') p.squashScale = SQUASH_ON_CROUCH;

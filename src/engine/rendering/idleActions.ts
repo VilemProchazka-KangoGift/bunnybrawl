@@ -1,5 +1,7 @@
 import type { CharacterColors } from '../characters/types';
 import { getCharacterPack } from '../characters/registry';
+import { IDLE_FIRST_DELAY, IDLE_REST_MIN, IDLE_REST_MAX } from '../constants';
+import { fastSin } from '../fastMath';
 
 /** Player view passed to action apply functions — narrow shape, only what actions need. */
 export interface IdleActionPlayerView {
@@ -37,7 +39,7 @@ const SHARED_ACTIONS: Record<SharedActionId, IdleAction> = {
     id: 'headBob',
     duration: 0.7,
     apply: (ctx, _cx, _yOff, _w, _h, t) => {
-      const pulse = Math.sin(t * Math.PI);
+      const pulse = fastSin(t * Math.PI);
       ctx.translate(0, -pulse * 2);
     },
   },
@@ -45,7 +47,7 @@ const SHARED_ACTIONS: Record<SharedActionId, IdleAction> = {
     id: 'headTilt',
     duration: 0.7,
     apply: (ctx, cx, yOff, _w, h, t) => {
-      const pulse = Math.sin(t * Math.PI);
+      const pulse = fastSin(t * Math.PI);
       ctx.translate(cx, yOff + h * 0.5);
       ctx.rotate(pulse * 0.12);
       ctx.translate(-cx, -(yOff + h * 0.5));
@@ -55,8 +57,8 @@ const SHARED_ACTIONS: Record<SharedActionId, IdleAction> = {
     id: 'headShake',
     duration: 0.8,
     apply: (ctx, cx, yOff, _w, h, t) => {
-      const env = Math.sin(t * Math.PI);
-      const osc = Math.sin(t * Math.PI * 4);
+      const env = fastSin(t * Math.PI);
+      const osc = fastSin(t * Math.PI * 4);
       ctx.translate(cx, yOff + h * 0.5);
       ctx.rotate(env * osc * 0.08);
       ctx.translate(-cx, -(yOff + h * 0.5));
@@ -66,7 +68,7 @@ const SHARED_ACTIONS: Record<SharedActionId, IdleAction> = {
     id: 'littleHop',
     duration: 0.55,
     apply: (ctx, _cx, _yOff, _w, _h, t) => {
-      const lift = Math.sin(t * Math.PI) * 14;
+      const lift = fastSin(t * Math.PI) * 14;
       ctx.translate(0, -lift);
     },
   },
@@ -74,7 +76,7 @@ const SHARED_ACTIONS: Record<SharedActionId, IdleAction> = {
     id: 'stretch',
     duration: 0.95,
     apply: (ctx, cx, yOff, _w, h, t) => {
-      const pulse = Math.sin(t * Math.PI);
+      const pulse = fastSin(t * Math.PI);
       const sy = 1 + pulse * 0.10;
       const sx = 1 - pulse * 0.05;
       const baseY = yOff + h;
@@ -174,4 +176,45 @@ export function getIdleAction(charName: string, index: number): IdleAction | nul
 export function clearIdleActionCache(): void {
   poolCache.clear();
   weightCache.clear();
+}
+
+/** Per-player tick of the idle action state machine. Used by both match (cosmeticStep)
+ *  and lobby (LobbyGame.step). Local state only — never synced over the network. */
+export interface IdleStateMachineTarget {
+  state: string;
+  character: { name: string };
+  idleAction: number;
+  idleActionTimer: number;
+  idleActionDuration: number;
+}
+
+export function tickIdleStateMachine(p: IdleStateMachineTarget, dt: number): void {
+  if (p.state !== 'idle') {
+    p.idleAction = -1;
+    p.idleActionTimer = 0;
+    p.idleActionDuration = 0;
+    return;
+  }
+  // Seed first-action delay on the frame we (re-)enter idle.
+  if (p.idleActionTimer === 0 && p.idleAction === -1 && p.idleActionDuration === 0) {
+    p.idleActionTimer = IDLE_FIRST_DELAY;
+  }
+  p.idleActionTimer -= dt;
+  if (p.idleActionTimer > 0) return;
+
+  if (p.idleAction >= 0) {
+    p.idleAction = -1;
+    p.idleActionDuration = 0;
+    p.idleActionTimer = IDLE_REST_MIN + Math.random() * (IDLE_REST_MAX - IDLE_REST_MIN);
+    return;
+  }
+  const pick = pickIdleAction(p.character.name);
+  if (pick) {
+    p.idleAction = pick.index;
+    p.idleActionDuration = pick.action.duration;
+    p.idleActionTimer = pick.action.duration;
+  } else {
+    // Empty pool (misconfigured pack) — stay resting until next tick re-tries.
+    p.idleActionTimer = IDLE_REST_MAX;
+  }
 }
