@@ -70,6 +70,16 @@ export const perfTrace = {
     buf.totalMs += elapsed;
   },
 
+  /** Time a synchronous function. Closes the span even if `fn` throws. */
+  measure<T>(name: PerfSection, fn: () => T): T {
+    const t = perfTrace.begin(name);
+    try {
+      return fn();
+    } finally {
+      perfTrace.end(name, t);
+    }
+  },
+
   snapshot(): Record<string, SectionStats> {
     const out: Record<string, SectionStats> = {};
     for (const [name, buf] of sections) {

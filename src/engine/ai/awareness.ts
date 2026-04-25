@@ -62,12 +62,9 @@ export function buildAwareness(
   preferSafePath: boolean = false,
   mirrorNav: boolean = false,
 ): AwarenessSnapshot {
-  const _t = perfTrace.begin('awareness');
-  try {
-    return _buildAwarenessImpl(self, state, arena, awarenessRadius, pathfindingDepth, preferSafePath, mirrorNav);
-  } finally {
-    perfTrace.end('awareness', _t);
-  }
+  return perfTrace.measure('awareness', () =>
+    _buildAwarenessImpl(self, state, arena, awarenessRadius, pathfindingDepth, preferSafePath, mirrorNav),
+  );
 }
 
 function _buildAwarenessImpl(

@@ -191,15 +191,12 @@ export class ParticleSystem implements CosmeticSystem {
 
   /** Update weather, particles, gibs, confetti. */
   cosmeticUpdate(dt: number): void {
-    const _t = perfTrace.begin('particles');
-    try {
+    perfTrace.measure('particles', () => {
       updateWeather(this.state, this.theme, dt);
       updateParticles(this._particles, this.particleFreeList, this.arena.platforms, this.settings.goreMode, this.newBloodDripsSinceRender, dt);
       updateGibs(this.state.gibs, this.arena.platforms, this.arena.effectZones, this.geyserIndexMap, this.state.geyserStates, this.newGroundedGibsSinceRender, dt);
       updateConfetti(this.state.confetti, this.state.timeElapsed, dt);
-    } finally {
-      perfTrace.end('particles', _t);
-    }
+    });
   }
 
   /** Tick the firework spawn timer (called every frame on matchOver).

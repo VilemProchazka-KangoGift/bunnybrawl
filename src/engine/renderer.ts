@@ -486,8 +486,7 @@ export class Renderer {
   // ---- Frame rendering ----
 
   renderFrame(matchState: MatchState, arena: Arena, particles: Particle[], cosmeticLead = 0): void {
-    const _t = perfTrace.begin('renderFrame');
-    try {
+    perfTrace.measure('renderFrame', () => {
       const ctx = this.fgCtx;
       ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
@@ -800,9 +799,7 @@ export class Renderer {
       } else {
         this._drawOverlayContent(this.fgCtx, matchState, arena, hudDirty);
       }
-    } finally {
-      perfTrace.end('renderFrame', _t);
-    }
+    });
   }
 
   /** Draw HUD + overlays on the dedicated hud canvas, skipping clear+redraw when nothing changed. */

@@ -548,8 +548,7 @@ export class GameLoop {
   /** Half-rate wrapper around cosmeticStep. Tests call cosmeticStep directly
    *  so assertions run at the un-throttled per-tick rate. */
   tickCosmetic(dt: number): void {
-    const _t = perfTrace.begin('tickCosmetic');
-    try {
+    perfTrace.measure('tickCosmetic', () => {
       // Defend against pathological dt: negative (clock-warp), NaN, Infinity.
       // NaN poisoning here would silently kill all cosmetic updates for the
       // rest of the session — every subsequent comparison returns false.
@@ -565,9 +564,7 @@ export class GameLoop {
       // we recover within ~16 frames after a big gap rather than dropping it.
       this._cosmeticLead = Math.max(0, this._cosmeticLead - stepDt);
       this.cosmeticStep(stepDt);
-    } finally {
-      perfTrace.end('tickCosmetic', _t);
-    }
+    });
   }
 
   /** Re-prime cosmetic baselines (prevCosmeticState + spring map) against the
@@ -591,8 +588,7 @@ export class GameLoop {
   /** Tick all cosmetic-only systems (particles, environment, visual decays).
    *  Called once per frame from local loop(), host loop, and guest loop. */
   cosmeticStep(dt: number): void {
-    const _t = perfTrace.begin('cosmeticStep');
-    try {
+    perfTrace.measure('cosmeticStep', () => {
       // Skip cosmetic updates during loading — snapshots received here would
       // otherwise trigger spurious transition sounds as prev-state vs. snapshot-state
       // flips on the guest.
@@ -619,9 +615,7 @@ export class GameLoop {
 
       // --- Environment ---
       this.environmentSystem.cosmeticUpdate(dt);
-    } finally {
-      perfTrace.end('cosmeticStep', _t);
-    }
+    });
   }
 
   // Public VFX methods removed — cosmeticStep() calls private methods directly.
@@ -732,8 +726,7 @@ export class GameLoop {
 
   /** Run one fixed-timestep simulation tick. Public for rollback engine. */
   fixedUpdate(dt: number, networkInputs?: Map<string, InputState>): void {
-    const _t = perfTrace.begin('fixedUpdate');
-    try {
+    perfTrace.measure('fixedUpdate', () => {
     this._networkInputs = networkInputs;
     if (this.stopped || this.state.matchOver) return;
     if (this.state.phase === 'loading') return;
@@ -987,9 +980,7 @@ export class GameLoop {
 
     // Crowd cheering, periodic ambient sounds, match end check
     this.matchSystem.fixedUpdate(dt);
-    } finally {
-      perfTrace.end('fixedUpdate', _t);
-    }
+    });
   }
 
   private getPlayerInput(player: Player): InputState {
