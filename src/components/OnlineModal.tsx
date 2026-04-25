@@ -25,8 +25,8 @@ const CONNECTING_STAGE_TIMINGS: Array<{ at: number; key: ConnectingStage }> = [
   { at: 15000, key: 'slow' },
 ];
 
-export { getModalTransport, clearModalTransport, clearReclaimTokens, tearDownOnlineSession, getHostReclaimTokens, getGuestOwnReclaimToken, resolveRandomArena, PLAYER_NAME_MAX_LENGTH } from './useOnlineRoom';
 import { PLAYER_NAME_MAX_LENGTH } from './useOnlineRoom';
+export { getModalTransport, clearModalTransport, clearReclaimTokens, tearDownOnlineSession, getHostReclaimTokens, getGuestOwnReclaimToken, resolveRandomArena } from './useOnlineRoom';
 
 interface OnlineModalProps {
   onClose: () => void;
@@ -97,7 +97,7 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
                   <input className="online-code-input online-name-input" data-testid="online-name-input" type="text" maxLength={PLAYER_NAME_MAX_LENGTH}
                     value={playerName} autoFocus
                     onChange={(e) => {
-                      const v = e.target.value.replace(/[\p{C}]/gu, '').slice(0, 16);
+                      const v = e.target.value.replace(/[\p{C}]/gu, '').slice(0, PLAYER_NAME_MAX_LENGTH);
                       setPlayerName(v);
                     }}
                     onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}

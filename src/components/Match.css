@@ -283,9 +283,6 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  /* Translucent dark veil over the (already-rendered) arena background.
-     Combined with backdrop-filter, this gives a frosted-glass effect
-     showing the arena underneath. */
   background: rgba(10, 10, 20, 0.55);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -299,13 +296,8 @@
   width: 280px;
   height: auto;
   margin-bottom: 24px;
-  animation: match-loading-logo-zoom 3s ease-in-out infinite;
+  animation: logoZoom 3s ease-in-out infinite;
   filter: drop-shadow(0 4px 16px rgba(0, 0, 0, 0.5));
-}
-
-@keyframes match-loading-logo-zoom {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.04); }
 }
 
 .match-loading-spinner {

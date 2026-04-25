@@ -20,12 +20,8 @@ import {
 import { ALL_BOT_SLOTS, isBotSlot } from '../engine/types';
 import { listArenaPacks } from '../engine/arenas';
 import type { BotSlot, CharacterSlot, PlayerSlot } from '../engine/types';
-
-// Match HUD score box (rendering/hud.ts) is ~112px wide at 16px Press Start 2P
-// bold — anything past ~8 chars overflows into the next slot. Used for both
-// the input maxLength and as a clamp when loading a stale long name from
-// localStorage left over from before this limit was tightened.
-export const PLAYER_NAME_MAX_LENGTH = 8;
+import { PLAYER_NAME_MAX_LENGTH } from '../engine/rendering/hud';
+export { PLAYER_NAME_MAX_LENGTH };
 
 /** Resolve 'random' arenaId to a concrete ID so both peers use the same arena.
  *  CRITICAL: must be called once on the host before sending SETTINGS_SYNC, then

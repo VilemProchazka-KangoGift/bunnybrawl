@@ -62,11 +62,6 @@
   filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.4));
 }
 
-@keyframes logoZoom {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.04); }
-}
-
 .tagline {
   font-family: 'Nunito', sans-serif;
   font-size: 24px;

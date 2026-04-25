@@ -4,6 +4,11 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT, SCORE_ANIM_DURATION, MATCH_COUNTDOWN } fro
 import { getCharacterEmoji, getCharacterDisplayName } from '../characters';
 import i18n from '../../i18n';
 
+// Score box ~112px wide at 16px Press Start 2P bold fits ~8 chars before
+// overflowing the next slot. Used by OnlineModal as input maxLength too.
+export const PLAYER_NAME_MAX_LENGTH = 8;
+const PLAYER_NAME_MAX_LENGTH_COMPACT = 4;
+
 // HUD cache state (module-level)
 let hudCache: OffscreenCanvas | null = null;
 let hudCacheCtx: OffscreenCanvasRenderingContext2D | null = null;
@@ -113,11 +118,8 @@ function _drawHUDImpl(ctx: CanvasRenderingContext2D, state: MatchState, frameTim
 
     const customName = playerNames?.[player.id];
     const translatedName = customName || getCharacterDisplayName(player.character.name, i18n.language);
-    // Hard cap on name length so an old-version peer broadcasting a long name
-    // can't push their text past the score box's right edge into the next slot.
-    // OnlineModal clamps newly-entered names to PLAYER_NAME_MAX_LENGTH (8) but
-    // names that arrive over the wire skip that input — clamp here defensively.
-    const displayName = compact ? translatedName.slice(0, 4) : translatedName.slice(0, 8);
+    // Defensive clamp — old-version peers can broadcast names past the input maxLength.
+    const displayName = translatedName.slice(0, compact ? PLAYER_NAME_MAX_LENGTH_COMPACT : PLAYER_NAME_MAX_LENGTH);
     ctx.fillStyle = player.character.color;
     ctx.font = `bold ${compact ? 12 : 16}px "Press Start 2P", monospace`;
     ctx.textAlign = 'left';
