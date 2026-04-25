@@ -4,7 +4,7 @@
  * Buffers guest inputs, broadcasts snapshots, manages peer connections.
  * Game-specific logic (input latching, reconnect respawn) is injected via callbacks.
  */
-import type { SnapshotCodec, InputCodec, HostAuthorityConfig } from './types';
+import type { SnapshotEncoder, InputCodec, HostAuthorityConfig } from './types';
 import { CoreMsgType, encodePong, decodePingPong } from './protocol';
 
 /** Minimal simulation interface — only what the host authority actually calls. */
@@ -37,7 +37,7 @@ export interface HostDebugStats {
 
 export class GenericHostAuthority<TInput, TState, TSnapshot> {
   private simulation: HostSimulation<TState>;
-  private snapshotCodec: SnapshotCodec<TSnapshot, TState>;
+  private snapshotEncoder: SnapshotEncoder<TSnapshot, TState>;
   private inputCodec: InputCodec<TInput>;
   private transport: HostTransport;
   readonly localSlot: string;
@@ -61,9 +61,10 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
   // Per-slot frame tracking for input redundancy
   private lastConsumedFrame = new Map<string, number>();
 
-  // Reconnection grace period
+  // Reconnection grace period (seconds before a disconnected slot is final-evicted).
   private disconnectedSlots = new Map<string, { timer: number; peerId: string }>();
-  private readonly GRACE_PERIOD = 20; // seconds
+  private readonly gracePeriodSec: number;
+  private static readonly DEFAULT_GRACE_PERIOD_SEC = 20;
 
   // Stats — ring buffer of last 120 snapshot sizes (~2s at 60Hz)
   private lastSnapshotBytes = 0;
@@ -87,13 +88,14 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
     decodeSlot: (byte: number) => string,
   ) {
     this.simulation = config.simulation;
-    this.snapshotCodec = config.snapshotCodec;
+    this.snapshotEncoder = config.snapshotEncoder;
     this.inputCodec = config.inputCodec;
     this.transport = transport;
     this.localSlot = config.localSlot;
     this.onInputReceived = config.onInputReceived;
     this.onPlayerReconnect = config.onPlayerReconnect;
     this.onPlayerDisconnect = config.onPlayerDisconnect;
+    this.gracePeriodSec = config.gracePeriodSec ?? GenericHostAuthority.DEFAULT_GRACE_PERIOD_SEC;
     this.decodeInputMessage = decodeInputMessage;
     this.decodeSlot = decodeSlot;
   }
@@ -108,7 +110,7 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
     this.peerSlotMap.delete(peerId);
     if (slot) {
       this.guestInputs.delete(slot);
-      this.disconnectedSlots.set(slot, { timer: this.GRACE_PERIOD, peerId });
+      this.disconnectedSlots.set(slot, { timer: this.gracePeriodSec, peerId });
       this.simulation.disconnectPlayer(slot);
       this.onPlayerDisconnect?.(slot);
     }
@@ -163,8 +165,8 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
     if (this.matchOverSnapshotsLeft === 0) return;
     if (this.matchOverSnapshotsLeft > 0) this.matchOverSnapshotsLeft--;
     this.localFrame++;
-    const snap = this.snapshotCodec.takeSnapshot(this.localFrame, state);
-    const encodeBuf = this.snapshotCodec.encode(snap);
+    const snap = this.snapshotEncoder.takeSnapshot(this.localFrame, state);
+    const encodeBuf = this.snapshotEncoder.encode(snap);
 
     const msg = new Uint8Array(1 + encodeBuf.byteLength);
     msg[0] = CoreMsgType.SNAPSHOT;
@@ -184,8 +186,8 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
    *  reclaimed guest needs a fresh full state outside the broadcast cadence.
    *  Does not advance localFrame or touch the match-over tail. */
   sendSnapshotTo(peerId: string, state: TState): void {
-    const snap = this.snapshotCodec.takeSnapshot(this.localFrame, state);
-    const encodeBuf = this.snapshotCodec.encode(snap);
+    const snap = this.snapshotEncoder.takeSnapshot(this.localFrame, state);
+    const encodeBuf = this.snapshotEncoder.encode(snap);
     const msg = new Uint8Array(1 + encodeBuf.byteLength);
     msg[0] = CoreMsgType.SNAPSHOT;
     msg.set(new Uint8Array(encodeBuf), 1);

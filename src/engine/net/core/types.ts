@@ -13,13 +13,21 @@
 
 // ---- Snapshot Codec ----
 
-/** Game-specific snapshot serialization. The core just transports bytes. */
-export interface SnapshotCodec<TSnapshot, TState> {
+/** Host-side snapshot serialization — take state and serialize to wire bytes. */
+export interface SnapshotEncoder<TSnapshot, TState> {
   takeSnapshot(frame: number, state: TState): TSnapshot;
   encode(snapshot: TSnapshot): ArrayBuffer;
+}
+
+/** Guest-side snapshot deserialization — wire bytes back to state. */
+export interface SnapshotDecoder<TSnapshot, TState> {
   decode(buffer: ArrayBuffer): TSnapshot | null;
   applyToState(snapshot: TSnapshot, state: TState): void;
 }
+
+/** Both halves bundled — convenience for code that does both (tests, fixtures). */
+export interface SnapshotCodec<TSnapshot, TState>
+  extends SnapshotEncoder<TSnapshot, TState>, SnapshotDecoder<TSnapshot, TState> {}
 
 // ---- Interpolation Config ----
 
@@ -44,9 +52,11 @@ export interface InputCodec<TInput> {
 /** Configuration for the generic host authority engine. */
 export interface HostAuthorityConfig<TInput, TState, TSnapshot> {
   simulation: { getState(): TState; disconnectPlayer(id: string): void };
-  snapshotCodec: SnapshotCodec<TSnapshot, TState>;
+  snapshotEncoder: SnapshotEncoder<TSnapshot, TState>;
   inputCodec: InputCodec<TInput>;
   localSlot: string;
+  /** Seconds a disconnected slot is held in reconnect-grace before final eviction. Default 20. */
+  gracePeriodSec?: number;
   /** Called when a guest input arrives — game can latch edge-triggered inputs. */
   onInputReceived?(slot: string, existing: TInput, incoming: TInput): TInput;
   /** Called when a player reconnects in splatted state — game can trigger respawn. */

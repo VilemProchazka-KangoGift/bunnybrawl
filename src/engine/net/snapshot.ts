@@ -164,7 +164,9 @@ export function encodeSnapshot(snap: AuthSnapshot): { buffer: ArrayBuffer; lengt
       (dfSide << 6);
     ENCODE_VIEW.setUint8(o++, flags);
     ENCODE_VIEW.setUint8(o++, p.animFrame & 0xFF);
-    ENCODE_VIEW.setUint8(o++, Math.min(p.score, 255));
+    // Score / killStreak as Uint16 so mods (or carrots) that push past 255
+    // don't silently freeze the guest's view of the scoreboard.
+    ENCODE_VIEW.setUint16(o, Math.min(p.score, 65535), true); o += 2;
 
     // Timer presence mask + only non-zero timers.
     // Bits: 0=hitstop 1=invincible 2=splat 3=respawn 4=fat 5=slow 6=burn 7=damageFlash
@@ -196,7 +198,7 @@ export function encodeSnapshot(snap: AuthSnapshot): { buffer: ArrayBuffer; lengt
     if (dfTimer) ENCODE_VIEW.setUint8(o++, dfTimer);
 
     ENCODE_VIEW.setUint8(o++, Math.round(p.squashScale * 50) & 0xFF); // 50 = 1.0 normal
-    ENCODE_VIEW.setUint8(o++, Math.min(p.killStreak, 255));
+    ENCODE_VIEW.setUint16(o, Math.min(p.killStreak, 65535), true); o += 2;
     ENCODE_VIEW.setUint8(o++, Math.min(Math.round(p.width), 255));
     ENCODE_VIEW.setUint8(o++, Math.min(Math.round(p.height), 255));
     ENCODE_VIEW.setUint8(o++, Math.round(p.sideSquash * 50) & 0xFF); // 50 = 1.0 normal
@@ -293,6 +295,15 @@ export function encodeSnapshot(snap: AuthSnapshot): { buffer: ArrayBuffer; lengt
     ENCODE_VIEW.setFloat32(o, sa.timer, true); o += 4;
   }
 
+  // Defense in depth: every individual setFloat32/setUint16 past
+  // MAX_SNAPSHOT_BYTES already throws RangeError, but a final assertion gives
+  // a clearer signal of "snapshot grew past budget" if a future caller adds
+  // a field that fits within the buffer for typical entity counts but
+  // overflows on edge cases (e.g. carrot-rain mods).
+  if (o > MAX_SNAPSHOT_BYTES) {
+    throw new Error(`encodeSnapshot: ${o} bytes exceeds MAX_SNAPSHOT_BYTES (${MAX_SNAPSHOT_BYTES})`);
+  }
+
   return { buffer: ENCODE_BUF, length: o };
 }
 
@@ -319,7 +330,7 @@ export function decodeSnapshot(buf: ArrayBuffer): AuthSnapshot | null {
     const stateIdx = view.getUint8(o++);
     const flags = view.getUint8(o++);
     const animFrame = view.getUint8(o++);
-    const score = view.getUint8(o++);
+    const score = view.getUint16(o, true); o += 2;
 
     const timerMask = view.getUint8(o++);
     const hitstopTimer = (timerMask & 1) ? view.getUint8(o++) / 60 : 0;
@@ -332,7 +343,7 @@ export function decodeSnapshot(buf: ArrayBuffer): AuthSnapshot | null {
     const damageFlashTimer = (timerMask & 128) ? view.getUint8(o++) / 60 : 0;
 
     const squashScale = view.getUint8(o++) / 50;
-    const killStreak = view.getUint8(o++);
+    const killStreak = view.getUint16(o, true); o += 2;
     const width = view.getUint8(o++);
     const height = view.getUint8(o++);
     const sideSquash = view.getUint8(o++) / 50;

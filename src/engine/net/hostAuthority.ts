@@ -26,15 +26,13 @@ export interface HostAuthorityConfig {
   onPlayerDisconnect?: (slot: PlayerSlot) => void;
 }
 
-// Snapshot codec adapter for the generic core
-const crSnapshotCodec = {
+// Snapshot encoder adapter for the generic core (host-only path).
+const crSnapshotEncoder = {
   takeSnapshot: (frame: number, state: MatchState) => takeAuthSnapshot(frame, state),
   encode: (snap: ReturnType<typeof takeAuthSnapshot>) => {
     const { buffer, length } = encodeSnapshot(snap);
     return buffer.slice(0, length);
   },
-  decode: () => null, // Host doesn't decode snapshots
-  applyToState: () => {}, // Host doesn't apply snapshots
 };
 
 // Input codec adapter
@@ -58,7 +56,7 @@ export class HostAuthority {
     this.core = new GenericHostAuthority(
       {
         simulation: config.gameLoop,
-        snapshotCodec: crSnapshotCodec,
+        snapshotEncoder: crSnapshotEncoder,
         inputCodec: crInputCodec,
         localSlot: config.localSlot,
         onInputReceived: (_slot, existing, incoming) => {
