@@ -145,6 +145,98 @@ describe('useOnlineRoom — PROTOCOL_VERSION mismatch', () => {
   });
 });
 
+describe('useOnlineRoom — host-only message direction validation', () => {
+  // Lobby protocol invariants: SLOT_ASSIGNMENT, SETTINGS_SYNC, START_MATCH,
+  // PLAYER_JOINED, PLAYER_LEFT, MATCH_IN_PROGRESS, MATCH_RESULT are all
+  // host→guest. A guest could otherwise send any of these and rewrite the
+  // host's localSlot, settings, or force a premature match start.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    capturedEvents = null;
+    act(() => {
+      useGameStore.getState().resetOnline();
+      useGameStore.getState().setMatchSettings({ arenaId: 'meadow', killLimit: 16 });
+    });
+  });
+
+  function setupHost() {
+    const onMatchStart = vi.fn();
+    const { result } = renderHook(() => useOnlineRoom({ onMatchStart }));
+    act(() => result.current.connect(true));
+    expect(capturedEvents).toBeTruthy();
+    return result;
+  }
+
+  it('host ignores SLOT_ASSIGNMENT from a guest (would otherwise rewrite localSlot)', () => {
+    setupHost();
+    const before = useGameStore.getState().online.localSlot;
+    act(() => {
+      capturedEvents!.onReliableMessage(
+        { type: MsgType.SLOT_ASSIGNMENT, slot: 'P3', allPlayers: [], reclaimToken: 'attacker' } as any,
+        'peer-attacker',
+      );
+    });
+    // localSlot unchanged; reclaim token map untouched.
+    expect(useGameStore.getState().online.localSlot).toBe(before);
+  });
+
+  it('host ignores SETTINGS_SYNC from a guest (would otherwise overwrite host settings)', () => {
+    setupHost();
+    act(() => {
+      capturedEvents!.onReliableMessage(
+        { type: MsgType.SETTINGS_SYNC, arenaId: 'volcano', killLimit: 99, mods: {}, rngSeed: 0 } as any,
+        'peer-attacker',
+      );
+    });
+    expect(useGameStore.getState().matchSettings.arenaId).toBe('meadow');
+    expect(useGameStore.getState().matchSettings.killLimit).toBe(16);
+  });
+
+  it('host ignores START_MATCH from a guest (would otherwise force match start)', () => {
+    const onMatchStart = vi.fn();
+    const { result } = renderHook(() => useOnlineRoom({ onMatchStart }));
+    act(() => result.current.connect(true));
+    onMatchStart.mockClear();
+    act(() => {
+      capturedEvents!.onReliableMessage(
+        { type: MsgType.START_MATCH, roster: [{ slot: 'P1', characterName: 'Bunny' }] } as any,
+        'peer-attacker',
+      );
+    });
+    expect(onMatchStart).not.toHaveBeenCalled();
+    void result;
+  });
+
+  it('host ignores PLAYER_LEFT from a guest (would otherwise evict slots from host lobby state)', () => {
+    setupHost();
+    // Pre-populate a remotePlayers entry so we can check it survives.
+    act(() => {
+      useGameStore.getState().setOnline({
+        remotePlayers: [{ peerId: 'peer-x', slot: 'P2', characterName: 'Fox', playerName: '', ready: false }],
+      });
+    });
+    act(() => {
+      capturedEvents!.onReliableMessage(
+        { type: MsgType.PLAYER_LEFT, slot: 'P2', reason: 'fake' } as any,
+        'peer-attacker',
+      );
+    });
+    expect(useGameStore.getState().online.remotePlayers).toHaveLength(1);
+  });
+
+  it('host ignores MATCH_IN_PROGRESS from a guest (would otherwise drop host into spectator step)', () => {
+    const result = setupHost();
+    expect(result.current.step).toBe('connecting');
+    act(() => {
+      capturedEvents!.onReliableMessage(
+        { type: MsgType.MATCH_IN_PROGRESS, snapshot: null } as any,
+        'peer-attacker',
+      );
+    });
+    expect(result.current.step).not.toBe('spectating');
+  });
+});
+
 describe('clearModalTransport', () => {
   beforeEach(() => {
     vi.clearAllMocks();

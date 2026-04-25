@@ -504,7 +504,10 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
               setOnline({ remotePlayers: updated });
             }
           }
-        } else if (msg.type === MsgType.SLOT_ASSIGNMENT) {
+        } else if (!isHost && msg.type === MsgType.SLOT_ASSIGNMENT) {
+          // Host-broadcast only — lifting the !isHost gate would let a buggy/
+          // hostile guest rewrite the host's own localSlot + remotePlayers
+          // map, breaking match start.
           const slotMsg = msg as SlotAssignmentMessage;
           // Store the reclaim token issued by host for our slot. Match.tsx
           // hands it to NetMatch via config.ownReclaimToken so a future
@@ -520,7 +523,8 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
             });
           }
           setOnline({ localSlot: slotMsg.slot as PlayerSlot, playerNames: names, remotePlayers: newRemotePlayers });
-        } else if (msg.type === MsgType.SETTINGS_SYNC) {
+        } else if (!isHost && msg.type === MsgType.SETTINGS_SYNC) {
+          // Host-authoritative settings — guest applies, host never accepts.
           useGameStore.getState().setMatchSettings({
             arenaId: msg.arenaId, killLimit: msg.killLimit, timeLimit: msg.timeLimit,
             goreMode: msg.goreMode, botCount: msg.botCount,
@@ -536,11 +540,16 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
             });
           }
           setRemoteReady(true);
-        } else if (msg.type === MsgType.START_MATCH) {
+        } else if (!isHost && msg.type === MsgType.START_MATCH) {
+          // Host-broadcast only. A guest forging START_MATCH to host would
+          // otherwise drop the host into the match screen with the guest's
+          // chosen roster.
           const startMsg = msg as StartMatchMessage;
           receivedRosterRef.current = (startMsg.roster as RosterEntry[] | undefined) ?? null;
           startMatchRef.current();
-        } else if (msg.type === MsgType.PLAYER_JOINED) {
+        } else if (!isHost && msg.type === MsgType.PLAYER_JOINED) {
+          // Host-broadcast only. Without the gate, a guest could inject
+          // synthetic player rows into the host's lobby UI.
           const pj = msg as PlayerJoinedMessage;
           const current = useGameStore.getState().online.remotePlayers;
           const names = pj.playerName ? { ...useGameStore.getState().online.playerNames, [pj.slot]: pj.playerName } : undefined;
@@ -549,13 +558,19 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
             ? current.map(rp => rp.slot === pj.slot ? { ...rp, characterName: pj.characterName, playerName: pj.playerName || rp.playerName } : rp)
             : [...current, { peerId: pj.peerId, slot: pj.slot as PlayerSlot, characterName: pj.characterName, playerName: pj.playerName || '', ready: false }];
           setOnline({ remotePlayers: updatedPlayers, ...(names && { playerNames: names }) });
-        } else if (msg.type === MsgType.PLAYER_LEFT) {
+        } else if (!isHost && msg.type === MsgType.PLAYER_LEFT) {
+          // Host-broadcast only — a guest would otherwise be able to evict
+          // arbitrary slot rows from the host's lobby state.
           const pl = msg as PlayerLeftMessage;
           const current = useGameStore.getState().online.remotePlayers;
           setOnline({ remotePlayers: current.filter(rp => rp.slot !== pl.slot) });
-        } else if (msg.type === MsgType.MATCH_IN_PROGRESS) {
+        } else if (!isHost && msg.type === MsgType.MATCH_IN_PROGRESS) {
+          // Host-broadcast only — guests get this when joining a room whose
+          // host is already in a match.
           setStep('spectating');
-        } else if (msg.type === MsgType.MATCH_RESULT) {
+        } else if (!isHost && msg.type === MsgType.MATCH_RESULT) {
+          // Host-broadcast only — fired when the match ends and we're heading
+          // back to the lobby.
           setStep('lobby');
         }
       },

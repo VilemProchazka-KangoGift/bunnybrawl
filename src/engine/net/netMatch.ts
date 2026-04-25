@@ -178,6 +178,13 @@ export class NetMatch {
         // slot is still marked "loaded" from the original session.
         this.loadedGuests.delete(slot as PlayerSlot);
         config.onPlayerDisconnect?.(slot as PlayerSlot);
+        // Re-evaluate the LOADED handshake. If the disconnecting guest was
+        // the only slot we were still waiting on, expected→[] now and the
+        // phase should advance instead of hanging until the 15-30s
+        // LOADING_TIMEOUT_MS forces it.
+        if (this.gameLoop.getState().phase === 'loading') {
+          this.checkAllLoaded();
+        }
       },
     });
 
@@ -643,17 +650,33 @@ export class NetMatch {
       } else {
         this.gameLoop.resume();
       }
-    } else if (msg.type === MsgType.SETTINGS_SYNC) {
+    } else if (!this._isHost && msg.type === MsgType.SETTINGS_SYNC) {
+      // Host-authoritative — guests apply the host's settings, the host never
+      // accepts SETTINGS_SYNC from anyone. Without the !isHost gate, a buggy
+      // or hostile guest could swap the host's arena mid-match by sending
+      // SETTINGS_SYNC{arenaId:'volcano'} — Match.tsx wires onArenaChange to
+      // gameLoop.switchArena which rebuilds the host's match state in place.
       if ('arenaId' in msg) {
         this.onArenaChange?.((msg as { arenaId: string }).arenaId);
       }
-    } else if (msg.type === MsgType.MATCH_RESULT) {
+    } else if (!this._isHost && msg.type === MsgType.MATCH_RESULT) {
+      // Host-broadcast only. A guest sending MATCH_RESULT to the host would
+      // otherwise schedule a victory transition with the guest's chosen
+      // winner, racing the host's authoritative endMatch.
       this.onMatchEnd?.((msg as { winner: string | null }).winner as PlayerSlot | null, this.gameLoop.getState());
-    } else if (msg.type === MsgType.DISCONNECT) {
+    } else if (!this._isHost && msg.type === MsgType.DISCONNECT) {
+      // Host receives a guest's graceful DISCONNECT via hostAuthority
+      // (peer removal). The NetMatchConfig.onDisconnect callback is the
+      // guest's "reconnect-budget exhausted → flash 'Could not reconnect'"
+      // hook — firing it on the host on a guest's polite leave would push
+      // the host into the disconnect-victory screen.
       this.onDisconnect?.();
-    } else if (msg.type === MsgType.RECONNECT_SYNC) {
+    } else if (!this._isHost && msg.type === MsgType.RECONNECT_SYNC) {
       // Honor host's pause state so the guest's render doesn't diverge from
-      // a suspended simulation on the other end.
+      // a suspended simulation on the other end. Host gating: a guest sending
+      // RECONNECT_SYNC could otherwise pause/unpause the host's sim and reset
+      // the host's cosmetic prev-state baselines (silencing legitimate SFX
+      // until the next state transition).
       const syncMsg = msg as { paused?: boolean };
       if (syncMsg.paused) this.gameLoop.pause();
       else this.gameLoop.resume();
