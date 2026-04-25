@@ -33,5 +33,6 @@ src/fullscreen-check.png
 .worktrees/
 .superpowers/
 test-results/
+dist-perf/
 playwright-report/
 coverage/
