@@ -96,10 +96,13 @@ export class Renderer {
   private _lastBgArena: Arena | null = null;
   private _lastBgOriginalArena: Arena | undefined;
   // Cached foreground decorations (drawForegroundNature output). Static per
-  // match — refreshed only on arena change or render-scale change.
+  // match — refreshed only on arena change or render-scale change. The arena
+  // ref doubles as a dirty marker since renderBackground() also fires on
+  // splat-mark / gib bake events that don't change foreground content.
   private _fgNatureCache: OffscreenCanvas | null = null;
   private _fgNatureCacheCtx: OffscreenCanvasRenderingContext2D | null = null;
   private _fgNatureCacheScale = 0;
+  private _fgNatureCacheArena: Arena | null = null;
   private clouds: Cloud[] = [];
   private lastCloudTime = 0;
   private theme: ThemeConfig;
@@ -280,9 +283,15 @@ export class Renderer {
 
   private _renderForegroundNatureCache(themeArena: Arena): void {
     // OffscreenCanvas isn't available in jsdom test envs — skip caching there;
-    // renderFrame will fall back to drawing foreground nature directly.
+    // renderFrame falls back to drawing foreground nature directly.
     if (typeof OffscreenCanvas === 'undefined') return;
     const s = this._renderScale;
+    // Skip rebuild when nothing that affects foreground content has changed.
+    // renderBackground() also fires on splat marks / gib bakes mid-match —
+    // those don't touch foreground decorations.
+    if (this._fgNatureCache
+      && this._fgNatureCacheArena === themeArena
+      && this._fgNatureCacheScale === s) return;
     if (!this._fgNatureCache || this._fgNatureCacheScale !== s) {
       this._fgNatureCache = new OffscreenCanvas(
         Math.max(1, Math.ceil(CANVAS_WIDTH * s)),
@@ -294,9 +303,16 @@ export class Renderer {
     }
     const cctx = this._fgNatureCacheCtx!;
     cctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    if (this.mirrored) { cctx.save(); cctx.scale(-1, 1); cctx.translate(-CANVAS_WIDTH, 0); }
-    this.theme.drawForegroundNature(cctx as unknown as CanvasRenderingContext2D, themeArena);
-    if (this.mirrored) { cctx.restore(); }
+    this._drawForegroundNatureDirect(cctx as unknown as CanvasRenderingContext2D, themeArena);
+    this._fgNatureCacheArena = themeArena;
+  }
+
+  /** Apply mirror transform and call into theme's foreground draw. Shared by
+   *  the cache builder and the test-env (no OffscreenCanvas) fallback path. */
+  private _drawForegroundNatureDirect(ctx: CanvasRenderingContext2D, themeArena: Arena): void {
+    if (this.mirrored) { ctx.save(); ctx.scale(-1, 1); ctx.translate(-CANVAS_WIDTH, 0); }
+    this.theme.drawForegroundNature(ctx, themeArena);
+    if (this.mirrored) { ctx.restore(); }
   }
 
 
@@ -656,18 +672,13 @@ export class Renderer {
         }
       }
 
-      // Foreground nature is cached in _fgNatureCache (rebuilt by renderBackground
-      // on arena change or render-scale change). Mirror is already baked into the
-      // cache, so blit at identity transform — explicit logical W/H since the bitmap
-      // is at scaled-pixel dims. Fallback path (test env without OffscreenCanvas):
-      // draw directly so behavior matches pre-cache.
+      // Mirror is baked into the cache so blit at identity transform; explicit
+      // logical W/H since the bitmap is at scaled-pixel dims. Fallback for
+      // test envs without OffscreenCanvas: draw directly.
       if (this._fgNatureCache) {
         ctx.drawImage(this._fgNatureCache, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
       } else {
-        const themeArena = this.originalArena ?? arena;
-        if (this.mirrored) { ctx.save(); ctx.scale(-1, 1); ctx.translate(-CANVAS_WIDTH, 0); }
-        this.theme.drawForegroundNature(ctx, themeArena);
-        if (this.mirrored) { ctx.restore(); }
+        this._drawForegroundNatureDirect(ctx, this.originalArena ?? arena);
       }
 
       // Ghosts (drawn over foreground, semi-transparent)

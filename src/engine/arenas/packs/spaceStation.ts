@@ -687,8 +687,8 @@ export const spaceStation: ArenaPack = {
   },
 
   drawWeatherParticle: (ctx, w) => {
-    // Both spark + warning are circles, no rotation. Draw at world coords
-    // and skip save/translate/restore. Reset globalAlpha at end.
+    // Both spark + warning are circles — no rotation. Reset globalAlpha at
+    // end since each branch sets it.
     if (w.type === 'spark') {
       ctx.fillStyle = w.color || '#00CCFF';
       ctx.globalAlpha = 1;

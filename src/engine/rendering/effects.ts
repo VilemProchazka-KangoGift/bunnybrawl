@@ -25,6 +25,11 @@ const STAR_PHASE = new Float32Array(STAR_COUNT); // i * 1.7 baked in
 const FIREFLY_COUNT = 8;
 const FIREFLY_BASE_X = new Float32Array(FIREFLY_COUNT);
 const FIREFLY_BASE_Y = new Float32Array(FIREFLY_COUNT);
+// Per-frame scratch — populated once in the firefly block so the glow + body
+// passes can iterate twice without recomputing trig.
+const FIREFLY_X = new Float32Array(FIREFLY_COUNT);
+const FIREFLY_Y = new Float32Array(FIREFLY_COUNT);
+const FIREFLY_PULSE = new Float32Array(FIREFLY_COUNT);
 {
   const skyHeight = CANVAS_HEIGHT * 0.6;
   for (let i = 0; i < FIREFLY_COUNT; i++) {
@@ -83,8 +88,8 @@ export function drawDayNightCycle(
       ctx.arc(sunX, sunY, 9, 0, Math.PI * 2);
       ctx.fill();
 
-      // Light rays from sun -- combine 4 rays into single path, single fill
-      // (same color across all rays).
+      // Light rays from sun. All 4 rays share the same color — built into
+      // one path so a single fill renders all of them.
       if (nightIntensity < 0.3) {
         const rayAlpha = 0.04 * (1 - nightIntensity / 0.3);
         ctx.fillStyle = `rgba(255, ${lerpCh(215,60,sunRedshift)}, ${lerpCh(100,15,sunRedshift)}, ${rayAlpha})`;
@@ -161,9 +166,6 @@ export function drawDayNightCycle(
     }
   }
 
-  // Stars — set fillStyle once, modulate per-star alpha via globalAlpha.
-  // 30 fills/frame is unavoidable (per-star twinkle), but eliminating the
-  // per-star rgba template literal allocation is a clear win.
   if (nightIntensity > 0.25) {
     const starAlpha = Math.min((nightIntensity - 0.25) / 0.5, 1) * 0.8;
     const twinkleT = frameTime / 500;
@@ -177,31 +179,27 @@ export function drawDayNightCycle(
     }
   }
 
-  // Fireflies (conditional on theme) — same trick: fillStyle set once per
-  // ring, alpha via globalAlpha.
   if (nightIntensity > 0.4 && theme.dayNight.showFireflies) {
     const fireflyAlpha = Math.min((nightIntensity - 0.4) / 0.4, 1) * 0.7;
     const now = frameTime / 1000;
-    // Glow pass (outer halo)
+    // Compute fx/fy/pulse once; the glow + body passes both read these.
+    for (let i = 0; i < FIREFLY_COUNT; i++) {
+      FIREFLY_X[i] = FIREFLY_BASE_X[i] + fastSin(now * 0.5 + i * 2.3) * 30;
+      FIREFLY_Y[i] = FIREFLY_BASE_Y[i] + fastCos(now * 0.4 + i * 1.7) * 20;
+      FIREFLY_PULSE[i] = fastSin(now * 2 + i * 1.1) * 0.3 + 0.7;
+    }
     ctx.fillStyle = '#AAFF44';
     for (let i = 0; i < FIREFLY_COUNT; i++) {
-      const fx = FIREFLY_BASE_X[i] + fastSin(now * 0.5 + i * 2.3) * 30;
-      const fy = FIREFLY_BASE_Y[i] + fastCos(now * 0.4 + i * 1.7) * 20;
-      const pulse = fastSin(now * 2 + i * 1.1) * 0.3 + 0.7;
-      ctx.globalAlpha = fireflyAlpha * pulse * 0.3;
+      ctx.globalAlpha = fireflyAlpha * FIREFLY_PULSE[i] * 0.3;
       ctx.beginPath();
-      ctx.arc(fx, fy, 6, 0, Math.PI * 2);
+      ctx.arc(FIREFLY_X[i], FIREFLY_Y[i], 6, 0, Math.PI * 2);
       ctx.fill();
     }
-    // Body pass (bright core)
     ctx.fillStyle = '#CCFF66';
     for (let i = 0; i < FIREFLY_COUNT; i++) {
-      const fx = FIREFLY_BASE_X[i] + fastSin(now * 0.5 + i * 2.3) * 30;
-      const fy = FIREFLY_BASE_Y[i] + fastCos(now * 0.4 + i * 1.7) * 20;
-      const pulse = fastSin(now * 2 + i * 1.1) * 0.3 + 0.7;
-      ctx.globalAlpha = fireflyAlpha * pulse;
+      ctx.globalAlpha = fireflyAlpha * FIREFLY_PULSE[i];
       ctx.beginPath();
-      ctx.arc(fx, fy, 2, 0, Math.PI * 2);
+      ctx.arc(FIREFLY_X[i], FIREFLY_Y[i], 2, 0, Math.PI * 2);
       ctx.fill();
     }
   }

@@ -219,8 +219,7 @@ export function drawZeroGZone(
   ctx.strokeRect(zone.x + 1, zone.y + 1, zone.width - 2, zone.height - 2);
   ctx.setLineDash(NO_DASH);
 
-  // Corner brackets — single combined path stroked once instead of 4 separate
-  // strokes. lineWidth/strokeStyle inherit from the dashed border above.
+  // Corner brackets share lineWidth/strokeStyle with the dashed border above.
   ctx.globalAlpha = 0.4;
   const bLen = 15;
   const x0 = zone.x, x1 = zone.x + zone.width;
@@ -441,9 +440,8 @@ export function drawBouncyPlatformOverlay(
 ): void {
   ctx.save();
 
-  // Wobbly jelly surface -- always visible. fastSin lookup table replaces
-  // Math.sin in the per-vertex inner loop (~12 vertices per platform per
-  // frame). Visual-only, so the small precision loss is fine.
+  // Wobbly jelly surface — always visible. fastSin precision is fine for
+  // pure-visual displacement.
   const wobbleY = fastSin(time * 3) * 2;
   ctx.globalAlpha = 0.25;
   const jellyKey = `${bp.x}_${bp.y}_${bp.height}`;
@@ -484,8 +482,7 @@ export function drawBouncyPlatformOverlay(
   ctx.fillStyle = '#FF69B4';
   ctx.fillRect(bp.x, bp.y + bp.height, bp.width, 4);
 
-  // Up-arrow indicators — single combined path stroked once instead of
-  // per-arrow fill (typically 2–5 arrows per platform).
+  // Up-arrow indicators — typically 2–5 arrows per platform, all same color.
   ctx.globalAlpha = 0.3;
   ctx.fillStyle = '#FFFFFF';
   const arrowCount = Math.max(2, Math.floor(bp.width / 35));
