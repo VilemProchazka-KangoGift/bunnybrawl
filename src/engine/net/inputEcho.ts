@@ -163,7 +163,12 @@ export class InputEcho {
   }
 
   private applyExpression(input: InputState, player: Player): void {
-    if (input.down && player.vy > 200) {
+    // Only echo 'scared' over the default 'normal' — preserves host-authoritative
+    // expressions like 'angry' (kill streak) and 'dizzy' (post-stomp). The host
+    // owns those signals; clobbering them with input-derived 'scared' would
+    // visibly downgrade an angry player to scared mid-killstreak just because
+    // they're fast-falling.
+    if (player.expression === 'normal' && input.down && player.vy > 200) {
       player.expression = 'scared';
     }
   }
