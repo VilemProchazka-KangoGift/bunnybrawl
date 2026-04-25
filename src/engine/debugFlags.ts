@@ -12,6 +12,10 @@ export const debugFlags = {
   netDebugAllowed: debugParam.includes('net'),
   /** Whether net debug overlay is currently visible */
   netDebugEnabled: debugParam.includes('net'),
+  /** Whether fps overlay was requested via URL (gates keyboard toggle) */
+  fpsAllowed: debugParam.includes('fps'),
+  /** Whether fps overlay is currently visible */
+  fpsEnabled: debugParam.includes('fps'),
 };
 
 export function toggleNavDebug(): void {
@@ -23,5 +27,11 @@ export function toggleNavDebug(): void {
 export function toggleNetDebug(): void {
   if (debugFlags.netDebugAllowed) {
     debugFlags.netDebugEnabled = !debugFlags.netDebugEnabled;
+  }
+}
+
+export function toggleFpsDebug(): void {
+  if (debugFlags.fpsAllowed) {
+    debugFlags.fpsEnabled = !debugFlags.fpsEnabled;
   }
 }

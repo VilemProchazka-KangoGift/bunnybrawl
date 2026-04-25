@@ -28,7 +28,8 @@ import {
 } from '../constants';
 import { AIController } from '../ai';
 import { computeEffectivePhysics, createInitialPlayers, createInitialMatchState } from './initialState';
-import { debugFlags, toggleNavDebug, toggleNetDebug } from '../debugFlags';
+import { debugFlags, toggleNavDebug, toggleNetDebug, toggleFpsDebug } from '../debugFlags';
+import { sampleFps } from '../fpsCounter';
 import type { BotNavDebugState } from '../navDebugOverlay';
 import type { NetDebugStats } from '../net/core/debugOverlay';
 
@@ -251,11 +252,12 @@ export class GameLoop {
     audio.playMusic(this.arena.themeId);
     this.playSound('ambient');
     this.matchSystem.init();
-    if (debugFlags.navDebugAllowed || debugFlags.netDebugAllowed) {
+    if (debugFlags.navDebugAllowed || debugFlags.netDebugAllowed || debugFlags.fpsAllowed) {
       this._debugKeyHandler = (e: KeyboardEvent) => {
         if (e.key === '`') {
           if (debugFlags.navDebugAllowed) toggleNavDebug();
           if (debugFlags.netDebugAllowed) toggleNetDebug();
+          if (debugFlags.fpsAllowed) toggleFpsDebug();
         }
       };
       window.addEventListener('keydown', this._debugKeyHandler);
@@ -474,6 +476,7 @@ export class GameLoop {
 
   private loop = (currentTime: number): void => {
     if (!this.running) return;
+    sampleFps(currentTime);
 
     if (this.paused) {
       this.lastTime = currentTime;

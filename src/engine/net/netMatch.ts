@@ -13,6 +13,7 @@ import type { Arena, MatchSettings } from '../types';
 import { isBotSlot } from '../types';
 import { FIXED_TIMESTEP } from '../constants';
 import { debugFlags } from '../debugFlags';
+import { sampleFps } from '../fpsCounter';
 import { GameLoop } from '../gameLoop';
 import type { MatchEndCallback } from '../gameLoop';
 import { Transport } from './transport';
@@ -199,6 +200,7 @@ export class NetMatch {
     let rttCheckTimer = 0;
 
     const loop = (now: number) => {
+      sampleFps(now);
       // Cap dt to 3 ticks — prevents tick burst after fullscreen/tab-switch pauses
       const dt = Math.min((now - lastTime) / 1000, FIXED_DT * 3);
       lastTime = now;
@@ -293,6 +295,7 @@ export class NetMatch {
     );
 
     const loop = (now: number) => {
+      sampleFps(now);
       // Cap dt to 3 ticks — prevents tick burst after fullscreen/tab-switch pauses
       const dt = Math.min((now - lastTime) / 1000, FIXED_DT * 3);
       lastTime = now;

@@ -8,6 +8,7 @@ import { isTouchPrimary } from '../engine/touchDetect';
 import { getSlowDevice, subscribeSlowDevice } from '../engine/perfFlags';
 import { useCanvasRenderScale } from '../hooks/useCanvasRenderScale';
 import { drawMenuBackground } from './menuBackground';
+import { sampleFps, drawFpsCounter } from '../engine/fpsCounter';
 import { HelpModal } from './HelpModal';
 import { ModsModal } from './ModsModal';
 import { OnlineModal } from './OnlineModal';
@@ -72,8 +73,10 @@ export function MainMenu() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d')!;
-    const loop = () => {
+    const loop = (time: number) => {
+      sampleFps(time);
       drawMenuBackground(ctx);
+      drawFpsCounter(ctx, CANVAS_WIDTH);
       rafRef.current = requestAnimationFrame(loop);
     };
     rafRef.current = requestAnimationFrame(loop);

@@ -8,6 +8,7 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
 import { isTouchPrimary } from '../engine/touchDetect';
 import { TouchInputManager } from '../engine/touchInput';
 import { LobbyGame, READY_ZONE_X } from '../engine/lobbyGame';
+import { sampleFps, drawFpsCounter } from '../engine/fpsCounter';
 import { useCanvasRenderScale } from '../hooks/useCanvasRenderScale';
 import './CharacterSelect.css';
 
@@ -156,6 +157,7 @@ export function CharacterSelect() {
     const ctx = canvas.getContext('2d')!;
 
     const loop = (time: number) => {
+      sampleFps(time);
       const dt = lastTimeRef.current ? Math.min((time - lastTimeRef.current) / 1000, 0.05) : 1 / 60;
       lastTimeRef.current = time;
 
@@ -168,6 +170,7 @@ export function CharacterSelect() {
         if (game.isCountdownComplete()) startMatch();
       }
 
+      drawFpsCounter(ctx, CANVAS_WIDTH);
       rafRef.current = requestAnimationFrame(loop);
     };
 

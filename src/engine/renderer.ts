@@ -14,6 +14,7 @@ import { drawNavDebugOverlay } from './navDebugOverlay';
 import type { BotNavDebugState } from './navDebugOverlay';
 import { drawNetDebugOverlay } from './net/core/debugOverlay';
 import type { NetDebugStats } from './net/core/debugOverlay';
+import { drawFpsCounter } from './fpsCounter';
 
 // Extracted rendering modules
 import {
@@ -681,7 +682,8 @@ export class Renderer {
     const hasAnimations = !!(matchState.scoreAnimations && matchState.scoreAnimations.length > 0);
     const hasNavDebug = debugFlags.navDebugEnabled;
     const hasNetDebug = debugFlags.netDebugEnabled && !!this._netDebugStats;
-    const hasOverlayContent = hasCountdown || hasFlash || hasAnimations || hasNavDebug || hasNetDebug;
+    const hasFps = debugFlags.fpsEnabled;
+    const hasOverlayContent = hasCountdown || hasFlash || hasAnimations || hasNavDebug || hasNetDebug || hasFps;
 
     const rttRounded = this._isNetworkGuest ? Math.round(this._netRtt) : -1;
     const jitterRounded = this._isNetworkGuest ? Math.round(this._netJitter) : -1;
@@ -721,6 +723,10 @@ export class Renderer {
     if (debugFlags.netDebugEnabled && this._netDebugStats) {
       drawNetDebugOverlay(ctx, this._netDebugStats, CANVAS_WIDTH);
       d.netDebug = true;
+    }
+
+    if (debugFlags.fpsEnabled) {
+      drawFpsCounter(ctx, CANVAS_WIDTH);
     }
 
     if (matchState.screenFlash > 0) {
