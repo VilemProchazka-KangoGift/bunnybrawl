@@ -29,6 +29,7 @@ import {
 import { AIController } from '../ai';
 import { computeEffectivePhysics, createInitialPlayers, createInitialMatchState } from './initialState';
 import { debugFlags, toggleNavDebug, toggleNetDebug, toggleFpsDebug } from '../debugFlags';
+import { perfTrace } from '../perfTrace';
 import { sampleFps } from '../fpsCounter';
 import type { BotNavDebugState } from '../navDebugOverlay';
 import type { NetDebugStats } from '../net/core/debugOverlay';
@@ -394,11 +395,16 @@ export class GameLoop {
   /** Half-rate wrapper around cosmeticStep. Tests call cosmeticStep directly
    *  so assertions run at the un-throttled per-tick rate. */
   tickCosmetic(dt: number): void {
-    this._cosmeticLead += dt;
-    if (this._cosmeticLead < COSMETIC_INTERVAL) return;
-    const stepDt = Math.min(this._cosmeticLead, COSMETIC_MAX_STEP);
-    this._cosmeticLead = 0;
-    this.cosmeticStep(stepDt);
+    const _t = perfTrace.begin('tickCosmetic');
+    try {
+      this._cosmeticLead += dt;
+      if (this._cosmeticLead < COSMETIC_INTERVAL) return;
+      const stepDt = Math.min(this._cosmeticLead, COSMETIC_MAX_STEP);
+      this._cosmeticLead = 0;
+      this.cosmeticStep(stepDt);
+    } finally {
+      perfTrace.end('tickCosmetic', _t);
+    }
   }
 
   /** Seconds since the last cosmeticStep fired; renderer uses this to extrapolate
@@ -541,259 +547,264 @@ export class GameLoop {
 
   /** Run one fixed-timestep simulation tick. Public for rollback engine. */
   fixedUpdate(dt: number, networkInputs?: Map<string, InputState>): void {
-    this._networkInputs = networkInputs;
-    if (this.stopped || this.state.matchOver) return;
-    this.state.timeElapsed = f(this.state.timeElapsed + dt);
+    const _t = perfTrace.begin('fixedUpdate');
+    try {
+      this._networkInputs = networkInputs;
+      if (this.stopped || this.state.matchOver) return;
+      this.state.timeElapsed = f(this.state.timeElapsed + dt);
 
-    // Day/night cycle
-    this.state.dayPhase = f(this.state.dayPhase + f(dt / this.theme.dayNight.cycleDuration));
-    if (this.state.dayPhase > 1) this.state.dayPhase = f(this.state.dayPhase - 1);
+      // Day/night cycle
+      this.state.dayPhase = f(this.state.dayPhase + f(dt / this.theme.dayNight.cycleDuration));
+      if (this.state.dayPhase > 1) this.state.dayPhase = f(this.state.dayPhase - 1);
 
-    // Countdown logic
-    if (this.state.countdown > 0) {
-      this.state.countdown = f(this.state.countdown - dt);
-      if (this.state.countdown <= 0) {
-        this.state.countdown = 0;
+      // Countdown logic
+      if (this.state.countdown > 0) {
+        this.state.countdown = f(this.state.countdown - dt);
+        if (this.state.countdown <= 0) {
+          this.state.countdown = 0;
+        }
+        // Countdown sounds moved to cosmeticStep. Particles/weather handled by cosmeticStep too.
+        return;
       }
-      // Countdown sounds moved to cosmeticStep. Particles/weather handled by cosmeticStep too.
-      return;
-    }
 
-    // Screen shake decay (skip during resimulation — writes are also guarded)
-    if (!this._resimulating && this.state.screenShake > 0) this.state.screenShake = Math.max(0, this.state.screenShake - dt);
+      // Screen shake decay (skip during resimulation — writes are also guarded)
+      if (!this._resimulating && this.state.screenShake > 0) this.state.screenShake = Math.max(0, this.state.screenShake - dt);
 
-    // Hazard spawn timers + lifetimes
-    this.hazardSystem.fixedUpdate(dt);
+      // Hazard spawn timers + lifetimes
+      this.hazardSystem.fixedUpdate(dt);
 
-    // Carrot timer + spawn
-    this.carrotSystem.fixedUpdate(dt);
+      // Carrot timer + spawn
+      this.carrotSystem.fixedUpdate(dt);
 
-    // Weather moved to cosmeticStep
+      // Weather moved to cosmeticStep
 
-    // Update arena entities (lava rocks, ghosts, geysers, pigeons)
-    this.arenaEntitySystem.fixedUpdate(dt);
+      // Update arena entities (lava rocks, ghosts, geysers, pigeons)
+      this.arenaEntitySystem.fixedUpdate(dt);
 
-    // Gameplay timers (hitstop gates physics; fat/slow/burn affect gameplay)
-    // Cosmetic timers (animFrame, damageFlash, springTrail, fire particles) moved to cosmeticStep()
-    for (const player of this.state.players) {
-      if (!player.active) continue;
-      // Hitstop: decay timer + status timers, but skip physics
-      if (player.hitstopTimer > 0) {
-        player.hitstopTimer = Math.max(0, f(player.hitstopTimer - dt));
+      // Gameplay timers (hitstop gates physics; fat/slow/burn affect gameplay)
+      // Cosmetic timers (animFrame, damageFlash, springTrail, fire particles) moved to cosmeticStep()
+      for (const player of this.state.players) {
+        if (!player.active) continue;
+        // Hitstop: decay timer + status timers, but skip physics
+        if (player.hitstopTimer > 0) {
+          player.hitstopTimer = Math.max(0, f(player.hitstopTimer - dt));
+          if (player.fatTimer > 0) player.fatTimer = Math.max(0, f(player.fatTimer - dt));
+          if (player.slowTimer > 0) player.slowTimer = Math.max(0, f(player.slowTimer - dt));
+          if (player.burnTimer > 0) player.burnTimer = Math.max(0, f(player.burnTimer - dt));
+          continue;
+        }
         if (player.fatTimer > 0) player.fatTimer = Math.max(0, f(player.fatTimer - dt));
         if (player.slowTimer > 0) player.slowTimer = Math.max(0, f(player.slowTimer - dt));
         if (player.burnTimer > 0) player.burnTimer = Math.max(0, f(player.burnTimer - dt));
-        continue;
-      }
-      if (player.fatTimer > 0) player.fatTimer = Math.max(0, f(player.fatTimer - dt));
-      if (player.slowTimer > 0) player.slowTimer = Math.max(0, f(player.slowTimer - dt));
-      if (player.burnTimer > 0) player.burnTimer = Math.max(0, f(player.burnTimer - dt));
-    }
-
-    // bumpCooldown removed — bump detection uses sideSquash transition in cosmeticStep
-
-    // Input + physics
-    for (const player of this.state.players) {
-      if (!player.active) continue;
-      // SFX cooldown decay moved to cosmeticStep()
-      if (player.hitstopTimer > 0) continue;
-      const input = this.getPlayerInput(player);
-      const wasAirborne = player.state === 'airborne';
-      const prevVy = player.vy;
-      const prevVx = player.vx;
-      const wasCrouching = player.squashScale <= SQUASH_ON_CROUCH;
-
-      // Bot walk speed penalty (easy bots move slower)
-      let playerWalkSpeed = this.effWalkSpeed;
-      if (isBotSlot(player.id)) {
-        const ai = this.aiControllers.get(player.id);
-        if (ai) playerWalkSpeed *= ai.getWalkSpeedMult();
-      }
-      applyInput(player, input, dt, playerWalkSpeed, this.effFriction, this.effJumpImpulse);
-
-      if (!wasAirborne && player.state === 'airborne') {
-        // Stretch on jump
-        player.squashScale = STRETCH_ON_JUMP;
-        player.squashTimer = 0.15;
       }
 
-      applyGravity(player, dt, this.effGravity, this.effMaxFallSpeed);
-      movePlayer(player, dt);
-      collidePlatforms(player, this.arena.platforms);
-      resolveStuckPlayer(player, this.arena.platforms);
-      applyArenaConstraints(player, this.arena);
-      // Snap tiny values to zero: prevents ARM Flush-to-Zero (FTZ) subnormal
-      // divergence and signed-zero hash mismatches (-0 vs +0)
-      if (player.vx !== 0 && player.vx > -1e-4 && player.vx < 1e-4) player.vx = 0;
-      if (player.vy !== 0 && player.vy > -1e-4 && player.vy < 1e-4) player.vy = 0;
-      updatePlayerState(player);
+      // bumpCooldown removed — bump detection uses sideSquash transition in cosmeticStep
 
-      // Headbonk: ceiling collision clamped vy to 0 while going up
-      if (wasAirborne && player.state === 'airborne' && prevVy < -10 && player.vy === 0) {
-        const cd = getOrCreateCooldowns(this.playerTransitionSystem.getSfxCooldowns(), player.id);
-        if (cd.headbonk <= 0) {
-          this.playSound('headbonk');
-          cd.headbonk = 0.15;
+      // Input + physics
+      for (const player of this.state.players) {
+        if (!player.active) continue;
+        // SFX cooldown decay moved to cosmeticStep()
+        if (player.hitstopTimer > 0) continue;
+        const input = this.getPlayerInput(player);
+        const wasAirborne = player.state === 'airborne';
+        const prevVy = player.vy;
+        const prevVx = player.vx;
+        const wasCrouching = player.squashScale <= SQUASH_ON_CROUCH;
+
+        // Bot walk speed penalty (easy bots move slower)
+        let playerWalkSpeed = this.effWalkSpeed;
+        if (isBotSlot(player.id)) {
+          const ai = this.aiControllers.get(player.id);
+          if (ai) playerWalkSpeed *= ai.getWalkSpeedMult();
         }
-      }
+        applyInput(player, input, dt, playerWalkSpeed, this.effFriction, this.effJumpImpulse);
 
-      // Landing detection
-      const justLanded = wasAirborne && player.state !== 'airborne';
-
-      if (justLanded && haptics.isLocal(player.id)) haptics.landing(prevVy);
-
-      // Wall hit: squash/stretch (sound moved to cosmeticStep)
-      if (Math.abs(prevVx) > 100 && player.vx === 0 && prevVx !== 0) {
-        player.squashScale = 1.3; // stretch vertically = squash horizontally
-        player.squashTimer = 0.12;
-      }
-
-      // Squash on landing
-      if (justLanded) {
-        player.squashScale = SQUASH_ON_LAND;
-        player.squashTimer = 0.15;
-
-        // Platform crumble when landing hard — chunks fly UP and outward
-        if (prevVy > 300) {
-          const cx = player.x + player.width / 2;
-          const groundY = player.y + player.height;
-          const intensity = Math.min(prevVy / 400, 2);
-          const count = Math.floor(8 + intensity * 5);
-          for (let i = 0; i < count; i++) {
-            const life = 0.3 + Math.random() * 0.4;
-            this.particleSystem.emitParticle(cx + (Math.random() - 0.5) * player.width * 1.5, groundY - Math.random() * 3, (Math.random() - 0.5) * 100 * intensity, -(Math.random() * 60 + 30) * intensity, life, 2 + Math.random() * 3, i % 3 === 0 ? this.theme.platform.floatingBodyColor : this.theme.platform.groundTopColor);
-          }
+        if (!wasAirborne && player.state === 'airborne') {
+          // Stretch on jump
+          player.squashScale = STRETCH_ON_JUMP;
+          player.squashTimer = 0.15;
         }
-      }
 
-      // Squash when pressing down on ground (crouch)
-      if (input.down && player.state !== 'airborne') {
-        player.squashScale = SQUASH_ON_CROUCH;
-        // Crouch sound: only on initial sit-down
-        if (!wasCrouching) {
+        applyGravity(player, dt, this.effGravity, this.effMaxFallSpeed);
+        movePlayer(player, dt);
+        collidePlatforms(player, this.arena.platforms);
+        resolveStuckPlayer(player, this.arena.platforms);
+        applyArenaConstraints(player, this.arena);
+        // Snap tiny values to zero: prevents ARM Flush-to-Zero (FTZ) subnormal
+        // divergence and signed-zero hash mismatches (-0 vs +0)
+        if (player.vx !== 0 && player.vx > -1e-4 && player.vx < 1e-4) player.vx = 0;
+        if (player.vy !== 0 && player.vy > -1e-4 && player.vy < 1e-4) player.vy = 0;
+        updatePlayerState(player);
+
+        // Headbonk: ceiling collision clamped vy to 0 while going up
+        if (wasAirborne && player.state === 'airborne' && prevVy < -10 && player.vy === 0) {
           const cd = getOrCreateCooldowns(this.playerTransitionSystem.getSfxCooldowns(), player.id);
-          if (cd.crouch <= 0) {
-            this.playSound('crouch');
-            cd.crouch = 0.2;
+          if (cd.headbonk <= 0) {
+            this.playSound('headbonk');
+            cd.headbonk = 0.15;
           }
         }
-      } else {
-        // Squash/stretch decay
-        if (player.squashTimer > 0) {
-          player.squashTimer = f(player.squashTimer - dt);
-          player.squashScale = f(player.squashScale + f(f(1.0 - player.squashScale) * f(SQUASH_DECAY_SPEED * dt)));
+
+        // Landing detection
+        const justLanded = wasAirborne && player.state !== 'airborne';
+
+        if (justLanded && haptics.isLocal(player.id)) haptics.landing(prevVy);
+
+        // Wall hit: squash/stretch (sound moved to cosmeticStep)
+        if (Math.abs(prevVx) > 100 && player.vx === 0 && prevVx !== 0) {
+          player.squashScale = 1.3; // stretch vertically = squash horizontally
+          player.squashTimer = 0.12;
+        }
+
+        // Squash on landing
+        if (justLanded) {
+          player.squashScale = SQUASH_ON_LAND;
+          player.squashTimer = 0.15;
+
+          // Platform crumble when landing hard — chunks fly UP and outward
+          if (prevVy > 300) {
+            const cx = player.x + player.width / 2;
+            const groundY = player.y + player.height;
+            const intensity = Math.min(prevVy / 400, 2);
+            const count = Math.floor(8 + intensity * 5);
+            for (let i = 0; i < count; i++) {
+              const life = 0.3 + Math.random() * 0.4;
+              this.particleSystem.emitParticle(cx + (Math.random() - 0.5) * player.width * 1.5, groundY - Math.random() * 3, (Math.random() - 0.5) * 100 * intensity, -(Math.random() * 60 + 30) * intensity, life, 2 + Math.random() * 3, i % 3 === 0 ? this.theme.platform.floatingBodyColor : this.theme.platform.groundTopColor);
+            }
+          }
+        }
+
+        // Squash when pressing down on ground (crouch)
+        if (input.down && player.state !== 'airborne') {
+          player.squashScale = SQUASH_ON_CROUCH;
+          // Crouch sound: only on initial sit-down
+          if (!wasCrouching) {
+            const cd = getOrCreateCooldowns(this.playerTransitionSystem.getSfxCooldowns(), player.id);
+            if (cd.crouch <= 0) {
+              this.playSound('crouch');
+              cd.crouch = 0.2;
+            }
+          }
         } else {
-          player.squashScale = 1.0;
-        }
-      }
-
-      // Side squash decay, fat wobble, expressions (dizzy/scared), idle anim,
-      // afterimages, footstep sounds all moved to cosmeticStep()
-
-      // Angry expression (proximity check requires iterating other players — stays in fixedUpdate)
-      if (player.invincibleTimer <= 0 && player.vy <= 400) {
-        let angry = false;
-        for (const other of this.state.players) {
-          if (other.id === player.id || !other.active || other.state === 'splat' || other.state === 'respawning') continue;
-          const dx = Math.abs((other.x + other.width / 2) - (player.x + player.width / 2));
-          const dy = Math.abs((other.y + other.height / 2) - (player.y + player.height / 2));
-          if (dx < 80 && dy < 60) { angry = true; break; }
-        }
-        player.expression = angry ? 'angry' : 'normal';
-      }
-
-      // Stats: airborne time
-      if (player.state === 'airborne') {
-        const ps = this.state.stats.perPlayer.get(player.id);
-        if (ps) ps.timeAirborne += dt;
-      }
-      // Stats: distance traveled
-      {
-        const ps = this.state.stats.perPlayer.get(player.id);
-        if (ps) ps.distanceTraveled += (Math.abs(player.vx) * dt + Math.abs(player.vy) * dt);
-      }
-
-      // Hazard collisions
-      this.playerCollisionSystem.checkCollisions(player);
-
-      // Effect zone interactions (zero-G, current, geyser)
-      this.effectZoneSystem.applyToPlayer(player, justLanded, wasAirborne, prevVy, dt);
-
-      // Bouncy platform check (on landing — skip if holding down on ground to avoid repeat bouncing)
-      if (this.arena.bouncyPlatforms && justLanded && !(input.down && prevVy < 100)) {
-        for (const bi of this.arena.bouncyPlatforms) {
-          const bp = this.arena.platforms[bi];
-          if (!bp) continue;
-          const playerBottom = player.y + player.height;
-          const playerCx = player.x + player.width / 2;
-          if (playerBottom >= bp.y && playerBottom <= bp.y + bp.height + 4 &&
-              playerCx >= bp.x && playerCx <= bp.x + bp.width) {
-            player.vy = f(SPRING_BOUNCE * 0.85);
-            player.state = 'airborne';
-            this.state.bouncyWobble.set(bi, 0.4);
-            // jump sound moved to cosmeticStep (grounded→airborne transition)
-            break;
+          // Squash/stretch decay
+          if (player.squashTimer > 0) {
+            player.squashTimer = f(player.squashTimer - dt);
+            player.squashScale = f(player.squashScale + f(f(1.0 - player.squashScale) * f(SQUASH_DECAY_SPEED * dt)));
+          } else {
+            player.squashScale = 1.0;
           }
         }
-      }
 
-      // Pigeon scatter check
-      for (const flock of this.state.pigeonFlocks) {
-        if (!flock.active) continue;
-        const dx = (player.x + player.width / 2) - flock.x;
-        const dy = (player.y + player.height) - flock.y;
-        if (dx * dx + dy * dy < 60 * 60 && player.state !== 'airborne') {
-          flock.active = false;
-          flock.respawnTimer = this.theme.pigeonConfig?.respawnTime || 12;
-          this.playSound('pigeon_scatter');
-          // Spawn scatter particles (gray birds flying away)
-          for (let pi = 0; pi < 6; pi++) {
-            const angle = -Math.PI * 0.5 + (Math.random() - 0.5) * Math.PI * 0.8;
-            const speed = 150 + Math.random() * 200;
-            flock.scatterParticles.push({
-              x: flock.x + (Math.random() - 0.5) * 20,
-              y: flock.y - 5,
-              vx: Math.cos(angle) * speed * (Math.random() < 0.5 ? -1 : 1),
-              vy: Math.sin(angle) * speed - 80,
-              life: 1.0 + Math.random() * 0.5,
-            });
+        // Side squash decay, fat wobble, expressions (dizzy/scared), idle anim,
+        // afterimages, footstep sounds all moved to cosmeticStep()
+
+        // Angry expression (proximity check requires iterating other players — stays in fixedUpdate)
+        if (player.invincibleTimer <= 0 && player.vy <= 400) {
+          let angry = false;
+          for (const other of this.state.players) {
+            if (other.id === player.id || !other.active || other.state === 'splat' || other.state === 'respawning') continue;
+            const dx = Math.abs((other.x + other.width / 2) - (player.x + player.width / 2));
+            const dy = Math.abs((other.y + other.height / 2) - (player.y + player.height / 2));
+            if (dx < 80 && dy < 60) { angry = true; break; }
           }
+          player.expression = angry ? 'angry' : 'normal';
         }
-      }
 
-      // Carrot pickup
-      for (const carrot of this.state.carrots) {
-        if (!carrot.active) continue;
-        if (aabbOverlap(player.x, player.y, player.width, player.height, carrot.x - CARROT_SIZE / 2, carrot.y, CARROT_SIZE, CARROT_SIZE)) {
-          carrot.active = false;
-          player.score += 1;
-          player.fatTimer = FAT_DURATION;
-          // Crunch sound + VFX fired by cosmeticStep via score-change transition detection
-          // (works on both host and guest — entity removal doesn't matter since score is in snapshot)
-          // Hitstop — shorter than kill (half duration)
-          player.hitstopTimer = Math.max(player.hitstopTimer, HITSTOP_DURATION * 0.5);
-          if (!this._resimulating) this.state.hitstopZoom = Math.max(this.state.hitstopZoom, HITSTOP_DURATION * 0.5);
-          // Stats: carrots eaten
+        // Stats: airborne time
+        if (player.state === 'airborne') {
           const ps = this.state.stats.perPlayer.get(player.id);
-          if (ps) ps.carrotsEaten += 1;
+          if (ps) ps.timeAirborne += dt;
+        }
+        // Stats: distance traveled
+        {
+          const ps = this.state.stats.perPlayer.get(player.id);
+          if (ps) ps.distanceTraveled += (Math.abs(player.vx) * dt + Math.abs(player.vy) * dt);
+        }
+
+        // Hazard collisions
+        this.playerCollisionSystem.checkCollisions(player);
+
+        // Effect zone interactions (zero-G, current, geyser)
+        this.effectZoneSystem.applyToPlayer(player, justLanded, wasAirborne, prevVy, dt);
+
+        // Bouncy platform check (on landing — skip if holding down on ground to avoid repeat bouncing)
+        if (this.arena.bouncyPlatforms && justLanded && !(input.down && prevVy < 100)) {
+          for (const bi of this.arena.bouncyPlatforms) {
+            const bp = this.arena.platforms[bi];
+            if (!bp) continue;
+            const playerBottom = player.y + player.height;
+            const playerCx = player.x + player.width / 2;
+            if (playerBottom >= bp.y && playerBottom <= bp.y + bp.height + 4 &&
+                playerCx >= bp.x && playerCx <= bp.x + bp.width) {
+              player.vy = f(SPRING_BOUNCE * 0.85);
+              player.state = 'airborne';
+              this.state.bouncyWobble.set(bi, 0.4);
+              // jump sound moved to cosmeticStep (grounded→airborne transition)
+              break;
+            }
+          }
+        }
+
+        // Pigeon scatter check
+        for (const flock of this.state.pigeonFlocks) {
+          if (!flock.active) continue;
+          const dx = (player.x + player.width / 2) - flock.x;
+          const dy = (player.y + player.height) - flock.y;
+          if (dx * dx + dy * dy < 60 * 60 && player.state !== 'airborne') {
+            flock.active = false;
+            flock.respawnTimer = this.theme.pigeonConfig?.respawnTime || 12;
+            this.playSound('pigeon_scatter');
+            // Spawn scatter particles (gray birds flying away)
+            for (let pi = 0; pi < 6; pi++) {
+              const angle = -Math.PI * 0.5 + (Math.random() - 0.5) * Math.PI * 0.8;
+              const speed = 150 + Math.random() * 200;
+              flock.scatterParticles.push({
+                x: flock.x + (Math.random() - 0.5) * 20,
+                y: flock.y - 5,
+                vx: Math.cos(angle) * speed * (Math.random() < 0.5 ? -1 : 1),
+                vy: Math.sin(angle) * speed - 80,
+                life: 1.0 + Math.random() * 0.5,
+              });
+            }
+          }
+        }
+
+        // Carrot pickup
+        for (const carrot of this.state.carrots) {
+          if (!carrot.active) continue;
+          if (aabbOverlap(player.x, player.y, player.width, player.height, carrot.x - CARROT_SIZE / 2, carrot.y, CARROT_SIZE, CARROT_SIZE)) {
+            carrot.active = false;
+            player.score += 1;
+            player.fatTimer = FAT_DURATION;
+            // Crunch sound + VFX fired by cosmeticStep via score-change transition detection
+            // (works on both host and guest — entity removal doesn't matter since score is in snapshot)
+            // Hitstop — shorter than kill (half duration)
+            player.hitstopTimer = Math.max(player.hitstopTimer, HITSTOP_DURATION * 0.5);
+            if (!this._resimulating) this.state.hitstopZoom = Math.max(this.state.hitstopZoom, HITSTOP_DURATION * 0.5);
+            // Stats: carrots eaten
+            const ps = this.state.stats.perPlayer.get(player.id);
+            if (ps) ps.carrotsEaten += 1;
+          }
         }
       }
-    }
 
-    for (let i = this.state.carrots.length - 1; i >= 0; i--) {
-      if (!this.state.carrots[i].active) {
-        swapRemove(this.state.carrots, i);
+      for (let i = this.state.carrots.length - 1; i >= 0; i--) {
+        if (!this.state.carrots[i].active) {
+          swapRemove(this.state.carrots, i);
+        }
       }
+
+      // Zero-G ambient sound management
+      this.effectZoneSystem.fixedUpdate(dt);
+
+      // Stomps, kill feed, player-player collision, splat timers
+      this.stompSystem.fixedUpdate(dt);
+
+      // Crowd cheering, periodic ambient sounds, match end check
+      this.matchSystem.fixedUpdate(dt);
+    } finally {
+      perfTrace.end('fixedUpdate', _t);
     }
-
-    // Zero-G ambient sound management
-    this.effectZoneSystem.fixedUpdate(dt);
-
-    // Stomps, kill feed, player-player collision, splat timers
-    this.stompSystem.fixedUpdate(dt);
-
-    // Crowd cheering, periodic ambient sounds, match end check
-    this.matchSystem.fixedUpdate(dt);
   }
 
   private getPlayerInput(player: Player): InputState {
