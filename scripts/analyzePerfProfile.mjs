@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // @ts-check
 import { readFileSync, writeFileSync, readdirSync } from 'fs';
 import path from 'path';

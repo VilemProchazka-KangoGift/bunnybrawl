@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // @ts-check
 import { spawn, execFileSync } from 'child_process';
 import path from 'path';
