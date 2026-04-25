@@ -16,6 +16,8 @@ export const debugFlags = {
   fpsAllowed: debugParam.includes('fps'),
   /** Whether fps overlay is currently visible */
   fpsEnabled: debugParam.includes('fps'),
+  /** Whether perf instrumentation is collecting section timings (set via ?debug=perf, no keyboard toggle) */
+  perfEnabled: debugParam.includes('perf'),
 };
 
 export function toggleNavDebug(): void {
