@@ -246,6 +246,9 @@ function blitWithIdleTransform(
   ctx.save();
   idleAnimAction.apply(ctx, cx, y, w, h, idleT, colors, player);
   ctx.drawImage(cached, dx, dy, dw, dh);
+  if (idleAnimAction.applyAfter) {
+    idleAnimAction.applyAfter(ctx, cx, y, w, h, idleT, colors, player);
+  }
   ctx.restore();
 }
 

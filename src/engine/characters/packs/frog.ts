@@ -1,9 +1,10 @@
 import { Howl } from 'howler';
 import type { CharacterPack } from '../types';
+import type { IdleAction } from '../../rendering/idleActions';
 import { fillBodyGradient } from '../../spriteShading';
 import { floatBufferToWavDataUri } from '../../audio/synthesis/wav';
 
-const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, _state, _animFrame, isIdleAnim, idleT, colors) => {
+const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, _state, _animFrame, _isIdleAnim, _idleT, colors) => {
   fillBodyGradient(ctx, { cx, cy: yOff + h * 0.55, rx: w * 0.42, ry: h * 0.35 }, colors);
   ctx.fillStyle = colors.lightColor;
   ctx.beginPath();
@@ -12,9 +13,34 @@ const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, _state, _a
   ctx.beginPath();
   ctx.arc(cx + 7, yOff + 8, 6, 0, Math.PI * 2);
   ctx.fill();
-  // Frog idle blink: draw lines instead of circle eyes
-  const frogBlink = isIdleAnim && idleT > 0.3 && idleT < 0.7;
-  if (frogBlink) {
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.arc(cx - 6, yOff + 8, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(cx + 8, yOff + 8, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#90EE90';
+  ctx.beginPath();
+  ctx.ellipse(cx, yOff + h * 0.62, w * 0.25, h * 0.18, 0, 0, Math.PI * 2);
+  ctx.fill();
+};
+
+// Closes both eyes during the middle 40% of the action. Drawn as overlay so it
+// runs at full cosmetic-tick rate (the cached sprite freezes idleT at one bit).
+const blinkAction: IdleAction = {
+  id: 'frogBlink',
+  duration: 0.7,
+  apply: () => {},
+  applyAfter: (ctx, cx, yOff, _w, _h, t, colors) => {
+    if (t < 0.3 || t > 0.7) return;
+    ctx.fillStyle = colors.lightColor;
+    ctx.beginPath();
+    ctx.arc(cx - 7, yOff + 8, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(cx + 7, yOff + 8, 6, 0, Math.PI * 2);
+    ctx.fill();
     ctx.strokeStyle = '#000';
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -25,19 +51,7 @@ const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, _state, _a
     ctx.moveTo(cx + 5, yOff + 8);
     ctx.lineTo(cx + 11, yOff + 8);
     ctx.stroke();
-  } else {
-    ctx.fillStyle = '#000';
-    ctx.beginPath();
-    ctx.arc(cx - 6, yOff + 8, 3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(cx + 8, yOff + 8, 3, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.fillStyle = '#90EE90';
-  ctx.beginPath();
-  ctx.ellipse(cx, yOff + h * 0.62, w * 0.25, h * 0.18, 0, 0, Math.PI * 2);
-  ctx.fill();
+  },
 };
 
 const drawGib: CharacterPack['drawGib'] = (_ctx, _gibType, _w, _h, _colors) => {
@@ -53,6 +67,7 @@ export const frog: CharacterPack = {
   translations: { en: 'Frog', cs: 'Žába', hi: 'मेंढक', fil: 'Palaka' },
   legStyle: { shape: 'wide', footStyle: 'webbed', legWidth: 5, spreadAngle: 4 },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.55, rx: w * 0.42, ry: h * 0.35 }),
+  idleActions: { custom: [blinkAction] },
   drawSprite, drawGib,
   createSound: () => {
     const sampleRate = 44100;

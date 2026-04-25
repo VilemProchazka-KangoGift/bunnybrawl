@@ -3,7 +3,7 @@ import type { CharacterPack } from '../types';
 import { fillBodyGradient } from '../../spriteShading';
 import { generateToneBuffer } from '../../audio/synthesis/core';
 
-const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, state, animFrame, isIdleAnim, idleT, colors) => {
+const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, state, animFrame, _isIdleAnim, _idleT, colors) => {
   const isRunning = state === 'run';
   fillBodyGradient(ctx, { cx, cy: yOff + h * 0.55, rx: w * 0.38, ry: h * 0.38 }, colors);
   ctx.fillStyle = colors.color;
@@ -19,7 +19,7 @@ const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, state, ani
   ctx.fill();
   ctx.fillStyle = colors.lightColor;
   ctx.beginPath();
-  const tailWag = isRunning ? Math.sin(animFrame * Math.PI) * 5 : (isIdleAnim ? Math.sin(idleT * Math.PI * 2) * 4 : 0);
+  const tailWag = isRunning ? Math.sin(animFrame * Math.PI) * 5 : 0;
   ctx.moveTo(cx - w * 0.3, yOff + h * 0.5);
   ctx.quadraticCurveTo(cx - w * 0.7, yOff + h * 0.2 + tailWag, cx - w * 0.5, yOff + h * 0.1);
   ctx.quadraticCurveTo(cx - w * 0.3, yOff + h * 0.3, cx - w * 0.3, yOff + h * 0.5);

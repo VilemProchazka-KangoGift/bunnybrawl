@@ -3,7 +3,7 @@ import type { CharacterPack } from '../types';
 import { fillBodyGradient } from '../../spriteShading';
 import { generateToneBuffer } from '../../audio/synthesis/core';
 
-const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, _state, _animFrame, isIdleAnim, idleT, colors) => {
+const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, _state, _animFrame, _isIdleAnim, _idleT, colors) => {
   fillBodyGradient(ctx, { cx, cy: yOff + h * 0.5, rx: w * 0.42, ry: h * 0.42 }, colors);
   ctx.beginPath();
   ctx.arc(cx - 10, yOff + 4, 6, 0, Math.PI * 2);
@@ -22,14 +22,6 @@ const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, _state, _a
   ctx.beginPath();
   ctx.ellipse(cx + 2, yOff + h * 0.5, 6, 5, 0, 0, Math.PI * 2);
   ctx.fill();
-  // Bear scratch idle: small paw near ear
-  if (isIdleAnim) {
-    const scratchY = Math.sin(idleT * Math.PI * 3) * 3;
-    ctx.fillStyle = colors.darkColor;
-    ctx.beginPath();
-    ctx.arc(cx + 13, yOff + 6 + scratchY, 3, 0, Math.PI * 2);
-    ctx.fill();
-  }
 };
 
 const drawGib: CharacterPack['drawGib'] = (ctx, gibType, _w, _h, colors) => {
