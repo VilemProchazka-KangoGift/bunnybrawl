@@ -13,6 +13,15 @@ export default defineConfig({
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:4175/bunnybrawl/',
     trace: 'off',
+    // Uncap rendering — without these, headless Chrome rate-limits to vsync (~60Hz)
+    // and frame-time stats become uniformly 16.7ms regardless of actual engine cost.
+    launchOptions: {
+      args: [
+        '--disable-frame-rate-limit',
+        '--disable-gpu-vsync',
+        '--disable-features=CalculateNativeWinOcclusion',
+      ],
+    },
   },
   projects: [
     {
