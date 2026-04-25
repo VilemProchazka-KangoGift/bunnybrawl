@@ -7,7 +7,7 @@ import {
   SHOCKWAVE_DURATION, SCREEN_FLASH_DURATION,
   HITSTOP_DURATION, HITSTOP_ZOOM,
 } from './constants';
-import { drawCloud as drawCloudPrimitive, drawHill, drawPlatformMoss } from './themes/drawPrimitives';
+import { drawHill, drawPlatformMoss } from './themes/drawPrimitives';
 import { hexToRGB } from './fastMath';
 import { debugFlags } from './debugFlags';
 import { drawNavDebugOverlay } from './navDebugOverlay';
@@ -83,6 +83,16 @@ function freshDiag(): RenderDiagnostics {
     countdown: false, navDebug: false, netDebug: false, screenFlash: false,
     hitstop: false, screenShake: false, zeroGShimmer: false, playersDrawn: 0,
   };
+}
+
+function resetDiag(d: RenderDiagnostics): void {
+  d.clouds = false; d.weather = false; d.wildlife = false; d.animatedBg = false;
+  d.hazardZones = false; d.effectZones = false; d.bouncyPlatforms = false; d.pigeons = false;
+  d.lavaRocks = false; d.springs = false; d.thorns = false; d.carrots = false;
+  d.gibs = false; d.confetti = false; d.shockwaves = false; d.afterimages = false;
+  d.fog = false; d.ambient = false; d.fireworks = false; d.dayNight = false;
+  d.countdown = false; d.navDebug = false; d.netDebug = false; d.screenFlash = false;
+  d.hitstop = false; d.screenShake = false; d.zeroGShimmer = false; d.playersDrawn = 0;
 }
 
 export class Renderer {
@@ -319,14 +329,27 @@ export class Renderer {
   // ---- Clouds ----
 
   private updateAndDrawClouds(ctx: CanvasRenderingContext2D, dt: number): void {
-    const color = this.theme.clouds.color;
+    // Inlined batch of theme-default clouds: one fillStyle, one beginPath/fill
+    // for all clouds. Each cloud is 4 overlapping arcs (the original drawCloud
+    // shape); moveTo before each cloud starts a new sub-path so neighbours
+    // don't connect with a stray line. (The drawCloud primitive in
+    // drawPrimitives is still used by menu + lobby renderers — those aren't
+    // hot enough to justify duplicating this batch path there.)
+    ctx.fillStyle = this.theme.clouds.color;
+    ctx.beginPath();
     for (const cloud of this.clouds) {
       cloud.x += cloud.speed * dt;
       if (cloud.x - cloud.size > CANVAS_WIDTH) {
         cloud.x = -cloud.size * 2;
       }
-      drawCloudPrimitive(ctx, cloud.x, cloud.y, cloud.size, color);
+      const x = cloud.x, y = cloud.y, s = cloud.size;
+      ctx.moveTo(x + s * 0.5, y);
+      ctx.arc(x, y, s * 0.5, 0, Math.PI * 2);
+      ctx.arc(x + s * 0.4, y - s * 0.15, s * 0.4, 0, Math.PI * 2);
+      ctx.arc(x + s * 0.8, y, s * 0.45, 0, Math.PI * 2);
+      ctx.arc(x + s * 0.35, y + s * 0.1, s * 0.35, 0, Math.PI * 2);
     }
+    ctx.fill();
   }
 
 
@@ -417,8 +440,8 @@ export class Renderer {
       const ctx = this.fgCtx;
       ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-      // Reset diagnostics each frame
-      this._diag = freshDiag();
+      // Reset diagnostics each frame (mutate in place — avoid 14k object allocs over 30s)
+      resetDiag(this._diag);
       const d = this._diag;
 
       // Cache time once per frame
