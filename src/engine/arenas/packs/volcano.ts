@@ -432,34 +432,38 @@ export const volcano: ArenaPack = {
   },
 
   drawWeatherParticle: (ctx: CanvasRenderingContext2D, w: WeatherParticle) => {
-    ctx.save();
-    ctx.translate(w.x, w.y);
-    ctx.rotate(w.rotation);
     if (w.type === 'ember') {
-      // Glowing ember
-      ctx.fillStyle = w.color || '#FF6B00';
+      // Embers are circles — rotation has no visual effect, so skip the
+      // save/translate/rotate/restore canvas-state dance and draw directly
+      // at world coords. The arc primitive accepts a center, so this is
+      // exactly equivalent visually.
+      const x = w.x, y = w.y, s = w.size;
+      const color = w.color || '#FF6B00';
+      ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.arc(0, 0, w.size, 0, Math.PI * 2);
+      ctx.arc(x, y, s, 0, Math.PI * 2);
       ctx.fill();
-      // Inner bright core
       ctx.fillStyle = '#FFCC00';
       ctx.beginPath();
-      ctx.arc(0, 0, w.size * 0.4, 0, Math.PI * 2);
+      ctx.arc(x, y, s * 0.4, 0, Math.PI * 2);
       ctx.fill();
-      // Glow
       ctx.globalAlpha = 0.3;
-      ctx.fillStyle = w.color || '#FF6B00';
+      ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.arc(0, 0, w.size * 2, 0, Math.PI * 2);
+      ctx.arc(x, y, s * 2, 0, Math.PI * 2);
       ctx.fill();
+      ctx.globalAlpha = 1;
     } else {
-      // Ash
+      // Ash is an asymmetric ellipse — rotation matters.
+      ctx.save();
+      ctx.translate(w.x, w.y);
+      ctx.rotate(w.rotation);
       ctx.fillStyle = w.color || 'rgba(120, 100, 90, 0.5)';
       ctx.beginPath();
       ctx.ellipse(0, 0, w.size, w.size * 0.4, 0, 0, Math.PI * 2);
       ctx.fill();
+      ctx.restore();
     }
-    ctx.restore();
   },
 
   // ---- Gameplay modifiers ----

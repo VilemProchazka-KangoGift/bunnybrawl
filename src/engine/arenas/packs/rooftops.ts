@@ -748,19 +748,22 @@ export const rooftops: ArenaPack = {
   },
 
   drawWeatherParticle: (ctx, w) => {
-    ctx.save();
-    ctx.translate(w.x, w.y);
-    ctx.rotate(w.rotation);
     if (w.type === 'leaf') {
+      // Leaves are rectangles — rotation visible.
+      ctx.save();
+      ctx.translate(w.x, w.y);
+      ctx.rotate(w.rotation);
       ctx.fillStyle = 'rgba(200, 190, 170, 0.35)';
       ctx.fillRect(-w.size, -w.size * 0.4, w.size * 2, w.size * 0.8);
+      ctx.restore();
     } else {
+      // Ash is a circle — rotation invisible, so draw at world coords
+      // and skip the canvas-state save/translate/rotate/restore.
       ctx.fillStyle = w.color || 'rgba(200, 190, 180, 0.4)';
       ctx.beginPath();
-      ctx.arc(0, 0, w.size * 0.5, 0, Math.PI * 2);
+      ctx.arc(w.x, w.y, w.size * 0.5, 0, Math.PI * 2);
       ctx.fill();
     }
-    ctx.restore();
   },
 
   drawCustomThorn: createThornRenderer((ctx, x, y, width, height, _fadeAlpha) => {
