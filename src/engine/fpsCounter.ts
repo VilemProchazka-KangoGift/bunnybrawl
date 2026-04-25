@@ -31,6 +31,17 @@ export function resetFpsCounter(): void {
   lastSampleTime = 0;
 }
 
+/** Dump the raw frame-time samples (newest-first) for E2E perf collection.
+ *  Returns up to MAX_SAMPLES dt values in milliseconds. */
+export function dumpSamples(): { dts: number[]; count: number } {
+  const dts: number[] = [];
+  for (let i = 0; i < total; i++) {
+    const idx = (writeIdx - 1 - i + MAX_SAMPLES) % MAX_SAMPLES;
+    dts.push(frameDts[idx]);
+  }
+  return { dts, count: total };
+}
+
 interface FpsStats {
   current: number;
   avg: number;
