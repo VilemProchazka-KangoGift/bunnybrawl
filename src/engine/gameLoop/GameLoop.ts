@@ -309,16 +309,40 @@ export class GameLoop {
   /** Swap to a different arena in place. */
   switchArena(arenaId: string, settingsOverrides?: Partial<MatchSettings>): void {
     this.simulator.switchArena(arenaId, settingsOverrides);
-    // Renderer + cosmetic-system theme refs need updating after the simulator's swap.
-    const newTheme = this.simulator.getTheme();
-    this.renderer.setTheme(newTheme);
-    this.renderer.setTimeLimit(this.simulator.getSettings().timeLimit);
-    // Rebuild cosmetic systems against the new state/theme so their captured
-    // refs (theme/state) match the simulator's. The simulator already
-    // Object.assign'd into the existing state, so player references stay
-    // valid; only the theme needs propagating.
+    // Cosmetic + renderer wiring needs the new arena/theme/state refs.
+    // The simulator Object.assign'd into the existing state, but cosmetic
+    // systems captured the prior arena/theme references; rebuild them.
     const sState = this.simulator.getState();
+    const sArena = this.simulator.getArena();
+    const newTheme = this.simulator.getTheme();
+    const settings = this.simulator.getSettings();
+
+    this.renderer.setTheme(newTheme);
+    this.renderer.setTimeLimit(settings.timeLimit);
+
+    this.particleSystem = new ParticleSystem(
+      sState, sArena, newTheme, settings,
+      this.simulator.getArenaEntitySystem().getGeyserIndexMap(),
+    );
+    this.simulator.setParticleEmitter(this.particleSystem);
+
+    this.playerTransitionSystem = new PlayerTransitionSystem(
+      sState, settings, (name) => this.playSound(name),
+      (name) => { if (this._audioEnabled) audio.playAnimal(name); },
+      this.particleSystem,
+    );
+    this.playerCosmeticSystem = new PlayerCosmeticSystem(
+      sState, this.simulator.getEffWalkSpeed(), this.particleSystem,
+      (name) => this.playSound(name),
+    );
     this.environmentSystem = new EnvironmentSystem(sState, newTheme);
+    this.entityTransitionSystem = new EntityTransitionSystem(sState, (name) => this.playSound(name));
+
+    this.simulator.setSfxCooldownsGetter(() => this.playerTransitionSystem.getSfxCooldowns());
+
+    this.playerTransitionSystem.init();
+    this.entityTransitionSystem.init();
+
     // Drain leftover cosmetic lead so the first cosmeticStep after new arena
     // load doesn't run against residual time from the prior arena.
     this._cosmeticLead = 0;

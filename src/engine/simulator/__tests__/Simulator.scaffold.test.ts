@@ -43,7 +43,7 @@ beforeAll(() => {
   registerBuiltinCharacters();
 });
 
-describe('Simulator scaffold (Task 3.1)', () => {
+describe('Simulator (Task 3.2 — real implementation)', () => {
   it('is importable in Node and constructs without throwing', () => {
     const arena = getArena('meadow');
     expect(() => new Simulator({ arena, settings: SETTINGS, activePlayers: PLAYERS })).not.toThrow();
