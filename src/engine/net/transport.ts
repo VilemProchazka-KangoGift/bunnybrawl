@@ -191,10 +191,13 @@ export class Transport {
   private cleanupPriorRoom(): void {
     this.cancelPendingJoin();
     if (!this.room) return;
-    // Fire-and-forget room.leave() — Trystero cleans up WebRTC channels
-    // asynchronously; we don't need to block the new room's creation on it.
-    try { this.room.leave().catch(() => {}); } catch { /* ignore */ }
+    const dyingRoom = this.room;
+    // Null FIRST so any callback fired synchronously by Trystero during leave
+    // (or from the dying room's still-registered listeners) sees the gen
+    // mismatch (`this.room === capturedRoom` evaluates false in the setupRoom
+    // closures) and skips state mutation. Then fire-and-forget leave().
     this.room = null;
+    try { dyingRoom.leave().catch(() => {}); } catch { /* ignore */ }
     this.peers.clear();
     this.sendBinaryAction = null;
     this.sendJsonAction = null;

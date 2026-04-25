@@ -858,7 +858,7 @@ describe('HostAuthority', () => {
       expect(result).toBe(true);
     });
 
-    it('cleans up grace state after grace period expires', () => {
+    it('cleans up grace state after grace period expires; token preserved for late reclaim', () => {
       const onPlayerDisconnect = vi.fn();
       const { host } = makeHostAuthority({ onPlayerDisconnect });
       host.addGuest('peer-a', 'P2' as PlayerSlot, 'tok');
@@ -867,15 +867,19 @@ describe('HostAuthority', () => {
       // Tick past the 20s grace period
       host.tickGraceTimers(21);
 
-      // Grace expired — token AND grace state are gone (finalRemoveGuest deletes
-      // the reclaim token). Defensive reconnection still works since no active
-      // peer owns the slot AND no stored token to validate against.
+      // Grace expired but the reclaim token is intentionally retained — the
+      // ORIGINAL peer can still reclaim with their token after a long
+      // disconnect (phone call, brief tab close), but a STRANGER cannot
+      // claim the abandoned slot.
       mockGameLoopInstance.getState.mockReturnValue({
         ...makeMinimalMatchState(),
         players: [{ id: 'P2', disconnected: true, active: false, state: 'idle', respawnTimer: 0, splatTimer: 0 }],
       });
-      const result = host.handleReconnectRequest('P2' as PlayerSlot, 'peer-new');
-      expect(result).toBe(true);
+      // Stranger reclaim — rejected.
+      expect(host.handleReconnectRequest('P2' as PlayerSlot, 'stranger', 'wrong')).toBe(false);
+      expect(host.handleReconnectRequest('P2' as PlayerSlot, 'stranger')).toBe(false);
+      // Original peer with correct token — accepted.
+      expect(host.handleReconnectRequest('P2' as PlayerSlot, 'original', 'tok')).toBe(true);
     });
   });
 
@@ -912,6 +916,40 @@ describe('HostAuthority', () => {
       const token = host.getReclaimToken('P2' as PlayerSlot);
       expect(token).toBeTruthy();
       expect(token!.length).toBeGreaterThanOrEqual(32);
+    });
+
+    it('preserves the reclaim token past grace expiry (no stranger bypass)', () => {
+      // Regression: finalRemoveGuest used to delete the token. With it gone,
+      // the post-grace path saw storedToken=undefined and the validation
+      // `if (storedToken && ...)` fell through, allowing any stranger to
+      // claim the abandoned slot — defeating the auth fix.
+      const { host } = makeHostAuthority();
+      mockGameLoopInstance.getState.mockReturnValue({
+        ...makeMinimalMatchState(),
+        players: [{ id: 'P2', disconnected: true, active: false, state: 'idle', respawnTimer: 0, splatTimer: 0 }],
+      });
+      host.addGuest('peer-a', 'P2' as PlayerSlot, 'survives-grace');
+      host.removeGuest('peer-a');
+      host.tickGraceTimers(21); // past 20s grace
+
+      // Stranger without token is still rejected.
+      expect(host.handleReconnectRequest('P2' as PlayerSlot, 'stranger')).toBe(false);
+      expect(host.handleReconnectRequest('P2' as PlayerSlot, 'stranger', 'guess')).toBe(false);
+      // Original peer with their token is accepted.
+      expect(host.handleReconnectRequest('P2' as PlayerSlot, 'original', 'survives-grace')).toBe(true);
+    });
+
+    it('stop() drops all reclaim tokens (match-end lifetime boundary)', () => {
+      const { host } = makeHostAuthority();
+      host.addGuest('peer-a', 'P2' as PlayerSlot, 'tok-a');
+      host.addGuest('peer-b', 'P3' as PlayerSlot, 'tok-b');
+      expect(host.getReclaimToken('P2' as PlayerSlot)).toBe('tok-a');
+      expect(host.getReclaimToken('P3' as PlayerSlot)).toBe('tok-b');
+
+      host.stop();
+
+      expect(host.getReclaimToken('P2' as PlayerSlot)).toBeNull();
+      expect(host.getReclaimToken('P3' as PlayerSlot)).toBeNull();
     });
 
     it('rejects reclaim attempt for the host\'s own localSlot (security)', () => {

@@ -89,6 +89,9 @@ const transportMockApi = {
 vi.mock('./OnlineModal', () => ({
   getModalTransport: vi.fn(() => transportMockApi),
   clearModalTransport: vi.fn(),
+  clearReclaimTokens: vi.fn(),
+  getHostReclaimTokens: vi.fn(() => new Map()),
+  getGuestOwnReclaimToken: vi.fn(() => null),
 }));
 
 vi.mock('../engine/matchLoading', () => ({

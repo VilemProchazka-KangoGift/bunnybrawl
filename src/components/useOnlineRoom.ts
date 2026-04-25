@@ -43,7 +43,12 @@ export function clearModalTransport(): void { _modalTransport = null; }
 // only its own token.
 let _hostReclaimTokens: Map<string, string> = new Map();
 let _guestOwnReclaimToken: string | null = null;
-export function getHostReclaimTokens(): Map<string, string> { return _hostReclaimTokens; }
+export function getHostReclaimTokens(): Map<string, string> {
+  // Return a defensive copy: the live Map is host-authoritative state and
+  // a caller mutating what NetMatch passes through to addGuest could corrupt
+  // the host's auth state. Iterate is fine, mutate is not.
+  return new Map(_hostReclaimTokens);
+}
 export function getGuestOwnReclaimToken(): string | null { return _guestOwnReclaimToken; }
 export function clearReclaimTokens(): void {
   _hostReclaimTokens = new Map();
@@ -307,6 +312,10 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
       transportRef.current = null;
       _modalTransport = null;
     }
+    // Drop any stale tokens from a prior session — defensive in case a
+    // quit/menu path missed clearReclaimTokens(). Without this, a guest
+    // might present an old host's token to the new host.
+    clearReclaimTokens();
     setStep('connecting');
     setOnline({ isHost, isOnline: true, roomCode: null, connectionStatus: 'idle', connectionError: null });
 

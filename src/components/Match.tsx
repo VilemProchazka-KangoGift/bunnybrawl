@@ -4,7 +4,7 @@ import { useGameStore } from '../store/gameStore';
 import { GameLoop } from '../engine/gameLoop';
 import { NetMatch } from '../engine/net/netMatch';
 import { MsgType } from '../engine/net/protocol';
-import { getModalTransport, clearModalTransport, getHostReclaimTokens, getGuestOwnReclaimToken } from './OnlineModal';
+import { getModalTransport, clearModalTransport, clearReclaimTokens, getHostReclaimTokens, getGuestOwnReclaimToken } from './OnlineModal';
 import { getArena, listArenaPacks } from '../engine/arenas';
 import { ArenaGrid } from './ArenaGrid';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
@@ -145,6 +145,10 @@ export function Match() {
       transport.destroy();
       clearModalTransport();
     }
+    // Drop reclaim tokens — without this, the next online session inherits
+    // stale lobby tokens that no longer match the new host's HostAuthority,
+    // so reconnect attempts during the next match would fail authentication.
+    clearReclaimTokens();
     // Drop random-arena memory so a fresh play picks freely; without this,
     // the prior match's arena remains excluded from the next 'random' draw
     // even though resetOnline / setActivePlayers fired.

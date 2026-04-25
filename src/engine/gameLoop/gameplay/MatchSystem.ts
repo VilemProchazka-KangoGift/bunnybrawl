@@ -6,6 +6,7 @@ import { updateCrowdCheering, tickPeriodicAmbient } from '../cosmetics/sfx';
 import { checkMatchEnd } from './match';
 import { SLOW_MO_DURATION } from '../../constants';
 import { randRange } from '../../themes/utils';
+import { audio } from '../../audio';
 
 export class MatchSystem implements GameplaySystem {
   private state: MatchState;
@@ -98,6 +99,18 @@ export class MatchSystem implements GameplaySystem {
   }
 
   cleanup(): void {
+    // Stop the ambient loops we started in init(). Today GameLoop.stop() and
+    // switchArena() also call audio.stopAllGameSounds() before reaching here,
+    // but cleanup() is the contract for "stop everything this system owns" —
+    // making it idempotent and self-contained avoids a footgun if a future
+    // call site reaches cleanup without running stopAllGameSounds first.
+    for (const loop of this.activeAmbientLoops) {
+      audio.stop(loop);
+    }
+    if (this.crowdStarted) {
+      audio.stop('crowd');
+      this.crowdStarted = false;
+    }
     this.activeAmbientLoops = [];
     this.periodicAmbientTimers.clear();
   }

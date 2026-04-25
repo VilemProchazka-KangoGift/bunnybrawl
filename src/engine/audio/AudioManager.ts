@@ -79,6 +79,7 @@ class AudioManager {
   }
 
   playAnimal(characterName: string): void {
+    if (!this.initialized) this.init();
     const soundName = characterName.toLowerCase();
     if (this.sounds.has(soundName)) {
       this.play(soundName);

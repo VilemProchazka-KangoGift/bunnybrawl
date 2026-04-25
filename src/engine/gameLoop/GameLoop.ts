@@ -973,6 +973,11 @@ export class GameLoop {
     this.state.matchOver = true;
     this.state.winner = winner;
     if (!this._resimulating) this.state.screenFlash = SCREEN_FLASH_DURATION;
+    // If the match ends while the user is still in the pause overlay (e.g.
+    // all-disconnected auto-guard fires), the gamePaused flag would otherwise
+    // stay true through the 1.5s victory transition — silencing the victory
+    // sound and any menu music until Match.tsx unmounts and stops everything.
+    audio.setPaused(false);
     audio.stopMusic();
     // victory sound moved to cosmeticStep (matchOver transition detection)
     this.onMatchEnd(winner, this.state);

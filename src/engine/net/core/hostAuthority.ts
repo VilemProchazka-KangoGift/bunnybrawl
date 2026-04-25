@@ -170,9 +170,12 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
   private finalRemoveGuest(slot: string): void {
     this.disconnectedSlots.delete(slot);
     this.lastConsumedFrame.delete(slot);
-    // Slot is truly gone — drop the reclaim token. A peer presenting the old
-    // token in a future RECONNECT_REQUEST gets rejected (slot has no entry).
-    this.reclaimTokens.delete(slot);
+    // Keep the reclaim token: after grace expires, the original peer can
+    // still present their token to reclaim, but a stranger CANNOT (storedToken
+    // exists, presented token differs, validation rejects). If we deleted
+    // here, the post-grace path would fall through with storedToken=undefined
+    // and let any peer claim the abandoned slot — defeating the auth fix.
+    // Tokens get dropped at match end via stop().
   }
 
   tickGraceTimers(dt: number): void {
@@ -223,6 +226,10 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
 
   stop(): void {
     this.running = false;
+    // Drop reclaim tokens at match end — finalRemoveGuest deliberately keeps
+    // them across grace expiry to maintain auth integrity, but match end is
+    // the actual lifetime boundary.
+    this.reclaimTokens.clear();
   }
 
   broadcastSnapshot(state: TState): void {
