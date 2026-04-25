@@ -14,6 +14,24 @@ let _spriteScale = 1;
 const SPRITE_CACHE_CAP_BASE = 600;
 let _spriteCacheCap = SPRITE_CACHE_CAP_BASE;
 
+// Pre-rendered shadow ellipse — replaces a per-player-per-frame ellipse path
+// (5 players × 60+fps = thousands of ellipse calls). Per-call cost becomes
+// `globalAlpha = a; drawImage(...)` — modulated alpha + scaled blit.
+// Source bitmap is at logical 20×4 (the max ellipse extent at shadowScale=1);
+// drawImage scales down smoothly for smaller shadowScale values.
+let _shadowCache: OffscreenCanvas | null = null;
+function getShadowCache(): OffscreenCanvas | null {
+  if (_shadowCache) return _shadowCache;
+  if (typeof OffscreenCanvas === 'undefined') return null;
+  _shadowCache = new OffscreenCanvas(20, 4);
+  const c = _shadowCache.getContext('2d')!;
+  c.fillStyle = '#000000';
+  c.beginPath();
+  c.ellipse(10, 2, 10, 2, 0, 0, Math.PI * 2);
+  c.fill();
+  return _shadowCache;
+}
+
 export function clearSpriteCache(): void {
   spriteCache.clear();
 }
@@ -35,24 +53,35 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player, nearCa
   const cx = x + width / 2;
   const cy = y + height;
 
-  // Character shadow -- projected onto ground/platform below, shrinks with height
+  // Character shadow — projected onto ground/platform below, shrinks with height
   if (state !== 'splat' && state !== 'respawning') {
-    // Find the nearest platform surface below the player's feet
-    let shadowY = 660; // default: ground
-    // Check against a simple ground level -- the renderer doesn't have arena access here,
-    // so use the player's feet position when grounded, or project to 660 (ground) when airborne
+    let shadowY = 660;
     if (state === 'idle' || state === 'run') {
-      shadowY = cy; // on ground -- shadow at feet
+      shadowY = cy;
     } else {
-      shadowY = Math.min(cy + 200, 660); // project downward, cap at ground
+      shadowY = Math.min(cy + 200, 660);
     }
     const heightAboveShadow = Math.max(0, shadowY - cy);
     const shadowScale = Math.max(0.3, 1 - heightAboveShadow / 200);
     const shadowAlpha = 0.2 * shadowScale;
-    ctx.fillStyle = `rgba(0, 0, 0, ${shadowAlpha})`;
-    ctx.beginPath();
-    ctx.ellipse(cx, shadowY, 10 * shadowScale, 2 * shadowScale, 0, 0, Math.PI * 2);
-    ctx.fill();
+    // Skip when essentially invisible (high airborne with low scale).
+    if (shadowAlpha >= 0.05) {
+      const cache = getShadowCache();
+      if (cache) {
+        // Multiply against entry alpha so a globalAlpha set by a caller
+        // (e.g. invincibility blink) still attenuates the shadow.
+        const entryAlpha = ctx.globalAlpha;
+        ctx.globalAlpha = entryAlpha * shadowAlpha;
+        const w = 20 * shadowScale, h = 4 * shadowScale;
+        ctx.drawImage(cache, cx - w / 2, shadowY - h / 2, w, h);
+        ctx.globalAlpha = entryAlpha;
+      } else {
+        ctx.fillStyle = `rgba(0, 0, 0, ${shadowAlpha})`;
+        ctx.beginPath();
+        ctx.ellipse(cx, shadowY, 10 * shadowScale, 2 * shadowScale, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
   }
 
   // Kill streak flame aura (d) -- drawn behind character sprite
