@@ -1,5 +1,5 @@
 import type {
-  MatchState, MatchSettings, Arena, PlayerSlot, Player,
+  MatchState, MatchSettings, Arena, PlayerSlot, Player, CharacterSlot,
   InputState, MatchPhase,
 } from '../types';
 import { isBotSlot } from '../types';
@@ -9,7 +9,10 @@ import type { GameSnapshot } from '../net/serialize';
 import type { ThemeConfig } from '../themes/types';
 import { getArena, getTheme, mirrorArena } from '../arenas';
 import { swapRemove } from '../themes/utils';
-import { InputManager } from '../input';
+import { KeyboardManager } from '../input/KeyboardManager';
+import { KeyboardInput } from '../input/KeyboardInput';
+import { RuleBasedBot } from '../input/RuleBasedBot';
+import type { PlayerInput } from '../input/PlayerInput';
 import { TouchInputManager } from '../touchInput';
 import { isTouchPrimary } from '../touchDetect';
 import { haptics } from '../haptics';
@@ -47,7 +50,6 @@ import { ArenaEntitySystem } from './gameplay/ArenaEntitySystem';
 import { EffectZoneSystem } from './gameplay/EffectZoneSystem';
 import { PlayerCollisionSystem } from './gameplay/PlayerCollisionSystem';
 import { StompSystem } from './gameplay/StompSystem';
-import { getPlayerInput as _getPlayerInput } from './gameplay/match';
 import { MatchSystem } from './gameplay/MatchSystem';
 
 /** Force 32-bit float for cross-architecture determinism (x86 80-bit vs ARM 64-bit). */
@@ -65,7 +67,8 @@ export class GameLoop {
   private originalArena: Arena;  // un-mirrored arena for theme rendering
   private settings: MatchSettings;
   private state: MatchState;
-  private input: InputManager;
+  private keyboardManager: KeyboardManager;
+  private playerInputs: Map<PlayerSlot, PlayerInput> = new Map();
   private renderer: Renderer;
   private onMatchEnd: MatchEndCallback;
   private theme: ThemeConfig;
@@ -154,7 +157,7 @@ export class GameLoop {
     this.settings = settings;
     this.onMatchEnd = onMatchEnd;
     this.theme = getTheme(arena.themeId);
-    this.input = new InputManager();
+    this.keyboardManager = new KeyboardManager();
     this.renderer = new Renderer(bgCanvas, fgCanvas, this.theme, settings.mods.mirrorArena, hudCanvas);
     this.renderer.setTimeLimit(settings.timeLimit);
 
@@ -184,6 +187,27 @@ export class GameLoop {
     for (const player of players) {
       if (isBotSlot(player.id)) {
         this.aiControllers.set(player.id, new AIController(player.id, player.character.name, botDifficulty, botIndex++, this.aiRng));
+      }
+    }
+
+    // Build PlayerInput dispatch map: KeyboardInput for humans, RuleBasedBot for bots.
+    // RuleBasedBot captures this.arena by reference, so this must run after the arena
+    // has its final form (super-bounce + mirror copies above) and before systems consume state.
+    for (const player of players) {
+      if (isBotSlot(player.id)) {
+        const ai = this.aiControllers.get(player.id)!;
+        this.playerInputs.set(player.id, new RuleBasedBot(
+          player.id,
+          ai,
+          this.arena,
+          settings.mods.carrotChase,
+          settings.mods.mirrorArena,
+        ));
+      } else {
+        this.playerInputs.set(player.id, new KeyboardInput(
+          player.id as CharacterSlot,
+          this.keyboardManager,
+        ));
       }
     }
 
@@ -252,7 +276,7 @@ export class GameLoop {
   }
 
   start(): void {
-    this.input.attach();
+    this.keyboardManager.attach();
     if (this.touchInput) {
       const container = document.querySelector('.game-scaler-content') as HTMLElement | null;
       if (container) {
@@ -288,7 +312,7 @@ export class GameLoop {
     this.running = false;
     this.stopped = true;
     if (this.rafId) cancelAnimationFrame(this.rafId);
-    this.input.detach();
+    this.keyboardManager.detach();
     this.touchInput?.detach();
     audio.stopAllGameSounds();
     this.matchSystem.cleanup();
@@ -339,9 +363,15 @@ export class GameLoop {
     return this.aiControllers;
   }
 
+  /** Read-only accessor for the unified PlayerInput dispatch map.
+   *  Used by tests and (in Task 3.x) the future Simulator integration. */
+  getPlayerInputs(): ReadonlyMap<PlayerSlot, PlayerInput> {
+    return this.playerInputs;
+  }
+
   /** Read merged input from all key bindings + touch (for online play). */
   getInputAny(): InputState {
-    const kb = this.input.getInputAny();
+    const kb = this.keyboardManager.readAny();
     if (this.touchInput) {
       // Convert touch airborne-tap to fast-fall using THIS side's view of the
       // player. On a guest, that view comes from the latest snapshot (~RTT/2
@@ -432,6 +462,11 @@ export class GameLoop {
       effectiveArena = mirrorArena(effectiveArena);
     }
     this.arena = effectiveArena;
+    // Propagate the new arena to every RuleBasedBot — they captured the prior
+    // arena by reference at construction. Keyboard/remote inputs are arena-agnostic.
+    for (const pi of this.playerInputs.values()) {
+      if (pi instanceof RuleBasedBot) pi.setArena(this.arena);
+    }
     this.theme = getTheme(newArena.themeId);
 
     // Recompute effective physics from new theme + mods
@@ -984,7 +1019,32 @@ export class GameLoop {
   }
 
   private getPlayerInput(player: Player): InputState {
-    return _getPlayerInput(player, this.input, this.touchInput, this.touchSlot, this._networkInputs, this.aiControllers, this.state, this.arena, this.settings);
+    // Network override (host receives guest input)
+    if (this._networkInputs) {
+      const net = this._networkInputs.get(player.id);
+      if (net) {
+        if (net.jump && player.state === 'airborne') {
+          return { left: net.left, right: net.right, jump: false, down: true };
+        }
+        return net;
+      }
+    }
+    // Touch override (browser, local touch player)
+    if (this.touchInput && player.id === this.touchSlot) {
+      return this.touchInput.getInputForPlayer(player.state === 'airborne');
+    }
+    // Unified PlayerInput dispatch (KeyboardInput or RuleBasedBot)
+    const pi = this.playerInputs.get(player.id);
+    if (pi) return pi.getAction(this.state);
+    return { left: false, right: false, jump: false, down: false };
+  }
+
+  /** @internal Test-only: forwards to the private getPlayerInput so dispatch
+   *  branches (network/touch/keyboard/bot/fallback) can be asserted without
+   *  driving a full fixedUpdate tick. */
+  getPlayerInputForTest(player: Player, networkInputs?: Map<string, InputState>): InputState {
+    if (networkInputs) this._networkInputs = networkInputs;
+    return this.getPlayerInput(player);
   }
 
   getTouchInput(): TouchInputManager | null {
