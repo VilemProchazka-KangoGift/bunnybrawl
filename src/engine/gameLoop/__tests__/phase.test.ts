@@ -297,6 +297,27 @@ describe('GameLoop.setPhase', () => {
     expect(loop.getCosmeticLead()).toBeCloseTo(0, 5);
   });
 
+  it('tickCosmetic ignores NaN / Infinity / non-positive dt without poisoning state', () => {
+    // Without the guard, NaN propagates to _cosmeticLead and every subsequent
+    // comparison returns false — silently disabling all SFX/particles for the
+    // rest of the session. Regression for the dt-poisoning class of bug.
+    const { loop } = createLoop();
+    loop.getState().phase = 'playing';
+
+    const initial = loop.getCosmeticLead();
+    loop.tickCosmetic(NaN);
+    loop.tickCosmetic(Infinity);
+    loop.tickCosmetic(-0.5);
+    loop.tickCosmetic(0);
+    expect(loop.getCosmeticLead()).toBe(initial);
+    expect(Number.isFinite(loop.getCosmeticLead())).toBe(true);
+
+    // Subsequent normal tick still works correctly.
+    loop.tickCosmetic(FIXED_TIMESTEP);
+    expect(Number.isFinite(loop.getCosmeticLead())).toBe(true);
+    expect(loop.getCosmeticLead()).toBeCloseTo(FIXED_TIMESTEP, 5);
+  });
+
   it('setPhase("playing") re-primes cosmetic baselines so the next cosmeticStep does not fire spurious jump SFX', () => {
     // Without the baseline reprime, prev-state captured at construction
     // (phase=loading, players idle, score=0) would compare against the first

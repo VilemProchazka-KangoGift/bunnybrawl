@@ -378,6 +378,42 @@ describe('PlayerTransitionSystem', () => {
     expect(sys.getSfxCooldowns().size).toBe(0);
   });
 
+  it('score increase WITHOUT fatTimer change (kill score +2) does NOT fire crunch', () => {
+    // Regression: previously the score-delta branch fired `crunch` + carrot
+    // pickup VFX unconditionally. A stomp adds +2 to the attacker, which
+    // wrongly triggered carrot SFX every kill. Now gated on fatTimer transition.
+    const player = makePlayer({ id: 'P1', state: 'idle', score: 0, fatTimer: 0 });
+    const state = makeSystemState({ players: [player] });
+    const { sys, playSound } = makePlayerTransitionSystem(state);
+    sys.init();
+
+    // Simulate kill: score +2, fatTimer unchanged.
+    player.score = 2;
+    sys.cosmeticUpdate(1 / 60);
+
+    expect(playSound).not.toHaveBeenCalledWith('crunch');
+    // Score animation still pushed (used for the floating "+2" text).
+    expect(state.scoreAnimations.length).toBe(1);
+    expect(state.scoreAnimations[0].value).toBe(2);
+  });
+
+  it('fatTimer 0 → positive (carrot pickup) DOES fire crunch + animal + VFX', () => {
+    const player = makePlayer({ id: 'P1', state: 'idle', score: 0, fatTimer: 0 });
+    const state = makeSystemState({ players: [player] });
+    const { sys, playSound, playAnimal } = makePlayerTransitionSystem(state);
+    sys.init();
+
+    // Simulate carrot pickup: score +1, fatTimer set to FAT_DURATION.
+    player.score = 1;
+    player.fatTimer = 8; // FAT_DURATION-ish
+    sys.cosmeticUpdate(1 / 60);
+
+    expect(playSound).toHaveBeenCalledWith('crunch');
+    expect(playAnimal).toHaveBeenCalled();
+    expect(state.scoreAnimations.length).toBe(1);
+    expect(state.scoreAnimations[0].value).toBe(1);
+  });
+
   it('resetBaseline() suppresses spurious jump SFX after a state jump', () => {
     // Simulates the reconnect path: prev-state captured at construction shows
     // an idle player; after the disconnect/reconnect window, the snapshot

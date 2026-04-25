@@ -285,6 +285,9 @@ export class GameLoop {
     this.touchInput?.detach();
     audio.stopAllGameSounds();
     this.matchSystem.cleanup();
+    // Reset half-rate cosmetic accumulator so a re-start (or test reuse)
+    // doesn't carry over leftover lead from the prior session.
+    this._cosmeticLead = 0;
     if (this._debugKeyHandler) {
       window.removeEventListener('keydown', this._debugKeyHandler);
       this._debugKeyHandler = null;
@@ -377,21 +380,22 @@ export class GameLoop {
     if (prev === phase) return;
     this.state.phase = phase;
     if (phase === 'playing' && prev !== 'playing') {
-      // First entry into playing — kick off music + ambient. Preloaded by
-      // runLoadingTasks, so this should start instantly.
-      audio.playMusic(this.arena.themeId);
-      this.playSound('ambient');
-      // Start per-arena ambient loops (wind, lava, underwater bubbles, etc.)
-      // Gated here so they don't play during the loading phase.
-      this.matchSystem.init();
-      // Re-prime cosmetic prev-state baselines now that we're entering the
-      // active phase — without this, prev-state captured at construction
-      // (idle, score=0) compares against the first post-countdown snapshot
-      // and fires spurious jump/land/score SFX. Guest path mirrors this in
-      // NetMatch's _fireGuestPhaseChange.
-      this.resetCosmeticBaselines();
+      this.onEnterPlayingPhase();
     }
     this.onPhaseChange?.(phase);
+  }
+
+  /** Side effects that fire on the loading→playing edge. Called by setPhase
+   *  on the host, and by NetMatch's snapshot-driven phase tracker on the
+   *  guest. Includes music + ambient + matchSystem.init() + cosmetic
+   *  baseline reset — without these on the guest, joining players hear no
+   *  music, no per-arena ambient (wind/lava/underwater), and may hear
+   *  spurious jump/land/score SFX as prev-state catches up. */
+  onEnterPlayingPhase(): void {
+    audio.playMusic(this.arena.themeId);
+    this.playSound('ambient');
+    this.matchSystem.init();
+    this.resetCosmeticBaselines();
   }
 
   /** Swap to a different arena in place — scores reset (no carry-over), state is
@@ -447,6 +451,11 @@ export class GameLoop {
 
     this.renderer.setTheme(this.theme);
     this.renderer.setTimeLimit(this.settings.timeLimit);
+
+    // Drain leftover cosmetic lead — otherwise the first cosmeticStep after
+    // the new arena finishes loading runs against residual time from the
+    // prior arena.
+    this._cosmeticLead = 0;
 
     // Bump the generation so in-flight preload promises from the previous
     // arena don't incorrectly flip us back to 'playing'.
@@ -524,6 +533,10 @@ export class GameLoop {
   /** Half-rate wrapper around cosmeticStep. Tests call cosmeticStep directly
    *  so assertions run at the un-throttled per-tick rate. */
   tickCosmetic(dt: number): void {
+    // Defend against pathological dt: negative (clock-warp), NaN, Infinity.
+    // NaN poisoning here would silently kill all cosmetic updates for the
+    // rest of the session — every subsequent comparison returns false.
+    if (!Number.isFinite(dt) || dt <= 0) return;
     this._cosmeticLead += dt;
     if (this._cosmeticLead < COSMETIC_INTERVAL) return;
     const stepDt = Math.min(this._cosmeticLead, COSMETIC_MAX_STEP);

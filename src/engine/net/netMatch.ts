@@ -334,6 +334,11 @@ export class NetMatch {
     // Reused scratch buffer: only clear jumps fixedUpdate actually consumed,
     // so a jump latched mid-tick survives to the next tick.
     const consumedJumpSlots: PlayerSlot[] = [];
+    // Reused scratch InputState passed to networkInputs.set(localSlot, ...).
+    // We copy the delayed ring slot here so consumeGuestJumps' mutation of
+    // input.jump doesn't corrupt the ring — otherwise an increase in
+    // delayFrames re-reads the same slot whose jump was already cleared.
+    const localInputScratch: import('../types').InputState = { left: false, right: false, jump: false, down: false };
 
     const loop = (now: number) => {
       // Cap dt to 3 ticks — prevents tick burst after fullscreen/tab-switch pauses
@@ -362,12 +367,19 @@ export class NetMatch {
         inputRing[writeIdx % MAX_DELAY].down = currentInput.down;
         writeIdx++;
 
-        // Read delayed input (or current if buffer not full yet)
+        // Read delayed input (or current if buffer not full yet). Copy into
+        // a scratch InputState so consumeGuestJumps' jump-clear mutation
+        // doesn't corrupt the ring buffer (re-reading the same slot when
+        // delayFrames increases would otherwise see an already-cleared jump).
         const readIdx = writeIdx > delayFrames ? writeIdx - delayFrames : writeIdx - 1;
         const delayedInput = inputRing[readIdx % MAX_DELAY];
+        localInputScratch.left = delayedInput.left;
+        localInputScratch.right = delayedInput.right;
+        localInputScratch.jump = delayedInput.jump;
+        localInputScratch.down = delayedInput.down;
 
         const networkInputs = this.hostAuthority!.getNetworkInputs();
-        networkInputs.set(this.localSlot, delayedInput);
+        networkInputs.set(this.localSlot, localInputScratch);
         consumedJumpSlots.length = 0;
         for (const [slot, input] of networkInputs) {
           if (input.jump) consumedJumpSlots.push(slot as PlayerSlot);
@@ -477,12 +489,12 @@ export class NetMatch {
       const state = this.gameLoop.getState();
       const curPhase = state.phase;
       if (curPhase !== this._prevGuestPhase) {
-        // loading→playing edge: prev-state baselines captured at construction
-        // are stale relative to the host's first 'playing' snapshot. Reset
-        // here so the guest doesn't fire spurious jump/land/score SFX when
-        // entering the active phase. Mirrors GameLoop.setPhase on host.
+        // loading→playing edge: kick off music, ambient, per-arena loops,
+        // and re-prime cosmetic prev-state baselines. Mirrors host's
+        // setPhase('playing'). Without this, the guest plays the entire
+        // match in silence (no music, no per-arena ambient).
         if (this._prevGuestPhase === 'loading' && curPhase === 'playing') {
-          this.gameLoop.resetCosmeticBaselines();
+          this.gameLoop.onEnterPlayingPhase();
         }
         this._prevGuestPhase = curPhase;
         this.onPhaseChange?.(curPhase);

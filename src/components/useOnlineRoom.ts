@@ -142,6 +142,20 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
     flashAutoSwitchNotice(null);
   }, [resetOnline, flashAutoSwitchNotice]);
 
+  // Guarantee cleanup on hook unmount — guards against future paths that
+  // dismiss the modal without going through Back/Cancel buttons. We must NOT
+  // destroy the transport when match-start triggers the unmount, since
+  // Match.tsx is taking ownership in that case (handoff via _modalTransport).
+  const matchHandedOff = useRef(false);
+  const cleanupRef = useRef(cleanup);
+  cleanupRef.current = cleanup;
+  useEffect(() => {
+    return () => {
+      if (matchHandedOff.current) return;
+      if (transportRef.current) cleanupRef.current();
+    };
+  }, []);
+
   const startMatchAsGuest = useCallback(() => {
     const store = useGameStore.getState();
     const mySlot: PlayerSlot = store.online.isHost ? 'P1' : (store.online.localSlot || 'P2');
@@ -201,6 +215,7 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
     }
 
     setOnline({ isOnline: true, localSlot: mySlot, playerNames: names });
+    matchHandedOff.current = true;
     onMatchStart();
     setScreen('match');
   }, [allChars, setActivePlayers, setOnline, setScreen, onMatchStart]);
@@ -351,6 +366,7 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
       onPeerDisconnected: (peerId: string) => {
         const slot = peerSlotMap.get(peerId);
         peerSlotMap.delete(peerId);
+        pendingPlayerNames.current.delete(peerId);
         if (isHost) {
           if (slot) freedSlots.push(slot);
           const current = useGameStore.getState().online.remotePlayers;

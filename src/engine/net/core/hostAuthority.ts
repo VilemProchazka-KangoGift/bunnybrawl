@@ -147,6 +147,12 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
   }
 
   handleReconnectRequest(slot: string, newPeerId: string): boolean {
+    // Never let a remote peer reclaim the host's own slot. The host's localSlot
+    // is never in peerSlotMap (which only tracks remote peers), so without this
+    // check a malicious guest could send RECONNECT_REQUEST{slot: hostSlot} and
+    // hijack input authority over the host's player.
+    if (slot === this.localSlot) return false;
+
     const graceInfo = this.disconnectedSlots.get(slot);
     if (!graceInfo) {
       const hasActivePeer = [...this.peerSlotMap.values()].includes(slot);

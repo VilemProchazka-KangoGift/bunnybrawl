@@ -192,16 +192,15 @@ export class ParticleSystem implements CosmeticSystem {
     updateConfetti(this.state.confetti, this.state.timeElapsed, dt);
   }
 
-  /** Tick firework timer + update particle systems (called for match-over fireworks). */
+  /** Tick the firework spawn timer (called every frame on matchOver).
+   *  Particle/gib/confetti motion is handled by cosmeticStep; calling
+   *  updateParticles here would double-tick them and run at ~1.5× speed. */
   updateFireworks(dt: number): void {
     this.fireworkTimer -= dt;
     if (this.fireworkTimer <= 0) {
       this.fireworkTimer = 0.3;
       this.spawnFirework();
     }
-    updateParticles(this._particles, this.particleFreeList, this.arena.platforms, this.settings.goreMode, this.newBloodDripsSinceRender, dt);
-    updateGibs(this.state.gibs, this.arena.platforms, this.arena.effectZones, this.geyserIndexMap, this.state.geyserStates, this.newGroundedGibsSinceRender, dt);
-    updateConfetti(this.state.confetti, this.state.timeElapsed, dt);
   }
 
   /** Flush settled gibs and blood drips to the renderer background canvas. */

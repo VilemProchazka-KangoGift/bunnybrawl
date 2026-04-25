@@ -290,7 +290,20 @@ export function Match() {
           setUnstable(stalled ? { kind: 'mine' } : null);
         },
         onDisconnect: () => {
-          if (matchEnded) return;
+          // If the match ended naturally and the peer disconnected during the
+          // 1.5s pre-victory pause, replace the queued natural-result with a
+          // disconnect-win so the victory screen suppresses the now-pointless
+          // rematch buttons.
+          if (matchEnded) {
+            if (victoryTimeoutRef.current) {
+              clearTimeout(victoryTimeoutRef.current);
+              victoryTimeoutRef.current = null;
+            }
+            if (gameLoopRef.current) {
+              setMatchResult(null, gameLoopRef.current.getState(), true);
+            }
+            return;
+          }
           // Flash "Could not reconnect" for ~1.8s before the victory screen.
           reconnectFailedRef.current = true;
           setReconnectFailed(true);
@@ -299,6 +312,9 @@ export function Match() {
             disconnectDelayRef.current = null;
             reconnectFailedRef.current = false;
             setReconnectFailed(false);
+            // If the match also ended naturally during the 1.8s flash window,
+            // the natural-result victoryTimeoutRef has already fired —
+            // skip to avoid clobbering the winner with a null disconnect-win.
             if (matchEnded) return;
             if (gameLoopRef.current) {
               setMatchResult(null, gameLoopRef.current.getState(), true);

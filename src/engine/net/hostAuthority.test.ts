@@ -879,6 +879,24 @@ describe('HostAuthority', () => {
   });
 
   describe('handleReconnectRequest', () => {
+    it('rejects reclaim attempt for the host\'s own localSlot (security)', () => {
+      // A malicious or buggy guest could send RECONNECT_REQUEST{slot: localSlot}
+      // and hijack input authority over the host's player. localSlot is never
+      // in peerSlotMap (which tracks remote peers), so without the explicit
+      // guard the slot would appear "available for reclaim".
+      const { host } = makeHostAuthority({ localSlot: 'P1' as PlayerSlot });
+      mockGameLoopInstance.getState.mockReturnValue({
+        ...makeMinimalMatchState(),
+        players: [{ id: 'P1', disconnected: false, active: true, state: 'idle', respawnTimer: 0, splatTimer: 0 }],
+      });
+
+      const result = host.handleReconnectRequest('P1' as PlayerSlot, 'malicious-peer');
+
+      expect(result).toBe(false);
+      // Mapping must NOT have been added.
+      expect(host.getNetworkInputs().has('P1')).toBe(false);
+    });
+
     it('succeeds even without grace period if slot has no active peer', () => {
       const { host } = makeHostAuthority();
       mockGameLoopInstance.getState.mockReturnValue({
