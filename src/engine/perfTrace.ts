@@ -19,6 +19,7 @@ interface SectionBuffer {
 }
 
 const MAX_SAMPLES_PER_SECTION = 10_000;
+const WORK = new Float32Array(MAX_SAMPLES_PER_SECTION);
 const sections = new Map<string, SectionBuffer>();
 
 function getOrCreateBuffer(name: string): SectionBuffer {
@@ -47,7 +48,12 @@ export const perfTrace = {
     if (!perfTrace.enabled || start === 0) return;
     const elapsed = performance.now() - start;
     const buf = getOrCreateBuffer(name);
-    buf.samples[buf.writeIdx % MAX_SAMPLES_PER_SECTION] = elapsed;
+    const idx = buf.writeIdx % MAX_SAMPLES_PER_SECTION;
+    if (buf.count >= MAX_SAMPLES_PER_SECTION) {
+      // Ring is full — subtract the sample we're about to overwrite so totalMs stays in sync with the ring
+      buf.totalMs -= buf.samples[idx];
+    }
+    buf.samples[idx] = elapsed;
     buf.writeIdx++;
     if (buf.count < MAX_SAMPLES_PER_SECTION) buf.count++;
     buf.totalMs += elapsed;
@@ -55,7 +61,7 @@ export const perfTrace = {
 
   snapshot(): Record<string, SectionStats> {
     const out: Record<string, SectionStats> = {};
-    const work = new Float32Array(MAX_SAMPLES_PER_SECTION);
+    const work = WORK;
     for (const [name, buf] of sections) {
       if (buf.count === 0 || buf.writeIdx === 0) continue;
       for (let i = 0; i < buf.count; i++) work[i] = buf.samples[i];
@@ -65,7 +71,7 @@ export const perfTrace = {
       out[name] = {
         calls: buf.writeIdx,
         totalMs: buf.totalMs,
-        avgMs: buf.totalMs / buf.writeIdx,
+        avgMs: buf.totalMs / buf.count,
         p95Ms: slice[p95Idx],
       };
     }
