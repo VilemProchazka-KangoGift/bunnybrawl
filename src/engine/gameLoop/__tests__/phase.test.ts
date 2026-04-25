@@ -257,6 +257,46 @@ describe('GameLoop.setPhase', () => {
     expect(state.phase).toBe('over');
   });
 
+  it('tickCosmetic preserves residual cosmeticLead after a long gap', () => {
+    // After a tab-switch with multi-second dt, tickCosmetic clamps the step
+    // to COSMETIC_MAX_STEP and should subtract the consumed dt from
+    // _cosmeticLead — not zero it. Without this, accumulators bound to
+    // real-elapsed time stutter after a tab return.
+    const { loop } = createLoop();
+    loop.getState().phase = 'playing';
+
+    // Simulate a 2-second gap. COSMETIC_MAX_STEP = 4 * FIXED_TIMESTEP ≈ 67ms,
+    // so 2s should leave ~1.93s in residual.
+    const lead0 = loop.getCosmeticLead();
+    expect(lead0).toBe(0);
+
+    loop.tickCosmetic(2.0);
+
+    // After consuming one capped step, residual should still be substantial
+    // (close to 2 seconds minus ~67ms).
+    const remaining = loop.getCosmeticLead();
+    expect(remaining).toBeGreaterThan(1.5);
+    expect(remaining).toBeLessThan(2.0);
+
+    // Next tickCosmetic with a normal dt drains another step from residual
+    loop.tickCosmetic(FIXED_TIMESTEP);
+    const remaining2 = loop.getCosmeticLead();
+    expect(remaining2).toBeLessThan(remaining);
+  });
+
+  it('tickCosmetic with normal dt below COSMETIC_INTERVAL accumulates without firing', () => {
+    const { loop } = createLoop();
+    loop.getState().phase = 'playing';
+
+    // FIXED_TIMESTEP alone is below COSMETIC_INTERVAL (which is 2x FT)
+    loop.tickCosmetic(FIXED_TIMESTEP);
+    expect(loop.getCosmeticLead()).toBeCloseTo(FIXED_TIMESTEP, 5);
+
+    // Second tick crosses the threshold — leftover stays around 0
+    loop.tickCosmetic(FIXED_TIMESTEP);
+    expect(loop.getCosmeticLead()).toBeCloseTo(0, 5);
+  });
+
   it('setPhase("playing") re-primes cosmetic baselines so the next cosmeticStep does not fire spurious jump SFX', () => {
     // Without the baseline reprime, prev-state captured at construction
     // (phase=loading, players idle, score=0) would compare against the first

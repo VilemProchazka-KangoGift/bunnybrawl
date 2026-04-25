@@ -36,6 +36,11 @@ export interface GameStore {
   setActivePlayers: (players: PlayerSlot[]) => void;
   disconnectWin: boolean;
   setMatchResult: (winner: PlayerSlot | null, state: MatchState, disconnected?: boolean) => void;
+  /** Clear winner / lastMatchState / disconnectWin without changing screen.
+   *  Used by rematch and quit-to-menu paths to prevent ghost data from a
+   *  prior match leaking into the next one (e.g. if the new match's
+   *  onMatchEnd is delayed or the user navigates away early). */
+  clearMatchResult: () => void;
   setOnline: (state: Partial<OnlineState>) => void;
   resetOnline: () => void;
   reset: () => void;
@@ -104,6 +109,9 @@ export const useGameStore = create<GameStore>((set) => ({
 
   setMatchResult: (winner, matchState, disconnected) =>
     set({ winner, lastMatchState: matchState, screen: 'victory', disconnectWin: !!disconnected }),
+
+  clearMatchResult: () =>
+    set({ winner: null, lastMatchState: null, disconnectWin: false }),
 
   setOnline: (state) =>
     set((prev) => ({ online: { ...prev.online, ...state } })),

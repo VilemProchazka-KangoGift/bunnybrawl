@@ -329,14 +329,18 @@ export class GameLoop {
   getInputAny(): InputState {
     const kb = this.input.getInputAny();
     if (this.touchInput) {
-      // Network mode: skip airborne conversion — host applies it in getPlayerInput()
-      // using authoritative state. Jump latch preserves across message overwrites.
+      // Convert touch airborne-tap to fast-fall using THIS side's view of the
+      // player. On a guest, that view comes from the latest snapshot (~RTT/2
+      // stale), which is still much closer to the moment the user actually
+      // tapped than the host's view (which is RTT/2 stale from the OTHER
+      // direction). Sending the converted input across the wire spares the
+      // host from guessing — its match.ts:39-41 safety-net conversion only
+      // fires if the guest's view diverged enough that they sent a raw jump
+      // while the host's authoritative player state is airborne.
       const touchPlayer = this.touchSlot
         ? this.state.players.find(p => p.id === this.touchSlot)
         : null;
-      const airborne = this._networkMode
-        ? false  // network mode: never convert, host applies conversion in getPlayerInput()
-        : touchPlayer?.state === 'airborne';
+      const airborne = touchPlayer?.state === 'airborne';
       const ti = this.touchInput.getInputForPlayer(airborne);
       return {
         left: kb.left || ti.left,
@@ -523,7 +527,13 @@ export class GameLoop {
     this._cosmeticLead += dt;
     if (this._cosmeticLead < COSMETIC_INTERVAL) return;
     const stepDt = Math.min(this._cosmeticLead, COSMETIC_MAX_STEP);
-    this._cosmeticLead = 0;
+    // Subtract the consumed dt instead of zeroing — after a long tab-switch,
+    // _cosmeticLead can be 5+ seconds; clamping the step but discarding the
+    // residual means accumulators bound to elapsed time stutter. We still
+    // cap the catch-up at COSMETIC_MAX_STEP per tick, but the residual is
+    // drained on subsequent frames at most ~1s/frame (60fps × 4 ticks) so
+    // we recover within ~16 frames after a big gap rather than dropping it.
+    this._cosmeticLead = Math.max(0, this._cosmeticLead - stepDt);
     this.cosmeticStep(stepDt);
   }
 

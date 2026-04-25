@@ -525,6 +525,66 @@ describe('HostAuthority', () => {
     });
   });
 
+  describe('counter-reset detection (Uint32 wraparound)', () => {
+    it('treats a frame counter that has dropped >>1M frames as a reset', () => {
+      // Simulates the Uint32 wraparound case: host's lastConsumedFrame is
+      // near MAX_UINT32 (e.g. 4_290_000_000), guest's wire frame wrapped
+      // to 0 and is now climbing slowly. Without the counter-reset guard,
+      // every input would be silently discarded (`entry.frame <= lastFrame`)
+      // forever.
+      const transport = makeMockTransport();
+      const { host } = makeHostAuthority({ transport: transport as any });
+      host.addGuest('peer-a', 'P2' as PlayerSlot);
+
+      // Burn lastConsumedFrame to a very high value (we use 5,000,000 so
+      // the gap is comfortably > 1M — exact value chosen for readability).
+      const burnMsg = encodeInputMessage(
+        [{ frame: 5_000_000, input: { left: false, right: true, jump: false, down: false } }],
+        0, 1, 'P2',
+      );
+      host.handleUnreliableMessage(burnMsg, 'peer-a');
+
+      // Now a "wrapped" bundle arrives — newest is 1, drops far below stored.
+      const wrappedMsg = encodeInputMessage(
+        [{ frame: 1, input: { left: true, right: false, jump: true, down: false } }],
+        0, 1, 'P2',
+      );
+      host.handleUnreliableMessage(wrappedMsg, 'peer-a');
+
+      const input = host.getGuestInput('P2' as PlayerSlot);
+      expect(input.left).toBe(true);
+      expect(input.right).toBe(false);
+      expect(input.jump).toBe(true);
+    });
+
+    it('does NOT reset on a small backward drift (network reorder, not wraparound)', () => {
+      // A normal out-of-order packet (e.g. F=100 arrives after F=105) must
+      // NOT be treated as a counter reset — that would re-accept already-
+      // applied inputs and overwrite newer state.
+      const transport = makeMockTransport();
+      const { host } = makeHostAuthority({ transport: transport as any });
+      host.addGuest('peer-a', 'P2' as PlayerSlot);
+
+      const newer = encodeInputMessage(
+        [{ frame: 105, input: { left: false, right: true, jump: false, down: false } }],
+        0, 1, 'P2',
+      );
+      host.handleUnreliableMessage(newer, 'peer-a');
+
+      const older = encodeInputMessage(
+        [{ frame: 100, input: { left: true, right: false, jump: false, down: false } }],
+        0, 1, 'P2',
+      );
+      host.handleUnreliableMessage(older, 'peer-a');
+
+      // Older entry must NOT have overwritten the newer one (left=true would
+      // indicate a spurious reset acceptance).
+      const input = host.getGuestInput('P2' as PlayerSlot);
+      expect(input.right).toBe(true);
+      expect(input.left).toBe(false);
+    });
+  });
+
   describe('removeGuest — lastConsumedFrame cleanup', () => {
     it('clears lastConsumedFrame so a fresh peer in the same slot is accepted', () => {
       // Simulate the bare-transport-recycle path: peer disconnects and

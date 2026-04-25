@@ -66,6 +66,45 @@ describe('GameStore', () => {
     expect(state.winner).toBeNull();
   });
 
+  describe('clearMatchResult', () => {
+    it('clears winner / lastMatchState / disconnectWin without changing screen', () => {
+      const mockState = {
+        players: [],
+        killFeed: [],
+        timeElapsed: 60,
+        matchOver: true,
+        winner: 'P1' as const,
+        carrots: [],
+        carrotTimer: 10,
+        springs: [],
+        thorns: [],
+      };
+      useGameStore.getState().setMatchResult('P1', mockState, true);
+      // Sanity check the setMatchResult side-effects we'll be clearing.
+      expect(useGameStore.getState().winner).toBe('P1');
+      expect(useGameStore.getState().lastMatchState).toBe(mockState);
+      expect(useGameStore.getState().disconnectWin).toBe(true);
+      expect(useGameStore.getState().screen).toBe('victory');
+
+      useGameStore.getState().clearMatchResult();
+
+      const after = useGameStore.getState();
+      expect(after.winner).toBeNull();
+      expect(after.lastMatchState).toBeNull();
+      expect(after.disconnectWin).toBe(false);
+      // Screen is intentionally NOT touched — caller drives navigation.
+      expect(after.screen).toBe('victory');
+    });
+
+    it('is idempotent — second call is a no-op', () => {
+      useGameStore.getState().clearMatchResult();
+      useGameStore.getState().clearMatchResult();
+      const s = useGameStore.getState();
+      expect(s.winner).toBeNull();
+      expect(s.disconnectWin).toBe(false);
+    });
+  });
+
   it('all game mods default to false', () => {
     const { matchSettings } = useGameStore.getState();
     expect(matchSettings.mods).toEqual({

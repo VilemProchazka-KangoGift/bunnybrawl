@@ -384,6 +384,10 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
             transport.destroy();
             transportRef.current = null;
             _modalTransport = null;
+            // Drop buffered HANDSHAKE names from the rejected peer; otherwise
+            // a future peer that happens to reuse a peerId could pick up a
+            // stale name from a prior session.
+            pendingPlayerNames.current.clear();
             setStep('choose');
             return;
           }

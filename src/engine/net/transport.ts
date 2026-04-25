@@ -173,6 +173,14 @@ export class Transport {
     this.events = events;
   }
 
+  /** Read the current events bag — used by callers that need to swap in a
+   *  new wiring temporarily and restore the prior one on cleanup
+   *  (VictoryScreen does this so unmount doesn't leave stale callbacks
+   *  attached to the still-alive transport). */
+  getEvents(): TransportEvents {
+    return this.events;
+  }
+
   /** Tear down any prior Room instance + associated state. Called by both
    *  createRoom and joinRoom so reconnection attempts don't leak WebRTC
    *  channels or leave stale peer entries in `this.peers`. No-op + instant

@@ -18,7 +18,9 @@ import { useDelayedFlag } from '../hooks/useDelayedFlag';
 import { useWakeLock } from '../hooks/useWakeLock';
 import './Match.css';
 
-// Track last resolved arena so random doesn't repeat on rematch
+// Track last resolved arena so random doesn't repeat on rematch. Intentionally
+// module-scope so it survives Match unmounts during a single session.
+// Cleared on handleQuit (return to menu) so a new session draws freely.
 let lastResolvedArenaId: string | null = null;
 
 function resolveArenaId(arenaId: string): string {
@@ -66,7 +68,7 @@ export function Match() {
   const hudCanvasRef = useRef<HTMLCanvasElement>(null);
   const gameLoopRef = useRef<GameLoop | null>(null);
   const victoryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { activePlayers, matchSettings, setMatchResult, setScreen, setActivePlayers, setMatchSettings, online, resetOnline } = useGameStore();
+  const { activePlayers, matchSettings, setMatchResult, setScreen, setActivePlayers, setMatchSettings, online, resetOnline, clearMatchResult } = useGameStore();
   const [paused, setPaused] = useState(false);
   const [showLevelSelect, setShowLevelSelect] = useState(false);
   // Mutually exclusive: local stall (my snapshot stream lagged) vs peer stall
@@ -143,10 +145,21 @@ export function Match() {
       transport.destroy();
       clearModalTransport();
     }
-    resetOnline();
-    setActivePlayers([]);
+    // Drop random-arena memory so a fresh play picks freely; without this,
+    // the prior match's arena remains excluded from the next 'random' draw
+    // even though resetOnline / setActivePlayers fired.
+    lastResolvedArenaId = null;
+    // setScreen first, then clear store fields. Match.tsx's effect dep array
+    // reacts to online.isOnline; flipping it before screen='menu' would
+    // briefly render the match branch with online cleared.
     setScreen('menu');
-  }, [setActivePlayers, setScreen, resetOnline]);
+    setActivePlayers([]);
+    resetOnline();
+    // Drop ghost match data — without this, a future VictoryScreen mount
+    // (or a delayed setMatchResult that slipped past clearTimeout) would
+    // surface stale winner/lastMatchState from this match.
+    clearMatchResult();
+  }, [setActivePlayers, setScreen, resetOnline, clearMatchResult]);
 
   const handleChangeArena = useCallback((newArenaId: string) => {
     const loop = gameLoopRef.current;
