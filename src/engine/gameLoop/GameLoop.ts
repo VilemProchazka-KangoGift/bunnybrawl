@@ -94,7 +94,6 @@ export class GameLoop {
       rng,
       events: {
         onSfxRequest: (name) => this.playSound(name),
-        onAnimalSfxRequest: (name) => { if (this._audioEnabled) audio.playAnimal(name); },
         onMusicStartRequest: (themeId) => audio.playMusic(themeId),
         onMusicStopRequest: () => audio.stopMusic(),
         onSoundStopRequest: (name) => audio.stop(name),
@@ -135,6 +134,9 @@ export class GameLoop {
 
     // Cooldowns map lives on PlayerTransitionSystem — wire it back into the simulator
     // for the headbonk + crouch + zero-G sound paths in fixedUpdate.
+    // The lazy `() => this.playerTransitionSystem.getSfxCooldowns()` indirection
+    // means subsequent playerTransitionSystem replacements (e.g. switchArena)
+    // are picked up automatically — no need to re-call setSfxCooldownsGetter.
     this.simulator.setSfxCooldownsGetter(() => this.playerTransitionSystem.getSfxCooldowns());
 
     this.playerTransitionSystem.init();
@@ -337,8 +339,6 @@ export class GameLoop {
     );
     this.environmentSystem = new EnvironmentSystem(sState, newTheme);
     this.entityTransitionSystem = new EntityTransitionSystem(sState, (name) => this.playSound(name));
-
-    this.simulator.setSfxCooldownsGetter(() => this.playerTransitionSystem.getSfxCooldowns());
 
     this.playerTransitionSystem.init();
     this.entityTransitionSystem.init();

@@ -1,6 +1,5 @@
 import type { Player, PlayerSlot, EffectZone } from '../../types';
 import { aabbOverlap } from '../../physics';
-import { audio } from '../../audio';
 import type { SfxCooldowns } from '../cosmetics/sfx';
 import { getOrCreateCooldowns } from '../cosmetics/sfx';
 
@@ -52,6 +51,7 @@ export function updateZeroGSound(
   cachedZeroGZones: readonly EffectZone[],
   zeroGSoundPlaying: boolean,
   playSound: (name: string) => void,
+  stopSound: (name: string) => void,
 ): boolean {
   if (cachedZeroGZones.length === 0) return zeroGSoundPlaying;
   let anyInZeroG = false;
@@ -69,7 +69,7 @@ export function updateZeroGSound(
     playSound('zero_g');
     return true;
   } else if (!anyInZeroG && zeroGSoundPlaying) {
-    audio.stop('zero_g');
+    stopSound('zero_g');
     return false;
   }
   return zeroGSoundPlaying;

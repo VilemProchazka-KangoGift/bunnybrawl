@@ -690,13 +690,16 @@ describe('EffectZoneSystem', () => {
     const arenaEntitySys = new ArenaEntitySystem(state, arena, mockTheme, Math.random);
     arenaEntitySys.init();
     const playSound = vi.fn();
+    const stopSound = vi.fn();
     return {
       sys: new EffectZoneSystem(
         state, arena, arenaEntitySys,
         () => new Map(),
         playSound,
+        stopSound,
       ),
       playSound,
+      stopSound,
     };
   }
 

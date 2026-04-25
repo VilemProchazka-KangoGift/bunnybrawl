@@ -39,6 +39,7 @@ const FORBIDDEN: Array<{ pattern: RegExp; reason: string }> = [
   { pattern: /\bOffscreenCanvas\b/, reason: 'OffscreenCanvas — belongs in renderer/adapter' },
   { pattern: /\.getContext\s*\(\s*['"]2d['"]/, reason: 'canvas.getContext — DOM API' },
   { pattern: /from\s+['"]howler['"]/, reason: 'Howler import — audio belongs behind playSound callback' },
+  { pattern: /from\s+['"](?:\.{1,2}\/)+audio(?:['"\/]|\.\w+['"])/, reason: 'audio module import — gameplay must route through SimulatorEvents (onSfxRequest etc.)' },
 ];
 
 function* walkTs(path: string): Generator<string> {

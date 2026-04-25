@@ -117,7 +117,6 @@ export class Simulator {
     const e = opts.events ?? {};
     this._events = {
       onSfxRequest: e.onSfxRequest ?? NOOP_NAME,
-      onAnimalSfxRequest: e.onAnimalSfxRequest ?? NOOP_NAME,
       onMusicStartRequest: e.onMusicStartRequest ?? NOOP_NAME,
       onMusicStopRequest: e.onMusicStopRequest ?? NOOP,
       onSoundStopRequest: e.onSoundStopRequest ?? NOOP_NAME,
@@ -188,7 +187,7 @@ export class Simulator {
     // the previous one at construction).
     this._effectZoneSystem = new EffectZoneSystem(
       this._state, this._arena, this._arenaEntitySystem,
-      this._sfxCooldownsGetter, this._boundPlaySound,
+      this._sfxCooldownsGetter, this._boundPlaySound, this._boundStopSound,
     );
   }
 
@@ -582,7 +581,7 @@ export class Simulator {
 
     this._effectZoneSystem = new EffectZoneSystem(
       this._state, this._arena, this._arenaEntitySystem,
-      this._sfxCooldownsGetter, this._boundPlaySound,
+      this._sfxCooldownsGetter, this._boundPlaySound, this._boundStopSound,
     );
     this._playerCollisionSystem = new PlayerCollisionSystem(
       this._state, this._arena, this._boundParticleEmitter,

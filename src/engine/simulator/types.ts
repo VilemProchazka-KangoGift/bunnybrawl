@@ -38,9 +38,6 @@ export interface SimulatorEvents {
   /** A sound effect should play. Browser adapter calls audio.play(name). */
   onSfxRequest?: (name: string) => void;
 
-  /** A character-bound sound (e.g. animal noise) should play. */
-  onAnimalSfxRequest?: (name: string) => void;
-
   /** Arena music should start. Browser adapter calls audio.playMusic(themeId). */
   onMusicStartRequest?: (themeId: string) => void;
 
