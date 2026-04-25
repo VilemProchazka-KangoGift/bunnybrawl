@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NetMatch } from './netMatch';
 import type { NetMatchConfig } from './netMatch';
 import { MsgType } from './protocol';
@@ -65,11 +65,21 @@ vi.mock('./hostAuthority', () => ({
   },
 }));
 
+// Capture the latest EntityInterpolation mock instance so tests can assert
+// reset() was called from completeReconnection.
+const interpInstances: Array<{
+  pushSnapshot: ReturnType<typeof vi.fn>;
+  getInterpolatedState: ReturnType<typeof vi.fn>;
+  getLatestSnapshot: ReturnType<typeof vi.fn>;
+  reset: ReturnType<typeof vi.fn>;
+}> = [];
 vi.mock('./interpolation', () => ({
   EntityInterpolation: class MockEntityInterpolation {
     pushSnapshot = vi.fn();
     getInterpolatedState = vi.fn(() => null);
     getLatestSnapshot = vi.fn(() => null);
+    reset = vi.fn();
+    constructor() { interpInstances.push(this); }
   },
   applySnapshotToState: vi.fn(),
 }));
@@ -362,6 +372,181 @@ describe('NetMatch', () => {
       mockGameLoopInstance.setPhase.mockClear();
       events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' });
       expect(mockGameLoopInstance.setPhase).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('armLoadingTimeout (host)', () => {
+    let transport: ReturnType<typeof makeMockTransport>;
+    let netMatch: NetMatch;
+    let onLoadingTimeout: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      transport = makeMockTransport(true);
+      mockHostAuthorityInstance.getExpectedGuestSlots.mockReturnValue(['P2', 'P3']);
+      mockGameLoopInstance.getState.mockReturnValue({ players: [], matchOver: false, winner: null, phase: 'loading' });
+      onLoadingTimeout = vi.fn();
+      netMatch = new NetMatch(makeConfig(transport, { onLoadingTimeout }));
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('fires onLoadingTimeout with laggard slots after 15s', () => {
+      netMatch.start();
+      // Only P2 sent LOADED; P3 is the laggard
+      const events = transport.setEvents.mock.calls[0][0];
+      events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' });
+      onLoadingTimeout.mockClear();
+
+      vi.advanceTimersByTime(14999);
+      expect(onLoadingTimeout).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(2);
+      expect(onLoadingTimeout).toHaveBeenCalledTimes(1);
+      expect(onLoadingTimeout).toHaveBeenCalledWith(['P3']);
+    });
+
+    it('disconnects laggards and forces phase=playing on timeout', () => {
+      netMatch.start();
+      mockGameLoopInstance.disconnectPlayer.mockClear();
+      mockGameLoopInstance.setPhase.mockClear();
+      vi.advanceTimersByTime(15001);
+      // Both expected guests are laggards (no LOADED arrived)
+      expect(mockGameLoopInstance.disconnectPlayer).toHaveBeenCalledWith('P2');
+      expect(mockGameLoopInstance.disconnectPlayer).toHaveBeenCalledWith('P3');
+      expect(mockGameLoopInstance.setPhase).toHaveBeenCalledWith('playing');
+    });
+
+    it('does NOT fire when phase already advanced before timeout', () => {
+      netMatch.start();
+      // Simulate the phase already being 'playing' by the time the timeout
+      // hits — checkAllLoaded got there first.
+      mockGameLoopInstance.getState.mockReturnValue({ players: [], matchOver: false, winner: null, phase: 'playing' });
+      onLoadingTimeout.mockClear();
+      vi.advanceTimersByTime(15001);
+      expect(onLoadingTimeout).not.toHaveBeenCalled();
+    });
+
+    it('resetLoadingHandshake() re-arms the timer', () => {
+      netMatch.start();
+      vi.advanceTimersByTime(10000);
+      netMatch.resetLoadingHandshake();
+      onLoadingTimeout.mockClear();
+      // 5s more from original start would have tripped the original timer;
+      // resetLoadingHandshake should have restarted the clock.
+      vi.advanceTimersByTime(5500);
+      expect(onLoadingTimeout).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(10000);
+      expect(onLoadingTimeout).toHaveBeenCalled();
+    });
+
+    it('stop() cancels the loading timeout', () => {
+      netMatch.start();
+      netMatch.stop();
+      onLoadingTimeout.mockClear();
+      vi.advanceTimersByTime(20000);
+      expect(onLoadingTimeout).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('completeReconnection (guest)', () => {
+    let transport: ReturnType<typeof makeMockTransport>;
+    let netMatch: NetMatch;
+    let onReconnecting: ReturnType<typeof vi.fn>;
+    let onStall: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      transport = makeMockTransport(false);
+      onReconnecting = vi.fn();
+      onStall = vi.fn();
+      // Clear instance log so we know which one our guest creates
+      interpInstances.length = 0;
+      netMatch = new NetMatch(makeConfig(transport, {
+        localSlot: 'P2' as PlayerSlot,
+        remoteSlots: ['P1'] as PlayerSlot[],
+        onReconnecting,
+        onStall,
+      }));
+    });
+
+    it('RECONNECT_SYNC resets interpolation', () => {
+      netMatch.start();
+      const interp = interpInstances[interpInstances.length - 1];
+      interp.reset.mockClear();
+      const events = transport.setEvents.mock.calls[0][0];
+      events.onReliableMessage({ type: MsgType.RECONNECT_SYNC, slot: 'P2', snapshotFrame: 100, paused: false });
+      expect(interp.reset).toHaveBeenCalled();
+    });
+
+    it('RECONNECT_SYNC fires onReconnecting(false) and onStall(false)', () => {
+      netMatch.start();
+      onReconnecting.mockClear();
+      onStall.mockClear();
+      const events = transport.setEvents.mock.calls[0][0];
+      events.onReliableMessage({ type: MsgType.RECONNECT_SYNC, slot: 'P2', snapshotFrame: 100, paused: false });
+      expect(onReconnecting).toHaveBeenCalledWith(false);
+      expect(onStall).toHaveBeenCalledWith(false);
+    });
+
+    it('RECONNECT_SYNC honors paused flag (host suspended)', () => {
+      netMatch.start();
+      mockGameLoopInstance.pause.mockClear();
+      mockGameLoopInstance.resume.mockClear();
+      const events = transport.setEvents.mock.calls[0][0];
+      events.onReliableMessage({ type: MsgType.RECONNECT_SYNC, slot: 'P2', snapshotFrame: 100, paused: true });
+      expect(mockGameLoopInstance.pause).toHaveBeenCalled();
+    });
+
+    it('RECONNECT_SYNC honors paused=false (host running)', () => {
+      netMatch.start();
+      mockGameLoopInstance.resume.mockClear();
+      const events = transport.setEvents.mock.calls[0][0];
+      events.onReliableMessage({ type: MsgType.RECONNECT_SYNC, slot: 'P2', snapshotFrame: 100, paused: false });
+      expect(mockGameLoopInstance.resume).toHaveBeenCalled();
+    });
+  });
+
+  describe('visibilitychange listener', () => {
+    let transport: ReturnType<typeof makeMockTransport>;
+    let addSpy: ReturnType<typeof vi.spyOn>;
+    let removeSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      transport = makeMockTransport(true);
+      addSpy = vi.spyOn(document, 'addEventListener');
+      removeSpy = vi.spyOn(document, 'removeEventListener');
+    });
+
+    afterEach(() => {
+      addSpy.mockRestore();
+      removeSpy.mockRestore();
+    });
+
+    it('start() registers a visibilitychange listener', () => {
+      const nm = new NetMatch(makeConfig(transport));
+      nm.start();
+      const visibilityCalls = addSpy.mock.calls.filter(c => c[0] === 'visibilitychange');
+      expect(visibilityCalls).toHaveLength(1);
+      nm.stop();
+    });
+
+    it('stop() removes the visibilitychange listener', () => {
+      const nm = new NetMatch(makeConfig(transport));
+      nm.start();
+      removeSpy.mockClear();
+      nm.stop();
+      const visibilityCalls = removeSpy.mock.calls.filter(c => c[0] === 'visibilitychange');
+      expect(visibilityCalls).toHaveLength(1);
+    });
+
+    it('uses the same handler reference for add and remove (no listener leak)', () => {
+      const nm = new NetMatch(makeConfig(transport));
+      nm.start();
+      const addedHandler = addSpy.mock.calls.find(c => c[0] === 'visibilitychange')?.[1];
+      nm.stop();
+      const removedHandler = removeSpy.mock.calls.find(c => c[0] === 'visibilitychange')?.[1];
+      expect(addedHandler).toBe(removedHandler);
     });
   });
 });
