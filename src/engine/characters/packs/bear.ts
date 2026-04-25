@@ -24,7 +24,7 @@ const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, _state, _a
   ctx.fill();
   // Bear scratch idle: small paw near ear
   if (isIdleAnim) {
-    const scratchY = Math.sin((idleT / 0.5) * Math.PI * 3) * 3;
+    const scratchY = Math.sin(idleT * Math.PI * 3) * 3;
     ctx.fillStyle = colors.darkColor;
     ctx.beginPath();
     ctx.arc(cx + 13, yOff + 6 + scratchY, 3, 0, Math.PI * 2);
@@ -53,7 +53,7 @@ const drawGib: CharacterPack['drawGib'] = (ctx, gibType, _w, _h, colors) => {
 export const bear: CharacterPack = {
   name: 'Bear',
   color: '#8B4513', darkColor: '#654321', lightColor: '#D2691E',
-  emoji: '\uD83D\uDC3B', customEyes: false, idleTransform: 'none',
+  emoji: '\uD83D\uDC3B', customEyes: false,
   splatShape: 'circle',
   gibs: [{ gibType: 'ear', width: 10, height: 10 }, { gibType: 'ear', width: 10, height: 10 }, { gibType: 'snout', width: 10, height: 8 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Bear', cs: 'Medvěd', hi: 'भालू', fil: 'Oso' },

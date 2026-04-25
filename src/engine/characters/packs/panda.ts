@@ -54,7 +54,7 @@ const drawGib: CharacterPack['drawGib'] = (ctx, gibType, _w, _h, colors) => {
 export const panda: CharacterPack = {
   name: 'Panda',
   color: '#F0F0F0', darkColor: '#333333', lightColor: '#FFFFFF',
-  emoji: '\uD83D\uDC3C', customEyes: true, idleTransform: 'headBob',
+  emoji: '\uD83D\uDC3C', customEyes: true,
   splatShape: 'circle',
   gibs: [{ gibType: 'ear', width: 10, height: 10 }, { gibType: 'ear', width: 10, height: 10 }, { gibType: 'body', width: 14, height: 12 }, { gibType: 'body', width: 10, height: 10 }],
   translations: { en: 'Panda', cs: 'Panda', hi: 'पांडा', fil: 'Panda' },

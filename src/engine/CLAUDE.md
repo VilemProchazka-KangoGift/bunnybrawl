@@ -2,6 +2,7 @@
 
 ## Renderer & Sprites
 - Sprite drawing dispatches via `getSpriteRenderer(name)` / `getGibRenderer(name)` from character pack registry. Fallback pill-shape for unknown characters.
+- Idle actions: shared library in `rendering/idleActions.ts` (6 actions: `headBob`, `headTilt`, `headShake`, `littleHop`, `stretch`, `lookAround`) + per-pack `CharacterPack.idleActions` config (`weights` overrides + `custom` signatures). Driver in `gameLoop/cosmetics/playerCosmetics.ts` (in-match) and `lobbyGame.ts` (lobby) — same state machine: 0.8s first-action delay, then alternating 0.6–1.4s rest gap and ~0.7–1.0s actions. State (`idleAction`, `idleActionTimer`, `idleActionDuration`) is local-only — NOT in `net/snapshot.ts`. Each peer rolls actions independently; cosmetic divergence is acceptable. Action ctx transform is applied to the main canvas around `drawImage(cached, ...)`, NOT inside `_drawCharacterSpriteImpl` — otherwise the per-frame transform bakes into the 1-bit-keyed sprite cache and the action freezes. Per-pack in-sprite tweaks (bunny ear-twitch, bear scratch, fox tail-wag, frog blink) still ride on the cached sprite via `isIdleAnim`/`idleT` params; they live with the 1-bit cache granularity.
 - `spriteShading.ts`: `fillBodyGradient` for body fill, `drawHighlightSpot` for glint. Gradient edge blended 30% toward `darkColor` (not raw) to avoid harsh contrast on Panda/Cow.
 - At 40px character height, subtle effects become prominent. Highlight spots must be ≤0.18 alpha. Stipple dots and outer glows look bad.
 - Bubble helmet drawn at end of `drawCharacterSprite` for `space_station` and `underwater` themes only.
@@ -91,7 +92,7 @@
 - Nav graph doesn't model intra-platform obstacles or blocking ceilings. Small obstacles handled by stuck recovery; impassable barriers require splitting ground in arena definition.
 - Nav ceiling gap must exceed 174px (MAX_JUMP_HEIGHT) or phantom edges are created.
 - Lobby bots (`botLobbyInput()` in `lobbyGame.ts`) return `InputState` and go through `applyInput` like humans. Behavior (walk-to-zone + wall-jump) remains lobby-specific and does not share code with match AI.
-- Lobby runs no `cosmeticStep` — any renderer-consumed cosmetic timer (`idleAnimTimer`, `animFrame`, `squashScale`) must be ticked manually inside `LobbyGame.step()`. Mirror the logic from `gameLoop/cosmetics/playerCosmetics.ts`.
+- Lobby runs no `cosmeticStep` — any renderer-consumed cosmetic timer (`idleAction*`, `animFrame`, `squashScale`) must be ticked manually inside `LobbyGame.step()`. Mirror the logic from `gameLoop/cosmetics/playerCosmetics.ts`.
 
 ## Performance
 - Sprite cache: keyed by `name_state_animFrame_fastFalling_idleKey_sqKey`, 600-entry cap. `sqKey` = `Math.round(squashScale * 10)`. Breathing (2% scale) excluded from key.

@@ -214,14 +214,15 @@ Each character is a single file in `src/engine/characters/packs/` exporting a `C
 1. Create `packs/newAnimal.ts` — copy an existing pack (e.g. `bunny.ts`). Provide:
    - `drawSprite: CharacterRenderer` — pure function, sprite-cached. Receives `(ctx, cx, yOff, w, h, state, animFrame, isIdleAnim, idleT, colors)`.
    - `drawGib: GibRenderer` — draws ear/tail/horn gibs. ctx already translated+rotated.
-   - Data: `name`, `color/darkColor/lightColor`, `emoji`, `customEyes`, `idleTransform`, `splatShape`, `gibs[]`
+   - Data: `name`, `color/darkColor/lightColor`, `emoji`, `customEyes`, `splatShape`, `gibs[]`
+   - Optional: `idleActions: { weights?: { stretch?: 0, ... }, custom?: [...] }` — override per-action weights (0 disables) or add signature actions. Defaults to all 6 shared actions weighted 1.0 if omitted.
    - `translations: { en: 'Name', cs: 'Jméno' }`
 2. Import and add to `BUILTINS` array in `characters/builtin.ts`
 3. Add `createSound` field — returns `new Howl(...)`. Use `generateToneBuffer()` or `generateMultiSegmentTone()` from `audio/synthesis/core`, or custom synthesis with `floatBufferToWavDataUri()` from `audio/synthesis/wav`. Add the character name to `SoundName` union in `audio/types.ts`.
 
 **Rendering contract:**
 - `customEyes: true` = renderer draws its own eyes; `false` = generic dots drawn after sprite.
-- `idleTransform`: `'none'` | `'headTilt'` | `'headFlip'` | `'headBob'`
+- Idle actions are picked randomly from a per-pack pool (default: all 6 shared actions in `rendering/idleActions.ts`). The pack's `drawSprite` receives `isIdleAnim` (boolean) and `idleT ∈ [0, 1]` (action progress) for in-sprite tweaks like ear-twitch / tail-wag. Note: `idleT` flows through the sprite cache, so the in-sprite tweak only sees a 1-bit on/off (idleT ranges over the action duration but the cache key is binary). Big animated transforms belong in shared idle actions, not in `drawSprite`.
 - Generic legs, motion lines, fast-fall lines, bubble helmet drawn AFTER `drawSprite` — don't draw in pack.
 - `bodyEllipse` must match the ellipse in `fillBodyGradient`. `noHighlight: true` skips white overlay.
 - Sheep uses `fillBodyGradientCircle` (6 overlapping circles, not ellipse).

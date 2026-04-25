@@ -33,6 +33,7 @@ function makeTestPlayer(id: PlayerSlot): Player {
     sideSquash: 0.75,
     afterimages: [],
     idleAnimTimer: 1.2,
+    idleAction: -1, idleActionTimer: 0, idleActionDuration: 0,
     expression: 'angry' as const,
     killStreak: 3,
     breathTimer: 0.6,

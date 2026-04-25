@@ -1,9 +1,11 @@
 import type { Player, PlayerSlot } from '../../types';
 import {
-  ANIM_FRAME_DURATION, RUN_FRAMES, IDLE_ANIM_INTERVAL,
+  ANIM_FRAME_DURATION, RUN_FRAMES,
+  IDLE_FIRST_DELAY, IDLE_REST_MIN, IDLE_REST_MAX,
   AFTERIMAGE_INTERVAL, AFTERIMAGE_SPEED_THRESHOLD, AFTERIMAGE_MAX,
   SQUASH_DECAY_SPEED,
 } from '../../constants';
+import { pickIdleAction } from '../../rendering/idleActions';
 import { audio } from '../../audio';
 import { swapRemove } from '../../themes/utils';
 import { fastSin } from '../../fastMath';
@@ -24,11 +26,16 @@ export function updatePlayerCosmetics(
   emitParticle: (x: number, y: number, vx: number, vy: number, life: number, size: number, color: string) => void,
   playSound: (name: string) => void,
 ): void {
-  // Animation frame advance
-  player.animTimer += dt;
-  if (player.animTimer >= ANIM_FRAME_DURATION) {
-    player.animTimer -= ANIM_FRAME_DURATION;
-    player.animFrame = (player.animFrame + 1) % RUN_FRAMES;
+  // Animation frame advance — only while running. Reset on transition out.
+  if (player.state === 'run') {
+    player.animTimer += dt;
+    if (player.animTimer >= ANIM_FRAME_DURATION) {
+      player.animTimer -= ANIM_FRAME_DURATION;
+      player.animFrame = (player.animFrame + 1) % RUN_FRAMES;
+    }
+  } else {
+    player.animFrame = 0;
+    player.animTimer = 0;
   }
 
   // Fire particles while burning
@@ -43,11 +50,39 @@ export function updatePlayerCosmetics(
     }
   }
 
-  // Idle animation timer
+  // Idle action state machine — locally driven, not synced over network.
   if (player.state === 'idle') {
-    player.idleAnimTimer += dt;
-    if (player.idleAnimTimer >= IDLE_ANIM_INTERVAL) player.idleAnimTimer = 0;
+    // First-frame seeding: leaving idle zeros all three; re-entering idle hits this branch
+    // exactly once before the decrement.
+    if (player.idleActionTimer === 0 && player.idleAction === -1 && player.idleActionDuration === 0) {
+      player.idleActionTimer = IDLE_FIRST_DELAY;
+    }
+    player.idleActionTimer -= dt;
+    if (player.idleActionTimer <= 0) {
+      if (player.idleAction >= 0) {
+        // current action just ended → enter rest
+        player.idleAction = -1;
+        player.idleActionDuration = 0;
+        player.idleActionTimer = IDLE_REST_MIN + Math.random() * (IDLE_REST_MAX - IDLE_REST_MIN);
+      } else {
+        // rest (or first delay) just ended → pick next action
+        const pick = pickIdleAction(player.character.name);
+        if (pick) {
+          player.idleAction = pick.index;
+          player.idleActionDuration = pick.action.duration;
+          player.idleActionTimer = pick.action.duration;
+        } else {
+          // Empty pool (misconfigured pack) — stay resting forever.
+          player.idleActionTimer = IDLE_REST_MAX;
+        }
+      }
+    }
+    // Legacy field — derive from new state for backward compat with bunny/bear/fox/frog drawSprite tweaks
+    player.idleAnimTimer = player.idleAction >= 0 ? player.idleActionTimer : 0;
   } else {
+    player.idleAction = -1;
+    player.idleActionTimer = 0;
+    player.idleActionDuration = 0;
     player.idleAnimTimer = 0;
   }
 

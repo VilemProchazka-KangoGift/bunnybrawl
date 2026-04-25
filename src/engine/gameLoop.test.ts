@@ -2459,18 +2459,20 @@ describe('Countdown Freeze', () => {
 // ===================================================================
 
 describe('Animation Timers', () => {
-  it('animTimer increments each frame for active players', () => {
+  it('animTimer increments each frame for running players', () => {
     const { loop } = createLoop();
     loop.skipCountdown();
     const state = loop.getState();
     const player = state.players[0];
 
-    // Ensure player is active and not in hitstop
+    // Ensure player is active, not in hitstop, and in 'run' state.
+    // Post-fix, animTimer only ticks while running.
     player.active = true;
     player.hitstopTimer = 0;
     player.animTimer = 0;
 
     loop.fixedUpdate(FIXED_TIMESTEP);
+    player.state = 'run';
     loop.cosmeticStep(FIXED_TIMESTEP); // animTimer advance now in cosmeticStep
 
     expect(player.animTimer).toBeGreaterThan(0);
@@ -2483,15 +2485,20 @@ describe('Animation Timers', () => {
     const state = loop.getState();
     const player = state.players[0];
 
+    player.x = 200;
+    player.y = 660 - PLAYER_HEIGHT;
     player.active = true;
     player.hitstopTimer = 0;
     player.animTimer = 0;
     player.animFrame = 0;
 
-    // Advance enough frames to exceed ANIM_FRAME_DURATION (0.12s)
+    // Advance enough frames to exceed ANIM_FRAME_DURATION (0.12s).
+    // animFrame only ticks while in 'run' state (post-fix), so force the
+    // state each tick — physics will reset to 'idle' if vx ~ 0.
     const steps = Math.ceil(ANIM_FRAME_DURATION / FIXED_TIMESTEP) + 1;
     for (let i = 0; i < steps; i++) {
       loop.fixedUpdate(FIXED_TIMESTEP);
+      player.state = 'run';
       loop.cosmeticStep(FIXED_TIMESTEP); // animFrame advance now in cosmeticStep
     }
 
@@ -2499,28 +2506,123 @@ describe('Animation Timers', () => {
     expect(player.animFrame).toBeGreaterThan(0);
   });
 
-  it('idleAnimTimer increments when player is idle', () => {
+  it('animFrame stays at 0 when player is idle (not running)', () => {
     const { loop } = createLoop();
     loop.skipCountdown();
     const state = loop.getState();
     const player = state.players[0];
 
-    // Set player to idle on the ground
     player.x = 200;
     player.y = 660 - PLAYER_HEIGHT;
     player.vx = 0;
     player.state = 'idle';
     player.active = true;
     player.hitstopTimer = 0;
-    player.idleAnimTimer = 0;
+    player.animFrame = 0;
+    player.animTimer = 0;
 
-    loop.fixedUpdate(FIXED_TIMESTEP);
-    loop.cosmeticStep(FIXED_TIMESTEP); // idleAnimTimer now in cosmeticStep
-
-    expect(player.idleAnimTimer).toBeGreaterThan(0);
+    for (let i = 0; i < 30; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+      loop.cosmeticStep(FIXED_TIMESTEP);
+      // animFrame must never advance past 0 while idle. Asserting only at the
+      // end is fragile because animFrame is modulo RUN_FRAMES — it wraps back
+      // to 0 periodically under the buggy code.
+      expect(player.animFrame).toBe(0);
+    }
   });
 
-  it('fastFalling player has faster animation', () => {
+  it('animFrame resets to 0 when state transitions from run to idle', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    player.x = 200;
+    player.y = 660 - PLAYER_HEIGHT;
+    player.state = 'run';
+    player.animFrame = 2;
+    player.animTimer = 0.05;
+
+    // Now switch to idle
+    player.state = 'idle';
+    player.vx = 0;
+    loop.fixedUpdate(FIXED_TIMESTEP);
+    loop.cosmeticStep(FIXED_TIMESTEP);
+
+    expect(player.animFrame).toBe(0);
+    expect(player.animTimer).toBe(0);
+  });
+
+  it('entering idle seeds idleActionTimer to IDLE_FIRST_DELAY', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    player.x = 200;
+    player.y = 660 - PLAYER_HEIGHT;
+    player.vx = 0;
+    player.state = 'idle';
+    player.active = true;
+    player.hitstopTimer = 0;
+    player.idleAction = -1;
+    player.idleActionTimer = 0;
+    player.idleActionDuration = 0;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+    loop.cosmeticStep(FIXED_TIMESTEP);
+
+    // After 1 tick (~16.67ms): timer was seeded to 0.8s, then ticked down by ~0.0167.
+    expect(player.idleAction).toBe(-1);
+    expect(player.idleActionTimer).toBeGreaterThan(0.7);
+    expect(player.idleActionTimer).toBeLessThan(0.81);
+  });
+
+  it('idle action fires after IDLE_FIRST_DELAY of standing still', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+    player.x = 200; player.y = 660 - PLAYER_HEIGHT; player.vx = 0;
+    player.state = 'idle'; player.active = true; player.hitstopTimer = 0;
+    player.idleAction = -1; player.idleActionTimer = 0; player.idleActionDuration = 0;
+
+    // Tick for ~1 second (>0.8s first delay)
+    for (let i = 0; i < 60; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+      loop.cosmeticStep(FIXED_TIMESTEP);
+    }
+
+    expect(player.idleAction).toBeGreaterThanOrEqual(0);
+    expect(player.idleActionDuration).toBeGreaterThan(0);
+  });
+
+  it('leaving idle clears idleAction state', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+    player.x = 200; player.y = 660 - PLAYER_HEIGHT; player.vx = 0;
+    player.state = 'idle'; player.active = true; player.hitstopTimer = 0;
+
+    // Run long enough to be in an action
+    for (let i = 0; i < 90; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+      loop.cosmeticStep(FIXED_TIMESTEP);
+    }
+
+    // Now switch to running (vx > 10 so updatePlayerState keeps state='run')
+    player.state = 'run';
+    player.vx = 200;
+    loop.fixedUpdate(FIXED_TIMESTEP);
+    loop.cosmeticStep(FIXED_TIMESTEP);
+
+    expect(player.idleAction).toBe(-1);
+    expect(player.idleActionTimer).toBe(0);
+    expect(player.idleActionDuration).toBe(0);
+  });
+
+  it('fastFalling airborne player does NOT tick animTimer (gated on run state)', () => {
     const { loop } = createLoop();
     loop.setNetworkMode(true);
     loop.skipCountdown();
@@ -2545,8 +2647,8 @@ describe('Animation Timers', () => {
 
     // After pressing down while airborne, player should be fast-falling
     expect(player.fastFalling).toBe(true);
-    // animTimer should have advanced (animation keeps ticking)
-    expect(player.animTimer).toBeGreaterThan(0);
+    // animTimer is gated on 'run' state — airborne players don't tick it
+    expect(player.animTimer).toBe(0);
   });
 });
 

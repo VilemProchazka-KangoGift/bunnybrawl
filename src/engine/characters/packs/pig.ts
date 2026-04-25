@@ -68,7 +68,7 @@ const drawGib: CharacterPack['drawGib'] = (ctx, gibType, _w, _h, colors) => {
 export const pig: CharacterPack = {
   name: 'Pig',
   color: '#F4A6B0', darkColor: '#C88090', lightColor: '#FFD0D8',
-  emoji: '\uD83D\uDC37', customEyes: false, idleTransform: 'headBob',
+  emoji: '\uD83D\uDC37', customEyes: false,
   splatShape: 'circle',
   gibs: [{ gibType: 'ear', width: 8, height: 10 }, { gibType: 'ear', width: 8, height: 10 }, { gibType: 'snout', width: 8, height: 6 }, { gibType: 'tail', width: 10, height: 8 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Pig', cs: 'Prase', hi: 'सूअर', fil: 'Baboy' },

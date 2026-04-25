@@ -77,7 +77,7 @@ const drawGib: CharacterPack['drawGib'] = (ctx, gibType, _w, _h, colors) => {
 export const cow: CharacterPack = {
   name: 'Cow',
   color: '#F5F0E0', darkColor: '#4A3A2A', lightColor: '#FFFFFF',
-  emoji: '\uD83D\uDC2E', customEyes: true, idleTransform: 'headBob',
+  emoji: '\uD83D\uDC2E', customEyes: true,
   splatShape: 'splat',
   gibs: [{ gibType: 'horn', width: 8, height: 12 }, { gibType: 'horn', width: 8, height: 12 }, { gibType: 'tail', width: 14, height: 6 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Cow', cs: 'Kráva', hi: 'गाय', fil: 'Baka' },

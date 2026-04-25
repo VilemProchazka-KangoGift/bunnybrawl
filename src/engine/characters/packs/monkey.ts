@@ -67,7 +67,7 @@ const drawGib: CharacterPack['drawGib'] = (ctx, gibType, _w, _h, colors) => {
 export const monkey: CharacterPack = {
   name: 'Monkey',
   color: '#B07040', darkColor: '#704020', lightColor: '#D09060',
-  emoji: '\uD83D\uDC35', customEyes: true, idleTransform: 'headBob',
+  emoji: '\uD83D\uDC35', customEyes: true,
   splatShape: 'star',
   gibs: [{ gibType: 'ear', width: 10, height: 10 }, { gibType: 'ear', width: 10, height: 10 }, { gibType: 'tail', width: 16, height: 8 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Monkey', cs: 'Opice', hi: 'बंदर', fil: 'Unggoy' },

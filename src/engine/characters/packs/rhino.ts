@@ -60,7 +60,7 @@ const drawGib: CharacterPack['drawGib'] = (ctx, gibType, _w, _h, colors) => {
 export const rhino: CharacterPack = {
   name: 'Rhino',
   color: '#8A8A8A', darkColor: '#5A5A5A', lightColor: '#B0B0B0',
-  emoji: '\uD83E\uDD8F', customEyes: false, idleTransform: 'headBob',
+  emoji: '\uD83E\uDD8F', customEyes: false,
   splatShape: 'circle',
   gibs: [{ gibType: 'ear', width: 8, height: 8 }, { gibType: 'ear', width: 8, height: 8 }, { gibType: 'horn', width: 8, height: 14 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Rhino', cs: 'Nosorožec', hi: 'गैंडा', fil: 'Rinoseros' },

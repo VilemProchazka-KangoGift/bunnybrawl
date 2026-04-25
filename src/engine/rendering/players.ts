@@ -4,6 +4,7 @@ import { FAT_SCALE, HITSTOP_DURATION } from '../constants';
 import { hasCustomEyes, getSpriteRenderer, getCharacterPack, drawLegs } from '../characters';
 import { drawHighlightSpot } from '../spriteShading';
 import { getSlowDevice } from '../perfFlags';
+import { getIdleAction } from './idleActions';
 
 // Sprite cache: key -> OffscreenCanvas with pre-drawn character sprite.
 // Backing-store dims include the current render scale; cleared on scale change.
@@ -113,7 +114,7 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player, nearCa
   if (state === 'splat') {
     drawSplatCharacter(ctx, x, y, width, height, character.color, character.darkColor);
   } else {
-    drawCharacterSprite(ctx, x, y, width, height, character, state, animFrame, fastFalling, player.idleAnimTimer, player.squashScale, theme);
+    drawCharacterSprite(ctx, x, y, width, height, character, state, animFrame, fastFalling, player.idleAction, player.idleActionTimer, player.idleActionDuration, player.squashScale, theme, player);
     drawExpression(ctx, player, frameTime);
   }
 
@@ -173,14 +174,25 @@ function drawCharacterSprite(
   x: number, y: number, w: number, h: number,
   char: { name: string; color: string; darkColor: string; lightColor: string },
   state: string, animFrame: number, fastFalling: boolean,
-  idleAnimTimer?: number, squashScale = 1,
-  theme?: ThemeConfig,
+  idleAction: number, idleActionTimer: number, idleActionDuration: number,
+  squashScale: number,
+  theme: ThemeConfig | undefined,
+  player: Player,
 ): void {
-  const idleKey = (state === 'idle' && idleAnimTimer !== undefined && idleAnimTimer > 0 && idleAnimTimer < 0.5)
-    ? Math.floor(idleAnimTimer * 10)
-    : -1;
+  // 1-bit idle flag — covers the four packs (bunny/bear/fox/frog) whose drawSprite reads isIdleAnim.
+  const idleKey = idleAction >= 0 ? 1 : 0;
   const sqKey = Math.round(squashScale * 10);
   const cacheKey = `${char.name}_${state}_${animFrame}_${fastFalling ? 1 : 0}_${idleKey}_${sqKey}`;
+
+  // Idle action ctx transform — applied to main ctx, OUTSIDE the cached bitmap, so the
+  // animated transform doesn't get baked into the (1-bit-keyed) sprite cache entry.
+  const cx = x + w / 2;
+  const yOff = y;
+  const idleT = idleActionDuration > 0 ? 1 - (idleActionTimer / idleActionDuration) : 0;
+  const idleAnimAction = (idleAction >= 0 && state !== 'run' && state !== 'airborne')
+    ? getIdleAction(char.name, idleAction)
+    : null;
+  const colors = { color: char.color, darkColor: char.darkColor, lightColor: char.lightColor };
 
   const pad = 10;
   const cw = Math.ceil(w) + pad * 2;
@@ -192,7 +204,10 @@ function drawCharacterSprite(
     spriteCache.delete(cacheKey);
     spriteCache.set(cacheKey, cached);
     // Explicit logical dest size — cached bitmap is at scaled px dims; main ctx transform maps logical → pixel.
+    ctx.save();
+    if (idleAnimAction) idleAnimAction.apply(ctx, cx, yOff, w, h, idleT, colors, player);
     ctx.drawImage(cached, x - pad, y - pad, cw, ch);
+    ctx.restore();
     return;
   }
 
@@ -203,14 +218,17 @@ function drawCharacterSprite(
   sctx.scale(s, s);
   sctx.translate(-x + pad, -y + pad);
 
-  _drawCharacterSpriteImpl(sctx, x, y, w, h, char, state, animFrame, fastFalling, idleAnimTimer, squashScale, theme);
+  _drawCharacterSpriteImpl(sctx, x, y, w, h, char, state, animFrame, fastFalling, idleAction, idleActionTimer, idleActionDuration, squashScale, theme);
 
   if (spriteCache.size > _spriteCacheCap) {
     const first = spriteCache.keys().next().value;
     if (first !== undefined) spriteCache.delete(first);
   }
   spriteCache.set(cacheKey, cached);
+  ctx.save();
+  if (idleAnimAction) idleAnimAction.apply(ctx, cx, yOff, w, h, idleT, colors, player);
   ctx.drawImage(cached, x - pad, y - pad, cw, ch);
+  ctx.restore();
 }
 
 /** Core character drawing: sprite + highlight + eyes + legs. Shared by match and lobby. */
@@ -248,8 +266,9 @@ function _drawCharacterSpriteImpl(
   x: number, y: number, w: number, h: number,
   char: { name: string; color: string; darkColor: string; lightColor: string },
   state: string, animFrame: number, fastFalling: boolean,
-  idleAnimTimer?: number, squashScale = 1,
-  theme?: ThemeConfig,
+  idleAction: number, idleActionTimer: number, idleActionDuration: number,
+  squashScale: number,
+  theme: ThemeConfig | undefined,
 ): void {
   const cx = x + w / 2;
   const isAirborne = state === 'airborne';
@@ -268,31 +287,13 @@ function _drawCharacterSpriteImpl(
     ctx.translate(-cx, -(yOff + h / 2));
   }
 
-  // Idle animation -- apply transform based on character pack's idleTransform setting
-  const idleT = idleAnimTimer ?? -1;
-  const isIdleAnim = idleT >= 0 && idleT < 0.5;
-  if (isIdleAnim && state !== 'run' && state !== 'airborne') {
-    const t = idleT / 0.5;
-    const pulse = Math.sin(t * Math.PI);
-    const pack = getCharacterPack(char.name);
-    const idleType = pack?.idleTransform ?? 'headBob';
-    if (idleType === 'headTilt') {
-      ctx.translate(cx, yOff + h * 0.5);
-      ctx.rotate(pulse * 0.12);
-      ctx.translate(-cx, -(yOff + h * 0.5));
-    } else if (idleType === 'headFlip') {
-      const flipScale = 1 - pulse * 0.15;
-      ctx.translate(cx, yOff + h * 0.5);
-      ctx.scale(flipScale, 1);
-      ctx.translate(-cx, -(yOff + h * 0.5));
-    } else if (idleType === 'headBob') {
-      ctx.translate(0, -pulse * 2);
-    }
-    // 'none' -- no transform
-  }
-
+  // Action transform is NOT applied here — it's applied to the main ctx in drawCharacterSprite,
+  // outside the sprite cache. Otherwise the per-frame transform would be baked into the cached bitmap.
+  const isIdleAnimFlag = idleAction >= 0;
+  const idleT = idleActionDuration > 0 ? 1 - (idleActionTimer / idleActionDuration) : 0;
   const colors = { color: char.color, darkColor: char.darkColor, lightColor: char.lightColor };
-  drawCharacterCore(ctx, cx, yOff, w, h, char.name, state, animFrame, squashScale, colors, isIdleAnim, idleT);
+
+  drawCharacterCore(ctx, cx, yOff, w, h, char.name, state, animFrame, squashScale, colors, isIdleAnimFlag, idleT);
 
   // Motion lines for airborne
   if (isAirborne && !fastFalling) {
