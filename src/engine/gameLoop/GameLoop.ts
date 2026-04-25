@@ -395,16 +395,11 @@ export class GameLoop {
   /** Half-rate wrapper around cosmeticStep. Tests call cosmeticStep directly
    *  so assertions run at the un-throttled per-tick rate. */
   tickCosmetic(dt: number): void {
-    const _t = perfTrace.begin('tickCosmetic');
-    try {
-      this._cosmeticLead += dt;
-      if (this._cosmeticLead < COSMETIC_INTERVAL) return;
-      const stepDt = Math.min(this._cosmeticLead, COSMETIC_MAX_STEP);
-      this._cosmeticLead = 0;
-      this.cosmeticStep(stepDt);
-    } finally {
-      perfTrace.end('tickCosmetic', _t);
-    }
+    this._cosmeticLead += dt;
+    if (this._cosmeticLead < COSMETIC_INTERVAL) return;
+    const stepDt = Math.min(this._cosmeticLead, COSMETIC_MAX_STEP);
+    this._cosmeticLead = 0;
+    this.cosmeticStep(stepDt);
   }
 
   /** Seconds since the last cosmeticStep fired; renderer uses this to extrapolate
@@ -416,27 +411,32 @@ export class GameLoop {
   /** Tick all cosmetic-only systems (particles, environment, visual decays).
    *  Called once per frame from local loop(), host loop, and guest loop. */
   cosmeticStep(dt: number): void {
-    // --- Per-player cosmetic systems ---
-    this.playerTransitionSystem.cosmeticUpdate(dt);
-    this.playerCosmeticSystem.cosmeticUpdate(dt);
+    const _t = perfTrace.begin('cosmeticStep');
+    try {
+      // --- Per-player cosmetic systems ---
+      this.playerTransitionSystem.cosmeticUpdate(dt);
+      this.playerCosmeticSystem.cosmeticUpdate(dt);
 
-    // --- Entity transition detection ---
-    this.entityTransitionSystem.cosmeticUpdate(dt);
+      // --- Entity transition detection ---
+      this.entityTransitionSystem.cosmeticUpdate(dt);
 
-    // NOTE: The following minor effects remain in fixedUpdate (host-only, acceptable):
-    // - crouch sound (depends on input.down + wasCrouching local var)
-    // - zero_g loop (depends on zone occupancy check + start/stop)
-    // - splash sound (depends on landing-in-waterfall-zone detection)
-    // - pigeon_scatter (depends on proximity check with pigeon flocks)
-    // - crowd cheering (depends on score proximity to kill limit + volume ramp)
-    // - periodic ambient sounds (depends on timer-based random intervals)
-    // - collision particles for thorn/hazard/ghost/lava rock (depend on exact collision position)
+      // NOTE: The following minor effects remain in fixedUpdate (host-only, acceptable):
+      // - crouch sound (depends on input.down + wasCrouching local var)
+      // - zero_g loop (depends on zone occupancy check + start/stop)
+      // - splash sound (depends on landing-in-waterfall-zone detection)
+      // - pigeon_scatter (depends on proximity check with pigeon flocks)
+      // - crowd cheering (depends on score proximity to kill limit + volume ramp)
+      // - periodic ambient sounds (depends on timer-based random intervals)
+      // - collision particles for thorn/hazard/ghost/lava rock (depend on exact collision position)
 
-    // --- Particle systems ---
-    this.particleSystem.cosmeticUpdate(dt);
+      // --- Particle systems ---
+      this.particleSystem.cosmeticUpdate(dt);
 
-    // --- Environment ---
-    this.environmentSystem.cosmeticUpdate(dt);
+      // --- Environment ---
+      this.environmentSystem.cosmeticUpdate(dt);
+    } finally {
+      perfTrace.end('cosmeticStep', _t);
+    }
   }
 
   // Public VFX methods removed — cosmeticStep() calls private methods directly.

@@ -169,6 +169,9 @@ export function Match() {
       }, 1500);
     };
 
+    window.__perfTrace = perfTrace;
+    window.__fpsCounter = fpsCounter;
+
     if (online.isOnline) {
       // Network mode
       const transport = getModalTransport();
@@ -227,11 +230,6 @@ export function Match() {
       gameLoopRef.current = netMatch.getGameLoop();
       window.__gameLoop = netMatch.getGameLoop();
       (window as any).__netMatch = netMatch;
-      // E2E perf hooks (Spec: docs/superpowers/specs/2026-04-25-perf-profiling-e2e-design.md)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (window as any).__perfTrace = perfTrace;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (window as any).__fpsCounter = fpsCounter;
       netMatch.getGameLoop().setPlayerNames(useGameStore.getState().online.playerNames);
       netMatch.getGameLoop().setLocalSlot((online.isHost ? 'P1' : online.localSlot) as PlayerSlot);
       netMatch.start();
@@ -262,11 +260,6 @@ export function Match() {
 
     gameLoopRef.current = loop;
     window.__gameLoop = loop;
-    // E2E perf hooks (Spec: docs/superpowers/specs/2026-04-25-perf-profiling-e2e-design.md)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any).__perfTrace = perfTrace;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any).__fpsCounter = fpsCounter;
     loop.start();
     setTouchInput(loop.getTouchInput());
 

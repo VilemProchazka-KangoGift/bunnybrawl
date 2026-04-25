@@ -11,14 +11,7 @@ interface LongTaskEntry {
 
 declare global {
   interface Window {
-    __perfTrace?: {
-      snapshot: () => Record<string, { calls: number; totalMs: number; avgMs: number; p95Ms: number }>;
-      reset: () => void;
-      enabled: boolean;
-    };
-    __fpsCounter?: { dumpSamples: () => { dts: number[]; count: number; lastSampleTime: number } };
     __longTasks?: LongTaskEntry[];
-    __gameLoop?: { getState(): { countdown: number; matchOver: boolean } };
   }
 }
 
@@ -35,7 +28,7 @@ test('perf profile run', async ({ page, context }) => {
   // Install in-page long-task observer BEFORE navigation
   await context.addInitScript(() => {
     const buf: LongTaskEntry[] = [];
-    (window as Window).__longTasks = buf;
+    window.__longTasks = buf;
     try {
       const obs = new PerformanceObserver((list) => {
         for (const entry of list.getEntries()) {

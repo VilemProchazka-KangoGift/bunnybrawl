@@ -169,6 +169,12 @@ function summarizeHeapTimeline(timeline) {
   };
 }
 
+function formatLoc(node) {
+  return node.source && node.sourceLine
+    ? `${node.source}:${node.sourceLine}`
+    : `${(node.url || '').split('/').pop() ?? '?'}:${node.lineNumber + 1}`;
+}
+
 function flattenHeapProfile(heap, durationS) {
   const out = [];
   function walk(node) {
@@ -290,11 +296,8 @@ async function main() {
   lines.push('|---|-----|-----------|');
   for (const node of cpuFlat.slice(0, 20)) {
     const pct = totalCpuMs > 0 ? ((node.selfMs / totalCpuMs) * 100).toFixed(1) : '0';
-    const loc = node.source && node.sourceLine
-      ? `${node.source}:${node.sourceLine}`
-      : `${(node.url || '').split('/').pop() ?? '?'}:${node.lineNumber + 1}`;
     const fn = node.functionName || '(anonymous)';
-    lines.push(`| ${pct} | ${node.selfMs.toFixed(0)} | ${loc} (${fn}) |`);
+    lines.push(`| ${pct} | ${node.selfMs.toFixed(0)} | ${formatLoc(node)} (${fn}) |`);
   }
   lines.push('');
   lines.push('## Top 20 allocation sites (sampled MB/sec)');
@@ -302,11 +305,8 @@ async function main() {
   lines.push('| MB/s | File:line |');
   lines.push('|------|-----------|');
   for (const node of heapFlat.slice(0, 20)) {
-    const loc = node.source && node.sourceLine
-      ? `${node.source}:${node.sourceLine}`
-      : `${(node.url || '').split('/').pop() ?? '?'}:${node.lineNumber + 1}`;
     const fn = node.functionName || '(anonymous)';
-    lines.push(`| ${node.bytesPerSec.toFixed(2)} | ${loc} (${fn}) |`);
+    lines.push(`| ${node.bytesPerSec.toFixed(2)} | ${formatLoc(node)} (${fn}) |`);
   }
   lines.push('');
   lines.push('## Self-time by module');
