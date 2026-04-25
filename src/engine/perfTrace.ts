@@ -48,7 +48,15 @@ function getOrCreateBuffer(name: PerfSection): SectionBuffer {
 }
 
 export const perfTrace = {
-  enabled: debugFlags.perfEnabled,
+  // Getter so the flag is read fresh on each access — initDebugFlags() runs after this
+  // module loads in the browser, and it's never called in Node tests.
+  // Setter writes through to debugFlags.perfEnabled so tests can flip it on/off explicitly.
+  get enabled(): boolean {
+    return debugFlags.perfEnabled;
+  },
+  set enabled(v: boolean) {
+    debugFlags.perfEnabled = v;
+  },
 
   begin(_name: PerfSection): number {
     if (!perfTrace.enabled) return 0;
