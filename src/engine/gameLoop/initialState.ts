@@ -8,7 +8,7 @@ import type {
 import type { ThemeConfig } from '../themes/types';
 import { getCharacterForSlot } from '../characters';
 import { createWeatherParticle } from './cosmetics/environment';
-import { randRange, pickWeighted } from '../themes/utils';
+import { randRange, pickWeighted, shuffleInPlace } from '../themes/utils';
 import {
   PLAYER_WIDTH, PLAYER_HEIGHT, GIANT_SCALE,
   CARROT_FIRST_SPAWN_DELAY, CARROT_CHASE_FIRST_SPAWN_DELAY,
@@ -57,18 +57,16 @@ export function createInitialPlayers(
   const pw = giantPlayers ? PLAYER_WIDTH * GIANT_SCALE : PLAYER_WIDTH;
   const ph = giantPlayers ? PLAYER_HEIGHT * GIANT_SCALE : PLAYER_HEIGHT;
 
-  // Fisher-Yates shuffle of spawn indices — fixed RNG call count for net determinism
-  const order = arena.spawnPoints.map((_, i) => i);
-  for (let i = order.length - 1; i > 0; i--) {
-    const j = Math.floor(gameRandom() * (i + 1));
-    [order[i], order[j]] = [order[j], order[i]];
-  }
+  const shuffledSpawns = [...arena.spawnPoints];
+  shuffleInPlace(shuffledSpawns, gameRandom);
 
-  return activePlayers.map((slot, index) => ({
+  return activePlayers.map((slot, index) => {
+    const sp = shuffledSpawns[index % shuffledSpawns.length];
+    return ({
     id: slot,
     character: getCharacterForSlot(slot),
-    x: arena.spawnPoints[order[index % order.length]].x - pw / 2,
-    y: arena.spawnPoints[order[index % order.length]].y - ph,
+    x: sp.x - pw / 2,
+    y: sp.y - ph,
     vx: 0, vy: 0,
     width: pw, height: ph,
     state: 'idle' as const, facing: 'right' as const,
@@ -80,7 +78,8 @@ export function createInitialPlayers(
     expression: 'normal' as const, killStreak: 0,
     breathTimer: 0, springTrailTimer: 0, damageFlashSide: null, damageFlashTimer: 0, burnTimer: 0, hitstopTimer: 0,
     renderOffsetX: 0, renderOffsetY: 0, disconnected: false,
-  }));
+    });
+  });
 }
 
 /** Build the initial MatchState from arena, theme, settings, and players. */

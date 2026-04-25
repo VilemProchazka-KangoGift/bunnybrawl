@@ -35,3 +35,11 @@ export function pickWeighted<T extends { weight: number }>(items: T[]): T {
   }
   return items[items.length - 1];
 }
+
+/** Fisher-Yates shuffle in place. Always consumes `arr.length - 1` calls to `rnd` for net determinism. */
+export function shuffleInPlace<T>(arr: T[], rnd: () => number): void {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+}

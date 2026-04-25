@@ -2,6 +2,7 @@ import type { CharacterDef, CharacterSlot, PlayerSlot, BotSlot } from '../types'
 import { isBotSlot } from '../types';
 import { getAllCharacterDefs } from './registry';
 import { SeededRNG } from '../net/prng';
+import { shuffleInPlace } from '../themes/utils';
 
 // Default characters tied to player slots (used before lobby reassignment)
 export const CHARACTERS: Record<CharacterSlot, CharacterDef> = {
@@ -42,10 +43,7 @@ export function assignBotCharacters(humanSlots: CharacterSlot[], botSlots: BotSl
   const shuffled = [...available];
   const rng = seed != null ? new SeededRNG(seed) : null;
   const rnd = rng ? () => rng.nextFloat() : Math.random;
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(rnd() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
+  shuffleInPlace(shuffled, rnd);
   for (let i = 0; i < botSlots.length; i++) {
     const char = shuffled[i % shuffled.length];
     BOT_CHARACTERS.set(botSlots[i], { ...char, slot: botSlots[i] });
