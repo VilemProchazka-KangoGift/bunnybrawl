@@ -15,6 +15,7 @@ import type { PlayerSlot, MatchPhase } from '../engine/types';
 import { runLoadingTasks } from '../engine/matchLoading';
 import { useTransientBanner } from '../hooks/useTransientBanner';
 import { useDelayedFlag } from '../hooks/useDelayedFlag';
+import { useWakeLock } from '../hooks/useWakeLock';
 import './Match.css';
 
 // Track last resolved arena so random doesn't repeat on rematch
@@ -425,20 +426,8 @@ export function Match() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePlayers, matchSettings, setMatchResult, online.isOnline]);
 
-  // Wake lock: prevent screen dimming during match on mobile.
-  // `cancelled` flag covers the race where cleanup fires before the async
-  // request resolves — without it, the sentinel would be assigned post-cleanup
-  // and leaked until GC.
-  useEffect(() => {
-    if (!isMobile || !('wakeLock' in navigator)) return;
-    let cancelled = false;
-    let wakeLock: WakeLockSentinel | null = null;
-    navigator.wakeLock.request('screen').then((wl) => {
-      if (cancelled) { wl.release().catch(() => {}); return; }
-      wakeLock = wl;
-    }).catch(() => {});
-    return () => { cancelled = true; wakeLock?.release().catch(() => {}); };
-  }, [isMobile]);
+  // Wake lock: prevent screen dimming during match on mobile
+  useWakeLock(isMobile);
 
   return (
     <div className="match-container" data-testid="match-screen">
