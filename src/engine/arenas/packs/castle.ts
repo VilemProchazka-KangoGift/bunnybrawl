@@ -550,19 +550,18 @@ export const castle: ArenaPack = {
   },
 
   drawWeatherParticle: (ctx: CanvasRenderingContext2D, w: WeatherParticle) => {
-    ctx.save();
-    ctx.translate(w.x, w.y);
-    // Torch spark particles
+    // Torch spark — concentric circles, no rotation. Draw at world coords;
+    // reset globalAlpha at end since save/restore is gone.
     ctx.fillStyle = w.color || '#FF8844';
     ctx.globalAlpha = 0.7;
     ctx.beginPath();
-    ctx.arc(0, 0, w.size, 0, Math.PI * 2);
+    ctx.arc(w.x, w.y, w.size, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = '#FFCC66';
     ctx.beginPath();
-    ctx.arc(0, 0, w.size * 0.4, 0, Math.PI * 2);
+    ctx.arc(w.x, w.y, w.size * 0.4, 0, Math.PI * 2);
     ctx.fill();
-    ctx.restore();
+    ctx.globalAlpha = 1;
   },
 
   // ---- Gameplay modifiers ----
