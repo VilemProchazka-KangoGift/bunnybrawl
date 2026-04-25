@@ -7,6 +7,14 @@
 import type { SnapshotEncoder, InputCodec, HostAuthorityConfig } from './types';
 import { CoreMsgType, encodePong, decodePingPong } from './protocol';
 
+/**
+ * Frame gap threshold for detecting input counter resets. If a new bundle's
+ * newest frame is more than this many frames below our stored max, treat it
+ * as a fresh counter (Uint32 wraparound, or a reconnecting client whose
+ * disconnect we never observed) and reset the stored value.
+ */
+const COUNTER_RESET_GAP = 1_000_000;
+
 /** Minimal simulation interface — only what the host authority actually calls. */
 export interface HostSimulation<TState> {
   getState(): TState;
@@ -218,16 +226,9 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
         const expected = this.peerSlotMap.get(fromPeerId);
         if (!expected || expected !== slot) return;
       }
-      // Counter-reset detection: guestFrame is encoded as Uint32 on the wire
-      // and wraps to 0 at ~828 days at 60fps, OR a fresh client could rejoin
-      // the same slot with its own counter starting at 1. If the incoming
-      // bundle's newest frame is far below our stored lastConsumedFrame
-      // (>> 1M frames behind), treat it as a counter reset and accept the
-      // bundle from scratch. Without this, the slot would be silently muted
-      // forever once the wire counter wrapped.
+      // Counter-reset detection (see COUNTER_RESET_GAP at module top).
       const stored = this.lastConsumedFrame.get(slot) ?? 0;
       const newest = decoded.inputs[decoded.inputCount - 1].frame;
-      const COUNTER_RESET_GAP = 1_000_000;
       if (stored - newest > COUNTER_RESET_GAP) {
         this.lastConsumedFrame.delete(slot);
       }

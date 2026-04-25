@@ -10,7 +10,7 @@
  * the same RTT/2 stale, but from the same direction the input is going.
  */
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
-import type { MatchSettings, PlayerSlot } from '../types';
+import type { PlayerSlot } from '../types';
 
 // Force isTouchPrimary() = true so GameLoop creates a TouchInputManager.
 vi.mock('../touchDetect', () => ({
@@ -69,7 +69,7 @@ HTMLCanvasElement.prototype.getContext = function (type: string) {
 } as never;
 
 import { GameLoop } from '../gameLoop';
-import { makeArena } from './testHelpers';
+import { makeArena, makeSettings } from './testHelpers';
 import { registerBuiltinArenas } from '../arenas';
 import { registerBuiltinCharacters } from '../characters';
 
@@ -77,23 +77,6 @@ beforeAll(() => {
   registerBuiltinArenas();
   registerBuiltinCharacters();
 });
-
-function makeSettings(overrides?: Partial<MatchSettings>): MatchSettings {
-  return {
-    killLimit: 16,
-    timeLimit: 0,
-    playerCount: 2,
-    goreMode: false,
-    arenaId: 'meadow',
-    botCount: 0,
-    botDifficulty: 'medium',
-    mods: {
-      extremeGore: false, carrotChase: false, giantPlayers: false, turbo: false,
-      superBounce: false, mirrorArena: false, underwaterGravity: false,
-    },
-    ...overrides,
-  };
-}
 
 let lastLoop: GameLoop | null = null;
 function makeLoop(): GameLoop {

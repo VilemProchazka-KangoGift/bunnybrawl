@@ -9,6 +9,7 @@ import { ArenaGrid } from './ArenaGrid';
 import { getModalTransport, clearModalTransport } from './OnlineModal';
 import { MsgType } from '../engine/net/protocol';
 import type { ReliableMessage } from '../engine/net/protocol';
+import type { ConnectionStatus, TransportEvents } from '../engine/net/transport';
 import './VictoryScreen.css';
 
 interface FireworkParticle {
@@ -27,11 +28,9 @@ export function VictoryScreen() {
   const { winner, lastMatchState, setScreen, setActivePlayers, setMatchSettings, online, disconnectWin, clearMatchResult } = useGameStore();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [showArenaSelect, setShowArenaSelect] = useState(false);
-  // disconnectWin means our peer left mid-match. The transport may still
-  // think it's healthy on this side (Trystero detects via pong timeout, not
-  // synchronously), but the "Rematch" button would send into the void.
-  // Initialize peerConnected from disconnectWin so the disconnect-win path
-  // shows "Back to menu" only.
+  // Skip the optimistic "connected" default when we already know the peer left
+  // (Trystero detects this via pong timeout, not synchronously, so the
+  // transport may still report healthy at this moment).
   const [peerConnected, setPeerConnected] = useState(!disconnectWin);
 
   const winnerChar = winner ? lastMatchState?.players.find(p => p.id === winner)?.character ?? null : null;
@@ -89,25 +88,21 @@ export function VictoryScreen() {
     setScreen('match');
   }, [setMatchSettings, online.isOnline, online.isHost, setScreen, clearMatchResult]);
 
-  // Online: listen for disconnect + rematch signals. We snapshot the prior
-  // events wiring (NetMatch installed it) and restore on unmount so a leaving
-  // VictoryScreen doesn't leave stale victory-screen callbacks attached to
-  // the transport — particularly the `setScreen('match')` handler that would
-  // fire on a future host-driven START_MATCH after we've already navigated
-  // back to the menu.
+  // Snapshot prior wiring and restore on unmount, so a leaving VictoryScreen
+  // doesn't leave its `setScreen('match')` handler attached to fire on a
+  // future host-driven START_MATCH after we've navigated back to the menu.
   useEffect(() => {
     if (!online.isOnline) return;
     const transport = getModalTransport();
     if (!transport) return;
     const priorEvents = transport.getEvents();
-    transport.setEvents({
-      onStatusChange: (status) => {
+    const ourEvents: TransportEvents = {
+      onStatusChange: (status: ConnectionStatus) => {
         if (status === 'disconnected' || status === 'error') {
           setPeerConnected(false);
           if (!online.isHost) {
             transport.destroy();
             clearModalTransport();
-            // setScreen first, then clear (avoids the brief mismatch render).
             setScreen('menu');
             setActivePlayers([]);
             useGameStore.getState().resetOnline();
@@ -115,7 +110,7 @@ export function VictoryScreen() {
           }
         }
       },
-      onReliableMessage: (msg) => {
+      onReliableMessage: (msg: ReliableMessage) => {
         if (msg.type === MsgType.SETTINGS_SYNC && 'arenaId' in msg) {
           setMatchSettings({ arenaId: msg.arenaId });
         }
@@ -131,16 +126,13 @@ export function VictoryScreen() {
       onPeerDisconnected: () => {
         setPeerConnected(false);
       },
-    });
+    };
+    transport.setEvents(ourEvents);
     return () => {
-      // Restore prior wiring only if the transport is still alive AND nothing
-      // else has rewired in the meantime (which would have replaced our
-      // events object with their own — restoring would clobber theirs).
+      // Only restore if our wiring is still the active one — if a later mount
+      // rewired in the meantime, we'd clobber theirs.
       const t = getModalTransport();
-      if (t === transport && t.getEvents() !== priorEvents) {
-        // Note: priorEvents may be the no-op default from Transport's ctor.
-        // That's OK — we just don't want to leave OUR victory-screen
-        // callbacks attached.
+      if (t === transport && t.getEvents() === ourEvents) {
         t.setEvents(priorEvents);
       }
     };
@@ -246,6 +238,8 @@ export function VictoryScreen() {
     return highlights;
   }, [sortedPlayers, lastMatchState, t, online.isOnline, online.playerNames]);
 
+  const canRematch = !disconnectWin && (!online.isOnline || online.isHost) && peerConnected;
+
   return (
     <div className="victory-screen" data-testid="victory-screen">
       <canvas ref={canvasRef} className="fireworks-canvas" />
@@ -343,11 +337,11 @@ export function VictoryScreen() {
             </p>
           )}
           <div className="victory-actions">
-            {!disconnectWin && (!online.isOnline || online.isHost) && peerConnected && (
-              <button className="btn-base rematch-btn" onClick={handleRematch} data-testid="rematch-button">{t('victory_rematch')}</button>
-            )}
-            {!disconnectWin && (!online.isOnline || online.isHost) && peerConnected && (
-              <button className="btn-base arena-btn-v" data-testid="change-arena-button" onClick={() => setShowArenaSelect(true)}>{t('victory_choose_arena')}</button>
+            {canRematch && (
+              <>
+                <button className="btn-base rematch-btn" onClick={handleRematch} data-testid="rematch-button">{t('victory_rematch')}</button>
+                <button className="btn-base arena-btn-v" data-testid="change-arena-button" onClick={() => setShowArenaSelect(true)}>{t('victory_choose_arena')}</button>
+              </>
             )}
             <button className="btn-base menu-btn-v" onClick={handleMenu} data-testid="menu-button">{t(disconnectWin || (online.isOnline && !online.isHost) ? 'leave_game' : 'victory_menu')}</button>
           </div>
