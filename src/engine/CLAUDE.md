@@ -99,12 +99,20 @@
 - Sprite cache: keyed by `name_state_animFrame_fastFalling_sqKey`, 600-entry cap. `sqKey` = `Math.round(squashScale * 10)`. Breathing (2% scale) excluded from key. Idle-action geometry must use `IdleAction.applyAfter` (overlay outside the cache), not in-sprite branches on `isIdleAnim`/`idleT` — those freeze at first cache hit because they're not in the key.
 - Gradient cache: lava, zero-G, ghost, bouncy gradients cached in Maps by position.
 - HUD cache: 1280x90 OffscreenCanvas, redraws on score/timer/player changes.
+- **Foreground-nature cache**: `Renderer._fgNatureCache` is a 1280×720 OffscreenCanvas that captures `theme.drawForegroundNature(ctx, arena)` output. Built in `renderBackground()` (arena-load + render-scale change), blit at identity transform in `renderFrame`. Mirror is baked in. Test envs without OffscreenCanvas fall back to direct draw. Was the biggest single perf win in the 2026-04-25 pass — meadow 25.6ms→7.5ms, eliminated GC pauses up to 166ms. Any future foreground-nature additions go through this cache automatically as long as they use only static inputs (no `time`, RNG, runtime state).
 - Particle pool: free-list via `emitParticle()`, capped at 300.
 - Platform filter cache: `getFloatingPlatforms()` uses WeakMap.
 - AI throttle: decisions every 3rd frame, staggered by `botIndex % 3`.
-- globalAlpha: bake into `rgba()` fillStyle, don't mutate `ctx.globalAlpha` per element.
+- **globalAlpha rule (refined)**:
+  - **Static alpha**: bake into `rgba()` fillStyle, don't mutate `ctx.globalAlpha` per call. Saves a state mutation.
+  - **Dynamic per-element alpha** (e.g. star twinkle, firefly pulse): set `fillStyle` once with opaque color (`'#FFFFFF'`), modulate `ctx.globalAlpha` per element. Avoids the rgba template-literal string allocation per element. Wrap the function in `save/restore` so the mutation doesn't leak. See `drawDayNightCycle`.
 - Off-screen culling for particles and gibs.
-- `fastMath.ts`: lookup tables for `fastSin`/`fastCos` — visual effects only, keep `Math.sin`/`Math.cos` for physics.
+- `fastMath.ts`: lookup tables for `fastSin`/`fastCos` — visual effects only, keep `Math.sin`/`Math.cos` for physics. **Note: V8 inlines `Math.sin` to FPU instructions; the lookup table isn't always faster on desktop.** Don't blanket-convert without measuring at the call site. Style consistency within a file is reasonable.
+- **Weather particle shape branch**: arena packs' `drawWeatherParticle` should branch by shape. Symmetric shapes (circles, ellipses with ratio 1:1) skip `save/translate/rotate/restore` — draw directly at `(w.x, w.y)`. Asymmetric (rectangles, ellipses with ratio ≠ 1, offset features) keep the transform. Same applies to `drawWeather` defaults in `rendering/particles.ts` for `'snow'`/`'ember'` types.
+- **Combine N draws into 1 path**: per-element `beginPath/draw/fill` (or stroke) in a tight loop is wasteful when colors match. Build one path with sub-paths (use `moveTo` before each `arc` to start a new sub-path so circles don't connect with lines), call `fill()`/`stroke()` once at end. Pattern landed in `drawZeroGZone` (12 fills→2), `drawBouncyPlatformOverlay` arrows (N→1), `drawDayNightCycle` sun rays (4→1).
+- **Hoist `setLineDash` arrays**: array literals passed to `setLineDash` allocate. Module-scope `const ZEROG_DASH = [8, 5]; const NO_DASH = [];` reused across calls.
+- **Precompute static loop values**: scattered positions like `(i * 137 + 83) % WIDTH` recomputed every frame should be hoisted to module-scope `Float32Array` initialized once. Pattern landed in `drawDayNightCycle` for stars + fireflies.
+- **Perf measurement**: `npm run perf -- --arena=X` runs the e2e perf profile with vsync uncapped, random P1 input, sourcemapped bundle. Reports go to `test-results/perf/report.md`. **Save reports to `perf-runs/<arena>/` between runs** — Playwright wipes `test-results/` on each invocation. Run-to-run variance ~5%; trust deltas of >0.3ms/frame, treat smaller as noise. Use volcano or meadow for shared-rendering hot-path measurements (more signal than rooftops).
 
 ## Mobile / Touch Input
 - `TouchInputManager` follows same `attach()`/`detach()`/`getInput() → InputState` contract as `InputManager`. Integrated via `getPlayerInput()` touch branch in gameLoop.
