@@ -682,8 +682,16 @@ export class NetMatch {
       else this.gameLoop.resume();
       this.completeReconnection();
     } else if (this._isHost && msg.type === MsgType.LOADED) {
-      const slot = (msg as { slot: string }).slot as PlayerSlot;
-      this.loadedGuests.add(slot);
+      // Source-authenticate the slot. A buggy or hostile peer could otherwise
+      // send LOADED{slot: anotherPeer} and trick checkAllLoaded into flipping
+      // phase=playing before that peer has actually finished warming assets,
+      // dropping the laggard into the match mid-fetch with a black background
+      // and silent music until their preload completes. The CONNECTION_UNSTABLE
+      // handler below already takes this approach — match it.
+      if (!fromPeerId || !this.hostAuthority) return;
+      const senderSlot = this.hostAuthority.getSlotForPeer(fromPeerId) as PlayerSlot | undefined;
+      if (!senderSlot) return;
+      this.loadedGuests.add(senderSlot);
       this.checkAllLoaded();
     } else if (this._isHost && msg.type === MsgType.CONNECTION_UNSTABLE) {
       const stalled = (msg as { stalled: boolean }).stalled;

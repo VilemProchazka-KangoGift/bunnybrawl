@@ -411,6 +411,14 @@ describe('NetMatch', () => {
     beforeEach(() => {
       transport = makeMockTransport(true);
       mockHostAuthorityInstance.getExpectedGuestSlots.mockReturnValue(['P2']);
+      // The host now derives the LOADED sender's slot from the peerId rather
+      // than trusting msg.slot — wire the mock so peer-p2 resolves to P2.
+      mockHostAuthorityInstance.getSlotForPeer.mockImplementation((peerId: string) => {
+        if (peerId === 'peer-p2') return 'P2';
+        if (peerId === 'peer-p3') return 'P3';
+        if (peerId === 'peer-p4') return 'P4';
+        return undefined;
+      });
       netMatch = new NetMatch(makeConfig(transport));
     });
 
@@ -426,7 +434,7 @@ describe('NetMatch', () => {
       netMatch.start();
       mockGameLoopInstance.setPhase.mockClear();
       const events = transport.setEvents.mock.calls[0][0];
-      events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' });
+      events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' }, 'peer-p2');
       // Host hasn't marked self loaded → still loading
       expect(mockGameLoopInstance.setPhase).not.toHaveBeenCalled();
     });
@@ -436,7 +444,7 @@ describe('NetMatch', () => {
       mockGameLoopInstance.setPhase.mockClear();
       netMatch.markHostLoaded();
       const events = transport.setEvents.mock.calls[0][0];
-      events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' });
+      events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' }, 'peer-p2');
       expect(mockGameLoopInstance.setPhase).toHaveBeenCalledWith('playing');
     });
 
@@ -444,11 +452,40 @@ describe('NetMatch', () => {
       netMatch.start();
       netMatch.markHostLoaded();
       const events = transport.setEvents.mock.calls[0][0];
-      events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' });
+      events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' }, 'peer-p2');
       // Simulate phase already flipped
       mockGameLoopInstance.getState.mockReturnValueOnce({ players: [], matchOver: false, winner: null, phase: 'playing' });
       mockGameLoopInstance.setPhase.mockClear();
-      events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' });
+      events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' }, 'peer-p2');
+      expect(mockGameLoopInstance.setPhase).not.toHaveBeenCalled();
+    });
+
+    it('REJECTS LOADED with spoofed slot field (uses sender peerId, not msg.slot)', () => {
+      // Scenario: P3 sends LOADED{slot: 'P2'} pretending to be P2. If the host
+      // trusted msg.slot, it would mark P2 as loaded and force-start the match
+      // before P2 has actually warmed assets. With source-authentication, the
+      // host derives the slot from fromPeerId — peer-p3 maps to 'P3', NOT 'P2'.
+      mockHostAuthorityInstance.getExpectedGuestSlots.mockReturnValue(['P2', 'P3']);
+      netMatch.start();
+      netMatch.markHostLoaded();
+      mockGameLoopInstance.setPhase.mockClear();
+      const events = transport.setEvents.mock.calls[0][0];
+      // P3 sends LOADED with msg.slot='P2' (spoofed)
+      events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' }, 'peer-p3');
+      // Phase must NOT flip — only P3 has loaded, P2 is still genuinely waiting
+      expect(mockGameLoopInstance.setPhase).not.toHaveBeenCalledWith('playing');
+      // Now the real P2 sends LOADED — phase should advance.
+      events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' }, 'peer-p2');
+      expect(mockGameLoopInstance.setPhase).toHaveBeenCalledWith('playing');
+    });
+
+    it('IGNORES LOADED from an unknown peerId (no slot mapping)', () => {
+      netMatch.start();
+      netMatch.markHostLoaded();
+      mockGameLoopInstance.setPhase.mockClear();
+      const events = transport.setEvents.mock.calls[0][0];
+      // Unknown peer (e.g., a stale peer id that already disconnected, or noise)
+      events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' }, 'peer-unknown');
       expect(mockGameLoopInstance.setPhase).not.toHaveBeenCalled();
     });
 
@@ -502,6 +539,11 @@ describe('NetMatch', () => {
       vi.useFakeTimers();
       transport = makeMockTransport(true);
       mockHostAuthorityInstance.getExpectedGuestSlots.mockReturnValue(['P2', 'P3']);
+      mockHostAuthorityInstance.getSlotForPeer.mockImplementation((peerId: string) => {
+        if (peerId === 'peer-p2') return 'P2';
+        if (peerId === 'peer-p3') return 'P3';
+        return undefined;
+      });
       mockGameLoopInstance.getState.mockReturnValue({ players: [], matchOver: false, winner: null, phase: 'loading' });
       onLoadingTimeout = vi.fn();
       netMatch = new NetMatch(makeConfig(transport, { onLoadingTimeout }));
@@ -516,7 +558,7 @@ describe('NetMatch', () => {
       netMatch.markHostLoaded();
       // Only P2 sent LOADED; P3 is the laggard
       const events = transport.setEvents.mock.calls[0][0];
-      events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' });
+      events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' }, 'peer-p2');
       onLoadingTimeout.mockClear();
 
       vi.advanceTimersByTime(14999);
