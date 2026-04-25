@@ -67,5 +67,19 @@ describe('analyzePerfProfile helpers', () => {
       expect(find('audio')?.selfMs).toBe(10);
       expect(find('other')?.selfMs).toBe(5);
     });
+
+    it('buckets engine root files (perfTrace, fpsCounter, etc.) as engine-root, not other', () => {
+      const flat = [
+        { source: 'src/engine/perfTrace.ts', selfMs: 8, functionName: 'begin' },
+        { source: 'src/engine/fpsCounter.ts', selfMs: 4, functionName: 'sampleFps' },
+        { source: 'src/engine/rendering/players.ts', selfMs: 50, functionName: 'd' },
+        { source: null, selfMs: 3, functionName: 'native' },
+      ];
+      const buckets = bucketByModule(flat);
+      const find = (m) => buckets.find((b) => b.module === m);
+      expect(find('engine-root')?.selfMs).toBe(12);
+      expect(find('rendering')?.selfMs).toBe(50);
+      expect(find('other')?.selfMs).toBe(3);
+    });
   });
 });

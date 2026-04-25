@@ -68,6 +68,7 @@ export function bucketByModule(flat) {
     if (node.source) {
       const m = node.source.match(/src\/engine\/([^/]+)\//);
       if (m) mod = m[1];
+      else if (node.source.startsWith('src/engine/')) mod = 'engine-root';
       else if (node.source.startsWith('src/components/')) mod = 'components';
       else if (node.source.startsWith('src/store/')) mod = 'store';
     }
@@ -207,7 +208,9 @@ async function main() {
       if (orig) {
         node.source = orig.source;
         node.sourceLine = orig.line;
-      } else {
+      } else if (node.url) {
+        // Only count as "unresolved" if a URL was present but didn't match a sourcemap.
+        // Empty URLs are V8 builtins (drawImage, fillRect, etc.) — not user code, not a sourcemap miss.
         unresolvedCount++;
       }
     }
