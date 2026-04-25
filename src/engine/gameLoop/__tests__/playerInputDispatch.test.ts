@@ -183,7 +183,7 @@ describe('GameLoop.getPlayerInput dispatch', () => {
     // Inject a stub PlayerInput so we can detect the fall-through.
     const stubAction: InputState = { left: false, right: false, jump: true, down: false };
     const stub = { slot: 'P1' as PlayerSlot, getAction: vi.fn(() => stubAction) };
-    (loop as unknown as { playerInputs: Map<PlayerSlot, typeof stub> }).playerInputs.set('P1', stub);
+    loop.getSimulator().setPlayerInput('P1', stub);
 
     const networkInputs = new Map<string, InputState>([
       ['P2', { left: false, right: false, jump: false, down: false }],
@@ -201,12 +201,9 @@ describe('GameLoop.getPlayerInput dispatch', () => {
     const touchOut: InputState = { left: true, right: false, jump: false, down: false };
     const stubTouch = {
       getInputForPlayer: vi.fn((airborne: boolean) => ({ ...touchOut, _airborne: airborne } as unknown as InputState)),
-      detach: vi.fn(),
     };
     // Simulate construction-time touch wiring (only applied on touch-primary devices).
-    const internal = loop as unknown as { touchInput: typeof stubTouch | null; touchSlot: PlayerSlot | null };
-    internal.touchInput = stubTouch;
-    internal.touchSlot = 'P1';
+    loop.getSimulator().setTouchInput(stubTouch, 'P1');
 
     const result = loop.getPlayerInputForTest(player);
 
@@ -221,11 +218,8 @@ describe('GameLoop.getPlayerInput dispatch', () => {
     player.state = 'airborne';
     const stubTouch = {
       getInputForPlayer: vi.fn(() => ({ left: false, right: false, jump: false, down: false } as InputState)),
-      detach: vi.fn(),
     };
-    const internal = loop as unknown as { touchInput: typeof stubTouch | null; touchSlot: PlayerSlot | null };
-    internal.touchInput = stubTouch;
-    internal.touchSlot = 'P1';
+    loop.getSimulator().setTouchInput(stubTouch, 'P1');
 
     loop.getPlayerInputForTest(player);
 
@@ -269,8 +263,11 @@ describe('GameLoop.getPlayerInput dispatch', () => {
   it('returns all-false fallback when player has no entry in playerInputs (defensive)', () => {
     const loop = createLoop();
     const player = loop.getState().players.find(p => p.id === 'P1')!;
-    // Defensive: drop the entry and verify the empty-input fallback.
-    (loop as unknown as { playerInputs: Map<PlayerSlot, unknown> }).playerInputs.delete('P1');
+    // Defensive: drop the entry and verify the empty-input fallback. The
+    // simulator's playerInputs is a Map; deleting via its setPlayerInput API
+    // requires a value, so reach in and drop the entry directly.
+    const sim = loop.getSimulator() as unknown as { _playerInputs: Map<PlayerSlot, unknown> };
+    sim._playerInputs.delete('P1');
 
     const result = loop.getPlayerInputForTest(player);
 

@@ -848,12 +848,13 @@ describe('StompSystem', () => {
 describe('MatchSystem', () => {
   function makeMatchSystem(state: MatchState, onMatchEnd = vi.fn()) {
     const playSound = vi.fn();
+    const stopSound = vi.fn();
     const sys = new MatchSystem(
       state, mockSettings, mockTheme,
-      playSound, () => false,
+      playSound, stopSound, () => false,
       onMatchEnd,
     );
-    return { sys, playSound, onMatchEnd };
+    return { sys, playSound, stopSound, onMatchEnd };
   }
 
   it('init() with no ambientSoundConfig does not call playSound', () => {
@@ -873,7 +874,7 @@ describe('MatchSystem', () => {
     };
     const state = makeSystemState();
     const playSound = vi.fn();
-    const sys = new MatchSystem(state, mockSettings, themeWithAmbient, playSound, () => false, vi.fn());
+    const sys = new MatchSystem(state, mockSettings, themeWithAmbient, playSound, vi.fn(), () => false, vi.fn());
     sys.init();
 
     expect(playSound).toHaveBeenCalledWith('wind');
@@ -903,7 +904,7 @@ describe('MatchSystem', () => {
   it('fixedUpdate() skips crowd + ambient tick when resimulating', () => {
     const state = makeSystemState({ countdown: 0 });
     const playSound = vi.fn();
-    const sys = new MatchSystem(state, mockSettings, mockTheme, playSound, () => true, vi.fn());
+    const sys = new MatchSystem(state, mockSettings, mockTheme, playSound, vi.fn(), () => true, vi.fn());
     sys.init();
     sys.fixedUpdate(1 / 60);
 
@@ -920,18 +921,18 @@ describe('MatchSystem', () => {
       },
     };
     const state = makeSystemState();
-    const sys = new MatchSystem(state, mockSettings, themeWithAmbient, vi.fn(), () => false, vi.fn());
+    const sys = new MatchSystem(state, mockSettings, themeWithAmbient, vi.fn(), vi.fn(), () => false, vi.fn());
     sys.init();
     sys.cleanup();
     // No throw; internal maps reset
     expect(() => sys.fixedUpdate(1 / 60)).not.toThrow();
   });
 
-  it('cleanup() stops every ambient loop init() started (so endMatch can silence them mid-match)', async () => {
+  it('cleanup() stops every ambient loop init() started (so endMatch can silence them mid-match)', () => {
     // GameLoop.endMatch calls matchSystem.cleanup() before the 1.5s victory
     // delay so theme ambient loops (wind, lava, etc.) don't keep playing
     // audibly until Match.tsx unmount. Verify cleanup actually emits stop()
-    // for each registered loop.
+    // for each registered loop via the injected stopSound callback.
     const themeWithAmbient = {
       ...mockTheme,
       ambientSoundConfig: {
@@ -939,19 +940,18 @@ describe('MatchSystem', () => {
         periodic: [],
       },
     };
-    const { audio } = await import('../../audio');
-    vi.mocked(audio.stop).mockClear();
+    const stopSound = vi.fn();
 
     const state = makeSystemState();
-    const sys = new MatchSystem(state, mockSettings, themeWithAmbient, vi.fn(), () => false, vi.fn());
+    const sys = new MatchSystem(state, mockSettings, themeWithAmbient, vi.fn(), stopSound, () => false, vi.fn());
     sys.init();
     sys.cleanup();
 
-    expect(audio.stop).toHaveBeenCalledWith('wind');
-    expect(audio.stop).toHaveBeenCalledWith('lava');
+    expect(stopSound).toHaveBeenCalledWith('wind');
+    expect(stopSound).toHaveBeenCalledWith('lava');
   });
 
-  it('cleanup() is idempotent — second call is a no-op (endMatch + GameLoop.stop both call it)', async () => {
+  it('cleanup() is idempotent — second call is a no-op (endMatch + GameLoop.stop both call it)', () => {
     const themeWithAmbient = {
       ...mockTheme,
       ambientSoundConfig: {
@@ -959,17 +959,16 @@ describe('MatchSystem', () => {
         periodic: [],
       },
     };
-    const { audio } = await import('../../audio');
-    vi.mocked(audio.stop).mockClear();
+    const stopSound = vi.fn();
 
     const state = makeSystemState();
-    const sys = new MatchSystem(state, mockSettings, themeWithAmbient, vi.fn(), () => false, vi.fn());
+    const sys = new MatchSystem(state, mockSettings, themeWithAmbient, vi.fn(), stopSound, () => false, vi.fn());
     sys.init();
     sys.cleanup();
-    const firstCallCount = vi.mocked(audio.stop).mock.calls.length;
+    const firstCallCount = stopSound.mock.calls.length;
     sys.cleanup();
     // No additional stop() calls — activeAmbientLoops is now empty.
-    expect(vi.mocked(audio.stop).mock.calls.length).toBe(firstCallCount);
+    expect(stopSound.mock.calls.length).toBe(firstCallCount);
   });
 
   // --- host match-end guard: no-humans-remaining ---

@@ -6,13 +6,13 @@ import { updateCrowdCheering, tickPeriodicAmbient } from '../cosmetics/sfx';
 import { checkMatchEnd } from './match';
 import { SLOW_MO_DURATION } from '../../constants';
 import { randRange } from '../../themes/utils';
-import { audio } from '../../audio';
 
 export class MatchSystem implements GameplaySystem {
   private state: MatchState;
   private settings: MatchSettings;
   private theme: ThemeConfig;
   private playSound: (name: string) => void;
+  private stopSound: (name: string) => void;
   private resimulatingGetter: () => boolean;
   private onMatchEnd: (winner: PlayerSlot | null) => void;
 
@@ -25,6 +25,7 @@ export class MatchSystem implements GameplaySystem {
     settings: MatchSettings,
     theme: ThemeConfig,
     playSound: (name: string) => void,
+    stopSound: (name: string) => void,
     resimulatingGetter: () => boolean,
     onMatchEnd: (winner: PlayerSlot | null) => void,
   ) {
@@ -32,6 +33,7 @@ export class MatchSystem implements GameplaySystem {
     this.settings = settings;
     this.theme = theme;
     this.playSound = playSound;
+    this.stopSound = stopSound;
     this.resimulatingGetter = resimulatingGetter;
     this.onMatchEnd = onMatchEnd;
     this.crowdStarted = false;
@@ -105,10 +107,10 @@ export class MatchSystem implements GameplaySystem {
     // making it idempotent and self-contained avoids a footgun if a future
     // call site reaches cleanup without running stopAllGameSounds first.
     for (const loop of this.activeAmbientLoops) {
-      audio.stop(loop);
+      this.stopSound(loop);
     }
     if (this.crowdStarted) {
-      audio.stop('crowd');
+      this.stopSound('crowd');
       this.crowdStarted = false;
     }
     this.activeAmbientLoops = [];

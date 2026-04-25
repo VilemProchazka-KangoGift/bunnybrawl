@@ -1,14 +1,11 @@
 import type {
-  MatchState, MatchSettings, Arena, PlayerSlot, Player, CharacterSlot,
+  MatchState, MatchSettings, Arena, PlayerSlot, CharacterSlot,
   InputState, MatchPhase,
 } from '../types';
 import { isBotSlot } from '../types';
 import { SeededRNG } from '../net/prng';
 import { takeSnapshot as _takeSnapshot, restoreSnapshot as _restoreSnapshot } from '../net/serialize';
 import type { GameSnapshot } from '../net/serialize';
-import type { ThemeConfig } from '../themes/types';
-import { getArena, getTheme, mirrorArena } from '../arenas';
-import { swapRemove } from '../themes/utils';
 import { KeyboardManager } from '../input/KeyboardManager';
 import { KeyboardInput } from '../input/KeyboardInput';
 import { RuleBasedBot } from '../input/RuleBasedBot';
@@ -18,42 +15,25 @@ import { isTouchPrimary } from '../touchDetect';
 import { haptics } from '../haptics';
 import { Renderer } from '../renderer';
 import { subscribeRenderScale } from '../renderScale';
-import { applyInput, applyGravity, movePlayer, collidePlatforms, updatePlayerState, applyArenaConstraints, aabbOverlap, resolveStuckPlayer } from '../physics';
 import { audio } from '../audio';
 import {
   FIXED_TIMESTEP, MAX_FRAME_TIME,
-  CARROT_SIZE,
-  FAT_DURATION, SPRING_BOUNCE,
   CANVAS_WIDTH,
-  SLOW_MO_FACTOR, HITSTOP_DURATION,
-  SQUASH_ON_LAND, STRETCH_ON_JUMP, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED,
-  SCREEN_FLASH_DURATION,
+  SLOW_MO_FACTOR,
 } from '../constants';
 import { AIController } from '../ai';
-import { computeEffectivePhysics, createInitialPlayers, createInitialMatchState } from './initialState';
+import { Simulator } from '../simulator/Simulator';
 import { debugFlags, toggleNavDebug, toggleNetDebug, toggleFpsDebug } from '../debugFlags';
 import { perfTrace } from '../perfTrace';
 import { sampleFps } from '../fpsCounter';
 import type { BotNavDebugState } from '../navDebugOverlay';
 import type { NetDebugStats } from '../net/core/debugOverlay';
 
-// Extracted submodules
-import { getOrCreateCooldowns } from './cosmetics/sfx';
 import { EnvironmentSystem } from './cosmetics/EnvironmentSystem';
 import { EntityTransitionSystem } from './cosmetics/EntityTransitionSystem';
 import { ParticleSystem } from './cosmetics/ParticleSystem';
 import { PlayerTransitionSystem } from './cosmetics/PlayerTransitionSystem';
 import { PlayerCosmeticSystem } from './cosmetics/PlayerCosmeticSystem';
-import { HazardSystem } from './gameplay/HazardSystem';
-import { CarrotSystem } from './gameplay/CarrotSystem';
-import { ArenaEntitySystem } from './gameplay/ArenaEntitySystem';
-import { EffectZoneSystem } from './gameplay/EffectZoneSystem';
-import { PlayerCollisionSystem } from './gameplay/PlayerCollisionSystem';
-import { StompSystem } from './gameplay/StompSystem';
-import { MatchSystem } from './gameplay/MatchSystem';
-
-/** Force 32-bit float for cross-architecture determinism (x86 80-bit vs ARM 64-bit). */
-const f = Math.fround;
 
 /** Half-rate cosmetic threshold: particles/SFX/VFX tick at ~30Hz while render stays at 60Hz. */
 const COSMETIC_INTERVAL = FIXED_TIMESTEP * 2;
@@ -63,22 +43,10 @@ const COSMETIC_MAX_STEP = FIXED_TIMESTEP * 4;
 export type MatchEndCallback = (winner: PlayerSlot | null, state: MatchState) => void;
 
 export class GameLoop {
-  private arena: Arena;
-  private originalArena: Arena;  // un-mirrored arena for theme rendering
-  private settings: MatchSettings;
-  private state: MatchState;
+  private simulator: Simulator;
   private keyboardManager: KeyboardManager;
-  private playerInputs: Map<PlayerSlot, PlayerInput> = new Map();
   private renderer: Renderer;
   private onMatchEnd: MatchEndCallback;
-  private theme: ThemeConfig;
-
-  // Effective physics (base constant * theme modifier)
-  private effGravity: number;
-  private effFriction: number;
-  private effWalkSpeed: number;
-  private effJumpImpulse: number;
-  private effMaxFallSpeed: number;
 
   private lastTime = 0;
   private accumulator = 0;
@@ -86,56 +54,23 @@ export class GameLoop {
   private running = false;
   private stopped = false;
   private paused = false;
+
   particleSystem!: ParticleSystem;
-  private aiControllers: Map<string, AIController> = new Map();
-
-  // Gameplay systems
-  private hazardSystem!: HazardSystem;
-  private carrotSystem!: CarrotSystem;
-  private arenaEntitySystem!: ArenaEntitySystem;
-  private effectZoneSystem!: EffectZoneSystem;
-  private playerCollisionSystem!: PlayerCollisionSystem;
-  private stompSystem!: StompSystem;
-  private matchSystem!: MatchSystem;
-  private _debugKeyHandler: ((e: KeyboardEvent) => void) | null = null;
-  private _unsubRenderScale: (() => void) | null = null;
-
-  // Global bump cooldown (prevents double-fire from both pushed players)
-
-  // Touch input for mobile
-  private touchInput: TouchInputManager | null = null;
-  private touchSlot: PlayerSlot | null = null;
-
-  // Deterministic PRNG for network mode (undefined = use Math.random, local play)
-  // Split into two streams so AI conditional calls can't desync spawn RNG
-  private rng?: SeededRNG;
-  private aiRng?: SeededRNG;
-
-  // Network mode: when true, external code drives the loop
-  private _networkMode = false;
-  private _audioEnabled = true;
-  private _resimulating = false; // true during rollback resimulation — skip cosmetic systems
-  // Explicit inputs injected by rollback engine (keyed by PlayerSlot)
-  private _networkInputs?: Map<string, InputState>;
-
-  // Phase change callback (loading → playing → over). Fires on transition only.
-  private onPhaseChange?: (phase: MatchPhase) => void;
-
-  // Incremented every time a loading session begins (construction + switchArena).
-  // Callers that kick off async preload work capture this at start and compare
-  // on resolution — stale promises (superseded by a rapid arena change) won't
-  // flip phase into 'playing' with the wrong arena's assets preloaded.
-  private _loadingGeneration = 0;
-
-  // Bound callbacks for extracted submodules (avoids .bind() allocations in hot paths)
-  private readonly _boundGameRandom = (): number => this.gameRandom();
-  private readonly _boundPlaySound = (name: string): void => this.playSound(name as Parameters<typeof audio.play>[0]);
-
-  // CosmeticSystem instances
   private environmentSystem!: EnvironmentSystem;
   private entityTransitionSystem!: EntityTransitionSystem;
   private playerTransitionSystem!: PlayerTransitionSystem;
   private playerCosmeticSystem!: PlayerCosmeticSystem;
+
+  private _debugKeyHandler: ((e: KeyboardEvent) => void) | null = null;
+  private _unsubRenderScale: (() => void) | null = null;
+
+  private touchInput: TouchInputManager | null = null;
+  private touchSlot: PlayerSlot | null = null;
+
+  private _networkMode = false;
+  private _audioEnabled = true;
+
+  private onPhaseChange?: (phase: MatchPhase) => void;
 
   private _cosmeticLead = 0;
 
@@ -149,130 +84,92 @@ export class GameLoop {
     hudCanvas?: HTMLCanvasElement,
     rng?: SeededRNG,
   ) {
-    this.rng = rng; // Set before any gameRandom() calls in init
-    // Derive separate AI RNG stream so AI conditional calls can't desync spawn RNG
-    if (rng) this.aiRng = new SeededRNG(rng.getState() ^ 0x41495F52); // 'AI_R' xor
-    this.arena = arena;
-    this.originalArena = arena;
-    this.settings = settings;
     this.onMatchEnd = onMatchEnd;
-    this.theme = getTheme(arena.themeId);
     this.keyboardManager = new KeyboardManager();
-    this.renderer = new Renderer(bgCanvas, fgCanvas, this.theme, settings.mods.mirrorArena, hudCanvas);
+
+    this.simulator = new Simulator({
+      arena,
+      settings,
+      activePlayers,
+      rng,
+      events: {
+        onSfxRequest: (name) => this.playSound(name),
+        onAnimalSfxRequest: (name) => { if (this._audioEnabled) audio.playAnimal(name); },
+        onMusicStartRequest: (themeId) => audio.playMusic(themeId),
+        onMusicStopRequest: () => audio.stopMusic(),
+        onSoundStopRequest: (name) => audio.stop(name),
+        onAllGameSoundsStopRequest: () => audio.stopAllGameSounds(),
+        onPhaseChange: (phase) => this._handlePhaseChange(phase),
+        onMatchEnd: (winner) => this._handleMatchEnd(winner),
+        onPlayerLanding: (slot, prevVy) => { if (haptics.isLocal(slot)) haptics.landing(prevVy); },
+      },
+    });
+
+    this.renderer = new Renderer(bgCanvas, fgCanvas, this.simulator.getTheme(), settings.mods.mirrorArena, hudCanvas);
     this.renderer.setTimeLimit(settings.timeLimit);
 
-    // Compute effective physics from theme + mod modifiers
-    const phys = computeEffectivePhysics(this.theme, settings.mods);
-    this.effGravity = phys.gravity;
-    this.effFriction = phys.friction;
-    this.effWalkSpeed = phys.walkSpeed;
-    this.effJumpImpulse = phys.jumpImpulse;
-    this.effMaxFallSpeed = phys.maxFallSpeed;
+    // ParticleSystem references the simulator's state/arena/theme/settings and
+    // ArenaEntitySystem.geyserIndexMap. Construct it after the simulator so its
+    // refs are stable, then swap it onto the simulator.
+    const sState = this.simulator.getState();
+    const sArena = this.simulator.getArena();
+    const sTheme = this.simulator.getTheme();
+    this.particleSystem = new ParticleSystem(
+      sState, sArena, sTheme, settings,
+      this.simulator.getArenaEntitySystem().getGeyserIndexMap(),
+    );
+    this.simulator.setParticleEmitter(this.particleSystem);
 
-    // Super Bounce: mark all platforms as bouncy (shallow-copy arena to avoid mutation)
-    if (settings.mods.superBounce) {
-      this.arena = { ...arena, bouncyPlatforms: arena.platforms.map((_, i) => i) };
-    }
+    // Cosmetic systems — own particle/transition baselines on the browser side.
+    this.playerTransitionSystem = new PlayerTransitionSystem(
+      sState, settings, (name) => this.playSound(name),
+      (name) => { if (this._audioEnabled) audio.playAnimal(name); },
+      this.particleSystem,
+    );
+    this.playerCosmeticSystem = new PlayerCosmeticSystem(
+      sState, this.simulator.getEffWalkSpeed(), this.particleSystem,
+      (name) => this.playSound(name),
+    );
+    this.environmentSystem = new EnvironmentSystem(sState, sTheme);
+    this.entityTransitionSystem = new EntityTransitionSystem(sState, (name) => this.playSound(name));
 
-    // Mirror Arena: flip all positions horizontally (shallow-copy)
-    if (settings.mods.mirrorArena) {
-      this.arena = mirrorArena(this.arena);
-    }
+    // Cooldowns map lives on PlayerTransitionSystem — wire it back into the simulator
+    // for the headbonk + crouch + zero-G sound paths in fixedUpdate.
+    this.simulator.setSfxCooldownsGetter(() => this.playerTransitionSystem.getSfxCooldowns());
 
-    const players = createInitialPlayers(activePlayers, this.arena, settings.mods.giantPlayers, this._boundGameRandom);
+    this.playerTransitionSystem.init();
+    this.entityTransitionSystem.init();
 
-    // Init AI controllers for bot players
-    const botDifficulty = settings.botDifficulty ?? 'medium';
-    let botIndex = 0;
-    for (const player of players) {
+    // PlayerInput dispatch: KeyboardInput for humans, RuleBasedBot for bots.
+    // Must run after the simulator constructor (arena/state are final) and
+    // before fixedUpdate consumes them.
+    for (const player of sState.players) {
       if (isBotSlot(player.id)) {
-        this.aiControllers.set(player.id, new AIController(player.id, player.character.name, botDifficulty, botIndex++, this.aiRng));
-      }
-    }
-
-    // Build PlayerInput dispatch map: KeyboardInput for humans, RuleBasedBot for bots.
-    // RuleBasedBot captures this.arena by reference, so this must run after the arena
-    // has its final form (super-bounce + mirror copies above) and before systems consume state.
-    for (const player of players) {
-      if (isBotSlot(player.id)) {
-        const ai = this.aiControllers.get(player.id)!;
-        this.playerInputs.set(player.id, new RuleBasedBot(
+        const ai = this.simulator.getAIControllers().get(player.id)!;
+        this.simulator.setPlayerInput(player.id, new RuleBasedBot(
           player.id,
           ai,
-          this.arena,
+          sArena,
           settings.mods.carrotChase,
           settings.mods.mirrorArena,
         ));
       } else {
-        this.playerInputs.set(player.id, new KeyboardInput(
+        this.simulator.setPlayerInput(player.id, new KeyboardInput(
           player.id as CharacterSlot,
           this.keyboardManager,
         ));
       }
     }
 
-    this.state = createInitialMatchState(this.arena, this.theme, settings, players, activePlayers, this._boundGameRandom);
-
-    // Touch input for mobile: controls the first human player
+    // Touch input for mobile: controls the first human player.
     if (isTouchPrimary()) {
       this.touchInput = new TouchInputManager();
       this.touchSlot = activePlayers.find(s => !isBotSlot(s)) ?? null;
-      if (this.touchSlot) haptics.init(this.touchSlot);
+      if (this.touchSlot) {
+        haptics.init(this.touchSlot);
+        this.simulator.setTouchInput(this.touchInput, this.touchSlot);
+      }
     }
-
-    this.buildSystems();
-  }
-
-  /** Build (or rebuild) all gameplay + cosmetic systems. Called from the
-   *  constructor and from `switchArena()` — the two paths that need a fresh
-   *  system graph bound to the current arena/theme/state. Order matters:
-   *  arenaEntitySystem first (others read its cached zones), then gameplay
-   *  that depends on particleSystem/playerTransitionSystem. */
-  private buildSystems(): void {
-    this.arenaEntitySystem = new ArenaEntitySystem(this.state, this.arena, this.theme, this._boundGameRandom);
-    this.arenaEntitySystem.init();
-
-    this.hazardSystem = new HazardSystem(this.state, this.arena, this._boundGameRandom);
-    this.hazardSystem.init();
-
-    this.particleSystem = new ParticleSystem(this.state, this.arena, this.theme, this.settings, this.arenaEntitySystem.getGeyserIndexMap());
-    this.carrotSystem = new CarrotSystem(
-      this.state, this.arena, this.settings,
-      this.arenaEntitySystem.getCachedZeroGZones(),
-      this._boundGameRandom, this.particleSystem,
-    );
-    this.playerTransitionSystem = new PlayerTransitionSystem(
-      this.state, this.settings, this._boundPlaySound,
-      (name: string) => { if (this._audioEnabled) audio.playAnimal(name); },
-      this.particleSystem,
-    );
-    this.playerCosmeticSystem = new PlayerCosmeticSystem(
-      this.state, this.effWalkSpeed, this.particleSystem, this._boundPlaySound,
-    );
-    this.environmentSystem = new EnvironmentSystem(this.state, this.theme);
-    this.entityTransitionSystem = new EntityTransitionSystem(this.state, this._boundPlaySound);
-    this.playerTransitionSystem.init();
-    this.entityTransitionSystem.init();
-
-    this.effectZoneSystem = new EffectZoneSystem(
-      this.state, this.arena, this.arenaEntitySystem,
-      () => this.playerTransitionSystem.getSfxCooldowns(),
-      this._boundPlaySound,
-    );
-    this.playerCollisionSystem = new PlayerCollisionSystem(
-      this.state, this.arena, this.particleSystem,
-      () => this._resimulating,
-    );
-    this.stompSystem = new StompSystem(
-      this.state, this.arena, this.settings,
-      () => this._resimulating,
-      () => this.rng,
-    );
-    this.matchSystem = new MatchSystem(
-      this.state, this.settings, this.theme, this._boundPlaySound,
-      () => this._resimulating,
-      (winner) => this.endMatch(winner),
-    );
   }
 
   start(): void {
@@ -284,11 +181,6 @@ export class GameLoop {
         this.touchInput.attach(container, scaleFn, () => this.paused);
       }
     }
-    // Music + ambient + renderBackground are NO LONGER started here. They run
-    // during the loading phase (via runLoadingTasks → preloadArena + renderBackground)
-    // and via setPhase('playing') → audio.playMusic + playSound('ambient')
-    // + matchSystem.init() (arena ambient loops).
-    // Render-scale subscription is independent of phase — keep it in start().
     this._unsubRenderScale = subscribeRenderScale((s) => this.renderer.setRenderScale(s));
     this.running = true;
     this.lastTime = performance.now();
@@ -302,7 +194,6 @@ export class GameLoop {
       };
       window.addEventListener('keydown', this._debugKeyHandler);
     }
-    // In network mode, the external NetMatch drives the loop
     if (!this._networkMode) {
       this.loop(this.lastTime);
     }
@@ -315,9 +206,7 @@ export class GameLoop {
     this.keyboardManager.detach();
     this.touchInput?.detach();
     audio.stopAllGameSounds();
-    this.matchSystem.cleanup();
-    // Reset half-rate cosmetic accumulator so a re-start (or test reuse)
-    // doesn't carry over leftover lead from the prior session.
+    this.simulator.cleanup();
     this._cosmeticLead = 0;
     if (this._debugKeyHandler) {
       window.removeEventListener('keydown', this._debugKeyHandler);
@@ -330,59 +219,47 @@ export class GameLoop {
   }
 
   /** Play a sound, respecting audio mute (used during rollback resimulation). */
-  private playSound(name: Parameters<typeof audio.play>[0]): void {
-    if (this._audioEnabled) audio.play(name);
-  }
-
-  /** Gameplay-affecting random: seeded in network mode, Math.random() in local. */
-  private gameRandom(): number {
-    return this.rng ? this.rng.nextFloat() : Math.random();
+  private playSound(name: string): void {
+    if (this._audioEnabled) audio.play(name as Parameters<typeof audio.play>[0]);
   }
 
   /** Set a seeded PRNG for deterministic network play. */
   setRng(rng: SeededRNG): void {
-    this.rng = rng;
-    // AI uses separate stream — propagate aiRng, not main rng
-    for (const ai of this.aiControllers.values()) {
-      ai.setRng(this.aiRng ?? rng);
-    }
+    this.simulator.setRng(rng);
   }
 
   /** Get the current RNG (for snapshots). */
   getRng(): SeededRNG | undefined {
-    return this.rng;
+    return this.simulator.getRng();
   }
 
   /** Get the AI RNG (for snapshots). */
   getAiRng(): SeededRNG | undefined {
-    return this.aiRng;
+    return this.simulator.getAiRng();
   }
 
   /** Get AI controllers map (for snapshots). */
   getAIControllers(): Map<string, AIController> {
-    return this.aiControllers;
+    return this.simulator.getAIControllers();
+  }
+
+  /** Get the underlying Simulator (for tests + adapter wiring). */
+  getSimulator(): Simulator {
+    return this.simulator;
   }
 
   /** Read-only accessor for the unified PlayerInput dispatch map.
    *  Used by tests and (in Task 3.x) the future Simulator integration. */
   getPlayerInputs(): ReadonlyMap<PlayerSlot, PlayerInput> {
-    return this.playerInputs;
+    return this.simulator.getPlayerInputs();
   }
 
   /** Read merged input from all key bindings + touch (for online play). */
   getInputAny(): InputState {
     const kb = this.keyboardManager.readAny();
     if (this.touchInput) {
-      // Convert touch airborne-tap to fast-fall using THIS side's view of the
-      // player. On a guest, that view comes from the latest snapshot (~RTT/2
-      // stale), which is still much closer to the moment the user actually
-      // tapped than the host's view (which is RTT/2 stale from the OTHER
-      // direction). Sending the converted input across the wire spares the
-      // host from guessing — its match.ts:39-41 safety-net conversion only
-      // fires if the guest's view diverged enough that they sent a raw jump
-      // while the host's authoritative player state is airborne.
       const touchPlayer = this.touchSlot
-        ? this.state.players.find(p => p.id === this.touchSlot)
+        ? this.simulator.getState().players.find(p => p.id === this.touchSlot)
         : null;
       const airborne = touchPlayer?.state === 'airborne';
       const ti = this.touchInput.getInputForPlayer(airborne);
@@ -407,130 +284,64 @@ export class GameLoop {
     this.onPhaseChange = cb;
   }
 
-  /** Snapshot the current loading-session generation. Async preload callers
-   *  capture this before their work starts and compare on resolution; a
-   *  different value means a rapid arena swap has made the result stale. */
+  /** Snapshot the current loading-session generation. */
   getLoadingGeneration(): number {
-    return this._loadingGeneration;
+    return this.simulator.getLoadingGeneration();
   }
 
-  /** Transition the match to a new phase. No-op if already in that phase.
-   *  On first entry into 'playing', starts arena music + ambient loop. */
+  /** Transition the match to a new phase. */
   setPhase(phase: MatchPhase): void {
-    const prev = this.state.phase;
-    if (prev === phase) return;
-    this.state.phase = phase;
-    if (phase === 'playing' && prev !== 'playing') {
-      this.onEnterPlayingPhase();
-    }
-    this.onPhaseChange?.(phase);
+    this.simulator.setPhase(phase);
   }
 
-  /** Side effects that fire on the loading→playing edge. Called by setPhase
-   *  on the host, and by NetMatch's snapshot-driven phase tracker on the
-   *  guest. Includes music + ambient + matchSystem.init() + cosmetic
-   *  baseline reset — without these on the guest, joining players hear no
-   *  music, no per-arena ambient (wind/lava/underwater), and may hear
-   *  spurious jump/land/score SFX as prev-state catches up. */
+  /** Side effects that fire on the loading→playing edge. Called by NetMatch's
+   *  snapshot-driven phase tracker on the guest path (where the simulator's
+   *  setPhase isn't called — phase is mutated directly by applySnapshotToState).
+   *  Mirrors what Simulator.setPhase('playing') does for the host. */
   onEnterPlayingPhase(): void {
-    audio.playMusic(this.arena.themeId);
+    audio.playMusic(this.simulator.getArena().themeId);
     this.playSound('ambient');
-    this.matchSystem.init();
+    this.simulator.initMatchSystem();
     this.resetCosmeticBaselines();
-  }
-
-  /** Swap to a different arena in place — scores reset (no carry-over), state is
-   *  reinitialized, phase flips back to 'loading'. Used by the pause-menu arena
-   *  picker so we don't unmount the Match component (which would lose transport
-   *  wiring on the online path). */
-  switchArena(arenaId: string, settingsOverrides?: Partial<MatchSettings>): void {
-    // Stop prior arena audio: music, ambient, theme-specific loops + periodic timers.
-    audio.stopAllGameSounds();
-    this.matchSystem.cleanup();
-
-    // Resolve new arena + theme
-    const newArena = getArena(arenaId);
-    this.originalArena = newArena;
-    if (settingsOverrides) {
-      this.settings = { ...this.settings, ...settingsOverrides };
-    }
-    let effectiveArena = newArena;
-    if (this.settings.mods.superBounce) {
-      effectiveArena = { ...effectiveArena, bouncyPlatforms: effectiveArena.platforms.map((_, i) => i) };
-    }
-    if (this.settings.mods.mirrorArena) {
-      effectiveArena = mirrorArena(effectiveArena);
-    }
-    this.arena = effectiveArena;
-    // Propagate the new arena to every RuleBasedBot — they captured the prior
-    // arena by reference at construction. Keyboard/remote inputs are arena-agnostic.
-    for (const pi of this.playerInputs.values()) {
-      if (pi instanceof RuleBasedBot) pi.setArena(this.arena);
-    }
-    this.theme = getTheme(newArena.themeId);
-
-    // Recompute effective physics from new theme + mods
-    const phys = computeEffectivePhysics(this.theme, this.settings.mods);
-    this.effGravity = phys.gravity;
-    this.effFriction = phys.friction;
-    this.effWalkSpeed = phys.walkSpeed;
-    this.effJumpImpulse = phys.jumpImpulse;
-    this.effMaxFallSpeed = phys.maxFallSpeed;
-
-    // Reset state to fresh match-initial — reuses existing player slots
-    const activePlayers = this.state.players.map(p => p.id);
-    const fresh = createInitialMatchState(
-      this.arena, this.theme, this.settings,
-      createInitialPlayers(activePlayers, this.arena, this.settings.mods.giantPlayers, this._boundGameRandom),
-      activePlayers, this._boundGameRandom,
-    );
-    // Replace every field on the existing state object so any external holder
-    // of the reference keeps pointing at live data.
-    Object.assign(this.state, fresh);
-
-    // Rebuild all arena-dependent systems. The old instances are replaced by
-    // reassignment — they hold only `this.state`/`this.theme` refs, no timers
-    // or listeners, so GC reclaims them without explicit cleanup. (matchSystem
-    // already had its periodic-ambient timers cleared above via
-    // `matchSystem.cleanup()` before rebuild.)
-    this.buildSystems();
-
-    this.renderer.setTheme(this.theme);
-    this.renderer.setTimeLimit(this.settings.timeLimit);
-
-    // Drain leftover cosmetic lead — otherwise the first cosmeticStep after
-    // the new arena finishes loading runs against residual time from the
-    // prior arena.
     this._cosmeticLead = 0;
-
-    // Bump the generation so in-flight preload promises from the previous
-    // arena don't incorrectly flip us back to 'playing'.
-    this._loadingGeneration++;
-
-    // Emit the phase transition (Match.tsx listens to re-show the loading overlay).
-    this.onPhaseChange?.('loading');
   }
 
-  /** Get the renderer instance. Used by matchLoading to render the background
-   *  and warm the sprite cache during the loading phase. */
+  /** Swap to a different arena in place. */
+  switchArena(arenaId: string, settingsOverrides?: Partial<MatchSettings>): void {
+    this.simulator.switchArena(arenaId, settingsOverrides);
+    // Renderer + cosmetic-system theme refs need updating after the simulator's swap.
+    const newTheme = this.simulator.getTheme();
+    this.renderer.setTheme(newTheme);
+    this.renderer.setTimeLimit(this.simulator.getSettings().timeLimit);
+    // Rebuild cosmetic systems against the new state/theme so their captured
+    // refs (theme/state) match the simulator's. The simulator already
+    // Object.assign'd into the existing state, so player references stay
+    // valid; only the theme needs propagating.
+    const sState = this.simulator.getState();
+    this.environmentSystem = new EnvironmentSystem(sState, newTheme);
+    // Drain leftover cosmetic lead so the first cosmeticStep after new arena
+    // load doesn't run against residual time from the prior arena.
+    this._cosmeticLead = 0;
+  }
+
+  /** Get the renderer instance. */
   getRenderer(): Renderer {
     return this.renderer;
   }
 
-  /** Get the (possibly mirrored) arena — passed to matchLoading.renderBackground. */
+  /** Get the (possibly mirrored) arena. */
   getArena(): Arena {
-    return this.arena;
+    return this.simulator.getArena();
   }
 
-  /** Get the un-mirrored arena — needed by matchLoading for theme draw calls. */
+  /** Get the un-mirrored arena. */
   getOriginalArena(): Arena {
-    return this.originalArena;
+    return this.simulator.getOriginalArena();
   }
 
-  /** Get the list of character names active in this match (including bots).
-   *  Used by matchLoading to know which sprites to warm. */
+  /** Get the list of character names active in this match (including bots). */
   getActiveCharacterNames(): string[] {
-    return this.state.players.map(p => p.character.name);
+    return this.simulator.getState().players.map(p => p.character.name);
   }
 
   /** Update net debug stats (forwarded to renderer for overlay). */
@@ -538,7 +349,7 @@ export class GameLoop {
     this.renderer.setNetDebugStats(stats);
   }
 
-  /** Set custom player display names for online mode (forwarded to renderer for HUD). */
+  /** Set custom player display names for online mode. */
   setPlayerNames(names: Record<string, string>): void {
     this.renderer.setPlayerNames(names);
   }
@@ -551,23 +362,15 @@ export class GameLoop {
   /** Override the touch input slot (for online guest who is P2, not P1). */
   setLocalSlot(slot: PlayerSlot): void {
     this.touchSlot = slot;
-    if (this.touchInput && slot) haptics.init(slot);
+    if (this.touchInput && slot) {
+      haptics.init(slot);
+      this.simulator.setTouchInput(this.touchInput, slot);
+    }
   }
 
-  /** Mark a player as disconnected — kill them and prevent respawn. */
+  /** Mark a player as disconnected. */
   disconnectPlayer(slot: PlayerSlot): void {
-    const player = this.state.players.find(p => p.id === slot);
-    if (!player) return;
-    player.disconnected = true;
-    // Force corpse and zero respawnTimer. The respawning branch in stomp.ts
-    // doesn't short-circuit on `disconnected`, so a mid-respawn disconnect
-    // would otherwise tick through to 'idle' and stand on the field as a
-    // free-stomp ghost.
-    if (player.state !== 'splat') {
-      player.state = 'splat';
-      player.splatTimer = 999999; // never auto-advance to respawning
-    }
-    player.respawnTimer = 0;
+    this.simulator.disconnectPlayer(slot);
   }
 
   /** Mute/unmute audio (used during rollback resimulation). */
@@ -575,122 +378,82 @@ export class GameLoop {
     this._audioEnabled = enabled;
   }
 
-  /** Mark that we're in rollback resimulation — cosmetic systems will be skipped. */
+  /** Mark that we're in rollback resimulation. */
   setResimulating(resim: boolean): void {
-    this._resimulating = resim;
+    this.simulator.setResimulating(resim);
   }
 
-  /** Half-rate wrapper around cosmeticStep. Tests call cosmeticStep directly
-   *  so assertions run at the un-throttled per-tick rate. */
+  /** Half-rate wrapper around cosmeticStep. */
   tickCosmetic(dt: number): void {
     perfTrace.measure('tickCosmetic', () => {
-      // Defend against pathological dt: negative (clock-warp), NaN, Infinity.
-      // NaN poisoning here would silently kill all cosmetic updates for the
-      // rest of the session — every subsequent comparison returns false.
       if (!Number.isFinite(dt) || dt <= 0) return;
       this._cosmeticLead += dt;
       if (this._cosmeticLead < COSMETIC_INTERVAL) return;
       const stepDt = Math.min(this._cosmeticLead, COSMETIC_MAX_STEP);
-      // Subtract the consumed dt instead of zeroing — after a long tab-switch,
-      // _cosmeticLead can be 5+ seconds; clamping the step but discarding the
-      // residual means accumulators bound to elapsed time stutter. We still
-      // cap the catch-up at COSMETIC_MAX_STEP per tick, but the residual is
-      // drained on subsequent frames at most ~1s/frame (60fps × 4 ticks) so
-      // we recover within ~16 frames after a big gap rather than dropping it.
       this._cosmeticLead = Math.max(0, this._cosmeticLead - stepDt);
       this.cosmeticStep(stepDt);
     });
   }
 
-  /** Re-prime cosmetic baselines (prevCosmeticState + spring map) against the
-   *  current state. Used by NetMatch.completeReconnection so the first
-   *  post-reconnect snapshot doesn't fire spurious transition SFX (jump,
-   *  land, score animations, possibly a duplicate victory sound) by comparing
-   *  against pre-disconnect state. Also useful on the loading→playing edge
-   *  if the host's countdown advanced while the guest's prevState was
-   *  captured at construction. */
+  /** Re-prime cosmetic baselines against the current state. */
   resetCosmeticBaselines(): void {
     this.playerTransitionSystem.resetBaseline();
     this.entityTransitionSystem.resetBaseline();
   }
 
-  /** Seconds since the last cosmeticStep fired; renderer uses this to extrapolate
-   *  particle/gib positions forward by `vx * lead` so half-rate motion stays smooth. */
+  /** Seconds since the last cosmeticStep fired. */
   getCosmeticLead(): number {
     return this._cosmeticLead;
   }
 
-  /** Tick all cosmetic-only systems (particles, environment, visual decays).
-   *  Called once per frame from local loop(), host loop, and guest loop. */
+  /** Tick all cosmetic-only systems (particles, environment, visual decays). */
   cosmeticStep(dt: number): void {
     perfTrace.measure('cosmeticStep', () => {
-      // Skip cosmetic updates during loading — snapshots received here would
-      // otherwise trigger spurious transition sounds as prev-state vs. snapshot-state
-      // flips on the guest.
-      if (this.state.phase === 'loading') return;
+      if (this.simulator.getState().phase === 'loading') return;
 
-      // --- Per-player cosmetic systems ---
       this.playerTransitionSystem.cosmeticUpdate(dt);
       this.playerCosmeticSystem.cosmeticUpdate(dt);
-
-      // --- Entity transition detection ---
       this.entityTransitionSystem.cosmeticUpdate(dt);
-
-      // NOTE: The following minor effects remain in fixedUpdate (host-only, acceptable):
-      // - crouch sound (depends on input.down + wasCrouching local var)
-      // - zero_g loop (depends on zone occupancy check + start/stop)
-      // - splash sound (depends on landing-in-waterfall-zone detection)
-      // - pigeon_scatter (depends on proximity check with pigeon flocks)
-      // - crowd cheering (depends on score proximity to kill limit + volume ramp)
-      // - periodic ambient sounds (depends on timer-based random intervals)
-      // - collision particles for thorn/hazard/ghost/lava rock (depend on exact collision position)
-
-      // --- Particle systems ---
       this.particleSystem.cosmeticUpdate(dt);
-
-      // --- Environment ---
       this.environmentSystem.cosmeticUpdate(dt);
     });
   }
 
-  // Public VFX methods removed — cosmeticStep() calls private methods directly.
-
   /** Render current frame. Public for network loop. */
   renderFrame(frameDt?: number): void {
-    // In network mode, decay real-time timers that are normally handled in loop()
+    const state = this.simulator.getState();
+    const arena = this.simulator.getArena();
     if (this._networkMode && frameDt !== undefined && frameDt > 0) {
-      if (this.state.slowMotion > 0) this.state.slowMotion = Math.max(0, this.state.slowMotion - frameDt);
-      if (this.state.screenFlash > 0) this.state.screenFlash = Math.max(0, this.state.screenFlash - frameDt);
-      if (this.state.hitstopZoom > 0) this.state.hitstopZoom = Math.max(0, this.state.hitstopZoom - frameDt);
-      // Fireworks when match is over
-      if (this.state.matchOver) {
+      if (state.slowMotion > 0) state.slowMotion = Math.max(0, state.slowMotion - frameDt);
+      if (state.screenFlash > 0) state.screenFlash = Math.max(0, state.screenFlash - frameDt);
+      if (state.hitstopZoom > 0) state.hitstopZoom = Math.max(0, state.hitstopZoom - frameDt);
+      if (state.matchOver) {
         this.particleSystem.updateFireworks(frameDt);
       }
     }
-    // Bake settled gibs/blood
     this.particleSystem.bakeToRenderer(this.renderer);
-    this.renderer.renderFrame(this.state, this.arena, this.particleSystem.getParticles(), this._cosmeticLead);
+    this.renderer.renderFrame(state, arena, this.particleSystem.getParticles(), this._cosmeticLead);
   }
 
   /** Capture a snapshot of all gameplay state for rollback. */
   takeSnapshot(frame: number): GameSnapshot {
-    return _takeSnapshot(frame, this.state, this.rng, this.aiControllers, this.aiRng);
+    return _takeSnapshot(frame, this.simulator.getState(), this.simulator.getRng(), this.simulator.getAIControllers(), this.simulator.getAiRng());
   }
 
   /** Restore gameplay state from a snapshot for rollback. */
   restoreSnapshot(snap: GameSnapshot): void {
-    _restoreSnapshot(snap, this.state, this.rng, this.aiControllers, this.aiRng);
+    _restoreSnapshot(snap, this.simulator.getState(), this.simulator.getRng(), this.simulator.getAIControllers(), this.simulator.getAiRng());
   }
 
-  getState(): MatchState { return this.state; }
+  getState(): MatchState { return this.simulator.getState(); }
   getRendererDiagnostics() { return this.renderer.getDiagnostics(); }
   pause(): void { this.paused = true; audio.setPaused(true); }
-  resume(): void { this.paused = false; this.lastTime = performance.now(); audio.setPaused(false, this.arena.themeId); }
+  resume(): void { this.paused = false; this.lastTime = performance.now(); audio.setPaused(false, this.simulator.getArena().themeId); }
   isPaused(): boolean { return this.paused; }
   skipCountdown(): void {
-    if (this.state.countdown > 0) {
-      this.state.countdown = 0;
-      // countdown_go sound will fire from cosmeticStep transition detection
+    const state = this.simulator.getState();
+    if (state.countdown > 0) {
+      state.countdown = 0;
     }
   }
 
@@ -698,9 +461,12 @@ export class GameLoop {
     if (!this.running) return;
     sampleFps(currentTime);
 
+    const state = this.simulator.getState();
+    const arena = this.simulator.getArena();
+
     if (this.paused) {
       this.lastTime = currentTime;
-      this.renderer.renderFrame(this.state, this.arena, this.particleSystem.getParticles(), 0);
+      this.renderer.renderFrame(state, arena, this.particleSystem.getParticles(), 0);
       this.rafId = requestAnimationFrame(this.loop);
       return;
     }
@@ -709,8 +475,7 @@ export class GameLoop {
     this.lastTime = currentTime;
     if (frameTime > MAX_FRAME_TIME) frameTime = MAX_FRAME_TIME;
 
-    // Slow-motion affects accumulation
-    const timeScale = this.state.slowMotion > 0 ? SLOW_MO_FACTOR : 1;
+    const timeScale = state.slowMotion > 0 ? SLOW_MO_FACTOR : 1;
     this.accumulator += frameTime * timeScale;
 
     while (this.accumulator >= FIXED_TIMESTEP) {
@@ -718,36 +483,30 @@ export class GameLoop {
       this.accumulator -= FIXED_TIMESTEP;
     }
 
-    // Pass FIXED_TIMESTEP (not frameTime) so cosmetic motion stays tied to simulation
-    // ticks, matching the old once-per-render-frame contract. Network loops use dt directly.
     if (!this._networkMode) {
       this.tickCosmetic(FIXED_TIMESTEP);
     }
 
-    // Timers that run in real time (not affected by fixedUpdate early return)
-    if (this.state.slowMotion > 0) {
-      this.state.slowMotion = Math.max(0, this.state.slowMotion - frameTime);
+    if (state.slowMotion > 0) {
+      state.slowMotion = Math.max(0, state.slowMotion - frameTime);
     }
-    if (this.state.screenFlash > 0) {
-      this.state.screenFlash = Math.max(0, this.state.screenFlash - frameTime);
+    if (state.screenFlash > 0) {
+      state.screenFlash = Math.max(0, state.screenFlash - frameTime);
     }
-    if (this.state.hitstopZoom > 0) {
-      this.state.hitstopZoom = Math.max(0, this.state.hitstopZoom - frameTime);
+    if (state.hitstopZoom > 0) {
+      state.hitstopZoom = Math.max(0, state.hitstopZoom - frameTime);
     }
 
-    // Fireworks when match is over
-    if (this.state.matchOver) {
+    if (state.matchOver) {
       this.particleSystem.updateFireworks(frameTime);
     }
 
-    // Render — bake settled gibs and blood drips onto persistent background canvas
     this.particleSystem.bakeToRenderer(this.renderer);
 
-    // Collect bot nav debug state (zero cost when overlay is off)
     if (debugFlags.navDebugEnabled) {
       const botStates: BotNavDebugState[] = [];
-      for (const player of this.state.players) {
-        const ai = this.aiControllers.get(player.id);
+      for (const player of state.players) {
+        const ai = this.simulator.getAIControllers().get(player.id);
         if (ai && player.active && player.state !== 'splat' && player.state !== 'respawning') {
           botStates.push({ slot: player.id, x: player.x, y: player.y, navTarget: ai.getLastNavTarget() });
         }
@@ -755,318 +514,42 @@ export class GameLoop {
       this.renderer.setBotNavDebugStates(botStates);
     }
 
-    this.renderer.renderFrame(this.state, this.arena, this.particleSystem.getParticles(), this._cosmeticLead);
+    this.renderer.renderFrame(state, arena, this.particleSystem.getParticles(), this._cosmeticLead);
     this.rafId = requestAnimationFrame(this.loop);
   };
 
   /** Run one fixed-timestep simulation tick. Public for rollback engine. */
   fixedUpdate(dt: number, networkInputs?: Map<string, InputState>): void {
+    if (this.stopped) return;
     perfTrace.measure('fixedUpdate', () => {
-    this._networkInputs = networkInputs;
-    if (this.stopped || this.state.matchOver) return;
-    if (this.state.phase === 'loading') return;
-    this.state.timeElapsed = f(this.state.timeElapsed + dt);
-
-    // Day/night cycle
-    this.state.dayPhase = f(this.state.dayPhase + f(dt / this.theme.dayNight.cycleDuration));
-    if (this.state.dayPhase > 1) this.state.dayPhase = f(this.state.dayPhase - 1);
-
-    // Countdown logic
-    if (this.state.countdown > 0) {
-      this.state.countdown = f(this.state.countdown - dt);
-      if (this.state.countdown <= 0) {
-        this.state.countdown = 0;
-      }
-      // Countdown sounds moved to cosmeticStep. Particles/weather handled by cosmeticStep too.
-      return;
-    }
-
-    // Screen shake decay (skip during resimulation — writes are also guarded)
-    if (!this._resimulating && this.state.screenShake > 0) this.state.screenShake = Math.max(0, this.state.screenShake - dt);
-
-    // Hazard spawn timers + lifetimes
-    this.hazardSystem.fixedUpdate(dt);
-
-    // Carrot timer + spawn
-    this.carrotSystem.fixedUpdate(dt);
-
-    // Weather moved to cosmeticStep
-
-    // Update arena entities (lava rocks, ghosts, geysers, pigeons)
-    this.arenaEntitySystem.fixedUpdate(dt);
-
-    // Gameplay timers (hitstop gates physics; fat/slow/burn affect gameplay)
-    // Cosmetic timers (animFrame, damageFlash, springTrail, fire particles) moved to cosmeticStep()
-    for (const player of this.state.players) {
-      if (!player.active) continue;
-      // Hitstop: decay timer + status timers, but skip physics
-      if (player.hitstopTimer > 0) {
-        player.hitstopTimer = Math.max(0, f(player.hitstopTimer - dt));
-        if (player.fatTimer > 0) player.fatTimer = Math.max(0, f(player.fatTimer - dt));
-        if (player.slowTimer > 0) player.slowTimer = Math.max(0, f(player.slowTimer - dt));
-        if (player.burnTimer > 0) player.burnTimer = Math.max(0, f(player.burnTimer - dt));
-        continue;
-      }
-      if (player.fatTimer > 0) player.fatTimer = Math.max(0, f(player.fatTimer - dt));
-      if (player.slowTimer > 0) player.slowTimer = Math.max(0, f(player.slowTimer - dt));
-      if (player.burnTimer > 0) player.burnTimer = Math.max(0, f(player.burnTimer - dt));
-    }
-
-
-    // Input + physics
-    for (const player of this.state.players) {
-      if (!player.active) continue;
-      // SFX cooldown decay moved to cosmeticStep()
-      if (player.hitstopTimer > 0) continue;
-      const input = this.getPlayerInput(player);
-      const wasAirborne = player.state === 'airborne';
-      const prevVy = player.vy;
-      const prevVx = player.vx;
-      const wasCrouching = player.squashScale <= SQUASH_ON_CROUCH;
-
-      // Bot walk speed penalty (easy bots move slower)
-      let playerWalkSpeed = this.effWalkSpeed;
-      if (isBotSlot(player.id)) {
-        const ai = this.aiControllers.get(player.id);
-        if (ai) playerWalkSpeed *= ai.getWalkSpeedMult();
-      }
-      applyInput(player, input, dt, playerWalkSpeed, this.effFriction, this.effJumpImpulse);
-
-      if (!wasAirborne && player.state === 'airborne') {
-        // Stretch on jump
-        player.squashScale = STRETCH_ON_JUMP;
-        player.squashTimer = 0.15;
-      }
-
-      applyGravity(player, dt, this.effGravity, this.effMaxFallSpeed);
-      movePlayer(player, dt);
-      collidePlatforms(player, this.arena.platforms);
-      resolveStuckPlayer(player, this.arena.platforms);
-      applyArenaConstraints(player, this.arena);
-      // Snap tiny values to zero: prevents ARM Flush-to-Zero (FTZ) subnormal
-      // divergence and signed-zero hash mismatches (-0 vs +0)
-      if (player.vx !== 0 && player.vx > -1e-4 && player.vx < 1e-4) player.vx = 0;
-      if (player.vy !== 0 && player.vy > -1e-4 && player.vy < 1e-4) player.vy = 0;
-      updatePlayerState(player);
-
-      // Headbonk: ceiling collision clamped vy to 0 while going up
-      if (wasAirborne && player.state === 'airborne' && prevVy < -10 && player.vy === 0) {
-        const cd = getOrCreateCooldowns(this.playerTransitionSystem.getSfxCooldowns(), player.id);
-        if (cd.headbonk <= 0) {
-          this.playSound('headbonk');
-          cd.headbonk = 0.15;
-        }
-      }
-
-      // Landing detection
-      const justLanded = wasAirborne && player.state !== 'airborne';
-
-      if (justLanded && haptics.isLocal(player.id)) haptics.landing(prevVy);
-
-      // Wall hit: squash/stretch (sound moved to cosmeticStep)
-      if (Math.abs(prevVx) > 100 && player.vx === 0 && prevVx !== 0) {
-        player.squashScale = 1.3; // stretch vertically = squash horizontally
-        player.squashTimer = 0.12;
-      }
-
-      // Squash on landing
-      if (justLanded) {
-        player.squashScale = SQUASH_ON_LAND;
-        player.squashTimer = 0.15;
-
-        // Platform crumble when landing hard — chunks fly UP and outward
-        if (prevVy > 300) {
-          const cx = player.x + player.width / 2;
-          const groundY = player.y + player.height;
-          const intensity = Math.min(prevVy / 400, 2);
-          const count = Math.floor(8 + intensity * 5);
-          for (let i = 0; i < count; i++) {
-            const life = 0.3 + Math.random() * 0.4;
-            this.particleSystem.emitParticle(cx + (Math.random() - 0.5) * player.width * 1.5, groundY - Math.random() * 3, (Math.random() - 0.5) * 100 * intensity, -(Math.random() * 60 + 30) * intensity, life, 2 + Math.random() * 3, i % 3 === 0 ? this.theme.platform.floatingBodyColor : this.theme.platform.groundTopColor);
-          }
-        }
-      }
-
-      // Squash when pressing down on ground (crouch)
-      if (input.down && player.state !== 'airborne') {
-        player.squashScale = SQUASH_ON_CROUCH;
-        // Crouch sound: only on initial sit-down
-        if (!wasCrouching) {
-          const cd = getOrCreateCooldowns(this.playerTransitionSystem.getSfxCooldowns(), player.id);
-          if (cd.crouch <= 0) {
-            this.playSound('crouch');
-            cd.crouch = 0.2;
-          }
-        }
-      } else {
-        // Squash/stretch decay
-        if (player.squashTimer > 0) {
-          player.squashTimer = f(player.squashTimer - dt);
-          player.squashScale = f(player.squashScale + f(f(1.0 - player.squashScale) * f(SQUASH_DECAY_SPEED * dt)));
-        } else {
-          player.squashScale = 1.0;
-        }
-      }
-
-      // Side squash decay, fat wobble, expressions (dizzy/scared), idle anim,
-      // afterimages, footstep sounds all moved to cosmeticStep()
-
-      // Angry expression (proximity check requires iterating other players — stays in fixedUpdate)
-      if (player.invincibleTimer <= 0 && player.vy <= 400) {
-        let angry = false;
-        for (const other of this.state.players) {
-          if (other.id === player.id || !other.active || other.state === 'splat' || other.state === 'respawning') continue;
-          const dx = Math.abs((other.x + other.width / 2) - (player.x + player.width / 2));
-          const dy = Math.abs((other.y + other.height / 2) - (player.y + player.height / 2));
-          if (dx < 80 && dy < 60) { angry = true; break; }
-        }
-        player.expression = angry ? 'angry' : 'normal';
-      }
-
-      // Stats: airborne time
-      if (player.state === 'airborne') {
-        const ps = this.state.stats.perPlayer.get(player.id);
-        if (ps) ps.timeAirborne += dt;
-      }
-      // Stats: distance traveled
-      {
-        const ps = this.state.stats.perPlayer.get(player.id);
-        if (ps) ps.distanceTraveled += (Math.abs(player.vx) * dt + Math.abs(player.vy) * dt);
-      }
-
-      // Hazard collisions
-      this.playerCollisionSystem.checkCollisions(player);
-
-      // Effect zone interactions (zero-G, current, geyser)
-      this.effectZoneSystem.applyToPlayer(player, justLanded, wasAirborne, prevVy, dt);
-
-      // Bouncy platform check (on landing — skip if holding down on ground to avoid repeat bouncing)
-      if (this.arena.bouncyPlatforms && justLanded && !(input.down && prevVy < 100)) {
-        for (const bi of this.arena.bouncyPlatforms) {
-          const bp = this.arena.platforms[bi];
-          if (!bp) continue;
-          const playerBottom = player.y + player.height;
-          const playerCx = player.x + player.width / 2;
-          if (playerBottom >= bp.y && playerBottom <= bp.y + bp.height + 4 &&
-              playerCx >= bp.x && playerCx <= bp.x + bp.width) {
-            player.vy = f(SPRING_BOUNCE * 0.85);
-            player.state = 'airborne';
-            this.state.bouncyWobble.set(bi, 0.4);
-            // jump sound moved to cosmeticStep (grounded→airborne transition)
-            break;
-          }
-        }
-      }
-
-      // Pigeon scatter check
-      for (const flock of this.state.pigeonFlocks) {
-        if (!flock.active) continue;
-        const dx = (player.x + player.width / 2) - flock.x;
-        const dy = (player.y + player.height) - flock.y;
-        if (dx * dx + dy * dy < 60 * 60 && player.state !== 'airborne') {
-          flock.active = false;
-          flock.respawnTimer = this.theme.pigeonConfig?.respawnTime || 12;
-          this.playSound('pigeon_scatter');
-          // Spawn scatter particles (gray birds flying away)
-          for (let pi = 0; pi < 6; pi++) {
-            const angle = -Math.PI * 0.5 + (Math.random() - 0.5) * Math.PI * 0.8;
-            const speed = 150 + Math.random() * 200;
-            flock.scatterParticles.push({
-              x: flock.x + (Math.random() - 0.5) * 20,
-              y: flock.y - 5,
-              vx: Math.cos(angle) * speed * (Math.random() < 0.5 ? -1 : 1),
-              vy: Math.sin(angle) * speed - 80,
-              life: 1.0 + Math.random() * 0.5,
-            });
-          }
-        }
-      }
-
-      // Carrot pickup
-      for (const carrot of this.state.carrots) {
-        if (!carrot.active) continue;
-        if (aabbOverlap(player.x, player.y, player.width, player.height, carrot.x - CARROT_SIZE / 2, carrot.y, CARROT_SIZE, CARROT_SIZE)) {
-          carrot.active = false;
-          player.score += 1;
-          player.fatTimer = FAT_DURATION;
-          // Crunch sound + VFX fired by cosmeticStep via score-change transition detection
-          // (works on both host and guest — entity removal doesn't matter since score is in snapshot)
-          // Hitstop — shorter than kill (half duration)
-          player.hitstopTimer = Math.max(player.hitstopTimer, HITSTOP_DURATION * 0.5);
-          if (!this._resimulating) this.state.hitstopZoom = Math.max(this.state.hitstopZoom, HITSTOP_DURATION * 0.5);
-          // Stats: carrots eaten
-          const ps = this.state.stats.perPlayer.get(player.id);
-          if (ps) ps.carrotsEaten += 1;
-        }
-      }
-    }
-
-    for (let i = this.state.carrots.length - 1; i >= 0; i--) {
-      if (!this.state.carrots[i].active) {
-        swapRemove(this.state.carrots, i);
-      }
-    }
-
-    // Zero-G ambient sound management
-    this.effectZoneSystem.fixedUpdate(dt);
-
-    // Stomps, kill feed, player-player collision, splat timers
-    this.stompSystem.fixedUpdate(dt);
-
-    // Crowd cheering, periodic ambient sounds, match end check
-    this.matchSystem.fixedUpdate(dt);
+      this.simulator.fixedUpdate(dt, networkInputs);
     });
   }
 
-  private getPlayerInput(player: Player): InputState {
-    // Network override (host receives guest input)
-    if (this._networkInputs) {
-      const net = this._networkInputs.get(player.id);
-      if (net) {
-        if (net.jump && player.state === 'airborne') {
-          return { left: net.left, right: net.right, jump: false, down: true };
-        }
-        return net;
-      }
-    }
-    // Touch override (browser, local touch player)
-    if (this.touchInput && player.id === this.touchSlot) {
-      return this.touchInput.getInputForPlayer(player.state === 'airborne');
-    }
-    // Unified PlayerInput dispatch (KeyboardInput or RuleBasedBot)
-    const pi = this.playerInputs.get(player.id);
-    if (pi) return pi.getAction(this.state);
-    return { left: false, right: false, jump: false, down: false };
-  }
-
-  /** @internal Test-only: forwards to the private getPlayerInput so dispatch
-   *  branches (network/touch/keyboard/bot/fallback) can be asserted without
-   *  driving a full fixedUpdate tick. */
-  getPlayerInputForTest(player: Player, networkInputs?: Map<string, InputState>): InputState {
-    if (networkInputs) this._networkInputs = networkInputs;
-    return this.getPlayerInput(player);
+  /** @internal Test-only: forwards to simulator's getPlayerInputForTest. */
+  getPlayerInputForTest(player: import('../types').Player, networkInputs?: Map<string, InputState>): InputState {
+    return this.simulator.getPlayerInputForTest(player, networkInputs);
   }
 
   getTouchInput(): TouchInputManager | null {
     return this.touchInput;
   }
 
-  private endMatch(winner: PlayerSlot | null): void {
-    this.state.matchOver = true;
-    this.state.winner = winner;
-    if (!this._resimulating) this.state.screenFlash = SCREEN_FLASH_DURATION;
-    // If the match ends while the user is still in the pause overlay (e.g.
-    // all-disconnected auto-guard fires), the gamePaused flag would otherwise
-    // stay true through the 1.5s victory transition — silencing the victory
-    // sound and any menu music until Match.tsx unmounts and stops everything.
+  // Phase + match-end handlers — wired into Simulator events from the constructor.
+
+  private _handlePhaseChange(phase: MatchPhase): void {
+    this.onPhaseChange?.(phase);
+    if (phase === 'playing') {
+      this.resetCosmeticBaselines();
+      this._cosmeticLead = 0;
+    }
+  }
+
+  private _handleMatchEnd(winner: PlayerSlot | null): void {
+    // Match.tsx pause overlay: clear the gamePaused flag so the victory sound
+    // plays even if the match ended while still paused. matchSystem.cleanup
+    // already ran inside Simulator.
     audio.setPaused(false);
-    // Stop theme ambient loops (wind, lava, underwater, etc.) immediately —
-    // without this they keep playing audibly through the 1.5s pre-victory
-    // delay until Match.tsx unmount calls gameLoop.stop(). Music stop stays
-    // alongside so the arena track also fades on match end.
-    this.matchSystem.cleanup();
-    audio.stopMusic();
-    // victory sound moved to cosmeticStep (matchOver transition detection)
-    this.onMatchEnd(winner, this.state);
+    this.onMatchEnd(winner, this.simulator.getState());
   }
 }

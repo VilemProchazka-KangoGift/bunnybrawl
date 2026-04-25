@@ -118,15 +118,19 @@ describe('Simulator scaffold (Task 3.1)', () => {
     expect(inputs.get('P2')).toBe(p2);
   });
 
-  it('fixedUpdate throws NOT_IMPLEMENTED (scaffold has no behavior yet)', () => {
+  it('fixedUpdate runs without throwing (Task 3.2: real implementation)', () => {
     const arena = getArena('meadow');
     const sim = new Simulator({ arena, settings: SETTINGS, activePlayers: PLAYERS });
-    expect(() => sim.fixedUpdate(1 / 60)).toThrow(/Task 3\.2/);
+    // Default phase is 'loading' — fixedUpdate early-returns without error.
+    expect(() => sim.fixedUpdate(1 / 60)).not.toThrow();
   });
 
-  it('getState throws NOT_IMPLEMENTED (scaffold has no state yet)', () => {
+  it('getState returns the initialized MatchState (Task 3.2: real implementation)', () => {
     const arena = getArena('meadow');
     const sim = new Simulator({ arena, settings: SETTINGS, activePlayers: PLAYERS });
-    expect(() => sim.getState()).toThrow(/Task 3\.2/);
+    const state = sim.getState();
+    expect(state).toBeDefined();
+    expect(state.players.length).toBe(PLAYERS.length);
+    expect(state.phase).toBe('loading');
   });
 });

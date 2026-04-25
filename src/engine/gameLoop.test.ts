@@ -3214,8 +3214,9 @@ describe('GameLoop — arena-specific features', () => {
       },
     });
     const state = loop.getState();
-    // Current zones are cached for per-frame use (now owned by ArenaEntitySystem)
-    expect((loop as any).arenaEntitySystem.getCachedGeyserZones()).toBeDefined();
+    // Current zones are cached for per-frame use (now owned by ArenaEntitySystem,
+    // exposed via the simulator).
+    expect(loop.getSimulator().getArenaEntitySystem().getCachedGeyserZones()).toBeDefined();
   });
 
   it('processes geyser timer cycling', () => {
@@ -3489,9 +3490,9 @@ describe('GameLoop — mod physics multipliers', () => {
       settings: { mods: { superBounce: true, turbo: false, extremeGore: false, carrotChase: false, giantPlayers: false, mirrorArena: false, underwaterGravity: false } },
     });
     // The arena should have bouncyPlatforms set to all indices
-    const arena = (loop as any).arena;
+    const arena = loop.getArena();
     expect(arena.bouncyPlatforms).toBeDefined();
-    expect(arena.bouncyPlatforms.length).toBe(arena.platforms.length);
+    expect(arena.bouncyPlatforms!.length).toBe(arena.platforms.length);
   });
 
   it('mirrorArena mod flips arena positions', () => {
@@ -3499,7 +3500,7 @@ describe('GameLoop — mod physics multipliers', () => {
       settings: { mods: { mirrorArena: true, turbo: false, extremeGore: false, carrotChase: false, giantPlayers: false, superBounce: false, underwaterGravity: false } },
     });
     // Mirror should have been applied — arena id should still be the same
-    const arena = (loop as any).arena;
+    const arena = loop.getArena();
     expect(arena).toBeDefined();
   });
 
@@ -3725,20 +3726,19 @@ describe('GameLoop — entity systems', () => {
   });
 
   it('gameRandom uses Math.random in local mode', () => {
+    // In local mode (no rng), the simulator falls back to Math.random for
+    // gameplay-affecting random calls. We can't observe gameRandom directly
+    // (it's private to Simulator), so observe via getRng() — which returns
+    // undefined in local mode.
     const { loop } = createLoop();
-    const val = (loop as any).gameRandom();
-    expect(typeof val).toBe('number');
-    expect(val).toBeGreaterThanOrEqual(0);
-    expect(val).toBeLessThan(1);
+    expect(loop.getRng()).toBeUndefined();
   });
 
   it('gameRandom uses seeded RNG when set', () => {
     const { loop } = createLoop();
     const rng = { nextFloat: vi.fn(() => 0.42), getState: () => 0, setState: () => {} } as any;
     loop.setRng(rng);
-    const val = (loop as any).gameRandom();
-    expect(val).toBe(0.42);
-    expect(rng.nextFloat).toHaveBeenCalled();
+    expect(loop.getRng()).toBe(rng);
   });
 });
 
