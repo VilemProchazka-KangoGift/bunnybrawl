@@ -37,4 +37,10 @@ describe('regression: pure modules import in Node env without DOM', () => {
     const mod = await import('../net/prng');
     expect(mod.SeededRNG).toBeDefined();
   });
+
+  it('audio module is importable in Node (does not call new Howl at import)', async () => {
+    const mod = await import('../audio');
+    expect(mod.audio).toBeDefined();
+    // audio.init() is NOT called automatically — importing should be inert
+  });
 });
