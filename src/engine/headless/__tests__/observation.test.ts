@@ -224,6 +224,98 @@ describe('observation extractor (Task 4.2 — pure Node)', () => {
     expect(Array.from(out2)).toEqual(Array.from(out1));
   });
 
+  it('wrap-aware: opponent on the wrap-near side encodes the short signed distance', () => {
+    // Arena wraps via physics.wrapHorizontal — P1 at x=10 with an opponent at
+    // x=1270 on a 1280-wide arena are actually 20px apart around the seam,
+    // not 1260px apart. The encoded dx should be -20/1280, NOT +1260/1280.
+    const arena = makeArena({ width: 1280, height: 720 });
+    const state = makeState({
+      players: [
+        makePlayer({ id: 'P1', x: 10, y: 400 }),
+        makePlayer({ id: 'P2', x: 1270, y: 400 }),
+      ],
+    });
+    const out = new Float32Array(OBSERVATION_SIZE);
+    extractObservation(state, 'P1', arena, out);
+
+    const base = OBS_OPPONENT_OFFSET; // P2 = slot 0
+    expect(out[base + 0]).toBeCloseTo(-20 / 1280, 5); // wrap-aware dx_norm
+    expect(out[base + 0]).not.toBeCloseTo(1260 / 1280, 2); // NOT raw difference
+  });
+
+  it('wrap-aware: y-axis is unchanged (no vertical wrap, gravity + ground/ceiling)', () => {
+    // Same horizontal wrap scenario. dy must still be the raw difference —
+    // y does not wrap.
+    const arena = makeArena({ width: 1280, height: 720 });
+    const state = makeState({
+      players: [
+        makePlayer({ id: 'P1', x: 10, y: 400 }),
+        makePlayer({ id: 'P2', x: 1270, y: 200 }),
+      ],
+    });
+    const out = new Float32Array(OBSERVATION_SIZE);
+    extractObservation(state, 'P1', arena, out);
+
+    const base = OBS_OPPONENT_OFFSET; // P2 = slot 0
+    expect(out[base + 1]).toBeCloseTo((200 - 400) / 720, 5); // raw dy_norm
+  });
+
+  it('wrap-aware: carrot on the wrap-near side encodes the short signed distance', () => {
+    const arena = makeArena({ width: 1280, height: 720 });
+    const state = makeState({
+      players: [makePlayer({ id: 'P1', x: 10, y: 400 })],
+      carrots: [
+        { x: 1270, y: 400, active: true, spawnTime: 0 },
+      ],
+    });
+    const out = new Float32Array(OBSERVATION_SIZE);
+    extractObservation(state, 'P1', arena, out);
+
+    const base = OBS_CARROT_OFFSET;
+    expect(out[base + 0]).toBeCloseTo(-20 / 1280, 5); // wrap-aware dx_norm
+    expect(out[base + 0]).not.toBeCloseTo(1260 / 1280, 2); // NOT raw difference
+    expect(out[base + 1]).toBeCloseTo(0, 5);          // dy_norm
+    expect(out[base + 2]).toBe(1);                    // present
+  });
+
+  it('wrap-aware: hazard left edge wraps; width is left as-is', () => {
+    // A hazard whose left edge is just past the wrap seam. The dx should be
+    // negative-near-zero, but the width is not wrapped.
+    const hazardZones: HazardZone[] = [
+      { x: 1270, y: 600, width: 40, height: 30, type: 'lava' },
+    ];
+    const arena = makeArena({ width: 1280, height: 720, hazardZones });
+    const state = makeState({
+      players: [makePlayer({ id: 'P1', x: 10, y: 400 })],
+    });
+    const out = new Float32Array(OBSERVATION_SIZE);
+    extractObservation(state, 'P1', arena, out);
+
+    const base = OBS_HAZARD_OFFSET;
+    expect(out[base + 0]).toBeCloseTo(-20 / 1280, 5); // wrap-aware dx_norm_left
+    expect(out[base + 2]).toBeCloseTo(40 / 1280, 5);  // width unchanged
+    expect(out[base + 3]).toBeCloseTo(30 / 720, 5);   // height unchanged
+  });
+
+  it('wrap-aware: opponent exactly at half-width is encoded as +0.5 (asymmetric `>`/`<` is fine — both edges equidistant)', () => {
+    // dx = exactly W/2 (= 640 for 1280-wide arena). The `>` guard means
+    // wrapDx returns 640 unchanged, so dx_norm = 640/1280 = 0.5. The
+    // mirror case (-640) would also be returned unchanged by the `<` guard.
+    // Both edges of the seam are equidistant — either sign is correct.
+    const arena = makeArena({ width: 1280, height: 720 });
+    const state = makeState({
+      players: [
+        makePlayer({ id: 'P1', x: 0, y: 400 }),
+        makePlayer({ id: 'P2', x: 640, y: 400 }),
+      ],
+    });
+    const out = new Float32Array(OBSERVATION_SIZE);
+    extractObservation(state, 'P1', arena, out);
+
+    const base = OBS_OPPONENT_OFFSET; // P2 = slot 0
+    expect(out[base + 0]).toBeCloseTo(0.5, 5);
+  });
+
   it('makeObservation allocates a properly-sized Float32Array and fills it', () => {
     const arena = makeArena();
     const state = makeState({

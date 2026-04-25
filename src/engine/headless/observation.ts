@@ -29,6 +29,12 @@ import type { Arena, MatchState, Player, PlayerSlot } from '../types';
  * Coordinate normalization: arena width/height map to [0, 1]. Velocities are
  * divided by VELOCITY_SCALE (a soft cap; values can exceed 1.0 but usually
  * fit in [-2, 2]). Padding for missing entities is zero.
+ *
+ * Egocentric X distances (opponents / carrots / hazards) use shortest signed
+ * distance modulo arena width — see `wrapDx` below — so they live in
+ * `[-0.5, +0.5]` rather than `[-1, +1]`. The arena wraps horizontally
+ * (`physics.wrapHorizontal`); without this, a 20px-around-the-seam opponent
+ * would look like a full screen away.
  */
 export const SELF_FEATURES = 8;
 export const PER_OPPONENT_FEATURES = 8;
@@ -107,7 +113,7 @@ export function extractObservation(
   for (let i = 0; i < MAX_OPPONENTS && i < opponents.length; i++) {
     const op = opponents[i];
     const base = OBS_OPPONENT_OFFSET + i * PER_OPPONENT_FEATURES;
-    out[base + 0] = (op.x - self.x) / W;
+    out[base + 0] = wrapDx(op.x - self.x, W) / W;
     out[base + 1] = (op.y - self.y) / H;
     out[base + 2] = op.vx / VELOCITY_SCALE;
     out[base + 3] = op.vy / VELOCITY_SCALE;
@@ -123,17 +129,20 @@ export function extractObservation(
   for (let i = 0; i < MAX_CARROTS && i < carrots.length; i++) {
     const c = carrots[i];
     const base = OBS_CARROT_OFFSET + i * PER_CARROT_FEATURES;
-    out[base + 0] = (c.x - self.x) / W;
+    out[base + 0] = wrapDx(c.x - self.x, W) / W;
     out[base + 1] = (c.y - self.y) / H;
     out[base + 2] = 1;
   }
 
-  // Hazard zones — arena.hazardZones (immutable per arena, stable index order)
+  // Hazard zones — arena.hazardZones (immutable per arena, stable index order).
+  // Hazards are rectangles; we wrap the LEFT edge (h.x) relative to self for
+  // egocentric encoding. Width is unaffected by the seam — no current arena
+  // has a hazard zone that straddles the wrap boundary.
   const hazards = arena.hazardZones ?? [];
   for (let i = 0; i < MAX_HAZARDS && i < hazards.length; i++) {
     const h = hazards[i];
     const base = OBS_HAZARD_OFFSET + i * PER_HAZARD_FEATURES;
-    out[base + 0] = (h.x - self.x) / W;
+    out[base + 0] = wrapDx(h.x - self.x, W) / W;
     out[base + 1] = (h.y - self.y) / H;
     out[base + 2] = h.width / W;
     out[base + 3] = h.height / H;
@@ -163,4 +172,22 @@ function findPlayer(state: Readonly<MatchState>, slot: PlayerSlot): Player | und
 
 function clamp01(x: number): number {
   return x < 0 ? 0 : x > 1 ? 1 : x;
+}
+
+/**
+ * Shortest signed delta on a horizontally-wrapping axis.
+ *
+ * The arena wraps via `physics.wrapHorizontal` — a player past the left edge
+ * teleports to the right and vice versa. Without this helper, an opponent
+ * 20px to the left around the seam would encode as nearly a full screen
+ * away, poisoning the policy's egocentric distance signal.
+ *
+ * Range: [-W/2, W/2]. The asymmetric guards (`>` vs `<`) deliberately keep
+ * an exact `W/2` input as `+W/2` (no wrap); both edges are equidistant so
+ * the choice is arbitrary. Mirrors `wrapDx` in `ai/awareness.ts`.
+ */
+function wrapDx(dx: number, W: number): number {
+  if (dx > W / 2) return dx - W;
+  if (dx < -W / 2) return dx + W;
+  return dx;
 }
