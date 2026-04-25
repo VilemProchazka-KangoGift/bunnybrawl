@@ -3,6 +3,7 @@ import type { ThemeConfig } from '../../themes/types';
 import type { CosmeticSystem } from '../types';
 import type { HazardHitResult } from '../gameplay/playerCollisions';
 import type { Renderer } from '../../renderer';
+import type { ParticleEmitter } from '../../simulator/types';
 import { BLOOD_COLOR, CARROT_SIZE } from '../../constants';
 import { haptics } from '../../haptics';
 import { perfTrace } from '../../perfTrace';
@@ -12,7 +13,7 @@ import { updateWeather } from './environment';
 
 const CARROT_PICKUP_COLORS = ['#FF8C00', '#FF6600', '#FFA500', '#FF7700', '#FFD700', '#FF8C00'];
 
-export class ParticleSystem implements CosmeticSystem {
+export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
   private state: MatchState;
   private arena: Arena;
   private theme: ThemeConfig;

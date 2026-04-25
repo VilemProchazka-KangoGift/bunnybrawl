@@ -1,6 +1,6 @@
 import type { MatchState, Arena, Player } from '../../types';
 import type { GameplaySystem } from '../types';
-import type { ParticleSystem } from '../cosmetics/ParticleSystem';
+import type { ParticleEmitter } from '../../simulator/types';
 import {
   handleSpringCollision,
   handleThornCollision,
@@ -13,13 +13,13 @@ import {
 export class PlayerCollisionSystem implements GameplaySystem {
   private state: MatchState;
   private arena: Arena;
-  private particleSystem: ParticleSystem;
+  private particleSystem: ParticleEmitter;
   private resimulatingGetter: () => boolean;
 
   constructor(
     state: MatchState,
     arena: Arena,
-    particleSystem: ParticleSystem,
+    particleSystem: ParticleEmitter,
     resimulatingGetter: () => boolean,
   ) {
     this.state = state;

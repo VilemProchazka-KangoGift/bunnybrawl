@@ -1,5 +1,20 @@
 import type { MatchState, MatchPhase, MatchSettings, Arena, PlayerSlot } from '../types';
 import type { SeededRNG } from '../net/prng';
+import type { HazardHitResult } from '../gameLoop/gameplay/playerCollisions';
+
+/**
+ * Narrow surface for VFX emission used by gameplay systems. Gameplay code
+ * depends on this interface so it can be reused by headless runners with a
+ * no-op emitter, or by the browser via ParticleSystem (which implements it).
+ *
+ * Only includes calls actually made from the gameplay/ folder — keeps the
+ * coupling tight. Add to this interface only when a gameplay system needs a
+ * new VFX call.
+ */
+export interface ParticleEmitter {
+  spawnCarrotVFX(x: number, y: number): void;
+  applyHazardHitVFX(hit: HazardHitResult, playerId: PlayerSlot, state: MatchState, resimulating: boolean): void;
+}
 
 /**
  * Side-effect requests emitted by the Simulator. Adapters subscribe and decide
