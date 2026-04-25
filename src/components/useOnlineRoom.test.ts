@@ -41,7 +41,11 @@ vi.mock('../engine/net/transport', () => ({
   },
 }));
 
-import { useOnlineRoom, getModalTransport, clearModalTransport } from './useOnlineRoom';
+import {
+  useOnlineRoom, getModalTransport, clearModalTransport,
+  tearDownOnlineSession, getHostReclaimTokens, getGuestOwnReclaimToken,
+  clearReclaimTokens,
+} from './useOnlineRoom';
 
 describe('useOnlineRoom — PROTOCOL_VERSION mismatch', () => {
   beforeEach(() => {
@@ -178,5 +182,56 @@ describe('clearModalTransport', () => {
       clearModalTransport();
     }).not.toThrow();
     expect(getModalTransport()).toBeNull();
+  });
+});
+
+describe('tearDownOnlineSession', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    capturedEvents = null;
+    act(() => {
+      useGameStore.getState().resetOnline();
+    });
+    clearModalTransport();
+    clearReclaimTokens();
+  });
+
+  it('destroys the active transport, clears the module-scope ref, and drops reclaim tokens in one call', () => {
+    const onMatchStart = vi.fn();
+    const { result } = renderHook(() => useOnlineRoom({ onMatchStart }));
+    act(() => result.current.connect(true));
+
+    // Simulate the lobby having issued a token to a connecting guest. The
+    // tokens map only mutates via the host onPeerConnected handler, so reach
+    // into it the same way a real session would by populating before teardown.
+    expect(getModalTransport()).not.toBeNull();
+    expect(getGuestOwnReclaimToken()).toBeNull();
+
+    transportMockApi.destroy.mockClear();
+    tearDownOnlineSession();
+
+    expect(transportMockApi.destroy).toHaveBeenCalledTimes(1);
+    expect(getModalTransport()).toBeNull();
+    expect(getHostReclaimTokens().size).toBe(0);
+    expect(getGuestOwnReclaimToken()).toBeNull();
+  });
+
+  it('is safe to call when no transport is active (Match.handleQuit local-mode path)', () => {
+    expect(getModalTransport()).toBeNull();
+    expect(() => tearDownOnlineSession()).not.toThrow();
+    expect(transportMockApi.destroy).not.toHaveBeenCalled();
+  });
+
+  it('repeated calls are idempotent', () => {
+    const onMatchStart = vi.fn();
+    const { result } = renderHook(() => useOnlineRoom({ onMatchStart }));
+    act(() => result.current.connect(true));
+    transportMockApi.destroy.mockClear();
+
+    tearDownOnlineSession();
+    expect(transportMockApi.destroy).toHaveBeenCalledTimes(1);
+    tearDownOnlineSession();
+    // Second call: transport already gone, no extra destroy.
+    expect(transportMockApi.destroy).toHaveBeenCalledTimes(1);
   });
 });

@@ -4,7 +4,7 @@ import { useGameStore } from '../store/gameStore';
 import { GameLoop } from '../engine/gameLoop';
 import { NetMatch } from '../engine/net/netMatch';
 import { MsgType } from '../engine/net/protocol';
-import { getModalTransport, clearModalTransport, clearReclaimTokens, getHostReclaimTokens, getGuestOwnReclaimToken } from './OnlineModal';
+import { getModalTransport, tearDownOnlineSession, getHostReclaimTokens, getGuestOwnReclaimToken } from './OnlineModal';
 import { getArena, listArenaPacks } from '../engine/arenas';
 import { ArenaGrid } from './ArenaGrid';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
@@ -140,15 +140,11 @@ export function Match() {
     }
     gameLoopRef.current?.stop();
     gameLoopRef.current = null;
-    const transport = getModalTransport();
-    if (transport) {
-      transport.destroy();
-      clearModalTransport();
-    }
-    // Drop reclaim tokens — without this, the next online session inherits
-    // stale lobby tokens that no longer match the new host's HostAuthority,
-    // so reconnect attempts during the next match would fail authentication.
-    clearReclaimTokens();
+    // Teardown destroys the transport, clears the module-scope transport ref,
+    // and drops lobby-issued reclaim tokens — without the token clear, the
+    // next online session would inherit stale tokens that no longer match
+    // the new host's HostAuthority and reconnect attempts would fail auth.
+    tearDownOnlineSession();
     // Drop random-arena memory so a fresh play picks freely; without this,
     // the prior match's arena remains excluded from the next 'random' draw
     // even though resetOnline / setActivePlayers fired.
@@ -293,7 +289,7 @@ export function Match() {
         // Reclaim tokens issued during the lobby. Host: full Map<slot,token>;
         // guest: own token only. Used to authenticate RECONNECT_REQUEST so a
         // malicious peer in the room can't claim a disconnected stranger's slot.
-        reclaimTokens: online.isHost ? getHostReclaimTokens() as Map<PlayerSlot, string> : undefined,
+        reclaimTokens: online.isHost ? getHostReclaimTokens() : undefined,
         ownReclaimToken: !online.isHost ? (getGuestOwnReclaimToken() ?? undefined) : undefined,
         onStall: (stalled) => {
           setUnstable(stalled ? { kind: 'mine' } : null);

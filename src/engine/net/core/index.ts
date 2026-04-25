@@ -33,7 +33,7 @@ export { SnapshotInterpolation } from './interpolation';
 export type { InterpolationResult } from './interpolation';
 
 // Host authority (generic input buffering + snapshot broadcast)
-export { GenericHostAuthority } from './hostAuthority';
+export { GenericHostAuthority, generateReclaimToken } from './hostAuthority';
 export type { HostTransport, HostDebugStats } from './hostAuthority';
 
 // Config types

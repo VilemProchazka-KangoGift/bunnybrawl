@@ -6,7 +6,7 @@ import type { PlayerSlot, PlayerStats } from '../engine/types';
 import { isBotSlot } from '../engine/types';
 import { getCharacterEmoji, getCharacterDisplayName } from '../engine/characters';
 import { ArenaGrid } from './ArenaGrid';
-import { getModalTransport, clearModalTransport, clearReclaimTokens } from './OnlineModal';
+import { getModalTransport, tearDownOnlineSession } from './OnlineModal';
 import { MsgType } from '../engine/net/protocol';
 import type { ReliableMessage } from '../engine/net/protocol';
 import type { ConnectionStatus, TransportEvents } from '../engine/net/transport';
@@ -61,12 +61,7 @@ export function VictoryScreen() {
   }, [online.isOnline, online.isHost, setScreen, clearMatchResult]);
 
   const handleMenu = useCallback(() => {
-    const transport = getModalTransport();
-    if (transport) {
-      transport.destroy();
-      clearModalTransport();
-    }
-    clearReclaimTokens();
+    tearDownOnlineSession();
     // setScreen first, then clear store fields (Match/VictoryScreen subscribers
     // see a clean transition rather than online=false but screen=victory).
     setScreen('menu');
@@ -102,9 +97,7 @@ export function VictoryScreen() {
         if (status === 'disconnected' || status === 'error') {
           setPeerConnected(false);
           if (!online.isHost) {
-            transport.destroy();
-            clearModalTransport();
-            clearReclaimTokens();
+            tearDownOnlineSession();
             setScreen('menu');
             setActivePlayers([]);
             useGameStore.getState().resetOnline();

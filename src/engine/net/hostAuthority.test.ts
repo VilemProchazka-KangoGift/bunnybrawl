@@ -1082,3 +1082,24 @@ describe('HostAuthority', () => {
     });
   });
 });
+
+describe('generateReclaimToken (exported)', () => {
+  it('produces a 32-char lowercase hex string (128 bits of entropy)', async () => {
+    const { generateReclaimToken } = await import('./core/hostAuthority');
+    const token = generateReclaimToken();
+    expect(token).toMatch(/^[0-9a-f]{32}$/);
+  });
+
+  it('produces distinct tokens across calls (no fixed seed)', async () => {
+    const { generateReclaimToken } = await import('./core/hostAuthority');
+    const seen = new Set<string>();
+    for (let i = 0; i < 64; i++) seen.add(generateReclaimToken());
+    expect(seen.size).toBe(64);
+  });
+
+  it('is re-exported from net/core barrel for non-core callers (lobby/useOnlineRoom)', async () => {
+    const core = await import('./core');
+    expect(typeof core.generateReclaimToken).toBe('function');
+    expect(core.generateReclaimToken()).toMatch(/^[0-9a-f]{32}$/);
+  });
+});

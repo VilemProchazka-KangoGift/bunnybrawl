@@ -90,6 +90,11 @@ vi.mock('./OnlineModal', () => ({
   getModalTransport: vi.fn(() => transportMockApi),
   clearModalTransport: vi.fn(),
   clearReclaimTokens: vi.fn(),
+  // Match.tsx now calls tearDownOnlineSession() instead of inlining the
+  // destroy + clearModalTransport + clearReclaimTokens chain. Mock it to do
+  // the same observable thing so existing assertions on transport.destroy
+  // still pass.
+  tearDownOnlineSession: vi.fn(() => { transportMockApi.destroy(); }),
   getHostReclaimTokens: vi.fn(() => new Map()),
   getGuestOwnReclaimToken: vi.fn(() => null),
 }));

@@ -17,8 +17,10 @@ const COUNTER_RESET_GAP = 1_000_000;
 
 /** Generate a cryptographically random reclaim token. Uses crypto when
  *  available (browsers, Node 19+); falls back to Math.random() in test
- *  envs that don't expose crypto.getRandomValues. 128 bits of entropy. */
-function generateReclaimToken(): string {
+ *  envs that don't expose crypto.getRandomValues. 128 bits of entropy.
+ *  Exported so the lobby (which issues tokens before HostAuthority is
+ *  constructed) can call the same generator instead of duplicating it. */
+export function generateReclaimToken(): string {
   const bytes = new Uint8Array(16);
   if (typeof globalThis !== 'undefined' && globalThis.crypto?.getRandomValues) {
     globalThis.crypto.getRandomValues(bytes);

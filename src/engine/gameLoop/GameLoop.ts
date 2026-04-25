@@ -978,6 +978,11 @@ export class GameLoop {
     // stay true through the 1.5s victory transition — silencing the victory
     // sound and any menu music until Match.tsx unmounts and stops everything.
     audio.setPaused(false);
+    // Stop theme ambient loops (wind, lava, underwater, etc.) immediately —
+    // without this they keep playing audibly through the 1.5s pre-victory
+    // delay until Match.tsx unmount calls gameLoop.stop(). Music stop stays
+    // alongside so the arena track also fades on match end.
+    this.matchSystem.cleanup();
     audio.stopMusic();
     // victory sound moved to cosmeticStep (matchOver transition detection)
     this.onMatchEnd(winner, this.state);
