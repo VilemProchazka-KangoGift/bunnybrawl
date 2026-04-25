@@ -201,7 +201,7 @@ function drawCharacterSprite(
     spriteCache.delete(cacheKey);
     spriteCache.set(cacheKey, cached);
     // Explicit logical dest size — cached bitmap is at scaled px dims; main ctx transform maps logical → pixel.
-    blitWithIdleTransform(ctx, cached, x, y, w, h, pad, cw, ch, char, idleAnimAction, idleActionTimer, idleActionDuration, player);
+    blitWithIdleTransform(ctx, cached, x, y, w, h, pad, idleAnimAction, idleActionTimer, idleActionDuration, char, player);
     return;
   }
 
@@ -219,22 +219,25 @@ function drawCharacterSprite(
     if (first !== undefined) spriteCache.delete(first);
   }
   spriteCache.set(cacheKey, cached);
-  blitWithIdleTransform(ctx, cached, x, y, w, h, pad, cw, ch, char, idleAnimAction, idleActionTimer, idleActionDuration, player);
+  blitWithIdleTransform(ctx, cached, x, y, w, h, pad, idleAnimAction, idleActionTimer, idleActionDuration, char, player);
 }
 
 /** Blit cached sprite, optionally with an idle-action ctx transform around it. */
 function blitWithIdleTransform(
   ctx: CanvasRenderingContext2D,
   cached: OffscreenCanvas,
-  x: number, y: number, w: number, h: number,
-  pad: number, cw: number, ch: number,
-  char: { name: string; color: string; darkColor: string; lightColor: string },
+  x: number, y: number, w: number, h: number, pad: number,
   idleAnimAction: IdleAction | null,
   idleActionTimer: number, idleActionDuration: number,
+  char: { color: string; darkColor: string; lightColor: string },
   player: Player,
 ): void {
+  const dx = x - pad;
+  const dy = y - pad;
+  const dw = Math.ceil(w) + pad * 2;
+  const dh = Math.ceil(h) + pad * 2;
   if (!idleAnimAction) {
-    ctx.drawImage(cached, x - pad, y - pad, cw, ch);
+    ctx.drawImage(cached, dx, dy, dw, dh);
     return;
   }
   const cx = x + w / 2;
@@ -242,7 +245,7 @@ function blitWithIdleTransform(
   const colors = { color: char.color, darkColor: char.darkColor, lightColor: char.lightColor };
   ctx.save();
   idleAnimAction.apply(ctx, cx, y, w, h, idleT, colors, player);
-  ctx.drawImage(cached, x - pad, y - pad, cw, ch);
+  ctx.drawImage(cached, dx, dy, dw, dh);
   ctx.restore();
 }
 

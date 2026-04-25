@@ -1,4 +1,5 @@
 import type { CharacterColors } from '../characters/types';
+import type { Player } from '../types';
 import { getCharacterPack } from '../characters/registry';
 import { IDLE_FIRST_DELAY, IDLE_REST_MIN, IDLE_REST_MAX } from '../constants';
 import { fastSin } from '../fastMath';
@@ -180,13 +181,7 @@ export function clearIdleActionCache(): void {
 
 /** Per-player tick of the idle action state machine. Used by both match (cosmeticStep)
  *  and lobby (LobbyGame.step). Local state only — never synced over the network. */
-export interface IdleStateMachineTarget {
-  state: string;
-  character: { name: string };
-  idleAction: number;
-  idleActionTimer: number;
-  idleActionDuration: number;
-}
+export type IdleStateMachineTarget = Pick<Player, 'state' | 'character' | 'idleAction' | 'idleActionTimer' | 'idleActionDuration'>;
 
 export function tickIdleStateMachine(p: IdleStateMachineTarget, dt: number): void {
   if (p.state !== 'idle') {
