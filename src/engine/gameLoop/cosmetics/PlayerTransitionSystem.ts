@@ -74,6 +74,18 @@ export class PlayerTransitionSystem implements CosmeticSystem {
     return this.sfxCooldowns;
   }
 
+  /** Re-prime per-player baselines against current state. Used when the
+   *  guest reconnects (snapshots resume from a different state, so a stale
+   *  baseline would fire spurious jump/land/score-anim SFX) or on the
+   *  loading→playing edge (initial baseline was captured before the host's
+   *  countdown advanced). */
+  resetBaseline(): void {
+    this.prevCosmeticState.clear();
+    for (const p of this.state.players) {
+      this.prevCosmeticState.set(p.id, snapshotPlayerCosmeticState(p));
+    }
+  }
+
   cleanup(): void {
     this.prevCosmeticState.clear();
     this.sfxCooldowns.clear();

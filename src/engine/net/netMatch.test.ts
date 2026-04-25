@@ -33,6 +33,7 @@ const mockGameLoopInstance = {
   setOnPhaseChange: vi.fn(),
   setPhase: vi.fn(),
   setConnectionQuality: vi.fn(),
+  resetCosmeticBaselines: vi.fn(),
 };
 
 vi.mock('../gameLoop', () => ({
@@ -477,6 +478,14 @@ describe('NetMatch', () => {
       const events = transport.setEvents.mock.calls[0][0];
       events.onReliableMessage({ type: MsgType.RECONNECT_SYNC, slot: 'P2', snapshotFrame: 100, paused: false });
       expect(interp.reset).toHaveBeenCalled();
+    });
+
+    it('RECONNECT_SYNC resets cosmetic baselines on the gameLoop', () => {
+      netMatch.start();
+      mockGameLoopInstance.resetCosmeticBaselines.mockClear();
+      const events = transport.setEvents.mock.calls[0][0];
+      events.onReliableMessage({ type: MsgType.RECONNECT_SYNC, slot: 'P2', snapshotFrame: 100, paused: false });
+      expect(mockGameLoopInstance.resetCosmeticBaselines).toHaveBeenCalledTimes(1);
     });
 
     it('RECONNECT_SYNC fires onReconnecting(false) and onStall(false)', () => {

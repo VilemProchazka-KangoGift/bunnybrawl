@@ -6,7 +6,7 @@ import { detectEntityTransitions } from './entityTransitions';
 export class EntityTransitionSystem implements CosmeticSystem {
   private state: MatchState;
   private playSound: (name: string) => void;
-  private pes: PrevEntityState = { springBounces: [], countdownSec: 4, matchOver: false };
+  private pes: PrevEntityState = { springBounces: new Map(), countdownSec: 4, matchOver: false };
 
   constructor(state: MatchState, playSound: (name: string) => void) {
     this.state = state;
@@ -14,7 +14,7 @@ export class EntityTransitionSystem implements CosmeticSystem {
   }
 
   init(): void {
-    this.pes.springBounces = this.state.springs.map(s => s.bounceTimer);
+    this.pes.springBounces = new Map(this.state.springs.map(s => [s, s.bounceTimer]));
     this.pes.countdownSec = Math.ceil(this.state.countdown);
     this.pes.matchOver = this.state.matchOver;
   }
@@ -24,4 +24,11 @@ export class EntityTransitionSystem implements CosmeticSystem {
   }
 
   cleanup(): void {}
+
+  /** Re-prime baselines against current state — used by reconnect/phase
+   *  transitions where running detectEntityTransitions against a stale
+   *  prev-state would fire spurious SFX. */
+  resetBaseline(): void {
+    this.init();
+  }
 }

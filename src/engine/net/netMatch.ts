@@ -477,6 +477,13 @@ export class NetMatch {
       const state = this.gameLoop.getState();
       const curPhase = state.phase;
       if (curPhase !== this._prevGuestPhase) {
+        // loading→playing edge: prev-state baselines captured at construction
+        // are stale relative to the host's first 'playing' snapshot. Reset
+        // here so the guest doesn't fire spurious jump/land/score SFX when
+        // entering the active phase. Mirrors GameLoop.setPhase on host.
+        if (this._prevGuestPhase === 'loading' && curPhase === 'playing') {
+          this.gameLoop.resetCosmeticBaselines();
+        }
         this._prevGuestPhase = curPhase;
         this.onPhaseChange?.(curPhase);
       }
@@ -684,6 +691,12 @@ export class NetMatch {
     // lerp across a huge frame gap and teleport entities. Reset latches too
     // so the first post-reconnect snapshot re-fires any phase/match-end edge.
     this.interpolation?.reset();
+    // Cosmetic prev-state baselines also need a reset — without this, the
+    // first post-reconnect snapshot triggers transitions against pre-
+    // disconnect state (e.g. jump/land sounds for a player who landed
+    // during the disconnect, score-anim crunch for delta points scored
+    // while we were gone, possibly a duplicate victory sound).
+    this.gameLoop.resetCosmeticBaselines();
     this._guestMatchOverFired = false;
     this._prevGuestPhase = 'loading';
     this.lastSnapshotTime = performance.now();

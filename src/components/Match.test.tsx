@@ -47,6 +47,7 @@ const gameLoopMockApi = {
   setLocalSlot: vi.fn(),
   setPlayerNames: vi.fn(),
   disconnectPlayer: vi.fn(),
+  resetCosmeticBaselines: vi.fn(),
 };
 
 vi.mock('../engine/gameLoop', () => ({
@@ -87,6 +88,7 @@ const transportMockApi = {
 
 vi.mock('./OnlineModal', () => ({
   getModalTransport: vi.fn(() => transportMockApi),
+  clearModalTransport: vi.fn(),
 }));
 
 vi.mock('../engine/matchLoading', () => ({

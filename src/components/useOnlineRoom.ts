@@ -31,6 +31,12 @@ function resolveRandomArena(arenaId: string): string {
 // once the match starts. Assigned by connect, cleared by cleanup.
 let _modalTransport: Transport | null = null;
 export function getModalTransport(): Transport | null { return _modalTransport; }
+/** Null the module-scope transport ref. Call this anywhere a transport is
+ *  destroyed outside of useOnlineRoom.cleanup() — Match.handleQuit and
+ *  VictoryScreen.handleMenu both destroy the transport but used to leave a
+ *  stale reference behind, exposing a window where getModalTransport()
+ *  returned a destroyed instance. */
+export function clearModalTransport(): void { _modalTransport = null; }
 
 export type OnlineStep = 'choose' | 'connecting' | 'lobby' | 'spectating';
 

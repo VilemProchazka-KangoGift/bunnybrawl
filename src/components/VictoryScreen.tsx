@@ -6,7 +6,7 @@ import type { PlayerSlot, PlayerStats } from '../engine/types';
 import { isBotSlot } from '../engine/types';
 import { getCharacterEmoji, getCharacterDisplayName } from '../engine/characters';
 import { ArenaGrid } from './ArenaGrid';
-import { getModalTransport } from './OnlineModal';
+import { getModalTransport, clearModalTransport } from './OnlineModal';
 import { MsgType } from '../engine/net/protocol';
 import type { ReliableMessage } from '../engine/net/protocol';
 import './VictoryScreen.css';
@@ -55,7 +55,10 @@ export function VictoryScreen() {
 
   const handleMenu = useCallback(() => {
     const transport = getModalTransport();
-    if (transport) transport.destroy();
+    if (transport) {
+      transport.destroy();
+      clearModalTransport();
+    }
     useGameStore.getState().resetOnline();
     setActivePlayers([]);
     setScreen('menu');
@@ -85,6 +88,7 @@ export function VictoryScreen() {
           setPeerConnected(false);
           if (!online.isHost) {
             transport.destroy();
+            clearModalTransport();
             useGameStore.getState().resetOnline();
             setActivePlayers([]);
             setScreen('menu');

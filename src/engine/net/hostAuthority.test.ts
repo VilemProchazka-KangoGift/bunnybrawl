@@ -462,6 +462,102 @@ describe('HostAuthority', () => {
       // Empty buffer — should not throw
       expect(() => host.handleUnreliableMessage(new ArrayBuffer(0))).not.toThrow();
     });
+
+    it('rejects spoofed source slot from a different peer', () => {
+      // P2 (peer-a) tries to spoof P3's slot — must be rejected even though
+      // P3 is a real registered slot.
+      const transport = makeMockTransport();
+      const { host } = makeHostAuthority({ transport: transport as any });
+      host.addGuest('peer-a', 'P2' as PlayerSlot);
+      host.addGuest('peer-b', 'P3' as PlayerSlot);
+
+      const spoofMsg = encodeInputMessage(
+        [{ frame: 1, input: { left: true, right: false, jump: false, down: false } }],
+        0, 1, 'P3', // peer-a sending input claiming to be P3
+      );
+      host.handleUnreliableMessage(spoofMsg, 'peer-a');
+
+      // P3's slot should NOT have been mutated by peer-a's spoof
+      const p3Input = host.getGuestInput('P3' as PlayerSlot);
+      expect(p3Input).toEqual({ left: false, right: false, jump: false, down: false });
+    });
+
+    it('rejects spoofed bot slot input', () => {
+      // Bots run on host only. A guest must not be able to drive a bot's input.
+      const transport = makeMockTransport();
+      const { host } = makeHostAuthority({ transport: transport as any });
+      host.addGuest('peer-a', 'P2' as PlayerSlot);
+
+      const spoofMsg = encodeInputMessage(
+        [{ frame: 1, input: { left: true, right: true, jump: true, down: false } }],
+        0, 1, 'B1' as PlayerSlot,
+      );
+      host.handleUnreliableMessage(spoofMsg, 'peer-a');
+
+      const inputs = host.getNetworkInputs();
+      // B1 must not have been added to the inputs map
+      expect(inputs.has('B1')).toBe(false);
+    });
+
+    it('intra-bundle non-monotonic ordering does not let an older entry overwrite a newer one', () => {
+      // The host iterates bundle entries in order. Without a per-call max
+      // tracker, [F=10, F=5, F=8] would all pass the lastConsumedFrame check
+      // (which is read once before the loop) and the older entry F=5 would
+      // overwrite the newer F=10's left/right/down fields.
+      const transport = makeMockTransport();
+      const { host } = makeHostAuthority({ transport: transport as any });
+      host.addGuest('peer-a', 'P2' as PlayerSlot);
+
+      const msg = encodeInputMessage(
+        [
+          { frame: 10, input: { left: false, right: true, jump: false, down: false } },
+          { frame: 5,  input: { left: true,  right: false, jump: false, down: false } },
+          { frame: 8,  input: { left: true,  right: false, jump: false, down: false } },
+        ],
+        0, 3, 'P2',
+      );
+      host.handleUnreliableMessage(msg, 'peer-a');
+
+      // Newest frame's input wins (right=true), not the older entries' left=true
+      const input = host.getGuestInput('P2' as PlayerSlot);
+      expect(input.right).toBe(true);
+      expect(input.left).toBe(false);
+    });
+  });
+
+  describe('removeGuest — lastConsumedFrame cleanup', () => {
+    it('clears lastConsumedFrame so a fresh peer in the same slot is accepted', () => {
+      // Simulate the bare-transport-recycle path: peer disconnects and
+      // immediately rejoins into the same slot WITHOUT going through the
+      // RECONNECT_REQUEST flow. Without the cleanup fix, the new peer's
+      // fresh frame counter (starting at 1) would lose to the host's stale
+      // lastConsumedFrame (e.g. 100), discarding all inputs silently.
+      const transport = makeMockTransport();
+      const { host } = makeHostAuthority({ transport: transport as any });
+      host.addGuest('peer-a', 'P2' as PlayerSlot);
+
+      // Burn lastConsumedFrame up to 100
+      const burnMsg = encodeInputMessage(
+        [{ frame: 100, input: { left: false, right: true, jump: false, down: false } }],
+        0, 1, 'P2',
+      );
+      host.handleUnreliableMessage(burnMsg, 'peer-a');
+
+      // Peer disconnects and a fresh peer takes over the same slot
+      host.removeGuest('peer-a');
+      host.addGuest('peer-b', 'P2' as PlayerSlot);
+
+      // Fresh peer sends frame=1 — must be accepted, not silently dropped
+      const freshMsg = encodeInputMessage(
+        [{ frame: 1, input: { left: true, right: false, jump: false, down: false } }],
+        0, 1, 'P2',
+      );
+      host.handleUnreliableMessage(freshMsg, 'peer-b');
+
+      const input = host.getGuestInput('P2' as PlayerSlot);
+      expect(input.left).toBe(true);
+      expect(input.right).toBe(false);
+    });
   });
 
   describe('handleUnreliableMessage — PING', () => {

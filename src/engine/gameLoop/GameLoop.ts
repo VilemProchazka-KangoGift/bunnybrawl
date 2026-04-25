@@ -380,6 +380,12 @@ export class GameLoop {
       // Start per-arena ambient loops (wind, lava, underwater bubbles, etc.)
       // Gated here so they don't play during the loading phase.
       this.matchSystem.init();
+      // Re-prime cosmetic prev-state baselines now that we're entering the
+      // active phase — without this, prev-state captured at construction
+      // (idle, score=0) compares against the first post-countdown snapshot
+      // and fires spurious jump/land/score SFX. Guest path mirrors this in
+      // NetMatch's _fireGuestPhaseChange.
+      this.resetCosmeticBaselines();
     }
     this.onPhaseChange?.(phase);
   }
@@ -519,6 +525,18 @@ export class GameLoop {
     const stepDt = Math.min(this._cosmeticLead, COSMETIC_MAX_STEP);
     this._cosmeticLead = 0;
     this.cosmeticStep(stepDt);
+  }
+
+  /** Re-prime cosmetic baselines (prevCosmeticState + spring map) against the
+   *  current state. Used by NetMatch.completeReconnection so the first
+   *  post-reconnect snapshot doesn't fire spurious transition SFX (jump,
+   *  land, score animations, possibly a duplicate victory sound) by comparing
+   *  against pre-disconnect state. Also useful on the loading→playing edge
+   *  if the host's countdown advanced while the guest's prevState was
+   *  captured at construction. */
+  resetCosmeticBaselines(): void {
+    this.playerTransitionSystem.resetBaseline();
+    this.entityTransitionSystem.resetBaseline();
   }
 
   /** Seconds since the last cosmeticStep fired; renderer uses this to extrapolate

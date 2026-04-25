@@ -4,7 +4,7 @@ import { useGameStore } from '../store/gameStore';
 import { GameLoop } from '../engine/gameLoop';
 import { NetMatch } from '../engine/net/netMatch';
 import { MsgType } from '../engine/net/protocol';
-import { getModalTransport } from './OnlineModal';
+import { getModalTransport, clearModalTransport } from './OnlineModal';
 import { getArena, listArenaPacks } from '../engine/arenas';
 import { ArenaGrid } from './ArenaGrid';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
@@ -139,7 +139,10 @@ export function Match() {
     gameLoopRef.current?.stop();
     gameLoopRef.current = null;
     const transport = getModalTransport();
-    if (transport) transport.destroy();
+    if (transport) {
+      transport.destroy();
+      clearModalTransport();
+    }
     resetOnline();
     setActivePlayers([]);
     setScreen('menu');

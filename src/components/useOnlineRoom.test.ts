@@ -41,7 +41,7 @@ vi.mock('../engine/net/transport', () => ({
   },
 }));
 
-import { useOnlineRoom } from './useOnlineRoom';
+import { useOnlineRoom, getModalTransport, clearModalTransport } from './useOnlineRoom';
 
 describe('useOnlineRoom — PROTOCOL_VERSION mismatch', () => {
   beforeEach(() => {
@@ -138,5 +138,45 @@ describe('useOnlineRoom — PROTOCOL_VERSION mismatch', () => {
     expect(transportMockApi.destroy).not.toHaveBeenCalled();
     const { connectionStatus } = useGameStore.getState().online;
     expect(connectionStatus).not.toBe('error');
+  });
+});
+
+describe('clearModalTransport', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    capturedEvents = null;
+    act(() => {
+      useGameStore.getState().resetOnline();
+    });
+    clearModalTransport();
+  });
+
+  it('starts as null when no connection has been made', () => {
+    expect(getModalTransport()).toBeNull();
+  });
+
+  it('connect() populates the modal transport ref', () => {
+    const onMatchStart = vi.fn();
+    const { result } = renderHook(() => useOnlineRoom({ onMatchStart }));
+    act(() => result.current.connect(true));
+    expect(getModalTransport()).not.toBeNull();
+  });
+
+  it('clearModalTransport() nulls the ref so quit-then-connect path is clean', () => {
+    const onMatchStart = vi.fn();
+    const { result } = renderHook(() => useOnlineRoom({ onMatchStart }));
+    act(() => result.current.connect(true));
+    expect(getModalTransport()).not.toBeNull();
+    clearModalTransport();
+    expect(getModalTransport()).toBeNull();
+  });
+
+  it('repeated clear is a no-op', () => {
+    expect(() => {
+      clearModalTransport();
+      clearModalTransport();
+      clearModalTransport();
+    }).not.toThrow();
+    expect(getModalTransport()).toBeNull();
   });
 });

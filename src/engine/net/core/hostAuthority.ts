@@ -110,6 +110,14 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
     this.peerSlotMap.delete(peerId);
     if (slot) {
       this.guestInputs.delete(slot);
+      // Clear lastConsumedFrame too: a fresh peer reconnecting into the same
+      // slot (without going through the explicit RECONNECT_REQUEST flow)
+      // starts at guestFrame=1 — if a stale lastConsumedFrame from the prior
+      // session survives, all of the new peer's inputs are silently discarded
+      // until their counter catches up. The grace-period reclaim path
+      // (handleReconnectRequest) clears this on its own; this guards the
+      // bare-transport-recycle path.
+      this.lastConsumedFrame.delete(slot);
       this.disconnectedSlots.set(slot, { timer: this.gracePeriodSec, peerId });
       this.simulation.disconnectPlayer(slot);
       this.onPlayerDisconnect?.(slot);
@@ -203,11 +211,22 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
       const decoded = this.decodeInputMessage(data);
       if (!decoded || decoded.inputCount === 0) return;
       const slot = this.decodeSlot(decoded.source);
-      const lastFrame = this.lastConsumedFrame.get(slot) ?? 0;
+      // Source authentication: a malicious / buggy peer could spoof another
+      // slot ID (including a bot slot) on the wire to hijack inputs. We trust
+      // only the slot the host assigned to the originating peer.
+      if (fromPeerId !== undefined) {
+        const expected = this.peerSlotMap.get(fromPeerId);
+        if (!expected || expected !== slot) return;
+      }
+      // Track a per-call max so a non-monotonic intra-bundle ordering can't
+      // overwrite a newer frame with an older one. (lastConsumedFrame is
+      // snapshotted before the loop and only written after — without this
+      // local guard, [F=10, F=5, F=8] would apply F=5 over F=10.)
+      let maxFrameThisCall = this.lastConsumedFrame.get(slot) ?? 0;
 
       for (let i = 0; i < decoded.inputCount; i++) {
         const entry = decoded.inputs[i];
-        if (entry.frame <= lastFrame) continue;
+        if (entry.frame <= maxFrameThisCall) continue;
 
         const existing = this.guestInputs.get(slot);
         if (existing && this.onInputReceived) {
@@ -216,6 +235,7 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
         } else {
           this.guestInputs.set(slot, entry.input);
         }
+        maxFrameThisCall = entry.frame;
         this.lastConsumedFrame.set(slot, entry.frame);
       }
 

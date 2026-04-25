@@ -207,6 +207,59 @@ describe('EntityTransitionSystem', () => {
     const sys = new EntityTransitionSystem(state, vi.fn());
     expect(() => sys.cleanup()).not.toThrow();
   });
+
+  // ─── Spring identity (not array index) ─────────────────────────────────
+  // Springs are removed via swapRemove(): a dead slot is overwritten by the
+  // last spring in the array. If detection is keyed by index, the moved-in
+  // spring's `bounceTimer = 0` could be compared against the dead spring's
+  // prior nonzero bounceTimer and miss the next bounce.
+  it('detection survives swapRemove of an earlier spring (identity-keyed)', () => {
+    const springA = { x: 100, y: 400, platformIndex: 1, bounceTimer: 0, life: 5, growTimer: 0 };
+    const springB = { x: 500, y: 400, platformIndex: 1, bounceTimer: 0, life: 5, growTimer: 0 };
+    const state = makeSystemState({ springs: [springA, springB] });
+    const playSound = vi.fn();
+    const sys = new EntityTransitionSystem(state, playSound);
+    sys.init();
+
+    // First, springA bounces — capture its prev=0 → cur=0.3 transition
+    springA.bounceTimer = 0.3;
+    sys.cosmeticUpdate(1 / 60);
+    expect(playSound).toHaveBeenCalledWith('spring');
+    playSound.mockClear();
+
+    // Now springA is removed via swapRemove — springB shifts into slot 0,
+    // and a NEW spring fills slot 1.
+    const springC = { x: 800, y: 400, platformIndex: 1, bounceTimer: 0, life: 5, growTimer: 0 };
+    state.springs[0] = springB;
+    state.springs[1] = springC;
+    sys.cosmeticUpdate(1 / 60);
+    expect(playSound).not.toHaveBeenCalled();
+
+    // springB bounces. With INDEX-keyed detection this would compare against
+    // springA's prior 0.3 (still in slot 0) and miss the 0→0.3 transition.
+    // With IDENTITY-keyed detection, springB's own prev=0 is read.
+    springB.bounceTimer = 0.4;
+    sys.cosmeticUpdate(1 / 60);
+    expect(playSound).toHaveBeenCalledWith('spring');
+  });
+
+  it('resetBaseline() re-primes prev-state to suppress spurious next-tick fire', () => {
+    const state = makeSystemState({ matchOver: false });
+    const playSound = vi.fn();
+    const sys = new EntityTransitionSystem(state, playSound);
+    sys.init();
+
+    // State changes drastically (simulating snapshot apply on reconnect)
+    state.matchOver = true;
+    state.countdown = 0;
+    sys.resetBaseline();
+
+    // After reset, the next cosmeticUpdate should NOT fire victory or
+    // countdown sounds, because the baseline now matches current state.
+    sys.cosmeticUpdate(1 / 60);
+    expect(playSound).not.toHaveBeenCalledWith('victory');
+    expect(playSound).not.toHaveBeenCalledWith('countdown_go');
+  });
 });
 
 // ── ParticleSystem ───────────────────────────────────────────────────────────
@@ -323,6 +376,28 @@ describe('PlayerTransitionSystem', () => {
     sys.cleanup();
 
     expect(sys.getSfxCooldowns().size).toBe(0);
+  });
+
+  it('resetBaseline() suppresses spurious jump SFX after a state jump', () => {
+    // Simulates the reconnect path: prev-state captured at construction shows
+    // an idle player; after the disconnect/reconnect window, the snapshot
+    // shows the player airborne with a different score. Without resetBaseline,
+    // the next cosmeticUpdate would fire 'jump' (idle→airborne) and N×'crunch'
+    // for the score delta. With resetBaseline, the new state IS the baseline.
+    const player = makePlayer({ id: 'P1', state: 'idle', score: 0 });
+    const state = makeSystemState({ players: [player] });
+    const { sys, playSound } = makePlayerTransitionSystem(state);
+    sys.init();
+
+    // Mutate to "post-reconnect" state
+    player.state = 'airborne';
+    player.score = 4;
+    sys.resetBaseline();
+    playSound.mockClear();
+
+    sys.cosmeticUpdate(1 / 60);
+    expect(playSound).not.toHaveBeenCalledWith('jump');
+    expect(playSound).not.toHaveBeenCalledWith('crunch');
   });
 });
 

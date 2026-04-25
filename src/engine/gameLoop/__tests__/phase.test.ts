@@ -256,6 +256,32 @@ describe('GameLoop.setPhase', () => {
     loop.setPhase('over');
     expect(state.phase).toBe('over');
   });
+
+  it('setPhase("playing") re-primes cosmetic baselines so the next cosmeticStep does not fire spurious jump SFX', () => {
+    // Without the baseline reprime, prev-state captured at construction
+    // (phase=loading, players idle, score=0) would compare against the first
+    // playing-phase cosmeticStep where players may already be moving (e.g.
+    // the host's countdown ran before the snapshot reached the guest), and
+    // fire spurious jump/land/score SFX.
+    const { loop } = createLoop();
+    const state = loop.getState();
+
+    // Mutate state to simulate "host countdown advanced before phase flip" —
+    // player is now airborne with vy. This is what prev-state would compare
+    // against if no baseline reset happened.
+    const p = state.players[0];
+    p.state = 'airborne';
+    p.vy = -400;
+
+    vi.mocked(audio.play).mockClear();
+    loop.setPhase('playing');
+    loop.cosmeticStep(FIXED_TIMESTEP);
+
+    // No 'jump' sound: baseline was reset to current state in setPhase, so
+    // the prev=airborne / cur=airborne comparison sees no transition.
+    const playCalls = vi.mocked(audio.play).mock.calls.map(c => c[0]);
+    expect(playCalls).not.toContain('jump');
+  });
 });
 
 // ===================================================================

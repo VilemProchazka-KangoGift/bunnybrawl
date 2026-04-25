@@ -25,7 +25,7 @@ const CONNECTING_STAGE_TIMINGS: Array<{ at: number; key: ConnectingStage }> = [
   { at: 15000, key: 'slow' },
 ];
 
-export { getModalTransport } from './useOnlineRoom';
+export { getModalTransport, clearModalTransport } from './useOnlineRoom';
 
 interface OnlineModalProps {
   onClose: () => void;
