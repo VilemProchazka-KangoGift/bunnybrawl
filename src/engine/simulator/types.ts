@@ -12,10 +12,19 @@ export interface SimulatorEvents {
   /** A sound effect should play. Browser adapter calls audio.play(name). */
   onSfxRequest?: (name: string) => void;
 
-  /** A character-bound sound should play (e.g. character-specific noises). */
+  /** A character-bound sound (e.g. animal noise) should play. */
   onAnimalSfxRequest?: (name: string) => void;
 
-  /** Match phase changed (loading → playing → over). */
+  /** Arena music should start. Browser adapter calls audio.playMusic(themeId). */
+  onMusicStartRequest?: (themeId: string) => void;
+
+  /** Arena music should stop. */
+  onMusicStopRequest?: () => void;
+
+  /** All game sounds should stop (match end, arena swap). */
+  onAllGameSoundsStopRequest?: () => void;
+
+  /** Match phase changed. */
   onPhaseChange?: (phase: MatchPhase) => void;
 
   /** Match has ended — winner slot or null for draw / all-disconnected. */

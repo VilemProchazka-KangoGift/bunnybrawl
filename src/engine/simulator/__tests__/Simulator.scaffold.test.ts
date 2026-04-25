@@ -1,12 +1,12 @@
 // @vitest-environment node
 import { describe, it, expect, beforeAll } from 'vitest';
 import { Simulator } from '../Simulator';
-import type { SimulatorEvents } from '../types';
 import { registerBuiltinArenas } from '../../arenas/builtin';
 import { registerBuiltinCharacters } from '../../characters/builtin';
 import { getArena } from '../../arenas';
 import { SeededRNG } from '../../net/prng';
-import type { MatchSettings, PlayerSlot } from '../../types';
+import type { MatchSettings, PlayerSlot, InputState } from '../../types';
+import type { PlayerInput } from '../../input/PlayerInput';
 
 const SETTINGS: MatchSettings = {
   killLimit: 16,
@@ -28,6 +28,15 @@ const SETTINGS: MatchSettings = {
 };
 
 const PLAYERS: PlayerSlot[] = ['P1', 'P2'];
+
+const IDLE_INPUT: InputState = { left: false, right: false, jump: false, down: false };
+
+function makeStubInput(slot: PlayerSlot): PlayerInput {
+  return {
+    slot,
+    getAction: () => IDLE_INPUT,
+  };
+}
 
 beforeAll(() => {
   registerBuiltinArenas();
@@ -67,20 +76,46 @@ describe('Simulator scaffold (Task 3.1)', () => {
     expect(sim.getRng()).toBe(rng);
   });
 
-  it('getEvents returns the constructor events (or empty object when omitted)', () => {
+  it('constructs without error when events is omitted (no-op defaults are applied internally)', () => {
     const arena = getArena('meadow');
-    const events: SimulatorEvents = {
-      onSfxRequest: () => {},
-      onAnimalSfxRequest: () => {},
-      onPhaseChange: () => {},
-      onMatchEnd: () => {},
-    };
+    expect(() => new Simulator({ arena, settings: SETTINGS, activePlayers: PLAYERS })).not.toThrow();
+    expect(() => new Simulator({ arena, settings: SETTINGS, activePlayers: PLAYERS, events: {} })).not.toThrow();
+  });
 
-    const withEvents = new Simulator({ arena, settings: SETTINGS, activePlayers: PLAYERS, events });
-    expect(withEvents.getEvents()).toBe(events);
+  it('getPhase returns "loading" on a fresh scaffold', () => {
+    const arena = getArena('meadow');
+    const sim = new Simulator({ arena, settings: SETTINGS, activePlayers: PLAYERS });
+    expect(sim.getPhase()).toBe('loading');
+  });
 
-    const withoutEvents = new Simulator({ arena, settings: SETTINGS, activePlayers: PLAYERS });
-    expect(withoutEvents.getEvents()).toEqual({});
+  it('setPlayerInput stores a value retrievable via getPlayerInput', () => {
+    const arena = getArena('meadow');
+    const sim = new Simulator({ arena, settings: SETTINGS, activePlayers: PLAYERS });
+    const input = makeStubInput('P1');
+
+    sim.setPlayerInput('P1', input);
+    expect(sim.getPlayerInput('P1')).toBe(input);
+  });
+
+  it('getPlayerInput returns undefined for an unset slot', () => {
+    const arena = getArena('meadow');
+    const sim = new Simulator({ arena, settings: SETTINGS, activePlayers: PLAYERS });
+    expect(sim.getPlayerInput('P1')).toBeUndefined();
+  });
+
+  it('getPlayerInputs returns a Map containing registered entries', () => {
+    const arena = getArena('meadow');
+    const sim = new Simulator({ arena, settings: SETTINGS, activePlayers: PLAYERS });
+    const p1 = makeStubInput('P1');
+    const p2 = makeStubInput('P2');
+
+    sim.setPlayerInput('P1', p1);
+    sim.setPlayerInput('P2', p2);
+
+    const inputs = sim.getPlayerInputs();
+    expect(inputs.size).toBe(2);
+    expect(inputs.get('P1')).toBe(p1);
+    expect(inputs.get('P2')).toBe(p2);
   });
 
   it('fixedUpdate throws NOT_IMPLEMENTED (scaffold has no behavior yet)', () => {
