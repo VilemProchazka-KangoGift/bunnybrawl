@@ -23,9 +23,7 @@ export interface IdleAction {
     colors: CharacterColors,
     player: IdleActionPlayerView,
   ) => void;
-  /** Optional overlay drawn after the cached sprite. Runs inside the same save/restore
-   *  block as `apply`, so the active ctx transform still applies — coordinates match `apply`.
-   *  Use this for effects that need to cover or replace cached sprite features (eyes, etc.). */
+  /** Runs inside the same save/restore as `apply`, so the active ctx transform still applies. */
   applyAfter?: (
     ctx: CanvasRenderingContext2D,
     cx: number, yOff: number, w: number, h: number,

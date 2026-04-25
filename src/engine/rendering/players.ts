@@ -179,10 +179,8 @@ function drawCharacterSprite(
   theme: ThemeConfig | undefined,
   player: Player,
 ): void {
-  // 1-bit idle flag — covers the four packs (bunny/bear/fox/frog) whose drawSprite reads isIdleAnim.
-  const idleKey = idleAction >= 0 ? 1 : 0;
   const sqKey = Math.round(squashScale * 10);
-  const cacheKey = `${char.name}_${state}_${animFrame}_${fastFalling ? 1 : 0}_${idleKey}_${sqKey}`;
+  const cacheKey = `${char.name}_${state}_${animFrame}_${fastFalling ? 1 : 0}_${sqKey}`;
 
   // Idle action ctx transform — applied to main ctx, OUTSIDE the cached bitmap, so the
   // animated transform doesn't get baked into the (1-bit-keyed) sprite cache entry.

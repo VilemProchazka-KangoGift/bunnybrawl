@@ -4,21 +4,34 @@ import type { IdleAction } from '../../rendering/idleActions';
 import { fillBodyGradient } from '../../spriteShading';
 import { floatBufferToWavDataUri } from '../../audio/synthesis/wav';
 
+const EYE_DX = 7;
+const EYE_Y = 8;
+const EYE_R = 6;
+// Pupils are offset 1px right of the eye-white centers — a fixed rightward gaze
+// the closed lids must stay centered on, not on the eye-white centers.
+const LEFT_PUPIL_DX = -6;
+const RIGHT_PUPIL_DX = 8;
+const LID_HALF = 3;
+
+function drawEyeWhites(ctx: CanvasRenderingContext2D, cx: number, yOff: number, lightColor: string): void {
+  ctx.fillStyle = lightColor;
+  ctx.beginPath();
+  ctx.arc(cx - EYE_DX, yOff + EYE_Y, EYE_R, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(cx + EYE_DX, yOff + EYE_Y, EYE_R, 0, Math.PI * 2);
+  ctx.fill();
+}
+
 const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, _state, _animFrame, _isIdleAnim, _idleT, colors) => {
   fillBodyGradient(ctx, { cx, cy: yOff + h * 0.55, rx: w * 0.42, ry: h * 0.35 }, colors);
-  ctx.fillStyle = colors.lightColor;
-  ctx.beginPath();
-  ctx.arc(cx - 7, yOff + 8, 6, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(cx + 7, yOff + 8, 6, 0, Math.PI * 2);
-  ctx.fill();
+  drawEyeWhites(ctx, cx, yOff, colors.lightColor);
   ctx.fillStyle = '#000';
   ctx.beginPath();
-  ctx.arc(cx - 6, yOff + 8, 3, 0, Math.PI * 2);
+  ctx.arc(cx + LEFT_PUPIL_DX, yOff + EYE_Y, 3, 0, Math.PI * 2);
   ctx.fill();
   ctx.beginPath();
-  ctx.arc(cx + 8, yOff + 8, 3, 0, Math.PI * 2);
+  ctx.arc(cx + RIGHT_PUPIL_DX, yOff + EYE_Y, 3, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = '#90EE90';
   ctx.beginPath();
@@ -26,30 +39,25 @@ const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, _state, _a
   ctx.fill();
 };
 
-// Closes both eyes during the middle 40% of the action. Drawn as overlay so it
-// runs at full cosmetic-tick rate (the cached sprite freezes idleT at one bit).
+// idleT is frozen in the cached sprite (1-bit cache key), so the blink must
+// run after drawImage to actually animate.
 const blinkAction: IdleAction = {
   id: 'frogBlink',
   duration: 0.7,
+  weight: 2,
   apply: () => {},
   applyAfter: (ctx, cx, yOff, _w, _h, t, colors) => {
     if (t < 0.3 || t > 0.7) return;
-    ctx.fillStyle = colors.lightColor;
-    ctx.beginPath();
-    ctx.arc(cx - 7, yOff + 8, 6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(cx + 7, yOff + 8, 6, 0, Math.PI * 2);
-    ctx.fill();
+    drawEyeWhites(ctx, cx, yOff, colors.lightColor);
     ctx.strokeStyle = '#000';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(cx - 9, yOff + 8);
-    ctx.lineTo(cx - 3, yOff + 8);
+    ctx.moveTo(cx + LEFT_PUPIL_DX - LID_HALF, yOff + EYE_Y);
+    ctx.lineTo(cx + LEFT_PUPIL_DX + LID_HALF, yOff + EYE_Y);
     ctx.stroke();
     ctx.beginPath();
-    ctx.moveTo(cx + 5, yOff + 8);
-    ctx.lineTo(cx + 11, yOff + 8);
+    ctx.moveTo(cx + RIGHT_PUPIL_DX - LID_HALF, yOff + EYE_Y);
+    ctx.lineTo(cx + RIGHT_PUPIL_DX + LID_HALF, yOff + EYE_Y);
     ctx.stroke();
   },
 };

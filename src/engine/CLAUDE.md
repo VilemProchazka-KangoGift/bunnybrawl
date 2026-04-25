@@ -96,7 +96,7 @@
 - Lobby runs no `cosmeticStep` — any renderer-consumed cosmetic timer (`idleAction*`, `animFrame`, `squashScale`) must be ticked manually inside `LobbyGame.step()`. Mirror the logic from `gameLoop/cosmetics/playerCosmetics.ts`.
 
 ## Performance
-- Sprite cache: keyed by `name_state_animFrame_fastFalling_idleKey_sqKey`, 600-entry cap. `sqKey` = `Math.round(squashScale * 10)`. Breathing (2% scale) excluded from key.
+- Sprite cache: keyed by `name_state_animFrame_fastFalling_sqKey`, 600-entry cap. `sqKey` = `Math.round(squashScale * 10)`. Breathing (2% scale) excluded from key. Idle-action geometry must use `IdleAction.applyAfter` (overlay outside the cache), not in-sprite branches on `isIdleAnim`/`idleT` — those freeze at first cache hit because they're not in the key.
 - Gradient cache: lava, zero-G, ghost, bouncy gradients cached in Maps by position.
 - HUD cache: 1280x90 OffscreenCanvas, redraws on score/timer/player changes.
 - Particle pool: free-list via `emitParticle()`, capped at 300.
