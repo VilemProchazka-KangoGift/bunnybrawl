@@ -44,7 +44,7 @@ vi.mock('../engine/net/transport', () => ({
 import {
   useOnlineRoom, getModalTransport, clearModalTransport,
   tearDownOnlineSession, getHostReclaimTokens, getGuestOwnReclaimToken,
-  clearReclaimTokens,
+  clearReclaimTokens, resolveRandomArena,
 } from './useOnlineRoom';
 
 describe('useOnlineRoom — PROTOCOL_VERSION mismatch', () => {
@@ -325,5 +325,24 @@ describe('tearDownOnlineSession', () => {
     tearDownOnlineSession();
     // Second call: transport already gone, no extra destroy.
     expect(transportMockApi.destroy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('resolveRandomArena', () => {
+  it('returns the input unchanged for non-random arena IDs', () => {
+    expect(resolveRandomArena('volcano')).toBe('volcano');
+    expect(resolveRandomArena('meadow')).toBe('meadow');
+    expect(resolveRandomArena('haunted_graveyard')).toBe('haunted_graveyard');
+  });
+
+  it('resolves "random" to a concrete arena ID from the registry', () => {
+    // Concrete = matches some registered arena. Without resolution at the
+    // host, the wire ships 'random' and host+guest each Math.random() to
+    // different arenas — players visibly clip on platforms the other side
+    // never drew.
+    const resolved = resolveRandomArena('random');
+    expect(resolved).not.toBe('random');
+    expect(typeof resolved).toBe('string');
+    expect(resolved.length).toBeGreaterThan(0);
   });
 });

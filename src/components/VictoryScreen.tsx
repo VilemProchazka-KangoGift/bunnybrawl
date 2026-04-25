@@ -6,7 +6,7 @@ import type { PlayerSlot, PlayerStats } from '../engine/types';
 import { isBotSlot } from '../engine/types';
 import { getCharacterEmoji, getCharacterDisplayName } from '../engine/characters';
 import { ArenaGrid } from './ArenaGrid';
-import { getModalTransport, tearDownOnlineSession } from './OnlineModal';
+import { getModalTransport, tearDownOnlineSession, resolveRandomArena } from './OnlineModal';
 import { MsgType } from '../engine/net/protocol';
 import type { ReliableMessage } from '../engine/net/protocol';
 import type { ConnectionStatus, TransportEvents } from '../engine/net/transport';
@@ -70,13 +70,19 @@ export function VictoryScreen() {
     clearMatchResult();
   }, [setActivePlayers, setScreen, clearMatchResult]);
   const handleChooseArena = useCallback((arenaId: string) => {
-    setMatchSettings({ arenaId });
+    // Host must resolve 'random' here, NOT downstream in Match.tsx — host and
+    // guest's resolveArenaId both use Math.random(), so leaving 'random' on
+    // the wire desyncs them onto different arenas (players visibly clip on
+    // platforms the other side never drew).
+    const concreteArenaId = (online.isOnline && online.isHost)
+      ? resolveRandomArena(arenaId)
+      : arenaId;
+    setMatchSettings({ arenaId: concreteArenaId });
     setShowArenaSelect(false);
-    // Host sends arena change + start to guest
     if (online.isOnline && online.isHost) {
       const transport = getModalTransport();
       if (transport) {
-        transport.sendReliable({ type: MsgType.SETTINGS_SYNC, arenaId } as ReliableMessage); // SETTINGS_SYNC (arena only)
+        transport.sendReliable({ type: MsgType.SETTINGS_SYNC, arenaId: concreteArenaId } as ReliableMessage); // SETTINGS_SYNC (arena only)
         transport.sendReliable({ type: MsgType.START_MATCH } as ReliableMessage); // START_MATCH
       }
     }

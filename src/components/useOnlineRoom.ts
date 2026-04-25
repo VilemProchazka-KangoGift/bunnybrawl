@@ -21,8 +21,13 @@ import { ALL_BOT_SLOTS, isBotSlot } from '../engine/types';
 import { listArenaPacks } from '../engine/arenas';
 import type { BotSlot, CharacterSlot, PlayerSlot } from '../engine/types';
 
-/** Resolve 'random' arenaId to a concrete ID so both peers use the same arena. */
-function resolveRandomArena(arenaId: string): string {
+/** Resolve 'random' arenaId to a concrete ID so both peers use the same arena.
+ *  CRITICAL: must be called once on the host before sending SETTINGS_SYNC, then
+ *  the concrete arena ID is persisted to the store and broadcast. If 'random'
+ *  reaches the wire and each peer resolves independently, host and guest pick
+ *  DIFFERENT arenas and desync (players appear to clip / float on platforms
+ *  the other side doesn't have). */
+export function resolveRandomArena(arenaId: string): string {
   if (arenaId !== 'random') return arenaId;
   const all = listArenaPacks();
   return all[Math.floor(Math.random() * all.length)]?.id ?? 'meadow';
