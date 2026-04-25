@@ -5,6 +5,7 @@ import type { HazardHitResult } from '../gameplay/playerCollisions';
 import type { Renderer } from '../../renderer';
 import { BLOOD_COLOR, CARROT_SIZE } from '../../constants';
 import { haptics } from '../../haptics';
+import { perfTrace } from '../../perfTrace';
 import { emitParticle as _emitParticle, spawnDustParticles as _spawnDustParticles, spawnGoreParticles as _spawnGoreParticles, spawnConfetti as _spawnConfetti, spawnCarrotVFX as _spawnCarrotVFX, spawnRingVFX as _spawnRingVFX, spawnFirework as _spawnFirework, updateParticles, updateConfetti } from './particles';
 import { launchGib, spawnGibs, updateGibs } from './gibs';
 import { updateWeather } from './environment';
@@ -190,10 +191,15 @@ export class ParticleSystem implements CosmeticSystem {
 
   /** Update weather, particles, gibs, confetti. */
   cosmeticUpdate(dt: number): void {
-    updateWeather(this.state, this.theme, dt);
-    updateParticles(this._particles, this.particleFreeList, this.arena.platforms, this.settings.goreMode, this.newBloodDripsSinceRender, dt);
-    updateGibs(this.state.gibs, this.arena.platforms, this.arena.effectZones, this.geyserIndexMap, this.state.geyserStates, this.newGroundedGibsSinceRender, dt);
-    updateConfetti(this.state.confetti, this.state.timeElapsed, dt);
+    const _t = perfTrace.begin('particles');
+    try {
+      updateWeather(this.state, this.theme, dt);
+      updateParticles(this._particles, this.particleFreeList, this.arena.platforms, this.settings.goreMode, this.newBloodDripsSinceRender, dt);
+      updateGibs(this.state.gibs, this.arena.platforms, this.arena.effectZones, this.geyserIndexMap, this.state.geyserStates, this.newGroundedGibsSinceRender, dt);
+      updateConfetti(this.state.confetti, this.state.timeElapsed, dt);
+    } finally {
+      perfTrace.end('particles', _t);
+    }
   }
 
   /** Tick firework timer + update particle systems (called for match-over fireworks). */
