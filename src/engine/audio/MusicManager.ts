@@ -85,6 +85,12 @@ export class MusicManager {
     }
     this.stopMusic();
     this.musicHowl?.unload();
+    // Cancel any in-flight preload for this theme. Without this, a slow
+    // network preload completing AFTER we've created+played a fresh Howl
+    // would clobber the playing instance via its onload commit — leaving
+    // the playing Howl orphaned (still audible, no longer referenced) and
+    // doubling music on the next pause/resume cycle.
+    if (this._inFlightPreload?.themeId === themeId) this._inFlightPreload = null;
     const mp3 = getArenaPack(themeId)?.musicFile;
     if (!mp3) { console.warn(`[audio] No musicFile for arena '${themeId}'`); return; }
     this.musicHowl = new Howl({ src: [AUDIO_BASE + mp3], volume: 0.22, loop: true, html5: true });
@@ -117,10 +123,17 @@ export class MusicManager {
           // Only commit this Howl if we're still the most-recent preload.
           // A later preloadArena(differentTheme) will have overwritten
           // _inFlightPreload; in that case the older load completes into
-          // a nowhere.
+          // a nowhere. Also: if playMusic(themeId) raced ahead of us and
+          // already created+started its own Howl, do NOT clobber it
+          // (would orphan the playing Howl into permanent background loop).
           if (this._inFlightPreload?.themeId === themeId) {
-            this.musicHowl = howl;
-            this.musicThemeId = themeId;
+            const playMusicAlreadyTook = this.musicHowl !== null && this.musicThemeId === themeId;
+            if (playMusicAlreadyTook) {
+              howl.unload();
+            } else {
+              this.musicHowl = howl;
+              this.musicThemeId = themeId;
+            }
             this._inFlightPreload = null;
           } else {
             howl.unload();
