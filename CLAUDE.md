@@ -177,11 +177,11 @@ npm test          # Unit/integration tests (~2000 tests, Vitest)
 npm run test:e2e  # E2E tests (~120 tests, Playwright, builds first)
 npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/physics changes)
 # Dev shortcut — skip lobby:
-# http://localhost:5173/carrot-royale/?arena=rooftops&bots=2&difficulty=hard
+# http://localhost:5173/bunnybrawl/?arena=rooftops&bots=2&difficulty=hard
 # Nav debug overlay:
-# http://localhost:5173/carrot-royale/?arena=meadow&bots=2&debug=nav (toggle with ` key)
+# http://localhost:5173/bunnybrawl/?arena=meadow&bots=2&debug=nav (toggle with ` key)
 # Mobile testing (forces touch mode in desktop browser):
-# http://localhost:5173/carrot-royale/?mobile&arena=meadow&bots=2
+# http://localhost:5173/bunnybrawl/?mobile&arena=meadow&bots=2
 ```
 
 ## Testing

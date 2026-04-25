@@ -43,6 +43,7 @@
 - Scoring: kill = 2pts, carrot = 1pt, fall-off = respawn only. Default kill limit 16.
 - `MatchState.bouncyWobble` is a Map (non-serializable).
 - Game mods are runtime-only via `eff*` multipliers — never mutate base constants or arena definitions.
+- `updatePlayerState()` (called inside `fixedUpdate`) always derives `player.state` from velocity: `vy != 0` → airborne; `|vx| > 10` → run; else idle. Tests that need a specific state across a fixedUpdate boundary must set the matching velocity too — e.g. `player.state = 'run'; player.vx = 200` keeps run state.
 
 ## Characters
 - Pack registry must be initialized before use — `registerBuiltinCharacters()` called at module scope in `App.tsx`.
