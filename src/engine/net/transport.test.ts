@@ -47,7 +47,7 @@ vi.mock('./core/networkSimulator', () => ({
   NetworkSimulator: vi.fn(() => ({ enabled: false, enqueue: vi.fn(), flush: vi.fn(() => []), getConfig: vi.fn(() => ({ latencyMs: 0, jitterMs: 0 })) })),
 }));
 
-import { Transport } from './transport';
+import { Transport, ROOM_CODE_LENGTH } from './transport';
 import type { TransportEvents } from './transport';
 import { MsgType, encodePing, encodePong } from './protocol';
 
@@ -296,6 +296,13 @@ describe('Transport — message handling', () => {
 });
 
 describe('Transport — createRoom lifecycle', () => {
+  // Regression pin: room codes are 3 chars, not 4. This has flipped back to 4
+  // multiple times during refactors. The product decision is shorter codes for
+  // verbal sharing — don't relax this without explicit sign-off.
+  it('ROOM_CODE_LENGTH is 3 (regression pin — do NOT bump without product sign-off)', () => {
+    expect(ROOM_CODE_LENGTH).toBe(3);
+  });
+
   it('creates a room and resolves with room code', async () => {
     resetMocks();
     const events = makeEvents();
@@ -303,7 +310,8 @@ describe('Transport — createRoom lifecycle', () => {
 
     const code = await t.createRoom();
 
-    expect(code).toMatch(/^[A-Z2-9]{4}$/);
+    expect(code).toMatch(/^[A-Z2-9]{3}$/);
+    expect(code.length).toBe(ROOM_CODE_LENGTH);
     expect(t.roomCode).toBe(code);
     expect(t.isHost).toBe(true);
     expect(events.onStatusChange).toHaveBeenCalledWith('creating', undefined);

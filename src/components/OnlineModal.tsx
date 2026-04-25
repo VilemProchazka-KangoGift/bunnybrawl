@@ -25,7 +25,8 @@ const CONNECTING_STAGE_TIMINGS: Array<{ at: number; key: ConnectingStage }> = [
   { at: 15000, key: 'slow' },
 ];
 
-export { getModalTransport, clearModalTransport, clearReclaimTokens, tearDownOnlineSession, getHostReclaimTokens, getGuestOwnReclaimToken, resolveRandomArena } from './useOnlineRoom';
+export { getModalTransport, clearModalTransport, clearReclaimTokens, tearDownOnlineSession, getHostReclaimTokens, getGuestOwnReclaimToken, resolveRandomArena, PLAYER_NAME_MAX_LENGTH } from './useOnlineRoom';
+import { PLAYER_NAME_MAX_LENGTH } from './useOnlineRoom';
 
 interface OnlineModalProps {
   onClose: () => void;
@@ -93,7 +94,7 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
                     {playerName || t('tap_to_enter_name', 'Tap to enter name...')}
                   </button>
                 ) : (
-                  <input className="online-code-input online-name-input" data-testid="online-name-input" type="text" maxLength={16}
+                  <input className="online-code-input online-name-input" data-testid="online-name-input" type="text" maxLength={PLAYER_NAME_MAX_LENGTH}
                     value={playerName} autoFocus
                     onChange={(e) => {
                       const v = e.target.value.replace(/[\p{C}]/gu, '').slice(0, 16);
@@ -339,7 +340,7 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
       {mobileNameOpen && (
         <MobileTextInput
           value={playerName}
-          maxLength={16}
+          maxLength={PLAYER_NAME_MAX_LENGTH}
           label={t('your_name', 'Your name')}
           onConfirm={(v) => {
             setPlayerName(v);

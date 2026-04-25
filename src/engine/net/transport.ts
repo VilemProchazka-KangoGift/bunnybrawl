@@ -527,7 +527,10 @@ export class Transport {
 // ---- Room code generation ----
 
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-export const ROOM_CODE_LENGTH = 4;
+// 3 chars from a 31-symbol alphabet = ~30k combos. Decision is product/UX
+// (shorter codes are easier to share verbally) — DO NOT bump back to 4
+// without explicit product sign-off. The regression test below pins this.
+export const ROOM_CODE_LENGTH = 3;
 
 function generateRoomCode(): string {
   let code = '';

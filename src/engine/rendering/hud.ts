@@ -113,7 +113,11 @@ function _drawHUDImpl(ctx: CanvasRenderingContext2D, state: MatchState, frameTim
 
     const customName = playerNames?.[player.id];
     const translatedName = customName || getCharacterDisplayName(player.character.name, i18n.language);
-    const displayName = compact ? translatedName.slice(0, 4) : translatedName;
+    // Hard cap on name length so an old-version peer broadcasting a long name
+    // can't push their text past the score box's right edge into the next slot.
+    // OnlineModal clamps newly-entered names to PLAYER_NAME_MAX_LENGTH (8) but
+    // names that arrive over the wire skip that input — clamp here defensively.
+    const displayName = compact ? translatedName.slice(0, 4) : translatedName.slice(0, 8);
     ctx.fillStyle = player.character.color;
     ctx.font = `bold ${compact ? 12 : 16}px "Press Start 2P", monospace`;
     ctx.textAlign = 'left';

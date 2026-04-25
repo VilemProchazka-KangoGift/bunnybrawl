@@ -16,6 +16,7 @@ import { runLoadingTasks } from '../engine/matchLoading';
 import { useTransientBanner } from '../hooks/useTransientBanner';
 import { useDelayedFlag } from '../hooks/useDelayedFlag';
 import { useWakeLock } from '../hooks/useWakeLock';
+import logoImg from '/logo.png?url';
 import './Match.css';
 
 // Track last resolved arena so random doesn't repeat on rematch. Intentionally
@@ -502,6 +503,7 @@ export function Match() {
             aria-live="polite"
             aria-busy="true"
           >
+            <img src={logoImg} alt="Carrot Royale" className="match-loading-logo" />
             <div className="match-loading-spinner" />
             <div className="match-loading-text">{t('loading', 'Loading...')}</div>
             <div className="match-loading-sub" data-testid="match-loading-sub">

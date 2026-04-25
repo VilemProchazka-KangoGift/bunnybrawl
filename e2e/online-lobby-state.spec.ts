@@ -34,7 +34,7 @@ async function hostCreateRoom(page: Page, name = 'Host'): Promise<string> {
   const codeEl = page.getByTestId('online-room-code');
   await expect(codeEl).toBeVisible({ timeout: 15000 });
   const code = await codeEl.textContent();
-  expect(code).toMatch(/^[A-Z2-9]{4}$/);
+  expect(code).toMatch(/^[A-Z2-9]{3}$/);
   return code!;
 }
 

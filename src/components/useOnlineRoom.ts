@@ -21,6 +21,12 @@ import { ALL_BOT_SLOTS, isBotSlot } from '../engine/types';
 import { listArenaPacks } from '../engine/arenas';
 import type { BotSlot, CharacterSlot, PlayerSlot } from '../engine/types';
 
+// Match HUD score box (rendering/hud.ts) is ~112px wide at 16px Press Start 2P
+// bold — anything past ~8 chars overflows into the next slot. Used for both
+// the input maxLength and as a clamp when loading a stale long name from
+// localStorage left over from before this limit was tightened.
+export const PLAYER_NAME_MAX_LENGTH = 8;
+
 /** Resolve 'random' arenaId to a concrete ID so both peers use the same arena.
  *  CRITICAL: must be called once on the host before sending SETTINGS_SYNC, then
  *  the concrete arena ID is persisted to the store and broadcast. If 'random'
@@ -115,7 +121,7 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
   const localCharRef = useRef(CHARACTERS.P1.name);
   localCharRef.current = localChar;
   const [playerName, setPlayerNameState] = useState(() =>
-    localStorage.getItem('carrotroyale_player_name') || ''
+    (localStorage.getItem('carrotroyale_player_name') || '').slice(0, PLAYER_NAME_MAX_LENGTH)
   );
   const playerNameRef = useRef('');
   playerNameRef.current = playerName;
@@ -129,9 +135,10 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
   const allChars = getAllCharacters();
 
   const setPlayerName = useCallback((name: string) => {
-    setPlayerNameState(name);
-    playerNameRef.current = name;
-    try { localStorage.setItem('carrotroyale_player_name', name); } catch {}
+    const clamped = name.slice(0, PLAYER_NAME_MAX_LENGTH);
+    setPlayerNameState(clamped);
+    playerNameRef.current = clamped;
+    try { localStorage.setItem('carrotroyale_player_name', clamped); } catch {}
   }, []);
 
   // Guest-only one-shot: if local character conflicts with a remote player, pick an alt.
