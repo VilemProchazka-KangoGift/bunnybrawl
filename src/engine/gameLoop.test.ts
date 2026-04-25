@@ -3291,6 +3291,41 @@ describe('GameLoop — arena-specific features', () => {
     expect(p2?.splatTimer).toBeGreaterThan(0);
   });
 
+  it('disconnectPlayer cancels an in-progress respawn (would otherwise tick to idle)', () => {
+    // Repro: a player who was mid-respawn at disconnect time keeps ticking
+    // through respawnTimer, then transitions to 'idle' on a spawn point —
+    // appearing alive on the field but disconnected and frozen, free to be
+    // stomped for score by remote peers.
+    const { loop } = createLoop();
+    const p2 = loop.getState().players.find(p => p.id === 'P2')!;
+    p2.state = 'respawning';
+    p2.respawnTimer = 1.0;
+    p2.splatTimer = 0;
+
+    loop.disconnectPlayer('P2');
+
+    expect(p2.disconnected).toBe(true);
+    expect(p2.state).toBe('splat');
+    expect(p2.splatTimer).toBeGreaterThan(0); // 999999 sentinel — won't auto-advance
+    expect(p2.respawnTimer).toBe(0); // canceled
+  });
+
+  it('disconnectPlayer preserves splatTimer trajectory for already-splat players', () => {
+    // A player stomped just before disconnecting. They're already splatted;
+    // we still want them as a corpse but the existing splat timer is fine
+    // (the splat-tick loop short-circuits on disconnected for splat state).
+    const { loop } = createLoop();
+    const p2 = loop.getState().players.find(p => p.id === 'P2')!;
+    p2.state = 'splat';
+    p2.splatTimer = 0.4;
+
+    loop.disconnectPlayer('P2');
+
+    expect(p2.disconnected).toBe(true);
+    expect(p2.state).toBe('splat');
+    expect(p2.splatTimer).toBe(0.4); // untouched
+  });
+
   it('setLocalSlot changes touch target slot', () => {
     const { loop } = createLoop();
     loop.setLocalSlot('P2');
