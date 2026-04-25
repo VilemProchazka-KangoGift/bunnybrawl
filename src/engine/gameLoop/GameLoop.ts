@@ -166,7 +166,7 @@ export class GameLoop {
       this.arena = mirrorArena(this.arena);
     }
 
-    const players = createInitialPlayers(activePlayers, this.arena, settings.mods.giantPlayers);
+    const players = createInitialPlayers(activePlayers, this.arena, settings.mods.giantPlayers, this._boundGameRandom);
 
     // Init AI controllers for bot players
     const botDifficulty = settings.botDifficulty ?? 'medium';

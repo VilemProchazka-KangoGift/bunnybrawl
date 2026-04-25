@@ -39,7 +39,7 @@ export const rooftops: ArenaPack = {
     { x: 1200, y: 480, width: 65, height: 14 },
   ],
   spawnPoints: [
-    { x: 200, y: 460 }, { x: 660, y: 350 }, { x: 1080, y: 280 },
+    { x: 200, y: 460 }, { x: 620, y: 350 }, { x: 1080, y: 280 },
     { x: 280, y: 460 }, { x: 660, y: 530 }, { x: 1080, y: 460 },
   ],
   allowFallOff: true,

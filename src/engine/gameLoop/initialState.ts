@@ -48,15 +48,27 @@ export function computeEffectivePhysics(theme: ThemeConfig, mods: MatchSettings[
 }
 
 /** Build the initial player array for a match. */
-export function createInitialPlayers(activePlayers: PlayerSlot[], arena: Arena, giantPlayers: boolean): Player[] {
+export function createInitialPlayers(
+  activePlayers: PlayerSlot[],
+  arena: Arena,
+  giantPlayers: boolean,
+  gameRandom: () => number,
+): Player[] {
   const pw = giantPlayers ? PLAYER_WIDTH * GIANT_SCALE : PLAYER_WIDTH;
   const ph = giantPlayers ? PLAYER_HEIGHT * GIANT_SCALE : PLAYER_HEIGHT;
+
+  // Fisher-Yates shuffle of spawn indices — fixed RNG call count for net determinism
+  const order = arena.spawnPoints.map((_, i) => i);
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(gameRandom() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
 
   return activePlayers.map((slot, index) => ({
     id: slot,
     character: getCharacterForSlot(slot),
-    x: arena.spawnPoints[index % arena.spawnPoints.length].x - pw / 2,
-    y: arena.spawnPoints[index % arena.spawnPoints.length].y - ph,
+    x: arena.spawnPoints[order[index % order.length]].x - pw / 2,
+    y: arena.spawnPoints[order[index % order.length]].y - ph,
     vx: 0, vy: 0,
     width: pw, height: ph,
     state: 'idle' as const, facing: 'right' as const,
