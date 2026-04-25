@@ -290,6 +290,21 @@ describe('InputEcho', () => {
       echo.apply(noInput(), state, rtt, dt);
       expect(getPlayer(state).expression).toBe('normal');
     });
+
+    it('does NOT clobber host-set "angry" expression (preserves killstreak signal)', () => {
+      // Snapshot says player is on a killstreak (angry). Echo would normally
+      // downgrade to 'scared' for fast-fall, hiding the host's authoritative
+      // signal. Verify echo defers when expression isn't the default.
+      const state = makeState({ state: 'airborne', vy: 300, expression: 'angry' });
+      echo.apply(downInput(), state, rtt, dt);
+      expect(getPlayer(state).expression).toBe('angry');
+    });
+
+    it('does NOT clobber host-set "dizzy" expression (preserves post-stomp recovery)', () => {
+      const state = makeState({ state: 'airborne', vy: 300, expression: 'dizzy' });
+      echo.apply(downInput(), state, rtt, dt);
+      expect(getPlayer(state).expression).toBe('dizzy');
+    });
   });
 
   // ---- Suppression during death/respawn ----

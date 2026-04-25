@@ -8,7 +8,7 @@
  * - Host: runs fixedUpdate() with guest inputs injected
  * - Guest: receives host snapshots and overwrites its MatchState before rendering
  */
-import type { PlayerSlot, MatchState } from '../types';
+import type { PlayerSlot, MatchState, MatchPhase } from '../types';
 import type { Arena, MatchSettings } from '../types';
 import { isBotSlot } from '../types';
 import { FIXED_TIMESTEP } from '../constants';
@@ -24,12 +24,7 @@ import type { HostDebugStats } from './hostAuthority';
 import { EntityInterpolation, applySnapshotToState } from './interpolation';
 import { InputEcho } from './inputEcho';
 import { decodeSnapshot } from './snapshot';
-import {
-  decodePingPong,
-  encodePing, encodePong,
-  encodeInputMessage,
-  encodeSnapshotAck,
-} from './protocol';
+import { encodeInputMessage } from './protocol';
 
 export interface NetMatchConfig {
   bgCanvas: HTMLCanvasElement;
@@ -42,14 +37,37 @@ export interface NetMatchConfig {
   transport: Transport;
   localSlot: PlayerSlot;
   remoteSlots: PlayerSlot[];
-  rngSeed: number;
-  onDesync?: () => void;
   onStall?: (stalled: boolean) => void;
-  onStallTimeout?: () => void;
   onDisconnect?: () => void;
   onPlayerDisconnect?: (slot: PlayerSlot) => void;
   onArenaChange?: (arenaId: string) => void;
   onReconnecting?: (reconnecting: boolean) => void;
+  /** Fired when the match phase transitions. On host, driven by the LOADED
+   *  handshake; on guest, driven by the applied snapshot's phase field. */
+  onPhaseChange?: (phase: MatchPhase) => void;
+  /** Host-side hook: fires when a guest sends CONNECTION_UNSTABLE. The UI
+   *  layer uses this to show a banner "X has a slow connection" — no game
+   *  behavior changes. */
+  onGuestConnectionUnstable?: (slot: PlayerSlot, stalled: boolean) => void;
+  /** Guest-side hook: fires every reconnection attempt with (current, max).
+   *  UI layer uses it to show an attempt counter and enable a Give Up button. */
+  onReconnectAttempt?: (current: number, max: number) => void;
+  /** Host-side hook: fires when a guest successfully reclaims their slot via
+   *  RECONNECT_REQUEST. The UI layer uses it to send a fresh SETTINGS_SYNC so
+   *  a guest that missed an arena change during the disconnect still ends up
+   *  on the right arena. */
+  onGuestReconnected?: (slot: PlayerSlot) => void;
+  /** Fires with the slot list that never sent LOADED within LOADING_TIMEOUT_MS. */
+  onLoadingTimeout?: (slots: PlayerSlot[]) => void;
+  /** HOST: per-slot reclaim tokens issued in lobby SLOT_ASSIGNMENT. Passed
+   *  to HostAuthority.addGuest so the same token validates a future
+   *  RECONNECT_REQUEST. Slots not in the map get a fresh token at addGuest. */
+  reclaimTokens?: Map<PlayerSlot, string>;
+  /** GUEST: this peer's own reclaim token, received from host in
+   *  SLOT_ASSIGNMENT. Sent in RECONNECT_REQUEST to authenticate the reclaim
+   *  attempt. Without this, any peer in the room could claim a disconnected
+   *  slot and steal the original player's score. */
+  ownReclaimToken?: string;
 }
 
 export class NetMatch {
@@ -67,8 +85,8 @@ export class NetMatch {
 
   // Guest-specific
   private interpolation: EntityInterpolation | null = null;
-  private pingTimer: ReturnType<typeof setInterval> | null = null;
   private inputEcho: InputEcho | null = null;
+  private ownReclaimToken: string | null = null;  // token to authenticate RECONNECT_REQUEST
   private lastSnapshotTime = 0;    // wall-clock time of last received snapshot
   private stallNotified = false;    // whether onStall(true) has been fired
 
@@ -77,6 +95,40 @@ export class NetMatch {
   private reconnectTimer: ReturnType<typeof setInterval> | null = null;
   private onReconnecting?: (reconnecting: boolean) => void;
   private onStall?: (stalled: boolean) => void;
+
+  // Phase callback forwarder (fired from gameLoop.setPhase or, for guests,
+  // from snapshot-driven phase transitions detected in the guest loop).
+  private onPhaseChange?: (phase: MatchPhase) => void;
+  // Host-side only: fires when a guest sends CONNECTION_UNSTABLE.
+  private onGuestConnectionUnstable?: (slot: PlayerSlot, stalled: boolean) => void;
+  // Guest-side only: fires per reconnect attempt so the UI can show progress.
+  private onReconnectAttempt?: (current: number, max: number) => void;
+  // Host-side only: fires after a guest reclaims their slot via RECONNECT_REQUEST.
+  private onGuestReconnected?: (slot: PlayerSlot) => void;
+  // Host-side only: fires when LOADING_TIMEOUT_MS forces the match to start
+  // without some guests.
+  private onLoadingTimeout?: (slots: PlayerSlot[]) => void;
+  // Visibility listener — installed in start(), removed in stop(). Resets
+  // stall-detection timestamps when the tab returns so a long backgrounded
+  // period doesn't fire a spurious "Connection Unstable" banner.
+  private _visibilityHandler: (() => void) | null = null;
+  // Previous phase seen in guest snapshots — drives onPhaseChange on transition.
+  private _prevGuestPhase: MatchPhase = 'loading';
+  // Latches on the first snapshot where matchOver=true so guest-side match-end
+  // fires exactly once, even if MATCH_RESULT reliable message is dropped.
+  private _guestMatchOverFired = false;
+
+  // Host-side LOADED handshake state
+  private loadedGuests = new Set<PlayerSlot>();
+  private hostSelfLoaded = false;
+  // One-shot flag: if loading timeout fires while hostSelfLoaded is false,
+  // re-arm the timer once instead of force-flipping. Reset on each new
+  // loading session via resetLoadingHandshake().
+  private _loadingTimeoutExtended = false;
+  private loadingTimeout: ReturnType<typeof setTimeout> | null = null;
+  /** Maximum time host waits for all guests to signal LOADED before force-
+   *  advancing phase to 'playing' (and treating laggards as disconnected). */
+  private static readonly LOADING_TIMEOUT_MS = 15000;
 
   // Shared
   private rafId = 0;
@@ -90,6 +142,11 @@ export class NetMatch {
     this.onArenaChange = config.onArenaChange;
     this.onReconnecting = config.onReconnecting;
     this.onStall = config.onStall;
+    this.onPhaseChange = config.onPhaseChange;
+    this.onGuestConnectionUnstable = config.onGuestConnectionUnstable;
+    this.onReconnectAttempt = config.onReconnectAttempt;
+    this.onGuestReconnected = config.onGuestReconnected;
+    this.onLoadingTimeout = config.onLoadingTimeout;
     this.localSlot = config.localSlot;
 
     // Both host and guest create a GameLoop (needed for canvas rendering)
@@ -116,7 +173,20 @@ export class NetMatch {
       transport: config.transport,
       localSlot: config.localSlot,
       onMatchEnd: config.onMatchEnd,
-      onPlayerDisconnect: config.onPlayerDisconnect,
+      onPlayerDisconnect: (slot) => {
+        // Drop any stale LOADED signal for a slot that's disconnecting —
+        // otherwise a later reconnect would skip the handshake because its
+        // slot is still marked "loaded" from the original session.
+        this.loadedGuests.delete(slot as PlayerSlot);
+        config.onPlayerDisconnect?.(slot as PlayerSlot);
+        // Re-evaluate the LOADED handshake. If the disconnecting guest was
+        // the only slot we were still waiting on, expected→[] now and the
+        // phase should advance instead of hanging until the 15-30s
+        // LOADING_TIMEOUT_MS forces it.
+        if (this.gameLoop.getState().phase === 'loading') {
+          this.checkAllLoaded();
+        }
+      },
     });
 
     // Register remote human players
@@ -125,7 +195,11 @@ export class NetMatch {
         const peerIds = config.transport.getPeerIds();
         const peerIdx = config.remoteSlots.indexOf(slot);
         if (peerIdx < peerIds.length) {
-          this.hostAuthority.addGuest(peerIds[peerIdx], slot);
+          // Pass the lobby-issued token through so the same token validates
+          // future RECONNECT_REQUEST. If absent (e.g. test path), HostAuthority
+          // generates a fresh one at addGuest time.
+          const token = config.reclaimTokens?.get(slot);
+          this.hostAuthority.addGuest(peerIds[peerIdx], slot, token);
         }
       }
     }
@@ -133,6 +207,7 @@ export class NetMatch {
 
   private initGuest(config: NetMatchConfig): void {
     this.interpolation = new EntityInterpolation();
+    this.ownReclaimToken = config.ownReclaimToken ?? null;
     // Input echo: instant visual feedback without position prediction.
     // Disable with ?noecho URL param.
     const noEcho = typeof location !== 'undefined'
@@ -170,15 +245,111 @@ export class NetMatch {
 
     // Both: put GameLoop in network mode (external RAF, no internal loop)
     this.gameLoop.setNetworkMode(true);
+    // Forward gameLoop phase changes (host-driven) to the NetMatchConfig caller.
+    // Guest-driven phase changes (from snapshots) fire via _fireGuestPhaseChange
+    // in startGuestLoop, since applySnapshotToState bypasses setPhase.
+    this.gameLoop.setOnPhaseChange((phase) => this.onPhaseChange?.(phase));
     // start() in network mode attaches input handlers + audio but skips internal RAF
     this.gameLoop.start();
 
+    // rAF stops while the tab is hidden; refresh lastSnapshotTime on return
+    // so the 500ms stall banner doesn't trip on the first frame back.
+    if (typeof document !== 'undefined') {
+      this._visibilityHandler = () => {
+        if (document.hidden) return;
+        if (this.lastSnapshotTime > 0) {
+          this.lastSnapshotTime = performance.now();
+        }
+      };
+      document.addEventListener('visibilitychange', this._visibilityHandler);
+    }
+
     if (this._isHost && this.hostAuthority) {
       this.hostAuthority.start();
+      this.armLoadingTimeout();
       this.startHostLoop();
     } else {
       this.startGuestLoop();
     }
+  }
+
+  /** Host: hard timeout for the LOADED handshake. If any guest fails to
+   *  signal within LOADING_TIMEOUT_MS, force the match forward and treat
+   *  non-responding slots as disconnected. Called from start() and from
+   *  resetLoadingHandshake() on rematch/arena-change. */
+  private armLoadingTimeout(): void {
+    if (this.loadingTimeout) clearTimeout(this.loadingTimeout);
+    this.loadingTimeout = setTimeout(() => {
+      if (this.gameLoop.getState().phase !== 'loading') return;
+      // Defer the force-flip if our own preload is still in flight — flipping
+      // before host's assets are warm makes audio + sprites pop in over the
+      // first few seconds of play. The check has a single retry budget so a
+      // permanently-stuck host preload still progresses.
+      if (!this.hostSelfLoaded && !this._loadingTimeoutExtended) {
+        console.warn('[NetMatch] loading timeout fired but host not loaded — extending');
+        this._loadingTimeoutExtended = true;
+        this.armLoadingTimeout();
+        return;
+      }
+      console.warn('[NetMatch] loading timeout — forcing phase=playing');
+      const expected = this.hostAuthority!.getExpectedGuestSlots();
+      const laggards: PlayerSlot[] = [];
+      for (const slot of expected) {
+        if (!this.loadedGuests.has(slot)) {
+          laggards.push(slot);
+          this.gameLoop.disconnectPlayer(slot);
+        }
+      }
+      this.onLoadingTimeout?.(laggards);
+      this.gameLoop.setPhase('playing');
+    }, NetMatch.LOADING_TIMEOUT_MS);
+  }
+
+  /** Host: signal that this side's own loading tasks have completed. When
+   *  combined with LOADED messages from all guests, flips phase to 'playing'. */
+  markHostLoaded(): void {
+    if (!this._isHost) return;
+    this.hostSelfLoaded = true;
+    this.checkAllLoaded();
+  }
+
+  /** Guest: tell host that our local loading is done. Host broadcasts a
+   *  new snapshot with phase='playing' once all guests have signalled. */
+  signalGuestLoaded(): void {
+    if (this._isHost) return;
+    this.transport.sendReliable({
+      type: MsgType.LOADED,
+      slot: this.localSlot,
+    } as ReliableMessage);
+  }
+
+  /** Host: reset loading-handshake state when re-entering the 'loading'
+   *  phase (rematch, arena change). Without this, a stale LOADED from the
+   *  first match would cause checkAllLoaded to flip phase back to 'playing'
+   *  before guests finish warming the new arena. */
+  resetLoadingHandshake(): void {
+    if (!this._isHost) return;
+    this.loadedGuests.clear();
+    this.hostSelfLoaded = false;
+    this._loadingTimeoutExtended = false;
+    this.armLoadingTimeout();
+  }
+
+  /** Host: check whether all expected guests + host itself have completed
+   *  loading. If so, flip phase to 'playing' — the next broadcast snapshot
+   *  carries the new phase, auto-syncing all guests. */
+  private checkAllLoaded(): void {
+    if (!this._isHost || !this.hostAuthority) return;
+    if (!this.hostSelfLoaded) return;
+    const expected = this.hostAuthority.getExpectedGuestSlots();
+    const allIn = expected.every(s => this.loadedGuests.has(s));
+    if (!allIn) return;
+    if (this.gameLoop.getState().phase !== 'loading') return;
+    if (this.loadingTimeout) {
+      clearTimeout(this.loadingTimeout);
+      this.loadingTimeout = null;
+    }
+    this.gameLoop.setPhase('playing');
   }
 
   /** Host: simulate + broadcast + render. */
@@ -198,6 +369,14 @@ export class NetMatch {
     let writeIdx = 0;
     let delayFrames = 2; // initial delay (updated from RTT)
     let rttCheckTimer = 0;
+    // Reused scratch buffer: only clear jumps fixedUpdate actually consumed,
+    // so a jump latched mid-tick survives to the next tick.
+    const consumedJumpSlots: PlayerSlot[] = [];
+    // Reused scratch InputState passed to networkInputs.set(localSlot, ...).
+    // We copy the delayed ring slot here so consumeGuestJumps' mutation of
+    // input.jump doesn't corrupt the ring — otherwise an increase in
+    // delayFrames re-reads the same slot whose jump was already cleared.
+    const localInputScratch: import('../types').InputState = { left: false, right: false, jump: false, down: false };
 
     const loop = (now: number) => {
       sampleFps(now);
@@ -227,25 +406,36 @@ export class NetMatch {
         inputRing[writeIdx % MAX_DELAY].down = currentInput.down;
         writeIdx++;
 
-        // Read delayed input (or current if buffer not full yet)
+        // Read delayed input (or current if buffer not full yet). Copy into
+        // a scratch InputState so consumeGuestJumps' jump-clear mutation
+        // doesn't corrupt the ring buffer (re-reading the same slot when
+        // delayFrames increases would otherwise see an already-cleared jump).
         const readIdx = writeIdx > delayFrames ? writeIdx - delayFrames : writeIdx - 1;
         const delayedInput = inputRing[readIdx % MAX_DELAY];
+        localInputScratch.left = delayedInput.left;
+        localInputScratch.right = delayedInput.right;
+        localInputScratch.jump = delayedInput.jump;
+        localInputScratch.down = delayedInput.down;
 
         const networkInputs = this.hostAuthority!.getNetworkInputs();
-        networkInputs.set(this.localSlot, delayedInput);
+        networkInputs.set(this.localSlot, localInputScratch);
+        consumedJumpSlots.length = 0;
+        for (const [slot, input] of networkInputs) {
+          if (input.jump) consumedJumpSlots.push(slot as PlayerSlot);
+        }
         this.gameLoop.fixedUpdate(FIXED_DT, networkInputs);
-        // Clear latched guest jump flags — jump is edge-triggered, fire once per tap
-        this.hostAuthority!.consumeGuestJumps();
+        this.hostAuthority!.consumeGuestJumps(consumedJumpSlots);
         // Tick reconnection grace timers
         this.hostAuthority!.tickGraceTimers(FIXED_DT);
         this.gameLoop.tickCosmetic(FIXED_DT);
         accumulator -= FIXED_DT;
       }
 
-      // Broadcast snapshot once per render frame (not per tick) —
-      // multiple ticks in one frame would spam guests with snapshots,
-      // causing decode/GC pressure that tanks mobile framerate.
+      // One snapshot per render frame (not per tick) — multiple snapshots
+      // per frame would spam guests with decode/GC pressure on mobile.
       this.hostAuthority!.broadcastSnapshot(this.gameLoop.getState());
+
+      this.gameLoop.setConnectionQuality(this.transport.currentRtt, this.transport.currentJitter);
 
       if (debugFlags.netDebugEnabled) {
         const s = this.hostAuthority!.getStats();
@@ -272,10 +462,9 @@ export class NetMatch {
 
   /** Guest: send inputs + predict local + receive snapshots → render. */
   private startGuestLoop(): void {
-    this.pingTimer = setInterval(() => {
-      this.transport.sendUnreliable(encodePing(performance.now()));
-    }, 500);
-
+    // Transport owns all ping/pong RTT measurement. NetMatch used to start its
+    // own 500ms ping interval here — dead code because Transport intercepts
+    // ping/pong before they reach NetMatch's handleUnreliableMessage.
     const FIXED_DT = FIXED_TIMESTEP;
     let lastTime = performance.now();
     let guestFrame = 0;
@@ -334,13 +523,38 @@ export class NetMatch {
         }
       }
 
+      // 2b. Detect host-driven phase changes arriving via snapshot. Guest's
+      // gameLoop.setPhase is never called (phase is mutated directly by
+      // applySnapshotToState), so onPhaseChange must be forwarded here.
+      const state = this.gameLoop.getState();
+      const curPhase = state.phase;
+      if (curPhase !== this._prevGuestPhase) {
+        // loading→playing edge: kick off music, ambient, per-arena loops,
+        // and re-prime cosmetic prev-state baselines. Mirrors host's
+        // setPhase('playing'). Without this, the guest plays the entire
+        // match in silence (no music, no per-arena ambient).
+        if (this._prevGuestPhase === 'loading' && curPhase === 'playing') {
+          this.gameLoop.onEnterPlayingPhase();
+        }
+        this._prevGuestPhase = curPhase;
+        this.onPhaseChange?.(curPhase);
+      }
+      // 2c. Snapshot-driven match-end fallback. The MATCH_RESULT reliable
+      // message is defensive but can be lost if the host's connection closes
+      // mid-send. The match-over tail of 20 snapshots (core/hostAuthority.ts)
+      // gives us redundant delivery — as soon as any of them lands with
+      // matchOver=true, synthesize the onMatchEnd callback locally.
+      if (!this._guestMatchOverFired && state.matchOver) {
+        this._guestMatchOverFired = true;
+        this.onMatchEnd?.(state.winner as PlayerSlot | null, state);
+      }
+
       // 3. Tick cosmetics (SFX, particles, visual effects via state-transition detection)
       // No matchOver guard — cosmeticStep needs to run the frame matchOver flips
       // to detect the transition and play the victory sound.
       this.gameLoop.tickCosmetic(dt);
 
       // 4. Apply input echo for local player visual responsiveness
-      const state = this.gameLoop.getState();
       if (this.inputEcho) {
         this.inputEcho.apply(localInput, state, this.transport.currentRtt, dt);
       }
@@ -358,15 +572,26 @@ export class NetMatch {
       }
       if (state.screenShake > 0) state.screenShake = Math.max(0, state.screenShake - dt);
 
-      // 6. Stall detection: check time since last snapshot (suppressed after match end)
+      // 6. Stall detection (soft banner only). A snapshot-stream gap no longer
+      // triggers reconnection — the transport's pong timeout is the single
+      // source of truth for peer liveness. Forcing reconnection on brief
+      // Wi-Fi blips while the WebRTC channel is still alive caused all
+      // reconnect attempts to be rejected by the host (hasActivePeer=true)
+      // until the pong timeout caught up ~7s later. Now we just flash a
+      // "Connection Unstable" banner; actual reconnect fires from
+      // onPeerDisconnected in setEvents.
       if (this.lastSnapshotTime > 0 && !this.reconnecting && !state.matchOver) {
         const elapsed = now - this.lastSnapshotTime;
-        if (elapsed > 3000) {
-          // Hard stall — trigger reconnection
-          this.startReconnection();
-        } else if (elapsed > 500 && !this.stallNotified) {
+        if (elapsed > 500 && !this.stallNotified) {
           this.stallNotified = true;
           this.onStall?.(true);
+          // Reliable hint to host: "my snapshot stream is lagging." Host will
+          // show a banner so the human running the host knows why the guest
+          // is misbehaving, without waiting for the pong timeout.
+          this.transport.sendReliable({
+            type: MsgType.CONNECTION_UNSTABLE,
+            stalled: true,
+          } as ReliableMessage);
         }
       }
 
@@ -388,16 +613,10 @@ export class NetMatch {
 
     if (this._isHost && this.hostAuthority) {
       this.hostAuthority.handleUnreliableMessage(data, fromPeerId);
-    } else {
-      if (type === MsgType.SNAPSHOT) {
-        this.handleGuestSnapshot(data);
-      } else if (type === MsgType.PING || type === MsgType.PONG) {
-        const pp = decodePingPong(data);
-        if (pp?.type === MsgType.PING && fromPeerId) {
-          this.transport.sendUnreliableTo(fromPeerId, encodePong(pp.timestamp));
-        }
-      }
+    } else if (type === MsgType.SNAPSHOT) {
+      this.handleGuestSnapshot(data);
     }
+    // Ping/pong handled by Transport — it intercepts before dispatching here.
   }
 
   private handleGuestSnapshot(data: ArrayBuffer): void {
@@ -408,6 +627,11 @@ export class NetMatch {
     if (this.stallNotified) {
       this.stallNotified = false;
       this.onStall?.(false);
+      // Let host know we're healthy again so it can drop the banner.
+      this.transport.sendReliable({
+        type: MsgType.CONNECTION_UNSTABLE,
+        stalled: false,
+      } as ReliableMessage);
     }
 
     // Strip the 1-byte type prefix (0x20) and decode
@@ -415,7 +639,6 @@ export class NetMatch {
     const snap = decodeSnapshot(snapBuf);
     if (snap) {
       this.interpolation.pushSnapshot(snap);
-      this.transport.sendUnreliable(encodeSnapshotAck(snap.frame));
     }
   }
 
@@ -430,17 +653,69 @@ export class NetMatch {
       } else {
         this.gameLoop.resume();
       }
-    } else if (msg.type === MsgType.SETTINGS_SYNC) {
+    } else if (!this._isHost && msg.type === MsgType.SETTINGS_SYNC) {
+      // Host-authoritative — guests apply the host's settings, the host never
+      // accepts SETTINGS_SYNC from anyone. Without the !isHost gate, a buggy
+      // or hostile guest could swap the host's arena mid-match by sending
+      // SETTINGS_SYNC{arenaId:'volcano'} — Match.tsx wires onArenaChange to
+      // gameLoop.switchArena which rebuilds the host's match state in place.
       if ('arenaId' in msg) {
         this.onArenaChange?.((msg as { arenaId: string }).arenaId);
       }
-    } else if (msg.type === MsgType.MATCH_RESULT) {
+    } else if (!this._isHost && msg.type === MsgType.MATCH_RESULT) {
+      // Host-broadcast only. A guest sending MATCH_RESULT to the host would
+      // otherwise schedule a victory transition with the guest's chosen
+      // winner, racing the host's authoritative endMatch.
       this.onMatchEnd?.((msg as { winner: string | null }).winner as PlayerSlot | null, this.gameLoop.getState());
-    } else if (msg.type === MsgType.DISCONNECT) {
+    } else if (!this._isHost && msg.type === MsgType.DISCONNECT) {
+      // Host receives a guest's graceful DISCONNECT via hostAuthority
+      // (peer removal). The NetMatchConfig.onDisconnect callback is the
+      // guest's "reconnect-budget exhausted → flash 'Could not reconnect'"
+      // hook — firing it on the host on a guest's polite leave would push
+      // the host into the disconnect-victory screen.
       this.onDisconnect?.();
-    } else if (msg.type === MsgType.RECONNECT_SYNC) {
-      // Host confirmed our reconnection — resume match
+    } else if (!this._isHost && msg.type === MsgType.RECONNECT_SYNC) {
+      // Honor host's pause state so the guest's render doesn't diverge from
+      // a suspended simulation on the other end. Host gating: a guest sending
+      // RECONNECT_SYNC could otherwise pause/unpause the host's sim and reset
+      // the host's cosmetic prev-state baselines (silencing legitimate SFX
+      // until the next state transition).
+      const syncMsg = msg as { paused?: boolean };
+      if (syncMsg.paused) this.gameLoop.pause();
+      else this.gameLoop.resume();
       this.completeReconnection();
+    } else if (this._isHost && msg.type === MsgType.LOADED) {
+      // Source-authenticate the slot from peerId. A peer could otherwise send
+      // LOADED{slot: anotherPeer} and force-start the match before that peer
+      // has actually warmed assets. CONNECTION_UNSTABLE below uses the same
+      // pattern.
+      if (!fromPeerId || !this.hostAuthority) return;
+      const senderSlot = this.hostAuthority.getSlotForPeer(fromPeerId) as PlayerSlot | undefined;
+      if (!senderSlot) return;
+      this.loadedGuests.add(senderSlot);
+      this.checkAllLoaded();
+    } else if (this._isHost && msg.type === MsgType.CONNECTION_UNSTABLE) {
+      const stalled = (msg as { stalled: boolean }).stalled;
+      if (fromPeerId && this.hostAuthority) {
+        const slot = this.hostAuthority.getSlotForPeer(fromPeerId);
+        if (slot) this.onGuestConnectionUnstable?.(slot, stalled);
+      }
+    } else if (this._isHost && msg.type === MsgType.RECONNECT_REQUEST) {
+      if (!fromPeerId || !this.hostAuthority) return;
+      const reqSlot = (msg as { slot: string }).slot as PlayerSlot;
+      const presentedToken = (msg as { reclaimToken?: string }).reclaimToken;
+      if (!this.hostAuthority.handleReconnectRequest(reqSlot, fromPeerId, presentedToken)) return;
+      // Ack with current pause state so the guest's render doesn't diverge
+      // from a suspended host sim.
+      this.transport.sendReliableTo(fromPeerId, {
+        type: MsgType.RECONNECT_SYNC,
+        slot: reqSlot,
+        snapshotFrame: this.hostAuthority.getLocalFrame(),
+        paused: this.gameLoop.isPaused(),
+      } as ReliableMessage);
+      this.hostAuthority.sendSnapshotTo(fromPeerId, this.gameLoop.getState());
+      this.loadedGuests.delete(reqSlot);
+      this.onGuestReconnected?.(reqSlot);
     }
   }
 
@@ -451,29 +726,35 @@ export class NetMatch {
     this.onReconnecting?.(true);
 
     let attempts = 0;
-    const MAX_ATTEMPTS = 9; // 9 attempts * 2s = 18s, within 20s grace
+    // 12 attempts × 1.5s = 18s total. Must stay within host's 20s
+    // GRACE_PERIOD so the same slot can be reclaimed — otherwise the user
+    // rejoins as a brand-new peer with lost state.
+    const MAX_ATTEMPTS = 12;
+    this.onReconnectAttempt?.(attempts, MAX_ATTEMPTS);
 
-    this.reconnectTimer = setInterval(() => {
+    const tryAttempt = () => {
       attempts++;
       if (attempts > MAX_ATTEMPTS) {
         this.abortReconnection();
         return;
       }
-      // Try to rejoin the room
+      this.onReconnectAttempt?.(attempts, MAX_ATTEMPTS);
       const code = this.transport.roomCode;
-      if (code) {
-        this.transport.joinRoom(code).then(() => {
-          // Reconnected — send reclaim request
-          this.transport.sendReliable({
-            type: MsgType.RECONNECT_REQUEST,
-            slot: this.localSlot,
-            playerName: '',
-          } as import('./protocol').ReliableMessage);
-        }).catch(() => {
-          // Will retry on next interval
-        });
-      }
-    }, 2000);
+      if (!code) return;
+      this.transport.joinRoom(code).then(() => {
+        // Re-send on every tick after a successful joinRoom — if
+        // RECONNECT_SYNC was lost, the next RECONNECT_REQUEST will produce
+        // another response from the host (handler is idempotent).
+        this.transport.sendReliable({
+          type: MsgType.RECONNECT_REQUEST,
+          slot: this.localSlot,
+          playerName: '',
+          reclaimToken: this.ownReclaimToken ?? '',
+        } as import('./protocol').ReliableMessage);
+      }).catch(() => { /* retry next tick */ });
+    };
+    tryAttempt();
+    this.reconnectTimer = setInterval(tryAttempt, 1500);
   }
 
   /** Complete reconnection after host confirms. */
@@ -483,6 +764,22 @@ export class NetMatch {
       clearInterval(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+    // Stale snapshots would block fresh ones via the out-of-order guard, or
+    // lerp across a huge frame gap and teleport entities. Reset latches too
+    // so the first post-reconnect snapshot re-fires any phase/match-end edge.
+    this.interpolation?.reset();
+    // Cosmetic prev-state baselines also need a reset — without this, the
+    // first post-reconnect snapshot triggers transitions against pre-
+    // disconnect state (e.g. jump/land sounds for a player who landed
+    // during the disconnect, score-anim crunch for delta points scored
+    // while we were gone, possibly a duplicate victory sound).
+    this.gameLoop.resetCosmeticBaselines();
+    this._guestMatchOverFired = false;
+    // Sync prev-phase to current state so the next snapshot tick doesn't see
+    // a synthetic loading→playing edge and re-fire onEnterPlayingPhase. That
+    // would double-start non-idempotent ambient loops (wind/lava/etc.) and
+    // append duplicate entries to MatchSystem.activeAmbientLoops.
+    this._prevGuestPhase = this.gameLoop.getState().phase;
     this.lastSnapshotTime = performance.now();
     this.stallNotified = false;
     this.onReconnecting?.(false);
@@ -509,13 +806,17 @@ export class NetMatch {
       cancelAnimationFrame(this.rafId);
       this.rafId = 0;
     }
-    if (this.pingTimer) {
-      clearInterval(this.pingTimer);
-      this.pingTimer = null;
-    }
     if (this.reconnectTimer) {
       clearInterval(this.reconnectTimer);
       this.reconnectTimer = null;
+    }
+    if (this.loadingTimeout) {
+      clearTimeout(this.loadingTimeout);
+      this.loadingTimeout = null;
+    }
+    if (this._visibilityHandler) {
+      document.removeEventListener('visibilitychange', this._visibilityHandler);
+      this._visibilityHandler = null;
     }
     this.hostAuthority?.stop();
     this.gameLoop.stop();

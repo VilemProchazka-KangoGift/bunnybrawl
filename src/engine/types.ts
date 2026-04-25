@@ -274,9 +274,16 @@ export interface Thorn {
   hit: boolean;
 }
 
+export type MatchPhase = 'loading' | 'playing' | 'over';
+
 export interface MatchState {
   players: Player[];
+  phase: MatchPhase;
   killFeed: KillFeedEntry[];
+  /** Total stomp count across the entire match. Distinct from killFeed.length
+   *  because killFeed is trimmed to the most-recent 10 entries (HUD display
+   *  budget). VictoryScreen reads this for the "Total Splats" stat. */
+  totalKills: number;
   timeElapsed: number;
   matchOver: boolean;
   winner: PlayerSlot | null;

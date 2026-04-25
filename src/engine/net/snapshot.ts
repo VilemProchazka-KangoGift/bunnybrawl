@@ -9,7 +9,7 @@
  * - Delta compression: unchanged frames ≈ 40-80 bytes
  */
 import type {
-  PlayerSlot, PlayerState, KillFeedEntry, MatchState,
+  PlayerSlot, PlayerState, KillFeedEntry, MatchState, MatchPhase,
 } from '../types';
 import { encodeSlot, decodeSlot } from './protocol';
 
@@ -47,6 +47,7 @@ export interface SnapshotPlayer {
 
 export interface AuthSnapshot {
   frame: number;
+  phase: MatchPhase;
   players: SnapshotPlayer[];
   carrots: Array<{ x: number; y: number; active: boolean }>;
   springs: Array<{ x: number; y: number; bounceTimer: number; life: number; growTimer: number }>;
@@ -55,6 +56,10 @@ export interface AuthSnapshot {
   lavaRocks: Array<{ x: number; y: number; vy: number; active: boolean }>;
   geyserStates: Array<{ timer: number; active: boolean; activeTimer: number }>;
   killFeed: KillFeedEntry[];
+  /** Match-wide stomp counter (uncapped; killFeed is the last-10 HUD slice).
+   *  Source of truth for VictoryScreen "Total Splats". Encoded as Uint16 —
+   *  caps at 65535 stomps which is far beyond any practical match length. */
+  totalKills: number;
   timeElapsed: number;
   countdown: number;
   dayPhase: number;
@@ -163,7 +168,9 @@ export function encodeSnapshot(snap: AuthSnapshot): { buffer: ArrayBuffer; lengt
       (dfSide << 6);
     ENCODE_VIEW.setUint8(o++, flags);
     ENCODE_VIEW.setUint8(o++, p.animFrame & 0xFF);
-    ENCODE_VIEW.setUint8(o++, Math.min(p.score, 255));
+    // Score / killStreak as Uint16 so mods (or carrots) that push past 255
+    // don't silently freeze the guest's view of the scoreboard.
+    ENCODE_VIEW.setUint16(o, Math.min(p.score, 65535), true); o += 2;
 
     // Timer presence mask + only non-zero timers.
     // Bits: 0=hitstop 1=invincible 2=splat 3=respawn 4=fat 5=slow 6=burn 7=damageFlash
@@ -195,7 +202,7 @@ export function encodeSnapshot(snap: AuthSnapshot): { buffer: ArrayBuffer; lengt
     if (dfTimer) ENCODE_VIEW.setUint8(o++, dfTimer);
 
     ENCODE_VIEW.setUint8(o++, Math.round(p.squashScale * 50) & 0xFF); // 50 = 1.0 normal
-    ENCODE_VIEW.setUint8(o++, Math.min(p.killStreak, 255));
+    ENCODE_VIEW.setUint16(o, Math.min(p.killStreak, 65535), true); o += 2;
     ENCODE_VIEW.setUint8(o++, Math.min(Math.round(p.width), 255));
     ENCODE_VIEW.setUint8(o++, Math.min(Math.round(p.height), 255));
     ENCODE_VIEW.setUint8(o++, Math.round(p.sideSquash * 50) & 0xFF); // 50 = 1.0 normal
@@ -265,6 +272,11 @@ export function encodeSnapshot(snap: AuthSnapshot): { buffer: ArrayBuffer; lengt
     ENCODE_VIEW.setFloat32(o, kf.timestamp, true); o += 4;
   }
 
+  // Match-wide stomp counter — separate from the trimmed killFeed slice above
+  // so guests can show an accurate "Total Splats" count without us having to
+  // wire all kills onto the wire.
+  ENCODE_VIEW.setUint16(o, Math.min(snap.totalKills, 65535), true); o += 2;
+
   // Global state
   ENCODE_VIEW.setFloat32(o, snap.timeElapsed, true); o += 4;
   ENCODE_VIEW.setFloat32(o, snap.countdown, true); o += 4;
@@ -275,7 +287,9 @@ export function encodeSnapshot(snap: AuthSnapshot): { buffer: ArrayBuffer; lengt
   ENCODE_VIEW.setFloat32(o, snap.hitstopZoom, true); o += 4;
 
   // Match state flags
-  ENCODE_VIEW.setUint8(o++, (snap.matchOver ? 1 : 0) | (snap.winner ? 2 : 0));
+  // Bits: 0=matchOver, 1=winner-present, 2-3=phase (0=loading, 1=playing, 2=over)
+  const phaseBits = snap.phase === 'loading' ? 0 : snap.phase === 'playing' ? 1 : 2;
+  ENCODE_VIEW.setUint8(o++, (snap.matchOver ? 1 : 0) | (snap.winner ? 2 : 0) | (phaseBits << 2));
   if (snap.winner) {
     ENCODE_VIEW.setUint8(o++, encodeSlot(snap.winner));
   }
@@ -288,6 +302,15 @@ export function encodeSnapshot(snap: AuthSnapshot): { buffer: ArrayBuffer; lengt
     ENCODE_VIEW.setUint8(o++, encodeSlot(sa.playerId));
     ENCODE_VIEW.setUint8(o++, sa.value & 0xFF);
     ENCODE_VIEW.setFloat32(o, sa.timer, true); o += 4;
+  }
+
+  // Defense in depth: every individual setFloat32/setUint16 past
+  // MAX_SNAPSHOT_BYTES already throws RangeError, but a final assertion gives
+  // a clearer signal of "snapshot grew past budget" if a future caller adds
+  // a field that fits within the buffer for typical entity counts but
+  // overflows on edge cases (e.g. carrot-rain mods).
+  if (o > MAX_SNAPSHOT_BYTES) {
+    throw new Error(`encodeSnapshot: ${o} bytes exceeds MAX_SNAPSHOT_BYTES (${MAX_SNAPSHOT_BYTES})`);
   }
 
   return { buffer: ENCODE_BUF, length: o };
@@ -316,7 +339,7 @@ export function decodeSnapshot(buf: ArrayBuffer): AuthSnapshot | null {
     const stateIdx = view.getUint8(o++);
     const flags = view.getUint8(o++);
     const animFrame = view.getUint8(o++);
-    const score = view.getUint8(o++);
+    const score = view.getUint16(o, true); o += 2;
 
     const timerMask = view.getUint8(o++);
     const hitstopTimer = (timerMask & 1) ? view.getUint8(o++) / 60 : 0;
@@ -329,7 +352,7 @@ export function decodeSnapshot(buf: ArrayBuffer): AuthSnapshot | null {
     const damageFlashTimer = (timerMask & 128) ? view.getUint8(o++) / 60 : 0;
 
     const squashScale = view.getUint8(o++) / 50;
-    const killStreak = view.getUint8(o++);
+    const killStreak = view.getUint16(o, true); o += 2;
     const width = view.getUint8(o++);
     const height = view.getUint8(o++);
     const sideSquash = view.getUint8(o++) / 50;
@@ -444,6 +467,9 @@ export function decodeSnapshot(buf: ArrayBuffer): AuthSnapshot | null {
     killFeed.push({ attacker, victim, timestamp });
   }
 
+  // Match-wide stomp counter (Uint16) — accurate "Total Splats" for guests.
+  const totalKills = view.getUint16(o, true); o += 2;
+
   // Global state
   const timeElapsed = view.getFloat32(o, true); o += 4;
   const countdown = view.getFloat32(o, true); o += 4;
@@ -460,6 +486,8 @@ export function decodeSnapshot(buf: ArrayBuffer): AuthSnapshot | null {
   if (matchFlags & 2) {
     winner = decodeSlotAs(view.getUint8(o++));
   }
+  const phaseBits = (matchFlags >> 2) & 3;
+  const phase: MatchPhase = phaseBits === 0 ? 'loading' : phaseBits === 1 ? 'playing' : 'over';
 
   // Score animations
   const saLen = view.getUint8(o++);
@@ -473,6 +501,7 @@ export function decodeSnapshot(buf: ArrayBuffer): AuthSnapshot | null {
 
   return {
     frame,
+    phase,
     players,
     carrots,
     springs,
@@ -481,6 +510,7 @@ export function decodeSnapshot(buf: ArrayBuffer): AuthSnapshot | null {
     lavaRocks,
     geyserStates,
     killFeed,
+    totalKills,
     timeElapsed,
     countdown,
     dayPhase,
@@ -505,6 +535,7 @@ export function decodeSnapshot(buf: ArrayBuffer): AuthSnapshot | null {
 export function takeAuthSnapshot(frame: number, state: MatchState): AuthSnapshot {
   return {
     frame,
+    phase: state.phase,
     players: state.players.map(p => ({
       id: p.id,
       x: p.x, y: p.y,
@@ -551,6 +582,7 @@ export function takeAuthSnapshot(frame: number, state: MatchState): AuthSnapshot
       timer: gs.timer, active: gs.active, activeTimer: gs.activeTimer,
     })),
     killFeed: state.killFeed,
+    totalKills: state.totalKills,
     timeElapsed: state.timeElapsed,
     countdown: state.countdown,
     dayPhase: state.dayPhase,

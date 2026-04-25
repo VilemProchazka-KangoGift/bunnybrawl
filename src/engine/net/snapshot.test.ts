@@ -6,6 +6,7 @@ import type { MatchState, PlayerSlot } from '../types';
 function makeTestSnapshot(frame = 1): AuthSnapshot {
   return {
     frame,
+    phase: 'playing',
     players: [
       { id: 'P1' as PlayerSlot, x: 100.5, y: 200.25, vx: 50, vy: -100, state: 'run', facing: 'right', animFrame: 3, score: 5, hitstopTimer: 0.1, invincibleTimer: 1.5, fastFalling: false, splatTimer: 0, respawnTimer: 0, fatTimer: 0.5, slowTimer: 0, burnTimer: 0, squashScale: 1, expression: 'normal', killStreak: 2, disconnected: false, active: true, width: 32, height: 32 },
       { id: 'B1' as PlayerSlot, x: 500, y: 300, vx: 0, vy: 0, state: 'idle', facing: 'left', animFrame: 0, score: 3, hitstopTimer: 0, invincibleTimer: 0, fastFalling: true, splatTimer: 0, respawnTimer: 0, fatTimer: 0, slowTimer: 0.2, burnTimer: 0.3, squashScale: 0.8, expression: 'scared', killStreak: 0, disconnected: false, active: true, width: 32, height: 32 },
@@ -122,6 +123,7 @@ describe('snapshot encode/decode round-trip', () => {
   it('handles empty snapshot (no entities)', () => {
     const snap: AuthSnapshot = {
       frame: 1,
+      phase: 'loading',
       players: [],
       carrots: [],
       springs: [],
@@ -159,6 +161,43 @@ describe('snapshot encode/decode round-trip', () => {
     expect(decoded!.winner).toBe('P1');
   });
 
+  it('preserves phase = "loading" through encode/decode', () => {
+    const snap = makeTestSnapshot(1);
+    snap.phase = 'loading';
+    const { buffer, length } = encodeSnapshot(snap);
+    const decoded = decodeSnapshot(buffer.slice(0, length));
+    expect(decoded!.phase).toBe('loading');
+  });
+
+  it('preserves phase = "playing" through encode/decode', () => {
+    const snap = makeTestSnapshot(1);
+    snap.phase = 'playing';
+    const { buffer, length } = encodeSnapshot(snap);
+    const decoded = decodeSnapshot(buffer.slice(0, length));
+    expect(decoded!.phase).toBe('playing');
+  });
+
+  it('preserves phase = "over" through encode/decode', () => {
+    const snap = makeTestSnapshot(1);
+    snap.phase = 'over';
+    const { buffer, length } = encodeSnapshot(snap);
+    const decoded = decodeSnapshot(buffer.slice(0, length));
+    expect(decoded!.phase).toBe('over');
+  });
+
+  it('phase bits do not interfere with matchOver/winner flags', () => {
+    // Phase 'over' (bits 2-3 = 10) AND matchOver (bit 0) AND winner (bit 1)
+    const snap = makeTestSnapshot(1);
+    snap.phase = 'over';
+    snap.matchOver = true;
+    snap.winner = 'B1' as PlayerSlot;
+    const { buffer, length } = encodeSnapshot(snap);
+    const decoded = decodeSnapshot(buffer.slice(0, length));
+    expect(decoded!.phase).toBe('over');
+    expect(decoded!.matchOver).toBe(true);
+    expect(decoded!.winner).toBe('B1');
+  });
+
   it('preserves timer precision within uint8 range', () => {
     const snap = makeTestSnapshot(1);
     snap.players[0].hitstopTimer = 0.1; // 6 frames
@@ -173,6 +212,25 @@ describe('snapshot encode/decode round-trip', () => {
   it('rejects buffer that is too small', () => {
     const buf = new ArrayBuffer(3);
     expect(decodeSnapshot(buf)).toBeNull();
+  });
+
+  it('round-trips totalKills (the source of truth for VictoryScreen total-splats)', () => {
+    // Counter must survive the wire — host shows trimmed killFeed (10),
+    // guest shows trimmed killFeed (5), but VictoryScreen reads totalKills
+    // which should equal the actual stomp count regardless of trimming.
+    const snap = makeTestSnapshot(1);
+    snap.totalKills = 27;
+    const { buffer, length } = encodeSnapshot(snap);
+    const decoded = decodeSnapshot(buffer.slice(0, length));
+    expect(decoded!.totalKills).toBe(27);
+  });
+
+  it('clamps totalKills to Uint16 max on encode', () => {
+    const snap = makeTestSnapshot(1);
+    snap.totalKills = 70000; // beyond Uint16
+    const { buffer, length } = encodeSnapshot(snap);
+    const decoded = decodeSnapshot(buffer.slice(0, length));
+    expect(decoded!.totalKills).toBe(65535);
   });
 
   it('encodeSnapshot returns shared buffer (caller must copy)', () => {
@@ -191,6 +249,7 @@ describe('snapshot encode/decode round-trip', () => {
 describe('takeAuthSnapshot', () => {
   it('extracts snapshot from MatchState', () => {
     const state = {
+      phase: 'playing',
       players: [
         { id: 'P1', x: 100, y: 200, vx: 10, vy: -5, state: 'run', facing: 'right', animFrame: 1, score: 3, hitstopTimer: 0, invincibleTimer: 0, fastFalling: false, splatTimer: 0, respawnTimer: 0, fatTimer: 0, slowTimer: 0, burnTimer: 0, squashScale: 1, expression: 'normal', killStreak: 1, disconnected: false, active: true, width: 32, height: 32, character: {} },
       ],

@@ -71,7 +71,9 @@ export function makeArena(overrides?: Partial<Arena>): Arena {
 export function makeState(overrides: Partial<MatchState> = {}): MatchState {
   return {
     players: [],
+    phase: 'playing',
     killFeed: [],
+    totalKills: 0,
     timeElapsed: 0,
     matchOver: false,
     winner: null,

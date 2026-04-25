@@ -71,8 +71,8 @@ describe('LobbyGame', () => {
   });
 
   it('creates extra NPC characters from remaining roster', () => {
-    // 18 total characters - 5 humans - 2 bots = 11 extras
-    expect(game.extraChars.length).toBe(11);
+    const rosterSize = getAllCharacters().length;
+    expect(game.extraChars.length).toBe(rosterSize - 5 - 2);
   });
 
   it('mobile mode creates only P1', () => {
@@ -365,16 +365,16 @@ describe('LobbyGame', () => {
     it('creates 0 bots when botCount is 0', () => {
       const g = makeLobbyGame({ botCount: 0 });
       expect(g.bots).toHaveLength(0);
-      // 18 characters - 5 humans - 0 bots = 13 extras
-      expect(g.extraChars.length).toBe(13);
+      const rosterSize = getAllCharacters().length;
+      expect(g.extraChars.length).toBe(rosterSize - 5);
     });
 
     it('creates 1 bot when botCount is 1', () => {
       const g = makeLobbyGame({ botCount: 1 });
       expect(g.bots).toHaveLength(1);
       expect(g.bots[0].id).toBe('B1');
-      // 18 - 5 - 1 = 12 extras
-      expect(g.extraChars.length).toBe(12);
+      const rosterSize = getAllCharacters().length;
+      expect(g.extraChars.length).toBe(rosterSize - 5 - 1);
     });
 
     it('creates 5 bots when botCount is 5', () => {
@@ -382,15 +382,16 @@ describe('LobbyGame', () => {
       expect(g.bots).toHaveLength(5);
       const botSlots = g.bots.map(b => b.id);
       expect(botSlots).toEqual(['B1', 'B2', 'B3', 'B4', 'B5']);
-      // 18 - 5 - 5 = 8 extras
-      expect(g.extraChars.length).toBe(8);
+      const rosterSize = getAllCharacters().length;
+      expect(g.extraChars.length).toBe(rosterSize - 5 - 5);
     });
 
     it('total characters always equals full roster size', () => {
+      const rosterSize = getAllCharacters().length;
       for (const botCount of [0, 1, 2, 3, 5]) {
         const g = makeLobbyGame({ botCount });
         const total = g.players.length + g.bots.length + g.extraChars.length;
-        expect(total).toBe(18);
+        expect(total).toBe(rosterSize);
       }
     });
   });

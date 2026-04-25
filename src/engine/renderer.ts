@@ -24,7 +24,9 @@ import {
   drawDayNightCycle,
   drawHUD, drawCountdown, drawConnectionQuality, invalidateHudCache, isHudDirty,
   drawPlayer,
+  warmSpriteCacheForCharacters,
   clearRenderingCaches,
+  clearArenaCaches,
 } from './rendering';
 import { setSpriteCacheScale } from './rendering/players';
 import { setHudScale } from './rendering/hud';
@@ -111,12 +113,18 @@ export class Renderer {
   private _diag: RenderDiagnostics = freshDiag();
   private _netRtt = 0;
   private _netJitter = 0;
-  private _isNetworkGuest = false;
+  private _isNetworkMatch = false;
 
   // Overlay-layer dirty tracking (only used when hudCtx is set)
   private _overlayHadContent = false;
   private _overlayLastRtt = -1;
   private _overlayLastJitter = -1;
+
+  // Sprite-cache warm tracking — the cache itself is module-scoped and keyed
+  // by name+state+animFrame+flags (no theme). setTheme() calls
+  // clearRenderingCaches() so the invariant "warmed under current theme" is
+  // maintained. Consumers use hasWarmedAll() to verify preload coverage.
+  private _warmedNames: Set<string> = new Set();
 
   constructor(bgCanvas: HTMLCanvasElement, fgCanvas: HTMLCanvasElement, theme: ThemeConfig, mirrored = false, hudCanvas?: HTMLCanvasElement) {
     clearRenderingCaches();
@@ -138,17 +146,7 @@ export class Renderer {
     setSpriteCacheScale(this._renderScale);
     setHudScale(this._renderScale);
 
-    // Init clouds from theme config
-    const cc = theme.clouds;
-    this.clouds = [];
-    for (let i = 0; i < cc.count; i++) {
-      this.clouds.push({
-        x: (i / cc.count) * CANVAS_WIDTH + Math.random() * 100,
-        y: cc.yRange[0] + Math.random() * (cc.yRange[1] - cc.yRange[0]),
-        size: cc.minSize + Math.random() * (cc.maxSize - cc.minSize),
-        speed: cc.minSpeed + Math.random() * (cc.maxSpeed - cc.minSpeed),
-      });
-    }
+    this.initClouds();
   }
 
   private _applyScaleToCanvases(): void {
@@ -194,14 +192,67 @@ export class Renderer {
     this._timeLimit = timeLimit;
   }
 
+  setNetworkMode(isNetwork: boolean): void {
+    this._isNetworkMatch = isNetwork;
+  }
+
   setConnectionQuality(rtt: number, jitter: number): void {
     this._netRtt = rtt;
     this._netJitter = jitter;
-    this._isNetworkGuest = true;
   }
 
   /** E2E diagnostic: which rendering branches fired last frame. */
   getDiagnostics(): RenderDiagnostics { return this._diag; }
+
+  /** Pre-populate the sprite cache for the given character names. Called during
+   *  the loading phase so the first visible frame doesn't hitch on cache misses.
+   *  Passes `this.theme` so bubble-helmet arenas bake the helmet into the cached
+   *  bitmap — otherwise cache-miss at render time poisons the cache without it. */
+  warmSpriteCache(names: string[]): void {
+    warmSpriteCacheForCharacters(names, this.theme);
+    for (const name of names) this._warmedNames.add(name);
+  }
+
+  /** True when every name has been warmed under the current theme. Used by
+   *  the loading orchestrator to verify sprite-cache coverage before flipping
+   *  phase to 'playing'. Any name not yet warmed would cause first-frame jank. */
+  hasWarmedAll(names: string[]): boolean {
+    for (const name of names) {
+      if (!this._warmedNames.has(name)) return false;
+    }
+    return true;
+  }
+
+  /** Swap the active theme without tearing down the renderer. Used by
+   *  `GameLoop.switchArena()` for in-place arena changes. Resets cloud layout
+   *  and derived color caches; leaves the sprite cache intact (the cache key
+   *  includes a bubble-helmet bit, so cross-arena sprite reuse is safe). */
+  setTheme(theme: ThemeConfig): void {
+    this.theme = theme;
+    this._fogRGB = null;
+    this._ambientRGBs = null;
+    this.initClouds();
+    clearArenaCaches();
+    invalidateHudCache();
+    // Characters warmed under the old theme may have used different helmet
+    // settings — force re-warm under the new theme (cheap: cache hits for
+    // entries already keyed with the current helmet bit).
+    this._warmedNames.clear();
+  }
+
+  /** Populate `this.clouds` from the current theme's cloud config. */
+  private initClouds(): void {
+    const cc = this.theme.clouds;
+    this.clouds = [];
+    for (let i = 0; i < cc.count; i++) {
+      this.clouds.push({
+        x: (i / cc.count) * CANVAS_WIDTH + Math.random() * 100,
+        y: cc.yRange[0] + Math.random() * (cc.yRange[1] - cc.yRange[0]),
+        size: cc.minSize + Math.random() * (cc.maxSize - cc.minSize),
+        speed: cc.minSpeed + Math.random() * (cc.maxSpeed - cc.minSpeed),
+      });
+    }
+  }
 
   renderBackground(arena: Arena, originalArena?: Arena): void {
     if (originalArena) this.originalArena = originalArena;
@@ -685,8 +736,8 @@ export class Renderer {
     const hasFps = debugFlags.fpsEnabled;
     const hasOverlayContent = hasCountdown || hasFlash || hasAnimations || hasNavDebug || hasNetDebug || hasFps;
 
-    const rttRounded = this._isNetworkGuest ? Math.round(this._netRtt) : -1;
-    const jitterRounded = this._isNetworkGuest ? Math.round(this._netJitter) : -1;
+    const rttRounded = this._isNetworkMatch ? Math.round(this._netRtt) : -1;
+    const jitterRounded = this._isNetworkMatch ? Math.round(this._netJitter) : -1;
     const qualityChanged = rttRounded !== this._overlayLastRtt || jitterRounded !== this._overlayLastJitter;
 
     // Redraw if: cache dirty, transient content active, content just ended (clear residue), or quality indicator changed.
@@ -711,7 +762,7 @@ export class Renderer {
 
     drawHUD(ctx, matchState, this.frameTime, this._playerNames, this._timeLimit, hudDirty);
 
-    if (this._isNetworkGuest) {
+    if (this._isNetworkMatch) {
       drawConnectionQuality(ctx, this._netRtt, this._netJitter, CANVAS_WIDTH);
     }
 

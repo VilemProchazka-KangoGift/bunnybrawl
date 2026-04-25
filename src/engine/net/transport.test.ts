@@ -47,7 +47,7 @@ vi.mock('./core/networkSimulator', () => ({
   NetworkSimulator: vi.fn(() => ({ enabled: false, enqueue: vi.fn(), flush: vi.fn(() => []), getConfig: vi.fn(() => ({ latencyMs: 0, jitterMs: 0 })) })),
 }));
 
-import { Transport } from './transport';
+import { Transport, ROOM_CODE_LENGTH } from './transport';
 import type { TransportEvents } from './transport';
 import { MsgType, encodePing, encodePong } from './protocol';
 
@@ -296,6 +296,13 @@ describe('Transport — message handling', () => {
 });
 
 describe('Transport — createRoom lifecycle', () => {
+  // Regression pin: room codes are 3 chars, not 4. This has flipped back to 4
+  // multiple times during refactors. The product decision is shorter codes for
+  // verbal sharing — don't relax this without explicit sign-off.
+  it('ROOM_CODE_LENGTH is 3 (regression pin — do NOT bump without product sign-off)', () => {
+    expect(ROOM_CODE_LENGTH).toBe(3);
+  });
+
   it('creates a room and resolves with room code', async () => {
     resetMocks();
     const events = makeEvents();
@@ -304,6 +311,7 @@ describe('Transport — createRoom lifecycle', () => {
     const code = await t.createRoom();
 
     expect(code).toMatch(/^[A-Z2-9]{3}$/);
+    expect(code.length).toBe(ROOM_CODE_LENGTH);
     expect(t.roomCode).toBe(code);
     expect(t.isHost).toBe(true);
     expect(events.onStatusChange).toHaveBeenCalledWith('creating', undefined);
@@ -323,6 +331,29 @@ describe('Transport — createRoom lifecycle', () => {
     expect(events.onPeerConnected).toHaveBeenCalledWith('guest-1');
     expect(events.onStatusChange).toHaveBeenCalledWith('connected', undefined);
 
+    t.destroy();
+  });
+});
+
+describe('Transport — cleanup on joinRoom reuse', () => {
+  it('leaves the prior room before joining a new one', async () => {
+    resetMocks();
+    const events = makeEvents();
+    const t = new Transport(events);
+
+    const firstJoin = t.joinRoom('ABC');
+    onPeerJoinCallback?.('host-peer-1');
+    await firstJoin;
+    expect(t.peerCount).toBe(1);
+
+    // Second joinRoom should leave() the old room + clear peers
+    mockRoom.leave.mockClear();
+    const secondJoin = t.joinRoom('XYZ');
+    expect(mockRoom.leave).toHaveBeenCalled();
+    expect(t.peerCount).toBe(0);
+
+    onPeerJoinCallback?.('host-peer-2');
+    await secondJoin;
     t.destroy();
   });
 });
@@ -347,6 +378,126 @@ describe('Transport — joinRoom lifecycle', () => {
 
     expect(t.peerCount).toBe(1);
     t.destroy();
+  });
+
+  it('destroy() cancels the pending 20s join timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      resetMocks();
+      const events = makeEvents();
+      const t = new Transport(events);
+
+      // Start a join that will never resolve (no peer joins).
+      // Catch the rejection up front so the promise doesn't surface as
+      // unhandled when the test eventually completes.
+      const joinPromise = t.joinRoom('NEVR');
+      const settled = joinPromise.catch(() => 'rejected');
+
+      // Destroy before timeout fires — should cancel the pending timer
+      // AND prevent the timeout's `setStatus('error', …)` from running.
+      t.destroy();
+      const statusCallsBefore = (events.onStatusChange as ReturnType<typeof vi.fn>).mock.calls.length;
+
+      // Spin the clock past the 20s timeout. If destroy didn't cancel
+      // the timer, the error-status callback would fire here.
+      vi.advanceTimersByTime(25000);
+      await Promise.resolve();
+
+      const statusCallsAfter = (events.onStatusChange as ReturnType<typeof vi.fn>).mock.calls.length;
+      // destroy() itself emits one 'idle' status change. After that, no
+      // additional 'error' status change from a stale join timeout.
+      const errorCalls = (events.onStatusChange as ReturnType<typeof vi.fn>).mock.calls
+        .filter((c) => c[0] === 'error');
+      expect(errorCalls).toHaveLength(0);
+      // Sanity: destroy() did fire (status moved past join callsBefore)
+      expect(statusCallsAfter).toBeGreaterThanOrEqual(statusCallsBefore);
+
+      // The promise itself remains unresolved because the timer was
+      // cancelled and no peer ever joined — that's the correct behavior
+      // (caller already destroyed the Transport). Don't await it.
+      void settled;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('cleanupPriorRoom() cancels a pending join timer', async () => {
+    vi.useFakeTimers();
+    try {
+      resetMocks();
+      const events = makeEvents();
+      const t = new Transport(events);
+
+      const firstJoin = t.joinRoom('AAA');
+      const swallowFirst = firstJoin.catch(() => {});
+
+      // Trigger cleanupPriorRoom indirectly via a second joinRoom call.
+      // The pending first-join timer must be cancelled, otherwise the
+      // first promise would reject after 20s with 'timeout'.
+      const secondJoin = t.joinRoom('BBB');
+      onPeerJoinCallback?.('host');
+      await secondJoin;
+
+      // Advance past the original 20s timeout — must NOT fire 'error'
+      vi.advanceTimersByTime(25000);
+      await Promise.resolve();
+      const errorCalls = (events.onStatusChange as ReturnType<typeof vi.fn>).mock.calls
+        .filter((c) => c[0] === 'error');
+      expect(errorCalls).toHaveLength(0);
+
+      void swallowFirst;
+      t.destroy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('setEvents() during a pending join does not break the resolver', async () => {
+    resetMocks();
+    const initialEvents = makeEvents();
+    const t = new Transport(initialEvents);
+
+    const joinPromise = t.joinRoom('ABC');
+
+    // Caller swaps in a NEW events object before the first peer joins
+    // (mimics the lobby→match handoff that previously broke the join).
+    const newEvents = makeEvents();
+    t.setEvents(newEvents);
+
+    // Peer joins after the swap. The one-shot resolver must still fire
+    // AND the new events.onPeerConnected must be invoked, NOT the old.
+    onPeerJoinCallback?.('host-peer');
+    await joinPromise;
+
+    expect(newEvents.onPeerConnected).toHaveBeenCalledWith('host-peer');
+    expect(initialEvents.onPeerConnected).not.toHaveBeenCalled();
+
+    t.destroy();
+  });
+
+  it('rejects with timeout error when no peer joins within 20s', async () => {
+    vi.useFakeTimers();
+    try {
+      resetMocks();
+      const events = makeEvents();
+      const t = new Transport(events);
+
+      const joinPromise = t.joinRoom('CDEF');
+      const result = joinPromise.catch((e) => e.message);
+
+      vi.advanceTimersByTime(20001);
+      await Promise.resolve();
+      await Promise.resolve();
+
+      await expect(result).resolves.toBe('timeout');
+      const errorCalls = (events.onStatusChange as ReturnType<typeof vi.fn>).mock.calls
+        .filter((c) => c[0] === 'error');
+      expect(errorCalls.length).toBeGreaterThan(0);
+
+      t.destroy();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

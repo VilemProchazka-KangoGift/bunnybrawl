@@ -8,6 +8,12 @@ export class MusicManager {
   private muted = false;
   private musicHowl: Howl | null = null;
   private musicThemeId: string | null = null;
+  // Dedupe concurrent preloads. musicHowl/musicThemeId are only set on the
+  // `load` event, so without this track, two rapid preloadArena(same theme)
+  // calls would both start a fresh Howl fetch. If the themeId differs, we
+  // abandon the in-flight load (its onload/onloaderror still runs but may be
+  // overwritten — see below).
+  private _inFlightPreload: { themeId: string; promise: Promise<void> } | null = null;
   // Tracks whether menu music has actually started playing. Mobile browsers
   // block autoplay until a user gesture; Howler's internal `.playing()` flag
   // can report true even when the browser silently rejected play(), so we
@@ -79,11 +85,79 @@ export class MusicManager {
     }
     this.stopMusic();
     this.musicHowl?.unload();
+    // Cancel any in-flight preload for this theme so its late onload doesn't
+    // clobber the fresh Howl we're about to create — that would orphan the
+    // playing instance into a permanent background loop.
+    if (this._inFlightPreload?.themeId === themeId) this._inFlightPreload = null;
     const mp3 = getArenaPack(themeId)?.musicFile;
     if (!mp3) { console.warn(`[audio] No musicFile for arena '${themeId}'`); return; }
     this.musicHowl = new Howl({ src: [AUDIO_BASE + mp3], volume: 0.22, loop: true, html5: true });
     this.musicThemeId = themeId;
     this.musicHowl.play();
+  }
+
+  /**
+   * Preload the arena music so a later `playMusic(themeId)` can start without
+   * fetch+decode latency. Resolves on load success or error (never rejects —
+   * a failed preload must not block the loading screen).
+   */
+  preloadArena(themeId: string): Promise<void> {
+    if (this.musicDisabled) return Promise.resolve();
+    if (this.musicHowl && this.musicThemeId === themeId) return Promise.resolve();
+    // Dedup concurrent calls for the same theme
+    if (this._inFlightPreload && this._inFlightPreload.themeId === themeId) {
+      return this._inFlightPreload.promise;
+    }
+    const mp3 = getArenaPack(themeId)?.musicFile;
+    if (!mp3) return Promise.resolve();
+    const promise = new Promise<void>((resolve) => {
+      this.musicHowl?.unload();
+      const howl = new Howl({
+        src: [AUDIO_BASE + mp3],
+        volume: 0.22,
+        loop: true,
+        html5: true,
+        onload: () => {
+          // Only commit this Howl if we're still the most-recent preload.
+          // A later preloadArena(differentTheme) will have overwritten
+          // _inFlightPreload; in that case the older load completes into
+          // a nowhere. Also: if playMusic(themeId) raced ahead of us and
+          // already created+started its own Howl, do NOT clobber it
+          // (would orphan the playing Howl into permanent background loop).
+          if (this._inFlightPreload?.themeId === themeId) {
+            const playMusicAlreadyTook = this.musicHowl !== null && this.musicThemeId === themeId;
+            if (playMusicAlreadyTook) {
+              howl.unload();
+            } else {
+              this.musicHowl = howl;
+              this.musicThemeId = themeId;
+            }
+            this._inFlightPreload = null;
+          } else {
+            howl.unload();
+          }
+          resolve();
+        },
+        onloaderror: () => {
+          if (this._inFlightPreload?.themeId === themeId) {
+            this.musicHowl = null;
+            this.musicThemeId = null;
+            this._inFlightPreload = null;
+          }
+          resolve();
+        },
+      });
+      howl.load();
+    });
+    this._inFlightPreload = { themeId, promise };
+    return promise;
+  }
+
+  /** Returns true when the preloaded music Howl matches the given themeId.
+   *  Used by the loading screen to verify the right arena was actually
+   *  preloaded before flipping phase to 'playing'. */
+  hasPreloadedArena(themeId: string): boolean {
+    return this.musicHowl !== null && this.musicThemeId === themeId;
   }
 
   stopMusic(): void {

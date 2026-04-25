@@ -1,10 +1,12 @@
 import type { MatchState, MatchSettings, PlayerSlot } from '../../types';
+import { isBotSlot } from '../../types';
 import type { ThemeConfig } from '../../themes/types';
 import type { GameplaySystem } from '../types';
 import { updateCrowdCheering, tickPeriodicAmbient } from '../cosmetics/sfx';
 import { checkMatchEnd } from './match';
 import { SLOW_MO_DURATION } from '../../constants';
 import { randRange } from '../../themes/utils';
+import { audio } from '../../audio';
 
 export class MatchSystem implements GameplaySystem {
   private state: MatchState;
@@ -67,10 +69,48 @@ export class MatchSystem implements GameplaySystem {
     if (winner !== null) {
       this.state.slowMotion = SLOW_MO_DURATION;
       this.onMatchEnd(winner);
+      return;
+    }
+
+    // Host match-end guard: if every human left the match (disconnected) AND
+    // no bots remain, stop the simulation rather than let it run forever with
+    // no opponents. Online-only edge case: in local play, player.disconnected
+    // never flips. If the lone survivor is a human, award them the win; if
+    // only bots remain (unusual), end with no winner.
+    if (!this.resimulatingGetter() && !this.state.matchOver) {
+      let activeHumans = 0;
+      let activeBots = 0;
+      let lastActiveHuman: PlayerSlot | null = null;
+      for (const p of this.state.players) {
+        if (p.disconnected || !p.active) continue;
+        if (isBotSlot(p.id)) {
+          activeBots++;
+        } else {
+          activeHumans++;
+          lastActiveHuman = p.id;
+        }
+      }
+      if (activeHumans + activeBots === 0) {
+        this.onMatchEnd(null);
+      } else if (activeHumans === 1 && activeBots === 0) {
+        this.onMatchEnd(lastActiveHuman);
+      }
     }
   }
 
   cleanup(): void {
+    // Stop the ambient loops we started in init(). Today GameLoop.stop() and
+    // switchArena() also call audio.stopAllGameSounds() before reaching here,
+    // but cleanup() is the contract for "stop everything this system owns" —
+    // making it idempotent and self-contained avoids a footgun if a future
+    // call site reaches cleanup without running stopAllGameSounds first.
+    for (const loop of this.activeAmbientLoops) {
+      audio.stop(loop);
+    }
+    if (this.crowdStarted) {
+      audio.stop('crowd');
+      this.crowdStarted = false;
+    }
     this.activeAmbientLoops = [];
     this.periodicAmbientTimers.clear();
   }

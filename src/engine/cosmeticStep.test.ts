@@ -29,6 +29,7 @@ vi.mock('./renderer', () => ({
     setNetDebugStats = vi.fn();
     setPlayerNames = vi.fn();
     setTimeLimit = vi.fn();
+    setNetworkMode = vi.fn();
     getDiagnostics = vi.fn(() => ({ clouds: false, weather: false, wildlife: false, playersDrawn: 0 }));
   },
 }));
@@ -116,6 +117,9 @@ function createLoop(opts?: {
     opts?.players ?? (['P1', 'P2'] as PlayerSlot[]),
     onMatchEnd,
   );
+  // Default to 'playing' phase so cosmeticStep runs. Tests can flip to
+  // 'loading' to exercise the early-return.
+  loop.getState().phase = 'playing';
   _lastLoop = loop;
   return { loop, onMatchEnd, arena, settings };
 }

@@ -5,7 +5,7 @@
  * - Jump latching (edge-triggered jump preserved across rapid input messages)
  * - consumeGuestJumps() to clear latched jumps after each tick
  * - Reconnect respawn (dead players respawn when reconnecting)
- * - Reliable message handling (pause/disconnect/reconnect with game protocol)
+ * - Pause/disconnect reliable message handling
  */
 import type { InputState, PlayerSlot, MatchState } from '../types';
 import type { GameLoop } from '../gameLoop';
@@ -26,15 +26,13 @@ export interface HostAuthorityConfig {
   onPlayerDisconnect?: (slot: PlayerSlot) => void;
 }
 
-// Snapshot codec adapter for the generic core
-const crSnapshotCodec = {
+// Snapshot encoder adapter for the generic core (host-only path).
+const crSnapshotEncoder = {
   takeSnapshot: (frame: number, state: MatchState) => takeAuthSnapshot(frame, state),
   encode: (snap: ReturnType<typeof takeAuthSnapshot>) => {
     const { buffer, length } = encodeSnapshot(snap);
     return buffer.slice(0, length);
   },
-  decode: () => null, // Host doesn't decode snapshots
-  applyToState: () => {}, // Host doesn't apply snapshots
 };
 
 // Input codec adapter
@@ -58,7 +56,7 @@ export class HostAuthority {
     this.core = new GenericHostAuthority(
       {
         simulation: config.gameLoop,
-        snapshotCodec: crSnapshotCodec,
+        snapshotEncoder: crSnapshotEncoder,
         inputCodec: crInputCodec,
         localSlot: config.localSlot,
         onInputReceived: (_slot, existing, incoming) => {
@@ -90,7 +88,10 @@ export class HostAuthority {
     );
   }
 
-  addGuest(peerId: string, slot: PlayerSlot): void { this.core.addGuest(peerId, slot); }
+  addGuest(peerId: string, slot: PlayerSlot, reclaimToken?: string): void {
+    this.core.addGuest(peerId, slot, reclaimToken);
+  }
+  getReclaimToken(slot: PlayerSlot): string | null { return this.core.getReclaimToken(slot); }
   removeGuest(peerId: string): void { this.core.removeGuest(peerId); }
   tickGraceTimers(dt: number): void { this.core.tickGraceTimers(dt); }
   start(): void { this.core.start(); }
@@ -98,26 +99,34 @@ export class HostAuthority {
   getGuestInput(slot: PlayerSlot): InputState { return this.core.getGuestInput(slot); }
   getNetworkInputs(): Map<string, InputState> { return this.core.getNetworkInputs(); }
   getStats(): HostDebugStats { return this.core.getStats(); }
+  getExpectedGuestSlots(): PlayerSlot[] { return this.core.getExpectedGuestSlots() as PlayerSlot[]; }
+  getSlotForPeer(peerId: string): PlayerSlot | undefined { return this.core.getSlotForPeer(peerId) as PlayerSlot | undefined; }
   setMatchOver(): void { this.core.setMatchOver(); }
 
   broadcastSnapshot(state: MatchState): void { this.core.broadcastSnapshot(state); }
+  sendSnapshotTo(peerId: string, state: MatchState): void { this.core.sendSnapshotTo(peerId, state); }
+  getLocalFrame(): number { return this.core.getLocalFrame(); }
 
   handleUnreliableMessage(data: ArrayBuffer, fromPeerId?: string): void {
     this.core.handleUnreliableMessage(data, fromPeerId);
   }
 
-  /** Clear latched jump flags after the host tick consumed them. */
-  consumeGuestJumps(): void {
-    for (const input of this.core.getNetworkInputs().values()) {
-      input.jump = false;
+  /** Clear latched jump flags only for the slots fixedUpdate consumed,
+   *  preserving jumps latched by inputs that arrived mid-tick. */
+  consumeGuestJumps(slots: Iterable<PlayerSlot>): void {
+    const inputs = this.core.getNetworkInputs();
+    for (const slot of slots) {
+      const input = inputs.get(slot);
+      if (input) input.jump = false;
     }
   }
 
-  handleReconnectRequest(slot: PlayerSlot, newPeerId: string): boolean {
-    return this.core.handleReconnectRequest(slot, newPeerId);
+  handleReconnectRequest(slot: PlayerSlot, newPeerId: string, presentedToken?: string): boolean {
+    return this.core.handleReconnectRequest(slot, newPeerId, presentedToken);
   }
 
-  /** Handle reliable messages — game-specific protocol (pause/disconnect/reconnect). */
+  /** Handle reliable messages — pause relay + disconnect teardown. Reconnect
+   *  sync lives in NetMatch since it needs host-wide state (pause flag). */
   handleReliableMessage(msg: ReliableMessage, fromPeerId?: string): void {
     switch (msg.type) {
       case MsgType.PAUSE:
@@ -137,24 +146,6 @@ export class HostAuthority {
       case MsgType.DISCONNECT:
         if (fromPeerId) this.core.removeGuest(fromPeerId);
         break;
-      case MsgType.RECONNECT_REQUEST: {
-        const reqSlot = (msg as { slot: string }).slot as PlayerSlot;
-        if (fromPeerId && this.core.handleReconnectRequest(reqSlot, fromPeerId)) {
-          this.transport.sendReliableTo(fromPeerId, {
-            type: MsgType.RECONNECT_SYNC,
-            slot: reqSlot,
-            snapshotFrame: this.core.getLocalFrame(),
-          } as ReliableMessage);
-          // Send fresh snapshot
-          const snap = takeAuthSnapshot(this.core.getLocalFrame(), this.gameLoop.getState());
-          const { buffer: buf, length: len } = encodeSnapshot(snap);
-          const fullMsg = new Uint8Array(1 + len);
-          fullMsg[0] = MsgType.SNAPSHOT;
-          fullMsg.set(new Uint8Array(buf, 0, len), 1);
-          this.transport.sendUnreliableTo(fromPeerId, fullMsg.buffer);
-        }
-        break;
-      }
     }
   }
 }

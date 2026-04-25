@@ -11,39 +11,23 @@
  *   TPlayerId — game's player identifier (e.g. 'P1' | 'P2' | 'B1')
  */
 
-// ---- Simulation ----
-
-/** Game simulation loop — the core orchestrator calls these to drive host and guest. */
-export interface Simulation<TInput, TState> {
-  fixedUpdate(dt: number, networkInputs: Map<string, TInput>): void;
-  getState(): TState;
-  /** Read merged local input (keyboard + touch + gamepad). */
-  getInputAny(): TInput;
-  disconnectPlayer(id: string): void;
-  /** dt is frame delta — used to decay visual timers between simulation ticks. */
-  renderFrame(dt: number): void;
-  cosmeticStep(dt: number): void;
-  /** Switch to external RAF control (no internal requestAnimationFrame loop). */
-  setNetworkMode(enabled: boolean): void;
-  start(): void;
-  stop(): void;
-  pause(): void;
-  resume(): void;
-  isPaused(): boolean;
-  skipCountdown(): void;
-  /** Optional: update HUD with connection quality. */
-  setConnectionQuality?(rtt: number, jitter: number): void;
-}
-
 // ---- Snapshot Codec ----
 
-/** Game-specific snapshot serialization. The core just transports bytes. */
-export interface SnapshotCodec<TSnapshot, TState> {
+/** Host-side snapshot serialization — take state and serialize to wire bytes. */
+export interface SnapshotEncoder<TSnapshot, TState> {
   takeSnapshot(frame: number, state: TState): TSnapshot;
   encode(snapshot: TSnapshot): ArrayBuffer;
+}
+
+/** Guest-side snapshot deserialization — wire bytes back to state. */
+export interface SnapshotDecoder<TSnapshot, TState> {
   decode(buffer: ArrayBuffer): TSnapshot | null;
   applyToState(snapshot: TSnapshot, state: TState): void;
 }
+
+/** Both halves bundled — convenience for code that does both (tests, fixtures). */
+export interface SnapshotCodec<TSnapshot, TState>
+  extends SnapshotEncoder<TSnapshot, TState>, SnapshotDecoder<TSnapshot, TState> {}
 
 // ---- Interpolation Config ----
 
@@ -61,7 +45,6 @@ export interface InputCodec<TInput> {
   decode(byte: number): TInput;
   /** Return a neutral / idle input value. */
   noInput(): TInput;
-  bytesPerInput?: number;
 }
 
 // ---- Host Authority Config ----
@@ -69,9 +52,11 @@ export interface InputCodec<TInput> {
 /** Configuration for the generic host authority engine. */
 export interface HostAuthorityConfig<TInput, TState, TSnapshot> {
   simulation: { getState(): TState; disconnectPlayer(id: string): void };
-  snapshotCodec: SnapshotCodec<TSnapshot, TState>;
+  snapshotEncoder: SnapshotEncoder<TSnapshot, TState>;
   inputCodec: InputCodec<TInput>;
   localSlot: string;
+  /** Seconds a disconnected slot is held in reconnect-grace before final eviction. Default 20. */
+  gracePeriodSec?: number;
   /** Called when a guest input arrives — game can latch edge-triggered inputs. */
   onInputReceived?(slot: string, existing: TInput, incoming: TInput): TInput;
   /** Called when a player reconnects in splatted state — game can trigger respawn. */
@@ -79,40 +64,3 @@ export interface HostAuthorityConfig<TInput, TState, TSnapshot> {
   onPlayerDisconnect?(slot: string): void;
 }
 
-// ---- Orchestrator Config ----
-
-/** Configuration for the generic host/guest loop orchestrator. */
-export interface OrchestratorConfig<TInput, TState, TSnapshot> {
-  simulation: Simulation<TInput, TState>;
-  snapshotCodec: SnapshotCodec<TSnapshot, TState>;
-  inputCodec: InputCodec<TInput>;
-  interpolationConfig: InterpolationConfig<TSnapshot>;
-  localSlot: string;
-  remoteSlots: string[];
-  isHost: boolean;
-  fixedTimestep: number;
-  /** Called every guest frame after snapshot apply — game decays visual timers. */
-  onGuestTick?(dt: number, state: TState): void;
-  /** Called every guest frame with local input — game applies cosmetic echo. */
-  onGuestInput?(input: TInput, state: TState, rtt: number, dt: number): void;
-  /** Extrapolate a snapshot forward by dt (for late arrivals). */
-  extrapolateSnapshot?(snapshot: TSnapshot, dt: number): TSnapshot;
-  onMatchEnd?(winner: string | null, state: TState): void;
-  onStall?(stalled: boolean): void;
-  onStallTimeout?(): void;
-  onDisconnect?(): void;
-  onPlayerDisconnect?(slot: string): void;
-  onReconnecting?(reconnecting: boolean): void;
-  /** Check if a slot is a bot (bots don't get network treatment). */
-  isBotSlot?(slot: string): boolean;
-}
-
-// ---- Transport Config ----
-
-export interface TransportConfig {
-  appId: string;
-  iceServers?: RTCIceServer[];
-  pingInterval?: number;
-  pongTimeout?: number;
-  degradedThreshold?: number;
-}

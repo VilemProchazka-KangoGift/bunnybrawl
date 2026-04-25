@@ -83,9 +83,16 @@ export class AIController {
       return { left: false, right: false, jump: false, down: this.tauntTimer % 6 < 3 };
     }
 
-    // Stuck detection
+    // Stuck detection — but only when the bot is actually trying to move.
+    // During search-pause (intentional idle) or taunt (post-kill freeze), no
+    // movement is expected, so don't accumulate stuckTimer toward the
+    // 45-frame nav-jump threshold or the bot fires spurious mid-roam jumps
+    // when the search-pause ends.
     const moved = Math.abs(self.x - this.lastX) + Math.abs(self.y - this.lastY);
-    if (moved < 2) {
+    const intentionallyIdle = this.searchTimer > 0;
+    if (intentionallyIdle) {
+      this.stuckTimer = 0;
+    } else if (moved < 2) {
       this.stuckTimer++;
     } else {
       this.stuckTimer = 0;

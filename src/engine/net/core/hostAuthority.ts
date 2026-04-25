@@ -4,8 +4,33 @@
  * Buffers guest inputs, broadcasts snapshots, manages peer connections.
  * Game-specific logic (input latching, reconnect respawn) is injected via callbacks.
  */
-import type { SnapshotCodec, InputCodec, HostAuthorityConfig } from './types';
-import { CoreMsgType, encodePong, decodePingPong, decodeSnapshotAck } from './protocol';
+import type { SnapshotEncoder, InputCodec, HostAuthorityConfig } from './types';
+import { CoreMsgType, encodePong, decodePingPong } from './protocol';
+
+/**
+ * Frame gap threshold for detecting input counter resets. If a new bundle's
+ * newest frame is more than this many frames below our stored max, treat it
+ * as a fresh counter (Uint32 wraparound, or a reconnecting client whose
+ * disconnect we never observed) and reset the stored value.
+ */
+const COUNTER_RESET_GAP = 1_000_000;
+
+/** Generate a cryptographically random reclaim token. Uses crypto when
+ *  available (browsers, Node 19+); falls back to Math.random() in test
+ *  envs that don't expose crypto.getRandomValues. 128 bits of entropy.
+ *  Exported so the lobby (which issues tokens before HostAuthority is
+ *  constructed) can call the same generator instead of duplicating it. */
+export function generateReclaimToken(): string {
+  const bytes = new Uint8Array(16);
+  if (typeof globalThis !== 'undefined' && globalThis.crypto?.getRandomValues) {
+    globalThis.crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < 16; i++) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  let s = '';
+  for (let i = 0; i < 16; i++) s += bytes[i].toString(16).padStart(2, '0');
+  return s;
+}
 
 /** Minimal simulation interface — only what the host authority actually calls. */
 export interface HostSimulation<TState> {
@@ -37,7 +62,7 @@ export interface HostDebugStats {
 
 export class GenericHostAuthority<TInput, TState, TSnapshot> {
   private simulation: HostSimulation<TState>;
-  private snapshotCodec: SnapshotCodec<TSnapshot, TState>;
+  private snapshotEncoder: SnapshotEncoder<TSnapshot, TState>;
   private inputCodec: InputCodec<TInput>;
   private transport: HostTransport;
   readonly localSlot: string;
@@ -48,21 +73,29 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
 
   private localFrame = 0;
   private running = false;
+  // After `setMatchOver()`, the host sends this many more snapshots (so late
+  // guests see matchOver=true even if the first copy is lost), then stops.
+  private matchOverSnapshotsLeft = -1;
+  private static readonly MATCH_OVER_TAIL = 20;
 
   // Guest input buffers: slot → latest input
   private guestInputs = new Map<string, TInput>();
   // Peer → slot mapping
   private peerSlotMap = new Map<string, string>();
 
-  // Delta compression infrastructure (disabled — kept for future)
-  private guestAckedFrame = new Map<string, number>();
-
   // Per-slot frame tracking for input redundancy
   private lastConsumedFrame = new Map<string, number>();
 
-  // Reconnection grace period
+  // Reconnection grace period (seconds before a disconnected slot is final-evicted).
   private disconnectedSlots = new Map<string, { timer: number; peerId: string }>();
-  private readonly GRACE_PERIOD = 20; // seconds
+  /** Per-slot reclaim secret. Generated on addGuest and presented by the
+   *  reconnecting peer in RECONNECT_REQUEST. Without this, any peer in the
+   *  room could claim a disconnected slot and steal the original player's
+   *  score. Survives across the disconnect grace period; cleared only on
+   *  finalRemoveGuest (slot truly gone). */
+  private reclaimTokens = new Map<string, string>();
+  private readonly gracePeriodSec: number;
+  private static readonly DEFAULT_GRACE_PERIOD_SEC = 20;
 
   // Stats — ring buffer of last 120 snapshot sizes (~2s at 60Hz)
   private lastSnapshotBytes = 0;
@@ -86,29 +119,51 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
     decodeSlot: (byte: number) => string,
   ) {
     this.simulation = config.simulation;
-    this.snapshotCodec = config.snapshotCodec;
+    this.snapshotEncoder = config.snapshotEncoder;
     this.inputCodec = config.inputCodec;
     this.transport = transport;
     this.localSlot = config.localSlot;
     this.onInputReceived = config.onInputReceived;
     this.onPlayerReconnect = config.onPlayerReconnect;
     this.onPlayerDisconnect = config.onPlayerDisconnect;
+    this.gracePeriodSec = config.gracePeriodSec ?? GenericHostAuthority.DEFAULT_GRACE_PERIOD_SEC;
     this.decodeInputMessage = decodeInputMessage;
     this.decodeSlot = decodeSlot;
   }
 
-  addGuest(peerId: string, slot: string): void {
+  /** Register a guest. Optionally accept a pre-issued reclaim token (e.g. a
+   *  token already sent to the guest in lobby SLOT_ASSIGNMENT). When omitted,
+   *  generates a fresh token. Use getReclaimToken(slot) to retrieve. */
+  addGuest(peerId: string, slot: string, reclaimToken?: string): void {
     this.peerSlotMap.set(peerId, slot);
     this.guestInputs.set(slot, this.inputCodec.noInput());
+    if (reclaimToken) {
+      this.reclaimTokens.set(slot, reclaimToken);
+    } else if (!this.reclaimTokens.has(slot)) {
+      this.reclaimTokens.set(slot, generateReclaimToken());
+    }
+  }
+
+  /** Returns the reclaim token for a slot, or null if none is registered.
+   *  Used by the host to send the token to the guest in SLOT_ASSIGNMENT. */
+  getReclaimToken(slot: string): string | null {
+    return this.reclaimTokens.get(slot) ?? null;
   }
 
   removeGuest(peerId: string): void {
     const slot = this.peerSlotMap.get(peerId);
     this.peerSlotMap.delete(peerId);
-    this.guestAckedFrame.delete(peerId);
     if (slot) {
       this.guestInputs.delete(slot);
-      this.disconnectedSlots.set(slot, { timer: this.GRACE_PERIOD, peerId });
+      // Clear lastConsumedFrame too: a fresh peer reconnecting into the same
+      // slot (without going through the explicit RECONNECT_REQUEST flow)
+      // starts at guestFrame=1 — if a stale lastConsumedFrame from the prior
+      // session survives, all of the new peer's inputs are silently discarded
+      // until their counter catches up. The grace-period reclaim path
+      // (handleReconnectRequest) clears this on its own; this guards the
+      // bare-transport-recycle path.
+      this.lastConsumedFrame.delete(slot);
+      this.disconnectedSlots.set(slot, { timer: this.gracePeriodSec, peerId });
       this.simulation.disconnectPlayer(slot);
       this.onPlayerDisconnect?.(slot);
     }
@@ -117,6 +172,12 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
   private finalRemoveGuest(slot: string): void {
     this.disconnectedSlots.delete(slot);
     this.lastConsumedFrame.delete(slot);
+    // Keep the reclaim token: after grace expires, the original peer can
+    // still present their token to reclaim, but a stranger CANNOT (storedToken
+    // exists, presented token differs, validation rejects). If we deleted
+    // here, the post-grace path would fall through with storedToken=undefined
+    // and let any peer claim the abandoned slot — defeating the auth fix.
+    // Tokens get dropped at match end via stop().
   }
 
   tickGraceTimers(dt: number): void {
@@ -128,7 +189,19 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
     }
   }
 
-  handleReconnectRequest(slot: string, newPeerId: string): boolean {
+  handleReconnectRequest(slot: string, newPeerId: string, presentedToken?: string): boolean {
+    // Never let a remote peer reclaim the host's own slot. The host's localSlot
+    // is never in peerSlotMap (which only tracks remote peers), so without this
+    // check a malicious guest could send RECONNECT_REQUEST{slot: hostSlot} and
+    // hijack input authority over the host's player.
+    if (slot === this.localSlot) return false;
+
+    // Token validation: if we issued a token for this slot, the reclaiming
+    // peer must present a matching one. This prevents a malicious peer in
+    // the room from claiming a disconnected stranger's slot to steal score.
+    const storedToken = this.reclaimTokens.get(slot);
+    if (storedToken && storedToken !== presentedToken) return false;
+
     const graceInfo = this.disconnectedSlots.get(slot);
     if (!graceInfo) {
       const hasActivePeer = [...this.peerSlotMap.values()].includes(slot);
@@ -155,12 +228,20 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
 
   stop(): void {
     this.running = false;
+    // Drop reclaim tokens at match end — finalRemoveGuest deliberately keeps
+    // them across grace expiry to maintain auth integrity, but match end is
+    // the actual lifetime boundary.
+    this.reclaimTokens.clear();
   }
 
   broadcastSnapshot(state: TState): void {
+    // After match end, send a finite tail so guests reliably see matchOver=true
+    // then stop — no point burning bandwidth on a dead simulation.
+    if (this.matchOverSnapshotsLeft === 0) return;
+    if (this.matchOverSnapshotsLeft > 0) this.matchOverSnapshotsLeft--;
     this.localFrame++;
-    const snap = this.snapshotCodec.takeSnapshot(this.localFrame, state);
-    const encodeBuf = this.snapshotCodec.encode(snap);
+    const snap = this.snapshotEncoder.takeSnapshot(this.localFrame, state);
+    const encodeBuf = this.snapshotEncoder.encode(snap);
 
     const msg = new Uint8Array(1 + encodeBuf.byteLength);
     msg[0] = CoreMsgType.SNAPSHOT;
@@ -176,6 +257,18 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
     if (this.snapshotHistoryCount < GenericHostAuthority.SNAPSHOT_HISTORY_SIZE) this.snapshotHistoryCount++;
   }
 
+  /** One-off snapshot to a single peer — used for reconnect sync where the
+   *  reclaimed guest needs a fresh full state outside the broadcast cadence.
+   *  Does not advance localFrame or touch the match-over tail. */
+  sendSnapshotTo(peerId: string, state: TState): void {
+    const snap = this.snapshotEncoder.takeSnapshot(this.localFrame, state);
+    const encodeBuf = this.snapshotEncoder.encode(snap);
+    const msg = new Uint8Array(1 + encodeBuf.byteLength);
+    msg[0] = CoreMsgType.SNAPSHOT;
+    msg.set(new Uint8Array(encodeBuf), 1);
+    this.transport.sendUnreliableTo(peerId, msg.buffer);
+  }
+
   handleUnreliableMessage(data: ArrayBuffer, fromPeerId?: string): void {
     const view = new DataView(data);
     if (view.byteLength < 1) return;
@@ -185,11 +278,28 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
       const decoded = this.decodeInputMessage(data);
       if (!decoded || decoded.inputCount === 0) return;
       const slot = this.decodeSlot(decoded.source);
-      const lastFrame = this.lastConsumedFrame.get(slot) ?? 0;
+      // Source authentication: a malicious / buggy peer could spoof another
+      // slot ID (including a bot slot) on the wire to hijack inputs. We trust
+      // only the slot the host assigned to the originating peer.
+      if (fromPeerId !== undefined) {
+        const expected = this.peerSlotMap.get(fromPeerId);
+        if (!expected || expected !== slot) return;
+      }
+      // Counter-reset detection (see COUNTER_RESET_GAP at module top).
+      const stored = this.lastConsumedFrame.get(slot) ?? 0;
+      const newest = decoded.inputs[decoded.inputCount - 1].frame;
+      if (stored - newest > COUNTER_RESET_GAP) {
+        this.lastConsumedFrame.delete(slot);
+      }
+      // Track a per-call max so a non-monotonic intra-bundle ordering can't
+      // overwrite a newer frame with an older one. (lastConsumedFrame is
+      // snapshotted before the loop and only written after — without this
+      // local guard, [F=10, F=5, F=8] would apply F=5 over F=10.)
+      let maxFrameThisCall = this.lastConsumedFrame.get(slot) ?? 0;
 
       for (let i = 0; i < decoded.inputCount; i++) {
         const entry = decoded.inputs[i];
-        if (entry.frame <= lastFrame) continue;
+        if (entry.frame <= maxFrameThisCall) continue;
 
         const existing = this.guestInputs.get(slot);
         if (existing && this.onInputReceived) {
@@ -198,6 +308,7 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
         } else {
           this.guestInputs.set(slot, entry.input);
         }
+        maxFrameThisCall = entry.frame;
         this.lastConsumedFrame.set(slot, entry.frame);
       }
 
@@ -208,11 +319,6 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
             this.transport.sendUnreliableTo(pid, data);
           }
         }
-      }
-    } else if (type === CoreMsgType.SNAPSHOT_ACK) {
-      const frame = decodeSnapshotAck(data);
-      if (frame !== null && fromPeerId) {
-        this.guestAckedFrame.set(fromPeerId, frame);
       }
     } else if (type === CoreMsgType.PING) {
       const pp = decodePingPong(data);
@@ -254,5 +360,25 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
 
   getLocalFrame(): number { return this.localFrame; }
 
-  setMatchOver(): void {}
+  /** Return the slot IDs of all currently-connected guests. Used by
+   *  host-level LOADED handshake to know which slots are expected to signal
+   *  readiness. Excludes slots in the reconnection grace period. */
+  getExpectedGuestSlots(): string[] {
+    return [...this.peerSlotMap.values()];
+  }
+
+  /** Resolve a transport peerId to its assigned slot, or undefined if the
+   *  peer has no slot (not yet joined or already removed). */
+  getSlotForPeer(peerId: string): string | undefined {
+    return this.peerSlotMap.get(peerId);
+  }
+
+  /** Arm the finite match-over broadcast tail. After MATCH_OVER_TAIL more
+   *  snapshots, broadcastSnapshot becomes a no-op until the authority is
+   *  destroyed. */
+  setMatchOver(): void {
+    if (this.matchOverSnapshotsLeft < 0) {
+      this.matchOverSnapshotsLeft = GenericHostAuthority.MATCH_OVER_TAIL;
+    }
+  }
 }

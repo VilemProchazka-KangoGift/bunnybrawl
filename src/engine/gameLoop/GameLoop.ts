@@ -1,13 +1,13 @@
 import type {
   MatchState, MatchSettings, Arena, PlayerSlot, Player,
-  InputState,
+  InputState, MatchPhase,
 } from '../types';
 import { isBotSlot } from '../types';
 import { SeededRNG } from '../net/prng';
 import { takeSnapshot as _takeSnapshot, restoreSnapshot as _restoreSnapshot } from '../net/serialize';
 import type { GameSnapshot } from '../net/serialize';
 import type { ThemeConfig } from '../themes/types';
-import { getTheme, mirrorArena } from '../arenas';
+import { getArena, getTheme, mirrorArena } from '../arenas';
 import { swapRemove } from '../themes/utils';
 import { InputManager } from '../input';
 import { TouchInputManager } from '../touchInput';
@@ -97,7 +97,6 @@ export class GameLoop {
   private _unsubRenderScale: (() => void) | null = null;
 
   // Global bump cooldown (prevents double-fire from both pushed players)
-  // bumpCooldown removed — bump detection now uses sideSquash transition in cosmeticStep
 
   // Touch input for mobile
   private touchInput: TouchInputManager | null = null;
@@ -114,6 +113,15 @@ export class GameLoop {
   private _resimulating = false; // true during rollback resimulation — skip cosmetic systems
   // Explicit inputs injected by rollback engine (keyed by PlayerSlot)
   private _networkInputs?: Map<string, InputState>;
+
+  // Phase change callback (loading → playing → over). Fires on transition only.
+  private onPhaseChange?: (phase: MatchPhase) => void;
+
+  // Incremented every time a loading session begins (construction + switchArena).
+  // Callers that kick off async preload work capture this at start and compare
+  // on resolution — stale promises (superseded by a rapid arena change) won't
+  // flip phase into 'playing' with the wrong arena's assets preloaded.
+  private _loadingGeneration = 0;
 
   // Bound callbacks for extracted submodules (avoids .bind() allocations in hot paths)
   private readonly _boundGameRandom = (): number => this.gameRandom();
@@ -180,19 +188,27 @@ export class GameLoop {
 
     this.state = createInitialMatchState(this.arena, this.theme, settings, players, activePlayers, this._boundGameRandom);
 
-    // Instantiate arena entity system first — others need its cached zones
-    this.arenaEntitySystem = new ArenaEntitySystem(this.state, this.arena, this.theme, this._boundGameRandom);
-    this.arenaEntitySystem.init();
-
-    this.hazardSystem = new HazardSystem(this.state, this.arena, this._boundGameRandom);
-    this.hazardSystem.init();
-
     // Touch input for mobile: controls the first human player
     if (isTouchPrimary()) {
       this.touchInput = new TouchInputManager();
       this.touchSlot = activePlayers.find(s => !isBotSlot(s)) ?? null;
       if (this.touchSlot) haptics.init(this.touchSlot);
     }
+
+    this.buildSystems();
+  }
+
+  /** Build (or rebuild) all gameplay + cosmetic systems. Called from the
+   *  constructor and from `switchArena()` — the two paths that need a fresh
+   *  system graph bound to the current arena/theme/state. Order matters:
+   *  arenaEntitySystem first (others read its cached zones), then gameplay
+   *  that depends on particleSystem/playerTransitionSystem. */
+  private buildSystems(): void {
+    this.arenaEntitySystem = new ArenaEntitySystem(this.state, this.arena, this.theme, this._boundGameRandom);
+    this.arenaEntitySystem.init();
+
+    this.hazardSystem = new HazardSystem(this.state, this.arena, this._boundGameRandom);
+    this.hazardSystem.init();
 
     this.particleSystem = new ParticleSystem(this.state, this.arena, this.theme, this.settings, this.arenaEntitySystem.getGeyserIndexMap());
     this.carrotSystem = new CarrotSystem(
@@ -213,7 +229,6 @@ export class GameLoop {
     this.playerTransitionSystem.init();
     this.entityTransitionSystem.init();
 
-    // Instantiate new gameplay systems after arenaEntitySystem and playerTransitionSystem
     this.effectZoneSystem = new EffectZoneSystem(
       this.state, this.arena, this.arenaEntitySystem,
       () => this.playerTransitionSystem.getSfxCooldowns(),
@@ -244,14 +259,14 @@ export class GameLoop {
         this.touchInput.attach(container, scaleFn, () => this.paused);
       }
     }
-    this.renderer.renderBackground(this.arena, this.originalArena);
-    // Renderer.setRenderScale auto-redraws bg from cached arena (baked gibs/blood lost).
+    // Music + ambient + renderBackground are NO LONGER started here. They run
+    // during the loading phase (via runLoadingTasks → preloadArena + renderBackground)
+    // and via setPhase('playing') → audio.playMusic + playSound('ambient')
+    // + matchSystem.init() (arena ambient loops).
+    // Render-scale subscription is independent of phase — keep it in start().
     this._unsubRenderScale = subscribeRenderScale((s) => this.renderer.setRenderScale(s));
     this.running = true;
     this.lastTime = performance.now();
-    audio.playMusic(this.arena.themeId);
-    this.playSound('ambient');
-    this.matchSystem.init();
     if (debugFlags.navDebugAllowed || debugFlags.netDebugAllowed || debugFlags.fpsAllowed) {
       this._debugKeyHandler = (e: KeyboardEvent) => {
         if (e.key === '`') {
@@ -276,6 +291,9 @@ export class GameLoop {
     this.touchInput?.detach();
     audio.stopAllGameSounds();
     this.matchSystem.cleanup();
+    // Reset half-rate cosmetic accumulator so a re-start (or test reuse)
+    // doesn't carry over leftover lead from the prior session.
+    this._cosmeticLead = 0;
     if (this._debugKeyHandler) {
       window.removeEventListener('keydown', this._debugKeyHandler);
       this._debugKeyHandler = null;
@@ -324,14 +342,18 @@ export class GameLoop {
   getInputAny(): InputState {
     const kb = this.input.getInputAny();
     if (this.touchInput) {
-      // Network mode: skip airborne conversion — host applies it in getPlayerInput()
-      // using authoritative state. Jump latch preserves across message overwrites.
+      // Convert touch airborne-tap to fast-fall using THIS side's view of the
+      // player. On a guest, that view comes from the latest snapshot (~RTT/2
+      // stale), which is still much closer to the moment the user actually
+      // tapped than the host's view (which is RTT/2 stale from the OTHER
+      // direction). Sending the converted input across the wire spares the
+      // host from guessing — its match.ts:39-41 safety-net conversion only
+      // fires if the guest's view diverged enough that they sent a raw jump
+      // while the host's authoritative player state is airborne.
       const touchPlayer = this.touchSlot
         ? this.state.players.find(p => p.id === this.touchSlot)
         : null;
-      const airborne = this._networkMode
-        ? false  // network mode: never convert, host applies conversion in getPlayerInput()
-        : touchPlayer?.state === 'airborne';
+      const airborne = touchPlayer?.state === 'airborne';
       const ti = this.touchInput.getInputForPlayer(airborne);
       return {
         left: kb.left || ti.left,
@@ -346,6 +368,133 @@ export class GameLoop {
   /** Enable network mode: external code drives the loop. */
   setNetworkMode(enabled: boolean): void {
     this._networkMode = enabled;
+    this.renderer.setNetworkMode(enabled);
+  }
+
+  /** Register a callback that fires whenever the match phase changes. */
+  setOnPhaseChange(cb: (phase: MatchPhase) => void): void {
+    this.onPhaseChange = cb;
+  }
+
+  /** Snapshot the current loading-session generation. Async preload callers
+   *  capture this before their work starts and compare on resolution; a
+   *  different value means a rapid arena swap has made the result stale. */
+  getLoadingGeneration(): number {
+    return this._loadingGeneration;
+  }
+
+  /** Transition the match to a new phase. No-op if already in that phase.
+   *  On first entry into 'playing', starts arena music + ambient loop. */
+  setPhase(phase: MatchPhase): void {
+    const prev = this.state.phase;
+    if (prev === phase) return;
+    this.state.phase = phase;
+    if (phase === 'playing' && prev !== 'playing') {
+      this.onEnterPlayingPhase();
+    }
+    this.onPhaseChange?.(phase);
+  }
+
+  /** Side effects that fire on the loading→playing edge. Called by setPhase
+   *  on the host, and by NetMatch's snapshot-driven phase tracker on the
+   *  guest. Includes music + ambient + matchSystem.init() + cosmetic
+   *  baseline reset — without these on the guest, joining players hear no
+   *  music, no per-arena ambient (wind/lava/underwater), and may hear
+   *  spurious jump/land/score SFX as prev-state catches up. */
+  onEnterPlayingPhase(): void {
+    audio.playMusic(this.arena.themeId);
+    this.playSound('ambient');
+    this.matchSystem.init();
+    this.resetCosmeticBaselines();
+  }
+
+  /** Swap to a different arena in place — scores reset (no carry-over), state is
+   *  reinitialized, phase flips back to 'loading'. Used by the pause-menu arena
+   *  picker so we don't unmount the Match component (which would lose transport
+   *  wiring on the online path). */
+  switchArena(arenaId: string, settingsOverrides?: Partial<MatchSettings>): void {
+    // Stop prior arena audio: music, ambient, theme-specific loops + periodic timers.
+    audio.stopAllGameSounds();
+    this.matchSystem.cleanup();
+
+    // Resolve new arena + theme
+    const newArena = getArena(arenaId);
+    this.originalArena = newArena;
+    if (settingsOverrides) {
+      this.settings = { ...this.settings, ...settingsOverrides };
+    }
+    let effectiveArena = newArena;
+    if (this.settings.mods.superBounce) {
+      effectiveArena = { ...effectiveArena, bouncyPlatforms: effectiveArena.platforms.map((_, i) => i) };
+    }
+    if (this.settings.mods.mirrorArena) {
+      effectiveArena = mirrorArena(effectiveArena);
+    }
+    this.arena = effectiveArena;
+    this.theme = getTheme(newArena.themeId);
+
+    // Recompute effective physics from new theme + mods
+    const phys = computeEffectivePhysics(this.theme, this.settings.mods);
+    this.effGravity = phys.gravity;
+    this.effFriction = phys.friction;
+    this.effWalkSpeed = phys.walkSpeed;
+    this.effJumpImpulse = phys.jumpImpulse;
+    this.effMaxFallSpeed = phys.maxFallSpeed;
+
+    // Reset state to fresh match-initial — reuses existing player slots
+    const activePlayers = this.state.players.map(p => p.id);
+    const fresh = createInitialMatchState(
+      this.arena, this.theme, this.settings,
+      createInitialPlayers(activePlayers, this.arena, this.settings.mods.giantPlayers, this._boundGameRandom),
+      activePlayers, this._boundGameRandom,
+    );
+    // Replace every field on the existing state object so any external holder
+    // of the reference keeps pointing at live data.
+    Object.assign(this.state, fresh);
+
+    // Rebuild all arena-dependent systems. The old instances are replaced by
+    // reassignment — they hold only `this.state`/`this.theme` refs, no timers
+    // or listeners, so GC reclaims them without explicit cleanup. (matchSystem
+    // already had its periodic-ambient timers cleared above via
+    // `matchSystem.cleanup()` before rebuild.)
+    this.buildSystems();
+
+    this.renderer.setTheme(this.theme);
+    this.renderer.setTimeLimit(this.settings.timeLimit);
+
+    // Drain leftover cosmetic lead — otherwise the first cosmeticStep after
+    // the new arena finishes loading runs against residual time from the
+    // prior arena.
+    this._cosmeticLead = 0;
+
+    // Bump the generation so in-flight preload promises from the previous
+    // arena don't incorrectly flip us back to 'playing'.
+    this._loadingGeneration++;
+
+    // Emit the phase transition (Match.tsx listens to re-show the loading overlay).
+    this.onPhaseChange?.('loading');
+  }
+
+  /** Get the renderer instance. Used by matchLoading to render the background
+   *  and warm the sprite cache during the loading phase. */
+  getRenderer(): Renderer {
+    return this.renderer;
+  }
+
+  /** Get the (possibly mirrored) arena — passed to matchLoading.renderBackground. */
+  getArena(): Arena {
+    return this.arena;
+  }
+
+  /** Get the un-mirrored arena — needed by matchLoading for theme draw calls. */
+  getOriginalArena(): Arena {
+    return this.originalArena;
+  }
+
+  /** Get the list of character names active in this match (including bots).
+   *  Used by matchLoading to know which sprites to warm. */
+  getActiveCharacterNames(): string[] {
+    return this.state.players.map(p => p.character.name);
   }
 
   /** Update net debug stats (forwarded to renderer for overlay). */
@@ -374,11 +523,15 @@ export class GameLoop {
     const player = this.state.players.find(p => p.id === slot);
     if (!player) return;
     player.disconnected = true;
-    // Kill the player if alive — they'll show as a corpse
-    if (player.state !== 'splat' && player.state !== 'respawning') {
+    // Force corpse and zero respawnTimer. The respawning branch in stomp.ts
+    // doesn't short-circuit on `disconnected`, so a mid-respawn disconnect
+    // would otherwise tick through to 'idle' and stand on the field as a
+    // free-stomp ghost.
+    if (player.state !== 'splat') {
       player.state = 'splat';
       player.splatTimer = 999999; // never auto-advance to respawning
     }
+    player.respawnTimer = 0;
   }
 
   /** Mute/unmute audio (used during rollback resimulation). */
@@ -394,11 +547,33 @@ export class GameLoop {
   /** Half-rate wrapper around cosmeticStep. Tests call cosmeticStep directly
    *  so assertions run at the un-throttled per-tick rate. */
   tickCosmetic(dt: number): void {
+    // Defend against pathological dt: negative (clock-warp), NaN, Infinity.
+    // NaN poisoning here would silently kill all cosmetic updates for the
+    // rest of the session — every subsequent comparison returns false.
+    if (!Number.isFinite(dt) || dt <= 0) return;
     this._cosmeticLead += dt;
     if (this._cosmeticLead < COSMETIC_INTERVAL) return;
     const stepDt = Math.min(this._cosmeticLead, COSMETIC_MAX_STEP);
-    this._cosmeticLead = 0;
+    // Subtract the consumed dt instead of zeroing — after a long tab-switch,
+    // _cosmeticLead can be 5+ seconds; clamping the step but discarding the
+    // residual means accumulators bound to elapsed time stutter. We still
+    // cap the catch-up at COSMETIC_MAX_STEP per tick, but the residual is
+    // drained on subsequent frames at most ~1s/frame (60fps × 4 ticks) so
+    // we recover within ~16 frames after a big gap rather than dropping it.
+    this._cosmeticLead = Math.max(0, this._cosmeticLead - stepDt);
     this.cosmeticStep(stepDt);
+  }
+
+  /** Re-prime cosmetic baselines (prevCosmeticState + spring map) against the
+   *  current state. Used by NetMatch.completeReconnection so the first
+   *  post-reconnect snapshot doesn't fire spurious transition SFX (jump,
+   *  land, score animations, possibly a duplicate victory sound) by comparing
+   *  against pre-disconnect state. Also useful on the loading→playing edge
+   *  if the host's countdown advanced while the guest's prevState was
+   *  captured at construction. */
+  resetCosmeticBaselines(): void {
+    this.playerTransitionSystem.resetBaseline();
+    this.entityTransitionSystem.resetBaseline();
   }
 
   /** Seconds since the last cosmeticStep fired; renderer uses this to extrapolate
@@ -410,6 +585,11 @@ export class GameLoop {
   /** Tick all cosmetic-only systems (particles, environment, visual decays).
    *  Called once per frame from local loop(), host loop, and guest loop. */
   cosmeticStep(dt: number): void {
+    // Skip cosmetic updates during loading — snapshots received here would
+    // otherwise trigger spurious transition sounds as prev-state vs. snapshot-state
+    // flips on the guest.
+    if (this.state.phase === 'loading') return;
+
     // --- Per-player cosmetic systems ---
     this.playerTransitionSystem.cosmeticUpdate(dt);
     this.playerCosmeticSystem.cosmeticUpdate(dt);
@@ -543,6 +723,7 @@ export class GameLoop {
   fixedUpdate(dt: number, networkInputs?: Map<string, InputState>): void {
     this._networkInputs = networkInputs;
     if (this.stopped || this.state.matchOver) return;
+    if (this.state.phase === 'loading') return;
     this.state.timeElapsed = f(this.state.timeElapsed + dt);
 
     // Day/night cycle
@@ -590,7 +771,6 @@ export class GameLoop {
       if (player.burnTimer > 0) player.burnTimer = Math.max(0, f(player.burnTimer - dt));
     }
 
-    // bumpCooldown removed — bump detection uses sideSquash transition in cosmeticStep
 
     // Input + physics
     for (const player of this.state.players) {
@@ -808,6 +988,16 @@ export class GameLoop {
     this.state.matchOver = true;
     this.state.winner = winner;
     if (!this._resimulating) this.state.screenFlash = SCREEN_FLASH_DURATION;
+    // If the match ends while the user is still in the pause overlay (e.g.
+    // all-disconnected auto-guard fires), the gamePaused flag would otherwise
+    // stay true through the 1.5s victory transition — silencing the victory
+    // sound and any menu music until Match.tsx unmounts and stops everything.
+    audio.setPaused(false);
+    // Stop theme ambient loops (wind, lava, underwater, etc.) immediately —
+    // without this they keep playing audibly through the 1.5s pre-victory
+    // delay until Match.tsx unmount calls gameLoop.stop(). Music stop stays
+    // alongside so the arena track also fades on match end.
+    this.matchSystem.cleanup();
     audio.stopMusic();
     // victory sound moved to cosmeticStep (matchOver transition detection)
     this.onMatchEnd(winner, this.state);

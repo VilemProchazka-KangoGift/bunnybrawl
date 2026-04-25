@@ -21,7 +21,12 @@ vi.mock('howler', () => {
     this.playing = vi.fn().mockReturnValue(false);
     this.on = vi.fn();
     this.once = vi.fn();
+    this.load = vi.fn();
     this._src = arguments[0]?.src;
+    // Capture onload/onloaderror callbacks so tests can fire them deterministically
+    // (instead of waiting for an actual MP3 fetch + decode that doesn't run in JSDOM).
+    this._onload = arguments[0]?.onload;
+    this._onloaderror = arguments[0]?.onloaderror;
     instances.push(this);
   }
   return {
@@ -268,6 +273,60 @@ describe('AudioManager', () => {
       arenaHowl.stop.mockClear();
       audio.stopMusic();
       expect(arenaHowl.stop).toHaveBeenCalled();
+    });
+
+    it('playMusic during in-flight preload does NOT orphan the playing Howl', async () => {
+      // Race: preloadArena starts (slow network). playMusic fires before
+      // preload completes. The preload's onload would otherwise commit the
+      // preloaded Howl over the playing one — the playing Howl becomes
+      // orphaned (loop:true keeps it audible forever) and a later
+      // setPaused(false, themeId) starts the preloaded Howl on top.
+      audio.init();
+      // Snapshot the howl-instance count BEFORE the preload — the menu Howl
+      // and any sound Howls have already been created.
+      const baseline = getInstances().length;
+
+      const preloadPromise = audio.preloadArena('meadow');
+      const preloadHowl = getInstances()[baseline]; // first new Howl after baseline
+      expect(preloadHowl).toBeTruthy();
+      expect(preloadHowl._onload).toBeTypeOf('function');
+
+      // playMusic fires before preload completes (no onload yet).
+      audio.playMusic('meadow');
+      const playHowl = getInstances()[getInstances().length - 1];
+      expect(playHowl).toBeTruthy();
+      expect(playHowl).not.toBe(preloadHowl);
+      expect(playHowl.play).toHaveBeenCalled();
+
+      // Now the preload's onload fires. With the fix, it must NOT clobber
+      // the playing Howl — it should detect that musicHowl already holds
+      // a Howl for this theme and unload its own.
+      preloadHowl._onload();
+      expect(preloadHowl.unload).toHaveBeenCalled();
+
+      await preloadPromise;
+      // The actively-playing Howl is the one playMusic created — verify by
+      // calling stopMusic and confirming THAT one (not the preload one) is
+      // the one targeted.
+      playHowl.stop.mockClear();
+      preloadHowl.stop.mockClear();
+      audio.stopMusic();
+      expect(playHowl.stop).toHaveBeenCalled();
+      expect(preloadHowl.stop).not.toHaveBeenCalled();
+    });
+
+    it('playMusic cancels the in-flight preload tracker for the same theme', () => {
+      // Defense in depth: if playMusic creates its own Howl for theme X, the
+      // _inFlightPreload tracker for X must be nulled so a stranger preload
+      // onload can't sneak in later (e.g. a duplicate preloadArena call that
+      // resolved to the dedupe path returns the same promise but the
+      // original Howl's onload still has the original closure).
+      audio.init();
+      audio.preloadArena('meadow');
+      audio.playMusic('meadow');
+      // Internal: _inFlightPreload should be null after playMusic.
+      const mm = (audio as unknown as { music: { _inFlightPreload: unknown } }).music;
+      expect(mm._inFlightPreload).toBeNull();
     });
 
     it('playMenuMusic does not play when muted', () => {

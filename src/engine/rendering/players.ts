@@ -1,6 +1,6 @@
 import type { Player } from '../types';
 import type { ThemeConfig } from '../themes/types';
-import { FAT_SCALE, HITSTOP_DURATION } from '../constants';
+import { FAT_SCALE, HITSTOP_DURATION, PLAYER_WIDTH, PLAYER_HEIGHT } from '../constants';
 import { hasCustomEyes, getSpriteRenderer, getCharacterPack, drawLegs } from '../characters';
 import { drawHighlightSpot } from '../spriteShading';
 import { getSlowDevice } from '../perfFlags';
@@ -24,6 +24,41 @@ export function setSpriteCacheScale(scale: number): void {
   _spriteScale = scale;
   _spriteCacheCap = Math.max(50, Math.round(SPRITE_CACHE_CAP_BASE / (scale * scale)));
   spriteCache.clear();
+}
+
+/** Pre-populate the sprite cache for the given character names by drawing a
+ *  handful of common (state, animFrame) combinations into a throwaway canvas.
+ *  First-render sprite-cache misses are the #1 source of first-frame hitches,
+ *  so the loading phase does this work up front.
+ *
+ *  `theme` MUST match the theme used at match render time. Bubble-helmet arenas
+ *  bake the glass dome into the cached bitmap; the cache key includes a helmet
+ *  bit so cross-theme reuse is safe, but warming under the wrong theme still
+ *  doubles the cache footprint. */
+export function warmSpriteCacheForCharacters(names: string[], theme?: ThemeConfig): void {
+  const states: Array<string> = ['idle', 'run', 'airborne'];
+  const animFrames = [0, 2, 4];
+
+  const cw = PLAYER_WIDTH + 20;
+  const ch = PLAYER_HEIGHT + 20;
+  const scratch = new OffscreenCanvas(cw, ch);
+  const sctx = scratch.getContext('2d');
+  if (!sctx) return;
+  const ctx = sctx as unknown as CanvasRenderingContext2D;
+
+  // idleAction = -1 short-circuits the idle-action overlay path in
+  // drawCharacterSprite/blitWithIdleTransform, so the stub player is never read.
+  const stubPlayer = {} as Player;
+  for (const name of names) {
+    const pack = getCharacterPack(name);
+    if (!pack) continue;
+    const char = { name, color: pack.color, darkColor: pack.darkColor, lightColor: pack.lightColor };
+    for (const state of states) {
+      for (const frame of animFrames) {
+        drawCharacterSprite(ctx, 0, 0, PLAYER_WIDTH, PLAYER_HEIGHT, char, state, frame, false, -1, 0, 0, 1, theme, stubPlayer);
+      }
+    }
+  }
 }
 
 export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player, nearCarrot: boolean, theme: ThemeConfig, frameTime: number): void {
@@ -180,7 +215,11 @@ function drawCharacterSprite(
   player: Player,
 ): void {
   const sqKey = Math.round(squashScale * 10);
-  const cacheKey = `${char.name}_${state}_${animFrame}_${fastFalling ? 1 : 0}_${sqKey}`;
+  // Helmet bit prevents bubble-helmet arenas (underwater, space_station) from
+  // poisoning the cache: helmet is baked in at draw time, so a helmet-less
+  // first render would otherwise be reused at the helmet variant.
+  const helmetKey = theme?.bubbleHelmet ? 1 : 0;
+  const cacheKey = `${char.name}_${state}_${animFrame}_${fastFalling ? 1 : 0}_${sqKey}_${helmetKey}`;
 
   // Idle action ctx transform — applied to main ctx, OUTSIDE the cached bitmap, so the
   // animated transform doesn't get baked into the (1-bit-keyed) sprite cache entry.
