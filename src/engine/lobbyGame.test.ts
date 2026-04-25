@@ -71,8 +71,8 @@ describe('LobbyGame', () => {
   });
 
   it('creates extra NPC characters from remaining roster', () => {
-    // 17 total characters - 5 humans - 2 bots = 10 extras
-    expect(game.extraChars.length).toBe(10);
+    // 18 total characters - 5 humans - 2 bots = 11 extras
+    expect(game.extraChars.length).toBe(11);
   });
 
   it('mobile mode creates only P1', () => {
@@ -365,16 +365,16 @@ describe('LobbyGame', () => {
     it('creates 0 bots when botCount is 0', () => {
       const g = makeLobbyGame({ botCount: 0 });
       expect(g.bots).toHaveLength(0);
-      // 17 characters - 5 humans - 0 bots = 12 extras
-      expect(g.extraChars.length).toBe(12);
+      // 18 characters - 5 humans - 0 bots = 13 extras
+      expect(g.extraChars.length).toBe(13);
     });
 
     it('creates 1 bot when botCount is 1', () => {
       const g = makeLobbyGame({ botCount: 1 });
       expect(g.bots).toHaveLength(1);
       expect(g.bots[0].id).toBe('B1');
-      // 17 - 5 - 1 = 11 extras
-      expect(g.extraChars.length).toBe(11);
+      // 18 - 5 - 1 = 12 extras
+      expect(g.extraChars.length).toBe(12);
     });
 
     it('creates 5 bots when botCount is 5', () => {
@@ -382,15 +382,15 @@ describe('LobbyGame', () => {
       expect(g.bots).toHaveLength(5);
       const botSlots = g.bots.map(b => b.id);
       expect(botSlots).toEqual(['B1', 'B2', 'B3', 'B4', 'B5']);
-      // 17 - 5 - 5 = 7 extras
-      expect(g.extraChars.length).toBe(7);
+      // 18 - 5 - 5 = 8 extras
+      expect(g.extraChars.length).toBe(8);
     });
 
     it('total characters always equals full roster size', () => {
       for (const botCount of [0, 1, 2, 3, 5]) {
         const g = makeLobbyGame({ botCount });
         const total = g.players.length + g.bots.length + g.extraChars.length;
-        expect(total).toBe(17);
+        expect(total).toBe(18);
       }
     });
   });
@@ -525,15 +525,16 @@ describe('LobbyGame', () => {
     });
 
     it('player lands back on ground after jump arc', () => {
-      // Isolate: move all entities far away so no stomp/collision interference
-      for (const e of [...game.players, ...game.bots, ...game.extraChars]) {
-        e.x = -500;
-        e.vy = 0;
-        e.vx = 0;
-        e.splatTimer = 0;
-      }
-
+      // Isolate the test player completely. Pre-fix moved entities to x=-500 but
+      // `clampLobbyBounds` snaps them back to x=0, then wanderInput drifts them
+      // across the canvas; one could land under the test player and re-trigger
+      // a stomp bounce, leaving the player permanently airborne. Default human
+      // spawns at x=40,130,220,... also overlap with the test player at x=100.
       const p = game.players[0];
+      game.players = [p];
+      game.bots = [];
+      game.extraChars = [];
+
       p.x = 100;
       p.vx = 0;
       p.state = 'idle';
@@ -635,13 +636,23 @@ describe('LobbyGame', () => {
     });
 
     it('NPC facing matches movement direction', () => {
+      // Isolate the NPC: remove neighbors so wanderInput's repulsion stays at zero,
+      // and stub Math.random so the small random left/right/jump probabilities
+      // (Math.random() < 0.005) never fire. Without these, applyInput can set
+      // facing='left' for one frame while vx is still positive (acceleration ramp).
       const npc = game.extraChars[0];
+      game.extraChars = [npc];
       npc.vx = 50;
       npc.state = 'idle';
 
-      game.update(1 / 60, new Set());
+      const origRandom = Math.random;
+      Math.random = () => 0.99;
+      try {
+        game.update(1 / 60, new Set());
+      } finally {
+        Math.random = origRandom;
+      }
 
-      // facing may change due to random vx reassignment, but if vx > 0 then facing should be right
       if (npc.vx > 0) expect(npc.facing).toBe('right');
       if (npc.vx < 0) expect(npc.facing).toBe('left');
     });

@@ -58,6 +58,7 @@ HTMLCanvasElement.prototype.getContext = function (type: string) {
 import { GameLoop } from './gameLoop';
 import { registerBuiltinArenas } from './arenas';
 import { registerBuiltinCharacters } from './characters';
+import { SeededRNG } from './net/prng';
 
 function makeSettings(overrides?: Partial<MatchSettings>): MatchSettings {
   return {
@@ -72,7 +73,7 @@ function makeSettings(overrides?: Partial<MatchSettings>): MatchSettings {
 
 let _lastLoop: GameLoop | null = null;
 
-function createLoop(opts?: { settings?: Partial<MatchSettings>; arena?: Partial<Arena>; players?: PlayerSlot[] }) {
+function createLoop(opts?: { settings?: Partial<MatchSettings>; arena?: Partial<Arena>; players?: PlayerSlot[]; rng?: SeededRNG }) {
   const bgCanvas = document.createElement('canvas');
   bgCanvas.width = 1280; bgCanvas.height = 720;
   const fgCanvas = document.createElement('canvas');
@@ -80,7 +81,7 @@ function createLoop(opts?: { settings?: Partial<MatchSettings>; arena?: Partial<
   const arena = makeArena(opts?.arena);
   const settings = makeSettings(opts?.settings);
   const onMatchEnd = vi.fn();
-  const loop = new GameLoop(bgCanvas, fgCanvas, arena, settings, opts?.players ?? (['P1', 'P2'] as PlayerSlot[]), onMatchEnd);
+  const loop = new GameLoop(bgCanvas, fgCanvas, arena, settings, opts?.players ?? (['P1', 'P2'] as PlayerSlot[]), onMatchEnd, undefined, opts?.rng);
   _lastLoop = loop;
   return { loop, onMatchEnd, arena, settings };
 }
@@ -267,8 +268,11 @@ describe('Integration: spring bounce chain', () => {
 
 describe('Integration: determinism', () => {
   it('two loops with same initial state produce identical results after 60 frames', () => {
-    const { loop: a } = createLoop();
-    const { loop: b } = createLoop();
+    // Seed RNG identically — GameLoop's spawn-point shuffle (and other init randomness)
+    // falls back to Math.random() when no rng is provided, producing different
+    // initial states between instances.
+    const { loop: a } = createLoop({ rng: new SeededRNG(0xC0FFEE) });
+    const { loop: b } = createLoop({ rng: new SeededRNG(0xC0FFEE) });
     a.skipCountdown();
     b.skipCountdown();
 
@@ -292,8 +296,8 @@ describe('Integration: determinism', () => {
   });
 
   it('network mode with identical inputs produces identical state', () => {
-    const { loop: a } = createLoop();
-    const { loop: b } = createLoop();
+    const { loop: a } = createLoop({ rng: new SeededRNG(0xBEEF) });
+    const { loop: b } = createLoop({ rng: new SeededRNG(0xBEEF) });
     a.skipCountdown();
     b.skipCountdown();
     a.setNetworkMode(true);
