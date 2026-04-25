@@ -25,17 +25,50 @@ const STAR_PHASE = new Float32Array(STAR_COUNT); // i * 1.7 baked in
 const FIREFLY_COUNT = 8;
 const FIREFLY_BASE_X = new Float32Array(FIREFLY_COUNT);
 const FIREFLY_BASE_Y = new Float32Array(FIREFLY_COUNT);
-// Per-frame scratch — populated once in the firefly block so the glow + body
-// passes can iterate twice without recomputing trig.
-const FIREFLY_X = new Float32Array(FIREFLY_COUNT);
-const FIREFLY_Y = new Float32Array(FIREFLY_COUNT);
-const FIREFLY_PULSE = new Float32Array(FIREFLY_COUNT);
 {
   const skyHeight = CANVAS_HEIGHT * 0.6;
   for (let i = 0; i < FIREFLY_COUNT; i++) {
     FIREFLY_BASE_X[i] = (i * 173 + 57) % CANVAS_WIDTH;
     FIREFLY_BASE_Y[i] = 100 + ((i * 211 + 29) % skyHeight);
   }
+}
+
+// Pre-rendered visuals. Stars: the entire 30-star field baked into one bitmap
+// — replaces 30 fills/frame with a single drawImage. Tradeoff: per-star
+// twinkle is replaced by a single uniform fade modulated by globalAlpha.
+// Fireflies: a single 12×12 stamp (glow + body composited at the right alpha
+// ratios) — replaces 16 fills/frame (8×glow + 8×body) with 8 drawImages,
+// preserving per-firefly position and pulse.
+const STAR_FIELD_HEIGHT = Math.ceil(CANVAS_HEIGHT * 0.35);
+let _starField: OffscreenCanvas | null = null;
+let _firefly: OffscreenCanvas | null = null;
+function getStarField(): OffscreenCanvas | null {
+  if (_starField) return _starField;
+  if (typeof OffscreenCanvas === 'undefined') return null;
+  _starField = new OffscreenCanvas(CANVAS_WIDTH, STAR_FIELD_HEIGHT);
+  const c = _starField.getContext('2d')!;
+  c.fillStyle = '#FFFFFF';
+  for (let i = 0; i < STAR_COUNT; i++) {
+    c.beginPath();
+    c.arc(STAR_X[i], STAR_Y[i], STAR_SIZE[i], 0, Math.PI * 2);
+    c.fill();
+  }
+  return _starField;
+}
+function getFireflyStamp(): OffscreenCanvas | null {
+  if (_firefly) return _firefly;
+  if (typeof OffscreenCanvas === 'undefined') return null;
+  _firefly = new OffscreenCanvas(12, 12);
+  const c = _firefly.getContext('2d')!;
+  // Glow at 0.3, body at 1.0 — same ratio the original two-pass code used,
+  // multiplied through globalAlpha = pulse*fireflyAlpha at draw time.
+  c.fillStyle = '#AAFF44';
+  c.globalAlpha = 0.3;
+  c.beginPath(); c.arc(6, 6, 6, 0, Math.PI * 2); c.fill();
+  c.fillStyle = '#CCFF66';
+  c.globalAlpha = 1;
+  c.beginPath(); c.arc(6, 6, 2, 0, Math.PI * 2); c.fill();
+  return _firefly;
 }
 
 export function drawDayNightCycle(
@@ -168,39 +201,54 @@ export function drawDayNightCycle(
 
   if (nightIntensity > 0.25) {
     const starAlpha = Math.min((nightIntensity - 0.25) / 0.5, 1) * 0.8;
-    const twinkleT = frameTime / 500;
-    ctx.fillStyle = '#FFFFFF';
-    for (let i = 0; i < STAR_COUNT; i++) {
-      const twinkle = fastSin(twinkleT + STAR_PHASE[i]) * 0.3 + 0.7;
+    const stars = getStarField();
+    if (stars) {
+      // Slow uniform twinkle (~3% amplitude) keeps the night sky from feeling
+      // static. Per-star phase variation is gone; tradeoff documented above.
+      const twinkle = 0.97 + fastSin(frameTime / 500) * 0.03;
       ctx.globalAlpha = starAlpha * twinkle;
-      ctx.beginPath();
-      ctx.arc(STAR_X[i], STAR_Y[i], STAR_SIZE[i], 0, Math.PI * 2);
-      ctx.fill();
+      ctx.drawImage(stars, 0, 0);
+    } else {
+      ctx.fillStyle = '#FFFFFF';
+      for (let i = 0; i < STAR_COUNT; i++) {
+        const twinkle = fastSin(frameTime / 500 + STAR_PHASE[i]) * 0.3 + 0.7;
+        ctx.globalAlpha = starAlpha * twinkle;
+        ctx.beginPath();
+        ctx.arc(STAR_X[i], STAR_Y[i], STAR_SIZE[i], 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
   }
 
   if (nightIntensity > 0.4 && theme.dayNight.showFireflies) {
     const fireflyAlpha = Math.min((nightIntensity - 0.4) / 0.4, 1) * 0.7;
     const now = frameTime / 1000;
-    // Compute fx/fy/pulse once; the glow + body passes both read these.
-    for (let i = 0; i < FIREFLY_COUNT; i++) {
-      FIREFLY_X[i] = FIREFLY_BASE_X[i] + fastSin(now * 0.5 + i * 2.3) * 30;
-      FIREFLY_Y[i] = FIREFLY_BASE_Y[i] + fastCos(now * 0.4 + i * 1.7) * 20;
-      FIREFLY_PULSE[i] = fastSin(now * 2 + i * 1.1) * 0.3 + 0.7;
-    }
-    ctx.fillStyle = '#AAFF44';
-    for (let i = 0; i < FIREFLY_COUNT; i++) {
-      ctx.globalAlpha = fireflyAlpha * FIREFLY_PULSE[i] * 0.3;
-      ctx.beginPath();
-      ctx.arc(FIREFLY_X[i], FIREFLY_Y[i], 6, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.fillStyle = '#CCFF66';
-    for (let i = 0; i < FIREFLY_COUNT; i++) {
-      ctx.globalAlpha = fireflyAlpha * FIREFLY_PULSE[i];
-      ctx.beginPath();
-      ctx.arc(FIREFLY_X[i], FIREFLY_Y[i], 2, 0, Math.PI * 2);
-      ctx.fill();
+    const stamp = getFireflyStamp();
+    if (stamp) {
+      for (let i = 0; i < FIREFLY_COUNT; i++) {
+        const fx = FIREFLY_BASE_X[i] + fastSin(now * 0.5 + i * 2.3) * 30;
+        const fy = FIREFLY_BASE_Y[i] + fastCos(now * 0.4 + i * 1.7) * 20;
+        const pulse = fastSin(now * 2 + i * 1.1) * 0.3 + 0.7;
+        ctx.globalAlpha = fireflyAlpha * pulse;
+        ctx.drawImage(stamp, fx - 6, fy - 6);
+      }
+    } else {
+      ctx.fillStyle = '#AAFF44';
+      for (let i = 0; i < FIREFLY_COUNT; i++) {
+        const fx = FIREFLY_BASE_X[i] + fastSin(now * 0.5 + i * 2.3) * 30;
+        const fy = FIREFLY_BASE_Y[i] + fastCos(now * 0.4 + i * 1.7) * 20;
+        const pulse = fastSin(now * 2 + i * 1.1) * 0.3 + 0.7;
+        ctx.globalAlpha = fireflyAlpha * pulse * 0.3;
+        ctx.beginPath();
+        ctx.arc(fx, fy, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#CCFF66';
+        ctx.globalAlpha = fireflyAlpha * pulse;
+        ctx.beginPath();
+        ctx.arc(fx, fy, 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#AAFF44';
+      }
     }
   }
 
