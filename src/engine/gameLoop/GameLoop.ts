@@ -513,12 +513,10 @@ export class GameLoop {
     const player = this.state.players.find(p => p.id === slot);
     if (!player) return;
     player.disconnected = true;
-    // Force corpse state. Splatted players already are; alive players need
-    // killing; mid-respawn players need their respawn cancelled — without that
-    // last clause the existing respawnTimer keeps ticking (nothing in the
-    // splat/respawn loop short-circuits on `disconnected` for the respawning
-    // branch), so they advance to `idle` and appear alive on the field. Other
-    // players could then stomp the disconnected ghost for free score.
+    // Force corpse and zero respawnTimer. The respawning branch in stomp.ts
+    // doesn't short-circuit on `disconnected`, so a mid-respawn disconnect
+    // would otherwise tick through to 'idle' and stand on the field as a
+    // free-stomp ghost.
     if (player.state !== 'splat') {
       player.state = 'splat';
       player.splatTimer = 999999; // never auto-advance to respawning

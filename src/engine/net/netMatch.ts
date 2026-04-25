@@ -682,12 +682,10 @@ export class NetMatch {
       else this.gameLoop.resume();
       this.completeReconnection();
     } else if (this._isHost && msg.type === MsgType.LOADED) {
-      // Source-authenticate the slot. A buggy or hostile peer could otherwise
-      // send LOADED{slot: anotherPeer} and trick checkAllLoaded into flipping
-      // phase=playing before that peer has actually finished warming assets,
-      // dropping the laggard into the match mid-fetch with a black background
-      // and silent music until their preload completes. The CONNECTION_UNSTABLE
-      // handler below already takes this approach — match it.
+      // Source-authenticate the slot from peerId. A peer could otherwise send
+      // LOADED{slot: anotherPeer} and force-start the match before that peer
+      // has actually warmed assets. CONNECTION_UNSTABLE below uses the same
+      // pattern.
       if (!fromPeerId || !this.hostAuthority) return;
       const senderSlot = this.hostAuthority.getSlotForPeer(fromPeerId) as PlayerSlot | undefined;
       if (!senderSlot) return;
@@ -752,11 +750,6 @@ export class NetMatch {
         } as import('./protocol').ReliableMessage);
       }).catch(() => { /* retry next tick */ });
     };
-    // Fire one attempt immediately — without this, the user stares at
-    // "Reconnecting..." for 1.5s before the first joinRoom() even fires.
-    // Total span unchanged (12 attempts at t=0, 1.5, ..., 16.5s); we just
-    // shift the schedule earlier so the host's grace window is used from
-    // the front instead of the back.
     tryAttempt();
     this.reconnectTimer = setInterval(tryAttempt, 1500);
   }

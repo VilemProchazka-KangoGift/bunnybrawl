@@ -70,10 +70,7 @@ export function VictoryScreen() {
     clearMatchResult();
   }, [setActivePlayers, setScreen, clearMatchResult]);
   const handleChooseArena = useCallback((arenaId: string) => {
-    // Host must resolve 'random' here, NOT downstream in Match.tsx — host and
-    // guest's resolveArenaId both use Math.random(), so leaving 'random' on
-    // the wire desyncs them onto different arenas (players visibly clip on
-    // platforms the other side never drew).
+    // Host resolves 'random' before broadcasting — see resolveRandomArena.
     const concreteArenaId = (online.isOnline && online.isHost)
       ? resolveRandomArena(arenaId)
       : arenaId;
