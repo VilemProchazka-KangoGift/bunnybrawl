@@ -114,18 +114,27 @@ export async function buildSourceMapResolver(mapsDir) {
   };
 }
 
-function correlateLongFrames(dts, longTasks) {
-  const ordered = [...dts].reverse();
+function correlateLongFrames(dts, lastSampleTime, longTasks) {
+  // dts is newest-first. Reconstruct absolute (performance.now()-relative)
+  // timestamps so they align with longTask.startTime in the same reference frame.
+  // Each frame's timestamp is the END of the frame interval; this is what the
+  // browser would treat as the rAF tick time.
   const timeline = [];
-  let t = 0;
-  for (const dt of ordered) {
+  let t = lastSampleTime;
+  for (const dt of dts) {
     timeline.push({ tMs: t, dt });
-    t += dt;
+    t -= dt;
   }
+  timeline.reverse(); // oldest-first
   const long = timeline.filter((f) => f.dt > 25);
   return long.map((f) => {
-    const window = 50;
-    const overlap = longTasks.find((lt) => Math.abs(lt.startTime - f.tMs) <= window);
+    const window = 50; // ms window for matching a longTask to a frame
+    const overlap = longTasks.find((lt) => {
+      const ltEnd = lt.startTime + lt.duration;
+      // longTask overlaps the frame if its window touches [f.tMs - dt, f.tMs]
+      const frameStart = f.tMs - f.dt;
+      return ltEnd >= frameStart - window && lt.startTime <= f.tMs + window;
+    });
     return {
       tSec: (f.tMs / 1000).toFixed(2),
       frameMs: f.dt.toFixed(1),
@@ -228,7 +237,7 @@ async function main() {
   const buckets = bucketByModule(cpuFlat);
   const totalCpuMs = cpuFlat.reduce((s, n) => s + n.selfMs, 0);
   const heapSummary = summarizeHeapTimeline(heapTimeline);
-  const longFrames = correlateLongFrames(frames.dts ?? [], longTasks);
+  const longFrames = correlateLongFrames(frames.dts ?? [], frames.lastSampleTime ?? 0, longTasks);
 
   const lines = [];
   lines.push(`# Perf Profile — ${meta.runStartedAt}`);

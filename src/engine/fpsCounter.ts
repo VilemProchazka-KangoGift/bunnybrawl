@@ -32,14 +32,17 @@ export function resetFpsCounter(): void {
 }
 
 /** Dump the raw frame-time samples (newest-first) for E2E perf collection.
- *  Returns up to MAX_SAMPLES dt values in milliseconds. */
-export function dumpSamples(): { dts: number[]; count: number } {
+ *  Returns up to MAX_SAMPLES dt values in milliseconds, plus the
+ *  performance.now() timestamp of the most recent sample. The timestamp lets
+ *  consumers reconstruct absolute (page-time) timestamps per frame so they
+ *  align with longTask / CDP timelines. */
+export function dumpSamples(): { dts: number[]; count: number; lastSampleTime: number } {
   const dts: number[] = [];
   for (let i = 0; i < total; i++) {
     const idx = (writeIdx - 1 - i + MAX_SAMPLES) % MAX_SAMPLES;
     dts.push(frameDts[idx]);
   }
-  return { dts, count: total };
+  return { dts, count: total, lastSampleTime };
 }
 
 interface FpsStats {

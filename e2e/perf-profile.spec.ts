@@ -16,7 +16,7 @@ declare global {
       reset: () => void;
       enabled: boolean;
     };
-    __fpsCounter?: { dumpSamples: () => { dts: number[]; count: number } };
+    __fpsCounter?: { dumpSamples: () => { dts: number[]; count: number; lastSampleTime: number } };
     __longTasks?: LongTaskEntry[];
     __gameLoop?: { getState(): { countdown: number; matchOver: boolean } };
   }
@@ -56,8 +56,14 @@ test('perf profile run', async ({ page, context }) => {
     }
   });
 
-  // ?debug=perffps activates BOTH perfTrace AND fpsCounter (the substring matches both flags)
-  await page.goto(`/?arena=${arena}&bots=${bots}&difficulty=${difficulty}&killLimit=999&debug=perffps`);
+  // ?debug=perffps activates BOTH perfTrace AND fpsCounter (the substring matches both flags).
+  // URL params encoded for defense — arena IDs are alphanumeric in practice but encoding
+  // protects against injection if a malicious value reaches us via env vars.
+  const url = `/?arena=${encodeURIComponent(arena)}`
+    + `&bots=${encodeURIComponent(bots)}`
+    + `&difficulty=${encodeURIComponent(difficulty)}`
+    + `&killLimit=999&debug=perffps`;
+  await page.goto(url);
   await page.waitForFunction(() => window.__gameLoop?.getState()?.countdown === 0, undefined, { timeout: 15000 });
   expect(await page.evaluate(() => window.__perfTrace?.enabled)).toBe(true);
 
@@ -69,35 +75,55 @@ test('perf profile run', async ({ page, context }) => {
   await cdp.send('HeapProfiler.enable');
   await cdp.send('Performance.enable');
 
-  await cdp.send('Profiler.start');
-  await cdp.send('HeapProfiler.startSampling', { samplingInterval: 32_768 });
-
+  // Wrap collection in try/finally so the profilers are always stopped, even
+  // on test failure — otherwise they keep running until the page closes.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let cpu: any, heap: any;
+  let cpuStarted = false, heapStarted = false;
   const heapTimeline: { t: number; usedMB: number; totalMB: number }[] = [];
   const startedAt = Date.now();
-  const heapPoller = setInterval(async () => {
-    try {
-      const res = await cdp.send('Performance.getMetrics');
-      const used = res.metrics.find((m) => m.name === 'JSHeapUsedSize')?.value ?? 0;
-      const total = res.metrics.find((m) => m.name === 'JSHeapTotalSize')?.value ?? 0;
-      heapTimeline.push({
-        t: (Date.now() - startedAt) / 1000,
-        usedMB: used / (1024 * 1024),
-        totalMB: total / (1024 * 1024),
-      });
-    } catch {
-      // CDP may briefly fail; ignore
+  let heapPoller: NodeJS.Timeout | undefined;
+  try {
+    await cdp.send('Profiler.start');
+    cpuStarted = true;
+    await cdp.send('HeapProfiler.startSampling', { samplingInterval: 32_768 });
+    heapStarted = true;
+
+    heapPoller = setInterval(async () => {
+      try {
+        const res = await cdp.send('Performance.getMetrics');
+        const used = res.metrics.find((m) => m.name === 'JSHeapUsedSize')?.value ?? 0;
+        const total = res.metrics.find((m) => m.name === 'JSHeapTotalSize')?.value ?? 0;
+        heapTimeline.push({
+          t: (Date.now() - startedAt) / 1000,
+          usedMB: used / (1024 * 1024),
+          totalMB: total / (1024 * 1024),
+        });
+      } catch {
+        // CDP may briefly fail; ignore
+      }
+    }, 1000);
+
+    await page.waitForTimeout(durationS * 1000);
+  } finally {
+    if (heapPoller) clearInterval(heapPoller);
+    // Stop in reverse-start order. Use try/catch — calling Stop on a never-started
+    // profiler would throw, masking any earlier exception.
+    if (heapStarted) {
+      try { heap = await cdp.send('HeapProfiler.stopSampling'); } catch (e) { console.error('HeapProfiler.stopSampling failed:', e); }
     }
-  }, 1000);
+    if (cpuStarted) {
+      try { cpu = await cdp.send('Profiler.stop'); } catch (e) { console.error('Profiler.stop failed:', e); }
+    }
+  }
 
-  await page.waitForTimeout(durationS * 1000);
-
-  clearInterval(heapPoller);
-
-  const cpu = await cdp.send('Profiler.stop');
-  const heap = await cdp.send('HeapProfiler.stopSampling');
+  // Fail fast if either profiler couldn't return a result — without these,
+  // there's no point continuing to artifact writes or analysis.
+  expect(cpu, 'CPU profiler failed to stop').toBeDefined();
+  expect(heap, 'Heap profiler failed to stop').toBeDefined();
 
   const sections = await page.evaluate(() => window.__perfTrace?.snapshot() ?? {});
-  const frames = await page.evaluate(() => window.__fpsCounter?.dumpSamples() ?? { dts: [], count: 0 });
+  const frames = await page.evaluate(() => window.__fpsCounter?.dumpSamples() ?? { dts: [], count: 0, lastSampleTime: 0 });
   const longTasks = await page.evaluate(() => window.__longTasks ?? []);
 
   const meta = {
