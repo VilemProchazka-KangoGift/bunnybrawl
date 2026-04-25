@@ -43,4 +43,9 @@ describe('regression: pure modules import in Node env without DOM', () => {
     expect(mod.audio).toBeDefined();
     // audio.init() is NOT called automatically — importing should be inert
   });
+
+  it('simulator scaffold is importable in Node', async () => {
+    const mod = await import('../simulator');
+    expect(mod.Simulator).toBeDefined();
+  });
 });
