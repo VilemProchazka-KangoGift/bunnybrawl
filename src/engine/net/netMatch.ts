@@ -744,6 +744,12 @@ export class NetMatch {
         } as import('./protocol').ReliableMessage);
       }).catch(() => { /* retry next tick */ });
     };
+    // Fire one attempt immediately — without this, the user stares at
+    // "Reconnecting..." for 1.5s before the first joinRoom() even fires.
+    // Total span unchanged (12 attempts at t=0, 1.5, ..., 16.5s); we just
+    // shift the schedule earlier so the host's grace window is used from
+    // the front instead of the back.
+    tryAttempt();
     this.reconnectTimer = setInterval(tryAttempt, 1500);
   }
 

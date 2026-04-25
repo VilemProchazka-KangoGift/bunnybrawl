@@ -104,6 +104,8 @@ function makeMockTransport(isHost = true) {
     sendUnreliable: vi.fn(),
     sendUnreliableTo: vi.fn(),
     getPeerIds: vi.fn(() => ['peer-a']),
+    joinRoom: vi.fn(() => Promise.resolve()),
+    roomCode: 'TEST',
     peerCount: 1,
     currentRtt: 0,
     currentJitter: 0,
@@ -200,6 +202,32 @@ describe('NetMatch', () => {
     it('starts host authority for host', () => {
       netMatch.start();
       expect(mockHostAuthorityInstance.start).toHaveBeenCalled();
+    });
+  });
+
+  describe('reconnection (guest)', () => {
+    it('fires the first joinRoom() attempt immediately, not 1.5s later', () => {
+      // Without the immediate first attempt, the user stares at "Reconnecting..."
+      // for a full setInterval period before the first joinRoom even fires.
+      // We use fake timers to verify joinRoom is called BEFORE any timer advance.
+      vi.useFakeTimers();
+      try {
+        const guestTransport = makeMockTransport(false);
+        const nm = new NetMatch(makeConfig(guestTransport, {
+          localSlot: 'P2' as PlayerSlot,
+          remoteSlots: ['P1'] as PlayerSlot[],
+        }));
+        nm.start();
+        const events = guestTransport.setEvents.mock.calls[0][0];
+        guestTransport.joinRoom.mockClear();
+        // Trigger reconnect path
+        events.onPeerDisconnected('peer-a');
+        // Without advancing timers — joinRoom must already be called.
+        expect(guestTransport.joinRoom).toHaveBeenCalledTimes(1);
+        expect(guestTransport.joinRoom).toHaveBeenCalledWith('TEST');
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 
