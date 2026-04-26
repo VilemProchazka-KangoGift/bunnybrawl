@@ -125,7 +125,7 @@ src/
     headless/     # Headless ML-driven simulation runner (Phase 4)
       HeadlessRunner.ts # Drives Simulator until matchOver/maxTicks. Optional recording:
                         # observation snapshot + action capture + reward shaper per slot.
-      observation.ts    # extractObservation(state, slot, arena, out): writes 68-float
+      observation.ts    # extractObservation(state, slot, arena, settings, out): writes 98-float
                         # egocentric Float32Array. wrapDx for horizontal arena wrap.
       reward.ts         # RewardShaper class with tunable RewardWeights (kill/carrot/death/
                         # win/loss/survival/airborne shaping). Per-slot stateful.
