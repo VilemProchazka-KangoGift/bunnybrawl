@@ -1,76 +1,103 @@
 // @vitest-environment node
 //
-// Observation extractor (Task 4.2).
+// Observation extractor.
 // Pure Node — no browser/audio/renderer imports. Verifies layout, ordering,
-// determinism, and edge cases (missing slot, oversized buffer, etc.).
+// determinism, edge cases (missing slot, oversized buffer), match-context
+// block, and expanded self block.
 
 import { describe, it, expect } from 'vitest';
 import {
   extractObservation,
   makeObservation,
   OBSERVATION_SIZE,
+  OBS_MATCH_CONTEXT_OFFSET,
+  OBS_SELF_OFFSET,
   OBS_OPPONENT_OFFSET,
   OBS_CARROT_OFFSET,
   OBS_HAZARD_OFFSET,
+  MATCH_CONTEXT_FEATURES,
+  SELF_FEATURES,
   PER_OPPONENT_FEATURES,
   PER_CARROT_FEATURES,
   PER_HAZARD_FEATURES,
 } from '../observation';
-import { makePlayer, makeState, makeArena } from '../../__tests__/testHelpers';
+import {
+  makePlayer, makeState, makeArena, makeSettings,
+} from '../../__tests__/testHelpers';
 import type { Carrot, HazardZone } from '../../types';
 
-describe('observation extractor (Task 4.2 — pure Node)', () => {
+describe('observation extractor (pure Node)', () => {
   it('throws when the output buffer is too small', () => {
     const state = makeState({ players: [makePlayer({ id: 'P1' })] });
     const arena = makeArena();
+    const settings = makeSettings();
     const tooSmall = new Float32Array(OBSERVATION_SIZE - 1);
-    expect(() => extractObservation(state, 'P1', arena, tooSmall)).toThrow(/too small/i);
+    expect(() => extractObservation(state, 'P1', arena, settings, tooSmall)).toThrow(/too small/i);
   });
 
-  it('returns all zeros when the requested slot is not in the state', () => {
-    const state = makeState({ players: [makePlayer({ id: 'P2' })] });
+  it('OBSERVATION_SIZE = 82 (10 ctx + 12 self + 32 opp + 12 carrot + 16 hazard)', () => {
+    expect(OBSERVATION_SIZE).toBe(82);
+    expect(MATCH_CONTEXT_FEATURES).toBe(10);
+    expect(SELF_FEATURES).toBe(12);
+  });
+
+  it('match-context block is filled even when slot is missing; self/opponent/carrot/hazard zero', () => {
+    const state = makeState({ players: [makePlayer({ id: 'P2' })], timeElapsed: 30 });
     const arena = makeArena();
+    const settings = makeSettings({
+      killLimit: 16,
+      timeLimit: 60,
+      mods: {
+        extremeGore: false, carrotChase: true, giantPlayers: false, turbo: false,
+        superBounce: false, mirrorArena: false, underwaterGravity: false,
+      },
+    });
     const out = new Float32Array(OBSERVATION_SIZE);
-    // Pre-fill with a sentinel value so we can confirm the zeroing happens.
-    out.fill(7);
-    extractObservation(state, 'P1', arena, out);
-    for (let i = 0; i < OBSERVATION_SIZE; i++) {
+    out.fill(7); // sentinel
+    extractObservation(state, 'P1', arena, settings, out);
+
+    // Match context populated regardless of slot presence.
+    expect(out[OBS_MATCH_CONTEXT_OFFSET + 0]).toBe(1); // carrotChase
+    expect(out[OBS_MATCH_CONTEXT_OFFSET + 7]).toBe(0); // killScoreValue_norm = 0 in carrotChase
+    expect(out[OBS_MATCH_CONTEXT_OFFSET + 8]).toBeCloseTo(16 / 32, 5);
+    expect(out[OBS_MATCH_CONTEXT_OFFSET + 9]).toBeCloseTo(0.5, 5); // 30 / 60
+
+    // Self/opponent/carrot/hazard are all zero (slot not present).
+    for (let i = OBS_SELF_OFFSET; i < OBSERVATION_SIZE; i++) {
       expect(out[i]).toBe(0);
     }
   });
 
   it('encodes the self block: position, velocity, on_ground for idle vs airborne', () => {
-    // Idle player at arena center
     const arena = makeArena({ width: 1280, height: 720 });
+    const settings = makeSettings();
     const state = makeState({
       players: [
         makePlayer({ id: 'P1', x: 640, y: 360, vx: 300, vy: -300, state: 'idle' }),
       ],
     });
     const out = new Float32Array(OBSERVATION_SIZE);
-    extractObservation(state, 'P1', arena, out);
+    extractObservation(state, 'P1', arena, settings, out);
 
-    expect(out[0]).toBeCloseTo(0.5, 5);  // x_norm = 640/1280
-    expect(out[1]).toBeCloseTo(0.5, 5);  // y_norm = 360/720
-    expect(out[2]).toBeCloseTo(0.5, 5);  // vx_norm = 300/600
-    expect(out[3]).toBeCloseTo(-0.5, 5); // vy_norm = -300/600
-    expect(out[4]).toBe(1);              // on_ground
+    expect(out[OBS_SELF_OFFSET + 0]).toBeCloseTo(0.5, 5);
+    expect(out[OBS_SELF_OFFSET + 1]).toBeCloseTo(0.5, 5);
+    expect(out[OBS_SELF_OFFSET + 2]).toBeCloseTo(0.5, 5);
+    expect(out[OBS_SELF_OFFSET + 3]).toBeCloseTo(-0.5, 5);
+    expect(out[OBS_SELF_OFFSET + 4]).toBe(1); // on_ground
 
-    // Same player, but airborne
     const state2 = makeState({
       players: [
         makePlayer({ id: 'P1', x: 640, y: 360, vx: 0, vy: 0, state: 'airborne' }),
       ],
     });
     const out2 = new Float32Array(OBSERVATION_SIZE);
-    extractObservation(state2, 'P1', arena, out2);
-    expect(out2[4]).toBe(0); // on_ground = 0 when airborne
+    extractObservation(state2, 'P1', arena, settings, out2);
+    expect(out2[OBS_SELF_OFFSET + 4]).toBe(0); // on_ground = 0 when airborne
   });
 
   it('orders opponents by slot id alphabetically and marks each present', () => {
-    // Players: P1 (self), P2, B1, B2. Alphabetical opponents from P1's view:
-    //   B1 < B2 < P2.
     const arena = makeArena();
+    const settings = makeSettings();
     const state = makeState({
       players: [
         makePlayer({ id: 'P1', x: 100, y: 400 }),
@@ -80,24 +107,20 @@ describe('observation extractor (Task 4.2 — pure Node)', () => {
       ],
     });
     const out = new Float32Array(OBSERVATION_SIZE);
-    extractObservation(state, 'P1', arena, out);
+    extractObservation(state, 'P1', arena, settings, out);
 
-    // Slot 0 should be B1 (dx = 300-100 = 200; W = 1280)
     const slot0 = OBS_OPPONENT_OFFSET + 0 * PER_OPPONENT_FEATURES;
     expect(out[slot0 + 0]).toBeCloseTo(200 / 1280, 5);
-    expect(out[slot0 + 7]).toBe(1); // present
+    expect(out[slot0 + 7]).toBe(1);
 
-    // Slot 1 should be B2 (dx = 400-100 = 300)
     const slot1 = OBS_OPPONENT_OFFSET + 1 * PER_OPPONENT_FEATURES;
     expect(out[slot1 + 0]).toBeCloseTo(300 / 1280, 5);
     expect(out[slot1 + 7]).toBe(1);
 
-    // Slot 2 should be P2 (dx = 200-100 = 100)
     const slot2 = OBS_OPPONENT_OFFSET + 2 * PER_OPPONENT_FEATURES;
     expect(out[slot2 + 0]).toBeCloseTo(100 / 1280, 5);
     expect(out[slot2 + 7]).toBe(1);
 
-    // Slot 3 (no 4th opponent) should be all zero
     const slot3 = OBS_OPPONENT_OFFSET + 3 * PER_OPPONENT_FEATURES;
     for (let f = 0; f < PER_OPPONENT_FEATURES; f++) {
       expect(out[slot3 + f]).toBe(0);
@@ -106,6 +129,7 @@ describe('observation extractor (Task 4.2 — pure Node)', () => {
 
   it('encodes opponent dx/dy relative to self', () => {
     const arena = makeArena({ width: 1280, height: 720 });
+    const settings = makeSettings();
     const state = makeState({
       players: [
         makePlayer({ id: 'P1', x: 200, y: 400 }),
@@ -113,17 +137,17 @@ describe('observation extractor (Task 4.2 — pure Node)', () => {
       ],
     });
     const out = new Float32Array(OBSERVATION_SIZE);
-    extractObservation(state, 'P1', arena, out);
+    extractObservation(state, 'P1', arena, settings, out);
 
-    // P2 is the only opponent → slot 0
     const base = OBS_OPPONENT_OFFSET;
-    expect(out[base + 0]).toBeCloseTo(400 / 1280, 5); // dx_norm = (600-200)/1280
-    expect(out[base + 1]).toBeCloseTo(0, 5);          // dy_norm = 0
-    expect(out[base + 7]).toBe(1);                    // present
+    expect(out[base + 0]).toBeCloseTo(400 / 1280, 5);
+    expect(out[base + 1]).toBeCloseTo(0, 5);
+    expect(out[base + 7]).toBe(1);
   });
 
   it('marks an inactive (splat) opponent with alive=0 but present=1', () => {
     const arena = makeArena();
+    const settings = makeSettings();
     const state = makeState({
       players: [
         makePlayer({ id: 'P1', x: 100, y: 400 }),
@@ -131,18 +155,19 @@ describe('observation extractor (Task 4.2 — pure Node)', () => {
       ],
     });
     const out = new Float32Array(OBSERVATION_SIZE);
-    extractObservation(state, 'P1', arena, out);
+    extractObservation(state, 'P1', arena, settings, out);
 
-    const base = OBS_OPPONENT_OFFSET; // P2 = slot 0
-    expect(out[base + 6]).toBe(0); // alive = 0 because state === 'splat'
-    expect(out[base + 7]).toBe(1); // present = 1 (entry exists)
+    const base = OBS_OPPONENT_OFFSET;
+    expect(out[base + 6]).toBe(0);
+    expect(out[base + 7]).toBe(1);
   });
 
   it('encodes only active carrots in insertion order; padding is zeroed', () => {
     const arena = makeArena();
+    const settings = makeSettings();
     const carrots: Carrot[] = [
       { x: 100, y: 200, active: true,  spawnTime: 0 },
-      { x: 300, y: 200, active: false, spawnTime: 1 }, // skipped
+      { x: 300, y: 200, active: false, spawnTime: 1 },
       { x: 500, y: 200, active: true,  spawnTime: 2 },
     ];
     const state = makeState({
@@ -150,21 +175,18 @@ describe('observation extractor (Task 4.2 — pure Node)', () => {
       carrots,
     });
     const out = new Float32Array(OBSERVATION_SIZE);
-    extractObservation(state, 'P1', arena, out);
+    extractObservation(state, 'P1', arena, settings, out);
 
-    // Slot 0: first active carrot (x=100, y=200)
     const c0 = OBS_CARROT_OFFSET + 0 * PER_CARROT_FEATURES;
     expect(out[c0 + 0]).toBeCloseTo(100 / 1280, 5);
     expect(out[c0 + 1]).toBeCloseTo(200 / 720, 5);
-    expect(out[c0 + 2]).toBe(1); // present
+    expect(out[c0 + 2]).toBe(1);
 
-    // Slot 1: second active carrot (x=500, y=200) — the inactive one was skipped
     const c1 = OBS_CARROT_OFFSET + 1 * PER_CARROT_FEATURES;
     expect(out[c1 + 0]).toBeCloseTo(500 / 1280, 5);
     expect(out[c1 + 1]).toBeCloseTo(200 / 720, 5);
     expect(out[c1 + 2]).toBe(1);
 
-    // Slot 2 + 3: no active carrots → zero
     for (let i = 2; i < 4; i++) {
       const base = OBS_CARROT_OFFSET + i * PER_CARROT_FEATURES;
       for (let f = 0; f < PER_CARROT_FEATURES; f++) {
@@ -178,19 +200,19 @@ describe('observation extractor (Task 4.2 — pure Node)', () => {
       { x: 100, y: 600, width: 300, height: 40, type: 'lava' },
     ];
     const arena = makeArena({ width: 1280, height: 720, hazardZones });
+    const settings = makeSettings();
     const state = makeState({
       players: [makePlayer({ id: 'P1', x: 200, y: 300 })],
     });
     const out = new Float32Array(OBSERVATION_SIZE);
-    extractObservation(state, 'P1', arena, out);
+    extractObservation(state, 'P1', arena, settings, out);
 
     const base = OBS_HAZARD_OFFSET;
-    expect(out[base + 0]).toBeCloseTo((100 - 200) / 1280, 5); // dx_norm_left
-    expect(out[base + 1]).toBeCloseTo((600 - 300) / 720, 5);  // dy_norm_top
-    expect(out[base + 2]).toBeCloseTo(300 / 1280, 5);         // w_norm
-    expect(out[base + 3]).toBeCloseTo(40 / 720, 5);           // h_norm
+    expect(out[base + 0]).toBeCloseTo((100 - 200) / 1280, 5);
+    expect(out[base + 1]).toBeCloseTo((600 - 300) / 720, 5);
+    expect(out[base + 2]).toBeCloseTo(300 / 1280, 5);
+    expect(out[base + 3]).toBeCloseTo(40 / 720, 5);
 
-    // Remaining hazard slots should be zeroed
     for (let i = 1; i < 4; i++) {
       const slot = OBS_HAZARD_OFFSET + i * PER_HAZARD_FEATURES;
       for (let f = 0; f < PER_HAZARD_FEATURES; f++) {
@@ -204,6 +226,7 @@ describe('observation extractor (Task 4.2 — pure Node)', () => {
       { x: 0, y: 700, width: 1280, height: 20, type: 'lava' },
     ];
     const arena = makeArena({ hazardZones });
+    const settings = makeSettings();
     const state = makeState({
       players: [
         makePlayer({ id: 'P1', x: 100, y: 400, vx: 50, vy: 0 }),
@@ -218,17 +241,15 @@ describe('observation extractor (Task 4.2 — pure Node)', () => {
 
     const out1 = new Float32Array(OBSERVATION_SIZE);
     const out2 = new Float32Array(OBSERVATION_SIZE);
-    extractObservation(state, 'P1', arena, out1);
-    extractObservation(state, 'P1', arena, out2);
+    extractObservation(state, 'P1', arena, settings, out1);
+    extractObservation(state, 'P1', arena, settings, out2);
 
     expect(Array.from(out2)).toEqual(Array.from(out1));
   });
 
   it('wrap-aware: opponent on the wrap-near side encodes the short signed distance', () => {
-    // Arena wraps via physics.wrapHorizontal — P1 at x=10 with an opponent at
-    // x=1270 on a 1280-wide arena are actually 20px apart around the seam,
-    // not 1260px apart. The encoded dx should be -20/1280, NOT +1260/1280.
     const arena = makeArena({ width: 1280, height: 720 });
+    const settings = makeSettings();
     const state = makeState({
       players: [
         makePlayer({ id: 'P1', x: 10, y: 400 }),
@@ -236,17 +257,16 @@ describe('observation extractor (Task 4.2 — pure Node)', () => {
       ],
     });
     const out = new Float32Array(OBSERVATION_SIZE);
-    extractObservation(state, 'P1', arena, out);
+    extractObservation(state, 'P1', arena, settings, out);
 
-    const base = OBS_OPPONENT_OFFSET; // P2 = slot 0
-    expect(out[base + 0]).toBeCloseTo(-20 / 1280, 5); // wrap-aware dx_norm
-    expect(out[base + 0]).not.toBeCloseTo(1260 / 1280, 2); // NOT raw difference
+    const base = OBS_OPPONENT_OFFSET;
+    expect(out[base + 0]).toBeCloseTo(-20 / 1280, 5);
+    expect(out[base + 0]).not.toBeCloseTo(1260 / 1280, 2);
   });
 
-  it('wrap-aware: y-axis is unchanged (no vertical wrap, gravity + ground/ceiling)', () => {
-    // Same horizontal wrap scenario. dy must still be the raw difference —
-    // y does not wrap.
+  it('wrap-aware: y-axis is unchanged (no vertical wrap)', () => {
     const arena = makeArena({ width: 1280, height: 720 });
+    const settings = makeSettings();
     const state = makeState({
       players: [
         makePlayer({ id: 'P1', x: 10, y: 400 }),
@@ -254,55 +274,50 @@ describe('observation extractor (Task 4.2 — pure Node)', () => {
       ],
     });
     const out = new Float32Array(OBSERVATION_SIZE);
-    extractObservation(state, 'P1', arena, out);
+    extractObservation(state, 'P1', arena, settings, out);
 
-    const base = OBS_OPPONENT_OFFSET; // P2 = slot 0
-    expect(out[base + 1]).toBeCloseTo((200 - 400) / 720, 5); // raw dy_norm
+    const base = OBS_OPPONENT_OFFSET;
+    expect(out[base + 1]).toBeCloseTo((200 - 400) / 720, 5);
   });
 
   it('wrap-aware: carrot on the wrap-near side encodes the short signed distance', () => {
     const arena = makeArena({ width: 1280, height: 720 });
+    const settings = makeSettings();
     const state = makeState({
       players: [makePlayer({ id: 'P1', x: 10, y: 400 })],
-      carrots: [
-        { x: 1270, y: 400, active: true, spawnTime: 0 },
-      ],
+      carrots: [{ x: 1270, y: 400, active: true, spawnTime: 0 }],
     });
     const out = new Float32Array(OBSERVATION_SIZE);
-    extractObservation(state, 'P1', arena, out);
+    extractObservation(state, 'P1', arena, settings, out);
 
     const base = OBS_CARROT_OFFSET;
-    expect(out[base + 0]).toBeCloseTo(-20 / 1280, 5); // wrap-aware dx_norm
-    expect(out[base + 0]).not.toBeCloseTo(1260 / 1280, 2); // NOT raw difference
-    expect(out[base + 1]).toBeCloseTo(0, 5);          // dy_norm
-    expect(out[base + 2]).toBe(1);                    // present
+    expect(out[base + 0]).toBeCloseTo(-20 / 1280, 5);
+    expect(out[base + 0]).not.toBeCloseTo(1260 / 1280, 2);
+    expect(out[base + 1]).toBeCloseTo(0, 5);
+    expect(out[base + 2]).toBe(1);
   });
 
   it('wrap-aware: hazard left edge wraps; width is left as-is', () => {
-    // A hazard whose left edge is just past the wrap seam. The dx should be
-    // negative-near-zero, but the width is not wrapped.
     const hazardZones: HazardZone[] = [
       { x: 1270, y: 600, width: 40, height: 30, type: 'lava' },
     ];
     const arena = makeArena({ width: 1280, height: 720, hazardZones });
+    const settings = makeSettings();
     const state = makeState({
       players: [makePlayer({ id: 'P1', x: 10, y: 400 })],
     });
     const out = new Float32Array(OBSERVATION_SIZE);
-    extractObservation(state, 'P1', arena, out);
+    extractObservation(state, 'P1', arena, settings, out);
 
     const base = OBS_HAZARD_OFFSET;
-    expect(out[base + 0]).toBeCloseTo(-20 / 1280, 5); // wrap-aware dx_norm_left
-    expect(out[base + 2]).toBeCloseTo(40 / 1280, 5);  // width unchanged
-    expect(out[base + 3]).toBeCloseTo(30 / 720, 5);   // height unchanged
+    expect(out[base + 0]).toBeCloseTo(-20 / 1280, 5);
+    expect(out[base + 2]).toBeCloseTo(40 / 1280, 5);
+    expect(out[base + 3]).toBeCloseTo(30 / 720, 5);
   });
 
-  it('wrap-aware: opponent exactly at half-width is encoded as +0.5 (asymmetric `>`/`<` is fine — both edges equidistant)', () => {
-    // dx = exactly W/2 (= 640 for 1280-wide arena). The `>` guard means
-    // wrapDx returns 640 unchanged, so dx_norm = 640/1280 = 0.5. The
-    // mirror case (-640) would also be returned unchanged by the `<` guard.
-    // Both edges of the seam are equidistant — either sign is correct.
+  it('wrap-aware: opponent exactly at half-width is encoded as +0.5', () => {
     const arena = makeArena({ width: 1280, height: 720 });
+    const settings = makeSettings();
     const state = makeState({
       players: [
         makePlayer({ id: 'P1', x: 0, y: 400 }),
@@ -310,25 +325,151 @@ describe('observation extractor (Task 4.2 — pure Node)', () => {
       ],
     });
     const out = new Float32Array(OBSERVATION_SIZE);
-    extractObservation(state, 'P1', arena, out);
+    extractObservation(state, 'P1', arena, settings, out);
 
-    const base = OBS_OPPONENT_OFFSET; // P2 = slot 0
+    const base = OBS_OPPONENT_OFFSET;
     expect(out[base + 0]).toBeCloseTo(0.5, 5);
   });
 
   it('makeObservation allocates a properly-sized Float32Array and fills it', () => {
     const arena = makeArena();
+    const settings = makeSettings();
     const state = makeState({
       players: [makePlayer({ id: 'P1', x: 640, y: 360 })],
     });
 
-    const obs = makeObservation(state, 'P1', arena);
+    const obs = makeObservation(state, 'P1', arena, settings);
     expect(obs).toBeInstanceOf(Float32Array);
     expect(obs.length).toBe(OBSERVATION_SIZE);
+    expect(obs[OBS_SELF_OFFSET + 0]).toBeCloseTo(0.5, 5);
+    expect(obs[OBS_SELF_OFFSET + 1]).toBeCloseTo(0.5, 5);
+    expect(obs[OBS_SELF_OFFSET + 4]).toBe(1);
+  });
 
-    // Self block populated (x_norm should be 0.5)
-    expect(obs[0]).toBeCloseTo(0.5, 5);
-    expect(obs[1]).toBeCloseTo(0.5, 5);
-    expect(obs[4]).toBe(1); // on_ground (default state is 'idle')
+  // ---------- Match context block ----------
+
+  it('match context: all 7 mods + scoring + limits encode correctly when all-on', () => {
+    const arena = makeArena();
+    const state = makeState({ players: [makePlayer({ id: 'P1' })], timeElapsed: 60 });
+    const settings = makeSettings({
+      killLimit: 32,
+      timeLimit: 120,
+      mods: {
+        extremeGore: true, carrotChase: true, giantPlayers: true, turbo: true,
+        superBounce: true, mirrorArena: true, underwaterGravity: true,
+      },
+    });
+    const out = new Float32Array(OBSERVATION_SIZE);
+    extractObservation(state, 'P1', arena, settings, out);
+
+    expect(out[OBS_MATCH_CONTEXT_OFFSET + 0]).toBe(1); // carrotChase
+    expect(out[OBS_MATCH_CONTEXT_OFFSET + 1]).toBe(1); // mirrorArena
+    expect(out[OBS_MATCH_CONTEXT_OFFSET + 2]).toBe(1); // superBounce
+    expect(out[OBS_MATCH_CONTEXT_OFFSET + 3]).toBe(1); // turbo
+    expect(out[OBS_MATCH_CONTEXT_OFFSET + 4]).toBe(1); // giantPlayers
+    expect(out[OBS_MATCH_CONTEXT_OFFSET + 5]).toBe(1); // underwaterGravity
+    expect(out[OBS_MATCH_CONTEXT_OFFSET + 6]).toBe(1); // extremeGore
+    expect(out[OBS_MATCH_CONTEXT_OFFSET + 7]).toBe(0); // killScoreValue_norm: 0 because carrotChase ON
+    expect(out[OBS_MATCH_CONTEXT_OFFSET + 8]).toBeCloseTo(1, 5); // 32 / 32 = 1
+    expect(out[OBS_MATCH_CONTEXT_OFFSET + 9]).toBeCloseTo(0.5, 5); // 60 / 120
+  });
+
+  it('match context: carrotChase OFF → killScoreValue_norm = 1', () => {
+    const arena = makeArena();
+    const state = makeState({ players: [makePlayer({ id: 'P1' })] });
+    const settings = makeSettings(); // carrotChase: false (default)
+    const out = new Float32Array(OBSERVATION_SIZE);
+    extractObservation(state, 'P1', arena, settings, out);
+
+    expect(out[OBS_MATCH_CONTEXT_OFFSET + 0]).toBe(0);
+    expect(out[OBS_MATCH_CONTEXT_OFFSET + 7]).toBe(1);
+  });
+
+  it('match context: carrotChase ON → killScoreValue_norm = 0', () => {
+    const arena = makeArena();
+    const state = makeState({ players: [makePlayer({ id: 'P1' })] });
+    const settings = makeSettings({
+      mods: {
+        extremeGore: false, carrotChase: true, giantPlayers: false, turbo: false,
+        superBounce: false, mirrorArena: false, underwaterGravity: false,
+      },
+    });
+    const out = new Float32Array(OBSERVATION_SIZE);
+    extractObservation(state, 'P1', arena, settings, out);
+
+    expect(out[OBS_MATCH_CONTEXT_OFFSET + 0]).toBe(1);
+    expect(out[OBS_MATCH_CONTEXT_OFFSET + 7]).toBe(0);
+  });
+
+  // ---------- Self block additions ----------
+
+  it('self burn_norm: burnTimer at half BURN_TIMER_MAX (5s) ≈ 0.5', () => {
+    const arena = makeArena();
+    const settings = makeSettings();
+    const state = makeState({
+      players: [makePlayer({ id: 'P1', burnTimer: 2.5 })],
+    });
+    const out = new Float32Array(OBSERVATION_SIZE);
+    extractObservation(state, 'P1', arena, settings, out);
+    expect(out[OBS_SELF_OFFSET + 8]).toBeCloseTo(0.5, 5);
+  });
+
+  it('self score_norm: score at half killLimit ≈ 0.5', () => {
+    const arena = makeArena();
+    const settings = makeSettings({ killLimit: 16 });
+    const state = makeState({
+      players: [makePlayer({ id: 'P1', score: 8 })],
+    });
+    const out = new Float32Array(OBSERVATION_SIZE);
+    extractObservation(state, 'P1', arena, settings, out);
+    expect(out[OBS_SELF_OFFSET + 9]).toBeCloseTo(0.5, 5);
+  });
+
+  it('self splat flag: state="splat" → out[OBS_SELF_OFFSET + 10] = 1', () => {
+    const arena = makeArena();
+    const settings = makeSettings();
+    const state = makeState({
+      players: [makePlayer({ id: 'P1', state: 'splat' })],
+    });
+    const out = new Float32Array(OBSERVATION_SIZE);
+    extractObservation(state, 'P1', arena, settings, out);
+    expect(out[OBS_SELF_OFFSET + 10]).toBe(1);
+    expect(out[OBS_SELF_OFFSET + 11]).toBe(0);
+  });
+
+  it('self respawning flag: state="respawning" → out[OBS_SELF_OFFSET + 11] = 1', () => {
+    const arena = makeArena();
+    const settings = makeSettings();
+    const state = makeState({
+      players: [makePlayer({ id: 'P1', state: 'respawning' })],
+    });
+    const out = new Float32Array(OBSERVATION_SIZE);
+    extractObservation(state, 'P1', arena, settings, out);
+    expect(out[OBS_SELF_OFFSET + 10]).toBe(0);
+    expect(out[OBS_SELF_OFFSET + 11]).toBe(1);
+  });
+
+  it('time progress: timeElapsed=60, timeLimit=120 → 0.5', () => {
+    const arena = makeArena();
+    const settings = makeSettings({ timeLimit: 120 });
+    const state = makeState({
+      players: [makePlayer({ id: 'P1' })],
+      timeElapsed: 60,
+    });
+    const out = new Float32Array(OBSERVATION_SIZE);
+    extractObservation(state, 'P1', arena, settings, out);
+    expect(out[OBS_MATCH_CONTEXT_OFFSET + 9]).toBeCloseTo(0.5, 5);
+  });
+
+  it('time progress: timeLimit=0 (no limit) → 0', () => {
+    const arena = makeArena();
+    const settings = makeSettings({ timeLimit: 0 });
+    const state = makeState({
+      players: [makePlayer({ id: 'P1' })],
+      timeElapsed: 9999,
+    });
+    const out = new Float32Array(OBSERVATION_SIZE);
+    extractObservation(state, 'P1', arena, settings, out);
+    expect(out[OBS_MATCH_CONTEXT_OFFSET + 9]).toBe(0);
   });
 });

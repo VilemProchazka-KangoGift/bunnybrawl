@@ -9,19 +9,22 @@
 //
 // MatchState does NOT carry the arena reference (the arena lives in the
 // owning runner / GameLoop / Simulator). Width/height + hazard zones are
-// therefore taken from a separate `arena` parameter.
+// therefore taken from a separate `arena` parameter. MatchSettings is also
+// passed in — needed for the match-context block (mods + scoring values +
+// time/kill limits).
 
-import type { Arena, MatchState, Player, PlayerSlot } from '../types';
+import type { Arena, MatchSettings, MatchState, Player, PlayerSlot } from '../types';
 
 /**
  * Observation layout (per slot):
  *
- *   self block        — 8 floats
- *   per-opponent      — 8 floats × MAX_OPPONENTS (4) = 32
- *   per-carrot        — 3 floats × MAX_CARROTS (4)   = 12
- *   per-hazard-zone   — 4 floats × MAX_HAZARDS (4)   = 16
+ *   match context     — 10 floats
+ *   self block        — 12 floats
+ *   per-opponent      —  8 floats × MAX_OPPONENTS (4) = 32
+ *   per-carrot        —  3 floats × MAX_CARROTS (4)   = 12
+ *   per-hazard-zone   —  4 floats × MAX_HAZARDS (4)   = 16
  *   ----
- *   total                                              68
+ *   total                                              82
  *
  * Stable ordering: opponents sorted by slot id (alphabetical). Carrots use
  * insertion order (filtered to active=true). Hazards use arena index order.
@@ -35,8 +38,14 @@ import type { Arena, MatchState, Player, PlayerSlot } from '../types';
  * `[-0.5, +0.5]` rather than `[-1, +1]`. The arena wraps horizontally
  * (`physics.wrapHorizontal`); without this, a 20px-around-the-seam opponent
  * would look like a full screen away.
+ *
+ * The match-context block lets a single trained policy adapt across regimes
+ * (normal vs carrotChase, kill-limit 8 vs 32, etc.) without retraining. All
+ * fields are static for the duration of a match (mods + limits) except
+ * `timeProgress` which advances with `state.timeElapsed`.
  */
-export const SELF_FEATURES = 8;
+export const MATCH_CONTEXT_FEATURES = 10;
+export const SELF_FEATURES = 12;
 export const PER_OPPONENT_FEATURES = 8;
 export const PER_CARROT_FEATURES = 3;
 export const PER_HAZARD_FEATURES = 4;
@@ -45,16 +54,21 @@ export const MAX_OPPONENTS = 4;
 export const MAX_CARROTS = 4;
 export const MAX_HAZARDS = 4;
 
-export const OBS_OPPONENT_OFFSET = SELF_FEATURES;
+export const OBS_MATCH_CONTEXT_OFFSET = 0;
+export const OBS_SELF_OFFSET = OBS_MATCH_CONTEXT_OFFSET + MATCH_CONTEXT_FEATURES;
+export const OBS_OPPONENT_OFFSET = OBS_SELF_OFFSET + SELF_FEATURES;
 export const OBS_CARROT_OFFSET = OBS_OPPONENT_OFFSET + MAX_OPPONENTS * PER_OPPONENT_FEATURES;
 export const OBS_HAZARD_OFFSET = OBS_CARROT_OFFSET + MAX_CARROTS * PER_CARROT_FEATURES;
 export const OBSERVATION_SIZE = OBS_HAZARD_OFFSET + MAX_HAZARDS * PER_HAZARD_FEATURES;
+// = 10 + 12 + 32 + 12 + 16 = 82
 
 const VELOCITY_SCALE = 600; // approximate max sustained vx/vy in px/s
 const FAT_TIMER_MAX = 6.6;  // matches FAT_DURATION (constants.ts)
 const SLOW_TIMER_MAX = 5;   // matches THORN_SLOW_DURATION
 const INVINCIBLE_TIMER_MAX = 1.5; // matches INVINCIBLE_DURATION
+const BURN_TIMER_MAX = 5;   // matches THORN_SLOW_DURATION (lava sets burnTimer to the same value)
 const SCORE_DIFF_SCALE = 16;     // default killLimit
+const KILL_LIMIT_NORM = 32;      // upper bound for killLimit normalization (typical 4-32)
 
 export interface ObservationConfig {
   /** Optional override for arena width (defaults to arena.width). */
@@ -66,8 +80,13 @@ export interface ObservationConfig {
 /**
  * Write an observation for `slot` into `out`. Throws if `out.length < OBSERVATION_SIZE`.
  *
- * Self block (8): x_norm, y_norm, vx_norm, vy_norm, on_ground, fat_timer_norm,
- *                 slow_timer_norm, invincible_timer_norm.
+ * Match context block (10): carrotChase, mirrorArena, superBounce, turbo,
+ *   giantPlayers, underwaterGravity, extremeGore (all 0/1), killScoreValue_norm
+ *   (0 in carrotChase, 1 otherwise), killLimit_norm (settings.killLimit / 32),
+ *   timeProgress (state.timeElapsed / settings.timeLimit, clamped 0..1; 0 if no time limit).
+ * Self block (12): x_norm, y_norm, vx_norm, vy_norm, on_ground, fat_timer_norm,
+ *                  slow_timer_norm, invincible_timer_norm, burn_timer_norm,
+ *                  score_norm, splat (0/1), respawning (0/1).
  * Opponent block (8 × MAX_OPPONENTS): dx_norm, dy_norm, vx_norm, vy_norm,
  *                                     on_ground, score_diff, alive, present.
  * Carrot block (3 × MAX_CARROTS): dx_norm, dy_norm, present.
@@ -80,6 +99,7 @@ export function extractObservation(
   state: Readonly<MatchState>,
   slot: PlayerSlot,
   arena: Readonly<Arena>,
+  settings: Readonly<MatchSettings>,
   out: Float32Array,
   config?: ObservationConfig,
 ): void {
@@ -89,21 +109,46 @@ export function extractObservation(
   // Zero the slice we'll write to (don't trust caller's buffer).
   for (let i = 0; i < OBSERVATION_SIZE; i++) out[i] = 0;
 
+  // Match context block — populated even when slot is missing (these are
+  // global facts about the match, not slot-specific). Cheap to fill.
+  const mods = settings.mods;
+  out[OBS_MATCH_CONTEXT_OFFSET + 0] = mods.carrotChase ? 1 : 0;
+  out[OBS_MATCH_CONTEXT_OFFSET + 1] = mods.mirrorArena ? 1 : 0;
+  out[OBS_MATCH_CONTEXT_OFFSET + 2] = mods.superBounce ? 1 : 0;
+  out[OBS_MATCH_CONTEXT_OFFSET + 3] = mods.turbo ? 1 : 0;
+  out[OBS_MATCH_CONTEXT_OFFSET + 4] = mods.giantPlayers ? 1 : 0;
+  out[OBS_MATCH_CONTEXT_OFFSET + 5] = mods.underwaterGravity ? 1 : 0;
+  out[OBS_MATCH_CONTEXT_OFFSET + 6] = mods.extremeGore ? 1 : 0;
+  // killScoreValue_norm: kills give 2 points normally (game ratio kill:carrot 2:1),
+  // 0 in carrotChase. Normalized by carrot value (1) → (carrotChase ? 0 : 2/2 = 1).
+  out[OBS_MATCH_CONTEXT_OFFSET + 7] = mods.carrotChase ? 0 : 1;
+  // killLimit_norm: clamped 0..2 (typical 4-32, divided by 32).
+  out[OBS_MATCH_CONTEXT_OFFSET + 8] = clamp(settings.killLimit / KILL_LIMIT_NORM, 0, 2);
+  // timeProgress: 0 if no time limit; otherwise elapsed / limit, clamped 0..1.
+  out[OBS_MATCH_CONTEXT_OFFSET + 9] =
+    settings.timeLimit > 0 ? clamp01(state.timeElapsed / settings.timeLimit) : 0;
+
   const self = findPlayer(state, slot);
-  if (!self) return; // slot not in state — return all zeros
+  if (!self) return; // slot not in state — match context filled, rest zero
 
   const W = config?.arenaWidth ?? arena.width;
   const H = config?.arenaHeight ?? arena.height;
 
-  // Self block
-  out[0] = self.x / W;
-  out[1] = self.y / H;
-  out[2] = self.vx / VELOCITY_SCALE;
-  out[3] = self.vy / VELOCITY_SCALE;
-  out[4] = self.state === 'airborne' ? 0 : 1; // on_ground
-  out[5] = clamp01(self.fatTimer / FAT_TIMER_MAX);
-  out[6] = clamp01(self.slowTimer / SLOW_TIMER_MAX);
-  out[7] = clamp01(self.invincibleTimer / INVINCIBLE_TIMER_MAX);
+  // Self block (offsets relative to OBS_SELF_OFFSET)
+  out[OBS_SELF_OFFSET + 0] = self.x / W;
+  out[OBS_SELF_OFFSET + 1] = self.y / H;
+  out[OBS_SELF_OFFSET + 2] = self.vx / VELOCITY_SCALE;
+  out[OBS_SELF_OFFSET + 3] = self.vy / VELOCITY_SCALE;
+  out[OBS_SELF_OFFSET + 4] = self.state === 'airborne' ? 0 : 1; // on_ground
+  out[OBS_SELF_OFFSET + 5] = clamp01(self.fatTimer / FAT_TIMER_MAX);
+  out[OBS_SELF_OFFSET + 6] = clamp01(self.slowTimer / SLOW_TIMER_MAX);
+  out[OBS_SELF_OFFSET + 7] = clamp01(self.invincibleTimer / INVINCIBLE_TIMER_MAX);
+  out[OBS_SELF_OFFSET + 8] = clamp01(self.burnTimer / BURN_TIMER_MAX);
+  // score_norm: scaled by killLimit so a "near-victory" reads as ~1. Guard
+  // against killLimit=0 (test scenarios) by flooring the divisor at 1.
+  out[OBS_SELF_OFFSET + 9] = self.score / Math.max(1, settings.killLimit);
+  out[OBS_SELF_OFFSET + 10] = self.state === 'splat' ? 1 : 0;
+  out[OBS_SELF_OFFSET + 11] = self.state === 'respawning' ? 1 : 0;
 
   // Opponents — sorted by slot id, excluding self
   const opponents = state.players
@@ -157,10 +202,11 @@ export function makeObservation(
   state: Readonly<MatchState>,
   slot: PlayerSlot,
   arena: Readonly<Arena>,
+  settings: Readonly<MatchSettings>,
   config?: ObservationConfig,
 ): Float32Array {
   const out = new Float32Array(OBSERVATION_SIZE);
-  extractObservation(state, slot, arena, out, config);
+  extractObservation(state, slot, arena, settings, out, config);
   return out;
 }
 
@@ -172,6 +218,10 @@ function findPlayer(state: Readonly<MatchState>, slot: PlayerSlot): Player | und
 
 function clamp01(x: number): number {
   return x < 0 ? 0 : x > 1 ? 1 : x;
+}
+
+function clamp(x: number, lo: number, hi: number): number {
+  return x < lo ? lo : x > hi ? hi : x;
 }
 
 /**
