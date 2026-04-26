@@ -11,7 +11,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { HeadlessRunner } from '../HeadlessRunner';
 import { InMemoryRecorder } from '../recording';
-import { extractObservation, OBSERVATION_SIZE } from '../observation';
+import { OBSERVATION_SIZE, OBS_SELF_OFFSET, SELF_FEATURES } from '../observation';
 import { RewardShaper } from '../reward';
 import { registerBuiltinArenas } from '../../arenas/builtin';
 import { registerBuiltinCharacters } from '../../characters/builtin';
@@ -175,9 +175,11 @@ describe('HeadlessRunner recording integration', () => {
     // First sample's obs is the pre-FIRST-tick observation: the initial state.
     // Re-extract from the simulator's current state... actually we can't, the
     // simulator has stepped. Instead, verify obs is internally consistent:
-    // self block (first 8) should be non-zero (P1 has a position).
+    // self block (12 floats at OBS_SELF_OFFSET) should be non-zero (P1 has a position).
     let nonZero = false;
-    for (let i = 0; i < 8; i++) if (obs[i] !== 0) { nonZero = true; break; }
+    for (let i = 0; i < SELF_FEATURES; i++) {
+      if (obs[OBS_SELF_OFFSET + i] !== 0) { nonZero = true; break; }
+    }
     expect(nonZero).toBe(true);
   });
 
@@ -204,16 +206,17 @@ describe('HeadlessRunner recording integration', () => {
     // sample-index-2 (since first observe returns 0) becomes load-bearing.
     runner.getSimulator().getState().countdown = 0;
 
-    // Inject a kill on the 3rd fixedUpdate by bumping P1's score after the
-    // simulator finishes that tick — the reward shaper will see the +2 score
-    // delta when it observes during _recordTick.
+    // Inject a kill on the 3rd fixedUpdate by appending a killFeed entry where
+    // P1 is the attacker. The reward shaper detects this via the killFeed scan
+    // when it observes during _recordTick.
     let fixedUpdateCount = 0;
     const origFixedUpdate = runner.getSimulator().fixedUpdate.bind(runner.getSimulator());
     runner.getSimulator().fixedUpdate = (dt: number): void => {
       origFixedUpdate(dt);
       fixedUpdateCount++;
       if (fixedUpdateCount === 3) {
-        runner.getSimulator().getState().players[0].score = 2;
+        const state = runner.getSimulator().getState();
+        state.killFeed.push({ attacker: 'P1', victim: 'P2', timestamp: state.timeElapsed });
       }
     };
 
@@ -224,9 +227,9 @@ describe('HeadlessRunner recording integration', () => {
 
     // Timing:
     //   sample[0] tick=0: first observe returns 0 (init)
-    //   sample[1] tick=1: dScore=0, survival only (0.001)
-    //   sample[2] tick=2: 3rd fixedUpdate set score=2, dScore=2, kill+survival (~1.001)
-    //   sample[3]+   : dScore=0 again
+    //   sample[1] tick=1: no killFeed entries, survival only (0.001)
+    //   sample[2] tick=2: 3rd fixedUpdate appended killFeed entry → kill+survival (~1.001)
+    //   sample[3]+   : timestamp baseline updated; same entry not re-counted
     expect(p1Samples[2].reward).toBeGreaterThan(0.9);
     expect(p1Samples[3].reward).toBeLessThan(0.1);
   });

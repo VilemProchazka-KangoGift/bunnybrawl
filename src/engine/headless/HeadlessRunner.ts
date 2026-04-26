@@ -175,7 +175,7 @@ export class HeadlessRunner {
     const arena = this._simulator.getArena();
     for (const slot of this._recording.slots) {
       const buf = this._obsBuffers.get(slot)!;
-      extractObservation(state, slot, arena, buf);
+      extractObservation(state, slot, arena, this._config.settings, buf);
       const snap = this._obsSnapshots.get(slot)!;
       for (let i = 0; i < OBSERVATION_SIZE; i++) snap[i] = buf[i];
     }

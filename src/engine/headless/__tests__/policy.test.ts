@@ -6,7 +6,7 @@ import { OBSERVATION_SIZE } from '../observation';
 import { registerBuiltinArenas } from '../../arenas/builtin';
 import { registerBuiltinCharacters } from '../../characters/builtin';
 import { getArena } from '../../arenas';
-import { makePlayer, makeState } from '../../__tests__/testHelpers';
+import { makePlayer, makeState, makeSettings } from '../../__tests__/testHelpers';
 import type { InputState, PlayerSlot } from '../../types';
 
 beforeAll(() => {
@@ -37,7 +37,7 @@ describe('PolicyBroker', () => {
     const arena = getArena('meadow');
     const state = buildState([]);
 
-    broker.tick(state, arena);
+    broker.tick(state, arena, makeSettings());
 
     expect(policy.step).not.toHaveBeenCalled();
   });
@@ -57,7 +57,7 @@ describe('PolicyBroker', () => {
     const arena = getArena('meadow');
     const state = buildState(['P1']);
 
-    broker.tick(state, arena);
+    broker.tick(state, arena, makeSettings());
 
     expect(policy.step).toHaveBeenCalledTimes(1);
     const [slots, obs] = policy.step.mock.calls[0] as [
@@ -96,7 +96,7 @@ describe('PolicyBroker', () => {
     const arena = getArena('meadow');
     const state = buildState(['P1']);
 
-    broker.tick(state, arena);
+    broker.tick(state, arena, makeSettings());
 
     const action = pi.getAction(state);
     expect(action).toEqual({ left: true, right: false, jump: true, down: false });
@@ -113,7 +113,7 @@ describe('PolicyBroker', () => {
     const arena = getArena('meadow');
     const state = buildState(['P1', 'P2']);
 
-    broker.tick(state, arena);
+    broker.tick(state, arena, makeSettings());
 
     expect(policy.step.mock.calls[0][0]).toEqual(['P1', 'P2']);
     expect(piP1.getAction(state)).toEqual({ left: true, right: false, jump: false, down: false });
@@ -128,7 +128,7 @@ describe('PolicyBroker', () => {
     const arena = getArena('meadow');
     const state = buildState(['B1', 'P1']);
 
-    broker.tick(state, arena);
+    broker.tick(state, arena, makeSettings());
 
     expect(policy.step.mock.calls[0][0]).toEqual(['B1', 'P1']);
   });
@@ -142,7 +142,7 @@ describe('PolicyBroker', () => {
     const arena = getArena('meadow');
     const state = buildState(['P1', 'P2']);
 
-    broker.tick(state, arena);
+    broker.tick(state, arena, makeSettings());
 
     expect(policy.step.mock.calls[0][0]).toEqual(['P2']);
     expect(broker.size()).toBe(1);
@@ -156,7 +156,7 @@ describe('PolicyBroker', () => {
     const arena = getArena('meadow');
     const state = buildState(['P1']);
 
-    broker.tick(state, arena);
+    broker.tick(state, arena, makeSettings());
 
     expect(policy.step.mock.calls[0][0]).toEqual(['P1']);
     expect(broker.size()).toBe(1);
@@ -185,7 +185,7 @@ describe('PolicyBroker', () => {
     expect(broker.size()).toBe(5);
     expect(broker.getBufferCapacity()).toBeGreaterThanOrEqual(5 * OBSERVATION_SIZE);
 
-    broker.tick(state, arena);
+    broker.tick(state, arena, makeSettings());
 
     const [batchSlots, obs] = policy.step.mock.calls[0] as [
       ReadonlyArray<PlayerSlot>,

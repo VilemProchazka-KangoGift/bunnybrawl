@@ -21,7 +21,7 @@
 //   3. Simulator iterates players, calls each PolicyInput.getAction(state),
 //      which returns the broker's stored action for that slot.
 
-import type { Arena, InputState, MatchState, PlayerSlot } from '../types';
+import type { Arena, InputState, MatchSettings, MatchState, PlayerSlot } from '../types';
 import type { PlayerInput } from '../input/PlayerInput';
 import { extractObservation, OBSERVATION_SIZE } from './observation';
 
@@ -59,7 +59,7 @@ const INITIAL_CAPACITY = 4;
  *   simulator.setPlayerInput('P1', piP1);
  *   simulator.setPlayerInput('P2', piP2);
  *   // Per tick:
- *   broker.tick(simulator.getState(), simulator.getArena());
+ *   broker.tick(simulator.getState(), simulator.getArena(), simulator.getSettings());
  *   simulator.fixedUpdate(dt);  // PolicyInput.getAction now reads broker's actions
  */
 export class PolicyBroker {
@@ -101,11 +101,15 @@ export class PolicyBroker {
   }
 
   /** Run one batched forward pass. Call BEFORE the per-slot fixedUpdate iteration. */
-  tick(state: Readonly<MatchState>, arena: Readonly<Arena>): void {
+  tick(
+    state: Readonly<MatchState>,
+    arena: Readonly<Arena>,
+    settings: Readonly<MatchSettings>,
+  ): void {
     if (this._slots.length === 0) return;
     for (let i = 0; i < this._slots.length; i++) {
       const sub = this._obsBuffer.subarray(i * OBSERVATION_SIZE, (i + 1) * OBSERVATION_SIZE);
-      extractObservation(state, this._slots[i], arena, sub);
+      extractObservation(state, this._slots[i], arena, settings, sub);
     }
     this._policy.step(this._slots, this._obsBuffer, this._actions);
   }

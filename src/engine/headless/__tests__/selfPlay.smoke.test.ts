@@ -11,7 +11,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { HeadlessRunner } from '../HeadlessRunner';
 import { InMemoryRecorder } from '../recording';
 import { RewardShaper } from '../reward';
-import { extractObservation, OBSERVATION_SIZE, makeObservation } from '../observation';
+import { extractObservation, OBSERVATION_SIZE, OBS_SELF_OFFSET, makeObservation } from '../observation';
 import { PolicyBroker } from '../policy';
 import type { BatchedPolicy } from '../policy';
 import { registerBuiltinArenas } from '../../arenas/builtin';
@@ -153,7 +153,7 @@ describe('self-play smoke test (Task 4.6 — end-to-end)', () => {
     const arena = sim.getArena();
     const origFixedUpdate = sim.fixedUpdate.bind(sim);
     sim.fixedUpdate = (dt: number): void => {
-      broker.tick(sim.getState(), arena);
+      broker.tick(sim.getState(), arena, sim.getSettings());
       origFixedUpdate(dt);
     };
 
@@ -216,19 +216,26 @@ describe('self-play smoke test (Task 4.6 — end-to-end)', () => {
     // Manually extract a fresh observation from the SAME initial state values
     // and compare. The runner snapshots BEFORE fixedUpdate so the obs reflects
     // the pre-tick state.
+    const freshSettings = makeSettings({ killLimit: 999 });
     const fresh = makeObservation(
-      { players: [{ ...initialP1, x: initialX, y: initialY }], carrots: [], stats: { perPlayer: new Map() } } as never,
+      {
+        players: [{ ...initialP1, x: initialX, y: initialY }],
+        carrots: [],
+        stats: { perPlayer: new Map() },
+        timeElapsed: 0,
+      } as never,
       'P1',
       getArena('meadow'),
+      freshSettings,
     );
-    // self block: x_norm + y_norm should match
+    // self block: x_norm + y_norm should match (located at OBS_SELF_OFFSET)
     const W = getArena('meadow').width;
     const H = getArena('meadow').height;
-    expect(sample.obs[0]).toBeCloseTo(initialX / W, 4);
-    expect(sample.obs[1]).toBeCloseTo(initialY / H, 4);
+    expect(sample.obs[OBS_SELF_OFFSET + 0]).toBeCloseTo(initialX / W, 4);
+    expect(sample.obs[OBS_SELF_OFFSET + 1]).toBeCloseTo(initialY / H, 4);
     // Sanity: fresh extraction agrees on self position
-    expect(fresh[0]).toBeCloseTo(initialX / W, 4);
-    expect(fresh[1]).toBeCloseTo(initialY / H, 4);
+    expect(fresh[OBS_SELF_OFFSET + 0]).toBeCloseTo(initialX / W, 4);
+    expect(fresh[OBS_SELF_OFFSET + 1]).toBeCloseTo(initialY / H, 4);
   });
 
   it('two consecutive matches with the same seed produce identical recordings', async () => {
@@ -272,16 +279,25 @@ describe('self-play smoke test (Task 4.6 — end-to-end)', () => {
     // Direct unit-style check that the observation pipeline and the runner's
     // snapshot read agree on byte-level encoding.
     const arena = getArena('meadow');
+    const settings = makeSettings();
     const buffer = new Float32Array(OBSERVATION_SIZE);
     extractObservation(
-      { players: [{ id: 'P1', x: 100, y: 200, vx: 50, vy: 0, state: 'idle', score: 0, fatTimer: 0, slowTimer: 0, invincibleTimer: 0, active: true }], carrots: [] } as never,
+      {
+        players: [{
+          id: 'P1', x: 100, y: 200, vx: 50, vy: 0, state: 'idle', score: 0,
+          fatTimer: 0, slowTimer: 0, invincibleTimer: 0, burnTimer: 0, active: true,
+        }],
+        carrots: [],
+        timeElapsed: 0,
+      } as never,
       'P1',
       arena,
+      settings,
       buffer,
     );
-    expect(buffer[0]).toBeCloseTo(100 / arena.width, 4);
-    expect(buffer[1]).toBeCloseTo(200 / arena.height, 4);
-    expect(buffer[2]).toBeCloseTo(50 / 600, 4);
-    expect(buffer[4]).toBe(1); // on_ground
+    expect(buffer[OBS_SELF_OFFSET + 0]).toBeCloseTo(100 / arena.width, 4);
+    expect(buffer[OBS_SELF_OFFSET + 1]).toBeCloseTo(200 / arena.height, 4);
+    expect(buffer[OBS_SELF_OFFSET + 2]).toBeCloseTo(50 / 600, 4);
+    expect(buffer[OBS_SELF_OFFSET + 4]).toBe(1); // on_ground
   });
 });
