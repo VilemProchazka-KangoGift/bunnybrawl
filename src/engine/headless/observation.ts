@@ -20,11 +20,11 @@ import type { Arena, MatchSettings, MatchState, Player, PlayerSlot } from '../ty
  *
  *   match context     — 10 floats
  *   self block        — 12 floats
- *   per-opponent      —  8 floats × MAX_OPPONENTS (4) = 32
+ *   per-opponent      — 12 floats × MAX_OPPONENTS (4) = 48
  *   per-carrot        —  3 floats × MAX_CARROTS (4)   = 12
  *   per-hazard-zone   —  4 floats × MAX_HAZARDS (4)   = 16
  *   ----
- *   total                                              82
+ *   total                                              98
  *
  * Stable ordering: opponents sorted by slot id (alphabetical). Carrots use
  * insertion order (filtered to active=true). Hazards use arena index order.
@@ -46,7 +46,7 @@ import type { Arena, MatchSettings, MatchState, Player, PlayerSlot } from '../ty
  */
 export const MATCH_CONTEXT_FEATURES = 10;
 export const SELF_FEATURES = 12;
-export const PER_OPPONENT_FEATURES = 8;
+export const PER_OPPONENT_FEATURES = 12;
 export const PER_CARROT_FEATURES = 3;
 export const PER_HAZARD_FEATURES = 4;
 
@@ -60,7 +60,7 @@ export const OBS_OPPONENT_OFFSET = OBS_SELF_OFFSET + SELF_FEATURES;
 export const OBS_CARROT_OFFSET = OBS_OPPONENT_OFFSET + MAX_OPPONENTS * PER_OPPONENT_FEATURES;
 export const OBS_HAZARD_OFFSET = OBS_CARROT_OFFSET + MAX_CARROTS * PER_CARROT_FEATURES;
 export const OBSERVATION_SIZE = OBS_HAZARD_OFFSET + MAX_HAZARDS * PER_HAZARD_FEATURES;
-// = 10 + 12 + 32 + 12 + 16 = 82
+// = 10 + 12 + 48 + 12 + 16 = 98
 
 const VELOCITY_SCALE = 600; // approximate max sustained vx/vy in px/s
 const FAT_TIMER_MAX = 6.6;  // matches FAT_DURATION (constants.ts)
@@ -87,8 +87,11 @@ export interface ObservationConfig {
  * Self block (12): x_norm, y_norm, vx_norm, vy_norm, on_ground, fat_timer_norm,
  *                  slow_timer_norm, invincible_timer_norm, burn_timer_norm,
  *                  score_norm, splat (0/1), respawning (0/1).
- * Opponent block (8 × MAX_OPPONENTS): dx_norm, dy_norm, vx_norm, vy_norm,
- *                                     on_ground, score_diff, alive, present.
+ * Opponent block (12 × MAX_OPPONENTS): dx_norm, dy_norm, vx_norm, vy_norm,
+ *                                      on_ground, score_diff,
+ *                                      fat_timer_norm, slow_timer_norm,
+ *                                      invincible_timer_norm, burn_timer_norm,
+ *                                      alive, present.
  * Carrot block (3 × MAX_CARROTS): dx_norm, dy_norm, present.
  * Hazard block (4 × MAX_HAZARDS): dx_norm_left, dy_norm_top, w_norm, h_norm
  *                                  (rectangle relative to self).
@@ -164,9 +167,13 @@ export function extractObservation(
     out[base + 3] = op.vy / VELOCITY_SCALE;
     out[base + 4] = op.state === 'airborne' ? 0 : 1;
     out[base + 5] = (op.score - self.score) / SCORE_DIFF_SCALE;
-    out[base + 6] =
+    out[base + 6] = clamp01(op.fatTimer / FAT_TIMER_MAX);
+    out[base + 7] = clamp01(op.slowTimer / SLOW_TIMER_MAX);
+    out[base + 8] = clamp01(op.invincibleTimer / INVINCIBLE_TIMER_MAX);
+    out[base + 9] = clamp01(op.burnTimer / BURN_TIMER_MAX);
+    out[base + 10] =
       op.active && op.state !== 'splat' && op.state !== 'respawning' ? 1 : 0;
-    out[base + 7] = 1; // present
+    out[base + 11] = 1; // present
   }
 
   // Carrots — by spawn order (state.carrots array order), filter active

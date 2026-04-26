@@ -35,10 +35,11 @@ describe('observation extractor (pure Node)', () => {
     expect(() => extractObservation(state, 'P1', arena, settings, tooSmall)).toThrow(/too small/i);
   });
 
-  it('OBSERVATION_SIZE = 82 (10 ctx + 12 self + 32 opp + 12 carrot + 16 hazard)', () => {
-    expect(OBSERVATION_SIZE).toBe(82);
+  it('OBSERVATION_SIZE = 98 (10 ctx + 12 self + 48 opp + 12 carrot + 16 hazard)', () => {
+    expect(OBSERVATION_SIZE).toBe(98);
     expect(MATCH_CONTEXT_FEATURES).toBe(10);
     expect(SELF_FEATURES).toBe(12);
+    expect(PER_OPPONENT_FEATURES).toBe(12);
   });
 
   it('match-context block is filled even when slot is missing; self/opponent/carrot/hazard zero', () => {
@@ -111,15 +112,15 @@ describe('observation extractor (pure Node)', () => {
 
     const slot0 = OBS_OPPONENT_OFFSET + 0 * PER_OPPONENT_FEATURES;
     expect(out[slot0 + 0]).toBeCloseTo(200 / 1280, 5);
-    expect(out[slot0 + 7]).toBe(1);
+    expect(out[slot0 + 11]).toBe(1);
 
     const slot1 = OBS_OPPONENT_OFFSET + 1 * PER_OPPONENT_FEATURES;
     expect(out[slot1 + 0]).toBeCloseTo(300 / 1280, 5);
-    expect(out[slot1 + 7]).toBe(1);
+    expect(out[slot1 + 11]).toBe(1);
 
     const slot2 = OBS_OPPONENT_OFFSET + 2 * PER_OPPONENT_FEATURES;
     expect(out[slot2 + 0]).toBeCloseTo(100 / 1280, 5);
-    expect(out[slot2 + 7]).toBe(1);
+    expect(out[slot2 + 11]).toBe(1);
 
     const slot3 = OBS_OPPONENT_OFFSET + 3 * PER_OPPONENT_FEATURES;
     for (let f = 0; f < PER_OPPONENT_FEATURES; f++) {
@@ -142,7 +143,7 @@ describe('observation extractor (pure Node)', () => {
     const base = OBS_OPPONENT_OFFSET;
     expect(out[base + 0]).toBeCloseTo(400 / 1280, 5);
     expect(out[base + 1]).toBeCloseTo(0, 5);
-    expect(out[base + 7]).toBe(1);
+    expect(out[base + 11]).toBe(1);
   });
 
   it('marks an inactive (splat) opponent with alive=0 but present=1', () => {
@@ -158,8 +159,8 @@ describe('observation extractor (pure Node)', () => {
     extractObservation(state, 'P1', arena, settings, out);
 
     const base = OBS_OPPONENT_OFFSET;
-    expect(out[base + 6]).toBe(0);
-    expect(out[base + 7]).toBe(1);
+    expect(out[base + 10]).toBe(0);
+    expect(out[base + 11]).toBe(1);
   });
 
   it('encodes only active carrots in insertion order; padding is zeroed', () => {
@@ -471,5 +472,94 @@ describe('observation extractor (pure Node)', () => {
     const out = new Float32Array(OBSERVATION_SIZE);
     extractObservation(state, 'P1', arena, settings, out);
     expect(out[OBS_MATCH_CONTEXT_OFFSET + 9]).toBe(0);
+  });
+
+  // ---------- Opponent block — timer norms ----------
+
+  it('opponent fat_norm: fatTimer normalized by FAT_TIMER_MAX (6.6s) at offset +6', () => {
+    const arena = makeArena();
+    const settings = makeSettings();
+    const state = makeState({
+      players: [
+        makePlayer({ id: 'P1', x: 100, y: 400 }),
+        makePlayer({ id: 'P2', x: 200, y: 400, fatTimer: 3.3 }), // half of 6.6
+      ],
+    });
+    const out = new Float32Array(OBSERVATION_SIZE);
+    extractObservation(state, 'P1', arena, settings, out);
+    expect(out[OBS_OPPONENT_OFFSET + 6]).toBeCloseTo(0.5, 5);
+  });
+
+  it('opponent fat_norm: clamps to 1.0 when fatTimer exceeds FAT_TIMER_MAX', () => {
+    const arena = makeArena();
+    const settings = makeSettings();
+    const state = makeState({
+      players: [
+        makePlayer({ id: 'P1', x: 100, y: 400 }),
+        makePlayer({ id: 'P2', x: 200, y: 400, fatTimer: 999 }),
+      ],
+    });
+    const out = new Float32Array(OBSERVATION_SIZE);
+    extractObservation(state, 'P1', arena, settings, out);
+    expect(out[OBS_OPPONENT_OFFSET + 6]).toBe(1);
+  });
+
+  it('opponent slow_norm: slowTimer normalized by SLOW_TIMER_MAX (5s) at offset +7', () => {
+    const arena = makeArena();
+    const settings = makeSettings();
+    const state = makeState({
+      players: [
+        makePlayer({ id: 'P1', x: 100, y: 400 }),
+        makePlayer({ id: 'P2', x: 200, y: 400, slowTimer: 2.5 }), // half of 5
+      ],
+    });
+    const out = new Float32Array(OBSERVATION_SIZE);
+    extractObservation(state, 'P1', arena, settings, out);
+    expect(out[OBS_OPPONENT_OFFSET + 7]).toBeCloseTo(0.5, 5);
+  });
+
+  it('opponent invincible_norm: invincibleTimer normalized by INVINCIBLE_TIMER_MAX (1.5s) at offset +8', () => {
+    const arena = makeArena();
+    const settings = makeSettings();
+    const state = makeState({
+      players: [
+        makePlayer({ id: 'P1', x: 100, y: 400 }),
+        makePlayer({ id: 'P2', x: 200, y: 400, invincibleTimer: 0.75 }), // half of 1.5
+      ],
+    });
+    const out = new Float32Array(OBSERVATION_SIZE);
+    extractObservation(state, 'P1', arena, settings, out);
+    expect(out[OBS_OPPONENT_OFFSET + 8]).toBeCloseTo(0.5, 5);
+  });
+
+  it('opponent burn_norm: burnTimer normalized by BURN_TIMER_MAX (5s) at offset +9', () => {
+    const arena = makeArena();
+    const settings = makeSettings();
+    const state = makeState({
+      players: [
+        makePlayer({ id: 'P1', x: 100, y: 400 }),
+        makePlayer({ id: 'P2', x: 200, y: 400, burnTimer: 2.5 }), // half of 5
+      ],
+    });
+    const out = new Float32Array(OBSERVATION_SIZE);
+    extractObservation(state, 'P1', arena, settings, out);
+    expect(out[OBS_OPPONENT_OFFSET + 9]).toBeCloseTo(0.5, 5);
+  });
+
+  it('opponent timer norms are zero when timers are zero (default player)', () => {
+    const arena = makeArena();
+    const settings = makeSettings();
+    const state = makeState({
+      players: [
+        makePlayer({ id: 'P1', x: 100, y: 400 }),
+        makePlayer({ id: 'P2', x: 200, y: 400 }),
+      ],
+    });
+    const out = new Float32Array(OBSERVATION_SIZE);
+    extractObservation(state, 'P1', arena, settings, out);
+    expect(out[OBS_OPPONENT_OFFSET + 6]).toBe(0); // fat
+    expect(out[OBS_OPPONENT_OFFSET + 7]).toBe(0); // slow
+    expect(out[OBS_OPPONENT_OFFSET + 8]).toBe(0); // invincible
+    expect(out[OBS_OPPONENT_OFFSET + 9]).toBe(0); // burn
   });
 });
