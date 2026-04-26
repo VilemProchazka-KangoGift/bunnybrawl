@@ -106,6 +106,35 @@ src/
         hazardFactories.ts # createThornRenderer, createSpringRenderer
         index.ts      # Barrel export
       utils.ts      # Shared utilities (randRange, pickWeighted, swapRemove, getFloatingPlatforms)
+    input/        # Unified PlayerInput abstraction (Phase 2 of headless refactor)
+      PlayerInput.ts   # Interface: { slot, getAction(state) -> InputState, dispose? }
+      KeyboardManager.ts # Owns window listeners + per-slot pressed-key state (5 slots)
+      KeyboardInput.ts # PlayerInput backed by a slot's KEY_BINDINGS
+      RuleBasedBot.ts  # PlayerInput wrapping AIController; setArena() on switchArena
+      RemoteInput.ts   # PlayerInput backed by ReadonlyMap<slot, InputState> buffer (host netcode)
+      RandomInput.ts   # Synthetic PlayerInput with seeded RNG + tunable jump/move/down probs
+      index.ts         # Barrel export
+    simulator/    # Pure simulation core — Node-safe, no browser/audio imports
+      Simulator.ts     # Owns: state, settings, arena, RNG, AI controllers, PlayerInputs,
+                       # all 7 gameplay systems. Side effects (audio, phase, match-end,
+                       # particles, haptics) routed through SimulatorEvents/ParticleEmitter
+                       # interfaces — no direct audio.* or browser API calls.
+      types.ts         # SimulatorEvents (7 callbacks), SimulatorOptions, ParticleEmitter,
+                       # TouchInputProvider, HapticEmitter interfaces
+      index.ts         # Barrel export
+    headless/     # Headless ML-driven simulation runner (Phase 4)
+      HeadlessRunner.ts # Drives Simulator until matchOver/maxTicks. Optional recording:
+                        # observation snapshot + action capture + reward shaper per slot.
+      observation.ts    # extractObservation(state, slot, arena, out): writes 68-float
+                        # egocentric Float32Array. wrapDx for horizontal arena wrap.
+      reward.ts         # RewardShaper class with tunable RewardWeights (kill/carrot/death/
+                        # win/loss/survival/airborne shaping). Per-slot stateful.
+      policy.ts         # BatchedPolicy interface (one forward pass per tick fills all slots)
+                        # + PolicyBroker orchestrator + PolicyInput per-slot adapter
+      recording.ts      # MatchRecorder interface; InMemoryRecorder + NDJSONFileRecorder
+                        # (line-delimited JSON via node:fs, multi-million-sample friendly)
+      types.ts          # MatchResult, HeadlessRunnerConfig, RecordingConfig
+      index.ts          # Barrel export
     net/          # Host-authoritative network multiplayer (WebRTC via Trystero MQTT)
       core/             # Generic netcode core (zero game imports — reusable library foundation)
         types.ts          # Generic interfaces: Simulation, SnapshotCodec, InterpolationConfig, InputCodec
@@ -167,6 +196,9 @@ src/
 - **Host-authoritative network multiplayer** — WebRTC DataChannels via Trystero (serverless MQTT signaling). Host runs full simulation and broadcasts binary snapshots every tick. Guests interpolate between snapshots and send inputs to host. No determinism requirements — host is the single source of truth. 2-player MVP, bots run on host only.
 - **cosmeticStep architecture** — Both host and guest call `gameLoop.cosmeticStep(dt)` for all SFX, particles, VFX. Host calls after `fixedUpdate()`, guest calls after `applySnapshotToState()`. Transition detection via prev-state comparison. No separate GuestSFX module.
 - **Mobile support** — `?mobile` URL param forces mobile mode. `isTouchPrimary()` detects coarse-pointer devices. `.is-mobile` CSS class on `<html>` for platform-conditional styles. Touch controls via `TouchInputManager` (same `InputState` interface as keyboard/AI). Haptic feedback via Vibration API.
+- **Hexagonal Simulator extraction (Solution C)** — `Simulator` (in `src/engine/simulator/`) is the pure simulation core: owns MatchState, RNG, AIControllers, PlayerInputs map, all 7 gameplay systems. Zero browser/DOM/audio imports — verified by `regression-no-browser-apis.test.ts`. Side effects flow through `SimulatorEvents` (audio request callbacks: sfx, music start/stop, all-sounds-stop, phase change, match end, player landing for haptics) and `ParticleEmitter` interface. `GameLoop` becomes a browser adapter: owns Renderer, RAF loop, KeyboardManager, TouchInputManager, ParticleSystem + 4 cosmetic systems; constructs Simulator and subscribes to events. Public GameLoop API is preserved (Match.tsx / NetMatch unchanged); methods delegate to `simulator.*`.
+- **PlayerInput abstraction (Phase 2)** — All input sources (keyboard, rule-based AI, network remote, ML policy, synthetic random) implement the `PlayerInput` interface (`{ slot, getAction(state) → InputState }`). `Simulator` holds `Map<PlayerSlot, PlayerInput>`. The browser-side touch and host-side network input overrides remain explicit special cases inside Simulator's per-player loop because they depend on per-tick state (touchInput airborne flag, network input buffer freshness).
+- **Headless ML pipeline** — `HeadlessRunner` composes `Simulator` + per-slot `PlayerInput`s for Node self-play. Observation extraction writes 68-float egocentric `Float32Array`s into caller-provided buffers (zero per-tick alloc). Recording: observations + captured actions + reward-shaper outputs persisted via `InMemoryRecorder` (tests) or `NDJSONFileRecorder` (training data). `BatchedPolicy` interface enables one neural-net forward pass per tick across all slots; `PolicyBroker` extracts observations into a flat batch and distributes actions via per-slot `PolicyInput` adapters. Run `npx vite-node scripts/selfPlay.ts` for the example pipeline.
 
 ## Build & Run
 
@@ -176,6 +208,7 @@ npm run build     # Production build (tsc + vite)
 npm test          # Unit/integration tests (~2000 tests, Vitest)
 npm run test:e2e  # E2E tests (~120 tests, Playwright, builds first)
 npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/physics changes)
+npx vite-node scripts/selfPlay.ts -- --episodes 5 --arena meadow --out data/run.ndjson  # Headless self-play data generation
 # Dev shortcut — skip lobby:
 # http://localhost:5173/bunnybrawl/?arena=rooftops&bots=2&difficulty=hard
 # Nav debug overlay:
