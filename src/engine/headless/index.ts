@@ -1,5 +1,7 @@
 export { HeadlessRunner } from './HeadlessRunner';
-export type { MatchResult, HeadlessRunnerConfig } from './types';
+export type { MatchResult, HeadlessRunnerConfig, RecordingConfig } from './types';
+export { InMemoryRecorder, NDJSONFileRecorder } from './recording';
+export type { MatchRecorder, Sample, MatchHeader } from './recording';
 export {
   extractObservation,
   makeObservation,

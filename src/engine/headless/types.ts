@@ -2,6 +2,8 @@ import type { MatchState, MatchSettings, PlayerSlot } from '../types';
 import type { SeededRNG } from '../net/prng';
 import type { PlayerInput } from '../input/PlayerInput';
 import type { ParticleEmitter } from '../simulator/types';
+import type { MatchRecorder } from './recording';
+import type { RewardShaper } from './reward';
 
 /**
  * Result returned by HeadlessRunner.runMatch().
@@ -49,4 +51,34 @@ export interface HeadlessRunnerConfig {
    * RandomInput don't need the controller and can be passed via this map.
    */
   inputs: Map<PlayerSlot, PlayerInput>;
+  /**
+   * Optional recording config. When set, the runner emits one Sample per
+   * (recorded slot, tick) to `recording.recorder`. Observation extraction +
+   * action capture + reward computation are wired automatically.
+   *
+   * Captured action accuracy: the runner replaces each recorded slot's
+   * PlayerInput with a thin wrapper that records the action returned by the
+   * inner input. The Simulator sees the same action it would have without
+   * recording — purely additive instrumentation.
+   *
+   * Free-form `tags` on the header lets callers stamp curriculum stage,
+   * opponent id, etc. without changing the wire format.
+   */
+  recording?: RecordingConfig;
+}
+
+/** Recording configuration for HeadlessRunner. */
+export interface RecordingConfig {
+  /** Sink — InMemoryRecorder, NDJSONFileRecorder, or custom. */
+  recorder: MatchRecorder;
+  /** Slots to record. Subset of activePlayers. */
+  slots: PlayerSlot[];
+  /**
+   * Optional per-slot reward shapers. If a slot is in `slots` but missing
+   * from this map, that slot's recorded reward is always 0 (purely behavioral
+   * data — no learning signal).
+   */
+  rewardShapers?: Map<PlayerSlot, RewardShaper>;
+  /** Optional free-form tags for the episode header (curriculum, opponent, etc.). */
+  tags?: Record<string, string | number | boolean>;
 }
