@@ -315,6 +315,28 @@ describe('AudioManager', () => {
       expect(preloadHowl.stop).not.toHaveBeenCalled();
     });
 
+    it('playMusic plays the preloaded Howl after preload completes (no extra Howl)', () => {
+      // Production flow: matchLoading.runLoadingTasks() → preloadArena → onload
+      // commits → setPhase('playing') → onMusicStartRequest → playMusic.
+      // playMusic must reuse the committed preload Howl, not create a new one.
+      audio.init();
+      const baseline = getInstances().length;
+      audio.preloadArena('meadow');
+      const preloadHowl = getInstances()[baseline];
+      expect(preloadHowl).toBeTruthy();
+
+      // Fire the load event to commit the Howl.
+      preloadHowl._onload();
+
+      const countAfterPreload = getInstances().length;
+      audio.playMusic('meadow');
+
+      // No new Howl created — the committed preload Howl is reused.
+      expect(getInstances().length).toBe(countAfterPreload);
+      // play() called on the committed preload Howl.
+      expect(preloadHowl.play).toHaveBeenCalled();
+    });
+
     it('playMusic cancels the in-flight preload tracker for the same theme', () => {
       // Defense in depth: if playMusic creates its own Howl for theme X, the
       // _inFlightPreload tracker for X must be nulled so a stranger preload
