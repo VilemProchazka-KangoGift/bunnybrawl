@@ -2,10 +2,13 @@
 // Owns the lobby player state, NPC wandering, bot AI, physics, stomp/swap, and
 // ready-zone countdown. Delegates rendering to lobbyRender.ts and bot AI to lobbyBots.ts.
 
-import type { Arena, CharacterDef, CharacterSlot, MatchState, Player, PlayerSlot, InputState, WildlifeEntity } from './types';
+import type { Arena, CharacterDef, CharacterSlot, MatchState, Particle, Player, PlayerSlot, InputState, WildlifeEntity } from './types';
 import type { ThemeConfig } from './themes/types';
 import { ALL_BOT_SLOTS, isBotSlot } from './types';
-import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED } from './constants';
+import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED, DUST_LAND_VY_THRESHOLD } from './constants';
+import {
+  spawnJumpDustParticles, spawnDustParticles, spawnFootstepDustParticles, updateParticles,
+} from './gameLoop/cosmetics/particles';
 import { tickIdleStateMachine } from './rendering/idleActions';
 import { KEY_BINDINGS } from './input';
 import { applyInput, applyGravity, movePlayer, collidePlatforms, updatePlayerState } from './physics';
@@ -126,10 +129,24 @@ export class LobbyGame {
   private _humanInZoneCount = 0;
   private _botInZoneCount = 0;
 
+  // Cosmetics — driven manually since the lobby has no GameLoop/cosmeticStep.
+  // Only the three effects users notice in the lobby: jump dust, landing dust,
+  // and footstep puffs. Prev-state captured per entity so transitions
+  // (grounded↔airborne, vy magnitude on landing) can fire deterministically
+  // each step without reaching into the cosmetic-system machinery.
+  private _particles: Particle[] = [];
+  private _particleFreeList: Particle[] = [];
+  private _prevState = new WeakMap<Player, { state: Player['state']; vy: number }>();
+  private _footstepAccs = new WeakMap<Player, number>();
+  // Cached lobby ground colour for landing dust (read once at construction).
+  private _dustColor: string;
+
   constructor(config: LobbyGameConfig) {
     const botCount = config.botCount;
     const botSlots = ALL_BOT_SLOTS.slice(0, botCount);
-    this._matchState = buildLobbyMatchState(getTheme('lobby'));
+    const theme = getTheme('lobby');
+    this._matchState = buildLobbyMatchState(theme);
+    this._dustColor = theme.ground.surfaceColor;
 
     // On mobile, only spawn P1 (touch player)
     const activeSlots = config.isMobile ? (['P1'] as CharacterSlot[]) : SLOTS;
@@ -185,6 +202,10 @@ export class LobbyGame {
         return;
       }
 
+      const prev = this._prevState.get(p);
+      const prevState = prev?.state ?? p.state;
+      const prevVy = prev?.vy ?? p.vy;
+
       applyInput(p, input, dt, LOBBY_SPEED, 1500 /* friction */, LOBBY_JUMP);
 
       // Passive facing sync — applyInput only sets facing on directional input;
@@ -199,6 +220,29 @@ export class LobbyGame {
       collidePlatforms(p, this.getArena().platforms);
       clampLobbyBounds(p);
       updatePlayerState(p);
+
+      // Cosmetic transitions — jump dust, landing dust, footstep puffs.
+      const wasGrounded = prevState !== 'airborne';
+      const isAirborne = p.state === 'airborne';
+      if (wasGrounded && isAirborne && input.jump) {
+        spawnJumpDustParticles(this._particles, this._particleFreeList, p);
+      }
+      if (!wasGrounded && !isAirborne && Math.abs(prevVy) >= DUST_LAND_VY_THRESHOLD) {
+        spawnDustParticles(this._particles, this._particleFreeList, p, Math.abs(prevVy), this._dustColor);
+      }
+      if (p.state === 'run') {
+        const speedRatio = Math.min(Math.abs(p.vx) / LOBBY_SPEED, 1);
+        const interval = 0.22 - speedRatio * 0.12;
+        let acc = (this._footstepAccs.get(p) ?? 0) + dt;
+        if (acc >= interval) {
+          acc -= interval;
+          spawnFootstepDustParticles(this._particles, this._particleFreeList, p);
+        }
+        this._footstepAccs.set(p, acc);
+      } else {
+        this._footstepAccs.set(p, 0);
+      }
+      this._prevState.set(p, { state: p.state, vy: p.vy });
 
       // Squash decay (engine decays these inside GameLoop with fround — lobby doesn't need determinism)
       if (p.squashScale !== 1) {
@@ -249,9 +293,16 @@ export class LobbyGame {
     this.processStomps(this._allLobby);
     this.updateReadyZone(dt);
 
+    updateParticles(this._particles, this._particleFreeList, this.getArena().platforms, false, [], dt);
+
     this._matchState.timeElapsed += dt;
     this._matchState.dayPhase = (this._matchState.timeElapsed / LOBBY_DAY_CYCLE) % 1;
     updateWildlife(this._matchState, dt);
+  }
+
+  /** Live particles for the renderer's foreground pass. */
+  getParticles(): Particle[] {
+    return this._particles;
   }
 
   /**

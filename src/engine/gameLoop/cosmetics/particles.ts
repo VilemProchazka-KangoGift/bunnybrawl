@@ -59,6 +59,27 @@ export function spawnJumpDustParticles(
   }
 }
 
+/** Small puff of dust at the foot of a running player, trailing behind the
+ *  facing direction. Designed for the lobby; no per-tick cost beyond two
+ *  emit() calls when fired. */
+export function spawnFootstepDustParticles(
+  particles: Particle[], freeList: Particle[],
+  player: Player,
+): void {
+  const cx = player.x + player.width / 2;
+  const groundY = player.y + player.height;
+  const behind = player.facing === 'right' ? -1 : 1;
+  for (let i = 0; i < 2; i++) {
+    const sx = cx + behind * (player.width * 0.3 + Math.random() * 4);
+    const sy = groundY - Math.random() * 2;
+    const vx = behind * (20 + Math.random() * 30);
+    const vy = -Math.random() * 30 - 10;
+    const life = 0.18 + Math.random() * 0.12;
+    const size = 1 + Math.random() * 1.2;
+    emitParticle(particles, freeList, sx, sy, vx, vy, life, size, JUMP_DUST_COLOR);
+  }
+}
+
 export function spawnGoreParticles(
   particles: Particle[], freeList: Particle[],
   victim: Player, extremeGore: boolean,
