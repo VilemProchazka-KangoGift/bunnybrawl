@@ -4,6 +4,7 @@ import { FAT_SCALE, HITSTOP_DURATION, PLAYER_WIDTH, PLAYER_HEIGHT } from '../con
 import { hasCustomEyes, getSpriteRenderer, getCharacterPack, drawLegs } from '../characters';
 import { drawHighlightSpot } from '../spriteShading';
 import { getSlowDevice } from '../perfFlags';
+import { getOutlineStyle, subscribeOutlineStyle, type OutlineStyle } from '../outlineStyle';
 import { getIdleAction, type IdleAction } from './idleActions';
 
 // Sprite cache: key -> OffscreenCanvas with pre-drawn character sprite.
@@ -34,6 +35,72 @@ function getShadowCache(): OffscreenCanvas | null {
 
 export function clearSpriteCache(): void {
   spriteCache.clear();
+}
+
+// Outline style changes invalidate the sprite cache (style is part of the cache key
+// but old entries become unreachable, so we drop them eagerly to bound memory).
+subscribeOutlineStyle(() => spriteCache.clear());
+
+// Theme luminance class — adaptive outline picks white on dark themes, black otherwise.
+// Cached per-theme on first read.
+const _themeLumCache = new WeakMap<ThemeConfig, 'dark' | 'light'>();
+function themeLuminance(theme: ThemeConfig | undefined): 'dark' | 'light' {
+  if (!theme) return 'light';
+  const cached = _themeLumCache.get(theme);
+  if (cached) return cached;
+  // Use the LAST sky gradient stop (horizon color) as the readability anchor.
+  const stops = theme.sky?.gradient ?? [];
+  const horizon = stops[stops.length - 1]?.color ?? '#FFFFFF';
+  const r = parseInt(horizon.slice(1, 3), 16) || 0;
+  const g = parseInt(horizon.slice(3, 5), 16) || 0;
+  const b = parseInt(horizon.slice(5, 7), 16) || 0;
+  // Rec. 601 luma; 128 split keeps volcano/space/haunted/castle/rooftops on the dark side.
+  const luma = 0.299 * r + 0.587 * g + 0.114 * b;
+  const cls: 'dark' | 'light' = luma < 128 ? 'dark' : 'light';
+  _themeLumCache.set(theme, cls);
+  return cls;
+}
+
+function outlineColorFor(style: OutlineStyle, char: { darkColor: string }, theme: ThemeConfig | undefined): string | null {
+  if (style === 'none') return null;
+  if (style === 'black') return '#000';
+  if (style === 'charDark') return char.darkColor;
+  return themeLuminance(theme) === 'dark' ? '#FFF' : '#000';
+}
+
+const OUTLINE_OFFSETS_4: ReadonlyArray<readonly [number, number]> = [[-1,0],[1,0],[0,-1],[0,1]];
+const OUTLINE_OFFSETS_8: ReadonlyArray<readonly [number, number]> = [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[1,-1],[-1,1],[1,1]];
+
+/** Bake an outline into the cached sprite by stamping its silhouette at offsets in
+ *  the outline color, behind the original pixels. The silhouette is captured by
+ *  cloning the sprite to a temp canvas then tinting it via `source-in`. */
+function applyOutlineToCache(cached: OffscreenCanvas, color: string, style: OutlineStyle): void {
+  const w = cached.width;
+  const h = cached.height;
+  if (w === 0 || h === 0) return;
+  const sctx = cached.getContext('2d');
+  if (!sctx) return;
+
+  // Clone original sprite + tint to outline color in a temp buffer.
+  const temp = new OffscreenCanvas(w, h);
+  const tctx = temp.getContext('2d');
+  if (!tctx) return;
+  tctx.drawImage(cached, 0, 0);
+  tctx.globalCompositeOperation = 'source-in';
+  tctx.fillStyle = color;
+  tctx.fillRect(0, 0, w, h);
+
+  // Stamp tinted silhouette behind the existing sprite. 4 offsets = 1px outline (style B);
+  // 8 offsets = thicker outline (charDark/adaptive — read better at the busy backgrounds).
+  const offsets = style === 'black' ? OUTLINE_OFFSETS_4 : OUTLINE_OFFSETS_8;
+  sctx.save();
+  sctx.globalCompositeOperation = 'destination-over';
+  // Outline width scales with sprite cache scale so it stays 1px in logical units.
+  const px = _spriteScale;
+  for (const [dx, dy] of offsets) {
+    sctx.drawImage(temp, dx * px, dy * px);
+  }
+  sctx.restore();
 }
 
 /** Set the current render scale for new sprite cache entries. Clears the cache if the scale changed. */
@@ -248,7 +315,13 @@ function drawCharacterSprite(
   // poisoning the cache: helmet is baked in at draw time, so a helmet-less
   // first render would otherwise be reused at the helmet variant.
   const helmetKey = theme?.bubbleHelmet ? 1 : 0;
-  const cacheKey = `${char.name}_${state}_${animFrame}_${fastFalling ? 1 : 0}_${sqKey}_${helmetKey}`;
+  const outlineStyle = getOutlineStyle();
+  // Adaptive outline color depends on theme luminance — fold luminance class into
+  // the key so two arenas with different luminance don't share a cache entry.
+  const outlineKey = outlineStyle === 'adaptive'
+    ? `a${themeLuminance(theme)}`
+    : outlineStyle;
+  const cacheKey = `${char.name}_${state}_${animFrame}_${fastFalling ? 1 : 0}_${sqKey}_${helmetKey}_${outlineKey}`;
 
   // Idle action ctx transform — applied to main ctx, OUTSIDE the cached bitmap, so the
   // animated transform doesn't get baked into the (1-bit-keyed) sprite cache entry.
@@ -279,6 +352,11 @@ function drawCharacterSprite(
   sctx.translate(-x + pad, -y + pad);
 
   _drawCharacterSpriteImpl(sctx, x, y, w, h, char, state, animFrame, fastFalling, idleAction, idleActionTimer, idleActionDuration, squashScale, theme);
+
+  const outlineColor = outlineColorFor(outlineStyle, char, theme);
+  if (outlineColor) {
+    applyOutlineToCache(cached, outlineColor, outlineStyle);
+  }
 
   if (spriteCache.size > _spriteCacheCap) {
     const first = spriteCache.keys().next().value;

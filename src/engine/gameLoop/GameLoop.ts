@@ -24,6 +24,7 @@ import {
 import { AIController } from '../ai';
 import { Simulator } from '../simulator/Simulator';
 import { debugFlags, toggleNavDebug, toggleNetDebug, toggleFpsDebug } from '../debugFlags';
+import { cycleOutlineStyle } from '../outlineStyle';
 import { perfTrace } from '../perfTrace';
 import { sampleFps } from '../fpsCounter';
 import type { BotNavDebugState } from '../navDebugOverlay';
@@ -188,16 +189,17 @@ export class GameLoop {
     this._unsubRenderScale = subscribeRenderScale((s) => this.renderer.setRenderScale(s));
     this.running = true;
     this.lastTime = performance.now();
-    if (debugFlags.navDebugAllowed || debugFlags.netDebugAllowed || debugFlags.fpsAllowed) {
-      this._debugKeyHandler = (e: KeyboardEvent) => {
-        if (e.key === '`') {
-          if (debugFlags.navDebugAllowed) toggleNavDebug();
-          if (debugFlags.netDebugAllowed) toggleNetDebug();
-          if (debugFlags.fpsAllowed) toggleFpsDebug();
-        }
-      };
-      window.addEventListener('keydown', this._debugKeyHandler);
-    }
+    this._debugKeyHandler = (e: KeyboardEvent) => {
+      if (e.key === '`') {
+        if (debugFlags.navDebugAllowed) toggleNavDebug();
+        if (debugFlags.netDebugAllowed) toggleNetDebug();
+        if (debugFlags.fpsAllowed) toggleFpsDebug();
+      } else if (e.key === 'o' || e.key === 'O') {
+        const next = cycleOutlineStyle();
+        console.info(`[outline] cycled to: ${next}`);
+      }
+    };
+    window.addEventListener('keydown', this._debugKeyHandler);
     if (!this._networkMode) {
       this.loop(this.lastTime);
     }
