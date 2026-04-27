@@ -250,17 +250,22 @@ export function generateSpringSound(): string {
 }
 
 export function generateCrouchSound(): string {
+  // "Cloth ruffle" recipe: muffled noise burst with fabric-jitter amplitude
+  // modulation. 80ms, low-pass cutoff 0.12 (heavy muffle), 80Hz jitter at
+  // shallow 0.2 depth — short, soft, doesn't fatigue when held.
   const sampleRate = 44100;
-  const duration = 0.06;
+  const duration = 0.08;
   const numSamples = Math.floor(sampleRate * duration);
   const buffer = new Float32Array(numSamples);
+  let lp = 0;
   for (let i = 0; i < numSamples; i++) {
     const t = i / sampleRate;
     const progress = i / numSamples;
-    const envelope = Math.max(0, 1 - progress * 4) * 0.4;
-    const noise = (Math.random() * 2 - 1) * 0.4;
-    const thud = Math.sin(2 * Math.PI * 130 * t) * 0.3;
-    buffer[i] = (noise + thud) * envelope;
+    const noise = Math.random() * 2 - 1;
+    lp += 0.12 * (noise - lp);
+    const jitter = 1 + 0.2 * Math.sin(2 * Math.PI * 80 * t);
+    const env = Math.min(1, progress * 8) * Math.max(0, 1 - progress) ** 1.5;
+    buffer[i] = lp * jitter * env * 0.4;
   }
   return floatBufferToWavDataUri(buffer, sampleRate);
 }
