@@ -13,12 +13,9 @@ This is the first feature of Phase 3. More features (drop shadows, sunset/dawn, 
 
 Fires only on **player-initiated jumps** — not on spring launches, geyser blasts, or any other involuntary takeoff. Springs already have their own bouncy overlay/sound; layering takeoff dust on top muddies the visual language.
 
-The transition seam is `playerTransitions.ts` (next to the existing `cb.playSound('jump')` line). Two implementation paths, decide in plan:
+The transition seam is `playerTransitions.ts` (next to the existing `cb.playSound('jump')` line). Implementation chose the **snapshot-derivable path**: at the grounded→airborne edge, a player whose `springTrailTimer` rose this tick (was 0, is now > 0) is a spring launch; otherwise it's an input jump. `springTrailTimer` is already in snapshots, so this works on guest without extra wire format. No `Player` field added, no protocol bump.
 
-- **Flag path:** physics sets a transient `Player.jumpedThisTick` boolean when `input.jump` causes a jump. Transition detection reads it. Cleared per-tick. Not in network snapshots — guests detect via the alternate path below.
-- **Snapshot-derivable path:** at the grounded→airborne edge, a player whose `bounceTimer` rose this tick (was 0, is now > 0) is a spring launch; otherwise it's an input jump. `bounceTimer` is already in snapshots, so this works on guest without extra wire format.
-
-A combined approach is fine: flag on host, derived check on guest. Plan picks the cleanest unified mechanism.
+A geyser exclusion was originally proposed via `prev.vy - player.vy > 300`, but TDD surfaced that this also fires for normal jumps from rest (`JUMP_IMPULSE = -560` → delta 560 > 300, indistinguishable from geyser strength `-550`). The geyser branch was dropped: jump dust on a rare geyser launch is harmless, and the user's product choice was "input.jump only" with springs as the named exclusion.
 
 ## Visual parameters
 
@@ -39,54 +36,39 @@ The particle pool's existing gravity decay applies — the upward arc settles ba
 ## Architecture
 
 ```
-physics.ts (sets transient jumpedThisTick on input.jump grounded→airborne)
-        │
-        ▼
-Simulator.fixedUpdate (existing flow)
-        │
-        ▼
 PlayerTransitionSystem.cosmeticStep
         └── playerTransitions.ts: detectPlayerTransitions()
                 ├── existing: wasGrounded && isAirborne → cb.playSound('jump')
-                └── NEW: same gate + isInputJump → cb.spawnJumpDustParticles(player)
-                                                       │
-                                                       ▼
+                └── added: same gate + !sprangThisTick → cb.spawnJumpDustParticles(player)
+                                                              │
+                                                              ▼
                             ParticleSystem.spawnJumpDustParticles(player)
-                                                       │
-                                                       ▼
+                                                              │
+                                                              ▼
                                 particles.ts: spawnJumpDustParticles()
-                                  (new pure function alongside spawnDustParticles)
 ```
+
+`sprangThisTick = prev.springTrailTimer === 0 && player.springTrailTimer > 0` — rising edge protects against false-positives during the 0.6s spring-trail decay window (a player input-jumping with a still-decaying trail correctly gets dust).
 
 Cosmetic-only — no gameplay impact. Runs at half-rate (~30Hz) via `tickCosmetic`. Single-tick rising-edge event, so half-rate is fine.
 
 ## Network behavior
 
-Inherits the existing cosmeticStep architecture:
-
-- **Host:** runs full path, sees its own input flag.
-- **Guest:** detects via the bounceTimer rising-edge rule on snapshot prev/curr comparison. No new wire format, no protocol bump.
+Inherits the existing cosmeticStep architecture. Both host and guest run the trigger after their respective tick paths (host after `fixedUpdate`, guest after `applySnapshotToState`). Detection uses already-snapshotted `springTrailTimer` and `player.state` — no new wire field, no protocol bump.
 
 ## Out of scope
 
 - **Surface-aware dust** (snow vs dirt vs metal): deferred to E3 (richer landing dust). When E3 lands and adds material variation, jump dust adopts the same material lookup.
 - **Gore-mode toggle:** dust is neutral (not gore). Always on, like landing dust.
 - **Performance budget:** 5 particles per jump, ~one jump per 0.5–1s per player, max 5 players → trivial against the 300-particle pool cap. No new perf work.
-- **Jump-from-trampoline / spring / geyser dust:** explicitly excluded per Q1.
+- **Jump-from-spring dust:** excluded via `springTrailTimer` rising edge.
+- **Jump-from-geyser dust:** intentionally NOT special-cased — vy heuristic can't distinguish jumps from geysers cleanly (`JUMP_IMPULSE = -560` vs geyser strength `-550`), and the case is rare enough that puff-on-geyser is harmless.
 
 ## Testing
 
-- **Unit:** add a transition test in `playerTransitions.test.ts` mirroring the existing landing-dust test — verify `cb.spawnJumpDustParticles` is called on grounded→airborne when input-jump path, and NOT called on spring launch.
-- **Snapshot:** run the full suite to confirm no regression in audio-trace or determinism snapshots (the current branch already has 3 modified snapshot files; new transitions may add lines — review carefully).
-- **Manual:** dev-run with `?arena=meadow&bots=2`, confirm puffs appear on jump but not on spring landings.
-
-## Open implementation questions for the plan
-
-These are deferred to `writing-plans`:
-
-1. Flag-path vs snapshot-derived-only: pick one mechanism for both host and guest, or use the host-flag/guest-derived split. The unified approach is simpler to reason about; the split is one less field on `Player`.
-2. Whether `Player.jumpedThisTick` (if used) needs initialization in `testHelpers.ts`'s `makePlayer()` and the various mock players.
-3. Where to clear the transient flag: end of physics, end of fixedUpdate, or start of next tick.
+- **Unit:** 3 tests in `cosmeticStep.test.ts` — positive (input jump fires dust), negative (spring rising-edge suppresses), nuance (decaying spring trail still fires dust on a real input jump).
+- **Snapshot:** full suite green with no snapshot regen needed (cosmeticStep is not in the audio-trace or determinism snapshots).
+- **Manual:** dev-run with `?arena=meadow&bots=2`, confirm puffs appear on jump but not on spring launches.
 
 ## Followups
 
