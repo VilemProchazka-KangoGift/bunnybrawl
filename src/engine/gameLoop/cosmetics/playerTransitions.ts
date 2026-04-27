@@ -109,9 +109,6 @@ export function detectPlayerTransitions(
   // Burn start
   if (prev.burnTimer <= 0 && player.burnTimer > 0) cb.playSound('oof');
 
-  // Geyser launch
-  if (prev.vy - player.vy > 300) cb.playSound('geyser');
-
   // Score change → score animation (any source: carrot, stomp kill, etc.)
   if (player.score > prev.score) {
     state.scoreAnimations.push({ playerId: player.id, value: player.score - prev.score, timer: SCORE_ANIM_DURATION });

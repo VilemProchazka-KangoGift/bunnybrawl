@@ -143,6 +143,28 @@ describe('cosmeticStep transition detection', () => {
     expect(vi.mocked(audio.play)).toHaveBeenCalledWith('jump');
   });
 
+  it('does NOT play geyser sound on a normal jump from rest (regression for vy-heuristic false-positive)', () => {
+    const { loop } = createLoop();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    // Establish initial grounded state at rest
+    player.state = 'idle';
+    player.vy = 0;
+    loop.cosmeticStep(FIXED_TIMESTEP);
+
+    vi.mocked(audio.play).mockClear();
+
+    // Normal jump (vy = JUMP_IMPULSE), prev.vy = 0
+    player.state = 'airborne';
+    player.vy = JUMP_IMPULSE;
+    loop.cosmeticStep(FIXED_TIMESTEP);
+
+    // Jump SFX fires; geyser SFX must NOT
+    expect(vi.mocked(audio.play)).toHaveBeenCalledWith('jump');
+    expect(vi.mocked(audio.play)).not.toHaveBeenCalledWith('geyser');
+  });
+
   it('spawns jump dust on input-jump grounded → airborne transition', () => {
     const { loop } = createLoop();
     const state = loop.getState();
