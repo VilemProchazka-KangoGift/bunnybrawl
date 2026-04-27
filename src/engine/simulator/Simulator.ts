@@ -11,7 +11,7 @@ import { swapRemove } from '../themes/utils';
 import { AIController } from '../ai';
 import {
   applyInput, applyGravity, movePlayer, collidePlatforms, updatePlayerState,
-  applyArenaConstraints, aabbOverlap, resolveStuckPlayer,
+  applyArenaConstraints, aabbOverlap, resolveStuckPlayer, resolveOutOfBoundsPlayer,
 } from '../physics';
 import {
   CARROT_SIZE, FAT_DURATION, SPRING_BOUNCE,
@@ -411,6 +411,7 @@ export class Simulator {
       collidePlatforms(player, this._arena.platforms);
       resolveStuckPlayer(player, this._arena.platforms);
       applyArenaConstraints(player, this._arena);
+      resolveOutOfBoundsPlayer(player, this._arena);
       if (player.vx !== 0 && player.vx > -1e-4 && player.vx < 1e-4) player.vx = 0;
       if (player.vy !== 0 && player.vy > -1e-4 && player.vy < 1e-4) player.vy = 0;
       updatePlayerState(player);

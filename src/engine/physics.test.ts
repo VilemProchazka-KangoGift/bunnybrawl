@@ -138,16 +138,18 @@ describe('Physics - movePlayer', () => {
 });
 
 describe('Physics - wrapHorizontal', () => {
-  it('wraps player from right to left', () => {
-    const player = makePlayer({ x: CANVAS_WIDTH + 1 });
+  it('wraps player from right to left when center crosses right edge', () => {
+    // center past arenaWidth — wrap by translating -arenaWidth
+    const player = makePlayer({ x: CANVAS_WIDTH - PLAYER_WIDTH / 2 + 1 });
     wrapHorizontal(player, CANVAS_WIDTH);
-    expect(player.x).toBe(-PLAYER_WIDTH);
+    expect(player.x).toBeCloseTo(-PLAYER_WIDTH / 2 + 1, 3);
   });
 
-  it('wraps player from left to right', () => {
-    const player = makePlayer({ x: -PLAYER_WIDTH - 1 });
+  it('wraps player from left to right when center crosses left edge', () => {
+    // center below 0 — wrap by translating +arenaWidth
+    const player = makePlayer({ x: -PLAYER_WIDTH / 2 - 1 });
     wrapHorizontal(player, CANVAS_WIDTH);
-    expect(player.x).toBe(CANVAS_WIDTH);
+    expect(player.x).toBeCloseTo(CANVAS_WIDTH - PLAYER_WIDTH / 2 - 1, 3);
   });
 
   it('does not wrap player in middle', () => {
@@ -557,30 +559,32 @@ describe('Physics constants validation', () => {
 // ===================================================================
 
 describe('wrapHorizontal edge cases', () => {
-  it('wraps from left to right when x + width < 0', () => {
+  it('wraps from left to right when center crosses left edge', () => {
     const player = makePlayer({ x: -PLAYER_WIDTH - 5 });
+    // center = -PLAYER_WIDTH/2 - 5, < 0 → translate +CANVAS_WIDTH
     wrapHorizontal(player, CANVAS_WIDTH);
-    expect(player.x).toBe(CANVAS_WIDTH);
+    expect(player.x).toBeCloseTo(CANVAS_WIDTH - PLAYER_WIDTH - 5, 3);
   });
 
-  it('wraps from right to left when x > arenaWidth', () => {
+  it('wraps from right to left when center crosses right edge', () => {
     const player = makePlayer({ x: CANVAS_WIDTH + 10 });
+    // center = CANVAS_WIDTH + 10 + PLAYER_WIDTH/2, > CANVAS_WIDTH → translate -CANVAS_WIDTH
     wrapHorizontal(player, CANVAS_WIDTH);
-    expect(player.x).toBe(-PLAYER_WIDTH);
+    expect(player.x).toBeCloseTo(10, 3);
   });
 
-  it('does NOT wrap when player is at exact left boundary (x + width === 0)', () => {
-    const player = makePlayer({ x: -PLAYER_WIDTH });
+  it('does NOT wrap when half the player is still on-screen on the left (center >= 0)', () => {
+    const player = makePlayer({ x: -PLAYER_WIDTH / 2 + 0.5 });
     wrapHorizontal(player, CANVAS_WIDTH);
-    // x + width === 0 is NOT < 0, so no wrap
-    expect(player.x).toBe(-PLAYER_WIDTH);
+    // center = 0.5, in-bounds — preserved
+    expect(player.x).toBeCloseTo(-PLAYER_WIDTH / 2 + 0.5, 3);
   });
 
-  it('does NOT wrap when player is at exact right boundary (x === arenaWidth)', () => {
-    const player = makePlayer({ x: CANVAS_WIDTH });
+  it('wraps when center crosses right edge by even 1px', () => {
+    const player = makePlayer({ x: CANVAS_WIDTH - PLAYER_WIDTH / 2 + 1 });
     wrapHorizontal(player, CANVAS_WIDTH);
-    // x === arenaWidth is NOT > arenaWidth, so no wrap
-    expect(player.x).toBe(CANVAS_WIDTH);
+    // center was just past arenaWidth — now mirrored to just past 0
+    expect(player.x).toBeCloseTo(-PLAYER_WIDTH / 2 + 1, 3);
   });
 
   it('does NOT wrap player in the middle of the arena', () => {
@@ -592,7 +596,17 @@ describe('wrapHorizontal edge cases', () => {
   it('wraps correctly with a custom arena width', () => {
     const player = makePlayer({ x: 2000 + 1 });
     wrapHorizontal(player, 2000);
-    expect(player.x).toBe(-PLAYER_WIDTH);
+    // center = 2001 + PLAYER_WIDTH/2 > 2000 → translate -2000
+    expect(player.x).toBeCloseTo(1, 3);
+  });
+
+  it('handles extreme out-of-bounds positions via modulo', () => {
+    const player = makePlayer({ x: CANVAS_WIDTH * 5 + 100 });
+    wrapHorizontal(player, CANVAS_WIDTH);
+    // Should land somewhere inside [0 - PLAYER_WIDTH/2, CANVAS_WIDTH - PLAYER_WIDTH/2)
+    const center = player.x + PLAYER_WIDTH / 2;
+    expect(center).toBeGreaterThanOrEqual(0);
+    expect(center).toBeLessThan(CANVAS_WIDTH);
   });
 });
 
@@ -711,7 +725,8 @@ describe('applyArenaConstraints with allowFallOff', () => {
   it('horizontal wrapping still applies with allowFallOff=true', () => {
     const player = makePlayer({ x: CANVAS_WIDTH + 10 });
     applyArenaConstraints(player, arenaFallOff);
-    expect(player.x).toBe(-PLAYER_WIDTH);
+    // Center-based wrap: center was at CANVAS_WIDTH + 10 + halfW → translate -CANVAS_WIDTH.
+    expect(player.x).toBeCloseTo(10, 3);
   });
 });
 

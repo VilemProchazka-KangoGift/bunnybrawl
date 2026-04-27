@@ -110,10 +110,17 @@ export function movePlayer(player: Player, dt: number): void {
 }
 
 export function wrapHorizontal(player: Player, arenaWidth: number): void {
-  if (player.x + player.width < 0) {
-    player.x = arenaWidth;
-  } else if (player.x > arenaWidth) {
-    player.x = -player.width;
+  // Center-based, continuous wrap: trigger when the player's center crosses the
+  // arena edge, translate by exactly arenaWidth so a player half-visible on one
+  // side becomes half-visible on the other. The previous edge-based wrap put
+  // the player FULLY off-screen on the opposite side, leaving them invisible
+  // for a body-width of walking — and stuck if vx decayed to 0 (friction,
+  // released input, slowTimer) before they walked back into view.
+  const halfW = player.width / 2;
+  let center = player.x + halfW;
+  if (center < 0 || center >= arenaWidth) {
+    center = ((center % arenaWidth) + arenaWidth) % arenaWidth;
+    player.x = f(center - halfW);
   }
 }
 
@@ -360,4 +367,24 @@ export function resolveStuckPlayer(player: Player, platforms: Platform[]): void 
     }
     return; // one ejection per frame max
   }
+}
+
+/**
+ * Failsafe: if a player ends up outside the playable area despite wrapHorizontal
+ * having run, snap them to a spawn point. Mirrors resolveStuckPlayer's role for
+ * deep-platform embeds — if the wrap path ever fails to bring a player back in,
+ * this catches it so they can't be permanently invisible.
+ */
+export function resolveOutOfBoundsPlayer(player: Player, arena: Arena): void {
+  if (!player.active || player.state === 'splat' || player.state === 'respawning') return;
+  const halfW = player.width / 2;
+  const center = player.x + halfW;
+  if (center >= 0 && center <= arena.width && player.y <= arena.height + 200) return;
+  const spawn = arena.spawnPoints[0];
+  if (!spawn) return;
+  player.x = f(spawn.x - halfW);
+  player.y = f(spawn.y - player.height);
+  player.vx = 0;
+  player.vy = 0;
+  if (player.state === 'airborne') player.state = 'idle';
 }

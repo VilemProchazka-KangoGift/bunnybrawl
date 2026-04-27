@@ -1826,8 +1826,11 @@ describe('Wrap-around Movement', () => {
 
     loop.fixedUpdate(FIXED_TIMESTEP);
 
-    // wrapHorizontal: if player.x > arenaWidth, player.x = -player.width
-    expect(player.x).toBe(-PLAYER_WIDTH);
+    // Center-based wrap translates by exactly arenaWidth, so the player ends
+    // up the same distance past the *left* edge as they were past the right —
+    // visible on the left side, never fully off-screen.
+    expect(player.x).toBeGreaterThanOrEqual(0);
+    expect(player.x).toBeLessThan(CANVAS_WIDTH / 2);
   });
 
   it('player moving past x=0 (left edge) wraps to the right side', () => {
@@ -1836,15 +1839,17 @@ describe('Wrap-around Movement', () => {
     const state = loop.getState();
     const player = state.players[0];
 
-    // Place player so that player.x + player.width < 0 (fully off left edge)
+    // Place player so the center has crossed the left edge
     player.x = -PLAYER_WIDTH - 5;
     player.y = 660 - PLAYER_HEIGHT;
     player.state = 'idle';
 
     loop.fixedUpdate(FIXED_TIMESTEP);
 
-    // wrapHorizontal: if player.x + player.width < 0, player.x = arenaWidth
-    expect(player.x).toBe(CANVAS_WIDTH);
+    // Center-based wrap translates by exactly arenaWidth, putting the player
+    // visible on the right side instead of fully off-screen at x=arenaWidth.
+    expect(player.x).toBeGreaterThan(CANVAS_WIDTH / 2);
+    expect(player.x).toBeLessThan(CANVAS_WIDTH);
   });
 
   it('player within bounds does not wrap', () => {
