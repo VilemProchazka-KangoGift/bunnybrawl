@@ -137,9 +137,7 @@ export function generateFootstepWood(): string {
   for (let i = 0; i < numSamples; i++) {
     const t = i / sampleRate;
     const progress = i / numSamples;
-    // Warm 160Hz tone with steep decay
     const tone = Math.sin(2 * Math.PI * 160 * t) * Math.exp(-progress * 30) * 0.3;
-    // Brief noise click for impact texture
     const noise = (Math.random() * 2 - 1) * Math.max(0, 1 - progress * 18) * 0.25;
     buffer[i] = tone + noise;
   }
@@ -177,7 +175,6 @@ export function generateSplashSound(): string {
 }
 
 export function generateLandSound(): string {
-  // "Crunch" recipe: 85Hz sub-bass thud + low-pass filtered noise grit
   const sampleRate = 44100;
   const duration = 0.28;
   const numSamples = Math.floor(sampleRate * duration);
@@ -250,9 +247,7 @@ export function generateSpringSound(): string {
 }
 
 export function generateCrouchSound(): string {
-  // "Cloth ruffle" recipe: muffled noise burst with fabric-jitter amplitude
-  // modulation. 80ms, low-pass cutoff 0.12 (heavy muffle), 80Hz jitter at
-  // shallow 0.2 depth — short, soft, doesn't fatigue when held.
+  // Soft and short — the crouch key is often held, so this needs to not fatigue.
   const sampleRate = 44100;
   const duration = 0.08;
   const numSamples = Math.floor(sampleRate * duration);
