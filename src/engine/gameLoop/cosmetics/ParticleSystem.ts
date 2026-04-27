@@ -6,7 +6,7 @@ import type { Renderer } from '../../renderer';
 import type { ParticleEmitter } from '../../simulator/types';
 import { BLOOD_COLOR, CARROT_SIZE } from '../../constants';
 import { haptics } from '../../haptics';
-import { emitParticle as _emitParticle, spawnDustParticles as _spawnDustParticles, spawnGoreParticles as _spawnGoreParticles, spawnConfetti as _spawnConfetti, spawnCarrotVFX as _spawnCarrotVFX, spawnRingVFX as _spawnRingVFX, spawnFirework as _spawnFirework, updateParticles, updateConfetti } from './particles';
+import { emitParticle as _emitParticle, spawnDustParticles as _spawnDustParticles, spawnJumpDustParticles as _spawnJumpDustParticles, spawnGoreParticles as _spawnGoreParticles, spawnConfetti as _spawnConfetti, spawnCarrotVFX as _spawnCarrotVFX, spawnRingVFX as _spawnRingVFX, spawnFirework as _spawnFirework, updateParticles, updateConfetti } from './particles';
 import { launchGib, spawnGibs, updateGibs } from './gibs';
 import { updateWeather } from './environment';
 
@@ -49,6 +49,10 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
 
   spawnDustParticles(player: Player, landVy: number): void {
     _spawnDustParticles(this._particles, this.particleFreeList, player, landVy);
+  }
+
+  spawnJumpDustParticles(player: Player): void {
+    _spawnJumpDustParticles(this._particles, this.particleFreeList, player);
   }
 
   spawnGoreParticles(victim: Player, extremeGore: boolean): void {
