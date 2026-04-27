@@ -15,7 +15,7 @@ export interface PrevPlayerCosmeticState {
   burnTimer: number;
   slowTimer: number;
   fastFalling: boolean;
-  springTrailTimer: number;  // NEW
+  springTrailTimer: number;
 }
 
 export function snapshotPlayerCosmeticState(player: Player): PrevPlayerCosmeticState {
@@ -24,7 +24,7 @@ export function snapshotPlayerCosmeticState(player: Player): PrevPlayerCosmeticS
     score: player.score, fatTimer: player.fatTimer, sideSquash: player.sideSquash,
     burnTimer: player.burnTimer, slowTimer: player.slowTimer,
     fastFalling: player.fastFalling,
-    springTrailTimer: player.springTrailTimer,  // NEW
+    springTrailTimer: player.springTrailTimer,
   };
 }
 
@@ -135,5 +135,5 @@ export function detectPlayerTransitions(
   prev.burnTimer = player.burnTimer;
   prev.slowTimer = player.slowTimer;
   prev.fastFalling = player.fastFalling;
-  prev.springTrailTimer = player.springTrailTimer;  // NEW
+  prev.springTrailTimer = player.springTrailTimer;
 }
