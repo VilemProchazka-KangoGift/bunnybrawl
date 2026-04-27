@@ -88,23 +88,28 @@ export function generateThornHitSound(): string {
 }
 
 export function generateVictorySound(): string {
+  // 4-note ascending arpeggio C5-E5-G5-C6 (sine), with the final C6 sustained
+  // 300ms longer than the others to leave a triumphant tail.
   const sampleRate = 44100;
-  const notes = [523, 659, 784, 1047]; // C5, E5, G5, C6
-  const noteDuration = 0.15;
-  const totalSamples = Math.floor(sampleRate * notes.length * noteDuration);
+  const notes = [523, 659, 784, 1047];
+  const noteDur = 0.15;
+  const sustainExtra = 0.3;
+  const totalDur = notes.length * noteDur + sustainExtra;
+  const totalSamples = Math.floor(sampleRate * totalDur);
   const buffer = new Float32Array(totalSamples);
-
-  for (let n = 0; n < notes.length; n++) {
-    const startSample = Math.floor(n * noteDuration * sampleRate);
-    const endSample = Math.floor((n + 1) * noteDuration * sampleRate);
-    for (let i = startSample; i < endSample && i < totalSamples; i++) {
-      const t = (i - startSample) / sampleRate;
-      const progress = (i - startSample) / (endSample - startSample);
-      const envelope = Math.max(0, 1 - progress) * 0.3;
-      buffer[i] = Math.sin(2 * Math.PI * notes[n] * t) * envelope;
-    }
+  for (let i = 0; i < totalSamples; i++) {
+    const t = i / sampleRate;
+    const idx = Math.floor(t / noteDur);
+    if (idx >= notes.length + 1) continue;
+    const noteIdx = Math.min(idx, notes.length - 1);
+    const isLast = noteIdx === notes.length - 1;
+    const noteStart = noteIdx * noteDur;
+    const noteT = t - noteStart;
+    const localDur = isLast ? noteDur + sustainExtra : noteDur;
+    const noteP = noteT / localDur;
+    const env = Math.min(1, noteP * 25) * Math.max(0, 1 - noteP) * 0.3;
+    buffer[i] = Math.sin(2 * Math.PI * notes[noteIdx] * t) * env;
   }
-
   return floatBufferToWavDataUri(buffer, sampleRate);
 }
 
