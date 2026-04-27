@@ -40,6 +40,24 @@ export function spawnDustParticles(
   }
 }
 
+export function spawnJumpDustParticles(
+  particles: Particle[], freeList: Particle[],
+  player: Player,
+): void {
+  const cx = player.x + player.width / 2;
+  const groundY = player.y + player.height;
+  const count = 5;
+  for (let i = 0; i < count; i++) {
+    const sx = cx + (Math.random() - 0.5) * player.width * 0.4;
+    const sy = groundY - Math.random() * 2;
+    const vx = (Math.random() - 0.5) * 160;
+    const vy = -Math.random() * 70 - 30;
+    const life = 0.35 * (0.7 + Math.random() * 0.3);
+    const size = 1.5 + Math.random() * 1.5;
+    emitParticle(particles, freeList, sx, sy, vx, vy, life, size, '#C8B896');
+  }
+}
+
 export function spawnGoreParticles(
   particles: Particle[], freeList: Particle[],
   victim: Player, extremeGore: boolean,
