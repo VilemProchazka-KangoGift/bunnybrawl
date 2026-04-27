@@ -194,6 +194,7 @@ export class Renderer {
   private _netRtt = 0;
   private _netJitter = 0;
   private _isNetworkMatch = false;
+  private _paused = false;
 
   // Overlay-layer dirty tracking (only used when hudCtx is set)
   private _overlayHadContent = false;
@@ -283,6 +284,10 @@ export class Renderer {
   setConnectionQuality(rtt: number, jitter: number): void {
     this._netRtt = rtt;
     this._netJitter = jitter;
+  }
+
+  setPaused(paused: boolean): void {
+    this._paused = paused;
   }
 
   /** Lobby-mode HUD callback. Receives a clean ctx each frame. Set null to disable. */
@@ -607,8 +612,8 @@ export class Renderer {
         ctx.translate(-CANVAS_WIDTH / 2, -CANVAS_HEIGHT / 2);
       }
 
-      // Screen shake offset
-      if (matchState.screenShake > 0) {
+      // Screen shake offset (suppressed when paused or after match-over to avoid jitter on overlays)
+      if (matchState.screenShake > 0 && !this._paused && !matchState.matchOver) {
         d.screenShake = true;
         const intensity = SCREEN_SHAKE_INTENSITY * (matchState.screenShake / 0.3);
         ctx.translate(

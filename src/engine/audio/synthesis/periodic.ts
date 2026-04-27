@@ -82,34 +82,23 @@ export function generateAmbGhostHooSound(): string {
 }
 
 export function generateAmbVolcanoBurstSound(): string {
+  // Volcanic vent: initial pressure release (fast-decay noise burst) +
+  // sustained high-passed steam noise + sustained 65Hz low rumble underneath.
   const sampleRate = 44100;
-  const duration = 0.5;
+  const duration = 0.9;
   const numSamples = Math.floor(sampleRate * duration);
   const buffer = new Float32Array(numSamples);
+  let lp = 0;
   for (let i = 0; i < numSamples; i++) {
     const t = i / sampleRate;
     const progress = i / numSamples;
-    const envelope = Math.max(0, 1 - progress * 1.8) * (progress < 0.15 ? progress / 0.15 : 1) * 0.5;
-    const rumble = Math.sin(2 * Math.PI * 60 * t) * 0.5;
-    const noise = (Math.random() * 2 - 1) * 0.5;
-    buffer[i] = (rumble + noise) * envelope;
+    const release = (Math.random() * 2 - 1) * Math.max(0, 1 - progress * 12) * 0.55;
+    const noise = Math.random() * 2 - 1;
+    lp += 0.32 * (noise - lp);
+    const steam = (noise - lp) * Math.min(1, progress * 6) * Math.max(0, 1 - progress) ** 1.2 * 0.35;
+    const rumble = Math.sin(2 * Math.PI * 65 * t) * Math.max(0, 1 - progress * 1.5) * 0.32;
+    buffer[i] = release + steam + rumble;
   }
   return floatBufferToWavDataUri(buffer, sampleRate);
 }
 
-export function generateAmbDripSound(): string {
-  const sampleRate = 44100;
-  const duration = 0.08;
-  const numSamples = Math.floor(sampleRate * duration);
-  const buffer = new Float32Array(numSamples);
-  for (let i = 0; i < numSamples; i++) {
-    const t = i / sampleRate;
-    const progress = i / numSamples;
-    const freq = 600 + (400 - 600) * progress;
-    const envelope = Math.max(0, 1 - progress * 3) * 0.4;
-    const tone = Math.sin(2 * Math.PI * freq * t);
-    const noise = (Math.random() * 2 - 1) * 0.1;
-    buffer[i] = (tone + noise) * envelope;
-  }
-  return floatBufferToWavDataUri(buffer, sampleRate);
-}

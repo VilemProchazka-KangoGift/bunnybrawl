@@ -932,12 +932,6 @@ export const underwater: ArenaPack = {
     ctx.restore();
   },
 
-  // ---- Audio ----
-  ambientSoundConfig: {
-    loops: ['amb_underwater_bubbles'],
-    periodic: [{ sound: 'amb_drip', intervalRange: [3, 10] }],
-  },
-
   bubbleHelmet: true,
   musicFile: 'underwater.mp3',
   // NAV-DATA-START — auto-generated, do not hand-edit

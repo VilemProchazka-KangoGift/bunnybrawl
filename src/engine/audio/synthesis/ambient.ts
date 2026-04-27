@@ -109,38 +109,6 @@ export function generateAmbLavaSound(): string {
   return floatBufferToWavDataUri(buffer, sampleRate);
 }
 
-export function generateAmbUnderwaterBubblesSound(): string {
-  const sampleRate = 44100;
-  const duration = 2;
-  const numSamples = Math.floor(sampleRate * duration);
-  const buffer = new Float32Array(numSamples);
-  let brown = 0;
-  // Pre-generate random bubble positions
-  let nextBubble = Math.floor(Math.random() * 800) + 200;
-  let bubbleLife = 0;
-  let bubbleFreq = 400;
-  for (let i = 0; i < numSamples; i++) {
-    const t = i / sampleRate;
-    const white = Math.random() * 2 - 1;
-    brown += white * 0.005;
-    brown *= 0.999;
-    brown = Math.max(-1, Math.min(1, brown));
-    let bubbleSample = 0;
-    if (i >= nextBubble && bubbleLife <= 0) {
-      bubbleLife = 400 + Math.floor(Math.random() * 300);
-      bubbleFreq = 300 + Math.random() * 500;
-      nextBubble = i + Math.floor(Math.random() * 2000) + 500;
-    }
-    if (bubbleLife > 0) {
-      const bp = 1 - bubbleLife / 700;
-      const bEnv = Math.max(0, 1 - bp * 3) * 0.25;
-      bubbleSample = Math.sin(2 * Math.PI * bubbleFreq * t) * bEnv;
-      bubbleLife--;
-    }
-    buffer[i] = brown * 0.06 + bubbleSample;
-  }
-  return floatBufferToWavDataUri(buffer, sampleRate);
-}
 
 export function generateAmbSpaceHumSound(): string {
   const sampleRate = 44100;

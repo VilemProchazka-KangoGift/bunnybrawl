@@ -14,6 +14,10 @@ import {
   generateFootstepWood, generateCrouchSound, generateFastfallSound,
   generateSelectSound, generateVictorySound,
 } from '../src/engine/audio/synthesis/sfx';
+import {
+  generateGeyserSound, generatePigeonScatterSound, generateAmbBirdChirpSound,
+  generateAmbGhostHooSound, generateAmbVolcanoBurstSound, generateAmbDripSound,
+} from '../src/engine/audio/synthesis/periodic';
 import { floatBufferToWavDataUri } from '../src/engine/audio/synthesis/wav';
 import { generateToneBuffer, generateMultiSegmentTone } from '../src/engine/audio/synthesis/core';
 
@@ -2346,6 +2350,847 @@ function goBellChord(): string {
 }
 
 // ---------------------------------------------------------------------------
+// Volcano redesign — entirely new approaches (user flagged R6 selection as poor)
+
+function volcanoMassiveEruption(): string {
+  // Sustained low rumble + initial noise burst + secondary debris transients
+  let lp = 0;
+  return buildBuffer(0.85, (t) => {
+    const p = t / 0.85;
+    // Initial blast (0-15%)
+    const blast = (Math.random() * 2 - 1) * Math.max(0, 1 - p * 8) * 0.6;
+    // Sustained sub-bass rumble
+    const sub = Math.sin(2 * Math.PI * 50 * t) * Math.min(1, p * 4) * Math.max(0, 1 - p * 1.2) * 0.45;
+    // Body noise (filtered)
+    const noise = Math.random() * 2 - 1;
+    lp += 0.16 * (noise - lp);
+    const body = lp * Math.min(1, p * 5) * Math.max(0, 1 - p * 1.4) * 0.3;
+    // Debris transients at random spots
+    const debris = [0.25, 0.42, 0.58, 0.7];
+    let dbg = 0;
+    for (const d of debris) {
+      const dt = p - d;
+      if (dt > 0 && dt < 0.04) {
+        dbg += (Math.random() * 2 - 1) * Math.exp(-dt * 50) * 0.25;
+      }
+    }
+    return blast + sub + body + dbg;
+  });
+}
+
+function volcanoSpittingMagma(): string {
+  // 4 violent noise bursts in succession (magma blobs)
+  return buildBuffer(0.65, (t) => {
+    const p = t / 0.65;
+    const bursts = [0.0, 0.16, 0.34, 0.5];
+    let burst = 0;
+    for (const b of bursts) {
+      const dt = p - b;
+      if (dt > 0 && dt < 0.1) {
+        const localP = dt / 0.1;
+        const env = Math.sin(localP * Math.PI) ** 1.4;
+        burst += (Math.random() * 2 - 1) * env * 0.5;
+      }
+    }
+    // Low rumble underneath
+    const rumble = Math.sin(2 * Math.PI * 70 * t) * Math.max(0, 1 - p * 1.3) * 0.25;
+    return burst + rumble;
+  });
+}
+
+function volcanoSustainedRoar(): string {
+  // Long noise burst with low-pass filtering for "roaring lava" character
+  let lp = 0;
+  return buildBuffer(0.95, (t) => {
+    const p = t / 0.95;
+    const noise = Math.random() * 2 - 1;
+    lp += 0.1 * (noise - lp);
+    // Layered roar: filtered noise + sub-bass + mid-band growl
+    const roar = lp * 0.7;
+    const sub = Math.sin(2 * Math.PI * 55 * t) * 0.35;
+    const growl = Math.sin(2 * Math.PI * 130 * t + Math.sin(2 * Math.PI * 3 * t) * 1.5) * 0.18;
+    const env = Math.min(1, p * 4) * Math.max(0, 1 - p) ** 0.8;
+    return (roar + sub + growl) * env * 0.7;
+  });
+}
+
+function volcanoPyroclastic(): string {
+  // Sharp transient + sustained mid noise + gradual fade with reverb feel
+  let lp = 0;
+  let reverb = 0;
+  return buildBuffer(0.85, (t) => {
+    const p = t / 0.85;
+    const transient = (Math.random() * 2 - 1) * Math.max(0, 1 - p * 25) * 0.65;
+    const noise = Math.random() * 2 - 1;
+    lp += 0.22 * (noise - lp);
+    const body = lp * Math.min(1, p * 6) * Math.max(0, 1 - p) ** 1.4 * 0.45;
+    // Crude reverb via decay-feedback
+    const inSig = transient + body;
+    reverb += 0.1 * (inSig - reverb);
+    const tail = reverb * Math.max(0, p - 0.1) * Math.max(0, 1 - p) ** 0.7 * 0.4;
+    return inSig + tail;
+  });
+}
+
+function volcanoEarthShaking(): string {
+  // Very long sub-bass with slow modulation — more felt than heard
+  return buildBuffer(1.1, (t) => {
+    const p = t / 1.1;
+    // Two sub-bass layers, slightly detuned for beating effect
+    const sub1 = Math.sin(2 * Math.PI * 42 * t);
+    const sub2 = Math.sin(2 * Math.PI * 47 * t);
+    const am = 0.7 + 0.3 * Math.sin(2 * Math.PI * 1.5 * t);
+    const noise = (Math.random() * 2 - 1) * 0.12;
+    const env = Math.min(1, p * 3) * Math.max(0, 1 - p) ** 0.7;
+    return ((sub1 + sub2) * 0.35 * am + noise) * env;
+  });
+}
+
+function volcanoThunderCrack(): string {
+  // Sharp high crack + descending rumble (like nearby thunder)
+  return buildBuffer(0.8, (t) => {
+    const p = t / 0.8;
+    const crack = (Math.random() * 2 - 1) * Math.max(0, 1 - p * 20) * 0.7;
+    const crackTone = Math.sin(2 * Math.PI * 1500 * t) * Math.max(0, 1 - p * 14) * 0.35;
+    const rumbleF = 90 - 50 * Math.min(1, p * 1.5);
+    const rumble = Math.sin(2 * Math.PI * rumbleF * t) * Math.min(1, p * 5) * Math.max(0, 1 - p) * 0.45;
+    const noise = (Math.random() * 2 - 1) * Math.max(0, 1 - p * 2) * 0.18;
+    return crack + crackTone + rumble + noise;
+  });
+}
+
+function volcanoLayeredHits(): string {
+  // Series of explosive hits with reverb tail
+  let reverb = 0;
+  return buildBuffer(0.95, (t) => {
+    const p = t / 0.95;
+    const hits = [0.0, 0.22, 0.42];
+    let hit = 0;
+    for (let i = 0; i < hits.length; i++) {
+      const dt = p - hits[i];
+      if (dt > 0 && dt < 0.08) {
+        const intensity = 0.8 - i * 0.15; // diminishing
+        hit += (Math.random() * 2 - 1) * Math.exp(-dt * 40) * intensity;
+        hit += Math.sin(2 * Math.PI * (60 + i * 10) * t) * Math.exp(-dt * 6) * intensity * 0.5;
+      }
+    }
+    reverb += 0.06 * (hit - reverb);
+    const tail = reverb * Math.max(0, 1 - p) * 0.6;
+    return hit + tail;
+  });
+}
+
+function volcanoHotPlop(): string {
+  // Descending pitch + wet noise (like big magma blob falling/splashing)
+  let lp = 0;
+  return buildBuffer(0.5, (t) => {
+    const p = t / 0.5;
+    const pitchDrop = 250 - 180 * (1 - Math.exp(-p * 5));
+    const tone = Math.sin(2 * Math.PI * pitchDrop * t) * Math.max(0, 1 - p * 2.5) * 0.4;
+    const noise = Math.random() * 2 - 1;
+    lp += 0.14 * (noise - lp);
+    const splash = lp * Math.min(1, p * 12) * Math.max(0, 1 - p * 1.6) * 0.5;
+    const sizzle = (Math.random() * 2 - 1) * Math.max(0, p - 0.3) * Math.max(0, 1 - p) * 0.2;
+    return tone + splash + sizzle;
+  });
+}
+
+function volcanoVent(): string {
+  // Initial pressure release + sustained steam + low rumble underneath
+  let lp = 0;
+  return buildBuffer(0.9, (t) => {
+    const p = t / 0.9;
+    const release = (Math.random() * 2 - 1) * Math.max(0, 1 - p * 12) * 0.55;
+    const noise = Math.random() * 2 - 1;
+    lp += 0.32 * (noise - lp); // brighter (steam)
+    const steam = (noise - lp) * Math.min(1, p * 6) * Math.max(0, 1 - p) ** 1.2 * 0.35;
+    const rumble = Math.sin(2 * Math.PI * 65 * t) * Math.max(0, 1 - p * 1.5) * 0.32;
+    return release + steam + rumble;
+  });
+}
+
+function volcanoRollingThunder(): string {
+  // Repeated low-frequency pulses with variation
+  let lp = 0;
+  return buildBuffer(1.0, (t) => {
+    const p = t / 1.0;
+    const noise = Math.random() * 2 - 1;
+    lp += 0.06 * (noise - lp);
+    // Modulate amplitude with low-freq oscillation for "rolling" feel
+    const am1 = 0.5 + 0.5 * Math.sin(2 * Math.PI * 2.5 * t);
+    const am2 = 0.6 + 0.4 * Math.sin(2 * Math.PI * 4 * t + 1.0);
+    const sub = Math.sin(2 * Math.PI * 55 * t) * am1 * 0.4;
+    const body = lp * am2 * 0.5;
+    const env = Math.min(1, p * 4) * Math.max(0, 1 - p) ** 0.7;
+    return (sub + body) * env;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Volcano-only refinement page
+
+function buildVolcanoPage(): PageDef {
+  return {
+    title: 'Volcano Burst — Redesign',
+    subtitle: 'Last round\'s volcano selection didn\'t land. Ten fresh categorically different recipes — pick 1–3.',
+    sounds: [
+      {
+        name: 'amb_volcano_burst',
+        description: 'Plays in volcano arena (eruptions). Should feel violent but not overwhelm gameplay.',
+        candidates: [
+          proc('amb_volcano_burst', 'massive', volcanoMassiveEruption(),
+               'Massive eruption — initial blast + sub-bass rumble + body noise + 4 debris transients (850ms)'),
+          proc('amb_volcano_burst', 'spitting', volcanoSpittingMagma(),
+               'Spitting magma — 4 violent noise bursts in succession + low rumble (650ms)'),
+          proc('amb_volcano_burst', 'roar', volcanoSustainedRoar(),
+               'Sustained roar — filtered noise + sub-bass + AM growl (950ms)'),
+          proc('amb_volcano_burst', 'pyroclastic', volcanoPyroclastic(),
+               'Pyroclastic — sharp transient + sustained noise + crude reverb tail (850ms)'),
+          proc('amb_volcano_burst', 'earth-shaking', volcanoEarthShaking(),
+               'Earth-shaking — sub-bass 42/47Hz beating + slow AM (1.1s, more felt than heard)'),
+          proc('amb_volcano_burst', 'thunder', volcanoThunderCrack(),
+               'Thunder crack — sharp 1500Hz crack + 90→40Hz descending rumble (800ms)'),
+          proc('amb_volcano_burst', 'layered-hits', volcanoLayeredHits(),
+               'Layered hits — 3 explosive hits with diminishing intensity + reverb tail (950ms)'),
+          proc('amb_volcano_burst', 'hot-plop', volcanoHotPlop(),
+               'Hot plop — descending 250→70Hz tone + wet noise + sizzle tail (500ms)'),
+          proc('amb_volcano_burst', 'vent', volcanoVent(),
+               'Volcanic vent — pressure release + sustained steam + low rumble (900ms)'),
+          proc('amb_volcano_burst', 'rolling-thunder', volcanoRollingThunder(),
+               'Rolling thunder — sub-bass + body noise with 2.5/4Hz amplitude rolling (1.0s)'),
+        ],
+      },
+    ],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Periodic ambient sound recipes (parameterized + categorical "different takes")
+
+interface GeyserParams {
+  duration: number; startF: number; endF: number;
+  toneAmp: number; noiseAmp: number; envDecay: number;
+}
+
+function geyserVariant(p: Partial<GeyserParams> = {}): string {
+  const { duration = 0.6, startF = 200, endF = 600,
+          toneAmp = 0.3, noiseAmp = 0.15, envDecay = 1.5 } = p;
+  return buildBuffer(duration, (t) => {
+    const prog = t / duration;
+    const env = Math.max(0, 1 - prog * envDecay) * (prog < 0.1 ? prog * 10 : 1);
+    const f = startF + (endF - startF) * prog;
+    const bubble = Math.sin(2 * Math.PI * f * t) * toneAmp;
+    const noise = (Math.random() * 2 - 1) * noiseAmp;
+    return (bubble + noise) * env * 0.3;
+  });
+}
+
+function geyserSteamVent(): string {
+  // High filtered noise + descending pitch (steam release)
+  let lp = 0;
+  return buildBuffer(0.5, (t) => {
+    const p = t / 0.5;
+    const noise = Math.random() * 2 - 1;
+    lp += 0.4 * (noise - lp); // brighter
+    const f = 1200 - 800 * p;
+    const tone = Math.sin(2 * Math.PI * f * t) * Math.max(0, 1 - p * 2.5) * 0.15;
+    const env = Math.min(1, p * 6) * Math.max(0, 1 - p * 1.5) * 0.4;
+    return ((noise - lp) * 0.6 + tone) * env;
+  });
+}
+
+function geyserPressurized(): string {
+  // Sharp pop attack + high-pressure tone + noise
+  return buildBuffer(0.55, (t) => {
+    const p = t / 0.55;
+    const pop = (Math.random() * 2 - 1) * Math.max(0, 1 - p * 30) * 0.4;
+    const f = 320 + 480 * (1 - Math.exp(-p * 6)); // rapid rise then settle
+    const tone = Math.sin(2 * Math.PI * f * t) * Math.max(0, 1 - p * 2) * 0.3;
+    const noise = (Math.random() * 2 - 1) * Math.max(0, 1 - p * 3) * 0.25;
+    return pop + tone + noise;
+  });
+}
+
+function geyserBoil(): string {
+  // Low rumble + bubbling texture (warm-up before eruption)
+  let lp = 0;
+  return buildBuffer(0.7, (t) => {
+    const p = t / 0.7;
+    const rumble = Math.sin(2 * Math.PI * 90 * t) * Math.max(0, 1 - p * 1.2) * 0.25;
+    const noise = Math.random() * 2 - 1;
+    lp += 0.18 * (noise - lp);
+    const am = 0.5 + 0.5 * Math.sin(2 * Math.PI * 8 * t); // bubble texture
+    const env = Math.min(1, p * 5) * Math.max(0, 1 - p * 1.4);
+    return (rumble + lp * am * 0.35) * env;
+  });
+}
+
+interface PigeonScatterParams {
+  duration: number; flapRate: number; noiseAmp: number; flapAmp: number;
+}
+
+function pigeonScatterVariant(p: Partial<PigeonScatterParams> = {}): string {
+  const { duration = 0.4, flapRate = 8, noiseAmp = 0.4, flapAmp = 0.3 } = p;
+  return buildBuffer(duration, (t) => {
+    const prog = t / duration;
+    const env = Math.max(0, 1 - prog * 2) * (prog < 0.05 ? prog * 20 : 1);
+    const flap = Math.sin(2 * Math.PI * 30 * prog * flapRate) * flapAmp;
+    const noise = (Math.random() * 2 - 1) * noiseAmp;
+    return (noise * (0.5 + flap * 0.5)) * env * 0.2;
+  });
+}
+
+function pigeonMultipleBirds(): string {
+  // Three staggered flaps (multiple birds taking off)
+  return buildBuffer(0.6, (t) => {
+    const p = t / 0.6;
+    const noise = Math.random() * 2 - 1;
+    let env = 0;
+    const flaps = [0.0, 0.12, 0.28];
+    for (const f of flaps) {
+      const dt = p - f;
+      if (dt > 0 && dt < 0.18) {
+        env = Math.max(env, Math.sin(dt / 0.18 * Math.PI) * 0.85);
+      }
+    }
+    const flapModulation = Math.sin(2 * Math.PI * 15 * t) * 0.4;
+    return noise * (0.5 + flapModulation * 0.5) * env * 0.2;
+  });
+}
+
+function pigeonWhoosh(): string {
+  // Single quick whoosh with wing accent
+  let lp = 0;
+  return buildBuffer(0.3, (t) => {
+    const p = t / 0.3;
+    const noise = Math.random() * 2 - 1;
+    lp += 0.22 * (noise - lp);
+    const flap = Math.sin(2 * Math.PI * 25 * t) * 0.3;
+    const env = Math.min(1, p * 8) * Math.max(0, 1 - p) ** 1.3;
+    return (lp + flap * 0.4) * env * 0.42;
+  });
+}
+
+interface BirdChirpParams {
+  notes: { start: number; end: number; freqStart: number; freqEnd: number }[];
+  vibRate: number;
+  vibDepthRel: number; // relative to freq
+  amp: number;
+}
+
+function birdChirpVariant(p: BirdChirpParams): string {
+  const { notes, vibRate, vibDepthRel, amp } = p;
+  const duration = Math.max(...notes.map(n => n.end)) + 0.02;
+  return buildBuffer(duration, (t) => {
+    let sample = 0;
+    for (const note of notes) {
+      if (t >= note.start && t < note.end) {
+        const np = (t - note.start) / (note.end - note.start);
+        const freq = note.freqStart + (note.freqEnd - note.freqStart) * np;
+        const vibrato = Math.sin(2 * Math.PI * vibRate * t) * freq * vibDepthRel;
+        const env = Math.sin(np * Math.PI) * amp;
+        sample = Math.sin(2 * Math.PI * (freq + vibrato) * t) * env;
+      }
+    }
+    return sample;
+  });
+}
+
+function birdTrill(): string {
+  // Fast oscillation between two freqs
+  return buildBuffer(0.3, (t) => {
+    const p = t / 0.3;
+    const trillRate = 18;
+    const trillBit = Math.sin(2 * Math.PI * trillRate * t) > 0;
+    const f = trillBit ? 3000 : 3500;
+    const env = Math.sin(p * Math.PI) * 0.32;
+    return Math.sin(2 * Math.PI * f * t) * env;
+  });
+}
+
+function birdWhistle(): string {
+  // Single rising note with vibrato
+  return buildBuffer(0.3, (t) => {
+    const p = t / 0.3;
+    const baseF = 2400 + 1000 * p;
+    const vib = Math.sin(2 * Math.PI * 30 * t) * 80;
+    const f = baseF + vib;
+    const env = Math.sin(p * Math.PI) * 0.32;
+    return Math.sin(2 * Math.PI * f * t) * env;
+  });
+}
+
+function birdCuckoo(): string {
+  // 2-note descending alternating
+  return buildBuffer(0.4, (t) => {
+    const p = t / 0.4;
+    let f = 0;
+    let env = 0;
+    if (p < 0.3) { f = 1500; env = Math.sin((p / 0.3) * Math.PI) * 0.32; }
+    else if (p > 0.45 && p < 0.85) {
+      f = 1200;
+      env = Math.sin(((p - 0.45) / 0.4) * Math.PI) * 0.32;
+    }
+    return Math.sin(2 * Math.PI * f * t) * env;
+  });
+}
+
+function birdSparrow(): string {
+  // Many rapid short chirps
+  return buildBuffer(0.4, (t) => {
+    const p = t / 0.4;
+    let sample = 0;
+    for (let i = 0; i < 6; i++) {
+      const start = i * 0.06;
+      const end = start + 0.04;
+      if (p >= start && p < end) {
+        const np = (p - start) / 0.04;
+        const f = 2800 + 600 * np;
+        const env = Math.sin(np * Math.PI) * 0.28;
+        sample = Math.sin(2 * Math.PI * f * t) * env;
+      }
+    }
+    return sample;
+  });
+}
+
+interface GhostHooParams {
+  duration: number; startF: number; endF: number;
+  vibRate: number; vibDepth: number; amp: number;
+}
+
+function ghostHooVariant(p: Partial<GhostHooParams> = {}): string {
+  const { duration = 0.6, startF = 150, endF = 100,
+          vibRate = 4, vibDepth = 15, amp = 0.4 } = p;
+  return buildBuffer(duration, (t) => {
+    const prog = t / duration;
+    const baseFreq = startF + (endF - startF) * prog;
+    const vib = Math.sin(2 * Math.PI * vibRate * t) * vibDepth;
+    const env = Math.max(0, 1 - prog) * amp;
+    return Math.sin(2 * Math.PI * (baseFreq + vib) * t) * env;
+  });
+}
+
+function ghostWail(): string {
+  // Crescendo + decrescendo, descending pitch
+  return buildBuffer(0.85, (t) => {
+    const p = t / 0.85;
+    const baseF = 180 - 80 * p;
+    const vib = Math.sin(2 * Math.PI * 5 * t) * 14;
+    const f = baseF + vib;
+    const env = Math.sin(p * Math.PI) * 0.45; // crescendo-decrescendo
+    return Math.sin(2 * Math.PI * f * t) * env;
+  });
+}
+
+function ghostWhooshHoo(): string {
+  // Air whoosh into a "hoo"
+  let lp = 0;
+  return buildBuffer(0.7, (t) => {
+    const p = t / 0.7;
+    const noise = Math.random() * 2 - 1;
+    lp += 0.12 * (noise - lp);
+    const whoosh = lp * Math.max(0, 0.3 - p) * 1.0; // first 30%
+    const f = 130 - 30 * Math.max(0, p - 0.3);
+    const vib = Math.sin(2 * Math.PI * 4 * t) * 10;
+    const tone = Math.sin(2 * Math.PI * (f + vib) * t) * Math.max(0, p - 0.2) * Math.max(0, 1 - p) * 0.5;
+    return whoosh + tone;
+  });
+}
+
+function ghostTwoHoos(): string {
+  // 2 short hoos with brief gap
+  return buildBuffer(0.7, (t) => {
+    const p = t / 0.7;
+    let f = 0;
+    let env = 0;
+    if (p < 0.32) {
+      const lp = p / 0.32;
+      f = 160 - 30 * lp + Math.sin(2 * Math.PI * 4 * t) * 12;
+      env = Math.sin(lp * Math.PI) * 0.4;
+    } else if (p > 0.42 && p < 0.85) {
+      const lp = (p - 0.42) / 0.43;
+      f = 140 - 30 * lp + Math.sin(2 * Math.PI * 4 * t) * 12;
+      env = Math.sin(lp * Math.PI) * 0.4;
+    }
+    return Math.sin(2 * Math.PI * f * t) * env;
+  });
+}
+
+interface VolcanoBurstParams {
+  duration: number; rumbleF: number; rumbleAmp: number; noiseAmp: number;
+}
+
+function volcanoBurstVariant(p: Partial<VolcanoBurstParams> = {}): string {
+  const { duration = 0.5, rumbleF = 60, rumbleAmp = 0.5, noiseAmp = 0.5 } = p;
+  return buildBuffer(duration, (t) => {
+    const prog = t / duration;
+    const env = Math.max(0, 1 - prog * 1.8) * (prog < 0.15 ? prog / 0.15 : 1) * 0.5;
+    const rumble = Math.sin(2 * Math.PI * rumbleF * t) * rumbleAmp;
+    const noise = (Math.random() * 2 - 1) * noiseAmp;
+    return (rumble + noise) * env;
+  });
+}
+
+function volcanoDistantBoom(): string {
+  // Soft sub-bass thud, more felt than heard
+  return buildBuffer(0.55, (t) => {
+    const p = t / 0.55;
+    const sub = Math.sin(2 * Math.PI * 45 * t) * Math.max(0, 1 - p * 1.5) * 0.5;
+    const noise = (Math.random() * 2 - 1) * Math.max(0, 1 - p * 6) * 0.15;
+    return sub + noise;
+  });
+}
+
+function volcanoRocksFalling(): string {
+  // Multiple noise transients descending in spacing
+  return buildBuffer(0.7, (t) => {
+    const p = t / 0.7;
+    const transients = [0.0, 0.13, 0.22, 0.30, 0.40, 0.5, 0.6];
+    let sample = 0;
+    for (const tt of transients) {
+      const dt = p - tt;
+      if (dt > 0 && dt < 0.05) {
+        sample += (Math.random() * 2 - 1) * Math.exp(-dt * 60) * 0.45;
+      }
+    }
+    const rumble = Math.sin(2 * Math.PI * 70 * t) * Math.max(0, 1 - p * 1.5) * 0.2;
+    return sample + rumble;
+  });
+}
+
+function volcanoSteamHiss(): string {
+  // Bright noise + low rumble underneath
+  let hp = 0;
+  return buildBuffer(0.55, (t) => {
+    const p = t / 0.55;
+    const noise = Math.random() * 2 - 1;
+    hp = noise - hp * 0.3;
+    const rumble = Math.sin(2 * Math.PI * 65 * t) * Math.max(0, 1 - p * 1.5) * 0.25;
+    const env = Math.min(1, p * 6) * Math.max(0, 1 - p * 1.4) * 0.45;
+    return (hp * 0.5 + rumble) * env;
+  });
+}
+
+function volcanoCrack(): string {
+  // Tonal cracks + rumble (tectonic)
+  return buildBuffer(0.5, (t) => {
+    const p = t / 0.5;
+    const cracks = [0.05, 0.18, 0.32];
+    let sample = 0;
+    for (let i = 0; i < cracks.length; i++) {
+      const dt = p - cracks[i];
+      if (dt > 0 && dt < 0.04) {
+        const freqs = [400, 280, 200];
+        sample += Math.sin(2 * Math.PI * freqs[i] * t) * Math.exp(-dt * 30) * 0.32;
+      }
+    }
+    const rumble = Math.sin(2 * Math.PI * 55 * t) * Math.max(0, 1 - p * 2) * 0.25;
+    return sample + rumble;
+  });
+}
+
+interface DripParams {
+  duration: number; startF: number; endF: number;
+  toneAmp: number; noiseAmp: number;
+}
+
+function dripVariant(p: Partial<DripParams> = {}): string {
+  const { duration = 0.08, startF = 600, endF = 400,
+          toneAmp = 1.0, noiseAmp = 0.1 } = p;
+  return buildBuffer(duration, (t) => {
+    const prog = t / duration;
+    const f = startF + (endF - startF) * prog;
+    const env = Math.max(0, 1 - prog * 3) * 0.4;
+    const tone = Math.sin(2 * Math.PI * f * t) * toneAmp;
+    const noise = (Math.random() * 2 - 1) * noiseAmp;
+    return (tone + noise) * env;
+  });
+}
+
+function dripPlink(): string {
+  // Bell-like plink with inharmonic partial
+  return buildBuffer(0.18, (t) => {
+    const p = t / 0.18;
+    const env = Math.min(1, p * 200) * Math.exp(-p * 8);
+    let sample = 0;
+    sample += Math.sin(2 * Math.PI * 1100 * t) * 0.32;
+    sample += Math.sin(2 * Math.PI * 1100 * 2.42 * t) * 0.12;
+    return sample * env;
+  });
+}
+
+function dripPlop(): string {
+  // Lower descending tone — bigger drop
+  return buildBuffer(0.12, (t) => {
+    const p = t / 0.12;
+    const f = 350 - 250 * p;
+    const env = Math.max(0, 1 - p * 5) * 0.5;
+    return Math.sin(2 * Math.PI * f * t) * env;
+  });
+}
+
+function dripCaveEcho(): string {
+  // Drip + echo tail (delayed quieter copy)
+  return buildBuffer(0.28, (t) => {
+    const p = t / 0.28;
+    let sample = 0;
+    // Main drip at t=0
+    if (p < 0.3) {
+      const lp = p / 0.3;
+      const f = 600 - 200 * lp;
+      sample += Math.sin(2 * Math.PI * f * t) * Math.exp(-lp * 4) * 0.4;
+    }
+    // Echo at t=0.13
+    if (p > 0.42 && p < 0.92) {
+      const lp = (p - 0.42) / 0.5;
+      const f = 600 - 200 * lp;
+      sample += Math.sin(2 * Math.PI * f * t) * Math.exp(-lp * 5) * 0.18;
+    }
+    return sample;
+  });
+}
+
+function dripCaveDeep(): string {
+  // Lower pitch with reverb feel
+  let lp = 0;
+  return buildBuffer(0.2, (t) => {
+    const p = t / 0.2;
+    const f = 250 - 60 * p;
+    const tone = Math.sin(2 * Math.PI * f * t);
+    const noise = Math.random() * 2 - 1;
+    lp += 0.04 * (noise - lp);
+    const env = Math.min(1, p * 30) * Math.exp(-p * 4) * 0.45;
+    return (tone + lp * 0.4) * env;
+  });
+}
+
+function dripSplashDrop(): string {
+  // Tiny splash texture — noise burst with brief tone
+  return buildBuffer(0.1, (t) => {
+    const p = t / 0.1;
+    const noise = (Math.random() * 2 - 1) * Math.max(0, 1 - p * 10) * 0.45;
+    const tone = Math.sin(2 * Math.PI * 700 * t) * Math.max(0, 1 - p * 6) * 0.18;
+    return noise + tone;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Periodic ambient page
+
+function buildAmbientPage(): PageDef {
+  return {
+    title: 'Periodic Ambient Sounds',
+    subtitle: 'These fire on randomized timers during gameplay so REPETITION is very noticeable. Multi-pick within each sound — picked variants will become runtime random-rotation if we ship multi-variant runtime.',
+    sounds: [
+      // ---- geyser ----
+      {
+        name: 'geyser',
+        description: 'Plays when a geyser erupts — water shooting up. Pick 2–3.',
+        candidates: [
+          proc('geyser', 'current', generateGeyserSound(),
+               'Procedural — current (200→600Hz rising bubble + noise, 600ms)'),
+          proc('geyser', 'higher', geyserVariant({ startF: 300, endF: 800 }),
+               'Higher pitch (300→800Hz)'),
+          proc('geyser', 'lower', geyserVariant({ startF: 130, endF: 400 }),
+               'Lower pitch (130→400Hz)'),
+          proc('geyser', 'shorter', geyserVariant({ duration: 0.4 }),
+               'Shorter (400ms)'),
+          proc('geyser', 'longer', geyserVariant({ duration: 0.85, envDecay: 1.1 }),
+               'Longer (850ms)'),
+          proc('geyser', 'gushy', geyserVariant({ noiseAmp: 0.32, toneAmp: 0.2 }),
+               'Gushy (more noise, less tone)'),
+          proc('geyser', 'pure-tone', geyserVariant({ noiseAmp: 0.05, toneAmp: 0.4 }),
+               'Pure-tone (almost no noise)'),
+          proc('geyser', 'take-steam', geyserSteamVent(),
+               '* Different take — steam vent (descending high noise + tone)'),
+          proc('geyser', 'take-pressurized', geyserPressurized(),
+               '* Different take — pressurized (sharp pop + rapid pitch rise)'),
+          proc('geyser', 'take-boil', geyserBoil(),
+               '* Different take — boil (low rumble + bubbling AM, 700ms)'),
+        ],
+      },
+      // ---- pigeon_scatter ----
+      {
+        name: 'pigeon_scatter',
+        description: 'Plays when pigeons take off. Pick 2.',
+        candidates: [
+          proc('pigeon_scatter', 'current', generatePigeonScatterSound(),
+               'Procedural — current (wing flap noise, 400ms)'),
+          proc('pigeon_scatter', 'faster', pigeonScatterVariant({ flapRate: 14 }),
+               'Faster flap rate'),
+          proc('pigeon_scatter', 'slower', pigeonScatterVariant({ flapRate: 5 }),
+               'Slower flap rate'),
+          proc('pigeon_scatter', 'noisier', pigeonScatterVariant({ noiseAmp: 0.55 }),
+               'More noise (chaotic flap)'),
+          proc('pigeon_scatter', 'shorter', pigeonScatterVariant({ duration: 0.28 }),
+               'Shorter (280ms)'),
+          proc('pigeon_scatter', 'longer', pigeonScatterVariant({ duration: 0.6 }),
+               'Longer (600ms, lingering)'),
+          proc('pigeon_scatter', 'take-multi', pigeonMultipleBirds(),
+               '* Different take — multiple birds (3 staggered flaps, 600ms)'),
+          proc('pigeon_scatter', 'take-whoosh', pigeonWhoosh(),
+               '* Different take — single whoosh (low-pass + flap accent, 300ms)'),
+        ],
+      },
+      // ---- amb_bird_chirp ----
+      {
+        name: 'amb_bird_chirp',
+        description: 'Plays randomly during gameplay (bird ambience). Very repetition-prone — pick 3–5.',
+        candidates: [
+          proc('amb_bird_chirp', 'current', generateAmbBirdChirpSound(),
+               'Procedural — current (4 warbling notes, 350ms)'),
+          // Different note configurations
+          proc('amb_bird_chirp', '2-notes', birdChirpVariant({
+            notes: [
+              { start: 0, end: 0.06, freqStart: 2800, freqEnd: 3200 },
+              { start: 0.08, end: 0.14, freqStart: 3400, freqEnd: 2600 },
+            ], vibRate: 45, vibDepthRel: 0.05, amp: 0.35,
+          }), '2 notes (200ms — shorter)'),
+          proc('amb_bird_chirp', '3-notes-asc', birdChirpVariant({
+            notes: [
+              { start: 0, end: 0.06, freqStart: 2400, freqEnd: 2800 },
+              { start: 0.08, end: 0.14, freqStart: 2800, freqEnd: 3200 },
+              { start: 0.16, end: 0.22, freqStart: 3200, freqEnd: 3600 },
+            ], vibRate: 45, vibDepthRel: 0.04, amp: 0.32,
+          }), '3 ascending notes (220ms)'),
+          proc('amb_bird_chirp', '5-notes-fast', birdChirpVariant({
+            notes: [
+              { start: 0.0, end: 0.04, freqStart: 2800, freqEnd: 3200 },
+              { start: 0.06, end: 0.10, freqStart: 3400, freqEnd: 2900 },
+              { start: 0.12, end: 0.16, freqStart: 3000, freqEnd: 3500 },
+              { start: 0.18, end: 0.22, freqStart: 3300, freqEnd: 2700 },
+              { start: 0.24, end: 0.28, freqStart: 2900, freqEnd: 2400 },
+            ], vibRate: 50, vibDepthRel: 0.05, amp: 0.32,
+          }), '5 rapid notes (300ms — busy)'),
+          proc('amb_bird_chirp', 'lower-range', birdChirpVariant({
+            notes: [
+              { start: 0, end: 0.06, freqStart: 1800, freqEnd: 2200 },
+              { start: 0.08, end: 0.14, freqStart: 2300, freqEnd: 1700 },
+              { start: 0.16, end: 0.22, freqStart: 2000, freqEnd: 2400 },
+            ], vibRate: 40, vibDepthRel: 0.05, amp: 0.32,
+          }), 'Lower range (1800-2400Hz)'),
+          proc('amb_bird_chirp', 'higher-range', birdChirpVariant({
+            notes: [
+              { start: 0, end: 0.06, freqStart: 3600, freqEnd: 4000 },
+              { start: 0.08, end: 0.14, freqStart: 4200, freqEnd: 3400 },
+              { start: 0.16, end: 0.22, freqStart: 3800, freqEnd: 4400 },
+              { start: 0.25, end: 0.33, freqStart: 4000, freqEnd: 3200 },
+            ], vibRate: 50, vibDepthRel: 0.05, amp: 0.3,
+          }), 'Higher range (3400-4400Hz)'),
+          proc('amb_bird_chirp', 'less-vibrato', birdChirpVariant({
+            notes: [
+              { start: 0, end: 0.06, freqStart: 2800, freqEnd: 3200 },
+              { start: 0.08, end: 0.14, freqStart: 3400, freqEnd: 2600 },
+              { start: 0.16, end: 0.22, freqStart: 3000, freqEnd: 3600 },
+              { start: 0.25, end: 0.33, freqStart: 3200, freqEnd: 2400 },
+            ], vibRate: 30, vibDepthRel: 0.025, amp: 0.35,
+          }), 'Less vibrato (smoother)'),
+          // Different takes
+          proc('amb_bird_chirp', 'take-trill', birdTrill(),
+               '* Different take — trill (fast 2-pitch oscillation, 300ms)'),
+          proc('amb_bird_chirp', 'take-whistle', birdWhistle(),
+               '* Different take — whistle (single rising note with vibrato)'),
+          proc('amb_bird_chirp', 'take-cuckoo', birdCuckoo(),
+               '* Different take — cuckoo (2-note descending alt)'),
+          proc('amb_bird_chirp', 'take-sparrow', birdSparrow(),
+               '* Different take — sparrow (6 rapid short chirps)'),
+        ],
+      },
+      // ---- amb_ghost_hoo ----
+      {
+        name: 'amb_ghost_hoo',
+        description: 'Plays in haunted graveyard. Pick 2–3.',
+        candidates: [
+          proc('amb_ghost_hoo', 'current', generateAmbGhostHooSound(),
+               'Procedural — current (150→100Hz vibrato, 600ms)'),
+          proc('amb_ghost_hoo', 'lower', ghostHooVariant({ startF: 110, endF: 75 }),
+               'Lower (110→75Hz, deeper/spookier)'),
+          proc('amb_ghost_hoo', 'higher', ghostHooVariant({ startF: 180, endF: 140 }),
+               'Higher (180→140Hz, less spooky)'),
+          proc('amb_ghost_hoo', 'fast-vib', ghostHooVariant({ vibRate: 7, vibDepth: 18 }),
+               'Faster vibrato (more wobble)'),
+          proc('amb_ghost_hoo', 'slow-vib', ghostHooVariant({ vibRate: 2.5, vibDepth: 12 }),
+               'Slower vibrato'),
+          proc('amb_ghost_hoo', 'shorter', ghostHooVariant({ duration: 0.4 }),
+               'Shorter (400ms)'),
+          proc('amb_ghost_hoo', 'longer', ghostHooVariant({ duration: 0.9 }),
+               'Longer (900ms, drawn-out)'),
+          proc('amb_ghost_hoo', 'take-wail', ghostWail(),
+               '* Different take — wail (crescendo+decrescendo, 850ms)'),
+          proc('amb_ghost_hoo', 'take-whoosh-hoo', ghostWhooshHoo(),
+               '* Different take — air whoosh + hoo (700ms)'),
+          proc('amb_ghost_hoo', 'take-2-hoos', ghostTwoHoos(),
+               '* Different take — 2 short hoos (700ms)'),
+        ],
+      },
+      // ---- amb_volcano_burst ----
+      {
+        name: 'amb_volcano_burst',
+        description: 'Plays in volcano arena (eruptions). Pick 2.',
+        candidates: [
+          proc('amb_volcano_burst', 'current', generateAmbVolcanoBurstSound(),
+               'Procedural — current (60Hz rumble + noise, 500ms)'),
+          proc('amb_volcano_burst', 'deeper', volcanoBurstVariant({ rumbleF: 40 }),
+               'Deeper rumble (40Hz)'),
+          proc('amb_volcano_burst', 'higher', volcanoBurstVariant({ rumbleF: 90 }),
+               'Higher rumble (90Hz)'),
+          proc('amb_volcano_burst', 'rumble-heavy', volcanoBurstVariant({ rumbleAmp: 0.7, noiseAmp: 0.3 }),
+               'More rumble dominance'),
+          proc('amb_volcano_burst', 'noise-heavy', volcanoBurstVariant({ rumbleAmp: 0.3, noiseAmp: 0.7 }),
+               'More noise dominance (chaotic)'),
+          proc('amb_volcano_burst', 'longer', volcanoBurstVariant({ duration: 0.8 }),
+               'Longer (800ms)'),
+          proc('amb_volcano_burst', 'take-distant', volcanoDistantBoom(),
+               '* Different take — distant boom (45Hz sub, 550ms)'),
+          proc('amb_volcano_burst', 'take-rocks', volcanoRocksFalling(),
+               '* Different take — rocks falling (multiple transients + rumble, 700ms)'),
+          proc('amb_volcano_burst', 'take-steam', volcanoSteamHiss(),
+               '* Different take — steam hiss (bright noise + rumble, 550ms)'),
+          proc('amb_volcano_burst', 'take-crack', volcanoCrack(),
+               '* Different take — tectonic cracks (3 tonal cracks + rumble, 500ms)'),
+        ],
+      },
+      // ---- amb_drip ----
+      {
+        name: 'amb_drip',
+        description: 'Plays in cave/cellar arenas. VERY repetition-prone — fires every few seconds. Pick 3–5.',
+        candidates: [
+          proc('amb_drip', 'current', generateAmbDripSound(),
+               'Procedural — current (600→400Hz descending, 80ms)'),
+          proc('amb_drip', 'higher', dripVariant({ startF: 800, endF: 550 }),
+               'Higher pitch (800→550Hz)'),
+          proc('amb_drip', 'lower', dripVariant({ startF: 450, endF: 280 }),
+               'Lower pitch (450→280Hz)'),
+          proc('amb_drip', 'longer', dripVariant({ duration: 0.13 }),
+               'Longer (130ms — more sustain)'),
+          proc('amb_drip', 'shorter', dripVariant({ duration: 0.05 }),
+               'Shorter (50ms — sharper)'),
+          proc('amb_drip', 'cleaner', dripVariant({ noiseAmp: 0 }),
+               'Cleaner (no noise)'),
+          proc('amb_drip', 'gravelly', dripVariant({ noiseAmp: 0.3 }),
+               'Gravelly (more noise)'),
+          proc('amb_drip', 'wide-fall', dripVariant({ startF: 800, endF: 250 }),
+               'Wide pitch fall (800→250Hz)'),
+          proc('amb_drip', 'narrow-fall', dripVariant({ startF: 600, endF: 520 }),
+               'Narrow fall (600→520Hz, almost flat)'),
+          proc('amb_drip', 'take-plink', dripPlink(),
+               '* Different take — plink (1100Hz bell-like, 180ms)'),
+          proc('amb_drip', 'take-plop', dripPlop(),
+               '* Different take — plop (350→100Hz lower drop, 120ms)'),
+          proc('amb_drip', 'take-cave-echo', dripCaveEcho(),
+               '* Different take — cave echo (drip + echo tail, 280ms)'),
+          proc('amb_drip', 'take-cave-deep', dripCaveDeep(),
+               '* Different take — deep cave (250Hz with reverb feel, 200ms)'),
+          proc('amb_drip', 'take-splash', dripSplashDrop(),
+               '* Different take — splash drop (noise burst + brief tone, 100ms)'),
+        ],
+      },
+    ],
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Select — wide creative take. Fires dozens of times per session in menus,
 // so brevity matters more than character. Each candidate ≤100ms.
 
@@ -4193,6 +5038,10 @@ function main(): void {
     pageDef = buildUiPage();
   } else if (page === 'select') {
     pageDef = buildSelectPage();
+  } else if (page === 'ambient') {
+    pageDef = buildAmbientPage();
+  } else if (page === 'volcano') {
+    pageDef = buildVolcanoPage();
   } else {
     throw new Error('Unknown page: ' + page);
   }

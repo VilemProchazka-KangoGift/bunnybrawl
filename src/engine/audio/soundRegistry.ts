@@ -11,12 +11,12 @@ import {
 import {
   generateAmbientSound, generateCrowdSound, generateZeroGSound,
   generateWaterfallSound, generateAmbWindSound, generateAmbLavaSound,
-  generateAmbUnderwaterBubblesSound, generateAmbSpaceHumSound,
+  generateAmbSpaceHumSound,
 } from './synthesis/ambient';
 import {
   generateGeyserSound, generatePigeonScatterSound,
   generateAmbBirdChirpSound, generateAmbGhostHooSound,
-  generateAmbVolcanoBurstSound, generateAmbDripSound,
+  generateAmbVolcanoBurstSound,
 } from './synthesis/periodic';
 import { generateToneBuffer } from './synthesis/core';
 
@@ -54,7 +54,6 @@ const AMBIENT_DEFS: Array<[string, SoundDef]> = [
   ['waterfall_ambient', { generate: generateWaterfallSound, volume: 0.18, loop: true }],
   ['amb_wind',   { generate: generateAmbWindSound, volume: 0.55, loop: true }],
   ['amb_lava',   { generate: generateAmbLavaSound, volume: 0.6, loop: true }],
-  ['amb_underwater_bubbles', { generate: generateAmbUnderwaterBubblesSound, volume: 0.55, loop: true }],
   ['amb_space_hum', { generate: generateAmbSpaceHumSound, volume: 0.55, loop: true }],
 ];
 
@@ -64,7 +63,6 @@ const PERIODIC_DEFS: Array<[string, SoundDef]> = [
   ['amb_bird_chirp', { generate: generateAmbBirdChirpSound, volume: 0.5 }],
   ['amb_ghost_hoo',  { generate: generateAmbGhostHooSound, volume: 0.65 }],
   ['amb_volcano_burst', { generate: generateAmbVolcanoBurstSound, volume: 0.8 }],
-  ['amb_drip',     { generate: generateAmbDripSound, volume: 0.55 }],
 ];
 
 function registerDefs(sounds: Map<string, Howl>, defs: Array<[string, SoundDef]>): void {

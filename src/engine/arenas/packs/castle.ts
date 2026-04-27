@@ -834,7 +834,6 @@ export const castle: ArenaPack = {
   // ---- Audio ----
   ambientSoundConfig: {
     loops: ['amb_wind'],
-    periodic: [{ sound: 'amb_drip', intervalRange: [4, 12] }],
   },
   musicFile: 'castle.mp3',
   // NAV-DATA-START — auto-generated, do not hand-edit

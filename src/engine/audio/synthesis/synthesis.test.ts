@@ -18,12 +18,12 @@ import {
 import {
   generateAmbientSound, generateCrowdSound, generateZeroGSound,
   generateWaterfallSound, generateAmbWindSound, generateAmbLavaSound,
-  generateAmbUnderwaterBubblesSound, generateAmbSpaceHumSound,
+  generateAmbSpaceHumSound,
 } from './ambient';
 import {
   generateGeyserSound, generatePigeonScatterSound,
   generateAmbBirdChirpSound, generateAmbGhostHooSound,
-  generateAmbVolcanoBurstSound, generateAmbDripSound,
+  generateAmbVolcanoBurstSound,
 } from './periodic';
 
 const WAV_PREFIX = 'data:audio/wav;base64,';
@@ -211,7 +211,6 @@ describe('Ambient generators', () => {
     ['waterfall', generateWaterfallSound],
     ['wind', generateAmbWindSound],
     ['lava', generateAmbLavaSound],
-    ['underwater_bubbles', generateAmbUnderwaterBubblesSound],
     ['space_hum', generateAmbSpaceHumSound],
   ];
 
@@ -226,7 +225,7 @@ describe('Ambient generators', () => {
   }
 
   it('ambient loops are long enough (>= 2s at 44100 Hz)', () => {
-    const longLoops = [generateAmbientSound, generateZeroGSound, generateAmbUnderwaterBubblesSound, generateAmbSpaceHumSound];
+    const longLoops = [generateAmbientSound, generateZeroGSound, generateAmbSpaceHumSound];
     for (const gen of longLoops) {
       const { samples } = decodeWavSamples(gen());
       expect(samples.length).toBeGreaterThanOrEqual(44100 * 2);
@@ -243,7 +242,6 @@ describe('Periodic generators', () => {
     ['bird_chirp', generateAmbBirdChirpSound],
     ['ghost_hoo', generateAmbGhostHooSound],
     ['volcano_burst', generateAmbVolcanoBurstSound],
-    ['drip', generateAmbDripSound],
   ];
 
   for (const [name, gen] of periodicGenerators) {

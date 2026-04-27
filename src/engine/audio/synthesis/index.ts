@@ -27,7 +27,6 @@ export {
   generateWaterfallSound,
   generateAmbWindSound,
   generateAmbLavaSound,
-  generateAmbUnderwaterBubblesSound,
   generateAmbSpaceHumSound,
 } from './ambient';
 
@@ -37,5 +36,4 @@ export {
   generateAmbBirdChirpSound,
   generateAmbGhostHooSound,
   generateAmbVolcanoBurstSound,
-  generateAmbDripSound,
 } from './periodic';
