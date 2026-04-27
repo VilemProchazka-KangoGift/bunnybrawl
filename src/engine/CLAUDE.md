@@ -24,6 +24,7 @@
 - **ParticleSystem** is the central VFX hub — other systems reference it for `emitParticle()`, `spawnKillSplatter()`, `applyHazardHitVFX()`, etc. Created first in GameLoop constructor.
 - **Per-player systems** (EffectZoneSystem, PlayerCollisionSystem) have `applyToPlayer()`/`checkCollisions()` methods called from GameLoop's per-player loop, NOT from the system array iteration.
 - **`erasableSyntaxOnly: true`** in tsconfig — cannot use constructor parameter properties (`private foo: T` in constructor). Use explicit field declarations + constructor body assignment.
+- **`DEFAULT_*` constants use plain `const X: Readonly<T> = {...}`**, not `Object.freeze({...})`. `Readonly` already enforces immutability at the type level; the runtime freeze adds nothing for an internal config object. Engine-wide convention — see `headless/HeadlessRunner.ts:DEFAULT_MAX_TICKS`, `net/core/networkSimulator.ts:DEFAULT_CONFIG`, `ai/personality.ts:DEFAULT_PERSONALITY`, `headless/reward.ts:DEFAULT_REWARD_WEIGHTS`.
 - **Avoid `.bind(this)` in hot paths** — creates new function per call. Use cached arrow fields: `private readonly _boundFn = (): T => this.fn()`.
 - **`audio.playAnimal(name)`** is separate from `audio.play(name)` — both must be gated by `_audioEnabled` for rollback resimulation. Route through callbacks, not direct imports.
 - `fixedUpdate` returns early when `matchOver` — timers that should keep running (screenFlash, slowMotion) must be decayed in `loop()` instead.
