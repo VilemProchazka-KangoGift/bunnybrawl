@@ -33,6 +33,7 @@ export interface TransitionCallbacks {
   playSound: (name: string) => void;
   playAnimal: (characterName: string) => void;
   spawnDustParticles: (player: Player, landVy: number) => void;
+  spawnJumpDustParticles: (player: Player) => void;
   spawnKillSplatter: (victim: Player) => void;
   pickupCarrotVFX: (x: number, y: number) => void;
   spawnPlayerSpawnVFX: (x: number, y: number) => void;
