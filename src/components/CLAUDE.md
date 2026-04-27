@@ -4,6 +4,8 @@
 - Canvas text in CharacterSelect needs i18n: `i18n.t('char_Name', name)`, not raw `char.name`.
 - Screen containers must use `width/height: 100%` — they inherit from `GameScaler`'s 1280x720 div. Never set fixed pixel dimensions.
 - Buttons use `.btn-base` from `shared.css` (hover scale 1.06, active 0.97). New buttons should include `btn-base`.
+- **`useSyncExternalStore`**: hoist `subscribe` and `getSnapshot` callbacks to module scope. Inline `.bind(this)` or arrow closures rebind per render → React treats the subscribe identity as new and re-subscribes the listener on every render. See `SettingsModal.tsx` for the pattern.
+- **Modal-in-modal**: render the inner modal as a fragment sibling (`<>{outer}{inner && <Inner/>}</>`), NOT inside the outer panel. Nesting puts the inner overlay inside the outer panel's stacking context — works by DOM order today but is fragile. See `SettingsModal.tsx` opening `CharacterSelectorModal`.
 - Victory screen: two-column layout (scoreboard+stats left, stats+MVP right). "Change Arena" button opens overlay. Mobile keeps the same horizontal two-column layout — do NOT switch to `flex-direction: column` (overflows 720px logical height). Compact via smaller fonts/padding instead.
 - Pause screen arena selector must update both `currentArenaId` local state AND `matchSettings.arenaId` in store.
 - Menu music (`menuMusicHowl`) must NOT be tied to component lifecycle — neither MainMenu nor CharacterSelect stops on unmount. Preloaded in `audio.init()`.

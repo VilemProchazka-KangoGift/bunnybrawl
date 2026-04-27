@@ -215,6 +215,12 @@ npx vite-node scripts/selfPlay.ts -- --episodes 5 --arena meadow --out data/run.
 # http://localhost:5173/bunnybrawl/?arena=meadow&bots=2&debug=nav (toggle with ` key)
 # Mobile testing (forces touch mode in desktop browser):
 # http://localhost:5173/bunnybrawl/?mobile&arena=meadow&bots=2
+# Dev-server troubleshooting — if browser doesn't show your edits, the Vite
+# process may be running from an orphaned worktree dir (git worktree list
+# won't show it). Diagnose:
+#   netstat -ano | grep 5173       # find PID listening on port
+#   wmic process where "ProcessId=<PID>" get CommandLine
+# Then kill it and restart `npm run dev` from the correct worktree.
 ```
 
 ## Testing
@@ -361,6 +367,7 @@ Online play uses host-authoritative architecture with Trystero MQTT signaling fo
 
 - **PlayerSlot = CharacterSlot | BotSlot** — human P1-P5, bot B1-B5. Use `isBotSlot(slot)`, `getCharacterForSlot(slot)`.
 - **Bot characters in `BOT_CHARACTERS` Map** — populated by `assignBotCharacters()`, not in `CHARACTERS` record.
+- **localStorage**: use `safeStorage.{get,set,remove}` from `src/storage.ts` — handles Safari private mode / sandboxed iframes. Never inline `try { localStorage.* } catch {}`.
 - **Always document lessons** — update `.claude/skills/*.md` after completing features.
 
 ## File Size Reference
