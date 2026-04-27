@@ -51,7 +51,12 @@ export interface RewardWeights {
   fallOffPenalty?: number;
 }
 
-const DEFAULTS: Required<RewardWeights> = {
+/**
+ * Default reward weights. Exported so callers (CLI scripts, training driver
+ * code) can read the canonical defaults without hardcoding numbers, and so
+ * tests can assert against them. Treat as immutable — `Object.freeze`d.
+ */
+export const DEFAULT_REWARD_WEIGHTS: Readonly<Required<RewardWeights>> = Object.freeze({
   killBonus: 1.0,
   deathPenalty: -1.0,
   carrotBonus: 0.5,
@@ -62,7 +67,7 @@ const DEFAULTS: Required<RewardWeights> = {
   hazardHitPenalty: -0.3,
   burnTickPenalty: -0.005,
   fallOffPenalty: -0.5,
-};
+});
 
 /**
  * Compute a scalar reward per tick for one slot. Stateful — call `observe`
@@ -88,7 +93,7 @@ export class RewardShaper {
 
   constructor(slot: PlayerSlot, weights?: RewardWeights) {
     this.slot = slot;
-    this._w = { ...DEFAULTS, ...weights };
+    this._w = { ...DEFAULT_REWARD_WEIGHTS, ...weights };
   }
 
   /**

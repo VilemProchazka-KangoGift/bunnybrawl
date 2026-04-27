@@ -208,7 +208,7 @@ npm run build     # Production build (tsc + vite)
 npm test          # Unit/integration tests (~2000 tests, Vitest)
 npm run test:e2e  # E2E tests (~120 tests, Playwright, builds first)
 npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/physics changes)
-npx vite-node scripts/selfPlay.ts -- --episodes 5 --arena meadow --out data/run.ndjson  # Headless self-play data generation
+npx vite-node scripts/selfPlay.ts -- --episodes 5 --arena meadow --out data/run.ndjson  # Headless self-play data generation (see docs/headless-recording-format.md for format + CLI flags)
 # Dev shortcut — skip lobby:
 # http://localhost:5173/bunnybrawl/?arena=rooftops&bots=2&difficulty=hard
 # Nav debug overlay:

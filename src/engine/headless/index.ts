@@ -21,7 +21,7 @@ export {
   OBS_HAZARD_OFFSET,
 } from './observation';
 export type { ObservationConfig } from './observation';
-export { RewardShaper } from './reward';
+export { RewardShaper, DEFAULT_REWARD_WEIGHTS } from './reward';
 export type { RewardWeights } from './reward';
 export { PolicyBroker, PolicyInput } from './policy';
 export type { BatchedPolicy } from './policy';
