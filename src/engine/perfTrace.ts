@@ -6,14 +6,32 @@ import { debugFlags } from './debugFlags';
 
 /** Allowed section names. Restricted to a literal union to prevent dynamic-string
  *  callers from accidentally allocating a 40KB ring per unique value. Add new
- *  sections here as the surface grows. */
+ *  sections here as the surface grows.
+ *
+ *  Names are dot-namespaced so reports group visually:
+ *    fixedUpdate / cosmeticStep / tickCosmetic / renderFrame — top-level orchestrator spans
+ *    gameplay.* — per-system spans inside fixedUpdate
+ *    cosmetic.* — per-system spans inside cosmeticStep (particles already covered)
+ *    simulator.* — Simulator-internal spans (per-player loop)
+ *    awareness — AI awareness pass (legacy flat name, kept for continuity) */
 export type PerfSection =
   | 'fixedUpdate'
   | 'tickCosmetic'
   | 'cosmeticStep'
   | 'renderFrame'
   | 'awareness'
-  | 'particles';
+  | 'particles'
+  | 'gameplay.hazard'
+  | 'gameplay.carrot'
+  | 'gameplay.arenaEntity'
+  | 'gameplay.effectZone'
+  | 'gameplay.stomp'
+  | 'gameplay.match'
+  | 'simulator.perPlayerPhysics'
+  | 'cosmetic.playerTransition'
+  | 'cosmetic.playerCosmetic'
+  | 'cosmetic.entityTransition'
+  | 'cosmetic.environment';
 
 interface SectionStats {
   calls: number;

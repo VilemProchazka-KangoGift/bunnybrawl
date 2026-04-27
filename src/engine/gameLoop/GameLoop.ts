@@ -437,11 +437,11 @@ export class GameLoop {
     perfTrace.measure('cosmeticStep', () => {
       if (this.simulator.getState().phase === 'loading') return;
 
-      this.playerTransitionSystem.cosmeticUpdate(dt);
-      this.playerCosmeticSystem.cosmeticUpdate(dt);
-      this.entityTransitionSystem.cosmeticUpdate(dt);
+      perfTrace.measure('cosmetic.playerTransition', () => this.playerTransitionSystem.cosmeticUpdate(dt));
+      perfTrace.measure('cosmetic.playerCosmetic', () => this.playerCosmeticSystem.cosmeticUpdate(dt));
+      perfTrace.measure('cosmetic.entityTransition', () => this.entityTransitionSystem.cosmeticUpdate(dt));
       this.particleSystem.cosmeticUpdate(dt);
-      this.environmentSystem.cosmeticUpdate(dt);
+      perfTrace.measure('cosmetic.environment', () => this.environmentSystem.cosmeticUpdate(dt));
     });
   }
 
