@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../store/gameStore';
 import { audio } from '../engine/audio';
 import { ArenaGrid } from './ArenaGrid';
-import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
+import { CANVAS_WIDTH, CANVAS_HEIGHT, MAX_BOT_COUNT } from '../engine/constants';
 import { isTouchPrimary } from '../engine/touchDetect';
 import { getSlowDevice, subscribeSlowDevice } from '../engine/perfFlags';
 import { useCanvasRenderScale } from '../hooks/useCanvasRenderScale';
@@ -12,6 +12,7 @@ import { sampleFps, drawFpsCounter } from '../engine/fpsCounter';
 import { HelpModal } from './HelpModal';
 import { ModsModal } from './ModsModal';
 import { OnlineModal } from './OnlineModal';
+import { SettingsModal } from './SettingsModal';
 import logoImg from '/logo.png?url';
 import './MainMenu.css';
 
@@ -24,6 +25,7 @@ export function MainMenu() {
   const [modsOpen, setModsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [onlineOpen, setOnlineOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const slowDevice = useSyncExternalStore(subscribeSlowDevice, getSlowDevice);
 
   // Mobile: ensure at least 1 bot (single player needs opponents)
@@ -49,8 +51,6 @@ export function MainMenu() {
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
   }, [handlePlay, onlineOpen]);
-
-  const [musicOff, setMusicOff] = useState(() => audio.isMusicDisabled());
 
   useEffect(() => {
     audio.playMenuMusic();
@@ -89,15 +89,15 @@ export function MainMenu() {
       <div className="menu-bg">
         <div className={`menu-content${slowDevice ? ' menu-content--no-blur' : ''}`}>
           <button
-            className="overlay-icon-btn music-toggle-btn"
-            onClick={() => {
-              const disabled = audio.toggleMusicDisabled();
-              setMusicOff(disabled);
-              if (!disabled) audio.playMenuMusic();
-            }}
-            title={musicOff ? t('music_on') : t('music_off')}
+            className="settings-toggle-btn"
+            onClick={() => { audio.init(); audio.play('select'); setSettingsOpen(true); }}
+            title={t('settings_title')}
+            aria-label={t('settings_title')}
           >
-            {musicOff ? '\uD83D\uDD07' : '\uD83C\uDFB5'}
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
           </button>
           <img src={logoImg} alt="Carrot Royale" className="game-logo" />
           <p className="tagline">{t('tagline')}</p>
@@ -150,8 +150,8 @@ export function MainMenu() {
                 <span className="bot-count" data-testid="bot-count">{matchSettings.botCount}</span>
                 <button
                   className="bot-btn"
-                  onClick={() => setMatchSettings({ botCount: Math.min(5, matchSettings.botCount + 1) })}
-                  disabled={matchSettings.botCount >= 5}
+                  onClick={() => setMatchSettings({ botCount: Math.min(MAX_BOT_COUNT, matchSettings.botCount + 1) })}
+                  disabled={matchSettings.botCount >= MAX_BOT_COUNT}
                 >+</button>
               </div>
               {matchSettings.botCount > 0 && (
@@ -207,6 +207,7 @@ export function MainMenu() {
           {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
           {modsOpen && <ModsModal onClose={() => setModsOpen(false)} />}
           {onlineOpen && <OnlineModal onClose={() => setOnlineOpen(false)} />}
+          {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
         </div>
         <div className="build-info">
           {new Date(__BUILD_TIME__).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}

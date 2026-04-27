@@ -11,6 +11,7 @@ import { isTouchPrimary } from './engine/touchDetect';
 import { registerBuiltinArenas } from './engine/arenas';
 import type { PlayerSlot, BotSlot, CharacterSlot } from './engine/types';
 import { ALL_BOT_SLOTS } from './engine/types';
+import { MAX_BOT_COUNT } from './engine/constants';
 import logoUrl from '/logo.png?url';
 
 // Register all built-in packs at module load time
@@ -39,7 +40,7 @@ function useDevAutoStart() {
     if (!arena) return;
     didAutoStart.current = true;
 
-    const botCount = Math.min(5, Math.max(0, parseInt(params.get('bots') || '1', 10) || 1));
+    const botCount = Math.min(MAX_BOT_COUNT, Math.max(0, parseInt(params.get('bots') || '1', 10) || 1));
     const rawDiff = params.get('difficulty');
     const validDiffs = ['easy', 'medium', 'hard', 'impossible'] as const;
     const diff = validDiffs.includes(rawDiff as typeof validDiffs[number]) ? rawDiff as typeof validDiffs[number] : 'medium';

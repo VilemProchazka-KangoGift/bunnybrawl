@@ -79,13 +79,7 @@ export function drawLobbyOverlay(
   ctx.fillStyle = 'rgba(40, 140, 45, 0.85)';
   ctx.fillText(goText, goCx, goCy);
 
-  // ---- Per-character labels (NPCs, bots, players) ----
-  for (const npc of state.extras) {
-    ctx.fillStyle = 'rgba(255,255,255,0.4)';
-    ctx.font = "10px 'Nunito', sans-serif";
-    ctx.textAlign = 'center';
-    ctx.fillText(getCharacterDisplayName(npc.character.name, lang), npc.x + PLAYER_WIDTH / 2, npc.y - 5);
-  }
+  // ---- Per-character labels (bots, players) ----
   for (const bot of state.bots) {
     const tagX = bot.x + PLAYER_WIDTH / 2;
     const tagW = 36;

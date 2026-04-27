@@ -10,12 +10,12 @@ import { tickIdleStateMachine } from './rendering/idleActions';
 import { KEY_BINDINGS } from './input';
 import { applyInput, applyGravity, movePlayer, collidePlatforms, updatePlayerState } from './physics';
 import { isStomping } from './stomp';
-import { getAllCharacters } from './characters';
+import { getLobbyRoster } from './characters';
 import { audio } from './audio';
 import { updateWildlife } from './gameLoop/cosmetics/environment';
 import { createEmptyMatchState } from './simulator/initialState';
 import { getArena, getTheme } from './arenas';
-import { pickWeighted, randRange } from './themes/utils';
+import { pickWeighted, randRange, shuffleInPlace } from './themes/utils';
 import {
   SLOTS, READY_ZONE_X, COUNTDOWN_SECONDS, GROUND_Y, LOBBY_DAY_CYCLE,
   LOBBY_GRAVITY, LOBBY_SPEED, LOBBY_JUMP,
@@ -90,13 +90,6 @@ function buildLobbyMatchState(theme: ThemeConfig): MatchState {
   return { ...createEmptyMatchState(), wildlife };
 }
 
-function shuffle<T>(arr: T[]): T[] {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
 
 export interface LobbyGameConfig {
   botCount: number;
@@ -142,7 +135,8 @@ export class LobbyGame {
     const activeSlots = config.isMobile ? (['P1'] as CharacterSlot[]) : SLOTS;
 
     // Randomly assign characters to players
-    const shuffled = shuffle([...getAllCharacters()]);
+    const shuffled = [...getLobbyRoster()];
+    shuffleInPlace(shuffled, Math.random);
     const assigned = shuffled.slice(0, activeSlots.length);
     const botAssigned = shuffled.slice(activeSlots.length, activeSlots.length + botCount);
     const extras = shuffled.slice(activeSlots.length + botCount);

@@ -36,3 +36,12 @@ export {
   getCharacterForSlot,
   assignBotCharacters,
 } from './defaults';
+
+export {
+  MAX_LOBBY_ROSTER,
+  getSelectedCharacters,
+  setSelectedCharacters,
+  subscribeSelectedCharacters,
+  regenerateLobbyRoster,
+  getLobbyRoster,
+} from './preferences';

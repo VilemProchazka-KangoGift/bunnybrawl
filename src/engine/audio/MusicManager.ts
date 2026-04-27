@@ -1,10 +1,29 @@
 import { Howl } from 'howler';
 import { getArenaPack } from '../arenas/registry';
+import { safeStorage } from '../../storage';
 
 const AUDIO_BASE = import.meta.env.BASE_URL + 'audio/';
 
+const MENU_BASE_VOLUME = 0.25;
+const ARENA_BASE_VOLUME = 0.22;
+const LS_MUSIC_DISABLED = 'carrotroyale_music_disabled';
+const LS_MUSIC_VOLUME = 'carrotroyale_music_volume';
+
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+
+type MusicListener = () => void;
+
 export class MusicManager {
-  private musicDisabled = (() => { try { return localStorage.getItem('carrotroyale_music_disabled') === '1'; } catch { return false; } })();
+  private musicDisabled = safeStorage.get(LS_MUSIC_DISABLED) === '1';
+  // Multiplies into per-track base volumes. Persisted, default 1.0.
+  private musicVolumeScalar = (() => {
+    const raw = safeStorage.get(LS_MUSIC_VOLUME);
+    if (raw === null) return 1;
+    const n = parseFloat(raw);
+    return Number.isFinite(n) ? clamp01(n) : 1;
+  })();
+  private listeners: Set<MusicListener> = new Set();
+  private inFlightPreloadHowl: Howl | null = null;
   private muted = false;
   private musicHowl: Howl | null = null;
   private musicThemeId: string | null = null;
@@ -19,6 +38,12 @@ export class MusicManager {
   // can report true even when the browser silently rejected play(), so we
   // track real playback via Howl events instead.
   private menuMusicActuallyPlaying = false;
+  // Tracks whether play() has been issued but the 'play' event hasn't fired
+  // yet. Without this, rapid duplicate `playMenuMusic()` calls (e.g. React
+  // StrictMode double-mount, Ctrl+F5 races) call Howl.play() twice during
+  // load, and html5: true's Audio-element pool spawns two concurrent
+  // instances when the file finally finishes loading.
+  private menuMusicPlayPending = false;
   // Start fetching before first user interaction (init() is heavy).
   private menuMusicHowl: Howl | null = this.musicDisabled ? null : this.createMenuHowl();
 
@@ -28,12 +53,18 @@ export class MusicManager {
   private createMenuHowl(): Howl {
     const howl = new Howl({
       src: [AUDIO_BASE + 'carrot-royale-main.mp3'],
-      volume: 0.25,
+      volume: MENU_BASE_VOLUME * this.musicVolumeScalar,
       loop: true,
       html5: true,
     });
-    const clearPlaying = () => { this.menuMusicActuallyPlaying = false; };
-    howl.on('play', () => { this.menuMusicActuallyPlaying = true; });
+    const clearPlaying = () => {
+      this.menuMusicActuallyPlaying = false;
+      this.menuMusicPlayPending = false;
+    };
+    howl.on('play', () => {
+      this.menuMusicActuallyPlaying = true;
+      this.menuMusicPlayPending = false;
+    });
     howl.on('stop', clearPlaying);
     howl.on('playerror', clearPlaying);
     return howl;
@@ -48,9 +79,11 @@ export class MusicManager {
   }
 
   setMusicDisabled(disabled: boolean): void {
+    if (this.musicDisabled === disabled) return;
     this.musicDisabled = disabled;
-    try { localStorage.setItem('carrotroyale_music_disabled', disabled ? '1' : '0'); } catch { /* restricted context */ }
+    safeStorage.set(LS_MUSIC_DISABLED, disabled ? '1' : '0');
     if (disabled) { this.stopMusic(); this.stopMenuMusic(); }
+    this.notify();
   }
 
   toggleMusicDisabled(): boolean {
@@ -58,12 +91,37 @@ export class MusicManager {
     return this.musicDisabled;
   }
 
+  getMusicVolume(): number {
+    return this.musicVolumeScalar;
+  }
+
+  setMusicVolume(v: number): void {
+    const clamped = clamp01(v);
+    if (clamped === this.musicVolumeScalar) return;
+    this.musicVolumeScalar = clamped;
+    safeStorage.set(LS_MUSIC_VOLUME, String(clamped));
+    this.menuMusicHowl?.volume(MENU_BASE_VOLUME * clamped);
+    this.musicHowl?.volume(ARENA_BASE_VOLUME * clamped);
+    this.inFlightPreloadHowl?.volume(ARENA_BASE_VOLUME * clamped);
+    this.notify();
+  }
+
+  subscribe(listener: MusicListener): () => void {
+    this.listeners.add(listener);
+    return () => { this.listeners.delete(listener); };
+  }
+
+  private notify(): void {
+    for (const l of this.listeners) l();
+  }
+
   playMenuMusic(): void {
     if (this.muted || this.musicDisabled) return;
     if (!this.menuMusicHowl) {
       this.menuMusicHowl = this.createMenuHowl();
     }
-    if (this.menuMusicActuallyPlaying) return;
+    if (this.menuMusicActuallyPlaying || this.menuMusicPlayPending) return;
+    this.menuMusicPlayPending = true;
     this.menuMusicHowl.play();
   }
 
@@ -91,7 +149,7 @@ export class MusicManager {
     if (this._inFlightPreload?.themeId === themeId) this._inFlightPreload = null;
     const mp3 = getArenaPack(themeId)?.musicFile;
     if (!mp3) { console.warn(`[audio] No musicFile for arena '${themeId}'`); return; }
-    this.musicHowl = new Howl({ src: [AUDIO_BASE + mp3], volume: 0.22, loop: true, html5: true });
+    this.musicHowl = new Howl({ src: [AUDIO_BASE + mp3], volume: ARENA_BASE_VOLUME * this.musicVolumeScalar, loop: true, html5: true });
     this.musicThemeId = themeId;
     this.musicHowl.play();
   }
@@ -112,9 +170,12 @@ export class MusicManager {
     if (!mp3) return Promise.resolve();
     const promise = new Promise<void>((resolve) => {
       this.musicHowl?.unload();
+      const clearInFlight = () => {
+        if (this.inFlightPreloadHowl === howl) this.inFlightPreloadHowl = null;
+      };
       const howl = new Howl({
         src: [AUDIO_BASE + mp3],
-        volume: 0.22,
+        volume: ARENA_BASE_VOLUME * this.musicVolumeScalar,
         loop: true,
         html5: true,
         onload: () => {
@@ -136,6 +197,7 @@ export class MusicManager {
           } else {
             howl.unload();
           }
+          clearInFlight();
           resolve();
         },
         onloaderror: () => {
@@ -144,9 +206,11 @@ export class MusicManager {
             this.musicThemeId = null;
             this._inFlightPreload = null;
           }
+          clearInFlight();
           resolve();
         },
       });
+      this.inFlightPreloadHowl = howl;
       howl.load();
     });
     this._inFlightPreload = { themeId, promise };

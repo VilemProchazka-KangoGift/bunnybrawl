@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback, useMemo } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { CHARACTERS, BOT_CHARACTERS, assignBotCharacters } from '../engine/characters';
+import { CHARACTERS, BOT_CHARACTERS, assignBotCharacters, regenerateLobbyRoster } from '../engine/characters';
 import { audio } from '../engine/audio';
 import type { CharacterSlot, PlayerSlot, BotSlot, Particle } from '../engine/types';
 import { isBotSlot } from '../engine/types';
@@ -34,6 +34,7 @@ export function CharacterSelect() {
 
   // Initialise LobbyGame once
   useEffect(() => {
+    regenerateLobbyRoster();
     lobbyGameRef.current = new LobbyGame({
       botCount: matchSettings.botCount,
       isMobile,

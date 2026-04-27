@@ -7,7 +7,7 @@ import { useGameStore } from '../store/gameStore';
 import { audio } from '../engine/audio';
 import { isTouchPrimary } from '../engine/touchDetect';
 import { MobileTextInput } from './MobileTextInput';
-import { getAllCharacters, getCharacterEmoji, getCharacterDisplayName } from '../engine/characters';
+import { getLobbyRoster, getCharacterEmoji, getCharacterDisplayName } from '../engine/characters';
 import { ALL_BOT_SLOTS } from '../engine/types';
 import { useOnlineRoom } from './useOnlineRoom';
 import { ROOM_CODE_LENGTH } from '../engine/net/transport';
@@ -61,7 +61,7 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
     return () => timers.forEach(clearTimeout);
   }, [step, online.isHost]);
 
-  const allChars = getAllCharacters();
+  const allChars = getLobbyRoster();
 
   return (
     <>

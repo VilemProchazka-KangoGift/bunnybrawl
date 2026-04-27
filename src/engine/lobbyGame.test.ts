@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { LobbyGame, READY_ZONE_X } from './lobbyGame';
 import { PLAYER_WIDTH } from './constants';
-import { registerBuiltinCharacters, getAllCharacters } from './characters';
+import { registerBuiltinCharacters, getAllCharacters, MAX_LOBBY_ROSTER } from './characters';
 import { registerBuiltinArenas } from './arenas';
 
 // Ensure character + arena packs are registered (needed for getAllCharacters)
@@ -46,8 +46,7 @@ describe('LobbyGame', () => {
   });
 
   it('creates extra NPC characters from remaining roster', () => {
-    const rosterSize = getAllCharacters().length;
-    expect(game.extraChars.length).toBe(rosterSize - 5 /* humans */ - 2 /* bots */);
+    expect(game.extraChars.length).toBe(MAX_LOBBY_ROSTER - 5 /* humans */ - 2 /* bots */);
   });
 
   it('mobile mode creates only P1', () => {
@@ -340,16 +339,14 @@ describe('LobbyGame', () => {
     it('creates 0 bots when botCount is 0', () => {
       const g = makeLobbyGame({ botCount: 0 });
       expect(g.bots).toHaveLength(0);
-      const rosterSize = getAllCharacters().length;
-      expect(g.extraChars.length).toBe(rosterSize - 5);
+      expect(g.extraChars.length).toBe(MAX_LOBBY_ROSTER - 5);
     });
 
     it('creates 1 bot when botCount is 1', () => {
       const g = makeLobbyGame({ botCount: 1 });
       expect(g.bots).toHaveLength(1);
       expect(g.bots[0].id).toBe('B1');
-      const rosterSize = getAllCharacters().length;
-      expect(g.extraChars.length).toBe(rosterSize - 5 - 1);
+      expect(g.extraChars.length).toBe(MAX_LOBBY_ROSTER - 5 - 1);
     });
 
     it('creates 5 bots when botCount is 5', () => {
@@ -357,16 +354,14 @@ describe('LobbyGame', () => {
       expect(g.bots).toHaveLength(5);
       const botSlots = g.bots.map(b => b.id);
       expect(botSlots).toEqual(['B1', 'B2', 'B3', 'B4', 'B5']);
-      const rosterSize = getAllCharacters().length;
-      expect(g.extraChars.length).toBe(rosterSize - 5 - 5);
+      expect(g.extraChars.length).toBe(MAX_LOBBY_ROSTER - 5 - 5);
     });
 
-    it('total characters always equals full roster size', () => {
-      const rosterSize = getAllCharacters().length;
+    it('total characters always equals lobby roster size', () => {
       for (const botCount of [0, 1, 2, 3, 5]) {
         const g = makeLobbyGame({ botCount });
         const total = g.players.length + g.bots.length + g.extraChars.length;
-        expect(total).toBe(rosterSize);
+        expect(total).toBe(MAX_LOBBY_ROSTER);
       }
     });
   });

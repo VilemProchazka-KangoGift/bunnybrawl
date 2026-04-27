@@ -4,8 +4,10 @@ import cs from './locales/cs.json';
 import en from './locales/en.json';
 import fil from './locales/fil.json';
 import hi from './locales/hi.json';
+import { safeStorage } from './storage';
 
-const savedLng = (() => { try { return localStorage.getItem('carrotroyale_lang'); } catch { return null; } })();
+const LS_LANG = 'carrotroyale_lang';
+const savedLng = safeStorage.get(LS_LANG);
 
 i18n.use(initReactI18next).init({
   resources: {
@@ -20,7 +22,7 @@ i18n.use(initReactI18next).init({
 });
 
 i18n.on('languageChanged', (lng) => {
-  try { localStorage.setItem('carrotroyale_lang', lng); } catch { /* noop */ }
+  safeStorage.set(LS_LANG, lng);
 });
 
 export default i18n;

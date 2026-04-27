@@ -1,6 +1,7 @@
 import type { CharacterDef, CharacterSlot, PlayerSlot, BotSlot } from '../types';
 import { isBotSlot } from '../types';
 import { getAllCharacterDefs } from './registry';
+import { getLobbyRoster } from './preferences';
 import { SeededRNG } from '../net/prng';
 import { shuffleInPlace } from '../themes/utils';
 
@@ -39,7 +40,7 @@ export function assignBotCharacters(humanSlots: CharacterSlot[], botSlots: BotSl
   const usedNames = humanCharNames
     ? new Set(humanCharNames)
     : new Set(humanSlots.map(s => CHARACTERS[s].name));
-  const available = getAllCharacters().filter(c => !usedNames.has(c.name));
+  const available = getLobbyRoster().filter(c => !usedNames.has(c.name));
   const shuffled = [...available];
   const rng = seed != null ? new SeededRNG(seed) : null;
   const rnd = rng ? () => rng.nextFloat() : Math.random;

@@ -110,6 +110,18 @@ class AudioManager {
     return this.music.isMusicDisabled();
   }
 
+  getMusicVolume(): number {
+    return this.music.getMusicVolume();
+  }
+
+  setMusicVolume(v: number): void {
+    this.music.setMusicVolume(v);
+  }
+
+  subscribeMusic(listener: () => void): () => void {
+    return this.music.subscribe(listener);
+  }
+
   setPaused(paused: boolean, themeId?: string): void {
     this.gamePaused = paused;
     this.updateHowlerMute();

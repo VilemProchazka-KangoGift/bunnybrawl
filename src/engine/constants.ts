@@ -130,3 +130,6 @@ export const THORN_WIDTH = 28;                  // px
 export const THORN_HEIGHT = 12;                 // px
 export const THORN_Y_OFFSET = 12;              // px above platform surface
 
+// Match composition
+export const MAX_BOT_COUNT = 4;                 // 1 human + 4 bots fills P1-P5
+

@@ -15,13 +15,17 @@ import type {
   StartMatchMessage, PlayerJoinedMessage, PlayerLeftMessage,
 } from '../engine/net/protocol';
 import {
-  CHARACTERS, BOT_CHARACTERS, getAllCharacters, assignBotCharacters,
+  CHARACTERS, BOT_CHARACTERS, getLobbyRoster, assignBotCharacters,
 } from '../engine/characters';
 import { ALL_BOT_SLOTS, isBotSlot } from '../engine/types';
 import { listPlayableArenaPacks } from '../engine/arenas';
 import type { BotSlot, CharacterSlot, PlayerSlot } from '../engine/types';
 import { PLAYER_NAME_MAX_LENGTH } from '../engine/rendering/hud';
+import { safeStorage } from '../storage';
 export { PLAYER_NAME_MAX_LENGTH };
+
+const LS_ONLINE_CHAR = 'carrotroyale_online_char';
+const LS_PLAYER_NAME = 'carrotroyale_player_name';
 
 /** Resolve 'random' arenaId to a concrete ID so both peers use the same arena.
  *  CRITICAL: must be called once on the host before sending SETTINGS_SYNC, then
@@ -112,12 +116,12 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
 
   const [step, setStep] = useState<OnlineStep>('choose');
   const [localChar, setLocalChar] = useState(() =>
-    localStorage.getItem('carrotroyale_online_char') || CHARACTERS.P1.name
+    safeStorage.get(LS_ONLINE_CHAR) || CHARACTERS.P1.name
   );
   const localCharRef = useRef(CHARACTERS.P1.name);
   localCharRef.current = localChar;
   const [playerName, setPlayerNameState] = useState(() =>
-    (localStorage.getItem('carrotroyale_player_name') || '').slice(0, PLAYER_NAME_MAX_LENGTH)
+    (safeStorage.get(LS_PLAYER_NAME) || '').slice(0, PLAYER_NAME_MAX_LENGTH)
   );
   const playerNameRef = useRef('');
   playerNameRef.current = playerName;
@@ -128,13 +132,13 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
   // Buffer for player names received via HANDSHAKE before the peer is in remotePlayers
   const pendingPlayerNames = useRef<Map<string, string>>(new Map());
 
-  const allChars = getAllCharacters();
+  const allChars = getLobbyRoster();
 
   const setPlayerName = useCallback((name: string) => {
     const clamped = name.slice(0, PLAYER_NAME_MAX_LENGTH);
     setPlayerNameState(clamped);
     playerNameRef.current = clamped;
-    try { localStorage.setItem('carrotroyale_player_name', clamped); } catch {}
+    safeStorage.set(LS_PLAYER_NAME, clamped);
   }, []);
 
   // Guest-only one-shot: if local character conflicts with a remote player, pick an alt.
@@ -264,7 +268,7 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
   const handleCharChange = useCallback((value: string) => {
     setLocalChar(value);
     localCharRef.current = value;
-    localStorage.setItem('carrotroyale_online_char', value);
+    safeStorage.set(LS_ONLINE_CHAR, value);
     transportRef.current?.sendReliable({ type: MsgType.CHARACTER_SELECT, characterName: value });
   }, []);
 

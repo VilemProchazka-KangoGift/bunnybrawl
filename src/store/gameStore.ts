@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import type { GameScreen, MatchSettings, PlayerSlot, MatchState, GameMods } from '../engine/types';
 import type { ConnectionStatus } from '../engine/net/transport';
+import { MAX_BOT_COUNT } from '../engine/constants';
+import { safeStorage } from '../storage';
 
 export interface RemotePlayerInfo {
   peerId: string;
@@ -46,12 +48,10 @@ export interface GameStore {
   reset: () => void;
 }
 
+// safeStorage swallows storage errors; this guard handles parse() throwing on
+// malformed JSON written by an older build.
 function loadStorage<T>(key: string, parse: (raw: string | null) => T, fallback: T): T {
-  try { return parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
-}
-
-function saveStorage(key: string, value: string): void {
-  try { localStorage.setItem(key, value); } catch { /* noop */ }
+  try { return parse(safeStorage.get(key)) ?? fallback; } catch { return fallback; }
 }
 
 const defaultSettings: MatchSettings = {
@@ -60,7 +60,7 @@ const defaultSettings: MatchSettings = {
   playerCount: 2,
   goreMode: loadStorage('carrotroyale_gore', v => v === 'true', false),
   arenaId: loadStorage('carrotroyale_arena', v => v || 'meadow', 'meadow'),
-  botCount: loadStorage('carrotroyale_botcount', v => parseInt(v || '0', 10) || 0, 0),
+  botCount: loadStorage('carrotroyale_botcount', v => Math.min(MAX_BOT_COUNT, parseInt(v || '0', 10) || 0), 0),
   botDifficulty: loadStorage<'easy' | 'medium' | 'hard' | 'impossible'>('carrotroyale_botdiff', v => {
     return v === 'easy' || v === 'medium' || v === 'hard' || v === 'impossible' ? v : 'medium';
   }, 'medium'),
@@ -97,11 +97,11 @@ export const useGameStore = create<GameStore>((set) => ({
   setMatchSettings: (settings) =>
     set((state) => {
       const next = { ...state.matchSettings, ...settings };
-      if ('goreMode' in settings) saveStorage('carrotroyale_gore', String(next.goreMode));
-      if ('arenaId' in settings) saveStorage('carrotroyale_arena', next.arenaId);
-      if ('botCount' in settings) saveStorage('carrotroyale_botcount', String(next.botCount));
-      if ('botDifficulty' in settings) saveStorage('carrotroyale_botdiff', next.botDifficulty);
-      if ('mods' in settings) saveStorage('carrotroyale_mods', JSON.stringify(next.mods));
+      if ('goreMode' in settings) safeStorage.set('carrotroyale_gore', String(next.goreMode));
+      if ('arenaId' in settings) safeStorage.set('carrotroyale_arena', next.arenaId);
+      if ('botCount' in settings) safeStorage.set('carrotroyale_botcount', String(next.botCount));
+      if ('botDifficulty' in settings) safeStorage.set('carrotroyale_botdiff', next.botDifficulty);
+      if ('mods' in settings) safeStorage.set('carrotroyale_mods', JSON.stringify(next.mods));
       return { matchSettings: next };
     }),
 
