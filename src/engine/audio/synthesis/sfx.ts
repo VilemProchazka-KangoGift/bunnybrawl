@@ -24,26 +24,44 @@ export function generateSelectSound(): string {
 }
 
 export function generateStompSound(): string {
+  // Layer 1 (0–450ms): "Cartoon-splat" — burst + descending pitch sweep + wet
+  // low-pass body + drips. Layer 2 (100–420ms): "OH YEAH!" voice-like layer —
+  // pitch curve rises 280→380Hz over 50ms ("oh"), then falls to 220Hz over the
+  // remainder ("yeah"). Square wave for cartoon character.
   const sampleRate = 44100;
-  const duration = 0.3;
+  const duration = 0.55;
   const numSamples = Math.floor(sampleRate * duration);
   const buffer = new Float32Array(numSamples);
-
+  let lp = 0;
   for (let i = 0; i < numSamples; i++) {
     const t = i / sampleRate;
-    const progress = i / numSamples;
-
-    // Sharp crack at the start (high freq, fast decay)
-    const crack = Math.sin(2 * Math.PI * 800 * t) * Math.max(0, 1 - progress * 12) * 0.4;
-    // Heavy thud (descending frequency for weight)
-    const thudFreq = 120 * (1 - progress * 0.6);
-    const thud = Math.sin(2 * Math.PI * thudFreq * t) * Math.max(0, 1 - progress * 2) * 0.5;
-    // Noise burst for impact texture
-    const noise = (Math.random() * 2 - 1) * Math.max(0, 1 - progress * 5) * 0.35;
-
-    buffer[i] = crack + thud + noise;
+    // ---- Splat layer (0..0.45s) ----
+    let splat = 0;
+    if (t < 0.45) {
+      const prog = t / 0.45;
+      const burst = (Math.random() * 2 - 1) * Math.max(0, 1 - prog * 8) * 0.7;
+      const sweepF = 350 + (70 - 350) * Math.min(1, prog * 2.5);
+      const sweep = Math.sin(2 * Math.PI * sweepF * t) * Math.max(0, 1 - prog * 3) * 0.4;
+      const noise = Math.random() * 2 - 1;
+      lp += 0.16 * (noise - lp);
+      const body = lp * Math.max(0, prog - 0.05) * Math.max(0, 1 - prog * 1.5) * 0.5;
+      const drips = (Math.random() * 2 - 1) * Math.max(0, prog - 0.55) * Math.max(0, 1 - prog) * 0.25;
+      splat = burst + sweep + body + drips;
+    }
+    // ---- OH YEAH layer (0.10..0.42s) ----
+    let voice = 0;
+    const localT = t - 0.1;
+    if (localT >= 0 && localT < 0.32) {
+      const f = localT < 0.05
+        ? 280 + 100 * (localT / 0.05)
+        : 380 + (220 - 380) * ((localT - 0.05) / 0.27);
+      const phase = (t * f) % 1;
+      const sq = phase < 0.5 ? 1 : -1;
+      const env = Math.min(1, localT * 20) * Math.max(0, 1 - localT * 1.5);
+      voice = sq * env * 0.18;
+    }
+    buffer[i] = splat + voice;
   }
-
   return floatBufferToWavDataUri(buffer, sampleRate);
 }
 
@@ -91,25 +109,47 @@ export function generateVictorySound(): string {
 }
 
 export function generateCrunchSound(): string {
+  // Layer 1 (0–280ms): "Triple-dramatic" with 2 bite centers (18%, 62%) —
+  // each bite has a triangular envelope + sharp transient at its leading edge.
+  // Layer 2 (180–300ms): C6→F6 rising 4th jingle (square wave, 60ms per note).
   const sampleRate = 44100;
-  const duration = 0.15;
+  const duration = 0.5;
   const numSamples = Math.floor(sampleRate * duration);
   const buffer = new Float32Array(numSamples);
+  const biteCenters = [0.18, 0.62];
   for (let i = 0; i < numSamples; i++) {
     const t = i / sampleRate;
-    const progress = i / numSamples;
-    // Two-phase envelope: sharp attack, moderate decay
-    const envelope = progress < 0.08
-      ? progress / 0.08
-      : Math.max(0, 1 - (progress - 0.08) * 1.2);
-    // Loud crackly noise (the crunch)
-    const noise = (Math.random() * 2 - 1) * 0.7;
-    // Multiple crunch harmonics for texture
-    const crunch1 = Math.sin(2 * Math.PI * 400 * t) * 0.3;
-    const crunch2 = Math.sin(2 * Math.PI * 900 * t) * 0.15 * Math.max(0, 1 - progress * 3);
-    // Sharp snap at the start
-    const snap = progress < 0.06 ? Math.sin(2 * Math.PI * 2500 * t) * 0.5 : 0;
-    buffer[i] = (noise + crunch1 + crunch2 + snap) * envelope * 0.45;
+    // ---- Chomp-chomp layer (0..0.28s) ----
+    let chomp = 0;
+    if (t < 0.28) {
+      const splatProg = t / 0.28;
+      let env = 0;
+      let transient = 0;
+      for (const c of biteCenters) {
+        const dist = Math.abs(splatProg - c);
+        if (dist < 0.07) env = Math.max(env, (1 - dist / 0.07) ** 1.2);
+        const dt = splatProg - c;
+        if (dt > 0 && dt < 0.025) {
+          transient += (Math.random() * 2 - 1) * Math.exp(-dt * 80) * 0.55;
+        }
+      }
+      const noise = (Math.random() * 2 - 1) * 0.85;
+      const harm = Math.sin(2 * Math.PI * 600 * t) * 0.3;
+      chomp = ((noise + harm) * env + transient) * 0.95;
+    }
+    // ---- Jingle layer (0.18..0.30s) — 2-note rising 4th C6 → F6 ----
+    let jingle = 0;
+    const localT = t - 0.18;
+    if (localT >= 0 && localT < 0.12) {
+      const f = localT < 0.06 ? 1047 : 1397;
+      const noteT = localT < 0.06 ? localT : localT - 0.06;
+      const noteP = noteT / 0.06;
+      const phase = (t * f) % 1;
+      const sq = phase < 0.5 ? 1 : -1;
+      const env = Math.min(1, noteP * 30) * Math.max(0, 1 - noteP * 0.5);
+      jingle = sq * env * 0.16;
+    }
+    buffer[i] = chomp + jingle;
   }
   return floatBufferToWavDataUri(buffer, sampleRate);
 }
