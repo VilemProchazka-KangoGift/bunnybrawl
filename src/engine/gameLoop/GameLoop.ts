@@ -487,8 +487,8 @@ export class GameLoop {
 
   getState(): MatchState { return this.simulator.getState(); }
   getRendererDiagnostics() { return this.renderer.getDiagnostics(); }
-  pause(): void { this.paused = true; audio.setPaused(true); this.renderer.setPaused(true); }
-  resume(): void { this.paused = false; this.lastTime = performance.now(); audio.setPaused(false, this.simulator.getArena().themeId); this.renderer.setPaused(false); }
+  pause(): void { this.paused = true; audio.setPaused(true); this.simulator.getState().screenShake = 0; }
+  resume(): void { this.paused = false; this.lastTime = performance.now(); audio.setPaused(false, this.simulator.getArena().themeId); }
   isPaused(): boolean { return this.paused; }
   skipCountdown(): void {
     const state = this.simulator.getState();

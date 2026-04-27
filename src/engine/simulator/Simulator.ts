@@ -617,7 +617,10 @@ export class Simulator {
       (winner) => {
         this._state.matchOver = true;
         this._state.winner = winner;
-        if (!this._resimulating) this._state.screenFlash = SCREEN_FLASH_DURATION;
+        if (!this._resimulating) {
+          this._state.screenFlash = SCREEN_FLASH_DURATION;
+          this._state.screenShake = 0;
+        }
         this._matchSystem.cleanup();
         this._events.onMusicStopRequest();
         this._events.onMatchEnd(winner, this._state);

@@ -27,7 +27,7 @@
 - **`DEFAULT_*` constants use plain `const X: Readonly<T> = {...}`**, not `Object.freeze({...})`. `Readonly` already enforces immutability at the type level; the runtime freeze adds nothing for an internal config object. Engine-wide convention — see `headless/HeadlessRunner.ts:DEFAULT_MAX_TICKS`, `net/core/networkSimulator.ts:DEFAULT_CONFIG`, `ai/personality.ts:DEFAULT_PERSONALITY`, `headless/reward.ts:DEFAULT_REWARD_WEIGHTS`.
 - **Avoid `.bind(this)` in hot paths** — creates new function per call. Use cached arrow fields: `private readonly _boundFn = (): T => this.fn()`.
 - **`audio.playAnimal(name)`** is separate from `audio.play(name)` — both must be gated by `_audioEnabled` for rollback resimulation. Route through callbacks, not direct imports.
-- `fixedUpdate` returns early when `matchOver` — timers that should keep running (screenFlash, slowMotion) must be decayed in `loop()` instead.
+- `fixedUpdate` returns early when `matchOver` — timers that should keep running (screenFlash, slowMotion, hitstopZoom) must be decayed in `loop()` instead. **`screenShake` is the exception**: it decays inside `fixedUpdate` (`Simulator.ts:356`, gated by `!_resimulating`), so it freezes both after `matchOver` and during pause. Zero it at the source on those transitions (matchOver latch in `Simulator.ts`, `GameLoop.pause()`) — don't add render-side guards.
 - Stomps must be checked BEFORE `collidePlayersHorizontal`; collision skips when vertical overlap < 50% (stomp zone).
 - Never splice/shift `splatMarks` during `fixedUpdate` — multiple ticks per frame + `newSplatsSinceRender` stores indices. Cap array in render path only.
 - `GameLoop.stop()` must stop ALL looping sounds — music, ambient, wind, zero_g, crowd, plus all theme `activeAmbientLoops`.
