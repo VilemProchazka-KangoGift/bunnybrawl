@@ -221,6 +221,9 @@ npx vite-node scripts/selfPlay.ts -- --episodes 5 --arena meadow --out data/run.
 #   netstat -ano | grep 5173       # find PID listening on port
 #   wmic process where "ProcessId=<PID>" get CommandLine
 # Then kill it and restart `npm run dev` from the correct worktree.
+# `gh pr merge` from a worktree fails with "main is already checked out at <repo>" but
+# the server-side merge still completes. Verify via `gh pr view N --json state,mergeCommit`.
+# Local main on the primary clone stays stale until you pull there manually.
 ```
 
 ## Testing
@@ -230,6 +233,8 @@ npx vite-node scripts/selfPlay.ts -- --episodes 5 --arena meadow --out data/run.
 - The lobby walk-to-zone E2E test is inherently flaky (random NPC placement). Tagged `@flaky`, uses retries.
 - `MainMenu.test.tsx`, `VictoryScreen.test.tsx`, and `switchArena.test.ts > respawns players at new arena spawn points` have known pre-existing failures (logo.png import denied by Vite test transform; switchArena spawn-point assertion is flaky against current spawn-resolution logic).
 - **GameLoop tests** require mocking `audio`, `renderer`, `howler`, and `HTMLCanvasElement.prototype.getContext`. See `gameLoop.test.ts` top for the full mock block. Always call `loop.stop()` in `afterEach` to prevent keydown listener leaks.
+- **Cosmetic-transition tests** must call `loop.cosmeticStep(FIXED_TIMESTEP)` directly with a prev-then-curr state pair (e.g. set airborne → tick → set idle → tick). A single `loop.fixedUpdate` doesn't fire cosmetics: `tickCosmetic` accumulates dt and only forwards once per `COSMETIC_INTERVAL` (2× FIXED_TIMESTEP).
+- **Theme-derived values in test assertions** — import `getTheme(arenaId)` from `./arenas` rather than hardcoding hex literals. Default test arena uses `themeId: 'meadow'`.
 - **Audio tests** — the `AudioManager` singleton creates a `menuMusicHowl` at field init time (before tests run), so the `Howl` mock must be a real constructor function (not arrow), and tracking instances requires `globalThis` (vi.mock factories run before `const` declarations).
 - **Registry tests** — character/arena registries use module-scoped Maps with no `clear()`. Use unique pack names per test to avoid collisions. Count-based assertions should use `toBeGreaterThanOrEqual`, not exact counts.
 - **Character pack names are capitalized** — `getCharacterPack('Bunny')` not `'bunny'`.
