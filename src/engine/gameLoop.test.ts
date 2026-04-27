@@ -56,29 +56,10 @@ vi.mock('howler', () => ({
   Howler: { mute: vi.fn() },
 }));
 
-// Mock canvas getContext since happy-dom may not support Canvas 2D
-const mockCtx = {
-  fillRect: vi.fn(), clearRect: vi.fn(), beginPath: vi.fn(), arc: vi.fn(),
-  fill: vi.fn(), stroke: vi.fn(), moveTo: vi.fn(), lineTo: vi.fn(),
-  save: vi.fn(), restore: vi.fn(), translate: vi.fn(), rotate: vi.fn(),
-  scale: vi.fn(), drawImage: vi.fn(), createLinearGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
-  createRadialGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
-  measureText: vi.fn(() => ({ width: 50 })),
-  fillText: vi.fn(), strokeText: vi.fn(), closePath: vi.fn(),
-  setTransform: vi.fn(), resetTransform: vi.fn(), clip: vi.fn(),
-  rect: vi.fn(), ellipse: vi.fn(), quadraticCurveTo: vi.fn(), bezierCurveTo: vi.fn(),
-  canvas: { width: 1280, height: 720 },
-  globalAlpha: 1, globalCompositeOperation: 'source-over',
-  fillStyle: '', strokeStyle: '', lineWidth: 1, lineCap: 'butt',
-  lineJoin: 'miter', font: '', textAlign: 'start', textBaseline: 'alphabetic',
-  shadowColor: '', shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0,
-};
-
-const origGetContext = HTMLCanvasElement.prototype.getContext;
-HTMLCanvasElement.prototype.getContext = function (type: string) {
-  if (type === '2d') return mockCtx as unknown as CanvasRenderingContext2D;
-  return origGetContext.call(this, type as any);
-} as any;
+// Patch canvas.getContext('2d') — happy-dom returns null otherwise, breaking
+// Renderer/GameLoop construction.
+import { installMockCanvas2D } from './__tests__/mockCanvas';
+installMockCanvas2D();
 
 // Import after mocks are set up
 import { GameLoop } from './gameLoop';

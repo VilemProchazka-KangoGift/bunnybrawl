@@ -1,5 +1,6 @@
 import type { Player, PlayerSlot, Arena, MatchState, MatchSettings } from '../types';
 import { PLAYER_WIDTH, PLAYER_HEIGHT } from '../constants';
+import { createEmptyMatchState } from '../gameLoop/initialState';
 
 /** Canonical test factory for Player objects. Includes ALL Player fields with sensible defaults. */
 export function makePlayer(overrides: Partial<Player> & { id?: PlayerSlot } = {}): Player {
@@ -68,41 +69,10 @@ export function makeArena(overrides?: Partial<Arena>): Arena {
 /** Minimal MatchState with sensible defaults. Override what your test needs. */
 export function makeState(overrides: Partial<MatchState> = {}): MatchState {
   return {
-    players: [],
-    killFeed: [],
-    timeElapsed: 0,
-    matchOver: false,
-    winner: null,
-    carrots: [],
-    carrotTimer: 5,
-    springs: [],
-    thorns: [],
-    springSpawnTimer: 5,
-    thornSpawnTimer: 5,
-    screenShake: 0,
-    slowMotion: 0,
-    weather: [],
-    dayPhase: 0,
-    countdown: 0,
-    stats: { perPlayer: new Map() },
-    shockwaves: [],
-    screenFlash: 0,
-    hitstopZoom: 0,
-    wildlife: [],
-    fogParticles: [],
-    pollenParticles: [],
-    shootingStars: [],
-    scoreAnimations: [],
-    ghosts: [],
-    lavaRocks: [],
-    lavaRockTimer: 5,
-    geyserStates: [],
-    pigeonFlocks: [],
-    bouncyWobble: new Map(),
-    gibs: [],
-    confetti: [],
+    ...createEmptyMatchState(),
+    carrotTimer: 5, springSpawnTimer: 5, thornSpawnTimer: 5, lavaRockTimer: 5,
     ...overrides,
-  } as MatchState;
+  };
 }
 
 /** Minimal MatchSettings with sensible defaults. Override what your test needs. */

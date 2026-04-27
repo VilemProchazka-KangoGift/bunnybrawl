@@ -2,7 +2,7 @@
 // Owns the lobby player state, NPC wandering, bot AI, physics, stomp/swap, and
 // ready-zone countdown. Delegates rendering to lobbyRender.ts and bot AI to lobbyBots.ts.
 
-import type { Arena, CharacterDef, CharacterSlot, MatchState, MatchStats, Player, PlayerSlot, InputState, WildlifeEntity } from './types';
+import type { Arena, CharacterDef, CharacterSlot, MatchState, Player, PlayerSlot, InputState, WildlifeEntity } from './types';
 import type { ThemeConfig } from './themes/types';
 import { ALL_BOT_SLOTS, isBotSlot } from './types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED, IDLE_ANIM_INTERVAL } from './constants';
@@ -12,6 +12,7 @@ import { isStomping } from './stomp';
 import { getAllCharacters } from './characters';
 import { audio } from './audio';
 import { updateWildlife } from './gameLoop/cosmetics/environment';
+import { createEmptyMatchState } from './gameLoop/initialState';
 import { getArena, getTheme } from './arenas';
 import { pickWeighted, randRange } from './themes/utils';
 import {
@@ -84,24 +85,7 @@ function buildLobbyMatchState(theme: ThemeConfig): MatchState {
     });
   }
 
-  const stats: MatchStats = { perPlayer: new Map() };
-  return {
-    players: [],
-    killFeed: [],
-    timeElapsed: 0, matchOver: false, winner: null,
-    carrots: [], carrotTimer: 9999,
-    springs: [], thorns: [],
-    springSpawnTimer: 9999, thornSpawnTimer: 9999,
-    screenShake: 0, slowMotion: 0, hitstopZoom: 0,
-    weather: [], dayPhase: 0, countdown: 0, stats,
-    shockwaves: [], screenFlash: 0,
-    wildlife,
-    fogParticles: [], pollenParticles: [], shootingStars: [],
-    scoreAnimations: [], ghosts: [],
-    lavaRocks: [], lavaRockTimer: 9999,
-    geyserStates: [], pigeonFlocks: [], bouncyWobble: new Map(),
-    gibs: [], confetti: [],
-  };
+  return { ...createEmptyMatchState(), wildlife };
 }
 
 function shuffle<T>(arr: T[]): T[] {

@@ -2,7 +2,7 @@ import { useRef, useEffect, useCallback, useMemo } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { CHARACTERS, BOT_CHARACTERS, assignBotCharacters } from '../engine/characters';
 import { audio } from '../engine/audio';
-import type { CharacterSlot, PlayerSlot, BotSlot } from '../engine/types';
+import type { CharacterSlot, PlayerSlot, BotSlot, Particle } from '../engine/types';
 import { isBotSlot } from '../engine/types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
 import { isTouchPrimary } from '../engine/touchDetect';
@@ -13,6 +13,10 @@ import { Renderer } from '../engine/renderer';
 import { getTheme } from '../engine/arenas';
 import { useCanvasRenderScale } from '../hooks/useCanvasRenderScale';
 import './CharacterSelect.css';
+
+// Lobby has no particle system — share one frozen-empty array across all
+// `renderer.renderFrame` calls instead of allocating `[]` per RAF tick.
+const NO_PARTICLES: Particle[] = [];
 
 export function CharacterSelect() {
   const { setScreen, setActivePlayers, setMatchSettings, matchSettings } = useGameStore();
@@ -199,7 +203,7 @@ export function CharacterSelect() {
       if (g) {
         const touchInput = lobbyTouchRef.current?.getInput();
         g.update(dt, keysRef.current, touchInput);
-        renderer.renderFrame(g.getMatchState(), g.getArena(), []);
+        renderer.renderFrame(g.getMatchState(), g.getArena(), NO_PARTICLES);
         if (g.isCountdownComplete()) startMatch();
       }
 

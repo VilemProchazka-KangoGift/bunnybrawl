@@ -70,6 +70,33 @@ export function createInitialPlayers(activePlayers: PlayerSlot[], arena: Arena, 
   }));
 }
 
+/**
+ * MatchState shape with all collections empty and timers at 0. Callers
+ * (`createInitialMatchState`, `LobbyGame.buildLobbyMatchState`, test helpers)
+ * spread this and override the fields they actually use, so a new MatchState
+ * field only needs to be added here.
+ */
+export function createEmptyMatchState(): MatchState {
+  return {
+    players: [],
+    killFeed: [],
+    timeElapsed: 0, matchOver: false, winner: null,
+    carrots: [], carrotTimer: 0,
+    springs: [], thorns: [],
+    springSpawnTimer: 0, thornSpawnTimer: 0,
+    screenShake: 0, slowMotion: 0, hitstopZoom: 0,
+    weather: [], dayPhase: 0, countdown: 0,
+    stats: { perPlayer: new Map() },
+    shockwaves: [], screenFlash: 0,
+    wildlife: [],
+    fogParticles: [], pollenParticles: [], shootingStars: [],
+    scoreAnimations: [], ghosts: [],
+    lavaRocks: [], lavaRockTimer: 0,
+    geyserStates: [], pigeonFlocks: [], bouncyWobble: new Map(),
+    gibs: [], confetti: [],
+  };
+}
+
 /** Build the initial MatchState from arena, theme, settings, and players. */
 export function createInitialMatchState(
   arena: Arena,
@@ -134,28 +161,17 @@ export function createInitialMatchState(
     : 9999;
 
   return {
+    ...createEmptyMatchState(),
     players,
-    killFeed: [],
-    timeElapsed: 0, matchOver: false, winner: null,
-    carrots: [],
     carrotTimer: settings.mods.carrotChase ? CARROT_CHASE_FIRST_SPAWN_DELAY : CARROT_FIRST_SPAWN_DELAY,
-    springs: [], thorns: [],
     springSpawnTimer: 5,
     thornSpawnTimer: 8,
-    screenShake: 0, slowMotion: 0, hitstopZoom: 0,
     weather,
-    dayPhase: 0,
     countdown: MATCH_COUNTDOWN,
     stats,
-    shockwaves: [],
-    screenFlash: 0,
     wildlife,
     fogParticles,
     pollenParticles,
-    shootingStars: [],
-    scoreAnimations: [],
-    ghosts: [],
-    lavaRocks: [],
     lavaRockTimer,
     geyserStates: (arena.effectZones || []).filter(z => z.type === 'geyser').map(z => ({
       timer: (z.interval || 10) * gameRandom(),
@@ -166,8 +182,5 @@ export function createInitialMatchState(
       x: p.x, y: p.y, active: true, respawnTimer: 0,
       scatterParticles: [],
     })),
-    bouncyWobble: new Map(),
-    gibs: [],
-    confetti: [],
   };
 }

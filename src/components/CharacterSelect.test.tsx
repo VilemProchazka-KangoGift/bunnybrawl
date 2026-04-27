@@ -5,40 +5,14 @@ import { useGameStore } from '../store/gameStore';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
 import { registerBuiltinCharacters } from '../engine/characters';
 import { registerBuiltinArenas } from '../engine/arenas';
+import { installMockCanvas2D } from '../engine/__tests__/mockCanvas';
 
 // LobbyGame's constructor reads the lobby arena pack from the registry
 // (`getArena('lobby').platforms` for collision). Tests must initialise both
 // registries before rendering — App.tsx does this at module scope in production.
 registerBuiltinCharacters();
 registerBuiltinArenas();
-
-// happy-dom returns null from canvas.getContext('2d'), but the Renderer
-// constructor (now used in lobby mode) needs a real-ish ctx for setTransform.
-// Mirror the mock pattern from gameLoop.test.ts.
-const mockCtx = {
-  fillRect: vi.fn(), clearRect: vi.fn(), beginPath: vi.fn(), arc: vi.fn(),
-  fill: vi.fn(), stroke: vi.fn(), moveTo: vi.fn(), lineTo: vi.fn(),
-  save: vi.fn(), restore: vi.fn(), translate: vi.fn(), rotate: vi.fn(),
-  scale: vi.fn(), drawImage: vi.fn(),
-  createLinearGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
-  createRadialGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
-  measureText: vi.fn(() => ({ width: 50 })),
-  fillText: vi.fn(), strokeText: vi.fn(), closePath: vi.fn(),
-  setTransform: vi.fn(), resetTransform: vi.fn(), clip: vi.fn(),
-  rect: vi.fn(), ellipse: vi.fn(), quadraticCurveTo: vi.fn(), bezierCurveTo: vi.fn(),
-  roundRect: vi.fn(), setLineDash: vi.fn(),
-  canvas: { width: 1280, height: 720 },
-  globalAlpha: 1, globalCompositeOperation: 'source-over',
-  fillStyle: '', strokeStyle: '', lineWidth: 1, lineCap: 'butt',
-  lineJoin: 'miter', font: '', textAlign: 'start', textBaseline: 'alphabetic',
-  shadowColor: '', shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0,
-  filter: 'none',
-};
-const origGetContext = HTMLCanvasElement.prototype.getContext;
-HTMLCanvasElement.prototype.getContext = function (type: string) {
-  if (type === '2d') return mockCtx as unknown as CanvasRenderingContext2D;
-  return origGetContext.call(this, type as any);
-} as typeof HTMLCanvasElement.prototype.getContext;
+installMockCanvas2D();
 
 describe('CharacterSelect (Lobby)', () => {
   beforeEach(() => {
