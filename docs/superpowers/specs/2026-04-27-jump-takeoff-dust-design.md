@@ -70,6 +70,10 @@ Inherits the existing cosmeticStep architecture. Both host and guest run the tri
 - **Snapshot:** full suite green with no snapshot regen needed (cosmeticStep is not in the audio-trace or determinism snapshots).
 - **Manual:** dev-run with `?arena=meadow&bots=2`, confirm puffs appear on jump but not on spring launches.
 
+## Slow-device opt-out
+
+Gated by the existing `getSlowDevice()` flag in `perfFlags.ts` — when slow-device mode is on, `spawnJumpDustParticles` is skipped at the callback wiring in `PlayerTransitionSystem`. Mirrors the existing kill-streak particle gating in `rendering/players.ts`.
+
 ## Followups
 
 After this ships, candidate next features (any order):

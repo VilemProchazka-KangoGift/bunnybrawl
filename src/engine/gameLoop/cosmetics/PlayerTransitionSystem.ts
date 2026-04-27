@@ -8,6 +8,7 @@ import {
   snapshotPlayerCosmeticState,
 } from './playerTransitions';
 import type { PrevPlayerCosmeticState, TransitionCallbacks } from './playerTransitions';
+import { getSlowDevice } from '../../perfFlags';
 
 export class PlayerTransitionSystem implements CosmeticSystem {
   private state: MatchState;
@@ -37,7 +38,7 @@ export class PlayerTransitionSystem implements CosmeticSystem {
       playSound: this.playSound,
       playAnimal: this.playAnimal,
       spawnDustParticles: (p, vy) => this.particleSystem.spawnDustParticles(p, vy),
-      spawnJumpDustParticles: (p) => this.particleSystem.spawnJumpDustParticles(p),
+      spawnJumpDustParticles: (p) => { if (!getSlowDevice()) this.particleSystem.spawnJumpDustParticles(p); },
       spawnKillSplatter: (v) => this.particleSystem.spawnKillSplatter(v, this.settings),
       pickupCarrotVFX: (x, y) => this.particleSystem.pickupCarrotVFX(x, y),
       spawnPlayerSpawnVFX: (x, y) => this.particleSystem.spawnRingVFX(x, y),
