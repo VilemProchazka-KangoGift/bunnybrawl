@@ -29,7 +29,7 @@ export function emitParticle(
 
 export function spawnDustParticles(
   particles: Particle[], freeList: Particle[],
-  player: Player, landVy: number,
+  player: Player, landVy: number, color: string,
 ): void {
   const cx = player.x + player.width / 2;
   const groundY = player.y + player.height;
@@ -37,7 +37,7 @@ export function spawnDustParticles(
   const count = Math.floor(8 + intensity * 6);
   for (let i = 0; i < count; i++) {
     const life = 0.3 + Math.random() * 0.4 * intensity;
-    emitParticle(particles, freeList, cx + (Math.random() - 0.5) * player.width * 1.5, groundY - Math.random() * 4, (Math.random() - 0.5) * 150 * intensity, -Math.random() * 80 * intensity - 20, life, 2 + Math.random() * 4 * intensity, DUST_COLOR);
+    emitParticle(particles, freeList, cx + (Math.random() - 0.5) * player.width * 1.5, groundY - Math.random() * 4, (Math.random() - 0.5) * 150 * intensity, -Math.random() * 80 * intensity - 20, life, 2 + Math.random() * 4 * intensity, color);
   }
 }
 
