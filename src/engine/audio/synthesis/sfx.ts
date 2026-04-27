@@ -48,8 +48,9 @@ export function generateStompSound(): string {
 }
 
 export function generateThornHitSound(): string {
+  // Long, painful: 500ms with descending pain tone 600→130Hz at louder amp.
   const sampleRate = 44100;
-  const duration = 0.3;
+  const duration = 0.5;
   const numSamples = Math.floor(sampleRate * duration);
   const buffer = new Float32Array(numSamples);
 
@@ -57,12 +58,9 @@ export function generateThornHitSound(): string {
     const t = i / sampleRate;
     const progress = i / numSamples;
 
-    // Sharp initial stab (high freq, fast decay)
     const stab = Math.sin(2 * Math.PI * 1200 * t) * Math.max(0, 1 - progress * 8) * 0.35;
-    // Descending pain tone
-    const painFreq = 600 - progress * 400;
-    const pain = Math.sin(2 * Math.PI * painFreq * t) * Math.max(0, 1 - progress * 3) * 0.2;
-    // Crackle noise
+    const painFreq = 600 + (130 - 600) * progress;
+    const pain = Math.sin(2 * Math.PI * painFreq * t) * Math.max(0, 1 - progress * 3) * 0.32;
     const noise = (Math.random() * 2 - 1) * Math.max(0, 1 - progress * 5) * 0.15;
 
     buffer[i] = stab + pain + noise;
@@ -145,31 +143,40 @@ export function generateFootstepWood(): string {
 }
 
 export function generateOofSound(): string {
+  // Comic-book POW: descending square 280→80Hz with exp decay + brief noise tail.
   const sampleRate = 44100;
-  const duration = 0.15;
+  const duration = 0.18;
   const numSamples = Math.floor(sampleRate * duration);
   const buffer = new Float32Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / sampleRate;
     const progress = i / numSamples;
-    const freq = 150 + (100 - 150) * progress;
-    const envelope = Math.max(0, 1 - progress * 2) * 0.3;
-    const tone = Math.sin(2 * Math.PI * freq * t);
-    const noise = (Math.random() * 2 - 1) * Math.max(0, 1 - progress * 5) * 0.2;
-    buffer[i] = (tone + noise) * envelope;
+    const freq = 280 - 200 * progress;
+    const phase = (t * freq) % 1;
+    const sq = phase < 0.5 ? 1 : -1;
+    const env = Math.exp(-progress * 4) * 0.32;
+    const noise = (Math.random() * 2 - 1) * Math.max(0, 1 - progress * 15) * 0.25;
+    buffer[i] = sq * env + noise;
   }
   return floatBufferToWavDataUri(buffer, sampleRate);
 }
 
 export function generateSplashSound(): string {
+  // Watery: initial slap (fast-decay noise) + low-pass body bell-curve at 30% +
+  // droplet noise tail in second half. 320ms total.
   const sampleRate = 44100;
-  const duration = 0.1;
+  const duration = 0.32;
   const numSamples = Math.floor(sampleRate * duration);
   const buffer = new Float32Array(numSamples);
+  let lp = 0;
   for (let i = 0; i < numSamples; i++) {
     const progress = i / numSamples;
-    const envelope = Math.max(0, 1 - progress * 4) * 0.2;
-    buffer[i] = (Math.random() * 2 - 1) * envelope;
+    const slap = (Math.random() * 2 - 1) * Math.max(0, 1 - progress * 25) * 0.45;
+    const noise = Math.random() * 2 - 1;
+    lp += 0.18 * (noise - lp);
+    const body = lp * Math.max(0, 1 - Math.abs(progress - 0.3) * 6) * 0.3;
+    const droplets = (Math.random() * 2 - 1) * Math.max(0, progress - 0.5) * Math.max(0, 1 - progress) * 0.15;
+    buffer[i] = slap + body + droplets;
   }
   return floatBufferToWavDataUri(buffer, sampleRate);
 }
@@ -192,21 +199,20 @@ export function generateLandSound(): string {
 }
 
 export function generateHeadbonkSound(): string {
+  // Lower body (280→130Hz triangle, 200ms) with very soft knock — the original
+  // hard knock made hits feel like bell-strikes; softer reads as "hollow bonk".
   const sampleRate = 44100;
-  const duration = 0.15;
+  const duration = 0.2;
   const numSamples = Math.floor(sampleRate * duration);
   const buffer = new Float32Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / sampleRate;
     const progress = i / numSamples;
-    // Hard knock transient
-    const knock = progress < 0.1 ? Math.sin(2 * Math.PI * 1000 * t) * 0.7 : 0;
-    // Hollow bonk body (descending)
-    const freq = 350 + (180 - 350) * progress;
+    const knock = progress < 0.1 ? Math.sin(2 * Math.PI * 1000 * t) * 0.15 : 0;
+    const freq = 280 + (130 - 280) * progress;
     const envelope = Math.max(0, 1 - progress * 1.8) * 0.6;
     const phase = (t * freq) % 1;
     const tri = 4 * Math.abs(phase - 0.5) - 1;
-    // Noise for impact texture
     const noise = (Math.random() * 2 - 1) * Math.max(0, 1 - progress * 6) * 0.25;
     buffer[i] = (tri * envelope) + knock + noise;
   }
@@ -222,26 +228,28 @@ export function generateBumpSound(): string {
     const t = i / sampleRate;
     const progress = i / numSamples;
     const envelope = Math.max(0, 1 - progress * 3) * 0.4;
-    const noise = (Math.random() * 2 - 1) * 0.4;
-    const tone = Math.sin(2 * Math.PI * 160 * t) * 0.3;
+    const noise = (Math.random() * 2 - 1) * 0.25;
+    const tone = Math.sin(2 * Math.PI * 160 * t) * 0.2;
     buffer[i] = (noise + tone) * envelope;
   }
   return floatBufferToWavDataUri(buffer, sampleRate);
 }
 
 export function generateSpringSound(): string {
+  // Triangle sweep 240→860Hz over 140ms — chiptune "phaseJump" character,
+  // brighter and more cartoony than a wobbling sine.
   const sampleRate = 44100;
-  const duration = 0.2;
+  const duration = 0.14;
   const numSamples = Math.floor(sampleRate * duration);
   const buffer = new Float32Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / sampleRate;
     const progress = i / numSamples;
-    const envelope = Math.max(0, 1 - progress * 1.5) * 0.5;
-    // Wobbling frequency for "boing" effect
-    const wobble = Math.sin(2 * Math.PI * 25 * t) * 200;
-    const freq = 400 + wobble;
-    buffer[i] = Math.sin(2 * Math.PI * freq * t) * envelope;
+    const freq = 240 + 620 * progress;
+    const phase = (t * freq) % 1;
+    const tri = 4 * Math.abs(phase - 0.5) - 1;
+    const env = Math.min(1, progress * 25) * Math.max(0, 1 - progress) ** 0.85 * 0.42;
+    buffer[i] = tri * env;
   }
   return floatBufferToWavDataUri(buffer, sampleRate);
 }
