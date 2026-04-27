@@ -48,7 +48,7 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
   }
 
   spawnDustParticles(player: Player, landVy: number): void {
-    _spawnDustParticles(this._particles, this.particleFreeList, player, landVy);
+    _spawnDustParticles(this._particles, this.particleFreeList, player, landVy, this.theme.ground.surfaceColor);
   }
 
   spawnJumpDustParticles(player: Player): void {
