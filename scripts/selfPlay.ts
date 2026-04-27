@@ -36,7 +36,12 @@ import { getArena } from '../src/engine/arenas';
 import { SeededRNG } from '../src/engine/net/prng';
 import { HeadlessRunner } from '../src/engine/headless/HeadlessRunner';
 import { NDJSONFileRecorder } from '../src/engine/headless/recording';
-import { DEFAULT_REWARD_WEIGHTS, RewardShaper } from '../src/engine/headless/reward';
+import {
+  DEFAULT_REWARD_WEIGHTS,
+  REWARD_WEIGHT_KEYS,
+  RewardShaper,
+  weightsToTagRecord,
+} from '../src/engine/headless/reward';
 import type { RewardWeights } from '../src/engine/headless/reward';
 import { RandomInput } from '../src/engine/input/RandomInput';
 import { RuleBasedBot } from '../src/engine/input/RuleBasedBot';
@@ -50,23 +55,30 @@ interface CliArgs {
   out: string;
   seed: number;
   ticks: number;
-  /** Resolved reward weights for this run (defaults merged with file + CLI overrides). */
+  /** Resolved reward weights (defaults merged with file + CLI overrides). */
   rewardWeights: Required<RewardWeights>;
 }
 
-const REWARD_WEIGHT_KEYS = Object.keys(DEFAULT_REWARD_WEIGHTS) as Array<keyof RewardWeights>;
+const REWARD_FLAG_PREFIX = '--reward.';
 
 function loadRewardsFile(path: string): Partial<RewardWeights> {
   const raw = readFileSync(resolve(process.cwd(), path), 'utf8');
   const parsed = JSON.parse(raw) as Record<string, unknown>;
+  for (const k of Object.keys(parsed)) {
+    if (!REWARD_WEIGHT_KEYS.includes(k as keyof RewardWeights)) {
+      throw new Error(
+        `--rewards-file: unknown key '${k}'. Valid keys: ${REWARD_WEIGHT_KEYS.join(', ')}`,
+      );
+    }
+  }
   const out: Partial<RewardWeights> = {};
   for (const k of REWARD_WEIGHT_KEYS) {
     const v = parsed[k];
-    if (typeof v === 'number' && Number.isFinite(v)) {
-      out[k] = v;
-    } else if (v !== undefined) {
+    if (v === undefined) continue;
+    if (typeof v !== 'number' || !Number.isFinite(v)) {
       throw new Error(`--rewards-file: '${k}' must be a finite number, got ${JSON.stringify(v)}`);
     }
+    out[k] = v;
   }
   return out;
 }
@@ -81,15 +93,10 @@ function parseArgs(argv: string[]): CliArgs {
     rewardWeights: { ...DEFAULT_REWARD_WEIGHTS },
   };
 
-  // First pass: file-loaded weights (lower precedence than CLI flags).
-  for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === '--rewards-file') {
-      const fileWeights = loadRewardsFile(argv[++i]);
-      Object.assign(args.rewardWeights, fileWeights);
-    }
-  }
+  // File loaded first so individual --reward.<key> flags below override it.
+  const fileIdx = argv.indexOf('--rewards-file');
+  if (fileIdx >= 0) Object.assign(args.rewardWeights, loadRewardsFile(argv[fileIdx + 1]));
 
-  // Second pass: everything else, including --reward.<key> overrides.
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--episodes') args.episodes = Number(argv[++i]);
@@ -97,9 +104,9 @@ function parseArgs(argv: string[]): CliArgs {
     else if (a === '--out') args.out = argv[++i];
     else if (a === '--seed') args.seed = Number(argv[++i]);
     else if (a === '--ticks') args.ticks = Number(argv[++i]);
-    else if (a === '--rewards-file') i++; // already handled
-    else if (a.startsWith('--reward.')) {
-      const key = a.slice('--reward.'.length) as keyof RewardWeights;
+    else if (a === '--rewards-file') i++;
+    else if (a.startsWith(REWARD_FLAG_PREFIX)) {
+      const key = a.slice(REWARD_FLAG_PREFIX.length) as keyof RewardWeights;
       if (!REWARD_WEIGHT_KEYS.includes(key)) {
         throw new Error(`Unknown reward weight: '${key}'. Valid keys: ${REWARD_WEIGHT_KEYS.join(', ')}`);
       }
@@ -124,12 +131,6 @@ const BASE_MODS = {
   underwaterGravity: false,
 };
 
-function flattenWeightsAsTags(w: Required<RewardWeights>): Record<string, number> {
-  const out: Record<string, number> = {};
-  for (const k of REWARD_WEIGHT_KEYS) out[`reward.${k}`] = w[k] as number;
-  return out;
-}
-
 function makeSettings(arenaId: string): MatchSettings {
   return {
     killLimit: 16,
@@ -146,6 +147,7 @@ function makeSettings(arenaId: string): MatchSettings {
 async function runEpisode(
   episodeIndex: number,
   args: CliArgs,
+  weightTags: Readonly<Record<string, number>>,
   recorder: NDJSONFileRecorder,
 ): Promise<{ winner: PlayerSlot | null; ticks: number; reason: 'match_over' | 'max_ticks' }> {
   const players: PlayerSlot[] = ['P1', 'P2', 'B1', 'B2'];
@@ -169,15 +171,7 @@ async function runEpisode(
       recorder,
       slots: players,
       rewardShapers: shapers,
-      // Header tags become part of every episode's first NDJSON line. Stamping
-      // the resolved weights here makes each output file self-describing — a
-      // training run can recover the exact shaping used to produce its data.
-      tags: {
-        episode: episodeIndex,
-        seed,
-        source: 'selfPlay.ts',
-        ...flattenWeightsAsTags(args.rewardWeights),
-      },
+      tags: { episode: episodeIndex, seed, source: 'selfPlay.ts', ...weightTags },
     },
   };
 
@@ -219,11 +213,12 @@ async function main(): Promise<void> {
   }
 
   const recorder = new NDJSONFileRecorder(outPath);
+  const weightTags = weightsToTagRecord(args.rewardWeights);
   const startMs = Date.now();
   const summaries: Array<{ episode: number; winner: PlayerSlot | null; ticks: number; reason: string }> = [];
 
   for (let i = 0; i < args.episodes; i++) {
-    const summary = await runEpisode(i, args, recorder);
+    const summary = await runEpisode(i, args, weightTags, recorder);
     summaries.push({ episode: i, ...summary });
     console.log(
       `  episode ${i + 1}/${args.episodes}: winner=${summary.winner ?? 'null'} ticks=${summary.ticks} reason=${summary.reason}`,

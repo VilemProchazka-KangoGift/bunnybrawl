@@ -153,10 +153,10 @@ export function extractObservation(
   out[OBS_SELF_OFFSET + 10] = self.state === 'splat' ? 1 : 0;
   out[OBS_SELF_OFFSET + 11] = self.state === 'respawning' ? 1 : 0;
 
-  // Opponents — sorted by slot id, excluding self
+  // Opponents — sorted by slot id, excluding self. .filter() already returns
+  // a fresh array; in-place sort doesn't leak into state.players.
   const opponents = state.players
     .filter(p => p.id !== slot)
-    .slice()
     .sort((a, b) => a.id.localeCompare(b.id));
   for (let i = 0; i < MAX_OPPONENTS && i < opponents.length; i++) {
     const op = opponents[i];

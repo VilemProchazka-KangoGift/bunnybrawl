@@ -51,12 +51,7 @@ export interface RewardWeights {
   fallOffPenalty?: number;
 }
 
-/**
- * Default reward weights. Exported so callers (CLI scripts, training driver
- * code) can read the canonical defaults without hardcoding numbers, and so
- * tests can assert against them. Treat as immutable — `Object.freeze`d.
- */
-export const DEFAULT_REWARD_WEIGHTS: Readonly<Required<RewardWeights>> = Object.freeze({
+export const DEFAULT_REWARD_WEIGHTS: Readonly<Required<RewardWeights>> = {
   killBonus: 1.0,
   deathPenalty: -1.0,
   carrotBonus: 0.5,
@@ -67,7 +62,26 @@ export const DEFAULT_REWARD_WEIGHTS: Readonly<Required<RewardWeights>> = Object.
   hazardHitPenalty: -0.3,
   burnTickPenalty: -0.005,
   fallOffPenalty: -0.5,
-});
+};
+
+/** Ordered list of weight keys, derived once from defaults. */
+export const REWARD_WEIGHT_KEYS = Object.keys(DEFAULT_REWARD_WEIGHTS) as ReadonlyArray<
+  keyof Required<RewardWeights>
+>;
+
+/**
+ * Convert a resolved weights object into a flat `prefix.<key>: value` record,
+ * suitable for embedding in NDJSON `MatchHeader.tags` so consumed datasets
+ * carry the shaping that produced them.
+ */
+export function weightsToTagRecord(
+  weights: Required<RewardWeights>,
+  prefix = 'reward',
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const k of REWARD_WEIGHT_KEYS) out[`${prefix}.${k}`] = weights[k];
+  return out;
+}
 
 /**
  * Compute a scalar reward per tick for one slot. Stateful — call `observe`
