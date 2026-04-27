@@ -4,6 +4,7 @@ import { swapRemove } from '../../themes/utils';
 
 export const CONFETTI_COLORS = ['#FFD700', '#FF69B4', '#00FFFF', '#7CFC00', '#FF6347', '#DA70D6', '#FFA500'];
 const CONFETTI_SHAPES: Array<'star' | 'diamond' | 'circle' | 'ribbon'> = ['star', 'diamond', 'circle', 'ribbon'];
+const DUST_COLOR = '#C8B896';
 
 /** Soft cap on simultaneous live particles. Bulk emitters (gore splatter,
  *  fireworks) can produce hundreds per call and matchOver fireworks accrete
@@ -36,7 +37,7 @@ export function spawnDustParticles(
   const count = Math.floor(8 + intensity * 6);
   for (let i = 0; i < count; i++) {
     const life = 0.3 + Math.random() * 0.4 * intensity;
-    emitParticle(particles, freeList, cx + (Math.random() - 0.5) * player.width * 1.5, groundY - Math.random() * 4, (Math.random() - 0.5) * 150 * intensity, -Math.random() * 80 * intensity - 20, life, 2 + Math.random() * 4 * intensity, '#C8B896');
+    emitParticle(particles, freeList, cx + (Math.random() - 0.5) * player.width * 1.5, groundY - Math.random() * 4, (Math.random() - 0.5) * 150 * intensity, -Math.random() * 80 * intensity - 20, life, 2 + Math.random() * 4 * intensity, DUST_COLOR);
   }
 }
 
@@ -52,9 +53,9 @@ export function spawnJumpDustParticles(
     const sy = groundY - Math.random() * 2;
     const vx = (Math.random() - 0.5) * 160;
     const vy = -Math.random() * 70 - 30;
-    const life = 0.35 * (0.7 + Math.random() * 0.3);
+    const life = 0.245 + Math.random() * 0.105;
     const size = 1.5 + Math.random() * 1.5;
-    emitParticle(particles, freeList, sx, sy, vx, vy, life, size, '#C8B896');
+    emitParticle(particles, freeList, sx, sy, vx, vy, life, size, DUST_COLOR);
   }
 }
 
