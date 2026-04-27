@@ -2,7 +2,6 @@ import type { Player, PlayerSlot } from '../../types';
 import {
   ANIM_FRAME_DURATION, RUN_FRAMES, IDLE_ANIM_INTERVAL,
   AFTERIMAGE_INTERVAL, AFTERIMAGE_SPEED_THRESHOLD, AFTERIMAGE_MAX,
-  SQUASH_DECAY_SPEED,
 } from '../../constants';
 import { audio } from '../../audio';
 import { swapRemove } from '../../themes/utils';
@@ -99,11 +98,10 @@ export function updatePlayerCosmetics(
     player.expression = 'scared';
   }
 
-  // Side squash decay (wall/push squash recovers to 1.0)
-  if (player.sideSquash !== 1) {
-    player.sideSquash = f(player.sideSquash + f(f(1.0 - player.sideSquash) * f(SQUASH_DECAY_SPEED * dt)));
-    if (Math.abs(player.sideSquash - 1) < 0.02) player.sideSquash = 1;
-  }
+  // sideSquash decay moved to GameLoop.fixedUpdate (before collidePlatforms)
+  // so end-of-tick state is the physics-authored value when wall-pressing,
+  // not the post-decay value (which the half-rate cosmetic step left
+  // alternating with the freshly-set 0.75 — visible as a 30Hz flicker).
 
   // Fat wobble
   if (player.fatTimer > 0) {

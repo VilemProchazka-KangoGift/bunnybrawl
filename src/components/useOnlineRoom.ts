@@ -16,13 +16,13 @@ import {
   CHARACTERS, BOT_CHARACTERS, getAllCharacters, assignBotCharacters,
 } from '../engine/characters';
 import { ALL_BOT_SLOTS, isBotSlot } from '../engine/types';
-import { listArenaPacks } from '../engine/arenas';
+import { listPlayableArenaPacks } from '../engine/arenas';
 import type { BotSlot, CharacterSlot, PlayerSlot } from '../engine/types';
 
 /** Resolve 'random' arenaId to a concrete ID so both peers use the same arena. */
 function resolveRandomArena(arenaId: string): string {
   if (arenaId !== 'random') return arenaId;
-  const all = listArenaPacks();
+  const all = listPlayableArenaPacks();
   return all[Math.floor(Math.random() * all.length)]?.id ?? 'meadow';
 }
 

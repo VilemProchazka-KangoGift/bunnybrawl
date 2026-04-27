@@ -1,6 +1,6 @@
 # Component Caveats
 
-- `CharacterSelect.tsx` delegates lobby simulation to `LobbyGame` (`src/engine/lobbyGame.ts`), which uses the engine's `Player` type, `applyInput`/`collidePlatforms` against a 2-platform synthetic `LOBBY_ARENA` (ground + wall), `isStomping()` for stomp detection, and `drawPlayer` for rendering. Swap-on-stomp, walk-to-zone bot AI, and bespoke lobby art remain lobby-specific. Squash decay is inline (no fround — lobby is not network-replicated).
+- `CharacterSelect.tsx` delegates lobby simulation to `LobbyGame` (`src/engine/lobbyGame.ts`), which uses the engine's `Player` type, `applyInput`/`collidePlatforms` against the registry-backed `lobby` arena pack (ground + wall), and `isStomping()` for stomp detection. World rendering goes through the standard `Renderer` in `lobbyMode`; HUD overlays come from `drawLobbyOverlay` via `setLobbyOverlayFn`. Swap-on-stomp, walk-to-zone bot AI, and the bespoke iso lobby art (in the lobby arena pack) remain lobby-specific. Squash decay is inline (no fround — lobby is not network-replicated). The lobby pack sets `playable: false` so it doesn't appear in arena selectors.
 - Canvas text in CharacterSelect needs i18n: `i18n.t('char_Name', name)`, not raw `char.name`.
 - Screen containers must use `width/height: 100%` — they inherit from `GameScaler`'s 1280x720 div. Never set fixed pixel dimensions.
 - Buttons use `.btn-base` from `shared.css` (hover scale 1.06, active 0.97). New buttons should include `btn-base`.
@@ -14,7 +14,7 @@
 - Lobby join zones are labeled "START", not "Join".
 - Online lobby char-select onChange uses shared `handleOnlineCharChange` callback — don't duplicate the handler inline.
 - In transport callbacks (`onPeerConnected`, `onReliableMessage`, etc.) snapshot `useGameStore.getState()` once and reuse. Multiple reads + interleaved `setOnline` calls cause redundant React re-renders.
-- Mobile lobby: only P1 spawned (not P2-P5). `drawLobby` must iterate `players.length`, NOT the `SLOTS` array — accessing `players[i]` beyond array bounds crashes the canvas loop.
+- Mobile lobby: only P1 spawned (not P2-P5). `drawLobbyOverlay` must iterate `state.players.length`, NOT the `SLOTS` array — accessing `players[i]` beyond array bounds crashes the canvas loop.
 - Translucent corner icon buttons (fullscreen, music toggle) use `.overlay-icon-btn` from `shared.css`. Component-specific classes (`.fullscreen-btn`, `.music-toggle-btn`) only set `z-index`. Don't duplicate the base styles.
 - Mobile overlay buttons (`.mobile-overlay-btn` in shared.css) are distinct from `.btn-base` — 44x44 translucent touch targets, no hover effects.
 - TouchOverlay uses direct DOM refs (not React state) for joystick position — touch events fire at 60-120Hz, too fast for React reconciliation.

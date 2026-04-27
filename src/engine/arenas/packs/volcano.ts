@@ -4,10 +4,10 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { getFloatingPlatforms } from '../../themes/utils';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
 import {
-  CAP_DEPTH, mulberry32, seedFor,
+  CAP_DEPTH, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
   capFrontY, capBackY, skewPx,
   drawPlatformRightFace, drawPlatformCap,
-  jaggedDown, backWavyUp, drawLeftStones,
+  jaggedDown, backWavyUp, drawLeftStones, leftJagged,
 } from '../../themes/drawPrimitives';
 
 // Near-black volcanic stone palette for left protrusions.
@@ -18,24 +18,61 @@ const VOLCANO_STONE_PALETTE = [
   { base: '#221a1a', dark: '#0c0606', light: '#3e3030' },
 ];
 
-function drawVolcanoPlatform(ctx: CanvasRenderingContext2D, platform: Platform): void {
+function drawVolcanoPlatformBg(ctx: CanvasRenderingContext2D, platform: Platform): void {
   const rng = mulberry32(seedFor(platform.x, platform.y));
   const cF = capFrontY(platform);
   const cB = capBackY(platform);
-  const bodyTop = cF;
-  const bodyH = platform.height - CAP_DEPTH / 2;
   const sp = skewPx();
 
   // Right face — very dark rock shadow.
   drawPlatformRightFace(ctx, platform, '#0a0606');
 
-  // Left-side decoration: column of dark volcanic stones.
+  // Left-side decoration: column of dark volcanic stones (left of body).
   drawLeftStones(ctx, platform, VOLCANO_STONE_PALETTE, rng, {
     count: 3,
     rxMin: 2.8,
     rxMax: 5,
     elongateChance: 0.35,
   });
+
+  // Edge profiles — sharp jagged peaks on front, small back wave.
+  const frontPts = jaggedDown(platform.x, platform.width, cF, rng, {
+    bumps: 4,
+    ampMin: 3,
+    ampMax: 5,
+  });
+  const backPts = backWavyUp(platform.x, platform.width, cB, sp, rng, {
+    bumps: 3,
+    ampMin: 2,
+    ampMax: 3,
+  });
+  const leftPts = leftJagged(cB, cF, platform.x, rng, { bumps: 2, ampMin: 2, ampMax: 3.5 });
+
+  // Cap — near-black with ember flecks scattered across.
+  drawPlatformCap(ctx, platform, frontPts, backPts, {
+    capColor: '#1a1410',
+    capLight: 'rgba(255,180,100,0.15)',
+    drawCapTexture: (ctx2, capFront, _capBack, skew) => {
+      const flecks = Math.max(4, Math.floor(platform.width / 6));
+      for (let i = 0; i < flecks; i++) {
+        const u = (i + 0.3 + rng() * 0.4) / flecks;
+        const v = 0.15 + rng() * 0.7;
+        const fx = platform.x + u * platform.width + v * skew;
+        const fy = capFront - v * CAP_DEPTH;
+        ctx2.fillStyle = 'rgba(255,100,20,0.7)';
+        ctx2.beginPath();
+        ctx2.arc(fx, fy, 0.7, 0, Math.PI * 2);
+        ctx2.fill();
+      }
+    },
+  }, leftPts);
+}
+
+function drawVolcanoPlatformFg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+  const rng = mulberry32(seedFor(platform.x, platform.y) ^ BODY_SEED_OFFSET);
+  const cF = capFrontY(platform);
+  const bodyTop = cF;
+  const bodyH = platform.height - CAP_DEPTH / 2;
 
   // Body front — charred black rock gradient.
   const g = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
@@ -55,7 +92,7 @@ function drawVolcanoPlatform(ctx: CanvasRenderingContext2D, platform: Platform):
   ctx.closePath();
   ctx.clip();
 
-  // Hot pools — 2-3 radial gradients glowing red/orange across the body.
+  // Hot pools
   const poolCount = 2 + (rng() < 0.5 ? 1 : 0);
   for (let i = 0; i < poolCount; i++) {
     const px = platform.x + (0.15 + (i + rng() * 0.5) / poolCount * 0.7) * platform.width;
@@ -69,7 +106,7 @@ function drawVolcanoPlatform(ctx: CanvasRenderingContext2D, platform: Platform):
     ctx.fillRect(px - pr, py - pr, pr * 2, pr * 2);
   }
 
-  // Branching glowing cracks — 1-2 seed anchors, 2-3 segments each.
+  // Branching glowing cracks
   const crackAnchors = 1 + (rng() < 0.6 ? 1 : 0);
   for (let a = 0; a < crackAnchors; a++) {
     const ax = platform.x + (0.2 + rng() * 0.6) * platform.width;
@@ -86,14 +123,12 @@ function drawVolcanoPlatform(ctx: CanvasRenderingContext2D, platform: Platform):
       cy += Math.sin(dir) * len * 0.6;
       points.push({ x: cx, y: cy });
     }
-    // Outer orange-red stroke
     ctx.strokeStyle = 'rgba(255,90,26,0.8)';
     ctx.lineWidth = 1.4;
     ctx.beginPath();
     ctx.moveTo(points[0].x, points[0].y);
     for (let p = 1; p < points.length; p++) ctx.lineTo(points[p].x, points[p].y);
     ctx.stroke();
-    // Inner pale glow stroke
     ctx.strokeStyle = 'rgba(255,228,170,0.7)';
     ctx.lineWidth = 0.5;
     ctx.beginPath();
@@ -101,7 +136,6 @@ function drawVolcanoPlatform(ctx: CanvasRenderingContext2D, platform: Platform):
     for (let p = 1; p < points.length; p++) ctx.lineTo(points[p].x, points[p].y);
     ctx.stroke();
 
-    // Optional branch off mid-point
     if (segments >= 2 && rng() < 0.6) {
       const mid = points[1];
       const branchLen = 3 + rng() * 5;
@@ -123,41 +157,10 @@ function drawVolcanoPlatform(ctx: CanvasRenderingContext2D, platform: Platform):
     }
   }
 
-  // Bottom bevel — deep shadow at the base of the rock.
+  // Bottom bevel
   ctx.fillStyle = 'rgba(0,0,0,0.45)';
   ctx.fillRect(platform.x, bodyTop + bodyH - 4, platform.width, 4);
   ctx.restore();
-
-  // Edge profiles — sharp jagged peaks on front, small back wave.
-  const frontPts = jaggedDown(platform.x, platform.width, cF, rng, {
-    bumps: 4,
-    ampMin: 3,
-    ampMax: 5,
-  });
-  const backPts = backWavyUp(platform.x, platform.width, cB, sp, rng, {
-    bumps: 3,
-    ampMin: 2,
-    ampMax: 3,
-  });
-
-  // Cap — near-black with ember flecks scattered across.
-  drawPlatformCap(ctx, platform, frontPts, backPts, {
-    capColor: '#1a1410',
-    capLight: 'rgba(255,180,100,0.15)',
-    drawCapTexture: (ctx2, capFront, _capBack, skew) => {
-      const flecks = Math.max(4, Math.floor(platform.width / 6));
-      for (let i = 0; i < flecks; i++) {
-        const u = (i + 0.3 + rng() * 0.4) / flecks;
-        const v = 0.15 + rng() * 0.7;
-        const fx = platform.x + u * platform.width + v * skew;
-        const fy = capFront - v * CAP_DEPTH;
-        ctx2.fillStyle = 'rgba(255,100,20,0.7)';
-        ctx2.beginPath();
-        ctx2.arc(fx, fy, 0.7, 0, Math.PI * 2);
-        ctx2.fill();
-      }
-    },
-  });
 }
 
 export const volcano: ArenaPack = {
@@ -174,7 +177,7 @@ export const volcano: ArenaPack = {
   // ---- Layout ----
   width: CANVAS_WIDTH,
   height: CANVAS_HEIGHT,
-  platforms: [
+  platforms: applyIsoInsets([
     { x: 0, y: 660, width: 260, height: 60 },
     { x: 420, y: 660, width: 400, height: 60 },
     { x: 980, y: 660, width: 300, height: 60 },
@@ -201,7 +204,7 @@ export const volcano: ArenaPack = {
     { x: 530, y: 300, width: 220, height: 24 },
     { x: 530, y: 390, width: 80, height: 24 },
     { x: 680, y: 385, width: 80, height: 24 },
-  ],
+  ]),
   spawnPoints: [
     { x: 130, y: 560 }, { x: 1110, y: 560 },
     { x: 320, y: 460 }, { x: 1060, y: 460 },
@@ -546,7 +549,11 @@ export const volcano: ArenaPack = {
   },
 
   drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
-    drawVolcanoPlatform(ctx, platform);
+    drawVolcanoPlatformBg(ctx, platform);
+  },
+
+  drawPlatformOverlay: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
+    drawVolcanoPlatformFg(ctx, platform);
   },
 
   drawWeatherParticle: (ctx: CanvasRenderingContext2D, w: WeatherParticle) => {

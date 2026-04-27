@@ -8,18 +8,24 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
 import { isTouchPrimary } from '../engine/touchDetect';
 import { TouchInputManager } from '../engine/touchInput';
 import { LobbyGame, READY_ZONE_X } from '../engine/lobbyGame';
+import { drawLobbyOverlay } from '../engine/lobbyRender';
+import { Renderer } from '../engine/renderer';
+import { getTheme } from '../engine/arenas';
 import { useCanvasRenderScale } from '../hooks/useCanvasRenderScale';
 import './CharacterSelect.css';
 
 export function CharacterSelect() {
   const { setScreen, setActivePlayers, setMatchSettings, matchSettings } = useGameStore();
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const bgCanvasRef = useRef<HTMLCanvasElement>(null);
+  const fgCanvasRef = useRef<HTMLCanvasElement>(null);
+  const hudCanvasRef = useRef<HTMLCanvasElement>(null);
   const keysRef = useRef<Set<string>>(new Set());
   const rafRef = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
   const startedRef = useRef<boolean>(false);
   const lobbyTouchRef = useRef<TouchInputManager | null>(null);
   const lobbyGameRef = useRef<LobbyGame | null>(null);
+  const rendererRef = useRef<Renderer | null>(null);
   const isMobile = useMemo(() => isTouchPrimary(), []);
 
   // Initialise LobbyGame once
@@ -111,7 +117,7 @@ export function CharacterSelect() {
   }, [setScreen, startMatch]);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
+    const canvas = fgCanvasRef.current;
     if (!canvas) return;
 
     // Separate click + touchstart (rather than one pointerdown) so that on mobile
@@ -147,43 +153,91 @@ export function CharacterSelect() {
     };
   }, [startMatch]);
 
-  useCanvasRenderScale(canvasRef);
+  useCanvasRenderScale(bgCanvasRef);
+  useCanvasRenderScale(fgCanvasRef);
+  useCanvasRenderScale(hudCanvasRef);
 
-  // Main RAF loop — delegates to LobbyGame
+  // Main RAF loop — lobby physics + standard Renderer (lobbyMode)
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d')!;
+    const bg = bgCanvasRef.current;
+    const fg = fgCanvasRef.current;
+    const hud = hudCanvasRef.current;
+    if (!bg || !fg || !hud) return;
+
+    const theme = getTheme('lobby');
+    const renderer = new Renderer(bg, fg, theme, false, hud, { lobbyMode: true });
+    rendererRef.current = renderer;
+
+    // Static world (sky, hills, far background, platform iso skin) baked once.
+    const game = lobbyGameRef.current;
+    if (game) {
+      renderer.renderBackground(game.getArena());
+    }
+
+    // Wire the lobby HUD overlay through the renderer's lobby-mode hook so it
+    // paints on the dedicated hud canvas above the player layer each frame.
+    renderer.setLobbyOverlayFn((ctx, frameTime) => {
+      const g = lobbyGameRef.current;
+      if (!g) return;
+      const counts = g.getReadyZoneCounts();
+      drawLobbyOverlay(ctx, {
+        players: g.players,
+        bots: g.bots,
+        extras: g.extraChars,
+        countdown: g.countdown,
+        countdownActive: g.countdownStarted,
+        isMobile,
+        inZoneCount: counts.inZone,
+        humanInZoneCount: counts.humans,
+        botInZoneCount: counts.bots,
+      }, frameTime);
+    });
 
     const loop = (time: number) => {
       const dt = lastTimeRef.current ? Math.min((time - lastTimeRef.current) / 1000, 0.05) : 1 / 60;
       lastTimeRef.current = time;
 
-      const game = lobbyGameRef.current;
-      if (game) {
+      const g = lobbyGameRef.current;
+      if (g) {
         const touchInput = lobbyTouchRef.current?.getInput();
-        game.update(dt, keysRef.current, touchInput);
-        game.render(ctx, dt);
-
-        if (game.isCountdownComplete()) startMatch();
+        g.update(dt, keysRef.current, touchInput);
+        renderer.renderFrame(g.getMatchState(), g.getArena(), []);
+        if (g.isCountdownComplete()) startMatch();
       }
 
       rafRef.current = requestAnimationFrame(loop);
     };
 
     rafRef.current = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(rafRef.current);
-  }, [startMatch]);
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      rendererRef.current = null;
+    };
+  }, [isMobile, startMatch]);
 
   return (
     <div className="char-select" data-testid="char-select">
-      <canvas
-        ref={canvasRef}
-        width={CANVAS_WIDTH}
-        height={CANVAS_HEIGHT}
-        className="lobby-canvas"
-        data-testid="lobby-canvas"
-      />
+      <div className="lobby-canvas-container">
+        <canvas
+          ref={bgCanvasRef}
+          width={CANVAS_WIDTH}
+          height={CANVAS_HEIGHT}
+          className="lobby-canvas lobby-bg-canvas"
+        />
+        <canvas
+          ref={fgCanvasRef}
+          width={CANVAS_WIDTH}
+          height={CANVAS_HEIGHT}
+          className="lobby-canvas lobby-fg-canvas"
+          data-testid="lobby-canvas"
+        />
+        <canvas
+          ref={hudCanvasRef}
+          width={CANVAS_WIDTH}
+          height={CANVAS_HEIGHT}
+          className="lobby-canvas lobby-hud-canvas"
+        />
+      </div>
       {isMobile && (
         <button
           className="mobile-overlay-btn lobby-back-btn"

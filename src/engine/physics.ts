@@ -121,6 +121,11 @@ export function collidePlatforms(player: Player, platforms: Platform[]): void {
   if (player.state === 'splat' || player.state === 'respawning') return;
 
   for (const plat of platforms) {
+    // AABB uses the FULL rect so the top "shelf" stays solid even when the
+    // collision insets (leftCollisionInset, bottomCollisionInset) are set.
+    // Otherwise a player standing on top of an iso platform near the left
+    // edge would fall through the inset gap, re-enter AABB next frame, and
+    // snap back up — visible as twitching.
     if (aabbOverlap(
       player.x, player.y, player.width, player.height,
       plat.x, plat.y, plat.width, plat.height
@@ -145,8 +150,20 @@ export function collidePlatforms(player: Player, platforms: Platform[]): void {
       const sideOverlap = overlapLeft < overlapRight ? overlapLeft : overlapRight;
       const landingFromAbove = feetNearTop && sideOverlap > overlapTop;
 
+      // Phantom-strip gates: skip lateral / head-bump response while the
+      // player is inside the visual cap overhang, so a player can pass "behind"
+      // the iso skew (jump from below, walk into from the left). Computed once
+      // here; pastBumpTop also gates the top eject in the fallback to prevent
+      // teleporting onto the platform when rising through the bottom strip.
+      const li = plat.leftCollisionInset ?? 0;
+      const bonkLeftX = f(plat.x + li);
+      const pastBonkWall = f(player.x + player.width) > bonkLeftX;
+      const bi = plat.bottomCollisionInset ?? 0;
+      const bonkTopY = f(plat.y + plat.height - bi);
+      const pastBumpTop = player.y < bonkTopY;
+
       if ((minDir === 2 || landingFromAbove) && player.vy >= 0 && overlapTop < overlapBottom) {
-        // Landing on top
+        // Landing on top — cap is the shelf, full rect, no gate.
         player.y = plat.y - player.height;
         player.vy = 0;
         if (player.state === 'airborne') {
@@ -154,23 +171,31 @@ export function collidePlatforms(player: Player, platforms: Platform[]): void {
         }
         player.fastFalling = false;
       } else if (minDir === 3 && player.vy < 0) {
-        // Hitting bottom (head bump)
-        player.y = plat.y + plat.height;
-        player.vy = 0;
+        if (pastBonkWall && pastBumpTop) {
+          player.y = bonkTopY;
+          player.vy = 0;
+        }
       } else if (minDir === 0) {
-        player.x = plat.x - player.width;
-        if (player.vx > 0) { player.sideSquash = 0.75; player.vx = 0; }
+        // Side bonk left — clamped to the inset wall, not raw plat.x.
+        if (pastBonkWall) {
+          player.x = bonkLeftX - player.width;
+          if (player.vx > 0) { player.sideSquash = 0.75; player.vx = 0; }
+        }
       } else if (minDir === 1) {
         player.x = plat.x + plat.width;
         if (player.vx < 0) { player.sideSquash = 0.75; player.vx = 0; }
       } else {
-        // Fallback: eject via smallest overlap
-        if (overlapTop <= overlapBottom) {
-          player.y = plat.y - player.height;
-          player.vy = 0;
-        } else {
-          player.y = plat.y + plat.height;
-          player.vy = 0;
+        // Fallback for tied/sign-conflicting cases: minDir===2 with overlapTop===overlapBottom
+        // (top branch's strict-less-than fails) and minDir===3 with vy>=0 (head bump's vy<0 fails).
+        // Skip while rising — minDir flips to 2 on descent and the top branch handles it.
+        if (pastBonkWall && pastBumpTop && player.vy >= 0) {
+          if (overlapTop <= overlapBottom) {
+            player.y = plat.y - player.height;
+            player.vy = 0;
+          } else {
+            player.y = bonkTopY;
+            player.vy = 0;
+          }
         }
       }
     }
@@ -306,8 +331,18 @@ export function resolveStuckPlayer(player: Player, platforms: Platform[]): void 
     if (overlapLeft < minVal) { minVal = overlapLeft; minDir = 2; }
     if (overlapRight < minVal) { minVal = overlapRight; minDir = 3; }
 
-    // Only intervene if deeply embedded (normal collision handles shallow overlap)
+    // Phantom-strip allowances (wider than the universal 5px shallow guard).
+    // collidePlatforms lets players legitimately embed up to the inset there;
+    // ejecting every frame would undo the pass-through.
+    const bi = plat.bottomCollisionInset ?? 0;
+    const li = plat.leftCollisionInset ?? 0;
+    if (minDir === 1 && overlapBottom <= bi + 5) continue;
+    if (minDir === 2 && overlapLeft <= li + 5) continue;
+    // Universal: only intervene on deep embed.
     if (minVal <= 5) continue;
+    // Rising-player guard: minDir flips to 0 (top) as they clear the cap from
+    // inside the strip — snapping up would teleport them onto the platform.
+    if (minDir === 0 && player.vy < 0) continue;
 
     // Eject via smallest overlap direction (index-based, no float ===)
     if (minDir === 0) {

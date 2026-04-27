@@ -4,15 +4,15 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { drawTree, drawHangingVine, drawFgLeafCluster, drawFern } from '../../themes/drawPrimitives';
 import { getFloatingPlatforms } from '../../themes/utils';
 import {
-  CAP_DEPTH, mulberry32, seedFor,
+  CAP_DEPTH, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
   capFrontY, capBackY, skewPx,
   drawPlatformRightFace, drawPlatformCap,
-  wavyDown, backWavyUp, drawLeafCluster,
+  wavyDown, backWavyUp, drawLeafCluster, leftWavy,
 } from '../../themes/drawPrimitives';
 
 const MOSS_TUFT_COLORS = ['#4a7828', '#6a9a3a', '#8fa84f'];
 
-function drawTreetopsPlatform(ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean): void {
+function drawTreetopsPlatformBg(ctx: CanvasRenderingContext2D, platform: Platform): void {
   const rng = mulberry32(seedFor(platform.x, platform.y));
   const cF = capFrontY(platform);
   const cB = capBackY(platform);
@@ -23,10 +23,10 @@ function drawTreetopsPlatform(ctx: CanvasRenderingContext2D, platform: Platform,
   // Right face — darker wood (shadow side)
   drawPlatformRightFace(ctx, platform, '#3a2208');
 
-  // Left-side leaf clusters — only on platforms wide enough that the foliage
-  // doesn't overwhelm them. Skip tiny branch platforms (width < 70).
+  // Left-side leaf clusters (extend LEFT of platform.x — don't overlap player
+  // when player is inside body region, can stay in bg)
   if (platform.width >= 70) {
-    const clusterN = 2 + Math.floor(rng() * 2); // 2-3 clusters
+    const clusterN = 2 + Math.floor(rng() * 2);
     for (let i = 0; i < clusterN; i++) {
       const t = (i + 0.3 + rng() * 0.4) / clusterN;
       const cy = bodyTop + 4 + t * (bodyH - 8);
@@ -36,6 +36,38 @@ function drawTreetopsPlatform(ctx: CanvasRenderingContext2D, platform: Platform,
     }
   }
 
+  // Edge profiles — wavy rounded (front + back)
+  const frontPts = wavyDown(platform.x, platform.width, cF, rng, { bumps: 4, ampMin: 2, ampMax: 4, valleyBase: 0.3 });
+  const backPts = backWavyUp(platform.x, platform.width, cB, sp, rng, { bumps: 3, ampMin: 2, ampMax: 3.5 });
+  const leftPts = leftWavy(cB, cF, platform.x, rng, { bumps: 2, ampMin: 1.5, ampMax: 3 });
+
+  // Cap — mossy green with scattered tufts
+  drawPlatformCap(ctx, platform, frontPts, backPts, {
+    capColor: '#5a8a3a',
+    capLight: 'rgba(240,255,200,0.18)',
+    drawCapTexture: (ctx2, capFront, _capBack, skew) => {
+      const n = Math.max(2, Math.floor(platform.width / 10));
+      for (let i = 0; i < n; i++) {
+        const u = (i + 0.3 + rng() * 0.4) / n;
+        const v = 0.15 + rng() * 0.7;
+        const tx = platform.x + u * platform.width + v * skew;
+        const ty = capFront - v * CAP_DEPTH;
+        ctx2.fillStyle = MOSS_TUFT_COLORS[Math.floor(rng() * MOSS_TUFT_COLORS.length)];
+        const r = 0.9 + rng() * 0.6;
+        ctx2.beginPath();
+        ctx2.arc(tx, ty, r, 0, Math.PI * 2);
+        ctx2.fill();
+      }
+    },
+  }, leftPts);
+}
+
+function drawTreetopsPlatformFg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+  const rng = mulberry32(seedFor(platform.x, platform.y) ^ BODY_SEED_OFFSET);
+  const cF = capFrontY(platform);
+  const bodyTop = cF;
+  const bodyH = platform.height - CAP_DEPTH / 2;
+
   // Body front face — warm wood gradient
   const g = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
   g.addColorStop(0, '#8a5a2a');
@@ -44,7 +76,7 @@ function drawTreetopsPlatform(ctx: CanvasRenderingContext2D, platform: Platform,
   ctx.fillStyle = g;
   ctx.fillRect(platform.x, bodyTop, platform.width, bodyH);
 
-  // Vertical bark ridges — 3-5 thin slightly-wobbly strokes, top to bottom
+  // Vertical bark ridges
   const ridgeN = 3 + Math.floor(rng() * 3);
   ctx.strokeStyle = 'rgba(40,20,10,0.45)';
   for (let i = 0; i < ridgeN; i++) {
@@ -60,7 +92,7 @@ function drawTreetopsPlatform(ctx: CanvasRenderingContext2D, platform: Platform,
     ctx.stroke();
   }
 
-  // Knots — 1-2 small radial gradient circles per platform
+  // Knots
   const knotN = 1 + Math.floor(rng() * 2);
   for (let i = 0; i < knotN; i++) {
     const kx = platform.x + 4 + rng() * Math.max(1, platform.width - 8);
@@ -75,34 +107,9 @@ function drawTreetopsPlatform(ctx: CanvasRenderingContext2D, platform: Platform,
     ctx.fill();
   }
 
-  // Bottom bevel — dark strip
+  // Bottom bevel
   ctx.fillStyle = 'rgba(0,0,0,0.32)';
   ctx.fillRect(platform.x, bodyTop + bodyH - 4, platform.width, 4);
-
-  // Edge profiles — wavy rounded (front + back)
-  const frontPts = wavyDown(platform.x, platform.width, cF, rng, { bumps: 4, ampMin: 2, ampMax: 4, valleyBase: 0.3 });
-  const backPts = backWavyUp(platform.x, platform.width, cB, sp, rng, { bumps: 3, ampMin: 2, ampMax: 3.5 });
-
-  // Cap — mossy green with scattered tufts
-  drawPlatformCap(ctx, platform, frontPts, backPts, {
-    capColor: '#5a8a3a',
-    capLight: 'rgba(240,255,200,0.18)',
-    drawCapTexture: (ctx2, capFront, _capBack, skew) => {
-      // Mossy tufts — small arc blobs in 3 greens, ~1 per 10px of width
-      const n = Math.max(2, Math.floor(platform.width / 10));
-      for (let i = 0; i < n; i++) {
-        const u = (i + 0.3 + rng() * 0.4) / n;
-        const v = 0.15 + rng() * 0.7;
-        const tx = platform.x + u * platform.width + v * skew;
-        const ty = capFront - v * CAP_DEPTH;
-        ctx2.fillStyle = MOSS_TUFT_COLORS[Math.floor(rng() * MOSS_TUFT_COLORS.length)];
-        const r = 0.9 + rng() * 0.6;
-        ctx2.beginPath();
-        ctx2.arc(tx, ty, r, 0, Math.PI * 2);
-        ctx2.fill();
-      }
-    },
-  });
 }
 
 export const treetops: ArenaPack = {
@@ -119,7 +126,7 @@ export const treetops: ArenaPack = {
   // ---- Layout ----
   width: CANVAS_WIDTH,
   height: CANVAS_HEIGHT,
-  platforms: [
+  platforms: applyIsoInsets([
     { x: 30, y: 600, width: 180, height: 24 },
     { x: 400, y: 590, width: 240, height: 24 },
     { x: 800, y: 600, width: 220, height: 24 },
@@ -139,7 +146,7 @@ export const treetops: ArenaPack = {
     { x: 880, y: 425, width: 70, height: 20 },
     { x: 280, y: 320, width: 70, height: 20 },
     { x: 850, y: 315, width: 70, height: 20 },
-  ],
+  ]),
   spawnPoints: [
     { x: 120, y: 580 }, { x: 1180, y: 565 },
     { x: 500, y: 570 }, { x: 900, y: 580 },
@@ -438,8 +445,12 @@ export const treetops: ArenaPack = {
     ctx.restore();
   },
 
-  drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => {
-    drawTreetopsPlatform(ctx, platform, isGround);
+  drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
+    drawTreetopsPlatformBg(ctx, platform);
+  },
+
+  drawPlatformOverlay: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
+    drawTreetopsPlatformFg(ctx, platform);
   },
 
   // ---- Gameplay modifiers ----

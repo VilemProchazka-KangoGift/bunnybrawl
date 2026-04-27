@@ -1,8 +1,9 @@
-// Shared lobby constants, layout, and engine-compat stubs.
+// Shared lobby constants and layout. The arena layout itself lives in the
+// lobby arena pack (`src/engine/arenas/packs/lobby.ts`); these constants are
+// kept here because both the pack and `LobbyGame` consume them.
 
-import type { Arena, CharacterSlot } from './types';
-import type { ThemeConfig } from './themes/types';
-import { CANVAS_WIDTH, CANVAS_HEIGHT } from './constants';
+import type { CharacterSlot } from './types';
+import { CANVAS_WIDTH } from './constants';
 
 export const SLOTS: CharacterSlot[] = ['P1', 'P2', 'P3', 'P4', 'P5'];
 export const READY_ZONE_X = CANVAS_WIDTH * 0.72;
@@ -23,23 +24,3 @@ export const BOT_PAUSE_CHANCE = [0.003, 0.002, 0.004, 0.001, 0.003];
 
 export const FLOWER_COLORS = ['#FF6B8A', '#FFD700', '#FF69B4', '#DDA0DD', '#87CEEB', '#FFA07A'];
 export const FLOWER_POSITIONS = [100, 190, 260, 340, 430, 520, 580, 670];
-
-// Synthetic arena used by engine physics (collidePlatforms needs a Platform[]).
-// Ground spans full width; wall obstacle matches the visual WALL_X/WALL_Y/WALL_WIDTH/WALL_HEIGHT.
-export const LOBBY_ARENA: Arena = {
-  id: 'lobby',
-  name: 'Lobby',
-  themeId: 'lobby',
-  width: CANVAS_WIDTH,
-  height: CANVAS_HEIGHT,
-  platforms: [
-    { x: 0, y: GROUND_Y, width: CANVAS_WIDTH, height: CANVAS_HEIGHT - GROUND_Y },
-    { x: WALL_X, y: WALL_Y, width: WALL_WIDTH, height: WALL_HEIGHT },
-  ],
-  spawnPoints: [],
-  allowFallOff: false,
-};
-
-// Minimal theme stub for drawPlayer — it only reads theme.bubbleHelmet.
-// Other fields set to satisfy the type but never consulted in the lobby render path.
-export const LOBBY_THEME = { bubbleHelmet: false } as unknown as ThemeConfig;

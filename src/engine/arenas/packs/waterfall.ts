@@ -7,10 +7,10 @@ import {
   drawFgBush, drawTallGrass, drawFern, drawHangingVine, drawFgLeafCluster, drawFgWildflower,
 } from '../../themes/drawPrimitives';
 import {
-  CAP_DEPTH, mulberry32, seedFor,
+  CAP_DEPTH, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
   capFrontY, capBackY, skewPx,
   drawPlatformRightFace, drawPlatformCap,
-  wavyDown, backWavyUp, drawLeftStones,
+  wavyDown, backWavyUp, drawLeftStones, leftWavy,
 } from '../../themes/drawPrimitives';
 
 // Wet stone palette — blue-gray tinted for the waterfall biome.
@@ -21,55 +21,17 @@ const WATERFALL_STONE_PALETTE = [
   { base: '#54646e', dark: '#283440', light: '#849aa8' },
 ];
 
-function drawWaterfallPlatform(ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean): void {
+function drawWaterfallPlatformBg(ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean): void {
   const rng = mulberry32(seedFor(platform.x, platform.y));
   const cF = capFrontY(platform);
   const cB = capBackY(platform);
-  const bodyTop = cF;
-  const bodyH = platform.height - CAP_DEPTH / 2;
   const sp = skewPx();
 
   // Right face — dark wet stone
   drawPlatformRightFace(ctx, platform, '#18241c');
 
-  // Body front face — dark wet-stone gradient
-  const g = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
-  g.addColorStop(0, '#3a5848');
-  g.addColorStop(1, '#1a2818');
-  ctx.fillStyle = g;
-  ctx.fillRect(platform.x, bodyTop, platform.width, bodyH);
-
-  // Vertical water streaks — 3-4 thin pale strokes with slight quadratic sway
-  const streakN = 3 + Math.floor(rng() * 2);
-  ctx.strokeStyle = 'rgba(200,230,240,0.45)';
-  ctx.lineWidth = 1;
-  for (let i = 0; i < streakN; i++) {
-    const sx = platform.x + 4 + rng() * (platform.width - 8);
-    const sway = (rng() - 0.5) * 3;
-    ctx.beginPath();
-    ctx.moveTo(sx, bodyTop);
-    ctx.quadraticCurveTo(sx + sway, bodyTop + bodyH * 0.5, sx, bodyTop + bodyH);
-    ctx.stroke();
-  }
-
-  // Algae patches — 5-8 small dark-green ellipses scattered over the body
-  ctx.fillStyle = 'rgba(30,60,40,0.55)';
-  const algaeN = 5 + Math.floor(rng() * 4);
-  for (let i = 0; i < algaeN; i++) {
-    const ax = platform.x + 2 + rng() * (platform.width - 4);
-    const ay = bodyTop + 2 + rng() * Math.max(1, bodyH - 4);
-    const arx = 1.2 + rng() * 0.8;
-    const ary = 0.8 + rng() * 0.6;
-    ctx.beginPath();
-    ctx.ellipse(ax, ay, arx, ary, rng() * Math.PI, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // Bottom bevel — subtle dark strip
-  ctx.fillStyle = 'rgba(0,0,0,0.30)';
-  ctx.fillRect(platform.x, bodyTop + bodyH - 4, platform.width, 4);
-
-  // Left protrusions — wet blue-gray stones (skip ground)
+  // Left protrusions — wet blue-gray stones (skip ground; extend left, no
+  // body-region overlap)
   if (!isGround) {
     drawLeftStones(ctx, platform, WATERFALL_STONE_PALETTE, rng, { count: 3, rxMin: 2.8, rxMax: 5 });
   }
@@ -77,6 +39,7 @@ function drawWaterfallPlatform(ctx: CanvasRenderingContext2D, platform: Platform
   // Edge profiles — wavy rounded; capture front pts to find drip peaks
   const frontPts = wavyDown(platform.x, platform.width, cF, rng, { bumps: 4, ampMin: 2, ampMax: 4, valleyBase: 0.3 });
   const backPts = backWavyUp(platform.x, platform.width, cB, sp, rng, { bumps: 3, ampMin: 2, ampMax: 3 });
+  const leftPts = leftWavy(cB, cF, platform.x, rng, { bumps: 2, ampMin: 1.5, ampMax: 3 });
 
   // Cap — wet moss blue-green with cycling green dots
   drawPlatformCap(ctx, platform, frontPts, backPts, {
@@ -96,12 +59,9 @@ function drawWaterfallPlatform(ctx: CanvasRenderingContext2D, platform: Platform
         ctx2.fill();
       }
     },
-  });
+  }, leftPts);
 
-  // Signature — thin water trickles threading down from edge peaks. Each is a
-  // short vertical stroke fading to transparent, with a tiny bead at the tip.
-  // Peaks are local maxima in y along the front edge (larger y = lower on
-  // screen = deepest dip point).
+  // Water trickles threading down from front edge peaks
   for (let i = 1; i < frontPts.length - 1; i++) {
     const prev = frontPts[i - 1];
     const cur = frontPts[i];
@@ -117,13 +77,56 @@ function drawWaterfallPlatform(ctx: CanvasRenderingContext2D, platform: Platform
       ctx.moveTo(cur.x, cur.y);
       ctx.lineTo(cur.x, cur.y + threadLen);
       ctx.stroke();
-      // Tiny bead at the tip
       ctx.fillStyle = 'rgba(210,235,245,0.75)';
       ctx.beginPath();
       ctx.arc(cur.x, cur.y + threadLen, 0.9, 0, Math.PI * 2);
       ctx.fill();
     }
   }
+}
+
+function drawWaterfallPlatformFg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+  const rng = mulberry32(seedFor(platform.x, platform.y) ^ BODY_SEED_OFFSET);
+  const cF = capFrontY(platform);
+  const bodyTop = cF;
+  const bodyH = platform.height - CAP_DEPTH / 2;
+
+  // Body front face — dark wet-stone gradient
+  const g = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
+  g.addColorStop(0, '#3a5848');
+  g.addColorStop(1, '#1a2818');
+  ctx.fillStyle = g;
+  ctx.fillRect(platform.x, bodyTop, platform.width, bodyH);
+
+  // Vertical water streaks
+  const streakN = 3 + Math.floor(rng() * 2);
+  ctx.strokeStyle = 'rgba(200,230,240,0.45)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < streakN; i++) {
+    const sx = platform.x + 4 + rng() * (platform.width - 8);
+    const sway = (rng() - 0.5) * 3;
+    ctx.beginPath();
+    ctx.moveTo(sx, bodyTop);
+    ctx.quadraticCurveTo(sx + sway, bodyTop + bodyH * 0.5, sx, bodyTop + bodyH);
+    ctx.stroke();
+  }
+
+  // Algae patches
+  ctx.fillStyle = 'rgba(30,60,40,0.55)';
+  const algaeN = 5 + Math.floor(rng() * 4);
+  for (let i = 0; i < algaeN; i++) {
+    const ax = platform.x + 2 + rng() * (platform.width - 4);
+    const ay = bodyTop + 2 + rng() * Math.max(1, bodyH - 4);
+    const arx = 1.2 + rng() * 0.8;
+    const ary = 0.8 + rng() * 0.6;
+    ctx.beginPath();
+    ctx.ellipse(ax, ay, arx, ary, rng() * Math.PI, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Bottom bevel
+  ctx.fillStyle = 'rgba(0,0,0,0.30)';
+  ctx.fillRect(platform.x, bodyTop + bodyH - 4, platform.width, 4);
 }
 
 export const waterfall: ArenaPack = {
@@ -140,7 +143,7 @@ export const waterfall: ArenaPack = {
   // ---- Layout ----
   width: CANVAS_WIDTH,
   height: CANVAS_HEIGHT,
-  platforms: [
+  platforms: applyIsoInsets([
     { x: 0, y: 660, width: CANVAS_WIDTH, height: 60 },
     { x: 30, y: 570, width: 170, height: 24 },
     { x: 100, y: 470, width: 120, height: 24 },
@@ -159,7 +162,7 @@ export const waterfall: ArenaPack = {
     { x: 920, y: 400, width: 90, height: 24 },
     { x: 530, y: 612, width: 48, height: 48 },
     { x: 710, y: 618, width: 42, height: 42 },
-  ],
+  ]),
   spawnPoints: [
     { x: 100, y: 550 },
     { x: 1160, y: 530 },
@@ -555,7 +558,9 @@ export const waterfall: ArenaPack = {
     ctx.restore();
   },
 
-  drawPlatform: (ctx, platform, isGround) => drawWaterfallPlatform(ctx, platform, isGround),
+  drawPlatform: (ctx, platform, isGround) => drawWaterfallPlatformBg(ctx, platform, isGround),
+
+  drawPlatformOverlay: (ctx, platform, _isGround) => drawWaterfallPlatformFg(ctx, platform),
 
   // ---- Audio ----
   ambientSoundConfig: {

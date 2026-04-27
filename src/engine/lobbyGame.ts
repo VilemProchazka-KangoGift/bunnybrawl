@@ -2,23 +2,23 @@
 // Owns the lobby player state, NPC wandering, bot AI, physics, stomp/swap, and
 // ready-zone countdown. Delegates rendering to lobbyRender.ts and bot AI to lobbyBots.ts.
 
-import type { CharacterDef, CharacterSlot, Player, PlayerSlot, InputState } from './types';
+import type { Arena, CharacterDef, CharacterSlot, MatchState, MatchStats, Platform, Player, PlayerSlot, InputState, WildlifeEntity } from './types';
+import type { ThemeConfig } from './themes/types';
 import { ALL_BOT_SLOTS, isBotSlot } from './types';
-import { CANVAS_WIDTH, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED, IDLE_ANIM_INTERVAL } from './constants';
+import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED, IDLE_ANIM_INTERVAL } from './constants';
 import { KEY_BINDINGS } from './input';
 import { applyInput, applyGravity, movePlayer, collidePlatforms, updatePlayerState } from './physics';
 import { isStomping } from './stomp';
 import { getAllCharacters } from './characters';
 import { audio } from './audio';
-import { initWildlife } from './canvasAnimations';
-import type { SimpleWildlife } from './canvasAnimations';
+import { updateWildlife } from './gameLoop/cosmetics/environment';
+import { getArena, getTheme } from './arenas';
 import {
-  SLOTS, READY_ZONE_X, COUNTDOWN_SECONDS, GROUND_Y,
+  SLOTS, READY_ZONE_X, COUNTDOWN_SECONDS, GROUND_Y, LOBBY_DAY_CYCLE,
   LOBBY_GRAVITY, LOBBY_SPEED, LOBBY_JUMP,
-  WALL_X, LOBBY_ARENA,
+  WALL_X,
 } from './lobbyConstants';
 import { botLobbyInput, wanderInput } from './lobbyBots';
-import { drawLobby } from './lobbyRender';
 
 export { READY_ZONE_X } from './lobbyConstants';
 
@@ -59,6 +59,59 @@ function clampLobbyBounds(p: Player): void {
   }
 }
 
+/**
+ * Build a minimal MatchState for the lobby — populated enough to satisfy
+ * Renderer.renderFrame (which expects a full MatchState shape) but empty for
+ * everything the lobby doesn't use (carrots, springs, thorns, gibs, hazards,
+ * etc.). Callers update `players`, `wildlife`, `timeElapsed`, `dayPhase`
+ * each frame; everything else stays as initialized here.
+ */
+function buildLobbyMatchState(theme: ThemeConfig): MatchState {
+  // Initial wildlife matches theme.wildlife config — same shape used by matches.
+  const wildlife: WildlifeEntity[] = [];
+  const wc = theme.wildlife;
+  for (let i = 0; i < wc.count; i++) {
+    const types = wc.types;
+    let pick = types[0];
+    if (types.length > 1) {
+      const totalWeight = types.reduce((s, t) => s + t.weight, 0);
+      let r = Math.random() * totalWeight;
+      for (const t of types) {
+        r -= t.weight;
+        if (r <= 0) { pick = t; break; }
+      }
+    }
+    wildlife.push({
+      type: pick.type,
+      x: pick.type === 'bird' ? -50 - Math.random() * 100 : Math.random() * CANVAS_WIDTH,
+      y: (pick.yRange[0] + Math.random() * (pick.yRange[1] - pick.yRange[0])) * CANVAS_HEIGHT,
+      vx: pick.speedRange[0] + Math.random() * (pick.speedRange[1] - pick.speedRange[0]),
+      vy: 0,
+      wingPhase: Math.random() * Math.PI * 2,
+      color: pick.colors[Math.floor(Math.random() * pick.colors.length)],
+    });
+  }
+
+  const stats: MatchStats = { perPlayer: new Map() };
+  return {
+    players: [],
+    killFeed: [],
+    timeElapsed: 0, matchOver: false, winner: null,
+    carrots: [], carrotTimer: 9999,
+    springs: [], thorns: [],
+    springSpawnTimer: 9999, thornSpawnTimer: 9999,
+    screenShake: 0, slowMotion: 0, hitstopZoom: 0,
+    weather: [], dayPhase: 0, countdown: 0, stats,
+    shockwaves: [], screenFlash: 0,
+    wildlife,
+    fogParticles: [], pollenParticles: [], shootingStars: [],
+    scoreAnimations: [], ghosts: [],
+    lavaRocks: [], lavaRockTimer: 9999,
+    geyserStates: [], pigeonFlocks: [], bouncyWobble: new Map(),
+    gibs: [], confetti: [],
+  };
+}
+
 function shuffle<T>(arr: T[]): T[] {
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -85,8 +138,14 @@ export class LobbyGame {
   countdownStarted = false;
 
   private readySoundPlayed = new Set<PlayerSlot>();
-  private wildlife: SimpleWildlife[] | null = null;
-  private isMobile: boolean;
+  private _timeElapsed = 0;
+  private _platforms: Platform[];
+
+  // MatchState shim — populated lazily on first getMatchState() call. Mutated
+  // each frame so rendering through the standard Renderer works without
+  // re-allocating the state shape.
+  private _matchState: MatchState | null = null;
+  private _renderEntities: Player[] = []; // reused by getMatchState() each call
 
   // Pre-allocated combined arrays (rebuilt in update, avoid per-frame spread)
   private _allLobby: Player[] = [];
@@ -99,9 +158,9 @@ export class LobbyGame {
   private _botInZoneCount = 0;
 
   constructor(config: LobbyGameConfig) {
-    this.isMobile = config.isMobile;
     const botCount = config.botCount;
     const botSlots = ALL_BOT_SLOTS.slice(0, botCount);
+    this._platforms = getArena('lobby').platforms;
 
     // On mobile, only spawn P1 (touch player)
     const activeSlots = config.isMobile ? (['P1'] as CharacterSlot[]) : SLOTS;
@@ -167,7 +226,7 @@ export class LobbyGame {
 
       applyGravity(p, dt, LOBBY_GRAVITY, 800);
       movePlayer(p, dt);
-      collidePlatforms(p, LOBBY_ARENA.platforms);
+      collidePlatforms(p, this._platforms);
       clampLobbyBounds(p);
       updatePlayerState(p);
 
@@ -224,6 +283,43 @@ export class LobbyGame {
 
     this.processStomps(this._allLobby);
     this.updateReadyZone(dt);
+
+    this._timeElapsed += dt;
+    if (this._matchState) updateWildlife(this._matchState, dt);
+  }
+
+  /**
+   * Return a MatchState compatible with Renderer.renderFrame. Players list
+   * combines humans + bots + NPCs in render order (NPCs back, players front).
+   * dayPhase mirrors LOBBY_DAY_CYCLE so the standard day/night renderer ticks
+   * at the lobby's pace.
+   */
+  getMatchState(): MatchState {
+    if (!this._matchState) {
+      this._matchState = buildLobbyMatchState(getTheme('lobby'));
+    }
+    this._renderEntities.length = 0;
+    for (const e of this.extraChars) this._renderEntities.push(e);
+    for (const b of this.bots) this._renderEntities.push(b);
+    for (const p of this.players) this._renderEntities.push(p);
+    this._matchState.players = this._renderEntities;
+    this._matchState.timeElapsed = this._timeElapsed;
+    this._matchState.dayPhase = (this._timeElapsed / LOBBY_DAY_CYCLE) % 1;
+    return this._matchState;
+  }
+
+  /** Lobby arena (registry-backed). Use for canvas mounts that need the platform layout. */
+  getArena(): Arena {
+    return getArena('lobby');
+  }
+
+  /** Read-only ready-zone counts for HUD overlay. */
+  getReadyZoneCounts(): { inZone: number; humans: number; bots: number } {
+    return {
+      inZone: this._inZoneCount,
+      humans: this._humanInZoneCount,
+      bots: this._botInZoneCount,
+    };
   }
 
   private processStomps(allLobby: Player[]): void {
@@ -319,22 +415,10 @@ export class LobbyGame {
     return this.countdownStarted && this.countdown <= 0;
   }
 
-  render(ctx: CanvasRenderingContext2D, dt: number): void {
-    if (!this.wildlife) {
-      this.wildlife = initWildlife(6, GROUND_Y, 0.67);
-    }
-    drawLobby(
-      ctx, this.players, this.bots, this.extraChars,
-      this.countdown, this.countdownStarted, dt, this.wildlife, this.isMobile,
-      this._inZoneCount, this._humanInZoneCount, this._botInZoneCount,
-    );
-  }
-
   destroy(): void {
     this.players = [];
     this.bots = [];
     this.extraChars = [];
-    this.wildlife = null;
     this.readySoundPlayed.clear();
   }
 }

@@ -616,6 +616,18 @@ export class GameLoop {
 
       applyGravity(player, dt, this.effGravity, this.effMaxFallSpeed);
       movePlayer(player, dt);
+
+      // Side squash decay BEFORE collidePlatforms — when the player is
+      // pressing into a wall, collidePlatforms re-sets sideSquash to 0.75
+      // each tick and that overwrite is the final per-tick value, pinning
+      // the squash statically. Running decay in cosmeticStep instead would
+      // let the post-physics decay leak into render frames where the
+      // half-rate cosmetic ran, producing a 0.75↔0.78 visible flicker.
+      if (player.sideSquash !== 1) {
+        player.sideSquash = f(player.sideSquash + f(f(1.0 - player.sideSquash) * f(SQUASH_DECAY_SPEED * dt)));
+        if (Math.abs(player.sideSquash - 1) < 0.02) player.sideSquash = 1;
+      }
+
       collidePlatforms(player, this.arena.platforms);
       resolveStuckPlayer(player, this.arena.platforms);
       applyArenaConstraints(player, this.arena);

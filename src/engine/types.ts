@@ -23,6 +23,22 @@ export interface Platform {
    * Arenas that don't use style can ignore it.
    */
   style?: string;
+  /**
+   * Optional inset (px) on the left collision edge. Lets characters approach
+   * past plat.x by this many pixels before bonking. Used by arena packs whose
+   * cap is drawn as an iso parallelogram (back-left shifts inward by `sp`)
+   * so the visible top-left of the cap sits inside platform.x — without an
+   * inset, characters bonk an invisible wall before reaching the visible edge.
+   */
+  leftCollisionInset?: number;
+  /**
+   * Optional inset (px) on the bottom collision edge. Lets characters rise
+   * past plat.y + plat.height into the bottom strip without head-bumping.
+   * Mirrors `leftCollisionInset` for the fake-3D skew (down): the body face
+   * overlay (drawn after players) occludes characters in that window. Without
+   * an inset, characters bonk a wall under the visible bottom edge of the body.
+   */
+  bottomCollisionInset?: number;
 }
 
 export interface SpawnPoint {

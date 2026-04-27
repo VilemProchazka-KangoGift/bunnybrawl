@@ -3,10 +3,10 @@ import type { Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
 import {
-  CAP_DEPTH, mulberry32, seedFor,
+  CAP_DEPTH, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
   capFrontY, capBackY, skewPx,
   drawPlatformRightFace, drawPlatformCap,
-  drawLeftStones, wavyDown, backWavyUp,
+  drawLeftStones, wavyDown, backWavyUp, leftWavy,
 } from '../../themes/drawPrimitives';
 import type { StonePaletteRow } from '../../themes/drawPrimitives';
 import { getFloatingPlatforms } from '../../themes/utils';
@@ -19,21 +19,91 @@ const UNDERWATER_STONE_PALETTE: StonePaletteRow[] = [
   { base: '#627268', dark: '#32423a', light: '#82928a' },
 ];
 
-function drawUnderwaterPlatform(ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean): void {
+function drawUnderwaterPlatformBg(ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean): void {
   const rng = mulberry32(seedFor(platform.x, platform.y));
   const cF = capFrontY(platform);
   const cB = capBackY(platform);
-  const bodyTop = cF;
-  const bodyH = platform.height - CAP_DEPTH / 2;
   const sp = skewPx();
 
   // Right face — deep teal shadow.
   drawPlatformRightFace(ctx, platform, '#082028');
 
-  // Left-side stones — only on floating platforms (ground stones would stick out past screen edge).
+  // Left-side stones — only on floating platforms.
   if (!isGround) {
     drawLeftStones(ctx, platform, UNDERWATER_STONE_PALETTE, rng, { count: 3, rxMin: 2.5, rxMax: 4.5 });
   }
+
+  // Edge profiles — gentle wavy.
+  const frontPts = wavyDown(platform.x, platform.width, cF, rng, { bumps: 3, ampMin: 2, ampMax: 3.5, valleyBase: 0.4 });
+  const backPts = backWavyUp(platform.x, platform.width, cB, sp, rng, { bumps: 3, ampMin: 2, ampMax: 3 });
+  const leftPts = leftWavy(cB, cF, platform.x, rng, { bumps: 2, ampMin: 1.5, ampMax: 2.5 });
+
+  // Cap — sandy tan with caustic ripples.
+  drawPlatformCap(ctx, platform, frontPts, backPts, {
+    capColor: '#d4b890',
+    capLight: 'rgba(255,245,220,0.2)',
+    drawCapTexture: (ctx2, capFront, capBack, skew) => {
+      const rippleN = 2 + Math.floor(rng() * 2);
+      ctx2.strokeStyle = 'rgba(180,230,255,0.5)';
+      ctx2.lineWidth = 0.8;
+      for (let i = 0; i < rippleN; i++) {
+        const rw = platform.width * 0.4;
+        const rx = platform.x + rng() * (platform.width - rw);
+        const v = 0.25 + rng() * 0.5;
+        const midY = capBack + v * (capFront - capBack);
+        const y0 = midY + (rng() - 0.5) * 2;
+        const y1 = midY + (rng() - 0.5) * 2;
+        const ymid = midY - 1.5 - rng() * 1.5;
+        ctx2.beginPath();
+        ctx2.moveTo(rx + v * skew, y0);
+        ctx2.quadraticCurveTo(rx + rw * 0.5 + v * skew, ymid, rx + rw + v * skew, y1);
+        ctx2.stroke();
+      }
+    },
+  }, leftPts);
+
+  // Kelp strands hanging below body bottom (floating only). Stay in bg —
+  // they're below the body region, so player rising into body is above them.
+  if (!isGround) {
+    const bb = platform.y + platform.height;
+    const kelpCount = 2 + Math.floor(rng() * 2);
+    for (let k = 0; k < kelpCount; k++) {
+      const kx = platform.x + (k + 0.5 + (rng() - 0.5) * 0.3) * platform.width / kelpCount;
+      const klen = 18 + rng() * 10;
+      const phase = rng() * Math.PI * 2;
+      const swayAmp = 3 + rng() * 2;
+      ctx.strokeStyle = '#2a6838';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(kx, bb);
+      const steps = 6;
+      for (let s = 1; s <= steps; s++) {
+        const t = s / steps;
+        const px = kx + Math.sin(phase + t * Math.PI * 1.5) * swayAmp * t;
+        const py = bb + t * klen;
+        ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+      const leafN = 3 + Math.floor(rng() * 2);
+      ctx.fillStyle = '#3a7848';
+      for (let l = 0; l < leafN; l++) {
+        const t = (l + 0.6) / leafN;
+        const px = kx + Math.sin(phase + t * Math.PI * 1.5) * swayAmp * t;
+        const py = bb + t * klen;
+        const side = l % 2 === 0 ? 1 : -1;
+        ctx.beginPath();
+        ctx.ellipse(px + side * 3, py, 3, 1.4, side * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+}
+
+function drawUnderwaterPlatformFg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+  const rng = mulberry32(seedFor(platform.x, platform.y) ^ BODY_SEED_OFFSET);
+  const cF = capFrontY(platform);
+  const bodyTop = cF;
+  const bodyH = platform.height - CAP_DEPTH / 2;
 
   // Body front face — deep teal gradient.
   const g = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
@@ -43,13 +113,12 @@ function drawUnderwaterPlatform(ctx: CanvasRenderingContext2D, platform: Platfor
   ctx.fillStyle = g;
   ctx.fillRect(platform.x, bodyTop, platform.width, bodyH);
 
-  // --- Coral: seed-picked single type per platform ---
+  // Coral: seed-picked single type per platform
   const coralRoll = rng();
-  // Distribution: 40% branching, 35% tube, 25% anemone
   const coralType = coralRoll < 0.4 ? 'branching' : (coralRoll < 0.75 ? 'tube' : 'anemone');
 
   if (coralType === 'branching') {
-    const stalkCount = 2 + Math.floor(rng() * 2); // 2-3
+    const stalkCount = 2 + Math.floor(rng() * 2);
     for (let i = 0; i < stalkCount; i++) {
       const sx = platform.x + 6 + (i + rng() * 0.5) * (platform.width - 12) / stalkCount;
       const stalkH = bodyH * (0.4 + rng() * 0.3);
@@ -60,7 +129,6 @@ function drawUnderwaterPlatform(ctx: CanvasRenderingContext2D, platform: Platfor
       ctx.moveTo(sx, sy + stalkH);
       ctx.quadraticCurveTo(sx + (rng() - 0.5) * 3, sy + stalkH * 0.5, sx + (rng() - 0.5) * 2, sy);
       ctx.stroke();
-      // Side branches (1-2)
       const branchN = 1 + Math.floor(rng() * 2);
       for (let b = 0; b < branchN; b++) {
         const bt = 0.3 + rng() * 0.5;
@@ -72,44 +140,38 @@ function drawUnderwaterPlatform(ctx: CanvasRenderingContext2D, platform: Platfor
         ctx.moveTo(bx, by);
         ctx.lineTo(bx + side * blen, by - blen * 0.5);
         ctx.stroke();
-        // small circle cap on tip
         ctx.fillStyle = '#c94a5a';
         ctx.beginPath();
         ctx.arc(bx + side * blen, by - blen * 0.5, 1.2, 0, Math.PI * 2);
         ctx.fill();
       }
-      // Cap on main stalk tip
       ctx.fillStyle = '#c94a5a';
       ctx.beginPath();
       ctx.arc(sx + (rng() - 0.5) * 2, sy, 1.4, 0, Math.PI * 2);
       ctx.fill();
     }
   } else if (coralType === 'tube') {
-    const tubeCount = 3 + Math.floor(rng() * 3); // 3-5
+    const tubeCount = 3 + Math.floor(rng() * 3);
     for (let i = 0; i < tubeCount; i++) {
       const tx = platform.x + 4 + (i + 0.5) * (platform.width - 8) / tubeCount + (rng() - 0.5) * 2;
-      const th = 6 + rng() * 6; // 6-12
+      const th = 6 + rng() * 6;
       const tyBase = bodyTop + bodyH - 1;
       ctx.fillStyle = '#e07a3a';
       ctx.fillRect(tx - 1.5, tyBase - th, 3, th);
-      // Darker opening dot at the top
       ctx.fillStyle = '#7a3a14';
       ctx.beginPath();
       ctx.ellipse(tx, tyBase - th, 1.2, 0.7, 0, 0, Math.PI * 2);
       ctx.fill();
     }
   } else {
-    // anemone: 1-2 bulbous bases with wavy tentacles
     const baseCount = 1 + Math.floor(rng() * 2);
     for (let i = 0; i < baseCount; i++) {
       const ax = platform.x + (i + 0.5 + rng() * 0.3) * platform.width / baseCount;
       const ay = bodyTop + bodyH * (0.55 + rng() * 0.2);
-      // Bulbous base
       ctx.fillStyle = '#e890b0';
       ctx.beginPath();
       ctx.ellipse(ax, ay, 3.5, 2.2, 0, 0, Math.PI * 2);
       ctx.fill();
-      // Tentacles (~8 wavy strokes radiating outward)
       ctx.strokeStyle = 'rgba(232,144,176,0.7)';
       ctx.lineWidth = 1;
       const tentCount = 8;
@@ -128,7 +190,7 @@ function drawUnderwaterPlatform(ctx: CanvasRenderingContext2D, platform: Platfor
     }
   }
 
-  // Barnacles — 2-5 small off-white ellipses scattered on the body.
+  // Barnacles
   const barnacleCount = 2 + Math.floor(rng() * 4);
   ctx.fillStyle = '#d8d0b8';
   for (let i = 0; i < barnacleCount; i++) {
@@ -137,74 +199,6 @@ function drawUnderwaterPlatform(ctx: CanvasRenderingContext2D, platform: Platfor
     ctx.beginPath();
     ctx.ellipse(bx, by, 1.4 + rng() * 0.6, 1 + rng() * 0.4, 0, 0, Math.PI * 2);
     ctx.fill();
-  }
-
-  // Edge profiles — gentle wavy.
-  const frontPts = wavyDown(platform.x, platform.width, cF, rng, { bumps: 3, ampMin: 2, ampMax: 3.5, valleyBase: 0.4 });
-  const backPts = backWavyUp(platform.x, platform.width, cB, sp, rng, { bumps: 3, ampMin: 2, ampMax: 3 });
-
-  // Cap — sandy tan with caustic ripples.
-  drawPlatformCap(ctx, platform, frontPts, backPts, {
-    capColor: '#d4b890',
-    capLight: 'rgba(255,245,220,0.2)',
-    drawCapTexture: (ctx2, capFront, capBack, skew) => {
-      // Caustic ripples — 2-3 thin curved light-blue lines.
-      const rippleN = 2 + Math.floor(rng() * 2);
-      ctx2.strokeStyle = 'rgba(180,230,255,0.5)';
-      ctx2.lineWidth = 0.8;
-      for (let i = 0; i < rippleN; i++) {
-        const rw = platform.width * 0.4;
-        const rx = platform.x + rng() * (platform.width - rw);
-        const v = 0.25 + rng() * 0.5;
-        const midY = capBack + v * (capFront - capBack);
-        const y0 = midY + (rng() - 0.5) * 2;
-        const y1 = midY + (rng() - 0.5) * 2;
-        const ymid = midY - 1.5 - rng() * 1.5;
-        ctx2.beginPath();
-        ctx2.moveTo(rx + v * skew, y0);
-        ctx2.quadraticCurveTo(rx + rw * 0.5 + v * skew, ymid, rx + rw + v * skew, y1);
-        ctx2.stroke();
-      }
-    },
-  });
-
-  // Signature — kelp strands hanging from body bottom (floating only).
-  if (!isGround) {
-    const bb = platform.y + platform.height;
-    const kelpCount = 2 + Math.floor(rng() * 2); // 2-3
-    for (let k = 0; k < kelpCount; k++) {
-      const kx = platform.x + (k + 0.5 + (rng() - 0.5) * 0.3) * platform.width / kelpCount;
-      const klen = 18 + rng() * 10; // 18-28
-      const phase = rng() * Math.PI * 2;
-      const swayAmp = 3 + rng() * 2;
-
-      // Strand — sine-curve sway
-      ctx.strokeStyle = '#2a6838';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(kx, bb);
-      const steps = 6;
-      for (let s = 1; s <= steps; s++) {
-        const t = s / steps;
-        const px = kx + Math.sin(phase + t * Math.PI * 1.5) * swayAmp * t;
-        const py = bb + t * klen;
-        ctx.lineTo(px, py);
-      }
-      ctx.stroke();
-
-      // Leaves along the strand (3-4 alternating)
-      const leafN = 3 + Math.floor(rng() * 2);
-      ctx.fillStyle = '#3a7848';
-      for (let l = 0; l < leafN; l++) {
-        const t = (l + 0.6) / leafN;
-        const px = kx + Math.sin(phase + t * Math.PI * 1.5) * swayAmp * t;
-        const py = bb + t * klen;
-        const side = l % 2 === 0 ? 1 : -1;
-        ctx.beginPath();
-        ctx.ellipse(px + side * 3, py, 3, 1.4, side * 0.4, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
   }
 }
 
@@ -222,7 +216,7 @@ export const underwater: ArenaPack = {
   // ---- Layout ----
   width: CANVAS_WIDTH,
   height: CANVAS_HEIGHT,
-  platforms: [
+  platforms: applyIsoInsets([
     { x: 0, y: 660, width: CANVAS_WIDTH, height: 60 },
     { x: 100, y: 410, width: 130, height: 24 },
     { x: 200, y: 275, width: 120, height: 24 },
@@ -235,7 +229,7 @@ export const underwater: ArenaPack = {
     { x: 290, y: 170, width: 100, height: 24 },
     { x: 890, y: 170, width: 100, height: 24 },
     { x: 540, y: 80, width: 200, height: 24 },
-  ],
+  ]),
   spawnPoints: [
     { x: 200, y: 640 }, { x: 1080, y: 640 },
     { x: 400, y: 640 }, { x: 880, y: 640 },
@@ -720,7 +714,11 @@ export const underwater: ArenaPack = {
   },
 
   drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => {
-    drawUnderwaterPlatform(ctx, platform, isGround);
+    drawUnderwaterPlatformBg(ctx, platform, isGround);
+  },
+
+  drawPlatformOverlay: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
+    drawUnderwaterPlatformFg(ctx, platform);
   },
 
   drawWeatherParticle: (ctx, w) => {

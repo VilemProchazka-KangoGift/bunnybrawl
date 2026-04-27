@@ -7,9 +7,9 @@ import {
   drawFgBush, drawTallGrass, drawFern, drawHangingVine, drawFgLeafCluster, drawFgWildflower,
 } from '../../themes/drawPrimitives';
 import {
-  CAP_DEPTH, SKEW_RATIO, mulberry32, seedFor,
+  CAP_DEPTH, SKEW_RATIO, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
   drawPlatformRightFace, drawPlatformCap,
-  drawStone, wavyDown, backWavyUp,
+  drawStone, wavyDown, backWavyUp, leftWavy,
 } from '../../themes/drawPrimitives';
 
 // Shared decoration data — hoisted so we don't realloc per bake.
@@ -112,6 +112,8 @@ function drawMeadowStump(ctx: CanvasRenderingContext2D, platform: Platform): voi
   // Edge profiles — gentle wavy for natural rough-cut stump top
   const frontPts = wavyDown(platform.x, platform.width, cF, rng, { bumps: 3, ampMin: 1.5, ampMax: 3, valleyBase: 0.3 });
   const backPts = backWavyUp(platform.x, platform.width, cB, sp, rng, { bumps: 3, ampMin: 1.5, ampMax: 2.8 });
+  // `leftPts` is taken by the body burl path above; this one is the cap edge.
+  const capLeftPts = leftWavy(cB, cF, platform.x, rng, { bumps: 2, ampMin: 1, ampMax: 2 });
 
   // Cap — wood with concentric tree-ring ellipses
   drawPlatformCap(ctx, platform, frontPts, backPts, {
@@ -139,7 +141,7 @@ function drawMeadowStump(ctx: CanvasRenderingContext2D, platform: Platform): voi
       ctx2.ellipse(cx, cy, 1.2, 0.8, 0, 0, Math.PI * 2);
       ctx2.fill();
     },
-  });
+  }, capLeftPts);
 }
 
 export const meadow: ArenaPack = {
@@ -156,7 +158,7 @@ export const meadow: ArenaPack = {
   // ---- Layout ----
   width: CANVAS_WIDTH,
   height: CANVAS_HEIGHT,
-  platforms: [
+  platforms: applyIsoInsets([
     { x: 0, y: 660, width: CANVAS_WIDTH, height: 60 },
     { x: 90, y: 520, width: 160, height: 24 },
     { x: 990, y: 535, width: 200, height: 24 },
@@ -170,7 +172,7 @@ export const meadow: ArenaPack = {
     { x: 860, y: 615, width: 55, height: 45, style: 'stump' },
     { x: 440, y: 360, width: 45, height: 40, style: 'stump' },
     { x: 800, y: 375, width: 45, height: 40, style: 'stump' },
-  ],
+  ] as Platform[], p => p.style !== 'stump'),
   spawnPoints: [
     { x: 170, y: 500 }, { x: 1090, y: 515 },
     { x: 380, y: 380 }, { x: 870, y: 395 },
@@ -396,7 +398,8 @@ export const meadow: ArenaPack = {
     // Right face — dark dirt tone
     drawPlatformRightFace(ctx, platform, '#1e130a');
 
-    // Left-side decoration: one stone + a few root tendrils
+    // Left-side decoration: one stone + a few root tendrils (extends LEFT of
+    // platform.x, doesn't overlap player when player is inside body region)
     const stoneRx = 3.5 + rng() * 1.8;
     const stoneRy = stoneRx * (0.75 + rng() * 0.15);
     const stoneCy = bodyTop + 5 + rng() * Math.max(4, (bodyH - 14) * 0.4);
@@ -422,7 +425,39 @@ export const meadow: ArenaPack = {
       ctx.stroke();
     }
 
-    // Body front face — soil gradient with clumps, pebbles, one exposed root
+    // Edge profiles
+    const frontPts = wavyDown(platform.x, platform.width, cF, rng, { bumps: 5, ampMin: 2, ampMax: 4, valleyBase: 0.3 });
+    const backPts = backWavyUp(platform.x, platform.width, cB, sp, rng, { bumps: 4, ampMin: 2, ampMax: 3.5 });
+    const leftPts = leftWavy(cB, cF, platform.x, rng, { bumps: 2, ampMin: 1.5, ampMax: 3 });
+
+    // Cap — grass with tufted dots
+    drawPlatformCap(ctx, platform, frontPts, backPts, {
+      capColor: '#5a8f3a',
+      capLight: 'rgba(255,255,220,0.15)',
+      drawCapTexture: (ctx2, capFront, _capBack, skew) => {
+        ctx2.fillStyle = '#4a7a2e';
+        const n = Math.floor(platform.width / 7);
+        for (let i = 0; i < n; i++) {
+          const u = (i + 0.5) / n + Math.sin(i * 2.3 + platform.x * 0.01) * 0.04;
+          const v = 0.15 + (Math.sin(i * 7.1 + platform.x * 0.02) + 1) * 0.35;
+          ctx2.beginPath();
+          ctx2.arc(platform.x + u * platform.width + v * skew, capFront - v * CAP_DEPTH, 0.85, 0, Math.PI * 2);
+          ctx2.fill();
+        }
+      },
+    }, leftPts);
+  },
+
+  // Body face overlay — drawn AFTER players so a player rising up next to or
+  // through a platform's body is occluded ("goes behind the platform").
+  drawPlatformOverlay: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
+    if (platform.style === 'stump') return;
+    const rng = mulberry32(seedFor(platform.x, platform.y) ^ BODY_SEED_OFFSET);
+    const cF = platform.y + CAP_DEPTH / 2;
+    const bodyTop = cF;
+    const bodyH = platform.height - CAP_DEPTH / 2;
+
+    // Body front face — soil gradient
     const g = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
     g.addColorStop(0, '#5a3a20');
     g.addColorStop(0.5, '#4a2e18');
@@ -450,27 +485,6 @@ export const meadow: ArenaPack = {
     // Body bottom bevel — dark strip at the bottom of the front face
     ctx.fillStyle = 'rgba(0,0,0,0.30)';
     ctx.fillRect(platform.x, bodyTop + bodyH - 4, platform.width, 4);
-
-    // Edge profiles
-    const frontPts = wavyDown(platform.x, platform.width, cF, rng, { bumps: 5, ampMin: 2, ampMax: 4, valleyBase: 0.3 });
-    const backPts = backWavyUp(platform.x, platform.width, cB, sp, rng, { bumps: 4, ampMin: 2, ampMax: 3.5 });
-
-    // Cap — grass with tufted dots
-    drawPlatformCap(ctx, platform, frontPts, backPts, {
-      capColor: '#5a8f3a',
-      capLight: 'rgba(255,255,220,0.15)',
-      drawCapTexture: (ctx2, capFront, _capBack, skew) => {
-        ctx2.fillStyle = '#4a7a2e';
-        const n = Math.floor(platform.width / 7);
-        for (let i = 0; i < n; i++) {
-          const u = (i + 0.5) / n + Math.sin(i * 2.3 + platform.x * 0.01) * 0.04;
-          const v = 0.15 + (Math.sin(i * 7.1 + platform.x * 0.02) + 1) * 0.35;
-          ctx2.beginPath();
-          ctx2.arc(platform.x + u * platform.width + v * skew, capFront - v * CAP_DEPTH, 0.85, 0, Math.PI * 2);
-          ctx2.fill();
-        }
-      },
-    });
   },
 
   // ---- Audio ----

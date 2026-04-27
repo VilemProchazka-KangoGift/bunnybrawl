@@ -51,6 +51,27 @@ export function listArenaPacks(): Array<{
   }));
 }
 
+/**
+ * Like listArenaPacks() but excludes packs flagged with `playable: false`
+ * (e.g. the lobby). Use for arena pickers, random-arena resolution, online
+ * settings sync — anywhere a player might select a match arena.
+ */
+export function listPlayableArenaPacks(): Array<{
+  id: string;
+  previewGradient: string;
+  previewIcon: string;
+  translations: Record<string, string>;
+}> {
+  return Array.from(PACKS.values())
+    .filter(p => p.playable !== false)
+    .map(p => ({
+      id: p.id,
+      previewGradient: p.previewGradient,
+      previewIcon: p.previewIcon,
+      translations: p.translations,
+    }));
+}
+
 // ---- Extractors ----
 // Extract legacy Arena / ThemeConfig from a pack for consumers that still need them.
 
@@ -93,6 +114,7 @@ export function toThemeConfig(pack: ArenaPack): ThemeConfig {
     drawFarBackground: pack.drawFarBackground,
     drawBackgroundNature: pack.drawBackgroundNature,
     drawPlatform: pack.drawPlatform,
+    drawPlatformOverlay: pack.drawPlatformOverlay,
     drawForegroundNature: pack.drawForegroundNature,
     drawAnimatedBackground: pack.drawAnimatedBackground,
     drawWeatherParticle: pack.drawWeatherParticle,

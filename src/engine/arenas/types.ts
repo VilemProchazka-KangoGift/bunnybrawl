@@ -23,6 +23,13 @@ export type {
 export interface ArenaPack {
   // ---- Identity ----
   id: string;
+  /**
+   * Whether this arena is selectable from the menu and pickable by random
+   * arena resolution. Defaults to true. Set false for utility arenas like
+   * the lobby that share the renderer pipeline but should never appear in
+   * the arena selector.
+   */
+  playable?: boolean;
 
   // ---- UI metadata ----
   previewGradient: string;   // CSS gradient for menu thumbnail
@@ -84,8 +91,23 @@ export interface ArenaPack {
    * Optional full override of platform rendering. When defined, the renderer
    * calls this instead of the built-in flat-rect fallback. Receives the full
    * Platform object so packs can dispatch on `platform.style` if needed.
+   *
+   * For arenas with `leftCollisionInset` (architectural iso caps), this
+   * function should draw ONLY the cap + right face (the parts that always
+   * sit behind the player). The body face goes in `drawPlatformOverlay` so
+   * it can occlude players that enter the iso phantom strip.
    */
   drawPlatform?: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => void;
+  /**
+   * Optional foreground overlay for the platform's body face. Called by the
+   * renderer AFTER players are drawn, so the body occludes any player whose
+   * bbox overlaps the body's draw region. Architectural arenas with iso caps
+   * use this to keep the iso back-left shift visually consistent: the player
+   * can stand or jump into the phantom strip [plat.x, plat.x + sp] and the
+   * body face hides the part of the sprite that would otherwise reveal the
+   * collision-vs-visible mismatch.
+   */
+  drawPlatformOverlay?: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => void;
   drawAnimatedBackground?: (ctx: CanvasRenderingContext2D, arena: Arena, time: number) => void;
   drawWeatherParticle?: (ctx: CanvasRenderingContext2D, particle: WeatherParticle) => void;
   drawCustomHazardZone?: (ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, time: number) => void;

@@ -73,10 +73,10 @@ src/
     fastMath.ts   # Trig lookup tables (fastSin/fastCos) for hot render paths
     renderScale.ts # Backing-store scale (1×–2×). applyRenderScaleToCanvas() helper + subscribeRenderScale()
     canvasAnimations.ts # Shared canvas utilities (wildlife, day/night) for MainMenu + CharacterSelect
-    lobbyGame.ts  # Lobby simulation orchestrator — LobbyGame class, stomp/swap, ready-zone countdown
-    lobbyConstants.ts # Layout constants, LOBBY_ARENA stub, READY_ZONE_X, BOT_PAUSE_CHANCE
+    lobbyGame.ts  # Lobby simulation orchestrator — LobbyGame class, stomp/swap, ready-zone countdown. Renders via standard Renderer in lobbyMode.
+    lobbyConstants.ts # Lobby layout constants (READY_ZONE_X, GROUND_Y, WALL_X, …)
     lobbyBots.ts  # botLobbyInput + wanderInput (pure input generators)
-    lobbyRender.ts # drawLobby + gradient cache — all canvas rendering for the lobby
+    lobbyRender.ts # drawLobbyOverlay — HUD (ready zone, labels, countdown) painted on the dedicated hud canvas via Renderer's lobbyMode hook
     debugFlags.ts # Dev-only flags from URL params (?debug=nav)
     navDebugOverlay.ts # Nav graph debug overlay renderer
     characters/   # Character pack system (registry-based, extensible)

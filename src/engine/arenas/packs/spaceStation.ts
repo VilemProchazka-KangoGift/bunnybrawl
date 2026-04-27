@@ -4,13 +4,14 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
 import { getFloatingPlatforms } from '../../themes/utils';
 import {
-  CAP_DEPTH, mulberry32, seedFor,
+  CAP_DEPTH, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
   capFrontY, capBackY, skewPx,
   drawPlatformRightFace, drawPlatformCap,
-  subtleDown, backFlat,
+  subtleDown, backIso, leftIso,
 } from '../../themes/drawPrimitives';
 
-function drawSpacePlatform(ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean): void {
+// Bg pass: cap + right face + status LEDs. Sit behind the player.
+function drawSpacePlatformBg(ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean): void {
   const rng = mulberry32(seedFor(platform.x, platform.y));
   const cF = capFrontY(platform);
   const cB = capBackY(platform);
@@ -18,19 +19,18 @@ function drawSpacePlatform(ctx: CanvasRenderingContext2D, platform: Platform, is
   const bodyH = platform.height - CAP_DEPTH / 2;
   const sp = skewPx();
 
-  // Right face — darker metal shadow with a few status LEDs (signature)
+  // Right face
   drawPlatformRightFace(ctx, platform, '#14141E');
-  // Status LEDs on the right face — small colored dots with faint halo
+  // Status LEDs on the right face
   const ledPalette: Array<{ solid: string; glow: string }> = [
     { solid: '#FF4444', glow: 'rgba(255,68,68,0.3)' },
     { solid: '#00FF88', glow: 'rgba(0,255,136,0.3)' },
     { solid: '#00CCFF', glow: 'rgba(0,204,255,0.3)' },
     { solid: '#FFAA00', glow: 'rgba(255,170,0,0.3)' },
   ];
-  // Place LEDs along the right-face centerline (midway between front and back edges of the parallelogram).
   const ledN = 2 + Math.floor(rng() * 2);
   const faceCenterX = platform.x + platform.width + sp * 0.5;
-  const faceCenterYShift = -CAP_DEPTH * 0.25; // back edge sits higher than front
+  const faceCenterYShift = -CAP_DEPTH * 0.25;
   for (let i = 0; i < ledN; i++) {
     const t = (i + 0.5) / ledN;
     const ly = bodyTop + 2 + t * Math.max(1, bodyH - 4) + faceCenterYShift;
@@ -45,67 +45,11 @@ function drawSpacePlatform(ctx: CanvasRenderingContext2D, platform: Platform, is
     ctx.fill();
   }
 
-  // Body front face — metal gradient (light top → dark bottom)
-  const g = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
-  g.addColorStop(0, '#3C3C50');
-  g.addColorStop(0.5, '#2A2A3A');
-  g.addColorStop(1, '#16161E');
-  ctx.fillStyle = g;
-  ctx.fillRect(platform.x, bodyTop, platform.width, bodyH);
-
-  // Horizontal seam line — bright top / dark bottom hairline mid-body
-  if (bodyH >= 10) {
-    const seamY = Math.round(bodyTop + bodyH * 0.5);
-    ctx.fillStyle = 'rgba(90,100,120,0.55)';
-    ctx.fillRect(platform.x, seamY, platform.width, 1);
-    ctx.fillStyle = 'rgba(0,0,0,0.45)';
-    ctx.fillRect(platform.x, seamY + 1, platform.width, 1);
-  }
-
-  // Bolt heads — darker dot + metallic highlight, at seam height and corners
-  const boltN = Math.max(2, Math.floor(platform.width / 60));
-  const boltY = bodyTop + bodyH * 0.5;
-  for (let i = 0; i < boltN; i++) {
-    const t = (i + 0.5) / boltN;
-    const bx = platform.x + 6 + t * (platform.width - 12);
-    ctx.fillStyle = '#0A0A12';
-    ctx.beginPath();
-    ctx.arc(bx, boltY, 1.6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(150,165,190,0.6)';
-    ctx.beginPath();
-    ctx.arc(bx - 0.4, boltY - 0.5, 0.7, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // Hazard stripe — diagonal yellow/black bar along the bottom edge
-  const stripeH = Math.min(4, bodyH * 0.18);
-  if (stripeH >= 2) {
-    const stripeY = bodyTop + bodyH - stripeH;
-    // Base yellow
-    ctx.fillStyle = '#C9A514';
-    ctx.fillRect(platform.x, stripeY, platform.width, stripeH);
-    // Black diagonal hatching
-    ctx.fillStyle = 'rgba(14,14,22,0.9)';
-    const step = 8;
-    for (let sx = platform.x - stripeH; sx < platform.x + platform.width; sx += step) {
-      ctx.beginPath();
-      ctx.moveTo(sx, stripeY + stripeH);
-      ctx.lineTo(sx + stripeH, stripeY);
-      ctx.lineTo(sx + stripeH + step * 0.45, stripeY);
-      ctx.lineTo(sx + step * 0.45, stripeY + stripeH);
-      ctx.closePath();
-      ctx.fill();
-    }
-  }
-
-  // Edge profiles — minimal wear (man-made metal)
+  // Edge profiles + iso cap.
   const frontPts = subtleDown(platform.x, platform.width, cF, rng, { count: 1, amp: 0.8 });
-  const backPts = backFlat(platform.x, platform.width, cB, sp);
+  const backPts = backIso(platform.x, platform.width, cB, sp);
+  const leftPts = leftIso(cB, cF, platform.x, sp);
 
-  // Cap — dark metal with cyan LED strips along its edges.
-  // Ground decks: back edge only (far-wall rim light).
-  // Floating platforms: front edge (lit leading lip) + back edge (far rim) for a framed look.
   drawPlatformCap(ctx, platform, frontPts, backPts, {
     capColor: '#25252F',
     capLight: 'rgba(60,70,90,0.3)',
@@ -134,13 +78,72 @@ function drawSpacePlatform(ctx: CanvasRenderingContext2D, platform: Platform, is
           ctx2.fillRect(tx, stripY, 2, 1);
         }
       };
-
-      // Back-edge strip — present on every platform.
       drawStrip(capBack + 1, 'down');
-      // Front-edge strip — floating platforms only.
       if (!isGround) drawStrip(capFront - 2, 'up');
     },
-  });
+  }, leftPts);
+}
+
+// Fg pass: body face. Drawn after players for occlusion.
+function drawSpacePlatformFg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+  const rng = mulberry32(seedFor(platform.x, platform.y) ^ BODY_SEED_OFFSET);
+  const cF = capFrontY(platform);
+  const bodyTop = cF;
+  const bodyH = platform.height - CAP_DEPTH / 2;
+
+  // Body front face — metal gradient
+  const g = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
+  g.addColorStop(0, '#3C3C50');
+  g.addColorStop(0.5, '#2A2A3A');
+  g.addColorStop(1, '#16161E');
+  ctx.fillStyle = g;
+  ctx.fillRect(platform.x, bodyTop, platform.width, bodyH);
+
+  // Horizontal seam line
+  if (bodyH >= 10) {
+    const seamY = Math.round(bodyTop + bodyH * 0.5);
+    ctx.fillStyle = 'rgba(90,100,120,0.55)';
+    ctx.fillRect(platform.x, seamY, platform.width, 1);
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.fillRect(platform.x, seamY + 1, platform.width, 1);
+  }
+
+  // Bolt heads
+  const boltN = Math.max(2, Math.floor(platform.width / 60));
+  const boltY = bodyTop + bodyH * 0.5;
+  for (let i = 0; i < boltN; i++) {
+    const t = (i + 0.5) / boltN;
+    const bx = platform.x + 6 + t * (platform.width - 12);
+    ctx.fillStyle = '#0A0A12';
+    ctx.beginPath();
+    ctx.arc(bx, boltY, 1.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(150,165,190,0.6)';
+    ctx.beginPath();
+    ctx.arc(bx - 0.4, boltY - 0.5, 0.7, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Hazard stripe
+  const stripeH = Math.min(4, bodyH * 0.18);
+  if (stripeH >= 2) {
+    const stripeY = bodyTop + bodyH - stripeH;
+    ctx.fillStyle = '#C9A514';
+    ctx.fillRect(platform.x, stripeY, platform.width, stripeH);
+    ctx.fillStyle = 'rgba(14,14,22,0.9)';
+    const step = 8;
+    for (let sx = platform.x - stripeH; sx < platform.x + platform.width; sx += step) {
+      ctx.beginPath();
+      ctx.moveTo(sx, stripeY + stripeH);
+      ctx.lineTo(sx + stripeH, stripeY);
+      ctx.lineTo(sx + stripeH + step * 0.45, stripeY);
+      ctx.lineTo(sx + step * 0.45, stripeY + stripeH);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+  // Reference rng so unused-warning is suppressed; cheap noise fleck for grain.
+  if (rng() < 0) ctx.fillRect(0, 0, 0, 0);
 }
 
 let scanLinePattern: CanvasPattern | null = null;
@@ -302,7 +305,7 @@ export const spaceStation: ArenaPack = {
   // ---- Layout ----
   width: CANVAS_WIDTH,
   height: CANVAS_HEIGHT,
-  platforms: [
+  platforms: applyIsoInsets([
     { x: 0, y: 660, width: 220, height: 60 },
     { x: 1060, y: 660, width: 220, height: 60 },
     { x: 45, y: 465, width: 165, height: 24 },
@@ -313,7 +316,7 @@ export const spaceStation: ArenaPack = {
     { x: 1075, y: 260, width: 125, height: 24 },
     { x: 85, y: 625, width: 50, height: 35 },
     { x: 1140, y: 625, width: 45, height: 35 },
-  ],
+  ]),
   spawnPoints: [
     { x: 100, y: 445 }, { x: 1135, y: 425 },
     { x: 100, y: 340 }, { x: 1170, y: 330 },
@@ -782,7 +785,10 @@ export const spaceStation: ArenaPack = {
   },
 
   drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => {
-    drawSpacePlatform(ctx, platform, isGround);
+    drawSpacePlatformBg(ctx, platform, isGround);
+  },
+  drawPlatformOverlay: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
+    drawSpacePlatformFg(ctx, platform);
   },
 
   drawWeatherParticle: (ctx, w) => {

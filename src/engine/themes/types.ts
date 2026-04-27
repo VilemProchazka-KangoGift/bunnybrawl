@@ -133,6 +133,8 @@ export interface ThemeConfig {
   /** Drawn over players — foreground bushes, snow piles */
   drawForegroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => void;
   drawPlatform?: (ctx: CanvasRenderingContext2D, platform: import('../types').Platform, isGround: boolean) => void;
+  /** Foreground overlay for platform body face — drawn after players for occlusion. */
+  drawPlatformOverlay?: (ctx: CanvasRenderingContext2D, platform: import('../types').Platform, isGround: boolean) => void;
 
   /** Per-frame animated background (drawn behind players, after wildlife — e.g. objects visible through windows) */
   drawAnimatedBackground?: (ctx: CanvasRenderingContext2D, arena: Arena, time: number) => void;

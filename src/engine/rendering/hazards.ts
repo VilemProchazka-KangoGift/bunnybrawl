@@ -426,13 +426,17 @@ export function drawBouncyPlatformOverlay(
 ): void {
   ctx.save();
 
-  // Wobbly jelly surface -- always visible
+  // Wobbly jelly surface -- always visible. Draw the wavy edge along the
+  // BACK edge of the 3D cap (8px above bp.y, the collision center) so the
+  // animation sits at the iso parallelogram's far rim instead of bisecting
+  // the cap face. CAP_DEPTH/2 = 8 to match the platform framework.
+  const waveBackOffset = 8;
   const wobbleY = Math.sin(time * 3) * 2;
   ctx.globalAlpha = 0.25;
   const jellyKey = `${bp.x}_${bp.y}_${bp.height}`;
   let jellyGrad = cachedJellyGradients.get(jellyKey);
   if (!jellyGrad) {
-    jellyGrad = ctx.createLinearGradient(bp.x, bp.y - 4, bp.x, bp.y + bp.height);
+    jellyGrad = ctx.createLinearGradient(bp.x, bp.y - waveBackOffset - 4, bp.x, bp.y + bp.height);
     jellyGrad.addColorStop(0, '#FF69B4');
     jellyGrad.addColorStop(0.5, '#FF99CC');
     jellyGrad.addColorStop(1, '#FF69B4');
@@ -441,10 +445,10 @@ export function drawBouncyPlatformOverlay(
   ctx.fillStyle = jellyGrad;
   ctx.beginPath();
   ctx.moveTo(bp.x, bp.y + bp.height);
-  ctx.lineTo(bp.x, bp.y);
-  // Wavy top edge
+  ctx.lineTo(bp.x, bp.y - waveBackOffset);
+  // Wavy top edge along the cap's back rim
   for (let wx = bp.x; wx <= bp.x + bp.width; wx += 10) {
-    const wy = bp.y - 2 + Math.sin(time * 4 + wx * 0.1) * 2 + wobbleY;
+    const wy = bp.y - waveBackOffset - 2 + Math.sin(time * 4 + wx * 0.1) * 2 + wobbleY;
     ctx.lineTo(wx, wy);
   }
   ctx.lineTo(bp.x + bp.width, bp.y + bp.height);

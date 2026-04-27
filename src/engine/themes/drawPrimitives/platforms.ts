@@ -13,6 +13,38 @@ import type { Platform } from '../../types';
 export const CAP_DEPTH = 16;
 /** Horizontal skew ratio. Back edge is offset right by CAP_DEPTH * SKEW_RATIO. */
 export const SKEW_RATIO = 0.5;
+/**
+ * Lateral phantom-strip width on the left side of architectural platforms.
+ * Player can walk/jump into [plat.x, plat.x + LEFT_COLLISION_INSET] without
+ * bonking; the body face overlay (drawn after players) occludes them in that
+ * window. See `Platform.leftCollisionInset` and `physics.collidePlatforms`.
+ */
+export const LEFT_COLLISION_INSET = 10;
+/**
+ * Vertical phantom-strip height on the bottom of architectural platforms.
+ * Player can rise into [plat.y + plat.height - BOTTOM_COLLISION_INSET, plat.y
+ * + plat.height] without head-bumping; the body face overlay occludes them
+ * in that window. Mirrors LEFT_COLLISION_INSET for the fake-3D skew (down).
+ * See `Platform.bottomCollisionInset` and `physics.collidePlatforms`.
+ */
+export const BOTTOM_COLLISION_INSET = 10;
+
+/**
+ * Apply iso-skew collision insets to platforms drawn with the parallelogram
+ * cap (back shifted right by `sp`, body lifted up by CAP_DEPTH/2). `predicate`
+ * lets packs opt out per-platform — e.g. meadow stumps and winter ice cubes
+ * use a different visual style and don't get the insets.
+ */
+export function applyIsoInsets<T extends Platform>(
+  platforms: T[],
+  predicate?: (p: T) => boolean,
+): T[] {
+  return platforms.map(p =>
+    predicate && !predicate(p)
+      ? p
+      : { ...p, leftCollisionInset: LEFT_COLLISION_INSET, bottomCollisionInset: BOTTOM_COLLISION_INSET }
+  );
+}
 
 // ---- Deterministic PRNG ----
 /** mulberry32 — fast 32-bit PRNG for per-platform visual variation. */
@@ -32,6 +64,13 @@ export function mulberry32(seed: number): () => number {
 export function seedFor(x: number, y: number): number {
   return (x * 73856093) ^ (y * 19349663);
 }
+
+/**
+ * Decorrelation offset (golden-ratio reciprocal × 2^32) so the bg pass and
+ * the fg body overlay pass for the same platform draw INDEPENDENT random
+ * sequences. Use as `mulberry32(seedFor(x, y) ^ BODY_SEED_OFFSET)` in fg.
+ */
+export const BODY_SEED_OFFSET = 0x9E3779B9;
 
 // ---- Edge profile generators ----
 //
@@ -195,6 +234,110 @@ export function backFlat(x: number, w: number, cB: number, sp: number): EdgePoin
   return [{ x, y: cB }, { x: x + w + sp, y: cB }];
 }
 
+// ---- Left-edge profile generators ----
+//
+// All left-edge generators produce points going FROM (leftX, yBot) AT THE START
+// to (leftX, yTop) AT THE END (i.e. up the left side of the cap), with x values
+// only ever <= leftX (bumps grow OUTWARD to the left, into negative-x space).
+// Never inward — that would create gaps revealing the body or background through
+// the cap. Mirrors the front/back outward-only constraint.
+
+/** Rounded sine-blended bumps protruding leftward — mirrors `wavyDown` for the vertical left edge. */
+export function leftWavy(yTop: number, yBot: number, leftX: number, rng: () => number, opts: WavyOpts): EdgePoint[] {
+  const bumps = opts.bumps ?? 3;
+  const ampMin = opts.ampMin ?? 1.5;
+  const ampMax = opts.ampMax ?? 3;
+  const resolution = opts.resolution ?? 5;
+  const N = bumps + Math.floor(rng() * 2);
+  const centers: Array<{ t: number; amp: number; spread: number }> = [];
+  for (let i = 0; i < N; i++) {
+    centers.push({
+      t: (i + 0.5 + (rng() - 0.5) * 0.3) / N,
+      amp: ampMin + rng() * (ampMax - ampMin),
+      spread: 0.5 / N + rng() * 0.2 / N,
+    });
+  }
+  const yRange = yBot - yTop;
+  const pts: EdgePoint[] = [{ x: leftX, y: yBot }];
+  const steps = resolution * N;
+  for (let s = 1; s < steps; s++) {
+    const t = s / steps;
+    let dx = 0;
+    for (const c of centers) {
+      const dist = Math.abs(t - c.t);
+      if (dist < c.spread * 2) {
+        dx -= c.amp * Math.cos(Math.min(1, dist / c.spread) * Math.PI / 2);
+      }
+    }
+    pts.push({ x: leftX + dx, y: yBot - t * yRange });
+  }
+  pts.push({ x: leftX, y: yTop });
+  return pts;
+}
+
+/** Sharp leftward V-peaks — volcanic / haunted broken stone. Mirrors `jaggedDown`. */
+export function leftJagged(yTop: number, yBot: number, leftX: number, rng: () => number, opts: JaggedOpts): EdgePoint[] {
+  const bumps = opts.bumps ?? 3;
+  const ampMin = opts.ampMin ?? 2;
+  const ampMax = opts.ampMax ?? 4;
+  const N = bumps + Math.floor(rng() * 2);
+  const yRange = yBot - yTop;
+  const pts: EdgePoint[] = [{ x: leftX, y: yBot }];
+  for (let i = 0; i < N; i++) {
+    const t1 = (i + 0.2 + rng() * 0.2) / N;
+    const t2 = (i + 0.55 + rng() * 0.2) / N;
+    const t3 = (i + 0.85) / N;
+    const amp = ampMin + rng() * (ampMax - ampMin);
+    pts.push({ x: leftX - 0.3, y: yBot - t1 * yRange });
+    pts.push({ x: leftX - amp, y: yBot - t2 * yRange });
+    pts.push({ x: leftX - 0.5, y: yBot - t3 * yRange });
+  }
+  pts.push({ x: leftX, y: yTop });
+  return pts;
+}
+
+/** Tiny hairline outward chips — man-made wear. Mirrors `subtleDown`. */
+export function leftSubtle(yTop: number, yBot: number, leftX: number, rng: () => number, opts: SubtleOpts): EdgePoint[] {
+  const count = opts.count ?? 1;
+  const amp = opts.amp ?? 1;
+  const N = count + Math.floor(rng() * 2);
+  const yRange = yBot - yTop;
+  const pts: EdgePoint[] = [{ x: leftX, y: yBot }];
+  for (let i = 0; i < N; i++) {
+    const t = 0.2 + (i / N) * 0.6 + rng() * 0.1;
+    const cy = yBot - t * yRange;
+    const ch = 2 + rng() * 2;
+    pts.push({ x: leftX, y: cy + ch / 2 });
+    pts.push({ x: leftX - amp * (0.5 + rng() * 0.5), y: cy });
+    pts.push({ x: leftX, y: cy - ch / 2 });
+  }
+  pts.push({ x: leftX, y: yTop });
+  return pts;
+}
+
+/**
+ * Iso projection: cap left edge slopes from (leftX, yBot) at the front to
+ * (leftX + sp, yTop) at the back, mirroring the right edge's outward slope so
+ * the cap reads as a true parallelogram. Pair with `backIso` for clean
+ * architectural surfaces (castle, rooftops, space station, candyLand,
+ * hauntedGraveyard).
+ *
+ * The back-left shift means visible cap-back-top sits sp pixels INSIDE the
+ * platform's x range. To avoid a visible offset between the bonk wall and
+ * this slope, architectural arenas set `Platform.leftCollisionInset = sp` so
+ * the player bonks at `plat.x + sp` (the visible back-top edge), and they
+ * draw the body face in the foreground overlay pass so it occludes the
+ * player when their bbox enters the phantom strip [plat.x, plat.x + sp].
+ */
+export function leftIso(yTop: number, yBot: number, leftX: number, sp: number): EdgePoint[] {
+  return [{ x: leftX, y: yBot }, { x: leftX + sp, y: yTop }];
+}
+
+/** Iso projection: back edge shifted right by `sp` so the cap is a parallelogram. */
+export function backIso(x: number, w: number, cB: number, sp: number): EdgePoint[] {
+  return [{ x: x + sp, y: cB }, { x: x + w + sp, y: cB }];
+}
+
 // ---- Derived geometry ----
 /** Y-coordinate of the cap's front edge (lowest point of cap, closest to body top). */
 export function capFrontY(platform: Platform): number { return platform.y + CAP_DEPTH / 2; }
@@ -242,13 +385,19 @@ export interface CapRenderOpts {
   drawCapTexture: (ctx: CanvasRenderingContext2D, cF: number, cB: number, sp: number) => void;
 }
 
-/** Cap polygon + gradient + texture. frontPts / backPts define the irregular edges. */
+/**
+ * Cap polygon + gradient + texture. frontPts / backPts define the irregular edges.
+ * Optional `leftPts` (start at front-left, end at back-left, x &lt;= leftX) replaces
+ * the default straight vertical left edge with outward bumps. When omitted, the
+ * left edge stays vertical at platform.x — preserving the original behavior.
+ */
 export function drawPlatformCap(
   ctx: CanvasRenderingContext2D,
   platform: Platform,
   frontPts: EdgePoint[],
   backPts: EdgePoint[],
   opts: CapRenderOpts,
+  leftPts?: EdgePoint[],
 ): void {
   const sp = skewPx();
   const cF = capFrontY(platform);
@@ -260,6 +409,12 @@ export function drawPlatformCap(
     for (let i = 1; i < backPts.length; i++) ctx.lineTo(backPts[i].x, backPts[i].y);
     ctx.lineTo(platform.x + platform.width, cF);
     for (let i = frontPts.length - 1; i >= 0; i--) ctx.lineTo(frontPts[i].x, frontPts[i].y);
+    if (leftPts) {
+      // First leftPt duplicates the last frontPt (both at front-left); skip it
+      // to avoid a redundant lineTo, and the closePath rejoins back-left to
+      // backPts[0] which the last leftPt already lands on.
+      for (let i = 1; i < leftPts.length; i++) ctx.lineTo(leftPts[i].x, leftPts[i].y);
+    }
     ctx.closePath();
   };
 

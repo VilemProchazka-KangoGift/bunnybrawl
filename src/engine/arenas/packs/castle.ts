@@ -4,10 +4,10 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { getFloatingPlatforms } from '../../themes/utils';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
 import {
-  CAP_DEPTH, mulberry32, seedFor,
+  CAP_DEPTH, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
   capFrontY, capBackY, skewPx,
   drawPlatformRightFace, drawPlatformCap,
-  subtleDown, backFlat,
+  subtleDown, backIso, leftIso,
 } from '../../themes/drawPrimitives';
 
 /**
@@ -60,69 +60,22 @@ function drawCastleCobweb(
   ctx.restore();
 }
 
-function drawCastlePlatform(ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean): void {
+// Bg pass: cap + right face. These always sit BEHIND the player.
+function drawCastlePlatformBg(ctx: CanvasRenderingContext2D, platform: Platform): void {
   const rng = mulberry32(seedFor(platform.x, platform.y));
   const cF = capFrontY(platform);
   const cB = capBackY(platform);
-  const bodyTop = cF;
-  const bodyH = platform.height - CAP_DEPTH / 2;
   const sp = skewPx();
+  const brickW = 40;
 
   // Right face — dark stone shadow
   drawPlatformRightFace(ctx, platform, '#2a2a2a');
 
-  // Body front face — gray stone gradient (light top → dark bottom)
-  const bodyGrad = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
-  bodyGrad.addColorStop(0, '#7a7a7a');
-  bodyGrad.addColorStop(1, '#3a3a3a');
-  ctx.fillStyle = bodyGrad;
-  ctx.fillRect(platform.x, bodyTop, platform.width, bodyH);
-
-  // Brick mortar pattern — staggered courses
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(platform.x, bodyTop, platform.width, bodyH);
-  ctx.clip();
-
-  const brickH = 12;
-  const brickW = 40;
-  ctx.fillStyle = 'rgba(42,42,42,0.5)';
-
-  // Horizontal mortar lines every ~12px
-  let row = 0;
-  for (let by = bodyTop + brickH; by < bodyTop + bodyH; by += brickH) {
-    ctx.fillRect(platform.x, by, platform.width, 1);
-    row++;
-  }
-
-  // Vertical mortar ticks — staggered. Odd rows offset by half-brick.
-  row = 0;
-  for (let by = bodyTop; by < bodyTop + bodyH; by += brickH) {
-    const offset = (row % 2 === 1) ? brickW * 0.5 : 0;
-    for (let bx = platform.x + offset; bx <= platform.x + platform.width; bx += brickW) {
-      ctx.fillRect(bx, by, 1, brickH);
-    }
-    row++;
-  }
-
-  // Weathering blotches — 3-4 darker ellipses
-  const blotchCount = 3 + Math.floor(rng() * 2);
-  ctx.fillStyle = 'rgba(40,40,40,0.3)';
-  for (let i = 0; i < blotchCount; i++) {
-    const bx = platform.x + rng() * platform.width;
-    const by = bodyTop + rng() * bodyH;
-    const brx = 4 + rng() * 6;
-    const bry = 2 + rng() * 4;
-    ctx.beginPath();
-    ctx.ellipse(bx, by, brx, bry, rng() * Math.PI, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  ctx.restore();
-
-  // Edge profiles — subtle inward chip notches on front, flat horizon on back
+  // Edge profiles — subtle inward chip notches on front; iso parallelogram cap
+  // (back shifted right + left edge sloped) for the architectural feel.
   const frontPts = subtleDown(platform.x, platform.width, cF, rng, { count: 2, amp: 1.2 });
-  const backPts = backFlat(platform.x, platform.width, cB, sp);
+  const backPts = backIso(platform.x, platform.width, cB, sp);
+  const leftPts = leftIso(cB, cF, platform.x, sp);
 
   // Cap — weathered stone with worn speckles + brick-direction mortar
   drawPlatformCap(ctx, platform, frontPts, backPts, {
@@ -147,7 +100,6 @@ function drawCastlePlatform(ctx: CanvasRenderingContext2D, platform: Platform, i
       const capDepthY = capFront - capBack;
       for (const frac of [0.3, 0.7]) {
         const ly = capBack + capDepthY * frac;
-        // Skewed line: starts at (platform.x + skew * (1-frac), ly), ends at (platform.x + width + skew * (1-frac), ly)
         const lx0 = platform.x + skew * (1 - frac);
         const lx1 = lx0 + platform.width;
         ctx2.fillRect(lx0, ly, lx1 - lx0, 1);
@@ -165,11 +117,68 @@ function drawCastlePlatform(ctx: CanvasRenderingContext2D, platform: Platform, i
         r++;
       }
     },
-  });
+  }, leftPts);
+}
+
+// Fg pass: body face + cobwebs. Drawn AFTER players so the body occludes any
+// player whose bbox overlaps the body region — gives the iso phantom strip
+// (between plat.x and plat.x + leftCollisionInset) a "going behind" feel.
+function drawCastlePlatformFg(ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean): void {
+  // Independent seed (offset from bg) so bg and fg rng streams don't interfere.
+  const rng = mulberry32(seedFor(platform.x, platform.y) ^ BODY_SEED_OFFSET);
+  const cF = capFrontY(platform);
+  const bodyTop = cF;
+  const bodyH = platform.height - CAP_DEPTH / 2;
+
+  // Body front face — gray stone gradient (light top → dark bottom)
+  const bodyGrad = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
+  bodyGrad.addColorStop(0, '#7a7a7a');
+  bodyGrad.addColorStop(1, '#3a3a3a');
+  ctx.fillStyle = bodyGrad;
+  ctx.fillRect(platform.x, bodyTop, platform.width, bodyH);
+
+  // Brick mortar pattern — staggered courses
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(platform.x, bodyTop, platform.width, bodyH);
+  ctx.clip();
+
+  const brickH = 12;
+  const brickW = 40;
+  ctx.fillStyle = 'rgba(42,42,42,0.5)';
+
+  // Horizontal mortar lines every ~12px
+  for (let by = bodyTop + brickH; by < bodyTop + bodyH; by += brickH) {
+    ctx.fillRect(platform.x, by, platform.width, 1);
+  }
+
+  // Vertical mortar ticks — staggered. Odd rows offset by half-brick.
+  let row = 0;
+  for (let by = bodyTop; by < bodyTop + bodyH; by += brickH) {
+    const offset = (row % 2 === 1) ? brickW * 0.5 : 0;
+    for (let bx = platform.x + offset; bx <= platform.x + platform.width; bx += brickW) {
+      ctx.fillRect(bx, by, 1, brickH);
+    }
+    row++;
+  }
+
+  // Weathering blotches — 3-4 darker ellipses
+  const blotchCount = 3 + Math.floor(rng() * 2);
+  ctx.fillStyle = 'rgba(40,40,40,0.3)';
+  for (let i = 0; i < blotchCount; i++) {
+    const bx = platform.x + rng() * platform.width;
+    const by = bodyTop + rng() * bodyH;
+    const brx = 4 + rng() * 6;
+    const bry = 2 + rng() * 4;
+    ctx.beginPath();
+    ctx.ellipse(bx, by, brx, bry, rng() * Math.PI, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
 
   // Cobwebs in front-face corners — 45% chance per corner. Never both corners
-  // on the same vertical side (they'd overflow into each other on tall platforms);
-  // if both would fire, a coinflip drops one. Floating only, bodyH >= 10 only.
+  // on the same vertical side. Floating only, bodyH >= 10 only.
   if (!isGround && bodyH >= 10) {
     const bb = bodyTop + bodyH;
     let leftTop = rng() < 0.45;
@@ -203,7 +212,7 @@ export const castle: ArenaPack = {
   // ---- Layout ----
   width: CANVAS_WIDTH,
   height: CANVAS_HEIGHT,
-  platforms: [
+  platforms: applyIsoInsets([
     { x: 0, y: 660, width: 240, height: 60 },
     { x: 380, y: 660, width: 520, height: 60 },
     { x: 1040, y: 660, width: 240, height: 60 },
@@ -225,7 +234,7 @@ export const castle: ArenaPack = {
     { x: 820, y: 590, width: 40, height: 70 },
     { x: 270, y: 440, width: 115, height: 24 },
     { x: 910, y: 435, width: 85, height: 24 },
-  ],
+  ]),
   spawnPoints: [
     { x: 100, y: 560 }, { x: 1180, y: 560 },
     { x: 90, y: 400 }, { x: 1150, y: 390 },
@@ -530,24 +539,9 @@ export const castle: ArenaPack = {
     drawArmor(250, y, 45);
     drawArmor(1050, y, 42);
 
-    // Stone pillars
-    const drawPillar = (px: number, py: number, pw: number, ph: number) => {
-      ctx.fillStyle = '#3A3A50';
-      ctx.fillRect(px, py - ph, pw, ph);
-      // Cap
-      ctx.fillStyle = '#4A4A60';
-      ctx.fillRect(px - 3, py - ph - 5, pw + 6, 8);
-      // Base
-      ctx.fillRect(px - 3, py - 5, pw + 6, 8);
-      // Highlight
-      ctx.fillStyle = 'rgba(100, 100, 130, 0.3)';
-      ctx.fillRect(px + 2, py - ph + 5, 3, ph - 10);
-    };
-
-    // Stone pillars (matching jumpable platform blocks at x=430, 630, 820)
-    drawPillar(430, y, 40, 70);
-    drawPillar(630, y, 40, 60);
-    drawPillar(820, y, 40, 70);
+    // (Pillars at x=430, 630, 820 are platforms — they're rendered by drawPlatform
+    // with the same 3D castle treatment as the rest of the level. No 2D overlay
+    // here; that double-paint produced flat caps/bases poking through the 3D body.)
   },
 
   drawForegroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => {
@@ -695,8 +689,11 @@ export const castle: ArenaPack = {
     });
   },
 
-  drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => {
-    drawCastlePlatform(ctx, platform, isGround);
+  drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
+    drawCastlePlatformBg(ctx, platform);
+  },
+  drawPlatformOverlay: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => {
+    drawCastlePlatformFg(ctx, platform, isGround);
   },
 
   drawWeatherParticle: (ctx: CanvasRenderingContext2D, w: WeatherParticle) => {

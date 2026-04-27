@@ -7,10 +7,32 @@
   justify-content: center;
 }
 
+.lobby-canvas-container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
 .lobby-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
   display: block;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
+}
+
+.lobby-bg-canvas {
+  z-index: 1;
+}
+
+.lobby-fg-canvas {
+  z-index: 2;
+}
+
+.lobby-hud-canvas {
+  z-index: 3;
+  pointer-events: none;
 }
 
 .lobby-back-btn {

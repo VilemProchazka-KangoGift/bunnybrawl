@@ -5,7 +5,7 @@ import { GameLoop } from '../engine/gameLoop';
 import { NetMatch } from '../engine/net/netMatch';
 import { MsgType } from '../engine/net/protocol';
 import { getModalTransport } from './OnlineModal';
-import { getArena, listArenaPacks } from '../engine/arenas';
+import { getArena, listPlayableArenaPacks } from '../engine/arenas';
 import { ArenaGrid } from './ArenaGrid';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
 import { isTouchPrimary } from '../engine/touchDetect';
@@ -22,7 +22,7 @@ function resolveArenaId(arenaId: string): string {
     lastResolvedArenaId = arenaId;
     return arenaId;
   }
-  const allArenas = listArenaPacks();
+  const allArenas = listPlayableArenaPacks();
   const available = allArenas.filter(a => a.id !== lastResolvedArenaId);
   const pick = available[Math.floor(Math.random() * available.length)] || allArenas[0];
   lastResolvedArenaId = pick.id;

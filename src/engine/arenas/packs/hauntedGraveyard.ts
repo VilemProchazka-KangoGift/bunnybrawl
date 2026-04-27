@@ -4,10 +4,10 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { createThornRenderer } from '../../themes/drawPrimitives';
 import { getFloatingPlatforms } from '../../themes/utils';
 import {
-  CAP_DEPTH, mulberry32, seedFor,
+  CAP_DEPTH, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
   capFrontY, capBackY, skewPx,
   drawPlatformRightFace, drawPlatformCap,
-  jaggedDown, backWavyUp, drawLeftStones,
+  jaggedDown, backIso, leftIso, drawLeftStones,
   type StonePaletteRow,
 } from '../../themes/drawPrimitives';
 
@@ -69,16 +69,53 @@ function drawCobweb(
   ctx.restore();
 }
 
-function drawHauntedPlatform(ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean): void {
+// Bg pass: cap + right face + left-protrusion stones. Sit behind the player.
+function drawHauntedPlatformBg(ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean): void {
   const rng = mulberry32(seedFor(platform.x, platform.y));
   const cF = capFrontY(platform);
   const cB = capBackY(platform);
-  const bodyTop = cF;
-  const bodyH = platform.height - CAP_DEPTH / 2;
   const sp = skewPx();
 
-  // Right face — very dark purple-gray
+  // Right face
   drawPlatformRightFace(ctx, platform, '#1a1522');
+
+  // Edge profiles + iso cap.
+  const frontPts = jaggedDown(platform.x, platform.width, cF, rng, { bumps: 4, ampMin: 3, ampMax: 5 });
+  const backPts = backIso(platform.x, platform.width, cB, sp);
+  const leftPts = leftIso(cB, cF, platform.x, sp);
+
+  drawPlatformCap(ctx, platform, frontPts, backPts, {
+    capColor: '#7a7580',
+    capLight: 'rgba(220,215,225,0.18)',
+    drawCapTexture: (ctx2, capFront, _capBack, skew) => {
+      const patchN = 3 + Math.floor(rng() * 2);
+      ctx2.fillStyle = 'rgba(50,40,55,0.4)';
+      for (let i = 0; i < patchN; i++) {
+        const u = (i + 0.3 + rng() * 0.4) / patchN;
+        const v = 0.2 + rng() * 0.6;
+        const px = platform.x + u * platform.width + v * skew;
+        const py = capFront - v * CAP_DEPTH;
+        const rx = 3 + rng() * 2;
+        const ry = (1.2 + rng() * 0.8);
+        ctx2.beginPath();
+        ctx2.ellipse(px, py, rx, ry, rng() * Math.PI, 0, Math.PI * 2);
+        ctx2.fill();
+      }
+    },
+  }, leftPts);
+
+  // Left protrusion stones (floating only) — bg, behind player
+  if (!isGround) {
+    drawLeftStones(ctx, platform, HAUNTED_STONE_PALETTE, rng);
+  }
+}
+
+// Fg pass: body + cracks + cobwebs. Drawn after players for occlusion.
+function drawHauntedPlatformFg(ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean): void {
+  const rng = mulberry32(seedFor(platform.x, platform.y) ^ BODY_SEED_OFFSET);
+  const cF = capFrontY(platform);
+  const bodyTop = cF;
+  const bodyH = platform.height - CAP_DEPTH / 2;
 
   // Body front face — cold gray-purple gradient
   const g = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
@@ -87,9 +124,8 @@ function drawHauntedPlatform(ctx: CanvasRenderingContext2D, platform: Platform, 
   ctx.fillStyle = g;
   ctx.fillRect(platform.x, bodyTop, platform.width, bodyH);
 
-  // 1-3 deep cracks with ghostly green seepage. Each crack: main stem of 2-3
-  // segments (8-14px each), with 0-2 short side branches (4-8px).
-  const crackCount = 1 + Math.floor(rng() * 3); // 1..3
+  // 1-3 deep cracks with ghostly green seepage.
+  const crackCount = 1 + Math.floor(rng() * 3);
   type Seg = { x1: number; y1: number; x2: number; y2: number };
   const segs: Seg[] = [];
   for (let c = 0; c < crackCount; c++) {
@@ -97,16 +133,14 @@ function drawHauntedPlatform(ctx: CanvasRenderingContext2D, platform: Platform, 
     const ay = bodyTop + 4 + rng() * Math.max(1, bodyH - 8);
     let cx = ax;
     let cy = ay;
-    const stemSegs = 2 + Math.floor(rng() * 2); // 2..3
-    // Bias direction roughly downward but jittery
+    const stemSegs = 2 + Math.floor(rng() * 2);
     let dir = (rng() - 0.5) * 1.6 + Math.PI * 0.5;
     for (let s = 0; s < stemSegs; s++) {
       const len = 8 + rng() * 6;
       const nx = cx + Math.cos(dir) * len;
       const ny = cy + Math.sin(dir) * len;
       segs.push({ x1: cx, y1: cy, x2: nx, y2: ny });
-      // Side branches off this segment
-      const branchN = Math.floor(rng() * 3); // 0..2
+      const branchN = Math.floor(rng() * 3);
       for (let b = 0; b < branchN; b++) {
         const t = 0.3 + rng() * 0.5;
         const bx = cx + (nx - cx) * t;
@@ -124,7 +158,6 @@ function drawHauntedPlatform(ctx: CanvasRenderingContext2D, platform: Platform, 
       dir += (rng() - 0.5) * 1.0;
     }
   }
-  // Glow pass first (wider, soft green)
   ctx.strokeStyle = 'rgba(100,200,140,0.35)';
   ctx.lineWidth = 4;
   ctx.lineCap = 'round';
@@ -134,7 +167,6 @@ function drawHauntedPlatform(ctx: CanvasRenderingContext2D, platform: Platform, 
     ctx.lineTo(s.x2, s.y2);
     ctx.stroke();
   }
-  // Dark core stroke
   ctx.strokeStyle = '#15101a';
   ctx.lineWidth = 1.5 + rng() * 0.5;
   for (const s of segs) {
@@ -145,14 +177,11 @@ function drawHauntedPlatform(ctx: CanvasRenderingContext2D, platform: Platform, 
   }
   ctx.lineCap = 'butt';
 
-  // Bottom bevel — slight darkening at the base of the front face
+  // Bottom bevel
   ctx.fillStyle = 'rgba(0,0,0,0.30)';
   ctx.fillRect(platform.x, bodyTop + bodyH - 3, platform.width, 3);
 
-  // Cobwebs in front-face corners — 70% chance per corner, but never both
-  // corners on the same vertical side (they overflow into each other on tall
-  // platforms). If both would fire on a side, drop one via a coinflip.
-  // Floating only, and only on platforms with bodyH >= 10 (skip tiny tombstones).
+  // Cobwebs in front-face corners
   if (!isGround && bodyH >= 10) {
     const bb = bodyTop + bodyH;
     let leftTop = rng() < 0.7;
@@ -170,36 +199,6 @@ function drawHauntedPlatform(ctx: CanvasRenderingContext2D, platform: Platform, 
     if (leftBot)  drawCobweb(ctx, platform.x, bb, +1, -1);
     if (rightBot) drawCobweb(ctx, platform.x + platform.width, bb, -1, -1);
   }
-
-  // Edge profiles — jagged broken stone, both front and back
-  const frontPts = jaggedDown(platform.x, platform.width, cF, rng, { bumps: 4, ampMin: 3, ampMax: 5 });
-  const backPts = backWavyUp(platform.x, platform.width, cB, sp, rng, { bumps: 3, ampMin: 2, ampMax: 3.5 });
-
-  // Cap — dusty lichen-gray with grime patches
-  drawPlatformCap(ctx, platform, frontPts, backPts, {
-    capColor: '#7a7580',
-    capLight: 'rgba(220,215,225,0.18)',
-    drawCapTexture: (ctx2, capFront, _capBack, skew) => {
-      const patchN = 3 + Math.floor(rng() * 2); // 3..4
-      ctx2.fillStyle = 'rgba(50,40,55,0.4)';
-      for (let i = 0; i < patchN; i++) {
-        const u = (i + 0.3 + rng() * 0.4) / patchN;
-        const v = 0.2 + rng() * 0.6;
-        const px = platform.x + u * platform.width + v * skew;
-        const py = capFront - v * CAP_DEPTH;
-        const rx = 3 + rng() * 2;
-        const ry = (1.2 + rng() * 0.8);
-        ctx2.beginPath();
-        ctx2.ellipse(px, py, rx, ry, rng() * Math.PI, 0, Math.PI * 2);
-        ctx2.fill();
-      }
-    },
-  });
-
-  // Left protrusions — varied dusky purple-gray stones (floating only)
-  if (!isGround) {
-    drawLeftStones(ctx, platform, HAUNTED_STONE_PALETTE, rng);
-  }
 }
 
 export const hauntedGraveyard: ArenaPack = {
@@ -216,7 +215,7 @@ export const hauntedGraveyard: ArenaPack = {
   // ---- Layout ----
   width: CANVAS_WIDTH,
   height: CANVAS_HEIGHT,
-  platforms: [
+  platforms: applyIsoInsets([
     { x: 0, y: 660, width: 480, height: 60 },
     { x: 800, y: 660, width: 480, height: 60 },
     { x: 120, y: 625, width: 35, height: 35 },
@@ -233,7 +232,7 @@ export const hauntedGraveyard: ArenaPack = {
     { x: 520, y: 290, width: 240, height: 24 },
     { x: 200, y: 450, width: 100, height: 24 },
     { x: 980, y: 450, width: 100, height: 24 },
-  ],
+  ]),
   spawnPoints: [
     { x: 100, y: 500 }, { x: 1160, y: 500 },
     { x: 600, y: 385 }, { x: 350, y: 628 },
@@ -606,7 +605,10 @@ export const hauntedGraveyard: ArenaPack = {
   },
 
   drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => {
-    drawHauntedPlatform(ctx, platform, isGround);
+    drawHauntedPlatformBg(ctx, platform, isGround);
+  },
+  drawPlatformOverlay: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => {
+    drawHauntedPlatformFg(ctx, platform, isGround);
   },
 
   drawCustomThorn: createThornRenderer((ctx, x, y, width, height, fadeAlpha) => {

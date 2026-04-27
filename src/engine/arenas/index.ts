@@ -14,6 +14,7 @@ export {
   getArenaNav,
   getArenaDisplayName,
   listArenaPacks,
+  listPlayableArenaPacks,
   toArena,
   toThemeConfig,
 } from './registry';

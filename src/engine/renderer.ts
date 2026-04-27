@@ -1,4 +1,4 @@
-import type { Arena, MatchState, Particle, Platform, PlayerSlot, Gib } from './types';
+import type { Arena, MatchState, Particle, Platform, Player, PlayerSlot, Gib } from './types';
 import type { ThemeConfig } from './themes/types';
 import { aabbOverlap } from './physics';
 import {
@@ -7,7 +7,10 @@ import {
   SHOCKWAVE_DURATION, SCREEN_FLASH_DURATION,
   HITSTOP_DURATION, HITSTOP_ZOOM,
 } from './constants';
-import { drawCloud as drawCloudPrimitive, drawHill, drawPlatformMoss } from './themes/drawPrimitives';
+import {
+  drawCloud as drawCloudPrimitive, drawHill, drawPlatformMoss,
+  capFrontY, capBackY, skewPx,
+} from './themes/drawPrimitives';
 import { hexToRGB } from './fastMath';
 import { debugFlags } from './debugFlags';
 import { drawNavDebugOverlay } from './navDebugOverlay';
@@ -38,6 +41,10 @@ interface Cloud {
 }
 
 const _nearCarrotSet = new Set<PlayerSlot>();
+const _isoOccluders: Platform[] = [];
+
+/** Sprite extends ~12 px above the bbox top for tall ears, horns, and gib pivots. */
+const SPRITE_TOP_PAD = 12;
 
 /** Diagnostic flags tracking which rendering branches fired each frame. */
 export interface RenderDiagnostics {
@@ -71,6 +78,52 @@ export interface RenderDiagnostics {
   playersDrawn: number;
 }
 
+/**
+ * Collect iso platforms whose 3D footprint overlaps the player's sprite
+ * extent. Caller subtracts each via evenodd clip when drawing the player
+ * (see addIsoPlatformPath). Reuses a module-level array to avoid per-frame
+ * allocation; the result is consumed before the next call.
+ */
+function findIsoOccluders(player: Player, platforms: Platform[]): Platform[] {
+  _isoOccluders.length = 0;
+  const playerBottom = player.y + player.height;
+  const playerSpriteTop = player.y - SPRITE_TOP_PAD;
+  const playerRight = player.x + player.width;
+  for (const plat of platforms) {
+    if (plat.leftCollisionInset == null && plat.bottomCollisionInset == null) continue;
+    if (playerBottom <= plat.y) continue;
+    const platRight = plat.x + plat.width;
+    if (playerRight <= plat.x || player.x >= platRight) continue;
+    // Polygon spans capBack..bottom vertically (sprite ears reach into cap).
+    if (playerBottom <= capBackY(plat) || playerSpriteTop >= plat.y + plat.height) continue;
+    _isoOccluders.push(plat);
+  }
+  return _isoOccluders;
+}
+
+/**
+ * Trace the iso occluder silhouette — body (front rectangle) plus the cap's
+ * LEFT diagonal extension only. The cap's right-side iso shift and the
+ * right face are deliberately excluded: a player adjacent to the platform
+ * on the right is in front of those surfaces, not behind them. The left
+ * diagonal stays so a player approaching from the left whose ears poke up
+ * into the cap region still appears behind the cap there. Five vertices,
+ * clockwise from the cap's back-left; closePath traces the cap-left
+ * diagonal back to start.
+ */
+function addIsoPlatformPath(ctx: CanvasRenderingContext2D, plat: Platform): void {
+  const sp = skewPx();
+  const cF = capFrontY(plat);
+  const cB = capBackY(plat);
+  const bottom = plat.y + plat.height;
+  ctx.moveTo(plat.x + sp, cB);
+  ctx.lineTo(plat.x + plat.width, cB);
+  ctx.lineTo(plat.x + plat.width, bottom);
+  ctx.lineTo(plat.x, bottom);
+  ctx.lineTo(plat.x, cF);
+  ctx.closePath();
+}
+
 function freshDiag(): RenderDiagnostics {
   return {
     clouds: false, weather: false, wildlife: false, animatedBg: false,
@@ -90,6 +143,14 @@ export class Renderer {
   private bgCtx: CanvasRenderingContext2D;
   private fgCtx: CanvasRenderingContext2D;
   private hudCtx: CanvasRenderingContext2D | null = null;
+  // Cached fg overlay (platform body faces drawn after players). Built once
+  // per arena/scale change in renderBackground; one drawImage per frame
+  // beats N×decorations-per-platform-per-frame.
+  private _overlayCanvas: OffscreenCanvas | null = null;
+  // True if any platform in the current arena has an iso phantom-strip inset.
+  // When false, the per-player findIsoOccluders scan is skipped entirely
+  // (lobby, non-iso arenas).
+  private _arenaHasIsoOccluders = false;
   private _renderScale = 1;
   private _lastBgArena: Arena | null = null;
   private _lastBgOriginalArena: Arena | undefined;
@@ -117,7 +178,16 @@ export class Renderer {
   private _overlayLastRtt = -1;
   private _overlayLastJitter = -1;
 
-  constructor(bgCanvas: HTMLCanvasElement, fgCanvas: HTMLCanvasElement, theme: ThemeConfig, mirrored = false, hudCanvas?: HTMLCanvasElement) {
+  // Lobby mode: skip match-HUD/countdown/connection-quality and let the
+  // caller paint a custom overlay each frame via _lobbyOverlayFn.
+  private _lobbyMode = false;
+  private _lobbyOverlayFn: ((ctx: CanvasRenderingContext2D, frameTime: number) => void) | null = null;
+
+  constructor(
+    bgCanvas: HTMLCanvasElement, fgCanvas: HTMLCanvasElement, theme: ThemeConfig,
+    mirrored = false, hudCanvas?: HTMLCanvasElement,
+    options?: { lobbyMode?: boolean },
+  ) {
     clearRenderingCaches();
     this.bgCanvas = bgCanvas;
     this.fgCanvas = fgCanvas;
@@ -130,6 +200,8 @@ export class Renderer {
       this.hudCanvas = hudCanvas;
       this.hudCtx = hudCanvas.getContext('2d')!;
     }
+
+    this._lobbyMode = options?.lobbyMode ?? false;
 
     // Apply initial render scale to all canvases (sets backing-store dims + ctx transform)
     this._renderScale = getRenderScale();
@@ -199,6 +271,11 @@ export class Renderer {
     this._isNetworkGuest = true;
   }
 
+  /** Lobby-mode HUD callback. Receives a clean ctx each frame. Set null to disable. */
+  setLobbyOverlayFn(fn: ((ctx: CanvasRenderingContext2D, frameTime: number) => void) | null): void {
+    this._lobbyOverlayFn = fn;
+  }
+
   /** E2E diagnostic: which rendering branches fired last frame. */
   getDiagnostics(): RenderDiagnostics { return this._diag; }
 
@@ -206,6 +283,9 @@ export class Renderer {
     if (originalArena) this.originalArena = originalArena;
     this._lastBgArena = arena;
     this._lastBgOriginalArena = originalArena;
+    this._arenaHasIsoOccluders = arena.platforms.some(
+      p => p.leftCollisionInset != null || p.bottomCollisionInset != null,
+    );
     const themeArena = this.originalArena ?? arena; // un-mirrored arena for theme draw calls
     const ctx = this.bgCtx;
     const theme = this.theme;
@@ -264,6 +344,30 @@ export class Renderer {
     if (this.mirrored) { ctx.save(); ctx.scale(-1, 1); ctx.translate(-CANVAS_WIDTH, 0); }
     theme.drawBackgroundNature(ctx, themeArena);
     if (this.mirrored) { ctx.restore(); }
+
+    this.buildPlatformOverlay(arena);
+  }
+
+  /**
+   * Bake every platform's body-face overlay into a single OffscreenCanvas.
+   * Drawn after players each frame as one drawImage, sparing the fg ctx the
+   * per-platform decoration cost on every frame.
+   */
+  private buildPlatformOverlay(arena: Arena): void {
+    const draw = this.theme.drawPlatformOverlay;
+    if (!draw) { this._overlayCanvas = null; return; }
+    const s = this._renderScale;
+    const w = Math.max(1, Math.round(CANVAS_WIDTH * s));
+    const h = Math.max(1, Math.round(CANVAS_HEIGHT * s));
+    if (!this._overlayCanvas || this._overlayCanvas.width !== w || this._overlayCanvas.height !== h) {
+      this._overlayCanvas = new OffscreenCanvas(w, h);
+    }
+    const octx = this._overlayCanvas.getContext('2d')! as unknown as CanvasRenderingContext2D;
+    octx.setTransform(s, 0, 0, s, 0, 0);
+    octx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    for (const plat of arena.platforms) {
+      draw(octx, plat, plat.y >= 650);
+    }
   }
 
 
@@ -321,13 +425,12 @@ export class Renderer {
   }
 
   private blendColor(hex: string, target: string, amount: number): string {
-    const parse = (h: string) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
-    const [r1, g1, b1] = parse(hex);
-    const [r2, g2, b2] = parse(target);
-    const r = Math.round(r1 + (r2 - r1) * amount);
-    const g = Math.round(g1 + (g2 - g1) * amount);
-    const b = Math.round(b1 + (b2 - b1) * amount);
-    return `rgb(${r},${g},${b})`;
+    const a = hexToRGB(hex);
+    const b = hexToRGB(target);
+    const r = Math.round(a.r + (b.r - a.r) * amount);
+    const g = Math.round(a.g + (b.g - a.g) * amount);
+    const bl = Math.round(a.b + (b.b - a.b) * amount);
+    return `rgb(${r},${g},${bl})`;
   }
 
   bakeGibs(gibs: Gib[]): void {
@@ -554,12 +657,32 @@ export class Renderer {
       }
     }
 
-    // Players
+    // Players (iso clip applied when applicable — see findIsoOccluders).
+    const useIsoClip = this._arenaHasIsoOccluders;
     for (const player of matchState.players) {
       if (!player.active) continue;
       if (player.state === 'respawning') continue;
+      const occluders = useIsoClip ? findIsoOccluders(player, arena.platforms) : null;
+      const clipped = occluders !== null && occluders.length > 0;
+      if (clipped) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        for (const plat of occluders!) addIsoPlatformPath(ctx, plat);
+        ctx.clip('evenodd');
+      }
       drawPlayer(ctx, player, nearCarrotSet.has(player.id), this.theme, this.frameTime);
+      if (clipped) ctx.restore();
       d.playersDrawn++;
+    }
+
+    // Platform body overlay (cached). Drawn AFTER players so the body face
+    // occludes any player whose bbox enters the iso phantom strip — the
+    // "going behind the platform" effect. Cached at arena/scale change in
+    // buildPlatformOverlay; this is one drawImage instead of a per-platform
+    // decoration loop on every frame.
+    if (this._overlayCanvas) {
+      ctx.drawImage(this._overlayCanvas, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     }
 
     // Spring spiral trail (h) -- drawn near players
@@ -668,11 +791,32 @@ export class Renderer {
     // Overlay layer: HUD, countdown, connection quality, debug overlays, screen flash.
     // When hudCtx is set, these go on a dedicated canvas above fg, redrawn only when
     // state changes (saving a per-frame blit). Otherwise fall back to drawing on fg.
+    if (this._lobbyMode) {
+      this._renderLobbyOverlay(matchState);
+      return;
+    }
     const hudDirty = isHudDirty(matchState);
     if (this.hudCtx) {
       this._renderOverlayLayer(matchState, arena, hudDirty);
     } else {
       this._drawOverlayContent(this.fgCtx, matchState, arena, hudDirty);
+    }
+  }
+
+  /**
+   * Lobby-mode overlay path. Caller-supplied draw fn paints the HUD each frame
+   * (no dirty-tracking — lobby HUD has continuously-moving labels and the
+   * ready-zone gradient). Screen flash still respected for stomp swaps.
+   */
+  private _renderLobbyOverlay(matchState: MatchState): void {
+    const target = this.hudCtx ?? this.fgCtx;
+    if (this.hudCtx) target.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    if (this._lobbyOverlayFn) this._lobbyOverlayFn(target, this.frameTime);
+    if (matchState.screenFlash > 0) {
+      this._diag.screenFlash = true;
+      const flashAlpha = Math.min(1, matchState.screenFlash / SCREEN_FLASH_DURATION);
+      target.fillStyle = `rgba(255, 255, 255, ${flashAlpha})`;
+      target.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     }
   }
 

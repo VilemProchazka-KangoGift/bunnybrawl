@@ -10,11 +10,13 @@ import { hauntedGraveyard } from './packs/hauntedGraveyard';
 import { rooftops } from './packs/rooftops';
 import { spaceStation } from './packs/spaceStation';
 import { waterfall } from './packs/waterfall';
+import { lobby } from './packs/lobby';
 
-/** Register all 11 built-in arena packs. Must be called before any arena lookups. */
+/** Register all built-in arena packs. Must be called before any arena lookups. */
 export function registerBuiltinArenas(): void {
   [
     meadow, winterLake, volcano, castle, candyLand,
     treetops, underwater, hauntedGraveyard, rooftops, spaceStation, waterfall,
+    lobby,
   ].forEach(registerArena);
 }

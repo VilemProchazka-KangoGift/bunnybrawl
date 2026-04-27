@@ -4,24 +4,63 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
 import { getFloatingPlatforms } from '../../themes/utils';
 import {
-  CAP_DEPTH, mulberry32, seedFor,
+  CAP_DEPTH, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
   capFrontY, capBackY, skewPx,
   drawPlatformRightFace, drawPlatformCap,
-  candyDrips, backWavyUp,
+  candyDrips, backIso, leftIso,
 } from '../../themes/drawPrimitives';
 
 const SPRINKLE_COLORS = ['#FF69B4', '#FFD700', '#87CEEB', '#98FB98', '#DDA0DD', '#FF6347'];
 
-function drawCandyPlatform(ctx: CanvasRenderingContext2D, platform: Platform): void {
+// Bg pass: cap + right face. Sit behind the player.
+function drawCandyPlatformBg(ctx: CanvasRenderingContext2D, platform: Platform): void {
   const rng = mulberry32(seedFor(platform.x, platform.y));
   const cF = capFrontY(platform);
   const cB = capBackY(platform);
-  const bodyTop = cF;
-  const bodyH = platform.height - CAP_DEPTH / 2;
   const sp = skewPx();
 
   // Right face — darker pink (shadow side)
   drawPlatformRightFace(ctx, platform, '#D06A98');
+
+  // Edge profiles + iso parallelogram cap.
+  const frontPts = candyDrips(platform.x, platform.width, cF, rng);
+  const backPts = backIso(platform.x, platform.width, cB, sp);
+  const leftPts = leftIso(cB, cF, platform.x, sp);
+
+  // Cap — white frosting with rainbow sprinkles
+  drawPlatformCap(ctx, platform, frontPts, backPts, {
+    capColor: '#FFFDF7',
+    capLight: 'rgba(255,255,255,0.4)',
+    drawCapTexture: (ctx2, capFront, _capBack, skew) => {
+      const n = Math.max(3, Math.floor(platform.width / 12));
+      for (let i = 0; i < n; i++) {
+        const u = (i + 0.3 + rng() * 0.4) / n;
+        const v = 0.15 + rng() * 0.7;
+        const sx = platform.x + u * platform.width + v * skew;
+        const sy = capFront - v * CAP_DEPTH;
+        const angle = rng() * Math.PI;
+        const color = SPRINKLE_COLORS[Math.floor(rng() * SPRINKLE_COLORS.length)];
+        ctx2.save();
+        ctx2.translate(sx, sy);
+        ctx2.rotate(angle);
+        ctx2.fillStyle = color;
+        ctx2.fillRect(-1.8, -0.55, 3.6, 1.1);
+        ctx2.beginPath();
+        ctx2.arc(-1.8, 0, 0.55, 0, Math.PI * 2);
+        ctx2.arc(1.8, 0, 0.55, 0, Math.PI * 2);
+        ctx2.fill();
+        ctx2.restore();
+      }
+    },
+  }, leftPts);
+}
+
+// Fg pass: body face. Drawn after players for occlusion.
+function drawCandyPlatformFg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+  const rng = mulberry32(seedFor(platform.x, platform.y) ^ BODY_SEED_OFFSET);
+  const cF = capFrontY(platform);
+  const bodyTop = cF;
+  const bodyH = platform.height - CAP_DEPTH / 2;
 
   // Body front face — pink layer cake gradient
   const g = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
@@ -37,7 +76,6 @@ function drawCandyPlatform(ctx: CanvasRenderingContext2D, platform: Platform): v
     const layerH = Math.max(2, Math.min(4, bodyH * 0.15));
     ctx.fillStyle = '#FFE8D4';
     ctx.fillRect(platform.x, layerY, platform.width, layerH);
-    // Soft shadow below the cream stripe
     ctx.fillStyle = 'rgba(160,70,100,0.25)';
     ctx.fillRect(platform.x, layerY + layerH, platform.width, 1);
   }
@@ -57,39 +95,6 @@ function drawCandyPlatform(ctx: CanvasRenderingContext2D, platform: Platform): v
   // Bottom bevel — deeper pink shadow at the cake's base
   ctx.fillStyle = 'rgba(120,40,70,0.3)';
   ctx.fillRect(platform.x, bodyTop + bodyH - 3, platform.width, 3);
-
-  // Edge profiles — sum-of-triangles drips on front (signature candy look); rounded sine on back.
-  const frontPts = candyDrips(platform.x, platform.width, cF, rng);
-  const backPts = backWavyUp(platform.x, platform.width, cB, sp, rng, { bumps: 3, ampMin: 2, ampMax: 3.5 });
-
-  // Cap — white frosting with rainbow sprinkles
-  drawPlatformCap(ctx, platform, frontPts, backPts, {
-    capColor: '#FFFDF7',
-    capLight: 'rgba(255,255,255,0.4)',
-    drawCapTexture: (ctx2, capFront, _capBack, skew) => {
-      // Sprinkles — short rotated capsule shapes in varied pastel colors
-      const n = Math.max(3, Math.floor(platform.width / 12));
-      for (let i = 0; i < n; i++) {
-        const u = (i + 0.3 + rng() * 0.4) / n;
-        const v = 0.15 + rng() * 0.7;
-        const sx = platform.x + u * platform.width + v * skew;
-        const sy = capFront - v * CAP_DEPTH;
-        const angle = rng() * Math.PI;
-        const color = SPRINKLE_COLORS[Math.floor(rng() * SPRINKLE_COLORS.length)];
-        ctx2.save();
-        ctx2.translate(sx, sy);
-        ctx2.rotate(angle);
-        ctx2.fillStyle = color;
-        // capsule: rect with rounded ends
-        ctx2.fillRect(-1.8, -0.55, 3.6, 1.1);
-        ctx2.beginPath();
-        ctx2.arc(-1.8, 0, 0.55, 0, Math.PI * 2);
-        ctx2.arc(1.8, 0, 0.55, 0, Math.PI * 2);
-        ctx2.fill();
-        ctx2.restore();
-      }
-    },
-  });
 }
 
 export const candyLand: ArenaPack = {
@@ -106,7 +111,7 @@ export const candyLand: ArenaPack = {
   // ---- Layout ----
   width: CANVAS_WIDTH,
   height: CANVAS_HEIGHT,
-  platforms: [
+  platforms: applyIsoInsets([
     { x: 0, y: 660, width: CANVAS_WIDTH, height: 60 },
     { x: 460, y: 530, width: 360, height: 24 },
     { x: 510, y: 390, width: 260, height: 24 },
@@ -115,7 +120,7 @@ export const candyLand: ArenaPack = {
     { x: 1090, y: 510, width: 140, height: 24 },
     { x: 50, y: 350, width: 145, height: 24 },
     { x: 1100, y: 325, width: 115, height: 24 },
-  ],
+  ]),
   spawnPoints: [
     { x: 130, y: 510 }, { x: 1160, y: 490 },
     { x: 640, y: 510 }, { x: 640, y: 240 },
@@ -439,7 +444,10 @@ export const candyLand: ArenaPack = {
   },
 
   drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
-    drawCandyPlatform(ctx, platform);
+    drawCandyPlatformBg(ctx, platform);
+  },
+  drawPlatformOverlay: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
+    drawCandyPlatformFg(ctx, platform);
   },
 
   drawWeatherParticle: (ctx, w) => {

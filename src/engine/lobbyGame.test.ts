@@ -17,31 +17,6 @@ vi.mock('./audio', () => ({
   },
 }));
 
-// Mock rendering modules that drawLobby imports (use importOriginal for complete exports)
-vi.mock('./rendering/players', async (importOriginal) => {
-  const actual = await importOriginal() as any;
-  return { ...actual, drawCharacterCore: vi.fn(), drawPlayer: vi.fn() };
-});
-
-vi.mock('./themes/drawPrimitives', async (importOriginal) => {
-  const actual = await importOriginal() as any;
-  return {
-    ...actual,
-    drawTree: vi.fn(),
-    drawBush: vi.fn(),
-    drawFlower: vi.fn(),
-    drawMushroom: vi.fn(),
-    drawGrassTuft: vi.fn(),
-    drawCloud: vi.fn(),
-  };
-});
-
-vi.mock('./canvasAnimations', () => ({
-  initWildlife: vi.fn(() => []),
-  updateAndDrawWildlife: vi.fn(),
-  drawDayNightCycle: vi.fn(),
-}));
-
 function makeLobbyGame(opts: { botCount?: number; isMobile?: boolean } = {}) {
   return new LobbyGame({
     botCount: opts.botCount ?? 2,
@@ -71,8 +46,8 @@ describe('LobbyGame', () => {
   });
 
   it('creates extra NPC characters from remaining roster', () => {
-    // 17 total characters - 5 humans - 2 bots = 10 extras
-    expect(game.extraChars.length).toBe(10);
+    const rosterSize = getAllCharacters().length;
+    expect(game.extraChars.length).toBe(rosterSize - 5 /* humans */ - 2 /* bots */);
   });
 
   it('mobile mode creates only P1', () => {
@@ -365,16 +340,14 @@ describe('LobbyGame', () => {
     it('creates 0 bots when botCount is 0', () => {
       const g = makeLobbyGame({ botCount: 0 });
       expect(g.bots).toHaveLength(0);
-      // 17 characters - 5 humans - 0 bots = 12 extras
-      expect(g.extraChars.length).toBe(12);
+      expect(g.extraChars.length).toBe(getAllCharacters().length - 5);
     });
 
     it('creates 1 bot when botCount is 1', () => {
       const g = makeLobbyGame({ botCount: 1 });
       expect(g.bots).toHaveLength(1);
       expect(g.bots[0].id).toBe('B1');
-      // 17 - 5 - 1 = 11 extras
-      expect(g.extraChars.length).toBe(11);
+      expect(g.extraChars.length).toBe(getAllCharacters().length - 5 - 1);
     });
 
     it('creates 5 bots when botCount is 5', () => {
@@ -382,15 +355,15 @@ describe('LobbyGame', () => {
       expect(g.bots).toHaveLength(5);
       const botSlots = g.bots.map(b => b.id);
       expect(botSlots).toEqual(['B1', 'B2', 'B3', 'B4', 'B5']);
-      // 17 - 5 - 5 = 7 extras
-      expect(g.extraChars.length).toBe(7);
+      expect(g.extraChars.length).toBe(getAllCharacters().length - 5 - 5);
     });
 
     it('total characters always equals full roster size', () => {
+      const rosterSize = getAllCharacters().length;
       for (const botCount of [0, 1, 2, 3, 5]) {
         const g = makeLobbyGame({ botCount });
         const total = g.players.length + g.bots.length + g.extraChars.length;
-        expect(total).toBe(17);
+        expect(total).toBe(rosterSize);
       }
     });
   });
@@ -525,8 +498,13 @@ describe('LobbyGame', () => {
     });
 
     it('player lands back on ground after jump arc', () => {
-      // Isolate: move all entities far away so no stomp/collision interference
-      for (const e of [...game.players, ...game.bots, ...game.extraChars]) {
+      // Isolate: clear bots + NPCs so falling P1 can't re-launch by stomping someone.
+      // (clampLobbyBounds snaps off-screen x back into the canvas, and NPC wander
+      // can place an extra under P1's descent path — vy=-300 on stomp keeps P1
+      // perpetually airborne otherwise.)
+      game.bots.length = 0;
+      game.extraChars.length = 0;
+      for (const e of game.players.slice(1)) {
         e.x = -500;
         e.vy = 0;
         e.vx = 0;
@@ -1169,153 +1147,4 @@ describe('LobbyGame', () => {
     });
   });
 
-  // ---- Render method ----
-
-  describe('render', () => {
-    function makeMockCtx() {
-      return {
-        fillStyle: '' as any,
-        strokeStyle: '' as any,
-        lineWidth: 1,
-        lineCap: '' as string,
-        lineJoin: '' as string,
-        font: '' as string,
-        textAlign: '' as string,
-        textBaseline: '' as string,
-        globalAlpha: 1,
-        globalCompositeOperation: 'source-over',
-        shadowColor: '',
-        shadowBlur: 0,
-        shadowOffsetX: 0,
-        shadowOffsetY: 0,
-        save: vi.fn(),
-        restore: vi.fn(),
-        translate: vi.fn(),
-        scale: vi.fn(),
-        rotate: vi.fn(),
-        beginPath: vi.fn(),
-        moveTo: vi.fn(),
-        lineTo: vi.fn(),
-        closePath: vi.fn(),
-        arc: vi.fn(),
-        ellipse: vi.fn(),
-        fill: vi.fn(),
-        stroke: vi.fn(),
-        fillRect: vi.fn(),
-        clearRect: vi.fn(),
-        fillText: vi.fn(),
-        strokeText: vi.fn(),
-        measureText: vi.fn(() => ({ width: 50, actualBoundingBoxAscent: 8, actualBoundingBoxDescent: 2 })),
-        createLinearGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
-        createRadialGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
-        drawImage: vi.fn(),
-        setLineDash: vi.fn(),
-        quadraticCurveTo: vi.fn(),
-        bezierCurveTo: vi.fn(),
-        clip: vi.fn(),
-        rect: vi.fn(),
-        roundRect: vi.fn(),
-        canvas: { width: 1280, height: 720 },
-      } as any;
-    }
-
-    it('render() calls drawLobby without crashing', () => {
-      const ctx = makeMockCtx();
-      expect(() => game.render(ctx, 1 / 60)).not.toThrow();
-    });
-
-    it('render() draws sky gradient', () => {
-      const ctx = makeMockCtx();
-      game.render(ctx, 1 / 60);
-      expect(ctx.fillRect).toHaveBeenCalled();
-    });
-
-    it('render() draws character sprites', async () => {
-      const ctx = makeMockCtx();
-      game.render(ctx, 1 / 60);
-      const mod = await import('./rendering/players');
-      expect(vi.mocked(mod.drawPlayer)).toHaveBeenCalled();
-    });
-
-    it('render() draws wall', () => {
-      const ctx = makeMockCtx();
-      game.render(ctx, 1 / 60);
-      // Wall is drawn via fillRect with gradient
-      expect(ctx.createLinearGradient).toHaveBeenCalled();
-    });
-
-    it('render() draws ready zone overlay', () => {
-      const ctx = makeMockCtx();
-      game.render(ctx, 1 / 60);
-      // Zone gradient is created
-      const gradientCalls = ctx.createLinearGradient.mock.calls;
-      expect(gradientCalls.length).toBeGreaterThanOrEqual(3); // sky + ground + wall + zone
-    });
-
-    it('render() draws character name tags', () => {
-      const ctx = makeMockCtx();
-      game.render(ctx, 1 / 60);
-      expect(ctx.fillText).toHaveBeenCalled();
-    });
-
-    it('render() draws countdown when active', () => {
-      const ctx = makeMockCtx();
-      game.players[0].x = READY_ZONE_X + 10;
-      game.bots[0].x = READY_ZONE_X + 50;
-      game.update(1 / 60, new Set());
-      expect(game.countdownStarted).toBe(true);
-
-      game.render(ctx, 1 / 60);
-      // Countdown text should be drawn
-      const textCalls = ctx.fillText.mock.calls.map((c: any[]) => c[0]);
-      const hasCountdown = textCalls.some((t: string) => /\d/.test(t));
-      expect(hasCountdown || ctx.fillText.mock.calls.length > 5).toBe(true);
-    });
-
-    it('render() handles mobile mode', () => {
-      const mobile = makeLobbyGame({ isMobile: true, botCount: 1 });
-      const ctx = makeMockCtx();
-      expect(() => mobile.render(ctx, 1 / 60)).not.toThrow();
-    });
-
-    it('render() draws splatted characters differently', () => {
-      const ctx = makeMockCtx();
-      game.players[0].splatTimer = 0.5;
-      expect(() => game.render(ctx, 1 / 60)).not.toThrow();
-    });
-
-    it('render() draws trees and bushes', async () => {
-      const ctx = makeMockCtx();
-      game.render(ctx, 1 / 60);
-      const mod = await import('./themes/drawPrimitives');
-      expect(vi.mocked(mod.drawTree)).toHaveBeenCalled();
-      expect(vi.mocked(mod.drawBush)).toHaveBeenCalled();
-    });
-
-    it('render() draws flowers', async () => {
-      const ctx = makeMockCtx();
-      game.render(ctx, 1 / 60);
-      const mod = await import('./themes/drawPrimitives');
-      expect(vi.mocked(mod.drawFlower)).toHaveBeenCalled();
-    });
-
-    it('render() initializes wildlife on first render', async () => {
-      const fresh = makeLobbyGame();
-      const ctx = makeMockCtx();
-      fresh.render(ctx, 1 / 60);
-      const mod = await import('./canvasAnimations');
-      expect(vi.mocked(mod.initWildlife)).toHaveBeenCalled();
-    });
-
-    it('render() shows zone participant counts', () => {
-      const ctx = makeMockCtx();
-      game.players[0].x = READY_ZONE_X + 10;
-      game.players[1].x = READY_ZONE_X + 50;
-      game.bots[0].x = READY_ZONE_X + 30;
-      game.update(1 / 60, new Set());
-      game.render(ctx, 1 / 60);
-      // Should render text with participant info
-      expect(ctx.fillText).toHaveBeenCalled();
-    });
-  });
 });

@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { listArenaPacks, getArenaDisplayName } from '../engine/arenas';
+import { listPlayableArenaPacks, getArenaDisplayName } from '../engine/arenas';
 
 interface ArenaGridProps {
   onSelect: (arenaId: string) => void;
@@ -13,7 +13,7 @@ interface ArenaGridProps {
 export function ArenaGrid({ onSelect, currentId, classPrefix, selectedClass = 'selected' }: ArenaGridProps) {
   const { i18n } = useTranslation();
   return <>
-    {listArenaPacks().map(a => (
+    {listPlayableArenaPacks().map(a => (
       <button
         key={a.id}
         className={`${classPrefix}-btn${currentId === a.id ? ` ${selectedClass}` : ''}`}

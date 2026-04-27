@@ -10,10 +10,10 @@ import {
   createThornRenderer, createSpringRenderer,
 } from '../../themes/drawPrimitives';
 import {
-  CAP_DEPTH, mulberry32, seedFor,
+  CAP_DEPTH, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
   capFrontY, capBackY, skewPx,
   drawPlatformRightFace, drawPlatformCap,
-  wavyDown, backWavyUp,
+  wavyDown, backWavyUp, leftWavy,
 } from '../../themes/drawPrimitives';
 
 // Platform colors — legacy fields kept for ThemeConfig compat; unused once drawPlatform owns rendering.
@@ -22,73 +22,37 @@ const FLOAT_TOP = '#D8E8F0';
 const GROUND_BODY = '#4A6A7C';
 const GROUND_TOP = '#E0EEF5';
 
-function drawWinterPlatform(ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean): void {
+function drawWinterPlatformBg(ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean): void {
   const rng = mulberry32(seedFor(platform.x, platform.y));
   const cF = capFrontY(platform);
   const cB = capBackY(platform);
-  const bodyTop = cF;
-  const bodyH = platform.height - CAP_DEPTH / 2;
   const sp = skewPx();
 
   // Right face — bluish snow shadow (darker than body)
   drawPlatformRightFace(ctx, platform, '#5A7486');
 
-  // Body front face — packed snow: light grey-blue top → deeper blue-grey bottom
-  const g = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
-  g.addColorStop(0, '#C8D8E4');
-  g.addColorStop(0.5, '#9BB3C5');
-  g.addColorStop(1, '#6A8494');
-  ctx.fillStyle = g;
-  ctx.fillRect(platform.x, bodyTop, platform.width, bodyH);
-
-  // Packed-snow speckles — seeded variation across the front face
-  ctx.fillStyle = 'rgba(90,115,140,0.35)';
-  const speckN = Math.max(2, Math.floor(platform.width / 14));
-  for (let i = 0; i < speckN; i++) {
-    const px = platform.x + rng() * platform.width;
-    const py = bodyTop + 2 + rng() * Math.max(1, bodyH - 4);
-    ctx.beginPath();
-    ctx.ellipse(px, py, 1.2 + rng() * 0.9, 0.7 + rng() * 0.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  // Faint bright snow-dust specks for depth
-  ctx.fillStyle = 'rgba(240,248,255,0.5)';
-  const dustN = Math.max(1, Math.floor(platform.width / 22));
-  for (let i = 0; i < dustN; i++) {
-    const px = platform.x + rng() * platform.width;
-    const py = bodyTop + 1 + rng() * Math.max(1, bodyH - 3);
-    ctx.beginPath();
-    ctx.arc(px, py, 0.7, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  // Bottom bevel — slight dark shadow where the snow compacts
-  ctx.fillStyle = 'rgba(40,55,75,0.28)';
-  ctx.fillRect(platform.x, bodyTop + bodyH - 3, platform.width, 3);
-
   // Edge profiles — rounded snow domes (down/up)
   const frontPts = wavyDown(platform.x, platform.width, cF, rng, { bumps: 4, ampMin: 2, ampMax: 4, valleyBase: 0.4 });
   const backPts = backWavyUp(platform.x, platform.width, cB, sp, rng, { bumps: 3, ampMin: 2, ampMax: 3.5 });
+  const leftPts = leftWavy(cB, cF, platform.x, rng, { bumps: 2, ampMin: 1.5, ampMax: 3 });
 
   // Cap — bright white snow with sparkles and gentle blue-shadow gradient
   drawPlatformCap(ctx, platform, frontPts, backPts, {
     capColor: '#F6FAFF',
     capLight: 'rgba(255,255,255,0.35)',
     drawCapTexture: (ctx2, capFront, capBack, skew) => {
-      // Subtle blue shading near back edge
       const shadow = ctx2.createLinearGradient(0, capBack, 0, capFront);
       shadow.addColorStop(0, 'rgba(170,195,220,0.35)');
       shadow.addColorStop(1, 'rgba(255,255,255,0)');
       ctx2.fillStyle = shadow;
       ctx2.fillRect(platform.x - 2, capBack - 2, platform.width + skew + 4, CAP_DEPTH + 4);
 
-      // Sparkle glints across the cap
       const n = Math.max(2, Math.floor(platform.width / 22));
       for (let i = 0; i < n; i++) {
         const u = (i + 0.3 + rng() * 0.4) / n;
         const v = 0.2 + rng() * 0.65;
         const sx = platform.x + u * platform.width + v * skew;
         const sy = capFront - v * CAP_DEPTH;
-        // tiny glint — center bright dot + faint halo
         ctx2.fillStyle = 'rgba(255,255,255,0.9)';
         ctx2.beginPath();
         ctx2.arc(sx, sy, 0.7, 0, Math.PI * 2);
@@ -99,9 +63,10 @@ function drawWinterPlatform(ctx: CanvasRenderingContext2D, platform: Platform, i
         ctx2.fill();
       }
     },
-  });
+  }, leftPts);
 
-  // Signature — icicles hanging from body bottom (floating only; ground bottom is off-screen).
+  // Icicles hanging below body bottom (floating only). Stay in bg — they're
+  // below the body region, so player rising into body is above them.
   if (!isGround) {
     const bb = platform.y + platform.height;
     const icicleCount = Math.max(1, Math.floor(platform.width / 38));
@@ -112,6 +77,45 @@ function drawWinterPlatform(ctx: CanvasRenderingContext2D, platform: Platform, i
       drawIcicle(ctx, ix, bb, len);
     }
   }
+}
+
+function drawWinterPlatformFg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+  const rng = mulberry32(seedFor(platform.x, platform.y) ^ BODY_SEED_OFFSET);
+  const cF = capFrontY(platform);
+  const bodyTop = cF;
+  const bodyH = platform.height - CAP_DEPTH / 2;
+
+  // Body front face — packed snow gradient
+  const g = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
+  g.addColorStop(0, '#C8D8E4');
+  g.addColorStop(0.5, '#9BB3C5');
+  g.addColorStop(1, '#6A8494');
+  ctx.fillStyle = g;
+  ctx.fillRect(platform.x, bodyTop, platform.width, bodyH);
+
+  // Packed-snow speckles
+  ctx.fillStyle = 'rgba(90,115,140,0.35)';
+  const speckN = Math.max(2, Math.floor(platform.width / 14));
+  for (let i = 0; i < speckN; i++) {
+    const px = platform.x + rng() * platform.width;
+    const py = bodyTop + 2 + rng() * Math.max(1, bodyH - 4);
+    ctx.beginPath();
+    ctx.ellipse(px, py, 1.2 + rng() * 0.9, 0.7 + rng() * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Snow-dust specks
+  ctx.fillStyle = 'rgba(240,248,255,0.5)';
+  const dustN = Math.max(1, Math.floor(platform.width / 22));
+  for (let i = 0; i < dustN; i++) {
+    const px = platform.x + rng() * platform.width;
+    const py = bodyTop + 1 + rng() * Math.max(1, bodyH - 3);
+    ctx.beginPath();
+    ctx.arc(px, py, 0.7, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Bottom bevel
+  ctx.fillStyle = 'rgba(40,55,75,0.28)';
+  ctx.fillRect(platform.x, bodyTop + bodyH - 3, platform.width, 3);
 }
 
 export const winterLake: ArenaPack = {
@@ -128,7 +132,7 @@ export const winterLake: ArenaPack = {
   // ---- Layout ----
   width: CANVAS_WIDTH,
   height: CANVAS_HEIGHT,
-  platforms: [
+  platforms: applyIsoInsets([
     { x: 0, y: 660, width: CANVAS_WIDTH, height: 60 },
     { x: 35, y: 575, width: 115, height: 24 },
     { x: 95, y: 490, width: 110, height: 24 },
@@ -148,7 +152,7 @@ export const winterLake: ArenaPack = {
     { x: 600, y: 230, width: 50, height: 18 },
     { x: 200, y: 350, width: 40, height: 18 },
     { x: 1040, y: 350, width: 40, height: 18 },
-  ],
+  ] as Platform[], p => p.style !== 'iceCube'),
   spawnPoints: [
     { x: 95, y: 555 }, { x: 1170, y: 565 },
     { x: 90, y: 395 }, { x: 1170, y: 405 },
@@ -441,13 +445,16 @@ export const winterLake: ArenaPack = {
 
   drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => {
     if (platform.style === 'iceCube') {
-      // Shift the cube down by half its 3D depth so the collision line sits in the middle
-      // of the top face — character walks mid-cap like meadow stumps, not at the front edge.
       const depth = platform.width * 0.3;
       drawIceCube(ctx, platform.x, platform.y + depth / 2, platform.width, platform.height - depth / 2);
       return;
     }
-    drawWinterPlatform(ctx, platform, isGround);
+    drawWinterPlatformBg(ctx, platform, isGround);
+  },
+
+  drawPlatformOverlay: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
+    if (platform.style === 'iceCube') return;
+    drawWinterPlatformFg(ctx, platform);
   },
 
   // ---- Gameplay modifiers ----

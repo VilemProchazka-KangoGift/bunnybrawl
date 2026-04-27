@@ -1,6 +1,436 @@
 import type { ArenaPack } from '../types';
+import type { Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
+import {
+  CAP_DEPTH, applyIsoInsets, mulberry32, seedFor,
+  capFrontY, capBackY, skewPx,
+  drawPlatformRightFace, drawPlatformCap,
+  subtleDown, backIso, leftIso,
+} from '../../themes/drawPrimitives';
+
+// --- 3D rooftop cap: gravel + tar texture, with a raised parapet along the back.
+// No body is drawn; drawFarBackground owns the building facades below.
+function drawRoofPlatform(ctx: CanvasRenderingContext2D, platform: Platform): void {
+  const rng = mulberry32(seedFor(platform.x, platform.y));
+  const cF = capFrontY(platform);
+  const cB = capBackY(platform);
+  const sp = skewPx();
+
+  const frontPts = subtleDown(platform.x, platform.width, cF, rng, { count: 2, amp: 0.8 });
+  const backPts = backIso(platform.x, platform.width, cB, sp);
+  const leftPts = leftIso(cB, cF, platform.x, sp);
+
+  drawPlatformCap(ctx, platform, frontPts, backPts, {
+    capColor: '#3E3648',
+    capLight: 'rgba(110,95,120,0.25)',
+    drawCapTexture: (ctx2, capFront, capBack, skew) => {
+      // Dense gravel specks across the cap
+      ctx2.fillStyle = 'rgba(90,78,100,0.55)';
+      const n = Math.max(6, Math.floor(platform.width / 7));
+      for (let i = 0; i < n; i++) {
+        const u = rng();
+        const v = rng();
+        const gx = platform.x + u * platform.width + v * skew;
+        const gy = capBack + v * CAP_DEPTH + (rng() - 0.5) * 1.5;
+        ctx2.beginPath();
+        ctx2.arc(gx, gy, 0.7 + rng() * 0.6, 0, Math.PI * 2);
+        ctx2.fill();
+      }
+      // A few darker tar blotches
+      ctx2.fillStyle = 'rgba(22,18,30,0.45)';
+      const blotchN = Math.max(1, Math.floor(platform.width / 80));
+      for (let i = 0; i < blotchN; i++) {
+        const u = 0.15 + rng() * 0.7;
+        const v = 0.35 + rng() * 0.5;
+        const bx = platform.x + u * platform.width + v * skew;
+        const by = capBack + v * CAP_DEPTH;
+        ctx2.beginPath();
+        ctx2.ellipse(bx, by, 2.5 + rng() * 1.5, 1.3 + rng() * 0.7, rng() * Math.PI, 0, Math.PI * 2);
+        ctx2.fill();
+      }
+      // Light sheen at the front edge (parapet lip)
+      const sheen = ctx2.createLinearGradient(0, capFront - 2, 0, capFront + 1);
+      sheen.addColorStop(0, 'rgba(160,150,170,0)');
+      sheen.addColorStop(1, 'rgba(160,150,170,0.3)');
+      ctx2.fillStyle = sheen;
+      ctx2.fillRect(platform.x, capFront - 2, platform.width + skew, 3);
+    },
+  }, leftPts);
+
+  // Parapet shadow — thin dark strip just below the cap's front edge, anchoring
+  // the rooftop against the facade that drawFarBackground paints beneath.
+  ctx.fillStyle = 'rgba(12,10,18,0.45)';
+  ctx.fillRect(platform.x, cF, platform.width, 2);
+}
+
+// --- Hallway floor: wood planks + crimson carpet runner, with a short wood body
+// representing the floor's edge thickness.
+function drawHallwayPlatformBg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+  const rng = mulberry32(seedFor(platform.x, platform.y));
+  const cF = capFrontY(platform);
+  const cB = capBackY(platform);
+  const sp = skewPx();
+
+  // Right face — dark wood edge
+  drawPlatformRightFace(ctx, platform, '#2A1C14');
+
+  // Edges — subtle wear scrapes on front, iso cap.
+  const frontPts = subtleDown(platform.x, platform.width, cF, rng, { count: 2, amp: 0.8 });
+  const backPts = backIso(platform.x, platform.width, cB, sp);
+  const leftPts = leftIso(cB, cF, platform.x, sp);
+
+  // Cap — wood plank surface with crimson carpet runner down the middle
+  drawPlatformCap(ctx, platform, frontPts, backPts, {
+    capColor: '#6A4A30',
+    capLight: 'rgba(150,110,70,0.25)',
+    drawCapTexture: (ctx2, _capFront, capBack, skew) => {
+      // Plank seams — vertical ticks spaced ~45px apart, slightly staggered per row
+      ctx2.fillStyle = 'rgba(30,18,10,0.55)';
+      const plankW = 45;
+      for (let i = 0; i < 2; i++) {
+        const rowY = capBack + (i === 0 ? CAP_DEPTH * 0.25 : CAP_DEPTH * 0.65);
+        const rowShift = i === 0 ? 0 : plankW * 0.5;
+        for (let px = platform.x + rowShift; px < platform.x + platform.width; px += plankW) {
+          const gx = px + (rowY - capBack) / CAP_DEPTH * skew;
+          ctx2.fillRect(gx, rowY - CAP_DEPTH * 0.15, 1, CAP_DEPTH * 0.3);
+        }
+      }
+      // Crimson carpet runner — tapered inward from both ends, gold fringe edges
+      const runnerTopV = 0.15;  // fraction of CAP_DEPTH from cB
+      const runnerBotV = 0.95;
+      const runnerPad = 30;
+      const runnerX0 = platform.x + runnerPad;
+      const runnerX1 = platform.x + platform.width - runnerPad;
+      if (runnerX1 > runnerX0 + 20) {
+        ctx2.fillStyle = '#8B2A2A';
+        ctx2.beginPath();
+        ctx2.moveTo(runnerX0 + runnerTopV * skew, capBack + runnerTopV * CAP_DEPTH);
+        ctx2.lineTo(runnerX1 + runnerTopV * skew, capBack + runnerTopV * CAP_DEPTH);
+        ctx2.lineTo(runnerX1 + runnerBotV * skew, capBack + runnerBotV * CAP_DEPTH);
+        ctx2.lineTo(runnerX0 + runnerBotV * skew, capBack + runnerBotV * CAP_DEPTH);
+        ctx2.closePath();
+        ctx2.fill();
+        // Gold fringe along front edge
+        ctx2.fillStyle = '#C79A3A';
+        ctx2.fillRect(runnerX0 + runnerBotV * skew, capBack + runnerBotV * CAP_DEPTH - 1.5, runnerX1 - runnerX0, 1);
+        // Darker stripe down the runner center for depth
+        ctx2.fillStyle = 'rgba(40,10,10,0.35)';
+        const midV = (runnerTopV + runnerBotV) * 0.5;
+        ctx2.fillRect(runnerX0 + midV * skew, capBack + midV * CAP_DEPTH - 0.5, runnerX1 - runnerX0, 1);
+      }
+      // Scuff marks on the wood — a couple of subtle darker smears outside the runner
+      ctx2.fillStyle = 'rgba(30,20,12,0.25)';
+      for (let i = 0; i < 2; i++) {
+        const side = i === 0 ? 0 : 1;
+        const v = 0.3 + rng() * 0.5;
+        const sxBase = platform.x + (side === 0 ? rng() * runnerPad : platform.width - rng() * runnerPad);
+        ctx2.beginPath();
+        ctx2.ellipse(sxBase + v * skew, capBack + v * CAP_DEPTH, 3 + rng() * 2, 0.7, 0, 0, Math.PI * 2);
+        ctx2.fill();
+      }
+    },
+  }, leftPts);
+}
+
+// Hallway body fg pass — wood planks with grain. Drawn after players for occlusion.
+function drawHallwayPlatformFg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+  const cF = capFrontY(platform);
+  const bodyTop = cF;
+  const bodyH = platform.height - CAP_DEPTH / 2;
+
+  const bodyGrad = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
+  bodyGrad.addColorStop(0, '#4A3020');
+  bodyGrad.addColorStop(1, '#2A1C14');
+  ctx.fillStyle = bodyGrad;
+  ctx.fillRect(platform.x, bodyTop, platform.width, bodyH);
+  ctx.strokeStyle = 'rgba(20,12,6,0.45)';
+  ctx.lineWidth = 1;
+  for (let gy = bodyTop + 3; gy < bodyTop + bodyH - 1; gy += 4) {
+    ctx.beginPath();
+    ctx.moveTo(platform.x, gy);
+    ctx.lineTo(platform.x + platform.width, gy);
+    ctx.stroke();
+  }
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.fillRect(platform.x, bodyTop + bodyH - 2, platform.width, 2);
+}
+
+// --- Prop renderers (chimney / AC / HVAC / balcony) — straight ports of the
+// previous customDraw branches. These render the full prop body; no 3D cap
+// framework because the props have their own silhouette (brick stack, AC fan
+// grill, vent slats, awning).
+function drawChimneyBg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+  const rng = mulberry32(seedFor(platform.x, platform.y));
+  const cF = capFrontY(platform);
+  const cB = capBackY(platform);
+  const bodyTop = cF;
+  const bodyExt = CAP_DEPTH / 2;
+  const bodyH = platform.height - CAP_DEPTH / 2 + bodyExt;
+  const sp = skewPx();
+
+  // Right face — darker brick (extended bottom matches body)
+  drawPlatformRightFace(ctx, platform, '#2E2024', bodyTop + bodyH);
+
+  // Cap iso parallelogram + lid texture.
+  const x = platform.x;
+  const w = platform.width;
+  const frontPts = subtleDown(x, w, cF, rng, { count: 1, amp: 0.5 });
+  const backPts = backIso(x, w, cB, sp);
+  const leftPts = leftIso(cB, cF, x, sp);
+  drawPlatformCap(ctx, platform, frontPts, backPts, {
+    capColor: '#5A4A50',
+    capLight: 'rgba(120,100,110,0.35)',
+    drawCapTexture: (ctx2, capFront, capBack, skew) => {
+      const flueW = w * 0.45;
+      const flueX = x + (w - flueW) * 0.5;
+      const flueV = 0.4;
+      ctx2.fillStyle = '#15101A';
+      ctx2.fillRect(flueX + flueV * skew, capBack + flueV * CAP_DEPTH, flueW, CAP_DEPTH * 0.35);
+      ctx2.fillStyle = 'rgba(20,15,18,0.6)';
+      ctx2.fillRect(flueX + flueV * skew - 1, capBack + flueV * CAP_DEPTH - 0.5, flueW + 2, 1);
+      ctx2.fillStyle = 'rgba(180,160,170,0.25)';
+      ctx2.fillRect(x + 1, capFront - 1.5, w + skew * 0.5, 1);
+    },
+  }, leftPts);
+
+  // Smoke wisp rising from the flue
+  ctx.strokeStyle = 'rgba(150, 140, 160, 0.18)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x + w / 2 + sp * 0.4, cB - 1);
+  ctx.quadraticCurveTo(x + w / 2 + 9, cB - 12, x + w / 2 + 4, cB - 22);
+  ctx.stroke();
+}
+
+// Chimney body fg pass — brick column. Drawn after players for occlusion.
+function drawChimneyFg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+  const cF = capFrontY(platform);
+  const bodyTop = cF;
+  const bodyExt = CAP_DEPTH / 2;
+  const bodyH = platform.height - CAP_DEPTH / 2 + bodyExt;
+  const x = platform.x;
+  const w = platform.width;
+
+  ctx.fillStyle = '#4A3A40';
+  ctx.fillRect(x, bodyTop, w, bodyH);
+  ctx.strokeStyle = 'rgba(28, 18, 22, 0.55)';
+  ctx.lineWidth = 1;
+  for (let by = bodyTop + 4; by < bodyTop + bodyH; by += 7) {
+    ctx.beginPath();
+    ctx.moveTo(x, by);
+    ctx.lineTo(x + w, by);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = 'rgba(28, 18, 22, 0.4)';
+  for (let i = 0, by = bodyTop + 4; by < bodyTop + bodyH; by += 7, i++) {
+    const off = i % 2 === 0 ? w * 0.5 : 0;
+    ctx.beginPath();
+    ctx.moveTo(x + off, by);
+    ctx.lineTo(x + off, by + 7);
+    ctx.stroke();
+  }
+}
+
+function drawBalcony(ctx: CanvasRenderingContext2D, platform: Platform): void {
+  const { x, y, width: w, height: h } = platform;
+  ctx.fillStyle = '#6A6A78';
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = '#7A7A88';
+  ctx.fillRect(x, y, w, 3);
+  ctx.fillStyle = '#5A5A68';
+  ctx.fillRect(x - 2, y + 2, 3, h - 4);
+  ctx.fillRect(x + w - 1, y + 2, 3, h - 4);
+  const awH = 13;
+  ctx.fillStyle = '#8B3030';
+  ctx.beginPath();
+  ctx.moveTo(x, y - 1);
+  ctx.lineTo(x + 4, y - awH);
+  ctx.lineTo(x + w - 4, y - awH);
+  ctx.lineTo(x + w, y - 1);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#C04040';
+  for (let sx = x + 8; sx < x + w - 8; sx += 13) {
+    const t0 = (sx - x) / w;
+    const t1 = (sx + 5 - x) / w;
+    const sy0 = y - 1 - (awH - 2) * Math.min(t0 * 3, (1 - t0) * 3, 1);
+    const sy1 = y - 1 - (awH - 2) * Math.min(t1 * 3, (1 - t1) * 3, 1);
+    ctx.beginPath();
+    ctx.moveTo(sx, sy0);
+    ctx.lineTo(sx + 5, sy1);
+    ctx.lineTo(sx + 5, y - 1);
+    ctx.lineTo(sx, y - 1);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.strokeStyle = '#5A5A68';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(x, y - 10);
+  ctx.lineTo(x + w, y - 10);
+  ctx.stroke();
+  for (let rx = x + 5; rx < x + w; rx += 12) {
+    ctx.beginPath();
+    ctx.moveTo(rx, y);
+    ctx.lineTo(rx, y - 10);
+    ctx.stroke();
+  }
+}
+
+function drawAcUnitBg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+  const rng = mulberry32(seedFor(platform.x, platform.y));
+  const cF = capFrontY(platform);
+  const cB = capBackY(platform);
+  const bodyTop = cF;
+  const bodyExt = 14;
+  const bodyH = platform.height - CAP_DEPTH / 2 + bodyExt;
+  const sp = skewPx();
+  const x = platform.x;
+  const w = platform.width;
+
+  // Right face — dark metal shadow (extended bottom matches body)
+  drawPlatformRightFace(ctx, platform, '#7C7C84', bodyTop + bodyH);
+
+  // Cap — iso parallelogram + compressor grill ridges + front sheen.
+  const frontPts = subtleDown(x, w, cF, rng, { count: 1, amp: 0.5 });
+  const backPts = backIso(x, w, cB, sp);
+  const leftPts = leftIso(cB, cF, x, sp);
+  drawPlatformCap(ctx, platform, frontPts, backPts, {
+    capColor: '#B6B6C0',
+    capLight: 'rgba(230,230,238,0.4)',
+    drawCapTexture: (ctx2, capFront, capBack, skew) => {
+      ctx2.fillStyle = 'rgba(110,110,124,0.65)';
+      const ridges = 5;
+      const ridgeV = 0.35;
+      for (let i = 0; i < ridges; i++) {
+        const u = (i + 0.5) / ridges;
+        const rx = x + 3 + u * (w - 6) + ridgeV * skew;
+        ctx2.fillRect(rx, capBack + ridgeV * CAP_DEPTH, 1, CAP_DEPTH * 0.45);
+      }
+      const sheen = ctx2.createLinearGradient(0, capFront - 2, 0, capFront);
+      sheen.addColorStop(0, 'rgba(255,255,255,0)');
+      sheen.addColorStop(1, 'rgba(255,255,255,0.4)');
+      ctx2.fillStyle = sheen;
+      ctx2.fillRect(x, capFront - 2, w + skew * 0.5, 2);
+    },
+  }, leftPts);
+}
+
+// AC body fg pass — housing + fan + vent slats + rubber feet. Drawn after
+// players for occlusion (so the player's right edge "goes behind" the AC).
+function drawAcUnitFg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+  const cF = capFrontY(platform);
+  const bodyTop = cF;
+  const bodyExt = 14;
+  const bodyH = platform.height - CAP_DEPTH / 2 + bodyExt;
+  const x = platform.x;
+  const w = platform.width;
+
+  // Body front face — main housing
+  ctx.fillStyle = '#D8D8E0';
+  ctx.fillRect(x, bodyTop, w, bodyH);
+  // Bottom shadow band
+  ctx.fillStyle = '#A0A0A8';
+  ctx.fillRect(x, bodyTop + bodyH - 2, w, 2);
+  // Frame border
+  ctx.strokeStyle = '#808088';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(x + 0.5, bodyTop + 0.5, w - 1, bodyH - 1);
+
+  // Big fan grill
+  const fanCx = x + w * 0.6;
+  const fanCy = bodyTop + bodyH / 2;
+  const fanR = bodyH * 0.42;
+  ctx.fillStyle = '#2C2C34';
+  ctx.beginPath();
+  ctx.arc(fanCx, fanCy, fanR + 1, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#9CA0AC';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(fanCx, fanCy, fanR, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(140,144,156,0.7)';
+  ctx.lineWidth = 0.7;
+  ctx.beginPath();
+  ctx.arc(fanCx, fanCy, fanR * 0.6, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(150,154,168,0.85)';
+  ctx.lineWidth = 0.9;
+  const spokeCount = 8;
+  for (let i = 0; i < spokeCount; i++) {
+    const a = (i / spokeCount) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(fanCx + Math.cos(a) * fanR * 0.18, fanCy + Math.sin(a) * fanR * 0.18);
+    ctx.lineTo(fanCx + Math.cos(a) * fanR * 0.92, fanCy + Math.sin(a) * fanR * 0.92);
+    ctx.stroke();
+  }
+  ctx.fillStyle = '#646874';
+  ctx.beginPath();
+  ctx.arc(fanCx, fanCy, fanR * 0.18, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(220,224,232,0.7)';
+  ctx.beginPath();
+  ctx.arc(fanCx - fanR * 0.05, fanCy - fanR * 0.06, fanR * 0.07, 0, Math.PI * 2);
+  ctx.fill();
+  // Vent slats on the left portion
+  ctx.fillStyle = '#B0B0B8';
+  for (let vy = bodyTop + 2; vy < bodyTop + bodyH - 2; vy += 2.5) {
+    ctx.fillRect(x + 2, vy, w * 0.28, 1.2);
+  }
+  // Rubber feet — at the bottom of the body, hanging just below
+  ctx.fillStyle = '#404048';
+  ctx.fillRect(x + 4, bodyTop + bodyH, 4, 2);
+  ctx.fillRect(x + w - 8, bodyTop + bodyH, 4, 2);
+}
+
+function drawHvacBlock(ctx: CanvasRenderingContext2D, platform: Platform): void {
+  const { x, y, width: w, height: h } = platform;
+  ctx.fillStyle = '#5A5A68';
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = 'rgba(70, 70, 80, 0.5)';
+  ctx.lineWidth = 1;
+  for (let vy = y + 4; vy < y + h - 2; vy += 4) {
+    ctx.beginPath();
+    ctx.moveTo(x + 2, vy);
+    ctx.lineTo(x + w - 2, vy);
+    ctx.stroke();
+  }
+  ctx.fillStyle = '#6A6A78';
+  ctx.fillRect(x - 1, y - 2, w + 2, 3);
+  ctx.fillStyle = '#5A5A64';
+  ctx.fillRect(x + w / 2 - 3, y - 8, 6, 8);
+  ctx.fillRect(x + w / 2 - 5, y - 10, 10, 3);
+}
+
+// Bg pass dispatch — cap + right face for iso styles, full draw for bespoke styles.
+function drawRooftopsPlatformBg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+  switch (platform.style) {
+    case 'roof':     return drawRoofPlatform(ctx, platform);
+    case 'hallway':  return drawHallwayPlatformBg(ctx, platform);
+    case 'chimney':  return drawChimneyBg(ctx, platform);
+    case 'balcony':  return drawBalcony(ctx, platform);  // bespoke 2D, all in bg
+    case 'ac':       return drawAcUnitBg(ctx, platform);
+    case 'hvac':     return drawHvacBlock(ctx, platform);  // bespoke 2D, all in bg
+    default: {
+      ctx.fillStyle = '#4A4050';
+      ctx.fillRect(platform.x, platform.y + 3, platform.width, platform.height - 3);
+      ctx.fillStyle = '#6A5A6A';
+      ctx.fillRect(platform.x, platform.y, platform.width, 4);
+    }
+  }
+}
+
+// Fg pass dispatch — body face for iso styles only. Bespoke styles render fully in bg.
+function drawRooftopsPlatformFg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+  switch (platform.style) {
+    case 'hallway':  return drawHallwayPlatformFg(ctx, platform);
+    case 'chimney':  return drawChimneyFg(ctx, platform);
+    case 'ac':       return drawAcUnitFg(ctx, platform);
+    // 'roof' has no body. 'balcony' and 'hvac' rendered fully in bg pass.
+  }
+}
 
 export const rooftops: ArenaPack = {
   // ---- Identity ----
@@ -16,28 +446,28 @@ export const rooftops: ArenaPack = {
   // ---- Layout ----
   width: CANVAS_WIDTH,
   height: CANVAS_HEIGHT,
-  platforms: [
-    { x: 80, y: 480, width: 270, height: 240 },
-    { x: 130, y: 440, width: 28, height: 40 },
-    { x: 250, y: 444, width: 28, height: 36 },
-    { x: 350, y: 505, width: 52, height: 20 },
-    { x: 458, y: 430, width: 52, height: 20 },
-    { x: 445, y: 550, width: 65, height: 14 },
-    { x: 510, y: 370, width: 300, height: 80 },
-    { x: 510, y: 550, width: 300, height: 24 },
-    { x: 510, y: 580, width: 300, height: 140 },
-    { x: 555, y: 335, width: 40, height: 35 },
-    { x: 650, y: 330, width: 45, height: 40 },
-    { x: 760, y: 338, width: 38, height: 32 },
-    { x: 810, y: 550, width: 65, height: 14 },
-    { x: 810, y: 430, width: 52, height: 20 },
-    { x: 918, y: 360, width: 52, height: 20 },
-    { x: 905, y: 480, width: 65, height: 14 },
-    { x: 970, y: 300, width: 230, height: 80 },
-    { x: 970, y: 480, width: 230, height: 24 },
-    { x: 970, y: 510, width: 230, height: 210 },
-    { x: 1200, y: 480, width: 65, height: 14 },
-  ],
+  platforms: applyIsoInsets([
+    { x: 80, y: 480, width: 270, height: 240, style: 'roof' },
+    { x: 130, y: 440, width: 28, height: 40, style: 'chimney' },
+    { x: 250, y: 444, width: 28, height: 36, style: 'chimney' },
+    { x: 350, y: 505, width: 52, height: 20, style: 'ac' },
+    { x: 458, y: 430, width: 52, height: 20, style: 'ac' },
+    { x: 445, y: 550, width: 65, height: 14, style: 'balcony' },
+    { x: 510, y: 370, width: 300, height: 80, style: 'roof' },
+    { x: 510, y: 550, width: 300, height: 24, style: 'hallway' },
+    { x: 510, y: 580, width: 300, height: 140, style: 'roof' },
+    { x: 555, y: 335, width: 40, height: 35, style: 'hvac' },
+    { x: 650, y: 330, width: 45, height: 40, style: 'hvac' },
+    { x: 760, y: 338, width: 38, height: 32, style: 'hvac' },
+    { x: 810, y: 550, width: 65, height: 14, style: 'balcony' },
+    { x: 810, y: 430, width: 52, height: 20, style: 'ac' },
+    { x: 918, y: 360, width: 52, height: 20, style: 'ac' },
+    { x: 905, y: 480, width: 65, height: 14, style: 'balcony' },
+    { x: 970, y: 300, width: 230, height: 80, style: 'roof' },
+    { x: 970, y: 480, width: 230, height: 24, style: 'hallway' },
+    { x: 970, y: 510, width: 230, height: 210, style: 'roof' },
+    { x: 1200, y: 480, width: 65, height: 14, style: 'balcony' },
+  ], p => p.style === 'roof' || p.style === 'hallway' || p.style === 'chimney' || p.style === 'ac'),
   spawnPoints: [
     { x: 200, y: 460 }, { x: 660, y: 350 }, { x: 1080, y: 280 },
     { x: 280, y: 460 }, { x: 660, y: 530 }, { x: 1080, y: 460 },
@@ -75,190 +505,6 @@ export const rooftops: ArenaPack = {
     groundBodyColor: '#3A3040',
     groundTopColor: '#5A5060',
     drawMoss: false,
-    customDraw: (ctx, x, y, w, h, isGround) => {
-      if (isGround || (w >= 200 && h >= 25)) {
-        // Solid building block -- thin rooftop gravel surface on top only
-        const topH = Math.min(h, 8);
-        ctx.fillStyle = '#3A3040';
-        ctx.fillRect(x, y, w, topH);
-        ctx.fillStyle = '#5A5060';
-        ctx.fillRect(x, y, w, 4);
-        ctx.fillStyle = 'rgba(80, 70, 90, 0.4)';
-        for (let gx = x + 5; gx < x + w; gx += 8 + Math.random() * 6) {
-          ctx.beginPath();
-          ctx.arc(gx, y + 4 + Math.random() * 3, 1.5, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.fillStyle = '#4A4050';
-        ctx.fillRect(x, y, w, 2);
-      } else if (w <= 35 && h >= 30) {
-        // Chimney -- brick + smoke
-        ctx.fillStyle = '#4A3A40';
-        ctx.fillRect(x, y, w, h);
-        ctx.strokeStyle = 'rgba(60, 45, 50, 0.5)';
-        ctx.lineWidth = 1;
-        for (let by = y + 5; by < y + h; by += 8) {
-          ctx.beginPath();
-          ctx.moveTo(x, by);
-          ctx.lineTo(x + w, by);
-          ctx.stroke();
-        }
-        ctx.fillStyle = '#5A4A50';
-        ctx.fillRect(x - 2, y - 3, w + 4, 5);
-        ctx.strokeStyle = 'rgba(150, 140, 160, 0.15)';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(x + w / 2, y - 3);
-        ctx.quadraticCurveTo(x + w / 2 + 8, y - 15, x + w / 2 + 3, y - 25);
-        ctx.stroke();
-      } else if (w >= 60 && w <= 90 && h <= 18) {
-        // Balcony at hallway entrance -- concrete ledge + striped awning
-        ctx.fillStyle = '#6A6A78';
-        ctx.fillRect(x, y, w, h);
-        ctx.fillStyle = '#7A7A88';
-        ctx.fillRect(x, y, w, 3);
-        ctx.fillStyle = '#5A5A68';
-        ctx.fillRect(x - 2, y + 2, 3, h - 4);
-        ctx.fillRect(x + w - 1, y + 2, 3, h - 4);
-        // Awning canopy
-        const awH = 13;
-        ctx.fillStyle = '#8B3030';
-        ctx.beginPath();
-        ctx.moveTo(x, y - 1);
-        ctx.lineTo(x + 4, y - awH);
-        ctx.lineTo(x + w - 4, y - awH);
-        ctx.lineTo(x + w, y - 1);
-        ctx.closePath();
-        ctx.fill();
-        ctx.fillStyle = '#C04040';
-        for (let sx = x + 8; sx < x + w - 8; sx += 13) {
-          const t0 = (sx - x) / w;
-          const t1 = (sx + 5 - x) / w;
-          const sy0 = y - 1 - (awH - 2) * Math.min(t0 * 3, (1 - t0) * 3, 1);
-          const sy1 = y - 1 - (awH - 2) * Math.min(t1 * 3, (1 - t1) * 3, 1);
-          ctx.beginPath();
-          ctx.moveTo(sx, sy0);
-          ctx.lineTo(sx + 5, sy1);
-          ctx.lineTo(sx + 5, y - 1);
-          ctx.lineTo(sx, y - 1);
-          ctx.closePath();
-          ctx.fill();
-        }
-        // Railing
-        ctx.strokeStyle = '#5A5A68';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(x, y - 10);
-        ctx.lineTo(x + w, y - 10);
-        ctx.stroke();
-        for (let rx = x + 5; rx < x + w; rx += 12) {
-          ctx.beginPath();
-          ctx.moveTo(rx, y);
-          ctx.lineTo(rx, y - 10);
-          ctx.stroke();
-        }
-      } else if (w <= 55 && h <= 22) {
-        // AC outdoor unit -- chunky white box with prominent fan grill
-        // Main housing
-        ctx.fillStyle = '#D8D8E0';
-        ctx.fillRect(x, y, w, h);
-        // 3D depth -- darker bottom and right edges
-        ctx.fillStyle = '#A0A0A8';
-        ctx.fillRect(x, y + h - 3, w, 3);
-        ctx.fillRect(x + w - 3, y, 3, h);
-        // Frame border
-        ctx.strokeStyle = '#808088';
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-        // Big fan grill circle -- the main visual feature
-        const cx = x + w * 0.55;
-        const cy = y + h / 2;
-        const r = h * 0.36;
-        // Fan grill backing
-        ctx.fillStyle = '#404048';
-        ctx.beginPath();
-        ctx.arc(cx, cy, r + 1, 0, Math.PI * 2);
-        ctx.fill();
-        // Fan circle
-        ctx.strokeStyle = '#909098';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, 0, Math.PI * 2);
-        ctx.stroke();
-        // Fan blades (cross)
-        ctx.strokeStyle = '#707078';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(cx - r * 0.75, cy);
-        ctx.lineTo(cx + r * 0.75, cy);
-        ctx.moveTo(cx, cy - r * 0.75);
-        ctx.lineTo(cx, cy + r * 0.75);
-        ctx.stroke();
-        // Vent slats on left portion
-        ctx.fillStyle = '#B0B0B8';
-        for (let vy = y + 3; vy < y + h - 3; vy += 3) {
-          ctx.fillRect(x + 3, vy, w * 0.3, 1.5);
-        }
-        // Compressor bump on top
-        ctx.fillStyle = '#C0C0C8';
-        ctx.fillRect(x + w * 0.2, y - 3, w * 0.3, 4);
-        ctx.fillStyle = '#A0A0A8';
-        ctx.fillRect(x + w * 0.2, y - 4, w * 0.3, 1.5);
-        // Rubber feet
-        ctx.fillStyle = '#404048';
-        ctx.fillRect(x + 4, y + h, 4, 2);
-        ctx.fillRect(x + w - 8, y + h, 4, 2);
-      } else if (w >= 200 && h < 25) {
-        // Hallway floor -- warm wooden planks + carpet
-        ctx.fillStyle = '#5A4030';
-        ctx.fillRect(x, y, w, h);
-        ctx.strokeStyle = 'rgba(40, 25, 15, 0.35)';
-        ctx.lineWidth = 1;
-        for (let py = y + 5; py < y + h; py += 5) {
-          ctx.beginPath();
-          ctx.moveTo(x, py);
-          ctx.lineTo(x + w, py);
-          ctx.stroke();
-        }
-        for (let row = 0; row < 4; row++) {
-          const rowY = y + 1 + row * 5;
-          const off = row % 2 === 0 ? 0 : 30;
-          ctx.strokeStyle = 'rgba(40, 25, 15, 0.2)';
-          for (let px = x + off + 20; px < x + w; px += 60) {
-            ctx.beginPath();
-            ctx.moveTo(px, rowY);
-            ctx.lineTo(px, rowY + 4);
-            ctx.stroke();
-          }
-        }
-        ctx.fillStyle = 'rgba(140, 35, 35, 0.18)';
-        ctx.fillRect(x + w * 0.25, y + 2, w * 0.5, h - 3);
-        ctx.fillStyle = '#6A5040';
-        ctx.fillRect(x, y, w, 2);
-      } else if (w <= 55 && h >= 25) {
-        // HVAC block -- vent slats + exhaust pipe
-        ctx.fillStyle = '#5A5A68';
-        ctx.fillRect(x, y, w, h);
-        ctx.strokeStyle = 'rgba(70, 70, 80, 0.5)';
-        ctx.lineWidth = 1;
-        for (let vy = y + 4; vy < y + h - 2; vy += 4) {
-          ctx.beginPath();
-          ctx.moveTo(x + 2, vy);
-          ctx.lineTo(x + w - 2, vy);
-          ctx.stroke();
-        }
-        ctx.fillStyle = '#6A6A78';
-        ctx.fillRect(x - 1, y - 2, w + 2, 3);
-        ctx.fillStyle = '#5A5A64';
-        ctx.fillRect(x + w / 2 - 3, y - 8, 6, 8);
-        ctx.fillRect(x + w / 2 - 5, y - 10, 10, 3);
-      } else {
-        ctx.fillStyle = '#4A4050';
-        ctx.fillRect(x, y + 3, w, h - 3);
-        ctx.fillStyle = '#6A5A6A';
-        ctx.fillRect(x, y, w, 4);
-      }
-    },
   },
 
   // ---- Ambient systems ----
@@ -391,6 +637,14 @@ export const rooftops: ArenaPack = {
       ctx.fillStyle = b.dark;
       ctx.fillRect(b.x, b.roofY, 10, 720 - b.roofY);
       ctx.fillRect(b.x + b.w - 10, b.roofY, 10, 720 - b.roofY);
+      // Extended right-side wall — sits behind the 3D rooftop cap's 8px rightward
+      // skew so the cap's overhang has a solid wall beneath it instead of sky.
+      // Starts 8px above the original roofline to also back the cap's raised back edge.
+      ctx.fillRect(b.x + b.w, b.roofY - 8, 8, 728 - b.roofY);
+      // Top-left infill — fills the 8x8 wedge above the facade's top-left where
+      // the iso cap's back-left has shifted INWARD (back-left at x+sp, not x).
+      // Without this, that corner shows sky behind the cap's left slope.
+      ctx.fillRect(b.x, b.roofY - 8, 8, 8);
       // Parapet rim at rooftop edge -- sits exactly at building top
       ctx.fillStyle = b.accent;
       ctx.fillRect(b.x, b.roofY - 3, b.w, 5);
@@ -685,6 +939,65 @@ export const rooftops: ArenaPack = {
   },
 
   drawBackgroundNature: (ctx, arena) => {
+    // Tiny decorative chimneys on the middle building's upper roof (B2 at y=370).
+    // Purely visual — no collision. Match the iso treatment of real chimneys
+    // (right face + top cap parallelogram) so they don't read as 2D stickers.
+    const drawTinyChimney = (tcx: number, baseY: number, tcw: number, tch: number) => {
+      const tdepth = 5; // mini iso skew
+      ctx.save();
+      // Right face — sloped parallelogram (front-bottom-right to back-top-right)
+      ctx.fillStyle = '#221418';
+      ctx.beginPath();
+      ctx.moveTo(tcx + tcw, baseY - tch);
+      ctx.lineTo(tcx + tcw + tdepth, baseY - tch - tdepth);
+      ctx.lineTo(tcx + tcw + tdepth, baseY - tdepth);
+      ctx.lineTo(tcx + tcw, baseY);
+      ctx.closePath();
+      ctx.fill();
+      // Body front face — brick column
+      ctx.fillStyle = '#3E2A2A';
+      ctx.fillRect(tcx, baseY - tch, tcw, tch);
+      // Mortar courses
+      ctx.fillStyle = 'rgba(20, 12, 14, 0.55)';
+      for (let by = baseY - tch + 4; by < baseY; by += 5) {
+        ctx.fillRect(tcx, by, tcw, 0.8);
+      }
+      // Brick edge highlight (front-left)
+      ctx.fillStyle = 'rgba(170, 110, 90, 0.25)';
+      ctx.fillRect(tcx, baseY - tch, 1, tch);
+      // Iso cap parallelogram on top — front-bottom at baseY-tch, back-top
+      // shifted right by tdepth and up by tdepth.
+      ctx.fillStyle = '#5A4040';
+      ctx.beginPath();
+      ctx.moveTo(tcx, baseY - tch);
+      ctx.lineTo(tcx + tdepth, baseY - tch - tdepth);
+      ctx.lineTo(tcx + tcw + tdepth, baseY - tch - tdepth);
+      ctx.lineTo(tcx + tcw, baseY - tch);
+      ctx.closePath();
+      ctx.fill();
+      // Cap front lip (slightly darker bottom edge)
+      ctx.fillStyle = 'rgba(40, 24, 28, 0.55)';
+      ctx.fillRect(tcx, baseY - tch - 0.5, tcw, 1);
+      // Dark flue opening — sits inside the cap parallelogram
+      ctx.fillStyle = '#0E0810';
+      ctx.fillRect(tcx + tcw * 0.25 + tdepth * 0.5, baseY - tch - tdepth * 0.6, tcw * 0.5, 1);
+      // Faint smoke wisp from the flue
+      ctx.strokeStyle = 'rgba(160, 150, 165, 0.18)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(tcx + tcw / 2 + tdepth * 0.5, baseY - tch - tdepth);
+      ctx.quadraticCurveTo(tcx + tcw / 2 + 4, baseY - tch - tdepth - 8, tcx + tcw / 2 + 1, baseY - tch - tdepth - 16);
+      ctx.stroke();
+      ctx.restore();
+    };
+    // B2 upper roof platform is index 6 (y=370). Place small stacks across
+    // its top in the gaps between/behind the HVAC blocks.
+    const b2RoofY = arena.platforms[6].y;
+    drawTinyChimney(525, b2RoofY, 7, 14);
+    drawTinyChimney(605, b2RoofY, 8, 18);
+    drawTinyChimney(720, b2RoofY, 7, 12);
+    drawTinyChimney(795, b2RoofY, 6, 10);
+
     // Antennas on B1 right edge
     const drawAntenna = (ax: number, ay: number, h: number) => {
       ctx.strokeStyle = '#5A5A6A';
@@ -745,6 +1058,14 @@ export const rooftops: ArenaPack = {
     ctx.closePath();
     ctx.fill();
     ctx.restore();
+  },
+
+  drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
+    drawRooftopsPlatformBg(ctx, platform);
+  },
+
+  drawPlatformOverlay: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
+    drawRooftopsPlatformFg(ctx, platform);
   },
 
   drawWeatherParticle: (ctx, w) => {
