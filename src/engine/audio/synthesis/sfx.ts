@@ -2,7 +2,21 @@ import { floatBufferToWavDataUri } from './wav';
 import { generateToneBuffer } from './core';
 
 export function generateJumpSound(): string {
-  return generateToneBuffer(300, 0.12, 'square', 0.25, 600);
+  const sampleRate = 44100;
+  const duration = 0.12;
+  const numSamples = Math.floor(sampleRate * duration);
+  const buffer = new Float32Array(numSamples);
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / sampleRate;
+    const p = i / numSamples;
+    const freq = 300 + 300 * p;
+    const phase = (t * freq) % 1;
+    const tri = 4 * Math.abs(phase - 0.5) - 1;
+    // Soft attack + hard release in last 15% — avoids the click at the start
+    const env = Math.min(1, p * 12) * Math.max(0, 1 - Math.max(0, p - 0.85) * 7);
+    buffer[i] = tri * 0.3 * env;
+  }
+  return floatBufferToWavDataUri(buffer, sampleRate);
 }
 
 export function generateSelectSound(): string {
@@ -104,7 +118,7 @@ export function generateCrunchSound(): string {
 
 export function generateFootstepGrass(): string {
   const sampleRate = 44100;
-  const duration = 0.05;
+  const duration = 0.035;
   const numSamples = Math.floor(sampleRate * duration);
   const buffer = new Float32Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
@@ -117,15 +131,17 @@ export function generateFootstepGrass(): string {
 
 export function generateFootstepWood(): string {
   const sampleRate = 44100;
-  const duration = 0.05;
+  const duration = 0.07;
   const numSamples = Math.floor(sampleRate * duration);
   const buffer = new Float32Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / sampleRate;
     const progress = i / numSamples;
-    const envelope = Math.max(0, 1 - progress * 3) * 0.15;
-    const tone = Math.sin(2 * Math.PI * 1200 * t);
-    buffer[i] = tone * envelope;
+    // Warm 160Hz tone with steep decay
+    const tone = Math.sin(2 * Math.PI * 160 * t) * Math.exp(-progress * 30) * 0.3;
+    // Brief noise click for impact texture
+    const noise = (Math.random() * 2 - 1) * Math.max(0, 1 - progress * 18) * 0.25;
+    buffer[i] = tone + noise;
   }
   return floatBufferToWavDataUri(buffer, sampleRate);
 }
@@ -161,18 +177,19 @@ export function generateSplashSound(): string {
 }
 
 export function generateLandSound(): string {
+  // "Crunch" recipe: 85Hz sub-bass thud + low-pass filtered noise grit
   const sampleRate = 44100;
-  const duration = 0.1;
+  const duration = 0.28;
   const numSamples = Math.floor(sampleRate * duration);
   const buffer = new Float32Array(numSamples);
+  let lp = 0;
   for (let i = 0; i < numSamples; i++) {
     const t = i / sampleRate;
     const progress = i / numSamples;
-    const freq = 150 + (80 - 150) * progress;
-    const envelope = Math.max(0, 1 - progress * 2.5) * 0.5;
-    const tone = Math.sin(2 * Math.PI * freq * t);
-    const noise = progress < 0.3 ? (Math.random() * 2 - 1) * 0.5 : 0;
-    buffer[i] = (tone + noise) * envelope;
+    const thud = Math.sin(2 * Math.PI * 85 * t) * Math.max(0, 1 - progress * 3) * 0.45;
+    const rawNoise = Math.random() * 2 - 1;
+    lp += 0.15 * (rawNoise - lp); // muffled grit
+    buffer[i] = thud + lp * Math.max(0, 1 - progress * 5) * 0.35;
   }
   return floatBufferToWavDataUri(buffer, sampleRate);
 }
@@ -257,7 +274,7 @@ export function generateFastfallSound(): string {
     const t = i / sampleRate;
     const progress = i / numSamples;
     // Long descending swoosh
-    const freq = 800 + (150 - 800) * progress;
+    const freq = 600 + (150 - 600) * progress;
     const envelope = Math.max(0, 1 - progress * 1.2) * 0.5;
     const tone = Math.sin(2 * Math.PI * freq * t) * 0.5;
     // Rushing air noise that builds then fades
