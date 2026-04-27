@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
 import type { MatchSettings, Arena, PlayerSlot, InputState } from './types';
 import { makeArena } from './__tests__/testHelpers';
-import { FIXED_TIMESTEP, DUST_LAND_VY_THRESHOLD, MATCH_COUNTDOWN } from './constants';
+import { FIXED_TIMESTEP, DUST_LAND_VY_THRESHOLD, MATCH_COUNTDOWN, JUMP_IMPULSE } from './constants';
 
 // --- Mocks ---
 
@@ -160,7 +160,7 @@ describe('cosmeticStep transition detection', () => {
 
     // Transition to airborne via input.jump (vy = JUMP_IMPULSE)
     player.state = 'airborne';
-    player.vy = -650;
+    player.vy = JUMP_IMPULSE;
     loop.cosmeticStep(FIXED_TIMESTEP);
 
     expect(spy).toHaveBeenCalledOnce();
@@ -190,6 +190,31 @@ describe('cosmeticStep transition detection', () => {
     loop.cosmeticStep(FIXED_TIMESTEP);
 
     expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('spawns jump dust on input-jump while springTrailTimer is still decaying (not a rising edge)', () => {
+    const { loop } = createLoop();
+    const state = loop.getState();
+    const player = state.players[0];
+    const ps: ParticleSystem = loop.particleSystem;
+    const spy = vi.spyOn(ps, 'spawnJumpDustParticles');
+
+    // Grounded baseline — springTrailTimer already > 0, decaying from an earlier spring
+    player.state = 'idle';
+    player.vy = 0;
+    player.springTrailTimer = 0.3;
+    loop.cosmeticStep(FIXED_TIMESTEP);
+
+    spy.mockClear();
+
+    // Input jump — springTrailTimer keeps decaying, NOT a 0 → positive rising edge
+    player.state = 'airborne';
+    player.vy = -560;
+    player.springTrailTimer = 0.28;
+    loop.cosmeticStep(FIXED_TIMESTEP);
+
+    expect(spy).toHaveBeenCalledOnce();
+    expect(spy).toHaveBeenCalledWith(player);
   });
 
   it('detects landing: airborne → grounded with sufficient vy plays land sound', () => {
