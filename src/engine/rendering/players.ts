@@ -56,9 +56,8 @@ function applyRimLight(cached: OffscreenCanvas): void {
   // source-atop only paints over existing pixels — gradient is auto-clipped to silhouette.
   sctx.globalCompositeOperation = 'source-atop';
   const grad = sctx.createLinearGradient(0, 0, w, h);
-  // Subtle by design — at 40px char height stronger overlays read as bleached.
-  grad.addColorStop(0, 'rgba(255, 255, 255, 0.28)');
-  grad.addColorStop(0.45, 'rgba(255, 255, 255, 0.06)');
+  grad.addColorStop(0, 'rgba(255, 255, 255, 0.35)');
+  grad.addColorStop(0.5, 'rgba(255, 255, 255, 0.1)');
   grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
   sctx.fillStyle = grad;
   sctx.fillRect(0, 0, w, h);
