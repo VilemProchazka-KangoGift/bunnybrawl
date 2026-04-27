@@ -114,7 +114,7 @@ A single trained policy can adapt across regimes (e.g. normal play vs `carrotCha
 | 16 | `slow_timer_norm` | 0–1 | `slowTimer / 5` ("hurt" — set by thorn / ghost / lava) |
 | 17 | `invincible_timer_norm` | 0–1 | `invincibleTimer / 1.5` (post-respawn i-frames) |
 | 18 | `burn_timer_norm` | 0–1 | `burnTimer / 5` (lava DoT) |
-| 19 | `score_norm` | 0–1+ | `score / max(1, killLimit)` |
+| 19 | `score_norm` | 0–2 | killLimit-relative, clamped: `clamp(score / divisor, 0, 2)` where `divisor = killLimit > 0 ? killLimit : 16` |
 | 20 | `splat` | 0/1 | `state === 'splat'` |
 | 21 | `respawning` | 0/1 | `state === 'respawning'` |
 
@@ -131,7 +131,7 @@ For each opponent `i ∈ 0..3` at offset `22 + i*12`:
 | +2 | `vx_norm` | `op.vx / 600` |
 | +3 | `vy_norm` | `op.vy / 600` |
 | +4 | `on_ground` | `op.state !== 'airborne'` |
-| +5 | `score_diff` | `(op.score - self.score) / 16` |
+| +5 | `score_diff` | killLimit-relative, clamped: `clamp((op.score - self.score) / divisor, -2, 2)` (same divisor as `score_norm`) |
 | +6 | `fat_timer_norm` | `op.fatTimer / 6.6` |
 | +7 | `slow_timer_norm` | `op.slowTimer / 5` (hurt opponent → juicy stomp target) |
 | +8 | `invincible_timer_norm` | `op.invincibleTimer / 1.5` (cannot be stomped while > 0) |

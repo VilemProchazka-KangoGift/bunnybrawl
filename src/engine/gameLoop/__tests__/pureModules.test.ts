@@ -483,66 +483,60 @@ describe('decaySfxCooldowns', () => {
 
 describe('updateCrowdCheering', () => {
   const playSound = vi.fn();
+  const setVolume = vi.fn();
+  const stopSound = vi.fn();
 
   beforeEach(() => {
-    vi.mocked(audio.setVolume).mockReset();
-    vi.mocked(audio.stop).mockReset();
     playSound.mockReset();
+    setVolume.mockReset();
+    stopSound.mockReset();
   });
 
   it('starts crowd sound when leadScore >= killLimit - 3 and not already started', () => {
-    playSound.mockClear();
     const state = makeState({ players: [makePlayer({ id: 'P1', score: 13, active: true })] });
     const settings = makeSettings({ killLimit: 16 }); // 13 >= 13 → crowd starts
-    const result = updateCrowdCheering(state, settings, false, playSound);
+    const result = updateCrowdCheering(state, settings, false, playSound, setVolume, stopSound);
     expect(result).toBe(true);
     expect(playSound).toHaveBeenCalledWith('crowd');
   });
 
   it('does not call playSound again if crowd already started', () => {
-    playSound.mockClear();
     const state = makeState({ players: [makePlayer({ id: 'P1', score: 14, active: true })] });
     const settings = makeSettings({ killLimit: 16 });
-    const result = updateCrowdCheering(state, settings, true, playSound);
+    const result = updateCrowdCheering(state, settings, true, playSound, setVolume, stopSound);
     expect(result).toBe(true);
     expect(playSound).not.toHaveBeenCalled();
   });
 
   it('sets volume to 0.3 when player is within 1 kill of limit', () => {
-    vi.mocked(audio.setVolume).mockClear();
     const state = makeState({ players: [makePlayer({ id: 'P1', score: 15, active: true })] });
     const settings = makeSettings({ killLimit: 16 }); // 15 >= 15 → loud
-    updateCrowdCheering(state, settings, true, playSound);
-    expect(audio.setVolume).toHaveBeenCalledWith('crowd', 0.3);
+    updateCrowdCheering(state, settings, true, playSound, setVolume, stopSound);
+    expect(setVolume).toHaveBeenCalledWith('crowd', 0.3);
   });
 
   it('sets volume to 0.15 when player is 2 or 3 kills from limit', () => {
-    vi.mocked(audio.setVolume).mockClear();
     const state = makeState({ players: [makePlayer({ id: 'P1', score: 13, active: true })] });
     const settings = makeSettings({ killLimit: 16 }); // 13 < 15 → quiet
-    updateCrowdCheering(state, settings, true, playSound);
-    expect(audio.setVolume).toHaveBeenCalledWith('crowd', 0.15);
+    updateCrowdCheering(state, settings, true, playSound, setVolume, stopSound);
+    expect(setVolume).toHaveBeenCalledWith('crowd', 0.15);
   });
 
   it('stops crowd when lead drops back below threshold', () => {
-    vi.mocked(audio.setVolume).mockClear();
-    vi.mocked(audio.stop).mockClear();
     const state = makeState({ players: [makePlayer({ id: 'P1', score: 5, active: true })] });
     const settings = makeSettings({ killLimit: 16 }); // 5 < 13 → stop
-    const result = updateCrowdCheering(state, settings, true, playSound);
+    const result = updateCrowdCheering(state, settings, true, playSound, setVolume, stopSound);
     expect(result).toBe(false);
-    expect(audio.stop).toHaveBeenCalledWith('crowd');
+    expect(stopSound).toHaveBeenCalledWith('crowd');
   });
 
   it('returns false and stays quiet when no player is near the limit', () => {
-    playSound.mockClear();
-    vi.mocked(audio.stop).mockClear();
     const state = makeState({ players: [makePlayer({ id: 'P1', score: 1, active: true })] });
     const settings = makeSettings({ killLimit: 16 }); // 1 < 13 → never started → no-op
-    const result = updateCrowdCheering(state, settings, false, playSound);
+    const result = updateCrowdCheering(state, settings, false, playSound, setVolume, stopSound);
     expect(result).toBe(false);
     expect(playSound).not.toHaveBeenCalled();
-    expect(audio.stop).not.toHaveBeenCalled();
+    expect(stopSound).not.toHaveBeenCalled();
   });
 });
 

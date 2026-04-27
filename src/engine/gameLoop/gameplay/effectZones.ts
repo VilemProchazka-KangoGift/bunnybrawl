@@ -1,7 +1,7 @@
 import type { Player, PlayerSlot, EffectZone } from '../../types';
 import { aabbOverlap } from '../../physics';
-import type { SfxCooldowns } from '../cosmetics/sfx';
-import { getOrCreateCooldowns } from '../cosmetics/sfx';
+import type { SfxCooldowns } from '../../sfxCooldowns';
+import { getOrCreateCooldowns } from '../../sfxCooldowns';
 
 const f = Math.fround;
 

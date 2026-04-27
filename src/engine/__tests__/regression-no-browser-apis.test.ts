@@ -17,7 +17,7 @@ const PURE_PATHS = [
   'src/engine/hazardCollision.ts',
   'src/engine/constants.ts',
   'src/engine/fastMath.ts',
-  'src/engine/gameLoop/initialState.ts',
+  'src/engine/sfxCooldowns.ts',
   'src/engine/gameLoop/gameplay',
   'src/engine/ai',
 ];

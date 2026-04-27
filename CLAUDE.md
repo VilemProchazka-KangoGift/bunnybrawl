@@ -119,7 +119,7 @@ src/
                        # all 7 gameplay systems. Side effects (audio, phase, match-end,
                        # particles, haptics) routed through SimulatorEvents/ParticleEmitter
                        # interfaces — no direct audio.* or browser API calls.
-      types.ts         # SimulatorEvents (8 callbacks), SimulatorOptions, ParticleEmitter,
+      types.ts         # SimulatorEvents (10 callbacks), SimulatorOptions, ParticleEmitter,
                        # TouchInputProvider interfaces
       index.ts         # Barrel export
     headless/     # Headless ML-driven simulation runner (Phase 4)

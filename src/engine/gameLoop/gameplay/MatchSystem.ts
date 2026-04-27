@@ -13,6 +13,7 @@ export class MatchSystem implements GameplaySystem {
   private theme: ThemeConfig;
   private playSound: (name: string) => void;
   private stopSound: (name: string) => void;
+  private setSoundVolume: (name: string, volume: number) => void;
   private resimulatingGetter: () => boolean;
   private onMatchEnd: (winner: PlayerSlot | null) => void;
 
@@ -26,6 +27,7 @@ export class MatchSystem implements GameplaySystem {
     theme: ThemeConfig,
     playSound: (name: string) => void,
     stopSound: (name: string) => void,
+    setSoundVolume: (name: string, volume: number) => void,
     resimulatingGetter: () => boolean,
     onMatchEnd: (winner: PlayerSlot | null) => void,
   ) {
@@ -34,6 +36,7 @@ export class MatchSystem implements GameplaySystem {
     this.theme = theme;
     this.playSound = playSound;
     this.stopSound = stopSound;
+    this.setSoundVolume = setSoundVolume;
     this.resimulatingGetter = resimulatingGetter;
     this.onMatchEnd = onMatchEnd;
     this.crowdStarted = false;
@@ -62,7 +65,10 @@ export class MatchSystem implements GameplaySystem {
   fixedUpdate(dt: number): void {
     // Crowd cheering + periodic ambient sounds (skip during resimulation)
     if (!this.resimulatingGetter()) {
-      this.crowdStarted = updateCrowdCheering(this.state, this.settings, this.crowdStarted, this.playSound);
+      this.crowdStarted = updateCrowdCheering(
+        this.state, this.settings, this.crowdStarted,
+        this.playSound, this.setSoundVolume, this.stopSound,
+      );
       tickPeriodicAmbient(this.theme, this.periodicAmbientTimers, dt, this.playSound);
     }
 

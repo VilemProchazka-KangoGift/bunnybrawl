@@ -1,5 +1,5 @@
-// Pure constructors for GameLoop initial state.
-// Extracted from GameLoop constructor to keep the class focused on wiring systems together.
+// Pure constructors for Simulator initial state.
+// Used by Simulator's constructor and switchArena to (re)create MatchState.
 
 import type {
   Arena, MatchSettings, MatchState, Player, PlayerSlot, PlayerStats, MatchStats,
@@ -7,7 +7,7 @@ import type {
 } from '../types';
 import type { ThemeConfig } from '../themes/types';
 import { getCharacterForSlot } from '../characters';
-import { createWeatherParticle } from './cosmetics/environment';
+import { createWeatherParticle } from '../gameLoop/cosmetics/environment';
 import { randRange, pickWeighted, shuffleInPlace } from '../themes/utils';
 import {
   PLAYER_WIDTH, PLAYER_HEIGHT, GIANT_SCALE,

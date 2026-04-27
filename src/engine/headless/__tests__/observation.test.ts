@@ -426,6 +426,45 @@ describe('observation extractor (pure Node)', () => {
     expect(out[OBS_SELF_OFFSET + 9]).toBeCloseTo(0.5, 5);
   });
 
+  it('self score_norm clamps to 2 in time-limit-only matches with high scores', () => {
+    const arena = makeArena();
+    const settings = makeSettings({ killLimit: 0, timeLimit: 180 });
+    const state = makeState({
+      players: [makePlayer({ id: 'P1', score: 999 })],
+    });
+    const out = new Float32Array(OBSERVATION_SIZE);
+    extractObservation(state, 'P1', arena, settings, out);
+    // killLimit=0 falls back to SCORE_FALLBACK_DIVISOR=16; 999/16 clamps to cap=2
+    expect(out[OBS_SELF_OFFSET + 9]).toBe(2);
+  });
+
+  it('opponent score_diff is killLimit-relative and clamped', () => {
+    const arena = makeArena();
+    // killLimit=8 → leading by 4 reads as +0.5; would have been +0.25 under fixed /16 divisor
+    const settings = makeSettings({ killLimit: 8 });
+    const state = makeState({
+      players: [
+        makePlayer({ id: 'P1', score: 0 }),
+        makePlayer({ id: 'P2', score: 4 }),
+      ],
+    });
+    const out = new Float32Array(OBSERVATION_SIZE);
+    extractObservation(state, 'P1', arena, settings, out);
+    expect(out[OBS_OPPONENT_OFFSET + 5]).toBeCloseTo(0.5, 5);
+
+    // Extreme score gap clamps to ±2
+    const big = makeState({
+      players: [
+        makePlayer({ id: 'P1', score: 0 }),
+        makePlayer({ id: 'P2', score: 999 }),
+      ],
+    });
+    extractObservation(big, 'P1', arena, settings, out);
+    expect(out[OBS_OPPONENT_OFFSET + 5]).toBe(2);
+    extractObservation(big, 'P2', arena, settings, out);
+    expect(out[OBS_OPPONENT_OFFSET + 5]).toBe(-2);
+  });
+
   it('self splat flag: state="splat" → out[OBS_SELF_OFFSET + 10] = 1', () => {
     const arena = makeArena();
     const settings = makeSettings();

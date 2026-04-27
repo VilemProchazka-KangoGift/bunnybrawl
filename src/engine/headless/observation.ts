@@ -67,8 +67,18 @@ const FAT_TIMER_MAX = 6.6;  // matches FAT_DURATION (constants.ts)
 const SLOW_TIMER_MAX = 5;   // matches THORN_SLOW_DURATION
 const INVINCIBLE_TIMER_MAX = 1.5; // matches INVINCIBLE_DURATION
 const BURN_TIMER_MAX = 5;   // matches THORN_SLOW_DURATION (lava sets burnTimer to the same value)
-const SCORE_DIFF_SCALE = 16;     // default killLimit
-const KILL_LIMIT_NORM = 32;      // upper bound for killLimit normalization (typical 4-32)
+const SCORE_FALLBACK_DIVISOR = 16; // used when killLimit is 0 (time-limit-only matches)
+const SCORE_NORM_CAP = 2;          // bounds on score_norm and score_diff
+const KILL_LIMIT_NORM = 32;        // upper bound for killLimit normalization (typical 4-32)
+
+/**
+ * Score normalization divisor. killLimit-relative when set so the same
+ * fraction-toward-victory reads as the same number across kill-limit regimes;
+ * falls back to a constant in time-limit-only matches (killLimit === 0).
+ */
+function scoreDivisor(killLimit: number): number {
+  return killLimit > 0 ? killLimit : SCORE_FALLBACK_DIVISOR;
+}
 
 export interface ObservationConfig {
   /** Optional override for arena width (defaults to arena.width). */
@@ -86,12 +96,13 @@ export interface ObservationConfig {
  *   timeProgress (state.timeElapsed / settings.timeLimit, clamped 0..1; 0 if no time limit).
  * Self block (12): x_norm, y_norm, vx_norm, vy_norm, on_ground, fat_timer_norm,
  *                  slow_timer_norm, invincible_timer_norm, burn_timer_norm,
- *                  score_norm, splat (0/1), respawning (0/1).
+ *                  score_norm (killLimit-relative, clamped 0..2), splat (0/1),
+ *                  respawning (0/1).
  * Opponent block (12 × MAX_OPPONENTS): dx_norm, dy_norm, vx_norm, vy_norm,
- *                                      on_ground, score_diff,
- *                                      fat_timer_norm, slow_timer_norm,
- *                                      invincible_timer_norm, burn_timer_norm,
- *                                      alive, present.
+ *                                      on_ground, score_diff (killLimit-relative,
+ *                                      clamped -2..2), fat_timer_norm,
+ *                                      slow_timer_norm, invincible_timer_norm,
+ *                                      burn_timer_norm, alive, present.
  * Carrot block (3 × MAX_CARROTS): dx_norm, dy_norm, present.
  * Hazard block (4 × MAX_HAZARDS): dx_norm_left, dy_norm_top, w_norm, h_norm
  *                                  (rectangle relative to self).
@@ -147,9 +158,11 @@ export function extractObservation(
   out[OBS_SELF_OFFSET + 6] = clamp01(self.slowTimer / SLOW_TIMER_MAX);
   out[OBS_SELF_OFFSET + 7] = clamp01(self.invincibleTimer / INVINCIBLE_TIMER_MAX);
   out[OBS_SELF_OFFSET + 8] = clamp01(self.burnTimer / BURN_TIMER_MAX);
-  // score_norm: scaled by killLimit so a "near-victory" reads as ~1. Guard
-  // against killLimit=0 (test scenarios) by flooring the divisor at 1.
-  out[OBS_SELF_OFFSET + 9] = self.score / Math.max(1, settings.killLimit);
+  // score_norm: scaled by killLimit so "at-victory" reads as ~1. Time-limit-only
+  // matches (killLimit=0) fall back to SCORE_FALLBACK_DIVISOR. Clamped to [0, 2]
+  // so unbounded scores in long matches stay in distribution.
+  const scoreDiv = scoreDivisor(settings.killLimit);
+  out[OBS_SELF_OFFSET + 9] = clamp(self.score / scoreDiv, 0, SCORE_NORM_CAP);
   out[OBS_SELF_OFFSET + 10] = self.state === 'splat' ? 1 : 0;
   out[OBS_SELF_OFFSET + 11] = self.state === 'respawning' ? 1 : 0;
 
@@ -166,7 +179,7 @@ export function extractObservation(
     out[base + 2] = op.vx / VELOCITY_SCALE;
     out[base + 3] = op.vy / VELOCITY_SCALE;
     out[base + 4] = op.state === 'airborne' ? 0 : 1;
-    out[base + 5] = (op.score - self.score) / SCORE_DIFF_SCALE;
+    out[base + 5] = clamp((op.score - self.score) / scoreDiv, -SCORE_NORM_CAP, SCORE_NORM_CAP);
     out[base + 6] = clamp01(op.fatTimer / FAT_TIMER_MAX);
     out[base + 7] = clamp01(op.slowTimer / SLOW_TIMER_MAX);
     out[base + 8] = clamp01(op.invincibleTimer / INVINCIBLE_TIMER_MAX);

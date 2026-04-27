@@ -18,11 +18,11 @@ import {
   HITSTOP_DURATION, SQUASH_ON_LAND, STRETCH_ON_JUMP, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED,
   SCREEN_FLASH_DURATION,
 } from '../constants';
-import { computeEffectivePhysics, createInitialPlayers, createInitialMatchState } from '../gameLoop/initialState';
+import { computeEffectivePhysics, createInitialPlayers, createInitialMatchState } from './initialState';
 import { RuleBasedBot } from '../input/RuleBasedBot';
 
-import { getOrCreateCooldowns } from '../gameLoop/cosmetics/sfx';
-import type { SfxCooldowns } from '../gameLoop/cosmetics/sfx';
+import { getOrCreateCooldowns } from '../sfxCooldowns';
+import type { SfxCooldowns } from '../sfxCooldowns';
 import { HazardSystem } from '../gameLoop/gameplay/HazardSystem';
 import { CarrotSystem } from '../gameLoop/gameplay/CarrotSystem';
 import { ArenaEntitySystem } from '../gameLoop/gameplay/ArenaEntitySystem';
@@ -35,9 +35,11 @@ const f = Math.fround;
 
 const NOOP = (): void => {};
 const NOOP_NAME = (_n: string): void => {};
+const NOOP_NAME_NUM = (_n: string, _v: number): void => {};
 const NOOP_PHASE = (_p: MatchPhase): void => {};
 const NOOP_MATCH_END = (_w: PlayerSlot | null, _s: MatchState): void => {};
 const NOOP_LANDING = (_s: PlayerSlot, _v: number): void => {};
+const NOOP_SLOT = (_s: PlayerSlot): void => {};
 
 const NOOP_EMITTER: ParticleEmitter = {
   emitParticle: NOOP,
@@ -94,6 +96,8 @@ export class Simulator {
   private readonly _boundGameRandom = (): number => this.gameRandom();
   private readonly _boundPlaySound = (name: string): void => this._events.onSfxRequest(name);
   private readonly _boundStopSound = (name: string): void => this._events.onSoundStopRequest(name);
+  private readonly _boundSetSoundVolume = (name: string, volume: number): void =>
+    this._events.onSoundVolumeRequest(name, volume);
   private readonly _boundParticleEmitter: ParticleEmitter = {
     emitParticle: (x, y, vx, vy, life, size, color) => this._particleEmitter.emitParticle(x, y, vx, vy, life, size, color),
     spawnCarrotVFX: (x, y) => this._particleEmitter.spawnCarrotVFX(x, y),
@@ -120,10 +124,12 @@ export class Simulator {
       onMusicStartRequest: e.onMusicStartRequest ?? NOOP_NAME,
       onMusicStopRequest: e.onMusicStopRequest ?? NOOP,
       onSoundStopRequest: e.onSoundStopRequest ?? NOOP_NAME,
+      onSoundVolumeRequest: e.onSoundVolumeRequest ?? NOOP_NAME_NUM,
       onAllGameSoundsStopRequest: e.onAllGameSoundsStopRequest ?? NOOP,
       onPhaseChange: e.onPhaseChange ?? NOOP_PHASE,
       onMatchEnd: e.onMatchEnd ?? NOOP_MATCH_END,
       onPlayerLanding: e.onPlayerLanding ?? NOOP_LANDING,
+      onStompHaptic: e.onStompHaptic ?? NOOP_SLOT,
     };
     this._particleEmitter = opts.particleEmitter ?? NOOP_EMITTER;
 
@@ -591,10 +597,11 @@ export class Simulator {
       this._state, this._arena, this._settings,
       () => this._resimulating,
       () => this._rng,
+      this._events.onStompHaptic,
     );
     this._matchSystem = new MatchSystem(
       this._state, this._settings, this._theme,
-      this._boundPlaySound, this._boundStopSound,
+      this._boundPlaySound, this._boundStopSound, this._boundSetSoundVolume,
       () => this._resimulating,
       (winner) => {
         this._state.matchOver = true;

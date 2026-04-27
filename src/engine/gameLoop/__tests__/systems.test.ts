@@ -852,12 +852,13 @@ describe('MatchSystem', () => {
   function makeMatchSystem(state: MatchState, onMatchEnd = vi.fn()) {
     const playSound = vi.fn();
     const stopSound = vi.fn();
+    const setSoundVolume = vi.fn();
     const sys = new MatchSystem(
       state, mockSettings, mockTheme,
-      playSound, stopSound, () => false,
+      playSound, stopSound, setSoundVolume, () => false,
       onMatchEnd,
     );
-    return { sys, playSound, stopSound, onMatchEnd };
+    return { sys, playSound, stopSound, setSoundVolume, onMatchEnd };
   }
 
   it('init() with no ambientSoundConfig does not call playSound', () => {
@@ -877,7 +878,7 @@ describe('MatchSystem', () => {
     };
     const state = makeSystemState();
     const playSound = vi.fn();
-    const sys = new MatchSystem(state, mockSettings, themeWithAmbient, playSound, vi.fn(), () => false, vi.fn());
+    const sys = new MatchSystem(state, mockSettings, themeWithAmbient, playSound, vi.fn(), vi.fn(), () => false, vi.fn());
     sys.init();
 
     expect(playSound).toHaveBeenCalledWith('wind');
@@ -907,7 +908,7 @@ describe('MatchSystem', () => {
   it('fixedUpdate() skips crowd + ambient tick when resimulating', () => {
     const state = makeSystemState({ countdown: 0 });
     const playSound = vi.fn();
-    const sys = new MatchSystem(state, mockSettings, mockTheme, playSound, vi.fn(), () => true, vi.fn());
+    const sys = new MatchSystem(state, mockSettings, mockTheme, playSound, vi.fn(), vi.fn(), () => true, vi.fn());
     sys.init();
     sys.fixedUpdate(1 / 60);
 
@@ -924,7 +925,7 @@ describe('MatchSystem', () => {
       },
     };
     const state = makeSystemState();
-    const sys = new MatchSystem(state, mockSettings, themeWithAmbient, vi.fn(), vi.fn(), () => false, vi.fn());
+    const sys = new MatchSystem(state, mockSettings, themeWithAmbient, vi.fn(), vi.fn(), vi.fn(), () => false, vi.fn());
     sys.init();
     sys.cleanup();
     // No throw; internal maps reset
@@ -946,7 +947,7 @@ describe('MatchSystem', () => {
     const stopSound = vi.fn();
 
     const state = makeSystemState();
-    const sys = new MatchSystem(state, mockSettings, themeWithAmbient, vi.fn(), stopSound, () => false, vi.fn());
+    const sys = new MatchSystem(state, mockSettings, themeWithAmbient, vi.fn(), stopSound, vi.fn(), () => false, vi.fn());
     sys.init();
     sys.cleanup();
 
@@ -965,7 +966,7 @@ describe('MatchSystem', () => {
     const stopSound = vi.fn();
 
     const state = makeSystemState();
-    const sys = new MatchSystem(state, mockSettings, themeWithAmbient, vi.fn(), stopSound, () => false, vi.fn());
+    const sys = new MatchSystem(state, mockSettings, themeWithAmbient, vi.fn(), stopSound, vi.fn(), () => false, vi.fn());
     sys.init();
     sys.cleanup();
     const firstCallCount = stopSound.mock.calls.length;

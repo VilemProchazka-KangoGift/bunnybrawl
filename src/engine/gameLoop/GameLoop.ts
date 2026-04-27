@@ -97,10 +97,12 @@ export class GameLoop {
         onMusicStartRequest: (themeId) => audio.playMusic(themeId),
         onMusicStopRequest: () => audio.stopMusic(),
         onSoundStopRequest: (name) => audio.stop(name),
+        onSoundVolumeRequest: (name, volume) => audio.setVolume(name, volume),
         onAllGameSoundsStopRequest: () => audio.stopAllGameSounds(),
         onPhaseChange: (phase) => this._handlePhaseChange(phase),
         onMatchEnd: (winner) => this._handleMatchEnd(winner),
         onPlayerLanding: (slot, prevVy) => { if (haptics.isLocal(slot)) haptics.landing(prevVy); },
+        onStompHaptic: (slot) => { if (haptics.isLocal(slot)) haptics.hitstop(); },
       },
     });
 

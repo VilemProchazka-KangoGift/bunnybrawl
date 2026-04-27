@@ -47,6 +47,9 @@ export interface SimulatorEvents {
   /** A specific looping sound should stop (used by match cleanup for ambient loops). */
   onSoundStopRequest?: (name: string) => void;
 
+  /** A specific looping sound should change volume (e.g. crowd cheer crescendo). */
+  onSoundVolumeRequest?: (name: string, volume: number) => void;
+
   /** All game sounds should stop (match end, arena swap). */
   onAllGameSoundsStopRequest?: () => void;
 
@@ -58,6 +61,9 @@ export interface SimulatorEvents {
 
   /** Player just landed after being airborne. Browser adapter triggers haptics. */
   onPlayerLanding?: (slot: PlayerSlot, prevVy: number) => void;
+
+  /** A stomp involves this slot (attacker or victim). Browser adapter triggers haptics. */
+  onStompHaptic?: (slot: PlayerSlot) => void;
 }
 
 export interface SimulatorOptions {

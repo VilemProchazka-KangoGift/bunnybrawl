@@ -1,7 +1,7 @@
 import type { MatchState, Arena, Player, PlayerSlot } from '../../types';
 import type { GameplaySystem } from '../types';
 import type { ArenaEntitySystem } from './ArenaEntitySystem';
-import type { SfxCooldowns } from '../cosmetics/sfx';
+import type { SfxCooldowns } from '../../sfxCooldowns';
 import { applyEffectZones, updateZeroGSound } from './effectZones';
 
 export class EffectZoneSystem implements GameplaySystem {
