@@ -4,6 +4,7 @@ import { FAT_SCALE, HITSTOP_DURATION, PLAYER_WIDTH, PLAYER_HEIGHT } from '../con
 import { hasCustomEyes, getSpriteRenderer, getCharacterPack, drawLegs } from '../characters';
 import { drawHighlightSpot } from '../spriteShading';
 import { getSlowDevice } from '../perfFlags';
+import { getRimLight, subscribeRimLight } from '../rimLight';
 import { getIdleAction, type IdleAction } from './idleActions';
 
 // Sprite cache: key -> OffscreenCanvas with pre-drawn character sprite.
@@ -34,6 +35,34 @@ function getShadowCache(): OffscreenCanvas | null {
 
 export function clearSpriteCache(): void {
   spriteCache.clear();
+}
+
+// Rim-light toggle invalidates the cached sprites — drop entries eagerly.
+subscribeRimLight(() => spriteCache.clear());
+
+/** Apply a top-left → bottom-right white gradient overlay clipped to the
+ *  existing sprite alpha. Brightens the lit edge of the body silhouette;
+ *  dims to nothing on the shaded side. Runs once per cache miss. */
+function applyRimLight(cached: OffscreenCanvas): void {
+  const sctx = cached.getContext('2d');
+  if (!sctx) return;
+  const w = cached.width;
+  const h = cached.height;
+  if (w === 0 || h === 0) return;
+
+  sctx.save();
+  // Drop the cache canvas's per-draw scale+translate so we work in raw pixels.
+  sctx.setTransform(1, 0, 0, 1, 0, 0);
+  // source-atop only paints over existing pixels — gradient is auto-clipped to silhouette.
+  sctx.globalCompositeOperation = 'source-atop';
+  const grad = sctx.createLinearGradient(0, 0, w, h);
+  // Subtle by design — at 40px char height stronger overlays read as bleached.
+  grad.addColorStop(0, 'rgba(255, 255, 255, 0.28)');
+  grad.addColorStop(0.45, 'rgba(255, 255, 255, 0.06)');
+  grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  sctx.fillStyle = grad;
+  sctx.fillRect(0, 0, w, h);
+  sctx.restore();
 }
 
 /** Set the current render scale for new sprite cache entries. Clears the cache if the scale changed. */
@@ -248,7 +277,8 @@ function drawCharacterSprite(
   // poisoning the cache: helmet is baked in at draw time, so a helmet-less
   // first render would otherwise be reused at the helmet variant.
   const helmetKey = theme?.bubbleHelmet ? 1 : 0;
-  const cacheKey = `${char.name}_${state}_${animFrame}_${fastFalling ? 1 : 0}_${sqKey}_${helmetKey}`;
+  const rimKey = getRimLight() ? 1 : 0;
+  const cacheKey = `${char.name}_${state}_${animFrame}_${fastFalling ? 1 : 0}_${sqKey}_${helmetKey}_${rimKey}`;
 
   // Idle action ctx transform — applied to main ctx, OUTSIDE the cached bitmap, so the
   // animated transform doesn't get baked into the (1-bit-keyed) sprite cache entry.
@@ -279,6 +309,8 @@ function drawCharacterSprite(
   sctx.translate(-x + pad, -y + pad);
 
   _drawCharacterSpriteImpl(sctx, x, y, w, h, char, state, animFrame, fastFalling, idleAction, idleActionTimer, idleActionDuration, squashScale, theme);
+
+  if (rimKey) applyRimLight(cached);
 
   if (spriteCache.size > _spriteCacheCap) {
     const first = spriteCache.keys().next().value;
