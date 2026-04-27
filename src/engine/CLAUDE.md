@@ -114,7 +114,7 @@
 - Gradient cache: lava, zero-G, ghost, bouncy gradients cached in Maps by position.
 - HUD cache: 1280x90 OffscreenCanvas, redraws on score/timer/player changes.
 - **Foreground-nature cache**: `Renderer._fgNatureCache` is a 1280×720 OffscreenCanvas that captures `theme.drawForegroundNature(ctx, arena)` output. Built in `renderBackground()` (arena-load + render-scale change), blit at identity transform in `renderFrame`. Mirror is baked in. Test envs without OffscreenCanvas fall back to direct draw. Was the biggest single perf win in the 2026-04-25 pass — meadow 25.6ms→7.5ms, eliminated GC pauses up to 166ms. Any future foreground-nature additions go through this cache automatically as long as they use only static inputs (no `time`, RNG, runtime state).
-- Particle pool: free-list via `emitParticle()`, capped at 300.
+- Particle pool: free-list via `emitParticle()`, capped at 600.
 - Platform filter cache: `getFloatingPlatforms()` uses WeakMap.
 - AI throttle: decisions every 3rd frame, staggered by `botIndex % 3`.
 - **globalAlpha rule (refined)**:

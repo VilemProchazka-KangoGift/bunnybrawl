@@ -4,7 +4,7 @@ import { swapRemove } from '../../themes/utils';
 
 export const CONFETTI_COLORS = ['#FFD700', '#FF69B4', '#00FFFF', '#7CFC00', '#FF6347', '#DA70D6', '#FFA500'];
 const CONFETTI_SHAPES: Array<'star' | 'diamond' | 'circle' | 'ribbon'> = ['star', 'diamond', 'circle', 'ribbon'];
-const DUST_COLOR = '#C8B896';
+const JUMP_DUST_COLOR = '#C8B896';
 
 /** Soft cap on simultaneous live particles. Bulk emitters (gore splatter,
  *  fireworks) can produce hundreds per call and matchOver fireworks accrete
@@ -55,7 +55,7 @@ export function spawnJumpDustParticles(
     const vy = -Math.random() * 70 - 30;
     const life = 0.245 + Math.random() * 0.105;
     const size = 1.5 + Math.random() * 1.5;
-    emitParticle(particles, freeList, sx, sy, vx, vy, life, size, DUST_COLOR);
+    emitParticle(particles, freeList, sx, sy, vx, vy, life, size, JUMP_DUST_COLOR);
   }
 }
 

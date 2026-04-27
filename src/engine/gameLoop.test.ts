@@ -817,14 +817,12 @@ describe('Landing Dust', () => {
     const state = loop.getState();
     const player = state.players[0];
 
-    // Establish airborne baseline so cosmeticStep prev-state captures airborne
     player.state = 'airborne';
     player.vy = DUST_LAND_VY_THRESHOLD + 100;
     loop.cosmeticStep(FIXED_TIMESTEP);
 
     const particlesBefore = loop.particleSystem.getParticles().length;
 
-    // Land — airborne → grounded transition with prev.vy above dust threshold
     player.state = 'idle';
     player.vy = 0;
     loop.cosmeticStep(FIXED_TIMESTEP);
