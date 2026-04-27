@@ -437,11 +437,25 @@ export class GameLoop {
     perfTrace.measure('cosmeticStep', () => {
       if (this.simulator.getState().phase === 'loading') return;
 
-      perfTrace.measure('cosmetic.playerTransition', () => this.playerTransitionSystem.cosmeticUpdate(dt));
-      perfTrace.measure('cosmetic.playerCosmetic', () => this.playerCosmeticSystem.cosmeticUpdate(dt));
-      perfTrace.measure('cosmetic.entityTransition', () => this.entityTransitionSystem.cosmeticUpdate(dt));
+      const playerTransitionStart = perfTrace.begin('cosmetic.playerTransition');
+      this.playerTransitionSystem.cosmeticUpdate(dt);
+      perfTrace.end('cosmetic.playerTransition', playerTransitionStart);
+
+      const playerCosmeticStart = perfTrace.begin('cosmetic.playerCosmetic');
+      this.playerCosmeticSystem.cosmeticUpdate(dt);
+      perfTrace.end('cosmetic.playerCosmetic', playerCosmeticStart);
+
+      const entityTransitionStart = perfTrace.begin('cosmetic.entityTransition');
+      this.entityTransitionSystem.cosmeticUpdate(dt);
+      perfTrace.end('cosmetic.entityTransition', entityTransitionStart);
+
+      const particlesStart = perfTrace.begin('cosmetic.particles');
       this.particleSystem.cosmeticUpdate(dt);
-      perfTrace.measure('cosmetic.environment', () => this.environmentSystem.cosmeticUpdate(dt));
+      perfTrace.end('cosmetic.particles', particlesStart);
+
+      const environmentStart = perfTrace.begin('cosmetic.environment');
+      this.environmentSystem.cosmeticUpdate(dt);
+      perfTrace.end('cosmetic.environment', environmentStart);
     });
   }
 

@@ -357,11 +357,19 @@ export class Simulator {
       this._state.screenShake = Math.max(0, this._state.screenShake - dt);
     }
 
-    perfTrace.measure('gameplay.hazard', () => this._hazardSystem.fixedUpdate(dt));
-    perfTrace.measure('gameplay.carrot', () => this._carrotSystem.fixedUpdate(dt));
-    perfTrace.measure('gameplay.arenaEntity', () => this._arenaEntitySystem.fixedUpdate(dt));
+    const hazardStart = perfTrace.begin('gameplay.hazard');
+    this._hazardSystem.fixedUpdate(dt);
+    perfTrace.end('gameplay.hazard', hazardStart);
 
-    const _perPlayerStart = perfTrace.begin('simulator.perPlayerPhysics');
+    const carrotStart = perfTrace.begin('gameplay.carrot');
+    this._carrotSystem.fixedUpdate(dt);
+    perfTrace.end('gameplay.carrot', carrotStart);
+
+    const arenaEntityStart = perfTrace.begin('gameplay.arenaEntity');
+    this._arenaEntitySystem.fixedUpdate(dt);
+    perfTrace.end('gameplay.arenaEntity', arenaEntityStart);
+
+    const perPlayerStart = perfTrace.begin('simulator.perPlayerPhysics');
 
     for (const player of this._state.players) {
       if (!player.active) continue;
@@ -539,11 +547,19 @@ export class Simulator {
       }
     }
 
-    perfTrace.end('simulator.perPlayerPhysics', _perPlayerStart);
+    perfTrace.end('simulator.perPlayerPhysics', perPlayerStart);
 
-    perfTrace.measure('gameplay.effectZone', () => this._effectZoneSystem.fixedUpdate(dt));
-    perfTrace.measure('gameplay.stomp', () => this._stompSystem.fixedUpdate(dt));
-    perfTrace.measure('gameplay.match', () => this._matchSystem.fixedUpdate(dt));
+    const effectZoneStart = perfTrace.begin('gameplay.effectZone');
+    this._effectZoneSystem.fixedUpdate(dt);
+    perfTrace.end('gameplay.effectZone', effectZoneStart);
+
+    const stompStart = perfTrace.begin('gameplay.stomp');
+    this._stompSystem.fixedUpdate(dt);
+    perfTrace.end('gameplay.stomp', stompStart);
+
+    const matchStart = perfTrace.begin('gameplay.match');
+    this._matchSystem.fixedUpdate(dt);
+    perfTrace.end('gameplay.match', matchStart);
   }
 
   // Internal -------------------------------------------------------------
