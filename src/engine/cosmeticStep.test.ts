@@ -44,7 +44,7 @@ installMockCanvas2D();
 
 // Import after mocks are set up
 import { GameLoop } from './gameLoop';
-import { registerBuiltinArenas } from './arenas';
+import { getTheme, registerBuiltinArenas } from './arenas';
 import { registerBuiltinCharacters } from './characters';
 import { audio } from './audio';
 import type { ParticleSystem } from './gameLoop/cosmetics/ParticleSystem';
@@ -216,22 +216,19 @@ describe('cosmeticStep transition detection', () => {
 
   it('landing dust uses the arena theme surface color', () => {
     const { loop } = createLoop();
-    const state = loop.getState();
-    const player = state.players[0];
+    const player = loop.getState().players[0];
 
-    // Establish airborne baseline at high downward velocity
     player.state = 'airborne';
     player.vy = 500;
     loop.cosmeticStep(FIXED_TIMESTEP);
 
-    // Land — wasAirborne && isGrounded && |prev.vy| >= DUST_LAND_VY_THRESHOLD
     player.state = 'idle';
     player.vy = 0;
     loop.cosmeticStep(FIXED_TIMESTEP);
 
-    // Default test arena uses meadow theme; surfaceColor is grass green.
-    const greenDust = loop.particleSystem.getParticles().filter(p => p.color === '#6BBF59');
-    expect(greenDust.length).toBeGreaterThan(0);
+    const expected = getTheme('meadow').ground.surfaceColor;
+    const tinted = loop.particleSystem.getParticles().filter(p => p.color === expected);
+    expect(tinted.length).toBeGreaterThan(0);
   });
 
   it('spawns jump dust on input-jump while springTrailTimer is still decaying (not a rising edge)', () => {
