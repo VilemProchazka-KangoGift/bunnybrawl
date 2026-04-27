@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { InputEcho } from './inputEcho';
 import type { InputState, MatchState, Player, PlayerSlot } from '../types';
-import { makePlayer } from '../__tests__/testHelpers';
+import { makePlayer, makeState as makeEmptyMatchState } from '../__tests__/testHelpers';
 
 // ---------- Helpers ----------
 
@@ -25,44 +25,9 @@ function downInput(): InputState {
   return { left: false, right: false, jump: false, down: true };
 }
 
-/** Minimal MatchState with a single player. */
+/** Single-player MatchState. Remaining fields default to empty via testHelpers. */
 function makeState(playerOverrides: Partial<Player> = {}): MatchState {
-  return {
-    players: [makePlayer({ id: 'P1' as PlayerSlot, ...playerOverrides })],
-    // Remaining fields are unused by InputEcho — provide minimal stubs
-    killFeed: [],
-    timeElapsed: 0,
-    matchOver: false,
-    winner: null,
-    carrots: [],
-    carrotTimer: 0,
-    springs: [],
-    thorns: [],
-    springSpawnTimer: 0,
-    thornSpawnTimer: 0,
-    screenShake: 0,
-    slowMotion: 0,
-    weather: [],
-    dayPhase: 0,
-    countdown: 0,
-    stats: { perPlayer: new Map() },
-    shockwaves: [],
-    screenFlash: 0,
-    hitstopZoom: 0,
-    wildlife: [],
-    fogParticles: [],
-    pollenParticles: [],
-    shootingStars: [],
-    scoreAnimations: [],
-    ghosts: [],
-    lavaRocks: [],
-    lavaRockTimer: 0,
-    geyserStates: [],
-    pigeonFlocks: [],
-    bouncyWobble: new Map(),
-    gibs: [],
-    confetti: [],
-  } as MatchState;
+  return makeEmptyMatchState({ players: [makePlayer({ id: 'P1' as PlayerSlot, ...playerOverrides })] });
 }
 
 function getPlayer(state: MatchState): Player {

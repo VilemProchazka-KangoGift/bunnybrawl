@@ -66,13 +66,9 @@ export function makeArena(overrides?: Partial<Arena>): Arena {
   };
 }
 
-/** Minimal MatchState with sensible defaults. Override what your test needs. */
+/** Minimal MatchState with all timers and collections at zero/empty. Override what your test needs. */
 export function makeState(overrides: Partial<MatchState> = {}): MatchState {
-  return {
-    ...createEmptyMatchState(),
-    carrotTimer: 5, springSpawnTimer: 5, thornSpawnTimer: 5, lavaRockTimer: 5,
-    ...overrides,
-  };
+  return { ...createEmptyMatchState(), ...overrides };
 }
 
 /** Minimal MatchSettings with sensible defaults. Override what your test needs. */

@@ -1,7 +1,6 @@
 // Shared canvas-2d mock for tests. happy-dom's `canvas.getContext('2d')`
 // returns null, so anything that constructs a Renderer / GameLoop fails on
-// `setTransform` etc. unless the prototype is patched. Use `installMockCanvas2D()`
-// to install + teardown across a test file.
+// `setTransform` etc. unless the prototype is patched.
 
 import { vi } from 'vitest';
 
@@ -28,21 +27,32 @@ export function createMockCanvasCtx(): CanvasRenderingContext2D {
   return ctx as unknown as CanvasRenderingContext2D;
 }
 
+const MOCK_INSTALLED = Symbol.for('mockCanvas2dInstalled');
+
 /**
  * Patch `HTMLCanvasElement.prototype.getContext` to return a shared mock 2D
- * context. Idempotent if called twice (only patches once). Returns a `restore`
- * fn that puts the original implementation back — call from `afterAll` if a
- * test file needs to leave the global pristine.
+ * context for the lifetime of the test worker. Vitest isolates test files into
+ * separate workers, so this is fire-and-forget — no teardown needed. Call once
+ * at the top of any test file that constructs a Renderer / GameLoop.
+ *
+ * Within a single worker, repeat calls are no-ops (the patch is keyed by a
+ * symbol on the prototype), so each migrated test file can call it without
+ * coordinating.
  */
-export function installMockCanvas2D(): { ctx: CanvasRenderingContext2D; restore: () => void } {
+export function installMockCanvas2D(): CanvasRenderingContext2D {
+  type PatchedProto = typeof HTMLCanvasElement.prototype & {
+    [MOCK_INSTALLED]?: { ctx: CanvasRenderingContext2D };
+  };
+  const proto = HTMLCanvasElement.prototype as PatchedProto;
+  const existing = proto[MOCK_INSTALLED];
+  if (existing) return existing.ctx;
+
   const ctx = createMockCanvasCtx();
-  const orig = HTMLCanvasElement.prototype.getContext;
-  HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, type: string) {
+  const orig = proto.getContext;
+  proto.getContext = function (this: HTMLCanvasElement, type: string) {
     if (type === '2d') return ctx;
     return orig.call(this, type as never);
   } as typeof HTMLCanvasElement.prototype.getContext;
-  return {
-    ctx,
-    restore: () => { HTMLCanvasElement.prototype.getContext = orig; },
-  };
+  proto[MOCK_INSTALLED] = { ctx };
+  return ctx;
 }

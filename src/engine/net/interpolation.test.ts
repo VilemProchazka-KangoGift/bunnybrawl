@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { EntityInterpolation, applySnapshotToState } from './interpolation';
 import type { AuthSnapshot } from './snapshot';
-import type { MatchState } from '../types';
+import type { MatchState, PlayerSlot } from '../types';
+import { makePlayer, makeState } from '../__tests__/testHelpers';
 
 function makeSnap(frame: number, px = 100, py = 200): AuthSnapshot {
   return {
@@ -149,22 +150,12 @@ describe('EntityInterpolation', () => {
 
 describe('applySnapshotToState', () => {
   function makeMinimalState(): MatchState {
-    return {
+    return makeState({
       players: [
-        { id: 'P1', x: 0, y: 0, vx: 0, vy: 0, width: 32, height: 32, state: 'idle', facing: 'right', splatTimer: 0, respawnTimer: 0, invincibleTimer: 0, score: 0, active: true, animFrame: 0, animTimer: 0, fastFalling: false, fatTimer: 0, slowTimer: 0, squashScale: 1, squashTimer: 0, sideSquash: 1, afterimages: [], idleAnimTimer: 0, expression: 'normal', killStreak: 0, breathTimer: 0, springTrailTimer: 0, damageFlashSide: null, damageFlashTimer: 0, burnTimer: 0, hitstopTimer: 0, renderOffsetX: 0, renderOffsetY: 0, disconnected: false, character: { slot: 'P1', name: 'Bunny', color: '#fff', darkColor: '#ccc', lightColor: '#fff' } },
-        { id: 'P2', x: 0, y: 0, vx: 0, vy: 0, width: 32, height: 32, state: 'idle', facing: 'right', splatTimer: 0, respawnTimer: 0, invincibleTimer: 0, score: 0, active: true, animFrame: 0, animTimer: 0, fastFalling: false, fatTimer: 0, slowTimer: 0, squashScale: 1, squashTimer: 0, sideSquash: 1, afterimages: [], idleAnimTimer: 0, expression: 'normal', killStreak: 0, breathTimer: 0, springTrailTimer: 0, damageFlashSide: null, damageFlashTimer: 0, burnTimer: 0, hitstopTimer: 0, renderOffsetX: 0, renderOffsetY: 0, disconnected: false, character: { slot: 'P2', name: 'Fox', color: '#f80', darkColor: '#a40', lightColor: '#fc0' } },
+        makePlayer({ id: 'P1' as PlayerSlot, x: 0, y: 0, character: { slot: 'P1', name: 'Bunny', color: '#fff', darkColor: '#ccc', lightColor: '#fff' } }),
+        makePlayer({ id: 'P2' as PlayerSlot, x: 0, y: 0, character: { slot: 'P2', name: 'Fox', color: '#f80', darkColor: '#a40', lightColor: '#fc0' } }),
       ],
-      killFeed: [], timeElapsed: 0, matchOver: false, winner: null,
-      carrots: [], carrotTimer: 0, springs: [], thorns: [],
-      springSpawnTimer: 0, thornSpawnTimer: 0, screenShake: 0, slowMotion: 0,
-      weather: [], dayPhase: 0, countdown: 0,
-      stats: { perPlayer: new Map() },
-      shockwaves: [], screenFlash: 0, hitstopZoom: 0,
-      wildlife: [], fogParticles: [], pollenParticles: [], shootingStars: [],
-      scoreAnimations: [], ghosts: [], lavaRocks: [], lavaRockTimer: 0,
-      geyserStates: [], pigeonFlocks: [],
-      bouncyWobble: new Map(), gibs: [], confetti: [],
-    } as unknown as MatchState;
+    });
   }
 
   it('updates player positions from snapshot', () => {

@@ -1,49 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { buildAwareness } from '../awareness';
-import type { MatchState, Arena, PlayerSlot } from '../../types';
-import { makePlayer, makeArena } from '../../__tests__/testHelpers';
+import type { Arena, PlayerSlot } from '../../types';
+import { makePlayer, makeArena, makeState } from '../../__tests__/testHelpers';
 import { PLAYER_WIDTH, PLAYER_HEIGHT, CANVAS_WIDTH } from '../../constants';
 import { registerArena, getArenaNav } from '../../arenas/registry';
-
-/** Minimal MatchState factory for awareness tests. */
-function makeState(overrides?: Partial<MatchState>): MatchState {
-  return {
-    players: [],
-    killFeed: [],
-    timeElapsed: 30,
-    matchOver: false,
-    winner: null,
-    carrots: [],
-    carrotTimer: 10,
-    springs: [],
-    thorns: [],
-    springSpawnTimer: 10,
-    thornSpawnTimer: 10,
-    screenShake: 0,
-    slowMotion: 0,
-    weather: [],
-    dayPhase: 0,
-    countdown: 0,
-    stats: { perPlayer: new Map() },
-    shockwaves: [],
-    screenFlash: 0,
-    hitstopZoom: 0,
-    wildlife: [],
-    fogParticles: [],
-    pollenParticles: [],
-    shootingStars: [],
-    scoreAnimations: [],
-    ghosts: [],
-    lavaRocks: [],
-    lavaRockTimer: 10,
-    geyserStates: [],
-    pigeonFlocks: [],
-    bouncyWobble: new Map(),
-    gibs: [],
-    confetti: [],
-    ...overrides,
-  };
-}
 
 describe('buildAwareness', () => {
   // ── Self state detection ──────────────────────────────────────────────

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { PlayerSlot, InputState, MatchState } from '../types';
 import { MsgType, encodeInputMessage, encodePing, encodeSnapshotAck } from './protocol';
+import { makeState } from '../__tests__/testHelpers';
 
 // ---- Mock infrastructure ----
 
@@ -85,34 +86,7 @@ import { HostAuthority, type HostAuthorityConfig } from './hostAuthority';
 // ---- Helpers ----
 
 function makeMinimalMatchState(): MatchState {
-  return {
-    players: [],
-    killFeed: [],
-    timeElapsed: 0,
-    matchOver: false,
-    winner: null,
-    carrots: [],
-    carrotTimer: 0,
-    springs: [],
-    thorns: [],
-    springSpawnTimer: 0,
-    thornSpawnTimer: 0,
-    splatMarks: [],
-    particles: [],
-    gibs: [],
-    countdown: 3,
-    dayPhase: 0,
-    screenShake: 0,
-    slowMotion: 0,
-    screenFlash: 0,
-    hitstopZoom: 1,
-    scoreAnimations: [],
-    ghosts: [],
-    lavaRocks: [],
-    geyserStates: [],
-    bouncyWobble: new Map(),
-    pigeons: [],
-  } as unknown as MatchState;
+  return makeState({ countdown: 3, hitstopZoom: 1 });
 }
 
 function makeMockTransport() {
