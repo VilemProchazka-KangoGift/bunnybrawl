@@ -57,7 +57,15 @@ export function detectPlayerTransitions(
   const isGrounded = player.state === 'idle' || player.state === 'run';
 
   // Jump: grounded → airborne
-  if (wasGrounded && isAirborne) cb.playSound('jump');
+  if (wasGrounded && isAirborne) {
+    cb.playSound('jump');
+    // Jump dust fires only on input-jump — exclude spring launches
+    // (springTrailTimer rising edge: was 0 last tick, now > 0).
+    const sprangThisTick = prev.springTrailTimer === 0 && player.springTrailTimer > 0;
+    if (!sprangThisTick) {
+      cb.spawnJumpDustParticles(player);
+    }
+  }
 
   // Fast-fall start
   if (!prev.fastFalling && player.fastFalling) cb.playSound('fastfall');

@@ -47,6 +47,7 @@ import { GameLoop } from './gameLoop';
 import { registerBuiltinArenas } from './arenas';
 import { registerBuiltinCharacters } from './characters';
 import { audio } from './audio';
+import type { ParticleSystem } from './gameLoop/cosmetics/ParticleSystem';
 
 // --- Factories ---
 
@@ -140,6 +141,55 @@ describe('cosmeticStep transition detection', () => {
     loop.cosmeticStep(FIXED_TIMESTEP);
 
     expect(vi.mocked(audio.play)).toHaveBeenCalledWith('jump');
+  });
+
+  it('spawns jump dust on input-jump grounded → airborne transition', () => {
+    const { loop } = createLoop();
+    const state = loop.getState();
+    const player = state.players[0];
+    const ps: ParticleSystem = loop.particleSystem;
+    const spy = vi.spyOn(ps, 'spawnJumpDustParticles');
+
+    // Establish initial grounded state (no spring trail active)
+    player.state = 'idle';
+    player.vy = 0;
+    player.springTrailTimer = 0;
+    loop.cosmeticStep(FIXED_TIMESTEP);
+
+    spy.mockClear();
+
+    // Transition to airborne via input.jump (vy = JUMP_IMPULSE)
+    player.state = 'airborne';
+    player.vy = -650;
+    loop.cosmeticStep(FIXED_TIMESTEP);
+
+    expect(spy).toHaveBeenCalledOnce();
+    expect(spy).toHaveBeenCalledWith(player);
+  });
+
+  it('does NOT spawn jump dust when launched by a spring (springTrailTimer rising edge)', () => {
+    const { loop } = createLoop();
+    const state = loop.getState();
+    const player = state.players[0];
+    const ps: ParticleSystem = loop.particleSystem;
+    const spy = vi.spyOn(ps, 'spawnJumpDustParticles');
+
+    // Grounded baseline, no active spring trail
+    player.state = 'idle';
+    player.vy = 0;
+    player.springTrailTimer = 0;
+    loop.cosmeticStep(FIXED_TIMESTEP);
+
+    spy.mockClear();
+
+    // Spring contact this tick: airborne, vy = SPRING_BOUNCE,
+    // springTrailTimer rises 0 → SPRING_TRAIL_DURATION (0.6).
+    player.state = 'airborne';
+    player.vy = -700;
+    player.springTrailTimer = 0.6;
+    loop.cosmeticStep(FIXED_TIMESTEP);
+
+    expect(spy).not.toHaveBeenCalled();
   });
 
   it('detects landing: airborne → grounded with sufficient vy plays land sound', () => {
