@@ -16,7 +16,7 @@ import {
 } from '../src/engine/audio/synthesis/sfx';
 import {
   generateGeyserSound, generatePigeonScatterSound, generateAmbBirdChirpSound,
-  generateAmbGhostHooSound, generateAmbVolcanoBurstSound, generateAmbDripSound,
+  generateAmbGhostHooSound, generateAmbVolcanoBurstSound,
 } from '../src/engine/audio/synthesis/periodic';
 import { floatBufferToWavDataUri } from '../src/engine/audio/synthesis/wav';
 import { generateToneBuffer, generateMultiSegmentTone } from '../src/engine/audio/synthesis/core';
@@ -2495,16 +2495,29 @@ function volcanoHotPlop(): string {
   });
 }
 
-function volcanoVent(): string {
-  // Initial pressure release + sustained steam + low rumble underneath
+interface VolcanoVentParams {
+  duration: number;
+  releaseAmp: number;
+  releaseDecay: number;
+  steamLp: number;       // higher = brighter steam
+  steamAmp: number;
+  rumbleF: number;
+  rumbleAmp: number;
+  rumbleDecay: number;
+}
+
+function volcanoVent(p: Partial<VolcanoVentParams> = {}): string {
+  const { duration = 0.9, releaseAmp = 0.55, releaseDecay = 12,
+          steamLp = 0.32, steamAmp = 0.35,
+          rumbleF = 65, rumbleAmp = 0.32, rumbleDecay = 1.5 } = p;
   let lp = 0;
-  return buildBuffer(0.9, (t) => {
-    const p = t / 0.9;
-    const release = (Math.random() * 2 - 1) * Math.max(0, 1 - p * 12) * 0.55;
+  return buildBuffer(duration, (t) => {
+    const prog = t / duration;
+    const release = (Math.random() * 2 - 1) * Math.max(0, 1 - prog * releaseDecay) * releaseAmp;
     const noise = Math.random() * 2 - 1;
-    lp += 0.32 * (noise - lp); // brighter (steam)
-    const steam = (noise - lp) * Math.min(1, p * 6) * Math.max(0, 1 - p) ** 1.2 * 0.35;
-    const rumble = Math.sin(2 * Math.PI * 65 * t) * Math.max(0, 1 - p * 1.5) * 0.32;
+    lp += steamLp * (noise - lp);
+    const steam = (noise - lp) * Math.min(1, prog * 6) * Math.max(0, 1 - prog) ** 1.2 * steamAmp;
+    const rumble = Math.sin(2 * Math.PI * rumbleF * t) * Math.max(0, 1 - prog * rumbleDecay) * rumbleAmp;
     return release + steam + rumble;
   });
 }
@@ -3151,39 +3164,372 @@ function buildAmbientPage(): PageDef {
                '* Different take — tectonic cracks (3 tonal cracks + rumble, 500ms)'),
         ],
       },
-      // ---- amb_drip ----
+    ],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Ambient R2: focused refinements of the 4 remaining periodic ambient sounds
+// + close perturbations of the freshly-saved volcano "vent" recipe.
+
+function buildAmbientR2Page(): PageDef {
+  return {
+    title: 'Periodic Ambients — Round 2',
+    subtitle: 'Volcano now uses the "vent" recipe — close perturbations below. Focused variations for geyser, pigeon_scatter, amb_bird_chirp, amb_ghost_hoo. Multi-pick within each.',
+    sounds: [
+      // ---- volcano (close perturbations of the saved vent recipe) ----
       {
-        name: 'amb_drip',
-        description: 'Plays in cave/cellar arenas. VERY repetition-prone — fires every few seconds. Pick 3–5.',
+        name: 'amb_volcano_burst',
+        description: 'Now uses the "vent" recipe (pressure release + steam + 65Hz rumble, 900ms). Pick 1–3 perturbations or fresh takes.',
         candidates: [
-          proc('amb_drip', 'current', generateAmbDripSound(),
-               'Procedural — current (600→400Hz descending, 80ms)'),
-          proc('amb_drip', 'higher', dripVariant({ startF: 800, endF: 550 }),
-               'Higher pitch (800→550Hz)'),
-          proc('amb_drip', 'lower', dripVariant({ startF: 450, endF: 280 }),
-               'Lower pitch (450→280Hz)'),
-          proc('amb_drip', 'longer', dripVariant({ duration: 0.13 }),
-               'Longer (130ms — more sustain)'),
-          proc('amb_drip', 'shorter', dripVariant({ duration: 0.05 }),
-               'Shorter (50ms — sharper)'),
-          proc('amb_drip', 'cleaner', dripVariant({ noiseAmp: 0 }),
-               'Cleaner (no noise)'),
-          proc('amb_drip', 'gravelly', dripVariant({ noiseAmp: 0.3 }),
-               'Gravelly (more noise)'),
-          proc('amb_drip', 'wide-fall', dripVariant({ startF: 800, endF: 250 }),
-               'Wide pitch fall (800→250Hz)'),
-          proc('amb_drip', 'narrow-fall', dripVariant({ startF: 600, endF: 520 }),
-               'Narrow fall (600→520Hz, almost flat)'),
-          proc('amb_drip', 'take-plink', dripPlink(),
-               '* Different take — plink (1100Hz bell-like, 180ms)'),
-          proc('amb_drip', 'take-plop', dripPlop(),
-               '* Different take — plop (350→100Hz lower drop, 120ms)'),
-          proc('amb_drip', 'take-cave-echo', dripCaveEcho(),
-               '* Different take — cave echo (drip + echo tail, 280ms)'),
-          proc('amb_drip', 'take-cave-deep', dripCaveDeep(),
-               '* Different take — deep cave (250Hz with reverb feel, 200ms)'),
-          proc('amb_drip', 'take-splash', dripSplashDrop(),
-               '* Different take — splash drop (noise burst + brief tone, 100ms)'),
+          proc('amb_volcano_burst', 'vent-current', volcanoVent(),
+               'Current — vent default (900ms, releaseAmp 0.55, steamLp 0.32, rumble 65Hz)'),
+          proc('amb_volcano_burst', 'vent-shorter', volcanoVent({ duration: 0.7, releaseDecay: 16, rumbleDecay: 1.9 }),
+               'Shorter — 700ms, faster decay'),
+          proc('amb_volcano_burst', 'vent-longer', volcanoVent({ duration: 1.15, releaseDecay: 9, rumbleDecay: 1.2 }),
+               'Longer — 1.15s, slower decay'),
+          proc('amb_volcano_burst', 'vent-bigger-blast', volcanoVent({ releaseAmp: 0.75, releaseDecay: 9 }),
+               'Bigger initial blast (0.75 amp, slower release decay)'),
+          proc('amb_volcano_burst', 'vent-softer-blast', volcanoVent({ releaseAmp: 0.38, releaseDecay: 16 }),
+               'Softer initial blast (0.38 amp, faster release decay)'),
+          proc('amb_volcano_burst', 'vent-bright-steam', volcanoVent({ steamLp: 0.5, steamAmp: 0.42 }),
+               'Brighter / louder steam (steamLp 0.5, amp 0.42)'),
+          proc('amb_volcano_burst', 'vent-muffled-steam', volcanoVent({ steamLp: 0.18, steamAmp: 0.28 }),
+               'Muffled steam (steamLp 0.18, amp 0.28)'),
+          proc('amb_volcano_burst', 'vent-low-rumble', volcanoVent({ rumbleF: 48, rumbleAmp: 0.42 }),
+               'Lower rumble (48Hz, amp 0.42 — sub-bass forward)'),
+          proc('amb_volcano_burst', 'vent-mid-rumble', volcanoVent({ rumbleF: 95, rumbleAmp: 0.28 }),
+               'Higher rumble (95Hz, amp 0.28 — more body, less sub)'),
+          proc('amb_volcano_burst', 'vent-rumble-heavy', volcanoVent({ rumbleF: 55, rumbleAmp: 0.5, rumbleDecay: 1.0 }),
+               'Rumble-heavy (55Hz, amp 0.5, slow decay — cavernous)'),
+          proc('amb_volcano_burst', 'vent-no-rumble', volcanoVent({ rumbleAmp: 0.05 }),
+               'No rumble — pure release + steam (amp 0.05)'),
+          proc('amb_volcano_burst', 'vent-lots-rumble', volcanoVent({ duration: 1.0, rumbleF: 60, rumbleAmp: 0.55, rumbleDecay: 1.1 }),
+               'Heavy rumble (1.0s, 60Hz, amp 0.55, slow decay)'),
+          proc('amb_volcano_burst', 'vent-steam-forward', volcanoVent({ releaseAmp: 0.4, steamAmp: 0.5, steamLp: 0.42 }),
+               'Steam-forward (smaller release, brighter / louder steam)'),
+          proc('amb_volcano_burst', 'vent-blast-forward', volcanoVent({ releaseAmp: 0.7, steamAmp: 0.22 }),
+               'Blast-forward (0.7 release, quieter steam)'),
+          // Fresh takes (different recipes)
+          proc('amb_volcano_burst', 'take-vent-cracky', (() => {
+            // Vent + a couple of crackling debris pops layered in
+            let lp = 0;
+            return buildBuffer(0.95, (t) => {
+              const prog = t / 0.95;
+              const release = (Math.random() * 2 - 1) * Math.max(0, 1 - prog * 12) * 0.5;
+              const noise = Math.random() * 2 - 1;
+              lp += 0.32 * (noise - lp);
+              const steam = (noise - lp) * Math.min(1, prog * 6) * Math.max(0, 1 - prog) ** 1.2 * 0.32;
+              const rumble = Math.sin(2 * Math.PI * 65 * t) * Math.max(0, 1 - prog * 1.5) * 0.3;
+              const cracks = [0.18, 0.34, 0.52, 0.71];
+              let pop = 0;
+              for (const c of cracks) {
+                const dt = prog - c;
+                if (dt > 0 && dt < 0.04) pop += (Math.random() * 2 - 1) * Math.exp(-dt * 80) * 0.32;
+              }
+              return release + steam + rumble + pop;
+            });
+          })(), '* Fresh take — vent + 4 crackle pops layered'),
+          proc('amb_volcano_burst', 'take-vent-double', (() => {
+            // Two stacked vents (initial + secondary release at 0.45)
+            let lp = 0;
+            return buildBuffer(1.05, (t) => {
+              const prog = t / 1.05;
+              const r1 = (Math.random() * 2 - 1) * Math.max(0, 1 - prog * 14) * 0.5;
+              const dt2 = Math.max(0, prog - 0.42);
+              const r2 = (Math.random() * 2 - 1) * Math.max(0, 1 - dt2 * 16) * 0.4;
+              const noise = Math.random() * 2 - 1;
+              lp += 0.32 * (noise - lp);
+              const steam = (noise - lp) * Math.min(1, prog * 6) * Math.max(0, 1 - prog) ** 1.2 * 0.32;
+              const rumble = Math.sin(2 * Math.PI * 65 * t) * Math.max(0, 1 - prog * 1.4) * 0.32;
+              return r1 + r2 + steam + rumble;
+            });
+          })(), '* Fresh take — double-vent (secondary release at 42%)'),
+          proc('amb_volcano_burst', 'take-vent-warble', (() => {
+            // Vent recipe with a slow LFO pitching the rumble (45→75Hz wobble)
+            let lp = 0;
+            return buildBuffer(0.95, (t) => {
+              const prog = t / 0.95;
+              const release = (Math.random() * 2 - 1) * Math.max(0, 1 - prog * 12) * 0.55;
+              const noise = Math.random() * 2 - 1;
+              lp += 0.32 * (noise - lp);
+              const steam = (noise - lp) * Math.min(1, prog * 6) * Math.max(0, 1 - prog) ** 1.2 * 0.35;
+              const rF = 60 + 12 * Math.sin(2 * Math.PI * 1.6 * t);
+              const rumble = Math.sin(2 * Math.PI * rF * t) * Math.max(0, 1 - prog * 1.5) * 0.32;
+              return release + steam + rumble;
+            });
+          })(), '* Fresh take — vent with 1.6Hz pitch wobble on rumble'),
+        ],
+      },
+      // ---- geyser ----
+      {
+        name: 'geyser',
+        description: 'Plays when a geyser erupts. Fires periodically — repetition matters. Pick 2–3.',
+        candidates: [
+          proc('geyser', 'current', generateGeyserSound(),
+               'Current — 200→600Hz rising bubble + noise (600ms)'),
+          proc('geyser', 'rise-faster', geyserVariant({ duration: 0.4, startF: 220, endF: 700, envDecay: 1.8 }),
+               'Faster rise (400ms, 220→700Hz)'),
+          proc('geyser', 'rise-slower', geyserVariant({ duration: 0.85, startF: 180, endF: 520, envDecay: 1.1 }),
+               'Slower rise (850ms, 180→520Hz)'),
+          proc('geyser', 'wider-sweep', geyserVariant({ startF: 140, endF: 780 }),
+               'Wider pitch sweep (140→780Hz)'),
+          proc('geyser', 'narrow-sweep', geyserVariant({ startF: 240, endF: 360 }),
+               'Narrow pitch sweep (240→360Hz, almost flat)'),
+          proc('geyser', 'mostly-noise', geyserVariant({ noiseAmp: 0.3, toneAmp: 0.15 }),
+               'Mostly noise (gushy water)'),
+          proc('geyser', 'mostly-tone', geyserVariant({ noiseAmp: 0.04, toneAmp: 0.42 }),
+               'Mostly tone (whistly)'),
+          proc('geyser', 'long-decay', geyserVariant({ duration: 0.75, envDecay: 0.9 }),
+               'Long decay tail (750ms)'),
+          // Fresh takes
+          proc('geyser', 'take-steam-vent', geyserSteamVent(),
+               '* Different take — steam vent (descending high noise + tone, 500ms)'),
+          proc('geyser', 'take-pressurized', geyserPressurized(),
+               '* Different take — pressurized (sharp pop + rapid pitch rise, 550ms)'),
+          proc('geyser', 'take-boil', geyserBoil(),
+               '* Different take — bubbling boil (low rumble + 8Hz AM texture, 700ms)'),
+          proc('geyser', 'take-spurt', (() => {
+            // Quick noise burst + descending tone (water spurt)
+            return buildBuffer(0.45, (t) => {
+              const p = t / 0.45;
+              const burst = (Math.random() * 2 - 1) * Math.max(0, 1 - p * 5) * 0.42;
+              const tone = Math.sin(2 * Math.PI * (550 - 400 * p) * t) * Math.max(0, 1 - p * 2) * 0.22;
+              const env = Math.min(1, p * 12) * 1;
+              return (burst + tone) * env;
+            });
+          })(), '* Different take — spurt (noise burst + descending tone, 450ms)'),
+          proc('geyser', 'take-bubbling-rise', (() => {
+            // Multiple short bubble pops at increasing pitch
+            return buildBuffer(0.65, (t) => {
+              const p = t / 0.65;
+              let sample = 0;
+              const bubbles = [0.04, 0.14, 0.22, 0.32, 0.44, 0.58];
+              for (let i = 0; i < bubbles.length; i++) {
+                const dt = p - bubbles[i];
+                if (dt > 0 && dt < 0.06) {
+                  const f = 280 + i * 90;
+                  sample += Math.sin(2 * Math.PI * f * t) * Math.exp(-dt * 25) * 0.32;
+                }
+              }
+              const noise = (Math.random() * 2 - 1) * Math.max(0, 1 - p * 2) * 0.12;
+              return sample + noise;
+            });
+          })(), '* Different take — bubbling rise (6 ascending bubble pops, 650ms)'),
+        ],
+      },
+      // ---- pigeon_scatter ----
+      {
+        name: 'pigeon_scatter',
+        description: 'Pigeons take off. Periodic — should sound natural and not too repetitive. Pick 2–3.',
+        candidates: [
+          proc('pigeon_scatter', 'current', generatePigeonScatterSound(),
+               'Current — wing flapping noise (400ms)'),
+          proc('pigeon_scatter', 'fast-flap', pigeonScatterVariant({ flapRate: 14 }),
+               'Faster wing flap rate'),
+          proc('pigeon_scatter', 'slow-flap', pigeonScatterVariant({ flapRate: 5 }),
+               'Slower wing flap rate (heavier birds)'),
+          proc('pigeon_scatter', 'short-burst', pigeonScatterVariant({ duration: 0.25, flapRate: 10 }),
+               'Short burst (250ms — startled flick)'),
+          proc('pigeon_scatter', 'long-flutter', pigeonScatterVariant({ duration: 0.65, flapRate: 7, noiseAmp: 0.3 }),
+               'Long flutter (650ms, more sustained)'),
+          proc('pigeon_scatter', 'noisy', pigeonScatterVariant({ noiseAmp: 0.55, flapAmp: 0.2 }),
+               'Noisier (more whoosh, less flap pulse)'),
+          proc('pigeon_scatter', 'flappy', pigeonScatterVariant({ noiseAmp: 0.25, flapAmp: 0.45 }),
+               'Flappier (clearer flap pulses)'),
+          // Fresh takes
+          proc('pigeon_scatter', 'take-multi-bird', pigeonMultipleBirds(),
+               '* Different take — multiple birds (3 staggered flaps, 600ms)'),
+          proc('pigeon_scatter', 'take-whoosh', pigeonWhoosh(),
+               '* Different take — single whoosh (300ms)'),
+          proc('pigeon_scatter', 'take-startle', (() => {
+            // Sharp initial flap + rapid trailing flutter
+            return buildBuffer(0.5, (t) => {
+              const p = t / 0.5;
+              const noise = Math.random() * 2 - 1;
+              const startle = noise * Math.max(0, 1 - p * 18) * 0.55;
+              const flutter = noise * Math.min(1, p * 8) * Math.max(0, 1 - p * 2.2) * 0.28
+                * (0.5 + 0.5 * Math.sin(2 * Math.PI * 18 * t));
+              return startle + flutter;
+            });
+          })(), '* Different take — startle (sharp flap + flutter, 500ms)'),
+          proc('pigeon_scatter', 'take-coo-flap', (() => {
+            // Brief coo (200Hz) + flap noise on top
+            return buildBuffer(0.45, (t) => {
+              const p = t / 0.45;
+              const coo = Math.sin(2 * Math.PI * (200 + 80 * Math.sin(2 * Math.PI * 4 * t)) * t)
+                * Math.max(0, 1 - p * 3) * 0.18;
+              const flap = (Math.random() * 2 - 1) * (0.5 + 0.5 * Math.sin(2 * Math.PI * 14 * t))
+                * Math.max(0, 1 - p * 2) * Math.min(1, p * 10) * 0.22;
+              return coo + flap;
+            });
+          })(), '* Different take — coo + flap (200Hz vibrato + wing noise, 450ms)'),
+        ],
+      },
+      // ---- amb_bird_chirp ----
+      {
+        name: 'amb_bird_chirp',
+        description: 'Random songbird chirps in nature arenas. VERY repetition-prone. Multi-pick recommended (will random-rotate at runtime if shipped).',
+        candidates: [
+          proc('amb_bird_chirp', 'current', generateAmbBirdChirpSound(),
+               'Current — 4-note warble at 2400-3600Hz (350ms)'),
+          // Pitch variations of the existing 4-note warble
+          proc('amb_bird_chirp', 'higher-warble', birdChirpVariant({
+            notes: [
+              { start: 0, end: 0.06, freqStart: 3300, freqEnd: 3700 },
+              { start: 0.08, end: 0.14, freqStart: 3900, freqEnd: 3100 },
+              { start: 0.16, end: 0.22, freqStart: 3500, freqEnd: 4100 },
+              { start: 0.25, end: 0.33, freqStart: 3700, freqEnd: 2900 },
+            ], vibRate: 45, vibDepthRel: 0.05, amp: 0.32,
+          }), 'Higher warble (3100-4100Hz)'),
+          proc('amb_bird_chirp', 'lower-warble', birdChirpVariant({
+            notes: [
+              { start: 0, end: 0.06, freqStart: 2200, freqEnd: 2600 },
+              { start: 0.08, end: 0.14, freqStart: 2700, freqEnd: 2000 },
+              { start: 0.16, end: 0.22, freqStart: 2400, freqEnd: 2900 },
+              { start: 0.25, end: 0.33, freqStart: 2600, freqEnd: 1900 },
+            ], vibRate: 38, vibDepthRel: 0.06, amp: 0.34,
+          }), 'Lower warble (1900-2900Hz)'),
+          proc('amb_bird_chirp', 'fast-warble', birdChirpVariant({
+            notes: [
+              { start: 0, end: 0.04, freqStart: 2900, freqEnd: 3300 },
+              { start: 0.05, end: 0.09, freqStart: 3500, freqEnd: 2700 },
+              { start: 0.10, end: 0.14, freqStart: 3100, freqEnd: 3700 },
+              { start: 0.16, end: 0.21, freqStart: 3300, freqEnd: 2500 },
+            ], vibRate: 55, vibDepthRel: 0.05, amp: 0.32,
+          }), 'Faster warble (210ms, fast vibrato)'),
+          proc('amb_bird_chirp', 'slow-warble', birdChirpVariant({
+            notes: [
+              { start: 0, end: 0.10, freqStart: 2700, freqEnd: 3100 },
+              { start: 0.13, end: 0.22, freqStart: 3300, freqEnd: 2500 },
+              { start: 0.25, end: 0.34, freqStart: 2900, freqEnd: 3500 },
+              { start: 0.38, end: 0.50, freqStart: 3100, freqEnd: 2300 },
+            ], vibRate: 35, vibDepthRel: 0.06, amp: 0.34,
+          }), 'Slower warble (520ms, gentler)'),
+          proc('amb_bird_chirp', 'three-note', birdChirpVariant({
+            notes: [
+              { start: 0, end: 0.07, freqStart: 2800, freqEnd: 3300 },
+              { start: 0.10, end: 0.17, freqStart: 3500, freqEnd: 2700 },
+              { start: 0.20, end: 0.28, freqStart: 3000, freqEnd: 3500 },
+            ], vibRate: 45, vibDepthRel: 0.05, amp: 0.34,
+          }), 'Three-note phrase (300ms)'),
+          proc('amb_bird_chirp', 'two-note', birdChirpVariant({
+            notes: [
+              { start: 0, end: 0.08, freqStart: 2900, freqEnd: 3400 },
+              { start: 0.11, end: 0.19, freqStart: 3300, freqEnd: 2600 },
+            ], vibRate: 45, vibDepthRel: 0.05, amp: 0.34,
+          }), 'Two-note phrase (210ms — short)'),
+          proc('amb_bird_chirp', 'rising', birdChirpVariant({
+            notes: [
+              { start: 0, end: 0.06, freqStart: 2400, freqEnd: 2700 },
+              { start: 0.08, end: 0.14, freqStart: 2800, freqEnd: 3100 },
+              { start: 0.16, end: 0.22, freqStart: 3200, freqEnd: 3500 },
+              { start: 0.25, end: 0.33, freqStart: 3600, freqEnd: 3900 },
+            ], vibRate: 45, vibDepthRel: 0.04, amp: 0.32,
+          }), 'Rising melodic phrase'),
+          proc('amb_bird_chirp', 'descending', birdChirpVariant({
+            notes: [
+              { start: 0, end: 0.06, freqStart: 3700, freqEnd: 3400 },
+              { start: 0.08, end: 0.14, freqStart: 3300, freqEnd: 3000 },
+              { start: 0.16, end: 0.22, freqStart: 2900, freqEnd: 2600 },
+              { start: 0.25, end: 0.33, freqStart: 2500, freqEnd: 2200 },
+            ], vibRate: 45, vibDepthRel: 0.04, amp: 0.32,
+          }), 'Descending melodic phrase'),
+          proc('amb_bird_chirp', 'minimal-vib', birdChirpVariant({
+            notes: [
+              { start: 0, end: 0.06, freqStart: 2800, freqEnd: 3200 },
+              { start: 0.08, end: 0.14, freqStart: 3400, freqEnd: 2600 },
+              { start: 0.16, end: 0.22, freqStart: 3000, freqEnd: 3600 },
+              { start: 0.25, end: 0.33, freqStart: 3200, freqEnd: 2400 },
+            ], vibRate: 25, vibDepthRel: 0.02, amp: 0.32,
+          }), 'Cleaner — minimal vibrato'),
+          // Fresh takes
+          proc('amb_bird_chirp', 'take-trill', birdTrill(),
+               '* Different take — fast trill (3000/3500Hz oscillation, 300ms)'),
+          proc('amb_bird_chirp', 'take-whistle', birdWhistle(),
+               '* Different take — single rising whistle (2400→3400Hz, 300ms)'),
+          proc('amb_bird_chirp', 'take-cuckoo', birdCuckoo(),
+               '* Different take — cuckoo (2-note descending, 400ms)'),
+          proc('amb_bird_chirp', 'take-sparrow', birdSparrow(),
+               '* Different take — sparrow (6 rapid chirps, 400ms)'),
+          proc('amb_bird_chirp', 'take-tweet', (() => {
+            // Single short rising tweet ~80ms
+            return buildBuffer(0.09, (t) => {
+              const p = t / 0.09;
+              const f = 2700 + 1200 * p;
+              const env = Math.sin(p * Math.PI) * 0.32;
+              return Math.sin(2 * Math.PI * f * t) * env;
+            });
+          })(), '* Different take — single short tweet (90ms)'),
+          proc('amb_bird_chirp', 'take-double-chirp', (() => {
+            // Two staccato chirps
+            return buildBuffer(0.25, (t) => {
+              const p = t / 0.25;
+              const a = (p < 0.13) ? Math.sin((p / 0.13) * Math.PI) * 0.32 : 0;
+              const b = (p > 0.16 && p < 0.25) ? Math.sin(((p - 0.16) / 0.09) * Math.PI) * 0.32 : 0;
+              const fa = 3100;
+              const fb = 2900;
+              return Math.sin(2 * Math.PI * fa * t) * a + Math.sin(2 * Math.PI * fb * t) * b;
+            });
+          })(), '* Different take — double staccato chirp (250ms)'),
+        ],
+      },
+      // ---- amb_ghost_hoo ----
+      {
+        name: 'amb_ghost_hoo',
+        description: 'Ghost vocalization in haunted_graveyard arena. Periodic. Pick 2–3.',
+        candidates: [
+          proc('amb_ghost_hoo', 'current', generateAmbGhostHooSound(),
+               'Current — 150→100Hz vibrato hoo (600ms)'),
+          proc('amb_ghost_hoo', 'higher', ghostHooVariant({ startF: 200, endF: 140 }),
+               'Higher pitch (200→140Hz)'),
+          proc('amb_ghost_hoo', 'lower', ghostHooVariant({ startF: 110, endF: 75 }),
+               'Lower pitch (110→75Hz — ominous)'),
+          proc('amb_ghost_hoo', 'shorter', ghostHooVariant({ duration: 0.4 }),
+               'Shorter (400ms)'),
+          proc('amb_ghost_hoo', 'longer', ghostHooVariant({ duration: 0.95 }),
+               'Longer (950ms — drawn out)'),
+          proc('amb_ghost_hoo', 'fast-vib', ghostHooVariant({ vibRate: 7, vibDepth: 18 }),
+               'Faster vibrato (7Hz, 18 depth)'),
+          proc('amb_ghost_hoo', 'slow-vib', ghostHooVariant({ vibRate: 2.5, vibDepth: 10 }),
+               'Slower vibrato (2.5Hz, 10 depth — calmer)'),
+          proc('amb_ghost_hoo', 'wide-vib', ghostHooVariant({ vibDepth: 28 }),
+               'Wider vibrato (28 depth — wobblier)'),
+          proc('amb_ghost_hoo', 'flat-pitch', ghostHooVariant({ startF: 130, endF: 125 }),
+               'Flat pitch (130→125Hz — sustained note)'),
+          proc('amb_ghost_hoo', 'big-fall', ghostHooVariant({ startF: 200, endF: 70, duration: 0.85 }),
+               'Big pitch fall (200→70Hz, 850ms)'),
+          // Fresh takes
+          proc('amb_ghost_hoo', 'take-wail', ghostWail(),
+               '* Different take — wail (crescendo+decrescendo, 850ms)'),
+          proc('amb_ghost_hoo', 'take-whoosh-hoo', ghostWhooshHoo(),
+               '* Different take — air whoosh into hoo (700ms)'),
+          proc('amb_ghost_hoo', 'take-two-hoos', ghostTwoHoos(),
+               '* Different take — 2 short hoos with gap (700ms)'),
+          proc('amb_ghost_hoo', 'take-moan', (() => {
+            // Slowly drifting low moan, mostly flat with subtle vibrato
+            return buildBuffer(1.0, (t) => {
+              const p = t / 1.0;
+              const baseF = 100 + 8 * Math.sin(2 * Math.PI * 0.8 * t); // very slow drift
+              const vib = Math.sin(2 * Math.PI * 3 * t) * 6;
+              const env = Math.sin(p * Math.PI) * 0.4;
+              return Math.sin(2 * Math.PI * (baseF + vib) * t) * env;
+            });
+          })(), '* Different take — moan (1.0s, slow pitch drift)'),
+          proc('amb_ghost_hoo', 'take-breathy', (() => {
+            // Hoo + breath noise underneath
+            let lp = 0;
+            return buildBuffer(0.7, (t) => {
+              const p = t / 0.7;
+              const baseF = 140 - 40 * p;
+              const vib = Math.sin(2 * Math.PI * 4.5 * t) * 14;
+              const tone = Math.sin(2 * Math.PI * (baseF + vib) * t) * Math.sin(p * Math.PI) * 0.32;
+              const noise = Math.random() * 2 - 1;
+              lp += 0.18 * (noise - lp);
+              const breath = lp * Math.sin(p * Math.PI) * 0.2;
+              return tone + breath;
+            });
+          })(), '* Different take — breathy (hoo + breath noise, 700ms)'),
         ],
       },
     ],
@@ -5040,6 +5386,8 @@ function main(): void {
     pageDef = buildSelectPage();
   } else if (page === 'ambient') {
     pageDef = buildAmbientPage();
+  } else if (page === 'ambient-r2') {
+    pageDef = buildAmbientR2Page();
   } else if (page === 'volcano') {
     pageDef = buildVolcanoPage();
   } else {
