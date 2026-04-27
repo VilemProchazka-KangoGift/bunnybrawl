@@ -117,6 +117,7 @@
 - **Hoist `setLineDash` arrays**: array literals passed to `setLineDash` allocate. Module-scope `const ZEROG_DASH = [8, 5]; const NO_DASH = [];` reused across calls.
 - **Precompute static loop values**: scattered positions like `(i * 137 + 83) % WIDTH` recomputed every frame should be hoisted to module-scope `Float32Array` initialized once. Pattern landed in `drawDayNightCycle` for stars + fireflies.
 - **Perf measurement**: `npm run perf -- --arena=X` runs the e2e perf profile with vsync uncapped, random P1 input, sourcemapped bundle. Reports go to `test-results/perf/report.md`. **Save reports to `perf-runs/<arena>/` between runs** — Playwright wipes `test-results/` on each invocation. Run-to-run variance ~5%; trust deltas of >0.3ms/frame, treat smaller as noise. Use volcano or meadow for shared-rendering hot-path measurements (more signal than rooftops).
+- **perfTrace**: orchestrator-level spans (`fixedUpdate`, `cosmeticStep`, `tickCosmetic`, `renderFrame`) use `measure()` for try/finally + early-return safety. Per-system leaf spans (`gameplay.*`, `cosmetic.*`, `simulator.*`) use `begin/end` to avoid per-call closure allocation (~4% observer effect at 60Hz). Systems do NOT self-instrument — orchestrators wrap them externally so dot-namespaces stay consistent.
 
 ## Mobile / Touch Input
 - `TouchInputManager` follows same `attach()`/`detach()`/`getInput() → InputState` contract as `InputManager`. Integrated via `getPlayerInput()` touch branch in gameLoop.
