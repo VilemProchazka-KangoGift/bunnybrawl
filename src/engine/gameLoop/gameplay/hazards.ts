@@ -85,23 +85,17 @@ export function spawnThorn(
 }
 
 export function updateHazardLifetimes(state: MatchState, dt: number): void {
-  for (const s of state.springs) {
+  for (let i = state.springs.length - 1; i >= 0; i--) {
+    const s = state.springs[i];
     s.life = f(s.life - dt);
     if (s.growTimer > 0) s.growTimer = f(s.growTimer - dt);
     if (s.bounceTimer > 0) s.bounceTimer = f(s.bounceTimer - dt);
-  }
-  for (let i = state.springs.length - 1; i >= 0; i--) {
-    if (state.springs[i].life <= 0) {
-      swapRemove(state.springs, i);
-    }
-  }
-  for (const t of state.thorns) {
-    t.life = f(t.life - dt);
-    if (t.growTimer > 0) t.growTimer = f(t.growTimer - dt);
+    if (s.life <= 0) swapRemove(state.springs, i);
   }
   for (let i = state.thorns.length - 1; i >= 0; i--) {
-    if (state.thorns[i].life <= 0 || state.thorns[i].hit) {
-      swapRemove(state.thorns, i);
-    }
+    const t = state.thorns[i];
+    t.life = f(t.life - dt);
+    if (t.growTimer > 0) t.growTimer = f(t.growTimer - dt);
+    if (t.life <= 0 || t.hit) swapRemove(state.thorns, i);
   }
 }

@@ -33,6 +33,8 @@ export const MsgType = {
   MATCH_IN_PROGRESS: 0x14,
   RECONNECT_REQUEST: 0x15,
   RECONNECT_SYNC: 0x16,
+  LOADED: 0x17,
+  CONNECTION_UNSTABLE: 0x18,
 } as const;
 
 // ---- Slot encoding (game-specific: P1-P5 / B1-B5 convention) ----
@@ -245,6 +247,10 @@ export interface PlayerLeftMessage {
 export interface SlotAssignmentMessage {
   type: 0x0F;
   slot: string;
+  /** Per-guest secret issued by host. Must be presented in RECONNECT_REQUEST
+   *  to reclaim this slot — without authentication, any peer in the room
+   *  could claim a disconnected slot and steal the original player's score. */
+  reclaimToken: string;
   allPlayers: Array<{ slot: string; characterName: string; isHost: boolean; playerName?: string }>;
 }
 
@@ -257,12 +263,29 @@ export interface ReconnectRequestMessage {
   type: 0x15;
   slot: string;
   playerName: string;
+  /** Token previously issued to this guest in SLOT_ASSIGNMENT. Host validates
+   *  against the stored token for the slot before accepting reclaim. */
+  reclaimToken: string;
 }
 
 export interface ReconnectSyncMessage {
   type: 0x16;
   slot: string;
   snapshotFrame: number;
+  /** Host's pause state at the moment of reclaim. A guest reconnecting into
+   *  a paused match must stay paused until the host resumes, otherwise its
+   *  local render loop diverges from the host's suspended simulation. */
+  paused?: boolean;
+}
+
+export interface LoadedMessage {
+  type: 0x17;
+  slot: string;
+}
+
+export interface ConnectionUnstableMessage {
+  type: 0x18;
+  stalled: boolean;
 }
 
 export type ReliableMessage =
@@ -283,4 +306,6 @@ export type ReliableMessage =
   | SlotAssignmentMessage
   | MatchInProgressMessage
   | ReconnectRequestMessage
-  | ReconnectSyncMessage;
+  | ReconnectSyncMessage
+  | LoadedMessage
+  | ConnectionUnstableMessage;

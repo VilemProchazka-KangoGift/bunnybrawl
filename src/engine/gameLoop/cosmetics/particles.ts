@@ -5,11 +5,17 @@ import { swapRemove } from '../../themes/utils';
 export const CONFETTI_COLORS = ['#FFD700', '#FF69B4', '#00FFFF', '#7CFC00', '#FF6347', '#DA70D6', '#FFA500'];
 const CONFETTI_SHAPES: Array<'star' | 'diamond' | 'circle' | 'ribbon'> = ['star', 'diamond', 'circle', 'ribbon'];
 
+/** Soft cap on simultaneous live particles. Bulk emitters (gore splatter,
+ *  fireworks) can produce hundreds per call and matchOver fireworks accrete
+ *  across the celebration. Beyond this, GC pressure visibly stutters mobile. */
+const MAX_LIVE_PARTICLES = 600;
+
 /** Emit a particle, reusing a recycled object if available to reduce GC pressure. */
 export function emitParticle(
   particles: Particle[], freeList: Particle[],
   x: number, y: number, vx: number, vy: number, life: number, size: number, color: string,
 ): void {
+  if (particles.length >= MAX_LIVE_PARTICLES) return;
   const recycled = freeList.pop();
   if (recycled) {
     recycled.x = x; recycled.y = y; recycled.vx = vx; recycled.vy = vy;
@@ -77,16 +83,23 @@ export function spawnConfetti(
   }
 }
 
-export function spawnCarrotVFX(
+export function spawnRingVFX(
   particles: Particle[], freeList: Particle[],
-  x: number, y: number,
+  cx: number, cy: number,
 ): void {
   for (let i = 0; i < 12; i++) {
     const angle = (i / 12) * Math.PI * 2;
     const speed = 40 + Math.random() * 60;
     const life = 0.5 + Math.random() * 0.3;
-    emitParticle(particles, freeList, x, y + CARROT_SIZE / 2, Math.cos(angle) * speed, Math.sin(angle) * speed, life, 2 + Math.random() * 3, i % 2 === 0 ? '#FFD700' : '#FF8C00');
+    emitParticle(particles, freeList, cx, cy, Math.cos(angle) * speed, Math.sin(angle) * speed, life, 2 + Math.random() * 3, i % 2 === 0 ? '#FFD700' : '#FF8C00');
   }
+}
+
+export function spawnCarrotVFX(
+  particles: Particle[], freeList: Particle[],
+  x: number, y: number,
+): void {
+  spawnRingVFX(particles, freeList, x, y + CARROT_SIZE / 2);
 }
 
 export function spawnFirework(particles: Particle[], freeList: Particle[]): void {

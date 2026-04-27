@@ -1,12 +1,14 @@
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useCallback, useState, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../store/gameStore';
 import { audio } from '../engine/audio';
 import { ArenaGrid } from './ArenaGrid';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
 import { isTouchPrimary } from '../engine/touchDetect';
+import { getSlowDevice, subscribeSlowDevice } from '../engine/perfFlags';
 import { useCanvasRenderScale } from '../hooks/useCanvasRenderScale';
 import { drawMenuBackground } from './menuBackground';
+import { sampleFps, drawFpsCounter } from '../engine/fpsCounter';
 import { HelpModal } from './HelpModal';
 import { ModsModal } from './ModsModal';
 import { OnlineModal } from './OnlineModal';
@@ -22,6 +24,7 @@ export function MainMenu() {
   const [modsOpen, setModsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [onlineOpen, setOnlineOpen] = useState(false);
+  const slowDevice = useSyncExternalStore(subscribeSlowDevice, getSlowDevice);
 
   // Mobile: ensure at least 1 bot (single player needs opponents)
   useEffect(() => {
@@ -70,8 +73,10 @@ export function MainMenu() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d')!;
-    const loop = () => {
+    const loop = (time: number) => {
+      sampleFps(time);
       drawMenuBackground(ctx);
+      drawFpsCounter(ctx, CANVAS_WIDTH);
       rafRef.current = requestAnimationFrame(loop);
     };
     rafRef.current = requestAnimationFrame(loop);
@@ -82,7 +87,7 @@ export function MainMenu() {
     <div className="main-menu" data-testid="main-menu">
       <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="menu-bg-canvas" />
       <div className="menu-bg">
-        <div className="menu-content">
+        <div className={`menu-content${slowDevice ? ' menu-content--no-blur' : ''}`}>
           <button
             className="overlay-icon-btn music-toggle-btn"
             onClick={() => {

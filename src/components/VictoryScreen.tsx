@@ -7,9 +7,10 @@ import type { PlayerSlot, PlayerStats } from '../engine/types';
 import { isBotSlot } from '../engine/types';
 import { getCharacterEmoji, getCharacterDisplayName } from '../engine/characters';
 import { ArenaGrid } from './ArenaGrid';
-import { getModalTransport } from './OnlineModal';
+import { getModalTransport, tearDownOnlineSession, resolveRandomArena } from './OnlineModal';
 import { MsgType } from '../engine/net/protocol';
 import type { ReliableMessage } from '../engine/net/protocol';
+import type { ConnectionStatus, TransportEvents } from '../engine/net/transport';
 import './VictoryScreen.css';
 
 interface FireworkParticle {
@@ -25,10 +26,13 @@ interface FireworkParticle {
 
 export function VictoryScreen() {
   const { t, i18n } = useTranslation();
-  const { winner, lastMatchState, setScreen, setActivePlayers, setMatchSettings, online, disconnectWin } = useGameStore();
+  const { winner, lastMatchState, setScreen, setActivePlayers, setMatchSettings, online, disconnectWin, clearMatchResult } = useGameStore();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [showArenaSelect, setShowArenaSelect] = useState(false);
-  const [peerConnected, setPeerConnected] = useState(true);
+  // Skip the optimistic "connected" default when we already know the peer left
+  // (Trystero detects this via pong timeout, not synchronously, so the
+  // transport may still report healthy at this moment).
+  const [peerConnected, setPeerConnected] = useState(!disconnectWin);
 
   const winnerChar = winner ? lastMatchState?.players.find(p => p.id === winner)?.character ?? null : null;
   const players = lastMatchState?.players.filter(p => p.active) ?? [];
@@ -51,48 +55,61 @@ export function VictoryScreen() {
         transport.sendReliable({ type: MsgType.START_MATCH } as ReliableMessage); // START_MATCH
       }
     }
+    // Drop ghost data — without this, the new Match could re-mount with a
+    // stale winner / lastMatchState until the new match fires onMatchEnd.
+    clearMatchResult();
     setScreen('match');
-  }, [online.isOnline, online.isHost, setScreen]);
+  }, [online.isOnline, online.isHost, setScreen, clearMatchResult]);
 
   const handleMenu = useCallback(() => {
-    const transport = getModalTransport();
-    if (transport) transport.destroy();
-    useGameStore.getState().resetOnline();
-    setActivePlayers([]);
+    tearDownOnlineSession();
+    // setScreen first, then clear store fields (Match/VictoryScreen subscribers
+    // see a clean transition rather than online=false but screen=victory).
     setScreen('menu');
-  }, [setActivePlayers, setScreen]);
+    setActivePlayers([]);
+    useGameStore.getState().resetOnline();
+    clearMatchResult();
+  }, [setActivePlayers, setScreen, clearMatchResult]);
   const handleChooseArena = useCallback((arenaId: string) => {
-    setMatchSettings({ arenaId });
+    // Host resolves 'random' before broadcasting — see resolveRandomArena.
+    const concreteArenaId = (online.isOnline && online.isHost)
+      ? resolveRandomArena(arenaId)
+      : arenaId;
+    setMatchSettings({ arenaId: concreteArenaId });
     setShowArenaSelect(false);
-    // Host sends arena change + start to guest
     if (online.isOnline && online.isHost) {
       const transport = getModalTransport();
       if (transport) {
-        transport.sendReliable({ type: MsgType.SETTINGS_SYNC, arenaId } as ReliableMessage); // SETTINGS_SYNC (arena only)
+        transport.sendReliable({ type: MsgType.SETTINGS_SYNC, arenaId: concreteArenaId } as ReliableMessage); // SETTINGS_SYNC (arena only)
         transport.sendReliable({ type: MsgType.START_MATCH } as ReliableMessage); // START_MATCH
       }
     }
+    clearMatchResult();
     setScreen('match');
-  }, [setMatchSettings, online.isOnline, online.isHost, setScreen]);
+  }, [setMatchSettings, online.isOnline, online.isHost, setScreen, clearMatchResult]);
 
-  // Online: listen for disconnect + rematch signals
+  // Snapshot prior wiring and restore on unmount, so a leaving VictoryScreen
+  // doesn't leave its `setScreen('match')` handler attached to fire on a
+  // future host-driven START_MATCH after we've navigated back to the menu.
   useEffect(() => {
     if (!online.isOnline) return;
     const transport = getModalTransport();
     if (!transport) return;
-    transport.setEvents({
-      onStatusChange: (status) => {
+    const priorEvents = transport.getEvents();
+    const ourEvents: TransportEvents = {
+      onStatusChange: (status: ConnectionStatus) => {
         if (status === 'disconnected' || status === 'error') {
           setPeerConnected(false);
           if (!online.isHost) {
-            transport.destroy();
-            useGameStore.getState().resetOnline();
-            setActivePlayers([]);
+            tearDownOnlineSession();
             setScreen('menu');
+            setActivePlayers([]);
+            useGameStore.getState().resetOnline();
+            clearMatchResult();
           }
         }
       },
-      onReliableMessage: (msg) => {
+      onReliableMessage: (msg: ReliableMessage) => {
         if (msg.type === MsgType.SETTINGS_SYNC && 'arenaId' in msg) {
           setMatchSettings({ arenaId: msg.arenaId });
         }
@@ -108,8 +125,17 @@ export function VictoryScreen() {
       onPeerDisconnected: () => {
         setPeerConnected(false);
       },
-    });
-  }, [online.isOnline, online.isHost, setScreen, setMatchSettings, setActivePlayers]);
+    };
+    transport.setEvents(ourEvents);
+    return () => {
+      // Only restore if our wiring is still the active one — if a later mount
+      // rewired in the meantime, we'd clobber theirs.
+      const t = getModalTransport();
+      if (t === transport && t.getEvents() === ourEvents) {
+        t.setEvents(priorEvents);
+      }
+    };
+  }, [online.isOnline, online.isHost, setScreen, setMatchSettings, setActivePlayers, clearMatchResult]);
 
   useCanvasRenderScale(canvasRef);
 
@@ -211,6 +237,8 @@ export function VictoryScreen() {
     return highlights;
   }, [sortedPlayers, lastMatchState, t, online.isOnline, online.playerNames]);
 
+  const canRematch = !disconnectWin && (!online.isOnline || online.isHost) && peerConnected;
+
   return (
     <div className="victory-screen" data-testid="victory-screen">
       <canvas ref={canvasRef} className="fireworks-canvas" />
@@ -252,7 +280,7 @@ export function VictoryScreen() {
 
               <div className="match-stats">
                 <span>{t('victory_match_time')}: {formatTime(lastMatchState?.timeElapsed ?? 0)}</span>
-                <span>{t('victory_total_splats')}: {lastMatchState?.killFeed.length ?? 0}</span>
+                <span>{t('victory_total_splats')}: {lastMatchState?.totalKills ?? 0}</span>
               </div>
             </div>
 
@@ -308,11 +336,11 @@ export function VictoryScreen() {
             </p>
           )}
           <div className="victory-actions">
-            {!disconnectWin && (!online.isOnline || online.isHost) && peerConnected && (
-              <button className="btn-base rematch-btn" onClick={handleRematch} data-testid="rematch-button">{t('victory_rematch')}</button>
-            )}
-            {!disconnectWin && (!online.isOnline || online.isHost) && peerConnected && (
-              <button className="btn-base arena-btn-v" data-testid="change-arena-button" onClick={() => setShowArenaSelect(true)}>{t('victory_choose_arena')}</button>
+            {canRematch && (
+              <>
+                <button className="btn-base rematch-btn" onClick={handleRematch} data-testid="rematch-button">{t('victory_rematch')}</button>
+                <button className="btn-base arena-btn-v" data-testid="change-arena-button" onClick={() => setShowArenaSelect(true)}>{t('victory_choose_arena')}</button>
+              </>
             )}
             <button className="btn-base menu-btn-v" onClick={handleMenu} data-testid="menu-button">{t(disconnectWin || (online.isOnline && !online.isHost) ? 'leave_game' : 'victory_menu')}</button>
           </div>

@@ -53,7 +53,7 @@ const drawGib: CharacterPack['drawGib'] = (ctx, gibType, _w, _h, colors) => {
 export const wolf: CharacterPack = {
   name: 'Wolf',
   color: '#708090', darkColor: '#4A5A68', lightColor: '#A0B0C0',
-  emoji: '\uD83D\uDC3A', customEyes: false, idleTransform: 'headBob',
+  emoji: '\uD83D\uDC3A', customEyes: false,
   splatShape: 'star',
   gibs: [{ gibType: 'ear', width: 8, height: 12 }, { gibType: 'ear', width: 8, height: 12 }, { gibType: 'tail', width: 16, height: 10 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Wolf', cs: 'Vlk', hi: 'भेड़िया', fil: 'Lobo' },

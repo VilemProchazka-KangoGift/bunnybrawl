@@ -3,6 +3,7 @@ import { isBotSlot } from '../types';
 import type { AwarenessSnapshot } from './types';
 import { PLAYER_WIDTH, PLAYER_HEIGHT, CANVAS_WIDTH } from '../constants';
 import { getArenaNav } from '../arenas/registry';
+import { perfTrace } from '../perfTrace';
 
 /** Shortest horizontal distance accounting for screen wrap */
 function wrapDx(dx: number): number {
@@ -11,10 +12,13 @@ function wrapDx(dx: number): number {
   return dx;
 }
 
-function wrapDist(ax: number, ay: number, bx: number, by: number): { dx: number; dy: number; dist: number } {
+/** Wrap-aware distance only. Hot path on bot decision frames — returns a
+ *  number to avoid the object-literal GC pressure of an {dx,dy,dist} return.
+ *  When the caller also needs dx/dy, compute them separately via wrapDx. */
+function wrapDistance(ax: number, ay: number, bx: number, by: number): number {
   const dx = wrapDx(bx - ax);
   const dy = by - ay;
-  return { dx, dy, dist: Math.sqrt(dx * dx + dy * dy) };
+  return Math.sqrt(dx * dx + dy * dy);
 }
 
 /** Find which platform a position is standing on (-1 if none) */
@@ -58,6 +62,20 @@ export function buildAwareness(
   preferSafePath: boolean = false,
   mirrorNav: boolean = false,
 ): AwarenessSnapshot {
+  return perfTrace.measure('awareness', () =>
+    _buildAwarenessImpl(self, state, arena, awarenessRadius, pathfindingDepth, preferSafePath, mirrorNav),
+  );
+}
+
+function _buildAwarenessImpl(
+  self: Player,
+  state: MatchState,
+  arena: Arena,
+  awarenessRadius: number,
+  pathfindingDepth: number = 0,
+  preferSafePath: boolean = false,
+  mirrorNav: boolean = false,
+): AwarenessSnapshot {
   const selfOnGround = self.state !== 'airborne';
   const selfAirborne = self.state === 'airborne';
 
@@ -84,13 +102,15 @@ export function buildAwareness(
 
     // Clustering: count nearby bots
     if (isBotSlot(p.id) && p.state !== 'splat' && p.state !== 'respawning') {
-      const { dist: bDist } = wrapDist(self.x, self.y, p.x, p.y);
+      const bDist = wrapDistance(self.x, self.y, p.x, p.y);
       if (bDist < 120) nearbyBotCount++;
     }
 
     if (p.state === 'splat' || p.state === 'respawning') continue;
 
-    const { dx, dy, dist } = wrapDist(self.x, self.y, p.x, p.y);
+    const dx = wrapDx(p.x - self.x);
+    const dy = p.y - self.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
 
     // Nearest enemy (within awareness radius)
     if (dist < awarenessRadius && dist < nearestDist) {
@@ -144,43 +164,56 @@ export function buildAwareness(
   let bestCarrotDist = Infinity;
   for (const c of state.carrots) {
     if (!c.active) continue;
-    const { dist } = wrapDist(self.x, self.y, c.x, c.y);
+    const dist = wrapDistance(self.x, self.y, c.x, c.y);
     if (dist < awarenessRadius && dist < bestCarrotDist) {
       bestCarrotDist = dist;
       nearestCarrot = { x: c.x, y: c.y, dist };
     }
   }
 
-  // Find all nearby hazards (hazard zones, thorns, ghosts, lava rocks)
+  // Find all nearby hazards (hazard zones, thorns, ghosts, lava rocks).
+  // Inlined to avoid allocating a closure per buildAwareness — this runs
+  // ~20Hz × N bots and the closure was capturing 5+ vars by reference.
   const nearbyHazards: AwarenessSnapshot['nearbyHazards'] = [];
   let nearestHazard: AwarenessSnapshot['nearestHazard'] = null;
   let bestHazardDist = Infinity;
   const HAZARD_DETECT_RADIUS = 200;
   const hazardRadius = Math.max(awarenessRadius, HAZARD_DETECT_RADIUS);
-  const checkHazard = (type: string, hx: number, hy: number) => {
-    const dx = hx - self.x;
-    const dy = hy - self.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist < hazardRadius) {
-      nearbyHazards.push({ type, x: hx, y: hy, dist });
-      if (dist < bestHazardDist) {
-        bestHazardDist = dist;
-        nearestHazard = { type, x: hx, y: hy, dist };
-      }
-    }
-  };
 
   for (const hz of arena.hazardZones ?? []) {
-    checkHazard('lava', hz.x + hz.width / 2, hz.y + hz.height / 2);
+    const hx = hz.x + hz.width / 2, hy = hz.y + hz.height / 2;
+    const dx = hx - self.x, dy = hy - self.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < hazardRadius) {
+      nearbyHazards.push({ type: 'lava', x: hx, y: hy, dist });
+      if (dist < bestHazardDist) { bestHazardDist = dist; nearestHazard = { type: 'lava', x: hx, y: hy, dist }; }
+    }
   }
   for (const t of state.thorns) {
-    if (t.growTimer <= 0 && !t.hit) checkHazard('thorn', t.x, t.y);
+    if (t.growTimer > 0 || t.hit) continue;
+    const dx = t.x - self.x, dy = t.y - self.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < hazardRadius) {
+      nearbyHazards.push({ type: 'thorn', x: t.x, y: t.y, dist });
+      if (dist < bestHazardDist) { bestHazardDist = dist; nearestHazard = { type: 'thorn', x: t.x, y: t.y, dist }; }
+    }
   }
   for (const g of state.ghosts) {
-    checkHazard('ghost', g.x, g.y);
+    const dx = g.x - self.x, dy = g.y - self.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < hazardRadius) {
+      nearbyHazards.push({ type: 'ghost', x: g.x, y: g.y, dist });
+      if (dist < bestHazardDist) { bestHazardDist = dist; nearestHazard = { type: 'ghost', x: g.x, y: g.y, dist }; }
+    }
   }
   for (const r of state.lavaRocks) {
-    if (r.active) checkHazard('lavaRock', r.x, r.y);
+    if (!r.active) continue;
+    const dx = r.x - self.x, dy = r.y - self.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < hazardRadius) {
+      nearbyHazards.push({ type: 'lavaRock', x: r.x, y: r.y, dist });
+      if (dist < bestHazardDist) { bestHazardDist = dist; nearestHazard = { type: 'lavaRock', x: r.x, y: r.y, dist }; }
+    }
   }
 
   // Find nearest platform above and below (wider horizontal range for zigzag stairs)

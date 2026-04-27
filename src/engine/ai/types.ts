@@ -24,6 +24,10 @@ export interface DifficultyParams {
   precisionMult: number;      // 0-1, reduces jitter + lowers thresholds (0=normal, 1=precise)
 }
 
+/** Discriminator for awareness hazard entries. Matches the literal strings
+ *  emitted by buildAwareness in awareness.ts — keep them in sync. */
+export type HazardType = 'lava' | 'thorn' | 'ghost' | 'lavaRock';
+
 export interface AwarenessSnapshot {
   self: { x: number; y: number; vx: number; vy: number; onGround: boolean; score: number; slowed: boolean; fat: boolean; invincible: boolean };
   nearestEnemy: { x: number; y: number; vx: number; vy: number; dx: number; dy: number; dist: number; score: number } | null;
@@ -36,8 +40,8 @@ export interface AwarenessSnapshot {
   /** Airborne enemies above us (not necessarily falling yet) — dodge zone */
   airborneAbove: Array<{ x: number; dx: number; dy: number; dist: number }>;
   nearestCarrot: { x: number; y: number; dist: number } | null;
-  nearestHazard: { type: string; x: number; y: number; dist: number } | null;
-  nearbyHazards: Array<{ type: string; x: number; y: number; dist: number }>;
+  nearestHazard: { type: HazardType; x: number; y: number; dist: number } | null;
+  nearbyHazards: Array<{ type: HazardType; x: number; y: number; dist: number }>;
   nearestPlatformAbove: { x: number; y: number; width: number; dy: number } | null;
   nearestPlatformBelow: { x: number; y: number; width: number; dy: number } | null;
   /** When airborne, nearest platform we could land on */

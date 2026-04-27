@@ -1,9 +1,10 @@
 import type { Player } from '../types';
 import type { ThemeConfig } from '../themes/types';
-import { FAT_SCALE, HITSTOP_DURATION } from '../constants';
+import { FAT_SCALE, HITSTOP_DURATION, PLAYER_WIDTH, PLAYER_HEIGHT } from '../constants';
 import { hasCustomEyes, getSpriteRenderer, getCharacterPack, drawLegs } from '../characters';
 import { drawHighlightSpot } from '../spriteShading';
 import { getSlowDevice } from '../perfFlags';
+import { getIdleAction, type IdleAction } from './idleActions';
 
 // Sprite cache: key -> OffscreenCanvas with pre-drawn character sprite.
 // Backing-store dims include the current render scale; cleared on scale change.
@@ -12,6 +13,24 @@ let _spriteScale = 1;
 // Cap entries at scale=1; shrink quadratically with scale so total bytes stay bounded.
 const SPRITE_CACHE_CAP_BASE = 600;
 let _spriteCacheCap = SPRITE_CACHE_CAP_BASE;
+
+// Pre-rendered shadow ellipse — replaces a per-player-per-frame ellipse path
+// (5 players × 60+fps = thousands of ellipse calls). Per-call cost becomes
+// `globalAlpha = a; drawImage(...)` — modulated alpha + scaled blit.
+// Source bitmap is at logical 20×4 (the max ellipse extent at shadowScale=1);
+// drawImage scales down smoothly for smaller shadowScale values.
+let _shadowCache: OffscreenCanvas | null = null;
+function getShadowCache(): OffscreenCanvas | null {
+  if (_shadowCache) return _shadowCache;
+  if (typeof OffscreenCanvas === 'undefined') return null;
+  _shadowCache = new OffscreenCanvas(20, 4);
+  const c = _shadowCache.getContext('2d')!;
+  c.fillStyle = '#000000';
+  c.beginPath();
+  c.ellipse(10, 2, 10, 2, 0, 0, Math.PI * 2);
+  c.fill();
+  return _shadowCache;
+}
 
 export function clearSpriteCache(): void {
   spriteCache.clear();
@@ -25,6 +44,41 @@ export function setSpriteCacheScale(scale: number): void {
   spriteCache.clear();
 }
 
+/** Pre-populate the sprite cache for the given character names by drawing a
+ *  handful of common (state, animFrame) combinations into a throwaway canvas.
+ *  First-render sprite-cache misses are the #1 source of first-frame hitches,
+ *  so the loading phase does this work up front.
+ *
+ *  `theme` MUST match the theme used at match render time. Bubble-helmet arenas
+ *  bake the glass dome into the cached bitmap; the cache key includes a helmet
+ *  bit so cross-theme reuse is safe, but warming under the wrong theme still
+ *  doubles the cache footprint. */
+export function warmSpriteCacheForCharacters(names: string[], theme?: ThemeConfig): void {
+  const states: Array<string> = ['idle', 'run', 'airborne'];
+  const animFrames = [0, 2, 4];
+
+  const cw = PLAYER_WIDTH + 20;
+  const ch = PLAYER_HEIGHT + 20;
+  const scratch = new OffscreenCanvas(cw, ch);
+  const sctx = scratch.getContext('2d');
+  if (!sctx) return;
+  const ctx = sctx as unknown as CanvasRenderingContext2D;
+
+  // idleAction = -1 short-circuits the idle-action overlay path in
+  // drawCharacterSprite/blitWithIdleTransform, so the stub player is never read.
+  const stubPlayer = {} as Player;
+  for (const name of names) {
+    const pack = getCharacterPack(name);
+    if (!pack) continue;
+    const char = { name, color: pack.color, darkColor: pack.darkColor, lightColor: pack.lightColor };
+    for (const state of states) {
+      for (const frame of animFrames) {
+        drawCharacterSprite(ctx, 0, 0, PLAYER_WIDTH, PLAYER_HEIGHT, char, state, frame, false, -1, 0, 0, 1, theme, stubPlayer);
+      }
+    }
+  }
+}
+
 export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player, nearCarrot: boolean, theme: ThemeConfig, frameTime: number): void {
   const { width, height, character, state, facing, invincibleTimer, animFrame, fastFalling, fatTimer, slowTimer } = player;
   // Apply visual correction offset from rollback smoothing
@@ -34,24 +88,35 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player, nearCa
   const cx = x + width / 2;
   const cy = y + height;
 
-  // Character shadow -- projected onto ground/platform below, shrinks with height
+  // Character shadow — projected onto ground/platform below, shrinks with height
   if (state !== 'splat' && state !== 'respawning') {
-    // Find the nearest platform surface below the player's feet
-    let shadowY = 660; // default: ground
-    // Check against a simple ground level -- the renderer doesn't have arena access here,
-    // so use the player's feet position when grounded, or project to 660 (ground) when airborne
+    let shadowY = 660;
     if (state === 'idle' || state === 'run') {
-      shadowY = cy; // on ground -- shadow at feet
+      shadowY = cy;
     } else {
-      shadowY = Math.min(cy + 200, 660); // project downward, cap at ground
+      shadowY = Math.min(cy + 200, 660);
     }
     const heightAboveShadow = Math.max(0, shadowY - cy);
     const shadowScale = Math.max(0.3, 1 - heightAboveShadow / 200);
     const shadowAlpha = 0.2 * shadowScale;
-    ctx.fillStyle = `rgba(0, 0, 0, ${shadowAlpha})`;
-    ctx.beginPath();
-    ctx.ellipse(cx, shadowY, 10 * shadowScale, 2 * shadowScale, 0, 0, Math.PI * 2);
-    ctx.fill();
+    // Skip when essentially invisible (high airborne with low scale).
+    if (shadowAlpha >= 0.05) {
+      const cache = getShadowCache();
+      if (cache) {
+        // Multiply against entry alpha so a globalAlpha set by a caller
+        // (e.g. invincibility blink) still attenuates the shadow.
+        const entryAlpha = ctx.globalAlpha;
+        ctx.globalAlpha = entryAlpha * shadowAlpha;
+        const w = 20 * shadowScale, h = 4 * shadowScale;
+        ctx.drawImage(cache, cx - w / 2, shadowY - h / 2, w, h);
+        ctx.globalAlpha = entryAlpha;
+      } else {
+        ctx.fillStyle = `rgba(0, 0, 0, ${shadowAlpha})`;
+        ctx.beginPath();
+        ctx.ellipse(cx, shadowY, 10 * shadowScale, 2 * shadowScale, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
   }
 
   // Kill streak flame aura (d) -- drawn behind character sprite
@@ -113,7 +178,7 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player, nearCa
   if (state === 'splat') {
     drawSplatCharacter(ctx, x, y, width, height, character.color, character.darkColor);
   } else {
-    drawCharacterSprite(ctx, x, y, width, height, character, state, animFrame, fastFalling, player.idleAnimTimer, player.squashScale, theme);
+    drawCharacterSprite(ctx, x, y, width, height, character, state, animFrame, fastFalling, player.idleAction, player.idleActionTimer, player.idleActionDuration, player.squashScale, theme, player);
     drawExpression(ctx, player, frameTime);
   }
 
@@ -173,14 +238,24 @@ function drawCharacterSprite(
   x: number, y: number, w: number, h: number,
   char: { name: string; color: string; darkColor: string; lightColor: string },
   state: string, animFrame: number, fastFalling: boolean,
-  idleAnimTimer?: number, squashScale = 1,
-  theme?: ThemeConfig,
+  idleAction: number, idleActionTimer: number, idleActionDuration: number,
+  squashScale: number,
+  theme: ThemeConfig | undefined,
+  player: Player,
 ): void {
-  const idleKey = (state === 'idle' && idleAnimTimer !== undefined && idleAnimTimer > 0 && idleAnimTimer < 0.5)
-    ? Math.floor(idleAnimTimer * 10)
-    : -1;
   const sqKey = Math.round(squashScale * 10);
-  const cacheKey = `${char.name}_${state}_${animFrame}_${fastFalling ? 1 : 0}_${idleKey}_${sqKey}`;
+  // Helmet bit prevents bubble-helmet arenas (underwater, space_station) from
+  // poisoning the cache: helmet is baked in at draw time, so a helmet-less
+  // first render would otherwise be reused at the helmet variant.
+  const helmetKey = theme?.bubbleHelmet ? 1 : 0;
+  const cacheKey = `${char.name}_${state}_${animFrame}_${fastFalling ? 1 : 0}_${sqKey}_${helmetKey}`;
+
+  // Idle action ctx transform — applied to main ctx, OUTSIDE the cached bitmap, so the
+  // animated transform doesn't get baked into the (1-bit-keyed) sprite cache entry.
+  // Resolved lazily so non-idle players (the common case) skip allocation + save/restore.
+  const idleAnimAction = (idleAction >= 0 && state !== 'run' && state !== 'airborne')
+    ? getIdleAction(char.name, idleAction)
+    : null;
 
   const pad = 10;
   const cw = Math.ceil(w) + pad * 2;
@@ -192,7 +267,7 @@ function drawCharacterSprite(
     spriteCache.delete(cacheKey);
     spriteCache.set(cacheKey, cached);
     // Explicit logical dest size — cached bitmap is at scaled px dims; main ctx transform maps logical → pixel.
-    ctx.drawImage(cached, x - pad, y - pad, cw, ch);
+    blitWithIdleTransform(ctx, cached, x, y, w, h, pad, idleAnimAction, idleActionTimer, idleActionDuration, char, player);
     return;
   }
 
@@ -203,14 +278,44 @@ function drawCharacterSprite(
   sctx.scale(s, s);
   sctx.translate(-x + pad, -y + pad);
 
-  _drawCharacterSpriteImpl(sctx, x, y, w, h, char, state, animFrame, fastFalling, idleAnimTimer, squashScale, theme);
+  _drawCharacterSpriteImpl(sctx, x, y, w, h, char, state, animFrame, fastFalling, idleAction, idleActionTimer, idleActionDuration, squashScale, theme);
 
   if (spriteCache.size > _spriteCacheCap) {
     const first = spriteCache.keys().next().value;
     if (first !== undefined) spriteCache.delete(first);
   }
   spriteCache.set(cacheKey, cached);
-  ctx.drawImage(cached, x - pad, y - pad, cw, ch);
+  blitWithIdleTransform(ctx, cached, x, y, w, h, pad, idleAnimAction, idleActionTimer, idleActionDuration, char, player);
+}
+
+/** Blit cached sprite, optionally with an idle-action ctx transform around it. */
+function blitWithIdleTransform(
+  ctx: CanvasRenderingContext2D,
+  cached: OffscreenCanvas,
+  x: number, y: number, w: number, h: number, pad: number,
+  idleAnimAction: IdleAction | null,
+  idleActionTimer: number, idleActionDuration: number,
+  char: { color: string; darkColor: string; lightColor: string },
+  player: Player,
+): void {
+  const dx = x - pad;
+  const dy = y - pad;
+  const dw = Math.ceil(w) + pad * 2;
+  const dh = Math.ceil(h) + pad * 2;
+  if (!idleAnimAction) {
+    ctx.drawImage(cached, dx, dy, dw, dh);
+    return;
+  }
+  const cx = x + w / 2;
+  const idleT = idleActionDuration > 0 ? 1 - (idleActionTimer / idleActionDuration) : 0;
+  const colors = { color: char.color, darkColor: char.darkColor, lightColor: char.lightColor };
+  ctx.save();
+  idleAnimAction.apply(ctx, cx, y, w, h, idleT, colors, player);
+  ctx.drawImage(cached, dx, dy, dw, dh);
+  if (idleAnimAction.applyAfter) {
+    idleAnimAction.applyAfter(ctx, cx, y, w, h, idleT, colors, player);
+  }
+  ctx.restore();
 }
 
 /** Core character drawing: sprite + highlight + eyes + legs. Shared by match and lobby. */
@@ -248,8 +353,9 @@ function _drawCharacterSpriteImpl(
   x: number, y: number, w: number, h: number,
   char: { name: string; color: string; darkColor: string; lightColor: string },
   state: string, animFrame: number, fastFalling: boolean,
-  idleAnimTimer?: number, squashScale = 1,
-  theme?: ThemeConfig,
+  idleAction: number, idleActionTimer: number, idleActionDuration: number,
+  squashScale: number,
+  theme: ThemeConfig | undefined,
 ): void {
   const cx = x + w / 2;
   const isAirborne = state === 'airborne';
@@ -268,31 +374,13 @@ function _drawCharacterSpriteImpl(
     ctx.translate(-cx, -(yOff + h / 2));
   }
 
-  // Idle animation -- apply transform based on character pack's idleTransform setting
-  const idleT = idleAnimTimer ?? -1;
-  const isIdleAnim = idleT >= 0 && idleT < 0.5;
-  if (isIdleAnim && state !== 'run' && state !== 'airborne') {
-    const t = idleT / 0.5;
-    const pulse = Math.sin(t * Math.PI);
-    const pack = getCharacterPack(char.name);
-    const idleType = pack?.idleTransform ?? 'headBob';
-    if (idleType === 'headTilt') {
-      ctx.translate(cx, yOff + h * 0.5);
-      ctx.rotate(pulse * 0.12);
-      ctx.translate(-cx, -(yOff + h * 0.5));
-    } else if (idleType === 'headFlip') {
-      const flipScale = 1 - pulse * 0.15;
-      ctx.translate(cx, yOff + h * 0.5);
-      ctx.scale(flipScale, 1);
-      ctx.translate(-cx, -(yOff + h * 0.5));
-    } else if (idleType === 'headBob') {
-      ctx.translate(0, -pulse * 2);
-    }
-    // 'none' -- no transform
-  }
-
+  // Action transform is NOT applied here — it's applied to the main ctx in drawCharacterSprite,
+  // outside the sprite cache. Otherwise the per-frame transform would be baked into the cached bitmap.
+  const isIdleAnimFlag = idleAction >= 0;
+  const idleT = idleActionDuration > 0 ? 1 - (idleActionTimer / idleActionDuration) : 0;
   const colors = { color: char.color, darkColor: char.darkColor, lightColor: char.lightColor };
-  drawCharacterCore(ctx, cx, yOff, w, h, char.name, state, animFrame, squashScale, colors, isIdleAnim, idleT);
+
+  drawCharacterCore(ctx, cx, yOff, w, h, char.name, state, animFrame, squashScale, colors, isIdleAnimFlag, idleT);
 
   // Motion lines for airborne
   if (isAirborne && !fastFalling) {

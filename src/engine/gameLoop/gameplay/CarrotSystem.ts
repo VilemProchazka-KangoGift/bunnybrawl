@@ -1,6 +1,6 @@
 import type { MatchState, Arena, EffectZone, MatchSettings } from '../../types';
 import type { GameplaySystem } from '../types';
-import type { ParticleSystem } from '../cosmetics/ParticleSystem';
+import type { ParticleEmitter } from '../../simulator/types';
 import { CARROT_SPAWN_INTERVAL, CARROT_CHASE_SPAWN_INTERVAL } from '../../constants';
 import { spawnCarrot } from './carrots';
 
@@ -12,7 +12,7 @@ export class CarrotSystem implements GameplaySystem {
   private settings: MatchSettings;
   private cachedZeroGZones: readonly EffectZone[];
   private gameRandom: () => number;
-  private particleSystem: ParticleSystem;
+  private particleSystem: ParticleEmitter;
 
   constructor(
     state: MatchState,
@@ -20,7 +20,7 @@ export class CarrotSystem implements GameplaySystem {
     settings: MatchSettings,
     cachedZeroGZones: readonly EffectZone[],
     gameRandom: () => number,
-    particleSystem: ParticleSystem,
+    particleSystem: ParticleEmitter,
   ) {
     this.state = state;
     this.arena = arena;

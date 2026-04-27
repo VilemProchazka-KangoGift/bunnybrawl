@@ -271,10 +271,14 @@ export class TouchInputManager {
 
   private resetJump(): void {
     this.jumpTouchId = null;
-    // If the jump was already consumed by the game loop, clear fully.
-    // If NOT consumed yet (quick tap finished before game read it),
-    // keep jumpTriggered=true so the next getInput() still returns the jump.
-    if (this.jumpConsumed) {
+    // If the jump was already consumed, clear fully. If NOT consumed and the
+    // touch ended within JUMP_COMMIT_DELAY (quick tap), keep it pending so
+    // the next getInput() still fires the jump. After the commit window the
+    // game loop has either consumed it OR something blocked getInput (pause).
+    // In the latter case, preserving the jump would cause a spontaneous jump
+    // on resume — clear it instead.
+    const elapsed = performance.now() - this.jumpStartTime;
+    if (this.jumpConsumed || elapsed >= JUMP_COMMIT_DELAY_MS) {
       this.jumpTriggered = false;
       this.jumpConsumed = false;
     }

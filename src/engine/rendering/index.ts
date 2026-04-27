@@ -3,7 +3,7 @@ export { drawWeather, drawParticles, drawGibs, drawGibShape, drawConfetti, drawF
 export { drawHazardZone, drawGhost, drawLavaRock, drawZeroGZone, drawCurrentZone, drawGeyser, drawBouncyPlatformOverlay, drawPigeonFlock, clearHazardCaches } from './hazards';
 export { drawDayNightCycle } from './effects';
 export { drawHUD, drawCountdown, drawConnectionQuality, invalidateHudCache, isHudDirty, resetHudState } from './hud';
-export { drawPlayer, clearSpriteCache, drawCharacterCore } from './players';
+export { drawPlayer, clearSpriteCache, drawCharacterCore, warmSpriteCacheForCharacters } from './players';
 
 import { clearHazardCaches } from './hazards';
 import { clearSpriteCache } from './players';
@@ -13,5 +13,13 @@ import { resetHudState } from './hud';
 export function clearRenderingCaches(): void {
   clearHazardCaches();
   clearSpriteCache();
+  resetHudState();
+}
+
+/** Clear only arena-dependent caches (hazards + HUD). Sprite cache is keyed
+ *  by helmet-bit so it survives arena swaps — used by `Renderer.setTheme()`
+ *  to avoid re-warming characters on every pause-menu arena change. */
+export function clearArenaCaches(): void {
+  clearHazardCaches();
   resetHudState();
 }

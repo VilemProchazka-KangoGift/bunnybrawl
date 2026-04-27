@@ -247,6 +247,25 @@ describe('TouchInputManager', () => {
       const input = manager.getInput();
       expect(input.jump).toBe(false); // still consumed from first, second ignored
     });
+
+    it('clears unconsumed jump on touch-end after the commit window', () => {
+      // Regression: if the user tapped jump, paused mid-touch (preventing
+      // getInput from consuming the jump), and then released the finger,
+      // resetJump used to preserve jumpTriggered=true (intended for quick
+      // taps under JUMP_COMMIT_DELAY). On resume, the player would jump
+      // spontaneously. Now: post-window touch-ends always clear jump state.
+      tapRight(800, 400);
+      // Time passes well past the 80ms commit window — the game loop is
+      // assumed to have either consumed the jump or been blocked by pause.
+      mockNow += 500;
+      // No getInput() call happens (simulating pause). Touch ends.
+      endRight(800, 400);
+
+      // Subsequent reads must NOT report jump.
+      mockNow += 100;
+      const input = manager.getInput();
+      expect(input.jump).toBe(false);
+    });
   });
 
   // ---- 4. Swipe-down (fast fall) ----

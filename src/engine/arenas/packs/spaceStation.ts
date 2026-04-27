@@ -792,28 +792,26 @@ export const spaceStation: ArenaPack = {
   },
 
   drawWeatherParticle: (ctx, w) => {
-    ctx.save();
-    ctx.translate(w.x, w.y);
+    // Both spark + warning are circles — no rotation. Reset globalAlpha at
+    // end since each branch sets it.
     if (w.type === 'spark') {
-      // Electric spark
       ctx.fillStyle = w.color || '#00CCFF';
+      ctx.globalAlpha = 1;
       ctx.beginPath();
-      ctx.arc(0, 0, w.size, 0, Math.PI * 2);
+      ctx.arc(w.x, w.y, w.size, 0, Math.PI * 2);
       ctx.fill();
-      // Glow
       ctx.globalAlpha = 0.3;
       ctx.beginPath();
-      ctx.arc(0, 0, w.size * 2.5, 0, Math.PI * 2);
+      ctx.arc(w.x, w.y, w.size * 2.5, 0, Math.PI * 2);
       ctx.fill();
     } else {
-      // Warning light particle
       ctx.fillStyle = w.color || '#FFAA00';
       ctx.globalAlpha = 0.6;
       ctx.beginPath();
-      ctx.arc(0, 0, w.size, 0, Math.PI * 2);
+      ctx.arc(w.x, w.y, w.size, 0, Math.PI * 2);
       ctx.fill();
     }
-    ctx.restore();
+    ctx.globalAlpha = 1;
   },
 
   // ---- Gameplay modifiers ----

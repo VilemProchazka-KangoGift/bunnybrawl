@@ -93,7 +93,7 @@ const drawGib: CharacterPack['drawGib'] = (ctx, gibType, _w, _h, colors) => {
 export const horse: CharacterPack = {
   name: 'Horse',
   color: '#8B6040', darkColor: '#5C3A20', lightColor: '#B08060',
-  emoji: '\uD83D\uDC34', customEyes: true, idleTransform: 'headBob',
+  emoji: '\uD83D\uDC34', customEyes: true,
   splatShape: 'circle',
   gibs: [{ gibType: 'ear', width: 8, height: 10 }, { gibType: 'ear', width: 8, height: 10 }, { gibType: 'mane', width: 12, height: 14 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Horse', cs: 'Kůň', hi: 'घोड़ा', fil: 'Kabayo' },

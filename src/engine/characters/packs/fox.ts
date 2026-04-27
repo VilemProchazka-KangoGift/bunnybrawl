@@ -3,7 +3,7 @@ import type { CharacterPack } from '../types';
 import { fillBodyGradient } from '../../spriteShading';
 import { generateToneBuffer } from '../../audio/synthesis/core';
 
-const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, state, animFrame, isIdleAnim, idleT, colors) => {
+const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, state, animFrame, _isIdleAnim, _idleT, colors) => {
   const isRunning = state === 'run';
   fillBodyGradient(ctx, { cx, cy: yOff + h * 0.55, rx: w * 0.38, ry: h * 0.38 }, colors);
   ctx.fillStyle = colors.color;
@@ -19,7 +19,7 @@ const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, state, ani
   ctx.fill();
   ctx.fillStyle = colors.lightColor;
   ctx.beginPath();
-  const tailWag = isRunning ? Math.sin(animFrame * Math.PI) * 5 : (isIdleAnim ? Math.sin((idleT / 0.5) * Math.PI * 2) * 4 : 0);
+  const tailWag = isRunning ? Math.sin(animFrame * Math.PI) * 5 : 0;
   ctx.moveTo(cx - w * 0.3, yOff + h * 0.5);
   ctx.quadraticCurveTo(cx - w * 0.7, yOff + h * 0.2 + tailWag, cx - w * 0.5, yOff + h * 0.1);
   ctx.quadraticCurveTo(cx - w * 0.3, yOff + h * 0.3, cx - w * 0.3, yOff + h * 0.5);
@@ -59,7 +59,7 @@ const drawGib: CharacterPack['drawGib'] = (ctx, gibType, _w, _h, colors) => {
 export const fox: CharacterPack = {
   name: 'Fox',
   color: '#FF8C00', darkColor: '#CC6600', lightColor: '#FFB347',
-  emoji: '\uD83E\uDD8A', customEyes: false, idleTransform: 'none',
+  emoji: '\uD83E\uDD8A', customEyes: false,
   splatShape: 'star',
   gibs: [{ gibType: 'ear', width: 10, height: 10 }, { gibType: 'ear', width: 10, height: 10 }, { gibType: 'tail', width: 16, height: 10 }, { gibType: 'snout', width: 8, height: 6 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Fox', cs: 'Liška', hi: 'लोमड़ी', fil: 'Soro' },

@@ -1,0 +1,48 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Simulator determinism (Task 3.4 — standalone, no GameLoop) > locks the standalone Simulator fingerprint (refactor regression) 1`] = `
+{
+  "kills": 1,
+  "phase": "playing",
+  "positions": [
+    {
+      "slot": "P1",
+      "x": 639.7222900390625,
+      "y": 628,
+    },
+    {
+      "slot": "P2",
+      "x": 55.611045837402344,
+      "y": 507.5,
+    },
+    {
+      "slot": "B1",
+      "x": 697.2109375,
+      "y": 385.75,
+    },
+    {
+      "slot": "B2",
+      "x": 105.44446563720703,
+      "y": 545.25,
+    },
+  ],
+  "scores": [
+    {
+      "score": 0,
+      "slot": "P1",
+    },
+    {
+      "score": 0,
+      "slot": "P2",
+    },
+    {
+      "score": 2,
+      "slot": "B1",
+    },
+    {
+      "score": 0,
+      "slot": "B2",
+    },
+  ],
+}
+`;

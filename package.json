@@ -12,7 +12,9 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:all": "vitest run && playwright test",
-    "clean": "npx rimraf node_modules/.vite dist"
+    "clean": "npx rimraf node_modules/.vite dist",
+    "perf:build": "tsc -b && vite build --sourcemap --outDir dist-perf",
+    "perf": "node scripts/runPerfProfile.mjs"
   },
   "dependencies": {
     "@trystero-p2p/mqtt": "^0.23.0",
@@ -42,6 +44,7 @@
     "happy-dom": "^20.8.9",
     "jsdom": "^29.0.1",
     "playwright": "^1.58.2",
+    "source-map": "^0.7.6",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.57.0",
     "vite": "^8.0.7",

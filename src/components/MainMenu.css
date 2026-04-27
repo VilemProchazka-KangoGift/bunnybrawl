@@ -46,11 +46,17 @@
 
 .menu-content {
   text-align: center;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(6px);
   border-radius: 20px;
   padding: 24px 36px 20px;
   position: relative;
   min-height: 660px;
+}
+
+.menu-content--no-blur {
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: none;
 }
 
 .game-logo {
@@ -60,11 +66,6 @@
   margin: -10px auto 8px;
   animation: logoZoom 3s ease-in-out infinite;
   filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.4));
-}
-
-@keyframes logoZoom {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.04); }
 }
 
 .tagline {
@@ -352,6 +353,30 @@
 .online-error {
   color: #FF6B6B;
 }
+
+.online-auto-switch-notice {
+  margin: -8px auto 16px;
+  padding: 8px 16px;
+  max-width: 480px;
+  background: rgba(255, 180, 0, 0.14);
+  border: 1px solid rgba(255, 180, 0, 0.35);
+  border-radius: 8px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 14px;
+  color: #FFD86B;
+  text-align: center;
+  animation: auto-switch-pulse 0.6s ease-out;
+}
+
+@keyframes auto-switch-pulse {
+  0% { opacity: 0; transform: translateY(-4px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.online-status-box--ready-hint { margin-top: 8px; }
+.online-status-box--spectating { text-align: center; padding: 24px 0; }
+.online-spectating-title { font-size: 18px; margin-bottom: 8px; }
+.online-spectating-hint  { opacity: 0.7; }
 
 .online-players {
   display: flex;

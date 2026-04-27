@@ -1,8 +1,9 @@
 import type { Player, PlayerSlot } from '../../types';
 import {
-  ANIM_FRAME_DURATION, RUN_FRAMES, IDLE_ANIM_INTERVAL,
+  ANIM_FRAME_DURATION, RUN_FRAMES,
   AFTERIMAGE_INTERVAL, AFTERIMAGE_SPEED_THRESHOLD, AFTERIMAGE_MAX,
 } from '../../constants';
+import { tickIdleStateMachine } from '../../rendering/idleActions';
 import { audio } from '../../audio';
 import { swapRemove } from '../../themes/utils';
 import { fastSin } from '../../fastMath';
@@ -23,11 +24,16 @@ export function updatePlayerCosmetics(
   emitParticle: (x: number, y: number, vx: number, vy: number, life: number, size: number, color: string) => void,
   playSound: (name: string) => void,
 ): void {
-  // Animation frame advance
-  player.animTimer += dt;
-  if (player.animTimer >= ANIM_FRAME_DURATION) {
-    player.animTimer -= ANIM_FRAME_DURATION;
-    player.animFrame = (player.animFrame + 1) % RUN_FRAMES;
+  // Animation frame advance — only while running. Reset on transition out.
+  if (player.state === 'run') {
+    player.animTimer += dt;
+    if (player.animTimer >= ANIM_FRAME_DURATION) {
+      player.animTimer -= ANIM_FRAME_DURATION;
+      player.animFrame = (player.animFrame + 1) % RUN_FRAMES;
+    }
+  } else {
+    player.animFrame = 0;
+    player.animTimer = 0;
   }
 
   // Fire particles while burning
@@ -42,13 +48,7 @@ export function updatePlayerCosmetics(
     }
   }
 
-  // Idle animation timer
-  if (player.state === 'idle') {
-    player.idleAnimTimer += dt;
-    if (player.idleAnimTimer >= IDLE_ANIM_INTERVAL) player.idleAnimTimer = 0;
-  } else {
-    player.idleAnimTimer = 0;
-  }
+  tickIdleStateMachine(player, dt);
 
   // Afterimages — spawn at speed threshold or during invincibility
   const speed = Math.max(Math.abs(player.vx), Math.abs(player.vy));

@@ -8,7 +8,7 @@ import {
   HITSTOP_DURATION, HITSTOP_ZOOM,
 } from './constants';
 import {
-  drawCloud as drawCloudPrimitive, drawHill, drawPlatformMoss,
+  drawHill, drawPlatformMoss,
   capFrontY, capBackY, skewPx,
 } from './themes/drawPrimitives';
 import { hexToRGB } from './fastMath';
@@ -17,6 +17,7 @@ import { drawNavDebugOverlay } from './navDebugOverlay';
 import type { BotNavDebugState } from './navDebugOverlay';
 import { drawNetDebugOverlay } from './net/core/debugOverlay';
 import type { NetDebugStats } from './net/core/debugOverlay';
+import { drawFpsCounter } from './fpsCounter';
 
 // Extracted rendering modules
 import {
@@ -26,12 +27,15 @@ import {
   drawDayNightCycle,
   drawHUD, drawCountdown, drawConnectionQuality, invalidateHudCache, isHudDirty,
   drawPlayer,
+  warmSpriteCacheForCharacters,
   clearRenderingCaches,
+  clearArenaCaches,
 } from './rendering';
 import { setSpriteCacheScale } from './rendering/players';
 import { setHudScale } from './rendering/hud';
 import { applyRenderScaleToCanvas, getRenderScale } from './renderScale';
 import { getSlowDevice } from './perfFlags';
+import { perfTrace } from './perfTrace';
 
 interface Cloud {
   x: number;
@@ -136,6 +140,16 @@ function freshDiag(): RenderDiagnostics {
   };
 }
 
+function resetDiag(d: RenderDiagnostics): void {
+  d.clouds = false; d.weather = false; d.wildlife = false; d.animatedBg = false;
+  d.hazardZones = false; d.effectZones = false; d.bouncyPlatforms = false; d.pigeons = false;
+  d.lavaRocks = false; d.springs = false; d.thorns = false; d.carrots = false;
+  d.gibs = false; d.confetti = false; d.shockwaves = false; d.afterimages = false;
+  d.fog = false; d.ambient = false; d.fireworks = false; d.dayNight = false;
+  d.countdown = false; d.navDebug = false; d.netDebug = false; d.screenFlash = false;
+  d.hitstop = false; d.screenShake = false; d.zeroGShimmer = false; d.playersDrawn = 0;
+}
+
 export class Renderer {
   private bgCanvas: HTMLCanvasElement;
   private fgCanvas: HTMLCanvasElement;
@@ -154,6 +168,14 @@ export class Renderer {
   private _renderScale = 1;
   private _lastBgArena: Arena | null = null;
   private _lastBgOriginalArena: Arena | undefined;
+  // Cached foreground decorations (drawForegroundNature output). Static per
+  // match — refreshed only on arena change or render-scale change. The arena
+  // ref doubles as a dirty marker since renderBackground() also fires on
+  // splat-mark / gib bake events that don't change foreground content.
+  private _fgNatureCache: OffscreenCanvas | null = null;
+  private _fgNatureCacheCtx: OffscreenCanvasRenderingContext2D | null = null;
+  private _fgNatureCacheScale = 0;
+  private _fgNatureCacheArena: Arena | null = null;
   private clouds: Cloud[] = [];
   private lastCloudTime = 0;
   private theme: ThemeConfig;
@@ -171,7 +193,7 @@ export class Renderer {
   private _diag: RenderDiagnostics = freshDiag();
   private _netRtt = 0;
   private _netJitter = 0;
-  private _isNetworkGuest = false;
+  private _isNetworkMatch = false;
 
   // Overlay-layer dirty tracking (only used when hudCtx is set)
   private _overlayHadContent = false;
@@ -182,10 +204,13 @@ export class Renderer {
   // overlay path with a caller-supplied draw fn (see `setLobbyOverlayFn`).
   private _lobbyOverlayFn: ((ctx: CanvasRenderingContext2D) => void) | null = null;
 
-  constructor(
-    bgCanvas: HTMLCanvasElement, fgCanvas: HTMLCanvasElement, theme: ThemeConfig,
-    mirrored = false, hudCanvas?: HTMLCanvasElement,
-  ) {
+  // Sprite-cache warm tracking — the cache itself is module-scoped and keyed
+  // by name+state+animFrame+flags (no theme). setTheme() calls
+  // clearRenderingCaches() so the invariant "warmed under current theme" is
+  // maintained. Consumers use hasWarmedAll() to verify preload coverage.
+  private _warmedNames: Set<string> = new Set();
+
+  constructor(bgCanvas: HTMLCanvasElement, fgCanvas: HTMLCanvasElement, theme: ThemeConfig, mirrored = false, hudCanvas?: HTMLCanvasElement) {
     clearRenderingCaches();
     this.bgCanvas = bgCanvas;
     this.fgCanvas = fgCanvas;
@@ -205,17 +230,7 @@ export class Renderer {
     setSpriteCacheScale(this._renderScale);
     setHudScale(this._renderScale);
 
-    // Init clouds from theme config
-    const cc = theme.clouds;
-    this.clouds = [];
-    for (let i = 0; i < cc.count; i++) {
-      this.clouds.push({
-        x: (i / cc.count) * CANVAS_WIDTH + Math.random() * 100,
-        y: cc.yRange[0] + Math.random() * (cc.yRange[1] - cc.yRange[0]),
-        size: cc.minSize + Math.random() * (cc.maxSize - cc.minSize),
-        speed: cc.minSpeed + Math.random() * (cc.maxSpeed - cc.minSpeed),
-      });
-    }
+    this.initClouds();
   }
 
   private _applyScaleToCanvases(): void {
@@ -261,10 +276,13 @@ export class Renderer {
     this._timeLimit = timeLimit;
   }
 
+  setNetworkMode(isNetwork: boolean): void {
+    this._isNetworkMatch = isNetwork;
+  }
+
   setConnectionQuality(rtt: number, jitter: number): void {
     this._netRtt = rtt;
     this._netJitter = jitter;
-    this._isNetworkGuest = true;
   }
 
   /** Lobby-mode HUD callback. Receives a clean ctx each frame. Set null to disable. */
@@ -274,6 +292,56 @@ export class Renderer {
 
   /** E2E diagnostic: which rendering branches fired last frame. */
   getDiagnostics(): RenderDiagnostics { return this._diag; }
+
+  /** Pre-populate the sprite cache for the given character names. Called during
+   *  the loading phase so the first visible frame doesn't hitch on cache misses.
+   *  Passes `this.theme` so bubble-helmet arenas bake the helmet into the cached
+   *  bitmap — otherwise cache-miss at render time poisons the cache without it. */
+  warmSpriteCache(names: string[]): void {
+    warmSpriteCacheForCharacters(names, this.theme);
+    for (const name of names) this._warmedNames.add(name);
+  }
+
+  /** True when every name has been warmed under the current theme. Used by
+   *  the loading orchestrator to verify sprite-cache coverage before flipping
+   *  phase to 'playing'. Any name not yet warmed would cause first-frame jank. */
+  hasWarmedAll(names: string[]): boolean {
+    for (const name of names) {
+      if (!this._warmedNames.has(name)) return false;
+    }
+    return true;
+  }
+
+  /** Swap the active theme without tearing down the renderer. Used by
+   *  `GameLoop.switchArena()` for in-place arena changes. Resets cloud layout
+   *  and derived color caches; leaves the sprite cache intact (the cache key
+   *  includes a bubble-helmet bit, so cross-arena sprite reuse is safe). */
+  setTheme(theme: ThemeConfig): void {
+    this.theme = theme;
+    this._fogRGB = null;
+    this._ambientRGBs = null;
+    this.initClouds();
+    clearArenaCaches();
+    invalidateHudCache();
+    // Characters warmed under the old theme may have used different helmet
+    // settings — force re-warm under the new theme (cheap: cache hits for
+    // entries already keyed with the current helmet bit).
+    this._warmedNames.clear();
+  }
+
+  /** Populate `this.clouds` from the current theme's cloud config. */
+  private initClouds(): void {
+    const cc = this.theme.clouds;
+    this.clouds = [];
+    for (let i = 0; i < cc.count; i++) {
+      this.clouds.push({
+        x: (i / cc.count) * CANVAS_WIDTH + Math.random() * 100,
+        y: cc.yRange[0] + Math.random() * (cc.yRange[1] - cc.yRange[0]),
+        size: cc.minSize + Math.random() * (cc.maxSize - cc.minSize),
+        speed: cc.minSpeed + Math.random() * (cc.maxSpeed - cc.minSpeed),
+      });
+    }
+  }
 
   renderBackground(arena: Arena, originalArena?: Arena): void {
     if (originalArena) this.originalArena = originalArena;
@@ -342,6 +410,11 @@ export class Renderer {
     if (this.mirrored) { ctx.restore(); }
 
     this.buildPlatformOverlay(arena);
+    // Foreground nature is also static per-arena — render once into an
+    // OffscreenCanvas here so renderFrame can blit it instead of re-running
+    // 20+ shape primitives per frame. Heavy arenas (meadow, winter_lake)
+    // have ~25 fg decorations each.
+    this._renderForegroundNatureCache(themeArena);
   }
 
   /**
@@ -366,18 +439,65 @@ export class Renderer {
     }
   }
 
+  private _renderForegroundNatureCache(themeArena: Arena): void {
+    // OffscreenCanvas isn't available in jsdom test envs — skip caching there;
+    // renderFrame falls back to drawing foreground nature directly.
+    if (typeof OffscreenCanvas === 'undefined') return;
+    const s = this._renderScale;
+    // Skip rebuild when nothing that affects foreground content has changed.
+    // renderBackground() also fires on splat marks / gib bakes mid-match —
+    // those don't touch foreground decorations.
+    if (this._fgNatureCache
+      && this._fgNatureCacheArena === themeArena
+      && this._fgNatureCacheScale === s) return;
+    if (!this._fgNatureCache || this._fgNatureCacheScale !== s) {
+      this._fgNatureCache = new OffscreenCanvas(
+        Math.max(1, Math.ceil(CANVAS_WIDTH * s)),
+        Math.max(1, Math.ceil(CANVAS_HEIGHT * s)),
+      );
+      this._fgNatureCacheCtx = this._fgNatureCache.getContext('2d')!;
+      this._fgNatureCacheCtx.scale(s, s);
+      this._fgNatureCacheScale = s;
+    }
+    const cctx = this._fgNatureCacheCtx!;
+    cctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    this._drawForegroundNatureDirect(cctx as unknown as CanvasRenderingContext2D, themeArena);
+    this._fgNatureCacheArena = themeArena;
+  }
+
+  /** Apply mirror transform and call into theme's foreground draw. Shared by
+   *  the cache builder and the test-env (no OffscreenCanvas) fallback path. */
+  private _drawForegroundNatureDirect(ctx: CanvasRenderingContext2D, themeArena: Arena): void {
+    if (this.mirrored) { ctx.save(); ctx.scale(-1, 1); ctx.translate(-CANVAS_WIDTH, 0); }
+    this.theme.drawForegroundNature(ctx, themeArena);
+    if (this.mirrored) { ctx.restore(); }
+  }
+
 
   // ---- Clouds ----
 
   private updateAndDrawClouds(ctx: CanvasRenderingContext2D, dt: number): void {
-    const color = this.theme.clouds.color;
+    // Inlined batch of theme-default clouds: one fillStyle, one beginPath/fill
+    // for all clouds. Each cloud is 4 overlapping arcs (the original drawCloud
+    // shape); moveTo before each cloud starts a new sub-path so neighbours
+    // don't connect with a stray line. (The drawCloud primitive in
+    // drawPrimitives is still used by menu + lobby renderers — those aren't
+    // hot enough to justify duplicating this batch path there.)
+    ctx.fillStyle = this.theme.clouds.color;
+    ctx.beginPath();
     for (const cloud of this.clouds) {
       cloud.x += cloud.speed * dt;
       if (cloud.x - cloud.size > CANVAS_WIDTH) {
         cloud.x = -cloud.size * 2;
       }
-      drawCloudPrimitive(ctx, cloud.x, cloud.y, cloud.size, color);
+      const x = cloud.x, y = cloud.y, s = cloud.size;
+      ctx.moveTo(x + s * 0.5, y);
+      ctx.arc(x, y, s * 0.5, 0, Math.PI * 2);
+      ctx.arc(x + s * 0.4, y - s * 0.15, s * 0.4, 0, Math.PI * 2);
+      ctx.arc(x + s * 0.8, y, s * 0.45, 0, Math.PI * 2);
+      ctx.arc(x + s * 0.35, y + s * 0.1, s * 0.35, 0, Math.PI * 2);
     }
+    ctx.fill();
   }
 
 
@@ -464,339 +584,345 @@ export class Renderer {
   // ---- Frame rendering ----
 
   renderFrame(matchState: MatchState, arena: Arena, particles: Particle[], cosmeticLead = 0): void {
-    const ctx = this.fgCtx;
-    ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    perfTrace.measure('renderFrame', () => {
+      const ctx = this.fgCtx;
+      ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    // Reset diagnostics each frame
-    this._diag = freshDiag();
-    const d = this._diag;
+      // Reset diagnostics each frame (mutate in place — avoid 14k object allocs over 30s)
+      resetDiag(this._diag);
+      const d = this._diag;
 
-    // Cache time once per frame
-    this.frameTime = performance.now();
+      // Cache time once per frame
+      this.frameTime = performance.now();
 
-    ctx.save();
+      ctx.save();
 
-    // Hitstop zoom punch -- subtle scale centered on screen
-    if (matchState.hitstopZoom > 0) {
-      d.hitstop = true;
-      const t = matchState.hitstopZoom / HITSTOP_DURATION; // 1 -> 0
-      const scale = 1 + HITSTOP_ZOOM * t * t;              // ease-out
-      ctx.translate(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
-      ctx.scale(scale, scale);
-      ctx.translate(-CANVAS_WIDTH / 2, -CANVAS_HEIGHT / 2);
-    }
-
-    // Screen shake offset
-    if (matchState.screenShake > 0) {
-      d.screenShake = true;
-      const intensity = SCREEN_SHAKE_INTENSITY * (matchState.screenShake / 0.3);
-      ctx.translate(
-        (Math.random() - 0.5) * intensity * 2,
-        (Math.random() - 0.5) * intensity * 2,
-      );
-    }
-
-    // Animated clouds
-    const now = this.frameTime / 1000;
-    const dt = now - (this.lastCloudTime || now);
-    this.lastCloudTime = now;
-    this.updateAndDrawClouds(ctx, dt);
-    d.clouds = true;
-
-    const slow = getSlowDevice();
-
-    // Weather (leaves, petals)
-    if (!slow) {
-      drawWeather(ctx, matchState.weather, this.theme, cosmeticLead);
-      if (matchState.weather.length > 0) d.weather = true;
-    }
-
-    // Wildlife: butterflies + birds (q) -- drawn after clouds/weather, before springs
-    if (!slow && matchState.wildlife) {
-      drawWildlife(ctx, matchState.wildlife);
-      d.wildlife = true;
-    }
-
-    // Theme-specific animated background (e.g. space objects through windows)
-    if (this.theme.drawAnimatedBackground) {
-      const thA = this.originalArena ?? arena;
-      if (this.mirrored) { ctx.save(); ctx.scale(-1, 1); ctx.translate(-CANVAS_WIDTH, 0); }
-      this.theme.drawAnimatedBackground(ctx, thA, matchState.timeElapsed);
-      if (this.mirrored) { ctx.restore(); }
-      d.animatedBg = true;
-    }
-
-    // Hazard zones (lava pools etc.)
-    if (arena.hazardZones) {
-      for (const hz of arena.hazardZones) {
-        drawHazardZone(ctx, hz, this.theme, matchState.timeElapsed);
+      // Hitstop zoom punch -- subtle scale centered on screen
+      if (matchState.hitstopZoom > 0) {
+        d.hitstop = true;
+        const t = matchState.hitstopZoom / HITSTOP_DURATION; // 1 -> 0
+        const scale = 1 + HITSTOP_ZOOM * t * t;              // ease-out
+        ctx.translate(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+        ctx.scale(scale, scale);
+        ctx.translate(-CANVAS_WIDTH / 2, -CANVAS_HEIGHT / 2);
       }
-      d.hazardZones = true;
-    }
 
-    // Effect zones (zero-G, currents, geysers)
-    if (arena.effectZones) {
-      let geyserIdx = 0;
-      for (let zi = 0; zi < arena.effectZones.length; zi++) {
-        const zone = arena.effectZones[zi];
-        if (zone.type === 'zero_g') {
-          drawZeroGZone(ctx, zone, matchState.timeElapsed);
-        } else if (zone.type === 'current') {
-          drawCurrentZone(ctx, zone, matchState.timeElapsed);
-        } else if (zone.type === 'geyser') {
-          const gs = matchState.geyserStates[geyserIdx];
-          if (gs) drawGeyser(ctx, zone, gs, matchState.timeElapsed);
-          geyserIdx++;
+      // Screen shake offset
+      if (matchState.screenShake > 0) {
+        d.screenShake = true;
+        const intensity = SCREEN_SHAKE_INTENSITY * (matchState.screenShake / 0.3);
+        ctx.translate(
+          (Math.random() - 0.5) * intensity * 2,
+          (Math.random() - 0.5) * intensity * 2,
+        );
+      }
+
+      // Animated clouds
+      const now = this.frameTime / 1000;
+      const dt = now - (this.lastCloudTime || now);
+      this.lastCloudTime = now;
+      this.updateAndDrawClouds(ctx, dt);
+      d.clouds = true;
+
+      const slow = getSlowDevice();
+
+      // Weather (leaves, petals)
+      if (!slow) {
+        drawWeather(ctx, matchState.weather, this.theme, cosmeticLead);
+        if (matchState.weather.length > 0) d.weather = true;
+      }
+
+      // Wildlife: butterflies + birds (q) -- drawn after clouds/weather, before springs
+      if (!slow && matchState.wildlife) {
+        drawWildlife(ctx, matchState.wildlife);
+        d.wildlife = true;
+      }
+
+      // Theme-specific animated background (e.g. space objects through windows)
+      if (this.theme.drawAnimatedBackground) {
+        const thA = this.originalArena ?? arena;
+        if (this.mirrored) { ctx.save(); ctx.scale(-1, 1); ctx.translate(-CANVAS_WIDTH, 0); }
+        this.theme.drawAnimatedBackground(ctx, thA, matchState.timeElapsed);
+        if (this.mirrored) { ctx.restore(); }
+        d.animatedBg = true;
+      }
+
+      // Hazard zones (lava pools etc.)
+      if (arena.hazardZones) {
+        for (const hz of arena.hazardZones) {
+          drawHazardZone(ctx, hz, this.theme, matchState.timeElapsed);
+        }
+        d.hazardZones = true;
+      }
+
+      // Effect zones (zero-G, currents, geysers)
+      if (arena.effectZones) {
+        let geyserIdx = 0;
+        for (let zi = 0; zi < arena.effectZones.length; zi++) {
+          const zone = arena.effectZones[zi];
+          if (zone.type === 'zero_g') {
+            drawZeroGZone(ctx, zone, matchState.timeElapsed);
+          } else if (zone.type === 'current') {
+            drawCurrentZone(ctx, zone, matchState.timeElapsed);
+          } else if (zone.type === 'geyser') {
+            const gs = matchState.geyserStates[geyserIdx];
+            if (gs) drawGeyser(ctx, zone, gs, matchState.timeElapsed);
+            geyserIdx++;
+          }
+        }
+        d.effectZones = true;
+      }
+
+      // Bouncy platform wobble
+      if (arena.bouncyPlatforms) {
+        for (const bi of arena.bouncyPlatforms) {
+          const bp = arena.platforms[bi];
+          if (!bp) continue;
+          const wobble = matchState.bouncyWobble.get(bi) || 0;
+          drawBouncyPlatformOverlay(ctx, bp, wobble, matchState.timeElapsed);
+        }
+        d.bouncyPlatforms = true;
+      }
+
+      // Pigeon flocks
+      for (const flock of matchState.pigeonFlocks) {
+        drawPigeonFlock(ctx, flock, matchState.timeElapsed);
+        d.pigeons = true;
+      }
+
+
+      // Lava rocks (falling hazards)
+      for (const rock of matchState.lavaRocks) {
+        if (!rock.active) continue;
+        drawLavaRock(ctx, rock, this.theme);
+        d.lavaRocks = true;
+      }
+
+      // Springs and thorns (behind players)
+      for (const spring of matchState.springs) { drawSpringMushroom(ctx, spring, this.theme); d.springs = true; }
+      for (const thorn of matchState.thorns) { drawThorn(ctx, thorn, this.theme); d.thorns = true; }
+
+      // Carrots
+      for (const carrot of matchState.carrots) {
+        if (carrot.active) { drawCarrot(ctx, carrot, matchState.timeElapsed, this.frameTime); d.carrots = true; }
+      }
+
+      // Particles
+      drawParticles(ctx, particles, cosmeticLead);
+
+      // Gibs and confetti
+      if (matchState.gibs.length > 0) { drawGibs(ctx, matchState.gibs, cosmeticLead); d.gibs = true; }
+      if (matchState.confetti.length > 0) { drawConfetti(ctx, matchState.confetti, cosmeticLead); d.confetti = true; }
+
+      // Stomp shockwaves (e) -- after particles, before players
+      if (matchState.shockwaves) {
+        if (matchState.shockwaves.length > 0) d.shockwaves = true;
+        for (const sw of matchState.shockwaves) {
+          const progress = 1 - sw.life / SHOCKWAVE_DURATION;
+          const alpha = sw.life / SHOCKWAVE_DURATION;
+          const lineW = Math.max(1, 4 * (1 - progress));
+          ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+          ctx.lineWidth = lineW;
+          ctx.beginPath();
+          ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
+          ctx.stroke();
         }
       }
-      d.effectZones = true;
-    }
 
-    // Bouncy platform wobble
-    if (arena.bouncyPlatforms) {
-      for (const bi of arena.bouncyPlatforms) {
-        const bp = arena.platforms[bi];
-        if (!bp) continue;
-        const wobble = matchState.bouncyWobble.get(bi) || 0;
-        drawBouncyPlatformOverlay(ctx, bp, wobble, matchState.timeElapsed);
-      }
-      d.bouncyPlatforms = true;
-    }
-
-    // Pigeon flocks
-    for (const flock of matchState.pigeonFlocks) {
-      drawPigeonFlock(ctx, flock, matchState.timeElapsed);
-      d.pigeons = true;
-    }
-
-
-    // Lava rocks (falling hazards)
-    for (const rock of matchState.lavaRocks) {
-      if (!rock.active) continue;
-      drawLavaRock(ctx, rock, this.theme);
-      d.lavaRocks = true;
-    }
-
-    // Springs and thorns (behind players)
-    for (const spring of matchState.springs) { drawSpringMushroom(ctx, spring, this.theme); d.springs = true; }
-    for (const thorn of matchState.thorns) { drawThorn(ctx, thorn, this.theme); d.thorns = true; }
-
-    // Carrots
-    for (const carrot of matchState.carrots) {
-      if (carrot.active) { drawCarrot(ctx, carrot, matchState.timeElapsed, this.frameTime); d.carrots = true; }
-    }
-
-    // Particles
-    drawParticles(ctx, particles, cosmeticLead);
-
-    // Gibs and confetti
-    if (matchState.gibs.length > 0) { drawGibs(ctx, matchState.gibs, cosmeticLead); d.gibs = true; }
-    if (matchState.confetti.length > 0) { drawConfetti(ctx, matchState.confetti, cosmeticLead); d.confetti = true; }
-
-    // Stomp shockwaves (e) -- after particles, before players
-    if (matchState.shockwaves) {
-      if (matchState.shockwaves.length > 0) d.shockwaves = true;
-      for (const sw of matchState.shockwaves) {
-        const progress = 1 - sw.life / SHOCKWAVE_DURATION;
-        const alpha = sw.life / SHOCKWAVE_DURATION;
-        const lineW = Math.max(1, 4 * (1 - progress));
-        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
-        ctx.lineWidth = lineW;
-        ctx.beginPath();
-        ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-    }
-
-    // Afterimage ghost trails (drawn behind players)
-    if (!slow) {
-      for (const player of matchState.players) {
-        if (!player.active) continue;
-        if (player.state === 'respawning') continue;
-        const afterimages = player.afterimages;
-        if (afterimages && afterimages.length > 0) {
-          d.afterimages = true;
-          const isInvincible = player.invincibleTimer > 0;
-          const trailColor = isInvincible ? '#88BBFF' : player.character.color;
-          const { r, g, b } = hexToRGB(trailColor);
-          for (const img of afterimages) {
-            ctx.fillStyle = `rgba(${r},${g},${b},${img.alpha})`;
-            ctx.beginPath();
-            ctx.ellipse(
-              img.x + player.width / 2,
-              img.y + player.height * 0.55,
-              player.width * 0.38,
-              player.height * 0.38,
-              0, 0, Math.PI * 2
-            );
-            ctx.fill();
+      // Afterimage ghost trails (drawn behind players)
+      if (!slow) {
+        for (const player of matchState.players) {
+          if (!player.active) continue;
+          if (player.state === 'respawning') continue;
+          const afterimages = player.afterimages;
+          if (afterimages && afterimages.length > 0) {
+            d.afterimages = true;
+            const isInvincible = player.invincibleTimer > 0;
+            const trailColor = isInvincible ? '#88BBFF' : player.character.color;
+            const { r, g, b } = hexToRGB(trailColor);
+            for (const img of afterimages) {
+              ctx.fillStyle = `rgba(${r},${g},${b},${img.alpha})`;
+              ctx.beginPath();
+              ctx.ellipse(
+                img.x + player.width / 2,
+                img.y + player.height * 0.55,
+                player.width * 0.38,
+                player.height * 0.38,
+                0, 0, Math.PI * 2
+              );
+              ctx.fill();
+            }
           }
         }
       }
-    }
 
-    // Compute which players are near a carrot (c) for blush
-    _nearCarrotSet.clear();
-    const nearCarrotSet = _nearCarrotSet;
-    for (const player of matchState.players) {
-      if (!player.active || player.state === 'respawning') continue;
-      const pcx = player.x + player.width / 2;
-      const pcy = player.y + player.height / 2;
-      for (const carrot of matchState.carrots) {
-        if (!carrot.active) continue;
-        const dx = pcx - carrot.x;
-        const dy = pcy - carrot.y;
-        if (dx * dx + dy * dy < 10000) {
-          nearCarrotSet.add(player.id);
-          break;
-        }
-      }
-    }
-
-    // Players (iso clip applied when applicable — see findIsoOccluders).
-    const useIsoClip = this._arenaHasIsoOccluders;
-    for (const player of matchState.players) {
-      if (!player.active) continue;
-      if (player.state === 'respawning') continue;
-      const occluders = useIsoClip ? findIsoOccluders(player, arena.platforms) : null;
-      const clipped = occluders !== null && occluders.length > 0;
-      if (clipped) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-        for (const plat of occluders!) addIsoPlatformPath(ctx, plat);
-        ctx.clip('evenodd');
-      }
-      drawPlayer(ctx, player, nearCarrotSet.has(player.id), this.theme, this.frameTime);
-      if (clipped) ctx.restore();
-      d.playersDrawn++;
-    }
-
-    // Platform body overlay (cached). Drawn AFTER players so the body face
-    // occludes any player whose bbox enters the iso phantom strip — the
-    // "going behind the platform" effect. Cached at arena/scale change in
-    // buildPlatformOverlay; this is one drawImage instead of a per-platform
-    // decoration loop on every frame.
-    if (this._overlayCanvas) {
-      ctx.drawImage(this._overlayCanvas, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    }
-
-    // Spring spiral trail (h) -- drawn near players
-    for (const player of matchState.players) {
-      if (!player.active || player.state === 'respawning') continue;
-      if (player.springTrailTimer > 0) {
-        drawSpringTrail(ctx, player, this.frameTime);
-      }
-    }
-
-    // Zero-G character effect -- shimmer around players in zero-G zones
-    if (arena.effectZones) {
+      // Compute which players are near a carrot (c) for blush
+      _nearCarrotSet.clear();
+      const nearCarrotSet = _nearCarrotSet;
       for (const player of matchState.players) {
-        if (!player.active || player.state === 'splat' || player.state === 'respawning') continue;
-        for (const zone of arena.effectZones) {
-          if (zone.type !== 'zero_g') continue;
-          if (aabbOverlap(player.x, player.y, player.width, player.height, zone.x, zone.y, zone.width, zone.height)) {
-            const pcx = player.x + player.width / 2;
-            const pcy = player.y + player.height / 2;
-            ctx.save();
-            // Cyan glow around player
-            ctx.globalAlpha = 0.15 + Math.sin(matchState.timeElapsed * 4) * 0.05;
-            const glow = ctx.createRadialGradient(pcx, pcy, 5, pcx, pcy, 25);
-            glow.addColorStop(0, 'rgba(0, 220, 255, 0.3)');
-            glow.addColorStop(1, 'rgba(0, 200, 255, 0)');
-            ctx.fillStyle = glow;
-            ctx.fillRect(pcx - 25, pcy - 25, 50, 50);
-            // Sparkle ring
-            ctx.globalAlpha = 0.35;
-            for (let s = 0; s < 6; s++) {
-              const angle = matchState.timeElapsed * 2 + s * Math.PI / 3;
-              const sr = 18;
-              const sx = pcx + Math.cos(angle) * sr;
-              const sy = pcy + Math.sin(angle) * sr;
-              ctx.fillStyle = '#88EEFF';
-              ctx.beginPath();
-              ctx.arc(sx, sy, 1.5, 0, Math.PI * 2);
-              ctx.fill();
-            }
-            ctx.restore();
-            d.zeroGShimmer = true;
+        if (!player.active || player.state === 'respawning') continue;
+        const pcx = player.x + player.width / 2;
+        const pcy = player.y + player.height / 2;
+        for (const carrot of matchState.carrots) {
+          if (!carrot.active) continue;
+          const dx = pcx - carrot.x;
+          const dy = pcy - carrot.y;
+          if (dx * dx + dy * dy < 10000) {
+            nearCarrotSet.add(player.id);
             break;
           }
         }
       }
-    }
 
-    // Ground fog (o) -- after players, before foreground nature
-    if (matchState.fogParticles) {
-      d.fog = true;
-      const fogCfg = this.theme.fog;
-      if (!this._fogRGB) {
-        this._fogRGB = hexToRGB(fogCfg.color);
+      // Players (iso clip applied when applicable — see findIsoOccluders).
+      const useIsoClip = this._arenaHasIsoOccluders;
+      for (const player of matchState.players) {
+        if (!player.active) continue;
+        if (player.state === 'respawning') continue;
+        const occluders = useIsoClip ? findIsoOccluders(player, arena.platforms) : null;
+        const clipped = occluders !== null && occluders.length > 0;
+        if (clipped) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+          for (const plat of occluders!) addIsoPlatformPath(ctx, plat);
+          ctx.clip('evenodd');
+        }
+        drawPlayer(ctx, player, nearCarrotSet.has(player.id), this.theme, this.frameTime);
+        if (clipped) ctx.restore();
+        d.playersDrawn++;
       }
-      const { r, g, b } = this._fogRGB;
-      for (const fp of matchState.fogParticles) {
-        ctx.fillStyle = `rgba(${r},${g},${b},${fp.alpha * (fogCfg.opacity ?? 0.3)})`;
-        ctx.beginPath();
-        ctx.ellipse(fp.x, fp.y, fogCfg.sizeX, fogCfg.sizeY, 0, 0, Math.PI * 2);
-        ctx.fill();
+
+      // Platform body overlay (cached). Drawn AFTER players so the body face
+      // occludes any player whose bbox enters the iso phantom strip — the
+      // "going behind the platform" effect. Cached at arena/scale change in
+      // buildPlatformOverlay; this is one drawImage instead of a per-platform
+      // decoration loop on every frame.
+      if (this._overlayCanvas) {
+        ctx.drawImage(this._overlayCanvas, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
       }
-    }
 
-    // Foreground nature -- delegated to theme (pass original arena, canvas transform handles mirroring)
-    const themeArena = this.originalArena ?? arena;
-    if (this.mirrored) { ctx.save(); ctx.scale(-1, 1); ctx.translate(-CANVAS_WIDTH, 0); }
-    this.theme.drawForegroundNature(ctx, themeArena);
-    if (this.mirrored) { ctx.restore(); }
-
-    // Ghosts (drawn over foreground, semi-transparent)
-    for (const ghost of matchState.ghosts) {
-      drawGhost(ctx, ghost, this.theme, matchState.timeElapsed);
-    }
-
-    // Ambient particles (pollen / snow drift / sparkles)
-    if (!slow && matchState.pollenParticles) {
-      d.ambient = true;
-      const ambCfg = this.theme.ambientParticles;
-      if (!this._ambientRGBs) {
-        this._ambientRGBs = ambCfg.colors.map(hexToRGB);
+      // Spring spiral trail (h) -- drawn near players
+      for (const player of matchState.players) {
+        if (!player.active || player.state === 'respawning') continue;
+        if (player.springTrailTimer > 0) {
+          drawSpringTrail(ctx, player, this.frameTime);
+        }
       }
-      for (const pp of matchState.pollenParticles) {
-        const ci = pp.size > 2 ? 0 : (this._ambientRGBs.length > 1 ? 1 : 0);
-        const { r, g, b } = this._ambientRGBs[ci];
-        ctx.fillStyle = `rgba(${r},${g},${b},${pp.alpha * 0.7})`;
-        ctx.beginPath();
-        ctx.arc(pp.x, pp.y, pp.size, 0, Math.PI * 2);
-        ctx.fill();
+
+      // Zero-G character effect -- shimmer around players in zero-G zones
+      if (arena.effectZones) {
+        for (const player of matchState.players) {
+          if (!player.active || player.state === 'splat' || player.state === 'respawning') continue;
+          for (const zone of arena.effectZones) {
+            if (zone.type !== 'zero_g') continue;
+            if (aabbOverlap(player.x, player.y, player.width, player.height, zone.x, zone.y, zone.width, zone.height)) {
+              const pcx = player.x + player.width / 2;
+              const pcy = player.y + player.height / 2;
+              ctx.save();
+              // Cyan glow around player
+              ctx.globalAlpha = 0.15 + Math.sin(matchState.timeElapsed * 4) * 0.05;
+              const glow = ctx.createRadialGradient(pcx, pcy, 5, pcx, pcy, 25);
+              glow.addColorStop(0, 'rgba(0, 220, 255, 0.3)');
+              glow.addColorStop(1, 'rgba(0, 200, 255, 0)');
+              ctx.fillStyle = glow;
+              ctx.fillRect(pcx - 25, pcy - 25, 50, 50);
+              // Sparkle ring
+              ctx.globalAlpha = 0.35;
+              for (let s = 0; s < 6; s++) {
+                const angle = matchState.timeElapsed * 2 + s * Math.PI / 3;
+                const sr = 18;
+                const sx = pcx + Math.cos(angle) * sr;
+                const sy = pcy + Math.sin(angle) * sr;
+                ctx.fillStyle = '#88EEFF';
+                ctx.beginPath();
+                ctx.arc(sx, sy, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+              }
+              ctx.restore();
+              d.zeroGShimmer = true;
+              break;
+            }
+          }
+        }
       }
-    }
 
-    // Fireworks when match is over
-    if (matchState.matchOver) {
-      drawFireworks(ctx, particles, this.frameTime, cosmeticLead);
-      d.fireworks = true;
-    }
+      // Ground fog (o) -- after players, before foreground nature
+      if (matchState.fogParticles) {
+        d.fog = true;
+        const fogCfg = this.theme.fog;
+        if (!this._fogRGB) {
+          this._fogRGB = hexToRGB(fogCfg.color);
+        }
+        const { r, g, b } = this._fogRGB;
+        for (const fp of matchState.fogParticles) {
+          ctx.fillStyle = `rgba(${r},${g},${b},${fp.alpha * (fogCfg.opacity ?? 0.3)})`;
+          ctx.beginPath();
+          ctx.ellipse(fp.x, fp.y, fogCfg.sizeX, fogCfg.sizeY, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
 
-    // Day/night cycle overlay (only if theme has it enabled)
-    if (!slow && this.theme.dayNight.enabled && matchState.dayPhase !== undefined) {
-      drawDayNightCycle(ctx, matchState.dayPhase, matchState, this.theme, this.frameTime);
-      d.dayNight = true;
-    }
+      // Mirror is baked into the cache so blit at identity transform; explicit
+      // logical W/H since the bitmap is at scaled-pixel dims. Fallback for
+      // test envs without OffscreenCanvas: draw directly.
+      if (this._fgNatureCache) {
+        ctx.drawImage(this._fgNatureCache, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      } else {
+        this._drawForegroundNatureDirect(ctx, this.originalArena ?? arena);
+      }
 
-    ctx.restore();
+      // Ghosts (drawn over foreground, semi-transparent)
+      for (const ghost of matchState.ghosts) {
+        drawGhost(ctx, ghost, this.theme, matchState.timeElapsed);
+      }
 
-    // Overlay layer: HUD, countdown, connection quality, debug overlays, screen flash.
-    // When hudCtx is set, these go on a dedicated canvas above fg, redrawn only when
-    // state changes (saving a per-frame blit). Otherwise fall back to drawing on fg.
-    if (this._lobbyOverlayFn) {
-      this._renderLobbyOverlay(matchState);
-      return;
-    }
-    const hudDirty = isHudDirty(matchState);
-    if (this.hudCtx) {
-      this._renderOverlayLayer(matchState, arena, hudDirty);
-    } else {
-      this._drawOverlayContent(this.fgCtx, matchState, arena, hudDirty);
-    }
+      // Ambient particles (pollen / snow drift / sparkles)
+      if (!slow && matchState.pollenParticles) {
+        d.ambient = true;
+        const ambCfg = this.theme.ambientParticles;
+        if (!this._ambientRGBs) {
+          this._ambientRGBs = ambCfg.colors.map(hexToRGB);
+        }
+        for (const pp of matchState.pollenParticles) {
+          const ci = pp.size > 2 ? 0 : (this._ambientRGBs.length > 1 ? 1 : 0);
+          const { r, g, b } = this._ambientRGBs[ci];
+          ctx.fillStyle = `rgba(${r},${g},${b},${pp.alpha * 0.7})`;
+          ctx.beginPath();
+          ctx.arc(pp.x, pp.y, pp.size, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // Fireworks when match is over
+      if (matchState.matchOver) {
+        drawFireworks(ctx, particles, this.frameTime, cosmeticLead);
+        d.fireworks = true;
+      }
+
+      // Day/night cycle overlay (only if theme has it enabled)
+      if (!slow && this.theme.dayNight.enabled && matchState.dayPhase !== undefined) {
+        drawDayNightCycle(ctx, matchState.dayPhase, matchState, this.theme, this.frameTime);
+        d.dayNight = true;
+      }
+
+      ctx.restore();
+
+      // Overlay layer: HUD, countdown, connection quality, debug overlays, screen flash.
+      // When hudCtx is set, these go on a dedicated canvas above fg, redrawn only when
+      // state changes (saving a per-frame blit). Otherwise fall back to drawing on fg.
+      // Lobby mode replaces the match HUD entirely with a caller-supplied draw fn.
+      if (this._lobbyOverlayFn) {
+        this._renderLobbyOverlay(matchState);
+      } else {
+        const hudDirty = isHudDirty(matchState);
+        if (this.hudCtx) {
+          this._renderOverlayLayer(matchState, arena, hudDirty);
+        } else {
+          this._drawOverlayContent(this.fgCtx, matchState, arena, hudDirty);
+        }
+      }
+    });
   }
 
   /**
@@ -825,10 +951,11 @@ export class Renderer {
     const hasAnimations = !!(matchState.scoreAnimations && matchState.scoreAnimations.length > 0);
     const hasNavDebug = debugFlags.navDebugEnabled;
     const hasNetDebug = debugFlags.netDebugEnabled && !!this._netDebugStats;
-    const hasOverlayContent = hasCountdown || hasFlash || hasAnimations || hasNavDebug || hasNetDebug;
+    const hasFps = debugFlags.fpsEnabled;
+    const hasOverlayContent = hasCountdown || hasFlash || hasAnimations || hasNavDebug || hasNetDebug || hasFps;
 
-    const rttRounded = this._isNetworkGuest ? Math.round(this._netRtt) : -1;
-    const jitterRounded = this._isNetworkGuest ? Math.round(this._netJitter) : -1;
+    const rttRounded = this._isNetworkMatch ? Math.round(this._netRtt) : -1;
+    const jitterRounded = this._isNetworkMatch ? Math.round(this._netJitter) : -1;
     const qualityChanged = rttRounded !== this._overlayLastRtt || jitterRounded !== this._overlayLastJitter;
 
     // Redraw if: cache dirty, transient content active, content just ended (clear residue), or quality indicator changed.
@@ -853,7 +980,7 @@ export class Renderer {
 
     drawHUD(ctx, matchState, this.frameTime, this._playerNames, this._timeLimit, hudDirty);
 
-    if (this._isNetworkGuest) {
+    if (this._isNetworkMatch) {
       drawConnectionQuality(ctx, this._netRtt, this._netJitter, CANVAS_WIDTH);
     }
 
@@ -865,6 +992,10 @@ export class Renderer {
     if (debugFlags.netDebugEnabled && this._netDebugStats) {
       drawNetDebugOverlay(ctx, this._netDebugStats, CANVAS_WIDTH);
       d.netDebug = true;
+    }
+
+    if (debugFlags.fpsEnabled) {
+      drawFpsCounter(ctx, CANVAS_WIDTH);
     }
 
     if (matchState.screenFlash > 0) {

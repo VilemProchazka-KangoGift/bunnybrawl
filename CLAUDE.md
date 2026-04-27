@@ -106,6 +106,35 @@ src/
         hazardFactories.ts # createThornRenderer, createSpringRenderer
         index.ts      # Barrel export
       utils.ts      # Shared utilities (randRange, pickWeighted, swapRemove, getFloatingPlatforms)
+    input/        # Unified PlayerInput abstraction (Phase 2 of headless refactor)
+      PlayerInput.ts   # Interface: { slot, getAction(state) -> InputState, dispose? }
+      KeyboardManager.ts # Owns window listeners + per-slot pressed-key state (5 slots)
+      KeyboardInput.ts # PlayerInput backed by a slot's KEY_BINDINGS
+      RuleBasedBot.ts  # PlayerInput wrapping AIController; setArena() on switchArena
+      RemoteInput.ts   # PlayerInput backed by ReadonlyMap<slot, InputState> buffer (host netcode)
+      RandomInput.ts   # Synthetic PlayerInput with seeded RNG + tunable jump/move/down probs
+      index.ts         # Barrel export
+    simulator/    # Pure simulation core — Node-safe, no browser/audio imports
+      Simulator.ts     # Owns: state, settings, arena, RNG, AI controllers, PlayerInputs,
+                       # all 7 gameplay systems. Side effects (audio, phase, match-end,
+                       # particles, haptics) routed through SimulatorEvents/ParticleEmitter
+                       # interfaces — no direct audio.* or browser API calls.
+      types.ts         # SimulatorEvents (10 callbacks), SimulatorOptions, ParticleEmitter,
+                       # TouchInputProvider interfaces
+      index.ts         # Barrel export
+    headless/     # Headless ML-driven simulation runner (Phase 4)
+      HeadlessRunner.ts # Drives Simulator until matchOver/maxTicks. Optional recording:
+                        # observation snapshot + action capture + reward shaper per slot.
+      observation.ts    # extractObservation(state, slot, arena, settings, out): writes 98-float
+                        # egocentric Float32Array. wrapDx for horizontal arena wrap.
+      reward.ts         # RewardShaper class with tunable RewardWeights (kill/carrot/death/
+                        # win/loss/survival/airborne shaping). Per-slot stateful.
+      policy.ts         # BatchedPolicy interface (one forward pass per tick fills all slots)
+                        # + PolicyBroker orchestrator + PolicyInput per-slot adapter
+      recording.ts      # MatchRecorder interface; InMemoryRecorder + NDJSONFileRecorder
+                        # (line-delimited JSON via node:fs, multi-million-sample friendly)
+      types.ts          # MatchResult, HeadlessRunnerConfig, RecordingConfig
+      index.ts          # Barrel export
     net/          # Host-authoritative network multiplayer (WebRTC via Trystero MQTT)
       core/             # Generic netcode core (zero game imports — reusable library foundation)
         types.ts          # Generic interfaces: Simulation, SnapshotCodec, InterpolationConfig, InputCodec
@@ -167,6 +196,9 @@ src/
 - **Host-authoritative network multiplayer** — WebRTC DataChannels via Trystero (serverless MQTT signaling). Host runs full simulation and broadcasts binary snapshots every tick. Guests interpolate between snapshots and send inputs to host. No determinism requirements — host is the single source of truth. 2-player MVP, bots run on host only.
 - **cosmeticStep architecture** — Both host and guest call `gameLoop.cosmeticStep(dt)` for all SFX, particles, VFX. Host calls after `fixedUpdate()`, guest calls after `applySnapshotToState()`. Transition detection via prev-state comparison. No separate GuestSFX module.
 - **Mobile support** — `?mobile` URL param forces mobile mode. `isTouchPrimary()` detects coarse-pointer devices. `.is-mobile` CSS class on `<html>` for platform-conditional styles. Touch controls via `TouchInputManager` (same `InputState` interface as keyboard/AI). Haptic feedback via Vibration API.
+- **Hexagonal Simulator extraction (Solution C)** — `Simulator` (in `src/engine/simulator/`) is the pure simulation core: owns MatchState, RNG, AIControllers, PlayerInputs map, all 7 gameplay systems. Zero browser/DOM/audio imports — verified by `regression-no-browser-apis.test.ts`. Side effects flow through `SimulatorEvents` (audio request callbacks: sfx, music start/stop, all-sounds-stop, phase change, match end, player landing for haptics) and `ParticleEmitter` interface. `GameLoop` becomes a browser adapter: owns Renderer, RAF loop, KeyboardManager, TouchInputManager, ParticleSystem + 4 cosmetic systems; constructs Simulator and subscribes to events. Public GameLoop API is preserved (Match.tsx / NetMatch unchanged); methods delegate to `simulator.*`.
+- **PlayerInput abstraction (Phase 2)** — All input sources (keyboard, rule-based AI, network remote, ML policy, synthetic random) implement the `PlayerInput` interface (`{ slot, getAction(state) → InputState }`). `Simulator` holds `Map<PlayerSlot, PlayerInput>`. The browser-side touch and host-side network input overrides remain explicit special cases inside Simulator's per-player loop because they depend on per-tick state (touchInput airborne flag, network input buffer freshness).
+- **Headless ML pipeline** — `HeadlessRunner` composes `Simulator` + per-slot `PlayerInput`s for Node self-play. Observation extraction (`extractObservation(state, slot, arena, settings, out)`) writes 98-float egocentric `Float32Array`s into caller-provided buffers (zero per-tick alloc). Recording: observations + captured actions + reward-shaper outputs persisted via `InMemoryRecorder` (tests) or `NDJSONFileRecorder` (training data). `BatchedPolicy` interface enables one neural-net forward pass per tick across all slots; `PolicyBroker` extracts observations into a flat batch and distributes actions via per-slot `PolicyInput` adapters. Wire-format spec: `docs/headless-recording-format.md`. Run `npx vite-node scripts/selfPlay.ts` for the example pipeline.
 
 ## Build & Run
 
@@ -176,12 +208,13 @@ npm run build     # Production build (tsc + vite)
 npm test          # Unit/integration tests (~2000 tests, Vitest)
 npm run test:e2e  # E2E tests (~120 tests, Playwright, builds first)
 npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/physics changes)
+npx vite-node scripts/selfPlay.ts -- --episodes 5 --arena meadow --out data/run.ndjson  # Headless self-play data generation (see docs/headless-recording-format.md for format + CLI flags)
 # Dev shortcut — skip lobby:
-# http://localhost:5173/carrot-royale/?arena=rooftops&bots=2&difficulty=hard
+# http://localhost:5173/bunnybrawl/?arena=rooftops&bots=2&difficulty=hard
 # Nav debug overlay:
-# http://localhost:5173/carrot-royale/?arena=meadow&bots=2&debug=nav (toggle with ` key)
+# http://localhost:5173/bunnybrawl/?arena=meadow&bots=2&debug=nav (toggle with ` key)
 # Mobile testing (forces touch mode in desktop browser):
-# http://localhost:5173/carrot-royale/?mobile&arena=meadow&bots=2
+# http://localhost:5173/bunnybrawl/?mobile&arena=meadow&bots=2
 ```
 
 ## Testing
@@ -189,7 +222,7 @@ npx vite-node scripts/generateNavData.ts  # Regenerate AI nav data (after arena/
 - Tests force `i18n.changeLanguage('en')` so string assertions work regardless of default language.
 - When adding new Player fields, update `makePlayer()` in `src/engine/__tests__/testHelpers.ts` and mock players in `VictoryScreen.test.tsx`.
 - The lobby walk-to-zone E2E test is inherently flaky (random NPC placement). Tagged `@flaky`, uses retries.
-- `MainMenu.test.tsx` and `VictoryScreen.test.tsx` have a known pre-existing failure (logo.png import denied by Vite test transform).
+- `MainMenu.test.tsx`, `VictoryScreen.test.tsx`, and `switchArena.test.ts > respawns players at new arena spawn points` have known pre-existing failures (logo.png import denied by Vite test transform; switchArena spawn-point assertion is flaky against current spawn-resolution logic).
 - **GameLoop tests** require mocking `audio`, `renderer`, `howler`, and `HTMLCanvasElement.prototype.getContext`. See `gameLoop.test.ts` top for the full mock block. Always call `loop.stop()` in `afterEach` to prevent keydown listener leaks.
 - **Audio tests** — the `AudioManager` singleton creates a `menuMusicHowl` at field init time (before tests run), so the `Howl` mock must be a real constructor function (not arrow), and tracking instances requires `globalThis` (vi.mock factories run before `const` declarations).
 - **Registry tests** — character/arena registries use module-scoped Maps with no `clear()`. Use unique pack names per test to avoid collisions. Count-based assertions should use `toBeGreaterThanOrEqual`, not exact counts.
@@ -214,14 +247,15 @@ Each character is a single file in `src/engine/characters/packs/` exporting a `C
 1. Create `packs/newAnimal.ts` — copy an existing pack (e.g. `bunny.ts`). Provide:
    - `drawSprite: CharacterRenderer` — pure function, sprite-cached. Receives `(ctx, cx, yOff, w, h, state, animFrame, isIdleAnim, idleT, colors)`.
    - `drawGib: GibRenderer` — draws ear/tail/horn gibs. ctx already translated+rotated.
-   - Data: `name`, `color/darkColor/lightColor`, `emoji`, `customEyes`, `idleTransform`, `splatShape`, `gibs[]`
+   - Data: `name`, `color/darkColor/lightColor`, `emoji`, `customEyes`, `splatShape`, `gibs[]`
+   - Optional: `idleActions: { weights?: { stretch?: 0, ... }, custom?: [...] }` — override per-action weights (0 disables) or add signature actions. Defaults to all 6 shared actions weighted 1.0 if omitted.
    - `translations: { en: 'Name', cs: 'Jméno' }`
 2. Import and add to `BUILTINS` array in `characters/builtin.ts`
 3. Add `createSound` field — returns `new Howl(...)`. Use `generateToneBuffer()` or `generateMultiSegmentTone()` from `audio/synthesis/core`, or custom synthesis with `floatBufferToWavDataUri()` from `audio/synthesis/wav`. Add the character name to `SoundName` union in `audio/types.ts`.
 
 **Rendering contract:**
 - `customEyes: true` = renderer draws its own eyes; `false` = generic dots drawn after sprite.
-- `idleTransform`: `'none'` | `'headTilt'` | `'headFlip'` | `'headBob'`
+- Idle actions are picked randomly from a per-pack pool (default: all 6 shared actions in `rendering/idleActions.ts`). The pack's `drawSprite` receives `isIdleAnim` (boolean) and `idleT ∈ [0, 1]` (action progress) for in-sprite tweaks like ear-twitch / tail-wag. Note: `idleT` flows through the sprite cache, so the in-sprite tweak only sees a 1-bit on/off (idleT ranges over the action duration but the cache key is binary). Big animated transforms belong in shared idle actions, not in `drawSprite`.
 - Generic legs, motion lines, fast-fall lines, bubble helmet drawn AFTER `drawSprite` — don't draw in pack.
 - `bodyEllipse` must match the ellipse in `fillBodyGradient`. `noHighlight: true` skips white overlay.
 - Sheep uses `fillBodyGradientCircle` (6 overlapping circles, not ellipse).
@@ -336,8 +370,10 @@ Largest files to be aware of when context is limited:
 - `gameLoop/GameLoop.ts` ~780 lines + `gameplay/` and `cosmetics/` systems ~2000 lines total (`initialState.ts` ~175)
 - `themes/drawPrimitives/` ~990 lines across 4 files (winter.ts ~540 is largest)
 - `lobbyGame.ts` ~330 + `lobbyRender.ts` ~390 + `lobbyConstants.ts` ~45 + `lobbyBots.ts` ~45
-- `OnlineModal.tsx` ~320 (UI) + `useOnlineRoom.ts` ~490 (network) — `CharacterSelect.tsx` ~160 (lobby logic moved to engine/)
+- `Match.tsx` ~600 (canvas mount + online/local lifecycle + pause/reconnect overlays)
+- `OnlineModal.tsx` ~365 (UI) + `useOnlineRoom.ts` ~515 (network) — `CharacterSelect.tsx` ~160 (lobby logic moved to engine/)
 - `audio/` directory total ~1050 lines (split: AudioManager ~140, MusicManager ~90, soundRegistry ~80, synthesis/ ~700) — `VictoryScreen.css` ~520 lines
 - Arena pack files ~200-800 lines each (11 arenas in `arenas/packs/`)
 - AI: `utility.ts` ~450, `awareness.ts` ~370
-- Net: `snapshot.ts` ~575, `netMatch.ts` ~370, `transport.ts` ~350, `interpolation.ts` ~260
+- Net: `snapshot.ts` ~575, `netMatch.ts` ~770, `transport.ts` ~500, `interpolation.ts` ~350
+- Hooks: `useTransientBanner.ts` ~30, `useDelayedFlag.ts` ~15

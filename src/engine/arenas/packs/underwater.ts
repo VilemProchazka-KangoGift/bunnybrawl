@@ -722,28 +722,25 @@ export const underwater: ArenaPack = {
   },
 
   drawWeatherParticle: (ctx, w) => {
-    ctx.save();
-    ctx.translate(w.x, w.y);
+    // No rotation was applied before — bubble + plankton are circles.
+    // Draw at world coords; the bubble highlight's fixed-offset position
+    // is identical to the previous translate(w.x,w.y) + arc(-0.3s,-0.3s).
     if (w.type === 'bubble') {
-      // Bubble
       ctx.strokeStyle = 'rgba(180, 220, 255, 0.5)';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.arc(0, 0, w.size, 0, Math.PI * 2);
+      ctx.arc(w.x, w.y, w.size, 0, Math.PI * 2);
       ctx.stroke();
-      // Highlight
       ctx.fillStyle = 'rgba(220, 240, 255, 0.3)';
       ctx.beginPath();
-      ctx.arc(-w.size * 0.3, -w.size * 0.3, w.size * 0.3, 0, Math.PI * 2);
+      ctx.arc(w.x - w.size * 0.3, w.y - w.size * 0.3, w.size * 0.3, 0, Math.PI * 2);
       ctx.fill();
     } else {
-      // Floating debris/plankton
       ctx.fillStyle = 'rgba(100, 180, 140, 0.3)';
       ctx.beginPath();
-      ctx.arc(0, 0, w.size * 0.5, 0, Math.PI * 2);
+      ctx.arc(w.x, w.y, w.size * 0.5, 0, Math.PI * 2);
       ctx.fill();
     }
-    ctx.restore();
   },
 
   // ---- Gameplay modifiers ----

@@ -8,11 +8,9 @@
 
 // Generic interfaces
 export type {
-  Simulation,
   SnapshotCodec,
   InterpolationConfig,
   InputCodec,
-  TransportConfig,
 } from './types';
 
 // Network simulator (latency/jitter/loss injection)
@@ -35,11 +33,11 @@ export { SnapshotInterpolation } from './interpolation';
 export type { InterpolationResult } from './interpolation';
 
 // Host authority (generic input buffering + snapshot broadcast)
-export { GenericHostAuthority } from './hostAuthority';
+export { GenericHostAuthority, generateReclaimToken } from './hostAuthority';
 export type { HostTransport, HostDebugStats } from './hostAuthority';
 
 // Config types
-export type { HostAuthorityConfig, OrchestratorConfig } from './types';
+export type { HostAuthorityConfig } from './types';
 
 // Debug overlay
 export { drawNetDebugOverlay } from './debugOverlay';

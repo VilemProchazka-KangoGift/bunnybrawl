@@ -1,5 +1,5 @@
-// Pure constructors for GameLoop initial state.
-// Extracted from GameLoop constructor to keep the class focused on wiring systems together.
+// Pure constructors for Simulator initial state.
+// Used by Simulator's constructor and switchArena to (re)create MatchState.
 
 import type {
   Arena, MatchSettings, MatchState, Player, PlayerSlot, PlayerStats, MatchStats,
@@ -7,8 +7,8 @@ import type {
 } from '../types';
 import type { ThemeConfig } from '../themes/types';
 import { getCharacterForSlot } from '../characters';
-import { createWeatherParticle } from './cosmetics/environment';
-import { randRange, pickWeighted } from '../themes/utils';
+import { createWeatherParticle } from '../gameLoop/cosmetics/environment';
+import { randRange, pickWeighted, shuffleInPlace } from '../themes/utils';
 import {
   PLAYER_WIDTH, PLAYER_HEIGHT, GIANT_SCALE,
   CARROT_FIRST_SPAWN_DELAY, CARROT_CHASE_FIRST_SPAWN_DELAY,
@@ -48,26 +48,38 @@ export function computeEffectivePhysics(theme: ThemeConfig, mods: MatchSettings[
 }
 
 /** Build the initial player array for a match. */
-export function createInitialPlayers(activePlayers: PlayerSlot[], arena: Arena, giantPlayers: boolean): Player[] {
+export function createInitialPlayers(
+  activePlayers: PlayerSlot[],
+  arena: Arena,
+  giantPlayers: boolean,
+  gameRandom: () => number,
+): Player[] {
   const pw = giantPlayers ? PLAYER_WIDTH * GIANT_SCALE : PLAYER_WIDTH;
   const ph = giantPlayers ? PLAYER_HEIGHT * GIANT_SCALE : PLAYER_HEIGHT;
 
-  return activePlayers.map((slot, index) => ({
+  const shuffledSpawns = [...arena.spawnPoints];
+  shuffleInPlace(shuffledSpawns, gameRandom);
+
+  return activePlayers.map((slot, index) => {
+    const sp = shuffledSpawns[index % shuffledSpawns.length];
+    return ({
     id: slot,
     character: getCharacterForSlot(slot),
-    x: arena.spawnPoints[index % arena.spawnPoints.length].x - pw / 2,
-    y: arena.spawnPoints[index % arena.spawnPoints.length].y - ph,
+    x: sp.x - pw / 2,
+    y: sp.y - ph,
     vx: 0, vy: 0,
     width: pw, height: ph,
     state: 'idle' as const, facing: 'right' as const,
     splatTimer: 0, respawnTimer: 0, invincibleTimer: 0,
     score: 0, active: true, animFrame: 0, animTimer: 0,
     fastFalling: false, fatTimer: 0, slowTimer: 0,
-    squashScale: 1, squashTimer: 0, sideSquash: 1, afterimages: [], idleAnimTimer: 0,
+    squashScale: 1, squashTimer: 0, sideSquash: 1, afterimages: [],
+    idleAction: -1, idleActionTimer: 0, idleActionDuration: 0,
     expression: 'normal' as const, killStreak: 0,
     breathTimer: 0, springTrailTimer: 0, damageFlashSide: null, damageFlashTimer: 0, burnTimer: 0, hitstopTimer: 0,
     renderOffsetX: 0, renderOffsetY: 0, disconnected: false,
-  }));
+    });
+  });
 }
 
 /**
@@ -79,7 +91,9 @@ export function createInitialPlayers(activePlayers: PlayerSlot[], arena: Arena, 
 export function createEmptyMatchState(): MatchState {
   return {
     players: [],
+    phase: 'loading',
     killFeed: [],
+    totalKills: 0,
     timeElapsed: 0, matchOver: false, winner: null,
     carrots: [], carrotTimer: 0,
     springs: [], thorns: [],

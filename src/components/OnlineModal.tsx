@@ -1,7 +1,7 @@
 // Online multiplayer lobby modal — host/join room, character select, ready-up.
 // Network/protocol logic lives in useOnlineRoom; this file is UI only.
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../store/gameStore';
 import { audio } from '../engine/audio';
@@ -10,8 +10,23 @@ import { MobileTextInput } from './MobileTextInput';
 import { getAllCharacters, getCharacterEmoji, getCharacterDisplayName } from '../engine/characters';
 import { ALL_BOT_SLOTS } from '../engine/types';
 import { useOnlineRoom } from './useOnlineRoom';
+import { ROOM_CODE_LENGTH } from '../engine/net/transport';
 
-export { getModalTransport } from './useOnlineRoom';
+type ConnectingStage = 'initial' | 'searching' | 'check' | 'slow';
+const CONNECTING_STAGE_KEYS: Record<ConnectingStage, string> = {
+  initial: 'connecting_server',
+  searching: 'connecting_searching',
+  check: 'connecting_check_code',
+  slow: 'connecting_slow',
+};
+const CONNECTING_STAGE_TIMINGS: Array<{ at: number; key: ConnectingStage }> = [
+  { at: 3000,  key: 'searching' },
+  { at: 8000,  key: 'check' },
+  { at: 15000, key: 'slow' },
+];
+
+import { PLAYER_NAME_MAX_LENGTH } from './useOnlineRoom';
+export { getModalTransport, clearModalTransport, clearReclaimTokens, tearDownOnlineSession, getHostReclaimTokens, getGuestOwnReclaimToken, resolveRandomArena } from './useOnlineRoom';
 
 interface OnlineModalProps {
   onClose: () => void;
@@ -28,12 +43,23 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
     localReady, markLocalReady,
     remoteReady,
     connect, cleanup, startMatchAsHost,
+    autoSwitchNotice,
   } = useOnlineRoom({ onMatchStart: onClose });
 
   const [joinMode, setJoinMode] = useState(false);
   const [joinCode, setJoinCode] = useState('');
   const [mobileNameOpen, setMobileNameOpen] = useState(false);
   const [mobileCodeOpen, setMobileCodeOpen] = useState(false);
+
+  // Guest-only staged messaging: MQTT → signaling → WebRTC can take 10-20s
+  // on cold start. Staged copy reassures the user that work is happening.
+  const [connectingStage, setConnectingStage] = useState<ConnectingStage>('initial');
+  useEffect(() => {
+    setConnectingStage('initial');
+    if (step !== 'connecting' || online.isHost) return;
+    const timers = CONNECTING_STAGE_TIMINGS.map(s => setTimeout(() => setConnectingStage(s.key), s.at));
+    return () => timers.forEach(clearTimeout);
+  }, [step, online.isHost]);
 
   const allChars = getAllCharacters();
 
@@ -42,6 +68,20 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
       <div className="mods-overlay" onClick={() => { if (step === 'choose') { onClose(); setJoinMode(false); } }}>
         <div className="mods-modal online-modal" onClick={e => e.stopPropagation()}>
           <h2 className="mods-title">{t('online_play', 'Online Play')}</h2>
+
+          {autoSwitchNotice && (
+            <div
+              className="online-auto-switch-notice"
+              data-testid="online-auto-switch-notice"
+              role="status"
+              aria-live="polite"
+            >
+              {t('char_auto_switched', '{{prev}} was taken — you\'re {{next}}', {
+                prev: getCharacterDisplayName(autoSwitchNotice.prev, i18n.language),
+                next: getCharacterDisplayName(autoSwitchNotice.next, i18n.language),
+              })}
+            </div>
+          )}
 
           {/* Step 1: Choose create or join */}
           {step === 'choose' && !joinMode && (
@@ -54,10 +94,10 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
                     {playerName || t('tap_to_enter_name', 'Tap to enter name...')}
                   </button>
                 ) : (
-                  <input className="online-code-input online-name-input" data-testid="online-name-input" type="text" maxLength={16}
+                  <input className="online-code-input online-name-input" data-testid="online-name-input" type="text" maxLength={PLAYER_NAME_MAX_LENGTH}
                     value={playerName} autoFocus
                     onChange={(e) => {
-                      const v = e.target.value.replace(/[\p{C}]/gu, '').slice(0, 16);
+                      const v = e.target.value.replace(/[\p{C}]/gu, '').slice(0, PLAYER_NAME_MAX_LENGTH);
                       setPlayerName(v);
                     }}
                     onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
@@ -102,13 +142,13 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
                   {joinCode || t('code_placeholder', 'Code')}
                 </button>
               ) : (
-                <input className="online-code-input" data-testid="online-code-input" type="text" maxLength={3} placeholder={t('code_placeholder', 'Code')}
+                <input className="online-code-input" data-testid="online-code-input" type="text" maxLength={ROOM_CODE_LENGTH} placeholder={t('code_placeholder', 'Code')}
                   value={joinCode} autoFocus
                   onChange={(e) => setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z2-9]/g, ''))}
-                  onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') { (e.target as HTMLInputElement).blur(); if (joinCode.length >= 3) { audio.play('select'); audio.init(); connect(false, joinCode); } } }}
+                  onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') { (e.target as HTMLInputElement).blur(); if (joinCode.length >= ROOM_CODE_LENGTH) { audio.play('select'); audio.init(); connect(false, joinCode); } } }}
                 />
               )}
-              <button className={`btn-base menu-btn online-create-btn${joinCode.length >= 3 ? ' play-btn' : ''}`} data-testid="online-join-submit" disabled={joinCode.length < 3}
+              <button className={`btn-base menu-btn online-create-btn${joinCode.length >= ROOM_CODE_LENGTH ? ' play-btn' : ''}`} data-testid="online-join-submit" disabled={joinCode.length < ROOM_CODE_LENGTH}
                 onClick={() => { audio.play('select'); audio.init(); connect(false, joinCode); }}>
                 {t('join_room', 'Join')}
               </button>
@@ -117,7 +157,11 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
           )}
 
           {/* Step 2: Connecting — room code, character select, waiting */}
-          {step === 'connecting' && (
+          {step === 'connecting' && (() => {
+            const errorBlock = online.connectionStatus === 'error' && (
+              <span className="online-error">{online.connectionError || t('connection_error', 'Connection failed')}</span>
+            );
+            return (
             <div className="online-step">
               {online.roomCode && (
                 <div className="online-room-code">
@@ -142,9 +186,7 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
                     <div className="online-status-box">
                       {!online.roomCode && online.connectionStatus !== 'error' && t('connecting_server', 'Connecting to server...')}
                       {online.roomCode && t('waiting_players', 'Waiting for players to join...')}
-                      {online.connectionStatus === 'error' && (
-                        <span className="online-error">{online.connectionError || t('connection_error', 'Connection failed')}</span>
-                      )}
+                      {errorBlock}
                     </div>
                     <button className="btn-base mods-close-btn" onClick={() => { cleanup(); setStep('choose'); }}>
                       {t('back', 'Back')}
@@ -165,10 +207,8 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
               ) : (
                 <>
                   <div className="online-status-box">
-                    {!online.roomCode && online.connectionStatus !== 'error' && t('connecting_server', 'Connecting to server...')}
-                    {online.connectionStatus === 'error' && (
-                      <span className="online-error">{online.connectionError || t('connection_error', 'Connection failed')}</span>
-                    )}
+                    {online.connectionStatus !== 'error' && t(CONNECTING_STAGE_KEYS[connectingStage], { code: joinCode })}
+                    {errorBlock}
                   </div>
                   <button className="btn-base mods-close-btn" onClick={() => { cleanup(); setStep('choose'); }}>
                     {t('back', 'Back')}
@@ -176,7 +216,8 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
                 </>
               )}
             </div>
-          )}
+            );
+          })()}
 
           {/* Step 3: Lobby — both connected */}
           {step === 'lobby' && (
@@ -216,7 +257,13 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
                     <div className="online-ready-status"><span className="online-ready-badge">{t('ready', 'READY')}</span></div>
                   )}
 
-                  {/* Host: start button */}
+                  {/* Host: "waiting to ready up" hint + Start button. Host
+                      can still force-start; the hint just explains the wait. */}
+                  {online.isHost && online.remotePlayers.length > 0 && !online.remotePlayers.some(rp => rp.ready) && (
+                    <div className="online-status-box online-status-box--ready-hint" data-testid="waiting-ready-hint">
+                      {t('waiting_ready', 'Waiting for opponent to ready up...')}
+                    </div>
+                  )}
                   {online.isHost && (
                     <button className="btn-base menu-btn play-btn" data-testid="online-start-btn" onClick={() => {
                       audio.play('select');
@@ -281,9 +328,9 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
           {/* Step 4: Spectating — joined while match in progress */}
           {step === 'spectating' && (
             <div className="online-step">
-              <div className="online-status-box" style={{ textAlign: 'center', padding: '24px 0' }}>
-                <p style={{ fontSize: '18px', marginBottom: 8 }}>{t('match_in_progress', 'Match in progress')}</p>
-                <p style={{ opacity: 0.7 }}>{t('spectating_hint', "You'll join when the current match ends.")}</p>
+              <div className="online-status-box online-status-box--spectating">
+                <p className="online-spectating-title">{t('match_in_progress', 'Match in progress')}</p>
+                <p className="online-spectating-hint">{t('spectating_hint', "You'll join when the current match ends.")}</p>
               </div>
               <button className="btn-base mods-close-btn" onClick={cleanup}>{t('back', 'Back')}</button>
             </div>
@@ -293,7 +340,7 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
       {mobileNameOpen && (
         <MobileTextInput
           value={playerName}
-          maxLength={16}
+          maxLength={PLAYER_NAME_MAX_LENGTH}
           label={t('your_name', 'Your name')}
           onConfirm={(v) => {
             setPlayerName(v);
@@ -305,13 +352,13 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
       {mobileCodeOpen && (
         <MobileTextInput
           value={joinCode}
-          maxLength={3}
+          maxLength={ROOM_CODE_LENGTH}
           label={t('enter_room_code', 'Enter the room code')}
           onConfirm={(v) => {
-            const code = v.toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, 3);
+            const code = v.toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, ROOM_CODE_LENGTH);
             setJoinCode(code);
             setMobileCodeOpen(false);
-            if (code.length >= 3) { audio.play('select'); audio.init(); connect(false, code); }
+            if (code.length >= ROOM_CODE_LENGTH) { audio.play('select'); audio.init(); connect(false, code); }
           }}
           onCancel={() => setMobileCodeOpen(false)}
         />

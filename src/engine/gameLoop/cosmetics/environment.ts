@@ -73,8 +73,10 @@ export function updatePollen(state: MatchState, dt: number): void {
 }
 
 export function updateShootingStars(state: MatchState, theme: ThemeConfig, dt: number): void {
-  // Spawn new shooting stars (night phase)
-  if (theme.dayNight.showShootingStars && state.dayPhase > 0.4 && Math.random() < 0.005) {
+  // Spawn rate ~0.3/sec at night. dt-scaled so half-rate cosmetic doesn't
+  // halve the rate (was Math.random() < 0.005, baked for 60Hz tick — became
+  // ~0.15/sec when cosmeticStep moved to 30Hz).
+  if (theme.dayNight.showShootingStars && state.dayPhase > 0.4 && Math.random() < 0.3 * dt) {
     const svx = 300 + Math.random() * 200;
     const svy = 50 + Math.random() * 50;
     state.shootingStars.push({

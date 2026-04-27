@@ -5,8 +5,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGameStore, type RemotePlayerInfo } from '../store/gameStore';
+import { useTransientBanner } from '../hooks/useTransientBanner';
 import { Transport } from '../engine/net/transport';
 import type { ConnectionStatus } from '../engine/net/transport';
+import { generateReclaimToken } from '../engine/net/core';
 import { MsgType, PROTOCOL_VERSION } from '../engine/net/protocol';
 import type {
   ReliableMessage, HandshakeMessage, SlotAssignmentMessage,
@@ -18,9 +20,16 @@ import {
 import { ALL_BOT_SLOTS, isBotSlot } from '../engine/types';
 import { listPlayableArenaPacks } from '../engine/arenas';
 import type { BotSlot, CharacterSlot, PlayerSlot } from '../engine/types';
+import { PLAYER_NAME_MAX_LENGTH } from '../engine/rendering/hud';
+export { PLAYER_NAME_MAX_LENGTH };
 
-/** Resolve 'random' arenaId to a concrete ID so both peers use the same arena. */
-function resolveRandomArena(arenaId: string): string {
+/** Resolve 'random' arenaId to a concrete ID so both peers use the same arena.
+ *  CRITICAL: must be called once on the host before sending SETTINGS_SYNC, then
+ *  the concrete arena ID is persisted to the store and broadcast. If 'random'
+ *  reaches the wire and each peer resolves independently, host and guest pick
+ *  DIFFERENT arenas and desync (players appear to clip / float on platforms
+ *  the other side doesn't have). */
+export function resolveRandomArena(arenaId: string): string {
   if (arenaId !== 'random') return arenaId;
   const all = listPlayableArenaPacks();
   return all[Math.floor(Math.random() * all.length)]?.id ?? 'meadow';
@@ -30,6 +39,40 @@ function resolveRandomArena(arenaId: string): string {
 // once the match starts. Assigned by connect, cleared by cleanup.
 let _modalTransport: Transport | null = null;
 export function getModalTransport(): Transport | null { return _modalTransport; }
+/** Null the module-scope transport ref. Call this anywhere a transport is
+ *  destroyed outside of useOnlineRoom.cleanup() — Match.handleQuit and
+ *  VictoryScreen.handleMenu both destroy the transport but used to leave a
+ *  stale reference behind, exposing a window where getModalTransport()
+ *  returned a destroyed instance. */
+export function clearModalTransport(): void { _modalTransport = null; }
+
+// Reclaim tokens issued by the host in lobby SLOT_ASSIGNMENT. Picked up by
+// Match.tsx when starting NetMatch. Host: full Map<slot, token>. Guest:
+// only its own token.
+let _hostReclaimTokens: Map<PlayerSlot, string> = new Map();
+let _guestOwnReclaimToken: string | null = null;
+export function getHostReclaimTokens(): Map<PlayerSlot, string> {
+  return _hostReclaimTokens;
+}
+export function getGuestOwnReclaimToken(): string | null { return _guestOwnReclaimToken; }
+export function clearReclaimTokens(): void {
+  _hostReclaimTokens = new Map();
+  _guestOwnReclaimToken = null;
+}
+
+/** One-shot teardown of the online session: destroys the active transport,
+ *  drops the module-scope transport ref, and clears any lobby-issued reclaim
+ *  tokens. Used by every "go back to menu" path (handleQuit, handleMenu, peer
+ *  disconnect during VictoryScreen) so each site doesn't reimplement the
+ *  same three-step cleanup and miss a step. */
+export function tearDownOnlineSession(): void {
+  const transport = _modalTransport;
+  if (transport) {
+    transport.destroy();
+    _modalTransport = null;
+  }
+  clearReclaimTokens();
+}
 
 export type OnlineStep = 'choose' | 'connecting' | 'lobby' | 'spectating';
 
@@ -50,6 +93,7 @@ export interface UseOnlineRoomResult {
   connect: (isHost: boolean, joinCode?: string) => void;
   cleanup: () => void;
   startMatchAsHost: () => void;
+  autoSwitchNotice: { prev: string; next: string } | null;
 }
 
 type RosterEntry = { slot: PlayerSlot; characterName: string; playerName?: string };
@@ -73,7 +117,7 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
   const localCharRef = useRef(CHARACTERS.P1.name);
   localCharRef.current = localChar;
   const [playerName, setPlayerNameState] = useState(() =>
-    localStorage.getItem('carrotroyale_player_name') || ''
+    (localStorage.getItem('carrotroyale_player_name') || '').slice(0, PLAYER_NAME_MAX_LENGTH)
   );
   const playerNameRef = useRef('');
   playerNameRef.current = playerName;
@@ -87,14 +131,17 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
   const allChars = getAllCharacters();
 
   const setPlayerName = useCallback((name: string) => {
-    setPlayerNameState(name);
-    playerNameRef.current = name;
-    try { localStorage.setItem('carrotroyale_player_name', name); } catch {}
+    const clamped = name.slice(0, PLAYER_NAME_MAX_LENGTH);
+    setPlayerNameState(clamped);
+    playerNameRef.current = clamped;
+    try { localStorage.setItem('carrotroyale_player_name', clamped); } catch {}
   }, []);
 
   // Guest-only one-shot: if local character conflicts with a remote player, pick an alt.
   // Host never auto-switches (authoritative).
   const didAutoSwitch = useRef(false);
+  const [autoSwitchNotice, flashAutoSwitchNotice] =
+    useTransientBanner<{ prev: string; next: string }>();
   useEffect(() => {
     if (online.isHost) return;
     const takenNames = new Set<string>();
@@ -106,10 +153,15 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
 
     const alt = allChars.find(c => !takenNames.has(c.name) && c.name !== localChar);
     if (alt) {
+      const prev = localChar;
       setLocalChar(alt.name);
       localCharRef.current = alt.name;
       transportRef.current?.sendReliable({ type: MsgType.CHARACTER_SELECT, characterName: alt.name });
+      flashAutoSwitchNotice({ prev, next: alt.name }, 4500);
     }
+  // `localChar` / `allChars` / `flashAutoSwitchNotice` are intentionally omitted:
+  // the didAutoSwitch.current guard short-circuits after one fire, so later
+  // changes to those deps can't cause a second switch.
   }, [online.isHost, online.remotePlayers]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const cleanup = useCallback(() => {
@@ -124,7 +176,23 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
     setRemoteReady(false);
     pendingPlayerNames.current.clear();
     didAutoSwitch.current = false;
-  }, [resetOnline]);
+    flashAutoSwitchNotice(null);
+    clearReclaimTokens();
+  }, [resetOnline, flashAutoSwitchNotice]);
+
+  // Guarantee cleanup on hook unmount — guards against future paths that
+  // dismiss the modal without going through Back/Cancel buttons. We must NOT
+  // destroy the transport when match-start triggers the unmount, since
+  // Match.tsx is taking ownership in that case (handoff via _modalTransport).
+  const matchHandedOff = useRef(false);
+  const cleanupRef = useRef(cleanup);
+  cleanupRef.current = cleanup;
+  useEffect(() => {
+    return () => {
+      if (matchHandedOff.current) return;
+      if (transportRef.current) cleanupRef.current();
+    };
+  }, []);
 
   const startMatchAsGuest = useCallback(() => {
     const store = useGameStore.getState();
@@ -185,6 +253,7 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
     }
 
     setOnline({ isOnline: true, localSlot: mySlot, playerNames: names });
+    matchHandedOff.current = true;
     onMatchStart();
     setScreen('match');
   }, [allChars, setActivePlayers, setOnline, setScreen, onMatchStart]);
@@ -248,6 +317,10 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
       transportRef.current = null;
       _modalTransport = null;
     }
+    // Drop any stale tokens from a prior session — defensive in case a
+    // quit/menu path missed clearReclaimTokens(). Without this, a guest
+    // might present an old host's token to the new host.
+    clearReclaimTokens();
     setStep('connecting');
     setOnline({ isHost, isOnline: true, roomCode: null, connectionStatus: 'idle', connectionError: null });
 
@@ -292,12 +365,17 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
         const slot = allocateSlot() as PlayerSlot;
         peerSlotMap.set(peerId, slot);
         const newPeer = { peerId, slot: slot as PlayerSlot, characterName: CHARACTERS.P2.name, playerName: '', ready: false };
+        // Issue this guest's reclaim token. Stored host-side for validation
+        // when they later send RECONNECT_REQUEST. Sent to the guest only —
+        // SLOT_ASSIGNMENT goes via sendReliableTo (per-peer), not broadcast.
+        const reclaimToken = generateReclaimToken();
+        _hostReclaimTokens.set(slot, reclaimToken);
 
         // Match in progress → late joiner becomes spectator
         const currentScreen = useGameStore.getState().screen;
         if (currentScreen === 'match' || currentScreen === 'victory') {
           transport.sendReliableTo(peerId, { type: MsgType.MATCH_IN_PROGRESS, snapshot: null } as ReliableMessage);
-          transport.sendReliableTo(peerId, { type: MsgType.SLOT_ASSIGNMENT, slot, allPlayers: [] } as ReliableMessage);
+          transport.sendReliableTo(peerId, { type: MsgType.SLOT_ASSIGNMENT, slot, reclaimToken, allPlayers: [] } as ReliableMessage);
           setOnline({ remotePlayers: [...currentPlayers, newPeer] });
           return;
         }
@@ -305,6 +383,7 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
         transport.sendReliableTo(peerId, {
           type: MsgType.SLOT_ASSIGNMENT,
           slot,
+          reclaimToken,
           allPlayers: [
             { slot: 'P1', characterName: localCharRef.current, isHost: true, playerName: playerNameRef.current },
             ...currentPlayers.map(rp => ({
@@ -335,6 +414,11 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
       onPeerDisconnected: (peerId: string) => {
         const slot = peerSlotMap.get(peerId);
         peerSlotMap.delete(peerId);
+        pendingPlayerNames.current.delete(peerId);
+        // Drop the slot's reclaim token — when allocateSlot reuses this slot
+        // for a fresh peer, a new token will be issued. This keeps a stale
+        // token from authenticating a different peer's RECONNECT_REQUEST.
+        if (slot) _hostReclaimTokens.delete(slot as PlayerSlot);
         if (isHost) {
           if (slot) freedSlots.push(slot);
           const current = useGameStore.getState().online.remotePlayers;
@@ -357,6 +441,24 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
       onReliableMessage: (msg: ReliableMessage, fromPeerId?: string) => {
         if (msg.type === MsgType.HANDSHAKE) {
           const hsMsg = msg as HandshakeMessage;
+          // Validate protocol version — cross-version builds silently corrupt
+          // snapshots. Reject mismatch with a user-facing error and disconnect.
+          if (hsMsg.protocolVersion !== PROTOCOL_VERSION) {
+            const err = t('version_mismatch', 'Version mismatch — please reload the page');
+            setOnline({ connectionStatus: 'error', connectionError: err });
+            if (isHost && fromPeerId) {
+              transport.sendReliableTo(fromPeerId, { type: MsgType.DISCONNECT } as ReliableMessage);
+            }
+            transport.destroy();
+            transportRef.current = null;
+            _modalTransport = null;
+            // Drop buffered HANDSHAKE names from the rejected peer; otherwise
+            // a future peer that happens to reuse a peerId could pick up a
+            // stale name from a prior session.
+            pendingPlayerNames.current.clear();
+            setStep('choose');
+            return;
+          }
           if (isHost && fromPeerId) {
             pendingPlayerNames.current.set(fromPeerId, hsMsg.playerName);
             const { remotePlayers, playerNames } = useGameStore.getState().online;
@@ -410,8 +512,15 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
               setOnline({ remotePlayers: updated });
             }
           }
-        } else if (msg.type === MsgType.SLOT_ASSIGNMENT) {
+        } else if (!isHost && msg.type === MsgType.SLOT_ASSIGNMENT) {
+          // Host-broadcast only — lifting the !isHost gate would let a buggy/
+          // hostile guest rewrite the host's own localSlot + remotePlayers
+          // map, breaking match start.
           const slotMsg = msg as SlotAssignmentMessage;
+          // Store the reclaim token issued by host for our slot. Match.tsx
+          // hands it to NetMatch via config.ownReclaimToken so a future
+          // RECONNECT_REQUEST authenticates the reclaim attempt.
+          if (slotMsg.reclaimToken) _guestOwnReclaimToken = slotMsg.reclaimToken;
           const names: Record<string, string> = {};
           const newRemotePlayers: RemotePlayerInfo[] = [];
           for (const p of slotMsg.allPlayers) {
@@ -422,7 +531,8 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
             });
           }
           setOnline({ localSlot: slotMsg.slot as PlayerSlot, playerNames: names, remotePlayers: newRemotePlayers });
-        } else if (msg.type === MsgType.SETTINGS_SYNC) {
+        } else if (!isHost && msg.type === MsgType.SETTINGS_SYNC) {
+          // Host-authoritative settings — guest applies, host never accepts.
           useGameStore.getState().setMatchSettings({
             arenaId: msg.arenaId, killLimit: msg.killLimit, timeLimit: msg.timeLimit,
             goreMode: msg.goreMode, botCount: msg.botCount,
@@ -438,11 +548,16 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
             });
           }
           setRemoteReady(true);
-        } else if (msg.type === MsgType.START_MATCH) {
+        } else if (!isHost && msg.type === MsgType.START_MATCH) {
+          // Host-broadcast only. A guest forging START_MATCH to host would
+          // otherwise drop the host into the match screen with the guest's
+          // chosen roster.
           const startMsg = msg as StartMatchMessage;
           receivedRosterRef.current = (startMsg.roster as RosterEntry[] | undefined) ?? null;
           startMatchRef.current();
-        } else if (msg.type === MsgType.PLAYER_JOINED) {
+        } else if (!isHost && msg.type === MsgType.PLAYER_JOINED) {
+          // Host-broadcast only. Without the gate, a guest could inject
+          // synthetic player rows into the host's lobby UI.
           const pj = msg as PlayerJoinedMessage;
           const current = useGameStore.getState().online.remotePlayers;
           const names = pj.playerName ? { ...useGameStore.getState().online.playerNames, [pj.slot]: pj.playerName } : undefined;
@@ -451,13 +566,19 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
             ? current.map(rp => rp.slot === pj.slot ? { ...rp, characterName: pj.characterName, playerName: pj.playerName || rp.playerName } : rp)
             : [...current, { peerId: pj.peerId, slot: pj.slot as PlayerSlot, characterName: pj.characterName, playerName: pj.playerName || '', ready: false }];
           setOnline({ remotePlayers: updatedPlayers, ...(names && { playerNames: names }) });
-        } else if (msg.type === MsgType.PLAYER_LEFT) {
+        } else if (!isHost && msg.type === MsgType.PLAYER_LEFT) {
+          // Host-broadcast only — a guest would otherwise be able to evict
+          // arbitrary slot rows from the host's lobby state.
           const pl = msg as PlayerLeftMessage;
           const current = useGameStore.getState().online.remotePlayers;
           setOnline({ remotePlayers: current.filter(rp => rp.slot !== pl.slot) });
-        } else if (msg.type === MsgType.MATCH_IN_PROGRESS) {
+        } else if (!isHost && msg.type === MsgType.MATCH_IN_PROGRESS) {
+          // Host-broadcast only — guests get this when joining a room whose
+          // host is already in a match.
           setStep('spectating');
-        } else if (msg.type === MsgType.MATCH_RESULT) {
+        } else if (!isHost && msg.type === MsgType.MATCH_RESULT) {
+          // Host-broadcast only — fired when the match ends and we're heading
+          // back to the lobby.
           setStep('lobby');
         }
       },
@@ -485,5 +606,6 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
     localReady, markLocalReady,
     remoteReady,
     connect, cleanup, startMatchAsHost,
+    autoSwitchNotice,
   };
 }

@@ -47,6 +47,7 @@ vi.mock('./renderer', () => ({
     setNetDebugStats = vi.fn();
     setPlayerNames = vi.fn();
     setTimeLimit = vi.fn();
+    setNetworkMode = vi.fn();
     getDiagnostics = vi.fn(() => ({ clouds: false, weather: false, wildlife: false, playersDrawn: 0 }));
   },
 }));
@@ -115,6 +116,10 @@ function createLoop(opts?: {
     opts?.players ?? (['P1', 'P2'] as PlayerSlot[]),
     onMatchEnd,
   );
+  // Default to 'playing' phase so fixedUpdate runs. New loops construct in
+  // 'loading' phase (gated in fixedUpdate); tests that need pre-match semantics
+  // can override by flipping state.phase back to 'loading'.
+  loop.getState().phase = 'playing';
   _lastLoop = loop;
   return { loop, onMatchEnd, arena, settings };
 }
@@ -2440,18 +2445,20 @@ describe('Countdown Freeze', () => {
 // ===================================================================
 
 describe('Animation Timers', () => {
-  it('animTimer increments each frame for active players', () => {
+  it('animTimer increments each frame for running players', () => {
     const { loop } = createLoop();
     loop.skipCountdown();
     const state = loop.getState();
     const player = state.players[0];
 
-    // Ensure player is active and not in hitstop
+    // Ensure player is active, not in hitstop, and in 'run' state.
+    // Post-fix, animTimer only ticks while running.
     player.active = true;
     player.hitstopTimer = 0;
     player.animTimer = 0;
 
     loop.fixedUpdate(FIXED_TIMESTEP);
+    player.state = 'run';
     loop.cosmeticStep(FIXED_TIMESTEP); // animTimer advance now in cosmeticStep
 
     expect(player.animTimer).toBeGreaterThan(0);
@@ -2464,15 +2471,20 @@ describe('Animation Timers', () => {
     const state = loop.getState();
     const player = state.players[0];
 
+    player.x = 200;
+    player.y = 660 - PLAYER_HEIGHT;
     player.active = true;
     player.hitstopTimer = 0;
     player.animTimer = 0;
     player.animFrame = 0;
 
-    // Advance enough frames to exceed ANIM_FRAME_DURATION (0.12s)
+    // Advance enough frames to exceed ANIM_FRAME_DURATION (0.12s).
+    // animFrame only ticks while in 'run' state (post-fix), so force the
+    // state each tick — physics will reset to 'idle' if vx ~ 0.
     const steps = Math.ceil(ANIM_FRAME_DURATION / FIXED_TIMESTEP) + 1;
     for (let i = 0; i < steps; i++) {
       loop.fixedUpdate(FIXED_TIMESTEP);
+      player.state = 'run';
       loop.cosmeticStep(FIXED_TIMESTEP); // animFrame advance now in cosmeticStep
     }
 
@@ -2480,28 +2492,123 @@ describe('Animation Timers', () => {
     expect(player.animFrame).toBeGreaterThan(0);
   });
 
-  it('idleAnimTimer increments when player is idle', () => {
+  it('animFrame stays at 0 when player is idle (not running)', () => {
     const { loop } = createLoop();
     loop.skipCountdown();
     const state = loop.getState();
     const player = state.players[0];
 
-    // Set player to idle on the ground
     player.x = 200;
     player.y = 660 - PLAYER_HEIGHT;
     player.vx = 0;
     player.state = 'idle';
     player.active = true;
     player.hitstopTimer = 0;
-    player.idleAnimTimer = 0;
+    player.animFrame = 0;
+    player.animTimer = 0;
 
-    loop.fixedUpdate(FIXED_TIMESTEP);
-    loop.cosmeticStep(FIXED_TIMESTEP); // idleAnimTimer now in cosmeticStep
-
-    expect(player.idleAnimTimer).toBeGreaterThan(0);
+    for (let i = 0; i < 30; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+      loop.cosmeticStep(FIXED_TIMESTEP);
+      // animFrame must never advance past 0 while idle. Asserting only at the
+      // end is fragile because animFrame is modulo RUN_FRAMES — it wraps back
+      // to 0 periodically under the buggy code.
+      expect(player.animFrame).toBe(0);
+    }
   });
 
-  it('fastFalling player has faster animation', () => {
+  it('animFrame resets to 0 when state transitions from run to idle', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    player.x = 200;
+    player.y = 660 - PLAYER_HEIGHT;
+    player.state = 'run';
+    player.animFrame = 2;
+    player.animTimer = 0.05;
+
+    // Now switch to idle
+    player.state = 'idle';
+    player.vx = 0;
+    loop.fixedUpdate(FIXED_TIMESTEP);
+    loop.cosmeticStep(FIXED_TIMESTEP);
+
+    expect(player.animFrame).toBe(0);
+    expect(player.animTimer).toBe(0);
+  });
+
+  it('entering idle seeds idleActionTimer to IDLE_FIRST_DELAY', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+
+    player.x = 200;
+    player.y = 660 - PLAYER_HEIGHT;
+    player.vx = 0;
+    player.state = 'idle';
+    player.active = true;
+    player.hitstopTimer = 0;
+    player.idleAction = -1;
+    player.idleActionTimer = 0;
+    player.idleActionDuration = 0;
+
+    loop.fixedUpdate(FIXED_TIMESTEP);
+    loop.cosmeticStep(FIXED_TIMESTEP);
+
+    // After 1 tick (~16.67ms): timer was seeded to 0.8s, then ticked down by ~0.0167.
+    expect(player.idleAction).toBe(-1);
+    expect(player.idleActionTimer).toBeGreaterThan(0.7);
+    expect(player.idleActionTimer).toBeLessThan(0.81);
+  });
+
+  it('idle action fires after IDLE_FIRST_DELAY of standing still', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+    player.x = 200; player.y = 660 - PLAYER_HEIGHT; player.vx = 0;
+    player.state = 'idle'; player.active = true; player.hitstopTimer = 0;
+    player.idleAction = -1; player.idleActionTimer = 0; player.idleActionDuration = 0;
+
+    // Tick for ~1 second (>0.8s first delay)
+    for (let i = 0; i < 60; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+      loop.cosmeticStep(FIXED_TIMESTEP);
+    }
+
+    expect(player.idleAction).toBeGreaterThanOrEqual(0);
+    expect(player.idleActionDuration).toBeGreaterThan(0);
+  });
+
+  it('leaving idle clears idleAction state', () => {
+    const { loop } = createLoop();
+    loop.skipCountdown();
+    const state = loop.getState();
+    const player = state.players[0];
+    player.x = 200; player.y = 660 - PLAYER_HEIGHT; player.vx = 0;
+    player.state = 'idle'; player.active = true; player.hitstopTimer = 0;
+
+    // Run long enough to be in an action
+    for (let i = 0; i < 90; i++) {
+      loop.fixedUpdate(FIXED_TIMESTEP);
+      loop.cosmeticStep(FIXED_TIMESTEP);
+    }
+
+    // Now switch to running (vx > 10 so updatePlayerState keeps state='run')
+    player.state = 'run';
+    player.vx = 200;
+    loop.fixedUpdate(FIXED_TIMESTEP);
+    loop.cosmeticStep(FIXED_TIMESTEP);
+
+    expect(player.idleAction).toBe(-1);
+    expect(player.idleActionTimer).toBe(0);
+    expect(player.idleActionDuration).toBe(0);
+  });
+
+  it('fastFalling airborne player does NOT tick animTimer (gated on run state)', () => {
     const { loop } = createLoop();
     loop.setNetworkMode(true);
     loop.skipCountdown();
@@ -2526,8 +2633,8 @@ describe('Animation Timers', () => {
 
     // After pressing down while airborne, player should be fast-falling
     expect(player.fastFalling).toBe(true);
-    // animTimer should have advanced (animation keeps ticking)
-    expect(player.animTimer).toBeGreaterThan(0);
+    // animTimer is gated on 'run' state — airborne players don't tick it
+    expect(player.animTimer).toBe(0);
   });
 });
 
@@ -2559,21 +2666,17 @@ describe('Particle System', () => {
     const { loop } = createLoop();
     loop.skipCountdown();
 
-    // Manually inject a particle into the internal array
-    loop.particleSystem.getParticles().push({
+    const injected = {
       x: 500, y: 500, vx: 10, vy: -20,
       life: 1.0, maxLife: 1.0, size: 3, color: '#FF0000',
-    });
+    };
+    loop.particleSystem.getParticles().push(injected);
 
-    const lifeBefore = loop.particleSystem.getParticles()[0].life;
+    const lifeBefore = injected.life;
     loop.fixedUpdate(FIXED_TIMESTEP);
     loop.cosmeticStep(FIXED_TIMESTEP);
 
-    // Particle life should have decreased
-    const particle = loop.particleSystem.getParticles().find((p: any) => p.maxLife === 1.0);
-    if (particle) {
-      expect(particle.life).toBeLessThan(lifeBefore);
-    }
+    expect(injected.life).toBeLessThan(lifeBefore);
   });
 
   it('dead particles (life <= 0) are removed', () => {
@@ -3092,8 +3195,9 @@ describe('GameLoop — arena-specific features', () => {
       },
     });
     const state = loop.getState();
-    // Current zones are cached for per-frame use (now owned by ArenaEntitySystem)
-    expect((loop as any).arenaEntitySystem.getCachedGeyserZones()).toBeDefined();
+    // Current zones are cached for per-frame use (now owned by ArenaEntitySystem,
+    // exposed via the simulator).
+    expect(loop.getSimulator().getArenaEntitySystem().getCachedGeyserZones()).toBeDefined();
   });
 
   it('processes geyser timer cycling', () => {
@@ -3267,6 +3371,41 @@ describe('GameLoop — arena-specific features', () => {
     expect(p2?.splatTimer).toBeGreaterThan(0);
   });
 
+  it('disconnectPlayer cancels an in-progress respawn (would otherwise tick to idle)', () => {
+    // Repro: a player who was mid-respawn at disconnect time keeps ticking
+    // through respawnTimer, then transitions to 'idle' on a spawn point —
+    // appearing alive on the field but disconnected and frozen, free to be
+    // stomped for score by remote peers.
+    const { loop } = createLoop();
+    const p2 = loop.getState().players.find(p => p.id === 'P2')!;
+    p2.state = 'respawning';
+    p2.respawnTimer = 1.0;
+    p2.splatTimer = 0;
+
+    loop.disconnectPlayer('P2');
+
+    expect(p2.disconnected).toBe(true);
+    expect(p2.state).toBe('splat');
+    expect(p2.splatTimer).toBeGreaterThan(0); // 999999 sentinel — won't auto-advance
+    expect(p2.respawnTimer).toBe(0); // canceled
+  });
+
+  it('disconnectPlayer preserves splatTimer trajectory for already-splat players', () => {
+    // A player stomped just before disconnecting. They're already splatted;
+    // we still want them as a corpse but the existing splat timer is fine
+    // (the splat-tick loop short-circuits on disconnected for splat state).
+    const { loop } = createLoop();
+    const p2 = loop.getState().players.find(p => p.id === 'P2')!;
+    p2.state = 'splat';
+    p2.splatTimer = 0.4;
+
+    loop.disconnectPlayer('P2');
+
+    expect(p2.disconnected).toBe(true);
+    expect(p2.state).toBe('splat');
+    expect(p2.splatTimer).toBe(0.4); // untouched
+  });
+
   it('setLocalSlot changes touch target slot', () => {
     const { loop } = createLoop();
     loop.setLocalSlot('P2');
@@ -3332,9 +3471,9 @@ describe('GameLoop — mod physics multipliers', () => {
       settings: { mods: { superBounce: true, turbo: false, extremeGore: false, carrotChase: false, giantPlayers: false, mirrorArena: false, underwaterGravity: false } },
     });
     // The arena should have bouncyPlatforms set to all indices
-    const arena = (loop as any).arena;
+    const arena = loop.getArena();
     expect(arena.bouncyPlatforms).toBeDefined();
-    expect(arena.bouncyPlatforms.length).toBe(arena.platforms.length);
+    expect(arena.bouncyPlatforms!.length).toBe(arena.platforms.length);
   });
 
   it('mirrorArena mod flips arena positions', () => {
@@ -3342,7 +3481,7 @@ describe('GameLoop — mod physics multipliers', () => {
       settings: { mods: { mirrorArena: true, turbo: false, extremeGore: false, carrotChase: false, giantPlayers: false, superBounce: false, underwaterGravity: false } },
     });
     // Mirror should have been applied — arena id should still be the same
-    const arena = (loop as any).arena;
+    const arena = loop.getArena();
     expect(arena).toBeDefined();
   });
 
@@ -3367,7 +3506,21 @@ describe('GameLoop — start and stop lifecycle', () => {
     loop.start();
 
     expect(rafSpy).toHaveBeenCalled();
-    expect(vi.mocked(audio.playMusic)).toHaveBeenCalled();
+    // Music no longer plays on start() — it plays on setPhase('playing').
+
+    loop.stop();
+    vi.restoreAllMocks();
+  });
+
+  it('start() does NOT play music (music is gated on setPhase("playing"))', () => {
+    vi.spyOn(globalThis, 'requestAnimationFrame').mockReturnValue(1);
+    vi.spyOn(performance, 'now').mockReturnValue(1000);
+    vi.mocked(audio.playMusic).mockClear();
+
+    const { loop } = createLoop();
+    loop.start();
+
+    expect(vi.mocked(audio.playMusic)).not.toHaveBeenCalled();
 
     loop.stop();
     vi.restoreAllMocks();
@@ -3554,20 +3707,19 @@ describe('GameLoop — entity systems', () => {
   });
 
   it('gameRandom uses Math.random in local mode', () => {
+    // In local mode (no rng), the simulator falls back to Math.random for
+    // gameplay-affecting random calls. We can't observe gameRandom directly
+    // (it's private to Simulator), so observe via getRng() — which returns
+    // undefined in local mode.
     const { loop } = createLoop();
-    const val = (loop as any).gameRandom();
-    expect(typeof val).toBe('number');
-    expect(val).toBeGreaterThanOrEqual(0);
-    expect(val).toBeLessThan(1);
+    expect(loop.getRng()).toBeUndefined();
   });
 
   it('gameRandom uses seeded RNG when set', () => {
     const { loop } = createLoop();
     const rng = { nextFloat: vi.fn(() => 0.42), getState: () => 0, setState: () => {} } as any;
     loop.setRng(rng);
-    const val = (loop as any).gameRandom();
-    expect(val).toBe(0.42);
-    expect(rng.nextFloat).toHaveBeenCalled();
+    expect(loop.getRng()).toBe(rng);
   });
 });
 

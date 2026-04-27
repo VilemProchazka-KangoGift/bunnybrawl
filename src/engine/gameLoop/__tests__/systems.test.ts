@@ -207,6 +207,59 @@ describe('EntityTransitionSystem', () => {
     const sys = new EntityTransitionSystem(state, vi.fn());
     expect(() => sys.cleanup()).not.toThrow();
   });
+
+  // ─── Spring identity (not array index) ─────────────────────────────────
+  // Springs are removed via swapRemove(): a dead slot is overwritten by the
+  // last spring in the array. If detection is keyed by index, the moved-in
+  // spring's `bounceTimer = 0` could be compared against the dead spring's
+  // prior nonzero bounceTimer and miss the next bounce.
+  it('detection survives swapRemove of an earlier spring (identity-keyed)', () => {
+    const springA = { x: 100, y: 400, platformIndex: 1, bounceTimer: 0, life: 5, growTimer: 0 };
+    const springB = { x: 500, y: 400, platformIndex: 1, bounceTimer: 0, life: 5, growTimer: 0 };
+    const state = makeSystemState({ springs: [springA, springB] });
+    const playSound = vi.fn();
+    const sys = new EntityTransitionSystem(state, playSound);
+    sys.init();
+
+    // First, springA bounces — capture its prev=0 → cur=0.3 transition
+    springA.bounceTimer = 0.3;
+    sys.cosmeticUpdate(1 / 60);
+    expect(playSound).toHaveBeenCalledWith('spring');
+    playSound.mockClear();
+
+    // Now springA is removed via swapRemove — springB shifts into slot 0,
+    // and a NEW spring fills slot 1.
+    const springC = { x: 800, y: 400, platformIndex: 1, bounceTimer: 0, life: 5, growTimer: 0 };
+    state.springs[0] = springB;
+    state.springs[1] = springC;
+    sys.cosmeticUpdate(1 / 60);
+    expect(playSound).not.toHaveBeenCalled();
+
+    // springB bounces. With INDEX-keyed detection this would compare against
+    // springA's prior 0.3 (still in slot 0) and miss the 0→0.3 transition.
+    // With IDENTITY-keyed detection, springB's own prev=0 is read.
+    springB.bounceTimer = 0.4;
+    sys.cosmeticUpdate(1 / 60);
+    expect(playSound).toHaveBeenCalledWith('spring');
+  });
+
+  it('resetBaseline() re-primes prev-state to suppress spurious next-tick fire', () => {
+    const state = makeSystemState({ matchOver: false });
+    const playSound = vi.fn();
+    const sys = new EntityTransitionSystem(state, playSound);
+    sys.init();
+
+    // State changes drastically (simulating snapshot apply on reconnect)
+    state.matchOver = true;
+    state.countdown = 0;
+    sys.resetBaseline();
+
+    // After reset, the next cosmeticUpdate should NOT fire victory or
+    // countdown sounds, because the baseline now matches current state.
+    sys.cosmeticUpdate(1 / 60);
+    expect(playSound).not.toHaveBeenCalledWith('victory');
+    expect(playSound).not.toHaveBeenCalledWith('countdown_go');
+  });
 });
 
 // ── ParticleSystem ───────────────────────────────────────────────────────────
@@ -269,6 +322,18 @@ describe('ParticleSystem', () => {
     sys.cleanup();
     expect(sys.getParticles().length).toBe(0);
   });
+
+  it('emitParticle enforces a soft cap so bulk emitters cannot grow live count unbounded', () => {
+    // Regression: spawnGoreParticles + matchOver firework spam could push the
+    // live array into the thousands and stutter mobile GC. Cap is 600.
+    const state = makeSystemState();
+    const sys = makeParticleSystem(state);
+    sys.init();
+    for (let i = 0; i < 1500; i++) {
+      sys.emitParticle(0, 0, 0, 0, 1.0, 3, '#fff');
+    }
+    expect(sys.getParticles().length).toBeLessThanOrEqual(600);
+  });
 });
 
 // ── PlayerTransitionSystem ───────────────────────────────────────────────────
@@ -323,6 +388,64 @@ describe('PlayerTransitionSystem', () => {
     sys.cleanup();
 
     expect(sys.getSfxCooldowns().size).toBe(0);
+  });
+
+  it('score increase WITHOUT fatTimer change (kill score +2) does NOT fire crunch', () => {
+    // Regression: previously the score-delta branch fired `crunch` + carrot
+    // pickup VFX unconditionally. A stomp adds +2 to the attacker, which
+    // wrongly triggered carrot SFX every kill. Now gated on fatTimer transition.
+    const player = makePlayer({ id: 'P1', state: 'idle', score: 0, fatTimer: 0 });
+    const state = makeSystemState({ players: [player] });
+    const { sys, playSound } = makePlayerTransitionSystem(state);
+    sys.init();
+
+    // Simulate kill: score +2, fatTimer unchanged.
+    player.score = 2;
+    sys.cosmeticUpdate(1 / 60);
+
+    expect(playSound).not.toHaveBeenCalledWith('crunch');
+    // Score animation still pushed (used for the floating "+2" text).
+    expect(state.scoreAnimations.length).toBe(1);
+    expect(state.scoreAnimations[0].value).toBe(2);
+  });
+
+  it('fatTimer 0 → positive (carrot pickup) DOES fire crunch + animal + VFX', () => {
+    const player = makePlayer({ id: 'P1', state: 'idle', score: 0, fatTimer: 0 });
+    const state = makeSystemState({ players: [player] });
+    const { sys, playSound, playAnimal } = makePlayerTransitionSystem(state);
+    sys.init();
+
+    // Simulate carrot pickup: score +1, fatTimer set to FAT_DURATION.
+    player.score = 1;
+    player.fatTimer = 8; // FAT_DURATION-ish
+    sys.cosmeticUpdate(1 / 60);
+
+    expect(playSound).toHaveBeenCalledWith('crunch');
+    expect(playAnimal).toHaveBeenCalled();
+    expect(state.scoreAnimations.length).toBe(1);
+    expect(state.scoreAnimations[0].value).toBe(1);
+  });
+
+  it('resetBaseline() suppresses spurious jump SFX after a state jump', () => {
+    // Simulates the reconnect path: prev-state captured at construction shows
+    // an idle player; after the disconnect/reconnect window, the snapshot
+    // shows the player airborne with a different score. Without resetBaseline,
+    // the next cosmeticUpdate would fire 'jump' (idle→airborne) and N×'crunch'
+    // for the score delta. With resetBaseline, the new state IS the baseline.
+    const player = makePlayer({ id: 'P1', state: 'idle', score: 0 });
+    const state = makeSystemState({ players: [player] });
+    const { sys, playSound } = makePlayerTransitionSystem(state);
+    sys.init();
+
+    // Mutate to "post-reconnect" state
+    player.state = 'airborne';
+    player.score = 4;
+    sys.resetBaseline();
+    playSound.mockClear();
+
+    sys.cosmeticUpdate(1 / 60);
+    expect(playSound).not.toHaveBeenCalledWith('jump');
+    expect(playSound).not.toHaveBeenCalledWith('crunch');
   });
 });
 
@@ -567,13 +690,16 @@ describe('EffectZoneSystem', () => {
     const arenaEntitySys = new ArenaEntitySystem(state, arena, mockTheme, Math.random);
     arenaEntitySys.init();
     const playSound = vi.fn();
+    const stopSound = vi.fn();
     return {
       sys: new EffectZoneSystem(
         state, arena, arenaEntitySys,
         () => new Map(),
         playSound,
+        stopSound,
       ),
       playSound,
+      stopSound,
     };
   }
 
@@ -688,6 +814,31 @@ describe('StompSystem', () => {
     expect(stomper.hitstopTimer).toBeGreaterThan(0);
   });
 
+  it('increments totalKills on each stomp (uncapped, distinct from trimmed killFeed)', () => {
+    // VictoryScreen "Total Splats" reads state.totalKills; killFeed is trimmed
+    // to last 10. Verify the counter advances by one stomp event regardless of
+    // whether the killFeed slice wraps.
+    const victim = makePlayer({
+      id: 'P1',
+      x: 640, y: 600,
+      state: 'idle',
+      score: 0,
+      invincibleTimer: 0,
+      splatTimer: 0,
+    });
+    const stomper = makePlayer({
+      id: 'P2',
+      x: 640, y: victim.y - victim.height + 2,
+      vy: 200,
+      state: 'airborne',
+    });
+    const state = makeSystemState({ players: [victim, stomper], countdown: 0, totalKills: 0 });
+    const sys = makeStompSystem(state);
+    sys.init();
+    sys.fixedUpdate(1 / 60);
+    expect(state.totalKills).toBe(1);
+  });
+
   it('cleanup() is a no-op', () => {
     const state = makeSystemState();
     const sys = makeStompSystem(state);
@@ -700,12 +851,14 @@ describe('StompSystem', () => {
 describe('MatchSystem', () => {
   function makeMatchSystem(state: MatchState, onMatchEnd = vi.fn()) {
     const playSound = vi.fn();
+    const stopSound = vi.fn();
+    const setSoundVolume = vi.fn();
     const sys = new MatchSystem(
       state, mockSettings, mockTheme,
-      playSound, () => false,
+      playSound, stopSound, setSoundVolume, () => false,
       onMatchEnd,
     );
-    return { sys, playSound, onMatchEnd };
+    return { sys, playSound, stopSound, setSoundVolume, onMatchEnd };
   }
 
   it('init() with no ambientSoundConfig does not call playSound', () => {
@@ -725,7 +878,7 @@ describe('MatchSystem', () => {
     };
     const state = makeSystemState();
     const playSound = vi.fn();
-    const sys = new MatchSystem(state, mockSettings, themeWithAmbient, playSound, () => false, vi.fn());
+    const sys = new MatchSystem(state, mockSettings, themeWithAmbient, playSound, vi.fn(), vi.fn(), () => false, vi.fn());
     sys.init();
 
     expect(playSound).toHaveBeenCalledWith('wind');
@@ -755,7 +908,7 @@ describe('MatchSystem', () => {
   it('fixedUpdate() skips crowd + ambient tick when resimulating', () => {
     const state = makeSystemState({ countdown: 0 });
     const playSound = vi.fn();
-    const sys = new MatchSystem(state, mockSettings, mockTheme, playSound, () => true, vi.fn());
+    const sys = new MatchSystem(state, mockSettings, mockTheme, playSound, vi.fn(), vi.fn(), () => true, vi.fn());
     sys.init();
     sys.fixedUpdate(1 / 60);
 
@@ -772,10 +925,95 @@ describe('MatchSystem', () => {
       },
     };
     const state = makeSystemState();
-    const sys = new MatchSystem(state, mockSettings, themeWithAmbient, vi.fn(), () => false, vi.fn());
+    const sys = new MatchSystem(state, mockSettings, themeWithAmbient, vi.fn(), vi.fn(), vi.fn(), () => false, vi.fn());
     sys.init();
     sys.cleanup();
     // No throw; internal maps reset
     expect(() => sys.fixedUpdate(1 / 60)).not.toThrow();
+  });
+
+  it('cleanup() stops every ambient loop init() started (so endMatch can silence them mid-match)', () => {
+    // GameLoop.endMatch calls matchSystem.cleanup() before the 1.5s victory
+    // delay so theme ambient loops (wind, lava, etc.) don't keep playing
+    // audibly until Match.tsx unmount. Verify cleanup actually emits stop()
+    // for each registered loop via the injected stopSound callback.
+    const themeWithAmbient = {
+      ...mockTheme,
+      ambientSoundConfig: {
+        loops: ['wind', 'lava'],
+        periodic: [],
+      },
+    };
+    const stopSound = vi.fn();
+
+    const state = makeSystemState();
+    const sys = new MatchSystem(state, mockSettings, themeWithAmbient, vi.fn(), stopSound, vi.fn(), () => false, vi.fn());
+    sys.init();
+    sys.cleanup();
+
+    expect(stopSound).toHaveBeenCalledWith('wind');
+    expect(stopSound).toHaveBeenCalledWith('lava');
+  });
+
+  it('cleanup() is idempotent — second call is a no-op (endMatch + GameLoop.stop both call it)', () => {
+    const themeWithAmbient = {
+      ...mockTheme,
+      ambientSoundConfig: {
+        loops: ['wind'],
+        periodic: [],
+      },
+    };
+    const stopSound = vi.fn();
+
+    const state = makeSystemState();
+    const sys = new MatchSystem(state, mockSettings, themeWithAmbient, vi.fn(), stopSound, vi.fn(), () => false, vi.fn());
+    sys.init();
+    sys.cleanup();
+    const firstCallCount = stopSound.mock.calls.length;
+    sys.cleanup();
+    // No additional stop() calls — activeAmbientLoops is now empty.
+    expect(stopSound.mock.calls.length).toBe(firstCallCount);
+  });
+
+  // --- host match-end guard: no-humans-remaining ---
+
+  it('ends match as self-winner when only one human remains and no bots', () => {
+    const p1 = makePlayer({ id: 'P1', score: 0 });
+    const p2 = makePlayer({ id: 'P2', score: 0, disconnected: true });
+    const state = makeSystemState({ players: [p1, p2], countdown: 0 });
+    const { sys, onMatchEnd } = makeMatchSystem(state);
+    sys.init();
+    sys.fixedUpdate(1 / 60);
+    expect(onMatchEnd).toHaveBeenCalledWith('P1');
+  });
+
+  it('ends match with null winner when all players disconnected', () => {
+    const p1 = makePlayer({ id: 'P1', score: 0, disconnected: true });
+    const p2 = makePlayer({ id: 'P2', score: 0, disconnected: true });
+    const state = makeSystemState({ players: [p1, p2], countdown: 0 });
+    const { sys, onMatchEnd } = makeMatchSystem(state);
+    sys.init();
+    sys.fixedUpdate(1 / 60);
+    expect(onMatchEnd).toHaveBeenCalledWith(null);
+  });
+
+  it('does NOT end match when one human + one bot remain (match continues)', () => {
+    const p1 = makePlayer({ id: 'P1', score: 0 });
+    const b1 = makePlayer({ id: 'B1', score: 0 });
+    const state = makeSystemState({ players: [p1, b1], countdown: 0 });
+    const { sys, onMatchEnd } = makeMatchSystem(state);
+    sys.init();
+    sys.fixedUpdate(1 / 60);
+    expect(onMatchEnd).not.toHaveBeenCalled();
+  });
+
+  it('does NOT end match when two humans both active', () => {
+    const p1 = makePlayer({ id: 'P1', score: 0 });
+    const p2 = makePlayer({ id: 'P2', score: 0 });
+    const state = makeSystemState({ players: [p1, p2], countdown: 0 });
+    const { sys, onMatchEnd } = makeMatchSystem(state);
+    sys.init();
+    sys.fixedUpdate(1 / 60);
+    expect(onMatchEnd).not.toHaveBeenCalled();
   });
 });

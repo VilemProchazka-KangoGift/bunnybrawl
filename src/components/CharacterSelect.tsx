@@ -11,6 +11,7 @@ import { LobbyGame, READY_ZONE_X } from '../engine/lobbyGame';
 import { drawLobbyOverlay } from '../engine/lobbyRender';
 import { Renderer } from '../engine/renderer';
 import { getTheme } from '../engine/arenas';
+import { sampleFps, drawFpsCounter } from '../engine/fpsCounter';
 import { useCanvasRenderScale } from '../hooks/useCanvasRenderScale';
 import './CharacterSelect.css';
 
@@ -193,9 +194,11 @@ export function CharacterSelect() {
         humanInZoneCount: counts.humans,
         botInZoneCount: counts.bots,
       });
+      drawFpsCounter(ctx, CANVAS_WIDTH);
     });
 
     const loop = (time: number) => {
+      sampleFps(time);
       const dt = lastTimeRef.current ? Math.min((time - lastTimeRef.current) / 1000, 0.05) : 1 / 60;
       lastTimeRef.current = time;
 

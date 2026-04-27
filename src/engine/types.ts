@@ -139,7 +139,9 @@ export interface Player {
   squashTimer: number;   // decay timer for squash/stretch
   sideSquash: number;    // 1.0 = normal, <1 = squashed horizontally (wall/push)
   afterimages: Array<{x: number; y: number; facing: 'left'|'right'; alpha: number}>;
-  idleAnimTimer: number; // for character-specific idle animations
+  idleAction: number;        // index into pack's idle action pool, -1 = none (resting)
+  idleActionTimer: number;   // seconds remaining in current action or rest gap
+  idleActionDuration: number;// total duration of current action; 0 during rest
   expression: 'normal' | 'scared' | 'angry' | 'dizzy';
   killStreak: number;    // current consecutive kills without dying
   breathTimer: number;         // for idle breathing animation
@@ -294,9 +296,16 @@ export interface Thorn {
   hit: boolean;
 }
 
+export type MatchPhase = 'loading' | 'playing' | 'over';
+
 export interface MatchState {
   players: Player[];
+  phase: MatchPhase;
   killFeed: KillFeedEntry[];
+  /** Total stomp count across the entire match. Distinct from killFeed.length
+   *  because killFeed is trimmed to the most-recent 10 entries (HUD display
+   *  budget). VictoryScreen reads this for the "Total Splats" stat. */
+  totalKills: number;
   timeElapsed: number;
   matchOver: boolean;
   winner: PlayerSlot | null;

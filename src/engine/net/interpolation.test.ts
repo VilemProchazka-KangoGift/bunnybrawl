@@ -7,6 +7,7 @@ import { makePlayer, makeState } from '../__tests__/testHelpers';
 function makeSnap(frame: number, px = 100, py = 200): AuthSnapshot {
   return {
     frame,
+    phase: 'playing',
     players: [
       { id: 'P1' as PlayerSlot, x: px, y: py, vx: 10, vy: 0, state: 'run', facing: 'right', animFrame: 0, score: 0, hitstopTimer: 0, invincibleTimer: 0, fastFalling: false, splatTimer: 0, respawnTimer: 0, fatTimer: 0, slowTimer: 0, burnTimer: 0, squashScale: 1, expression: 'normal', killStreak: 0, disconnected: false, active: true, width: 32, height: 32 },
       { id: 'P2' as PlayerSlot, x: px + 100, y: py, vx: -5, vy: 0, state: 'idle', facing: 'left', animFrame: 0, score: 1, hitstopTimer: 0, invincibleTimer: 0, fastFalling: false, splatTimer: 0, respawnTimer: 0, fatTimer: 0, slowTimer: 0, burnTimer: 0, squashScale: 1, expression: 'normal', killStreak: 0, disconnected: false, active: true, width: 32, height: 32 },

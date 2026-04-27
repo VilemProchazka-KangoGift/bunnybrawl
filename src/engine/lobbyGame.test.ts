@@ -340,14 +340,16 @@ describe('LobbyGame', () => {
     it('creates 0 bots when botCount is 0', () => {
       const g = makeLobbyGame({ botCount: 0 });
       expect(g.bots).toHaveLength(0);
-      expect(g.extraChars.length).toBe(getAllCharacters().length - 5);
+      const rosterSize = getAllCharacters().length;
+      expect(g.extraChars.length).toBe(rosterSize - 5);
     });
 
     it('creates 1 bot when botCount is 1', () => {
       const g = makeLobbyGame({ botCount: 1 });
       expect(g.bots).toHaveLength(1);
       expect(g.bots[0].id).toBe('B1');
-      expect(g.extraChars.length).toBe(getAllCharacters().length - 5 - 1);
+      const rosterSize = getAllCharacters().length;
+      expect(g.extraChars.length).toBe(rosterSize - 5 - 1);
     });
 
     it('creates 5 bots when botCount is 5', () => {
@@ -355,7 +357,8 @@ describe('LobbyGame', () => {
       expect(g.bots).toHaveLength(5);
       const botSlots = g.bots.map(b => b.id);
       expect(botSlots).toEqual(['B1', 'B2', 'B3', 'B4', 'B5']);
-      expect(g.extraChars.length).toBe(getAllCharacters().length - 5 - 5);
+      const rosterSize = getAllCharacters().length;
+      expect(g.extraChars.length).toBe(rosterSize - 5 - 5);
     });
 
     it('total characters always equals full roster size', () => {
@@ -498,20 +501,16 @@ describe('LobbyGame', () => {
     });
 
     it('player lands back on ground after jump arc', () => {
-      // Isolate: clear bots + NPCs so falling P1 can't re-launch by stomping someone.
-      // (clampLobbyBounds snaps off-screen x back into the canvas, and NPC wander
-      // can place an extra under P1's descent path — vy=-300 on stomp keeps P1
-      // perpetually airborne otherwise.)
-      game.bots.length = 0;
-      game.extraChars.length = 0;
-      for (const e of game.players.slice(1)) {
-        e.x = -500;
-        e.vy = 0;
-        e.vx = 0;
-        e.splatTimer = 0;
-      }
-
+      // Isolate the test player completely. Pre-fix moved entities to x=-500 but
+      // `clampLobbyBounds` snaps them back to x=0, then wanderInput drifts them
+      // across the canvas; one could land under the test player and re-trigger
+      // a stomp bounce, leaving the player permanently airborne. Default human
+      // spawns at x=40,130,220,... also overlap with the test player at x=100.
       const p = game.players[0];
+      game.players = [p];
+      game.bots = [];
+      game.extraChars = [];
+
       p.x = 100;
       p.vx = 0;
       p.state = 'idle';
@@ -613,13 +612,23 @@ describe('LobbyGame', () => {
     });
 
     it('NPC facing matches movement direction', () => {
+      // Isolate the NPC: remove neighbors so wanderInput's repulsion stays at zero,
+      // and stub Math.random so the small random left/right/jump probabilities
+      // (Math.random() < 0.005) never fire. Without these, applyInput can set
+      // facing='left' for one frame while vx is still positive (acceleration ramp).
       const npc = game.extraChars[0];
+      game.extraChars = [npc];
       npc.vx = 50;
       npc.state = 'idle';
 
-      game.update(1 / 60, new Set());
+      const origRandom = Math.random;
+      Math.random = () => 0.99;
+      try {
+        game.update(1 / 60, new Set());
+      } finally {
+        Math.random = origRandom;
+      }
 
-      // facing may change due to random vx reassignment, but if vx > 0 then facing should be right
       if (npc.vx > 0) expect(npc.facing).toBe('right');
       if (npc.vx < 0) expect(npc.facing).toBe('left');
     });
@@ -846,6 +855,38 @@ describe('LobbyGame', () => {
       game.update(1 / 60, new Set());
 
       expect(p.animFrame).toBe(0);
+    });
+
+    it('idle action timer is seeded on first idle frame', () => {
+      const p = game.players[0];
+      p.state = 'idle';
+      p.vx = 0;
+      p.idleAction = -1;
+      p.idleActionTimer = 0;
+      p.idleActionDuration = 0;
+
+      game.update(1 / 60, new Set());
+
+      // Seeded to IDLE_FIRST_DELAY=0.8 then decremented by ~0.016
+      expect(p.idleActionTimer).toBeGreaterThan(0.7);
+      expect(p.idleActionTimer).toBeLessThan(0.8);
+    });
+
+    it('lobby idle picks an action after IDLE_FIRST_DELAY', () => {
+      const p = game.players[0];
+      p.state = 'idle';
+      p.vx = 0;
+      p.idleAction = -1;
+      p.idleActionTimer = 0;
+      p.idleActionDuration = 0;
+
+      // Tick ~1s (>0.8s first delay)
+      for (let i = 0; i < 60; i++) {
+        game.update(1 / 60, new Set());
+      }
+
+      expect(p.idleAction).toBeGreaterThanOrEqual(0);
+      expect(p.idleActionDuration).toBeGreaterThan(0);
     });
   });
 

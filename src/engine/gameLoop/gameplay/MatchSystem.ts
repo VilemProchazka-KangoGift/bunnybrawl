@@ -1,4 +1,5 @@
 import type { MatchState, MatchSettings, PlayerSlot } from '../../types';
+import { isBotSlot } from '../../types';
 import type { ThemeConfig } from '../../themes/types';
 import type { GameplaySystem } from '../types';
 import { updateCrowdCheering, tickPeriodicAmbient } from '../cosmetics/sfx';
@@ -11,6 +12,8 @@ export class MatchSystem implements GameplaySystem {
   private settings: MatchSettings;
   private theme: ThemeConfig;
   private playSound: (name: string) => void;
+  private stopSound: (name: string) => void;
+  private setSoundVolume: (name: string, volume: number) => void;
   private resimulatingGetter: () => boolean;
   private onMatchEnd: (winner: PlayerSlot | null) => void;
 
@@ -23,6 +26,8 @@ export class MatchSystem implements GameplaySystem {
     settings: MatchSettings,
     theme: ThemeConfig,
     playSound: (name: string) => void,
+    stopSound: (name: string) => void,
+    setSoundVolume: (name: string, volume: number) => void,
     resimulatingGetter: () => boolean,
     onMatchEnd: (winner: PlayerSlot | null) => void,
   ) {
@@ -30,6 +35,8 @@ export class MatchSystem implements GameplaySystem {
     this.settings = settings;
     this.theme = theme;
     this.playSound = playSound;
+    this.stopSound = stopSound;
+    this.setSoundVolume = setSoundVolume;
     this.resimulatingGetter = resimulatingGetter;
     this.onMatchEnd = onMatchEnd;
     this.crowdStarted = false;
@@ -58,7 +65,10 @@ export class MatchSystem implements GameplaySystem {
   fixedUpdate(dt: number): void {
     // Crowd cheering + periodic ambient sounds (skip during resimulation)
     if (!this.resimulatingGetter()) {
-      this.crowdStarted = updateCrowdCheering(this.state, this.settings, this.crowdStarted, this.playSound);
+      this.crowdStarted = updateCrowdCheering(
+        this.state, this.settings, this.crowdStarted,
+        this.playSound, this.setSoundVolume, this.stopSound,
+      );
       tickPeriodicAmbient(this.theme, this.periodicAmbientTimers, dt, this.playSound);
     }
 
@@ -67,10 +77,48 @@ export class MatchSystem implements GameplaySystem {
     if (winner !== null) {
       this.state.slowMotion = SLOW_MO_DURATION;
       this.onMatchEnd(winner);
+      return;
+    }
+
+    // Host match-end guard: if every human left the match (disconnected) AND
+    // no bots remain, stop the simulation rather than let it run forever with
+    // no opponents. Online-only edge case: in local play, player.disconnected
+    // never flips. If the lone survivor is a human, award them the win; if
+    // only bots remain (unusual), end with no winner.
+    if (!this.resimulatingGetter() && !this.state.matchOver) {
+      let activeHumans = 0;
+      let activeBots = 0;
+      let lastActiveHuman: PlayerSlot | null = null;
+      for (const p of this.state.players) {
+        if (p.disconnected || !p.active) continue;
+        if (isBotSlot(p.id)) {
+          activeBots++;
+        } else {
+          activeHumans++;
+          lastActiveHuman = p.id;
+        }
+      }
+      if (activeHumans + activeBots === 0) {
+        this.onMatchEnd(null);
+      } else if (activeHumans === 1 && activeBots === 0) {
+        this.onMatchEnd(lastActiveHuman);
+      }
     }
   }
 
   cleanup(): void {
+    // Stop the ambient loops we started in init(). Today GameLoop.stop() and
+    // switchArena() also call audio.stopAllGameSounds() before reaching here,
+    // but cleanup() is the contract for "stop everything this system owns" —
+    // making it idempotent and self-contained avoids a footgun if a future
+    // call site reaches cleanup without running stopAllGameSounds first.
+    for (const loop of this.activeAmbientLoops) {
+      this.stopSound(loop);
+    }
+    if (this.crowdStarted) {
+      this.stopSound('crowd');
+      this.crowdStarted = false;
+    }
     this.activeAmbientLoops = [];
     this.periodicAmbientTimers.clear();
   }

@@ -1,7 +1,7 @@
 import type { MatchState, Arena, Player, PlayerSlot } from '../../types';
 import type { GameplaySystem } from '../types';
 import type { ArenaEntitySystem } from './ArenaEntitySystem';
-import type { SfxCooldowns } from '../cosmetics/sfx';
+import type { SfxCooldowns } from '../../sfxCooldowns';
 import { applyEffectZones, updateZeroGSound } from './effectZones';
 
 export class EffectZoneSystem implements GameplaySystem {
@@ -10,6 +10,7 @@ export class EffectZoneSystem implements GameplaySystem {
   private arenaEntitySystem: ArenaEntitySystem;
   private sfxCooldownsGetter: () => Map<PlayerSlot, SfxCooldowns>;
   private playSound: (name: string) => void;
+  private stopSound: (name: string) => void;
   private zeroGSoundPlaying = false;
 
   constructor(
@@ -18,12 +19,14 @@ export class EffectZoneSystem implements GameplaySystem {
     arenaEntitySystem: ArenaEntitySystem,
     sfxCooldownsGetter: () => Map<PlayerSlot, SfxCooldowns>,
     playSound: (name: string) => void,
+    stopSound: (name: string) => void,
   ) {
     this.state = state;
     this.arena = arena;
     this.arenaEntitySystem = arenaEntitySystem;
     this.sfxCooldownsGetter = sfxCooldownsGetter;
     this.playSound = playSound;
+    this.stopSound = stopSound;
   }
 
   init(): void {}
@@ -56,6 +59,7 @@ export class EffectZoneSystem implements GameplaySystem {
       this.arenaEntitySystem.getCachedZeroGZones(),
       this.zeroGSoundPlaying,
       this.playSound,
+      this.stopSound,
     );
   }
 

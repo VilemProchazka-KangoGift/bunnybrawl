@@ -79,6 +79,7 @@ class AudioManager {
   }
 
   playAnimal(characterName: string): void {
+    if (!this.initialized) this.init();
     const soundName = characterName.toLowerCase();
     if (this.sounds.has(soundName)) {
       this.play(soundName);
@@ -132,6 +133,17 @@ class AudioManager {
 
   stopMusic(): void {
     this.music.stopMusic();
+  }
+
+  /** Preload an arena's music Howl. A later `playMusic(themeId)` will reuse it. */
+  preloadArena(themeId: string): Promise<void> {
+    return this.music.preloadArena(themeId);
+  }
+
+  /** True when the preloaded music matches `themeId`. Loading screens use
+   *  this to verify readiness before flipping phase to 'playing'. */
+  hasPreloadedArena(themeId: string): boolean {
+    return this.music.hasPreloadedArena(themeId);
   }
 
   destroy(): void {

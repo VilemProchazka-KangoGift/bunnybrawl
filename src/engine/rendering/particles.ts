@@ -11,52 +11,59 @@ export function drawWeather(ctx: CanvasRenderingContext2D, weather: WeatherParti
     return;
   }
   for (const w of weather) {
-    ctx.save();
-    ctx.translate(w.x + w.vx * lead, w.y + w.vy * lead);
-    ctx.rotate(w.rotation + w.rotSpeed * lead);
-    if (w.type === 'leaf') {
-      ctx.fillStyle = 'rgba(90, 160, 60, 0.4)';
-      ctx.beginPath();
-      ctx.ellipse(0, 0, w.size, w.size * 0.4, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(60, 120, 40, 0.3)';
-      ctx.lineWidth = 0.5;
-      ctx.beginPath();
-      ctx.moveTo(-w.size * 0.7, 0);
-      ctx.lineTo(w.size * 0.7, 0);
-      ctx.stroke();
-    } else if (w.type === 'petal') {
-      ctx.fillStyle = 'rgba(255, 180, 200, 0.35)';
-      ctx.beginPath();
-      ctx.ellipse(0, 0, w.size, w.size * 0.6, 0, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (w.type === 'snow') {
+    const px = w.x + w.vx * lead;
+    const py = w.y + w.vy * lead;
+    if (w.type === 'snow') {
+      // Symmetric — rotation invisible, draw at world coords.
       ctx.fillStyle = w.color || 'rgba(230, 240, 255, 0.7)';
       ctx.beginPath();
-      ctx.arc(0, 0, w.size, 0, Math.PI * 2);
+      ctx.arc(px, py, w.size, 0, Math.PI * 2);
       ctx.fill();
       if (w.size > 3.5) {
         ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
         ctx.beginPath();
-        ctx.arc(0, -w.size * 0.3, 1, 0, Math.PI * 2);
+        ctx.arc(px, py - w.size * 0.3, 1, 0, Math.PI * 2);
         ctx.fill();
       }
     } else if (w.type === 'ember') {
+      // Symmetric concentric circles — rotation invisible.
       ctx.fillStyle = w.color || 'rgba(255, 120, 30, 0.6)';
       ctx.beginPath();
-      ctx.arc(0, 0, w.size, 0, Math.PI * 2);
+      ctx.arc(px, py, w.size, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = 'rgba(255, 200, 50, 0.8)';
       ctx.beginPath();
-      ctx.arc(0, 0, w.size * 0.5, 0, Math.PI * 2);
+      ctx.arc(px, py, w.size * 0.5, 0, Math.PI * 2);
       ctx.fill();
-    } else if (w.type === 'ash') {
-      ctx.fillStyle = w.color || 'rgba(150, 150, 150, 0.4)';
-      ctx.beginPath();
-      ctx.ellipse(0, 0, w.size, w.size * 0.5, 0, 0, Math.PI * 2);
-      ctx.fill();
+    } else {
+      // Asymmetric shapes (leaf, petal, ash) — keep the transform.
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.rotate(w.rotation + w.rotSpeed * lead);
+      if (w.type === 'leaf') {
+        ctx.fillStyle = 'rgba(90, 160, 60, 0.4)';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, w.size, w.size * 0.4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(60, 120, 40, 0.3)';
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(-w.size * 0.7, 0);
+        ctx.lineTo(w.size * 0.7, 0);
+        ctx.stroke();
+      } else if (w.type === 'petal') {
+        ctx.fillStyle = 'rgba(255, 180, 200, 0.35)';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, w.size, w.size * 0.6, 0, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (w.type === 'ash') {
+        ctx.fillStyle = w.color || 'rgba(150, 150, 150, 0.4)';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, w.size, w.size * 0.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
     }
-    ctx.restore();
   }
 }
 

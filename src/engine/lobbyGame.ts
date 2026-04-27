@@ -5,14 +5,15 @@
 import type { Arena, CharacterDef, CharacterSlot, MatchState, Player, PlayerSlot, InputState, WildlifeEntity } from './types';
 import type { ThemeConfig } from './themes/types';
 import { ALL_BOT_SLOTS, isBotSlot } from './types';
-import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED, IDLE_ANIM_INTERVAL } from './constants';
+import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED } from './constants';
+import { tickIdleStateMachine } from './rendering/idleActions';
 import { KEY_BINDINGS } from './input';
 import { applyInput, applyGravity, movePlayer, collidePlatforms, updatePlayerState } from './physics';
 import { isStomping } from './stomp';
 import { getAllCharacters } from './characters';
 import { audio } from './audio';
 import { updateWildlife } from './gameLoop/cosmetics/environment';
-import { createEmptyMatchState } from './gameLoop/initialState';
+import { createEmptyMatchState } from './simulator/initialState';
 import { getArena, getTheme } from './arenas';
 import { pickWeighted, randRange } from './themes/utils';
 import {
@@ -36,7 +37,8 @@ function makeLobbyPlayer(slot: PlayerSlot, char: CharacterDef, x: number, y: num
     animFrame: 0, animTimer: 0, fastFalling: false,
     fatTimer: 0, slowTimer: 0,
     squashScale: 1, squashTimer: 0, sideSquash: 1,
-    afterimages: [], idleAnimTimer: 0,
+    afterimages: [],
+    idleAction: -1, idleActionTimer: 0, idleActionDuration: 0,
     expression: 'normal', killStreak: 0,
     breathTimer: 0, springTrailTimer: 0,
     damageFlashSide: null, damageFlashTimer: 0, burnTimer: 0, hitstopTimer: 0,
@@ -220,12 +222,7 @@ export class LobbyGame {
         if (p.animTimer > 0.12) { p.animTimer = 0; p.animFrame = (p.animFrame + 1) % 4; }
       }
 
-      if (p.state === 'idle') {
-        p.idleAnimTimer += dt;
-        if (p.idleAnimTimer >= IDLE_ANIM_INTERVAL) p.idleAnimTimer = 0;
-      } else {
-        p.idleAnimTimer = 0;
-      }
+      tickIdleStateMachine(p, dt);
 
       // Lobby-specific: crouch-on-ground squat
       if (input.down && p.state !== 'airborne') p.squashScale = SQUASH_ON_CROUCH;

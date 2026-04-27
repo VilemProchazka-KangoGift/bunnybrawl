@@ -67,3 +67,9 @@
 .mobile-overlay-btn:active {
   background: rgba(0, 0, 0, 0.6);
 }
+
+/* Subtle 3s logo zoom (MainMenu title, Match loading overlay) */
+@keyframes logoZoom {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}

@@ -53,8 +53,11 @@ export interface TransportEvents {
 
 const APP_ID = 'carrot-royale-v1';
 const PING_INTERVAL = 500;
-const PONG_TIMEOUT_MS = 10000;   // 10s — mobile networks need longer grace periods
-const DEGRADED_THRESHOLD_MS = 4000;
+// Transport's pong timeout is the sole source of truth for peer death —
+// snapshot-gap detection no longer triggers reconnect (mobile Wi-Fi jitter
+// produced too many false positives). Faster detection → faster recovery.
+const PONG_TIMEOUT_MS = 5000;
+const DEGRADED_THRESHOLD_MS = 2500;
 const RTT_ALPHA = 0.1;
 
 // TURN config (free relay for symmetric NAT fallback)
@@ -112,6 +115,12 @@ export class Transport {
   private _jitter = 0;
   private _isRelay = false;
 
+  // One-shot hooks for the in-flight joinRoom() promise. Tracked as instance
+  // fields (not closure state) so `destroy()`/`cleanupPriorRoom()` can cancel
+  // a pending join and `setEvents()` won't clobber the resolver.
+  private joinTimeout: ReturnType<typeof setTimeout> | null = null;
+  private joinResolvedOnPeer: ((peerId: string) => void) | null = null;
+
   constructor(events: TransportEvents) {
     this.events = events;
     const simConfig = readSimConfigFromUrl();
@@ -164,13 +173,51 @@ export class Transport {
     this.events = events;
   }
 
+  /** Read the current events bag — used by callers that need to swap in a
+   *  new wiring temporarily and restore the prior one on cleanup
+   *  (VictoryScreen does this so unmount doesn't leave stale callbacks
+   *  attached to the still-alive transport). */
+  getEvents(): TransportEvents {
+    return this.events;
+  }
+
+  /** Tear down any prior Room instance + associated state. Called by both
+   *  createRoom and joinRoom so reconnection attempts don't leak WebRTC
+   *  channels or leave stale peer entries in `this.peers`. No-op + instant
+   *  return on a fresh Transport with no existing Room, so callers of
+   *  createRoom/joinRoom continue to run their critical setup synchronously
+   *  (tests depend on that timing, as do UI subscribers that read roomCode
+   *  immediately after the call). */
+  private cleanupPriorRoom(): void {
+    this.cancelPendingJoin();
+    if (!this.room) return;
+    const dyingRoom = this.room;
+    // Null FIRST so any callback fired synchronously by Trystero during leave
+    // (or from the dying room's still-registered listeners) sees the gen
+    // mismatch (`this.room === capturedRoom` evaluates false in the setupRoom
+    // closures) and skips state mutation. Then fire-and-forget leave().
+    this.room = null;
+    try { dyingRoom.leave().catch(() => {}); } catch { /* ignore */ }
+    this.peers.clear();
+    this.sendBinaryAction = null;
+    this.sendJsonAction = null;
+    this._rtt = 0;
+    this._jitter = 0;
+    this.stopPing();
+  }
+
+  private cancelPendingJoin(): void {
+    if (this.joinTimeout) { clearTimeout(this.joinTimeout); this.joinTimeout = null; }
+    this.joinResolvedOnPeer = null;
+  }
+
   /** Create a room as host. Returns the room code. */
   async createRoom(): Promise<string> {
-    this.setStatus('creating');
-    this._isHost = true;
-
+    this.cleanupPriorRoom();
     const code = generateRoomCode();
     this._roomCode = code;
+    this.setStatus('creating');
+    this._isHost = true;
 
     try {
       const { config, roomId } = getRoomConfig(`room-${code.toUpperCase()}`);
@@ -189,12 +236,15 @@ export class Transport {
 
   /** Join a room as guest by room code. */
   async joinRoom(code: string): Promise<void> {
+    this.cleanupPriorRoom();
     this.setStatus('joining');
     this._isHost = false;
     this._roomCode = code;
 
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
+      this.joinTimeout = setTimeout(() => {
+        this.joinTimeout = null;
+        this.joinResolvedOnPeer = null;
         this.setStatus('error', 'Connection timed out. Check the room code or try again.');
         reject(new Error('timeout'));
       }, 20000); // 20s timeout for Nostr discovery
@@ -203,7 +253,7 @@ export class Transport {
         const { config, roomId } = getRoomConfig(`room-${code.toUpperCase()}`);
         this.room = joinRoom(config, roomId);
       } catch (e) {
-        clearTimeout(timeout);
+        this.cancelPendingJoin();
         this.setStatus('error', `Failed to join room: ${e}`);
         reject(e);
         return;
@@ -211,15 +261,15 @@ export class Transport {
 
       this.setupRoom();
 
-      // Wait for at least one peer (the host) to connect
-      const origOnPeerConnected = this.events.onPeerConnected;
-      const checkConnected = (peerId: string) => {
-        clearTimeout(timeout);
-        this.events.onPeerConnected = origOnPeerConnected;
-        origOnPeerConnected?.(peerId);
+      // One-shot resolver — `setupRoom`'s onPeerJoin invokes this alongside
+      // the regular `events.onPeerConnected`, so we never mutate `this.events`
+      // (a later `setEvents()` call would otherwise clobber the caller's
+      // handler with a stale reference).
+      this.joinResolvedOnPeer = () => {
+        if (this.joinTimeout) { clearTimeout(this.joinTimeout); this.joinTimeout = null; }
+        this.joinResolvedOnPeer = null;
         resolve();
       };
-      this.events.onPeerConnected = checkConnected;
     });
   }
 
@@ -259,6 +309,7 @@ export class Transport {
 
   /** Clean up all resources. */
   destroy(): void {
+    this.cancelPendingJoin();
     if (this.simFlushTimer) {
       clearInterval(this.simFlushTimer);
       this.simFlushTimer = null;
@@ -280,6 +331,13 @@ export class Transport {
   private setupRoom(): void {
     if (!this.room) return;
 
+    // Capture the current room ref so callbacks fired by an asynchronously-
+    // dying room (room.leave() is fire-and-forget) don't mutate state for
+    // the new room. Without this, a late onPeerJoin from the old room would
+    // add a phantom peer to `this.peers` of the new transport state, and a
+    // late onPeerLeave would corrupt connection tracking.
+    const capturedRoom = this.room;
+
     // Create actions for binary and JSON channels
     const [sendBinary, onBinary] = this.room.makeAction<ArrayBuffer>('bin');
     const [sendJson, onJson] = this.room.makeAction<string>('json');
@@ -289,6 +347,7 @@ export class Transport {
 
     // Handle incoming binary data
     onBinary((data: ArrayBuffer | Uint8Array, peerId: string) => {
+      if (this.room !== capturedRoom) return;
       // Trystero may deliver Uint8Array instead of ArrayBuffer
       const buf = data instanceof ArrayBuffer ? data : data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
       this.onIncomingData(buf, peerId, true);
@@ -296,11 +355,13 @@ export class Transport {
 
     // Handle incoming JSON data
     onJson((data: string, peerId: string) => {
+      if (this.room !== capturedRoom) return;
       this.onIncomingData(data, peerId, false);
     });
 
     // Peer join/leave
     this.room.onPeerJoin((peerId: string) => {
+      if (this.room !== capturedRoom) return;
       const info: PeerInfo = {
         peerId,
         rtt: 0,
@@ -321,9 +382,11 @@ export class Transport {
       }
 
       this.events.onPeerConnected?.(peerId);
+      if (this.joinResolvedOnPeer) this.joinResolvedOnPeer(peerId);
     });
 
     this.room.onPeerLeave((peerId: string) => {
+      if (this.room !== capturedRoom) return;
       this.removePeer(peerId);
     });
   }
@@ -464,10 +527,14 @@ export class Transport {
 // ---- Room code generation ----
 
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+// 3 chars from a 31-symbol alphabet = ~30k combos. Decision is product/UX
+// (shorter codes are easier to share verbally) — DO NOT bump back to 4
+// without explicit product sign-off. The regression test below pins this.
+export const ROOM_CODE_LENGTH = 3;
 
 function generateRoomCode(): string {
   let code = '';
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < ROOM_CODE_LENGTH; i++) {
     code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
   }
   return code;

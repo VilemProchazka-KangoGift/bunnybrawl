@@ -298,7 +298,7 @@ function makeTestPlayer(id: PlayerSlot): Player {
     squashTimer: 0.4,
     sideSquash: 0.75,
     afterimages: [{ x: 90, y: 190, facing: 'left' as const, alpha: 0.5 }],
-    idleAnimTimer: 1.2,
+    idleAction: -1, idleActionTimer: 0, idleActionDuration: 0,
     expression: 'angry' as const,
     killStreak: 3,
     breathTimer: 0.6,
@@ -366,7 +366,8 @@ describe('Snapshot field coverage', () => {
     p.splatTimer = 0; p.respawnTimer = 0; p.invincibleTimer = 0;
     p.animFrame = 0; p.animTimer = 0; p.fastFalling = false;
     p.fatTimer = 0; p.slowTimer = 0; p.squashScale = 1;
-    p.squashTimer = 0; p.sideSquash = 1; p.idleAnimTimer = 0;
+    p.squashTimer = 0; p.sideSquash = 1;
+    p.idleAction = -1; p.idleActionTimer = 0; p.idleActionDuration = 0;
     p.expression = 'normal'; p.killStreak = 0; p.breathTimer = 0;
     p.springTrailTimer = 0; p.damageFlashSide = null; p.damageFlashTimer = 0;
     p.burnTimer = 0; p.hitstopTimer = 0; p.disconnected = false;

@@ -1,6 +1,6 @@
 import type { Player, PlayerSlot, Arena, MatchState, MatchSettings } from '../types';
 import { PLAYER_WIDTH, PLAYER_HEIGHT } from '../constants';
-import { createEmptyMatchState } from '../gameLoop/initialState';
+import { createEmptyMatchState } from '../simulator/initialState';
 
 /** Canonical test factory for Player objects. Includes ALL Player fields with sensible defaults. */
 export function makePlayer(overrides: Partial<Player> & { id?: PlayerSlot } = {}): Player {
@@ -30,7 +30,9 @@ export function makePlayer(overrides: Partial<Player> & { id?: PlayerSlot } = {}
     squashTimer: 0,
     sideSquash: 1,
     afterimages: [],
-    idleAnimTimer: 0,
+    idleAction: -1,
+    idleActionTimer: 0,
+    idleActionDuration: 0,
     expression: 'normal',
     killStreak: 0,
     breathTimer: 0,
@@ -68,7 +70,9 @@ export function makeArena(overrides?: Partial<Arena>): Arena {
 
 /** Minimal MatchState with all timers and collections at zero/empty. Override what your test needs. */
 export function makeState(overrides: Partial<MatchState> = {}): MatchState {
-  return { ...createEmptyMatchState(), ...overrides };
+  // Note: createEmptyMatchState defaults `phase: 'loading'`, but tests typically
+  // exercise gameplay logic — flip to 'playing' so fixedUpdate doesn't gate.
+  return { ...createEmptyMatchState(), phase: 'playing', ...overrides };
 }
 
 /** Minimal MatchSettings with sensible defaults. Override what your test needs. */

@@ -29,7 +29,7 @@ beforeAll(async () => {
 
 // ── Imports after mocks ──────────────────────────────────────────────────────
 import { updateLavaRocks, updateGhosts, updateGeyserTimers, updatePigeonFlocks } from '../gameplay/arenaEntities';
-import { checkMatchEnd, getPlayerInput } from '../gameplay/match';
+import { checkMatchEnd } from '../gameplay/match';
 import {
   decaySfxCooldowns,
   getOrCreateCooldowns,
@@ -38,10 +38,10 @@ import {
   type SfxCooldowns,
 } from '../cosmetics/sfx';
 import { audio } from '../../audio';
-import type { MatchState, MatchSettings, Player, PlayerSlot, InputState, Arena } from '../../types';
+import type { PlayerSlot } from '../../types';
 import type { ThemeConfig } from '../../themes/types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
-import { makePlayer, makeArena, makeState, makeSettings } from '../../__tests__/testHelpers';
+import { makePlayer, makeState, makeSettings } from '../../__tests__/testHelpers';
 
 // ── Shared helpers ───────────────────────────────────────────────────────────
 
@@ -413,157 +413,6 @@ describe('checkMatchEnd', () => {
   });
 });
 
-// ────────────────────────────────────────────────────────────────────────────
-
-describe('getPlayerInput', () => {
-  const arena = makeArena();
-  const settings = makeSettings();
-
-  /** Minimal mock InputManager. */
-  const makeInputManager = (returnValue: InputState = { left: false, right: false, jump: false, down: false }) => ({
-    getInput: vi.fn().mockReturnValue(returnValue),
-  });
-
-  /** Minimal mock TouchInputManager. */
-  const makeTouchInputManager = (returnValue: InputState = { left: true, right: false, jump: false, down: false }) => ({
-    getInputForPlayer: vi.fn().mockReturnValue(returnValue),
-  });
-
-  /** Minimal mock AIController. */
-  const makeAIController = (returnValue: InputState = { left: false, right: true, jump: false, down: false }) => ({
-    getInput: vi.fn().mockReturnValue(returnValue),
-  });
-
-  it('returns network input for a human player when networkInputs is provided', () => {
-    const player = makePlayer({ id: 'P1', state: 'idle' });
-    const netInput: InputState = { left: false, right: true, jump: false, down: false };
-    const networkInputs = new Map<string, InputState>([['P1', netInput]]);
-    const input = makeInputManager();
-
-    const result = getPlayerInput(
-      player, input as any, null, null, networkInputs,
-      new Map(), makeState(), arena, settings,
-    );
-    expect(result).toBe(netInput);
-  });
-
-  it('converts jump→down when player is airborne in network mode', () => {
-    const player = makePlayer({ id: 'P1', state: 'airborne' });
-    const netInput: InputState = { left: true, right: false, jump: true, down: false };
-    const networkInputs = new Map<string, InputState>([['P1', netInput]]);
-
-    const result = getPlayerInput(
-      player, makeInputManager() as any, null, null, networkInputs,
-      new Map(), makeState(), arena, settings,
-    );
-    expect(result).toEqual({ left: true, right: false, jump: false, down: true });
-  });
-
-  it('returns empty input for airborne player in network mode with jump=false', () => {
-    const player = makePlayer({ id: 'P1', state: 'airborne' });
-    const netInput: InputState = { left: false, right: false, jump: false, down: false };
-    const networkInputs = new Map<string, InputState>([['P1', netInput]]);
-
-    const result = getPlayerInput(
-      player, makeInputManager() as any, null, null, networkInputs,
-      new Map(), makeState(), arena, settings,
-    );
-    expect(result).toBe(netInput);
-  });
-
-  it('falls through to keyboard when networkInputs has no entry for this player', () => {
-    const player = makePlayer({ id: 'P1', state: 'idle' });
-    const kbInput: InputState = { left: false, right: false, jump: true, down: false };
-    const input = makeInputManager(kbInput);
-    // networkInputs exists but does not contain P1
-    const networkInputs = new Map<string, InputState>([['P2', { left: false, right: false, jump: false, down: false }]]);
-
-    const result = getPlayerInput(
-      player, input as any, null, null, networkInputs,
-      new Map(), makeState(), arena, settings,
-    );
-    expect(result).toBe(kbInput);
-    expect(input.getInput).toHaveBeenCalledWith('P1');
-  });
-
-  it('returns AI input for a bot slot (B1) when controller is registered', () => {
-    const player = makePlayer({ id: 'B1' as PlayerSlot, state: 'idle' });
-    const aiInput: InputState = { left: false, right: true, jump: false, down: false };
-    const ai = makeAIController(aiInput);
-    const aiControllers = new Map<string, any>([['B1', ai]]);
-
-    const result = getPlayerInput(
-      player, makeInputManager() as any, null, null, undefined,
-      aiControllers, makeState(), arena, settings,
-    );
-    expect(result).toBe(aiInput);
-    expect(ai.getInput).toHaveBeenCalled();
-  });
-
-  it('returns empty input for a bot slot when no AI controller registered', () => {
-    const player = makePlayer({ id: 'B2' as PlayerSlot, state: 'idle' });
-
-    const result = getPlayerInput(
-      player, makeInputManager() as any, null, null, undefined,
-      new Map(), makeState(), arena, settings,
-    );
-    expect(result).toEqual({ left: false, right: false, jump: false, down: false });
-  });
-
-  it('returns touch input when player is the touch slot', () => {
-    const player = makePlayer({ id: 'P1', state: 'idle' });
-    const touchResult: InputState = { left: true, right: false, jump: false, down: false };
-    const touchInput = makeTouchInputManager(touchResult);
-
-    const result = getPlayerInput(
-      player, makeInputManager() as any, touchInput as any, 'P1', undefined,
-      new Map(), makeState(), arena, settings,
-    );
-    expect(result).toBe(touchResult);
-    // airborne=false because player.state === 'idle'
-    expect(touchInput.getInputForPlayer).toHaveBeenCalledWith(false);
-  });
-
-  it('passes airborne=true to touch when player.state is airborne', () => {
-    const player = makePlayer({ id: 'P1', state: 'airborne' });
-    const touchInput = makeTouchInputManager();
-
-    getPlayerInput(
-      player, makeInputManager() as any, touchInput as any, 'P1', undefined,
-      new Map(), makeState(), arena, settings,
-    );
-    expect(touchInput.getInputForPlayer).toHaveBeenCalledWith(true);
-  });
-
-  it('falls through to keyboard when touchInput is present but player is not the touch slot', () => {
-    const player = makePlayer({ id: 'P2', state: 'idle' });
-    const kbInput: InputState = { left: false, right: false, jump: false, down: true };
-    const input = makeInputManager(kbInput);
-    const touchInput = makeTouchInputManager();
-
-    const result = getPlayerInput(
-      player, input as any, touchInput as any, 'P1', undefined,
-      new Map(), makeState(), arena, settings,
-    );
-    expect(result).toBe(kbInput);
-    expect(input.getInput).toHaveBeenCalledWith('P2');
-    expect(touchInput.getInputForPlayer).not.toHaveBeenCalled();
-  });
-
-  it('uses keyboard input when no touch and no network and not a bot', () => {
-    const player = makePlayer({ id: 'P1', state: 'idle' });
-    const kbInput: InputState = { left: true, right: false, jump: false, down: false };
-    const input = makeInputManager(kbInput);
-
-    const result = getPlayerInput(
-      player, input as any, null, null, undefined,
-      new Map(), makeState(), arena, settings,
-    );
-    expect(result).toBe(kbInput);
-    expect(input.getInput).toHaveBeenCalledWith('P1');
-  });
-});
-
 // ════════════════════════════════════════════════════════════════════════════
 // cosmetics/sfx.ts
 // ════════════════════════════════════════════════════════════════════════════
@@ -634,66 +483,60 @@ describe('decaySfxCooldowns', () => {
 
 describe('updateCrowdCheering', () => {
   const playSound = vi.fn();
+  const setVolume = vi.fn();
+  const stopSound = vi.fn();
 
   beforeEach(() => {
-    vi.mocked(audio.setVolume).mockReset();
-    vi.mocked(audio.stop).mockReset();
     playSound.mockReset();
+    setVolume.mockReset();
+    stopSound.mockReset();
   });
 
   it('starts crowd sound when leadScore >= killLimit - 3 and not already started', () => {
-    playSound.mockClear();
     const state = makeState({ players: [makePlayer({ id: 'P1', score: 13, active: true })] });
     const settings = makeSettings({ killLimit: 16 }); // 13 >= 13 → crowd starts
-    const result = updateCrowdCheering(state, settings, false, playSound);
+    const result = updateCrowdCheering(state, settings, false, playSound, setVolume, stopSound);
     expect(result).toBe(true);
     expect(playSound).toHaveBeenCalledWith('crowd');
   });
 
   it('does not call playSound again if crowd already started', () => {
-    playSound.mockClear();
     const state = makeState({ players: [makePlayer({ id: 'P1', score: 14, active: true })] });
     const settings = makeSettings({ killLimit: 16 });
-    const result = updateCrowdCheering(state, settings, true, playSound);
+    const result = updateCrowdCheering(state, settings, true, playSound, setVolume, stopSound);
     expect(result).toBe(true);
     expect(playSound).not.toHaveBeenCalled();
   });
 
   it('sets volume to 0.3 when player is within 1 kill of limit', () => {
-    vi.mocked(audio.setVolume).mockClear();
     const state = makeState({ players: [makePlayer({ id: 'P1', score: 15, active: true })] });
     const settings = makeSettings({ killLimit: 16 }); // 15 >= 15 → loud
-    updateCrowdCheering(state, settings, true, playSound);
-    expect(audio.setVolume).toHaveBeenCalledWith('crowd', 0.3);
+    updateCrowdCheering(state, settings, true, playSound, setVolume, stopSound);
+    expect(setVolume).toHaveBeenCalledWith('crowd', 0.3);
   });
 
   it('sets volume to 0.15 when player is 2 or 3 kills from limit', () => {
-    vi.mocked(audio.setVolume).mockClear();
     const state = makeState({ players: [makePlayer({ id: 'P1', score: 13, active: true })] });
     const settings = makeSettings({ killLimit: 16 }); // 13 < 15 → quiet
-    updateCrowdCheering(state, settings, true, playSound);
-    expect(audio.setVolume).toHaveBeenCalledWith('crowd', 0.15);
+    updateCrowdCheering(state, settings, true, playSound, setVolume, stopSound);
+    expect(setVolume).toHaveBeenCalledWith('crowd', 0.15);
   });
 
   it('stops crowd when lead drops back below threshold', () => {
-    vi.mocked(audio.setVolume).mockClear();
-    vi.mocked(audio.stop).mockClear();
     const state = makeState({ players: [makePlayer({ id: 'P1', score: 5, active: true })] });
     const settings = makeSettings({ killLimit: 16 }); // 5 < 13 → stop
-    const result = updateCrowdCheering(state, settings, true, playSound);
+    const result = updateCrowdCheering(state, settings, true, playSound, setVolume, stopSound);
     expect(result).toBe(false);
-    expect(audio.stop).toHaveBeenCalledWith('crowd');
+    expect(stopSound).toHaveBeenCalledWith('crowd');
   });
 
   it('returns false and stays quiet when no player is near the limit', () => {
-    playSound.mockClear();
-    vi.mocked(audio.stop).mockClear();
     const state = makeState({ players: [makePlayer({ id: 'P1', score: 1, active: true })] });
     const settings = makeSettings({ killLimit: 16 }); // 1 < 13 → never started → no-op
-    const result = updateCrowdCheering(state, settings, false, playSound);
+    const result = updateCrowdCheering(state, settings, false, playSound, setVolume, stopSound);
     expect(result).toBe(false);
     expect(playSound).not.toHaveBeenCalled();
-    expect(audio.stop).not.toHaveBeenCalled();
+    expect(stopSound).not.toHaveBeenCalled();
   });
 });
 

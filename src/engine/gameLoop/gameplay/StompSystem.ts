@@ -1,4 +1,4 @@
-import type { MatchState, Arena, MatchSettings } from '../../types';
+import type { MatchState, Arena, MatchSettings, PlayerSlot } from '../../types';
 import type { GameplaySystem } from '../types';
 import type { SeededRNG } from '../../net/prng';
 import { processStompsAndCollisions } from './stomps';
@@ -9,6 +9,7 @@ export class StompSystem implements GameplaySystem {
   private settings: MatchSettings;
   private resimulatingGetter: () => boolean;
   private rngGetter: () => SeededRNG | undefined;
+  private onStompHaptic: (slot: PlayerSlot) => void;
 
   constructor(
     state: MatchState,
@@ -16,12 +17,14 @@ export class StompSystem implements GameplaySystem {
     settings: MatchSettings,
     resimulatingGetter: () => boolean,
     rngGetter: () => SeededRNG | undefined,
+    onStompHaptic: (slot: PlayerSlot) => void,
   ) {
     this.state = state;
     this.arena = arena;
     this.settings = settings;
     this.resimulatingGetter = resimulatingGetter;
     this.rngGetter = rngGetter;
+    this.onStompHaptic = onStompHaptic;
   }
 
   init(): void {}
@@ -34,6 +37,7 @@ export class StompSystem implements GameplaySystem {
       dt,
       this.resimulatingGetter(),
       this.rngGetter(),
+      this.onStompHaptic,
     );
   }
 

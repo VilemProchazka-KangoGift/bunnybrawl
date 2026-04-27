@@ -6,10 +6,40 @@
  * fields to lerp vs snap) and applySnapshotToState are defined here.
  */
 import type { MatchState } from '../types';
-import type { AuthSnapshot } from './snapshot';
+import type { AuthSnapshot, SnapshotPlayer } from './snapshot';
 import { GRAVITY } from '../constants';
 import { SnapshotInterpolation } from './core/interpolation';
 import type { InterpolationConfig } from './core/types';
+
+/** Copy every non-positional field from a snapshot player. Positional fields
+ *  (x/y/vx/vy) are handled separately because interpolation lerps them while
+ *  direct apply just copies. Adding a new wire-serialized Player field? Add
+ *  it here — both `applySnapshotToState` and `interpolateSnapshots` use this. */
+function copyPlayerNonPositional(src: SnapshotPlayer, dst: SnapshotPlayer): void {
+  dst.id = src.id;
+  dst.state = src.state;
+  dst.facing = src.facing;
+  dst.animFrame = src.animFrame;
+  dst.score = src.score;
+  dst.hitstopTimer = src.hitstopTimer;
+  dst.invincibleTimer = src.invincibleTimer;
+  dst.fastFalling = src.fastFalling;
+  dst.splatTimer = src.splatTimer;
+  dst.respawnTimer = src.respawnTimer;
+  dst.fatTimer = src.fatTimer;
+  dst.slowTimer = src.slowTimer;
+  dst.burnTimer = src.burnTimer;
+  dst.squashScale = src.squashScale;
+  dst.expression = src.expression;
+  dst.killStreak = src.killStreak;
+  dst.disconnected = src.disconnected;
+  dst.active = src.active;
+  dst.width = src.width;
+  dst.height = src.height;
+  dst.sideSquash = src.sideSquash;
+  dst.damageFlashTimer = src.damageFlashTimer;
+  dst.damageFlashSide = src.damageFlashSide;
+}
 
 // ---- Game-specific interpolation config ----
 
@@ -52,6 +82,16 @@ export class EntityInterpolation {
 
   getDelayFrames(): number {
     return this.engine.getDelayFrames();
+  }
+
+  reset(): void {
+    this.engine.reset();
+    // Drop the module-scoped interp/extrap scratch buffers: their `players`
+    // arrays grow to the largest snapshot seen and never shrink. A fresh
+    // match may have fewer entities; better to reallocate than keep stale
+    // players entries as zombies.
+    _extrapResult = null;
+    _interpResult = null;
   }
 }
 
@@ -107,7 +147,9 @@ function extrapolateSnapshot(snap: AuthSnapshot, dt: number): AuthSnapshot {
   r.thorns = snap.thorns;
   r.geyserStates = snap.geyserStates;
   r.killFeed = snap.killFeed;
+  r.totalKills = snap.totalKills;
   r.scoreAnimations = snap.scoreAnimations;
+  r.phase = snap.phase;
   r.matchOver = snap.matchOver;
   r.winner = snap.winner;
   r.timeElapsed = snap.timeElapsed;
@@ -142,30 +184,7 @@ function interpolateSnapshots(a: AuthSnapshot, b: AuthSnapshot, t: number): Auth
       r.players.push({ ...bp });
     }
     const rp = r.players[i];
-    // Explicit field copy (faster than Object.assign for known shapes)
-    rp.id = bp.id;
-    rp.state = bp.state;
-    rp.facing = bp.facing;
-    rp.animFrame = bp.animFrame;
-    rp.score = bp.score;
-    rp.hitstopTimer = bp.hitstopTimer;
-    rp.invincibleTimer = bp.invincibleTimer;
-    rp.fastFalling = bp.fastFalling;
-    rp.splatTimer = bp.splatTimer;
-    rp.respawnTimer = bp.respawnTimer;
-    rp.fatTimer = bp.fatTimer;
-    rp.slowTimer = bp.slowTimer;
-    rp.burnTimer = bp.burnTimer;
-    rp.squashScale = bp.squashScale;
-    rp.expression = bp.expression;
-    rp.killStreak = bp.killStreak;
-    rp.disconnected = bp.disconnected;
-    rp.active = bp.active;
-    rp.width = bp.width;
-    rp.height = bp.height;
-    rp.sideSquash = bp.sideSquash;
-    rp.damageFlashTimer = bp.damageFlashTimer;
-    rp.damageFlashSide = bp.damageFlashSide;
+    copyPlayerNonPositional(bp, rp);
     // Lerp positions/velocities
     if (ap) {
       rp.x = lerp(ap.x, bp.x, t);
@@ -185,7 +204,9 @@ function interpolateSnapshots(a: AuthSnapshot, b: AuthSnapshot, t: number): Auth
   r.thorns = b.thorns;
   r.geyserStates = b.geyserStates;
   r.killFeed = b.killFeed;
+  r.totalKills = b.totalKills;
   r.scoreAnimations = b.scoreAnimations;
+  r.phase = b.phase;
   r.matchOver = b.matchOver;
   r.winner = b.winner;
 
@@ -255,30 +276,10 @@ export function applySnapshotToState(
     player.y = sp.y;
     player.vx = sp.vx;
     player.vy = sp.vy;
-    player.state = sp.state;
-    player.facing = sp.facing;
-    player.animFrame = sp.animFrame;
-    player.score = sp.score;
-    player.hitstopTimer = sp.hitstopTimer;
-    player.invincibleTimer = sp.invincibleTimer;
-    player.fastFalling = sp.fastFalling;
-    player.splatTimer = sp.splatTimer;
-    player.respawnTimer = sp.respawnTimer;
-    player.fatTimer = sp.fatTimer;
-    player.slowTimer = sp.slowTimer;
-    player.burnTimer = sp.burnTimer;
-    player.squashScale = sp.squashScale;
-    player.expression = sp.expression;
-    player.killStreak = sp.killStreak;
-    player.disconnected = sp.disconnected;
-    player.active = sp.active;
-    player.width = sp.width;
-    player.height = sp.height;
-    player.sideSquash = sp.sideSquash;
-    player.damageFlashTimer = sp.damageFlashTimer;
-    player.damageFlashSide = sp.damageFlashSide;
+    copyPlayerNonPositional(sp, player);
   }
 
+  state.phase = snap.phase;
   state.timeElapsed = snap.timeElapsed;
   state.countdown = snap.countdown;
   state.dayPhase = snap.dayPhase;
@@ -289,6 +290,7 @@ export function applySnapshotToState(
   state.screenFlash = snap.screenFlash;
   state.hitstopZoom = snap.hitstopZoom;
   state.killFeed = snap.killFeed;
+  state.totalKills = snap.totalKills;
   state.scoreAnimations = snap.scoreAnimations;
 
   syncArray(state.carrots, snap.carrots, (s) => ({ x: s.x, y: s.y, active: s.active, spawnTime: 0 }), (dst, src) => {

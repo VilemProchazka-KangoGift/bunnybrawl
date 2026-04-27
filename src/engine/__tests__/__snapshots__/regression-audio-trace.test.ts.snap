@@ -1,0 +1,24 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`regression: audio call trace > locks the SFX call sequence for the 5s scripted scenario (refactor regression) 1`] = `
+[
+  "countdown_beep",
+  "countdown_beep",
+  "countdown_go",
+  "amb_bird_chirp",
+  "jump",
+  "jump",
+  "jump",
+  "geyser",
+  "fastfall",
+  "land",
+  "geyser",
+  "jump",
+  "geyser",
+  "fastfall",
+  "land",
+  "geyser",
+  "jump",
+  "geyser",
+]
+`;

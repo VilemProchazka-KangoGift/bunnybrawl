@@ -10,6 +10,7 @@ export interface PrevPlayerCosmeticState {
   vx: number;
   vy: number;
   score: number;
+  fatTimer: number;
   sideSquash: number;
   burnTimer: number;
   slowTimer: number;
@@ -19,7 +20,7 @@ export interface PrevPlayerCosmeticState {
 export function snapshotPlayerCosmeticState(player: Player): PrevPlayerCosmeticState {
   return {
     state: player.state, vx: player.vx, vy: player.vy,
-    score: player.score, sideSquash: player.sideSquash,
+    score: player.score, fatTimer: player.fatTimer, sideSquash: player.sideSquash,
     burnTimer: player.burnTimer, slowTimer: player.slowTimer,
     fastFalling: player.fastFalling,
   };
@@ -32,6 +33,7 @@ export interface TransitionCallbacks {
   spawnDustParticles: (player: Player, landVy: number) => void;
   spawnKillSplatter: (victim: Player) => void;
   pickupCarrotVFX: (x: number, y: number) => void;
+  spawnPlayerSpawnVFX: (x: number, y: number) => void;
 }
 
 /**
@@ -82,7 +84,10 @@ export function detectPlayerTransitions(
   }
 
   // Respawn
-  if (prev.state === 'respawning' && player.state === 'idle') cb.playSound('land');
+  if (prev.state === 'respawning' && player.state === 'idle') {
+    cb.playSound('land');
+    cb.spawnPlayerSpawnVFX(player.x + player.width / 2, player.y + player.height / 2);
+  }
 
   // Push bump (sideSquash === 0.8 is exact collision marker; wall hits set 0.75)
   if (prev.sideSquash >= 0.95 && Math.abs(player.sideSquash - 0.8) < 0.01) {
@@ -96,9 +101,14 @@ export function detectPlayerTransitions(
   // Geyser launch
   if (prev.vy - player.vy > 300) cb.playSound('geyser');
 
-  // Score change → score animation + carrot pickup sound
+  // Score change → score animation (any source: carrot, stomp kill, etc.)
   if (player.score > prev.score) {
     state.scoreAnimations.push({ playerId: player.id, value: player.score - prev.score, timer: SCORE_ANIM_DURATION });
+  }
+
+  // Carrot pickup → crunch + animal sound + pickup VFX. Detected via fatTimer
+  // jump (carrot pickup is the only path that sets fatTimer non-decreasingly).
+  if (player.fatTimer > prev.fatTimer) {
     cb.playSound('crunch');
     cb.playAnimal(player.character.name);
     cb.pickupCarrotVFX(player.x + player.width / 2, player.y);
@@ -112,6 +122,7 @@ export function detectPlayerTransitions(
   prev.vx = player.vx;
   prev.vy = player.vy;
   prev.score = player.score;
+  prev.fatTimer = player.fatTimer;
   prev.sideSquash = player.sideSquash;
   prev.burnTimer = player.burnTimer;
   prev.slowTimer = player.slowTimer;

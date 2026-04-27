@@ -1,0 +1,20 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`regression: determinism > locks the deterministic-scenario fingerprint (refactor regression) 1`] = `
+{
+  "kills": 0,
+  "phase": "playing",
+  "positions": [
+    {
+      "slot": "P1",
+      "x": 315.3332214355469,
+      "y": 572.25,
+    },
+    {
+      "slot": "P2",
+      "x": 1015.0010986328125,
+      "y": 503,
+    },
+  ],
+}
+`;
