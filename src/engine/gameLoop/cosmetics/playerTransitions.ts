@@ -15,6 +15,7 @@ export interface PrevPlayerCosmeticState {
   burnTimer: number;
   slowTimer: number;
   fastFalling: boolean;
+  springTrailTimer: number;
 }
 
 export function snapshotPlayerCosmeticState(player: Player): PrevPlayerCosmeticState {
@@ -23,6 +24,7 @@ export function snapshotPlayerCosmeticState(player: Player): PrevPlayerCosmeticS
     score: player.score, fatTimer: player.fatTimer, sideSquash: player.sideSquash,
     burnTimer: player.burnTimer, slowTimer: player.slowTimer,
     fastFalling: player.fastFalling,
+    springTrailTimer: player.springTrailTimer,
   };
 }
 
@@ -31,6 +33,7 @@ export interface TransitionCallbacks {
   playSound: (name: string) => void;
   playAnimal: (characterName: string) => void;
   spawnDustParticles: (player: Player, landVy: number) => void;
+  spawnJumpDustParticles: (player: Player) => void;
   spawnKillSplatter: (victim: Player) => void;
   pickupCarrotVFX: (x: number, y: number) => void;
   spawnPlayerSpawnVFX: (x: number, y: number) => void;
@@ -54,7 +57,15 @@ export function detectPlayerTransitions(
   const isGrounded = player.state === 'idle' || player.state === 'run';
 
   // Jump: grounded → airborne
-  if (wasGrounded && isAirborne) cb.playSound('jump');
+  if (wasGrounded && isAirborne) {
+    cb.playSound('jump');
+    // Jump dust fires only on input-jump — exclude spring launches
+    // (springTrailTimer rising edge: was 0 last tick, now > 0).
+    const sprangThisTick = prev.springTrailTimer === 0 && player.springTrailTimer > 0;
+    if (!sprangThisTick) {
+      cb.spawnJumpDustParticles(player);
+    }
+  }
 
   // Fast-fall start
   if (!prev.fastFalling && player.fastFalling) cb.playSound('fastfall');
@@ -98,9 +109,6 @@ export function detectPlayerTransitions(
   // Burn start
   if (prev.burnTimer <= 0 && player.burnTimer > 0) cb.playSound('oof');
 
-  // Geyser launch
-  if (prev.vy - player.vy > 300) cb.playSound('geyser');
-
   // Score change → score animation (any source: carrot, stomp kill, etc.)
   if (player.score > prev.score) {
     state.scoreAnimations.push({ playerId: player.id, value: player.score - prev.score, timer: SCORE_ANIM_DURATION });
@@ -127,4 +135,5 @@ export function detectPlayerTransitions(
   prev.burnTimer = player.burnTimer;
   prev.slowTimer = player.slowTimer;
   prev.fastFalling = player.fastFalling;
+  prev.springTrailTimer = player.springTrailTimer;
 }

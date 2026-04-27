@@ -9,16 +9,11 @@ exports[`regression: audio call trace > locks the SFX call sequence for the 5s s
   "jump",
   "jump",
   "jump",
-  "geyser",
   "fastfall",
   "land",
-  "geyser",
   "jump",
-  "geyser",
   "fastfall",
   "land",
-  "geyser",
   "jump",
-  "geyser",
 ]
 `;
