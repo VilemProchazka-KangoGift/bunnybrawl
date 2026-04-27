@@ -151,6 +151,8 @@ describe('self-play smoke test (Task 4.6 — end-to-end)', () => {
     // simulator.fixedUpdate, so do it that way.
     const sim = runner.getSimulator();
     const arena = sim.getArena();
+    const initialX = new Map<PlayerSlot, number>();
+    for (const p of sim.getState().players) initialX.set(p.id, p.x);
     const origFixedUpdate = sim.fixedUpdate.bind(sim);
     sim.fixedUpdate = (dt: number): void => {
       broker.tick(sim.getState(), arena, sim.getSettings());
@@ -170,15 +172,15 @@ describe('self-play smoke test (Task 4.6 — end-to-end)', () => {
     expect(p1).toBeDefined();
     expect(p1!.action.right).toBe(true);
 
-    // All slots should converge to "moving right" — players' x velocities
-    // should be positive (or at least non-negative on the final tick).
+    // The action must reach physics — verify by position. After 60 ticks of
+    // "right=true", at least one slot should have moved right of its spawn.
+    // Some spawns may be wall-bound; use any-slot-moved as the signal.
     const finalState = recorder.getResult()!.finalState;
-    for (const slot of players) {
-      const p = finalState.players.find(pp => pp.id === slot);
-      expect(p).toBeDefined();
-      // After 60 ticks of "right", the player should have moved right
-      // unless walls/edges intervened. Use position > start as the signal.
-    }
+    const movedRight = players.filter(slot => {
+      const p = finalState.players.find(pp => pp.id === slot)!;
+      return p.x > initialX.get(slot)!;
+    });
+    expect(movedRight.length).toBeGreaterThan(0);
   });
 
   it('observation, reward, and recorded sample shapes are mutually consistent', async () => {

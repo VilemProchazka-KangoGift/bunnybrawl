@@ -119,8 +119,8 @@ src/
                        # all 7 gameplay systems. Side effects (audio, phase, match-end,
                        # particles, haptics) routed through SimulatorEvents/ParticleEmitter
                        # interfaces — no direct audio.* or browser API calls.
-      types.ts         # SimulatorEvents (7 callbacks), SimulatorOptions, ParticleEmitter,
-                       # TouchInputProvider, HapticEmitter interfaces
+      types.ts         # SimulatorEvents (8 callbacks), SimulatorOptions, ParticleEmitter,
+                       # TouchInputProvider interfaces
       index.ts         # Barrel export
     headless/     # Headless ML-driven simulation runner (Phase 4)
       HeadlessRunner.ts # Drives Simulator until matchOver/maxTicks. Optional recording:
@@ -198,7 +198,7 @@ src/
 - **Mobile support** — `?mobile` URL param forces mobile mode. `isTouchPrimary()` detects coarse-pointer devices. `.is-mobile` CSS class on `<html>` for platform-conditional styles. Touch controls via `TouchInputManager` (same `InputState` interface as keyboard/AI). Haptic feedback via Vibration API.
 - **Hexagonal Simulator extraction (Solution C)** — `Simulator` (in `src/engine/simulator/`) is the pure simulation core: owns MatchState, RNG, AIControllers, PlayerInputs map, all 7 gameplay systems. Zero browser/DOM/audio imports — verified by `regression-no-browser-apis.test.ts`. Side effects flow through `SimulatorEvents` (audio request callbacks: sfx, music start/stop, all-sounds-stop, phase change, match end, player landing for haptics) and `ParticleEmitter` interface. `GameLoop` becomes a browser adapter: owns Renderer, RAF loop, KeyboardManager, TouchInputManager, ParticleSystem + 4 cosmetic systems; constructs Simulator and subscribes to events. Public GameLoop API is preserved (Match.tsx / NetMatch unchanged); methods delegate to `simulator.*`.
 - **PlayerInput abstraction (Phase 2)** — All input sources (keyboard, rule-based AI, network remote, ML policy, synthetic random) implement the `PlayerInput` interface (`{ slot, getAction(state) → InputState }`). `Simulator` holds `Map<PlayerSlot, PlayerInput>`. The browser-side touch and host-side network input overrides remain explicit special cases inside Simulator's per-player loop because they depend on per-tick state (touchInput airborne flag, network input buffer freshness).
-- **Headless ML pipeline** — `HeadlessRunner` composes `Simulator` + per-slot `PlayerInput`s for Node self-play. Observation extraction writes 68-float egocentric `Float32Array`s into caller-provided buffers (zero per-tick alloc). Recording: observations + captured actions + reward-shaper outputs persisted via `InMemoryRecorder` (tests) or `NDJSONFileRecorder` (training data). `BatchedPolicy` interface enables one neural-net forward pass per tick across all slots; `PolicyBroker` extracts observations into a flat batch and distributes actions via per-slot `PolicyInput` adapters. Run `npx vite-node scripts/selfPlay.ts` for the example pipeline.
+- **Headless ML pipeline** — `HeadlessRunner` composes `Simulator` + per-slot `PlayerInput`s for Node self-play. Observation extraction (`extractObservation(state, slot, arena, settings, out)`) writes 98-float egocentric `Float32Array`s into caller-provided buffers (zero per-tick alloc). Recording: observations + captured actions + reward-shaper outputs persisted via `InMemoryRecorder` (tests) or `NDJSONFileRecorder` (training data). `BatchedPolicy` interface enables one neural-net forward pass per tick across all slots; `PolicyBroker` extracts observations into a flat batch and distributes actions via per-slot `PolicyInput` adapters. Wire-format spec: `docs/headless-recording-format.md`. Run `npx vite-node scripts/selfPlay.ts` for the example pipeline.
 
 ## Build & Run
 

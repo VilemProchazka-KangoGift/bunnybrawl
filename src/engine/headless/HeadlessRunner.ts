@@ -74,6 +74,7 @@ export class HeadlessRunner {
   /** Pre-tick observation snapshots (cloned to plain arrays for the recorder). */
   private readonly _obsSnapshots: Map<PlayerSlot, number[]> = new Map();
   private _ticks = 0;
+  private _consumed = false;
 
   constructor(config: HeadlessRunnerConfig) {
     this._config = config;
@@ -122,8 +123,18 @@ export class HeadlessRunner {
    * Run the simulation loop. Synchronous — blocks until termination.
    * If a recorder is configured, it receives begin() before the first tick
    * and end() after the loop terminates. flush() is the caller's job (await it).
+   *
+   * Single-shot — construct a fresh runner per episode. Calling twice would
+   * write two header lines into the same recorder and resume from a terminal
+   * state; the guard below makes the misuse explicit.
    */
   runMatch(): MatchResult {
+    if (this._consumed) {
+      throw new Error(
+        'HeadlessRunner.runMatch() is single-shot. Construct a new HeadlessRunner per episode.',
+      );
+    }
+    this._consumed = true;
     if (this._recording) {
       this._recording.recorder.begin({
         arenaId: this._config.arenaId,

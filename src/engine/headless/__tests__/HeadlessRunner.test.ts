@@ -170,4 +170,20 @@ describe('HeadlessRunner (Task 4.1 — pure Node, no browser deps)', () => {
     expect(() => runner.runMatch()).not.toThrow();
     expect(runner.getTicks()).toBe(30);
   });
+
+  it('runMatch() is single-shot — second call throws', () => {
+    const players: PlayerSlot[] = ['P1', 'P2'];
+    const config: HeadlessRunnerConfig = {
+      arenaId: 'meadow',
+      activePlayers: players,
+      settings: makeSettings({ killLimit: 999, playerCount: 2, botCount: 0 }),
+      rng: new SeededRNG(11),
+      inputs: new Map<PlayerSlot, PlayerInput>(),
+      maxTicks: 10,
+    };
+    const runner = new HeadlessRunner(config);
+
+    runner.runMatch();
+    expect(() => runner.runMatch()).toThrow(/single-shot/);
+  });
 });
