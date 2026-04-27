@@ -222,7 +222,7 @@ npx vite-node scripts/selfPlay.ts -- --episodes 5 --arena meadow --out data/run.
 - Tests force `i18n.changeLanguage('en')` so string assertions work regardless of default language.
 - When adding new Player fields, update `makePlayer()` in `src/engine/__tests__/testHelpers.ts` and mock players in `VictoryScreen.test.tsx`.
 - The lobby walk-to-zone E2E test is inherently flaky (random NPC placement). Tagged `@flaky`, uses retries.
-- `MainMenu.test.tsx` and `VictoryScreen.test.tsx` have a known pre-existing failure (logo.png import denied by Vite test transform).
+- `MainMenu.test.tsx`, `VictoryScreen.test.tsx`, and `switchArena.test.ts > respawns players at new arena spawn points` have known pre-existing failures (logo.png import denied by Vite test transform; switchArena spawn-point assertion is flaky against current spawn-resolution logic).
 - **GameLoop tests** require mocking `audio`, `renderer`, `howler`, and `HTMLCanvasElement.prototype.getContext`. See `gameLoop.test.ts` top for the full mock block. Always call `loop.stop()` in `afterEach` to prevent keydown listener leaks.
 - **Audio tests** — the `AudioManager` singleton creates a `menuMusicHowl` at field init time (before tests run), so the `Howl` mock must be a real constructor function (not arrow), and tracking instances requires `globalThis` (vi.mock factories run before `const` declarations).
 - **Registry tests** — character/arena registries use module-scoped Maps with no `clear()`. Use unique pack names per test to avoid collisions. Count-based assertions should use `toBeGreaterThanOrEqual`, not exact counts.
