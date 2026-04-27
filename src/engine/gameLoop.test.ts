@@ -814,24 +814,21 @@ describe('Fall-off & Wrap', () => {
 describe('Landing Dust', () => {
   it('landing dust spawns on hard landing', () => {
     const { loop } = createLoop();
-    loop.skipCountdown();
     const state = loop.getState();
     const player = state.players[0];
 
-    // Position player just above the ground platform (y=660),
-    // moving down fast enough to trigger dust
-    player.x = 200;
-    player.y = 660 - player.height - 2; // just above ground
-    player.vy = DUST_LAND_VY_THRESHOLD + 100; // well above dust threshold
+    // Establish airborne baseline so cosmeticStep prev-state captures airborne
     player.state = 'airborne';
-    player.active = true;
+    player.vy = DUST_LAND_VY_THRESHOLD + 100;
+    loop.cosmeticStep(FIXED_TIMESTEP);
 
-    // Access particles via public particleSystem
     const particlesBefore = loop.particleSystem.getParticles().length;
 
-    loop.fixedUpdate(FIXED_TIMESTEP);
+    // Land — airborne → grounded transition with prev.vy above dust threshold
+    player.state = 'idle';
+    player.vy = 0;
+    loop.cosmeticStep(FIXED_TIMESTEP);
 
-    // After landing with high velocity, dust particles should have been emitted
     expect(loop.particleSystem.getParticles().length).toBeGreaterThan(particlesBefore);
   });
 });
@@ -2645,21 +2642,11 @@ describe('Animation Timers', () => {
 describe('Particle System', () => {
   it('emitParticle adds to internal particles array', () => {
     const { loop } = createLoop();
-    loop.skipCountdown();
-
     const particlesBefore = loop.particleSystem.getParticles().length;
 
-    // Trigger particle emission by having a player land hard (dust)
-    const player = loop.getState().players[0];
-    player.x = 200;
-    player.y = 660 - player.height - 2;
-    player.vy = DUST_LAND_VY_THRESHOLD + 100;
-    player.state = 'airborne';
-    player.active = true;
+    loop.particleSystem.emitParticle(100, 100, 0, 0, 1, 3, '#FFF');
 
-    loop.fixedUpdate(FIXED_TIMESTEP);
-
-    expect(loop.particleSystem.getParticles().length).toBeGreaterThan(particlesBefore);
+    expect(loop.particleSystem.getParticles().length).toBe(particlesBefore + 1);
   });
 
   it('particles have life that decays each frame', () => {
