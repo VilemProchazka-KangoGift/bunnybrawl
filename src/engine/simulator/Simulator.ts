@@ -435,17 +435,6 @@ export class Simulator {
       if (justLanded) {
         player.squashScale = SQUASH_ON_LAND;
         player.squashTimer = 0.15;
-
-        if (prevVy > 300) {
-          const cx = player.x + player.width / 2;
-          const groundY = player.y + player.height;
-          const intensity = Math.min(prevVy / 400, 2);
-          const count = Math.floor(8 + intensity * 5);
-          for (let i = 0; i < count; i++) {
-            const life = 0.3 + Math.random() * 0.4;
-            this._particleEmitter.emitParticle(cx + (Math.random() - 0.5) * player.width * 1.5, groundY - Math.random() * 3, (Math.random() - 0.5) * 100 * intensity, -(Math.random() * 60 + 30) * intensity, life, 2 + Math.random() * 3, i % 3 === 0 ? this._theme.platform.floatingBodyColor : this._theme.platform.groundTopColor);
-          }
-        }
       }
 
       if (input.down && player.state !== 'airborne') {
