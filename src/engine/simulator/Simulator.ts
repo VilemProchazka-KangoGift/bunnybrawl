@@ -411,7 +411,7 @@ export class Simulator {
       collidePlatforms(player, this._arena.platforms);
       resolveStuckPlayer(player, this._arena.platforms);
       applyArenaConstraints(player, this._arena);
-      resolveOutOfBoundsPlayer(player, this._arena);
+      resolveOutOfBoundsPlayer(player, this._arena, this._state.players, this._rng);
       if (player.vx !== 0 && player.vx > -1e-4 && player.vx < 1e-4) player.vx = 0;
       if (player.vy !== 0 && player.vy > -1e-4 && player.vy < 1e-4) player.vy = 0;
       updatePlayerState(player);

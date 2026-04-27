@@ -6,9 +6,15 @@ import {
   FAT_SPEED_MULT, FAT_JUMP_MULT, THORN_SPEED_MULT, THORN_JUMP_MULT,
 } from './constants';
 import type { InputState } from './types';
+import type { SeededRNG } from './net/prng';
+import { respawnPlayer } from './stomp';
 
 /** Force 32-bit float for cross-architecture determinism (x86 80-bit vs ARM 64-bit). */
 const f = Math.fround;
+
+/** Allow falling past the bottom of the arena before the failsafe fires. Lets fall-off
+ *  arenas play their respawn animation; only catastrophically lost players get rescued. */
+const OOB_Y_RESCUE_BUFFER = 200;
 
 // ---------------------------------------------------------------------------
 // Generic physics primitives (no Math.fround)
@@ -110,12 +116,8 @@ export function movePlayer(player: Player, dt: number): void {
 }
 
 export function wrapHorizontal(player: Player, arenaWidth: number): void {
-  // Center-based, continuous wrap: trigger when the player's center crosses the
-  // arena edge, translate by exactly arenaWidth so a player half-visible on one
-  // side becomes half-visible on the other. The previous edge-based wrap put
-  // the player FULLY off-screen on the opposite side, leaving them invisible
-  // for a body-width of walking — and stuck if vx decayed to 0 (friction,
-  // released input, slowTimer) before they walked back into view.
+  // Center-based: keeps the player half-visible at the seam. An edge-based wrap
+  // strands them off-screen if vx decays to 0 before they walk a body-width back.
   const halfW = player.width / 2;
   let center = player.x + halfW;
   if (center < 0 || center >= arenaWidth) {
@@ -371,20 +373,18 @@ export function resolveStuckPlayer(player: Player, platforms: Platform[]): void 
 
 /**
  * Failsafe: if a player ends up outside the playable area despite wrapHorizontal
- * having run, snap them to a spawn point. Mirrors resolveStuckPlayer's role for
- * deep-platform embeds — if the wrap path ever fails to bring a player back in,
- * this catches it so they can't be permanently invisible.
+ * having run, respawn them. Mirrors resolveStuckPlayer's role for deep-platform
+ * embeds — catches the rare case so they can't end up permanently invisible.
  */
-export function resolveOutOfBoundsPlayer(player: Player, arena: Arena): void {
+export function resolveOutOfBoundsPlayer(
+  player: Player,
+  arena: Arena,
+  allPlayers?: Player[],
+  rng?: SeededRNG,
+): void {
+  // Bounds check first — this is the hot path (every active player, every tick).
+  const center = player.x + player.width / 2;
+  if (center >= 0 && center < arena.width && player.y <= arena.height + OOB_Y_RESCUE_BUFFER) return;
   if (!player.active || player.state === 'splat' || player.state === 'respawning') return;
-  const halfW = player.width / 2;
-  const center = player.x + halfW;
-  if (center >= 0 && center <= arena.width && player.y <= arena.height + 200) return;
-  const spawn = arena.spawnPoints[0];
-  if (!spawn) return;
-  player.x = f(spawn.x - halfW);
-  player.y = f(spawn.y - player.height);
-  player.vx = 0;
-  player.vy = 0;
-  if (player.state === 'airborne') player.state = 'idle';
+  respawnPlayer(player, arena.spawnPoints, allPlayers, rng);
 }
