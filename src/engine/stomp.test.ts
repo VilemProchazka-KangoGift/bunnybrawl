@@ -15,7 +15,7 @@ describe('Stomp - isStomping', () => {
   it('detects stomp when attacker falls on victim', () => {
     const attacker = makePlayer({
       id: 'P1',
-      x: 100, y: 380,
+      x: 100, y: 378,
       vy: 200, // falling fast
     });
     const victim = makePlayer({
@@ -47,7 +47,7 @@ describe('Stomp - isStomping', () => {
 
 describe('Stomp - checkStomps', () => {
   it('registers a stomp kill and updates scores', () => {
-    const attacker = makePlayer({ id: 'P1', x: 100, y: 380, vy: 200, state: 'airborne' });
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 378, vy: 200, state: 'airborne' });
     const victim = makePlayer({ id: 'P2', character: CHARACTERS.P2, x: 100, y: 400, state: 'idle' });
     const players = [attacker, victim];
 
@@ -62,7 +62,7 @@ describe('Stomp - checkStomps', () => {
   });
 
   it('does not stomp invincible players', () => {
-    const attacker = makePlayer({ id: 'P1', x: 100, y: 380, vy: 200, state: 'airborne' });
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 378, vy: 200, state: 'airborne' });
     const victim = makePlayer({
       id: 'P2', character: CHARACTERS.P2,
       x: 100, y: 400, state: 'idle', invincibleTimer: 1.0,
@@ -75,7 +75,7 @@ describe('Stomp - checkStomps', () => {
   });
 
   it('does not stomp already-splatted players', () => {
-    const attacker = makePlayer({ id: 'P1', x: 100, y: 380, vy: 200, state: 'airborne' });
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 378, vy: 200, state: 'airborne' });
     const victim = makePlayer({
       id: 'P2', character: CHARACTERS.P2,
       x: 100, y: 400, state: 'splat',
@@ -87,7 +87,7 @@ describe('Stomp - checkStomps', () => {
   });
 
   it('gives attacker a bounce after stomp', () => {
-    const attacker = makePlayer({ id: 'P1', x: 100, y: 380, vy: 200, state: 'airborne' });
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 378, vy: 200, state: 'airborne' });
     const victim = makePlayer({ id: 'P2', character: CHARACTERS.P2, x: 100, y: 400, state: 'idle' });
 
     checkStomps([attacker, victim], spawnPoints, 10);
@@ -159,47 +159,47 @@ describe('Stomp - respawnPlayer', () => {
 
 describe('Stomp - threshold edge cases', () => {
   it('STOMP_VY_THRESHOLD boundary: vy just below threshold does NOT stomp', () => {
-    const attacker = makePlayer({ id: 'P1', x: 100, y: 380, vy: STOMP_VY_THRESHOLD - 1 });
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 378, vy: STOMP_VY_THRESHOLD - 1 });
     const victim = makePlayer({ id: 'P2', character: CHARACTERS.P2, x: 100, y: 400 });
     expect(isStomping(attacker, victim)).toBe(false);
   });
 
   it('STOMP_VY_THRESHOLD boundary: vy at exactly threshold DOES stomp', () => {
-    const attacker = makePlayer({ id: 'P1', x: 100, y: 380, vy: STOMP_VY_THRESHOLD });
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 378, vy: STOMP_VY_THRESHOLD });
     const victim = makePlayer({ id: 'P2', character: CHARACTERS.P2, x: 100, y: 400 });
     expect(isStomping(attacker, victim)).toBe(true);
   });
 
   it('attacker bounces with STOMP_BOUNCE velocity after kill', () => {
-    const attacker = makePlayer({ id: 'P1', x: 100, y: 380, vy: 200, state: 'airborne' });
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 378, vy: 200, state: 'airborne' });
     const victim = makePlayer({ id: 'P2', character: CHARACTERS.P2, x: 100, y: 400, state: 'idle' });
     checkStomps([attacker, victim], spawnPoints, 10);
     expect(attacker.vy).toBe(STOMP_BOUNCE);
   });
 
   it('victim gets SPLAT_DURATION timer on stomp', () => {
-    const attacker = makePlayer({ id: 'P1', x: 100, y: 380, vy: 200, state: 'airborne' });
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 378, vy: 200, state: 'airborne' });
     const victim = makePlayer({ id: 'P2', character: CHARACTERS.P2, x: 100, y: 400, state: 'idle' });
     checkStomps([attacker, victim], spawnPoints, 10);
     expect(victim.splatTimer).toBe(SPLAT_DURATION);
   });
 
   it('does not stomp inactive players', () => {
-    const attacker = makePlayer({ id: 'P1', x: 100, y: 380, vy: 200, state: 'airborne' });
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 378, vy: 200, state: 'airborne' });
     const victim = makePlayer({ id: 'P2', character: CHARACTERS.P2, x: 100, y: 400, state: 'idle', active: false });
     const { killFeedEntries } = checkStomps([attacker, victim], spawnPoints, 10);
     expect(killFeedEntries).toHaveLength(0);
   });
 
   it('does not stomp respawning players', () => {
-    const attacker = makePlayer({ id: 'P1', x: 100, y: 380, vy: 200, state: 'airborne' });
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 378, vy: 200, state: 'airborne' });
     const victim = makePlayer({ id: 'P2', character: CHARACTERS.P2, x: 100, y: 400, state: 'respawning' });
     const { killFeedEntries } = checkStomps([attacker, victim], spawnPoints, 10);
     expect(killFeedEntries).toHaveLength(0);
   });
 
   it('can stomp disconnected players (they remain as targets)', () => {
-    const attacker = makePlayer({ id: 'P1', x: 100, y: 380, vy: 200, state: 'airborne' });
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 378, vy: 200, state: 'airborne' });
     const victim = makePlayer({ id: 'P2', character: CHARACTERS.P2, x: 100, y: 400, state: 'idle', disconnected: true });
     const { killFeedEntries } = checkStomps([attacker, victim], spawnPoints, 10);
     // Disconnected players can still be killed — they just don't respawn
@@ -268,14 +268,14 @@ describe('Stomp constants', () => {
 
 describe('checkStomps - edge cases', () => {
   it('attacker state is set to airborne after stomp', () => {
-    const attacker = makePlayer({ id: 'P1', x: 100, y: 380, vy: 200, state: 'airborne' });
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 378, vy: 200, state: 'airborne' });
     const victim = makePlayer({ id: 'P2', character: CHARACTERS.P2, x: 100, y: 400, state: 'idle' });
     checkStomps([attacker, victim], spawnPoints, 10);
     expect(attacker.state).toBe('airborne');
   });
 
   it('victim velocity is zeroed on stomp', () => {
-    const attacker = makePlayer({ id: 'P1', x: 100, y: 380, vy: 200, state: 'airborne' });
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 378, vy: 200, state: 'airborne' });
     const victim = makePlayer({ id: 'P2', character: CHARACTERS.P2, x: 100, y: 400, state: 'idle', vx: 100, vy: -50 });
     checkStomps([attacker, victim], spawnPoints, 10);
     expect(victim.vx).toBe(0);
@@ -283,14 +283,14 @@ describe('checkStomps - edge cases', () => {
   });
 
   it('killFeedEntry includes correct timestamp', () => {
-    const attacker = makePlayer({ id: 'P1', x: 100, y: 380, vy: 200, state: 'airborne' });
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 378, vy: 200, state: 'airborne' });
     const victim = makePlayer({ id: 'P2', character: CHARACTERS.P2, x: 100, y: 400, state: 'idle' });
     const { killFeedEntries } = checkStomps([attacker, victim], spawnPoints, 42.5);
     expect(killFeedEntries[0].timestamp).toBe(42.5);
   });
 
   it('carrotChase mod: stomp does not award points', () => {
-    const attacker = makePlayer({ id: 'P1', x: 100, y: 380, vy: 200, state: 'airborne', score: 0 });
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 378, vy: 200, state: 'airborne', score: 0 });
     const victim = makePlayer({ id: 'P2', character: CHARACTERS.P2, x: 100, y: 400, state: 'idle' });
     checkStomps([attacker, victim], spawnPoints, 10, { carrotChase: true, extremeGore: false, giantPlayers: false, turbo: false, superBounce: false, mirrorArena: false, underwaterGravity: false });
     expect(attacker.score).toBe(0); // no points in carrot chase
@@ -298,7 +298,7 @@ describe('checkStomps - edge cases', () => {
   });
 
   it('splatMark is created at victim center', () => {
-    const attacker = makePlayer({ id: 'P1', x: 200, y: 380, vy: 200, state: 'airborne' });
+    const attacker = makePlayer({ id: 'P1', x: 200, y: 378, vy: 200, state: 'airborne' });
     const victim = makePlayer({ id: 'P2', character: CHARACTERS.P2, x: 200, y: 400, state: 'idle' });
     const { splatMarks } = checkStomps([attacker, victim], spawnPoints, 10);
     expect(splatMarks[0].x).toBe(200 + PLAYER_WIDTH / 2);
@@ -307,7 +307,7 @@ describe('checkStomps - edge cases', () => {
 
   it('three-player multi-kill in one frame', () => {
     // P1 stomps P2, P3 stomps P1 (simultaneously)
-    const p1 = makePlayer({ id: 'P1', x: 100, y: 380, vy: 200, state: 'airborne' });
+    const p1 = makePlayer({ id: 'P1', x: 100, y: 378, vy: 200, state: 'airborne' });
     const p2 = makePlayer({ id: 'P2', character: CHARACTERS.P2, x: 100, y: 400, state: 'idle' });
     const p3 = makePlayer({ id: 'P3', character: CHARACTERS.P3, x: 100, y: 360, vy: 200, state: 'airborne' });
     // P3 above P1 (stomps P1), P1 above P2 (stomps P2)
@@ -352,24 +352,20 @@ describe('createSplatMark - details', () => {
 
 describe('isStomping - geometry precision', () => {
   // overlap = (attacker.y + attacker.height) - victim.y
-  // Stomp requires: overlap > 0 && overlap < victim.height * 0.5
-  // victim.height * 0.5 = 16 (PLAYER_HEIGHT = 32)
+  // Stomp requires: overlap > 0 && overlap < victim.height * 0.35
+  // victim.height * 0.35 = 11.2 (PLAYER_HEIGHT = 32)
 
-  it('overlap exactly at victim.height * 0.5 boundary returns false (not strictly <)', () => {
-    // overlap = attackerBottom - victimTop = (attacker.y + 32) - victim.y
-    // We want overlap = 32 * 0.5 = 16 exactly
-    // So attacker.y + 32 - victim.y = 16 → attacker.y = victim.y - 16
+  it('overlap above victim.height * 0.35 boundary returns false (not strictly <)', () => {
+    // attacker.y = 388 → attackerBottom = 420 → overlap = 20 ≥ 11.2 → false
     const victim = makePlayer({ id: 'P2', x: 100, y: 400 });
-    const attacker = makePlayer({ id: 'P1', x: 100, y: 400 - PLAYER_HEIGHT * 0.5, vy: STOMP_VY_THRESHOLD });
-    // overlap = (384 + 32) - 400 = 16 = victim.height * 0.5 → NOT < 0.5*h → false
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 388, vy: STOMP_VY_THRESHOLD });
     expect(isStomping(attacker, victim)).toBe(false);
   });
 
-  it('overlap = victim.height * 0.5 - 1 returns true', () => {
-    // overlap = 15 < 16 → true
+  it('overlap below victim.height * 0.35 returns true', () => {
+    // attacker.y = 378 → attackerBottom = 410 → overlap = 10 < 11.2 → true
     const victim = makePlayer({ id: 'P2', x: 100, y: 400 });
-    const attacker = makePlayer({ id: 'P1', x: 100, y: 400 - PLAYER_HEIGHT * 0.5 - 1, vy: STOMP_VY_THRESHOLD });
-    // overlap = (383 + 32) - 400 = 15 → true
+    const attacker = makePlayer({ id: 'P1', x: 100, y: 378, vy: STOMP_VY_THRESHOLD });
     expect(isStomping(attacker, victim)).toBe(true);
   });
 
@@ -396,9 +392,9 @@ describe('isStomping - geometry precision', () => {
     const victim = makePlayer({ id: 'P2', x: 100 + PLAYER_WIDTH - 1, y: 400 });
     const attacker = makePlayer({ id: 'P1', x: 100, y: 395, vy: 200 });
     // attacker right = 132, victim left = 131 → 132 > 131 ✓
-    // vertical overlap = (395 + 32) - 400 = 27 → but 27 >= 16 → too deep
-    // Need less vertical overlap: attacker.y such that overlap < 16
-    // overlap = attacker.y + 32 - 400 < 16 → attacker.y < 384
+    // vertical overlap = (395 + 32) - 400 = 27 → but 27 >= 11.2 → too deep
+    // Need less vertical overlap: attacker.y such that overlap < 11.2
+    // overlap = attacker.y + 32 - 400 < 11.2 → attacker.y < 388.8
     // overlap > 0 → attacker.y + 32 > 400 → attacker.y > 368
     // Use attacker.y = 378 → overlap = 410 - 400 = 10 ✓
     const attacker2 = makePlayer({ id: 'P1', x: 100, y: 378, vy: 200 });
@@ -406,12 +402,12 @@ describe('isStomping - geometry precision', () => {
     expect(isStomping(attacker2, victim2)).toBe(true);
   });
 
-  it('attacker fully inside victim vertically returns false (overlap >= 0.5 * height)', () => {
+  it('attacker fully inside victim vertically returns false (overlap >= 0.35 * height)', () => {
     // If attacker is inside victim, overlap = attacker.y + height - victim.y
-    // Attacker at same y as victim → overlap = 32 (full height) ≥ 16 → false
+    // Attacker at same y as victim → overlap = 32 (full height) ≥ 11.2 → false
     const victim = makePlayer({ id: 'P2', x: 100, y: 400 });
     const attacker = makePlayer({ id: 'P1', x: 100, y: 400, vy: 200 });
-    // overlap = (400 + 32) - 400 = 32 ≥ 16 → false
+    // overlap = (400 + 32) - 400 = 32 ≥ 11.2 → false
     expect(isStomping(attacker, victim)).toBe(false);
   });
 
@@ -419,7 +415,7 @@ describe('isStomping - geometry precision', () => {
     // attacker.y > victim.y + victim.height → overlap negative
     const victim = makePlayer({ id: 'P2', x: 100, y: 400 });
     const attacker = makePlayer({ id: 'P1', x: 100, y: 420, vy: 200 });
-    // overlap = (420 + 32) - 400 = 52 ≥ 16 → false (also not a stomp position)
+    // overlap = (420 + 32) - 400 = 52 ≥ 11.2 → false (also not a stomp position)
     expect(isStomping(attacker, victim)).toBe(false);
   });
 
@@ -427,7 +423,7 @@ describe('isStomping - geometry precision', () => {
     // overlap = 1 → attacker.y + 32 - victim.y = 1 → attacker.y = victim.y - 31
     const victim = makePlayer({ id: 'P2', x: 100, y: 400 });
     const attacker = makePlayer({ id: 'P1', x: 100, y: 400 - PLAYER_HEIGHT + 1, vy: 200 });
-    // overlap = (369 + 32) - 400 = 1 → 1 > 0 && 1 < 16 → true
+    // overlap = (369 + 32) - 400 = 1 → 1 > 0 && 1 < 11.2 → true
     // But we also need AABB overlap: vertical check: ay < by + bh → 369 < 432 ✓, ay + ah > by → 401 > 400 ✓
     expect(isStomping(attacker, victim)).toBe(true);
   });
