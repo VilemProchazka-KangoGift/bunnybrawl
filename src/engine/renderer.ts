@@ -178,15 +178,13 @@ export class Renderer {
   private _overlayLastRtt = -1;
   private _overlayLastJitter = -1;
 
-  // Lobby mode: skip match-HUD/countdown/connection-quality and let the
-  // caller paint a custom overlay each frame via _lobbyOverlayFn.
-  private _lobbyMode = false;
-  private _lobbyOverlayFn: ((ctx: CanvasRenderingContext2D, frameTime: number) => void) | null = null;
+  // Lobby mode: when set, replaces the match-HUD/countdown/connection-quality
+  // overlay path with a caller-supplied draw fn (see `setLobbyOverlayFn`).
+  private _lobbyOverlayFn: ((ctx: CanvasRenderingContext2D) => void) | null = null;
 
   constructor(
     bgCanvas: HTMLCanvasElement, fgCanvas: HTMLCanvasElement, theme: ThemeConfig,
     mirrored = false, hudCanvas?: HTMLCanvasElement,
-    options?: { lobbyMode?: boolean },
   ) {
     clearRenderingCaches();
     this.bgCanvas = bgCanvas;
@@ -200,8 +198,6 @@ export class Renderer {
       this.hudCanvas = hudCanvas;
       this.hudCtx = hudCanvas.getContext('2d')!;
     }
-
-    this._lobbyMode = options?.lobbyMode ?? false;
 
     // Apply initial render scale to all canvases (sets backing-store dims + ctx transform)
     this._renderScale = getRenderScale();
@@ -272,7 +268,7 @@ export class Renderer {
   }
 
   /** Lobby-mode HUD callback. Receives a clean ctx each frame. Set null to disable. */
-  setLobbyOverlayFn(fn: ((ctx: CanvasRenderingContext2D, frameTime: number) => void) | null): void {
+  setLobbyOverlayFn(fn: ((ctx: CanvasRenderingContext2D) => void) | null): void {
     this._lobbyOverlayFn = fn;
   }
 
@@ -791,7 +787,7 @@ export class Renderer {
     // Overlay layer: HUD, countdown, connection quality, debug overlays, screen flash.
     // When hudCtx is set, these go on a dedicated canvas above fg, redrawn only when
     // state changes (saving a per-frame blit). Otherwise fall back to drawing on fg.
-    if (this._lobbyMode) {
+    if (this._lobbyOverlayFn) {
       this._renderLobbyOverlay(matchState);
       return;
     }
@@ -811,7 +807,7 @@ export class Renderer {
   private _renderLobbyOverlay(matchState: MatchState): void {
     const target = this.hudCtx ?? this.fgCtx;
     if (this.hudCtx) target.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    if (this._lobbyOverlayFn) this._lobbyOverlayFn(target, this.frameTime);
+    if (this._lobbyOverlayFn) this._lobbyOverlayFn(target);
     if (matchState.screenFlash > 0) {
       this._diag.screenFlash = true;
       const flashAlpha = Math.min(1, matchState.screenFlash / SCREEN_FLASH_DURATION);

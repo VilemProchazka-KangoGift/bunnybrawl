@@ -324,9 +324,7 @@ export const lobby: ArenaPack = {
     }
   },
 
-  drawForegroundNature: (_ctx: CanvasRenderingContext2D, _arena: Arena) => {
-    // Lobby has no foreground nature.
-  },
+  drawForegroundNature: () => {},
 
   drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
     if (platform.style === 'wall') {

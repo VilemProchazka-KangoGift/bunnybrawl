@@ -2,7 +2,7 @@
 // Owns the lobby player state, NPC wandering, bot AI, physics, stomp/swap, and
 // ready-zone countdown. Delegates rendering to lobbyRender.ts and bot AI to lobbyBots.ts.
 
-import type { Arena, CharacterDef, CharacterSlot, MatchState, MatchStats, Platform, Player, PlayerSlot, InputState, WildlifeEntity } from './types';
+import type { Arena, CharacterDef, CharacterSlot, MatchState, MatchStats, Player, PlayerSlot, InputState, WildlifeEntity } from './types';
 import type { ThemeConfig } from './themes/types';
 import { ALL_BOT_SLOTS, isBotSlot } from './types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED, IDLE_ANIM_INTERVAL } from './constants';
@@ -13,6 +13,7 @@ import { getAllCharacters } from './characters';
 import { audio } from './audio';
 import { updateWildlife } from './gameLoop/cosmetics/environment';
 import { getArena, getTheme } from './arenas';
+import { pickWeighted, randRange } from './themes/utils';
 import {
   SLOTS, READY_ZONE_X, COUNTDOWN_SECONDS, GROUND_Y, LOBBY_DAY_CYCLE,
   LOBBY_GRAVITY, LOBBY_SPEED, LOBBY_JUMP,
@@ -67,28 +68,19 @@ function clampLobbyBounds(p: Player): void {
  * each frame; everything else stays as initialized here.
  */
 function buildLobbyMatchState(theme: ThemeConfig): MatchState {
-  // Initial wildlife matches theme.wildlife config — same shape used by matches.
+  // Initial wildlife — same loop shape as createInitialMatchState.
   const wildlife: WildlifeEntity[] = [];
   const wc = theme.wildlife;
   for (let i = 0; i < wc.count; i++) {
-    const types = wc.types;
-    let pick = types[0];
-    if (types.length > 1) {
-      const totalWeight = types.reduce((s, t) => s + t.weight, 0);
-      let r = Math.random() * totalWeight;
-      for (const t of types) {
-        r -= t.weight;
-        if (r <= 0) { pick = t; break; }
-      }
-    }
+    const chosen = pickWeighted(wc.types);
     wildlife.push({
-      type: pick.type,
-      x: pick.type === 'bird' ? -50 - Math.random() * 100 : Math.random() * CANVAS_WIDTH,
-      y: (pick.yRange[0] + Math.random() * (pick.yRange[1] - pick.yRange[0])) * CANVAS_HEIGHT,
-      vx: pick.speedRange[0] + Math.random() * (pick.speedRange[1] - pick.speedRange[0]),
+      type: chosen.type,
+      x: chosen.type === 'bird' ? -50 - Math.random() * 100 : Math.random() * CANVAS_WIDTH,
+      y: randRange(chosen.yRange) * CANVAS_HEIGHT,
+      vx: randRange(chosen.speedRange),
       vy: 0,
       wingPhase: Math.random() * Math.PI * 2,
-      color: pick.colors[Math.floor(Math.random() * pick.colors.length)],
+      color: chosen.colors[Math.floor(Math.random() * chosen.colors.length)],
     });
   }
 
@@ -138,13 +130,11 @@ export class LobbyGame {
   countdownStarted = false;
 
   private readySoundPlayed = new Set<PlayerSlot>();
-  private _timeElapsed = 0;
-  private _platforms: Platform[];
 
-  // MatchState shim — populated lazily on first getMatchState() call. Mutated
-  // each frame so rendering through the standard Renderer works without
-  // re-allocating the state shape.
-  private _matchState: MatchState | null = null;
+  // MatchState shim — built once in the constructor and mutated each frame so
+  // rendering through the standard Renderer works without re-allocating the
+  // state shape. `timeElapsed` doubles as our day-night clock.
+  private _matchState: MatchState;
   private _renderEntities: Player[] = []; // reused by getMatchState() each call
 
   // Pre-allocated combined arrays (rebuilt in update, avoid per-frame spread)
@@ -160,7 +150,7 @@ export class LobbyGame {
   constructor(config: LobbyGameConfig) {
     const botCount = config.botCount;
     const botSlots = ALL_BOT_SLOTS.slice(0, botCount);
-    this._platforms = getArena('lobby').platforms;
+    this._matchState = buildLobbyMatchState(getTheme('lobby'));
 
     // On mobile, only spawn P1 (touch player)
     const activeSlots = config.isMobile ? (['P1'] as CharacterSlot[]) : SLOTS;
@@ -226,7 +216,7 @@ export class LobbyGame {
 
       applyGravity(p, dt, LOBBY_GRAVITY, 800);
       movePlayer(p, dt);
-      collidePlatforms(p, this._platforms);
+      collidePlatforms(p, this.getArena().platforms);
       clampLobbyBounds(p);
       updatePlayerState(p);
 
@@ -284,27 +274,21 @@ export class LobbyGame {
     this.processStomps(this._allLobby);
     this.updateReadyZone(dt);
 
-    this._timeElapsed += dt;
-    if (this._matchState) updateWildlife(this._matchState, dt);
+    this._matchState.timeElapsed += dt;
+    this._matchState.dayPhase = (this._matchState.timeElapsed / LOBBY_DAY_CYCLE) % 1;
+    updateWildlife(this._matchState, dt);
   }
 
   /**
    * Return a MatchState compatible with Renderer.renderFrame. Players list
    * combines humans + bots + NPCs in render order (NPCs back, players front).
-   * dayPhase mirrors LOBBY_DAY_CYCLE so the standard day/night renderer ticks
-   * at the lobby's pace.
    */
   getMatchState(): MatchState {
-    if (!this._matchState) {
-      this._matchState = buildLobbyMatchState(getTheme('lobby'));
-    }
     this._renderEntities.length = 0;
     for (const e of this.extraChars) this._renderEntities.push(e);
     for (const b of this.bots) this._renderEntities.push(b);
     for (const p of this.players) this._renderEntities.push(p);
     this._matchState.players = this._renderEntities;
-    this._matchState.timeElapsed = this._timeElapsed;
-    this._matchState.dayPhase = (this._timeElapsed / LOBBY_DAY_CYCLE) % 1;
     return this._matchState;
   }
 

@@ -48,8 +48,16 @@ export interface LobbyOverlayState {
 export function drawLobbyOverlay(
   ctx: CanvasRenderingContext2D,
   state: LobbyOverlayState,
-  _frameTime: number,
 ): void {
+  // Read i18n once per frame — calling i18n.t / i18n.language inside loops
+  // costs ~30 dictionary lookups per frame for ~25 entities + static labels.
+  const lang = i18n.language;
+  const goText = i18n.t('lobby_go');
+  const swapText = i18n.t('lobby_title');
+  const rulesText = `${i18n.t('rules_label')}  🦶 ${i18n.t('rules_stomp')}   🥕 ${i18n.t('rules_carrot')}`;
+  const joinText = i18n.t('lobby_join');
+  const skipText = i18n.t('countdown_skip');
+
   // ---- Ready zone ----
   ctx.fillStyle = getOverlayZoneGrad(ctx);
   ctx.fillRect(READY_ZONE_X, 55, CANVAS_WIDTH - READY_ZONE_X, GROUND_Y - 55);
@@ -61,7 +69,6 @@ export function drawLobbyOverlay(
   ctx.lineWidth = 12;
   ctx.beginPath(); ctx.moveTo(READY_ZONE_X, 55); ctx.lineTo(READY_ZONE_X, GROUND_Y); ctx.stroke();
 
-  const goText = i18n.t('lobby_go');
   const goCx = (READY_ZONE_X + CANVAS_WIDTH) / 2;
   const goCy = GROUND_Y / 2 + 40;
   ctx.font = "bold 80px 'Nunito', sans-serif";
@@ -77,7 +84,7 @@ export function drawLobbyOverlay(
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
     ctx.font = "10px 'Nunito', sans-serif";
     ctx.textAlign = 'center';
-    ctx.fillText(getCharacterDisplayName(npc.character.name, i18n.language), npc.x + PLAYER_WIDTH / 2, npc.y - 5);
+    ctx.fillText(getCharacterDisplayName(npc.character.name, lang), npc.x + PLAYER_WIDTH / 2, npc.y - 5);
   }
   for (const bot of state.bots) {
     const tagX = bot.x + PLAYER_WIDTH / 2;
@@ -139,7 +146,7 @@ export function drawLobbyOverlay(
     ctx.fillStyle = player.character.color;
     ctx.textAlign = 'left';
     ctx.font = "bold 14px 'Nunito', sans-serif";
-    ctx.fillText(`${player.id}: ${getCharacterDisplayName(player.character.name, i18n.language)}`, textX, 26);
+    ctx.fillText(`${player.id}: ${getCharacterDisplayName(player.character.name, lang)}`, textX, 26);
 
     if (!state.isMobile) {
       const bindings = KEY_BINDINGS[player.id as CharacterSlot];
@@ -151,7 +158,6 @@ export function drawLobbyOverlay(
   }
 
   // ---- Bottom-left: swap instruction ----
-  const swapText = i18n.t('lobby_title');
   ctx.font = "bold 16px 'Nunito', sans-serif";
   const swapW = ctx.measureText(swapText).width + 28;
   const blX = 14;
@@ -167,7 +173,6 @@ export function drawLobbyOverlay(
   ctx.textBaseline = 'alphabetic';
 
   // ---- Rules hint ----
-  const rulesText = `${i18n.t('rules_label')}  🦶 ${i18n.t('rules_stomp')}   🥕 ${i18n.t('rules_carrot')}`;
   ctx.font = "14px 'Nunito', sans-serif";
   ctx.textAlign = 'center';
   const rulesCx = (READY_ZONE_X + CANVAS_WIDTH) / 2;
@@ -185,7 +190,6 @@ export function drawLobbyOverlay(
   ctx.globalAlpha = 1;
 
   // ---- Bottom-right: join instruction with arrow ----
-  const joinText = i18n.t('lobby_join');
   ctx.font = "bold 16px 'Nunito', sans-serif";
   const joinW = ctx.measureText(joinText).width + 50;
   const brX = CANVAS_WIDTH - joinW - 14;
@@ -219,7 +223,7 @@ export function drawLobbyOverlay(
     ctx.font = "14px 'Nunito', sans-serif";
     ctx.globalAlpha = 0.5;
     ctx.fillStyle = '#FFF';
-    ctx.fillText(i18n.t('countdown_skip'), cx, cy + 62);
+    ctx.fillText(skipText, cx, cy + 62);
     ctx.globalAlpha = 1;
   }
 

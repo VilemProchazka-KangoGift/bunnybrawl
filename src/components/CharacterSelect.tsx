@@ -25,7 +25,6 @@ export function CharacterSelect() {
   const startedRef = useRef<boolean>(false);
   const lobbyTouchRef = useRef<TouchInputManager | null>(null);
   const lobbyGameRef = useRef<LobbyGame | null>(null);
-  const rendererRef = useRef<Renderer | null>(null);
   const isMobile = useMemo(() => isTouchPrimary(), []);
 
   // Initialise LobbyGame once
@@ -165,8 +164,7 @@ export function CharacterSelect() {
     if (!bg || !fg || !hud) return;
 
     const theme = getTheme('lobby');
-    const renderer = new Renderer(bg, fg, theme, false, hud, { lobbyMode: true });
-    rendererRef.current = renderer;
+    const renderer = new Renderer(bg, fg, theme, false, hud);
 
     // Static world (sky, hills, far background, platform iso skin) baked once.
     const game = lobbyGameRef.current;
@@ -176,7 +174,7 @@ export function CharacterSelect() {
 
     // Wire the lobby HUD overlay through the renderer's lobby-mode hook so it
     // paints on the dedicated hud canvas above the player layer each frame.
-    renderer.setLobbyOverlayFn((ctx, frameTime) => {
+    renderer.setLobbyOverlayFn((ctx) => {
       const g = lobbyGameRef.current;
       if (!g) return;
       const counts = g.getReadyZoneCounts();
@@ -190,7 +188,7 @@ export function CharacterSelect() {
         inZoneCount: counts.inZone,
         humanInZoneCount: counts.humans,
         botInZoneCount: counts.bots,
-      }, frameTime);
+      });
     });
 
     const loop = (time: number) => {
@@ -211,7 +209,6 @@ export function CharacterSelect() {
     rafRef.current = requestAnimationFrame(loop);
     return () => {
       cancelAnimationFrame(rafRef.current);
-      rendererRef.current = null;
     };
   }, [isMobile, startMatch]);
 
