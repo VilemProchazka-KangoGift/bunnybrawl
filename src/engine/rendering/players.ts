@@ -4,6 +4,7 @@ import { FAT_SCALE, HITSTOP_DURATION, PLAYER_WIDTH, PLAYER_HEIGHT } from '../con
 import { hasCustomEyes, getSpriteRenderer, getCharacterPack, drawLegs } from '../characters';
 import { drawHighlightSpot } from '../spriteShading';
 import { getSlowDevice } from '../perfFlags';
+import { hexToRGB } from '../fastMath';
 import { getIdleAction, type IdleAction } from './idleActions';
 
 // Sprite cache: key -> OffscreenCanvas with pre-drawn character sprite.
@@ -34,6 +35,52 @@ function getShadowCache(): OffscreenCanvas | null {
 
 export function clearSpriteCache(): void {
   spriteCache.clear();
+}
+
+function darken(hex: string, factor: number): string {
+  const { r, g, b } = hexToRGB(hex);
+  return `rgb(${Math.round(r * factor)}, ${Math.round(g * factor)}, ${Math.round(b * factor)})`;
+}
+
+// Outline color is derived from char.color, NOT pack.darkColor — darkColor is the
+// body-shading base, and for high-contrast packs (tiger stripes, panda patches)
+// it's a near-black spot color that reads as a heavy black outline. Darkening
+// the body primary keeps the outline visibly tied to the character without
+// dropping to spot-color black.
+const OUTLINE_DARKEN = 0.8;
+
+const OUTLINE_OFFSETS_4: ReadonlyArray<readonly [number, number]> = [[-1,0],[1,0],[0,-1],[0,1]];
+
+/** Bake an outline into the cached sprite by stamping its silhouette at 4 offsets in
+ *  the outline color, behind the original pixels. The silhouette is captured by
+ *  cloning the sprite to a temp canvas then tinting it via `source-in`. */
+function applyOutlineToCache(cached: OffscreenCanvas, color: string): void {
+  const w = cached.width;
+  const h = cached.height;
+  if (w === 0 || h === 0) return;
+  const sctx = cached.getContext('2d');
+  if (!sctx) return;
+
+  // Tinted silhouette via source-in.
+  const temp = new OffscreenCanvas(w, h);
+  const tctx = temp.getContext('2d');
+  if (!tctx) return;
+  tctx.drawImage(cached, 0, 0);
+  tctx.globalCompositeOperation = 'source-in';
+  tctx.fillStyle = color;
+  tctx.fillRect(0, 0, w, h);
+
+  sctx.save();
+  // Drop the cache canvas's scale+translate transform from the original draw —
+  // we want raw-pixel offsets here, not logical coords.
+  sctx.setTransform(1, 0, 0, 1, 0, 0);
+  sctx.globalCompositeOperation = 'destination-over';
+  // Outline width scales with sprite cache scale so it stays 1px in logical units.
+  const px = _spriteScale;
+  for (const [dx, dy] of OUTLINE_OFFSETS_4) {
+    sctx.drawImage(temp, dx * px, dy * px);
+  }
+  sctx.restore();
 }
 
 /** Set the current render scale for new sprite cache entries. Clears the cache if the scale changed. */
@@ -179,6 +226,12 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player, nearCa
     drawSplatCharacter(ctx, x, y, width, height, character.color, character.darkColor);
   } else {
     drawCharacterSprite(ctx, x, y, width, height, character, state, animFrame, fastFalling, player.idleAction, player.idleActionTimer, player.idleActionDuration, player.squashScale, theme, player);
+    // Motion / fast-fall lines drawn OUTSIDE the sprite cache so the outline pass doesn't stamp them.
+    if (state === 'airborne' && !fastFalling) {
+      drawMotionLines(ctx, cx, y + height);
+    } else if (fastFalling) {
+      drawFastFallLines(ctx, cx, y);
+    }
     drawExpression(ctx, player, frameTime);
   }
 
@@ -280,6 +333,8 @@ function drawCharacterSprite(
 
   _drawCharacterSpriteImpl(sctx, x, y, w, h, char, state, animFrame, fastFalling, idleAction, idleActionTimer, idleActionDuration, squashScale, theme);
 
+  applyOutlineToCache(cached, darken(char.color, OUTLINE_DARKEN));
+
   if (spriteCache.size > _spriteCacheCap) {
     const first = spriteCache.keys().next().value;
     if (first !== undefined) spriteCache.delete(first);
@@ -358,7 +413,6 @@ function _drawCharacterSpriteImpl(
   theme: ThemeConfig | undefined,
 ): void {
   const cx = x + w / 2;
-  const isAirborne = state === 'airborne';
   const isRunning = state === 'run';
   const bounce = isRunning ? Math.sin(animFrame * Math.PI / 2) * 2 : 0;
   const yOff = y - bounce;
@@ -381,30 +435,6 @@ function _drawCharacterSpriteImpl(
   const colors = { color: char.color, darkColor: char.darkColor, lightColor: char.lightColor };
 
   drawCharacterCore(ctx, cx, yOff, w, h, char.name, state, animFrame, squashScale, colors, isIdleAnimFlag, idleT);
-
-  // Motion lines for airborne
-  if (isAirborne && !fastFalling) {
-    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(cx - 3, yOff + h + 2);
-    ctx.lineTo(cx - 3, yOff + h + 8);
-    ctx.moveTo(cx + 3, yOff + h + 2);
-    ctx.lineTo(cx + 3, yOff + h + 8);
-    ctx.stroke();
-  }
-
-  // Fast-fall speed lines (g) -- enhanced: more lines, longer, brighter
-  if (fastFalling) {
-    ctx.strokeStyle = 'rgba(255,255,220,0.8)';
-    ctx.lineWidth = 2;
-    for (let i = -2; i <= 2; i++) {
-      ctx.beginPath();
-      ctx.moveTo(cx + i * 5, yOff - 2);
-      ctx.lineTo(cx + i * 5, yOff - 20);
-      ctx.stroke();
-    }
-  }
 
   // Bubble helmet (enabled per-arena via bubbleHelmet flag)
   if (theme?.bubbleHelmet) {
@@ -442,6 +472,32 @@ function _drawCharacterSpriteImpl(
   }
 
   ctx.restore();
+}
+
+/** Two short white lines trailing below an airborne character. Drawn outside the
+ *  sprite cache so the outline pass doesn't stamp them. */
+function drawMotionLines(ctx: CanvasRenderingContext2D, cx: number, footY: number): void {
+  ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(cx - 3, footY + 2);
+  ctx.lineTo(cx - 3, footY + 8);
+  ctx.moveTo(cx + 3, footY + 2);
+  ctx.lineTo(cx + 3, footY + 8);
+  ctx.stroke();
+}
+
+/** Five vertical speed lines above a fast-falling character. Drawn outside the
+ *  sprite cache so the outline pass doesn't stamp them. */
+function drawFastFallLines(ctx: CanvasRenderingContext2D, cx: number, headY: number): void {
+  ctx.strokeStyle = 'rgba(255,255,220,0.8)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let i = -2; i <= 2; i++) {
+    ctx.moveTo(cx + i * 5, headY - 2);
+    ctx.lineTo(cx + i * 5, headY - 20);
+  }
+  ctx.stroke();
 }
 
 export function drawSplatCharacter(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, color: string, darkColor: string): void {
