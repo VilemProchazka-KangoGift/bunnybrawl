@@ -746,6 +746,7 @@
   justify-content: center;
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
+  border-radius: 20px;
 }
 
 .mods-modal,
