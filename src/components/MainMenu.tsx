@@ -13,6 +13,7 @@ import { HelpModal } from './HelpModal';
 import { ModsModal } from './ModsModal';
 import { OnlineModal } from './OnlineModal';
 import { SettingsModal } from './SettingsModal';
+import { DevMenu } from './DevMenu';
 import logoImg from '/logo.png?url';
 import './MainMenu.css';
 
@@ -26,6 +27,37 @@ export function MainMenu() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [onlineOpen, setOnlineOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [devOpen, setDevOpen] = useState(false);
+  const settingsLongPressTimer = useRef<number | null>(null);
+  const settingsLongPressFired = useRef(false);
+
+  const cancelSettingsLongPress = useCallback(() => {
+    if (settingsLongPressTimer.current != null) {
+      window.clearTimeout(settingsLongPressTimer.current);
+      settingsLongPressTimer.current = null;
+    }
+  }, []);
+  const startSettingsLongPress = useCallback(() => {
+    cancelSettingsLongPress();
+    settingsLongPressFired.current = false;
+    settingsLongPressTimer.current = window.setTimeout(() => {
+      settingsLongPressFired.current = true;
+      settingsLongPressTimer.current = null;
+      audio.init();
+      audio.play('select');
+      setDevOpen(true);
+    }, 4000);
+  }, [cancelSettingsLongPress]);
+  const handleSettingsClick = useCallback(() => {
+    if (settingsLongPressFired.current) {
+      settingsLongPressFired.current = false;
+      return;
+    }
+    audio.init();
+    audio.play('select');
+    setSettingsOpen(true);
+  }, []);
+  useEffect(() => () => cancelSettingsLongPress(), [cancelSettingsLongPress]);
   const slowDevice = useSyncExternalStore(subscribeSlowDevice, getSlowDevice);
 
   // Mobile: ensure at least 1 bot (single player needs opponents)
@@ -43,14 +75,20 @@ export function MainMenu() {
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Enter' && !onlineOpen) {
+      const target = e.target as HTMLElement | null;
+      const inEditable = target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.isContentEditable;
+      if (e.key === 'Enter' && !onlineOpen && !devOpen) {
         e.preventDefault();
         handlePlay();
+      }
+      if (!inEditable && (e.code === 'Backquote' || e.key === '`')) {
+        e.preventDefault();
+        setDevOpen(o => !o);
       }
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [handlePlay, onlineOpen]);
+  }, [handlePlay, onlineOpen, devOpen]);
 
   useEffect(() => {
     audio.playMenuMusic();
@@ -90,7 +128,11 @@ export function MainMenu() {
         <div className={`menu-content${slowDevice ? ' menu-content--no-blur' : ''}`}>
           <button
             className="settings-toggle-btn"
-            onClick={() => { audio.init(); audio.play('select'); setSettingsOpen(true); }}
+            onClick={handleSettingsClick}
+            onPointerDown={startSettingsLongPress}
+            onPointerUp={cancelSettingsLongPress}
+            onPointerLeave={cancelSettingsLongPress}
+            onPointerCancel={cancelSettingsLongPress}
             title={t('settings_title')}
             aria-label={t('settings_title')}
           >
@@ -208,6 +250,7 @@ export function MainMenu() {
           {modsOpen && <ModsModal onClose={() => setModsOpen(false)} />}
           {onlineOpen && <OnlineModal onClose={() => setOnlineOpen(false)} />}
           {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+          {devOpen && <DevMenu onClose={() => setDevOpen(false)} />}
         </div>
         <div className="build-info">
           {new Date(__BUILD_TIME__).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}

@@ -49,3 +49,35 @@ export function toggleFpsDebug(): void {
     debugFlags.fpsEnabled = !debugFlags.fpsEnabled;
   }
 }
+
+export type DebugFlagName = 'nav' | 'net' | 'fps' | 'perf';
+
+/** Set a debug flag from the dev menu — bypasses URL gating by flipping *Allowed and *Enabled together. */
+export function setDebugFlag(name: DebugFlagName, value: boolean): void {
+  switch (name) {
+    case 'nav':
+      debugFlags.navDebugAllowed = value;
+      debugFlags.navDebugEnabled = value;
+      break;
+    case 'net':
+      debugFlags.netDebugAllowed = value;
+      debugFlags.netDebugEnabled = value;
+      break;
+    case 'fps':
+      debugFlags.fpsAllowed = value;
+      debugFlags.fpsEnabled = value;
+      break;
+    case 'perf':
+      debugFlags.perfEnabled = value;
+      break;
+  }
+}
+
+export function getDebugFlag(name: DebugFlagName): boolean {
+  switch (name) {
+    case 'nav': return debugFlags.navDebugEnabled;
+    case 'net': return debugFlags.netDebugEnabled;
+    case 'fps': return debugFlags.fpsEnabled;
+    case 'perf': return debugFlags.perfEnabled;
+  }
+}
