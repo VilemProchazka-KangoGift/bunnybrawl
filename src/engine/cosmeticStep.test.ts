@@ -507,23 +507,90 @@ describe('cosmeticStep transition detection', () => {
     expect(landCalls.length).toBe(0);
   });
 
-  it('respawn (respawning → idle) plays land sound', () => {
+  it('respawn (post-stomp) fires spawn VFX + land sound on invincibleTimer rising edge', () => {
     const { loop } = createLoop();
     const state = loop.getState();
     const player = state.players[0];
+    const ringSpy = vi.spyOn(loop.particleSystem, 'spawnRingVFX');
 
-    // Establish respawning state
+    // Baseline: still in respawning, no i-frames yet
     player.state = 'respawning';
-    player.vy = 0;
+    player.invincibleTimer = 0;
     loop.cosmeticStep(FIXED_TIMESTEP);
 
     vi.mocked(audio.play).mockClear();
+    ringSpy.mockClear();
 
-    // Respawn completes
+    // respawnPlayer fires: state → idle, invincibleTimer set non-zero
     player.state = 'idle';
+    player.invincibleTimer = 1.5;
     loop.cosmeticStep(FIXED_TIMESTEP);
 
     expect(vi.mocked(audio.play)).toHaveBeenCalledWith('land');
+    expect(ringSpy).toHaveBeenCalled();
+  });
+
+  it('teleport respawn (fall-off / OOB) fires spawn VFX + land sound', () => {
+    const { loop } = createLoop();
+    const state = loop.getState();
+    const player = state.players[0];
+    const ringSpy = vi.spyOn(loop.particleSystem, 'spawnRingVFX');
+
+    // Baseline: airborne, falling, no i-frames
+    player.state = 'airborne';
+    player.invincibleTimer = 0;
+    loop.cosmeticStep(FIXED_TIMESTEP);
+
+    vi.mocked(audio.play).mockClear();
+    ringSpy.mockClear();
+
+    // handleFallOff fires: state → idle, invincibleTimer = 1.5
+    player.state = 'idle';
+    player.invincibleTimer = 1.5;
+    loop.cosmeticStep(FIXED_TIMESTEP);
+
+    expect(vi.mocked(audio.play)).toHaveBeenCalledWith('land');
+    expect(ringSpy).toHaveBeenCalled();
+  });
+
+  it('back-to-back respawn (i-frames still active) still fires spawn VFX', () => {
+    const { loop } = createLoop();
+    const state = loop.getState();
+    const player = state.players[0];
+    const ringSpy = vi.spyOn(loop.particleSystem, 'spawnRingVFX');
+
+    // Baseline: i-frames mid-decay from prior respawn
+    player.state = 'airborne';
+    player.invincibleTimer = 0.8;
+    loop.cosmeticStep(FIXED_TIMESTEP);
+
+    ringSpy.mockClear();
+
+    // Falls off — handleFallOff resets invincibleTimer up to 1.5
+    player.state = 'idle';
+    player.invincibleTimer = 1.5;
+    loop.cosmeticStep(FIXED_TIMESTEP);
+
+    expect(ringSpy).toHaveBeenCalled();
+  });
+
+  it('horizontal wrap does NOT fire spawn VFX (no invincibleTimer change)', () => {
+    const { loop } = createLoop();
+    const state = loop.getState();
+    const player = state.players[0];
+    const ringSpy = vi.spyOn(loop.particleSystem, 'spawnRingVFX');
+
+    player.state = 'idle';
+    player.x = 1270;
+    player.invincibleTimer = 0;
+    loop.cosmeticStep(FIXED_TIMESTEP);
+
+    ringSpy.mockClear();
+
+    player.x = -10;
+    loop.cosmeticStep(FIXED_TIMESTEP);
+
+    expect(ringSpy).not.toHaveBeenCalled();
   });
 
   it('score increase creates score animation', () => {

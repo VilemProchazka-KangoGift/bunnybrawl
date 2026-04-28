@@ -14,6 +14,7 @@ export interface PrevPlayerCosmeticState {
   sideSquash: number;
   burnTimer: number;
   slowTimer: number;
+  invincibleTimer: number;
   fastFalling: boolean;
   springTrailTimer: number;
 }
@@ -23,6 +24,7 @@ export function snapshotPlayerCosmeticState(player: Player): PrevPlayerCosmeticS
     state: player.state, vx: player.vx, vy: player.vy,
     score: player.score, fatTimer: player.fatTimer, sideSquash: player.sideSquash,
     burnTimer: player.burnTimer, slowTimer: player.slowTimer,
+    invincibleTimer: player.invincibleTimer,
     fastFalling: player.fastFalling,
     springTrailTimer: player.springTrailTimer,
   };
@@ -94,8 +96,10 @@ export function detectPlayerTransitions(
     });
   }
 
-  // Respawn
-  if (prev.state === 'respawning' && player.state === 'idle') {
+  // Respawn (any path: stomp, fall-off, OOB failsafe). invincibleTimer rises
+  // non-zero only via respawnPlayer / handleFallOff — both are spawn moments.
+  // Game start is handled separately by PlayerTransitionSystem.init().
+  if (player.invincibleTimer > prev.invincibleTimer) {
     cb.playSound('land');
     cb.spawnPlayerSpawnVFX(player.x + player.width / 2, player.y + player.height / 2);
   }
@@ -133,6 +137,7 @@ export function detectPlayerTransitions(
   prev.fatTimer = player.fatTimer;
   prev.sideSquash = player.sideSquash;
   prev.burnTimer = player.burnTimer;
+  prev.invincibleTimer = player.invincibleTimer;
   prev.slowTimer = player.slowTimer;
   prev.fastFalling = player.fastFalling;
   prev.springTrailTimer = player.springTrailTimer;
