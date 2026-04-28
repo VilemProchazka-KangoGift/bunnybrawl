@@ -16,7 +16,7 @@ import {
   generateFastfallSound,
 } from './sfx';
 import {
-  generateAmbientSound, generateCrowdSound, generateZeroGSound,
+  generateCrowdSound, generateZeroGSound,
   generateWaterfallSound, generateAmbWindSound, generateAmbLavaSound,
   generateAmbSpaceHumSound,
 } from './ambient';
@@ -205,7 +205,6 @@ describe('SFX generators', () => {
 
 describe('Ambient generators', () => {
   const ambientGenerators: Array<[string, () => string]> = [
-    ['ambient', generateAmbientSound],
     ['crowd', generateCrowdSound],
     ['zero_g', generateZeroGSound],
     ['waterfall', generateWaterfallSound],
@@ -225,7 +224,7 @@ describe('Ambient generators', () => {
   }
 
   it('ambient loops are long enough (>= 2s at 44100 Hz)', () => {
-    const longLoops = [generateAmbientSound, generateZeroGSound, generateAmbSpaceHumSound];
+    const longLoops = [generateZeroGSound, generateAmbSpaceHumSound];
     for (const gen of longLoops) {
       const { samples } = decodeWavSamples(gen());
       expect(samples.length).toBeGreaterThanOrEqual(44100 * 2);

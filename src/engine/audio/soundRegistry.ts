@@ -9,7 +9,7 @@ import {
   generateFastfallSound,
 } from './synthesis/sfx';
 import {
-  generateAmbientSound, generateCrowdSound, generateZeroGSound,
+  generateCrowdSound, generateZeroGSound,
   generateWaterfallSound, generateAmbWindSound, generateAmbLavaSound,
   generateAmbSpaceHumSound,
 } from './synthesis/ambient';
@@ -48,7 +48,6 @@ const SFX_DEFS: Array<[string, SoundDef]> = [
 ];
 
 const AMBIENT_DEFS: Array<[string, SoundDef]> = [
-  ['ambient',    { generate: generateAmbientSound, volume: 0.12, loop: true }],
   ['crowd',      { generate: generateCrowdSound, volume: 0 }],
   ['zero_g',     { generate: generateZeroGSound, volume: 0.15, loop: true }],
   ['waterfall_ambient', { generate: generateWaterfallSound, volume: 0.18, loop: true }],

@@ -252,7 +252,6 @@ export class Simulator {
     this._phase = phase;
     if (phase === 'playing' && prev !== 'playing') {
       this._events.onMusicStartRequest(this._arena.themeId);
-      this._events.onSfxRequest('ambient');
       this._matchSystem.init();
     }
     this._events.onPhaseChange(phase);

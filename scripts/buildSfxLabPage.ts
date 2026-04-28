@@ -18,6 +18,10 @@ import {
   generateGeyserSound, generatePigeonScatterSound, generateAmbBirdChirpSound,
   generateAmbGhostHooSound, generateAmbVolcanoBurstSound,
 } from '../src/engine/audio/synthesis/periodic';
+import {
+  generateZeroGSound, generateWaterfallSound,
+  generateAmbWindSound, generateAmbLavaSound, generateAmbSpaceHumSound,
+} from '../src/engine/audio/synthesis/ambient';
 import { floatBufferToWavDataUri } from '../src/engine/audio/synthesis/wav';
 import { generateToneBuffer, generateMultiSegmentTone } from '../src/engine/audio/synthesis/core';
 
@@ -3657,6 +3661,781 @@ function selectMidClick(): string {
 }
 
 // ---------------------------------------------------------------------------
+// Ambient loops — 6 continuous arena/zone backgrounds. These play for minutes
+// at a time, so each candidate must (a) feel right for its arena, (b) have a
+// clean loop seam, (c) survive long-listen ear fatigue.
+//
+// Loop seam strategy: keep a fixed loop length, use frequencies whose periods
+// divide it cleanly, and keep noise statistically stationary (no integrators
+// that drift toward one rail).
+
+// ---- Helpers for stationary-noise loops ----
+
+function makeBrown(decay: number, scale: number): (white: number) => number {
+  // Leaky integrator — bounded brown-ish noise. decay=0.998 is mild low-pass,
+  // scale controls the white→brown amplification. Result stays roughly in
+  // [-1,1] and is statistically stationary, so the loop seam is inaudible.
+  let s = 0;
+  return (white: number) => {
+    s += white * scale;
+    s *= decay;
+    if (s > 1) s = 1; else if (s < -1) s = -1;
+    return s;
+  };
+}
+
+interface AmbientLoopParams {
+  duration: number;
+}
+
+// ---- ambient (generic background) ----
+
+interface AmbientGenericParams extends AmbientLoopParams {
+  brownDecay: number;     // higher = brighter, lower = warmer
+  brownScale: number;     // white→brown amp
+  outAmp: number;
+}
+
+function ambientGenericVariant(p: Partial<AmbientGenericParams> = {}): string {
+  const { duration = 2.0, brownDecay = 0.998, brownScale = 0.02, outAmp = 0.05 } = p;
+  const brown = makeBrown(brownDecay, brownScale);
+  return buildBuffer(duration, () => brown(Math.random() * 2 - 1) * outAmp);
+}
+
+function ambientWarmth(): string {
+  // Brown noise + faint 60Hz sub hum + 0.18Hz amplitude breath
+  const brown = makeBrown(0.997, 0.018);
+  return buildBuffer(2.0, (t) => {
+    const n = brown(Math.random() * 2 - 1);
+    const hum = Math.sin(2 * Math.PI * 60 * t) * 0.025;
+    const breath = 0.7 + 0.3 * Math.sin(2 * Math.PI * 0.18 * t);
+    return (n * 0.6 + hum) * breath * 0.08;
+  });
+}
+
+function ambientPad(): string {
+  // Three-tone pad (90/135/180Hz, 1:1.5:2 ratio) + faint air noise
+  const brown = makeBrown(0.999, 0.005);
+  return buildBuffer(2.0, (t) => {
+    const n = brown(Math.random() * 2 - 1);
+    const a = Math.sin(2 * Math.PI * 90 * t) * 0.018;
+    const b = Math.sin(2 * Math.PI * 135 * t) * 0.012;
+    const c = Math.sin(2 * Math.PI * 180 * t) * 0.008;
+    const breath = 0.75 + 0.25 * Math.sin(2 * Math.PI * 0.12 * t);
+    return ((a + b + c) * breath + n * 0.04) * 0.7;
+  });
+}
+
+function ambientHushedRoom(): string {
+  // Very quiet pink-ish noise — "indoor stillness". Two leaky integrators
+  // at different time constants approximate pink.
+  const slow = makeBrown(0.995, 0.02);
+  const fast = makeBrown(0.92, 0.05);
+  return buildBuffer(2.0, () => {
+    const w = Math.random() * 2 - 1;
+    return (slow(w) * 0.7 + fast(w) * 0.3) * 0.05;
+  });
+}
+
+// ---- zero_g ----
+
+interface ZeroGParams extends AmbientLoopParams {
+  hum: number; mod: number; high: number;
+  highBaseF: number; vibratoF: number; vibratoDepth: number;
+  hub: number; outAmp: number;
+}
+
+function zeroGVariant(p: Partial<ZeroGParams> = {}): string {
+  const { duration = 2.0, hum = 80, mod = 0.5, high = 220,
+          vibratoF = 0.3, vibratoDepth = 3, outAmp = 0.4 } = p;
+  return buildBuffer(duration, (t) => {
+    const h = Math.sin(2 * Math.PI * hum * t) * 0.08;
+    const m = Math.sin(2 * Math.PI * mod * t) * 0.3 + 0.7;
+    const hi = Math.sin(2 * Math.PI * high * t + Math.sin(2 * Math.PI * vibratoF * t) * vibratoDepth) * 0.02;
+    return (h * m + hi) * outAmp;
+  });
+}
+
+function zeroGShimmer(): string {
+  // Drone + slow phase-shifted shimmer (LFO-modulated 320Hz tone)
+  return buildBuffer(2.0, (t) => {
+    const drone = Math.sin(2 * Math.PI * 70 * t) * 0.07;
+    const shimmer = Math.sin(2 * Math.PI * 320 * t + Math.sin(2 * Math.PI * 0.5 * t) * 6) * 0.025;
+    const m = 0.7 + 0.3 * Math.sin(2 * Math.PI * 0.4 * t);
+    return (drone + shimmer) * m * 0.5;
+  });
+}
+
+function zeroGEthereal(): string {
+  // Two-octave drone (60Hz + 120Hz) + very faint 0.5Hz tremolo on the upper
+  return buildBuffer(2.0, (t) => {
+    const lo = Math.sin(2 * Math.PI * 60 * t) * 0.07;
+    const trem = 0.7 + 0.3 * Math.sin(2 * Math.PI * 0.5 * t);
+    const hi = Math.sin(2 * Math.PI * 120 * t) * 0.04 * trem;
+    return (lo + hi) * 0.5;
+  });
+}
+
+function zeroGAirlock(): string {
+  // Hum + faint 0.25Hz breathing noise on top
+  const brown = makeBrown(0.998, 0.012);
+  return buildBuffer(2.0, (t) => {
+    const h = Math.sin(2 * Math.PI * 80 * t) * 0.07;
+    const m = 0.7 + 0.3 * Math.sin(2 * Math.PI * 0.25 * t);
+    const air = brown(Math.random() * 2 - 1) * 0.04;
+    return (h + air) * m * 0.5;
+  });
+}
+
+// ---- waterfall_ambient ----
+
+interface WaterfallParams extends AmbientLoopParams {
+  brownAmp: number; rushAmp: number; toneF: number; toneAmp: number;
+  ebbF: number; outAmp: number;
+}
+
+function waterfallVariant(p: Partial<WaterfallParams> = {}): string {
+  const { duration = 3.0, brownAmp = 0.08, rushAmp = 0.12, toneF = 55,
+          toneAmp = 0.015, ebbF = 0.25, outAmp = 0.35 } = p;
+  const brown = makeBrown(0.998, 0.015);
+  return buildBuffer(duration, (t) => {
+    const w = Math.random() * 2 - 1;
+    const b = brown(w);
+    const rush = w * rushAmp;
+    const m = 0.7 + 0.3 * Math.sin(2 * Math.PI * ebbF * t);
+    const tone = Math.sin(2 * Math.PI * toneF * t) * toneAmp;
+    return (b * brownAmp + rush * m + tone) * outAmp;
+  });
+}
+
+function waterfallRoaring(): string {
+  // Heavier mid-band: two leaky integrators stacked (one slow, one fast)
+  const slow = makeBrown(0.998, 0.02);
+  const fast = makeBrown(0.85, 0.18);
+  return buildBuffer(3.0, (t) => {
+    const w = Math.random() * 2 - 1;
+    const m = 0.7 + 0.3 * Math.sin(2 * Math.PI * 0.22 * t);
+    const tone = Math.sin(2 * Math.PI * 50 * t) * 0.02;
+    return (slow(w) * 0.07 + fast(w) * 0.18 * m + tone) * 0.45;
+  });
+}
+
+function waterfallMistyCascade(): string {
+  // Brighter, less low end — like mist near the top
+  const brown = makeBrown(0.94, 0.06);
+  return buildBuffer(3.0, (t) => {
+    const w = Math.random() * 2 - 1;
+    const b = brown(w);
+    const m = 0.75 + 0.25 * Math.sin(2 * Math.PI * 0.3 * t);
+    return (b * 0.15 + w * 0.08) * m * 0.4;
+  });
+}
+
+function waterfallDistant(): string {
+  // Quieter, lower-passed — heard from afar
+  const brown = makeBrown(0.999, 0.02);
+  return buildBuffer(3.0, (t) => {
+    const w = Math.random() * 2 - 1;
+    const b = brown(w);
+    const tone = Math.sin(2 * Math.PI * 45 * t) * 0.02;
+    const m = 0.65 + 0.35 * Math.sin(2 * Math.PI * 0.18 * t);
+    return (b * 0.18 + tone) * m * 0.4;
+  });
+}
+
+// ---- amb_wind ----
+
+interface WindParams extends AmbientLoopParams {
+  brownScale: number; brownDecay: number; modF: number; modDepth: number; outAmp: number;
+}
+
+function windVariant(p: Partial<WindParams> = {}): string {
+  const { duration = 3.0, brownScale = 0.01, brownDecay = 0.999,
+          modF = 0.2, modDepth = 0.4, outAmp = 0.25 } = p;
+  const brown = makeBrown(brownDecay, brownScale);
+  return buildBuffer(duration, (t) => {
+    const b = brown(Math.random() * 2 - 1);
+    const m = (1 - modDepth) + modDepth * Math.sin(2 * Math.PI * modF * t);
+    return b * m * outAmp;
+  });
+}
+
+function windGusty(): string {
+  // Brown noise with two-LFO amplitude mod (0.15Hz + 0.7Hz) — gust + lull
+  const brown = makeBrown(0.998, 0.012);
+  return buildBuffer(3.0, (t) => {
+    const b = brown(Math.random() * 2 - 1);
+    const slow = 0.6 + 0.4 * Math.sin(2 * Math.PI * 0.15 * t);
+    const fast = 0.85 + 0.15 * Math.sin(2 * Math.PI * 0.7 * t + 1);
+    return b * slow * fast * 0.28;
+  });
+}
+
+function windHowling(): string {
+  // Brown noise + 180Hz whistle that pitch-modulates with wind
+  const brown = makeBrown(0.997, 0.013);
+  return buildBuffer(3.0, (t) => {
+    const b = brown(Math.random() * 2 - 1);
+    const lfo = Math.sin(2 * Math.PI * 0.2 * t);
+    const whistleF = 180 + 40 * lfo;
+    const whistleAmp = Math.max(0, lfo) * 0.025; // only when LFO peaks
+    const whistle = Math.sin(2 * Math.PI * whistleF * t) * whistleAmp;
+    const m = 0.7 + 0.3 * Math.sin(2 * Math.PI * 0.18 * t);
+    return (b * m + whistle) * 0.32;
+  });
+}
+
+function windHighAltitude(): string {
+  // Brighter brown noise (bigger scale, faster decay) — thinner air
+  const brown = makeBrown(0.94, 0.06);
+  return buildBuffer(3.0, (t) => {
+    const b = brown(Math.random() * 2 - 1);
+    const m = 0.6 + 0.4 * Math.sin(2 * Math.PI * 0.25 * t);
+    return b * m * 0.18;
+  });
+}
+
+// ---- amb_lava ----
+
+interface LavaParams extends AmbientLoopParams {
+  brownAmp: number; rumbleF: number; rumbleAmp: number;
+  modF: number; modDepth: number; outAmp: number;
+}
+
+function lavaVariant(p: Partial<LavaParams> = {}): string {
+  const { duration = 3.0, brownAmp = 0.1, rumbleF = 45, rumbleAmp = 0.15,
+          modF = 0.15, modDepth = 0.3, outAmp = 0.5 } = p;
+  const brown = makeBrown(0.997, 0.02);
+  return buildBuffer(duration, (t) => {
+    const b = brown(Math.random() * 2 - 1) * brownAmp;
+    const rumble = Math.sin(2 * Math.PI * rumbleF * t) * rumbleAmp;
+    const m = (1 - modDepth) + modDepth * Math.sin(2 * Math.PI * modF * t);
+    return (b + rumble) * m * outAmp;
+  });
+}
+
+function lavaBubbling(): string {
+  // Rumble + slow bubble pops sprinkled across the loop (deterministic spacing)
+  const brown = makeBrown(0.997, 0.02);
+  const pops = [0.21, 0.78, 1.34, 1.92, 2.55];
+  return buildBuffer(3.0, (t) => {
+    const b = brown(Math.random() * 2 - 1);
+    const rumble = Math.sin(2 * Math.PI * 45 * t) * 0.13;
+    let pop = 0;
+    for (const tt of pops) {
+      const dt = t - tt;
+      if (dt > 0 && dt < 0.08) pop += Math.sin(2 * Math.PI * 180 * dt) * Math.exp(-dt * 25) * 0.06;
+    }
+    const m = 0.7 + 0.3 * Math.sin(2 * Math.PI * 0.18 * t);
+    return (b * 0.1 + rumble + pop) * m * 0.5;
+  });
+}
+
+function lavaThicker(): string {
+  // Slower rumble (35Hz) + stronger brown — feels viscous
+  const brown = makeBrown(0.998, 0.025);
+  return buildBuffer(3.0, (t) => {
+    const b = brown(Math.random() * 2 - 1);
+    const rumble = Math.sin(2 * Math.PI * 35 * t) * 0.16;
+    const m = 0.7 + 0.3 * Math.sin(2 * Math.PI * 0.13 * t);
+    return (b * 0.13 + rumble) * m * 0.55;
+  });
+}
+
+function lavaCrackling(): string {
+  // Lava + faint high-frequency crackle (random pops)
+  const brown = makeBrown(0.997, 0.02);
+  // Pre-generate crackle positions for stationary loop
+  const cracklePositions: number[] = [];
+  for (let i = 0; i < 18; i++) cracklePositions.push((i * 0.171 + 0.07) % 3.0);
+  return buildBuffer(3.0, (t) => {
+    const b = brown(Math.random() * 2 - 1);
+    const rumble = Math.sin(2 * Math.PI * 45 * t) * 0.13;
+    let crk = 0;
+    for (const tt of cracklePositions) {
+      const dt = t - tt;
+      if (dt > 0 && dt < 0.015) crk += (Math.sin(2 * Math.PI * 1200 * dt)) * Math.exp(-dt * 200) * 0.04;
+    }
+    const m = 0.7 + 0.3 * Math.sin(2 * Math.PI * 0.15 * t);
+    return (b * 0.1 + rumble + crk) * m * 0.5;
+  });
+}
+
+// ---- amb_space_hum ----
+
+interface SpaceHumParams extends AmbientLoopParams {
+  hum: number; humAmp: number; modF: number;
+  highF: number; highAmp: number; vibratoF: number; vibratoDepth: number;
+  outAmp: number;
+}
+
+function spaceHumVariant(p: Partial<SpaceHumParams> = {}): string {
+  const { duration = 2.0, hum = 80, humAmp = 0.12, modF = 0.4,
+          highF = 220, highAmp = 0.04, vibratoF = 0.25, vibratoDepth = 3,
+          outAmp = 0.5 } = p;
+  return buildBuffer(duration, (t) => {
+    const h = Math.sin(2 * Math.PI * hum * t) * humAmp;
+    const m = 0.7 + 0.3 * Math.sin(2 * Math.PI * modF * t);
+    const hi = Math.sin(2 * Math.PI * highF * t + Math.sin(2 * Math.PI * vibratoF * t) * vibratoDepth) * highAmp;
+    return (h * m + hi) * outAmp;
+  });
+}
+
+function spaceHumElectronic(): string {
+  // Square-wave-like 60Hz with subtle harmonics — feels like power systems
+  return buildBuffer(2.0, (t) => {
+    const fund = Math.sin(2 * Math.PI * 60 * t) * 0.08;
+    const h2 = Math.sin(2 * Math.PI * 180 * t) * 0.025;
+    const h3 = Math.sin(2 * Math.PI * 300 * t) * 0.012;
+    const m = 0.75 + 0.25 * Math.sin(2 * Math.PI * 0.3 * t);
+    return (fund + h2 + h3) * m * 0.5;
+  });
+}
+
+function spaceHumDeepHull(): string {
+  // Lower fundamental (50Hz) + slow throbbing
+  return buildBuffer(2.0, (t) => {
+    const lo = Math.sin(2 * Math.PI * 50 * t) * 0.13;
+    const throb = 0.6 + 0.4 * Math.sin(2 * Math.PI * 0.5 * t);
+    const high = Math.sin(2 * Math.PI * 200 * t) * 0.025;
+    return (lo * throb + high) * 0.5;
+  });
+}
+
+function spaceHumServerRoom(): string {
+  // 80Hz hum + faint white-noise hiss (stationary, looped via leaky integrator)
+  const brown = makeBrown(0.85, 0.04);
+  return buildBuffer(2.0, (t) => {
+    const h = Math.sin(2 * Math.PI * 80 * t) * 0.1;
+    const hiss = brown(Math.random() * 2 - 1) * 0.04;
+    const m = 0.8 + 0.2 * Math.sin(2 * Math.PI * 0.4 * t);
+    return (h * m + hiss) * 0.5;
+  });
+}
+
+function spaceHumDistantStars(): string {
+  // 80Hz hum + sparse high-frequency twinkles (deterministic positions)
+  const positions: number[] = [];
+  for (let i = 0; i < 8; i++) positions.push((i * 0.247 + 0.05) % 2.0);
+  return buildBuffer(2.0, (t) => {
+    const h = Math.sin(2 * Math.PI * 80 * t) * 0.1;
+    let twinkle = 0;
+    for (const tt of positions) {
+      const dt = t - tt;
+      if (dt > 0 && dt < 0.04) twinkle += Math.sin(2 * Math.PI * 1500 * dt) * Math.exp(-dt * 60) * 0.018;
+    }
+    const m = 0.75 + 0.25 * Math.sin(2 * Math.PI * 0.25 * t);
+    return (h * m + twinkle) * 0.5;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Ambient loops page
+
+function buildAmbientLoopsPage(): PageDef {
+  return {
+    title: 'Ambient Loops',
+    subtitle: 'Continuous backgrounds. Each plays for minutes. Listen long enough to detect repetition or fatigue. Pick 1 winner per sound (these are arena-defining textures).',
+    sounds: [
+      // ---- ambient (generic) ----
+      {
+        name: 'ambient',
+        description: 'Generic background — used as a fallback ambient. Currently barely audible (vol 0.12). Pick 1.',
+        candidates: [
+          proc('ambient', 'current', generateAmbientSound(),
+               'Current — brownian noise, very faint (2s)'),
+          proc('ambient', 'brighter', ambientGenericVariant({ brownDecay: 0.99 }),
+               'Brighter (less integrated, more white character)'),
+          proc('ambient', 'warmer', ambientGenericVariant({ brownDecay: 0.9995, brownScale: 0.025 }),
+               'Warmer (more integrated, lower band)'),
+          proc('ambient', 'louder', ambientGenericVariant({ outAmp: 0.08 }),
+               'Louder (×0.08 vs ×0.05)'),
+          proc('ambient', 'longer', ambientGenericVariant({ duration: 3.0 }),
+               'Longer loop (3s — longer cycle)'),
+          // Fresh takes
+          proc('ambient', 'take-warmth', ambientWarmth(),
+               '* Different take — warmth (brown + 60Hz hum + 0.18Hz breath, 2s)'),
+          proc('ambient', 'take-pad', ambientPad(),
+               '* Different take — 3-tone pad (90/135/180Hz + air, 2s)'),
+          proc('ambient', 'take-hushed', ambientHushedRoom(),
+               '* Different take — hushed room (pink-ish noise, 2s)'),
+        ],
+      },
+      // ---- zero_g ----
+      {
+        name: 'zero_g',
+        description: 'Loops while a player is in a zero-G zone. Should feel weightless / electronic. Pick 1.',
+        candidates: [
+          proc('zero_g', 'current', generateZeroGSound(),
+               'Current — 80Hz hum + 220Hz wobble (2s)'),
+          proc('zero_g', 'lower-hum', zeroGVariant({ hum: 60 }),
+               'Lower hum (60Hz)'),
+          proc('zero_g', 'higher-hum', zeroGVariant({ hum: 110 }),
+               'Higher hum (110Hz)'),
+          proc('zero_g', 'fast-mod', zeroGVariant({ mod: 1.0, vibratoF: 0.6 }),
+               'Faster modulation (1Hz mod, 0.6Hz vibrato)'),
+          proc('zero_g', 'slow-mod', zeroGVariant({ mod: 0.25, vibratoF: 0.15 }),
+               'Slower modulation (calmer)'),
+          proc('zero_g', 'wider-vib', zeroGVariant({ vibratoDepth: 8 }),
+               'Wider vibrato on top (8 depth)'),
+          proc('zero_g', 'cleaner', zeroGVariant({ high: 0, vibratoDepth: 0 }),
+               'Cleaner — no high wobble (just hum)'),
+          // Fresh takes
+          proc('zero_g', 'take-shimmer', zeroGShimmer(),
+               '* Different take — drone + 320Hz phase shimmer (2s)'),
+          proc('zero_g', 'take-ethereal', zeroGEthereal(),
+               '* Different take — 60+120Hz two-octave drone (2s)'),
+          proc('zero_g', 'take-airlock', zeroGAirlock(),
+               '* Different take — hum + air-noise breath (2s)'),
+        ],
+      },
+      // ---- waterfall_ambient ----
+      {
+        name: 'waterfall_ambient',
+        description: 'Loops in waterfall arena. Should feel like rushing water without being abrasive. Pick 1.',
+        candidates: [
+          proc('waterfall_ambient', 'current', generateWaterfallSound(),
+               'Current — brown rumble + rushing white + 55Hz tone (3s)'),
+          proc('waterfall_ambient', 'gentler', waterfallVariant({ rushAmp: 0.08, brownAmp: 0.06 }),
+               'Gentler (less rush, less brown)'),
+          proc('waterfall_ambient', 'fiercer', waterfallVariant({ rushAmp: 0.18, brownAmp: 0.1 }),
+               'Fiercer (more rush, more brown)'),
+          proc('waterfall_ambient', 'lower-tone', waterfallVariant({ toneF: 40 }),
+               'Lower tone (40Hz — heavier presence)'),
+          proc('waterfall_ambient', 'no-tone', waterfallVariant({ toneAmp: 0 }),
+               'No low tone — pure noise mix'),
+          proc('waterfall_ambient', 'fast-ebb', waterfallVariant({ ebbF: 0.5 }),
+               'Faster ebb-and-flow (0.5Hz mod)'),
+          proc('waterfall_ambient', 'slow-ebb', waterfallVariant({ ebbF: 0.12 }),
+               'Slower ebb-and-flow (0.12Hz mod — calmer)'),
+          // Fresh takes
+          proc('waterfall_ambient', 'take-roaring', waterfallRoaring(),
+               '* Different take — roaring (stacked slow+fast brown, 3s)'),
+          proc('waterfall_ambient', 'take-misty', waterfallMistyCascade(),
+               '* Different take — misty cascade (brighter, less low-end, 3s)'),
+          proc('waterfall_ambient', 'take-distant', waterfallDistant(),
+               '* Different take — distant (low-pass, quieter, 3s)'),
+        ],
+      },
+      // ---- amb_wind ----
+      {
+        name: 'amb_wind',
+        description: 'Wind loop in winter / rooftops / treetops arenas. Pick 1.',
+        candidates: [
+          proc('amb_wind', 'current', generateAmbWindSound(),
+               'Current — brown + 0.2Hz amplitude mod (3s)'),
+          proc('amb_wind', 'breezier', windVariant({ modDepth: 0.6, modF: 0.3 }),
+               'Breezier (deeper, faster mod)'),
+          proc('amb_wind', 'steadier', windVariant({ modDepth: 0.2, modF: 0.12 }),
+               'Steadier (calmer mod)'),
+          proc('amb_wind', 'brighter', windVariant({ brownDecay: 0.95, brownScale: 0.04 }),
+               'Brighter (less integrated)'),
+          proc('amb_wind', 'darker', windVariant({ brownDecay: 0.9995, brownScale: 0.018 }),
+               'Darker (more integrated)'),
+          proc('amb_wind', 'louder', windVariant({ outAmp: 0.32 }),
+               'Louder (×0.32 vs ×0.25)'),
+          // Fresh takes
+          proc('amb_wind', 'take-gusty', windGusty(),
+               '* Different take — gusty (two-LFO mod, 3s)'),
+          proc('amb_wind', 'take-howling', windHowling(),
+               '* Different take — howling (brown + 180Hz whistle on LFO peaks, 3s)'),
+          proc('amb_wind', 'take-high-altitude', windHighAltitude(),
+               '* Different take — high-altitude (thinner, brighter, 3s)'),
+        ],
+      },
+      // ---- amb_lava ----
+      {
+        name: 'amb_lava',
+        description: 'Lava loop in volcano arena. Currently the loudest ambient (vol 0.6). Pick 1.',
+        candidates: [
+          proc('amb_lava', 'current', generateAmbLavaSound(),
+               'Current — brown + 45Hz rumble (3s)'),
+          proc('amb_lava', 'lower-rumble', lavaVariant({ rumbleF: 35, rumbleAmp: 0.18 }),
+               'Lower rumble (35Hz, amp 0.18)'),
+          proc('amb_lava', 'higher-rumble', lavaVariant({ rumbleF: 60, rumbleAmp: 0.12 }),
+               'Higher rumble (60Hz)'),
+          proc('amb_lava', 'no-rumble', lavaVariant({ rumbleAmp: 0, brownAmp: 0.18 }),
+               'No rumble — pure brown bed'),
+          proc('amb_lava', 'fast-mod', lavaVariant({ modF: 0.35, modDepth: 0.45 }),
+               'Faster mod (0.35Hz, deeper)'),
+          proc('amb_lava', 'slow-mod', lavaVariant({ modF: 0.08, modDepth: 0.2 }),
+               'Slower mod (0.08Hz, gentler)'),
+          // Fresh takes
+          proc('amb_lava', 'take-bubbling', lavaBubbling(),
+               '* Different take — bubbling (rumble + 5 deterministic bubble pops, 3s)'),
+          proc('amb_lava', 'take-thicker', lavaThicker(),
+               '* Different take — thicker (35Hz rumble, stronger brown, 3s)'),
+          proc('amb_lava', 'take-crackling', lavaCrackling(),
+               '* Different take — crackling (lava + 18 high-freq crackle pops, 3s)'),
+        ],
+      },
+      // ---- amb_space_hum ----
+      {
+        name: 'amb_space_hum',
+        description: 'Loop in space station arena. Should feel like life-support / power systems. Pick 1.',
+        candidates: [
+          proc('amb_space_hum', 'current', generateAmbSpaceHumSound(),
+               'Current — 80Hz hum + 220Hz wobble (2s)'),
+          proc('amb_space_hum', 'lower-hum', spaceHumVariant({ hum: 55 }),
+               'Lower hum (55Hz — heavier)'),
+          proc('amb_space_hum', 'higher-hum', spaceHumVariant({ hum: 110 }),
+               'Higher hum (110Hz — lighter)'),
+          proc('amb_space_hum', 'no-wobble', spaceHumVariant({ highAmp: 0, vibratoDepth: 0 }),
+               'No wobble — clean hum only'),
+          proc('amb_space_hum', 'wobblier', spaceHumVariant({ vibratoDepth: 6, vibratoF: 0.5 }),
+               'More wobble (6 depth, 0.5Hz)'),
+          proc('amb_space_hum', 'fast-mod', spaceHumVariant({ modF: 0.7 }),
+               'Faster amplitude mod (0.7Hz)'),
+          // Fresh takes
+          proc('amb_space_hum', 'take-electronic', spaceHumElectronic(),
+               '* Different take — electronic (60+180+300Hz harmonics, 2s)'),
+          proc('amb_space_hum', 'take-deep-hull', spaceHumDeepHull(),
+               '* Different take — deep hull (50Hz + 0.5Hz throb + 200Hz, 2s)'),
+          proc('amb_space_hum', 'take-server-room', spaceHumServerRoom(),
+               '* Different take — server room (hum + white-noise hiss, 2s)'),
+          proc('amb_space_hum', 'take-distant-stars', spaceHumDistantStars(),
+               '* Different take — distant stars (hum + 8 high-freq twinkles, 2s)'),
+        ],
+      },
+    ],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Ambient loops R2 — variations of the picks from round 1.
+// Picks (parity-counted):
+//   zero_g            → zeroGShimmer (drone + 320Hz phase shimmer)
+//   waterfall_ambient → waterfallRoaring (stacked slow+fast brown)
+//   amb_wind          → breezier (windVariant modDepth 0.6, modF 0.3)
+//   amb_lava          → slow-mod (lavaVariant modF 0.08, modDepth 0.2)
+//   amb_space_hum     → current (80Hz hum + 220Hz wobble)
+
+// ---- zero_g shimmer perturbations ----
+
+interface ZeroGShimmerParams {
+  duration: number;
+  droneF: number; droneAmp: number;
+  shimmerF: number; shimmerLfoF: number; shimmerLfoDepth: number; shimmerAmp: number;
+  amF: number; amDepth: number;
+  outAmp: number;
+}
+
+function zeroGShimmerVariant(p: Partial<ZeroGShimmerParams> = {}): string {
+  const { duration = 2.0, droneF = 70, droneAmp = 0.07,
+          shimmerF = 320, shimmerLfoF = 0.5, shimmerLfoDepth = 6, shimmerAmp = 0.025,
+          amF = 0.4, amDepth = 0.3, outAmp = 0.5 } = p;
+  return buildBuffer(duration, (t) => {
+    const drone = Math.sin(2 * Math.PI * droneF * t) * droneAmp;
+    const shimmer = Math.sin(2 * Math.PI * shimmerF * t + Math.sin(2 * Math.PI * shimmerLfoF * t) * shimmerLfoDepth) * shimmerAmp;
+    const m = (1 - amDepth) + amDepth * Math.sin(2 * Math.PI * amF * t);
+    return (drone + shimmer) * m * outAmp;
+  });
+}
+
+// ---- waterfall roaring perturbations ----
+
+interface WaterfallRoaringParams {
+  duration: number;
+  slowDecay: number; slowScale: number; slowAmp: number;
+  fastDecay: number; fastScale: number; fastAmp: number;
+  toneF: number; toneAmp: number;
+  modF: number; modDepth: number;
+  outAmp: number;
+}
+
+function waterfallRoaringVariant(p: Partial<WaterfallRoaringParams> = {}): string {
+  const { duration = 3.0,
+          slowDecay = 0.998, slowScale = 0.02, slowAmp = 0.07,
+          fastDecay = 0.85, fastScale = 0.18, fastAmp = 0.18,
+          toneF = 50, toneAmp = 0.02,
+          modF = 0.22, modDepth = 0.3, outAmp = 0.45 } = p;
+  const slow = makeBrown(slowDecay, slowScale);
+  const fast = makeBrown(fastDecay, fastScale);
+  return buildBuffer(duration, (t) => {
+    const w = Math.random() * 2 - 1;
+    const m = (1 - modDepth) + modDepth * Math.sin(2 * Math.PI * modF * t);
+    const tone = Math.sin(2 * Math.PI * toneF * t) * toneAmp;
+    return (slow(w) * slowAmp + fast(w) * fastAmp * m + tone) * outAmp;
+  });
+}
+
+// ---- amb_lava slow-mod perturbations ----
+// Reusing existing lavaVariant — just generate close perturbations of
+// modF=0.08, modDepth=0.2.
+
+// ---- amb_wind breezier perturbations ----
+// Reusing existing windVariant — close perturbations of modDepth=0.6, modF=0.3.
+
+// ---------------------------------------------------------------------------
+// Ambient loops R2 page
+
+function buildAmbientLoopsR2Page(): PageDef {
+  return {
+    title: 'Ambient Loops — Round 2',
+    subtitle: 'Close perturbations of the round-1 picks. Listen long for fatigue/seam issues. Pick 1 winner per sound.',
+    sounds: [
+      // ---- zero_g (winner: shimmer) ----
+      {
+        name: 'zero_g',
+        description: 'Round 1 pick: shimmer (70Hz drone + 320Hz phase shimmer + 0.5Hz LFO).',
+        candidates: [
+          proc('zero_g', 'shimmer-current', zeroGShimmerVariant(),
+               'Current — 70Hz drone + 320Hz/0.5Hz shimmer + 0.4Hz AM'),
+          proc('zero_g', 'shimmer-deeper', zeroGShimmerVariant({ droneF: 55, droneAmp: 0.085 }),
+               'Deeper drone (55Hz, amp 0.085)'),
+          proc('zero_g', 'shimmer-thinner', zeroGShimmerVariant({ droneF: 90, droneAmp: 0.06 }),
+               'Thinner drone (90Hz, amp 0.06)'),
+          proc('zero_g', 'shimmer-brighter', zeroGShimmerVariant({ shimmerF: 420, shimmerAmp: 0.03 }),
+               'Brighter shimmer (420Hz, amp 0.03)'),
+          proc('zero_g', 'shimmer-warmer', zeroGShimmerVariant({ shimmerF: 240, shimmerAmp: 0.022 }),
+               'Warmer shimmer (240Hz)'),
+          proc('zero_g', 'shimmer-quieter', zeroGShimmerVariant({ shimmerAmp: 0.015 }),
+               'Quieter shimmer (amp 0.015 — drone-forward)'),
+          proc('zero_g', 'shimmer-louder', zeroGShimmerVariant({ shimmerAmp: 0.04 }),
+               'Louder shimmer (amp 0.04 — shimmer-forward)'),
+          proc('zero_g', 'shimmer-fast-lfo', zeroGShimmerVariant({ shimmerLfoF: 0.9 }),
+               'Faster LFO on shimmer (0.9Hz — busier)'),
+          proc('zero_g', 'shimmer-slow-lfo', zeroGShimmerVariant({ shimmerLfoF: 0.25 }),
+               'Slower LFO on shimmer (0.25Hz — calmer)'),
+          proc('zero_g', 'shimmer-wide-lfo', zeroGShimmerVariant({ shimmerLfoDepth: 12 }),
+               'Wider LFO depth (12 — more movement)'),
+          proc('zero_g', 'shimmer-tight-lfo', zeroGShimmerVariant({ shimmerLfoDepth: 3 }),
+               'Tighter LFO depth (3 — more stable)'),
+          proc('zero_g', 'shimmer-fast-am', zeroGShimmerVariant({ amF: 0.7, amDepth: 0.4 }),
+               'Faster amplitude pulse (0.7Hz, deeper)'),
+          proc('zero_g', 'shimmer-slow-am', zeroGShimmerVariant({ amF: 0.18, amDepth: 0.2 }),
+               'Slower amplitude pulse (0.18Hz, gentler)'),
+          proc('zero_g', 'shimmer-louder-out', zeroGShimmerVariant({ outAmp: 0.7 }),
+               'Louder overall (outAmp 0.7)'),
+        ],
+      },
+      // ---- waterfall_ambient (winner: roaring) ----
+      {
+        name: 'waterfall_ambient',
+        description: 'Round 1 pick: roaring (stacked slow+fast brown + 50Hz tone).',
+        candidates: [
+          proc('waterfall_ambient', 'roaring-current', waterfallRoaringVariant(),
+               'Current — slow(0.998/0.02)+fast(0.85/0.18) + 50Hz'),
+          proc('waterfall_ambient', 'roaring-fiercer', waterfallRoaringVariant({ fastAmp: 0.24, slowAmp: 0.09 }),
+               'Fiercer (more rush + more low body)'),
+          proc('waterfall_ambient', 'roaring-gentler', waterfallRoaringVariant({ fastAmp: 0.13, slowAmp: 0.05 }),
+               'Gentler (less rush, less body)'),
+          proc('waterfall_ambient', 'roaring-brighter', waterfallRoaringVariant({ fastDecay: 0.78, fastScale: 0.22 }),
+               'Brighter rush (faster decay, bigger scale)'),
+          proc('waterfall_ambient', 'roaring-darker', waterfallRoaringVariant({ fastDecay: 0.92, fastScale: 0.14 }),
+               'Darker rush (slower decay)'),
+          proc('waterfall_ambient', 'roaring-low-tone', waterfallRoaringVariant({ toneF: 38 }),
+               'Lower body tone (38Hz)'),
+          proc('waterfall_ambient', 'roaring-no-tone', waterfallRoaringVariant({ toneAmp: 0 }),
+               'No body tone — pure noise mix'),
+          proc('waterfall_ambient', 'roaring-loud-tone', waterfallRoaringVariant({ toneAmp: 0.035 }),
+               'Louder body tone (amp 0.035)'),
+          proc('waterfall_ambient', 'roaring-fast-ebb', waterfallRoaringVariant({ modF: 0.4, modDepth: 0.4 }),
+               'Faster ebb (0.4Hz, deeper)'),
+          proc('waterfall_ambient', 'roaring-slow-ebb', waterfallRoaringVariant({ modF: 0.12, modDepth: 0.2 }),
+               'Slower ebb (0.12Hz, calmer)'),
+          proc('waterfall_ambient', 'roaring-flat', waterfallRoaringVariant({ modDepth: 0 }),
+               'Flat ebb (no modulation — steady roar)'),
+          proc('waterfall_ambient', 'roaring-louder', waterfallRoaringVariant({ outAmp: 0.6 }),
+               'Louder overall (outAmp 0.6)'),
+          proc('waterfall_ambient', 'roaring-quieter', waterfallRoaringVariant({ outAmp: 0.32 }),
+               'Quieter overall (outAmp 0.32)'),
+        ],
+      },
+      // ---- amb_wind (winner: breezier) ----
+      {
+        name: 'amb_wind',
+        description: 'Round 1 pick: breezier (windVariant modDepth 0.6, modF 0.3).',
+        candidates: [
+          proc('amb_wind', 'breezier-current', windVariant({ modDepth: 0.6, modF: 0.3 }),
+               'Current — modDepth 0.6, modF 0.3'),
+          proc('amb_wind', 'breezier-deeper-mod', windVariant({ modDepth: 0.75, modF: 0.3 }),
+               'Deeper modulation (depth 0.75)'),
+          proc('amb_wind', 'breezier-shallower-mod', windVariant({ modDepth: 0.45, modF: 0.3 }),
+               'Shallower modulation (depth 0.45)'),
+          proc('amb_wind', 'breezier-faster-mod', windVariant({ modDepth: 0.6, modF: 0.45 }),
+               'Faster mod (0.45Hz)'),
+          proc('amb_wind', 'breezier-slower-mod', windVariant({ modDepth: 0.6, modF: 0.18 }),
+               'Slower mod (0.18Hz — drawn-out gusts)'),
+          proc('amb_wind', 'breezier-brighter', windVariant({ modDepth: 0.6, modF: 0.3, brownDecay: 0.995, brownScale: 0.014 }),
+               'Brighter (less integrated brown)'),
+          proc('amb_wind', 'breezier-darker', windVariant({ modDepth: 0.6, modF: 0.3, brownDecay: 0.9995, brownScale: 0.012 }),
+               'Darker (more integrated brown)'),
+          proc('amb_wind', 'breezier-louder', windVariant({ modDepth: 0.6, modF: 0.3, outAmp: 0.32 }),
+               'Louder (outAmp 0.32)'),
+          proc('amb_wind', 'breezier-quieter', windVariant({ modDepth: 0.6, modF: 0.3, outAmp: 0.18 }),
+               'Quieter (outAmp 0.18)'),
+          proc('amb_wind', 'breezier-longer-loop', windVariant({ duration: 4.5, modDepth: 0.6, modF: 0.3 }),
+               'Longer loop (4.5s — less repetition-prone)'),
+        ],
+      },
+      // ---- amb_lava (winner: slow-mod) ----
+      {
+        name: 'amb_lava',
+        description: 'Round 1 pick: slow-mod (lavaVariant modF 0.08, modDepth 0.2).',
+        candidates: [
+          proc('amb_lava', 'slow-mod-current', lavaVariant({ modF: 0.08, modDepth: 0.2 }),
+               'Current — modF 0.08, modDepth 0.2'),
+          proc('amb_lava', 'slow-mod-even-slower', lavaVariant({ modF: 0.05, modDepth: 0.2 }),
+               'Even slower mod (0.05Hz)'),
+          proc('amb_lava', 'slow-mod-faster', lavaVariant({ modF: 0.12, modDepth: 0.22 }),
+               'Slightly faster (0.12Hz)'),
+          proc('amb_lava', 'slow-mod-shallower', lavaVariant({ modF: 0.08, modDepth: 0.12 }),
+               'Shallower mod (0.12 depth — almost steady)'),
+          proc('amb_lava', 'slow-mod-deeper', lavaVariant({ modF: 0.08, modDepth: 0.32 }),
+               'Deeper mod (0.32 — more breathing)'),
+          proc('amb_lava', 'slow-mod-low-rumble', lavaVariant({ modF: 0.08, modDepth: 0.2, rumbleF: 35, rumbleAmp: 0.18 }),
+               'Lower rumble (35Hz, amp 0.18)'),
+          proc('amb_lava', 'slow-mod-high-rumble', lavaVariant({ modF: 0.08, modDepth: 0.2, rumbleF: 55, rumbleAmp: 0.13 }),
+               'Higher rumble (55Hz)'),
+          proc('amb_lava', 'slow-mod-loud-rumble', lavaVariant({ modF: 0.08, modDepth: 0.2, rumbleAmp: 0.2 }),
+               'Louder rumble (amp 0.2)'),
+          proc('amb_lava', 'slow-mod-no-rumble', lavaVariant({ modF: 0.08, modDepth: 0.2, rumbleAmp: 0, brownAmp: 0.16 }),
+               'No rumble — pure brown bed'),
+          proc('amb_lava', 'slow-mod-louder', lavaVariant({ modF: 0.08, modDepth: 0.2, outAmp: 0.6 }),
+               'Louder overall (outAmp 0.6)'),
+          proc('amb_lava', 'slow-mod-quieter', lavaVariant({ modF: 0.08, modDepth: 0.2, outAmp: 0.4 }),
+               'Quieter overall (outAmp 0.4)'),
+        ],
+      },
+      // ---- amb_space_hum (winner: current) ----
+      {
+        name: 'amb_space_hum',
+        description: 'Round 1 pick: current (80Hz hum + 220Hz wobble + 0.4Hz mod).',
+        candidates: [
+          proc('amb_space_hum', 'current', spaceHumVariant(),
+               'Current — 80Hz hum + 220Hz/0.25Hz wobble + 0.4Hz mod'),
+          proc('amb_space_hum', 'lower-hum', spaceHumVariant({ hum: 65 }),
+               'Lower hum (65Hz)'),
+          proc('amb_space_hum', 'higher-hum', spaceHumVariant({ hum: 100 }),
+               'Higher hum (100Hz)'),
+          proc('amb_space_hum', 'louder-hum', spaceHumVariant({ humAmp: 0.16 }),
+               'Louder hum (amp 0.16)'),
+          proc('amb_space_hum', 'quieter-hum', spaceHumVariant({ humAmp: 0.08 }),
+               'Quieter hum (amp 0.08)'),
+          proc('amb_space_hum', 'fast-mod', spaceHumVariant({ modF: 0.65 }),
+               'Faster amplitude mod (0.65Hz)'),
+          proc('amb_space_hum', 'slow-mod', spaceHumVariant({ modF: 0.22 }),
+               'Slower amplitude mod (0.22Hz)'),
+          proc('amb_space_hum', 'brighter-wobble', spaceHumVariant({ highF: 280 }),
+               'Brighter wobble (280Hz)'),
+          proc('amb_space_hum', 'warmer-wobble', spaceHumVariant({ highF: 170 }),
+               'Warmer wobble (170Hz)'),
+          proc('amb_space_hum', 'louder-wobble', spaceHumVariant({ highAmp: 0.07 }),
+               'Louder wobble (amp 0.07)'),
+          proc('amb_space_hum', 'quieter-wobble', spaceHumVariant({ highAmp: 0.025 }),
+               'Quieter wobble (amp 0.025)'),
+          proc('amb_space_hum', 'wider-vibrato', spaceHumVariant({ vibratoDepth: 6 }),
+               'Wider vibrato on wobble (6 depth)'),
+          proc('amb_space_hum', 'no-vibrato', spaceHumVariant({ vibratoDepth: 0 }),
+               'No vibrato on wobble (clean tone)'),
+        ],
+      },
+    ],
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Select-only refinement page
 
 function buildSelectPage(): PageDef {
@@ -5388,6 +6167,10 @@ function main(): void {
     pageDef = buildAmbientPage();
   } else if (page === 'ambient-r2') {
     pageDef = buildAmbientR2Page();
+  } else if (page === 'ambient-loops') {
+    pageDef = buildAmbientLoopsPage();
+  } else if (page === 'ambient-loops-r2') {
+    pageDef = buildAmbientLoopsR2Page();
   } else if (page === 'volcano') {
     pageDef = buildVolcanoPage();
   } else {

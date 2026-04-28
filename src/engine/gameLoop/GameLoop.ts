@@ -304,7 +304,6 @@ export class GameLoop {
    *  Mirrors what Simulator.setPhase('playing') does for the host. */
   onEnterPlayingPhase(): void {
     audio.playMusic(this.simulator.getArena().themeId);
-    this.playSound('ambient');
     this.simulator.initMatchSystem();
     this.resetCosmeticBaselines();
     this._cosmeticLead = 0;

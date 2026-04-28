@@ -190,15 +190,13 @@ describe('MatchPhase gating in fixedUpdate', () => {
 // ===================================================================
 
 describe('GameLoop.setPhase', () => {
-  it('setPhase("playing") triggers playMusic + ambient', () => {
+  it('setPhase("playing") triggers playMusic', () => {
     const { loop } = createLoop();
     vi.mocked(audio.playMusic).mockClear();
-    vi.mocked(audio.play).mockClear();
 
     loop.setPhase('playing');
 
     expect(vi.mocked(audio.playMusic)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(audio.play)).toHaveBeenCalledWith('ambient');
   });
 
   it('setPhase to same value is idempotent — no re-trigger of playMusic', () => {

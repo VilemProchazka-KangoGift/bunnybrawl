@@ -21,7 +21,6 @@ export {
 } from './sfx';
 
 export {
-  generateAmbientSound,
   generateCrowdSound,
   generateZeroGSound,
   generateWaterfallSound,

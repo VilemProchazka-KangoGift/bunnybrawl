@@ -1,20 +1,5 @@
 import { floatBufferToWavDataUri } from './wav';
 
-export function generateAmbientSound(): string {
-  const sampleRate = 44100;
-  const duration = 2;
-  const numSamples = Math.floor(sampleRate * duration);
-  const buffer = new Float32Array(numSamples);
-  let brown = 0;
-  for (let i = 0; i < numSamples; i++) {
-    const white = Math.random() * 2 - 1;
-    brown += white * 0.02;
-    brown = Math.max(-1, Math.min(1, brown));
-    buffer[i] = brown * 0.05;
-  }
-  return floatBufferToWavDataUri(buffer, sampleRate);
-}
-
 export function generateCrowdSound(): string {
   const sampleRate = 44100;
   const duration = 0.5;
@@ -32,47 +17,48 @@ export function generateCrowdSound(): string {
 }
 
 export function generateZeroGSound(): string {
+  // Shimmer — thin 90Hz drone + 320Hz LFO-phase-modulated upper tone.
   const sampleRate = 44100;
-  const duration = 2;
+  const duration = 2.0;
   const numSamples = Math.floor(sampleRate * duration);
   const buffer = new Float32Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / sampleRate;
-    // Deep electronic hum with slight modulation
-    const hum = Math.sin(2 * Math.PI * 80 * t) * 0.08;
-    const mod = Math.sin(2 * Math.PI * 0.5 * t) * 0.3 + 0.7;
-    const high = Math.sin(2 * Math.PI * 220 * t + Math.sin(2 * Math.PI * 0.3 * t) * 3) * 0.02;
-    buffer[i] = (hum * mod + high) * 0.4;
+    const drone = Math.sin(2 * Math.PI * 90 * t) * 0.06;
+    const shimmer = Math.sin(2 * Math.PI * 320 * t + Math.sin(2 * Math.PI * 0.5 * t) * 6) * 0.025;
+    const mod = 0.7 + 0.3 * Math.sin(2 * Math.PI * 0.4 * t);
+    buffer[i] = (drone + shimmer) * mod * 0.5;
   }
   return floatBufferToWavDataUri(buffer, sampleRate);
 }
 
 export function generateWaterfallSound(): string {
+  // Roaring (gentler) — stacked leaky integrators (slow body + fast rush) +
+  // 50Hz body tone, modulated 0.22Hz.
   const sampleRate = 44100;
   const duration = 3;
   const numSamples = Math.floor(sampleRate * duration);
   const buffer = new Float32Array(numSamples);
-  // Brownian noise for the low rumble, band-limited white noise for the rushing water
-  let brown = 0;
+  let slow = 0;
+  let fast = 0;
   for (let i = 0; i < numSamples; i++) {
     const t = i / sampleRate;
     const white = Math.random() * 2 - 1;
-    // Brownian component — deep rumble
-    brown += white * 0.015;
-    brown *= 0.998; // slow decay to prevent drift
-    brown = Math.max(-1, Math.min(1, brown));
-    // Filtered noise — rushing water (mid-high frequencies)
-    const rush = white * 0.12;
-    // Slow modulation for natural ebb and flow
-    const mod = 0.7 + 0.3 * Math.sin(2 * Math.PI * 0.25 * t);
-    // Gentle low tone for depth
-    const tone = Math.sin(2 * Math.PI * 55 * t) * 0.015;
-    buffer[i] = (brown * 0.08 + rush * mod + tone) * 0.35;
+    slow += white * 0.02;
+    slow *= 0.998;
+    slow = Math.max(-1, Math.min(1, slow));
+    fast += white * 0.18;
+    fast *= 0.85;
+    fast = Math.max(-1, Math.min(1, fast));
+    const mod = 0.7 + 0.3 * Math.sin(2 * Math.PI * 0.22 * t);
+    const tone = Math.sin(2 * Math.PI * 50 * t) * 0.02;
+    buffer[i] = (slow * 0.05 + fast * 0.13 * mod + tone) * 0.45;
   }
   return floatBufferToWavDataUri(buffer, sampleRate);
 }
 
 export function generateAmbWindSound(): string {
+  // Breezier (quieter) — brown noise with deeper 0.3Hz amplitude modulation.
   const sampleRate = 44100;
   const duration = 3;
   const numSamples = Math.floor(sampleRate * duration);
@@ -84,13 +70,15 @@ export function generateAmbWindSound(): string {
     brown += white * 0.01;
     brown *= 0.999;
     brown = Math.max(-1, Math.min(1, brown));
-    const mod = 0.6 + 0.4 * Math.sin(2 * Math.PI * 0.2 * t);
-    buffer[i] = brown * mod * 0.25;
+    const mod = 0.4 + 0.6 * Math.sin(2 * Math.PI * 0.3 * t);
+    buffer[i] = brown * mod * 0.18;
   }
   return floatBufferToWavDataUri(buffer, sampleRate);
 }
 
 export function generateAmbLavaSound(): string {
+  // Slow-mod with low rumble — 35Hz sub-bass rumble + brown bed,
+  // gently modulated at 0.08Hz.
   const sampleRate = 44100;
   const duration = 3;
   const numSamples = Math.floor(sampleRate * duration);
@@ -102,8 +90,8 @@ export function generateAmbLavaSound(): string {
     brown += white * 0.02;
     brown *= 0.997;
     brown = Math.max(-1, Math.min(1, brown));
-    const rumble = Math.sin(2 * Math.PI * 45 * t) * 0.15;
-    const mod = 0.7 + 0.3 * Math.sin(2 * Math.PI * 0.15 * t);
+    const rumble = Math.sin(2 * Math.PI * 35 * t) * 0.18;
+    const mod = 0.8 + 0.2 * Math.sin(2 * Math.PI * 0.08 * t);
     buffer[i] = (brown * 0.1 + rumble) * mod * 0.5;
   }
   return floatBufferToWavDataUri(buffer, sampleRate);
@@ -119,7 +107,7 @@ export function generateAmbSpaceHumSound(): string {
     const t = i / sampleRate;
     const hum = Math.sin(2 * Math.PI * 80 * t) * 0.12;
     const mod = Math.sin(2 * Math.PI * 0.4 * t) * 0.3 + 0.7;
-    const high = Math.sin(2 * Math.PI * 220 * t + Math.sin(2 * Math.PI * 0.25 * t) * 3) * 0.04;
+    const high = Math.sin(2 * Math.PI * 220 * t + Math.sin(2 * Math.PI * 0.25 * t) * 6) * 0.04;
     buffer[i] = (hum * mod + high) * 0.5;
   }
   return floatBufferToWavDataUri(buffer, sampleRate);
