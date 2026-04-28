@@ -53,7 +53,7 @@ export const bear: CharacterPack = {
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.5, rx: w * 0.42, ry: h * 0.42 }),
   drawSprite, drawGib,
   createSound: () => new Howl({
-    src: [generateToneBuffer(100, 0.25, 'sawtooth', 0.4)],
+    src: [generateToneBuffer(120, 0.3, 'sawtooth', 0.4, 80)],
     volume: 0.4,
   }),
 };

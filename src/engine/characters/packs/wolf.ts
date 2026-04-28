@@ -62,8 +62,8 @@ export const wolf: CharacterPack = {
   drawSprite, drawGib,
   createSound: () => new Howl({
     src: [generateMultiSegmentTone([
-      { freq: 300, freqEnd: 500, duration: 0.12, type: 'sawtooth' },
-      { freq: 500, freqEnd: 400, duration: 0.23, type: 'sawtooth' },
+      { freq: 250, freqEnd: 600, duration: 0.12, type: 'sawtooth' },
+      { freq: 600, freqEnd: 350, duration: 0.23, type: 'sawtooth' },
     ], 0.4)],
     volume: 0.4,
   }),

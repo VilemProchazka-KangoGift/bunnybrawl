@@ -79,8 +79,8 @@ export const tiger: CharacterPack = {
   drawSprite, drawGib,
   createSound: () => new Howl({
     src: [generateMultiSegmentTone([
-      { freq: 200, freqEnd: 120, duration: 0.2, type: 'sawtooth' },
-      { freq: 120, freqEnd: 80, duration: 0.15, type: 'sawtooth' },
+      { freq: 200, freqEnd: 120, duration: 0.28, type: 'sawtooth' },
+      { freq: 120, freqEnd: 80, duration: 0.22, type: 'sawtooth' },
     ], 0.5)],
     volume: 0.45,
   }),

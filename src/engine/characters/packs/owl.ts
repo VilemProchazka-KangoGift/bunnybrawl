@@ -85,8 +85,9 @@ export const owl: CharacterPack = {
   drawSprite, drawGib,
   createSound: () => new Howl({
     src: [generateMultiSegmentTone([
-      { freq: 400, freqEnd: 300, duration: 0.15, type: 'sine' },
-      { freq: 300, freqEnd: 400, duration: 0.15, type: 'sine' },
+      { freq: 380, freqEnd: 320, duration: 0.1, type: 'sine' },
+      { freq: 380, freqEnd: 320, duration: 0.1, type: 'sine' },
+      { freq: 360, freqEnd: 280, duration: 0.18, type: 'sine' },
     ], 0.4)],
     volume: 0.4,
   }),

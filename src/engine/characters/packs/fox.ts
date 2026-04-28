@@ -67,7 +67,7 @@ export const fox: CharacterPack = {
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.55, rx: w * 0.38, ry: h * 0.38 }),
   drawSprite, drawGib,
   createSound: () => new Howl({
-    src: [generateToneBuffer(600, 0.15, 'sawtooth', 0.4, 400)],
+    src: [generateToneBuffer(600, 0.1, 'sawtooth', 0.4, 400)],
     volume: 0.4,
   }),
 };

@@ -102,8 +102,8 @@ export const horse: CharacterPack = {
   drawSprite, drawGib,
   createSound: () => new Howl({
     src: [generateMultiSegmentTone([
-      { freq: 500, freqEnd: 800, duration: 0.1, type: 'sawtooth' },
-      { freq: 800, freqEnd: 400, duration: 0.2, type: 'sawtooth' },
+      { freq: 400, freqEnd: 950, duration: 0.1, type: 'sawtooth' },
+      { freq: 950, freqEnd: 320, duration: 0.2, type: 'sawtooth' },
     ], 0.4)],
     volume: 0.4,
   }),

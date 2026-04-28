@@ -124,8 +124,8 @@ export const cat: CharacterPack = {
   drawSprite, drawGib,
   createSound: () => new Howl({
     src: [generateMultiSegmentTone([
-      { freq: 700, freqEnd: 500, duration: 0.1, type: 'sine' },
-      { freq: 500, freqEnd: 600, duration: 0.1, type: 'sine' },
+      { freq: 700, freqEnd: 500, duration: 0.15, type: 'sine' },
+      { freq: 500, freqEnd: 650, duration: 0.18, type: 'sine' },
     ], 0.4)],
     volume: 0.4,
   }),

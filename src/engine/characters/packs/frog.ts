@@ -79,7 +79,7 @@ export const frog: CharacterPack = {
   drawSprite, drawGib,
   createSound: () => {
     const sampleRate = 44100;
-    const duration = 0.2;
+    const duration = 0.32;
     const numSamples = Math.floor(sampleRate * duration);
     const buffer = new Float32Array(numSamples);
     for (let i = 0; i < numSamples; i++) {

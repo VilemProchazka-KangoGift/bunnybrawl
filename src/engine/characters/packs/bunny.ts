@@ -1,7 +1,7 @@
 import { Howl } from 'howler';
 import type { CharacterPack } from '../types';
 import { fillBodyGradient } from '../../spriteShading';
-import { generateToneBuffer } from '../../audio/synthesis/core';
+import { generateMultiSegmentTone } from '../../audio/synthesis/core';
 
 const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, _state, _animFrame, _isIdleAnim, _idleT, colors) => {
   fillBodyGradient(ctx, { cx, cy: yOff + h * 0.55, rx: w * 0.4, ry: h * 0.4 }, colors);
@@ -54,7 +54,10 @@ export const bunny: CharacterPack = {
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.55, rx: w * 0.4, ry: h * 0.4 }),
   drawSprite, drawGib,
   createSound: () => new Howl({
-    src: [generateToneBuffer(800, 0.1, 'square', 0.4, 1200)],
+    src: [generateMultiSegmentTone([
+      { freq: 800, freqEnd: 1100, duration: 0.05, type: 'square' },
+      { freq: 900, freqEnd: 1300, duration: 0.05, type: 'square' },
+    ], 0.4)],
     volume: 0.4,
   }),
 };

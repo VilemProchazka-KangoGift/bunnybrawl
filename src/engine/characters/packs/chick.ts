@@ -85,8 +85,8 @@ export const chick: CharacterPack = {
   drawSprite, drawGib,
   createSound: () => new Howl({
     src: [generateMultiSegmentTone([
-      { freq: 1400, freqEnd: 1200, duration: 0.06, type: 'square' },
-      { freq: 1400, freqEnd: 1100, duration: 0.08, type: 'square' },
+      { freq: 1700, freqEnd: 1450, duration: 0.06, type: 'square' },
+      { freq: 1700, freqEnd: 1350, duration: 0.08, type: 'square' },
     ], 0.35)],
     volume: 0.4,
   }),

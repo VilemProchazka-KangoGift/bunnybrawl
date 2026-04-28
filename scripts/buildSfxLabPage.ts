@@ -4436,6 +4436,532 @@ function buildAmbientLoopsR2Page(): PageDef {
 }
 
 // ---------------------------------------------------------------------------
+// Character voices — all 18 characters at once.
+//
+// Each character has a unique voice played at character-select / hover. Most
+// are 1- or 2-segment tone sweeps via generateToneBuffer / generateMultiSegmentTone.
+// The frog uses a custom wobble synth.
+//
+// Variations: 5-7 per character along natural axes (pitch up/down, longer/
+// shorter, oscillator, sweep range) plus 1-2 fresh takes (different shape).
+
+function frogVariant(opts: {
+  duration?: number; startF?: number; endF?: number;
+  wobbleF?: number; wobbleDepth?: number; wave?: 'square' | 'triangle' | 'sine';
+  amp?: number;
+} = {}): string {
+  const { duration = 0.2, startF = 200, endF = 150,
+          wobbleF = 30, wobbleDepth = 20, wave = 'square', amp = 0.4 } = opts;
+  return buildBuffer(duration, (t) => {
+    const prog = t / duration;
+    const f = startF + (endF - startF) * prog + Math.sin(2 * Math.PI * wobbleF * t) * wobbleDepth;
+    const env = Math.max(0, 1 - prog) * amp;
+    const phase = (t * f) % 1;
+    let s = 0;
+    if (wave === 'square') s = phase < 0.5 ? 1 : -1;
+    else if (wave === 'triangle') s = 4 * Math.abs(phase - 0.5) - 1;
+    else s = Math.sin(2 * Math.PI * phase);
+    return s * env;
+  });
+}
+
+function buildCharacterVoicesPage(): PageDef {
+  const T = generateToneBuffer;
+  const M = generateMultiSegmentTone;
+  return {
+    title: 'Character Voices — All 18',
+    subtitle: 'Each character\'s hover/select voice. 5-7 variations each. Pick 1 winner per character (or accept current).',
+    sounds: [
+      // ---- bunny: square 800→1200, 100ms ----
+      {
+        name: 'bunny',
+        description: 'Current: square 800→1200Hz, 100ms.',
+        candidates: [
+          proc('bunny', 'current', T(800, 0.1, 'square', 0.4, 1200), 'Current — square 800→1200Hz (100ms)'),
+          proc('bunny', 'higher', T(1000, 0.1, 'square', 0.4, 1500), 'Higher (1000→1500Hz)'),
+          proc('bunny', 'lower', T(600, 0.1, 'square', 0.4, 950), 'Lower (600→950Hz)'),
+          proc('bunny', 'shorter', T(800, 0.06, 'square', 0.4, 1200), 'Shorter (60ms)'),
+          proc('bunny', 'longer', T(800, 0.16, 'square', 0.4, 1200), 'Longer (160ms)'),
+          proc('bunny', 'triangle', T(800, 0.1, 'triangle', 0.4, 1200), 'Triangle wave (softer)'),
+          proc('bunny', 'two-chirp', M([
+            { freq: 800, freqEnd: 1100, duration: 0.05, type: 'square' },
+            { freq: 900, freqEnd: 1300, duration: 0.05, type: 'square' },
+          ], 0.4), '* Two-chirp (squeak-squeak)'),
+        ],
+      },
+      // ---- fox: sawtooth 600→400, 150ms ----
+      {
+        name: 'fox',
+        description: 'Current: sawtooth 600→400Hz, 150ms (descending yip).',
+        candidates: [
+          proc('fox', 'current', T(600, 0.15, 'sawtooth', 0.4, 400), 'Current — sawtooth 600→400Hz (150ms)'),
+          proc('fox', 'higher', T(750, 0.15, 'sawtooth', 0.4, 500), 'Higher (750→500Hz)'),
+          proc('fox', 'lower', T(450, 0.15, 'sawtooth', 0.4, 300), 'Lower (450→300Hz)'),
+          proc('fox', 'shorter', T(600, 0.1, 'sawtooth', 0.4, 400), 'Shorter (100ms)'),
+          proc('fox', 'square', T(600, 0.15, 'square', 0.4, 400), 'Square wave (harsher)'),
+          proc('fox', 'triangle', T(600, 0.15, 'triangle', 0.4, 400), 'Triangle (softer)'),
+          proc('fox', 'two-yip', M([
+            { freq: 700, freqEnd: 500, duration: 0.07, type: 'sawtooth' },
+            { freq: 500, freqEnd: 350, duration: 0.1, type: 'sawtooth' },
+          ], 0.4), '* Two-segment yip'),
+        ],
+      },
+      // ---- frog: custom 200→150 + 30Hz wobble, 200ms ----
+      {
+        name: 'frog',
+        description: 'Current: square 200→150Hz with 30Hz vibrato, 200ms (croak).',
+        candidates: [
+          proc('frog', 'current', frogVariant(), 'Current — 200→150Hz square + 30Hz wobble (200ms)'),
+          proc('frog', 'deeper', frogVariant({ startF: 150, endF: 100 }), 'Deeper (150→100Hz)'),
+          proc('frog', 'higher', frogVariant({ startF: 280, endF: 220 }), 'Higher (280→220Hz)'),
+          proc('frog', 'fast-wobble', frogVariant({ wobbleF: 50 }), 'Faster wobble (50Hz)'),
+          proc('frog', 'slow-wobble', frogVariant({ wobbleF: 18 }), 'Slower wobble (18Hz)'),
+          proc('frog', 'wider-wobble', frogVariant({ wobbleDepth: 35 }), 'Wider wobble (depth 35)'),
+          proc('frog', 'longer', frogVariant({ duration: 0.32 }), 'Longer croak (320ms)'),
+          proc('frog', 'triangle', frogVariant({ wave: 'triangle' }), 'Triangle wave (smoother)'),
+        ],
+      },
+      // ---- bear: sawtooth 100Hz flat, 250ms ----
+      {
+        name: 'bear',
+        description: 'Current: sawtooth 100Hz flat, 250ms (deep growl).',
+        candidates: [
+          proc('bear', 'current', T(100, 0.25, 'sawtooth', 0.4), 'Current — sawtooth 100Hz flat (250ms)'),
+          proc('bear', 'lower', T(75, 0.25, 'sawtooth', 0.4), 'Lower (75Hz)'),
+          proc('bear', 'higher', T(135, 0.25, 'sawtooth', 0.4), 'Higher (135Hz)'),
+          proc('bear', 'longer', T(100, 0.4, 'sawtooth', 0.4), 'Longer (400ms)'),
+          proc('bear', 'descending', T(120, 0.3, 'sawtooth', 0.4, 80), 'Descending sweep (120→80Hz)'),
+          proc('bear', 'square', T(100, 0.25, 'square', 0.4), 'Square wave (more buzzy)'),
+          proc('bear', 'two-grumble', M([
+            { freq: 110, freqEnd: 90, duration: 0.12, type: 'sawtooth' },
+            { freq: 90, freqEnd: 100, duration: 0.18, type: 'sawtooth' },
+          ], 0.4), '* Two-grumble'),
+        ],
+      },
+      // ---- owl: sine 400→300→300→400, 300ms (hoot) ----
+      {
+        name: 'owl',
+        description: 'Current: 2-segment sine 400→300→300→400Hz, 300ms (hoot-hoot).',
+        candidates: [
+          proc('owl', 'current', M([
+            { freq: 400, freqEnd: 300, duration: 0.15, type: 'sine' },
+            { freq: 300, freqEnd: 400, duration: 0.15, type: 'sine' },
+          ], 0.4), 'Current — sine 400↔300Hz (300ms)'),
+          proc('owl', 'lower', M([
+            { freq: 300, freqEnd: 220, duration: 0.15, type: 'sine' },
+            { freq: 220, freqEnd: 300, duration: 0.15, type: 'sine' },
+          ], 0.4), 'Lower (300↔220Hz — bigger owl)'),
+          proc('owl', 'higher', M([
+            { freq: 500, freqEnd: 380, duration: 0.15, type: 'sine' },
+            { freq: 380, freqEnd: 500, duration: 0.15, type: 'sine' },
+          ], 0.4), 'Higher (500↔380Hz — smaller owl)'),
+          proc('owl', 'wider-sweep', M([
+            { freq: 450, freqEnd: 250, duration: 0.15, type: 'sine' },
+            { freq: 250, freqEnd: 450, duration: 0.15, type: 'sine' },
+          ], 0.4), 'Wider sweep (450↔250Hz)'),
+          proc('owl', 'longer', M([
+            { freq: 400, freqEnd: 300, duration: 0.22, type: 'sine' },
+            { freq: 300, freqEnd: 400, duration: 0.22, type: 'sine' },
+          ], 0.4), 'Longer (440ms)'),
+          proc('owl', 'triangle', M([
+            { freq: 400, freqEnd: 300, duration: 0.15, type: 'triangle' },
+            { freq: 300, freqEnd: 400, duration: 0.15, type: 'triangle' },
+          ], 0.4), 'Triangle wave (more body)'),
+          proc('owl', 'who-who-whoo', M([
+            { freq: 380, freqEnd: 320, duration: 0.1, type: 'sine' },
+            { freq: 380, freqEnd: 320, duration: 0.1, type: 'sine' },
+            { freq: 360, freqEnd: 280, duration: 0.18, type: 'sine' },
+          ], 0.4), '* Three-hoot pattern (who-who-whoo)'),
+        ],
+      },
+      // ---- cat: sine 700→500→500→600, 200ms (mrow) ----
+      {
+        name: 'cat',
+        description: 'Current: 2-segment sine 700→500→500→600Hz, 200ms (mrow).',
+        candidates: [
+          proc('cat', 'current', M([
+            { freq: 700, freqEnd: 500, duration: 0.1, type: 'sine' },
+            { freq: 500, freqEnd: 600, duration: 0.1, type: 'sine' },
+          ], 0.4), 'Current — sine 700→500→600Hz (200ms)'),
+          proc('cat', 'higher', M([
+            { freq: 850, freqEnd: 600, duration: 0.1, type: 'sine' },
+            { freq: 600, freqEnd: 750, duration: 0.1, type: 'sine' },
+          ], 0.4), 'Higher (kitten — 850→600→750Hz)'),
+          proc('cat', 'lower', M([
+            { freq: 550, freqEnd: 380, duration: 0.1, type: 'sine' },
+            { freq: 380, freqEnd: 480, duration: 0.1, type: 'sine' },
+          ], 0.4), 'Lower (big cat — 550→380→480Hz)'),
+          proc('cat', 'longer-meow', M([
+            { freq: 700, freqEnd: 500, duration: 0.15, type: 'sine' },
+            { freq: 500, freqEnd: 650, duration: 0.18, type: 'sine' },
+          ], 0.4), 'Longer meow (330ms)'),
+          proc('cat', 'shorter-mew', M([
+            { freq: 750, freqEnd: 550, duration: 0.06, type: 'sine' },
+            { freq: 550, freqEnd: 700, duration: 0.06, type: 'sine' },
+          ], 0.4), 'Shorter mew (120ms)'),
+          proc('cat', 'triangle', M([
+            { freq: 700, freqEnd: 500, duration: 0.1, type: 'triangle' },
+            { freq: 500, freqEnd: 600, duration: 0.1, type: 'triangle' },
+          ], 0.4), 'Triangle wave'),
+          proc('cat', 'purr-meow', M([
+            { freq: 200, freqEnd: 250, duration: 0.06, type: 'square' },
+            { freq: 700, freqEnd: 500, duration: 0.08, type: 'sine' },
+            { freq: 500, freqEnd: 600, duration: 0.08, type: 'sine' },
+          ], 0.4), '* Purr-meow (low buzz → meow)'),
+        ],
+      },
+      // ---- wolf: sawtooth 300→500→500→400, 350ms (howl) ----
+      {
+        name: 'wolf',
+        description: 'Current: 2-segment sawtooth 300→500→400Hz, 350ms (howl).',
+        candidates: [
+          proc('wolf', 'current', M([
+            { freq: 300, freqEnd: 500, duration: 0.12, type: 'sawtooth' },
+            { freq: 500, freqEnd: 400, duration: 0.23, type: 'sawtooth' },
+          ], 0.4), 'Current — sawtooth 300→500→400Hz (350ms)'),
+          proc('wolf', 'higher', M([
+            { freq: 380, freqEnd: 600, duration: 0.12, type: 'sawtooth' },
+            { freq: 600, freqEnd: 480, duration: 0.23, type: 'sawtooth' },
+          ], 0.4), 'Higher (380→600→480Hz)'),
+          proc('wolf', 'lower', M([
+            { freq: 220, freqEnd: 380, duration: 0.12, type: 'sawtooth' },
+            { freq: 380, freqEnd: 300, duration: 0.23, type: 'sawtooth' },
+          ], 0.4), 'Lower (alpha — 220→380→300Hz)'),
+          proc('wolf', 'longer-howl', M([
+            { freq: 300, freqEnd: 500, duration: 0.15, type: 'sawtooth' },
+            { freq: 500, freqEnd: 400, duration: 0.35, type: 'sawtooth' },
+          ], 0.4), 'Longer howl (500ms)'),
+          proc('wolf', 'wider-sweep', M([
+            { freq: 250, freqEnd: 600, duration: 0.12, type: 'sawtooth' },
+            { freq: 600, freqEnd: 350, duration: 0.23, type: 'sawtooth' },
+          ], 0.4), 'Wider sweep (250→600→350Hz)'),
+          proc('wolf', 'triangle', M([
+            { freq: 300, freqEnd: 500, duration: 0.12, type: 'triangle' },
+            { freq: 500, freqEnd: 400, duration: 0.23, type: 'triangle' },
+          ], 0.4), 'Triangle (smoother)'),
+        ],
+      },
+      // ---- panda: triangle 500→600, 120ms ----
+      {
+        name: 'panda',
+        description: 'Current: triangle 500→600Hz, 120ms (gentle yip).',
+        candidates: [
+          proc('panda', 'current', T(500, 0.12, 'triangle', 0.4, 600), 'Current — triangle 500→600Hz (120ms)'),
+          proc('panda', 'higher', T(620, 0.12, 'triangle', 0.4, 750), 'Higher (620→750Hz)'),
+          proc('panda', 'lower', T(380, 0.12, 'triangle', 0.4, 470), 'Lower (380→470Hz)'),
+          proc('panda', 'longer', T(500, 0.2, 'triangle', 0.4, 600), 'Longer (200ms)'),
+          proc('panda', 'descending', T(600, 0.12, 'triangle', 0.4, 500), 'Descending instead (600→500Hz)'),
+          proc('panda', 'sine', T(500, 0.12, 'sine', 0.4, 600), 'Sine (smoother)'),
+          proc('panda', 'two-coo', M([
+            { freq: 500, freqEnd: 580, duration: 0.07, type: 'triangle' },
+            { freq: 480, freqEnd: 560, duration: 0.09, type: 'triangle' },
+          ], 0.4), '* Two-segment coo'),
+        ],
+      },
+      // ---- pig: square 250→350→350→200, 200ms (oink) ----
+      {
+        name: 'pig',
+        description: 'Current: 2-segment square 250→350→200Hz, 200ms (oink).',
+        candidates: [
+          proc('pig', 'current', M([
+            { freq: 250, freqEnd: 350, duration: 0.07, type: 'square' },
+            { freq: 350, freqEnd: 200, duration: 0.13, type: 'square' },
+          ], 0.4), 'Current — square 250→350→200Hz (200ms)'),
+          proc('pig', 'higher', M([
+            { freq: 320, freqEnd: 440, duration: 0.07, type: 'square' },
+            { freq: 440, freqEnd: 260, duration: 0.13, type: 'square' },
+          ], 0.4), 'Higher (320→440→260Hz)'),
+          proc('pig', 'lower', M([
+            { freq: 180, freqEnd: 270, duration: 0.07, type: 'square' },
+            { freq: 270, freqEnd: 150, duration: 0.13, type: 'square' },
+          ], 0.4), 'Lower (180→270→150Hz)'),
+          proc('pig', 'longer', M([
+            { freq: 250, freqEnd: 350, duration: 0.1, type: 'square' },
+            { freq: 350, freqEnd: 200, duration: 0.2, type: 'square' },
+          ], 0.4), 'Longer (300ms)'),
+          proc('pig', 'sawtooth', M([
+            { freq: 250, freqEnd: 350, duration: 0.07, type: 'sawtooth' },
+            { freq: 350, freqEnd: 200, duration: 0.13, type: 'sawtooth' },
+          ], 0.4), 'Sawtooth (rougher)'),
+          proc('pig', 'oink-oink', M([
+            { freq: 250, freqEnd: 350, duration: 0.05, type: 'square' },
+            { freq: 350, freqEnd: 200, duration: 0.07, type: 'square' },
+            { freq: 250, freqEnd: 350, duration: 0.05, type: 'square' },
+            { freq: 350, freqEnd: 200, duration: 0.07, type: 'square' },
+          ], 0.4), '* Two oinks (oink-oink)'),
+        ],
+      },
+      // ---- cow: sine 150→130, 400ms (moo) ----
+      {
+        name: 'cow',
+        description: 'Current: sine 150→130Hz, 400ms (moo).',
+        candidates: [
+          proc('cow', 'current', T(150, 0.4, 'sine', 0.4, 130), 'Current — sine 150→130Hz (400ms)'),
+          proc('cow', 'higher', T(190, 0.4, 'sine', 0.4, 165), 'Higher (190→165Hz)'),
+          proc('cow', 'lower', T(115, 0.4, 'sine', 0.4, 100), 'Lower (115→100Hz — bull)'),
+          proc('cow', 'longer', T(150, 0.55, 'sine', 0.4, 125), 'Longer moo (550ms)'),
+          proc('cow', 'shorter', T(150, 0.25, 'sine', 0.4, 130), 'Shorter (250ms)'),
+          proc('cow', 'triangle', T(150, 0.4, 'triangle', 0.4, 130), 'Triangle (more body)'),
+          proc('cow', 'mooo-rising', M([
+            { freq: 130, freqEnd: 160, duration: 0.15, type: 'sine' },
+            { freq: 160, freqEnd: 130, duration: 0.25, type: 'sine' },
+          ], 0.4), '* Two-segment moo (rise then fall)'),
+        ],
+      },
+      // ---- goat: sawtooth 400→300→300→350, 250ms (bleat) ----
+      {
+        name: 'goat',
+        description: 'Current: 2-segment sawtooth 400→300→350Hz, 250ms (bleat).',
+        candidates: [
+          proc('goat', 'current', M([
+            { freq: 400, freqEnd: 300, duration: 0.1, type: 'sawtooth' },
+            { freq: 300, freqEnd: 350, duration: 0.15, type: 'sawtooth' },
+          ], 0.4), 'Current — sawtooth 400→300→350Hz (250ms)'),
+          proc('goat', 'higher', M([
+            { freq: 500, freqEnd: 380, duration: 0.1, type: 'sawtooth' },
+            { freq: 380, freqEnd: 440, duration: 0.15, type: 'sawtooth' },
+          ], 0.4), 'Higher (500→380→440Hz)'),
+          proc('goat', 'lower', M([
+            { freq: 320, freqEnd: 230, duration: 0.1, type: 'sawtooth' },
+            { freq: 230, freqEnd: 280, duration: 0.15, type: 'sawtooth' },
+          ], 0.4), 'Lower (320→230→280Hz)'),
+          proc('goat', 'longer', M([
+            { freq: 400, freqEnd: 300, duration: 0.14, type: 'sawtooth' },
+            { freq: 300, freqEnd: 350, duration: 0.22, type: 'sawtooth' },
+          ], 0.4), 'Longer bleat (360ms)'),
+          proc('goat', 'square', M([
+            { freq: 400, freqEnd: 300, duration: 0.1, type: 'square' },
+            { freq: 300, freqEnd: 350, duration: 0.15, type: 'square' },
+          ], 0.4), 'Square (sharper)'),
+          proc('goat', 'wobbly-bleat', M([
+            { freq: 420, freqEnd: 310, duration: 0.06, type: 'sawtooth' },
+            { freq: 320, freqEnd: 380, duration: 0.06, type: 'sawtooth' },
+            { freq: 380, freqEnd: 320, duration: 0.06, type: 'sawtooth' },
+            { freq: 320, freqEnd: 360, duration: 0.08, type: 'sawtooth' },
+          ], 0.4), '* Wobbly bleat (4 segments)'),
+        ],
+      },
+      // ---- horse: sawtooth 500→800→800→400, 300ms (neigh) ----
+      {
+        name: 'horse',
+        description: 'Current: 2-segment sawtooth 500→800→400Hz, 300ms (neigh).',
+        candidates: [
+          proc('horse', 'current', M([
+            { freq: 500, freqEnd: 800, duration: 0.1, type: 'sawtooth' },
+            { freq: 800, freqEnd: 400, duration: 0.2, type: 'sawtooth' },
+          ], 0.4), 'Current — sawtooth 500→800→400Hz (300ms)'),
+          proc('horse', 'higher', M([
+            { freq: 620, freqEnd: 1000, duration: 0.1, type: 'sawtooth' },
+            { freq: 1000, freqEnd: 500, duration: 0.2, type: 'sawtooth' },
+          ], 0.4), 'Higher (620→1000→500Hz)'),
+          proc('horse', 'lower', M([
+            { freq: 380, freqEnd: 600, duration: 0.1, type: 'sawtooth' },
+            { freq: 600, freqEnd: 300, duration: 0.2, type: 'sawtooth' },
+          ], 0.4), 'Lower (380→600→300Hz)'),
+          proc('horse', 'longer', M([
+            { freq: 500, freqEnd: 800, duration: 0.13, type: 'sawtooth' },
+            { freq: 800, freqEnd: 400, duration: 0.27, type: 'sawtooth' },
+          ], 0.4), 'Longer neigh (400ms)'),
+          proc('horse', 'wider-sweep', M([
+            { freq: 400, freqEnd: 950, duration: 0.1, type: 'sawtooth' },
+            { freq: 950, freqEnd: 320, duration: 0.2, type: 'sawtooth' },
+          ], 0.4), 'Wider sweep (400→950→320Hz)'),
+          proc('horse', 'square', M([
+            { freq: 500, freqEnd: 800, duration: 0.1, type: 'square' },
+            { freq: 800, freqEnd: 400, duration: 0.2, type: 'square' },
+          ], 0.4), 'Square (more buzz)'),
+          proc('horse', 'whinny', M([
+            { freq: 500, freqEnd: 800, duration: 0.06, type: 'sawtooth' },
+            { freq: 800, freqEnd: 600, duration: 0.06, type: 'sawtooth' },
+            { freq: 600, freqEnd: 800, duration: 0.06, type: 'sawtooth' },
+            { freq: 800, freqEnd: 400, duration: 0.12, type: 'sawtooth' },
+          ], 0.4), '* Whinny (oscillating then drop)'),
+        ],
+      },
+      // ---- sheep: sine 350→250, 300ms (baa) ----
+      {
+        name: 'sheep',
+        description: 'Current: sine 350→250Hz, 300ms (baa).',
+        candidates: [
+          proc('sheep', 'current', T(350, 0.3, 'sine', 0.4, 250), 'Current — sine 350→250Hz (300ms)'),
+          proc('sheep', 'higher', T(440, 0.3, 'sine', 0.4, 320), 'Higher (lamb — 440→320Hz)'),
+          proc('sheep', 'lower', T(280, 0.3, 'sine', 0.4, 200), 'Lower (ram — 280→200Hz)'),
+          proc('sheep', 'longer', T(350, 0.45, 'sine', 0.4, 240), 'Longer (450ms)'),
+          proc('sheep', 'shorter', T(350, 0.18, 'sine', 0.4, 260), 'Shorter (180ms)'),
+          proc('sheep', 'triangle', T(350, 0.3, 'triangle', 0.4, 250), 'Triangle (more body)'),
+          proc('sheep', 'sawtooth', T(350, 0.3, 'sawtooth', 0.4, 250), 'Sawtooth (rougher baa)'),
+          proc('sheep', 'wobbly-baa', frogVariant({ duration: 0.3, startF: 350, endF: 250, wobbleF: 12, wobbleDepth: 18, wave: 'sine', amp: 0.4 }), '* Wobbly baa (12Hz vibrato, 300ms sine)'),
+        ],
+      },
+      // ---- monkey: square 800→1200→1200→600, 200ms (chatter) ----
+      {
+        name: 'monkey',
+        description: 'Current: 2-segment square 800→1200→600Hz, 200ms (chatter).',
+        candidates: [
+          proc('monkey', 'current', M([
+            { freq: 800, freqEnd: 1200, duration: 0.07, type: 'square' },
+            { freq: 1200, freqEnd: 600, duration: 0.13, type: 'square' },
+          ], 0.4), 'Current — square 800→1200→600Hz (200ms)'),
+          proc('monkey', 'higher', M([
+            { freq: 1000, freqEnd: 1500, duration: 0.07, type: 'square' },
+            { freq: 1500, freqEnd: 750, duration: 0.13, type: 'square' },
+          ], 0.4), 'Higher (1000→1500→750Hz)'),
+          proc('monkey', 'lower', M([
+            { freq: 600, freqEnd: 950, duration: 0.07, type: 'square' },
+            { freq: 950, freqEnd: 450, duration: 0.13, type: 'square' },
+          ], 0.4), 'Lower (600→950→450Hz)'),
+          proc('monkey', 'longer', M([
+            { freq: 800, freqEnd: 1200, duration: 0.1, type: 'square' },
+            { freq: 1200, freqEnd: 600, duration: 0.18, type: 'square' },
+          ], 0.4), 'Longer chatter (280ms)'),
+          proc('monkey', 'sawtooth', M([
+            { freq: 800, freqEnd: 1200, duration: 0.07, type: 'sawtooth' },
+            { freq: 1200, freqEnd: 600, duration: 0.13, type: 'sawtooth' },
+          ], 0.4), 'Sawtooth (rougher)'),
+          proc('monkey', 'triple-chirp', M([
+            { freq: 900, freqEnd: 1200, duration: 0.05, type: 'square' },
+            { freq: 800, freqEnd: 1100, duration: 0.05, type: 'square' },
+            { freq: 700, freqEnd: 1000, duration: 0.05, type: 'square' },
+          ], 0.4), '* Triple chirp (ee-ee-ee)'),
+        ],
+      },
+      // ---- tiger: sawtooth 200→120→120→80, 350ms (roar) ----
+      {
+        name: 'tiger',
+        description: 'Current: 2-segment sawtooth 200→120→80Hz, 350ms (roar).',
+        candidates: [
+          proc('tiger', 'current', M([
+            { freq: 200, freqEnd: 120, duration: 0.2, type: 'sawtooth' },
+            { freq: 120, freqEnd: 80, duration: 0.15, type: 'sawtooth' },
+          ], 0.5), 'Current — sawtooth 200→120→80Hz (350ms)'),
+          proc('tiger', 'deeper', M([
+            { freq: 160, freqEnd: 95, duration: 0.2, type: 'sawtooth' },
+            { freq: 95, freqEnd: 60, duration: 0.15, type: 'sawtooth' },
+          ], 0.5), 'Deeper (160→95→60Hz)'),
+          proc('tiger', 'higher', M([
+            { freq: 250, freqEnd: 150, duration: 0.2, type: 'sawtooth' },
+            { freq: 150, freqEnd: 105, duration: 0.15, type: 'sawtooth' },
+          ], 0.5), 'Higher (250→150→105Hz)'),
+          proc('tiger', 'longer', M([
+            { freq: 200, freqEnd: 120, duration: 0.28, type: 'sawtooth' },
+            { freq: 120, freqEnd: 80, duration: 0.22, type: 'sawtooth' },
+          ], 0.5), 'Longer roar (500ms)'),
+          proc('tiger', 'square', M([
+            { freq: 200, freqEnd: 120, duration: 0.2, type: 'square' },
+            { freq: 120, freqEnd: 80, duration: 0.15, type: 'square' },
+          ], 0.5), 'Square (more buzz)'),
+          proc('tiger', 'growly', frogVariant({ duration: 0.4, startF: 180, endF: 90, wobbleF: 28, wobbleDepth: 12, wave: 'square', amp: 0.45 }), '* Growly (28Hz wobble on the descent, 400ms)'),
+        ],
+      },
+      // ---- rhino: square 100→60 + sine 60→90, 350ms (grunt) ----
+      {
+        name: 'rhino',
+        description: 'Current: square 100→60Hz then sine 60→90Hz, 350ms (grunt).',
+        candidates: [
+          proc('rhino', 'current', M([
+            { freq: 100, freqEnd: 60, duration: 0.15, type: 'square' },
+            { freq: 60, freqEnd: 90, duration: 0.2, type: 'sine' },
+          ], 0.5), 'Current — sq 100→60 + sine 60→90Hz (350ms)'),
+          proc('rhino', 'lower', M([
+            { freq: 80, freqEnd: 50, duration: 0.15, type: 'square' },
+            { freq: 50, freqEnd: 75, duration: 0.2, type: 'sine' },
+          ], 0.5), 'Lower (80→50 + 50→75Hz)'),
+          proc('rhino', 'higher', M([
+            { freq: 130, freqEnd: 80, duration: 0.15, type: 'square' },
+            { freq: 80, freqEnd: 115, duration: 0.2, type: 'sine' },
+          ], 0.5), 'Higher (130→80 + 80→115Hz)'),
+          proc('rhino', 'longer', M([
+            { freq: 100, freqEnd: 60, duration: 0.2, type: 'square' },
+            { freq: 60, freqEnd: 90, duration: 0.28, type: 'sine' },
+          ], 0.5), 'Longer grunt (480ms)'),
+          proc('rhino', 'all-sawtooth', M([
+            { freq: 100, freqEnd: 60, duration: 0.15, type: 'sawtooth' },
+            { freq: 60, freqEnd: 90, duration: 0.2, type: 'sawtooth' },
+          ], 0.5), 'All sawtooth (rougher)'),
+          proc('rhino', 'snort', M([
+            { freq: 130, freqEnd: 70, duration: 0.08, type: 'square' },
+            { freq: 70, freqEnd: 50, duration: 0.06, type: 'square' },
+            { freq: 50, freqEnd: 80, duration: 0.16, type: 'sine' },
+          ], 0.5), '* Snort (sharper attack)'),
+        ],
+      },
+      // ---- hedgehog: triangle 600→800→800→500, 160ms (squeak) ----
+      {
+        name: 'hedgehog',
+        description: 'Current: 2-segment triangle 600→800→500Hz, 160ms (squeak).',
+        candidates: [
+          proc('hedgehog', 'current', M([
+            { freq: 600, freqEnd: 800, duration: 0.06, type: 'triangle' },
+            { freq: 800, freqEnd: 500, duration: 0.1, type: 'triangle' },
+          ], 0.4), 'Current — triangle 600→800→500Hz (160ms)'),
+          proc('hedgehog', 'higher', M([
+            { freq: 750, freqEnd: 1000, duration: 0.06, type: 'triangle' },
+            { freq: 1000, freqEnd: 620, duration: 0.1, type: 'triangle' },
+          ], 0.4), 'Higher (750→1000→620Hz)'),
+          proc('hedgehog', 'lower', M([
+            { freq: 480, freqEnd: 640, duration: 0.06, type: 'triangle' },
+            { freq: 640, freqEnd: 400, duration: 0.1, type: 'triangle' },
+          ], 0.4), 'Lower (480→640→400Hz)'),
+          proc('hedgehog', 'shorter', M([
+            { freq: 600, freqEnd: 800, duration: 0.04, type: 'triangle' },
+            { freq: 800, freqEnd: 500, duration: 0.06, type: 'triangle' },
+          ], 0.4), 'Shorter (100ms)'),
+          proc('hedgehog', 'square', M([
+            { freq: 600, freqEnd: 800, duration: 0.06, type: 'square' },
+            { freq: 800, freqEnd: 500, duration: 0.1, type: 'square' },
+          ], 0.4), 'Square (sharper)'),
+          proc('hedgehog', 'sine', M([
+            { freq: 600, freqEnd: 800, duration: 0.06, type: 'sine' },
+            { freq: 800, freqEnd: 500, duration: 0.1, type: 'sine' },
+          ], 0.4), 'Sine (smoother)'),
+          proc('hedgehog', 'double-squeak', M([
+            { freq: 600, freqEnd: 800, duration: 0.04, type: 'triangle' },
+            { freq: 800, freqEnd: 500, duration: 0.05, type: 'triangle' },
+            { freq: 600, freqEnd: 800, duration: 0.04, type: 'triangle' },
+            { freq: 800, freqEnd: 500, duration: 0.05, type: 'triangle' },
+          ], 0.4), '* Double squeak'),
+        ],
+      },
+      // ---- chick: square 1400→1200→1400→1100, 140ms (peep peep) ----
+      {
+        name: 'chick',
+        description: 'Current: 2-segment square 1400→1200→1100Hz, 140ms (peep-peep).',
+        candidates: [
+          proc('chick', 'current', M([
+            { freq: 1400, freqEnd: 1200, duration: 0.06, type: 'square' },
+            { freq: 1400, freqEnd: 1100, duration: 0.08, type: 'square' },
+          ], 0.35), 'Current — square 1400→1200/1100Hz (140ms)'),
+          proc('chick', 'higher', M([
+            { freq: 1700, freqEnd: 1450, duration: 0.06, type: 'square' },
+            { freq: 1700, freqEnd: 1350, duration: 0.08, type: 'square' },
+          ], 0.35), 'Higher (1700→1450/1350Hz)'),
+          proc('chick', 'lower', M([
+            { freq: 1100, freqEnd: 950, duration: 0.06, type: 'square' },
+            { freq: 1100, freqEnd: 870, duration: 0.08, type: 'square' },
+          ], 0.35), 'Lower (1100→950/870Hz)'),
+          proc('chick', 'three-peep', M([
+            { freq: 1400, freqEnd: 1200, duration: 0.05, type: 'square' },
+            { freq: 1400, freqEnd: 1100, duration: 0.05, type: 'square' },
+            { freq: 1400, freqEnd: 1000, duration: 0.06, type: 'square' },
+          ], 0.35), 'Three peeps (160ms)'),
+          proc('chick', 'triangle', M([
+            { freq: 1400, freqEnd: 1200, duration: 0.06, type: 'triangle' },
+            { freq: 1400, freqEnd: 1100, duration: 0.08, type: 'triangle' },
+          ], 0.35), 'Triangle (softer)'),
+          proc('chick', 'rising', M([
+            { freq: 1100, freqEnd: 1300, duration: 0.06, type: 'square' },
+            { freq: 1200, freqEnd: 1450, duration: 0.08, type: 'square' },
+          ], 0.35), 'Rising (1100→1450Hz)'),
+          proc('chick', 'long-cheep', M([
+            { freq: 1400, freqEnd: 1100, duration: 0.18, type: 'square' },
+          ], 0.35), '* Single long cheep (180ms)'),
+        ],
+      },
+    ],
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Select-only refinement page
 
 function buildSelectPage(): PageDef {
@@ -6171,6 +6697,8 @@ function main(): void {
     pageDef = buildAmbientLoopsPage();
   } else if (page === 'ambient-loops-r2') {
     pageDef = buildAmbientLoopsR2Page();
+  } else if (page === 'character-voices') {
+    pageDef = buildCharacterVoicesPage();
   } else if (page === 'volcano') {
     pageDef = buildVolcanoPage();
   } else {

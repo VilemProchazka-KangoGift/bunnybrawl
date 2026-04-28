@@ -62,7 +62,7 @@ export const panda: CharacterPack = {
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.52, rx: w * 0.42, ry: h * 0.42 }),
   drawSprite, drawGib,
   createSound: () => new Howl({
-    src: [generateToneBuffer(500, 0.12, 'triangle', 0.4, 600)],
+    src: [generateToneBuffer(380, 0.12, 'triangle', 0.4, 470)],
     volume: 0.4,
   }),
 };

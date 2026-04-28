@@ -76,8 +76,9 @@ export const monkey: CharacterPack = {
   drawSprite, drawGib,
   createSound: () => new Howl({
     src: [generateMultiSegmentTone([
-      { freq: 800, freqEnd: 1200, duration: 0.07, type: 'square' },
-      { freq: 1200, freqEnd: 600, duration: 0.13, type: 'square' },
+      { freq: 900, freqEnd: 1200, duration: 0.05, type: 'square' },
+      { freq: 800, freqEnd: 1100, duration: 0.05, type: 'square' },
+      { freq: 700, freqEnd: 1000, duration: 0.05, type: 'square' },
     ], 0.4)],
     volume: 0.4,
   }),

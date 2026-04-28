@@ -119,8 +119,10 @@ export const goat: CharacterPack = {
   drawSprite, drawGib,
   createSound: () => new Howl({
     src: [generateMultiSegmentTone([
-      { freq: 400, freqEnd: 300, duration: 0.1, type: 'sawtooth' },
-      { freq: 300, freqEnd: 350, duration: 0.15, type: 'sawtooth' },
+      { freq: 420, freqEnd: 310, duration: 0.06, type: 'sawtooth' },
+      { freq: 320, freqEnd: 380, duration: 0.06, type: 'sawtooth' },
+      { freq: 380, freqEnd: 320, duration: 0.06, type: 'sawtooth' },
+      { freq: 320, freqEnd: 360, duration: 0.08, type: 'sawtooth' },
     ], 0.4)],
     volume: 0.4,
   }),
