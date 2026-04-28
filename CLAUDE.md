@@ -267,7 +267,7 @@ Each character is a single file in `src/engine/characters/packs/` exporting a `C
 **Rendering contract:**
 - `customEyes: true` = renderer draws its own eyes; `false` = generic dots drawn after sprite.
 - Idle actions are picked randomly from a per-pack pool (default: all 6 shared actions in `rendering/idleActions.ts`). The pack's `drawSprite` receives `isIdleAnim` (boolean) and `idleT ∈ [0, 1]` (action progress) for in-sprite tweaks like ear-twitch / tail-wag. Note: `idleT` flows through the sprite cache, so the in-sprite tweak only sees a 1-bit on/off (idleT ranges over the action duration but the cache key is binary). Big animated transforms belong in shared idle actions, not in `drawSprite`.
-- Generic legs, motion lines, fast-fall lines, bubble helmet drawn AFTER `drawSprite` — don't draw in pack.
+- Generic legs and bubble helmet draw inside the sprite cache (after pack `drawSprite`, still cached). Motion lines + fast-fall lines draw in `drawPlayer` POST-cache so the outline pass doesn't stamp them — don't draw any of these in pack.
 - `bodyEllipse` must match the ellipse in `fillBodyGradient`. `noHighlight: true` skips white overlay.
 - Sheep uses `fillBodyGradientCircle` (6 overlapping circles, not ellipse).
 
