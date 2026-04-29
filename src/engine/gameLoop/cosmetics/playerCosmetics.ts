@@ -103,8 +103,7 @@ export function updatePlayerCosmetics(
   // not the post-decay value (which the half-rate cosmetic step left
   // alternating with the freshly-set 0.75 — visible as a 30Hz flicker).
 
-  // Fat wobble
-  if (player.fatTimer > 0) {
-    player.squashScale = f(player.squashScale * f(1 + f(fastSin(f(timeElapsed * 6)) * 0.05)));
-  }
+  // Fat wobble moved to Simulator.fixedUpdate — squashScale is in the snapshot,
+  // so applying it on both host and guest cosmeticStep compounded the wobble
+  // and caused visible vibration on guests when fatPlayer mod was on.
 }

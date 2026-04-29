@@ -20,6 +20,7 @@ import {
 } from '../constants';
 import { computeEffectivePhysics, createInitialPlayers, createInitialMatchState } from './initialState';
 import { perfTrace } from '../perfTrace';
+import { fastSin } from '../fastMath';
 import { RuleBasedBot } from '../input/RuleBasedBot';
 
 import { getOrCreateCooldowns } from '../sfxCooldowns';
@@ -453,6 +454,13 @@ export class Simulator {
         } else {
           player.squashScale = 1.0;
         }
+      }
+
+      // Fat wobble — host-only (or local). squashScale is in the snapshot, so
+      // applying this on the guest as well would compound the multiplication
+      // and produce a visible vibration when fatPlayer mod is on.
+      if (player.fatTimer > 0) {
+        player.squashScale = f(player.squashScale * f(1 + f(fastSin(f(this._state.timeElapsed * 6)) * 0.05)));
       }
 
       if (player.invincibleTimer <= 0 && player.vy <= 400) {

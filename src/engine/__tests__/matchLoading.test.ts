@@ -7,6 +7,7 @@ vi.mock('../audio', () => ({
   audio: {
     preloadArena: vi.fn(() => Promise.resolve()),
     hasPreloadedArena: vi.fn(() => true),
+    resumeContext: vi.fn(),
   },
 }));
 
