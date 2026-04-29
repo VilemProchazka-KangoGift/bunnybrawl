@@ -5,6 +5,7 @@ import {
 import { tickIdleStateMachine } from '../../rendering/idleActions';
 import { audio } from '../../audio';
 import { swapRemove } from '../../themes/utils';
+import { getSlowDevice } from '../../perfFlags';
 
 const FIRE_COLORS = ['#FF4400', '#FF8800', '#FFCC00', '#FFAA00'];
 
@@ -43,9 +44,13 @@ export function updatePlayerCosmetics(
 
   tickIdleStateMachine(player, dt);
 
-  // Afterimages — spawn at speed threshold or during invincibility
+  // Afterimages — spawn at speed threshold or during invincibility. Skipped
+  // entirely on slow-device (already-drawn ones still decay below). Saves
+  // per-player allocations + render-time blits at the cost of a less flashy
+  // movement trail.
   const speed = Math.max(Math.abs(player.vx), Math.abs(player.vy));
-  const spawnAfterimage = speed > AFTERIMAGE_SPEED_THRESHOLD || player.invincibleTimer > 0;
+  const spawnAfterimage = !getSlowDevice()
+    && (speed > AFTERIMAGE_SPEED_THRESHOLD || player.invincibleTimer > 0);
   if (spawnAfterimage) {
     let acc = afterimageAccs.get(player.id) || 0;
     acc += dt;

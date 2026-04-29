@@ -82,6 +82,10 @@ interface Scenario {
   /** CPU throttling applied to the guest only (low-end mobile simulation).
    *  4 = 4× slowdown, ~equivalent to a low-end Android device. */
   guestCpuSlowdown?: number;
+  /** Pre-seed `carrotroyale_slow_device=1` on the guest so perfFlags reads
+   *  it at module init. Skips wildlife/fog/pollen/shootingStars cosmetic
+   *  updates, afterimage spawns, and bumps cosmetic interval to ~20Hz. */
+  guestSlowDevice?: boolean;
   /** All-mods toggle (default true to stress the heaviest gameplay path). */
   allMods?: boolean;
 }
@@ -123,13 +127,36 @@ const SCENARIOS: Scenario[] = [
     guestCpuSlowdown: 4,
     allMods: true,
   },
+  {
+    name: '07-slow-guest-with-slow-device-pref',
+    desc: '4× CPU throttle on guest + slow-device pref enabled',
+    guestCpuSlowdown: 4,
+    guestSlowDevice: true,
+    allMods: true,
+  },
+  {
+    name: '08-worst-case-with-slow-device-pref',
+    desc: '200ms+50ms jitter + 5% loss + 4× CPU + slow-device pref',
+    network: { latencyMs: 200, jitterMs: 50, lossPct: 5 },
+    guestCpuSlowdown: 4,
+    guestSlowDevice: true,
+    allMods: true,
+  },
 ];
 
 // ---- Setup helpers ----
 
-async function createPerfPage(browser: Browser, label: 'host' | 'guest'): Promise<PerfPage> {
+async function createPerfPage(browser: Browser, label: 'host' | 'guest', opts?: { slowDevice?: boolean }): Promise<PerfPage> {
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
+  if (opts?.slowDevice) {
+    // perfFlags reads carrotroyale_slow_device at module init, so the localStorage
+    // value must be set before the app bundle loads. addInitScript runs before
+    // any page script.
+    await ctx.addInitScript(() => {
+      try { localStorage.setItem('carrotroyale_slow_device', '1'); } catch { /* sandboxed */ }
+    });
+  }
   await ctx.addInitScript(() => {
     const buf: LongTaskEntry[] = [];
     window.__longTasks = buf;
@@ -526,7 +553,7 @@ async function runScenario(browser: Browser, scenario: Scenario, baseOutDir: str
   mkdirSync(outDir, { recursive: true });
 
   const host = await createPerfPage(browser, 'host');
-  const guest = await createPerfPage(browser, 'guest');
+  const guest = await createPerfPage(browser, 'guest', { slowDevice: scenario.guestSlowDevice });
   const pair: OnlinePair = { host, guest };
 
   try {

@@ -25,6 +25,7 @@ import { AIController } from '../ai';
 import { Simulator } from '../simulator/Simulator';
 import { debugFlags, toggleNavDebug, toggleNetDebug, toggleFpsDebug } from '../debugFlags';
 import { perfTrace } from '../perfTrace';
+import { getSlowDevice } from '../perfFlags';
 import { sampleFps } from '../fpsCounter';
 import type { BotNavDebugState } from '../navDebugOverlay';
 import type { NetDebugStats } from '../net/core/debugOverlay';
@@ -37,6 +38,10 @@ import { PlayerCosmeticSystem } from './cosmetics/PlayerCosmeticSystem';
 
 /** Half-rate cosmetic threshold: particles/SFX/VFX tick at ~30Hz while render stays at 60Hz. */
 const COSMETIC_INTERVAL = FIXED_TIMESTEP * 2;
+/** Slow-device cosmetic threshold: third-rate (~20Hz). Renderer extrapolates positions
+ *  from velocity so the visual smoothness gap is small; halves cosmetic CPU on throttled
+ *  devices where renderFrame already eats 3.8ms (8× normal) on the throttled-CPU profile. */
+const COSMETIC_INTERVAL_SLOW = FIXED_TIMESTEP * 3;
 /** Cap per-step cosmetic dt so tab-switch recovery doesn't dump seconds of work into one step. */
 const COSMETIC_MAX_STEP = FIXED_TIMESTEP * 4;
 
@@ -408,12 +413,13 @@ export class GameLoop {
     this.simulator.setResimulating(resim);
   }
 
-  /** Half-rate wrapper around cosmeticStep. */
+  /** Half-rate wrapper around cosmeticStep (third-rate on slow-device). */
   tickCosmetic(dt: number): void {
     perfTrace.measure('tickCosmetic', () => {
       if (!Number.isFinite(dt) || dt <= 0) return;
       this._cosmeticLead += dt;
-      if (this._cosmeticLead < COSMETIC_INTERVAL) return;
+      const interval = getSlowDevice() ? COSMETIC_INTERVAL_SLOW : COSMETIC_INTERVAL;
+      if (this._cosmeticLead < interval) return;
       const stepDt = Math.min(this._cosmeticLead, COSMETIC_MAX_STEP);
       this._cosmeticLead = Math.max(0, this._cosmeticLead - stepDt);
       this.cosmeticStep(stepDt);

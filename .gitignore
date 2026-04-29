@@ -36,3 +36,4 @@ test-results/
 dist-perf/
 playwright-report/
 coverage/
+perf-runs/
