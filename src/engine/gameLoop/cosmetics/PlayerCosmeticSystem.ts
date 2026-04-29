@@ -34,7 +34,7 @@ export class PlayerCosmeticSystem implements CosmeticSystem {
       if (player.hitstopTimer > 0) continue;
 
       updatePlayerCosmetics(
-        player, dt, this.state.timeElapsed, this.effWalkSpeed,
+        player, dt, this.effWalkSpeed,
         this.afterimageAccumulators, this.footstepAccumulators,
         this._emitParticle,
         this.playSound,

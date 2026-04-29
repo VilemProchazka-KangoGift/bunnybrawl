@@ -87,6 +87,39 @@ const EXPRESSION_REVERSE = ['normal', 'scared', 'angry', 'dizzy'] as const;
 /** Decode slot byte to PlayerSlot (type-narrowing wrapper around decodeSlot). */
 const decodeSlotAs = (b: number) => decodeSlot(b) as PlayerSlot;
 
+/** Build a fully-formed empty AuthSnapshot. All arrays exist and are empty so
+ *  V8 can lock the hidden class on first use; pooled instances reuse the same
+ *  shape for every decode. */
+export function createEmptySnapshot(): AuthSnapshot {
+  return {
+    frame: 0,
+    phase: 'loading',
+    players: [],
+    carrots: [],
+    springs: [],
+    thorns: [],
+    ghosts: [],
+    lavaRocks: [],
+    geyserStates: [],
+    killFeed: [],
+    totalKills: 0,
+    timeElapsed: 0,
+    countdown: 0,
+    dayPhase: 0,
+    matchOver: false,
+    winner: null,
+    screenShake: 0,
+    slowMotion: 0,
+    screenFlash: 0,
+    hitstopZoom: 0,
+    scoreAnimations: [],
+  };
+}
+
+/** Reused boolean array for readPackedBools — avoids `new Array(n)` per call.
+ *  Decoder is single-threaded; the buffer is consumed before the next read. */
+const PACKED_BOOLS_OUT: boolean[] = [];
+
 // ---- Binary encoding ----
 
 // Pre-allocated encode buffer (4KB — handles 10 players + 30 entities comfortably)
@@ -121,10 +154,13 @@ function writePackedBools(o: number, n: number, get: (i: number) => boolean): nu
   return o;
 }
 
-/** Read N booleans from ceil(N/8) bitfield bytes. Returns [bools, newOffset]. */
+/** Read N booleans from ceil(N/8) bitfield bytes. Returns [bools, newOffset].
+ *  Reuses the module-scope `PACKED_BOOLS_OUT` array — caller must consume the
+ *  result before the next call. */
 function readPackedBools(view: DataView, o: number, n: number): [boolean[], number] {
   const byteCount = (n + 7) >> 3;
-  const bools: boolean[] = new Array(n);
+  const bools = PACKED_BOOLS_OUT;
+  bools.length = n;
   for (let b = 0; b < byteCount; b++) {
     const byte = view.getUint8(o + b);
     const base = b * 8;
@@ -318,18 +354,27 @@ export function encodeSnapshot(snap: AuthSnapshot): { buffer: ArrayBuffer; lengt
 
 /**
  * Decode a binary snapshot back into an AuthSnapshot object.
+ *
+ * If `out` is provided, writes into it in-place — pooled reuse pattern. Inner
+ * arrays grow on demand and are trimmed via `length = N`; per-element objects
+ * are mutated in place (allocated only when growing past current length). Net
+ * allocations in steady state: zero. Without `out`, behaves like the original
+ * allocating decoder (used by tests).
+ *
+ * `offset` lets callers skip a leading wrapper byte without `buf.slice(1)`.
  */
-export function decodeSnapshot(buf: ArrayBuffer): AuthSnapshot | null {
-  if (buf.byteLength < 5) return null;
+export function decodeSnapshot(buf: ArrayBuffer, offset = 0, out?: AuthSnapshot): AuthSnapshot | null {
+  if (buf.byteLength - offset < 5) return null;
   try {
-  const view = new DataView(buf);
+  const view = new DataView(buf, offset);
   let o = 0;
 
   const frame = view.getUint32(o, true); o += 4;
 
   // Players
   const playerCount = view.getUint8(o++);
-  const players: SnapshotPlayer[] = [];
+  const players = out ? out.players : [];
+  if (out && players.length > playerCount) players.length = playerCount;
   for (let i = 0; i < playerCount; i++) {
     const id = decodeSlotAs(view.getUint8(o++));
     const x = view.getFloat32(o, true); o += 4;
@@ -359,112 +404,160 @@ export function decodeSnapshot(buf: ArrayBuffer): AuthSnapshot | null {
 
     const dfSide = (flags >> 6) & 3;
     const damageFlashSide: 'left' | 'right' | null = dfSide === 1 ? 'left' : dfSide === 2 ? 'right' : null;
+    const state = PLAYER_STATE_REVERSE[stateIdx] ?? 'idle';
+    const facing: 'left' | 'right' = (flags & 1) ? 'right' : 'left';
+    const fastFalling = !!(flags & 2);
+    const disconnected = !!(flags & 4);
+    const active = !!(flags & 8);
+    const expression = EXPRESSION_REVERSE[(flags >> 4) & 3] ?? 'normal';
 
-    players.push({
-      id,
-      x, y, vx, vy,
-      state: PLAYER_STATE_REVERSE[stateIdx] ?? 'idle',
-      facing: (flags & 1) ? 'right' : 'left',
-      fastFalling: !!(flags & 2),
-      disconnected: !!(flags & 4),
-      active: !!(flags & 8),
-      expression: EXPRESSION_REVERSE[(flags >> 4) & 3] ?? 'normal',
-      animFrame,
-      score,
-      hitstopTimer,
-      invincibleTimer,
-      splatTimer,
-      respawnTimer,
-      fatTimer,
-      slowTimer,
-      burnTimer,
-      squashScale,
-      killStreak,
-      width, height,
-      sideSquash,
-      damageFlashTimer,
-      damageFlashSide,
-    });
+    if (out && i < players.length) {
+      const p = players[i];
+      p.id = id; p.x = x; p.y = y; p.vx = vx; p.vy = vy;
+      p.state = state; p.facing = facing; p.fastFalling = fastFalling;
+      p.disconnected = disconnected; p.active = active; p.expression = expression;
+      p.animFrame = animFrame; p.score = score;
+      p.hitstopTimer = hitstopTimer; p.invincibleTimer = invincibleTimer;
+      p.splatTimer = splatTimer; p.respawnTimer = respawnTimer;
+      p.fatTimer = fatTimer; p.slowTimer = slowTimer; p.burnTimer = burnTimer;
+      p.squashScale = squashScale; p.killStreak = killStreak;
+      p.width = width; p.height = height; p.sideSquash = sideSquash;
+      p.damageFlashTimer = damageFlashTimer; p.damageFlashSide = damageFlashSide;
+    } else {
+      players.push({
+        id, x, y, vx, vy, state, facing, fastFalling, disconnected, active,
+        expression, animFrame, score,
+        hitstopTimer, invincibleTimer, splatTimer, respawnTimer,
+        fatTimer, slowTimer, burnTimer,
+        squashScale, killStreak, width, height, sideSquash,
+        damageFlashTimer, damageFlashSide,
+      });
+    }
   }
 
   // Carrots
   const carrotCount = view.getUint8(o++);
   let carrotActives: boolean[];
   [carrotActives, o] = readPackedBools(view, o, carrotCount);
-  const carrots: AuthSnapshot['carrots'] = [];
+  const carrots = out ? out.carrots : [] as AuthSnapshot['carrots'];
+  if (out && carrots.length > carrotCount) carrots.length = carrotCount;
   for (let i = 0; i < carrotCount; i++) {
     const x = view.getFloat32(o, true); o += 4;
     const y = view.getFloat32(o, true); o += 4;
-    carrots.push({ x, y, active: carrotActives[i] });
+    const active = carrotActives[i];
+    if (out && i < carrots.length) {
+      carrots[i].x = x; carrots[i].y = y; carrots[i].active = active;
+    } else {
+      carrots.push({ x, y, active });
+    }
   }
 
   // Springs
   const springCount = view.getUint8(o++);
-  const springs: AuthSnapshot['springs'] = [];
+  const springs = out ? out.springs : [] as AuthSnapshot['springs'];
+  if (out && springs.length > springCount) springs.length = springCount;
   for (let i = 0; i < springCount; i++) {
     const x = view.getFloat32(o, true); o += 4;
     const y = view.getFloat32(o, true); o += 4;
     const bounceTimer = view.getFloat32(o, true); o += 4;
     const life = view.getFloat32(o, true); o += 4;
     const growTimer = view.getFloat32(o, true); o += 4;
-    springs.push({ x, y, bounceTimer, life, growTimer });
+    if (out && i < springs.length) {
+      const s = springs[i];
+      s.x = x; s.y = y; s.bounceTimer = bounceTimer; s.life = life; s.growTimer = growTimer;
+    } else {
+      springs.push({ x, y, bounceTimer, life, growTimer });
+    }
   }
 
   // Thorns
   const thornCount = view.getUint8(o++);
   let thornHits: boolean[];
   [thornHits, o] = readPackedBools(view, o, thornCount);
-  const thorns: AuthSnapshot['thorns'] = [];
+  const thorns = out ? out.thorns : [] as AuthSnapshot['thorns'];
+  if (out && thorns.length > thornCount) thorns.length = thornCount;
   for (let i = 0; i < thornCount; i++) {
     const x = view.getFloat32(o, true); o += 4;
     const y = view.getFloat32(o, true); o += 4;
     const life = view.getFloat32(o, true); o += 4;
     const growTimer = view.getFloat32(o, true); o += 4;
-    thorns.push({ x, y, life, growTimer, hit: thornHits[i] });
+    const hit = thornHits[i];
+    if (out && i < thorns.length) {
+      const t = thorns[i];
+      t.x = x; t.y = y; t.life = life; t.growTimer = growTimer; t.hit = hit;
+    } else {
+      thorns.push({ x, y, life, growTimer, hit });
+    }
   }
 
   // Ghosts
   const ghostCount = view.getUint8(o++);
-  const ghosts: AuthSnapshot['ghosts'] = [];
+  const ghosts = out ? out.ghosts : [] as AuthSnapshot['ghosts'];
+  if (out && ghosts.length > ghostCount) ghosts.length = ghostCount;
   for (let i = 0; i < ghostCount; i++) {
     const x = view.getFloat32(o, true); o += 4;
     const y = view.getFloat32(o, true); o += 4;
     const vx = view.getFloat32(o, true); o += 4;
     const wobblePhase = view.getFloat32(o, true); o += 4;
-    ghosts.push({ x, y, vx, wobblePhase });
+    if (out && i < ghosts.length) {
+      const g = ghosts[i];
+      g.x = x; g.y = y; g.vx = vx; g.wobblePhase = wobblePhase;
+    } else {
+      ghosts.push({ x, y, vx, wobblePhase });
+    }
   }
 
   // Lava rocks
   const lrCount = view.getUint8(o++);
   let lrActives: boolean[];
   [lrActives, o] = readPackedBools(view, o, lrCount);
-  const lavaRocks: AuthSnapshot['lavaRocks'] = [];
+  const lavaRocks = out ? out.lavaRocks : [] as AuthSnapshot['lavaRocks'];
+  if (out && lavaRocks.length > lrCount) lavaRocks.length = lrCount;
   for (let i = 0; i < lrCount; i++) {
     const x = view.getFloat32(o, true); o += 4;
     const y = view.getFloat32(o, true); o += 4;
     const vy = view.getFloat32(o, true); o += 4;
-    lavaRocks.push({ x, y, vy, active: lrActives[i] });
+    const active = lrActives[i];
+    if (out && i < lavaRocks.length) {
+      const r = lavaRocks[i];
+      r.x = x; r.y = y; r.vy = vy; r.active = active;
+    } else {
+      lavaRocks.push({ x, y, vy, active });
+    }
   }
 
   // Geyser states
   const gsCount = view.getUint8(o++);
   let gsActives: boolean[];
   [gsActives, o] = readPackedBools(view, o, gsCount);
-  const geyserStates: AuthSnapshot['geyserStates'] = [];
+  const geyserStates = out ? out.geyserStates : [] as AuthSnapshot['geyserStates'];
+  if (out && geyserStates.length > gsCount) geyserStates.length = gsCount;
   for (let i = 0; i < gsCount; i++) {
     const timer = view.getFloat32(o, true); o += 4;
     const activeTimer = view.getFloat32(o, true); o += 4;
-    geyserStates.push({ timer, active: gsActives[i], activeTimer });
+    const active = gsActives[i];
+    if (out && i < geyserStates.length) {
+      const g = geyserStates[i];
+      g.timer = timer; g.active = active; g.activeTimer = activeTimer;
+    } else {
+      geyserStates.push({ timer, active, activeTimer });
+    }
   }
 
   // Kill feed
   const kfLen = view.getUint8(o++);
-  const killFeed: KillFeedEntry[] = [];
+  const killFeed = out ? out.killFeed : [] as KillFeedEntry[];
+  if (out && killFeed.length > kfLen) killFeed.length = kfLen;
   for (let i = 0; i < kfLen; i++) {
     const attacker = decodeSlotAs(view.getUint8(o++));
     const victim = decodeSlotAs(view.getUint8(o++));
     const timestamp = view.getFloat32(o, true); o += 4;
-    killFeed.push({ attacker, victim, timestamp });
+    if (out && i < killFeed.length) {
+      const k = killFeed[i];
+      k.attacker = attacker; k.victim = victim; k.timestamp = timestamp;
+    } else {
+      killFeed.push({ attacker, victim, timestamp });
+    }
   }
 
   // Match-wide stomp counter (Uint16) — accurate "Total Splats" for guests.
@@ -491,36 +584,51 @@ export function decodeSnapshot(buf: ArrayBuffer): AuthSnapshot | null {
 
   // Score animations
   const saLen = view.getUint8(o++);
-  const scoreAnimations: AuthSnapshot['scoreAnimations'] = [];
+  const scoreAnimations = out ? out.scoreAnimations : [] as AuthSnapshot['scoreAnimations'];
+  if (out && scoreAnimations.length > saLen) scoreAnimations.length = saLen;
   for (let i = 0; i < saLen; i++) {
     const playerId = decodeSlotAs(view.getUint8(o++));
     const value = view.getUint8(o++);
     const timer = view.getFloat32(o, true); o += 4;
-    scoreAnimations.push({ playerId, value, timer });
+    if (out && i < scoreAnimations.length) {
+      const s = scoreAnimations[i];
+      s.playerId = playerId; s.value = value; s.timer = timer;
+    } else {
+      scoreAnimations.push({ playerId, value, timer });
+    }
+  }
+
+  if (out) {
+    out.frame = frame;
+    out.phase = phase;
+    out.totalKills = totalKills;
+    out.timeElapsed = timeElapsed;
+    out.countdown = countdown;
+    out.dayPhase = dayPhase;
+    out.matchOver = matchOver;
+    out.winner = winner;
+    out.screenShake = screenShake;
+    out.slowMotion = slowMotion;
+    out.screenFlash = screenFlash;
+    out.hitstopZoom = hitstopZoom;
+    return out;
   }
 
   return {
-    frame,
-    phase,
-    players,
-    carrots,
-    springs,
-    thorns,
-    ghosts,
-    lavaRocks,
-    geyserStates,
-    killFeed,
+    frame, phase,
+    players: players as SnapshotPlayer[],
+    carrots: carrots as AuthSnapshot['carrots'],
+    springs: springs as AuthSnapshot['springs'],
+    thorns: thorns as AuthSnapshot['thorns'],
+    ghosts: ghosts as AuthSnapshot['ghosts'],
+    lavaRocks: lavaRocks as AuthSnapshot['lavaRocks'],
+    geyserStates: geyserStates as AuthSnapshot['geyserStates'],
+    killFeed: killFeed as KillFeedEntry[],
     totalKills,
-    timeElapsed,
-    countdown,
-    dayPhase,
-    matchOver,
-    winner,
-    screenShake,
-    slowMotion,
-    screenFlash,
-    hitstopZoom,
-    scoreAnimations,
+    timeElapsed, countdown, dayPhase,
+    matchOver, winner,
+    screenShake, slowMotion, screenFlash, hitstopZoom,
+    scoreAnimations: scoreAnimations as AuthSnapshot['scoreAnimations'],
   };
   } catch {
     // Corrupted or truncated buffer — return null instead of crashing

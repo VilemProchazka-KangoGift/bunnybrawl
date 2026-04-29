@@ -14,6 +14,7 @@ import { isBotSlot } from '../types';
 import { FIXED_TIMESTEP } from '../constants';
 import { debugFlags } from '../debugFlags';
 import { sampleFps } from '../fpsCounter';
+import { perfTrace } from '../perfTrace';
 import { GameLoop } from '../gameLoop';
 import type { MatchEndCallback } from '../gameLoop';
 import { Transport } from './transport';
@@ -23,7 +24,8 @@ import { HostAuthority } from './hostAuthority';
 import type { HostDebugStats } from './hostAuthority';
 import { EntityInterpolation, applySnapshotToState } from './interpolation';
 import { InputEcho } from './inputEcho';
-import { decodeSnapshot } from './snapshot';
+import { decodeSnapshot, createEmptySnapshot } from './snapshot';
+import type { AuthSnapshot } from './snapshot';
 import { encodeInputMessage } from './protocol';
 
 export interface NetMatchConfig {
@@ -89,6 +91,14 @@ export class NetMatch {
   private ownReclaimToken: string | null = null;  // token to authenticate RECONNECT_REQUEST
   private lastSnapshotTime = 0;    // wall-clock time of last received snapshot
   private stallNotified = false;    // whether onStall(true) has been fired
+  // Pool of pre-allocated AuthSnapshot instances cycled through during decode.
+  // Size matches the interpolation ring (30) so by the time we wrap back to
+  // slot 0, the ring has already evicted whatever this slot used to hold.
+  // Decoder writes into the pooled instance in-place — eliminates ~2400
+  // small-object allocations per second on the snapshot decode path.
+  private static readonly SNAPSHOT_POOL_SIZE = 30;
+  private snapshotPool: AuthSnapshot[] = [];
+  private snapshotPoolIdx = 0;
 
   // Reconnection state (guest only)
   private reconnecting = false;
@@ -207,6 +217,11 @@ export class NetMatch {
 
   private initGuest(config: NetMatchConfig): void {
     this.interpolation = new EntityInterpolation();
+    this.snapshotPool = Array.from(
+      { length: NetMatch.SNAPSHOT_POOL_SIZE },
+      () => createEmptySnapshot(),
+    );
+    this.snapshotPoolIdx = 0;
     this.ownReclaimToken = config.ownReclaimToken ?? null;
     // Input echo: instant visual feedback without position prediction.
     // Disable with ?noecho URL param.
@@ -401,7 +416,9 @@ export class NetMatch {
   private startHostLoop(): void {
     let lastTime = performance.now();
     const FIXED_DT = FIXED_TIMESTEP;
+    const BROADCAST_INTERVAL_MS = 1000 / 60;
     let accumulator = 0;
+    let lastBroadcastTime = 0;
 
     // Fairness delay: buffer host inputs to match guest round-trip latency.
     // Without this, host has 0ms input lag while guest has RTT/2 + interpolation delay.
@@ -476,9 +493,15 @@ export class NetMatch {
         accumulator -= FIXED_DT;
       }
 
-      // One snapshot per render frame (not per tick) — multiple snapshots
-      // per frame would spam guests with decode/GC pressure on mobile.
-      this.hostAuthority!.broadcastSnapshot(this.gameLoop.getState());
+      // Throttle to 60Hz. A 120Hz host display would otherwise broadcast 120
+      // snapshots/sec and double the guest's decode + GC load for no benefit
+      // (the simulation is fixed-timestep at 60Hz).
+      if (now - lastBroadcastTime >= BROADCAST_INTERVAL_MS) {
+        lastBroadcastTime = now;
+        const broadcastStart = perfTrace.begin('net.broadcastSnapshot');
+        this.hostAuthority!.broadcastSnapshot(this.gameLoop.getState());
+        perfTrace.end('net.broadcastSnapshot', broadcastStart);
+      }
 
       this.gameLoop.setConnectionQuality(this.transport.currentRtt, this.transport.currentJitter);
 
@@ -564,7 +587,9 @@ export class NetMatch {
       if (this.interpolation) {
         const snap = this.interpolation.getInterpolatedState();
         if (snap) {
+          const applyStart = perfTrace.begin('net.applySnapshot');
           applySnapshotToState(snap, this.gameLoop.getState());
+          perfTrace.end('net.applySnapshot', applyStart);
         }
       }
 
@@ -691,12 +716,19 @@ export class NetMatch {
       } as ReliableMessage);
     }
 
-    // Strip the 1-byte type prefix (0x20) and decode
-    const snapBuf = data.slice(1);
-    const snap = decodeSnapshot(snapBuf);
+    const handleStart = perfTrace.begin('net.handleSnapshot');
+    // Skip the 1-byte type prefix and decode into a pooled instance —
+    // pool size matches the interpolation ring so the slot we're about to
+    // overwrite has already been evicted from the ring.
+    const out = this.snapshotPool[this.snapshotPoolIdx];
+    this.snapshotPoolIdx = (this.snapshotPoolIdx + 1) % NetMatch.SNAPSHOT_POOL_SIZE;
+    const decodeStart = perfTrace.begin('net.decodeSnapshot');
+    const snap = decodeSnapshot(data, 1, out);
+    perfTrace.end('net.decodeSnapshot', decodeStart);
     if (snap) {
       this.interpolation.pushSnapshot(snap);
     }
+    perfTrace.end('net.handleSnapshot', handleStart);
   }
 
   handleReliableMessage(msg: ReliableMessage, fromPeerId?: string): void {

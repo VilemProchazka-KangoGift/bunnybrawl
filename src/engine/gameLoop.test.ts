@@ -2451,15 +2451,17 @@ describe('Animation Timers', () => {
     const state = loop.getState();
     const player = state.players[0];
 
-    // Ensure player is active, not in hitstop, and in 'run' state.
-    // Post-fix, animTimer only ticks while running.
+    // animFrame/animTimer advance happens in fixedUpdate (host-authoritative).
+    // updatePlayerState classifies state from velocity, so we need to be on
+    // the ground (vy === 0) AND have vx > 10.
+    player.x = 200;
+    player.y = 660 - PLAYER_HEIGHT;
     player.active = true;
     player.hitstopTimer = 0;
     player.animTimer = 0;
+    player.vx = 300;
 
     loop.fixedUpdate(FIXED_TIMESTEP);
-    player.state = 'run';
-    loop.cosmeticStep(FIXED_TIMESTEP); // animTimer advance now in cosmeticStep
 
     expect(player.animTimer).toBeGreaterThan(0);
     expect(player.animTimer).toBeCloseTo(FIXED_TIMESTEP, 6);
@@ -2478,14 +2480,13 @@ describe('Animation Timers', () => {
     player.animTimer = 0;
     player.animFrame = 0;
 
-    // Advance enough frames to exceed ANIM_FRAME_DURATION (0.12s).
-    // animFrame only ticks while in 'run' state (post-fix), so force the
-    // state each tick — physics will reset to 'idle' if vx ~ 0.
+    // Re-set vx each tick so updatePlayerState keeps state='run' across
+    // friction; animFrame advance now lives in fixedUpdate.
     const steps = Math.ceil(ANIM_FRAME_DURATION / FIXED_TIMESTEP) + 1;
     for (let i = 0; i < steps; i++) {
-      loop.fixedUpdate(FIXED_TIMESTEP);
+      player.vx = 300;
       player.state = 'run';
-      loop.cosmeticStep(FIXED_TIMESTEP); // animFrame advance now in cosmeticStep
+      loop.fixedUpdate(FIXED_TIMESTEP);
     }
 
     // animFrame should have advanced at least once

@@ -1,14 +1,11 @@
 import type { Player, PlayerSlot } from '../../types';
 import {
-  ANIM_FRAME_DURATION, RUN_FRAMES,
   AFTERIMAGE_INTERVAL, AFTERIMAGE_SPEED_THRESHOLD, AFTERIMAGE_MAX,
 } from '../../constants';
 import { tickIdleStateMachine } from '../../rendering/idleActions';
 import { audio } from '../../audio';
 import { swapRemove } from '../../themes/utils';
-import { fastSin } from '../../fastMath';
 
-const f = Math.fround;
 const FIRE_COLORS = ['#FF4400', '#FF8800', '#FFCC00', '#FFAA00'];
 
 /**
@@ -17,22 +14,18 @@ const FIRE_COLORS = ['#FF4400', '#FF8800', '#FFCC00', '#FFAA00'];
  * Called for each active player NOT in hitstop.
  */
 export function updatePlayerCosmetics(
-  player: Player, dt: number, timeElapsed: number,
+  player: Player, dt: number,
   effWalkSpeed: number,
   afterimageAccs: Map<PlayerSlot, number>,
   footstepAccs: Map<PlayerSlot, number>,
   emitParticle: (x: number, y: number, vx: number, vy: number, life: number, size: number, color: string) => void,
   playSound: (name: string) => void,
 ): void {
-  // Animation frame advance — only while running. Reset on transition out.
-  if (player.state === 'run') {
-    player.animTimer += dt;
-    if (player.animTimer >= ANIM_FRAME_DURATION) {
-      player.animTimer -= ANIM_FRAME_DURATION;
-      player.animFrame = (player.animFrame + 1) % RUN_FRAMES;
-    }
-  } else {
-    player.animFrame = 0;
+  // animFrame advance moved to Simulator.fixedUpdate — animFrame is in the
+  // snapshot, so advancing it on guest's local clock (which drifts vs host)
+  // overrode the snapshot value at non-deterministic times, causing visible
+  // shake in the run cycle. animTimer stays local (cosmetic-only).
+  if (player.state !== 'run') {
     player.animTimer = 0;
   }
 
@@ -91,12 +84,10 @@ export function updatePlayerCosmetics(
     footstepAccs.set(player.id, 0);
   }
 
-  // Expressions: dizzy (invincible) and scared (fast fall)
-  if (player.invincibleTimer > 0) {
-    player.expression = 'dizzy';
-  } else if (player.vy > 400) {
-    player.expression = 'scared';
-  }
+  // Expression overrides (dizzy/scared) moved to Simulator.fixedUpdate —
+  // expression is in the snapshot, so overriding it on guest from
+  // locally-decayed timers / interpolated vy could downgrade an authoritative
+  // 'angry' (kill streak) to 'scared' mid-killstreak.
 
   // sideSquash decay moved to GameLoop.fixedUpdate (before collidePlatforms)
   // so end-of-tick state is the physics-authored value when wall-pressing,

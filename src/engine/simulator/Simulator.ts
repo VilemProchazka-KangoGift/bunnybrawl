@@ -16,7 +16,7 @@ import {
 import {
   CARROT_SIZE, FAT_DURATION, SPRING_BOUNCE,
   HITSTOP_DURATION, SQUASH_ON_LAND, STRETCH_ON_JUMP, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED,
-  SCREEN_FLASH_DURATION,
+  SCREEN_FLASH_DURATION, ANIM_FRAME_DURATION, RUN_FRAMES,
 } from '../constants';
 import { computeEffectivePhysics, createInitialPlayers, createInitialMatchState } from './initialState';
 import { perfTrace } from '../perfTrace';
@@ -463,6 +463,19 @@ export class Simulator {
         player.squashScale = f(player.squashScale * f(1 + f(fastSin(f(this._state.timeElapsed * 6)) * 0.05)));
       }
 
+      // animFrame advance — was in PlayerCosmeticSystem but animFrame is in
+      // the snapshot, so guest's local animTimer drift caused visible run-cycle
+      // shake. Host advances authoritatively here, guest reads from snapshot.
+      if (player.state === 'run') {
+        player.animTimer = f(player.animTimer + dt);
+        if (player.animTimer >= ANIM_FRAME_DURATION) {
+          player.animTimer = f(player.animTimer - ANIM_FRAME_DURATION);
+          player.animFrame = (player.animFrame + 1) % RUN_FRAMES;
+        }
+      } else {
+        player.animFrame = 0;
+      }
+
       if (player.invincibleTimer <= 0 && player.vy <= 400) {
         let angry = false;
         for (const other of this._state.players) {
@@ -472,6 +485,15 @@ export class Simulator {
           if (dx < 80 && dy < 60) { angry = true; break; }
         }
         player.expression = angry ? 'angry' : 'normal';
+      }
+      // dizzy/scared overrides — moved here from PlayerCosmeticSystem so the
+      // value is baked into the snapshot. Order matters: these win over the
+      // angry/normal block above so a stomped player shows dizzy, and a
+      // fast-falling non-angry player shows scared.
+      if (player.invincibleTimer > 0) {
+        player.expression = 'dizzy';
+      } else if (player.vy > 400 && player.expression === 'normal') {
+        player.expression = 'scared';
       }
 
       if (player.state === 'airborne') {

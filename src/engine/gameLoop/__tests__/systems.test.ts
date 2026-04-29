@@ -464,7 +464,7 @@ describe('PlayerCosmeticSystem', () => {
     expect(() => sys.init()).not.toThrow();
   });
 
-  it('cosmeticUpdate() advances animTimer for active players', () => {
+  it('cosmeticUpdate() does NOT advance animTimer (now in Simulator.fixedUpdate)', () => {
     const player = makePlayer({ id: 'P1', state: 'run', animTimer: 0 });
     const state = makeSystemState({ players: [player] });
     const sys = makePlayerCosmeticSystem(state);
@@ -472,18 +472,9 @@ describe('PlayerCosmeticSystem', () => {
 
     sys.cosmeticUpdate(1 / 60);
 
-    expect(player.animTimer).toBeGreaterThan(0);
-  });
-
-  it('cosmeticUpdate() skips players in hitstop', () => {
-    const player = makePlayer({ id: 'P1', state: 'run', animTimer: 0, hitstopTimer: 0.1 });
-    const state = makeSystemState({ players: [player] });
-    const sys = makePlayerCosmeticSystem(state);
-    sys.init();
-
-    sys.cosmeticUpdate(1 / 60);
-
-    // animTimer should NOT advance during hitstop
+    // animFrame is in the snapshot — guest's local cosmetic clock would drift
+    // vs host and override the authoritative value. Advance lives in
+    // Simulator.fixedUpdate now (host-authoritative).
     expect(player.animTimer).toBe(0);
   });
 

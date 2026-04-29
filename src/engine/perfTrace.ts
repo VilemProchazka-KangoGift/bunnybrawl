@@ -24,7 +24,11 @@ export type PerfSection =
   | 'cosmetic.playerCosmetic'
   | 'cosmetic.entityTransition'
   | 'cosmetic.particles'
-  | 'cosmetic.environment';
+  | 'cosmetic.environment'
+  | 'net.decodeSnapshot'
+  | 'net.applySnapshot'
+  | 'net.broadcastSnapshot'
+  | 'net.handleSnapshot';
 
 interface SectionStats {
   calls: number;
