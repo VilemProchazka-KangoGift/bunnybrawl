@@ -468,6 +468,19 @@ export class NetMatch {
         // Host should delay by: RTT/2 + 1 frame (to roughly match guest's total)
         const targetDelay = Math.round((rtt / 2) / (FIXED_DT * 1000)) + 1;
         delayFrames = Math.max(1, Math.min(MAX_DELAY, targetDelay));
+
+        // Per-peer broadcast tier based on health. Divisor 1 = 60Hz, 2 = 30Hz,
+        // 3 = 20Hz. Skip if the guest's CONNECTION_UNSTABLE signal already
+        // pinned a tier — the explicit signal beats RTT-derived heuristics.
+        for (const peerId of this.transport.getPeerIds()) {
+          if (this.hostAuthority?.isPeerUnstable(peerId)) continue;
+          const info = this.transport.getPeerInfo(peerId);
+          if (!info) continue;
+          let divisor = 1;
+          if (info.rtt > 300 || info.jitter > 100) divisor = 3;
+          else if (info.rtt > 150 || info.jitter > 50) divisor = 2;
+          this.hostAuthority?.setPeerBroadcastDivisor(peerId, divisor);
+        }
       }
 
       while (accumulator >= FIXED_DT) {

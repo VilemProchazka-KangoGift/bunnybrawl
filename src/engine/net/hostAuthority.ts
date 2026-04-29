@@ -108,6 +108,8 @@ export class HostAuthority {
   getLocalFrame(): number { return this.core.getLocalFrame(); }
   setPeerUnstable(peerId: string, unstable: boolean): void { this.core.setPeerUnstable(peerId, unstable); }
   isPeerUnstable(peerId: string): boolean { return this.core.isPeerUnstable(peerId); }
+  setPeerBroadcastDivisor(peerId: string, divisor: number): void { this.core.setPeerBroadcastDivisor(peerId, divisor); }
+  getPeerBroadcastDivisor(peerId: string): number { return this.core.getPeerBroadcastDivisor(peerId); }
 
   handleUnreliableMessage(data: ArrayBuffer, fromPeerId?: string): void {
     this.core.handleUnreliableMessage(data, fromPeerId);

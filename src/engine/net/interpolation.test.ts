@@ -98,14 +98,14 @@ describe('EntityInterpolation', () => {
     for (let i = 1; i <= 10; i++) {
       interp.pushSnapshot(makeSnap(i, 100 + i, 200));
     }
-    expect(interp.getDelayFrames()).toBe(2); // starts at MIN_DELAY
+    const initialDelay = interp.getDelayFrames();
 
     // Simulate a burst of gaps: jump from 10 to 15 (missed 4 frames)
     interp.pushSnapshot(makeSnap(15, 115, 200));
     // Then another gap
     interp.pushSnapshot(makeSnap(20, 120, 200));
-    // Delay should have increased
-    expect(interp.getDelayFrames()).toBeGreaterThan(2);
+    // Delay should have increased above the initial value
+    expect(interp.getDelayFrames()).toBeGreaterThan(initialDelay);
   });
 
   it('tightens delay after sustained on-time delivery', () => {
@@ -135,6 +135,7 @@ describe('EntityInterpolation', () => {
     const result = interp.getInterpolatedState();
     expect(result).not.toBeNull();
   });
+
 
   it('getLatestSnapshot returns most recent', () => {
     const interp = new EntityInterpolation();

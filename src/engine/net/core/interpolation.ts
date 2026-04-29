@@ -12,6 +12,11 @@ import type { InterpolationConfig } from './types';
 const MIN_DELAY_FRAMES = 2;
 const MAX_DELAY_FRAMES = 8;
 const MAX_EXTRAP_FRAMES = 4;
+// First-connect delay starts wider than MIN so JIT/sprite-cache warmup
+// doesn't manifest as visible teleports while the adaptive logic hasn't
+// yet had a chance to widen. Existing on-time-count tightens it back to
+// MIN over ~4s on a healthy connection.
+const WARMUP_DELAY_FRAMES = 4;
 
 /** Result of getInterpolatedState — either a single snapshot or a bracket for lerp. */
 export type InterpolationResult<TSnapshot> =
@@ -33,7 +38,7 @@ export class SnapshotInterpolation<TSnapshot> {
   private readonly _interpResult = { kind: 'interpolate' as const, before: null as TSnapshot | null, after: null as TSnapshot | null, t: 0 };
   private readonly _extrapResult = { kind: 'extrapolate' as const, snapshot: null as TSnapshot | null, overshootFrames: 0 };
   private lastReceivedFrame = -1;
-  private interpDelayFrames = MIN_DELAY_FRAMES;
+  private interpDelayFrames = WARMUP_DELAY_FRAMES;
   private initialized = false;
 
   // Jitter tracking for adaptive delay
@@ -215,7 +220,8 @@ export class SnapshotInterpolation<TSnapshot> {
     this.consecutiveLateCount = 0;
     this.consecutiveOnTimeCount = 0;
     this.lastArrivalMs = 0;
-    this.interpDelayFrames = MIN_DELAY_FRAMES;
+    // Reconnect re-warms — start wide, let on-time arrivals tighten back.
+    this.interpDelayFrames = WARMUP_DELAY_FRAMES;
     this.initialized = false;
   }
 }

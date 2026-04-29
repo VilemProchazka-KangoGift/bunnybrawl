@@ -61,6 +61,8 @@ const mockHostAuthorityInstance = {
   getSlotForPeer: vi.fn(() => undefined),
   setPeerUnstable: vi.fn(),
   isPeerUnstable: vi.fn(() => false),
+  setPeerBroadcastDivisor: vi.fn(),
+  getPeerBroadcastDivisor: vi.fn(() => 1),
 };
 
 // Captured config — tests inspect onPlayerDisconnect callback to verify
@@ -107,6 +109,7 @@ function makeMockTransport(isHost = true) {
     sendUnreliable: vi.fn(),
     sendUnreliableTo: vi.fn(),
     getPeerIds: vi.fn(() => ['peer-a']),
+    getPeerInfo: vi.fn(() => undefined),
     joinRoom: vi.fn(() => Promise.resolve()),
     roomCode: 'TEST',
     peerCount: 1,

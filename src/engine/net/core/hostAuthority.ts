@@ -97,12 +97,10 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
   private readonly gracePeriodSec: number;
   private static readonly DEFAULT_GRACE_PERIOD_SEC = 20;
 
-  // Peers the guest has self-reported as struggling (snapshot stall on their
-  // side, signalled via CONNECTION_UNSTABLE). For these peers, broadcast at
-  // half rate (every other frame) — halves their decode + GC + apply cost
-  // at the price of slightly thinner interpolation. The widened delay
-  // ceiling (8 frames) absorbs the larger inter-arrival gaps.
-  private unstablePeers = new Set<string>();
+  // Per-peer broadcast divisor. 1 = full 60Hz, 2 = ~30Hz, 3 = ~20Hz.
+  // Set via setPeerBroadcastDivisor — the unstable signal trips this to 2,
+  // upstream callers can also set finer tiers based on RTT/jitter telemetry.
+  private peerBroadcastDivisor = new Map<string, number>();
 
   // Stats — ring buffer of last 120 snapshot sizes (~2s at 60Hz)
   private lastSnapshotBytes = 0;
@@ -160,7 +158,7 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
   removeGuest(peerId: string): void {
     const slot = this.peerSlotMap.get(peerId);
     this.peerSlotMap.delete(peerId);
-    this.unstablePeers.delete(peerId);
+    this.peerBroadcastDivisor.delete(peerId);
     if (slot) {
       this.guestInputs.delete(slot);
       // Clear lastConsumedFrame too: a fresh peer reconnecting into the same
@@ -177,18 +175,27 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
     }
   }
 
-  /** Mark a peer as connection-unstable. While true, broadcastSnapshot sends
-   *  to this peer at half rate (every other frame ≈ 30Hz). Set false to
-   *  resume full-rate. The signal originates from the guest's stall detector
-   *  (CONNECTION_UNSTABLE protocol message). */
-  setPeerUnstable(peerId: string, unstable: boolean): void {
-    if (unstable) this.unstablePeers.add(peerId);
-    else this.unstablePeers.delete(peerId);
+  /** Set the broadcast frame divisor for one peer. 1 = full 60Hz (default),
+   *  2 = ~30Hz, 3 = ~20Hz, 4 = ~15Hz. Bandwidth + decode cost scales as
+   *  1/divisor. The widened interpolation delay ceiling absorbs the larger
+   *  inter-arrival gap. Capped at 4 to bound the worst case. */
+  setPeerBroadcastDivisor(peerId: string, divisor: number): void {
+    const d = Math.max(1, Math.min(4, Math.floor(divisor)));
+    if (d === 1) this.peerBroadcastDivisor.delete(peerId);
+    else this.peerBroadcastDivisor.set(peerId, d);
   }
 
-  /** Test introspection — true iff broadcastSnapshot will skip this peer on even frames. */
+  getPeerBroadcastDivisor(peerId: string): number {
+    return this.peerBroadcastDivisor.get(peerId) ?? 1;
+  }
+
+  /** Convenience: binary unstable signal maps to divisor=2 (≈30Hz). */
+  setPeerUnstable(peerId: string, unstable: boolean): void {
+    this.setPeerBroadcastDivisor(peerId, unstable ? 2 : 1);
+  }
+
   isPeerUnstable(peerId: string): boolean {
-    return this.unstablePeers.has(peerId);
+    return this.getPeerBroadcastDivisor(peerId) > 1;
   }
 
   private finalRemoveGuest(slot: string): void {
@@ -250,7 +257,7 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
 
   stop(): void {
     this.running = false;
-    this.unstablePeers.clear();
+    this.peerBroadcastDivisor.clear();
     // Drop reclaim tokens at match end — finalRemoveGuest deliberately keeps
     // them across grace expiry to maintain auth integrity, but match end is
     // the actual lifetime boundary.
@@ -270,9 +277,11 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
     msg[0] = CoreMsgType.SNAPSHOT;
     msg.set(new Uint8Array(encodeBuf), 1);
 
-    const skipUnstableThisFrame = (this.localFrame & 1) === 0;
     for (const peerId of this.transport.getPeerIds()) {
-      if (skipUnstableThisFrame && this.unstablePeers.has(peerId)) continue;
+      const divisor = this.peerBroadcastDivisor.get(peerId);
+      // Skip when divisor > 1 and this frame doesn't align with the divisor.
+      // localFrame % divisor === 0 lets one in `divisor` frames through.
+      if (divisor && divisor > 1 && this.localFrame % divisor !== 0) continue;
       this.transport.sendUnreliableTo(peerId, msg.buffer);
     }
 

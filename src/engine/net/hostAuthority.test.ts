@@ -738,6 +738,74 @@ describe('HostAuthority', () => {
       host.removeGuest('peer-a');
       expect(host.isPeerUnstable('peer-a')).toBe(false);
     });
+
+    it('per-peer broadcast divisor produces 1/N rate for arbitrary N', () => {
+      const transport = makeMockTransport();
+      transport.getPeerIds.mockReturnValue(['p1', 'p2', 'p3', 'p4']);
+      const { host } = makeHostAuthority({ transport: transport as any });
+      host.addGuest('p1', 'P2' as PlayerSlot);
+      host.addGuest('p2', 'P3' as PlayerSlot);
+      host.addGuest('p3', 'P4' as PlayerSlot);
+      host.addGuest('p4', 'P5' as PlayerSlot);
+      host.setPeerBroadcastDivisor('p2', 2); // 30Hz
+      host.setPeerBroadcastDivisor('p3', 3); // 20Hz
+      host.setPeerBroadcastDivisor('p4', 4); // 15Hz
+
+      for (let i = 0; i < 12; i++) host.broadcastSnapshot(makeMinimalMatchState());
+
+      const sendsTo = (id: string): number =>
+        transport.sendUnreliableTo.mock.calls.filter((c: unknown[]) => c[0] === id).length;
+
+      expect(sendsTo('p1')).toBe(12);   // divisor 1 → all 12
+      expect(sendsTo('p2')).toBe(6);    // divisor 2 → 6
+      expect(sendsTo('p3')).toBe(4);    // divisor 3 → 4
+      expect(sendsTo('p4')).toBe(3);    // divisor 4 → 3
+    });
+
+    it('clamps broadcast divisor to [1, 4]', () => {
+      const transport = makeMockTransport();
+      transport.getPeerIds.mockReturnValue(['peer-a']);
+      const { host } = makeHostAuthority({ transport: transport as any });
+      host.addGuest('peer-a', 'P2' as PlayerSlot);
+
+      host.setPeerBroadcastDivisor('peer-a', 0);    // clamps up to 1
+      expect(host.getPeerBroadcastDivisor('peer-a')).toBe(1);
+
+      host.setPeerBroadcastDivisor('peer-a', 99);   // clamps down to 4
+      expect(host.getPeerBroadcastDivisor('peer-a')).toBe(4);
+
+      host.setPeerBroadcastDivisor('peer-a', 2.7);  // floors to 2
+      expect(host.getPeerBroadcastDivisor('peer-a')).toBe(2);
+    });
+
+    it('setPeerUnstable maps to divisor 2 (true) or 1 (false)', () => {
+      const transport = makeMockTransport();
+      transport.getPeerIds.mockReturnValue(['peer-a']);
+      const { host } = makeHostAuthority({ transport: transport as any });
+      host.addGuest('peer-a', 'P2' as PlayerSlot);
+
+      host.setPeerUnstable('peer-a', true);
+      expect(host.getPeerBroadcastDivisor('peer-a')).toBe(2);
+      expect(host.isPeerUnstable('peer-a')).toBe(true);
+
+      host.setPeerUnstable('peer-a', false);
+      expect(host.getPeerBroadcastDivisor('peer-a')).toBe(1);
+      expect(host.isPeerUnstable('peer-a')).toBe(false);
+    });
+
+    it('setting divisor=1 explicitly clears the per-peer override', () => {
+      const transport = makeMockTransport();
+      transport.getPeerIds.mockReturnValue(['peer-a']);
+      const { host } = makeHostAuthority({ transport: transport as any });
+      host.addGuest('peer-a', 'P2' as PlayerSlot);
+
+      host.setPeerBroadcastDivisor('peer-a', 3);
+      host.setPeerBroadcastDivisor('peer-a', 1);
+
+      for (let i = 0; i < 6; i++) host.broadcastSnapshot(makeMinimalMatchState());
+      const sends = transport.sendUnreliableTo.mock.calls.filter((c: unknown[]) => c[0] === 'peer-a').length;
+      expect(sends).toBe(6); // full rate restored
+    });
   });
 
   describe('handleReliableMessage', () => {
