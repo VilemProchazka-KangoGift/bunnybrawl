@@ -16,16 +16,13 @@ export class EnvironmentSystem implements CosmeticSystem {
   init(): void {}
 
   cosmeticUpdate(dt: number): void {
-    // Decorative atmosphere — frozen on slow-device. Existing entries stay
-    // drawn at their last position; renderer doesn't care that they're stale.
+    // Decorative atmosphere is frozen on slow-device; gameplay feedback always ticks.
     if (!getSlowDevice()) {
       updateWildlife(this.state, dt);
       updateFog(this.state, dt);
       updatePollen(this.state, dt);
       updateShootingStars(this.state, this.theme, dt);
     }
-    // Gameplay-relevant feedback (shockwaves, score popups, bouncy jelly,
-    // pigeon scatter from stomps) always ticks.
     updateShockwaves(this.state, dt);
     updateScoreAnimations(this.state, dt);
     updateBouncyWobble(this.state, dt);

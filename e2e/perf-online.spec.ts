@@ -178,15 +178,10 @@ async function createPerfPage(browser: Browser, label: 'host' | 'guest', opts?: 
   return { page, ctx, label };
 }
 
-/** Inject a per-frame sampler that records every player's position and an
- *  interpolation buffer-depth proxy at every RAF on the guest. Captures
- *  the data needed to detect freezes, teleports, and rubber-banding —
- *  player-feel artifacts that don't show up in CPU profiles. Also wraps
- *  EntityInterpolation.pushSnapshot to record snapshot arrival timing.
- *  Started after the match enters the 'playing' phase so loading-screen
- *  state doesn't contaminate the samples. */
+/** Per-frame sampler on the guest: records player [x,y,vx,vy,state] tuples
+ *  per RAF and snapshot arrival times via NetMatch.getLatestSnapshotFrame.
+ *  Must start after phase='playing' so loading samples don't contaminate. */
 async function startPlayerFeelSampler(p: PerfPage): Promise<void> {
-  const PLAYER_STATE_MAP: Record<string, number> = { idle: 0, run: 1, airborne: 2, splat: 3, respawning: 4 };
   await p.page.evaluate(({ stateMap }) => {
     window.__playerSamples = [];
     window.__snapshotArrivals = [];
@@ -224,7 +219,7 @@ async function startPlayerFeelSampler(p: PerfPage): Promise<void> {
       }
     };
     setInterval(pollSnap, 4);
-  }, { stateMap: PLAYER_STATE_MAP });
+  }, { stateMap: PLAYER_STATE_NUM });
 }
 
 async function stopPlayerFeelSampler(p: PerfPage): Promise<{ samples: PlayerFrame[]; arrivals: SnapshotArrival[] }> {
@@ -623,11 +618,9 @@ async function runScenario(browser: Browser, scenario: Scenario, baseOutDir: str
 
     const guestFeel = await stopPlayerFeelSampler(guest);
 
-    // Probe: did the auto-slow-device detector flip on either peer?
-    // Set by autoSlowDetect.flip() in the engine.
     const autoSlow = {
-      host: await host.page.evaluate(() => (globalThis as { __autoSlowFlipped?: boolean }).__autoSlowFlipped === true),
-      guest: await guest.page.evaluate(() => (globalThis as { __autoSlowFlipped?: boolean }).__autoSlowFlipped === true),
+      host: await host.page.evaluate(() => window.__gameLoop?.isAutoSlowFlipped?.() === true),
+      guest: await guest.page.evaluate(() => window.__gameLoop?.isAutoSlowFlipped?.() === true),
     };
 
     const hostProfile = await stopAndCapture(host, cdpHost, heapHost.timeline);
@@ -682,7 +675,8 @@ function renderSummaryTable(summaries: ScenarioSummary[]): string {
   for (const s of summaries) {
     const hostLT = `${s.hostLongTasks.count} (max ${s.hostLongTasks.maxMs.toFixed(0)}ms)`;
     const guestLT = `${s.guestLongTasks.count} (max ${s.guestLongTasks.maxMs.toFixed(0)}ms)`;
-    const autoFlag = `${s.autoSlow.host ? '🔥' : '·'} / ${s.autoSlow.guest ? '🔥' : '·'}`;
+    const flagSymbol = (on: boolean) => on ? 'AUTO' : '-';
+    const autoFlag = `${flagSymbol(s.autoSlow.host)} / ${flagSymbol(s.autoSlow.guest)}`;
     lines.push(`| ${s.name} | ${s.hostFps.toFixed(1)} | ${s.guestFps.toFixed(1)} | ${hostLT} | ${guestLT} | ${s.hostHeapDeltaMB.toFixed(1)} MB | ${s.guestHeapDeltaMB.toFixed(1)} MB | ${autoFlag} |`);
   }
   lines.push('');

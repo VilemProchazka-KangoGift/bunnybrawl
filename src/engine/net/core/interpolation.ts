@@ -7,13 +7,8 @@
  */
 import type { InterpolationConfig } from './types';
 
-// Adaptive interpolation delay (in frames). Ceiling is 8 frames (~133ms at
-// 60Hz) so a chronically jittery network (200ms+50ms jitter shows snap gaps
-// up to 200ms in the perf-online suite) can buffer enough to keep arrivals
-// inside the lerp window instead of falling out the back into extrapolation.
-// Trades +50ms input lag on already-laggy connections for elimination of
-// the visible teleport class — see the high-latency scenario in
-// e2e/perf-online.spec.ts which produced 8 teleports up to 635px before.
+// Ceiling is 8 frames (~133ms) so chronic jitter can buffer enough to keep
+// arrivals inside the lerp window instead of falling into extrapolation.
 const MIN_DELAY_FRAMES = 2;
 const MAX_DELAY_FRAMES = 8;
 const MAX_EXTRAP_FRAMES = 4;
@@ -46,12 +41,10 @@ export class SnapshotInterpolation<TSnapshot> {
   private consecutiveOnTimeCount = 0;
   private readonly TIGHTEN_THRESHOLD = 120;
 
-  // Wall-clock arrival tracking — frames arriving in-order but late (network
-  // sim delays packets without dropping them) wouldn't trip the frame-gap
-  // widening logic. Capturing inter-arrival ms catches that class of jitter
-  // and widens delay so the buffer can absorb it.
+  // Wall-clock arrival tracking catches in-order-but-late frames that would
+  // not trip the frame-gap widening logic above.
   private lastArrivalMs = 0;
-  private readonly LATE_ARRIVAL_MS = 35; // ~2× the expected 16.67ms inter-tick
+  private readonly LATE_ARRIVAL_MS = 35;
 
   private config: InterpolationConfig<TSnapshot>;
 
@@ -78,7 +71,8 @@ export class SnapshotInterpolation<TSnapshot> {
       const lateByTime = arrivalGapMs > this.LATE_ARRIVAL_MS;
       if (gap > 1 || lateByTime) {
         // Frame gap counts cumulatively; pure timing-late counts as 1.
-        this.consecutiveLateCount += gap > 1 ? gap - 1 : 1;
+        const lateInc = gap > 1 ? gap - 1 : 1;
+        this.consecutiveLateCount += lateInc;
         this.consecutiveOnTimeCount = 0;
         if (this.consecutiveLateCount > 3 && this.interpDelayFrames < MAX_DELAY_FRAMES) {
           this.interpDelayFrames++;
@@ -147,13 +141,9 @@ export class SnapshotInterpolation<TSnapshot> {
       const latest = this.ringAt(this.ringCount - 1);
       const overshootFrames = targetFrame - this.config.getFrame(latest);
       if (overshootFrames > 0) {
-        // Freeze-cap: when overshoot exceeds MAX_EXTRAP_FRAMES, hold the
-        // extrapolated position at the cap rather than snapping back to the
-        // latest snapshot. The pre-existing fall-back-to-latest path was the
-        // root cause of the high-latency teleport class — the renderer would
-        // be displaying the player at "latest + 4 frames forward" then
-        // suddenly snap back to the raw "latest" position, producing a 60-
-        // 100px visible jump every time a snapshot stayed late.
+        // Freeze-cap: when overshoot exceeds MAX_EXTRAP_FRAMES, hold at the
+        // cap rather than snapping back to `latest` — the snap-back was the
+        // root cause of the high-latency teleport class.
         this._extrapResult.snapshot = latest;
         this._extrapResult.overshootFrames = Math.min(overshootFrames, MAX_EXTRAP_FRAMES);
         return this._extrapResult as InterpolationResult<TSnapshot> & { kind: 'extrapolate' };

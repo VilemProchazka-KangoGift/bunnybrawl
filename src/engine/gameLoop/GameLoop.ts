@@ -39,9 +39,7 @@ import { PlayerCosmeticSystem } from './cosmetics/PlayerCosmeticSystem';
 
 /** Half-rate cosmetic threshold: particles/SFX/VFX tick at ~30Hz while render stays at 60Hz. */
 const COSMETIC_INTERVAL = FIXED_TIMESTEP * 2;
-/** Slow-device cosmetic threshold: third-rate (~20Hz). Renderer extrapolates positions
- *  from velocity so the visual smoothness gap is small; halves cosmetic CPU on throttled
- *  devices where renderFrame already eats 3.8ms (8× normal) on the throttled-CPU profile. */
+/** Slow-device threshold: ~20Hz. Renderer extrapolates from velocity so the smoothness gap is small. */
 const COSMETIC_INTERVAL_SLOW = FIXED_TIMESTEP * 3;
 /** Cap per-step cosmetic dt so tab-switch recovery doesn't dump seconds of work into one step. */
 const COSMETIC_MAX_STEP = FIXED_TIMESTEP * 4;
@@ -521,6 +519,7 @@ export class GameLoop {
   pause(): void { this.paused = true; audio.setPaused(true); this.simulator.getState().screenShake = 0; }
   resume(): void { this.paused = false; this.lastTime = performance.now(); audio.setPaused(false, this.simulator.getArena().themeId); }
   isPaused(): boolean { return this.paused; }
+  isAutoSlowFlipped(): boolean { return autoSlowDetect.isFlipped(); }
   skipCountdown(): void {
     const state = this.simulator.getState();
     if (state.countdown > 0) {

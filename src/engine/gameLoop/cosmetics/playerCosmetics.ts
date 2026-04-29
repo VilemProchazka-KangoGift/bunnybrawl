@@ -44,10 +44,8 @@ export function updatePlayerCosmetics(
 
   tickIdleStateMachine(player, dt);
 
-  // Afterimages — spawn at speed threshold or during invincibility. Skipped
-  // entirely on slow-device (already-drawn ones still decay below). Saves
-  // per-player allocations + render-time blits at the cost of a less flashy
-  // movement trail.
+  // Afterimages — spawn at speed threshold or during invincibility. Skipped on
+  // slow-device; decay loop below still drains pre-existing entries.
   const speed = Math.max(Math.abs(player.vx), Math.abs(player.vy));
   const spawnAfterimage = !getSlowDevice()
     && (speed > AFTERIMAGE_SPEED_THRESHOLD || player.invincibleTimer > 0);
