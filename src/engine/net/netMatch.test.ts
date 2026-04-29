@@ -27,6 +27,7 @@ const mockGameLoopInstance = {
   setResimulating: vi.fn(),
   cosmeticStep: vi.fn(),
   tickCosmetic: vi.fn(),
+  warmupCosmeticDuringLoading: vi.fn(),
   getRng: vi.fn(() => null),
   getAIControllers: vi.fn(() => new Map()),
   getAiRng: vi.fn(() => undefined),

@@ -431,6 +431,29 @@ export class GameLoop {
     return this._cosmeticLead;
   }
 
+  /** JIT warmup for the cosmetic hot paths during the guest's loading phase.
+   *  `cosmeticStep` early-returns at phase=loading to avoid spurious transition
+   *  sounds while the first snapshot establishes a baseline — but that means
+   *  the first cosmeticStep after phase flips to 'playing' has to JIT-compile
+   *  5 systems × per-player × per-entity hot paths at once, blowing frame
+   *  budget on cold low-end Android.
+   *
+   *  This bypasses the phase guard but pins prev-state to current state every
+   *  call (`resetCosmeticBaselines`) so transition detection finds prev==curr
+   *  and fires nothing. The goal is purely to warm V8's optimizer; the loading
+   *  overlay hides any cosmetic motion this incidentally produces (wildlife,
+   *  fog, pollen). After phase flips, `onEnterPlayingPhase` re-primes baselines
+   *  one more time against the just-applied snapshot so the first real
+   *  cosmeticStep starts clean. */
+  warmupCosmeticDuringLoading(dt: number): void {
+    this.resetCosmeticBaselines();
+    this.playerTransitionSystem.cosmeticUpdate(dt);
+    this.playerCosmeticSystem.cosmeticUpdate(dt);
+    this.entityTransitionSystem.cosmeticUpdate(dt);
+    this.particleSystem.cosmeticUpdate(dt);
+    this.environmentSystem.cosmeticUpdate(dt);
+  }
+
   /** Tick all cosmetic-only systems (particles, environment, visual decays). */
   cosmeticStep(dt: number): void {
     perfTrace.measure('cosmeticStep', () => {

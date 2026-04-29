@@ -597,7 +597,14 @@ export class NetMatch {
       // 3. Tick cosmetics (SFX, particles, visual effects via state-transition detection)
       // No matchOver guard — cosmeticStep needs to run the frame matchOver flips
       // to detect the transition and play the victory sound.
-      this.gameLoop.tickCosmetic(dt);
+      // During loading, `cosmeticStep` would early-return — instead, run the
+      // systems with prev-state pinned to current so JIT compiles the hot paths
+      // before phase flips to 'playing'.
+      if (state.phase === 'loading') {
+        this.gameLoop.warmupCosmeticDuringLoading(dt);
+      } else {
+        this.gameLoop.tickCosmetic(dt);
+      }
 
       // 4. Apply input echo for local player visual responsiveness
       if (this.inputEcho) {
