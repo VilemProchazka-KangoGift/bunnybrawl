@@ -97,6 +97,13 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
   private readonly gracePeriodSec: number;
   private static readonly DEFAULT_GRACE_PERIOD_SEC = 20;
 
+  // Peers the guest has self-reported as struggling (snapshot stall on their
+  // side, signalled via CONNECTION_UNSTABLE). For these peers, broadcast at
+  // half rate (every other frame) — halves their decode + GC + apply cost
+  // at the price of slightly thinner interpolation. The widened delay
+  // ceiling (8 frames) absorbs the larger inter-arrival gaps.
+  private unstablePeers = new Set<string>();
+
   // Stats — ring buffer of last 120 snapshot sizes (~2s at 60Hz)
   private lastSnapshotBytes = 0;
   private static readonly SNAPSHOT_HISTORY_SIZE = 120;
@@ -153,6 +160,7 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
   removeGuest(peerId: string): void {
     const slot = this.peerSlotMap.get(peerId);
     this.peerSlotMap.delete(peerId);
+    this.unstablePeers.delete(peerId);
     if (slot) {
       this.guestInputs.delete(slot);
       // Clear lastConsumedFrame too: a fresh peer reconnecting into the same
@@ -167,6 +175,20 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
       this.simulation.disconnectPlayer(slot);
       this.onPlayerDisconnect?.(slot);
     }
+  }
+
+  /** Mark a peer as connection-unstable. While true, broadcastSnapshot sends
+   *  to this peer at half rate (every other frame ≈ 30Hz). Set false to
+   *  resume full-rate. The signal originates from the guest's stall detector
+   *  (CONNECTION_UNSTABLE protocol message). */
+  setPeerUnstable(peerId: string, unstable: boolean): void {
+    if (unstable) this.unstablePeers.add(peerId);
+    else this.unstablePeers.delete(peerId);
+  }
+
+  /** Test introspection — true iff broadcastSnapshot will skip this peer on even frames. */
+  isPeerUnstable(peerId: string): boolean {
+    return this.unstablePeers.has(peerId);
   }
 
   private finalRemoveGuest(slot: string): void {
@@ -228,6 +250,7 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
 
   stop(): void {
     this.running = false;
+    this.unstablePeers.clear();
     // Drop reclaim tokens at match end — finalRemoveGuest deliberately keeps
     // them across grace expiry to maintain auth integrity, but match end is
     // the actual lifetime boundary.
@@ -247,7 +270,9 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
     msg[0] = CoreMsgType.SNAPSHOT;
     msg.set(new Uint8Array(encodeBuf), 1);
 
+    const skipUnstableThisFrame = (this.localFrame & 1) === 0;
     for (const peerId of this.transport.getPeerIds()) {
+      if (skipUnstableThisFrame && this.unstablePeers.has(peerId)) continue;
       this.transport.sendUnreliableTo(peerId, msg.buffer);
     }
 

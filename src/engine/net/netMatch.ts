@@ -795,6 +795,11 @@ export class NetMatch {
     } else if (this._isHost && msg.type === MsgType.CONNECTION_UNSTABLE) {
       const stalled = (msg as { stalled: boolean }).stalled;
       if (fromPeerId && this.hostAuthority) {
+        // Half-rate broadcast to this peer while they're stalled. Pairs with
+        // the widened interpolation delay ceiling on the guest side — guest
+        // can absorb the larger inter-arrival gaps without falling out of
+        // the lerp window into extrapolation.
+        this.hostAuthority.setPeerUnstable(fromPeerId, stalled);
         const slot = this.hostAuthority.getSlotForPeer(fromPeerId);
         if (slot) this.onGuestConnectionUnstable?.(slot, stalled);
       }

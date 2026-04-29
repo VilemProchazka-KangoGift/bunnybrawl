@@ -59,6 +59,8 @@ const mockHostAuthorityInstance = {
   tickGraceTimers: vi.fn(),
   getExpectedGuestSlots: vi.fn(() => [] as string[]),
   getSlotForPeer: vi.fn(() => undefined),
+  setPeerUnstable: vi.fn(),
+  isPeerUnstable: vi.fn(() => false),
 };
 
 // Captured config — tests inspect onPlayerDisconnect callback to verify

@@ -690,6 +690,54 @@ describe('HostAuthority', () => {
 
       expect(transport.sendUnreliableTo).not.toHaveBeenCalled();
     });
+
+    it('halves broadcast rate to peers marked unstable while keeping healthy peers full-rate', () => {
+      const transport = makeMockTransport();
+      transport.getPeerIds.mockReturnValue(['peer-stable', 'peer-unstable']);
+      const { host } = makeHostAuthority({ transport: transport as any });
+      host.addGuest('peer-stable', 'P2' as PlayerSlot);
+      host.addGuest('peer-unstable', 'P3' as PlayerSlot);
+      host.setPeerUnstable('peer-unstable', true);
+
+      // Run 10 broadcast frames.
+      for (let i = 0; i < 10; i++) host.broadcastSnapshot(makeMinimalMatchState());
+
+      // Healthy peer: 10 sends. Unstable peer: ~5 sends (every other frame).
+      const sendsTo = (id: string): number =>
+        transport.sendUnreliableTo.mock.calls.filter((c: unknown[]) => c[0] === id).length;
+
+      expect(sendsTo('peer-stable')).toBe(10);
+      expect(sendsTo('peer-unstable')).toBe(5);
+    });
+
+    it('returns to full broadcast rate once peer is marked stable again', () => {
+      const transport = makeMockTransport();
+      transport.getPeerIds.mockReturnValue(['peer-a']);
+      const { host } = makeHostAuthority({ transport: transport as any });
+      host.addGuest('peer-a', 'P2' as PlayerSlot);
+
+      host.setPeerUnstable('peer-a', true);
+      for (let i = 0; i < 6; i++) host.broadcastSnapshot(makeMinimalMatchState());
+      const sendsWhileUnstable = transport.sendUnreliableTo.mock.calls.length;
+
+      host.setPeerUnstable('peer-a', false);
+      for (let i = 0; i < 6; i++) host.broadcastSnapshot(makeMinimalMatchState());
+      const sendsAfterRecovery = transport.sendUnreliableTo.mock.calls.length - sendsWhileUnstable;
+
+      expect(sendsWhileUnstable).toBe(3);  // half of 6
+      expect(sendsAfterRecovery).toBe(6);  // back to full
+    });
+
+    it('removeGuest clears any unstable flag for that peer', () => {
+      const transport = makeMockTransport();
+      transport.getPeerIds.mockReturnValue(['peer-a']);
+      const { host } = makeHostAuthority({ transport: transport as any });
+      host.addGuest('peer-a', 'P2' as PlayerSlot);
+      host.setPeerUnstable('peer-a', true);
+      expect(host.isPeerUnstable('peer-a')).toBe(true);
+      host.removeGuest('peer-a');
+      expect(host.isPeerUnstable('peer-a')).toBe(false);
+    });
   });
 
   describe('handleReliableMessage', () => {

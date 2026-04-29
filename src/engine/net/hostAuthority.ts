@@ -106,6 +106,8 @@ export class HostAuthority {
   broadcastSnapshot(state: MatchState): void { this.core.broadcastSnapshot(state); }
   sendSnapshotTo(peerId: string, state: MatchState): void { this.core.sendSnapshotTo(peerId, state); }
   getLocalFrame(): number { return this.core.getLocalFrame(); }
+  setPeerUnstable(peerId: string, unstable: boolean): void { this.core.setPeerUnstable(peerId, unstable); }
+  isPeerUnstable(peerId: string): boolean { return this.core.isPeerUnstable(peerId); }
 
   handleUnreliableMessage(data: ArrayBuffer, fromPeerId?: string): void {
     this.core.handleUnreliableMessage(data, fromPeerId);
