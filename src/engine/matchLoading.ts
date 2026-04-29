@@ -1,6 +1,7 @@
 import { audio } from './audio';
 import type { Arena } from './types';
 import type { Renderer } from './renderer';
+import type { NetMatch } from './net';
 
 /**
  * Minimum visible duration for the loading overlay. Prevents a blink-and-miss
@@ -21,6 +22,9 @@ export interface RunLoadingTasksOpts {
   renderer: Renderer;
   arena: Arena;
   originalArena: Arena;
+  /** When set, guests wait for the snapshot stream to warm up before the
+   *  loading screen lifts. No-op on host. */
+  netMatch?: NetMatch | null;
   minDurationMs?: number;
   timeoutMs?: number;
 }
@@ -44,6 +48,10 @@ export async function runLoadingTasks(opts: RunLoadingTasksOpts): Promise<void> 
   const minMs = opts.minDurationMs ?? DEFAULT_MIN_MS;
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
+  // The lobby→match flow has no setPaused/visibility transition, so resume
+  // here covers idle-in-lobby auto-suspend before the first SFX fires.
+  audio.resumeContext();
+
   const minDelay = new Promise<void>((resolve) => setTimeout(resolve, minMs));
 
   const musicTask = audio.preloadArena(opts.arenaId);
@@ -64,7 +72,11 @@ export async function runLoadingTasks(opts: RunLoadingTasksOpts): Promise<void> 
     }, 0);
   });
 
-  const allTasks = Promise.all([musicTask, backgroundTask, spriteTask, minDelay]);
+  // Guest-only snapshot stream warm-up. Resolves on success or graceful
+  // timeout — never rejects, so a flaky network can't stall match start.
+  const networkTask = opts.netMatch?.waitForGuestNetworkReady() ?? Promise.resolve();
+
+  const allTasks = Promise.all([musicTask, backgroundTask, spriteTask, networkTask, minDelay]);
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timeoutId = setTimeout(() => reject(new Error('loading_timeout')), timeoutMs);

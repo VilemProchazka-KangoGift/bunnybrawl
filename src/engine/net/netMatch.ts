@@ -323,6 +323,51 @@ export class NetMatch {
     } as ReliableMessage);
   }
 
+  /** Guest: wait until the snapshot stream has warmed up before signalling
+   *  LOADED. The first 10–20s of a match used to be choppy on low-end Android:
+   *  interpolation starts at 2-frame delay, only widens after detecting 3+
+   *  missed snapshots, while the renderer/AI/sprite caches haven't JITted yet.
+   *  Holding LOADED back until the buffer has filled lets the loading screen
+   *  absorb that warm-up window instead of the player seeing it as choppy
+   *  gameplay. Resolves on success or graceful timeout — never rejects, so a
+   *  flaky network can't block match start.
+   *
+   *  Gates on three signals:
+   *    - Interpolation ring depth ≥ minSnapshots (covers the 5-frame max
+   *      adaptive delay with margin).
+   *    - At least one valid RTT measurement (`transport.currentRtt > 0`).
+   *      Without this, host's input-fairness delay spends the first second
+   *      computing against a stale RTT.
+   *    - At least minMs since the first snapshot arrived (lets jitter
+   *      measurements settle before interpolation tightens). */
+  async waitForGuestNetworkReady(opts: {
+    minSnapshots?: number;
+    minMs?: number;
+    timeoutMs?: number;
+  } = {}): Promise<void> {
+    if (this._isHost || !this.interpolation) return;
+    const minSnapshots = opts.minSnapshots ?? 12;
+    const minMs = opts.minMs ?? 250;
+    const timeoutMs = opts.timeoutMs ?? 4000;
+    const startTime = performance.now();
+    let firstSnapshotTime = 0;
+    return new Promise<void>((resolve) => {
+      const check = () => {
+        if (!this.interpolation) { resolve(); return; }
+        const depth = this.interpolation.getBufferDepth();
+        const rtt = this.transport.currentRtt;
+        const now = performance.now();
+        if (depth > 0 && firstSnapshotTime === 0) firstSnapshotTime = now;
+        const elapsed = now - startTime;
+        const sinceFirst = firstSnapshotTime > 0 ? now - firstSnapshotTime : 0;
+        if (depth >= minSnapshots && rtt > 0 && sinceFirst >= minMs) { resolve(); return; }
+        if (elapsed >= timeoutMs) { resolve(); return; }
+        setTimeout(check, 50);
+      };
+      check();
+    });
+  }
+
   /** Host: reset loading-handshake state when re-entering the 'loading'
    *  phase (rematch, arena change). Without this, a stale LOADED from the
    *  first match would cause checkAllLoaded to flip phase back to 'playing'
@@ -580,7 +625,12 @@ export class NetMatch {
       // until the pong timeout caught up ~7s later. Now we just flash a
       // "Connection Unstable" banner; actual reconnect fires from
       // onPeerDisconnected in setEvents.
-      if (this.lastSnapshotTime > 0 && !this.reconnecting && !state.matchOver) {
+      // Skip during loading: a >500ms gap is normal as JIT compiles the
+      // snapshot decode path on a cold guest, and the ensuing
+      // CONNECTION_UNSTABLE message would tell the host "guest has a slow
+      // connection" before the match has even started.
+      if (this.lastSnapshotTime > 0 && !this.reconnecting && !state.matchOver
+          && state.phase !== 'loading') {
         const elapsed = now - this.lastSnapshotTime;
         if (elapsed > 500 && !this.stallNotified) {
           this.stallNotified = true;

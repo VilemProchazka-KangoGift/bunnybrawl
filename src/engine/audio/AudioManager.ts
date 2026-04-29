@@ -21,6 +21,20 @@ class AudioManager {
     this.music.setMuted(this.muted);
   }
 
+  /** Resume the Web Audio context if suspended/interrupted. Mobile OSes
+   *  suspend on phone-call, screen-off, or backgrounding and won't auto-resume;
+   *  Howler.mute() only flips a gain node, not the context state. Symptom of
+   *  forgetting it: MP3 music plays (HTMLAudio) but procedural SFX stay silent
+   *  (Web Audio). Called from visibility, `setPaused(false)`, `playMusic`,
+   *  `playMenuMusic`, and the loading screen. */
+  resumeContext(): void {
+    const ctx = (Howler as unknown as { ctx?: AudioContext | null }).ctx;
+    if (ctx && (ctx.state === 'suspended' || ctx.state === 'interrupted' as AudioContextState)
+        && typeof ctx.resume === 'function') {
+      ctx.resume().catch(() => {});
+    }
+  }
+
   init(): void {
     if (this.initialized) return;
 
@@ -29,6 +43,7 @@ class AudioManager {
     this._visibilityHandler = () => {
       this.backgroundMuted = document.hidden;
       this.updateHowlerMute();
+      if (!document.hidden) this.resumeContext();
     };
     document.addEventListener('visibilitychange', this._visibilityHandler);
 
@@ -125,11 +140,15 @@ class AudioManager {
   setPaused(paused: boolean, themeId?: string): void {
     this.gamePaused = paused;
     this.updateHowlerMute();
-    if (!paused && themeId) this.playMusic(themeId);
+    if (!paused) {
+      this.resumeContext();
+      if (themeId) this.playMusic(themeId);
+    }
   }
 
   playMenuMusic(): void {
     this.syncMusicMute();
+    this.resumeContext();
     this.music.playMenuMusic();
   }
 
@@ -140,6 +159,7 @@ class AudioManager {
   playMusic(themeId: string): void {
     if (!this.initialized) this.init();
     this.syncMusicMute();
+    this.resumeContext();
     this.music.playMusic(themeId);
   }
 

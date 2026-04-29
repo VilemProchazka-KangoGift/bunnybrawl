@@ -49,6 +49,7 @@ function kickoffLoading(
   loop: GameLoop,
   isCurrent: () => boolean,
   onReady: () => void,
+  netMatch?: NetMatch | null,
 ): void {
   const startGen = loop.getLoadingGeneration();
   runLoadingTasks({
@@ -57,6 +58,7 @@ function kickoffLoading(
     renderer: loop.getRenderer(),
     arena: loop.getArena(),
     originalArena: loop.getOriginalArena(),
+    netMatch,
   }).finally(() => {
     if (!isCurrent()) return;
     if (loop.getLoadingGeneration() !== startGen) return;
@@ -197,7 +199,7 @@ export function Match() {
       } else {
         loop.setPhase('playing');
       }
-    });
+    }, nm);
   }, [setMatchSettings, online.isOnline, online.isHost]);
 
   useEffect(() => {
@@ -390,7 +392,7 @@ export function Match() {
             setLocalTasksDone(true);
             if (online.isHost) nm.markHostLoaded();
             else nm.signalGuestLoaded();
-          });
+          }, nm);
         },
         onPhaseChange: (phase) => {
           setPhaseIsLoading(phase === 'loading');
@@ -432,6 +434,7 @@ export function Match() {
           if (online.isHost) netMatch.markHostLoaded();
           else netMatch.signalGuestLoaded();
         },
+        netMatch,
       );
 
       return () => {
