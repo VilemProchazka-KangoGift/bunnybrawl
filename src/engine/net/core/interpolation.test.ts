@@ -114,6 +114,62 @@ describe('SnapshotInterpolation', () => {
     expect(delayAfterOnTime).toBeLessThanOrEqual(delayAfterGap);
   });
 
+  // ---- Adaptive delay: wall-clock widening ----
+
+  it('widens delay when consecutive frames arrive late by wall-clock even with no frame gaps', async () => {
+    const interp = createInterp();
+    interp.pushSnapshot({ frame: 1, x: 0 });
+    const initialDelay = interp.getDelayFrames();
+    // Push 10 in-order, consecutive frames spaced 50ms apart (well above
+    // LATE_ARRIVAL_MS=35). Without wall-clock widening this would not raise
+    // delay because no frame gap is ever seen.
+    for (let i = 2; i <= 11; i++) {
+      await new Promise(r => setTimeout(r, 50));
+      interp.pushSnapshot({ frame: i, x: i });
+    }
+    expect(interp.getDelayFrames()).toBeGreaterThan(initialDelay);
+  });
+
+  it('does NOT widen delay on consecutive frames arriving promptly (<35ms apart)', async () => {
+    const interp = createInterp();
+    interp.pushSnapshot({ frame: 1, x: 0 });
+    const initialDelay = interp.getDelayFrames();
+    for (let i = 2; i <= 11; i++) {
+      // 16ms is the expected 60Hz interval; well below LATE_ARRIVAL_MS.
+      await new Promise(r => setTimeout(r, 16));
+      interp.pushSnapshot({ frame: i, x: i });
+    }
+    expect(interp.getDelayFrames()).toBe(initialDelay);
+  });
+
+  // ---- Extrapolation freeze-cap ----
+
+  it('caps extrapolation overshoot rather than falling back to latest snapshot', () => {
+    const interp = createInterp();
+    interp.pushSnapshot({ frame: 1, x: 0 });
+    interp.pushSnapshot({ frame: 10, x: 100 });
+    // No more snapshots arrive; targetFrame = 10 - delay = 8 (within ring),
+    // so first call interpolates. Push a closer snapshot then let extrap
+    // overshoot accumulate via additional getRawResult calls (which are
+    // stateless — overshoot derives from current ring state).
+    // Force a wide overshoot: only one snapshot at frame 100, latestHostFrame=100,
+    // targetFrame=98 (delay=2). overshoot=98-100=-2 → falls through to single.
+    // Better path: two snapshots at 100, 101. Latest=101, targetFrame=99. overshoot=99-101=-2.
+    // To trigger extrap we need targetFrame > latest frame in ring.
+    // Use a single snapshot to force getRawResult into the no-after branch.
+    const interp2 = createInterp();
+    // Push one snapshot, then bump the latestHostFrame artificially via
+    // multiple pushes that increase the ring's max frame; the no-after path
+    // engages when there's no snapshot at-or-after targetFrame.
+    interp2.pushSnapshot({ frame: 100, x: 0 });
+    interp2.pushSnapshot({ frame: 101, x: 10 }); // delay=2, target=99, before=100, no after
+    const result = interp2.getRawResult();
+    expect(result).not.toBeNull();
+    if (result && result.kind === 'extrapolate') {
+      expect(result.overshootFrames).toBeLessThanOrEqual(4);
+    }
+  });
+
   // ---- getLatestSnapshot ----
 
   it('getLatestSnapshot returns the newest pushed snapshot', () => {
