@@ -430,6 +430,7 @@ interface ScenarioSummary {
   guestHeapDeltaMB: number;
   hostKeySections: Record<string, { avgMs: number; p95Ms: number; calls: number }>;
   guestKeySections: Record<string, { avgMs: number; p95Ms: number; calls: number }>;
+  autoSlow: { host: boolean; guest: boolean };
   feel: FeelSummary;
 }
 
@@ -622,6 +623,13 @@ async function runScenario(browser: Browser, scenario: Scenario, baseOutDir: str
 
     const guestFeel = await stopPlayerFeelSampler(guest);
 
+    // Probe: did the auto-slow-device detector flip on either peer?
+    // Set by autoSlowDetect.flip() in the engine.
+    const autoSlow = {
+      host: await host.page.evaluate(() => (globalThis as { __autoSlowFlipped?: boolean }).__autoSlowFlipped === true),
+      guest: await guest.page.evaluate(() => (globalThis as { __autoSlowFlipped?: boolean }).__autoSlowFlipped === true),
+    };
+
     const hostProfile = await stopAndCapture(host, cdpHost, heapHost.timeline);
     const guestProfile = await stopAndCapture(guest, cdpGuest, heapGuest.timeline);
 
@@ -652,6 +660,7 @@ async function runScenario(browser: Browser, scenario: Scenario, baseOutDir: str
       guestHeapDeltaMB: guestSummary.heapDeltaMB,
       hostKeySections: hostSummary.keySections,
       guestKeySections: guestSummary.keySections,
+      autoSlow,
       feel: feelSummary,
     };
   } finally {
@@ -666,12 +675,15 @@ function renderSummaryTable(summaries: ScenarioSummary[]): string {
   lines.push('');
   lines.push('## Throughput & memory');
   lines.push('');
-  lines.push('| scenario | host fps | guest fps | host long-tasks | guest long-tasks | host heap Δ | guest heap Δ |');
-  lines.push('|---|---|---|---|---|---|---|');
+  lines.push('autoSlow: did the per-match perf detector flip slow-device on?');
+  lines.push('');
+  lines.push('| scenario | host fps | guest fps | host long-tasks | guest long-tasks | host heap Δ | guest heap Δ | autoSlow (host/guest) |');
+  lines.push('|---|---|---|---|---|---|---|---|');
   for (const s of summaries) {
     const hostLT = `${s.hostLongTasks.count} (max ${s.hostLongTasks.maxMs.toFixed(0)}ms)`;
     const guestLT = `${s.guestLongTasks.count} (max ${s.guestLongTasks.maxMs.toFixed(0)}ms)`;
-    lines.push(`| ${s.name} | ${s.hostFps.toFixed(1)} | ${s.guestFps.toFixed(1)} | ${hostLT} | ${guestLT} | ${s.hostHeapDeltaMB.toFixed(1)} MB | ${s.guestHeapDeltaMB.toFixed(1)} MB |`);
+    const autoFlag = `${s.autoSlow.host ? '🔥' : '·'} / ${s.autoSlow.guest ? '🔥' : '·'}`;
+    lines.push(`| ${s.name} | ${s.hostFps.toFixed(1)} | ${s.guestFps.toFixed(1)} | ${hostLT} | ${guestLT} | ${s.hostHeapDeltaMB.toFixed(1)} MB | ${s.guestHeapDeltaMB.toFixed(1)} MB | ${autoFlag} |`);
   }
   lines.push('');
   lines.push('## Player feel (guest)');

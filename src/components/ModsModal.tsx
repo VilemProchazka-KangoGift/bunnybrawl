@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../store/gameStore';
-import { getSlowDevice, setSlowDevice, subscribeSlowDevice } from '../engine/perfFlags';
+import { getSlowDeviceUserPref, setSlowDevice, subscribeSlowDevice } from '../engine/perfFlags';
 
 interface ModsModalProps {
   onClose: () => void;
@@ -22,7 +22,7 @@ const MOD_LIST = [
 export function ModsModal({ onClose }: ModsModalProps) {
   const { t } = useTranslation();
   const { matchSettings, setMatchSettings } = useGameStore();
-  const slowDevice = useSyncExternalStore(subscribeSlowDevice, getSlowDevice);
+  const slowDevice = useSyncExternalStore(subscribeSlowDevice, getSlowDeviceUserPref);
   return (
     <div className="mods-overlay" onClick={onClose}>
       <div className="mods-modal" onClick={e => e.stopPropagation()}>

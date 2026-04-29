@@ -27,6 +27,7 @@ import { debugFlags, toggleNavDebug, toggleNetDebug, toggleFpsDebug } from '../d
 import { perfTrace } from '../perfTrace';
 import { getSlowDevice } from '../perfFlags';
 import { sampleFps } from '../fpsCounter';
+import * as autoSlowDetect from '../autoSlowDetect';
 import type { BotNavDebugState } from '../navDebugOverlay';
 import type { NetDebugStats } from '../net/core/debugOverlay';
 
@@ -191,6 +192,7 @@ export class GameLoop {
       }
     }
     this._unsubRenderScale = subscribeRenderScale((s) => this.renderer.setRenderScale(s));
+    autoSlowDetect.start();
     this.running = true;
     this.lastTime = performance.now();
     if (debugFlags.navDebugAllowed || debugFlags.netDebugAllowed || debugFlags.fpsAllowed) {
@@ -217,6 +219,7 @@ export class GameLoop {
     audio.stopAllGameSounds();
     this.simulator.cleanup();
     this._cosmeticLead = 0;
+    autoSlowDetect.stop();
     if (this._debugKeyHandler) {
       window.removeEventListener('keydown', this._debugKeyHandler);
       this._debugKeyHandler = null;
@@ -542,6 +545,7 @@ export class GameLoop {
     let frameTime = (currentTime - this.lastTime) / 1000;
     this.lastTime = currentTime;
     if (frameTime > MAX_FRAME_TIME) frameTime = MAX_FRAME_TIME;
+    autoSlowDetect.feedFrame(frameTime * 1000);
 
     const timeScale = state.slowMotion > 0 ? SLOW_MO_FACTOR : 1;
     this.accumulator += frameTime * timeScale;

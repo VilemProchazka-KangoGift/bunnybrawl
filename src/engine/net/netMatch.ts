@@ -14,6 +14,7 @@ import { isBotSlot } from '../types';
 import { FIXED_TIMESTEP } from '../constants';
 import { debugFlags } from '../debugFlags';
 import { sampleFps } from '../fpsCounter';
+import * as autoSlowDetect from '../autoSlowDetect';
 import { perfTrace } from '../perfTrace';
 import { GameLoop } from '../gameLoop';
 import type { MatchEndCallback } from '../gameLoop';
@@ -454,6 +455,7 @@ export class NetMatch {
       // Cap dt to 3 ticks — prevents tick burst after fullscreen/tab-switch pauses
       const dt = Math.min((now - lastTime) / 1000, FIXED_DT * 3);
       lastTime = now;
+      autoSlowDetect.feedFrame(dt * 1000);
       accumulator += dt;
 
       // Periodically adapt delay to match guest RTT (every ~1s)
@@ -565,6 +567,7 @@ export class NetMatch {
       // Cap dt to 3 ticks — prevents tick burst after fullscreen/tab-switch pauses
       const dt = Math.min((now - lastTime) / 1000, FIXED_DT * 3);
       lastTime = now;
+      autoSlowDetect.feedFrame(dt * 1000);
 
       // 1. Read local input, push to ring buffer, send bundled to host
       const localInput = this.gameLoop.getInputAny();
