@@ -34,7 +34,7 @@ export { drawNetDebugOverlay } from './core/debugOverlay';
 export type { NetDebugStats } from './core/debugOverlay';
 
 export {
-  encodeSnapshot, decodeSnapshot, takeAuthSnapshot,
+  encodeSnapshot, decodeSnapshot, takeAuthSnapshot, createEmptySnapshot,
   createDelta, applyDelta,
 } from './snapshot';
 export type { AuthSnapshot, SnapshotPlayer } from './snapshot';
