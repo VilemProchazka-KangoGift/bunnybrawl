@@ -338,6 +338,15 @@ export class NetMatch {
     } as ReliableMessage);
   }
 
+  /** Guest-only: returns the latest received snapshot's host-frame number,
+   *  or -1 if nothing has arrived yet. Public so e2e perf tests can derive
+   *  snapshot arrival timing without monkey-patching private internals. */
+  getLatestSnapshotFrame(): number {
+    if (!this.interpolation) return -1;
+    const snap = this.interpolation.getLatestSnapshot();
+    return snap ? snap.frame : -1;
+  }
+
   /** Guest: wait until the snapshot stream has warmed up before signalling
    *  LOADED. The first 10–20s of a match used to be choppy on low-end Android:
    *  interpolation starts at 2-frame delay, only widens after detecting 3+
