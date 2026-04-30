@@ -1,4 +1,4 @@
-import type { Player } from '../types';
+import type { Player, PlayerState } from '../types';
 import type { ThemeConfig } from '../themes/types';
 import { FAT_SCALE, HITSTOP_DURATION, PLAYER_WIDTH, PLAYER_HEIGHT } from '../constants';
 import { hasCustomEyes, getSpriteRenderer, getCharacterPack, drawLegs } from '../characters';
@@ -9,11 +9,27 @@ import { getIdleAction, type IdleAction } from './idleActions';
 
 // Sprite cache: key -> OffscreenCanvas with pre-drawn character sprite.
 // Backing-store dims include the current render scale; cleared on scale change.
-const spriteCache = new Map<string, OffscreenCanvas>();
+const spriteCache = new Map<number, OffscreenCanvas>();
 let _spriteScale = 1;
-// Cap entries at scale=1; shrink quadratically with scale so total bytes stay bounded.
 const SPRITE_CACHE_CAP_BASE = 600;
 let _spriteCacheCap = SPRITE_CACHE_CAP_BASE;
+
+// Pack-name → small int, populated lazily. 5-bit field allows 32 entries; pack
+// registry caps below that (17 chars + fallbacks).
+const _charNameToIndex = new Map<string, number>();
+let _nextCharIndex = 0;
+function charIndex(name: string): number {
+  let idx = _charNameToIndex.get(name);
+  if (idx === undefined) {
+    idx = _nextCharIndex++;
+    _charNameToIndex.set(name, idx);
+  }
+  return idx;
+}
+
+const _stateIndex: Record<PlayerState, number> = {
+  idle: 0, run: 1, airborne: 2, splat: 3, respawning: 4,
+};
 
 // Pre-rendered shadow ellipse — replaces a per-player-per-frame ellipse path
 // (5 players × 60+fps = thousands of ellipse calls). Per-call cost becomes
@@ -50,6 +66,13 @@ function darken(hex: string, factor: number): string {
 const OUTLINE_DARKEN = 0.8;
 
 const OUTLINE_OFFSETS_4: ReadonlyArray<readonly [number, number]> = [[-1,0],[1,0],[0,-1],[0,1]];
+
+const KILL_STREAK_FLAME_COLORS = [
+  'rgba(255, 100, 0, 0.3)',
+  'rgba(255, 60, 0, 0.25)',
+  'rgba(255, 200, 0, 0.2)',
+  'rgba(255, 0, 0, 0.2)',
+] as const;
 
 /** Bake an outline into the cached sprite by stamping its silhouette at 4 offsets in
  *  the outline color, behind the original pixels. The silhouette is captured by
@@ -101,7 +124,7 @@ export function setSpriteCacheScale(scale: number): void {
  *  bit so cross-theme reuse is safe, but warming under the wrong theme still
  *  doubles the cache footprint. */
 export function warmSpriteCacheForCharacters(names: string[], theme?: ThemeConfig): void {
-  const states: Array<string> = ['idle', 'run', 'airborne'];
+  const states: PlayerState[] = ['idle', 'run', 'airborne'];
   const animFrames = [0, 2, 4];
 
   const cw = PLAYER_WIDTH + 20;
@@ -174,8 +197,7 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player, nearCa
       const flameX = cx + Math.sin(angle) * 8;
       const flameY = y + height * 0.3 + Math.cos(angle * 1.3) * 4;
       const flameR = 8 + Math.sin(angle * 2) * 3;
-      const colors = ['rgba(255, 100, 0, 0.3)', 'rgba(255, 60, 0, 0.25)', 'rgba(255, 200, 0, 0.2)', 'rgba(255, 0, 0, 0.2)'];
-      ctx.fillStyle = colors[i];
+      ctx.fillStyle = KILL_STREAK_FLAME_COLORS[i];
       ctx.beginPath();
       ctx.arc(flameX, flameY, flameR, 0, Math.PI * 2);
       ctx.fill();
@@ -290,7 +312,7 @@ function drawCharacterSprite(
   ctx: CanvasRenderingContext2D,
   x: number, y: number, w: number, h: number,
   char: { name: string; color: string; darkColor: string; lightColor: string },
-  state: string, animFrame: number, fastFalling: boolean,
+  state: PlayerState, animFrame: number, fastFalling: boolean,
   idleAction: number, idleActionTimer: number, idleActionDuration: number,
   squashScale: number,
   theme: ThemeConfig | undefined,
@@ -301,7 +323,14 @@ function drawCharacterSprite(
   // poisoning the cache: helmet is baked in at draw time, so a helmet-less
   // first render would otherwise be reused at the helmet variant.
   const helmetKey = theme?.bubbleHelmet ? 1 : 0;
-  const cacheKey = `${char.name}_${state}_${animFrame}_${fastFalling ? 1 : 0}_${sqKey}_${helmetKey}`;
+  // Packed bitfield: char(5) | state(3) | animFrame(4) | fastFalling(1) | sqKey(5) | helmet(1)
+  const cacheKey =
+    (charIndex(char.name) & 0x1F) |
+    (_stateIndex[state] << 5) |
+    ((animFrame & 0xF) << 8) |
+    ((fastFalling ? 1 : 0) << 12) |
+    ((sqKey & 0x1F) << 13) |
+    (helmetKey << 18);
 
   // Idle action ctx transform — applied to main ctx, OUTSIDE the cached bitmap, so the
   // animated transform doesn't get baked into the (1-bit-keyed) sprite cache entry.

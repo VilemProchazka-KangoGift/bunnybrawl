@@ -373,21 +373,14 @@ export class Simulator {
 
     for (const player of this._state.players) {
       if (!player.active) continue;
-      if (player.hitstopTimer > 0) {
-        player.hitstopTimer = Math.max(0, f(player.hitstopTimer - dt));
-        if (player.fatTimer > 0) player.fatTimer = Math.max(0, f(player.fatTimer - dt));
-        if (player.slowTimer > 0) player.slowTimer = Math.max(0, f(player.slowTimer - dt));
-        if (player.burnTimer > 0) player.burnTimer = Math.max(0, f(player.burnTimer - dt));
-        continue;
-      }
+      // Status timers tick down even during hitstop.
       if (player.fatTimer > 0) player.fatTimer = Math.max(0, f(player.fatTimer - dt));
       if (player.slowTimer > 0) player.slowTimer = Math.max(0, f(player.slowTimer - dt));
       if (player.burnTimer > 0) player.burnTimer = Math.max(0, f(player.burnTimer - dt));
-    }
-
-    for (const player of this._state.players) {
-      if (!player.active) continue;
-      if (player.hitstopTimer > 0) continue;
+      if (player.hitstopTimer > 0) {
+        player.hitstopTimer = Math.max(0, f(player.hitstopTimer - dt));
+        if (player.hitstopTimer > 0) continue;
+      }
       const input = this._getPlayerInput(player);
       const wasAirborne = player.state === 'airborne';
       const prevVy = player.vy;
@@ -478,11 +471,13 @@ export class Simulator {
 
       if (player.invincibleTimer <= 0 && player.vy <= 400) {
         let angry = false;
+        const pcx = player.x + player.width / 2;
+        const pcy = player.y + player.height / 2;
         for (const other of this._state.players) {
           if (other.id === player.id || !other.active || other.state === 'splat' || other.state === 'respawning') continue;
-          const dx = Math.abs((other.x + other.width / 2) - (player.x + player.width / 2));
-          const dy = Math.abs((other.y + other.height / 2) - (player.y + player.height / 2));
-          if (dx < 80 && dy < 60) { angry = true; break; }
+          const dx = (other.x + other.width / 2) - pcx;
+          const dy = (other.y + other.height / 2) - pcy;
+          if (dx > -80 && dx < 80 && dy > -60 && dy < 60) { angry = true; break; }
         }
         player.expression = angry ? 'angry' : 'normal';
       }
@@ -496,13 +491,10 @@ export class Simulator {
         player.expression = 'scared';
       }
 
-      if (player.state === 'airborne') {
-        const ps = this._state.stats.perPlayer.get(player.id);
-        if (ps) ps.timeAirborne += dt;
-      }
-      {
-        const ps = this._state.stats.perPlayer.get(player.id);
-        if (ps) ps.distanceTraveled += (Math.abs(player.vx) * dt + Math.abs(player.vy) * dt);
+      const ps = this._state.stats.perPlayer.get(player.id);
+      if (ps) {
+        if (player.state === 'airborne') ps.timeAirborne += dt;
+        ps.distanceTraveled += (Math.abs(player.vx) + Math.abs(player.vy)) * dt;
       }
 
       this._playerCollisionSystem.checkCollisions(player);
@@ -587,12 +579,22 @@ export class Simulator {
     return this._rng ? this._rng.nextFloat() : Math.random();
   }
 
+  /** Reusable scratch InputState for the airborne-jump→fast-fall remap path.
+   *  Consumed inline within _getPlayerInput's caller — never capture the ref. */
+  private readonly _airborneFastFallScratch: InputState = { left: false, right: false, jump: false, down: false };
+  private static readonly _NEUTRAL_INPUT: Readonly<InputState> = { left: false, right: false, jump: false, down: false };
+
   private _getPlayerInput(player: Player): InputState {
     if (this._networkInputs) {
       const net = this._networkInputs.get(player.id);
       if (net) {
         if (net.jump && player.state === 'airborne') {
-          return { left: net.left, right: net.right, jump: false, down: true };
+          const s = this._airborneFastFallScratch;
+          s.left = net.left;
+          s.right = net.right;
+          s.jump = false;
+          s.down = true;
+          return s;
         }
         return net;
       }
@@ -602,7 +604,7 @@ export class Simulator {
     }
     const pi = this._playerInputs.get(player.id);
     if (pi) return pi.getAction(this._state);
-    return { left: false, right: false, jump: false, down: false };
+    return Simulator._NEUTRAL_INPUT;
   }
 
   /** Test-only: forwards to _getPlayerInput so dispatch branches can be

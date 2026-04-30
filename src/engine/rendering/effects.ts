@@ -42,6 +42,17 @@ const FIREFLY_BASE_Y = new Float32Array(FIREFLY_COUNT);
 const STAR_FIELD_HEIGHT = Math.ceil(CANVAS_HEIGHT * 0.35);
 let _starField: OffscreenCanvas | null = null;
 let _firefly: OffscreenCanvas | null = null;
+let _afterglowGradient: CanvasGradient | null = null;
+function getAfterglowGradient(ctx: CanvasRenderingContext2D): CanvasGradient {
+  if (_afterglowGradient) return _afterglowGradient;
+  // Built at intensity=1; per-frame intensity is applied via globalAlpha at draw time.
+  _afterglowGradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+  _afterglowGradient.addColorStop(0, 'rgba(220, 40, 10, 0.10)');
+  _afterglowGradient.addColorStop(0.35, 'rgba(240, 55, 15, 0.20)');
+  _afterglowGradient.addColorStop(0.65, 'rgba(230, 45, 10, 0.28)');
+  _afterglowGradient.addColorStop(1.0, 'rgba(200, 35, 10, 0.22)');
+  return _afterglowGradient;
+}
 function getStarField(): OffscreenCanvas | null {
   if (_starField) return _starField;
   if (typeof OffscreenCanvas === 'undefined') return null;
@@ -154,14 +165,15 @@ export function drawDayNightCycle(
     afterglowIntensity = afterglowIntensity * afterglowIntensity * (3 - 2 * afterglowIntensity);
   }
   if (afterglowIntensity > 0.01) {
-    // Gradient overlay: warm orange-red, stronger near horizon
-    const agGrad = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-    agGrad.addColorStop(0, `rgba(220, 40, 10, ${afterglowIntensity * 0.10})`);
-    agGrad.addColorStop(0.35, `rgba(240, 55, 15, ${afterglowIntensity * 0.20})`);
-    agGrad.addColorStop(0.65, `rgba(230, 45, 10, ${afterglowIntensity * 0.28})`);
-    agGrad.addColorStop(1.0, `rgba(200, 35, 10, ${afterglowIntensity * 0.22})`);
-    ctx.fillStyle = agGrad;
+    // Gradient overlay: warm orange-red, stronger near horizon. The full
+    // gradient varies linearly with afterglowIntensity, so build it once at
+    // intensity=1 (in module scope) and modulate via globalAlpha. createLinearGradient
+    // + 4 addColorStop calls happen ~7-15s per dawn/dusk window otherwise.
+    ctx.save();
+    ctx.globalAlpha = afterglowIntensity;
+    ctx.fillStyle = getAfterglowGradient(ctx);
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    ctx.restore();
   }
 
   // Darkness overlay

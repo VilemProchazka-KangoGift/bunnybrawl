@@ -28,7 +28,15 @@ export type PerfSection =
   | 'net.decodeSnapshot'
   | 'net.applySnapshot'
   | 'net.broadcastSnapshot'
-  | 'net.handleSnapshot';
+  | 'net.handleSnapshot'
+  | 'net.handleDelta'
+  | 'render.bg'
+  | 'render.entities'
+  | 'render.particles'
+  | 'render.afterimages'
+  | 'render.players'
+  | 'render.fg-nature'
+  | 'render.overlay';
 
 interface SectionStats {
   calls: number;

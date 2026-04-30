@@ -9,6 +9,10 @@ export const KEY_BINDINGS: Record<CharacterSlot, KeyBindings> = {
   P5: { left: '4', right: '6', jump: '8', down: '5' },
 };
 
+/** Frozen entries snapshot used by hot paths so `Object.entries(...)` doesn't
+ *  allocate a fresh `[slot, binding][]` array on every keyup / readAny tick. */
+const BINDING_ENTRIES = Object.entries(KEY_BINDINGS) as [CharacterSlot, KeyBindings][];
+
 /**
  * Owns window keyboard listeners and pressed-key state.
  * Per-slot KeyboardInput instances share one KeyboardManager.
@@ -26,8 +30,8 @@ export class KeyboardManager {
     e.preventDefault();
     const key = this.normalizeKey(e.key);
     this.keys.delete(key);
-    for (const [slot, b] of Object.entries(KEY_BINDINGS)) {
-      if (key === b.jump) this.jumpPressed.set(slot as CharacterSlot, false);
+    for (const [slot, b] of BINDING_ENTRIES) {
+      if (key === b.jump) this.jumpPressed.set(slot, false);
     }
   };
 
@@ -68,13 +72,13 @@ export class KeyboardManager {
   /** Read input from ALL key bindings merged (for online play — any keys work). */
   readAny(): { left: boolean; right: boolean; jump: boolean; down: boolean } {
     let left = false, right = false, jump = false, down = false;
-    for (const [slot, b] of Object.entries(KEY_BINDINGS)) {
+    for (const [slot, b] of BINDING_ENTRIES) {
       if (this.keys.has(b.left)) left = true;
       if (this.keys.has(b.right)) right = true;
       if (this.keys.has(b.down)) down = true;
-      if (this.keys.has(b.jump) && !this.jumpPressed.get(slot as CharacterSlot)) {
+      if (this.keys.has(b.jump) && !this.jumpPressed.get(slot)) {
         jump = true;
-        this.jumpPressed.set(slot as CharacterSlot, true);
+        this.jumpPressed.set(slot, true);
       }
     }
     return { left, right, jump, down };

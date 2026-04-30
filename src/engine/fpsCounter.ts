@@ -29,6 +29,8 @@ export function resetFpsCounter(): void {
   writeIdx = 0;
   total = 0;
   lastSampleTime = 0;
+  _cachedStats = null;
+  _lastStatsTime = 0;
 }
 
 /** Dump the raw frame-time samples (newest-first) for E2E perf collection.
@@ -91,14 +93,28 @@ function colorForFps(fps: number): string {
   return '#FF6B6B';
 }
 
-// Per-character width for `bold 12px monospace`, measured once on first
-// draw. Lets us replace per-frame ctx.measureText calls (3–7% of perf
-// profiles when fpsCounter is on) with `text.length * _charWidth`.
+// Cached width of `M` in `bold 12px monospace` — replaces per-frame
+// measureText with `text.length * _charWidth`.
 let _charWidth = 0;
+
+// Stats refresh at 10Hz (computeStats sorts a 600-sample Float32Array; the
+// readout is human-paced).
+let _cachedStats: FpsStats | null = null;
+let _cachedLine1 = '';
+let _cachedLine2 = '';
+let _lastStatsTime = 0;
+const STATS_REFRESH_MS = 100;
 
 export function drawFpsCounter(ctx: CanvasRenderingContext2D, canvasWidth: number): void {
   if (!debugFlags.fpsEnabled) return;
-  const stats = computeStats();
+  const now = performance.now();
+  if (!_cachedStats || now - _lastStatsTime >= STATS_REFRESH_MS) {
+    _cachedStats = computeStats();
+    _cachedLine1 = `${_cachedStats.current.toFixed(0)} fps  ${_cachedStats.lastDtMs.toFixed(1)}ms`;
+    _cachedLine2 = `avg ${_cachedStats.avg.toFixed(0)}  1%low ${_cachedStats.low1pct.toFixed(0)}`;
+    _lastStatsTime = now;
+  }
+  const stats = _cachedStats;
   void canvasWidth; // bottom-left is fixed; param kept for symmetry with other overlays
 
   ctx.save();
@@ -107,8 +123,8 @@ export function drawFpsCounter(ctx: CanvasRenderingContext2D, canvasWidth: numbe
 
   if (_charWidth === 0) _charWidth = ctx.measureText('M').width;
 
-  const line1 = `${stats.current.toFixed(0)} fps  ${stats.lastDtMs.toFixed(1)}ms`;
-  const line2 = `avg ${stats.avg.toFixed(0)}  1%low ${stats.low1pct.toFixed(0)}`;
+  const line1 = _cachedLine1;
+  const line2 = _cachedLine2;
   const w1 = line1.length * _charWidth;
   const w2 = line2.length * _charWidth;
   const padX = 8;

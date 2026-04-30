@@ -573,29 +573,30 @@ export const winterLake: ArenaPack = {
 
   drawCustomHazardZone: (ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, _time: number) => {
     ctx.save();
-    // Icicle spikes hanging downward
     const icicleCount = Math.floor(width / 12);
+    const step = width / icicleCount;
+    ctx.fillStyle = 'rgba(180, 210, 240, 0.7)';
+    ctx.beginPath();
     for (let i = 0; i < icicleCount; i++) {
-      const ix = x + 6 + i * (width / icicleCount);
+      const ix = x + 6 + i * step;
       const ih = height + 15 + (i % 3) * 8;
-      // Ice body
-      ctx.fillStyle = 'rgba(180, 210, 240, 0.7)';
-      ctx.beginPath();
       ctx.moveTo(ix - 4, y);
       ctx.lineTo(ix, y + ih);
       ctx.lineTo(ix + 4, y);
       ctx.closePath();
-      ctx.fill();
-      // Highlight
-      ctx.fillStyle = 'rgba(220, 240, 255, 0.5)';
-      ctx.beginPath();
+    }
+    ctx.fill();
+    ctx.fillStyle = 'rgba(220, 240, 255, 0.5)';
+    ctx.beginPath();
+    for (let i = 0; i < icicleCount; i++) {
+      const ix = x + 6 + i * step;
+      const ih = height + 15 + (i % 3) * 8;
       ctx.moveTo(ix - 1, y + 2);
       ctx.lineTo(ix, y + ih * 0.7);
       ctx.lineTo(ix + 1, y + 2);
       ctx.closePath();
-      ctx.fill();
     }
-    // Frost base along the platform bottom
+    ctx.fill();
     ctx.fillStyle = 'rgba(200, 220, 240, 0.3)';
     ctx.fillRect(x - 5, y - 2, width + 10, 4);
     ctx.restore();

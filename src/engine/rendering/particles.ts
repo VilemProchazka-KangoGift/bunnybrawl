@@ -4,6 +4,16 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT, SPRING_TRAIL_DURATION } from '../constants
 import { getGibRenderer } from '../characters';
 import { hexToRGB } from '../fastMath';
 
+const _rgbStringCache = new Map<string, string>();
+function rgbString(hex: string): string {
+  let s = _rgbStringCache.get(hex);
+  if (s) return s;
+  const { r, g, b } = hexToRGB(hex);
+  s = `rgb(${r},${g},${b})`;
+  _rgbStringCache.set(hex, s);
+  return s;
+}
+
 export function drawWeather(ctx: CanvasRenderingContext2D, weather: WeatherParticle[], theme: ThemeConfig, lead = 0): void {
   const customDraw = theme.drawWeatherParticle;
   if (customDraw) {
@@ -68,14 +78,17 @@ export function drawWeather(ctx: CanvasRenderingContext2D, weather: WeatherParti
 }
 
 export function drawParticles(ctx: CanvasRenderingContext2D, particles: Particle[], lead = 0): void {
+  let lastColor = '';
   for (const p of particles) {
     const dx = p.x + p.vx * lead;
     const dy = p.y + p.vy * lead;
-    // Off-screen culling
     if (dx < -20 || dx > CANVAS_WIDTH + 20 || dy < -20 || dy > CANVAS_HEIGHT + 20) continue;
     const alpha = p.life / p.maxLife;
     ctx.globalAlpha = alpha * 0.7;
-    ctx.fillStyle = p.color;
+    if (p.color !== lastColor) {
+      ctx.fillStyle = p.color;
+      lastColor = p.color;
+    }
     ctx.beginPath();
     ctx.arc(dx, dy, p.size * alpha, 0, Math.PI * 2);
     ctx.fill();
@@ -117,11 +130,11 @@ export function drawGibShape(ctx: CanvasRenderingContext2D, gib: Gib): void {
 export function drawConfetti(ctx: CanvasRenderingContext2D, confetti: ConfettiParticle[], lead = 0): void {
   for (const c of confetti) {
     const alpha = (c.life / c.maxLife) * 0.9;
-    const { r, g, b } = hexToRGB(c.color);
     ctx.save();
     ctx.translate(c.x + c.vx * lead, c.y + c.vy * lead);
     ctx.rotate(c.rotation + c.rotationSpeed * lead);
-    ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
+    ctx.fillStyle = rgbString(c.color);
+    ctx.globalAlpha = alpha;
 
     switch (c.shape) {
       case 'star': {
@@ -227,18 +240,22 @@ export function drawWildlife(ctx: CanvasRenderingContext2D, wildlife: WildlifeEn
     if (w.type === 'butterfly') {
       // Butterfly: small colored V-shapes that flutter
       const wingAngle = Math.sin(w.wingPhase) * 0.6;
+      const wcos = Math.cos(wingAngle);
+      const wsin = Math.abs(Math.sin(wingAngle));
+      const wingX = 6 * wcos;
+      const wingY = -4 * wsin - 3;
       ctx.fillStyle = w.color;
       // Left wing
       ctx.beginPath();
       ctx.moveTo(0, 0);
-      ctx.lineTo(-6 * Math.cos(wingAngle), -4 * Math.abs(Math.sin(wingAngle)) - 3);
+      ctx.lineTo(-wingX, wingY);
       ctx.lineTo(-3, 0);
       ctx.closePath();
       ctx.fill();
       // Right wing
       ctx.beginPath();
       ctx.moveTo(0, 0);
-      ctx.lineTo(6 * Math.cos(wingAngle), -4 * Math.abs(Math.sin(wingAngle)) - 3);
+      ctx.lineTo(wingX, wingY);
       ctx.lineTo(3, 0);
       ctx.closePath();
       ctx.fill();
@@ -325,6 +342,7 @@ export function drawSpringTrail(ctx: CanvasRenderingContext2D, player: Player, f
   const t = player.springTrailTimer / SPRING_TRAIL_DURATION; // 1 = just started, 0 = fading
 
   ctx.save();
+  ctx.fillStyle = '#5DDE70';
   const pointCount = 12;
   for (let i = 0; i < pointCount; i++) {
     const progress = i / pointCount;
@@ -332,10 +350,7 @@ export function drawSpringTrail(ctx: CanvasRenderingContext2D, player: Player, f
     const radius = 6 + progress * 10;
     const py = baseY + progress * 30;
     const px = cx + Math.cos(angle) * radius;
-    const alpha = t * (1 - progress) * 0.5;
-
-    ctx.globalAlpha = alpha;
-    ctx.fillStyle = '#5DDE70';
+    ctx.globalAlpha = t * (1 - progress) * 0.5;
     ctx.beginPath();
     ctx.arc(px, py, 2.5 - progress, 0, Math.PI * 2);
     ctx.fill();

@@ -1,21 +1,26 @@
 import type { ThemeConfig } from '../themes/types';
 import { fastSin } from '../fastMath';
+import { getSlowDevice } from '../perfFlags';
 
-// Gradient caches (avoid per-frame creation)
-const cachedLavaGradients = new Map<string, { body: CanvasGradient; halo: CanvasGradient }>();
-const cachedZeroGBgGradients = new Map<string, CanvasGradient>();
+// Gradient caches keyed by the hz/zone object identity — arena objects are
+// stable for the match lifetime, so a WeakMap avoids per-frame string-key
+// allocation. Cleared via clearHazardCaches() on theme/arena change.
+type LavaGradients = { body: CanvasGradient; halo: CanvasGradient };
+type CurrentGradients = { water: CanvasGradient; highlight: CanvasGradient };
+const cachedLavaGradients = new WeakMap<object, LavaGradients>();
+const cachedZeroGBgGradients = new WeakMap<object, CanvasGradient>();
+const cachedCurrentGradients = new WeakMap<object, CurrentGradients>();
 const cachedGhostGlowGradients = new Map<string, CanvasGradient>();
-const cachedJellyGradients = new Map<string, CanvasGradient>();
+const cachedJellyGradients = new WeakMap<object, CanvasGradient>();
 
 // Hoisted dash patterns — setLineDash takes a fresh array otherwise.
 const ZEROG_DASH: number[] = [8, 5];
 const NO_DASH: number[] = [];
 
 export function clearHazardCaches(): void {
-  cachedLavaGradients.clear();
-  cachedZeroGBgGradients.clear();
+  // WeakMaps drop entries when their key references go away (arena change).
+  // The remaining Map keys on theme-derived strings still need explicit clearing.
   cachedGhostGlowGradients.clear();
-  cachedJellyGradients.clear();
 }
 
 export function drawHazardZone(
@@ -31,46 +36,44 @@ export function drawHazardZone(
   ctx.save();
   if (hz.type === 'lava') {
     // Animated lava pool
-    const pulse = 0.7 + Math.sin(time * 3) * 0.15;
+    const pulse = 0.7 + fastSin(time * 3) * 0.15;
+    const cx = hz.x + hz.width / 2;
+    const cy = hz.y + hz.height / 2;
 
-    // Lava body + halo (cached gradients)
-    const lavaKey = `${hz.x}_${hz.y}`;
-    let cachedLava = cachedLavaGradients.get(lavaKey);
+    // Lava body + halo (cached gradients keyed by hz identity)
+    let cachedLava = cachedLavaGradients.get(hz as object);
     if (!cachedLava) {
       const body = ctx.createLinearGradient(hz.x, hz.y, hz.x, hz.y + hz.height);
       body.addColorStop(0, '#FF6600');
       body.addColorStop(0.5, '#FF4400');
       body.addColorStop(1, '#CC2200');
-      const halo = ctx.createRadialGradient(
-        hz.x + hz.width / 2, hz.y + hz.height / 2, 2,
-        hz.x + hz.width / 2, hz.y + hz.height / 2, hz.width * 0.8
-      );
+      const halo = ctx.createRadialGradient(cx, cy, 2, cx, cy, hz.width * 0.8);
       halo.addColorStop(0, 'rgba(255, 100, 0, 0.3)');
       halo.addColorStop(1, 'rgba(255, 60, 0, 0)');
       cachedLava = { body, halo };
-      cachedLavaGradients.set(lavaKey, cachedLava);
+      cachedLavaGradients.set(hz as object, cachedLava);
     }
     ctx.fillStyle = cachedLava.body;
     ctx.beginPath();
-    ctx.ellipse(hz.x + hz.width / 2, hz.y + hz.height / 2, hz.width / 2, hz.height / 2, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy, hz.width / 2, hz.height / 2, 0, 0, Math.PI * 2);
     ctx.fill();
 
     // Bright center (pulsing)
     ctx.globalAlpha = pulse;
     ctx.fillStyle = '#FFCC33';
     ctx.beginPath();
-    ctx.ellipse(hz.x + hz.width / 2, hz.y + hz.height / 2, hz.width * 0.3, hz.height * 0.3, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy, hz.width * 0.3, hz.height * 0.3, 0, 0, Math.PI * 2);
     ctx.fill();
 
     // Glow halo
-    ctx.globalAlpha = 0.15 + Math.sin(time * 2) * 0.05;
+    ctx.globalAlpha = 0.15 + fastSin(time * 2) * 0.05;
     ctx.fillStyle = cachedLava.halo;
     ctx.fillRect(hz.x - hz.width * 0.3, hz.y - hz.height, hz.width * 1.6, hz.height * 3);
 
     // Bubble spots
     ctx.globalAlpha = 0.5;
     ctx.fillStyle = '#FFAA00';
-    const bubbleX = hz.x + hz.width * (0.3 + Math.sin(time * 4) * 0.15);
+    const bubbleX = hz.x + hz.width * (0.3 + fastSin(time * 4) * 0.15);
     const bubbleY = hz.y + hz.height * 0.3;
     ctx.beginPath();
     ctx.arc(bubbleX, bubbleY, 2, 0, Math.PI * 2);
@@ -87,13 +90,13 @@ export function drawGhost(
 ): void {
   // Custom ghost renderer (e.g. wasps)
   if (theme.drawCustomGhost) {
-    theme.drawCustomGhost(ctx, ghost.x, ghost.y + Math.sin(ghost.wobblePhase + time * 2) * 3, ghost.size, ghost.alpha, time);
+    theme.drawCustomGhost(ctx, ghost.x, ghost.y + fastSin(ghost.wobblePhase + time * 2) * 3, ghost.size, ghost.alpha, time);
     return;
   }
   ctx.save();
-  const wobble = Math.sin(ghost.wobblePhase + time * 2) * 3;
+  const wobble = fastSin(ghost.wobblePhase + time * 2) * 3;
   ctx.translate(ghost.x, ghost.y + wobble);
-  ctx.globalAlpha = ghost.alpha * (0.5 + Math.sin(time * 1.5) * 0.15);
+  ctx.globalAlpha = ghost.alpha * (0.5 + fastSin(time * 1.5) * 0.15);
 
   const gc = theme.ghostConfig;
   const color = gc?.color || '#AABBDD';
@@ -121,7 +124,7 @@ export function drawGhost(
   const waves = 4;
   for (let w = 0; w < waves; w++) {
     const wx = s * 0.5 - (w + 1) * (s / waves);
-    const wy = s * 0.3 + Math.sin(time * 3 + w * 1.5) * s * 0.08;
+    const wy = s * 0.3 + fastSin(time * 3 + w * 1.5) * s * 0.08;
     const cx = wx + s / (waves * 2);
     ctx.quadraticCurveTo(cx, wy + s * 0.12, wx, wy);
   }
@@ -196,16 +199,15 @@ export function drawZeroGZone(
 ): void {
   ctx.save();
 
-  // Pulsing background fill (cached gradient)
-  ctx.globalAlpha = 0.1 + Math.sin(time * 1.5) * 0.04;
-  const zKey = `${zone.x}_${zone.y}`;
-  let bgGrad = cachedZeroGBgGradients.get(zKey);
+  // Pulsing background fill (cached gradient keyed by zone identity)
+  ctx.globalAlpha = 0.1 + fastSin(time * 1.5) * 0.04;
+  let bgGrad = cachedZeroGBgGradients.get(zone as object);
   if (!bgGrad) {
     bgGrad = ctx.createLinearGradient(zone.x, zone.y, zone.x, zone.y + zone.height);
     bgGrad.addColorStop(0, 'rgba(0, 180, 255, 0.2)');
     bgGrad.addColorStop(0.5, 'rgba(0, 220, 255, 0.08)');
     bgGrad.addColorStop(1, 'rgba(0, 180, 255, 0.2)');
-    cachedZeroGBgGradients.set(zKey, bgGrad);
+    cachedZeroGBgGradients.set(zone as object, bgGrad);
   }
   ctx.fillStyle = bgGrad;
   ctx.fillRect(zone.x, zone.y, zone.width, zone.height);
@@ -280,36 +282,64 @@ export function drawCurrentZone(
     const zx = zone.x, zy = zone.y, zw = zone.width, zh = zone.height;
     const cx = zx + zw / 2;
 
-    // Water body -- vertical gradient from blue-white at top to deeper blue at bottom
-    const waterGrad = ctx.createLinearGradient(0, zy, 0, zy + zh);
-    waterGrad.addColorStop(0, 'rgba(140, 200, 240, 0.45)');
-    waterGrad.addColorStop(0.3, 'rgba(100, 180, 230, 0.4)');
-    waterGrad.addColorStop(1, 'rgba(70, 150, 210, 0.35)');
+    // Water body + center highlight gradients (cached by zone identity)
+    let cachedGrads = cachedCurrentGradients.get(zone as object);
+    if (!cachedGrads) {
+      const water = ctx.createLinearGradient(0, zy, 0, zy + zh);
+      water.addColorStop(0, 'rgba(140, 200, 240, 0.45)');
+      water.addColorStop(0.3, 'rgba(100, 180, 230, 0.4)');
+      water.addColorStop(1, 'rgba(70, 150, 210, 0.35)');
+      const highlight = ctx.createLinearGradient(cx - 30, 0, cx + 30, 0);
+      highlight.addColorStop(0, 'rgba(255,255,255,0)');
+      highlight.addColorStop(0.5, 'rgba(255,255,255,1)');
+      highlight.addColorStop(1, 'rgba(255,255,255,0)');
+      cachedGrads = { water, highlight };
+      cachedCurrentGradients.set(zone as object, cachedGrads);
+    }
+    // Single closed polygon (right edge top→bottom, left edge bottom→top)
+    // filled with the water gradient. Avoids a globalCompositeOperation
+    // switch that destination-out cutouts would require.
     ctx.globalAlpha = 1;
-    ctx.fillStyle = waterGrad;
-    ctx.fillRect(zx, zy, zw, zh);
-
-    // Wavy edges -- clip the sharp rectangle into organic water shape
-    ctx.globalCompositeOperation = 'destination-out';
-    ctx.globalAlpha = 1;
-    for (let side = 0; side < 2; side++) {
-      const ex = side === 0 ? zx : zx + zw;
-      const dir = side === 0 ? -1 : 1;
-      ctx.beginPath();
+    ctx.fillStyle = cachedGrads.water;
+    ctx.beginPath();
+    {
+      const ex = zx + zw;
+      const dir = 1;
       ctx.moveTo(ex + dir * 12, zy);
-      for (let ey = zy; ey <= zy + zh; ey += 8) {
+      ctx.lineTo(Math.sin(zy * 0.03 + time * 2.5) * 5 * dir * 0.5
+        + Math.sin(zy * 0.07 + time * 1.8) * 3 * dir * 0.5 + ex, zy);
+      for (let ey = zy + 8; ey <= zy + zh; ey += 8) {
         const wave = Math.sin(ey * 0.03 + time * 2.5) * 5 + Math.sin(ey * 0.07 + time * 1.8) * 3;
         ctx.lineTo(ex + wave * dir * 0.5, ey);
       }
       ctx.lineTo(ex + dir * 12, zy + zh);
-      ctx.closePath();
-      ctx.fill();
     }
-    ctx.globalCompositeOperation = 'source-over';
+    {
+      const ex = zx;
+      const dir = -1;
+      ctx.lineTo(ex + dir * 12, zy + zh);
+      for (let ey = zy + zh; ey >= zy; ey -= 8) {
+        const wave = Math.sin(ey * 0.03 + time * 2.5) * 5 + Math.sin(ey * 0.07 + time * 1.8) * 3;
+        ctx.lineTo(ex + wave * dir * 0.5, ey);
+      }
+      ctx.lineTo(ex + dir * 12, zy);
+    }
+    ctx.closePath();
+    ctx.fill();
+
+    const speed = Math.abs(zone.vy) * 0.3;
+    // Slow-device skips animated layers; keeps body + center highlight.
+    if (getSlowDevice()) {
+      ctx.globalAlpha = 0.12;
+      ctx.fillStyle = cachedGrads.highlight;
+      ctx.fillRect(cx - 30, zy, 60, zh);
+      ctx.restore();
+      return;
+    }
 
     // Flowing water columns -- wide semi-transparent bands moving downward
-    const speed = Math.abs(zone.vy) * 0.3;
     const colCount = 5;
+    ctx.fillStyle = '#D0EAFF';
     for (let i = 0; i < colCount; i++) {
       const colW = 20 + (i % 3) * 12;
       const baseX = zx + 30 + (i * (zw - 60)) / colCount + Math.sin(time * 1.2 + i * 1.7) * 10;
@@ -319,7 +349,6 @@ export function drawCurrentZone(
       const y2 = Math.min(colY + colLen, zy + zh);
       if (y1 >= y2) continue;
       ctx.globalAlpha = 0.15 + 0.05 * Math.sin(time * 1.5 + i);
-      ctx.fillStyle = '#D0EAFF';
       ctx.beginPath();
       ctx.ellipse(baseX, (y1 + y2) / 2, colW / 2, (y2 - y1) / 2, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -328,6 +357,7 @@ export function drawCurrentZone(
     // White foam streaks -- thin fast lines for motion feel
     const streakCount = Math.max(14, Math.round(zw / 20));
     ctx.lineWidth = 1.5;
+    ctx.strokeStyle = '#FFFFFF';
     for (let i = 0; i < streakCount; i++) {
       const sx = zx + 8 + ((i * 29 + Math.sin(i * 3.1) * 15) % (zw - 16));
       const streakLen = 40 + (i % 5) * 15;
@@ -336,7 +366,6 @@ export function drawCurrentZone(
       const y2 = Math.min(sy + streakLen, zy + zh);
       if (y1 >= y2) continue;
       ctx.globalAlpha = 0.25 + 0.1 * Math.sin(time * 2 + i * 0.8);
-      ctx.strokeStyle = '#FFFFFF';
       ctx.beginPath();
       ctx.moveTo(sx, y1);
       ctx.lineTo(sx + Math.sin(time * 0.8 + i) * 4, y2);
@@ -345,12 +374,12 @@ export function drawCurrentZone(
 
     // Splash/foam at the bottom of the waterfall
     const foamY = zy + zh;
+    ctx.fillStyle = '#E8F4FF';
     for (let i = 0; i < 18; i++) {
       const fx = zx + 10 + (i / 18) * (zw - 20) + Math.sin(time * 3 + i * 1.3) * 8;
       const fy = foamY - 4 - Math.abs(Math.sin(time * 2.2 + i * 0.7)) * 18;
       const fr = 5 + Math.sin(time * 1.8 + i * 1.1) * 3;
       ctx.globalAlpha = 0.35 + 0.15 * Math.sin(time * 1.5 + i);
-      ctx.fillStyle = '#E8F4FF';
       ctx.beginPath();
       ctx.arc(fx, fy, fr, 0, Math.PI * 2);
       ctx.fill();
@@ -358,11 +387,7 @@ export function drawCurrentZone(
 
     // Bright highlight down the center
     ctx.globalAlpha = 0.12;
-    const hlGrad = ctx.createLinearGradient(cx - 30, 0, cx + 30, 0);
-    hlGrad.addColorStop(0, 'rgba(255,255,255,0)');
-    hlGrad.addColorStop(0.5, 'rgba(255,255,255,1)');
-    hlGrad.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = hlGrad;
+    ctx.fillStyle = cachedGrads.highlight;
     ctx.fillRect(cx - 30, zy, 60, zh);
 
     ctx.restore();
@@ -447,14 +472,13 @@ export function drawBouncyPlatformOverlay(
   const waveBackOffset = 8;
   const wobbleY = fastSin(time * 3) * 2;
   ctx.globalAlpha = 0.25;
-  const jellyKey = `${bp.x}_${bp.y}_${bp.height}`;
-  let jellyGrad = cachedJellyGradients.get(jellyKey);
+  let jellyGrad = cachedJellyGradients.get(bp as object);
   if (!jellyGrad) {
     jellyGrad = ctx.createLinearGradient(bp.x, bp.y - waveBackOffset - 4, bp.x, bp.y + bp.height);
     jellyGrad.addColorStop(0, '#FF69B4');
     jellyGrad.addColorStop(0.5, '#FF99CC');
     jellyGrad.addColorStop(1, '#FF69B4');
-    cachedJellyGradients.set(jellyKey, jellyGrad);
+    cachedJellyGradients.set(bp as object, jellyGrad);
   }
   ctx.fillStyle = jellyGrad;
   ctx.beginPath();

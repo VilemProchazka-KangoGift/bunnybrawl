@@ -93,12 +93,12 @@ function findIsoOccluders(player: Player, platforms: Platform[]): Platform[] {
   const playerBottom = player.y + player.height;
   const playerSpriteTop = player.y - SPRITE_TOP_PAD;
   const playerRight = player.x + player.width;
+  // Caller passes the pre-filtered iso-platforms array, so the inset check
+  // doesn't need to repeat here.
   for (const plat of platforms) {
-    if (plat.leftCollisionInset == null && plat.bottomCollisionInset == null) continue;
     if (playerBottom <= plat.y) continue;
     const platRight = plat.x + plat.width;
     if (playerRight <= plat.x || player.x >= platRight) continue;
-    // Polygon spans capBack..bottom vertically (sprite ears reach into cap).
     if (playerBottom <= capBackY(plat) || playerSpriteTop >= plat.y + plat.height) continue;
     _isoOccluders.push(plat);
   }
@@ -165,6 +165,10 @@ export class Renderer {
   // When false, the per-player findIsoOccluders scan is skipped entirely
   // (lobby, non-iso arenas).
   private _arenaHasIsoOccluders = false;
+  // Pre-filtered to only the iso-occluder platforms (those with collision
+  // insets). Avoids checking leftCollisionInset/bottomCollisionInset on every
+  // platform every player every frame.
+  private _isoOccluderPlatforms: Platform[] = [];
   private _renderScale = 1;
   private _lastBgArena: Arena | null = null;
   private _lastBgOriginalArena: Arena | undefined;
@@ -183,6 +187,7 @@ export class Renderer {
 
   private _fogRGB: { r: number; g: number; b: number } | null = null;
   private _ambientRGBs: { r: number; g: number; b: number }[] | null = null;
+  private _ambientRGBStrings: string[] | null = null;
 
   private mirrored = false;
   private originalArena: Arena | null = null;  // un-mirrored arena for theme draw calls
@@ -320,6 +325,7 @@ export class Renderer {
     this.theme = theme;
     this._fogRGB = null;
     this._ambientRGBs = null;
+    this._ambientRGBStrings = null;
     this.initClouds();
     clearArenaCaches();
     invalidateHudCache();
@@ -347,9 +353,13 @@ export class Renderer {
     if (originalArena) this.originalArena = originalArena;
     this._lastBgArena = arena;
     this._lastBgOriginalArena = originalArena;
-    this._arenaHasIsoOccluders = arena.platforms.some(
-      p => p.leftCollisionInset != null || p.bottomCollisionInset != null,
-    );
+    this._isoOccluderPlatforms.length = 0;
+    for (const p of arena.platforms) {
+      if (p.leftCollisionInset != null || p.bottomCollisionInset != null) {
+        this._isoOccluderPlatforms.push(p);
+      }
+    }
+    this._arenaHasIsoOccluders = this._isoOccluderPlatforms.length > 0;
     const themeArena = this.originalArena ?? arena; // un-mirrored arena for theme draw calls
     const ctx = this.bgCtx;
     const theme = this.theme;
@@ -617,6 +627,7 @@ export class Renderer {
         );
       }
 
+      const bgStart = perfTrace.begin('render.bg');
       // Animated clouds
       const now = this.frameTime / 1000;
       const dt = now - (this.lastCloudTime || now);
@@ -684,12 +695,14 @@ export class Renderer {
         d.bouncyPlatforms = true;
       }
 
+      perfTrace.end('render.bg', bgStart);
+
+      const entStart = perfTrace.begin('render.entities');
       // Pigeon flocks
       for (const flock of matchState.pigeonFlocks) {
         drawPigeonFlock(ctx, flock, matchState.timeElapsed);
         d.pigeons = true;
       }
-
 
       // Lava rocks (falling hazards)
       for (const rock of matchState.lavaRocks) {
@@ -706,42 +719,46 @@ export class Renderer {
       for (const carrot of matchState.carrots) {
         if (carrot.active) { drawCarrot(ctx, carrot, matchState.timeElapsed, this.frameTime); d.carrots = true; }
       }
+      perfTrace.end('render.entities', entStart);
 
-      // Particles
+      const partStart = perfTrace.begin('render.particles');
       drawParticles(ctx, particles, cosmeticLead);
 
-      // Gibs and confetti
       if (matchState.gibs.length > 0) { drawGibs(ctx, matchState.gibs, cosmeticLead); d.gibs = true; }
       if (matchState.confetti.length > 0) { drawConfetti(ctx, matchState.confetti, cosmeticLead); d.confetti = true; }
 
       // Stomp shockwaves (e) -- after particles, before players
-      if (matchState.shockwaves) {
-        if (matchState.shockwaves.length > 0) d.shockwaves = true;
+      if (matchState.shockwaves && matchState.shockwaves.length > 0) {
+        d.shockwaves = true;
+        ctx.save();
+        ctx.strokeStyle = '#FFFFFF';
         for (const sw of matchState.shockwaves) {
           const progress = 1 - sw.life / SHOCKWAVE_DURATION;
-          const alpha = sw.life / SHOCKWAVE_DURATION;
-          const lineW = Math.max(1, 4 * (1 - progress));
-          ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
-          ctx.lineWidth = lineW;
+          ctx.globalAlpha = sw.life / SHOCKWAVE_DURATION;
+          ctx.lineWidth = Math.max(1, 4 * (1 - progress));
           ctx.beginPath();
           ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
           ctx.stroke();
         }
+        ctx.restore();
       }
+      perfTrace.end('render.particles', partStart);
 
-      // Afterimage ghost trails (drawn behind players)
+      const aiStart = perfTrace.begin('render.afterimages');
+      // Afterimage ghost trails (drawn behind players).
       if (!slow) {
+        let aiSaved = false;
         for (const player of matchState.players) {
           if (!player.active) continue;
           if (player.state === 'respawning') continue;
           const afterimages = player.afterimages;
           if (afterimages && afterimages.length > 0) {
             d.afterimages = true;
+            if (!aiSaved) { ctx.save(); aiSaved = true; }
             const isInvincible = player.invincibleTimer > 0;
-            const trailColor = isInvincible ? '#88BBFF' : player.character.color;
-            const { r, g, b } = hexToRGB(trailColor);
+            ctx.fillStyle = isInvincible ? '#88BBFF' : player.character.color;
             for (const img of afterimages) {
-              ctx.fillStyle = `rgba(${r},${g},${b},${img.alpha})`;
+              ctx.globalAlpha = img.alpha;
               ctx.beginPath();
               ctx.ellipse(
                 img.x + player.width / 2,
@@ -754,8 +771,12 @@ export class Renderer {
             }
           }
         }
+        if (aiSaved) ctx.restore();
       }
 
+      perfTrace.end('render.afterimages', aiStart);
+
+      const playersStart = perfTrace.begin('render.players');
       // Compute which players are near a carrot (c) for blush
       _nearCarrotSet.clear();
       const nearCarrotSet = _nearCarrotSet;
@@ -776,10 +797,11 @@ export class Renderer {
 
       // Players (iso clip applied when applicable — see findIsoOccluders).
       const useIsoClip = this._arenaHasIsoOccluders;
+      const isoPlatforms = this._isoOccluderPlatforms;
       for (const player of matchState.players) {
         if (!player.active) continue;
         if (player.state === 'respawning') continue;
-        const occluders = useIsoClip ? findIsoOccluders(player, arena.platforms) : null;
+        const occluders = useIsoClip ? findIsoOccluders(player, isoPlatforms) : null;
         const clipped = occluders !== null && occluders.length > 0;
         if (clipped) {
           ctx.save();
@@ -847,20 +869,27 @@ export class Renderer {
         }
       }
 
+      perfTrace.end('render.players', playersStart);
+
+      const fgStart = perfTrace.begin('render.fg-nature');
       // Ground fog (o) -- after players, before foreground nature
-      if (matchState.fogParticles) {
+      if (matchState.fogParticles && matchState.fogParticles.length > 0) {
         d.fog = true;
         const fogCfg = this.theme.fog;
         if (!this._fogRGB) {
           this._fogRGB = hexToRGB(fogCfg.color);
         }
         const { r, g, b } = this._fogRGB;
+        const opacity = fogCfg.opacity ?? 0.3;
+        ctx.save();
+        ctx.fillStyle = `rgb(${r},${g},${b})`;
         for (const fp of matchState.fogParticles) {
-          ctx.fillStyle = `rgba(${r},${g},${b},${fp.alpha * (fogCfg.opacity ?? 0.3)})`;
+          ctx.globalAlpha = fp.alpha * opacity;
           ctx.beginPath();
           ctx.ellipse(fp.x, fp.y, fogCfg.sizeX, fogCfg.sizeY, 0, 0, Math.PI * 2);
           ctx.fill();
         }
+        ctx.restore();
       }
 
       // Mirror is baked into the cache so blit at identity transform; explicit
@@ -878,20 +907,31 @@ export class Renderer {
       }
 
       // Ambient particles (pollen / snow drift / sparkles)
-      if (!slow && matchState.pollenParticles) {
+      if (!slow && matchState.pollenParticles && matchState.pollenParticles.length > 0) {
         d.ambient = true;
         const ambCfg = this.theme.ambientParticles;
         if (!this._ambientRGBs) {
           this._ambientRGBs = ambCfg.colors.map(hexToRGB);
         }
+        if (!this._ambientRGBStrings || this._ambientRGBStrings.length !== this._ambientRGBs.length) {
+          this._ambientRGBStrings = this._ambientRGBs.map(c => `rgb(${c.r},${c.g},${c.b})`);
+        }
+        const colorStrings = this._ambientRGBStrings;
+        const hasTwoColors = colorStrings.length > 1;
+        ctx.save();
+        let lastCi = -1;
         for (const pp of matchState.pollenParticles) {
-          const ci = pp.size > 2 ? 0 : (this._ambientRGBs.length > 1 ? 1 : 0);
-          const { r, g, b } = this._ambientRGBs[ci];
-          ctx.fillStyle = `rgba(${r},${g},${b},${pp.alpha * 0.7})`;
+          const ci = pp.size > 2 ? 0 : (hasTwoColors ? 1 : 0);
+          if (ci !== lastCi) {
+            ctx.fillStyle = colorStrings[ci];
+            lastCi = ci;
+          }
+          ctx.globalAlpha = pp.alpha * 0.7;
           ctx.beginPath();
           ctx.arc(pp.x, pp.y, pp.size, 0, Math.PI * 2);
           ctx.fill();
         }
+        ctx.restore();
       }
 
       // Fireworks when match is over
@@ -906,12 +946,14 @@ export class Renderer {
         d.dayNight = true;
       }
 
+      perfTrace.end('render.fg-nature', fgStart);
+
       ctx.restore();
 
+      const overlayStart = perfTrace.begin('render.overlay');
       // Overlay layer: HUD, countdown, connection quality, debug overlays, screen flash.
       // When hudCtx is set, these go on a dedicated canvas above fg, redrawn only when
       // state changes (saving a per-frame blit). Otherwise fall back to drawing on fg.
-      // Lobby mode replaces the match HUD entirely with a caller-supplied draw fn.
       if (this._lobbyOverlayFn) {
         this._renderLobbyOverlay(matchState);
       } else {
@@ -922,6 +964,7 @@ export class Renderer {
           this._drawOverlayContent(this.fgCtx, matchState, arena, hudDirty);
         }
       }
+      perfTrace.end('render.overlay', overlayStart);
     });
   }
 
