@@ -5,7 +5,8 @@
  * Game-specific logic (input latching, reconnect respawn) is injected via callbacks.
  */
 import type { SnapshotEncoder, InputCodec, HostAuthorityConfig } from './types';
-import { CoreMsgType, encodePong, decodePingPong } from './protocol';
+import { CoreMsgType, encodePong, decodePingPong, decodeSnapshotAck } from './protocol';
+import { createDelta } from './deltaCompression';
 
 /**
  * Frame gap threshold for detecting input counter resets. If a new bundle's
@@ -102,6 +103,23 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
   // upstream callers can also set finer tiers based on RTT/jitter telemetry.
   private peerBroadcastDivisor = new Map<string, number>();
 
+  // ---- Delta compression state (per-peer baseline tracking) ----
+  // Disabled by default; opt in via enableDeltaCompression().
+  private deltaEnabled = false;
+  // Ring of recently-encoded full snapshots, keyed by frame, for ACK→baseline lookup.
+  private encodedSnapshotRing: Map<number, ArrayBuffer> = new Map();
+  /** Per-peer baseline = the encoded snapshot frame the guest has confirmed
+   *  applying. We send delta against this. `frame` doubles as the most-recent
+   *  ACK for stale-baseline detection. */
+  private peerBaseline = new Map<string, { frame: number; encoded: ArrayBuffer }>();
+  /** Frame at which we last sent peer a full snapshot (keyframe). Forced
+   *  every KEYFRAME_INTERVAL frames as a recovery floor: even if every ACK
+   *  is lost, the guest gets a clean baseline within ~1s. */
+  private peerLastKeyframe = new Map<string, number>();
+  private static readonly KEYFRAME_INTERVAL = 60;        // ~1s @ 60Hz
+  private static readonly STALE_ACK_THRESHOLD = 30;      // ~0.5s without ACK → keyframe
+  private static readonly ENCODED_RING_SIZE = 120;       // 2s of history
+
   // Stats — ring buffer of last 120 snapshot sizes (~2s at 60Hz)
   private lastSnapshotBytes = 0;
   private static readonly SNAPSHOT_HISTORY_SIZE = 120;
@@ -159,6 +177,8 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
     const slot = this.peerSlotMap.get(peerId);
     this.peerSlotMap.delete(peerId);
     this.peerBroadcastDivisor.delete(peerId);
+    this.peerBaseline.delete(peerId);
+    this.peerLastKeyframe.delete(peerId);
     if (slot) {
       this.guestInputs.delete(slot);
       // Clear lastConsumedFrame too: a fresh peer reconnecting into the same
@@ -258,11 +278,32 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
   stop(): void {
     this.running = false;
     this.peerBroadcastDivisor.clear();
+    this.resetDeltaState();
     // Drop reclaim tokens at match end — finalRemoveGuest deliberately keeps
     // them across grace expiry to maintain auth integrity, but match end is
     // the actual lifetime boundary.
     this.reclaimTokens.clear();
   }
+
+  /** Enable delta compression. Off by default. Caller should ensure both
+   *  sides agree (PROTOCOL_VERSION rolls when this lands). */
+  enableDeltaCompression(enabled: boolean): void {
+    this.deltaEnabled = enabled;
+    if (!enabled) this.resetDeltaState();
+  }
+
+  private resetDeltaState(): void {
+    this.encodedSnapshotRing.clear();
+    this.peerBaseline.clear();
+    this.peerLastKeyframe.clear();
+  }
+
+  /** Test introspection: count of full vs delta sends per peer in the last
+   *  broadcast call. Resets each broadcast. */
+  private _lastBroadcastFulls = 0;
+  private _lastBroadcastDeltas = 0;
+  getLastBroadcastFulls(): number { return this._lastBroadcastFulls; }
+  getLastBroadcastDeltas(): number { return this._lastBroadcastDeltas; }
 
   broadcastSnapshot(state: TState): void {
     // After match end, send a finite tail so guests reliably see matchOver=true
@@ -272,23 +313,96 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
     this.localFrame++;
     const snap = this.snapshotEncoder.takeSnapshot(this.localFrame, state);
     const encodeBuf = this.snapshotEncoder.encode(snap);
+    this._lastBroadcastFulls = 0;
+    this._lastBroadcastDeltas = 0;
 
-    const msg = new Uint8Array(1 + encodeBuf.byteLength);
-    msg[0] = CoreMsgType.SNAPSHOT;
-    msg.set(new Uint8Array(encodeBuf), 1);
+    // Build full-snapshot message lazily (only if any peer needs it).
+    let fullMsgBuf: ArrayBuffer | null = null;
+    const buildFull = (): ArrayBuffer => {
+      if (!fullMsgBuf) {
+        const msg = new Uint8Array(1 + encodeBuf.byteLength);
+        msg[0] = CoreMsgType.SNAPSHOT;
+        msg.set(new Uint8Array(encodeBuf), 1);
+        fullMsgBuf = msg.buffer;
+      }
+      return fullMsgBuf;
+    };
 
+    // Track wire bytes sent — this is what actually consumes bandwidth.
+    // For delta-on we want to see the post-compression payload size, not
+    // the source-encoded size. Take the max across peers (worst peer drives
+    // the cost on a multi-guest host); when there are no peers, fall back
+    // to the encoded size so single-page tests still see something.
+    let wireBytesThisTick = 0;
+    let baselineStashed = false;
     for (const peerId of this.transport.getPeerIds()) {
-      const divisor = this.peerBroadcastDivisor.get(peerId);
+      const divisor = this.peerBroadcastDivisor.get(peerId) ?? 1;
       // Skip when divisor > 1 and this frame doesn't align with the divisor.
-      // localFrame % divisor === 0 lets one in `divisor` frames through.
-      if (divisor && divisor > 1 && this.localFrame % divisor !== 0) continue;
-      this.transport.sendUnreliableTo(peerId, msg.buffer);
+      if (divisor > 1 && this.localFrame % divisor !== 0) continue;
+
+      let buf: ArrayBuffer;
+      if (this.deltaEnabled) {
+        // Stash baseline lazily — only when at least one delta-eligible peer
+        // is going to receive this frame. Skips a slice + Map insert per
+        // tick when the host is solo or all peers are on divisor>1.
+        if (!baselineStashed && divisor === 1) {
+          this.encodedSnapshotRing.set(this.localFrame, encodeBuf.slice(0));
+          if (this.encodedSnapshotRing.size > GenericHostAuthority.ENCODED_RING_SIZE) {
+            this.encodedSnapshotRing.delete(this.localFrame - GenericHostAuthority.ENCODED_RING_SIZE);
+          }
+          baselineStashed = true;
+        }
+        buf = this.encodeForPeer(peerId, divisor, encodeBuf, buildFull);
+      } else {
+        buf = buildFull();
+      }
+      this.transport.sendUnreliableTo(peerId, buf);
+      if (buf.byteLength > wireBytesThisTick) wireBytesThisTick = buf.byteLength;
     }
 
-    this.lastSnapshotBytes = encodeBuf.byteLength;
-    this.snapshotHistory[this.snapshotHistoryIdx] = Math.min(encodeBuf.byteLength, 65535);
+    // If no peer was sent (all skipped or empty room), record the full-message
+    // size as a stand-in so the rolling stats stay populated.
+    if (wireBytesThisTick === 0) wireBytesThisTick = 1 + encodeBuf.byteLength;
+
+    this.lastSnapshotBytes = wireBytesThisTick;
+    this.snapshotHistory[this.snapshotHistoryIdx] = Math.min(wireBytesThisTick, 65535);
     this.snapshotHistoryIdx = (this.snapshotHistoryIdx + 1) % GenericHostAuthority.SNAPSHOT_HISTORY_SIZE;
     if (this.snapshotHistoryCount < GenericHostAuthority.SNAPSHOT_HISTORY_SIZE) this.snapshotHistoryCount++;
+  }
+
+  /** Decide whether to send full or delta to one peer, build the bytes,
+   *  and update bookkeeping. Returns the message buffer to send. */
+  private encodeForPeer(peerId: string, divisor: number, currentEncoded: ArrayBuffer, buildFull: () => ArrayBuffer): ArrayBuffer {
+    // Stressed peers (divisor > 1) skip delta entirely: CPU/network is
+    // already strained, robustness over bandwidth.
+    if (divisor > 1) {
+      this._lastBroadcastFulls++;
+      return buildFull();
+    }
+
+    const baseline = this.peerBaseline.get(peerId);
+    const lastKeyframe = this.peerLastKeyframe.get(peerId) ?? -Infinity;
+
+    // Force full when:
+    //  - no baseline yet (peer just joined or never ACKed)
+    //  - keyframe interval elapsed (recovery floor)
+    //  - no fresh ACK in STALE_ACK_THRESHOLD frames (peer stopped confirming)
+    const sinceKeyframe = this.localFrame - lastKeyframe;
+    const sinceAck = baseline ? this.localFrame - baseline.frame : Infinity;
+    const needKeyframe = !baseline
+      || sinceKeyframe >= GenericHostAuthority.KEYFRAME_INTERVAL
+      || sinceAck >= GenericHostAuthority.STALE_ACK_THRESHOLD;
+
+    if (needKeyframe) {
+      this.peerLastKeyframe.set(peerId, this.localFrame);
+      this._lastBroadcastFulls++;
+      return buildFull();
+    }
+
+    // Delta path: encode against this peer's confirmed baseline.
+    const delta = createDelta(currentEncoded, baseline.encoded, baseline.frame);
+    this._lastBroadcastDeltas++;
+    return delta;
   }
 
   /** One-off snapshot to a single peer — used for reconnect sync where the
@@ -359,6 +473,17 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
       if (pp && fromPeerId) {
         this.transport.sendUnreliableTo(fromPeerId, encodePong(pp.timestamp));
       }
+    } else if (type === CoreMsgType.SNAPSHOT_ACK) {
+      // Guest confirmed applying a snapshot — promote that frame to its
+      // baseline so we can delta-encode against it next broadcast.
+      if (!this.deltaEnabled || !fromPeerId) return;
+      const ackedFrame = decodeSnapshotAck(data);
+      if (ackedFrame === null) return;
+      const encoded = this.encodedSnapshotRing.get(ackedFrame);
+      if (!encoded) return; // ACK is older than our ring — nothing to base on
+      const existing = this.peerBaseline.get(fromPeerId)?.frame ?? -1;
+      if (ackedFrame <= existing) return; // out-of-order ACK, ignore
+      this.peerBaseline.set(fromPeerId, { frame: ackedFrame, encoded });
     }
   }
 

@@ -63,6 +63,7 @@ const mockHostAuthorityInstance = {
   isPeerUnstable: vi.fn(() => false),
   setPeerBroadcastDivisor: vi.fn(),
   getPeerBroadcastDivisor: vi.fn(() => 1),
+  enableDeltaCompression: vi.fn(),
 };
 
 // Captured config — tests inspect onPlayerDisconnect callback to verify
@@ -701,6 +702,96 @@ describe('NetMatch', () => {
       const events = transport.setEvents.mock.calls[0][0];
       events.onReliableMessage({ type: MsgType.RECONNECT_SYNC, slot: 'P2', snapshotFrame: 100, paused: false });
       expect(mockGameLoopInstance.resume).toHaveBeenCalled();
+    });
+  });
+
+  describe('guest delta compression path', () => {
+    let transport: ReturnType<typeof makeMockTransport>;
+    let netMatch: NetMatch;
+
+    beforeEach(async () => {
+      transport = makeMockTransport(false);
+      interpInstances.length = 0;
+      netMatch = new NetMatch(makeConfig(transport, {
+        localSlot: 'P2' as PlayerSlot,
+        remoteSlots: ['P1'] as PlayerSlot[],
+      }));
+    });
+
+    /** Build a synthetic full SNAPSHOT message (with 0x20 type prefix). */
+    async function buildSnapshotMsg(frame: number) {
+      const { takeAuthSnapshot, encodeSnapshot } = await import('./snapshot');
+      const { makeState } = await import('../__tests__/testHelpers');
+      const state = makeState({ countdown: 0 });
+      const snap = takeAuthSnapshot(frame, state);
+      const { buffer, length } = encodeSnapshot(snap);
+      const out = new Uint8Array(1 + length);
+      out[0] = MsgType.SNAPSHOT;
+      out.set(new Uint8Array(buffer, 0, length), 1);
+      return { msg: out.buffer, raw: buffer.slice(0, length) };
+    }
+
+    it('SNAPSHOT_DELTA reconstructs against stored baseline and ACKs', async () => {
+      const { createDelta } = await import('./core/deltaCompression');
+      const { encodeSnapshotAck } = await import('./core/protocol');
+
+      const { msg: fullA, raw: rawA } = await buildSnapshotMsg(1);
+      const { raw: rawB } = await buildSnapshotMsg(2);
+      // Receive the full first
+      netMatch.handleUnreliableMessage(fullA);
+      // ACK for frame 1 should have been sent
+      const ackBuf = encodeSnapshotAck(1);
+      const ackSent = transport.sendUnreliable.mock.calls.some(
+        (c: unknown[]) => (c[0] as ArrayBuffer).byteLength === ackBuf.byteLength,
+      );
+      expect(ackSent).toBe(true);
+
+      // Build a delta frame-2 against frame-1 and feed it as SNAPSHOT_DELTA
+      const delta = createDelta(rawB, rawA, 1);
+      transport.sendUnreliable.mockClear();
+      netMatch.handleUnreliableMessage(delta);
+
+      // Interpolation should have received the reconstructed snapshot
+      const interp = interpInstances[interpInstances.length - 1];
+      expect(interp.pushSnapshot).toHaveBeenCalled();
+      // ACK for frame 2 sent
+      expect(transport.sendUnreliable).toHaveBeenCalled();
+    });
+
+    it('SNAPSHOT_DELTA against unknown baseline frame is dropped (no push, no ACK)', async () => {
+      const { createDelta } = await import('./core/deltaCompression');
+      const { raw: rawA } = await buildSnapshotMsg(1);
+      const { raw: rawB } = await buildSnapshotMsg(2);
+
+      // Build a delta whose baseFrame=999 — guest never received it, so drop
+      const delta = createDelta(rawB, rawA, 999);
+      transport.sendUnreliable.mockClear();
+      netMatch.handleUnreliableMessage(delta);
+
+      const interp = interpInstances[interpInstances.length - 1];
+      expect(interp.pushSnapshot).not.toHaveBeenCalled();
+      expect(transport.sendUnreliable).not.toHaveBeenCalled();
+    });
+
+    it('completeReconnection clears the guest baseline ring', async () => {
+      const { createDelta } = await import('./core/deltaCompression');
+      const { msg: fullA, raw: rawA } = await buildSnapshotMsg(1);
+      const { raw: rawB } = await buildSnapshotMsg(2);
+
+      netMatch.handleUnreliableMessage(fullA); // baseline 1 stored
+      netMatch.start();
+
+      // Simulate reconnect — should drop baselines
+      const events = transport.setEvents.mock.calls[0][0];
+      events.onReliableMessage({ type: MsgType.RECONNECT_SYNC, slot: 'P2', snapshotFrame: 50, paused: false });
+
+      // After reset, a delta against frame 1 must be dropped
+      const interp = interpInstances[interpInstances.length - 1];
+      interp.pushSnapshot.mockClear();
+      transport.sendUnreliable.mockClear();
+      const delta = createDelta(rawB, rawA, 1);
+      netMatch.handleUnreliableMessage(delta);
+      expect(interp.pushSnapshot).not.toHaveBeenCalled();
     });
   });
 

@@ -427,6 +427,7 @@ interface ScenarioSummary {
   guestKeySections: Record<string, { avgMs: number; p95Ms: number; calls: number }>;
   autoSlow: { host: boolean; guest: boolean };
   feel: FeelSummary;
+  bandwidth: { snapshotBytesMean: number; snapshotBytesMax: number };
 }
 
 function analyseGuestFeel(samples: PlayerFrame[], arrivals: SnapshotArrival[], arenaWidth = 1280): FeelSummary {
@@ -515,7 +516,13 @@ function summariseProfile(profile: CapturedProfile, durationS: number, keys: str
   keySections: Record<string, { avgMs: number; p95Ms: number; calls: number }>;
 } {
   const frames = profile.frames as { dts: number[]; count: number };
-  const fps = frames?.count > 0 ? frames.count / durationS : 0;
+  // fpsCounter ring buffer caps `count` at MAX_SAMPLES (600). For a 20s test
+  // at 60fps the buffer overwrites older samples — `count / durationS` would
+  // saturate at 30fps. Compute fps from the actual elapsed time of retained
+  // samples instead, which stays accurate regardless of buffer size.
+  const totalMs = frames?.dts?.reduce((s, d) => s + d, 0) ?? 0;
+  const fps = totalMs > 0 ? (frames.count * 1000) / totalMs : 0;
+  void durationS;
   const lt = profile.longTasks ?? [];
   const longTasks = {
     count: lt.length,
@@ -618,6 +625,17 @@ async function runScenario(browser: Browser, scenario: Scenario, baseOutDir: str
 
     const guestFeel = await stopPlayerFeelSampler(guest);
 
+    // Capture host snapshot bandwidth (rolling 120-sample mean from
+    // HostAuthority — measured BEFORE we tear down the page).
+    const bandwidth = await host.page.evaluate(() => {
+      const nm = (window as { __netMatch?: { getDebugStats?: () => { snapshotBytesMean: number; snapshotBytesMax: number } } }).__netMatch;
+      const s = nm?.getDebugStats?.();
+      return {
+        snapshotBytesMean: s?.snapshotBytesMean ?? 0,
+        snapshotBytesMax: s?.snapshotBytesMax ?? 0,
+      };
+    });
+
     const autoSlow = {
       host: await host.page.evaluate(() => window.__gameLoop?.isAutoSlowFlipped?.() === true),
       guest: await guest.page.evaluate(() => window.__gameLoop?.isAutoSlowFlipped?.() === true),
@@ -655,6 +673,7 @@ async function runScenario(browser: Browser, scenario: Scenario, baseOutDir: str
       guestKeySections: guestSummary.keySections,
       autoSlow,
       feel: feelSummary,
+      bandwidth,
     };
   } finally {
     await pair.host.ctx.close().catch(() => {});
@@ -678,6 +697,16 @@ function renderSummaryTable(summaries: ScenarioSummary[]): string {
     const flagSymbol = (on: boolean) => on ? 'AUTO' : '-';
     const autoFlag = `${flagSymbol(s.autoSlow.host)} / ${flagSymbol(s.autoSlow.guest)}`;
     lines.push(`| ${s.name} | ${s.hostFps.toFixed(1)} | ${s.guestFps.toFixed(1)} | ${hostLT} | ${guestLT} | ${s.hostHeapDeltaMB.toFixed(1)} MB | ${s.guestHeapDeltaMB.toFixed(1)} MB | ${autoFlag} |`);
+  }
+  lines.push('');
+  lines.push('## Snapshot bandwidth (host)');
+  lines.push('');
+  lines.push('Mean / max bytes per outbound snapshot, sampled over the last ~2s of the run via `HostAuthority.getStats()`. Lower is better. Delta-compressed snapshots compress repeated/unchanged bytes via XOR+RLE; a forced keyframe lands every 60 frames or after 30 frames of ACK silence.');
+  lines.push('');
+  lines.push('| scenario | snapshot bytes mean | snapshot bytes max |');
+  lines.push('|---|---|---|');
+  for (const s of summaries) {
+    lines.push(`| ${s.name} | ${s.bandwidth.snapshotBytesMean.toFixed(0)} B | ${s.bandwidth.snapshotBytesMax} B |`);
   }
   lines.push('');
   lines.push('## Player feel (guest)');

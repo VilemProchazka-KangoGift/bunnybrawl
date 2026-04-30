@@ -1144,7 +1144,8 @@ describe('HostAuthority', () => {
 
       const stats = host.getStats();
       expect(stats.localFrame).toBe(1);
-      expect(stats.snapshotBytes).toBe(64); // from mockEncodeSnapshot length
+      // Wire bytes = 1-byte type prefix + 64-byte encoded snapshot
+      expect(stats.snapshotBytes).toBe(65);
     });
   });
 

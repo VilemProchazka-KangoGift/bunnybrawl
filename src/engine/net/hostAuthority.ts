@@ -110,6 +110,7 @@ export class HostAuthority {
   isPeerUnstable(peerId: string): boolean { return this.core.isPeerUnstable(peerId); }
   setPeerBroadcastDivisor(peerId: string, divisor: number): void { this.core.setPeerBroadcastDivisor(peerId, divisor); }
   getPeerBroadcastDivisor(peerId: string): number { return this.core.getPeerBroadcastDivisor(peerId); }
+  enableDeltaCompression(enabled: boolean): void { this.core.enableDeltaCompression(enabled); }
 
   handleUnreliableMessage(data: ArrayBuffer, fromPeerId?: string): void {
     this.core.handleUnreliableMessage(data, fromPeerId);

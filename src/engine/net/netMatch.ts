@@ -28,6 +28,8 @@ import { InputEcho } from './inputEcho';
 import { decodeSnapshot, createEmptySnapshot } from './snapshot';
 import type { AuthSnapshot } from './snapshot';
 import { encodeInputMessage } from './protocol';
+import { encodeSnapshotAck } from './core/protocol';
+import { applyDelta, readDeltaBaseFrame } from './core/deltaCompression';
 
 export interface NetMatchConfig {
   bgCanvas: HTMLCanvasElement;
@@ -101,6 +103,14 @@ export class NetMatch {
   private snapshotPool: AuthSnapshot[] = [];
   private snapshotPoolIdx = 0;
 
+  // Guest-side delta compression: ring of recently-applied raw encoded
+  // snapshots, keyed by host frame. When a SNAPSHOT_DELTA arrives we peek
+  // its baseFrame, look up the matching baseline bytes here, apply the
+  // delta, then send a SNAPSHOT_ACK for the new frame so the host can
+  // delta against it next tick.
+  private static readonly GUEST_BASELINE_RING_SIZE = 120; // ~2s at 60Hz
+  private guestBaselines = new Map<number, ArrayBuffer>();
+
   // Reconnection state (guest only)
   private reconnecting = false;
   private reconnectTimer: ReturnType<typeof setInterval> | null = null;
@@ -128,6 +138,10 @@ export class NetMatch {
   // Latches on the first snapshot where matchOver=true so guest-side match-end
   // fires exactly once, even if MATCH_RESULT reliable message is dropped.
   private _guestMatchOverFired = false;
+  // Latches once the guest has signalled CONNECTION_UNSTABLE due to its own
+  // auto-slow-device flip. Without this latch, the per-frame guest loop
+  // would re-send the message every frame after autoSlow trips.
+  private _autoSlowReported = false;
 
   // Host-side LOADED handshake state
   private loadedGuests = new Set<PlayerSlot>();
@@ -282,6 +296,7 @@ export class NetMatch {
 
     if (this._isHost && this.hostAuthority) {
       this.hostAuthority.start();
+      this.hostAuthority.enableDeltaCompression(true);
       this.armLoadingTimeout();
       this.startHostLoop();
     } else {
@@ -674,6 +689,17 @@ export class NetMatch {
       }
       if (state.screenShake > 0) state.screenShake = Math.max(0, state.screenShake - dt);
 
+      // 5b. Signal slow CPU to host once our local autoSlow flips — host
+      // halves broadcast rate and skips delta encoding to this peer.
+      if (!this._autoSlowReported && state.phase !== 'loading'
+          && autoSlowDetect.isFlipped()) {
+        this._autoSlowReported = true;
+        this.transport.sendReliable({
+          type: MsgType.CONNECTION_UNSTABLE,
+          stalled: true,
+        } as ReliableMessage);
+      }
+
       // 6. Stall detection (soft banner only). A snapshot-stream gap no longer
       // triggers reconnection — the transport's pong timeout is the single
       // source of truth for peer liveness. Forcing reconnection on brief
@@ -722,24 +748,46 @@ export class NetMatch {
       this.hostAuthority.handleUnreliableMessage(data, fromPeerId);
     } else if (type === MsgType.SNAPSHOT) {
       this.handleGuestSnapshot(data);
+    } else if (type === MsgType.SNAPSHOT_DELTA) {
+      this.handleGuestDelta(data);
     }
     // Ping/pong handled by Transport — it intercepts before dispatching here.
   }
 
-  private handleGuestSnapshot(data: ArrayBuffer): void {
-    if (!this.interpolation) return;
-
-    // Track snapshot arrival for stall detection
+  /** Update stall-detection bookkeeping after any successful snapshot
+   *  arrival (full or delta). Called by both handleGuestSnapshot and
+   *  handleGuestDelta. */
+  private noteSnapshotArrival(): void {
     this.lastSnapshotTime = performance.now();
     if (this.stallNotified) {
       this.stallNotified = false;
       this.onStall?.(false);
-      // Let host know we're healthy again so it can drop the banner.
       this.transport.sendReliable({
         type: MsgType.CONNECTION_UNSTABLE,
         stalled: false,
       } as ReliableMessage);
     }
+  }
+
+  /** Push raw encoded bytes (no type prefix) into the guest baseline ring
+   *  and trim oldest entries to bound memory. */
+  private storeGuestBaseline(frame: number, encoded: ArrayBuffer): void {
+    this.guestBaselines.set(frame, encoded);
+    if (this.guestBaselines.size > NetMatch.GUEST_BASELINE_RING_SIZE) {
+      // Drop the oldest (smallest frame number)
+      const oldest = this.guestBaselines.keys().next().value;
+      if (oldest !== undefined) this.guestBaselines.delete(oldest);
+    }
+  }
+
+  /** ACK the host: "I have applied frame N, you may delta against it." */
+  private sendAck(frame: number): void {
+    this.transport.sendUnreliable(encodeSnapshotAck(frame));
+  }
+
+  private handleGuestSnapshot(data: ArrayBuffer): void {
+    if (!this.interpolation) return;
+    this.noteSnapshotArrival();
 
     const handleStart = perfTrace.begin('net.handleSnapshot');
     // Skip the 1-byte type prefix and decode into a pooled instance —
@@ -752,8 +800,52 @@ export class NetMatch {
     perfTrace.end('net.decodeSnapshot', decodeStart);
     if (snap) {
       this.interpolation.pushSnapshot(snap);
+      // Skip baseline-store + ACK after we've signalled slow CPU — the host
+      // bypasses delta encoding to unstable peers so this work is unused.
+      if (!this._autoSlowReported) {
+        this.storeGuestBaseline(snap.frame, data.slice(1));
+        this.sendAck(snap.frame);
+      }
     }
     perfTrace.end('net.handleSnapshot', handleStart);
+  }
+
+  private handleGuestDelta(data: ArrayBuffer): void {
+    if (!this.interpolation) return;
+
+    const handleStart = perfTrace.begin('net.handleDelta');
+    const baseFrame = readDeltaBaseFrame(data);
+    if (baseFrame === null) {
+      perfTrace.end('net.handleDelta', handleStart);
+      return;
+    }
+    const baseline = this.guestBaselines.get(baseFrame);
+    if (!baseline) {
+      // Baseline not in our ring — host will keyframe within
+      // STALE_ACK_THRESHOLD frames, so just drop. No sense ACKing nothing.
+      perfTrace.end('net.handleDelta', handleStart);
+      return;
+    }
+    const reconstructed = applyDelta(data, baseline);
+    if (!reconstructed) {
+      perfTrace.end('net.handleDelta', handleStart);
+      return;
+    }
+
+    // Counts as snapshot arrival once we've actually got bytes we can use.
+    this.noteSnapshotArrival();
+
+    const out = this.snapshotPool[this.snapshotPoolIdx];
+    this.snapshotPoolIdx = (this.snapshotPoolIdx + 1) % NetMatch.SNAPSHOT_POOL_SIZE;
+    const decodeStart = perfTrace.begin('net.decodeSnapshot');
+    const snap = decodeSnapshot(reconstructed, 0, out);
+    perfTrace.end('net.decodeSnapshot', decodeStart);
+    if (snap) {
+      this.interpolation.pushSnapshot(snap);
+      this.storeGuestBaseline(snap.frame, reconstructed);
+      this.sendAck(snap.frame);
+    }
+    perfTrace.end('net.handleDelta', handleStart);
   }
 
   handleReliableMessage(msg: ReliableMessage, fromPeerId?: string): void {
@@ -887,6 +979,13 @@ export class NetMatch {
     // lerp across a huge frame gap and teleport entities. Reset latches too
     // so the first post-reconnect snapshot re-fires any phase/match-end edge.
     this.interpolation?.reset();
+    // Drop the encoded baseline ring too — frames the host knew we ACKed are
+    // gone after reconnect; the next snapshot must be a full keyframe and we
+    // start over from there. Clear `_autoSlowReported` so the guest will
+    // re-signal CONNECTION_UNSTABLE if its autoSlow is still flipped, since
+    // the host's per-peer state has been reset.
+    this.guestBaselines.clear();
+    this._autoSlowReported = false;
     // Cosmetic prev-state baselines also need a reset — without this, the
     // first post-reconnect snapshot triggers transitions against pre-
     // disconnect state (e.g. jump/land sounds for a player who landed
@@ -938,6 +1037,7 @@ export class NetMatch {
       this._visibilityHandler = null;
     }
     this.hostAuthority?.stop();
+    this.guestBaselines.clear();
     this.gameLoop.stop();
   }
 
