@@ -35,3 +35,19 @@ export function hexToRGB(hex: string): { r: number; g: number; b: number } {
   const b = parseInt(hex.slice(5, 7), 16);
   return { r, g, b };
 }
+
+/** Convert hex color "#RRGGBB" to HSL components (h ∈ [0,360], s,l ∈ [0,1]). */
+export function hexToHSL(hex: string): { h: number; s: number; l: number } {
+  const { r: r255, g: g255, b: b255 } = hexToRGB(hex);
+  const r = r255 / 255, g = g255 / 255, b = b255 / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return { h: 0, s: 0, l };
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h = 0;
+  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0));
+  else if (max === g) h = (b - r) / d + 2;
+  else h = (r - g) / d + 4;
+  return { h: h * 60, s, l };
+}
