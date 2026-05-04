@@ -529,6 +529,18 @@ export const treetops: ArenaPack = {
     periodic: [{ sound: 'amb_bird_chirp', intervalRange: [8, 20] }],
   },
 
+  // Perched songbirds on upper branches that scatter when a player lands nearby
+  scatterFlockConfig: {
+    species: 'bird',
+    positions: [
+      { x: 180, y: 140 },
+      { x: 700, y: 130 },
+      { x: 1080, y: 145 },
+    ],
+    radius: 120,
+    respawnTime: 8,
+  },
+
   musicFile: 'treetops.mp3',
   // NAV-DATA-START — auto-generated, do not hand-edit
   navData: {

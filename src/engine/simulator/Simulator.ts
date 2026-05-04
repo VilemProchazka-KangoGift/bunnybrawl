@@ -538,6 +538,38 @@ export class Simulator {
         }
       }
 
+      // Species-aware scatter flocks (birds, bats, crows). Trigger: player
+      // lands within `flock.radius` while the flock is armed; one-shot per
+      // approach, re-armed when the player exits 1.5× radius.
+      for (const flock of this._state.scatterFlocks) {
+        const dx = (player.x + player.width / 2) - flock.x;
+        const dy = (player.y + player.height) - flock.y;
+        const distSq = dx * dx + dy * dy;
+        const r = flock.radius;
+        if (!flock.active) continue;
+        if (flock.armed && distSq < r * r && player.state !== 'airborne') {
+          flock.active = false;
+          flock.armed = false;
+          flock.respawnTimer = this._theme.scatterFlockConfig?.respawnTime || 8;
+          this._events.onSfxRequest('pigeon_scatter');
+          const count = flock.species === 'bat' ? 12 : 7;
+          for (let pi = 0; pi < count; pi++) {
+            const angle = -Math.PI * 0.5 + (Math.random() - 0.5) * 1.6;
+            const speed = 130 + Math.random() * 160;
+            flock.scatterParticles.push({
+              x: flock.x + (Math.random() - 0.5) * 20,
+              y: flock.y - 4,
+              vx: Math.cos(angle) * speed * (flock.x > player.x ? 1 : -1),
+              vy: Math.sin(angle) * speed - 60,
+              life: 1.6 + Math.random() * 0.8,
+              phase: Math.random() * Math.PI * 2,
+            });
+          }
+        } else if (!flock.armed && distSq > (r * 1.5) * (r * 1.5)) {
+          flock.armed = true;
+        }
+      }
+
       for (const carrot of this._state.carrots) {
         if (!carrot.active) continue;
         if (aabbOverlap(player.x, player.y, player.width, player.height, carrot.x - CARROT_SIZE / 2, carrot.y, CARROT_SIZE, CARROT_SIZE)) {

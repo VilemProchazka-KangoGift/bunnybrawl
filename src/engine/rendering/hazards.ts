@@ -589,3 +589,178 @@ export function drawPigeonFlock(
   }
   ctx.restore();
 }
+
+// Species-aware scatter flocks (birds, bats, crows). Mirrors drawPigeonFlock
+// but dispatches sprite + behavior on flock.species.
+export function drawScatterFlock(
+  ctx: CanvasRenderingContext2D,
+  flock: {
+    species: 'bird' | 'bat' | 'crow';
+    x: number; y: number;
+    active: boolean;
+    scatterParticles: Array<{ x: number; y: number; vx: number; vy: number; life: number; phase: number }>;
+  },
+  time: number,
+): void {
+  ctx.save();
+  if (flock.active) {
+    drawPerchedFlock(ctx, flock.species, flock.x, flock.y, time);
+  }
+  for (const sp of flock.scatterParticles) {
+    drawFlyingScatter(ctx, flock.species, sp);
+  }
+  ctx.restore();
+}
+
+function drawPerchedFlock(
+  ctx: CanvasRenderingContext2D,
+  species: 'bird' | 'bat' | 'crow',
+  cx: number,
+  cy: number,
+  time: number,
+): void {
+  if (species === 'bat') {
+    // Three bats hanging upside-down from a tower beam
+    ctx.globalAlpha = 0.8;
+    for (let i = 0; i < 3; i++) {
+      const bx = cx - 12 + i * 12;
+      const by = cy;
+      const sway = Math.sin(time * 1.2 + i) * 1;
+      ctx.fillStyle = '#1a1422';
+      // Body (teardrop, hanging)
+      ctx.beginPath();
+      ctx.ellipse(bx + sway, by + 4, 3, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Folded wings
+      ctx.beginPath();
+      ctx.moveTo(bx - 3 + sway, by + 2);
+      ctx.quadraticCurveTo(bx + sway, by + 6, bx + 3 + sway, by + 2);
+      ctx.fill();
+      // Glint eye
+      ctx.fillStyle = '#ff7c2e';
+      ctx.fillRect(bx - 0.5 + sway, by + 5, 1, 1);
+    }
+    ctx.globalAlpha = 1;
+    return;
+  }
+  if (species === 'crow') {
+    ctx.globalAlpha = 0.85;
+    for (let i = 0; i < 3; i++) {
+      const px = cx - 10 + i * 10;
+      const py = cy - 4;
+      ctx.fillStyle = '#0e0a14';
+      // Body
+      ctx.beginPath();
+      ctx.ellipse(px, py, 5, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Head
+      ctx.beginPath();
+      ctx.arc(px + 4, py - 3, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      // Beak (longer than pigeon)
+      ctx.fillStyle = '#5a3a1c';
+      ctx.beginPath();
+      ctx.moveTo(px + 6, py - 3);
+      ctx.lineTo(px + 9, py - 2.5);
+      ctx.lineTo(px + 6, py - 2);
+      ctx.fill();
+      // Head bob
+      if (Math.sin(time * 3 + i * 2) > 0.6) {
+        ctx.fillStyle = '#0e0a14';
+        ctx.beginPath();
+        ctx.arc(px + 4, py - 4, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+    return;
+  }
+  // bird (treetops): smaller passerine birds, brighter color
+  ctx.globalAlpha = 0.85;
+  const colors = ['#3a4a8a', '#a85a3a', '#5a8a3a'];
+  for (let i = 0; i < 4; i++) {
+    const px = cx - 12 + i * 8;
+    const py = cy - 3;
+    ctx.fillStyle = colors[i % colors.length];
+    // Body
+    ctx.beginPath();
+    ctx.ellipse(px, py, 3.5, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Head
+    ctx.beginPath();
+    ctx.arc(px + 2.5, py - 2, 2, 0, Math.PI * 2);
+    ctx.fill();
+    // Beak
+    ctx.fillStyle = '#ff8a3a';
+    ctx.fillRect(px + 4, py - 2, 1, 1);
+    // Tail-tip
+    ctx.fillStyle = colors[i % colors.length];
+    ctx.beginPath();
+    ctx.moveTo(px - 3, py);
+    ctx.lineTo(px - 5, py - 1);
+    ctx.lineTo(px - 5, py + 1);
+    ctx.fill();
+    // Idle blink/hop
+    if (Math.sin(time * 5 + i * 1.7) > 0.85) {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(px + 2.5, py - 2, 0.5, 0.5);
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawFlyingScatter(
+  ctx: CanvasRenderingContext2D,
+  species: 'bird' | 'bat' | 'crow',
+  sp: { x: number; y: number; vx: number; vy: number; life: number; phase: number },
+): void {
+  ctx.globalAlpha = Math.min(1, sp.life) * 0.85;
+  if (species === 'bat') {
+    // Bat shape: scalloped wings flapping fast
+    const flap = Math.sin(sp.life * 32 + sp.phase) * 4;
+    ctx.fillStyle = '#1a1422';
+    ctx.beginPath();
+    ctx.moveTo(sp.x - 5, sp.y);
+    ctx.quadraticCurveTo(sp.x - 2, sp.y - flap, sp.x, sp.y);
+    ctx.quadraticCurveTo(sp.x + 2, sp.y - flap, sp.x + 5, sp.y);
+    ctx.lineTo(sp.x + 4, sp.y + 1.5);
+    ctx.lineTo(sp.x, sp.y + 0.5);
+    ctx.lineTo(sp.x - 4, sp.y + 1.5);
+    ctx.closePath();
+    ctx.fill();
+  } else if (species === 'crow') {
+    const flap = Math.sin(sp.life * 24 + sp.phase) * 5;
+    ctx.fillStyle = '#0e0a14';
+    ctx.beginPath();
+    ctx.ellipse(sp.x, sp.y, 4, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(sp.x - 3, sp.y);
+    ctx.lineTo(sp.x - 9, sp.y + flap);
+    ctx.lineTo(sp.x - 2, sp.y);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(sp.x + 3, sp.y);
+    ctx.lineTo(sp.x + 9, sp.y + flap);
+    ctx.lineTo(sp.x + 2, sp.y);
+    ctx.fill();
+  } else {
+    // bird
+    const flap = Math.sin(sp.life * 28 + sp.phase) * 4;
+    ctx.fillStyle = '#3a4a8a';
+    ctx.beginPath();
+    ctx.ellipse(sp.x, sp.y, 3, 2.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(sp.x - 2, sp.y);
+    ctx.lineTo(sp.x - 6, sp.y + flap);
+    ctx.lineTo(sp.x - 1, sp.y);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(sp.x + 2, sp.y);
+    ctx.lineTo(sp.x + 6, sp.y + flap);
+    ctx.lineTo(sp.x + 1, sp.y);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}

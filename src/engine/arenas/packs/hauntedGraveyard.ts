@@ -694,6 +694,18 @@ export const hauntedGraveyard: ArenaPack = {
     periodic: [{ sound: 'amb_ghost_hoo', intervalRange: [10, 25] }],
   },
 
+  // Crows perched on gravestones; scatter when disturbed
+  scatterFlockConfig: {
+    species: 'crow',
+    positions: [
+      { x: 240, y: 596 },
+      { x: 700, y: 596 },
+      { x: 1040, y: 596 },
+    ],
+    radius: 140,
+    respawnTime: 10,
+  },
+
   musicFile: 'haunted_graveyard.mp3',
   // NAV-DATA-START — auto-generated, do not hand-edit
   navData: {

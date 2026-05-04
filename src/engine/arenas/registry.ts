@@ -125,6 +125,7 @@ export function toThemeConfig(pack: ArenaPack): ThemeConfig {
     ghostConfig: pack.ghostConfig,
     lavaRockConfig: pack.lavaRockConfig,
     pigeonConfig: pack.pigeonConfig,
+    scatterFlockConfig: pack.scatterFlockConfig,
     physics: pack.physics,
     ambientSoundConfig: pack.ambientSoundConfig,
     bubbleHelmet: pack.bubbleHelmet,

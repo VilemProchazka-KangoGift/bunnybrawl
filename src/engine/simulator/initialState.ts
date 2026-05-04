@@ -108,7 +108,7 @@ export function createEmptyMatchState(): MatchState {
     fogParticles: [], pollenParticles: [], shootingStars: [],
     scoreAnimations: [], ghosts: [],
     lavaRocks: [], lavaRockTimer: 0,
-    geyserStates: [], pigeonFlocks: [], bouncyWobble: new Map(),
+    geyserStates: [], pigeonFlocks: [], scatterFlocks: [], bouncyWobble: new Map(),
     gibs: [], confetti: [],
   };
 }
@@ -196,6 +196,13 @@ export function createInitialMatchState(
     })),
     pigeonFlocks: (theme.pigeonConfig?.positions || []).map(p => ({
       x: p.x, y: p.y, active: true, respawnTimer: 0,
+      scatterParticles: [],
+    })),
+    scatterFlocks: (theme.scatterFlockConfig?.positions || []).map(p => ({
+      species: theme.scatterFlockConfig!.species,
+      x: p.x, y: p.y,
+      radius: theme.scatterFlockConfig!.radius,
+      active: true, armed: true, respawnTimer: 0,
       scatterParticles: [],
     })),
   };

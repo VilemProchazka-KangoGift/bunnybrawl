@@ -121,6 +121,7 @@ export interface ArenaPack {
   ghostConfig?: ThemeConfig['ghostConfig'];
   lavaRockConfig?: ThemeConfig['lavaRockConfig'];
   pigeonConfig?: ThemeConfig['pigeonConfig'];
+  scatterFlockConfig?: ThemeConfig['scatterFlockConfig'];
   physics?: PhysicsModifiers;
 
   // ---- Audio ----

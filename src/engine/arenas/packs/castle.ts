@@ -835,6 +835,18 @@ export const castle: ArenaPack = {
   ambientSoundConfig: {
     loops: ['amb_wind'],
   },
+
+  // Bats hanging from tower beams; erupt when a player lands within range
+  scatterFlockConfig: {
+    species: 'bat',
+    positions: [
+      { x: 320, y: 180 },
+      { x: 960, y: 180 },
+    ],
+    radius: 140,
+    respawnTime: 10,
+  },
+
   musicFile: 'castle.mp3',
   // NAV-DATA-START — auto-generated, do not hand-edit
   navData: {

@@ -81,3 +81,16 @@ export function updatePigeonFlocks(state: MatchState, dt: number): void {
     }
   }
 }
+
+// Parallel of updatePigeonFlocks for species-aware scatterFlocks (birds, bats, crows).
+export function updateScatterFlocks(state: MatchState, dt: number): void {
+  for (const flock of state.scatterFlocks) {
+    if (!flock.active) {
+      flock.respawnTimer = f(flock.respawnTimer - dt);
+      if (flock.respawnTimer <= 0) {
+        flock.active = true;
+        flock.armed = true;
+      }
+    }
+  }
+}

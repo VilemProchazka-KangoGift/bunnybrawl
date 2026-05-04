@@ -23,7 +23,7 @@ import { drawFpsCounter } from './fpsCounter';
 import {
   drawCarrot, drawSpringMushroom, drawThorn,
   drawWeather, drawParticles, drawGibs, drawGibShape, drawConfetti, drawFireworks, drawWildlife, drawSpringTrail,
-  drawHazardZone, drawGhost, drawLavaRock, drawZeroGZone, drawCurrentZone, drawGeyser, drawBouncyPlatformOverlay, drawPigeonFlock,
+  drawHazardZone, drawGhost, drawLavaRock, drawZeroGZone, drawCurrentZone, drawGeyser, drawBouncyPlatformOverlay, drawPigeonFlock, drawScatterFlock,
   drawDayNightCycle,
   drawHUD, drawCountdown, drawConnectionQuality, invalidateHudCache, isHudDirty,
   drawPlayer,
@@ -714,6 +714,11 @@ export class Renderer {
       for (const flock of matchState.pigeonFlocks) {
         drawPigeonFlock(ctx, flock, matchState.timeElapsed);
         d.pigeons = true;
+      }
+
+      // Species-aware scatter flocks (birds, bats, crows)
+      for (const flock of matchState.scatterFlocks) {
+        drawScatterFlock(ctx, flock, matchState.timeElapsed);
       }
 
       // Lava rocks (falling hazards)

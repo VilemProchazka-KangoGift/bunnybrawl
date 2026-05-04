@@ -179,6 +179,15 @@ export interface ThemeConfig {
     respawnTime: number;
   };
 
+  // Optional perched-wildlife flocks (birds, bats, crows) that scatter on
+  // stomp landings within radius. Like pigeonConfig but species-aware.
+  scatterFlockConfig?: {
+    species: 'bird' | 'bat' | 'crow';
+    positions: Array<{ x: number; y: number }>;
+    radius: number;        // px from player landing point
+    respawnTime: number;   // s before perched re-appears
+  };
+
   // Optional physics modifiers
   physics?: PhysicsModifiers;
 
