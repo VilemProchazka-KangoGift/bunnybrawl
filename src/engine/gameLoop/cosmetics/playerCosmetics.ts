@@ -21,6 +21,7 @@ export function updatePlayerCosmetics(
   footstepAccs: Map<PlayerSlot, number>,
   emitParticle: (x: number, y: number, vx: number, vy: number, life: number, size: number, color: string) => void,
   playSound: (name: string) => void,
+  inCountdown: boolean,
 ): void {
   // animFrame advance moved to Simulator.fixedUpdate — animFrame is in the
   // snapshot, so advancing it on guest's local clock (which drifts vs host)
@@ -56,7 +57,7 @@ export function updatePlayerCosmetics(
     }
   }
 
-  tickIdleStateMachine(player, dt);
+  tickIdleStateMachine(player, dt, inCountdown);
 
   // Afterimages — spawn at speed threshold or during invincibility. Skipped on
   // slow-device; decay loop below still drains pre-existing entries.

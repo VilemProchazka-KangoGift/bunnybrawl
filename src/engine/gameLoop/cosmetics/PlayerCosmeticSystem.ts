@@ -38,6 +38,7 @@ export class PlayerCosmeticSystem implements CosmeticSystem {
         this.afterimageAccumulators, this.footstepAccumulators,
         this._emitParticle,
         this.playSound,
+        this.state.countdown > 0,
       );
     }
   }
