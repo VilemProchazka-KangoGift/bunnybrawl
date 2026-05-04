@@ -31,7 +31,10 @@ export function updatePlayerCosmetics(
   }
 
   // Fast-fall smear fade-in/out. Ramps up while fastFalling, ramps down faster on
-  // exit so the smudge doesn't linger after landing. Local-only — not snapshotted.
+  // exit so the smudge doesn't linger after landing. Anchor capture lives in the
+  // renderer (per-frame) to catch the transition right at the moment fast-fall
+  // stops — cosmeticStep is half-rate, which would let a stomp bounce drag the
+  // smudge upward for a frame before the anchor was set. Local-only — not snapshotted.
   if (player.fastFalling) {
     player.fastFallStreakAlpha = Math.min(1, player.fastFallStreakAlpha + dt * 10);
   } else {

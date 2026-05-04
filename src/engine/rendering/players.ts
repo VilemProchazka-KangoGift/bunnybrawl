@@ -249,14 +249,28 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player, nearCa
   } else {
     drawCharacterSprite(ctx, x, y, width, height, character, state, animFrame, fastFalling, player.idleAction, player.idleActionTimer, player.idleActionDuration, player.squashScale, theme, player);
     // Motion / fast-fall lines drawn OUTSIDE the sprite cache so the outline pass doesn't stamp them.
-    // Fast-fall smudge fades in/out via fastFallStreakAlpha (ticked in playerCosmetics)
-    // — render it whenever alpha > 0 even after fastFalling drops, so the smudge
-    // doesn't cut off the moment the player lands.
+    // Fast-fall smudge fades in/out via fastFallStreakAlpha (ticked in playerCosmetics).
+    // While fading (fastFalling=false but alpha>0), anchor at the position the player
+    // had the moment fast-fall stopped — so a stomp bounce or jump cancel doesn't drag
+    // the smudge upward. Captured here (60Hz) rather than in cosmeticStep (~30Hz) to
+    // catch the transition without a one-frame lag.
     const fastFallAlpha = player.fastFallStreakAlpha ?? 0;
+    if (fastFalling) {
+      player.fastFallAnchorX = NaN;
+      player.fastFallAnchorY = NaN;
+    } else if (fastFallAlpha > 0 && !Number.isFinite(player.fastFallAnchorX)) {
+      player.fastFallAnchorX = cx;
+      player.fastFallAnchorY = y;
+    }
     if (state === 'airborne' && !fastFalling && fastFallAlpha <= 0.01) {
       drawMotionLines(ctx, cx, y + height);
     } else if (fastFalling || fastFallAlpha > 0.01) {
-      drawFastFallStreaks(ctx, cx, y, character.color, player.vx, fastFallAlpha);
+      const anchored = !fastFalling && Number.isFinite(player.fastFallAnchorX);
+      const smearCx = anchored ? player.fastFallAnchorX : cx;
+      const smearY = anchored ? player.fastFallAnchorY : y;
+      // Lean reads as motion blur — drop it once anchored so the smudge sits still.
+      const smearVx = anchored ? 0 : player.vx;
+      drawFastFallStreaks(ctx, smearCx, smearY, character.color, smearVx, fastFallAlpha);
     }
     drawExpression(ctx, player, frameTime);
   }

@@ -44,7 +44,7 @@ function makeLobbyPlayer(slot: PlayerSlot, char: CharacterDef, x: number, y: num
     idleAction: -1, idleActionTimer: 0, idleActionDuration: 0,
     expression: 'normal', killStreak: 0,
     breathTimer: 0, springTrailTimer: 0, springLaunchX: 0, springLaunchY: 0,
-    fastFallStreakAlpha: 0,
+    fastFallStreakAlpha: 0, fastFallAnchorX: NaN, fastFallAnchorY: NaN,
     damageFlashSide: null, damageFlashTimer: 0, burnTimer: 0, hitstopTimer: 0,
     renderOffsetX: 0, renderOffsetY: 0, disconnected: false,
   };

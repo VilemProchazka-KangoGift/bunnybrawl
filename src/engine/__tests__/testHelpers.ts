@@ -40,6 +40,8 @@ export function makePlayer(overrides: Partial<Player> & { id?: PlayerSlot } = {}
     springLaunchX: 0,
     springLaunchY: 0,
     fastFallStreakAlpha: 0,
+    fastFallAnchorX: NaN,
+    fastFallAnchorY: NaN,
     damageFlashSide: null,
     damageFlashTimer: 0,
     burnTimer: 0,
