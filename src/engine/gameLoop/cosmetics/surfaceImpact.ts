@@ -2,7 +2,6 @@ import type { Arena, MatchState, Player, PlayerSlot, SurfaceTag } from '../../ty
 import {
   DUST_LAND_VY_THRESHOLD,
   HARD_LAND_VY_THRESHOLD,
-  SHOCKWAVE_DURATION,
   SURFACE_DECAL_MAX,
   SURFACE_CRACK_LIFE,
   SURFACE_GLASS_CRACK_LIFE,
@@ -128,12 +127,6 @@ export function detectSurfaceImpact(
       }
     }
 
-    if (!slow && hardLanding) {
-      state.shockwaves.push({
-        x: cx, y: fy,
-        radius: 0, maxRadius: 36, life: SHOCKWAVE_DURATION, surface,
-      });
-    }
   }
 
   const inLava = isInLavaZone(player, arena);

@@ -30,7 +30,7 @@ import {
   warmSpriteCacheForCharacters,
   clearRenderingCaches,
   clearArenaCaches,
-  drawSurfaceDecals, drawRipples, shockwaveStyleFor,
+  drawSurfaceDecals, drawRipples,
 } from './rendering';
 import { setSpriteCacheScale } from './rendering/players';
 import { setHudScale } from './rendering/hud';
@@ -736,11 +736,11 @@ export class Renderer {
       if (matchState.shockwaves && matchState.shockwaves.length > 0) {
         d.shockwaves = true;
         ctx.save();
+        ctx.strokeStyle = '#FFFFFF';
         for (const sw of matchState.shockwaves) {
           const progress = 1 - sw.life / SHOCKWAVE_DURATION;
           ctx.globalAlpha = sw.life / SHOCKWAVE_DURATION;
           ctx.lineWidth = Math.max(1, 4 * (1 - progress));
-          ctx.strokeStyle = shockwaveStyleFor(sw.surface).stroke;
           ctx.beginPath();
           ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
           ctx.stroke();

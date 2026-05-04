@@ -1,4 +1,4 @@
-import type { MatchState, SurfaceDecal, SurfaceTag } from '../types';
+import type { MatchState, SurfaceDecal } from '../types';
 import { fastSin, fastCos } from '../fastMath';
 
 /**
@@ -64,29 +64,98 @@ function drawCrack(ctx: CanvasRenderingContext2D, d: SurfaceDecal, alpha: number
 }
 
 /**
- * Hard-landing scuff: an oblong smudge tinted by character color. Two
- * overlapping ellipses with seed-driven offset/skew for variety.
+ * Surface debris palette for scuff decals. Two colors per surface — a
+ * darker base for chips/leaves and a lighter for highlights/grains.
+ */
+const DEBRIS: Record<string, [string, string]> = {
+  grass: ['#4A7A30', '#8AB860'],
+  stone: ['#7A7066', '#C0B898'],
+  wood:  ['#7A4F28', '#C8A278'],
+  snow:  ['#E8F0FF', '#FFFFFF'],
+  sand:  ['#A88858', '#E8D8A0'],
+  metal: ['#FFE8B0', '#FFFFFF'],
+  ice:   ['#A8C8E0', '#E8F8FF'],
+  glass: ['#C0D8E0', '#FFFFFF'],
+};
+
+/**
+ * Hard-landing scuff: a graphic impact pattern — small character-tinted
+ * center + 6–10 surface-typed debris flecks radiating outward. Differs
+ * per surface so wood splinters don't read like grass clumps.
  */
 function drawScuff(ctx: CanvasRenderingContext2D, d: SurfaceDecal, alpha: number): void {
-  const ang = (d.seed - 0.5) * 0.5;  // ±0.25 rad rotation
-  const rx = 16;
-  const ry = 4;
+  const [debrisDark, debrisLight] = DEBRIS[d.surface] ?? DEBRIS.stone;
+  const baseAngle = d.seed * Math.PI * 2;
 
-  ctx.globalAlpha = alpha * 0.55;
+  // Center impact — small character-tinted oval (id cue, not the whole effect).
+  ctx.globalAlpha = alpha * 0.75;
   ctx.fillStyle = d.color;
-  ctx.save();
-  ctx.translate(d.x, d.y - 1);
-  ctx.rotate(ang);
   ctx.beginPath();
-  ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+  ctx.ellipse(d.x, d.y - 1, 6, 2.2, (d.seed - 0.5) * 0.4, 0, Math.PI * 2);
   ctx.fill();
 
-  // Lighter inner streak for texture
-  ctx.globalAlpha = alpha * 0.35;
-  ctx.beginPath();
-  ctx.ellipse((d.seed - 0.5) * 4, -1, rx * 0.6, ry * 0.5, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
+  // Radial debris flecks — shape varies by surface.
+  const fleckCount = 8;
+  const spread = 18;
+  for (let i = 0; i < fleckCount; i++) {
+    const rand = ((d.seed * 23.7 + i * 5.13) % 1 + 1) % 1;
+    const a = baseAngle + (i / fleckCount) * Math.PI * 2 + rand * 0.3;
+    const r = spread * (0.5 + rand * 0.5);
+    const fx = d.x + fastCos(a) * r;
+    // Foreshorten Y for ground-perspective feel
+    const fy = d.y + fastSin(a) * r * 0.4 - 0.5;
+
+    const isLight = i % 2 === 0;
+    ctx.fillStyle = isLight ? debrisLight : debrisDark;
+    ctx.globalAlpha = alpha * (isLight ? 0.65 : 0.85);
+
+    // Surface-specific fleck shape:
+    if (d.surface === 'metal') {
+      // Sparks: small bright lines radiating outward
+      ctx.strokeStyle = ctx.fillStyle;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(d.x + fastCos(a) * 4, d.y + fastSin(a) * 4 * 0.4);
+      ctx.lineTo(fx, fy);
+      ctx.stroke();
+    } else if (d.surface === 'wood') {
+      // Splinters: tiny rotated rectangles
+      ctx.save();
+      ctx.translate(fx, fy);
+      ctx.rotate(a);
+      ctx.fillRect(-2, -0.6, 4, 1.2);
+      ctx.restore();
+    } else if (d.surface === 'grass') {
+      // Leaf flecks: small triangles
+      ctx.save();
+      ctx.translate(fx, fy);
+      ctx.rotate(a + 0.3);
+      ctx.beginPath();
+      ctx.moveTo(0, -1.5);
+      ctx.lineTo(2, 1);
+      ctx.lineTo(-2, 1);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    } else if (d.surface === 'snow') {
+      // Powder puffs: soft circles
+      ctx.beginPath();
+      ctx.arc(fx, fy, 1.4 + rand * 0.8, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (d.surface === 'ice') {
+      // Skid hatch: thin streak
+      ctx.save();
+      ctx.translate(fx, fy);
+      ctx.rotate(a);
+      ctx.fillRect(-3, -0.5, 6, 1);
+      ctx.restore();
+    } else {
+      // stone / sand / glass / fallback: chip dots
+      ctx.beginPath();
+      ctx.arc(fx, fy, 1.2 + rand * 0.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
 }
 
 /**
@@ -120,21 +189,3 @@ export function drawRipples(ctx: CanvasRenderingContext2D, state: MatchState): v
   ctx.restore();
 }
 
-/**
- * Surface-tagged shockwave color picker. Used by the renderer's shockwave
- * pass to colorize var-shockwave variants without changing the existing
- * shockwave entity layout (just reads the optional `surface` field).
- */
-export function shockwaveStyleFor(surface: SurfaceTag | undefined): { stroke: string } {
-  switch (surface) {
-    case 'metal':  return { stroke: '#FFE0A0' };
-    case 'stone':  return { stroke: '#E8DEC0' };
-    case 'snow':   return { stroke: '#F0F8FF' };
-    case 'sand':   return { stroke: '#F0E0A0' };
-    case 'ice':    return { stroke: '#D8F0FF' };
-    case 'wood':   return { stroke: '#E0C090' };
-    case 'glass':  return { stroke: '#FFFFFF' };
-    case 'grass':  return { stroke: '#FFFFFF' };
-    default:       return { stroke: '#FFFFFF' };
-  }
-}

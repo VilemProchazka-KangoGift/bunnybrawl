@@ -170,23 +170,7 @@ describe('detectSurfaceImpact — landing transitions', () => {
     expect(state.surfaceDecals.length).toBe(0);
   });
 
-  it('hard landing pushes a surface-tagged shockwave', () => {
-    const arena = makeImpactArena({ defaultSurface: 'metal' });
-    const state = makeState();
-    const player = makeLandedPlayer(640, 660);
-    state.players = [player];
-    const prev: PrevSurfaceImpactState = {
-      state: 'airborne', vy: HARD_LAND_VY_THRESHOLD + 100, inLava: false, fastFalling: false,
-    };
-    state.shockwaves.length = 0;
-
-    detectSurfaceImpact(player, prev, state, arena, cb);
-
-    expect(state.shockwaves.length).toBe(1);
-    expect(state.shockwaves[0].surface).toBe('metal');
-  });
-
-  it('slow-device gates cracks AND extra shockwave (scuff still spawns)', () => {
+  it('slow-device gates cracks (scuff still spawns)', () => {
     const arena = makeImpactArena({ iceCubeAt: 0 });
     const state = makeState();
     const player = makeLandedPlayer(640, 660);
@@ -194,7 +178,6 @@ describe('detectSurfaceImpact — landing transitions', () => {
     const prev: PrevSurfaceImpactState = {
       state: 'airborne', vy: HARD_LAND_VY_THRESHOLD + 100, inLava: false, fastFalling: true,
     };
-    state.shockwaves.length = 0;
 
     detectSurfaceImpact(player, prev, state, arena, { isSlowDevice: () => true, random: () => 0.5 });
 
@@ -202,7 +185,6 @@ describe('detectSurfaceImpact — landing transitions', () => {
     const cracks = state.surfaceDecals.filter(d => d.kind === 'crack');
     expect(scuffs.length).toBe(1);
     expect(cracks.length).toBe(0);
-    expect(state.shockwaves.length).toBe(0);
   });
 });
 
