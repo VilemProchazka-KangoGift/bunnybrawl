@@ -47,6 +47,15 @@ interface Cloud {
 const _nearCarrotSet = new Set<PlayerSlot>();
 const _isoOccluders: Platform[] = [];
 
+/** Memoized hex→HSL for character colors. Bounded by character pack count (≤17). */
+const _hslCache = new Map<string, { h: number; s: number; l: number }>();
+function getCachedHsl(hex: string): { h: number; s: number; l: number } {
+  let v = _hslCache.get(hex);
+  if (!v) { v = hexToHSL(hex); _hslCache.set(hex, v); }
+  return v;
+}
+const _invincibleHsl = getCachedHsl('#88BBFF');
+
 /** Sprite extends ~12 px above the bbox top for tall ears, horns, and gib pivots. */
 const SPRITE_TOP_PAD = 12;
 
@@ -223,6 +232,7 @@ export class Renderer {
     this.fgCanvas = fgCanvas;
     this.bgCtx = bgCanvas.getContext('2d')!;
     this.fgCtx = fgCanvas.getContext('2d')!;
+    this._diag.ctx = this.fgCtx;
     this.theme = theme;
     this.mirrored = mirrored;
 
@@ -298,10 +308,7 @@ export class Renderer {
   }
 
   /** E2E diagnostic: which rendering branches fired last frame. */
-  getDiagnostics(): RenderDiagnostics {
-    this._diag.ctx = this.fgCtx;
-    return this._diag;
-  }
+  getDiagnostics(): RenderDiagnostics { return this._diag; }
 
   /** Pre-populate the sprite cache for the given character names. Called during
    *  the loading phase so the first visible frame doesn't hitch on cache misses.
@@ -760,17 +767,17 @@ export class Renderer {
           if (afterimages && afterimages.length > 0) {
             d.afterimages = true;
             if (!aiSaved) { ctx.save(); aiSaved = true; }
-            const isInvincible = player.invincibleTimer > 0;
-            const baseHsl = isInvincible
-              ? { h: 215, s: 1, l: 0.78 }
-              : hexToHSL(player.character.color);
+            const baseHsl = player.invincibleTimer > 0
+              ? _invincibleHsl
+              : getCachedHsl(player.character.color);
+            const slSuffix = `,${Math.round(baseHsl.s * 100)}%,${Math.round(baseHsl.l * 100)}%)`;
             const total = afterimages.length;
             for (let i = 0; i < total; i++) {
               const img = afterimages[i];
               // Oldest (i=0) shifted -18°, newest (i=total-1) at base hue.
               const shift = ((i / Math.max(1, total - 1)) - 1) * 18;
               const h = (baseHsl.h + shift + 360) % 360;
-              ctx.fillStyle = `hsl(${h.toFixed(1)},${(baseHsl.s * 100).toFixed(0)}%,${(baseHsl.l * 100).toFixed(0)}%)`;
+              ctx.fillStyle = `hsl(${Math.round(h)}${slSuffix}`;
               ctx.globalAlpha = img.alpha;
               ctx.beginPath();
               ctx.ellipse(

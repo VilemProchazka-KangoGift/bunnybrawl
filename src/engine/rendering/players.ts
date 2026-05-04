@@ -531,11 +531,10 @@ export function drawFastFallStreaks(ctx: CanvasRenderingContext2D, cx: number, h
     ctx.stroke();
     return;
   }
-  // Chromatic split: cyan core, magenta offset right, red shadow offset left.
   const SEGMENT_W = 3;
   const SEGMENT_H = 16;
   const SEGMENT_SPACING_Y = 4;
-  const SEGMENTS = 3; // three vertical pulses per streak
+  const SEGMENTS = 3;
   for (let s = 0; s < SEGMENTS; s++) {
     const segY = headY - 4 - s * (SEGMENT_H + SEGMENT_SPACING_Y);
     // cyan core

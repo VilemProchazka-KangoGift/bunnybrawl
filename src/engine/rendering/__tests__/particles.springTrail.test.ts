@@ -1,15 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { drawSpringTrail } from '../particles';
 import type { Player } from '../../types';
-
-function makeMockCtx() {
-  return {
-    save: vi.fn(), restore: vi.fn(), beginPath: vi.fn(),
-    moveTo: vi.fn(), lineTo: vi.fn(), quadraticCurveTo: vi.fn(),
-    stroke: vi.fn(), fill: vi.fn(), arc: vi.fn(),
-    fillStyle: '', strokeStyle: '', lineWidth: 0, globalAlpha: 1,
-  } as unknown as CanvasRenderingContext2D;
-}
+import { createMockCanvasCtx } from '../../__tests__/mockCanvas';
 
 function makePlayer(): Player {
   return {
@@ -21,14 +13,14 @@ function makePlayer(): Player {
 
 describe('drawSpringTrail', () => {
   it('uses a yellow rgba strokeStyle', () => {
-    const ctx = makeMockCtx();
+    const ctx = createMockCanvasCtx();
     drawSpringTrail(ctx, makePlayer(), 0);
     expect((ctx as unknown as Record<string, unknown>).strokeStyle).toMatch(/^rgba\(255,212,90,/);
     expect(ctx.stroke).toHaveBeenCalledTimes(1);
   });
 
   it('uses lineTo for an arc path, not arc primitives', () => {
-    const ctx = makeMockCtx();
+    const ctx = createMockCanvasCtx();
     drawSpringTrail(ctx, makePlayer(), 0);
     // Curlicue is a poly-line, not a series of `arc` calls.
     expect((ctx.lineTo as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThanOrEqual(8);

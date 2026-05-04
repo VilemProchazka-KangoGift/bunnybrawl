@@ -349,11 +349,13 @@ export function drawSpringTrail(ctx: CanvasRenderingContext2D, player: Player, f
   ctx.beginPath();
   const ARC_HEIGHT = 60;
   const STEPS = 14;
+  const WOBBLE_FREQ = 20;
+  const WOBBLE_AMP = 4;
   const phaseOffset = frameTime * 0.005;
   for (let s = 0; s <= STEPS; s++) {
     const u = s / STEPS;
     const reach = u * t;  // tip of arc lengthens with t
-    const ax = cx + Math.sin(reach * 20 + phaseOffset) * 4;
+    const ax = cx + Math.sin(reach * WOBBLE_FREQ + phaseOffset) * WOBBLE_AMP;
     const ay = baseY - 8 - Math.sin(reach * Math.PI) * ARC_HEIGHT;
     if (s === 0) ctx.moveTo(ax, ay); else ctx.lineTo(ax, ay);
   }
