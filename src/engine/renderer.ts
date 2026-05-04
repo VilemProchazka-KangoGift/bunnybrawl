@@ -25,7 +25,7 @@ import {
   drawWeather, drawParticles, drawGibs, drawGibShape, drawConfetti, drawFireworks, drawWildlife, drawSpringTrail,
   drawHazardZone, drawGhost, drawLavaRock, drawZeroGZone, drawCurrentZone, drawGeyser, drawBouncyPlatformOverlay, drawPigeonFlock,
   drawDayNightCycle,
-  drawHUD, drawCountdown, drawConnectionQuality, invalidateHudCache, isHudDirty,
+  drawHUD, drawCountdown, drawConnectionQuality, drawComboPopups, invalidateHudCache, isHudDirty,
   drawPlayer,
   warmSpriteCacheForCharacters,
   clearRenderingCaches,
@@ -1040,6 +1040,9 @@ export class Renderer {
       drawCountdown(ctx, matchState.countdown);
       d.countdown = true;
     }
+
+    // Combo popups float over the field but under the HUD pill, so draw before drawHUD.
+    drawComboPopups(ctx, matchState);
 
     drawHUD(ctx, matchState, this.frameTime, this._playerNames, this._timeLimit, hudDirty);
 

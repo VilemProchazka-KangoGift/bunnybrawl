@@ -338,6 +338,12 @@ export interface MatchState {
   pollenParticles: Array<{x: number; y: number; vx: number; vy: number; size: number; alpha: number}>;
   shootingStars: Array<{x: number; y: number; vx: number; vy: number; life: number; tailLen: number}>;
   scoreAnimations: Array<{playerId: PlayerSlot; value: number; timer: number}>;
+  /** Combo popups (×N text) spawned when a killer chains stomps within COMBO_WINDOW_SEC.
+   *  Cosmetic-only, runs on host + guest (driven by killFeed transitions). */
+  comboPopups: Array<{x: number; y: number; count: number; timer: number; killer: PlayerSlot}>;
+  /** Per-slot goal-pulse timer. Set by HUDFeedbackSystem on score rising edge.
+   *  Read by HUD renderer to scale + flash the player's score pill. */
+  goalPulseTimers: Map<PlayerSlot, number>;
   ghosts: GhostEntity[];
   lavaRocks: LavaRock[];
   lavaRockTimer: number;

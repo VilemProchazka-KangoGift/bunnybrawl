@@ -78,6 +78,8 @@ function makeTestMatchState(): MatchState {
     pollenParticles: [],
     shootingStars: [],
     scoreAnimations: [{ playerId: 'P1' as PlayerSlot, value: 2, timer: 0.5 }],
+    comboPopups: [],
+    goalPulseTimers: new Map(),
     ghosts: [],
     lavaRocks: [{ x: 400, y: 300, active: true } as any],
     lavaRockTimer: 15.0,

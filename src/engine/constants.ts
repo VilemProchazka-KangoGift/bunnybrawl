@@ -102,6 +102,12 @@ export const SPRING_TRAIL_DURATION = 0.35;
 // Score animation
 export const SCORE_ANIM_DURATION = 0.5;
 
+// HUD feedback (combo popups + goal pulse)
+export const COMBO_WINDOW_SEC = 1.5;        // sliding window of recent kills per killer
+export const COMBO_POPUP_DURATION = 1.0;    // 0.6s rise + 0.4s fade
+export const COMBO_POPUP_RISE_PX = 30;
+export const GOAL_PULSE_DURATION = 0.45;
+
 // Blood / gore
 export const BLOOD_COLOR = '#CC2222';
 

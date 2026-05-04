@@ -13,3 +13,4 @@ export { EntityTransitionSystem } from './EntityTransitionSystem';
 export { ParticleSystem } from './ParticleSystem';
 export { PlayerTransitionSystem } from './PlayerTransitionSystem';
 export { PlayerCosmeticSystem } from './PlayerCosmeticSystem';
+export { HUDFeedbackSystem } from './HUDFeedbackSystem';
