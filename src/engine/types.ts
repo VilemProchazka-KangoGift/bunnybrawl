@@ -12,11 +12,29 @@ export interface AABB {
   height: number;
 }
 
+/**
+ * Surface tag — drives footstep VFX, hard-landing decals, and shockwave
+ * variants. `surfaceOf(plat)` defaults to 'grass' if a platform omits it.
+ * Stays optional on the Platform interface so test fixtures don't need
+ * to plumb a value through.
+ */
+export type SurfaceTag =
+  | 'grass'
+  | 'stone'
+  | 'metal'
+  | 'snow'
+  | 'sand'
+  | 'ice'
+  | 'wood'
+  | 'glass';
+
 export interface Platform {
   x: number;
   y: number;
   width: number;
   height: number;
+  /** See SurfaceTag. Footstep + impact VFX dispatch on this. */
+  surface?: SurfaceTag;
   /**
    * Optional per-platform style tag. Used by arena packs whose drawPlatform
    * function varies rendering per platform (e.g. rooftops: 'house' | 'hallway').
@@ -82,6 +100,8 @@ export interface Arena {
   noSpawnZones?: AABB[];       // zones where hazards/characters should not spawn
   carrotZones?: AABB[];        // zones with increased carrot spawn likelihood
   noSprings?: boolean;         // disable spring spawning on this arena
+  /** Surface used when a platform omits `surface`. Falls back to 'grass'. */
+  defaultSurface?: SurfaceTag;
   /** Nav hints: manual overrides for AI pathfinding in obstacle-blocked areas.
    *  When a bot is on `onPlatform` within `inZone` x-range, navTarget is overridden
    *  to route through `goTo` platform at `approachX`. Normal nav resumes after the hop. */
@@ -296,6 +316,32 @@ export interface Thorn {
   hit: boolean;
 }
 
+/**
+ * Persistent ground decal — spider-cracks (ice/glass) and hard-landing
+ * scuffs. Rendered into the bg cache via fade-only redraw, mirroring
+ * the SplatMark lifecycle. Local-only; not snapshotted.
+ */
+export interface SurfaceDecal {
+  kind: 'crack' | 'scuff';
+  x: number;
+  y: number;
+  age: number;          // seconds since spawn
+  life: number;         // total lifetime in seconds (fade scales by 1 - age/life)
+  seed: number;         // deterministic per-decal RNG for shape jitter
+  color: string;        // tint (scuff = dark char tone, crack = white)
+  surface: SurfaceTag;  // surface this decal sits on (drives shape style)
+}
+
+/** Liquid-impact ripple — cosmetic only, lives in MatchState until expired. */
+export interface Ripple {
+  x: number;
+  y: number;
+  age: number;
+  life: number;
+  maxRadius: number;
+  surface: 'water' | 'lava';
+}
+
 export type MatchPhase = 'loading' | 'playing' | 'over';
 
 export interface MatchState {
@@ -338,6 +384,10 @@ export interface MatchState {
   bouncyWobble: Map<number, number>;  // platform index → wobble timer
   gibs: Gib[];
   confetti: ConfettiParticle[];
+  /** Persistent ground decals (cracks/scuffs) — bg-cache rendered, capped. */
+  surfaceDecals: SurfaceDecal[];
+  /** Active liquid-impact ripples. */
+  ripples: Ripple[];
 }
 
 export interface MatchStats {

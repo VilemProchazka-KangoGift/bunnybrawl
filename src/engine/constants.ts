@@ -133,3 +133,12 @@ export const THORN_Y_OFFSET = 12;              // px above platform surface
 // Match composition
 export const MAX_BOT_COUNT = 4;                 // 1 human + 4 bots fills P1-P5
 
+// Surface decals + ripples (Cosmetics Batch B)
+export const SURFACE_DECAL_MAX = 30;            // cap before oldest is evicted
+export const SURFACE_CRACK_LIFE = 3.0;          // ice spider-cracks
+export const SURFACE_GLASS_CRACK_LIFE = 2.0;    // glass cracks fade faster
+export const SURFACE_SCUFF_LIFE = 5.0;          // hard-landing scuffs
+export const SURFACE_RIPPLE_LIFE = 0.6;         // liquid impact ripples
+export const SURFACE_RIPPLE_MAX_RADIUS = 60;    // px expansion target
+export const HARD_LAND_VY_THRESHOLD = 600;      // vy below this = hard land (decal trigger)
+

@@ -156,6 +156,7 @@ export const meadow: ArenaPack = {
   translations: { en: 'Meadow', cs: 'Louka', hi: '\u0918\u093E\u0938 \u0915\u093E \u092E\u0948\u0926\u093E\u0928', fil: 'Damuhan' },
 
   // ---- Layout ----
+  defaultSurface: 'grass',
   width: CANVAS_WIDTH,
   height: CANVAS_HEIGHT,
   platforms: applyIsoInsets([

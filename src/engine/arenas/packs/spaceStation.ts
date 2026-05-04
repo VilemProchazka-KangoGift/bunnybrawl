@@ -303,6 +303,7 @@ export const spaceStation: ArenaPack = {
   translations: { en: 'Space Station', cs: 'Vesm\u00EDrn\u00E1 stanice', hi: '\u0905\u0902\u0924\u0930\u093F\u0915\u094D\u0937 \u0938\u094D\u091F\u0947\u0936\u0928', fil: 'Kalawakan' },
 
   // ---- Layout ----
+  defaultSurface: 'metal',
   width: CANVAS_WIDTH,
   height: CANVAS_HEIGHT,
   platforms: applyIsoInsets([

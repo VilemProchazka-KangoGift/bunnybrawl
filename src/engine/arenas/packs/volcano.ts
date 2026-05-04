@@ -175,6 +175,7 @@ export const volcano: ArenaPack = {
   translations: { en: 'Volcano', cs: 'Sopka', hi: '\u091C\u094D\u0935\u093E\u0932\u093E\u092E\u0941\u0916\u0940', fil: 'Bulkan' },
 
   // ---- Layout ----
+  defaultSurface: 'stone',
   width: CANVAS_WIDTH,
   height: CANVAS_HEIGHT,
   platforms: applyIsoInsets([

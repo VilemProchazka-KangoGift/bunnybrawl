@@ -124,6 +124,7 @@ export const treetops: ArenaPack = {
   translations: { en: 'Treetops', cs: 'Koruny strom\u016F', hi: '\u092A\u0947\u0921\u093C\u094B\u0902 \u0915\u0940 \u091A\u094B\u091F\u0940', fil: 'Tuktok ng Puno' },
 
   // ---- Layout ----
+  defaultSurface: 'wood',
   width: CANVAS_WIDTH,
   height: CANVAS_HEIGHT,
   platforms: applyIsoInsets([
