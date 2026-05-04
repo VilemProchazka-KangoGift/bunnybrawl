@@ -12,18 +12,30 @@ function makePlayer(): Player {
 }
 
 describe('drawSpringTrail', () => {
-  it('uses a yellow rgba strokeStyle', () => {
+  it('draws a gradient-filled energy column plus stroked coil rings', () => {
     const ctx = createMockCanvasCtx();
     drawSpringTrail(ctx, makePlayer(), 0);
-    expect((ctx as unknown as Record<string, unknown>).strokeStyle).toMatch(/^rgba\(255,212,90,/);
+    // One fill (column) + one stroke (rings combined into a single path).
+    expect(ctx.fill).toHaveBeenCalledTimes(1);
     expect(ctx.stroke).toHaveBeenCalledTimes(1);
+    expect(ctx.createLinearGradient).toHaveBeenCalled();
   });
 
-  it('uses lineTo for an arc path, not arc primitives', () => {
+  it('renders the rings with ellipse, not line segments', () => {
     const ctx = createMockCanvasCtx();
     drawSpringTrail(ctx, makePlayer(), 0);
-    // Curlicue is a poly-line, not a series of `arc` calls.
-    expect((ctx.lineTo as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThanOrEqual(8);
-    expect((ctx.arc as ReturnType<typeof vi.fn>).mock.calls.length).toBe(0);
+    // Column ellipse + 3 coil rings = at least 4 ellipse calls.
+    expect((ctx.ellipse as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThanOrEqual(4);
+    // No lineTo segments — this is no longer a polyline curlicue.
+    expect((ctx.lineTo as ReturnType<typeof vi.fn>).mock.calls.length).toBe(0);
+  });
+
+  it('returns without drawing when the timer is zero', () => {
+    const ctx = createMockCanvasCtx();
+    const p = makePlayer();
+    p.springTrailTimer = 0;
+    drawSpringTrail(ctx, p, 0);
+    expect(ctx.fill).not.toHaveBeenCalled();
+    expect(ctx.stroke).not.toHaveBeenCalled();
   });
 });

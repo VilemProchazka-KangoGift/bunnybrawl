@@ -355,28 +355,41 @@ export function drawWildlife(ctx: CanvasRenderingContext2D, wildlife: WildlifeEn
 }
 
 export function drawSpringTrail(ctx: CanvasRenderingContext2D, player: Player, frameTime: number): void {
-  // Anchored at the launch point (where the spring fired), not the moving player.
-  // Trail rises as a fixed-height yellow squiggle from the spring location and
-  // fades with springTrailTimer — the player has already rocketed away.
+  // Anchored at the spring (where the player launched from), not the moving player.
+  // Two layers: a yellow energy column rising out of the spring + animated coil
+  // rings racing up the column, both fading with springTrailTimer.
   const launchX = player.springLaunchX > 0 ? player.springLaunchX : player.x + player.width / 2;
   const launchY = player.springLaunchY > 0 ? player.springLaunchY : player.y + player.height;
   const t = player.springTrailTimer / SPRING_TRAIL_DURATION;
+  if (t <= 0) return;
 
-  ctx.save();
-  ctx.strokeStyle = `rgba(255,212,90,${(0.7 * t).toFixed(3)})`;
-  ctx.lineWidth = 2.5;
+  const COL_H = 90;
+  const COL_HALF_W = 9;
+
+  // Energy column — bright at the base, fading to transparent at the top.
+  const grad = ctx.createLinearGradient(launchX, launchY, launchX, launchY - COL_H);
+  grad.addColorStop(0, `rgba(255,212,90,${(0.65 * t).toFixed(3)})`);
+  grad.addColorStop(0.55, `rgba(255,180,40,${(0.28 * t).toFixed(3)})`);
+  grad.addColorStop(1, 'rgba(255,180,40,0)');
+  ctx.fillStyle = grad;
   ctx.beginPath();
-  const ARC_HEIGHT = 60;
-  const STEPS = 14;
-  const WOBBLE_FREQ = 20;
-  const WOBBLE_AMP = 5;
-  const phaseOffset = frameTime * 0.005;
-  for (let s = 0; s <= STEPS; s++) {
-    const u = s / STEPS;
-    const ay = launchY - u * ARC_HEIGHT;
-    const ax = launchX + Math.sin(u * WOBBLE_FREQ + phaseOffset) * WOBBLE_AMP;
-    if (s === 0) ctx.moveTo(ax, ay); else ctx.lineTo(ax, ay);
+  ctx.ellipse(launchX, launchY - COL_H / 2, COL_HALF_W, COL_H / 2, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Coil rings racing upward — phase advances with timer + frameTime so rings
+  // appear to rise out of the spring, evoking spring coils releasing.
+  const RING_COUNT = 3;
+  const animPhase = (1 - t) * 1.4 + frameTime * 0.0015;
+  ctx.strokeStyle = `rgba(255,235,120,${(0.85 * t).toFixed(3)})`;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let i = 0; i < RING_COUNT; i++) {
+    const phase = (animPhase + i / RING_COUNT) % 1;
+    const ry = launchY - phase * COL_H;
+    const rw = 6 + phase * 9;
+    // moveTo before each ellipse so sub-paths don't connect with a stroke line.
+    ctx.moveTo(launchX + rw, ry);
+    ctx.ellipse(launchX, ry, rw, 2.5, 0, 0, Math.PI * 2);
   }
   ctx.stroke();
-  ctx.restore();
 }

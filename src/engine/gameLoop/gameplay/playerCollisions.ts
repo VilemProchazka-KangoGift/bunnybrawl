@@ -55,8 +55,10 @@ export function handleSpringCollision(player: Player, state: MatchState): Hazard
 
   return {
     type: 'spring',
-    px: player.x + player.width / 2,
-    py: player.y + player.height / 2,
+    // Burst originates at the spring (release point), not the player center —
+    // looks like the spring kicked off energy, not like the player exploded.
+    px: spring.x,
+    py: spring.y,
     haptic: 'spring',
   };
 }
