@@ -10,7 +10,7 @@ import { shuffleInPlace } from '../themes/utils';
 import { createEmitter } from '../emitter';
 import { safeStorage } from '../../storage';
 
-export const MAX_LOBBY_ROSTER = 10; // 5 humans (P1-P5) + up to 5 bots
+export const MAX_LOBBY_ROSTER = 12; // 5 humans (P1-P5) + up to 7 bots
 
 // Default selection — pick MAX_LOBBY_ROSTER from the registered packs.
 const DEFAULT_SELECTED = ['Bunny', 'Frog', 'Owl', 'Cat', 'Panda', 'Pig', 'Chick', 'Monkey', 'Tiger', 'Hedgehog'];
