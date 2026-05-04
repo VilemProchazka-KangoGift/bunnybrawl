@@ -273,7 +273,7 @@ describe('Trystero import', () => {
 // ---- Snapshot coverage tests ----
 
 /** Fields intentionally excluded from PlayerSnapshot (cosmetic or reconstructed). */
-const PLAYER_EXCLUDED_FIELDS = ['character', 'afterimages', 'renderOffsetX', 'renderOffsetY', 'springLaunchY'];
+const PLAYER_EXCLUDED_FIELDS = ['character', 'afterimages', 'renderOffsetX', 'renderOffsetY', 'springLaunchX', 'springLaunchY'];
 
 function makeTestPlayer(id: PlayerSlot): Player {
   return {
@@ -303,6 +303,7 @@ function makeTestPlayer(id: PlayerSlot): Player {
     killStreak: 3,
     breathTimer: 0.6,
     springTrailTimer: 0.3,
+    springLaunchX: 0,
     springLaunchY: 0,
     damageFlashSide: 'left' as const,
     damageFlashTimer: 0.15,

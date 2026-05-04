@@ -252,7 +252,7 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player, nearCa
     if (state === 'airborne' && !fastFalling) {
       drawMotionLines(ctx, cx, y + height);
     } else if (fastFalling) {
-      drawFastFallStreaks(ctx, cx, y, player.vx, frameTime);
+      drawFastFallStreaks(ctx, cx, y, character.color, player.vx);
     }
     drawExpression(ctx, player, frameTime);
   }
@@ -516,12 +516,15 @@ function drawMotionLines(ctx: CanvasRenderingContext2D, cx: number, footY: numbe
   ctx.stroke();
 }
 
-/** Fast-fall speed lines. Three offset chromatic fills (cyan / magenta / red
- *  shadow) when slow-device is off; falls back to the legacy flat lines when on.
+/** Fast-fall vertical smear. Stretched player-colored gradient streak fading
+ *  upward from the head, with a slight lean opposite of horizontal motion
+ *  (trail-behind effect). Falls back to legacy flat lines when slow-device is on.
  *  Drawn outside the sprite cache so the outline pass doesn't stamp them. */
-export function drawFastFallStreaks(ctx: CanvasRenderingContext2D, cx: number, headY: number, vx = 0, frameTime = 0): void {
+export function drawFastFallStreaks(
+  ctx: CanvasRenderingContext2D, cx: number, headY: number,
+  color: string, vx = 0,
+): void {
   if (getSlowDevice()) {
-    // Legacy flat lines — unchanged
     ctx.strokeStyle = 'rgba(255,255,220,0.8)';
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -532,37 +535,31 @@ export function drawFastFallStreaks(ctx: CanvasRenderingContext2D, cx: number, h
     ctx.stroke();
     return;
   }
-
-  // Wind-rush converging lines — diagonal streaks coming from upper-trailing
-  // direction toward the player. Bias is opposite of vx so lines appear to
-  // come from where the player is moving away from (intuitive "left a trail").
-  const vxBias = Math.max(-1, Math.min(1, vx / 200));
-  const animPhase = (frameTime * 0.012) % 1;
-  const LINE_COUNT = 6;
-  const LINE_LEN = 22;
-  const CONVERGE_DIST = 30;
-  ctx.strokeStyle = 'rgba(255,255,255,0.7)';
-  ctx.lineWidth = 1.5;
-  for (let i = 0; i < LINE_COUNT; i++) {
-    const localPhase = (animPhase + i / LINE_COUNT) % 1;
-    const fade = 1 - localPhase;
-    const sideBase = i % 2 === 0 ? -1 : 1;
-    // angle from straight up (-PI/2). sideBase splays left/right; vxBias
-    // shifts both directions so trail follows player's horizontal motion.
-    const splay = (sideBase * 0.7) - vxBias * 0.4;
-    const ang = -Math.PI / 2 + splay;
-    const tipDist = CONVERGE_DIST * (1 - localPhase);
-    const tipX = cx + Math.cos(ang) * tipDist;
-    const tipY = (headY - 10) + Math.sin(ang) * tipDist;
-    const tailX = tipX + Math.cos(ang) * LINE_LEN;
-    const tailY = tipY + Math.sin(ang) * LINE_LEN;
-    ctx.globalAlpha = fade * 0.85;
-    ctx.beginPath();
-    ctx.moveTo(tailX, tailY);
-    ctx.lineTo(tipX, tipY);
-    ctx.stroke();
-  }
-  ctx.globalAlpha = 1;
+  const STREAK_H = 50;
+  const STREAK_W = 14;
+  const { r, g, b } = hexToRGB(color);
+  // Top of smear leans opposite of motion direction — trails behind as player moves sideways.
+  const lean = Math.max(-1, Math.min(1, vx / 200)) * 10;
+  const topY = headY - STREAK_H;
+  const grad = ctx.createLinearGradient(cx, topY, cx, headY);
+  grad.addColorStop(0, `rgba(${r},${g},${b},0)`);
+  grad.addColorStop(1, `rgba(${r},${g},${b},0.55)`);
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(cx - STREAK_W / 2 - lean, topY);
+  ctx.lineTo(cx + STREAK_W / 2 - lean, topY);
+  ctx.lineTo(cx + STREAK_W / 2, headY);
+  ctx.lineTo(cx - STREAK_W / 2, headY);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(cx - 4 - lean * 0.7, topY + STREAK_H * 0.3);
+  ctx.lineTo(cx - 4, headY - 4);
+  ctx.moveTo(cx + 4 - lean * 0.7, topY + STREAK_H * 0.3);
+  ctx.lineTo(cx + 4, headY - 4);
+  ctx.stroke();
 }
 
 export function drawSplatCharacter(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, color: string, darkColor: string): void {

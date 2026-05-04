@@ -37,6 +37,7 @@ export function makePlayer(overrides: Partial<Player> & { id?: PlayerSlot } = {}
     killStreak: 0,
     breathTimer: 0,
     springTrailTimer: 0,
+    springLaunchX: 0,
     springLaunchY: 0,
     damageFlashSide: null,
     damageFlashTimer: 0,

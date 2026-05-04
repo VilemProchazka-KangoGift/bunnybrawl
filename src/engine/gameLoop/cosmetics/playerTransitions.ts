@@ -65,6 +65,7 @@ export function detectPlayerTransitions(
     // (springTrailTimer rising edge: was 0 last tick, now > 0).
     const sprangThisTick = prev.springTrailTimer === 0 && player.springTrailTimer > 0;
     if (sprangThisTick) {
+      player.springLaunchX = player.x + player.width / 2;
       player.springLaunchY = player.y + player.height;
     }
     if (!sprangThisTick) {

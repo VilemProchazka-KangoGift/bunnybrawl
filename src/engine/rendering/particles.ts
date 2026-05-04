@@ -355,27 +355,26 @@ export function drawWildlife(ctx: CanvasRenderingContext2D, wildlife: WildlifeEn
 }
 
 export function drawSpringTrail(ctx: CanvasRenderingContext2D, player: Player, frameTime: number): void {
-  const cx = player.x + player.width / 2;
-  const launchY = player.springLaunchY > 0 ? player.springLaunchY : (player.y + player.height);
-  const playerFeetY = player.y + player.height;
-  const t = player.springTrailTimer / SPRING_TRAIL_DURATION; // 1 = just started, 0 = fading
+  // Anchored at the launch point (where the spring fired), not the moving player.
+  // Trail rises as a fixed-height yellow squiggle from the spring location and
+  // fades with springTrailTimer — the player has already rocketed away.
+  const launchX = player.springLaunchX > 0 ? player.springLaunchX : player.x + player.width / 2;
+  const launchY = player.springLaunchY > 0 ? player.springLaunchY : player.y + player.height;
+  const t = player.springTrailTimer / SPRING_TRAIL_DURATION;
 
-  // Curlicue arc from launch point up to current player position.
-  // Anchored at launchY (where the spring fired) so the trail visibly stretches
-  // as the player rises, instead of attaching to the moving player feet.
   ctx.save();
-  ctx.strokeStyle = `rgba(255,212,90,${(0.55 * t).toFixed(3)})`;
+  ctx.strokeStyle = `rgba(255,212,90,${(0.7 * t).toFixed(3)})`;
   ctx.lineWidth = 2.5;
   ctx.beginPath();
+  const ARC_HEIGHT = 60;
   const STEPS = 14;
   const WOBBLE_FREQ = 20;
-  const WOBBLE_AMP = 4;
+  const WOBBLE_AMP = 5;
   const phaseOffset = frameTime * 0.005;
   for (let s = 0; s <= STEPS; s++) {
     const u = s / STEPS;
-    // ay interpolates from launchY (s=0) up to playerFeetY (s=1)
-    const ay = launchY + (playerFeetY - launchY) * u;
-    const ax = cx + Math.sin(u * WOBBLE_FREQ + phaseOffset) * WOBBLE_AMP;
+    const ay = launchY - u * ARC_HEIGHT;
+    const ax = launchX + Math.sin(u * WOBBLE_FREQ + phaseOffset) * WOBBLE_AMP;
     if (s === 0) ctx.moveTo(ax, ay); else ctx.lineTo(ax, ay);
   }
   ctx.stroke();
