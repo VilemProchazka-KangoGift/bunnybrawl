@@ -249,23 +249,25 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player, nearCa
   } else {
     drawCharacterSprite(ctx, x, y, width, height, character, state, animFrame, fastFalling, player.idleAction, player.idleActionTimer, player.idleActionDuration, player.squashScale, theme, player);
     // Motion / fast-fall lines drawn OUTSIDE the sprite cache so the outline pass doesn't stamp them.
-    // Fast-fall smudge fades in/out via fastFallStreakAlpha (ticked in playerCosmetics).
-    // While fading (fastFalling=false but alpha>0), anchor at the position the player
-    // had the moment fast-fall stopped — so a stomp bounce or jump cancel doesn't drag
-    // the smudge upward. Captured here (60Hz) rather than in cosmeticStep (~30Hz) to
-    // catch the transition without a one-frame lag.
+    // "Actively" fast-falling means the boolean is set AND the player is moving
+    // downward — covers stomp/spring/geyser/bouncy bounces, which leave fastFalling
+    // true (down still held) but reverse vy. While fading (alpha>0 but not actively
+    // diving), anchor at the position fast-fall stopped so the smudge dissolves in
+    // place instead of riding the bounce upward. Captured here (60Hz) rather than
+    // in cosmeticStep (~30Hz) to catch the transition without a one-frame lag.
     const fastFallAlpha = player.fastFallStreakAlpha ?? 0;
-    if (fastFalling) {
+    const activelyFastFalling = fastFalling && player.vy >= 0;
+    if (activelyFastFalling) {
       player.fastFallAnchorX = NaN;
       player.fastFallAnchorY = NaN;
     } else if (fastFallAlpha > 0 && !Number.isFinite(player.fastFallAnchorX)) {
       player.fastFallAnchorX = cx;
       player.fastFallAnchorY = y;
     }
-    if (state === 'airborne' && !fastFalling && fastFallAlpha <= 0.01) {
+    if (state === 'airborne' && !activelyFastFalling && fastFallAlpha <= 0.01) {
       drawMotionLines(ctx, cx, y + height);
-    } else if (fastFalling || fastFallAlpha > 0.01) {
-      const anchored = !fastFalling && Number.isFinite(player.fastFallAnchorX);
+    } else if (activelyFastFalling || fastFallAlpha > 0.01) {
+      const anchored = !activelyFastFalling && Number.isFinite(player.fastFallAnchorX);
       const smearCx = anchored ? player.fastFallAnchorX : cx;
       const smearY = anchored ? player.fastFallAnchorY : y;
       // Lean reads as motion blur — drop it once anchored so the smudge sits still.
