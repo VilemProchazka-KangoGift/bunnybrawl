@@ -252,7 +252,7 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player, nearCa
     if (state === 'airborne' && !fastFalling) {
       drawMotionLines(ctx, cx, y + height);
     } else if (fastFalling) {
-      drawFastFallStreaks(ctx, cx, y);
+      drawFastFallStreaks(ctx, cx, y, player.vx, frameTime);
     }
     drawExpression(ctx, player, frameTime);
   }
@@ -519,8 +519,9 @@ function drawMotionLines(ctx: CanvasRenderingContext2D, cx: number, footY: numbe
 /** Fast-fall speed lines. Three offset chromatic fills (cyan / magenta / red
  *  shadow) when slow-device is off; falls back to the legacy flat lines when on.
  *  Drawn outside the sprite cache so the outline pass doesn't stamp them. */
-export function drawFastFallStreaks(ctx: CanvasRenderingContext2D, cx: number, headY: number): void {
+export function drawFastFallStreaks(ctx: CanvasRenderingContext2D, cx: number, headY: number, vx = 0, frameTime = 0): void {
   if (getSlowDevice()) {
+    // Legacy flat lines — unchanged
     ctx.strokeStyle = 'rgba(255,255,220,0.8)';
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -531,22 +532,37 @@ export function drawFastFallStreaks(ctx: CanvasRenderingContext2D, cx: number, h
     ctx.stroke();
     return;
   }
-  const SEGMENT_W = 3;
-  const SEGMENT_H = 16;
-  const SEGMENT_SPACING_Y = 4;
-  const SEGMENTS = 3;
-  for (let s = 0; s < SEGMENTS; s++) {
-    const segY = headY - 4 - s * (SEGMENT_H + SEGMENT_SPACING_Y);
-    // cyan core
-    ctx.fillStyle = 'rgba(120,230,250,0.55)';
-    ctx.fillRect(cx - SEGMENT_W / 2, segY - SEGMENT_H, SEGMENT_W, SEGMENT_H);
-    // magenta offset right
-    ctx.fillStyle = 'rgba(230,90,210,0.45)';
-    ctx.fillRect(cx - SEGMENT_W / 2 + 2, segY - SEGMENT_H + 1, SEGMENT_W, SEGMENT_H);
-    // red shadow offset left
-    ctx.fillStyle = 'rgba(255,90,90,0.35)';
-    ctx.fillRect(cx - SEGMENT_W / 2 - 2, segY - SEGMENT_H + 2, SEGMENT_W, SEGMENT_H);
+
+  // Wind-rush converging lines — diagonal streaks coming from upper-trailing
+  // direction toward the player. Bias is opposite of vx so lines appear to
+  // come from where the player is moving away from (intuitive "left a trail").
+  const vxBias = Math.max(-1, Math.min(1, vx / 200));
+  const animPhase = (frameTime * 0.012) % 1;
+  const LINE_COUNT = 6;
+  const LINE_LEN = 22;
+  const CONVERGE_DIST = 30;
+  ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+  ctx.lineWidth = 1.5;
+  for (let i = 0; i < LINE_COUNT; i++) {
+    const localPhase = (animPhase + i / LINE_COUNT) % 1;
+    const fade = 1 - localPhase;
+    const sideBase = i % 2 === 0 ? -1 : 1;
+    // angle from straight up (-PI/2). sideBase splays left/right; vxBias
+    // shifts both directions so trail follows player's horizontal motion.
+    const splay = (sideBase * 0.7) - vxBias * 0.4;
+    const ang = -Math.PI / 2 + splay;
+    const tipDist = CONVERGE_DIST * (1 - localPhase);
+    const tipX = cx + Math.cos(ang) * tipDist;
+    const tipY = (headY - 10) + Math.sin(ang) * tipDist;
+    const tailX = tipX + Math.cos(ang) * LINE_LEN;
+    const tailY = tipY + Math.sin(ang) * LINE_LEN;
+    ctx.globalAlpha = fade * 0.85;
+    ctx.beginPath();
+    ctx.moveTo(tailX, tailY);
+    ctx.lineTo(tipX, tipY);
+    ctx.stroke();
   }
+  ctx.globalAlpha = 1;
 }
 
 export function drawSplatCharacter(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, color: string, darkColor: string): void {

@@ -15,15 +15,17 @@ const MAX_LIVE_PARTICLES = 600;
 export function emitParticle(
   particles: Particle[], freeList: Particle[],
   x: number, y: number, vx: number, vy: number, life: number, size: number, color: string,
+  shape?: 'circle' | 'spike',
 ): void {
   if (particles.length >= MAX_LIVE_PARTICLES) return;
   const recycled = freeList.pop();
   if (recycled) {
     recycled.x = x; recycled.y = y; recycled.vx = vx; recycled.vy = vy;
     recycled.life = life; recycled.maxLife = life; recycled.size = size; recycled.color = color;
+    recycled.shape = shape;
     particles.push(recycled);
   } else {
-    particles.push({ x, y, vx, vy, life, maxLife: life, size, color });
+    particles.push({ x, y, vx, vy, life, maxLife: life, size, color, shape });
   }
 }
 
@@ -47,14 +49,14 @@ export function spawnJumpDustParticles(
 ): void {
   const cx = player.x + player.width / 2;
   const groundY = player.y + player.height;
-  const count = 5;
+  const count = 9;
   for (let i = 0; i < count; i++) {
-    const sx = cx + (Math.random() - 0.5) * player.width * 0.4;
-    const sy = groundY - Math.random() * 2;
-    const vx = (Math.random() - 0.5) * 160;
-    const vy = -Math.random() * 70 - 30;
-    const life = 0.245 + Math.random() * 0.105;
-    const size = 1.5 + Math.random() * 1.5;
+    const sx = cx + (Math.random() - 0.5) * player.width * 0.7;
+    const sy = groundY - Math.random() * 3;
+    const vx = (Math.random() - 0.5) * 200;
+    const vy = -Math.random() * 110 - 50;
+    const life = 0.4 + Math.random() * 0.25;
+    const size = 2.5 + Math.random() * 2;
     emitParticle(particles, freeList, sx, sy, vx, vy, life, size, JUMP_DUST_COLOR);
   }
 }

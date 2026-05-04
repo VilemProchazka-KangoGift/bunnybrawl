@@ -43,8 +43,8 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
 
   init(): void {}
 
-  emitParticle(x: number, y: number, vx: number, vy: number, life: number, size: number, color: string): void {
-    _emitParticle(this._particles, this.particleFreeList, x, y, vx, vy, life, size, color);
+  emitParticle(x: number, y: number, vx: number, vy: number, life: number, size: number, color: string, shape?: 'circle' | 'spike'): void {
+    _emitParticle(this._particles, this.particleFreeList, x, y, vx, vy, life, size, color, shape);
   }
 
   spawnDustParticles(player: Player, landVy: number): void {
@@ -152,7 +152,7 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
             const speed = 80 + Math.random() * 140;
             const life = 0.25 + Math.random() * 0.35;
             const color = i % 2 === 0 ? '#5C3A1E' : '#3A2210';
-            this.emitParticle(hit.sx, hit.sy, Math.cos(angle) * speed, Math.sin(angle) * speed, life, 1.2 + Math.random() * 1.6, color);
+            this.emitParticle(hit.sx, hit.sy, Math.cos(angle) * speed, Math.sin(angle) * speed, life, 1.2 + Math.random() * 1.6, color, 'spike');
           }
           this.emitParticle(hit.sx, hit.sy, 0, 30, 1.0, 1.8, BLOOD_COLOR);
         }

@@ -13,7 +13,7 @@ import type { HazardHitResult } from '../gameLoop/gameplay/playerCollisions';
  * call.
  */
 export interface ParticleEmitter {
-  emitParticle(x: number, y: number, vx: number, vy: number, life: number, size: number, color: string): void;
+  emitParticle(x: number, y: number, vx: number, vy: number, life: number, size: number, color: string, shape?: 'circle' | 'spike'): void;
   spawnCarrotVFX(x: number, y: number): void;
   applyHazardHitVFX(hit: HazardHitResult, playerId: PlayerSlot, state: MatchState, resimulating: boolean): void;
 }

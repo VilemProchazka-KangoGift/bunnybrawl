@@ -64,6 +64,9 @@ export function detectPlayerTransitions(
     // Jump dust fires only on input-jump — exclude spring launches
     // (springTrailTimer rising edge: was 0 last tick, now > 0).
     const sprangThisTick = prev.springTrailTimer === 0 && player.springTrailTimer > 0;
+    if (sprangThisTick) {
+      player.springLaunchY = player.y + player.height;
+    }
     if (!sprangThisTick) {
       cb.spawnJumpDustParticles(player);
     }

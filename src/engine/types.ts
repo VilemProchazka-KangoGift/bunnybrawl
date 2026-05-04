@@ -146,6 +146,7 @@ export interface Player {
   killStreak: number;    // current consecutive kills without dying
   breathTimer: number;         // for idle breathing animation
   springTrailTimer: number;    // >0 = spiral trail active after spring bounce
+  springLaunchY: number;     // local-only — y of player feet at moment of spring rising edge; used by drawSpringTrail
   damageFlashSide: 'left' | 'right' | null; // which side got hit
   damageFlashTimer: number;    // >0 = show red flash
   burnTimer: number;           // >0 = on fire from lava, spawns flame particles
@@ -195,6 +196,7 @@ export interface Particle {
   maxLife: number;
   size: number;
   color: string;
+  shape?: 'circle' | 'spike';  // default circle; 'spike' renders as oriented triangle
 }
 
 export type GibType = 'ear' | 'tail' | 'body' | 'snout' | 'horn' | 'wing' | 'beard' | 'mane' | 'wool' | 'spine';

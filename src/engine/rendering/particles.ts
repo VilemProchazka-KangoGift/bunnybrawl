@@ -89,9 +89,27 @@ export function drawParticles(ctx: CanvasRenderingContext2D, particles: Particle
       ctx.fillStyle = p.color;
       lastColor = p.color;
     }
-    ctx.beginPath();
-    ctx.arc(dx, dy, p.size * alpha, 0, Math.PI * 2);
-    ctx.fill();
+    if (p.shape === 'spike') {
+      // Oriented narrow triangle pointing along velocity. Length 3.5x size, base 0.7x size.
+      const ang = Math.atan2(p.vy, p.vx);
+      const r = p.size * alpha;
+      const len = r * 3.5;
+      const halfBase = r * 0.7;
+      ctx.save();
+      ctx.translate(dx, dy);
+      ctx.rotate(ang);
+      ctx.beginPath();
+      ctx.moveTo(len, 0);
+      ctx.lineTo(-len * 0.4, -halfBase);
+      ctx.lineTo(-len * 0.4, halfBase);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    } else {
+      ctx.beginPath();
+      ctx.arc(dx, dy, p.size * alpha, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
   ctx.globalAlpha = 1;
 }
@@ -338,25 +356,26 @@ export function drawWildlife(ctx: CanvasRenderingContext2D, wildlife: WildlifeEn
 
 export function drawSpringTrail(ctx: CanvasRenderingContext2D, player: Player, frameTime: number): void {
   const cx = player.x + player.width / 2;
-  const baseY = player.y + player.height;
+  const launchY = player.springLaunchY > 0 ? player.springLaunchY : (player.y + player.height);
+  const playerFeetY = player.y + player.height;
   const t = player.springTrailTimer / SPRING_TRAIL_DURATION; // 1 = just started, 0 = fading
 
-  // Curlicue arc: rising sinusoidal poly-line above the spring base.
-  // Length scales with `t` so the arc grows during launch and fades after.
+  // Curlicue arc from launch point up to current player position.
+  // Anchored at launchY (where the spring fired) so the trail visibly stretches
+  // as the player rises, instead of attaching to the moving player feet.
   ctx.save();
   ctx.strokeStyle = `rgba(255,212,90,${(0.55 * t).toFixed(3)})`;
   ctx.lineWidth = 2.5;
   ctx.beginPath();
-  const ARC_HEIGHT = 60;
   const STEPS = 14;
   const WOBBLE_FREQ = 20;
   const WOBBLE_AMP = 4;
   const phaseOffset = frameTime * 0.005;
   for (let s = 0; s <= STEPS; s++) {
     const u = s / STEPS;
-    const reach = u * t;  // tip of arc lengthens with t
-    const ax = cx + Math.sin(reach * WOBBLE_FREQ + phaseOffset) * WOBBLE_AMP;
-    const ay = baseY - 8 - Math.sin(reach * Math.PI) * ARC_HEIGHT;
+    // ay interpolates from launchY (s=0) up to playerFeetY (s=1)
+    const ay = launchY + (playerFeetY - launchY) * u;
+    const ax = cx + Math.sin(u * WOBBLE_FREQ + phaseOffset) * WOBBLE_AMP;
     if (s === 0) ctx.moveTo(ax, ay); else ctx.lineTo(ax, ay);
   }
   ctx.stroke();

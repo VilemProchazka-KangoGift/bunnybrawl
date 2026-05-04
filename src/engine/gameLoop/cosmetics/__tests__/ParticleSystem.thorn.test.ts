@@ -59,4 +59,11 @@ describe('ParticleSystem.applyHazardHitVFX — thorn', () => {
     ps.applyHazardHitVFX(hit, 'P1', state, false);
     expect(state.screenFlash).toBeGreaterThanOrEqual(0.18);
   });
+
+  it('emits 12 barb fragments with shape: spike', () => {
+    const hit: HazardHitResult = { type: 'thorn', px: 100, py: 200, sx: 100, sy: 215 };
+    ps.applyHazardHitVFX(hit, 'P1', state, false);
+    const spikes = ps.getParticles().filter(p => p.shape === 'spike');
+    expect(spikes.length).toBe(12);
+  });
 });
