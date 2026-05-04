@@ -4,6 +4,7 @@ export { drawHazardZone, drawGhost, drawLavaRock, drawZeroGZone, drawCurrentZone
 export { drawDayNightCycle } from './effects';
 export { drawHUD, drawCountdown, drawConnectionQuality, invalidateHudCache, isHudDirty, resetHudState } from './hud';
 export { drawPlayer, clearSpriteCache, drawCharacterCore, warmSpriteCacheForCharacters } from './players';
+export { drawSurfaceDecals, drawRipples, shockwaveStyleFor } from './surfaceImpact';
 
 import { clearHazardCaches } from './hazards';
 import { clearSpriteCache } from './players';

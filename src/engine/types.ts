@@ -367,7 +367,7 @@ export interface MatchState {
   dayPhase: number;       // 0-1 cycle (0=noon, 0.5=night, 1=noon again)
   countdown: number;      // >0 = pre-match countdown in seconds, 0 = match running
   stats: MatchStats;
-  shockwaves: Array<{x: number; y: number; radius: number; maxRadius: number; life: number}>;
+  shockwaves: Array<{x: number; y: number; radius: number; maxRadius: number; life: number; surface?: SurfaceTag}>;
   screenFlash: number;  // >0 = white flash on screen (for final kill)
   hitstopZoom: number;  // >0 = camera zoom punch active (eases out)
   wildlife: WildlifeEntity[];

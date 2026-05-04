@@ -36,6 +36,7 @@ import { EntityTransitionSystem } from './cosmetics/EntityTransitionSystem';
 import { ParticleSystem } from './cosmetics/ParticleSystem';
 import { PlayerTransitionSystem } from './cosmetics/PlayerTransitionSystem';
 import { PlayerCosmeticSystem } from './cosmetics/PlayerCosmeticSystem';
+import { SurfaceImpactSystem } from './cosmetics/SurfaceImpactSystem';
 
 /** Half-rate cosmetic threshold: particles/SFX/VFX tick at ~30Hz while render stays at 60Hz. */
 const COSMETIC_INTERVAL = FIXED_TIMESTEP * 2;
@@ -64,6 +65,7 @@ export class GameLoop {
   private entityTransitionSystem!: EntityTransitionSystem;
   private playerTransitionSystem!: PlayerTransitionSystem;
   private playerCosmeticSystem!: PlayerCosmeticSystem;
+  private surfaceImpactSystem!: SurfaceImpactSystem;
 
   private _debugKeyHandler: ((e: KeyboardEvent) => void) | null = null;
   private _unsubRenderScale: (() => void) | null = null;
@@ -137,6 +139,7 @@ export class GameLoop {
     );
     this.environmentSystem = new EnvironmentSystem(sState, sTheme);
     this.entityTransitionSystem = new EntityTransitionSystem(sState, (name) => this.playSound(name));
+    this.surfaceImpactSystem = new SurfaceImpactSystem(sState, sArena);
 
     // Cooldowns map lives on PlayerTransitionSystem — wire it back into the simulator
     // for the headbonk + crouch + zero-G sound paths in fixedUpdate.
@@ -346,9 +349,11 @@ export class GameLoop {
     );
     this.environmentSystem = new EnvironmentSystem(sState, newTheme);
     this.entityTransitionSystem = new EntityTransitionSystem(sState, (name) => this.playSound(name));
+    this.surfaceImpactSystem = new SurfaceImpactSystem(sState, sArena);
 
     this.playerTransitionSystem.init();
     this.entityTransitionSystem.init();
+    this.surfaceImpactSystem.init();
 
     // Drain leftover cosmetic lead so the first cosmeticStep after new arena
     // load doesn't run against residual time from the prior arena.
@@ -431,6 +436,7 @@ export class GameLoop {
   resetCosmeticBaselines(): void {
     this.playerTransitionSystem.resetBaseline();
     this.entityTransitionSystem.resetBaseline();
+    this.surfaceImpactSystem.resetBaseline();
   }
 
   /** Seconds since the last cosmeticStep fired. */
@@ -459,6 +465,7 @@ export class GameLoop {
     this.entityTransitionSystem.cosmeticUpdate(dt);
     this.particleSystem.cosmeticUpdate(dt);
     this.environmentSystem.cosmeticUpdate(dt);
+    this.surfaceImpactSystem.cosmeticUpdate(dt);
   }
 
   /** Tick all cosmetic-only systems (particles, environment, visual decays). */
@@ -485,6 +492,10 @@ export class GameLoop {
       const environmentStart = perfTrace.begin('cosmetic.environment');
       this.environmentSystem.cosmeticUpdate(dt);
       perfTrace.end('cosmetic.environment', environmentStart);
+
+      const surfaceImpactStart = perfTrace.begin('cosmetic.surfaceImpact');
+      this.surfaceImpactSystem.cosmeticUpdate(dt);
+      perfTrace.end('cosmetic.surfaceImpact', surfaceImpactStart);
     });
   }
 
