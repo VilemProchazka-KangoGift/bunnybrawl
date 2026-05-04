@@ -341,19 +341,22 @@ export function drawSpringTrail(ctx: CanvasRenderingContext2D, player: Player, f
   const baseY = player.y + player.height;
   const t = player.springTrailTimer / SPRING_TRAIL_DURATION; // 1 = just started, 0 = fading
 
+  // Curlicue arc: rising sinusoidal poly-line above the spring base.
+  // Length scales with `t` so the arc grows during launch and fades after.
   ctx.save();
-  ctx.fillStyle = '#5DDE70';
-  const pointCount = 12;
-  for (let i = 0; i < pointCount; i++) {
-    const progress = i / pointCount;
-    const angle = progress * Math.PI * 4 + frameTime / 200; // spiral
-    const radius = 6 + progress * 10;
-    const py = baseY + progress * 30;
-    const px = cx + Math.cos(angle) * radius;
-    ctx.globalAlpha = t * (1 - progress) * 0.5;
-    ctx.beginPath();
-    ctx.arc(px, py, 2.5 - progress, 0, Math.PI * 2);
-    ctx.fill();
+  ctx.strokeStyle = `rgba(255,212,90,${(0.55 * t).toFixed(3)})`;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  const ARC_HEIGHT = 60;
+  const STEPS = 14;
+  const phaseOffset = frameTime * 0.005;
+  for (let s = 0; s <= STEPS; s++) {
+    const u = s / STEPS;
+    const reach = u * t;  // tip of arc lengthens with t
+    const ax = cx + Math.sin(reach * 20 + phaseOffset) * 4;
+    const ay = baseY - 8 - Math.sin(reach * Math.PI) * ARC_HEIGHT;
+    if (s === 0) ctx.moveTo(ax, ay); else ctx.lineTo(ax, ay);
   }
+  ctx.stroke();
   ctx.restore();
 }
