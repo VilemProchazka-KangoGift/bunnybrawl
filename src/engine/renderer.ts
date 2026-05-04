@@ -50,6 +50,22 @@ const _isoOccluders: Platform[] = [];
 /** Sprite extends ~12 px above the bbox top for tall ears, horns, and gib pivots. */
 const SPRITE_TOP_PAD = 12;
 
+/** Convert hex color "#RRGGBB" to HSL components (h ∈ [0,360], s,l ∈ [0,1]). */
+function hexToHSL(hex: string): { h: number; s: number; l: number } {
+  const { r: r255, g: g255, b: b255 } = hexToRGB(hex);
+  const r = r255 / 255, g = g255 / 255, b = b255 / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return { h: 0, s: 0, l };
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h = 0;
+  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0));
+  else if (max === g) h = (b - r) / d + 2;
+  else h = (r - g) / d + 4;
+  return { h: h * 60, s, l };
+}
+
 /** Diagnostic flags tracking which rendering branches fired each frame. */
 export interface RenderDiagnostics {
   clouds: boolean;
@@ -80,6 +96,7 @@ export interface RenderDiagnostics {
   screenShake: boolean;
   zeroGShimmer: boolean;
   playersDrawn: number;
+  ctx?: CanvasRenderingContext2D;
 }
 
 /**
@@ -296,7 +313,10 @@ export class Renderer {
   }
 
   /** E2E diagnostic: which rendering branches fired last frame. */
-  getDiagnostics(): RenderDiagnostics { return this._diag; }
+  getDiagnostics(): RenderDiagnostics {
+    this._diag.ctx = this.fgCtx;
+    return this._diag;
+  }
 
   /** Pre-populate the sprite cache for the given character names. Called during
    *  the loading phase so the first visible frame doesn't hitch on cache misses.
@@ -756,8 +776,16 @@ export class Renderer {
             d.afterimages = true;
             if (!aiSaved) { ctx.save(); aiSaved = true; }
             const isInvincible = player.invincibleTimer > 0;
-            ctx.fillStyle = isInvincible ? '#88BBFF' : player.character.color;
-            for (const img of afterimages) {
+            const baseHsl = isInvincible
+              ? { h: 215, s: 1, l: 0.78 }
+              : hexToHSL(player.character.color);
+            const total = afterimages.length;
+            for (let i = 0; i < total; i++) {
+              const img = afterimages[i];
+              // Oldest (i=0) shifted -18°, newest (i=total-1) at base hue.
+              const shift = ((i / Math.max(1, total - 1)) - 1) * 18;
+              const h = (baseHsl.h + shift + 360) % 360;
+              ctx.fillStyle = `hsl(${h.toFixed(1)},${(baseHsl.s * 100).toFixed(0)}%,${(baseHsl.l * 100).toFixed(0)}%)`;
               ctx.globalAlpha = img.alpha;
               ctx.beginPath();
               ctx.ellipse(
