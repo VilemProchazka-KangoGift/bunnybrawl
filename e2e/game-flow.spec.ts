@@ -60,7 +60,8 @@ test.describe('Carrot Royale E2E', () => {
     await expect(page.getByTestId('game-canvas')).toBeVisible();
   });
 
-  test('gore toggle exists on menu', async ({ page }) => {
+  test('gore toggle exists in settings', async ({ page }) => {
+    await page.locator('.settings-toggle-btn').click();
     await expect(page.getByTestId('gore-toggle')).toBeVisible();
   });
 });

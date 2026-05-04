@@ -79,7 +79,8 @@ test.describe('Main Menu UI Elements', () => {
     await expect(page.getByTestId('bot-settings')).toBeVisible();
   });
 
-  test('gore toggle is visible', async ({ page }) => {
+  test('gore toggle is visible in settings', async ({ page }) => {
+    await page.locator('.settings-toggle-btn').click();
     await expect(page.getByTestId('gore-toggle')).toBeVisible();
   });
 });
@@ -118,6 +119,7 @@ test.describe('Gore Toggle', () => {
   });
 
   test('gore toggle can be clicked', async ({ page }) => {
+    await page.locator('.settings-toggle-btn').click();
     const toggle = page.getByTestId('gore-toggle');
     await expect(toggle).toBeVisible();
     await toggle.click();
@@ -126,6 +128,7 @@ test.describe('Gore Toggle', () => {
   });
 
   test('gore setting persists in localStorage', async ({ page }) => {
+    await page.locator('.settings-toggle-btn').click();
     // Click gore toggle
     await page.getByTestId('gore-toggle').click();
     // Check localStorage

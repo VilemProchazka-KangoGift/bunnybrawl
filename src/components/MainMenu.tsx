@@ -212,15 +212,6 @@ export function MainMenu() {
             </div>
           </div>
 
-          <label className="gore-toggle">
-            <input
-              type="checkbox"
-              checked={matchSettings.goreMode}
-              onChange={(e) => setMatchSettings({ goreMode: e.target.checked })}
-              data-testid="gore-toggle"
-            />
-            <span>{t('blood_mode')}</span>
-          </label>
           <div className="lang-toggle">
             {[
               { code: 'en', label: 'EN', flag: <><rect width="60" height="40" fill="#012169"/><path d="M0,0 L60,40 M60,0 L0,40" stroke="#fff" strokeWidth="7"/><path d="M0,0 L60,40 M60,0 L0,40" stroke="#C8102E" strokeWidth="4"/><path d="M30,0 V40 M0,20 H60" stroke="#fff" strokeWidth="10"/><path d="M30,0 V40 M0,20 H60" stroke="#C8102E" strokeWidth="6"/></> },

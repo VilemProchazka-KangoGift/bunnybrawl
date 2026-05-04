@@ -41,6 +41,7 @@ test.describe('Arena Selector', () => {
 test.describe('Gore Toggle', () => {
   test('gore toggle can be clicked to toggle state', async ({ page }) => {
     await page.goto('/');
+    await page.locator('.settings-toggle-btn').click();
     const toggle = page.getByTestId('gore-toggle');
     await expect(toggle).toBeVisible();
 
@@ -60,6 +61,7 @@ test.describe('Gore Toggle', () => {
 
   test('gore setting persists in localStorage', async ({ page }) => {
     await page.goto('/');
+    await page.locator('.settings-toggle-btn').click();
     const toggle = page.getByTestId('gore-toggle');
 
     // Enable gore

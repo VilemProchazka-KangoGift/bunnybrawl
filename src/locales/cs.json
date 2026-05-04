@@ -4,6 +4,7 @@
   "tagline": "Bez chemie, bez slitování.",
   "play": "Hrát",
   "blood_mode": "Krvavý režim",
+  "blood_mode_desc": "Krev, kusy těl. Vypnuto = jen konfety.",
   "slow_device": "Slabé zařízení",
   "slow_device_desc": "Nižší rozlišení, méně efektů.",
   "arena_label": "Aréna",

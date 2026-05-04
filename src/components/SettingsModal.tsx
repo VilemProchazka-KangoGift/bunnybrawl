@@ -1,6 +1,8 @@
 import { useState, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import { audio } from '../engine/audio';
+import { useGameStore } from '../store/gameStore';
+import { getSlowDeviceUserPref, setSlowDevice, subscribeSlowDevice } from '../engine/perfFlags';
 import { CharacterSelectorModal } from './CharacterSelectorModal';
 
 interface SettingsModalProps {
@@ -20,6 +22,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const [charSelectorOpen, setCharSelectorOpen] = useState(false);
   const musicOff = useSyncExternalStore(subscribeMusic, getMusicDisabled);
   const volume = useSyncExternalStore(subscribeMusic, getMusicVolume);
+  const { matchSettings, setMatchSettings } = useGameStore();
+  const slowDevice = useSyncExternalStore(subscribeSlowDevice, getSlowDeviceUserPref);
 
   const toggleMusic = () => {
     const willUnmute = audio.isMusicDisabled();
@@ -67,6 +71,34 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
               aria-label={t('settings_music_volume')}
             />
             <span className="settings-volume-value">{Math.round(volume * 100)}</span>
+          </div>
+          <div className="mod-row">
+            <label className="mod-toggle">
+              <input
+                type="checkbox"
+                checked={matchSettings.goreMode}
+                onChange={(e) => setMatchSettings({ goreMode: e.target.checked })}
+                data-testid="gore-toggle"
+              />
+              <div className="mod-info">
+                <span className="mod-name">{t('blood_mode')}</span>
+                <span className="mod-desc">{t('blood_mode_desc')}</span>
+              </div>
+            </label>
+          </div>
+          <div className="mod-row">
+            <label className="mod-toggle">
+              <input
+                type="checkbox"
+                checked={slowDevice}
+                onChange={(e) => setSlowDevice(e.target.checked)}
+                data-testid="slow-device-toggle"
+              />
+              <div className="mod-info">
+                <span className="mod-name">{t('slow_device')}</span>
+                <span className="mod-desc">{t('slow_device_desc')}</span>
+              </div>
+            </label>
           </div>
           <div className="settings-row">
             <button

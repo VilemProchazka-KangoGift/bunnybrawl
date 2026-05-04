@@ -4,6 +4,7 @@
   "tagline": "Locally sourced violence.",
   "play": "Play",
   "blood_mode": "Blood mode",
+  "blood_mode_desc": "Splats, blood, gibs. Off = confetti only.",
   "slow_device": "Slow device",
   "slow_device_desc": "Lower resolution, fewer effects.",
   "arena_label": "Arena",
