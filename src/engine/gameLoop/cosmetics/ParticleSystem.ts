@@ -193,16 +193,14 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
         break;
       }
       case 'spring': {
-        // Radial yellow/orange burst at the launch point — fan-shaped, biased
-        // upward (most of the energy is the player's launch direction) with a
-        // little leak sideways and down so it reads as a release, not a beam.
-        for (let i = 0; i < 14; i++) {
-          // Upper hemisphere ±~110°, biased toward straight up.
-          const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.2;
-          const speed = 110 + Math.random() * 160;
-          const life = 0.3 + Math.random() * 0.35;
-          const color = i % 3 === 0 ? '#FFEB7A' : i % 3 === 1 ? '#FFD43A' : '#FFA800';
-          this.emitParticle(px, py, Math.cos(angle) * speed, Math.sin(angle) * speed, life, 1.6 + Math.random() * 1.8, color, 'spike');
+        // Small upward fan of yellow spikes — release energy, kept subtle so it
+        // doesn't compete with the player's launch motion.
+        for (let i = 0; i < 8; i++) {
+          const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.0;
+          const speed = 100 + Math.random() * 120;
+          const life = 0.2 + Math.random() * 0.2;
+          const color = i % 2 === 0 ? '#FFD43A' : '#FFA800';
+          this.emitParticle(px, py, Math.cos(angle) * speed, Math.sin(angle) * speed, life, 1.2 + Math.random() * 1.2, color, 'spike');
         }
         break;
       }

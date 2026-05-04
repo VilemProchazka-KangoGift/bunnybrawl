@@ -97,7 +97,7 @@ export const SHOCKWAVE_DURATION = 0.4;
 export const SCREEN_FLASH_DURATION = 0.15;
 
 // Spring trail
-export const SPRING_TRAIL_DURATION = 0.6;
+export const SPRING_TRAIL_DURATION = 0.35;
 
 // Score animation
 export const SCORE_ANIM_DURATION = 0.5;

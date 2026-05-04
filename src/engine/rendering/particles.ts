@@ -363,13 +363,13 @@ export function drawSpringTrail(ctx: CanvasRenderingContext2D, player: Player, f
   const t = player.springTrailTimer / SPRING_TRAIL_DURATION;
   if (t <= 0) return;
 
-  const COL_H = 90;
-  const COL_HALF_W = 9;
+  const COL_H = 70;
+  const COL_HALF_W = 7;
 
   // Energy column — bright at the base, fading to transparent at the top.
   const grad = ctx.createLinearGradient(launchX, launchY, launchX, launchY - COL_H);
-  grad.addColorStop(0, `rgba(255,212,90,${(0.65 * t).toFixed(3)})`);
-  grad.addColorStop(0.55, `rgba(255,180,40,${(0.28 * t).toFixed(3)})`);
+  grad.addColorStop(0, `rgba(255,212,90,${(0.4 * t).toFixed(3)})`);
+  grad.addColorStop(0.55, `rgba(255,180,40,${(0.16 * t).toFixed(3)})`);
   grad.addColorStop(1, 'rgba(255,180,40,0)');
   ctx.fillStyle = grad;
   ctx.beginPath();
@@ -378,18 +378,18 @@ export function drawSpringTrail(ctx: CanvasRenderingContext2D, player: Player, f
 
   // Coil rings racing upward — phase advances with timer + frameTime so rings
   // appear to rise out of the spring, evoking spring coils releasing.
-  const RING_COUNT = 3;
-  const animPhase = (1 - t) * 1.4 + frameTime * 0.0015;
-  ctx.strokeStyle = `rgba(255,235,120,${(0.85 * t).toFixed(3)})`;
-  ctx.lineWidth = 2;
+  const RING_COUNT = 2;
+  const animPhase = (1 - t) * 1.6 + frameTime * 0.002;
+  ctx.strokeStyle = `rgba(255,235,120,${(0.55 * t).toFixed(3)})`;
+  ctx.lineWidth = 1.5;
   ctx.beginPath();
   for (let i = 0; i < RING_COUNT; i++) {
     const phase = (animPhase + i / RING_COUNT) % 1;
     const ry = launchY - phase * COL_H;
-    const rw = 6 + phase * 9;
+    const rw = 5 + phase * 7;
     // moveTo before each ellipse so sub-paths don't connect with a stroke line.
     ctx.moveTo(launchX + rw, ry);
-    ctx.ellipse(launchX, ry, rw, 2.5, 0, 0, Math.PI * 2);
+    ctx.ellipse(launchX, ry, rw, 2, 0, 0, Math.PI * 2);
   }
   ctx.stroke();
 }

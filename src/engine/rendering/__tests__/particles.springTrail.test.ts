@@ -24,8 +24,8 @@ describe('drawSpringTrail', () => {
   it('renders the rings with ellipse, not line segments', () => {
     const ctx = createMockCanvasCtx();
     drawSpringTrail(ctx, makePlayer(), 0);
-    // Column ellipse + 3 coil rings = at least 4 ellipse calls.
-    expect((ctx.ellipse as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThanOrEqual(4);
+    // Column ellipse + 2 coil rings = at least 3 ellipse calls.
+    expect((ctx.ellipse as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThanOrEqual(3);
     // No lineTo segments — this is no longer a polyline curlicue.
     expect((ctx.lineTo as ReturnType<typeof vi.fn>).mock.calls.length).toBe(0);
   });
