@@ -137,8 +137,7 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
     const { px, py } = hit;
     switch (hit.type) {
       case 'thorn': {
-        // Boost screen flash so the impact reads stronger
-        if (!resimulating && hit.screenFlash !== undefined) {
+        if (!resimulating) {
           state.screenFlash = Math.max(state.screenFlash, 0.18);
         }
         // Blood from player
@@ -154,7 +153,6 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
             const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.1;
             const speed = 80 + Math.random() * 140;
             const life = 0.25 + Math.random() * 0.35;
-            // Mix two barb shades so the burst doesn't look monochrome
             const color = i % 2 === 0 ? '#5C3A1E' : '#3A2210';
             this.emitParticle(hit.sx, hit.sy, Math.cos(angle) * speed, Math.sin(angle) * speed, life, 1.2 + Math.random() * 1.6, color);
           }

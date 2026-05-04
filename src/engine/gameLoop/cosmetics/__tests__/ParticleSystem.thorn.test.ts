@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import type { MatchState } from '../../../types';
 import { makeArena, makeSettings, makeState } from '../../../__tests__/testHelpers';
 import type { HazardHitResult } from '../../gameplay/playerCollisions';
+import { getTheme, registerBuiltinArenas } from '../../../arenas';
 
 vi.mock('../../../audio', () => ({
   audio: {
@@ -18,28 +19,21 @@ vi.mock('../../../haptics', () => ({
 
 import { ParticleSystem } from '../ParticleSystem';
 
-// Minimal theme — mirrors the pattern from systems.test.ts to avoid registry init
-const mockTheme = {
-  weather: { particleCount: 0, types: [] },
-  wildlife: { count: 0, types: [] },
-  fog: { count: 0 },
-  ambientParticles: { count: 0 },
-  dayNight: { enabled: false, cycleDuration: 120, showShootingStars: false },
-  platform: { floatingBodyColor: '#888', groundTopColor: '#666' },
-  ground: { surfaceColor: '#888888' },
-  physics: {},
-} as any;
+beforeAll(() => {
+  registerBuiltinArenas();
+});
 
-describe('ParticleSystem.applyHazardHitVFX — thorn (rich-thorn batch C)', () => {
+describe('ParticleSystem.applyHazardHitVFX — thorn', () => {
   let ps: ParticleSystem;
   let state: MatchState;
   const arena = makeArena();
   const settings = makeSettings();
 
   beforeEach(() => {
+    const theme = getTheme('meadow');
     state = makeState({ arena });
     state.phase = 'playing';
-    ps = new ParticleSystem(state, arena, mockTheme, settings, new Map());
+    ps = new ParticleSystem(state, arena, theme, settings, new Map());
   });
 
   it('emits more particles than the legacy thorn case', () => {
@@ -61,7 +55,7 @@ describe('ParticleSystem.applyHazardHitVFX — thorn (rich-thorn batch C)', () =
   });
 
   it('boosts screen flash to at least 0.18', () => {
-    const hit: HazardHitResult = { type: 'thorn', px: 100, py: 200, sx: 100, sy: 215, screenFlash: 0.1 };
+    const hit: HazardHitResult = { type: 'thorn', px: 100, py: 200, sx: 100, sy: 215 };
     ps.applyHazardHitVFX(hit, 'P1', state, false);
     expect(state.screenFlash).toBeGreaterThanOrEqual(0.18);
   });
