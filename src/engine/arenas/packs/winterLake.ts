@@ -1,6 +1,8 @@
 import type { ArenaPack } from '../types';
 import type { Arena, Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
+import { fastSin } from '../../fastMath';
+import { getSlowDevice } from '../../perfFlags';
 import { getFloatingPlatforms } from '../../themes/utils';
 import {
   drawPineTree, drawChristmasTree, drawSnowDrift, drawIcePatch, drawIcicle, drawIceCube,
@@ -441,6 +443,47 @@ export const winterLake: ArenaPack = {
 
     drawSnowDrift(ctx, 15, gy, 45, 6);
     drawSnowDrift(ctx, 1250, gy, 40, 5);
+  },
+
+  // Aurora curtains across the upper sky. Slow-device gated.
+  drawAnimatedBackground: (ctx, _arena, time) => {
+    if (getSlowDevice()) return;
+    ctx.save();
+    const stripes: ReadonlyArray<{ color: string; y: number; h: number; speed: number; phase: number }> = [
+      { color: '#7be0a3', y: 56,  h: 56, speed: 0.6,  phase: 0   },
+      { color: '#a3e8ff', y: 88,  h: 64, speed: 0.45, phase: 1.2 },
+      { color: '#c899ff', y: 120, h: 56, speed: 0.55, phase: 2.4 },
+      { color: '#7be0a3', y: 176, h: 48, speed: 0.7,  phase: 3.6 },
+      { color: '#a3e8ff', y: 224, h: 40, speed: 0.4,  phase: 4.8 },
+    ];
+    for (const st of stripes) {
+      const breathe = 0.5 + 0.5 * fastSin(time * 0.7 + st.phase);
+      ctx.fillStyle = st.color;
+      ctx.globalAlpha = 0.15 + breathe * 0.18;
+      ctx.beginPath();
+      ctx.moveTo(0, st.y);
+      for (let x = 0; x <= CANVAS_WIDTH; x += 24) {
+        const y = st.y + fastSin(x * 0.0085 + time * st.speed + st.phase) * 16
+                       + fastSin(x * 0.003 + time * st.speed * 0.5) * 22;
+        ctx.lineTo(x, y);
+      }
+      for (let x = CANVAS_WIDTH; x >= 0; x -= 24) {
+        const y = st.y + st.h + fastSin(x * 0.0085 + time * st.speed + st.phase + 0.7) * 16
+                              + fastSin(x * 0.003 + time * st.speed * 0.5 + 0.5) * 22;
+        ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fill();
+    }
+    // Vertical light pillars
+    ctx.fillStyle = '#a3e8ff';
+    ctx.globalAlpha = 0.14;
+    for (let i = 0; i < 7; i++) {
+      const x = ((i * 187) + fastSin(time * 0.3 + i) * 80 + CANVAS_WIDTH) % CANVAS_WIDTH;
+      const phase = fastSin(time * 1.4 + i * 1.7);
+      if (phase > 0.2) ctx.fillRect(x, 60, 2, 200 + phase * 30);
+    }
+    ctx.restore();
   },
 
   drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => {
