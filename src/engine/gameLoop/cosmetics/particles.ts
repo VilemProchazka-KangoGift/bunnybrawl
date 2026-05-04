@@ -1,4 +1,4 @@
-import type { Particle, Player, Platform, ConfettiParticle } from '../../types';
+import type { Particle, ParticleShape, Player, Platform, ConfettiParticle } from '../../types';
 import { BLOOD_COLOR, CARROT_SIZE, CONFETTI_COUNT, CONFETTI_GRAVITY, CONFETTI_FLUTTER, CONFETTI_LIFE_MIN, CONFETTI_LIFE_MAX, CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { swapRemove } from '../../themes/utils';
 
@@ -15,7 +15,7 @@ const MAX_LIVE_PARTICLES = 600;
 export function emitParticle(
   particles: Particle[], freeList: Particle[],
   x: number, y: number, vx: number, vy: number, life: number, size: number, color: string,
-  shape?: 'circle' | 'spike',
+  shape?: ParticleShape,
 ): void {
   if (particles.length >= MAX_LIVE_PARTICLES) return;
   const recycled = freeList.pop();

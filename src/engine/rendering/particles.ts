@@ -358,18 +358,18 @@ export function drawSpringTrail(ctx: CanvasRenderingContext2D, player: Player, f
   // Anchored at the spring (where the player launched from), not the moving player.
   // Two layers: a yellow energy column rising out of the spring + animated coil
   // rings racing up the column, both fading with springTrailTimer.
-  const launchX = player.springLaunchX > 0 ? player.springLaunchX : player.x + player.width / 2;
-  const launchY = player.springLaunchY > 0 ? player.springLaunchY : player.y + player.height;
   const t = player.springTrailTimer / SPRING_TRAIL_DURATION;
-  if (t <= 0) return;
+  if (t <= 0 || !Number.isFinite(player.springLaunchX)) return;
+  const launchX = player.springLaunchX;
+  const launchY = player.springLaunchY;
 
   const COL_H = 70;
   const COL_HALF_W = 7;
 
   // Energy column — bright at the base, fading to transparent at the top.
   const grad = ctx.createLinearGradient(launchX, launchY, launchX, launchY - COL_H);
-  grad.addColorStop(0, `rgba(255,212,90,${(0.4 * t).toFixed(3)})`);
-  grad.addColorStop(0.55, `rgba(255,180,40,${(0.16 * t).toFixed(3)})`);
+  grad.addColorStop(0, `rgba(255,212,90,${0.4 * t})`);
+  grad.addColorStop(0.55, `rgba(255,180,40,${0.16 * t})`);
   grad.addColorStop(1, 'rgba(255,180,40,0)');
   ctx.fillStyle = grad;
   ctx.beginPath();
@@ -380,7 +380,7 @@ export function drawSpringTrail(ctx: CanvasRenderingContext2D, player: Player, f
   // appear to rise out of the spring, evoking spring coils releasing.
   const RING_COUNT = 2;
   const animPhase = (1 - t) * 1.6 + frameTime * 0.002;
-  ctx.strokeStyle = `rgba(255,235,120,${(0.55 * t).toFixed(3)})`;
+  ctx.strokeStyle = `rgba(255,235,120,${0.55 * t})`;
   ctx.lineWidth = 1.5;
   ctx.beginPath();
   for (let i = 0; i < RING_COUNT; i++) {

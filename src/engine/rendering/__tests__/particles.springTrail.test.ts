@@ -7,6 +7,8 @@ function makePlayer(): Player {
   return {
     id: 'P1', x: 100, y: 200, width: 28, height: 40,
     springTrailTimer: 0.4,
+    springLaunchX: 250,
+    springLaunchY: 600,
     character: { name: 'Bunny', color: '#FFFFFF', darkColor: '#000000', lightColor: '#888888', emoji: '🐰' } as never,
   } as unknown as Player;
 }

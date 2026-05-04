@@ -1,4 +1,4 @@
-import type { MatchState, MatchSettings, Arena, Particle, Gib, Player, PlayerSlot, EffectZone } from '../../types';
+import type { MatchState, MatchSettings, Arena, Particle, ParticleShape, Gib, Player, PlayerSlot, EffectZone } from '../../types';
 import type { ThemeConfig } from '../../themes/types';
 import type { CosmeticSystem } from '../types';
 import type { HazardHitResult } from '../gameplay/playerCollisions';
@@ -43,7 +43,7 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
 
   init(): void {}
 
-  emitParticle(x: number, y: number, vx: number, vy: number, life: number, size: number, color: string, shape?: 'circle' | 'spike'): void {
+  emitParticle(x: number, y: number, vx: number, vy: number, life: number, size: number, color: string, shape?: ParticleShape): void {
     _emitParticle(this._particles, this.particleFreeList, x, y, vx, vy, life, size, color, shape);
   }
 
@@ -204,7 +204,9 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
         }
         break;
       }
-      // fallOff: no particles
+      case 'fallOff':
+        // No particles — handled by spawnKillSplatter elsewhere.
+        break;
     }
   }
 

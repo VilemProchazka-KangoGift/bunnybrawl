@@ -14,6 +14,11 @@ let _spriteScale = 1;
 const SPRITE_CACHE_CAP_BASE = 600;
 let _spriteCacheCap = SPRITE_CACHE_CAP_BASE;
 
+/** Below this fast-fall smear alpha, skip drawing. Used both as the visible
+ *  threshold for the per-frame "is the smudge still on screen?" check and as
+ *  the inner early-return in drawFastFallStreaks. */
+const FASTFALL_ALPHA_EPSILON = 0.01;
+
 // Pack-name → small int, populated lazily. 5-bit field allows 32 entries; pack
 // registry caps below that (17 chars + fallbacks).
 const _charNameToIndex = new Map<string, number>();
@@ -255,7 +260,7 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player, nearCa
     // diving), anchor at the position fast-fall stopped so the smudge dissolves in
     // place instead of riding the bounce upward. Captured here (60Hz) rather than
     // in cosmeticStep (~30Hz) to catch the transition without a one-frame lag.
-    const fastFallAlpha = player.fastFallStreakAlpha ?? 0;
+    const fastFallAlpha = player.fastFallStreakAlpha;
     const activelyFastFalling = fastFalling && player.vy >= 0;
     if (activelyFastFalling) {
       player.fastFallAnchorX = NaN;
@@ -264,9 +269,9 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player, nearCa
       player.fastFallAnchorX = cx;
       player.fastFallAnchorY = y;
     }
-    if (state === 'airborne' && !activelyFastFalling && fastFallAlpha <= 0.01) {
+    if (state === 'airborne' && !activelyFastFalling && fastFallAlpha <= FASTFALL_ALPHA_EPSILON) {
       drawMotionLines(ctx, cx, y + height);
-    } else if (activelyFastFalling || fastFallAlpha > 0.01) {
+    } else if (activelyFastFalling || fastFallAlpha > FASTFALL_ALPHA_EPSILON) {
       const anchored = !activelyFastFalling && Number.isFinite(player.fastFallAnchorX);
       const smearCx = anchored ? player.fastFallAnchorX : cx;
       const smearY = anchored ? player.fastFallAnchorY : y;
@@ -547,9 +552,9 @@ export function drawFastFallStreaks(
   ctx: CanvasRenderingContext2D, cx: number, headY: number,
   color: string, vx = 0, alpha = 1,
 ): void {
-  if (alpha <= 0.01) return;
+  if (alpha <= FASTFALL_ALPHA_EPSILON) return;
   if (getSlowDevice()) {
-    ctx.strokeStyle = `rgba(255,255,220,${(0.8 * alpha).toFixed(3)})`;
+    ctx.strokeStyle = `rgba(255,255,220,${0.8 * alpha})`;
     ctx.lineWidth = 2;
     ctx.beginPath();
     for (let i = -2; i <= 2; i++) {
@@ -568,8 +573,8 @@ export function drawFastFallStreaks(
 
   const grad = ctx.createLinearGradient(cx, topY, cx, headY);
   grad.addColorStop(0, `rgba(${r},${g},${b},0)`);
-  grad.addColorStop(0.4, `rgba(${r},${g},${b},${(0.32 * alpha).toFixed(3)})`);
-  grad.addColorStop(1, `rgba(${r},${g},${b},${(0.85 * alpha).toFixed(3)})`);
+  grad.addColorStop(0.4, `rgba(${r},${g},${b},${0.32 * alpha})`);
+  grad.addColorStop(1, `rgba(${r},${g},${b},${0.85 * alpha})`);
   ctx.fillStyle = grad;
 
   // Lozenge with a narrow leaned tip (top) and a rounded wider base — looks
@@ -583,7 +588,7 @@ export function drawFastFallStreaks(
   ctx.fill();
 
   // Inner motion wisps — visible streaks in the smudge body.
-  ctx.strokeStyle = `rgba(255,255,255,${(0.4 * alpha).toFixed(3)})`;
+  ctx.strokeStyle = `rgba(255,255,255,${0.4 * alpha})`;
   ctx.lineWidth = 1.4;
   ctx.beginPath();
   ctx.moveTo(cx - 4 - lean * 0.5, topY + STREAK_H * 0.4);

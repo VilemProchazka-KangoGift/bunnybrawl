@@ -146,8 +146,8 @@ export interface Player {
   killStreak: number;    // current consecutive kills without dying
   breathTimer: number;         // for idle breathing animation
   springTrailTimer: number;    // >0 = spiral trail active after spring bounce
-  springLaunchX: number;     // local-only — anchor x for drawSpringTrail (set to spring.x at bounce)
-  springLaunchY: number;     // local-only — anchor y for drawSpringTrail (set to spring.y at bounce)
+  springLaunchX: number;     // local-only — anchor x for drawSpringTrail (set to spring.x at bounce). NaN = unset.
+  springLaunchY: number;     // local-only — anchor y for drawSpringTrail (set to spring.y at bounce). NaN = unset.
   fastFallStreakAlpha: number; // local-only — 0..1, ramps up while fastFalling, ramps down on exit; drives drawFastFallStreaks fade in/out
   fastFallAnchorX: number;     // local-only — cx where fastFalling stopped; smudge fades from there instead of riding a stomp bounce. NaN = unset.
   fastFallAnchorY: number;     // local-only — headY where fastFalling stopped. NaN = unset.
@@ -200,8 +200,11 @@ export interface Particle {
   maxLife: number;
   size: number;
   color: string;
-  shape?: 'circle' | 'spike';  // default circle; 'spike' renders as oriented triangle
+  shape?: ParticleShape;
 }
+
+/** default 'circle'; 'spike' renders as a velocity-aligned triangle. */
+export type ParticleShape = 'circle' | 'spike';
 
 export type GibType = 'ear' | 'tail' | 'body' | 'snout' | 'horn' | 'wing' | 'beard' | 'mane' | 'wool' | 'spine';
 
