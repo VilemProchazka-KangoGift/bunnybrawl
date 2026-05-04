@@ -252,7 +252,7 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player, nearCa
     if (state === 'airborne' && !fastFalling) {
       drawMotionLines(ctx, cx, y + height);
     } else if (fastFalling) {
-      drawFastFallLines(ctx, cx, y);
+      drawFastFallStreaks(ctx, cx, y);
     }
     drawExpression(ctx, player, frameTime);
   }
@@ -516,17 +516,38 @@ function drawMotionLines(ctx: CanvasRenderingContext2D, cx: number, footY: numbe
   ctx.stroke();
 }
 
-/** Five vertical speed lines above a fast-falling character. Drawn outside the
- *  sprite cache so the outline pass doesn't stamp them. */
-function drawFastFallLines(ctx: CanvasRenderingContext2D, cx: number, headY: number): void {
-  ctx.strokeStyle = 'rgba(255,255,220,0.8)';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  for (let i = -2; i <= 2; i++) {
-    ctx.moveTo(cx + i * 5, headY - 2);
-    ctx.lineTo(cx + i * 5, headY - 20);
+/** Fast-fall speed lines. Three offset chromatic fills (cyan / magenta / red
+ *  shadow) when slow-device is off; falls back to the legacy flat lines when on.
+ *  Drawn outside the sprite cache so the outline pass doesn't stamp them. */
+export function drawFastFallStreaks(ctx: CanvasRenderingContext2D, cx: number, headY: number): void {
+  if (getSlowDevice()) {
+    ctx.strokeStyle = 'rgba(255,255,220,0.8)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = -2; i <= 2; i++) {
+      ctx.moveTo(cx + i * 5, headY - 2);
+      ctx.lineTo(cx + i * 5, headY - 20);
+    }
+    ctx.stroke();
+    return;
   }
-  ctx.stroke();
+  // Chromatic split: cyan core, magenta offset right, red shadow offset left.
+  const SEGMENT_W = 3;
+  const SEGMENT_H = 16;
+  const SEGMENT_SPACING_Y = 4;
+  const SEGMENTS = 3; // three vertical pulses per streak
+  for (let s = 0; s < SEGMENTS; s++) {
+    const segY = headY - 4 - s * (SEGMENT_H + SEGMENT_SPACING_Y);
+    // cyan core
+    ctx.fillStyle = 'rgba(120,230,250,0.55)';
+    ctx.fillRect(cx - SEGMENT_W / 2, segY - SEGMENT_H, SEGMENT_W, SEGMENT_H);
+    // magenta offset right
+    ctx.fillStyle = 'rgba(230,90,210,0.45)';
+    ctx.fillRect(cx - SEGMENT_W / 2 + 2, segY - SEGMENT_H + 1, SEGMENT_W, SEGMENT_H);
+    // red shadow offset left
+    ctx.fillStyle = 'rgba(255,90,90,0.35)';
+    ctx.fillRect(cx - SEGMENT_W / 2 - 2, segY - SEGMENT_H + 2, SEGMENT_W, SEGMENT_H);
+  }
 }
 
 export function drawSplatCharacter(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, color: string, darkColor: string): void {
