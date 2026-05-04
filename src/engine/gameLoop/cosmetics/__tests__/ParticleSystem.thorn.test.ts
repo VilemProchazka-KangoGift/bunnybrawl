@@ -39,8 +39,8 @@ describe('ParticleSystem.applyHazardHitVFX — thorn', () => {
   it('emits more particles than the legacy thorn case', () => {
     const hit: HazardHitResult = { type: 'thorn', px: 100, py: 200, sx: 100, sy: 215 };
     ps.applyHazardHitVFX(hit, 'P1', state, false);
-    // Legacy: 18 blood + 8 shrapnel = 26. New: 18 blood + 12 barbs + 1 drip = 31.
-    expect(ps.getParticles().length).toBeGreaterThanOrEqual(31);
+    // Legacy: 18 blood + 8 shrapnel = 26. Current: 18 blood + 14 barbs + 1 drip = 33.
+    expect(ps.getParticles().length).toBeGreaterThanOrEqual(33);
   });
 
   it('emits at least one long-lived drip particle near the contact point', () => {
@@ -60,10 +60,13 @@ describe('ParticleSystem.applyHazardHitVFX — thorn', () => {
     expect(state.screenFlash).toBeGreaterThanOrEqual(0.18);
   });
 
-  it('emits 12 barb fragments with shape: spike', () => {
+  it('emits all blood + barb particles as spikes for an elongated splatter read', () => {
     const hit: HazardHitResult = { type: 'thorn', px: 100, py: 200, sx: 100, sy: 215 };
     ps.applyHazardHitVFX(hit, 'P1', state, false);
     const spikes = ps.getParticles().filter(p => p.shape === 'spike');
-    expect(spikes.length).toBe(12);
+    // 18 blood (red) + 14 barb (brown) = 32. Drip stays a circle.
+    expect(spikes.length).toBe(32);
+    const barbs = spikes.filter(p => p.color === '#5C3A1E' || p.color === '#3A2210');
+    expect(barbs.length).toBe(14);
   });
 });

@@ -543,17 +543,17 @@ export function drawFastFallStreaks(
     ctx.stroke();
     return;
   }
-  const STREAK_H = 52;
-  const HALF_W = 13;            // half the bottom width — wider than the previous trapezoid for a smudgier read
+  const STREAK_H = 70;
+  const HALF_W = 17;            // half the bottom width — wider than the previous trapezoid for a smudgier read
   const { r, g, b } = hexToRGB(color);
   // Top of smear leans opposite of motion — trail-behind read.
-  const lean = Math.max(-1, Math.min(1, vx / 200)) * 9;
+  const lean = Math.max(-1, Math.min(1, vx / 200)) * 11;
   const topY = headY - STREAK_H;
 
   const grad = ctx.createLinearGradient(cx, topY, cx, headY);
   grad.addColorStop(0, `rgba(${r},${g},${b},0)`);
-  grad.addColorStop(0.45, `rgba(${r},${g},${b},${(0.18 * alpha).toFixed(3)})`);
-  grad.addColorStop(1, `rgba(${r},${g},${b},${(0.6 * alpha).toFixed(3)})`);
+  grad.addColorStop(0.4, `rgba(${r},${g},${b},${(0.32 * alpha).toFixed(3)})`);
+  grad.addColorStop(1, `rgba(${r},${g},${b},${(0.85 * alpha).toFixed(3)})`);
   ctx.fillStyle = grad;
 
   // Lozenge with a narrow leaned tip (top) and a rounded wider base — looks
@@ -561,18 +561,18 @@ export function drawFastFallStreaks(
   ctx.beginPath();
   ctx.moveTo(cx - lean, topY);
   ctx.quadraticCurveTo(cx + HALF_W + lean * 0.4, headY - STREAK_H * 0.35, cx + HALF_W, headY);
-  ctx.quadraticCurveTo(cx, headY + 5, cx - HALF_W, headY);
+  ctx.quadraticCurveTo(cx, headY + 6, cx - HALF_W, headY);
   ctx.quadraticCurveTo(cx - HALF_W - lean * 0.4, headY - STREAK_H * 0.35, cx - lean, topY);
   ctx.closePath();
   ctx.fill();
 
-  // Faint inner motion wisps — subtle so they don't reintroduce the "two lines" read.
-  ctx.strokeStyle = `rgba(255,255,255,${(0.22 * alpha).toFixed(3)})`;
-  ctx.lineWidth = 1;
+  // Inner motion wisps — visible streaks in the smudge body.
+  ctx.strokeStyle = `rgba(255,255,255,${(0.4 * alpha).toFixed(3)})`;
+  ctx.lineWidth = 1.4;
   ctx.beginPath();
-  ctx.moveTo(cx - 3 - lean * 0.5, topY + STREAK_H * 0.45);
+  ctx.moveTo(cx - 4 - lean * 0.5, topY + STREAK_H * 0.4);
   ctx.quadraticCurveTo(cx - 3, topY + STREAK_H * 0.75, cx - 2, headY - 3);
-  ctx.moveTo(cx + 3 - lean * 0.5, topY + STREAK_H * 0.45);
+  ctx.moveTo(cx + 4 - lean * 0.5, topY + STREAK_H * 0.4);
   ctx.quadraticCurveTo(cx + 3, topY + STREAK_H * 0.75, cx + 2, headY - 3);
   ctx.stroke();
 }

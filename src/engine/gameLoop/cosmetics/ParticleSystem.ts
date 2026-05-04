@@ -140,20 +140,24 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
         if (!resimulating) {
           state.screenFlash = Math.max(state.screenFlash, 0.18);
         }
+        // Blood droplets — emitted as spikes so they read as elongated splatter
+        // streaks rather than round dots. Velocity-aligned via the 'spike' shape.
         for (let i = 0; i < 18; i++) {
           const angle = Math.random() * Math.PI * 2;
-          const speed = 60 + Math.random() * 160;
+          const speed = 90 + Math.random() * 180;
           const life = 0.4 + Math.random() * 0.5;
-          this.emitParticle(px + (Math.random() - 0.5) * 8, py + (Math.random() - 0.5) * 8, Math.cos(angle) * speed, Math.sin(angle) * speed - 80, life, 2.5 + Math.random() * 4, BLOOD_COLOR);
+          this.emitParticle(px + (Math.random() - 0.5) * 8, py + (Math.random() - 0.5) * 8, Math.cos(angle) * speed, Math.sin(angle) * speed - 80, life, 2 + Math.random() * 3, BLOOD_COLOR, 'spike');
         }
         if (hit.sx !== undefined && hit.sy !== undefined) {
-          for (let i = 0; i < 12; i++) {
+          // Wood barb fragments — bias upward (away from the spike).
+          for (let i = 0; i < 14; i++) {
             const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.1;
-            const speed = 80 + Math.random() * 140;
-            const life = 0.25 + Math.random() * 0.35;
+            const speed = 90 + Math.random() * 160;
+            const life = 0.3 + Math.random() * 0.4;
             const color = i % 2 === 0 ? '#5C3A1E' : '#3A2210';
-            this.emitParticle(hit.sx, hit.sy, Math.cos(angle) * speed, Math.sin(angle) * speed, life, 1.2 + Math.random() * 1.6, color, 'spike');
+            this.emitParticle(hit.sx, hit.sy, Math.cos(angle) * speed, Math.sin(angle) * speed, life, 1.4 + Math.random() * 1.8, color, 'spike');
           }
+          // Slow blood drip from the thorn tip.
           this.emitParticle(hit.sx, hit.sy, 0, 30, 1.0, 1.8, BLOOD_COLOR);
         }
         break;
