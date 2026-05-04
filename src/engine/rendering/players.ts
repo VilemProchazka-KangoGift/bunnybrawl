@@ -249,10 +249,14 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player, nearCa
   } else {
     drawCharacterSprite(ctx, x, y, width, height, character, state, animFrame, fastFalling, player.idleAction, player.idleActionTimer, player.idleActionDuration, player.squashScale, theme, player);
     // Motion / fast-fall lines drawn OUTSIDE the sprite cache so the outline pass doesn't stamp them.
-    if (state === 'airborne' && !fastFalling) {
+    // Fast-fall smudge fades in/out via fastFallStreakAlpha (ticked in playerCosmetics)
+    // — render it whenever alpha > 0 even after fastFalling drops, so the smudge
+    // doesn't cut off the moment the player lands.
+    const fastFallAlpha = player.fastFallStreakAlpha ?? 0;
+    if (state === 'airborne' && !fastFalling && fastFallAlpha <= 0.01) {
       drawMotionLines(ctx, cx, y + height);
-    } else if (fastFalling) {
-      drawFastFallStreaks(ctx, cx, y, character.color, player.vx);
+    } else if (fastFalling || fastFallAlpha > 0.01) {
+      drawFastFallStreaks(ctx, cx, y, character.color, player.vx, fastFallAlpha);
     }
     drawExpression(ctx, player, frameTime);
   }
@@ -516,16 +520,20 @@ function drawMotionLines(ctx: CanvasRenderingContext2D, cx: number, footY: numbe
   ctx.stroke();
 }
 
-/** Fast-fall vertical smear. Stretched player-colored gradient streak fading
- *  upward from the head, with a slight lean opposite of horizontal motion
- *  (trail-behind effect). Falls back to legacy flat lines when slow-device is on.
- *  Drawn outside the sprite cache so the outline pass doesn't stamp them. */
+/** Fast-fall vertical smudge. Player-colored streak with curved sides (so it reads
+ *  as a smear instead of two parallel lines), narrowing to a point at the top
+ *  with a lean opposite horizontal motion (trail-behind). `alpha` (0..1) drives
+ *  fade-in on entry and fade-out on landing — caller ramps it via
+ *  `fastFallStreakAlpha` so the effect doesn't pop or linger.
+ *  Falls back to legacy flat lines when slow-device is on. Drawn outside the
+ *  sprite cache so the outline pass doesn't stamp it. */
 export function drawFastFallStreaks(
   ctx: CanvasRenderingContext2D, cx: number, headY: number,
-  color: string, vx = 0,
+  color: string, vx = 0, alpha = 1,
 ): void {
+  if (alpha <= 0.01) return;
   if (getSlowDevice()) {
-    ctx.strokeStyle = 'rgba(255,255,220,0.8)';
+    ctx.strokeStyle = `rgba(255,255,220,${(0.8 * alpha).toFixed(3)})`;
     ctx.lineWidth = 2;
     ctx.beginPath();
     for (let i = -2; i <= 2; i++) {
@@ -535,30 +543,37 @@ export function drawFastFallStreaks(
     ctx.stroke();
     return;
   }
-  const STREAK_H = 50;
-  const STREAK_W = 14;
+  const STREAK_H = 52;
+  const HALF_W = 13;            // half the bottom width — wider than the previous trapezoid for a smudgier read
   const { r, g, b } = hexToRGB(color);
-  // Top of smear leans opposite of motion direction — trails behind as player moves sideways.
-  const lean = Math.max(-1, Math.min(1, vx / 200)) * 10;
+  // Top of smear leans opposite of motion — trail-behind read.
+  const lean = Math.max(-1, Math.min(1, vx / 200)) * 9;
   const topY = headY - STREAK_H;
+
   const grad = ctx.createLinearGradient(cx, topY, cx, headY);
   grad.addColorStop(0, `rgba(${r},${g},${b},0)`);
-  grad.addColorStop(1, `rgba(${r},${g},${b},0.55)`);
+  grad.addColorStop(0.45, `rgba(${r},${g},${b},${(0.18 * alpha).toFixed(3)})`);
+  grad.addColorStop(1, `rgba(${r},${g},${b},${(0.6 * alpha).toFixed(3)})`);
   ctx.fillStyle = grad;
+
+  // Lozenge with a narrow leaned tip (top) and a rounded wider base — looks
+  // like a paint smear rather than a flat trapezoid.
   ctx.beginPath();
-  ctx.moveTo(cx - STREAK_W / 2 - lean, topY);
-  ctx.lineTo(cx + STREAK_W / 2 - lean, topY);
-  ctx.lineTo(cx + STREAK_W / 2, headY);
-  ctx.lineTo(cx - STREAK_W / 2, headY);
+  ctx.moveTo(cx - lean, topY);
+  ctx.quadraticCurveTo(cx + HALF_W + lean * 0.4, headY - STREAK_H * 0.35, cx + HALF_W, headY);
+  ctx.quadraticCurveTo(cx, headY + 5, cx - HALF_W, headY);
+  ctx.quadraticCurveTo(cx - HALF_W - lean * 0.4, headY - STREAK_H * 0.35, cx - lean, topY);
   ctx.closePath();
   ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+
+  // Faint inner motion wisps — subtle so they don't reintroduce the "two lines" read.
+  ctx.strokeStyle = `rgba(255,255,255,${(0.22 * alpha).toFixed(3)})`;
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(cx - 4 - lean * 0.7, topY + STREAK_H * 0.3);
-  ctx.lineTo(cx - 4, headY - 4);
-  ctx.moveTo(cx + 4 - lean * 0.7, topY + STREAK_H * 0.3);
-  ctx.lineTo(cx + 4, headY - 4);
+  ctx.moveTo(cx - 3 - lean * 0.5, topY + STREAK_H * 0.45);
+  ctx.quadraticCurveTo(cx - 3, topY + STREAK_H * 0.75, cx - 2, headY - 3);
+  ctx.moveTo(cx + 3 - lean * 0.5, topY + STREAK_H * 0.45);
+  ctx.quadraticCurveTo(cx + 3, topY + STREAK_H * 0.75, cx + 2, headY - 3);
   ctx.stroke();
 }
 

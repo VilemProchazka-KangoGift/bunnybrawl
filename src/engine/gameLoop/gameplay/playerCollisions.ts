@@ -46,6 +46,11 @@ export function handleSpringCollision(player: Player, state: MatchState): Hazard
   player.state = 'airborne';
   spring.bounceTimer = 0.3;
   player.springTrailTimer = SPRING_TRAIL_DURATION;
+  // Anchor the trail at the spring (stable across frames). Set here in fixedUpdate
+  // so the renderer sees the launch coords on the same tick the timer becomes >0
+  // — relying on cosmeticStep (half-rate) to capture player.x/y was racy.
+  player.springLaunchX = spring.x;
+  player.springLaunchY = spring.y;
   // spring sound moved to cosmeticStep (bounceTimer transition detection)
 
   return {

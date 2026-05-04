@@ -30,6 +30,14 @@ export function updatePlayerCosmetics(
     player.animTimer = 0;
   }
 
+  // Fast-fall smear fade-in/out. Ramps up while fastFalling, ramps down faster on
+  // exit so the smudge doesn't linger after landing. Local-only — not snapshotted.
+  if (player.fastFalling) {
+    player.fastFallStreakAlpha = Math.min(1, player.fastFallStreakAlpha + dt * 10);
+  } else {
+    player.fastFallStreakAlpha = Math.max(0, player.fastFallStreakAlpha - dt * 18);
+  }
+
   // Fire particles while burning
   if (player.burnTimer > 0 && player.state !== 'splat' && player.state !== 'respawning') {
     const cx = player.x + player.width / 2;

@@ -31,7 +31,14 @@ export function detectEntityTransitions(
         const dist = Math.sqrt((p.x + p.width / 2 - spring.x) ** 2 + (p.y + p.height - spring.y) ** 2);
         if (dist < minDist) { minDist = dist; closest = p; }
       }
-      if (closest) closest.springTrailTimer = SPRING_TRAIL_DURATION;
+      if (closest) {
+        closest.springTrailTimer = SPRING_TRAIL_DURATION;
+        // Anchor trail at the spring (stable across frames). Mirrors host-side
+        // setter in handleSpringCollision so guest peers also render the trail
+        // from a fixed launch point even though springLaunchX/Y aren't snapshotted.
+        closest.springLaunchX = spring.x;
+        closest.springLaunchY = spring.y;
+      }
     }
     pes.springBounces.set(spring, cur);
   }

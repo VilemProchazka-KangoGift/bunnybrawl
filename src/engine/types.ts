@@ -146,8 +146,9 @@ export interface Player {
   killStreak: number;    // current consecutive kills without dying
   breathTimer: number;         // for idle breathing animation
   springTrailTimer: number;    // >0 = spiral trail active after spring bounce
-  springLaunchX: number;     // local-only — x of player center at moment of spring rising edge; used by drawSpringTrail
-  springLaunchY: number;     // local-only — y of player feet at moment of spring rising edge; used by drawSpringTrail
+  springLaunchX: number;     // local-only — anchor x for drawSpringTrail (set to spring.x at bounce)
+  springLaunchY: number;     // local-only — anchor y for drawSpringTrail (set to spring.y at bounce)
+  fastFallStreakAlpha: number; // local-only — 0..1, ramps up while fastFalling, ramps down on exit; drives drawFastFallStreaks fade in/out
   damageFlashSide: 'left' | 'right' | null; // which side got hit
   damageFlashTimer: number;    // >0 = show red flash
   burnTimer: number;           // >0 = on fire from lava, spawns flame particles
