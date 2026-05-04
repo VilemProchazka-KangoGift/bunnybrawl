@@ -136,6 +136,7 @@ export class GameLoop {
     this.playerCosmeticSystem = new PlayerCosmeticSystem(
       sState, this.simulator.getEffWalkSpeed(), this.particleSystem,
       (name) => this.playSound(name),
+      sArena,
     );
     this.environmentSystem = new EnvironmentSystem(sState, sTheme);
     this.entityTransitionSystem = new EntityTransitionSystem(sState, (name) => this.playSound(name));
@@ -346,6 +347,7 @@ export class GameLoop {
     this.playerCosmeticSystem = new PlayerCosmeticSystem(
       sState, this.simulator.getEffWalkSpeed(), this.particleSystem,
       (name) => this.playSound(name),
+      sArena,
     );
     this.environmentSystem = new EnvironmentSystem(sState, newTheme);
     this.entityTransitionSystem = new EntityTransitionSystem(sState, (name) => this.playSound(name));

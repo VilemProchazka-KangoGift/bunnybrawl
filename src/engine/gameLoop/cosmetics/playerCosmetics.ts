@@ -1,13 +1,45 @@
-import type { Player, PlayerSlot } from '../../types';
+import type { Arena, Player, PlayerSlot, SurfaceTag } from '../../types';
 import {
   AFTERIMAGE_INTERVAL, AFTERIMAGE_SPEED_THRESHOLD, AFTERIMAGE_MAX,
 } from '../../constants';
 import { tickIdleStateMachine } from '../../rendering/idleActions';
 import { audio } from '../../audio';
-import { swapRemove } from '../../themes/utils';
+import { surfaceAt, swapRemove } from '../../themes/utils';
 import { getSlowDevice } from '../../perfFlags';
 
 const FIRE_COLORS = ['#FF4400', '#FF8800', '#FFCC00', '#FFAA00'];
+
+/**
+ * Surface → footstep sound name. Reuses existing grass/wood SFX where
+ * timbres overlap; ice is silent (sliding). Routes:
+ *   grass/snow/sand → footstep_grass (soft, muffled)
+ *   wood/stone/metal/glass → footstep_wood (sharp)
+ *   ice → null (no sound)
+ */
+function footstepSoundFor(surface: SurfaceTag): string | null {
+  switch (surface) {
+    case 'ice':    return null;
+    case 'snow':
+    case 'sand':
+    case 'grass':  return 'footstep_grass';
+    default:       return 'footstep_wood';
+  }
+}
+
+/** Surface → footstep dust color (env-sparks tints + var-dust palette). */
+function footstepDustColorFor(surface: SurfaceTag): string {
+  switch (surface) {
+    case 'grass':  return '#A8C878';
+    case 'stone':  return '#C0B898';
+    case 'wood':   return '#C8AA80';
+    case 'snow':   return '#F8FAFF';
+    case 'sand':   return '#E8D8A0';
+    case 'ice':    return '#D8F0FF';
+    case 'metal':  return '#FFE8B0';  // bright spark-like
+    case 'glass':  return '#FFFFFF';
+    default:       return '#C8AA80';
+  }
+}
 
 /**
  * Update per-player cosmetic state: animation, fire particles, idle anim,
@@ -21,6 +53,7 @@ export function updatePlayerCosmetics(
   footstepAccs: Map<PlayerSlot, number>,
   emitParticle: (x: number, y: number, vx: number, vy: number, life: number, size: number, color: string) => void,
   playSound: (name: string) => void,
+  arena?: Arena,
 ): void {
   // animFrame advance moved to Simulator.fixedUpdate — animFrame is in the
   // snapshot, so advancing it on guest's local clock (which drifts vs host)
@@ -68,7 +101,9 @@ export function updatePlayerCosmetics(
     if (player.afterimages[i].alpha <= 0) swapRemove(player.afterimages, i);
   }
 
-  // Footstep sounds — interval and volume scale with speed
+  // Footstep sounds + surface-aware dust (env-sparks / var-dust).
+  // Tempo, volume, AND puff size scale with speed (var-dust). Surface
+  // beneath the player picks both sound timbre and particle palette.
   if (player.state === 'run') {
     const runSpeed = Math.abs(player.vx);
     const speedRatio = Math.min(runSpeed / effWalkSpeed, 1);
@@ -77,10 +112,46 @@ export function updatePlayerCosmetics(
     fAcc += dt;
     if (fAcc >= interval) {
       fAcc -= interval;
-      const playerBottom = player.y + player.height;
-      const name = playerBottom > 600 ? 'footstep_grass' : 'footstep_wood';
-      audio.setVolume(name, 0.08 + speedRatio * 0.2);
-      playSound(name);
+
+      const cx = player.x + player.width / 2;
+      const fy = player.y + player.height;
+      // Fall back to legacy ground-y heuristic when arena is unavailable
+      // (preserves existing test fixtures that don't pass arena through).
+      const surface: SurfaceTag = arena
+        ? surfaceAt(arena, cx, fy)
+        : (fy > 600 ? 'grass' : 'wood');
+
+      const name = footstepSoundFor(surface);
+      if (name !== null) {
+        audio.setVolume(name, 0.08 + speedRatio * 0.2);
+        playSound(name);
+      }
+
+      // Var-dust puff: small at low speed, larger trailing at full speed.
+      // Slow-device skips dust spawn (audio still plays).
+      if (!getSlowDevice()) {
+        const color = footstepDustColorFor(surface);
+        const behind = player.facing === 'right' ? -1 : 1;
+        const sx = cx + behind * (player.width * 0.3);
+        const sy = fy - 1;
+        const baseSize = 1 + speedRatio * 1.4;
+        const baseLife = 0.16 + speedRatio * 0.12;
+
+        if (surface === 'metal' || surface === 'glass') {
+          // Bright spark-style emission: smaller, faster, fewer.
+          emitParticle(sx, sy, behind * (40 + speedRatio * 30), -30 - Math.random() * 30,
+            baseLife * 0.7, 0.8 + Math.random() * 0.6, color);
+        } else if (surface === 'ice') {
+          // Tiny ice glints, subtle.
+          if (Math.random() < 0.5) {
+            emitParticle(sx, sy, behind * (12 + speedRatio * 12), -8 - Math.random() * 12,
+              baseLife * 0.6, 0.6, color);
+          }
+        } else {
+          emitParticle(sx, sy, behind * (20 + speedRatio * 30), -10 - Math.random() * 25,
+            baseLife, baseSize, color);
+        }
+      }
     }
     footstepAccs.set(player.id, fAcc);
   } else {
