@@ -137,6 +137,10 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
     const { px, py } = hit;
     switch (hit.type) {
       case 'thorn': {
+        // Boost screen flash so the impact reads stronger
+        if (!resimulating && hit.screenFlash !== undefined) {
+          state.screenFlash = Math.max(state.screenFlash, 0.18);
+        }
         // Blood from player
         for (let i = 0; i < 18; i++) {
           const angle = Math.random() * Math.PI * 2;
@@ -144,14 +148,18 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
           const life = 0.4 + Math.random() * 0.5;
           this.emitParticle(px + (Math.random() - 0.5) * 8, py + (Math.random() - 0.5) * 8, Math.cos(angle) * speed, Math.sin(angle) * speed - 80, life, 2.5 + Math.random() * 4, BLOOD_COLOR);
         }
-        // Thorn shrapnel
+        // Barb fragments — sharper, faster, radial-upward
         if (hit.sx !== undefined && hit.sy !== undefined) {
-          for (let i = 0; i < 8; i++) {
-            const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI;
-            const speed = 30 + Math.random() * 80;
-            const life = 0.3 + Math.random() * 0.3;
-            this.emitParticle(hit.sx, hit.sy, Math.cos(angle) * speed, Math.sin(angle) * speed, life, 1.5 + Math.random() * 2, '#5C3A1E');
+          for (let i = 0; i < 12; i++) {
+            const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.1;
+            const speed = 80 + Math.random() * 140;
+            const life = 0.25 + Math.random() * 0.35;
+            // Mix two barb shades so the burst doesn't look monochrome
+            const color = i % 2 === 0 ? '#5C3A1E' : '#3A2210';
+            this.emitParticle(hit.sx, hit.sy, Math.cos(angle) * speed, Math.sin(angle) * speed, life, 1.2 + Math.random() * 1.6, color);
           }
+          // Slow drip at contact point — long life, tiny downward velocity
+          this.emitParticle(hit.sx, hit.sy, 0, 30, 1.0, 1.8, BLOOD_COLOR);
         }
         break;
       }
