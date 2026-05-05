@@ -1,6 +1,8 @@
 import type { ArenaPack } from '../types';
 import type { Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
+import { fastSin } from '../../fastMath';
+import { getSlowDevice } from '../../perfFlags';
 import { getFloatingPlatforms } from '../../themes/utils';
 import {
   drawTree, drawBush, drawFlower, drawGrassTuft,
@@ -561,6 +563,73 @@ export const waterfall: ArenaPack = {
   drawPlatform: (ctx, platform, isGround) => drawWaterfallPlatformBg(ctx, platform, isGround),
 
   drawPlatformOverlay: (ctx, platform, _isGround) => drawWaterfallPlatformFg(ctx, platform),
+
+  drawAnimatedBackground: (ctx, _arena, time) => {
+    if (getSlowDevice()) return;
+    ctx.save();
+    // Mist band at the base of waterfall
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
+    for (let i = 0; i < 12; i++) {
+      const drift = fastSin(time * 0.5 + i) * 14;
+      const x = 60 + i * 110 + drift;
+      const y = 600 + fastSin(time + i * 0.7) * 8;
+      const r = 24 + (i % 3) * 8;
+      ctx.beginPath();
+      ctx.ellipse(x, y, r, r * 0.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Periodic spray puffs at waterfall lip
+    const lipX = 970;
+    const period = 1.3;
+    const phase = time % period;
+    if (phase < 0.5) {
+      const u = phase / 0.5;
+      for (let i = 0; i < 8; i++) {
+        const a = -Math.PI / 2 + (i / 8 - 0.5) * 1.4;
+        const speed = 80 + (i % 3) * 30;
+        const px = lipX + Math.cos(a) * speed * u;
+        const py = 540 + Math.sin(a) * speed * u + 80 * u * u;
+        ctx.fillStyle = `rgba(220, 240, 255, ${(1 - u) * 0.7})`;
+        ctx.beginPath();
+        ctx.arc(px, py, 3 + u * 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    // Frogs perched on lily pads (3 lily pads at fixed positions, frogs idle-breathe)
+    const lilyPads = [
+      { x: 320, y: 700 },
+      { x: 720, y: 700 },
+      { x: 1100, y: 700 },
+    ];
+    for (let i = 0; i < lilyPads.length; i++) {
+      const lp = lilyPads[i];
+      // Lily pad
+      ctx.fillStyle = '#3d8a3a';
+      ctx.beginPath();
+      ctx.ellipse(lp.x, lp.y - 2, 20, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#5fb45a';
+      ctx.beginPath();
+      ctx.ellipse(lp.x - 2, lp.y - 4, 18, 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Frog (breathes via squash)
+      const breath = fastSin(time * 2 + i) * 0.3;
+      ctx.fillStyle = '#5fb45a';
+      ctx.beginPath();
+      ctx.ellipse(lp.x, lp.y - 8 + breath, 8, 6 - breath * 0.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Eyes
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(lp.x - 3, lp.y - 13, 1.8, 0, Math.PI * 2);
+      ctx.arc(lp.x + 3, lp.y - 13, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#000';
+      ctx.fillRect(lp.x - 3.5, lp.y - 13, 1, 1);
+      ctx.fillRect(lp.x + 2.5, lp.y - 13, 1, 1);
+    }
+    ctx.restore();
+  },
 
   // ---- Audio ----
   ambientSoundConfig: {

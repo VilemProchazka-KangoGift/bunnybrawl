@@ -1,6 +1,8 @@
 import type { ArenaPack } from '../types';
 import type { Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
+import { fastSin } from '../../fastMath';
+import { getSlowDevice } from '../../perfFlags';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
 import {
   CAP_DEPTH, applyIsoInsets, mulberry32, seedFor,
@@ -1135,6 +1137,68 @@ export const rooftops: ArenaPack = {
     ctx.ellipse(x, lidY, halfW * 0.7, size * 0.06, 0, 0, Math.PI * 2);
     ctx.fill();
   }),
+
+  drawAnimatedBackground: (ctx, _arena, time) => {
+    if (getSlowDevice()) return;
+    ctx.save();
+    // Smokestacks — continuous puff columns (3 chimneys at fixed positions)
+    const stacks = [
+      { x: 280, y: 280 },
+      { x: 940, y: 240 },
+      { x: 1180, y: 320 },
+    ];
+    for (let si = 0; si < stacks.length; si++) {
+      const s = stacks[si];
+      // Stack shaft
+      ctx.fillStyle = '#2a2e3a';
+      ctx.fillRect(s.x - 6, s.y, 12, 50);
+      ctx.fillStyle = '#1a1e26';
+      ctx.fillRect(s.x - 8, s.y - 4, 16, 6);
+      // Smoke puffs rising
+      for (let i = 0; i < 12; i++) {
+        const t = ((time * 0.35 + i * 0.08 + si * 0.13) % 1);
+        const px = s.x + 4 + fastSin(time * 0.8 + i + si) * 22 * t;
+        const py = s.y - 8 - t * 200;
+        const sz = 5 + t * 12;
+        ctx.fillStyle = `rgba(160, 165, 180, ${(1 - t) * 0.7})`;
+        ctx.beginPath();
+        ctx.arc(px, py, sz, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    // Neon signs — 2 signs that flicker periodically
+    const signs = [
+      { x: 80, y: 320, color: '#ff5f8a', glow: '#ff5f8a' },
+      { x: 1080, y: 200, color: '#7df0ff', glow: '#7df0ff' },
+    ];
+    for (let si = 0; si < signs.length; si++) {
+      const s = signs[si];
+      // Periodic glitch: every 4-7s a 0.2-0.4s flicker
+      const period = 5 + si * 1.5;
+      const phase = (time + si * 2) % period;
+      const glitching = phase < 0.3;
+      const flickerLevel = glitching ? (fastSin(time * 80) > 0 ? 1 : 0.3) : 1;
+      const baseAlpha = (glitching ? 0.4 : 0.85) + (glitching ? flickerLevel * 0.2 : fastSin(time * 3) * 0.05);
+      // Frame
+      ctx.fillStyle = '#1a1a26';
+      ctx.fillRect(s.x - 4, s.y - 4, 88, 28);
+      // Letters
+      ctx.fillStyle = `rgba(${si === 0 ? '255,95,138' : '125,240,255'},${baseAlpha})`;
+      for (let li = 0; li < 5; li++) {
+        const die = glitching && li === 0 && fastSin(time * 90) < 0;
+        if (die) continue;
+        const lx = s.x + 4 + li * 16;
+        ctx.fillRect(lx, s.y, 10, 18);
+      }
+      // Glow
+      ctx.shadowColor = s.glow;
+      ctx.shadowBlur = glitching ? 6 * flickerLevel : 12;
+      ctx.fillStyle = `rgba(${si === 0 ? '255,95,138' : '125,240,255'},${0.3 * baseAlpha})`;
+      ctx.fillRect(s.x + 4, s.y, 78, 18);
+      ctx.shadowBlur = 0;
+    }
+    ctx.restore();
+  },
 
   // ---- Audio ----
   ambientSoundConfig: {
