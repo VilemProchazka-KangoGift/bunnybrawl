@@ -1,6 +1,8 @@
 import type { ArenaPack } from '../types';
 import type { Arena, Platform, WeatherParticle } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
+import { fastSin } from '../../fastMath';
+import { getSlowDevice } from '../../perfFlags';
 import { getFloatingPlatforms } from '../../themes/utils';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
 import {
@@ -830,6 +832,78 @@ export const castle: ArenaPack = {
     ctx.fillStyle = '#4A4A55';
     ctx.fillRect(x - halfW * 0.7, y - 3, halfW * 1.4, 3);
   }),
+
+  drawAnimatedBackground: (ctx, _arena, time) => {
+    if (getSlowDevice()) return;
+    ctx.save();
+    // Wall torches — flickering flames at fixed positions on tower walls
+    const torches = [
+      { x: 280, y: 420 }, { x: 280, y: 220 },
+      { x: 1000, y: 420 }, { x: 1000, y: 220 },
+      { x: 640, y: 280 },
+    ];
+    for (let i = 0; i < torches.length; i++) {
+      const t = torches[i];
+      const flicker = 0.85 + fastSin(time * 14 + i * 1.7) * 0.15;
+      const wig = fastSin(time * 9 + i) * 1.5;
+      // Sconce
+      ctx.fillStyle = '#3a2a1c';
+      ctx.fillRect(t.x - 2, t.y, 4, 10);
+      // Flame body (radial gradient inline)
+      const flameH = 16 * flicker;
+      const grd = ctx.createRadialGradient(t.x + wig, t.y - flameH * 0.5, 0, t.x + wig, t.y - flameH * 0.5, flameH);
+      grd.addColorStop(0, 'rgba(255,245,168,1)');
+      grd.addColorStop(0.5, 'rgba(255,154,58,0.9)');
+      grd.addColorStop(1, 'rgba(255,80,20,0)');
+      ctx.fillStyle = grd;
+      ctx.beginPath();
+      ctx.ellipse(t.x + wig, t.y - flameH * 0.6, 6 * flicker, flameH, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Hot core
+      ctx.fillStyle = `rgba(255,235,180,${0.9 * flicker})`;
+      ctx.beginPath();
+      ctx.ellipse(t.x + wig, t.y - flameH * 0.5, 2.5, flameH * 0.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Drifting embers
+      for (let k = 0; k < 2; k++) {
+        const u = ((time * 0.5 + i * 0.3 + k * 0.5) % 1);
+        ctx.globalAlpha = (1 - u) * 0.55;
+        ctx.fillStyle = '#ff9a3a';
+        ctx.beginPath();
+        ctx.arc(t.x + fastSin(time * 3 + k + i) * 4, t.y - flameH - u * 30, 1.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+    // Banners — gentle wave on tower walls (rectangular cloth)
+    const banners = [
+      { x: 260, y: 320, color: '#cc4444' },
+      { x: 1020, y: 320, color: '#4a7ad6' },
+      { x: 640, y: 200, color: '#ffd56b' },
+    ];
+    for (let i = 0; i < banners.length; i++) {
+      const b = banners[i];
+      const wave = fastSin(time * 2.2 + i * 1.3) * 4;
+      const wave2 = fastSin(time * 4 + i) * 2;
+      // Pole
+      ctx.fillStyle = '#3a2a1c';
+      ctx.fillRect(b.x - 1, b.y - 32, 2, 32);
+      // Cloth
+      ctx.fillStyle = b.color;
+      ctx.beginPath();
+      ctx.moveTo(b.x - 10, b.y - 30);
+      ctx.lineTo(b.x + 10, b.y - 30);
+      ctx.lineTo(b.x + 10 + wave, b.y - 8);
+      ctx.lineTo(b.x + wave * 0.5, b.y - 4);
+      ctx.lineTo(b.x - 10 + wave2, b.y - 8);
+      ctx.closePath();
+      ctx.fill();
+      // Crest dot
+      ctx.fillStyle = '#ffd56b';
+      ctx.fillRect(b.x - 1, b.y - 22, 2, 2);
+    }
+    ctx.restore();
+  },
 
   // ---- Audio ----
   ambientSoundConfig: {

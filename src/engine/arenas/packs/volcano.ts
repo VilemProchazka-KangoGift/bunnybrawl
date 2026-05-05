@@ -1,6 +1,8 @@
 import type { ArenaPack } from '../types';
 import type { Arena, Platform, WeatherParticle } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
+import { fastSin, fastCos } from '../../fastMath';
+import { getSlowDevice } from '../../perfFlags';
 import { getFloatingPlatforms } from '../../themes/utils';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
 import {
@@ -682,6 +684,67 @@ export const volcano: ArenaPack = {
     ctx.ellipse(x, y - size * 0.5 / squash, halfW * 0.15, flameH * 0.3, 0, 0, Math.PI * 2);
     ctx.fill();
   }),
+
+  drawAnimatedBackground: (ctx, _arena, time) => {
+    if (getSlowDevice()) return;
+    ctx.save();
+    // Heat-haze shimmer over lava zones (translucent dashed rings)
+    const lavaZones = [
+      { cx: 340, cy: 694, w: 130 },
+      { cx: 900, cy: 694, w: 130 },
+      { cx: 610, cy: 654, w: 60 },
+    ];
+    ctx.strokeStyle = 'rgba(255, 200, 150, 0.18)';
+    ctx.lineWidth = 1;
+    for (const lz of lavaZones) {
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2 + time * 0.5;
+        const r = 26 + fastSin(time * 2 + i) * 4;
+        const x0 = lz.cx + fastCos(a) * r;
+        const y0 = lz.cy - 6 + fastSin(a) * r * 0.4;
+        const x1 = lz.cx + fastCos(a + 0.18) * r;
+        const y1 = lz.cy - 6 + fastSin(a + 0.18) * r * 0.4;
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+        ctx.stroke();
+      }
+    }
+    // Ash plumes — 3 vents on ground, continuous rising particles seeded by time
+    const vents = [220, 640, 1060];
+    ctx.fillStyle = 'rgba(80, 50, 40, 0.55)';
+    for (const vx of vents) {
+      for (let i = 0; i < 14; i++) {
+        const t = ((time * 0.4 + i * 0.07) % 1);
+        const px = vx + fastSin(time * 1.3 + i * 1.7) * 28 * t;
+        const py = 700 - t * 220;
+        const sz = 2 + t * 5;
+        const a = (1 - t) * 0.55;
+        ctx.globalAlpha = a;
+        ctx.beginPath();
+        ctx.arc(px, py, sz, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+    // Lava warning bubbles — periodic telegraph at lava centers
+    for (let zi = 0; zi < lavaZones.length; zi++) {
+      const lz = lavaZones[zi];
+      const period = 4 + zi * 0.7;
+      const phase = (time + zi * 1.3) % period;
+      if (phase < 1.4) {
+        const u = phase / 1.4;
+        const r = 4 + u * 7;
+        ctx.globalAlpha = 0.55 * (1 - u * 0.4);
+        ctx.fillStyle = '#ffd56b';
+        ctx.beginPath();
+        ctx.arc(lz.cx, lz.cy - 6 - u * 5, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  },
 
   // ---- Audio ----
   ambientSoundConfig: {
