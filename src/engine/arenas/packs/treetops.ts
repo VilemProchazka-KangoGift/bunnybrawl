@@ -1,6 +1,8 @@
 import type { ArenaPack } from '../types';
 import type { Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
+import { fastSin } from '../../fastMath';
+import { getSlowDevice } from '../../perfFlags';
 import { drawTree, drawHangingVine, drawFgLeafCluster, drawFern } from '../../themes/drawPrimitives';
 import { getFloatingPlatforms } from '../../themes/utils';
 import {
@@ -520,6 +522,51 @@ export const treetops: ArenaPack = {
     ctx.closePath();
     ctx.fill();
 
+    ctx.restore();
+  },
+
+  drawAnimatedBackground: (ctx, _arena, time) => {
+    if (getSlowDevice()) return;
+    ctx.save();
+    // Squirrel — periodic dart across a high branch (every ~7s)
+    const period = 7;
+    const phase = time % period;
+    if (phase < 2.4) {
+      const u = phase / 2.4;
+      const fromLeft = Math.floor(time / period) % 2 === 0;
+      const x = fromLeft ? -30 + u * (CANVAS_WIDTH + 60) : CANVAS_WIDTH + 30 - u * (CANVAS_WIDTH + 60);
+      const y = 180 + fastSin(u * 16) * 2;
+      const facingLeft = !fromLeft;
+      ctx.save();
+      ctx.translate(x, y);
+      if (facingLeft) ctx.scale(-1, 1);
+      // Body
+      ctx.fillStyle = '#a5683a';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 9, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Tail (curl behind body)
+      ctx.beginPath();
+      ctx.moveTo(-7, 0);
+      ctx.bezierCurveTo(-18, -3, -22, -14, -10, -14);
+      ctx.lineTo(-10, -6);
+      ctx.bezierCurveTo(-14, -7, -10, -2, -7, 0);
+      ctx.fill();
+      // Head
+      ctx.beginPath();
+      ctx.arc(7, -1, 4, 0, Math.PI * 2);
+      ctx.fill();
+      // Ear
+      ctx.beginPath();
+      ctx.moveTo(8, -4);
+      ctx.lineTo(10, -7);
+      ctx.lineTo(11, -4);
+      ctx.fill();
+      // Eye
+      ctx.fillStyle = '#000';
+      ctx.fillRect(8, -2, 1.5, 1.5);
+      ctx.restore();
+    }
     ctx.restore();
   },
 

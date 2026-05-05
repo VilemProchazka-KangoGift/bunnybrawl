@@ -1,6 +1,8 @@
 import type { ArenaPack } from '../types';
 import type { Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
+import { fastSin, fastCos } from '../../fastMath';
+import { getSlowDevice } from '../../perfFlags';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
 import {
   CAP_DEPTH, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
@@ -929,6 +931,65 @@ export const underwater: ArenaPack = {
     ctx.ellipse(-bellW * 0.2, -bellH * 0.5, bellW * 0.25, bellH * 0.3, -0.2, 0, Math.PI * 2);
     ctx.fill();
 
+    ctx.restore();
+  },
+
+  drawAnimatedBackground: (ctx, _arena, time) => {
+    if (getSlowDevice()) return;
+    ctx.save();
+    // Fish school — small school swims in a slow figure-8 around mid-screen
+    const cx = CANVAS_WIDTH * 0.5 + fastSin(time * 0.4) * 220;
+    const cy = 360 + fastSin(time * 0.6) * 30;
+    const fishCount = 11;
+    for (let i = 0; i < fishCount; i++) {
+      const ox = (i % 5) * 22 - 44;
+      const oy = Math.floor(i / 5) * 18 - 18;
+      const wob = fastSin(time * 4 + i) * 2;
+      const x = cx + ox + wob;
+      const y = cy + oy + fastCos(time * 3 + i) * 2;
+      const facingLeft = fastSin(time * 0.4) < 0;
+      ctx.save();
+      ctx.translate(x, y);
+      if (facingLeft) ctx.scale(-1, 1);
+      // Body
+      ctx.fillStyle = '#ffaa3a';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 7, 3.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Tail wag
+      const tailWag = fastSin(time * 12 + i) * 0.8;
+      ctx.beginPath();
+      ctx.moveTo(-7, 0);
+      ctx.lineTo(-12, -3 + tailWag);
+      ctx.lineTo(-12, 3 + tailWag);
+      ctx.closePath();
+      ctx.fill();
+      // Eye
+      ctx.fillStyle = '#000';
+      ctx.fillRect(4, -1, 1, 1);
+      ctx.restore();
+    }
+    // Ambient bubble columns rising from seabed
+    ctx.fillStyle = 'rgba(200, 235, 255, 0.45)';
+    ctx.strokeStyle = 'rgba(200, 235, 255, 0.6)';
+    ctx.lineWidth = 1;
+    const columns = [180, 540, 940, 1180];
+    for (let ci = 0; ci < columns.length; ci++) {
+      for (let i = 0; i < 5; i++) {
+        const t = ((time * 0.5 + i * 0.2 + ci * 0.13) % 1);
+        const bx = columns[ci] + fastSin(time * 2 + i + ci) * 8;
+        const by = 700 - t * 700;
+        const r = 1.5 + t * 2;
+        ctx.beginPath();
+        ctx.arc(bx, by, r, 0, Math.PI * 2);
+        ctx.stroke();
+        if (i % 2 === 0) {
+          ctx.beginPath();
+          ctx.arc(bx - 0.5, by - 0.5, r * 0.3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
     ctx.restore();
   },
 

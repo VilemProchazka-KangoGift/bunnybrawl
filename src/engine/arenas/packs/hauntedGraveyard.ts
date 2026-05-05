@@ -1,6 +1,9 @@
 import type { ArenaPack } from '../types';
 import type { Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
+import { fastSin, fastCos } from '../../fastMath';
+import { getSlowDevice } from '../../perfFlags';
+import { computeNightIntensity } from '../../rendering';
 import { createThornRenderer } from '../../themes/drawPrimitives';
 import { getFloatingPlatforms } from '../../themes/utils';
 import {
@@ -687,6 +690,58 @@ export const hauntedGraveyard: ArenaPack = {
     size: 30,
     color: 'rgba(180, 200, 220, 0.6)',
     glowColor: '#6688BB',
+  },
+
+  drawAnimatedBackground: (ctx, _arena, time, dayPhase) => {
+    if (getSlowDevice()) return;
+    const nightIntensity = computeNightIntensity(dayPhase);
+    ctx.save();
+    // Will-o'-wisps — drift in slow circles, brighter at night
+    const wispBrightness = 0.5 + nightIntensity * 0.5;
+    const wisps = [
+      { x: 200, y: 540, phase: 0 },
+      { x: 640, y: 480, phase: 1.7 },
+      { x: 1080, y: 540, phase: 3.3 },
+      { x: 420, y: 420, phase: 0.8 },
+      { x: 880, y: 420, phase: 2.4 },
+    ];
+    for (const w of wisps) {
+      const dx = fastCos(time * 0.6 + w.phase) * 40;
+      const dy = fastSin(time * 0.8 + w.phase) * 24;
+      const x = w.x + dx;
+      const y = w.y + dy;
+      const pulse = 0.7 + fastSin(time * 3 + w.phase) * 0.3;
+      // Halo
+      const grd = ctx.createRadialGradient(x, y, 0, x, y, 32);
+      grd.addColorStop(0, `rgba(168, 255, 208, ${0.85 * wispBrightness * pulse})`);
+      grd.addColorStop(1, 'rgba(168, 255, 208, 0)');
+      ctx.fillStyle = grd;
+      ctx.beginPath();
+      ctx.arc(x, y, 32, 0, Math.PI * 2);
+      ctx.fill();
+      // Bright core
+      ctx.fillStyle = `rgba(220, 255, 230, ${wispBrightness * pulse})`;
+      ctx.beginPath();
+      ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Low fog band — translucent rolling mist along ground
+    ctx.fillStyle = 'rgba(220, 220, 255, 0.10)';
+    for (let i = 0; i < 5; i++) {
+      const wob = fastSin(time * 0.4 + i * 0.7) * 8;
+      const y = 660 - i * 12 + wob;
+      const x = ((time * (15 + i * 5)) % 200) - 100;
+      ctx.beginPath();
+      ctx.ellipse(x + 200, y, 180, 12, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(x + 600, y, 160, 10, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(x + 1000, y, 200, 14, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
   },
 
   // ---- Audio ----
