@@ -9,7 +9,7 @@ import {
   SURFACE_RIPPLE_LIFE,
   SURFACE_RIPPLE_MAX_RADIUS,
 } from '../../constants';
-import { platformAt, surfaceOf } from '../../themes/utils';
+import { platformUnderFoot, surfaceOf } from '../../themes/utils';
 
 export interface PrevSurfaceImpactState {
   state: Player['state'];
@@ -147,7 +147,9 @@ export function detectSurfaceImpact(
   if (wasAirborne && isGrounded && Math.abs(prev.vy) >= DUST_LAND_VY_THRESHOLD) {
     const cx = player.x + player.width / 2;
     const fy = player.y + player.height;
-    const plat = platformAt(arena, cx, fy);
+    // Use the player's full foot extent — handles half-off-edge landings
+    // where the center is past plat.x + plat.width but the bbox overlaps.
+    const plat = platformUnderFoot(arena, player.x, player.x + player.width, fy);
     const surface = surfaceOf(plat, arena);
     const hardLanding = Math.abs(prev.vy) >= HARD_LAND_VY_THRESHOLD || prev.fastFalling;
 

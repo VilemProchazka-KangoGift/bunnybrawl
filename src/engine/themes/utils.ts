@@ -32,6 +32,32 @@ export function platformAt(arena: Arena, x: number, y: number, tolerance = 4): P
 }
 
 /**
+ * Find the platform a player AABB is standing on. Unlike `platformAt`,
+ * this matches platforms whose horizontal range OVERLAPS the player's
+ * foot extent — handles the case where the player is half-off an edge
+ * (player center past `plat.x + plat.width`, but the bbox still overlaps).
+ * Picks the platform with the largest horizontal overlap.
+ */
+export function platformUnderFoot(
+  arena: Arena, footX: number, footRight: number, footY: number, tolerance = 4,
+): Platform | undefined {
+  const plats = arena.platforms;
+  let best: Platform | undefined;
+  let bestOverlap = 0;
+  for (let i = 0; i < plats.length; i++) {
+    const p = plats[i];
+    const ox0 = Math.max(footX, p.x);
+    const ox1 = Math.min(footRight, p.x + p.width);
+    const overlap = ox1 - ox0;
+    if (overlap <= 0) continue;
+    const dy = footY - p.y;
+    if (dy < -tolerance || dy > p.height + tolerance) continue;
+    if (overlap > bestOverlap) { bestOverlap = overlap; best = p; }
+  }
+  return best;
+}
+
+/**
  * Find the platform a player is standing on (or last touched on the way down)
  * and return its surface tag.
  */

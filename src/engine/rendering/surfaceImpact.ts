@@ -85,10 +85,12 @@ function drawCrack(ctx: CanvasRenderingContext2D, d: SurfaceDecal, alpha: number
  * the oval into empty space. No clip = global decal (e.g. ground floor).
  */
 function drawScuff(ctx: CanvasRenderingContext2D, d: SurfaceDecal, alpha: number): void {
-  const halfW = 6;
+  // Footprint-width oval (~player foot wide) so edge landings visibly clip.
+  const halfW = 14;
+  const halfH = 3;
   const left = d.x - halfW;
   const right = d.x + halfW;
-  // Clip whole oval if it sits entirely past the platform edge.
+  // Drop entirely if the oval sits past the platform edge.
   if (d.clipMaxX !== undefined && left >= d.clipMaxX) return;
   if (d.clipMinX !== undefined && right <= d.clipMinX) return;
 
@@ -100,13 +102,19 @@ function drawScuff(ctx: CanvasRenderingContext2D, d: SurfaceDecal, alpha: number
     const x0 = Math.max(d.clipMinX ?? -Infinity, left);
     const x1 = Math.min(d.clipMaxX ?? Infinity, right);
     ctx.beginPath();
-    ctx.rect(x0, d.y - 6, x1 - x0, 8);
+    ctx.rect(x0, d.y - halfH - 2, x1 - x0, halfH * 2 + 4);
     ctx.clip();
   }
-  ctx.globalAlpha = alpha * 0.75;
+  // Outer footprint (char-tinted, soft).
+  ctx.globalAlpha = alpha * 0.65;
   ctx.fillStyle = d.color;
   ctx.beginPath();
-  ctx.ellipse(d.x, d.y - 1, halfW, 2.2, (d.seed - 0.5) * 0.4, 0, Math.PI * 2);
+  ctx.ellipse(d.x, d.y - 1, halfW, halfH, (d.seed - 0.5) * 0.4, 0, Math.PI * 2);
+  ctx.fill();
+  // Darker inner core for a stronger impact mark.
+  ctx.globalAlpha = alpha * 0.85;
+  ctx.beginPath();
+  ctx.ellipse(d.x + (d.seed - 0.5) * 4, d.y - 1, halfW * 0.55, halfH * 0.7, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }
