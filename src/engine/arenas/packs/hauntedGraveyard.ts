@@ -707,8 +707,8 @@ export const hauntedGraveyard: ArenaPack = {
     {
       species: 'bat',
       positions: [
-        { x: 580, y: 302 },
-        { x: 720, y: 302 },
+        { x: 580, y: 325 },
+        { x: 720, y: 325 },
       ],
       radius: 140,
       respawnTime: 10,

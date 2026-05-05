@@ -621,7 +621,7 @@ const PERCHED_FLOCK_DRAWERS: Record<ScatterFlockSpecies, (ctx: CanvasRenderingCo
       const bx = cx + o.dx;
       const by = cy + o.dy;
       const sway = fastSin(time * 1.2 + i);
-      ctx.fillStyle = '#1a1422';
+      ctx.fillStyle = '#2c1f3c';
       ctx.beginPath();
       ctx.ellipse(bx + sway, by + 4, 3, 5, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -629,8 +629,8 @@ const PERCHED_FLOCK_DRAWERS: Record<ScatterFlockSpecies, (ctx: CanvasRenderingCo
       ctx.moveTo(bx - 3 + sway, by + 2);
       ctx.quadraticCurveTo(bx + sway, by + 6, bx + 3 + sway, by + 2);
       ctx.fill();
-      ctx.fillStyle = '#ff7c2e';
-      ctx.fillRect(bx - 0.5 + sway, by + 5, 1, 1);
+      ctx.fillStyle = '#ff9244';
+      ctx.fillRect(bx - 1 + sway, by + 5, 2, 1);
     }
     ctx.globalAlpha = 1;
   },
@@ -695,7 +695,7 @@ const PERCHED_FLOCK_DRAWERS: Record<ScatterFlockSpecies, (ctx: CanvasRenderingCo
 
 interface FlyingSpeciesCfg { color: string | null; bodyW: number; bodyH: number; wingSpan: number; flapFreq: number; flapAmp: number; }
 const FLYING_CFG: Record<ScatterFlockSpecies, FlyingSpeciesCfg> = {
-  bat:  { color: '#1a1422', bodyW: 0,   bodyH: 0,   wingSpan: 5, flapFreq: 32, flapAmp: 4 },
+  bat:  { color: '#2c1f3c', bodyW: 0,   bodyH: 0,   wingSpan: 5, flapFreq: 32, flapAmp: 4 },
   crow: { color: '#0e0a14', bodyW: 4,   bodyH: 3,   wingSpan: 9, flapFreq: 24, flapAmp: 5 },
   bird: { color: null,      bodyW: 3,   bodyH: 2.5, wingSpan: 6, flapFreq: 28, flapAmp: 4 },
 };
