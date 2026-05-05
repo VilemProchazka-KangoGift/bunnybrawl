@@ -13,11 +13,10 @@ export function surfaceOf(platform: Platform | undefined, arena?: { defaultSurfa
 }
 
 /**
- * Find the platform a player is standing on (or last touched on the way down)
- * and return its surface tag. Picks the topmost platform whose horizontal
- * range contains `x` and whose top edge is within `tolerance` px of `y`.
+ * Find the topmost platform whose horizontal range contains `x` and whose
+ * top edge is within `tolerance` px of `y`. Returns undefined if none.
  */
-export function surfaceAt(arena: Arena, x: number, y: number, tolerance = 4): SurfaceTag {
+export function platformAt(arena: Arena, x: number, y: number, tolerance = 4): Platform | undefined {
   const plats = arena.platforms;
   let best: Platform | undefined;
   let bestDy = Infinity;
@@ -29,7 +28,15 @@ export function surfaceAt(arena: Arena, x: number, y: number, tolerance = 4): Su
     const adjDy = Math.abs(dy);
     if (adjDy < bestDy) { bestDy = adjDy; best = p; }
   }
-  return surfaceOf(best, arena);
+  return best;
+}
+
+/**
+ * Find the platform a player is standing on (or last touched on the way down)
+ * and return its surface tag.
+ */
+export function surfaceAt(arena: Arena, x: number, y: number, tolerance = 4): SurfaceTag {
+  return surfaceOf(platformAt(arena, x, y, tolerance), arena);
 }
 
 /** Get platforms with y < 650 and width >= 80 (floating platforms suitable for decorations). Cached. */

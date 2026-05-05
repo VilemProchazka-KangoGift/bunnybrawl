@@ -33,6 +33,18 @@ function drawCrack(ctx: CanvasRenderingContext2D, d: SurfaceDecal, alpha: number
   const baseAngle = d.seed * Math.PI * 2;
   const len = d.surface === 'glass' ? 22 : 28;
 
+  // Clip whole crack if center sits past the platform edge.
+  if (d.clipMaxX !== undefined && d.x >= d.clipMaxX) return;
+  if (d.clipMinX !== undefined && d.x <= d.clipMinX) return;
+
+  ctx.save();
+  if (d.clipMinX !== undefined || d.clipMaxX !== undefined) {
+    const x0 = d.clipMinX ?? d.x - len;
+    const x1 = d.clipMaxX ?? d.x + len;
+    ctx.beginPath();
+    ctx.rect(x0, d.y - len, x1 - x0, len * 2);
+    ctx.clip();
+  }
   ctx.globalAlpha = alpha * 0.7;
   ctx.strokeStyle = d.color;
   ctx.lineWidth = 1.2;
@@ -61,101 +73,42 @@ function drawCrack(ctx: CanvasRenderingContext2D, d: SurfaceDecal, alpha: number
   ctx.beginPath();
   ctx.arc(d.x, d.y, 2, 0, Math.PI * 2);
   ctx.fill();
+  ctx.restore();
 }
 
 /**
- * Surface debris palette for scuff decals. Two colors per surface — a
- * darker base for chips/leaves and a lighter for highlights/grains.
- */
-const DEBRIS: Record<string, [string, string]> = {
-  grass: ['#4A7A30', '#8AB860'],
-  stone: ['#7A7066', '#C0B898'],
-  wood:  ['#7A4F28', '#C8A278'],
-  snow:  ['#E8F0FF', '#FFFFFF'],
-  sand:  ['#A88858', '#E8D8A0'],
-  metal: ['#FFE8B0', '#FFFFFF'],
-  ice:   ['#A8C8E0', '#E8F8FF'],
-  glass: ['#C0D8E0', '#FFFFFF'],
-};
-
-/**
- * Hard-landing scuff: a graphic impact pattern — small character-tinted
- * center + 6–10 surface-typed debris flecks radiating outward. Differs
- * per surface so wood splinters don't read like grass clumps.
+ * Hard-landing scuff: a small character-tinted oval centered on the impact
+ * point. Debris flecks are emitted as airborne particles at spawn time
+ * (see surfaceImpact.ts:emitScuffDebris) so they're not part of this draw.
+ *
+ * Clipped horizontally to the platform extent so edge landings don't paint
+ * the oval into empty space. No clip = global decal (e.g. ground floor).
  */
 function drawScuff(ctx: CanvasRenderingContext2D, d: SurfaceDecal, alpha: number): void {
-  const [debrisDark, debrisLight] = DEBRIS[d.surface] ?? DEBRIS.stone;
-  const baseAngle = d.seed * Math.PI * 2;
+  const halfW = 6;
+  const left = d.x - halfW;
+  const right = d.x + halfW;
+  // Clip whole oval if it sits entirely past the platform edge.
+  if (d.clipMaxX !== undefined && left >= d.clipMaxX) return;
+  if (d.clipMinX !== undefined && right <= d.clipMinX) return;
 
-  // Center impact — small character-tinted oval (id cue, not the whole effect).
+  const needsClip = (d.clipMinX !== undefined && left < d.clipMinX)
+    || (d.clipMaxX !== undefined && right > d.clipMaxX);
+
+  ctx.save();
+  if (needsClip) {
+    const x0 = Math.max(d.clipMinX ?? -Infinity, left);
+    const x1 = Math.min(d.clipMaxX ?? Infinity, right);
+    ctx.beginPath();
+    ctx.rect(x0, d.y - 6, x1 - x0, 8);
+    ctx.clip();
+  }
   ctx.globalAlpha = alpha * 0.75;
   ctx.fillStyle = d.color;
   ctx.beginPath();
-  ctx.ellipse(d.x, d.y - 1, 6, 2.2, (d.seed - 0.5) * 0.4, 0, Math.PI * 2);
+  ctx.ellipse(d.x, d.y - 1, halfW, 2.2, (d.seed - 0.5) * 0.4, 0, Math.PI * 2);
   ctx.fill();
-
-  // Radial debris flecks — shape varies by surface.
-  const fleckCount = 8;
-  const spread = 18;
-  for (let i = 0; i < fleckCount; i++) {
-    const rand = ((d.seed * 23.7 + i * 5.13) % 1 + 1) % 1;
-    const a = baseAngle + (i / fleckCount) * Math.PI * 2 + rand * 0.3;
-    const r = spread * (0.5 + rand * 0.5);
-    const fx = d.x + fastCos(a) * r;
-    // Foreshorten Y for ground-perspective feel
-    const fy = d.y + fastSin(a) * r * 0.4 - 0.5;
-
-    const isLight = i % 2 === 0;
-    ctx.fillStyle = isLight ? debrisLight : debrisDark;
-    ctx.globalAlpha = alpha * (isLight ? 0.65 : 0.85);
-
-    // Surface-specific fleck shape:
-    if (d.surface === 'metal') {
-      // Sparks: small bright lines radiating outward
-      ctx.strokeStyle = ctx.fillStyle;
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.moveTo(d.x + fastCos(a) * 4, d.y + fastSin(a) * 4 * 0.4);
-      ctx.lineTo(fx, fy);
-      ctx.stroke();
-    } else if (d.surface === 'wood') {
-      // Splinters: tiny rotated rectangles
-      ctx.save();
-      ctx.translate(fx, fy);
-      ctx.rotate(a);
-      ctx.fillRect(-2, -0.6, 4, 1.2);
-      ctx.restore();
-    } else if (d.surface === 'grass') {
-      // Leaf flecks: small triangles
-      ctx.save();
-      ctx.translate(fx, fy);
-      ctx.rotate(a + 0.3);
-      ctx.beginPath();
-      ctx.moveTo(0, -1.5);
-      ctx.lineTo(2, 1);
-      ctx.lineTo(-2, 1);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-    } else if (d.surface === 'snow') {
-      // Powder puffs: soft circles
-      ctx.beginPath();
-      ctx.arc(fx, fy, 1.4 + rand * 0.8, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (d.surface === 'ice') {
-      // Skid hatch: thin streak
-      ctx.save();
-      ctx.translate(fx, fy);
-      ctx.rotate(a);
-      ctx.fillRect(-3, -0.5, 6, 1);
-      ctx.restore();
-    } else {
-      // stone / sand / glass / fallback: chip dots
-      ctx.beginPath();
-      ctx.arc(fx, fy, 1.2 + rand * 0.6, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
+  ctx.restore();
 }
 
 /**

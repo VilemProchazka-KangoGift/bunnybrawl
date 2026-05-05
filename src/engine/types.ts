@@ -330,6 +330,10 @@ export interface SurfaceDecal {
   seed: number;         // deterministic per-decal RNG for shape jitter
   color: string;        // tint (scuff = dark char tone, crack = white)
   surface: SurfaceTag;  // surface this decal sits on (drives shape style)
+  /** Platform horizontal clip extent. Renderer cuts off draws outside [clipMinX, clipMaxX]
+   *  so edge landings don't paint into empty space. Undefined = no clip. */
+  clipMinX?: number;
+  clipMaxX?: number;
 }
 
 /** Liquid-impact ripple — cosmetic only, lives in MatchState until expired. */

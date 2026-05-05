@@ -9,7 +9,7 @@ import {
   SURFACE_RIPPLE_LIFE,
   SURFACE_RIPPLE_MAX_RADIUS,
 } from '../../constants';
-import { surfaceAt } from '../../themes/utils';
+import { platformAt, surfaceOf } from '../../themes/utils';
 
 export interface PrevSurfaceImpactState {
   state: Player['state'];
@@ -49,7 +49,7 @@ export function decalLife(kind: 'crack' | 'scuff', surface: SurfaceTag): number 
 
 export function pushSurfaceDecal(
   state: MatchState,
-  decal: { kind: 'crack' | 'scuff'; x: number; y: number; life: number; seed: number; color: string; surface: SurfaceTag },
+  decal: { kind: 'crack' | 'scuff'; x: number; y: number; life: number; seed: number; color: string; surface: SurfaceTag; clipMinX?: number; clipMaxX?: number },
 ): void {
   if (decal.life <= 0) return;
   if (state.surfaceDecals.length >= SURFACE_DECAL_MAX) {
@@ -88,6 +88,49 @@ export function updateSurfaceLifetimes(state: MatchState, dt: number): void {
 export interface SurfaceImpactCallbacks {
   isSlowDevice: () => boolean;
   random: () => number;
+  emitParticle: (x: number, y: number, vx: number, vy: number, life: number, size: number, color: string) => void;
+}
+
+/**
+ * Surface debris palette for the airborne flecks emitted on hard landings.
+ * Two colors per surface — alternated across emitted particles for variety.
+ */
+const DEBRIS_COLORS: Record<SurfaceTag, [string, string]> = {
+  grass: ['#4A7A30', '#8AB860'],
+  stone: ['#7A7066', '#C0B898'],
+  wood:  ['#7A4F28', '#C8A278'],
+  snow:  ['#E8F0FF', '#FFFFFF'],
+  sand:  ['#A88858', '#E8D8A0'],
+  metal: ['#FFE8B0', '#FFFFFF'],
+  ice:   ['#A8C8E0', '#E8F8FF'],
+  glass: ['#C0D8E0', '#FFFFFF'],
+};
+
+/**
+ * Emit airborne scuff debris flecks on a hard landing. Particles arc outward
+ * via existing particle gravity. Top hemisphere only — debris jumps UP from
+ * the impact, never tunnels into the platform.
+ */
+function emitScuffDebris(
+  cx: number, fy: number, surface: SurfaceTag, cb: SurfaceImpactCallbacks,
+): void {
+  const palette = DEBRIS_COLORS[surface] ?? DEBRIS_COLORS.stone;
+  const count = surface === 'metal' ? 10 : 8;
+  for (let i = 0; i < count; i++) {
+    // Angle in top hemisphere: -π (left) to 0 (right), biased toward upward.
+    const t = i / count + cb.random() * 0.06;
+    const angle = -Math.PI + t * Math.PI;
+    const speed = 80 + cb.random() * 140;
+    const vx = Math.cos(angle) * speed;
+    // Always upward kick on top of the radial component
+    const vy = Math.sin(angle) * speed - 40 - cb.random() * 60;
+    const life = 0.45 + cb.random() * 0.35;
+    const size = surface === 'metal'
+      ? 0.8 + cb.random() * 0.6   // sparks: small + bright
+      : 1.4 + cb.random() * 1.0;  // chunks
+    const color = palette[i % 2];
+    cb.emitParticle(cx, fy - 1, vx, vy, life, size, color);
+  }
 }
 
 export function detectSurfaceImpact(
@@ -104,7 +147,8 @@ export function detectSurfaceImpact(
   if (wasAirborne && isGrounded && Math.abs(prev.vy) >= DUST_LAND_VY_THRESHOLD) {
     const cx = player.x + player.width / 2;
     const fy = player.y + player.height;
-    const surface = surfaceAt(arena, cx, fy);
+    const plat = platformAt(arena, cx, fy);
+    const surface = surfaceOf(plat, arena);
     const hardLanding = Math.abs(prev.vy) >= HARD_LAND_VY_THRESHOLD || prev.fastFalling;
 
     if (hardLanding) {
@@ -114,7 +158,15 @@ export function detectSurfaceImpact(
         seed: cb.random(),
         color: scuffColorFor(player.character.darkColor),
         surface,
+        clipMinX: plat?.x,
+        clipMaxX: plat ? plat.x + plat.width : undefined,
       });
+
+      // Airborne debris flecks — always emitted regardless of edge proximity.
+      // Particles outside the platform fall into empty space naturally.
+      if (!slow) {
+        emitScuffDebris(cx, fy, surface, cb);
+      }
 
       if (!slow && (surface === 'ice' || surface === 'glass')) {
         pushSurfaceDecal(state, {
@@ -123,6 +175,8 @@ export function detectSurfaceImpact(
           seed: cb.random(),
           color: surface === 'ice' ? '#FFFFFF' : '#E0F8FF',
           surface,
+          clipMinX: plat?.x,
+          clipMaxX: plat ? plat.x + plat.width : undefined,
         });
       }
     }

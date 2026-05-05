@@ -1,5 +1,6 @@
 import type { Arena, MatchState, PlayerSlot } from '../../types';
 import type { CosmeticSystem } from '../types';
+import type { ParticleSystem } from './ParticleSystem';
 import { getSlowDevice } from '../../perfFlags';
 import {
   detectSurfaceImpact,
@@ -23,12 +24,13 @@ export class SurfaceImpactSystem implements CosmeticSystem {
   private prev: Map<PlayerSlot, PrevSurfaceImpactState> = new Map();
   private readonly _cb: SurfaceImpactCallbacks;
 
-  constructor(state: MatchState, arena: Arena) {
+  constructor(state: MatchState, arena: Arena, particleSystem: ParticleSystem) {
     this.state = state;
     this.arena = arena;
     this._cb = {
       isSlowDevice: () => getSlowDevice(),
       random: () => Math.random(),
+      emitParticle: (x, y, vx, vy, life, size, color) => particleSystem.emitParticle(x, y, vx, vy, life, size, color),
     };
   }
 

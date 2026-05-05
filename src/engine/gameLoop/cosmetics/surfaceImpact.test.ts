@@ -14,10 +14,15 @@ import {
 } from './surfaceImpact';
 import { SURFACE_DECAL_MAX, HARD_LAND_VY_THRESHOLD } from '../../constants';
 
-const cb: SurfaceImpactCallbacks = {
-  isSlowDevice: () => false,
-  random: () => 0.5,
-};
+function makeCb(overrides: Partial<SurfaceImpactCallbacks> = {}): SurfaceImpactCallbacks {
+  return {
+    isSlowDevice: () => false,
+    random: () => 0.5,
+    emitParticle: () => {},
+    ...overrides,
+  };
+}
+const cb = makeCb();
 
 function makeImpactArena(opts: { defaultSurface?: Arena['defaultSurface']; iceCubeAt?: number } = {}): Arena {
   const arena = makeArena({
@@ -179,12 +184,68 @@ describe('detectSurfaceImpact — landing transitions', () => {
       state: 'airborne', vy: HARD_LAND_VY_THRESHOLD + 100, inLava: false, fastFalling: true,
     };
 
-    detectSurfaceImpact(player, prev, state, arena, { isSlowDevice: () => true, random: () => 0.5 });
+    detectSurfaceImpact(player, prev, state, arena, makeCb({ isSlowDevice: () => true }));
 
     const scuffs = state.surfaceDecals.filter(d => d.kind === 'scuff');
     const cracks = state.surfaceDecals.filter(d => d.kind === 'crack');
     expect(scuffs.length).toBe(1);
     expect(cracks.length).toBe(0);
+  });
+});
+
+describe('detectSurfaceImpact — debris particles + edge clipping', () => {
+  it('emits airborne debris particles on hard landing', () => {
+    const arena = makeImpactArena({ defaultSurface: 'stone' });
+    const state = makeState();
+    const player = makeLandedPlayer(640, 660);
+    state.players = [player];
+    const prev: PrevSurfaceImpactState = {
+      state: 'airborne', vy: HARD_LAND_VY_THRESHOLD + 50, inLava: false, fastFalling: false,
+    };
+    const emitted: Array<{ x: number; y: number; vx: number; vy: number }> = [];
+
+    detectSurfaceImpact(player, prev, state, arena, makeCb({
+      emitParticle: (x, y, vx, vy) => { emitted.push({ x, y, vx, vy }); },
+    }));
+
+    expect(emitted.length).toBeGreaterThanOrEqual(8);
+    // All particles emit in top hemisphere — vy starts negative (upward kick)
+    expect(emitted.every(p => p.vy < 0)).toBe(true);
+  });
+
+  it('slow-device suppresses debris particles', () => {
+    const arena = makeImpactArena({ defaultSurface: 'stone' });
+    const state = makeState();
+    const player = makeLandedPlayer(640, 660);
+    state.players = [player];
+    const prev: PrevSurfaceImpactState = {
+      state: 'airborne', vy: HARD_LAND_VY_THRESHOLD + 50, inLava: false, fastFalling: false,
+    };
+    const emitted: number[] = [];
+
+    detectSurfaceImpact(player, prev, state, arena, makeCb({
+      isSlowDevice: () => true,
+      emitParticle: () => { emitted.push(1); },
+    }));
+
+    expect(emitted.length).toBe(0);
+  });
+
+  it('decal carries clip extent matching the platform under impact', () => {
+    const arena = makeImpactArena({ defaultSurface: 'grass' });
+    const state = makeState();
+    // Player at the small floating platform (200..400).
+    const player = makeLandedPlayer(300, 500);
+    state.players = [player];
+    const prev: PrevSurfaceImpactState = {
+      state: 'airborne', vy: HARD_LAND_VY_THRESHOLD + 50, inLava: false, fastFalling: false,
+    };
+
+    detectSurfaceImpact(player, prev, state, arena, cb);
+
+    const scuff = state.surfaceDecals.find(d => d.kind === 'scuff');
+    expect(scuff?.clipMinX).toBe(200);
+    expect(scuff?.clipMaxX).toBe(400);
   });
 });
 
