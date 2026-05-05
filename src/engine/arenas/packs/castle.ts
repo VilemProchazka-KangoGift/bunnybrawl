@@ -836,7 +836,6 @@ export const castle: ArenaPack = {
     loops: ['amb_wind'],
   },
 
-  // Bats hanging from tower beams; erupt when a player lands within range
   scatterFlockConfig: {
     species: 'bat',
     positions: [

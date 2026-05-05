@@ -344,19 +344,14 @@ export interface MatchState {
 
   geyserStates: Array<{ timer: number; active: boolean; activeTimer: number }>;
   pigeonFlocks: Array<{ x: number; y: number; active: boolean; respawnTimer: number; scatterParticles: Array<{ x: number; y: number; vx: number; vy: number; life: number }> }>;
-  /**
-   * Per-arena perched wildlife (birds, bats, crows) that scatter when a
-   * player triggers them within radius. Parallel to pigeonFlocks but with
-   * species + per-flock radius so different arenas can use different
-   * creatures and trigger distances. Local-cosmetic, not in net/snapshot.
-   */
+  /** Local-cosmetic, not in net/snapshot. */
   scatterFlocks: Array<{
-    species: 'bird' | 'bat' | 'crow';
+    species: import('./themes/types').ScatterFlockSpecies;
     x: number;
     y: number;
     radius: number;
     active: boolean;
-    armed: boolean;            // re-armed when player leaves the radius
+    armed: boolean;
     respawnTimer: number;
     scatterParticles: Array<{ x: number; y: number; vx: number; vy: number; life: number; phase: number }>;
   }>;

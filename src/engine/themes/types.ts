@@ -1,5 +1,7 @@
 import type { Arena, WeatherParticle, WildlifeEntity } from '../types';
 
+export type ScatterFlockSpecies = 'bird' | 'bat' | 'crow';
+
 // ---- Sub-config interfaces ----
 
 export interface GradientStop {
@@ -179,13 +181,11 @@ export interface ThemeConfig {
     respawnTime: number;
   };
 
-  // Optional perched-wildlife flocks (birds, bats, crows) that scatter on
-  // stomp landings within radius. Like pigeonConfig but species-aware.
   scatterFlockConfig?: {
-    species: 'bird' | 'bat' | 'crow';
+    species: ScatterFlockSpecies;
     positions: Array<{ x: number; y: number }>;
-    radius: number;        // px from player landing point
-    respawnTime: number;   // s before perched re-appears
+    radius: number;
+    respawnTime: number;
   };
 
   // Optional physics modifiers

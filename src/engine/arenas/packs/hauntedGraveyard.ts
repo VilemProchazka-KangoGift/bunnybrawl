@@ -694,7 +694,6 @@ export const hauntedGraveyard: ArenaPack = {
     periodic: [{ sound: 'amb_ghost_hoo', intervalRange: [10, 25] }],
   },
 
-  // Crows perched on gravestones; scatter when disturbed
   scatterFlockConfig: {
     species: 'crow',
     positions: [

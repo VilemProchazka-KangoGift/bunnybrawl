@@ -140,11 +140,15 @@ export function updatePigeonScatterParticles(state: MatchState, dt: number): voi
   }
 }
 
-// Scatter-flock particles (birds, bats, crows). Bats float (low gravity);
-// birds and crows fall with normal gravity.
+const SCATTER_FLOCK_GRAVITY: Record<import('../../themes/types').ScatterFlockSpecies, number> = {
+  bat: 20,
+  bird: 80,
+  crow: 80,
+};
+
 export function updateScatterFlockParticles(state: MatchState, dt: number): void {
   for (const flock of state.scatterFlocks) {
-    const grav = flock.species === 'bat' ? 20 : 80;
+    const grav = SCATTER_FLOCK_GRAVITY[flock.species];
     for (let si = flock.scatterParticles.length - 1; si >= 0; si--) {
       const sp = flock.scatterParticles[si];
       sp.x += sp.vx * dt;

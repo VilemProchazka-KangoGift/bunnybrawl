@@ -32,8 +32,15 @@ import { EffectZoneSystem } from '../gameLoop/gameplay/EffectZoneSystem';
 import { PlayerCollisionSystem } from '../gameLoop/gameplay/PlayerCollisionSystem';
 import { StompSystem } from '../gameLoop/gameplay/StompSystem';
 import { MatchSystem } from '../gameLoop/gameplay/MatchSystem';
+import type { ScatterFlockSpecies } from '../themes/types';
 
 const f = Math.fround;
+
+const SCATTER_PARTICLE_COUNT: Record<ScatterFlockSpecies, number> = {
+  bird: 7,
+  bat: 12,
+  crow: 7,
+};
 
 const NOOP = (): void => {};
 const NOOP_NAME = (_n: string): void => {};
@@ -538,21 +545,18 @@ export class Simulator {
         }
       }
 
-      // Species-aware scatter flocks (birds, bats, crows). Trigger: player
-      // lands within `flock.radius` while the flock is armed; one-shot per
-      // approach, re-armed when the player exits 1.5× radius.
       for (const flock of this._state.scatterFlocks) {
+        if (!flock.active) continue;
         const dx = (player.x + player.width / 2) - flock.x;
         const dy = (player.y + player.height) - flock.y;
         const distSq = dx * dx + dy * dy;
         const r = flock.radius;
-        if (!flock.active) continue;
         if (flock.armed && distSq < r * r && player.state !== 'airborne') {
           flock.active = false;
           flock.armed = false;
-          flock.respawnTimer = this._theme.scatterFlockConfig?.respawnTime || 8;
+          flock.respawnTimer = this._theme.scatterFlockConfig!.respawnTime;
           this._events.onSfxRequest('pigeon_scatter');
-          const count = flock.species === 'bat' ? 12 : 7;
+          const count = SCATTER_PARTICLE_COUNT[flock.species];
           for (let pi = 0; pi < count; pi++) {
             const angle = -Math.PI * 0.5 + (Math.random() - 0.5) * 1.6;
             const speed = 130 + Math.random() * 160;

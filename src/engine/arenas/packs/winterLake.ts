@@ -18,6 +18,14 @@ import {
   wavyDown, backWavyUp, leftWavy,
 } from '../../themes/drawPrimitives';
 
+const AURORA_STRIPES = [
+  { color: '#7be0a3', y: 56,  h: 56, speed: 0.6,  phase: 0   },
+  { color: '#a3e8ff', y: 88,  h: 64, speed: 0.45, phase: 1.2 },
+  { color: '#c899ff', y: 120, h: 56, speed: 0.55, phase: 2.4 },
+  { color: '#7be0a3', y: 176, h: 48, speed: 0.7,  phase: 3.6 },
+  { color: '#a3e8ff', y: 224, h: 40, speed: 0.4,  phase: 4.8 },
+] as const;
+
 // Platform colors — legacy fields kept for ThemeConfig compat; unused once drawPlatform owns rendering.
 const FLOAT_BODY = '#5A7A8C';
 const FLOAT_TOP = '#D8E8F0';
@@ -445,18 +453,10 @@ export const winterLake: ArenaPack = {
     drawSnowDrift(ctx, 1250, gy, 40, 5);
   },
 
-  // Aurora curtains across the upper sky. Slow-device gated.
   drawAnimatedBackground: (ctx, _arena, time) => {
     if (getSlowDevice()) return;
     ctx.save();
-    const stripes: ReadonlyArray<{ color: string; y: number; h: number; speed: number; phase: number }> = [
-      { color: '#7be0a3', y: 56,  h: 56, speed: 0.6,  phase: 0   },
-      { color: '#a3e8ff', y: 88,  h: 64, speed: 0.45, phase: 1.2 },
-      { color: '#c899ff', y: 120, h: 56, speed: 0.55, phase: 2.4 },
-      { color: '#7be0a3', y: 176, h: 48, speed: 0.7,  phase: 3.6 },
-      { color: '#a3e8ff', y: 224, h: 40, speed: 0.4,  phase: 4.8 },
-    ];
-    for (const st of stripes) {
+    for (const st of AURORA_STRIPES) {
       const breathe = 0.5 + 0.5 * fastSin(time * 0.7 + st.phase);
       ctx.fillStyle = st.color;
       ctx.globalAlpha = 0.15 + breathe * 0.18;
