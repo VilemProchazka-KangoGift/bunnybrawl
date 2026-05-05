@@ -169,6 +169,7 @@ export interface Player {
   springLaunchX: number;     // local-only — anchor x for drawSpringTrail (set to spring.x at bounce). NaN = unset.
   springLaunchY: number;     // local-only — anchor y for drawSpringTrail (set to spring.y at bounce). NaN = unset.
   fastFallStreakAlpha: number; // local-only — 0..1, ramps up while fastFalling, ramps down on exit; drives drawFastFallStreaks fade in/out
+  airLean: number;             // local-only — 0..1, primed to 1 on jump rise, decays during descent; lerps body-lean magnitude run→air
   fastFallAnchorX: number;     // local-only — cx where fastFalling stopped; smudge fades from there instead of riding a stomp bounce. NaN = unset.
   fastFallAnchorY: number;     // local-only — headY where fastFalling stopped. NaN = unset.
   damageFlashSide: 'left' | 'right' | null; // which side got hit

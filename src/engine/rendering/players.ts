@@ -1,6 +1,6 @@
 import type { Player, PlayerState } from '../types';
 import type { ThemeConfig } from '../themes/types';
-import { FAT_SCALE, HITSTOP_DURATION, PLAYER_WIDTH, PLAYER_HEIGHT } from '../constants';
+import { FAT_SCALE, HITSTOP_DURATION, MAX_WALK_SPEED, PLAYER_WIDTH, PLAYER_HEIGHT } from '../constants';
 import { hasCustomEyes, getSpriteRenderer, getCharacterPack, drawLegs } from '../characters';
 import { drawHighlightSpot } from '../spriteShading';
 import { getSlowDevice } from '../perfFlags';
@@ -78,6 +78,9 @@ const KILL_STREAK_FLAME_COLORS = [
   'rgba(255, 200, 0, 0.2)',
   'rgba(255, 0, 0, 0.2)',
 ] as const;
+
+const AIR_LEAN_MAX_RAD = 0.14;     // ~8° at full air speed
+const RUN_LEAN_MAX_RAD = 0.06;     // ~3.4° at full ground speed — subtler than the jump lean
 
 /** Bake an outline into the cached sprite by stamping its silhouette at 4 offsets in
  *  the outline color, behind the original pixels. The silhouette is captured by
@@ -249,10 +252,23 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player, nearCa
     ctx.translate(-cx, 0);
   }
 
+  // Body lean tracks vx continuously. Magnitude lerps RUN→AIR via `airLean`, so the
+  // ground/air transition has no visible snap. Applied AFTER the facing flip, so the
+  // sign is negated for facing-left to keep world-space tilt aligned with `vx`.
+  const facingSign = facing === 'left' ? -1 : 1;
+  const leanMaxRad = RUN_LEAN_MAX_RAD + (AIR_LEAN_MAX_RAD - RUN_LEAN_MAX_RAD) * player.airLean;
+  const leanRad = Math.max(-1, Math.min(1, player.vx / MAX_WALK_SPEED)) * leanMaxRad * facingSign;
+
   if (state === 'splat') {
     drawSplatCharacter(ctx, x, y, width, height, character.color, character.darkColor);
   } else {
+    const pivotY = cy - height / 2;
+    ctx.save();
+    ctx.translate(cx, pivotY);
+    ctx.rotate(leanRad);
+    ctx.translate(-cx, -pivotY);
     drawCharacterSprite(ctx, x, y, width, height, character, state, animFrame, fastFalling, player.idleAction, player.idleActionTimer, player.idleActionDuration, player.squashScale, theme, player);
+    ctx.restore();
     // Motion / fast-fall lines drawn OUTSIDE the sprite cache so the outline pass doesn't stamp them.
     // "Actively" fast-falling means the boolean is set AND the player is moving
     // downward — covers stomp/spring/geyser/bouncy bounces, which leave fastFalling
