@@ -11,7 +11,14 @@ import {
 } from '../../constants';
 import { hexToRGB } from '../../fastMath';
 import { platformUnderFoot, surfaceOf, swapRemove } from '../../themes/utils';
+import { CAP_DEPTH, SKEW_RATIO } from '../../themes/drawPrimitives/platforms';
 import { SURFACE_PALETTE } from './surfacePalette';
+
+/** Iso-skew shift at the cap centerline. The cap is a parallelogram whose
+ *  back-edge runs `sp = CAP_DEPTH * SKEW_RATIO` px to the right of the
+ *  front-edge; the centerline (where decals are drawn) is shifted by half
+ *  that. Used to align decal clip rects with the visible cap on iso platforms. */
+const ISO_CAP_SHIFT = (CAP_DEPTH * SKEW_RATIO) / 2;
 
 export interface PrevSurfaceImpactState {
   state: Player['state'];
@@ -136,8 +143,12 @@ export function detectSurfaceImpact(
     const hardLanding = absVy >= HARD_LAND_VY_THRESHOLD || prev.fastFalling;
 
     if (hardLanding) {
+      // Iso platforms (leftCollisionInset set) have a parallelogram cap
+      // shifted right by sp at the back. Shift clip extent to the cap
+      // centerline so decals don't overflow the visible top.
+      const shift = plat?.leftCollisionInset !== undefined ? ISO_CAP_SHIFT : 0;
       const clip = plat
-        ? { clipMinX: plat.x, clipMaxX: plat.x + plat.width }
+        ? { clipMinX: plat.x + shift, clipMaxX: plat.x + plat.width + shift }
         : {};
 
       pushSurfaceDecal(state, {
