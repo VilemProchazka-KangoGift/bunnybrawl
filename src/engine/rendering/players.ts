@@ -14,6 +14,11 @@ let _spriteScale = 1;
 const SPRITE_CACHE_CAP_BASE = 600;
 let _spriteCacheCap = SPRITE_CACHE_CAP_BASE;
 
+/** Below this fast-fall smear alpha, skip drawing. Used both as the visible
+ *  threshold for the per-frame "is the smudge still on screen?" check and as
+ *  the inner early-return in drawFastFallStreaks. */
+const FASTFALL_ALPHA_EPSILON = 0.01;
+
 // Pack-name → small int, populated lazily. 5-bit field allows 32 entries; pack
 // registry caps below that (17 chars + fallbacks).
 const _charNameToIndex = new Map<string, number>();
@@ -249,10 +254,30 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player, nearCa
   } else {
     drawCharacterSprite(ctx, x, y, width, height, character, state, animFrame, fastFalling, player.idleAction, player.idleActionTimer, player.idleActionDuration, player.squashScale, theme, player);
     // Motion / fast-fall lines drawn OUTSIDE the sprite cache so the outline pass doesn't stamp them.
-    if (state === 'airborne' && !fastFalling) {
+    // "Actively" fast-falling means the boolean is set AND the player is moving
+    // downward — covers stomp/spring/geyser/bouncy bounces, which leave fastFalling
+    // true (down still held) but reverse vy. While fading (alpha>0 but not actively
+    // diving), anchor at the position fast-fall stopped so the smudge dissolves in
+    // place instead of riding the bounce upward. Captured here (60Hz) rather than
+    // in cosmeticStep (~30Hz) to catch the transition without a one-frame lag.
+    const fastFallAlpha = player.fastFallStreakAlpha;
+    const activelyFastFalling = fastFalling && player.vy >= 0;
+    if (activelyFastFalling) {
+      player.fastFallAnchorX = NaN;
+      player.fastFallAnchorY = NaN;
+    } else if (fastFallAlpha > 0 && !Number.isFinite(player.fastFallAnchorX)) {
+      player.fastFallAnchorX = cx;
+      player.fastFallAnchorY = y;
+    }
+    if (state === 'airborne' && !activelyFastFalling && fastFallAlpha <= FASTFALL_ALPHA_EPSILON) {
       drawMotionLines(ctx, cx, y + height);
-    } else if (fastFalling) {
-      drawFastFallLines(ctx, cx, y);
+    } else if (activelyFastFalling || fastFallAlpha > FASTFALL_ALPHA_EPSILON) {
+      const anchored = !activelyFastFalling && Number.isFinite(player.fastFallAnchorX);
+      const smearCx = anchored ? player.fastFallAnchorX : cx;
+      const smearY = anchored ? player.fastFallAnchorY : y;
+      // Lean reads as motion blur — drop it once anchored so the smudge sits still.
+      const smearVx = anchored ? 0 : player.vx;
+      drawFastFallStreaks(ctx, smearCx, smearY, character.color, smearVx, fastFallAlpha);
     }
     drawExpression(ctx, player, frameTime);
   }
@@ -516,16 +541,60 @@ function drawMotionLines(ctx: CanvasRenderingContext2D, cx: number, footY: numbe
   ctx.stroke();
 }
 
-/** Five vertical speed lines above a fast-falling character. Drawn outside the
- *  sprite cache so the outline pass doesn't stamp them. */
-function drawFastFallLines(ctx: CanvasRenderingContext2D, cx: number, headY: number): void {
-  ctx.strokeStyle = 'rgba(255,255,220,0.8)';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  for (let i = -2; i <= 2; i++) {
-    ctx.moveTo(cx + i * 5, headY - 2);
-    ctx.lineTo(cx + i * 5, headY - 20);
+/** Fast-fall vertical smudge. Player-colored streak with curved sides (so it reads
+ *  as a smear instead of two parallel lines), narrowing to a point at the top
+ *  with a lean opposite horizontal motion (trail-behind). `alpha` (0..1) drives
+ *  fade-in on entry and fade-out on landing — caller ramps it via
+ *  `fastFallStreakAlpha` so the effect doesn't pop or linger.
+ *  Falls back to legacy flat lines when slow-device is on. Drawn outside the
+ *  sprite cache so the outline pass doesn't stamp it. */
+export function drawFastFallStreaks(
+  ctx: CanvasRenderingContext2D, cx: number, headY: number,
+  color: string, vx = 0, alpha = 1,
+): void {
+  if (alpha <= FASTFALL_ALPHA_EPSILON) return;
+  if (getSlowDevice()) {
+    ctx.strokeStyle = `rgba(255,255,220,${0.8 * alpha})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = -2; i <= 2; i++) {
+      ctx.moveTo(cx + i * 5, headY - 2);
+      ctx.lineTo(cx + i * 5, headY - 20);
+    }
+    ctx.stroke();
+    return;
   }
+  const STREAK_H = 70;
+  const HALF_W = 17;            // half the bottom width — wider than the previous trapezoid for a smudgier read
+  const { r, g, b } = hexToRGB(color);
+  // Top of smear leans opposite of motion — trail-behind read.
+  const lean = Math.max(-1, Math.min(1, vx / 200)) * 11;
+  const topY = headY - STREAK_H;
+
+  const grad = ctx.createLinearGradient(cx, topY, cx, headY);
+  grad.addColorStop(0, `rgba(${r},${g},${b},0)`);
+  grad.addColorStop(0.4, `rgba(${r},${g},${b},${0.32 * alpha})`);
+  grad.addColorStop(1, `rgba(${r},${g},${b},${0.85 * alpha})`);
+  ctx.fillStyle = grad;
+
+  // Lozenge with a narrow leaned tip (top) and a rounded wider base — looks
+  // like a paint smear rather than a flat trapezoid.
+  ctx.beginPath();
+  ctx.moveTo(cx - lean, topY);
+  ctx.quadraticCurveTo(cx + HALF_W + lean * 0.4, headY - STREAK_H * 0.35, cx + HALF_W, headY);
+  ctx.quadraticCurveTo(cx, headY + 6, cx - HALF_W, headY);
+  ctx.quadraticCurveTo(cx - HALF_W - lean * 0.4, headY - STREAK_H * 0.35, cx - lean, topY);
+  ctx.closePath();
+  ctx.fill();
+
+  // Inner motion wisps — visible streaks in the smudge body.
+  ctx.strokeStyle = `rgba(255,255,255,${0.4 * alpha})`;
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(cx - 4 - lean * 0.5, topY + STREAK_H * 0.4);
+  ctx.quadraticCurveTo(cx - 3, topY + STREAK_H * 0.75, cx - 2, headY - 3);
+  ctx.moveTo(cx + 4 - lean * 0.5, topY + STREAK_H * 0.4);
+  ctx.quadraticCurveTo(cx + 3, topY + STREAK_H * 0.75, cx + 2, headY - 3);
   ctx.stroke();
 }
 

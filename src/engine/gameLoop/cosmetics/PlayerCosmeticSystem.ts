@@ -42,6 +42,7 @@ export class PlayerCosmeticSystem implements CosmeticSystem {
         this._emitParticle,
         this.playSound,
         this.arena,
+        this.state.countdown > 0,
       );
     }
   }

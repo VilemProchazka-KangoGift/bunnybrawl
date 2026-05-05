@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { fastSin, fastCos, hexToRGB } from './fastMath';
+import { fastSin, fastCos, hexToRGB, hexToHSL } from './fastMath';
 
 describe('fastSin', () => {
   it('sin(0) ≈ 0', () => {
@@ -95,6 +95,39 @@ describe('hexToRGB', () => {
 
   it('parses gray #808080', () => {
     expect(hexToRGB('#808080')).toEqual({ r: 128, g: 128, b: 128 });
+  });
+});
+
+describe('hexToHSL', () => {
+  it('red #FF0000 → h≈0, s=1, l=0.5', () => {
+    const { h, s, l } = hexToHSL('#FF0000');
+    expect(h).toBeCloseTo(0, 0);
+    expect(s).toBeCloseTo(1, 5);
+    expect(l).toBeCloseTo(0.5, 5);
+  });
+
+  it('blue #0000FF → h≈240, s=1, l=0.5', () => {
+    const { h, s, l } = hexToHSL('#0000FF');
+    expect(h).toBeCloseTo(240, 0);
+    expect(s).toBeCloseTo(1, 5);
+    expect(l).toBeCloseTo(0.5, 5);
+  });
+
+  it('gray #808080 → s=0 (achromatic)', () => {
+    const { s } = hexToHSL('#808080');
+    expect(s).toBe(0);
+  });
+
+  it('white #FFFFFF → l=1, s=0', () => {
+    const { s, l } = hexToHSL('#FFFFFF');
+    expect(s).toBe(0);
+    expect(l).toBeCloseTo(1, 5);
+  });
+
+  it('black #000000 → l=0, s=0', () => {
+    const { s, l } = hexToHSL('#000000');
+    expect(s).toBe(0);
+    expect(l).toBeCloseTo(0, 5);
   });
 });
 

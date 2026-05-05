@@ -63,6 +63,9 @@ export function detectPlayerTransitions(
     cb.playSound('jump');
     // Jump dust fires only on input-jump — exclude spring launches
     // (springTrailTimer rising edge: was 0 last tick, now > 0).
+    // Note: springLaunchX/Y are set at the spring's coords by handleSpringCollision
+    // (host) and entityTransitions (guest), not here — this runs at half-rate
+    // after physics has already moved the player off the spring.
     const sprangThisTick = prev.springTrailTimer === 0 && player.springTrailTimer > 0;
     if (!sprangThisTick) {
       cb.spawnJumpDustParticles(player);

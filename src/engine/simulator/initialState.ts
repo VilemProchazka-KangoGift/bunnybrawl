@@ -76,7 +76,9 @@ export function createInitialPlayers(
     squashScale: 1, squashTimer: 0, sideSquash: 1, afterimages: [],
     idleAction: -1, idleActionTimer: 0, idleActionDuration: 0,
     expression: 'normal' as const, killStreak: 0,
-    breathTimer: 0, springTrailTimer: 0, damageFlashSide: null, damageFlashTimer: 0, burnTimer: 0, hitstopTimer: 0,
+    breathTimer: 0, springTrailTimer: 0, springLaunchX: NaN, springLaunchY: NaN,
+    fastFallStreakAlpha: 0, fastFallAnchorX: NaN, fastFallAnchorY: NaN,
+    damageFlashSide: null, damageFlashTimer: 0, burnTimer: 0, hitstopTimer: 0,
     renderOffsetX: 0, renderOffsetY: 0, disconnected: false,
     });
   });
@@ -104,7 +106,7 @@ export function createEmptyMatchState(): MatchState {
     shockwaves: [], screenFlash: 0,
     wildlife: [],
     fogParticles: [], pollenParticles: [], shootingStars: [],
-    scoreAnimations: [], ghosts: [],
+    scoreAnimations: [], comboPopups: [], goalPulseTimers: new Map(), ghosts: [],
     lavaRocks: [], lavaRockTimer: 0,
     geyserStates: [], pigeonFlocks: [], bouncyWobble: new Map(),
     gibs: [], confetti: [],

@@ -19,3 +19,4 @@ export {
   updateSurfaceLifetimes,
 } from './surfaceImpact';
 export type { PrevSurfaceImpactState, SurfaceImpactCallbacks } from './surfaceImpact';
+export { HUDFeedbackSystem } from './HUDFeedbackSystem';

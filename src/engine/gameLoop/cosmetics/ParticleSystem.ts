@@ -1,4 +1,4 @@
-import type { MatchState, MatchSettings, Arena, Particle, Gib, Player, PlayerSlot, EffectZone } from '../../types';
+import type { MatchState, MatchSettings, Arena, Particle, ParticleShape, Gib, Player, PlayerSlot, EffectZone } from '../../types';
 import type { ThemeConfig } from '../../themes/types';
 import type { CosmeticSystem } from '../types';
 import type { HazardHitResult } from '../gameplay/playerCollisions';
@@ -43,8 +43,8 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
 
   init(): void {}
 
-  emitParticle(x: number, y: number, vx: number, vy: number, life: number, size: number, color: string): void {
-    _emitParticle(this._particles, this.particleFreeList, x, y, vx, vy, life, size, color);
+  emitParticle(x: number, y: number, vx: number, vy: number, life: number, size: number, color: string, shape?: ParticleShape): void {
+    _emitParticle(this._particles, this.particleFreeList, x, y, vx, vy, life, size, color, shape);
   }
 
   spawnDustParticles(player: Player, landVy: number): void {
@@ -137,21 +137,28 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
     const { px, py } = hit;
     switch (hit.type) {
       case 'thorn': {
-        // Blood from player
+        if (!resimulating) {
+          state.screenFlash = Math.max(state.screenFlash, 0.18);
+        }
+        // Blood droplets — emitted as spikes so they read as elongated splatter
+        // streaks rather than round dots. Velocity-aligned via the 'spike' shape.
         for (let i = 0; i < 18; i++) {
           const angle = Math.random() * Math.PI * 2;
-          const speed = 60 + Math.random() * 160;
+          const speed = 90 + Math.random() * 180;
           const life = 0.4 + Math.random() * 0.5;
-          this.emitParticle(px + (Math.random() - 0.5) * 8, py + (Math.random() - 0.5) * 8, Math.cos(angle) * speed, Math.sin(angle) * speed - 80, life, 2.5 + Math.random() * 4, BLOOD_COLOR);
+          this.emitParticle(px + (Math.random() - 0.5) * 8, py + (Math.random() - 0.5) * 8, Math.cos(angle) * speed, Math.sin(angle) * speed - 80, life, 2 + Math.random() * 3, BLOOD_COLOR, 'spike');
         }
-        // Thorn shrapnel
         if (hit.sx !== undefined && hit.sy !== undefined) {
-          for (let i = 0; i < 8; i++) {
-            const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI;
-            const speed = 30 + Math.random() * 80;
-            const life = 0.3 + Math.random() * 0.3;
-            this.emitParticle(hit.sx, hit.sy, Math.cos(angle) * speed, Math.sin(angle) * speed, life, 1.5 + Math.random() * 2, '#5C3A1E');
+          // Wood barb fragments — bias upward (away from the spike).
+          for (let i = 0; i < 14; i++) {
+            const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.1;
+            const speed = 90 + Math.random() * 160;
+            const life = 0.3 + Math.random() * 0.4;
+            const color = i % 2 === 0 ? '#5C3A1E' : '#3A2210';
+            this.emitParticle(hit.sx, hit.sy, Math.cos(angle) * speed, Math.sin(angle) * speed, life, 1.4 + Math.random() * 1.8, color, 'spike');
           }
+          // Slow blood drip from the thorn tip.
+          this.emitParticle(hit.sx, hit.sy, 0, 30, 1.0, 1.8, BLOOD_COLOR);
         }
         break;
       }
@@ -185,7 +192,21 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
         }
         break;
       }
-      // spring, fallOff: no particles
+      case 'spring': {
+        // Small upward fan of yellow spikes — release energy, kept subtle so it
+        // doesn't compete with the player's launch motion.
+        for (let i = 0; i < 8; i++) {
+          const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.0;
+          const speed = 100 + Math.random() * 120;
+          const life = 0.2 + Math.random() * 0.2;
+          const color = i % 2 === 0 ? '#FFD43A' : '#FFA800';
+          this.emitParticle(px, py, Math.cos(angle) * speed, Math.sin(angle) * speed, life, 1.2 + Math.random() * 1.2, color, 'spike');
+        }
+        break;
+      }
+      case 'fallOff':
+        // No particles — handled by spawnKillSplatter elsewhere.
+        break;
     }
   }
 

@@ -166,6 +166,11 @@ export interface Player {
   killStreak: number;    // current consecutive kills without dying
   breathTimer: number;         // for idle breathing animation
   springTrailTimer: number;    // >0 = spiral trail active after spring bounce
+  springLaunchX: number;     // local-only — anchor x for drawSpringTrail (set to spring.x at bounce). NaN = unset.
+  springLaunchY: number;     // local-only — anchor y for drawSpringTrail (set to spring.y at bounce). NaN = unset.
+  fastFallStreakAlpha: number; // local-only — 0..1, ramps up while fastFalling, ramps down on exit; drives drawFastFallStreaks fade in/out
+  fastFallAnchorX: number;     // local-only — cx where fastFalling stopped; smudge fades from there instead of riding a stomp bounce. NaN = unset.
+  fastFallAnchorY: number;     // local-only — headY where fastFalling stopped. NaN = unset.
   damageFlashSide: 'left' | 'right' | null; // which side got hit
   damageFlashTimer: number;    // >0 = show red flash
   burnTimer: number;           // >0 = on fire from lava, spawns flame particles
@@ -215,7 +220,11 @@ export interface Particle {
   maxLife: number;
   size: number;
   color: string;
+  shape?: ParticleShape;
 }
+
+/** default 'circle'; 'spike' renders as a velocity-aligned triangle. */
+export type ParticleShape = 'circle' | 'spike';
 
 export type GibType = 'ear' | 'tail' | 'body' | 'snout' | 'horn' | 'wing' | 'beard' | 'mane' | 'wool' | 'spine';
 
@@ -379,6 +388,12 @@ export interface MatchState {
   pollenParticles: Array<{x: number; y: number; vx: number; vy: number; size: number; alpha: number}>;
   shootingStars: Array<{x: number; y: number; vx: number; vy: number; life: number; tailLen: number}>;
   scoreAnimations: Array<{playerId: PlayerSlot; value: number; timer: number}>;
+  /** Combo popups (×N text) spawned when a killer chains stomps within COMBO_WINDOW_SEC.
+   *  Cosmetic-only, runs on host + guest (driven by killFeed transitions). */
+  comboPopups: Array<{x: number; y: number; count: number; timer: number; killer: PlayerSlot}>;
+  /** Per-slot goal-pulse timer. Set by HUDFeedbackSystem on score rising edge.
+   *  Read by HUD renderer to scale + flash the player's score pill. */
+  goalPulseTimers: Map<PlayerSlot, number>;
   ghosts: GhostEntity[];
   lavaRocks: LavaRock[];
   lavaRockTimer: number;

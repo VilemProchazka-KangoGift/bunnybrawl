@@ -1,6 +1,9 @@
 import type { Player, MatchState } from '../types';
 import { isBotSlot } from '../types';
-import { CANVAS_WIDTH, CANVAS_HEIGHT, SCORE_ANIM_DURATION, MATCH_COUNTDOWN } from '../constants';
+import {
+  CANVAS_WIDTH, CANVAS_HEIGHT, SCORE_ANIM_DURATION, MATCH_COUNTDOWN,
+  COMBO_POPUP_DURATION, COMBO_POPUP_RISE_PX, GOAL_PULSE_DURATION,
+} from '../constants';
 import { getCharacterEmoji, getCharacterDisplayName } from '../characters';
 import i18n from '../../i18n';
 
@@ -8,6 +11,14 @@ import i18n from '../../i18n';
 // overflowing the next slot. Used by OnlineModal as input maxLength too.
 export const PLAYER_NAME_MAX_LENGTH = 8;
 const PLAYER_NAME_MAX_LENGTH_COMPACT = 4;
+
+// Warm yellow overlay blended with #FFF score digit during goal pulse.
+const SCORE_PULSE_TINT = '#FFE78A';
+
+// ×N popup tier colors (yellow → orange → pink).
+const COMBO_COLORS: Record<number, string> = { 2: '#FFD63A', 3: '#FF9322' };
+const COMBO_COLOR_HIGH = '#FF4FB8';
+const COMBO_POPUP_FONT = 'bold 28px "Press Start 2P", monospace';
 
 // HUD cache state (module-level)
 let hudCache: OffscreenCanvas | null = null;
@@ -54,6 +65,8 @@ function matchTimeSec(state: MatchState): number {
 export function isHudDirty(state: MatchState): boolean {
   const timerSec = Math.floor(matchTimeSec(state));
   if (timerSec !== hudLastTimer || !hudCache) return true;
+  // Active goal pulse animates the score pill — redraw every frame until it expires.
+  if (state.goalPulseTimers.size > 0) return true;
   let activeCount = 0;
   for (const p of state.players) {
     if (p.active) activeCount++;
@@ -116,12 +129,33 @@ function _drawHUDImpl(ctx: CanvasRenderingContext2D, state: MatchState, frameTim
     const px = startX + i * scoreWidth;
     const isBot = isBotSlot(player.id);
 
+    const pulseT = state.goalPulseTimers.get(player.id) ?? 0;
+    const pulseProgress = pulseT > 0 ? 1 - pulseT / GOAL_PULSE_DURATION : 0;
+    const pulseEnvelope = Math.sin(pulseProgress * Math.PI);
+    const pulseScale = 1 + pulseEnvelope * 0.18;
+
+    if (pulseScale !== 1) {
+      ctx.save();
+      const pillCx = px + (scoreWidth - 10) / 2;
+      const pillCy = 30;
+      ctx.translate(pillCx, pillCy);
+      ctx.scale(pulseScale, pulseScale);
+      ctx.translate(-pillCx, -pillCy);
+    }
+
     ctx.fillStyle = isBot ? 'rgba(40, 20, 60, 0.55)' : 'rgba(0, 0, 0, 0.5)';
     ctx.beginPath();
     ctx.roundRect(px, 10, scoreWidth - 10, 40, 8);
     ctx.fill();
 
-    // Character emoji
+    if (pulseEnvelope > 0) {
+      ctx.strokeStyle = player.character.color;
+      ctx.globalAlpha = 0.75 * pulseEnvelope;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
     ctx.font = '28px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -136,16 +170,28 @@ function _drawHUDImpl(ctx: CanvasRenderingContext2D, state: MatchState, frameTim
     ctx.font = `bold ${compact ? 12 : 16}px "Press Start 2P", monospace`;
     ctx.textAlign = 'left';
     ctx.fillText(displayName, px + 38, 28);
-    ctx.fillStyle = '#FFF';
+    // Boost score-digit lightness via globalAlpha over a fixed warm tint —
+    // avoids a per-frame `rgb(...)` template-literal allocation per pulsed player.
     ctx.font = `bold ${compact ? 14 : 18}px "Press Start 2P", monospace`;
-    ctx.fillText(`${player.score}`, px + 38, 45);
+    if (pulseEnvelope > 0) {
+      ctx.fillStyle = '#FFF';
+      ctx.fillText(`${player.score}`, px + 38, 45);
+      ctx.fillStyle = SCORE_PULSE_TINT;
+      ctx.globalAlpha = pulseEnvelope;
+      ctx.fillText(`${player.score}`, px + 38, 45);
+      ctx.globalAlpha = 1;
+    } else {
+      ctx.fillStyle = '#FFF';
+      ctx.fillText(`${player.score}`, px + 38, 45);
+    }
 
-    // Small bot indicator
     if (isBot) {
       ctx.fillStyle = 'rgba(180, 140, 255, 0.7)';
       ctx.font = 'bold 7px monospace';
       ctx.fillText('BOT', px + 4, 18);
     }
+
+    if (pulseScale !== 1) ctx.restore();
   }
 
   if (state.timeElapsed >= 0) {
@@ -204,6 +250,38 @@ function _drawScoreAnimations(ctx: CanvasRenderingContext2D, state: MatchState):
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(`+${anim.value}`, 0, 0);
+    ctx.restore();
+  }
+}
+
+/** Draw active combo popups (×N text) — post-player, pre-HUD layer.
+ *  Rises COMBO_POPUP_RISE_PX over the first 60% of life, fades over the last 40%. */
+export function drawComboPopups(ctx: CanvasRenderingContext2D, state: MatchState): void {
+  if (state.comboPopups.length === 0) return;
+  const RISE_FRACTION = 0.6;
+  ctx.font = COMBO_POPUP_FONT;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = '#000';
+  for (const popup of state.comboPopups) {
+    const progress = 1 - popup.timer / COMBO_POPUP_DURATION;
+    if (progress < 0 || progress > 1) continue;
+    const riseT = Math.min(1, progress / RISE_FRACTION);
+    const riseEase = 1 - (1 - riseT) * (1 - riseT) * (1 - riseT);
+    const yOffset = -COMBO_POPUP_RISE_PX * riseEase;
+    const fadeT = progress < RISE_FRACTION ? 0 : (progress - RISE_FRACTION) / (1 - RISE_FRACTION);
+    const alpha = 1 - fadeT;
+    const scale = 1.4 - riseEase * 0.4;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(popup.x, popup.y + yOffset);
+    ctx.scale(scale, scale);
+    const label = `×${popup.count}`;
+    ctx.strokeText(label, 0, 0);
+    ctx.fillStyle = COMBO_COLORS[popup.count] ?? COMBO_COLOR_HIGH;
+    ctx.fillText(label, 0, 0);
     ctx.restore();
   }
 }

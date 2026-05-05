@@ -23,6 +23,7 @@ export function updatePlayerCosmetics(
   emitParticle: (x: number, y: number, vx: number, vy: number, life: number, size: number, color: string) => void,
   playSound: (name: string) => void,
   arena: Arena,
+  inCountdown: boolean,
 ): void {
   // animFrame advance moved to Simulator.fixedUpdate — animFrame is in the
   // snapshot, so advancing it on guest's local clock (which drifts vs host)
@@ -30,6 +31,20 @@ export function updatePlayerCosmetics(
   // shake in the run cycle. animTimer stays local (cosmetic-only).
   if (player.state !== 'run') {
     player.animTimer = 0;
+  }
+
+  // Fast-fall smear fade-in/out. Ramps up while *visually* fast-falling (the
+  // boolean stays true on a spring/geyser/stomp bounce if down is still held —
+  // physics needs that for FAST_FALL_GRAVITY math — but the player is moving
+  // upward, so cosmetically we should fade out). Ramps down faster on exit so
+  // the smudge doesn't linger. Anchor capture lives in the renderer (per-frame)
+  // to catch the transition without cosmeticStep's half-rate lag.
+  // Local-only — not snapshotted.
+  const activelyFastFalling = player.fastFalling && player.vy >= 0;
+  if (activelyFastFalling) {
+    player.fastFallStreakAlpha = Math.min(1, player.fastFallStreakAlpha + dt * 10);
+  } else {
+    player.fastFallStreakAlpha = Math.max(0, player.fastFallStreakAlpha - dt * 18);
   }
 
   // Fire particles while burning
@@ -44,7 +59,7 @@ export function updatePlayerCosmetics(
     }
   }
 
-  tickIdleStateMachine(player, dt);
+  tickIdleStateMachine(player, dt, inCountdown);
 
   // Afterimages — spawn at speed threshold or during invincibility. Skipped on
   // slow-device; decay loop below still drains pre-existing entries.

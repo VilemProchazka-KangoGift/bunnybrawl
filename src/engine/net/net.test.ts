@@ -273,7 +273,7 @@ describe('Trystero import', () => {
 // ---- Snapshot coverage tests ----
 
 /** Fields intentionally excluded from PlayerSnapshot (cosmetic or reconstructed). */
-const PLAYER_EXCLUDED_FIELDS = ['character', 'afterimages', 'renderOffsetX', 'renderOffsetY'];
+const PLAYER_EXCLUDED_FIELDS = ['character', 'afterimages', 'renderOffsetX', 'renderOffsetY', 'springLaunchX', 'springLaunchY', 'fastFallStreakAlpha', 'fastFallAnchorX', 'fastFallAnchorY'];
 
 function makeTestPlayer(id: PlayerSlot): Player {
   return {
@@ -303,6 +303,11 @@ function makeTestPlayer(id: PlayerSlot): Player {
     killStreak: 3,
     breathTimer: 0.6,
     springTrailTimer: 0.3,
+    springLaunchX: NaN,
+    springLaunchY: NaN,
+    fastFallStreakAlpha: 0,
+    fastFallAnchorX: NaN,
+    fastFallAnchorY: NaN,
     damageFlashSide: 'left' as const,
     damageFlashTimer: 0.15,
     burnTimer: 2.0,
@@ -340,6 +345,8 @@ function makeTestMatchState(): MatchState {
     pollenParticles: [],
     shootingStars: [],
     scoreAnimations: [{ playerId: 'P1' as PlayerSlot, value: 2, timer: 0.5 }],
+    comboPopups: [],
+    goalPulseTimers: new Map(),
     ghosts: [],
     lavaRocks: [],
     lavaRockTimer: 15.0,

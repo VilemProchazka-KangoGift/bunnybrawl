@@ -191,8 +191,8 @@ export function clearIdleActionCache(): void {
  *  and lobby (LobbyGame.step). Local state only — never synced over the network. */
 export type IdleStateMachineTarget = Pick<Player, 'state' | 'character' | 'idleAction' | 'idleActionTimer' | 'idleActionDuration'>;
 
-export function tickIdleStateMachine(p: IdleStateMachineTarget, dt: number): void {
-  if (p.state !== 'idle') {
+export function tickIdleStateMachine(p: IdleStateMachineTarget, dt: number, suppress = false): void {
+  if (suppress || p.state !== 'idle') {
     p.idleAction = -1;
     p.idleActionTimer = 0;
     p.idleActionDuration = 0;

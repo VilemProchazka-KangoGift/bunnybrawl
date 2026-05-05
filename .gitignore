@@ -12,6 +12,7 @@ dist
 dist-ssr
 *.local
 .claude/settings.local.json
+.serena/
 
 # Playwright MCP / E2E output
 .playwright-mcp/

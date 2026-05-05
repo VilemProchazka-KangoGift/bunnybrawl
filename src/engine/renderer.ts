@@ -11,7 +11,7 @@ import {
   drawHill, drawPlatformMoss,
   capFrontY, capBackY, skewPx,
 } from './themes/drawPrimitives';
-import { hexToRGB } from './fastMath';
+import { hexToRGB, hexToHSL } from './fastMath';
 import { debugFlags } from './debugFlags';
 import { drawNavDebugOverlay } from './navDebugOverlay';
 import type { BotNavDebugState } from './navDebugOverlay';
@@ -25,7 +25,7 @@ import {
   drawWeather, drawParticles, drawGibs, drawGibShape, drawConfetti, drawFireworks, drawWildlife, drawSpringTrail,
   drawHazardZone, drawGhost, drawLavaRock, drawZeroGZone, drawCurrentZone, drawGeyser, drawBouncyPlatformOverlay, drawPigeonFlock,
   drawDayNightCycle,
-  drawHUD, drawCountdown, drawConnectionQuality, invalidateHudCache, isHudDirty,
+  drawHUD, drawCountdown, drawConnectionQuality, drawComboPopups, invalidateHudCache, isHudDirty,
   drawPlayer,
   warmSpriteCacheForCharacters,
   clearRenderingCaches,
@@ -47,6 +47,15 @@ interface Cloud {
 
 const _nearCarrotSet = new Set<PlayerSlot>();
 const _isoOccluders: Platform[] = [];
+
+/** Memoized hex→HSL for character colors. Bounded by character pack count (≤17). */
+const _hslCache = new Map<string, { h: number; s: number; l: number }>();
+function getCachedHsl(hex: string): { h: number; s: number; l: number } {
+  let v = _hslCache.get(hex);
+  if (!v) { v = hexToHSL(hex); _hslCache.set(hex, v); }
+  return v;
+}
+const _invincibleHsl = getCachedHsl('#88BBFF');
 
 /** Sprite extends ~12 px above the bbox top for tall ears, horns, and gib pivots. */
 const SPRITE_TOP_PAD = 12;
@@ -81,6 +90,8 @@ export interface RenderDiagnostics {
   screenShake: boolean;
   zeroGShimmer: boolean;
   playersDrawn: number;
+  /** @internal test-only — bypasses renderer state machine */
+  ctx?: CanvasRenderingContext2D;
 }
 
 /**
@@ -222,6 +233,7 @@ export class Renderer {
     this.fgCanvas = fgCanvas;
     this.bgCtx = bgCanvas.getContext('2d')!;
     this.fgCtx = fgCanvas.getContext('2d')!;
+    this._diag.ctx = this.fgCtx;
     this.theme = theme;
     this.mirrored = mirrored;
 
@@ -763,9 +775,17 @@ export class Renderer {
           if (afterimages && afterimages.length > 0) {
             d.afterimages = true;
             if (!aiSaved) { ctx.save(); aiSaved = true; }
-            const isInvincible = player.invincibleTimer > 0;
-            ctx.fillStyle = isInvincible ? '#88BBFF' : player.character.color;
-            for (const img of afterimages) {
+            const baseHsl = player.invincibleTimer > 0
+              ? _invincibleHsl
+              : getCachedHsl(player.character.color);
+            const slSuffix = `,${Math.round(baseHsl.s * 100)}%,${Math.round(baseHsl.l * 100)}%)`;
+            const total = afterimages.length;
+            for (let i = 0; i < total; i++) {
+              const img = afterimages[i];
+              // Oldest (i=0) shifted -18°, newest (i=total-1) at base hue.
+              const shift = ((i / Math.max(1, total - 1)) - 1) * 18;
+              const h = (baseHsl.h + shift + 360) % 360;
+              ctx.fillStyle = `hsl(${Math.round(h)}${slSuffix}`;
               ctx.globalAlpha = img.alpha;
               ctx.beginPath();
               ctx.ellipse(
@@ -1028,6 +1048,9 @@ export class Renderer {
       drawCountdown(ctx, matchState.countdown);
       d.countdown = true;
     }
+
+    // Combo popups float over the field but under the HUD pill, so draw before drawHUD.
+    drawComboPopups(ctx, matchState);
 
     drawHUD(ctx, matchState, this.frameTime, this._playerNames, this._timeLimit, hudDirty);
 

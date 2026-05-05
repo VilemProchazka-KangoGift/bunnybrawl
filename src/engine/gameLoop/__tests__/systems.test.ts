@@ -43,6 +43,7 @@ import { EntityTransitionSystem } from '../cosmetics/EntityTransitionSystem';
 import { ParticleSystem } from '../cosmetics/ParticleSystem';
 import { PlayerTransitionSystem } from '../cosmetics/PlayerTransitionSystem';
 import { PlayerCosmeticSystem } from '../cosmetics/PlayerCosmeticSystem';
+import { HUDFeedbackSystem } from '../cosmetics/HUDFeedbackSystem';
 import { HazardSystem } from '../gameplay/HazardSystem';
 import { CarrotSystem } from '../gameplay/CarrotSystem';
 import { ArenaEntitySystem } from '../gameplay/ArenaEntitySystem';
@@ -1006,5 +1007,181 @@ describe('MatchSystem', () => {
     sys.init();
     sys.fixedUpdate(1 / 60);
     expect(onMatchEnd).not.toHaveBeenCalled();
+  });
+});
+
+// ── HUDFeedbackSystem ────────────────────────────────────────────────────────
+
+describe('HUDFeedbackSystem', () => {
+  it('init() snapshots scores and clears combo windows', () => {
+    const state = makeSystemState({
+      players: [makePlayer({ id: 'P1', score: 5 }), makePlayer({ id: 'P2', score: 3 })],
+    });
+    const sys = new HUDFeedbackSystem(state);
+    expect(() => sys.init()).not.toThrow();
+  });
+
+  it('single kill spawns no combo popup', () => {
+    const state = makeSystemState({
+      players: [makePlayer({ id: 'P1' }), makePlayer({ id: 'P2', x: 200, y: 100 })],
+      timeElapsed: 5,
+    });
+    const sys = new HUDFeedbackSystem(state);
+    sys.init();
+    state.killFeed.push({ attacker: 'P1', victim: 'P2', timestamp: 5 });
+    sys.cosmeticUpdate(1 / 60);
+    expect(state.comboPopups).toHaveLength(0);
+  });
+
+  it('two kills within window spawn ×2 popup', () => {
+    const state = makeSystemState({
+      players: [makePlayer({ id: 'P1' }), makePlayer({ id: 'P2', x: 220, y: 110 })],
+      timeElapsed: 5,
+    });
+    const sys = new HUDFeedbackSystem(state);
+    sys.init();
+    state.killFeed.push({ attacker: 'P1', victim: 'P2', timestamp: 5.0 });
+    state.killFeed.push({ attacker: 'P1', victim: 'P2', timestamp: 5.5 });
+    sys.cosmeticUpdate(1 / 60);
+    expect(state.comboPopups).toHaveLength(1);
+    expect(state.comboPopups[0].count).toBe(2);
+    expect(state.comboPopups[0].killer).toBe('P1');
+  });
+
+  it('three kills within window spawns ×2 then ×3 (popups stack on same chain)', () => {
+    const state = makeSystemState({
+      players: [makePlayer({ id: 'P1' }), makePlayer({ id: 'P2', x: 220, y: 110 })],
+      timeElapsed: 5,
+    });
+    const sys = new HUDFeedbackSystem(state);
+    sys.init();
+    state.killFeed.push(
+      { attacker: 'P1', victim: 'P2', timestamp: 5.0 },
+      { attacker: 'P1', victim: 'P2', timestamp: 5.4 },
+      { attacker: 'P1', victim: 'P2', timestamp: 5.8 },
+    );
+    sys.cosmeticUpdate(1 / 60);
+    expect(state.comboPopups.map(p => p.count)).toEqual([2, 3]);
+  });
+
+  it('kill outside the window resets the combo to 1', () => {
+    const state = makeSystemState({
+      players: [makePlayer({ id: 'P1' }), makePlayer({ id: 'P2', x: 220, y: 110 })],
+      timeElapsed: 5,
+    });
+    const sys = new HUDFeedbackSystem(state);
+    sys.init();
+    state.killFeed.push({ attacker: 'P1', victim: 'P2', timestamp: 5.0 });
+    sys.cosmeticUpdate(1 / 60);
+    expect(state.comboPopups).toHaveLength(0);
+    // Second kill 2.0s later — outside the 1.5s window.
+    state.killFeed.push({ attacker: 'P1', victim: 'P2', timestamp: 7.0 });
+    state.timeElapsed = 7.0;
+    sys.cosmeticUpdate(1 / 60);
+    expect(state.comboPopups).toHaveLength(0);
+  });
+
+  it('different killers do not share combo windows', () => {
+    const state = makeSystemState({
+      players: [makePlayer({ id: 'P1' }), makePlayer({ id: 'P2' }), makePlayer({ id: 'B1', x: 300, y: 200 })],
+      timeElapsed: 5,
+    });
+    const sys = new HUDFeedbackSystem(state);
+    sys.init();
+    state.killFeed.push(
+      { attacker: 'P1', victim: 'B1', timestamp: 5.0 },
+      { attacker: 'P2', victim: 'B1', timestamp: 5.2 },
+    );
+    sys.cosmeticUpdate(1 / 60);
+    expect(state.comboPopups).toHaveLength(0);
+  });
+
+  it('combo popup positioned at victim location', () => {
+    const state = makeSystemState({
+      players: [makePlayer({ id: 'P1' }), makePlayer({ id: 'P2', x: 350, y: 280, width: 30 })],
+      timeElapsed: 5,
+    });
+    const sys = new HUDFeedbackSystem(state);
+    sys.init();
+    state.killFeed.push(
+      { attacker: 'P1', victim: 'P2', timestamp: 5.0 },
+      { attacker: 'P1', victim: 'P2', timestamp: 5.3 },
+    );
+    sys.cosmeticUpdate(1 / 60);
+    expect(state.comboPopups[0].x).toBe(365); // 350 + 30/2
+    expect(state.comboPopups[0].y).toBe(280);
+  });
+
+  it('popup timer decays and removes when expired', () => {
+    const state = makeSystemState({
+      players: [makePlayer({ id: 'P1' }), makePlayer({ id: 'P2' })],
+      timeElapsed: 5,
+    });
+    const sys = new HUDFeedbackSystem(state);
+    sys.init();
+    state.killFeed.push(
+      { attacker: 'P1', victim: 'P2', timestamp: 5.0 },
+      { attacker: 'P1', victim: 'P2', timestamp: 5.3 },
+    );
+    sys.cosmeticUpdate(1 / 60);
+    expect(state.comboPopups).toHaveLength(1);
+    // Advance enough to expire the popup (COMBO_POPUP_DURATION = 1.0s).
+    for (let i = 0; i < 90; i++) sys.cosmeticUpdate(1 / 60);
+    expect(state.comboPopups).toHaveLength(0);
+  });
+
+  it('score rising edge sets goal pulse timer', () => {
+    const state = makeSystemState({
+      players: [makePlayer({ id: 'P1', score: 0 }), makePlayer({ id: 'P2', score: 0 })],
+    });
+    const sys = new HUDFeedbackSystem(state);
+    sys.init();
+    state.players[0].score = 1;
+    sys.cosmeticUpdate(1 / 60);
+    expect(state.goalPulseTimers.get('P1')).toBeGreaterThan(0);
+    expect(state.goalPulseTimers.has('P2')).toBe(false);
+  });
+
+  it('goal pulse decays and clears', () => {
+    const state = makeSystemState({
+      players: [makePlayer({ id: 'P1', score: 0 })],
+    });
+    const sys = new HUDFeedbackSystem(state);
+    sys.init();
+    state.players[0].score = 1;
+    sys.cosmeticUpdate(1 / 60);
+    const initial = state.goalPulseTimers.get('P1')!;
+    sys.cosmeticUpdate(1 / 60);
+    expect(state.goalPulseTimers.get('P1')).toBeLessThan(initial);
+    // Advance enough to expire (GOAL_PULSE_DURATION = 0.45s).
+    for (let i = 0; i < 60; i++) sys.cosmeticUpdate(1 / 60);
+    expect(state.goalPulseTimers.has('P1')).toBe(false);
+  });
+
+  it('score going down does not trigger pulse', () => {
+    const state = makeSystemState({
+      players: [makePlayer({ id: 'P1', score: 5 })],
+    });
+    const sys = new HUDFeedbackSystem(state);
+    sys.init();
+    state.players[0].score = 4;
+    sys.cosmeticUpdate(1 / 60);
+    expect(state.goalPulseTimers.has('P1')).toBe(false);
+  });
+
+  it('resetBaseline ignores a new kill that landed before reset', () => {
+    const state = makeSystemState({
+      players: [makePlayer({ id: 'P1' }), makePlayer({ id: 'P2' })],
+      timeElapsed: 5,
+    });
+    const sys = new HUDFeedbackSystem(state);
+    sys.init();
+    state.killFeed.push({ attacker: 'P1', victim: 'P2', timestamp: 5.0 });
+    state.timeElapsed = 6;
+    sys.resetBaseline();
+    state.killFeed.push({ attacker: 'P1', victim: 'P2', timestamp: 6.5 });
+    sys.cosmeticUpdate(1 / 60);
+    // Single kill since baseline → no combo (rolled-up timestamps cleared).
+    expect(state.comboPopups).toHaveLength(0);
   });
 });

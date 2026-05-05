@@ -34,6 +34,8 @@ function makeState(overrides?: Partial<MatchState>): MatchState {
     pollenParticles: [],
     shootingStars: [],
     scoreAnimations: [],
+    comboPopups: [],
+    goalPulseTimers: new Map(),
     ghosts: [],
     lavaRocks: [],
     lavaRockTimer: 10,

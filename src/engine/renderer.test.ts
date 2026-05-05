@@ -25,6 +25,7 @@ vi.mock('./rendering', () => ({
   drawHUD: vi.fn(),
   drawCountdown: vi.fn(),
   drawConnectionQuality: vi.fn(),
+  drawComboPopups: vi.fn(),
   invalidateHudCache: vi.fn(),
   isHudDirty: vi.fn(() => false),
   drawPlayer: vi.fn(),
@@ -520,6 +521,27 @@ describe('Renderer — renderFrame conditional branches', () => {
     state.players[0].afterimages = [{ x: 190, y: 620, alpha: 0.5 }];
     renderer.renderFrame(state, makeArena(), []);
     expect(renderer.getDiagnostics().afterimages).toBe(true);
+  });
+
+  it('uses hue-shifted hsl fillStyle for afterimages, not raw character color', () => {
+    const state = makeState();
+    state.players[0].afterimages = [
+      { x: 190, y: 620, alpha: 0.3 },
+      { x: 200, y: 620, alpha: 0.5 },
+      { x: 210, y: 620, alpha: 0.7 },
+    ];
+    const seen: string[] = [];
+    const ctx = renderer.getDiagnostics().ctx as CanvasRenderingContext2D;
+    Object.defineProperty(ctx, 'fillStyle', {
+      set(v) { seen.push(String(v)); },
+      get() { return ''; },
+      configurable: true,
+    });
+    renderer.renderFrame(state, makeArena(), []);
+    const hslFills = seen.filter(s => s.startsWith('hsl('));
+    const unique = new Set(hslFills);
+    expect(hslFills.length).toBeGreaterThanOrEqual(3);
+    expect(unique.size).toBeGreaterThanOrEqual(2);
   });
 
   it('draws fog particles when present', () => {

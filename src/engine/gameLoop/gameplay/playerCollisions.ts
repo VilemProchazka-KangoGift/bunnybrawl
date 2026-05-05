@@ -46,12 +46,19 @@ export function handleSpringCollision(player: Player, state: MatchState): Hazard
   player.state = 'airborne';
   spring.bounceTimer = 0.3;
   player.springTrailTimer = SPRING_TRAIL_DURATION;
+  // Anchor the trail at the spring (stable across frames). Set here in fixedUpdate
+  // so the renderer sees the launch coords on the same tick the timer becomes >0
+  // — relying on cosmeticStep (half-rate) to capture player.x/y was racy.
+  player.springLaunchX = spring.x;
+  player.springLaunchY = spring.y;
   // spring sound moved to cosmeticStep (bounceTimer transition detection)
 
   return {
     type: 'spring',
-    px: player.x + player.width / 2,
-    py: player.y + player.height / 2,
+    // Burst originates at the spring (release point), not the player center —
+    // looks like the spring kicked off energy, not like the player exploded.
+    px: spring.x,
+    py: spring.y,
     haptic: 'spring',
   };
 }

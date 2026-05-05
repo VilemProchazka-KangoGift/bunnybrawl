@@ -89,9 +89,27 @@ export function drawParticles(ctx: CanvasRenderingContext2D, particles: Particle
       ctx.fillStyle = p.color;
       lastColor = p.color;
     }
-    ctx.beginPath();
-    ctx.arc(dx, dy, p.size * alpha, 0, Math.PI * 2);
-    ctx.fill();
+    if (p.shape === 'spike') {
+      // Oriented narrow triangle pointing along velocity. Length 3.5x size, base 0.7x size.
+      const ang = Math.atan2(p.vy, p.vx);
+      const r = p.size * alpha;
+      const len = r * 3.5;
+      const halfBase = r * 0.7;
+      ctx.save();
+      ctx.translate(dx, dy);
+      ctx.rotate(ang);
+      ctx.beginPath();
+      ctx.moveTo(len, 0);
+      ctx.lineTo(-len * 0.4, -halfBase);
+      ctx.lineTo(-len * 0.4, halfBase);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    } else {
+      ctx.beginPath();
+      ctx.arc(dx, dy, p.size * alpha, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
   ctx.globalAlpha = 1;
 }
@@ -337,23 +355,41 @@ export function drawWildlife(ctx: CanvasRenderingContext2D, wildlife: WildlifeEn
 }
 
 export function drawSpringTrail(ctx: CanvasRenderingContext2D, player: Player, frameTime: number): void {
-  const cx = player.x + player.width / 2;
-  const baseY = player.y + player.height;
-  const t = player.springTrailTimer / SPRING_TRAIL_DURATION; // 1 = just started, 0 = fading
+  // Anchored at the spring (where the player launched from), not the moving player.
+  // Two layers: a yellow energy column rising out of the spring + animated coil
+  // rings racing up the column, both fading with springTrailTimer.
+  const t = player.springTrailTimer / SPRING_TRAIL_DURATION;
+  if (t <= 0 || !Number.isFinite(player.springLaunchX)) return;
+  const launchX = player.springLaunchX;
+  const launchY = player.springLaunchY;
 
-  ctx.save();
-  ctx.fillStyle = '#5DDE70';
-  const pointCount = 12;
-  for (let i = 0; i < pointCount; i++) {
-    const progress = i / pointCount;
-    const angle = progress * Math.PI * 4 + frameTime / 200; // spiral
-    const radius = 6 + progress * 10;
-    const py = baseY + progress * 30;
-    const px = cx + Math.cos(angle) * radius;
-    ctx.globalAlpha = t * (1 - progress) * 0.5;
-    ctx.beginPath();
-    ctx.arc(px, py, 2.5 - progress, 0, Math.PI * 2);
-    ctx.fill();
+  const COL_H = 70;
+  const COL_HALF_W = 7;
+
+  // Energy column — bright at the base, fading to transparent at the top.
+  const grad = ctx.createLinearGradient(launchX, launchY, launchX, launchY - COL_H);
+  grad.addColorStop(0, `rgba(255,212,90,${0.4 * t})`);
+  grad.addColorStop(0.55, `rgba(255,180,40,${0.16 * t})`);
+  grad.addColorStop(1, 'rgba(255,180,40,0)');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.ellipse(launchX, launchY - COL_H / 2, COL_HALF_W, COL_H / 2, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Coil rings racing upward — phase advances with timer + frameTime so rings
+  // appear to rise out of the spring, evoking spring coils releasing.
+  const RING_COUNT = 2;
+  const animPhase = (1 - t) * 1.6 + frameTime * 0.002;
+  ctx.strokeStyle = `rgba(255,235,120,${0.55 * t})`;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  for (let i = 0; i < RING_COUNT; i++) {
+    const phase = (animPhase + i / RING_COUNT) % 1;
+    const ry = launchY - phase * COL_H;
+    const rw = 5 + phase * 7;
+    // moveTo before each ellipse so sub-paths don't connect with a stroke line.
+    ctx.moveTo(launchX + rw, ry);
+    ctx.ellipse(launchX, ry, rw, 2, 0, 0, Math.PI * 2);
   }
-  ctx.restore();
+  ctx.stroke();
 }
