@@ -499,6 +499,37 @@ export const winterLake: ArenaPack = {
       const phase = fastSin(time * 1.4 + i * 1.7);
       if (phase > 0.2) ctx.fillRect(x, 60, 2, 200 + phase * 30);
     }
+    ctx.globalAlpha = 1;
+    // Powder — ambient snow puffs near ground that catch light
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+    for (let i = 0; i < 22; i++) {
+      const t = ((time * 0.3 + i * 0.045) % 1);
+      const baseX = ((i * 197) % CANVAS_WIDTH);
+      const x = baseX + fastSin(time * 0.6 + i) * 12;
+      const y = 720 - t * 40;
+      const a = (1 - t) * 0.65;
+      ctx.globalAlpha = a;
+      ctx.beginPath();
+      ctx.arc(x, y, 1.5 + (1 - t) * 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    // Ice glints — sparkles on ground surface (4-pointed stars at random positions)
+    for (let i = 0; i < 30; i++) {
+      const phase = fastSin(time * 4 + i * 0.7);
+      if (phase < 0.7) continue;
+      const x = ((i * 251) % CANVAS_WIDTH);
+      const y = 656 + (i % 3) * 4;
+      const r = 1 + (phase - 0.7) * 6;
+      ctx.fillStyle = `rgba(168, 225, 255, ${(phase - 0.7) * 3})`;
+      ctx.beginPath();
+      ctx.moveTo(x, y - r);
+      ctx.lineTo(x + r * 0.4, y);
+      ctx.lineTo(x, y + r);
+      ctx.lineTo(x - r * 0.4, y);
+      ctx.closePath();
+      ctx.fill();
+    }
     ctx.restore();
   },
 
