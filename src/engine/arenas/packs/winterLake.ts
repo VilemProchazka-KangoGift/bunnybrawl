@@ -453,21 +453,24 @@ export const winterLake: ArenaPack = {
     drawSnowDrift(ctx, 1250, gy, 40, 5);
   },
 
-  drawAnimatedBackground: (ctx, _arena, time) => {
+  drawAnimatedBackground: (ctx, _arena, time, dayPhase) => {
     if (getSlowDevice()) return;
+    const nightIntensity = Math.max(0, (1 - Math.cos(dayPhase * Math.PI * 2)) / 2);
+    if (nightIntensity < 0.05) return;
     ctx.save();
+    const OVERHANG = 80;
     for (const st of AURORA_STRIPES) {
       const breathe = 0.5 + 0.5 * fastSin(time * 0.7 + st.phase);
       ctx.fillStyle = st.color;
-      ctx.globalAlpha = 0.15 + breathe * 0.18;
+      ctx.globalAlpha = (0.15 + breathe * 0.18) * nightIntensity;
       ctx.beginPath();
-      ctx.moveTo(0, st.y);
-      for (let x = 0; x <= CANVAS_WIDTH; x += 24) {
+      ctx.moveTo(-OVERHANG, st.y);
+      for (let x = -OVERHANG; x <= CANVAS_WIDTH + OVERHANG; x += 24) {
         const y = st.y + fastSin(x * 0.0085 + time * st.speed + st.phase) * 16
                        + fastSin(x * 0.003 + time * st.speed * 0.5) * 22;
         ctx.lineTo(x, y);
       }
-      for (let x = CANVAS_WIDTH; x >= 0; x -= 24) {
+      for (let x = CANVAS_WIDTH + OVERHANG; x >= -OVERHANG; x -= 24) {
         const y = st.y + st.h + fastSin(x * 0.0085 + time * st.speed + st.phase + 0.7) * 16
                               + fastSin(x * 0.003 + time * st.speed * 0.5 + 0.5) * 22;
         ctx.lineTo(x, y);
@@ -475,15 +478,28 @@ export const winterLake: ArenaPack = {
       ctx.closePath();
       ctx.fill();
     }
-    // Vertical light pillars
     ctx.fillStyle = '#a3e8ff';
-    ctx.globalAlpha = 0.14;
+    ctx.globalAlpha = 0.14 * nightIntensity;
     for (let i = 0; i < 7; i++) {
       const x = ((i * 187) + fastSin(time * 0.3 + i) * 80 + CANVAS_WIDTH) % CANVAS_WIDTH;
       const phase = fastSin(time * 1.4 + i * 1.7);
       if (phase > 0.2) ctx.fillRect(x, 60, 2, 200 + phase * 30);
     }
     ctx.restore();
+  },
+
+  drawSceneTint: (ctx, dayPhase, time) => {
+    if (getSlowDevice()) return;
+    const nightIntensity = Math.max(0, (1 - Math.cos(dayPhase * Math.PI * 2)) / 2);
+    if (nightIntensity < 0.05) return;
+    const breathe = 0.5 + 0.5 * fastSin(time * 0.5);
+    const tintAlpha = nightIntensity * (0.05 + breathe * 0.04);
+    const grad = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+    grad.addColorStop(0,    `rgba(123, 224, 163, ${tintAlpha * 1.4})`);
+    grad.addColorStop(0.45, `rgba(163, 232, 255, ${tintAlpha * 0.9})`);
+    grad.addColorStop(1,    `rgba(123, 224, 163, ${tintAlpha * 0.3})`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
   },
 
   drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => {

@@ -532,9 +532,9 @@ export const treetops: ArenaPack = {
   scatterFlockConfig: {
     species: 'bird',
     positions: [
-      { x: 180, y: 140 },
-      { x: 700, y: 130 },
-      { x: 1080, y: 145 },
+      { x: 590, y: 258 },
+      { x: 550, y: 478 },
+      { x: 1100, y: 473 },
     ],
     radius: 120,
     respawnTime: 8,

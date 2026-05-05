@@ -839,8 +839,8 @@ export const castle: ArenaPack = {
   scatterFlockConfig: {
     species: 'bat',
     positions: [
-      { x: 320, y: 180 },
-      { x: 960, y: 180 },
+      { x: 400, y: 308 },
+      { x: 880, y: 308 },
     ],
     radius: 140,
     respawnTime: 10,

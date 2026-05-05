@@ -592,12 +592,34 @@ export function drawPigeonFlock(
 
 const BIRD_PALETTE = ['#3a4a8a', '#a85a3a', '#5a8a3a'] as const;
 
+// Per-bird offsets — broken into two clusters with vertical jitter so the
+// flock reads as natural perching, not a regimented line.
+const BIRD_OFFSETS: ReadonlyArray<{ dx: number; dy: number }> = [
+  { dx: -14, dy: -3 },
+  { dx: -6,  dy: -7 },
+  { dx: 6,   dy: -2 },
+  { dx: 16,  dy: -5 },
+];
+
+const CROW_OFFSETS: ReadonlyArray<{ dx: number; dy: number }> = [
+  { dx: -12, dy: -4 },
+  { dx: 2,   dy: -6 },
+  { dx: 14,  dy: -3 },
+];
+
+const BAT_OFFSETS: ReadonlyArray<{ dx: number; dy: number }> = [
+  { dx: -14, dy: 0 },
+  { dx: 0,   dy: 3 },
+  { dx: 14,  dy: 1 },
+];
+
 const PERCHED_FLOCK_DRAWERS: Record<ScatterFlockSpecies, (ctx: CanvasRenderingContext2D, cx: number, cy: number, time: number) => void> = {
   bat: (ctx, cx, cy, time) => {
     ctx.globalAlpha = 0.8;
     for (let i = 0; i < 3; i++) {
-      const bx = cx - 12 + i * 12;
-      const by = cy;
+      const o = BAT_OFFSETS[i];
+      const bx = cx + o.dx;
+      const by = cy + o.dy;
       const sway = fastSin(time * 1.2 + i);
       ctx.fillStyle = '#1a1422';
       ctx.beginPath();
@@ -615,8 +637,9 @@ const PERCHED_FLOCK_DRAWERS: Record<ScatterFlockSpecies, (ctx: CanvasRenderingCo
   crow: (ctx, cx, cy, time) => {
     ctx.globalAlpha = 0.85;
     for (let i = 0; i < 3; i++) {
-      const px = cx - 10 + i * 10;
-      const py = cy - 4;
+      const o = CROW_OFFSETS[i];
+      const px = cx + o.dx;
+      const py = cy + o.dy;
       ctx.fillStyle = '#0e0a14';
       ctx.beginPath();
       ctx.ellipse(px, py, 5, 4, 0, 0, Math.PI * 2);
@@ -642,8 +665,9 @@ const PERCHED_FLOCK_DRAWERS: Record<ScatterFlockSpecies, (ctx: CanvasRenderingCo
   bird: (ctx, cx, cy, time) => {
     ctx.globalAlpha = 0.85;
     for (let i = 0; i < 4; i++) {
-      const px = cx - 12 + i * 8;
-      const py = cy - 3;
+      const offset = BIRD_OFFSETS[i];
+      const px = cx + offset.dx;
+      const py = cy + offset.dy;
       const color = BIRD_PALETTE[i % BIRD_PALETTE.length];
       ctx.fillStyle = color;
       ctx.beginPath();

@@ -138,8 +138,11 @@ export interface ThemeConfig {
   /** Foreground overlay for platform body face — drawn after players for occlusion. */
   drawPlatformOverlay?: (ctx: CanvasRenderingContext2D, platform: import('../types').Platform, isGround: boolean) => void;
 
-  /** Per-frame animated background (drawn behind players, after wildlife — e.g. objects visible through windows) */
-  drawAnimatedBackground?: (ctx: CanvasRenderingContext2D, arena: Arena, time: number) => void;
+  /** Per-frame animated background. Drawn after the static bg cache and BEFORE clouds, so it composes as far-sky atmosphere (aurora, distant space objects). dayPhase: 0=noon, 0.5=midnight. */
+  drawAnimatedBackground?: (ctx: CanvasRenderingContext2D, arena: Arena, time: number, dayPhase: number) => void;
+
+  /** Per-frame full-scene tint, drawn LAST after day-night overlay. Use for global mood washes (aurora green, lava red glow) that should affect every layer including players. */
+  drawSceneTint?: (ctx: CanvasRenderingContext2D, dayPhase: number, time: number) => void;
 
   // Optional custom particle renderer (overrides default leaf/petal/snow drawing)
   drawWeatherParticle?: (ctx: CanvasRenderingContext2D, particle: WeatherParticle) => void;

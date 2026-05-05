@@ -697,9 +697,9 @@ export const hauntedGraveyard: ArenaPack = {
   scatterFlockConfig: {
     species: 'crow',
     positions: [
-      { x: 240, y: 596 },
-      { x: 700, y: 596 },
-      { x: 1040, y: 596 },
+      { x: 250, y: 448 },
+      { x: 640, y: 288 },
+      { x: 1030, y: 448 },
     ],
     radius: 140,
     respawnTime: 10,

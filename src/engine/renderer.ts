@@ -640,14 +640,24 @@ export class Renderer {
       }
 
       const bgStart = perfTrace.begin('render.bg');
-      // Animated clouds
+      const slow = getSlowDevice();
+
+      // Theme-specific animated background — drawn FIRST (behind clouds) so
+      // sky-atmosphere effects (aurora, distant space objects) compose under
+      // weather and clouds.
+      if (this.theme.drawAnimatedBackground) {
+        const thA = this.originalArena ?? arena;
+        if (this.mirrored) { ctx.save(); ctx.scale(-1, 1); ctx.translate(-CANVAS_WIDTH, 0); }
+        this.theme.drawAnimatedBackground(ctx, thA, matchState.timeElapsed, matchState.dayPhase ?? 0);
+        if (this.mirrored) { ctx.restore(); }
+        d.animatedBg = true;
+      }
+
       const now = this.frameTime / 1000;
       const dt = now - (this.lastCloudTime || now);
       this.lastCloudTime = now;
       this.updateAndDrawClouds(ctx, dt);
       d.clouds = true;
-
-      const slow = getSlowDevice();
 
       // Weather (leaves, petals)
       if (!slow) {
@@ -659,15 +669,6 @@ export class Renderer {
       if (!slow && matchState.wildlife) {
         drawWildlife(ctx, matchState.wildlife);
         d.wildlife = true;
-      }
-
-      // Theme-specific animated background (e.g. space objects through windows)
-      if (this.theme.drawAnimatedBackground) {
-        const thA = this.originalArena ?? arena;
-        if (this.mirrored) { ctx.save(); ctx.scale(-1, 1); ctx.translate(-CANVAS_WIDTH, 0); }
-        this.theme.drawAnimatedBackground(ctx, thA, matchState.timeElapsed);
-        if (this.mirrored) { ctx.restore(); }
-        d.animatedBg = true;
       }
 
       // Hazard zones (lava pools etc.)
@@ -969,6 +970,11 @@ export class Renderer {
       if (!slow && this.theme.dayNight.enabled && matchState.dayPhase !== undefined) {
         drawDayNightCycle(ctx, matchState.dayPhase, matchState, this.theme, this.frameTime);
         d.dayNight = true;
+      }
+
+      // Theme-specific full-scene tint (aurora glow, lava red wash, …)
+      if (!slow && this.theme.drawSceneTint) {
+        this.theme.drawSceneTint(ctx, matchState.dayPhase ?? 0, matchState.timeElapsed);
       }
 
       perfTrace.end('render.fg-nature', fgStart);
