@@ -736,6 +736,7 @@ function drawFlyingScatter(ctx: CanvasRenderingContext2D, species: ScatterFlockS
     ctx.closePath();
     ctx.fill();
   } else {
+    const dir = sp.vx >= 0 ? 1 : -1;
     ctx.beginPath();
     ctx.ellipse(sp.x, sp.y, cfg.bodyW, cfg.bodyH, 0, 0, Math.PI * 2);
     ctx.fill();
@@ -749,6 +750,27 @@ function drawFlyingScatter(ctx: CanvasRenderingContext2D, species: ScatterFlockS
     ctx.moveTo(sp.x + innerW, sp.y);
     ctx.lineTo(sp.x + cfg.wingSpan, sp.y + flap);
     ctx.lineTo(sp.x + (innerW - 1), sp.y);
+    ctx.fill();
+    const headR = species === 'crow' ? 2.2 : 1.7;
+    ctx.beginPath();
+    ctx.arc(sp.x + dir * (cfg.bodyW + 0.5), sp.y - cfg.bodyH * 0.4, headR, 0, Math.PI * 2);
+    ctx.fill();
+    if (species === 'crow') {
+      ctx.fillStyle = '#5a3a1c';
+      ctx.beginPath();
+      ctx.moveTo(sp.x + dir * (cfg.bodyW + 2), sp.y - cfg.bodyH * 0.3);
+      ctx.lineTo(sp.x + dir * (cfg.bodyW + 5), sp.y - cfg.bodyH * 0.2);
+      ctx.lineTo(sp.x + dir * (cfg.bodyW + 2), sp.y - cfg.bodyH * 0.1);
+      ctx.fill();
+    } else {
+      ctx.fillStyle = '#ff8a3a';
+      ctx.fillRect(sp.x + dir * (cfg.bodyW + 1.5), sp.y - cfg.bodyH * 0.4, dir * 1.5, 1);
+    }
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(sp.x - dir * cfg.bodyW, sp.y);
+    ctx.lineTo(sp.x - dir * (cfg.bodyW + 3), sp.y - 1);
+    ctx.lineTo(sp.x - dir * (cfg.bodyW + 3), sp.y + 1);
     ctx.fill();
   }
   ctx.globalAlpha = 1;
