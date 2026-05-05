@@ -693,11 +693,11 @@ const PERCHED_FLOCK_DRAWERS: Record<ScatterFlockSpecies, (ctx: CanvasRenderingCo
   },
 };
 
-interface FlyingSpeciesCfg { color: string; bodyW: number; bodyH: number; wingSpan: number; flapFreq: number; flapAmp: number; }
+interface FlyingSpeciesCfg { color: string | null; bodyW: number; bodyH: number; wingSpan: number; flapFreq: number; flapAmp: number; }
 const FLYING_CFG: Record<ScatterFlockSpecies, FlyingSpeciesCfg> = {
   bat:  { color: '#1a1422', bodyW: 0,   bodyH: 0,   wingSpan: 5, flapFreq: 32, flapAmp: 4 },
   crow: { color: '#0e0a14', bodyW: 4,   bodyH: 3,   wingSpan: 9, flapFreq: 24, flapAmp: 5 },
-  bird: { color: '#3a4a8a', bodyW: 3,   bodyH: 2.5, wingSpan: 6, flapFreq: 28, flapAmp: 4 },
+  bird: { color: null,      bodyW: 3,   bodyH: 2.5, wingSpan: 6, flapFreq: 28, flapAmp: 4 },
 };
 
 type ScatterParticle = { x: number; y: number; vx: number; vy: number; life: number; phase: number };
@@ -723,7 +723,8 @@ function drawFlyingScatter(ctx: CanvasRenderingContext2D, species: ScatterFlockS
   const cfg = FLYING_CFG[species];
   const flap = fastSin(sp.life * cfg.flapFreq + sp.phase) * cfg.flapAmp;
   ctx.globalAlpha = Math.min(1, sp.life) * 0.85;
-  ctx.fillStyle = cfg.color;
+  const color = cfg.color ?? BIRD_PALETTE[Math.floor(sp.phase * 1.7) % BIRD_PALETTE.length];
+  ctx.fillStyle = color;
   if (species === 'bat') {
     ctx.beginPath();
     ctx.moveTo(sp.x - 5, sp.y);
