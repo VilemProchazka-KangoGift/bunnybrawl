@@ -42,6 +42,7 @@ export function makePlayer(overrides: Partial<Player> & { id?: PlayerSlot } = {}
     fastFallStreakAlpha: 0,
     fastFallAnchorX: NaN,
     fastFallAnchorY: NaN,
+    airLean: 0,
     damageFlashSide: null,
     damageFlashTimer: 0,
     burnTimer: 0,

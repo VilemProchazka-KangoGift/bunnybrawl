@@ -9,6 +9,9 @@ import { getSlowDevice } from '../../perfFlags';
 
 const FIRE_COLORS = ['#FF4400', '#FF8800', '#FFCC00', '#FFAA00'];
 
+// Air-lean fades to 0 over ~0.7s — roughly the descent of a full jump.
+const AIR_LEAN_DECAY_PER_S = 1.5;
+
 /**
  * Update per-player cosmetic state: animation, fire particles, idle anim,
  * afterimages, footstep sounds, expressions, squash decay, fat wobble.
@@ -43,6 +46,15 @@ export function updatePlayerCosmetics(
     player.fastFallStreakAlpha = Math.min(1, player.fastFallStreakAlpha + dt * 10);
   } else {
     player.fastFallStreakAlpha = Math.max(0, player.fastFallStreakAlpha - dt * 18);
+  }
+
+  // Air-lean budget. Walking off a platform never primes it (vy starts >= 0).
+  if (player.state !== 'airborne' || player.fastFalling) {
+    player.airLean = 0;
+  } else if (player.vy < 0) {
+    player.airLean = 1;
+  } else {
+    player.airLean = Math.max(0, player.airLean - dt * AIR_LEAN_DECAY_PER_S);
   }
 
   // Fire particles while burning
