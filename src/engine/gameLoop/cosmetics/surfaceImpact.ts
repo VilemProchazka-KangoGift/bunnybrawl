@@ -7,11 +7,12 @@ import {
   SURFACE_CRACK_LIFE,
   SURFACE_GLASS_CRACK_LIFE,
   SURFACE_RIPPLE_LIFE,
-  SURFACE_SCUFF_LIFE,
+  SURFACE_MINI_CRACK_LIFE,
 } from '../../constants';
 import { platformUnderFoot, surfaceOf, swapRemove } from '../../themes/utils';
 import type { Platform } from '../../types';
 import { CAP_DEPTH, SKEW_RATIO } from '../../themes/drawPrimitives/platforms';
+import { ICE_CUBE_DEPTH_RATIO } from '../../themes/drawPrimitives/winter';
 import { SURFACE_PALETTE } from './surfacePalette';
 
 /** Inscribed-rectangle horizontal shift for iso platforms. The visible cap
@@ -20,11 +21,10 @@ import { SURFACE_PALETTE } from './surfacePalette';
  *  at every y is `[plat.x + sp, plat.x + plat.width]`. */
 const ISO_INSCRIBED_LEFT_SHIFT = CAP_DEPTH * SKEW_RATIO;
 
-/** Compute the leftward offset to apply to a platform's clip rect so decals
- *  stay inside the visible top face. iceCubes have a much deeper 3D draw
- *  (depth = width * 0.3) than the standard iso cap. */
-function inscribedLeftShift(plat: Platform): number {
-  if (plat.style === 'iceCube') return plat.width * 0.3;
+/** Left inset (px) for the platform's clip rect so decals stay inside the
+ *  visible top face. iceCubes use a deeper 3D draw than the standard iso cap. */
+function clipLeftInset(plat: Platform): number {
+  if (plat.style === 'iceCube') return plat.width * ICE_CUBE_DEPTH_RATIO;
   if (plat.leftCollisionInset !== undefined) return ISO_INSCRIBED_LEFT_SHIFT;
   return 0;
 }
@@ -56,21 +56,11 @@ export function isInLavaZone(player: Player, arena: Arena): boolean {
   return false;
 }
 
-export function decalLife(kind: 'crack' | 'scuff', surface: SurfaceTag): number {
-  if (kind === 'crack') {
-    if (surface === 'glass') return SURFACE_GLASS_CRACK_LIFE;
-    if (surface === 'ice') return SURFACE_CRACK_LIFE;
-    return 0;
-  }
-  return SURFACE_SCUFF_LIFE;
-}
-
 export function pushSurfaceDecal(
   state: MatchState,
-  decal: { kind: 'crack' | 'scuff'; x: number; y: number; life: number; seed: number; color: string; surface: SurfaceTag; clipMinX?: number; clipMaxX?: number },
+  decal: { kind: 'full' | 'mini'; x: number; y: number; life: number; seed: number; color: string; surface: SurfaceTag; clipMinX?: number; clipMaxX?: number },
 ): void {
   if (decal.life <= 0) return;
-  // FIFO eviction so the user always sees the most recent impacts.
   if (state.surfaceDecals.length >= SURFACE_DECAL_MAX) {
     state.surfaceDecals.shift();
   }
@@ -101,7 +91,6 @@ export function updateSurfaceLifetimes(state: MatchState, dt: number): void {
 
 export interface SurfaceImpactCallbacks {
   isSlowDevice: () => boolean;
-  random: () => number;
 }
 
 export function detectSurfaceImpact(
@@ -126,20 +115,17 @@ export function detectSurfaceImpact(
     const hardLanding = absVy >= HARD_LAND_VY_THRESHOLD || prev.fastFalling;
 
     if (hardLanding) {
-      // Inscribed-rectangle clip — widest rect that fits inside any iso /
-      // 3D-cube cap at every y, so cracks can't overflow visible edges.
       const clip = plat
-        ? { clipMinX: plat.x + inscribedLeftShift(plat), clipMaxX: plat.x + plat.width }
+        ? { clipMinX: plat.x + clipLeftInset(plat), clipMaxX: plat.x + plat.width }
         : {};
-
-      // Brittle surfaces (ice, glass) get a full spider crack; everything
-      // else gets a minicrack. One decal per impact.
       const useFullCrack = !slow && (surface === 'ice' || surface === 'glass');
-      const kind = useFullCrack ? 'crack' : 'scuff';
+      const kind = useFullCrack ? 'full' : 'mini';
+      const life = useFullCrack
+        ? (surface === 'glass' ? SURFACE_GLASS_CRACK_LIFE : SURFACE_CRACK_LIFE)
+        : SURFACE_MINI_CRACK_LIFE;
       pushSurfaceDecal(state, {
-        ...clip, kind, x: cx, y: fy, surface,
-        life: decalLife(kind, surface),
-        seed: cb.random(),
+        ...clip, kind, x: cx, y: fy, surface, life,
+        seed: Math.random(),
         color: SURFACE_PALETTE[surface].dust,
       });
     }
@@ -166,4 +152,3 @@ export function resetSurfaceImpactBaselines(
     prevMap.set(p.id, snapshotSurfaceImpactState(p, arena));
   }
 }
-

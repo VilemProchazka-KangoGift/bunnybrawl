@@ -3,7 +3,7 @@ import type { Arena, Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { getFloatingPlatforms } from '../../themes/utils';
 import {
-  drawPineTree, drawChristmasTree, drawSnowDrift, drawIcePatch, drawIcicle, drawIceCube,
+  drawPineTree, drawChristmasTree, drawSnowDrift, drawIcePatch, drawIcicle, drawIceCube, ICE_CUBE_DEPTH_RATIO,
   drawBigSnowman, drawIgloo, drawSnowman, drawSnowball,
   drawSnowballPyramid, drawLargeSnowballPyramid,
   drawFgBush,
@@ -446,7 +446,7 @@ export const winterLake: ArenaPack = {
 
   drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => {
     if (platform.style === 'iceCube') {
-      const depth = platform.width * 0.3;
+      const depth = platform.width * ICE_CUBE_DEPTH_RATIO;
       drawIceCube(ctx, platform.x, platform.y + depth / 2, platform.width, platform.height - depth / 2);
       return;
     }

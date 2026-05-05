@@ -317,21 +317,21 @@ export interface Thorn {
 }
 
 /**
- * Persistent ground decal — spider-cracks (ice/glass) and hard-landing
- * scuffs. Rendered into the bg cache via fade-only redraw, mirroring
- * the SplatMark lifecycle. Local-only; not snapshotted.
+ * Persistent ground decal from hard landings. `full` = spider crack
+ * (ice/glass), `mini` = small impact crack (any other surface). Local-only;
+ * not snapshotted.
  */
 export interface SurfaceDecal {
-  kind: 'crack' | 'scuff';
+  kind: 'full' | 'mini';
   x: number;
   y: number;
-  age: number;          // seconds since spawn
-  life: number;         // total lifetime in seconds (fade scales by 1 - age/life)
-  seed: number;         // deterministic per-decal RNG for shape jitter
-  color: string;        // tint (scuff = dark char tone, crack = white)
-  surface: SurfaceTag;  // surface this decal sits on (drives shape style)
-  /** Platform horizontal clip extent. Renderer cuts off draws outside [clipMinX, clipMaxX]
-   *  so edge landings don't paint into empty space. Undefined = no clip. */
+  age: number;
+  life: number;
+  seed: number;
+  color: string;
+  surface: SurfaceTag;
+  /** Platform horizontal clip extent — caps decal draws so edge landings
+   *  don't paint past the visible top face. Undefined = no clip. */
   clipMinX?: number;
   clipMaxX?: number;
 }

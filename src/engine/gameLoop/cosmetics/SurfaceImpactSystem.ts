@@ -28,7 +28,6 @@ export class SurfaceImpactSystem implements CosmeticSystem {
     this.arena = arena;
     this._cb = {
       isSlowDevice: () => getSlowDevice(),
-      random: () => Math.random(),
     };
   }
 

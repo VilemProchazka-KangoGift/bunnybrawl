@@ -7,7 +7,6 @@ import {
   pushSurfaceDecal,
   pushRipple,
   updateSurfaceLifetimes,
-  decalLife,
   snapshotSurfaceImpactState,
   type PrevSurfaceImpactState,
   type SurfaceImpactCallbacks,
@@ -17,7 +16,6 @@ import { SURFACE_DECAL_MAX, HARD_LAND_VY_THRESHOLD } from '../../constants';
 function makeCb(overrides: Partial<SurfaceImpactCallbacks> = {}): SurfaceImpactCallbacks {
   return {
     isSlowDevice: () => false,
-    random: () => 0.5,
     ...overrides,
   };
 }
@@ -54,15 +52,6 @@ function makeLandedPlayer(x = 100, y = 660): Player {
 }
 
 describe('surfaceImpact — pure helpers', () => {
-  it('decalLife: cracks only on ice/glass; scuffs on any surface', () => {
-    expect(decalLife('crack', 'ice')).toBeGreaterThan(0);
-    expect(decalLife('crack', 'glass')).toBeGreaterThan(0);
-    expect(decalLife('crack', 'grass')).toBe(0);
-    expect(decalLife('crack', 'metal')).toBe(0);
-    expect(decalLife('scuff', 'grass')).toBeGreaterThan(0);
-    expect(decalLife('scuff', 'metal')).toBeGreaterThan(0);
-  });
-
   it('isInLavaZone detects player center inside a lava hazardZone', () => {
     const arena = makeArena({
       hazardZones: [{ type: 'lava', x: 100, y: 600, width: 200, height: 100 }],
@@ -80,7 +69,7 @@ describe('surfaceImpact — pure helpers', () => {
     const state = makeState();
     for (let i = 0; i < SURFACE_DECAL_MAX + 5; i++) {
       pushSurfaceDecal(state, {
-        kind: 'scuff', x: i, y: 0, life: 5, seed: 0, color: '#000', surface: 'grass',
+        kind: 'mini', x: i, y: 0, life: 5, seed: 0, color: '#000', surface: 'grass',
       });
     }
     expect(state.surfaceDecals.length).toBe(SURFACE_DECAL_MAX);
@@ -91,7 +80,7 @@ describe('surfaceImpact — pure helpers', () => {
   it('pushSurfaceDecal skips when life <= 0', () => {
     const state = makeState();
     pushSurfaceDecal(state, {
-      kind: 'crack', x: 0, y: 0, life: 0, seed: 0, color: '#000', surface: 'grass',
+      kind: 'full', x: 0, y: 0, life: 0, seed: 0, color: '#000', surface: 'grass',
     });
     expect(state.surfaceDecals.length).toBe(0);
   });
@@ -107,7 +96,7 @@ describe('surfaceImpact — pure helpers', () => {
   it('updateSurfaceLifetimes ages and culls expired decals/ripples', () => {
     const state = makeState();
     pushSurfaceDecal(state, {
-      kind: 'scuff', x: 0, y: 0, life: 1, seed: 0, color: '#000', surface: 'grass',
+      kind: 'mini', x: 0, y: 0, life: 1, seed: 0, color: '#000', surface: 'grass',
     });
     pushRipple(state, 0, 0, 'lava');
 
@@ -134,11 +123,11 @@ describe('detectSurfaceImpact — landing transitions', () => {
 
     detectSurfaceImpact(player, prev, state, arena, cb);
 
-    const scuffs = state.surfaceDecals.filter(d => d.kind === 'scuff');
-    const cracks = state.surfaceDecals.filter(d => d.kind === 'crack');
-    expect(scuffs.length).toBe(1);
-    expect(cracks.length).toBe(0);
-    expect(scuffs[0].surface).toBe('grass');
+    const mini = state.surfaceDecals.filter(d => d.kind === 'mini');
+    const full = state.surfaceDecals.filter(d => d.kind === 'full');
+    expect(mini.length).toBe(1);
+    expect(full.length).toBe(0);
+    expect(mini[0].surface).toBe('grass');
   });
 
   it('hard landing on ice → single full-spider crack decal (no minicrack)', () => {
@@ -152,11 +141,11 @@ describe('detectSurfaceImpact — landing transitions', () => {
 
     detectSurfaceImpact(player, prev, state, arena, cb);
 
-    const scuffs = state.surfaceDecals.filter(d => d.kind === 'scuff');
-    const cracks = state.surfaceDecals.filter(d => d.kind === 'crack');
-    expect(scuffs.length).toBe(0);
-    expect(cracks.length).toBe(1);
-    expect(cracks[0].surface).toBe('ice');
+    const mini = state.surfaceDecals.filter(d => d.kind === 'mini');
+    const full = state.surfaceDecals.filter(d => d.kind === 'full');
+    expect(mini.length).toBe(0);
+    expect(full.length).toBe(1);
+    expect(full[0].surface).toBe('ice');
   });
 
   it('soft landing (low vy, no fastFall) does NOT spawn scuff decal', () => {
@@ -185,10 +174,10 @@ describe('detectSurfaceImpact — landing transitions', () => {
 
     detectSurfaceImpact(player, prev, state, arena, makeCb({ isSlowDevice: () => true }));
 
-    const scuffs = state.surfaceDecals.filter(d => d.kind === 'scuff');
-    const cracks = state.surfaceDecals.filter(d => d.kind === 'crack');
-    expect(scuffs.length).toBe(1);
-    expect(cracks.length).toBe(0);
+    const mini = state.surfaceDecals.filter(d => d.kind === 'mini');
+    const full = state.surfaceDecals.filter(d => d.kind === 'full');
+    expect(mini.length).toBe(1);
+    expect(full.length).toBe(0);
   });
 });
 
@@ -206,9 +195,9 @@ describe('detectSurfaceImpact — edge clipping', () => {
 
     detectSurfaceImpact(player, prev, state, arena, cb);
 
-    const scuff = state.surfaceDecals.find(d => d.kind === 'scuff');
-    expect(scuff?.clipMinX).toBe(200);
-    expect(scuff?.clipMaxX).toBe(400);
+    const mini = state.surfaceDecals.find(d => d.kind === 'mini');
+    expect(mini?.clipMinX).toBe(200);
+    expect(mini?.clipMaxX).toBe(400);
   });
 });
 

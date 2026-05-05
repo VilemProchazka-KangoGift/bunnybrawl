@@ -2,10 +2,34 @@ import type { MatchState, SurfaceDecal } from '../types';
 import { SURFACE_RIPPLE_LIFE, SURFACE_RIPPLE_MAX_RADIUS } from '../constants';
 import { fastSin, fastCos } from '../fastMath';
 
-/**
- * Draw all active surface decals (cracks + scuffs). Each decal fades over
- * its lifetime. Drawn behind players/particles, on top of platform caps.
- */
+interface CrackStyle {
+  spokes: number;
+  len: number;        // base spoke length
+  alpha: number;      // multiplier on the per-decal fade
+  lineWidth: number;
+  dotRadius: number;
+  bifurcate: boolean; // emit secondary forks every other spoke
+}
+
+const CRACK_STYLES: Record<SurfaceDecal['kind'], (d: SurfaceDecal) => CrackStyle> = {
+  full: (d) => ({
+    spokes: 6,
+    len: d.surface === 'glass' ? 22 : 28,
+    alpha: 0.7,
+    lineWidth: 1.2,
+    dotRadius: 2,
+    bifurcate: true,
+  }),
+  mini: () => ({
+    spokes: 5,
+    len: 12,
+    alpha: 0.85,
+    lineWidth: 1.4,
+    dotRadius: 1.6,
+    bifurcate: false,
+  }),
+};
+
 export function drawSurfaceDecals(ctx: CanvasRenderingContext2D, state: MatchState): void {
   const decals = state.surfaceDecals;
   if (decals.length === 0) return;
@@ -15,11 +39,8 @@ export function drawSurfaceDecals(ctx: CanvasRenderingContext2D, state: MatchSta
     const d = decals[i];
     const t = d.age / d.life;
     if (t >= 1) continue;
-    const alpha = 1 - t;
-    // 'crack' = full spider on ice/glass; 'scuff' = minicrack on any hard landing.
-    const isFull = d.kind === 'crack';
-    const len = isFull ? (d.surface === 'glass' ? 22 : 28) : 12;
-    drawCrackPattern(ctx, d, alpha, len, isFull);
+    const style = CRACK_STYLES[d.kind](d);
+    drawCrackPattern(ctx, d, 1 - t, style);
   }
   ctx.restore();
 }
@@ -27,41 +48,40 @@ export function drawSurfaceDecals(ctx: CanvasRenderingContext2D, state: MatchSta
 /**
  * Apply platform clip to a decal's draw region. Returns false if the decal
  * sits entirely outside the platform extent (caller should skip drawing).
+ * No-op (returns true with no clip path) when the decal sits fully inside.
  * Caller is responsible for ctx.save()/restore() — we only set up the clip.
  */
 function applyDecalClip(
   ctx: CanvasRenderingContext2D, d: SurfaceDecal, halfW: number, halfH: number,
 ): boolean {
+  const minX = d.clipMinX;
+  const maxX = d.clipMaxX;
+  if (minX === undefined && maxX === undefined) return true;
   const left = d.x - halfW;
   const right = d.x + halfW;
-  if (d.clipMaxX !== undefined && left >= d.clipMaxX) return false;
-  if (d.clipMinX !== undefined && right <= d.clipMinX) return false;
-  if (d.clipMinX === undefined && d.clipMaxX === undefined) return true;
-  const x0 = Math.max(d.clipMinX ?? -Infinity, left);
-  const x1 = Math.min(d.clipMaxX ?? Infinity, right);
+  if (maxX !== undefined && left >= maxX) return false;
+  if (minX !== undefined && right <= minX) return false;
+  // Fully inside — no clip path needed.
+  if ((minX === undefined || left >= minX) && (maxX === undefined || right <= maxX)) return true;
+  const x0 = Math.max(minX ?? -Infinity, left);
+  const x1 = Math.min(maxX ?? Infinity, right);
   ctx.beginPath();
   ctx.rect(x0, d.y - halfH, x1 - x0, halfH * 2);
   ctx.clip();
   return true;
 }
 
-/**
- * Radial crack pattern. `len` controls reach; `isFull` toggles bifurcations
- * (full spider for ice/glass) vs the simpler minicrack used for any hard
- * landing on other surfaces.
- */
 function drawCrackPattern(
-  ctx: CanvasRenderingContext2D, d: SurfaceDecal, alpha: number,
-  len: number, isFull: boolean,
+  ctx: CanvasRenderingContext2D, d: SurfaceDecal, fade: number, style: CrackStyle,
 ): void {
-  const spokes = isFull ? 6 : 5;
+  const { spokes, len, alpha, lineWidth, dotRadius, bifurcate } = style;
   const baseAngle = d.seed * Math.PI * 2;
 
   ctx.save();
   if (!applyDecalClip(ctx, d, len, len)) { ctx.restore(); return; }
-  ctx.globalAlpha = alpha * (isFull ? 0.7 : 0.85);
+  ctx.globalAlpha = fade * alpha;
   ctx.strokeStyle = d.color;
-  ctx.lineWidth = isFull ? 1.2 : 1.4;
+  ctx.lineWidth = lineWidth;
   ctx.beginPath();
   for (let i = 0; i < spokes; i++) {
     const a = baseAngle + (i / spokes) * Math.PI * 2 + (i % 2 ? 0.2 : -0.15);
@@ -70,7 +90,7 @@ function drawCrackPattern(
     const ey = d.y + fastSin(a) * l * 0.35;  // flattened for ground perspective
     ctx.moveTo(d.x, d.y);
     ctx.lineTo(ex, ey);
-    if (isFull && i % 2 === 0) {
+    if (bifurcate && i % 2 === 0) {
       const bx = d.x + fastCos(a) * (l * 0.55);
       const by = d.y + fastSin(a) * (l * 0.55) * 0.35;
       const fa = a + 0.5;
@@ -80,11 +100,10 @@ function drawCrackPattern(
   }
   ctx.stroke();
 
-  // Center impact dot
-  ctx.globalAlpha = alpha * 0.6;
+  ctx.globalAlpha = fade * 0.6;
   ctx.fillStyle = d.color;
   ctx.beginPath();
-  ctx.arc(d.x, d.y, isFull ? 2 : 1.6, 0, Math.PI * 2);
+  ctx.arc(d.x, d.y, dotRadius, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }
@@ -118,4 +137,3 @@ export function drawRipples(ctx: CanvasRenderingContext2D, state: MatchState): v
   }
   ctx.restore();
 }
-
