@@ -213,6 +213,7 @@ export const hauntedGraveyard: ArenaPack = {
   translations: { en: 'Haunted Graveyard', cs: 'Stra\u0161ideln\u00FD h\u0159bitov', hi: '\u092D\u0942\u0924\u093F\u092F\u093E \u0915\u092C\u094D\u0930\u093F\u0938\u094D\u0924\u093E\u0928', fil: 'Sementeryo' },
 
   // ---- Layout ----
+  defaultSurface: 'stone',
   width: CANVAS_WIDTH,
   height: CANVAS_HEIGHT,
   platforms: applyIsoInsets([

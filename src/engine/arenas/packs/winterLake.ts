@@ -3,7 +3,7 @@ import type { Arena, Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { getFloatingPlatforms } from '../../themes/utils';
 import {
-  drawPineTree, drawChristmasTree, drawSnowDrift, drawIcePatch, drawIcicle, drawIceCube,
+  drawPineTree, drawChristmasTree, drawSnowDrift, drawIcePatch, drawIcicle, drawIceCube, ICE_CUBE_DEPTH_RATIO,
   drawBigSnowman, drawIgloo, drawSnowman, drawSnowball,
   drawSnowballPyramid, drawLargeSnowballPyramid,
   drawFgBush,
@@ -130,6 +130,7 @@ export const winterLake: ArenaPack = {
   translations: { en: 'Winter Lake', cs: 'Zamrzl\u00E9 jezero', hi: '\u0938\u0930\u094D\u0926\u0940 \u0915\u0940 \u091D\u0940\u0932', fil: 'Lawa sa Taglamig' },
 
   // ---- Layout ----
+  defaultSurface: 'snow',
   width: CANVAS_WIDTH,
   height: CANVAS_HEIGHT,
   platforms: applyIsoInsets([
@@ -143,8 +144,8 @@ export const winterLake: ArenaPack = {
     { x: 440, y: 360, width: 400, height: 24 },
     { x: 45, y: 330, width: 100, height: 24 },
     { x: 520, y: 500, width: 240, height: 24 },
-    { x: 370, y: 610, width: 65, height: 50, style: 'iceCube' },
-    { x: 870, y: 610, width: 65, height: 50, style: 'iceCube' },
+    { x: 370, y: 610, width: 65, height: 50, style: 'iceCube', surface: 'ice' },
+    { x: 870, y: 610, width: 65, height: 50, style: 'iceCube', surface: 'ice' },
     { x: 270, y: 440, width: 90, height: 24 },
     { x: 920, y: 440, width: 90, height: 24 },
     { x: 380, y: 280, width: 45, height: 18 },
@@ -445,7 +446,7 @@ export const winterLake: ArenaPack = {
 
   drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => {
     if (platform.style === 'iceCube') {
-      const depth = platform.width * 0.3;
+      const depth = platform.width * ICE_CUBE_DEPTH_RATIO;
       drawIceCube(ctx, platform.x, platform.y + depth / 2, platform.width, platform.height - depth / 2);
       return;
     }

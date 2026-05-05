@@ -194,6 +194,7 @@ export const lobby: ArenaPack = {
   translations: { en: 'Lobby', cs: 'Lobby', hi: 'Lobby', fil: 'Lobby' },
 
   // ---- Layout ----
+  defaultSurface: 'grass',
   width: CANVAS_WIDTH,
   height: CANVAS_HEIGHT,
   platforms: applyIsoInsets(

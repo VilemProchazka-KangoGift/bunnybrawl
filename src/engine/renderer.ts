@@ -30,6 +30,7 @@ import {
   warmSpriteCacheForCharacters,
   clearRenderingCaches,
   clearArenaCaches,
+  drawSurfaceDecals, drawRipples,
 } from './rendering';
 import { setSpriteCacheScale } from './rendering/players';
 import { setHudScale } from './rendering/hud';
@@ -709,6 +710,10 @@ export class Renderer {
 
       perfTrace.end('render.bg', bgStart);
 
+      // Surface decals (cracks, scuffs) — drawn between platforms and entities so
+      // platform caps occlude them only on edges (decal y is platform top + small fudge).
+      drawSurfaceDecals(ctx, matchState);
+
       const entStart = perfTrace.begin('render.entities');
       // Pigeon flocks
       for (const flock of matchState.pigeonFlocks) {
@@ -754,6 +759,9 @@ export class Renderer {
         }
         ctx.restore();
       }
+
+      // Liquid impact ripples (env-ripples)
+      drawRipples(ctx, matchState);
       perfTrace.end('render.particles', partStart);
 
       const aiStart = perfTrace.begin('render.afterimages');

@@ -110,6 +110,7 @@ export function createEmptyMatchState(): MatchState {
     lavaRocks: [], lavaRockTimer: 0,
     geyserStates: [], pigeonFlocks: [], bouncyWobble: new Map(),
     gibs: [], confetti: [],
+    surfaceDecals: [], ripples: [],
   };
 }
 

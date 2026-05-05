@@ -1,8 +1,69 @@
-import type { Platform } from '../types';
+import type { Arena, Platform, SurfaceTag } from '../types';
 
 // Cached floating platform lists to avoid per-frame .filter() in theme draw functions.
 // WeakMap keyed by the arena's platforms array — auto-invalidates when arena changes.
 const _floatsCache = new WeakMap<Platform[], Platform[]>();
+
+/**
+ * Resolve the surface tag for a platform: per-platform `surface` field
+ * takes precedence, then arena's `defaultSurface`, then `'grass'`.
+ */
+export function surfaceOf(platform: Platform | undefined, arena?: { defaultSurface?: SurfaceTag }): SurfaceTag {
+  return platform?.surface ?? arena?.defaultSurface ?? 'grass';
+}
+
+/**
+ * Find the topmost platform whose horizontal range contains `x` and whose
+ * top edge is within `tolerance` px of `y`. Returns undefined if none.
+ */
+export function platformAt(arena: Arena, x: number, y: number, tolerance = 4): Platform | undefined {
+  const plats = arena.platforms;
+  let best: Platform | undefined;
+  let bestDy = Infinity;
+  for (let i = 0; i < plats.length; i++) {
+    const p = plats[i];
+    if (x < p.x || x > p.x + p.width) continue;
+    const dy = y - p.y;
+    if (dy < -tolerance || dy > p.height + tolerance) continue;
+    const adjDy = Math.abs(dy);
+    if (adjDy < bestDy) { bestDy = adjDy; best = p; }
+  }
+  return best;
+}
+
+/**
+ * Find the platform a player AABB is standing on. Unlike `platformAt`,
+ * this matches platforms whose horizontal range OVERLAPS the player's
+ * foot extent — handles the case where the player is half-off an edge
+ * (player center past `plat.x + plat.width`, but the bbox still overlaps).
+ * Picks the platform with the largest horizontal overlap.
+ */
+export function platformUnderFoot(
+  arena: Arena, footX: number, footRight: number, footY: number, tolerance = 4,
+): Platform | undefined {
+  const plats = arena.platforms;
+  let best: Platform | undefined;
+  let bestOverlap = 0;
+  for (let i = 0; i < plats.length; i++) {
+    const p = plats[i];
+    const ox0 = Math.max(footX, p.x);
+    const ox1 = Math.min(footRight, p.x + p.width);
+    const overlap = ox1 - ox0;
+    if (overlap <= 0) continue;
+    const dy = footY - p.y;
+    if (dy < -tolerance || dy > p.height + tolerance) continue;
+    if (overlap > bestOverlap) { bestOverlap = overlap; best = p; }
+  }
+  return best;
+}
+
+/**
+ * Find the platform a player is standing on (or last touched on the way down)
+ * and return its surface tag.
+ */
+export function surfaceAt(arena: Arena, x: number, y: number, tolerance = 4): SurfaceTag {
+  return surfaceOf(platformAt(arena, x, y, tolerance), arena);
+}
 
 /** Get platforms with y < 650 and width >= 80 (floating platforms suitable for decorations). Cached. */
 export function getFloatingPlatforms(platforms: Platform[]): Platform[] {

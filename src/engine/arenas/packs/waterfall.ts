@@ -141,6 +141,7 @@ export const waterfall: ArenaPack = {
   translations: { en: 'Waterfall', cs: 'Vodop\u00E1d', hi: '\u091D\u0930\u0928\u093E', fil: 'Talon' },
 
   // ---- Layout ----
+  defaultSurface: 'stone',
   width: CANVAS_WIDTH,
   height: CANVAS_HEIGHT,
   platforms: applyIsoInsets([

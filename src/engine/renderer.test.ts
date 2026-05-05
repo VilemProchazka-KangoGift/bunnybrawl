@@ -30,6 +30,10 @@ vi.mock('./rendering', () => ({
   isHudDirty: vi.fn(() => false),
   drawPlayer: vi.fn(),
   clearRenderingCaches: vi.fn(),
+  warmSpriteCacheForCharacters: vi.fn(),
+  clearArenaCaches: vi.fn(),
+  drawSurfaceDecals: vi.fn(),
+  drawRipples: vi.fn(),
 }));
 
 vi.mock('./rendering/players', () => ({

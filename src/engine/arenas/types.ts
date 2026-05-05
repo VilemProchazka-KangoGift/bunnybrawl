@@ -1,4 +1,4 @@
-import type { Arena, Platform, SpawnPoint, HazardZone, EffectZone, AABB, WeatherParticle } from '../types';
+import type { Arena, Platform, SpawnPoint, HazardZone, EffectZone, AABB, SurfaceTag, WeatherParticle } from '../types';
 import type { ThemeConfig } from '../themes/types';
 import type {
   GradientStop, CloudConfig, WeatherConfig, WildlifeConfig,
@@ -52,6 +52,13 @@ export interface ArenaPack {
   carrotZones?: AABB[];
   noSprings?: boolean;
   navHints?: Arena['navHints'];
+
+  /**
+   * Default surface for any platform that doesn't set its own `surface`.
+   * Drives footstep VFX (env-sparks/var-dust) and impact decals
+   * (env-cracks/env-decals). Falls back to 'grass' when undefined.
+   */
+  defaultSurface?: SurfaceTag;
 
   // ---- Visual config ----
   sky: { gradient: GradientStop[] };
