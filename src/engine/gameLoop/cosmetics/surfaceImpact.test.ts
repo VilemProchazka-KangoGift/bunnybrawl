@@ -141,7 +141,7 @@ describe('detectSurfaceImpact — landing transitions', () => {
     expect(scuffs[0].surface).toBe('grass');
   });
 
-  it('hard landing on ice → both scuff and spider-crack decals', () => {
+  it('hard landing on ice → single full-spider crack decal (no minicrack)', () => {
     const arena = makeImpactArena({ iceCubeAt: 0 });
     const state = makeState();
     const player = makeLandedPlayer(640, 660);
@@ -154,7 +154,7 @@ describe('detectSurfaceImpact — landing transitions', () => {
 
     const scuffs = state.surfaceDecals.filter(d => d.kind === 'scuff');
     const cracks = state.surfaceDecals.filter(d => d.kind === 'crack');
-    expect(scuffs.length).toBe(1);
+    expect(scuffs.length).toBe(0);
     expect(cracks.length).toBe(1);
     expect(cracks[0].surface).toBe('ice');
   });
@@ -174,7 +174,7 @@ describe('detectSurfaceImpact — landing transitions', () => {
     expect(state.surfaceDecals.length).toBe(0);
   });
 
-  it('slow-device gates cracks (scuff still spawns)', () => {
+  it('slow-device falls back to minicrack on ice (no full spider)', () => {
     const arena = makeImpactArena({ iceCubeAt: 0 });
     const state = makeState();
     const player = makeLandedPlayer(640, 660);

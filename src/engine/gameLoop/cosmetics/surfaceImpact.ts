@@ -9,16 +9,25 @@ import {
   SURFACE_RIPPLE_LIFE,
   SURFACE_SCUFF_LIFE,
 } from '../../constants';
-import { hexToRGB } from '../../fastMath';
 import { platformUnderFoot, surfaceOf, swapRemove } from '../../themes/utils';
+import type { Platform } from '../../types';
 import { CAP_DEPTH, SKEW_RATIO } from '../../themes/drawPrimitives/platforms';
+import { SURFACE_PALETTE } from './surfacePalette';
 
 /** Inscribed-rectangle horizontal shift for iso platforms. The visible cap
  *  is a parallelogram whose back-edge runs `sp = CAP_DEPTH * SKEW_RATIO` px
  *  right of the front-edge. The widest rectangle that fits inside the cap
- *  at every y is `[plat.x + sp, plat.x + plat.width]` — the back-left edge
- *  bounds the left side, the front-right edge bounds the right side. */
+ *  at every y is `[plat.x + sp, plat.x + plat.width]`. */
 const ISO_INSCRIBED_LEFT_SHIFT = CAP_DEPTH * SKEW_RATIO;
+
+/** Compute the leftward offset to apply to a platform's clip rect so decals
+ *  stay inside the visible top face. iceCubes have a much deeper 3D draw
+ *  (depth = width * 0.3) than the standard iso cap. */
+function inscribedLeftShift(plat: Platform): number {
+  if (plat.style === 'iceCube') return plat.width * 0.3;
+  if (plat.leftCollisionInset !== undefined) return ISO_INSCRIBED_LEFT_SHIFT;
+  return 0;
+}
 
 export interface PrevSurfaceImpactState {
   state: Player['state'];
@@ -117,31 +126,22 @@ export function detectSurfaceImpact(
     const hardLanding = absVy >= HARD_LAND_VY_THRESHOLD || prev.fastFalling;
 
     if (hardLanding) {
-      // Iso platforms (leftCollisionInset set) have a parallelogram cap.
-      // Use the inscribed rectangle so cracks can't overflow any visible
-      // edge: left bounded by the back-left corner, right by the front-right.
-      const isIso = plat?.leftCollisionInset !== undefined;
+      // Inscribed-rectangle clip — widest rect that fits inside any iso /
+      // 3D-cube cap at every y, so cracks can't overflow visible edges.
       const clip = plat
-        ? { clipMinX: plat.x + (isIso ? ISO_INSCRIBED_LEFT_SHIFT : 0), clipMaxX: plat.x + plat.width }
+        ? { clipMinX: plat.x + inscribedLeftShift(plat), clipMaxX: plat.x + plat.width }
         : {};
 
-      // Always-on minicrack — small radial impact mark, char-tinted.
+      // Brittle surfaces (ice, glass) get a full spider crack; everything
+      // else gets a minicrack. One decal per impact.
+      const useFullCrack = !slow && (surface === 'ice' || surface === 'glass');
+      const kind = useFullCrack ? 'crack' : 'scuff';
       pushSurfaceDecal(state, {
-        ...clip, kind: 'scuff', x: cx, y: fy, surface,
-        life: decalLife('scuff', surface),
+        ...clip, kind, x: cx, y: fy, surface,
+        life: decalLife(kind, surface),
         seed: cb.random(),
-        color: scuffColorFor(player.character.darkColor),
+        color: SURFACE_PALETTE[surface].dust,
       });
-
-      // Spider-crack overlay on brittle surfaces.
-      if (!slow && (surface === 'ice' || surface === 'glass')) {
-        pushSurfaceDecal(state, {
-          ...clip, kind: 'crack', x: cx, y: fy, surface,
-          life: decalLife('crack', surface),
-          seed: cb.random(),
-          color: surface === 'ice' ? '#FFFFFF' : '#E0F8FF',
-        });
-      }
     }
   }
 
@@ -167,14 +167,3 @@ export function resetSurfaceImpactBaselines(
   }
 }
 
-/** Desaturate the character's dark tone toward dark gray for ground readability. */
-function scuffColorFor(darkColor: string): string {
-  if (!/^#[0-9a-f]{6}$/i.test(darkColor)) return '#3A2820';
-  const { r, g, b } = hexToRGB(darkColor);
-  const blend = 0.5;
-  const gray = 64;
-  const rr = Math.round(r * (1 - blend) + gray * blend);
-  const gg = Math.round(g * (1 - blend) + gray * blend);
-  const bb = Math.round(b * (1 - blend) + gray * blend);
-  return `rgb(${rr},${gg},${bb})`;
-}
