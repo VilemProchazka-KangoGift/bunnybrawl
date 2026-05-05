@@ -13,14 +13,13 @@ export function drawSurfaceDecals(ctx: CanvasRenderingContext2D, state: MatchSta
   ctx.save();
   for (let i = 0; i < decals.length; i++) {
     const d = decals[i];
-    const t = d.age / d.life;       // 0 → 1 over lifetime
+    const t = d.age / d.life;
     if (t >= 1) continue;
-    const alpha = 1 - t;             // linear fade
-    if (d.kind === 'crack') {
-      drawCrack(ctx, d, alpha);
-    } else {
-      drawScuff(ctx, d, alpha);
-    }
+    const alpha = 1 - t;
+    // 'crack' = full spider on ice/glass; 'scuff' = minicrack on any hard landing.
+    const isFull = d.kind === 'crack';
+    const len = isFull ? (d.surface === 'glass' ? 22 : 28) : 12;
+    drawCrackPattern(ctx, d, alpha, len, isFull);
   }
   ctx.restore();
 }
@@ -46,17 +45,23 @@ function applyDecalClip(
   return true;
 }
 
-/** Spider-crack pattern for ice/glass with deterministic jitter from `seed`. */
-function drawCrack(ctx: CanvasRenderingContext2D, d: SurfaceDecal, alpha: number): void {
-  const spokes = 6;
+/**
+ * Radial crack pattern. `len` controls reach; `isFull` toggles bifurcations
+ * (full spider for ice/glass) vs the simpler minicrack used for any hard
+ * landing on other surfaces.
+ */
+function drawCrackPattern(
+  ctx: CanvasRenderingContext2D, d: SurfaceDecal, alpha: number,
+  len: number, isFull: boolean,
+): void {
+  const spokes = isFull ? 6 : 5;
   const baseAngle = d.seed * Math.PI * 2;
-  const len = d.surface === 'glass' ? 22 : 28;
 
   ctx.save();
   if (!applyDecalClip(ctx, d, len, len)) { ctx.restore(); return; }
-  ctx.globalAlpha = alpha * 0.7;
+  ctx.globalAlpha = alpha * (isFull ? 0.7 : 0.85);
   ctx.strokeStyle = d.color;
-  ctx.lineWidth = 1.2;
+  ctx.lineWidth = isFull ? 1.2 : 1.4;
   ctx.beginPath();
   for (let i = 0; i < spokes; i++) {
     const a = baseAngle + (i / spokes) * Math.PI * 2 + (i % 2 ? 0.2 : -0.15);
@@ -65,8 +70,7 @@ function drawCrack(ctx: CanvasRenderingContext2D, d: SurfaceDecal, alpha: number
     const ey = d.y + fastSin(a) * l * 0.35;  // flattened for ground perspective
     ctx.moveTo(d.x, d.y);
     ctx.lineTo(ex, ey);
-    // small bifurcation
-    if (i % 2 === 0) {
+    if (isFull && i % 2 === 0) {
       const bx = d.x + fastCos(a) * (l * 0.55);
       const by = d.y + fastSin(a) * (l * 0.55) * 0.35;
       const fa = a + 0.5;
@@ -77,29 +81,10 @@ function drawCrack(ctx: CanvasRenderingContext2D, d: SurfaceDecal, alpha: number
   ctx.stroke();
 
   // Center impact dot
-  ctx.globalAlpha = alpha * 0.5;
+  ctx.globalAlpha = alpha * 0.6;
   ctx.fillStyle = d.color;
   ctx.beginPath();
-  ctx.arc(d.x, d.y, 2, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-}
-
-/** Hard-landing scuff: footprint-width oval clipped to the platform extent. */
-function drawScuff(ctx: CanvasRenderingContext2D, d: SurfaceDecal, alpha: number): void {
-  const halfW = 14;
-  const halfH = 3;
-  ctx.save();
-  if (!applyDecalClip(ctx, d, halfW, halfH + 2)) { ctx.restore(); return; }
-  ctx.globalAlpha = alpha * 0.65;
-  ctx.fillStyle = d.color;
-  ctx.beginPath();
-  ctx.ellipse(d.x, d.y - 1, halfW, halfH, (d.seed - 0.5) * 0.4, 0, Math.PI * 2);
-  ctx.fill();
-  // Darker inner core for a stronger impact mark.
-  ctx.globalAlpha = alpha * 0.85;
-  ctx.beginPath();
-  ctx.ellipse(d.x + (d.seed - 0.5) * 4, d.y - 1, halfW * 0.55, halfH * 0.7, 0, 0, Math.PI * 2);
+  ctx.arc(d.x, d.y, isFull ? 2 : 1.6, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }

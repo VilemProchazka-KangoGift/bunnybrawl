@@ -12,13 +12,13 @@ import {
 import { hexToRGB } from '../../fastMath';
 import { platformUnderFoot, surfaceOf, swapRemove } from '../../themes/utils';
 import { CAP_DEPTH, SKEW_RATIO } from '../../themes/drawPrimitives/platforms';
-import { SURFACE_PALETTE } from './surfacePalette';
 
-/** Iso-skew shift at the cap centerline. The cap is a parallelogram whose
- *  back-edge runs `sp = CAP_DEPTH * SKEW_RATIO` px to the right of the
- *  front-edge; the centerline (where decals are drawn) is shifted by half
- *  that. Used to align decal clip rects with the visible cap on iso platforms. */
-const ISO_CAP_SHIFT = (CAP_DEPTH * SKEW_RATIO) / 2;
+/** Inscribed-rectangle horizontal shift for iso platforms. The visible cap
+ *  is a parallelogram whose back-edge runs `sp = CAP_DEPTH * SKEW_RATIO` px
+ *  right of the front-edge. The widest rectangle that fits inside the cap
+ *  at every y is `[plat.x + sp, plat.x + plat.width]` — the back-left edge
+ *  bounds the left side, the front-right edge bounds the right side. */
+const ISO_INSCRIBED_LEFT_SHIFT = CAP_DEPTH * SKEW_RATIO;
 
 export interface PrevSurfaceImpactState {
   state: Player['state'];
@@ -93,32 +93,6 @@ export function updateSurfaceLifetimes(state: MatchState, dt: number): void {
 export interface SurfaceImpactCallbacks {
   isSlowDevice: () => boolean;
   random: () => number;
-  emitParticle: (x: number, y: number, vx: number, vy: number, life: number, size: number, color: string) => void;
-}
-
-/**
- * Top-hemisphere debris on hard landing. Particles ride the existing
- * pool's gravity and arc outward; flecks past the platform edge fall
- * naturally into empty space.
- */
-function emitScuffDebris(
-  cx: number, fy: number, surface: SurfaceTag, cb: SurfaceImpactCallbacks,
-): void {
-  const palette = SURFACE_PALETTE[surface].debris;
-  const count = surface === 'metal' ? 10 : 8;
-  for (let i = 0; i < count; i++) {
-    const t = i / count + cb.random() * 0.06;
-    const angle = -Math.PI + t * Math.PI;
-    const speed = 80 + cb.random() * 140;
-    const vx = Math.cos(angle) * speed;
-    const vy = Math.sin(angle) * speed - 40 - cb.random() * 60;
-    const life = 0.45 + cb.random() * 0.35;
-    // Sparks: small + bright. Chunks: bigger.
-    const size = surface === 'metal'
-      ? 0.8 + cb.random() * 0.6
-      : 1.4 + cb.random() * 1.0;
-    cb.emitParticle(cx, fy - 1, vx, vy, life, size, palette[i % 2]);
-  }
 }
 
 export function detectSurfaceImpact(
@@ -143,14 +117,15 @@ export function detectSurfaceImpact(
     const hardLanding = absVy >= HARD_LAND_VY_THRESHOLD || prev.fastFalling;
 
     if (hardLanding) {
-      // Iso platforms (leftCollisionInset set) have a parallelogram cap
-      // shifted right by sp at the back. Shift clip extent to the cap
-      // centerline so decals don't overflow the visible top.
-      const shift = plat?.leftCollisionInset !== undefined ? ISO_CAP_SHIFT : 0;
+      // Iso platforms (leftCollisionInset set) have a parallelogram cap.
+      // Use the inscribed rectangle so cracks can't overflow any visible
+      // edge: left bounded by the back-left corner, right by the front-right.
+      const isIso = plat?.leftCollisionInset !== undefined;
       const clip = plat
-        ? { clipMinX: plat.x + shift, clipMaxX: plat.x + plat.width + shift }
+        ? { clipMinX: plat.x + (isIso ? ISO_INSCRIBED_LEFT_SHIFT : 0), clipMaxX: plat.x + plat.width }
         : {};
 
+      // Always-on minicrack — small radial impact mark, char-tinted.
       pushSurfaceDecal(state, {
         ...clip, kind: 'scuff', x: cx, y: fy, surface,
         life: decalLife('scuff', surface),
@@ -158,10 +133,7 @@ export function detectSurfaceImpact(
         color: scuffColorFor(player.character.darkColor),
       });
 
-      if (!slow) {
-        emitScuffDebris(cx, fy, surface, cb);
-      }
-
+      // Spider-crack overlay on brittle surfaces.
       if (!slow && (surface === 'ice' || surface === 'glass')) {
         pushSurfaceDecal(state, {
           ...clip, kind: 'crack', x: cx, y: fy, surface,

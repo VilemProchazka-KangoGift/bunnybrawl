@@ -140,7 +140,7 @@ export class GameLoop {
     );
     this.environmentSystem = new EnvironmentSystem(sState, sTheme);
     this.entityTransitionSystem = new EntityTransitionSystem(sState, (name) => this.playSound(name));
-    this.surfaceImpactSystem = new SurfaceImpactSystem(sState, sArena, this.particleSystem);
+    this.surfaceImpactSystem = new SurfaceImpactSystem(sState, sArena);
 
     // Cooldowns map lives on PlayerTransitionSystem — wire it back into the simulator
     // for the headbonk + crouch + zero-G sound paths in fixedUpdate.
@@ -351,7 +351,7 @@ export class GameLoop {
     );
     this.environmentSystem = new EnvironmentSystem(sState, newTheme);
     this.entityTransitionSystem = new EntityTransitionSystem(sState, (name) => this.playSound(name));
-    this.surfaceImpactSystem = new SurfaceImpactSystem(sState, sArena, this.particleSystem);
+    this.surfaceImpactSystem = new SurfaceImpactSystem(sState, sArena);
 
     this.playerTransitionSystem.init();
     this.entityTransitionSystem.init();

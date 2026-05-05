@@ -18,7 +18,6 @@ function makeCb(overrides: Partial<SurfaceImpactCallbacks> = {}): SurfaceImpactC
   return {
     isSlowDevice: () => false,
     random: () => 0.5,
-    emitParticle: () => {},
     ...overrides,
   };
 }
@@ -193,48 +192,12 @@ describe('detectSurfaceImpact — landing transitions', () => {
   });
 });
 
-describe('detectSurfaceImpact — debris particles + edge clipping', () => {
-  it('emits airborne debris particles on hard landing', () => {
-    const arena = makeImpactArena({ defaultSurface: 'stone' });
-    const state = makeState();
-    const player = makeLandedPlayer(640, 660);
-    state.players = [player];
-    const prev: PrevSurfaceImpactState = {
-      state: 'airborne', vy: HARD_LAND_VY_THRESHOLD + 50, inLava: false, fastFalling: false,
-    };
-    const emitted: Array<{ x: number; y: number; vx: number; vy: number }> = [];
-
-    detectSurfaceImpact(player, prev, state, arena, makeCb({
-      emitParticle: (x, y, vx, vy) => { emitted.push({ x, y, vx, vy }); },
-    }));
-
-    expect(emitted.length).toBeGreaterThanOrEqual(8);
-    // All particles emit in top hemisphere — vy starts negative (upward kick)
-    expect(emitted.every(p => p.vy < 0)).toBe(true);
-  });
-
-  it('slow-device suppresses debris particles', () => {
-    const arena = makeImpactArena({ defaultSurface: 'stone' });
-    const state = makeState();
-    const player = makeLandedPlayer(640, 660);
-    state.players = [player];
-    const prev: PrevSurfaceImpactState = {
-      state: 'airborne', vy: HARD_LAND_VY_THRESHOLD + 50, inLava: false, fastFalling: false,
-    };
-    const emitted: number[] = [];
-
-    detectSurfaceImpact(player, prev, state, arena, makeCb({
-      isSlowDevice: () => true,
-      emitParticle: () => { emitted.push(1); },
-    }));
-
-    expect(emitted.length).toBe(0);
-  });
-
+describe('detectSurfaceImpact — edge clipping', () => {
   it('decal carries clip extent matching the platform under impact', () => {
     const arena = makeImpactArena({ defaultSurface: 'grass' });
     const state = makeState();
-    // Player at the small floating platform (200..400).
+    // Player at the small floating platform (200..400). Test platform has no
+    // leftCollisionInset so clip extent matches plat.x..plat.x+width directly.
     const player = makeLandedPlayer(300, 500);
     state.players = [player];
     const prev: PrevSurfaceImpactState = {
