@@ -205,7 +205,7 @@ export function createInitialMatchState(
         radius: cfg.radius,
         respawnTime: cfg.respawnTime,
         active: true, armed: true, respawnTimer: 0,
-        scatterParticles: [] as Array<{ x: number; y: number; vx: number; vy: number; life: number; phase: number }>,
+        scatterParticles: [] as Array<{ x: number; y: number; vx: number; vy: number; life: number; phase: number; color: string }>,
       }))
     ),
   };

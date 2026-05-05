@@ -3,6 +3,7 @@ import type { Arena, Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
+import { computeNightIntensity } from '../../rendering';
 import { getFloatingPlatforms } from '../../themes/utils';
 import {
   drawPineTree, drawChristmasTree, drawSnowDrift, drawIcePatch, drawIcicle, drawIceCube,
@@ -25,6 +26,19 @@ const AURORA_STRIPES = [
   { color: '#7be0a3', y: 176, h: 48, speed: 0.7,  phase: 3.6 },
   { color: '#a3e8ff', y: 224, h: 40, speed: 0.4,  phase: 4.8 },
 ] as const;
+
+let _sceneTintGradient: CanvasGradient | null = null;
+function getSceneTintGradient(ctx: CanvasRenderingContext2D): CanvasGradient {
+  if (_sceneTintGradient) return _sceneTintGradient;
+  // Built at intensity=1.4 (the top stop's relative weight). Per-frame intensity
+  // applied via globalAlpha. Stop weights: top 1.4, mid 0.9, bottom 0.3 → ratios
+  // 1.0, 0.643, 0.214 against the 1.4 baseline.
+  _sceneTintGradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+  _sceneTintGradient.addColorStop(0,    'rgba(123, 224, 163, 1.0)');
+  _sceneTintGradient.addColorStop(0.45, 'rgba(163, 232, 255, 0.643)');
+  _sceneTintGradient.addColorStop(1,    'rgba(123, 224, 163, 0.214)');
+  return _sceneTintGradient;
+}
 
 // Platform colors — legacy fields kept for ThemeConfig compat; unused once drawPlatform owns rendering.
 const FLOAT_BODY = '#5A7A8C';
@@ -455,7 +469,7 @@ export const winterLake: ArenaPack = {
 
   drawAnimatedBackground: (ctx, _arena, time, dayPhase) => {
     if (getSlowDevice()) return;
-    const nightIntensity = Math.max(0, (1 - Math.cos(dayPhase * Math.PI * 2)) / 2);
+    const nightIntensity = computeNightIntensity(dayPhase);
     if (nightIntensity < 0.05) return;
     ctx.save();
     const OVERHANG = 80;
@@ -490,16 +504,15 @@ export const winterLake: ArenaPack = {
 
   drawSceneTint: (ctx, dayPhase, time) => {
     if (getSlowDevice()) return;
-    const nightIntensity = Math.max(0, (1 - Math.cos(dayPhase * Math.PI * 2)) / 2);
+    const nightIntensity = computeNightIntensity(dayPhase);
     if (nightIntensity < 0.05) return;
     const breathe = 0.5 + 0.5 * fastSin(time * 0.5);
     const tintAlpha = nightIntensity * (0.05 + breathe * 0.04);
-    const grad = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-    grad.addColorStop(0,    `rgba(123, 224, 163, ${tintAlpha * 1.4})`);
-    grad.addColorStop(0.45, `rgba(163, 232, 255, ${tintAlpha * 0.9})`);
-    grad.addColorStop(1,    `rgba(123, 224, 163, ${tintAlpha * 0.3})`);
-    ctx.fillStyle = grad;
+    ctx.save();
+    ctx.globalAlpha = tintAlpha * 1.4;
+    ctx.fillStyle = getSceneTintGradient(ctx);
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    ctx.restore();
   },
 
   drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => {

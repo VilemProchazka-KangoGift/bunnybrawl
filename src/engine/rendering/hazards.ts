@@ -590,10 +590,13 @@ export function drawPigeonFlock(
   ctx.restore();
 }
 
-const BIRD_PALETTE = ['#3a4a8a', '#a85a3a', '#5a8a3a'] as const;
+const BIRD_PALETTE: readonly string[] = ['#3a4a8a', '#a85a3a', '#5a8a3a'];
+const BAT_COLOR = '#2c1f3c';
+const CROW_COLOR = '#0e0a14';
+const BAT_EYE_COLOR = '#ff9244';
+const BIRD_BEAK_COLOR = '#ff8a3a';
+const CROW_BEAK_COLOR = '#5a3a1c';
 
-// Per-bird offsets — broken into two clusters with vertical jitter so the
-// flock reads as natural perching, not a regimented line.
 const BIRD_OFFSETS: ReadonlyArray<{ dx: number; dy: number }> = [
   { dx: -14, dy: -3 },
   { dx: -6,  dy: -7 },
@@ -621,7 +624,7 @@ const PERCHED_FLOCK_DRAWERS: Record<ScatterFlockSpecies, (ctx: CanvasRenderingCo
       const bx = cx + o.dx;
       const by = cy + o.dy;
       const sway = fastSin(time * 1.2 + i);
-      ctx.fillStyle = '#2c1f3c';
+      ctx.fillStyle = BAT_COLOR;
       ctx.beginPath();
       ctx.ellipse(bx + sway, by + 4, 3, 5, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -629,7 +632,7 @@ const PERCHED_FLOCK_DRAWERS: Record<ScatterFlockSpecies, (ctx: CanvasRenderingCo
       ctx.moveTo(bx - 3 + sway, by + 2);
       ctx.quadraticCurveTo(bx + sway, by + 6, bx + 3 + sway, by + 2);
       ctx.fill();
-      ctx.fillStyle = '#ff9244';
+      ctx.fillStyle = BAT_EYE_COLOR;
       ctx.fillRect(bx - 1 + sway, by + 5, 2, 1);
     }
     ctx.globalAlpha = 1;
@@ -640,21 +643,21 @@ const PERCHED_FLOCK_DRAWERS: Record<ScatterFlockSpecies, (ctx: CanvasRenderingCo
       const o = CROW_OFFSETS[i];
       const px = cx + o.dx;
       const py = cy + o.dy;
-      ctx.fillStyle = '#0e0a14';
+      ctx.fillStyle = CROW_COLOR;
       ctx.beginPath();
       ctx.ellipse(px, py, 5, 4, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.beginPath();
       ctx.arc(px + 4, py - 3, 2.5, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = '#5a3a1c';
+      ctx.fillStyle = CROW_BEAK_COLOR;
       ctx.beginPath();
       ctx.moveTo(px + 6, py - 3);
       ctx.lineTo(px + 9, py - 2.5);
       ctx.lineTo(px + 6, py - 2);
       ctx.fill();
       if (fastSin(time * 3 + i * 2) > 0.6) {
-        ctx.fillStyle = '#0e0a14';
+        ctx.fillStyle = CROW_COLOR;
         ctx.beginPath();
         ctx.arc(px + 4, py - 4, 2.5, 0, Math.PI * 2);
         ctx.fill();
@@ -676,7 +679,7 @@ const PERCHED_FLOCK_DRAWERS: Record<ScatterFlockSpecies, (ctx: CanvasRenderingCo
       ctx.beginPath();
       ctx.arc(px + 2.5, py - 2, 2, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = '#ff8a3a';
+      ctx.fillStyle = BIRD_BEAK_COLOR;
       ctx.fillRect(px + 4, py - 2, 1, 1);
       ctx.fillStyle = color;
       ctx.beginPath();
@@ -693,14 +696,20 @@ const PERCHED_FLOCK_DRAWERS: Record<ScatterFlockSpecies, (ctx: CanvasRenderingCo
   },
 };
 
-interface FlyingSpeciesCfg { color: string | null; bodyW: number; bodyH: number; wingSpan: number; flapFreq: number; flapAmp: number; }
+interface FlyingSpeciesCfg { palette: readonly string[]; bodyW: number; bodyH: number; wingSpan: number; flapFreq: number; flapAmp: number; }
 const FLYING_CFG: Record<ScatterFlockSpecies, FlyingSpeciesCfg> = {
-  bat:  { color: '#2c1f3c', bodyW: 0,   bodyH: 0,   wingSpan: 5, flapFreq: 32, flapAmp: 4 },
-  crow: { color: '#0e0a14', bodyW: 4,   bodyH: 3,   wingSpan: 9, flapFreq: 24, flapAmp: 5 },
-  bird: { color: null,      bodyW: 3,   bodyH: 2.5, wingSpan: 6, flapFreq: 28, flapAmp: 4 },
+  bat:  { palette: [BAT_COLOR],  bodyW: 0,   bodyH: 0,   wingSpan: 5, flapFreq: 32, flapAmp: 4 },
+  crow: { palette: [CROW_COLOR], bodyW: 4,   bodyH: 3,   wingSpan: 9, flapFreq: 24, flapAmp: 5 },
+  bird: { palette: BIRD_PALETTE, bodyW: 3,   bodyH: 2.5, wingSpan: 6, flapFreq: 28, flapAmp: 4 },
 };
 
-type ScatterParticle = { x: number; y: number; vx: number; vy: number; life: number; phase: number };
+/** Pick a body color from a species palette. Called once per particle at emit. */
+export function pickScatterColor(species: ScatterFlockSpecies, rand: number): string {
+  const palette = FLYING_CFG[species].palette;
+  return palette[Math.floor(rand * palette.length) % palette.length];
+}
+
+type ScatterParticle = { x: number; y: number; vx: number; vy: number; life: number; phase: number; color: string };
 
 export function drawScatterFlock(
   ctx: CanvasRenderingContext2D,
@@ -723,8 +732,7 @@ function drawFlyingScatter(ctx: CanvasRenderingContext2D, species: ScatterFlockS
   const cfg = FLYING_CFG[species];
   const flap = fastSin(sp.life * cfg.flapFreq + sp.phase) * cfg.flapAmp;
   ctx.globalAlpha = Math.min(1, sp.life) * 0.85;
-  const color = cfg.color ?? BIRD_PALETTE[Math.floor(sp.phase * 1.7) % BIRD_PALETTE.length];
-  ctx.fillStyle = color;
+  ctx.fillStyle = sp.color;
   if (species === 'bat') {
     ctx.beginPath();
     ctx.moveTo(sp.x - 5, sp.y);
@@ -735,43 +743,42 @@ function drawFlyingScatter(ctx: CanvasRenderingContext2D, species: ScatterFlockS
     ctx.lineTo(sp.x - 4, sp.y + 1.5);
     ctx.closePath();
     ctx.fill();
+    ctx.globalAlpha = 1;
+    return;
+  }
+  const dir = sp.vx >= 0 ? 1 : -1;
+  const innerW = species === 'crow' ? 3 : 2;
+  const bodyW = cfg.bodyW;
+  const bodyH = cfg.bodyH;
+  const headX = sp.x + dir * (bodyW + 0.5);
+  const headY = sp.y - bodyH * 0.4;
+  const headR = species === 'crow' ? 2.2 : 1.7;
+  // One path: body + both wings + head + tail (all body color).
+  ctx.beginPath();
+  ctx.ellipse(sp.x, sp.y, bodyW, bodyH, 0, 0, Math.PI * 2);
+  ctx.moveTo(sp.x - innerW, sp.y);
+  ctx.lineTo(sp.x - cfg.wingSpan, sp.y + flap);
+  ctx.lineTo(sp.x - (innerW - 1), sp.y);
+  ctx.moveTo(sp.x + innerW, sp.y);
+  ctx.lineTo(sp.x + cfg.wingSpan, sp.y + flap);
+  ctx.lineTo(sp.x + (innerW - 1), sp.y);
+  ctx.moveTo(headX + headR, headY);
+  ctx.arc(headX, headY, headR, 0, Math.PI * 2);
+  ctx.moveTo(sp.x - dir * bodyW, sp.y);
+  ctx.lineTo(sp.x - dir * (bodyW + 3), sp.y - 1);
+  ctx.lineTo(sp.x - dir * (bodyW + 3), sp.y + 1);
+  ctx.fill();
+  // Beak (different color, separate fill).
+  if (species === 'crow') {
+    ctx.fillStyle = CROW_BEAK_COLOR;
+    ctx.beginPath();
+    ctx.moveTo(sp.x + dir * (bodyW + 2), sp.y - bodyH * 0.3);
+    ctx.lineTo(sp.x + dir * (bodyW + 5), sp.y - bodyH * 0.2);
+    ctx.lineTo(sp.x + dir * (bodyW + 2), sp.y - bodyH * 0.1);
+    ctx.fill();
   } else {
-    const dir = sp.vx >= 0 ? 1 : -1;
-    ctx.beginPath();
-    ctx.ellipse(sp.x, sp.y, cfg.bodyW, cfg.bodyH, 0, 0, Math.PI * 2);
-    ctx.fill();
-    const innerW = species === 'crow' ? 3 : 2;
-    ctx.beginPath();
-    ctx.moveTo(sp.x - innerW, sp.y);
-    ctx.lineTo(sp.x - cfg.wingSpan, sp.y + flap);
-    ctx.lineTo(sp.x - (innerW - 1), sp.y);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(sp.x + innerW, sp.y);
-    ctx.lineTo(sp.x + cfg.wingSpan, sp.y + flap);
-    ctx.lineTo(sp.x + (innerW - 1), sp.y);
-    ctx.fill();
-    const headR = species === 'crow' ? 2.2 : 1.7;
-    ctx.beginPath();
-    ctx.arc(sp.x + dir * (cfg.bodyW + 0.5), sp.y - cfg.bodyH * 0.4, headR, 0, Math.PI * 2);
-    ctx.fill();
-    if (species === 'crow') {
-      ctx.fillStyle = '#5a3a1c';
-      ctx.beginPath();
-      ctx.moveTo(sp.x + dir * (cfg.bodyW + 2), sp.y - cfg.bodyH * 0.3);
-      ctx.lineTo(sp.x + dir * (cfg.bodyW + 5), sp.y - cfg.bodyH * 0.2);
-      ctx.lineTo(sp.x + dir * (cfg.bodyW + 2), sp.y - cfg.bodyH * 0.1);
-      ctx.fill();
-    } else {
-      ctx.fillStyle = '#ff8a3a';
-      ctx.fillRect(sp.x + dir * (cfg.bodyW + 1.5), sp.y - cfg.bodyH * 0.4, dir * 1.5, 1);
-    }
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.moveTo(sp.x - dir * cfg.bodyW, sp.y);
-    ctx.lineTo(sp.x - dir * (cfg.bodyW + 3), sp.y - 1);
-    ctx.lineTo(sp.x - dir * (cfg.bodyW + 3), sp.y + 1);
-    ctx.fill();
+    ctx.fillStyle = BIRD_BEAK_COLOR;
+    ctx.fillRect(sp.x + dir * (bodyW + 1.5), headY, dir * 1.5, 1);
   }
   ctx.globalAlpha = 1;
 }

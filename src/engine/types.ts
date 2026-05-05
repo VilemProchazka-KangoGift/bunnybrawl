@@ -354,7 +354,7 @@ export interface MatchState {
     active: boolean;
     armed: boolean;
     respawnTimer: number;
-    scatterParticles: Array<{ x: number; y: number; vx: number; vy: number; life: number; phase: number }>;
+    scatterParticles: Array<{ x: number; y: number; vx: number; vy: number; life: number; phase: number; color: string }>;
   }>;
   bouncyWobble: Map<number, number>;  // platform index → wobble timer
   gibs: Gib[];

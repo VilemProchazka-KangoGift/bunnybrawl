@@ -5,6 +5,11 @@ import { fastSin, fastCos } from '../fastMath';
 
 function lerpCh(a: number, b: number, t: number): number { return Math.round(a + (b - a) * t); }
 
+/** dayPhase 0=noon, 0.5=midnight, 1=noon. Returns 0..1 night intensity. */
+export function computeNightIntensity(dayPhase: number): number {
+  return Math.max(0, (1 - fastCos(dayPhase * Math.PI * 2)) / 2);
+}
+
 // Precomputed static star positions — i*K+J formulas were re-evaluated every
 // frame for 30 stars. Now they're frozen at module load.
 const STAR_COUNT = 30;
@@ -92,10 +97,7 @@ export function drawDayNightCycle(
   // Wrap in save/restore so per-star/per-firefly globalAlpha mutations don't
   // leak to subsequent renderFrame stages. Entry globalAlpha is preserved.
   ctx.save();
-  // dayPhase: 0 = noon, 0.5 = midnight, 1.0 = noon again
-  // Use cosine so darkness peaks smoothly at 0.5
-  const nightIntensity = Math.max(0, (1 - Math.cos(dayPhase * Math.PI * 2)) / 2);
-  // nightIntensity: 0 at noon, 1 at midnight, smooth transition
+  const nightIntensity = computeNightIntensity(dayPhase);
   const overlayAlpha = nightIntensity * 0.55;
 
   // Sun: visible when nightIntensity < 0.8, arcs left->right during day half (0.75->0.0->0.25)

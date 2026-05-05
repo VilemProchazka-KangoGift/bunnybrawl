@@ -642,13 +642,12 @@ export class Renderer {
       const bgStart = perfTrace.begin('render.bg');
       const slow = getSlowDevice();
 
-      // Theme-specific animated background — drawn FIRST (behind clouds) so
-      // sky-atmosphere effects (aurora, distant space objects) compose under
-      // weather and clouds.
+      // Drawn before clouds so sky-atmosphere effects (aurora, distant space
+      // objects) compose under weather and clouds.
       if (this.theme.drawAnimatedBackground) {
         const thA = this.originalArena ?? arena;
         if (this.mirrored) { ctx.save(); ctx.scale(-1, 1); ctx.translate(-CANVAS_WIDTH, 0); }
-        this.theme.drawAnimatedBackground(ctx, thA, matchState.timeElapsed, matchState.dayPhase ?? 0);
+        this.theme.drawAnimatedBackground(ctx, thA, matchState.timeElapsed, matchState.dayPhase);
         if (this.mirrored) { ctx.restore(); }
         d.animatedBg = true;
       }
@@ -972,9 +971,8 @@ export class Renderer {
         d.dayNight = true;
       }
 
-      // Theme-specific full-scene tint (aurora glow, lava red wash, …)
       if (!slow && this.theme.drawSceneTint) {
-        this.theme.drawSceneTint(ctx, matchState.dayPhase ?? 0, matchState.timeElapsed);
+        this.theme.drawSceneTint(ctx, matchState.dayPhase, matchState.timeElapsed);
       }
 
       perfTrace.end('render.fg-nature', fgStart);

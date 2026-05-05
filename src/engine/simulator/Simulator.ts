@@ -33,6 +33,7 @@ import { PlayerCollisionSystem } from '../gameLoop/gameplay/PlayerCollisionSyste
 import { StompSystem } from '../gameLoop/gameplay/StompSystem';
 import { MatchSystem } from '../gameLoop/gameplay/MatchSystem';
 import type { ScatterFlockSpecies } from '../themes/types';
+import { pickScatterColor } from '../rendering/hazards';
 
 const f = Math.fround;
 
@@ -567,6 +568,7 @@ export class Simulator {
               vy: Math.sin(angle) * speed - 60,
               life: 1.6 + Math.random() * 0.8,
               phase: Math.random() * Math.PI * 2,
+              color: pickScatterColor(flock.species, Math.random()),
             });
           }
         } else if (!flock.armed && distSq > (r * 1.5) * (r * 1.5)) {
