@@ -5,7 +5,7 @@ import { updatePlayerCosmetics } from './playerCosmetics';
 
 export class PlayerCosmeticSystem implements CosmeticSystem {
   private state: MatchState;
-  private arena: Arena | undefined;
+  private arena: Arena;
   private effWalkSpeed: number;
   private playSound: (name: string) => void;
 
@@ -18,7 +18,7 @@ export class PlayerCosmeticSystem implements CosmeticSystem {
     effWalkSpeed: number,
     particleSystem: ParticleSystem,
     playSound: (name: string) => void,
-    arena?: Arena,
+    arena: Arena,
   ) {
     this.state = state;
     this.arena = arena;
@@ -28,11 +28,6 @@ export class PlayerCosmeticSystem implements CosmeticSystem {
   }
 
   init(): void {}
-
-  /** Update arena reference after switchArena. */
-  setArena(arena: Arena): void {
-    this.arena = arena;
-  }
 
   cosmeticUpdate(dt: number): void {
     for (const player of this.state.players) {

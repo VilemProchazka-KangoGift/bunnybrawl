@@ -16,6 +16,6 @@ export { PlayerCosmeticSystem } from './PlayerCosmeticSystem';
 export { SurfaceImpactSystem } from './SurfaceImpactSystem';
 export {
   detectSurfaceImpact, snapshotSurfaceImpactState, isInLavaZone,
-  pushSurfaceDecal, pushRipple, updateSurfaceLifetimes, decalLife,
+  updateSurfaceLifetimes,
 } from './surfaceImpact';
 export type { PrevSurfaceImpactState, SurfaceImpactCallbacks } from './surfaceImpact';

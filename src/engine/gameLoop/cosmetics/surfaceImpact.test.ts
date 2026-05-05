@@ -102,7 +102,7 @@ describe('surfaceImpact — pure helpers', () => {
     pushRipple(state, 100, 200, 'lava');
     expect(state.ripples.length).toBe(1);
     expect(state.ripples[0]).toMatchObject({ x: 100, y: 200, surface: 'lava', age: 0 });
-    expect(state.ripples[0].life).toBeGreaterThan(0);
+    expect(state.ripples[0].age).toBe(0);
   });
 
   it('updateSurfaceLifetimes ages and culls expired decals/ripples', () => {

@@ -1,4 +1,5 @@
 import type { MatchState, SurfaceDecal } from '../types';
+import { SURFACE_RIPPLE_LIFE, SURFACE_RIPPLE_MAX_RADIUS } from '../constants';
 import { fastSin, fastCos } from '../fastMath';
 
 /**
@@ -25,26 +26,34 @@ export function drawSurfaceDecals(ctx: CanvasRenderingContext2D, state: MatchSta
 }
 
 /**
- * Spider-crack pattern for ice/glass. Draws 5-7 radial cracks emanating
- * from the impact point with deterministic jitter from `seed`.
+ * Apply platform clip to a decal's draw region. Returns false if the decal
+ * sits entirely outside the platform extent (caller should skip drawing).
+ * Caller is responsible for ctx.save()/restore() — we only set up the clip.
  */
+function applyDecalClip(
+  ctx: CanvasRenderingContext2D, d: SurfaceDecal, halfW: number, halfH: number,
+): boolean {
+  const left = d.x - halfW;
+  const right = d.x + halfW;
+  if (d.clipMaxX !== undefined && left >= d.clipMaxX) return false;
+  if (d.clipMinX !== undefined && right <= d.clipMinX) return false;
+  if (d.clipMinX === undefined && d.clipMaxX === undefined) return true;
+  const x0 = Math.max(d.clipMinX ?? -Infinity, left);
+  const x1 = Math.min(d.clipMaxX ?? Infinity, right);
+  ctx.beginPath();
+  ctx.rect(x0, d.y - halfH, x1 - x0, halfH * 2);
+  ctx.clip();
+  return true;
+}
+
+/** Spider-crack pattern for ice/glass with deterministic jitter from `seed`. */
 function drawCrack(ctx: CanvasRenderingContext2D, d: SurfaceDecal, alpha: number): void {
   const spokes = 6;
   const baseAngle = d.seed * Math.PI * 2;
   const len = d.surface === 'glass' ? 22 : 28;
 
-  // Clip whole crack if center sits past the platform edge.
-  if (d.clipMaxX !== undefined && d.x >= d.clipMaxX) return;
-  if (d.clipMinX !== undefined && d.x <= d.clipMinX) return;
-
   ctx.save();
-  if (d.clipMinX !== undefined || d.clipMaxX !== undefined) {
-    const x0 = d.clipMinX ?? d.x - len;
-    const x1 = d.clipMaxX ?? d.x + len;
-    ctx.beginPath();
-    ctx.rect(x0, d.y - len, x1 - x0, len * 2);
-    ctx.clip();
-  }
+  if (!applyDecalClip(ctx, d, len, len)) { ctx.restore(); return; }
   ctx.globalAlpha = alpha * 0.7;
   ctx.strokeStyle = d.color;
   ctx.lineWidth = 1.2;
@@ -67,7 +76,7 @@ function drawCrack(ctx: CanvasRenderingContext2D, d: SurfaceDecal, alpha: number
   }
   ctx.stroke();
 
-  // Small impact dot at center
+  // Center impact dot
   ctx.globalAlpha = alpha * 0.5;
   ctx.fillStyle = d.color;
   ctx.beginPath();
@@ -76,36 +85,12 @@ function drawCrack(ctx: CanvasRenderingContext2D, d: SurfaceDecal, alpha: number
   ctx.restore();
 }
 
-/**
- * Hard-landing scuff: a small character-tinted oval centered on the impact
- * point. Debris flecks are emitted as airborne particles at spawn time
- * (see surfaceImpact.ts:emitScuffDebris) so they're not part of this draw.
- *
- * Clipped horizontally to the platform extent so edge landings don't paint
- * the oval into empty space. No clip = global decal (e.g. ground floor).
- */
+/** Hard-landing scuff: footprint-width oval clipped to the platform extent. */
 function drawScuff(ctx: CanvasRenderingContext2D, d: SurfaceDecal, alpha: number): void {
-  // Footprint-width oval (~player foot wide) so edge landings visibly clip.
   const halfW = 14;
   const halfH = 3;
-  const left = d.x - halfW;
-  const right = d.x + halfW;
-  // Drop entirely if the oval sits past the platform edge.
-  if (d.clipMaxX !== undefined && left >= d.clipMaxX) return;
-  if (d.clipMinX !== undefined && right <= d.clipMinX) return;
-
-  const needsClip = (d.clipMinX !== undefined && left < d.clipMinX)
-    || (d.clipMaxX !== undefined && right > d.clipMaxX);
-
   ctx.save();
-  if (needsClip) {
-    const x0 = Math.max(d.clipMinX ?? -Infinity, left);
-    const x1 = Math.min(d.clipMaxX ?? Infinity, right);
-    ctx.beginPath();
-    ctx.rect(x0, d.y - halfH - 2, x1 - x0, halfH * 2 + 4);
-    ctx.clip();
-  }
-  // Outer footprint (char-tinted, soft).
+  if (!applyDecalClip(ctx, d, halfW, halfH + 2)) { ctx.restore(); return; }
   ctx.globalAlpha = alpha * 0.65;
   ctx.fillStyle = d.color;
   ctx.beginPath();
@@ -131,15 +116,14 @@ export function drawRipples(ctx: CanvasRenderingContext2D, state: MatchState): v
   ctx.lineWidth = 1.5;
   for (let i = 0; i < ripples.length; i++) {
     const r = ripples[i];
-    const t = r.age / r.life;
+    const t = r.age / SURFACE_RIPPLE_LIFE;
     if (t >= 1) continue;
     const fade = 1 - t;
     ctx.strokeStyle = r.surface === 'lava' ? `rgba(255, 180, 60, ${fade})` : `rgba(180, 220, 255, ${fade})`;
-    // 3 rings staggered at t = 0, 0.2, 0.4
     for (let k = 0; k < 3; k++) {
       const kt = t - k * 0.18;
       if (kt <= 0 || kt >= 1) continue;
-      const radius = r.maxRadius * kt;
+      const radius = SURFACE_RIPPLE_MAX_RADIUS * kt;
       const ringAlpha = (1 - kt) * fade;
       ctx.globalAlpha = ringAlpha;
       ctx.beginPath();

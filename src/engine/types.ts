@@ -336,13 +336,13 @@ export interface SurfaceDecal {
   clipMaxX?: number;
 }
 
-/** Liquid-impact ripple — cosmetic only, lives in MatchState until expired. */
+/** Liquid-impact ripple — cosmetic only, lives in MatchState until expired.
+ *  Lifetime + max radius are constants (SURFACE_RIPPLE_LIFE / SURFACE_RIPPLE_MAX_RADIUS);
+ *  the renderer reads them directly. */
 export interface Ripple {
   x: number;
   y: number;
   age: number;
-  life: number;
-  maxRadius: number;
   surface: 'water' | 'lava';
 }
 

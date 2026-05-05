@@ -55,15 +55,10 @@ export class SurfaceImpactSystem implements CosmeticSystem {
     }
   }
 
-  /** Re-prime baselines (switchArena, guest reconnect, loading→playing edge). */
+  /** Re-prime baselines (guest reconnect, loading→playing edge). switchArena
+   *  rebuilds the system entirely so it doesn't go through here. */
   resetBaseline(): void {
     resetSurfaceImpactBaselines(this.state, this.arena, this.prev);
-  }
-
-  /** Swap the arena reference after switchArena rebuild. */
-  setArena(arena: Arena): void {
-    this.arena = arena;
-    this.resetBaseline();
   }
 
   cleanup(): void {
