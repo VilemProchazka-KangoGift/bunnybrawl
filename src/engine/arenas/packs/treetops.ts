@@ -529,16 +529,18 @@ export const treetops: ArenaPack = {
     periodic: [{ sound: 'amb_bird_chirp', intervalRange: [8, 20] }],
   },
 
-  scatterFlockConfig: {
-    species: 'bird',
-    positions: [
-      { x: 590, y: 258 },
-      { x: 550, y: 478 },
-      { x: 1100, y: 473 },
-    ],
-    radius: 120,
-    respawnTime: 8,
-  },
+  scatterFlockConfigs: [
+    {
+      species: 'bird',
+      positions: [
+        { x: 590, y: 258 },
+        { x: 550, y: 478 },
+        { x: 1100, y: 473 },
+      ],
+      radius: 120,
+      respawnTime: 8,
+    },
+  ],
 
   musicFile: 'treetops.mp3',
   // NAV-DATA-START — auto-generated, do not hand-edit

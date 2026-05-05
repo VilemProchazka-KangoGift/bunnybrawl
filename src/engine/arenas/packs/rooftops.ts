@@ -1140,6 +1140,20 @@ export const rooftops: ArenaPack = {
   ambientSoundConfig: {
     loops: ['amb_wind'],
   },
+
+  scatterFlockConfigs: [
+    {
+      species: 'bird',
+      positions: [
+        { x: 180, y: 478 },
+        { x: 620, y: 368 },
+        { x: 1080, y: 298 },
+      ],
+      radius: 120,
+      respawnTime: 8,
+    },
+  ],
+
   musicFile: 'rooftops.mp3',
   // NAV-DATA-START — auto-generated, do not hand-edit
   navData: {

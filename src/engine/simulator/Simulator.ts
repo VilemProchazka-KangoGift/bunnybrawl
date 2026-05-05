@@ -554,7 +554,7 @@ export class Simulator {
         if (flock.armed && distSq < r * r && player.state !== 'airborne') {
           flock.active = false;
           flock.armed = false;
-          flock.respawnTimer = this._theme.scatterFlockConfig!.respawnTime;
+          flock.respawnTimer = flock.respawnTime;
           this._events.onSfxRequest('pigeon_scatter');
           const count = SCATTER_PARTICLE_COUNT[flock.species];
           for (let pi = 0; pi < count; pi++) {

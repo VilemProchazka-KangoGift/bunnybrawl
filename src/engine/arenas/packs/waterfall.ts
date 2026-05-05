@@ -567,6 +567,21 @@ export const waterfall: ArenaPack = {
     loops: ['waterfall_ambient'],
     periodic: [{ sound: 'amb_bird_chirp', intervalRange: [6, 15] }],
   },
+
+  scatterFlockConfigs: [
+    {
+      species: 'bird',
+      positions: [
+        { x: 350, y: 188 },
+        { x: 940, y: 168 },
+        { x: 150, y: 368 },
+        { x: 1180, y: 338 },
+      ],
+      radius: 120,
+      respawnTime: 8,
+    },
+  ],
+
   musicFile: 'waterfall.mp3',
   // NAV-DATA-START — auto-generated, do not hand-edit
   navData: {

@@ -198,12 +198,15 @@ export function createInitialMatchState(
       x: p.x, y: p.y, active: true, respawnTimer: 0,
       scatterParticles: [],
     })),
-    scatterFlocks: (theme.scatterFlockConfig?.positions || []).map(p => ({
-      species: theme.scatterFlockConfig!.species,
-      x: p.x, y: p.y,
-      radius: theme.scatterFlockConfig!.radius,
-      active: true, armed: true, respawnTimer: 0,
-      scatterParticles: [],
-    })),
+    scatterFlocks: (theme.scatterFlockConfigs || []).flatMap(cfg =>
+      cfg.positions.map(p => ({
+        species: cfg.species,
+        x: p.x, y: p.y,
+        radius: cfg.radius,
+        respawnTime: cfg.respawnTime,
+        active: true, armed: true, respawnTimer: 0,
+        scatterParticles: [] as Array<{ x: number; y: number; vx: number; vy: number; life: number; phase: number }>,
+      }))
+    ),
   };
 }

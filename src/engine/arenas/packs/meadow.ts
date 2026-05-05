@@ -491,6 +491,20 @@ export const meadow: ArenaPack = {
   ambientSoundConfig: {
     periodic: [{ sound: 'amb_bird_chirp', intervalRange: [5, 15] }],
   },
+
+  scatterFlockConfigs: [
+    {
+      species: 'bird',
+      positions: [
+        { x: 380, y: 398 },
+        { x: 640, y: 288 },
+        { x: 880, y: 413 },
+      ],
+      radius: 120,
+      respawnTime: 8,
+    },
+  ],
+
   musicFile: 'meadow.mp3',
   // NAV-DATA-START — auto-generated, do not hand-edit
   navData: {

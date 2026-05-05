@@ -350,6 +350,7 @@ export interface MatchState {
     x: number;
     y: number;
     radius: number;
+    respawnTime: number;
     active: boolean;
     armed: boolean;
     respawnTimer: number;

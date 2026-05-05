@@ -694,16 +694,26 @@ export const hauntedGraveyard: ArenaPack = {
     periodic: [{ sound: 'amb_ghost_hoo', intervalRange: [10, 25] }],
   },
 
-  scatterFlockConfig: {
-    species: 'crow',
-    positions: [
-      { x: 250, y: 448 },
-      { x: 640, y: 288 },
-      { x: 1030, y: 448 },
-    ],
-    radius: 140,
-    respawnTime: 10,
-  },
+  scatterFlockConfigs: [
+    {
+      species: 'crow',
+      positions: [
+        { x: 250, y: 448 },
+        { x: 1030, y: 448 },
+      ],
+      radius: 140,
+      respawnTime: 10,
+    },
+    {
+      species: 'bat',
+      positions: [
+        { x: 580, y: 302 },
+        { x: 720, y: 302 },
+      ],
+      radius: 140,
+      respawnTime: 10,
+    },
+  ],
 
   musicFile: 'haunted_graveyard.mp3',
   // NAV-DATA-START — auto-generated, do not hand-edit

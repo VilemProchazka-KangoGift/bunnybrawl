@@ -836,15 +836,17 @@ export const castle: ArenaPack = {
     loops: ['amb_wind'],
   },
 
-  scatterFlockConfig: {
-    species: 'bat',
-    positions: [
-      { x: 400, y: 308 },
-      { x: 880, y: 308 },
-    ],
-    radius: 140,
-    respawnTime: 10,
-  },
+  scatterFlockConfigs: [
+    {
+      species: 'bat',
+      positions: [
+        { x: 400, y: 308 },
+        { x: 880, y: 308 },
+      ],
+      radius: 140,
+      respawnTime: 10,
+    },
+  ],
 
   musicFile: 'castle.mp3',
   // NAV-DATA-START — auto-generated, do not hand-edit

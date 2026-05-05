@@ -184,12 +184,12 @@ export interface ThemeConfig {
     respawnTime: number;
   };
 
-  scatterFlockConfig?: {
+  scatterFlockConfigs?: Array<{
     species: ScatterFlockSpecies;
     positions: Array<{ x: number; y: number }>;
     radius: number;
     respawnTime: number;
-  };
+  }>;
 
   // Optional physics modifiers
   physics?: PhysicsModifiers;
