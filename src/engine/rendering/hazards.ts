@@ -533,6 +533,7 @@ export function drawPigeonFlock(
   ctx: CanvasRenderingContext2D,
   flock: { x: number; y: number; active: boolean; scatterParticles: Array<{ x: number; y: number; vx: number; vy: number; life: number }> },
   time: number,
+  lead = 0,
 ): void {
   ctx.save();
   if (flock.active) {
@@ -566,25 +567,27 @@ export function drawPigeonFlock(
       }
     }
   }
-  // Scatter particles (flying birds)
+  // Scatter particles (flying birds) — extrapolate position by lead for 60fps motion
   for (const sp of flock.scatterParticles) {
+    const x = sp.x + sp.vx * lead;
+    const y = sp.y + sp.vy * lead;
     ctx.globalAlpha = Math.min(1, sp.life) * 0.6;
     ctx.fillStyle = '#6A6A7A';
     // Body
     ctx.beginPath();
-    ctx.ellipse(sp.x, sp.y, 4, 3, 0, 0, Math.PI * 2);
+    ctx.ellipse(x, y, 4, 3, 0, 0, Math.PI * 2);
     ctx.fill();
     // Wings (flapping)
     const wing = Math.sin(sp.life * 30) * 6;
     ctx.beginPath();
-    ctx.moveTo(sp.x - 3, sp.y);
-    ctx.lineTo(sp.x - 8, sp.y + wing);
-    ctx.lineTo(sp.x - 2, sp.y);
+    ctx.moveTo(x - 3, y);
+    ctx.lineTo(x - 8, y + wing);
+    ctx.lineTo(x - 2, y);
     ctx.fill();
     ctx.beginPath();
-    ctx.moveTo(sp.x + 3, sp.y);
-    ctx.lineTo(sp.x + 8, sp.y + wing);
-    ctx.lineTo(sp.x + 2, sp.y);
+    ctx.moveTo(x + 3, y);
+    ctx.lineTo(x + 8, y + wing);
+    ctx.lineTo(x + 2, y);
     ctx.fill();
   }
   ctx.restore();
@@ -720,27 +723,31 @@ export function drawScatterFlock(
     scatterParticles: ScatterParticle[];
   },
   time: number,
+  lead = 0,
 ): void {
   if (!flock.active && flock.scatterParticles.length === 0) return;
   ctx.save();
   if (flock.active) PERCHED_FLOCK_DRAWERS[flock.species](ctx, flock.x, flock.y, time);
-  for (const sp of flock.scatterParticles) drawFlyingScatter(ctx, flock.species, sp);
+  for (const sp of flock.scatterParticles) drawFlyingScatter(ctx, flock.species, sp, lead);
   ctx.restore();
 }
 
-function drawFlyingScatter(ctx: CanvasRenderingContext2D, species: ScatterFlockSpecies, sp: ScatterParticle): void {
+function drawFlyingScatter(ctx: CanvasRenderingContext2D, species: ScatterFlockSpecies, sp: ScatterParticle, lead = 0): void {
   const cfg = FLYING_CFG[species];
+  // Position extrapolated by lead seconds for 60fps motion vs 30Hz update rate
+  const x = sp.x + sp.vx * lead;
+  const y = sp.y + sp.vy * lead;
   const flap = fastSin(sp.life * cfg.flapFreq + sp.phase) * cfg.flapAmp;
   ctx.globalAlpha = Math.min(1, sp.life) * 0.85;
   ctx.fillStyle = sp.color;
   if (species === 'bat') {
     ctx.beginPath();
-    ctx.moveTo(sp.x - 5, sp.y);
-    ctx.quadraticCurveTo(sp.x - 2, sp.y - flap, sp.x, sp.y);
-    ctx.quadraticCurveTo(sp.x + 2, sp.y - flap, sp.x + 5, sp.y);
-    ctx.lineTo(sp.x + 4, sp.y + 1.5);
-    ctx.lineTo(sp.x, sp.y + 0.5);
-    ctx.lineTo(sp.x - 4, sp.y + 1.5);
+    ctx.moveTo(x - 5, y);
+    ctx.quadraticCurveTo(x - 2, y - flap, x, y);
+    ctx.quadraticCurveTo(x + 2, y - flap, x + 5, y);
+    ctx.lineTo(x + 4, y + 1.5);
+    ctx.lineTo(x, y + 0.5);
+    ctx.lineTo(x - 4, y + 1.5);
     ctx.closePath();
     ctx.fill();
     ctx.globalAlpha = 1;
@@ -750,35 +757,33 @@ function drawFlyingScatter(ctx: CanvasRenderingContext2D, species: ScatterFlockS
   const innerW = species === 'crow' ? 3 : 2;
   const bodyW = cfg.bodyW;
   const bodyH = cfg.bodyH;
-  const headX = sp.x + dir * (bodyW + 0.5);
-  const headY = sp.y - bodyH * 0.4;
+  const headX = x + dir * (bodyW + 0.5);
+  const headY = y - bodyH * 0.4;
   const headR = species === 'crow' ? 2.2 : 1.7;
-  // One path: body + both wings + head + tail (all body color).
   ctx.beginPath();
-  ctx.ellipse(sp.x, sp.y, bodyW, bodyH, 0, 0, Math.PI * 2);
-  ctx.moveTo(sp.x - innerW, sp.y);
-  ctx.lineTo(sp.x - cfg.wingSpan, sp.y + flap);
-  ctx.lineTo(sp.x - (innerW - 1), sp.y);
-  ctx.moveTo(sp.x + innerW, sp.y);
-  ctx.lineTo(sp.x + cfg.wingSpan, sp.y + flap);
-  ctx.lineTo(sp.x + (innerW - 1), sp.y);
+  ctx.ellipse(x, y, bodyW, bodyH, 0, 0, Math.PI * 2);
+  ctx.moveTo(x - innerW, y);
+  ctx.lineTo(x - cfg.wingSpan, y + flap);
+  ctx.lineTo(x - (innerW - 1), y);
+  ctx.moveTo(x + innerW, y);
+  ctx.lineTo(x + cfg.wingSpan, y + flap);
+  ctx.lineTo(x + (innerW - 1), y);
   ctx.moveTo(headX + headR, headY);
   ctx.arc(headX, headY, headR, 0, Math.PI * 2);
-  ctx.moveTo(sp.x - dir * bodyW, sp.y);
-  ctx.lineTo(sp.x - dir * (bodyW + 3), sp.y - 1);
-  ctx.lineTo(sp.x - dir * (bodyW + 3), sp.y + 1);
+  ctx.moveTo(x - dir * bodyW, y);
+  ctx.lineTo(x - dir * (bodyW + 3), y - 1);
+  ctx.lineTo(x - dir * (bodyW + 3), y + 1);
   ctx.fill();
-  // Beak (different color, separate fill).
   if (species === 'crow') {
     ctx.fillStyle = CROW_BEAK_COLOR;
     ctx.beginPath();
-    ctx.moveTo(sp.x + dir * (bodyW + 2), sp.y - bodyH * 0.3);
-    ctx.lineTo(sp.x + dir * (bodyW + 5), sp.y - bodyH * 0.2);
-    ctx.lineTo(sp.x + dir * (bodyW + 2), sp.y - bodyH * 0.1);
+    ctx.moveTo(x + dir * (bodyW + 2), y - bodyH * 0.3);
+    ctx.lineTo(x + dir * (bodyW + 5), y - bodyH * 0.2);
+    ctx.lineTo(x + dir * (bodyW + 2), y - bodyH * 0.1);
     ctx.fill();
   } else {
     ctx.fillStyle = BIRD_BEAK_COLOR;
-    ctx.fillRect(sp.x + dir * (bodyW + 1.5), headY, dir * 1.5, 1);
+    ctx.fillRect(x + dir * (bodyW + 1.5), headY, dir * 1.5, 1);
   }
   ctx.globalAlpha = 1;
 }

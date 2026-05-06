@@ -1,6 +1,7 @@
 import type { ArenaPack } from '../types';
 import type { Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
+import { fastSin } from '../../fastMath';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
 import { getFloatingPlatforms } from '../../themes/utils';
 import {
@@ -446,62 +447,47 @@ export const spaceStation: ArenaPack = {
       else drawSatellite(ctx, obj);
     }
 
-    // Periodic shooting star through the hangar window (every ~7s)
-    const ssPeriod = 7;
-    const ssPhase = (time * 1) % ssPeriod;
-    if (ssPhase < 1.4) {
-      const u = ssPhase / 1.4;
-      const startX = WIN_X - 20;
-      const startY = WIN_Y + 60;
-      const x = startX + u * (WIN_W + 40);
-      const y = startY + u * 60;
-      ctx.globalAlpha = (1 - Math.abs(u - 0.5) * 2) * 0.95;
-      // Trail
-      const len = 32;
-      for (let i = 0; i < len; i++) {
-        const a = 1 - i / len;
-        ctx.fillStyle = `rgba(255,255,255,${a * 0.85})`;
-        ctx.fillRect(x - i * 1.8, y - i * 0.5, 1.5, 1.5);
-      }
-      // Bright head
-      ctx.fillStyle = '#ffffff';
-      ctx.shadowColor = '#a3e8ff';
-      ctx.shadowBlur = 8;
-      ctx.beginPath();
-      ctx.arc(x, y, 2.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.shadowBlur = 0;
-    }
-
     ctx.restore();
 
-    // Console panels — wall-mounted LED bars (outside the window clip)
+    // Wall-mounted console panels — positioned in wall regions away from platforms.
+    // Left wall: x=0-260 (window starts at 280). Right wall: x=1010-1280.
+    // Picked Y positions that don't sit under platforms.
     ctx.save();
     const panels = [
-      { x: 50, y: 380, color: '#7df0ff' },
-      { x: 50, y: 540, color: '#ff5f8a' },
-      { x: 1180, y: 380, color: '#7df0ff' },
-      { x: 1180, y: 540, color: '#a8ffd0' },
+      { x: 30,   y: 600, color: '#7df0ff' },  // left wall, low
+      { x: 220,  y: 605, color: '#a8ffd0' },  // left wall, edge
+      { x: 25,   y: 200, color: '#ff5f8a' },  // left wall, high
+      { x: 1030, y: 600, color: '#7df0ff' },  // right wall, low
+      { x: 1220, y: 605, color: '#ffd56b' },  // right wall, edge
+      { x: 1220, y: 200, color: '#a8ffd0' },  // right wall, high
     ];
     for (let pi = 0; pi < panels.length; pi++) {
       const p = panels[pi];
       // Frame
-      ctx.fillStyle = '#1a2230';
-      ctx.fillRect(p.x, p.y, 50, 14);
+      ctx.fillStyle = '#0e1420';
+      ctx.fillRect(p.x - 1, p.y - 1, 42, 16);
+      ctx.strokeStyle = '#2a3242';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(p.x - 1, p.y - 1, 42, 16);
       // Cycling status bars
-      const phase = Math.floor(time * 4 + pi * 2);
-      const baseAlpha = 0.55 + (Math.sin(time * 1.5 + pi) * 0.5 + 0.5) * 0.35;
+      const phase = Math.floor(time * 3 + pi * 2);
+      const baseAlpha = 0.6 + (fastSin(time * 1.5 + pi) * 0.5 + 0.5) * 0.3;
       ctx.fillStyle = p.color;
       ctx.globalAlpha = baseAlpha;
-      for (let i = 0; i < 4; i++) {
-        const w = 5 + ((i + phase) % 3) * 3;
-        ctx.fillRect(p.x + 4 + i * 11, p.y + 4, w, 3);
+      for (let i = 0; i < 3; i++) {
+        const w = 4 + ((i + phase) % 3) * 3;
+        ctx.fillRect(p.x + 3 + i * 12, p.y + 3, w, 2);
       }
-      // Pulse glow
+      // Pulse glow strip
       ctx.shadowColor = p.color;
-      ctx.shadowBlur = 6;
-      ctx.fillRect(p.x + 4, p.y + 9, 42, 2);
+      ctx.shadowBlur = 5;
+      ctx.fillRect(p.x + 3, p.y + 9, 34, 2);
       ctx.shadowBlur = 0;
+      // Tiny indicator LEDs
+      ctx.fillStyle = `rgba(255, 100, 100, ${0.5 + fastSin(time * 6 + pi) * 0.5})`;
+      ctx.beginPath();
+      ctx.arc(p.x + 38, p.y + 4, 1, 0, Math.PI * 2);
+      ctx.fill();
       ctx.globalAlpha = 1;
     }
     ctx.restore();

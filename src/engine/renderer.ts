@@ -712,13 +712,13 @@ export class Renderer {
       const entStart = perfTrace.begin('render.entities');
       // Pigeon flocks
       for (const flock of matchState.pigeonFlocks) {
-        drawPigeonFlock(ctx, flock, matchState.timeElapsed);
+        drawPigeonFlock(ctx, flock, matchState.timeElapsed, cosmeticLead);
         d.pigeons = true;
       }
 
       // Species-aware scatter flocks (birds, bats, crows)
       for (const flock of matchState.scatterFlocks) {
-        drawScatterFlock(ctx, flock, matchState.timeElapsed);
+        drawScatterFlock(ctx, flock, matchState.timeElapsed, cosmeticLead);
       }
 
       // Lava rocks (falling hazards)
