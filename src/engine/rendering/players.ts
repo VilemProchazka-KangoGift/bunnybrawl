@@ -76,30 +76,6 @@ function getFireCache(): OffscreenCanvas | null {
   return _fireCache;
 }
 
-// Fast-fall vertical streak. Linear gradient (player-color, fade top→bottom)
-// over a lozenge-shape path. Variable lean per draw, but the gradient itself
-// is just bottom-up alpha ramp. Bake one 1×N strip per player color; clip
-// the lozenge path and drawImage stretched.
-const FASTFALL_STRIP_H = 70;
-const _fastfallStripCache = new Map<string, OffscreenCanvas>();
-function getFastfallStrip(color: string): OffscreenCanvas | null {
-  let cache = _fastfallStripCache.get(color);
-  if (cache) return cache;
-  if (typeof OffscreenCanvas === 'undefined') return null;
-  const { r, g, b } = hexToRGB(color);
-  cache = new OffscreenCanvas(1, FASTFALL_STRIP_H);
-  const c = cache.getContext('2d')!;
-  const grad = c.createLinearGradient(0, 0, 0, FASTFALL_STRIP_H);
-  grad.addColorStop(0, `rgba(${r},${g},${b},0)`);
-  grad.addColorStop(0.4, `rgba(${r},${g},${b},0.32)`);
-  grad.addColorStop(1, `rgba(${r},${g},${b},0.85)`);
-  c.fillStyle = grad;
-  c.fillRect(0, 0, 1, FASTFALL_STRIP_H);
-  _fastfallStripCache.set(color, cache);
-  return cache;
-}
-
-
 export function clearSpriteCache(): void {
   spriteCache.clear();
 }
@@ -641,45 +617,32 @@ export function drawFastFallStreaks(
     ctx.stroke();
     return;
   }
-  const STREAK_H = FASTFALL_STRIP_H;
+  const STREAK_H = 70;
   const HALF_W = 17;            // half the bottom width — wider than the previous trapezoid for a smudgier read
+  const { r, g, b } = hexToRGB(color);
   // Top of smear leans opposite of motion — trail-behind read.
   const lean = Math.max(-1, Math.min(1, vx / 200)) * 11;
   const topY = headY - STREAK_H;
 
+  // Per-frame linear gradient over a 4-curve lozenge (~2400 px). The clip()
+  // + baked-strip + drawImage pattern was tested here and regressed perf —
+  // the path-clip setup outweighs the per-pixel-eval saving below ~10k px.
+  // See docs/perf-patterns.md threshold rule.
+  const grad = ctx.createLinearGradient(cx, topY, cx, headY);
+  grad.addColorStop(0, `rgba(${r},${g},${b},0)`);
+  grad.addColorStop(0.4, `rgba(${r},${g},${b},${0.32 * alpha})`);
+  grad.addColorStop(1, `rgba(${r},${g},${b},${0.85 * alpha})`);
+  ctx.fillStyle = grad;
+
   // Lozenge with a narrow leaned tip (top) and a rounded wider base — looks
-  // like a paint smear rather than a flat trapezoid. Fill via per-color baked
-  // strip + clipped drawImage: gradient evaluation happens once at bake time,
-  // per-frame cost becomes a memcpy/blend.
-  const strip = getFastfallStrip(color);
-  if (strip) {
-    ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(cx - lean, topY);
-    ctx.quadraticCurveTo(cx + HALF_W + lean * 0.4, headY - STREAK_H * 0.35, cx + HALF_W, headY);
-    ctx.quadraticCurveTo(cx, headY + 6, cx - HALF_W, headY);
-    ctx.quadraticCurveTo(cx - HALF_W - lean * 0.4, headY - STREAK_H * 0.35, cx - lean, topY);
-    ctx.closePath();
-    ctx.clip();
-    ctx.imageSmoothingEnabled = false;
-    ctx.globalAlpha = alpha;
-    ctx.drawImage(strip, cx - HALF_W - 6, topY, HALF_W * 2 + 12, STREAK_H);
-    ctx.restore();
-  } else {
-    const { r, g, b } = hexToRGB(color);
-    const grad = ctx.createLinearGradient(cx, topY, cx, headY);
-    grad.addColorStop(0, `rgba(${r},${g},${b},0)`);
-    grad.addColorStop(0.4, `rgba(${r},${g},${b},${0.32 * alpha})`);
-    grad.addColorStop(1, `rgba(${r},${g},${b},${0.85 * alpha})`);
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.moveTo(cx - lean, topY);
-    ctx.quadraticCurveTo(cx + HALF_W + lean * 0.4, headY - STREAK_H * 0.35, cx + HALF_W, headY);
-    ctx.quadraticCurveTo(cx, headY + 6, cx - HALF_W, headY);
-    ctx.quadraticCurveTo(cx - HALF_W - lean * 0.4, headY - STREAK_H * 0.35, cx - lean, topY);
-    ctx.closePath();
-    ctx.fill();
-  }
+  // like a paint smear rather than a flat trapezoid.
+  ctx.beginPath();
+  ctx.moveTo(cx - lean, topY);
+  ctx.quadraticCurveTo(cx + HALF_W + lean * 0.4, headY - STREAK_H * 0.35, cx + HALF_W, headY);
+  ctx.quadraticCurveTo(cx, headY + 6, cx - HALF_W, headY);
+  ctx.quadraticCurveTo(cx - HALF_W - lean * 0.4, headY - STREAK_H * 0.35, cx - lean, topY);
+  ctx.closePath();
+  ctx.fill();
 
   // Inner motion wisps — visible streaks in the smudge body.
   ctx.strokeStyle = `rgba(255,255,255,${0.4 * alpha})`;

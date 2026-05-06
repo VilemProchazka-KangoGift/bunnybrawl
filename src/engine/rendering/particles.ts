@@ -14,27 +14,6 @@ function rgbString(hex: string): string {
   return s;
 }
 
-// Spring-trail energy column. Linear gradient (yellow base → transparent top)
-// over a vertical ellipse. Static colors — bake once, modulate alpha at draw.
-const SPRING_CACHE_W = 16;
-const SPRING_CACHE_H = 70;
-let _springTrailCache: OffscreenCanvas | null = null;
-function getSpringTrailCache(): OffscreenCanvas | null {
-  if (_springTrailCache) return _springTrailCache;
-  if (typeof OffscreenCanvas === 'undefined') return null;
-  _springTrailCache = new OffscreenCanvas(SPRING_CACHE_W, SPRING_CACHE_H);
-  const c = _springTrailCache.getContext('2d')!;
-  const grad = c.createLinearGradient(0, SPRING_CACHE_H, 0, 0);
-  grad.addColorStop(0, 'rgba(255,212,90,0.4)');
-  grad.addColorStop(0.45, 'rgba(255,180,40,0.16)');
-  grad.addColorStop(1, 'rgba(255,180,40,0)');
-  c.fillStyle = grad;
-  c.beginPath();
-  c.ellipse(SPRING_CACHE_W / 2, SPRING_CACHE_H / 2, SPRING_CACHE_W / 2 - 0.5, SPRING_CACHE_H / 2, 0, 0, Math.PI * 2);
-  c.fill();
-  return _springTrailCache;
-}
-
 export function drawWeather(ctx: CanvasRenderingContext2D, weather: WeatherParticle[], theme: ThemeConfig, lead = 0): void {
   const customDraw = theme.drawWeatherParticle;
   if (customDraw) {
@@ -387,23 +366,17 @@ export function drawSpringTrail(ctx: CanvasRenderingContext2D, player: Player, f
   const COL_H = 70;
   const COL_HALF_W = 7;
 
-  // Energy column — bright at the base, fading to transparent at the top.
-  // Bake-once + globalAlpha modulation; see getSpringTrailCache.
-  const trail = getSpringTrailCache();
-  if (trail) {
-    ctx.globalAlpha = t;
-    ctx.drawImage(trail, launchX - SPRING_CACHE_W / 2, launchY - COL_H, SPRING_CACHE_W, COL_H);
-    ctx.globalAlpha = 1;
-  } else {
-    const grad = ctx.createLinearGradient(launchX, launchY, launchX, launchY - COL_H);
-    grad.addColorStop(0, `rgba(255,212,90,${0.4 * t})`);
-    grad.addColorStop(0.55, `rgba(255,180,40,${0.16 * t})`);
-    grad.addColorStop(1, 'rgba(255,180,40,0)');
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.ellipse(launchX, launchY - COL_H / 2, COL_HALF_W, COL_H / 2, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
+  // Per-frame linear gradient over a small ellipse (~770 px). Below the
+  // ~10k-pixel threshold for the bake-strip swap (see docs/perf-patterns.md);
+  // direct gradient fill is cheaper here.
+  const grad = ctx.createLinearGradient(launchX, launchY, launchX, launchY - COL_H);
+  grad.addColorStop(0, `rgba(255,212,90,${0.4 * t})`);
+  grad.addColorStop(0.55, `rgba(255,180,40,${0.16 * t})`);
+  grad.addColorStop(1, 'rgba(255,180,40,0)');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.ellipse(launchX, launchY - COL_H / 2, COL_HALF_W, COL_H / 2, 0, 0, Math.PI * 2);
+  ctx.fill();
 
   // Coil rings racing upward — phase advances with timer + frameTime so rings
   // appear to rise out of the spring, evoking spring coils releasing.
