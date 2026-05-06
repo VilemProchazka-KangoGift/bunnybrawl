@@ -736,9 +736,9 @@ export const hauntedGraveyard: ArenaPack = {
     // Three layers of wavy polygons with horizontal drift; each x has a "density"
     // modulation so some patches are thick enough to hide a character.
     const layers = [
-      { drift: 18, ampHi: 14, freq: 0.018, baseY: 660, height: 70, color: '#a4b3c5', alpha: 0.55 },
-      { drift: 11, ampHi: 18, freq: 0.012, baseY: 660, height: 95, color: '#bfcdda', alpha: 0.42 },
-      { drift: 7,  ampHi: 22, freq: 0.009, baseY: 660, height: 120, color: '#d3dde8', alpha: 0.30 },
+      { drift: 18, ampHi: 16, freq: 0.018, baseY: 660, height: 80,  color: '#a4b3c5', alpha: 0.70 },
+      { drift: 11, ampHi: 22, freq: 0.012, baseY: 660, height: 110, color: '#bfcdda', alpha: 0.55 },
+      { drift: 7,  ampHi: 28, freq: 0.009, baseY: 660, height: 140, color: '#d3dde8', alpha: 0.40 },
     ];
     for (let li = 0; li < layers.length; li++) {
       const L = layers[li];
@@ -763,16 +763,30 @@ export const hauntedGraveyard: ArenaPack = {
       ctx.closePath();
       ctx.fill();
     }
-    // Dense patches: occasional thicker fog clouds that fully occlude.
+    // Dense patches: thicker fog clouds at higher Y too — drawn as a wavy polygon
+    // band so they read as dense fog, not bubbles. These can fully hide a player.
     ctx.fillStyle = '#c8d4e0';
-    for (let i = 0; i < 5; i++) {
-      const cx = ((i * 280 + time * 14) % (CANVAS_WIDTH + 200)) - 100;
-      const cy = 620 + fastSin(time * 0.4 + i) * 12;
-      const sx = 90 + fastSin(time * 0.6 + i * 1.7) * 18;
-      const sy = 28 + fastSin(time * 0.5 + i) * 6;
-      ctx.globalAlpha = 0.70;
+    ctx.globalAlpha = 0.85;
+    for (let pi = 0; pi < 4; pi++) {
+      const cxBase = ((pi * 320 + time * 10) % (CANVAS_WIDTH + 240)) - 120;
+      const cy = 580 + fastSin(time * 0.3 + pi) * 16;
+      const halfW = 80;
+      const halfH = 32;
       ctx.beginPath();
-      ctx.ellipse(cx, cy, sx, sy, 0, 0, Math.PI * 2);
+      ctx.moveTo(cxBase - halfW, cy);
+      for (let x = -halfW; x <= halfW; x += 8) {
+        const t = x / halfW;
+        const baseEdge = halfH * Math.sqrt(Math.max(0, 1 - t * t));
+        const wave = fastSin((cxBase + x) * 0.05 + time * 1.5 + pi) * 6;
+        ctx.lineTo(cxBase + x, cy - baseEdge - wave);
+      }
+      for (let x = halfW; x >= -halfW; x -= 8) {
+        const t = x / halfW;
+        const baseEdge = halfH * Math.sqrt(Math.max(0, 1 - t * t));
+        const wave = fastSin((cxBase + x) * 0.05 + time * 1.5 + pi + 1.7) * 6;
+        ctx.lineTo(cxBase + x, cy + baseEdge + wave);
+      }
+      ctx.closePath();
       ctx.fill();
     }
     ctx.globalAlpha = 1;
