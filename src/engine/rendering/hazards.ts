@@ -5,11 +5,25 @@ import { getSlowDevice } from '../perfFlags';
 // Gradient caches keyed by the hz/zone object identity — arena objects are
 // stable for the match lifetime, so a WeakMap avoids per-frame string-key
 // allocation. Cleared via clearHazardCaches() on theme/arena change.
-type LavaGradients = { body: CanvasGradient; halo: CanvasGradient };
-type CurrentGradients = { water: CanvasGradient; highlight: CanvasGradient };
+type LavaGradients = {
+  bodyStrip: OffscreenCanvas | HTMLCanvasElement;
+  bodyHeight: number;
+  // Halo baked into a 2D image (radial gradient varies in both dimensions, so
+  // strip pattern doesn't apply). Drawn via drawImage instead of fillRect with
+  // gradient — saves the per-pixel radial evaluation over ~60k+ pixels/zone.
+  haloImage: OffscreenCanvas | HTMLCanvasElement;
+  haloW: number;
+  haloH: number;
+};
+// Vertical waterfall current: water body baked to a 1×N image strip; full-width
+// fill of a custom wavy path uses clip + stretched drawImage instead of a
+// per-pixel CanvasGradient (which was costing ~5ms/frame on a full-canvas fill).
+type CurrentImages = { waterStrip: OffscreenCanvas | HTMLCanvasElement; highlight: CanvasGradient; height: number };
 const cachedLavaGradients = new WeakMap<object, LavaGradients>();
-const cachedZeroGBgGradients = new WeakMap<object, CanvasGradient>();
-const cachedCurrentGradients = new WeakMap<object, CurrentGradients>();
+// Zero-G bg: per-zone strip (gradient varies by Y only). Stretched via drawImage
+// instead of full-area gradient fillRect — saves ~1-3ms on a 780×480 zone.
+const cachedZeroGBgStrips = new WeakMap<object, OffscreenCanvas | HTMLCanvasElement>();
+const cachedCurrentImages = new WeakMap<object, CurrentImages>();
 const cachedGhostGlowGradients = new Map<string, CanvasGradient>();
 const cachedJellyGradients = new WeakMap<object, CanvasGradient>();
 
@@ -40,23 +54,47 @@ export function drawHazardZone(
     const cx = hz.x + hz.width / 2;
     const cy = hz.y + hz.height / 2;
 
-    // Lava body + halo (cached gradients keyed by hz identity)
+    // Lava body strip (vertical gradient) + halo (radial, uncached fillRect).
     let cachedLava = cachedLavaGradients.get(hz as object);
     if (!cachedLava) {
-      const body = ctx.createLinearGradient(hz.x, hz.y, hz.x, hz.y + hz.height);
-      body.addColorStop(0, '#FF6600');
-      body.addColorStop(0.5, '#FF4400');
-      body.addColorStop(1, '#CC2200');
-      const halo = ctx.createRadialGradient(cx, cy, 2, cx, cy, hz.width * 0.8);
-      halo.addColorStop(0, 'rgba(255, 100, 0, 0.3)');
-      halo.addColorStop(1, 'rgba(255, 60, 0, 0)');
-      cachedLava = { body, halo };
+      const useOffscreen = typeof OffscreenCanvas !== 'undefined';
+      const bodyStrip = useOffscreen
+        ? new OffscreenCanvas(1, hz.height)
+        : (() => { const c = document.createElement('canvas'); c.width = 1; c.height = hz.height; return c; })();
+      const sctx = bodyStrip.getContext('2d') as CanvasRenderingContext2D;
+      const bodyG = sctx.createLinearGradient(0, 0, 0, hz.height);
+      bodyG.addColorStop(0, '#FF6600');
+      bodyG.addColorStop(0.5, '#FF4400');
+      bodyG.addColorStop(1, '#CC2200');
+      sctx.fillStyle = bodyG;
+      sctx.fillRect(0, 0, 1, hz.height);
+      // Halo: bake the radial gradient into a 2D image at half-resolution
+      // (gradient is smooth; nearest-neighbor upscale on draw is invisible).
+      const haloW = Math.ceil(hz.width * 1.6);
+      const haloH = Math.ceil(hz.height * 3);
+      const haloBakeW = Math.max(2, Math.ceil(haloW / 2));
+      const haloBakeH = Math.max(2, Math.ceil(haloH / 2));
+      const haloImage = useOffscreen
+        ? new OffscreenCanvas(haloBakeW, haloBakeH)
+        : (() => { const c = document.createElement('canvas'); c.width = haloBakeW; c.height = haloBakeH; return c; })();
+      const hctx = haloImage.getContext('2d') as CanvasRenderingContext2D;
+      const haloG = hctx.createRadialGradient(haloBakeW / 2, haloBakeH / 2, 1, haloBakeW / 2, haloBakeH / 2, haloBakeW * 0.5);
+      haloG.addColorStop(0, 'rgba(255, 100, 0, 0.3)');
+      haloG.addColorStop(1, 'rgba(255, 60, 0, 0)');
+      hctx.fillStyle = haloG;
+      hctx.fillRect(0, 0, haloBakeW, haloBakeH);
+      cachedLava = { bodyStrip, bodyHeight: hz.height, haloImage, haloW, haloH };
       cachedLavaGradients.set(hz as object, cachedLava);
     }
-    ctx.fillStyle = cachedLava.body;
+    // Clip to ellipse + drawImage strip stretched horizontally (gradient varies
+    // by Y only, so X-stretching is free).
     ctx.beginPath();
     ctx.ellipse(cx, cy, hz.width / 2, hz.height / 2, 0, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.save();
+    ctx.clip();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(cachedLava.bodyStrip, hz.x, hz.y, hz.width, hz.height);
+    ctx.restore();
 
     // Bright center (pulsing)
     ctx.globalAlpha = pulse;
@@ -65,10 +103,9 @@ export function drawHazardZone(
     ctx.ellipse(cx, cy, hz.width * 0.3, hz.height * 0.3, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Glow halo
+    // Glow halo (cached as 2D image, drawn via drawImage instead of gradient fillRect).
     ctx.globalAlpha = 0.15 + fastSin(time * 2) * 0.05;
-    ctx.fillStyle = cachedLava.halo;
-    ctx.fillRect(hz.x - hz.width * 0.3, hz.y - hz.height, hz.width * 1.6, hz.height * 3);
+    ctx.drawImage(cachedLava.haloImage, hz.x - hz.width * 0.3, hz.y - hz.height, cachedLava.haloW, cachedLava.haloH);
 
     // Bubble spots
     ctx.globalAlpha = 0.5;
@@ -199,18 +236,27 @@ export function drawZeroGZone(
 ): void {
   ctx.save();
 
-  // Pulsing background fill (cached gradient keyed by zone identity)
+  // Pulsing background fill — gradient baked into a 1×height strip.
   ctx.globalAlpha = 0.1 + fastSin(time * 1.5) * 0.04;
-  let bgGrad = cachedZeroGBgGradients.get(zone as object);
-  if (!bgGrad) {
-    bgGrad = ctx.createLinearGradient(zone.x, zone.y, zone.x, zone.y + zone.height);
-    bgGrad.addColorStop(0, 'rgba(0, 180, 255, 0.2)');
-    bgGrad.addColorStop(0.5, 'rgba(0, 220, 255, 0.08)');
-    bgGrad.addColorStop(1, 'rgba(0, 180, 255, 0.2)');
-    cachedZeroGBgGradients.set(zone as object, bgGrad);
+  let bgStrip = cachedZeroGBgStrips.get(zone as object);
+  if (!bgStrip) {
+    const useOffscreen = typeof OffscreenCanvas !== 'undefined';
+    bgStrip = useOffscreen
+      ? new OffscreenCanvas(1, zone.height)
+      : (() => { const c = document.createElement('canvas'); c.width = 1; c.height = zone.height; return c; })();
+    const sctx = bgStrip.getContext('2d') as CanvasRenderingContext2D;
+    const g = sctx.createLinearGradient(0, 0, 0, zone.height);
+    g.addColorStop(0, 'rgba(0, 180, 255, 0.2)');
+    g.addColorStop(0.5, 'rgba(0, 220, 255, 0.08)');
+    g.addColorStop(1, 'rgba(0, 180, 255, 0.2)');
+    sctx.fillStyle = g;
+    sctx.fillRect(0, 0, 1, zone.height);
+    cachedZeroGBgStrips.set(zone as object, bgStrip);
   }
-  ctx.fillStyle = bgGrad;
-  ctx.fillRect(zone.x, zone.y, zone.width, zone.height);
+  const prevSmooth = ctx.imageSmoothingEnabled;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(bgStrip, zone.x, zone.y, zone.width, zone.height);
+  ctx.imageSmoothingEnabled = prevSmooth;
 
   // Animated dashed border -- double line
   ctx.globalAlpha = 0.35;
@@ -282,25 +328,31 @@ export function drawCurrentZone(
     const zx = zone.x, zy = zone.y, zw = zone.width, zh = zone.height;
     const cx = zx + zw / 2;
 
-    // Water body + center highlight gradients (cached by zone identity)
-    let cachedGrads = cachedCurrentGradients.get(zone as object);
-    if (!cachedGrads) {
-      const water = ctx.createLinearGradient(0, zy, 0, zy + zh);
+    // Water body baked to a 1×height strip image (cached by zone identity).
+    // Stretched via drawImage inside a clipped wavy-edge path — avoids the
+    // per-pixel CanvasGradient lookup over a 200k+ pixel area.
+    let cachedImages = cachedCurrentImages.get(zone as object);
+    if (!cachedImages) {
+      const useOffscreen = typeof OffscreenCanvas !== 'undefined';
+      const strip = useOffscreen
+        ? new OffscreenCanvas(1, zh)
+        : (() => { const c = document.createElement('canvas'); c.width = 1; c.height = zh; return c; })();
+      const sctx = strip.getContext('2d') as CanvasRenderingContext2D;
+      const water = sctx.createLinearGradient(0, 0, 0, zh);
       water.addColorStop(0, 'rgba(140, 200, 240, 0.45)');
       water.addColorStop(0.3, 'rgba(100, 180, 230, 0.4)');
       water.addColorStop(1, 'rgba(70, 150, 210, 0.35)');
+      sctx.fillStyle = water;
+      sctx.fillRect(0, 0, 1, zh);
       const highlight = ctx.createLinearGradient(cx - 30, 0, cx + 30, 0);
       highlight.addColorStop(0, 'rgba(255,255,255,0)');
       highlight.addColorStop(0.5, 'rgba(255,255,255,1)');
       highlight.addColorStop(1, 'rgba(255,255,255,0)');
-      cachedGrads = { water, highlight };
-      cachedCurrentGradients.set(zone as object, cachedGrads);
+      cachedImages = { waterStrip: strip, highlight, height: zh };
+      cachedCurrentImages.set(zone as object, cachedImages);
     }
-    // Single closed polygon (right edge top→bottom, left edge bottom→top)
-    // filled with the water gradient. Avoids a globalCompositeOperation
-    // switch that destination-out cutouts would require.
+    // Wavy edge path → clip → drawImage of strip stretched to width.
     ctx.globalAlpha = 1;
-    ctx.fillStyle = cachedGrads.water;
     ctx.beginPath();
     {
       const ex = zx + zw;
@@ -325,13 +377,17 @@ export function drawCurrentZone(
       ctx.lineTo(ex + dir * 12, zy);
     }
     ctx.closePath();
-    ctx.fill();
+    ctx.save();
+    ctx.clip();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(cachedImages.waterStrip, zx - 12, zy, zw + 24, zh);
+    ctx.restore();
 
     const speed = Math.abs(zone.vy) * 0.3;
     // Slow-device skips animated layers; keeps body + center highlight.
     if (getSlowDevice()) {
       ctx.globalAlpha = 0.12;
-      ctx.fillStyle = cachedGrads.highlight;
+      ctx.fillStyle = cachedImages.highlight;
       ctx.fillRect(cx - 30, zy, 60, zh);
       ctx.restore();
       return;
@@ -387,7 +443,7 @@ export function drawCurrentZone(
 
     // Bright highlight down the center
     ctx.globalAlpha = 0.12;
-    ctx.fillStyle = cachedGrads.highlight;
+    ctx.fillStyle = cachedImages.highlight;
     ctx.fillRect(cx - 30, zy, 60, zh);
 
     ctx.restore();

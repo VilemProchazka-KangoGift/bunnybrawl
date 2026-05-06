@@ -2,6 +2,7 @@ import type { MatchState } from '../types';
 import type { ThemeConfig } from '../themes/types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../constants';
 import { fastSin, fastCos } from '../fastMath';
+import { bakeVerticalGradientStrip } from '../themes/utils';
 
 function lerpCh(a: number, b: number, t: number): number { return Math.round(a + (b - a) * t); }
 
@@ -47,16 +48,18 @@ const FIREFLY_BASE_Y = new Float32Array(FIREFLY_COUNT);
 const STAR_FIELD_HEIGHT = Math.ceil(CANVAS_HEIGHT * 0.35);
 let _starField: OffscreenCanvas | null = null;
 let _firefly: OffscreenCanvas | null = null;
-let _afterglowGradient: CanvasGradient | null = null;
-function getAfterglowGradient(ctx: CanvasRenderingContext2D): CanvasGradient {
-  if (_afterglowGradient) return _afterglowGradient;
-  // Built at intensity=1; per-frame intensity is applied via globalAlpha at draw time.
-  _afterglowGradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-  _afterglowGradient.addColorStop(0, 'rgba(220, 40, 10, 0.10)');
-  _afterglowGradient.addColorStop(0.35, 'rgba(240, 55, 15, 0.20)');
-  _afterglowGradient.addColorStop(0.65, 'rgba(230, 45, 10, 0.28)');
-  _afterglowGradient.addColorStop(1.0, 'rgba(200, 35, 10, 0.22)');
-  return _afterglowGradient;
+// Full-canvas gradient fillRect was costing ~5ms/frame during dawn/dusk windows.
+// Cached strip + drawImage at no-smooth is ~10× cheaper. See docs/perf-patterns.md.
+let _afterglowCache: OffscreenCanvas | null = null;
+function getAfterglowCache(): OffscreenCanvas | null {
+  if (_afterglowCache) return _afterglowCache;
+  _afterglowCache = bakeVerticalGradientStrip(CANVAS_HEIGHT, g => {
+    g.addColorStop(0, 'rgba(220, 40, 10, 0.10)');
+    g.addColorStop(0.35, 'rgba(240, 55, 15, 0.20)');
+    g.addColorStop(0.65, 'rgba(230, 45, 10, 0.28)');
+    g.addColorStop(1.0, 'rgba(200, 35, 10, 0.22)');
+  });
+  return _afterglowCache;
 }
 function getStarField(): OffscreenCanvas | null {
   if (_starField) return _starField;
@@ -167,15 +170,14 @@ export function drawDayNightCycle(
     afterglowIntensity = afterglowIntensity * afterglowIntensity * (3 - 2 * afterglowIntensity);
   }
   if (afterglowIntensity > 0.01) {
-    // Gradient overlay: warm orange-red, stronger near horizon. The full
-    // gradient varies linearly with afterglowIntensity, so build it once at
-    // intensity=1 (in module scope) and modulate via globalAlpha. createLinearGradient
-    // + 4 addColorStop calls happen ~7-15s per dawn/dusk window otherwise.
-    ctx.save();
-    ctx.globalAlpha = afterglowIntensity;
-    ctx.fillStyle = getAfterglowGradient(ctx);
-    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    ctx.restore();
+    const cache = getAfterglowCache();
+    if (cache) {
+      ctx.save();
+      ctx.globalAlpha = afterglowIntensity;
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(cache, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.restore();
+    }
   }
 
   // Darkness overlay

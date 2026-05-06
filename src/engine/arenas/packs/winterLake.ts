@@ -4,7 +4,7 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
 import { computeNightIntensity } from '../../rendering';
-import { getFloatingPlatforms } from '../../themes/utils';
+import { getFloatingPlatforms, bakeVerticalGradientStrip } from '../../themes/utils';
 import {
   drawPineTree, drawChristmasTree, drawSnowDrift, drawIcePatch, drawIcicle, drawIceCube, ICE_CUBE_DEPTH_RATIO,
   drawBigSnowman, drawIgloo, drawSnowman, drawSnowball,
@@ -24,6 +24,49 @@ const AURORA_STRIPES = [
   { color: '#c899ff', y: 120, h: 64, speed: 0.55, phase: 2.4 },
   { color: '#a3e8ff', y: 200, h: 56, speed: 0.5,  phase: 4.0 },
 ] as const;
+
+// Aurora is GPU-paint-heavy when drawn via fillPath every frame (3 stripes ×
+// full-canvas alpha-blended fills). Cached to an offscreen canvas, refreshed
+// at ~10Hz (every 100ms), then blit as a single drawImage. Visually
+// indistinguishable since aurora animates slowly.
+const AURORA_REFRESH_INTERVAL = 0.1;
+const AURORA_CACHE_H = 280;
+let _auroraCache: OffscreenCanvas | null = null;
+let _auroraCacheCtx: OffscreenCanvasRenderingContext2D | null = null;
+let _auroraCacheLastRefresh = -1;
+
+function refreshAuroraCache(time: number): void {
+  if (!_auroraCache || !_auroraCacheCtx) {
+    if (typeof OffscreenCanvas === 'undefined') return;
+    _auroraCache = new OffscreenCanvas(CANVAS_WIDTH, AURORA_CACHE_H);
+    _auroraCacheCtx = _auroraCache.getContext('2d');
+    if (!_auroraCacheCtx) { _auroraCache = null; return; }
+  }
+  const cctx = _auroraCacheCtx;
+  cctx.clearRect(0, 0, CANVAS_WIDTH, AURORA_CACHE_H);
+  const OVERHANG = 80;
+  const STEP = 40;
+  for (const st of AURORA_STRIPES) {
+    const breathe = 0.5 + 0.5 * fastSin(time * 0.7 + st.phase);
+    cctx.fillStyle = st.color;
+    cctx.globalAlpha = 0.15 + breathe * 0.18;
+    cctx.beginPath();
+    cctx.moveTo(-OVERHANG, st.y);
+    for (let x = -OVERHANG; x <= CANVAS_WIDTH + OVERHANG; x += STEP) {
+      const y = st.y + fastSin(x * 0.0085 + time * st.speed + st.phase) * 16
+                     + fastSin(x * 0.003 + time * st.speed * 0.5) * 22;
+      cctx.lineTo(x, y);
+    }
+    for (let x = CANVAS_WIDTH + OVERHANG; x >= -OVERHANG; x -= STEP) {
+      const y = st.y + st.h + fastSin(x * 0.0085 + time * st.speed + st.phase + 0.7) * 16
+                            + fastSin(x * 0.003 + time * st.speed * 0.5 + 0.5) * 22;
+      cctx.lineTo(x, y);
+    }
+    cctx.closePath();
+    cctx.fill();
+  }
+  cctx.globalAlpha = 1;
+}
 
 const GLINT_ANCHORS: ReadonlyArray<{ x: number; y: number }> = [
   { x: 50,   y: 572 }, { x: 90,   y: 572 }, { x: 130,  y: 573 }, { x: 170,  y: 573 },
@@ -52,17 +95,18 @@ const GLINT_ANCHORS: ReadonlyArray<{ x: number; y: number }> = [
   { x: 1140, y: 658 }, { x: 1220, y: 658 },
 ];
 
-let _sceneTintGradient: CanvasGradient | null = null;
-function getSceneTintGradient(ctx: CanvasRenderingContext2D): CanvasGradient {
-  if (_sceneTintGradient) return _sceneTintGradient;
-  // Built at intensity=1.4 (the top stop's relative weight). Per-frame intensity
-  // applied via globalAlpha. Stop weights: top 1.4, mid 0.9, bottom 0.3 → ratios
-  // 1.0, 0.643, 0.214 against the 1.4 baseline.
-  _sceneTintGradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-  _sceneTintGradient.addColorStop(0,    'rgba(123, 224, 163, 1.0)');
-  _sceneTintGradient.addColorStop(0.45, 'rgba(163, 232, 255, 0.643)');
-  _sceneTintGradient.addColorStop(1,    'rgba(123, 224, 163, 0.214)');
-  return _sceneTintGradient;
+// See docs/perf-patterns.md — full-canvas gradient fillRect costs ~5ms/frame.
+let _sceneTintCache: OffscreenCanvas | null = null;
+function getSceneTintCache(): OffscreenCanvas | null {
+  if (_sceneTintCache) return _sceneTintCache;
+  _sceneTintCache = bakeVerticalGradientStrip(CANVAS_HEIGHT, g => {
+    // Stop weights: top 1.0, mid 0.643, bottom 0.214 (relative to baseline 1.4
+    // applied via globalAlpha at draw time).
+    g.addColorStop(0,    'rgba(123, 224, 163, 1.0)');
+    g.addColorStop(0.45, 'rgba(163, 232, 255, 0.643)');
+    g.addColorStop(1,    'rgba(123, 224, 163, 0.214)');
+  });
+  return _sceneTintCache;
 }
 
 // Platform colors — legacy fields kept for ThemeConfig compat; unused once drawPlatform owns rendering.
@@ -498,26 +542,14 @@ export const winterLake: ArenaPack = {
     const nightIntensity = computeNightIntensity(dayPhase);
     if (nightIntensity < 0.05) return;
     ctx.save();
-    const OVERHANG = 80;
-    const STEP = 40;
-    for (const st of AURORA_STRIPES) {
-      const breathe = 0.5 + 0.5 * fastSin(time * 0.7 + st.phase);
-      ctx.fillStyle = st.color;
-      ctx.globalAlpha = (0.15 + breathe * 0.18) * nightIntensity;
-      ctx.beginPath();
-      ctx.moveTo(-OVERHANG, st.y);
-      for (let x = -OVERHANG; x <= CANVAS_WIDTH + OVERHANG; x += STEP) {
-        const y = st.y + fastSin(x * 0.0085 + time * st.speed + st.phase) * 16
-                       + fastSin(x * 0.003 + time * st.speed * 0.5) * 22;
-        ctx.lineTo(x, y);
-      }
-      for (let x = CANVAS_WIDTH + OVERHANG; x >= -OVERHANG; x -= STEP) {
-        const y = st.y + st.h + fastSin(x * 0.0085 + time * st.speed + st.phase + 0.7) * 16
-                              + fastSin(x * 0.003 + time * st.speed * 0.5 + 0.5) * 22;
-        ctx.lineTo(x, y);
-      }
-      ctx.closePath();
-      ctx.fill();
+    if (_auroraCacheLastRefresh < 0 || time - _auroraCacheLastRefresh >= AURORA_REFRESH_INTERVAL || time < _auroraCacheLastRefresh) {
+      refreshAuroraCache(time);
+      _auroraCacheLastRefresh = time;
+    }
+    if (_auroraCache) {
+      ctx.globalAlpha = nightIntensity;
+      ctx.drawImage(_auroraCache, 0, 0);
+      ctx.globalAlpha = 1;
     }
     ctx.fillStyle = '#a3e8ff';
     ctx.globalAlpha = 0.14 * nightIntensity;
@@ -573,10 +605,14 @@ export const winterLake: ArenaPack = {
     if (nightIntensity < 0.05) return;
     const breathe = 0.5 + 0.5 * fastSin(time * 0.5);
     const tintAlpha = nightIntensity * (0.05 + breathe * 0.04);
+    const cache = getSceneTintCache();
+    if (!cache) return;
     ctx.save();
     ctx.globalAlpha = tintAlpha * 1.4;
-    ctx.fillStyle = getSceneTintGradient(ctx);
-    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    // X-axis stretch from 4-wide cache: smoothing doesn't help (all 4 columns
+    // identical anyway) and skipping it saves the bilinear cost.
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(cache, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     ctx.restore();
   },
 

@@ -111,6 +111,34 @@ export function isLivePlayer(p: Player): boolean {
   return p.active && p.state !== 'splat' && p.state !== 'respawning';
 }
 
+/**
+ * Bake a vertical CanvasGradient into a 1-pixel-wide OffscreenCanvas. Use with
+ * `drawImage(cache, x, y, w, h)` + `imageSmoothingEnabled = false` instead of
+ * a full-area `fillRect` with `fillStyle = gradient` — the latter does a
+ * per-pixel gradient evaluation, the former is a memcpy + alpha blend.
+ *
+ * Saves ~5ms/frame on a full-canvas (1280×720) overlay. See
+ * docs/perf-patterns.md.
+ *
+ * The `build` callback receives a context to call `addColorStop` on; the
+ * gradient itself spans 0..height. Returns null if OffscreenCanvas is
+ * unavailable (test envs).
+ */
+export function bakeVerticalGradientStrip(
+  height: number,
+  build: (g: CanvasGradient) => void,
+): OffscreenCanvas | null {
+  if (typeof OffscreenCanvas === 'undefined') return null;
+  const c = new OffscreenCanvas(1, height);
+  const cctx = c.getContext('2d');
+  if (!cctx) return null;
+  const g = cctx.createLinearGradient(0, 0, 0, height);
+  build(g);
+  cctx.fillStyle = g;
+  cctx.fillRect(0, 0, 1, height);
+  return c;
+}
+
 export interface DriftBandConfig {
   topY: number;
   bottomY: number;
