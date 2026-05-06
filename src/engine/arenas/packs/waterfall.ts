@@ -13,6 +13,9 @@ const GROUND_MIST_CONFIG: DriftBandConfig = {
   drifts: [3, 6, 9],
 };
 
+// Waterfall current is x=440..840. Spray clouds are denser there.
+const WATERFALL_SPRAY_BOUNDS = { left: 440, right: 840 };
+
 // Waterfall current is x=440..840 (width 400). Spray spans the full lip.
 const WATERFALL_BASE_LX = 440;
 const WATERFALL_BASE_RX = 840;
@@ -267,17 +270,7 @@ export const waterfall: ArenaPack = {
     ],
   },
 
-  fog: {
-    count: 45,
-    baseY: 645,
-    yVariance: 30,
-    speedRange: [3, 9],
-    alphaRange: [0.3, 0.7],
-    color: '#D8EEFF',
-    sizeX: 70,
-    sizeY: 18,
-    opacity: 0.7,
-  },
+  fog: { count: 0, baseY: 0, yVariance: 0, speedRange: [0, 0], alphaRange: [0, 0], color: '#000', sizeX: 0, sizeY: 0, opacity: 0 },
 
   ambientParticles: {
     count: 15,
@@ -707,6 +700,22 @@ export const waterfall: ArenaPack = {
   drawAnimatedForeground: (ctx, _arena, time) => {
     if (getSlowDevice()) return;
     drawDriftBand(ctx, time, GROUND_MIST_CONFIG);
+    // Denser spray plumes around the waterfall splash zone.
+    ctx.save();
+    const cxBase = (WATERFALL_SPRAY_BOUNDS.left + WATERFALL_SPRAY_BOUNDS.right) / 2;
+    const halfW = (WATERFALL_SPRAY_BOUNDS.right - WATERFALL_SPRAY_BOUNDS.left) / 2;
+    for (let pi = 0; pi < 4; pi++) {
+      const drift = ((time * 18 + pi * 0.7) % 2 - 1) * halfW;
+      const px = cxBase + drift + fastSin(time * 0.4 + pi * 1.7) * 30;
+      const py = 640 + fastSin(time * 0.6 + pi) * 6;
+      const t = Math.abs(drift / halfW);
+      const alpha = (1 - t) * 0.45;
+      ctx.fillStyle = `rgba(220,235,250,${alpha})`;
+      ctx.beginPath();
+      ctx.ellipse(px, py, 90, 22, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
   },
 
   // ---- Audio ----

@@ -4,14 +4,23 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
 import { drawTree, drawHangingVine, drawFgLeafCluster, drawFern } from '../../themes/drawPrimitives';
-import { pushFromPlayers, isLivePlayer, makeDtTracker } from '../../themes/utils';
+import { pushFromPlayers, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
 import type { Player } from '../../types';
 
-const SQUIRREL_PLAT_TOP = 256;
-const SQUIRREL_PLAT_L = 440;
-const SQUIRREL_PLAT_R = 740;
-let _squirrelX = (SQUIRREL_PLAT_L + SQUIRREL_PLAT_R) / 2;
-let _squirrelDir = 1;
+const SQUIRREL_CFG = {
+  platL: 450,
+  platR: 730,
+  platTopY: 256,
+  walkSpeed: 45,
+  fleeSpeed: 140,
+  fleeRadius: 110,
+};
+const _squirrel: GroundCritterState = {
+  x: (SQUIRREL_CFG.platL + SQUIRREL_CFG.platR) / 2,
+  dir: 1,
+  facingEase: 1,
+  fleeing: false,
+};
 const _tickSquirrelDt = makeDtTracker();
 const TREETOPS_BUTTERFLY_HUES = [320, 60, 200, 290, 30, 160] as const;
 const TREETOPS_BUTTERFLY_COLORS = TREETOPS_BUTTERFLY_HUES.map(h => `hsl(${h},80%,65%)`);
@@ -582,33 +591,12 @@ export const treetops: ArenaPack = {
     ctx.save();
 
     const dt = _tickSquirrelDt(time);
-    const platL = SQUIRREL_PLAT_L + 10;
-    const platR = SQUIRREL_PLAT_R - 10;
-    let nearestPx = Infinity;
-    let nearestDx = 0;
-    if (matchState) {
-      for (const p of matchState.players) {
-        if (!isLivePlayer(p)) continue;
-        const pcx = p.x + p.width * 0.5;
-        const pcy = p.y + p.height;
-        if (Math.abs(pcy - SQUIRREL_PLAT_TOP) > 60) continue;
-        const dx = pcx - _squirrelX;
-        const adx = Math.abs(dx);
-        if (adx < nearestPx) { nearestPx = adx; nearestDx = dx; }
-      }
-    }
-    const fleeing = nearestPx < 110;
-    const speed = fleeing ? 140 : 45;
-    if (fleeing) _squirrelDir = nearestDx > 0 ? -1 : 1;
-    _squirrelX += _squirrelDir * speed * dt;
-    if (_squirrelX <= platL) { _squirrelX = platL; _squirrelDir = 1; }
-    else if (_squirrelX >= platR) { _squirrelX = platR; _squirrelDir = -1; }
-    const bob = fastSin(time * (fleeing ? 18 : 8)) * (fleeing ? 2 : 1);
-    const sx = _squirrelX;
-    const sy = SQUIRREL_PLAT_TOP + bob;
+    tickGroundCritter(_squirrel, matchState?.players ?? [], dt, SQUIRREL_CFG);
+    const fleeing = _squirrel.fleeing;
+    const bob = fastSin(time * (fleeing ? 18 : 8)) * (fleeing ? 2 : 1) * Math.abs(_squirrel.facingEase);
     ctx.save();
-    ctx.translate(sx, sy);
-    if (_squirrelDir < 0) ctx.scale(-1, 1);
+    ctx.translate(_squirrel.x, SQUIRREL_CFG.platTopY + bob);
+    if (_squirrel.facingEase < 0) ctx.scale(-1, 1);
     ctx.fillStyle = '#a5683a';
     ctx.beginPath();
     ctx.ellipse(0, 0, 9, 5, 0, 0, Math.PI * 2);

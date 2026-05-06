@@ -20,13 +20,11 @@ const _hallwayGlowGrads = new WeakMap<Hallway, CanvasGradient>();
 function getHallwayGlow(ctx: CanvasRenderingContext2D, h: Hallway): CanvasGradient {
   let g = _hallwayGlowGrads.get(h);
   if (!g) {
-    // Bulb sits in the upper third — glow radiates from there, filling almost
-    // the whole room. Only a thin sliver at the very top stays dark.
     const cx = h.x + h.w / 2;
-    const cy = h.y - 32 + (h.h + 32) * 0.3;
-    g = ctx.createRadialGradient(cx, cy, 0, cx, cy, h.w * 0.7);
-    g.addColorStop(0, 'rgba(255, 213, 107, 0.55)');
-    g.addColorStop(1, 'rgba(255, 180, 60, 0)');
+    const cy = h.y - 32 + (h.h + 32) * 0.5;
+    g = ctx.createRadialGradient(cx, cy, 0, cx, cy, h.w * 0.85);
+    g.addColorStop(0, 'rgba(255, 213, 107, 0.65)');
+    g.addColorStop(1, 'rgba(255, 180, 60, 0.15)');
     _hallwayGlowGrads.set(h, g);
   }
   return g;
@@ -1196,29 +1194,22 @@ export const rooftops: ArenaPack = {
           break;
         }
       }
-      // Room interior spans roughly h.y - 32 .. h.y + h.h. Light fills almost
-      // the entire room when lit; only a thin dark sliver remains at the very top.
       const interiorTop = h.y - 32;
       const interiorH = h.h + 32;
-      const darkSliverH = interiorH * 0.15;
       if (!lit) {
         ctx.fillStyle = 'rgba(8, 10, 18, 0.55)';
         ctx.fillRect(h.x + 4, interiorTop, h.w - 8, interiorH);
         continue;
       }
-      // Thin dark sliver at the very top so the bulb cord reads as hanging.
-      ctx.fillStyle = 'rgba(8, 10, 18, 0.55)';
-      ctx.fillRect(h.x + 4, interiorTop, h.w - 8, darkSliverH);
-      // Warm glow fills the rest of the room (gradient cached per hallway).
       ctx.fillStyle = getHallwayGlow(ctx, h);
-      ctx.fillRect(h.x, interiorTop + darkSliverH, h.w, interiorH - darkSliverH);
+      ctx.fillRect(h.x, interiorTop, h.w, interiorH);
       const flicker = 0.92 + fastSin(time * 9) * 0.08;
       const bulbX = h.x + h.w / 2;
-      const bulbY = interiorTop + darkSliverH + 8;
+      const bulbY = interiorTop + 10;
       ctx.strokeStyle = '#3a3a4a';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(bulbX, interiorTop + darkSliverH);
+      ctx.moveTo(bulbX, interiorTop);
       ctx.lineTo(bulbX, bulbY - 2);
       ctx.stroke();
       ctx.globalAlpha = flicker;

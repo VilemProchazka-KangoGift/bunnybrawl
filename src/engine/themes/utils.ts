@@ -90,6 +90,71 @@ export function drawDriftBand(
   ctx.restore();
 }
 
+export interface GroundCritterConfig {
+  platL: number;
+  platR: number;
+  platTopY: number;
+  yTolerance?: number;
+  walkSpeed: number;
+  fleeSpeed: number;
+  fleeRadius: number;
+  cornerMargin?: number;
+  turnEaseRate?: number;
+}
+
+export interface GroundCritterState {
+  x: number;
+  dir: 1 | -1;
+  facingEase: number;
+  fleeing: boolean;
+}
+
+/**
+ * Update an ambient ground critter: paces between [platL, platR], flees when a
+ * live player gets within fleeRadius (and is on roughly the same y level), runs
+ * past the player rather than getting trapped at an edge. facingEase lerps so
+ * direction changes have a brief slowdown-and-turn rather than instant reverse.
+ */
+export function tickGroundCritter(
+  state: GroundCritterState,
+  players: ReadonlyArray<Player>,
+  dt: number,
+  cfg: GroundCritterConfig,
+): void {
+  const yTol = cfg.yTolerance ?? 60;
+  const cornerMargin = cfg.cornerMargin ?? 25;
+  const turnEase = cfg.turnEaseRate ?? 4;
+  let nearestPx = Infinity;
+  let nearestDx = 0;
+  for (const p of players) {
+    if (!isLivePlayer(p)) continue;
+    const pcx = p.x + p.width * 0.5;
+    const pcy = p.y + p.height;
+    if (Math.abs(pcy - cfg.platTopY) > yTol) continue;
+    const dx = pcx - state.x;
+    const adx = Math.abs(dx);
+    if (adx < nearestPx) { nearestPx = adx; nearestDx = dx; }
+  }
+  state.fleeing = nearestPx < cfg.fleeRadius;
+  let targetDir: 1 | -1 = state.dir;
+  if (state.fleeing) {
+    targetDir = nearestDx > 0 ? -1 : 1;
+    // If cornered against the wall behind us, run past the player instead.
+    if (state.x <= cfg.platL + cornerMargin && targetDir === -1) targetDir = 1;
+    if (state.x >= cfg.platR - cornerMargin && targetDir === 1) targetDir = -1;
+  } else {
+    if (state.x <= cfg.platL) targetDir = 1;
+    else if (state.x >= cfg.platR) targetDir = -1;
+  }
+  state.dir = targetDir;
+  const blend = Math.min(1, turnEase * dt);
+  state.facingEase += (targetDir - state.facingEase) * blend;
+  const speed = state.fleeing ? cfg.fleeSpeed : cfg.walkSpeed;
+  state.x += state.facingEase * speed * dt;
+  if (state.x < cfg.platL) state.x = cfg.platL;
+  else if (state.x > cfg.platR) state.x = cfg.platR;
+}
+
 export function makeDtTracker(maxDt = 0.1): (time: number) => number {
   let last = 0;
   return (time: number) => {
@@ -97,6 +162,61 @@ export function makeDtTracker(maxDt = 0.1): (time: number) => number {
     last = time;
     return dt;
   };
+}
+
+/**
+ * Pure rat sprite — caller owns position + facing. Drawn at (x, y) with the
+ * given horizontal facing (1 = right, -1 = left). `motion` ∈ [0,1] scales the
+ * scurry/leg animation amplitude (use facingEase magnitude or fleeing flag).
+ */
+export function drawRat(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number,
+  facing: 1 | -1,
+  time: number,
+  motion: number,
+  fleeing: boolean,
+): void {
+  const scurry = fastSin(time * (fleeing ? 22 : 10)) * motion;
+  ctx.save();
+  ctx.translate(x, y);
+  if (facing < 0) ctx.scale(-1, 1);
+  ctx.strokeStyle = '#4a3a2a';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(-7, 0);
+  ctx.bezierCurveTo(-12, -2 + scurry, -16, 1, -18, -1 + scurry * 0.5);
+  ctx.stroke();
+  ctx.fillStyle = '#5a4a3a';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 7, 3, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(5, 0);
+  ctx.lineTo(11, -1);
+  ctx.lineTo(11, 1);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(7, -0.5, 3, 2.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#7a5a4a';
+  ctx.beginPath();
+  ctx.arc(5, -3, 1.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#000';
+  ctx.fillRect(8, -1, 0.8, 0.8);
+  ctx.strokeStyle = '#4a3a2a';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  for (let i = 0; i < 4; i++) {
+    const lx = -4 + i * 2.5;
+    const lift = fastSin(time * 22 + i * 1.5) * motion * 0.8;
+    ctx.moveTo(lx, 2);
+    ctx.lineTo(lx, 4 - Math.max(0, lift));
+  }
+  ctx.stroke();
+  ctx.restore();
 }
 
 const _pushOut = { x: 0, y: 0 };

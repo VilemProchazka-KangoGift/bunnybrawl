@@ -3,7 +3,14 @@ import type { Arena, Platform, WeatherParticle } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
-import { getFloatingPlatforms, isLivePlayer } from '../../themes/utils';
+import { getFloatingPlatforms, isLivePlayer, makeDtTracker, tickGroundCritter, drawRat, type GroundCritterState } from '../../themes/utils';
+
+const RAT_CFG = {
+  platL: 420, platR: 860, platTopY: 660,
+  walkSpeed: 50, fleeSpeed: 180, fleeRadius: 120, yTolerance: 80,
+};
+const _castleRat: GroundCritterState = { x: 640, dir: 1, facingEase: 1, fleeing: false };
+const _tickCastleRatDt = makeDtTracker();
 
 // x=1180 conflicted with the tall floating platform at x=1120 y=580; moved to x=1080 (clear ground space).
 const TORCH_X = [100, 400, 640, 880, 1080] as const;
@@ -824,6 +831,11 @@ export const castle: ArenaPack = {
   },
 
   drawAnimatedForeground: (ctx, arena, time, _dayPhase, matchState) => {
+    if (matchState) {
+      const dt = _tickCastleRatDt(time);
+      tickGroundCritter(_castleRat, matchState.players, dt, RAT_CFG);
+      drawRat(ctx, _castleRat.x, RAT_CFG.platTopY - 4, _castleRat.facingEase < 0 ? -1 : 1, time, Math.abs(_castleRat.facingEase), _castleRat.fleeing);
+    }
     // Reactive banners: nearest-player distance amplifies sway.
     const floats = getFloatingPlatforms(arena.platforms).filter(p => p.width >= 100);
     const players = matchState?.players;

@@ -5,7 +5,7 @@ import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
 import { computeNightIntensity } from '../../rendering';
 import { createThornRenderer } from '../../themes/drawPrimitives';
-import { getFloatingPlatforms, drawDriftBand, type DriftBandConfig } from '../../themes/utils';
+import { getFloatingPlatforms, drawDriftBand, makeDtTracker, tickGroundCritter, drawRat, type DriftBandConfig, type GroundCritterState } from '../../themes/utils';
 
 const FOG_CONFIG: DriftBandConfig = {
   topY: 600,
@@ -13,6 +13,13 @@ const FOG_CONFIG: DriftBandConfig = {
   colors: ['#dce4ec', '#c8d4e0', '#b1c0d0'],
   alphas: [0.10, 0.14, 0.20],
 };
+
+const RAT_CFG = {
+  platL: 30, platR: 460, platTopY: 660,
+  walkSpeed: 50, fleeSpeed: 180, fleeRadius: 120, yTolerance: 80,
+};
+const _graveRat: GroundCritterState = { x: 240, dir: 1, facingEase: 1, fleeing: false };
+const _tickGraveRatDt = makeDtTracker();
 
 const WISPS = [
   { x: 200, y: 540, phase: 0 },
@@ -736,9 +743,25 @@ export const hauntedGraveyard: ArenaPack = {
     ctx.restore();
   },
 
-  drawAnimatedForeground: (ctx, _arena, time) => {
+  drawAnimatedForeground: (ctx, _arena, time, _dayPhase, matchState) => {
     if (getSlowDevice()) return;
     drawDriftBand(ctx, time, FOG_CONFIG);
+    // Denser fog blobs that drift horizontally across the cemetery.
+    ctx.save();
+    for (let pi = 0; pi < 4; pi++) {
+      const cxBase = ((pi * 360 + time * 24) % (CANVAS_WIDTH + 280)) - 140;
+      const cy = 625 + fastSin(time * 0.4 + pi) * 6;
+      ctx.fillStyle = `rgba(180,195,210,${0.28 + pi * 0.04})`;
+      ctx.beginPath();
+      ctx.ellipse(cxBase, cy, 80 + pi * 6, 18, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+    if (matchState) {
+      const dt = _tickGraveRatDt(time);
+      tickGroundCritter(_graveRat, matchState.players, dt, RAT_CFG);
+      drawRat(ctx, _graveRat.x, RAT_CFG.platTopY - 4, _graveRat.facingEase < 0 ? -1 : 1, time, Math.abs(_graveRat.facingEase), _graveRat.fleeing);
+    }
   },
 
   // ---- Audio ----

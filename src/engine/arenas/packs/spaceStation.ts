@@ -1,8 +1,55 @@
 import type { ArenaPack } from '../types';
-import type { Platform } from '../../types';
+import type { Platform, Player } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
+import { fastSin } from '../../fastMath';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
-import { getFloatingPlatforms } from '../../themes/utils';
+import { getFloatingPlatforms, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
+
+const ROBOT_CFG = {
+  platL: 20, platR: 200, platTopY: 660,
+  walkSpeed: 22, fleeSpeed: 70, fleeRadius: 90, yTolerance: 80, turnEaseRate: 2,
+};
+const _robot: GroundCritterState = { x: 110, dir: 1, facingEase: 1, fleeing: false };
+const _tickRobotDt = makeDtTracker();
+
+function drawRobot(ctx: CanvasRenderingContext2D, time: number, players: ReadonlyArray<Player>): void {
+  const dt = _tickRobotDt(time);
+  tickGroundCritter(_robot, players, dt, ROBOT_CFG);
+  const step = fastSin(time * (_robot.fleeing ? 14 : 6)) * Math.abs(_robot.facingEase);
+  ctx.save();
+  ctx.translate(_robot.x, ROBOT_CFG.platTopY - 6);
+  if (_robot.facingEase < 0) ctx.scale(-1, 1);
+  // Legs (vertical bars, alternating raise).
+  ctx.fillStyle = '#5a6a78';
+  ctx.fillRect(-3, 1 - Math.max(0, step) * 1.2, 2, 5);
+  ctx.fillRect(1, 1 - Math.max(0, -step) * 1.2, 2, 5);
+  // Body (rounded rectangle).
+  ctx.fillStyle = '#9aa8b8';
+  ctx.fillRect(-5, -7, 10, 9);
+  ctx.fillStyle = '#7a8898';
+  ctx.fillRect(-5, 1, 10, 1.5);
+  // Faceplate (dark visor).
+  ctx.fillStyle = '#1a1a2a';
+  ctx.fillRect(-3.5, -5, 7, 3);
+  // Single eye light.
+  const blink = (Math.floor(time * 0.5) % 4 === 0) ? 0.3 : 1;
+  ctx.fillStyle = `rgba(125, 240, 255, ${blink})`;
+  ctx.beginPath();
+  ctx.arc(0, -3.5, 1.4, 0, Math.PI * 2);
+  ctx.fill();
+  // Antenna with pulsing tip.
+  ctx.strokeStyle = '#5a6a78';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, -7);
+  ctx.lineTo(0, -11);
+  ctx.stroke();
+  ctx.fillStyle = `rgba(255, 90, 90, ${0.5 + 0.5 * fastSin(time * 4)})`;
+  ctx.beginPath();
+  ctx.arc(0, -11.5, 1, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
 
 import {
   CAP_DEPTH, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
@@ -448,6 +495,11 @@ export const spaceStation: ArenaPack = {
     }
 
     ctx.restore();
+  },
+
+  drawAnimatedForeground: (ctx, _arena, time, _dayPhase, matchState) => {
+    if (!matchState) return;
+    drawRobot(ctx, time, matchState.players);
   },
 
   drawFarBackground: (ctx, _arena) => {

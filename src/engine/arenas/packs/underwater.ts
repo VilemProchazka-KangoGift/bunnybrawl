@@ -4,8 +4,73 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
-import { pushFromPlayers } from '../../themes/utils';
+import { pushFromPlayers, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
 import type { Player } from '../../types';
+
+const CRAB_CFG = {
+  platL: 350, platR: 950, platTopY: 660,
+  walkSpeed: 30, fleeSpeed: 130, fleeRadius: 100, yTolerance: 80,
+};
+const _crab: GroundCritterState = { x: 650, dir: 1, facingEase: 1, fleeing: false };
+const _tickCrabDt = makeDtTracker();
+
+function drawCrab(ctx: CanvasRenderingContext2D, time: number, players: ReadonlyArray<Player>): void {
+  const dt = _tickCrabDt(time);
+  tickGroundCritter(_crab, players, dt, CRAB_CFG);
+  const fleeing = _crab.fleeing;
+  const scuttle = fastSin(time * (fleeing ? 24 : 10)) * 0.7;
+  ctx.save();
+  ctx.translate(_crab.x, CRAB_CFG.platTopY - 5);
+  if (_crab.facingEase < 0) ctx.scale(-1, 1);
+  // Legs (4 each side).
+  ctx.strokeStyle = '#a83a2a';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  for (let i = 0; i < 4; i++) {
+    const lx = -6 + i * 4;
+    const lift = fastSin(time * 14 + i * 1.7) * 1.5 * Math.abs(_crab.facingEase);
+    ctx.moveTo(lx, 0);
+    ctx.lineTo(lx - 1.5, 4 - lift);
+  }
+  ctx.stroke();
+  // Body.
+  ctx.fillStyle = '#d04a3a';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 9, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Shell highlight.
+  ctx.fillStyle = 'rgba(255,180,160,0.5)';
+  ctx.beginPath();
+  ctx.ellipse(-2, -2, 4, 2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Pincers up front.
+  const pincerWiggle = scuttle * 1.5;
+  ctx.fillStyle = '#d04a3a';
+  ctx.beginPath();
+  ctx.ellipse(8, -2 + pincerWiggle, 2.5, 1.6, 0.3, 0, Math.PI * 2);
+  ctx.ellipse(8, 2 - pincerWiggle, 2.5, 1.6, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+  // Eye stalks.
+  ctx.strokeStyle = '#a83a2a';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(2, -3);
+  ctx.lineTo(3, -6);
+  ctx.moveTo(-1, -3);
+  ctx.lineTo(0, -6);
+  ctx.stroke();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(3, -6, 1.2, 0, Math.PI * 2);
+  ctx.arc(0, -6, 1.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.arc(3, -6, 0.5, 0, Math.PI * 2);
+  ctx.arc(0, -6, 0.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
 
 const FISH_SPECIES = [
   { color: '#ffaa3a', size: 0.7 },
@@ -1032,6 +1097,7 @@ export const underwater: ArenaPack = {
     const cy = 380 + fastSin(time * 0.5) * 40;
     const players = matchState.players;
     for (let i = 0; i < FISH_COUNT; i++) drawFish(ctx, i, time, cxBase, cy, players);
+    drawCrab(ctx, time, players);
     ctx.restore();
   },
 

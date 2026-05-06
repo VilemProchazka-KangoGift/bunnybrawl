@@ -3,7 +3,14 @@ import type { Arena, Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
-import { getFloatingPlatforms, pushFromPlayers, isLivePlayer, makeDtTracker } from '../../themes/utils';
+import { getFloatingPlatforms, pushFromPlayers, isLivePlayer, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
+
+const SNAIL_CFG = {
+  platL: 900, platR: 1080, platTopY: 660,
+  walkSpeed: 8, fleeSpeed: 22, fleeRadius: 70, yTolerance: 80, turnEaseRate: 2,
+};
+const _snail: GroundCritterState = { x: 990, dir: 1, facingEase: 1, fleeing: false };
+const _tickSnailDt = makeDtTracker();
 
 const BUTTERFLY_HUES = [320, 60, 200, 290, 30, 160, 180, 40] as const;
 const BUTTERFLY_COLORS = BUTTERFLY_HUES.map(h => `hsl(${h},80%,65%)`);
@@ -11,22 +18,21 @@ const BEE_CLUSTERS = [
   { homeX: 320, homeY: 420, phase: 0 },
   { homeX: 980, homeY: 380, phase: 2.4 },
 ] as const;
-// Placed at platform corners so they don't crowd springs/thorns in the middle.
+// Placed in gaps between FG bushes / stumps / wildflowers / tall grass, all of
+// which sit on the ground line or at platform 15%/85%. Center of platform is
+// clear of FG decoration.
 const DANDELIONS = [
-  { x: 180,  gy: 655 },
-  { x: 460,  gy: 655 },
-  { x: 740,  gy: 655 },
-  { x: 1180, gy: 655 },
-  { x: 305,  gy: 395 },
-  { x: 460,  gy: 395 },
-  { x: 785,  gy: 410 },
-  { x: 980,  gy: 410 },
-  { x: 565,  gy: 475 },
-  { x: 720,  gy: 475 },
-  { x: 130,  gy: 325 },
-  { x: 1150, gy: 340 },
-  { x: 510,  gy: 285 },
-  { x: 770,  gy: 285 },
+  // Ground line — between bushes (160, 520, 1000, 1120) and stumps (340, 860).
+  { x: 100,  gy: 655 },
+  { x: 380,  gy: 655 },
+  { x: 720,  gy: 655 },
+  { x: 1080, gy: 655 },
+  // Floating-platform centers (FG bushes sit at 15%/85%, centers are clear).
+  { x: 380,  gy: 395 },
+  { x: 880,  gy: 410 },
+  { x: 640,  gy: 475 },
+  { x: 640,  gy: 285 },
+  { x: 1090, gy: 530 },
 ] as const;
 // -1 = idle (full puff). >= 0 = burst-elapsed seconds.
 const _dandelionExcite = new Float32Array(DANDELIONS.length).fill(-1);
@@ -56,6 +62,51 @@ function drawButterfly(ctx: CanvasRenderingContext2D, i: number, time: number, p
   ctx.fill();
   ctx.fillStyle = '#000';
   ctx.fillRect(r.x - 0.5, r.y - 3, 1, 6);
+}
+
+function drawSnail(ctx: CanvasRenderingContext2D, time: number, players: ReadonlyArray<import('../../types').Player>): void {
+  const dt = _tickSnailDt(time);
+  tickGroundCritter(_snail, players, dt, SNAIL_CFG);
+  ctx.save();
+  ctx.translate(_snail.x, SNAIL_CFG.platTopY - 4);
+  if (_snail.facingEase < 0) ctx.scale(-1, 1);
+  // Body slug — gray-tan ellipse hugging the ground.
+  ctx.fillStyle = '#b89878';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 9, 3.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Foot trail (slimy underside).
+  ctx.fillStyle = 'rgba(120,100,80,0.5)';
+  ctx.fillRect(-9, 2.5, 18, 1.5);
+  // Shell — spiral on the back.
+  ctx.fillStyle = '#8a5a3a';
+  ctx.beginPath();
+  ctx.arc(-1, -3, 5.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#5a3a20';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  for (let r = 4.5; r >= 1; r -= 1.6) {
+    ctx.moveTo(-1 + r, -3);
+    ctx.arc(-1, -3, r, 0, Math.PI * 1.8);
+  }
+  ctx.stroke();
+  // Antennae (with eye dots).
+  const wig = fastSin(time * 6) * 0.5;
+  ctx.strokeStyle = '#8a6a4a';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(7, -1);
+  ctx.lineTo(10 + wig, -5);
+  ctx.moveTo(8, -1);
+  ctx.lineTo(11 - wig, -4);
+  ctx.stroke();
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.arc(10 + wig, -5, 0.6, 0, Math.PI * 2);
+  ctx.arc(11 - wig, -4, 0.6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 }
 
 function drawBeeCluster(ctx: CanvasRenderingContext2D, ci: number, time: number, players: ReadonlyArray<import('../../types').Player>): void {
@@ -654,6 +705,7 @@ export const meadow: ArenaPack = {
     const players = matchState.players;
     for (let i = 0; i < BUTTERFLY_HUES.length; i++) drawButterfly(ctx, i, time, players);
     for (let ci = 0; ci < BEE_CLUSTERS.length; ci++) drawBeeCluster(ctx, ci, time, players);
+    drawSnail(ctx, time, players);
     ctx.restore();
   },
 

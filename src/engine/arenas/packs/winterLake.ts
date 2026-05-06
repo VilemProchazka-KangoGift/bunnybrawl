@@ -27,28 +27,31 @@ const AURORA_STRIPES = [
   { color: '#a3e8ff', y: 224, h: 40, speed: 0.4,  phase: 4.8 },
 ] as const;
 
-// Glint anchors: spread densely across all platform tops + ground line.
 const GLINT_ANCHORS: ReadonlyArray<{ x: number; y: number }> = [
-  // Left-side floating platform stack
   { x: 50,   y: 572 }, { x: 90,   y: 572 }, { x: 130,  y: 573 }, { x: 170,  y: 573 },
   { x: 90,   y: 487 }, { x: 140,  y: 487 }, { x: 190,  y: 488 },
   { x: 40,   y: 412 }, { x: 80,   y: 412 }, { x: 130,  y: 413 },
   { x: 60,   y: 327 }, { x: 110,  y: 327 }, { x: 160,  y: 328 },
-  // Right-side floating platform stack
   { x: 1110, y: 582 }, { x: 1160, y: 582 }, { x: 1210, y: 583 },
   { x: 1080, y: 502 }, { x: 1130, y: 502 }, { x: 1180, y: 503 },
   { x: 1110, y: 422 }, { x: 1170, y: 422 }, { x: 1230, y: 423 },
-  // Center top platform
-  { x: 480,  y: 357 }, { x: 540,  y: 357 }, { x: 600,  y: 357 },
-  { x: 660,  y: 357 }, { x: 720,  y: 357 }, { x: 780,  y: 357 },
-  // Center middle platform
-  { x: 560,  y: 497 }, { x: 620,  y: 497 }, { x: 680,  y: 497 }, { x: 740,  y: 497 },
-  // Mid-height side platforms
-  { x: 280,  y: 437 }, { x: 330,  y: 438 }, { x: 380,  y: 438 },
-  { x: 920,  y: 437 }, { x: 970,  y: 438 }, { x: 1020, y: 438 },
-  // Ground line — sparse but visible
-  { x: 220,  y: 658 }, { x: 380,  y: 658 }, { x: 540,  y: 658 },
-  { x: 720,  y: 658 }, { x: 880,  y: 658 }, { x: 1060, y: 658 },
+  { x: 460,  y: 357 }, { x: 510,  y: 357 }, { x: 560,  y: 357 },
+  { x: 610,  y: 357 }, { x: 660,  y: 357 }, { x: 710,  y: 357 },
+  { x: 760,  y: 357 }, { x: 810,  y: 357 },
+  { x: 540,  y: 497 }, { x: 590,  y: 497 }, { x: 640,  y: 497 },
+  { x: 690,  y: 497 }, { x: 740,  y: 497 },
+  { x: 280,  y: 437 }, { x: 320,  y: 438 }, { x: 350,  y: 438 },
+  { x: 930,  y: 437 }, { x: 970,  y: 438 }, { x: 1000, y: 438 },
+  { x: 390,  y: 277 }, { x: 410,  y: 277 },
+  { x: 865,  y: 277 }, { x: 885,  y: 277 },
+  { x: 610,  y: 227 }, { x: 635,  y: 227 },
+  { x: 210,  y: 347 }, { x: 230,  y: 347 },
+  { x: 1050, y: 347 }, { x: 1070, y: 347 },
+  // Ground line — denser snow surface coverage
+  { x: 100,  y: 658 }, { x: 200,  y: 658 }, { x: 300,  y: 658 },
+  { x: 460,  y: 658 }, { x: 560,  y: 658 }, { x: 660,  y: 658 },
+  { x: 760,  y: 658 }, { x: 940,  y: 658 }, { x: 1040, y: 658 },
+  { x: 1140, y: 658 }, { x: 1220, y: 658 },
 ];
 
 let _sceneTintGradient: CanvasGradient | null = null;
