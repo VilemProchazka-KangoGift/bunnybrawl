@@ -4,7 +4,7 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
-import { getFloatingPlatforms, isLivePlayer } from '../../themes/utils';
+import { getFloatingPlatforms, isLivePlayer, makeDtTracker } from '../../themes/utils';
 
 const CANDY_CLOUDS = [
   { x: 200, y: 110, r: 26 },
@@ -13,18 +13,15 @@ const CANDY_CLOUDS = [
 ] as const;
 const SPRINKLE_HUES = [10, 45, 120, 200, 280, 320] as const;
 const WEATHER_SPRINKLE_COLORS = SPRINKLE_HUES.map(h => `hsl(${h},80%,65%)`);
-// Gumdrops placed at the OUTER corners of the secondary side platforms — out of
-// the natural traversal path, away from spring/thorn spawn middle-zones, and
-// drawn in drawAnimatedForeground so they sit on top of the bouncy jelly overlay.
+// Placed at outer platform corners so they don't crowd springs/thorns mid-platform.
 const GUMDROPS = [
-  { x: 46,   gy: 530, color: '#ff5e8a' }, // platform 4 (left-mid) left corner
-  { x: 1214, gy: 510, color: '#7be0a3' }, // platform 5 (right-mid) right corner
-  { x: 64,   gy: 350, color: '#ffe066' }, // platform 6 (left-top) left corner
-  { x: 1200, gy: 325, color: '#c899ff' }, // platform 7 (right-top) right corner
+  { x: 46,   gy: 530, color: '#ff5e8a' },
+  { x: 1214, gy: 510, color: '#7be0a3' },
+  { x: 64,   gy: 350, color: '#ffe066' },
+  { x: 1200, gy: 325, color: '#c899ff' },
 ] as const;
-// Per-gumdrop excitement decays each frame; rises when a player is within radius.
 const _gumdropExcite = new Float32Array(GUMDROPS.length);
-let _lastGumdropTime = 0;
+const _tickGumdropDt = makeDtTracker();
 // 8-wisp ring around each cloud, hoisted so the loop avoids 24 sin+cos per frame.
 const CLOUD_WISP_COS = new Float32Array(8);
 const CLOUD_WISP_SIN = new Float32Array(8);
@@ -655,8 +652,7 @@ export const candyLand: ArenaPack = {
     if (getSlowDevice()) return;
     ctx.save();
     const GUMDROP_R = 14;
-    const dt = Math.max(0, Math.min(0.1, time - _lastGumdropTime));
-    _lastGumdropTime = time;
+    const dt = _tickGumdropDt(time);
     for (let i = 0; i < GUMDROPS.length; i++) {
       const g = GUMDROPS[i];
       let nearby = 0;
@@ -666,14 +662,11 @@ export const candyLand: ArenaPack = {
         const py = p.y + p.height;
         if (Math.abs(dx) < 50 && Math.abs(py - g.gy) < 30) { nearby = 1; break; }
       }
-      // Slow attack/decay — spin/jump phase out smoothly instead of flicking.
-      const e = _gumdropExcite[i] = Math.max(0, _gumdropExcite[i] + (nearby - _gumdropExcite[i]) * dt * 4);
-      // Spin: base slow rotation, faster when excited.
+      _gumdropExcite[i] = Math.max(0, _gumdropExcite[i] + (nearby - _gumdropExcite[i]) * dt * 4);
+      const e = _gumdropExcite[i];
       const rot = time * (0.2 + e * 1.8) + i * 1.3;
-      // Jump: small repeating hop when excited (clamped sine, only positive lobes).
       const hopPhase = (time * (2 + e * 1.5) + i) % (Math.PI * 2);
-      const hopWave = Math.max(0, fastSin(hopPhase));
-      const hop = e * hopWave * 6;
+      const hop = e * Math.max(0, fastSin(hopPhase)) * 6;
       const cx = g.x;
       const cy = g.gy - GUMDROP_R + 2 - hop;
       ctx.save();

@@ -5,7 +5,14 @@ import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
 import { computeNightIntensity } from '../../rendering';
 import { createThornRenderer } from '../../themes/drawPrimitives';
-import { getFloatingPlatforms, drawDriftBand } from '../../themes/utils';
+import { getFloatingPlatforms, drawDriftBand, type DriftBandConfig } from '../../themes/utils';
+
+const FOG_CONFIG: DriftBandConfig = {
+  topY: 600,
+  bottomY: 660,
+  colors: ['#dce4ec', '#c8d4e0', '#b1c0d0'],
+  alphas: [0.10, 0.14, 0.20],
+};
 
 const WISPS = [
   { x: 200, y: 540, phase: 0 },
@@ -731,12 +738,7 @@ export const hauntedGraveyard: ArenaPack = {
 
   drawAnimatedForeground: (ctx, _arena, time) => {
     if (getSlowDevice()) return;
-    drawDriftBand(ctx, time, {
-      topY: 600,
-      bottomY: 660,
-      colors: ['#dce4ec', '#c8d4e0', '#b1c0d0'],
-      alphas: [0.10, 0.14, 0.20],
-    });
+    drawDriftBand(ctx, time, FOG_CONFIG);
   },
 
   // ---- Audio ----

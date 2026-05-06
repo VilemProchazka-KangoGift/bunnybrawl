@@ -3,7 +3,15 @@ import type { Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
-import { getFloatingPlatforms, isLivePlayer, drawDriftBand } from '../../themes/utils';
+import { getFloatingPlatforms, isLivePlayer, drawDriftBand, type DriftBandConfig } from '../../themes/utils';
+
+const GROUND_MIST_CONFIG: DriftBandConfig = {
+  topY: 615,
+  bottomY: 660,
+  colors: ['#e8f4ff', '#cfe4f5', '#a8c8de'],
+  alphas: [0.10, 0.13, 0.18],
+  drifts: [3, 6, 9],
+};
 
 // Waterfall current is x=440..840 (width 400). Spray spans the full lip.
 const WATERFALL_BASE_LX = 440;
@@ -698,14 +706,7 @@ export const waterfall: ArenaPack = {
 
   drawAnimatedForeground: (ctx, _arena, time) => {
     if (getSlowDevice()) return;
-    // Cool ground mist along the riverbed — subtle drift band.
-    drawDriftBand(ctx, time, {
-      topY: 615,
-      bottomY: 660,
-      colors: ['#e8f4ff', '#cfe4f5', '#a8c8de'],
-      alphas: [0.10, 0.13, 0.18],
-      drifts: [3, 6, 9],
-    });
+    drawDriftBand(ctx, time, GROUND_MIST_CONFIG);
   },
 
   // ---- Audio ----

@@ -539,7 +539,6 @@ export const winterLake: ArenaPack = {
     // Glint anchors: ground line (sparser) + platform tops.
     ctx.fillStyle = '#dcf5ff';
     for (let i = 0; i < GLINT_ANCHORS.length; i++) {
-      // Threshold 0.75 ~ 14% duty per anchor; bumped freq for slightly more pop.
       const phase = fastSin(time * 2.2 + i * 0.7);
       if (phase < 0.75) continue;
       const a = GLINT_ANCHORS[i];

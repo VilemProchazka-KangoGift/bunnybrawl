@@ -50,24 +50,12 @@ export function isLivePlayer(p: Player): boolean {
   return p.active && p.state !== 'splat' && p.state !== 'respawning';
 }
 
-/**
- * Subtle drifting low-band atmosphere — two layered wavy ribbons that slowly
- * drift sideways and undulate. Suitable for graveyard fog, waterfall mist,
- * volcano heat shimmer. Renders three thin layers with low alpha so the scene
- * still reads through.
- */
 export interface DriftBandConfig {
-  /** Top y of the band (where the wavy upper edge oscillates around). */
   topY: number;
-  /** Bottom y where the band runs out — usually the ground. */
   bottomY: number;
-  /** Hex/rgba color per layer. Three colors blend front-to-back. */
   colors: readonly [string, string, string];
-  /** Per-layer alpha (back, mid, front). Keep ≤ ~0.25 for "subtle". */
   alphas: readonly [number, number, number];
-  /** Per-layer horizontal drift speed in px/s. */
   drifts?: readonly [number, number, number];
-  /** Per-layer wave amplitude (px). */
   amps?: readonly [number, number, number];
 }
 
@@ -82,21 +70,33 @@ export function drawDriftBand(
   for (let li = 0; li < 3; li++) {
     const layerTop = cfg.topY + li * 6;
     const tx = time * drifts[li];
+    const amp = amps[li];
+    const ampSecondary = amp * 0.35;
+    const phase1 = li * 1.3;
+    const phase2 = li * 2.1;
     ctx.fillStyle = cfg.colors[li];
     ctx.globalAlpha = cfg.alphas[li];
     ctx.beginPath();
     ctx.moveTo(-20, cfg.bottomY);
     for (let x = -20; x <= CANVAS_WIDTH + 20; x += 14) {
-      const s1 = fastSin((x + tx) * 0.012 + li * 1.3);
-      const s2 = fastSin((x + tx) * 0.028 + li * 2.1);
-      const wave = s1 * amps[li] + s2 * amps[li] * 0.35;
-      ctx.lineTo(x, layerTop + wave);
+      const s1 = fastSin((x + tx) * 0.012 + phase1);
+      const s2 = fastSin((x + tx) * 0.028 + phase2);
+      ctx.lineTo(x, layerTop + s1 * amp + s2 * ampSecondary);
     }
     ctx.lineTo(CANVAS_WIDTH + 20, cfg.bottomY);
     ctx.closePath();
     ctx.fill();
   }
   ctx.restore();
+}
+
+export function makeDtTracker(maxDt = 0.1): (time: number) => number {
+  let last = 0;
+  return (time: number) => {
+    const dt = Math.max(0, Math.min(maxDt, time - last));
+    last = time;
+    return dt;
+  };
 }
 
 const _pushOut = { x: 0, y: 0 };

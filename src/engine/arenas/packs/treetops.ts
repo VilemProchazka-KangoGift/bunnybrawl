@@ -4,17 +4,15 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
 import { drawTree, drawHangingVine, drawFgLeafCluster, drawFern } from '../../themes/drawPrimitives';
-import { pushFromPlayers, isLivePlayer } from '../../themes/utils';
+import { pushFromPlayers, isLivePlayer, makeDtTracker } from '../../themes/utils';
 import type { Player } from '../../types';
 
 const SQUIRREL_PLAT_TOP = 256;
 const SQUIRREL_PLAT_L = 440;
 const SQUIRREL_PLAT_R = 740;
-// Ground critter base pattern: persistent x + facing dir, paces between platform
-// edges, flees when player nearby. Reusable for future ground cosmetics.
 let _squirrelX = (SQUIRREL_PLAT_L + SQUIRREL_PLAT_R) / 2;
 let _squirrelDir = 1;
-let _squirrelLastTime = 0;
+const _tickSquirrelDt = makeDtTracker();
 const TREETOPS_BUTTERFLY_HUES = [320, 60, 200, 290, 30, 160] as const;
 const TREETOPS_BUTTERFLY_COLORS = TREETOPS_BUTTERFLY_HUES.map(h => `hsl(${h},80%,65%)`);
 const TREETOPS_BEE_CLUSTERS = [
@@ -583,10 +581,7 @@ export const treetops: ArenaPack = {
     if (getSlowDevice()) return;
     ctx.save();
 
-    // Squirrel paces along its platform; flees when a player is on the platform
-    // and within trigger range. Persistent state — survives between frames.
-    const dt = Math.max(0, Math.min(0.1, time - _squirrelLastTime));
-    _squirrelLastTime = time;
+    const dt = _tickSquirrelDt(time);
     const platL = SQUIRREL_PLAT_L + 10;
     const platR = SQUIRREL_PLAT_R - 10;
     let nearestPx = Infinity;
@@ -596,7 +591,6 @@ export const treetops: ArenaPack = {
         if (!isLivePlayer(p)) continue;
         const pcx = p.x + p.width * 0.5;
         const pcy = p.y + p.height;
-        // Only react if player is roughly on the same platform.
         if (Math.abs(pcy - SQUIRREL_PLAT_TOP) > 60) continue;
         const dx = pcx - _squirrelX;
         const adx = Math.abs(dx);
@@ -605,10 +599,7 @@ export const treetops: ArenaPack = {
     }
     const fleeing = nearestPx < 110;
     const speed = fleeing ? 140 : 45;
-    if (fleeing) {
-      // Run away from the player — sign(squirrel - player).
-      _squirrelDir = nearestDx > 0 ? -1 : 1;
-    }
+    if (fleeing) _squirrelDir = nearestDx > 0 ? -1 : 1;
     _squirrelX += _squirrelDir * speed * dt;
     if (_squirrelX <= platL) { _squirrelX = platL; _squirrelDir = 1; }
     else if (_squirrelX >= platR) { _squirrelX = platR; _squirrelDir = -1; }
