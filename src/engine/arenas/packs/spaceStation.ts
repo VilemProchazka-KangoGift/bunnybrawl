@@ -4,6 +4,16 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin } from '../../fastMath';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
 import { getFloatingPlatforms } from '../../themes/utils';
+
+// Wall regions: left x=0-260 (window starts 280), right x=1010-1280. Y positions clear of platforms.
+const CONSOLE_PANELS = [
+  { x: 30,   y: 600, color: '#7df0ff' },
+  { x: 220,  y: 605, color: '#a8ffd0' },
+  { x: 25,   y: 200, color: '#ff5f8a' },
+  { x: 1030, y: 600, color: '#7df0ff' },
+  { x: 1220, y: 605, color: '#ffd56b' },
+  { x: 1220, y: 200, color: '#a8ffd0' },
+] as const;
 import {
   CAP_DEPTH, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
   capFrontY, capBackY, skewPx,
@@ -449,27 +459,14 @@ export const spaceStation: ArenaPack = {
 
     ctx.restore();
 
-    // Wall-mounted console panels — positioned in wall regions away from platforms.
-    // Left wall: x=0-260 (window starts at 280). Right wall: x=1010-1280.
-    // Picked Y positions that don't sit under platforms.
     ctx.save();
-    const panels = [
-      { x: 30,   y: 600, color: '#7df0ff' },  // left wall, low
-      { x: 220,  y: 605, color: '#a8ffd0' },  // left wall, edge
-      { x: 25,   y: 200, color: '#ff5f8a' },  // left wall, high
-      { x: 1030, y: 600, color: '#7df0ff' },  // right wall, low
-      { x: 1220, y: 605, color: '#ffd56b' },  // right wall, edge
-      { x: 1220, y: 200, color: '#a8ffd0' },  // right wall, high
-    ];
-    for (let pi = 0; pi < panels.length; pi++) {
-      const p = panels[pi];
-      // Frame
+    for (let pi = 0; pi < CONSOLE_PANELS.length; pi++) {
+      const p = CONSOLE_PANELS[pi];
       ctx.fillStyle = '#0e1420';
       ctx.fillRect(p.x - 1, p.y - 1, 42, 16);
       ctx.strokeStyle = '#2a3242';
       ctx.lineWidth = 1;
       ctx.strokeRect(p.x - 1, p.y - 1, 42, 16);
-      // Cycling status bars
       const phase = Math.floor(time * 3 + pi * 2);
       const baseAlpha = 0.6 + (fastSin(time * 1.5 + pi) * 0.5 + 0.5) * 0.3;
       ctx.fillStyle = p.color;
@@ -478,13 +475,13 @@ export const spaceStation: ArenaPack = {
         const w = 4 + ((i + phase) % 3) * 3;
         ctx.fillRect(p.x + 3 + i * 12, p.y + 3, w, 2);
       }
-      // Pulse glow strip
-      ctx.shadowColor = p.color;
-      ctx.shadowBlur = 5;
+      // Doubled bar emulates the bloom we used to get from shadowBlur.
+      ctx.globalAlpha = baseAlpha * 0.45;
+      ctx.fillRect(p.x + 1, p.y + 8, 38, 4);
+      ctx.globalAlpha = baseAlpha;
       ctx.fillRect(p.x + 3, p.y + 9, 34, 2);
-      ctx.shadowBlur = 0;
-      // Tiny indicator LEDs
-      ctx.fillStyle = `rgba(255, 100, 100, ${0.5 + fastSin(time * 6 + pi) * 0.5})`;
+      ctx.fillStyle = '#ff6464';
+      ctx.globalAlpha = 0.5 + fastSin(time * 6 + pi) * 0.5;
       ctx.beginPath();
       ctx.arc(p.x + 38, p.y + 4, 1, 0, Math.PI * 2);
       ctx.fill();

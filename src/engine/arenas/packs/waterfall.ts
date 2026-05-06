@@ -1,9 +1,16 @@
 import type { ArenaPack } from '../types';
 import type { Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
-import { fastSin } from '../../fastMath';
+import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
 import { getFloatingPlatforms } from '../../themes/utils';
+
+const WATERFALL_BASE_CX = 640;
+const WATERFALL_BASE_Y = 660;
+const LILY_PADS = [
+  { x: 220, gy: 655 },
+  { x: 1060, gy: 655 },
+] as const;
 import {
   drawTree, drawBush, drawFlower, drawGrassTuft,
   drawFgBush, drawTallGrass, drawFern, drawHangingVine, drawFgLeafCluster, drawFgWildflower,
@@ -567,60 +574,48 @@ export const waterfall: ArenaPack = {
   drawAnimatedBackground: (ctx, _arena, time) => {
     if (getSlowDevice()) return;
     ctx.save();
-    // Prominent vertical spray column at waterfall base — rises tall
-    // Waterfall current is x=440-840 (centered ~640), base at y=660
-    const baseCx = 640;
-    const baseY = 660;
-    // Tall rising spray plume
+    ctx.fillStyle = '#f0f8ff';
     for (let i = 0; i < 60; i++) {
       const t = ((time * 0.6 + i * 0.018) % 1);
       const xOff = fastSin(time * 1.5 + i * 0.7) * (60 + t * 40);
-      const x = baseCx + xOff;
-      const y = baseY - t * 220;
+      const x = WATERFALL_BASE_CX + xOff;
+      const y = WATERFALL_BASE_Y - t * 220;
       const r = 4 + (1 - t) * 8;
-      const a = (1 - t) * 0.85 * Math.min(1, t * 4);
-      ctx.fillStyle = `rgba(240, 248, 255, ${a})`;
+      ctx.globalAlpha = (1 - t) * 0.85 * Math.min(1, t * 4);
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fill();
     }
-    // Outer mist veil
+    ctx.fillStyle = '#dcebfa';
     for (let i = 0; i < 14; i++) {
       const t = ((time * 0.3 + i * 0.07) % 1);
       const side = (i % 2 === 0 ? -1 : 1);
-      const x = baseCx + side * (90 + t * 40 + fastSin(time + i) * 20);
-      const y = baseY - 30 - t * 140;
+      const x = WATERFALL_BASE_CX + side * (90 + t * 40 + fastSin(time + i) * 20);
+      const y = WATERFALL_BASE_Y - 30 - t * 140;
       const r = 28 + t * 18;
-      const a = (1 - t) * 0.35;
-      ctx.fillStyle = `rgba(220, 235, 250, ${a})`;
+      ctx.globalAlpha = (1 - t) * 0.35;
       ctx.beginPath();
       ctx.ellipse(x, y, r, r * 0.6, 0, 0, Math.PI * 2);
       ctx.fill();
     }
-    // Splash burst on impact (every ~0.4s)
-    const splashPeriod = 0.5;
-    const splashPhase = time % splashPeriod;
+    const splashPhase = time % 0.5;
     if (splashPhase < 0.3) {
       const u = splashPhase / 0.3;
+      ctx.fillStyle = '#ffffff';
+      ctx.globalAlpha = (1 - u) * 0.85;
       for (let i = 0; i < 16; i++) {
         const a = -Math.PI / 2 + ((i / 15) - 0.5) * 1.6;
         const speed = 50 + (i % 4) * 20;
-        const px = baseCx + Math.cos(a) * speed * u;
-        const py = baseY - 4 + Math.sin(a) * speed * u + 40 * u * u;
-        ctx.fillStyle = `rgba(255, 255, 255, ${(1 - u) * 0.85})`;
+        const px = WATERFALL_BASE_CX + fastCos(a) * speed * u;
+        const py = WATERFALL_BASE_Y - 4 + fastSin(a) * speed * u + 40 * u * u;
         ctx.beginPath();
         ctx.arc(px, py, 2 + u * 2, 0, Math.PI * 2);
         ctx.fill();
       }
     }
-    // Frogs on lily pads — placed on ground (y=655 above the y=660 ground top)
-    const lilyPads = [
-      { x: 220, gy: 655 },
-      { x: 1060, gy: 655 },
-    ];
-    for (let i = 0; i < lilyPads.length; i++) {
-      const lp = lilyPads[i];
-      // Lily pad (notched circle)
+    ctx.globalAlpha = 1;
+    for (let i = 0; i < LILY_PADS.length; i++) {
+      const lp = LILY_PADS[i];
       ctx.fillStyle = '#3d8a3a';
       ctx.beginPath();
       ctx.ellipse(lp.x, lp.gy + 2, 22, 6, 0, 0, Math.PI * 2);
@@ -629,7 +624,6 @@ export const waterfall: ArenaPack = {
       ctx.beginPath();
       ctx.ellipse(lp.x - 2, lp.gy, 20, 4, 0, 0, Math.PI * 2);
       ctx.fill();
-      // Notch
       ctx.fillStyle = 'rgba(0,0,0,0.25)';
       ctx.beginPath();
       ctx.moveTo(lp.x - 2, lp.gy);
@@ -637,34 +631,28 @@ export const waterfall: ArenaPack = {
       ctx.lineTo(lp.x + 1, lp.gy + 3);
       ctx.closePath();
       ctx.fill();
-      // Frog body — slightly bigger, sits on pad
       const breath = fastSin(time * 2 + i) * 0.5;
       ctx.fillStyle = '#4a8a3a';
       ctx.beginPath();
       ctx.ellipse(lp.x, lp.gy - 6 + breath, 9, 7 - breath * 0.5, 0, 0, Math.PI * 2);
       ctx.fill();
-      // Belly highlight
       ctx.fillStyle = '#a8d088';
       ctx.beginPath();
       ctx.ellipse(lp.x, lp.gy - 4 + breath, 6, 3, 0, 0, Math.PI * 2);
       ctx.fill();
-      // Eye bumps on top of head
       ctx.fillStyle = '#4a8a3a';
       ctx.beginPath();
       ctx.arc(lp.x - 3.5, lp.gy - 12, 2.5, 0, Math.PI * 2);
       ctx.arc(lp.x + 3.5, lp.gy - 12, 2.5, 0, Math.PI * 2);
       ctx.fill();
-      // Eye whites
       ctx.fillStyle = '#fff';
       ctx.beginPath();
       ctx.arc(lp.x - 3.5, lp.gy - 12, 1.6, 0, Math.PI * 2);
       ctx.arc(lp.x + 3.5, lp.gy - 12, 1.6, 0, Math.PI * 2);
       ctx.fill();
-      // Pupils
       ctx.fillStyle = '#000';
       ctx.fillRect(lp.x - 4, lp.gy - 12.5, 1, 1.5);
       ctx.fillRect(lp.x + 3, lp.gy - 12.5, 1, 1.5);
-      // Mouth line
       ctx.strokeStyle = '#2a4a2a';
       ctx.lineWidth = 0.7;
       ctx.beginPath();

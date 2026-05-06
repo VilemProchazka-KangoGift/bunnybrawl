@@ -1,10 +1,34 @@
 import type { ArenaPack } from '../types';
 import type { Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
-import { fastSin } from '../../fastMath';
+import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
 import { getFloatingPlatforms } from '../../themes/utils';
+
+const CANDY_CLOUDS = [
+  { x: 200, y: 110, r: 26 },
+  { x: 700, y: 80,  r: 32 },
+  { x: 1080, y: 130, r: 28 },
+] as const;
+const SPRINKLE_HUES = [10, 45, 120, 200, 280, 320] as const;
+const WEATHER_SPRINKLE_COLORS = SPRINKLE_HUES.map(h => `hsl(${h},80%,65%)`);
+const GUMDROPS = [
+  { x: 80,  color: '#ff5e8a' },
+  { x: 380, color: '#7be0a3' },
+  { x: 880, color: '#ffe066' },
+  { x: 1200, color: '#c899ff' },
+] as const;
+// 8-wisp ring around each cloud, hoisted so the loop avoids 24 sin+cos per frame.
+const CLOUD_WISP_COS = new Float32Array(8);
+const CLOUD_WISP_SIN = new Float32Array(8);
+{
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    CLOUD_WISP_COS[i] = Math.cos(a);
+    CLOUD_WISP_SIN[i] = Math.sin(a);
+  }
+}
 import {
   CAP_DEPTH, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
   capFrontY, capBackY, skewPx,
@@ -589,77 +613,55 @@ export const candyLand: ArenaPack = {
   drawAnimatedBackground: (ctx, _arena, time) => {
     if (getSlowDevice()) return;
     ctx.save();
-    // Cotton-candy clouds — fluffy multi-circle clusters that drift slowly
-    const clouds = [
-      { x: 200, y: 110, r: 26 },
-      { x: 700, y: 80,  r: 32 },
-      { x: 1080, y: 130, r: 28 },
-    ];
-    for (let ci = 0; ci < clouds.length; ci++) {
-      const c = clouds[ci];
-      const drift = fastSin(time * 0.4 + ci) * 8;
-      const cx = c.x + drift;
+    for (let ci = 0; ci < CANDY_CLOUDS.length; ci++) {
+      const c = CANDY_CLOUDS[ci];
+      const cx = c.x + fastSin(time * 0.4 + ci) * 8;
       const cy = c.y + fastSin(time * 0.6 + ci * 1.7) * 3;
-      const wisps = 8;
-      for (let i = 0; i < wisps; i++) {
-        const a = (i / wisps) * Math.PI * 2;
+      const innerR = c.r * 0.45;
+      for (let i = 0; i < 8; i++) {
         const wob = fastSin(time * 1.2 + i + ci) * 2;
-        const wx = cx + Math.cos(a) * (c.r * 0.7 + wob);
-        const wy = cy + Math.sin(a) * (c.r * 0.4 + wob);
+        const wx = cx + CLOUD_WISP_COS[i] * (c.r * 0.7 + wob);
+        const wy = cy + CLOUD_WISP_SIN[i] * (c.r * 0.4 + wob);
         ctx.fillStyle = i % 2 === 0 ? 'rgba(255, 200, 230, 0.85)' : 'rgba(255, 230, 240, 0.9)';
         ctx.beginPath();
-        ctx.arc(wx, wy, c.r * 0.45, 0, Math.PI * 2);
+        ctx.arc(wx, wy, innerR, 0, Math.PI * 2);
         ctx.fill();
       }
-      // Bright center
       ctx.fillStyle = 'rgba(255, 245, 250, 0.9)';
       ctx.beginPath();
       ctx.arc(cx, cy, c.r * 0.5, 0, Math.PI * 2);
       ctx.fill();
     }
-    // Sprinkles drifting / falling like confetti weather
-    const sprinkleHues = [10, 45, 120, 200, 280, 320];
     for (let i = 0; i < 28; i++) {
-      const hue = sprinkleHues[i % sprinkleHues.length];
       const x = ((i * 137 + time * 30) % (CANVAS_WIDTH + 20)) - 10;
       const y = ((i * 211 + time * 60) % CANVAS_HEIGHT);
-      const rot = time * 1.5 + i;
       ctx.save();
       ctx.translate(x, y);
-      ctx.rotate(rot);
-      ctx.fillStyle = `hsl(${hue}, 80%, 65%)`;
+      ctx.rotate(time * 1.5 + i);
+      ctx.fillStyle = WEATHER_SPRINKLE_COLORS[i % WEATHER_SPRINKLE_COLORS.length];
       ctx.fillRect(-3, -1, 6, 2);
       ctx.restore();
     }
-    // Gumdrop decorations sitting on the ground (y=660 is ground top)
-    const gumdrops = [
-      { x: 80,  color: '#ff5e8a' },
-      { x: 380, color: '#7be0a3' },
-      { x: 880, color: '#ffe066' },
-      { x: 1200, color: '#c899ff' },
-    ];
-    for (let i = 0; i < gumdrops.length; i++) {
-      const g = gumdrops[i];
+    const GUMDROP_R = 16;
+    const GUMDROP_BASE_Y = 656;
+    for (let i = 0; i < GUMDROPS.length; i++) {
+      const g = GUMDROPS[i];
       const wobble = fastSin(time * 3 + i) * 1.4;
-      const baseY = 656;
-      const r = 16;
-      // Body
+      const cy = GUMDROP_BASE_Y - GUMDROP_R + 2;
       ctx.fillStyle = g.color;
       ctx.beginPath();
-      ctx.ellipse(g.x + wobble * 0.2, baseY - r + 2, r + wobble * 0.3, r - wobble * 0.3, 0, 0, Math.PI * 2);
+      ctx.ellipse(g.x + wobble * 0.2, cy, GUMDROP_R + wobble * 0.3, GUMDROP_R - wobble * 0.3, 0, 0, Math.PI * 2);
       ctx.fill();
-      // Sugar coating bumps
       ctx.fillStyle = 'rgba(255,255,255,0.35)';
       for (let j = 0; j < 6; j++) {
         const a = (j / 6) * Math.PI * 2 + time * 0.3;
         ctx.beginPath();
-        ctx.arc(g.x + Math.cos(a) * r * 0.6, baseY - r + 2 + Math.sin(a) * (r - 2) * 0.6, 1.4, 0, Math.PI * 2);
+        ctx.arc(g.x + fastCos(a) * GUMDROP_R * 0.6, cy + fastSin(a) * (GUMDROP_R - 2) * 0.6, 1.4, 0, Math.PI * 2);
         ctx.fill();
       }
-      // Highlight
       ctx.fillStyle = 'rgba(255,255,255,0.7)';
       ctx.beginPath();
-      ctx.ellipse(g.x - 5, baseY - r + 2 - 4, 3.5, 2.5, 0, 0, Math.PI * 2);
+      ctx.ellipse(g.x - 5, cy - 4, 3.5, 2.5, 0, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();

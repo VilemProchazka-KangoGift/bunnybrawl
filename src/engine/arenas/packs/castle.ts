@@ -4,6 +4,9 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
 import { getFloatingPlatforms } from '../../themes/utils';
+
+const TORCH_X = [100, 400, 640, 880, 1180] as const;
+const TORCH_FLAME_Y = 580;
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
 import {
   CAP_DEPTH, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
@@ -836,41 +839,41 @@ export const castle: ArenaPack = {
   drawAnimatedBackground: (ctx, _arena, time) => {
     if (getSlowDevice()) return;
     ctx.save();
-    // Subtle animated overlay on EXISTING torches drawn in drawBackgroundNature.
-    // Existing torch positions: x ∈ {100, 400, 640, 880, 1180}, flame at y ≈ ground - 80.
-    // Ground top is y=660, so flame core sits around y=580. We add gentle glow + flicker.
-    const torchX = [100, 400, 640, 880, 1180];
-    const flameY = 580;
-    for (let i = 0; i < torchX.length; i++) {
-      const tx = torchX[i];
+    for (let i = 0; i < TORCH_X.length; i++) {
+      const tx = TORCH_X[i];
       const flicker = 0.92 + fastSin(time * 11 + i * 1.7) * 0.08;
-      // Soft warm halo around each flame
-      const glow = ctx.createRadialGradient(tx, flameY, 0, tx, flameY, 50 * flicker);
-      glow.addColorStop(0, `rgba(255, 180, 80, ${0.18 * flicker})`);
-      glow.addColorStop(0.5, `rgba(255, 120, 40, ${0.08 * flicker})`);
-      glow.addColorStop(1, 'rgba(255, 100, 20, 0)');
-      ctx.fillStyle = glow;
+      // Stacked alpha circles approximate the radial halo without a per-frame gradient.
+      ctx.fillStyle = '#ff7828';
+      ctx.globalAlpha = 0.18 * flicker;
       ctx.beginPath();
-      ctx.arc(tx, flameY, 50 * flicker, 0, Math.PI * 2);
+      ctx.arc(tx, TORCH_FLAME_Y, 50 * flicker, 0, Math.PI * 2);
       ctx.fill();
-      // Subtle flame tip overlay (small extra wiggle on top of static flame)
+      ctx.globalAlpha = 0.10 * flicker;
+      ctx.beginPath();
+      ctx.arc(tx, TORCH_FLAME_Y, 30 * flicker, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffb450';
+      ctx.globalAlpha = 0.20 * flicker;
+      ctx.beginPath();
+      ctx.arc(tx, TORCH_FLAME_Y, 14 * flicker, 0, Math.PI * 2);
+      ctx.fill();
       const wig = fastSin(time * 6 + i) * 1.2;
-      ctx.fillStyle = `rgba(255, 220, 130, ${0.55 * flicker})`;
+      ctx.fillStyle = '#ffdc82';
+      ctx.globalAlpha = 0.55 * flicker;
       ctx.beginPath();
-      ctx.moveTo(tx - 2, flameY - 4);
-      ctx.quadraticCurveTo(tx + wig, flameY - 14 * flicker, tx + 2, flameY - 4);
+      ctx.moveTo(tx - 2, TORCH_FLAME_Y - 4);
+      ctx.quadraticCurveTo(tx + wig, TORCH_FLAME_Y - 14 * flicker, tx + 2, TORCH_FLAME_Y - 4);
       ctx.fill();
-      // Drifting embers above each torch
+      ctx.fillStyle = '#ff9a3a';
       for (let k = 0; k < 2; k++) {
         const u = ((time * 0.4 + i * 0.31 + k * 0.5) % 1);
         ctx.globalAlpha = (1 - u) * 0.65;
-        ctx.fillStyle = '#ff9a3a';
         ctx.beginPath();
-        ctx.arc(tx + fastSin(time * 2 + k + i) * 6, flameY - 16 - u * 50, 1.4, 0, Math.PI * 2);
+        ctx.arc(tx + fastSin(time * 2 + k + i) * 6, TORCH_FLAME_Y - 16 - u * 50, 1.4, 0, Math.PI * 2);
         ctx.fill();
       }
-      ctx.globalAlpha = 1;
     }
+    ctx.globalAlpha = 1;
     ctx.restore();
   },
 

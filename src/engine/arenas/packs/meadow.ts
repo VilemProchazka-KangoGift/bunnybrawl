@@ -3,7 +3,26 @@ import type { Arena, Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
-import { getFloatingPlatforms } from '../../themes/utils';
+import { getFloatingPlatforms, pushFromPlayers } from '../../themes/utils';
+
+const BUTTERFLY_HUES = [320, 60, 200, 290, 30, 160, 180, 40] as const;
+const BUTTERFLY_COLORS = BUTTERFLY_HUES.map(h => `hsl(${h},80%,65%)`);
+const BEE_CLUSTERS = [
+  { homeX: 320, homeY: 420, phase: 0 },
+  { homeX: 980, homeY: 380, phase: 2.4 },
+] as const;
+const DANDELION_X = [180, 420, 850, 1180] as const;
+const DANDELION_GY = 655;
+// 14-angle seed-pattern, precomputed so the dandelion loop avoids 56 sin+cos per frame.
+const DANDELION_SEED_COS = new Float32Array(14);
+const DANDELION_SEED_SIN = new Float32Array(14);
+{
+  for (let i = 0; i < 14; i++) {
+    const a = (i / 14) * Math.PI * 2;
+    DANDELION_SEED_COS[i] = Math.cos(a);
+    DANDELION_SEED_SIN[i] = Math.sin(a);
+  }
+}
 import {
   drawTree, drawBush, drawFlower, drawMushroom, drawGrassTuft,
   drawFgBush, drawTallGrass, drawFern, drawHangingVine, drawFgLeafCluster, drawFgWildflower,
@@ -490,74 +509,35 @@ export const meadow: ArenaPack = {
   },
 
   drawAnimatedBackground: (ctx, _arena, time, _dayPhase, matchState) => {
-    if (getSlowDevice()) return;
+    if (getSlowDevice() || !matchState) return;
     ctx.save();
-    // Find nearest player position for parting reactivity (cheap closest scan)
-    const players = matchState?.players;
-    // Butterflies — roam across the meadow on long horizontal drift, react to nearest player
-    const BUTTERFLY_HUES = [320, 60, 200, 290, 30, 160, 180, 40];
+    const players = matchState.players;
     for (let i = 0; i < BUTTERFLY_HUES.length; i++) {
-      // Roaming center: each butterfly slowly drifts across the arena
       const driftSpeed = 0.04 + (i % 3) * 0.015;
       const homeX = ((i * 200 + time * 60 * driftSpeed) % (CANVAS_WIDTH + 200)) - 100;
       const homeY = 380 + fastSin(time * 0.4 + i * 1.7) * 80 + (i % 3) * 30;
-      // Local flutter
-      let x = homeX + fastSin(time * 1.2 + i) * 22;
-      let y = homeY + fastSin(time * 1.5 + i * 1.7) * 14;
-      // Player parting — nearest player within radius pushes butterfly outward
-      if (players) {
-        for (const p of players) {
-          if (!p.active || p.state === 'splat' || p.state === 'respawning') continue;
-          const dx = x - (p.x + p.width * 0.5);
-          const dy = y - (p.y + p.height * 0.4);
-          const d2 = dx * dx + dy * dy;
-          if (d2 < 100 * 100) {
-            const d = Math.sqrt(d2) + 0.001;
-            const f = (100 - d) / 100;
-            x += (dx / d) * f * 30;
-            y += (dy / d) * f * 24 - f * 10;
-          }
-        }
-      }
+      const flutterX = homeX + fastSin(time * 1.2 + i) * 22;
+      const flutterY = homeY + fastSin(time * 1.5 + i * 1.7) * 14;
+      const r = pushFromPlayers(players, flutterX, flutterY, 100, 30, 10);
       const flap = fastSin(time * 14 + i * 3) * 0.5 + 0.5;
-      ctx.fillStyle = `hsl(${BUTTERFLY_HUES[i]}, 80%, 65%)`;
+      ctx.fillStyle = BUTTERFLY_COLORS[i];
       ctx.beginPath();
-      ctx.ellipse(x - 4, y, 4 * flap, 5, 0, 0, Math.PI * 2);
-      ctx.ellipse(x + 4, y, 4 * flap, 5, 0, 0, Math.PI * 2);
+      ctx.ellipse(r.x - 4, r.y, 4 * flap, 5, 0, 0, Math.PI * 2);
+      ctx.ellipse(r.x + 4, r.y, 4 * flap, 5, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = '#000';
-      ctx.fillRect(x - 0.5, y - 3, 1, 6);
+      ctx.fillRect(r.x - 0.5, r.y - 3, 1, 6);
     }
-    // Bees — meander in clusters that wander; flee from nearby players
-    const beeClusters = [
-      { homeX: 320, homeY: 420, phase: 0 },
-      { homeX: 980, homeY: 380, phase: 2.4 },
-    ];
-    for (let ci = 0; ci < beeClusters.length; ci++) {
-      const c = beeClusters[ci];
-      // Cluster center wanders slowly
-      let cx = c.homeX + fastSin(time * 0.25 + c.phase) * 200;
-      let cy = c.homeY + fastSin(time * 0.4 + c.phase + 1) * 60;
-      // Cluster flees if a player is too close (within 140)
-      if (players) {
-        for (const p of players) {
-          if (!p.active || p.state === 'splat' || p.state === 'respawning') continue;
-          const dx = cx - (p.x + p.width * 0.5);
-          const dy = cy - (p.y + p.height * 0.4);
-          const d2 = dx * dx + dy * dy;
-          if (d2 < 140 * 140) {
-            const d = Math.sqrt(d2) + 0.001;
-            const f = (140 - d) / 140;
-            cx += (dx / d) * f * 60;
-            cy += (dy / d) * f * 40 - f * 20;
-          }
-        }
-      }
+    for (let ci = 0; ci < BEE_CLUSTERS.length; ci++) {
+      const c = BEE_CLUSTERS[ci];
+      const wanderX = c.homeX + fastSin(time * 0.25 + c.phase) * 200;
+      const wanderY = c.homeY + fastSin(time * 0.4 + c.phase + 1) * 60;
+      const r = pushFromPlayers(players, wanderX, wanderY, 140, 60, 20);
       for (let i = 0; i < 6; i++) {
-        const phase = ci * 7 + i;
-        const bx = cx + fastSin(time * 4 + phase) * 18 + (i % 3 - 1) * 6;
-        const by = cy + fastCos(time * 3 + phase) * 12 + (Math.floor(i / 3) - 0.5) * 6;
-        const wig = fastSin(time * 16 + phase) * 1.5;
+        const ph = ci * 7 + i;
+        const bx = r.x + fastSin(time * 4 + ph) * 18 + (i % 3 - 1) * 6;
+        const by = r.y + fastCos(time * 3 + ph) * 12 + (Math.floor(i / 3) - 0.5) * 6;
+        const wig = fastSin(time * 16 + ph) * 1.5;
         ctx.fillStyle = '#ffd54a';
         ctx.beginPath();
         ctx.ellipse(bx, by + wig, 3, 2.2, 0, 0, Math.PI * 2);
@@ -567,35 +547,28 @@ export const meadow: ArenaPack = {
         ctx.fillRect(bx, by + wig - 0.3, 1, 0.7);
       }
     }
-    // Dandelion seed-puffs — sit on top of ground (y=655 above the y=660 ground top)
-    const dandelions = [
-      { x: 180, gy: 655 }, { x: 420, gy: 655 }, { x: 850, gy: 655 }, { x: 1180, gy: 655 },
-    ];
-    for (const d of dandelions) {
-      // Stem first (drawn under puff)
+    for (const dx of DANDELION_X) {
+      const puffY = DANDELION_GY - 9;
       ctx.strokeStyle = '#5fb45a';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.moveTo(d.x, d.gy + 4);
-      ctx.lineTo(d.x + fastSin(time + d.x) * 0.5, d.gy - 8);
+      ctx.moveTo(dx, DANDELION_GY + 4);
+      ctx.lineTo(dx + fastSin(time + dx) * 0.5, DANDELION_GY - 8);
       ctx.stroke();
-      // Puff (white fluffy ball)
       ctx.fillStyle = 'rgba(255,255,255,0.95)';
       ctx.beginPath();
-      ctx.arc(d.x, d.gy - 9, 6, 0, Math.PI * 2);
+      ctx.arc(dx, puffY, 6, 0, Math.PI * 2);
       ctx.fill();
-      // Spiky seed pattern
       ctx.strokeStyle = 'rgba(220, 220, 200, 0.85)';
       ctx.lineWidth = 0.8;
+      ctx.beginPath();
       for (let i = 0; i < 14; i++) {
-        const a = (i / 14) * Math.PI * 2;
-        const r1 = 2;
-        const r2 = 7;
-        ctx.beginPath();
-        ctx.moveTo(d.x + Math.cos(a) * r1, d.gy - 9 + Math.sin(a) * r1);
-        ctx.lineTo(d.x + Math.cos(a) * r2, d.gy - 9 + Math.sin(a) * r2);
-        ctx.stroke();
+        const c = DANDELION_SEED_COS[i];
+        const s = DANDELION_SEED_SIN[i];
+        ctx.moveTo(dx + c * 2, puffY + s * 2);
+        ctx.lineTo(dx + c * 7, puffY + s * 7);
       }
+      ctx.stroke();
     }
     ctx.restore();
   },

@@ -4,6 +4,20 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
+import { pushFromPlayers } from '../../themes/utils';
+
+const FISH_SPECIES = [
+  { color: '#ffaa3a', size: 0.7 },
+  { color: '#5fb4d8', size: 1.0 },
+  { color: '#a8d088', size: 0.8 },
+  { color: '#d88aa8', size: 0.6 },
+  { color: '#ffd56b', size: 0.9 },
+] as const;
+const BUBBLE_LEAKS = [
+  { x: 165, y: 410 }, { x: 1125, y: 390 }, { x: 376, y: 345 },
+  { x: 906, y: 330 }, { x: 640, y: 80 },
+] as const;
+const BUBBLE_COLUMNS = [120, 380, 900, 1180] as const;
 import {
   CAP_DEPTH, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
   capFrontY, capBackY, skewPx,
@@ -935,58 +949,29 @@ export const underwater: ArenaPack = {
   },
 
   drawAnimatedBackground: (ctx, _arena, time, _dayPhase, matchState) => {
-    if (getSlowDevice()) return;
+    if (getSlowDevice() || !matchState) return;
     ctx.save();
-    // Fish school — varied sizes/colors, traverses entire arena, parts around players.
-    // Center wraps horizontally via large drift; species mix.
-    const SPECIES = [
-      { color: '#ffaa3a', size: 0.7 },   // small orange
-      { color: '#5fb4d8', size: 1.0 },   // medium blue
-      { color: '#a8d088', size: 0.8 },   // small green
-      { color: '#d88aa8', size: 0.6 },   // tiny pink
-      { color: '#ffd56b', size: 0.9 },   // medium gold
-    ];
     const cxBase = ((time * 70) % (CANVAS_WIDTH + 400)) - 200;
     const cy = 380 + fastSin(time * 0.5) * 40;
-    const fishCount = 18;
-    const facingLeft = false;       // flow left → right with cxBase advancing
-    const players = matchState?.players;
-    for (let i = 0; i < fishCount; i++) {
-      const sp = SPECIES[i % SPECIES.length];
-      const formIdx = i;
-      const ox = (formIdx % 6) * 26 - 65;
-      const oy = Math.floor(formIdx / 6) * 22 - 22 + (formIdx % 2) * 6;
+    const players = matchState.players;
+    const FISH_COUNT = 18;
+    for (let i = 0; i < FISH_COUNT; i++) {
+      const sp = FISH_SPECIES[i % FISH_SPECIES.length];
+      const ox = (i % 6) * 26 - 65;
+      const oy = Math.floor(i / 6) * 22 - 22 + (i % 2) * 6;
       const wob = fastSin(time * 4 + i) * 3;
       let x = cxBase + ox + wob;
-      let y = cy + oy + fastCos(time * 3 + i) * 3;
-      // Wrap around arena horizontally so fish always span the field
+      const baseY = cy + oy + fastCos(time * 3 + i) * 3;
       if (x < -40) x += CANVAS_WIDTH + 80;
       if (x > CANVAS_WIDTH + 40) x -= CANVAS_WIDTH + 80;
-      // Player parting — push outward from any player within 80px
-      if (players) {
-        for (const p of players) {
-          if (!p.active || p.state === 'splat' || p.state === 'respawning') continue;
-          const dx = x - (p.x + p.width * 0.5);
-          const dy = y - (p.y + p.height * 0.4);
-          const d2 = dx * dx + dy * dy;
-          if (d2 < 80 * 80) {
-            const d = Math.sqrt(d2) + 0.001;
-            const f = (80 - d) / 80;
-            x += (dx / d) * f * 35;
-            y += (dy / d) * f * 25;
-          }
-        }
-      }
+      const r = pushFromPlayers(players, x, baseY, 80, 35);
       const s = sp.size;
       ctx.save();
-      ctx.translate(x, y);
-      if (facingLeft) ctx.scale(-1, 1);
-      // Body
+      ctx.translate(r.x, r.y);
       ctx.fillStyle = sp.color;
       ctx.beginPath();
       ctx.ellipse(0, 0, 6 * s, 3 * s, 0, 0, Math.PI * 2);
       ctx.fill();
-      // Tail wag
       const tailWag = fastSin(time * 12 + i) * 0.8;
       ctx.beginPath();
       ctx.moveTo(-6 * s, 0);
@@ -994,59 +979,49 @@ export const underwater: ArenaPack = {
       ctx.lineTo(-10 * s, 3 * s + tailWag);
       ctx.closePath();
       ctx.fill();
-      // Belly highlight
       ctx.fillStyle = 'rgba(255,255,255,0.3)';
       ctx.beginPath();
       ctx.ellipse(-1 * s, 1 * s, 4 * s, 1.2 * s, 0, 0, Math.PI * 2);
       ctx.fill();
-      // Eye
       ctx.fillStyle = '#000';
       ctx.fillRect(3.5 * s, -0.7 * s, 1, 1);
       ctx.restore();
     }
-    // Bubble leaks from platforms — small streams rising from cracks in selected platforms
-    const leaks = [
-      { x: 165, y: 410 },   // left mid platform
-      { x: 1125, y: 390 },  // right mid platform
-      { x: 376, y: 345 },   // mid-left ledge
-      { x: 906, y: 330 },   // mid-right ledge
-      { x: 640, y: 80 },    // top platform
-    ];
-    for (let li = 0; li < leaks.length; li++) {
-      const lk = leaks[li];
+    // One strokeStyle for all bubble outlines; modulate via globalAlpha.
+    ctx.strokeStyle = '#dcf0ff';
+    ctx.fillStyle = '#ffffff';
+    ctx.lineWidth = 1;
+    for (let li = 0; li < BUBBLE_LEAKS.length; li++) {
+      const lk = BUBBLE_LEAKS[li];
       for (let i = 0; i < 6; i++) {
         const t = ((time * 0.7 + i * 0.16 + li * 0.21) % 1);
         const bx = lk.x + fastSin(time * 2.5 + i + li) * 5;
         const by = lk.y - t * 80;
-        const r = 1.2 + t * 1.8;
+        const rad = 1.2 + t * 1.8;
         const a = (1 - t) * 0.85;
-        ctx.strokeStyle = `rgba(220, 240, 255, ${a})`;
-        ctx.lineWidth = 1;
+        ctx.globalAlpha = a;
         ctx.beginPath();
-        ctx.arc(bx, by, r, 0, Math.PI * 2);
+        ctx.arc(bx, by, rad, 0, Math.PI * 2);
         ctx.stroke();
-        ctx.fillStyle = `rgba(255,255,255,${a * 0.4})`;
+        ctx.globalAlpha = a * 0.4;
         ctx.beginPath();
-        ctx.arc(bx - 0.5, by - 0.5, r * 0.3, 0, Math.PI * 2);
+        ctx.arc(bx - 0.5, by - 0.5, rad * 0.3, 0, Math.PI * 2);
         ctx.fill();
       }
     }
-    // Ambient bubble columns from seabed (further apart now)
-    const columns = [120, 380, 900, 1180];
-    for (let ci = 0; ci < columns.length; ci++) {
+    for (let ci = 0; ci < BUBBLE_COLUMNS.length; ci++) {
       for (let i = 0; i < 4; i++) {
         const t = ((time * 0.4 + i * 0.25 + ci * 0.13) % 1);
-        const bx = columns[ci] + fastSin(time * 1.5 + i + ci) * 12;
+        const bx = BUBBLE_COLUMNS[ci] + fastSin(time * 1.5 + i + ci) * 12;
         const by = 660 - t * 600;
-        const r = 1.5 + t * 2.5;
-        const a = (1 - t) * 0.7;
-        ctx.strokeStyle = `rgba(220, 240, 255, ${a})`;
-        ctx.lineWidth = 1;
+        const rad = 1.5 + t * 2.5;
+        ctx.globalAlpha = (1 - t) * 0.7;
         ctx.beginPath();
-        ctx.arc(bx, by, r, 0, Math.PI * 2);
+        ctx.arc(bx, by, rad, 0, Math.PI * 2);
         ctx.stroke();
       }
     }
+    ctx.globalAlpha = 1;
     ctx.restore();
   },
 

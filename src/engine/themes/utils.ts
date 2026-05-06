@@ -1,4 +1,4 @@
-import type { Platform } from '../types';
+import type { Platform, Player } from '../types';
 
 // Cached floating platform lists to avoid per-frame .filter() in theme draw functions.
 // WeakMap keyed by the arena's platforms array — auto-invalidates when arena changes.
@@ -42,4 +42,34 @@ export function shuffleInPlace<T>(arr: T[], rnd: () => number): void {
     const j = Math.floor(rnd() * (i + 1));
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
+}
+
+export function isLivePlayer(p: Player): boolean {
+  return p.active && p.state !== 'splat' && p.state !== 'respawning';
+}
+
+const _pushOut = { x: 0, y: 0 };
+/** Push (x, y) outward from any live player within `radius`. Lift adds extra upward push.
+ *  Mutates and returns a shared scratch object — do not retain. */
+export function pushFromPlayers(
+  players: ReadonlyArray<Player>,
+  x: number, y: number,
+  radius: number, push: number, lift = 0,
+): { x: number; y: number } {
+  _pushOut.x = x;
+  _pushOut.y = y;
+  const r2 = radius * radius;
+  for (const p of players) {
+    if (!isLivePlayer(p)) continue;
+    const dx = _pushOut.x - (p.x + p.width * 0.5);
+    const dy = _pushOut.y - (p.y + p.height * 0.4);
+    const d2 = dx * dx + dy * dy;
+    if (d2 < r2) {
+      const d = Math.sqrt(d2) + 0.001;
+      const f = (radius - d) / radius;
+      _pushOut.x += (dx / d) * f * push;
+      _pushOut.y += (dy / d) * f * push - f * lift;
+    }
+  }
+  return _pushOut;
 }

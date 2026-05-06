@@ -4,6 +4,11 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
 import { drawTree, drawHangingVine, drawFgLeafCluster, drawFern } from '../../themes/drawPrimitives';
+
+const SQUIRREL_PERIOD = 9;
+const SQUIRREL_PLAT_TOP = 256;
+const SQUIRREL_PLAT_L = 440;
+const SQUIRREL_PLAT_R = 740;
 import { getFloatingPlatforms } from '../../themes/utils';
 import {
   CAP_DEPTH, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
@@ -528,66 +533,51 @@ export const treetops: ArenaPack = {
   drawAnimatedBackground: (ctx, _arena, time) => {
     if (getSlowDevice()) return;
     ctx.save();
-    // Squirrel — jumps onto top platform (y=260, x=440..740), runs across, jumps off.
-    // Period: 9s. Phases: jump-up (0..0.5), run (0.5..2.6), jump-off (2.6..3.1).
-    const period = 9;
-    const phase = time % period;
-    const fromLeft = Math.floor(time / period) % 2 === 0;
-    const platTop = 256;          // y=260 platform top minus 4px squirrel offset
-    const platL = 440, platR = 740;
+    const phase = time % SQUIRREL_PERIOD;
+    const fromLeft = Math.floor(time / SQUIRREL_PERIOD) % 2 === 0;
     let x = 0, y = 0, visible = false;
     if (phase < 0.5) {
-      // Jump up from below the platform
       const u = phase / 0.5;
-      const startX = fromLeft ? platL + 10 : platR - 10;
-      x = startX;
-      y = platTop + 50 - u * 50;        // arcs from y=306 to y=256
+      x = fromLeft ? SQUIRREL_PLAT_L + 10 : SQUIRREL_PLAT_R - 10;
+      y = SQUIRREL_PLAT_TOP + 50 - u * 50;
       visible = true;
     } else if (phase < 2.6) {
-      // Run across the top
       const u = (phase - 0.5) / 2.1;
-      x = fromLeft ? platL + 10 + u * (platR - platL - 20) : platR - 10 - u * (platR - platL - 20);
-      y = platTop + fastSin(u * 22) * 1.5;  // tiny up/down on each step
+      x = fromLeft
+        ? SQUIRREL_PLAT_L + 10 + u * (SQUIRREL_PLAT_R - SQUIRREL_PLAT_L - 20)
+        : SQUIRREL_PLAT_R - 10 - u * (SQUIRREL_PLAT_R - SQUIRREL_PLAT_L - 20);
+      y = SQUIRREL_PLAT_TOP + fastSin(u * 22) * 1.5;
       visible = true;
     } else if (phase < 3.1) {
-      // Jump off the far side
       const u = (phase - 2.6) / 0.5;
-      const endX = fromLeft ? platR - 10 : platL + 10;
-      x = endX;
-      y = platTop + u * 60;             // falls below
+      x = fromLeft ? SQUIRREL_PLAT_R - 10 : SQUIRREL_PLAT_L + 10;
+      y = SQUIRREL_PLAT_TOP + u * 60;
       visible = true;
     }
     if (visible) {
-      const facingLeft = !fromLeft;
       ctx.save();
       ctx.translate(x, y);
-      if (facingLeft) ctx.scale(-1, 1);
-      // Body
+      if (!fromLeft) ctx.scale(-1, 1);
       ctx.fillStyle = '#a5683a';
       ctx.beginPath();
       ctx.ellipse(0, 0, 9, 5, 0, 0, Math.PI * 2);
       ctx.fill();
-      // Tail (curl behind body)
       ctx.beginPath();
       ctx.moveTo(-7, 0);
       ctx.bezierCurveTo(-18, -3, -22, -14, -10, -14);
       ctx.lineTo(-10, -6);
       ctx.bezierCurveTo(-14, -7, -10, -2, -7, 0);
       ctx.fill();
-      // Head
       ctx.beginPath();
       ctx.arc(7, -1, 4, 0, Math.PI * 2);
       ctx.fill();
-      // Ear
       ctx.beginPath();
       ctx.moveTo(8, -4);
       ctx.lineTo(10, -7);
       ctx.lineTo(11, -4);
       ctx.fill();
-      // Eye
       ctx.fillStyle = '#000';
       ctx.fillRect(8, -2, 1.5, 1.5);
-      // Belly
       ctx.fillStyle = '#e8c89a';
       ctx.beginPath();
       ctx.ellipse(0, 1.5, 5, 2, 0, 0, Math.PI * 2);

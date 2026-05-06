@@ -12,6 +12,27 @@ import {
   jaggedDown, backWavyUp, drawLeftStones, leftJagged,
 } from '../../themes/drawPrimitives';
 
+interface LavaZone { cx: number; cy: number; w: number }
+const LAVA_ZONES: ReadonlyArray<LavaZone> = [
+  { cx: 340, cy: 694, w: 130 },
+  { cx: 900, cy: 694, w: 130 },
+  { cx: 610, cy: 654, w: 60 },
+];
+const LAVA_VENTS = [220, 640, 1060] as const;
+const HAZE_COL_H = 80;
+const _hazeGradients = new WeakMap<LavaZone, CanvasGradient>();
+function getHazeGradient(ctx: CanvasRenderingContext2D, lz: LavaZone): CanvasGradient {
+  let g = _hazeGradients.get(lz);
+  if (!g) {
+    g = ctx.createLinearGradient(0, lz.cy - HAZE_COL_H, 0, lz.cy);
+    g.addColorStop(0, 'rgba(255, 120, 60, 0)');
+    g.addColorStop(0.5, 'rgba(255, 140, 80, 0.18)');
+    g.addColorStop(1, 'rgba(255, 100, 50, 0.32)');
+    _hazeGradients.set(lz, g);
+  }
+  return g;
+}
+
 // Near-black volcanic stone palette for left protrusions.
 const VOLCANO_STONE_PALETTE = [
   { base: '#1c1414', dark: '#080404', light: '#3a2e2a' },
@@ -688,41 +709,28 @@ export const volcano: ArenaPack = {
   drawAnimatedBackground: (ctx, _arena, time) => {
     if (getSlowDevice()) return;
     ctx.save();
-    // Heat-haze shimmer over lava zones — translucent wavy bands rising
-    const lavaZones = [
-      { cx: 340, cy: 694, w: 130 },
-      { cx: 900, cy: 694, w: 130 },
-      { cx: 610, cy: 654, w: 60 },
-    ];
-    for (const lz of lavaZones) {
-      // Gradient distortion column — orange-red haze rising from lava
-      const colH = 80;
-      const grd = ctx.createLinearGradient(0, lz.cy - colH, 0, lz.cy);
-      grd.addColorStop(0, 'rgba(255, 120, 60, 0)');
-      grd.addColorStop(0.5, 'rgba(255, 140, 80, 0.18)');
-      grd.addColorStop(1, 'rgba(255, 100, 50, 0.32)');
-      ctx.fillStyle = grd;
+    for (const lz of LAVA_ZONES) {
+      ctx.fillStyle = getHazeGradient(ctx, lz);
       ctx.beginPath();
       const halfW = lz.w * 0.55;
       const wob = fastSin(time * 2.5) * 6;
       ctx.moveTo(lz.cx - halfW + wob, lz.cy);
-      for (let y = lz.cy - 4; y >= lz.cy - colH; y -= 6) {
-        const t = (lz.cy - y) / colH;
+      for (let y = lz.cy - 4; y >= lz.cy - HAZE_COL_H; y -= 6) {
+        const t = (lz.cy - y) / HAZE_COL_H;
         const w = halfW * (1 - t * 0.5);
         const w2 = fastSin(y * 0.06 + time * 3) * 8 * (1 - t);
         ctx.lineTo(lz.cx + w + w2, y);
       }
-      ctx.lineTo(lz.cx + halfW + wob, lz.cy - colH);
-      ctx.lineTo(lz.cx - halfW + wob, lz.cy - colH);
-      for (let y = lz.cy - colH; y <= lz.cy - 4; y += 6) {
-        const t = (lz.cy - y) / colH;
+      ctx.lineTo(lz.cx + halfW + wob, lz.cy - HAZE_COL_H);
+      ctx.lineTo(lz.cx - halfW + wob, lz.cy - HAZE_COL_H);
+      for (let y = lz.cy - HAZE_COL_H; y <= lz.cy - 4; y += 6) {
+        const t = (lz.cy - y) / HAZE_COL_H;
         const w = halfW * (1 - t * 0.5);
         const w2 = fastSin(y * 0.06 + time * 3 + 1.7) * 8 * (1 - t);
         ctx.lineTo(lz.cx - w + w2, y);
       }
       ctx.closePath();
       ctx.fill();
-      // Bright shimmer streaks (vertical bright lines)
       ctx.strokeStyle = 'rgba(255, 200, 130, 0.35)';
       ctx.lineWidth = 1;
       for (let i = 0; i < 5; i++) {
@@ -739,10 +747,8 @@ export const volcano: ArenaPack = {
         ctx.stroke();
       }
     }
-    // Ash plumes — 3 vents on ground (y=660 = ground top), particles rise to y=400
-    const vents = [220, 640, 1060];
     ctx.fillStyle = '#3a201a';
-    for (const vx of vents) {
+    for (const vx of LAVA_VENTS) {
       for (let i = 0; i < 14; i++) {
         const t = ((time * 0.4 + i * 0.07) % 1);
         const px = vx + fastSin(time * 1.3 + i * 1.7) * 28 * t;
@@ -754,7 +760,6 @@ export const volcano: ArenaPack = {
         ctx.arc(px, py, sz, 0, Math.PI * 2);
         ctx.fill();
       }
-      // Ember sparks
       ctx.fillStyle = '#ff8a3a';
       for (let i = 0; i < 4; i++) {
         const t = ((time * 0.7 + i * 0.21) % 1);
@@ -768,9 +773,8 @@ export const volcano: ArenaPack = {
       ctx.fillStyle = '#3a201a';
     }
     ctx.globalAlpha = 1;
-    // Lava warning bubbles — periodic telegraph at lava centers
-    for (let zi = 0; zi < lavaZones.length; zi++) {
-      const lz = lavaZones[zi];
+    for (let zi = 0; zi < LAVA_ZONES.length; zi++) {
+      const lz = LAVA_ZONES[zi];
       const period = 4 + zi * 0.7;
       const phase = (time + zi * 1.3) % period;
       if (phase < 1.4) {

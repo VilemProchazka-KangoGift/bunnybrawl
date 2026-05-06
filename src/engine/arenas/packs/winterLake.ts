@@ -500,7 +500,6 @@ export const winterLake: ArenaPack = {
       if (phase > 0.2) ctx.fillRect(x, 60, 2, 200 + phase * 30);
     }
     ctx.globalAlpha = 1;
-    // Powder — drifting snow puffs that swirl up from the lake surface
     ctx.fillStyle = '#ffffff';
     for (let i = 0; i < 36; i++) {
       const t = ((time * 0.4 + i * 0.045) % 1);
@@ -508,14 +507,12 @@ export const winterLake: ArenaPack = {
       const x = baseX + fastSin(time * 0.6 + i) * 30;
       const y = 660 - t * 80;
       const r = 1.2 + (1 - t) * 2.5;
-      const a = Math.min(t * 4, 1) * (1 - t) * 0.85;
-      ctx.globalAlpha = a;
+      ctx.globalAlpha = Math.min(t * 4, 1) * (1 - t) * 0.85;
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fill();
     }
-    ctx.globalAlpha = 1;
-    // Ice glints — bright sparkles on the lake surface (cyan diamond stars)
+    ctx.fillStyle = '#dcf5ff';
     for (let i = 0; i < 50; i++) {
       const phase = fastSin(time * 3.2 + i * 0.7);
       if (phase < 0.55) continue;
@@ -523,8 +520,7 @@ export const winterLake: ArenaPack = {
       const y = 656 + (i % 4) * 2;
       const intensity = (phase - 0.55) * 2.2;
       const r = 1.5 + intensity * 5;
-      // Bright cross
-      ctx.fillStyle = `rgba(220, 245, 255, ${Math.min(1, intensity)})`;
+      ctx.globalAlpha = Math.min(1, intensity);
       ctx.beginPath();
       ctx.moveTo(x, y - r);
       ctx.lineTo(x + r * 0.3, y);
@@ -539,12 +535,20 @@ export const winterLake: ArenaPack = {
       ctx.lineTo(x, y + r * 0.3);
       ctx.closePath();
       ctx.fill();
-      // Bright core
-      ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(1, intensity)})`;
+    }
+    ctx.fillStyle = '#ffffff';
+    for (let i = 0; i < 50; i++) {
+      const phase = fastSin(time * 3.2 + i * 0.7);
+      if (phase < 0.55) continue;
+      const x = ((i * 251 + 13) % CANVAS_WIDTH);
+      const y = 656 + (i % 4) * 2;
+      const intensity = (phase - 0.55) * 2.2;
+      ctx.globalAlpha = Math.min(1, intensity);
       ctx.beginPath();
       ctx.arc(x, y, 1.2, 0, Math.PI * 2);
       ctx.fill();
     }
+    ctx.globalAlpha = 1;
     ctx.restore();
   },
 

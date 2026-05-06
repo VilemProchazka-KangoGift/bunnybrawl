@@ -6,6 +6,19 @@ import { getSlowDevice } from '../../perfFlags';
 import { computeNightIntensity } from '../../rendering';
 import { createThornRenderer } from '../../themes/drawPrimitives';
 import { getFloatingPlatforms } from '../../themes/utils';
+
+const WISPS = [
+  { x: 200, y: 540, phase: 0 },
+  { x: 640, y: 480, phase: 1.7 },
+  { x: 1080, y: 540, phase: 3.3 },
+  { x: 420, y: 420, phase: 0.8 },
+  { x: 880, y: 420, phase: 2.4 },
+] as const;
+const FOG_TOP_Y = 580;
+const FOG_BOTTOM_Y = 660;
+const FOG_BAND_H = FOG_BOTTOM_Y - FOG_TOP_Y;
+const FOG_ROWS = 5;
+const FOG_BLOBS = 12;
 import {
   CAP_DEPTH, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
   capFrontY, capBackY, skewPx,
@@ -696,80 +709,59 @@ export const hauntedGraveyard: ArenaPack = {
     if (getSlowDevice()) return;
     const nightIntensity = computeNightIntensity(dayPhase);
     ctx.save();
-    // Will-o'-wisps — drift in slow circles, brighter at night
     const wispBrightness = 0.5 + nightIntensity * 0.5;
-    const wisps = [
-      { x: 200, y: 540, phase: 0 },
-      { x: 640, y: 480, phase: 1.7 },
-      { x: 1080, y: 540, phase: 3.3 },
-      { x: 420, y: 420, phase: 0.8 },
-      { x: 880, y: 420, phase: 2.4 },
-    ];
-    for (const w of wisps) {
-      const dx = fastCos(time * 0.6 + w.phase) * 40;
-      const dy = fastSin(time * 0.8 + w.phase) * 24;
-      const x = w.x + dx;
-      const y = w.y + dy;
+    // Two stacked alpha circles approximate the radial halo without per-frame gradient creation.
+    ctx.fillStyle = '#a8ffd0';
+    for (const w of WISPS) {
+      const x = w.x + fastCos(time * 0.6 + w.phase) * 40;
+      const y = w.y + fastSin(time * 0.8 + w.phase) * 24;
       const pulse = 0.7 + fastSin(time * 3 + w.phase) * 0.3;
-      // Halo
-      const grd = ctx.createRadialGradient(x, y, 0, x, y, 32);
-      grd.addColorStop(0, `rgba(168, 255, 208, ${0.85 * wispBrightness * pulse})`);
-      grd.addColorStop(1, 'rgba(168, 255, 208, 0)');
-      ctx.fillStyle = grd;
-      ctx.beginPath();
-      ctx.arc(x, y, 32, 0, Math.PI * 2);
-      ctx.fill();
-      // Bright core
-      ctx.fillStyle = `rgba(220, 255, 230, ${wispBrightness * pulse})`;
-      ctx.beginPath();
-      ctx.arc(x, y, 2.5, 0, Math.PI * 2);
-      ctx.fill();
+      const a = wispBrightness * pulse;
+      ctx.globalAlpha = 0.45 * a;
+      ctx.beginPath(); ctx.arc(x, y, 32, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 0.45 * a;
+      ctx.beginPath(); ctx.arc(x, y, 16, 0, Math.PI * 2); ctx.fill();
     }
-    // Low ground fog — wispy curl-noise tendrils that drift, denser low to ground
-    // Composed of many small overlapping circles forming a soft gradient near the ground.
-    const fogTopY = 580;
-    const fogBottomY = 660;
-    const fogBandH = fogBottomY - fogTopY;
-    // Pre-stratified rows: lower rows are denser/more opaque
-    const rows = 5;
-    for (let r = 0; r < rows; r++) {
-      const rowU = r / (rows - 1);            // 0 (top) → 1 (bottom)
-      const yMid = fogTopY + rowU * fogBandH;
-      const baseAlpha = 0.04 + rowU * 0.10;   // fades upward
+    ctx.fillStyle = '#dcffe6';
+    for (const w of WISPS) {
+      const x = w.x + fastCos(time * 0.6 + w.phase) * 40;
+      const y = w.y + fastSin(time * 0.8 + w.phase) * 24;
+      const pulse = 0.7 + fastSin(time * 3 + w.phase) * 0.3;
+      ctx.globalAlpha = wispBrightness * pulse;
+      ctx.beginPath(); ctx.arc(x, y, 2.5, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = '#c8d7e6';
+    for (let r = 0; r < FOG_ROWS; r++) {
+      const rowU = r / (FOG_ROWS - 1);
+      const yMid = FOG_TOP_Y + rowU * FOG_BAND_H;
+      const baseAlpha = 0.04 + rowU * 0.10;
       const drift = (time * (12 + r * 3)) % CANVAS_WIDTH;
-      const blobs = 12;
-      for (let b = 0; b < blobs; b++) {
+      for (let b = 0; b < FOG_BLOBS; b++) {
         const phase = b * 1.7 + r * 0.6;
-        const x = ((b * (CANVAS_WIDTH / blobs) - drift) + CANVAS_WIDTH * 2) % CANVAS_WIDTH;
-        const yWob = fastSin(time * 0.5 + phase) * 6;
-        const y = yMid + yWob;
+        const x = ((b * (CANVAS_WIDTH / FOG_BLOBS) - drift) + CANVAS_WIDTH * 2) % CANVAS_WIDTH;
         const sx = 80 + fastSin(phase) * 24;
         const sy = 12 + (rowU * 6);
-        const a = baseAlpha * (0.7 + 0.3 * fastSin(time * 0.6 + phase));
-        ctx.fillStyle = `rgba(200, 215, 230, ${a})`;
+        ctx.globalAlpha = baseAlpha * (0.7 + 0.3 * fastSin(time * 0.6 + phase));
         ctx.beginPath();
-        ctx.ellipse(x, y, sx, sy, 0, 0, Math.PI * 2);
+        ctx.ellipse(x, yMid + fastSin(time * 0.5 + phase) * 6, sx, sy, 0, 0, Math.PI * 2);
         ctx.fill();
       }
     }
-    // Wispy curling tendrils — vertical strands rising slowly
     for (let i = 0; i < 16; i++) {
       const baseX = ((i * 89 + 23) % CANVAS_WIDTH);
       const t = ((time * 0.18 + i * 0.06) % 1);
       const cx = baseX + fastSin(time * 0.4 + i * 0.7) * 18;
-      const cy = fogBottomY - t * 140;
+      const cy = FOG_BOTTOM_Y - t * 140;
       const r = 8 + (1 - t) * 14;
       const a = (1 - t) * 0.10 * (0.6 + 0.4 * fastSin(time + i));
-      ctx.fillStyle = `rgba(180, 200, 220, ${a})`;
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.fill();
-      // Bright shimmer highlight (subtle)
-      ctx.fillStyle = `rgba(220, 230, 240, ${a * 0.5})`;
-      ctx.beginPath();
-      ctx.arc(cx - r * 0.3, cy - r * 0.3, r * 0.4, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.fillStyle = '#b4c8dc';
+      ctx.globalAlpha = a;
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#dce6f0';
+      ctx.globalAlpha = a * 0.5;
+      ctx.beginPath(); ctx.arc(cx - r * 0.3, cy - r * 0.3, r * 0.4, 0, Math.PI * 2); ctx.fill();
     }
+    ctx.globalAlpha = 1;
     ctx.restore();
   },
 
