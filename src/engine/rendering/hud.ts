@@ -7,9 +7,8 @@ import {
 import { getCharacterEmoji, getCharacterDisplayName } from '../characters';
 import i18n from '../../i18n';
 
-// Score box ~112px wide at 16px Press Start 2P bold fits ~8 chars before
-// overflowing the next slot. Used by OnlineModal as input maxLength too.
-export const PLAYER_NAME_MAX_LENGTH = 8;
+// Used by OnlineModal as input maxLength too.
+export const PLAYER_NAME_MAX_LENGTH = 12;
 const PLAYER_NAME_MAX_LENGTH_COMPACT = 4;
 
 // Warm yellow overlay blended with #FFF score digit during goal pulse.
