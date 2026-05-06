@@ -102,6 +102,12 @@ export const SPRING_TRAIL_DURATION = 0.35;
 // Score animation
 export const SCORE_ANIM_DURATION = 0.5;
 
+// HUD feedback (combo popups + goal pulse)
+export const COMBO_WINDOW_SEC = 1.5;        // sliding window of recent kills per killer
+export const COMBO_POPUP_DURATION = 1.0;    // 0.6s rise + 0.4s fade
+export const COMBO_POPUP_RISE_PX = 30;
+export const GOAL_PULSE_DURATION = 0.45;
+
 // Blood / gore
 export const BLOOD_COLOR = '#CC2222';
 
@@ -132,4 +138,14 @@ export const THORN_Y_OFFSET = 12;              // px above platform surface
 
 // Match composition
 export const MAX_BOT_COUNT = 4;                 // 1 human + 4 bots fills P1-P5
+
+// Surface decals + ripples (Cosmetics Batch B)
+export const SURFACE_DECAL_MAX = 30;            // cap before oldest is evicted
+export const SURFACE_RIPPLE_MAX = 12;           // defensive cap on active ripples
+export const SURFACE_CRACK_LIFE = 3.0;          // ice spider-cracks
+export const SURFACE_GLASS_CRACK_LIFE = 2.0;    // glass cracks fade faster
+export const SURFACE_MINI_CRACK_LIFE = 5.0;     // hard-landing mini crack on any surface
+export const SURFACE_RIPPLE_LIFE = 0.6;         // liquid impact ripples
+export const SURFACE_RIPPLE_MAX_RADIUS = 60;    // px expansion target
+export const HARD_LAND_VY_THRESHOLD = 600;      // vy below this = hard land (decal trigger)
 

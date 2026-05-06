@@ -330,6 +330,7 @@ export const underwater: ArenaPack = {
   translations: { en: 'Underwater', cs: 'Pod vodou', hi: '\u092A\u093E\u0928\u0940 \u0915\u0947 \u0928\u0940\u091A\u0947', fil: 'Ilalim ng Tubig' },
 
   // ---- Layout ----
+  defaultSurface: 'stone',
   width: CANVAS_WIDTH,
   height: CANVAS_HEIGHT,
   platforms: applyIsoInsets([

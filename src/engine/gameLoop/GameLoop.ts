@@ -36,6 +36,8 @@ import { EntityTransitionSystem } from './cosmetics/EntityTransitionSystem';
 import { ParticleSystem } from './cosmetics/ParticleSystem';
 import { PlayerTransitionSystem } from './cosmetics/PlayerTransitionSystem';
 import { PlayerCosmeticSystem } from './cosmetics/PlayerCosmeticSystem';
+import { SurfaceImpactSystem } from './cosmetics/SurfaceImpactSystem';
+import { HUDFeedbackSystem } from './cosmetics/HUDFeedbackSystem';
 
 /** Half-rate cosmetic threshold: particles/SFX/VFX tick at ~30Hz while render stays at 60Hz. */
 const COSMETIC_INTERVAL = FIXED_TIMESTEP * 2;
@@ -64,6 +66,8 @@ export class GameLoop {
   private entityTransitionSystem!: EntityTransitionSystem;
   private playerTransitionSystem!: PlayerTransitionSystem;
   private playerCosmeticSystem!: PlayerCosmeticSystem;
+  private surfaceImpactSystem!: SurfaceImpactSystem;
+  private hudFeedbackSystem!: HUDFeedbackSystem;
 
   private _debugKeyHandler: ((e: KeyboardEvent) => void) | null = null;
   private _unsubRenderScale: (() => void) | null = null;
@@ -134,9 +138,12 @@ export class GameLoop {
     this.playerCosmeticSystem = new PlayerCosmeticSystem(
       sState, this.simulator.getEffWalkSpeed(), this.particleSystem,
       (name) => this.playSound(name),
+      sArena,
     );
     this.environmentSystem = new EnvironmentSystem(sState, sTheme);
     this.entityTransitionSystem = new EntityTransitionSystem(sState, (name) => this.playSound(name));
+    this.surfaceImpactSystem = new SurfaceImpactSystem(sState, sArena);
+    this.hudFeedbackSystem = new HUDFeedbackSystem(sState);
 
     // Cooldowns map lives on PlayerTransitionSystem — wire it back into the simulator
     // for the headbonk + crouch + zero-G sound paths in fixedUpdate.
@@ -147,6 +154,7 @@ export class GameLoop {
 
     this.playerTransitionSystem.init();
     this.entityTransitionSystem.init();
+    this.hudFeedbackSystem.init();
 
     // PlayerInput dispatch: KeyboardInput for humans, RuleBasedBot for bots.
     // Must run after the simulator constructor (arena/state are final) and
@@ -343,12 +351,17 @@ export class GameLoop {
     this.playerCosmeticSystem = new PlayerCosmeticSystem(
       sState, this.simulator.getEffWalkSpeed(), this.particleSystem,
       (name) => this.playSound(name),
+      sArena,
     );
     this.environmentSystem = new EnvironmentSystem(sState, newTheme);
     this.entityTransitionSystem = new EntityTransitionSystem(sState, (name) => this.playSound(name));
+    this.surfaceImpactSystem = new SurfaceImpactSystem(sState, sArena);
+    this.hudFeedbackSystem = new HUDFeedbackSystem(sState);
 
     this.playerTransitionSystem.init();
     this.entityTransitionSystem.init();
+    this.surfaceImpactSystem.init();
+    this.hudFeedbackSystem.init();
 
     // Drain leftover cosmetic lead so the first cosmeticStep after new arena
     // load doesn't run against residual time from the prior arena.
@@ -431,6 +444,8 @@ export class GameLoop {
   resetCosmeticBaselines(): void {
     this.playerTransitionSystem.resetBaseline();
     this.entityTransitionSystem.resetBaseline();
+    this.surfaceImpactSystem.resetBaseline();
+    this.hudFeedbackSystem.resetBaseline();
   }
 
   /** Seconds since the last cosmeticStep fired. */
@@ -459,6 +474,8 @@ export class GameLoop {
     this.entityTransitionSystem.cosmeticUpdate(dt);
     this.particleSystem.cosmeticUpdate(dt);
     this.environmentSystem.cosmeticUpdate(dt);
+    this.surfaceImpactSystem.cosmeticUpdate(dt);
+    this.hudFeedbackSystem.cosmeticUpdate(dt);
   }
 
   /** Tick all cosmetic-only systems (particles, environment, visual decays). */
@@ -485,6 +502,14 @@ export class GameLoop {
       const environmentStart = perfTrace.begin('cosmetic.environment');
       this.environmentSystem.cosmeticUpdate(dt);
       perfTrace.end('cosmetic.environment', environmentStart);
+
+      const surfaceImpactStart = perfTrace.begin('cosmetic.surfaceImpact');
+      this.surfaceImpactSystem.cosmeticUpdate(dt);
+      perfTrace.end('cosmetic.surfaceImpact', surfaceImpactStart);
+
+      const hudFeedbackStart = perfTrace.begin('cosmetic.hudFeedback');
+      this.hudFeedbackSystem.cosmeticUpdate(dt);
+      perfTrace.end('cosmetic.hudFeedback', hudFeedbackStart);
     });
   }
 

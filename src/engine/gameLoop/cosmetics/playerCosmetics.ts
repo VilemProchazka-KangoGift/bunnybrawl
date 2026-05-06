@@ -1,11 +1,12 @@
-import type { Player, PlayerSlot } from '../../types';
+import type { Arena, Player, PlayerSlot } from '../../types';
 import {
   AFTERIMAGE_INTERVAL, AFTERIMAGE_SPEED_THRESHOLD, AFTERIMAGE_MAX,
 } from '../../constants';
 import { tickIdleStateMachine } from '../../rendering/idleActions';
 import { audio } from '../../audio';
-import { swapRemove } from '../../themes/utils';
+import { surfaceAt, swapRemove } from '../../themes/utils';
 import { getSlowDevice } from '../../perfFlags';
+import { SURFACE_PALETTE } from './surfacePalette';
 
 const FIRE_COLORS = ['#FF4400', '#FF8800', '#FFCC00', '#FFAA00'];
 
@@ -21,6 +22,7 @@ export function updatePlayerCosmetics(
   footstepAccs: Map<PlayerSlot, number>,
   emitParticle: (x: number, y: number, vx: number, vy: number, life: number, size: number, color: string) => void,
   playSound: (name: string) => void,
+  arena: Arena,
   inCountdown: boolean,
 ): void {
   // animFrame advance moved to Simulator.fixedUpdate — animFrame is in the
@@ -83,7 +85,8 @@ export function updatePlayerCosmetics(
     if (player.afterimages[i].alpha <= 0) swapRemove(player.afterimages, i);
   }
 
-  // Footstep sounds — interval and volume scale with speed
+  // Surface-aware footstep dispatch (sound + var-dust puff). Tempo,
+  // volume, and puff size scale with |vx|.
   if (player.state === 'run') {
     const runSpeed = Math.abs(player.vx);
     const speedRatio = Math.min(runSpeed / effWalkSpeed, 1);
@@ -92,10 +95,39 @@ export function updatePlayerCosmetics(
     fAcc += dt;
     if (fAcc >= interval) {
       fAcc -= interval;
-      const playerBottom = player.y + player.height;
-      const name = playerBottom > 600 ? 'footstep_grass' : 'footstep_wood';
-      audio.setVolume(name, 0.08 + speedRatio * 0.2);
-      playSound(name);
+
+      const cx = player.x + player.width / 2;
+      const fy = player.y + player.height;
+      const surface = surfaceAt(arena, cx, fy);
+      const palette = SURFACE_PALETTE[surface];
+
+      if (palette.footstepSound !== null) {
+        audio.setVolume(palette.footstepSound, 0.08 + speedRatio * 0.2);
+        playSound(palette.footstepSound);
+      }
+
+      if (!getSlowDevice()) {
+        const color = palette.dust;
+        const behind = player.facing === 'right' ? -1 : 1;
+        const sx = cx + behind * (player.width * 0.3);
+        const sy = fy - 1;
+        const baseSize = 1 + speedRatio * 1.4;
+        const baseLife = 0.16 + speedRatio * 0.12;
+
+        if (surface === 'metal' || surface === 'glass') {
+          // Sparks: smaller, faster, fewer.
+          emitParticle(sx, sy, behind * (40 + speedRatio * 30), -30 - Math.random() * 30,
+            baseLife * 0.7, 0.8 + Math.random() * 0.6, color);
+        } else if (surface === 'ice') {
+          if (Math.random() < 0.5) {
+            emitParticle(sx, sy, behind * (12 + speedRatio * 12), -8 - Math.random() * 12,
+              baseLife * 0.6, 0.6, color);
+          }
+        } else {
+          emitParticle(sx, sy, behind * (20 + speedRatio * 30), -10 - Math.random() * 25,
+            baseLife, baseSize, color);
+        }
+      }
     }
     footstepAccs.set(player.id, fAcc);
   } else {

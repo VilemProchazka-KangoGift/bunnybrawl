@@ -152,6 +152,7 @@ export const candyLand: ArenaPack = {
   translations: { en: 'Candy Land', cs: 'Cukr\u00E1rna', hi: '\u0915\u0948\u0902\u0921\u0940 \u0932\u0948\u0902\u0921', fil: 'Candy Land' },
 
   // ---- Layout ----
+  defaultSurface: 'wood',
   width: CANVAS_WIDTH,
   height: CANVAS_HEIGHT,
   platforms: applyIsoInsets([

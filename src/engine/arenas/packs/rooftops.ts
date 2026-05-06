@@ -471,6 +471,7 @@ export const rooftops: ArenaPack = {
   translations: { en: 'Rooftops', cs: 'St\u0159echy', hi: '\u091B\u0924\u0947\u0902', fil: 'Bubungan' },
 
   // ---- Layout ----
+  defaultSurface: 'wood',
   width: CANVAS_WIDTH,
   height: CANVAS_HEIGHT,
   platforms: applyIsoInsets([

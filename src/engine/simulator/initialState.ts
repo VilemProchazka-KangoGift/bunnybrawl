@@ -106,10 +106,11 @@ export function createEmptyMatchState(): MatchState {
     shockwaves: [], screenFlash: 0,
     wildlife: [],
     fogParticles: [], pollenParticles: [], shootingStars: [],
-    scoreAnimations: [], ghosts: [],
+    scoreAnimations: [], comboPopups: [], goalPulseTimers: new Map(), ghosts: [],
     lavaRocks: [], lavaRockTimer: 0,
     geyserStates: [], pigeonFlocks: [], scatterFlocks: [], bouncyWobble: new Map(),
     gibs: [], confetti: [],
+    surfaceDecals: [], ripples: [],
   };
 }
 

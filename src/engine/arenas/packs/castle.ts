@@ -224,6 +224,7 @@ export const castle: ArenaPack = {
   translations: { en: 'Castle', cs: 'Hrad', hi: '\u0915\u093F\u0932\u093E', fil: 'Kastilyo' },
 
   // ---- Layout ----
+  defaultSurface: 'stone',
   width: CANVAS_WIDTH,
   height: CANVAS_HEIGHT,
   platforms: applyIsoInsets([

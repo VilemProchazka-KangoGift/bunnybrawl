@@ -1,10 +1,11 @@
-import type { MatchState, PlayerSlot } from '../../types';
+import type { Arena, MatchState, PlayerSlot } from '../../types';
 import type { CosmeticSystem } from '../types';
 import type { ParticleSystem } from './ParticleSystem';
 import { updatePlayerCosmetics } from './playerCosmetics';
 
 export class PlayerCosmeticSystem implements CosmeticSystem {
   private state: MatchState;
+  private arena: Arena;
   private effWalkSpeed: number;
   private playSound: (name: string) => void;
 
@@ -17,8 +18,10 @@ export class PlayerCosmeticSystem implements CosmeticSystem {
     effWalkSpeed: number,
     particleSystem: ParticleSystem,
     playSound: (name: string) => void,
+    arena: Arena,
   ) {
     this.state = state;
+    this.arena = arena;
     this.effWalkSpeed = effWalkSpeed;
     this.playSound = playSound;
     this._emitParticle = (x, y, vx, vy, life, size, color) => particleSystem.emitParticle(x, y, vx, vy, life, size, color);
@@ -38,6 +41,7 @@ export class PlayerCosmeticSystem implements CosmeticSystem {
         this.afterimageAccumulators, this.footstepAccumulators,
         this._emitParticle,
         this.playSound,
+        this.arena,
         this.state.countdown > 0,
       );
     }

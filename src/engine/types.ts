@@ -12,11 +12,29 @@ export interface AABB {
   height: number;
 }
 
+/**
+ * Surface tag — drives footstep VFX, hard-landing decals, and shockwave
+ * variants. `surfaceOf(plat)` defaults to 'grass' if a platform omits it.
+ * Stays optional on the Platform interface so test fixtures don't need
+ * to plumb a value through.
+ */
+export type SurfaceTag =
+  | 'grass'
+  | 'stone'
+  | 'metal'
+  | 'snow'
+  | 'sand'
+  | 'ice'
+  | 'wood'
+  | 'glass';
+
 export interface Platform {
   x: number;
   y: number;
   width: number;
   height: number;
+  /** See SurfaceTag. Footstep + impact VFX dispatch on this. */
+  surface?: SurfaceTag;
   /**
    * Optional per-platform style tag. Used by arena packs whose drawPlatform
    * function varies rendering per platform (e.g. rooftops: 'house' | 'hallway').
@@ -82,6 +100,8 @@ export interface Arena {
   noSpawnZones?: AABB[];       // zones where hazards/characters should not spawn
   carrotZones?: AABB[];        // zones with increased carrot spawn likelihood
   noSprings?: boolean;         // disable spring spawning on this arena
+  /** Surface used when a platform omits `surface`. Falls back to 'grass'. */
+  defaultSurface?: SurfaceTag;
   /** Nav hints: manual overrides for AI pathfinding in obstacle-blocked areas.
    *  When a bot is on `onPlatform` within `inZone` x-range, navTarget is overridden
    *  to route through `goTo` platform at `approachX`. Normal nav resumes after the hop. */
@@ -305,6 +325,36 @@ export interface Thorn {
   hit: boolean;
 }
 
+/**
+ * Persistent ground decal from hard landings. `full` = spider crack
+ * (ice/glass), `mini` = small impact crack (any other surface). Local-only;
+ * not snapshotted.
+ */
+export interface SurfaceDecal {
+  kind: 'full' | 'mini';
+  x: number;
+  y: number;
+  age: number;
+  life: number;
+  seed: number;
+  color: string;
+  surface: SurfaceTag;
+  /** Platform horizontal clip extent — caps decal draws so edge landings
+   *  don't paint past the visible top face. Undefined = no clip. */
+  clipMinX?: number;
+  clipMaxX?: number;
+}
+
+/** Liquid-impact ripple — cosmetic only, lives in MatchState until expired.
+ *  Lifetime + max radius are constants (SURFACE_RIPPLE_LIFE / SURFACE_RIPPLE_MAX_RADIUS);
+ *  the renderer reads them directly. */
+export interface Ripple {
+  x: number;
+  y: number;
+  age: number;
+  surface: 'water' | 'lava';
+}
+
 export type MatchPhase = 'loading' | 'playing' | 'over';
 
 export interface MatchState {
@@ -338,6 +388,12 @@ export interface MatchState {
   pollenParticles: Array<{x: number; y: number; vx: number; vy: number; size: number; alpha: number}>;
   shootingStars: Array<{x: number; y: number; vx: number; vy: number; life: number; tailLen: number}>;
   scoreAnimations: Array<{playerId: PlayerSlot; value: number; timer: number}>;
+  /** Combo popups (×N text) spawned when a killer chains stomps within COMBO_WINDOW_SEC.
+   *  Cosmetic-only, runs on host + guest (driven by killFeed transitions). */
+  comboPopups: Array<{x: number; y: number; count: number; timer: number; killer: PlayerSlot}>;
+  /** Per-slot goal-pulse timer. Set by HUDFeedbackSystem on score rising edge.
+   *  Read by HUD renderer to scale + flash the player's score pill. */
+  goalPulseTimers: Map<PlayerSlot, number>;
   ghosts: GhostEntity[];
   lavaRocks: LavaRock[];
   lavaRockTimer: number;
@@ -359,6 +415,10 @@ export interface MatchState {
   bouncyWobble: Map<number, number>;  // platform index → wobble timer
   gibs: Gib[];
   confetti: ConfettiParticle[];
+  /** Persistent ground decals (cracks/scuffs) — bg-cache rendered, capped. */
+  surfaceDecals: SurfaceDecal[];
+  /** Active liquid-impact ripples. */
+  ripples: Ripple[];
 }
 
 export interface MatchStats {

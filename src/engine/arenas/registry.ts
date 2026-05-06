@@ -92,6 +92,7 @@ export function toArena(pack: ArenaPack): Arena {
     carrotZones: pack.carrotZones,
     noSprings: pack.noSprings,
     navHints: pack.navHints,
+    defaultSurface: pack.defaultSurface,
   };
 }
 

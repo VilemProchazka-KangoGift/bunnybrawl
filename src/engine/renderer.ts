@@ -25,11 +25,12 @@ import {
   drawWeather, drawParticles, drawGibs, drawGibShape, drawConfetti, drawFireworks, drawWildlife, drawSpringTrail,
   drawHazardZone, drawGhost, drawLavaRock, drawZeroGZone, drawCurrentZone, drawGeyser, drawBouncyPlatformOverlay, drawPigeonFlock, drawScatterFlock,
   drawDayNightCycle,
-  drawHUD, drawCountdown, drawConnectionQuality, invalidateHudCache, isHudDirty,
+  drawHUD, drawCountdown, drawConnectionQuality, drawComboPopups, invalidateHudCache, isHudDirty,
   drawPlayer,
   warmSpriteCacheForCharacters,
   clearRenderingCaches,
   clearArenaCaches,
+  drawSurfaceDecals, drawRipples,
 } from './rendering';
 import { setSpriteCacheScale } from './rendering/players';
 import { setHudScale } from './rendering/hud';
@@ -709,6 +710,10 @@ export class Renderer {
 
       perfTrace.end('render.bg', bgStart);
 
+      // Surface decals (cracks, scuffs) — drawn between platforms and entities so
+      // platform caps occlude them only on edges (decal y is platform top + small fudge).
+      drawSurfaceDecals(ctx, matchState);
+
       const entStart = perfTrace.begin('render.entities');
       // Pigeon flocks
       for (const flock of matchState.pigeonFlocks) {
@@ -759,6 +764,9 @@ export class Renderer {
         }
         ctx.restore();
       }
+
+      // Liquid impact ripples (env-ripples)
+      drawRipples(ctx, matchState);
       perfTrace.end('render.particles', partStart);
 
       const aiStart = perfTrace.begin('render.afterimages');
@@ -1056,6 +1064,9 @@ export class Renderer {
       drawCountdown(ctx, matchState.countdown);
       d.countdown = true;
     }
+
+    // Combo popups float over the field but under the HUD pill, so draw before drawHUD.
+    drawComboPopups(ctx, matchState);
 
     drawHUD(ctx, matchState, this.frameTime, this._playerNames, this._timeLimit, hudDirty);
 

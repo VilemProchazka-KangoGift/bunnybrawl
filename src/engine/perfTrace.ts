@@ -25,6 +25,8 @@ export type PerfSection =
   | 'cosmetic.entityTransition'
   | 'cosmetic.particles'
   | 'cosmetic.environment'
+  | 'cosmetic.surfaceImpact'
+  | 'cosmetic.hudFeedback'
   | 'net.decodeSnapshot'
   | 'net.applySnapshot'
   | 'net.broadcastSnapshot'

@@ -245,10 +245,13 @@ export function drawLargeSnowballPyramid(ctx: CanvasRenderingContext2D, x: numbe
   ctx.fill();
 }
 
+/** Iso depth ratio for `iceCube`-style platforms — width × this = 3D back-shift. */
+export const ICE_CUBE_DEPTH_RATIO = 0.3;
+
 /** Ice cube — translucent 3D block. Draws behind the platform at (x, topY).
  *  width/height are the visual cube dimensions (platform sits on top edge). */
 export function drawIceCube(ctx: CanvasRenderingContext2D, x: number, topY: number, width: number, height: number): void {
-  const depth = width * 0.3; // 3D depth offset
+  const depth = width * ICE_CUBE_DEPTH_RATIO;
 
   // Back face (darker, offset)
   ctx.fillStyle = 'rgba(140, 180, 210, 0.3)';
