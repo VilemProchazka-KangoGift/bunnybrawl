@@ -75,16 +75,35 @@ if (cache) {
 
 Apply when **all** of the following are true:
 
-1. The gradient covers a large area (>50k pixels per fill).
-2. The fill happens every frame (or many frames per match).
-3. The gradient itself doesn't change shape per frame (only its overall alpha
+1. The fill happens every frame (or many frames per match).
+2. The gradient itself doesn't change shape per frame (only its overall alpha
    may modulate via `globalAlpha`).
+3. The destination is one of:
+   - A **rectangular** `fillRect`/`drawImage` of any size — direct
+     `drawImage` swap, near-zero overhead, almost always a win once the fill
+     is over ~5k pixels.
+   - A **simple path** (low-vertex ellipse, polygon) over ~30k+ pixels
+     where clipping the path then `drawImage` still beats per-pixel
+     gradient eval.
+   - A **complex path** (wavy edge, 50+ vertices) over ~50k+ pixels where
+     the clip-mask setup cost is amortized.
 
 Skip when:
 
-- The fill area is small (<10k pixels). Gradient cost is dominated by setup.
+- The fill area is small (<10k pixels) AND uses a complex path. The path
+  setup + clip-mask cost exceeds the per-pixel-eval saving. Real example:
+  volcano lava-haze (3 zones × ~140×80 = 33k px wavy path) regressed when
+  converted from `fill()` with cached gradient → `clip()` + `drawImage`
+  (path complexity dominated).
 - The gradient is unique per fill and not reused across frames.
 - The shape varies and you'd need to rebuild the cache every frame anyway.
+
+**Pixel-count threshold rule of thumb**:
+- Linear gradient on rectangle: any size — `fillRect` swap is free.
+- Linear gradient on simple path: ~10k+ px before clip+drawImage wins.
+- Linear gradient on complex/wavy path: ~50k+ px.
+- Radial gradient: thresholds drop ~30% (radial per-pixel eval is more
+  expensive than linear, so the swap pays back faster).
 
 ### When the fill follows a custom path (not a rectangle)
 
