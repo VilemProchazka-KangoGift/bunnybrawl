@@ -119,29 +119,38 @@ export function drawDayNightCycle(
     const sunRedshift = Math.max(0, (sunT - 0.55) / 0.45);
 
     if (sunAlpha > 0.05) {
+      // Use a single rgb-prefix per ring + globalAlpha for the alpha. Saves
+      // two of the three per-frame rgba template literals during the day cycle;
+      // the rays already use a separate color so they get their own.
       const glowAlpha = sunAlpha * (0.3 + sunRedshift * 0.2);
       const bodyAlpha = sunAlpha * 0.9;
+      const glowR = lerpCh(255, 240, sunRedshift), glowG = lerpCh(215, 50, sunRedshift), glowB = lerpCh(0, 10, sunRedshift);
+      const bodyR = lerpCh(255, 220, sunRedshift), bodyG = lerpCh(165, 30, sunRedshift);
+      const coreR = lerpCh(255, 255, sunRedshift), coreG = lerpCh(215, 80, sunRedshift);
       // Glow (gold -> deep red, grows during sunset)
-      ctx.fillStyle = `rgba(${lerpCh(255,240,sunRedshift)}, ${lerpCh(215,50,sunRedshift)}, ${lerpCh(0,10,sunRedshift)}, ${glowAlpha})`;
+      ctx.globalAlpha = glowAlpha;
+      ctx.fillStyle = `rgb(${glowR},${glowG},${glowB})`;
       ctx.beginPath();
       ctx.arc(sunX, sunY, 32 + sunRedshift * 16, 0, Math.PI * 2);
       ctx.fill();
-      // Body (orange -> crimson)
-      ctx.fillStyle = `rgba(${lerpCh(255,220,sunRedshift)}, ${lerpCh(165,30,sunRedshift)}, ${lerpCh(0,10,sunRedshift)}, ${bodyAlpha})`;
+      // Body + core share bodyAlpha and the same B channel (10*sunRedshift)
+      ctx.globalAlpha = bodyAlpha;
+      ctx.fillStyle = `rgb(${bodyR},${bodyG},${glowB})`;
       ctx.beginPath();
       ctx.arc(sunX, sunY, 15, 0, Math.PI * 2);
       ctx.fill();
-      // Bright center (gold -> deep orange) -- inherits body alpha
-      ctx.fillStyle = `rgba(${lerpCh(255,255,sunRedshift)}, ${lerpCh(215,80,sunRedshift)}, ${lerpCh(0,10,sunRedshift)}, ${bodyAlpha})`;
+      ctx.fillStyle = `rgb(${coreR},${coreG},${glowB})`;
       ctx.beginPath();
       ctx.arc(sunX, sunY, 9, 0, Math.PI * 2);
       ctx.fill();
+      ctx.globalAlpha = 1;
 
       // Light rays from sun. All 4 rays share the same color — built into
       // one path so a single fill renders all of them.
       if (nightIntensity < 0.3) {
         const rayAlpha = 0.04 * (1 - nightIntensity / 0.3);
-        ctx.fillStyle = `rgba(255, ${lerpCh(215,60,sunRedshift)}, ${lerpCh(100,15,sunRedshift)}, ${rayAlpha})`;
+        ctx.globalAlpha = rayAlpha;
+        ctx.fillStyle = `rgb(255,${lerpCh(215, 60, sunRedshift)},${lerpCh(100, 15, sunRedshift)})`;
         ctx.beginPath();
         for (let r = 0; r < 4; r++) {
           const angle = -0.3 + r * 0.2;
@@ -153,6 +162,7 @@ export function drawDayNightCycle(
           ctx.closePath();
         }
         ctx.fill();
+        ctx.globalAlpha = 1;
       }
     }
   }

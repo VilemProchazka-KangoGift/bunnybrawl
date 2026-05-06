@@ -54,6 +54,52 @@ function getShadowCache(): OffscreenCanvas | null {
   return _shadowCache;
 }
 
+// Burn fire-glow radial gradient. Player burnTimer triggers ~1.5s of per-frame
+// radial-gradient ellipse fills. Bake once at full alpha; per-call modulates
+// with globalAlpha = fireAlpha. ~50×48 pixel ellipse → previously ~2400 per-pixel
+// gradient evaluations per burning player per frame.
+const FIRE_CACHE_W = 64;
+const FIRE_CACHE_H = 64;
+let _fireCache: OffscreenCanvas | null = null;
+function getFireCache(): OffscreenCanvas | null {
+  if (_fireCache) return _fireCache;
+  if (typeof OffscreenCanvas === 'undefined') return null;
+  _fireCache = new OffscreenCanvas(FIRE_CACHE_W, FIRE_CACHE_H);
+  const c = _fireCache.getContext('2d')!;
+  const cx = FIRE_CACHE_W / 2, cy = FIRE_CACHE_H / 2;
+  const grad = c.createRadialGradient(cx, cy, 0, cx, cy, FIRE_CACHE_W / 2);
+  grad.addColorStop(0, 'rgba(255, 200, 0, 0.6)');
+  grad.addColorStop(0.5, 'rgba(255, 100, 0, 0.4)');
+  grad.addColorStop(1, 'rgba(255, 50, 0, 0)');
+  c.fillStyle = grad;
+  c.fillRect(0, 0, FIRE_CACHE_W, FIRE_CACHE_H);
+  return _fireCache;
+}
+
+// Fast-fall vertical streak. Linear gradient (player-color, fade top→bottom)
+// over a lozenge-shape path. Variable lean per draw, but the gradient itself
+// is just bottom-up alpha ramp. Bake one 1×N strip per player color; clip
+// the lozenge path and drawImage stretched.
+const FASTFALL_STRIP_H = 70;
+const _fastfallStripCache = new Map<string, OffscreenCanvas>();
+function getFastfallStrip(color: string): OffscreenCanvas | null {
+  let cache = _fastfallStripCache.get(color);
+  if (cache) return cache;
+  if (typeof OffscreenCanvas === 'undefined') return null;
+  const { r, g, b } = hexToRGB(color);
+  cache = new OffscreenCanvas(1, FASTFALL_STRIP_H);
+  const c = cache.getContext('2d')!;
+  const grad = c.createLinearGradient(0, 0, 0, FASTFALL_STRIP_H);
+  grad.addColorStop(0, `rgba(${r},${g},${b},0)`);
+  grad.addColorStop(0.4, `rgba(${r},${g},${b},0.32)`);
+  grad.addColorStop(1, `rgba(${r},${g},${b},0.85)`);
+  c.fillStyle = grad;
+  c.fillRect(0, 0, 1, FASTFALL_STRIP_H);
+  _fastfallStripCache.set(color, cache);
+  return cache;
+}
+
+
 export function clearSpriteCache(): void {
   spriteCache.clear();
 }
@@ -318,17 +364,32 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player, nearCa
     ctx.fill();
   }
 
-  // Fire glow overlay when burning from lava
+  // Fire glow overlay when burning from lava. Bake-once + globalAlpha modulation
+  // — see getFireCache. Original used createRadialGradient(...,radius=rx) inside
+  // an ellipse(rx,ry) path; since the gradient fades to 0 at radius=rx and ry>rx,
+  // the visible circular region is fully contained in the ellipse. Drawing the
+  // baked cache to a square (2rx × 2rx) preserves the visual without an ellipse
+  // clip path. Fallback for envs without OffscreenCanvas.
   if (player.burnTimer > 0) {
     const fireAlpha = Math.min(0.4, player.burnTimer * 0.5) * (0.6 + Math.sin(player.burnTimer * 12) * 0.4);
-    const grad = ctx.createRadialGradient(cx, y + height * 0.4, 0, cx, y + height * 0.4, width * 0.7);
-    grad.addColorStop(0, `rgba(255, 200, 0, ${fireAlpha * 0.6})`);
-    grad.addColorStop(0.5, `rgba(255, 100, 0, ${fireAlpha * 0.4})`);
-    grad.addColorStop(1, `rgba(255, 50, 0, 0)`);
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.ellipse(cx, y + height * 0.4, width * 0.7, height * 0.6, 0, 0, Math.PI * 2);
-    ctx.fill();
+    const fireCache = getFireCache();
+    const ellRx = width * 0.7;
+    const ellCy = y + height * 0.4;
+    if (fireCache) {
+      ctx.globalAlpha = fireAlpha;
+      ctx.drawImage(fireCache, cx - ellRx, ellCy - ellRx, ellRx * 2, ellRx * 2);
+      ctx.globalAlpha = 1;
+    } else {
+      const ellRy = height * 0.6;
+      const grad = ctx.createRadialGradient(cx, ellCy, 0, cx, ellCy, ellRx);
+      grad.addColorStop(0, `rgba(255, 200, 0, ${fireAlpha * 0.6})`);
+      grad.addColorStop(0.5, `rgba(255, 100, 0, ${fireAlpha * 0.4})`);
+      grad.addColorStop(1, `rgba(255, 50, 0, 0)`);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.ellipse(cx, ellCy, ellRx, ellRy, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
   } else if (drawRedPulse) {
     // Red tint pulse overlay when hit by thorns (non-lava)
     const pulseAlpha = Math.abs(Math.sin(slowTimer * 8)) * 0.3;
@@ -580,28 +641,45 @@ export function drawFastFallStreaks(
     ctx.stroke();
     return;
   }
-  const STREAK_H = 70;
+  const STREAK_H = FASTFALL_STRIP_H;
   const HALF_W = 17;            // half the bottom width — wider than the previous trapezoid for a smudgier read
-  const { r, g, b } = hexToRGB(color);
   // Top of smear leans opposite of motion — trail-behind read.
   const lean = Math.max(-1, Math.min(1, vx / 200)) * 11;
   const topY = headY - STREAK_H;
 
-  const grad = ctx.createLinearGradient(cx, topY, cx, headY);
-  grad.addColorStop(0, `rgba(${r},${g},${b},0)`);
-  grad.addColorStop(0.4, `rgba(${r},${g},${b},${0.32 * alpha})`);
-  grad.addColorStop(1, `rgba(${r},${g},${b},${0.85 * alpha})`);
-  ctx.fillStyle = grad;
-
   // Lozenge with a narrow leaned tip (top) and a rounded wider base — looks
-  // like a paint smear rather than a flat trapezoid.
-  ctx.beginPath();
-  ctx.moveTo(cx - lean, topY);
-  ctx.quadraticCurveTo(cx + HALF_W + lean * 0.4, headY - STREAK_H * 0.35, cx + HALF_W, headY);
-  ctx.quadraticCurveTo(cx, headY + 6, cx - HALF_W, headY);
-  ctx.quadraticCurveTo(cx - HALF_W - lean * 0.4, headY - STREAK_H * 0.35, cx - lean, topY);
-  ctx.closePath();
-  ctx.fill();
+  // like a paint smear rather than a flat trapezoid. Fill via per-color baked
+  // strip + clipped drawImage: gradient evaluation happens once at bake time,
+  // per-frame cost becomes a memcpy/blend.
+  const strip = getFastfallStrip(color);
+  if (strip) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(cx - lean, topY);
+    ctx.quadraticCurveTo(cx + HALF_W + lean * 0.4, headY - STREAK_H * 0.35, cx + HALF_W, headY);
+    ctx.quadraticCurveTo(cx, headY + 6, cx - HALF_W, headY);
+    ctx.quadraticCurveTo(cx - HALF_W - lean * 0.4, headY - STREAK_H * 0.35, cx - lean, topY);
+    ctx.closePath();
+    ctx.clip();
+    ctx.imageSmoothingEnabled = false;
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(strip, cx - HALF_W - 6, topY, HALF_W * 2 + 12, STREAK_H);
+    ctx.restore();
+  } else {
+    const { r, g, b } = hexToRGB(color);
+    const grad = ctx.createLinearGradient(cx, topY, cx, headY);
+    grad.addColorStop(0, `rgba(${r},${g},${b},0)`);
+    grad.addColorStop(0.4, `rgba(${r},${g},${b},${0.32 * alpha})`);
+    grad.addColorStop(1, `rgba(${r},${g},${b},${0.85 * alpha})`);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(cx - lean, topY);
+    ctx.quadraticCurveTo(cx + HALF_W + lean * 0.4, headY - STREAK_H * 0.35, cx + HALF_W, headY);
+    ctx.quadraticCurveTo(cx, headY + 6, cx - HALF_W, headY);
+    ctx.quadraticCurveTo(cx - HALF_W - lean * 0.4, headY - STREAK_H * 0.35, cx - lean, topY);
+    ctx.closePath();
+    ctx.fill();
+  }
 
   // Inner motion wisps — visible streaks in the smudge body.
   ctx.strokeStyle = `rgba(255,255,255,${0.4 * alpha})`;
