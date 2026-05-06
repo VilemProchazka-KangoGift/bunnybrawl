@@ -7,88 +7,151 @@ import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrim
 import { pushFromPlayers, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
 import type { Player } from '../../types';
 
-const CRAB_CFG = {
-  platL: 350, platR: 950, platTopY: 660,
-  walkSpeed: 30, fleeSpeed: 130, fleeRadius: 100, yTolerance: 80,
-};
-const _crab: GroundCritterState = { x: 650, dir: 1, facingEase: 1, fleeing: false };
+const CRABS_CFG = [
+  { platL: 50,   platR: 380,  platTopY: 660, walkSpeed: 35, fleeSpeed: 130, fleeRadius: 100, yTolerance: 80 },
+  { platL: 480,  platR: 800,  platTopY: 660, walkSpeed: 30, fleeSpeed: 120, fleeRadius: 100, yTolerance: 80 },
+  { platL: 900,  platR: 1230, platTopY: 660, walkSpeed: 32, fleeSpeed: 140, fleeRadius: 100, yTolerance: 80 },
+];
+const _crabs: GroundCritterState[] = CRABS_CFG.map((cfg, i) => ({
+  x: (cfg.platL + cfg.platR) / 2,
+  dir: i % 2 === 0 ? 1 : -1, facingEase: 1, fleeing: false, committedFleeDir: 0,
+}));
 const _tickCrabDt = makeDtTracker();
 
-function drawCrab(ctx: CanvasRenderingContext2D, time: number, players: ReadonlyArray<Player>): void {
-  const dt = _tickCrabDt(time);
-  tickGroundCritter(_crab, players, dt, CRAB_CFG);
-  const fleeing = _crab.fleeing;
-  const scuttle = fastSin(time * (fleeing ? 24 : 10)) * 0.7;
+function drawOneCrab(ctx: CanvasRenderingContext2D, time: number, crab: GroundCritterState, cfg: typeof CRABS_CFG[number]): void {
+  const fleeing = crab.fleeing;
+  const motion = Math.abs(crab.facingEase);
   ctx.save();
-  ctx.translate(_crab.x, CRAB_CFG.platTopY - 5);
-  if (_crab.facingEase < 0) ctx.scale(-1, 1);
-  ctx.strokeStyle = '#a83a2a';
-  ctx.lineWidth = 1.2;
+  ctx.translate(crab.x, cfg.platTopY - 6);
+  if (crab.facingEase < 0) ctx.scale(-1, 1);
+
+  // 6 legs (3 on each side, splayed under the body) — alternating step lift.
+  ctx.strokeStyle = '#7a1f12';
+  ctx.lineWidth = 1.4;
+  ctx.lineCap = 'round';
   ctx.beginPath();
-  for (let i = 0; i < 4; i++) {
-    const lx = -6 + i * 4;
-    const lift = fastSin(time * 14 + i * 1.7) * 1.5 * Math.abs(_crab.facingEase);
-    ctx.moveTo(lx, 0);
-    ctx.lineTo(lx - 1.5, 4 - lift);
+  for (let s = -1; s <= 1; s += 2) {
+    for (let i = 0; i < 3; i++) {
+      const lift = fastSin(time * 14 + i * 1.4 + (s > 0 ? Math.PI : 0)) * motion;
+      const baseX = s * (4 + i * 2);
+      const tipX = s * (10 + i * 2);
+      const tipY = 6 - Math.max(0, lift) * 1.2;
+      // Knee bend down then out
+      const kneeX = (baseX + tipX) * 0.5;
+      const kneeY = 3 - Math.max(0, lift) * 0.5;
+      ctx.moveTo(baseX, 1);
+      ctx.lineTo(kneeX, kneeY);
+      ctx.lineTo(tipX, tipY);
+    }
   }
   ctx.stroke();
-  ctx.fillStyle = '#d04a3a';
-  ctx.beginPath();
-  ctx.ellipse(0, 0, 9, 6, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = 'rgba(255,180,160,0.5)';
-  ctx.beginPath();
-  ctx.ellipse(-2, -2, 4, 2, 0, 0, Math.PI * 2);
-  ctx.fill();
-  const armWiggle = scuttle * 1.2;
-  ctx.strokeStyle = '#a83a2a';
-  ctx.lineWidth = 2.2;
-  ctx.lineCap = 'round';
-  const elbow1X = 11, elbow1Y = -5 + armWiggle;
-  const elbow2X = 11, elbow2Y = 5 - armWiggle;
-  const tip1X = 18, tip1Y = -7 + armWiggle * 0.5;
-  const tip2X = 18, tip2Y = 7 - armWiggle * 0.5;
-  ctx.beginPath();
-  ctx.moveTo(7, -3);
-  ctx.lineTo(elbow1X, elbow1Y);
-  ctx.lineTo(tip1X, tip1Y);
-  ctx.moveTo(7, 3);
-  ctx.lineTo(elbow2X, elbow2Y);
-  ctx.lineTo(tip2X, tip2Y);
-  ctx.stroke();
   ctx.lineCap = 'butt';
-  ctx.fillStyle = '#d04a3a';
+
+  // Carapace (rounded shell — wider than tall, slightly raised at the back).
+  ctx.fillStyle = '#c8392a';
   ctx.beginPath();
-  ctx.ellipse(tip1X, tip1Y, 3, 2, 0.4, 0, Math.PI * 2);
-  ctx.ellipse(tip2X, tip2Y, 3, 2, -0.4, 0, Math.PI * 2);
+  ctx.ellipse(0, 0, 11, 7, 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = '#5a1a14';
+  // Shell detail — a darker rim and lighter highlight.
+  ctx.strokeStyle = '#7a1f12';
   ctx.lineWidth = 0.8;
   ctx.beginPath();
-  ctx.moveTo(tip1X + 1, tip1Y - 1.5);
-  ctx.lineTo(tip1X + 3, tip1Y);
-  ctx.moveTo(tip2X + 1, tip2Y + 1.5);
-  ctx.lineTo(tip2X + 3, tip2Y);
+  ctx.ellipse(0, 0, 11, 7, 0, 0, Math.PI * 2);
   ctx.stroke();
-  ctx.strokeStyle = '#a83a2a';
-  ctx.lineWidth = 0.8;
+  ctx.fillStyle = 'rgba(255,170,150,0.55)';
   ctx.beginPath();
-  ctx.moveTo(2, -3);
-  ctx.lineTo(3, -6);
-  ctx.moveTo(-1, -3);
-  ctx.lineTo(0, -6);
+  ctx.ellipse(-3, -2.5, 5, 2, -0.1, 0, Math.PI * 2);
+  ctx.fill();
+  // Two spike bumps along the front rim.
+  ctx.fillStyle = '#a82e1f';
+  ctx.beginPath();
+  ctx.moveTo(-3, -6.5);
+  ctx.lineTo(-2, -8);
+  ctx.lineTo(-1, -6.3);
+  ctx.moveTo(2, -6.6);
+  ctx.lineTo(3, -8);
+  ctx.lineTo(4, -6.3);
+  ctx.fill();
+
+  // Eye stalks on top of carapace.
+  ctx.strokeStyle = '#7a1f12';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(-2.5, -5);
+  ctx.lineTo(-3, -10);
+  ctx.moveTo(2.5, -5);
+  ctx.lineTo(3, -10);
   ctx.stroke();
   ctx.fillStyle = '#fff';
   ctx.beginPath();
-  ctx.arc(3, -6, 1.2, 0, Math.PI * 2);
-  ctx.arc(0, -6, 1.2, 0, Math.PI * 2);
+  ctx.arc(-3, -10, 1.6, 0, Math.PI * 2);
+  ctx.arc(3, -10, 1.6, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = '#000';
   ctx.beginPath();
-  ctx.arc(3, -6, 0.5, 0, Math.PI * 2);
-  ctx.arc(0, -6, 0.5, 0, Math.PI * 2);
+  ctx.arc(-3, -10, 0.7, 0, Math.PI * 2);
+  ctx.arc(3, -10, 0.7, 0, Math.PI * 2);
   ctx.fill();
+
+  // BIG claw on the right (forward-facing side). Fiddler-style oversized pincer.
+  const bigClawWiggle = fastSin(time * (fleeing ? 12 : 5)) * 0.3 * motion;
+  ctx.save();
+  ctx.translate(10, -1);
+  ctx.rotate(bigClawWiggle - 0.15);
+  // Upper arm.
+  ctx.fillStyle = '#a82e1f';
+  ctx.beginPath();
+  ctx.ellipse(4, 0, 5, 2.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Big pincer claw — two prongs forming a "C".
+  ctx.fillStyle = '#c8392a';
+  ctx.beginPath();
+  ctx.ellipse(11, -2.5, 6, 3.2, -0.1, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#a82e1f';
+  ctx.beginPath();
+  ctx.ellipse(11, 2.5, 6, 3, 0.1, 0, Math.PI * 2);
+  ctx.fill();
+  // Slit between prongs.
+  ctx.strokeStyle = '#3a1008';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(8, 0);
+  ctx.lineTo(15, 0);
+  ctx.stroke();
   ctx.restore();
+
+  // Small claw on the left.
+  const smallClawWiggle = fastSin(time * (fleeing ? 14 : 6) + 1.5) * 0.4 * motion;
+  ctx.save();
+  ctx.translate(-10, -1);
+  ctx.rotate(-smallClawWiggle + 0.2);
+  ctx.fillStyle = '#a82e1f';
+  ctx.beginPath();
+  ctx.ellipse(-3, 0, 3, 1.6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#c8392a';
+  ctx.beginPath();
+  ctx.ellipse(-7, -1, 2.5, 1.4, -0.2, 0, Math.PI * 2);
+  ctx.ellipse(-7, 1, 2.5, 1.4, 0.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#3a1008';
+  ctx.lineWidth = 0.7;
+  ctx.beginPath();
+  ctx.moveTo(-5.5, 0);
+  ctx.lineTo(-9, 0);
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.restore();
+}
+
+function drawCrab(ctx: CanvasRenderingContext2D, time: number, players: ReadonlyArray<Player>): void {
+  const dt = _tickCrabDt(time);
+  for (let i = 0; i < _crabs.length; i++) {
+    tickGroundCritter(_crabs[i], players, dt, CRABS_CFG[i]);
+    drawOneCrab(ctx, time, _crabs[i], CRABS_CFG[i]);
+  }
 }
 
 const FISH_SPECIES = [
@@ -1113,7 +1176,8 @@ export const underwater: ArenaPack = {
   drawAnimatedForeground: (ctx, _arena, time, _dayPhase, matchState) => {
     if (getSlowDevice() || !matchState) return;
     ctx.save();
-    const cxBase = ((time * 70) % (CANVAS_WIDTH + 400)) - 200;
+    // Smooth left-right sweep across the canvas — modulo wrap teleported the whole school.
+    const cxBase = CANVAS_WIDTH * 0.5 + fastSin(time * 0.18) * (CANVAS_WIDTH * 0.5 + 80);
     const cy = 380 + fastSin(time * 0.5) * 40;
     const players = matchState.players;
     for (let i = 0; i < FISH_COUNT; i++) drawFish(ctx, i, time, cxBase, cy, players);

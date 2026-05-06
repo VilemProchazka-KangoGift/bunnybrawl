@@ -15,11 +15,14 @@ const FOG_CONFIG: DriftBandConfig = {
   alphas: [0.10, 0.14, 0.20],
 };
 
-const RAT_CFG = {
-  platL: 30, platR: 460, platTopY: 660,
-  walkSpeed: 50, fleeSpeed: 180, fleeRadius: 120, yTolerance: 80,
-};
-const _graveRat: GroundCritterState = { x: 240, dir: 1, facingEase: 1, fleeing: false };
+const RATS_CFG = [
+  { platL: 30,  platR: 460,  platTopY: 660, walkSpeed: 50, fleeSpeed: 180, fleeRadius: 120, yTolerance: 80 },
+  { platL: 820, platR: 1260, platTopY: 660, walkSpeed: 52, fleeSpeed: 180, fleeRadius: 120, yTolerance: 80 },
+];
+const _graveRats: GroundCritterState[] = RATS_CFG.map((cfg, i) => ({
+  x: (cfg.platL + cfg.platR) / 2,
+  dir: i % 2 === 0 ? 1 : -1, facingEase: 1, fleeing: false, committedFleeDir: 0,
+}));
 const _tickGraveRatDt = makeDtTracker();
 
 const WISPS = [
@@ -367,7 +370,33 @@ export const hauntedGraveyard: ArenaPack = {
   drawFarBackground: (ctx, _arena) => {
     ctx.save();
 
-    // Stars (no moon -- day/night disabled)
+    // Full moon — hangs high in the sky, casts a soft halo.
+    const moonX = 950;
+    const moonY = 110;
+    const moonR = 38;
+    const moonHalo = ctx.createRadialGradient(moonX, moonY, moonR * 0.9, moonX, moonY, moonR * 2.2);
+    moonHalo.addColorStop(0, 'rgba(220, 215, 235, 0.35)');
+    moonHalo.addColorStop(1, 'rgba(220, 215, 235, 0)');
+    ctx.fillStyle = moonHalo;
+    ctx.beginPath();
+    ctx.arc(moonX, moonY, moonR * 2.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#e8e4f0';
+    ctx.beginPath();
+    ctx.arc(moonX, moonY, moonR, 0, Math.PI * 2);
+    ctx.fill();
+    // Craters — scattered asymmetrically across the disc.
+    ctx.fillStyle = 'rgba(170, 165, 195, 0.45)';
+    ctx.beginPath();
+    ctx.arc(moonX - 18, moonY + 2, 3.5, 0, Math.PI * 2);
+    ctx.arc(moonX - 2, moonY - 16, 2.5, 0, Math.PI * 2);
+    ctx.arc(moonX + 16, moonY + 8, 4, 0, Math.PI * 2);
+    ctx.arc(moonX + 4, moonY + 18, 3, 0, Math.PI * 2);
+    ctx.arc(moonX - 12, moonY + 16, 2, 0, Math.PI * 2);
+    ctx.arc(moonX + 18, moonY - 10, 2, 0, Math.PI * 2);
+    ctx.arc(moonX - 6, moonY + 4, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+
     ctx.fillStyle = '#CCBBDD';
     const stars = [
       [80, 25, 1.2], [200, 55, 0.8], [350, 20, 1.5], [480, 65, 1],
@@ -761,8 +790,11 @@ export const hauntedGraveyard: ArenaPack = {
     ctx.restore();
     if (matchState) {
       const dt = _tickGraveRatDt(time);
-      tickGroundCritter(_graveRat, matchState.players, dt, RAT_CFG);
-      drawRat(ctx, _graveRat.x, RAT_CFG.platTopY - 4, _graveRat.facingEase < 0 ? -1 : 1, time, Math.abs(_graveRat.facingEase), _graveRat.fleeing);
+      for (let i = 0; i < _graveRats.length; i++) {
+        const r = _graveRats[i];
+        tickGroundCritter(r, matchState.players, dt, RATS_CFG[i]);
+        drawRat(ctx, r.x, RATS_CFG[i].platTopY - 4, r.facingEase < 0 ? -1 : 1, time, Math.abs(r.facingEase), r.fleeing);
+      }
     }
   },
 

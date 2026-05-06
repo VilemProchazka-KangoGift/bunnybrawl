@@ -665,32 +665,51 @@ export const waterfall: ArenaPack = {
       ctx.fill();
       const breath = fastSin(time * 2 + i) * 0.5;
       const fy = lp.gy + lift;
+      // Body — wide squat ellipse sitting on the lily pad.
       ctx.fillStyle = '#4a8a3a';
       ctx.beginPath();
-      ctx.ellipse(lp.x, fy - 6 + breath, 9, 7 - breath * 0.5, 0, 0, Math.PI * 2);
+      ctx.ellipse(lp.x, fy - 5 + breath, 13, 7 - breath * 0.4, 0, 0, Math.PI * 2);
       ctx.fill();
+      // Folded back-leg bumps on each side.
+      ctx.beginPath();
+      ctx.ellipse(lp.x - 9, fy - 3, 4, 3, -0.3, 0, Math.PI * 2);
+      ctx.ellipse(lp.x + 9, fy - 3, 4, 3, 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      // Front feet poking out under the body.
+      ctx.fillStyle = '#3d6e2c';
+      ctx.beginPath();
+      ctx.ellipse(lp.x - 4, fy - 1, 3, 1.5, 0.1, 0, Math.PI * 2);
+      ctx.ellipse(lp.x + 4, fy - 1, 3, 1.5, -0.1, 0, Math.PI * 2);
+      ctx.fill();
+      // Lighter belly highlight.
       ctx.fillStyle = '#a8d088';
       ctx.beginPath();
-      ctx.ellipse(lp.x, fy - 4 + breath, 6, 3, 0, 0, Math.PI * 2);
+      ctx.ellipse(lp.x, fy - 3 + breath, 7, 2.5, 0, 0, Math.PI * 2);
       ctx.fill();
+      // Head — sits on top of the body, slightly forward.
       ctx.fillStyle = '#4a8a3a';
       ctx.beginPath();
-      ctx.arc(lp.x - 3.5, fy - 12, 2.5, 0, Math.PI * 2);
-      ctx.arc(lp.x + 3.5, fy - 12, 2.5, 0, Math.PI * 2);
+      ctx.ellipse(lp.x, fy - 11 + breath * 0.5, 8, 4.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Eye bumps on top of the head.
+      ctx.beginPath();
+      ctx.arc(lp.x - 4, fy - 14, 2.5, 0, Math.PI * 2);
+      ctx.arc(lp.x + 4, fy - 14, 2.5, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = '#fff';
       ctx.beginPath();
-      ctx.arc(lp.x - 3.5, fy - 12, 1.6, 0, Math.PI * 2);
-      ctx.arc(lp.x + 3.5, fy - 12, 1.6, 0, Math.PI * 2);
+      ctx.arc(lp.x - 4, fy - 14, 1.6, 0, Math.PI * 2);
+      ctx.arc(lp.x + 4, fy - 14, 1.6, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = '#000';
-      ctx.fillRect(lp.x - 4, fy - 12.5, 1, 1.5);
-      ctx.fillRect(lp.x + 3, fy - 12.5, 1, 1.5);
+      ctx.fillRect(lp.x - 4.5, fy - 14.5, 1, 1.5);
+      ctx.fillRect(lp.x + 3.5, fy - 14.5, 1, 1.5);
+      // Mouth line.
       ctx.strokeStyle = '#2a4a2a';
       ctx.lineWidth = 0.7;
       ctx.beginPath();
-      ctx.moveTo(lp.x - 4, fy - 4 + breath);
-      ctx.lineTo(lp.x + 4, fy - 4 + breath);
+      ctx.moveTo(lp.x - 5, fy - 10 + breath * 0.5);
+      ctx.lineTo(lp.x + 5, fy - 10 + breath * 0.5);
       ctx.stroke();
     }
     ctx.restore();

@@ -5,20 +5,22 @@ import { fastSin } from '../../fastMath';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
 import { getFloatingPlatforms, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
 
-const ROBOT_CFG = {
-  platL: 20, platR: 200, platTopY: 660,
-  walkSpeed: 22, fleeSpeed: 70, fleeRadius: 90, yTolerance: 80, turnEaseRate: 2,
-};
-const _robot: GroundCritterState = { x: 110, dir: 1, facingEase: 1, fleeing: false };
+const ROBOTS_CFG = [
+  { platL: 20,   platR: 200,  platTopY: 660, walkSpeed: 22, fleeSpeed: 70, fleeRadius: 90, yTolerance: 80, turnEaseRate: 2 },
+  { platL: 1080, platR: 1260, platTopY: 660, walkSpeed: 24, fleeSpeed: 75, fleeRadius: 90, yTolerance: 80, turnEaseRate: 2 },
+  { platL: 35,   platR: 195,  platTopY: 360, walkSpeed: 18, fleeSpeed: 60, fleeRadius: 85, yTolerance: 60, turnEaseRate: 2 },
+];
+const _robots: GroundCritterState[] = ROBOTS_CFG.map((cfg, i) => ({
+  x: (cfg.platL + cfg.platR) / 2,
+  dir: i % 2 === 0 ? 1 : -1, facingEase: 1, fleeing: false, committedFleeDir: 0,
+}));
 const _tickRobotDt = makeDtTracker();
 
-function drawRobot(ctx: CanvasRenderingContext2D, time: number, players: ReadonlyArray<Player>): void {
-  const dt = _tickRobotDt(time);
-  tickGroundCritter(_robot, players, dt, ROBOT_CFG);
-  const step = fastSin(time * (_robot.fleeing ? 14 : 6)) * Math.abs(_robot.facingEase);
+function drawOneRobot(ctx: CanvasRenderingContext2D, time: number, robot: GroundCritterState, cfg: typeof ROBOTS_CFG[number]): void {
+  const step = fastSin(time * (robot.fleeing ? 14 : 6)) * Math.abs(robot.facingEase);
   ctx.save();
-  ctx.translate(_robot.x, ROBOT_CFG.platTopY - 6);
-  if (_robot.facingEase < 0) ctx.scale(-1, 1);
+  ctx.translate(robot.x, cfg.platTopY - 6);
+  if (robot.facingEase < 0) ctx.scale(-1, 1);
   ctx.fillStyle = '#5a6a78';
   ctx.fillRect(-3, 1 - Math.max(0, step) * 1.2, 2, 5);
   ctx.fillRect(1, 1 - Math.max(0, -step) * 1.2, 2, 5);
@@ -44,6 +46,14 @@ function drawRobot(ctx: CanvasRenderingContext2D, time: number, players: Readonl
   ctx.arc(0, -11.5, 1, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
+}
+
+function drawRobot(ctx: CanvasRenderingContext2D, time: number, players: ReadonlyArray<Player>): void {
+  const dt = _tickRobotDt(time);
+  for (let i = 0; i < _robots.length; i++) {
+    tickGroundCritter(_robots[i], players, dt, ROBOTS_CFG[i]);
+    drawOneRobot(ctx, time, _robots[i], ROBOTS_CFG[i]);
+  }
 }
 
 import {

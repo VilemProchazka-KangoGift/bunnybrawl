@@ -7,20 +7,15 @@ import { drawTree, drawHangingVine, drawFgLeafCluster, drawFern } from '../../th
 import { pushFromPlayers, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
 import type { Player } from '../../types';
 
-const SQUIRREL_CFG = {
-  platL: 450,
-  platR: 730,
-  platTopY: 256,
-  walkSpeed: 45,
-  fleeSpeed: 140,
-  fleeRadius: 110,
-};
-const _squirrel: GroundCritterState = {
-  x: (SQUIRREL_CFG.platL + SQUIRREL_CFG.platR) / 2,
-  dir: 1,
-  facingEase: 1,
-  fleeing: false,
-};
+const SQUIRRELS_CFG = [
+  { platL: 450, platR: 730, platTopY: 256, walkSpeed: 45, fleeSpeed: 140, fleeRadius: 110, yTolerance: 60 },
+  { platL: 520, platR: 760, platTopY: 366, walkSpeed: 50, fleeSpeed: 150, fleeRadius: 110, yTolerance: 60 },
+  { platL: 140, platR: 310, platTopY: 486, walkSpeed: 45, fleeSpeed: 140, fleeRadius: 100, yTolerance: 60 },
+];
+const _squirrels: GroundCritterState[] = SQUIRRELS_CFG.map((cfg, i) => ({
+  x: (cfg.platL + cfg.platR) / 2,
+  dir: i % 2 === 0 ? 1 : -1, facingEase: 1, fleeing: false, committedFleeDir: 0,
+}));
 const _tickSquirrelDt = makeDtTracker();
 const TREETOPS_BUTTERFLY_HUES = [320, 60, 200, 290, 30, 160] as const;
 const TREETOPS_BUTTERFLY_COLORS = TREETOPS_BUTTERFLY_HUES.map(h => `hsl(${h},80%,65%)`);
@@ -592,37 +587,42 @@ export const treetops: ArenaPack = {
     ctx.save();
 
     const dt = _tickSquirrelDt(time);
-    tickGroundCritter(_squirrel, matchState?.players ?? [], dt, SQUIRREL_CFG);
-    const fleeing = _squirrel.fleeing;
-    const bob = fastSin(time * (fleeing ? 18 : 8)) * (fleeing ? 2 : 1) * Math.abs(_squirrel.facingEase);
-    ctx.save();
-    ctx.translate(_squirrel.x, SQUIRREL_CFG.platTopY + bob);
-    if (_squirrel.facingEase < 0) ctx.scale(-1, 1);
-    ctx.fillStyle = '#a5683a';
-    ctx.beginPath();
-    ctx.ellipse(0, 0, 9, 5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(-7, 0);
-    ctx.bezierCurveTo(-18, -3, -22, -14, -10, -14);
-    ctx.lineTo(-10, -6);
-    ctx.bezierCurveTo(-14, -7, -10, -2, -7, 0);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(7, -1, 4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(8, -4);
-    ctx.lineTo(10, -7);
-    ctx.lineTo(11, -4);
-    ctx.fill();
-    ctx.fillStyle = '#000';
-    ctx.fillRect(8, -2, 1.5, 1.5);
-    ctx.fillStyle = '#e8c89a';
-    ctx.beginPath();
-    ctx.ellipse(0, 1.5, 5, 2, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
+    const players = matchState?.players ?? [];
+    for (let si = 0; si < _squirrels.length; si++) {
+      const sq = _squirrels[si];
+      const cfg = SQUIRRELS_CFG[si];
+      tickGroundCritter(sq, players, dt, cfg);
+      const fleeing = sq.fleeing;
+      const bob = fastSin(time * (fleeing ? 18 : 8) + si) * (fleeing ? 2 : 1) * Math.abs(sq.facingEase);
+      ctx.save();
+      ctx.translate(sq.x, cfg.platTopY + bob);
+      if (sq.facingEase < 0) ctx.scale(-1, 1);
+      ctx.fillStyle = '#a5683a';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 9, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(-7, 0);
+      ctx.bezierCurveTo(-18, -3, -22, -14, -10, -14);
+      ctx.lineTo(-10, -6);
+      ctx.bezierCurveTo(-14, -7, -10, -2, -7, 0);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(7, -1, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(8, -4);
+      ctx.lineTo(10, -7);
+      ctx.lineTo(11, -4);
+      ctx.fill();
+      ctx.fillStyle = '#000';
+      ctx.fillRect(8, -2, 1.5, 1.5);
+      ctx.fillStyle = '#e8c89a';
+      ctx.beginPath();
+      ctx.ellipse(0, 1.5, 5, 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
 
     ctx.restore();
   },

@@ -25,7 +25,7 @@ function makeGumdrop(platL: number, platR: number, gy: number, color: string): G
   return {
     gy, color,
     cfg: { platL: platL + GUMDROP_R, platR: platR - GUMDROP_R, platTopY: gy, walkSpeed: 35, fleeSpeed: 110, fleeRadius: 90, yTolerance: 60, turnEaseRate: 3 },
-    state: { x: startX, dir: 1, facingEase: 1, fleeing: false },
+    state: { x: startX, dir: 1, facingEase: 1, fleeing: false, committedFleeDir: 0 },
     rot: 0,
   };
 }

@@ -168,6 +168,10 @@ export interface GroundCritterState {
   dir: 1 | -1;
   facingEase: number;
   fleeing: boolean;
+  // Once cornered and flipped to "run past", commit to that direction until the
+  // critter clears the opposite edge — prevents oscillation as the player
+  // tracks them across the corner threshold.
+  committedFleeDir: 0 | 1 | -1;
 }
 
 /**
@@ -199,11 +203,25 @@ export function tickGroundCritter(
   state.fleeing = nearestPx < cfg.fleeRadius;
   let targetDir: 1 | -1 = state.dir;
   if (state.fleeing) {
-    targetDir = nearestDx > 0 ? -1 : 1;
-    // If cornered against the wall behind us, run past the player instead.
-    if (state.x <= cfg.platL + cornerMargin && targetDir === -1) targetDir = 1;
-    if (state.x >= cfg.platR - cornerMargin && targetDir === 1) targetDir = -1;
+    const want: 1 | -1 = nearestDx > 0 ? -1 : 1;
+    // Honor a prior "run past" commitment until we reach the opposite edge.
+    if (state.committedFleeDir !== 0) {
+      targetDir = state.committedFleeDir;
+      const reachedFar =
+        (state.committedFleeDir === 1 && state.x >= cfg.platR - 5) ||
+        (state.committedFleeDir === -1 && state.x <= cfg.platL + 5);
+      if (reachedFar) state.committedFleeDir = 0;
+    } else if (state.x <= cfg.platL + cornerMargin && want === -1) {
+      state.committedFleeDir = 1;
+      targetDir = 1;
+    } else if (state.x >= cfg.platR - cornerMargin && want === 1) {
+      state.committedFleeDir = -1;
+      targetDir = -1;
+    } else {
+      targetDir = want;
+    }
   } else {
+    state.committedFleeDir = 0;
     if (state.x <= cfg.platL) targetDir = 1;
     else if (state.x >= cfg.platR) targetDir = -1;
   }

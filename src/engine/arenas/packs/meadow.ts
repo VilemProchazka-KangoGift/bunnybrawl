@@ -5,11 +5,14 @@ import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
 import { getFloatingPlatforms, pushFromPlayers, isLivePlayer, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
 
-const SNAIL_CFG = {
-  platL: 900, platR: 1080, platTopY: 660,
-  walkSpeed: 8, fleeSpeed: 22, fleeRadius: 70, yTolerance: 80, turnEaseRate: 2,
-};
-const _snail: GroundCritterState = { x: 990, dir: 1, facingEase: 1, fleeing: false };
+const SNAILS_CFG: Array<{ platL: number; platR: number; platTopY: number; walkSpeed: number; fleeSpeed: number; fleeRadius: number; yTolerance: number; turnEaseRate: number }> = [
+  { platL: 900, platR: 1080, platTopY: 660, walkSpeed: 8, fleeSpeed: 22, fleeRadius: 70, yTolerance: 80, turnEaseRate: 2 },
+  { platL: 200, platR: 380,  platTopY: 660, walkSpeed: 7, fleeSpeed: 20, fleeRadius: 70, yTolerance: 80, turnEaseRate: 2 },
+];
+const _snails: GroundCritterState[] = SNAILS_CFG.map((cfg, i) => ({
+  x: (cfg.platL + cfg.platR) / 2 + i * 7,
+  dir: i % 2 === 0 ? 1 : -1, facingEase: 1, fleeing: false, committedFleeDir: 0,
+}));
 const _tickSnailDt = makeDtTracker();
 
 const BUTTERFLY_HUES = [320, 60, 200, 290, 30, 160, 180, 40] as const;
@@ -64,12 +67,10 @@ function drawButterfly(ctx: CanvasRenderingContext2D, i: number, time: number, p
   ctx.fillRect(r.x - 0.5, r.y - 3, 1, 6);
 }
 
-function drawSnail(ctx: CanvasRenderingContext2D, time: number, players: ReadonlyArray<import('../../types').Player>): void {
-  const dt = _tickSnailDt(time);
-  tickGroundCritter(_snail, players, dt, SNAIL_CFG);
+function drawOneSnail(ctx: CanvasRenderingContext2D, time: number, snail: GroundCritterState, cfg: typeof SNAILS_CFG[number]): void {
   ctx.save();
-  ctx.translate(_snail.x, SNAIL_CFG.platTopY - 4);
-  if (_snail.facingEase < 0) ctx.scale(-1, 1);
+  ctx.translate(snail.x, cfg.platTopY - 4);
+  if (snail.facingEase < 0) ctx.scale(-1, 1);
   ctx.fillStyle = '#b89878';
   ctx.beginPath();
   ctx.ellipse(0, 0, 9, 3.5, 0, 0, Math.PI * 2);
@@ -103,6 +104,14 @@ function drawSnail(ctx: CanvasRenderingContext2D, time: number, players: Readonl
   ctx.arc(11 - wig, -4, 0.6, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
+}
+
+function drawSnails(ctx: CanvasRenderingContext2D, time: number, players: ReadonlyArray<import('../../types').Player>): void {
+  const dt = _tickSnailDt(time);
+  for (let i = 0; i < _snails.length; i++) {
+    tickGroundCritter(_snails[i], players, dt, SNAILS_CFG[i]);
+    drawOneSnail(ctx, time, _snails[i], SNAILS_CFG[i]);
+  }
 }
 
 function drawBeeCluster(ctx: CanvasRenderingContext2D, ci: number, time: number, players: ReadonlyArray<import('../../types').Player>): void {
@@ -702,7 +711,7 @@ export const meadow: ArenaPack = {
     const players = matchState.players;
     for (let i = 0; i < BUTTERFLY_HUES.length; i++) drawButterfly(ctx, i, time, players);
     for (let ci = 0; ci < BEE_CLUSTERS.length; ci++) drawBeeCluster(ctx, ci, time, players);
-    drawSnail(ctx, time, players);
+    drawSnails(ctx, time, players);
     ctx.restore();
   },
 

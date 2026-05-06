@@ -11,8 +11,11 @@ const CHIMNEYS = [
   { x: 264, y: 444 },
 ] as const;
 
-// Room interior matches `openH = 88` in drawFarBackground — floor at y, ceiling at y - 88.
+// Room interior matches `openH = 88` in drawFarBackground (floor at y, ceiling
+// at y - 88). The dark/light wash extends down through the platform body too,
+// so the apartment reads continuously from ceiling to floor edge.
 const HALLWAY_ROOM_H = 88;
+const HALLWAY_FLOOR_BODY_H = 24;
 interface Hallway { x: number; y: number; w: number }
 const HALLWAYS: ReadonlyArray<Hallway> = [
   { x: 510, y: 550, w: 300 },
@@ -23,7 +26,9 @@ function getHallwayGlow(ctx: CanvasRenderingContext2D, h: Hallway): CanvasGradie
   let g = _hallwayGlowGrads.get(h);
   if (!g) {
     const cx = h.x + h.w / 2;
-    const cy = h.y - HALLWAY_ROOM_H * 0.5;
+    // Center between ceiling and floor-body bottom.
+    const totalH = HALLWAY_ROOM_H + HALLWAY_FLOOR_BODY_H;
+    const cy = h.y - HALLWAY_ROOM_H + totalH * 0.5;
     g = ctx.createRadialGradient(cx, cy, 0, cx, cy, h.w * 0.9);
     g.addColorStop(0, 'rgba(255, 213, 107, 0.7)');
     g.addColorStop(1, 'rgba(255, 180, 60, 0.2)');
@@ -1198,13 +1203,14 @@ export const rooftops: ArenaPack = {
         }
       }
       const interiorTop = h.y - HALLWAY_ROOM_H;
+      const totalH = HALLWAY_ROOM_H + HALLWAY_FLOOR_BODY_H;
       if (!lit) {
         ctx.fillStyle = 'rgba(8, 10, 18, 0.55)';
-        ctx.fillRect(h.x + 4, interiorTop, h.w - 8, HALLWAY_ROOM_H);
+        ctx.fillRect(h.x + 4, interiorTop, h.w - 8, totalH);
         continue;
       }
       ctx.fillStyle = getHallwayGlow(ctx, h);
-      ctx.fillRect(h.x, interiorTop, h.w, HALLWAY_ROOM_H);
+      ctx.fillRect(h.x, interiorTop, h.w, totalH);
       const flicker = 0.92 + fastSin(time * 9) * 0.08;
       const bulbX = h.x + h.w / 2;
       const bulbY = interiorTop + 12;

@@ -6,11 +6,17 @@ import { getSlowDevice } from '../../perfFlags';
 import { getFloatingPlatforms, isLivePlayer, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
 import { drawRat } from '../../themes/drawPrimitives';
 
-const RAT_CFG = {
-  platL: 420, platR: 860, platTopY: 660,
-  walkSpeed: 50, fleeSpeed: 180, fleeRadius: 120, yTolerance: 80,
-};
-const _castleRat: GroundCritterState = { x: 640, dir: 1, facingEase: 1, fleeing: false };
+const RATS_CFG = [
+  { platL: 30,   platR: 220,  platTopY: 660, walkSpeed: 50, fleeSpeed: 180, fleeRadius: 120, yTolerance: 80 },
+  { platL: 420,  platR: 860,  platTopY: 660, walkSpeed: 50, fleeSpeed: 180, fleeRadius: 120, yTolerance: 80 },
+  { platL: 1060, platR: 1260, platTopY: 660, walkSpeed: 50, fleeSpeed: 180, fleeRadius: 120, yTolerance: 80 },
+];
+const _castleRats: GroundCritterState[] = RATS_CFG.map((cfg, i) => ({
+  x: (cfg.platL + cfg.platR) / 2,
+  dir: i % 2 === 0 ? 1 : -1, facingEase: 1, fleeing: false, committedFleeDir: 0,
+}));
+let _bannerExcite: Float32Array | null = null;
+const _tickBannerDt = makeDtTracker();
 const _tickCastleRatDt = makeDtTracker();
 
 // x=1180 conflicted with the tall floating platform at x=1120 y=580; moved to x=1080 (clear ground space).
@@ -835,12 +841,20 @@ export const castle: ArenaPack = {
   drawAnimatedForeground: (ctx, arena, time, _dayPhase, matchState) => {
     if (matchState) {
       const dt = _tickCastleRatDt(time);
-      tickGroundCritter(_castleRat, matchState.players, dt, RAT_CFG);
-      drawRat(ctx, _castleRat.x, RAT_CFG.platTopY - 4, _castleRat.facingEase < 0 ? -1 : 1, time, Math.abs(_castleRat.facingEase), _castleRat.fleeing);
+      for (let i = 0; i < _castleRats.length; i++) {
+        const r = _castleRats[i];
+        tickGroundCritter(r, matchState.players, dt, RATS_CFG[i]);
+        drawRat(ctx, r.x, RATS_CFG[i].platTopY - 4, r.facingEase < 0 ? -1 : 1, time, Math.abs(r.facingEase), r.fleeing);
+      }
     }
-    // Reactive banners: nearest-player distance amplifies sway.
+    // Reactive banners: nearest-player distance amplifies sway. Excitement is
+    // eased over ~0.5s so the wobble fades in/out smoothly instead of jumping.
     const floats = getFloatingPlatforms(arena.platforms).filter(p => p.width >= 100);
     const players = matchState?.players;
+    if (!_bannerExcite || _bannerExcite.length < floats.length) {
+      _bannerExcite = new Float32Array(floats.length);
+    }
+    const dt = _tickBannerDt(time);
     ctx.save();
     ctx.globalAlpha = 0.7;
     for (let i = 0; i < floats.length; i++) {
@@ -858,9 +872,12 @@ export const castle: ArenaPack = {
           if (d2 < nearest) nearest = d2;
         }
       }
-      const proximity = nearest < 90 * 90 ? 1 - Math.sqrt(nearest) / 90 : 0;
+      const target = nearest < 90 * 90 ? 1 - Math.sqrt(nearest) / 90 : 0;
+      _bannerExcite[i] = Math.max(0, _bannerExcite[i] + (target - _bannerExcite[i]) * dt * 3);
+      const excite = _bannerExcite[i];
       const baseSway = fastSin(time * 1.5 + i * 1.8) * 6;
-      const reactSway = fastSin(time * 9 + i * 0.7) * 6 * proximity;
+      // Reactive amplitude scales smoothly with eased excitement.
+      const reactSway = fastSin(time * (1.5 + excite * 4) + i * 1.8) * excite * 5;
       const sway = baseSway + reactSway;
       const h = 35;
       ctx.fillStyle = '#8A8A6A';
