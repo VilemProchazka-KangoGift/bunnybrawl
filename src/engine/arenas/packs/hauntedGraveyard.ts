@@ -14,11 +14,6 @@ const WISPS = [
   { x: 420, y: 420, phase: 0.8 },
   { x: 880, y: 420, phase: 2.4 },
 ] as const;
-const FOG_TOP_Y = 580;
-const FOG_BOTTOM_Y = 660;
-const FOG_BAND_H = FOG_BOTTOM_Y - FOG_TOP_Y;
-const FOG_ROWS = 5;
-const FOG_BLOBS = 12;
 import {
   CAP_DEPTH, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
   capFrontY, capBackY, skewPx,
@@ -730,36 +725,55 @@ export const hauntedGraveyard: ArenaPack = {
       ctx.globalAlpha = wispBrightness * pulse;
       ctx.beginPath(); ctx.arc(x, y, 2.5, 0, Math.PI * 2); ctx.fill();
     }
-    ctx.fillStyle = '#c8d7e6';
-    for (let r = 0; r < FOG_ROWS; r++) {
-      const rowU = r / (FOG_ROWS - 1);
-      const yMid = FOG_TOP_Y + rowU * FOG_BAND_H;
-      const baseAlpha = 0.04 + rowU * 0.10;
-      const drift = (time * (12 + r * 3)) % CANVAS_WIDTH;
-      for (let b = 0; b < FOG_BLOBS; b++) {
-        const phase = b * 1.7 + r * 0.6;
-        const x = ((b * (CANVAS_WIDTH / FOG_BLOBS) - drift) + CANVAS_WIDTH * 2) % CANVAS_WIDTH;
-        const sx = 80 + fastSin(phase) * 24;
-        const sy = 12 + (rowU * 6);
-        ctx.globalAlpha = baseAlpha * (0.7 + 0.3 * fastSin(time * 0.6 + phase));
-        ctx.beginPath();
-        ctx.ellipse(x, yMid + fastSin(time * 0.5 + phase) * 6, sx, sy, 0, 0, Math.PI * 2);
-        ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  },
+
+  drawAnimatedForeground: (ctx, _arena, time) => {
+    if (getSlowDevice()) return;
+    ctx.save();
+    // Wavy fog ribbons overlaid on top of players — denser low to ground.
+    // Three layers of wavy polygons with horizontal drift; each x has a "density"
+    // modulation so some patches are thick enough to hide a character.
+    const layers = [
+      { drift: 18, ampHi: 14, freq: 0.018, baseY: 660, height: 70, color: '#a4b3c5', alpha: 0.55 },
+      { drift: 11, ampHi: 18, freq: 0.012, baseY: 660, height: 95, color: '#bfcdda', alpha: 0.42 },
+      { drift: 7,  ampHi: 22, freq: 0.009, baseY: 660, height: 120, color: '#d3dde8', alpha: 0.30 },
+    ];
+    for (let li = 0; li < layers.length; li++) {
+      const L = layers[li];
+      const tx = time * L.drift;
+      // Build the wavy top edge once; the bottom is fixed at L.baseY.
+      ctx.fillStyle = L.color;
+      ctx.globalAlpha = L.alpha;
+      ctx.beginPath();
+      ctx.moveTo(-20, L.baseY);
+      for (let x = -20; x <= CANVAS_WIDTH + 20; x += 12) {
+        // Layered noise via sum of fastSins. denseAmp peaks where the slow
+        // sinewave crests, creating thick patches with thin gaps between.
+        const s = fastSin((x + tx) * L.freq);
+        const s2 = fastSin((x + tx) * L.freq * 2.7 + li);
+        const s3 = fastSin(x * 0.004 + time * 0.4 + li * 1.3);
+        const denseAmp = 0.5 + 0.5 * s3;             // 0..1
+        const wave = (s * 0.7 + s2 * 0.3) * L.ampHi * denseAmp;
+        const topY = L.baseY - L.height + wave;
+        ctx.lineTo(x, topY);
       }
+      ctx.lineTo(CANVAS_WIDTH + 20, L.baseY);
+      ctx.closePath();
+      ctx.fill();
     }
-    for (let i = 0; i < 16; i++) {
-      const baseX = ((i * 89 + 23) % CANVAS_WIDTH);
-      const t = ((time * 0.18 + i * 0.06) % 1);
-      const cx = baseX + fastSin(time * 0.4 + i * 0.7) * 18;
-      const cy = FOG_BOTTOM_Y - t * 140;
-      const r = 8 + (1 - t) * 14;
-      const a = (1 - t) * 0.10 * (0.6 + 0.4 * fastSin(time + i));
-      ctx.fillStyle = '#b4c8dc';
-      ctx.globalAlpha = a;
-      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#dce6f0';
-      ctx.globalAlpha = a * 0.5;
-      ctx.beginPath(); ctx.arc(cx - r * 0.3, cy - r * 0.3, r * 0.4, 0, Math.PI * 2); ctx.fill();
+    // Dense patches: occasional thicker fog clouds that fully occlude.
+    ctx.fillStyle = '#c8d4e0';
+    for (let i = 0; i < 5; i++) {
+      const cx = ((i * 280 + time * 14) % (CANVAS_WIDTH + 200)) - 100;
+      const cy = 620 + fastSin(time * 0.4 + i) * 12;
+      const sx = 90 + fastSin(time * 0.6 + i * 1.7) * 18;
+      const sy = 28 + fastSin(time * 0.5 + i) * 6;
+      ctx.globalAlpha = 0.70;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, sx, sy, 0, 0, Math.PI * 2);
+      ctx.fill();
     }
     ctx.globalAlpha = 1;
     ctx.restore();

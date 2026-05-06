@@ -971,6 +971,13 @@ export class Renderer {
         d.dayNight = true;
       }
 
+      if (this.theme.drawAnimatedForeground) {
+        const thA = this.originalArena ?? arena;
+        if (this.mirrored) { ctx.save(); ctx.scale(-1, 1); ctx.translate(-CANVAS_WIDTH, 0); }
+        this.theme.drawAnimatedForeground(ctx, thA, matchState.timeElapsed, matchState.dayPhase, matchState);
+        if (this.mirrored) { ctx.restore(); }
+      }
+
       if (!slow && this.theme.drawSceneTint) {
         this.theme.drawSceneTint(ctx, matchState.dayPhase, matchState.timeElapsed);
       }

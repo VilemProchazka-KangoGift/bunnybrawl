@@ -5,6 +5,7 @@ import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
 import { pushFromPlayers } from '../../themes/utils';
+import type { Player } from '../../types';
 
 const FISH_SPECIES = [
   { color: '#ffaa3a', size: 0.7 },
@@ -18,6 +19,40 @@ const BUBBLE_LEAKS = [
   { x: 906, y: 330 }, { x: 640, y: 80 },
 ] as const;
 const BUBBLE_COLUMNS = [120, 380, 900, 1180] as const;
+const FISH_COUNT = 18;
+
+function drawFish(ctx: CanvasRenderingContext2D, i: number, time: number, cxBase: number, cy: number, players: ReadonlyArray<Player>): void {
+  const sp = FISH_SPECIES[i % FISH_SPECIES.length];
+  const ox = (i % 6) * 26 - 65;
+  const oy = Math.floor(i / 6) * 22 - 22 + (i % 2) * 6;
+  const wob = fastSin(time * 4 + i) * 3;
+  let x = cxBase + ox + wob;
+  const baseY = cy + oy + fastCos(time * 3 + i) * 3;
+  if (x < -40) x += CANVAS_WIDTH + 80;
+  if (x > CANVAS_WIDTH + 40) x -= CANVAS_WIDTH + 80;
+  const r = pushFromPlayers(players, x, baseY, 70, 22);
+  const s = sp.size;
+  ctx.save();
+  ctx.translate(r.x, r.y);
+  ctx.fillStyle = sp.color;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 6 * s, 3 * s, 0, 0, Math.PI * 2);
+  ctx.fill();
+  const tailWag = fastSin(time * 12 + i) * 0.8;
+  ctx.beginPath();
+  ctx.moveTo(-6 * s, 0);
+  ctx.lineTo(-10 * s, -3 * s + tailWag);
+  ctx.lineTo(-10 * s, 3 * s + tailWag);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.beginPath();
+  ctx.ellipse(-1 * s, 1 * s, 4 * s, 1.2 * s, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#000';
+  ctx.fillRect(3.5 * s, -0.7 * s, 1, 1);
+  ctx.restore();
+}
 import {
   CAP_DEPTH, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
   capFrontY, capBackY, skewPx,
@@ -954,40 +989,8 @@ export const underwater: ArenaPack = {
     const cxBase = ((time * 70) % (CANVAS_WIDTH + 400)) - 200;
     const cy = 380 + fastSin(time * 0.5) * 40;
     const players = matchState.players;
-    const FISH_COUNT = 18;
-    for (let i = 0; i < FISH_COUNT; i++) {
-      const sp = FISH_SPECIES[i % FISH_SPECIES.length];
-      const ox = (i % 6) * 26 - 65;
-      const oy = Math.floor(i / 6) * 22 - 22 + (i % 2) * 6;
-      const wob = fastSin(time * 4 + i) * 3;
-      let x = cxBase + ox + wob;
-      const baseY = cy + oy + fastCos(time * 3 + i) * 3;
-      if (x < -40) x += CANVAS_WIDTH + 80;
-      if (x > CANVAS_WIDTH + 40) x -= CANVAS_WIDTH + 80;
-      const r = pushFromPlayers(players, x, baseY, 80, 35);
-      const s = sp.size;
-      ctx.save();
-      ctx.translate(r.x, r.y);
-      ctx.fillStyle = sp.color;
-      ctx.beginPath();
-      ctx.ellipse(0, 0, 6 * s, 3 * s, 0, 0, Math.PI * 2);
-      ctx.fill();
-      const tailWag = fastSin(time * 12 + i) * 0.8;
-      ctx.beginPath();
-      ctx.moveTo(-6 * s, 0);
-      ctx.lineTo(-10 * s, -3 * s + tailWag);
-      ctx.lineTo(-10 * s, 3 * s + tailWag);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,0.3)';
-      ctx.beginPath();
-      ctx.ellipse(-1 * s, 1 * s, 4 * s, 1.2 * s, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#000';
-      ctx.fillRect(3.5 * s, -0.7 * s, 1, 1);
-      ctx.restore();
-    }
-    // One strokeStyle for all bubble outlines; modulate via globalAlpha.
+    // Even fish in background, odd in foreground.
+    for (let i = 0; i < FISH_COUNT; i += 2) drawFish(ctx, i, time, cxBase, cy, players);
     ctx.strokeStyle = '#dcf0ff';
     ctx.fillStyle = '#ffffff';
     ctx.lineWidth = 1;
@@ -1022,6 +1025,16 @@ export const underwater: ArenaPack = {
       }
     }
     ctx.globalAlpha = 1;
+    ctx.restore();
+  },
+
+  drawAnimatedForeground: (ctx, _arena, time, _dayPhase, matchState) => {
+    if (getSlowDevice() || !matchState) return;
+    ctx.save();
+    const cxBase = ((time * 70) % (CANVAS_WIDTH + 400)) - 200;
+    const cy = 380 + fastSin(time * 0.5) * 40;
+    const players = matchState.players;
+    for (let i = 1; i < FISH_COUNT; i += 2) drawFish(ctx, i, time, cxBase, cy, players);
     ctx.restore();
   },
 

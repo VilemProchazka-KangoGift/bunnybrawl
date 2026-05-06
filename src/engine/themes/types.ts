@@ -141,6 +141,9 @@ export interface ThemeConfig {
   /** Per-frame animated background. Drawn after the static bg cache and BEFORE clouds, so it composes as far-sky atmosphere (aurora, distant space objects). dayPhase: 0=noon, 0.5=midnight. matchState provides player positions for parting/proximity effects. */
   drawAnimatedBackground?: (ctx: CanvasRenderingContext2D, arena: Arena, time: number, dayPhase: number, matchState?: import('../types').MatchState) => void;
 
+  /** Per-frame animated foreground. Drawn AFTER players + foreground-nature + platform overlays, so entities composed here cover platforms in front of the player. Pair with drawAnimatedBackground to split entities by z-order (e.g. half a flock in front, half behind). */
+  drawAnimatedForeground?: (ctx: CanvasRenderingContext2D, arena: Arena, time: number, dayPhase: number, matchState?: import('../types').MatchState) => void;
+
   /** Per-frame full-scene tint, drawn LAST after day-night overlay. Use for global mood washes (aurora green, lava red glow) that should affect every layer including players. */
   drawSceneTint?: (ctx: CanvasRenderingContext2D, dayPhase: number, time: number) => void;
 

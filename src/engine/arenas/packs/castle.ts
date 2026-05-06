@@ -3,10 +3,12 @@ import type { Arena, Platform, WeatherParticle } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
-import { getFloatingPlatforms } from '../../themes/utils';
+import { getFloatingPlatforms, isLivePlayer } from '../../themes/utils';
 
-const TORCH_X = [100, 400, 640, 880, 1180] as const;
+// x=1180 conflicted with the tall floating platform at x=1120 y=580; moved to x=1080 (clear ground space).
+const TORCH_X = [100, 400, 640, 880, 1080] as const;
 const TORCH_FLAME_Y = 580;
+const BANNER_COLORS = ['#8B0000', '#00008B', '#006400', '#4B0082'] as const;
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
 import {
   CAP_DEPTH, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
@@ -507,7 +509,7 @@ export const castle: ArenaPack = {
     drawTorch(400, y - 60);
     drawTorch(640, y - 60);
     drawTorch(880, y - 60);
-    drawTorch(1180, y - 60);
+    drawTorch(1080, y - 60);
 
     // Suits of armor on ground
     const drawArmor = (ax: number, ay: number, size: number) => {
@@ -647,51 +649,8 @@ export const castle: ArenaPack = {
     drawChain(1080, gy - 35, 3);
     ctx.restore();
 
-    // Foreground hanging banners — animated sway
-    const t = Date.now() * 0.001; // time in seconds for animation
-    const bannerColors = ['#8B0000', '#00008B', '#006400', '#4B0082'];
-    const floats = getFloatingPlatforms(arena.platforms).filter(p => p.width >= 100);
-    floats.forEach((plat, i) => {
-      const bx = plat.x + plat.width / 2;
-      const by = plat.y + plat.height;
-      const color = bannerColors[i % bannerColors.length];
-      const h = 35;
-      const sway = Math.sin(t * 1.5 + i * 1.8) * 6;
-
-      ctx.save();
-      ctx.globalAlpha = 0.7;
-
-      // Banner rod
-      ctx.fillStyle = '#8A8A6A';
-      ctx.fillRect(bx - 14, by - 2, 28, 3);
-
-      // Swaying banner body
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.moveTo(bx - 12, by);
-      ctx.lineTo(bx + 12, by);
-      ctx.quadraticCurveTo(bx + 10 + sway * 0.5, by + h * 0.5, bx + 8 + sway, by + h);
-      ctx.lineTo(bx + sway, by + h + 12);
-      ctx.lineTo(bx - 8 + sway, by + h);
-      ctx.quadraticCurveTo(bx - 10 + sway * 0.5, by + h * 0.5, bx - 12, by);
-      ctx.closePath();
-      ctx.fill();
-
-      // Emblem — shield shape
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-      const ex = bx + sway * 0.3;
-      ctx.beginPath();
-      ctx.moveTo(ex, by + 8);
-      ctx.lineTo(ex + 6, by + 13);
-      ctx.lineTo(ex + 6, by + 22);
-      ctx.lineTo(ex, by + 27);
-      ctx.lineTo(ex - 6, by + 22);
-      ctx.lineTo(ex - 6, by + 13);
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.restore();
-    });
+    // Banners are drawn in drawAnimatedForeground so they animate every frame
+    // and can react to nearby players (drawForegroundNature is cached at load).
   },
 
   drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
@@ -839,41 +798,81 @@ export const castle: ArenaPack = {
   drawAnimatedBackground: (ctx, _arena, time) => {
     if (getSlowDevice()) return;
     ctx.save();
+    // Subtle: smaller halo, slow flicker, gentler embers.
     for (let i = 0; i < TORCH_X.length; i++) {
       const tx = TORCH_X[i];
-      const flicker = 0.92 + fastSin(time * 11 + i * 1.7) * 0.08;
-      // Stacked alpha circles approximate the radial halo without a per-frame gradient.
+      const flicker = 0.95 + fastSin(time * 6 + i * 1.7) * 0.05;
       ctx.fillStyle = '#ff7828';
-      ctx.globalAlpha = 0.18 * flicker;
-      ctx.beginPath();
-      ctx.arc(tx, TORCH_FLAME_Y, 50 * flicker, 0, Math.PI * 2);
-      ctx.fill();
       ctx.globalAlpha = 0.10 * flicker;
       ctx.beginPath();
-      ctx.arc(tx, TORCH_FLAME_Y, 30 * flicker, 0, Math.PI * 2);
+      ctx.arc(tx, TORCH_FLAME_Y, 32 * flicker, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = '#ffb450';
-      ctx.globalAlpha = 0.20 * flicker;
+      ctx.globalAlpha = 0.06 * flicker;
       ctx.beginPath();
-      ctx.arc(tx, TORCH_FLAME_Y, 14 * flicker, 0, Math.PI * 2);
+      ctx.arc(tx, TORCH_FLAME_Y, 18 * flicker, 0, Math.PI * 2);
       ctx.fill();
-      const wig = fastSin(time * 6 + i) * 1.2;
-      ctx.fillStyle = '#ffdc82';
-      ctx.globalAlpha = 0.55 * flicker;
-      ctx.beginPath();
-      ctx.moveTo(tx - 2, TORCH_FLAME_Y - 4);
-      ctx.quadraticCurveTo(tx + wig, TORCH_FLAME_Y - 14 * flicker, tx + 2, TORCH_FLAME_Y - 4);
-      ctx.fill();
+      // Single drifting ember per torch (was 2 with snappy motion).
+      const u = ((time * 0.3 + i * 0.31) % 1);
+      ctx.globalAlpha = (1 - u) * 0.45;
       ctx.fillStyle = '#ff9a3a';
-      for (let k = 0; k < 2; k++) {
-        const u = ((time * 0.4 + i * 0.31 + k * 0.5) % 1);
-        ctx.globalAlpha = (1 - u) * 0.65;
-        ctx.beginPath();
-        ctx.arc(tx + fastSin(time * 2 + k + i) * 6, TORCH_FLAME_Y - 16 - u * 50, 1.4, 0, Math.PI * 2);
-        ctx.fill();
-      }
+      ctx.beginPath();
+      ctx.arc(tx + fastSin(time * 1.5 + i) * 4, TORCH_FLAME_Y - 16 - u * 40, 1.1, 0, Math.PI * 2);
+      ctx.fill();
     }
     ctx.globalAlpha = 1;
+    ctx.restore();
+  },
+
+  drawAnimatedForeground: (ctx, arena, time, _dayPhase, matchState) => {
+    // Reactive banners: nearest-player distance amplifies sway.
+    const floats = getFloatingPlatforms(arena.platforms).filter(p => p.width >= 100);
+    const players = matchState?.players;
+    ctx.save();
+    ctx.globalAlpha = 0.7;
+    for (let i = 0; i < floats.length; i++) {
+      const plat = floats[i];
+      const bx = plat.x + plat.width / 2;
+      const by = plat.y + plat.height;
+      const color = BANNER_COLORS[i % BANNER_COLORS.length];
+      let nearest = Infinity;
+      if (players) {
+        for (const p of players) {
+          if (!isLivePlayer(p)) continue;
+          const dx = (p.x + p.width * 0.5) - bx;
+          const dy = (p.y + p.height * 0.5) - (by + 18);
+          const d2 = dx * dx + dy * dy;
+          if (d2 < nearest) nearest = d2;
+        }
+      }
+      const proximity = nearest < 90 * 90 ? 1 - Math.sqrt(nearest) / 90 : 0;
+      const baseSway = fastSin(time * 1.5 + i * 1.8) * 6;
+      const reactSway = fastSin(time * 9 + i * 0.7) * 6 * proximity;
+      const sway = baseSway + reactSway;
+      const h = 35;
+      ctx.fillStyle = '#8A8A6A';
+      ctx.fillRect(bx - 14, by - 2, 28, 3);
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(bx - 12, by);
+      ctx.lineTo(bx + 12, by);
+      ctx.quadraticCurveTo(bx + 10 + sway * 0.5, by + h * 0.5, bx + 8 + sway, by + h);
+      ctx.lineTo(bx + sway, by + h + 12);
+      ctx.lineTo(bx - 8 + sway, by + h);
+      ctx.quadraticCurveTo(bx - 10 + sway * 0.5, by + h * 0.5, bx - 12, by);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+      const ex = bx + sway * 0.3;
+      ctx.beginPath();
+      ctx.moveTo(ex, by + 8);
+      ctx.lineTo(ex + 6, by + 13);
+      ctx.lineTo(ex + 6, by + 22);
+      ctx.lineTo(ex, by + 27);
+      ctx.lineTo(ex - 6, by + 22);
+      ctx.lineTo(ex - 6, by + 13);
+      ctx.closePath();
+      ctx.fill();
+    }
     ctx.restore();
   },
 

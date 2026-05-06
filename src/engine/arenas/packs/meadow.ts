@@ -3,17 +3,25 @@ import type { Arena, Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
-import { getFloatingPlatforms, pushFromPlayers } from '../../themes/utils';
+import { getFloatingPlatforms, pushFromPlayers, isLivePlayer } from '../../themes/utils';
 
 const BUTTERFLY_HUES = [320, 60, 200, 290, 30, 160, 180, 40] as const;
 const BUTTERFLY_COLORS = BUTTERFLY_HUES.map(h => `hsl(${h},80%,65%)`);
+// Even-indexed butterflies render in background, odd-indexed in foreground.
 const BEE_CLUSTERS = [
   { homeX: 320, homeY: 420, phase: 0 },
   { homeX: 980, homeY: 380, phase: 2.4 },
 ] as const;
-const DANDELION_X = [180, 420, 850, 1180] as const;
-const DANDELION_GY = 655;
-// 14-angle seed-pattern, precomputed so the dandelion loop avoids 56 sin+cos per frame.
+// Dandelions: x position + ground y (where stem base sits).
+const DANDELIONS = [
+  { x: 180, gy: 655 },           // ground
+  { x: 1180, gy: 655 },          // ground
+  { x: 380, gy: 395 },           // atop floating platform y=400
+  { x: 880, gy: 410 },           // atop floating platform y=415
+] as const;
+// Per-dandelion excitement (0..1), decays each frame, rises when a player is near.
+const _dandelionExcite = new Float32Array(DANDELIONS.length);
+let _lastDandelionTime = 0;
 const DANDELION_SEED_COS = new Float32Array(14);
 const DANDELION_SEED_SIN = new Float32Array(14);
 {
@@ -21,6 +29,43 @@ const DANDELION_SEED_SIN = new Float32Array(14);
     const a = (i / 14) * Math.PI * 2;
     DANDELION_SEED_COS[i] = Math.cos(a);
     DANDELION_SEED_SIN[i] = Math.sin(a);
+  }
+}
+
+function drawButterfly(ctx: CanvasRenderingContext2D, i: number, time: number, players: ReadonlyArray<import('../../types').Player>): void {
+  const driftSpeed = 0.04 + (i % 3) * 0.015;
+  const homeX = ((i * 200 + time * 60 * driftSpeed) % (CANVAS_WIDTH + 200)) - 100;
+  const homeY = 380 + fastSin(time * 0.4 + i * 1.7) * 80 + (i % 3) * 30;
+  const flutterX = homeX + fastSin(time * 1.2 + i) * 22;
+  const flutterY = homeY + fastSin(time * 1.5 + i * 1.7) * 14;
+  const r = pushFromPlayers(players, flutterX, flutterY, 70, 14, 4);
+  const flap = fastSin(time * 14 + i * 3) * 0.5 + 0.5;
+  ctx.fillStyle = BUTTERFLY_COLORS[i];
+  ctx.beginPath();
+  ctx.ellipse(r.x - 4, r.y, 4 * flap, 5, 0, 0, Math.PI * 2);
+  ctx.ellipse(r.x + 4, r.y, 4 * flap, 5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#000';
+  ctx.fillRect(r.x - 0.5, r.y - 3, 1, 6);
+}
+
+function drawBeeCluster(ctx: CanvasRenderingContext2D, ci: number, time: number, players: ReadonlyArray<import('../../types').Player>): void {
+  const c = BEE_CLUSTERS[ci];
+  const wanderX = c.homeX + fastSin(time * 0.25 + c.phase) * 200;
+  const wanderY = c.homeY + fastSin(time * 0.4 + c.phase + 1) * 60;
+  const r = pushFromPlayers(players, wanderX, wanderY, 110, 28, 8);
+  for (let i = 0; i < 6; i++) {
+    const ph = ci * 7 + i;
+    const bx = r.x + fastSin(time * 4 + ph) * 18 + (i % 3 - 1) * 6;
+    const by = r.y + fastCos(time * 3 + ph) * 12 + (Math.floor(i / 3) - 0.5) * 6;
+    const wig = fastSin(time * 16 + ph) * 1.5;
+    ctx.fillStyle = '#ffd54a';
+    ctx.beginPath();
+    ctx.ellipse(bx, by + wig, 3, 2.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#3a2a08';
+    ctx.fillRect(bx - 2, by + wig - 0.3, 1, 0.7);
+    ctx.fillRect(bx, by + wig - 0.3, 1, 0.7);
   }
 }
 import {
@@ -512,64 +557,65 @@ export const meadow: ArenaPack = {
     if (getSlowDevice() || !matchState) return;
     ctx.save();
     const players = matchState.players;
-    for (let i = 0; i < BUTTERFLY_HUES.length; i++) {
-      const driftSpeed = 0.04 + (i % 3) * 0.015;
-      const homeX = ((i * 200 + time * 60 * driftSpeed) % (CANVAS_WIDTH + 200)) - 100;
-      const homeY = 380 + fastSin(time * 0.4 + i * 1.7) * 80 + (i % 3) * 30;
-      const flutterX = homeX + fastSin(time * 1.2 + i) * 22;
-      const flutterY = homeY + fastSin(time * 1.5 + i * 1.7) * 14;
-      const r = pushFromPlayers(players, flutterX, flutterY, 100, 30, 10);
-      const flap = fastSin(time * 14 + i * 3) * 0.5 + 0.5;
-      ctx.fillStyle = BUTTERFLY_COLORS[i];
-      ctx.beginPath();
-      ctx.ellipse(r.x - 4, r.y, 4 * flap, 5, 0, 0, Math.PI * 2);
-      ctx.ellipse(r.x + 4, r.y, 4 * flap, 5, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#000';
-      ctx.fillRect(r.x - 0.5, r.y - 3, 1, 6);
-    }
-    for (let ci = 0; ci < BEE_CLUSTERS.length; ci++) {
-      const c = BEE_CLUSTERS[ci];
-      const wanderX = c.homeX + fastSin(time * 0.25 + c.phase) * 200;
-      const wanderY = c.homeY + fastSin(time * 0.4 + c.phase + 1) * 60;
-      const r = pushFromPlayers(players, wanderX, wanderY, 140, 60, 20);
-      for (let i = 0; i < 6; i++) {
-        const ph = ci * 7 + i;
-        const bx = r.x + fastSin(time * 4 + ph) * 18 + (i % 3 - 1) * 6;
-        const by = r.y + fastCos(time * 3 + ph) * 12 + (Math.floor(i / 3) - 0.5) * 6;
-        const wig = fastSin(time * 16 + ph) * 1.5;
-        ctx.fillStyle = '#ffd54a';
-        ctx.beginPath();
-        ctx.ellipse(bx, by + wig, 3, 2.2, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#3a2a08';
-        ctx.fillRect(bx - 2, by + wig - 0.3, 1, 0.7);
-        ctx.fillRect(bx, by + wig - 0.3, 1, 0.7);
+    // Even-indexed butterflies behind, odd in front.
+    for (let i = 0; i < BUTTERFLY_HUES.length; i += 2) drawButterfly(ctx, i, time, players);
+    drawBeeCluster(ctx, 0, time, players);
+    // Dandelions: decay excitement, raise it when a player is near, then draw.
+    const dt = Math.max(0, Math.min(0.1, time - _lastDandelionTime));
+    _lastDandelionTime = time;
+    for (let di = 0; di < DANDELIONS.length; di++) {
+      const d = DANDELIONS[di];
+      let nearest = Infinity;
+      for (const p of players) {
+        if (!isLivePlayer(p)) continue;
+        const dx = (p.x + p.width * 0.5) - d.x;
+        const dy = (p.y + p.height) - d.gy;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < nearest) nearest = d2;
       }
-    }
-    for (const dx of DANDELION_X) {
-      const puffY = DANDELION_GY - 9;
+      const dist = Math.sqrt(nearest);
+      const target = dist < 40 ? 1 : 0;
+      const e = _dandelionExcite[di] = Math.max(0, _dandelionExcite[di] + (target - _dandelionExcite[di]) * dt * 6);
+      const puffY = d.gy - 9;
+      // Stem
       ctx.strokeStyle = '#5fb45a';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.moveTo(dx, DANDELION_GY + 4);
-      ctx.lineTo(dx + fastSin(time + dx) * 0.5, DANDELION_GY - 8);
+      ctx.moveTo(d.x, d.gy + 4);
+      ctx.lineTo(d.x + fastSin(time + d.x) * 0.5, d.gy - 8);
       ctx.stroke();
-      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      // Puff shrinks as excitement rises (seeds blowing away).
+      const puffR = 6 * (1 - e * 0.6);
+      ctx.fillStyle = `rgba(255,255,255,${0.95 * (1 - e * 0.5)})`;
       ctx.beginPath();
-      ctx.arc(dx, puffY, 6, 0, Math.PI * 2);
+      ctx.arc(d.x, puffY, puffR, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = 'rgba(220, 220, 200, 0.85)';
+      // Seed strokes — inner shrinks, outer flies outward as e ramps.
+      ctx.strokeStyle = `rgba(220, 220, 200, ${0.85 * (1 - e * 0.4)})`;
       ctx.lineWidth = 0.8;
+      const innerR = 2 * (1 - e * 0.5);
+      const outerR = 7 + e * 18;
       ctx.beginPath();
       for (let i = 0; i < 14; i++) {
         const c = DANDELION_SEED_COS[i];
         const s = DANDELION_SEED_SIN[i];
-        ctx.moveTo(dx + c * 2, puffY + s * 2);
-        ctx.lineTo(dx + c * 7, puffY + s * 7);
+        // Each seed drifts on a slight wind angle when scattered.
+        const drift = e * 12 * (i % 2 === 0 ? 1 : -1);
+        ctx.moveTo(d.x + c * innerR, puffY + s * innerR);
+        ctx.lineTo(d.x + c * outerR + drift, puffY + s * outerR - e * 8);
       }
       ctx.stroke();
     }
+    ctx.restore();
+  },
+
+  drawAnimatedForeground: (ctx, _arena, time, _dayPhase, matchState) => {
+    if (getSlowDevice() || !matchState) return;
+    ctx.save();
+    const players = matchState.players;
+    // Odd-indexed butterflies in front; second bee cluster in front.
+    for (let i = 1; i < BUTTERFLY_HUES.length; i += 2) drawButterfly(ctx, i, time, players);
+    drawBeeCluster(ctx, 1, time, players);
     ctx.restore();
   },
 

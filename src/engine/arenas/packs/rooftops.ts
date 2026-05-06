@@ -7,9 +7,8 @@ import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrim
 import { isLivePlayer } from '../../themes/utils';
 
 const CHIMNEYS = [
-  { x: 144, y: 440 }, { x: 264, y: 444 },
-  { x: 525, y: 356 }, { x: 605, y: 352 },
-  { x: 720, y: 358 }, { x: 795, y: 360 },
+  { x: 144, y: 440 },
+  { x: 264, y: 444 },
 ] as const;
 
 interface Hallway { x: number; y: number; w: number; h: number }
@@ -21,9 +20,11 @@ const _hallwayGlowGrads = new WeakMap<Hallway, CanvasGradient>();
 function getHallwayGlow(ctx: CanvasRenderingContext2D, h: Hallway): CanvasGradient {
   let g = _hallwayGlowGrads.get(h);
   if (!g) {
+    // Center on the lower half of the room (where the bulb hangs).
     const cx = h.x + h.w / 2;
-    g = ctx.createRadialGradient(cx, h.y - 4, 0, cx, h.y - 4, h.w * 0.55);
-    g.addColorStop(0, 'rgba(255, 213, 107, 0.35)');
+    const cy = h.y - 32 + (h.h + 32) * 0.75;
+    g = ctx.createRadialGradient(cx, cy, 0, cx, cy, h.w * 0.55);
+    g.addColorStop(0, 'rgba(255, 213, 107, 0.45)');
     g.addColorStop(1, 'rgba(255, 180, 60, 0)');
     _hallwayGlowGrads.set(h, g);
   }
@@ -1169,12 +1170,14 @@ export const rooftops: ArenaPack = {
     ctx.fillStyle = '#b4b9c3';
     for (let si = 0; si < CHIMNEYS.length; si++) {
       const c = CHIMNEYS[si];
-      for (let i = 0; i < 10; i++) {
-        const t = ((time * 0.35 + i * 0.1 + si * 0.13) % 1);
-        const px = c.x + fastSin(time * 0.8 + i + si) * (16 + t * 24);
-        const py = c.y - 4 - t * 200;
-        const sz = 4 + t * 11;
-        ctx.globalAlpha = (1 - t) * 0.7;
+      for (let i = 0; i < 7; i++) {
+        // Slow, subtle smoke. Lower drift speed (0.18 vs 0.35), tighter wobble,
+        // smaller particles, lower peak alpha.
+        const t = ((time * 0.18 + i * 0.14 + si * 0.13) % 1);
+        const px = c.x + fastSin(time * 0.4 + i + si) * (10 + t * 18);
+        const py = c.y - 4 - t * 220;
+        const sz = 3 + t * 8;
+        ctx.globalAlpha = (1 - t) * 0.4;
         ctx.beginPath();
         ctx.arc(px, py, sz, 0, Math.PI * 2);
         ctx.fill();
@@ -1192,20 +1195,30 @@ export const rooftops: ArenaPack = {
           break;
         }
       }
+      // Room interior spans roughly h.y - 32 .. h.y + h.h. Light only the
+      // BOTTOM HALF — the top stays dark even when lit.
+      const interiorTop = h.y - 32;
+      const interiorH = h.h + 32;
+      const lightTopY = interiorTop + interiorH * 0.5;
+      const lightH = interiorH * 0.5;
       if (!lit) {
         ctx.fillStyle = 'rgba(8, 10, 18, 0.55)';
-        ctx.fillRect(h.x + 4, h.y - 28, h.w - 8, h.h + 24);
+        ctx.fillRect(h.x + 4, interiorTop, h.w - 8, interiorH);
         continue;
       }
+      // Dark wash on the top half so the glow only fills the lower portion.
+      ctx.fillStyle = 'rgba(8, 10, 18, 0.55)';
+      ctx.fillRect(h.x + 4, interiorTop, h.w - 8, interiorH * 0.5);
+      // Warm glow only in the bottom half (gradient cached per hallway).
       ctx.fillStyle = getHallwayGlow(ctx, h);
-      ctx.fillRect(h.x, h.y - 32, h.w, h.h + 32);
+      ctx.fillRect(h.x, lightTopY, h.w, lightH);
       const flicker = 0.92 + fastSin(time * 9) * 0.08;
       const bulbX = h.x + h.w / 2;
-      const bulbY = h.y - 22;
+      const bulbY = lightTopY + 8;
       ctx.strokeStyle = '#3a3a4a';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(bulbX, h.y - 32);
+      ctx.moveTo(bulbX, lightTopY);
       ctx.lineTo(bulbX, bulbY - 2);
       ctx.stroke();
       ctx.globalAlpha = flicker;
