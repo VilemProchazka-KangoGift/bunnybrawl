@@ -18,6 +18,18 @@ const _castleRats: GroundCritterState[] = RATS_CFG.map((cfg, i) => ({
 let _bannerExcite: Float32Array | null = null;
 const _tickBannerDt = makeDtTracker();
 const _tickCastleRatDt = makeDtTracker();
+// Cached banner-eligible floating platforms (.filter() in drawAnimatedForeground
+// otherwise allocates per frame). Keyed by arena.platforms identity for
+// auto-invalidation on switchArena.
+const _bannerFloatsCache = new WeakMap<Platform[], Platform[]>();
+function getBannerFloats(arena: Arena): Platform[] {
+  let cached = _bannerFloatsCache.get(arena.platforms);
+  if (!cached) {
+    cached = getFloatingPlatforms(arena.platforms).filter(p => p.width >= 100);
+    _bannerFloatsCache.set(arena.platforms, cached);
+  }
+  return cached;
+}
 
 // x=1180 conflicted with the tall floating platform at x=1120 y=580; moved to x=1080 (clear ground space).
 const TORCH_X = [100, 400, 640, 880, 1080] as const;
@@ -849,7 +861,7 @@ export const castle: ArenaPack = {
     }
     // Reactive banners: nearest-player distance amplifies sway. Excitement is
     // eased over ~0.5s so the wobble fades in/out smoothly instead of jumping.
-    const floats = getFloatingPlatforms(arena.platforms).filter(p => p.width >= 100);
+    const floats = getBannerFloats(arena);
     const players = matchState?.players;
     if (!_bannerExcite || _bannerExcite.length < floats.length) {
       _bannerExcite = new Float32Array(floats.length);
