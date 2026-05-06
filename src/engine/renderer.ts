@@ -906,9 +906,9 @@ export class Renderer {
 
       const fgStart = perfTrace.begin('render.fg-nature');
       // Ground fog (o) -- after players, before foreground nature
-      if (matchState.fogParticles && matchState.fogParticles.length > 0) {
+      const fogCfg = this.theme.fog;
+      if (fogCfg && matchState.fogParticles && matchState.fogParticles.length > 0) {
         d.fog = true;
-        const fogCfg = this.theme.fog;
         if (!this._fogRGB) {
           this._fogRGB = hexToRGB(fogCfg.color);
         }

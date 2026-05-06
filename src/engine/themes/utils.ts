@@ -225,61 +225,6 @@ export function makeDtTracker(maxDt = 0.1): (time: number) => number {
   };
 }
 
-/**
- * Pure rat sprite — caller owns position + facing. Drawn at (x, y) with the
- * given horizontal facing (1 = right, -1 = left). `motion` ∈ [0,1] scales the
- * scurry/leg animation amplitude (use facingEase magnitude or fleeing flag).
- */
-export function drawRat(
-  ctx: CanvasRenderingContext2D,
-  x: number, y: number,
-  facing: 1 | -1,
-  time: number,
-  motion: number,
-  fleeing: boolean,
-): void {
-  const scurry = fastSin(time * (fleeing ? 22 : 10)) * motion;
-  ctx.save();
-  ctx.translate(x, y);
-  if (facing < 0) ctx.scale(-1, 1);
-  ctx.strokeStyle = '#4a3a2a';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(-7, 0);
-  ctx.bezierCurveTo(-12, -2 + scurry, -16, 1, -18, -1 + scurry * 0.5);
-  ctx.stroke();
-  ctx.fillStyle = '#5a4a3a';
-  ctx.beginPath();
-  ctx.ellipse(0, 0, 7, 3, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(5, 0);
-  ctx.lineTo(11, -1);
-  ctx.lineTo(11, 1);
-  ctx.closePath();
-  ctx.fill();
-  ctx.beginPath();
-  ctx.ellipse(7, -0.5, 3, 2.5, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#7a5a4a';
-  ctx.beginPath();
-  ctx.arc(5, -3, 1.5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#000';
-  ctx.fillRect(8, -1, 0.8, 0.8);
-  ctx.strokeStyle = '#4a3a2a';
-  ctx.lineWidth = 0.8;
-  ctx.beginPath();
-  for (let i = 0; i < 4; i++) {
-    const lx = -4 + i * 2.5;
-    const lift = fastSin(time * 22 + i * 1.5) * motion * 0.8;
-    ctx.moveTo(lx, 2);
-    ctx.lineTo(lx, 4 - Math.max(0, lift));
-  }
-  ctx.stroke();
-  ctx.restore();
-}
-
 const _pushOut = { x: 0, y: 0 };
 /** Push (x, y) outward from any live player within `radius`. Lift adds extra upward push.
  *  Mutates and returns a shared scratch object — do not retain. */

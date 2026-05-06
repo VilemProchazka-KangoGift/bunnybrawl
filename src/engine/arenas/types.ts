@@ -86,7 +86,7 @@ export interface ArenaPack {
   clouds: CloudConfig;
   weather: WeatherConfig;
   wildlife: WildlifeConfig;
-  fog: FogConfig;
+  fog?: FogConfig;
   ambientParticles: AmbientParticleConfig;
   dayNight: DayNightConfig;
 

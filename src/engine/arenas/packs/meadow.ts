@@ -70,15 +70,12 @@ function drawSnail(ctx: CanvasRenderingContext2D, time: number, players: Readonl
   ctx.save();
   ctx.translate(_snail.x, SNAIL_CFG.platTopY - 4);
   if (_snail.facingEase < 0) ctx.scale(-1, 1);
-  // Body slug — gray-tan ellipse hugging the ground.
   ctx.fillStyle = '#b89878';
   ctx.beginPath();
   ctx.ellipse(0, 0, 9, 3.5, 0, 0, Math.PI * 2);
   ctx.fill();
-  // Foot trail (slimy underside).
   ctx.fillStyle = 'rgba(120,100,80,0.5)';
   ctx.fillRect(-9, 2.5, 18, 1.5);
-  // Shell — spiral on the back.
   ctx.fillStyle = '#8a5a3a';
   ctx.beginPath();
   ctx.arc(-1, -3, 5.5, 0, Math.PI * 2);
@@ -91,7 +88,6 @@ function drawSnail(ctx: CanvasRenderingContext2D, time: number, players: Readonl
     ctx.arc(-1, -3, r, 0, Math.PI * 1.8);
   }
   ctx.stroke();
-  // Antennae (with eye dots).
   const wig = fastSin(time * 6) * 0.5;
   ctx.strokeStyle = '#8a6a4a';
   ctx.lineWidth = 0.8;

@@ -3,7 +3,8 @@ import type { Arena, Platform, WeatherParticle } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
-import { getFloatingPlatforms, isLivePlayer, makeDtTracker, tickGroundCritter, drawRat, type GroundCritterState } from '../../themes/utils';
+import { getFloatingPlatforms, isLivePlayer, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
+import { drawRat } from '../../themes/drawPrimitives';
 
 const RAT_CFG = {
   platL: 420, platR: 860, platTopY: 660,

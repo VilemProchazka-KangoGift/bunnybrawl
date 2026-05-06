@@ -3,7 +3,7 @@ import type { Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
-import { getFloatingPlatforms, isLivePlayer, drawDriftBand, type DriftBandConfig } from '../../themes/utils';
+import { getFloatingPlatforms, isLivePlayer, drawDriftBand, makeDtTracker, type DriftBandConfig } from '../../themes/utils';
 
 const GROUND_MIST_CONFIG: DriftBandConfig = {
   topY: 615,
@@ -29,7 +29,7 @@ const LILY_PADS = [
   { x: 1105, gy: 435 },     // x=1050..1160 y=440 platform
 ] as const;
 const _frogJumpExcite = new Float32Array(LILY_PADS.length);
-let _lastFrogTime = 0;
+const _tickFrogDt = makeDtTracker();
 import {
   drawTree, drawBush, drawFlower, drawGrassTuft,
   drawFgBush, drawTallGrass, drawFern, drawHangingVine, drawFgLeafCluster, drawFgWildflower,
@@ -271,7 +271,6 @@ export const waterfall: ArenaPack = {
     ],
   },
 
-  fog: { count: 0, baseY: 0, yVariance: 0, speedRange: [0, 0], alphaRange: [0, 0], color: '#000', sizeX: 0, sizeY: 0, opacity: 0 },
 
   ambientParticles: {
     count: 15,
@@ -633,8 +632,7 @@ export const waterfall: ArenaPack = {
       }
     }
     ctx.globalAlpha = 1;
-    const dt = Math.max(0, Math.min(0.1, time - _lastFrogTime));
-    _lastFrogTime = time;
+    const dt = _tickFrogDt(time);
     for (let i = 0; i < LILY_PADS.length; i++) {
       const lp = LILY_PADS[i];
       // Reactive: frog leaps when a player approaches within 60px.
@@ -701,20 +699,21 @@ export const waterfall: ArenaPack = {
   drawAnimatedForeground: (ctx, _arena, time) => {
     if (getSlowDevice()) return;
     drawDriftBand(ctx, time, GROUND_MIST_CONFIG);
-    // Denser spray plumes around the waterfall splash zone.
     ctx.save();
+    ctx.fillStyle = '#dcebfa';
     const cxBase = (WATERFALL_SPRAY_BOUNDS.left + WATERFALL_SPRAY_BOUNDS.right) / 2;
     const halfW = (WATERFALL_SPRAY_BOUNDS.right - WATERFALL_SPRAY_BOUNDS.left) / 2;
     for (let pi = 0; pi < 4; pi++) {
       const driftPhase = time * 0.55 + pi * Math.PI / 2;
-      const px = cxBase + fastSin(driftPhase) * (halfW - 30);
-      const py = 640 + fastSin(time * 0.6 + pi) * 6;
-      // Alpha peaks mid-zone, fades at edges — and gently breathes via cos.
-      const edgeFade = 1 - Math.abs(fastSin(driftPhase));
-      const alpha = (0.18 + edgeFade * 0.25) * 0.9;
-      ctx.fillStyle = `rgba(220,235,250,${alpha})`;
+      const sinDrift = fastSin(driftPhase);
+      const edgeFade = 1 - Math.abs(sinDrift);
+      ctx.globalAlpha = (0.18 + edgeFade * 0.25) * 0.9;
       ctx.beginPath();
-      ctx.ellipse(px, py, 90, 22, 0, 0, Math.PI * 2);
+      ctx.ellipse(
+        cxBase + sinDrift * (halfW - 30),
+        640 + fastSin(time * 0.6 + pi) * 6,
+        90, 22, 0, 0, Math.PI * 2,
+      );
       ctx.fill();
     }
     ctx.restore();

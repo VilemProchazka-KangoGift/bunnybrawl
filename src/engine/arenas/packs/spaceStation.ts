@@ -19,25 +19,20 @@ function drawRobot(ctx: CanvasRenderingContext2D, time: number, players: Readonl
   ctx.save();
   ctx.translate(_robot.x, ROBOT_CFG.platTopY - 6);
   if (_robot.facingEase < 0) ctx.scale(-1, 1);
-  // Legs (vertical bars, alternating raise).
   ctx.fillStyle = '#5a6a78';
   ctx.fillRect(-3, 1 - Math.max(0, step) * 1.2, 2, 5);
   ctx.fillRect(1, 1 - Math.max(0, -step) * 1.2, 2, 5);
-  // Body (rounded rectangle).
   ctx.fillStyle = '#9aa8b8';
   ctx.fillRect(-5, -7, 10, 9);
   ctx.fillStyle = '#7a8898';
   ctx.fillRect(-5, 1, 10, 1.5);
-  // Faceplate (dark visor).
   ctx.fillStyle = '#1a1a2a';
   ctx.fillRect(-3.5, -5, 7, 3);
-  // Single eye light.
   const blink = (Math.floor(time * 0.5) % 4 === 0) ? 0.3 : 1;
   ctx.fillStyle = `rgba(125, 240, 255, ${blink})`;
   ctx.beginPath();
   ctx.arc(0, -3.5, 1.4, 0, Math.PI * 2);
   ctx.fill();
-  // Antenna with pulsing tip.
   ctx.strokeStyle = '#5a6a78';
   ctx.lineWidth = 1;
   ctx.beginPath();

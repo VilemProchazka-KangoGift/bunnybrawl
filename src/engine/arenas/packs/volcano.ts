@@ -822,19 +822,16 @@ export const volcano: ArenaPack = {
   drawAnimatedForeground: (ctx, _arena, time) => {
     if (getSlowDevice()) return;
     drawDriftBand(ctx, time, HEAT_SHIMMER_CONFIG);
-    // Denser heat plumes hugging each lava pit.
     ctx.save();
+    ctx.fillStyle = '#ff8c5a';
     for (let zi = 0; zi < LAVA_ZONES.length; zi++) {
       const lz = LAVA_ZONES[zi];
       const halfW = lz.w * 0.9;
       for (let pi = 0; pi < 3; pi++) {
         const wob = fastSin(time * 0.8 + pi + zi) * 12;
-        const px = lz.cx + wob;
-        const py = lz.cy - 18 - pi * 8;
-        const a = 0.18 - pi * 0.04;
-        ctx.fillStyle = `rgba(255,140,90,${a})`;
+        ctx.globalAlpha = 0.18 - pi * 0.04;
         ctx.beginPath();
-        ctx.ellipse(px, py, halfW, 14 + pi * 2, 0, 0, Math.PI * 2);
+        ctx.ellipse(lz.cx + wob, lz.cy - 18 - pi * 8, halfW, 14 + pi * 2, 0, 0, Math.PI * 2);
         ctx.fill();
       }
     }

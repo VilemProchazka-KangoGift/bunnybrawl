@@ -151,13 +151,15 @@ export function createInitialMatchState(
 
   const fc = theme.fog;
   const fogParticles: Array<{ x: number; y: number; vx: number; alpha: number }> = [];
-  for (let i = 0; i < fc.count; i++) {
-    fogParticles.push({
-      x: Math.random() * CANVAS_WIDTH,
-      y: fc.baseY + (Math.random() * 2 - 1) * fc.yVariance,
-      vx: randRange(fc.speedRange),
-      alpha: randRange(fc.alphaRange),
-    });
+  if (fc) {
+    for (let i = 0; i < fc.count; i++) {
+      fogParticles.push({
+        x: Math.random() * CANVAS_WIDTH,
+        y: fc.baseY + (Math.random() * 2 - 1) * fc.yVariance,
+        vx: randRange(fc.speedRange),
+        alpha: randRange(fc.alphaRange),
+      });
+    }
   }
 
   const ac = theme.ambientParticles;

@@ -5,7 +5,8 @@ import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
 import { computeNightIntensity } from '../../rendering';
 import { createThornRenderer } from '../../themes/drawPrimitives';
-import { getFloatingPlatforms, drawDriftBand, makeDtTracker, tickGroundCritter, drawRat, type DriftBandConfig, type GroundCritterState } from '../../themes/utils';
+import { getFloatingPlatforms, drawDriftBand, makeDtTracker, tickGroundCritter, type DriftBandConfig, type GroundCritterState } from '../../themes/utils';
+import { drawRat } from '../../themes/drawPrimitives';
 
 const FOG_CONFIG: DriftBandConfig = {
   topY: 600,
@@ -747,12 +748,12 @@ export const hauntedGraveyard: ArenaPack = {
   drawAnimatedForeground: (ctx, _arena, time, _dayPhase, matchState) => {
     if (getSlowDevice()) return;
     drawDriftBand(ctx, time, FOG_CONFIG);
-    // Denser fog blobs that drift horizontally across the cemetery.
     ctx.save();
+    ctx.fillStyle = '#b4c3d2';
     for (let pi = 0; pi < 4; pi++) {
       const cxBase = ((pi * 360 + time * 24) % (CANVAS_WIDTH + 280)) - 140;
       const cy = 625 + fastSin(time * 0.4 + pi) * 6;
-      ctx.fillStyle = `rgba(180,195,210,${0.28 + pi * 0.04})`;
+      ctx.globalAlpha = 0.28 + pi * 0.04;
       ctx.beginPath();
       ctx.ellipse(cxBase, cy, 80 + pi * 6, 18, 0, 0, Math.PI * 2);
       ctx.fill();

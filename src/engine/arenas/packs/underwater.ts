@@ -22,7 +22,6 @@ function drawCrab(ctx: CanvasRenderingContext2D, time: number, players: Readonly
   ctx.save();
   ctx.translate(_crab.x, CRAB_CFG.platTopY - 5);
   if (_crab.facingEase < 0) ctx.scale(-1, 1);
-  // Legs (4 each side).
   ctx.strokeStyle = '#a83a2a';
   ctx.lineWidth = 1.2;
   ctx.beginPath();
@@ -33,44 +32,36 @@ function drawCrab(ctx: CanvasRenderingContext2D, time: number, players: Readonly
     ctx.lineTo(lx - 1.5, 4 - lift);
   }
   ctx.stroke();
-  // Body.
   ctx.fillStyle = '#d04a3a';
   ctx.beginPath();
   ctx.ellipse(0, 0, 9, 6, 0, 0, Math.PI * 2);
   ctx.fill();
-  // Shell highlight.
   ctx.fillStyle = 'rgba(255,180,160,0.5)';
   ctx.beginPath();
   ctx.ellipse(-2, -2, 4, 2, 0, 0, Math.PI * 2);
   ctx.fill();
-  // Claw arms — segmented: shoulder (at body edge) + forearm + pincer at tip.
   const armWiggle = scuttle * 1.2;
   ctx.strokeStyle = '#a83a2a';
   ctx.lineWidth = 2.2;
   ctx.lineCap = 'round';
-  // Upper arm.
-  const armBaseY1 = -3;
-  const armBaseY2 = 3;
   const elbow1X = 11, elbow1Y = -5 + armWiggle;
   const elbow2X = 11, elbow2Y = 5 - armWiggle;
   const tip1X = 18, tip1Y = -7 + armWiggle * 0.5;
   const tip2X = 18, tip2Y = 7 - armWiggle * 0.5;
   ctx.beginPath();
-  ctx.moveTo(7, armBaseY1);
+  ctx.moveTo(7, -3);
   ctx.lineTo(elbow1X, elbow1Y);
   ctx.lineTo(tip1X, tip1Y);
-  ctx.moveTo(7, armBaseY2);
+  ctx.moveTo(7, 3);
   ctx.lineTo(elbow2X, elbow2Y);
   ctx.lineTo(tip2X, tip2Y);
   ctx.stroke();
   ctx.lineCap = 'butt';
-  // Pincer claws at the tip — two-prong shape.
   ctx.fillStyle = '#d04a3a';
   ctx.beginPath();
   ctx.ellipse(tip1X, tip1Y, 3, 2, 0.4, 0, Math.PI * 2);
   ctx.ellipse(tip2X, tip2Y, 3, 2, -0.4, 0, Math.PI * 2);
   ctx.fill();
-  // Pincer slits (the gap between prongs).
   ctx.strokeStyle = '#5a1a14';
   ctx.lineWidth = 0.8;
   ctx.beginPath();
@@ -79,7 +70,6 @@ function drawCrab(ctx: CanvasRenderingContext2D, time: number, players: Readonly
   ctx.moveTo(tip2X + 1, tip2Y + 1.5);
   ctx.lineTo(tip2X + 3, tip2Y);
   ctx.stroke();
-  // Eye stalks.
   ctx.strokeStyle = '#a83a2a';
   ctx.lineWidth = 0.8;
   ctx.beginPath();
