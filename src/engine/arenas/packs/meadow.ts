@@ -557,9 +557,6 @@ export const meadow: ArenaPack = {
     if (getSlowDevice() || !matchState) return;
     ctx.save();
     const players = matchState.players;
-    // Even-indexed butterflies behind, odd in front.
-    for (let i = 0; i < BUTTERFLY_HUES.length; i += 2) drawButterfly(ctx, i, time, players);
-    drawBeeCluster(ctx, 0, time, players);
     // Dandelions: decay excitement, raise it when a player is near, then draw.
     const dt = Math.max(0, Math.min(0.1, time - _lastDandelionTime));
     _lastDandelionTime = time;
@@ -573,38 +570,62 @@ export const meadow: ArenaPack = {
         const d2 = dx * dx + dy * dy;
         if (d2 < nearest) nearest = d2;
       }
-      const dist = Math.sqrt(nearest);
-      const target = dist < 40 ? 1 : 0;
-      const e = _dandelionExcite[di] = Math.max(0, _dandelionExcite[di] + (target - _dandelionExcite[di]) * dt * 6);
+      const target = nearest < 40 * 40 ? 1 : 0;
+      const e = _dandelionExcite[di] = Math.max(0, _dandelionExcite[di] + (target - _dandelionExcite[di]) * dt * 4);
       const puffY = d.gy - 9;
       // Stem
       ctx.strokeStyle = '#5fb45a';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.moveTo(d.x, d.gy + 4);
-      ctx.lineTo(d.x + fastSin(time + d.x) * 0.5, d.gy - 8);
+      ctx.lineTo(d.x, d.gy - 8);
       ctx.stroke();
-      // Puff shrinks as excitement rises (seeds blowing away).
-      const puffR = 6 * (1 - e * 0.6);
-      ctx.fillStyle = `rgba(255,255,255,${0.95 * (1 - e * 0.5)})`;
-      ctx.beginPath();
-      ctx.arc(d.x, puffY, puffR, 0, Math.PI * 2);
-      ctx.fill();
-      // Seed strokes — inner shrinks, outer flies outward as e ramps.
-      ctx.strokeStyle = `rgba(220, 220, 200, ${0.85 * (1 - e * 0.4)})`;
-      ctx.lineWidth = 0.8;
-      const innerR = 2 * (1 - e * 0.5);
-      const outerR = 7 + e * 18;
-      ctx.beginPath();
-      for (let i = 0; i < 14; i++) {
-        const c = DANDELION_SEED_COS[i];
-        const s = DANDELION_SEED_SIN[i];
-        // Each seed drifts on a slight wind angle when scattered.
-        const drift = e * 12 * (i % 2 === 0 ? 1 : -1);
-        ctx.moveTo(d.x + c * innerR, puffY + s * innerR);
-        ctx.lineTo(d.x + c * outerR + drift, puffY + s * outerR - e * 8);
+      // Idle puff: solid white sphere. As excitement rises, sphere shrinks
+      // and seeds (small floating dots) drift up-and-away.
+      const puffR = 6 * (1 - e * 0.85);
+      if (puffR > 0.3) {
+        ctx.fillStyle = `rgba(255,255,255,${0.95})`;
+        ctx.beginPath();
+        ctx.arc(d.x, puffY, puffR, 0, Math.PI * 2);
+        ctx.fill();
+        // Light dimples on the puff sphere (only when intact).
+        ctx.fillStyle = 'rgba(220, 220, 200, 0.75)';
+        for (let i = 0; i < 6; i++) {
+          const c = DANDELION_SEED_COS[i * 2];
+          const s = DANDELION_SEED_SIN[i * 2];
+          ctx.beginPath();
+          ctx.arc(d.x + c * puffR * 0.7, puffY + s * puffR * 0.7, 0.7, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
-      ctx.stroke();
+      // Floating seeds when excited. Each seed drifts upward and outward over time.
+      // Seeds appear gradually (count scales with e) and continue fading after.
+      if (e > 0.05) {
+        const seedCount = Math.ceil(e * 12);
+        ctx.fillStyle = '#f8f8e8';
+        for (let i = 0; i < seedCount; i++) {
+          // Per-seed phase based on i so they emerge at slightly different times.
+          const seedPhase = (i / 12) * (1 - e) + e * (1 - (i / 12) * 0.4);
+          const t = Math.max(0, Math.min(1, e - i * 0.05));
+          if (t < 0.05) continue;
+          const angle = (i * 0.7) + fastSin(time * 0.5 + i) * 0.3;
+          const radius = t * 28 + i;
+          const sx = d.x + fastCos(angle) * radius * 0.6 + fastSin(time + i) * 2;
+          const sy = puffY - t * 26 + fastSin(time * 0.8 + i) * 1.5;
+          const alpha = (1 - t) * 0.85;
+          ctx.globalAlpha = alpha;
+          ctx.beginPath();
+          ctx.arc(sx, sy, 1.4, 0, Math.PI * 2);
+          ctx.fill();
+          // Tiny tuft hairs above the seed (a fluffy seed has a parachute).
+          ctx.globalAlpha = alpha * 0.6;
+          ctx.beginPath();
+          ctx.arc(sx, sy - 2, 1.6, 0, Math.PI * 2);
+          ctx.fill();
+          void seedPhase;
+        }
+        ctx.globalAlpha = 1;
+      }
     }
     ctx.restore();
   },
@@ -613,9 +634,10 @@ export const meadow: ArenaPack = {
     if (getSlowDevice() || !matchState) return;
     ctx.save();
     const players = matchState.players;
-    // Odd-indexed butterflies in front; second bee cluster in front.
-    for (let i = 1; i < BUTTERFLY_HUES.length; i += 2) drawButterfly(ctx, i, time, players);
-    drawBeeCluster(ctx, 1, time, players);
+    // All butterflies + both bee clusters render in foreground so they are
+    // never half-clipped by platform body faces.
+    for (let i = 0; i < BUTTERFLY_HUES.length; i++) drawButterfly(ctx, i, time, players);
+    for (let ci = 0; ci < BEE_CLUSTERS.length; ci++) drawBeeCluster(ctx, ci, time, players);
     ctx.restore();
   },
 

@@ -13,14 +13,13 @@ const CANDY_CLOUDS = [
 ] as const;
 const SPRINKLE_HUES = [10, 45, 120, 200, 280, 320] as const;
 const WEATHER_SPRINKLE_COLORS = SPRINKLE_HUES.map(h => `hsl(${h},80%,65%)`);
-// gy is the surface y the gumdrop sits on (ground top y=660 or platform top y).
+// All gumdrops on ground only — candy platforms are bouncy and host springs/thorns,
+// stacking gumdrops on top causes visual conflicts.
 const GUMDROPS = [
   { x: 80,   gy: 660, color: '#ff5e8a' },
+  { x: 280,  gy: 660, color: '#7be0a3' },
+  { x: 1000, gy: 660, color: '#ffe066' },
   { x: 1200, gy: 660, color: '#c899ff' },
-  { x: 120,  gy: 530, color: '#ffe066' },     // atop x=30 y=530 platform
-  { x: 640,  gy: 530, color: '#7be0a3' },     // atop x=460 y=530 platform
-  { x: 640,  gy: 390, color: '#ff5e8a' },     // atop x=510 y=390 platform
-  { x: 1170, gy: 510, color: '#7be0a3' },     // atop x=1090 y=510 platform
 ] as const;
 // Per-gumdrop excitement decays each frame; rises when a player is within radius.
 const _gumdropExcite = new Float32Array(GUMDROPS.length);
@@ -653,16 +652,17 @@ export const candyLand: ArenaPack = {
     _lastGumdropTime = time;
     for (let i = 0; i < GUMDROPS.length; i++) {
       const g = GUMDROPS[i];
-      // Excitement: rises when a player is on the same surface within 50px.
       let nearby = 0;
       for (const p of matchState?.players ?? []) {
         if (!isLivePlayer(p)) continue;
         const dx = (p.x + p.width * 0.5) - g.x;
         const py = p.y + p.height;
-        if (Math.abs(dx) < 50 && Math.abs(py - g.gy) < 30) { nearby = 1; break; }
+        if (Math.abs(dx) < 40 && Math.abs(py - g.gy) < 30) { nearby = 1; break; }
       }
-      const e = _gumdropExcite[i] = Math.max(0, _gumdropExcite[i] + (nearby - _gumdropExcite[i]) * dt * 8);
-      const wobble = fastSin(time * (3 + e * 8) + i) * (1.4 + e * 4);
+      // Slow attack so the wobble eases in instead of flicking on/off.
+      const e = _gumdropExcite[i] = Math.max(0, _gumdropExcite[i] + (nearby - _gumdropExcite[i]) * dt * 3);
+      // Calmer: smaller amplitude swing and frequency only modestly higher when excited.
+      const wobble = fastSin(time * (2 + e * 2.5) + i) * (0.8 + e * 2);
       const cy = g.gy - GUMDROP_R + 2;
       ctx.fillStyle = g.color;
       ctx.beginPath();

@@ -983,14 +983,11 @@ export const underwater: ArenaPack = {
     ctx.restore();
   },
 
-  drawAnimatedBackground: (ctx, _arena, time, _dayPhase, matchState) => {
-    if (getSlowDevice() || !matchState) return;
+  drawAnimatedBackground: (ctx, _arena, time) => {
+    if (getSlowDevice()) return;
     ctx.save();
-    const cxBase = ((time * 70) % (CANVAS_WIDTH + 400)) - 200;
-    const cy = 380 + fastSin(time * 0.5) * 40;
-    const players = matchState.players;
-    // Even fish in background, odd in foreground.
-    for (let i = 0; i < FISH_COUNT; i += 2) drawFish(ctx, i, time, cxBase, cy, players);
+    // Bubbles only in background — fish are all in foreground (drawAnimatedForeground)
+    // so they don't half-clip behind platform faces.
     ctx.strokeStyle = '#dcf0ff';
     ctx.fillStyle = '#ffffff';
     ctx.lineWidth = 1;
@@ -1034,7 +1031,7 @@ export const underwater: ArenaPack = {
     const cxBase = ((time * 70) % (CANVAS_WIDTH + 400)) - 200;
     const cy = 380 + fastSin(time * 0.5) * 40;
     const players = matchState.players;
-    for (let i = 1; i < FISH_COUNT; i += 2) drawFish(ctx, i, time, cxBase, cy, players);
+    for (let i = 0; i < FISH_COUNT; i++) drawFish(ctx, i, time, cxBase, cy, players);
     ctx.restore();
   },
 

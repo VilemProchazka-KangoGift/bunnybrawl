@@ -575,7 +575,7 @@ export const treetops: ArenaPack = {
     ctx.restore();
   },
 
-  drawAnimatedBackground: (ctx, _arena, time, _dayPhase, matchState) => {
+  drawAnimatedBackground: (ctx, _arena, time) => {
     if (getSlowDevice()) return;
     ctx.save();
     const phase = time % SQUIRREL_PERIOD;
@@ -634,14 +634,6 @@ export const treetops: ArenaPack = {
       ctx.fill();
       ctx.restore();
     }
-    // Background half of meadow-style fauna.
-    if (matchState) {
-      const players = matchState.players;
-      for (let i = 0; i < TREETOPS_BUTTERFLY_HUES.length; i += 2) {
-        drawTreetopsButterfly(ctx, i, time, players);
-      }
-      drawTreetopsBeeCluster(ctx, 0, time, players);
-    }
     ctx.restore();
   },
 
@@ -649,10 +641,12 @@ export const treetops: ArenaPack = {
     if (getSlowDevice() || !matchState) return;
     ctx.save();
     const players = matchState.players;
-    for (let i = 1; i < TREETOPS_BUTTERFLY_HUES.length; i += 2) {
+    for (let i = 0; i < TREETOPS_BUTTERFLY_HUES.length; i++) {
       drawTreetopsButterfly(ctx, i, time, players);
     }
-    drawTreetopsBeeCluster(ctx, 1, time, players);
+    for (let ci = 0; ci < TREETOPS_BEE_CLUSTERS.length; ci++) {
+      drawTreetopsBeeCluster(ctx, ci, time, players);
+    }
     ctx.restore();
   },
 
