@@ -18,28 +18,34 @@ const TREETOPS_BEE_CLUSTERS = [
   { homeX: 940, homeY: 360, phase: 2.4 },
 ] as const;
 
-function drawTreetopsButterfly(ctx: CanvasRenderingContext2D, i: number, time: number, players: ReadonlyArray<Player>): void {
+function drawTreetopsButterfly(ctx: CanvasRenderingContext2D, i: number, time: number, players: ReadonlyArray<Player>, isBackground: boolean): void {
   const driftSpeed = 0.05 + (i % 3) * 0.015;
   const homeX = ((i * 220 + time * 60 * driftSpeed) % (CANVAS_WIDTH + 200)) - 100;
-  const homeY = 320 + fastSin(time * 0.4 + i * 1.7) * 90 + (i % 3) * 30;
+  // Background butterflies fly above the canopy (y=80..160), foreground in play area.
+  const homeY = isBackground
+    ? 90 + fastSin(time * 0.4 + i * 1.7) * 35 + (i % 3) * 16
+    : 320 + fastSin(time * 0.4 + i * 1.7) * 90 + (i % 3) * 30;
   const flutterX = homeX + fastSin(time * 1.2 + i) * 22;
   const flutterY = homeY + fastSin(time * 1.5 + i * 1.7) * 14;
-  const r = pushFromPlayers(players, flutterX, flutterY, 70, 14, 4);
+  const r = isBackground ? { x: flutterX, y: flutterY } : pushFromPlayers(players, flutterX, flutterY, 70, 14, 4);
   const flap = fastSin(time * 14 + i * 3) * 0.5 + 0.5;
+  const scale = isBackground ? 0.65 : 1;
   ctx.fillStyle = TREETOPS_BUTTERFLY_COLORS[i];
   ctx.beginPath();
-  ctx.ellipse(r.x - 4, r.y, 4 * flap, 5, 0, 0, Math.PI * 2);
-  ctx.ellipse(r.x + 4, r.y, 4 * flap, 5, 0, 0, Math.PI * 2);
+  ctx.ellipse(r.x - 4 * scale, r.y, 4 * flap * scale, 5 * scale, 0, 0, Math.PI * 2);
+  ctx.ellipse(r.x + 4 * scale, r.y, 4 * flap * scale, 5 * scale, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = '#000';
-  ctx.fillRect(r.x - 0.5, r.y - 3, 1, 6);
+  ctx.fillRect(r.x - 0.5, r.y - 3 * scale, 1, 6 * scale);
 }
 
-function drawTreetopsBeeCluster(ctx: CanvasRenderingContext2D, ci: number, time: number, players: ReadonlyArray<Player>): void {
+function drawTreetopsBeeCluster(ctx: CanvasRenderingContext2D, ci: number, time: number, players: ReadonlyArray<Player>, isBackground: boolean): void {
   const c = TREETOPS_BEE_CLUSTERS[ci];
   const wanderX = c.homeX + fastSin(time * 0.25 + c.phase) * 180;
-  const wanderY = c.homeY + fastSin(time * 0.4 + c.phase + 1) * 50;
-  const r = pushFromPlayers(players, wanderX, wanderY, 110, 28, 8);
+  const wanderY = isBackground
+    ? 130 + fastSin(time * 0.4 + c.phase + 1) * 30
+    : c.homeY + fastSin(time * 0.4 + c.phase + 1) * 50;
+  const r = isBackground ? { x: wanderX, y: wanderY } : pushFromPlayers(players, wanderX, wanderY, 110, 28, 8);
   for (let i = 0; i < 5; i++) {
     const ph = ci * 7 + i;
     const bx = r.x + fastSin(time * 4 + ph) * 16 + (i % 3 - 1) * 5;
@@ -575,9 +581,17 @@ export const treetops: ArenaPack = {
     ctx.restore();
   },
 
-  drawAnimatedBackground: (ctx, _arena, time) => {
+  drawAnimatedBackground: (ctx, _arena, time, _dayPhase, matchState) => {
     if (getSlowDevice()) return;
     ctx.save();
+    // Distant butterflies + bees above the canopy (parallax bg, no player react).
+    if (matchState) {
+      const players = matchState.players;
+      for (let i = 0; i < TREETOPS_BUTTERFLY_HUES.length; i += 2) {
+        drawTreetopsButterfly(ctx, i, time, players, true);
+      }
+      drawTreetopsBeeCluster(ctx, 0, time, players, true);
+    }
     const phase = time % SQUIRREL_PERIOD;
     const fromLeft = Math.floor(time / SQUIRREL_PERIOD) % 2 === 0;
     let x = 0, y = 0, alpha = 1, visible = false;
@@ -641,12 +655,10 @@ export const treetops: ArenaPack = {
     if (getSlowDevice() || !matchState) return;
     ctx.save();
     const players = matchState.players;
-    for (let i = 0; i < TREETOPS_BUTTERFLY_HUES.length; i++) {
-      drawTreetopsButterfly(ctx, i, time, players);
+    for (let i = 1; i < TREETOPS_BUTTERFLY_HUES.length; i += 2) {
+      drawTreetopsButterfly(ctx, i, time, players, false);
     }
-    for (let ci = 0; ci < TREETOPS_BEE_CLUSTERS.length; ci++) {
-      drawTreetopsBeeCluster(ctx, ci, time, players);
-    }
+    drawTreetopsBeeCluster(ctx, 1, time, players, false);
     ctx.restore();
   },
 

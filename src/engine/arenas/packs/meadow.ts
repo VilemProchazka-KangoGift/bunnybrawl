@@ -32,28 +32,38 @@ const DANDELION_SEED_SIN = new Float32Array(14);
   }
 }
 
-function drawButterfly(ctx: CanvasRenderingContext2D, i: number, time: number, players: ReadonlyArray<import('../../types').Player>): void {
+function drawButterfly(ctx: CanvasRenderingContext2D, i: number, time: number, players: ReadonlyArray<import('../../types').Player>, isBackground: boolean): void {
   const driftSpeed = 0.04 + (i % 3) * 0.015;
   const homeX = ((i * 200 + time * 60 * driftSpeed) % (CANVAS_WIDTH + 200)) - 100;
-  const homeY = 380 + fastSin(time * 0.4 + i * 1.7) * 80 + (i % 3) * 30;
+  // Background butterflies fly high in the sky (y=80..180) so they never enter
+  // the platform region. Foreground butterflies fly low in the play area.
+  const homeY = isBackground
+    ? 90 + fastSin(time * 0.4 + i * 1.7) * 40 + (i % 3) * 18
+    : 380 + fastSin(time * 0.4 + i * 1.7) * 80 + (i % 3) * 30;
   const flutterX = homeX + fastSin(time * 1.2 + i) * 22;
   const flutterY = homeY + fastSin(time * 1.5 + i * 1.7) * 14;
-  const r = pushFromPlayers(players, flutterX, flutterY, 70, 14, 4);
+  // Background butterflies don't react to players (they're far away).
+  const r = isBackground ? { x: flutterX, y: flutterY } : pushFromPlayers(players, flutterX, flutterY, 70, 14, 4);
   const flap = fastSin(time * 14 + i * 3) * 0.5 + 0.5;
+  // Background butterflies are smaller (parallax distance).
+  const scale = isBackground ? 0.65 : 1;
   ctx.fillStyle = BUTTERFLY_COLORS[i];
   ctx.beginPath();
-  ctx.ellipse(r.x - 4, r.y, 4 * flap, 5, 0, 0, Math.PI * 2);
-  ctx.ellipse(r.x + 4, r.y, 4 * flap, 5, 0, 0, Math.PI * 2);
+  ctx.ellipse(r.x - 4 * scale, r.y, 4 * flap * scale, 5 * scale, 0, 0, Math.PI * 2);
+  ctx.ellipse(r.x + 4 * scale, r.y, 4 * flap * scale, 5 * scale, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = '#000';
-  ctx.fillRect(r.x - 0.5, r.y - 3, 1, 6);
+  ctx.fillRect(r.x - 0.5, r.y - 3 * scale, 1, 6 * scale);
 }
 
-function drawBeeCluster(ctx: CanvasRenderingContext2D, ci: number, time: number, players: ReadonlyArray<import('../../types').Player>): void {
+function drawBeeCluster(ctx: CanvasRenderingContext2D, ci: number, time: number, players: ReadonlyArray<import('../../types').Player>, isBackground: boolean): void {
   const c = BEE_CLUSTERS[ci];
   const wanderX = c.homeX + fastSin(time * 0.25 + c.phase) * 200;
-  const wanderY = c.homeY + fastSin(time * 0.4 + c.phase + 1) * 60;
-  const r = pushFromPlayers(players, wanderX, wanderY, 110, 28, 8);
+  // Background cluster stays in the sky.
+  const wanderY = isBackground
+    ? 130 + fastSin(time * 0.4 + c.phase + 1) * 30
+    : c.homeY + fastSin(time * 0.4 + c.phase + 1) * 60;
+  const r = isBackground ? { x: wanderX, y: wanderY } : pushFromPlayers(players, wanderX, wanderY, 110, 28, 8);
   for (let i = 0; i < 6; i++) {
     const ph = ci * 7 + i;
     const bx = r.x + fastSin(time * 4 + ph) * 18 + (i % 3 - 1) * 6;
@@ -557,7 +567,13 @@ export const meadow: ArenaPack = {
     if (getSlowDevice() || !matchState) return;
     ctx.save();
     const players = matchState.players;
-    // Dandelions: decay excitement, raise it when a player is near, then draw.
+    // Even-indexed butterflies fly high in the SKY (true background — never
+    // enter platform area). Odd-indexed render in foreground.
+    for (let i = 0; i < BUTTERFLY_HUES.length; i += 2) drawButterfly(ctx, i, time, players, true);
+    drawBeeCluster(ctx, 0, time, players, true);
+    // Dandelions: trigger lifecycle. When a player enters the trigger radius
+    // and the puff is intact, kick off a burst — seeds fly outward over ~2s,
+    // puff regrows over the next ~5s.
     const dt = Math.max(0, Math.min(0.1, time - _lastDandelionTime));
     _lastDandelionTime = time;
     for (let di = 0; di < DANDELIONS.length; di++) {
@@ -570,26 +586,48 @@ export const meadow: ArenaPack = {
         const d2 = dx * dx + dy * dy;
         if (d2 < nearest) nearest = d2;
       }
-      const target = nearest < 40 * 40 ? 1 : 0;
-      const e = _dandelionExcite[di] = Math.max(0, _dandelionExcite[di] + (target - _dandelionExcite[di]) * dt * 4);
+      const playerNear = nearest < 40 * 40;
+      // _dandelionExcite[i] holds the burst-elapsed time (-1 = idle/full puff).
+      // When idle and player approaches → set to 0 (begin burst).
+      // While bursting, accumulates dt up to BURST_TOTAL = 7s, then resets to -1.
+      const BURST_TOTAL = 7.0;
+      const SEED_FLY_DURATION = 2.0;
+      let phase = _dandelionExcite[di];
+      if (phase < 0 && playerNear) phase = 0;
+      if (phase >= 0) {
+        phase += dt;
+        if (phase >= BURST_TOTAL) phase = -1;
+      }
+      _dandelionExcite[di] = phase;
       const puffY = d.gy - 9;
-      // Stem
+      // Stem (always visible)
       ctx.strokeStyle = '#5fb45a';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.moveTo(d.x, d.gy + 4);
       ctx.lineTo(d.x, d.gy - 8);
       ctx.stroke();
-      // Idle puff: solid white sphere. As excitement rises, sphere shrinks
-      // and seeds (small floating dots) drift up-and-away.
-      const puffR = 6 * (1 - e * 0.85);
+      // Puff sphere: full size when idle, 0 immediately on burst, regrows
+      // gradually after seeds fly off.
+      let puffR = 6;
+      if (phase >= 0) {
+        if (phase < SEED_FLY_DURATION) {
+          // Burst: shrink quickly to 0 over first 0.3s.
+          puffR = 6 * Math.max(0, 1 - phase / 0.3);
+        } else {
+          // Regrow over remaining (BURST_TOTAL - SEED_FLY_DURATION) seconds.
+          const regrow = (phase - SEED_FLY_DURATION) / (BURST_TOTAL - SEED_FLY_DURATION);
+          puffR = 6 * Math.min(1, regrow);
+        }
+      }
       if (puffR > 0.3) {
-        ctx.fillStyle = `rgba(255,255,255,${0.95})`;
+        ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = 0.95;
         ctx.beginPath();
         ctx.arc(d.x, puffY, puffR, 0, Math.PI * 2);
         ctx.fill();
-        // Light dimples on the puff sphere (only when intact).
-        ctx.fillStyle = 'rgba(220, 220, 200, 0.75)';
+        ctx.fillStyle = '#dcdcc8';
+        ctx.globalAlpha = 0.75;
         for (let i = 0; i < 6; i++) {
           const c = DANDELION_SEED_COS[i * 2];
           const s = DANDELION_SEED_SIN[i * 2];
@@ -597,32 +635,32 @@ export const meadow: ArenaPack = {
           ctx.arc(d.x + c * puffR * 0.7, puffY + s * puffR * 0.7, 0.7, 0, Math.PI * 2);
           ctx.fill();
         }
+        ctx.globalAlpha = 1;
       }
-      // Floating seeds when excited. Each seed drifts upward and outward over time.
-      // Seeds appear gradually (count scales with e) and continue fading after.
-      if (e > 0.05) {
-        const seedCount = Math.ceil(e * 12);
+      // Flying seeds: present only during burst (0..SEED_FLY_DURATION).
+      if (phase >= 0 && phase < SEED_FLY_DURATION) {
+        const t = phase / SEED_FLY_DURATION;
+        const SEEDS = 12;
         ctx.fillStyle = '#f8f8e8';
-        for (let i = 0; i < seedCount; i++) {
-          // Per-seed phase based on i so they emerge at slightly different times.
-          const seedPhase = (i / 12) * (1 - e) + e * (1 - (i / 12) * 0.4);
-          const t = Math.max(0, Math.min(1, e - i * 0.05));
-          if (t < 0.05) continue;
-          const angle = (i * 0.7) + fastSin(time * 0.5 + i) * 0.3;
-          const radius = t * 28 + i;
-          const sx = d.x + fastCos(angle) * radius * 0.6 + fastSin(time + i) * 2;
-          const sy = puffY - t * 26 + fastSin(time * 0.8 + i) * 1.5;
-          const alpha = (1 - t) * 0.85;
+        for (let i = 0; i < SEEDS; i++) {
+          // Each seed has its own emit time so they fan out gradually.
+          const emitT = i / SEEDS * 0.3;
+          const localT = (t - emitT) / (1 - emitT);
+          if (localT <= 0) continue;
+          const angle = (i / SEEDS) * Math.PI * 2 + fastSin(time + i) * 0.2;
+          const dist = localT * 60;
+          const sx = d.x + fastCos(angle) * dist + fastSin(time * 1.5 + i) * 2;
+          const sy = puffY - localT * 50 - localT * localT * 12 + fastSin(time + i) * 1.5;
+          const alpha = (1 - localT) * 0.95;
           ctx.globalAlpha = alpha;
           ctx.beginPath();
           ctx.arc(sx, sy, 1.4, 0, Math.PI * 2);
           ctx.fill();
-          // Tiny tuft hairs above the seed (a fluffy seed has a parachute).
+          // Parachute tuft
           ctx.globalAlpha = alpha * 0.6;
           ctx.beginPath();
-          ctx.arc(sx, sy - 2, 1.6, 0, Math.PI * 2);
+          ctx.arc(sx, sy - 2.5, 2, 0, Math.PI * 2);
           ctx.fill();
-          void seedPhase;
         }
         ctx.globalAlpha = 1;
       }
@@ -634,10 +672,9 @@ export const meadow: ArenaPack = {
     if (getSlowDevice() || !matchState) return;
     ctx.save();
     const players = matchState.players;
-    // All butterflies + both bee clusters render in foreground so they are
-    // never half-clipped by platform body faces.
-    for (let i = 0; i < BUTTERFLY_HUES.length; i++) drawButterfly(ctx, i, time, players);
-    for (let ci = 0; ci < BEE_CLUSTERS.length; ci++) drawBeeCluster(ctx, ci, time, players);
+    // Odd-indexed butterflies in foreground (low-flying, react to players).
+    for (let i = 1; i < BUTTERFLY_HUES.length; i += 2) drawButterfly(ctx, i, time, players, false);
+    drawBeeCluster(ctx, 1, time, players, false);
     ctx.restore();
   },
 

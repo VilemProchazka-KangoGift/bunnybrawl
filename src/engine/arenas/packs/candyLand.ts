@@ -13,13 +13,14 @@ const CANDY_CLOUDS = [
 ] as const;
 const SPRINKLE_HUES = [10, 45, 120, 200, 280, 320] as const;
 const WEATHER_SPRINKLE_COLORS = SPRINKLE_HUES.map(h => `hsl(${h},80%,65%)`);
-// All gumdrops on ground only — candy platforms are bouncy and host springs/thorns,
-// stacking gumdrops on top causes visual conflicts.
+// Gumdrops placed at the OUTER corners of the secondary side platforms — out of
+// the natural traversal path, away from spring/thorn spawn middle-zones, and
+// drawn in drawAnimatedForeground so they sit on top of the bouncy jelly overlay.
 const GUMDROPS = [
-  { x: 80,   gy: 660, color: '#ff5e8a' },
-  { x: 280,  gy: 660, color: '#7be0a3' },
-  { x: 1000, gy: 660, color: '#ffe066' },
-  { x: 1200, gy: 660, color: '#c899ff' },
+  { x: 46,   gy: 530, color: '#ff5e8a' }, // platform 4 (left-mid) left corner
+  { x: 1214, gy: 510, color: '#7be0a3' }, // platform 5 (right-mid) right corner
+  { x: 64,   gy: 350, color: '#ffe066' }, // platform 6 (left-top) left corner
+  { x: 1200, gy: 325, color: '#c899ff' }, // platform 7 (right-top) right corner
 ] as const;
 // Per-gumdrop excitement decays each frame; rises when a player is within radius.
 const _gumdropExcite = new Float32Array(GUMDROPS.length);
@@ -615,7 +616,7 @@ export const candyLand: ArenaPack = {
     ctx.fill();
   }),
 
-  drawAnimatedBackground: (ctx, _arena, time, _dayPhase, matchState) => {
+  drawAnimatedBackground: (ctx, _arena, time) => {
     if (getSlowDevice()) return;
     ctx.save();
     for (let ci = 0; ci < CANDY_CLOUDS.length; ci++) {
@@ -647,7 +648,13 @@ export const candyLand: ArenaPack = {
       ctx.fillRect(-3, -1, 6, 2);
       ctx.restore();
     }
-    const GUMDROP_R = 16;
+    ctx.restore();
+  },
+
+  drawAnimatedForeground: (ctx, _arena, time, _dayPhase, matchState) => {
+    if (getSlowDevice()) return;
+    ctx.save();
+    const GUMDROP_R = 14;
     const dt = Math.max(0, Math.min(0.1, time - _lastGumdropTime));
     _lastGumdropTime = time;
     for (let i = 0; i < GUMDROPS.length; i++) {
@@ -659,9 +666,7 @@ export const candyLand: ArenaPack = {
         const py = p.y + p.height;
         if (Math.abs(dx) < 40 && Math.abs(py - g.gy) < 30) { nearby = 1; break; }
       }
-      // Slow attack so the wobble eases in instead of flicking on/off.
       const e = _gumdropExcite[i] = Math.max(0, _gumdropExcite[i] + (nearby - _gumdropExcite[i]) * dt * 3);
-      // Calmer: smaller amplitude swing and frequency only modestly higher when excited.
       const wobble = fastSin(time * (2 + e * 2.5) + i) * (0.8 + e * 2);
       const cy = g.gy - GUMDROP_R + 2;
       ctx.fillStyle = g.color;
@@ -672,12 +677,12 @@ export const candyLand: ArenaPack = {
       for (let j = 0; j < 6; j++) {
         const a = (j / 6) * Math.PI * 2 + time * 0.3;
         ctx.beginPath();
-        ctx.arc(g.x + fastCos(a) * GUMDROP_R * 0.6, cy + fastSin(a) * (GUMDROP_R - 2) * 0.6, 1.4, 0, Math.PI * 2);
+        ctx.arc(g.x + fastCos(a) * GUMDROP_R * 0.6, cy + fastSin(a) * (GUMDROP_R - 2) * 0.6, 1.2, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.fillStyle = 'rgba(255,255,255,0.7)';
       ctx.beginPath();
-      ctx.ellipse(g.x - 5, cy - 4, 3.5, 2.5, 0, 0, Math.PI * 2);
+      ctx.ellipse(g.x - 4, cy - 3, 3, 2, 0, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();

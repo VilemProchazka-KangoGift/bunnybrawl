@@ -21,7 +21,7 @@ const BUBBLE_LEAKS = [
 const BUBBLE_COLUMNS = [120, 380, 900, 1180] as const;
 const FISH_COUNT = 18;
 
-function drawFish(ctx: CanvasRenderingContext2D, i: number, time: number, cxBase: number, cy: number, players: ReadonlyArray<Player>): void {
+function drawFish(ctx: CanvasRenderingContext2D, i: number, time: number, cxBase: number, cy: number, players: ReadonlyArray<Player>, isBackground: boolean): void {
   const sp = FISH_SPECIES[i % FISH_SPECIES.length];
   const ox = (i % 6) * 26 - 65;
   const oy = Math.floor(i / 6) * 22 - 22 + (i % 2) * 6;
@@ -30,8 +30,9 @@ function drawFish(ctx: CanvasRenderingContext2D, i: number, time: number, cxBase
   const baseY = cy + oy + fastCos(time * 3 + i) * 3;
   if (x < -40) x += CANVAS_WIDTH + 80;
   if (x > CANVAS_WIDTH + 40) x -= CANVAS_WIDTH + 80;
-  const r = pushFromPlayers(players, x, baseY, 70, 22);
-  const s = sp.size;
+  // Background fish swim high in the water column (y=120..220) and ignore players.
+  const r = isBackground ? { x, y: baseY } : pushFromPlayers(players, x, baseY, 70, 22);
+  const s = sp.size * (isBackground ? 0.6 : 1);
   ctx.save();
   ctx.translate(r.x, r.y);
   ctx.fillStyle = sp.color;
@@ -983,11 +984,17 @@ export const underwater: ArenaPack = {
     ctx.restore();
   },
 
-  drawAnimatedBackground: (ctx, _arena, time) => {
+  drawAnimatedBackground: (ctx, _arena, time, _dayPhase, matchState) => {
     if (getSlowDevice()) return;
     ctx.save();
-    // Bubbles only in background — fish are all in foreground (drawAnimatedForeground)
-    // so they don't half-clip behind platform faces.
+    // Distant fish high in the water column (parallax background, no player react).
+    if (matchState) {
+      const cxBaseBg = ((time * 50) % (CANVAS_WIDTH + 400)) - 200;
+      const cyBg = 170 + fastSin(time * 0.4) * 30;
+      const players = matchState.players;
+      for (let i = 0; i < FISH_COUNT; i += 2) drawFish(ctx, i, time, cxBaseBg, cyBg, players, true);
+    }
+    // Bubbles
     ctx.strokeStyle = '#dcf0ff';
     ctx.fillStyle = '#ffffff';
     ctx.lineWidth = 1;
@@ -1031,7 +1038,7 @@ export const underwater: ArenaPack = {
     const cxBase = ((time * 70) % (CANVAS_WIDTH + 400)) - 200;
     const cy = 380 + fastSin(time * 0.5) * 40;
     const players = matchState.players;
-    for (let i = 0; i < FISH_COUNT; i++) drawFish(ctx, i, time, cxBase, cy, players);
+    for (let i = 1; i < FISH_COUNT; i += 2) drawFish(ctx, i, time, cxBase, cy, players, false);
     ctx.restore();
   },
 

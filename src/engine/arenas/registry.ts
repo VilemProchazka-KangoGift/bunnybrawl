@@ -117,6 +117,7 @@ export function toThemeConfig(pack: ArenaPack): ThemeConfig {
     drawPlatformOverlay: pack.drawPlatformOverlay,
     drawForegroundNature: pack.drawForegroundNature,
     drawAnimatedBackground: pack.drawAnimatedBackground,
+    drawAnimatedForeground: pack.drawAnimatedForeground,
     drawSceneTint: pack.drawSceneTint,
     drawWeatherParticle: pack.drawWeatherParticle,
     drawCustomHazardZone: pack.drawCustomHazardZone,
