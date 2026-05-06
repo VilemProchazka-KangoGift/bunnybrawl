@@ -583,32 +583,47 @@ export const waterfall: ArenaPack = {
   drawAnimatedBackground: (ctx, _arena, time, _dayPhase, matchState) => {
     if (getSlowDevice()) return;
     ctx.save();
-    // Spray plume spread across the full waterfall width.
+    // Spray particles bucketed by alpha — 5 buckets means 5 globalAlpha
+    // mutations + 5 fills instead of 48 of each. Each bucket batches arcs
+    // into one beginPath via moveTo before each arc.
     ctx.fillStyle = '#f0f8ff';
-    for (let i = 0; i < 48; i++) {
-      const t = ((time * 0.6 + i * 0.021) % 1);
-      // Each particle anchored at a different x along the lip.
-      const xAnchor = WATERFALL_BASE_LX + ((i * 137) % WATERFALL_BASE_W);
-      const xOff = fastSin(time * 1.5 + i * 0.7) * (24 + t * 28);
-      const x = xAnchor + xOff;
-      const y = WATERFALL_BASE_Y - t * 220;
-      const r = 4 + (1 - t) * 8;
-      ctx.globalAlpha = (1 - t) * 0.85 * Math.min(1, t * 4);
+    const SPRAY_BUCKETS = 5;
+    for (let b = 0; b < SPRAY_BUCKETS; b++) {
+      ctx.globalAlpha = (b + 0.5) / SPRAY_BUCKETS * 0.85;
       ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
+      for (let i = 0; i < 48; i++) {
+        const t = ((time * 0.6 + i * 0.021) % 1);
+        const a = (1 - t) * 0.85 * Math.min(1, t * 4);
+        const bucket = Math.min(SPRAY_BUCKETS - 1, Math.floor(a / 0.85 * SPRAY_BUCKETS));
+        if (bucket !== b) continue;
+        const xAnchor = WATERFALL_BASE_LX + ((i * 137) % WATERFALL_BASE_W);
+        const xOff = fastSin(time * 1.5 + i * 0.7) * (24 + t * 28);
+        const x = xAnchor + xOff;
+        const y = WATERFALL_BASE_Y - t * 220;
+        const r = 4 + (1 - t) * 8;
+        ctx.moveTo(x + r, y);
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+      }
       ctx.fill();
     }
-    // Outer mist veil — also spread across width, drifting outward.
+    // Outer mist veil — bucketed similarly.
     ctx.fillStyle = '#dcebfa';
-    for (let i = 0; i < 10; i++) {
-      const t = ((time * 0.3 + i * 0.055) % 1);
-      const xAnchor = WATERFALL_BASE_LX - 30 + ((i * 79) % (WATERFALL_BASE_W + 60));
-      const x = xAnchor + fastSin(time + i) * 18;
-      const y = WATERFALL_BASE_Y - 30 - t * 140;
-      const r = 28 + t * 18;
-      ctx.globalAlpha = (1 - t) * 0.35;
+    const MIST_BUCKETS = 3;
+    for (let b = 0; b < MIST_BUCKETS; b++) {
+      ctx.globalAlpha = (b + 0.5) / MIST_BUCKETS * 0.35;
       ctx.beginPath();
-      ctx.ellipse(x, y, r, r * 0.6, 0, 0, Math.PI * 2);
+      for (let i = 0; i < 10; i++) {
+        const t = ((time * 0.3 + i * 0.055) % 1);
+        const a = (1 - t) * 0.35;
+        const bucket = Math.min(MIST_BUCKETS - 1, Math.floor(a / 0.35 * MIST_BUCKETS));
+        if (bucket !== b) continue;
+        const xAnchor = WATERFALL_BASE_LX - 30 + ((i * 79) % (WATERFALL_BASE_W + 60));
+        const x = xAnchor + fastSin(time + i) * 18;
+        const y = WATERFALL_BASE_Y - 30 - t * 140;
+        const r = 28 + t * 18;
+        ctx.moveTo(x + r, y);
+        ctx.ellipse(x, y, r, r * 0.6, 0, 0, Math.PI * 2);
+      }
       ctx.fill();
     }
     // Splash bursts at multiple points along the lip (5 anchors).
