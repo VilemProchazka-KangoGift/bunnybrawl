@@ -18,13 +18,24 @@ type LavaGradients = {
 // Vertical waterfall current: water body baked to a 1×N image strip; full-width
 // fill of a custom wavy path uses clip + stretched drawImage instead of a
 // per-pixel CanvasGradient (which was costing ~5ms/frame on a full-canvas fill).
-type CurrentImages = { waterStrip: OffscreenCanvas | HTMLCanvasElement; highlight: CanvasGradient; height: number };
+type CurrentImages = {
+  waterStrip: OffscreenCanvas | HTMLCanvasElement;
+  // Horizontal highlight gradient baked to a 60×1 strip (varies in X only,
+  // stretched in Y at draw via drawImage + imageSmoothingEnabled=false). Skips
+  // the per-pixel CanvasGradient evaluation over ~36k pixels/frame.
+  highlightStrip: OffscreenCanvas | HTMLCanvasElement;
+  height: number;
+};
 const cachedLavaGradients = new WeakMap<object, LavaGradients>();
 // Zero-G bg: per-zone strip (gradient varies by Y only). Stretched via drawImage
 // instead of full-area gradient fillRect — saves ~1-3ms on a 780×480 zone.
 const cachedZeroGBgStrips = new WeakMap<object, OffscreenCanvas | HTMLCanvasElement>();
 const cachedCurrentImages = new WeakMap<object, CurrentImages>();
-const cachedGhostGlowGradients = new Map<string, CanvasGradient>();
+// Ghost glow: cached gradient OBJECT was reused across frames, but the per-frame
+// fillRect over a (3s)×(3s) area still did per-pixel radial evaluation
+// (~40k pixels/frame in haunted_graveyard with 4-5 ghosts). Bake the gradient
+// into a 2D OffscreenCanvas; per-call becomes drawImage.
+const cachedGhostGlowImages = new Map<string, OffscreenCanvas | HTMLCanvasElement>();
 const cachedJellyGradients = new WeakMap<object, CanvasGradient>();
 
 // Hoisted dash patterns — setLineDash takes a fresh array otherwise.
@@ -34,7 +45,7 @@ const NO_DASH: number[] = [];
 export function clearHazardCaches(): void {
   // WeakMaps drop entries when their key references go away (arena change).
   // The remaining Map keys on theme-derived strings still need explicit clearing.
-  cachedGhostGlowGradients.clear();
+  cachedGhostGlowImages.clear();
 }
 
 export function drawHazardZone(
@@ -140,17 +151,31 @@ export function drawGhost(
   const glowColor = gc?.glowColor || '#6688BB';
   const s = ghost.size;
 
-  // Ghost glow (cached gradient)
+  // Ghost glow — gradient baked to a 2D OffscreenCanvas at half-resolution
+  // (radial gradient is smooth, nearest-neighbor upscale is invisible). Drawn
+  // via drawImage instead of fillRect with the gradient → no per-pixel eval.
   const gKey = `${s}_${glowColor}`;
-  let glow = cachedGhostGlowGradients.get(gKey);
-  if (!glow) {
-    glow = ctx.createRadialGradient(0, 0, s * 0.2, 0, 0, s * 1.5);
-    glow.addColorStop(0, glowColor + '33');
-    glow.addColorStop(1, glowColor + '00');
-    cachedGhostGlowGradients.set(gKey, glow);
+  let glowImage = cachedGhostGlowImages.get(gKey);
+  if (!glowImage) {
+    const haloW = Math.ceil(s * 3);
+    const useOffscreen = typeof OffscreenCanvas !== 'undefined';
+    const bakeW = Math.max(2, Math.ceil(haloW / 2));
+    glowImage = useOffscreen
+      ? new OffscreenCanvas(bakeW, bakeW)
+      : (() => { const c = document.createElement('canvas'); c.width = bakeW; c.height = bakeW; return c; })();
+    const gctx = glowImage.getContext('2d') as CanvasRenderingContext2D;
+    const half = bakeW / 2;
+    const radial = gctx.createRadialGradient(half, half, half * (0.2 / 1.5), half, half, half);
+    radial.addColorStop(0, glowColor + '33');
+    radial.addColorStop(1, glowColor + '00');
+    gctx.fillStyle = radial;
+    gctx.fillRect(0, 0, bakeW, bakeW);
+    cachedGhostGlowImages.set(gKey, glowImage);
   }
-  ctx.fillStyle = glow;
-  ctx.fillRect(-s * 1.5, -s * 1.5, s * 3, s * 3);
+  const prevSmooth = ctx.imageSmoothingEnabled;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(glowImage, -s * 1.5, -s * 1.5, s * 3, s * 3);
+  ctx.imageSmoothingEnabled = prevSmooth;
 
   // Ghost body (rounded top, wavy bottom)
   ctx.fillStyle = color;
@@ -344,11 +369,20 @@ export function drawCurrentZone(
       water.addColorStop(1, 'rgba(70, 150, 210, 0.35)');
       sctx.fillStyle = water;
       sctx.fillRect(0, 0, 1, zh);
-      const highlight = ctx.createLinearGradient(cx - 30, 0, cx + 30, 0);
+      // Highlight gradient varies in X only (60px wide). Bake to a 60×1 strip
+      // — drawImage stretches vertically at no per-pixel cost (memcpy + blend).
+      const HIGHLIGHT_W = 60;
+      const highlightStrip = useOffscreen
+        ? new OffscreenCanvas(HIGHLIGHT_W, 1)
+        : (() => { const c = document.createElement('canvas'); c.width = HIGHLIGHT_W; c.height = 1; return c; })();
+      const hlctx = highlightStrip.getContext('2d') as CanvasRenderingContext2D;
+      const highlight = hlctx.createLinearGradient(0, 0, HIGHLIGHT_W, 0);
       highlight.addColorStop(0, 'rgba(255,255,255,0)');
       highlight.addColorStop(0.5, 'rgba(255,255,255,1)');
       highlight.addColorStop(1, 'rgba(255,255,255,0)');
-      cachedImages = { waterStrip: strip, highlight, height: zh };
+      hlctx.fillStyle = highlight;
+      hlctx.fillRect(0, 0, HIGHLIGHT_W, 1);
+      cachedImages = { waterStrip: strip, highlightStrip, height: zh };
       cachedCurrentImages.set(zone as object, cachedImages);
     }
     // Wavy edge path → clip → drawImage of strip stretched to width.
@@ -387,8 +421,8 @@ export function drawCurrentZone(
     // Slow-device skips animated layers; keeps body + center highlight.
     if (getSlowDevice()) {
       ctx.globalAlpha = 0.12;
-      ctx.fillStyle = cachedImages.highlight;
-      ctx.fillRect(cx - 30, zy, 60, zh);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(cachedImages.highlightStrip, cx - 30, zy, 60, zh);
       ctx.restore();
       return;
     }
@@ -443,8 +477,8 @@ export function drawCurrentZone(
 
     // Bright highlight down the center
     ctx.globalAlpha = 0.12;
-    ctx.fillStyle = cachedImages.highlight;
-    ctx.fillRect(cx - 30, zy, 60, zh);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(cachedImages.highlightStrip, cx - 30, zy, 60, zh);
 
     ctx.restore();
     return;
