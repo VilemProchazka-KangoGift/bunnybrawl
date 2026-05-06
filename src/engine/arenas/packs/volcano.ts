@@ -3,7 +3,7 @@ import type { Arena, Platform, WeatherParticle } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
-import { getFloatingPlatforms } from '../../themes/utils';
+import { getFloatingPlatforms, drawDriftBand } from '../../themes/utils';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
 import {
   CAP_DEPTH, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
@@ -807,6 +807,19 @@ export const volcano: ArenaPack = {
     }
     ctx.globalAlpha = 1;
     ctx.restore();
+  },
+
+  drawAnimatedForeground: (ctx, _arena, time) => {
+    if (getSlowDevice()) return;
+    // Heat shimmer along the ground — warm-tinted drift band.
+    drawDriftBand(ctx, time, {
+      topY: 615,
+      bottomY: 660,
+      colors: ['#ffb88a', '#ff8a5a', '#c95a3a'],
+      alphas: [0.08, 0.10, 0.14],
+      drifts: [6, 10, 14],
+      amps: [6, 9, 12],
+    });
   },
 
   // ---- Audio ----

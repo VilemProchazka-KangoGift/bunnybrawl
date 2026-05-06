@@ -4,13 +4,17 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
 import { drawTree, drawHangingVine, drawFgLeafCluster, drawFern } from '../../themes/drawPrimitives';
-import { pushFromPlayers } from '../../themes/utils';
+import { pushFromPlayers, isLivePlayer } from '../../themes/utils';
 import type { Player } from '../../types';
 
-const SQUIRREL_PERIOD = 9;
 const SQUIRREL_PLAT_TOP = 256;
 const SQUIRREL_PLAT_L = 440;
 const SQUIRREL_PLAT_R = 740;
+// Ground critter base pattern: persistent x + facing dir, paces between platform
+// edges, flees when player nearby. Reusable for future ground cosmetics.
+let _squirrelX = (SQUIRREL_PLAT_L + SQUIRREL_PLAT_R) / 2;
+let _squirrelDir = 1;
+let _squirrelLastTime = 0;
 const TREETOPS_BUTTERFLY_HUES = [320, 60, 200, 290, 30, 160] as const;
 const TREETOPS_BUTTERFLY_COLORS = TREETOPS_BUTTERFLY_HUES.map(h => `hsl(${h},80%,65%)`);
 const TREETOPS_BEE_CLUSTERS = [
@@ -18,34 +22,28 @@ const TREETOPS_BEE_CLUSTERS = [
   { homeX: 940, homeY: 360, phase: 2.4 },
 ] as const;
 
-function drawTreetopsButterfly(ctx: CanvasRenderingContext2D, i: number, time: number, players: ReadonlyArray<Player>, isBackground: boolean): void {
+function drawTreetopsButterfly(ctx: CanvasRenderingContext2D, i: number, time: number, players: ReadonlyArray<Player>): void {
   const driftSpeed = 0.05 + (i % 3) * 0.015;
   const homeX = ((i * 220 + time * 60 * driftSpeed) % (CANVAS_WIDTH + 200)) - 100;
-  // Background butterflies fly above the canopy (y=80..160), foreground in play area.
-  const homeY = isBackground
-    ? 90 + fastSin(time * 0.4 + i * 1.7) * 35 + (i % 3) * 16
-    : 320 + fastSin(time * 0.4 + i * 1.7) * 90 + (i % 3) * 30;
+  const homeY = 320 + fastSin(time * 0.4 + i * 1.7) * 90 + (i % 3) * 30;
   const flutterX = homeX + fastSin(time * 1.2 + i) * 22;
   const flutterY = homeY + fastSin(time * 1.5 + i * 1.7) * 14;
-  const r = isBackground ? { x: flutterX, y: flutterY } : pushFromPlayers(players, flutterX, flutterY, 70, 14, 4);
+  const r = pushFromPlayers(players, flutterX, flutterY, 70, 14, 4);
   const flap = fastSin(time * 14 + i * 3) * 0.5 + 0.5;
-  const scale = isBackground ? 0.65 : 1;
   ctx.fillStyle = TREETOPS_BUTTERFLY_COLORS[i];
   ctx.beginPath();
-  ctx.ellipse(r.x - 4 * scale, r.y, 4 * flap * scale, 5 * scale, 0, 0, Math.PI * 2);
-  ctx.ellipse(r.x + 4 * scale, r.y, 4 * flap * scale, 5 * scale, 0, 0, Math.PI * 2);
+  ctx.ellipse(r.x - 4, r.y, 4 * flap, 5, 0, 0, Math.PI * 2);
+  ctx.ellipse(r.x + 4, r.y, 4 * flap, 5, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = '#000';
-  ctx.fillRect(r.x - 0.5, r.y - 3 * scale, 1, 6 * scale);
+  ctx.fillRect(r.x - 0.5, r.y - 3, 1, 6);
 }
 
-function drawTreetopsBeeCluster(ctx: CanvasRenderingContext2D, ci: number, time: number, players: ReadonlyArray<Player>, isBackground: boolean): void {
+function drawTreetopsBeeCluster(ctx: CanvasRenderingContext2D, ci: number, time: number, players: ReadonlyArray<Player>): void {
   const c = TREETOPS_BEE_CLUSTERS[ci];
   const wanderX = c.homeX + fastSin(time * 0.25 + c.phase) * 180;
-  const wanderY = isBackground
-    ? 130 + fastSin(time * 0.4 + c.phase + 1) * 30
-    : c.homeY + fastSin(time * 0.4 + c.phase + 1) * 50;
-  const r = isBackground ? { x: wanderX, y: wanderY } : pushFromPlayers(players, wanderX, wanderY, 110, 28, 8);
+  const wanderY = c.homeY + fastSin(time * 0.4 + c.phase + 1) * 50;
+  const r = pushFromPlayers(players, wanderX, wanderY, 110, 28, 8);
   for (let i = 0; i < 5; i++) {
     const ph = ci * 7 + i;
     const bx = r.x + fastSin(time * 4 + ph) * 16 + (i % 3 - 1) * 5;
@@ -584,70 +582,68 @@ export const treetops: ArenaPack = {
   drawAnimatedBackground: (ctx, _arena, time, _dayPhase, matchState) => {
     if (getSlowDevice()) return;
     ctx.save();
-    // Distant butterflies + bees above the canopy (parallax bg, no player react).
+
+    // Squirrel paces along its platform; flees when a player is on the platform
+    // and within trigger range. Persistent state — survives between frames.
+    const dt = Math.max(0, Math.min(0.1, time - _squirrelLastTime));
+    _squirrelLastTime = time;
+    const platL = SQUIRREL_PLAT_L + 10;
+    const platR = SQUIRREL_PLAT_R - 10;
+    let nearestPx = Infinity;
+    let nearestDx = 0;
     if (matchState) {
-      const players = matchState.players;
-      for (let i = 0; i < TREETOPS_BUTTERFLY_HUES.length; i += 2) {
-        drawTreetopsButterfly(ctx, i, time, players, true);
+      for (const p of matchState.players) {
+        if (!isLivePlayer(p)) continue;
+        const pcx = p.x + p.width * 0.5;
+        const pcy = p.y + p.height;
+        // Only react if player is roughly on the same platform.
+        if (Math.abs(pcy - SQUIRREL_PLAT_TOP) > 60) continue;
+        const dx = pcx - _squirrelX;
+        const adx = Math.abs(dx);
+        if (adx < nearestPx) { nearestPx = adx; nearestDx = dx; }
       }
-      drawTreetopsBeeCluster(ctx, 0, time, players, true);
     }
-    const phase = time % SQUIRREL_PERIOD;
-    const fromLeft = Math.floor(time / SQUIRREL_PERIOD) % 2 === 0;
-    let x = 0, y = 0, alpha = 1, visible = false;
-    if (phase < 0.5) {
-      const u = phase / 0.5;
-      x = fromLeft ? SQUIRREL_PLAT_L + 10 : SQUIRREL_PLAT_R - 10;
-      y = SQUIRREL_PLAT_TOP + 50 - u * 50;
-      visible = true;
-    } else if (phase < 2.6) {
-      const u = (phase - 0.5) / 2.1;
-      x = fromLeft
-        ? SQUIRREL_PLAT_L + 10 + u * (SQUIRREL_PLAT_R - SQUIRREL_PLAT_L - 20)
-        : SQUIRREL_PLAT_R - 10 - u * (SQUIRREL_PLAT_R - SQUIRREL_PLAT_L - 20);
-      y = SQUIRREL_PLAT_TOP + fastSin(u * 22) * 1.5;
-      visible = true;
-    } else if (phase < 3.1) {
-      // Disappear behind the platform: descend into the platform body and fade.
-      // The platform overlay (drawn after this hook) covers the body face;
-      // the alpha fade hides the lingering pixel until the overlay catches up.
-      const u = (phase - 2.6) / 0.5;
-      x = fromLeft ? SQUIRREL_PLAT_R - 10 : SQUIRREL_PLAT_L + 10;
-      y = SQUIRREL_PLAT_TOP + u * 22;
-      alpha = 1 - u;
-      visible = true;
+    const fleeing = nearestPx < 110;
+    const speed = fleeing ? 140 : 45;
+    if (fleeing) {
+      // Run away from the player — sign(squirrel - player).
+      _squirrelDir = nearestDx > 0 ? -1 : 1;
     }
-    if (visible) {
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.translate(x, y);
-      if (!fromLeft) ctx.scale(-1, 1);
-      ctx.fillStyle = '#a5683a';
-      ctx.beginPath();
-      ctx.ellipse(0, 0, 9, 5, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(-7, 0);
-      ctx.bezierCurveTo(-18, -3, -22, -14, -10, -14);
-      ctx.lineTo(-10, -6);
-      ctx.bezierCurveTo(-14, -7, -10, -2, -7, 0);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(7, -1, 4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(8, -4);
-      ctx.lineTo(10, -7);
-      ctx.lineTo(11, -4);
-      ctx.fill();
-      ctx.fillStyle = '#000';
-      ctx.fillRect(8, -2, 1.5, 1.5);
-      ctx.fillStyle = '#e8c89a';
-      ctx.beginPath();
-      ctx.ellipse(0, 1.5, 5, 2, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
+    _squirrelX += _squirrelDir * speed * dt;
+    if (_squirrelX <= platL) { _squirrelX = platL; _squirrelDir = 1; }
+    else if (_squirrelX >= platR) { _squirrelX = platR; _squirrelDir = -1; }
+    const bob = fastSin(time * (fleeing ? 18 : 8)) * (fleeing ? 2 : 1);
+    const sx = _squirrelX;
+    const sy = SQUIRREL_PLAT_TOP + bob;
+    ctx.save();
+    ctx.translate(sx, sy);
+    if (_squirrelDir < 0) ctx.scale(-1, 1);
+    ctx.fillStyle = '#a5683a';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 9, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(-7, 0);
+    ctx.bezierCurveTo(-18, -3, -22, -14, -10, -14);
+    ctx.lineTo(-10, -6);
+    ctx.bezierCurveTo(-14, -7, -10, -2, -7, 0);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(7, -1, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(8, -4);
+    ctx.lineTo(10, -7);
+    ctx.lineTo(11, -4);
+    ctx.fill();
+    ctx.fillStyle = '#000';
+    ctx.fillRect(8, -2, 1.5, 1.5);
+    ctx.fillStyle = '#e8c89a';
+    ctx.beginPath();
+    ctx.ellipse(0, 1.5, 5, 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
     ctx.restore();
   },
 
@@ -655,10 +651,12 @@ export const treetops: ArenaPack = {
     if (getSlowDevice() || !matchState) return;
     ctx.save();
     const players = matchState.players;
-    for (let i = 1; i < TREETOPS_BUTTERFLY_HUES.length; i += 2) {
-      drawTreetopsButterfly(ctx, i, time, players, false);
+    for (let i = 0; i < TREETOPS_BUTTERFLY_HUES.length; i++) {
+      drawTreetopsButterfly(ctx, i, time, players);
     }
-    drawTreetopsBeeCluster(ctx, 1, time, players, false);
+    for (let ci = 0; ci < TREETOPS_BEE_CLUSTERS.length; ci++) {
+      drawTreetopsBeeCluster(ctx, ci, time, players);
+    }
     ctx.restore();
   },
 

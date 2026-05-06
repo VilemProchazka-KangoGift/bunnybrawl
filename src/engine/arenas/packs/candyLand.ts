@@ -664,26 +664,37 @@ export const candyLand: ArenaPack = {
         if (!isLivePlayer(p)) continue;
         const dx = (p.x + p.width * 0.5) - g.x;
         const py = p.y + p.height;
-        if (Math.abs(dx) < 40 && Math.abs(py - g.gy) < 30) { nearby = 1; break; }
+        if (Math.abs(dx) < 50 && Math.abs(py - g.gy) < 30) { nearby = 1; break; }
       }
-      const e = _gumdropExcite[i] = Math.max(0, _gumdropExcite[i] + (nearby - _gumdropExcite[i]) * dt * 3);
-      const wobble = fastSin(time * (2 + e * 2.5) + i) * (0.8 + e * 2);
-      const cy = g.gy - GUMDROP_R + 2;
+      // Slow attack/decay — spin/jump phase out smoothly instead of flicking.
+      const e = _gumdropExcite[i] = Math.max(0, _gumdropExcite[i] + (nearby - _gumdropExcite[i]) * dt * 4);
+      // Spin: base slow rotation, faster when excited.
+      const rot = time * (0.2 + e * 1.8) + i * 1.3;
+      // Jump: small repeating hop when excited (clamped sine, only positive lobes).
+      const hopPhase = (time * (2 + e * 1.5) + i) % (Math.PI * 2);
+      const hopWave = Math.max(0, fastSin(hopPhase));
+      const hop = e * hopWave * 6;
+      const cx = g.x;
+      const cy = g.gy - GUMDROP_R + 2 - hop;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(rot);
       ctx.fillStyle = g.color;
       ctx.beginPath();
-      ctx.ellipse(g.x + wobble * 0.2, cy, GUMDROP_R + wobble * 0.3, GUMDROP_R - wobble * 0.3, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, 0, GUMDROP_R, GUMDROP_R, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = 'rgba(255,255,255,0.35)';
       for (let j = 0; j < 6; j++) {
-        const a = (j / 6) * Math.PI * 2 + time * 0.3;
+        const a = (j / 6) * Math.PI * 2;
         ctx.beginPath();
-        ctx.arc(g.x + fastCos(a) * GUMDROP_R * 0.6, cy + fastSin(a) * (GUMDROP_R - 2) * 0.6, 1.2, 0, Math.PI * 2);
+        ctx.arc(fastCos(a) * GUMDROP_R * 0.6, fastSin(a) * GUMDROP_R * 0.6, 1.2, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.fillStyle = 'rgba(255,255,255,0.7)';
       ctx.beginPath();
-      ctx.ellipse(g.x - 4, cy - 3, 3, 2, 0, 0, Math.PI * 2);
+      ctx.ellipse(-4, -3, 3, 2, 0, 0, Math.PI * 2);
       ctx.fill();
+      ctx.restore();
     }
     ctx.restore();
   },

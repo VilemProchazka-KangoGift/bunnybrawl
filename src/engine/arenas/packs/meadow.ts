@@ -12,12 +12,25 @@ const BEE_CLUSTERS = [
   { homeX: 320, homeY: 420, phase: 0 },
   { homeX: 980, homeY: 380, phase: 2.4 },
 ] as const;
-// Dandelions: x position + ground y (where stem base sits).
+// Dandelions: x position + ground y (where stem base sits). Placed at platform
+// corners so they don't visually crowd springs/thorns that spawn in the middle.
 const DANDELIONS = [
-  { x: 180, gy: 655 },           // ground
-  { x: 1180, gy: 655 },          // ground
-  { x: 380, gy: 395 },           // atop floating platform y=400
-  { x: 880, gy: 410 },           // atop floating platform y=415
+  // Ground (long strip — spread along)
+  { x: 180,  gy: 655 },
+  { x: 460,  gy: 655 },
+  { x: 740,  gy: 655 },
+  { x: 1180, gy: 655 },
+  // Floating platforms — corner placements
+  { x: 305,  gy: 395 }, // platform x=280, w=200, y=400 (left corner)
+  { x: 460,  gy: 395 }, // platform x=280, w=200, y=400 (right corner)
+  { x: 785,  gy: 410 }, // platform x=760, w=240, y=415 (left corner)
+  { x: 980,  gy: 410 }, // platform x=760, w=240, y=415 (right corner)
+  { x: 565,  gy: 475 }, // platform x=540, w=200, y=480 (left corner)
+  { x: 720,  gy: 475 }, // platform x=540, w=200, y=480 (right corner)
+  { x: 130,  gy: 325 }, // platform x=110, w=120, y=330 (left corner)
+  { x: 1150, gy: 340 }, // platform x=1010, w=160, y=345 (right corner)
+  { x: 510,  gy: 285 }, // platform x=490, w=300, y=290 (left corner)
+  { x: 770,  gy: 285 }, // platform x=490, w=300, y=290 (right corner)
 ] as const;
 // Per-dandelion excitement (0..1), decays each frame, rises when a player is near.
 const _dandelionExcite = new Float32Array(DANDELIONS.length);
@@ -32,38 +45,28 @@ const DANDELION_SEED_SIN = new Float32Array(14);
   }
 }
 
-function drawButterfly(ctx: CanvasRenderingContext2D, i: number, time: number, players: ReadonlyArray<import('../../types').Player>, isBackground: boolean): void {
+function drawButterfly(ctx: CanvasRenderingContext2D, i: number, time: number, players: ReadonlyArray<import('../../types').Player>): void {
   const driftSpeed = 0.04 + (i % 3) * 0.015;
   const homeX = ((i * 200 + time * 60 * driftSpeed) % (CANVAS_WIDTH + 200)) - 100;
-  // Background butterflies fly high in the sky (y=80..180) so they never enter
-  // the platform region. Foreground butterflies fly low in the play area.
-  const homeY = isBackground
-    ? 90 + fastSin(time * 0.4 + i * 1.7) * 40 + (i % 3) * 18
-    : 380 + fastSin(time * 0.4 + i * 1.7) * 80 + (i % 3) * 30;
+  const homeY = 380 + fastSin(time * 0.4 + i * 1.7) * 80 + (i % 3) * 30;
   const flutterX = homeX + fastSin(time * 1.2 + i) * 22;
   const flutterY = homeY + fastSin(time * 1.5 + i * 1.7) * 14;
-  // Background butterflies don't react to players (they're far away).
-  const r = isBackground ? { x: flutterX, y: flutterY } : pushFromPlayers(players, flutterX, flutterY, 70, 14, 4);
+  const r = pushFromPlayers(players, flutterX, flutterY, 70, 14, 4);
   const flap = fastSin(time * 14 + i * 3) * 0.5 + 0.5;
-  // Background butterflies are smaller (parallax distance).
-  const scale = isBackground ? 0.65 : 1;
   ctx.fillStyle = BUTTERFLY_COLORS[i];
   ctx.beginPath();
-  ctx.ellipse(r.x - 4 * scale, r.y, 4 * flap * scale, 5 * scale, 0, 0, Math.PI * 2);
-  ctx.ellipse(r.x + 4 * scale, r.y, 4 * flap * scale, 5 * scale, 0, 0, Math.PI * 2);
+  ctx.ellipse(r.x - 4, r.y, 4 * flap, 5, 0, 0, Math.PI * 2);
+  ctx.ellipse(r.x + 4, r.y, 4 * flap, 5, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = '#000';
-  ctx.fillRect(r.x - 0.5, r.y - 3 * scale, 1, 6 * scale);
+  ctx.fillRect(r.x - 0.5, r.y - 3, 1, 6);
 }
 
-function drawBeeCluster(ctx: CanvasRenderingContext2D, ci: number, time: number, players: ReadonlyArray<import('../../types').Player>, isBackground: boolean): void {
+function drawBeeCluster(ctx: CanvasRenderingContext2D, ci: number, time: number, players: ReadonlyArray<import('../../types').Player>): void {
   const c = BEE_CLUSTERS[ci];
   const wanderX = c.homeX + fastSin(time * 0.25 + c.phase) * 200;
-  // Background cluster stays in the sky.
-  const wanderY = isBackground
-    ? 130 + fastSin(time * 0.4 + c.phase + 1) * 30
-    : c.homeY + fastSin(time * 0.4 + c.phase + 1) * 60;
-  const r = isBackground ? { x: wanderX, y: wanderY } : pushFromPlayers(players, wanderX, wanderY, 110, 28, 8);
+  const wanderY = c.homeY + fastSin(time * 0.4 + c.phase + 1) * 60;
+  const r = pushFromPlayers(players, wanderX, wanderY, 110, 28, 8);
   for (let i = 0; i < 6; i++) {
     const ph = ci * 7 + i;
     const bx = r.x + fastSin(time * 4 + ph) * 18 + (i % 3 - 1) * 6;
@@ -567,10 +570,6 @@ export const meadow: ArenaPack = {
     if (getSlowDevice() || !matchState) return;
     ctx.save();
     const players = matchState.players;
-    // Even-indexed butterflies fly high in the SKY (true background — never
-    // enter platform area). Odd-indexed render in foreground.
-    for (let i = 0; i < BUTTERFLY_HUES.length; i += 2) drawButterfly(ctx, i, time, players, true);
-    drawBeeCluster(ctx, 0, time, players, true);
     // Dandelions: trigger lifecycle. When a player enters the trigger radius
     // and the puff is intact, kick off a burst — seeds fly outward over ~2s,
     // puff regrows over the next ~5s.
@@ -672,9 +671,8 @@ export const meadow: ArenaPack = {
     if (getSlowDevice() || !matchState) return;
     ctx.save();
     const players = matchState.players;
-    // Odd-indexed butterflies in foreground (low-flying, react to players).
-    for (let i = 1; i < BUTTERFLY_HUES.length; i += 2) drawButterfly(ctx, i, time, players, false);
-    drawBeeCluster(ctx, 1, time, players, false);
+    for (let i = 0; i < BUTTERFLY_HUES.length; i++) drawButterfly(ctx, i, time, players);
+    for (let ci = 0; ci < BEE_CLUSTERS.length; ci++) drawBeeCluster(ctx, ci, time, players);
     ctx.restore();
   },
 

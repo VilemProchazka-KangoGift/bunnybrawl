@@ -20,11 +20,12 @@ const _hallwayGlowGrads = new WeakMap<Hallway, CanvasGradient>();
 function getHallwayGlow(ctx: CanvasRenderingContext2D, h: Hallway): CanvasGradient {
   let g = _hallwayGlowGrads.get(h);
   if (!g) {
-    // Center on the lower half of the room (where the bulb hangs).
+    // Bulb sits in the upper third — glow radiates from there, filling almost
+    // the whole room. Only a thin sliver at the very top stays dark.
     const cx = h.x + h.w / 2;
-    const cy = h.y - 32 + (h.h + 32) * 0.75;
-    g = ctx.createRadialGradient(cx, cy, 0, cx, cy, h.w * 0.55);
-    g.addColorStop(0, 'rgba(255, 213, 107, 0.45)');
+    const cy = h.y - 32 + (h.h + 32) * 0.3;
+    g = ctx.createRadialGradient(cx, cy, 0, cx, cy, h.w * 0.7);
+    g.addColorStop(0, 'rgba(255, 213, 107, 0.55)');
     g.addColorStop(1, 'rgba(255, 180, 60, 0)');
     _hallwayGlowGrads.set(h, g);
   }
@@ -1195,30 +1196,29 @@ export const rooftops: ArenaPack = {
           break;
         }
       }
-      // Room interior spans roughly h.y - 32 .. h.y + h.h. Light only the
-      // BOTTOM HALF — the top stays dark even when lit.
+      // Room interior spans roughly h.y - 32 .. h.y + h.h. Light fills almost
+      // the entire room when lit; only a thin dark sliver remains at the very top.
       const interiorTop = h.y - 32;
       const interiorH = h.h + 32;
-      const lightTopY = interiorTop + interiorH * 0.5;
-      const lightH = interiorH * 0.5;
+      const darkSliverH = interiorH * 0.15;
       if (!lit) {
         ctx.fillStyle = 'rgba(8, 10, 18, 0.55)';
         ctx.fillRect(h.x + 4, interiorTop, h.w - 8, interiorH);
         continue;
       }
-      // Dark wash on the top half so the glow only fills the lower portion.
+      // Thin dark sliver at the very top so the bulb cord reads as hanging.
       ctx.fillStyle = 'rgba(8, 10, 18, 0.55)';
-      ctx.fillRect(h.x + 4, interiorTop, h.w - 8, interiorH * 0.5);
-      // Warm glow only in the bottom half (gradient cached per hallway).
+      ctx.fillRect(h.x + 4, interiorTop, h.w - 8, darkSliverH);
+      // Warm glow fills the rest of the room (gradient cached per hallway).
       ctx.fillStyle = getHallwayGlow(ctx, h);
-      ctx.fillRect(h.x, lightTopY, h.w, lightH);
+      ctx.fillRect(h.x, interiorTop + darkSliverH, h.w, interiorH - darkSliverH);
       const flicker = 0.92 + fastSin(time * 9) * 0.08;
       const bulbX = h.x + h.w / 2;
-      const bulbY = lightTopY + 8;
+      const bulbY = interiorTop + darkSliverH + 8;
       ctx.strokeStyle = '#3a3a4a';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(bulbX, lightTopY);
+      ctx.moveTo(bulbX, interiorTop + darkSliverH);
       ctx.lineTo(bulbX, bulbY - 2);
       ctx.stroke();
       ctx.globalAlpha = flicker;

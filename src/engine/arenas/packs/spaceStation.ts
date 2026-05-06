@@ -1,23 +1,9 @@
 import type { ArenaPack } from '../types';
 import type { Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
-import { fastSin } from '../../fastMath';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
 import { getFloatingPlatforms } from '../../themes/utils';
 
-// Wall-mounted panels aligned with each floating platform floor — tucked against
-// the outer wall, y-matched to each platform's top so the visual reads as
-// "instrument panel on the wall next to the catwalk".
-const CONSOLE_PANELS = [
-  // Left wall, against x=12, aligned with left floating platforms y=465/360/270.
-  { x: 12,   y: 465, color: '#7df0ff' },
-  { x: 12,   y: 360, color: '#a8ffd0' },
-  { x: 12,   y: 270, color: '#ff5f8a' },
-  // Right wall, against x=1226, aligned with right floats y=445/350/260.
-  { x: 1226, y: 445, color: '#7df0ff' },
-  { x: 1226, y: 350, color: '#ffd56b' },
-  { x: 1226, y: 260, color: '#a8ffd0' },
-] as const;
 import {
   CAP_DEPTH, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
   capFrontY, capBackY, skewPx,
@@ -461,36 +447,6 @@ export const spaceStation: ArenaPack = {
       else drawSatellite(ctx, obj);
     }
 
-    ctx.restore();
-
-    ctx.save();
-    for (let pi = 0; pi < CONSOLE_PANELS.length; pi++) {
-      const p = CONSOLE_PANELS[pi];
-      ctx.fillStyle = '#0e1420';
-      ctx.fillRect(p.x - 1, p.y - 1, 42, 16);
-      ctx.strokeStyle = '#2a3242';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(p.x - 1, p.y - 1, 42, 16);
-      const phase = Math.floor(time * 3 + pi * 2);
-      const baseAlpha = 0.6 + (fastSin(time * 1.5 + pi) * 0.5 + 0.5) * 0.3;
-      ctx.fillStyle = p.color;
-      ctx.globalAlpha = baseAlpha;
-      for (let i = 0; i < 3; i++) {
-        const w = 4 + ((i + phase) % 3) * 3;
-        ctx.fillRect(p.x + 3 + i * 12, p.y + 3, w, 2);
-      }
-      // Doubled bar emulates the bloom we used to get from shadowBlur.
-      ctx.globalAlpha = baseAlpha * 0.45;
-      ctx.fillRect(p.x + 1, p.y + 8, 38, 4);
-      ctx.globalAlpha = baseAlpha;
-      ctx.fillRect(p.x + 3, p.y + 9, 34, 2);
-      ctx.fillStyle = '#ff6464';
-      ctx.globalAlpha = 0.5 + fastSin(time * 6 + pi) * 0.5;
-      ctx.beginPath();
-      ctx.arc(p.x + 38, p.y + 4, 1, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-    }
     ctx.restore();
   },
 

@@ -5,7 +5,7 @@ import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
 import { computeNightIntensity } from '../../rendering';
 import { createThornRenderer } from '../../themes/drawPrimitives';
-import { getFloatingPlatforms } from '../../themes/utils';
+import { getFloatingPlatforms, drawDriftBand } from '../../themes/utils';
 
 const WISPS = [
   { x: 200, y: 540, phase: 0 },
@@ -731,72 +731,12 @@ export const hauntedGraveyard: ArenaPack = {
 
   drawAnimatedForeground: (ctx, _arena, time) => {
     if (getSlowDevice()) return;
-    ctx.save();
-    // Solid base band at ground — guarantees the fog reads as "I'm in fog" no
-    // matter where the player is. Wavy top edge fades the band into the air.
-    ctx.fillStyle = '#9eaec0';
-    ctx.globalAlpha = 0.90;
-    ctx.beginPath();
-    ctx.moveTo(-20, 660);
-    for (let x = -20; x <= CANVAS_WIDTH + 20; x += 10) {
-      const wave = fastSin(x * 0.015 + time * 0.4) * 12 + fastSin(x * 0.04 + time * 1.1) * 6;
-      ctx.lineTo(x, 620 + wave);
-    }
-    ctx.lineTo(CANVAS_WIDTH + 20, 660);
-    ctx.closePath();
-    ctx.fill();
-    // Three wavy ribbons stacked higher so fog reaches platform level.
-    const layers = [
-      { drift: 18, ampHi: 18, freq: 0.018, baseY: 640, height: 90,  color: '#b1c0d0', alpha: 0.80 },
-      { drift: 11, ampHi: 24, freq: 0.012, baseY: 620, height: 130, color: '#c8d4e0', alpha: 0.55 },
-      { drift: 7,  ampHi: 30, freq: 0.009, baseY: 600, height: 170, color: '#dce4ec', alpha: 0.35 },
-    ];
-    for (let li = 0; li < layers.length; li++) {
-      const L = layers[li];
-      const tx = time * L.drift;
-      ctx.fillStyle = L.color;
-      ctx.globalAlpha = L.alpha;
-      ctx.beginPath();
-      ctx.moveTo(-20, L.baseY);
-      for (let x = -20; x <= CANVAS_WIDTH + 20; x += 12) {
-        const s = fastSin((x + tx) * L.freq);
-        const s2 = fastSin((x + tx) * L.freq * 2.7 + li);
-        const s3 = fastSin(x * 0.004 + time * 0.4 + li * 1.3);
-        const denseAmp = 0.5 + 0.5 * s3;
-        const wave = (s * 0.7 + s2 * 0.3) * L.ampHi * denseAmp;
-        ctx.lineTo(x, L.baseY - L.height + wave);
-      }
-      ctx.lineTo(CANVAS_WIDTH + 20, L.baseY);
-      ctx.closePath();
-      ctx.fill();
-    }
-    // Dense drifting patches that fully occlude — wavy ellipsoidal blobs.
-    ctx.fillStyle = '#c8d4e0';
-    ctx.globalAlpha = 0.92;
-    for (let pi = 0; pi < 5; pi++) {
-      const cxBase = ((pi * 280 + time * 12) % (CANVAS_WIDTH + 240)) - 120;
-      const cy = 560 + fastSin(time * 0.3 + pi) * 20;
-      const halfW = 100;
-      const halfH = 38;
-      ctx.beginPath();
-      ctx.moveTo(cxBase - halfW, cy);
-      for (let x = -halfW; x <= halfW; x += 8) {
-        const t = x / halfW;
-        const baseEdge = halfH * Math.sqrt(Math.max(0, 1 - t * t));
-        const wave = fastSin((cxBase + x) * 0.05 + time * 1.5 + pi) * 6;
-        ctx.lineTo(cxBase + x, cy - baseEdge - wave);
-      }
-      for (let x = halfW; x >= -halfW; x -= 8) {
-        const t = x / halfW;
-        const baseEdge = halfH * Math.sqrt(Math.max(0, 1 - t * t));
-        const wave = fastSin((cxBase + x) * 0.05 + time * 1.5 + pi + 1.7) * 6;
-        ctx.lineTo(cxBase + x, cy + baseEdge + wave);
-      }
-      ctx.closePath();
-      ctx.fill();
-    }
-    ctx.globalAlpha = 1;
-    ctx.restore();
+    drawDriftBand(ctx, time, {
+      topY: 600,
+      bottomY: 660,
+      colors: ['#dce4ec', '#c8d4e0', '#b1c0d0'],
+      alphas: [0.10, 0.14, 0.20],
+    });
   },
 
   // ---- Audio ----
