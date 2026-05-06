@@ -11,20 +11,22 @@ const CHIMNEYS = [
   { x: 264, y: 444 },
 ] as const;
 
-interface Hallway { x: number; y: number; w: number; h: number }
+// Room interior matches `openH = 88` in drawFarBackground — floor at y, ceiling at y - 88.
+const HALLWAY_ROOM_H = 88;
+interface Hallway { x: number; y: number; w: number }
 const HALLWAYS: ReadonlyArray<Hallway> = [
-  { x: 510, y: 550, w: 300, h: 30 },
-  { x: 970, y: 480, w: 230, h: 30 },
+  { x: 510, y: 550, w: 300 },
+  { x: 970, y: 480, w: 230 },
 ];
 const _hallwayGlowGrads = new WeakMap<Hallway, CanvasGradient>();
 function getHallwayGlow(ctx: CanvasRenderingContext2D, h: Hallway): CanvasGradient {
   let g = _hallwayGlowGrads.get(h);
   if (!g) {
     const cx = h.x + h.w / 2;
-    const cy = h.y - 32 + (h.h + 32) * 0.5;
-    g = ctx.createRadialGradient(cx, cy, 0, cx, cy, h.w * 0.85);
-    g.addColorStop(0, 'rgba(255, 213, 107, 0.65)');
-    g.addColorStop(1, 'rgba(255, 180, 60, 0.15)');
+    const cy = h.y - HALLWAY_ROOM_H * 0.5;
+    g = ctx.createRadialGradient(cx, cy, 0, cx, cy, h.w * 0.9);
+    g.addColorStop(0, 'rgba(255, 213, 107, 0.7)');
+    g.addColorStop(1, 'rgba(255, 180, 60, 0.2)');
     _hallwayGlowGrads.set(h, g);
   }
   return g;
@@ -1190,23 +1192,22 @@ export const rooftops: ArenaPack = {
         if (!isLivePlayer(p)) continue;
         const px = p.x + p.width * 0.5;
         const py = p.y + p.height * 0.5;
-        if (px >= h.x - 20 && px <= h.x + h.w + 20 && py >= h.y - 40 && py <= h.y + h.h + 30) {
+        if (px >= h.x - 20 && px <= h.x + h.w + 20 && py >= h.y - HALLWAY_ROOM_H && py <= h.y + 30) {
           lit = true;
           break;
         }
       }
-      const interiorTop = h.y - 32;
-      const interiorH = h.h + 32;
+      const interiorTop = h.y - HALLWAY_ROOM_H;
       if (!lit) {
         ctx.fillStyle = 'rgba(8, 10, 18, 0.55)';
-        ctx.fillRect(h.x + 4, interiorTop, h.w - 8, interiorH);
+        ctx.fillRect(h.x + 4, interiorTop, h.w - 8, HALLWAY_ROOM_H);
         continue;
       }
       ctx.fillStyle = getHallwayGlow(ctx, h);
-      ctx.fillRect(h.x, interiorTop, h.w, interiorH);
+      ctx.fillRect(h.x, interiorTop, h.w, HALLWAY_ROOM_H);
       const flicker = 0.92 + fastSin(time * 9) * 0.08;
       const bulbX = h.x + h.w / 2;
-      const bulbY = interiorTop + 10;
+      const bulbY = interiorTop + 12;
       ctx.strokeStyle = '#3a3a4a';
       ctx.lineWidth = 1;
       ctx.beginPath();

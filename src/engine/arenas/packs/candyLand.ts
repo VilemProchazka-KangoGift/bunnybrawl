@@ -4,7 +4,7 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
-import { getFloatingPlatforms, isLivePlayer, makeDtTracker } from '../../themes/utils';
+import { getFloatingPlatforms, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
 
 const CANDY_CLOUDS = [
   { x: 200, y: 110, r: 26 },
@@ -13,29 +13,29 @@ const CANDY_CLOUDS = [
 ] as const;
 const SPRINKLE_HUES = [10, 45, 120, 200, 280, 320] as const;
 const WEATHER_SPRINKLE_COLORS = SPRINKLE_HUES.map(h => `hsl(${h},80%,65%)`);
-interface Gumdrop {
-  homeX: number; gy: number; color: string;
-  platL: number; platR: number;
-  x: number; vx: number;
-  y: number; vy: number; onGround: boolean;
+interface GumdropDef {
+  gy: number; color: string;
+  cfg: { platL: number; platR: number; platTopY: number; walkSpeed: number; fleeSpeed: number; fleeRadius: number; yTolerance: number; turnEaseRate: number };
+  state: GroundCritterState;
   rot: number;
-  jumpCd: number; kickCd: number;
 }
-const GUMDROPS: Gumdrop[] = [
-  { homeX: 120, gy: 530, color: '#ff5e8a', platL: 38, platR: 200, x: 120, vx: 0, y: 0, vy: 0, onGround: true, rot: 0, jumpCd: 1.2, kickCd: 0.8 },
-  { homeX: 1160, gy: 510, color: '#7be0a3', platL: 1098, platR: 1224, x: 1160, vx: 0, y: 0, vy: 0, onGround: true, rot: 0, jumpCd: 0.7, kickCd: 1.5 },
-  { homeX: 120, gy: 350, color: '#ffe066', platL: 58, platR: 188, x: 120, vx: 0, y: 0, vy: 0, onGround: true, rot: 0, jumpCd: 2.1, kickCd: 0.5 },
-  { homeX: 1158, gy: 325, color: '#c899ff', platL: 1108, platR: 1208, x: 1158, vx: 0, y: 0, vy: 0, onGround: true, rot: 0, jumpCd: 1.6, kickCd: 1.1 },
+const GUMDROP_R = 14;
+function makeGumdrop(platL: number, platR: number, gy: number, color: string): GumdropDef {
+  const startX = (platL + platR) / 2;
+  return {
+    gy, color,
+    cfg: { platL: platL + GUMDROP_R, platR: platR - GUMDROP_R, platTopY: gy, walkSpeed: 35, fleeSpeed: 110, fleeRadius: 90, yTolerance: 60, turnEaseRate: 3 },
+    state: { x: startX, dir: 1, facingEase: 1, fleeing: false },
+    rot: 0,
+  };
+}
+const GUMDROPS: GumdropDef[] = [
+  makeGumdrop(38,   200,  530, '#ff5e8a'),
+  makeGumdrop(1098, 1224, 510, '#7be0a3'),
+  makeGumdrop(58,   188,  350, '#ffe066'),
+  makeGumdrop(1108, 1208, 325, '#c899ff'),
 ];
-const GUMDROP_GRAVITY = 700;
-const GUMDROP_JUMP_V = -200;
-const GUMDROP_MAX_VX = 90;
 const _tickGumdropDt = makeDtTracker();
-let _gumdropRngSeed = 1;
-function gumdropRng(): number {
-  _gumdropRngSeed = (_gumdropRngSeed * 16807) % 2147483647;
-  return _gumdropRngSeed / 2147483647;
-}
 // 8-wisp ring around each cloud, hoisted so the loop avoids 24 sin+cos per frame.
 const CLOUD_WISP_COS = new Float32Array(8);
 const CLOUD_WISP_SIN = new Float32Array(8);
@@ -665,46 +665,16 @@ export const candyLand: ArenaPack = {
 
   drawAnimatedForeground: (ctx, _arena, time, _dayPhase, matchState) => {
     if (getSlowDevice()) return;
-    const GUMDROP_R = 14;
     const dt = _tickGumdropDt(time);
+    const players = matchState?.players ?? [];
     ctx.save();
     for (let i = 0; i < GUMDROPS.length; i++) {
       const g = GUMDROPS[i];
-      let excited = false;
-      for (const p of matchState?.players ?? []) {
-        if (!isLivePlayer(p)) continue;
-        const dx = (p.x + p.width * 0.5) - g.x;
-        const py = p.y + p.height;
-        if (Math.abs(dx) < 80 && Math.abs(py - g.gy) < 50) { excited = true; break; }
-      }
-      g.vy += GUMDROP_GRAVITY * dt;
-      g.x += g.vx * dt;
-      g.y += g.vy * dt;
-      if (g.y >= 0) {
-        g.y = 0;
-        if (g.vy > 60) g.vy = -g.vy * 0.35;
-        else { g.vy = 0; g.onGround = true; }
-        g.vx *= Math.pow(0.86, dt * 60);
-      } else {
-        g.onGround = false;
-      }
-      if (g.x < g.platL) { g.x = g.platL; g.vx = Math.abs(g.vx) * 0.6; }
-      else if (g.x > g.platR) { g.x = g.platR; g.vx = -Math.abs(g.vx) * 0.6; }
-      g.rot += (g.vx / GUMDROP_R) * dt;
-      g.jumpCd -= dt;
-      g.kickCd -= dt;
-      if (g.onGround && g.jumpCd <= 0) {
-        g.vy = GUMDROP_JUMP_V * (excited ? 1.2 : 1);
-        g.onGround = false;
-        g.jumpCd = excited ? 0.4 + gumdropRng() * 0.6 : 1.5 + gumdropRng() * 2.5;
-      }
-      if (g.kickCd <= 0) {
-        const kick = (gumdropRng() * 2 - 1) * (excited ? 80 : 50);
-        g.vx = Math.max(-GUMDROP_MAX_VX, Math.min(GUMDROP_MAX_VX, g.vx + kick));
-        g.kickCd = excited ? 0.5 + gumdropRng() * 0.8 : 1.5 + gumdropRng() * 1.5;
-      }
-      const cx = g.x;
-      const cy = g.gy - GUMDROP_R + 2 + g.y;
+      tickGroundCritter(g.state, players, dt, g.cfg);
+      const speed = g.state.fleeing ? g.cfg.fleeSpeed : g.cfg.walkSpeed;
+      g.rot += (g.state.facingEase * speed / GUMDROP_R) * dt;
+      const cx = g.state.x;
+      const cy = g.gy - GUMDROP_R + 2;
       ctx.save();
       ctx.translate(cx, cy);
       ctx.rotate(g.rot);

@@ -706,11 +706,12 @@ export const waterfall: ArenaPack = {
     const cxBase = (WATERFALL_SPRAY_BOUNDS.left + WATERFALL_SPRAY_BOUNDS.right) / 2;
     const halfW = (WATERFALL_SPRAY_BOUNDS.right - WATERFALL_SPRAY_BOUNDS.left) / 2;
     for (let pi = 0; pi < 4; pi++) {
-      const drift = ((time * 18 + pi * 0.7) % 2 - 1) * halfW;
-      const px = cxBase + drift + fastSin(time * 0.4 + pi * 1.7) * 30;
+      const driftPhase = time * 0.55 + pi * Math.PI / 2;
+      const px = cxBase + fastSin(driftPhase) * (halfW - 30);
       const py = 640 + fastSin(time * 0.6 + pi) * 6;
-      const t = Math.abs(drift / halfW);
-      const alpha = (1 - t) * 0.45;
+      // Alpha peaks mid-zone, fades at edges — and gently breathes via cos.
+      const edgeFade = 1 - Math.abs(fastSin(driftPhase));
+      const alpha = (0.18 + edgeFade * 0.25) * 0.9;
       ctx.fillStyle = `rgba(220,235,250,${alpha})`;
       ctx.beginPath();
       ctx.ellipse(px, py, 90, 22, 0, 0, Math.PI * 2);
