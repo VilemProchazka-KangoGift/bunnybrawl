@@ -139,7 +139,7 @@ export function drawDriftBand(
     ctx.globalAlpha = cfg.alphas[li];
     ctx.beginPath();
     ctx.moveTo(-20, cfg.bottomY);
-    for (let x = -20; x <= CANVAS_WIDTH + 20; x += 14) {
+    for (let x = -20; x <= CANVAS_WIDTH + 20; x += 22) {
       const s1 = fastSin((x + tx) * 0.012 + phase1);
       const s2 = fastSin((x + tx) * 0.028 + phase2);
       ctx.lineTo(x, layerTop + s1 * amp + s2 * ampSecondary);

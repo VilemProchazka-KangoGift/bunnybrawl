@@ -585,8 +585,8 @@ export const waterfall: ArenaPack = {
     ctx.save();
     // Spray plume spread across the full waterfall width.
     ctx.fillStyle = '#f0f8ff';
-    for (let i = 0; i < 80; i++) {
-      const t = ((time * 0.6 + i * 0.013) % 1);
+    for (let i = 0; i < 48; i++) {
+      const t = ((time * 0.6 + i * 0.021) % 1);
       // Each particle anchored at a different x along the lip.
       const xAnchor = WATERFALL_BASE_LX + ((i * 137) % WATERFALL_BASE_W);
       const xOff = fastSin(time * 1.5 + i * 0.7) * (24 + t * 28);
@@ -600,7 +600,7 @@ export const waterfall: ArenaPack = {
     }
     // Outer mist veil — also spread across width, drifting outward.
     ctx.fillStyle = '#dcebfa';
-    for (let i = 0; i < 18; i++) {
+    for (let i = 0; i < 10; i++) {
       const t = ((time * 0.3 + i * 0.055) % 1);
       const xAnchor = WATERFALL_BASE_LX - 30 + ((i * 79) % (WATERFALL_BASE_W + 60));
       const x = xAnchor + fastSin(time + i) * 18;

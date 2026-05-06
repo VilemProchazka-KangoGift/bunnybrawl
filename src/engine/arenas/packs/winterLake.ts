@@ -20,11 +20,9 @@ import {
 } from '../../themes/drawPrimitives';
 
 const AURORA_STRIPES = [
-  { color: '#7be0a3', y: 56,  h: 56, speed: 0.6,  phase: 0   },
-  { color: '#a3e8ff', y: 88,  h: 64, speed: 0.45, phase: 1.2 },
-  { color: '#c899ff', y: 120, h: 56, speed: 0.55, phase: 2.4 },
-  { color: '#7be0a3', y: 176, h: 48, speed: 0.7,  phase: 3.6 },
-  { color: '#a3e8ff', y: 224, h: 40, speed: 0.4,  phase: 4.8 },
+  { color: '#7be0a3', y: 56,  h: 64, speed: 0.6,  phase: 0   },
+  { color: '#c899ff', y: 120, h: 64, speed: 0.55, phase: 2.4 },
+  { color: '#a3e8ff', y: 200, h: 56, speed: 0.5,  phase: 4.0 },
 ] as const;
 
 const GLINT_ANCHORS: ReadonlyArray<{ x: number; y: number }> = [
@@ -501,18 +499,19 @@ export const winterLake: ArenaPack = {
     if (nightIntensity < 0.05) return;
     ctx.save();
     const OVERHANG = 80;
+    const STEP = 40;
     for (const st of AURORA_STRIPES) {
       const breathe = 0.5 + 0.5 * fastSin(time * 0.7 + st.phase);
       ctx.fillStyle = st.color;
       ctx.globalAlpha = (0.15 + breathe * 0.18) * nightIntensity;
       ctx.beginPath();
       ctx.moveTo(-OVERHANG, st.y);
-      for (let x = -OVERHANG; x <= CANVAS_WIDTH + OVERHANG; x += 24) {
+      for (let x = -OVERHANG; x <= CANVAS_WIDTH + OVERHANG; x += STEP) {
         const y = st.y + fastSin(x * 0.0085 + time * st.speed + st.phase) * 16
                        + fastSin(x * 0.003 + time * st.speed * 0.5) * 22;
         ctx.lineTo(x, y);
       }
-      for (let x = CANVAS_WIDTH + OVERHANG; x >= -OVERHANG; x -= 24) {
+      for (let x = CANVAS_WIDTH + OVERHANG; x >= -OVERHANG; x -= STEP) {
         const y = st.y + st.h + fastSin(x * 0.0085 + time * st.speed + st.phase + 0.7) * 16
                               + fastSin(x * 0.003 + time * st.speed * 0.5 + 0.5) * 22;
         ctx.lineTo(x, y);
@@ -529,7 +528,7 @@ export const winterLake: ArenaPack = {
     }
     ctx.globalAlpha = 1;
     ctx.fillStyle = '#ffffff';
-    for (let i = 0; i < 36; i++) {
+    for (let i = 0; i < 18; i++) {
       const t = ((time * 0.4 + i * 0.045) % 1);
       const baseX = ((i * 173 + 37) % CANVAS_WIDTH);
       const x = baseX + fastSin(time * 0.6 + i) * 30;
