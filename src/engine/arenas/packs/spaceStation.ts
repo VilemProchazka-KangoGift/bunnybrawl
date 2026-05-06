@@ -5,14 +5,18 @@ import { fastSin } from '../../fastMath';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
 import { getFloatingPlatforms } from '../../themes/utils';
 
-// Wall regions: left x=0-260 (window starts 280), right x=1010-1280. Y positions clear of platforms.
+// Wall-mounted panels aligned with each floating platform floor — tucked against
+// the outer wall, y-matched to each platform's top so the visual reads as
+// "instrument panel on the wall next to the catwalk".
 const CONSOLE_PANELS = [
-  { x: 30,   y: 600, color: '#7df0ff' },
-  { x: 220,  y: 605, color: '#a8ffd0' },
-  { x: 25,   y: 200, color: '#ff5f8a' },
-  { x: 1030, y: 600, color: '#7df0ff' },
-  { x: 1220, y: 605, color: '#ffd56b' },
-  { x: 1220, y: 200, color: '#a8ffd0' },
+  // Left wall, against x=12, aligned with left floating platforms y=465/360/270.
+  { x: 12,   y: 465, color: '#7df0ff' },
+  { x: 12,   y: 360, color: '#a8ffd0' },
+  { x: 12,   y: 270, color: '#ff5f8a' },
+  // Right wall, against x=1226, aligned with right floats y=445/350/260.
+  { x: 1226, y: 445, color: '#7df0ff' },
+  { x: 1226, y: 350, color: '#ffd56b' },
+  { x: 1226, y: 260, color: '#a8ffd0' },
 ] as const;
 import {
   CAP_DEPTH, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,

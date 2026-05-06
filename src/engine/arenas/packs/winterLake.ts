@@ -27,6 +27,24 @@ const AURORA_STRIPES = [
   { color: '#a3e8ff', y: 224, h: 40, speed: 0.4,  phase: 4.8 },
 ] as const;
 
+// Glint anchors: a few on each floating platform top + sparse ground positions.
+const GLINT_ANCHORS: ReadonlyArray<{ x: number; y: number }> = [
+  // Floating platform tops (2-3 glints per platform)
+  { x: 60,   y: 572 }, { x: 110,  y: 573 },
+  { x: 130,  y: 487 }, { x: 180,  y: 488 },
+  { x: 60,   y: 412 }, { x: 110,  y: 413 },
+  { x: 1130, y: 582 }, { x: 1200, y: 583 },
+  { x: 1090, y: 502 }, { x: 1150, y: 503 },
+  { x: 1140, y: 422 }, { x: 1210, y: 423 },
+  { x: 500,  y: 357 }, { x: 640,  y: 357 }, { x: 780,  y: 357 },
+  { x: 75,   y: 327 }, { x: 130,  y: 328 },
+  { x: 580,  y: 497 }, { x: 660,  y: 497 }, { x: 740,  y: 497 },
+  { x: 290,  y: 437 }, { x: 340,  y: 438 },
+  { x: 940,  y: 437 }, { x: 990,  y: 438 },
+  // Ground (very sparse)
+  { x: 250,  y: 658 }, { x: 700,  y: 658 }, { x: 1100, y: 658 },
+];
+
 let _sceneTintGradient: CanvasGradient | null = null;
 function getSceneTintGradient(ctx: CanvasRenderingContext2D): CanvasGradient {
   if (_sceneTintGradient) return _sceneTintGradient;
@@ -512,40 +530,29 @@ export const winterLake: ArenaPack = {
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fill();
     }
+    // Glint anchors: ground line (sparser) + platform tops.
     ctx.fillStyle = '#dcf5ff';
-    for (let i = 0; i < 50; i++) {
-      const phase = fastSin(time * 3.2 + i * 0.7);
-      if (phase < 0.55) continue;
-      const x = ((i * 251 + 13) % CANVAS_WIDTH);
-      const y = 656 + (i % 4) * 2;
-      const intensity = (phase - 0.55) * 2.2;
-      const r = 1.5 + intensity * 5;
-      ctx.globalAlpha = Math.min(1, intensity);
+    for (let i = 0; i < GLINT_ANCHORS.length; i++) {
+      // High threshold + slow phase => most glints idle, occasional sparkle.
+      const phase = fastSin(time * 1.8 + i * 0.9);
+      if (phase < 0.85) continue;
+      const a = GLINT_ANCHORS[i];
+      const intensity = (phase - 0.85) * 6.6;
+      const r = 1.2 + intensity * 3;
+      ctx.globalAlpha = Math.min(1, intensity) * 0.7;
       ctx.beginPath();
-      ctx.moveTo(x, y - r);
-      ctx.lineTo(x + r * 0.3, y);
-      ctx.lineTo(x, y + r);
-      ctx.lineTo(x - r * 0.3, y);
+      ctx.moveTo(a.x, a.y - r);
+      ctx.lineTo(a.x + r * 0.3, a.y);
+      ctx.lineTo(a.x, a.y + r);
+      ctx.lineTo(a.x - r * 0.3, a.y);
       ctx.closePath();
       ctx.fill();
       ctx.beginPath();
-      ctx.moveTo(x - r, y);
-      ctx.lineTo(x, y - r * 0.3);
-      ctx.lineTo(x + r, y);
-      ctx.lineTo(x, y + r * 0.3);
+      ctx.moveTo(a.x - r, a.y);
+      ctx.lineTo(a.x, a.y - r * 0.3);
+      ctx.lineTo(a.x + r, a.y);
+      ctx.lineTo(a.x, a.y + r * 0.3);
       ctx.closePath();
-      ctx.fill();
-    }
-    ctx.fillStyle = '#ffffff';
-    for (let i = 0; i < 50; i++) {
-      const phase = fastSin(time * 3.2 + i * 0.7);
-      if (phase < 0.55) continue;
-      const x = ((i * 251 + 13) % CANVAS_WIDTH);
-      const y = 656 + (i % 4) * 2;
-      const intensity = (phase - 0.55) * 2.2;
-      ctx.globalAlpha = Math.min(1, intensity);
-      ctx.beginPath();
-      ctx.arc(x, y, 1.2, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.globalAlpha = 1;

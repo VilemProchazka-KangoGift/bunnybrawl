@@ -3,14 +3,22 @@ import type { Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
-import { getFloatingPlatforms } from '../../themes/utils';
+import { getFloatingPlatforms, isLivePlayer } from '../../themes/utils';
 
-const WATERFALL_BASE_CX = 640;
+// Waterfall current is x=440..840 (width 400). Spray spans the full lip.
+const WATERFALL_BASE_LX = 440;
+const WATERFALL_BASE_RX = 840;
+const WATERFALL_BASE_W = WATERFALL_BASE_RX - WATERFALL_BASE_LX;
 const WATERFALL_BASE_Y = 660;
+// Frogs sit atop platforms; gy is the surface y the frog rests on.
 const LILY_PADS = [
-  { x: 220, gy: 655 },
-  { x: 1060, gy: 655 },
+  { x: 115,  gy: 565 },     // x=30..200 y=570 platform
+  { x: 1170, gy: 545 },     // x=1100..1240 y=550 platform
+  { x: 160,  gy: 365 },     // x=20..180 y=370 platform
+  { x: 1105, gy: 435 },     // x=1050..1160 y=440 platform
 ] as const;
+const _frogJumpExcite = new Float32Array(LILY_PADS.length);
+let _lastFrogTime = 0;
 import {
   drawTree, drawBush, drawFlower, drawGrassTuft,
   drawFgBush, drawTallGrass, drawFern, drawHangingVine, drawFgLeafCluster, drawFgWildflower,
@@ -571,14 +579,17 @@ export const waterfall: ArenaPack = {
 
   drawPlatformOverlay: (ctx, platform, _isGround) => drawWaterfallPlatformFg(ctx, platform),
 
-  drawAnimatedBackground: (ctx, _arena, time) => {
+  drawAnimatedBackground: (ctx, _arena, time, _dayPhase, matchState) => {
     if (getSlowDevice()) return;
     ctx.save();
+    // Spray plume spread across the full waterfall width.
     ctx.fillStyle = '#f0f8ff';
-    for (let i = 0; i < 60; i++) {
-      const t = ((time * 0.6 + i * 0.018) % 1);
-      const xOff = fastSin(time * 1.5 + i * 0.7) * (60 + t * 40);
-      const x = WATERFALL_BASE_CX + xOff;
+    for (let i = 0; i < 80; i++) {
+      const t = ((time * 0.6 + i * 0.013) % 1);
+      // Each particle anchored at a different x along the lip.
+      const xAnchor = WATERFALL_BASE_LX + ((i * 137) % WATERFALL_BASE_W);
+      const xOff = fastSin(time * 1.5 + i * 0.7) * (24 + t * 28);
+      const x = xAnchor + xOff;
       const y = WATERFALL_BASE_Y - t * 220;
       const r = 4 + (1 - t) * 8;
       ctx.globalAlpha = (1 - t) * 0.85 * Math.min(1, t * 4);
@@ -586,11 +597,12 @@ export const waterfall: ArenaPack = {
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fill();
     }
+    // Outer mist veil — also spread across width, drifting outward.
     ctx.fillStyle = '#dcebfa';
-    for (let i = 0; i < 14; i++) {
-      const t = ((time * 0.3 + i * 0.07) % 1);
-      const side = (i % 2 === 0 ? -1 : 1);
-      const x = WATERFALL_BASE_CX + side * (90 + t * 40 + fastSin(time + i) * 20);
+    for (let i = 0; i < 18; i++) {
+      const t = ((time * 0.3 + i * 0.055) % 1);
+      const xAnchor = WATERFALL_BASE_LX - 30 + ((i * 79) % (WATERFALL_BASE_W + 60));
+      const x = xAnchor + fastSin(time + i) * 18;
       const y = WATERFALL_BASE_Y - 30 - t * 140;
       const r = 28 + t * 18;
       ctx.globalAlpha = (1 - t) * 0.35;
@@ -598,24 +610,44 @@ export const waterfall: ArenaPack = {
       ctx.ellipse(x, y, r, r * 0.6, 0, 0, Math.PI * 2);
       ctx.fill();
     }
+    // Splash bursts at multiple points along the lip (5 anchors).
     const splashPhase = time % 0.5;
     if (splashPhase < 0.3) {
       const u = splashPhase / 0.3;
       ctx.fillStyle = '#ffffff';
       ctx.globalAlpha = (1 - u) * 0.85;
-      for (let i = 0; i < 16; i++) {
-        const a = -Math.PI / 2 + ((i / 15) - 0.5) * 1.6;
-        const speed = 50 + (i % 4) * 20;
-        const px = WATERFALL_BASE_CX + fastCos(a) * speed * u;
-        const py = WATERFALL_BASE_Y - 4 + fastSin(a) * speed * u + 40 * u * u;
-        ctx.beginPath();
-        ctx.arc(px, py, 2 + u * 2, 0, Math.PI * 2);
-        ctx.fill();
+      const splashAnchors = 5;
+      for (let s = 0; s < splashAnchors; s++) {
+        const sx = WATERFALL_BASE_LX + (s + 0.5) * (WATERFALL_BASE_W / splashAnchors);
+        for (let i = 0; i < 6; i++) {
+          const a = -Math.PI / 2 + ((i / 5) - 0.5) * 1.4;
+          const speed = 40 + (i % 3) * 18;
+          const px = sx + fastCos(a) * speed * u;
+          const py = WATERFALL_BASE_Y - 4 + fastSin(a) * speed * u + 40 * u * u;
+          ctx.beginPath();
+          ctx.arc(px, py, 2 + u * 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
     }
     ctx.globalAlpha = 1;
+    const dt = Math.max(0, Math.min(0.1, time - _lastFrogTime));
+    _lastFrogTime = time;
     for (let i = 0; i < LILY_PADS.length; i++) {
       const lp = LILY_PADS[i];
+      // Reactive: frog leaps when a player approaches within 60px.
+      let nearest = Infinity;
+      for (const p of matchState?.players ?? []) {
+        if (!isLivePlayer(p)) continue;
+        const dx = (p.x + p.width * 0.5) - lp.x;
+        const dy = (p.y + p.height) - lp.gy;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < nearest) nearest = d2;
+      }
+      const target = nearest < 60 * 60 ? 1 : 0;
+      const e = _frogJumpExcite[i] = Math.max(0, _frogJumpExcite[i] + (target - _frogJumpExcite[i]) * dt * 5);
+      // Hop arc: e ramps 0..1; lift = -sin(e*pi)*18 (peak at e=0.5)
+      const lift = -fastSin(e * Math.PI) * 18;
       ctx.fillStyle = '#3d8a3a';
       ctx.beginPath();
       ctx.ellipse(lp.x, lp.gy + 2, 22, 6, 0, 0, Math.PI * 2);
@@ -632,32 +664,33 @@ export const waterfall: ArenaPack = {
       ctx.closePath();
       ctx.fill();
       const breath = fastSin(time * 2 + i) * 0.5;
+      const fy = lp.gy + lift;
       ctx.fillStyle = '#4a8a3a';
       ctx.beginPath();
-      ctx.ellipse(lp.x, lp.gy - 6 + breath, 9, 7 - breath * 0.5, 0, 0, Math.PI * 2);
+      ctx.ellipse(lp.x, fy - 6 + breath, 9, 7 - breath * 0.5, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = '#a8d088';
       ctx.beginPath();
-      ctx.ellipse(lp.x, lp.gy - 4 + breath, 6, 3, 0, 0, Math.PI * 2);
+      ctx.ellipse(lp.x, fy - 4 + breath, 6, 3, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = '#4a8a3a';
       ctx.beginPath();
-      ctx.arc(lp.x - 3.5, lp.gy - 12, 2.5, 0, Math.PI * 2);
-      ctx.arc(lp.x + 3.5, lp.gy - 12, 2.5, 0, Math.PI * 2);
+      ctx.arc(lp.x - 3.5, fy - 12, 2.5, 0, Math.PI * 2);
+      ctx.arc(lp.x + 3.5, fy - 12, 2.5, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = '#fff';
       ctx.beginPath();
-      ctx.arc(lp.x - 3.5, lp.gy - 12, 1.6, 0, Math.PI * 2);
-      ctx.arc(lp.x + 3.5, lp.gy - 12, 1.6, 0, Math.PI * 2);
+      ctx.arc(lp.x - 3.5, fy - 12, 1.6, 0, Math.PI * 2);
+      ctx.arc(lp.x + 3.5, fy - 12, 1.6, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = '#000';
-      ctx.fillRect(lp.x - 4, lp.gy - 12.5, 1, 1.5);
-      ctx.fillRect(lp.x + 3, lp.gy - 12.5, 1, 1.5);
+      ctx.fillRect(lp.x - 4, fy - 12.5, 1, 1.5);
+      ctx.fillRect(lp.x + 3, fy - 12.5, 1, 1.5);
       ctx.strokeStyle = '#2a4a2a';
       ctx.lineWidth = 0.7;
       ctx.beginPath();
-      ctx.moveTo(lp.x - 4, lp.gy - 4 + breath);
-      ctx.lineTo(lp.x + 4, lp.gy - 4 + breath);
+      ctx.moveTo(lp.x - 4, fy - 4 + breath);
+      ctx.lineTo(lp.x + 4, fy - 4 + breath);
       ctx.stroke();
     }
     ctx.restore();

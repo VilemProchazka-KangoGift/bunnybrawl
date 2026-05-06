@@ -4,7 +4,7 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
-import { getFloatingPlatforms } from '../../themes/utils';
+import { getFloatingPlatforms, isLivePlayer } from '../../themes/utils';
 
 const CANDY_CLOUDS = [
   { x: 200, y: 110, r: 26 },
@@ -13,12 +13,18 @@ const CANDY_CLOUDS = [
 ] as const;
 const SPRINKLE_HUES = [10, 45, 120, 200, 280, 320] as const;
 const WEATHER_SPRINKLE_COLORS = SPRINKLE_HUES.map(h => `hsl(${h},80%,65%)`);
+// gy is the surface y the gumdrop sits on (ground top y=660 or platform top y).
 const GUMDROPS = [
-  { x: 80,  color: '#ff5e8a' },
-  { x: 380, color: '#7be0a3' },
-  { x: 880, color: '#ffe066' },
-  { x: 1200, color: '#c899ff' },
+  { x: 80,   gy: 660, color: '#ff5e8a' },
+  { x: 1200, gy: 660, color: '#c899ff' },
+  { x: 120,  gy: 530, color: '#ffe066' },     // atop x=30 y=530 platform
+  { x: 640,  gy: 530, color: '#7be0a3' },     // atop x=460 y=530 platform
+  { x: 640,  gy: 390, color: '#ff5e8a' },     // atop x=510 y=390 platform
+  { x: 1170, gy: 510, color: '#7be0a3' },     // atop x=1090 y=510 platform
 ] as const;
+// Per-gumdrop excitement decays each frame; rises when a player is within radius.
+const _gumdropExcite = new Float32Array(GUMDROPS.length);
+let _lastGumdropTime = 0;
 // 8-wisp ring around each cloud, hoisted so the loop avoids 24 sin+cos per frame.
 const CLOUD_WISP_COS = new Float32Array(8);
 const CLOUD_WISP_SIN = new Float32Array(8);
@@ -610,7 +616,7 @@ export const candyLand: ArenaPack = {
     ctx.fill();
   }),
 
-  drawAnimatedBackground: (ctx, _arena, time) => {
+  drawAnimatedBackground: (ctx, _arena, time, _dayPhase, matchState) => {
     if (getSlowDevice()) return;
     ctx.save();
     for (let ci = 0; ci < CANDY_CLOUDS.length; ci++) {
@@ -643,11 +649,21 @@ export const candyLand: ArenaPack = {
       ctx.restore();
     }
     const GUMDROP_R = 16;
-    const GUMDROP_BASE_Y = 656;
+    const dt = Math.max(0, Math.min(0.1, time - _lastGumdropTime));
+    _lastGumdropTime = time;
     for (let i = 0; i < GUMDROPS.length; i++) {
       const g = GUMDROPS[i];
-      const wobble = fastSin(time * 3 + i) * 1.4;
-      const cy = GUMDROP_BASE_Y - GUMDROP_R + 2;
+      // Excitement: rises when a player is on the same surface within 50px.
+      let nearby = 0;
+      for (const p of matchState?.players ?? []) {
+        if (!isLivePlayer(p)) continue;
+        const dx = (p.x + p.width * 0.5) - g.x;
+        const py = p.y + p.height;
+        if (Math.abs(dx) < 50 && Math.abs(py - g.gy) < 30) { nearby = 1; break; }
+      }
+      const e = _gumdropExcite[i] = Math.max(0, _gumdropExcite[i] + (nearby - _gumdropExcite[i]) * dt * 8);
+      const wobble = fastSin(time * (3 + e * 8) + i) * (1.4 + e * 4);
+      const cy = g.gy - GUMDROP_R + 2;
       ctx.fillStyle = g.color;
       ctx.beginPath();
       ctx.ellipse(g.x + wobble * 0.2, cy, GUMDROP_R + wobble * 0.3, GUMDROP_R - wobble * 0.3, 0, 0, Math.PI * 2);

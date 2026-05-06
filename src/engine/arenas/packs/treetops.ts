@@ -1,14 +1,59 @@
 import type { ArenaPack } from '../types';
 import type { Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
-import { fastSin } from '../../fastMath';
+import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
 import { drawTree, drawHangingVine, drawFgLeafCluster, drawFern } from '../../themes/drawPrimitives';
+import { pushFromPlayers } from '../../themes/utils';
+import type { Player } from '../../types';
 
 const SQUIRREL_PERIOD = 9;
 const SQUIRREL_PLAT_TOP = 256;
 const SQUIRREL_PLAT_L = 440;
 const SQUIRREL_PLAT_R = 740;
+const TREETOPS_BUTTERFLY_HUES = [320, 60, 200, 290, 30, 160] as const;
+const TREETOPS_BUTTERFLY_COLORS = TREETOPS_BUTTERFLY_HUES.map(h => `hsl(${h},80%,65%)`);
+const TREETOPS_BEE_CLUSTERS = [
+  { homeX: 280, homeY: 380, phase: 0 },
+  { homeX: 940, homeY: 360, phase: 2.4 },
+] as const;
+
+function drawTreetopsButterfly(ctx: CanvasRenderingContext2D, i: number, time: number, players: ReadonlyArray<Player>): void {
+  const driftSpeed = 0.05 + (i % 3) * 0.015;
+  const homeX = ((i * 220 + time * 60 * driftSpeed) % (CANVAS_WIDTH + 200)) - 100;
+  const homeY = 320 + fastSin(time * 0.4 + i * 1.7) * 90 + (i % 3) * 30;
+  const flutterX = homeX + fastSin(time * 1.2 + i) * 22;
+  const flutterY = homeY + fastSin(time * 1.5 + i * 1.7) * 14;
+  const r = pushFromPlayers(players, flutterX, flutterY, 70, 14, 4);
+  const flap = fastSin(time * 14 + i * 3) * 0.5 + 0.5;
+  ctx.fillStyle = TREETOPS_BUTTERFLY_COLORS[i];
+  ctx.beginPath();
+  ctx.ellipse(r.x - 4, r.y, 4 * flap, 5, 0, 0, Math.PI * 2);
+  ctx.ellipse(r.x + 4, r.y, 4 * flap, 5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#000';
+  ctx.fillRect(r.x - 0.5, r.y - 3, 1, 6);
+}
+
+function drawTreetopsBeeCluster(ctx: CanvasRenderingContext2D, ci: number, time: number, players: ReadonlyArray<Player>): void {
+  const c = TREETOPS_BEE_CLUSTERS[ci];
+  const wanderX = c.homeX + fastSin(time * 0.25 + c.phase) * 180;
+  const wanderY = c.homeY + fastSin(time * 0.4 + c.phase + 1) * 50;
+  const r = pushFromPlayers(players, wanderX, wanderY, 110, 28, 8);
+  for (let i = 0; i < 5; i++) {
+    const ph = ci * 7 + i;
+    const bx = r.x + fastSin(time * 4 + ph) * 16 + (i % 3 - 1) * 5;
+    const by = r.y + fastCos(time * 3 + ph) * 10 + (Math.floor(i / 3) - 0.5) * 5;
+    const wig = fastSin(time * 16 + ph) * 1.4;
+    ctx.fillStyle = '#ffd54a';
+    ctx.beginPath();
+    ctx.ellipse(bx, by + wig, 2.6, 1.9, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#3a2a08';
+    ctx.fillRect(bx - 1.5, by + wig - 0.3, 0.8, 0.6);
+    ctx.fillRect(bx, by + wig - 0.3, 0.8, 0.6);
+  }
+}
 import { getFloatingPlatforms } from '../../themes/utils';
 import {
   CAP_DEPTH, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
@@ -530,12 +575,12 @@ export const treetops: ArenaPack = {
     ctx.restore();
   },
 
-  drawAnimatedBackground: (ctx, _arena, time) => {
+  drawAnimatedBackground: (ctx, _arena, time, _dayPhase, matchState) => {
     if (getSlowDevice()) return;
     ctx.save();
     const phase = time % SQUIRREL_PERIOD;
     const fromLeft = Math.floor(time / SQUIRREL_PERIOD) % 2 === 0;
-    let x = 0, y = 0, visible = false;
+    let x = 0, y = 0, alpha = 1, visible = false;
     if (phase < 0.5) {
       const u = phase / 0.5;
       x = fromLeft ? SQUIRREL_PLAT_L + 10 : SQUIRREL_PLAT_R - 10;
@@ -549,13 +594,18 @@ export const treetops: ArenaPack = {
       y = SQUIRREL_PLAT_TOP + fastSin(u * 22) * 1.5;
       visible = true;
     } else if (phase < 3.1) {
+      // Disappear behind the platform: descend into the platform body and fade.
+      // The platform overlay (drawn after this hook) covers the body face;
+      // the alpha fade hides the lingering pixel until the overlay catches up.
       const u = (phase - 2.6) / 0.5;
       x = fromLeft ? SQUIRREL_PLAT_R - 10 : SQUIRREL_PLAT_L + 10;
-      y = SQUIRREL_PLAT_TOP + u * 60;
+      y = SQUIRREL_PLAT_TOP + u * 22;
+      alpha = 1 - u;
       visible = true;
     }
     if (visible) {
       ctx.save();
+      ctx.globalAlpha = alpha;
       ctx.translate(x, y);
       if (!fromLeft) ctx.scale(-1, 1);
       ctx.fillStyle = '#a5683a';
@@ -584,6 +634,25 @@ export const treetops: ArenaPack = {
       ctx.fill();
       ctx.restore();
     }
+    // Background half of meadow-style fauna.
+    if (matchState) {
+      const players = matchState.players;
+      for (let i = 0; i < TREETOPS_BUTTERFLY_HUES.length; i += 2) {
+        drawTreetopsButterfly(ctx, i, time, players);
+      }
+      drawTreetopsBeeCluster(ctx, 0, time, players);
+    }
+    ctx.restore();
+  },
+
+  drawAnimatedForeground: (ctx, _arena, time, _dayPhase, matchState) => {
+    if (getSlowDevice() || !matchState) return;
+    ctx.save();
+    const players = matchState.players;
+    for (let i = 1; i < TREETOPS_BUTTERFLY_HUES.length; i += 2) {
+      drawTreetopsButterfly(ctx, i, time, players);
+    }
+    drawTreetopsBeeCluster(ctx, 1, time, players);
     ctx.restore();
   },
 

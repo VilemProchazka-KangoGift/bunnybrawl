@@ -709,6 +709,24 @@ export const volcano: ArenaPack = {
   drawAnimatedBackground: (ctx, _arena, time) => {
     if (getSlowDevice()) return;
     ctx.save();
+    // Diffuse smoky fog above each lava zone — stacked drifting ellipses
+    // create the soft "haze" feel without a Canvas blur filter (which is
+    // expensive in Canvas2D).
+    ctx.fillStyle = '#3a1a1a';
+    for (const lz of LAVA_ZONES) {
+      const halfW = lz.w * 0.7;
+      for (let i = 0; i < 6; i++) {
+        const drift = fastSin(time * 0.3 + i * 1.3) * halfW * 0.4;
+        const py = lz.cy - 30 - i * 12;
+        const sx = halfW + 16 + fastSin(time * 0.4 + i * 0.7) * 8;
+        const sy = 16 + i * 1.5;
+        ctx.globalAlpha = 0.10 + (1 - i / 6) * 0.10;
+        ctx.beginPath();
+        ctx.ellipse(lz.cx + drift, py, sx, sy, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
     for (const lz of LAVA_ZONES) {
       ctx.fillStyle = getHazeGradient(ctx, lz);
       ctx.beginPath();
