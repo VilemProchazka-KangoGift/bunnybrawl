@@ -74,6 +74,12 @@ export const frog: CharacterPack = {
   gibs: [{ gibType: 'body', width: 12, height: 10 }, { gibType: 'body', width: 10, height: 10 }, { gibType: 'body', width: 11, height: 9 }],
   translations: { en: 'Frog', cs: 'Žába', hi: 'मेंढक', fil: 'Palaka' },
   legStyle: { shape: 'wide', footStyle: 'webbed', legWidth: 5, spreadAngle: 4 },
+  // Eyes bulge above the body at y=8, r=6 (whites span y=2-14, x: cx±13 to cx±1).
+  // Brows arch over the round whites.
+  eyebrowAnchor: {
+    leftOuter: { x: -13, y: -1 }, leftInner: { x: -2, y: 2 },
+    rightOuter: { x: 13, y: -1 }, rightInner: { x: 2, y: 2 },
+  },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.55, rx: w * 0.42, ry: h * 0.35 }),
   idleActions: { custom: [blinkAction] },
   drawSprite, drawGib,

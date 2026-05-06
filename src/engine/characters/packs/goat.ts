@@ -115,6 +115,11 @@ export const goat: CharacterPack = {
   gibs: [{ gibType: 'horn', width: 8, height: 14 }, { gibType: 'horn', width: 8, height: 14 }, { gibType: 'beard', width: 8, height: 10 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Goat', cs: 'Koza', hi: 'बकरी', fil: 'Kambing' },
   legStyle: { shape: 'tapered', footStyle: 'hoof' },
+  // Eyes at cx±5, y=15.2, r=3.5 (span y=11.7-18.7).
+  eyebrowAnchor: {
+    leftOuter: { x: -10, y: 9 }, leftInner: { x: -2, y: 11 },
+    rightOuter: { x: 10, y: 9 }, rightInner: { x: 2, y: 11 },
+  },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.52, rx: w * 0.4, ry: h * 0.4 }),
   drawSprite, drawGib,
   createSound: () => new Howl({

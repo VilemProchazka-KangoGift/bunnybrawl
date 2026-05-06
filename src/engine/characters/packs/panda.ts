@@ -59,6 +59,11 @@ export const panda: CharacterPack = {
   gibs: [{ gibType: 'ear', width: 10, height: 10 }, { gibType: 'ear', width: 10, height: 10 }, { gibType: 'body', width: 14, height: 12 }, { gibType: 'body', width: 10, height: 10 }],
   translations: { en: 'Panda', cs: 'Panda', hi: 'पांडा', fil: 'Panda' },
   legStyle: { shape: 'rounded', footStyle: 'round', legWidth: 6 },
+  // Black eye patches at cx±5, y=15.2, r=5 (span y=10.2-20.2). Brows clear the patches.
+  eyebrowAnchor: {
+    leftOuter: { x: -11, y: 8 }, leftInner: { x: -1, y: 10.5 },
+    rightOuter: { x: 11, y: 8 }, rightInner: { x: 1, y: 10.5 },
+  },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.52, rx: w * 0.42, ry: h * 0.42 }),
   drawSprite, drawGib,
   createSound: () => new Howl({

@@ -1,5 +1,6 @@
 import type { Player, PlayerState } from '../types';
 import type { ThemeConfig } from '../themes/types';
+import type { EyebrowAnchor } from '../characters/types';
 import { FAT_SCALE, HITSTOP_DURATION, MAX_WALK_SPEED, PLAYER_WIDTH, PLAYER_HEIGHT } from '../constants';
 import { hasCustomEyes, getSpriteRenderer, getCharacterPack, drawLegs } from '../characters';
 import { drawHighlightSpot } from '../spriteShading';
@@ -637,6 +638,15 @@ export function drawSplatCharacter(ctx: CanvasRenderingContext2D, x: number, y: 
   ctx.stroke();
 }
 
+// Calibrated for the generic eye dots in drawCharacterCore: centers at
+// (cx-4, h*0.4) and (cx+6, h*0.4). At h=40 that puts brows at y=12→13.6.
+const DEFAULT_EYEBROW_ANCHOR: EyebrowAnchor = {
+  leftOuter: { x: -8, y: 12 },
+  leftInner: { x: -2, y: 13.6 },
+  rightOuter: { x: 10, y: 12 },
+  rightInner: { x: 4, y: 13.6 },
+};
+
 export function drawExpression(ctx: CanvasRenderingContext2D, player: Player, frameTime: number): void {
   const expression = player.expression;
   if (!expression || expression === 'normal') return;
@@ -648,18 +658,15 @@ export function drawExpression(ctx: CanvasRenderingContext2D, player: Player, fr
   const yOff = y - bounce;
 
   if (expression === 'angry') {
-    // Two red-tinted angled lines above eyes (angry eyebrows)
+    const pack = getCharacterPack(player.character.name);
+    const anchor = pack?.eyebrowAnchor ?? DEFAULT_EYEBROW_ANCHOR;
     ctx.strokeStyle = 'rgba(200, 40, 40, 0.8)';
     ctx.lineWidth = 2;
-    // Left eyebrow -- angling inward-down
     ctx.beginPath();
-    ctx.moveTo(cx - 8, yOff + height * 0.3);
-    ctx.lineTo(cx - 2, yOff + height * 0.34);
-    ctx.stroke();
-    // Right eyebrow -- angling inward-down
-    ctx.beginPath();
-    ctx.moveTo(cx + 10, yOff + height * 0.3);
-    ctx.lineTo(cx + 4, yOff + height * 0.34);
+    ctx.moveTo(cx + anchor.leftOuter.x, yOff + anchor.leftOuter.y);
+    ctx.lineTo(cx + anchor.leftInner.x, yOff + anchor.leftInner.y);
+    ctx.moveTo(cx + anchor.rightOuter.x, yOff + anchor.rightOuter.y);
+    ctx.lineTo(cx + anchor.rightInner.x, yOff + anchor.rightInner.y);
     ctx.stroke();
   } else if (expression === 'scared') {
     // Sweat drop on the side of the head
