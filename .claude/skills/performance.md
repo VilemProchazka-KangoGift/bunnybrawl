@@ -20,7 +20,8 @@ Everything in `fixedUpdate()` and `renderFrame()` is the **hot path** — any wa
 | Anti-pattern | Cost | Fix |
 |-------------|------|-----|
 | `ctx.shadowBlur = N` | **Catastrophic** — triggers Gaussian blur per stroke/fill | Simulate glow with a wider, semi-transparent stroke underneath |
-| `ctx.createLinearGradient()` / `createRadialGradient()` in render loop | High — allocates gradient object | Cache in constructor or module scope. Zones don't move mid-match |
+| **Large `fillRect` / `fill()` with `fillStyle = CanvasGradient`** | **Catastrophic — ~5ms/frame on a full-canvas (1280×720) fill, even when the gradient is cached.** Browser evaluates the gradient function per-pixel. | Bake gradient into a 1×N OffscreenCanvas, then `drawImage(cache, …)` stretched + `imageSmoothingEnabled = false`. Use `clip()` + drawImage for shaped fills. See `bakeVerticalGradientStrip` helper + `docs/perf-patterns.md`. |
+| `ctx.createLinearGradient()` / `createRadialGradient()` in render loop (allocation only) | Medium — allocates gradient object each frame | Cache via WeakMap keyed by zone identity. Note: caching the gradient OBJECT does NOT eliminate the per-pixel cost above — only the bake-to-strip pattern does. |
 | `ctx.save()` / `ctx.restore()` per particle in a loop | High — deep-clones full canvas state | Track `globalAlpha`/`fillStyle` manually, or use one save/restore wrapping the whole loop |
 | `performance.now()` called multiple times per frame | Medium — system call | Cache once at top of `renderFrame()`, pass to sub-methods |
 | `Array.filter()` to clean dead entities | Medium — allocates new array | Use reverse-iterate + swap-and-pop (see pattern below) |
@@ -34,6 +35,8 @@ Everything in `fixedUpdate()` and `renderFrame()` is the **hot path** — any wa
 | `` `rgba(${r},${g},${b},${a})` `` template literals | String alloc per frame | Pre-compute static color strings. For dynamic alpha, accept the cost or use `ctx.globalAlpha`. |
 | Multiple `beginPath()/fill()` for same-color shapes | Draw call overhead | Batch into single path with multiple sub-paths, one `fill()`. |
 | `ctx.translate()/rotate()` per particle | Transform matrix multiply | Compute rotated coords in JS, draw at computed position. |
+| N particles each with unique alpha → N separate `fill()`s | State change + draw call per particle | **Alpha bucketing**: quantize alpha into 4–6 buckets, group particles by bucket, batch each bucket as one path with `moveTo` + `arc` sub-paths. See `waterfall.ts` spray (48 particles → 5 fills) and mist (10 → 3 fills). |
+| `imageSmoothingEnabled = true` (default) on stretched cache blits | Bilinear filtering of every dest pixel | Set `ctx.imageSmoothingEnabled = false` before `drawImage` of a 1×N or N×1 strip stretched to full size. Saves ~2ms on full-canvas blits. Wrap in save/restore. |
 
 ### Tier 3 — Good practices
 
@@ -172,6 +175,46 @@ theme.drawForegroundNature(cacheCtx, arena);
 // In renderFrame():
 ctx.drawImage(this.fgNatureCache, 0, 0);  // single blit replaces 20+ draw calls
 ```
+
+### Counter-example: not all caching is a win
+
+**Big alpha-blended canvas blits aren't free.** Caching the waterfall drift band
+(3 sin-wave layers across ~660px height, refreshed at 10Hz to an OffscreenCanvas
+the full canvas width) regressed perf across all 3 affected arenas:
+
+| Arena    | Path-fill (baseline) | Cached blit | Δ      |
+|----------|---------------------:|------------:|--------|
+| waterfall|                  8.4 |         8.9 | +0.5ms |
+| graveyard|                  6.8 |         7.4 | +0.6ms |
+| volcano  |                  5.9 |         7.8 | +1.9ms |
+
+Why: per-frame `drawImage` of a `1280×660` translucent canvas costs more on the
+GPU composite path than rasterizing 3 sin-wave fill paths in JS. The
+**gradient-strip pattern works because the cache is tiny (1×N), only the
+destination is large** — the strip becomes a memory-bandwidth-bound sample, not
+a per-pixel function evaluation.
+
+**Rule of thumb**: cache when the work you're replacing is per-pixel function
+evaluation (gradients, complex shaders). Don't cache when you're replacing a
+handful of cheap path fills — you're trading JS work for GPU bandwidth, and at
+1280×720 alpha-blended that bandwidth isn't free either.
+
+## Section timings vs. GPU composite
+
+`perfTrace` spans (`fixedUpdate`, `cosmeticStep`, `renderFrame`, gameplay/cosmetic
+leaves) typically capture only ~25% of a 16.6ms frame. The rest is GPU composite
++ paint, browser presentation, and event-loop overhead — **invisible to in-page
+instrumentation**.
+
+Implication: a "5ms saving" measured by replacing a full-canvas gradient with a
+strip blit comes both from inside `renderFrame` AND from reduced compositor
+load. Two consequences:
+
+1. JS-side spans don't sum to the frame budget. Don't chase "missing time"
+   inside scripts; it's GPU work.
+2. Wall-clock frame time (Playwright `npm run perf` percentiles) is the only
+   reliable measure for any change that touches large fills, alpha blends, or
+   layer composition. Don't ship perf claims based on perfTrace deltas alone.
 
 ## Audio Init Performance
 
