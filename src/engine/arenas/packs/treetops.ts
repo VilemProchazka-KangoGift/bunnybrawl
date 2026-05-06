@@ -528,14 +528,36 @@ export const treetops: ArenaPack = {
   drawAnimatedBackground: (ctx, _arena, time) => {
     if (getSlowDevice()) return;
     ctx.save();
-    // Squirrel — periodic dart across a high branch (every ~7s)
-    const period = 7;
+    // Squirrel — jumps onto top platform (y=260, x=440..740), runs across, jumps off.
+    // Period: 9s. Phases: jump-up (0..0.5), run (0.5..2.6), jump-off (2.6..3.1).
+    const period = 9;
     const phase = time % period;
-    if (phase < 2.4) {
-      const u = phase / 2.4;
-      const fromLeft = Math.floor(time / period) % 2 === 0;
-      const x = fromLeft ? -30 + u * (CANVAS_WIDTH + 60) : CANVAS_WIDTH + 30 - u * (CANVAS_WIDTH + 60);
-      const y = 180 + fastSin(u * 16) * 2;
+    const fromLeft = Math.floor(time / period) % 2 === 0;
+    const platTop = 256;          // y=260 platform top minus 4px squirrel offset
+    const platL = 440, platR = 740;
+    let x = 0, y = 0, visible = false;
+    if (phase < 0.5) {
+      // Jump up from below the platform
+      const u = phase / 0.5;
+      const startX = fromLeft ? platL + 10 : platR - 10;
+      x = startX;
+      y = platTop + 50 - u * 50;        // arcs from y=306 to y=256
+      visible = true;
+    } else if (phase < 2.6) {
+      // Run across the top
+      const u = (phase - 0.5) / 2.1;
+      x = fromLeft ? platL + 10 + u * (platR - platL - 20) : platR - 10 - u * (platR - platL - 20);
+      y = platTop + fastSin(u * 22) * 1.5;  // tiny up/down on each step
+      visible = true;
+    } else if (phase < 3.1) {
+      // Jump off the far side
+      const u = (phase - 2.6) / 0.5;
+      const endX = fromLeft ? platR - 10 : platL + 10;
+      x = endX;
+      y = platTop + u * 60;             // falls below
+      visible = true;
+    }
+    if (visible) {
       const facingLeft = !fromLeft;
       ctx.save();
       ctx.translate(x, y);
@@ -565,6 +587,11 @@ export const treetops: ArenaPack = {
       // Eye
       ctx.fillStyle = '#000';
       ctx.fillRect(8, -2, 1.5, 1.5);
+      // Belly
+      ctx.fillStyle = '#e8c89a';
+      ctx.beginPath();
+      ctx.ellipse(0, 1.5, 5, 2, 0, 0, Math.PI * 2);
+      ctx.fill();
       ctx.restore();
     }
     ctx.restore();

@@ -631,23 +631,35 @@ export const candyLand: ArenaPack = {
       ctx.fillRect(-3, -1, 6, 2);
       ctx.restore();
     }
-    // Gumdrop decorations sitting on far ground (small jelly shapes that wobble)
+    // Gumdrop decorations sitting on the ground (y=660 is ground top)
     const gumdrops = [
       { x: 80,  color: '#ff5e8a' },
-      { x: 360, color: '#7be0a3' },
-      { x: 920, color: '#ffe066' },
+      { x: 380, color: '#7be0a3' },
+      { x: 880, color: '#ffe066' },
       { x: 1200, color: '#c899ff' },
     ];
     for (let i = 0; i < gumdrops.length; i++) {
       const g = gumdrops[i];
-      const wobble = fastSin(time * 3 + i) * 1.2;
+      const wobble = fastSin(time * 3 + i) * 1.4;
+      const baseY = 656;
+      const r = 16;
+      // Body
       ctx.fillStyle = g.color;
       ctx.beginPath();
-      ctx.ellipse(g.x, 700, 14 + wobble * 0.3, 14 - wobble * 0.3, 0, 0, Math.PI * 2);
+      ctx.ellipse(g.x + wobble * 0.2, baseY - r + 2, r + wobble * 0.3, r - wobble * 0.3, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      // Sugar coating bumps
+      ctx.fillStyle = 'rgba(255,255,255,0.35)';
+      for (let j = 0; j < 6; j++) {
+        const a = (j / 6) * Math.PI * 2 + time * 0.3;
+        ctx.beginPath();
+        ctx.arc(g.x + Math.cos(a) * r * 0.6, baseY - r + 2 + Math.sin(a) * (r - 2) * 0.6, 1.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // Highlight
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
       ctx.beginPath();
-      ctx.ellipse(g.x - 4, 694, 3, 2, 0, 0, Math.PI * 2);
+      ctx.ellipse(g.x - 5, baseY - r + 2 - 4, 3.5, 2.5, 0, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();

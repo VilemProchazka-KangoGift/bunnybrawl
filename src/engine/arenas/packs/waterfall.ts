@@ -567,66 +567,110 @@ export const waterfall: ArenaPack = {
   drawAnimatedBackground: (ctx, _arena, time) => {
     if (getSlowDevice()) return;
     ctx.save();
-    // Mist band at the base of waterfall
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
-    for (let i = 0; i < 12; i++) {
-      const drift = fastSin(time * 0.5 + i) * 14;
-      const x = 60 + i * 110 + drift;
-      const y = 600 + fastSin(time + i * 0.7) * 8;
-      const r = 24 + (i % 3) * 8;
+    // Prominent vertical spray column at waterfall base — rises tall
+    // Waterfall current is x=440-840 (centered ~640), base at y=660
+    const baseCx = 640;
+    const baseY = 660;
+    // Tall rising spray plume
+    for (let i = 0; i < 60; i++) {
+      const t = ((time * 0.6 + i * 0.018) % 1);
+      const xOff = fastSin(time * 1.5 + i * 0.7) * (60 + t * 40);
+      const x = baseCx + xOff;
+      const y = baseY - t * 220;
+      const r = 4 + (1 - t) * 8;
+      const a = (1 - t) * 0.85 * Math.min(1, t * 4);
+      ctx.fillStyle = `rgba(240, 248, 255, ${a})`;
       ctx.beginPath();
-      ctx.ellipse(x, y, r, r * 0.5, 0, 0, Math.PI * 2);
+      ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fill();
     }
-    // Periodic spray puffs at waterfall lip
-    const lipX = 970;
-    const period = 1.3;
-    const phase = time % period;
-    if (phase < 0.5) {
-      const u = phase / 0.5;
-      for (let i = 0; i < 8; i++) {
-        const a = -Math.PI / 2 + (i / 8 - 0.5) * 1.4;
-        const speed = 80 + (i % 3) * 30;
-        const px = lipX + Math.cos(a) * speed * u;
-        const py = 540 + Math.sin(a) * speed * u + 80 * u * u;
-        ctx.fillStyle = `rgba(220, 240, 255, ${(1 - u) * 0.7})`;
+    // Outer mist veil
+    for (let i = 0; i < 14; i++) {
+      const t = ((time * 0.3 + i * 0.07) % 1);
+      const side = (i % 2 === 0 ? -1 : 1);
+      const x = baseCx + side * (90 + t * 40 + fastSin(time + i) * 20);
+      const y = baseY - 30 - t * 140;
+      const r = 28 + t * 18;
+      const a = (1 - t) * 0.35;
+      ctx.fillStyle = `rgba(220, 235, 250, ${a})`;
+      ctx.beginPath();
+      ctx.ellipse(x, y, r, r * 0.6, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Splash burst on impact (every ~0.4s)
+    const splashPeriod = 0.5;
+    const splashPhase = time % splashPeriod;
+    if (splashPhase < 0.3) {
+      const u = splashPhase / 0.3;
+      for (let i = 0; i < 16; i++) {
+        const a = -Math.PI / 2 + ((i / 15) - 0.5) * 1.6;
+        const speed = 50 + (i % 4) * 20;
+        const px = baseCx + Math.cos(a) * speed * u;
+        const py = baseY - 4 + Math.sin(a) * speed * u + 40 * u * u;
+        ctx.fillStyle = `rgba(255, 255, 255, ${(1 - u) * 0.85})`;
         ctx.beginPath();
-        ctx.arc(px, py, 3 + u * 2, 0, Math.PI * 2);
+        ctx.arc(px, py, 2 + u * 2, 0, Math.PI * 2);
         ctx.fill();
       }
     }
-    // Frogs perched on lily pads (3 lily pads at fixed positions, frogs idle-breathe)
+    // Frogs on lily pads — placed on ground (y=655 above the y=660 ground top)
     const lilyPads = [
-      { x: 320, y: 700 },
-      { x: 720, y: 700 },
-      { x: 1100, y: 700 },
+      { x: 220, gy: 655 },
+      { x: 1060, gy: 655 },
     ];
     for (let i = 0; i < lilyPads.length; i++) {
       const lp = lilyPads[i];
-      // Lily pad
+      // Lily pad (notched circle)
       ctx.fillStyle = '#3d8a3a';
       ctx.beginPath();
-      ctx.ellipse(lp.x, lp.y - 2, 20, 5, 0, 0, Math.PI * 2);
+      ctx.ellipse(lp.x, lp.gy + 2, 22, 6, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = '#5fb45a';
       ctx.beginPath();
-      ctx.ellipse(lp.x - 2, lp.y - 4, 18, 3, 0, 0, Math.PI * 2);
+      ctx.ellipse(lp.x - 2, lp.gy, 20, 4, 0, 0, Math.PI * 2);
       ctx.fill();
-      // Frog (breathes via squash)
-      const breath = fastSin(time * 2 + i) * 0.3;
-      ctx.fillStyle = '#5fb45a';
+      // Notch
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
       ctx.beginPath();
-      ctx.ellipse(lp.x, lp.y - 8 + breath, 8, 6 - breath * 0.5, 0, 0, Math.PI * 2);
+      ctx.moveTo(lp.x - 2, lp.gy);
+      ctx.lineTo(lp.x + 4, lp.gy);
+      ctx.lineTo(lp.x + 1, lp.gy + 3);
+      ctx.closePath();
       ctx.fill();
-      // Eyes
+      // Frog body — slightly bigger, sits on pad
+      const breath = fastSin(time * 2 + i) * 0.5;
+      ctx.fillStyle = '#4a8a3a';
+      ctx.beginPath();
+      ctx.ellipse(lp.x, lp.gy - 6 + breath, 9, 7 - breath * 0.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Belly highlight
+      ctx.fillStyle = '#a8d088';
+      ctx.beginPath();
+      ctx.ellipse(lp.x, lp.gy - 4 + breath, 6, 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Eye bumps on top of head
+      ctx.fillStyle = '#4a8a3a';
+      ctx.beginPath();
+      ctx.arc(lp.x - 3.5, lp.gy - 12, 2.5, 0, Math.PI * 2);
+      ctx.arc(lp.x + 3.5, lp.gy - 12, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      // Eye whites
       ctx.fillStyle = '#fff';
       ctx.beginPath();
-      ctx.arc(lp.x - 3, lp.y - 13, 1.8, 0, Math.PI * 2);
-      ctx.arc(lp.x + 3, lp.y - 13, 1.8, 0, Math.PI * 2);
+      ctx.arc(lp.x - 3.5, lp.gy - 12, 1.6, 0, Math.PI * 2);
+      ctx.arc(lp.x + 3.5, lp.gy - 12, 1.6, 0, Math.PI * 2);
       ctx.fill();
+      // Pupils
       ctx.fillStyle = '#000';
-      ctx.fillRect(lp.x - 3.5, lp.y - 13, 1, 1);
-      ctx.fillRect(lp.x + 2.5, lp.y - 13, 1, 1);
+      ctx.fillRect(lp.x - 4, lp.gy - 12.5, 1, 1.5);
+      ctx.fillRect(lp.x + 3, lp.gy - 12.5, 1, 1.5);
+      // Mouth line
+      ctx.strokeStyle = '#2a4a2a';
+      ctx.lineWidth = 0.7;
+      ctx.beginPath();
+      ctx.moveTo(lp.x - 4, lp.gy - 4 + breath);
+      ctx.lineTo(lp.x + 4, lp.gy - 4 + breath);
+      ctx.stroke();
     }
     ctx.restore();
   },

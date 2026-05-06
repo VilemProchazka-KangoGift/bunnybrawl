@@ -647,7 +647,7 @@ export class Renderer {
       if (this.theme.drawAnimatedBackground) {
         const thA = this.originalArena ?? arena;
         if (this.mirrored) { ctx.save(); ctx.scale(-1, 1); ctx.translate(-CANVAS_WIDTH, 0); }
-        this.theme.drawAnimatedBackground(ctx, thA, matchState.timeElapsed, matchState.dayPhase);
+        this.theme.drawAnimatedBackground(ctx, thA, matchState.timeElapsed, matchState.dayPhase, matchState);
         if (this.mirrored) { ctx.restore(); }
         d.animatedBg = true;
       }

@@ -1,7 +1,7 @@
 import type { ArenaPack } from '../types';
 import type { Arena, Platform, WeatherParticle } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
-import { fastSin, fastCos } from '../../fastMath';
+import { fastSin } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
 import { getFloatingPlatforms } from '../../themes/utils';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
@@ -688,43 +688,84 @@ export const volcano: ArenaPack = {
   drawAnimatedBackground: (ctx, _arena, time) => {
     if (getSlowDevice()) return;
     ctx.save();
-    // Heat-haze shimmer over lava zones (translucent dashed rings)
+    // Heat-haze shimmer over lava zones — translucent wavy bands rising
     const lavaZones = [
       { cx: 340, cy: 694, w: 130 },
       { cx: 900, cy: 694, w: 130 },
       { cx: 610, cy: 654, w: 60 },
     ];
-    ctx.strokeStyle = 'rgba(255, 200, 150, 0.18)';
-    ctx.lineWidth = 1;
     for (const lz of lavaZones) {
-      for (let i = 0; i < 12; i++) {
-        const a = (i / 12) * Math.PI * 2 + time * 0.5;
-        const r = 26 + fastSin(time * 2 + i) * 4;
-        const x0 = lz.cx + fastCos(a) * r;
-        const y0 = lz.cy - 6 + fastSin(a) * r * 0.4;
-        const x1 = lz.cx + fastCos(a + 0.18) * r;
-        const y1 = lz.cy - 6 + fastSin(a + 0.18) * r * 0.4;
+      // Gradient distortion column — orange-red haze rising from lava
+      const colH = 80;
+      const grd = ctx.createLinearGradient(0, lz.cy - colH, 0, lz.cy);
+      grd.addColorStop(0, 'rgba(255, 120, 60, 0)');
+      grd.addColorStop(0.5, 'rgba(255, 140, 80, 0.18)');
+      grd.addColorStop(1, 'rgba(255, 100, 50, 0.32)');
+      ctx.fillStyle = grd;
+      ctx.beginPath();
+      const halfW = lz.w * 0.55;
+      const wob = fastSin(time * 2.5) * 6;
+      ctx.moveTo(lz.cx - halfW + wob, lz.cy);
+      for (let y = lz.cy - 4; y >= lz.cy - colH; y -= 6) {
+        const t = (lz.cy - y) / colH;
+        const w = halfW * (1 - t * 0.5);
+        const w2 = fastSin(y * 0.06 + time * 3) * 8 * (1 - t);
+        ctx.lineTo(lz.cx + w + w2, y);
+      }
+      ctx.lineTo(lz.cx + halfW + wob, lz.cy - colH);
+      ctx.lineTo(lz.cx - halfW + wob, lz.cy - colH);
+      for (let y = lz.cy - colH; y <= lz.cy - 4; y += 6) {
+        const t = (lz.cy - y) / colH;
+        const w = halfW * (1 - t * 0.5);
+        const w2 = fastSin(y * 0.06 + time * 3 + 1.7) * 8 * (1 - t);
+        ctx.lineTo(lz.cx - w + w2, y);
+      }
+      ctx.closePath();
+      ctx.fill();
+      // Bright shimmer streaks (vertical bright lines)
+      ctx.strokeStyle = 'rgba(255, 200, 130, 0.35)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 5; i++) {
+        const phase = i * 1.3;
+        const xOff = fastSin(time * 1.5 + phase) * (halfW * 0.6);
+        const yStart = lz.cy - 6;
+        const yEnd = yStart - 50 - fastSin(time * 2 + phase) * 16;
         ctx.beginPath();
-        ctx.moveTo(x0, y0);
-        ctx.lineTo(x1, y1);
+        ctx.moveTo(lz.cx + xOff, yStart);
+        for (let y = yStart; y >= yEnd; y -= 4) {
+          const w = fastSin(y * 0.1 + time * 4 + phase) * 4;
+          ctx.lineTo(lz.cx + xOff + w, y);
+        }
         ctx.stroke();
       }
     }
-    // Ash plumes — 3 vents on ground, continuous rising particles seeded by time
+    // Ash plumes — 3 vents on ground (y=660 = ground top), particles rise to y=400
     const vents = [220, 640, 1060];
-    ctx.fillStyle = 'rgba(80, 50, 40, 0.55)';
+    ctx.fillStyle = '#3a201a';
     for (const vx of vents) {
       for (let i = 0; i < 14; i++) {
         const t = ((time * 0.4 + i * 0.07) % 1);
         const px = vx + fastSin(time * 1.3 + i * 1.7) * 28 * t;
-        const py = 700 - t * 220;
-        const sz = 2 + t * 5;
-        const a = (1 - t) * 0.55;
+        const py = 660 - t * 240;
+        const sz = 2 + t * 6;
+        const a = (1 - t) * 0.7;
         ctx.globalAlpha = a;
         ctx.beginPath();
         ctx.arc(px, py, sz, 0, Math.PI * 2);
         ctx.fill();
       }
+      // Ember sparks
+      ctx.fillStyle = '#ff8a3a';
+      for (let i = 0; i < 4; i++) {
+        const t = ((time * 0.7 + i * 0.21) % 1);
+        const px = vx + fastSin(time * 2 + i) * 14 * t;
+        const py = 660 - t * 200;
+        ctx.globalAlpha = (1 - t) * 0.85;
+        ctx.beginPath();
+        ctx.arc(px, py, 1.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = '#3a201a';
     }
     ctx.globalAlpha = 1;
     // Lava warning bubbles — periodic telegraph at lava centers
