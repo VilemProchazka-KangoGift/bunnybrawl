@@ -634,7 +634,7 @@ export class Renderer {
 
       // Cache time once per frame
       this.frameTime = performance.now();
-      this.lighting.beginFrame();
+      this.lighting.beginFrame(this.theme, matchState.dayPhase, 0);
 
       ctx.save();
 
