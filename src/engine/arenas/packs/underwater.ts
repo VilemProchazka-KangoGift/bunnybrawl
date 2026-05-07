@@ -1,5 +1,5 @@
 import type { ArenaPack } from '../types';
-import type { Platform } from '../../types';
+import type { Platform, PlayerSlot } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
@@ -17,6 +17,11 @@ const _crabs: GroundCritterState[] = CRABS_CFG.map((cfg, i) => ({
   dir: i % 2 === 0 ? 1 : -1, facingEase: 1, fleeing: false, committedFleeDir: 0,
 }));
 const _tickCrabDt = makeDtTracker();
+
+// ---- Bubble trails (env-wakes from Batch D) ----
+const _bubbleAccum = new Map<PlayerSlot, number>();
+const BUBBLE_INTERVAL = 0.08; // seconds between bubble emits per player
+const BUBBLE_VX_THRESHOLD = 50;
 
 function drawOneCrab(ctx: CanvasRenderingContext2D, time: number, crab: GroundCritterState, cfg: typeof CRABS_CFG[number]): void {
   const fleeing = crab.fleeing;
@@ -1204,6 +1209,28 @@ export const underwater: ArenaPack = {
     const players = matchState.players;
     for (let i = 0; i < FISH_COUNT; i++) drawFish(ctx, i, time, cxBase, cy, facing, players);
     ctx.restore();
+  },
+
+  cosmeticTick: (state, dt, services) => {
+    if (getSlowDevice()) return;
+    for (let i = 0; i < state.players.length; i++) {
+      const p = state.players[i];
+      if (!p.active || p.state === 'splat' || p.state === 'respawning') continue;
+      if (Math.abs(p.vx) < BUBBLE_VX_THRESHOLD) continue;
+
+      const next = (_bubbleAccum.get(p.id) ?? 0) - dt;
+      if (next > 0) { _bubbleAccum.set(p.id, next); continue; }
+      _bubbleAccum.set(p.id, BUBBLE_INTERVAL);
+
+      // Emit one bubble behind the player at hip height.
+      const offsetX = p.facing === 'right' ? -p.width * 0.5 : p.width * 0.5;
+      const bx = p.x + p.width * 0.5 + offsetX;
+      const by = p.y + p.height * 0.6;
+      const size = 1 + Math.random() * 2;
+      const drift = (Math.random() - 0.5) * 8;
+      // emitParticle(x, y, vx, vy, life, size, color)
+      services.emitParticle(bx, by, drift, -30, 1.2 + Math.random() * 0.4, size, 'rgba(180,230,255,0.55)');
+    }
   },
 
   bubbleHelmet: true,
