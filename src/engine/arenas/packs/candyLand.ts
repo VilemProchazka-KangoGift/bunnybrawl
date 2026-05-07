@@ -1,8 +1,51 @@
 import type { ArenaPack } from '../types';
 import type { Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
+import { fastSin, fastCos } from '../../fastMath';
+import { getSlowDevice } from '../../perfFlags';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
-import { getFloatingPlatforms } from '../../themes/utils';
+import { getFloatingPlatforms, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
+
+const CANDY_CLOUDS = [
+  { x: 200, y: 110, r: 26 },
+  { x: 700, y: 80,  r: 32 },
+  { x: 1080, y: 130, r: 28 },
+] as const;
+const SPRINKLE_HUES = [10, 45, 120, 200, 280, 320] as const;
+const WEATHER_SPRINKLE_COLORS = SPRINKLE_HUES.map(h => `hsl(${h},80%,65%)`);
+interface GumdropDef {
+  gy: number; color: string;
+  cfg: { platL: number; platR: number; platTopY: number; walkSpeed: number; fleeSpeed: number; fleeRadius: number; yTolerance: number; turnEaseRate: number };
+  state: GroundCritterState;
+  rot: number;
+}
+const GUMDROP_R = 14;
+function makeGumdrop(platL: number, platR: number, gy: number, color: string): GumdropDef {
+  const startX = (platL + platR) / 2;
+  return {
+    gy, color,
+    cfg: { platL: platL + GUMDROP_R, platR: platR - GUMDROP_R, platTopY: gy, walkSpeed: 35, fleeSpeed: 110, fleeRadius: 90, yTolerance: 60, turnEaseRate: 3 },
+    state: { x: startX, dir: 1, facingEase: 1, fleeing: false, committedFleeDir: 0 },
+    rot: 0,
+  };
+}
+const GUMDROPS: GumdropDef[] = [
+  makeGumdrop(38,   200,  530, '#ff5e8a'),
+  makeGumdrop(1098, 1224, 510, '#7be0a3'),
+  makeGumdrop(58,   188,  350, '#ffe066'),
+  makeGumdrop(1108, 1208, 325, '#c899ff'),
+];
+const _tickGumdropDt = makeDtTracker();
+// 8-wisp ring around each cloud, hoisted so the loop avoids 24 sin+cos per frame.
+const CLOUD_WISP_COS = new Float32Array(8);
+const CLOUD_WISP_SIN = new Float32Array(8);
+{
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    CLOUD_WISP_COS[i] = Math.cos(a);
+    CLOUD_WISP_SIN[i] = Math.sin(a);
+  }
+}
 import {
   CAP_DEPTH, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
   capFrontY, capBackY, skewPx,
@@ -584,6 +627,76 @@ export const candyLand: ArenaPack = {
     ctx.ellipse(x + halfW * 0.2, y - bodyH * 0.5, halfW * 0.2, bodyH * 0.2, 0.3, 0, Math.PI * 2);
     ctx.fill();
   }),
+
+  drawAnimatedBackground: (ctx, _arena, time) => {
+    if (getSlowDevice()) return;
+    ctx.save();
+    for (let ci = 0; ci < CANDY_CLOUDS.length; ci++) {
+      const c = CANDY_CLOUDS[ci];
+      const cx = c.x + fastSin(time * 0.4 + ci) * 8;
+      const cy = c.y + fastSin(time * 0.6 + ci * 1.7) * 3;
+      const innerR = c.r * 0.45;
+      for (let i = 0; i < 8; i++) {
+        const wob = fastSin(time * 1.2 + i + ci) * 2;
+        const wx = cx + CLOUD_WISP_COS[i] * (c.r * 0.7 + wob);
+        const wy = cy + CLOUD_WISP_SIN[i] * (c.r * 0.4 + wob);
+        ctx.fillStyle = i % 2 === 0 ? 'rgba(255, 200, 230, 0.85)' : 'rgba(255, 230, 240, 0.9)';
+        ctx.beginPath();
+        ctx.arc(wx, wy, innerR, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = 'rgba(255, 245, 250, 0.9)';
+      ctx.beginPath();
+      ctx.arc(cx, cy, c.r * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    for (let i = 0; i < 28; i++) {
+      const x = ((i * 137 + time * 30) % (CANVAS_WIDTH + 20)) - 10;
+      const y = ((i * 211 + time * 60) % CANVAS_HEIGHT);
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(time * 1.5 + i);
+      ctx.fillStyle = WEATHER_SPRINKLE_COLORS[i % WEATHER_SPRINKLE_COLORS.length];
+      ctx.fillRect(-3, -1, 6, 2);
+      ctx.restore();
+    }
+    ctx.restore();
+  },
+
+  drawGroundCritters: (ctx, _arena, time, _dayPhase, matchState) => {
+    if (getSlowDevice()) return;
+    const dt = _tickGumdropDt(time);
+    const players = matchState?.players ?? [];
+    ctx.save();
+    for (let i = 0; i < GUMDROPS.length; i++) {
+      const g = GUMDROPS[i];
+      tickGroundCritter(g.state, players, dt, g.cfg);
+      const speed = g.state.fleeing ? g.cfg.fleeSpeed : g.cfg.walkSpeed;
+      g.rot += (g.state.facingEase * speed / GUMDROP_R) * dt;
+      const cx = g.state.x;
+      const cy = g.gy - GUMDROP_R + 2;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(g.rot);
+      ctx.fillStyle = g.color;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, GUMDROP_R, GUMDROP_R, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.35)';
+      for (let j = 0; j < 6; j++) {
+        const a = (j / 6) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.arc(fastCos(a) * GUMDROP_R * 0.6, fastSin(a) * GUMDROP_R * 0.6, 1.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.beginPath();
+      ctx.ellipse(-4, -3, 3, 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore();
+  },
 
   // ---- Audio ----
   musicFile: 'candy_land.mp3',

@@ -32,8 +32,16 @@ import { EffectZoneSystem } from '../gameLoop/gameplay/EffectZoneSystem';
 import { PlayerCollisionSystem } from '../gameLoop/gameplay/PlayerCollisionSystem';
 import { StompSystem } from '../gameLoop/gameplay/StompSystem';
 import { MatchSystem } from '../gameLoop/gameplay/MatchSystem';
+import type { ScatterFlockSpecies } from '../themes/types';
+import { pickScatterColor } from '../rendering/hazards';
 
 const f = Math.fround;
+
+const SCATTER_PARTICLE_COUNT: Record<ScatterFlockSpecies, number> = {
+  bird: 7,
+  bat: 12,
+  crow: 7,
+};
 
 const NOOP = (): void => {};
 const NOOP_NAME = (_n: string): void => {};
@@ -535,6 +543,36 @@ export class Simulator {
               life: 1.0 + Math.random() * 0.5,
             });
           }
+        }
+      }
+
+      for (const flock of this._state.scatterFlocks) {
+        if (!flock.active) continue;
+        const dx = (player.x + player.width / 2) - flock.x;
+        const dy = (player.y + player.height) - flock.y;
+        const distSq = dx * dx + dy * dy;
+        const r = flock.radius;
+        if (flock.armed && distSq < r * r && player.state !== 'airborne') {
+          flock.active = false;
+          flock.armed = false;
+          flock.respawnTimer = flock.respawnTime;
+          this._events.onSfxRequest('pigeon_scatter');
+          const count = SCATTER_PARTICLE_COUNT[flock.species];
+          for (let pi = 0; pi < count; pi++) {
+            const angle = -Math.PI * 0.5 + (Math.random() - 0.5) * 1.6;
+            const speed = 130 + Math.random() * 160;
+            flock.scatterParticles.push({
+              x: flock.x + (Math.random() - 0.5) * 20,
+              y: flock.y - 4,
+              vx: Math.cos(angle) * speed * (flock.x > player.x ? 1 : -1),
+              vy: Math.sin(angle) * speed - 60,
+              life: 1.6 + Math.random() * 0.8,
+              phase: Math.random() * Math.PI * 2,
+              color: pickScatterColor(flock.species, Math.random()),
+            });
+          }
+        } else if (!flock.armed && distSq > (r * 1.5) * (r * 1.5)) {
+          flock.armed = true;
         }
       }
 

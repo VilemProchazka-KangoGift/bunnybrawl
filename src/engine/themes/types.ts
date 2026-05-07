@@ -1,5 +1,7 @@
 import type { Arena, WeatherParticle, WildlifeEntity } from '../types';
 
+export type ScatterFlockSpecies = 'bird' | 'bat' | 'crow';
+
 // ---- Sub-config interfaces ----
 
 export interface GradientStop {
@@ -121,7 +123,7 @@ export interface ThemeConfig {
   clouds: CloudConfig;
   weather: WeatherConfig;
   wildlife: WildlifeConfig;
-  fog: FogConfig;
+  fog?: FogConfig;
   ambientParticles: AmbientParticleConfig;
   dayNight: DayNightConfig;
 
@@ -136,8 +138,20 @@ export interface ThemeConfig {
   /** Foreground overlay for platform body face — drawn after players for occlusion. */
   drawPlatformOverlay?: (ctx: CanvasRenderingContext2D, platform: import('../types').Platform, isGround: boolean) => void;
 
-  /** Per-frame animated background (drawn behind players, after wildlife — e.g. objects visible through windows) */
-  drawAnimatedBackground?: (ctx: CanvasRenderingContext2D, arena: Arena, time: number) => void;
+  /** Per-frame animated background. Drawn after the static bg cache and BEFORE clouds, so it composes as far-sky atmosphere (aurora, distant space objects). dayPhase: 0=noon, 0.5=midnight. matchState provides player positions for parting/proximity effects. */
+  drawAnimatedBackground?: (ctx: CanvasRenderingContext2D, arena: Arena, time: number, dayPhase: number, matchState?: import('../types').MatchState) => void;
+
+  /** Per-frame animated foreground. Drawn AFTER players + foreground-nature + platform overlays, so entities composed here cover platforms in front of the player. Pair with drawAnimatedBackground to split entities by z-order (e.g. half a flock in front, half behind). */
+  drawAnimatedForeground?: (ctx: CanvasRenderingContext2D, arena: Arena, time: number, dayPhase: number, matchState?: import('../types').MatchState) => void;
+
+  /** Per-frame ground-level critters (snails, rats, squirrels, crabs, robots).
+   *  Drawn AFTER players + fog but BEFORE the foreground-nature cache, so grass
+   *  tufts / bushes occlude critters that walk behind them. Use this instead of
+   *  drawAnimatedForeground for anything that should disappear under foliage. */
+  drawGroundCritters?: (ctx: CanvasRenderingContext2D, arena: Arena, time: number, dayPhase: number, matchState?: import('../types').MatchState) => void;
+
+  /** Per-frame full-scene tint, drawn LAST after day-night overlay. Use for global mood washes (aurora green, lava red glow) that should affect every layer including players. */
+  drawSceneTint?: (ctx: CanvasRenderingContext2D, dayPhase: number, time: number) => void;
 
   // Optional custom particle renderer (overrides default leaf/petal/snow drawing)
   drawWeatherParticle?: (ctx: CanvasRenderingContext2D, particle: WeatherParticle) => void;
@@ -178,6 +192,13 @@ export interface ThemeConfig {
     positions: Array<{ x: number; y: number }>;
     respawnTime: number;
   };
+
+  scatterFlockConfigs?: Array<{
+    species: ScatterFlockSpecies;
+    positions: Array<{ x: number; y: number }>;
+    radius: number;
+    respawnTime: number;
+  }>;
 
   // Optional physics modifiers
   physics?: PhysicsModifiers;

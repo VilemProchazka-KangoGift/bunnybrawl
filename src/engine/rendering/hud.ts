@@ -112,14 +112,17 @@ export function drawHUD(ctx: CanvasRenderingContext2D, state: MatchState, frameT
 }
 
 function _drawHUDImpl(ctx: CanvasRenderingContext2D, state: MatchState, frameTime: number, playerNames: Record<string, string> | null, timeLimit = 0): void {
-  const activePlayers = state.players.filter(p => p.active);
+  // Reuse the persistent _hudActivePlayers array — Array.filter() allocates a
+  // fresh array every call (every frame during goal-pulse animation), and
+  // _drawScoreAnimations holds a reference to it across calls anyway.
+  _hudActivePlayers.length = 0;
+  for (const p of state.players) if (p.active) _hudActivePlayers.push(p);
+  const activePlayers = _hudActivePlayers;
   const scoreWidth = Math.min(160, Math.floor((CANVAS_WIDTH - 40) / activePlayers.length));
   const compact = scoreWidth < 130;
   const totalWidth = activePlayers.length * scoreWidth;
   const startX = (CANVAS_WIDTH - totalWidth) / 2;
 
-  // Store for _drawScoreAnimations
-  _hudActivePlayers = activePlayers;
   _hudStartX = startX;
   _hudScoreWidth = scoreWidth;
 

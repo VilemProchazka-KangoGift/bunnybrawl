@@ -81,3 +81,15 @@ export function updatePigeonFlocks(state: MatchState, dt: number): void {
     }
   }
 }
+
+export function updateScatterFlocks(state: MatchState, dt: number): void {
+  for (const flock of state.scatterFlocks) {
+    if (!flock.active) {
+      flock.respawnTimer = f(flock.respawnTimer - dt);
+      if (flock.respawnTimer <= 0) {
+        flock.active = true;
+        flock.armed = true;
+      }
+    }
+  }
+}

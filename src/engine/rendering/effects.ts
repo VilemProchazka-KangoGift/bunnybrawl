@@ -2,8 +2,14 @@ import type { MatchState } from '../types';
 import type { ThemeConfig } from '../themes/types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../constants';
 import { fastSin, fastCos } from '../fastMath';
+import { bakeVerticalGradientStrip } from '../themes/utils';
 
 function lerpCh(a: number, b: number, t: number): number { return Math.round(a + (b - a) * t); }
+
+/** dayPhase 0=noon, 0.5=midnight, 1=noon. Returns 0..1 night intensity. */
+export function computeNightIntensity(dayPhase: number): number {
+  return Math.max(0, (1 - fastCos(dayPhase * Math.PI * 2)) / 2);
+}
 
 // Precomputed static star positions — i*K+J formulas were re-evaluated every
 // frame for 30 stars. Now they're frozen at module load.
@@ -42,16 +48,18 @@ const FIREFLY_BASE_Y = new Float32Array(FIREFLY_COUNT);
 const STAR_FIELD_HEIGHT = Math.ceil(CANVAS_HEIGHT * 0.35);
 let _starField: OffscreenCanvas | null = null;
 let _firefly: OffscreenCanvas | null = null;
-let _afterglowGradient: CanvasGradient | null = null;
-function getAfterglowGradient(ctx: CanvasRenderingContext2D): CanvasGradient {
-  if (_afterglowGradient) return _afterglowGradient;
-  // Built at intensity=1; per-frame intensity is applied via globalAlpha at draw time.
-  _afterglowGradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-  _afterglowGradient.addColorStop(0, 'rgba(220, 40, 10, 0.10)');
-  _afterglowGradient.addColorStop(0.35, 'rgba(240, 55, 15, 0.20)');
-  _afterglowGradient.addColorStop(0.65, 'rgba(230, 45, 10, 0.28)');
-  _afterglowGradient.addColorStop(1.0, 'rgba(200, 35, 10, 0.22)');
-  return _afterglowGradient;
+// Full-canvas gradient fillRect was costing ~5ms/frame during dawn/dusk windows.
+// Cached strip + drawImage at no-smooth is ~10× cheaper. See docs/perf-patterns.md.
+let _afterglowCache: OffscreenCanvas | null = null;
+function getAfterglowCache(): OffscreenCanvas | null {
+  if (_afterglowCache) return _afterglowCache;
+  _afterglowCache = bakeVerticalGradientStrip(CANVAS_HEIGHT, g => {
+    g.addColorStop(0, 'rgba(220, 40, 10, 0.10)');
+    g.addColorStop(0.35, 'rgba(240, 55, 15, 0.20)');
+    g.addColorStop(0.65, 'rgba(230, 45, 10, 0.28)');
+    g.addColorStop(1.0, 'rgba(200, 35, 10, 0.22)');
+  });
+  return _afterglowCache;
 }
 function getStarField(): OffscreenCanvas | null {
   if (_starField) return _starField;
@@ -92,10 +100,7 @@ export function drawDayNightCycle(
   // Wrap in save/restore so per-star/per-firefly globalAlpha mutations don't
   // leak to subsequent renderFrame stages. Entry globalAlpha is preserved.
   ctx.save();
-  // dayPhase: 0 = noon, 0.5 = midnight, 1.0 = noon again
-  // Use cosine so darkness peaks smoothly at 0.5
-  const nightIntensity = Math.max(0, (1 - Math.cos(dayPhase * Math.PI * 2)) / 2);
-  // nightIntensity: 0 at noon, 1 at midnight, smooth transition
+  const nightIntensity = computeNightIntensity(dayPhase);
   const overlayAlpha = nightIntensity * 0.55;
 
   // Sun: visible when nightIntensity < 0.8, arcs left->right during day half (0.75->0.0->0.25)
@@ -114,29 +119,38 @@ export function drawDayNightCycle(
     const sunRedshift = Math.max(0, (sunT - 0.55) / 0.45);
 
     if (sunAlpha > 0.05) {
+      // Use a single rgb-prefix per ring + globalAlpha for the alpha. Saves
+      // two of the three per-frame rgba template literals during the day cycle;
+      // the rays already use a separate color so they get their own.
       const glowAlpha = sunAlpha * (0.3 + sunRedshift * 0.2);
       const bodyAlpha = sunAlpha * 0.9;
+      const glowR = lerpCh(255, 240, sunRedshift), glowG = lerpCh(215, 50, sunRedshift), glowB = lerpCh(0, 10, sunRedshift);
+      const bodyR = lerpCh(255, 220, sunRedshift), bodyG = lerpCh(165, 30, sunRedshift);
+      const coreR = lerpCh(255, 255, sunRedshift), coreG = lerpCh(215, 80, sunRedshift);
       // Glow (gold -> deep red, grows during sunset)
-      ctx.fillStyle = `rgba(${lerpCh(255,240,sunRedshift)}, ${lerpCh(215,50,sunRedshift)}, ${lerpCh(0,10,sunRedshift)}, ${glowAlpha})`;
+      ctx.globalAlpha = glowAlpha;
+      ctx.fillStyle = `rgb(${glowR},${glowG},${glowB})`;
       ctx.beginPath();
       ctx.arc(sunX, sunY, 32 + sunRedshift * 16, 0, Math.PI * 2);
       ctx.fill();
-      // Body (orange -> crimson)
-      ctx.fillStyle = `rgba(${lerpCh(255,220,sunRedshift)}, ${lerpCh(165,30,sunRedshift)}, ${lerpCh(0,10,sunRedshift)}, ${bodyAlpha})`;
+      // Body + core share bodyAlpha and the same B channel (10*sunRedshift)
+      ctx.globalAlpha = bodyAlpha;
+      ctx.fillStyle = `rgb(${bodyR},${bodyG},${glowB})`;
       ctx.beginPath();
       ctx.arc(sunX, sunY, 15, 0, Math.PI * 2);
       ctx.fill();
-      // Bright center (gold -> deep orange) -- inherits body alpha
-      ctx.fillStyle = `rgba(${lerpCh(255,255,sunRedshift)}, ${lerpCh(215,80,sunRedshift)}, ${lerpCh(0,10,sunRedshift)}, ${bodyAlpha})`;
+      ctx.fillStyle = `rgb(${coreR},${coreG},${glowB})`;
       ctx.beginPath();
       ctx.arc(sunX, sunY, 9, 0, Math.PI * 2);
       ctx.fill();
+      ctx.globalAlpha = 1;
 
       // Light rays from sun. All 4 rays share the same color — built into
       // one path so a single fill renders all of them.
       if (nightIntensity < 0.3) {
         const rayAlpha = 0.04 * (1 - nightIntensity / 0.3);
-        ctx.fillStyle = `rgba(255, ${lerpCh(215,60,sunRedshift)}, ${lerpCh(100,15,sunRedshift)}, ${rayAlpha})`;
+        ctx.globalAlpha = rayAlpha;
+        ctx.fillStyle = `rgb(255,${lerpCh(215, 60, sunRedshift)},${lerpCh(100, 15, sunRedshift)})`;
         ctx.beginPath();
         for (let r = 0; r < 4; r++) {
           const angle = -0.3 + r * 0.2;
@@ -148,6 +162,7 @@ export function drawDayNightCycle(
           ctx.closePath();
         }
         ctx.fill();
+        ctx.globalAlpha = 1;
       }
     }
   }
@@ -165,15 +180,14 @@ export function drawDayNightCycle(
     afterglowIntensity = afterglowIntensity * afterglowIntensity * (3 - 2 * afterglowIntensity);
   }
   if (afterglowIntensity > 0.01) {
-    // Gradient overlay: warm orange-red, stronger near horizon. The full
-    // gradient varies linearly with afterglowIntensity, so build it once at
-    // intensity=1 (in module scope) and modulate via globalAlpha. createLinearGradient
-    // + 4 addColorStop calls happen ~7-15s per dawn/dusk window otherwise.
-    ctx.save();
-    ctx.globalAlpha = afterglowIntensity;
-    ctx.fillStyle = getAfterglowGradient(ctx);
-    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    ctx.restore();
+    const cache = getAfterglowCache();
+    if (cache) {
+      ctx.save();
+      ctx.globalAlpha = afterglowIntensity;
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(cache, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.restore();
+    }
   }
 
   // Darkness overlay

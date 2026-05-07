@@ -1,7 +1,218 @@
 import type { ArenaPack } from '../types';
 import type { Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
+import { fastSin, fastCos } from '../../fastMath';
+import { getSlowDevice } from '../../perfFlags';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
+import { pushFromPlayers, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
+import type { Player } from '../../types';
+
+const CRABS_CFG = [
+  { platL: 50,   platR: 380,  platTopY: 660, walkSpeed: 35, fleeSpeed: 130, fleeRadius: 100, yTolerance: 80 },
+  { platL: 480,  platR: 800,  platTopY: 660, walkSpeed: 30, fleeSpeed: 120, fleeRadius: 100, yTolerance: 80 },
+  { platL: 900,  platR: 1230, platTopY: 660, walkSpeed: 32, fleeSpeed: 140, fleeRadius: 100, yTolerance: 80 },
+];
+const _crabs: GroundCritterState[] = CRABS_CFG.map((cfg, i) => ({
+  x: (cfg.platL + cfg.platR) / 2,
+  dir: i % 2 === 0 ? 1 : -1, facingEase: 1, fleeing: false, committedFleeDir: 0,
+}));
+const _tickCrabDt = makeDtTracker();
+
+function drawOneCrab(ctx: CanvasRenderingContext2D, time: number, crab: GroundCritterState, cfg: typeof CRABS_CFG[number]): void {
+  const fleeing = crab.fleeing;
+  const motion = Math.abs(crab.facingEase);
+  ctx.save();
+  ctx.translate(crab.x, cfg.platTopY - 6);
+  if (crab.facingEase < 0) ctx.scale(-1, 1);
+
+  // 6 legs (3 on each side, splayed under the body) — alternating step lift.
+  ctx.strokeStyle = '#7a1f12';
+  ctx.lineWidth = 1.4;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  for (let s = -1; s <= 1; s += 2) {
+    for (let i = 0; i < 3; i++) {
+      const lift = fastSin(time * 14 + i * 1.4 + (s > 0 ? Math.PI : 0)) * motion;
+      const baseX = s * (4 + i * 2);
+      const tipX = s * (10 + i * 2);
+      const tipY = 6 - Math.max(0, lift) * 1.2;
+      // Knee bend down then out
+      const kneeX = (baseX + tipX) * 0.5;
+      const kneeY = 3 - Math.max(0, lift) * 0.5;
+      ctx.moveTo(baseX, 1);
+      ctx.lineTo(kneeX, kneeY);
+      ctx.lineTo(tipX, tipY);
+    }
+  }
+  ctx.stroke();
+  ctx.lineCap = 'butt';
+
+  // Carapace (rounded shell — wider than tall, slightly raised at the back).
+  ctx.fillStyle = '#c8392a';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 11, 7, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Shell detail — a darker rim and lighter highlight.
+  ctx.strokeStyle = '#7a1f12';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 11, 7, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255,170,150,0.55)';
+  ctx.beginPath();
+  ctx.ellipse(-3, -2.5, 5, 2, -0.1, 0, Math.PI * 2);
+  ctx.fill();
+  // Two spike bumps along the front rim.
+  ctx.fillStyle = '#a82e1f';
+  ctx.beginPath();
+  ctx.moveTo(-3, -6.5);
+  ctx.lineTo(-2, -8);
+  ctx.lineTo(-1, -6.3);
+  ctx.moveTo(2, -6.6);
+  ctx.lineTo(3, -8);
+  ctx.lineTo(4, -6.3);
+  ctx.fill();
+
+  // Eye stalks on top of carapace.
+  ctx.strokeStyle = '#7a1f12';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(-2.5, -5);
+  ctx.lineTo(-3, -10);
+  ctx.moveTo(2.5, -5);
+  ctx.lineTo(3, -10);
+  ctx.stroke();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(-3, -10, 1.6, 0, Math.PI * 2);
+  ctx.arc(3, -10, 1.6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.arc(-3, -10, 0.7, 0, Math.PI * 2);
+  ctx.arc(3, -10, 0.7, 0, Math.PI * 2);
+  ctx.fill();
+
+  // BIG claw on the right (forward-facing side). Fiddler-style oversized pincer.
+  const bigClawWiggle = fastSin(time * (fleeing ? 12 : 5)) * 0.3 * motion;
+  ctx.save();
+  ctx.translate(10, -1);
+  ctx.rotate(bigClawWiggle - 0.15);
+  // Upper arm.
+  ctx.fillStyle = '#a82e1f';
+  ctx.beginPath();
+  ctx.ellipse(4, 0, 5, 2.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Big pincer claw — two prongs forming a "C".
+  ctx.fillStyle = '#c8392a';
+  ctx.beginPath();
+  ctx.ellipse(11, -2.5, 6, 3.2, -0.1, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#a82e1f';
+  ctx.beginPath();
+  ctx.ellipse(11, 2.5, 6, 3, 0.1, 0, Math.PI * 2);
+  ctx.fill();
+  // Slit between prongs.
+  ctx.strokeStyle = '#3a1008';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(8, 0);
+  ctx.lineTo(15, 0);
+  ctx.stroke();
+  ctx.restore();
+
+  // Small claw on the left.
+  const smallClawWiggle = fastSin(time * (fleeing ? 14 : 6) + 1.5) * 0.4 * motion;
+  ctx.save();
+  ctx.translate(-10, -1);
+  ctx.rotate(-smallClawWiggle + 0.2);
+  ctx.fillStyle = '#a82e1f';
+  ctx.beginPath();
+  ctx.ellipse(-3, 0, 3, 1.6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#c8392a';
+  ctx.beginPath();
+  ctx.ellipse(-7, -1, 2.5, 1.4, -0.2, 0, Math.PI * 2);
+  ctx.ellipse(-7, 1, 2.5, 1.4, 0.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#3a1008';
+  ctx.lineWidth = 0.7;
+  ctx.beginPath();
+  ctx.moveTo(-5.5, 0);
+  ctx.lineTo(-9, 0);
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.restore();
+}
+
+function drawCrab(ctx: CanvasRenderingContext2D, time: number, players: ReadonlyArray<Player>): void {
+  const dt = _tickCrabDt(time);
+  for (let i = 0; i < _crabs.length; i++) {
+    tickGroundCritter(_crabs[i], players, dt, CRABS_CFG[i]);
+    drawOneCrab(ctx, time, _crabs[i], CRABS_CFG[i]);
+  }
+}
+
+const FISH_SPECIES = [
+  { color: '#ffaa3a', size: 0.7 },
+  { color: '#5fb4d8', size: 1.0 },
+  { color: '#a8d088', size: 0.8 },
+  { color: '#d88aa8', size: 0.6 },
+  { color: '#ffd56b', size: 0.9 },
+] as const;
+const BUBBLE_LEAKS = [
+  { x: 165, y: 410 }, { x: 1125, y: 390 }, { x: 376, y: 345 },
+  { x: 906, y: 330 }, { x: 640, y: 80 },
+] as const;
+const BUBBLE_COLUMNS = [120, 380, 900, 1180] as const;
+const FISH_COUNT = 18;
+// Fish-school sweep: slow horizontal oscillation across the canvas. Amplitude
+// stays under CANVAS_WIDTH/2 so the school never crosses the edge — earlier
+// versions wider than that snapped fish across the seam in 1-frame teleports.
+// Frequencies in rad/s (period = 2π/freq); ~35s sweep, ~12.6s vertical bob.
+const FISH_SWEEP_FREQ = 0.18;
+const FISH_SWEEP_AMP_RATIO = 0.32;
+const FISH_BOB_FREQ = 0.5;
+const FISH_BOB_AMP = 40;
+const FISH_BASE_Y = 380;
+
+function drawFish(ctx: CanvasRenderingContext2D, i: number, time: number, cxBase: number, cy: number, facing: 1 | -1, players: ReadonlyArray<Player>): void {
+  const sp = FISH_SPECIES[i % FISH_SPECIES.length];
+  const ox = (i % 6) * 26 - 65;
+  const oy = Math.floor(i / 6) * 22 - 22 + (i % 2) * 6;
+  const wob = fastSin(time * 4 + i) * 3;
+  const x = cxBase + ox + wob;
+  const baseY = cy + oy + fastCos(time * 3 + i) * 3;
+  // No wrap: caller's sweep keeps the school inside the canvas. Wrapping
+  // per-fish at the edge snapped the school apart (each fish crossed the
+  // threshold one tick at a time, looking like 1-frame teleports).
+  const r = pushFromPlayers(players, x, baseY, 70, 22);
+  const s = sp.size;
+  ctx.save();
+  ctx.translate(r.x, r.y);
+  // Sprite has tail on the left + eye on the right (faces right by default);
+  // mirror when the school is swimming left so fish don't float backwards.
+  if (facing < 0) ctx.scale(-1, 1);
+  ctx.fillStyle = sp.color;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 6 * s, 3 * s, 0, 0, Math.PI * 2);
+  ctx.fill();
+  const tailWag = fastSin(time * 12 + i) * 0.8;
+  ctx.beginPath();
+  ctx.moveTo(-6 * s, 0);
+  ctx.lineTo(-10 * s, -3 * s + tailWag);
+  ctx.lineTo(-10 * s, 3 * s + tailWag);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.beginPath();
+  ctx.ellipse(-1 * s, 1 * s, 4 * s, 1.2 * s, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#000';
+  ctx.fillRect(3.5 * s, -0.7 * s, 1, 1);
+  ctx.restore();
+}
 import {
   CAP_DEPTH, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
   capFrontY, capBackY, skewPx,
@@ -930,6 +1141,68 @@ export const underwater: ArenaPack = {
     ctx.ellipse(-bellW * 0.2, -bellH * 0.5, bellW * 0.25, bellH * 0.3, -0.2, 0, Math.PI * 2);
     ctx.fill();
 
+    ctx.restore();
+  },
+
+  drawAnimatedBackground: (ctx, _arena, time) => {
+    if (getSlowDevice()) return;
+    ctx.save();
+    // Bubbles only — fish school renders entirely in foreground so it doesn't
+    // get split across z-order layers.
+    ctx.strokeStyle = '#dcf0ff';
+    ctx.fillStyle = '#ffffff';
+    ctx.lineWidth = 1;
+    for (let li = 0; li < BUBBLE_LEAKS.length; li++) {
+      const lk = BUBBLE_LEAKS[li];
+      for (let i = 0; i < 6; i++) {
+        const t = ((time * 0.7 + i * 0.16 + li * 0.21) % 1);
+        const bx = lk.x + fastSin(time * 2.5 + i + li) * 5;
+        const by = lk.y - t * 80;
+        const rad = 1.2 + t * 1.8;
+        const a = (1 - t) * 0.85;
+        ctx.globalAlpha = a;
+        ctx.beginPath();
+        ctx.arc(bx, by, rad, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = a * 0.4;
+        ctx.beginPath();
+        ctx.arc(bx - 0.5, by - 0.5, rad * 0.3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    for (let ci = 0; ci < BUBBLE_COLUMNS.length; ci++) {
+      for (let i = 0; i < 4; i++) {
+        const t = ((time * 0.4 + i * 0.25 + ci * 0.13) % 1);
+        const bx = BUBBLE_COLUMNS[ci] + fastSin(time * 1.5 + i + ci) * 12;
+        const by = 660 - t * 600;
+        const rad = 1.5 + t * 2.5;
+        ctx.globalAlpha = (1 - t) * 0.7;
+        ctx.beginPath();
+        ctx.arc(bx, by, rad, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  },
+
+  drawGroundCritters: (ctx, _arena, time, _dayPhase, matchState) => {
+    if (getSlowDevice() || !matchState) return;
+    drawCrab(ctx, time, matchState.players);
+  },
+
+  drawAnimatedForeground: (ctx, _arena, time, _dayPhase, matchState) => {
+    if (getSlowDevice() || !matchState) return;
+    ctx.save();
+    // Math.sin (not fastSin) — at this slow frequency fastSin's 1° table
+    // resolution would step in 7-12px chunks (~10Hz visible updates).
+    const sweep = time * FISH_SWEEP_FREQ;
+    const cxBase = CANVAS_WIDTH * 0.5 + Math.sin(sweep) * (CANVAS_WIDTH * FISH_SWEEP_AMP_RATIO);
+    const cy = FISH_BASE_Y + Math.sin(time * FISH_BOB_FREQ) * FISH_BOB_AMP;
+    // School direction = sign of d/dt sin(sweep) = sign of cos(sweep).
+    const facing: 1 | -1 = Math.cos(sweep) >= 0 ? 1 : -1;
+    const players = matchState.players;
+    for (let i = 0; i < FISH_COUNT; i++) drawFish(ctx, i, time, cxBase, cy, facing, players);
     ctx.restore();
   },
 

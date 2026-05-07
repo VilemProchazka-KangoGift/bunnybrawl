@@ -1,7 +1,18 @@
 import type { ArenaPack } from '../types';
 import type { Arena, Platform, WeatherParticle } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
-import { getFloatingPlatforms } from '../../themes/utils';
+import { fastSin } from '../../fastMath';
+import { getSlowDevice } from '../../perfFlags';
+import { getFloatingPlatforms, drawDriftBand, type DriftBandConfig } from '../../themes/utils';
+
+const HEAT_SHIMMER_CONFIG: DriftBandConfig = {
+  topY: 615,
+  bottomY: 660,
+  colors: ['#ffb88a', '#ff8a5a', '#c95a3a'],
+  alphas: [0.08, 0.10, 0.14],
+  drifts: [6, 10, 14],
+  amps: [6, 9, 12],
+};
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
 import {
   CAP_DEPTH, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
@@ -9,6 +20,27 @@ import {
   drawPlatformRightFace, drawPlatformCap,
   jaggedDown, backWavyUp, drawLeftStones, leftJagged,
 } from '../../themes/drawPrimitives';
+
+interface LavaZone { cx: number; cy: number; w: number }
+const LAVA_ZONES: ReadonlyArray<LavaZone> = [
+  { cx: 340, cy: 694, w: 130 },
+  { cx: 900, cy: 694, w: 130 },
+  { cx: 610, cy: 654, w: 60 },
+];
+const LAVA_VENTS = [220, 640, 1060] as const;
+const HAZE_COL_H = 80;
+const _hazeGradients = new WeakMap<LavaZone, CanvasGradient>();
+function getHazeGradient(ctx: CanvasRenderingContext2D, lz: LavaZone): CanvasGradient {
+  let g = _hazeGradients.get(lz);
+  if (!g) {
+    g = ctx.createLinearGradient(0, lz.cy - HAZE_COL_H, 0, lz.cy);
+    g.addColorStop(0, 'rgba(255, 120, 60, 0)');
+    g.addColorStop(0.5, 'rgba(255, 140, 80, 0.18)');
+    g.addColorStop(1, 'rgba(255, 100, 50, 0.32)');
+    _hazeGradients.set(lz, g);
+  }
+  return g;
+}
 
 // Near-black volcanic stone palette for left protrusions.
 const VOLCANO_STONE_PALETTE = [
@@ -683,6 +715,128 @@ export const volcano: ArenaPack = {
     ctx.ellipse(x, y - size * 0.5 / squash, halfW * 0.15, flameH * 0.3, 0, 0, Math.PI * 2);
     ctx.fill();
   }),
+
+  drawAnimatedBackground: (ctx, _arena, time) => {
+    if (getSlowDevice()) return;
+    ctx.save();
+    // Diffuse smoky fog above each lava zone — stacked drifting ellipses
+    // create the soft "haze" feel without a Canvas blur filter (which is
+    // expensive in Canvas2D).
+    ctx.fillStyle = '#3a1a1a';
+    for (const lz of LAVA_ZONES) {
+      const halfW = lz.w * 0.7;
+      for (let i = 0; i < 6; i++) {
+        const drift = fastSin(time * 0.3 + i * 1.3) * halfW * 0.4;
+        const py = lz.cy - 30 - i * 12;
+        const sx = halfW + 16 + fastSin(time * 0.4 + i * 0.7) * 8;
+        const sy = 16 + i * 1.5;
+        ctx.globalAlpha = 0.10 + (1 - i / 6) * 0.10;
+        ctx.beginPath();
+        ctx.ellipse(lz.cx + drift, py, sx, sy, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+    for (const lz of LAVA_ZONES) {
+      ctx.fillStyle = getHazeGradient(ctx, lz);
+      ctx.beginPath();
+      const halfW = lz.w * 0.55;
+      const wob = fastSin(time * 2.5) * 6;
+      ctx.moveTo(lz.cx - halfW + wob, lz.cy);
+      for (let y = lz.cy - 4; y >= lz.cy - HAZE_COL_H; y -= 6) {
+        const t = (lz.cy - y) / HAZE_COL_H;
+        const w = halfW * (1 - t * 0.5);
+        const w2 = fastSin(y * 0.06 + time * 3) * 8 * (1 - t);
+        ctx.lineTo(lz.cx + w + w2, y);
+      }
+      ctx.lineTo(lz.cx + halfW + wob, lz.cy - HAZE_COL_H);
+      ctx.lineTo(lz.cx - halfW + wob, lz.cy - HAZE_COL_H);
+      for (let y = lz.cy - HAZE_COL_H; y <= lz.cy - 4; y += 6) {
+        const t = (lz.cy - y) / HAZE_COL_H;
+        const w = halfW * (1 - t * 0.5);
+        const w2 = fastSin(y * 0.06 + time * 3 + 1.7) * 8 * (1 - t);
+        ctx.lineTo(lz.cx - w + w2, y);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255, 200, 130, 0.35)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 5; i++) {
+        const phase = i * 1.3;
+        const xOff = fastSin(time * 1.5 + phase) * (halfW * 0.6);
+        const yStart = lz.cy - 6;
+        const yEnd = yStart - 50 - fastSin(time * 2 + phase) * 16;
+        ctx.beginPath();
+        ctx.moveTo(lz.cx + xOff, yStart);
+        for (let y = yStart; y >= yEnd; y -= 4) {
+          const w = fastSin(y * 0.1 + time * 4 + phase) * 4;
+          ctx.lineTo(lz.cx + xOff + w, y);
+        }
+        ctx.stroke();
+      }
+    }
+    ctx.fillStyle = '#3a201a';
+    for (const vx of LAVA_VENTS) {
+      for (let i = 0; i < 14; i++) {
+        const t = ((time * 0.4 + i * 0.07) % 1);
+        const px = vx + fastSin(time * 1.3 + i * 1.7) * 28 * t;
+        const py = 660 - t * 240;
+        const sz = 2 + t * 6;
+        const a = (1 - t) * 0.7;
+        ctx.globalAlpha = a;
+        ctx.beginPath();
+        ctx.arc(px, py, sz, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = '#ff8a3a';
+      for (let i = 0; i < 4; i++) {
+        const t = ((time * 0.7 + i * 0.21) % 1);
+        const px = vx + fastSin(time * 2 + i) * 14 * t;
+        const py = 660 - t * 200;
+        ctx.globalAlpha = (1 - t) * 0.85;
+        ctx.beginPath();
+        ctx.arc(px, py, 1.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = '#3a201a';
+    }
+    ctx.globalAlpha = 1;
+    for (let zi = 0; zi < LAVA_ZONES.length; zi++) {
+      const lz = LAVA_ZONES[zi];
+      const period = 4 + zi * 0.7;
+      const phase = (time + zi * 1.3) % period;
+      if (phase < 1.4) {
+        const u = phase / 1.4;
+        const r = 4 + u * 7;
+        ctx.globalAlpha = 0.55 * (1 - u * 0.4);
+        ctx.fillStyle = '#ffd56b';
+        ctx.beginPath();
+        ctx.arc(lz.cx, lz.cy - 6 - u * 5, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  },
+
+  drawAnimatedForeground: (ctx, _arena, time) => {
+    if (getSlowDevice()) return;
+    drawDriftBand(ctx, time, HEAT_SHIMMER_CONFIG);
+    ctx.save();
+    ctx.fillStyle = '#ff8c5a';
+    for (let zi = 0; zi < LAVA_ZONES.length; zi++) {
+      const lz = LAVA_ZONES[zi];
+      const halfW = lz.w * 0.9;
+      for (let pi = 0; pi < 3; pi++) {
+        const wob = fastSin(time * 0.8 + pi + zi) * 12;
+        ctx.globalAlpha = 0.18 - pi * 0.04;
+        ctx.beginPath();
+        ctx.ellipse(lz.cx + wob, lz.cy - 18 - pi * 8, halfW, 14 + pi * 2, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  },
 
   // ---- Audio ----
   ambientSoundConfig: {

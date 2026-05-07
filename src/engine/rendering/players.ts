@@ -6,6 +6,7 @@ import { hasCustomEyes, getSpriteRenderer, getCharacterPack, drawLegs } from '..
 import { drawHighlightSpot } from '../spriteShading';
 import { getSlowDevice } from '../perfFlags';
 import { hexToRGB } from '../fastMath';
+import { bakeRadialGradientSquare } from '../themes/utils';
 import { getIdleAction, type IdleAction } from './idleActions';
 
 // Sprite cache: key -> OffscreenCanvas with pre-drawn character sprite.
@@ -53,6 +54,22 @@ function getShadowCache(): OffscreenCanvas | null {
   c.ellipse(10, 2, 10, 2, 0, 0, Math.PI * 2);
   c.fill();
   return _shadowCache;
+}
+
+// Burn fire-glow radial gradient. Player burnTimer triggers ~1.5s of per-frame
+// radial-gradient ellipse fills. Bake once at full alpha; per-call modulates
+// with globalAlpha = fireAlpha. ~50×48 pixel ellipse → previously ~2400 per-pixel
+// gradient evaluations per burning player per frame.
+const FIRE_CACHE_SIZE = 64;
+let _fireCache: OffscreenCanvas | null = null;
+function getFireCache(): OffscreenCanvas | null {
+  if (_fireCache) return _fireCache;
+  _fireCache = bakeRadialGradientSquare(FIRE_CACHE_SIZE, g => {
+    g.addColorStop(0, 'rgba(255, 200, 0, 0.6)');
+    g.addColorStop(0.5, 'rgba(255, 100, 0, 0.4)');
+    g.addColorStop(1, 'rgba(255, 50, 0, 0)');
+  });
+  return _fireCache;
 }
 
 export function clearSpriteCache(): void {
@@ -319,17 +336,32 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player, nearCa
     ctx.fill();
   }
 
-  // Fire glow overlay when burning from lava
+  // Fire glow overlay when burning from lava. Bake-once + globalAlpha modulation
+  // — see getFireCache. Original used createRadialGradient(...,radius=rx) inside
+  // an ellipse(rx,ry) path; since the gradient fades to 0 at radius=rx and ry>rx,
+  // the visible circular region is fully contained in the ellipse. Drawing the
+  // baked cache to a square (2rx × 2rx) preserves the visual without an ellipse
+  // clip path. Fallback for envs without OffscreenCanvas.
   if (player.burnTimer > 0) {
     const fireAlpha = Math.min(0.4, player.burnTimer * 0.5) * (0.6 + Math.sin(player.burnTimer * 12) * 0.4);
-    const grad = ctx.createRadialGradient(cx, y + height * 0.4, 0, cx, y + height * 0.4, width * 0.7);
-    grad.addColorStop(0, `rgba(255, 200, 0, ${fireAlpha * 0.6})`);
-    grad.addColorStop(0.5, `rgba(255, 100, 0, ${fireAlpha * 0.4})`);
-    grad.addColorStop(1, `rgba(255, 50, 0, 0)`);
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.ellipse(cx, y + height * 0.4, width * 0.7, height * 0.6, 0, 0, Math.PI * 2);
-    ctx.fill();
+    const fireCache = getFireCache();
+    const ellRx = width * 0.7;
+    const ellCy = y + height * 0.4;
+    if (fireCache) {
+      ctx.globalAlpha = fireAlpha;
+      ctx.drawImage(fireCache, cx - ellRx, ellCy - ellRx, ellRx * 2, ellRx * 2);
+      ctx.globalAlpha = 1;
+    } else {
+      const ellRy = height * 0.6;
+      const grad = ctx.createRadialGradient(cx, ellCy, 0, cx, ellCy, ellRx);
+      grad.addColorStop(0, `rgba(255, 200, 0, ${fireAlpha * 0.6})`);
+      grad.addColorStop(0.5, `rgba(255, 100, 0, ${fireAlpha * 0.4})`);
+      grad.addColorStop(1, `rgba(255, 50, 0, 0)`);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.ellipse(cx, ellCy, ellRx, ellRy, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
   } else if (drawRedPulse) {
     // Red tint pulse overlay when hit by thorns (non-lava)
     const pulseAlpha = Math.abs(Math.sin(slowTimer * 8)) * 0.3;
@@ -588,6 +620,10 @@ export function drawFastFallStreaks(
   const lean = Math.max(-1, Math.min(1, vx / 200)) * 11;
   const topY = headY - STREAK_H;
 
+  // Per-frame linear gradient over a 4-curve lozenge (~2400 px). The clip()
+  // + baked-strip + drawImage pattern was tested here and regressed perf —
+  // the path-clip setup outweighs the per-pixel-eval saving below ~10k px.
+  // See docs/perf-patterns.md threshold rule.
   const grad = ctx.createLinearGradient(cx, topY, cx, headY);
   grad.addColorStop(0, `rgba(${r},${g},${b},0)`);
   grad.addColorStop(0.4, `rgba(${r},${g},${b},${0.32 * alpha})`);

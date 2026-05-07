@@ -1,7 +1,65 @@
 import type { ArenaPack } from '../types';
 import type { Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
+import { fastSin, fastCos } from '../../fastMath';
+import { getSlowDevice } from '../../perfFlags';
 import { drawTree, drawHangingVine, drawFgLeafCluster, drawFern } from '../../themes/drawPrimitives';
+import { pushFromPlayers, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
+import type { Player } from '../../types';
+
+const SQUIRRELS_CFG = [
+  { platL: 450, platR: 730, platTopY: 256, walkSpeed: 45, fleeSpeed: 140, fleeRadius: 110, yTolerance: 60 },
+  { platL: 520, platR: 760, platTopY: 366, walkSpeed: 50, fleeSpeed: 150, fleeRadius: 110, yTolerance: 60 },
+  { platL: 140, platR: 310, platTopY: 486, walkSpeed: 45, fleeSpeed: 140, fleeRadius: 100, yTolerance: 60 },
+];
+const _squirrels: GroundCritterState[] = SQUIRRELS_CFG.map((cfg, i) => ({
+  x: (cfg.platL + cfg.platR) / 2,
+  dir: i % 2 === 0 ? 1 : -1, facingEase: 1, fleeing: false, committedFleeDir: 0,
+}));
+const _tickSquirrelDt = makeDtTracker();
+const TREETOPS_BUTTERFLY_HUES = [320, 60, 200, 290, 30, 160] as const;
+const TREETOPS_BUTTERFLY_COLORS = TREETOPS_BUTTERFLY_HUES.map(h => `hsl(${h},80%,65%)`);
+const TREETOPS_BEE_CLUSTERS = [
+  { homeX: 280, homeY: 380, phase: 0 },
+  { homeX: 940, homeY: 360, phase: 2.4 },
+] as const;
+
+function drawTreetopsButterfly(ctx: CanvasRenderingContext2D, i: number, time: number, players: ReadonlyArray<Player>): void {
+  const driftSpeed = 0.05 + (i % 3) * 0.015;
+  const homeX = ((i * 220 + time * 60 * driftSpeed) % (CANVAS_WIDTH + 200)) - 100;
+  const homeY = 320 + fastSin(time * 0.4 + i * 1.7) * 90 + (i % 3) * 30;
+  const flutterX = homeX + fastSin(time * 1.2 + i) * 22;
+  const flutterY = homeY + fastSin(time * 1.5 + i * 1.7) * 14;
+  const r = pushFromPlayers(players, flutterX, flutterY, 70, 14, 4);
+  const flap = fastSin(time * 14 + i * 3) * 0.5 + 0.5;
+  ctx.fillStyle = TREETOPS_BUTTERFLY_COLORS[i];
+  ctx.beginPath();
+  ctx.ellipse(r.x - 4, r.y, 4 * flap, 5, 0, 0, Math.PI * 2);
+  ctx.ellipse(r.x + 4, r.y, 4 * flap, 5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#000';
+  ctx.fillRect(r.x - 0.5, r.y - 3, 1, 6);
+}
+
+function drawTreetopsBeeCluster(ctx: CanvasRenderingContext2D, ci: number, time: number, players: ReadonlyArray<Player>): void {
+  const c = TREETOPS_BEE_CLUSTERS[ci];
+  const wanderX = c.homeX + fastSin(time * 0.25 + c.phase) * 180;
+  const wanderY = c.homeY + fastSin(time * 0.4 + c.phase + 1) * 50;
+  const r = pushFromPlayers(players, wanderX, wanderY, 110, 28, 8);
+  for (let i = 0; i < 5; i++) {
+    const ph = ci * 7 + i;
+    const bx = r.x + fastSin(time * 4 + ph) * 16 + (i % 3 - 1) * 5;
+    const by = r.y + fastCos(time * 3 + ph) * 10 + (Math.floor(i / 3) - 0.5) * 5;
+    const wig = fastSin(time * 16 + ph) * 1.4;
+    ctx.fillStyle = '#ffd54a';
+    ctx.beginPath();
+    ctx.ellipse(bx, by + wig, 2.6, 1.9, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#3a2a08';
+    ctx.fillRect(bx - 1.5, by + wig - 0.3, 0.8, 0.6);
+    ctx.fillRect(bx, by + wig - 0.3, 0.8, 0.6);
+  }
+}
 import { getFloatingPlatforms } from '../../themes/utils';
 import {
   CAP_DEPTH, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
@@ -524,11 +582,82 @@ export const treetops: ArenaPack = {
     ctx.restore();
   },
 
+  drawAnimatedBackground: (ctx, _arena, time, _dayPhase, matchState) => {
+    if (getSlowDevice()) return;
+    ctx.save();
+
+    const dt = _tickSquirrelDt(time);
+    const players = matchState?.players ?? [];
+    for (let si = 0; si < _squirrels.length; si++) {
+      const sq = _squirrels[si];
+      const cfg = SQUIRRELS_CFG[si];
+      tickGroundCritter(sq, players, dt, cfg);
+      const fleeing = sq.fleeing;
+      const bob = fastSin(time * (fleeing ? 18 : 8) + si) * (fleeing ? 2 : 1) * Math.abs(sq.facingEase);
+      ctx.save();
+      ctx.translate(sq.x, cfg.platTopY + bob);
+      if (sq.facingEase < 0) ctx.scale(-1, 1);
+      ctx.fillStyle = '#a5683a';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 9, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(-7, 0);
+      ctx.bezierCurveTo(-18, -3, -22, -14, -10, -14);
+      ctx.lineTo(-10, -6);
+      ctx.bezierCurveTo(-14, -7, -10, -2, -7, 0);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(7, -1, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(8, -4);
+      ctx.lineTo(10, -7);
+      ctx.lineTo(11, -4);
+      ctx.fill();
+      ctx.fillStyle = '#000';
+      ctx.fillRect(8, -2, 1.5, 1.5);
+      ctx.fillStyle = '#e8c89a';
+      ctx.beginPath();
+      ctx.ellipse(0, 1.5, 5, 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    ctx.restore();
+  },
+
+  drawAnimatedForeground: (ctx, _arena, time, _dayPhase, matchState) => {
+    if (getSlowDevice() || !matchState) return;
+    ctx.save();
+    const players = matchState.players;
+    for (let i = 0; i < TREETOPS_BUTTERFLY_HUES.length; i++) {
+      drawTreetopsButterfly(ctx, i, time, players);
+    }
+    for (let ci = 0; ci < TREETOPS_BEE_CLUSTERS.length; ci++) {
+      drawTreetopsBeeCluster(ctx, ci, time, players);
+    }
+    ctx.restore();
+  },
+
   // ---- Audio ----
   ambientSoundConfig: {
     loops: ['amb_wind'],
     periodic: [{ sound: 'amb_bird_chirp', intervalRange: [8, 20] }],
   },
+
+  scatterFlockConfigs: [
+    {
+      species: 'bird',
+      positions: [
+        { x: 590, y: 258 },
+        { x: 550, y: 478 },
+        { x: 1100, y: 473 },
+      ],
+      radius: 120,
+      respawnTime: 8,
+    },
+  ],
 
   musicFile: 'treetops.mp3',
   // NAV-DATA-START — auto-generated, do not hand-edit

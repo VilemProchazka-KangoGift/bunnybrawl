@@ -1,7 +1,138 @@
 import type { ArenaPack } from '../types';
 import type { Arena, Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
-import { getFloatingPlatforms } from '../../themes/utils';
+import { fastSin, fastCos } from '../../fastMath';
+import { getSlowDevice } from '../../perfFlags';
+import { getFloatingPlatforms, pushFromPlayers, isLivePlayer, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
+
+const SNAILS_CFG: Array<{ platL: number; platR: number; platTopY: number; walkSpeed: number; fleeSpeed: number; fleeRadius: number; yTolerance: number; turnEaseRate: number }> = [
+  { platL: 900, platR: 1080, platTopY: 660, walkSpeed: 8, fleeSpeed: 22, fleeRadius: 70, yTolerance: 80, turnEaseRate: 2 },
+  { platL: 200, platR: 380,  platTopY: 660, walkSpeed: 7, fleeSpeed: 20, fleeRadius: 70, yTolerance: 80, turnEaseRate: 2 },
+];
+const _snails: GroundCritterState[] = SNAILS_CFG.map((cfg, i) => ({
+  x: (cfg.platL + cfg.platR) / 2 + i * 7,
+  dir: i % 2 === 0 ? 1 : -1, facingEase: 1, fleeing: false, committedFleeDir: 0,
+}));
+const _tickSnailDt = makeDtTracker();
+
+const BUTTERFLY_HUES = [320, 60, 200, 290, 30, 160, 180, 40] as const;
+const BUTTERFLY_COLORS = BUTTERFLY_HUES.map(h => `hsl(${h},80%,65%)`);
+const BEE_CLUSTERS = [
+  { homeX: 320, homeY: 420, phase: 0 },
+  { homeX: 980, homeY: 380, phase: 2.4 },
+] as const;
+// Placed in gaps between FG bushes / stumps / wildflowers / tall grass, all of
+// which sit on the ground line or at platform 15%/85%. Center of platform is
+// clear of FG decoration.
+const DANDELIONS = [
+  // Ground line — between bushes (160, 520, 1000, 1120) and stumps (340, 860).
+  { x: 100,  gy: 655 },
+  { x: 380,  gy: 655 },
+  { x: 720,  gy: 655 },
+  { x: 1080, gy: 655 },
+  // Floating-platform centers (FG bushes sit at 15%/85%, centers are clear).
+  { x: 380,  gy: 395 },
+  { x: 880,  gy: 410 },
+  { x: 640,  gy: 475 },
+  { x: 640,  gy: 285 },
+  { x: 1090, gy: 530 },
+] as const;
+// -1 = idle (full puff). >= 0 = burst-elapsed seconds.
+const _dandelionExcite = new Float32Array(DANDELIONS.length).fill(-1);
+const _tickDandelionDt = makeDtTracker();
+const DANDELION_SEED_COS = new Float32Array(14);
+const DANDELION_SEED_SIN = new Float32Array(14);
+{
+  for (let i = 0; i < 14; i++) {
+    const a = (i / 14) * Math.PI * 2;
+    DANDELION_SEED_COS[i] = Math.cos(a);
+    DANDELION_SEED_SIN[i] = Math.sin(a);
+  }
+}
+
+function drawButterfly(ctx: CanvasRenderingContext2D, i: number, time: number, players: ReadonlyArray<import('../../types').Player>): void {
+  const driftSpeed = 0.04 + (i % 3) * 0.015;
+  const homeX = ((i * 200 + time * 60 * driftSpeed) % (CANVAS_WIDTH + 200)) - 100;
+  const homeY = 380 + fastSin(time * 0.4 + i * 1.7) * 80 + (i % 3) * 30;
+  const flutterX = homeX + fastSin(time * 1.2 + i) * 22;
+  const flutterY = homeY + fastSin(time * 1.5 + i * 1.7) * 14;
+  const r = pushFromPlayers(players, flutterX, flutterY, 70, 14, 4);
+  const flap = fastSin(time * 14 + i * 3) * 0.5 + 0.5;
+  ctx.fillStyle = BUTTERFLY_COLORS[i];
+  ctx.beginPath();
+  ctx.ellipse(r.x - 4, r.y, 4 * flap, 5, 0, 0, Math.PI * 2);
+  ctx.ellipse(r.x + 4, r.y, 4 * flap, 5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#000';
+  ctx.fillRect(r.x - 0.5, r.y - 3, 1, 6);
+}
+
+function drawOneSnail(ctx: CanvasRenderingContext2D, time: number, snail: GroundCritterState, cfg: typeof SNAILS_CFG[number]): void {
+  ctx.save();
+  ctx.translate(snail.x, cfg.platTopY - 4);
+  if (snail.facingEase < 0) ctx.scale(-1, 1);
+  ctx.fillStyle = '#b89878';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 9, 3.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(120,100,80,0.5)';
+  ctx.fillRect(-9, 2.5, 18, 1.5);
+  ctx.fillStyle = '#8a5a3a';
+  ctx.beginPath();
+  ctx.arc(-1, -3, 5.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#5a3a20';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  for (let r = 4.5; r >= 1; r -= 1.6) {
+    ctx.moveTo(-1 + r, -3);
+    ctx.arc(-1, -3, r, 0, Math.PI * 1.8);
+  }
+  ctx.stroke();
+  const wig = fastSin(time * 6) * 0.5;
+  ctx.strokeStyle = '#8a6a4a';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(7, -1);
+  ctx.lineTo(10 + wig, -5);
+  ctx.moveTo(8, -1);
+  ctx.lineTo(11 - wig, -4);
+  ctx.stroke();
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.arc(10 + wig, -5, 0.6, 0, Math.PI * 2);
+  ctx.arc(11 - wig, -4, 0.6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawSnails(ctx: CanvasRenderingContext2D, time: number, players: ReadonlyArray<import('../../types').Player>): void {
+  const dt = _tickSnailDt(time);
+  for (let i = 0; i < _snails.length; i++) {
+    tickGroundCritter(_snails[i], players, dt, SNAILS_CFG[i]);
+    drawOneSnail(ctx, time, _snails[i], SNAILS_CFG[i]);
+  }
+}
+
+function drawBeeCluster(ctx: CanvasRenderingContext2D, ci: number, time: number, players: ReadonlyArray<import('../../types').Player>): void {
+  const c = BEE_CLUSTERS[ci];
+  const wanderX = c.homeX + fastSin(time * 0.25 + c.phase) * 200;
+  const wanderY = c.homeY + fastSin(time * 0.4 + c.phase + 1) * 60;
+  const r = pushFromPlayers(players, wanderX, wanderY, 110, 28, 8);
+  for (let i = 0; i < 6; i++) {
+    const ph = ci * 7 + i;
+    const bx = r.x + fastSin(time * 4 + ph) * 18 + (i % 3 - 1) * 6;
+    const by = r.y + fastCos(time * 3 + ph) * 12 + (Math.floor(i / 3) - 0.5) * 6;
+    const wig = fastSin(time * 16 + ph) * 1.5;
+    ctx.fillStyle = '#ffd54a';
+    ctx.beginPath();
+    ctx.ellipse(bx, by + wig, 3, 2.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#3a2a08';
+    ctx.fillRect(bx - 2, by + wig - 0.3, 1, 0.7);
+    ctx.fillRect(bx, by + wig - 0.3, 1, 0.7);
+  }
+}
 import {
   drawTree, drawBush, drawFlower, drawMushroom, drawGrassTuft,
   drawFgBush, drawTallGrass, drawFern, drawHangingVine, drawFgLeafCluster, drawFgWildflower,
@@ -488,10 +619,124 @@ export const meadow: ArenaPack = {
     ctx.fillRect(platform.x, bodyTop + bodyH - 4, platform.width, 4);
   },
 
+  drawAnimatedBackground: (ctx, _arena, time, _dayPhase, matchState) => {
+    if (getSlowDevice() || !matchState) return;
+    ctx.save();
+    const players = matchState.players;
+    const dt = _tickDandelionDt(time);
+    const BURST_TOTAL = 7.0;
+    const SEED_FLY_DURATION = 2.0;
+    for (let di = 0; di < DANDELIONS.length; di++) {
+      const d = DANDELIONS[di];
+      let nearest = Infinity;
+      for (const p of players) {
+        if (!isLivePlayer(p)) continue;
+        const dx = (p.x + p.width * 0.5) - d.x;
+        const dy = (p.y + p.height) - d.gy;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < nearest) nearest = d2;
+      }
+      const playerNear = nearest < 40 * 40;
+      let phase = _dandelionExcite[di];
+      if (phase < 0 && playerNear) phase = 0;
+      if (phase >= 0) {
+        phase += dt;
+        if (phase >= BURST_TOTAL) phase = -1;
+      }
+      _dandelionExcite[di] = phase;
+      const puffY = d.gy - 9;
+      ctx.strokeStyle = '#5fb45a';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(d.x, d.gy + 4);
+      ctx.lineTo(d.x, d.gy - 8);
+      ctx.stroke();
+      let puffR = 6;
+      if (phase >= 0) {
+        if (phase < SEED_FLY_DURATION) {
+          puffR = 6 * Math.max(0, 1 - phase / 0.3);
+        } else {
+          const regrow = (phase - SEED_FLY_DURATION) / (BURST_TOTAL - SEED_FLY_DURATION);
+          puffR = 6 * Math.min(1, regrow);
+        }
+      }
+      if (puffR > 0.3) {
+        ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = 0.95;
+        ctx.beginPath();
+        ctx.arc(d.x, puffY, puffR, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#dcdcc8';
+        ctx.globalAlpha = 0.75;
+        for (let i = 0; i < 6; i++) {
+          const c = DANDELION_SEED_COS[i * 2];
+          const s = DANDELION_SEED_SIN[i * 2];
+          ctx.beginPath();
+          ctx.arc(d.x + c * puffR * 0.7, puffY + s * puffR * 0.7, 0.7, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+      if (phase >= 0 && phase < SEED_FLY_DURATION) {
+        const t = phase / SEED_FLY_DURATION;
+        const SEEDS = 12;
+        ctx.fillStyle = '#f8f8e8';
+        for (let i = 0; i < SEEDS; i++) {
+          const emitT = i / SEEDS * 0.3;
+          const localT = (t - emitT) / (1 - emitT);
+          if (localT <= 0) continue;
+          const angle = (i / SEEDS) * Math.PI * 2 + fastSin(time + i) * 0.2;
+          const dist = localT * 60;
+          const sx = d.x + fastCos(angle) * dist + fastSin(time * 1.5 + i) * 2;
+          const sy = puffY - localT * 50 - localT * localT * 12 + fastSin(time + i) * 1.5;
+          const alpha = (1 - localT) * 0.95;
+          ctx.globalAlpha = alpha;
+          ctx.beginPath();
+          ctx.arc(sx, sy, 1.4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = alpha * 0.6;
+          ctx.beginPath();
+          ctx.arc(sx, sy - 2.5, 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
+    ctx.restore();
+  },
+
+  drawGroundCritters: (ctx, _arena, time, _dayPhase, matchState) => {
+    if (getSlowDevice() || !matchState) return;
+    drawSnails(ctx, time, matchState.players);
+  },
+
+  drawAnimatedForeground: (ctx, _arena, time, _dayPhase, matchState) => {
+    if (getSlowDevice() || !matchState) return;
+    ctx.save();
+    const players = matchState.players;
+    for (let i = 0; i < BUTTERFLY_HUES.length; i++) drawButterfly(ctx, i, time, players);
+    for (let ci = 0; ci < BEE_CLUSTERS.length; ci++) drawBeeCluster(ctx, ci, time, players);
+    ctx.restore();
+  },
+
   // ---- Audio ----
   ambientSoundConfig: {
     periodic: [{ sound: 'amb_bird_chirp', intervalRange: [5, 15] }],
   },
+
+  scatterFlockConfigs: [
+    {
+      species: 'bird',
+      positions: [
+        { x: 380, y: 398 },
+        { x: 640, y: 288 },
+        { x: 880, y: 413 },
+      ],
+      radius: 120,
+      respawnTime: 8,
+    },
+  ],
+
   musicFile: 'meadow.mp3',
   // NAV-DATA-START — auto-generated, do not hand-edit
   navData: {

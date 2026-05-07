@@ -1,7 +1,41 @@
 import type { ArenaPack } from '../types';
 import type { Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
+import { fastSin } from '../../fastMath';
+import { getSlowDevice } from '../../perfFlags';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
+import { isLivePlayer } from '../../themes/utils';
+
+const CHIMNEYS = [
+  { x: 144, y: 440 },
+  { x: 264, y: 444 },
+] as const;
+
+// Room interior matches `openH = 88` in drawFarBackground (floor at y, ceiling
+// at y - 88). The dark/light wash extends down through the platform body too,
+// so the apartment reads continuously from ceiling to floor edge.
+const HALLWAY_ROOM_H = 88;
+const HALLWAY_FLOOR_BODY_H = 24;
+interface Hallway { x: number; y: number; w: number }
+const HALLWAYS: ReadonlyArray<Hallway> = [
+  { x: 510, y: 550, w: 300 },
+  { x: 970, y: 480, w: 230 },
+];
+const _hallwayGlowGrads = new WeakMap<Hallway, CanvasGradient>();
+function getHallwayGlow(ctx: CanvasRenderingContext2D, h: Hallway): CanvasGradient {
+  let g = _hallwayGlowGrads.get(h);
+  if (!g) {
+    const cx = h.x + h.w / 2;
+    // Center between ceiling and floor-body bottom.
+    const totalH = HALLWAY_ROOM_H + HALLWAY_FLOOR_BODY_H;
+    const cy = h.y - HALLWAY_ROOM_H + totalH * 0.5;
+    g = ctx.createRadialGradient(cx, cy, 0, cx, cy, h.w * 0.9);
+    g.addColorStop(0, 'rgba(255, 213, 107, 0.7)');
+    g.addColorStop(1, 'rgba(255, 180, 60, 0.2)');
+    _hallwayGlowGrads.set(h, g);
+  }
+  return g;
+}
 import {
   CAP_DEPTH, applyIsoInsets, mulberry32, seedFor,
   capFrontY, capBackY, skewPx,
@@ -1137,10 +1171,87 @@ export const rooftops: ArenaPack = {
     ctx.fill();
   }),
 
+  drawAnimatedBackground: (ctx, _arena, time, _dayPhase, matchState) => {
+    if (getSlowDevice() || !matchState) return;
+    ctx.save();
+    ctx.fillStyle = '#b4b9c3';
+    for (let si = 0; si < CHIMNEYS.length; si++) {
+      const c = CHIMNEYS[si];
+      for (let i = 0; i < 7; i++) {
+        // Slow, subtle smoke. Lower drift speed (0.18 vs 0.35), tighter wobble,
+        // smaller particles, lower peak alpha.
+        const t = ((time * 0.18 + i * 0.14 + si * 0.13) % 1);
+        const px = c.x + fastSin(time * 0.4 + i + si) * (10 + t * 18);
+        const py = c.y - 4 - t * 220;
+        const sz = 3 + t * 8;
+        ctx.globalAlpha = (1 - t) * 0.4;
+        ctx.beginPath();
+        ctx.arc(px, py, sz, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+    for (const h of HALLWAYS) {
+      let lit = false;
+      for (const p of matchState.players) {
+        if (!isLivePlayer(p)) continue;
+        const px = p.x + p.width * 0.5;
+        const py = p.y + p.height * 0.5;
+        if (px >= h.x - 20 && px <= h.x + h.w + 20 && py >= h.y - HALLWAY_ROOM_H && py <= h.y + 30) {
+          lit = true;
+          break;
+        }
+      }
+      const interiorTop = h.y - HALLWAY_ROOM_H;
+      const totalH = HALLWAY_ROOM_H + HALLWAY_FLOOR_BODY_H;
+      if (!lit) {
+        ctx.fillStyle = 'rgba(8, 10, 18, 0.55)';
+        ctx.fillRect(h.x + 4, interiorTop, h.w - 8, totalH);
+        continue;
+      }
+      ctx.fillStyle = getHallwayGlow(ctx, h);
+      ctx.fillRect(h.x, interiorTop, h.w, totalH);
+      const flicker = 0.92 + fastSin(time * 9) * 0.08;
+      const bulbX = h.x + h.w / 2;
+      const bulbY = interiorTop + 12;
+      ctx.strokeStyle = '#3a3a4a';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(bulbX, interiorTop);
+      ctx.lineTo(bulbX, bulbY - 2);
+      ctx.stroke();
+      ctx.globalAlpha = flicker;
+      ctx.fillStyle = '#ffe696';
+      ctx.beginPath();
+      ctx.arc(bulbX, bulbY, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff5c8';
+      ctx.beginPath();
+      ctx.arc(bulbX - 0.5, bulbY - 0.5, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+  },
+
   // ---- Audio ----
   ambientSoundConfig: {
     loops: ['amb_wind'],
   },
+
+  scatterFlockConfigs: [
+    {
+      species: 'bird',
+      positions: [
+        { x: 180, y: 478 },
+        { x: 620, y: 368 },
+        { x: 1080, y: 298 },
+      ],
+      radius: 120,
+      respawnTime: 8,
+    },
+  ],
+
   musicFile: 'rooftops.mp3',
   // NAV-DATA-START — auto-generated, do not hand-edit
   navData: {

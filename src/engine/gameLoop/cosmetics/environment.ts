@@ -139,3 +139,24 @@ export function updatePigeonScatterParticles(state: MatchState, dt: number): voi
     }
   }
 }
+
+const SCATTER_FLOCK_GRAVITY: Record<import('../../themes/types').ScatterFlockSpecies, number> = {
+  bat: 20,
+  bird: 80,
+  crow: 80,
+};
+
+export function updateScatterFlockParticles(state: MatchState, dt: number): void {
+  for (const flock of state.scatterFlocks) {
+    const grav = SCATTER_FLOCK_GRAVITY[flock.species];
+    for (let si = flock.scatterParticles.length - 1; si >= 0; si--) {
+      const sp = flock.scatterParticles[si];
+      sp.x += sp.vx * dt;
+      sp.y += sp.vy * dt;
+      sp.vy += grav * dt;
+      sp.vx *= 0.99;
+      sp.life -= dt;
+      if (sp.life <= 0) swapRemove(flock.scatterParticles, si);
+    }
+  }
+}

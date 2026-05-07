@@ -1,7 +1,40 @@
 import type { ArenaPack } from '../types';
 import type { Arena, Platform, WeatherParticle } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
-import { getFloatingPlatforms } from '../../themes/utils';
+import { fastSin } from '../../fastMath';
+import { getSlowDevice } from '../../perfFlags';
+import { getFloatingPlatforms, isLivePlayer, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
+import { drawRat } from '../../themes/drawPrimitives';
+
+const RATS_CFG = [
+  { platL: 30,   platR: 220,  platTopY: 660, walkSpeed: 50, fleeSpeed: 180, fleeRadius: 120, yTolerance: 80 },
+  { platL: 420,  platR: 860,  platTopY: 660, walkSpeed: 50, fleeSpeed: 180, fleeRadius: 120, yTolerance: 80 },
+  { platL: 1060, platR: 1260, platTopY: 660, walkSpeed: 50, fleeSpeed: 180, fleeRadius: 120, yTolerance: 80 },
+];
+const _castleRats: GroundCritterState[] = RATS_CFG.map((cfg, i) => ({
+  x: (cfg.platL + cfg.platR) / 2,
+  dir: i % 2 === 0 ? 1 : -1, facingEase: 1, fleeing: false, committedFleeDir: 0,
+}));
+let _bannerExcite: Float32Array | null = null;
+const _tickBannerDt = makeDtTracker();
+const _tickCastleRatDt = makeDtTracker();
+// Cached banner-eligible floating platforms (.filter() in drawAnimatedForeground
+// otherwise allocates per frame). Keyed by arena.platforms identity for
+// auto-invalidation on switchArena.
+const _bannerFloatsCache = new WeakMap<Platform[], Platform[]>();
+function getBannerFloats(arena: Arena): Platform[] {
+  let cached = _bannerFloatsCache.get(arena.platforms);
+  if (!cached) {
+    cached = getFloatingPlatforms(arena.platforms).filter(p => p.width >= 100);
+    _bannerFloatsCache.set(arena.platforms, cached);
+  }
+  return cached;
+}
+
+// x=1180 conflicted with the tall floating platform at x=1120 y=580; moved to x=1080 (clear ground space).
+const TORCH_X = [100, 400, 640, 880, 1080] as const;
+const TORCH_FLAME_Y = 580;
+const BANNER_COLORS = ['#8B0000', '#00008B', '#006400', '#4B0082'] as const;
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
 import {
   CAP_DEPTH, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
@@ -503,7 +536,7 @@ export const castle: ArenaPack = {
     drawTorch(400, y - 60);
     drawTorch(640, y - 60);
     drawTorch(880, y - 60);
-    drawTorch(1180, y - 60);
+    drawTorch(1080, y - 60);
 
     // Suits of armor on ground
     const drawArmor = (ax: number, ay: number, size: number) => {
@@ -643,51 +676,8 @@ export const castle: ArenaPack = {
     drawChain(1080, gy - 35, 3);
     ctx.restore();
 
-    // Foreground hanging banners — animated sway
-    const t = Date.now() * 0.001; // time in seconds for animation
-    const bannerColors = ['#8B0000', '#00008B', '#006400', '#4B0082'];
-    const floats = getFloatingPlatforms(arena.platforms).filter(p => p.width >= 100);
-    floats.forEach((plat, i) => {
-      const bx = plat.x + plat.width / 2;
-      const by = plat.y + plat.height;
-      const color = bannerColors[i % bannerColors.length];
-      const h = 35;
-      const sway = Math.sin(t * 1.5 + i * 1.8) * 6;
-
-      ctx.save();
-      ctx.globalAlpha = 0.7;
-
-      // Banner rod
-      ctx.fillStyle = '#8A8A6A';
-      ctx.fillRect(bx - 14, by - 2, 28, 3);
-
-      // Swaying banner body
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.moveTo(bx - 12, by);
-      ctx.lineTo(bx + 12, by);
-      ctx.quadraticCurveTo(bx + 10 + sway * 0.5, by + h * 0.5, bx + 8 + sway, by + h);
-      ctx.lineTo(bx + sway, by + h + 12);
-      ctx.lineTo(bx - 8 + sway, by + h);
-      ctx.quadraticCurveTo(bx - 10 + sway * 0.5, by + h * 0.5, bx - 12, by);
-      ctx.closePath();
-      ctx.fill();
-
-      // Emblem — shield shape
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-      const ex = bx + sway * 0.3;
-      ctx.beginPath();
-      ctx.moveTo(ex, by + 8);
-      ctx.lineTo(ex + 6, by + 13);
-      ctx.lineTo(ex + 6, by + 22);
-      ctx.lineTo(ex, by + 27);
-      ctx.lineTo(ex - 6, by + 22);
-      ctx.lineTo(ex - 6, by + 13);
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.restore();
-    });
+    // Banners are drawn in drawAnimatedForeground so they animate every frame
+    // and can react to nearby players (drawForegroundNature is cached at load).
   },
 
   drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
@@ -832,10 +822,122 @@ export const castle: ArenaPack = {
     ctx.fillRect(x - halfW * 0.7, y - 3, halfW * 1.4, 3);
   }),
 
+  drawAnimatedBackground: (ctx, _arena, time) => {
+    if (getSlowDevice()) return;
+    ctx.save();
+    // Subtle: smaller halo, slow flicker, gentler embers.
+    for (let i = 0; i < TORCH_X.length; i++) {
+      const tx = TORCH_X[i];
+      const flicker = 0.95 + fastSin(time * 6 + i * 1.7) * 0.05;
+      ctx.fillStyle = '#ff7828';
+      ctx.globalAlpha = 0.10 * flicker;
+      ctx.beginPath();
+      ctx.arc(tx, TORCH_FLAME_Y, 32 * flicker, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 0.06 * flicker;
+      ctx.beginPath();
+      ctx.arc(tx, TORCH_FLAME_Y, 18 * flicker, 0, Math.PI * 2);
+      ctx.fill();
+      // Single drifting ember per torch (was 2 with snappy motion).
+      const u = ((time * 0.3 + i * 0.31) % 1);
+      ctx.globalAlpha = (1 - u) * 0.45;
+      ctx.fillStyle = '#ff9a3a';
+      ctx.beginPath();
+      ctx.arc(tx + fastSin(time * 1.5 + i) * 4, TORCH_FLAME_Y - 16 - u * 40, 1.1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  },
+
+  drawGroundCritters: (ctx, _arena, time, _dayPhase, matchState) => {
+    if (!matchState) return;
+    const dt = _tickCastleRatDt(time);
+    for (let i = 0; i < _castleRats.length; i++) {
+      const r = _castleRats[i];
+      tickGroundCritter(r, matchState.players, dt, RATS_CFG[i]);
+      drawRat(ctx, r.x, RATS_CFG[i].platTopY - 4, r.facingEase < 0 ? -1 : 1, time, Math.abs(r.facingEase), r.fleeing);
+    }
+  },
+
+  drawAnimatedForeground: (ctx, arena, time, _dayPhase, matchState) => {
+    // Reactive banners: nearest-player distance amplifies sway. Excitement is
+    // eased over ~0.5s so the wobble fades in/out smoothly instead of jumping.
+    const floats = getBannerFloats(arena);
+    const players = matchState?.players;
+    if (!_bannerExcite || _bannerExcite.length < floats.length) {
+      _bannerExcite = new Float32Array(floats.length);
+    }
+    const dt = _tickBannerDt(time);
+    ctx.save();
+    ctx.globalAlpha = 0.7;
+    for (let i = 0; i < floats.length; i++) {
+      const plat = floats[i];
+      const bx = plat.x + plat.width / 2;
+      const by = plat.y + plat.height;
+      const color = BANNER_COLORS[i % BANNER_COLORS.length];
+      let nearest = Infinity;
+      if (players) {
+        for (const p of players) {
+          if (!isLivePlayer(p)) continue;
+          const dx = (p.x + p.width * 0.5) - bx;
+          const dy = (p.y + p.height * 0.5) - (by + 18);
+          const d2 = dx * dx + dy * dy;
+          if (d2 < nearest) nearest = d2;
+        }
+      }
+      const target = nearest < 90 * 90 ? 1 - Math.sqrt(nearest) / 90 : 0;
+      _bannerExcite[i] = Math.max(0, _bannerExcite[i] + (target - _bannerExcite[i]) * dt * 3);
+      const excite = _bannerExcite[i];
+      const baseSway = fastSin(time * 1.5 + i * 1.8) * 6;
+      // Reactive amplitude scales smoothly with eased excitement.
+      const reactSway = fastSin(time * (1.5 + excite * 4) + i * 1.8) * excite * 5;
+      const sway = baseSway + reactSway;
+      const h = 35;
+      ctx.fillStyle = '#8A8A6A';
+      ctx.fillRect(bx - 14, by - 2, 28, 3);
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(bx - 12, by);
+      ctx.lineTo(bx + 12, by);
+      ctx.quadraticCurveTo(bx + 10 + sway * 0.5, by + h * 0.5, bx + 8 + sway, by + h);
+      ctx.lineTo(bx + sway, by + h + 12);
+      ctx.lineTo(bx - 8 + sway, by + h);
+      ctx.quadraticCurveTo(bx - 10 + sway * 0.5, by + h * 0.5, bx - 12, by);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+      const ex = bx + sway * 0.3;
+      ctx.beginPath();
+      ctx.moveTo(ex, by + 8);
+      ctx.lineTo(ex + 6, by + 13);
+      ctx.lineTo(ex + 6, by + 22);
+      ctx.lineTo(ex, by + 27);
+      ctx.lineTo(ex - 6, by + 22);
+      ctx.lineTo(ex - 6, by + 13);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  },
+
   // ---- Audio ----
   ambientSoundConfig: {
     loops: ['amb_wind'],
   },
+
+  scatterFlockConfigs: [
+    {
+      species: 'bat',
+      positions: [
+        { x: 400, y: 308 },
+        { x: 880, y: 308 },
+      ],
+      radius: 140,
+      respawnTime: 10,
+    },
+  ],
+
   musicFile: 'castle.mp3',
   // NAV-DATA-START — auto-generated, do not hand-edit
   navData: {

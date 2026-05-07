@@ -23,7 +23,7 @@ import { drawFpsCounter } from './fpsCounter';
 import {
   drawCarrot, drawSpringMushroom, drawThorn,
   drawWeather, drawParticles, drawGibs, drawGibShape, drawConfetti, drawFireworks, drawWildlife, drawSpringTrail,
-  drawHazardZone, drawGhost, drawLavaRock, drawZeroGZone, drawCurrentZone, drawGeyser, drawBouncyPlatformOverlay, drawPigeonFlock,
+  drawHazardZone, drawGhost, drawLavaRock, drawZeroGZone, drawCurrentZone, drawGeyser, drawBouncyPlatformOverlay, drawPigeonFlock, drawScatterFlock,
   drawDayNightCycle,
   drawHUD, drawCountdown, drawConnectionQuality, drawComboPopups, invalidateHudCache, isHudDirty,
   drawPlayer,
@@ -497,6 +497,19 @@ export class Renderer {
   }
 
 
+  /** Mirror-aware draw helper. Wraps `fn` in a save/scale(-1,1)/translate when
+   *  the renderer is in mirrored mode; otherwise calls `fn` directly. Used by
+   *  the per-frame animated callbacks that want their content mirrored alongside
+   *  the rest of the scene. */
+  private withMirror(ctx: CanvasRenderingContext2D, fn: () => void): void {
+    if (!this.mirrored) { fn(); return; }
+    ctx.save();
+    ctx.scale(-1, 1);
+    ctx.translate(-CANVAS_WIDTH, 0);
+    fn();
+    ctx.restore();
+  }
+
   // ---- Clouds ----
 
   private updateAndDrawClouds(ctx: CanvasRenderingContext2D, dt: number): void {
@@ -641,14 +654,21 @@ export class Renderer {
       }
 
       const bgStart = perfTrace.begin('render.bg');
-      // Animated clouds
+      const slow = getSlowDevice();
+
+      // Drawn before clouds so sky-atmosphere effects (aurora, distant space
+      // objects) compose under weather and clouds.
+      if (this.theme.drawAnimatedBackground) {
+        const thA = this.originalArena ?? arena;
+        this.withMirror(ctx, () => this.theme.drawAnimatedBackground!(ctx, thA, matchState.timeElapsed, matchState.dayPhase, matchState));
+        d.animatedBg = true;
+      }
+
       const now = this.frameTime / 1000;
       const dt = now - (this.lastCloudTime || now);
       this.lastCloudTime = now;
       this.updateAndDrawClouds(ctx, dt);
       d.clouds = true;
-
-      const slow = getSlowDevice();
 
       // Weather (leaves, petals)
       if (!slow) {
@@ -660,15 +680,6 @@ export class Renderer {
       if (!slow && matchState.wildlife) {
         drawWildlife(ctx, matchState.wildlife);
         d.wildlife = true;
-      }
-
-      // Theme-specific animated background (e.g. space objects through windows)
-      if (this.theme.drawAnimatedBackground) {
-        const thA = this.originalArena ?? arena;
-        if (this.mirrored) { ctx.save(); ctx.scale(-1, 1); ctx.translate(-CANVAS_WIDTH, 0); }
-        this.theme.drawAnimatedBackground(ctx, thA, matchState.timeElapsed);
-        if (this.mirrored) { ctx.restore(); }
-        d.animatedBg = true;
       }
 
       // Hazard zones (lava pools etc.)
@@ -717,8 +728,13 @@ export class Renderer {
       const entStart = perfTrace.begin('render.entities');
       // Pigeon flocks
       for (const flock of matchState.pigeonFlocks) {
-        drawPigeonFlock(ctx, flock, matchState.timeElapsed);
+        drawPigeonFlock(ctx, flock, matchState.timeElapsed, cosmeticLead);
         d.pigeons = true;
+      }
+
+      // Species-aware scatter flocks (birds, bats, crows)
+      for (const flock of matchState.scatterFlocks) {
+        drawScatterFlock(ctx, flock, matchState.timeElapsed, cosmeticLead);
       }
 
       // Lava rocks (falling hazards)
@@ -901,9 +917,9 @@ export class Renderer {
 
       const fgStart = perfTrace.begin('render.fg-nature');
       // Ground fog (o) -- after players, before foreground nature
-      if (matchState.fogParticles && matchState.fogParticles.length > 0) {
+      const fogCfg = this.theme.fog;
+      if (fogCfg && matchState.fogParticles && matchState.fogParticles.length > 0) {
         d.fog = true;
-        const fogCfg = this.theme.fog;
         if (!this._fogRGB) {
           this._fogRGB = hexToRGB(fogCfg.color);
         }
@@ -918,6 +934,13 @@ export class Renderer {
           ctx.fill();
         }
         ctx.restore();
+      }
+
+      // Ground critters (snails, rats, crabs…) — drawn BEFORE fg-nature so
+      // grass tufts / bushes can occlude them when they walk behind foliage.
+      if (this.theme.drawGroundCritters) {
+        const thA = this.originalArena ?? arena;
+        this.withMirror(ctx, () => this.theme.drawGroundCritters!(ctx, thA, matchState.timeElapsed, matchState.dayPhase, matchState));
       }
 
       // Mirror is baked into the cache so blit at identity transform; explicit
@@ -972,6 +995,15 @@ export class Renderer {
       if (!slow && this.theme.dayNight.enabled && matchState.dayPhase !== undefined) {
         drawDayNightCycle(ctx, matchState.dayPhase, matchState, this.theme, this.frameTime);
         d.dayNight = true;
+      }
+
+      if (this.theme.drawAnimatedForeground) {
+        const thA = this.originalArena ?? arena;
+        this.withMirror(ctx, () => this.theme.drawAnimatedForeground!(ctx, thA, matchState.timeElapsed, matchState.dayPhase, matchState));
+      }
+
+      if (!slow && this.theme.drawSceneTint) {
+        this.theme.drawSceneTint(ctx, matchState.dayPhase, matchState.timeElapsed);
       }
 
       perfTrace.end('render.fg-nature', fgStart);

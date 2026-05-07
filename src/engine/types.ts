@@ -401,6 +401,18 @@ export interface MatchState {
 
   geyserStates: Array<{ timer: number; active: boolean; activeTimer: number }>;
   pigeonFlocks: Array<{ x: number; y: number; active: boolean; respawnTimer: number; scatterParticles: Array<{ x: number; y: number; vx: number; vy: number; life: number }> }>;
+  /** Local-cosmetic, not in net/snapshot. */
+  scatterFlocks: Array<{
+    species: import('./themes/types').ScatterFlockSpecies;
+    x: number;
+    y: number;
+    radius: number;
+    respawnTime: number;
+    active: boolean;
+    armed: boolean;
+    respawnTimer: number;
+    scatterParticles: Array<{ x: number; y: number; vx: number; vy: number; life: number; phase: number; color: string }>;
+  }>;
   bouncyWobble: Map<number, number>;  // platform index → wobble timer
   gibs: Gib[];
   confetti: ConfettiParticle[];

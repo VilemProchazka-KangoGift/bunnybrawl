@@ -1,8 +1,37 @@
 import type { ArenaPack } from '../types';
 import type { Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
+import { fastSin, fastCos } from '../../fastMath';
+import { getSlowDevice } from '../../perfFlags';
+import { computeNightIntensity } from '../../rendering';
 import { createThornRenderer } from '../../themes/drawPrimitives';
-import { getFloatingPlatforms } from '../../themes/utils';
+import { getFloatingPlatforms, drawDriftBand, makeDtTracker, tickGroundCritter, type DriftBandConfig, type GroundCritterState } from '../../themes/utils';
+import { drawRat } from '../../themes/drawPrimitives';
+
+const FOG_CONFIG: DriftBandConfig = {
+  topY: 600,
+  bottomY: 660,
+  colors: ['#dce4ec', '#c8d4e0', '#b1c0d0'],
+  alphas: [0.10, 0.14, 0.20],
+};
+
+const RATS_CFG = [
+  { platL: 30,  platR: 460,  platTopY: 660, walkSpeed: 50, fleeSpeed: 180, fleeRadius: 120, yTolerance: 80 },
+  { platL: 820, platR: 1260, platTopY: 660, walkSpeed: 52, fleeSpeed: 180, fleeRadius: 120, yTolerance: 80 },
+];
+const _graveRats: GroundCritterState[] = RATS_CFG.map((cfg, i) => ({
+  x: (cfg.platL + cfg.platR) / 2,
+  dir: i % 2 === 0 ? 1 : -1, facingEase: 1, fleeing: false, committedFleeDir: 0,
+}));
+const _tickGraveRatDt = makeDtTracker();
+
+const WISPS = [
+  { x: 200, y: 540, phase: 0 },
+  { x: 640, y: 480, phase: 1.7 },
+  { x: 1080, y: 540, phase: 3.3 },
+  { x: 420, y: 420, phase: 0.8 },
+  { x: 880, y: 420, phase: 2.4 },
+] as const;
 import {
   CAP_DEPTH, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
   capFrontY, capBackY, skewPx,
@@ -341,7 +370,33 @@ export const hauntedGraveyard: ArenaPack = {
   drawFarBackground: (ctx, _arena) => {
     ctx.save();
 
-    // Stars (no moon -- day/night disabled)
+    // Full moon — hangs high in the sky, casts a soft halo.
+    const moonX = 950;
+    const moonY = 110;
+    const moonR = 38;
+    const moonHalo = ctx.createRadialGradient(moonX, moonY, moonR * 0.9, moonX, moonY, moonR * 2.2);
+    moonHalo.addColorStop(0, 'rgba(220, 215, 235, 0.35)');
+    moonHalo.addColorStop(1, 'rgba(220, 215, 235, 0)');
+    ctx.fillStyle = moonHalo;
+    ctx.beginPath();
+    ctx.arc(moonX, moonY, moonR * 2.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#e8e4f0';
+    ctx.beginPath();
+    ctx.arc(moonX, moonY, moonR, 0, Math.PI * 2);
+    ctx.fill();
+    // Craters — scattered asymmetrically across the disc.
+    ctx.fillStyle = 'rgba(170, 165, 195, 0.45)';
+    ctx.beginPath();
+    ctx.arc(moonX - 18, moonY + 2, 3.5, 0, Math.PI * 2);
+    ctx.arc(moonX - 2, moonY - 16, 2.5, 0, Math.PI * 2);
+    ctx.arc(moonX + 16, moonY + 8, 4, 0, Math.PI * 2);
+    ctx.arc(moonX + 4, moonY + 18, 3, 0, Math.PI * 2);
+    ctx.arc(moonX - 12, moonY + 16, 2, 0, Math.PI * 2);
+    ctx.arc(moonX + 18, moonY - 10, 2, 0, Math.PI * 2);
+    ctx.arc(moonX - 6, moonY + 4, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+
     ctx.fillStyle = '#CCBBDD';
     const stars = [
       [80, 25, 1.2], [200, 55, 0.8], [350, 20, 1.5], [480, 65, 1],
@@ -690,10 +745,86 @@ export const hauntedGraveyard: ArenaPack = {
     glowColor: '#6688BB',
   },
 
+  drawAnimatedBackground: (ctx, _arena, time, dayPhase) => {
+    if (getSlowDevice()) return;
+    const nightIntensity = computeNightIntensity(dayPhase);
+    ctx.save();
+    const wispBrightness = 0.5 + nightIntensity * 0.5;
+    // Two stacked alpha circles approximate the radial halo without per-frame gradient creation.
+    ctx.fillStyle = '#a8ffd0';
+    for (const w of WISPS) {
+      const x = w.x + fastCos(time * 0.6 + w.phase) * 40;
+      const y = w.y + fastSin(time * 0.8 + w.phase) * 24;
+      const pulse = 0.7 + fastSin(time * 3 + w.phase) * 0.3;
+      const a = wispBrightness * pulse;
+      ctx.globalAlpha = 0.45 * a;
+      ctx.beginPath(); ctx.arc(x, y, 32, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 0.45 * a;
+      ctx.beginPath(); ctx.arc(x, y, 16, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = '#dcffe6';
+    for (const w of WISPS) {
+      const x = w.x + fastCos(time * 0.6 + w.phase) * 40;
+      const y = w.y + fastSin(time * 0.8 + w.phase) * 24;
+      const pulse = 0.7 + fastSin(time * 3 + w.phase) * 0.3;
+      ctx.globalAlpha = wispBrightness * pulse;
+      ctx.beginPath(); ctx.arc(x, y, 2.5, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  },
+
+  drawGroundCritters: (ctx, _arena, time, _dayPhase, matchState) => {
+    if (getSlowDevice() || !matchState) return;
+    const dt = _tickGraveRatDt(time);
+    for (let i = 0; i < _graveRats.length; i++) {
+      const r = _graveRats[i];
+      tickGroundCritter(r, matchState.players, dt, RATS_CFG[i]);
+      drawRat(ctx, r.x, RATS_CFG[i].platTopY - 4, r.facingEase < 0 ? -1 : 1, time, Math.abs(r.facingEase), r.fleeing);
+    }
+  },
+
+  drawAnimatedForeground: (ctx, _arena, time) => {
+    if (getSlowDevice()) return;
+    drawDriftBand(ctx, time, FOG_CONFIG);
+    ctx.save();
+    ctx.fillStyle = '#b4c3d2';
+    for (let pi = 0; pi < 4; pi++) {
+      const cxBase = ((pi * 360 + time * 24) % (CANVAS_WIDTH + 280)) - 140;
+      const cy = 625 + fastSin(time * 0.4 + pi) * 6;
+      ctx.globalAlpha = 0.28 + pi * 0.04;
+      ctx.beginPath();
+      ctx.ellipse(cxBase, cy, 80 + pi * 6, 18, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  },
+
   // ---- Audio ----
   ambientSoundConfig: {
     periodic: [{ sound: 'amb_ghost_hoo', intervalRange: [10, 25] }],
   },
+
+  scatterFlockConfigs: [
+    {
+      species: 'crow',
+      positions: [
+        { x: 250, y: 448 },
+        { x: 1030, y: 448 },
+      ],
+      radius: 140,
+      respawnTime: 10,
+    },
+    {
+      species: 'bat',
+      positions: [
+        { x: 580, y: 325 },
+        { x: 720, y: 325 },
+      ],
+      radius: 140,
+      respawnTime: 10,
+    },
+  ],
 
   musicFile: 'haunted_graveyard.mp3',
   // NAV-DATA-START — auto-generated, do not hand-edit

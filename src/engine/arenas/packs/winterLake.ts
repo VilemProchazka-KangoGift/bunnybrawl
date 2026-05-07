@@ -1,7 +1,10 @@
 import type { ArenaPack } from '../types';
 import type { Arena, Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
-import { getFloatingPlatforms } from '../../themes/utils';
+import { fastSin } from '../../fastMath';
+import { getSlowDevice } from '../../perfFlags';
+import { computeNightIntensity } from '../../rendering';
+import { getFloatingPlatforms, bakeVerticalGradientStrip } from '../../themes/utils';
 import {
   drawPineTree, drawChristmasTree, drawSnowDrift, drawIcePatch, drawIcicle, drawIceCube, ICE_CUBE_DEPTH_RATIO,
   drawBigSnowman, drawIgloo, drawSnowman, drawSnowball,
@@ -15,6 +18,96 @@ import {
   drawPlatformRightFace, drawPlatformCap,
   wavyDown, backWavyUp, leftWavy,
 } from '../../themes/drawPrimitives';
+
+const AURORA_STRIPES = [
+  { color: '#7be0a3', y: 56,  h: 64, speed: 0.6,  phase: 0   },
+  { color: '#c899ff', y: 120, h: 64, speed: 0.55, phase: 2.4 },
+  { color: '#a3e8ff', y: 200, h: 56, speed: 0.5,  phase: 4.0 },
+] as const;
+
+// Aurora is GPU-paint-heavy when drawn via fillPath every frame (3 stripes ×
+// full-canvas alpha-blended fills). Cached to an offscreen canvas, refreshed
+// at ~10Hz (every 100ms), then blit as a single drawImage. Visually
+// indistinguishable since aurora animates slowly.
+const AURORA_REFRESH_INTERVAL = 0.1;
+const AURORA_CACHE_H = 280;
+let _auroraCache: OffscreenCanvas | null = null;
+let _auroraCacheCtx: OffscreenCanvasRenderingContext2D | null = null;
+let _auroraCacheLastRefresh = -1;
+
+function refreshAuroraCache(time: number): void {
+  if (!_auroraCache || !_auroraCacheCtx) {
+    if (typeof OffscreenCanvas === 'undefined') return;
+    _auroraCache = new OffscreenCanvas(CANVAS_WIDTH, AURORA_CACHE_H);
+    _auroraCacheCtx = _auroraCache.getContext('2d');
+    if (!_auroraCacheCtx) { _auroraCache = null; return; }
+  }
+  const cctx = _auroraCacheCtx;
+  cctx.clearRect(0, 0, CANVAS_WIDTH, AURORA_CACHE_H);
+  const OVERHANG = 80;
+  const STEP = 40;
+  for (const st of AURORA_STRIPES) {
+    const breathe = 0.5 + 0.5 * fastSin(time * 0.7 + st.phase);
+    cctx.fillStyle = st.color;
+    cctx.globalAlpha = 0.15 + breathe * 0.18;
+    cctx.beginPath();
+    cctx.moveTo(-OVERHANG, st.y);
+    for (let x = -OVERHANG; x <= CANVAS_WIDTH + OVERHANG; x += STEP) {
+      const y = st.y + fastSin(x * 0.0085 + time * st.speed + st.phase) * 16
+                     + fastSin(x * 0.003 + time * st.speed * 0.5) * 22;
+      cctx.lineTo(x, y);
+    }
+    for (let x = CANVAS_WIDTH + OVERHANG; x >= -OVERHANG; x -= STEP) {
+      const y = st.y + st.h + fastSin(x * 0.0085 + time * st.speed + st.phase + 0.7) * 16
+                            + fastSin(x * 0.003 + time * st.speed * 0.5 + 0.5) * 22;
+      cctx.lineTo(x, y);
+    }
+    cctx.closePath();
+    cctx.fill();
+  }
+  cctx.globalAlpha = 1;
+}
+
+const GLINT_ANCHORS: ReadonlyArray<{ x: number; y: number }> = [
+  { x: 50,   y: 572 }, { x: 90,   y: 572 }, { x: 130,  y: 573 }, { x: 170,  y: 573 },
+  { x: 90,   y: 487 }, { x: 140,  y: 487 }, { x: 190,  y: 488 },
+  { x: 40,   y: 412 }, { x: 80,   y: 412 }, { x: 130,  y: 413 },
+  { x: 60,   y: 327 }, { x: 110,  y: 327 }, { x: 160,  y: 328 },
+  { x: 1110, y: 582 }, { x: 1160, y: 582 }, { x: 1210, y: 583 },
+  { x: 1080, y: 502 }, { x: 1130, y: 502 }, { x: 1180, y: 503 },
+  { x: 1110, y: 422 }, { x: 1170, y: 422 }, { x: 1230, y: 423 },
+  { x: 460,  y: 357 }, { x: 510,  y: 357 }, { x: 560,  y: 357 },
+  { x: 610,  y: 357 }, { x: 660,  y: 357 }, { x: 710,  y: 357 },
+  { x: 760,  y: 357 }, { x: 810,  y: 357 },
+  { x: 540,  y: 497 }, { x: 590,  y: 497 }, { x: 640,  y: 497 },
+  { x: 690,  y: 497 }, { x: 740,  y: 497 },
+  { x: 280,  y: 437 }, { x: 320,  y: 438 }, { x: 350,  y: 438 },
+  { x: 930,  y: 437 }, { x: 970,  y: 438 }, { x: 1000, y: 438 },
+  { x: 390,  y: 277 }, { x: 410,  y: 277 },
+  { x: 865,  y: 277 }, { x: 885,  y: 277 },
+  { x: 610,  y: 227 }, { x: 635,  y: 227 },
+  { x: 210,  y: 347 }, { x: 230,  y: 347 },
+  { x: 1050, y: 347 }, { x: 1070, y: 347 },
+  // Ground line — denser snow surface coverage
+  { x: 100,  y: 658 }, { x: 200,  y: 658 }, { x: 300,  y: 658 },
+  { x: 460,  y: 658 }, { x: 560,  y: 658 }, { x: 660,  y: 658 },
+  { x: 760,  y: 658 }, { x: 940,  y: 658 }, { x: 1040, y: 658 },
+  { x: 1140, y: 658 }, { x: 1220, y: 658 },
+];
+
+// See docs/perf-patterns.md — full-canvas gradient fillRect costs ~5ms/frame.
+let _sceneTintCache: OffscreenCanvas | null = null;
+function getSceneTintCache(): OffscreenCanvas | null {
+  if (_sceneTintCache) return _sceneTintCache;
+  _sceneTintCache = bakeVerticalGradientStrip(CANVAS_HEIGHT, g => {
+    // Stop weights: top 1.0, mid 0.643, bottom 0.214 (relative to baseline 1.4
+    // applied via globalAlpha at draw time).
+    g.addColorStop(0,    'rgba(123, 224, 163, 1.0)');
+    g.addColorStop(0.45, 'rgba(163, 232, 255, 0.643)');
+    g.addColorStop(1,    'rgba(123, 224, 163, 0.214)');
+  });
+  return _sceneTintCache;
+}
 
 // Platform colors — legacy fields kept for ThemeConfig compat; unused once drawPlatform owns rendering.
 const FLOAT_BODY = '#5A7A8C';
@@ -442,6 +535,85 @@ export const winterLake: ArenaPack = {
 
     drawSnowDrift(ctx, 15, gy, 45, 6);
     drawSnowDrift(ctx, 1250, gy, 40, 5);
+  },
+
+  drawAnimatedBackground: (ctx, _arena, time, dayPhase) => {
+    if (getSlowDevice()) return;
+    const nightIntensity = computeNightIntensity(dayPhase);
+    if (nightIntensity < 0.05) return;
+    ctx.save();
+    if (_auroraCacheLastRefresh < 0 || time - _auroraCacheLastRefresh >= AURORA_REFRESH_INTERVAL || time < _auroraCacheLastRefresh) {
+      refreshAuroraCache(time);
+      _auroraCacheLastRefresh = time;
+    }
+    if (_auroraCache) {
+      ctx.globalAlpha = nightIntensity;
+      ctx.drawImage(_auroraCache, 0, 0);
+      ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = '#a3e8ff';
+    ctx.globalAlpha = 0.14 * nightIntensity;
+    for (let i = 0; i < 7; i++) {
+      const x = ((i * 187) + fastSin(time * 0.3 + i) * 80 + CANVAS_WIDTH) % CANVAS_WIDTH;
+      const phase = fastSin(time * 1.4 + i * 1.7);
+      if (phase > 0.2) ctx.fillRect(x, 60, 2, 200 + phase * 30);
+    }
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#ffffff';
+    for (let i = 0; i < 18; i++) {
+      const t = ((time * 0.4 + i * 0.045) % 1);
+      const baseX = ((i * 173 + 37) % CANVAS_WIDTH);
+      const x = baseX + fastSin(time * 0.6 + i) * 30;
+      const y = 660 - t * 80;
+      const r = 1.2 + (1 - t) * 2.5;
+      ctx.globalAlpha = Math.min(t * 4, 1) * (1 - t) * 0.85;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Glint anchors: ground line (sparser) + platform tops.
+    ctx.fillStyle = '#dcf5ff';
+    for (let i = 0; i < GLINT_ANCHORS.length; i++) {
+      const phase = fastSin(time * 2.2 + i * 0.7);
+      if (phase < 0.75) continue;
+      const a = GLINT_ANCHORS[i];
+      const intensity = (phase - 0.75) * 4;
+      const r = 1.2 + intensity * 3;
+      ctx.globalAlpha = Math.min(1, intensity) * 0.7;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y - r);
+      ctx.lineTo(a.x + r * 0.3, a.y);
+      ctx.lineTo(a.x, a.y + r);
+      ctx.lineTo(a.x - r * 0.3, a.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(a.x - r, a.y);
+      ctx.lineTo(a.x, a.y - r * 0.3);
+      ctx.lineTo(a.x + r, a.y);
+      ctx.lineTo(a.x, a.y + r * 0.3);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  },
+
+  drawSceneTint: (ctx, dayPhase, time) => {
+    if (getSlowDevice()) return;
+    const nightIntensity = computeNightIntensity(dayPhase);
+    if (nightIntensity < 0.05) return;
+    const breathe = 0.5 + 0.5 * fastSin(time * 0.5);
+    const tintAlpha = nightIntensity * (0.05 + breathe * 0.04);
+    const cache = getSceneTintCache();
+    if (!cache) return;
+    ctx.save();
+    ctx.globalAlpha = tintAlpha * 1.4;
+    // X-axis stretch from 4-wide cache: smoothing doesn't help (all 4 columns
+    // identical anyway) and skipping it saves the bilinear cost.
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(cache, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    ctx.restore();
   },
 
   drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => {

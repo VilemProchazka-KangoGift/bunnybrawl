@@ -366,7 +366,9 @@ export function drawSpringTrail(ctx: CanvasRenderingContext2D, player: Player, f
   const COL_H = 70;
   const COL_HALF_W = 7;
 
-  // Energy column — bright at the base, fading to transparent at the top.
+  // Per-frame linear gradient over a small ellipse (~770 px). Below the
+  // ~10k-pixel threshold for the bake-strip swap (see docs/perf-patterns.md);
+  // direct gradient fill is cheaper here.
   const grad = ctx.createLinearGradient(launchX, launchY, launchX, launchY - COL_H);
   grad.addColorStop(0, `rgba(255,212,90,${0.4 * t})`);
   grad.addColorStop(0.55, `rgba(255,180,40,${0.16 * t})`);
