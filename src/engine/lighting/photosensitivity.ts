@@ -7,29 +7,25 @@
 //   - Hard flashes capped (L2+)
 //
 // URL: ?photosensitivity=on|off (overrides storage)
-// Storage: carrotroyale_photosensitivity
+// Storage: carrotroyale_photosensitivity (1 = on, 0 = off)
 
-import { safeStorage } from '../../storage';
-import { createEmitter } from '../emitter';
+import { createUrlStoredEmitter } from './urlStoredEmitter';
 
-const STORAGE_KEY = 'carrotroyale_photosensitivity';
-
-const value = createEmitter<boolean>(false);
-
-export const getPhotosensitivity = value.get;
-export const subscribePhotosensitivity = value.subscribe;
-
-export function setPhotosensitivity(v: boolean): void {
-  value.set(v);
-  safeStorage.set(STORAGE_KEY, v ? '1' : '0');
+function parse(raw: string): boolean | null {
+  if (raw === 'on' || raw === '1') return true;
+  if (raw === 'off' || raw === '0') return false;
+  return null;
 }
 
-export function initPhotosensitivity(searchString: string): void {
-  const params = new URLSearchParams(searchString);
-  const urlParam = params.get('photosensitivity');
-  if (urlParam === 'on') { value.set(true); return; }
-  if (urlParam === 'off') { value.set(false); return; }
-  const stored = safeStorage.get(STORAGE_KEY);
-  if (stored === '1') { value.set(true); return; }
-  value.set(false);
-}
+const emitter = createUrlStoredEmitter<boolean>({
+  storageKey: 'carrotroyale_photosensitivity',
+  paramName: 'photosensitivity',
+  defaultValue: false,
+  parse,
+  serialize: (v) => v ? '1' : '0',
+});
+
+export const getPhotosensitivity = emitter.get;
+export const subscribePhotosensitivity = emitter.subscribe;
+export const setPhotosensitivity = emitter.set;
+export const initPhotosensitivity = emitter.init;

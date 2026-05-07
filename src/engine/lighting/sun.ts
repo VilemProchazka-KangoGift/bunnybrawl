@@ -26,8 +26,11 @@ function lerpColor(a: RGB, b: RGB, t: number): RGB {
 
 /** "Distance from noon" in [0, 0.25] for daytime; > 0.25 means below horizon. */
 function distanceFromNoon(dayPhase: number): number {
-  // dayPhase wraps; min(dayPhase, 1-dayPhase) gives min distance from 0 (noon).
-  return Math.min(dayPhase, 1 - dayPhase);
+  // Wrap dayPhase to [0,1) so callers passing slightly out-of-range values
+  // (e.g. 1.0001 from a frame's worth of advancement) don't produce
+  // distances > 0.5 and silently mark the sun as below horizon.
+  const wrapped = ((dayPhase % 1) + 1) % 1;
+  return Math.min(wrapped, 1 - wrapped);
 }
 
 export function buildSunLight(
@@ -60,7 +63,7 @@ export function buildSunLight(
     : Math.PI / 2 - (tFromNoon * Math.PI / 2); // π/2 → 0
 
   if (photosensitivity) {
-    intensity = Math.min(intensity, PHOTOSENSITIVITY_INTENSITY_CAP * intensity);
+    intensity = Math.min(intensity, PHOTOSENSITIVITY_INTENSITY_CAP);
   }
 
   return { angle, color, intensity };

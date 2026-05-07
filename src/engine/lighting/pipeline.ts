@@ -37,12 +37,19 @@ export const TINT_COLOR: Readonly<RGB> = { r: 20, g: 24, b: 48 };
 export const BG_NIGHT_BAKE_RGBA =
   `rgba(${TINT_COLOR.r},${TINT_COLOR.g},${TINT_COLOR.b},${MAX_TINT_ALPHA})`;
 
-/**
- * fg-tint multiplier: scales the bg night intensity down for the multiply
- * overlay above fg. Multiply darkens harder than alpha blend, so 0.7 of the
- * bg opacity equalizes the visual balance between sky and sprites.
- */
-export const FG_TINT_INTENSITY_MUL = 0.7;
+/** fg-tint dusk threshold — multiply tint stays at 0 until bg-night opacity
+ *  passes this value. Preserves the warm sunset afterglow at dayPhase ≈ 0.25
+ *  (multiply on a colored layer crushes warm channels otherwise). */
+export const FG_TINT_DUSK_THRESHOLD = 0.55;
+
+/** fg-tint peak multiplier — applied after the dusk threshold ramps in. */
+export const FG_TINT_PEAK_MUL = 0.7;
+
+/** Maps bg-night opacity to fg-tint multiplier with a ramp that protects dusk. */
+export function fgTintIntensity(bgNightOpacity: number): number {
+  const t = (bgNightOpacity - FG_TINT_DUSK_THRESHOLD) / (1 - FG_TINT_DUSK_THRESHOLD);
+  return Math.max(0, Math.min(1, t)) * FG_TINT_PEAK_MUL;
+}
 
 export class LightingPipeline {
   private width: number;
@@ -53,15 +60,18 @@ export class LightingPipeline {
 
   /** Renderer toggles this when DOM darkening layers are wired — flips
    *  composite() to no-op and the CSS path takes over. */
-  private bgNightWired = false;
+  private useDomDarkening = false;
+
+  /** Reused scratch buffer for themeToAmbient — avoids per-frame allocation. */
+  private readonly _ambientScratch: RGB = { r: 0, g: 0, b: 0 };
 
   constructor(width: number, height: number) {
     this.width = width;
     this.height = height;
   }
 
-  setBgNightWired(wired: boolean): void {
-    this.bgNightWired = wired;
+  setUseDomDarkening(use: boolean): void {
+    this.useDomDarkening = use;
   }
 
   /**
@@ -73,20 +83,20 @@ export class LightingPipeline {
       this.tintAlpha = 0;
       return;
     }
-    const photosensitivity = getPhotosensitivity();
-    const ambient = themeToAmbient(theme, dayPhase, photosensitivity);
-    // Brightness deficit: 0 when ambient is full white, 1 when ambient is black.
+    const ambient = themeToAmbient(theme, dayPhase, getPhotosensitivity(), this._ambientScratch);
     const avgAmbient = (ambient.r + ambient.g + ambient.b) / 3;
     const deficit = Math.max(0, (255 - avgAmbient) / 255);
-    // Linear ramp scaled by a tunable max. At noon (deficit ~0.06) → ~0.04.
-    // At midnight (deficit ~0.69) → ~0.48 — moderate blue cast.
-    this.tintAlpha = Math.min(MAX_TINT_ALPHA, deficit * 0.7);
+    // At noon (deficit ~0.06) → ~0.04. At midnight (deficit ~0.69) → ~0.48.
+    const raw = Math.min(MAX_TINT_ALPHA, deficit * 0.7);
+    // Defend against NaN dayPhase upstream: NaN < 0.01 is false, so an
+    // unguarded composite would emit a `rgba(...,NaN)` fill. Coerce to 0.
+    this.tintAlpha = Number.isFinite(raw) ? raw : 0;
   }
 
   /** Source-over fallback path (no DOM darkening layers wired). */
   composite(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D): void {
     if (!this.isEnabled()) return;
-    if (this.bgNightWired) return;
+    if (this.useDomDarkening) return;
     if (this.tintAlpha < 0.01) return;
     ctx.save();
     ctx.globalCompositeOperation = 'source-over';
@@ -109,17 +119,6 @@ export class LightingPipeline {
 
   isEnabled(): boolean {
     return isLightingEnabled();
-  }
-
-  /** Test/debug accessor — M1 has no buffer; PR 3 debug overlay handles null gracefully. */
-  getLightBuffer(): OffscreenCanvas | null {
-    return null;
-  }
-
-  /** Compatibility shim — kept so renderer.ts wire-up doesn't need to change. */
-  setBgCanvas(_bg: HTMLCanvasElement | null): void {
-    // no-op in this implementation; sky tint is handled by the same overlay
-    // because fg's transparent regions become semi-opaque after the fillRect.
   }
 
   /** Test accessor — exposes the current frame's tint alpha. */

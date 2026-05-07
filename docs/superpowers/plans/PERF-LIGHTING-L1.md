@@ -1,9 +1,16 @@
 # Lighting L1 Foundation — Perf Comparison
 
+> **SUPERSEDED.** This doc captures the perf gate for the original
+> deferred-lite + multiply pipeline (commit `7bb2d74`). That architecture was
+> abandoned after the +6.8ms regression flagged below; the shipping pipeline
+> is CSS-composited cross-fade + multiply fg-tint, with numbers in
+> `perf-runs/lmode-comparison/REPORT.md`. Kept for archaeology — useful when
+> L2 considers resurrecting the buffer for point lights.
+
 **Date:** 2026-05-07
 **Branch:** `feat/lighting-l1-foundation`
 **Pre-M1 baseline commit:** `90ea4b7` (end of Part A integration stub)
-**Post-M1 commit:** `7bb2d74` (after Part B real pipeline + sun + ambient migration)
+**Post-M1 commit:** `7bb2d74` (Part B real pipeline + sun + ambient — superseded)
 **Protocol:** `npm run perf -- --arena=<id>` — vsync uncapped headless Chrome, 4 bots hard, 30s, random P1 input. Run-to-run variance ~5% (deltas <0.3ms = noise).
 
 ## Frame stats

@@ -2,7 +2,20 @@
 
 **Date:** 2026-05-07
 **Branch:** `feat/lighting-l1-foundation` (worktree at `.worktrees/lighting-l1`)
+**Status:** Implemented with significant architectural drift — see "Implementation drift" below.
 **Scope:** First milestone of the lighting program (`2026-05-07-lighting-program-design.md`). Stand up the deferred-lite pipeline as a parallel render path, prove it under real game load by migrating sun + ambient into it, ship the scaffolds (perf tier, accessibility, determinism, debug tooling) that L2–L5 rely on.
+
+> ## Implementation drift (added post-merge for honesty)
+>
+> What actually shipped diverges from the plan in three load-bearing ways:
+>
+> 1. **The deferred-lite pipeline was attempted, perf-failed, and replaced with CSS-composited cross-fade** (commits `058b630` → `2d86d1c` → `19bfc6f`). Per-frame multiply onto a half-res light buffer cost +6.8ms/frame on meadow at midnight (see `PERF-LIGHTING-L1.md`, now superseded by `perf-runs/lmode-comparison/REPORT.md`). The shipping mechanism is two stacked DOM elements: a `bgNightCanvas` with a uniformly-tinted day-BG bake (cross-fade via `style.opacity`) and an `fgNightTint` div with `mix-blend-mode: multiply`. Together they trigger Chromium GPU layer promotion and net out at 5.7ms/midnight on meadow vs 6.1ms pre-M1.
+> 2. **The sun light migration was attempted and reverted.** `buildSunLight()` exists in `lighting/sun.ts` and is unit-tested but has zero production callers. Sun rendering stayed in `rendering/effects.ts > drawDayNightCycle` (pure visual, not a buffer contribution). L3 may revive `buildSunLight` for shadow direction.
+> 3. **Debug overlay (Definition of Done #4) deferred to L2.** `lighting/debugOverlay.ts`, `?debug=light` URL parsing, and the `L`/`[`/`]`/`Shift+L`/`Ctrl+L` key handlers in `GameLoop` are not implemented. `lighting.getLightBuffer()` was removed (no longer needed without the buffer architecture). Reintroduce when L2's light catalog has something to introspect.
+>
+> Definition of Done items 1, 2, 3, 5, 7, 8 satisfied. Items 4 and 6 partially satisfied — determinism helper exists as `SeededRNG.fromTick(seed, tick)` in `net/prng.ts` (folded into the existing Mulberry32 class instead of a standalone `lighting/determinism.ts`).
+>
+> The architecture below describes the *plan*. Read `src/engine/CLAUDE.md` "## Lighting" for what shipped, and `docs/superpowers/reviews/2026-05-07-lighting-l1-cross-fade-review.md` for the post-implementation review.
 **Reference:** `lighting-reference.md` §21.1 (minimal pipeline), §21.2 (flicker — *not* M1 but informs determinism rule), §17.3 (sky-not-lit), §19.6/§19.7 (readability/HUD pitfalls), §17.15–17.17 (accessibility scaffolds).
 **Architectural lesson chain:** `feat/rim-light` (per-frame baked into sprite cache → couldn't track sun, flipped with facing, applied at night) → `feat/character-outlines` (same root cause) → this milestone (per-frame, post-cache, screen-space).
 

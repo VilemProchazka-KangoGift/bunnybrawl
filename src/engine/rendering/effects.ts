@@ -3,12 +3,12 @@ import type { ThemeConfig } from '../themes/types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../constants';
 import { fastSin, fastCos } from '../fastMath';
 import { bakeVerticalGradientStrip } from '../themes/utils';
+import { computeNightIntensity } from '../lighting/ambient';
 
+function lerpCh(a: number, b: number, t: number): number { return Math.round(a + (b - a) * t); }
 
-/** dayPhase 0=noon, 0.5=midnight, 1=noon. Returns 0..1 night intensity. */
-export function computeNightIntensity(dayPhase: number): number {
-  return Math.max(0, (1 - fastCos(dayPhase * Math.PI * 2)) / 2);
-}
+// Re-export so existing consumers of `effects.computeNightIntensity` keep working.
+export { computeNightIntensity };
 
 // Precomputed static star positions — i*K+J formulas were re-evaluated every
 // frame for 30 stars. Now they're frozen at module load.
@@ -101,6 +101,53 @@ export function drawDayNightCycle(
   ctx.save();
   const nightIntensity = computeNightIntensity(dayPhase);
   const overlayAlpha = nightIntensity * 0.55;
+
+  // Sun: visible during the day half. Lighting pipeline owns scene darkening,
+  // but the sun disc itself is a celestial body and lives here next to the moon.
+  const sunPhase = ((dayPhase + 0.25) % 1); // 0=sunrise(6am), 0.5=sunset(6pm)
+  if (sunPhase < 0.5) {
+    const sunT = sunPhase / 0.5; // 0->1 across the day
+    const sunX = 60 + sunT * (CANVAS_WIDTH - 120);
+    const sunArc = Math.sin(sunT * Math.PI);
+    const sunY = 130 - sunArc * 90;
+    const sunAlpha = Math.min(1, (1 - nightIntensity) * 1.5);
+    if (sunAlpha > 0.05) {
+      // Redshift: gold at noon → deep orange near horizon.
+      const sunRedshift = Math.max(0, Math.abs(sunT - 0.5) * 2 - 0.1) / 0.9;
+      const glowAlpha = sunAlpha * (0.3 + sunRedshift * 0.2);
+      const bodyAlpha = sunAlpha * 0.9;
+      const glowR = lerpCh(255, 240, sunRedshift), glowG = lerpCh(215, 50, sunRedshift), glowB = lerpCh(0, 10, sunRedshift);
+      const bodyR = lerpCh(255, 220, sunRedshift), bodyG = lerpCh(165, 30, sunRedshift);
+      const coreR = 255, coreG = lerpCh(215, 80, sunRedshift);
+      ctx.globalAlpha = glowAlpha;
+      ctx.fillStyle = `rgb(${glowR},${glowG},${glowB})`;
+      ctx.beginPath(); ctx.arc(sunX, sunY, 32 + sunRedshift * 16, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = bodyAlpha;
+      ctx.fillStyle = `rgb(${bodyR},${bodyG},${glowB})`;
+      ctx.beginPath(); ctx.arc(sunX, sunY, 15, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = `rgb(${coreR},${coreG},${glowB})`;
+      ctx.beginPath(); ctx.arc(sunX, sunY, 9, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+      // Light rays during midday only (one path, one fill).
+      if (nightIntensity < 0.3) {
+        const rayAlpha = 0.04 * (1 - nightIntensity / 0.3);
+        ctx.globalAlpha = rayAlpha;
+        ctx.fillStyle = `rgb(255,${lerpCh(215, 60, sunRedshift)},${lerpCh(100, 15, sunRedshift)})`;
+        ctx.beginPath();
+        for (let r = 0; r < 4; r++) {
+          const angle = -0.3 + r * 0.2;
+          const rayW = 60 + r * 20;
+          const rayDx = fastCos(angle) * 400;
+          ctx.moveTo(sunX, sunY);
+          ctx.lineTo(sunX + rayDx - rayW / 2, CANVAS_HEIGHT);
+          ctx.lineTo(sunX + rayDx + rayW / 2, CANVAS_HEIGHT);
+          ctx.closePath();
+        }
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
 
   // Sunset afterglow: warm redshift overlay during golden hour
   // dayPhase 0.25 = sunset; ramp in 0.16->0.25, linger + fade 0.25->0.38

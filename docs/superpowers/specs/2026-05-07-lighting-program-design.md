@@ -37,7 +37,7 @@ Decision deferred to L4: does `theme.drawSceneTint` (current per-arena overlay) 
 
 **Cross-faded BG variants — color grading via CSS-composited keyframes** (added 2026-05-07 after L1 perf work surfaced the design):
 
-L1 ships a uniform `rgba(20,24,48, alpha)` tint overlay applied via canvas `fillRect`. This works but can't do hue-shifted nights (ref §5.4 — *"don't just dim. Hue-shift."*) and applies the same color across all arenas. The doc-canonical alternative is per-arena color grading.
+L1 ships a CSS-composited cross-fade BG variant (a sibling `bgNightCanvas` with the day BG + uniform tint baked in, opacity-driven each frame) plus an `mix-blend-mode: multiply` fg-tint div for color-preserving sprite darkening. This is uniform across all arenas. It can't do hue-shifted nights (ref §5.4 — *"don't just dim. Hue-shift."*) — that's exactly what L4 adds: arenas opt in to per-arena keyframes via `ArenaPack.bgKeyframes`, the same `bgNightCanvas` mechanism just with multiple keyframes lerped instead of one uniform tint.
 
 The perf-optimal way to implement that is **NOT** canvas `drawImage` cross-fade between offscreen-baked variants (~2ms per frame from extra full-canvas blits — paying full-canvas pixel cost per blit). It's **stacked DOM canvases with CSS `opacity`** for cross-fade:
 

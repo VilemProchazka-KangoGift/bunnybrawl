@@ -10,6 +10,16 @@ export class SeededRNG {
     this.state = seed | 0;
   }
 
+  /** Construct an RNG keyed by (seed, tick). Used by lighting flicker and
+   *  any other per-tick deterministic effect that needs cross-peer visual
+   *  parity (the host-authoritative model lets cosmetics diverge in principle,
+   *  but consistent appearance is a quality bar). Pass a per-emitter seed
+   *  (e.g. a hash of the entity's position or id) so co-located effects don't
+   *  end up perfectly correlated. */
+  static fromTick(seed: number, tick: number): SeededRNG {
+    return new SeededRNG((seed * 0x9E3779B1 + tick * 0x85EBCA77) | 0);
+  }
+
   /** Advance state and return next float in [0, 1). */
   nextFloat(): number {
     this.state |= 0;

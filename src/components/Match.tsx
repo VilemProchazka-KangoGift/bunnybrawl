@@ -248,11 +248,13 @@ export function Match() {
 
   useEffect(() => {
     const bgCanvas = bgCanvasRef.current;
-    const bgNightCanvas = bgNightCanvasRef.current;
     const fgCanvas = fgCanvasRef.current;
     const hudCanvas = hudCanvasRef.current;
-    const fgNightTint = fgNightTintRef.current;
-    if (!bgCanvas || !bgNightCanvas || !fgCanvas || !hudCanvas || !fgNightTint) return;
+    if (!bgCanvas || !fgCanvas || !hudCanvas) return;
+    // Optional lighting overlays: when missing, Renderer falls back to the
+    // source-over fillRect tint path. Don't block match mount on them.
+    const bgNightCanvas = bgNightCanvasRef.current ?? undefined;
+    const fgNightTint = fgNightTintRef.current ?? undefined;
 
     const clearTimer = (ref: { current: ReturnType<typeof setTimeout> | null }) => {
       if (ref.current) { clearTimeout(ref.current); ref.current = null; }

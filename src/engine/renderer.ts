@@ -36,7 +36,7 @@ import { setSpriteCacheScale } from './rendering/players';
 import { setHudScale } from './rendering/hud';
 import { applyRenderScaleToCanvas, getRenderScale } from './renderScale';
 import { LightingPipeline } from './lighting';
-import { BG_NIGHT_BAKE_RGBA, FG_TINT_INTENSITY_MUL } from './lighting/pipeline';
+import { BG_NIGHT_BAKE_RGBA, fgTintIntensity } from './lighting/pipeline';
 import { getBrightness } from './lighting/brightness';
 import { getSlowDevice } from './perfFlags';
 import { perfTrace } from './perfTrace';
@@ -285,11 +285,10 @@ export class Renderer {
 
     this.initClouds();
     this.lighting = new LightingPipeline(CANVAS_WIDTH, CANVAS_HEIGHT);
-    this.lighting.setBgCanvas(bgCanvas);
 
     // Lobby/tests with no DOM darkening stay on the source-over fillRect path.
     this._hasDomDarkening = this.bgNightCanvas !== null || this._fgNightTint !== null;
-    this.lighting.setBgNightWired(this._hasDomDarkening);
+    this.lighting.setUseDomDarkening(this._hasDomDarkening);
   }
 
   private _applyScaleToCanvases(): void {
@@ -500,13 +499,16 @@ export class Renderer {
     }
     if (this._fgNightTint) {
       this._lastFgTintOpacity = setQuantizedOpacity(
-        this._fgNightTint, intensity * FG_TINT_INTENSITY_MUL, this._lastFgTintOpacity);
+        this._fgNightTint, fgTintIntensity(intensity), this._lastFgTintOpacity);
     }
   }
 
   /** Copy bg into bgNightCanvas with the night tint baked in. Called from
-   *  renderBackground() — arena load + render-scale change only. */
+   *  renderBackground() (arena load + render-scale change) AND from bakeGibs
+   *  / renderBloodDrips so kill marks track at night. Skipped when lighting
+   *  is off — the bake is invisible anyway and costs ~15MB of GPU bandwidth. */
   private _bakeBgNightVariant(): void {
+    if (!this.lighting.isEnabled()) return;
     if (!this.bgNightCanvas || !this.bgNightCtx) return;
     const ctx = this.bgNightCtx;
     const w = this.bgNightCanvas.width;
@@ -677,6 +679,10 @@ export class Renderer {
       drawGibShape(ctx, gib);
       ctx.restore();
     }
+    // Mid-match writes to bgCtx (gibs, splat marks) must be reflected in
+    // bgNightCanvas — otherwise kills become invisible at midnight on dark
+    // arenas where bgNight is the dominant compositor layer.
+    this._bakeBgNightVariant();
   }
 
   renderBloodDrips(drips: Array<{ x: number; y: number; radius: number; color: string }>): void {
@@ -697,6 +703,7 @@ export class Renderer {
         ctx.fill();
       }
     }
+    if (drips.length > 0) this._bakeBgNightVariant();
   }
 
   // ---- Frame rendering ----

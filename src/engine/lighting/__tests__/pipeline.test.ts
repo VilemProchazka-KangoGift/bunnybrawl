@@ -127,6 +127,49 @@ describe('LightingPipeline (L1 minimal source-over tint)', () => {
     expect(fills[0].h).toBe(600);
   });
 
+  it('setUseDomDarkening(true) makes composite a no-op even at midnight', () => {
+    const p = new LightingPipeline(1280, 720);
+    p.setUseDomDarkening(true);
+    p.beginFrame(mockTheme(), 0.5, 0);
+    const { ctx, fills } = makeCtx();
+    p.composite(ctx);
+    expect(fills).toHaveLength(0);
+  });
+
+  it('getBgNightOpacity is 0 when lighting is off, regardless of dayPhase', () => {
+    initLighting('?lighting=off');
+    const p = new LightingPipeline(1280, 720);
+    p.beginFrame(mockTheme(), 0, 0);
+    expect(p.getBgNightOpacity()).toBe(0);
+    p.beginFrame(mockTheme(), 0.5, 0);
+    expect(p.getBgNightOpacity()).toBe(0);
+  });
+
+  it('getBgNightOpacity ramps from near-zero at noon to ~1 at midnight', () => {
+    const p = new LightingPipeline(1280, 720);
+    p.beginFrame(mockTheme(), 0, 0);
+    const noon = p.getBgNightOpacity();
+    p.beginFrame(mockTheme(), 0.5, 0);
+    const midnight = p.getBgNightOpacity();
+    expect(noon).toBeLessThan(0.2);
+    expect(midnight).toBeGreaterThan(0.8);
+    expect(midnight).toBeLessThanOrEqual(1);
+  });
+
+  it('NaN dayPhase falls through gracefully (no NaN cascade in fillStyle)', () => {
+    const p = new LightingPipeline(1280, 720);
+    p.beginFrame(mockTheme(), Number.NaN, 0);
+    // Whatever tintAlpha the pipeline picks, it MUST be finite — otherwise
+    // composite emits `rgba(...,NaN)` which is an invalid color string.
+    expect(Number.isFinite(p.getTintAlphaForTesting())).toBe(true);
+    expect(Number.isFinite(p.getBgNightOpacity())).toBe(true);
+    const { ctx, fills } = makeCtx();
+    p.composite(ctx);
+    for (const f of fills) {
+      expect(f.style).not.toContain('NaN');
+    }
+  });
+
   it('beginFrame is cheap — no allocations for the buffer or temp canvases', () => {
     // Spy on OffscreenCanvas constructor; should NEVER be called by the pipeline.
     if (typeof globalThis.OffscreenCanvas === 'undefined') {

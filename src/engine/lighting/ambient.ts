@@ -1,12 +1,11 @@
 // src/engine/lighting/ambient.ts
 //
-// Computes the ambient color filling the light buffer at beginFrame().
-// Replaces the night-overlay alpha rect logic from drawDayNightCycle.
+// Computes the ambient color used by the lighting pipeline. Canonical home of
+// the dayPhase → nightIntensity curve; rendering/effects.ts re-exports it.
 //
-// dayPhase convention (matches existing drawDayNightCycle):
-//   0 = noon, 0.25 = sunset, 0.5 = midnight, 0.75 = sunrise.
-// Curve: nightIntensity = (1 - cos(dayPhase * 2π)) / 2 — same as drawDayNightCycle.
+// dayPhase convention: 0 = noon, 0.25 = sunset, 0.5 = midnight, 0.75 = sunrise.
 
+import { fastCos } from '../fastMath';
 import type { ThemeConfig } from '../themes/types';
 import type { RGB } from './types';
 
@@ -19,30 +18,38 @@ function lerpCh(a: number, b: number, t: number): number {
   return Math.round(a + (b - a) * t);
 }
 
-function nightIntensity(dayPhase: number): number {
-  return Math.max(0, (1 - Math.cos(dayPhase * Math.PI * 2)) / 2);
+/** Curve shared with rendering/effects.ts (sun/moon/stars/afterglow). */
+export function computeNightIntensity(dayPhase: number): number {
+  return Math.max(0, (1 - fastCos(dayPhase * Math.PI * 2)) / 2);
 }
 
+/**
+ * Compute the ambient RGB at the given dayPhase. Writes into `out` if provided
+ * (caller-owned scratch — avoids per-frame allocation in the renderer hot path).
+ */
 export function themeToAmbient(
   theme: ThemeConfig,
   dayPhase: number,
   photosensitivity: boolean,
+  out?: RGB,
 ): RGB {
+  const result = out ?? { r: 0, g: 0, b: 0 };
   if (!theme.dayNight.enabled) {
-    return { ...FIXED_AMBIENT };
+    result.r = FIXED_AMBIENT.r;
+    result.g = FIXED_AMBIENT.g;
+    result.b = FIXED_AMBIENT.b;
+    return result;
   }
 
-  const t = nightIntensity(dayPhase);
-  const r = lerpCh(NOON.r, MIDNIGHT.r, t);
-  const g = lerpCh(NOON.g, MIDNIGHT.g, t);
-  const b = lerpCh(NOON.b, MIDNIGHT.b, t);
+  const t = computeNightIntensity(dayPhase);
+  result.r = lerpCh(NOON.r, MIDNIGHT.r, t);
+  result.g = lerpCh(NOON.g, MIDNIGHT.g, t);
+  result.b = lerpCh(NOON.b, MIDNIGHT.b, t);
 
   if (photosensitivity) {
-    return {
-      r: Math.max(r, PHOTOSENSITIVITY_FLOOR.r),
-      g: Math.max(g, PHOTOSENSITIVITY_FLOOR.g),
-      b: Math.max(b, PHOTOSENSITIVITY_FLOOR.b),
-    };
+    if (result.r < PHOTOSENSITIVITY_FLOOR.r) result.r = PHOTOSENSITIVITY_FLOOR.r;
+    if (result.g < PHOTOSENSITIVITY_FLOOR.g) result.g = PHOTOSENSITIVITY_FLOOR.g;
+    if (result.b < PHOTOSENSITIVITY_FLOOR.b) result.b = PHOTOSENSITIVITY_FLOOR.b;
   }
-  return { r, g, b };
+  return result;
 }

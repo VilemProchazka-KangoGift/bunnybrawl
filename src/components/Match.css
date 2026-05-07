@@ -27,7 +27,9 @@
   z-index: 2;
   opacity: 0;
   pointer-events: none;
-  will-change: opacity;
+  /* No will-change: bg opacity changes slowly across the dayPhase cycle and
+     doesn't need permanent layer promotion. The fg-night-tint below DOES need
+     it (mix-blend-mode requires layer promotion to compose efficiently). */
 }
 
 .fg-canvas {
