@@ -35,6 +35,32 @@ Bloom (ref §11.1) with threshold pre-pass (ref §11.2). Vignette (ref §11.3). 
 
 Decision deferred to L4: does `theme.drawSceneTint` (current per-arena overlay) survive, or is it absorbed into color grading?
 
+**Cross-faded BG variants — color grading via CSS-composited keyframes** (added 2026-05-07 after L1 perf work surfaced the design):
+
+L1 ships a uniform `rgba(20,24,48, alpha)` tint overlay applied via canvas `fillRect`. This works but can't do hue-shifted nights (ref §5.4 — *"don't just dim. Hue-shift."*) and applies the same color across all arenas. The doc-canonical alternative is per-arena color grading.
+
+The perf-optimal way to implement that is **NOT** canvas `drawImage` cross-fade between offscreen-baked variants (~2ms per frame from extra full-canvas blits — paying full-canvas pixel cost per blit). It's **stacked DOM canvases with CSS `opacity`** for cross-fade:
+
+1. On arena load, generate N keyframe BGs (e.g. `bgNoon`, `bgSunset`, `bgMidnight`, `bgSunrise`) into separate `<canvas>` DOM elements at the same z-position. Each pre-rendered with arena-specific color grading at that lighting state.
+2. Each frame: figure out which two adjacent keyframes bracket the current `dayPhase`, set their `style.opacity` for the lerp factor. The other variants get `opacity: 0`.
+3. Browser's compositor blends them as part of the existing layer-composition pass that runs every frame for bg+fg+hud anyway. **Marginal cost ≈ 0.1ms.**
+4. The L1 tint pass on FG goes away (or stays at low alpha for slight sprite darkening on top of the lit BG).
+
+Why CSS opacity beats canvas `drawImage` cross-fade:
+- Canvas `drawImage` re-rasterizes each frame on the GPU, paying full-canvas pixel cost per blit
+- CSS opacity on stacked layers is part of the work the browser compositor was already doing for layered DOM
+- Adding extra layers is cheap; the compositor blends them in one pass
+
+Storage cost: 4 keyframes × 11 arenas × backing-res (2560×1440 at hi-DPI) × 4 bytes ≈ ~640MB worst case. **Way too much for in-memory.** Mitigations:
+- Generate keyframes lazily per-arena (only the current arena's variants in memory; ~58MB)
+- Allow `bgKeyframes: 2` (just `day` + `night`, lerp between) for arenas where 4 frames is overkill
+- Drop to logical-res (1280×720, 1/4 memory) and let CSS upscale via the existing GameScaler — the bilinear smoothing is fine for color-graded backgrounds
+- Per-arena: arena pack opts in via `ArenaPack.bgKeyframes?: BgKeyframeMap` — arenas that don't opt in fall back to L1's tint
+
+Sprites stay procedural — sprite cross-fade is impractical (cache explosion, every character pack would need lit-variant draw functions). Sprites either stay bright at night (acceptable for a party game per readability constraint) or get a low-alpha tint pass on top of the lit BG (the L1 mechanism, retained).
+
+This becomes the L4 color-grading mechanism. Each arena's `bgKeyframes` IS its color grading curve.
+
 Depends on: L1, L2.
 
 ### L5 — Exotic & gameplay coupling
