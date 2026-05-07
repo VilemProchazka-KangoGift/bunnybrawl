@@ -164,6 +164,10 @@ export class ReactiveDecorationSystem implements CosmeticSystem {
 
       // Proximity / excitement. Also captures signed dx to nearest player so
       // direction-aware draw fns (grass parting, vine lean) don't re-scan.
+      // `nearestDx` is only refreshed while the nearest player is INSIDE the
+      // proximity radius — once they exit, the direction is frozen at the
+      // last in-radius reading so the bend decays in-place rather than
+      // snapping to the player's current (far-away) direction.
       if (inst.proximity && !slow) {
         let nearestSq = Infinity;
         let nearestDx = 0;
@@ -179,11 +183,11 @@ export class ReactiveDecorationSystem implements CosmeticSystem {
           if (d2 < nearestSq) { nearestSq = d2; nearestDx = dxFromInst; found = true; }
         }
         if (found) {
-          updateExcitement(inst, Math.sqrt(nearestSq), dt);
-          inst.nearestDx = nearestDx;
+          const dist = Math.sqrt(nearestSq);
+          updateExcitement(inst, dist, dt);
+          if (dist < inst.proximity.radius) inst.nearestDx = nearestDx;
         } else {
           updateExcitement(inst, Infinity, dt);
-          inst.nearestDx = undefined;
         }
       }
 

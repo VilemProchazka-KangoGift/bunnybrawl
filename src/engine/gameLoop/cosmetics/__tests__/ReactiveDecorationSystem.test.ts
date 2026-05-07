@@ -113,6 +113,31 @@ describe('ReactiveDecorationSystem', () => {
     expect(Math.abs(i.nearestDx!)).toBeLessThan(50); // not P1's far dx (~−414)
   });
 
+  it('freezes nearestDx once nearest player exits the proximity radius', () => {
+    // Without this, a player walking past then far past would keep updating
+    // nearestDx, snapping bend direction as they cross x=instance.x. With
+    // the freeze, direction is locked at the moment of exit and only the
+    // magnitude (excitement) decays.
+    const player = makePlayer({ id: 'P1', x: 90, y: 580, width: 28, height: 40 });
+    const state = makeState({ phase: 'playing', players: [player] });
+    const sys = new ReactiveDecorationSystem(state, makeArena(), () => {});
+    const i = inst({
+      pos: { x: 100, y: 600 }, kind: 'test.bg',
+      proximity: { radius: 60, mode: 'lean', magnitude: 10 },
+    });
+    sys.setInstances([i]);
+    // Player inside radius — nearestDx tracks live position
+    sys.cosmeticUpdate(1 / 30);
+    expect(i.nearestDx).toBeDefined();
+    const exitDir = i.nearestDx!;
+    // Player walks far past on the OPPOSITE side (would flip nearestDx sign
+    // if we still tracked, since 100 - 500 = -400 vs original ~+4)
+    player.x = 500;
+    sys.cosmeticUpdate(1 / 30);
+    // nearestDx should be frozen at exit direction, not flipped to track far-away player
+    expect(Math.sign(i.nearestDx!)).toBe(Math.sign(exitDir));
+  });
+
   it('skips dead/respawning players when picking nearest', () => {
     const state = makeState({
       phase: 'playing',

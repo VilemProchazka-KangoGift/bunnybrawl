@@ -114,20 +114,27 @@ export function _resetReactiveKindsForTest(): void {
 
 // ---- Primitives ----
 
-/** Excitement decay/rise rate (k in 1/s). At 30Hz this gives ≈10-frame ease (≈0.33s). */
-const EXCITEMENT_RATE = 2.4;
+/** Excitement rise rate (k in 1/s). Quick reaction when player enters radius —
+ *  ≈0.4s to reach 90%. */
+const EXCITEMENT_RISE_RATE = 2.4;
+/** Excitement decay rate (k in 1/s). Slow settle after player leaves so
+ *  decorations don't snap back — ≈2.5s to reach 90% decay. Plants in real
+ *  life relax gradually; instant snap-back reads as artificial. */
+const EXCITEMENT_DECAY_RATE = 0.9;
 
 /** Stomp-shake decay per second. */
 export const SHAKE_DECAY_RATE = 7;
 
 /** Update an instance's excitement based on the closest player's distance.
  *  Caller is responsible for finding the closest player and passing its distance.
- *  No-op if the instance has no proximity config. Frame-rate-independent ease
- *  via 1 - exp(-k*dt). */
+ *  No-op if the instance has no proximity config. Asymmetric ease — fast rise,
+ *  slow decay — via 1 - exp(-k*dt). */
 export function updateExcitement(instance: ReactiveInstance, distanceToNearestPlayer: number, dt: number): void {
   if (!instance.proximity) return;
-  const target = distanceToNearestPlayer < instance.proximity.radius ? 1 : 0;
-  const alpha = 1 - Math.exp(-EXCITEMENT_RATE * dt);
+  const within = distanceToNearestPlayer < instance.proximity.radius;
+  const target = within ? 1 : 0;
+  const k = within ? EXCITEMENT_RISE_RATE : EXCITEMENT_DECAY_RATE;
+  const alpha = 1 - Math.exp(-k * dt);
   instance.excitement += (target - instance.excitement) * alpha;
 }
 

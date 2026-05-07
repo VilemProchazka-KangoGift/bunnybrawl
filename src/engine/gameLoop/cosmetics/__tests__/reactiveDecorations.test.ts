@@ -53,10 +53,29 @@ describe('reactiveDecorations — excitement primitive', () => {
     expect(inst.excitement).toBeLessThanOrEqual(1);
   });
 
-  it('decays toward 0 when outside radius', () => {
+  it('decays toward 0 when outside radius (slow settle, no snap-back)', () => {
+    // Decay rate 0.9/s gives ~2.5s to reach 90% decay. After 1 second we
+    // should still see substantial residual excitement (asymmetric ease —
+    // fast rise, slow decay) — not yet anywhere near zero.
     const inst = makeInstance({ proximity: { radius: 50, mode: 'excite', magnitude: 1 }, excitement: 1 });
-    for (let i = 0; i < 30; i++) updateExcitement(inst, 200, 1 / 30);
-    expect(inst.excitement).toBeLessThan(0.1);
+    for (let i = 0; i < 30; i++) updateExcitement(inst, 200, 1 / 30); // 1s
+    expect(inst.excitement).toBeGreaterThan(0.3); // visibly still bent
+    expect(inst.excitement).toBeLessThan(0.5);
+    // Continue another 4 seconds — now should be near zero.
+    for (let i = 0; i < 120; i++) updateExcitement(inst, 200, 1 / 30);
+    expect(inst.excitement).toBeLessThan(0.05);
+  });
+
+  it('rises faster than it decays (asymmetric — quick to react, slow to settle)', () => {
+    // 0.5s ramp inside radius then 0.5s outside. Asymmetric rates (rise 2.4,
+    // decay 0.9) mean we end up with more excitement than the simple linear
+    // round-trip would suggest.
+    const inst = makeInstance({ proximity: { radius: 50, mode: 'excite', magnitude: 1 } });
+    for (let i = 0; i < 15; i++) updateExcitement(inst, 30, 1 / 30);
+    const peak = inst.excitement;
+    for (let i = 0; i < 15; i++) updateExcitement(inst, 200, 1 / 30);
+    // After equal time outside, should still be > half of peak (slow decay).
+    expect(inst.excitement).toBeGreaterThan(peak * 0.5);
   });
 
   it('is a no-op when proximity is undefined', () => {
