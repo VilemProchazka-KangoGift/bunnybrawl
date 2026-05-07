@@ -111,6 +111,18 @@
 - `arenaId: 'random'` resolved in `Match.tsx` via `resolveArenaId()`, not in store.
 - `themes/` directory still exists for shared infrastructure: `types.ts` (ThemeConfig interface used by Renderer), `drawPrimitives.ts` (shared draw functions), `utils.ts` (utility functions). Individual theme files are gone — visuals live in arena pack files.
 
+## Reactive Decorations
+- **System** (`gameLoop/cosmetics/ReactiveDecorationSystem.ts`): arena-anchored decorations with wind sway, velocity-driven bend, stomp shake, burst triggers. Constructed by GameLoop; populated via `ArenaPack.buildReactiveDecorations(arena)`.
+- **Bend dynamics are spring-damper** (NOT proximity-duration). Force per (player × in-radius) = `playerVx × proxFactor × inst.bendCoeff`. Stiffness 28, damping 5 (ζ≈0.47, under-damped). `proximity.magnitude` = equilibrium bend at `WALKING_SPEED_REF` (200 px/s) — kind authors think in pixels.
+- **Layer** is `'prePlayer'` or `'postPlayer'` (drawn before / after player loop). NOT `background`/`foreground` — those names are misleading because both render mid-pipeline.
+- **Use `createReactiveInstance({...})`** factory in arena packs — fills runtime defaults (excitement, shakeDecay, bendValue, bendVelocity, bendCoeff). Don't hand-write the zeros.
+- **Use `composeBend(inst, swayPhase)`** in draw fns — combines wind muting `(1 - excitement)` with `inst.bendValue`. Don't add them manually.
+- **Per-kind mutable runtime state lives in `inst.data`** with a `resetData` callback at registration. Module-level WeakMaps are an anti-pattern — they survive arena switches and don't reset on guest reconnect.
+- **`proximity.mode`**: `'lean'` (bend with player motion, default), `'flee'` (away), `'excite'` (no bend — just excitement scalar; used by dandelion to trigger seed-burst).
+- **60Hz opt-in** via `highFrequency: true` for fast-moving creatures (butterflies, bees). Default 30Hz bucket runs at 15Hz with 2× dt via cosmetic-stagger.
+- **`isLivePlayer(p)`** in `themes/utils.ts` — use it instead of inlining `!p.active || p.state === 'splat' || p.state === 'respawning'`. Multiple cosmetic systems duplicate this guard inline; new code should not.
+- **Static decorations stay in `drawForegroundNature`/`drawBackgroundNature`** so they bake into the OffscreenCanvas cache. Only opt into the reactive system if the kind genuinely needs per-frame reactivity (proximity, stomp, burst). Wind-only sway alone is not worth the per-frame cost.
+
 ## AI
 - Awareness uses single pass over `state.players` — no `.filter()` loops.
 - Evaluators must not allocate arrays — runs 60x/bot/sec.
