@@ -206,6 +206,11 @@ function makeState(overrides?: any) {
     pollenParticles: null,
     geyserStates: [],
     bouncyWobble: new Map(),
+    // scatterFlocks defaulted here as a workaround — the production state
+    // factory in `simulator/initialState.ts` populates it, but this mock
+    // pre-dates that field. Without the default, every test that exercises
+    // `renderer.renderFrame` crashes on `for (const f of state.scatterFlocks)`.
+    scatterFlocks: [],
     ...overrides,
   } as any;
 }
@@ -350,23 +355,17 @@ describe('Renderer — renderFrame basics', () => {
   });
 
   it('clears foreground canvas each frame', () => {
-    // Override `scatterFlocks` to bypass an unrelated pre-existing bug in
-    // makeState (see "known pre-existing failures" in the engine notes).
-    renderer.renderFrame(makeState({ scatterFlocks: [] }), makeArena(), []);
+    renderer.renderFrame(makeState(), makeArena(), []);
     expect(fgCtx.clearRect).toHaveBeenCalledWith(0, 0, 1280, 720);
   });
 
   it('draws HUD every frame', () => {
-    // Override `scatterFlocks` to bypass an unrelated pre-existing bug in
-    // makeState (see "known pre-existing failures" in the engine notes).
-    renderer.renderFrame(makeState({ scatterFlocks: [] }), makeArena(), []);
+    renderer.renderFrame(makeState(), makeArena(), []);
     expect(drawHUD).toHaveBeenCalled();
   });
 
   it('draws players', () => {
-    // Override `scatterFlocks` to bypass an unrelated pre-existing bug in
-    // makeState (see "known pre-existing failures" in the engine notes).
-    renderer.renderFrame(makeState({ scatterFlocks: [] }), makeArena(), []);
+    renderer.renderFrame(makeState(), makeArena(), []);
     expect(drawPlayer).toHaveBeenCalledTimes(2); // P1 + P2
     expect(renderer.getDiagnostics().playersDrawn).toBe(2);
   });
@@ -386,9 +385,7 @@ describe('Renderer — renderFrame basics', () => {
   });
 
   it('sets clouds diagnostic flag', () => {
-    // Override `scatterFlocks` to bypass an unrelated pre-existing bug in
-    // makeState (see "known pre-existing failures" in the engine notes).
-    renderer.renderFrame(makeState({ scatterFlocks: [] }), makeArena(), []);
+    renderer.renderFrame(makeState(), makeArena(), []);
     expect(renderer.getDiagnostics().clouds).toBe(true);
   });
 });
@@ -616,9 +613,7 @@ describe('Renderer — renderFrame conditional branches', () => {
 
   it('draws nav debug overlay when enabled', () => {
     (debugFlags as any).navDebugEnabled = true;
-    // Override `scatterFlocks` to bypass an unrelated pre-existing bug in
-    // makeState (see "known pre-existing failures" in the engine notes).
-    renderer.renderFrame(makeState({ scatterFlocks: [] }), makeArena(), []);
+    renderer.renderFrame(makeState(), makeArena(), []);
     expect(drawNavDebugOverlay).toHaveBeenCalled();
     expect(renderer.getDiagnostics().navDebug).toBe(true);
     (debugFlags as any).navDebugEnabled = false;
@@ -627,9 +622,7 @@ describe('Renderer — renderFrame conditional branches', () => {
   it('draws net debug overlay when enabled with stats', () => {
     (debugFlags as any).netDebugEnabled = true;
     renderer.setNetDebugStats({ localFrame: 10, rtt: 50 } as any);
-    // Override `scatterFlocks` to bypass an unrelated pre-existing bug in
-    // makeState (see "known pre-existing failures" in the engine notes).
-    renderer.renderFrame(makeState({ scatterFlocks: [] }), makeArena(), []);
+    renderer.renderFrame(makeState(), makeArena(), []);
     expect(drawNetDebugOverlay).toHaveBeenCalled();
     expect(renderer.getDiagnostics().netDebug).toBe(true);
     (debugFlags as any).netDebugEnabled = false;
@@ -637,9 +630,7 @@ describe('Renderer — renderFrame conditional branches', () => {
 
   it('does not draw net debug without stats even when flag enabled', () => {
     (debugFlags as any).netDebugEnabled = true;
-    // Override `scatterFlocks` to bypass an unrelated pre-existing bug in
-    // makeState (see "known pre-existing failures" in the engine notes).
-    renderer.renderFrame(makeState({ scatterFlocks: [] }), makeArena(), []);
+    renderer.renderFrame(makeState(), makeArena(), []);
     expect(drawNetDebugOverlay).not.toHaveBeenCalled();
     expect(renderer.getDiagnostics().netDebug).toBe(false);
     (debugFlags as any).netDebugEnabled = false;
@@ -725,9 +716,7 @@ describe('Renderer — bgNight bake on bg writes', () => {
     // Coalesce: both bg-mutating paths fire same frame, ONE bake on next render.
     renderer.bakeGibs(gibs as any);
     renderer.renderBloodDrips(drips);
-    // Override `scatterFlocks` to bypass an unrelated pre-existing bug in
-    // makeState (see "known pre-existing failures" in the engine notes).
-    renderer.renderFrame(makeState({ scatterFlocks: [] }), makeArena(), []);
+    renderer.renderFrame(makeState(), makeArena(), []);
     expect(bgNightCtx.drawImage).toHaveBeenCalledTimes(1);
   });
 
@@ -738,9 +727,7 @@ describe('Renderer — bgNight bake on bg writes', () => {
     const fgTint = document.createElement('div');
     const renderer = new Renderer(bg, fg, makeTheme(), false, undefined, bgNight, fgTint);
     (bgNightCtx.drawImage as any).mockClear();
-    // Override `scatterFlocks` to bypass an unrelated pre-existing bug in
-    // makeState (see "known pre-existing failures" in the engine notes).
-    renderer.renderFrame(makeState({ scatterFlocks: [] }), makeArena(), []);
+    renderer.renderFrame(makeState(), makeArena(), []);
     expect(bgNightCtx.drawImage).not.toHaveBeenCalled();
   });
 });

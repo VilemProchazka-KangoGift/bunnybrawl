@@ -5,6 +5,17 @@
 **Mode:** Hobby/learning sandbox. Branches can be experiments. Cherry-pick survivors.
 **Reference:** `lighting-reference.md` (2487-line design doc, used as inspiration not instruction).
 
+## Reading order (start here)
+
+1. **This doc** — pillar decomposition, dependency graph, cross-pillar conventions.
+2. **`engine/CLAUDE.md` "## Lighting" section** — what shipped in L1, in primary voice.
+3. **`docs/superpowers/specs/2026-05-07-lighting-l1-foundation-design.md`** — L1 design. Has an "Implementation drift" header explaining where it diverged from plan.
+4. **`docs/superpowers/reviews/2026-05-07-lighting-l1-cross-fade-review.md`** — round-1 post-implementation review with cross-cutting patterns.
+5. **`docs/superpowers/specs/2026-05-07-lighting-l2-brainstorm-prep.md`** — open questions for L2 (read before starting L2 brainstorm).
+6. **`perf-runs/lmode-comparison/REPORT.md`** — the 7-mode A/B test that picked the cross-fade architecture.
+
+The plan doc (`plans/2026-05-07-lighting-l1-foundation.md`) is the original 2700-line TDD task list — historical reference, not a current source of truth. The PERF doc (`plans/PERF-LIGHTING-L1.md`) is **superseded** — it captures the failed deferred-lite pipeline's perf gate; the shipping perf is in `perf-runs/lmode-comparison/REPORT.md`.
+
 ## Why this is a program, not a feature
 
 A previous prototype on `feat/rim-light` shipped a single-effect rim-light experiment. Its post-mortem (`docs/rim-light-NEXT_STEPS.md`) identified one architectural lesson: **lighting is a per-frame, screen-space effect; it must NOT be baked into the sprite cache**. The same lesson applied to outlines later. Both were single-shot experiments without a pipeline; both ran into the same wall.

@@ -22,7 +22,7 @@ describe('LightingPipeline integration (source-over tint)', () => {
     sctx.fillRect(0, 0, 1280, 660);
 
     const p = new LightingPipeline(1280, 720);
-    p.beginFrame(theme, 0, 0); // noon
+    p.beginFrame(theme, 0); // noon
     p.composite(sctx as unknown as CanvasRenderingContext2D);
 
     // Ground pixel ~ source-over with rgba(20,24,48, ~0.04) on (126,159,77):
@@ -39,7 +39,7 @@ describe('LightingPipeline integration (source-over tint)', () => {
     sctx.fillRect(0, 0, 1280, 720);
 
     const p = new LightingPipeline(1280, 720);
-    p.beginFrame(theme, 0.5, 0); // midnight
+    p.beginFrame(theme, 0.5); // midnight
     p.composite(sctx as unknown as CanvasRenderingContext2D);
 
     // White tinted at alpha ~0.48 with rgba(20,24,48):

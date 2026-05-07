@@ -515,6 +515,10 @@ export class Renderer {
    *  setup pass for a future cross-fade. Skipping at noon would leave the
    *  night canvas empty when dayPhase advances into the visible band. */
   private _bakeBgNightVariant(): void {
+    // Clear the dirty flag unconditionally: even when this fires from
+    // renderBackground() (explicit) rather than the renderFrame drain,
+    // the bgNight is now in sync with bgCanvas — no follow-up bake needed.
+    this._bgNightDirty = false;
     if (!this.bgNightCanvas || !this.bgNightCtx) return;
     if (!this.lighting.isEnabled()) return;
     const ctx = this.bgNightCtx;
@@ -730,13 +734,11 @@ export class Renderer {
 
       // Cache time once per frame
       this.frameTime = performance.now();
-      this.lighting.beginFrame(this.theme, matchState.dayPhase, 0);
+      this.lighting.beginFrame(this.theme, matchState.dayPhase);
       // Drain mid-match bg writes (gibs, splat marks) into the bgNight bake.
-      // One bake per frame even when multiple bg-mutating paths fire same tick.
-      if (this._bgNightDirty) {
-        this._bgNightDirty = false;
-        this._bakeBgNightVariant();
-      }
+      // _bakeBgNightVariant clears the dirty flag itself, so an explicit
+      // bake from renderBackground() in the same frame won't double up.
+      if (this._bgNightDirty) this._bakeBgNightVariant();
       this._driveBgNightOpacity();
 
       ctx.save();

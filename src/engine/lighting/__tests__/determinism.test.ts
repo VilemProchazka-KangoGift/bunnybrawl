@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SeededRNG } from '../../net/prng';
+import { SeededRNG } from '../../seededRng';
 
 describe('SeededRNG.fromTick (lighting determinism)', () => {
   it('same seed + same tick produces identical output', () => {

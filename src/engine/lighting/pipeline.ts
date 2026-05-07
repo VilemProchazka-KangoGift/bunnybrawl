@@ -73,8 +73,10 @@ export class LightingPipeline {
   }
 
   /** Compute the tint alpha for this frame from ambient(theme, dayPhase).
-   *  No allocations — uses a private RGB scratch. */
-  beginFrame(theme: ThemeConfig, dayPhase: number, _tick: number): void {
+   *  No allocations — uses a private RGB scratch. L2 will add a `tick` arg
+   *  for deterministic flicker (see SeededRNG.fromTick); not added now to
+   *  avoid a no-op param sitting in the signature. */
+  beginFrame(theme: ThemeConfig, dayPhase: number): void {
     if (!this.isEnabled()) {
       this.tintAlpha = 0;
       return;

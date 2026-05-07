@@ -166,6 +166,12 @@ export function CharacterSelect() {
     if (!bg || !fg || !hud) return;
 
     const theme = getTheme('lobby');
+    // Lobby intentionally skips bgNightCanvas/fgNightTint — the lobby theme
+    // pins to noon (no day/night cycle) so the cross-fade infrastructure
+    // would only add VRAM cost. LightingPipeline falls back to the
+    // source-over fillRect path, but the noon tintAlpha (~0.04) is below
+    // the visibility threshold so composite() is also a no-op in practice.
+    // L4 per-arena keyframes may want lobby parity — see lighting program design doc.
     const renderer = new Renderer(bg, fg, theme, false, hud);
 
     // Static world (sky, hills, far background, platform iso skin) baked once.

@@ -47,25 +47,25 @@ describe('LightingPipeline (L1 minimal source-over tint)', () => {
 
   it('beginFrame at noon produces near-zero tint alpha', () => {
     const p = new LightingPipeline(1280, 720);
-    p.beginFrame(mockTheme(), 0, 0);
+    p.beginFrame(mockTheme(), 0);
     // At noon ambient is rgb(245,240,225); avg ~237; deficit ~0.07; alpha ~0.05.
     expect(p.getTintAlpha()).toBeLessThan(0.1);
   });
 
   it('beginFrame at midnight produces visible tint alpha', () => {
     const p = new LightingPipeline(1280, 720);
-    p.beginFrame(mockTheme(), 0.5, 0);
+    p.beginFrame(mockTheme(), 0.5);
     // At midnight ambient is rgb(60,70,110); avg 80; deficit ~0.69; alpha ~0.48.
     expect(p.getTintAlpha()).toBeGreaterThan(0.3);
   });
 
   it('beginFrame at sunset produces intermediate tint alpha', () => {
     const p = new LightingPipeline(1280, 720);
-    p.beginFrame(mockTheme(), 0, 0); // noon
+    p.beginFrame(mockTheme(), 0); // noon
     const noon = p.getTintAlpha();
-    p.beginFrame(mockTheme(), 0.25, 0); // sunset
+    p.beginFrame(mockTheme(), 0.25); // sunset
     const sunset = p.getTintAlpha();
-    p.beginFrame(mockTheme(), 0.5, 0); // midnight
+    p.beginFrame(mockTheme(), 0.5); // midnight
     const midnight = p.getTintAlpha();
     expect(sunset).toBeGreaterThan(noon);
     expect(sunset).toBeLessThan(midnight);
@@ -77,7 +77,7 @@ describe('LightingPipeline (L1 minimal source-over tint)', () => {
     // composite SHOULD emit one fill. Tighten the assertion to catch the
     // case where the threshold or noon math drift past each other.
     const p = new LightingPipeline(1280, 720);
-    p.beginFrame(mockTheme(), 0, 0);
+    p.beginFrame(mockTheme(), 0);
     const { ctx, fills } = makeCtx();
     p.composite(ctx);
     expect(fills).toHaveLength(1);
@@ -91,7 +91,7 @@ describe('LightingPipeline (L1 minimal source-over tint)', () => {
 
   it('composite at midnight applies one source-over fillRect', () => {
     const p = new LightingPipeline(1280, 720);
-    p.beginFrame(mockTheme(), 0.5, 0);
+    p.beginFrame(mockTheme(), 0.5);
     const { ctx, fills } = makeCtx();
     p.composite(ctx);
     expect(fills).toHaveLength(1);
@@ -105,7 +105,7 @@ describe('LightingPipeline (L1 minimal source-over tint)', () => {
   it('composite is no-op when lighting kill switch is set', () => {
     initLighting('?lighting=off');
     const p = new LightingPipeline(1280, 720);
-    p.beginFrame(mockTheme(), 0.5, 0);
+    p.beginFrame(mockTheme(), 0.5);
     const { ctx, fills } = makeCtx();
     p.composite(ctx);
     expect(fills).toHaveLength(0);
@@ -114,16 +114,16 @@ describe('LightingPipeline (L1 minimal source-over tint)', () => {
   it('dayNight.enabled === false returns fixed mid-bright ambient → consistent tint', () => {
     const fixed = mockTheme(false);
     const p = new LightingPipeline(1280, 720);
-    p.beginFrame(fixed, 0, 0);
+    p.beginFrame(fixed, 0);
     const a = p.getTintAlpha();
-    p.beginFrame(fixed, 0.5, 0);
+    p.beginFrame(fixed, 0.5);
     const b = p.getTintAlpha();
     expect(a).toBe(b); // no day-phase variation
   });
 
   it('resize updates dimensions used in fillRect', () => {
     const p = new LightingPipeline(1280, 720);
-    p.beginFrame(mockTheme(), 0.5, 0);
+    p.beginFrame(mockTheme(), 0.5);
     p.resize(800, 600, 1.0);
     const { ctx, fills } = makeCtx();
     p.composite(ctx);
@@ -134,7 +134,7 @@ describe('LightingPipeline (L1 minimal source-over tint)', () => {
   it('setHasDomDarkening(true) makes composite a no-op even at midnight', () => {
     const p = new LightingPipeline(1280, 720);
     p.setHasDomDarkening(true);
-    p.beginFrame(mockTheme(), 0.5, 0);
+    p.beginFrame(mockTheme(), 0.5);
     const { ctx, fills } = makeCtx();
     p.composite(ctx);
     expect(fills).toHaveLength(0);
@@ -143,17 +143,17 @@ describe('LightingPipeline (L1 minimal source-over tint)', () => {
   it('getBgNightOpacity is 0 when lighting is off, regardless of dayPhase', () => {
     initLighting('?lighting=off');
     const p = new LightingPipeline(1280, 720);
-    p.beginFrame(mockTheme(), 0, 0);
+    p.beginFrame(mockTheme(), 0);
     expect(p.getBgNightOpacity()).toBe(0);
-    p.beginFrame(mockTheme(), 0.5, 0);
+    p.beginFrame(mockTheme(), 0.5);
     expect(p.getBgNightOpacity()).toBe(0);
   });
 
   it('getBgNightOpacity ramps from near-zero at noon to ~1 at midnight', () => {
     const p = new LightingPipeline(1280, 720);
-    p.beginFrame(mockTheme(), 0, 0);
+    p.beginFrame(mockTheme(), 0);
     const noon = p.getBgNightOpacity();
-    p.beginFrame(mockTheme(), 0.5, 0);
+    p.beginFrame(mockTheme(), 0.5);
     const midnight = p.getBgNightOpacity();
     expect(noon).toBeLessThan(0.2);
     expect(midnight).toBeGreaterThan(0.8);
@@ -162,7 +162,7 @@ describe('LightingPipeline (L1 minimal source-over tint)', () => {
 
   it('NaN dayPhase falls through gracefully (no NaN cascade in fillStyle)', () => {
     const p = new LightingPipeline(1280, 720);
-    p.beginFrame(mockTheme(), Number.NaN, 0);
+    p.beginFrame(mockTheme(), Number.NaN);
     // Whatever tintAlpha the pipeline picks, it MUST be finite — otherwise
     // composite emits `rgba(...,NaN)` which is an invalid color string.
     expect(Number.isFinite(p.getTintAlpha())).toBe(true);
@@ -185,8 +185,8 @@ describe('LightingPipeline (L1 minimal source-over tint)', () => {
     globalThis.OffscreenCanvas = spy as unknown as typeof OffscreenCanvas;
     try {
       const p = new LightingPipeline(1280, 720);
-      p.beginFrame(mockTheme(), 0.0, 0);
-      p.beginFrame(mockTheme(), 0.5, 1);
+      p.beginFrame(mockTheme(), 0.0);
+      p.beginFrame(mockTheme(), 0.5);
       const { ctx } = makeCtx();
       p.composite(ctx);
       expect(spy).not.toHaveBeenCalled();

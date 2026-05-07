@@ -342,3 +342,24 @@ Per existing `feedback_commit_regularly.md`: commit + push frequently. Branch li
 ## Acceptance summary (one paragraph)
 
 When M1 is merged, the codebase has a real Canvas-2D deferred-lite lighting pipeline running on every frame for every arena, gated by a `?lighting=off` kill switch and a `Med` perf tier. Sun and ambient are the first proof-of-load contributions; moon, stars, fireflies stay legacy. Debug tooling lets us inspect every stage of the composite. Three accessibility toggles ship as URL+localStorage. The determinism rule is codified for L2's flicker work. The PR sequence keeps `renderer.ts` drift surface to a single-line composite-call insertion that lands first as an integration stub. L2 picks up against a stable, perf-gated foundation.
+
+## Decisions log (post-implementation)
+
+Captured across three review rounds — what got picked and why. Saves the L2 author from `git log` archaeology.
+
+| # | Decision | Why | Commit |
+|---|---|---|---|
+| 1 | Half-res light buffer + multiply pipeline → CSS-composited cross-fade | Buffer + multiply cost +6.8ms/frame on meadow at midnight (perf gate failed). CSS opacity on stacked DOM canvases is compositor-level work, ~0ms marginal. | `058b630` → `2d86d1c` |
+| 2 | `bgNight` cross-fade alone → add `fgNightTint` multiply layer | A/B test of 7 darkening compositors (`perf-runs/lmode-comparison/`) showed `bgNight + multiply fg-tint` won both visual quality (color-preserving sprite darkening) and perf (Chromium GPU layer promotion saves ~1.6ms). | `19bfc6f` |
+| 3 | Sun migration into `LightingPipeline.buildSunLight` reverted | Sun is a celestial body visual, not a light contribution in 2D. `buildSunLight` is retained (zero callers) for L3 shadow direction. Sun stays in `effects.ts > drawDayNightCycle`. | `8cd4919` (delete) → `6e6f0a6` (restore) |
+| 4 | Sun redshift: original asymmetric `(sunT - 0.55) / 0.45` over symmetric formula | Symmetric reddish sunrise looked wrong in playtests; pre-M1 visual contract was afternoon-only. | `10435c4` |
+| 5 | `_bgNightDirty` flag, drained once per frame | Pre-batch, `bakeGibs`/`renderBloodDrips` re-baked the night canvas on every drip/gib settle (across the 30-60 post-kill frames). p95 dropped 15.8ms → 7.4ms. | `10435c4` |
+| 6 | `fgTintIntensity` ramp threshold 0.55 (≈ dayPhase 0.32) | Below threshold, multiply layer stays silent. Preserves the warm sunset afterglow at peak dayPhase 0.25, which would otherwise be channel-crushed by the cool-blue multiply. | `6e6f0a6` |
+| 7 | PR 3 (debug overlay) deferred to L2 | Without an actual buffer to introspect, the planned `?debug=light` keys (`L`, `[`, `]`, `Shift+L`, `Ctrl+L`) had nothing to display. L2 light catalog brings emitters worth visualizing. | (deletion only) |
+| 8 | `?lighting=off` storage migrated `carrotroyale_lighting_off` → `carrotroyale_lighting` | Old key had asymmetric semantics ('1' = off, but `set(true)` stored '1'). New key uses 'on'/'off' consistently. Old users default to lighting-on (kill-switch is opt-in anyway). | `6e6f0a6` |
+| 9 | `tickRng(seed, tick)` (lighting/determinism.ts) folded into `SeededRNG.fromTick` | Same Mulberry32 inner loop. After L1, the class moved out of `net/` to `engine/seededRng.ts` because lighting is the dominant consumer. | `6e6f0a6`, then `<I-batch>` |
+| 10 | 4 URL-stored emitters → `createUrlStoredEmitter<T>` factory | ~150 LoC of duplicated boilerplate replaced with ~70 LoC factory + 4 thin callers. Tightened in round-2 to require explicit `serialize` (boolean footgun). | `6e6f0a6`, hardened `10435c4` |
+| 11 | `will-change: opacity` dropped from `.bg-night-canvas`, kept on `.fg-night-tint` | bg opacity changes slowly across the cycle and doesn't need permanent layer promotion. fg-tint NEEDS it (mix-blend-mode requires the layer). Untested but no perf regression observed. | `6e6f0a6` |
+| 12 | `getTintAlphaForTesting` → `getTintAlpha` | `*ForTesting` suffix was cargo-cult; the accessor is fine for production reads too. | `10435c4` |
+| 13 | Renderer constructor stays positional (deferred) | 7 + 4 trailing optional. L2 will likely add a light buffer canvas; refactor to options-bag at the L2 boundary, not preemptively. | (deferred) |
+

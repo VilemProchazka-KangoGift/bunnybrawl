@@ -1,7 +1,7 @@
 import type { MatchState } from '../types';
 import type { ThemeConfig } from '../themes/types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../constants';
-import { fastSin, fastCos } from '../fastMath';
+import { fastSin, fastCos, wrapToUnit } from '../fastMath';
 import { bakeVerticalGradientStrip } from '../themes/utils';
 import { computeNightIntensity } from '../lighting/ambient';
 
@@ -104,7 +104,8 @@ export function drawDayNightCycle(
 
   // Sun: visible during the day half. Lighting pipeline owns scene darkening,
   // but the sun disc itself is a celestial body and lives here next to the moon.
-  const sunPhase = ((dayPhase + 0.25) % 1); // 0=sunrise(6am), 0.5=sunset(6pm)
+  // wrapToUnit handles negative dayPhase or overshoots (parity with sun.ts).
+  const sunPhase = wrapToUnit(dayPhase + 0.25); // 0=sunrise(6am), 0.5=sunset(6pm)
   if (sunPhase < 0.5) {
     const sunT = sunPhase / 0.5; // 0->1 across the day
     const sunX = 60 + sunT * (CANVAS_WIDTH - 120);
@@ -180,7 +181,7 @@ export function drawDayNightCycle(
   }
 
   // Moon: visible when nightIntensity > 0.2, arcs during night half (0.25->0.5->0.75)
-  const moonPhase = ((dayPhase + 0.75) % 1); // shift so 0=moonrise, 0.5=moonset
+  const moonPhase = wrapToUnit(dayPhase + 0.75); // 0=moonrise, 0.5=moonset
   if (moonPhase < 0.5) {
     const moonT = moonPhase / 0.5;
     const moonX = 60 + moonT * (CANVAS_WIDTH - 120);
