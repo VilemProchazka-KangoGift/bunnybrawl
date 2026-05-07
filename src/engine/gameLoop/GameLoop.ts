@@ -84,6 +84,7 @@ export class GameLoop {
   private onPhaseChange?: (phase: MatchPhase) => void;
 
   private _cosmeticLead = 0;
+  private _cosmeticTick = 0;
 
   constructor(
     bgCanvas: HTMLCanvasElement,
@@ -535,6 +536,7 @@ export class GameLoop {
   cosmeticStep(dt: number): void {
     perfTrace.measure('cosmeticStep', () => {
       if (this.simulator.getState().phase === 'loading') return;
+      const tickIdx = this._cosmeticTick++;
 
       const playerTransitionStart = perfTrace.begin('cosmetic.playerTransition');
       this.playerTransitionSystem.cosmeticUpdate(dt);
@@ -564,9 +566,16 @@ export class GameLoop {
       this.hudFeedbackSystem.cosmeticUpdate(dt);
       perfTrace.end('cosmetic.hudFeedback', hudFeedbackStart);
 
-      const reactiveStart = perfTrace.begin('cosmetic.reactive');
-      this.reactiveDecorationSystem.cosmeticUpdate(dt);
-      perfTrace.end('cosmetic.reactive', reactiveStart);
+      // Reactive 30Hz bucket runs at half the cosmeticStep rate (~15Hz) with
+      // 2× dt so excitement/decay integrate the same total per second. Avoids
+      // piling reactive proximity scans on every render frame that lands on
+      // a cosmeticStep tick. The 60Hz bucket (fish/birds in fixedUpdate) is
+      // untouched.
+      if ((tickIdx & 1) === 0) {
+        const reactiveStart = perfTrace.begin('cosmetic.reactive');
+        this.reactiveDecorationSystem.cosmeticUpdate(dt * 2);
+        perfTrace.end('cosmetic.reactive', reactiveStart);
+      }
 
       // Per-arena bespoke cosmetic logic (e.g. underwater bubble trails).
       const tick = this.simulator.getTheme().cosmeticTick;
