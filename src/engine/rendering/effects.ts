@@ -1,15 +1,14 @@
 import type { MatchState } from '../types';
 import type { ThemeConfig } from '../themes/types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../constants';
-import { fastSin, fastCos } from '../fastMath';
+import { fastSin, fastCos, wrapToUnit } from '../fastMath';
 import { bakeVerticalGradientStrip } from '../themes/utils';
+import { computeNightIntensity } from '../lighting/ambient';
 
 function lerpCh(a: number, b: number, t: number): number { return Math.round(a + (b - a) * t); }
 
-/** dayPhase 0=noon, 0.5=midnight, 1=noon. Returns 0..1 night intensity. */
-export function computeNightIntensity(dayPhase: number): number {
-  return Math.max(0, (1 - fastCos(dayPhase * Math.PI * 2)) / 2);
-}
+// Re-export so existing consumers of `effects.computeNightIntensity` keep working.
+export { computeNightIntensity };
 
 // Precomputed static star positions — i*K+J formulas were re-evaluated every
 // frame for 30 stars. Now they're frozen at module load.
@@ -103,50 +102,40 @@ export function drawDayNightCycle(
   const nightIntensity = computeNightIntensity(dayPhase);
   const overlayAlpha = nightIntensity * 0.55;
 
-  // Sun: visible when nightIntensity < 0.8, arcs left->right during day half (0.75->0.0->0.25)
-  // Remap dayPhase so sun progress 0->1 = sunrise->sunset
-  const sunPhase = ((dayPhase + 0.25) % 1); // shift so 0=sunrise(6am), 0.5=sunset(6pm)
-  let sunX = CANVAS_WIDTH / 2;
-  let sunY = 80;
+  // Sun: visible during the day half. Lighting pipeline owns scene darkening,
+  // but the sun disc itself is a celestial body and lives here next to the moon.
+  const sunPhase = wrapToUnit(dayPhase + 0.25); // 0=sunrise(6am), 0.5=sunset(6pm)
   if (sunPhase < 0.5) {
     const sunT = sunPhase / 0.5; // 0->1 across the day
-    sunX = 60 + sunT * (CANVAS_WIDTH - 120);
+    const sunX = 60 + sunT * (CANVAS_WIDTH - 120);
     const sunArc = Math.sin(sunT * Math.PI);
-    sunY = 130 - sunArc * 90;
+    const sunY = 130 - sunArc * 90;
     const sunAlpha = Math.min(1, (1 - nightIntensity) * 1.5);
-
-    // Sun redshift: gold -> deep orange as sun approaches horizon
-    const sunRedshift = Math.max(0, (sunT - 0.55) / 0.45);
-
     if (sunAlpha > 0.05) {
-      // Use a single rgb-prefix per ring + globalAlpha for the alpha. Saves
-      // two of the three per-frame rgba template literals during the day cycle;
-      // the rays already use a separate color so they get their own.
+      // Redshift: gold from sunrise through noon, deep orange approaching
+      // sunset. Asymmetric (afternoon-only) by design — sunrise-redshift
+      // looked bizarre in playtests, and the game's dayPhase visual contract
+      // matches pre-M1 behavior. Sunset (sunT > 0.55) ramps toward 1.0.
+      const sunRedshift = Math.max(0, (sunT - 0.55) / 0.45);
       const glowAlpha = sunAlpha * (0.3 + sunRedshift * 0.2);
       const bodyAlpha = sunAlpha * 0.9;
       const glowR = lerpCh(255, 240, sunRedshift), glowG = lerpCh(215, 50, sunRedshift), glowB = lerpCh(0, 10, sunRedshift);
       const bodyR = lerpCh(255, 220, sunRedshift), bodyG = lerpCh(165, 30, sunRedshift);
-      const coreR = lerpCh(255, 255, sunRedshift), coreG = lerpCh(215, 80, sunRedshift);
-      // Glow (gold -> deep red, grows during sunset)
+      const coreR = 255, coreG = lerpCh(215, 80, sunRedshift);
+      // Body and core share the glow's B channel intentionally — the body
+      // ellipse is small enough that an independent B-redshift would be
+      // imperceptible, and pinning it to glowB keeps the three discs
+      // chromatically continuous as redshift ramps.
       ctx.globalAlpha = glowAlpha;
       ctx.fillStyle = `rgb(${glowR},${glowG},${glowB})`;
-      ctx.beginPath();
-      ctx.arc(sunX, sunY, 32 + sunRedshift * 16, 0, Math.PI * 2);
-      ctx.fill();
-      // Body + core share bodyAlpha and the same B channel (10*sunRedshift)
+      ctx.beginPath(); ctx.arc(sunX, sunY, 32 + sunRedshift * 16, 0, Math.PI * 2); ctx.fill();
       ctx.globalAlpha = bodyAlpha;
       ctx.fillStyle = `rgb(${bodyR},${bodyG},${glowB})`;
-      ctx.beginPath();
-      ctx.arc(sunX, sunY, 15, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.beginPath(); ctx.arc(sunX, sunY, 15, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = `rgb(${coreR},${coreG},${glowB})`;
-      ctx.beginPath();
-      ctx.arc(sunX, sunY, 9, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.beginPath(); ctx.arc(sunX, sunY, 9, 0, Math.PI * 2); ctx.fill();
       ctx.globalAlpha = 1;
-
-      // Light rays from sun. All 4 rays share the same color — built into
-      // one path so a single fill renders all of them.
+      // Light rays during midday only (one path, one fill).
       if (nightIntensity < 0.3) {
         const rayAlpha = 0.04 * (1 - nightIntensity / 0.3);
         ctx.globalAlpha = rayAlpha;
@@ -190,14 +179,8 @@ export function drawDayNightCycle(
     }
   }
 
-  // Darkness overlay
-  if (overlayAlpha > 0.02) {
-    ctx.fillStyle = `rgba(10, 12, 45, ${overlayAlpha})`;
-    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-  }
-
   // Moon: visible when nightIntensity > 0.2, arcs during night half (0.25->0.5->0.75)
-  const moonPhase = ((dayPhase + 0.75) % 1); // shift so 0=moonrise, 0.5=moonset
+  const moonPhase = wrapToUnit(dayPhase + 0.75); // 0=moonrise, 0.5=moonset
   if (moonPhase < 0.5) {
     const moonT = moonPhase / 0.5;
     const moonX = 60 + moonT * (CANVAS_WIDTH - 120);

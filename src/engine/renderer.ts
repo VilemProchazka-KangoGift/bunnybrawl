@@ -35,6 +35,8 @@ import {
 import { setSpriteCacheScale } from './rendering/players';
 import { setHudScale } from './rendering/hud';
 import { applyRenderScaleToCanvas, getRenderScale } from './renderScale';
+import { LightingPipeline } from './lighting';
+import { getBrightness } from './lighting/brightness';
 import { getSlowDevice } from './perfFlags';
 import { perfTrace } from './perfTrace';
 import { getReactiveKind } from './gameLoop/cosmetics/reactiveDecorations';
@@ -153,6 +155,15 @@ function freshDiag(): RenderDiagnostics {
   };
 }
 
+/** Write style.opacity if it changed at 3-decimal resolution. Returns the
+ *  new quantized value so callers can cache it. Skips DOM writes during
+ *  dayPhase plateaus (noon/midnight) and pause. */
+function setQuantizedOpacity(el: HTMLElement, target: number, last: number): number {
+  const q = Math.round(target * 1000) / 1000;
+  if (q !== last) el.style.opacity = String(q);
+  return q;
+}
+
 function resetDiag(d: RenderDiagnostics): void {
   d.clouds = false; d.weather = false; d.wildlife = false; d.animatedBg = false;
   d.hazardZones = false; d.effectZones = false; d.bouncyPlatforms = false; d.pigeons = false;
@@ -165,11 +176,28 @@ function resetDiag(d: RenderDiagnostics): void {
 
 export class Renderer {
   private bgCanvas: HTMLCanvasElement;
+  private bgNightCanvas: HTMLCanvasElement | null = null;
   private fgCanvas: HTMLCanvasElement;
   private hudCanvas: HTMLCanvasElement | null = null;
+  private lighting: LightingPipeline;
   private bgCtx: CanvasRenderingContext2D;
+  private bgNightCtx: CanvasRenderingContext2D | null = null;
   private fgCtx: CanvasRenderingContext2D;
   private hudCtx: CanvasRenderingContext2D | null = null;
+  // Foreground night-tint overlay; mix-blend-mode: multiply triggers Chromium
+  // GPU layer promotion for the fg canvas (perf win on top of the visual win).
+  private _fgNightTint: HTMLDivElement | null = null;
+  // Cached last-written opacity per element, avoids per-frame style-string
+  // churn during dayPhase plateaus (noon/midnight) and pause. Sentinel -1
+  // works because actual opacity is in [0, 1].
+  private _lastBgNightOpacity = -1;
+  private _lastFgTintOpacity = -1;
+  // Set once at construction; lets _driveBgNightOpacity early-out for
+  // renderer instances with no DOM darkening (lobby, tests).
+  private _hasDomDarkening = false;
+  // Set by bg-mutating paths (bakeGibs, renderBloodDrips) so the night-bake
+  // happens once at the next renderFrame instead of N times per kill.
+  private _bgNightDirty = false;
   // Cached fg overlay (platform body faces drawn after players). Built once
   // per arena/scale change in renderBackground; one drawImage per frame
   // beats N×decorations-per-platform-per-frame.
@@ -228,7 +256,7 @@ export class Renderer {
   // maintained. Consumers use hasWarmedAll() to verify preload coverage.
   private _warmedNames: Set<string> = new Set();
 
-  constructor(bgCanvas: HTMLCanvasElement, fgCanvas: HTMLCanvasElement, theme: ThemeConfig, mirrored = false, hudCanvas?: HTMLCanvasElement) {
+  constructor(bgCanvas: HTMLCanvasElement, fgCanvas: HTMLCanvasElement, theme: ThemeConfig, mirrored = false, hudCanvas?: HTMLCanvasElement, bgNightCanvas?: HTMLCanvasElement, fgNightTint?: HTMLDivElement) {
     clearRenderingCaches();
     this.bgCanvas = bgCanvas;
     this.fgCanvas = fgCanvas;
@@ -243,6 +271,15 @@ export class Renderer {
       this.hudCtx = hudCanvas.getContext('2d')!;
     }
 
+    // Optional cross-fade night-variant BG canvas; see lighting/pipeline.ts.
+    if (bgNightCanvas) {
+      this.bgNightCanvas = bgNightCanvas;
+      this.bgNightCtx = bgNightCanvas.getContext('2d')!;
+    }
+    if (fgNightTint) {
+      this._fgNightTint = fgNightTint;
+    }
+
     // Apply initial render scale to all canvases (sets backing-store dims + ctx transform)
     this._renderScale = getRenderScale();
     this._applyScaleToCanvases();
@@ -250,12 +287,20 @@ export class Renderer {
     setHudScale(this._renderScale);
 
     this.initClouds();
+    this.lighting = new LightingPipeline(CANVAS_WIDTH, CANVAS_HEIGHT);
+
+    // Lobby/tests with no DOM darkening stay on the source-over fillRect path.
+    this._hasDomDarkening = this.bgNightCanvas !== null || this._fgNightTint !== null;
+    this.lighting.setHasDomDarkening(this._hasDomDarkening);
   }
 
   private _applyScaleToCanvases(): void {
     const s = this._renderScale;
     applyRenderScaleToCanvas(this.bgCanvas, this.bgCtx, s);
     applyRenderScaleToCanvas(this.fgCanvas, this.fgCtx, s);
+    if (this.bgNightCanvas && this.bgNightCtx) {
+      applyRenderScaleToCanvas(this.bgNightCanvas, this.bgNightCtx, s);
+    }
     if (this.hudCanvas && this.hudCtx) {
       applyRenderScaleToCanvas(this.hudCanvas, this.hudCtx, s);
     }
@@ -273,6 +318,7 @@ export class Renderer {
     this._applyScaleToCanvases();
     setSpriteCacheScale(scale);
     setHudScale(scale);
+    this.lighting.resize(CANVAS_WIDTH, CANVAS_HEIGHT, scale);
     if (this._lastBgArena) {
       this.renderBackground(this._lastBgArena, this._lastBgOriginalArena);
     }
@@ -439,6 +485,53 @@ export class Renderer {
     // 20+ shape primitives per frame. Heavy arenas (meadow, winter_lake)
     // have ~25 fg decorations each.
     this._renderForegroundNatureCache(themeArena);
+    // Bake night variant of bg into the cross-fade canvas (when wired). Cheap:
+    // one drawImage + one fillRect per arena-load / render-scale change. CSS
+    // opacity then drives the day↔night cross-fade per frame at ~0 GPU cost.
+    this._bakeBgNightVariant();
+  }
+
+  /** Drive bgNight + fg-tint opacity from the lighting pipeline. Quantized
+   *  writes skip the style assignment when night intensity is unchanged. */
+  private _driveBgNightOpacity(): void {
+    if (!this._hasDomDarkening) return;
+    // When lighting is off, getBgNightOpacity() returns 0 and setQuantizedOpacity
+    // short-circuits on equal values — no DOM writes after the initial settle.
+    const intensity = this.lighting.getBgNightOpacity();
+    if (this.bgNightCanvas) {
+      this._lastBgNightOpacity = setQuantizedOpacity(
+        this.bgNightCanvas, intensity, this._lastBgNightOpacity);
+    }
+    if (this._fgNightTint) {
+      this._lastFgTintOpacity = setQuantizedOpacity(
+        this._fgNightTint, this.lighting.getFgTintOpacity(intensity), this._lastFgTintOpacity);
+    }
+  }
+
+  /** Copy bg into bgNightCanvas with the night tint baked in. Called from
+   *  renderBackground() (arena load + render-scale change) and from
+   *  renderFrame when `_bgNightDirty` was set by bakeGibs/renderBloodDrips
+   *  earlier in the frame (so kill marks track at night, with at most one
+   *  bake per frame). Skipped when lighting is off (~15MB GPU bandwidth).
+   *
+   *  We do NOT skip when current bgNight opacity is small — the bake is a
+   *  setup pass for a future cross-fade. Skipping at noon would leave the
+   *  night canvas empty when dayPhase advances into the visible band. */
+  private _bakeBgNightVariant(): void {
+    if (!this.bgNightCanvas || !this.bgNightCtx) return;
+    if (!this.lighting.isEnabled()) return;
+    this._bgNightDirty = false;
+    const ctx = this.bgNightCtx;
+    const w = this.bgNightCanvas.width;
+    const h = this.bgNightCanvas.height;
+    ctx.save();
+    // Identity: drawImage between two equally-scaled backing stores must run
+    // at 1:1 px or the per-canvas render-scale transform would double-scale.
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(this.bgCanvas, 0, 0);
+    ctx.fillStyle = this.lighting.getBgNightBakeColor();
+    ctx.fillRect(0, 0, w, h);
+    ctx.restore();
   }
 
   /**
@@ -610,7 +703,11 @@ export class Renderer {
     return `rgb(${r},${g},${bl})`;
   }
 
+  /** Bake gibs onto the bg canvas. Marks bgNight dirty so the cross-fade
+   *  variant picks them up at the next renderFrame (single re-bake even when
+   *  bakeGibs + renderBloodDrips both fire on the same kill frame). */
   bakeGibs(gibs: Gib[]): void {
+    if (gibs.length === 0) return;
     const ctx = this.bgCtx;
     for (const gib of gibs) {
       ctx.save();
@@ -620,9 +717,13 @@ export class Renderer {
       drawGibShape(ctx, gib);
       ctx.restore();
     }
+    this._bgNightDirty = true;
   }
 
+  /** Bake blood-drip splats onto the bg canvas. Marks bgNight dirty (see
+   *  bakeGibs for the coalesce contract). */
   renderBloodDrips(drips: Array<{ x: number; y: number; radius: number; color: string }>): void {
+    if (drips.length === 0) return;
     const ctx = this.bgCtx;
     for (const drip of drips) {
       ctx.fillStyle = drip.color + '99';
@@ -640,6 +741,7 @@ export class Renderer {
         ctx.fill();
       }
     }
+    this._bgNightDirty = true;
   }
 
   // ---- Frame rendering ----
@@ -661,6 +763,10 @@ export class Renderer {
 
       // Cache time once per frame
       this.frameTime = performance.now();
+      this.lighting.beginFrame(this.theme, matchState.dayPhase);
+      // Drain mid-match bg writes (gibs, splat marks) into the bgNight bake.
+      if (this._bgNightDirty) this._bakeBgNightVariant();
+      this._driveBgNightOpacity();
 
       ctx.save();
 
@@ -1048,6 +1154,33 @@ export class Renderer {
       }
 
       perfTrace.end('render.fg-nature', fgStart);
+
+      // Lighting composite — multiplies the light buffer onto the fg ctx.
+      // Sits inside the hitstop/screen-shake transform so lights ride the shake.
+      if (this.lighting.isEnabled()) {
+        this.lighting.composite(ctx);
+      }
+
+      // Brightness slider: applied AFTER lighting so users can tune the whole
+      // composited frame. Skipped at value 1.0.
+      const brightness = getBrightness();
+      if (brightness !== 1.0) {
+        ctx.save();
+        if (brightness < 1.0) {
+          // Darken: multiply with rgb(b,b,b)
+          ctx.globalCompositeOperation = 'multiply';
+          const v = Math.round(brightness * 255);
+          ctx.fillStyle = `rgb(${v},${v},${v})`;
+          ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        } else {
+          // Brighten: lighter blend with white at intensity (brightness - 1)
+          ctx.globalCompositeOperation = 'lighter';
+          const v = Math.round((brightness - 1) * 255);
+          ctx.fillStyle = `rgb(${v},${v},${v})`;
+          ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        }
+        ctx.restore();
+      }
 
       ctx.restore();
 

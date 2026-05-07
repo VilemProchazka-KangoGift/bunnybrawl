@@ -33,6 +33,8 @@ import { applyDelta, readDeltaBaseFrame } from './core/deltaCompression';
 
 export interface NetMatchConfig {
   bgCanvas: HTMLCanvasElement;
+  bgNightCanvas?: HTMLCanvasElement;
+  fgNightTint?: HTMLDivElement;
   fgCanvas: HTMLCanvasElement;
   hudCanvas?: HTMLCanvasElement;
   arena: Arena;
@@ -183,6 +185,9 @@ export class NetMatch {
       config.activePlayers,
       config.onMatchEnd,
       config.hudCanvas,
+      undefined, // rng
+      config.bgNightCanvas,
+      config.fgNightTint,
     );
 
     if (this._isHost) {

@@ -69,8 +69,10 @@ function kickoffLoading(
 export function Match() {
   const { t } = useTranslation();
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
+  const bgNightCanvasRef = useRef<HTMLCanvasElement>(null);
   const fgCanvasRef = useRef<HTMLCanvasElement>(null);
   const hudCanvasRef = useRef<HTMLCanvasElement>(null);
+  const fgNightTintRef = useRef<HTMLDivElement>(null);
   const gameLoopRef = useRef<GameLoop | null>(null);
   const victoryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { activePlayers, matchSettings, setMatchResult, setScreen, setActivePlayers, setMatchSettings, online, resetOnline, clearMatchResult } = useGameStore();
@@ -249,6 +251,10 @@ export function Match() {
     const fgCanvas = fgCanvasRef.current;
     const hudCanvas = hudCanvasRef.current;
     if (!bgCanvas || !fgCanvas || !hudCanvas) return;
+    // Optional lighting overlays: when missing, Renderer falls back to the
+    // source-over fillRect tint path. Don't block match mount on them.
+    const bgNightCanvas = bgNightCanvasRef.current ?? undefined;
+    const fgNightTint = fgNightTintRef.current ?? undefined;
 
     const clearTimer = (ref: { current: ReturnType<typeof setTimeout> | null }) => {
       if (ref.current) { clearTimeout(ref.current); ref.current = null; }
@@ -294,6 +300,8 @@ export function Match() {
 
       const netMatch = new NetMatch({
         bgCanvas,
+        bgNightCanvas,
+        fgNightTint,
         fgCanvas,
         hudCanvas,
         arena,
@@ -456,6 +464,9 @@ export function Match() {
       activePlayers,
       onMatchEnd,
       hudCanvas,
+      undefined, // rng
+      bgNightCanvas,
+      fgNightTint,
     );
 
     gameLoopRef.current = loop;
@@ -494,11 +505,22 @@ export function Match() {
           height={CANVAS_HEIGHT}
         />
         <canvas
+          ref={bgNightCanvasRef}
+          className="game-canvas bg-night-canvas"
+          width={CANVAS_WIDTH}
+          height={CANVAS_HEIGHT}
+        />
+        <canvas
           ref={fgCanvasRef}
           className="game-canvas fg-canvas"
           width={CANVAS_WIDTH}
           height={CANVAS_HEIGHT}
           data-testid="game-canvas"
+        />
+        <div
+          ref={fgNightTintRef}
+          className="fg-night-tint"
+          aria-hidden="true"
         />
         <canvas
           ref={hudCanvasRef}

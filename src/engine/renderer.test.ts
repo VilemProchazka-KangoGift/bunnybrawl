@@ -206,6 +206,11 @@ function makeState(overrides?: any) {
     pollenParticles: null,
     geyserStates: [],
     bouncyWobble: new Map(),
+    // scatterFlocks defaulted here as a workaround — the production state
+    // factory in `simulator/initialState.ts` populates it, but this mock
+    // pre-dates that field. Without the default, every test that exercises
+    // `renderer.renderFrame` crashes on `for (const f of state.scatterFlocks)`.
+    scatterFlocks: [],
     ...overrides,
   } as any;
 }
@@ -681,6 +686,49 @@ describe('Renderer — renderBloodDrips', () => {
     renderer.renderBloodDrips(drips);
     expect(bgCtx.arc).toHaveBeenCalled();
     expect(bgCtx.fill).toHaveBeenCalled();
+  });
+});
+
+describe('Renderer — bgNight bake on bg writes', () => {
+  it('bakeGibs marks bgNight dirty without baking eagerly', () => {
+    const { canvas: bg } = makeCanvas();
+    const { canvas: bgNight, ctx: bgNightCtx } = makeCanvas();
+    const { canvas: fg } = makeCanvas();
+    const fgTint = document.createElement('div');
+    const renderer = new Renderer(bg, fg, makeTheme(), false, undefined, bgNight, fgTint);
+    const gibs = [{ x: 100, y: 200, rotation: 0.5, type: 'ear', width: 8, height: 6, color: '#FF0000' }];
+    (bgNightCtx.drawImage as any).mockClear();
+    renderer.bakeGibs(gibs as any);
+    // Should NOT bake eagerly — just set the dirty flag.
+    expect(bgNightCtx.drawImage).not.toHaveBeenCalled();
+  });
+
+  it('bakeGibs followed by renderFrame triggers exactly one bgNight bake', () => {
+    const { canvas: bg } = makeCanvas();
+    const { canvas: bgNight, ctx: bgNightCtx } = makeCanvas();
+    const { canvas: fg } = makeCanvas();
+    const fgTint = document.createElement('div');
+    const renderer = new Renderer(bg, fg, makeTheme(), false, undefined, bgNight, fgTint);
+    const gibs = [{ x: 100, y: 200, rotation: 0.5, type: 'ear', width: 8, height: 6, color: '#FF0000' }];
+    const drips = [{ x: 200, y: 300, radius: 3, color: '#880000' }];
+    (bgNightCtx.drawImage as any).mockClear();
+
+    // Coalesce: both bg-mutating paths fire same frame, ONE bake on next render.
+    renderer.bakeGibs(gibs as any);
+    renderer.renderBloodDrips(drips);
+    renderer.renderFrame(makeState(), makeArena(), []);
+    expect(bgNightCtx.drawImage).toHaveBeenCalledTimes(1);
+  });
+
+  it('renderFrame without prior bg writes does not bake', () => {
+    const { canvas: bg } = makeCanvas();
+    const { canvas: bgNight, ctx: bgNightCtx } = makeCanvas();
+    const { canvas: fg } = makeCanvas();
+    const fgTint = document.createElement('div');
+    const renderer = new Renderer(bg, fg, makeTheme(), false, undefined, bgNight, fgTint);
+    (bgNightCtx.drawImage as any).mockClear();
+    renderer.renderFrame(makeState(), makeArena(), []);
+    expect(bgNightCtx.drawImage).not.toHaveBeenCalled();
   });
 });
 
