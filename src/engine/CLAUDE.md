@@ -181,6 +181,22 @@
 - `NDJSONFileRecorder` streams `{type:'header',...}\n{type:'sample',...}\n{type:'end',...}\n` lines. End record contains a summary subset (winner, ticks, reason) — `finalState` has Maps that don't survive JSON, so it's dropped.
 - Example pipeline: `npx vite-node scripts/selfPlay.ts -- --episodes 5 --arena meadow --out run.ndjson --seed 42`. Produces N episodes appended to a single NDJSON file. Use `--reward.<key> <value>` or `--rewards-file <path>` to override defaults per run; the resolved weights are recorded in every header's tags. NDJSON wire format is fully specified in `docs/headless-recording-format.md` — keep that doc in sync with `OBSERVATION_SIZE` / `DEFAULT_REWARD_WEIGHTS` changes.
 
+## Lighting
+
+- **Per-frame, screen-space, post-sprite-cache.** Hard rule from `feat/rim-light` and `feat/character-outlines` post-mortems. Never bake lighting into a sprite cache, the foreground-nature cache, or any other cached canvas. The `LightingPipeline.composite()` call sits inside the hitstop/screen-shake transform but AFTER all entities are drawn — lights ride the shake, never get baked.
+- **Composite point:** in `renderer.ts:renderFrame`, the order is `beginFrame()` at top, then all bg/fg/effects rendering as before, then `composite()` immediately before `ctx.restore()`, then brightness pass, then `ctx.restore()`, then HUD on dedicated canvas. HUD is NEVER tinted (ref §19.7 — bloom on UI = eye cancer).
+- **Half-res light buffer (0.5×).** `LightingPipeline` owns a single module-scope `OffscreenCanvas` at `bufW × bufH = floor(canvas × 0.5)`. Lazily created on first `beginFrame()` (avoids breaking JSDOM unit tests). Recreated on `setRenderScale`. Bilinear upscale during composite gives a free blur on lighting gradients.
+- **Multiply blend on the FG canvas in-place.** Sky/bg canvas is treated as self-lit (ref §17.3 variant 1) — only the FG ctx is multiplied by the light buffer. The bg-redraw-on-splat optimization is preserved.
+- **dayPhase convention** (matches existing `drawDayNightCycle`): `0 = noon, 0.25 = sunset, 0.5 = midnight, 0.75 = sunrise`. `nightIntensity = (1 - cos(dayPhase * 2π)) / 2`. `themeToAmbient` and `buildSunLight` both consume this convention.
+- **Determinism rule.** Any phased lighting effect (flicker, twinkle, pulse) MUST derive its phase from `tickRng(seed, state.tick)` from `lighting/determinism.ts`. Never `Math.random()`, never `performance.now()`. Reason: host-authoritative netcode allows cosmetic divergence in principle, but consistent appearance across host/guest is a quality bar for player-visible lighting.
+- **Kill switch:** `?lighting=off` URL param + localStorage key `carrotroyale_lighting_off`. When set, `LightingPipeline.isEnabled()` returns false; renderer skips both the composite and the brightness pass. E2E regression `lighting-off-regression.spec.ts` enforces it.
+- **Accessibility scaffolds (URL + localStorage, no UI in M1):**
+  - Brightness: `?brightness=0.5..1.5`, `carrotroyale_brightness`. Final composite multiplier; skipped at 1.0.
+  - Photosensitivity: `?photosensitivity=on|off`, `carrotroyale_photosensitivity`. Caps ambient floor at `rgb(120,130,160)` and sun intensity at 70% in M1; L2+ flicker reads the flag too.
+- **Perf tiers:** `low | med | high`, default `med`. URL `?perfTier=...`, storage `carrotroyale_perf_tier`. M1 only implements `med`; low/high fall through. L2+ branches.
+- **Pure light-math modules:** `ambient.ts` (`themeToAmbient(theme, dayPhase, photosensitivity)`) and `sun.ts` (`buildSunLight(theme, dayPhase, photosensitivity)`) are pure functions. Test them aggressively; they are the migration target for all future light contributions in M1's scope.
+- **What lives where:** `effects.ts > drawDayNightCycle` retains moon, stars, fireflies, sunset afterglow. Sun glow + night overlay alpha rect were removed in M1 — they're now light contributions on the buffer.
+
 ## Network Multiplayer (Host-Authoritative)
 - **Architecture**: Host runs full GameLoop (identical to local play), broadcasts binary snapshots to guests every tick. Guests interpolate between snapshots and send inputs to host. No determinism requirements — host is the single source of truth.
 - **ICE servers**: `ICE_SERVERS` in transport.ts configures STUN + TURN. TURN required for mobile-to-mobile (symmetric NAT). Currently uses free metered.ca Open Relay.
