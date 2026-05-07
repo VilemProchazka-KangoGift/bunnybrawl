@@ -1182,10 +1182,14 @@ export const underwater: ArenaPack = {
   drawAnimatedForeground: (ctx, _arena, time, _dayPhase, matchState) => {
     if (getSlowDevice() || !matchState) return;
     ctx.save();
-    // Sweep amplitude keeps the school fully on-screen. Wider amplitudes push
-    // fish off both edges and look like teleports as they re-enter.
-    const cxBase = CANVAS_WIDTH * 0.5 + fastSin(time * 0.18) * (CANVAS_WIDTH * 0.32);
-    const cy = 380 + fastSin(time * 0.5) * 40;
+    // Use Math.sin (not fastSin) for the slow school sweep — fastSin's 1°
+    // table resolution causes the position to step in 7-12px chunks at the
+    // 0.18 rad/s frequency (effective ~10Hz updates), which reads as visible
+    // choppiness even though render runs at 60Hz. Per-fish high-frequency
+    // wobble below stays on fastSin since it advances multiple degrees per
+    // frame and the steps are sub-pixel.
+    const cxBase = CANVAS_WIDTH * 0.5 + Math.sin(time * 0.18) * (CANVAS_WIDTH * 0.32);
+    const cy = 380 + Math.sin(time * 0.5) * 40;
     const players = matchState.players;
     for (let i = 0; i < FISH_COUNT; i++) drawFish(ctx, i, time, cxBase, cy, players);
     ctx.restore();
