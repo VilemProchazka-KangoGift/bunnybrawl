@@ -72,6 +72,11 @@ export function Match() {
   const bgNightCanvasRef = useRef<HTMLCanvasElement>(null);
   const fgCanvasRef = useRef<HTMLCanvasElement>(null);
   const hudCanvasRef = useRef<HTMLCanvasElement>(null);
+  // Foreground night-tint overlay: stacked between fg and hud canvases. The
+  // renderer drives its opacity from dayPhase via the lighting pipeline.
+  // mix-blend-mode: multiply on this layer darkens sprites with color
+  // preservation. See Match.css `.fg-night-tint`.
+  const fgNightTintRef = useRef<HTMLDivElement>(null);
   const gameLoopRef = useRef<GameLoop | null>(null);
   const victoryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { activePlayers, matchSettings, setMatchResult, setScreen, setActivePlayers, setMatchSettings, online, resetOnline, clearMatchResult } = useGameStore();
@@ -250,7 +255,8 @@ export function Match() {
     const bgNightCanvas = bgNightCanvasRef.current;
     const fgCanvas = fgCanvasRef.current;
     const hudCanvas = hudCanvasRef.current;
-    if (!bgCanvas || !bgNightCanvas || !fgCanvas || !hudCanvas) return;
+    const fgNightTint = fgNightTintRef.current;
+    if (!bgCanvas || !bgNightCanvas || !fgCanvas || !hudCanvas || !fgNightTint) return;
 
     const clearTimer = (ref: { current: ReturnType<typeof setTimeout> | null }) => {
       if (ref.current) { clearTimeout(ref.current); ref.current = null; }
@@ -297,6 +303,7 @@ export function Match() {
       const netMatch = new NetMatch({
         bgCanvas,
         bgNightCanvas,
+        fgNightTint,
         fgCanvas,
         hudCanvas,
         arena,
@@ -461,6 +468,7 @@ export function Match() {
       hudCanvas,
       undefined, // rng
       bgNightCanvas,
+      fgNightTint,
     );
 
     gameLoopRef.current = loop;
@@ -510,6 +518,11 @@ export function Match() {
           width={CANVAS_WIDTH}
           height={CANVAS_HEIGHT}
           data-testid="game-canvas"
+        />
+        <div
+          ref={fgNightTintRef}
+          className="fg-night-tint"
+          aria-hidden="true"
         />
         <canvas
           ref={hudCanvasRef}

@@ -177,6 +177,11 @@ export class Renderer {
   // Last opacity written to bgNightCanvas.style — avoids string churn per frame
   // when night intensity is unchanged (e.g. dayPhase frozen during pause).
   private _lastBgNightOpacity = -1;
+  // Foreground night-tint overlay (mix-blend-mode: multiply layer above fg).
+  // Triggers Chromium layer promotion → fg gets its own GPU compositor layer,
+  // measured ~1.6ms perf win at midnight on top of the visual win.
+  private _fgNightTint: HTMLDivElement | null = null;
+  private _lastFgTintOpacity = -1;
   // Cached fg overlay (platform body faces drawn after players). Built once
   // per arena/scale change in renderBackground; one drawImage per frame
   // beats N×decorations-per-platform-per-frame.
@@ -235,7 +240,7 @@ export class Renderer {
   // maintained. Consumers use hasWarmedAll() to verify preload coverage.
   private _warmedNames: Set<string> = new Set();
 
-  constructor(bgCanvas: HTMLCanvasElement, fgCanvas: HTMLCanvasElement, theme: ThemeConfig, mirrored = false, hudCanvas?: HTMLCanvasElement, bgNightCanvas?: HTMLCanvasElement) {
+  constructor(bgCanvas: HTMLCanvasElement, fgCanvas: HTMLCanvasElement, theme: ThemeConfig, mirrored = false, hudCanvas?: HTMLCanvasElement, bgNightCanvas?: HTMLCanvasElement, fgNightTint?: HTMLDivElement) {
     clearRenderingCaches();
     this.bgCanvas = bgCanvas;
     this.fgCanvas = fgCanvas;
@@ -269,7 +274,13 @@ export class Renderer {
     this.initClouds();
     this.lighting = new LightingPipeline(CANVAS_WIDTH, CANVAS_HEIGHT);
     this.lighting.setBgCanvas(bgCanvas);
-    this.lighting.setBgNightWired(this.bgNightCanvas !== null);
+
+    if (fgNightTint) this._fgNightTint = fgNightTint;
+    // Any DOM-driven darkening (bgNight cross-fade and/or fg-tint multiply
+    // layer) suppresses the legacy source-over fillRect tint pass on fg.
+    // Lobby/tests with neither stay on the source-over fallback.
+    const domDarkeningActive = this.bgNightCanvas !== null || this._fgNightTint !== null;
+    this.lighting.setBgNightWired(domDarkeningActive);
   }
 
   private _applyScaleToCanvases(): void {
@@ -469,18 +480,28 @@ export class Renderer {
     this._bakeBgNightVariant();
   }
 
-  /** Per-frame: drive bgNightCanvas.style.opacity from the lighting pipeline's
-   *  current night intensity. CSS opacity on a stacked DOM canvas costs ~0ms —
-   *  the browser compositor blends layers as part of the existing paint pass.
-   *  Skipped when opacity hasn't changed since last frame (string churn savings). */
+  /** Per-frame: drive bgNightCanvas + fgNightTint opacity from the lighting
+   *  pipeline's current night intensity. Quantized to 3 decimals so dayPhase
+   *  jitter doesn't churn style strings. The fg-tint runs at 0.7× the bg
+   *  intensity since multiply over a colored fg darkens harder than alpha
+   *  blend over a tinted bg — equalizes the visual balance. */
   private _driveBgNightOpacity(): void {
-    if (!this.bgNightCanvas) return;
-    const opacity = this.lighting.getBgNightOpacity();
-    // Quantize to 3 decimal places so dayPhase jitter doesn't cause string churn.
-    const q = Math.round(opacity * 1000) / 1000;
-    if (q === this._lastBgNightOpacity) return;
-    this._lastBgNightOpacity = q;
-    this.bgNightCanvas.style.opacity = String(q);
+    const intensity = this.lighting.getBgNightOpacity();
+    if (this.bgNightCanvas) {
+      const q = Math.round(intensity * 1000) / 1000;
+      if (q !== this._lastBgNightOpacity) {
+        this._lastBgNightOpacity = q;
+        this.bgNightCanvas.style.opacity = String(q);
+      }
+    }
+    if (this._fgNightTint) {
+      const target = intensity * 0.7;
+      const q = Math.round(target * 1000) / 1000;
+      if (q !== this._lastFgTintOpacity) {
+        this._lastFgTintOpacity = q;
+        this._fgNightTint.style.opacity = String(q);
+      }
+    }
   }
 
   /** Copy the freshly-rendered bg canvas into bgNightCanvas and overlay the

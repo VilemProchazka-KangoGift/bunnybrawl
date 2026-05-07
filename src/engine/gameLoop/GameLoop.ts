@@ -92,6 +92,7 @@ export class GameLoop {
     hudCanvas?: HTMLCanvasElement,
     rng?: SeededRNG,
     bgNightCanvas?: HTMLCanvasElement,
+    fgNightTint?: HTMLDivElement,
   ) {
     this.onMatchEnd = onMatchEnd;
     this.keyboardManager = new KeyboardManager();
@@ -115,7 +116,7 @@ export class GameLoop {
       },
     });
 
-    this.renderer = new Renderer(bgCanvas, fgCanvas, this.simulator.getTheme(), settings.mods.mirrorArena, hudCanvas, bgNightCanvas);
+    this.renderer = new Renderer(bgCanvas, fgCanvas, this.simulator.getTheme(), settings.mods.mirrorArena, hudCanvas, bgNightCanvas, fgNightTint);
     this.renderer.setTimeLimit(settings.timeLimit);
 
     // ParticleSystem references the simulator's state/arena/theme/settings and
