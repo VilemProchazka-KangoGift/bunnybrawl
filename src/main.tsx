@@ -1,7 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { initDebugFlags } from './engine/debugFlags';
-import { initLighting } from './engine/lighting';
+import { initLighting, initLightMode } from './engine/lighting';
 import { initPerfTier } from './engine/lighting/perfTier';
 import { initBrightness } from './engine/lighting/brightness';
 import { initPhotosensitivity } from './engine/lighting/photosensitivity';
@@ -13,6 +13,7 @@ import './components/shared.css'
 
 initDebugFlags(window.location.search);
 initLighting(window.location.search);
+initLightMode(window.location.search);
 initPerfTier(window.location.search);
 initBrightness(window.location.search);
 initPhotosensitivity(window.location.search);

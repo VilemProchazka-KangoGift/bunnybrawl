@@ -1,17 +1,17 @@
 // src/engine/lighting/__tests__/pipeline-integration.test.ts
 //
-// End-to-end: builds a real LightingPipeline, drives it through one frame
+// End-to-end: builds a real AmbientPipeline, drives it through one frame
 // against a synthesized minimal scene, asserts the composite output isn't mud.
 
 import { describe, it, expect } from 'vitest';
-import { LightingPipeline } from '../pipeline';
+import { AmbientPipeline } from '../pipeline';
 import type { ThemeConfig } from '../../themes/types';
 
 const theme = {
   dayNight: { enabled: true, showStars: true, showFireflies: true },
 } as unknown as ThemeConfig;
 
-describe('LightingPipeline integration (source-over tint)', () => {
+describe('AmbientPipeline integration (source-over tint)', () => {
   it('full frame at noon: tint barely visible — scene unchanged', () => {
     if (typeof OffscreenCanvas === 'undefined') return; // skip in JSDOM
     const scene = new OffscreenCanvas(1280, 720);
@@ -21,7 +21,7 @@ describe('LightingPipeline integration (source-over tint)', () => {
     sctx.fillStyle = '#A0C4E8'; // sky
     sctx.fillRect(0, 0, 1280, 660);
 
-    const p = new LightingPipeline(1280, 720);
+    const p = new AmbientPipeline(1280, 720);
     p.beginFrame(theme, 0); // noon
     p.composite(sctx as unknown as CanvasRenderingContext2D);
 
@@ -38,7 +38,7 @@ describe('LightingPipeline integration (source-over tint)', () => {
     sctx.fillStyle = '#FFFFFF';
     sctx.fillRect(0, 0, 1280, 720);
 
-    const p = new LightingPipeline(1280, 720);
+    const p = new AmbientPipeline(1280, 720);
     p.beginFrame(theme, 0.5); // midnight
     p.composite(sctx as unknown as CanvasRenderingContext2D);
 

@@ -73,6 +73,10 @@ export function Match() {
   const fgCanvasRef = useRef<HTMLCanvasElement>(null);
   const hudCanvasRef = useRef<HTMLCanvasElement>(null);
   const fgNightTintRef = useRef<HTMLDivElement>(null);
+  // L2 emitter compositing siblings — both modes wired; `?lmode` picks active.
+  const lightCanvasRef = useRef<HTMLCanvasElement>(null);
+  const lightStaticCanvasRef = useRef<HTMLCanvasElement>(null);
+  const lightDynamicCanvasRef = useRef<HTMLCanvasElement>(null);
   const gameLoopRef = useRef<GameLoop | null>(null);
   const victoryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { activePlayers, matchSettings, setMatchResult, setScreen, setActivePlayers, setMatchSettings, online, resetOnline, clearMatchResult } = useGameStore();
@@ -255,6 +259,9 @@ export function Match() {
     // source-over fillRect tint path. Don't block match mount on them.
     const bgNightCanvas = bgNightCanvasRef.current ?? undefined;
     const fgNightTint = fgNightTintRef.current ?? undefined;
+    const lightCanvas = lightCanvasRef.current ?? undefined;
+    const lightStaticCanvas = lightStaticCanvasRef.current ?? undefined;
+    const lightDynamicCanvas = lightDynamicCanvasRef.current ?? undefined;
 
     const clearTimer = (ref: { current: ReturnType<typeof setTimeout> | null }) => {
       if (ref.current) { clearTimeout(ref.current); ref.current = null; }
@@ -302,6 +309,9 @@ export function Match() {
         bgCanvas,
         bgNightCanvas,
         fgNightTint,
+        lightCanvas,
+        lightStaticCanvas,
+        lightDynamicCanvas,
         fgCanvas,
         hudCanvas,
         arena,
@@ -467,6 +477,9 @@ export function Match() {
       undefined, // rng
       bgNightCanvas,
       fgNightTint,
+      lightCanvas,
+      lightStaticCanvas,
+      lightDynamicCanvas,
     );
 
     gameLoopRef.current = loop;
@@ -521,6 +534,26 @@ export function Match() {
           ref={fgNightTintRef}
           className="fg-night-tint"
           aria-hidden="true"
+        />
+        {/* L2 emitter compositing — both `?lmode` paths wired; renderer picks
+            which is active. Unused canvases stay at opacity 0 (no GPU cost). */}
+        <canvas
+          ref={lightCanvasRef}
+          className="game-canvas light-canvas"
+          width={CANVAS_WIDTH}
+          height={CANVAS_HEIGHT}
+        />
+        <canvas
+          ref={lightStaticCanvasRef}
+          className="game-canvas light-static-canvas"
+          width={CANVAS_WIDTH}
+          height={CANVAS_HEIGHT}
+        />
+        <canvas
+          ref={lightDynamicCanvasRef}
+          className="game-canvas light-dynamic-canvas"
+          width={CANVAS_WIDTH}
+          height={CANVAS_HEIGHT}
         />
         <canvas
           ref={hudCanvasRef}
