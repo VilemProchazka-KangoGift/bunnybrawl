@@ -195,7 +195,8 @@ describe('LightingPipeline (real impl)', () => {
   it('beginFrame fills the light buffer with ambient color', () => {
     const p = new LightingPipeline(1280, 720);
     p.beginFrame(mockTheme(), 0, 0); // noon (dayPhase=0)
-    const buf = p.getLightBuffer();
+    const buf = p.getLightBuffer()!;
+    expect(buf).not.toBeNull();
     const ctx = buf.getContext('2d')!;
     // sample center pixel: should be warm-bright (noon ambient)
     const pixel = ctx.getImageData(buf.width / 2, buf.height / 2, 1, 1).data;
@@ -206,7 +207,8 @@ describe('LightingPipeline (real impl)', () => {
   it('beginFrame at midnight (dayPhase 0.5) produces cool blue ambient', () => {
     const p = new LightingPipeline(1280, 720);
     p.beginFrame(mockTheme(), 0.5, 0);
-    const buf = p.getLightBuffer();
+    const buf = p.getLightBuffer()!;
+    expect(buf).not.toBeNull();
     const ctx = buf.getContext('2d')!;
     const pixel = ctx.getImageData(buf.width / 2, buf.height / 2, 1, 1).data;
     expect(pixel[2]).toBeGreaterThan(pixel[0]); // blue > red
