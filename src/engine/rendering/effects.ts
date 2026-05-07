@@ -104,7 +104,6 @@ export function drawDayNightCycle(
 
   // Sun: visible during the day half. Lighting pipeline owns scene darkening,
   // but the sun disc itself is a celestial body and lives here next to the moon.
-  // wrapToUnit handles negative dayPhase or overshoots (parity with sun.ts).
   const sunPhase = wrapToUnit(dayPhase + 0.25); // 0=sunrise(6am), 0.5=sunset(6pm)
   if (sunPhase < 0.5) {
     const sunT = sunPhase / 0.5; // 0->1 across the day

@@ -166,11 +166,8 @@ export function CharacterSelect() {
     if (!bg || !fg || !hud) return;
 
     const theme = getTheme('lobby');
-    // Lobby skips bgNightCanvas/fgNightTint to avoid the per-arena VRAM cost.
-    // LightingPipeline falls back to the source-over fillRect path; the lobby
-    // does cycle dayPhase (LOBBY_DAY_CYCLE), so composite() emits a tint when
-    // the cycle hits dusk/midnight — same look as pre-M1's drawDayNightCycle.
-    // L4 per-arena keyframes may want lobby parity — see lighting program design doc.
+    // Lobby skips bgNightCanvas/fgNightTint and stays on the source-over
+    // fillRect path — the cross-fade infrastructure isn't worth its VRAM here.
     const renderer = new Renderer(bg, fg, theme, false, hud);
 
     // Static world (sky, hills, far background, platform iso skin) baked once.

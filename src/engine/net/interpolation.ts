@@ -8,6 +8,7 @@
 import type { MatchState } from '../types';
 import type { AuthSnapshot, SnapshotPlayer } from './snapshot';
 import { GRAVITY } from '../constants';
+import { wrapToUnit } from '../fastMath';
 import { SnapshotInterpolation } from './core/interpolation';
 import type { InterpolationConfig } from './core/types';
 
@@ -225,13 +226,13 @@ function interpolateSnapshots(a: AuthSnapshot, b: AuthSnapshot, t: number): Auth
 
   r.timeElapsed = lerp(a.timeElapsed, b.timeElapsed, t);
   r.countdown = lerp(a.countdown, b.countdown, t);
-  // dayPhase wraps in [0,1) — at the seam (e.g. 0.99 → 0.01) a naive lerp
-  // would pass through 0.5 (midnight), driving bgNightOpacity ≈ 0.88 for a few
-  // frames every cycle. Shift `a` by ±1 toward `b` before lerping, then wrap.
+  // dayPhase wraps in [0,1) — naive lerp at the 0.99→0.01 seam passes through
+  // 0.5 (midnight), driving bgNightOpacity ≈ 0.88 every cycle. Shift `a`
+  // toward `b` along the short arc, then wrap.
   let aPhase = a.dayPhase;
   if (b.dayPhase - a.dayPhase > 0.5) aPhase = a.dayPhase + 1;
   else if (a.dayPhase - b.dayPhase > 0.5) aPhase = a.dayPhase - 1;
-  r.dayPhase = ((lerp(aPhase, b.dayPhase, t) % 1) + 1) % 1;
+  r.dayPhase = wrapToUnit(lerp(aPhase, b.dayPhase, t));
   r.screenShake = lerp(a.screenShake, b.screenShake, t);
   r.slowMotion = lerp(a.slowMotion, b.slowMotion, t);
   r.screenFlash = lerp(a.screenFlash, b.screenFlash, t);

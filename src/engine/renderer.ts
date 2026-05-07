@@ -493,7 +493,9 @@ export class Renderer {
   /** Drive bgNight + fg-tint opacity from the lighting pipeline. Quantized
    *  writes skip the style assignment when night intensity is unchanged. */
   private _driveBgNightOpacity(): void {
-    if (!this._hasDomDarkening || !this.lighting.isEnabled()) return;
+    if (!this._hasDomDarkening) return;
+    // When lighting is off, getBgNightOpacity() returns 0 and setQuantizedOpacity
+    // short-circuits on equal values — no DOM writes after the initial settle.
     const intensity = this.lighting.getBgNightOpacity();
     if (this.bgNightCanvas) {
       this._lastBgNightOpacity = setQuantizedOpacity(
@@ -517,8 +519,6 @@ export class Renderer {
   private _bakeBgNightVariant(): void {
     if (!this.bgNightCanvas || !this.bgNightCtx) return;
     if (!this.lighting.isEnabled()) return;
-    // Clear flag only after the early returns succeed — otherwise toggling
-    // lighting on after a kill loses the pending bake signal.
     this._bgNightDirty = false;
     const ctx = this.bgNightCtx;
     const w = this.bgNightCanvas.width;
@@ -527,8 +527,6 @@ export class Renderer {
     // Identity: drawImage between two equally-scaled backing stores must run
     // at 1:1 px or the per-canvas render-scale transform would double-scale.
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    // bgCanvas is fully opaque (sky gradient fillRect covers every pixel), so
-    // drawImage overwrites without a preceding clearRect.
     ctx.drawImage(this.bgCanvas, 0, 0);
     ctx.fillStyle = this.lighting.getBgNightBakeColor();
     ctx.fillRect(0, 0, w, h);
@@ -736,8 +734,6 @@ export class Renderer {
       this.frameTime = performance.now();
       this.lighting.beginFrame(this.theme, matchState.dayPhase);
       // Drain mid-match bg writes (gibs, splat marks) into the bgNight bake.
-      // The bake clears the flag only when it actually runs, so a kill landed
-      // while lighting=off will re-bake on the next frame after re-enable.
       if (this._bgNightDirty) this._bakeBgNightVariant();
       this._driveBgNightOpacity();
 

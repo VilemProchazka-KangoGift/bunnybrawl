@@ -69,8 +69,7 @@ export class LightingPipeline {
     this.hasDomDarkening = has;
   }
 
-  /** Compute the tint alpha for this frame from ambient(theme, dayPhase).
-   *  Allocation-free — mutates the private `_ambientScratch`. */
+  /** Compute the tint alpha for this frame from ambient(theme, dayPhase). */
   beginFrame(theme: ThemeConfig, dayPhase: number): void {
     if (!this.isEnabled()) {
       this.tintAlpha = 0;
