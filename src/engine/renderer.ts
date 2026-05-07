@@ -253,6 +253,7 @@ export class Renderer {
 
     this.initClouds();
     this.lighting = new LightingPipeline(CANVAS_WIDTH, CANVAS_HEIGHT);
+    this.lighting.setBgCanvas(bgCanvas);
   }
 
   private _applyScaleToCanvases(): void {

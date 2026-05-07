@@ -10,21 +10,21 @@
 // Buffer is lazily created on first beginFrame() to avoid touching OffscreenCanvas
 // in environments that lack it (JSDOM unit tests).
 //
-// Perf fixes (L1):
-//  - beginFrame output is cached for ~30 frames; dayPhase changes ~1/3600 per
-//    frame at default cycle speed — well below visible threshold.
+// Perf:
 //  - Sun gradient baked to a 1×64 strip once per unique (color, intensity), then
 //    blitted with rotation. Eliminates per-frame full-buffer createLinearGradient
 //    evaluation (engine/CLAUDE.md: "catastrophic at 1280×720").
 //
-// Correctness fix (L1):
-//  - composite() now masks the light buffer by FG alpha before multiplying. The
-//    old direct multiply filled transparent FG pixels (sky region) with opaque
-//    ambient color, occluding the BG canvas. The new flow:
-//      1. Stamp light buffer onto a full-size temp canvas (source-over).
-//      2. destination-in with the FG canvas — keeps temp pixels only where FG
-//         has alpha (i.e. where sprites/particles are drawn).
-//      3. Multiply the masked result onto FG.
+// Composite strategy:
+//  - composite() does TWO passes onto the FG ctx:
+//      1. destination-over with BG canvas — fills FG's transparent regions
+//         (sky) with the BG content. After this pass FG is fully opaque.
+//      2. multiply with the light buffer — uniform scene-wide lighting.
+//  - Result: sky + hills + platforms + characters all multiply correctly. No
+//    halos around anti-aliased sprite edges (masking via destination-in
+//    produced asymmetric multiply on partial-alpha pixels).
+//  - The BG canvas is still rendered separately (splat-on-bg optimization
+//    preserved), it's just consumed each frame as a destination-over fill.
 
 import type { ThemeConfig } from '../themes/types';
 import { isLightingEnabled } from './index';
@@ -35,15 +35,6 @@ import type { RGB } from './types';
 
 const HALF_RES_SCALE = 0.5;
 
-/** Recompute the light buffer every N frames at most. */
-const CACHE_REFRESH_INTERVAL = 30; // ~0.5 s at 60 fps
-
-/**
- * Also recompute when dayPhase has moved more than this since the last bake.
- * 0.001 ≈ 0.4 s of game-time at default 1-cycle-per-24-min speed — imperceptible.
- */
-const CACHE_DAYPHASE_THRESHOLD = 0.001;
-
 export class LightingPipeline {
   private width: number;
   private height: number;
@@ -52,16 +43,11 @@ export class LightingPipeline {
   private lightBuffer: OffscreenCanvas | null = null;
   private lightCtx: OffscreenCanvasRenderingContext2D | null = null;
 
-  // ── Full-size temp canvas for the FG-alpha masking pass in composite() ──
-  private tempCanvas: OffscreenCanvas | null = null;
-  private tempCtx: OffscreenCanvasRenderingContext2D | null = null;
+  // ── BG canvas reference, set by Renderer; consumed in composite() to fill
+  // FG's transparent regions before multiply. ──
+  private bgCanvas: HTMLCanvasElement | null = null;
 
-  // ── beginFrame cache state ──
-  private lastDayPhase = -1; // sentinel: forces first-frame bake
-  private lastPhotosensitivity = false;
-  private cacheValidFor = 0; // frames remaining before next recompute
-
-  // ── Sun gradient strip cache ──
+  // ── Sun gradient strip cache (color/intensity-keyed; see getSunStrip). ──
   private cachedStrip: OffscreenCanvas | null = null;
   private cachedStripKey = '';
 
@@ -82,24 +68,6 @@ export class LightingPipeline {
     this.lightBuffer = new OffscreenCanvas(this.bufW, this.bufH);
     this.lightCtx = this.lightBuffer.getContext('2d');
     return this.lightCtx !== null;
-  }
-
-  /**
-   * Lazy full-size temp canvas for the composite masking pass.
-   * Returns null if OffscreenCanvas is unavailable (test / JSDOM).
-   */
-  private ensureTempCanvas(w: number, h: number): OffscreenCanvas | null {
-    if (typeof OffscreenCanvas === 'undefined') return null;
-    if (
-      this.tempCanvas !== null &&
-      this.tempCanvas.width === w &&
-      this.tempCanvas.height === h
-    ) {
-      return this.tempCanvas;
-    }
-    this.tempCanvas = new OffscreenCanvas(w, h);
-    this.tempCtx = this.tempCanvas.getContext('2d');
-    return this.tempCanvas;
   }
 
   /**
@@ -134,32 +102,15 @@ export class LightingPipeline {
    * Reset the light buffer to ambient and additively accumulate sun. Run at the
    * top of renderFrame so the buffer is ready when composite() is called.
    *
-   * The result is cached for up to CACHE_REFRESH_INTERVAL frames; it is only
-   * recomputed when dayPhase moves more than CACHE_DAYPHASE_THRESHOLD or the
-   * photosensitivity setting changes.
+   * Recomputed every frame for smooth dayPhase transitions. The work is cheap:
+   * a single fillRect on a 640×360 buffer plus one rotated drawImage of the
+   * pre-baked sun strip.
    */
   beginFrame(theme: ThemeConfig, dayPhase: number, _tick: number): void {
     if (!this.isEnabled()) return;
     if (!this.ensureBuffer()) return;
 
     const photosensitivity = getPhotosensitivity();
-
-    // Cache check: skip recompute when nothing perceptible changed.
-    const phaseDelta = Math.abs(dayPhase - this.lastDayPhase);
-    if (
-      this.cacheValidFor > 0 &&
-      phaseDelta < CACHE_DAYPHASE_THRESHOLD &&
-      photosensitivity === this.lastPhotosensitivity
-    ) {
-      this.cacheValidFor--;
-      return; // buffer still valid
-    }
-
-    // Recompute and refresh cache counters.
-    this.cacheValidFor = CACHE_REFRESH_INTERVAL;
-    this.lastDayPhase = dayPhase;
-    this.lastPhotosensitivity = photosensitivity;
-
     const ctx = this.lightCtx!;
 
     // 1. Fill with ambient (source-over, fully opaque).
@@ -178,18 +129,15 @@ export class LightingPipeline {
   }
 
   /**
-   * Multiply the light buffer onto the target ctx, but ONLY where the FG canvas
-   * already has alpha > 0. This prevents the opaque ambient color from occluding
-   * the transparent sky region (which shows through to the BG canvas via CSS
-   * stacking).
+   * Apply lighting to the FG ctx in two passes:
+   *   1. destination-over with BG canvas — fills FG's transparent regions
+   *      (sky) so the canvas is fully opaque before multiply.
+   *   2. multiply with the light buffer — uniform scene-wide darkening/tinting.
    *
-   * Flow:
-   *   1. Stamp the light buffer onto a full-size temp canvas (source-over).
-   *   2. destination-in with the FG canvas — erases temp pixels where FG is
-   *      transparent.
-   *   3. Multiply the masked result onto FG.
-   *
-   * Half-res buffer scales up with bilinear filtering — free blur on gradients.
+   * The destination-over pass requires `setBgCanvas(...)` to have been called
+   * during Renderer construction. Without it, the multiply still runs but the
+   * sky region (transparent FG) gets filled with opaque ambient color and
+   * occludes the BG canvas behind. setBgCanvas is a one-time wire-up.
    */
   composite(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D): void {
     if (!this.isEnabled()) return;
@@ -197,42 +145,26 @@ export class LightingPipeline {
 
     const w = this.width;
     const h = this.height;
-    const tmp = this.ensureTempCanvas(w, h);
 
-    if (tmp === null) {
-      // Fallback for environments without OffscreenCanvas: direct multiply
-      // (original behaviour — correctness issue doesn't matter in test env).
-      ctx.save();
-      ctx.globalCompositeOperation = 'multiply';
-      ctx.drawImage(this.lightBuffer, 0, 0, w, h);
-      ctx.restore();
-      return;
+    ctx.save();
+
+    // Pass 1: fill FG's transparent regions with BG content. After this pass
+    // FG is fully opaque so the multiply applies uniformly.
+    if (this.bgCanvas !== null) {
+      ctx.globalCompositeOperation = 'destination-over';
+      ctx.drawImage(this.bgCanvas, 0, 0, w, h);
     }
 
-    const tctx = this.tempCtx!;
-
-    // Step 1: stamp light buffer onto temp at full canvas size.
-    tctx.globalCompositeOperation = 'source-over';
-    tctx.clearRect(0, 0, w, h);
-    tctx.drawImage(this.lightBuffer, 0, 0, w, h);
-
-    // Step 2: mask by FG alpha — destination-in keeps only pixels where FG
-    // has alpha (sprites, particles, etc.).
-    //
-    // 4-arg drawImage with explicit (w, h) is REQUIRED here: ctx.canvas is the
-    // backing-store-sized canvas (e.g. 2560×1440 at renderScale=2), while tmp
-    // is logical-sized (1280×720). Without the explicit size, drawImage uses the
-    // source's intrinsic dimensions and the FG mask gets stamped at 2x scale,
-    // so a cloud at logical (200, 100) creates a ghost at logical (400, 200).
-    tctx.globalCompositeOperation = 'destination-in';
-    tctx.drawImage(ctx.canvas, 0, 0, w, h);
-    tctx.globalCompositeOperation = 'source-over';
-
-    // Step 3: multiply the masked light onto FG.
-    ctx.save();
+    // Pass 2: multiply the light buffer onto the now-opaque FG.
     ctx.globalCompositeOperation = 'multiply';
-    ctx.drawImage(tmp, 0, 0);
+    ctx.drawImage(this.lightBuffer, 0, 0, w, h);
+
     ctx.restore();
+  }
+
+  /** Wire the BG canvas at Renderer construction; consumed each composite pass. */
+  setBgCanvas(bg: HTMLCanvasElement | null): void {
+    this.bgCanvas = bg;
   }
 
   resize(w: number, h: number, _scale: number): void {
@@ -240,13 +172,8 @@ export class LightingPipeline {
     this.height = h;
     this.bufW = Math.ceil(w * HALF_RES_SCALE);
     this.bufH = Math.ceil(h * HALF_RES_SCALE);
-    // Drop existing buffers; ensureBuffer()/ensureTempCanvas() rebuild on next use.
     this.lightBuffer = null;
     this.lightCtx = null;
-    this.tempCanvas = null;
-    this.tempCtx = null;
-    // Invalidate cache so the new buffer gets filled immediately.
-    this.cacheValidFor = 0;
   }
 
   isEnabled(): boolean {

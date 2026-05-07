@@ -300,28 +300,17 @@ describe('LightingPipeline (real impl)', () => {
     expect(pixel[2]).toBe(0);
   });
 
-  it('beginFrame caches output — repeated calls with same dayPhase do not rebake', () => {
+  it('beginFrame recomputes the buffer every call (no caching)', () => {
+    // Cache was removed — abrupt step transitions are visually distracting.
+    // Sun gradient is pre-baked so per-frame recompute is cheap.
     const p = new LightingPipeline(1280, 720);
-    // First call bakes the buffer.
     p.beginFrame(mockTheme(), 0.0, 0);
     const buf = p.getLightBuffer()!;
     const ctx = buf.getContext('2d') as MockOffscreenCanvas2DCtx;
     const fillRectSpy = vi.spyOn(ctx, 'fillRect');
-    // Subsequent calls within the cache window should skip recompute.
     p.beginFrame(mockTheme(), 0.0, 1);
     p.beginFrame(mockTheme(), 0.0, 2);
-    expect(fillRectSpy).not.toHaveBeenCalled(); // cache still valid
-  });
-
-  it('beginFrame recomputes when dayPhase moves beyond threshold', () => {
-    const p = new LightingPipeline(1280, 720);
-    p.beginFrame(mockTheme(), 0.0, 0); // bake at noon
-    const buf = p.getLightBuffer()!;
-    const ctx = buf.getContext('2d') as MockOffscreenCanvas2DCtx;
-    const fillRectSpy = vi.spyOn(ctx, 'fillRect');
-    // Move far past the threshold (0.001) — should trigger recompute.
-    p.beginFrame(mockTheme(), 0.5, 1); // midnight
-    expect(fillRectSpy).toHaveBeenCalled();
+    expect(fillRectSpy).toHaveBeenCalledTimes(2); // ambient fill once per call
   });
 
   it('isEnabled() honors module kill switch (default true)', () => {
@@ -335,11 +324,10 @@ describe('LightingPipeline (real impl)', () => {
     expect(() => p.resize(1280, 720, 2.0)).not.toThrow();
   });
 
-  it('resize invalidates cache so next beginFrame recomputes', () => {
+  it('resize drops the buffer; next beginFrame recreates it', () => {
     const p = new LightingPipeline(1280, 720);
-    p.beginFrame(mockTheme(), 0.0, 0); // bake
-    p.resize(1280, 720, 1.0); // drops buffer + resets cacheValidFor
-    // After resize buffer is null — beginFrame should recreate and fill it.
+    p.beginFrame(mockTheme(), 0.0, 0);
+    p.resize(1280, 720, 1.0);
     p.beginFrame(mockTheme(), 0.0, 1);
     expect(p.getLightBuffer()).not.toBeNull();
   });
