@@ -774,7 +774,17 @@ export const hauntedGraveyard: ArenaPack = {
     ctx.restore();
   },
 
-  drawAnimatedForeground: (ctx, _arena, time, _dayPhase, matchState) => {
+  drawGroundCritters: (ctx, _arena, time, _dayPhase, matchState) => {
+    if (getSlowDevice() || !matchState) return;
+    const dt = _tickGraveRatDt(time);
+    for (let i = 0; i < _graveRats.length; i++) {
+      const r = _graveRats[i];
+      tickGroundCritter(r, matchState.players, dt, RATS_CFG[i]);
+      drawRat(ctx, r.x, RATS_CFG[i].platTopY - 4, r.facingEase < 0 ? -1 : 1, time, Math.abs(r.facingEase), r.fleeing);
+    }
+  },
+
+  drawAnimatedForeground: (ctx, _arena, time) => {
     if (getSlowDevice()) return;
     drawDriftBand(ctx, time, FOG_CONFIG);
     ctx.save();
@@ -788,14 +798,6 @@ export const hauntedGraveyard: ArenaPack = {
       ctx.fill();
     }
     ctx.restore();
-    if (matchState) {
-      const dt = _tickGraveRatDt(time);
-      for (let i = 0; i < _graveRats.length; i++) {
-        const r = _graveRats[i];
-        tickGroundCritter(r, matchState.players, dt, RATS_CFG[i]);
-        drawRat(ctx, r.x, RATS_CFG[i].platTopY - 4, r.facingEase < 0 ? -1 : 1, time, Math.abs(r.facingEase), r.fleeing);
-      }
-    }
   },
 
   // ---- Audio ----

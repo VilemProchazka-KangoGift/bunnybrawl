@@ -850,15 +850,17 @@ export const castle: ArenaPack = {
     ctx.restore();
   },
 
-  drawAnimatedForeground: (ctx, arena, time, _dayPhase, matchState) => {
-    if (matchState) {
-      const dt = _tickCastleRatDt(time);
-      for (let i = 0; i < _castleRats.length; i++) {
-        const r = _castleRats[i];
-        tickGroundCritter(r, matchState.players, dt, RATS_CFG[i]);
-        drawRat(ctx, r.x, RATS_CFG[i].platTopY - 4, r.facingEase < 0 ? -1 : 1, time, Math.abs(r.facingEase), r.fleeing);
-      }
+  drawGroundCritters: (ctx, _arena, time, _dayPhase, matchState) => {
+    if (!matchState) return;
+    const dt = _tickCastleRatDt(time);
+    for (let i = 0; i < _castleRats.length; i++) {
+      const r = _castleRats[i];
+      tickGroundCritter(r, matchState.players, dt, RATS_CFG[i]);
+      drawRat(ctx, r.x, RATS_CFG[i].platTopY - 4, r.facingEase < 0 ? -1 : 1, time, Math.abs(r.facingEase), r.fleeing);
     }
+  },
+
+  drawAnimatedForeground: (ctx, arena, time, _dayPhase, matchState) => {
     // Reactive banners: nearest-player distance amplifies sway. Excitement is
     // eased over ~0.5s so the wobble fades in/out smoothly instead of jumping.
     const floats = getBannerFloats(arena);

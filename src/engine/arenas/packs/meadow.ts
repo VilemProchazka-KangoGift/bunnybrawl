@@ -705,13 +705,17 @@ export const meadow: ArenaPack = {
     ctx.restore();
   },
 
+  drawGroundCritters: (ctx, _arena, time, _dayPhase, matchState) => {
+    if (getSlowDevice() || !matchState) return;
+    drawSnails(ctx, time, matchState.players);
+  },
+
   drawAnimatedForeground: (ctx, _arena, time, _dayPhase, matchState) => {
     if (getSlowDevice() || !matchState) return;
     ctx.save();
     const players = matchState.players;
     for (let i = 0; i < BUTTERFLY_HUES.length; i++) drawButterfly(ctx, i, time, players);
     for (let ci = 0; ci < BEE_CLUSTERS.length; ci++) drawBeeCluster(ctx, ci, time, players);
-    drawSnails(ctx, time, players);
     ctx.restore();
   },
 

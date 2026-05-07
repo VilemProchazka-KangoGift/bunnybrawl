@@ -173,10 +173,11 @@ function drawFish(ctx: CanvasRenderingContext2D, i: number, time: number, cxBase
   const ox = (i % 6) * 26 - 65;
   const oy = Math.floor(i / 6) * 22 - 22 + (i % 2) * 6;
   const wob = fastSin(time * 4 + i) * 3;
-  let x = cxBase + ox + wob;
+  const x = cxBase + ox + wob;
   const baseY = cy + oy + fastCos(time * 3 + i) * 3;
-  if (x < -40) x += CANVAS_WIDTH + 80;
-  if (x > CANVAS_WIDTH + 40) x -= CANVAS_WIDTH + 80;
+  // No wrap: caller's sweep keeps the school inside the canvas. Wrapping
+  // per-fish at the edge snapped the school apart (each fish crossed the
+  // threshold one tick at a time, looking like 1-frame teleports).
   const r = pushFromPlayers(players, x, baseY, 70, 22);
   const s = sp.size;
   ctx.save();
@@ -1173,15 +1174,20 @@ export const underwater: ArenaPack = {
     ctx.restore();
   },
 
+  drawGroundCritters: (ctx, _arena, time, _dayPhase, matchState) => {
+    if (getSlowDevice() || !matchState) return;
+    drawCrab(ctx, time, matchState.players);
+  },
+
   drawAnimatedForeground: (ctx, _arena, time, _dayPhase, matchState) => {
     if (getSlowDevice() || !matchState) return;
     ctx.save();
-    // Smooth left-right sweep across the canvas — modulo wrap teleported the whole school.
-    const cxBase = CANVAS_WIDTH * 0.5 + fastSin(time * 0.18) * (CANVAS_WIDTH * 0.5 + 80);
+    // Sweep amplitude keeps the school fully on-screen. Wider amplitudes push
+    // fish off both edges and look like teleports as they re-enter.
+    const cxBase = CANVAS_WIDTH * 0.5 + fastSin(time * 0.18) * (CANVAS_WIDTH * 0.32);
     const cy = 380 + fastSin(time * 0.5) * 40;
     const players = matchState.players;
     for (let i = 0; i < FISH_COUNT; i++) drawFish(ctx, i, time, cxBase, cy, players);
-    drawCrab(ctx, time, players);
     ctx.restore();
   },
 

@@ -925,6 +925,15 @@ export class Renderer {
         ctx.restore();
       }
 
+      // Ground critters (snails, rats, crabs…) — drawn BEFORE fg-nature so
+      // grass tufts / bushes can occlude them when they walk behind foliage.
+      if (this.theme.drawGroundCritters) {
+        const thA = this.originalArena ?? arena;
+        if (this.mirrored) { ctx.save(); ctx.scale(-1, 1); ctx.translate(-CANVAS_WIDTH, 0); }
+        this.theme.drawGroundCritters(ctx, thA, matchState.timeElapsed, matchState.dayPhase, matchState);
+        if (this.mirrored) { ctx.restore(); }
+      }
+
       // Mirror is baked into the cache so blit at identity transform; explicit
       // logical W/H since the bitmap is at scaled-pixel dims. Fallback for
       // test envs without OffscreenCanvas: draw directly.

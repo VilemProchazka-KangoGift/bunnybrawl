@@ -503,7 +503,7 @@ export const spaceStation: ArenaPack = {
     ctx.restore();
   },
 
-  drawAnimatedForeground: (ctx, _arena, time, _dayPhase, matchState) => {
+  drawGroundCritters: (ctx, _arena, time, _dayPhase, matchState) => {
     if (!matchState) return;
     drawRobot(ctx, time, matchState.players);
   },

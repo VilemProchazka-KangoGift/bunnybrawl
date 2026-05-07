@@ -663,7 +663,7 @@ export const candyLand: ArenaPack = {
     ctx.restore();
   },
 
-  drawAnimatedForeground: (ctx, _arena, time, _dayPhase, matchState) => {
+  drawGroundCritters: (ctx, _arena, time, _dayPhase, matchState) => {
     if (getSlowDevice()) return;
     const dt = _tickGumdropDt(time);
     const players = matchState?.players ?? [];

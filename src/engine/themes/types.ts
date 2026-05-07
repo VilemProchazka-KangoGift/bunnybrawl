@@ -144,6 +144,12 @@ export interface ThemeConfig {
   /** Per-frame animated foreground. Drawn AFTER players + foreground-nature + platform overlays, so entities composed here cover platforms in front of the player. Pair with drawAnimatedBackground to split entities by z-order (e.g. half a flock in front, half behind). */
   drawAnimatedForeground?: (ctx: CanvasRenderingContext2D, arena: Arena, time: number, dayPhase: number, matchState?: import('../types').MatchState) => void;
 
+  /** Per-frame ground-level critters (snails, rats, squirrels, crabs, robots).
+   *  Drawn AFTER players + fog but BEFORE the foreground-nature cache, so grass
+   *  tufts / bushes occlude critters that walk behind them. Use this instead of
+   *  drawAnimatedForeground for anything that should disappear under foliage. */
+  drawGroundCritters?: (ctx: CanvasRenderingContext2D, arena: Arena, time: number, dayPhase: number, matchState?: import('../types').MatchState) => void;
+
   /** Per-frame full-scene tint, drawn LAST after day-night overlay. Use for global mood washes (aurora green, lava red glow) that should affect every layer including players. */
   drawSceneTint?: (ctx: CanvasRenderingContext2D, dayPhase: number, time: number) => void;
 
