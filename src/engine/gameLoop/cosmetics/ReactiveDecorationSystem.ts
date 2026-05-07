@@ -120,19 +120,29 @@ export class ReactiveDecorationSystem implements CosmeticSystem {
     for (let i = 0; i < bucket.length; i++) {
       const inst = bucket[i];
 
-      // Proximity / excitement.
+      // Proximity / excitement. Also captures signed dx to nearest player so
+      // direction-aware draw fns (grass parting, vine lean) don't re-scan.
       if (inst.proximity && !slow) {
         let nearestSq = Infinity;
+        let nearestDx = 0;
+        let found = false;
         for (let pi = 0; pi < players.length; pi++) {
           const p = players[pi];
           if (!p.active || p.state === 'splat' || p.state === 'respawning') continue;
-          const dx = (p.x + p.width * 0.5) - inst.pos.x;
-          const dy = (p.y + p.height * 0.5) - inst.pos.y;
-          const d2 = dx * dx + dy * dy;
-          if (d2 < nearestSq) nearestSq = d2;
+          const px = p.x + p.width * 0.5;
+          const py = p.y + p.height * 0.5;
+          const dxFromInst = inst.pos.x - px;
+          const dyFromInst = inst.pos.y - py;
+          const d2 = dxFromInst * dxFromInst + dyFromInst * dyFromInst;
+          if (d2 < nearestSq) { nearestSq = d2; nearestDx = dxFromInst; found = true; }
         }
-        const dist = Math.sqrt(nearestSq);
-        updateExcitement(inst, dist, dt);
+        if (found) {
+          updateExcitement(inst, Math.sqrt(nearestSq), dt);
+          inst.nearestDx = nearestDx;
+        } else {
+          updateExcitement(inst, Infinity, dt);
+          inst.nearestDx = undefined;
+        }
       }
 
       // Shake decay (burst fires inside applyStompImpulse on rising edge,

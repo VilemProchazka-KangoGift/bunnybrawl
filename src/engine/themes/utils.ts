@@ -88,6 +88,11 @@ export function randRange(range: [number, number]): number {
   return range[0] + Math.random() * (range[1] - range[0]);
 }
 
+/** Clamp `v` to `[lo, hi]`. */
+export function clamp(v: number, lo: number, hi: number): number {
+  return v < lo ? lo : v > hi ? hi : v;
+}
+
 /** Pick a random item using weighted selection. Items must have a `weight` field. */
 export function pickWeighted<T extends { weight: number }>(items: T[]): T {
   const totalWeight = items.reduce((s, t) => s + t.weight, 0);

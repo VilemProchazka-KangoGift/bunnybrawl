@@ -31,6 +31,11 @@ export interface ReactiveInstance {
   excitement: number;
   /** 0..1, set on stomp impulse, decays each tick. */
   shakeDecay: number;
+  /** Signed dx (instance.x - nearestPlayer.centerX) at last proximity update.
+   *  Set by the system alongside excitement. Undefined if no proximity config
+   *  or no live player. Draw fns use this for direction-aware bend without
+   *  re-scanning state.players. */
+  nearestDx?: number;
 }
 
 export interface ReactiveKindConfig {

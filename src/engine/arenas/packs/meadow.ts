@@ -3,7 +3,7 @@ import type { Arena, Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
-import { getFloatingPlatforms, pushFromPlayers, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
+import { getFloatingPlatforms, pushFromPlayers, makeDtTracker, tickGroundCritter, clamp, type GroundCritterState } from '../../themes/utils';
 
 const SNAILS_CFG: Array<{ platL: number; platR: number; platTopY: number; walkSpeed: number; fleeSpeed: number; fleeRadius: number; yTolerance: number; turnEaseRate: number }> = [
   { platL: 900, platR: 1080, platTopY: 660, walkSpeed: 8, fleeSpeed: 22, fleeRadius: 70, yTolerance: 80, turnEaseRate: 2 },
@@ -152,22 +152,18 @@ import {
 // Per-instance custom data. WeakMaps so old instances are GC'd when
 // buildReactiveDecorations rebuilds them on switchArena.
 
-// Helper: find the active player nearest to (x, y); return signed dx
-// (instance.x - player.x) — positive means instance is to the RIGHT of player.
-// Returns a fallback sign when no live player exists or perfectly aligned.
-function _flockDx(state: import('../../types').MatchState, ix: number, iy: number, fallbackSign: number): number {
-  let bestSq = Infinity;
-  let bestDx = 0;
-  for (let i = 0; i < state.players.length; i++) {
-    const p = state.players[i];
-    if (!p.active || p.state === 'splat' || p.state === 'respawning') continue;
-    const dx = ix - (p.x + p.width * 0.5);
-    const dy = iy - (p.y + p.height * 0.5);
-    const d2 = dx * dx + dy * dy;
-    if (d2 < bestSq) { bestSq = d2; bestDx = dx; }
-  }
-  if (Math.abs(bestDx) < 0.5) return fallbackSign;
-  return bestDx;
+// Computes a direction-aware bend offset driven by `inst.excitement`.
+// The system writes `inst.nearestDx` alongside excitement, so this just reads
+// it without re-scanning players. `signMul` flips direction (use -1 to lean
+// TOWARD the player, default +1 leans AWAY).
+function _excitementBend(inst: ReactiveInstance, signMul = 1): number {
+  if (inst.excitement <= 0.01 || !inst.proximity) return 0;
+  const radius = inst.proximity.radius;
+  // Fallback: when player is exactly aligned, use seed parity for a stable
+  // per-instance side so adjacent grass tufts don't all bend the same way.
+  const dxRaw = inst.nearestDx ?? ((inst.seed % 2 === 0) ? 1 : -1);
+  const norm = clamp(dxRaw / radius, -1, 1);
+  return signMul * inst.excitement * inst.proximity.magnitude * norm;
 }
 
 // ---- meadow.tree ----
@@ -332,18 +328,9 @@ function meadowTallGrass(x: number, y: number, count: number): ReactiveInstance 
 }
 registerReactiveKind('meadow.tallGrass', {
   layer: 'background',
-  draw: (ctx, inst, swayPhase, _time, _dayPhase, state) => {
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
     const count = _tallGrassCount.get(inst) ?? 7;
-    // Flee bend: tips lean AWAY from nearest player (signed dx).
-    let fleeBend = 0;
-    if (inst.excitement > 0.01) {
-      const fallback = (inst.seed % 2 === 0) ? 1 : -1;
-      const dx = _flockDx(state, inst.pos.x, inst.pos.y - 10, fallback);
-      // Normalize dx by radius and clamp; lean away (same sign as dx).
-      const norm = Math.max(-1, Math.min(1, dx / 28));
-      fleeBend = inst.excitement * 18 * norm;
-    }
-    drawTallGrass(ctx, inst.pos.x, inst.pos.y, count, undefined, undefined, swayPhase + fleeBend);
+    drawTallGrass(ctx, inst.pos.x, inst.pos.y, count, undefined, undefined, swayPhase + _excitementBend(inst));
   },
 });
 
@@ -359,15 +346,8 @@ function meadowFern(x: number, y: number): ReactiveInstance {
 }
 registerReactiveKind('meadow.fern', {
   layer: 'background',
-  draw: (ctx, inst, swayPhase, _time, _dayPhase, state) => {
-    let fleeBend = 0;
-    if (inst.excitement > 0.01) {
-      const fallback = (inst.seed % 2 === 0) ? 1 : -1;
-      const dx = _flockDx(state, inst.pos.x, inst.pos.y - 11, fallback);
-      const norm = Math.max(-1, Math.min(1, dx / 28));
-      fleeBend = inst.excitement * 14 * norm;
-    }
-    drawFern(ctx, inst.pos.x, inst.pos.y, undefined, swayPhase + fleeBend);
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
+    drawFern(ctx, inst.pos.x, inst.pos.y, undefined, swayPhase + _excitementBend(inst));
   },
 });
 
@@ -388,17 +368,10 @@ function meadowHangingVine(x: number, y: number, length: number): ReactiveInstan
 }
 registerReactiveKind('meadow.hangingVine', {
   layer: 'background',
-  draw: (ctx, inst, swayPhase, _time, _dayPhase, state) => {
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
     const length = _vineLength.get(inst) ?? 20;
-    // Lean toward player: opposite sign of dx (vine bends in player's direction).
-    let leanBend = 0;
-    if (inst.excitement > 0.01) {
-      const fallback = (inst.seed % 2 === 0) ? 1 : -1;
-      const dx = _flockDx(state, inst.pos.x, inst.pos.y + length * 0.5, fallback);
-      const norm = Math.max(-1, Math.min(1, dx / 36));
-      leanBend = -inst.excitement * 14 * norm; // toward player
-    }
-    drawHangingVine(ctx, inst.pos.x, inst.pos.y, length, swayPhase + leanBend);
+    // signMul = -1 so vine leans TOWARD the player (opposite of grass flee).
+    drawHangingVine(ctx, inst.pos.x, inst.pos.y, length, swayPhase + _excitementBend(inst, -1));
   },
 });
 
