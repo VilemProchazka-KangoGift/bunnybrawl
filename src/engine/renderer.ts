@@ -35,6 +35,7 @@ import {
 import { setSpriteCacheScale } from './rendering/players';
 import { setHudScale } from './rendering/hud';
 import { applyRenderScaleToCanvas, getRenderScale } from './renderScale';
+import { LightingPipeline } from './lighting';
 import { getSlowDevice } from './perfFlags';
 import { perfTrace } from './perfTrace';
 
@@ -166,6 +167,7 @@ export class Renderer {
   private bgCanvas: HTMLCanvasElement;
   private fgCanvas: HTMLCanvasElement;
   private hudCanvas: HTMLCanvasElement | null = null;
+  private lighting: LightingPipeline;
   private bgCtx: CanvasRenderingContext2D;
   private fgCtx: CanvasRenderingContext2D;
   private hudCtx: CanvasRenderingContext2D | null = null;
@@ -249,6 +251,7 @@ export class Renderer {
     setHudScale(this._renderScale);
 
     this.initClouds();
+    this.lighting = new LightingPipeline(CANVAS_WIDTH, CANVAS_HEIGHT);
   }
 
   private _applyScaleToCanvases(): void {
@@ -272,6 +275,7 @@ export class Renderer {
     this._applyScaleToCanvases();
     setSpriteCacheScale(scale);
     setHudScale(scale);
+    this.lighting.resize(CANVAS_WIDTH, CANVAS_HEIGHT, scale);
     if (this._lastBgArena) {
       this.renderBackground(this._lastBgArena, this._lastBgOriginalArena);
     }
@@ -630,6 +634,7 @@ export class Renderer {
 
       // Cache time once per frame
       this.frameTime = performance.now();
+      this.lighting.beginFrame();
 
       ctx.save();
 
@@ -1007,6 +1012,13 @@ export class Renderer {
       }
 
       perfTrace.end('render.fg-nature', fgStart);
+
+      // Lighting composite — multiplies the light buffer onto the fg ctx.
+      // Sits inside the hitstop/screen-shake transform so lights ride the shake.
+      // No-op when ?lighting=off or in Part A (real impl lands in Part B).
+      if (this.lighting.isEnabled()) {
+        this.lighting.composite(ctx);
+      }
 
       ctx.restore();
 
