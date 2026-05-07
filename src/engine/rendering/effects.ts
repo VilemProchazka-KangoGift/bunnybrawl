@@ -4,7 +4,6 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../constants';
 import { fastSin, fastCos } from '../fastMath';
 import { bakeVerticalGradientStrip } from '../themes/utils';
 
-function lerpCh(a: number, b: number, t: number): number { return Math.round(a + (b - a) * t); }
 
 /** dayPhase 0=noon, 0.5=midnight, 1=noon. Returns 0..1 night intensity. */
 export function computeNightIntensity(dayPhase: number): number {
@@ -103,70 +102,6 @@ export function drawDayNightCycle(
   const nightIntensity = computeNightIntensity(dayPhase);
   const overlayAlpha = nightIntensity * 0.55;
 
-  // Sun: visible when nightIntensity < 0.8, arcs left->right during day half (0.75->0.0->0.25)
-  // Remap dayPhase so sun progress 0->1 = sunrise->sunset
-  const sunPhase = ((dayPhase + 0.25) % 1); // shift so 0=sunrise(6am), 0.5=sunset(6pm)
-  let sunX = CANVAS_WIDTH / 2;
-  let sunY = 80;
-  if (sunPhase < 0.5) {
-    const sunT = sunPhase / 0.5; // 0->1 across the day
-    sunX = 60 + sunT * (CANVAS_WIDTH - 120);
-    const sunArc = Math.sin(sunT * Math.PI);
-    sunY = 130 - sunArc * 90;
-    const sunAlpha = Math.min(1, (1 - nightIntensity) * 1.5);
-
-    // Sun redshift: gold -> deep orange as sun approaches horizon
-    const sunRedshift = Math.max(0, (sunT - 0.55) / 0.45);
-
-    if (sunAlpha > 0.05) {
-      // Use a single rgb-prefix per ring + globalAlpha for the alpha. Saves
-      // two of the three per-frame rgba template literals during the day cycle;
-      // the rays already use a separate color so they get their own.
-      const glowAlpha = sunAlpha * (0.3 + sunRedshift * 0.2);
-      const bodyAlpha = sunAlpha * 0.9;
-      const glowR = lerpCh(255, 240, sunRedshift), glowG = lerpCh(215, 50, sunRedshift), glowB = lerpCh(0, 10, sunRedshift);
-      const bodyR = lerpCh(255, 220, sunRedshift), bodyG = lerpCh(165, 30, sunRedshift);
-      const coreR = lerpCh(255, 255, sunRedshift), coreG = lerpCh(215, 80, sunRedshift);
-      // Glow (gold -> deep red, grows during sunset)
-      ctx.globalAlpha = glowAlpha;
-      ctx.fillStyle = `rgb(${glowR},${glowG},${glowB})`;
-      ctx.beginPath();
-      ctx.arc(sunX, sunY, 32 + sunRedshift * 16, 0, Math.PI * 2);
-      ctx.fill();
-      // Body + core share bodyAlpha and the same B channel (10*sunRedshift)
-      ctx.globalAlpha = bodyAlpha;
-      ctx.fillStyle = `rgb(${bodyR},${bodyG},${glowB})`;
-      ctx.beginPath();
-      ctx.arc(sunX, sunY, 15, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = `rgb(${coreR},${coreG},${glowB})`;
-      ctx.beginPath();
-      ctx.arc(sunX, sunY, 9, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-
-      // Light rays from sun. All 4 rays share the same color — built into
-      // one path so a single fill renders all of them.
-      if (nightIntensity < 0.3) {
-        const rayAlpha = 0.04 * (1 - nightIntensity / 0.3);
-        ctx.globalAlpha = rayAlpha;
-        ctx.fillStyle = `rgb(255,${lerpCh(215, 60, sunRedshift)},${lerpCh(100, 15, sunRedshift)})`;
-        ctx.beginPath();
-        for (let r = 0; r < 4; r++) {
-          const angle = -0.3 + r * 0.2;
-          const rayW = 60 + r * 20;
-          const rayDx = fastCos(angle) * 400;
-          ctx.moveTo(sunX, sunY);
-          ctx.lineTo(sunX + rayDx - rayW / 2, CANVAS_HEIGHT);
-          ctx.lineTo(sunX + rayDx + rayW / 2, CANVAS_HEIGHT);
-          ctx.closePath();
-        }
-        ctx.fill();
-        ctx.globalAlpha = 1;
-      }
-    }
-  }
-
   // Sunset afterglow: warm redshift overlay during golden hour
   // dayPhase 0.25 = sunset; ramp in 0.16->0.25, linger + fade 0.25->0.38
   let afterglowIntensity = 0;
@@ -188,12 +123,6 @@ export function drawDayNightCycle(
       ctx.drawImage(cache, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
       ctx.restore();
     }
-  }
-
-  // Darkness overlay
-  if (overlayAlpha > 0.02) {
-    ctx.fillStyle = `rgba(10, 12, 45, ${overlayAlpha})`;
-    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
   }
 
   // Moon: visible when nightIntensity > 0.2, arcs during night half (0.25->0.5->0.75)
