@@ -81,6 +81,11 @@ export const owl: CharacterPack = {
   gibs: [{ gibType: 'wing', width: 12, height: 8 }, { gibType: 'wing', width: 12, height: 8 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Owl', cs: 'Sova', hi: 'उल्लू', fil: 'Kuwago' },
   legStyle: { shape: 'stick', footStyle: 'claw', legWidth: 8, legHeight: 4, footWidth: 10, footHeight: 3 },
+  // Eyes at cx±5, y=14.4, r=4 (whites span y=10.4-18.4).
+  eyebrowAnchor: {
+    leftOuter: { x: -10, y: 8 }, leftInner: { x: -2, y: 10.5 },
+    rightOuter: { x: 10, y: 8 }, rightInner: { x: 2, y: 10.5 },
+  },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.5, rx: w * 0.4, ry: h * 0.42 }),
   drawSprite, drawGib,
   createSound: () => new Howl({

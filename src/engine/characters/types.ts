@@ -1,5 +1,5 @@
 import type { Howl } from 'howler';
-import type { SplatShape, GibType, PlayerState } from '../types';
+import type { SplatShape, GibType, PlayerState, Vec2 } from '../types';
 import type { GibDef } from '../stomp';
 import type { BodyEllipseParams } from '../spriteShading';
 
@@ -59,6 +59,20 @@ export interface LegStyle {
   spreadAngle?: number;
 }
 
+/** Per-pack override for the angry-expression eyebrow positions. Defaults are
+ *  calibrated for the generic eye dots in `drawCharacterCore` (centers at
+ *  cx ± 4–6, y ≈ h * 0.4); packs whose custom eyes sit elsewhere should
+ *  provide their own anchor so brows don't land inside the eyes.
+ *  Each point is `{ x, y }` where x is relative to cx and y is relative to yOff. */
+export interface EyebrowAnchor {
+  /** Outer end (away from face center) of each brow. */
+  leftOuter: Vec2;
+  rightOuter: Vec2;
+  /** Inner end (toward face center) of each brow. */
+  leftInner: Vec2;
+  rightInner: Vec2;
+}
+
 /** Complete definition of a character, bundling all data and rendering functions.
  *  Built-in characters populate this from scattered sources; external packs provide it directly. */
 export interface CharacterPack {
@@ -87,6 +101,8 @@ export interface CharacterPack {
 
   /** Leg shape and foot style. If omitted, defaults to rounded legs with round feet. */
   legStyle?: LegStyle;
+
+  eyebrowAnchor?: EyebrowAnchor;
 
   /** Factory: returns a Howl instance for this character's voice sound.
    *  Called once at AudioManager init. Can use procedural synthesis or MP3. */

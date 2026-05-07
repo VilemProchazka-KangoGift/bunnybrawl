@@ -58,6 +58,11 @@ export const sheep: CharacterPack = {
   gibs: [{ gibType: 'ear', width: 8, height: 8 }, { gibType: 'ear', width: 8, height: 8 }, { gibType: 'wool', width: 14, height: 12 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Sheep', cs: 'Ovce', hi: 'भेड़', fil: 'Tupa' },
   legStyle: { shape: 'rounded', footStyle: 'hoof', legWidth: 5 },
+  // Face shifted right ~2px: eyes at (cx-0.5, cx+4.5), y=16, r=2.
+  eyebrowAnchor: {
+    leftOuter: { x: -6, y: 12 }, leftInner: { x: -2, y: 13.6 },
+    rightOuter: { x: 10, y: 12 }, rightInner: { x: 4, y: 13.6 },
+  },
   bodyEllipse: (cx, yOff, _w, h) => ({ cx, cy: yOff + h * 0.46, rx: 12, ry: h * 0.18 }),
   drawSprite, drawGib,
   createSound: () => {

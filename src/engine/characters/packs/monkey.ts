@@ -72,6 +72,11 @@ export const monkey: CharacterPack = {
   gibs: [{ gibType: 'ear', width: 10, height: 10 }, { gibType: 'ear', width: 10, height: 10 }, { gibType: 'tail', width: 16, height: 8 }, { gibType: 'body', width: 14, height: 12 }],
   translations: { en: 'Monkey', cs: 'Opice', hi: 'बंदर', fil: 'Unggoy' },
   legStyle: { shape: 'tapered', footStyle: 'paw' },
+  // Eyes wide-set at cx±12, y=14, r=6 (whites span y=8-20). Brows clear the eye tops.
+  eyebrowAnchor: {
+    leftOuter: { x: -18, y: 5 }, leftInner: { x: -7, y: 8 },
+    rightOuter: { x: 18, y: 5 }, rightInner: { x: 7, y: 8 },
+  },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.52, rx: w * 0.4, ry: h * 0.4 }),
   drawSprite, drawGib,
   createSound: () => new Howl({
