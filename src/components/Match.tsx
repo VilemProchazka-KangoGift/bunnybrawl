@@ -72,10 +72,6 @@ export function Match() {
   const bgNightCanvasRef = useRef<HTMLCanvasElement>(null);
   const fgCanvasRef = useRef<HTMLCanvasElement>(null);
   const hudCanvasRef = useRef<HTMLCanvasElement>(null);
-  // Foreground night-tint overlay: stacked between fg and hud canvases. The
-  // renderer drives its opacity from dayPhase via the lighting pipeline.
-  // mix-blend-mode: multiply on this layer darkens sprites with color
-  // preservation. See Match.css `.fg-night-tint`.
   const fgNightTintRef = useRef<HTMLDivElement>(null);
   const gameLoopRef = useRef<GameLoop | null>(null);
   const victoryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);

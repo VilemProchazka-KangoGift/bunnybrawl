@@ -36,6 +36,7 @@ import { setSpriteCacheScale } from './rendering/players';
 import { setHudScale } from './rendering/hud';
 import { applyRenderScaleToCanvas, getRenderScale } from './renderScale';
 import { LightingPipeline } from './lighting';
+import { BG_NIGHT_BAKE_RGBA, FG_TINT_INTENSITY_MUL } from './lighting/pipeline';
 import { getBrightness } from './lighting/brightness';
 import { getSlowDevice } from './perfFlags';
 import { perfTrace } from './perfTrace';
@@ -154,6 +155,15 @@ function freshDiag(): RenderDiagnostics {
   };
 }
 
+/** Write style.opacity if it changed at 3-decimal resolution. Returns the
+ *  new quantized value so callers can cache it. Skips DOM writes during
+ *  dayPhase plateaus (noon/midnight) and pause. */
+function setQuantizedOpacity(el: HTMLElement, target: number, last: number): number {
+  const q = Math.round(target * 1000) / 1000;
+  if (q !== last) el.style.opacity = String(q);
+  return q;
+}
+
 function resetDiag(d: RenderDiagnostics): void {
   d.clouds = false; d.weather = false; d.wildlife = false; d.animatedBg = false;
   d.hazardZones = false; d.effectZones = false; d.bouncyPlatforms = false; d.pigeons = false;
@@ -174,14 +184,17 @@ export class Renderer {
   private bgNightCtx: CanvasRenderingContext2D | null = null;
   private fgCtx: CanvasRenderingContext2D;
   private hudCtx: CanvasRenderingContext2D | null = null;
-  // Last opacity written to bgNightCanvas.style — avoids string churn per frame
-  // when night intensity is unchanged (e.g. dayPhase frozen during pause).
-  private _lastBgNightOpacity = -1;
-  // Foreground night-tint overlay (mix-blend-mode: multiply layer above fg).
-  // Triggers Chromium layer promotion → fg gets its own GPU compositor layer,
-  // measured ~1.6ms perf win at midnight on top of the visual win.
+  // Foreground night-tint overlay; mix-blend-mode: multiply triggers Chromium
+  // GPU layer promotion for the fg canvas (perf win on top of the visual win).
   private _fgNightTint: HTMLDivElement | null = null;
+  // Cached last-written opacity per element, avoids per-frame style-string
+  // churn during dayPhase plateaus (noon/midnight) and pause. Sentinel -1
+  // works because actual opacity is in [0, 1].
+  private _lastBgNightOpacity = -1;
   private _lastFgTintOpacity = -1;
+  // Set once at construction; lets _driveBgNightOpacity early-out for
+  // renderer instances with no DOM darkening (lobby, tests).
+  private _hasDomDarkening = false;
   // Cached fg overlay (platform body faces drawn after players). Built once
   // per arena/scale change in renderBackground; one drawImage per frame
   // beats N×decorations-per-platform-per-frame.
@@ -255,14 +268,13 @@ export class Renderer {
       this.hudCtx = hudCanvas.getContext('2d')!;
     }
 
-    // Optional cross-fade night-variant BG canvas. When wired, renderBackground()
-    // bakes a uniformly-tinted copy into it; per-frame `style.opacity` drives the
-    // CSS-composited day↔night cross-fade. The legacy source-over tint pass on
-    // the FG ctx (lighting.composite) becomes a no-op in this mode — sprites
-    // stay bright at night per the party-game readability rule.
+    // Optional cross-fade night-variant BG canvas; see lighting/pipeline.ts.
     if (bgNightCanvas) {
       this.bgNightCanvas = bgNightCanvas;
       this.bgNightCtx = bgNightCanvas.getContext('2d')!;
+    }
+    if (fgNightTint) {
+      this._fgNightTint = fgNightTint;
     }
 
     // Apply initial render scale to all canvases (sets backing-store dims + ctx transform)
@@ -275,12 +287,9 @@ export class Renderer {
     this.lighting = new LightingPipeline(CANVAS_WIDTH, CANVAS_HEIGHT);
     this.lighting.setBgCanvas(bgCanvas);
 
-    if (fgNightTint) this._fgNightTint = fgNightTint;
-    // Any DOM-driven darkening (bgNight cross-fade and/or fg-tint multiply
-    // layer) suppresses the legacy source-over fillRect tint pass on fg.
-    // Lobby/tests with neither stay on the source-over fallback.
-    const domDarkeningActive = this.bgNightCanvas !== null || this._fgNightTint !== null;
-    this.lighting.setBgNightWired(domDarkeningActive);
+    // Lobby/tests with no DOM darkening stay on the source-over fillRect path.
+    this._hasDomDarkening = this.bgNightCanvas !== null || this._fgNightTint !== null;
+    this.lighting.setBgNightWired(this._hasDomDarkening);
   }
 
   private _applyScaleToCanvases(): void {
@@ -480,46 +489,35 @@ export class Renderer {
     this._bakeBgNightVariant();
   }
 
-  /** Per-frame: drive bgNightCanvas + fgNightTint opacity from the lighting
-   *  pipeline's current night intensity. Quantized to 3 decimals so dayPhase
-   *  jitter doesn't churn style strings. The fg-tint runs at 0.7× the bg
-   *  intensity since multiply over a colored fg darkens harder than alpha
-   *  blend over a tinted bg — equalizes the visual balance. */
+  /** Drive bgNight + fg-tint opacity from the lighting pipeline. Quantized
+   *  writes skip the style assignment when night intensity is unchanged. */
   private _driveBgNightOpacity(): void {
+    if (!this._hasDomDarkening) return;
     const intensity = this.lighting.getBgNightOpacity();
     if (this.bgNightCanvas) {
-      const q = Math.round(intensity * 1000) / 1000;
-      if (q !== this._lastBgNightOpacity) {
-        this._lastBgNightOpacity = q;
-        this.bgNightCanvas.style.opacity = String(q);
-      }
+      this._lastBgNightOpacity = setQuantizedOpacity(
+        this.bgNightCanvas, intensity, this._lastBgNightOpacity);
     }
     if (this._fgNightTint) {
-      const target = intensity * 0.7;
-      const q = Math.round(target * 1000) / 1000;
-      if (q !== this._lastFgTintOpacity) {
-        this._lastFgTintOpacity = q;
-        this._fgNightTint.style.opacity = String(q);
-      }
+      this._lastFgTintOpacity = setQuantizedOpacity(
+        this._fgNightTint, intensity * FG_TINT_INTENSITY_MUL, this._lastFgTintOpacity);
     }
   }
 
-  /** Copy the freshly-rendered bg canvas into bgNightCanvas and overlay the
-   *  uniform night tint. Called from renderBackground() (rare event). The
-   *  baked alpha (MAX_TINT_ALPHA) matches the legacy source-over tint at
-   *  midnight; per-frame `style.opacity` linearly cross-fades to that level. */
+  /** Copy bg into bgNightCanvas with the night tint baked in. Called from
+   *  renderBackground() — arena load + render-scale change only. */
   private _bakeBgNightVariant(): void {
     if (!this.bgNightCanvas || !this.bgNightCtx) return;
     const ctx = this.bgNightCtx;
     const w = this.bgNightCanvas.width;
     const h = this.bgNightCanvas.height;
     ctx.save();
-    // Identity transform: drawImage source→dest is 1:1 at backing-store pixels,
-    // so the render-scale ctx transform on both canvases doesn't double-scale.
+    // Identity: drawImage between two equally-scaled backing stores must run
+    // at 1:1 px or the per-canvas render-scale transform would double-scale.
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, w, h);
     ctx.drawImage(this.bgCanvas, 0, 0);
-    ctx.fillStyle = 'rgba(20,24,48,0.55)';
+    ctx.fillStyle = BG_NIGHT_BAKE_RGBA;
     ctx.fillRect(0, 0, w, h);
     ctx.restore();
   }

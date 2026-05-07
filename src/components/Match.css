@@ -39,12 +39,8 @@
   pointer-events: none;
 }
 
-/* Foreground night-tint overlay: positioned above fg, below hud (z:4).
-   `mix-blend-mode: multiply` darkens sprites + foreground decorations with
-   color preservation (vs. flat alpha which gray-shifts). Triggers Chromium
-   layer promotion so the fg canvas is composited on its own GPU layer —
-   measured ~1.6ms perf win at midnight in addition to the visual win.
-   See perf-runs/lmode-comparison/ for the full mode comparison. */
+/* Foreground night-tint: multiply preserves sprite color while darkening,
+   and the blend mode triggers Chromium layer promotion of the fg canvas. */
 .fg-night-tint {
   position: absolute;
   top: 0;
@@ -55,8 +51,7 @@
   pointer-events: none;
   opacity: 0;
   will-change: opacity;
-  /* Cool blue-gray multiplied with the scene yields moonlit color preservation */
-  background: rgba(80, 100, 160, 1);
+  background: rgb(80, 100, 160);
   mix-blend-mode: multiply;
 }
 
