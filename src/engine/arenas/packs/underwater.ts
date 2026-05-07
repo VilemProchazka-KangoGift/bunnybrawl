@@ -1226,10 +1226,10 @@ export const underwater: ArenaPack = {
       const offsetX = p.facing === 'right' ? -p.width * 0.5 : p.width * 0.5;
       const bx = p.x + p.width * 0.5 + offsetX;
       const by = p.y + p.height * 0.6;
-      const size = 1 + Math.random() * 2;
-      const drift = (Math.random() - 0.5) * 8;
+      const size = 3 + Math.random() * 3.5;
+      const drift = (Math.random() - 0.5) * 10;
       // emitParticle(x, y, vx, vy, life, size, color)
-      services.emitParticle(bx, by, drift, -30, 1.2 + Math.random() * 0.4, size, 'rgba(180,230,255,0.55)');
+      services.emitParticle(bx, by, drift, -34, 1.4 + Math.random() * 0.5, size, 'rgba(200,240,255,0.78)');
     }
   },
 

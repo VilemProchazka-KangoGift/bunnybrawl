@@ -152,6 +152,24 @@ import {
 // Per-instance custom data. WeakMaps so old instances are GC'd when
 // buildReactiveDecorations rebuilds them on switchArena.
 
+// Helper: find the active player nearest to (x, y); return signed dx
+// (instance.x - player.x) — positive means instance is to the RIGHT of player.
+// Returns a fallback sign when no live player exists or perfectly aligned.
+function _flockDx(state: import('../../types').MatchState, ix: number, iy: number, fallbackSign: number): number {
+  let bestSq = Infinity;
+  let bestDx = 0;
+  for (let i = 0; i < state.players.length; i++) {
+    const p = state.players[i];
+    if (!p.active || p.state === 'splat' || p.state === 'respawning') continue;
+    const dx = ix - (p.x + p.width * 0.5);
+    const dy = iy - (p.y + p.height * 0.5);
+    const d2 = dx * dx + dy * dy;
+    if (d2 < bestSq) { bestSq = d2; bestDx = dx; }
+  }
+  if (Math.abs(bestDx) < 0.5) return fallbackSign;
+  return bestDx;
+}
+
 // ---- meadow.tree ----
 const _treeSize = new WeakMap<ReactiveInstance, number>();
 function meadowTree(x: number, y: number, size: number): ReactiveInstance {
@@ -159,7 +177,7 @@ function meadowTree(x: number, y: number, size: number): ReactiveInstance {
     pos: { x, y },
     kind: 'meadow.tree',
     seed: Math.floor((x * 73 + y * 31) % 997),
-    windAmp: 5,
+    windAmp: 9,
     shakeRadius: 80,
     burst: { threshold: 0.95, particleKind: 'leaf', count: 12 },
     excitement: 0,
@@ -176,8 +194,8 @@ registerReactiveKind('meadow.tree', {
     const lean = swayPhase + (inst.shakeDecay > 0 ? Math.sin(inst.shakeDecay * 40) * inst.shakeDecay * 4 : 0);
     ctx.save();
     ctx.translate(inst.pos.x, inst.pos.y);
-    // 5px sway → ~0.05 rad tilt around base.
-    ctx.rotate(lean * 0.01);
+    // 9px sway → ~0.014 rad/px ≈ 7° max tilt. Visible canopy lean.
+    ctx.rotate(lean * 0.015);
     drawTree(ctx, 0, 0, size);
     ctx.restore();
   },
@@ -190,7 +208,7 @@ function meadowBush(x: number, y: number, size: number): ReactiveInstance {
     pos: { x, y },
     kind: 'meadow.bush',
     seed: Math.floor((x * 53 + y * 19) % 997),
-    windAmp: 2,
+    windAmp: 4,
     excitement: 0,
     shakeDecay: 0,
   };
@@ -215,7 +233,7 @@ function meadowFlower(x: number, y: number, color: string): ReactiveInstance {
     pos: { x, y },
     kind: 'meadow.flower',
     seed: Math.floor((x * 41 + y * 7) % 997),
-    windAmp: 1.5,
+    windAmp: 3,
     excitement: 0,
     shakeDecay: 0,
   };
@@ -239,7 +257,7 @@ function meadowMushroom(x: number, y: number): ReactiveInstance {
     pos: { x, y },
     kind: 'meadow.mushroom',
     seed: Math.floor((x * 29 + y * 11) % 997),
-    windAmp: 1, // small wobble only
+    windAmp: 2.5, // small wobble only
     excitement: 0,
     shakeDecay: 0,
   };
@@ -260,7 +278,7 @@ function meadowGrassTuft(x: number, y: number): ReactiveInstance {
     pos: { x, y },
     kind: 'meadow.grassTuft',
     seed: Math.floor((x * 17 + y * 13) % 997),
-    windAmp: 2,
+    windAmp: 4,
     excitement: 0,
     shakeDecay: 0,
   };
@@ -281,7 +299,7 @@ function meadowFgBush(x: number, y: number, size: number): ReactiveInstance {
   const inst: ReactiveInstance = {
     pos: { x, y }, kind: 'meadow.fgBush',
     seed: Math.floor((x * 67 + y * 23) % 997),
-    windAmp: 2.5,
+    windAmp: 5,
     excitement: 0, shakeDecay: 0,
   };
   _fgBushSize.set(inst, size);
@@ -299,13 +317,14 @@ registerReactiveKind('meadow.fgBush', {
 });
 
 // ---- meadow.tallGrass ----
+// Bends at the tip (base anchored). Wind sway + flee-from-player when stepped on.
 const _tallGrassCount = new WeakMap<ReactiveInstance, number>();
 function meadowTallGrass(x: number, y: number, count: number): ReactiveInstance {
   const inst: ReactiveInstance = {
     pos: { x, y }, kind: 'meadow.tallGrass',
     seed: Math.floor((x * 89 + y * 41) % 997),
-    windAmp: 3.5,
-    proximity: { radius: 24, mode: 'flee', magnitude: 14 },
+    windAmp: 8,
+    proximity: { radius: 28, mode: 'flee', magnitude: 18 },
     excitement: 0, shakeDecay: 0,
   };
   _tallGrassCount.set(inst, count);
@@ -313,15 +332,18 @@ function meadowTallGrass(x: number, y: number, count: number): ReactiveInstance 
 }
 registerReactiveKind('meadow.tallGrass', {
   layer: 'background',
-  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, state) => {
     const count = _tallGrassCount.get(inst) ?? 7;
-    // Apply parting offset based on excitement: shift away from the player.
-    // We don't store the player direction; use a horizontal nudge biased by sway.
-    const partOffset = inst.excitement * 14 * Math.sign(swayPhase || 1);
-    ctx.save();
-    ctx.translate(inst.pos.x + swayPhase + partOffset, inst.pos.y);
-    drawTallGrass(ctx, 0, 0, count);
-    ctx.restore();
+    // Flee bend: tips lean AWAY from nearest player (signed dx).
+    let fleeBend = 0;
+    if (inst.excitement > 0.01) {
+      const fallback = (inst.seed % 2 === 0) ? 1 : -1;
+      const dx = _flockDx(state, inst.pos.x, inst.pos.y - 10, fallback);
+      // Normalize dx by radius and clamp; lean away (same sign as dx).
+      const norm = Math.max(-1, Math.min(1, dx / 28));
+      fleeBend = inst.excitement * 18 * norm;
+    }
+    drawTallGrass(ctx, inst.pos.x, inst.pos.y, count, undefined, undefined, swayPhase + fleeBend);
   },
 });
 
@@ -330,30 +352,35 @@ function meadowFern(x: number, y: number): ReactiveInstance {
   return {
     pos: { x, y }, kind: 'meadow.fern',
     seed: Math.floor((x * 79 + y * 37) % 997),
-    windAmp: 3,
-    proximity: { radius: 24, mode: 'flee', magnitude: 12 },
+    windAmp: 7,
+    proximity: { radius: 28, mode: 'flee', magnitude: 14 },
     excitement: 0, shakeDecay: 0,
   };
 }
 registerReactiveKind('meadow.fern', {
   layer: 'background',
-  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
-    const partOffset = inst.excitement * 12 * Math.sign(swayPhase || 1);
-    ctx.save();
-    ctx.translate(inst.pos.x + swayPhase + partOffset, inst.pos.y);
-    drawFern(ctx, 0, 0);
-    ctx.restore();
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, state) => {
+    let fleeBend = 0;
+    if (inst.excitement > 0.01) {
+      const fallback = (inst.seed % 2 === 0) ? 1 : -1;
+      const dx = _flockDx(state, inst.pos.x, inst.pos.y - 11, fallback);
+      const norm = Math.max(-1, Math.min(1, dx / 28));
+      fleeBend = inst.excitement * 14 * norm;
+    }
+    drawFern(ctx, inst.pos.x, inst.pos.y, undefined, swayPhase + fleeBend);
   },
 });
 
 // ---- meadow.hangingVine ----
+// Bends at the bottom tip (top anchored to platform). Wind sway + lean toward
+// passing players (opposite sign to flee).
 const _vineLength = new WeakMap<ReactiveInstance, number>();
 function meadowHangingVine(x: number, y: number, length: number): ReactiveInstance {
   const inst: ReactiveInstance = {
     pos: { x, y }, kind: 'meadow.hangingVine',
     seed: Math.floor((x * 97 + y * 47) % 997),
-    windAmp: 5,
-    proximity: { radius: 30, mode: 'lean', magnitude: 10 },
+    windAmp: 10,
+    proximity: { radius: 36, mode: 'lean', magnitude: 14 },
     excitement: 0, shakeDecay: 0,
   };
   _vineLength.set(inst, length);
@@ -361,14 +388,17 @@ function meadowHangingVine(x: number, y: number, length: number): ReactiveInstan
 }
 registerReactiveKind('meadow.hangingVine', {
   layer: 'background',
-  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, state) => {
     const length = _vineLength.get(inst) ?? 20;
-    // Lean toward player (excitement * magnitude); sway is a base oscillation.
-    const lean = inst.excitement * 10;
-    ctx.save();
-    ctx.translate(inst.pos.x + swayPhase + lean, inst.pos.y);
-    drawHangingVine(ctx, 0, 0, length);
-    ctx.restore();
+    // Lean toward player: opposite sign of dx (vine bends in player's direction).
+    let leanBend = 0;
+    if (inst.excitement > 0.01) {
+      const fallback = (inst.seed % 2 === 0) ? 1 : -1;
+      const dx = _flockDx(state, inst.pos.x, inst.pos.y + length * 0.5, fallback);
+      const norm = Math.max(-1, Math.min(1, dx / 36));
+      leanBend = -inst.excitement * 14 * norm; // toward player
+    }
+    drawHangingVine(ctx, inst.pos.x, inst.pos.y, length, swayPhase + leanBend);
   },
 });
 
@@ -377,7 +407,7 @@ function meadowFgLeafCluster(x: number, y: number): ReactiveInstance {
   return {
     pos: { x, y }, kind: 'meadow.fgLeafCluster',
     seed: Math.floor((x * 103 + y * 53) % 997),
-    windAmp: 4,
+    windAmp: 6,
     excitement: 0, shakeDecay: 0,
   };
 }
@@ -397,7 +427,7 @@ function meadowFgWildflower(x: number, y: number, color: string, size: number): 
   const inst: ReactiveInstance = {
     pos: { x, y }, kind: 'meadow.fgWildflower',
     seed: Math.floor((x * 109 + y * 59) % 997),
-    windAmp: 2,
+    windAmp: 4,
     excitement: 0, shakeDecay: 0,
   };
   _wildflowerStyle.set(inst, { color, size });

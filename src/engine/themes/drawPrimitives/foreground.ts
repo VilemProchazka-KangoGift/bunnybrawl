@@ -70,17 +70,22 @@ export function drawFgBush(
   }
 }
 
-export function drawTallGrass(ctx: CanvasRenderingContext2D, x: number, groundY: number, bladeCount: number, darkColor = '#2D7A2D', lightColor = '#3A8A3A'): void {
+/** bendX shifts the TIP of each blade only; base stays anchored at groundY.
+ *  Default 0 = static draw. Used by ReactiveDecorationSystem to bend grass
+ *  with wind / player proximity. */
+export function drawTallGrass(ctx: CanvasRenderingContext2D, x: number, groundY: number, bladeCount: number, darkColor = '#2D7A2D', lightColor = '#3A8A3A', bendX = 0): void {
   for (let i = 0; i < bladeCount; i++) {
     const bx = x + (i - bladeCount / 2) * 6;
     const height = 14 + (i * 7 % 10);
     const lean = (i % 3 - 1) * 4;
+    const tipX = bx + lean + bendX;
+    const ctrlX = bx + lean * 0.5 + bendX * 0.55;
 
     ctx.strokeStyle = i % 2 === 0 ? darkColor : lightColor;
     ctx.lineWidth = 2.5;
     ctx.beginPath();
     ctx.moveTo(bx, groundY);
-    ctx.quadraticCurveTo(bx + lean * 0.5, groundY - height * 0.6, bx + lean, groundY - height);
+    ctx.quadraticCurveTo(ctrlX, groundY - height * 0.6, tipX, groundY - height);
     ctx.stroke();
 
     if (i % 3 === 0) {
@@ -88,49 +93,63 @@ export function drawTallGrass(ctx: CanvasRenderingContext2D, x: number, groundY:
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(bx + 1, groundY);
-      ctx.quadraticCurveTo(bx + lean * 0.5 + 1, groundY - height * 0.6, bx + lean + 1, groundY - height);
+      ctx.quadraticCurveTo(ctrlX + 1, groundY - height * 0.6, tipX + 1, groundY - height);
       ctx.stroke();
     }
   }
 }
 
-export function drawFern(ctx: CanvasRenderingContext2D, x: number, groundY: number, color = '#2D6B2D'): void {
+/** bendX shifts the stem TIP and frond attachment points proportionally to
+ *  height. Base stays anchored at groundY. */
+export function drawFern(ctx: CanvasRenderingContext2D, x: number, groundY: number, color = '#2D6B2D', bendX = 0): void {
   const height = 22;
   ctx.strokeStyle = color;
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(x, groundY);
-  ctx.quadraticCurveTo(x + 2, groundY - height * 0.5, x + 4, groundY - height);
+  ctx.quadraticCurveTo(x + 2 + bendX * 0.5, groundY - height * 0.5, x + 4 + bendX, groundY - height);
   ctx.stroke();
 
   const frondCount = 4;
   for (let i = 0; i < frondCount; i++) {
     const fy = groundY - 5 - i * 4;
     const fLen = 10 - i * 1.5;
+    // Frond attachment point follows the bent stem proportionally.
+    const stemBend = bendX * (i + 1) / frondCount;
+    const stemX = x + 1 + stemBend;
     for (const side of [-1, 1]) {
       ctx.strokeStyle = i < 2 ? '#2B7A2B' : '#3A9A3A';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.moveTo(x + 1, fy);
-      ctx.quadraticCurveTo(x + side * fLen * 0.7, fy - 3, x + side * fLen, fy - 1);
+      ctx.moveTo(stemX, fy);
+      ctx.quadraticCurveTo(stemX + side * fLen * 0.7, fy - 3, stemX + side * fLen, fy - 1);
       ctx.stroke();
     }
   }
 }
 
-export function drawHangingVine(ctx: CanvasRenderingContext2D, x: number, topY: number, length: number): void {
+/** bendX shifts the BOTTOM tip; top stays anchored at (x, topY). The vine
+ *  retains its baseline static curl (`Math.sin(x * 0.1) * 4`); bendX adds on
+ *  top of that for dynamic wind / player lean. */
+export function drawHangingVine(ctx: CanvasRenderingContext2D, x: number, topY: number, length: number, bendX = 0): void {
   ctx.strokeStyle = '#3A7A3A';
   ctx.lineWidth = 1.5;
-  const sway = Math.sin(x * 0.1) * 4;
+  const baseSway = Math.sin(x * 0.1) * 4;
+  // Bottom curve point and mid-control point both shifted by bendX,
+  // weighted so the curve bends most at the tip.
+  const tipX = x + baseSway * 0.5 + bendX;
+  const ctrlX = x + baseSway + bendX * 0.7;
   ctx.beginPath();
   ctx.moveTo(x, topY);
-  ctx.quadraticCurveTo(x + sway, topY + length * 0.6, x + sway * 0.5, topY + length);
+  ctx.quadraticCurveTo(ctrlX, topY + length * 0.6, tipX, topY + length);
   ctx.stroke();
 
   ctx.fillStyle = '#3D8B3D';
   for (let i = 0; i < 3; i++) {
     const ly = topY + (i + 1) * length * 0.25;
-    const lx = x + sway * (i + 1) / 4;
+    // Leaves follow the bent curve proportionally to depth.
+    const t = (i + 1) / 4;
+    const lx = x + baseSway * t + bendX * t * t;
     const side = i % 2 === 0 ? -1 : 1;
     ctx.beginPath();
     ctx.ellipse(lx + side * 4, ly, 4, 2.5, side * 0.5, 0, Math.PI * 2);
