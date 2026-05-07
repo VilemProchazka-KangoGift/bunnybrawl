@@ -170,7 +170,7 @@ function meadowTree(x: number, y: number, size: number): ReactiveInstance {
 }
 registerReactiveKind('meadow.tree', {
   layer: 'background',
-  draw: (ctx, inst, swayPhase) => {
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
     const size = _treeSize.get(inst) ?? 50;
     // Tree leans with swayPhase + shakeDecay shudder.
     const lean = swayPhase + (inst.shakeDecay > 0 ? Math.sin(inst.shakeDecay * 40) * inst.shakeDecay * 4 : 0);
@@ -199,7 +199,7 @@ function meadowBush(x: number, y: number, size: number): ReactiveInstance {
 }
 registerReactiveKind('meadow.bush', {
   layer: 'background',
-  draw: (ctx, inst, swayPhase) => {
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
     const size = _bushSize.get(inst) ?? 25;
     ctx.save();
     ctx.translate(inst.pos.x + swayPhase * 0.5, inst.pos.y);
@@ -224,7 +224,7 @@ function meadowFlower(x: number, y: number, color: string): ReactiveInstance {
 }
 registerReactiveKind('meadow.flower', {
   layer: 'background',
-  draw: (ctx, inst, swayPhase) => {
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
     const color = _flowerColor.get(inst) ?? '#FFD700';
     ctx.save();
     ctx.translate(inst.pos.x + swayPhase, inst.pos.y);
@@ -246,7 +246,7 @@ function meadowMushroom(x: number, y: number): ReactiveInstance {
 }
 registerReactiveKind('meadow.mushroom', {
   layer: 'background',
-  draw: (ctx, inst, swayPhase) => {
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
     ctx.save();
     ctx.translate(inst.pos.x + swayPhase * 0.3, inst.pos.y);
     drawMushroom(ctx, 0, 0);
@@ -267,7 +267,7 @@ function meadowGrassTuft(x: number, y: number): ReactiveInstance {
 }
 registerReactiveKind('meadow.grassTuft', {
   layer: 'background',
-  draw: (ctx, inst, swayPhase) => {
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
     ctx.save();
     ctx.translate(inst.pos.x + swayPhase, inst.pos.y);
     drawGrassTuft(ctx, 0, 0);
@@ -289,7 +289,7 @@ function meadowFgBush(x: number, y: number, size: number): ReactiveInstance {
 }
 registerReactiveKind('meadow.fgBush', {
   layer: 'background',
-  draw: (ctx, inst, swayPhase) => {
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
     const size = _fgBushSize.get(inst) ?? 40;
     ctx.save();
     ctx.translate(inst.pos.x + swayPhase * 0.7, inst.pos.y);
@@ -313,7 +313,7 @@ function meadowTallGrass(x: number, y: number, count: number): ReactiveInstance 
 }
 registerReactiveKind('meadow.tallGrass', {
   layer: 'background',
-  draw: (ctx, inst, swayPhase) => {
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
     const count = _tallGrassCount.get(inst) ?? 7;
     // Apply parting offset based on excitement: shift away from the player.
     // We don't store the player direction; use a horizontal nudge biased by sway.
@@ -337,7 +337,7 @@ function meadowFern(x: number, y: number): ReactiveInstance {
 }
 registerReactiveKind('meadow.fern', {
   layer: 'background',
-  draw: (ctx, inst, swayPhase) => {
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
     const partOffset = inst.excitement * 12 * Math.sign(swayPhase || 1);
     ctx.save();
     ctx.translate(inst.pos.x + swayPhase + partOffset, inst.pos.y);
@@ -361,7 +361,7 @@ function meadowHangingVine(x: number, y: number, length: number): ReactiveInstan
 }
 registerReactiveKind('meadow.hangingVine', {
   layer: 'background',
-  draw: (ctx, inst, swayPhase) => {
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
     const length = _vineLength.get(inst) ?? 20;
     // Lean toward player (excitement * magnitude); sway is a base oscillation.
     const lean = inst.excitement * 10;
@@ -383,7 +383,7 @@ function meadowFgLeafCluster(x: number, y: number): ReactiveInstance {
 }
 registerReactiveKind('meadow.fgLeafCluster', {
   layer: 'background',
-  draw: (ctx, inst, swayPhase) => {
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
     ctx.save();
     ctx.translate(inst.pos.x + swayPhase, inst.pos.y);
     drawFgLeafCluster(ctx, 0, 0);
@@ -405,7 +405,7 @@ function meadowFgWildflower(x: number, y: number, color: string, size: number): 
 }
 registerReactiveKind('meadow.fgWildflower', {
   layer: 'background',
-  draw: (ctx, inst, swayPhase) => {
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
     const style = _wildflowerStyle.get(inst) ?? { color: '#FFD700', size: 18 };
     ctx.save();
     ctx.translate(inst.pos.x + swayPhase, inst.pos.y);
@@ -433,7 +433,7 @@ const DANDELION_SEED_FLY_DURATION = 2.0;
 
 registerReactiveKind('meadow.dandelion', {
   layer: 'background',
-  draw: (ctx, inst, _swayPhase, time) => {
+  draw: (ctx, inst, _swayPhase, time, _dayPhase, _state) => {
     // Excitement rising → if we were idle, start a burst.
     let phase = _dandelionPhase.get(inst) ?? -1;
     if (phase < 0 && inst.excitement > 0.5) phase = 0;
@@ -509,6 +509,50 @@ registerReactiveKind('meadow.dandelion', {
       }
       ctx.globalAlpha = 1;
     }
+  },
+});
+
+// ---- meadow.butterfly ----
+const _butterflyIndex = new WeakMap<ReactiveInstance, number>();
+function meadowButterfly(idx: number): ReactiveInstance {
+  // Position is dynamic (computed in draw via time), pos here is just a
+  // dummy anchor; proximity radius is large since flock motion shifts pos.
+  const inst: ReactiveInstance = {
+    pos: { x: 0, y: 0 }, kind: 'meadow.butterfly',
+    seed: idx,
+    proximity: { radius: 70, mode: 'flee', magnitude: 14 },
+    excitement: 0, shakeDecay: 0,
+  };
+  _butterflyIndex.set(inst, idx);
+  return inst;
+}
+registerReactiveKind('meadow.butterfly', {
+  layer: 'foreground',
+  highFrequency: true, // flock motion needs 60Hz
+  draw: (ctx, inst, _swayPhase, time, _dayPhase, state) => {
+    const i = _butterflyIndex.get(inst) ?? 0;
+    drawButterfly(ctx, i, time, state.players);
+  },
+});
+
+// ---- meadow.bee ----
+const _beeClusterIndex = new WeakMap<ReactiveInstance, number>();
+function meadowBeeCluster(idx: number): ReactiveInstance {
+  const inst: ReactiveInstance = {
+    pos: { x: BEE_CLUSTERS[idx].homeX, y: BEE_CLUSTERS[idx].homeY }, kind: 'meadow.bee',
+    seed: idx,
+    proximity: { radius: 110, mode: 'flee', magnitude: 28 },
+    excitement: 0, shakeDecay: 0,
+  };
+  _beeClusterIndex.set(inst, idx);
+  return inst;
+}
+registerReactiveKind('meadow.bee', {
+  layer: 'foreground',
+  highFrequency: true,
+  draw: (ctx, inst, _swayPhase, time, _dayPhase, state) => {
+    const ci = _beeClusterIndex.get(inst) ?? 0;
+    drawBeeCluster(ctx, ci, time, state.players);
   },
 });
 
@@ -886,6 +930,11 @@ export const meadow: ArenaPack = {
       out.push(meadowDandelion(d.x, d.gy));
     }
 
+    // Butterflies (was drawAnimatedForeground)
+    for (let i = 0; i < BUTTERFLY_HUES.length; i++) out.push(meadowButterfly(i));
+    // Bee clusters (was drawAnimatedForeground)
+    for (let ci = 0; ci < BEE_CLUSTERS.length; ci++) out.push(meadowBeeCluster(ci));
+
     return out;
   },
 
@@ -1005,13 +1054,8 @@ export const meadow: ArenaPack = {
     drawSnails(ctx, time, matchState.players);
   },
 
-  drawAnimatedForeground: (ctx, _arena, time, _dayPhase, matchState) => {
-    if (getSlowDevice() || !matchState) return;
-    ctx.save();
-    const players = matchState.players;
-    for (let i = 0; i < BUTTERFLY_HUES.length; i++) drawButterfly(ctx, i, time, players);
-    for (let ci = 0; ci < BEE_CLUSTERS.length; ci++) drawBeeCluster(ctx, ci, time, players);
-    ctx.restore();
+  drawAnimatedForeground: (_ctx, _arena, _time, _dayPhase, _matchState) => {
+    // drawAnimatedForeground removed — butterflies + bees migrated to ReactiveDecorationSystem.
   },
 
   // ---- Audio ----

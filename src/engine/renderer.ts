@@ -511,7 +511,7 @@ export class Renderer {
       const swayPhase = slow || !inst.windAmp
         ? 0
         : Math.sin(windPhase + inst.seed * 0.7) * inst.windAmp;
-      cfg.draw(ctx, inst, swayPhase, time, dayPhase);
+      cfg.draw(ctx, inst, swayPhase, time, dayPhase, matchState);
     }
   }
 

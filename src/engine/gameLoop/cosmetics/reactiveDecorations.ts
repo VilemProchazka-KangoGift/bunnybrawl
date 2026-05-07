@@ -47,6 +47,7 @@ export interface ReactiveKindConfig {
  *  - swayPhase: precomputed `sin(windPhase + seed * 0.7) * windAmp` (or 0 on slow-device).
  *  - dayPhase: 0..1, current day/night phase from MatchState.
  *  - time: matchState.timeElapsed in seconds.
+ *  - state: full MatchState (needed by kinds that query player positions, e.g. flee behaviors).
  */
 export type ReactiveDraw = (
   ctx: CanvasRenderingContext2D,
@@ -54,6 +55,7 @@ export type ReactiveDraw = (
   swayPhase: number,
   time: number,
   dayPhase: number,
+  state: import('../../types').MatchState,
 ) => void;
 
 // ---- Registry ----
