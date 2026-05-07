@@ -39,6 +39,10 @@ export interface TransitionCallbacks {
   spawnKillSplatter: (victim: Player) => void;
   pickupCarrotVFX: (x: number, y: number) => void;
   spawnPlayerSpawnVFX: (x: number, y: number) => void;
+  /** Optional: fired when a player transitions to 'splat' (stomp landing).
+   *  Receives the stomp position (victim's center). Used by
+   *  ReactiveDecorationSystem to shake nearby trees / saplings. */
+  onStomp?: (x: number, y: number) => void;
 }
 
 /**
@@ -97,6 +101,7 @@ export function detectPlayerTransitions(
       x: player.x + player.width / 2, y: player.y + player.height / 2,
       radius: 0, maxRadius: SHOCKWAVE_MAX_RADIUS, life: SHOCKWAVE_DURATION,
     });
+    if (cb.onStomp) cb.onStomp(player.x + player.width / 2, player.y + player.height / 2);
   }
 
   // Respawn (any path: stomp, fall-off, OOB failsafe). invincibleTimer rises

@@ -3,7 +3,7 @@ import type { Arena, Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
-import { getFloatingPlatforms, pushFromPlayers, isLivePlayer, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
+import { getFloatingPlatforms, pushFromPlayers, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
 
 const SNAILS_CFG: Array<{ platL: number; platR: number; platTopY: number; walkSpeed: number; fleeSpeed: number; fleeRadius: number; yTolerance: number; turnEaseRate: number }> = [
   { platL: 900, platR: 1080, platTopY: 660, walkSpeed: 8, fleeSpeed: 22, fleeRadius: 70, yTolerance: 80, turnEaseRate: 2 },
@@ -37,9 +37,6 @@ const DANDELIONS = [
   { x: 640,  gy: 285 },
   { x: 1090, gy: 530 },
 ] as const;
-// -1 = idle (full puff). >= 0 = burst-elapsed seconds.
-const _dandelionExcite = new Float32Array(DANDELIONS.length).fill(-1);
-const _tickDandelionDt = makeDtTracker();
 const DANDELION_SEED_COS = new Float32Array(14);
 const DANDELION_SEED_SIN = new Float32Array(14);
 {
@@ -142,6 +139,235 @@ import {
   drawPlatformRightFace, drawPlatformCap,
   drawStone, wavyDown, backWavyUp, leftWavy,
 } from '../../themes/drawPrimitives';
+
+// ============================================================================
+// Reactive decoration factories + draw fns
+// ============================================================================
+
+import {
+  registerReactiveKind,
+  createReactiveInstance,
+  composeBend,
+  type ReactiveInstance,
+} from '../../gameLoop/cosmetics/reactiveDecorations';
+
+// ---- meadow.tree ----
+interface TreeData { size: number; }
+function meadowTree(x: number, y: number, size: number): ReactiveInstance {
+  return createReactiveInstance({
+    pos: { x, y },
+    kind: 'meadow.tree',
+    seed: Math.floor((x * 73 + y * 31) % 997),
+    data: { size } satisfies TreeData,
+    windAmp: 3,
+    shakeRadius: 80,
+    burst: { threshold: 0.95, particleKind: 'leaf', count: 12 },
+  });
+}
+registerReactiveKind('meadow.tree', {
+  layer: 'prePlayer',
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
+    const { size } = inst.data as TreeData;
+    // Tree leans with swayPhase + shakeDecay shudder. windAmp 3 × 0.015 ≈ 2.6°
+    // peak wind tilt; stomp shudder adds ~4× transient on top.
+    const lean = swayPhase + (inst.shakeDecay > 0 ? Math.sin(inst.shakeDecay * 40) * inst.shakeDecay * 4 : 0);
+    ctx.save();
+    ctx.translate(inst.pos.x, inst.pos.y);
+    ctx.rotate(lean * 0.015);
+    drawTree(ctx, 0, 0, size);
+    ctx.restore();
+  },
+});
+
+// ---- meadow.tallGrass ----
+// Bends at the tip (base anchored). Wind sway + push WITH passing player.
+interface TallGrassData { count: number; }
+function meadowTallGrass(x: number, y: number, count: number): ReactiveInstance {
+  return createReactiveInstance({
+    pos: { x, y }, kind: 'meadow.tallGrass',
+    seed: Math.floor((x * 89 + y * 41) % 997),
+    data: { count } satisfies TallGrassData,
+    windAmp: 6,
+    proximity: { radius: 36, mode: 'lean', magnitude: 30 },
+  });
+}
+registerReactiveKind('meadow.tallGrass', {
+  layer: 'prePlayer',
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
+    const { count } = inst.data as TallGrassData;
+    drawTallGrass(ctx, inst.pos.x, inst.pos.y, count, undefined, undefined, composeBend(inst, swayPhase));
+  },
+});
+
+// ---- meadow.fern ----
+function meadowFern(x: number, y: number): ReactiveInstance {
+  return createReactiveInstance({
+    pos: { x, y }, kind: 'meadow.fern',
+    seed: Math.floor((x * 79 + y * 37) % 997),
+    windAmp: 7,
+    proximity: { radius: 36, mode: 'lean', magnitude: 24 },
+  });
+}
+registerReactiveKind('meadow.fern', {
+  layer: 'prePlayer',
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
+    drawFern(ctx, inst.pos.x, inst.pos.y, undefined, composeBend(inst, swayPhase));
+  },
+});
+
+// ---- meadow.hangingVine ----
+// Bends at the bottom tip (top anchored to platform). Wind sway + lean toward
+// passing players (opposite sign to flee).
+interface HangingVineData { length: number; }
+function meadowHangingVine(x: number, y: number, length: number): ReactiveInstance {
+  return createReactiveInstance({
+    pos: { x, y }, kind: 'meadow.hangingVine',
+    seed: Math.floor((x * 97 + y * 47) % 997),
+    data: { length } satisfies HangingVineData,
+    windAmp: 10,
+    proximity: { radius: 36, mode: 'lean', magnitude: 30 },
+  });
+}
+registerReactiveKind('meadow.hangingVine', {
+  layer: 'prePlayer',
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
+    const { length } = inst.data as HangingVineData;
+    drawHangingVine(ctx, inst.pos.x, inst.pos.y, length, composeBend(inst, swayPhase));
+  },
+});
+
+// ---- meadow.dandelion ----
+// Mutable runtime burst phase lives directly on inst.data. -1 = idle (full
+// puff), >= 0 = burst-elapsed seconds. Excitement rising past 0.5 starts a
+// burst; the draw fn advances the phase ~1/60s per call.
+interface DandelionData { phase: number; }
+function meadowDandelion(x: number, y: number): ReactiveInstance {
+  return createReactiveInstance({
+    pos: { x, y }, kind: 'meadow.dandelion',
+    seed: Math.floor((x * 113 + y * 61) % 997),
+    data: { phase: -1 } satisfies DandelionData,
+    proximity: { radius: 40, mode: 'excite', magnitude: 1 },
+  });
+}
+
+const DANDELION_BURST_TOTAL = 7.0;
+const DANDELION_SEED_FLY_DURATION = 2.0;
+
+registerReactiveKind('meadow.dandelion', {
+  layer: 'prePlayer',
+  resetData: (d) => { (d as DandelionData).phase = -1; },
+  draw: (ctx, inst, _swayPhase, time, _dayPhase, _state) => {
+    const data = inst.data as DandelionData;
+    let phase = data.phase;
+    if (phase < 0 && inst.excitement > 0.5) phase = 0;
+    if (phase >= 0) {
+      phase += 1 / 60;
+      if (phase >= DANDELION_BURST_TOTAL) phase = -1;
+    }
+    data.phase = phase;
+
+    const x = inst.pos.x;
+    const gy = inst.pos.y;
+    const puffY = gy - 9;
+
+    // Stem.
+    ctx.strokeStyle = '#5fb45a';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x, gy + 4);
+    ctx.lineTo(x, gy - 8);
+    ctx.stroke();
+
+    // Puff (shrinks during seed-fly, regrows after).
+    let puffR = 6;
+    if (phase >= 0) {
+      if (phase < DANDELION_SEED_FLY_DURATION) {
+        puffR = 6 * Math.max(0, 1 - phase / 0.3);
+      } else {
+        const regrow = (phase - DANDELION_SEED_FLY_DURATION) / (DANDELION_BURST_TOTAL - DANDELION_SEED_FLY_DURATION);
+        puffR = 6 * Math.min(1, regrow);
+      }
+    }
+    if (puffR > 0.3) {
+      ctx.fillStyle = '#ffffff';
+      ctx.globalAlpha = 0.95;
+      ctx.beginPath();
+      ctx.arc(x, puffY, puffR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#dcdcc8';
+      ctx.globalAlpha = 0.75;
+      for (let i = 0; i < 6; i++) {
+        const c = DANDELION_SEED_COS[i * 2];
+        const s = DANDELION_SEED_SIN[i * 2];
+        ctx.beginPath();
+        ctx.arc(x + c * puffR * 0.7, puffY + s * puffR * 0.7, 0.7, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // Seed-fly particles.
+    if (phase >= 0 && phase < DANDELION_SEED_FLY_DURATION) {
+      const t = phase / DANDELION_SEED_FLY_DURATION;
+      const SEEDS = 12;
+      ctx.fillStyle = '#f8f8e8';
+      for (let i = 0; i < SEEDS; i++) {
+        const emitT = i / SEEDS * 0.3;
+        const localT = (t - emitT) / (1 - emitT);
+        if (localT <= 0) continue;
+        const angle = (i / SEEDS) * Math.PI * 2 + fastSin(time + i) * 0.2;
+        const dist = localT * 60;
+        const sx = x + fastCos(angle) * dist + fastSin(time * 1.5 + i) * 2;
+        const sy = puffY - localT * 50 - localT * localT * 12 + fastSin(time + i) * 1.5;
+        const alpha = (1 - localT) * 0.95;
+        ctx.globalAlpha = alpha;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 1.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = alpha * 0.6;
+        ctx.beginPath();
+        ctx.arc(sx, sy - 2.5, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+  },
+});
+
+// ---- meadow.butterfly ----
+// Position is dynamic (computed in draw via time), pos here is a dummy anchor;
+// proximity radius is large since flock motion shifts pos. The flock index
+// rides on `seed` — no separate data field needed.
+function meadowButterfly(idx: number): ReactiveInstance {
+  return createReactiveInstance({
+    pos: { x: 0, y: 0 }, kind: 'meadow.butterfly',
+    seed: idx,
+    proximity: { radius: 70, mode: 'flee', magnitude: 14 },
+  });
+}
+registerReactiveKind('meadow.butterfly', {
+  layer: 'postPlayer',
+  highFrequency: true, // flock motion needs 60Hz
+  draw: (ctx, inst, _swayPhase, time, _dayPhase, state) => {
+    drawButterfly(ctx, inst.seed, time, state.players);
+  },
+});
+
+// ---- meadow.bee ----
+function meadowBeeCluster(idx: number): ReactiveInstance {
+  return createReactiveInstance({
+    pos: { x: BEE_CLUSTERS[idx].homeX, y: BEE_CLUSTERS[idx].homeY }, kind: 'meadow.bee',
+    seed: idx,
+    proximity: { radius: 110, mode: 'flee', magnitude: 28 },
+  });
+}
+registerReactiveKind('meadow.bee', {
+  layer: 'postPlayer',
+  highFrequency: true,
+  draw: (ctx, inst, _swayPhase, time, _dayPhase, state) => {
+    drawBeeCluster(ctx, inst.seed, time, state.players);
+  },
+});
 
 // Shared decoration data — hoisted so we don't realloc per bake.
 const FOREST_TREE_POSITIONS = [
@@ -426,34 +652,27 @@ export const meadow: ArenaPack = {
     ctx.fill();
   },
 
+  // Static-shape decorations route through the cached fg/bg-nature layers
+  // (one-time bake). Only kinds that genuinely need per-frame reactivity —
+  // trees (stomp shake + leaf burst), tallGrass/fern (parting), hangingVine
+  // (lean), dandelion (excite-burst), butterflies + bees (flock motion) —
+  // live in `buildReactiveDecorations`. Trade: bushes/flowers/mushrooms/
+  // grass-tufts/fgBush/fgLeafCluster/fgWildflower lose their wind sway, but
+  // skip 50+ per-frame draw calls.
   drawBackgroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => {
     const ground = arena.platforms[0];
     const y = ground.y;
-
-    // Trees
-    drawTree(ctx, 60, y, 50);
-    drawTree(ctx, 620, y, 60);
-    drawTree(ctx, 1180, y, 45);
-
-    // Bushes
     drawBush(ctx, 200, y, 30);
     drawBush(ctx, 450, y, 22);
     drawBush(ctx, 700, y, 28);
     drawBush(ctx, 950, y, 25);
     drawBush(ctx, 1100, y, 20);
-
-    // Flowers
     const flowerPositions = [150, 280, 420, 500, 580, 750, 930, 980, 1050, 1200];
     for (const fx of flowerPositions) {
-      const color = FLOWER_COLORS[Math.floor(fx * 0.01) % FLOWER_COLORS.length];
-      drawFlower(ctx, fx, y, color);
+      drawFlower(ctx, fx, y, FLOWER_COLORS[Math.floor(fx * 0.01) % FLOWER_COLORS.length]);
     }
-
-    // Mushrooms (avoid stump positions at x=340, 440, 800, 860)
     drawMushroom(ctx, 240, y);
     drawMushroom(ctx, 720, y);
-
-    // Nature on floating platforms (exclude small obstacle platforms)
     const floats = getFloatingPlatforms(arena.platforms);
     for (const plat of floats) {
       const mid = plat.x + plat.width / 2;
@@ -470,44 +689,68 @@ export const meadow: ArenaPack = {
     }
   },
 
+  buildReactiveDecorations: (arena: Arena) => {
+    const ground = arena.platforms[0];
+    const y = ground.y;
+    const out: ReactiveInstance[] = [];
+
+    // Trees (stomp shake + leaf burst)
+    out.push(meadowTree(60, y, 50));
+    out.push(meadowTree(620, y, 60));
+    out.push(meadowTree(1180, y, 45));
+
+    // Tall grass clusters (player parting)
+    out.push(meadowTallGrass(310, y, 7));
+    out.push(meadowTallGrass(680, y, 9));
+    out.push(meadowTallGrass(1020, y, 6));
+    out.push(meadowTallGrass(430, y, 5));
+
+    // Ferns (player parting)
+    out.push(meadowFern(80, y));
+    out.push(meadowFern(770, y));
+    out.push(meadowFern(1220, y));
+
+    // Floating-platform reactive decorations: hanging vines (lean)
+    const floats = getFloatingPlatforms(arena.platforms);
+    for (const plat of floats) {
+      if (plat.width > 180) {
+        out.push(meadowHangingVine(plat.x + 15, plat.y + plat.height, 25));
+        out.push(meadowHangingVine(plat.x + plat.width - 15, plat.y + plat.height, 20));
+      } else {
+        out.push(meadowHangingVine(plat.x + plat.width / 2, plat.y + plat.height, 18));
+      }
+    }
+
+    // Dandelions (proximity-excite seed burst)
+    for (const d of DANDELIONS) {
+      out.push(meadowDandelion(d.x, d.gy));
+    }
+
+    // Butterflies + bee clusters (flock motion)
+    for (let i = 0; i < BUTTERFLY_HUES.length; i++) out.push(meadowButterfly(i));
+    for (let ci = 0; ci < BEE_CLUSTERS.length; ci++) out.push(meadowBeeCluster(ci));
+
+    return out;
+  },
+
   drawForegroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => {
     const ground = arena.platforms[0];
     const gy = ground.y;
-
-    // Large foreground bushes (avoid stump positions at x=340, x=860)
     drawFgBush(ctx, 160, gy, 60);
     drawFgBush(ctx, 520, gy, 52);
     drawFgBush(ctx, 1000, gy, 55);
     drawFgBush(ctx, 1120, gy, 48);
-
-    // Tall grass clusters
-    drawTallGrass(ctx, 310, gy, 7);
-    drawTallGrass(ctx, 680, gy, 9);
-    drawTallGrass(ctx, 1020, gy, 6);
-    drawTallGrass(ctx, 430, gy, 5);
-
-    // Ferns
-    drawFern(ctx, 80, gy);
-    drawFern(ctx, 770, gy);
-    drawFern(ctx, 1220, gy);
-
-    // Bushes + vines on floating platforms (exclude stumps — width < 70)
     const floats = getFloatingPlatforms(arena.platforms);
     for (let pi = 0; pi < floats.length; pi++) {
       const plat = floats[pi];
       if (plat.width > 180) {
         drawFgBush(ctx, plat.x + plat.width * 0.15, plat.y, pi % 2 === 0 ? 45 : 18);
         drawFgBush(ctx, plat.x + plat.width * 0.85, plat.y, pi % 2 === 0 ? 18 : 42);
-        drawHangingVine(ctx, plat.x + 15, plat.y + plat.height, 25);
-        drawHangingVine(ctx, plat.x + plat.width - 15, plat.y + plat.height, 20);
         drawFgLeafCluster(ctx, plat.x + plat.width / 2, plat.y);
       } else {
         drawFgBush(ctx, plat.x + plat.width * 0.5, plat.y, pi % 3 === 0 ? 38 : 16);
-        drawHangingVine(ctx, plat.x + plat.width / 2, plat.y + plat.height, 18);
       }
     }
-
-    // Foreground wildflowers
     drawFgWildflower(ctx, 240, gy, '#FF6B8A', 18);
     drawFgWildflower(ctx, 580, gy, '#DDA0DD', 20);
     drawFgWildflower(ctx, 930, gy, '#FFD700', 16);
@@ -619,104 +862,15 @@ export const meadow: ArenaPack = {
     ctx.fillRect(platform.x, bodyTop + bodyH - 4, platform.width, 4);
   },
 
-  drawAnimatedBackground: (ctx, _arena, time, _dayPhase, matchState) => {
-    if (getSlowDevice() || !matchState) return;
-    ctx.save();
-    const players = matchState.players;
-    const dt = _tickDandelionDt(time);
-    const BURST_TOTAL = 7.0;
-    const SEED_FLY_DURATION = 2.0;
-    for (let di = 0; di < DANDELIONS.length; di++) {
-      const d = DANDELIONS[di];
-      let nearest = Infinity;
-      for (const p of players) {
-        if (!isLivePlayer(p)) continue;
-        const dx = (p.x + p.width * 0.5) - d.x;
-        const dy = (p.y + p.height) - d.gy;
-        const d2 = dx * dx + dy * dy;
-        if (d2 < nearest) nearest = d2;
-      }
-      const playerNear = nearest < 40 * 40;
-      let phase = _dandelionExcite[di];
-      if (phase < 0 && playerNear) phase = 0;
-      if (phase >= 0) {
-        phase += dt;
-        if (phase >= BURST_TOTAL) phase = -1;
-      }
-      _dandelionExcite[di] = phase;
-      const puffY = d.gy - 9;
-      ctx.strokeStyle = '#5fb45a';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(d.x, d.gy + 4);
-      ctx.lineTo(d.x, d.gy - 8);
-      ctx.stroke();
-      let puffR = 6;
-      if (phase >= 0) {
-        if (phase < SEED_FLY_DURATION) {
-          puffR = 6 * Math.max(0, 1 - phase / 0.3);
-        } else {
-          const regrow = (phase - SEED_FLY_DURATION) / (BURST_TOTAL - SEED_FLY_DURATION);
-          puffR = 6 * Math.min(1, regrow);
-        }
-      }
-      if (puffR > 0.3) {
-        ctx.fillStyle = '#ffffff';
-        ctx.globalAlpha = 0.95;
-        ctx.beginPath();
-        ctx.arc(d.x, puffY, puffR, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#dcdcc8';
-        ctx.globalAlpha = 0.75;
-        for (let i = 0; i < 6; i++) {
-          const c = DANDELION_SEED_COS[i * 2];
-          const s = DANDELION_SEED_SIN[i * 2];
-          ctx.beginPath();
-          ctx.arc(d.x + c * puffR * 0.7, puffY + s * puffR * 0.7, 0.7, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.globalAlpha = 1;
-      }
-      if (phase >= 0 && phase < SEED_FLY_DURATION) {
-        const t = phase / SEED_FLY_DURATION;
-        const SEEDS = 12;
-        ctx.fillStyle = '#f8f8e8';
-        for (let i = 0; i < SEEDS; i++) {
-          const emitT = i / SEEDS * 0.3;
-          const localT = (t - emitT) / (1 - emitT);
-          if (localT <= 0) continue;
-          const angle = (i / SEEDS) * Math.PI * 2 + fastSin(time + i) * 0.2;
-          const dist = localT * 60;
-          const sx = d.x + fastCos(angle) * dist + fastSin(time * 1.5 + i) * 2;
-          const sy = puffY - localT * 50 - localT * localT * 12 + fastSin(time + i) * 1.5;
-          const alpha = (1 - localT) * 0.95;
-          ctx.globalAlpha = alpha;
-          ctx.beginPath();
-          ctx.arc(sx, sy, 1.4, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.globalAlpha = alpha * 0.6;
-          ctx.beginPath();
-          ctx.arc(sx, sy - 2.5, 2, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.globalAlpha = 1;
-      }
-    }
-    ctx.restore();
-  },
+  // drawAnimatedBackground removed — dandelions migrated to ReactiveDecorationSystem.
 
   drawGroundCritters: (ctx, _arena, time, _dayPhase, matchState) => {
     if (getSlowDevice() || !matchState) return;
     drawSnails(ctx, time, matchState.players);
   },
 
-  drawAnimatedForeground: (ctx, _arena, time, _dayPhase, matchState) => {
-    if (getSlowDevice() || !matchState) return;
-    ctx.save();
-    const players = matchState.players;
-    for (let i = 0; i < BUTTERFLY_HUES.length; i++) drawButterfly(ctx, i, time, players);
-    for (let ci = 0; ci < BEE_CLUSTERS.length; ci++) drawBeeCluster(ctx, ci, time, players);
-    ctx.restore();
+  drawAnimatedForeground: (_ctx, _arena, _time, _dayPhase, _matchState) => {
+    // drawAnimatedForeground removed — butterflies + bees migrated to ReactiveDecorationSystem.
   },
 
   // ---- Audio ----

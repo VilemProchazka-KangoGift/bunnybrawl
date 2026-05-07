@@ -1,4 +1,5 @@
 import type { Arena, WeatherParticle, WildlifeEntity } from '../types';
+import type { ReactiveInstance } from '../gameLoop/cosmetics/reactiveDecorations';
 
 export type ScatterFlockSpecies = 'bird' | 'bat' | 'crow';
 
@@ -143,6 +144,20 @@ export interface ThemeConfig {
 
   /** Per-frame animated foreground. Drawn AFTER players + foreground-nature + platform overlays, so entities composed here cover platforms in front of the player. Pair with drawAnimatedBackground to split entities by z-order (e.g. half a flock in front, half behind). */
   drawAnimatedForeground?: (ctx: CanvasRenderingContext2D, arena: Arena, time: number, dayPhase: number, matchState?: import('../types').MatchState) => void;
+
+  /** Mirror of `ArenaPack.buildReactiveDecorations` — see arenas/types.ts for
+   *  contract. Forwarded by `toThemeConfig` so the Renderer can read it via theme. */
+  buildReactiveDecorations?: (arena: Arena) => ReactiveInstance[];
+
+  /** Mirror of `ArenaPack.cosmeticTick` — see arenas/types.ts for contract.
+   *  Services shape inlined here (rather than imported as `ArenaCosmeticServices`)
+   *  to avoid a circular dep: arenas/types.ts already imports from themes/types.ts.
+   *  KEEP THE SHAPE IN SYNC with `ArenaCosmeticServices` in arenas/types.ts. */
+  cosmeticTick?: (
+    state: import('../types').MatchState,
+    dt: number,
+    services: { emitParticle: (x: number, y: number, vx: number, vy: number, life: number, size: number, color: string) => void },
+  ) => void;
 
   /** Per-frame ground-level critters (snails, rats, squirrels, crabs, robots).
    *  Drawn AFTER players + fog but BEFORE the foreground-nature cache, so grass

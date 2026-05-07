@@ -45,6 +45,8 @@ src/
         PlayerCosmeticSystem.ts   # Owns afterimage/footstep accumulators
         EntityTransitionSystem.ts # Owns prevEntityState, spring/countdown/matchOver sounds
         EnvironmentSystem.ts      # Wildlife, fog, pollen, shooting stars, shockwaves
+        ReactiveDecorationSystem.ts # Arena-anchored decorations: wind sway, velocity-driven bend, stomp shake, burst
+        reactiveDecorations.ts    # Pure helpers: spring-damper primitives, kind registry, factory
         particles.ts  gibs.ts  environment.ts  sfx.ts  # Pure functions (used by systems)
         playerTransitions.ts  playerCosmetics.ts  entityTransitions.ts
       gameplay/     # Gameplay systems (driven by fixedUpdate)
@@ -299,6 +301,14 @@ All mechanics are configured directly in the `ArenaPack`:
 - **No springs** (`noSprings`), custom hazard skins (`drawCustomThorn`/`drawCustomSpring`)
 - **Physics modifiers** (`physics`): gravity, friction, walkSpeed, jumpImpulse multipliers
 - **Bubble helmet** (`bubbleHelmet: true`): glass dome on all characters (used by underwater + space station)
+
+### Migrating an arena's decorations to ReactiveDecorationSystem
+1. In the arena pack, add `buildReactiveDecorations(arena): ReactiveInstance[]` — return one instance per reactive decoration (use `createReactiveInstance({...})` factory from `gameLoop/cosmetics/reactiveDecorations`).
+2. Register each kind via `registerReactiveKind('<arenaId>.<name>', { layer, draw, highFrequency?, resetData? })` at module scope. Layer is `'prePlayer'` or `'postPlayer'`.
+3. Draw fns call `composeBend(inst, swayPhase)` for the bend offset (handles wind muting + bendValue).
+4. Tune via `proximity.magnitude` (= px of bend at typical walk speed); `radius` controls reach.
+5. Per-kind mutable runtime state goes in `inst.data` (NOT module-level WeakMaps); register `resetData` callback for in-flight animations (e.g. dandelion seed-burst phase).
+6. Decorations with no proximity/stomp/burst behavior should stay STATIC in `drawForegroundNature` / `drawBackgroundNature` so they bake into the OffscreenCanvas cache. Only opt into the reactive system if per-frame reactivity is needed.
 
 ### Adding a new game mechanic / pickup
 1. Define interface in `types.ts`, add constants in `constants.ts`

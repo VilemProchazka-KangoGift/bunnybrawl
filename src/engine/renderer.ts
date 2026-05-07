@@ -37,6 +37,7 @@ import { setHudScale } from './rendering/hud';
 import { applyRenderScaleToCanvas, getRenderScale } from './renderScale';
 import { getSlowDevice } from './perfFlags';
 import { perfTrace } from './perfTrace';
+import { getReactiveKind } from './gameLoop/cosmetics/reactiveDecorations';
 
 interface Cloud {
   x: number;
@@ -488,6 +489,30 @@ export class Renderer {
     this._fgNatureCacheArena = themeArena;
   }
 
+  /** Draw the reactive decoration instances for one render layer. The caller
+   *  passes a pre-bucketed list (system filters by layer at `setInstances`
+   *  time) so this loop has no per-instance layer check or array allocation. */
+  private _drawReactiveLayer(
+    ctx: CanvasRenderingContext2D,
+    instances: ReadonlyArray<import('./gameLoop/cosmetics/reactiveDecorations').ReactiveInstance>,
+    windPhase: number,
+    matchState: MatchState,
+  ): void {
+    if (!instances || instances.length === 0) return;
+    const slow = getSlowDevice();
+    const time = matchState.timeElapsed;
+    const dayPhase = matchState.dayPhase ?? 0;
+    for (let i = 0; i < instances.length; i++) {
+      const inst = instances[i];
+      const cfg = getReactiveKind(inst.kind);
+      if (!cfg) continue;
+      const swayPhase = slow || !inst.windAmp
+        ? 0
+        : Math.sin(windPhase + inst.seed * 0.7) * inst.windAmp;
+      cfg.draw(ctx, inst, swayPhase, time, dayPhase, matchState);
+    }
+  }
+
   /** Apply mirror transform and call into theme's foreground draw. Shared by
    *  the cache builder and the test-env (no OffscreenCanvas) fallback path. */
   private _drawForegroundNatureDirect(ctx: CanvasRenderingContext2D, themeArena: Arena): void {
@@ -619,7 +644,13 @@ export class Renderer {
 
   // ---- Frame rendering ----
 
-  renderFrame(matchState: MatchState, arena: Arena, particles: Particle[], cosmeticLead = 0): void {
+  renderFrame(
+    matchState: MatchState,
+    arena: Arena,
+    particles: Particle[],
+    cosmeticLead = 0,
+    reactive?: import('./gameLoop/cosmetics/reactiveDecorations').ReactiveRenderArg,
+  ): void {
     perfTrace.measure('renderFrame', () => {
       const ctx = this.fgCtx;
       ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -952,6 +983,11 @@ export class Renderer {
         this._drawForegroundNatureDirect(ctx, this.originalArena ?? arena);
       }
 
+      // Reactive decorations — pre-player layer.
+      if (reactive) {
+        this.withMirror(ctx, () => this._drawReactiveLayer(ctx, reactive.prePlayer, reactive.windPhase, matchState));
+      }
+
       // Ghosts (drawn over foreground, semi-transparent)
       for (const ghost of matchState.ghosts) {
         drawGhost(ctx, ghost, this.theme, matchState.timeElapsed);
@@ -1000,6 +1036,11 @@ export class Renderer {
       if (this.theme.drawAnimatedForeground) {
         const thA = this.originalArena ?? arena;
         this.withMirror(ctx, () => this.theme.drawAnimatedForeground!(ctx, thA, matchState.timeElapsed, matchState.dayPhase, matchState));
+      }
+
+      // Reactive decorations — post-player layer.
+      if (reactive) {
+        this.withMirror(ctx, () => this._drawReactiveLayer(ctx, reactive.postPlayer, reactive.windPhase, matchState));
       }
 
       if (!slow && this.theme.drawSceneTint) {
