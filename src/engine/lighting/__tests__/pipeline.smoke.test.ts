@@ -4,23 +4,29 @@ import { LightingPipeline } from '../pipeline';
 
 // happy-dom does not include OffscreenCanvas. Provide a minimal stub so the
 // pipeline constructor and test calls don't throw.
-function makeOffscreenCtx() {
-  return {
+function makeOffscreenCtx(canvas?: MockOffscreenCanvas) {
+  const ctx: Record<string, unknown> = {
     globalCompositeOperation: 'source-over',
     globalAlpha: 1,
+    imageSmoothingEnabled: true,
     fillStyle: '' as string,
     fillRect: vi.fn(),
+    clearRect: vi.fn(),
     drawImage: vi.fn(),
     createLinearGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
     getImageData: vi.fn(() => ({ data: new Uint8ClampedArray([200, 200, 200, 255]) })),
     save: vi.fn(),
     restore: vi.fn(),
+    translate: vi.fn(),
+    rotate: vi.fn(),
   };
+  if (canvas) ctx['canvas'] = canvas;
+  return ctx;
 }
 class MockOffscreenCanvas {
   width: number; height: number;
   constructor(w: number, h: number) { this.width = w; this.height = h; }
-  getContext(_: string) { return makeOffscreenCtx(); }
+  getContext(_: string) { return makeOffscreenCtx(this); }
 }
 // @ts-ignore
 globalThis.OffscreenCanvas = MockOffscreenCanvas;

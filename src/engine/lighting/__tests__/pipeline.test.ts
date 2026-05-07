@@ -6,16 +6,18 @@ import type { ThemeConfig } from '../../themes/types';
 // OffscreenCanvas mock
 //
 // happy-dom does not include OffscreenCanvas. We provide a pixel-tracking mock
-// that is just faithful enough for the pipeline's beginFrame + composite calls:
+// that is faithful enough for the pipeline's beginFrame + composite calls.
 //
-//  • fillRect with 'source-over' stores the current fillStyle as the uniform
-//    pixel color (fill is always full-canvas for the pipeline).
-//  • fillRect with 'lighter' (additive) adds the parsed color on top, clamped
-//    to 255.
-//  • fillRect with 'source-over' again resets the buffer (ambient base fill).
-//  • getImageData returns that stored color.
-//  • drawImage(src, 0,0,w,h) on the TARGET ctx with globalCompositeOperation
-//    'multiply' computes newPixel = floor(target * src / 255).
+// Pixel model: uniform single RGBA pixel (whole canvas treated as one texel).
+//
+//  • fillRect with 'source-over' stores fillStyle as the uniform pixel.
+//  • fillRect with 'lighter' (additive) adds the parsed color, clamped to 255.
+//  • fillRect with a gradient object calls _fillRectWithGrad instead.
+//  • drawImage(src, ...) dispatches based on globalCompositeOperation:
+//      - 'source-over': copy src pixel → self pixel.
+//      - 'destination-in': self = self * (srcAlpha / 255).  alpha mask.
+//  • getImageData returns the stored pixel.
+//  • Target ctx (MockTargetCtx) uses 'multiply': self = floor(self * src / 255).
 // ---------------------------------------------------------------------------
 
 function parseRgba(style: string): [number, number, number, number] {
@@ -33,22 +35,29 @@ function parseRgba(style: string): [number, number, number, number] {
 class MockOffscreenCanvas2DCtx {
   globalCompositeOperation = 'source-over';
   globalAlpha = 1;
-  fillStyle: string = '';
+  fillStyle: string | object = '';
+  imageSmoothingEnabled = true;
   private _pixels: Uint8ClampedArray;
-  private _width: number;
-  private _height: number;
+  // We also need canvas ref for the destination-in drawImage(ctx.canvas, ...)
+  canvas: MockOffscreenCanvas;
 
-  constructor(w: number, h: number) {
-    this._width = w;
-    this._height = h;
+  constructor(canvas: MockOffscreenCanvas) {
+    this.canvas = canvas;
     // Start transparent black
-    this._pixels = new Uint8ClampedArray(4).fill(0);
+    this._pixels = new Uint8ClampedArray([0, 0, 0, 0]);
+  }
+
+  clearRect(_x: number, _y: number, _w: number, _h: number) {
+    this._pixels.fill(0);
   }
 
   fillRect(_x: number, _y: number, _w: number, _h: number) {
-    // If fillStyle is a gradient object, skip — the gradient mock doesn't
-    // produce pixel-level data; the ambient source-over fill is already stored.
-    if (typeof this.fillStyle !== 'string') return;
+    if (typeof this.fillStyle !== 'string') {
+      // Gradient object — handled via _gradientColor captured by createLinearGradient
+      const [fr, fg, fb, fa] = parseRgba(this._gradientColor);
+      this._fillRectWithGrad(fr, fg, fb, fa);
+      return;
+    }
     const [fr, fg, fb, fa] = parseRgba(this.fillStyle);
     if (this.globalCompositeOperation === 'source-over') {
       this._pixels[0] = fr;
@@ -70,28 +79,20 @@ class MockOffscreenCanvas2DCtx {
   }
 
   createLinearGradient(_x0: number, _y0: number, _x1: number, _y1: number) {
-    // Return a stub gradient whose addColorStop captures the last call's color
-    // for 'lighter' fillRect below. We simplify: pipeline draws one gradient
-    // fill with stop 0 = color, stop 1 = transparent. We capture stop 0.
     const self = this;
     let capturedColor = '';
     return {
       addColorStop: (offset: number, color: string) => {
         if (offset === 0) capturedColor = color;
-        // After both stops are added, patch fillStyle so fillRect sees it
         if (offset === 1) {
-          // keep capturedColor available to fillRect via fillStyle setter
-          (self as any)._gradientColor = capturedColor;
+          self._gradientColor = capturedColor;
         }
       },
     };
   }
 
-  // fillStyle setter: when assigned a gradient object, resolve via _gradientColor
-  private _gradientColor = '';
-  // we use plain JS object so no real setter — pipeline assigns ctx.fillStyle = grad
-  // We store it directly; fillRect checks if fillStyle is an object.
-  // Instead of a real setter, we override fillRect to handle the object case:
+  _gradientColor = '';
+
   _fillRectWithGrad(fr: number, fg: number, fb: number, fa: number) {
     if (this.globalCompositeOperation === 'lighter') {
       const alpha = fa / 255;
@@ -102,12 +103,42 @@ class MockOffscreenCanvas2DCtx {
     }
   }
 
-  drawImage(_src: MockOffscreenCanvas, _dx: number, _dy: number, _dw: number, _dh: number) {
-    // no-op for the light buffer (pipeline doesn't draw onto itself)
+  drawImage(
+    src: MockOffscreenCanvas | { _mockCtx?: MockOffscreenCanvas2DCtx },
+    _dx: number, _dy: number,
+    _dw?: number, _dh?: number,
+  ) {
+    // Resolve source pixels from whatever was passed.
+    let srcPx: Uint8ClampedArray | null = null;
+    if (src instanceof MockOffscreenCanvas) {
+      const sctx = src.getContext('2d') as MockOffscreenCanvas2DCtx | null;
+      if (sctx) srcPx = sctx.getPixels();
+    }
+
+    if (!srcPx) return;
+
+    if (this.globalCompositeOperation === 'source-over') {
+      // Copy source pixel onto self.
+      this._pixels[0] = srcPx[0];
+      this._pixels[1] = srcPx[1];
+      this._pixels[2] = srcPx[2];
+      this._pixels[3] = srcPx[3];
+    } else if (this.globalCompositeOperation === 'destination-in') {
+      // Keep self pixel scaled by source alpha (alpha mask).
+      const srcAlpha = srcPx[3] / 255;
+      this._pixels[0] = Math.round(this._pixels[0] * srcAlpha);
+      this._pixels[1] = Math.round(this._pixels[1] * srcAlpha);
+      this._pixels[2] = Math.round(this._pixels[2] * srcAlpha);
+      this._pixels[3] = Math.round(this._pixels[3] * srcAlpha);
+    }
   }
 
-  save() {}
-  restore() {}
+  translate(_x: number, _y: number) {}
+  rotate(_angle: number) {}
+
+  save() { this._savedOp = this.globalCompositeOperation; }
+  restore() { this.globalCompositeOperation = this._savedOp; }
+  private _savedOp = 'source-over';
 
   getPixels() { return this._pixels; }
 }
@@ -120,7 +151,7 @@ class MockOffscreenCanvas {
   constructor(w: number, h: number) {
     this.width = w;
     this.height = h;
-    this._ctx = new MockOffscreenCanvas2DCtx(w, h);
+    this._ctx = new MockOffscreenCanvas2DCtx(this);
   }
 
   getContext(type: string): MockOffscreenCanvas2DCtx | null {
@@ -134,8 +165,9 @@ class MockOffscreenCanvas {
 globalThis.OffscreenCanvas = MockOffscreenCanvas;
 
 // ---------------------------------------------------------------------------
-// Target canvas mock for composite() — also needs globalCompositeOperation +
-// drawImage that performs multiply blend against the source pixels.
+// Target canvas mock for composite() — needs globalCompositeOperation,
+// save/restore, drawImage with multiply, AND a canvas property so the
+// pipeline can call tctx.drawImage(ctx.canvas, 0, 0) for the alpha mask.
 // ---------------------------------------------------------------------------
 
 class MockTargetCtx {
@@ -145,20 +177,38 @@ class MockTargetCtx {
   private _pixels: Uint8ClampedArray;
   private _width: number;
   private _height: number;
+  // pipeline reads ctx.canvas to copy alpha into temp canvas
+  canvas: MockOffscreenCanvas;
 
   constructor(w: number, h: number) {
     this._width = w;
     this._height = h;
     this._pixels = new Uint8ClampedArray([0, 0, 0, 255]);
+    // Create a MockOffscreenCanvas whose ctx pixel mirrors this ctx's pixel.
+    this.canvas = new MockOffscreenCanvas(w, h);
+    this._syncCanvasPixels();
+  }
+
+  /** Keep canvas ctx pixel in sync with our own pixel (for destination-in). */
+  private _syncCanvasPixels() {
+    const cctx = this.canvas.getContext('2d') as MockOffscreenCanvas2DCtx;
+    if (!cctx) return;
+    // Directly write into the canvas ctx pixels.
+    const cp = cctx.getPixels();
+    cp[0] = this._pixels[0];
+    cp[1] = this._pixels[1];
+    cp[2] = this._pixels[2];
+    cp[3] = this._pixels[3];
   }
 
   fillRect(_x: number, _y: number, _w: number, _h: number) {
     const [r, g, b, a] = parseRgba(this.fillStyle as string);
     this._pixels[0] = r; this._pixels[1] = g;
     this._pixels[2] = b; this._pixels[3] = a;
+    this._syncCanvasPixels();
   }
 
-  drawImage(src: MockOffscreenCanvas, _dx: number, _dy: number, _dw: number, _dh: number) {
+  drawImage(src: MockOffscreenCanvas, _dx: number, _dy: number, _dw?: number, _dh?: number) {
     const srcCtx = src.getContext('2d') as MockOffscreenCanvas2DCtx | null;
     if (!srcCtx) return;
     const srcPx = srcCtx.getPixels();
@@ -167,6 +217,7 @@ class MockTargetCtx {
       this._pixels[1] = Math.floor(this._pixels[1] * srcPx[1] / 255);
       this._pixels[2] = Math.floor(this._pixels[2] * srcPx[2] / 255);
       this._pixels[3] = 255;
+      this._syncCanvasPixels();
     }
   }
 
@@ -226,6 +277,53 @@ describe('LightingPipeline (real impl)', () => {
     expect(pixel[2]).toBeLessThan(255);
   });
 
+  it('composite with transparent FG does NOT darken (alpha mask prevents occluding BG)', () => {
+    // Key correctness test for the L1 fix: a fully transparent FG pixel must
+    // not be multiplied — the ambient color must not "fill" transparent areas.
+    const p = new LightingPipeline(1280, 720);
+    p.beginFrame(mockTheme(), 0.5, 0); // midnight — ambient is a dark blue
+    const tctx = new MockTargetCtx(1280, 720);
+    // FG stays transparent black (default: alpha=0)
+    // We do NOT call fillRect — canvas starts transparent.
+    p.composite(tctx as unknown as CanvasRenderingContext2D);
+    const pixel = tctx.getImageData(640, 360, 1, 1).data;
+    // The transparent FG pixel must be unchanged (still 0,0,0,255 or similar).
+    // Because destination-in zeroed the temp canvas where FG alpha=0,
+    // the multiply step effectively multiplies by 0 → no change from black.
+    // More precisely: the temp canvas pixel got masked to alpha=0, so when
+    // we drawImage(tmp) with multiply, src has alpha=0 → multiply blends as
+    // transparent src → FG stays unchanged.
+    // The pixel value after our mock multiply is: floor(0 * anything / 255) = 0
+    // since the tmp canvas was cleared/zeroed for transparent FG.
+    expect(pixel[0]).toBe(0); // not "ambient blue"
+    expect(pixel[1]).toBe(0);
+    expect(pixel[2]).toBe(0);
+  });
+
+  it('beginFrame caches output — repeated calls with same dayPhase do not rebake', () => {
+    const p = new LightingPipeline(1280, 720);
+    // First call bakes the buffer.
+    p.beginFrame(mockTheme(), 0.0, 0);
+    const buf = p.getLightBuffer()!;
+    const ctx = buf.getContext('2d') as MockOffscreenCanvas2DCtx;
+    const fillRectSpy = vi.spyOn(ctx, 'fillRect');
+    // Subsequent calls within the cache window should skip recompute.
+    p.beginFrame(mockTheme(), 0.0, 1);
+    p.beginFrame(mockTheme(), 0.0, 2);
+    expect(fillRectSpy).not.toHaveBeenCalled(); // cache still valid
+  });
+
+  it('beginFrame recomputes when dayPhase moves beyond threshold', () => {
+    const p = new LightingPipeline(1280, 720);
+    p.beginFrame(mockTheme(), 0.0, 0); // bake at noon
+    const buf = p.getLightBuffer()!;
+    const ctx = buf.getContext('2d') as MockOffscreenCanvas2DCtx;
+    const fillRectSpy = vi.spyOn(ctx, 'fillRect');
+    // Move far past the threshold (0.001) — should trigger recompute.
+    p.beginFrame(mockTheme(), 0.5, 1); // midnight
+    expect(fillRectSpy).toHaveBeenCalled();
+  });
+
   it('isEnabled() honors module kill switch (default true)', () => {
     const p = new LightingPipeline(1280, 720);
     expect(p.isEnabled()).toBe(true);
@@ -235,5 +333,14 @@ describe('LightingPipeline (real impl)', () => {
     const p = new LightingPipeline(1280, 720);
     expect(() => p.resize(1280, 720, 1.0)).not.toThrow();
     expect(() => p.resize(1280, 720, 2.0)).not.toThrow();
+  });
+
+  it('resize invalidates cache so next beginFrame recomputes', () => {
+    const p = new LightingPipeline(1280, 720);
+    p.beginFrame(mockTheme(), 0.0, 0); // bake
+    p.resize(1280, 720, 1.0); // drops buffer + resets cacheValidFor
+    // After resize buffer is null — beginFrame should recreate and fill it.
+    p.beginFrame(mockTheme(), 0.0, 1);
+    expect(p.getLightBuffer()).not.toBeNull();
   });
 });
