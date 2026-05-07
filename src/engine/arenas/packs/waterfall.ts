@@ -1,9 +1,13 @@
 import type { ArenaPack } from '../types';
-import type { Platform } from '../../types';
+import type { Arena, Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
-import { getFloatingPlatforms, isLivePlayer, drawDriftBand, makeDtTracker, type DriftBandConfig } from '../../themes/utils';
+import { getFloatingPlatforms, drawDriftBand, type DriftBandConfig } from '../../themes/utils';
+import {
+  registerReactiveKind, createReactiveInstance, composeBend,
+  type ReactiveInstance,
+} from '../../gameLoop/cosmetics/reactiveDecorations';
 
 const GROUND_MIST_CONFIG: DriftBandConfig = {
   topY: 615,
@@ -28,8 +32,6 @@ const LILY_PADS = [
   { x: 160,  gy: 365 },     // x=20..180 y=370 platform
   { x: 1105, gy: 435 },     // x=1050..1160 y=440 platform
 ] as const;
-const _frogJumpExcite = new Float32Array(LILY_PADS.length);
-const _tickFrogDt = makeDtTracker();
 import {
   drawTree, drawBush, drawFlower, drawGrassTuft,
   drawFgBush, drawTallGrass, drawFern, drawHangingVine, drawFgLeafCluster, drawFgWildflower,
@@ -48,6 +50,217 @@ const WATERFALL_STONE_PALETTE = [
   { base: '#6a7a88', dark: '#34424e', light: '#9aaab8' },
   { base: '#54646e', dark: '#283440', light: '#849aa8' },
 ];
+
+// ============================================================================
+// Reactive decoration factories + draw fns
+// ============================================================================
+
+// ---- waterfall.tree ----
+interface TreeData { size: number; }
+function waterfallTree(x: number, y: number, size: number): ReactiveInstance {
+  return createReactiveInstance({
+    pos: { x, y },
+    kind: 'waterfall.tree',
+    seed: Math.floor((x * 73 + y * 31) % 997),
+    data: { size } satisfies TreeData,
+    windAmp: 3,
+    shakeRadius: 80,
+    burst: { threshold: 0.95, particleKind: 'leaf', count: 12 },
+  });
+}
+registerReactiveKind('waterfall.tree', {
+  layer: 'prePlayer',
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
+    const { size } = inst.data as TreeData;
+    const lean = swayPhase + (inst.shakeDecay > 0 ? Math.sin(inst.shakeDecay * 40) * inst.shakeDecay * 4 : 0);
+    ctx.save();
+    ctx.translate(inst.pos.x, inst.pos.y);
+    ctx.rotate(lean * 0.015);
+    drawTree(ctx, 0, 0, size);
+    ctx.restore();
+  },
+});
+
+// ---- waterfall.tallGrass ----
+interface TallGrassData { count: number; }
+function waterfallTallGrass(x: number, y: number, count: number): ReactiveInstance {
+  return createReactiveInstance({
+    pos: { x, y }, kind: 'waterfall.tallGrass',
+    seed: Math.floor((x * 89 + y * 41) % 997),
+    data: { count } satisfies TallGrassData,
+    windAmp: 6,
+    proximity: { radius: 36, mode: 'lean', magnitude: 30 },
+  });
+}
+registerReactiveKind('waterfall.tallGrass', {
+  layer: 'prePlayer',
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
+    const { count } = inst.data as TallGrassData;
+    drawTallGrass(ctx, inst.pos.x, inst.pos.y, count, undefined, undefined, composeBend(inst, swayPhase));
+  },
+});
+
+// ---- waterfall.fern ----
+function waterfallFern(x: number, y: number): ReactiveInstance {
+  return createReactiveInstance({
+    pos: { x, y }, kind: 'waterfall.fern',
+    seed: Math.floor((x * 79 + y * 37) % 997),
+    windAmp: 7,
+    proximity: { radius: 36, mode: 'lean', magnitude: 24 },
+  });
+}
+registerReactiveKind('waterfall.fern', {
+  layer: 'prePlayer',
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
+    drawFern(ctx, inst.pos.x, inst.pos.y, undefined, composeBend(inst, swayPhase));
+  },
+});
+
+// ---- waterfall.hangingVine ----
+interface HangingVineData { length: number; }
+function waterfallHangingVine(x: number, y: number, length: number): ReactiveInstance {
+  return createReactiveInstance({
+    pos: { x, y }, kind: 'waterfall.hangingVine',
+    seed: Math.floor((x * 97 + y * 47) % 997),
+    data: { length } satisfies HangingVineData,
+    windAmp: 10,
+    proximity: { radius: 36, mode: 'lean', magnitude: 30 },
+  });
+}
+registerReactiveKind('waterfall.hangingVine', {
+  layer: 'prePlayer',
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
+    const { length } = inst.data as HangingVineData;
+    drawHangingVine(ctx, inst.pos.x, inst.pos.y, length, composeBend(inst, swayPhase));
+  },
+});
+
+// ---- waterfall.fgBush ----
+// Subtle proximity-lean — bushes are stiffer than vines, so a smaller magnitude.
+interface FgBushData { size: number; }
+function waterfallFgBush(x: number, y: number, size: number): ReactiveInstance {
+  return createReactiveInstance({
+    pos: { x, y }, kind: 'waterfall.fgBush',
+    seed: Math.floor((x * 103 + y * 53) % 997),
+    data: { size } satisfies FgBushData,
+    windAmp: 4,
+    proximity: { radius: 30, mode: 'lean', magnitude: 12 },
+  });
+}
+registerReactiveKind('waterfall.fgBush', {
+  layer: 'prePlayer',
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
+    const { size } = inst.data as FgBushData;
+    const bend = composeBend(inst, swayPhase);
+    // Bushes are stout — bend by translating top of the bush slightly so the
+    // shape leans without skewing. Stiffness is built into the magnitude.
+    ctx.save();
+    ctx.translate(inst.pos.x, inst.pos.y);
+    // Apply small rotation around base. magnitude=12 → ~0.04 rad at typical pass.
+    ctx.transform(1, 0, bend * 0.012, 1, 0, 0);
+    drawFgBush(ctx, 0, 0, size);
+    ctx.restore();
+  },
+});
+
+// ---- waterfall.frogJump ----
+// Lily-pad frog with proximity-excite jump trigger. `excite` is the same
+// scalar 0..1 the dandelion uses; we drive lift = -sin(e * pi) * 18 so the
+// frog hops at peak excitement and settles back down. Module-level
+// `_frogJumpExcite` Float32Array is now per-instance `data.excite`.
+//
+// Note: ReactiveDecorationSystem already integrates `inst.excitement` for any
+// kind with a proximity config. We use that directly — no separate `excite`
+// field needed.
+interface FrogJumpData { padIndex: number; }
+function waterfallFrogJump(padIndex: number): ReactiveInstance {
+  const lp = LILY_PADS[padIndex];
+  return createReactiveInstance({
+    pos: { x: lp.x, y: lp.gy }, kind: 'waterfall.frogJump',
+    seed: padIndex,
+    data: { padIndex } satisfies FrogJumpData,
+    proximity: { radius: 60, mode: 'excite', magnitude: 1 },
+  });
+}
+registerReactiveKind('waterfall.frogJump', {
+  layer: 'postPlayer',
+  // Excitement is reset to 0 by the system; we have nothing else mutable so
+  // resetData is a no-op. Defining it for symmetry with other animated kinds.
+  resetData: (_d) => { /* excite scalar lives on inst.excitement, system handles reset */ },
+  draw: (ctx, inst, _swayPhase, time, _dayPhase, _state) => {
+    const { padIndex } = inst.data as FrogJumpData;
+    const lp = LILY_PADS[padIndex];
+    const e = inst.excitement;
+    // Hop arc: e ramps 0..1; lift = -sin(e*pi)*18 (peak at e=0.5)
+    const lift = -fastSin(e * Math.PI) * 18;
+
+    // Lily pad (under frog).
+    ctx.fillStyle = '#3d8a3a';
+    ctx.beginPath();
+    ctx.ellipse(lp.x, lp.gy + 2, 22, 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#5fb45a';
+    ctx.beginPath();
+    ctx.ellipse(lp.x - 2, lp.gy, 20, 4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath();
+    ctx.moveTo(lp.x - 2, lp.gy);
+    ctx.lineTo(lp.x + 4, lp.gy);
+    ctx.lineTo(lp.x + 1, lp.gy + 3);
+    ctx.closePath();
+    ctx.fill();
+
+    const breath = fastSin(time * 2 + padIndex) * 0.5;
+    const fy = lp.gy + lift;
+    // Body — wide squat ellipse sitting on the lily pad.
+    ctx.fillStyle = '#4a8a3a';
+    ctx.beginPath();
+    ctx.ellipse(lp.x, fy - 5 + breath, 13, 7 - breath * 0.4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Folded back-leg bumps on each side.
+    ctx.beginPath();
+    ctx.ellipse(lp.x - 9, fy - 3, 4, 3, -0.3, 0, Math.PI * 2);
+    ctx.ellipse(lp.x + 9, fy - 3, 4, 3, 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    // Front feet poking out under the body.
+    ctx.fillStyle = '#3d6e2c';
+    ctx.beginPath();
+    ctx.ellipse(lp.x - 4, fy - 1, 3, 1.5, 0.1, 0, Math.PI * 2);
+    ctx.ellipse(lp.x + 4, fy - 1, 3, 1.5, -0.1, 0, Math.PI * 2);
+    ctx.fill();
+    // Lighter belly highlight.
+    ctx.fillStyle = '#a8d088';
+    ctx.beginPath();
+    ctx.ellipse(lp.x, fy - 3 + breath, 7, 2.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Head — sits on top of the body, slightly forward.
+    ctx.fillStyle = '#4a8a3a';
+    ctx.beginPath();
+    ctx.ellipse(lp.x, fy - 11 + breath * 0.5, 8, 4.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Eye bumps on top of the head.
+    ctx.beginPath();
+    ctx.arc(lp.x - 4, fy - 14, 2.5, 0, Math.PI * 2);
+    ctx.arc(lp.x + 4, fy - 14, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(lp.x - 4, fy - 14, 1.6, 0, Math.PI * 2);
+    ctx.arc(lp.x + 4, fy - 14, 1.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#000';
+    ctx.fillRect(lp.x - 4.5, fy - 14.5, 1, 1.5);
+    ctx.fillRect(lp.x + 3.5, fy - 14.5, 1, 1.5);
+    // Mouth line.
+    ctx.strokeStyle = '#2a4a2a';
+    ctx.lineWidth = 0.7;
+    ctx.beginPath();
+    ctx.moveTo(lp.x - 5, fy - 10 + breath * 0.5);
+    ctx.lineTo(lp.x + 5, fy - 10 + breath * 0.5);
+    ctx.stroke();
+  },
+});
 
 function drawWaterfallPlatformBg(ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean): void {
   const rng = mulberry32(seedFor(platform.x, platform.y));
@@ -166,7 +379,7 @@ export const waterfall: ArenaPack = {
   previewIcon: '\u{1F4A7}',
 
   // ---- Translations ----
-  translations: { en: 'Waterfall', cs: 'Vodop\u00E1d', hi: '\u091D\u0930\u0928\u093E', fil: 'Talon' },
+  translations: { en: 'Waterfall', cs: 'Vodopád', hi: 'झरना', fil: 'Talon' },
 
   // ---- Layout ----
   defaultSurface: 'stone',
@@ -438,15 +651,15 @@ export const waterfall: ArenaPack = {
     ctx.restore();
   },
 
+  // Static-shape decorations route through the cached fg/bg-nature layers
+  // (one-time bake). Reactive kinds — trees (stomp shake + leaf burst),
+  // tallGrass/fern/hangingVine/fgBush (proximity lean), and lily-pad frogs
+  // (excite-jump) — live in `buildReactiveDecorations`.
   drawBackgroundNature: (ctx, arena) => {
     const ground = arena.platforms[0];
     const y = ground.y;
 
-    // Trees on the far sides (away from waterfall)
-    drawTree(ctx, 40, y, 55);
-    drawTree(ctx, 1200, y, 48);
-
-    // Bushes on sides
+    // Bushes on sides (static — bake into cache)
     drawBush(ctx, 130, y, 26);
     drawBush(ctx, 300, y, 20);
     drawBush(ctx, 970, y, 24);
@@ -492,7 +705,7 @@ export const waterfall: ArenaPack = {
     drawBoulder(390, 300, 35, 18, '#5A9A4A');
     drawBoulder(840, 520, 42, 24, '#4A8A3A');
 
-    // Flowers on the sides
+    // Flowers on the sides (static)
     const flowerColors = ['#FF6B8A', '#FFD700', '#87CEEB', '#DDA0DD', '#80CBC4'];
     const flowerPositions = [100, 180, 260, 950, 1030, 1120, 1200];
     for (const fx of flowerPositions) {
@@ -500,11 +713,11 @@ export const waterfall: ArenaPack = {
       drawFlower(ctx, fx, y, color);
     }
 
-    // Grass tufts near water
+    // Grass tufts near water (static)
     drawGrassTuft(ctx, 400, y, '#4D9F3A');
     drawGrassTuft(ctx, 870, y, '#4D9F3A');
 
-    // Nature on floating platforms
+    // Static nature on floating platforms
     const floats = getFloatingPlatforms(arena.platforms);
     for (const plat of floats) {
       const mid = plat.x + plat.width / 2;
@@ -518,50 +731,76 @@ export const waterfall: ArenaPack = {
     }
   },
 
+  buildReactiveDecorations: (arena: Arena) => {
+    const ground = arena.platforms[0];
+    const y = ground.y;
+    const out: ReactiveInstance[] = [];
+
+    // Trees on the far sides (away from waterfall) — stomp shake + leaf burst
+    out.push(waterfallTree(40, y, 55));
+    out.push(waterfallTree(1200, y, 48));
+
+    // Tall grass near waterfall edges (proximity lean)
+    out.push(waterfallTallGrass(380, y, 8));
+    out.push(waterfallTallGrass(870, y, 7));
+    out.push(waterfallTallGrass(140, y, 6));
+    out.push(waterfallTallGrass(1100, y, 5));
+
+    // Ferns (proximity lean)
+    out.push(waterfallFern(50, y));
+    out.push(waterfallFern(320, y));
+    out.push(waterfallFern(940, y));
+    out.push(waterfallFern(1240, y));
+
+    // Foreground bushes on sides (subtle proximity lean — stiffer than vines)
+    out.push(waterfallFgBush(90, y, 55));
+    out.push(waterfallFgBush(260, y, 42));
+    out.push(waterfallFgBush(990, y, 50));
+    out.push(waterfallFgBush(1170, y, 46));
+
+    // Vines + bushes on floating platforms
+    const floats = getFloatingPlatforms(arena.platforms);
+    for (const plat of floats) {
+      if (plat.width > 140) {
+        out.push(waterfallFgBush(plat.x + plat.width * 0.2, plat.y, 16));
+        out.push(waterfallFgBush(plat.x + plat.width * 0.8, plat.y, 14));
+        out.push(waterfallHangingVine(plat.x + 10, plat.y + plat.height, 22));
+        out.push(waterfallHangingVine(plat.x + plat.width - 10, plat.y + plat.height, 18));
+      } else if (plat.width >= 80) {
+        out.push(waterfallHangingVine(plat.x + plat.width / 2, plat.y + plat.height, 15));
+      }
+    }
+
+    // Lily-pad frogs (proximity excite → jump)
+    for (let i = 0; i < LILY_PADS.length; i++) {
+      out.push(waterfallFrogJump(i));
+    }
+
+    return out;
+  },
+
   drawForegroundNature: (ctx, arena) => {
     const ground = arena.platforms[0];
     const gy = ground.y;
 
-    // Large foreground bushes on sides
-    drawFgBush(ctx, 90, gy, 55);
-    drawFgBush(ctx, 260, gy, 42);
-    drawFgBush(ctx, 990, gy, 50);
-    drawFgBush(ctx, 1170, gy, 46);
+    // Static foreground decorations stay baked in cache. Reactive fgBushes,
+    // tall grass, ferns, hanging vines moved to buildReactiveDecorations.
 
-    // Tall grass near waterfall edges
-    drawTallGrass(ctx, 380, gy, 8);
-    drawTallGrass(ctx, 870, gy, 7);
-    drawTallGrass(ctx, 140, gy, 6);
-    drawTallGrass(ctx, 1100, gy, 5);
-
-    // Ferns
-    drawFern(ctx, 50, gy);
-    drawFern(ctx, 320, gy);
-    drawFern(ctx, 940, gy);
-    drawFern(ctx, 1240, gy);
-
-    // Vines + foliage on floating platforms
+    // Static leaf clusters on wide floating platforms
     const floats = getFloatingPlatforms(arena.platforms);
-    for (let pi = 0; pi < floats.length; pi++) {
-      const plat = floats[pi];
+    for (const plat of floats) {
       if (plat.width > 140) {
-        drawFgBush(ctx, plat.x + plat.width * 0.2, plat.y, 16);
-        drawFgBush(ctx, plat.x + plat.width * 0.8, plat.y, 14);
-        drawHangingVine(ctx, plat.x + 10, plat.y + plat.height, 22);
-        drawHangingVine(ctx, plat.x + plat.width - 10, plat.y + plat.height, 18);
         drawFgLeafCluster(ctx, plat.x + plat.width / 2, plat.y);
-      } else if (plat.width >= 80) {
-        drawHangingVine(ctx, plat.x + plat.width / 2, plat.y + plat.height, 15);
       }
     }
 
-    // Foreground wildflowers on sides
+    // Foreground wildflowers on sides (static)
     drawFgWildflower(ctx, 170, gy, '#4FC3F7', 16);
     drawFgWildflower(ctx, 300, gy, '#DDA0DD', 18);
     drawFgWildflower(ctx, 1020, gy, '#80CBC4', 17);
     drawFgWildflower(ctx, 1200, gy, '#FFD700', 20);
 
-    // Dense mist spray at waterfall base
+    // Dense mist spray at waterfall base (static)
     ctx.save();
     for (let i = 0; i < 14; i++) {
       const mx = 460 + i * 30;
@@ -580,7 +819,7 @@ export const waterfall: ArenaPack = {
 
   drawPlatformOverlay: (ctx, platform, _isGround) => drawWaterfallPlatformFg(ctx, platform),
 
-  drawAnimatedBackground: (ctx, _arena, time, _dayPhase, matchState) => {
+  drawAnimatedBackground: (ctx, _arena, time, _dayPhase, _matchState) => {
     if (getSlowDevice()) return;
     ctx.save();
     // Spray particles bucketed by alpha — 5 buckets means 5 globalAlpha
@@ -647,87 +886,8 @@ export const waterfall: ArenaPack = {
       }
     }
     ctx.globalAlpha = 1;
-    const dt = _tickFrogDt(time);
-    for (let i = 0; i < LILY_PADS.length; i++) {
-      const lp = LILY_PADS[i];
-      // Reactive: frog leaps when a player approaches within 60px.
-      let nearest = Infinity;
-      for (const p of matchState?.players ?? []) {
-        if (!isLivePlayer(p)) continue;
-        const dx = (p.x + p.width * 0.5) - lp.x;
-        const dy = (p.y + p.height) - lp.gy;
-        const d2 = dx * dx + dy * dy;
-        if (d2 < nearest) nearest = d2;
-      }
-      const target = nearest < 60 * 60 ? 1 : 0;
-      const e = _frogJumpExcite[i] = Math.max(0, _frogJumpExcite[i] + (target - _frogJumpExcite[i]) * dt * 5);
-      // Hop arc: e ramps 0..1; lift = -sin(e*pi)*18 (peak at e=0.5)
-      const lift = -fastSin(e * Math.PI) * 18;
-      ctx.fillStyle = '#3d8a3a';
-      ctx.beginPath();
-      ctx.ellipse(lp.x, lp.gy + 2, 22, 6, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#5fb45a';
-      ctx.beginPath();
-      ctx.ellipse(lp.x - 2, lp.gy, 20, 4, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = 'rgba(0,0,0,0.25)';
-      ctx.beginPath();
-      ctx.moveTo(lp.x - 2, lp.gy);
-      ctx.lineTo(lp.x + 4, lp.gy);
-      ctx.lineTo(lp.x + 1, lp.gy + 3);
-      ctx.closePath();
-      ctx.fill();
-      const breath = fastSin(time * 2 + i) * 0.5;
-      const fy = lp.gy + lift;
-      // Body — wide squat ellipse sitting on the lily pad.
-      ctx.fillStyle = '#4a8a3a';
-      ctx.beginPath();
-      ctx.ellipse(lp.x, fy - 5 + breath, 13, 7 - breath * 0.4, 0, 0, Math.PI * 2);
-      ctx.fill();
-      // Folded back-leg bumps on each side.
-      ctx.beginPath();
-      ctx.ellipse(lp.x - 9, fy - 3, 4, 3, -0.3, 0, Math.PI * 2);
-      ctx.ellipse(lp.x + 9, fy - 3, 4, 3, 0.3, 0, Math.PI * 2);
-      ctx.fill();
-      // Front feet poking out under the body.
-      ctx.fillStyle = '#3d6e2c';
-      ctx.beginPath();
-      ctx.ellipse(lp.x - 4, fy - 1, 3, 1.5, 0.1, 0, Math.PI * 2);
-      ctx.ellipse(lp.x + 4, fy - 1, 3, 1.5, -0.1, 0, Math.PI * 2);
-      ctx.fill();
-      // Lighter belly highlight.
-      ctx.fillStyle = '#a8d088';
-      ctx.beginPath();
-      ctx.ellipse(lp.x, fy - 3 + breath, 7, 2.5, 0, 0, Math.PI * 2);
-      ctx.fill();
-      // Head — sits on top of the body, slightly forward.
-      ctx.fillStyle = '#4a8a3a';
-      ctx.beginPath();
-      ctx.ellipse(lp.x, fy - 11 + breath * 0.5, 8, 4.5, 0, 0, Math.PI * 2);
-      ctx.fill();
-      // Eye bumps on top of the head.
-      ctx.beginPath();
-      ctx.arc(lp.x - 4, fy - 14, 2.5, 0, Math.PI * 2);
-      ctx.arc(lp.x + 4, fy - 14, 2.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#fff';
-      ctx.beginPath();
-      ctx.arc(lp.x - 4, fy - 14, 1.6, 0, Math.PI * 2);
-      ctx.arc(lp.x + 4, fy - 14, 1.6, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#000';
-      ctx.fillRect(lp.x - 4.5, fy - 14.5, 1, 1.5);
-      ctx.fillRect(lp.x + 3.5, fy - 14.5, 1, 1.5);
-      // Mouth line.
-      ctx.strokeStyle = '#2a4a2a';
-      ctx.lineWidth = 0.7;
-      ctx.beginPath();
-      ctx.moveTo(lp.x - 5, fy - 10 + breath * 0.5);
-      ctx.lineTo(lp.x + 5, fy - 10 + breath * 0.5);
-      ctx.stroke();
-    }
     ctx.restore();
+    // Lily-pad frogs migrated to ReactiveDecorationSystem (waterfall.frogJump).
   },
 
   drawAnimatedForeground: (ctx, _arena, time) => {

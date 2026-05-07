@@ -226,6 +226,337 @@ import {
 } from '../../themes/drawPrimitives';
 import type { StonePaletteRow } from '../../themes/drawPrimitives';
 import { getFloatingPlatforms } from '../../themes/utils';
+import {
+  registerReactiveKind, createReactiveInstance, composeBend,
+  type ReactiveInstance,
+} from '../../gameLoop/cosmetics/reactiveDecorations';
+
+// ============================================================================
+// Module-level draw fns lifted out of inline closures so reactive draws can
+// reuse them. Each accepts a `bendX` parameter — horizontal tip displacement
+// scaled by height progress. Base stays anchored.
+// ============================================================================
+
+function drawSeaweed(
+  ctx: CanvasRenderingContext2D,
+  sx: number,
+  sy: number,
+  h: number,
+  color: string,
+  bendX = 0,
+): void {
+  // Darker shade derived from the base color by dimming each channel ~60%.
+  const darker = color.replace(/#(..)(..)(..)/, (_m, r, g, b) => {
+    const d = (hex: string) => Math.max(0, Math.floor(parseInt(hex, 16) * 0.6)).toString(16).padStart(2, '0');
+    return `#${d(r)}${d(g)}${d(b)}`;
+  });
+  // Small dark holdfast where the seaweed anchors
+  ctx.fillStyle = darker;
+  ctx.beginPath();
+  ctx.ellipse(sx, sy - 0.5, Math.max(3, h * 0.08), Math.max(1.5, h * 0.04), 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  const stalkCount = h > 35 ? 3 : 2;
+  for (let s = 0; s < stalkCount; s++) {
+    const phase = s * 1.7 + (s * s) * 0.4;
+    const stalkH = h * (0.7 + (s === 0 ? 0.3 : (s === 1 ? 0.2 : 0.05)));
+    const baseOffset = (s - (stalkCount - 1) / 2) * Math.max(1.5, h * 0.05);
+    const sway = Math.min(9, h * 0.22);
+    const pointAt = (t: number) => {
+      const ny = t / stalkH;
+      // bendX scales linearly with height progress (tip displacement)
+      const x = sx + baseOffset + Math.sin(phase + t * 0.18) * sway * (0.3 + ny * 0.9) + bendX * ny;
+      const y = sy - t;
+      return { x, y };
+    };
+    // Outer glow pass — translucent, wider stroke
+    ctx.strokeStyle = color + 'cc'; // 80% alpha suffix works for #RGB/#RRGGBB hex
+    ctx.lineCap = 'round';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    let p = pointAt(0);
+    ctx.moveTo(p.x, p.y);
+    for (let t = 2; t <= stalkH; t += 3) {
+      p = pointAt(t);
+      ctx.lineTo(p.x, p.y);
+    }
+    ctx.stroke();
+    // Inner core — thinner darker stroke for depth
+    ctx.strokeStyle = darker;
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    p = pointAt(0);
+    ctx.moveTo(p.x, p.y);
+    for (let t = 2; t <= stalkH; t += 3) {
+      p = pointAt(t);
+      ctx.lineTo(p.x, p.y);
+    }
+    ctx.stroke();
+    ctx.lineCap = 'butt';
+
+    // Leaves — alternate sides, taper toward the top
+    ctx.fillStyle = color;
+    for (let t = Math.max(10, stalkH * 0.2); t < stalkH - 4; t += Math.max(10, stalkH * 0.2)) {
+      const anchor = pointAt(t);
+      const ny = t / stalkH;
+      const side = (Math.floor(t / 8) % 2) === 0 ? 1 : -1;
+      const leafLen = 5 + (1 - ny) * 4;
+      const leafW = 1.8 + (1 - ny) * 1.2;
+      const angle = Math.atan2(anchor.y - pointAt(Math.max(0, t - 2)).y, anchor.x - pointAt(Math.max(0, t - 2)).x) + side * 0.6;
+      ctx.beginPath();
+      ctx.ellipse(
+        anchor.x + Math.cos(angle) * leafLen * 0.55,
+        anchor.y + Math.sin(angle) * leafLen * 0.55,
+        leafLen * 0.6,
+        leafW,
+        angle,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+      // Leaf highlight
+      ctx.fillStyle = 'rgba(255,255,255,0.15)';
+      ctx.beginPath();
+      ctx.ellipse(
+        anchor.x + Math.cos(angle) * leafLen * 0.55 - Math.sin(angle) * leafW * 0.4,
+        anchor.y + Math.sin(angle) * leafLen * 0.55 + Math.cos(angle) * leafW * 0.4,
+        leafLen * 0.35,
+        leafW * 0.45,
+        angle,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+      ctx.fillStyle = color;
+    }
+
+    // Tiny bright tip — suggests a polyp or bubble
+    const tip = pointAt(stalkH);
+    ctx.fillStyle = 'rgba(220,255,240,0.7)';
+    ctx.beginPath();
+    ctx.arc(tip.x, tip.y, 1.1, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawFgKelp(
+  ctx: CanvasRenderingContext2D,
+  sx: number,
+  gy: number,
+  h: number,
+  lean: number,
+  bendX = 0,
+): void {
+  // Thick kelp stalk
+  ctx.strokeStyle = '#0D5A2A';
+  ctx.lineWidth = 10;
+  ctx.beginPath();
+  ctx.moveTo(sx, gy + 10);
+  for (let t = 0; t < h; t += 8) {
+    const ny = t / h;
+    ctx.lineTo(sx + Math.sin(t * 0.08) * 18 + lean * ny + bendX * ny, gy - t);
+  }
+  ctx.stroke();
+  // Large kelp leaves
+  ctx.fillStyle = '#1A6A3A';
+  for (let t = 15; t < h; t += 20) {
+    const ny = t / h;
+    const lx = sx + Math.sin(t * 0.08) * 18 + lean * ny + bendX * ny;
+    const ly = gy - t;
+    const side = (t % 40 < 20) ? 1 : -1;
+    ctx.beginPath();
+    ctx.ellipse(lx + side * 14, ly, 16, 6, side * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawFgSeaweed(
+  ctx: CanvasRenderingContext2D,
+  sx: number,
+  gy: number,
+  h: number,
+  bendX = 0,
+): void {
+  ctx.strokeStyle = '#1A6A3A';
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.moveTo(sx, gy + 10);
+  for (let t = 0; t < h; t += 10) {
+    const ny = t / h;
+    ctx.lineTo(sx + Math.sin(t * 0.12) * 12 + bendX * ny, gy - t);
+  }
+  ctx.stroke();
+  ctx.fillStyle = '#1A6A3A';
+  for (let t = 20; t < h; t += 25) {
+    const ny = t / h;
+    ctx.beginPath();
+    ctx.ellipse(sx + Math.sin(t * 0.12) * 12 + bendX * ny + 8, gy - t, 10, 4, 0.3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// Per-platform kelp strand (extracted from drawUnderwaterPlatformBg). Each
+// strand carries its own seeded params so reactive instances stay stable.
+interface PlatformKelpParams { kx: number; klen: number; phase: number; swayAmp: number; bb: number; }
+function drawPlatformKelpStrand(
+  ctx: CanvasRenderingContext2D,
+  params: PlatformKelpParams,
+  bendX = 0,
+): void {
+  const { kx, klen, phase, swayAmp, bb } = params;
+  ctx.strokeStyle = '#2a6838';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(kx, bb);
+  const steps = 6;
+  for (let s = 1; s <= steps; s++) {
+    const t = s / steps;
+    const px = kx + Math.sin(phase + t * Math.PI * 1.5) * swayAmp * t + bendX * t;
+    const py = bb + t * klen;
+    ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+  const leafN = 3 + Math.floor(((phase * 137) % 2));
+  ctx.fillStyle = '#3a7848';
+  for (let l = 0; l < leafN; l++) {
+    const t = (l + 0.6) / leafN;
+    const px = kx + Math.sin(phase + t * Math.PI * 1.5) * swayAmp * t + bendX * t;
+    const py = bb + t * klen;
+    const side = l % 2 === 0 ? 1 : -1;
+    ctx.beginPath();
+    ctx.ellipse(px + side * 3, py, 3, 1.4, side * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// Compute per-platform kelp params (seeded by platform position). Used both
+// for buildReactiveDecorations (one instance per strand) and as a stable
+// pre-cached list keyed by platform identity.
+function computePlatformKelpForPlatform(platform: Platform): PlatformKelpParams[] {
+  const rng = mulberry32(seedFor(platform.x, platform.y));
+  const bb = platform.y + platform.height;
+  const kelpCount = 2 + Math.floor(rng() * 2);
+  const out: PlatformKelpParams[] = [];
+  for (let k = 0; k < kelpCount; k++) {
+    const kx = platform.x + (k + 0.5 + (rng() - 0.5) * 0.3) * platform.width / kelpCount;
+    const klen = 18 + rng() * 10;
+    const phase = rng() * Math.PI * 2;
+    const swayAmp = 3 + rng() * 2;
+    out.push({ kx, klen, phase, swayAmp, bb });
+  }
+  return out;
+}
+
+// ============================================================================
+// Reactive decoration factories + draw fns
+// ============================================================================
+
+// ---- underwater.seaweed ----
+interface SeaweedData { h: number; color: string; }
+function underwaterSeaweed(x: number, y: number, h: number, color: string): ReactiveInstance {
+  return createReactiveInstance({
+    pos: { x, y }, kind: 'underwater.seaweed',
+    seed: Math.floor((x * 73 + y * 31) % 997),
+    data: { h, color } satisfies SeaweedData,
+    windAmp: 8,
+    proximity: { radius: 36, mode: 'lean', magnitude: 26 },
+  });
+}
+registerReactiveKind('underwater.seaweed', {
+  layer: 'prePlayer',
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
+    const { h, color } = inst.data as SeaweedData;
+    drawSeaweed(ctx, inst.pos.x, inst.pos.y, h, color, composeBend(inst, swayPhase));
+  },
+});
+
+// ---- underwater.fgKelp ----
+interface FgKelpData { h: number; lean: number; }
+function underwaterFgKelp(x: number, gy: number, h: number, lean: number): ReactiveInstance {
+  return createReactiveInstance({
+    pos: { x, y: gy }, kind: 'underwater.fgKelp',
+    seed: Math.floor((x * 89 + gy * 41) % 997),
+    data: { h, lean } satisfies FgKelpData,
+    windAmp: 12,
+    proximity: { radius: 50, mode: 'lean', magnitude: 38 },
+  });
+}
+registerReactiveKind('underwater.fgKelp', {
+  layer: 'prePlayer',
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
+    const { h, lean } = inst.data as FgKelpData;
+    ctx.save();
+    ctx.globalAlpha = 0.45;
+    drawFgKelp(ctx, inst.pos.x, inst.pos.y, h, lean, composeBend(inst, swayPhase));
+    ctx.restore();
+  },
+});
+
+// ---- underwater.fgSeaweed ----
+interface FgSeaweedData { h: number; }
+function underwaterFgSeaweed(x: number, gy: number, h: number): ReactiveInstance {
+  return createReactiveInstance({
+    pos: { x, y: gy }, kind: 'underwater.fgSeaweed',
+    seed: Math.floor((x * 79 + gy * 37) % 997),
+    data: { h } satisfies FgSeaweedData,
+    windAmp: 8,
+    proximity: { radius: 32, mode: 'lean', magnitude: 18 },
+  });
+}
+registerReactiveKind('underwater.fgSeaweed', {
+  layer: 'prePlayer',
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
+    const { h } = inst.data as FgSeaweedData;
+    ctx.save();
+    ctx.globalAlpha = 0.4;
+    drawFgSeaweed(ctx, inst.pos.x, inst.pos.y, h, composeBend(inst, swayPhase));
+    ctx.restore();
+  },
+});
+
+// ---- underwater.platformKelp ----
+// Each instance is one kelp strand anchored under a floating platform.
+// Per-strand params (kx, klen, phase, swayAmp, bb) ride on inst.data.
+function underwaterPlatformKelp(params: PlatformKelpParams): ReactiveInstance {
+  return createReactiveInstance({
+    pos: { x: params.kx, y: params.bb }, kind: 'underwater.platformKelp',
+    seed: Math.floor((params.kx * 97 + params.bb * 47 + params.phase * 1000) % 997),
+    data: params,
+    windAmp: 6,
+    proximity: { radius: 32, mode: 'lean', magnitude: 16 },
+  });
+}
+registerReactiveKind('underwater.platformKelp', {
+  layer: 'prePlayer',
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
+    drawPlatformKelpStrand(ctx, inst.data as PlatformKelpParams, composeBend(inst, swayPhase));
+  },
+});
+
+// ---- underwater.fishSchool ----
+// One instance per fish (mirrors meadow.butterfly: pos is dummy, flock motion
+// computed in draw via time + seed). 60Hz layer postPlayer so the school renders
+// in front of platforms but behind the HUD.
+function underwaterFishSchool(idx: number): ReactiveInstance {
+  return createReactiveInstance({
+    pos: { x: 0, y: 0 }, kind: 'underwater.fishSchool',
+    seed: idx,
+    proximity: { radius: 90, mode: 'flee', magnitude: 22 },
+  });
+}
+registerReactiveKind('underwater.fishSchool', {
+  layer: 'postPlayer',
+  highFrequency: true,
+  draw: (ctx, inst, _swayPhase, time, _dayPhase, state) => {
+    // Math.sin (not fastSin) — at this slow frequency fastSin's 1° table
+    // resolution would step in 7-12px chunks (~10Hz visible updates).
+    const sweep = time * FISH_SWEEP_FREQ;
+    const cxBase = CANVAS_WIDTH * 0.5 + Math.sin(sweep) * (CANVAS_WIDTH * FISH_SWEEP_AMP_RATIO);
+    const cy = FISH_BASE_Y + Math.sin(time * FISH_BOB_FREQ) * FISH_BOB_AMP;
+    const facing: 1 | -1 = Math.cos(sweep) >= 0 ? 1 : -1;
+    drawFish(ctx, inst.seed, time, cxBase, cy, facing, state.players);
+  },
+});
 
 // Algae-tinted cool-gray stone palette for left-side protrusions.
 const UNDERWATER_STONE_PALETTE: StonePaletteRow[] = [
@@ -278,41 +609,8 @@ function drawUnderwaterPlatformBg(ctx: CanvasRenderingContext2D, platform: Platf
     },
   }, leftPts);
 
-  // Kelp strands hanging below body bottom (floating only). Stay in bg —
-  // they're below the body region, so player rising into body is above them.
-  if (!isGround) {
-    const bb = platform.y + platform.height;
-    const kelpCount = 2 + Math.floor(rng() * 2);
-    for (let k = 0; k < kelpCount; k++) {
-      const kx = platform.x + (k + 0.5 + (rng() - 0.5) * 0.3) * platform.width / kelpCount;
-      const klen = 18 + rng() * 10;
-      const phase = rng() * Math.PI * 2;
-      const swayAmp = 3 + rng() * 2;
-      ctx.strokeStyle = '#2a6838';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(kx, bb);
-      const steps = 6;
-      for (let s = 1; s <= steps; s++) {
-        const t = s / steps;
-        const px = kx + Math.sin(phase + t * Math.PI * 1.5) * swayAmp * t;
-        const py = bb + t * klen;
-        ctx.lineTo(px, py);
-      }
-      ctx.stroke();
-      const leafN = 3 + Math.floor(rng() * 2);
-      ctx.fillStyle = '#3a7848';
-      for (let l = 0; l < leafN; l++) {
-        const t = (l + 0.6) / leafN;
-        const px = kx + Math.sin(phase + t * Math.PI * 1.5) * swayAmp * t;
-        const py = bb + t * klen;
-        const side = l % 2 === 0 ? 1 : -1;
-        ctx.beginPath();
-        ctx.ellipse(px + side * 3, py, 3, 1.4, side * 0.4, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-  }
+  // Kelp strands hanging below body bottom (floating only) are now reactive
+  // — see underwater.platformKelp + buildReactiveDecorations below.
 }
 
 function drawUnderwaterPlatformFg(ctx: CanvasRenderingContext2D, platform: Platform): void {
@@ -601,109 +899,8 @@ export const underwater: ArenaPack = {
     const ground = arena.platforms[0];
     const y = ground.y;
 
-    // Seaweed — 2-3 stalks from a shared holdfast, each with alternating leaves,
-    // a faint outer glow, and tapered thickness so it reads as organic plant life
-    // rather than a single painted stroke.
-    const drawSeaweed = (sx: number, sy: number, h: number, color: string) => {
-      // Darker shade derived from the base color by dimming each channel ~60%.
-      const darker = color.replace(/#(..)(..)(..)/, (_m, r, g, b) => {
-        const d = (hex: string) => Math.max(0, Math.floor(parseInt(hex, 16) * 0.6)).toString(16).padStart(2, '0');
-        return `#${d(r)}${d(g)}${d(b)}`;
-      });
-      // Small dark holdfast where the seaweed anchors
-      ctx.fillStyle = darker;
-      ctx.beginPath();
-      ctx.ellipse(sx, sy - 0.5, Math.max(3, h * 0.08), Math.max(1.5, h * 0.04), 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      const stalkCount = h > 35 ? 3 : 2;
-      for (let s = 0; s < stalkCount; s++) {
-        const phase = s * 1.7 + (s * s) * 0.4;
-        const stalkH = h * (0.7 + (s === 0 ? 0.3 : (s === 1 ? 0.2 : 0.05)));
-        const baseOffset = (s - (stalkCount - 1) / 2) * Math.max(1.5, h * 0.05);
-        const sway = Math.min(9, h * 0.22);
-        const pointAt = (t: number) => {
-          const ny = t / stalkH;
-          const x = sx + baseOffset + Math.sin(phase + t * 0.18) * sway * (0.3 + ny * 0.9);
-          const y = sy - t;
-          return { x, y };
-        };
-        // Outer glow pass — translucent, wider stroke
-        ctx.strokeStyle = color + 'cc'; // 80% alpha suffix works for #RGB/#RRGGBB hex
-        ctx.lineCap = 'round';
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        let p = pointAt(0);
-        ctx.moveTo(p.x, p.y);
-        for (let t = 2; t <= stalkH; t += 3) {
-          p = pointAt(t);
-          ctx.lineTo(p.x, p.y);
-        }
-        ctx.stroke();
-        // Inner core — thinner darker stroke for depth
-        ctx.strokeStyle = darker;
-        ctx.lineWidth = 1.8;
-        ctx.beginPath();
-        p = pointAt(0);
-        ctx.moveTo(p.x, p.y);
-        for (let t = 2; t <= stalkH; t += 3) {
-          p = pointAt(t);
-          ctx.lineTo(p.x, p.y);
-        }
-        ctx.stroke();
-        ctx.lineCap = 'butt';
-
-        // Leaves — alternate sides, taper toward the top
-        ctx.fillStyle = color;
-        for (let t = Math.max(10, stalkH * 0.2); t < stalkH - 4; t += Math.max(10, stalkH * 0.2)) {
-          const anchor = pointAt(t);
-          const ny = t / stalkH;
-          const side = (Math.floor(t / 8) % 2) === 0 ? 1 : -1;
-          const leafLen = 5 + (1 - ny) * 4;
-          const leafW = 1.8 + (1 - ny) * 1.2;
-          const angle = Math.atan2(anchor.y - pointAt(Math.max(0, t - 2)).y, anchor.x - pointAt(Math.max(0, t - 2)).x) + side * 0.6;
-          ctx.beginPath();
-          ctx.ellipse(
-            anchor.x + Math.cos(angle) * leafLen * 0.55,
-            anchor.y + Math.sin(angle) * leafLen * 0.55,
-            leafLen * 0.6,
-            leafW,
-            angle,
-            0,
-            Math.PI * 2,
-          );
-          ctx.fill();
-          // Leaf highlight
-          ctx.fillStyle = 'rgba(255,255,255,0.15)';
-          ctx.beginPath();
-          ctx.ellipse(
-            anchor.x + Math.cos(angle) * leafLen * 0.55 - Math.sin(angle) * leafW * 0.4,
-            anchor.y + Math.sin(angle) * leafLen * 0.55 + Math.cos(angle) * leafW * 0.4,
-            leafLen * 0.35,
-            leafW * 0.45,
-            angle,
-            0,
-            Math.PI * 2,
-          );
-          ctx.fill();
-          ctx.fillStyle = color;
-        }
-
-        // Tiny bright tip — suggests a polyp or bubble
-        const tip = pointAt(stalkH);
-        ctx.fillStyle = 'rgba(220,255,240,0.7)';
-        ctx.beginPath();
-        ctx.arc(tip.x, tip.y, 1.1, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    };
-
-    drawSeaweed(60, y, 60, '#2A8A4A');
-    drawSeaweed(280, y, 50, '#3A9A5A');
-    drawSeaweed(480, y, 70, '#2A7A3A');
-    drawSeaweed(720, y, 55, '#3A9A5A');
-    drawSeaweed(950, y, 65, '#2A8A4A');
-    drawSeaweed(1200, y, 45, '#3A9A5A');
+    // Seaweed (ground + per-platform) is now reactive — see
+    // underwater.seaweed in buildReactiveDecorations.
 
     // Coral formations
     const drawCoral = (cx: number, cy: number, size: number, color: string) => {
@@ -787,19 +984,66 @@ export const underwater: ArenaPack = {
     drawStarfish(340, y - 3, 10, '#FF6347');
     drawStarfish(880, y - 2, 8, '#FF8C00');
 
-    // Platform decorations
+    // Platform decorations — seaweed is reactive (see buildReactiveDecorations);
+    // coral/starfish stay static here so they bake into the bg cache.
     const floats = getFloatingPlatforms(arena.platforms);
     for (let i = 0; i < floats.length; i++) {
       const plat = floats[i];
       const mid = plat.x + plat.width / 2;
       if (i % 3 === 0) {
-        drawSeaweed(mid, plat.y, 30, '#2A8A4A');
+        // Reactive seaweed handled in buildReactiveDecorations
       } else if (i % 3 === 1) {
         drawCoral(mid, plat.y, 20, '#FF6B6B');
       } else {
         drawStarfish(mid, plat.y - 2, 6, '#FFD700');
       }
     }
+  },
+
+  buildReactiveDecorations: (arena) => {
+    const ground = arena.platforms[0];
+    const y = ground.y;
+    const out: ReactiveInstance[] = [];
+
+    // Ground-line seaweed (proximity-lean)
+    out.push(underwaterSeaweed(60,   y, 60, '#2A8A4A'));
+    out.push(underwaterSeaweed(280,  y, 50, '#3A9A5A'));
+    out.push(underwaterSeaweed(480,  y, 70, '#2A7A3A'));
+    out.push(underwaterSeaweed(720,  y, 55, '#3A9A5A'));
+    out.push(underwaterSeaweed(950,  y, 65, '#2A8A4A'));
+    out.push(underwaterSeaweed(1200, y, 45, '#3A9A5A'));
+
+    // Per-floating-platform seaweed (every 3rd platform — matches the static
+    // pattern previously baked into drawBackgroundNature).
+    const floats = getFloatingPlatforms(arena.platforms);
+    for (let i = 0; i < floats.length; i++) {
+      if (i % 3 === 0) {
+        const plat = floats[i];
+        const mid = plat.x + plat.width / 2;
+        out.push(underwaterSeaweed(mid, plat.y, 30, '#2A8A4A'));
+      }
+    }
+
+    // Large foreground kelp (×2)
+    out.push(underwaterFgKelp(50,   y, 80, -8));
+    out.push(underwaterFgKelp(1230, y, 75,  8));
+
+    // Thinner foreground seaweed (×2)
+    out.push(underwaterFgSeaweed(150,  y, 70));
+    out.push(underwaterFgSeaweed(1130, y, 60));
+
+    // Per-platform kelp strands (one instance per strand).
+    for (const plat of floats) {
+      const strands = computePlatformKelpForPlatform(plat);
+      for (const params of strands) {
+        out.push(underwaterPlatformKelp(params));
+      }
+    }
+
+    // Fish school (60Hz, postPlayer)
+    for (let i = 0; i < FISH_COUNT; i++) out.push(underwaterFishSchool(i));
+
+    return out;
   },
 
   drawForegroundNature: (ctx, arena) => {
@@ -866,56 +1110,8 @@ export const underwater: ArenaPack = {
     ctx.fill();
     ctx.restore();
 
-    // Large foreground kelp strands
-    ctx.save();
-    ctx.globalAlpha = 0.45;
-    const drawFgKelp = (sx: number, h: number, lean: number) => {
-      // Thick kelp stalk
-      ctx.strokeStyle = '#0D5A2A';
-      ctx.lineWidth = 10;
-      ctx.beginPath();
-      ctx.moveTo(sx, gy + 10);
-      for (let t = 0; t < h; t += 8) {
-        ctx.lineTo(sx + Math.sin(t * 0.08) * 18 + lean * (t / h), gy - t);
-      }
-      ctx.stroke();
-      // Large kelp leaves
-      ctx.fillStyle = '#1A6A3A';
-      for (let t = 15; t < h; t += 20) {
-        const lx = sx + Math.sin(t * 0.08) * 18 + lean * (t / h);
-        const ly = gy - t;
-        const side = (t % 40 < 20) ? 1 : -1;
-        ctx.beginPath();
-        ctx.ellipse(lx + side * 14, ly, 16, 6, side * 0.4, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    };
-    drawFgKelp(50, 80, -8);
-    drawFgKelp(1230, 75, 8);
-    ctx.restore();
-
-    // Foreground seaweed (original, thinner)
-    ctx.save();
-    ctx.globalAlpha = 0.4;
-    const drawFgSeaweed = (sx: number, h: number) => {
-      ctx.strokeStyle = '#1A6A3A';
-      ctx.lineWidth = 6;
-      ctx.beginPath();
-      ctx.moveTo(sx, gy + 10);
-      for (let t = 0; t < h; t += 10) {
-        ctx.lineTo(sx + Math.sin(t * 0.12) * 12, gy - t);
-      }
-      ctx.stroke();
-      ctx.fillStyle = '#1A6A3A';
-      for (let t = 20; t < h; t += 25) {
-        ctx.beginPath();
-        ctx.ellipse(sx + Math.sin(t * 0.12) * 12 + 8, gy - t, 10, 4, 0.3, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    };
-    drawFgSeaweed(150, 70);
-    drawFgSeaweed(1130, 60);
-    ctx.restore();
+    // Large foreground kelp + thinner foreground seaweed are now reactive —
+    // see underwater.fgKelp / underwater.fgSeaweed in buildReactiveDecorations.
 
     // Caustic light pattern on ground
     ctx.save();
@@ -1196,20 +1392,8 @@ export const underwater: ArenaPack = {
     drawCrab(ctx, time, matchState.players);
   },
 
-  drawAnimatedForeground: (ctx, _arena, time, _dayPhase, matchState) => {
-    if (getSlowDevice() || !matchState) return;
-    ctx.save();
-    // Math.sin (not fastSin) — at this slow frequency fastSin's 1° table
-    // resolution would step in 7-12px chunks (~10Hz visible updates).
-    const sweep = time * FISH_SWEEP_FREQ;
-    const cxBase = CANVAS_WIDTH * 0.5 + Math.sin(sweep) * (CANVAS_WIDTH * FISH_SWEEP_AMP_RATIO);
-    const cy = FISH_BASE_Y + Math.sin(time * FISH_BOB_FREQ) * FISH_BOB_AMP;
-    // School direction = sign of d/dt sin(sweep) = sign of cos(sweep).
-    const facing: 1 | -1 = Math.cos(sweep) >= 0 ? 1 : -1;
-    const players = matchState.players;
-    for (let i = 0; i < FISH_COUNT; i++) drawFish(ctx, i, time, cxBase, cy, facing, players);
-    ctx.restore();
-  },
+  // Fish school migrated to ReactiveDecorationSystem (postPlayer + 60Hz) —
+  // see underwater.fishSchool. drawAnimatedForeground no longer needed.
 
   cosmeticTick: (state, dt, services) => {
     if (getSlowDevice()) return;
