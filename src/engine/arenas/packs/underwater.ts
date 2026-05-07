@@ -167,6 +167,15 @@ const BUBBLE_LEAKS = [
 ] as const;
 const BUBBLE_COLUMNS = [120, 380, 900, 1180] as const;
 const FISH_COUNT = 18;
+// Fish-school sweep: slow horizontal oscillation across the canvas. Amplitude
+// stays under CANVAS_WIDTH/2 so the school never crosses the edge — earlier
+// versions wider than that snapped fish across the seam in 1-frame teleports.
+// Frequencies in rad/s (period = 2π/freq); ~35s sweep, ~12.6s vertical bob.
+const FISH_SWEEP_FREQ = 0.18;
+const FISH_SWEEP_AMP_RATIO = 0.32;
+const FISH_BOB_FREQ = 0.5;
+const FISH_BOB_AMP = 40;
+const FISH_BASE_Y = 380;
 
 function drawFish(ctx: CanvasRenderingContext2D, i: number, time: number, cxBase: number, cy: number, facing: 1 | -1, players: ReadonlyArray<Player>): void {
   const sp = FISH_SPECIES[i % FISH_SPECIES.length];
@@ -1185,16 +1194,13 @@ export const underwater: ArenaPack = {
   drawAnimatedForeground: (ctx, _arena, time, _dayPhase, matchState) => {
     if (getSlowDevice() || !matchState) return;
     ctx.save();
-    // Use Math.sin (not fastSin) for the slow school sweep — fastSin's 1°
-    // table resolution causes the position to step in 7-12px chunks at the
-    // 0.18 rad/s frequency (effective ~10Hz updates), which reads as visible
-    // choppiness even though render runs at 60Hz. Per-fish high-frequency
-    // wobble below stays on fastSin since it advances multiple degrees per
-    // frame and the steps are sub-pixel.
-    const cxBase = CANVAS_WIDTH * 0.5 + Math.sin(time * 0.18) * (CANVAS_WIDTH * 0.32);
-    const cy = 380 + Math.sin(time * 0.5) * 40;
-    // School direction = sign of d/dt sin(time*0.18) = sign of cos(time*0.18).
-    const facing: 1 | -1 = Math.cos(time * 0.18) >= 0 ? 1 : -1;
+    // Math.sin (not fastSin) — at this slow frequency fastSin's 1° table
+    // resolution would step in 7-12px chunks (~10Hz visible updates).
+    const sweep = time * FISH_SWEEP_FREQ;
+    const cxBase = CANVAS_WIDTH * 0.5 + Math.sin(sweep) * (CANVAS_WIDTH * FISH_SWEEP_AMP_RATIO);
+    const cy = FISH_BASE_Y + Math.sin(time * FISH_BOB_FREQ) * FISH_BOB_AMP;
+    // School direction = sign of d/dt sin(sweep) = sign of cos(sweep).
+    const facing: 1 | -1 = Math.cos(sweep) >= 0 ? 1 : -1;
     const players = matchState.players;
     for (let i = 0; i < FISH_COUNT; i++) drawFish(ctx, i, time, cxBase, cy, facing, players);
     ctx.restore();

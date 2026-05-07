@@ -497,6 +497,19 @@ export class Renderer {
   }
 
 
+  /** Mirror-aware draw helper. Wraps `fn` in a save/scale(-1,1)/translate when
+   *  the renderer is in mirrored mode; otherwise calls `fn` directly. Used by
+   *  the per-frame animated callbacks that want their content mirrored alongside
+   *  the rest of the scene. */
+  private withMirror(ctx: CanvasRenderingContext2D, fn: () => void): void {
+    if (!this.mirrored) { fn(); return; }
+    ctx.save();
+    ctx.scale(-1, 1);
+    ctx.translate(-CANVAS_WIDTH, 0);
+    fn();
+    ctx.restore();
+  }
+
   // ---- Clouds ----
 
   private updateAndDrawClouds(ctx: CanvasRenderingContext2D, dt: number): void {
@@ -647,9 +660,7 @@ export class Renderer {
       // objects) compose under weather and clouds.
       if (this.theme.drawAnimatedBackground) {
         const thA = this.originalArena ?? arena;
-        if (this.mirrored) { ctx.save(); ctx.scale(-1, 1); ctx.translate(-CANVAS_WIDTH, 0); }
-        this.theme.drawAnimatedBackground(ctx, thA, matchState.timeElapsed, matchState.dayPhase, matchState);
-        if (this.mirrored) { ctx.restore(); }
+        this.withMirror(ctx, () => this.theme.drawAnimatedBackground!(ctx, thA, matchState.timeElapsed, matchState.dayPhase, matchState));
         d.animatedBg = true;
       }
 
@@ -929,9 +940,7 @@ export class Renderer {
       // grass tufts / bushes can occlude them when they walk behind foliage.
       if (this.theme.drawGroundCritters) {
         const thA = this.originalArena ?? arena;
-        if (this.mirrored) { ctx.save(); ctx.scale(-1, 1); ctx.translate(-CANVAS_WIDTH, 0); }
-        this.theme.drawGroundCritters(ctx, thA, matchState.timeElapsed, matchState.dayPhase, matchState);
-        if (this.mirrored) { ctx.restore(); }
+        this.withMirror(ctx, () => this.theme.drawGroundCritters!(ctx, thA, matchState.timeElapsed, matchState.dayPhase, matchState));
       }
 
       // Mirror is baked into the cache so blit at identity transform; explicit
@@ -990,9 +999,7 @@ export class Renderer {
 
       if (this.theme.drawAnimatedForeground) {
         const thA = this.originalArena ?? arena;
-        if (this.mirrored) { ctx.save(); ctx.scale(-1, 1); ctx.translate(-CANVAS_WIDTH, 0); }
-        this.theme.drawAnimatedForeground(ctx, thA, matchState.timeElapsed, matchState.dayPhase, matchState);
-        if (this.mirrored) { ctx.restore(); }
+        this.withMirror(ctx, () => this.theme.drawAnimatedForeground!(ctx, thA, matchState.timeElapsed, matchState.dayPhase, matchState));
       }
 
       if (!slow && this.theme.drawSceneTint) {
