@@ -247,6 +247,11 @@ export function tickGroundCritter(
   const turnEase = cfg.turnEaseRate ?? 4;
   let nearestPx = Infinity;
   let nearestDx = 0;
+  // Track threats on each side independently — a player within fleeRadius on
+  // BOTH sides is a sandwich, where flee-from-nearest oscillates as the
+  // critter shifts between them.
+  let leftThreat = false;
+  let rightThreat = false;
   for (const p of players) {
     if (!isLivePlayer(p)) continue;
     const pcx = p.x + p.width * 0.5;
@@ -254,11 +259,20 @@ export function tickGroundCritter(
     if (Math.abs(pcy - cfg.platTopY) > yTol) continue;
     const dx = pcx - state.x;
     const adx = Math.abs(dx);
+    if (adx < cfg.fleeRadius) {
+      if (dx < 0) leftThreat = true;
+      else rightThreat = true;
+    }
     if (adx < nearestPx) { nearestPx = adx; nearestDx = dx; }
   }
   state.fleeing = nearestPx < cfg.fleeRadius;
+  const sandwiched = leftThreat && rightThreat;
   let targetDir: 1 | -1 = state.dir;
-  if (state.fleeing) {
+  if (sandwiched) {
+    // Freeze in place: nowhere safe to run. Keep last direction so facingEase
+    // doesn't slam to 0 and snap-flip; the speed multiplier below handles stop.
+    state.committedFleeDir = 0;
+  } else if (state.fleeing) {
     const want: 1 | -1 = nearestDx > 0 ? -1 : 1;
     // Honor a prior "run past" commitment until we reach the opposite edge.
     if (state.committedFleeDir !== 0) {
@@ -284,7 +298,7 @@ export function tickGroundCritter(
   state.dir = targetDir;
   const blend = Math.min(1, turnEase * dt);
   state.facingEase += (targetDir - state.facingEase) * blend;
-  const speed = state.fleeing ? cfg.fleeSpeed : cfg.walkSpeed;
+  const speed = sandwiched ? 0 : (state.fleeing ? cfg.fleeSpeed : cfg.walkSpeed);
   state.x += state.facingEase * speed * dt;
   if (state.x < cfg.platL) state.x = cfg.platL;
   else if (state.x > cfg.platR) state.x = cfg.platR;
