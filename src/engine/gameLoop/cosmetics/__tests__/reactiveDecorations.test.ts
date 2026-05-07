@@ -141,46 +141,50 @@ describe('reactiveDecorations — excitementBend', () => {
     expect(excitementBend(inst)).toBe(0);
   });
 
-  it('scales by excitement × magnitude × normalized dx', () => {
-    const inst = makeInstance({
-      excitement: 1,
-      proximity: { radius: 30, mode: 'flee', magnitude: 10 },
-      nearestDx: 30, // exactly at radius — norm = 1
-    });
-    expect(excitementBend(inst)).toBeCloseTo(10, 5);
-  });
-
-  it('flips direction with signMul = -1 (lean toward player)', () => {
+  it('default leans WITH the player (signMul = -1)', () => {
+    // Player to the LEFT of the decoration → nearestDx > 0 → bend negative
+    // (decoration tip shifts left, in the same direction the player will
+    // continue moving as they pass underneath/through).
     const inst = makeInstance({
       excitement: 1,
       proximity: { radius: 30, mode: 'lean', magnitude: 10 },
       nearestDx: 30,
     });
-    expect(excitementBend(inst, -1)).toBeCloseTo(-10, 5);
+    expect(excitementBend(inst)).toBeCloseTo(-10, 5);
+  });
+
+  it('signMul = +1 produces flee behavior (away from player)', () => {
+    const inst = makeInstance({
+      excitement: 1,
+      proximity: { radius: 30, mode: 'flee', magnitude: 10 },
+      nearestDx: 30,
+    });
+    expect(excitementBend(inst, 1)).toBeCloseTo(10, 5);
   });
 
   it('clamps |nearestDx| > radius to ±1', () => {
     const inst = makeInstance({
       excitement: 1,
-      proximity: { radius: 30, mode: 'flee', magnitude: 10 },
-      nearestDx: 999, // way beyond radius
+      proximity: { radius: 30, mode: 'lean', magnitude: 10 },
+      nearestDx: 999, // way beyond radius — norm clamps to +1
     });
-    expect(excitementBend(inst)).toBeCloseTo(10, 5);
+    expect(excitementBend(inst)).toBeCloseTo(-10, 5);
   });
 
   it('seed-parity fallback uses full magnitude (norm = ±1), not 1/radius', () => {
     // When nearestDx is undefined (no live player), the fallback must produce
-    // a visually meaningful bend, not ~0.5px. Even seed → +magnitude, odd → −magnitude.
+    // a visually meaningful bend, not ~0.5px. Default signMul=-1: even seed
+    // → -magnitude, odd → +magnitude.
     const evenSeed = makeInstance({
       excitement: 1, seed: 4,
-      proximity: { radius: 30, mode: 'flee', magnitude: 10 },
+      proximity: { radius: 30, mode: 'lean', magnitude: 10 },
       // nearestDx intentionally undefined
     });
     const oddSeed = makeInstance({
       excitement: 1, seed: 5,
-      proximity: { radius: 30, mode: 'flee', magnitude: 10 },
+      proximity: { radius: 30, mode: 'lean', magnitude: 10 },
     });
-    expect(excitementBend(evenSeed)).toBeCloseTo(10, 5);
-    expect(excitementBend(oddSeed)).toBeCloseTo(-10, 5);
+    expect(excitementBend(evenSeed)).toBeCloseTo(-10, 5);
+    expect(excitementBend(oddSeed)).toBeCloseTo(10, 5);
   });
 });

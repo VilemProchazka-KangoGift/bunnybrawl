@@ -163,11 +163,15 @@ export function shouldFireBurst(instance: ReactiveInstance, prevShake: number): 
 /** Direction-aware bend offset used by parting/lean draw fns. Returns a px
  *  offset to add to the swayPhase; positive = bend right, negative = bend left.
  *  Reads `instance.nearestDx` (set by the system during proximity scan) and
- *  scales by excitement × proximity.magnitude × signMul. `signMul = -1` flips
- *  flee→lean (vine bends TOWARD player; grass bends AWAY).
+ *  scales by excitement × proximity.magnitude × signMul.
+ *
+ *  Default `signMul = -1` makes the decoration lean in the same direction the
+ *  player is moving (matches the visual of brushing through grass / pushing a
+ *  hanging vine aside). Pass `signMul = +1` for explicit flee behavior — the
+ *  decoration recoils away from the player.
  *
  *  Lives here so kind authors across arenas don't reinvent it. */
-export function excitementBend(instance: ReactiveInstance, signMul = 1): number {
+export function excitementBend(instance: ReactiveInstance, signMul = -1): number {
   if (instance.excitement <= 0.01 || !instance.proximity) return 0;
   const radius = instance.proximity.radius;
   if (instance.nearestDx !== undefined) {

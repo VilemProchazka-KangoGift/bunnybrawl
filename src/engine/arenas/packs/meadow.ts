@@ -181,15 +181,14 @@ registerReactiveKind('meadow.tree', {
 });
 
 // ---- meadow.tallGrass ----
-// Bends at the tip (base anchored). Wind sway + push WITH passing player
-// (signMul = -1) — like a body brushing through tall grass.
+// Bends at the tip (base anchored). Wind sway + push WITH passing player.
 interface TallGrassData { count: number; }
 function meadowTallGrass(x: number, y: number, count: number): ReactiveInstance {
   return {
     pos: { x, y }, kind: 'meadow.tallGrass',
     seed: Math.floor((x * 89 + y * 41) % 997),
     data: { count } satisfies TallGrassData,
-    windAmp: 8,
+    windAmp: 6,
     proximity: { radius: 28, mode: 'lean', magnitude: 18 },
     excitement: 0, shakeDecay: 0,
   };
@@ -198,7 +197,7 @@ registerReactiveKind('meadow.tallGrass', {
   layer: 'prePlayer',
   draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
     const { count } = inst.data as TallGrassData;
-    drawTallGrass(ctx, inst.pos.x, inst.pos.y, count, undefined, undefined, swayPhase + excitementBend(inst, -1));
+    drawTallGrass(ctx, inst.pos.x, inst.pos.y, count, undefined, undefined, swayPhase + excitementBend(inst));
   },
 });
 
@@ -237,8 +236,7 @@ registerReactiveKind('meadow.hangingVine', {
   layer: 'prePlayer',
   draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
     const { length } = inst.data as HangingVineData;
-    // signMul = -1 so vine leans TOWARD the player (opposite of grass flee).
-    drawHangingVine(ctx, inst.pos.x, inst.pos.y, length, swayPhase + excitementBend(inst, -1));
+    drawHangingVine(ctx, inst.pos.x, inst.pos.y, length, swayPhase + excitementBend(inst));
   },
 });
 
