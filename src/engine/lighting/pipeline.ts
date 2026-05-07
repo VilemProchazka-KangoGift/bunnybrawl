@@ -4,19 +4,18 @@
 //
 // Per the reference doc §5.1 ("the sun isn't a 'light' in the buffer"), 2D
 // lighting cannot do per-pixel directional contribution without normal maps.
-// So the sun's job in L1 is just to set the AMBIENT COLOR. We render that as
-// a single translucent overlay drawn on the foreground canvas at end of
-// renderFrame. Pre-M1 already shipped this exact technique inside
-// drawDayNightCycle; we deleted it in B10 and now restore it through a
-// clean pipeline that L2-L5 can extend.
+// In L1 the pipeline owns the AMBIENT darkening; sun visual stays in
+// `rendering/effects.ts > drawDayNightCycle` next to moon/stars/afterglow.
 //
 // Architecture lesson chain (rim-light → outlines → here): lighting is per-frame,
 // screen-space, post-sprite-cache. Never bake into a sprite cache.
 //
 // Two darkening paths picked by the renderer at construction:
-//   - CSS-composited (bgNightCanvas + fgNightTint wired): composite() is a
-//     no-op; getBgNightOpacity() drives stacked DOM layers via style.opacity.
-//   - Source-over tint fallback (lobby, tests): composite() does one fillRect.
+//   - DOM cross-fade (bgNightCanvas + fgNightTint wired): composite() is a
+//     no-op; getBgNightOpacity() + getFgTintOpacity() drive stacked DOM
+//     layers via style.opacity. Browser compositor blends them for ~free.
+//   - Source-over tint fallback (lobby, tests): composite() does one fillRect
+//     on the FG ctx. Simpler but pays full-canvas pixel cost per frame.
 //
 // L2 (per-arena emitters) will add 'lighter' point-light passes on top.
 // L3 (shadows) reads sun direction from buildSunLight() in sun.ts.
@@ -28,28 +27,27 @@ import { getPhotosensitivity } from './photosensitivity';
 import type { RGB } from './types';
 
 /** Max alpha at full midnight. Matches pre-M1's `drawDayNightCycle` overlay. */
-export const MAX_TINT_ALPHA = 0.55;
+const MAX_TINT_ALPHA = 0.55;
 
 /** Night tint hue. */
-export const TINT_COLOR: Readonly<RGB> = { r: 20, g: 24, b: 48 };
+const TINT_COLOR: Readonly<RGB> = { r: 20, g: 24, b: 48 };
 
 /** Bake color string for the cross-fade bgNightCanvas. Same hue + max alpha. */
-export const BG_NIGHT_BAKE_RGBA =
+const BG_NIGHT_BAKE_RGBA =
   `rgba(${TINT_COLOR.r},${TINT_COLOR.g},${TINT_COLOR.b},${MAX_TINT_ALPHA})`;
 
-/** fg-tint dusk threshold — multiply tint stays at 0 until bg-night opacity
- *  passes this value. Preserves the warm sunset afterglow at dayPhase ≈ 0.25
- *  (multiply on a colored layer crushes warm channels otherwise). */
-export const FG_TINT_DUSK_THRESHOLD = 0.55;
+/** Tint gain — `tintAlpha = clamp(deficit * GAIN, MAX)`. Tunable; smaller
+ *  values delay the night tint, larger values approach midnight earlier. */
+const TINT_GAIN = 0.7;
+
+/** Below this bg-night opacity, the fg multiply layer stays silent. 0.55
+ *  corresponds to dayPhase ≈ 0.32 (post-sunset, well past the 0.16–0.30
+ *  afterglow window). The threshold protects the warm sunset redshift —
+ *  multiply on a cool-blue layer crushes red/orange channels otherwise. */
+const FG_TINT_DUSK_THRESHOLD = 0.55;
 
 /** fg-tint peak multiplier — applied after the dusk threshold ramps in. */
-export const FG_TINT_PEAK_MUL = 0.7;
-
-/** Maps bg-night opacity to fg-tint multiplier with a ramp that protects dusk. */
-export function fgTintIntensity(bgNightOpacity: number): number {
-  const t = (bgNightOpacity - FG_TINT_DUSK_THRESHOLD) / (1 - FG_TINT_DUSK_THRESHOLD);
-  return Math.max(0, Math.min(1, t)) * FG_TINT_PEAK_MUL;
-}
+const FG_TINT_PEAK_MUL = 0.7;
 
 export class LightingPipeline {
   private width: number;
@@ -60,7 +58,7 @@ export class LightingPipeline {
 
   /** Renderer toggles this when DOM darkening layers are wired — flips
    *  composite() to no-op and the CSS path takes over. */
-  private useDomDarkening = false;
+  private hasDomDarkening = false;
 
   /** Reused scratch buffer for themeToAmbient — avoids per-frame allocation. */
   private readonly _ambientScratch: RGB = { r: 0, g: 0, b: 0 };
@@ -70,14 +68,12 @@ export class LightingPipeline {
     this.height = height;
   }
 
-  setUseDomDarkening(use: boolean): void {
-    this.useDomDarkening = use;
+  setHasDomDarkening(has: boolean): void {
+    this.hasDomDarkening = has;
   }
 
-  /**
-   * Compute the tint alpha for this frame from ambient(theme, dayPhase). Cheap;
-   * no allocations, no canvas work — just a few arithmetic ops.
-   */
+  /** Compute the tint alpha for this frame from ambient(theme, dayPhase).
+   *  No allocations — uses a private RGB scratch. */
   beginFrame(theme: ThemeConfig, dayPhase: number, _tick: number): void {
     if (!this.isEnabled()) {
       this.tintAlpha = 0;
@@ -87,16 +83,15 @@ export class LightingPipeline {
     const avgAmbient = (ambient.r + ambient.g + ambient.b) / 3;
     const deficit = Math.max(0, (255 - avgAmbient) / 255);
     // At noon (deficit ~0.06) → ~0.04. At midnight (deficit ~0.69) → ~0.48.
-    const raw = Math.min(MAX_TINT_ALPHA, deficit * 0.7);
-    // Defend against NaN dayPhase upstream: NaN < 0.01 is false, so an
-    // unguarded composite would emit a `rgba(...,NaN)` fill. Coerce to 0.
+    const raw = Math.min(MAX_TINT_ALPHA, deficit * TINT_GAIN);
+    // Defensive: NaN tintAlpha would emit `rgba(...,NaN)` (invalid color).
     this.tintAlpha = Number.isFinite(raw) ? raw : 0;
   }
 
   /** Source-over fallback path (no DOM darkening layers wired). */
   composite(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D): void {
     if (!this.isEnabled()) return;
-    if (this.useDomDarkening) return;
+    if (this.hasDomDarkening) return;
     if (this.tintAlpha < 0.01) return;
     ctx.save();
     ctx.globalCompositeOperation = 'source-over';
@@ -112,6 +107,18 @@ export class LightingPipeline {
     return Math.min(1, this.tintAlpha / MAX_TINT_ALPHA);
   }
 
+  /** Map bg-night opacity to fg-tint multiply opacity with a dusk-protect ramp. */
+  getFgTintOpacity(bgNightOpacity: number): number {
+    const t = (bgNightOpacity - FG_TINT_DUSK_THRESHOLD) / (1 - FG_TINT_DUSK_THRESHOLD);
+    return Math.max(0, Math.min(1, t)) * FG_TINT_PEAK_MUL;
+  }
+
+  /** Color string the renderer paints over the day-bg snapshot to bake the
+   *  night-variant canvas. Encapsulates TINT_COLOR + MAX_TINT_ALPHA. */
+  getBgNightBakeColor(): string {
+    return BG_NIGHT_BAKE_RGBA;
+  }
+
   resize(w: number, h: number, _scale: number): void {
     this.width = w;
     this.height = h;
@@ -122,7 +129,7 @@ export class LightingPipeline {
   }
 
   /** Test accessor — exposes the current frame's tint alpha. */
-  getTintAlphaForTesting(): number {
+  getTintAlpha(): number {
     return this.tintAlpha;
   }
 }

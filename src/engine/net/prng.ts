@@ -1,6 +1,16 @@
 /**
- * Deterministic seeded PRNG using mulberry32.
- * Used in network mode to ensure identical simulation across peers.
+ * Deterministic seeded PRNG using mulberry32. Two distinct usage patterns:
+ *
+ *   1. Single-stream simulation determinism (netcode): construct once with
+ *      a known seed, advance via `nextFloat()`, snapshot via `getState()`.
+ *      Both peers run the same sequence — see `Simulator` and `physics.ts`.
+ *
+ *   2. Per-tick keyed cosmetics (lighting flicker, future L2 effects):
+ *      `SeededRNG.fromTick(emitterSeed, state.tick)` returns an independent
+ *      stream keyed by (emitter, tick). Host-authoritative netcode allows
+ *      cosmetic divergence in principle, but consistent appearance across
+ *      host/guest is a quality bar — and `state.tick` is in snapshots.
+ *
  * Fast, 32-bit period, produces uniform floats in [0, 1).
  */
 export class SeededRNG {

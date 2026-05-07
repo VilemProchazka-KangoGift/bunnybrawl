@@ -15,11 +15,15 @@ function parse(raw: string): number | null {
   return Math.max(MIN, Math.min(MAX, v));
 }
 
+// `parse` doubles as the clamp: it normalizes any URL/storage/setter input
+// to the [0.5, 1.5] range. The factory's round-trip `parse(serialize(v))`
+// turns `setBrightness(2.0)` into 1.5 silently — see urlStoredEmitter.ts.
 const emitter = createUrlStoredEmitter<number>({
   storageKey: 'carrotroyale_brightness',
   paramName: 'brightness',
   defaultValue: 1.0,
   parse,
+  serialize: (v) => String(v),
 });
 
 export const getBrightness = emitter.get;

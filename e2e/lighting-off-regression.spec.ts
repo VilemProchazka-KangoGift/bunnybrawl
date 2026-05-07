@@ -47,4 +47,25 @@ test.describe('Lighting kill switch', () => {
     });
     expect(isAlive).toBe(true);
   });
+
+  test('?lighting=off keeps darkening overlays invisible at midnight', async ({ page }) => {
+    await startMatch(page, 'lighting=off');
+    // Pin dayPhase to midnight; with lighting off, both DOM darkening
+    // overlays should stay at opacity 0.
+    const opacities = await page.evaluate(() => {
+      const loop = (window as any).__gameLoop;
+      const id = setInterval(() => { loop.getState().dayPhase = 0.5; }, 4);
+      return new Promise<{ bg: string; fg: string }>((resolve) => {
+        setTimeout(() => {
+          clearInterval(id);
+          resolve({
+            bg: (document.querySelector('.bg-night-canvas') as HTMLCanvasElement | null)?.style.opacity ?? '',
+            fg: (document.querySelector('.fg-night-tint') as HTMLDivElement | null)?.style.opacity ?? '',
+          });
+        }, 800);
+      });
+    });
+    expect(opacities.bg === '' || opacities.bg === '0').toBe(true);
+    expect(opacities.fg === '' || opacities.fg === '0').toBe(true);
+  });
 });

@@ -36,7 +36,6 @@ import { setSpriteCacheScale } from './rendering/players';
 import { setHudScale } from './rendering/hud';
 import { applyRenderScaleToCanvas, getRenderScale } from './renderScale';
 import { LightingPipeline } from './lighting';
-import { BG_NIGHT_BAKE_RGBA, fgTintIntensity } from './lighting/pipeline';
 import { getBrightness } from './lighting/brightness';
 import { getSlowDevice } from './perfFlags';
 import { perfTrace } from './perfTrace';
@@ -195,6 +194,9 @@ export class Renderer {
   // Set once at construction; lets _driveBgNightOpacity early-out for
   // renderer instances with no DOM darkening (lobby, tests).
   private _hasDomDarkening = false;
+  // Set by bg-mutating paths (bakeGibs, renderBloodDrips) so the night-bake
+  // happens once at the next renderFrame instead of N times per kill.
+  private _bgNightDirty = false;
   // Cached fg overlay (platform body faces drawn after players). Built once
   // per arena/scale change in renderBackground; one drawImage per frame
   // beats N×decorations-per-platform-per-frame.
@@ -288,7 +290,7 @@ export class Renderer {
 
     // Lobby/tests with no DOM darkening stay on the source-over fillRect path.
     this._hasDomDarkening = this.bgNightCanvas !== null || this._fgNightTint !== null;
-    this.lighting.setUseDomDarkening(this._hasDomDarkening);
+    this.lighting.setHasDomDarkening(this._hasDomDarkening);
   }
 
   private _applyScaleToCanvases(): void {
@@ -499,17 +501,22 @@ export class Renderer {
     }
     if (this._fgNightTint) {
       this._lastFgTintOpacity = setQuantizedOpacity(
-        this._fgNightTint, fgTintIntensity(intensity), this._lastFgTintOpacity);
+        this._fgNightTint, this.lighting.getFgTintOpacity(intensity), this._lastFgTintOpacity);
     }
   }
 
   /** Copy bg into bgNightCanvas with the night tint baked in. Called from
-   *  renderBackground() (arena load + render-scale change) AND from bakeGibs
-   *  / renderBloodDrips so kill marks track at night. Skipped when lighting
-   *  is off — the bake is invisible anyway and costs ~15MB of GPU bandwidth. */
+   *  renderBackground() (arena load + render-scale change) and from
+   *  renderFrame when `_bgNightDirty` was set by bakeGibs/renderBloodDrips
+   *  earlier in the frame (so kill marks track at night, with at most one
+   *  bake per frame). Skipped when lighting is off (~15MB GPU bandwidth).
+   *
+   *  We do NOT skip when current bgNight opacity is small — the bake is a
+   *  setup pass for a future cross-fade. Skipping at noon would leave the
+   *  night canvas empty when dayPhase advances into the visible band. */
   private _bakeBgNightVariant(): void {
-    if (!this.lighting.isEnabled()) return;
     if (!this.bgNightCanvas || !this.bgNightCtx) return;
+    if (!this.lighting.isEnabled()) return;
     const ctx = this.bgNightCtx;
     const w = this.bgNightCanvas.width;
     const h = this.bgNightCanvas.height;
@@ -519,7 +526,7 @@ export class Renderer {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, w, h);
     ctx.drawImage(this.bgCanvas, 0, 0);
-    ctx.fillStyle = BG_NIGHT_BAKE_RGBA;
+    ctx.fillStyle = this.lighting.getBgNightBakeColor();
     ctx.fillRect(0, 0, w, h);
     ctx.restore();
   }
@@ -669,7 +676,11 @@ export class Renderer {
     return `rgb(${r},${g},${bl})`;
   }
 
+  /** Bake gibs onto the bg canvas. Marks bgNight dirty so the cross-fade
+   *  variant picks them up at the next renderFrame (single re-bake even when
+   *  bakeGibs + renderBloodDrips both fire on the same kill frame). */
   bakeGibs(gibs: Gib[]): void {
+    if (gibs.length === 0) return;
     const ctx = this.bgCtx;
     for (const gib of gibs) {
       ctx.save();
@@ -679,13 +690,13 @@ export class Renderer {
       drawGibShape(ctx, gib);
       ctx.restore();
     }
-    // Mid-match writes to bgCtx (gibs, splat marks) must be reflected in
-    // bgNightCanvas — otherwise kills become invisible at midnight on dark
-    // arenas where bgNight is the dominant compositor layer.
-    this._bakeBgNightVariant();
+    this._bgNightDirty = true;
   }
 
+  /** Bake blood-drip splats onto the bg canvas. Marks bgNight dirty (see
+   *  bakeGibs for the coalesce contract). */
   renderBloodDrips(drips: Array<{ x: number; y: number; radius: number; color: string }>): void {
+    if (drips.length === 0) return;
     const ctx = this.bgCtx;
     for (const drip of drips) {
       ctx.fillStyle = drip.color + '99';
@@ -703,7 +714,7 @@ export class Renderer {
         ctx.fill();
       }
     }
-    if (drips.length > 0) this._bakeBgNightVariant();
+    this._bgNightDirty = true;
   }
 
   // ---- Frame rendering ----
@@ -720,6 +731,12 @@ export class Renderer {
       // Cache time once per frame
       this.frameTime = performance.now();
       this.lighting.beginFrame(this.theme, matchState.dayPhase, 0);
+      // Drain mid-match bg writes (gibs, splat marks) into the bgNight bake.
+      // One bake per frame even when multiple bg-mutating paths fire same tick.
+      if (this._bgNightDirty) {
+        this._bgNightDirty = false;
+        this._bakeBgNightVariant();
+      }
       this._driveBgNightOpacity();
 
       ctx.save();

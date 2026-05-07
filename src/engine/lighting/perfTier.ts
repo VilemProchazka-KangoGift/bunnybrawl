@@ -17,6 +17,7 @@ const emitter = createUrlStoredEmitter<PerfTier>({
   paramName: 'perfTier',
   defaultValue: 'med',
   parse,
+  serialize: (v) => v,
 });
 
 export const getPerfTier = emitter.get;

@@ -7,7 +7,7 @@
 //   - Hard flashes capped (L2+)
 //
 // URL: ?photosensitivity=on|off (overrides storage)
-// Storage: carrotroyale_photosensitivity (1 = on, 0 = off)
+// Storage: carrotroyale_photosensitivity ('on'/'off' — matches lighting kill-switch convention)
 
 import { createUrlStoredEmitter } from './urlStoredEmitter';
 
@@ -22,7 +22,7 @@ const emitter = createUrlStoredEmitter<boolean>({
   paramName: 'photosensitivity',
   defaultValue: false,
   parse,
-  serialize: (v) => v ? '1' : '0',
+  serialize: (v) => v ? 'on' : 'off',
 });
 
 export const getPhotosensitivity = emitter.get;

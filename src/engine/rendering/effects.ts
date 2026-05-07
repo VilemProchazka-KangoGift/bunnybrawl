@@ -112,13 +112,20 @@ export function drawDayNightCycle(
     const sunY = 130 - sunArc * 90;
     const sunAlpha = Math.min(1, (1 - nightIntensity) * 1.5);
     if (sunAlpha > 0.05) {
-      // Redshift: gold at noon → deep orange near horizon.
-      const sunRedshift = Math.max(0, Math.abs(sunT - 0.5) * 2 - 0.1) / 0.9;
+      // Redshift: gold from sunrise through noon, deep orange approaching
+      // sunset. Asymmetric (afternoon-only) by design — sunrise-redshift
+      // looked bizarre in playtests, and the game's dayPhase visual contract
+      // matches pre-M1 behavior. Sunset (sunT > 0.55) ramps toward 1.0.
+      const sunRedshift = Math.max(0, (sunT - 0.55) / 0.45);
       const glowAlpha = sunAlpha * (0.3 + sunRedshift * 0.2);
       const bodyAlpha = sunAlpha * 0.9;
       const glowR = lerpCh(255, 240, sunRedshift), glowG = lerpCh(215, 50, sunRedshift), glowB = lerpCh(0, 10, sunRedshift);
       const bodyR = lerpCh(255, 220, sunRedshift), bodyG = lerpCh(165, 30, sunRedshift);
       const coreR = 255, coreG = lerpCh(215, 80, sunRedshift);
+      // Body and core share the glow's B channel intentionally — the body
+      // ellipse is small enough that an independent B-redshift would be
+      // imperceptible, and pinning it to glowB keeps the three discs
+      // chromatically continuous as redshift ramps.
       ctx.globalAlpha = glowAlpha;
       ctx.fillStyle = `rgb(${glowR},${glowG},${glowB})`;
       ctx.beginPath(); ctx.arc(sunX, sunY, 32 + sunRedshift * 16, 0, Math.PI * 2); ctx.fill();

@@ -28,6 +28,13 @@ export function fastCos(radians: number): number {
   return COS_TABLE[idx | 0];
 }
 
+/** Wrap a value into [0, 1) using positive-modulo. Equivalent to the
+ *  `((x % 1) + 1) % 1` idiom used in `physics.wrapHorizontal` and
+ *  `lighting.distanceFromNoon`. Handles negative inputs and overshoots. */
+export function wrapToUnit(x: number): number {
+  return ((x % 1) + 1) % 1;
+}
+
 /** Parse hex color '#RRGGBB' to {r,g,b} components. Cache the result. */
 export function hexToRGB(hex: string): { r: number; g: number; b: number } {
   const r = parseInt(hex.slice(1, 3), 16);

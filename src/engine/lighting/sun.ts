@@ -9,6 +9,7 @@
 // Sun visible when dayPhase < 0.25 || dayPhase > 0.75.
 // Below horizon (0.25 <= dayPhase <= 0.75) returns null.
 
+import { wrapToUnit } from '../fastMath';
 import type { ThemeConfig } from '../themes/types';
 import type { RGB, SunContribution } from './types';
 
@@ -26,11 +27,8 @@ function lerpColor(a: RGB, b: RGB, t: number): RGB {
 
 /** "Distance from noon" in [0, 0.25] for daytime; > 0.25 means below horizon. */
 function distanceFromNoon(dayPhase: number): number {
-  // Wrap dayPhase to [0,1) so callers passing slightly out-of-range values
-  // (e.g. 1.0001 from a frame's worth of advancement) don't produce
-  // distances > 0.5 and silently mark the sun as below horizon.
-  const wrapped = ((dayPhase % 1) + 1) % 1;
-  return Math.min(wrapped, 1 - wrapped);
+  const w = wrapToUnit(dayPhase);
+  return Math.min(w, 1 - w);
 }
 
 export function buildSunLight(
