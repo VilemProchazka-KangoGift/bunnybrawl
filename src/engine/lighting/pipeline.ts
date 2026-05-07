@@ -16,9 +16,6 @@
 //     layers via style.opacity. Browser compositor blends them for ~free.
 //   - Source-over tint fallback (lobby, tests): composite() does one fillRect
 //     on the FG ctx. Simpler but pays full-canvas pixel cost per frame.
-//
-// L2 (per-arena emitters) will add 'lighter' point-light passes on top.
-// L3 (shadows) reads sun direction from buildSunLight() in sun.ts.
 
 import type { ThemeConfig } from '../themes/types';
 import { isLightingEnabled } from './index';
@@ -73,9 +70,7 @@ export class LightingPipeline {
   }
 
   /** Compute the tint alpha for this frame from ambient(theme, dayPhase).
-   *  No allocations — uses a private RGB scratch. L2 will add a `tick` arg
-   *  for deterministic flicker (see SeededRNG.fromTick); not added now to
-   *  avoid a no-op param sitting in the signature. */
+   *  Allocation-free — mutates the private `_ambientScratch`. */
   beginFrame(theme: ThemeConfig, dayPhase: number): void {
     if (!this.isEnabled()) {
       this.tintAlpha = 0;
@@ -102,8 +97,8 @@ export class LightingPipeline {
     ctx.restore();
   }
 
-  /** Map tintAlpha → [0,1] so midnight reaches full opacity; the baked bgNight
-   *  canvas then composites at the same effective alpha as the source-over path. */
+  /** Map tintAlpha → [0,1]; reaches 1.0 only when tintAlpha hits MAX_TINT_ALPHA.
+   *  At vanilla midnight (no photosensitivity) this is ~0.88. */
   getBgNightOpacity(): number {
     if (!this.isEnabled()) return 0;
     return Math.min(1, this.tintAlpha / MAX_TINT_ALPHA);
@@ -130,8 +125,9 @@ export class LightingPipeline {
     return isLightingEnabled();
   }
 
-  /** Test accessor — exposes the current frame's tint alpha. */
-  getTintAlpha(): number {
+  /** Test accessor — not for production use (semantics depend on darkening
+   *  path; the cross-fade path drives opacity, not alpha). */
+  _getTintAlphaForTest(): number {
     return this.tintAlpha;
   }
 }

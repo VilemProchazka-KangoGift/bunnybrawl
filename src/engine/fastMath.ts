@@ -29,8 +29,7 @@ export function fastCos(radians: number): number {
 }
 
 /** Wrap a value into [0, 1) using positive-modulo. Equivalent to the
- *  `((x % 1) + 1) % 1` idiom used in `physics.wrapHorizontal` and
- *  `lighting.distanceFromNoon`. Handles negative inputs and overshoots. */
+ *  `((x % 1) + 1) % 1` idiom. Handles negative inputs and overshoots. */
 export function wrapToUnit(x: number): number {
   return ((x % 1) + 1) % 1;
 }

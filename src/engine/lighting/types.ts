@@ -9,12 +9,3 @@ export interface RGB {
   g: number;
   b: number;
 }
-
-export interface SunContribution {
-  /** Screen-space angle in radians; 0 = right, π/2 = up, π = left */
-  angle: number;
-  /** Sun light color */
-  color: RGB;
-  /** 0..1 intensity at this dayPhase */
-  intensity: number;
-}

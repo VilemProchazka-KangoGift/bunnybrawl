@@ -49,33 +49,29 @@ describe('LightingPipeline (L1 minimal source-over tint)', () => {
     const p = new LightingPipeline(1280, 720);
     p.beginFrame(mockTheme(), 0);
     // At noon ambient is rgb(245,240,225); avg ~237; deficit ~0.07; alpha ~0.05.
-    expect(p.getTintAlpha()).toBeLessThan(0.1);
+    expect(p._getTintAlphaForTest()).toBeLessThan(0.1);
   });
 
   it('beginFrame at midnight produces visible tint alpha', () => {
     const p = new LightingPipeline(1280, 720);
     p.beginFrame(mockTheme(), 0.5);
     // At midnight ambient is rgb(60,70,110); avg 80; deficit ~0.69; alpha ~0.48.
-    expect(p.getTintAlpha()).toBeGreaterThan(0.3);
+    expect(p._getTintAlphaForTest()).toBeGreaterThan(0.3);
   });
 
   it('beginFrame at sunset produces intermediate tint alpha', () => {
     const p = new LightingPipeline(1280, 720);
     p.beginFrame(mockTheme(), 0); // noon
-    const noon = p.getTintAlpha();
+    const noon = p._getTintAlphaForTest();
     p.beginFrame(mockTheme(), 0.25); // sunset
-    const sunset = p.getTintAlpha();
+    const sunset = p._getTintAlphaForTest();
     p.beginFrame(mockTheme(), 0.5); // midnight
-    const midnight = p.getTintAlpha();
+    const midnight = p._getTintAlphaForTest();
     expect(sunset).toBeGreaterThan(noon);
     expect(sunset).toBeLessThan(midnight);
   });
 
   it('composite at noon emits one fillRect with small noon-shaded alpha', () => {
-    // Was previously a load-bearing-for-nothing `if (fills.length > 0)` test.
-    // Noon tintAlpha is ~0.04 — above the 0.01 visibility threshold, so
-    // composite SHOULD emit one fill. Tighten the assertion to catch the
-    // case where the threshold or noon math drift past each other.
     const p = new LightingPipeline(1280, 720);
     p.beginFrame(mockTheme(), 0);
     const { ctx, fills } = makeCtx();
@@ -85,8 +81,8 @@ describe('LightingPipeline (L1 minimal source-over tint)', () => {
     expect(fills[0].w).toBe(1280);
     expect(fills[0].h).toBe(720);
     expect(fills[0].style).toContain('rgba(20,24,48,');
-    expect(p.getTintAlpha()).toBeGreaterThan(0.01);
-    expect(p.getTintAlpha()).toBeLessThan(0.1);
+    expect(p._getTintAlphaForTest()).toBeGreaterThan(0.01);
+    expect(p._getTintAlphaForTest()).toBeLessThan(0.1);
   });
 
   it('composite at midnight applies one source-over fillRect', () => {
@@ -98,7 +94,6 @@ describe('LightingPipeline (L1 minimal source-over tint)', () => {
     expect(fills[0].gco).toBe('source-over');
     expect(fills[0].w).toBe(1280);
     expect(fills[0].h).toBe(720);
-    // The fillStyle should be an rgba string containing TINT_COLOR (5, 10, 35).
     expect(fills[0].style).toContain('rgba(20,24,48,');
   });
 
@@ -115,9 +110,9 @@ describe('LightingPipeline (L1 minimal source-over tint)', () => {
     const fixed = mockTheme(false);
     const p = new LightingPipeline(1280, 720);
     p.beginFrame(fixed, 0);
-    const a = p.getTintAlpha();
+    const a = p._getTintAlphaForTest();
     p.beginFrame(fixed, 0.5);
-    const b = p.getTintAlpha();
+    const b = p._getTintAlphaForTest();
     expect(a).toBe(b); // no day-phase variation
   });
 
@@ -165,7 +160,7 @@ describe('LightingPipeline (L1 minimal source-over tint)', () => {
     p.beginFrame(mockTheme(), Number.NaN);
     // Whatever tintAlpha the pipeline picks, it MUST be finite — otherwise
     // composite emits `rgba(...,NaN)` which is an invalid color string.
-    expect(Number.isFinite(p.getTintAlpha())).toBe(true);
+    expect(Number.isFinite(p._getTintAlphaForTest())).toBe(true);
     expect(Number.isFinite(p.getBgNightOpacity())).toBe(true);
     const { ctx, fills } = makeCtx();
     p.composite(ctx);

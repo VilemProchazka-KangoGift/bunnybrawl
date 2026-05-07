@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { SeededRNG } from '../../seededRng';
+import { SeededRNG } from '../seededRng';
 
-describe('SeededRNG.fromTick (lighting determinism)', () => {
+describe('SeededRNG.fromTick', () => {
   it('same seed + same tick produces identical output', () => {
     const a = SeededRNG.fromTick(42, 100);
     const b = SeededRNG.fromTick(42, 100);
