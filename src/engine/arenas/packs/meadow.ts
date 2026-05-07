@@ -158,7 +158,7 @@ function meadowTree(x: number, y: number, size: number): ReactiveInstance {
     kind: 'meadow.tree',
     seed: Math.floor((x * 73 + y * 31) % 997),
     data: { size } satisfies TreeData,
-    windAmp: 9,
+    windAmp: 3,
     shakeRadius: 80,
     burst: { threshold: 0.95, particleKind: 'leaf', count: 12 },
     excitement: 0,
@@ -169,11 +169,11 @@ registerReactiveKind('meadow.tree', {
   layer: 'prePlayer',
   draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
     const { size } = inst.data as TreeData;
-    // Tree leans with swayPhase + shakeDecay shudder.
+    // Tree leans with swayPhase + shakeDecay shudder. windAmp 3 × 0.015 ≈ 2.6°
+    // peak wind tilt; stomp shudder adds ~4× transient on top.
     const lean = swayPhase + (inst.shakeDecay > 0 ? Math.sin(inst.shakeDecay * 40) * inst.shakeDecay * 4 : 0);
     ctx.save();
     ctx.translate(inst.pos.x, inst.pos.y);
-    // 9px sway → ~0.014 rad/px ≈ 7° max tilt. Visible canopy lean.
     ctx.rotate(lean * 0.015);
     drawTree(ctx, 0, 0, size);
     ctx.restore();
@@ -181,7 +181,8 @@ registerReactiveKind('meadow.tree', {
 });
 
 // ---- meadow.tallGrass ----
-// Bends at the tip (base anchored). Wind sway + flee-from-player when stepped on.
+// Bends at the tip (base anchored). Wind sway + push WITH passing player
+// (signMul = -1) — like a body brushing through tall grass.
 interface TallGrassData { count: number; }
 function meadowTallGrass(x: number, y: number, count: number): ReactiveInstance {
   return {
@@ -189,7 +190,7 @@ function meadowTallGrass(x: number, y: number, count: number): ReactiveInstance 
     seed: Math.floor((x * 89 + y * 41) % 997),
     data: { count } satisfies TallGrassData,
     windAmp: 8,
-    proximity: { radius: 28, mode: 'flee', magnitude: 18 },
+    proximity: { radius: 28, mode: 'lean', magnitude: 18 },
     excitement: 0, shakeDecay: 0,
   };
 }
@@ -197,7 +198,7 @@ registerReactiveKind('meadow.tallGrass', {
   layer: 'prePlayer',
   draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
     const { count } = inst.data as TallGrassData;
-    drawTallGrass(ctx, inst.pos.x, inst.pos.y, count, undefined, undefined, swayPhase + excitementBend(inst));
+    drawTallGrass(ctx, inst.pos.x, inst.pos.y, count, undefined, undefined, swayPhase + excitementBend(inst, -1));
   },
 });
 
@@ -228,7 +229,7 @@ function meadowHangingVine(x: number, y: number, length: number): ReactiveInstan
     seed: Math.floor((x * 97 + y * 47) % 997),
     data: { length } satisfies HangingVineData,
     windAmp: 10,
-    proximity: { radius: 36, mode: 'lean', magnitude: 14 },
+    proximity: { radius: 36, mode: 'lean', magnitude: 30 },
     excitement: 0, shakeDecay: 0,
   };
 }
