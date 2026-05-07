@@ -419,6 +419,11 @@ export class GameLoop {
     return this.renderer;
   }
 
+  /** Reactive decoration system accessor (used by Renderer to draw instances). */
+  getReactiveDecorationSystem(): ReactiveDecorationSystem {
+    return this.reactiveDecorationSystem;
+  }
+
   /** Get the (possibly mirrored) arena. */
   getArena(): Arena {
     return this.simulator.getArena();
@@ -589,7 +594,14 @@ export class GameLoop {
       }
     }
     this.particleSystem.bakeToRenderer(this.renderer);
-    this.renderer.renderFrame(state, arena, this.particleSystem.getParticles(), this._cosmeticLead);
+    const reactive = {
+      instances: [
+        ...this.reactiveDecorationSystem.getInstances30Hz(),
+        ...this.reactiveDecorationSystem.getInstances60Hz(),
+      ],
+      windPhase: this.reactiveDecorationSystem.getWindPhase(),
+    };
+    this.renderer.renderFrame(state, arena, this.particleSystem.getParticles(), this._cosmeticLead, reactive);
   }
 
   /** Capture a snapshot of all gameplay state for rollback. */
@@ -624,7 +636,14 @@ export class GameLoop {
 
     if (this.paused) {
       this.lastTime = currentTime;
-      this.renderer.renderFrame(state, arena, this.particleSystem.getParticles(), 0);
+      const reactiveP = {
+        instances: [
+          ...this.reactiveDecorationSystem.getInstances30Hz(),
+          ...this.reactiveDecorationSystem.getInstances60Hz(),
+        ],
+        windPhase: this.reactiveDecorationSystem.getWindPhase(),
+      };
+      this.renderer.renderFrame(state, arena, this.particleSystem.getParticles(), 0, reactiveP);
       this.rafId = requestAnimationFrame(this.loop);
       return;
     }
@@ -673,7 +692,14 @@ export class GameLoop {
       this.renderer.setBotNavDebugStates(botStates);
     }
 
-    this.renderer.renderFrame(state, arena, this.particleSystem.getParticles(), this._cosmeticLead);
+    const reactive = {
+      instances: [
+        ...this.reactiveDecorationSystem.getInstances30Hz(),
+        ...this.reactiveDecorationSystem.getInstances60Hz(),
+      ],
+      windPhase: this.reactiveDecorationSystem.getWindPhase(),
+    };
+    this.renderer.renderFrame(state, arena, this.particleSystem.getParticles(), this._cosmeticLead, reactive);
     this.rafId = requestAnimationFrame(this.loop);
   };
 
