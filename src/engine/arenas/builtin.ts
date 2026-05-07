@@ -1,4 +1,8 @@
 import { registerArena } from './registry';
+// Side-effect import: registers cross-arena shared reactive decoration kinds
+// (decoration.hangingVine, decoration.fern, decoration.tallGrass) before any
+// arena pack module evaluates and references them in buildReactiveDecorations.
+import '../gameLoop/cosmetics/sharedDecorationKinds';
 import { meadow } from './packs/meadow';
 import { winterLake } from './packs/winterLake';
 import { volcano } from './packs/volcano';

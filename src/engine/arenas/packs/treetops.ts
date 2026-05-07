@@ -3,11 +3,12 @@ import type { Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
-import { drawTree, drawHangingVine, drawFgLeafCluster, drawFern } from '../../themes/drawPrimitives';
+import { drawTree, drawFgLeafCluster } from '../../themes/drawPrimitives';
+import { buildHangingVine, buildFern } from '../../gameLoop/cosmetics/sharedDecorationKinds';
 import { pushFromPlayers, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
 import type { Player } from '../../types';
 import {
-  registerReactiveKind, createReactiveInstance, composeBend,
+  registerReactiveKind, createReactiveInstance,
   type ReactiveInstance,
 } from '../../gameLoop/cosmetics/reactiveDecorations';
 
@@ -206,40 +207,9 @@ registerReactiveKind('treetops.tree', {
   },
 });
 
-// ---- treetops.hangingVine ----
-interface HangingVineData { length: number; }
-function treetopsHangingVine(x: number, y: number, length: number): ReactiveInstance {
-  return createReactiveInstance({
-    pos: { x, y }, kind: 'treetops.hangingVine',
-    seed: Math.floor((x * 97 + y * 47) % 997),
-    data: { length } satisfies HangingVineData,
-    windAmp: 10,
-    proximity: { radius: 36, mode: 'lean', magnitude: 30 },
-  });
-}
-registerReactiveKind('treetops.hangingVine', {
-  layer: 'prePlayer',
-  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
-    const { length } = inst.data as HangingVineData;
-    drawHangingVine(ctx, inst.pos.x, inst.pos.y, length, composeBend(inst, swayPhase));
-  },
-});
-
-// ---- treetops.fern ----
-function treetopsFern(x: number, y: number): ReactiveInstance {
-  return createReactiveInstance({
-    pos: { x, y }, kind: 'treetops.fern',
-    seed: Math.floor((x * 79 + y * 37) % 997),
-    windAmp: 7,
-    proximity: { radius: 36, mode: 'lean', magnitude: 24 },
-  });
-}
-registerReactiveKind('treetops.fern', {
-  layer: 'prePlayer',
-  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
-    drawFern(ctx, inst.pos.x, inst.pos.y, '#2A6A2A', composeBend(inst, swayPhase));
-  },
-});
+// hangingVine + fern live in `decoration.*` shared kinds — see
+// `gameLoop/cosmetics/sharedDecorationKinds.ts`. Treetops passes a darker
+// fern color ('#2A6A2A') via the third arg of buildFern.
 
 // ---- treetops.butterfly ----
 function treetopsButterfly(idx: number): ReactiveInstance {
@@ -557,13 +527,13 @@ export const treetops: ArenaPack = {
     const floats = getFloatingPlatforms(arena.platforms);
     for (let i = 0; i < floats.length; i++) {
       const plat = floats[i];
-      out.push(treetopsHangingVine(plat.x + 10, plat.y + plat.height, 20 + i * 3));
-      out.push(treetopsHangingVine(plat.x + plat.width - 10, plat.y + plat.height, 18 + i * 2));
+      out.push(buildHangingVine(plat.x + 10, plat.y + plat.height, 20 + i * 3));
+      out.push(buildHangingVine(plat.x + plat.width - 10, plat.y + plat.height, 18 + i * 2));
       if (plat.width > 200) {
-        out.push(treetopsFern(plat.x + 15, plat.y));
-        out.push(treetopsFern(plat.x + plat.width - 15, plat.y));
+        out.push(buildFern(plat.x + 15, plat.y, '#2A6A2A'));
+        out.push(buildFern(plat.x + plat.width - 15, plat.y, '#2A6A2A'));
       } else if (plat.width > 120) {
-        out.push(treetopsFern(plat.x + 8, plat.y));
+        out.push(buildFern(plat.x + 8, plat.y, '#2A6A2A'));
       }
     }
 

@@ -34,7 +34,7 @@ const LILY_PADS = [
 ] as const;
 import {
   drawTree, drawBush, drawFlower, drawGrassTuft,
-  drawFgBush, drawTallGrass, drawFern, drawHangingVine, drawFgLeafCluster, drawFgWildflower,
+  drawFgBush, drawFgLeafCluster, drawFgWildflower,
 } from '../../themes/drawPrimitives';
 import {
   CAP_DEPTH, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
@@ -42,6 +42,9 @@ import {
   drawPlatformRightFace, drawPlatformCap,
   wavyDown, backWavyUp, drawLeftStones, leftWavy,
 } from '../../themes/drawPrimitives';
+import {
+  buildHangingVine, buildFern, buildTallGrass,
+} from '../../gameLoop/cosmetics/sharedDecorationKinds';
 
 // Wet stone palette — blue-gray tinted for the waterfall biome.
 const WATERFALL_STONE_PALETTE = [
@@ -81,59 +84,8 @@ registerReactiveKind('waterfall.tree', {
   },
 });
 
-// ---- waterfall.tallGrass ----
-interface TallGrassData { count: number; }
-function waterfallTallGrass(x: number, y: number, count: number): ReactiveInstance {
-  return createReactiveInstance({
-    pos: { x, y }, kind: 'waterfall.tallGrass',
-    seed: Math.floor((x * 89 + y * 41) % 997),
-    data: { count } satisfies TallGrassData,
-    windAmp: 6,
-    proximity: { radius: 36, mode: 'lean', magnitude: 30 },
-  });
-}
-registerReactiveKind('waterfall.tallGrass', {
-  layer: 'prePlayer',
-  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
-    const { count } = inst.data as TallGrassData;
-    drawTallGrass(ctx, inst.pos.x, inst.pos.y, count, undefined, undefined, composeBend(inst, swayPhase));
-  },
-});
-
-// ---- waterfall.fern ----
-function waterfallFern(x: number, y: number): ReactiveInstance {
-  return createReactiveInstance({
-    pos: { x, y }, kind: 'waterfall.fern',
-    seed: Math.floor((x * 79 + y * 37) % 997),
-    windAmp: 7,
-    proximity: { radius: 36, mode: 'lean', magnitude: 24 },
-  });
-}
-registerReactiveKind('waterfall.fern', {
-  layer: 'prePlayer',
-  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
-    drawFern(ctx, inst.pos.x, inst.pos.y, undefined, composeBend(inst, swayPhase));
-  },
-});
-
-// ---- waterfall.hangingVine ----
-interface HangingVineData { length: number; }
-function waterfallHangingVine(x: number, y: number, length: number): ReactiveInstance {
-  return createReactiveInstance({
-    pos: { x, y }, kind: 'waterfall.hangingVine',
-    seed: Math.floor((x * 97 + y * 47) % 997),
-    data: { length } satisfies HangingVineData,
-    windAmp: 10,
-    proximity: { radius: 36, mode: 'lean', magnitude: 30 },
-  });
-}
-registerReactiveKind('waterfall.hangingVine', {
-  layer: 'prePlayer',
-  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
-    const { length } = inst.data as HangingVineData;
-    drawHangingVine(ctx, inst.pos.x, inst.pos.y, length, composeBend(inst, swayPhase));
-  },
-});
+// tallGrass, fern, hangingVine live in `decoration.*` shared kinds — see
+// `gameLoop/cosmetics/sharedDecorationKinds.ts`.
 
 // ---- waterfall.fgBush ----
 // Subtle proximity-lean — bushes are stiffer than vines, so a smaller magnitude.
@@ -741,16 +693,16 @@ export const waterfall: ArenaPack = {
     out.push(waterfallTree(1200, y, 48));
 
     // Tall grass near waterfall edges (proximity lean)
-    out.push(waterfallTallGrass(380, y, 8));
-    out.push(waterfallTallGrass(870, y, 7));
-    out.push(waterfallTallGrass(140, y, 6));
-    out.push(waterfallTallGrass(1100, y, 5));
+    out.push(buildTallGrass(380, y, 8));
+    out.push(buildTallGrass(870, y, 7));
+    out.push(buildTallGrass(140, y, 6));
+    out.push(buildTallGrass(1100, y, 5));
 
     // Ferns (proximity lean)
-    out.push(waterfallFern(50, y));
-    out.push(waterfallFern(320, y));
-    out.push(waterfallFern(940, y));
-    out.push(waterfallFern(1240, y));
+    out.push(buildFern(50, y));
+    out.push(buildFern(320, y));
+    out.push(buildFern(940, y));
+    out.push(buildFern(1240, y));
 
     // Foreground bushes on sides (subtle proximity lean — stiffer than vines)
     out.push(waterfallFgBush(90, y, 55));
@@ -764,10 +716,10 @@ export const waterfall: ArenaPack = {
       if (plat.width > 140) {
         out.push(waterfallFgBush(plat.x + plat.width * 0.2, plat.y, 16));
         out.push(waterfallFgBush(plat.x + plat.width * 0.8, plat.y, 14));
-        out.push(waterfallHangingVine(plat.x + 10, plat.y + plat.height, 22));
-        out.push(waterfallHangingVine(plat.x + plat.width - 10, plat.y + plat.height, 18));
+        out.push(buildHangingVine(plat.x + 10, plat.y + plat.height, 22));
+        out.push(buildHangingVine(plat.x + plat.width - 10, plat.y + plat.height, 18));
       } else if (plat.width >= 80) {
-        out.push(waterfallHangingVine(plat.x + plat.width / 2, plat.y + plat.height, 15));
+        out.push(buildHangingVine(plat.x + plat.width / 2, plat.y + plat.height, 15));
       }
     }
 

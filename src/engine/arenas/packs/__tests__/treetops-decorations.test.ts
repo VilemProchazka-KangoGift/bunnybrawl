@@ -43,7 +43,7 @@ describe('treetops — buildReactiveDecorations', () => {
 
   it('expected kinds are present', () => {
     const expected = [
-      'treetops.tree', 'treetops.hangingVine', 'treetops.fern',
+      'treetops.tree', 'decoration.hangingVine', 'decoration.fern',
       'treetops.butterfly', 'treetops.bee',
     ];
     for (const k of expected) {

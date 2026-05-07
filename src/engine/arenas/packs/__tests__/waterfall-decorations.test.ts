@@ -45,8 +45,8 @@ describe('waterfall — buildReactiveDecorations', () => {
 
   it('expected kinds are present', () => {
     const expected = [
-      'waterfall.tree', 'waterfall.tallGrass', 'waterfall.fern',
-      'waterfall.hangingVine', 'waterfall.fgBush', 'waterfall.frogJump',
+      'waterfall.tree', 'decoration.tallGrass', 'decoration.fern',
+      'decoration.hangingVine', 'waterfall.fgBush', 'waterfall.frogJump',
     ];
     for (const k of expected) {
       expect(hasReactiveKind(k)).toBe(true);
@@ -85,13 +85,13 @@ describe('waterfall — buildReactiveDecorations', () => {
     const pack = getArenaPack('waterfall');
     const arena = getArena('waterfall');
     const list = pack!.buildReactiveDecorations!(arena);
-    const tg = list.find((i) => i.kind === 'waterfall.tallGrass');
+    const tg = list.find((i) => i.kind === 'decoration.tallGrass');
     expect(tg?.proximity?.mode).toBe('lean');
     expect(tg?.proximity?.magnitude).toBe(30);
-    const fern = list.find((i) => i.kind === 'waterfall.fern');
+    const fern = list.find((i) => i.kind === 'decoration.fern');
     expect(fern?.proximity?.mode).toBe('lean');
     expect(fern?.proximity?.magnitude).toBe(24);
-    const vine = list.find((i) => i.kind === 'waterfall.hangingVine');
+    const vine = list.find((i) => i.kind === 'decoration.hangingVine');
     expect(vine?.proximity?.mode).toBe('lean');
     expect(vine?.proximity?.magnitude).toBe(30);
     const bush = list.find((i) => i.kind === 'waterfall.fgBush');

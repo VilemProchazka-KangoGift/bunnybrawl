@@ -44,7 +44,7 @@ describe('meadow — buildReactiveDecorations', () => {
 
   it('expected kinds are present', () => {
     const expected = [
-      'meadow.tree', 'meadow.tallGrass', 'meadow.fern', 'meadow.hangingVine',
+      'meadow.tree', 'decoration.tallGrass', 'decoration.fern', 'decoration.hangingVine',
       'meadow.dandelion', 'meadow.butterfly', 'meadow.bee',
     ];
     for (const k of expected) {
