@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   registerReactiveKind, getReactiveKind, hasReactiveKind, _resetReactiveKindsForTest,
-  updateExcitement, applyShakeImpulse, decayShake, shouldFireBurst, excitementBend,
+  updateExcitement, applyShakeImpulse, decayShake, shouldFireBurst, excitementBend, composeBend,
   type ReactiveInstance, type ReactiveKindConfig,
 } from '../reactiveDecorations';
 
@@ -54,15 +54,15 @@ describe('reactiveDecorations — excitement primitive', () => {
   });
 
   it('decays toward 0 when outside radius (slow settle, no snap-back)', () => {
-    // Decay rate 0.9/s gives ~2.5s to reach 90% decay. After 1 second we
-    // should still see substantial residual excitement (asymmetric ease —
-    // fast rise, slow decay) — not yet anywhere near zero.
+    // Decay rate 0.4/s gives ~5.7s to reach 90% decay. After 1 second the
+    // excitement should still be ~0.67 (most of the bend remains visible —
+    // asymmetric ease, fast rise, very slow decay).
     const inst = makeInstance({ proximity: { radius: 50, mode: 'excite', magnitude: 1 }, excitement: 1 });
     for (let i = 0; i < 30; i++) updateExcitement(inst, 200, 1 / 30); // 1s
-    expect(inst.excitement).toBeGreaterThan(0.3); // visibly still bent
-    expect(inst.excitement).toBeLessThan(0.5);
-    // Continue another 4 seconds — now should be near zero.
-    for (let i = 0; i < 120; i++) updateExcitement(inst, 200, 1 / 30);
+    expect(inst.excitement).toBeGreaterThan(0.6); // still mostly bent
+    expect(inst.excitement).toBeLessThan(0.75);
+    // Continue another ~7 seconds — now near zero.
+    for (let i = 0; i < 7 * 30; i++) updateExcitement(inst, 200, 1 / 30);
     expect(inst.excitement).toBeLessThan(0.05);
   });
 
@@ -188,6 +188,46 @@ describe('reactiveDecorations — excitementBend', () => {
       nearestDx: 999, // way beyond radius — norm clamps to +1
     });
     expect(excitementBend(inst)).toBeCloseTo(-10, 5);
+  });
+
+  it('composeBend mutes wind sway by (1 - excitement) so decay does not cross neutral', () => {
+    // Setup: wind blows decoration RIGHT (swayPhase = +5), player has pushed
+    // it LEFT (excitement = 1, nearestDx > 0 → bend = -10 with default lean).
+    const inst = makeInstance({
+      excitement: 1,
+      proximity: { radius: 30, mode: 'lean', magnitude: 10 },
+      nearestDx: 30,
+    });
+    // At peak excitement: wind fully muted, only push direction.
+    expect(composeBend(inst, 5)).toBeCloseTo(-10, 5);
+    // At 0 excitement: wind fully present (no push contribution).
+    inst.excitement = 0;
+    expect(composeBend(inst, 5)).toBeCloseTo(5, 5);
+    // Mid-decay: blend. excitement = 0.5 → wind contributes 2.5, push -5 → total -2.5
+    inst.excitement = 0.5;
+    expect(composeBend(inst, 5)).toBeCloseTo(-2.5, 5);
+  });
+
+  it('composeBend with opposite-direction wind never overshoots through zero abruptly', () => {
+    // Worst case for snap-back: push opposite to wind. As excitement decays,
+    // bend should smoothly transition from "pushed" toward "wind state" without
+    // passing through zero earlier than late in the decay.
+    const inst = makeInstance({
+      excitement: 1,
+      proximity: { radius: 30, mode: 'lean', magnitude: 18 },
+      nearestDx: 30, // bend = -18 (left), wind = +5 (right)
+    });
+    const samples: number[] = [];
+    for (const ex of [1.0, 0.8, 0.6, 0.4, 0.2, 0.05]) {
+      inst.excitement = ex;
+      samples.push(composeBend(inst, 5));
+    }
+    // Samples: -18, -15.4, -10.8, -4.2, +0.4, +4.65 — only crosses zero very
+    // late (excitement ≈ 0.2, after most of the decay has happened). Without
+    // muting, samples would be -13, -11.4, -7.8, -2.2, +1.4, +4.1 — crosses
+    // earlier. The muting buys the user a longer stable "pushed" reading.
+    expect(samples[0]).toBeLessThan(samples[1]); // monotonic toward wind dir
+    expect(samples[3]).toBeLessThan(0); // still on push side at ex=0.4
   });
 
   it('seed-parity fallback uses full magnitude (norm = ±1), not 1/radius', () => {

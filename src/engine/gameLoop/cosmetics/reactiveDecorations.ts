@@ -117,10 +117,10 @@ export function _resetReactiveKindsForTest(): void {
 /** Excitement rise rate (k in 1/s). Quick reaction when player enters radius —
  *  ≈0.4s to reach 90%. */
 const EXCITEMENT_RISE_RATE = 2.4;
-/** Excitement decay rate (k in 1/s). Slow settle after player leaves so
- *  decorations don't snap back — ≈2.5s to reach 90% decay. Plants in real
- *  life relax gradually; instant snap-back reads as artificial. */
-const EXCITEMENT_DECAY_RATE = 0.9;
+/** Excitement decay rate (k in 1/s). Slow settle after player leaves —
+ *  ≈5.7s to reach 90% decay. Plants in real life relax gradually; instant
+ *  snap-back reads as artificial. */
+const EXCITEMENT_DECAY_RATE = 0.4;
 
 /** Stomp-shake decay per second. */
 export const SHAKE_DECAY_RATE = 7;
@@ -165,6 +165,20 @@ export function decayShake(instance: ReactiveInstance, dt: number): void {
 export function shouldFireBurst(instance: ReactiveInstance, prevShake: number): boolean {
   if (!instance.burst) return false;
   return prevShake < instance.burst.threshold && instance.shakeDecay >= instance.burst.threshold;
+}
+
+/** Compose the full bend offset for a draw fn — wind sway muted by
+ *  `(1 - excitement)` plus the player-driven `excitementBend`. The muting
+ *  prevents the decoration from crossing neutral on its way back to wind
+ *  state during decay: if a player pushed the element opposite to its
+ *  natural wind lean, decay smoothly returns toward neutral and only
+ *  re-introduces the wind component as excitement approaches zero, so
+ *  the element doesn't "snap past" the rest position to the wind side.
+ *
+ *  Default `signMul = -1` is "lean with player" (see `excitementBend`).
+ *  Pass `signMul = +1` for flee. */
+export function composeBend(instance: ReactiveInstance, swayPhase: number, signMul = -1): number {
+  return swayPhase * (1 - instance.excitement) + excitementBend(instance, signMul);
 }
 
 /** Direction-aware bend offset used by parting/lean draw fns. Returns a px

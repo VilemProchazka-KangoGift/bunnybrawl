@@ -146,7 +146,7 @@ import {
 
 import {
   registerReactiveKind,
-  excitementBend,
+  composeBend,
   type ReactiveInstance,
 } from '../../gameLoop/cosmetics/reactiveDecorations';
 
@@ -197,7 +197,7 @@ registerReactiveKind('meadow.tallGrass', {
   layer: 'prePlayer',
   draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
     const { count } = inst.data as TallGrassData;
-    drawTallGrass(ctx, inst.pos.x, inst.pos.y, count, undefined, undefined, swayPhase + excitementBend(inst));
+    drawTallGrass(ctx, inst.pos.x, inst.pos.y, count, undefined, undefined, composeBend(inst, swayPhase));
   },
 });
 
@@ -214,7 +214,7 @@ function meadowFern(x: number, y: number): ReactiveInstance {
 registerReactiveKind('meadow.fern', {
   layer: 'prePlayer',
   draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
-    drawFern(ctx, inst.pos.x, inst.pos.y, undefined, swayPhase + excitementBend(inst));
+    drawFern(ctx, inst.pos.x, inst.pos.y, undefined, composeBend(inst, swayPhase));
   },
 });
 
@@ -236,7 +236,7 @@ registerReactiveKind('meadow.hangingVine', {
   layer: 'prePlayer',
   draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
     const { length } = inst.data as HangingVineData;
-    drawHangingVine(ctx, inst.pos.x, inst.pos.y, length, swayPhase + excitementBend(inst));
+    drawHangingVine(ctx, inst.pos.x, inst.pos.y, length, composeBend(inst, swayPhase));
   },
 });
 
