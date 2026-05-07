@@ -23,4 +23,4 @@ export {
 export { registerBuiltinArenas } from './builtin';
 
 // ---- Public API (lookup + arena transformations) ----
-export { getArena, getTheme, mirrorArena } from './operations';
+export { getArena, getTheme, getArenaLights, mirrorArena } from './operations';

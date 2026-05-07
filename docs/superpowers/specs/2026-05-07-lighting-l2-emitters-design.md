@@ -15,7 +15,7 @@ L2 ships:
 - A `Light` data type + per-arena static emitter list (`ArenaPack.lights`)
 - An `EmitterPipeline` parallel to `LightingPipeline`, owning per-frame dynamic emitters
 - Two compositing modes behind `?lmode=combined|split` for an empirical bakeoff (mirrors L1's 7-mode A/B test methodology)
-- One real test scene (haunted_graveyard with 8 torches + per-player aura) sufficient to drive the bakeoff
+- One real test scene (castle with 5 torches + per-player aura) sufficient to drive the bakeoff
 - After bakeoff: the rest of the L2 catalog (carrot glow, spawn pillars, lava emissive, firefly lights, per-player aura with critical-moment bump)
 
 L2 does **not** ship UI for emitter tuning — emitters live in arena pack files and are tuned via code.
@@ -165,15 +165,16 @@ Touches every test setup once; subsequent L2 PRs add one field instead of one po
 
 ### Phase 2 — Graveyard test scene
 
-- Add `lights: ReadonlyArray<Light>` to `haunted_graveyard.ts` arena pack — 8 torches at known wall positions, warm-orange color (`{r:255, g:150, b:60}`), `intensity: 0.8`, `radius: 80`, `falloff: 'inverse-square'`, `flickerSeed: hashPos(x,y)`, `flickerAmplitude: 0.15`
+- Add `lights: ReadonlyArray<Light>` to `castle.ts` arena pack — 5 torches at the existing `TORCH_X` positions (flame Y 580), warm-orange `{r:255, g:150, b:60}`, `intensity: 0.8`, `radius: 80`, `falloff: 'inverse-square'`, `flickerSeed: i+1` per torch, `flickerAmplitude: 0.1` (matches existing `fastSin × 0.05` ±5% modulation in `drawAnimatedBackground`)
+- Replace the existing 2D torch halo in `castle.drawAnimatedBackground` — the alpha-modulated circles get crushed by the fg-night-tint multiply at midnight, while real `Light` emitters punch through via the screen-blend layer. Keep the ember sparks (those still belong on FG ctx).
 - Static cache: `OffscreenCanvas` at full or half-res, baked at arena-load
 - Per-player aura: `Player.auraIntensity` field, baseline 0.3, ramps to 0.7 on critical moments (low health analog — revisit specifics in Phase 6). Renderer synthesizes a `Light` per active player each frame.
-- Smoke test: load haunted_graveyard at midnight, verify 8 torches visible + 1 aura per player, verify photosensitivity caps both, verify `?lighting=off` produces clean downgrade.
+- Smoke test: load castle at midnight, verify 5 torches visible + 1 aura per player, verify photosensitivity caps both, verify `?lighting=off` produces clean downgrade.
 
 ### Phase 3 — Bakeoff + decision
 
-- `npm run perf --arena=haunted_graveyard` × `?lmode=combined` × 5 runs
-- `npm run perf --arena=haunted_graveyard` × `?lmode=split` × 5 runs
+- `npm run perf --arena=castle` × `?lmode=combined` × 5 runs
+- `npm run perf --arena=castle` × `?lmode=split` × 5 runs
 - Save reports to `perf-runs/l2-emitter-comparison/{combined,split}/` (mirroring L1's `lmode-comparison/` layout)
 - Comparison table in `perf-runs/l2-emitter-comparison/REPORT.md`: p50/p95/p99 frame, GPU memory, compositor layer count
 - Pick winner. Rip out loser path. Single commit.
@@ -210,7 +211,7 @@ Touches every test setup once; subsequent L2 PRs add one field instead of one po
   - `flickerSeed` produces stable per-tick intensity (deterministic across host/guest)
   - `?lighting=off` zeros emitter pipeline (extends L1's regression test)
 - New E2E:
-  - `lighting-l2-graveyard.spec.ts` — load haunted_graveyard at midnight, screenshot baseline, verify torches present, verify `?lmode=combined` and `?lmode=split` produce matching pixels (visual parity gate for the bakeoff)
+  - `lighting-l2-graveyard.spec.ts` — load castle at midnight, screenshot baseline, verify torches present, verify `?lmode=combined` and `?lmode=split` produce matching pixels (visual parity gate for the bakeoff)
 - Renderer test setup: mock `lightCanvas` + `lightStaticCanvas` + `lightDynamicCanvas` refs (most tests pass `null` and stay on the L1 fallback path)
 
 ## Open follow-ups (not blocking L2 ship)

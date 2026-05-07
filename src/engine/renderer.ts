@@ -37,6 +37,7 @@ import { setHudScale } from './rendering/hud';
 import { applyRenderScaleToCanvas, getRenderScale } from './renderScale';
 import { Lighting, getLightMode } from './lighting';
 import type { Light } from './lighting';
+import { getArenaLights } from './arenas/operations';
 import { getBrightness } from './lighting/brightness';
 import { getSlowDevice } from './perfFlags';
 import { perfTrace } from './perfTrace';
@@ -546,6 +547,9 @@ export class Renderer {
     // one drawImage + one fillRect per arena-load / render-scale change. CSS
     // opacity then drives the day↔night cross-fade per frame at ~0 GPU cost.
     this._bakeBgNightVariant();
+    // L2 emitters: load the static catalog from the arena pack registry and
+    // bake into the appropriate light surface for the active ?lmode.
+    this.setArenaLights(getArenaLights(arena.id));
   }
 
   /** Drive bgNight + fg-tint opacity from the lighting pipeline. Quantized
@@ -908,11 +912,22 @@ export class Renderer {
       // Cache time once per frame
       this.frameTime = performance.now();
       this.lighting.ambient.beginFrame(this.theme, matchState.dayPhase);
-      // L2 emitters: gather dynamic emitters from entity state, then prep
-      // the per-frame stamp. Static catalog is set via setArenaLights().
+      // L2 emitters: synthesize per-player aura emitters from live entity
+      // state — no Player schema change needed. Phase 4+ adds carrot glow,
+      // spawn pillars, lava emissive on top.
       this._dynamicLights.length = 0;
-      // (synthesizers will push into _dynamicLights here; phase 4+ wires
-      // carrot-glow / per-player-aura. Empty list is the L2 Phase 1 baseline.)
+      for (const player of matchState.players) {
+        if (!player.active || player.state === 'splat' || player.state === 'respawning') continue;
+        this._dynamicLights.push({
+          kind: 'point',
+          x: player.x + player.width / 2,
+          y: player.y + player.height / 2,
+          color: hexToRGB(player.character.color),
+          intensity: 0.3,
+          radius: 70,
+          falloff: 'smoothstep',
+        });
+      }
       // Tick derived from timeElapsed (60Hz fixed-step). On guests, timeElapsed
       // is interpolated between snapshots → flicker advances smoothly without
       // a wire-format change for an explicit tick field.
