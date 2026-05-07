@@ -1,4 +1,4 @@
-/** Registers all 18 built-in characters into the character pack registry.
+/** Registers all 19 built-in characters into the character pack registry.
  *  Call this once at app startup before any game systems reference characters. */
 
 import { registerCharacter } from './registry';
@@ -20,10 +20,12 @@ import { tiger } from './packs/tiger';
 import { rhino } from './packs/rhino';
 import { hedgehog } from './packs/hedgehog';
 import { chick } from './packs/chick';
+import { axolotl } from './packs/axolotl';
 
 const BUILTINS = [
   bunny, fox, frog, bear, owl, cat, wolf, panda, pig,
   cow, goat, horse, sheep, monkey, tiger, rhino, hedgehog, chick,
+  axolotl,
 ];
 
 export function registerBuiltinCharacters(): void {
