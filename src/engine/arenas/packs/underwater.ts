@@ -168,7 +168,7 @@ const BUBBLE_LEAKS = [
 const BUBBLE_COLUMNS = [120, 380, 900, 1180] as const;
 const FISH_COUNT = 18;
 
-function drawFish(ctx: CanvasRenderingContext2D, i: number, time: number, cxBase: number, cy: number, players: ReadonlyArray<Player>): void {
+function drawFish(ctx: CanvasRenderingContext2D, i: number, time: number, cxBase: number, cy: number, facing: 1 | -1, players: ReadonlyArray<Player>): void {
   const sp = FISH_SPECIES[i % FISH_SPECIES.length];
   const ox = (i % 6) * 26 - 65;
   const oy = Math.floor(i / 6) * 22 - 22 + (i % 2) * 6;
@@ -182,6 +182,9 @@ function drawFish(ctx: CanvasRenderingContext2D, i: number, time: number, cxBase
   const s = sp.size;
   ctx.save();
   ctx.translate(r.x, r.y);
+  // Sprite has tail on the left + eye on the right (faces right by default);
+  // mirror when the school is swimming left so fish don't float backwards.
+  if (facing < 0) ctx.scale(-1, 1);
   ctx.fillStyle = sp.color;
   ctx.beginPath();
   ctx.ellipse(0, 0, 6 * s, 3 * s, 0, 0, Math.PI * 2);
@@ -1190,8 +1193,10 @@ export const underwater: ArenaPack = {
     // frame and the steps are sub-pixel.
     const cxBase = CANVAS_WIDTH * 0.5 + Math.sin(time * 0.18) * (CANVAS_WIDTH * 0.32);
     const cy = 380 + Math.sin(time * 0.5) * 40;
+    // School direction = sign of d/dt sin(time*0.18) = sign of cos(time*0.18).
+    const facing: 1 | -1 = Math.cos(time * 0.18) >= 0 ? 1 : -1;
     const players = matchState.players;
-    for (let i = 0; i < FISH_COUNT; i++) drawFish(ctx, i, time, cxBase, cy, players);
+    for (let i = 0; i < FISH_COUNT; i++) drawFish(ctx, i, time, cxBase, cy, facing, players);
     ctx.restore();
   },
 
