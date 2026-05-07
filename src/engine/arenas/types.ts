@@ -1,5 +1,6 @@
 import type { Arena, Platform, SpawnPoint, HazardZone, EffectZone, AABB, SurfaceTag, WeatherParticle } from '../types';
 import type { ThemeConfig } from '../themes/types';
+import type { ReactiveInstance } from '../gameLoop/cosmetics/reactiveDecorations';
 import type {
   GradientStop, CloudConfig, WeatherConfig, WildlifeConfig,
   FogConfig, AmbientParticleConfig, DayNightConfig,
@@ -12,6 +13,11 @@ export type {
   WildlifeConfig, WildlifeTypeConfig, FogConfig, AmbientParticleConfig,
   DayNightConfig, PhysicsModifiers, AmbientSoundConfig, PeriodicAmbientSound,
 } from '../themes/types';
+
+/** Per-arena cosmetic services passed to `cosmeticTick`. */
+export interface ArenaCosmeticServices {
+  emitParticle: (x: number, y: number, vx: number, vy: number, life: number, size: number, color: string) => void;
+}
 
 /**
  * A self-contained arena definition, combining structural layout (platforms,
@@ -117,6 +123,24 @@ export interface ArenaPack {
   drawPlatformOverlay?: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => void;
   drawAnimatedBackground?: (ctx: CanvasRenderingContext2D, arena: Arena, time: number, dayPhase: number, matchState?: import('../types').MatchState) => void;
   drawAnimatedForeground?: (ctx: CanvasRenderingContext2D, arena: Arena, time: number, dayPhase: number, matchState?: import('../types').MatchState) => void;
+
+  /** Build the arena's reactive decoration instance list. Called once per
+   *  arena load. Positions can depend on platform layout (use `arena.platforms`).
+   *  All `kind` values must be pre-registered via `registerReactiveKind` (the
+   *  arena pack typically does that at module load time). */
+  buildReactiveDecorations?: (arena: Arena) => ReactiveInstance[];
+
+  /** Per-tick cosmetic logic specific to this arena. Runs in cosmeticStep at
+   *  ~30Hz. Use for arena-specific particle emitters or bespoke effects that
+   *  don't fit the reactive-decoration model (player-emitted trails,
+   *  environmental triggers, etc.). The pack owns any state it needs as
+   *  module-local closures. */
+  cosmeticTick?: (
+    state: import('../types').MatchState,
+    dt: number,
+    services: ArenaCosmeticServices,
+  ) => void;
+
   drawGroundCritters?: (ctx: CanvasRenderingContext2D, arena: Arena, time: number, dayPhase: number, matchState?: import('../types').MatchState) => void;
   drawSceneTint?: (ctx: CanvasRenderingContext2D, dayPhase: number, time: number) => void;
   drawWeatherParticle?: (ctx: CanvasRenderingContext2D, particle: WeatherParticle) => void;
