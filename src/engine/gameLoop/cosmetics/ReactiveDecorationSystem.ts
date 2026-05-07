@@ -111,12 +111,27 @@ export class ReactiveDecorationSystem implements CosmeticSystem {
     this._applyImpulseToBucket(this._tick60, stompX, stompY);
   }
 
-  /** Re-prime per-instance state (zeros excitement / shakeDecay). Used on
-   *  guest reconnect or loading→playing edge to avoid stale carryover. Does
-   *  NOT reset windPhase — that stays continuous so wind doesn't snap. */
+  /** Re-prime per-instance state (zeros excitement / shakeDecay / nearestDx
+   *  and invokes the kind's `resetData` if registered). Used on guest reconnect
+   *  or loading→playing edge to avoid stale carryover — without it, dandelions
+   *  reconnecting mid-burst would resume with a half-grown puff. Does NOT
+   *  reset windPhase — that stays continuous so wind doesn't visually snap. */
   resetBaseline(): void {
-    for (const i of this._tick30) { i.excitement = 0; i.shakeDecay = 0; i.nearestDx = undefined; }
-    for (const i of this._tick60) { i.excitement = 0; i.shakeDecay = 0; i.nearestDx = undefined; }
+    this._resetBucket(this._tick30);
+    this._resetBucket(this._tick60);
+  }
+
+  private _resetBucket(bucket: ReactiveInstance[]): void {
+    for (let i = 0; i < bucket.length; i++) {
+      const inst = bucket[i];
+      inst.excitement = 0;
+      inst.shakeDecay = 0;
+      inst.nearestDx = undefined;
+      if (inst.data !== undefined) {
+        const cfg = getReactiveKind(inst.kind);
+        if (cfg?.resetData) cfg.resetData(inst.data);
+      }
+    }
   }
 
   cleanup(): void {

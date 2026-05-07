@@ -49,6 +49,11 @@ export interface ReactiveKindConfig {
   layer: ReactiveLayer;
   /** Update at 60Hz (fixedUpdate) instead of default 30Hz (cosmeticStep). */
   highFrequency?: boolean;
+  /** Reset mutable runtime state stored in `inst.data` (e.g. dandelion's
+   *  burst phase). Called by `resetBaseline` on guest reconnect / loading→
+   *  playing edge so kinds with in-flight animations don't resume mid-state.
+   *  Optional: kinds whose `data` is config-only don't need this. */
+  resetData?: (data: unknown) => void;
 }
 
 /** Per-frame argument bundle passed from GameLoop.renderFrame to Renderer.
@@ -80,11 +85,17 @@ export type ReactiveDraw = (
 
 const _kinds = new Map<string, ReactiveKindConfig>();
 
-export function registerReactiveKind(name: string, opts: { draw: ReactiveDraw; layer: ReactiveLayer; highFrequency?: boolean }): void {
+export function registerReactiveKind(name: string, opts: {
+  draw: ReactiveDraw;
+  layer: ReactiveLayer;
+  highFrequency?: boolean;
+  resetData?: (data: unknown) => void;
+}): void {
   _kinds.set(name, {
     draw: opts.draw,
     layer: opts.layer,
     highFrequency: opts.highFrequency ?? false,
+    resetData: opts.resetData,
   });
 }
 
@@ -159,9 +170,15 @@ export function shouldFireBurst(instance: ReactiveInstance, prevShake: number): 
 export function excitementBend(instance: ReactiveInstance, signMul = 1): number {
   if (instance.excitement <= 0.01 || !instance.proximity) return 0;
   const radius = instance.proximity.radius;
-  // Fallback when no live player or directly aligned: use seed parity for a
-  // stable per-instance side so adjacent grass tufts don't all bend the same way.
-  const dxRaw = instance.nearestDx ?? ((instance.seed % 2 === 0) ? 1 : -1);
-  const norm = dxRaw < -radius ? -1 : dxRaw > radius ? 1 : dxRaw / radius;
+  if (instance.nearestDx !== undefined) {
+    const norm = instance.nearestDx < -radius ? -1
+      : instance.nearestDx > radius ? 1
+      : instance.nearestDx / radius;
+    return signMul * instance.excitement * instance.proximity.magnitude * norm;
+  }
+  // Fallback when no live player: pick a stable per-instance side from seed
+  // parity at full magnitude (norm = ±1) so adjacent decorations don't all
+  // bend the same way and the magnitude actually reads visually.
+  const norm = (instance.seed & 1) === 0 ? 1 : -1;
   return signMul * instance.excitement * instance.proximity.magnitude * norm;
 }

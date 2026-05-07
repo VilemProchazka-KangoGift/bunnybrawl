@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   registerReactiveKind, getReactiveKind, hasReactiveKind, _resetReactiveKindsForTest,
-  updateExcitement, applyShakeImpulse, decayShake, shouldFireBurst,
+  updateExcitement, applyShakeImpulse, decayShake, shouldFireBurst, excitementBend,
   type ReactiveInstance, type ReactiveKindConfig,
 } from '../reactiveDecorations';
 
@@ -124,5 +124,63 @@ describe('reactiveDecorations — burst trigger', () => {
     // prev < threshold uses strict less-than, so prev === threshold should not fire.
     const inst = makeInstance({ burst: { threshold: 0.95, particleKind: 'petal', count: 10 }, shakeDecay: 1 });
     expect(shouldFireBurst(inst, 0.95)).toBe(false);
+  });
+});
+
+describe('reactiveDecorations — excitementBend', () => {
+  it('returns 0 when excitement is at rest', () => {
+    const inst = makeInstance({
+      excitement: 0,
+      proximity: { radius: 30, mode: 'flee', magnitude: 10 },
+    });
+    expect(excitementBend(inst)).toBe(0);
+  });
+
+  it('returns 0 when proximity is undefined', () => {
+    const inst = makeInstance({ excitement: 0.5 });
+    expect(excitementBend(inst)).toBe(0);
+  });
+
+  it('scales by excitement × magnitude × normalized dx', () => {
+    const inst = makeInstance({
+      excitement: 1,
+      proximity: { radius: 30, mode: 'flee', magnitude: 10 },
+      nearestDx: 30, // exactly at radius — norm = 1
+    });
+    expect(excitementBend(inst)).toBeCloseTo(10, 5);
+  });
+
+  it('flips direction with signMul = -1 (lean toward player)', () => {
+    const inst = makeInstance({
+      excitement: 1,
+      proximity: { radius: 30, mode: 'lean', magnitude: 10 },
+      nearestDx: 30,
+    });
+    expect(excitementBend(inst, -1)).toBeCloseTo(-10, 5);
+  });
+
+  it('clamps |nearestDx| > radius to ±1', () => {
+    const inst = makeInstance({
+      excitement: 1,
+      proximity: { radius: 30, mode: 'flee', magnitude: 10 },
+      nearestDx: 999, // way beyond radius
+    });
+    expect(excitementBend(inst)).toBeCloseTo(10, 5);
+  });
+
+  it('seed-parity fallback uses full magnitude (norm = ±1), not 1/radius', () => {
+    // When nearestDx is undefined (no live player), the fallback must produce
+    // a visually meaningful bend, not ~0.5px. Even seed → +magnitude, odd → −magnitude.
+    const evenSeed = makeInstance({
+      excitement: 1, seed: 4,
+      proximity: { radius: 30, mode: 'flee', magnitude: 10 },
+      // nearestDx intentionally undefined
+    });
+    const oddSeed = makeInstance({
+      excitement: 1, seed: 5,
+      proximity: { radius: 30, mode: 'flee', magnitude: 10 },
+    });
+    expect(excitementBend(evenSeed)).toBeCloseTo(10, 5);
+    expect(excitementBend(oddSeed)).toBeCloseTo(-10, 5);
   });
 });

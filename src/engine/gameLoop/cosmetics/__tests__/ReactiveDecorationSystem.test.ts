@@ -172,6 +172,32 @@ describe('ReactiveDecorationSystem', () => {
     expect(emit).toHaveBeenCalledTimes(2);
   });
 
+  it('resetBaseline invokes resetData for kinds that registered one', () => {
+    _resetReactiveKindsForTest();
+    const reset = vi.fn((d: unknown) => { (d as { phase: number }).phase = -1; });
+    registerReactiveKind('test.stateful', {
+      draw: () => {}, layer: 'prePlayer', resetData: reset,
+    });
+    const sys = new ReactiveDecorationSystem(makeState({ phase: 'playing' }), makeArena(), () => {});
+    const i = inst({ kind: 'test.stateful', data: { phase: 5 } });
+    sys.setInstances([i]);
+    sys.resetBaseline();
+    expect(reset).toHaveBeenCalledWith(i.data);
+    expect((i.data as { phase: number }).phase).toBe(-1);
+  });
+
+  it('resetBaseline does not call resetData for kinds without inst.data', () => {
+    _resetReactiveKindsForTest();
+    const reset = vi.fn();
+    registerReactiveKind('test.stateless', {
+      draw: () => {}, layer: 'prePlayer', resetData: reset,
+    });
+    const sys = new ReactiveDecorationSystem(makeState({ phase: 'playing' }), makeArena(), () => {});
+    sys.setInstances([inst({ kind: 'test.stateless' })]); // no data field
+    sys.resetBaseline();
+    expect(reset).not.toHaveBeenCalled();
+  });
+
   it('resetBaseline zeros excitement, shakeDecay, and nearestDx without resetting windPhase', () => {
     const sys = new ReactiveDecorationSystem(makeState({ phase: 'playing' }), makeArena(), () => {});
     const i = inst({

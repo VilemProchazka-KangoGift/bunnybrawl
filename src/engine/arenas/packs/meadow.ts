@@ -261,6 +261,7 @@ const DANDELION_SEED_FLY_DURATION = 2.0;
 
 registerReactiveKind('meadow.dandelion', {
   layer: 'prePlayer',
+  resetData: (d) => { (d as DandelionData).phase = -1; },
   draw: (ctx, inst, _swayPhase, time, _dayPhase, _state) => {
     const data = inst.data as DandelionData;
     let phase = data.phase;
