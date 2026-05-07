@@ -35,7 +35,7 @@ import {
 import { setSpriteCacheScale } from './rendering/players';
 import { setHudScale } from './rendering/hud';
 import { applyRenderScaleToCanvas, getRenderScale } from './renderScale';
-import { Lighting, getLightMode } from './lighting';
+import { Lighting } from './lighting';
 import type { Light } from './lighting';
 import { getArenaLights } from './arenas/operations';
 import { getBrightness } from './lighting/brightness';
@@ -76,13 +76,11 @@ export interface RendererOptions {
   hudCanvas?: HTMLCanvasElement;
   bgNightCanvas?: HTMLCanvasElement;
   fgNightTint?: HTMLDivElement;
-  /** L2 emitter compositing — pass either lightCanvas (combined mode) or
-   *  the lightStaticCanvas + lightDynamicCanvas pair (split mode). The
-   *  bakeoff toggle (`?lmode=combined|split`) picks which set the renderer
-   *  drives; both can be wired and the unused set stays at opacity 0. */
+  /** L2 emitter compositing — single screen-blend DOM sibling above
+   *  fg-night-tint. Static catalog baked into an internal cache; dynamic
+   *  emitters stamped per frame. (Bakeoff vs a split static/dynamic
+   *  layout was a wash — see `perf-runs/l2-emitter-comparison/REPORT.md`.) */
   lightCanvas?: HTMLCanvasElement;
-  lightStaticCanvas?: HTMLCanvasElement;
-  lightDynamicCanvas?: HTMLCanvasElement;
 }
 
 /** Diagnostic flags tracking which rendering branches fired each frame. */
@@ -202,16 +200,11 @@ export class Renderer {
   private fgCanvas: HTMLCanvasElement;
   private hudCanvas: HTMLCanvasElement | null = null;
   private lighting: Lighting;
-  // L2 emitter compositing — picks one of these layouts based on getLightMode().
-  // combined: lightCanvas only (cache+dynamic on one DOM sibling)
-  // split:    lightStaticCanvas (baked once) + lightDynamicCanvas (per-frame)
+  // L2 emitter compositing — single screen-blend DOM sibling, static cache
+  // baked once at arena-load + dynamic stamps per frame.
   private _lightCanvas: HTMLCanvasElement | null = null;
   private _lightCtx: CanvasRenderingContext2D | null = null;
-  private _lightStaticCanvas: HTMLCanvasElement | null = null;
-  private _lightStaticCtx: CanvasRenderingContext2D | null = null;
-  private _lightDynamicCanvas: HTMLCanvasElement | null = null;
-  private _lightDynamicCtx: CanvasRenderingContext2D | null = null;
-  /** Internal cache for combined-mode (no DOM sibling for static). */
+  /** Static contribution baked once per arena; blitted onto lightCanvas each frame. */
   private _lightStaticCache: OffscreenCanvas | null = null;
   /** Per-frame buffer for dynamic emitters; cleared at top of renderFrame. */
   private _dynamicLights: Light[] = [];
@@ -320,14 +313,6 @@ export class Renderer {
       this._lightCanvas = opts.lightCanvas;
       this._lightCtx = opts.lightCanvas.getContext('2d')!;
     }
-    if (opts.lightStaticCanvas) {
-      this._lightStaticCanvas = opts.lightStaticCanvas;
-      this._lightStaticCtx = opts.lightStaticCanvas.getContext('2d')!;
-    }
-    if (opts.lightDynamicCanvas) {
-      this._lightDynamicCanvas = opts.lightDynamicCanvas;
-      this._lightDynamicCtx = opts.lightDynamicCanvas.getContext('2d')!;
-    }
 
     // Apply initial render scale to all canvases (sets backing-store dims + ctx transform)
     this._renderScale = getRenderScale();
@@ -355,12 +340,6 @@ export class Renderer {
     }
     if (this._lightCanvas && this._lightCtx) {
       applyRenderScaleToCanvas(this._lightCanvas, this._lightCtx, s);
-    }
-    if (this._lightStaticCanvas && this._lightStaticCtx) {
-      applyRenderScaleToCanvas(this._lightStaticCanvas, this._lightStaticCtx, s);
-    }
-    if (this._lightDynamicCanvas && this._lightDynamicCtx) {
-      applyRenderScaleToCanvas(this._lightDynamicCanvas, this._lightDynamicCtx, s);
     }
   }
 
@@ -548,7 +527,7 @@ export class Renderer {
     // opacity then drives the day↔night cross-fade per frame at ~0 GPU cost.
     this._bakeBgNightVariant();
     // L2 emitters: load the static catalog from the arena pack registry and
-    // bake into the appropriate light surface for the active ?lmode.
+    // bake into the light cache. Empty for arenas without a `lights` field.
     this.setArenaLights(getArenaLights(arena.id));
   }
 
@@ -597,29 +576,13 @@ export class Renderer {
 
   /** L2: register the static emitter catalog for the current arena. Called
    *  from renderBackground after the bg cache is built. Triggers a one-time
-   *  bake — combined-mode populates `_lightStaticCache`; split-mode bakes
-   *  directly onto `_lightStaticCanvas`. */
+   *  bake into an OffscreenCanvas, blitted onto lightCanvas each frame. */
   setArenaLights(lights: ReadonlyArray<Light>): void {
     this.lighting.emitters.setStaticLights(lights);
     this._bakeStaticEmitters();
   }
 
   private _bakeStaticEmitters(): void {
-    const mode = getLightMode();
-    if (mode === 'split') {
-      if (!this._lightStaticCanvas || !this._lightStaticCtx) return;
-      const w = this._lightStaticCanvas.width;
-      const h = this._lightStaticCanvas.height;
-      const ctx = this._lightStaticCtx;
-      ctx.save();
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.clearRect(0, 0, w, h);
-      ctx.restore();
-      this.lighting.emitters.bakeStatic(ctx);
-      return;
-    }
-    // combined mode: bake into an internal OffscreenCanvas, drawn each frame
-    // in `_compositeEmitters`. Lazy-create on first bake.
     if (!this._lightCanvas) return;
     const bw = this._lightCanvas.width;
     const bh = this._lightCanvas.height;
@@ -630,31 +593,14 @@ export class Renderer {
     cacheCtx.save();
     cacheCtx.setTransform(this._renderScale, 0, 0, this._renderScale, 0, 0);
     cacheCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    cacheCtx.restore();
-    cacheCtx.save();
-    cacheCtx.setTransform(this._renderScale, 0, 0, this._renderScale, 0, 0);
     this.lighting.emitters.bakeStatic(cacheCtx);
     cacheCtx.restore();
   }
 
-  /** L2 emitter compositing — runs once per frame in renderFrame. */
+  /** L2 emitter compositing — runs once per frame in renderFrame.
+   *  Clear → blit static cache → dynamic stamps + flicker overlay. */
   private _compositeEmitters(): void {
     if (!this.lighting.isEnabled()) return;
-    const mode = getLightMode();
-    if (mode === 'split') {
-      // Static is baked once on lightStaticCanvas; just paint dynamic layer.
-      const ctx = this._lightDynamicCtx;
-      const canvas = this._lightDynamicCanvas;
-      if (!ctx || !canvas) return;
-      ctx.save();
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.restore();
-      this.lighting.emitters.compositeDynamic(ctx);
-      this._driveLightOpacity();
-      return;
-    }
-    // combined mode: blit static cache + dynamic stamps onto one canvas.
     const ctx = this._lightCtx;
     const canvas = this._lightCanvas;
     if (!ctx || !canvas) return;
@@ -672,14 +618,9 @@ export class Renderer {
   /** Light layer opacity tracks bgNightOpacity — emitters fade in with night,
    *  invisible during the day. Browser compositor skips zero-opacity layers. */
   private _driveLightOpacity(): void {
+    if (!this._lightCanvas) return;
     const target = this.lighting.ambient.getBgNightOpacity();
-    if (this._lightCanvas) {
-      this._lastLightOpacity = setQuantizedOpacity(this._lightCanvas, target, this._lastLightOpacity);
-    } else if (this._lightStaticCanvas && this._lightDynamicCanvas) {
-      // Both static + dynamic share the same opacity — one cached value.
-      this._lastLightOpacity = setQuantizedOpacity(this._lightStaticCanvas, target, this._lastLightOpacity);
-      setQuantizedOpacity(this._lightDynamicCanvas, target, this._lastLightOpacity);
-    }
+    this._lastLightOpacity = setQuantizedOpacity(this._lightCanvas, target, this._lastLightOpacity);
   }
 
   /**
@@ -1329,9 +1270,8 @@ export class Renderer {
       if (this.lighting.isEnabled()) {
         this.lighting.ambient.composite(ctx);
       }
-      // L2 emitter composite — writes to lightCanvas (combined) or
-      // lightDynamicCanvas (split). Skipped silently when neither is wired
-      // (lobby/tests stay on the source-over ambient fallback only).
+      // L2 emitter composite — writes to lightCanvas. Skipped silently
+      // when not wired (lobby/tests stay on the source-over ambient fallback only).
       this._compositeEmitters();
 
       // Brightness slider: applied AFTER lighting so users can tune the whole

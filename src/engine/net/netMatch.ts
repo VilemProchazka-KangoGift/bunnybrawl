@@ -35,10 +35,8 @@ export interface NetMatchConfig {
   bgCanvas: HTMLCanvasElement;
   bgNightCanvas?: HTMLCanvasElement;
   fgNightTint?: HTMLDivElement;
-  /** L2 emitter compositing — both `?lmode` paths wired; renderer picks. */
+  /** L2 emitter compositing — single screen-blend DOM sibling. */
   lightCanvas?: HTMLCanvasElement;
-  lightStaticCanvas?: HTMLCanvasElement;
-  lightDynamicCanvas?: HTMLCanvasElement;
   fgCanvas: HTMLCanvasElement;
   hudCanvas?: HTMLCanvasElement;
   arena: Arena;
@@ -193,8 +191,6 @@ export class NetMatch {
       config.bgNightCanvas,
       config.fgNightTint,
       config.lightCanvas,
-      config.lightStaticCanvas,
-      config.lightDynamicCanvas,
     );
 
     if (this._isHost) {

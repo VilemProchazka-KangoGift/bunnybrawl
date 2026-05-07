@@ -59,7 +59,8 @@ test('perf profile run', async ({ page, context }) => {
   const url = `/?arena=${encodeURIComponent(arena)}`
     + `&bots=${encodeURIComponent(bots)}`
     + `&difficulty=${encodeURIComponent(difficulty)}`
-    + `&killLimit=999&debug=perffps`;
+    + `&killLimit=999&debug=perffps`
+    + (process.env.PERF_EXTRA_URL ?? '');
   await page.goto(url);
   await page.waitForFunction(() => window.__gameLoop?.getState()?.countdown === 0, undefined, { timeout: 15000 });
   expect(await page.evaluate(() => window.__perfTrace?.enabled)).toBe(true);

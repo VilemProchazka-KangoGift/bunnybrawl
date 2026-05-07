@@ -35,6 +35,3 @@ export interface Light {
   flickerAmplitude?: number;
 }
 
-/** Pick: combined = single light canvas; split = static + dynamic siblings.
- *  Switched at boot via `?lmode=combined|split` for the L2 perf bakeoff. */
-export type LightMode = 'combined' | 'split';

@@ -98,8 +98,6 @@ export class GameLoop {
     bgNightCanvas?: HTMLCanvasElement,
     fgNightTint?: HTMLDivElement,
     lightCanvas?: HTMLCanvasElement,
-    lightStaticCanvas?: HTMLCanvasElement,
-    lightDynamicCanvas?: HTMLCanvasElement,
   ) {
     this.onMatchEnd = onMatchEnd;
     this.keyboardManager = new KeyboardManager();
@@ -132,8 +130,6 @@ export class GameLoop {
       bgNightCanvas,
       fgNightTint,
       lightCanvas,
-      lightStaticCanvas,
-      lightDynamicCanvas,
     });
     this.renderer.setTimeLimit(settings.timeLimit);
 

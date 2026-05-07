@@ -26,9 +26,8 @@ export const subscribeLightingEnabled = emitter.subscribe;
 export const setLightingEnabled = emitter.set;
 export const initLighting = emitter.init;
 
-export type { PerfTier, RGB, Light, LightKind, Falloff, LightMode } from './types';
+export type { PerfTier, RGB, Light, LightKind, Falloff } from './types';
 export { AmbientPipeline } from './pipeline';
 export { EmitterPipeline } from './emitter';
 export { Lighting } from './orchestrator';
 export { lightStamp, effectiveIntensity, PHOTOSENSITIVITY_INTENSITY_CAP } from './lightStamp';
-export { getLightMode, subscribeLightMode, setLightMode, initLightMode } from './lightMode';

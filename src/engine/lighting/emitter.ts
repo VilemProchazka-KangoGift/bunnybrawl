@@ -7,16 +7,11 @@
 // etc.). Outputs: a sequence of `lightStamp` calls onto a caller-provided ctx
 // with `'lighter'` blend.
 //
-// Two compositing strategies, picked by Renderer based on `getLightMode()`:
-//   - combined: bake static once into an internal cache; per-frame draw is
-//     drawImage(cache) + dynamic stamps + flicker overlay on the static
-//     positions. ONE light DOM sibling.
-//   - split: bake static directly onto the static DOM canvas (one-time);
-//     per-frame draw is dynamic stamps + flicker overlay only. TWO light
-//     DOM siblings.
-//
-// EmitterPipeline itself is mode-agnostic — it owns the light catalog and
-// exposes `bakeStatic` + `compositeDynamic`. Renderer sequences them.
+// Bake static once into an internal cache, blit the cache onto the light
+// DOM sibling each frame, then stamp dynamic emitters + flicker overlays on
+// top. (Bakeoff vs a split static/dynamic layout was a wash — see
+// `perf-runs/l2-emitter-comparison/REPORT.md`.) EmitterPipeline owns the
+// catalog and exposes `bakeStatic` + `compositeDynamic`; Renderer sequences.
 
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../constants';
 import { isLightingEnabled } from './index';

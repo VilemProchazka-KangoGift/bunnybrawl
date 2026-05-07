@@ -55,22 +55,18 @@
   mix-blend-mode: multiply;
 }
 
-/* L2 emitter compositing layers — sit ABOVE fg-night-tint so additive light
+/* L2 emitter compositing — sits ABOVE fg-night-tint so additive light
    contributions punch through the multiply darkening. mix-blend-mode: screen
    is perceptually additive on dark base pixels (when torches matter visually)
    and a near-no-op on bright pixels. Opacity tracks bgNightOpacity so lights
    fade in with night and disappear during the day. */
-.light-canvas,
-.light-static-canvas,
-.light-dynamic-canvas {
+.light-canvas {
+  z-index: 5;
   pointer-events: none;
   opacity: 0;
   will-change: opacity;
   mix-blend-mode: screen;
 }
-.light-canvas        { z-index: 5; }   /* combined-mode sole sibling */
-.light-static-canvas { z-index: 5; }   /* split-mode static (baked once) */
-.light-dynamic-canvas{ z-index: 6; }   /* split-mode dynamic (per-frame) */
 
 .pause-overlay {
   position: absolute;
