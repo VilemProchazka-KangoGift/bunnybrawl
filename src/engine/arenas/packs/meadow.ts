@@ -191,7 +191,7 @@ function meadowTallGrass(x: number, y: number, count: number): ReactiveInstance 
     seed: Math.floor((x * 89 + y * 41) % 997),
     data: { count } satisfies TallGrassData,
     windAmp: 6,
-    proximity: { radius: 28, mode: 'lean', magnitude: 18 },
+    proximity: { radius: 36, mode: 'lean', magnitude: 30 },
     excitement: 0, shakeDecay: 0, bendValue: 0, bendVelocity: 0,
   };
 }
@@ -209,7 +209,7 @@ function meadowFern(x: number, y: number): ReactiveInstance {
     pos: { x, y }, kind: 'meadow.fern',
     seed: Math.floor((x * 79 + y * 37) % 997),
     windAmp: 7,
-    proximity: { radius: 28, mode: 'flee', magnitude: 14 },
+    proximity: { radius: 36, mode: 'lean', magnitude: 24 },
     excitement: 0, shakeDecay: 0, bendValue: 0, bendVelocity: 0,
   };
 }

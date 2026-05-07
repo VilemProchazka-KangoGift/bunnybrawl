@@ -136,15 +136,19 @@ export const SHAKE_DECAY_RATE = 7;
 // older "excitement × magnitude" position-based model, which under-reacted
 // to fast players (short contact time → low excitement → small bend).
 //
-// Tuning rationale (BEND_STIFFNESS=12, BEND_DAMPING=4.5):
-//  - Natural frequency ω = sqrt(stiffness) ≈ 3.46 rad/s → period ≈ 1.8s
-//  - Damping ratio ζ = damping / (2·sqrt(stiffness)) ≈ 0.65 (under-damped)
-//  - Settling time (5%) ≈ 3·1/ζω ≈ 1.3s — visibly springy but not bouncy
-//  - With dt up to 67ms (15Hz cosmetic stagger), Euler integration is stable
-//    (well below 2/sqrt(stiffness) ≈ 0.58s stability bound).
+// Tuning rationale (BEND_STIFFNESS=28, BEND_DAMPING=5):
+//  - Higher stiffness amplifies transient peaks: peak ≈ impulse/sqrt(k).
+//    Doubling k from 12→28 roughly 1.5× the kick on a fast pass while
+//    keeping equilibrium bend (= force/k) unchanged because the input force
+//    formula scales with k (`forceCoeff = k / REF`).
+//  - Damping ratio ζ = damping / (2·sqrt(k)) ≈ 0.47 — under-damped, with
+//    a hint of overshoot/oscillation that reads as "alive."
+//  - Period 2π/sqrt(k) ≈ 1.19s. Settling time (5%) ≈ 3/(ζω) ≈ 1.2s.
+//  - Stability bound at dt=1/15 (the cosmetic-stagger rate): dt < 2/sqrt(k)
+//    = 0.378s. We're at 0.067s — comfortable.
 
-const BEND_STIFFNESS = 12;
-const BEND_DAMPING = 4.5;
+const BEND_STIFFNESS = 28;
+const BEND_DAMPING = 5;
 
 /** Reference walking speed used to scale `proximity.magnitude` into a
  *  spring-input force. Equilibrium bend at this player speed equals
