@@ -36,6 +36,7 @@ import { setSpriteCacheScale } from './rendering/players';
 import { setHudScale } from './rendering/hud';
 import { applyRenderScaleToCanvas, getRenderScale } from './renderScale';
 import { LightingPipeline } from './lighting';
+import { getBrightness } from './lighting/brightness';
 import { getSlowDevice } from './perfFlags';
 import { perfTrace } from './perfTrace';
 
@@ -1015,9 +1016,29 @@ export class Renderer {
 
       // Lighting composite — multiplies the light buffer onto the fg ctx.
       // Sits inside the hitstop/screen-shake transform so lights ride the shake.
-      // No-op when ?lighting=off or in Part A (real impl lands in Part B).
       if (this.lighting.isEnabled()) {
         this.lighting.composite(ctx);
+      }
+
+      // Brightness slider: applied AFTER lighting so users can tune the whole
+      // composited frame. Skipped at value 1.0.
+      const brightness = getBrightness();
+      if (brightness !== 1.0) {
+        ctx.save();
+        if (brightness < 1.0) {
+          // Darken: multiply with rgb(b,b,b)
+          ctx.globalCompositeOperation = 'multiply';
+          const v = Math.round(brightness * 255);
+          ctx.fillStyle = `rgb(${v},${v},${v})`;
+          ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        } else {
+          // Brighten: lighter blend with white at intensity (brightness - 1)
+          ctx.globalCompositeOperation = 'lighter';
+          const v = Math.round((brightness - 1) * 255);
+          ctx.fillStyle = `rgb(${v},${v},${v})`;
+          ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        }
+        ctx.restore();
       }
 
       ctx.restore();
