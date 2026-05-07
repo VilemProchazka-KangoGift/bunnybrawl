@@ -691,7 +691,7 @@ export const meadow: ArenaPack = {
   // (lean), dandelion (excite-burst), butterflies + bees (flock motion) —
   // live in `buildReactiveDecorations`. Trade: bushes/flowers/mushrooms/
   // grass-tufts/fgBush/fgLeafCluster/fgWildflower lose their wind sway, but
-  // skip 50+ per-frame draw calls. See PR thread.
+  // skip 50+ per-frame draw calls.
   drawBackgroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => {
     const ground = arena.platforms[0];
     const y = ground.y;

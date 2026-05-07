@@ -240,6 +240,7 @@ export class GameLoop {
     audio.stopAllGameSounds();
     this.simulator.cleanup();
     this._cosmeticLead = 0;
+    this._cosmeticTick = 0;
     autoSlowDetect.stop();
     if (this._debugKeyHandler) {
       window.removeEventListener('keydown', this._debugKeyHandler);
@@ -359,6 +360,7 @@ export class GameLoop {
     this.simulator.initMatchSystem();
     this.resetCosmeticBaselines();
     this._cosmeticLead = 0;
+    this._cosmeticTick = 0;
   }
 
   /** Swap to a different arena in place. */
@@ -413,6 +415,7 @@ export class GameLoop {
     // Drain leftover cosmetic lead so the first cosmeticStep after new arena
     // load doesn't run against residual time from the prior arena.
     this._cosmeticLead = 0;
+    this._cosmeticTick = 0;
   }
 
   /** Get the renderer instance. */
@@ -738,6 +741,7 @@ export class GameLoop {
     if (phase === 'playing') {
       this.resetCosmeticBaselines();
       this._cosmeticLead = 0;
+      this._cosmeticTick = 0;
     }
   }
 
