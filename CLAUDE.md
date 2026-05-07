@@ -249,6 +249,7 @@ npx vite-node scripts/selfPlay.ts -- --episodes 5 --arena meadow --out data/run.
 - **Nav data tests** must call `registerArena()` with `navData` — `getArenaNav(id)` reads from the registry Map, not from the arena object.
 - **Coverage config** (`vitest.config.ts`) excludes `arenas/packs/**` and `characters/packs/**` — canvas drawing code, not meaningful to unit test.
 - **E2E online diagnostics** — `window.__netMatch.getStats()` for RTT/frame/snapshot stats. `?simLatency=80&simJitter=20` simulates network conditions. `?debug=net` shows overlay.
+- **Vitest CRLF churn on Windows** — `npm test` / `vitest run` rewrites snapshot files (`__snapshots__/*.snap`) with platform-native line endings. They show up in `git status` as modified but `git diff --shortstat` reports 0 line changes. Always check with `git diff --stat` before committing; if only LF→CRLF, revert via `git checkout -- <file>` to keep commits clean.
 
 ## Common Patterns
 
