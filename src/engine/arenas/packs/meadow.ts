@@ -146,6 +146,7 @@ import {
 
 import {
   registerReactiveKind,
+  createReactiveInstance,
   composeBend,
   type ReactiveInstance,
 } from '../../gameLoop/cosmetics/reactiveDecorations';
@@ -153,7 +154,7 @@ import {
 // ---- meadow.tree ----
 interface TreeData { size: number; }
 function meadowTree(x: number, y: number, size: number): ReactiveInstance {
-  return {
+  return createReactiveInstance({
     pos: { x, y },
     kind: 'meadow.tree',
     seed: Math.floor((x * 73 + y * 31) % 997),
@@ -161,11 +162,7 @@ function meadowTree(x: number, y: number, size: number): ReactiveInstance {
     windAmp: 3,
     shakeRadius: 80,
     burst: { threshold: 0.95, particleKind: 'leaf', count: 12 },
-    excitement: 0,
-    shakeDecay: 0,
-    bendValue: 0,
-    bendVelocity: 0,
-  };
+  });
 }
 registerReactiveKind('meadow.tree', {
   layer: 'prePlayer',
@@ -186,14 +183,13 @@ registerReactiveKind('meadow.tree', {
 // Bends at the tip (base anchored). Wind sway + push WITH passing player.
 interface TallGrassData { count: number; }
 function meadowTallGrass(x: number, y: number, count: number): ReactiveInstance {
-  return {
+  return createReactiveInstance({
     pos: { x, y }, kind: 'meadow.tallGrass',
     seed: Math.floor((x * 89 + y * 41) % 997),
     data: { count } satisfies TallGrassData,
     windAmp: 6,
     proximity: { radius: 36, mode: 'lean', magnitude: 30 },
-    excitement: 0, shakeDecay: 0, bendValue: 0, bendVelocity: 0,
-  };
+  });
 }
 registerReactiveKind('meadow.tallGrass', {
   layer: 'prePlayer',
@@ -205,13 +201,12 @@ registerReactiveKind('meadow.tallGrass', {
 
 // ---- meadow.fern ----
 function meadowFern(x: number, y: number): ReactiveInstance {
-  return {
+  return createReactiveInstance({
     pos: { x, y }, kind: 'meadow.fern',
     seed: Math.floor((x * 79 + y * 37) % 997),
     windAmp: 7,
     proximity: { radius: 36, mode: 'lean', magnitude: 24 },
-    excitement: 0, shakeDecay: 0, bendValue: 0, bendVelocity: 0,
-  };
+  });
 }
 registerReactiveKind('meadow.fern', {
   layer: 'prePlayer',
@@ -225,14 +220,13 @@ registerReactiveKind('meadow.fern', {
 // passing players (opposite sign to flee).
 interface HangingVineData { length: number; }
 function meadowHangingVine(x: number, y: number, length: number): ReactiveInstance {
-  return {
+  return createReactiveInstance({
     pos: { x, y }, kind: 'meadow.hangingVine',
     seed: Math.floor((x * 97 + y * 47) % 997),
     data: { length } satisfies HangingVineData,
     windAmp: 10,
     proximity: { radius: 36, mode: 'lean', magnitude: 30 },
-    excitement: 0, shakeDecay: 0, bendValue: 0, bendVelocity: 0,
-  };
+  });
 }
 registerReactiveKind('meadow.hangingVine', {
   layer: 'prePlayer',
@@ -248,13 +242,12 @@ registerReactiveKind('meadow.hangingVine', {
 // burst; the draw fn advances the phase ~1/60s per call.
 interface DandelionData { phase: number; }
 function meadowDandelion(x: number, y: number): ReactiveInstance {
-  return {
+  return createReactiveInstance({
     pos: { x, y }, kind: 'meadow.dandelion',
     seed: Math.floor((x * 113 + y * 61) % 997),
     data: { phase: -1 } satisfies DandelionData,
     proximity: { radius: 40, mode: 'excite', magnitude: 1 },
-    excitement: 0, shakeDecay: 0, bendValue: 0, bendVelocity: 0,
-  };
+  });
 }
 
 const DANDELION_BURST_TOTAL = 7.0;
@@ -346,12 +339,11 @@ registerReactiveKind('meadow.dandelion', {
 // proximity radius is large since flock motion shifts pos. The flock index
 // rides on `seed` — no separate data field needed.
 function meadowButterfly(idx: number): ReactiveInstance {
-  return {
+  return createReactiveInstance({
     pos: { x: 0, y: 0 }, kind: 'meadow.butterfly',
     seed: idx,
     proximity: { radius: 70, mode: 'flee', magnitude: 14 },
-    excitement: 0, shakeDecay: 0, bendValue: 0, bendVelocity: 0,
-  };
+  });
 }
 registerReactiveKind('meadow.butterfly', {
   layer: 'postPlayer',
@@ -363,12 +355,11 @@ registerReactiveKind('meadow.butterfly', {
 
 // ---- meadow.bee ----
 function meadowBeeCluster(idx: number): ReactiveInstance {
-  return {
+  return createReactiveInstance({
     pos: { x: BEE_CLUSTERS[idx].homeX, y: BEE_CLUSTERS[idx].homeY }, kind: 'meadow.bee',
     seed: idx,
     proximity: { radius: 110, mode: 'flee', magnitude: 28 },
-    excitement: 0, shakeDecay: 0, bendValue: 0, bendVelocity: 0,
-  };
+  });
 }
 registerReactiveKind('meadow.bee', {
   layer: 'postPlayer',

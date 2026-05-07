@@ -17,6 +17,7 @@ function inst(overrides: Partial<ReactiveInstance> = {}): ReactiveInstance {
     shakeDecay: 0,
     bendValue: 0,
     bendVelocity: 0,
+    bendCoeff: 0,
     ...overrides,
   };
 }

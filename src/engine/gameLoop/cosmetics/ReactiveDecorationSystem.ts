@@ -2,8 +2,9 @@
 import type { Arena, MatchState } from '../../types';
 import type { CosmeticSystem } from '../types';
 import { getSlowDevice } from '../../perfFlags';
+import { isLivePlayer } from '../../themes/utils';
 import {
-  applyShakeImpulse, bendForceFromPlayer, decayShake, getReactiveKind,
+  applyShakeImpulse, bendCoeffForProximity, decayShake, getReactiveKind,
   tickBendDynamics, updateExcitement,
   type ReactiveInstance, type ReactiveLayer,
 } from './reactiveDecorations';
@@ -67,6 +68,12 @@ export class ReactiveDecorationSystem implements CosmeticSystem {
         console.warn(`[ReactiveDecorationSystem] unknown kind '${inst.kind}'`);
         continue;
       }
+      // Hoist the per-instance scaling factor for the spring-damper input
+      // out of the per-frame inner loop. Recomputed here on every setInstances
+      // so a future "swap kind config" path picks up the new mode/magnitude.
+      inst.bendCoeff = inst.proximity
+        ? bendCoeffForProximity(inst.proximity.magnitude, inst.proximity.mode)
+        : 0;
       if (cfg.highFrequency) this._tick60.push(inst);
       else this._tick30.push(inst);
       if (cfg.layer === 'postPlayer') this._drawPost.push(inst);
@@ -173,11 +180,12 @@ export class ReactiveDecorationSystem implements CosmeticSystem {
       if (inst.proximity && !slow) {
         const r = inst.proximity.radius;
         const r2 = r * r;
+        const coeff = inst.bendCoeff;
         let nearestSq = Infinity;
         let force = 0;
         for (let pi = 0; pi < players.length; pi++) {
           const p = players[pi];
-          if (!p.active || p.state === 'splat' || p.state === 'respawning') continue;
+          if (!isLivePlayer(p)) continue;
           const px = p.x + p.width * 0.5;
           const py = p.y + p.height * 0.5;
           const dx = inst.pos.x - px;
@@ -186,7 +194,7 @@ export class ReactiveDecorationSystem implements CosmeticSystem {
           if (d2 < nearestSq) nearestSq = d2;
           if (d2 < r2) {
             const proximityFactor = 1 - Math.sqrt(d2) / r;
-            force += bendForceFromPlayer(p.vx, proximityFactor, inst.proximity.magnitude, inst.proximity.mode);
+            force += p.vx * proximityFactor * coeff;
           }
         }
         const nearestDist = nearestSq === Infinity ? Infinity : Math.sqrt(nearestSq);

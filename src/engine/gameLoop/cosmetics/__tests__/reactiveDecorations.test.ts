@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   registerReactiveKind, getReactiveKind, hasReactiveKind, _resetReactiveKindsForTest,
   updateExcitement, applyShakeImpulse, decayShake, shouldFireBurst, composeBend,
-  tickBendDynamics, bendForceFromPlayer,
+  tickBendDynamics, bendCoeffForProximity, createReactiveInstance,
   type ReactiveInstance, type ReactiveKindConfig,
 } from '../reactiveDecorations';
 
@@ -15,6 +15,7 @@ function makeInstance(overrides: Partial<ReactiveInstance> = {}): ReactiveInstan
     shakeDecay: 0,
     bendValue: 0,
     bendVelocity: 0,
+    bendCoeff: 0,
     ...overrides,
   };
 }
@@ -140,31 +141,25 @@ describe('reactiveDecorations — burst trigger', () => {
 });
 
 describe('reactiveDecorations — bend dynamics (spring-damper)', () => {
-  it('bendForceFromPlayer scales linearly with player vx and proximity factor', () => {
-    const slowWalk = bendForceFromPlayer(80, 1, 18, 'lean');
-    const run = bendForceFromPlayer(400, 1, 18, 'lean');
-    // Force is linear in vx, so run/slow ratio = 5x.
-    expect(run / slowWalk).toBeCloseTo(5, 5);
-    // And linear in proximity factor.
-    const halfProx = bendForceFromPlayer(80, 0.5, 18, 'lean');
-    expect(slowWalk / halfProx).toBeCloseTo(2, 5);
+  it('bendCoeffForProximity scales linearly with magnitude', () => {
+    expect(bendCoeffForProximity(36, 'lean') / bendCoeffForProximity(18, 'lean')).toBeCloseTo(2, 5);
   });
 
-  it('bendForceFromPlayer flips sign for mode=flee', () => {
-    expect(bendForceFromPlayer(200, 1, 18, 'lean')).toBeGreaterThan(0);
-    expect(bendForceFromPlayer(200, 1, 18, 'flee')).toBeLessThan(0);
+  it('bendCoeffForProximity flips sign for mode=flee', () => {
+    expect(bendCoeffForProximity(18, 'lean')).toBeGreaterThan(0);
+    expect(bendCoeffForProximity(18, 'flee')).toBeLessThan(0);
   });
 
-  it('bendForceFromPlayer returns 0 for mode=excite (pure excitement scalar — no bend coupling)', () => {
-    expect(bendForceFromPlayer(400, 1, 18, 'excite')).toBe(0);
+  it('bendCoeffForProximity returns 0 for mode=excite (pure excitement scalar — no bend coupling)', () => {
+    expect(bendCoeffForProximity(18, 'excite')).toBe(0);
   });
 
   it('tickBendDynamics with constant force converges to equilibrium = magnitude at vx=200', () => {
-    // The system is tuned so that a player at WALKING_SPEED_REF (200 px/s)
-    // with proximityFactor=1 produces a steady-state bend equal to magnitude.
+    // The system is tuned so a player at WALKING_SPEED_REF (200 px/s) with
+    // proximityFactor=1 produces a steady-state bend equal to magnitude.
+    // Force = vx × prox × bendCoeff, so we reproduce the system's inner-loop math here.
     const inst = makeInstance();
-    const force = bendForceFromPlayer(200, 1, 18, 'lean');
-    // Run long enough to reach equilibrium
+    const force = 200 * 1 * bendCoeffForProximity(18, 'lean');
     for (let i = 0; i < 200; i++) tickBendDynamics(inst, force, 1 / 60);
     expect(inst.bendValue).toBeCloseTo(18, 0);
   });
@@ -177,33 +172,53 @@ describe('reactiveDecorations — bend dynamics (spring-damper)', () => {
   });
 
   it('tickBendDynamics is stable at the cosmetic-tick rate (dt up to 67ms)', () => {
-    // System runs the 30Hz bucket at 15Hz with the cosmetic-stagger optimization
-    // → dt up to ~67ms. Verify integration doesn't blow up.
     const inst = makeInstance();
-    const force = bendForceFromPlayer(400, 1, 30, 'lean');
+    const force = 400 * 1 * bendCoeffForProximity(30, 'lean');
     for (let i = 0; i < 60; i++) tickBendDynamics(inst, force, 1 / 15);
-    expect(Math.abs(inst.bendValue)).toBeLessThan(200); // sanity — would be Infinity if unstable
+    expect(Math.abs(inst.bendValue)).toBeLessThan(200);
     expect(Number.isFinite(inst.bendValue)).toBe(true);
     expect(Number.isFinite(inst.bendVelocity)).toBe(true);
   });
 
   it('fast-pass impulse produces a peak that arrives AFTER the player exits', () => {
-    // Key user-facing property: a fast player passing briefly gives the bend
-    // a velocity kick. After the force ends, the spring is still catching up
-    // — bend continues to grow for a moment, then springs back. This is what
-    // the user wants ("running through visibly affects grass").
     const inst = makeInstance();
-    const force = bendForceFromPlayer(400, 1, 18, 'lean');
-    // Apply force for 5 ticks (~83ms — short fast pass through small zone)
+    const force = 400 * 1 * bendCoeffForProximity(18, 'lean');
     for (let i = 0; i < 5; i++) tickBendDynamics(inst, force, 1 / 60);
     const bendAtExit = inst.bendValue;
     const velAtExit = inst.bendVelocity;
-    // Player has exited the radius — no more force
     for (let i = 0; i < 5; i++) tickBendDynamics(inst, 0, 1 / 60);
-    // Bend continued past the exit value (momentum carried it further)
     expect(Math.abs(inst.bendValue)).toBeGreaterThan(Math.abs(bendAtExit));
-    // Velocity was non-zero at exit (justifies the carry)
     expect(Math.abs(velAtExit)).toBeGreaterThan(0);
+  });
+});
+
+describe('reactiveDecorations — createReactiveInstance', () => {
+  it('fills runtime-state defaults (excitement, shakeDecay, bendValue, bendVelocity, bendCoeff = 0)', () => {
+    const inst = createReactiveInstance({
+      pos: { x: 1, y: 2 },
+      kind: 'test.x',
+      seed: 7,
+      windAmp: 5,
+      proximity: { radius: 30, mode: 'lean', magnitude: 18 },
+    });
+    expect(inst.excitement).toBe(0);
+    expect(inst.shakeDecay).toBe(0);
+    expect(inst.bendValue).toBe(0);
+    expect(inst.bendVelocity).toBe(0);
+    expect(inst.bendCoeff).toBe(0);
+    expect(inst.pos).toEqual({ x: 1, y: 2 });
+    expect(inst.proximity?.magnitude).toBe(18);
+  });
+
+  it('preserves optional config fields when omitted', () => {
+    const inst = createReactiveInstance({
+      pos: { x: 0, y: 0 }, kind: 'test.x', seed: 0,
+    });
+    expect(inst.proximity).toBeUndefined();
+    expect(inst.shakeRadius).toBeUndefined();
+    expect(inst.burst).toBeUndefined();
+    expect(inst.windAmp).toBeUndefined();
+    expect(inst.data).toBeUndefined();
   });
 });
 

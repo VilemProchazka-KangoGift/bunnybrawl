@@ -45,6 +45,12 @@ export interface ReactiveInstance {
   /** Rate of change of bendValue (px/s). Carries momentum so a fast player
    *  pass kicks the decoration even after they've left the radius. */
   bendVelocity: number;
+  /** Cached per-instance scaling factor for the spring-damper input force —
+   *  populated by the system at `setInstances` time from the kind's mode +
+   *  magnitude. Force per (player × proximity) reduces to the single multiply
+   *  `force += player.vx × proxFactor × bendCoeff`, hoisting the mode branch
+   *  and magnitude scaling out of the per-frame inner loop. */
+  bendCoeff: number;
 }
 
 export interface ReactiveKindConfig {
@@ -85,6 +91,30 @@ export type ReactiveDraw = (
   dayPhase: number,
   state: import('../../types').MatchState,
 ) => void;
+
+/** Factory helper — fills runtime-state defaults so kind authors only
+ *  specify the static config (pos, kind, seed, data, windAmp, proximity,
+ *  shakeRadius, burst). The system overwrites `bendCoeff` at setInstances
+ *  time, so the zero default here is just a placeholder. */
+export function createReactiveInstance(opts: {
+  pos: { x: number; y: number };
+  kind: string;
+  seed: number;
+  data?: unknown;
+  windAmp?: number;
+  proximity?: ReactiveInstance['proximity'];
+  shakeRadius?: number;
+  burst?: ReactiveInstance['burst'];
+}): ReactiveInstance {
+  return {
+    ...opts,
+    excitement: 0,
+    shakeDecay: 0,
+    bendValue: 0,
+    bendVelocity: 0,
+    bendCoeff: 0,
+  };
+}
 
 // ---- Registry ----
 
@@ -182,24 +212,15 @@ export function tickBendDynamics(instance: ReactiveInstance, force: number, dt: 
   instance.bendValue += instance.bendVelocity * dt;
 }
 
-/** Convert `(playerVx, proximityFactor, magnitude, mode)` to a spring-input
- *  force scalar. Encapsulates the magnitude-to-stiffness scaling so kind
- *  authors can keep thinking in "px of bend" via `proximity.magnitude` while
- *  the system handles physics-correct units internally. */
-export function bendForceFromPlayer(
-  playerVx: number,
-  proximityFactor: number,
-  magnitude: number,
-  mode: ProximityMode,
-): number {
+/** Compute the per-instance `bendCoeff` cache from the kind's proximity
+ *  config. Called once at `setInstances` time. The hot-path inner loop then
+ *  reduces to `force += player.vx × proxFactor × bendCoeff` (one multiply,
+ *  no branch). Tuned so equilibrium bend at vx=WALKING_SPEED_REF, prox=1
+ *  equals `magnitude` — kind authors keep thinking in pixels. */
+export function bendCoeffForProximity(magnitude: number, mode: ProximityMode): number {
   if (mode === 'excite') return 0; // pure excitement scalar — no bend coupling
   const sign = mode === 'flee' ? -1 : 1;
-  // Tuned so equilibrium bend at vx=WALKING_SPEED_REF, prox=1 equals magnitude.
-  // Derivation: bend_eq = force / stiffness; we want bend_eq = magnitude when
-  // (vx, prox) = (REF, 1), so force_at_ref = magnitude * stiffness. Hence
-  // forceCoeff = stiffness / WALKING_SPEED_REF.
-  const forceCoeff = BEND_STIFFNESS / WALKING_SPEED_REF;
-  return sign * playerVx * proximityFactor * magnitude * forceCoeff;
+  return sign * magnitude * BEND_STIFFNESS / WALKING_SPEED_REF;
 }
 
 /** Apply a stomp impulse: if the stomp is within `shakeRadius`, set shakeDecay to 1. */
