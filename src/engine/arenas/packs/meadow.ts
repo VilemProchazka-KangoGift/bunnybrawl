@@ -143,6 +143,141 @@ import {
   drawStone, wavyDown, backWavyUp, leftWavy,
 } from '../../themes/drawPrimitives';
 
+// ============================================================================
+// Reactive decoration factories + draw fns
+// ============================================================================
+
+import {
+  registerReactiveKind,
+  type ReactiveInstance,
+} from '../../gameLoop/cosmetics/reactiveDecorations';
+
+// Per-instance custom data. WeakMaps so old instances are GC'd when
+// buildReactiveDecorations rebuilds them on switchArena.
+
+// ---- meadow.tree ----
+const _treeSize = new WeakMap<ReactiveInstance, number>();
+function meadowTree(x: number, y: number, size: number): ReactiveInstance {
+  const inst: ReactiveInstance = {
+    pos: { x, y },
+    kind: 'meadow.tree',
+    seed: Math.floor((x * 73 + y * 31) % 997),
+    windAmp: 5,
+    shakeRadius: 80,
+    burst: { threshold: 0.95, particleKind: 'leaf', count: 12 },
+    excitement: 0,
+    shakeDecay: 0,
+  };
+  _treeSize.set(inst, size);
+  return inst;
+}
+registerReactiveKind('meadow.tree', {
+  layer: 'background',
+  draw: (ctx, inst, swayPhase) => {
+    const size = _treeSize.get(inst) ?? 50;
+    // Tree leans with swayPhase + shakeDecay shudder.
+    const lean = swayPhase + (inst.shakeDecay > 0 ? Math.sin(inst.shakeDecay * 40) * inst.shakeDecay * 4 : 0);
+    ctx.save();
+    ctx.translate(inst.pos.x, inst.pos.y);
+    // 5px sway → ~0.05 rad tilt around base.
+    ctx.rotate(lean * 0.01);
+    drawTree(ctx, 0, 0, size);
+    ctx.restore();
+  },
+});
+
+// ---- meadow.bush ----
+const _bushSize = new WeakMap<ReactiveInstance, number>();
+function meadowBush(x: number, y: number, size: number): ReactiveInstance {
+  const inst: ReactiveInstance = {
+    pos: { x, y },
+    kind: 'meadow.bush',
+    seed: Math.floor((x * 53 + y * 19) % 997),
+    windAmp: 2,
+    excitement: 0,
+    shakeDecay: 0,
+  };
+  _bushSize.set(inst, size);
+  return inst;
+}
+registerReactiveKind('meadow.bush', {
+  layer: 'background',
+  draw: (ctx, inst, swayPhase) => {
+    const size = _bushSize.get(inst) ?? 25;
+    ctx.save();
+    ctx.translate(inst.pos.x + swayPhase * 0.5, inst.pos.y);
+    drawBush(ctx, 0, 0, size);
+    ctx.restore();
+  },
+});
+
+// ---- meadow.flower ----
+const _flowerColor = new WeakMap<ReactiveInstance, string>();
+function meadowFlower(x: number, y: number, color: string): ReactiveInstance {
+  const inst: ReactiveInstance = {
+    pos: { x, y },
+    kind: 'meadow.flower',
+    seed: Math.floor((x * 41 + y * 7) % 997),
+    windAmp: 1.5,
+    excitement: 0,
+    shakeDecay: 0,
+  };
+  _flowerColor.set(inst, color);
+  return inst;
+}
+registerReactiveKind('meadow.flower', {
+  layer: 'background',
+  draw: (ctx, inst, swayPhase) => {
+    const color = _flowerColor.get(inst) ?? '#FFD700';
+    ctx.save();
+    ctx.translate(inst.pos.x + swayPhase, inst.pos.y);
+    drawFlower(ctx, 0, 0, color);
+    ctx.restore();
+  },
+});
+
+// ---- meadow.mushroom ----
+function meadowMushroom(x: number, y: number): ReactiveInstance {
+  return {
+    pos: { x, y },
+    kind: 'meadow.mushroom',
+    seed: Math.floor((x * 29 + y * 11) % 997),
+    windAmp: 1, // small wobble only
+    excitement: 0,
+    shakeDecay: 0,
+  };
+}
+registerReactiveKind('meadow.mushroom', {
+  layer: 'background',
+  draw: (ctx, inst, swayPhase) => {
+    ctx.save();
+    ctx.translate(inst.pos.x + swayPhase * 0.3, inst.pos.y);
+    drawMushroom(ctx, 0, 0);
+    ctx.restore();
+  },
+});
+
+// ---- meadow.grassTuft ----
+function meadowGrassTuft(x: number, y: number): ReactiveInstance {
+  return {
+    pos: { x, y },
+    kind: 'meadow.grassTuft',
+    seed: Math.floor((x * 17 + y * 13) % 997),
+    windAmp: 2,
+    excitement: 0,
+    shakeDecay: 0,
+  };
+}
+registerReactiveKind('meadow.grassTuft', {
+  layer: 'background',
+  draw: (ctx, inst, swayPhase) => {
+    ctx.save();
+    ctx.translate(inst.pos.x + swayPhase, inst.pos.y);
+    drawGrassTuft(ctx, 0, 0);
+    ctx.restore();
+  },
+});
+
 // Shared decoration data — hoisted so we don't realloc per bake.
 const FOREST_TREE_POSITIONS = [
   0, 530, 30, 510, 55, 530, 80, 495, 110, 525, 140, 500,
@@ -426,48 +561,55 @@ export const meadow: ArenaPack = {
     ctx.fill();
   },
 
-  drawBackgroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => {
+  drawBackgroundNature: (_ctx: CanvasRenderingContext2D, _arena: Arena) => {
+    // All meadow background-nature decorations migrated to buildReactiveDecorations.
+  },
+
+  buildReactiveDecorations: (arena: Arena) => {
     const ground = arena.platforms[0];
     const y = ground.y;
+    const out: ReactiveInstance[] = [];
 
-    // Trees
-    drawTree(ctx, 60, y, 50);
-    drawTree(ctx, 620, y, 60);
-    drawTree(ctx, 1180, y, 45);
+    // Trees (was drawBackgroundNature lines 433-436)
+    out.push(meadowTree(60, y, 50));
+    out.push(meadowTree(620, y, 60));
+    out.push(meadowTree(1180, y, 45));
 
-    // Bushes
-    drawBush(ctx, 200, y, 30);
-    drawBush(ctx, 450, y, 22);
-    drawBush(ctx, 700, y, 28);
-    drawBush(ctx, 950, y, 25);
-    drawBush(ctx, 1100, y, 20);
+    // Bushes (was drawBackgroundNature lines 438-443)
+    out.push(meadowBush(200, y, 30));
+    out.push(meadowBush(450, y, 22));
+    out.push(meadowBush(700, y, 28));
+    out.push(meadowBush(950, y, 25));
+    out.push(meadowBush(1100, y, 20));
 
-    // Flowers
+    // Flowers (was drawBackgroundNature lines 446-450)
     const flowerPositions = [150, 280, 420, 500, 580, 750, 930, 980, 1050, 1200];
     for (const fx of flowerPositions) {
       const color = FLOWER_COLORS[Math.floor(fx * 0.01) % FLOWER_COLORS.length];
-      drawFlower(ctx, fx, y, color);
+      out.push(meadowFlower(fx, y, color));
     }
 
-    // Mushrooms (avoid stump positions at x=340, 440, 800, 860)
-    drawMushroom(ctx, 240, y);
-    drawMushroom(ctx, 720, y);
+    // Mushrooms (was drawBackgroundNature lines 453-454)
+    out.push(meadowMushroom(240, y));
+    out.push(meadowMushroom(720, y));
 
-    // Nature on floating platforms (exclude small obstacle platforms)
+    // Floating-platform decorations (was drawBackgroundNature lines 457-470)
     const floats = getFloatingPlatforms(arena.platforms);
     for (const plat of floats) {
       const mid = plat.x + plat.width / 2;
       if (plat.width > 180) {
-        drawBush(ctx, mid - 30, plat.y, 15);
-        drawFlower(ctx, plat.x + 20, plat.y, '#FFD700');
-        drawFlower(ctx, plat.x + plat.width - 25, plat.y, '#FF69B4');
-        drawGrassTuft(ctx, plat.x + 10, plat.y);
-        drawGrassTuft(ctx, plat.x + plat.width - 15, plat.y);
+        out.push(meadowBush(mid - 30, plat.y, 15));
+        out.push(meadowFlower(plat.x + 20, plat.y, '#FFD700'));
+        out.push(meadowFlower(plat.x + plat.width - 25, plat.y, '#FF69B4'));
+        out.push(meadowGrassTuft(plat.x + 10, plat.y));
+        out.push(meadowGrassTuft(plat.x + plat.width - 15, plat.y));
       } else {
-        drawFlower(ctx, mid - 10, plat.y, '#DDA0DD');
-        drawGrassTuft(ctx, plat.x + 8, plat.y);
+        out.push(meadowFlower(mid - 10, plat.y, '#DDA0DD'));
+        out.push(meadowGrassTuft(plat.x + 8, plat.y));
       }
     }
+
+    return out;
   },
 
   drawForegroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => {
