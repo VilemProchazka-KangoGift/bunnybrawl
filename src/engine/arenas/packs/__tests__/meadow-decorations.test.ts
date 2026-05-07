@@ -50,10 +50,10 @@ describe('meadow — buildReactiveDecorations', () => {
 
   it('butterflies + bees register as foreground + highFrequency', () => {
     const butterfly = getReactiveKind('meadow.butterfly');
-    expect(butterfly?.layer).toBe('foreground');
+    expect(butterfly?.layer).toBe('postPlayer');
     expect(butterfly?.highFrequency).toBe(true);
     const bee = getReactiveKind('meadow.bee');
-    expect(bee?.layer).toBe('foreground');
+    expect(bee?.layer).toBe('postPlayer');
     expect(bee?.highFrequency).toBe(true);
   });
 

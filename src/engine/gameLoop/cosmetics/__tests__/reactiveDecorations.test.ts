@@ -21,21 +21,21 @@ describe('reactiveDecorations — kind registry', () => {
 
   it('registers and retrieves a kind', () => {
     const draw = () => {};
-    registerReactiveKind('test.foo', { draw, layer: 'background' });
+    registerReactiveKind('test.foo', { draw, layer: 'prePlayer' });
     expect(hasReactiveKind('test.foo')).toBe(true);
     const cfg = getReactiveKind('test.foo');
     expect(cfg?.draw).toBe(draw);
-    expect(cfg?.layer).toBe('background');
+    expect(cfg?.layer).toBe('prePlayer');
     expect(cfg?.highFrequency).toBe(false); // default
   });
 
   it('overwrites on re-registration (test reload pattern)', () => {
     const a = () => {};
     const b = () => {};
-    registerReactiveKind('test.foo', { draw: a, layer: 'background' });
-    registerReactiveKind('test.foo', { draw: b, layer: 'foreground' });
+    registerReactiveKind('test.foo', { draw: a, layer: 'prePlayer' });
+    registerReactiveKind('test.foo', { draw: b, layer: 'postPlayer' });
     expect(getReactiveKind('test.foo')?.draw).toBe(b);
-    expect(getReactiveKind('test.foo')?.layer).toBe('foreground');
+    expect(getReactiveKind('test.foo')?.layer).toBe('postPlayer');
   });
 
   it('returns undefined for unknown kind', () => {
@@ -113,5 +113,16 @@ describe('reactiveDecorations — burst trigger', () => {
   it('does not fire when burst is undefined', () => {
     const inst = makeInstance({ shakeDecay: 1 });
     expect(shouldFireBurst(inst, 0)).toBe(false);
+  });
+
+  it('fires at exact threshold boundary (prev=threshold-ε, decay=threshold)', () => {
+    const inst = makeInstance({ burst: { threshold: 0.95, particleKind: 'petal', count: 10 }, shakeDecay: 0.95 });
+    expect(shouldFireBurst(inst, 0.949)).toBe(true);
+  });
+
+  it('does not fire when prev equals threshold exactly', () => {
+    // prev < threshold uses strict less-than, so prev === threshold should not fire.
+    const inst = makeInstance({ burst: { threshold: 0.95, particleKind: 'petal', count: 10 }, shakeDecay: 1 });
+    expect(shouldFireBurst(inst, 0.95)).toBe(false);
   });
 });

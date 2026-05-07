@@ -606,14 +606,7 @@ export class GameLoop {
       }
     }
     this.particleSystem.bakeToRenderer(this.renderer);
-    const reactive = {
-      instances: [
-        ...this.reactiveDecorationSystem.getInstances30Hz(),
-        ...this.reactiveDecorationSystem.getInstances60Hz(),
-      ],
-      windPhase: this.reactiveDecorationSystem.getWindPhase(),
-    };
-    this.renderer.renderFrame(state, arena, this.particleSystem.getParticles(), this._cosmeticLead, reactive);
+    this.renderer.renderFrame(state, arena, this.particleSystem.getParticles(), this._cosmeticLead, this._buildReactiveArg());
   }
 
   /** Capture a snapshot of all gameplay state for rollback. */
@@ -648,14 +641,7 @@ export class GameLoop {
 
     if (this.paused) {
       this.lastTime = currentTime;
-      const reactiveP = {
-        instances: [
-          ...this.reactiveDecorationSystem.getInstances30Hz(),
-          ...this.reactiveDecorationSystem.getInstances60Hz(),
-        ],
-        windPhase: this.reactiveDecorationSystem.getWindPhase(),
-      };
-      this.renderer.renderFrame(state, arena, this.particleSystem.getParticles(), 0, reactiveP);
+      this.renderer.renderFrame(state, arena, this.particleSystem.getParticles(), 0, this._buildReactiveArg());
       this.rafId = requestAnimationFrame(this.loop);
       return;
     }
@@ -704,16 +690,24 @@ export class GameLoop {
       this.renderer.setBotNavDebugStates(botStates);
     }
 
-    const reactive = {
-      instances: [
-        ...this.reactiveDecorationSystem.getInstances30Hz(),
-        ...this.reactiveDecorationSystem.getInstances60Hz(),
-      ],
-      windPhase: this.reactiveDecorationSystem.getWindPhase(),
-    };
-    this.renderer.renderFrame(state, arena, this.particleSystem.getParticles(), this._cosmeticLead, reactive);
+    this.renderer.renderFrame(state, arena, this.particleSystem.getParticles(), this._cosmeticLead, this._buildReactiveArg());
     this.rafId = requestAnimationFrame(this.loop);
   };
+
+  /** Build the per-frame reactive arg passed to renderFrame. The inner arrays
+   *  are stable references owned by the system (rebuilt only on `setInstances`)
+   *  — no per-frame element copy. */
+  private _buildReactiveArg(): {
+    prePlayer: ReadonlyArray<import('./cosmetics/reactiveDecorations').ReactiveInstance>;
+    postPlayer: ReadonlyArray<import('./cosmetics/reactiveDecorations').ReactiveInstance>;
+    windPhase: number;
+  } {
+    return {
+      prePlayer: this.reactiveDecorationSystem.getInstancesForLayer('prePlayer'),
+      postPlayer: this.reactiveDecorationSystem.getInstancesForLayer('postPlayer'),
+      windPhase: this.reactiveDecorationSystem.getWindPhase(),
+    };
+  }
 
   /** Run one fixed-timestep simulation tick. Public for rollback engine. */
   fixedUpdate(dt: number, networkInputs?: Map<string, InputState>): void {

@@ -1,6 +1,6 @@
 // src/engine/gameLoop/cosmetics/reactiveDecorations.ts
 
-export type ReactiveLayer = 'background' | 'foreground';
+export type ReactiveLayer = 'prePlayer' | 'postPlayer';
 
 export type ProximityMode = 'flee' | 'lean' | 'excite';
 
@@ -11,6 +11,10 @@ export interface ReactiveInstance {
   kind: string;
   /** Per-instance deterministic seed for sway-phase offset, jitter, etc. */
   seed: number;
+  /** Per-kind opaque payload — config + mutable state. Each kind's factory
+   *  stamps a typed object here; the corresponding draw fn casts on read.
+   *  Shape is private to the kind. Local-only — never snapshotted. */
+  data?: unknown;
 
   // ---- Static reactivity opts (set by factory at registration) ----
   /** Sway amplitude in pixels. 0 / undefined = no wind sway. */
@@ -41,7 +45,7 @@ export interface ReactiveInstance {
 export interface ReactiveKindConfig {
   /** Per-kind draw function. Receives current swayPhase / excitement / shake. */
   draw: ReactiveDraw;
-  /** Render slot — pre-player or post-player. Defaults to 'background'. */
+  /** Render slot — drawn before players (`prePlayer`) or after (`postPlayer`). */
   layer: ReactiveLayer;
   /** Update at 60Hz (fixedUpdate) instead of default 30Hz (cosmeticStep). */
   highFrequency?: boolean;

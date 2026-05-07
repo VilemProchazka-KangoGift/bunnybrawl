@@ -4,7 +4,7 @@ import type { CosmeticSystem } from '../types';
 import { getSlowDevice } from '../../perfFlags';
 import {
   applyShakeImpulse, decayShake, getReactiveKind, updateExcitement,
-  type ReactiveInstance,
+  type ReactiveInstance, type ReactiveLayer,
 } from './reactiveDecorations';
 
 /** Wind oscillator angular speed (rad/s). One cycle ≈ 10s. */
@@ -23,15 +23,24 @@ export type BurstEmitter = (
  * and 60Hz (per-kind opt-in) buckets so fast-moving creatures stay smooth.
  *
  * Renders in two slots — pre-player and post-player — to preserve the existing
- * z-ordering of butterflies/bees vs trees/dandelions.
+ * z-ordering of butterflies/bees vs trees/dandelions. Instances are pre-bucketed
+ * by both update frequency AND render layer, so the renderer iterates one
+ * already-filtered list per layer with no per-frame allocation or layer
+ * filtering.
  */
 export class ReactiveDecorationSystem implements CosmeticSystem {
   private state: MatchState;
   private arena: Arena;
   private burstEmit: BurstEmitter;
 
-  private _instances30: ReactiveInstance[] = [];
-  private _instances60: ReactiveInstance[] = [];
+  /** Update buckets — drive `_tickBucket` at the kind's chosen frequency. */
+  private _tick30: ReactiveInstance[] = [];
+  private _tick60: ReactiveInstance[] = [];
+  /** Render buckets — concatenated by layer, exposed read-only to the renderer.
+   *  Combines 30Hz + 60Hz instances of the same layer in one stable array, so
+   *  per-frame consumers don't allocate or filter. */
+  private _drawPre: ReactiveInstance[] = [];
+  private _drawPost: ReactiveInstance[] = [];
   private _windPhase = 0;
 
   constructor(state: MatchState, arena: Arena, burstEmit: BurstEmitter) {
@@ -44,59 +53,74 @@ export class ReactiveDecorationSystem implements CosmeticSystem {
     // No-op: instances are populated via setInstances() at arena-load time.
   }
 
-  /** Replace the instance list. Buckets by registered kind frequency.
-   *  Unknown kinds (no registration) are dropped with a warning. */
+  /** Replace the instance list. Pre-buckets by both render layer AND update
+   *  frequency. Unknown kinds (no registration) are dropped with a warning. */
   setInstances(instances: ReactiveInstance[]): void {
-    this._instances30.length = 0;
-    this._instances60.length = 0;
+    this._tick30.length = 0;
+    this._tick60.length = 0;
+    this._drawPre.length = 0;
+    this._drawPost.length = 0;
     for (const inst of instances) {
       const cfg = getReactiveKind(inst.kind);
       if (!cfg) {
         console.warn(`[ReactiveDecorationSystem] unknown kind '${inst.kind}'`);
         continue;
       }
-      if (cfg.highFrequency) this._instances60.push(inst);
-      else this._instances30.push(inst);
+      if (cfg.highFrequency) this._tick60.push(inst);
+      else this._tick30.push(inst);
+      if (cfg.layer === 'postPlayer') this._drawPost.push(inst);
+      else this._drawPre.push(inst);
     }
   }
 
-  /** All 30Hz-bucketed instances. For Renderer use. */
-  getInstances30Hz(): ReadonlyArray<ReactiveInstance> { return this._instances30; }
-  /** All 60Hz-bucketed instances. For Renderer use. */
-  getInstances60Hz(): ReadonlyArray<ReactiveInstance> { return this._instances60; }
+  /** Layer-bucketed instances for Renderer use. No per-frame allocation —
+   *  these arrays are stable references rebuilt only on `setInstances`. */
+  getInstancesForLayer(layer: ReactiveLayer): ReadonlyArray<ReactiveInstance> {
+    return layer === 'postPlayer' ? this._drawPost : this._drawPre;
+  }
   /** Current wind oscillator phase. For Renderer (passed to draw fns). */
   getWindPhase(): number { return this._windPhase; }
 
   /** 60Hz tick. Called from GameLoop.fixedUpdate. Advances windPhase, runs the
-   *  60Hz instance bucket. */
+   *  60Hz instance bucket. Skips windPhase advancement during loading so trees
+   *  start at sway=0 the moment the match begins. */
   fixedUpdate(dt: number): void {
-    this._windPhase += WIND_SPEED * dt;
-    if (this._instances60.length > 0) this._tickBucket(this._instances60, dt);
+    if (this.state.phase !== 'loading') this._windPhase += WIND_SPEED * dt;
+    if (this._tick60.length > 0) this._tickBucket(this._tick60, dt);
   }
 
   /** 30Hz tick. Called from GameLoop.cosmeticStep. Runs the 30Hz instance bucket. */
   cosmeticUpdate(dt: number): void {
-    if (this._instances30.length > 0) this._tickBucket(this._instances30, dt);
+    if (this._tick30.length > 0) this._tickBucket(this._tick30, dt);
   }
 
   /** Apply a stomp impulse to all instances within their shakeRadius. Fires
    *  bursts immediately for any instance whose shakeDecay crosses its burst
-   *  threshold on the rising edge. */
+   *  threshold on the rising edge.
+   *
+   *  Safe by construction during host-authority resimulation: the only call
+   *  site is `PlayerTransitionSystem.cosmeticUpdate`, which runs from
+   *  `cosmeticStep` — and `cosmeticStep` is never called during resim
+   *  (gameplay re-runs go through `Simulator.fixedUpdate` only). Pinned by
+   *  the resimulation-safety test in `__tests__/ReactiveDecorationSystem`. */
   applyStompImpulse(stompX: number, stompY: number): void {
-    this._applyImpulseToBucket(this._instances30, stompX, stompY);
-    this._applyImpulseToBucket(this._instances60, stompX, stompY);
+    this._applyImpulseToBucket(this._tick30, stompX, stompY);
+    this._applyImpulseToBucket(this._tick60, stompX, stompY);
   }
 
   /** Re-prime per-instance state (zeros excitement / shakeDecay). Used on
-   *  guest reconnect or loading→playing edge to avoid stale carryover. */
+   *  guest reconnect or loading→playing edge to avoid stale carryover. Does
+   *  NOT reset windPhase — that stays continuous so wind doesn't snap. */
   resetBaseline(): void {
-    for (const i of this._instances30) { i.excitement = 0; i.shakeDecay = 0; }
-    for (const i of this._instances60) { i.excitement = 0; i.shakeDecay = 0; }
+    for (const i of this._tick30) { i.excitement = 0; i.shakeDecay = 0; i.nearestDx = undefined; }
+    for (const i of this._tick60) { i.excitement = 0; i.shakeDecay = 0; i.nearestDx = undefined; }
   }
 
   cleanup(): void {
-    this._instances30.length = 0;
-    this._instances60.length = 0;
+    this._tick30.length = 0;
+    this._tick60.length = 0;
+    this._drawPre.length = 0;
+    this._drawPost.length = 0;
     this._windPhase = 0;
   }
 

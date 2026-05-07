@@ -167,25 +167,24 @@ function _excitementBend(inst: ReactiveInstance, signMul = 1): number {
 }
 
 // ---- meadow.tree ----
-const _treeSize = new WeakMap<ReactiveInstance, number>();
+interface TreeData { size: number; }
 function meadowTree(x: number, y: number, size: number): ReactiveInstance {
-  const inst: ReactiveInstance = {
+  return {
     pos: { x, y },
     kind: 'meadow.tree',
     seed: Math.floor((x * 73 + y * 31) % 997),
+    data: { size } satisfies TreeData,
     windAmp: 9,
     shakeRadius: 80,
     burst: { threshold: 0.95, particleKind: 'leaf', count: 12 },
     excitement: 0,
     shakeDecay: 0,
   };
-  _treeSize.set(inst, size);
-  return inst;
 }
 registerReactiveKind('meadow.tree', {
-  layer: 'background',
+  layer: 'prePlayer',
   draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
-    const size = _treeSize.get(inst) ?? 50;
+    const { size } = inst.data as TreeData;
     // Tree leans with swayPhase + shakeDecay shudder.
     const lean = swayPhase + (inst.shakeDecay > 0 ? Math.sin(inst.shakeDecay * 40) * inst.shakeDecay * 4 : 0);
     ctx.save();
@@ -199,22 +198,21 @@ registerReactiveKind('meadow.tree', {
 
 // ---- meadow.tallGrass ----
 // Bends at the tip (base anchored). Wind sway + flee-from-player when stepped on.
-const _tallGrassCount = new WeakMap<ReactiveInstance, number>();
+interface TallGrassData { count: number; }
 function meadowTallGrass(x: number, y: number, count: number): ReactiveInstance {
-  const inst: ReactiveInstance = {
+  return {
     pos: { x, y }, kind: 'meadow.tallGrass',
     seed: Math.floor((x * 89 + y * 41) % 997),
+    data: { count } satisfies TallGrassData,
     windAmp: 8,
     proximity: { radius: 28, mode: 'flee', magnitude: 18 },
     excitement: 0, shakeDecay: 0,
   };
-  _tallGrassCount.set(inst, count);
-  return inst;
 }
 registerReactiveKind('meadow.tallGrass', {
-  layer: 'background',
+  layer: 'prePlayer',
   draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
-    const count = _tallGrassCount.get(inst) ?? 7;
+    const { count } = inst.data as TallGrassData;
     drawTallGrass(ctx, inst.pos.x, inst.pos.y, count, undefined, undefined, swayPhase + _excitementBend(inst));
   },
 });
@@ -230,7 +228,7 @@ function meadowFern(x: number, y: number): ReactiveInstance {
   };
 }
 registerReactiveKind('meadow.fern', {
-  layer: 'background',
+  layer: 'prePlayer',
   draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
     drawFern(ctx, inst.pos.x, inst.pos.y, undefined, swayPhase + _excitementBend(inst));
   },
@@ -239,36 +237,36 @@ registerReactiveKind('meadow.fern', {
 // ---- meadow.hangingVine ----
 // Bends at the bottom tip (top anchored to platform). Wind sway + lean toward
 // passing players (opposite sign to flee).
-const _vineLength = new WeakMap<ReactiveInstance, number>();
+interface HangingVineData { length: number; }
 function meadowHangingVine(x: number, y: number, length: number): ReactiveInstance {
-  const inst: ReactiveInstance = {
+  return {
     pos: { x, y }, kind: 'meadow.hangingVine',
     seed: Math.floor((x * 97 + y * 47) % 997),
+    data: { length } satisfies HangingVineData,
     windAmp: 10,
     proximity: { radius: 36, mode: 'lean', magnitude: 14 },
     excitement: 0, shakeDecay: 0,
   };
-  _vineLength.set(inst, length);
-  return inst;
 }
 registerReactiveKind('meadow.hangingVine', {
-  layer: 'background',
+  layer: 'prePlayer',
   draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
-    const length = _vineLength.get(inst) ?? 20;
+    const { length } = inst.data as HangingVineData;
     // signMul = -1 so vine leans TOWARD the player (opposite of grass flee).
     drawHangingVine(ctx, inst.pos.x, inst.pos.y, length, swayPhase + _excitementBend(inst, -1));
   },
 });
 
 // ---- meadow.dandelion ----
-// Per-instance burst phase: -1 = idle (full puff), >= 0 = burst-elapsed seconds.
-// Stored in a side-channel WeakMap keyed by the instance.
-const _dandelionPhase = new WeakMap<ReactiveInstance, number>();
-
+// Mutable runtime burst phase lives directly on inst.data. -1 = idle (full
+// puff), >= 0 = burst-elapsed seconds. Excitement rising past 0.5 starts a
+// burst; the draw fn advances the phase ~1/60s per call.
+interface DandelionData { phase: number; }
 function meadowDandelion(x: number, y: number): ReactiveInstance {
   return {
     pos: { x, y }, kind: 'meadow.dandelion',
     seed: Math.floor((x * 113 + y * 61) % 997),
+    data: { phase: -1 } satisfies DandelionData,
     proximity: { radius: 40, mode: 'excite', magnitude: 1 },
     excitement: 0, shakeDecay: 0,
   };
@@ -278,17 +276,16 @@ const DANDELION_BURST_TOTAL = 7.0;
 const DANDELION_SEED_FLY_DURATION = 2.0;
 
 registerReactiveKind('meadow.dandelion', {
-  layer: 'background',
+  layer: 'prePlayer',
   draw: (ctx, inst, _swayPhase, time, _dayPhase, _state) => {
-    // Excitement rising → if we were idle, start a burst.
-    let phase = _dandelionPhase.get(inst) ?? -1;
+    const data = inst.data as DandelionData;
+    let phase = data.phase;
     if (phase < 0 && inst.excitement > 0.5) phase = 0;
     if (phase >= 0) {
-      // Advance phase by ~1/60s per call (renderer runs at ~60Hz).
       phase += 1 / 60;
       if (phase >= DANDELION_BURST_TOTAL) phase = -1;
     }
-    _dandelionPhase.set(inst, phase);
+    data.phase = phase;
 
     const x = inst.pos.x;
     const gy = inst.pos.y;
@@ -359,46 +356,39 @@ registerReactiveKind('meadow.dandelion', {
 });
 
 // ---- meadow.butterfly ----
-const _butterflyIndex = new WeakMap<ReactiveInstance, number>();
+// Position is dynamic (computed in draw via time), pos here is a dummy anchor;
+// proximity radius is large since flock motion shifts pos. The flock index
+// rides on `seed` — no separate data field needed.
 function meadowButterfly(idx: number): ReactiveInstance {
-  // Position is dynamic (computed in draw via time), pos here is just a
-  // dummy anchor; proximity radius is large since flock motion shifts pos.
-  const inst: ReactiveInstance = {
+  return {
     pos: { x: 0, y: 0 }, kind: 'meadow.butterfly',
     seed: idx,
     proximity: { radius: 70, mode: 'flee', magnitude: 14 },
     excitement: 0, shakeDecay: 0,
   };
-  _butterflyIndex.set(inst, idx);
-  return inst;
 }
 registerReactiveKind('meadow.butterfly', {
-  layer: 'foreground',
+  layer: 'postPlayer',
   highFrequency: true, // flock motion needs 60Hz
   draw: (ctx, inst, _swayPhase, time, _dayPhase, state) => {
-    const i = _butterflyIndex.get(inst) ?? 0;
-    drawButterfly(ctx, i, time, state.players);
+    drawButterfly(ctx, inst.seed, time, state.players);
   },
 });
 
 // ---- meadow.bee ----
-const _beeClusterIndex = new WeakMap<ReactiveInstance, number>();
 function meadowBeeCluster(idx: number): ReactiveInstance {
-  const inst: ReactiveInstance = {
+  return {
     pos: { x: BEE_CLUSTERS[idx].homeX, y: BEE_CLUSTERS[idx].homeY }, kind: 'meadow.bee',
     seed: idx,
     proximity: { radius: 110, mode: 'flee', magnitude: 28 },
     excitement: 0, shakeDecay: 0,
   };
-  _beeClusterIndex.set(inst, idx);
-  return inst;
 }
 registerReactiveKind('meadow.bee', {
-  layer: 'foreground',
+  layer: 'postPlayer',
   highFrequency: true,
   draw: (ctx, inst, _swayPhase, time, _dayPhase, state) => {
-    const ci = _beeClusterIndex.get(inst) ?? 0;
-    drawBeeCluster(ctx, ci, time, state.players);
+    drawBeeCluster(ctx, inst.seed, time, state.players);
   },
 });
 

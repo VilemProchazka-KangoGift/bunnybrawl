@@ -489,15 +489,13 @@ export class Renderer {
     this._fgNatureCacheArena = themeArena;
   }
 
-  /** Draw all reactive decoration instances belonging to the given layer.
-   *  Iterates the full instance array (30Hz + 60Hz are unified here — bucketing
-   *  only affects update timing, not render). The layer flag filters per-instance
-   *  so each slot call only draws the right subset. */
+  /** Draw the reactive decoration instances for one render layer. The caller
+   *  passes a pre-bucketed list (system filters by layer at `setInstances`
+   *  time) so this loop has no per-instance layer check or array allocation. */
   private _drawReactiveLayer(
     ctx: CanvasRenderingContext2D,
     instances: ReadonlyArray<import('./gameLoop/cosmetics/reactiveDecorations').ReactiveInstance>,
     windPhase: number,
-    layer: 'background' | 'foreground',
     matchState: MatchState,
   ): void {
     if (!instances || instances.length === 0) return;
@@ -507,7 +505,7 @@ export class Renderer {
     for (let i = 0; i < instances.length; i++) {
       const inst = instances[i];
       const cfg = getReactiveKind(inst.kind);
-      if (!cfg || cfg.layer !== layer) continue;
+      if (!cfg) continue;
       const swayPhase = slow || !inst.windAmp
         ? 0
         : Math.sin(windPhase + inst.seed * 0.7) * inst.windAmp;
@@ -652,7 +650,8 @@ export class Renderer {
     particles: Particle[],
     cosmeticLead = 0,
     reactive?: {
-      instances: ReadonlyArray<import('./gameLoop/cosmetics/reactiveDecorations').ReactiveInstance>;
+      prePlayer: ReadonlyArray<import('./gameLoop/cosmetics/reactiveDecorations').ReactiveInstance>;
+      postPlayer: ReadonlyArray<import('./gameLoop/cosmetics/reactiveDecorations').ReactiveInstance>;
       windPhase: number;
     },
   ): void {
@@ -988,9 +987,9 @@ export class Renderer {
         this._drawForegroundNatureDirect(ctx, this.originalArena ?? arena);
       }
 
-      // Reactive decorations — background (pre-player) layer.
+      // Reactive decorations — pre-player layer.
       if (reactive) {
-        this.withMirror(ctx, () => this._drawReactiveLayer(ctx, reactive.instances, reactive.windPhase, 'background', matchState));
+        this.withMirror(ctx, () => this._drawReactiveLayer(ctx, reactive.prePlayer, reactive.windPhase, matchState));
       }
 
       // Ghosts (drawn over foreground, semi-transparent)
@@ -1043,9 +1042,9 @@ export class Renderer {
         this.withMirror(ctx, () => this.theme.drawAnimatedForeground!(ctx, thA, matchState.timeElapsed, matchState.dayPhase, matchState));
       }
 
-      // Reactive decorations — foreground (post-player) layer.
+      // Reactive decorations — post-player layer.
       if (reactive) {
-        this.withMirror(ctx, () => this._drawReactiveLayer(ctx, reactive.instances, reactive.windPhase, 'foreground', matchState));
+        this.withMirror(ctx, () => this._drawReactiveLayer(ctx, reactive.postPlayer, reactive.windPhase, matchState));
       }
 
       if (!slow && this.theme.drawSceneTint) {
