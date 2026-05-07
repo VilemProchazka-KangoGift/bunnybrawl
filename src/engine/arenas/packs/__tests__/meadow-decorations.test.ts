@@ -1,8 +1,12 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { registerBuiltinArenas } from '../../builtin';
 import { getArenaPack } from '../../registry';
 import { getArena } from '../../operations';
 import { hasReactiveKind, getReactiveKind } from '../../../gameLoop/cosmetics';
+import { ReactiveDecorationSystem } from '../../../gameLoop/cosmetics/ReactiveDecorationSystem';
+import { makeState } from '../../../__tests__/testHelpers';
+
+vi.mock('../../../perfFlags', () => ({ getSlowDevice: () => false }));
 
 beforeAll(() => {
   registerBuiltinArenas();
@@ -55,6 +59,24 @@ describe('meadow — buildReactiveDecorations', () => {
     const bee = getReactiveKind('meadow.bee');
     expect(bee?.layer).toBe('postPlayer');
     expect(bee?.highFrequency).toBe(true);
+  });
+
+  it('system.resetBaseline() rewinds dandelion bursts to idle', () => {
+    // Pins the round-3 fix: on guest reconnect / loading→playing edge, in-
+    // flight dandelion seed-bursts must reset so reconnects don't show partial
+    // puffs. A future refactor that drops the resetData wiring (in
+    // GameLoop.resetCosmeticBaselines or in the meadow.dandelion registration)
+    // would silently regress without this test.
+    const pack = getArenaPack('meadow');
+    const arena = getArena('meadow');
+    const list = pack!.buildReactiveDecorations!(arena);
+    const sys = new ReactiveDecorationSystem(makeState({ phase: 'playing' }), arena, () => {});
+    sys.setInstances(list);
+    const dandelion = list.find((i) => i.kind === 'meadow.dandelion');
+    expect(dandelion).toBeDefined();
+    (dandelion!.data as { phase: number }).phase = 3.5; // mid-burst
+    sys.resetBaseline();
+    expect((dandelion!.data as { phase: number }).phase).toBe(-1);
   });
 
   it('renders without errors at multiple windPhase slices', () => {
