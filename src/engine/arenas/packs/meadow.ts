@@ -181,10 +181,6 @@ registerReactiveKind('meadow.tree', {
   },
 });
 
-// hangingVine, fern, tallGrass live in `decoration.*` shared kinds — see
-// `gameLoop/cosmetics/sharedDecorationKinds.ts`. Imported above as
-// `buildHangingVine` / `buildFern` / `buildTallGrass`.
-
 // ---- meadow.dandelion ----
 // Mutable runtime burst phase lives directly on inst.data. -1 = idle (full
 // puff), >= 0 = burst-elapsed seconds. Excitement rising past 0.5 starts a

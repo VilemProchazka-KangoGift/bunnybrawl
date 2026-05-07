@@ -84,9 +84,6 @@ registerReactiveKind('waterfall.tree', {
   },
 });
 
-// tallGrass, fern, hangingVine live in `decoration.*` shared kinds — see
-// `gameLoop/cosmetics/sharedDecorationKinds.ts`.
-
 // ---- waterfall.fgBush ----
 // Subtle proximity-lean — bushes are stiffer than vines, so a smaller magnitude.
 interface FgBushData { size: number; }

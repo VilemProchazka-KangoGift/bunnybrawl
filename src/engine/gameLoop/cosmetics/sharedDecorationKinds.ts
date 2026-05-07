@@ -21,7 +21,7 @@ import {
 
 // ---- decoration.hangingVine ----
 // Use cases: meadow, treetops, waterfall (rope-like hanging plants on platform undersides).
-export interface HangingVineData { length: number; }
+interface HangingVineData { length: number; }
 export function buildHangingVine(x: number, y: number, length: number): ReactiveInstance {
   return createReactiveInstance({
     pos: { x, y }, kind: 'decoration.hangingVine',
@@ -41,7 +41,7 @@ registerReactiveKind('decoration.hangingVine', {
 
 // ---- decoration.fern ----
 // Use cases: meadow, treetops, waterfall (ground/platform-edge ferns).
-export interface FernData { color?: string; }
+interface FernData { color?: string; }
 export function buildFern(x: number, y: number, color?: string): ReactiveInstance {
   return createReactiveInstance({
     pos: { x, y }, kind: 'decoration.fern',
@@ -54,14 +54,14 @@ export function buildFern(x: number, y: number, color?: string): ReactiveInstanc
 registerReactiveKind('decoration.fern', {
   layer: 'prePlayer',
   draw: (ctx, inst, swayPhase) => {
-    const data = inst.data as FernData | undefined;
-    drawFern(ctx, inst.pos.x, inst.pos.y, data?.color, composeBend(inst, swayPhase));
+    const { color } = inst.data as FernData;
+    drawFern(ctx, inst.pos.x, inst.pos.y, color, composeBend(inst, swayPhase));
   },
 });
 
 // ---- decoration.tallGrass ----
 // Use cases: meadow, waterfall (grass clumps with player parting).
-export interface TallGrassData { count: number; }
+interface TallGrassData { count: number; }
 export function buildTallGrass(x: number, y: number, count: number): ReactiveInstance {
   return createReactiveInstance({
     pos: { x, y }, kind: 'decoration.tallGrass',

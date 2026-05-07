@@ -24,6 +24,7 @@ const _squirrels: GroundCritterState[] = SQUIRRELS_CFG.map((cfg, i) => ({
 const _tickSquirrelDt = makeDtTracker();
 const TREETOPS_BUTTERFLY_HUES = [320, 60, 200, 290, 30, 160] as const;
 const TREETOPS_BUTTERFLY_COLORS = TREETOPS_BUTTERFLY_HUES.map(h => `hsl(${h},80%,65%)`);
+const TREETOPS_FERN_COLOR = '#2A6A2A';
 const TREETOPS_BEE_CLUSTERS = [
   { homeX: 280, homeY: 380, phase: 0 },
   { homeX: 940, homeY: 360, phase: 2.4 },
@@ -206,10 +207,6 @@ registerReactiveKind('treetops.tree', {
     ctx.restore();
   },
 });
-
-// hangingVine + fern live in `decoration.*` shared kinds — see
-// `gameLoop/cosmetics/sharedDecorationKinds.ts`. Treetops passes a darker
-// fern color ('#2A6A2A') via the third arg of buildFern.
 
 // ---- treetops.butterfly ----
 function treetopsButterfly(idx: number): ReactiveInstance {
@@ -530,10 +527,10 @@ export const treetops: ArenaPack = {
       out.push(buildHangingVine(plat.x + 10, plat.y + plat.height, 20 + i * 3));
       out.push(buildHangingVine(plat.x + plat.width - 10, plat.y + plat.height, 18 + i * 2));
       if (plat.width > 200) {
-        out.push(buildFern(plat.x + 15, plat.y, '#2A6A2A'));
-        out.push(buildFern(plat.x + plat.width - 15, plat.y, '#2A6A2A'));
+        out.push(buildFern(plat.x + 15, plat.y, TREETOPS_FERN_COLOR));
+        out.push(buildFern(plat.x + plat.width - 15, plat.y, TREETOPS_FERN_COLOR));
       } else if (plat.width > 120) {
-        out.push(buildFern(plat.x + 8, plat.y, '#2A6A2A'));
+        out.push(buildFern(plat.x + 8, plat.y, TREETOPS_FERN_COLOR));
       }
     }
 
@@ -562,8 +559,8 @@ export const treetops: ArenaPack = {
     // Foreground leaf clusters on platforms
     for (const plat of floats) {
       if (plat.width > 150) {
-        drawFgLeafCluster(ctx, plat.x + plat.width * 0.3, plat.y, ['#1A5A1A', '#2A6A2A', '#3A7A3A']);
-        drawFgLeafCluster(ctx, plat.x + plat.width * 0.7, plat.y, ['#1A5A1A', '#2A6A2A', '#3A7A3A']);
+        drawFgLeafCluster(ctx, plat.x + plat.width * 0.3, plat.y, ['#1A5A1A', TREETOPS_FERN_COLOR, '#3A7A3A']);
+        drawFgLeafCluster(ctx, plat.x + plat.width * 0.7, plat.y, ['#1A5A1A', TREETOPS_FERN_COLOR, '#3A7A3A']);
       }
     }
 
