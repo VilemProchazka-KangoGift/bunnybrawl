@@ -63,6 +63,19 @@ const _invincibleHsl = getCachedHsl('#88BBFF');
 /** Sprite extends ~12 px above the bbox top for tall ears, horns, and gib pivots. */
 const SPRITE_TOP_PAD = 12;
 
+/** Constructor options. Required: bgCanvas + fgCanvas + theme. All others
+ *  are optional; lobby and tests pass only the required three and stay on the
+ *  source-over fillRect lighting fallback. L2 will add light-canvas fields. */
+export interface RendererOptions {
+  bgCanvas: HTMLCanvasElement;
+  fgCanvas: HTMLCanvasElement;
+  theme: ThemeConfig;
+  mirrored?: boolean;
+  hudCanvas?: HTMLCanvasElement;
+  bgNightCanvas?: HTMLCanvasElement;
+  fgNightTint?: HTMLDivElement;
+}
+
 /** Diagnostic flags tracking which rendering branches fired each frame. */
 export interface RenderDiagnostics {
   clouds: boolean;
@@ -256,28 +269,28 @@ export class Renderer {
   // maintained. Consumers use hasWarmedAll() to verify preload coverage.
   private _warmedNames: Set<string> = new Set();
 
-  constructor(bgCanvas: HTMLCanvasElement, fgCanvas: HTMLCanvasElement, theme: ThemeConfig, mirrored = false, hudCanvas?: HTMLCanvasElement, bgNightCanvas?: HTMLCanvasElement, fgNightTint?: HTMLDivElement) {
+  constructor(opts: RendererOptions) {
     clearRenderingCaches();
-    this.bgCanvas = bgCanvas;
-    this.fgCanvas = fgCanvas;
-    this.bgCtx = bgCanvas.getContext('2d')!;
-    this.fgCtx = fgCanvas.getContext('2d')!;
+    this.bgCanvas = opts.bgCanvas;
+    this.fgCanvas = opts.fgCanvas;
+    this.bgCtx = opts.bgCanvas.getContext('2d')!;
+    this.fgCtx = opts.fgCanvas.getContext('2d')!;
     this._diag.ctx = this.fgCtx;
-    this.theme = theme;
-    this.mirrored = mirrored;
+    this.theme = opts.theme;
+    this.mirrored = opts.mirrored ?? false;
 
-    if (hudCanvas) {
-      this.hudCanvas = hudCanvas;
-      this.hudCtx = hudCanvas.getContext('2d')!;
+    if (opts.hudCanvas) {
+      this.hudCanvas = opts.hudCanvas;
+      this.hudCtx = opts.hudCanvas.getContext('2d')!;
     }
 
     // Optional cross-fade night-variant BG canvas; see lighting/pipeline.ts.
-    if (bgNightCanvas) {
-      this.bgNightCanvas = bgNightCanvas;
-      this.bgNightCtx = bgNightCanvas.getContext('2d')!;
+    if (opts.bgNightCanvas) {
+      this.bgNightCanvas = opts.bgNightCanvas;
+      this.bgNightCtx = opts.bgNightCanvas.getContext('2d')!;
     }
-    if (fgNightTint) {
-      this._fgNightTint = fgNightTint;
+    if (opts.fgNightTint) {
+      this._fgNightTint = opts.fgNightTint;
     }
 
     // Apply initial render scale to all canvases (sets backing-store dims + ctx transform)

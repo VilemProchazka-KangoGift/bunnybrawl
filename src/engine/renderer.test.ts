@@ -221,7 +221,7 @@ describe('Renderer — construction', () => {
   it('creates with valid canvases and theme', () => {
     const { canvas: bg } = makeCanvas();
     const { canvas: fg } = makeCanvas();
-    const renderer = new Renderer(bg, fg, makeTheme());
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme() });
     expect(renderer).toBeDefined();
   });
 
@@ -230,14 +230,14 @@ describe('Renderer — construction', () => {
     const { canvas: fg } = makeCanvas();
     const theme = makeTheme();
     theme.clouds.count = 5;
-    const renderer = new Renderer(bg, fg, theme);
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme });
     expect((renderer as any).clouds).toHaveLength(5);
   });
 
   it('handles mirrored mode', () => {
     const { canvas: bg } = makeCanvas();
     const { canvas: fg } = makeCanvas();
-    const renderer = new Renderer(bg, fg, makeTheme(), true);
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme(), mirrored: true });
     expect((renderer as any).mirrored).toBe(true);
   });
 });
@@ -247,7 +247,7 @@ describe('Renderer — setters', () => {
   beforeEach(() => {
     const { canvas: bg } = makeCanvas();
     const { canvas: fg } = makeCanvas();
-    renderer = new Renderer(bg, fg, makeTheme());
+    renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme() });
   });
 
   it('setPlayerNames stores names', () => {
@@ -284,7 +284,7 @@ describe('Renderer — renderBackground', () => {
   it('draws sky gradient, hills, platforms, and ground', () => {
     const { canvas: bg, ctx: bgCtx } = makeCanvas();
     const { canvas: fg } = makeCanvas();
-    const renderer = new Renderer(bg, fg, makeTheme());
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme() });
 
     renderer.renderBackground(makeArena());
 
@@ -296,7 +296,7 @@ describe('Renderer — renderBackground', () => {
     const { canvas: bg } = makeCanvas();
     const { canvas: fg } = makeCanvas();
     const theme = makeTheme();
-    const renderer = new Renderer(bg, fg, theme);
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme });
 
     renderer.renderBackground(makeArena());
     expect(theme.drawFarBackground).toHaveBeenCalled();
@@ -305,7 +305,7 @@ describe('Renderer — renderBackground', () => {
   it('draws grass blades when theme enables them', () => {
     const { canvas: bg, ctx: bgCtx } = makeCanvas();
     const { canvas: fg } = makeCanvas();
-    const renderer = new Renderer(bg, fg, makeTheme());
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme() });
 
     renderer.renderBackground(makeArena());
     expect(bgCtx.stroke).toHaveBeenCalled(); // grass blade strokes
@@ -314,7 +314,7 @@ describe('Renderer — renderBackground', () => {
   it('applies mirror transform when mirrored', () => {
     const { canvas: bg, ctx: bgCtx } = makeCanvas();
     const { canvas: fg } = makeCanvas();
-    const renderer = new Renderer(bg, fg, makeTheme(), true);
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme(), mirrored: true });
 
     renderer.renderBackground(makeArena());
     expect(bgCtx.scale).toHaveBeenCalledWith(-1, 1);
@@ -323,7 +323,7 @@ describe('Renderer — renderBackground', () => {
   it('draws floating platform with accent color and moss', () => {
     const { canvas: bg, ctx: bgCtx } = makeCanvas();
     const { canvas: fg } = makeCanvas();
-    const renderer = new Renderer(bg, fg, makeTheme());
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme() });
 
     renderer.renderBackground(makeArena());
     // Multiple fillRect calls for ground + floating platforms
@@ -335,7 +335,7 @@ describe('Renderer — renderBackground', () => {
     const { canvas: fg } = makeCanvas();
     const theme = makeTheme();
     theme.platform.customDraw = vi.fn();
-    const renderer = new Renderer(bg, fg, theme);
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme });
 
     renderer.renderBackground(makeArena());
     expect(theme.platform.customDraw).toHaveBeenCalled();
@@ -351,7 +351,7 @@ describe('Renderer — renderFrame basics', () => {
     const { canvas: bg } = makeCanvas();
     const fg = makeCanvas();
     fgCtx = fg.ctx;
-    renderer = new Renderer(bg.canvas ?? bg as any, fg.canvas, makeTheme());
+    renderer = new Renderer({ bgCanvas: bg.canvas ?? bg as any, fgCanvas: fg.canvas, theme: makeTheme() });
   });
 
   it('clears foreground canvas each frame', () => {
@@ -397,7 +397,7 @@ describe('Renderer — renderFrame conditional branches', () => {
     vi.clearAllMocks();
     const { canvas: bg } = makeCanvas();
     const fg = makeCanvas();
-    renderer = new Renderer(bg.canvas ?? bg as any, fg.canvas, makeTheme());
+    renderer = new Renderer({ bgCanvas: bg.canvas ?? bg as any, fgCanvas: fg.canvas, theme: makeTheme() });
   });
 
   it('draws weather when particles present', () => {
@@ -419,7 +419,7 @@ describe('Renderer — renderFrame conditional branches', () => {
     const fg = makeCanvas();
     const theme = makeTheme();
     theme.drawAnimatedBackground = vi.fn();
-    const r = new Renderer(bg.canvas ?? bg as any, fg.canvas, theme);
+    const r = new Renderer({ bgCanvas: bg.canvas ?? bg as any, fgCanvas: fg.canvas, theme });
     r.renderFrame(makeState(), makeArena(), []);
     expect(theme.drawAnimatedBackground).toHaveBeenCalled();
     expect(r.getDiagnostics().animatedBg).toBe(true);
@@ -579,7 +579,7 @@ describe('Renderer — renderFrame conditional branches', () => {
     const fg = makeCanvas();
     const theme = makeTheme();
     theme.dayNight.enabled = true;
-    const r = new Renderer(bg.canvas ?? bg as any, fg.canvas, theme);
+    const r = new Renderer({ bgCanvas: bg.canvas ?? bg as any, fgCanvas: fg.canvas, theme });
     const state = makeState({ dayPhase: 0.5 });
     r.renderFrame(state, makeArena(), []);
     expect(drawDayNightCycle).toHaveBeenCalled();
@@ -656,7 +656,7 @@ describe('Renderer — renderFrame conditional branches', () => {
     const { canvas: bg } = makeCanvas();
     const fg = makeCanvas();
     const theme = makeTheme();
-    const r = new Renderer(bg.canvas ?? bg as any, fg.canvas, theme, true);
+    const r = new Renderer({ bgCanvas: bg.canvas ?? bg as any, fgCanvas: fg.canvas, theme, mirrored: true });
     r.renderFrame(makeState(), makeArena(), []);
     expect(theme.drawForegroundNature).toHaveBeenCalled();
   });
@@ -666,7 +666,7 @@ describe('Renderer — bakeGibs', () => {
   it('draws gibs onto background canvas', () => {
     const { canvas: bg, ctx: bgCtx } = makeCanvas();
     const { canvas: fg } = makeCanvas();
-    const renderer = new Renderer(bg, fg, makeTheme());
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme() });
     const gibs = [{ x: 100, y: 200, rotation: 0.5, type: 'ear', width: 8, height: 6, color: '#FF0000' }];
     renderer.bakeGibs(gibs as any);
     expect(bgCtx.save).toHaveBeenCalled();
@@ -681,7 +681,7 @@ describe('Renderer — renderBloodDrips', () => {
   it('draws blood drips onto background canvas', () => {
     const { canvas: bg, ctx: bgCtx } = makeCanvas();
     const { canvas: fg } = makeCanvas();
-    const renderer = new Renderer(bg, fg, makeTheme());
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme() });
     const drips = [{ x: 200, y: 300, radius: 3, color: '#880000' }];
     renderer.renderBloodDrips(drips);
     expect(bgCtx.arc).toHaveBeenCalled();
@@ -695,7 +695,7 @@ describe('Renderer — bgNight bake on bg writes', () => {
     const { canvas: bgNight, ctx: bgNightCtx } = makeCanvas();
     const { canvas: fg } = makeCanvas();
     const fgTint = document.createElement('div');
-    const renderer = new Renderer(bg, fg, makeTheme(), false, undefined, bgNight, fgTint);
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme(), bgNightCanvas: bgNight, fgNightTint: fgTint });
     const gibs = [{ x: 100, y: 200, rotation: 0.5, type: 'ear', width: 8, height: 6, color: '#FF0000' }];
     (bgNightCtx.drawImage as any).mockClear();
     renderer.bakeGibs(gibs as any);
@@ -708,7 +708,7 @@ describe('Renderer — bgNight bake on bg writes', () => {
     const { canvas: bgNight, ctx: bgNightCtx } = makeCanvas();
     const { canvas: fg } = makeCanvas();
     const fgTint = document.createElement('div');
-    const renderer = new Renderer(bg, fg, makeTheme(), false, undefined, bgNight, fgTint);
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme(), bgNightCanvas: bgNight, fgNightTint: fgTint });
     const gibs = [{ x: 100, y: 200, rotation: 0.5, type: 'ear', width: 8, height: 6, color: '#FF0000' }];
     const drips = [{ x: 200, y: 300, radius: 3, color: '#880000' }];
     (bgNightCtx.drawImage as any).mockClear();
@@ -725,7 +725,7 @@ describe('Renderer — bgNight bake on bg writes', () => {
     const { canvas: bgNight, ctx: bgNightCtx } = makeCanvas();
     const { canvas: fg } = makeCanvas();
     const fgTint = document.createElement('div');
-    const renderer = new Renderer(bg, fg, makeTheme(), false, undefined, bgNight, fgTint);
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme(), bgNightCanvas: bgNight, fgNightTint: fgTint });
     (bgNightCtx.drawImage as any).mockClear();
     renderer.renderFrame(makeState(), makeArena(), []);
     expect(bgNightCtx.drawImage).not.toHaveBeenCalled();
@@ -736,7 +736,7 @@ describe('Renderer — blendColor', () => {
   it('blends two hex colors', () => {
     const { canvas: bg } = makeCanvas();
     const { canvas: fg } = makeCanvas();
-    const renderer = new Renderer(bg, fg, makeTheme());
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme() });
     const blended = (renderer as any).blendColor('#FF0000', '#0000FF', 0.5);
     expect(blended).toMatch(/^rgb\(\d+,\d+,\d+\)$/);
     // Should be purple-ish (128, 0, 128)
@@ -746,7 +746,7 @@ describe('Renderer — blendColor', () => {
   it('returns first color at amount=0', () => {
     const { canvas: bg } = makeCanvas();
     const { canvas: fg } = makeCanvas();
-    const renderer = new Renderer(bg, fg, makeTheme());
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme() });
     const blended = (renderer as any).blendColor('#FF0000', '#0000FF', 0);
     expect(blended).toBe('rgb(255,0,0)');
   });

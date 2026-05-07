@@ -120,7 +120,15 @@ export class GameLoop {
       },
     });
 
-    this.renderer = new Renderer(bgCanvas, fgCanvas, this.simulator.getTheme(), settings.mods.mirrorArena, hudCanvas, bgNightCanvas, fgNightTint);
+    this.renderer = new Renderer({
+      bgCanvas,
+      fgCanvas,
+      theme: this.simulator.getTheme(),
+      mirrored: settings.mods.mirrorArena,
+      hudCanvas,
+      bgNightCanvas,
+      fgNightTint,
+    });
     this.renderer.setTimeLimit(settings.timeLimit);
 
     // ParticleSystem references the simulator's state/arena/theme/settings and
