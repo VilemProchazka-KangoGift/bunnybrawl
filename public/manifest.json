@@ -10,13 +10,7 @@
   "background_color": "#111111",
   "icons": [
     {
-      "src": "/bunnybrawl/favicon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any"
-    },
-    {
-      "src": "/bunnybrawl/logo.png",
+      "src": "/bunnybrawl/app-icon.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
