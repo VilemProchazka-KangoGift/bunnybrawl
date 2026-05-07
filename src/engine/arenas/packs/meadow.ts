@@ -215,10 +215,7 @@ registerReactiveKind('meadow.bush', {
   layer: 'background',
   draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
     const size = _bushSize.get(inst) ?? 25;
-    ctx.save();
-    ctx.translate(inst.pos.x + swayPhase * 0.5, inst.pos.y);
-    drawBush(ctx, 0, 0, size);
-    ctx.restore();
+    drawBush(ctx, inst.pos.x + swayPhase * 0.5, inst.pos.y, size);
   },
 });
 
@@ -240,10 +237,7 @@ registerReactiveKind('meadow.flower', {
   layer: 'background',
   draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
     const color = _flowerColor.get(inst) ?? '#FFD700';
-    ctx.save();
-    ctx.translate(inst.pos.x + swayPhase, inst.pos.y);
-    drawFlower(ctx, 0, 0, color);
-    ctx.restore();
+    drawFlower(ctx, inst.pos.x + swayPhase, inst.pos.y, color);
   },
 });
 
@@ -261,10 +255,7 @@ function meadowMushroom(x: number, y: number): ReactiveInstance {
 registerReactiveKind('meadow.mushroom', {
   layer: 'background',
   draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
-    ctx.save();
-    ctx.translate(inst.pos.x + swayPhase * 0.3, inst.pos.y);
-    drawMushroom(ctx, 0, 0);
-    ctx.restore();
+    drawMushroom(ctx, inst.pos.x + swayPhase * 0.3, inst.pos.y);
   },
 });
 
@@ -282,10 +273,7 @@ function meadowGrassTuft(x: number, y: number): ReactiveInstance {
 registerReactiveKind('meadow.grassTuft', {
   layer: 'background',
   draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
-    ctx.save();
-    ctx.translate(inst.pos.x + swayPhase, inst.pos.y);
-    drawGrassTuft(ctx, 0, 0);
-    ctx.restore();
+    drawGrassTuft(ctx, inst.pos.x + swayPhase, inst.pos.y);
   },
 });
 
@@ -305,10 +293,7 @@ registerReactiveKind('meadow.fgBush', {
   layer: 'background',
   draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
     const size = _fgBushSize.get(inst) ?? 40;
-    ctx.save();
-    ctx.translate(inst.pos.x + swayPhase * 0.7, inst.pos.y);
-    drawFgBush(ctx, 0, 0, size);
-    ctx.restore();
+    drawFgBush(ctx, inst.pos.x + swayPhase * 0.7, inst.pos.y, size);
   },
 });
 
@@ -387,10 +372,7 @@ function meadowFgLeafCluster(x: number, y: number): ReactiveInstance {
 registerReactiveKind('meadow.fgLeafCluster', {
   layer: 'background',
   draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
-    ctx.save();
-    ctx.translate(inst.pos.x + swayPhase, inst.pos.y);
-    drawFgLeafCluster(ctx, 0, 0);
-    ctx.restore();
+    drawFgLeafCluster(ctx, inst.pos.x + swayPhase, inst.pos.y);
   },
 });
 
@@ -410,10 +392,7 @@ registerReactiveKind('meadow.fgWildflower', {
   layer: 'background',
   draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
     const style = _wildflowerStyle.get(inst) ?? { color: '#FFD700', size: 18 };
-    ctx.save();
-    ctx.translate(inst.pos.x + swayPhase, inst.pos.y);
-    drawFgWildflower(ctx, 0, 0, style.color, style.size);
-    ctx.restore();
+    drawFgWildflower(ctx, inst.pos.x + swayPhase, inst.pos.y, style.color, style.size);
   },
 });
 
