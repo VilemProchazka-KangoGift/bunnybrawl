@@ -51,6 +51,15 @@ export interface ReactiveKindConfig {
   highFrequency?: boolean;
 }
 
+/** Per-frame argument bundle passed from GameLoop.renderFrame to Renderer.
+ *  Inner arrays are stable references owned by ReactiveDecorationSystem
+ *  (rebuilt only on `setInstances`), so no per-frame element copy. */
+export interface ReactiveRenderArg {
+  prePlayer: ReadonlyArray<ReactiveInstance>;
+  postPlayer: ReadonlyArray<ReactiveInstance>;
+  windPhase: number;
+}
+
 /**
  * Per-kind draw function. Called from Renderer once per frame per instance.
  *  - swayPhase: precomputed `sin(windPhase + seed * 0.7) * windAmp` (or 0 on slow-device).
@@ -129,8 +138,30 @@ export function decayShake(instance: ReactiveInstance, dt: number): void {
 }
 
 /** True iff `instance.shakeDecay` rose to or above the burst threshold this tick.
- *  Caller passes the previous (pre-tick) shake value. */
+ *  Caller passes the previous (pre-tick) shake value.
+ *
+ *  Threshold semantics: rising-edge uses strict `<` on `prev` and `>=` on the
+ *  new value. A threshold of exactly `1` would never fire, since `applyShakeImpulse`
+ *  sets `shakeDecay = 1` and re-impulses leave `prev = 1`. Keep burst thresholds
+ *  strictly below 1 (the meadow tree uses 0.95). */
 export function shouldFireBurst(instance: ReactiveInstance, prevShake: number): boolean {
   if (!instance.burst) return false;
   return prevShake < instance.burst.threshold && instance.shakeDecay >= instance.burst.threshold;
+}
+
+/** Direction-aware bend offset used by parting/lean draw fns. Returns a px
+ *  offset to add to the swayPhase; positive = bend right, negative = bend left.
+ *  Reads `instance.nearestDx` (set by the system during proximity scan) and
+ *  scales by excitement × proximity.magnitude × signMul. `signMul = -1` flips
+ *  flee→lean (vine bends TOWARD player; grass bends AWAY).
+ *
+ *  Lives here so kind authors across arenas don't reinvent it. */
+export function excitementBend(instance: ReactiveInstance, signMul = 1): number {
+  if (instance.excitement <= 0.01 || !instance.proximity) return 0;
+  const radius = instance.proximity.radius;
+  // Fallback when no live player or directly aligned: use seed parity for a
+  // stable per-instance side so adjacent grass tufts don't all bend the same way.
+  const dxRaw = instance.nearestDx ?? ((instance.seed % 2 === 0) ? 1 : -1);
+  const norm = dxRaw < -radius ? -1 : dxRaw > radius ? 1 : dxRaw / radius;
+  return signMul * instance.excitement * instance.proximity.magnitude * norm;
 }

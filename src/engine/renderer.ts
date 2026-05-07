@@ -649,11 +649,7 @@ export class Renderer {
     arena: Arena,
     particles: Particle[],
     cosmeticLead = 0,
-    reactive?: {
-      prePlayer: ReadonlyArray<import('./gameLoop/cosmetics/reactiveDecorations').ReactiveInstance>;
-      postPlayer: ReadonlyArray<import('./gameLoop/cosmetics/reactiveDecorations').ReactiveInstance>;
-      windPhase: number;
-    },
+    reactive?: import('./gameLoop/cosmetics/reactiveDecorations').ReactiveRenderArg,
   ): void {
     perfTrace.measure('renderFrame', () => {
       const ctx = this.fgCtx;

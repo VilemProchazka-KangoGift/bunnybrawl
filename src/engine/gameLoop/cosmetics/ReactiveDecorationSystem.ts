@@ -81,11 +81,14 @@ export class ReactiveDecorationSystem implements CosmeticSystem {
   /** Current wind oscillator phase. For Renderer (passed to draw fns). */
   getWindPhase(): number { return this._windPhase; }
 
-  /** 60Hz tick. Called from GameLoop.fixedUpdate. Advances windPhase, runs the
-   *  60Hz instance bucket. Skips windPhase advancement during loading so trees
-   *  start at sway=0 the moment the match begins. */
+  /** 60Hz tick. Called from GameLoop.fixedUpdate. Advances windPhase and runs
+   *  the 60Hz bucket — both skipped during loading so trees start at sway=0
+   *  and butterflies/bees don't accumulate excitement against off-screen
+   *  players the moment the match begins. (Mirrors the 30Hz bucket, which is
+   *  loading-gated by `cosmeticStep` early-returning in GameLoop.) */
   fixedUpdate(dt: number): void {
-    if (this.state.phase !== 'loading') this._windPhase += WIND_SPEED * dt;
+    if (this.state.phase === 'loading') return;
+    this._windPhase += WIND_SPEED * dt;
     if (this._tick60.length > 0) this._tickBucket(this._tick60, dt);
   }
 

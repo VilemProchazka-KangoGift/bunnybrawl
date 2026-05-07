@@ -3,7 +3,7 @@ import type { Arena, Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
-import { getFloatingPlatforms, pushFromPlayers, makeDtTracker, tickGroundCritter, clamp, type GroundCritterState } from '../../themes/utils';
+import { getFloatingPlatforms, pushFromPlayers, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
 
 const SNAILS_CFG: Array<{ platL: number; platR: number; platTopY: number; walkSpeed: number; fleeSpeed: number; fleeRadius: number; yTolerance: number; turnEaseRate: number }> = [
   { platL: 900, platR: 1080, platTopY: 660, walkSpeed: 8, fleeSpeed: 22, fleeRadius: 70, yTolerance: 80, turnEaseRate: 2 },
@@ -146,25 +146,9 @@ import {
 
 import {
   registerReactiveKind,
+  excitementBend,
   type ReactiveInstance,
 } from '../../gameLoop/cosmetics/reactiveDecorations';
-
-// Per-instance custom data. WeakMaps so old instances are GC'd when
-// buildReactiveDecorations rebuilds them on switchArena.
-
-// Computes a direction-aware bend offset driven by `inst.excitement`.
-// The system writes `inst.nearestDx` alongside excitement, so this just reads
-// it without re-scanning players. `signMul` flips direction (use -1 to lean
-// TOWARD the player, default +1 leans AWAY).
-function _excitementBend(inst: ReactiveInstance, signMul = 1): number {
-  if (inst.excitement <= 0.01 || !inst.proximity) return 0;
-  const radius = inst.proximity.radius;
-  // Fallback: when player is exactly aligned, use seed parity for a stable
-  // per-instance side so adjacent grass tufts don't all bend the same way.
-  const dxRaw = inst.nearestDx ?? ((inst.seed % 2 === 0) ? 1 : -1);
-  const norm = clamp(dxRaw / radius, -1, 1);
-  return signMul * inst.excitement * inst.proximity.magnitude * norm;
-}
 
 // ---- meadow.tree ----
 interface TreeData { size: number; }
@@ -213,7 +197,7 @@ registerReactiveKind('meadow.tallGrass', {
   layer: 'prePlayer',
   draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
     const { count } = inst.data as TallGrassData;
-    drawTallGrass(ctx, inst.pos.x, inst.pos.y, count, undefined, undefined, swayPhase + _excitementBend(inst));
+    drawTallGrass(ctx, inst.pos.x, inst.pos.y, count, undefined, undefined, swayPhase + excitementBend(inst));
   },
 });
 
@@ -230,7 +214,7 @@ function meadowFern(x: number, y: number): ReactiveInstance {
 registerReactiveKind('meadow.fern', {
   layer: 'prePlayer',
   draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
-    drawFern(ctx, inst.pos.x, inst.pos.y, undefined, swayPhase + _excitementBend(inst));
+    drawFern(ctx, inst.pos.x, inst.pos.y, undefined, swayPhase + excitementBend(inst));
   },
 });
 
@@ -253,7 +237,7 @@ registerReactiveKind('meadow.hangingVine', {
   draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
     const { length } = inst.data as HangingVineData;
     // signMul = -1 so vine leans TOWARD the player (opposite of grass flee).
-    drawHangingVine(ctx, inst.pos.x, inst.pos.y, length, swayPhase + _excitementBend(inst, -1));
+    drawHangingVine(ctx, inst.pos.x, inst.pos.y, length, swayPhase + excitementBend(inst, -1));
   },
 });
 

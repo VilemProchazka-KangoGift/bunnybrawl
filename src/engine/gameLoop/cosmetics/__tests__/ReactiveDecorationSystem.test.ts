@@ -49,14 +49,21 @@ describe('ReactiveDecorationSystem', () => {
     expect(sys.getWindPhase()).toBe(after);
   });
 
-  it('does NOT advance windPhase while phase=loading', () => {
-    const state = makeState({ phase: 'loading' });
+  it('skips windPhase + 60Hz bucket tick while phase=loading', () => {
+    const state = makeState({
+      phase: 'loading',
+      players: [makePlayer({ id: 'P1', x: 90, y: 580, width: 28, height: 40 })],
+    });
     const sys = new ReactiveDecorationSystem(state, makeArena(), () => {});
+    const i = inst({ kind: 'test.fast', proximity: { radius: 60, mode: 'excite', magnitude: 1 } });
+    sys.setInstances([i]);
     for (let n = 0; n < 60; n++) sys.fixedUpdate(1 / 60);
     expect(sys.getWindPhase()).toBe(0);
+    expect(i.excitement).toBe(0);
     state.phase = 'playing';
     sys.fixedUpdate(1 / 60);
     expect(sys.getWindPhase()).toBeGreaterThan(0);
+    expect(i.excitement).toBeGreaterThan(0);
   });
 
   it('updates excitement on 30Hz instances during cosmeticUpdate', () => {

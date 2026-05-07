@@ -39,7 +39,7 @@ import { PlayerCosmeticSystem } from './cosmetics/PlayerCosmeticSystem';
 import { SurfaceImpactSystem } from './cosmetics/SurfaceImpactSystem';
 import { HUDFeedbackSystem } from './cosmetics/HUDFeedbackSystem';
 import { ReactiveDecorationSystem } from './cosmetics/ReactiveDecorationSystem';
-import type { ReactiveInstance } from './cosmetics/reactiveDecorations';
+import type { ReactiveInstance, ReactiveRenderArg } from './cosmetics/reactiveDecorations';
 
 /** Half-rate cosmetic threshold: particles/SFX/VFX tick at ~30Hz while render stays at 60Hz. */
 const COSMETIC_INTERVAL = FIXED_TIMESTEP * 2;
@@ -697,11 +697,7 @@ export class GameLoop {
   /** Build the per-frame reactive arg passed to renderFrame. The inner arrays
    *  are stable references owned by the system (rebuilt only on `setInstances`)
    *  — no per-frame element copy. */
-  private _buildReactiveArg(): {
-    prePlayer: ReadonlyArray<import('./cosmetics/reactiveDecorations').ReactiveInstance>;
-    postPlayer: ReadonlyArray<import('./cosmetics/reactiveDecorations').ReactiveInstance>;
-    windPhase: number;
-  } {
+  private _buildReactiveArg(): ReactiveRenderArg {
     return {
       prePlayer: this.reactiveDecorationSystem.getInstancesForLayer('prePlayer'),
       postPlayer: this.reactiveDecorationSystem.getInstancesForLayer('postPlayer'),
