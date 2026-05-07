@@ -218,8 +218,14 @@ export class LightingPipeline {
 
     // Step 2: mask by FG alpha — destination-in keeps only pixels where FG
     // has alpha (sprites, particles, etc.).
+    //
+    // 4-arg drawImage with explicit (w, h) is REQUIRED here: ctx.canvas is the
+    // backing-store-sized canvas (e.g. 2560×1440 at renderScale=2), while tmp
+    // is logical-sized (1280×720). Without the explicit size, drawImage uses the
+    // source's intrinsic dimensions and the FG mask gets stamped at 2x scale,
+    // so a cloud at logical (200, 100) creates a ghost at logical (400, 200).
     tctx.globalCompositeOperation = 'destination-in';
-    tctx.drawImage(ctx.canvas, 0, 0);
+    tctx.drawImage(ctx.canvas, 0, 0, w, h);
     tctx.globalCompositeOperation = 'source-over';
 
     // Step 3: multiply the masked light onto FG.
@@ -275,14 +281,18 @@ export class LightingPipeline {
     }
 
     // Rotate so the strip's top (full color) points to the sun-side.
-    // strip top → bottom = color → transparent; sun-side is at (cos θ, -sin θ).
+    // Strip top is at y=0 in source; after centered draw at (-len/2, -len/2),
+    // the strip's "full-color end" points toward canvas y-negative = (0, -1).
+    // Sun direction in our convention (0=right, π/2=up, π=left) is
+    // (cos θ, -sin θ) in canvas space (y grows downward). Rotating (0, -1)
+    // onto (cos θ, -sin θ) requires α = π/2 - θ.
     const cx = this.bufW / 2;
     const cy = this.bufH / 2;
     // Diagonal of the buffer so the stretched strip covers every corner.
     const len = Math.max(this.bufW, this.bufH) * 2;
     ctx.save();
     ctx.translate(cx, cy);
-    ctx.rotate(-angle - Math.PI / 2); // strip top → sun direction
+    ctx.rotate(Math.PI / 2 - angle);
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(strip, -len / 2, -len / 2, len, len);
     ctx.restore();
