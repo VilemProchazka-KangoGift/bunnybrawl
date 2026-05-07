@@ -278,6 +278,145 @@ registerReactiveKind('meadow.grassTuft', {
   },
 });
 
+// ---- meadow.fgBush ----
+const _fgBushSize = new WeakMap<ReactiveInstance, number>();
+function meadowFgBush(x: number, y: number, size: number): ReactiveInstance {
+  const inst: ReactiveInstance = {
+    pos: { x, y }, kind: 'meadow.fgBush',
+    seed: Math.floor((x * 67 + y * 23) % 997),
+    windAmp: 2.5,
+    excitement: 0, shakeDecay: 0,
+  };
+  _fgBushSize.set(inst, size);
+  return inst;
+}
+registerReactiveKind('meadow.fgBush', {
+  layer: 'background',
+  draw: (ctx, inst, swayPhase) => {
+    const size = _fgBushSize.get(inst) ?? 40;
+    ctx.save();
+    ctx.translate(inst.pos.x + swayPhase * 0.7, inst.pos.y);
+    drawFgBush(ctx, 0, 0, size);
+    ctx.restore();
+  },
+});
+
+// ---- meadow.tallGrass ----
+const _tallGrassCount = new WeakMap<ReactiveInstance, number>();
+function meadowTallGrass(x: number, y: number, count: number): ReactiveInstance {
+  const inst: ReactiveInstance = {
+    pos: { x, y }, kind: 'meadow.tallGrass',
+    seed: Math.floor((x * 89 + y * 41) % 997),
+    windAmp: 3.5,
+    proximity: { radius: 24, mode: 'flee', magnitude: 14 },
+    excitement: 0, shakeDecay: 0,
+  };
+  _tallGrassCount.set(inst, count);
+  return inst;
+}
+registerReactiveKind('meadow.tallGrass', {
+  layer: 'background',
+  draw: (ctx, inst, swayPhase) => {
+    const count = _tallGrassCount.get(inst) ?? 7;
+    // Apply parting offset based on excitement: shift away from the player.
+    // We don't store the player direction; use a horizontal nudge biased by sway.
+    const partOffset = inst.excitement * 14 * Math.sign(swayPhase || 1);
+    ctx.save();
+    ctx.translate(inst.pos.x + swayPhase + partOffset, inst.pos.y);
+    drawTallGrass(ctx, 0, 0, count);
+    ctx.restore();
+  },
+});
+
+// ---- meadow.fern ----
+function meadowFern(x: number, y: number): ReactiveInstance {
+  return {
+    pos: { x, y }, kind: 'meadow.fern',
+    seed: Math.floor((x * 79 + y * 37) % 997),
+    windAmp: 3,
+    proximity: { radius: 24, mode: 'flee', magnitude: 12 },
+    excitement: 0, shakeDecay: 0,
+  };
+}
+registerReactiveKind('meadow.fern', {
+  layer: 'background',
+  draw: (ctx, inst, swayPhase) => {
+    const partOffset = inst.excitement * 12 * Math.sign(swayPhase || 1);
+    ctx.save();
+    ctx.translate(inst.pos.x + swayPhase + partOffset, inst.pos.y);
+    drawFern(ctx, 0, 0);
+    ctx.restore();
+  },
+});
+
+// ---- meadow.hangingVine ----
+const _vineLength = new WeakMap<ReactiveInstance, number>();
+function meadowHangingVine(x: number, y: number, length: number): ReactiveInstance {
+  const inst: ReactiveInstance = {
+    pos: { x, y }, kind: 'meadow.hangingVine',
+    seed: Math.floor((x * 97 + y * 47) % 997),
+    windAmp: 5,
+    proximity: { radius: 30, mode: 'lean', magnitude: 10 },
+    excitement: 0, shakeDecay: 0,
+  };
+  _vineLength.set(inst, length);
+  return inst;
+}
+registerReactiveKind('meadow.hangingVine', {
+  layer: 'background',
+  draw: (ctx, inst, swayPhase) => {
+    const length = _vineLength.get(inst) ?? 20;
+    // Lean toward player (excitement * magnitude); sway is a base oscillation.
+    const lean = inst.excitement * 10;
+    ctx.save();
+    ctx.translate(inst.pos.x + swayPhase + lean, inst.pos.y);
+    drawHangingVine(ctx, 0, 0, length);
+    ctx.restore();
+  },
+});
+
+// ---- meadow.fgLeafCluster ----
+function meadowFgLeafCluster(x: number, y: number): ReactiveInstance {
+  return {
+    pos: { x, y }, kind: 'meadow.fgLeafCluster',
+    seed: Math.floor((x * 103 + y * 53) % 997),
+    windAmp: 4,
+    excitement: 0, shakeDecay: 0,
+  };
+}
+registerReactiveKind('meadow.fgLeafCluster', {
+  layer: 'background',
+  draw: (ctx, inst, swayPhase) => {
+    ctx.save();
+    ctx.translate(inst.pos.x + swayPhase, inst.pos.y);
+    drawFgLeafCluster(ctx, 0, 0);
+    ctx.restore();
+  },
+});
+
+// ---- meadow.fgWildflower ----
+const _wildflowerStyle = new WeakMap<ReactiveInstance, { color: string; size: number }>();
+function meadowFgWildflower(x: number, y: number, color: string, size: number): ReactiveInstance {
+  const inst: ReactiveInstance = {
+    pos: { x, y }, kind: 'meadow.fgWildflower',
+    seed: Math.floor((x * 109 + y * 59) % 997),
+    windAmp: 2,
+    excitement: 0, shakeDecay: 0,
+  };
+  _wildflowerStyle.set(inst, { color, size });
+  return inst;
+}
+registerReactiveKind('meadow.fgWildflower', {
+  layer: 'background',
+  draw: (ctx, inst, swayPhase) => {
+    const style = _wildflowerStyle.get(inst) ?? { color: '#FFD700', size: 18 };
+    ctx.save();
+    ctx.translate(inst.pos.x + swayPhase, inst.pos.y);
+    drawFgWildflower(ctx, 0, 0, style.color, style.size);
+    ctx.restore();
+  },
+});
+
 // Shared decoration data — hoisted so we don't realloc per bake.
 const FOREST_TREE_POSITIONS = [
   0, 530, 30, 510, 55, 530, 80, 495, 110, 525, 140, 500,
@@ -609,51 +748,49 @@ export const meadow: ArenaPack = {
       }
     }
 
-    return out;
-  },
+    // Foreground bushes (was drawForegroundNature lines 478-481)
+    out.push(meadowFgBush(160, y, 60));
+    out.push(meadowFgBush(520, y, 52));
+    out.push(meadowFgBush(1000, y, 55));
+    out.push(meadowFgBush(1120, y, 48));
 
-  drawForegroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => {
-    const ground = arena.platforms[0];
-    const gy = ground.y;
+    // Tall grass clusters (was lines 484-487)
+    out.push(meadowTallGrass(310, y, 7));
+    out.push(meadowTallGrass(680, y, 9));
+    out.push(meadowTallGrass(1020, y, 6));
+    out.push(meadowTallGrass(430, y, 5));
 
-    // Large foreground bushes (avoid stump positions at x=340, x=860)
-    drawFgBush(ctx, 160, gy, 60);
-    drawFgBush(ctx, 520, gy, 52);
-    drawFgBush(ctx, 1000, gy, 55);
-    drawFgBush(ctx, 1120, gy, 48);
+    // Ferns (was lines 490-492)
+    out.push(meadowFern(80, y));
+    out.push(meadowFern(770, y));
+    out.push(meadowFern(1220, y));
 
-    // Tall grass clusters
-    drawTallGrass(ctx, 310, gy, 7);
-    drawTallGrass(ctx, 680, gy, 9);
-    drawTallGrass(ctx, 1020, gy, 6);
-    drawTallGrass(ctx, 430, gy, 5);
-
-    // Ferns
-    drawFern(ctx, 80, gy);
-    drawFern(ctx, 770, gy);
-    drawFern(ctx, 1220, gy);
-
-    // Bushes + vines on floating platforms (exclude stumps — width < 70)
-    const floats = getFloatingPlatforms(arena.platforms);
+    // Floating-platform foreground decorations (was lines 495-508)
     for (let pi = 0; pi < floats.length; pi++) {
       const plat = floats[pi];
       if (plat.width > 180) {
-        drawFgBush(ctx, plat.x + plat.width * 0.15, plat.y, pi % 2 === 0 ? 45 : 18);
-        drawFgBush(ctx, plat.x + plat.width * 0.85, plat.y, pi % 2 === 0 ? 18 : 42);
-        drawHangingVine(ctx, plat.x + 15, plat.y + plat.height, 25);
-        drawHangingVine(ctx, plat.x + plat.width - 15, plat.y + plat.height, 20);
-        drawFgLeafCluster(ctx, plat.x + plat.width / 2, plat.y);
+        out.push(meadowFgBush(plat.x + plat.width * 0.15, plat.y, pi % 2 === 0 ? 45 : 18));
+        out.push(meadowFgBush(plat.x + plat.width * 0.85, plat.y, pi % 2 === 0 ? 18 : 42));
+        out.push(meadowHangingVine(plat.x + 15, plat.y + plat.height, 25));
+        out.push(meadowHangingVine(plat.x + plat.width - 15, plat.y + plat.height, 20));
+        out.push(meadowFgLeafCluster(plat.x + plat.width / 2, plat.y));
       } else {
-        drawFgBush(ctx, plat.x + plat.width * 0.5, plat.y, pi % 3 === 0 ? 38 : 16);
-        drawHangingVine(ctx, plat.x + plat.width / 2, plat.y + plat.height, 18);
+        out.push(meadowFgBush(plat.x + plat.width * 0.5, plat.y, pi % 3 === 0 ? 38 : 16));
+        out.push(meadowHangingVine(plat.x + plat.width / 2, plat.y + plat.height, 18));
       }
     }
 
-    // Foreground wildflowers
-    drawFgWildflower(ctx, 240, gy, '#FF6B8A', 18);
-    drawFgWildflower(ctx, 580, gy, '#DDA0DD', 20);
-    drawFgWildflower(ctx, 930, gy, '#FFD700', 16);
-    drawFgWildflower(ctx, 1180, gy, '#FF69B4', 22);
+    // Foreground wildflowers (was lines 511-514)
+    out.push(meadowFgWildflower(240, y, '#FF6B8A', 18));
+    out.push(meadowFgWildflower(580, y, '#DDA0DD', 20));
+    out.push(meadowFgWildflower(930, y, '#FFD700', 16));
+    out.push(meadowFgWildflower(1180, y, '#FF69B4', 22));
+
+    return out;
+  },
+
+  drawForegroundNature: (_ctx: CanvasRenderingContext2D, _arena: Arena) => {
+    // All meadow foreground-nature decorations migrated to buildReactiveDecorations.
   },
 
   drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
