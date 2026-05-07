@@ -3,7 +3,7 @@ import type { Arena, Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
-import { getFloatingPlatforms, pushFromPlayers, isLivePlayer, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
+import { getFloatingPlatforms, pushFromPlayers, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
 
 const SNAILS_CFG: Array<{ platL: number; platR: number; platTopY: number; walkSpeed: number; fleeSpeed: number; fleeRadius: number; yTolerance: number; turnEaseRate: number }> = [
   { platL: 900, platR: 1080, platTopY: 660, walkSpeed: 8, fleeSpeed: 22, fleeRadius: 70, yTolerance: 80, turnEaseRate: 2 },
@@ -37,9 +37,6 @@ const DANDELIONS = [
   { x: 640,  gy: 285 },
   { x: 1090, gy: 530 },
 ] as const;
-// -1 = idle (full puff). >= 0 = burst-elapsed seconds.
-const _dandelionExcite = new Float32Array(DANDELIONS.length).fill(-1);
-const _tickDandelionDt = makeDtTracker();
 const DANDELION_SEED_COS = new Float32Array(14);
 const DANDELION_SEED_SIN = new Float32Array(14);
 {
@@ -417,6 +414,104 @@ registerReactiveKind('meadow.fgWildflower', {
   },
 });
 
+// ---- meadow.dandelion ----
+// Per-instance burst phase: -1 = idle (full puff), >= 0 = burst-elapsed seconds.
+// Stored in a side-channel WeakMap keyed by the instance.
+const _dandelionPhase = new WeakMap<ReactiveInstance, number>();
+
+function meadowDandelion(x: number, y: number): ReactiveInstance {
+  return {
+    pos: { x, y }, kind: 'meadow.dandelion',
+    seed: Math.floor((x * 113 + y * 61) % 997),
+    proximity: { radius: 40, mode: 'excite', magnitude: 1 },
+    excitement: 0, shakeDecay: 0,
+  };
+}
+
+const DANDELION_BURST_TOTAL = 7.0;
+const DANDELION_SEED_FLY_DURATION = 2.0;
+
+registerReactiveKind('meadow.dandelion', {
+  layer: 'background',
+  draw: (ctx, inst, _swayPhase, time) => {
+    // Excitement rising → if we were idle, start a burst.
+    let phase = _dandelionPhase.get(inst) ?? -1;
+    if (phase < 0 && inst.excitement > 0.5) phase = 0;
+    if (phase >= 0) {
+      // Advance phase by ~1/60s per call (renderer runs at ~60Hz).
+      phase += 1 / 60;
+      if (phase >= DANDELION_BURST_TOTAL) phase = -1;
+    }
+    _dandelionPhase.set(inst, phase);
+
+    const x = inst.pos.x;
+    const gy = inst.pos.y;
+    const puffY = gy - 9;
+
+    // Stem.
+    ctx.strokeStyle = '#5fb45a';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x, gy + 4);
+    ctx.lineTo(x, gy - 8);
+    ctx.stroke();
+
+    // Puff (shrinks during seed-fly, regrows after).
+    let puffR = 6;
+    if (phase >= 0) {
+      if (phase < DANDELION_SEED_FLY_DURATION) {
+        puffR = 6 * Math.max(0, 1 - phase / 0.3);
+      } else {
+        const regrow = (phase - DANDELION_SEED_FLY_DURATION) / (DANDELION_BURST_TOTAL - DANDELION_SEED_FLY_DURATION);
+        puffR = 6 * Math.min(1, regrow);
+      }
+    }
+    if (puffR > 0.3) {
+      ctx.fillStyle = '#ffffff';
+      ctx.globalAlpha = 0.95;
+      ctx.beginPath();
+      ctx.arc(x, puffY, puffR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#dcdcc8';
+      ctx.globalAlpha = 0.75;
+      for (let i = 0; i < 6; i++) {
+        const c = DANDELION_SEED_COS[i * 2];
+        const s = DANDELION_SEED_SIN[i * 2];
+        ctx.beginPath();
+        ctx.arc(x + c * puffR * 0.7, puffY + s * puffR * 0.7, 0.7, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // Seed-fly particles.
+    if (phase >= 0 && phase < DANDELION_SEED_FLY_DURATION) {
+      const t = phase / DANDELION_SEED_FLY_DURATION;
+      const SEEDS = 12;
+      ctx.fillStyle = '#f8f8e8';
+      for (let i = 0; i < SEEDS; i++) {
+        const emitT = i / SEEDS * 0.3;
+        const localT = (t - emitT) / (1 - emitT);
+        if (localT <= 0) continue;
+        const angle = (i / SEEDS) * Math.PI * 2 + fastSin(time + i) * 0.2;
+        const dist = localT * 60;
+        const sx = x + fastCos(angle) * dist + fastSin(time * 1.5 + i) * 2;
+        const sy = puffY - localT * 50 - localT * localT * 12 + fastSin(time + i) * 1.5;
+        const alpha = (1 - localT) * 0.95;
+        ctx.globalAlpha = alpha;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 1.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = alpha * 0.6;
+        ctx.beginPath();
+        ctx.arc(sx, sy - 2.5, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+  },
+});
+
 // Shared decoration data — hoisted so we don't realloc per bake.
 const FOREST_TREE_POSITIONS = [
   0, 530, 30, 510, 55, 530, 80, 495, 110, 525, 140, 500,
@@ -786,6 +881,11 @@ export const meadow: ArenaPack = {
     out.push(meadowFgWildflower(930, y, '#FFD700', 16));
     out.push(meadowFgWildflower(1180, y, '#FF69B4', 22));
 
+    // Dandelions (was DANDELIONS array + drawAnimatedBackground)
+    for (const d of DANDELIONS) {
+      out.push(meadowDandelion(d.x, d.gy));
+    }
+
     return out;
   },
 
@@ -898,91 +998,7 @@ export const meadow: ArenaPack = {
     ctx.fillRect(platform.x, bodyTop + bodyH - 4, platform.width, 4);
   },
 
-  drawAnimatedBackground: (ctx, _arena, time, _dayPhase, matchState) => {
-    if (getSlowDevice() || !matchState) return;
-    ctx.save();
-    const players = matchState.players;
-    const dt = _tickDandelionDt(time);
-    const BURST_TOTAL = 7.0;
-    const SEED_FLY_DURATION = 2.0;
-    for (let di = 0; di < DANDELIONS.length; di++) {
-      const d = DANDELIONS[di];
-      let nearest = Infinity;
-      for (const p of players) {
-        if (!isLivePlayer(p)) continue;
-        const dx = (p.x + p.width * 0.5) - d.x;
-        const dy = (p.y + p.height) - d.gy;
-        const d2 = dx * dx + dy * dy;
-        if (d2 < nearest) nearest = d2;
-      }
-      const playerNear = nearest < 40 * 40;
-      let phase = _dandelionExcite[di];
-      if (phase < 0 && playerNear) phase = 0;
-      if (phase >= 0) {
-        phase += dt;
-        if (phase >= BURST_TOTAL) phase = -1;
-      }
-      _dandelionExcite[di] = phase;
-      const puffY = d.gy - 9;
-      ctx.strokeStyle = '#5fb45a';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(d.x, d.gy + 4);
-      ctx.lineTo(d.x, d.gy - 8);
-      ctx.stroke();
-      let puffR = 6;
-      if (phase >= 0) {
-        if (phase < SEED_FLY_DURATION) {
-          puffR = 6 * Math.max(0, 1 - phase / 0.3);
-        } else {
-          const regrow = (phase - SEED_FLY_DURATION) / (BURST_TOTAL - SEED_FLY_DURATION);
-          puffR = 6 * Math.min(1, regrow);
-        }
-      }
-      if (puffR > 0.3) {
-        ctx.fillStyle = '#ffffff';
-        ctx.globalAlpha = 0.95;
-        ctx.beginPath();
-        ctx.arc(d.x, puffY, puffR, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#dcdcc8';
-        ctx.globalAlpha = 0.75;
-        for (let i = 0; i < 6; i++) {
-          const c = DANDELION_SEED_COS[i * 2];
-          const s = DANDELION_SEED_SIN[i * 2];
-          ctx.beginPath();
-          ctx.arc(d.x + c * puffR * 0.7, puffY + s * puffR * 0.7, 0.7, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.globalAlpha = 1;
-      }
-      if (phase >= 0 && phase < SEED_FLY_DURATION) {
-        const t = phase / SEED_FLY_DURATION;
-        const SEEDS = 12;
-        ctx.fillStyle = '#f8f8e8';
-        for (let i = 0; i < SEEDS; i++) {
-          const emitT = i / SEEDS * 0.3;
-          const localT = (t - emitT) / (1 - emitT);
-          if (localT <= 0) continue;
-          const angle = (i / SEEDS) * Math.PI * 2 + fastSin(time + i) * 0.2;
-          const dist = localT * 60;
-          const sx = d.x + fastCos(angle) * dist + fastSin(time * 1.5 + i) * 2;
-          const sy = puffY - localT * 50 - localT * localT * 12 + fastSin(time + i) * 1.5;
-          const alpha = (1 - localT) * 0.95;
-          ctx.globalAlpha = alpha;
-          ctx.beginPath();
-          ctx.arc(sx, sy, 1.4, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.globalAlpha = alpha * 0.6;
-          ctx.beginPath();
-          ctx.arc(sx, sy - 2.5, 2, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.globalAlpha = 1;
-      }
-    }
-    ctx.restore();
-  },
+  // drawAnimatedBackground removed — dandelions migrated to ReactiveDecorationSystem.
 
   drawGroundCritters: (ctx, _arena, time, _dayPhase, matchState) => {
     if (getSlowDevice() || !matchState) return;
