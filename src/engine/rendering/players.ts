@@ -5,6 +5,7 @@ import { hasCustomEyes, getSpriteRenderer, getCharacterPack, drawLegs } from '..
 import { drawHighlightSpot } from '../spriteShading';
 import { getSlowDevice } from '../perfFlags';
 import { hexToRGB } from '../fastMath';
+import { bakeRadialGradientSquare } from '../themes/utils';
 import { getIdleAction, type IdleAction } from './idleActions';
 
 // Sprite cache: key -> OffscreenCanvas with pre-drawn character sprite.
@@ -58,21 +59,15 @@ function getShadowCache(): OffscreenCanvas | null {
 // radial-gradient ellipse fills. Bake once at full alpha; per-call modulates
 // with globalAlpha = fireAlpha. ~50×48 pixel ellipse → previously ~2400 per-pixel
 // gradient evaluations per burning player per frame.
-const FIRE_CACHE_W = 64;
-const FIRE_CACHE_H = 64;
+const FIRE_CACHE_SIZE = 64;
 let _fireCache: OffscreenCanvas | null = null;
 function getFireCache(): OffscreenCanvas | null {
   if (_fireCache) return _fireCache;
-  if (typeof OffscreenCanvas === 'undefined') return null;
-  _fireCache = new OffscreenCanvas(FIRE_CACHE_W, FIRE_CACHE_H);
-  const c = _fireCache.getContext('2d')!;
-  const cx = FIRE_CACHE_W / 2, cy = FIRE_CACHE_H / 2;
-  const grad = c.createRadialGradient(cx, cy, 0, cx, cy, FIRE_CACHE_W / 2);
-  grad.addColorStop(0, 'rgba(255, 200, 0, 0.6)');
-  grad.addColorStop(0.5, 'rgba(255, 100, 0, 0.4)');
-  grad.addColorStop(1, 'rgba(255, 50, 0, 0)');
-  c.fillStyle = grad;
-  c.fillRect(0, 0, FIRE_CACHE_W, FIRE_CACHE_H);
+  _fireCache = bakeRadialGradientSquare(FIRE_CACHE_SIZE, g => {
+    g.addColorStop(0, 'rgba(255, 200, 0, 0.6)');
+    g.addColorStop(0.5, 'rgba(255, 100, 0, 0.4)');
+    g.addColorStop(1, 'rgba(255, 50, 0, 0)');
+  });
   return _fireCache;
 }
 

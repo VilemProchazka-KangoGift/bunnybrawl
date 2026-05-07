@@ -139,6 +139,34 @@ export function bakeVerticalGradientStrip(
   return c;
 }
 
+/**
+ * Bake a centered radial CanvasGradient into a square OffscreenCanvas. Use
+ * with `drawImage(cache, x, y, size, size)` + `imageSmoothingEnabled = false`
+ * instead of `fillRect`/`fill()` with `fillStyle = gradient` — same per-pixel
+ * eval avoidance as `bakeVerticalGradientStrip`. Best for radial glows/halos
+ * where the gradient covers a fixed-size circle (player burn fire, ghost glow).
+ *
+ * The `build` callback receives a gradient that spans `(size/2, size/2, 0)` to
+ * `(size/2, size/2, size/2)` — a circle inscribed in the square. Pixels outside
+ * the inscribed circle are extrapolated from the last color stop, so end with
+ * a fully-transparent stop unless you want the corners to bleed.
+ */
+export function bakeRadialGradientSquare(
+  size: number,
+  build: (g: CanvasGradient) => void,
+): OffscreenCanvas | null {
+  if (typeof OffscreenCanvas === 'undefined') return null;
+  const c = new OffscreenCanvas(size, size);
+  const cctx = c.getContext('2d');
+  if (!cctx) return null;
+  const half = size / 2;
+  const g = cctx.createRadialGradient(half, half, 0, half, half, half);
+  build(g);
+  cctx.fillStyle = g;
+  cctx.fillRect(0, 0, size, size);
+  return c;
+}
+
 export interface DriftBandConfig {
   topY: number;
   bottomY: number;
