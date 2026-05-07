@@ -38,6 +38,8 @@ import { PlayerTransitionSystem } from './cosmetics/PlayerTransitionSystem';
 import { PlayerCosmeticSystem } from './cosmetics/PlayerCosmeticSystem';
 import { SurfaceImpactSystem } from './cosmetics/SurfaceImpactSystem';
 import { HUDFeedbackSystem } from './cosmetics/HUDFeedbackSystem';
+import { ReactiveDecorationSystem } from './cosmetics/ReactiveDecorationSystem';
+import type { ReactiveInstance } from './cosmetics/reactiveDecorations';
 
 /** Half-rate cosmetic threshold: particles/SFX/VFX tick at ~30Hz while render stays at 60Hz. */
 const COSMETIC_INTERVAL = FIXED_TIMESTEP * 2;
@@ -68,6 +70,7 @@ export class GameLoop {
   private playerCosmeticSystem!: PlayerCosmeticSystem;
   private surfaceImpactSystem!: SurfaceImpactSystem;
   private hudFeedbackSystem!: HUDFeedbackSystem;
+  private reactiveDecorationSystem!: ReactiveDecorationSystem;
 
   private _debugKeyHandler: ((e: KeyboardEvent) => void) | null = null;
   private _unsubRenderScale: (() => void) | null = null;
@@ -130,10 +133,21 @@ export class GameLoop {
     this.simulator.setParticleEmitter(this.particleSystem);
 
     // Cosmetic systems — own particle/transition baselines on the browser side.
+    // ReactiveDecorationSystem must be constructed before PlayerTransitionSystem
+    // so we can pass its applyStompImpulse as the onStomp callback.
+    this.reactiveDecorationSystem = new ReactiveDecorationSystem(
+      sState, sArena,
+      (instance, _arena) => this._emitReactiveBurst(instance),
+    );
+    if (sTheme.buildReactiveDecorations) {
+      this.reactiveDecorationSystem.setInstances(sTheme.buildReactiveDecorations(sArena));
+    }
+
     this.playerTransitionSystem = new PlayerTransitionSystem(
       sState, settings, (name) => this.playSound(name),
       (name) => { if (this._audioEnabled) audio.playAnimal(name); },
       this.particleSystem,
+      (x, y) => this.reactiveDecorationSystem.applyStompImpulse(x, y),
     );
     this.playerCosmeticSystem = new PlayerCosmeticSystem(
       sState, this.simulator.getEffWalkSpeed(), this.particleSystem,
@@ -241,6 +255,29 @@ export class GameLoop {
     if (this._audioEnabled) audio.play(name as Parameters<typeof audio.play>[0]);
   }
 
+  private _emitReactiveBurst(instance: ReactiveInstance): void {
+    if (!instance.burst) return;
+    // Spawn `count` particles using the kind's burst color/style. For PR 1
+    // we keep this minimal: small petal-shaped fragments above the instance.
+    // Future tasks can extend per-particleKind styling.
+    const { count, particleKind } = instance.burst;
+    const cx = instance.pos.x;
+    const cy = instance.pos.y - 8;
+    const color = particleKind === 'leaf' ? '#5a8f3a'
+                : particleKind === 'petal' ? '#ffb3d9'
+                : '#cccccc';
+    for (let i = 0; i < count; i++) {
+      const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.2;
+      const speed = 50 + Math.random() * 80;
+      const life = 0.6 + Math.random() * 0.5;
+      this.particleSystem.emitParticle(
+        cx, cy,
+        Math.cos(angle) * speed, Math.sin(angle) * speed,
+        life, 1.5 + Math.random() * 1.5, color,
+      );
+    }
+  }
+
   /** Set a seeded PRNG for deterministic network play. */
   setRng(rng: SeededRNG): void {
     this.simulator.setRng(rng);
@@ -343,10 +380,19 @@ export class GameLoop {
     );
     this.simulator.setParticleEmitter(this.particleSystem);
 
+    this.reactiveDecorationSystem = new ReactiveDecorationSystem(
+      sState, sArena,
+      (instance, _arena) => this._emitReactiveBurst(instance),
+    );
+    if (newTheme.buildReactiveDecorations) {
+      this.reactiveDecorationSystem.setInstances(newTheme.buildReactiveDecorations(sArena));
+    }
+
     this.playerTransitionSystem = new PlayerTransitionSystem(
       sState, settings, (name) => this.playSound(name),
       (name) => { if (this._audioEnabled) audio.playAnimal(name); },
       this.particleSystem,
+      (x, y) => this.reactiveDecorationSystem.applyStompImpulse(x, y),
     );
     this.playerCosmeticSystem = new PlayerCosmeticSystem(
       sState, this.simulator.getEffWalkSpeed(), this.particleSystem,
@@ -446,6 +492,7 @@ export class GameLoop {
     this.entityTransitionSystem.resetBaseline();
     this.surfaceImpactSystem.resetBaseline();
     this.hudFeedbackSystem.resetBaseline();
+    this.reactiveDecorationSystem.resetBaseline();
   }
 
   /** Seconds since the last cosmeticStep fired. */
@@ -476,6 +523,7 @@ export class GameLoop {
     this.environmentSystem.cosmeticUpdate(dt);
     this.surfaceImpactSystem.cosmeticUpdate(dt);
     this.hudFeedbackSystem.cosmeticUpdate(dt);
+    this.reactiveDecorationSystem.cosmeticUpdate(dt);
   }
 
   /** Tick all cosmetic-only systems (particles, environment, visual decays). */
@@ -510,6 +558,21 @@ export class GameLoop {
       const hudFeedbackStart = perfTrace.begin('cosmetic.hudFeedback');
       this.hudFeedbackSystem.cosmeticUpdate(dt);
       perfTrace.end('cosmetic.hudFeedback', hudFeedbackStart);
+
+      const reactiveStart = perfTrace.begin('cosmetic.reactive');
+      this.reactiveDecorationSystem.cosmeticUpdate(dt);
+      perfTrace.end('cosmetic.reactive', reactiveStart);
+
+      // Per-arena bespoke cosmetic logic (e.g. underwater bubble trails).
+      const tick = this.simulator.getTheme().cosmeticTick;
+      if (tick) {
+        const arenaCosmeticStart = perfTrace.begin('cosmetic.arena');
+        tick(this.simulator.getState(), dt, {
+          emitParticle: (x, y, vx, vy, life, size, color) =>
+            this.particleSystem.emitParticle(x, y, vx, vy, life, size, color),
+        });
+        perfTrace.end('cosmetic.arena', arenaCosmeticStart);
+      }
     });
   }
 
@@ -618,6 +681,8 @@ export class GameLoop {
   fixedUpdate(dt: number, networkInputs?: Map<string, InputState>): void {
     if (this.stopped) return;
     perfTrace.measure('fixedUpdate', () => {
+      // 60Hz path: advance windPhase + run high-frequency reactive instances.
+      this.reactiveDecorationSystem.fixedUpdate(dt);
       this.simulator.fixedUpdate(dt, networkInputs);
     });
   }
