@@ -22,7 +22,9 @@ export interface ReactiveInstance {
   proximity?: {
     radius: number;
     mode: ProximityMode;
-    /** Kind-relative; the draw fn interprets it. */
+    /** Steady-state bend amplitude at typical walking speed (~200 px/s). The
+     *  spring-damper input scales by `magnitude / WALKING_SPEED_REF` so this
+     *  remains the intuitive "this is how far it bends" knob across kinds. */
     magnitude: number;
   };
   /** Stomp shake radius. Undefined = stomp-immune. */
@@ -31,15 +33,18 @@ export interface ReactiveInstance {
   burst?: { threshold: number; particleKind: string; count: number };
 
   // ---- Runtime-mutated state (updated by the system per tick) ----
-  /** 0..1, smoothed proximity scalar. */
+  /** 0..1, smoothed proximity scalar. Used for wind muting and as a "player
+   *  is here" flag for kind-specific triggers (e.g. dandelion seed-burst). */
   excitement: number;
   /** 0..1, set on stomp impulse, decays each tick. */
   shakeDecay: number;
-  /** Signed dx (instance.x - nearestPlayer.centerX) at last proximity update.
-   *  Set by the system alongside excitement. Undefined if no proximity config
-   *  or no live player. Draw fns use this for direction-aware bend without
-   *  re-scanning state.players. */
-  nearestDx?: number;
+  /** Signed bend offset in px, driven by spring-damper response to player
+   *  velocity. Positive = bend right, negative = bend left. The system
+   *  integrates this in `_tickBucket`; draw fns read via `composeBend`. */
+  bendValue: number;
+  /** Rate of change of bendValue (px/s). Carries momentum so a fast player
+   *  pass kicks the decoration even after they've left the radius. */
+  bendVelocity: number;
 }
 
 export interface ReactiveKindConfig {
@@ -114,16 +119,38 @@ export function _resetReactiveKindsForTest(): void {
 
 // ---- Primitives ----
 
-/** Excitement rise rate (k in 1/s). Quick reaction when player enters radius —
- *  ≈0.4s to reach 90%. */
+/** Excitement rise rate (k in 1/s). Quick reaction when player enters radius. */
 const EXCITEMENT_RISE_RATE = 2.4;
-/** Excitement decay rate (k in 1/s). Slow settle after player leaves —
- *  ≈5.7s to reach 90% decay. Plants in real life relax gradually; instant
- *  snap-back reads as artificial. */
+/** Excitement decay rate (k in 1/s). Slow settle so the wind-muting fades
+ *  back gradually after the player leaves. */
 const EXCITEMENT_DECAY_RATE = 0.4;
 
 /** Stomp-shake decay per second. */
 export const SHAKE_DECAY_RATE = 7;
+
+// ---- Spring-damper bend dynamics ----
+//
+// The bend is modeled as a 1D spring-damper system: position `bendValue`
+// and velocity `bendVelocity`. Each tick the system computes a force from
+// nearby players' velocities and integrates the dynamics. This replaces the
+// older "excitement × magnitude" position-based model, which under-reacted
+// to fast players (short contact time → low excitement → small bend).
+//
+// Tuning rationale (BEND_STIFFNESS=12, BEND_DAMPING=4.5):
+//  - Natural frequency ω = sqrt(stiffness) ≈ 3.46 rad/s → period ≈ 1.8s
+//  - Damping ratio ζ = damping / (2·sqrt(stiffness)) ≈ 0.65 (under-damped)
+//  - Settling time (5%) ≈ 3·1/ζω ≈ 1.3s — visibly springy but not bouncy
+//  - With dt up to 67ms (15Hz cosmetic stagger), Euler integration is stable
+//    (well below 2/sqrt(stiffness) ≈ 0.58s stability bound).
+
+const BEND_STIFFNESS = 12;
+const BEND_DAMPING = 4.5;
+
+/** Reference walking speed used to scale `proximity.magnitude` into a
+ *  spring-input force. Equilibrium bend at this player speed equals
+ *  `proximity.magnitude`. Above this speed → larger transient kick;
+ *  below → smaller bend. */
+const WALKING_SPEED_REF = 200;
 
 /** Update an instance's excitement based on the closest player's distance.
  *  Caller is responsible for finding the closest player and passing its distance.
@@ -136,6 +163,39 @@ export function updateExcitement(instance: ReactiveInstance, distanceToNearestPl
   const k = within ? EXCITEMENT_RISE_RATE : EXCITEMENT_DECAY_RATE;
   const alpha = 1 - Math.exp(-k * dt);
   instance.excitement += (target - instance.excitement) * alpha;
+}
+
+/** Integrate one timestep of the spring-damper bend dynamics. The caller
+ *  supplies `force` — the sum of (player.vx × proximityFactor × magScale)
+ *  over all players currently inside the proximity radius (with sign flipped
+ *  for `mode === 'flee'`). Semi-implicit Euler keeps the integration stable
+ *  at the system's 15-30Hz tick rate. */
+export function tickBendDynamics(instance: ReactiveInstance, force: number, dt: number): void {
+  const acc = -BEND_STIFFNESS * instance.bendValue
+            - BEND_DAMPING * instance.bendVelocity
+            + force;
+  instance.bendVelocity += acc * dt;
+  instance.bendValue += instance.bendVelocity * dt;
+}
+
+/** Convert `(playerVx, proximityFactor, magnitude, mode)` to a spring-input
+ *  force scalar. Encapsulates the magnitude-to-stiffness scaling so kind
+ *  authors can keep thinking in "px of bend" via `proximity.magnitude` while
+ *  the system handles physics-correct units internally. */
+export function bendForceFromPlayer(
+  playerVx: number,
+  proximityFactor: number,
+  magnitude: number,
+  mode: ProximityMode,
+): number {
+  if (mode === 'excite') return 0; // pure excitement scalar — no bend coupling
+  const sign = mode === 'flee' ? -1 : 1;
+  // Tuned so equilibrium bend at vx=WALKING_SPEED_REF, prox=1 equals magnitude.
+  // Derivation: bend_eq = force / stiffness; we want bend_eq = magnitude when
+  // (vx, prox) = (REF, 1), so force_at_ref = magnitude * stiffness. Hence
+  // forceCoeff = stiffness / WALKING_SPEED_REF.
+  const forceCoeff = BEND_STIFFNESS / WALKING_SPEED_REF;
+  return sign * playerVx * proximityFactor * magnitude * forceCoeff;
 }
 
 /** Apply a stomp impulse: if the stomp is within `shakeRadius`, set shakeDecay to 1. */
@@ -168,42 +228,10 @@ export function shouldFireBurst(instance: ReactiveInstance, prevShake: number): 
 }
 
 /** Compose the full bend offset for a draw fn — wind sway muted by
- *  `(1 - excitement)` plus the player-driven `excitementBend`. The muting
- *  prevents the decoration from crossing neutral on its way back to wind
- *  state during decay: if a player pushed the element opposite to its
- *  natural wind lean, decay smoothly returns toward neutral and only
- *  re-introduces the wind component as excitement approaches zero, so
- *  the element doesn't "snap past" the rest position to the wind side.
- *
- *  Default `signMul = -1` is "lean with player" (see `excitementBend`).
- *  Pass `signMul = +1` for flee. */
-export function composeBend(instance: ReactiveInstance, swayPhase: number, signMul = -1): number {
-  return swayPhase * (1 - instance.excitement) + excitementBend(instance, signMul);
-}
-
-/** Direction-aware bend offset used by parting/lean draw fns. Returns a px
- *  offset to add to the swayPhase; positive = bend right, negative = bend left.
- *  Reads `instance.nearestDx` (set by the system during proximity scan) and
- *  scales by excitement × proximity.magnitude × signMul.
- *
- *  Default `signMul = -1` makes the decoration lean in the same direction the
- *  player is moving (matches the visual of brushing through grass / pushing a
- *  hanging vine aside). Pass `signMul = +1` for explicit flee behavior — the
- *  decoration recoils away from the player.
- *
- *  Lives here so kind authors across arenas don't reinvent it. */
-export function excitementBend(instance: ReactiveInstance, signMul = -1): number {
-  if (instance.excitement <= 0.01 || !instance.proximity) return 0;
-  const radius = instance.proximity.radius;
-  if (instance.nearestDx !== undefined) {
-    const norm = instance.nearestDx < -radius ? -1
-      : instance.nearestDx > radius ? 1
-      : instance.nearestDx / radius;
-    return signMul * instance.excitement * instance.proximity.magnitude * norm;
-  }
-  // Fallback when no live player: pick a stable per-instance side from seed
-  // parity at full magnitude (norm = ±1) so adjacent decorations don't all
-  // bend the same way and the magnitude actually reads visually.
-  const norm = (instance.seed & 1) === 0 ? 1 : -1;
-  return signMul * instance.excitement * instance.proximity.magnitude * norm;
+ *  `(1 - excitement)` plus the velocity-driven `bendValue`. The wind muting
+ *  smoothly hands off to the natural wind state as the player leaves and
+ *  excitement decays, so the decoration doesn't snap past neutral on the way
+ *  back to its wind-driven rest position. */
+export function composeBend(instance: ReactiveInstance, swayPhase: number): number {
+  return swayPhase * (1 - instance.excitement) + instance.bendValue;
 }

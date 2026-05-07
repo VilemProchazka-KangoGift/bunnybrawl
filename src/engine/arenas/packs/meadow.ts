@@ -163,6 +163,8 @@ function meadowTree(x: number, y: number, size: number): ReactiveInstance {
     burst: { threshold: 0.95, particleKind: 'leaf', count: 12 },
     excitement: 0,
     shakeDecay: 0,
+    bendValue: 0,
+    bendVelocity: 0,
   };
 }
 registerReactiveKind('meadow.tree', {
@@ -190,7 +192,7 @@ function meadowTallGrass(x: number, y: number, count: number): ReactiveInstance 
     data: { count } satisfies TallGrassData,
     windAmp: 6,
     proximity: { radius: 28, mode: 'lean', magnitude: 18 },
-    excitement: 0, shakeDecay: 0,
+    excitement: 0, shakeDecay: 0, bendValue: 0, bendVelocity: 0,
   };
 }
 registerReactiveKind('meadow.tallGrass', {
@@ -208,7 +210,7 @@ function meadowFern(x: number, y: number): ReactiveInstance {
     seed: Math.floor((x * 79 + y * 37) % 997),
     windAmp: 7,
     proximity: { radius: 28, mode: 'flee', magnitude: 14 },
-    excitement: 0, shakeDecay: 0,
+    excitement: 0, shakeDecay: 0, bendValue: 0, bendVelocity: 0,
   };
 }
 registerReactiveKind('meadow.fern', {
@@ -229,7 +231,7 @@ function meadowHangingVine(x: number, y: number, length: number): ReactiveInstan
     data: { length } satisfies HangingVineData,
     windAmp: 10,
     proximity: { radius: 36, mode: 'lean', magnitude: 30 },
-    excitement: 0, shakeDecay: 0,
+    excitement: 0, shakeDecay: 0, bendValue: 0, bendVelocity: 0,
   };
 }
 registerReactiveKind('meadow.hangingVine', {
@@ -251,7 +253,7 @@ function meadowDandelion(x: number, y: number): ReactiveInstance {
     seed: Math.floor((x * 113 + y * 61) % 997),
     data: { phase: -1 } satisfies DandelionData,
     proximity: { radius: 40, mode: 'excite', magnitude: 1 },
-    excitement: 0, shakeDecay: 0,
+    excitement: 0, shakeDecay: 0, bendValue: 0, bendVelocity: 0,
   };
 }
 
@@ -348,7 +350,7 @@ function meadowButterfly(idx: number): ReactiveInstance {
     pos: { x: 0, y: 0 }, kind: 'meadow.butterfly',
     seed: idx,
     proximity: { radius: 70, mode: 'flee', magnitude: 14 },
-    excitement: 0, shakeDecay: 0,
+    excitement: 0, shakeDecay: 0, bendValue: 0, bendVelocity: 0,
   };
 }
 registerReactiveKind('meadow.butterfly', {
@@ -365,7 +367,7 @@ function meadowBeeCluster(idx: number): ReactiveInstance {
     pos: { x: BEE_CLUSTERS[idx].homeX, y: BEE_CLUSTERS[idx].homeY }, kind: 'meadow.bee',
     seed: idx,
     proximity: { radius: 110, mode: 'flee', magnitude: 28 },
-    excitement: 0, shakeDecay: 0,
+    excitement: 0, shakeDecay: 0, bendValue: 0, bendVelocity: 0,
   };
 }
 registerReactiveKind('meadow.bee', {

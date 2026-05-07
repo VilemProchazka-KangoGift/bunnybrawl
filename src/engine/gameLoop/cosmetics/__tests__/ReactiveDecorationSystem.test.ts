@@ -15,6 +15,8 @@ function inst(overrides: Partial<ReactiveInstance> = {}): ReactiveInstance {
     seed: 1,
     excitement: 0,
     shakeDecay: 0,
+    bendValue: 0,
+    bendVelocity: 0,
     ...overrides,
   };
 }
@@ -92,70 +94,87 @@ describe('ReactiveDecorationSystem', () => {
     expect(i.excitement).toBeGreaterThan(0.5);
   });
 
-  it('nearestDx tracks the actually-nearest live player, not the first', () => {
-    const state = makeState({
-      phase: 'playing',
-      players: [
-        makePlayer({ id: 'P1', x: 500, y: 580, width: 28, height: 40 }), // far
-        makePlayer({ id: 'P2', x: 110, y: 580, width: 28, height: 40 }), // near
-      ],
-    });
-    const sys = new ReactiveDecorationSystem(state, makeArena(), () => {});
-    const i = inst({
-      pos: { x: 100, y: 600 },
-      kind: 'test.bg',
-      proximity: { radius: 200, mode: 'flee', magnitude: 10 },
-    });
-    sys.setInstances([i]);
-    sys.cosmeticUpdate(1 / 30);
-    // P2 center is at 110+14 = 124; instance.x=100; dx = 100 - 124 = -24
-    expect(i.nearestDx).toBeLessThan(0);
-    expect(Math.abs(i.nearestDx!)).toBeLessThan(50); // not P1's far dx (~−414)
-  });
-
-  it('freezes nearestDx once nearest player exits the proximity radius', () => {
-    // Without this, a player walking past then far past would keep updating
-    // nearestDx, snapping bend direction as they cross x=instance.x. With
-    // the freeze, direction is locked at the moment of exit and only the
-    // magnitude (excitement) decays.
-    const player = makePlayer({ id: 'P1', x: 90, y: 580, width: 28, height: 40 });
+  it('bend reacts to player velocity — fast pass produces visible kick', () => {
+    // Fast player blowing through the proximity zone produces a momentum kick
+    // via the spring-damper model. Even though contact time is short, the
+    // velocity-driven force gives bendVelocity a hit; the spring keeps
+    // displacing for a moment after the player exits. (Player y=580 with
+    // height=40 → center at y=600 = instance.y, so dy=0, full radius coverage.)
+    const player = makePlayer({ id: 'P1', x: 60, y: 580, width: 28, height: 40, vx: 400 });
     const state = makeState({ phase: 'playing', players: [player] });
     const sys = new ReactiveDecorationSystem(state, makeArena(), () => {});
     const i = inst({
       pos: { x: 100, y: 600 }, kind: 'test.bg',
-      proximity: { radius: 60, mode: 'lean', magnitude: 10 },
+      proximity: { radius: 50, mode: 'lean', magnitude: 18 },
     });
     sys.setInstances([i]);
-    // Player inside radius — nearestDx tracks live position
-    sys.cosmeticUpdate(1 / 30);
-    expect(i.nearestDx).toBeDefined();
-    const exitDir = i.nearestDx!;
-    // Player walks far past on the OPPOSITE side (would flip nearestDx sign
-    // if we still tracked, since 100 - 500 = -400 vs original ~+4)
-    player.x = 500;
-    sys.cosmeticUpdate(1 / 30);
-    // nearestDx should be frozen at exit direction, not flipped to track far-away player
-    expect(Math.sign(i.nearestDx!)).toBe(Math.sign(exitDir));
+    let peak = 0;
+    for (let n = 0; n < 12; n++) {
+      sys.cosmeticUpdate(1 / 30);
+      player.x += 400 * (1 / 30);
+      peak = Math.max(peak, Math.abs(i.bendValue));
+    }
+    // Peak bend during/after the run pass should be visibly non-trivial.
+    expect(peak).toBeGreaterThan(3);
   });
 
-  it('skips dead/respawning players when picking nearest', () => {
-    const state = makeState({
-      phase: 'playing',
-      players: [
-        makePlayer({ id: 'P1', x: 110, y: 580, width: 28, height: 40, state: 'splat' }),
-        makePlayer({ id: 'P2', x: 500, y: 580, width: 28, height: 40, state: 'idle' }),
-      ],
-    });
+  it('bend follows player velocity sign for mode=lean (default)', () => {
+    const player = makePlayer({ id: 'P1', x: 80, y: 580, width: 28, height: 40, vx: 200 });
+    const state = makeState({ phase: 'playing', players: [player] });
     const sys = new ReactiveDecorationSystem(state, makeArena(), () => {});
     const i = inst({
-      pos: { x: 100, y: 600 },
-      kind: 'test.bg',
-      proximity: { radius: 600, mode: 'flee', magnitude: 10 },
+      pos: { x: 100, y: 600 }, kind: 'test.bg',
+      proximity: { radius: 50, mode: 'lean', magnitude: 18 },
     });
     sys.setInstances([i]);
-    sys.cosmeticUpdate(1 / 30);
-    // P1 (splat) skipped, falls back to P2 (far) — dx is large negative
-    expect(Math.abs(i.nearestDx!)).toBeGreaterThan(300);
+    for (let n = 0; n < 5; n++) sys.cosmeticUpdate(1 / 30);
+    expect(i.bendValue).toBeGreaterThan(0);
+  });
+
+  it('bend reverses sign for mode=flee', () => {
+    const player = makePlayer({ id: 'P1', x: 80, y: 580, width: 28, height: 40, vx: 200 });
+    const state = makeState({ phase: 'playing', players: [player] });
+    const sys = new ReactiveDecorationSystem(state, makeArena(), () => {});
+    const i = inst({
+      pos: { x: 100, y: 600 }, kind: 'test.bg',
+      proximity: { radius: 50, mode: 'flee', magnitude: 18 },
+    });
+    sys.setInstances([i]);
+    for (let n = 0; n < 5; n++) sys.cosmeticUpdate(1 / 30);
+    expect(i.bendValue).toBeLessThan(0);
+  });
+
+  it('bend springs back to zero after player leaves and stops', () => {
+    const player = makePlayer({ id: 'P1', x: 80, y: 580, width: 28, height: 40, vx: 200 });
+    const state = makeState({ phase: 'playing', players: [player] });
+    const sys = new ReactiveDecorationSystem(state, makeArena(), () => {});
+    const i = inst({
+      pos: { x: 100, y: 600 }, kind: 'test.bg',
+      proximity: { radius: 50, mode: 'lean', magnitude: 18 },
+    });
+    sys.setInstances([i]);
+    for (let n = 0; n < 10; n++) sys.cosmeticUpdate(1 / 30);
+    expect(Math.abs(i.bendValue)).toBeGreaterThan(0.1);
+    player.x = 1000;
+    player.vx = 0;
+    for (let n = 0; n < 100; n++) sys.cosmeticUpdate(1 / 30);
+    expect(Math.abs(i.bendValue)).toBeLessThan(0.05);
+    expect(Math.abs(i.bendVelocity)).toBeLessThan(0.5);
+  });
+
+  it('skips dead/respawning players when accumulating bend force', () => {
+    const splat = makePlayer({ id: 'P1', x: 90, y: 580, width: 28, height: 40, vx: 400, state: 'splat' });
+    const live = makePlayer({ id: 'P2', x: 1000, y: 580, width: 28, height: 40, vx: 400 });
+    const state = makeState({ phase: 'playing', players: [splat, live] });
+    const sys = new ReactiveDecorationSystem(state, makeArena(), () => {});
+    const i = inst({
+      pos: { x: 100, y: 600 }, kind: 'test.bg',
+      proximity: { radius: 30, mode: 'lean', magnitude: 18 },
+    });
+    sys.setInstances([i]);
+    for (let n = 0; n < 5; n++) sys.cosmeticUpdate(1 / 30);
+    expect(i.bendValue).toBe(0);
+    expect(i.bendVelocity).toBe(0);
   });
 
   it('applyStompImpulse sets shakeDecay only inside shakeRadius', () => {
@@ -223,7 +242,7 @@ describe('ReactiveDecorationSystem', () => {
     expect(reset).not.toHaveBeenCalled();
   });
 
-  it('resetBaseline zeros excitement, shakeDecay, and nearestDx without resetting windPhase', () => {
+  it('resetBaseline zeros excitement, shakeDecay, and bend dynamics without resetting windPhase', () => {
     const sys = new ReactiveDecorationSystem(makeState({ phase: 'playing' }), makeArena(), () => {});
     const i = inst({
       kind: 'test.bg', shakeRadius: 80,
@@ -231,14 +250,16 @@ describe('ReactiveDecorationSystem', () => {
     });
     i.excitement = 0.7;
     i.shakeDecay = 0.4;
-    i.nearestDx = 12;
+    i.bendValue = 12;
+    i.bendVelocity = 30;
     sys.setInstances([i]);
     sys.fixedUpdate(1 / 60); // advance windPhase
     const phase = sys.getWindPhase();
     sys.resetBaseline();
     expect(i.excitement).toBe(0);
     expect(i.shakeDecay).toBe(0);
-    expect(i.nearestDx).toBeUndefined();
+    expect(i.bendValue).toBe(0);
+    expect(i.bendVelocity).toBe(0);
     expect(sys.getWindPhase()).toBe(phase); // baseline reset preserves wind continuity
   });
 

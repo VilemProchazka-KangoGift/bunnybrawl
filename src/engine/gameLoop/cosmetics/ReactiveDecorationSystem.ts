@@ -3,7 +3,8 @@ import type { Arena, MatchState } from '../../types';
 import type { CosmeticSystem } from '../types';
 import { getSlowDevice } from '../../perfFlags';
 import {
-  applyShakeImpulse, decayShake, getReactiveKind, updateExcitement,
+  applyShakeImpulse, bendForceFromPlayer, decayShake, getReactiveKind,
+  tickBendDynamics, updateExcitement,
   type ReactiveInstance, type ReactiveLayer,
 } from './reactiveDecorations';
 
@@ -111,11 +112,12 @@ export class ReactiveDecorationSystem implements CosmeticSystem {
     this._applyImpulseToBucket(this._tick60, stompX, stompY);
   }
 
-  /** Re-prime per-instance state (zeros excitement / shakeDecay / nearestDx
-   *  and invokes the kind's `resetData` if registered). Used on guest reconnect
-   *  or loading→playing edge to avoid stale carryover — without it, dandelions
-   *  reconnecting mid-burst would resume with a half-grown puff. Does NOT
-   *  reset windPhase — that stays continuous so wind doesn't visually snap. */
+  /** Re-prime per-instance state (zeros excitement / shakeDecay / bend
+   *  dynamics and invokes the kind's `resetData` if registered). Used on
+   *  guest reconnect or loading→playing edge to avoid stale carryover —
+   *  without it, dandelions reconnecting mid-burst would resume with a
+   *  half-grown puff. Does NOT reset windPhase — that stays continuous so
+   *  wind doesn't visually snap. */
   resetBaseline(): void {
     this._resetBucket(this._tick30);
     this._resetBucket(this._tick60);
@@ -126,7 +128,8 @@ export class ReactiveDecorationSystem implements CosmeticSystem {
       const inst = bucket[i];
       inst.excitement = 0;
       inst.shakeDecay = 0;
-      inst.nearestDx = undefined;
+      inst.bendValue = 0;
+      inst.bendVelocity = 0;
       if (inst.data !== undefined) {
         const cfg = getReactiveKind(inst.kind);
         if (cfg?.resetData) cfg.resetData(inst.data);
@@ -162,33 +165,33 @@ export class ReactiveDecorationSystem implements CosmeticSystem {
     for (let i = 0; i < bucket.length; i++) {
       const inst = bucket[i];
 
-      // Proximity / excitement. Also captures signed dx to nearest player so
-      // direction-aware draw fns (grass parting, vine lean) don't re-scan.
-      // `nearestDx` is only refreshed while the nearest player is INSIDE the
-      // proximity radius — once they exit, the direction is frozen at the
-      // last in-radius reading so the bend decays in-place rather than
-      // snapping to the player's current (far-away) direction.
+      // Proximity-driven excitement (binary "player here" scalar — used for
+      // wind muting and burst triggers like dandelion seed-fly) AND
+      // velocity-driven spring-damper bend (the actual visual deflection).
+      // Single nearest-player scan accumulates both: nearest distance for
+      // excitement, summed force from in-radius players for bend.
       if (inst.proximity && !slow) {
+        const r = inst.proximity.radius;
+        const r2 = r * r;
         let nearestSq = Infinity;
-        let nearestDx = 0;
-        let found = false;
+        let force = 0;
         for (let pi = 0; pi < players.length; pi++) {
           const p = players[pi];
           if (!p.active || p.state === 'splat' || p.state === 'respawning') continue;
           const px = p.x + p.width * 0.5;
           const py = p.y + p.height * 0.5;
-          const dxFromInst = inst.pos.x - px;
-          const dyFromInst = inst.pos.y - py;
-          const d2 = dxFromInst * dxFromInst + dyFromInst * dyFromInst;
-          if (d2 < nearestSq) { nearestSq = d2; nearestDx = dxFromInst; found = true; }
+          const dx = inst.pos.x - px;
+          const dy = inst.pos.y - py;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < nearestSq) nearestSq = d2;
+          if (d2 < r2) {
+            const proximityFactor = 1 - Math.sqrt(d2) / r;
+            force += bendForceFromPlayer(p.vx, proximityFactor, inst.proximity.magnitude, inst.proximity.mode);
+          }
         }
-        if (found) {
-          const dist = Math.sqrt(nearestSq);
-          updateExcitement(inst, dist, dt);
-          if (dist < inst.proximity.radius) inst.nearestDx = nearestDx;
-        } else {
-          updateExcitement(inst, Infinity, dt);
-        }
+        const nearestDist = nearestSq === Infinity ? Infinity : Math.sqrt(nearestSq);
+        updateExcitement(inst, nearestDist, dt);
+        tickBendDynamics(inst, force, dt);
       }
 
       // Shake decay (burst fires inside applyStompImpulse on rising edge,

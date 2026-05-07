@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   registerReactiveKind, getReactiveKind, hasReactiveKind, _resetReactiveKindsForTest,
-  updateExcitement, applyShakeImpulse, decayShake, shouldFireBurst, excitementBend, composeBend,
+  updateExcitement, applyShakeImpulse, decayShake, shouldFireBurst, composeBend,
+  tickBendDynamics, bendForceFromPlayer,
   type ReactiveInstance, type ReactiveKindConfig,
 } from '../reactiveDecorations';
 
@@ -12,6 +13,8 @@ function makeInstance(overrides: Partial<ReactiveInstance> = {}): ReactiveInstan
     seed: 1,
     excitement: 0,
     shakeDecay: 0,
+    bendValue: 0,
+    bendVelocity: 0,
     ...overrides,
   };
 }
@@ -26,7 +29,7 @@ describe('reactiveDecorations — kind registry', () => {
     const cfg = getReactiveKind('test.foo');
     expect(cfg?.draw).toBe(draw);
     expect(cfg?.layer).toBe('prePlayer');
-    expect(cfg?.highFrequency).toBe(false); // default
+    expect(cfg?.highFrequency).toBe(false);
   });
 
   it('overwrites on re-registration (test reload pattern)', () => {
@@ -47,34 +50,25 @@ describe('reactiveDecorations — kind registry', () => {
 describe('reactiveDecorations — excitement primitive', () => {
   it('rises toward 1 when within radius', () => {
     const inst = makeInstance({ proximity: { radius: 50, mode: 'excite', magnitude: 1 } });
-    // Simulate 10 ticks of player at distance 30 (within radius 50)
     for (let i = 0; i < 10; i++) updateExcitement(inst, 30, 1 / 30);
     expect(inst.excitement).toBeGreaterThan(0.5);
     expect(inst.excitement).toBeLessThanOrEqual(1);
   });
 
   it('decays toward 0 when outside radius (slow settle, no snap-back)', () => {
-    // Decay rate 0.4/s gives ~5.7s to reach 90% decay. After 1 second the
-    // excitement should still be ~0.67 (most of the bend remains visible —
-    // asymmetric ease, fast rise, very slow decay).
     const inst = makeInstance({ proximity: { radius: 50, mode: 'excite', magnitude: 1 }, excitement: 1 });
     for (let i = 0; i < 30; i++) updateExcitement(inst, 200, 1 / 30); // 1s
     expect(inst.excitement).toBeGreaterThan(0.6); // still mostly bent
     expect(inst.excitement).toBeLessThan(0.75);
-    // Continue another ~7 seconds — now near zero.
     for (let i = 0; i < 7 * 30; i++) updateExcitement(inst, 200, 1 / 30);
     expect(inst.excitement).toBeLessThan(0.05);
   });
 
   it('rises faster than it decays (asymmetric — quick to react, slow to settle)', () => {
-    // 0.5s ramp inside radius then 0.5s outside. Asymmetric rates (rise 2.4,
-    // decay 0.9) mean we end up with more excitement than the simple linear
-    // round-trip would suggest.
     const inst = makeInstance({ proximity: { radius: 50, mode: 'excite', magnitude: 1 } });
     for (let i = 0; i < 15; i++) updateExcitement(inst, 30, 1 / 30);
     const peak = inst.excitement;
     for (let i = 0; i < 15; i++) updateExcitement(inst, 200, 1 / 30);
-    // After equal time outside, should still be > half of peak (slow decay).
     expect(inst.excitement).toBeGreaterThan(peak * 0.5);
   });
 
@@ -89,13 +83,13 @@ describe('reactiveDecorations — excitement primitive', () => {
 describe('reactiveDecorations — shake primitive', () => {
   it('sets shakeDecay to 1 when stomp is within shakeRadius', () => {
     const inst = makeInstance({ pos: { x: 100, y: 600 }, shakeRadius: 80 });
-    applyShakeImpulse(inst, 120, 600); // distance 20 — within
+    applyShakeImpulse(inst, 120, 600);
     expect(inst.shakeDecay).toBe(1);
   });
 
   it('does not set shakeDecay when stomp is outside shakeRadius', () => {
     const inst = makeInstance({ pos: { x: 100, y: 600 }, shakeRadius: 80 });
-    applyShakeImpulse(inst, 500, 600); // distance 400 — outside
+    applyShakeImpulse(inst, 500, 600);
     expect(inst.shakeDecay).toBe(0);
   });
 
@@ -107,7 +101,7 @@ describe('reactiveDecorations — shake primitive', () => {
 
   it('decays shakeDecay at rate 7/sec', () => {
     const inst = makeInstance({ shakeDecay: 1 });
-    decayShake(inst, 1 / 30); // ~0.233 of decay
+    decayShake(inst, 1 / 30);
     expect(inst.shakeDecay).toBeGreaterThan(0.7);
     expect(inst.shakeDecay).toBeLessThan(0.8);
   });
@@ -140,110 +134,108 @@ describe('reactiveDecorations — burst trigger', () => {
   });
 
   it('does not fire when prev equals threshold exactly', () => {
-    // prev < threshold uses strict less-than, so prev === threshold should not fire.
     const inst = makeInstance({ burst: { threshold: 0.95, particleKind: 'petal', count: 10 }, shakeDecay: 1 });
     expect(shouldFireBurst(inst, 0.95)).toBe(false);
   });
 });
 
-describe('reactiveDecorations — excitementBend', () => {
-  it('returns 0 when excitement is at rest', () => {
-    const inst = makeInstance({
-      excitement: 0,
-      proximity: { radius: 30, mode: 'flee', magnitude: 10 },
-    });
-    expect(excitementBend(inst)).toBe(0);
+describe('reactiveDecorations — bend dynamics (spring-damper)', () => {
+  it('bendForceFromPlayer scales linearly with player vx and proximity factor', () => {
+    const slowWalk = bendForceFromPlayer(80, 1, 18, 'lean');
+    const run = bendForceFromPlayer(400, 1, 18, 'lean');
+    // Force is linear in vx, so run/slow ratio = 5x.
+    expect(run / slowWalk).toBeCloseTo(5, 5);
+    // And linear in proximity factor.
+    const halfProx = bendForceFromPlayer(80, 0.5, 18, 'lean');
+    expect(slowWalk / halfProx).toBeCloseTo(2, 5);
   });
 
-  it('returns 0 when proximity is undefined', () => {
-    const inst = makeInstance({ excitement: 0.5 });
-    expect(excitementBend(inst)).toBe(0);
+  it('bendForceFromPlayer flips sign for mode=flee', () => {
+    expect(bendForceFromPlayer(200, 1, 18, 'lean')).toBeGreaterThan(0);
+    expect(bendForceFromPlayer(200, 1, 18, 'flee')).toBeLessThan(0);
   });
 
-  it('default leans WITH the player (signMul = -1)', () => {
-    // Player to the LEFT of the decoration → nearestDx > 0 → bend negative
-    // (decoration tip shifts left, in the same direction the player will
-    // continue moving as they pass underneath/through).
-    const inst = makeInstance({
-      excitement: 1,
-      proximity: { radius: 30, mode: 'lean', magnitude: 10 },
-      nearestDx: 30,
-    });
-    expect(excitementBend(inst)).toBeCloseTo(-10, 5);
+  it('bendForceFromPlayer returns 0 for mode=excite (pure excitement scalar — no bend coupling)', () => {
+    expect(bendForceFromPlayer(400, 1, 18, 'excite')).toBe(0);
   });
 
-  it('signMul = +1 produces flee behavior (away from player)', () => {
-    const inst = makeInstance({
-      excitement: 1,
-      proximity: { radius: 30, mode: 'flee', magnitude: 10 },
-      nearestDx: 30,
-    });
-    expect(excitementBend(inst, 1)).toBeCloseTo(10, 5);
+  it('tickBendDynamics with constant force converges to equilibrium = magnitude at vx=200', () => {
+    // The system is tuned so that a player at WALKING_SPEED_REF (200 px/s)
+    // with proximityFactor=1 produces a steady-state bend equal to magnitude.
+    const inst = makeInstance();
+    const force = bendForceFromPlayer(200, 1, 18, 'lean');
+    // Run long enough to reach equilibrium
+    for (let i = 0; i < 200; i++) tickBendDynamics(inst, force, 1 / 60);
+    expect(inst.bendValue).toBeCloseTo(18, 0);
   });
 
-  it('clamps |nearestDx| > radius to ±1', () => {
-    const inst = makeInstance({
-      excitement: 1,
-      proximity: { radius: 30, mode: 'lean', magnitude: 10 },
-      nearestDx: 999, // way beyond radius — norm clamps to +1
-    });
-    expect(excitementBend(inst)).toBeCloseTo(-10, 5);
+  it('tickBendDynamics with no force decays toward zero', () => {
+    const inst = makeInstance({ bendValue: 20, bendVelocity: 0 });
+    for (let i = 0; i < 200; i++) tickBendDynamics(inst, 0, 1 / 60);
+    expect(Math.abs(inst.bendValue)).toBeLessThan(0.5);
+    expect(Math.abs(inst.bendVelocity)).toBeLessThan(0.5);
   });
 
-  it('composeBend mutes wind sway by (1 - excitement) so decay does not cross neutral', () => {
-    // Setup: wind blows decoration RIGHT (swayPhase = +5), player has pushed
-    // it LEFT (excitement = 1, nearestDx > 0 → bend = -10 with default lean).
-    const inst = makeInstance({
-      excitement: 1,
-      proximity: { radius: 30, mode: 'lean', magnitude: 10 },
-      nearestDx: 30,
-    });
-    // At peak excitement: wind fully muted, only push direction.
+  it('tickBendDynamics is stable at the cosmetic-tick rate (dt up to 67ms)', () => {
+    // System runs the 30Hz bucket at 15Hz with the cosmetic-stagger optimization
+    // → dt up to ~67ms. Verify integration doesn't blow up.
+    const inst = makeInstance();
+    const force = bendForceFromPlayer(400, 1, 30, 'lean');
+    for (let i = 0; i < 60; i++) tickBendDynamics(inst, force, 1 / 15);
+    expect(Math.abs(inst.bendValue)).toBeLessThan(200); // sanity — would be Infinity if unstable
+    expect(Number.isFinite(inst.bendValue)).toBe(true);
+    expect(Number.isFinite(inst.bendVelocity)).toBe(true);
+  });
+
+  it('fast-pass impulse produces a peak that arrives AFTER the player exits', () => {
+    // Key user-facing property: a fast player passing briefly gives the bend
+    // a velocity kick. After the force ends, the spring is still catching up
+    // — bend continues to grow for a moment, then springs back. This is what
+    // the user wants ("running through visibly affects grass").
+    const inst = makeInstance();
+    const force = bendForceFromPlayer(400, 1, 18, 'lean');
+    // Apply force for 5 ticks (~83ms — short fast pass through small zone)
+    for (let i = 0; i < 5; i++) tickBendDynamics(inst, force, 1 / 60);
+    const bendAtExit = inst.bendValue;
+    const velAtExit = inst.bendVelocity;
+    // Player has exited the radius — no more force
+    for (let i = 0; i < 5; i++) tickBendDynamics(inst, 0, 1 / 60);
+    // Bend continued past the exit value (momentum carried it further)
+    expect(Math.abs(inst.bendValue)).toBeGreaterThan(Math.abs(bendAtExit));
+    // Velocity was non-zero at exit (justifies the carry)
+    expect(Math.abs(velAtExit)).toBeGreaterThan(0);
+  });
+});
+
+describe('reactiveDecorations — composeBend', () => {
+  it('mutes wind by (1 - excitement) and adds bendValue', () => {
+    const inst = makeInstance({ excitement: 1, bendValue: -10 });
+    // At peak excitement: wind fully muted, only bendValue reads.
     expect(composeBend(inst, 5)).toBeCloseTo(-10, 5);
-    // At 0 excitement: wind fully present (no push contribution).
+    // At 0 excitement: wind fully present (bendValue=0 if at rest, but here we set it to 0 explicitly).
     inst.excitement = 0;
+    inst.bendValue = 0;
     expect(composeBend(inst, 5)).toBeCloseTo(5, 5);
-    // Mid-decay: blend. excitement = 0.5 → wind contributes 2.5, push -5 → total -2.5
+    // Mid-decay: blend.
     inst.excitement = 0.5;
-    expect(composeBend(inst, 5)).toBeCloseTo(-2.5, 5);
+    inst.bendValue = -5;
+    expect(composeBend(inst, 5)).toBeCloseTo(-2.5, 5); // 5*0.5 + -5 = -2.5
   });
 
-  it('composeBend with opposite-direction wind never overshoots through zero abruptly', () => {
-    // Worst case for snap-back: push opposite to wind. As excitement decays,
-    // bend should smoothly transition from "pushed" toward "wind state" without
-    // passing through zero earlier than late in the decay.
-    const inst = makeInstance({
-      excitement: 1,
-      proximity: { radius: 30, mode: 'lean', magnitude: 18 },
-      nearestDx: 30, // bend = -18 (left), wind = +5 (right)
-    });
-    const samples: number[] = [];
-    for (const ex of [1.0, 0.8, 0.6, 0.4, 0.2, 0.05]) {
-      inst.excitement = ex;
-      samples.push(composeBend(inst, 5));
-    }
-    // Samples: -18, -15.4, -10.8, -4.2, +0.4, +4.65 — only crosses zero very
-    // late (excitement ≈ 0.2, after most of the decay has happened). Without
-    // muting, samples would be -13, -11.4, -7.8, -2.2, +1.4, +4.1 — crosses
-    // earlier. The muting buys the user a longer stable "pushed" reading.
-    expect(samples[0]).toBeLessThan(samples[1]); // monotonic toward wind dir
-    expect(samples[3]).toBeLessThan(0); // still on push side at ex=0.4
-  });
-
-  it('seed-parity fallback uses full magnitude (norm = ±1), not 1/radius', () => {
-    // When nearestDx is undefined (no live player), the fallback must produce
-    // a visually meaningful bend, not ~0.5px. Default signMul=-1: even seed
-    // → -magnitude, odd → +magnitude.
-    const evenSeed = makeInstance({
-      excitement: 1, seed: 4,
-      proximity: { radius: 30, mode: 'lean', magnitude: 10 },
-      // nearestDx intentionally undefined
-    });
-    const oddSeed = makeInstance({
-      excitement: 1, seed: 5,
-      proximity: { radius: 30, mode: 'lean', magnitude: 10 },
-    });
-    expect(excitementBend(evenSeed)).toBeCloseTo(-10, 5);
-    expect(excitementBend(oddSeed)).toBeCloseTo(10, 5);
+  it('opposite-wind push doesn\'t snap through neutral on relaxation', () => {
+    // Wind blows right (+5), player pushed bend left (bendValue=-15, excitement=1).
+    // As excitement decays AND bend springs back, the wind muting prevents
+    // a sudden flip through zero to the wind direction.
+    const inst = makeInstance({ excitement: 1, bendValue: -15 });
+    expect(composeBend(inst, 5)).toBeCloseTo(-15, 5);
+    // Mid-decay (excitement 0.5, bendValue 0.5*-15 ≈ -7.5 in real spring-damper):
+    // Approximate by setting both manually — composeBend doesn't simulate, just composes.
+    inst.excitement = 0.5;
+    inst.bendValue = -7.5;
+    expect(composeBend(inst, 5)).toBeCloseTo(-5, 5); // still on push side
+    // Late decay (excitement near 0, bend near 0):
+    inst.excitement = 0.05;
+    inst.bendValue = -0.5;
+    expect(composeBend(inst, 5)).toBeCloseTo(4.25, 5); // wind takes over only when both have nearly settled
   });
 });
