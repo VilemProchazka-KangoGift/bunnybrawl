@@ -166,12 +166,17 @@ function resetDiag(d: RenderDiagnostics): void {
 
 export class Renderer {
   private bgCanvas: HTMLCanvasElement;
+  private bgNightCanvas: HTMLCanvasElement | null = null;
   private fgCanvas: HTMLCanvasElement;
   private hudCanvas: HTMLCanvasElement | null = null;
   private lighting: LightingPipeline;
   private bgCtx: CanvasRenderingContext2D;
+  private bgNightCtx: CanvasRenderingContext2D | null = null;
   private fgCtx: CanvasRenderingContext2D;
   private hudCtx: CanvasRenderingContext2D | null = null;
+  // Last opacity written to bgNightCanvas.style — avoids string churn per frame
+  // when night intensity is unchanged (e.g. dayPhase frozen during pause).
+  private _lastBgNightOpacity = -1;
   // Cached fg overlay (platform body faces drawn after players). Built once
   // per arena/scale change in renderBackground; one drawImage per frame
   // beats N×decorations-per-platform-per-frame.
@@ -230,7 +235,7 @@ export class Renderer {
   // maintained. Consumers use hasWarmedAll() to verify preload coverage.
   private _warmedNames: Set<string> = new Set();
 
-  constructor(bgCanvas: HTMLCanvasElement, fgCanvas: HTMLCanvasElement, theme: ThemeConfig, mirrored = false, hudCanvas?: HTMLCanvasElement) {
+  constructor(bgCanvas: HTMLCanvasElement, fgCanvas: HTMLCanvasElement, theme: ThemeConfig, mirrored = false, hudCanvas?: HTMLCanvasElement, bgNightCanvas?: HTMLCanvasElement) {
     clearRenderingCaches();
     this.bgCanvas = bgCanvas;
     this.fgCanvas = fgCanvas;
@@ -245,6 +250,16 @@ export class Renderer {
       this.hudCtx = hudCanvas.getContext('2d')!;
     }
 
+    // Optional cross-fade night-variant BG canvas. When wired, renderBackground()
+    // bakes a uniformly-tinted copy into it; per-frame `style.opacity` drives the
+    // CSS-composited day↔night cross-fade. The legacy source-over tint pass on
+    // the FG ctx (lighting.composite) becomes a no-op in this mode — sprites
+    // stay bright at night per the party-game readability rule.
+    if (bgNightCanvas) {
+      this.bgNightCanvas = bgNightCanvas;
+      this.bgNightCtx = bgNightCanvas.getContext('2d')!;
+    }
+
     // Apply initial render scale to all canvases (sets backing-store dims + ctx transform)
     this._renderScale = getRenderScale();
     this._applyScaleToCanvases();
@@ -254,12 +269,16 @@ export class Renderer {
     this.initClouds();
     this.lighting = new LightingPipeline(CANVAS_WIDTH, CANVAS_HEIGHT);
     this.lighting.setBgCanvas(bgCanvas);
+    this.lighting.setBgNightWired(this.bgNightCanvas !== null);
   }
 
   private _applyScaleToCanvases(): void {
     const s = this._renderScale;
     applyRenderScaleToCanvas(this.bgCanvas, this.bgCtx, s);
     applyRenderScaleToCanvas(this.fgCanvas, this.fgCtx, s);
+    if (this.bgNightCanvas && this.bgNightCtx) {
+      applyRenderScaleToCanvas(this.bgNightCanvas, this.bgNightCtx, s);
+    }
     if (this.hudCanvas && this.hudCtx) {
       applyRenderScaleToCanvas(this.hudCanvas, this.hudCtx, s);
     }
@@ -444,6 +463,44 @@ export class Renderer {
     // 20+ shape primitives per frame. Heavy arenas (meadow, winter_lake)
     // have ~25 fg decorations each.
     this._renderForegroundNatureCache(themeArena);
+    // Bake night variant of bg into the cross-fade canvas (when wired). Cheap:
+    // one drawImage + one fillRect per arena-load / render-scale change. CSS
+    // opacity then drives the day↔night cross-fade per frame at ~0 GPU cost.
+    this._bakeBgNightVariant();
+  }
+
+  /** Per-frame: drive bgNightCanvas.style.opacity from the lighting pipeline's
+   *  current night intensity. CSS opacity on a stacked DOM canvas costs ~0ms —
+   *  the browser compositor blends layers as part of the existing paint pass.
+   *  Skipped when opacity hasn't changed since last frame (string churn savings). */
+  private _driveBgNightOpacity(): void {
+    if (!this.bgNightCanvas) return;
+    const opacity = this.lighting.getBgNightOpacity();
+    // Quantize to 3 decimal places so dayPhase jitter doesn't cause string churn.
+    const q = Math.round(opacity * 1000) / 1000;
+    if (q === this._lastBgNightOpacity) return;
+    this._lastBgNightOpacity = q;
+    this.bgNightCanvas.style.opacity = String(q);
+  }
+
+  /** Copy the freshly-rendered bg canvas into bgNightCanvas and overlay the
+   *  uniform night tint. Called from renderBackground() (rare event). The
+   *  baked alpha (MAX_TINT_ALPHA) matches the legacy source-over tint at
+   *  midnight; per-frame `style.opacity` linearly cross-fades to that level. */
+  private _bakeBgNightVariant(): void {
+    if (!this.bgNightCanvas || !this.bgNightCtx) return;
+    const ctx = this.bgNightCtx;
+    const w = this.bgNightCanvas.width;
+    const h = this.bgNightCanvas.height;
+    ctx.save();
+    // Identity transform: drawImage source→dest is 1:1 at backing-store pixels,
+    // so the render-scale ctx transform on both canvases doesn't double-scale.
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    ctx.drawImage(this.bgCanvas, 0, 0);
+    ctx.fillStyle = 'rgba(20,24,48,0.55)';
+    ctx.fillRect(0, 0, w, h);
+    ctx.restore();
   }
 
   /**
@@ -637,6 +694,7 @@ export class Renderer {
       // Cache time once per frame
       this.frameTime = performance.now();
       this.lighting.beginFrame(this.theme, matchState.dayPhase, 0);
+      this._driveBgNightOpacity();
 
       ctx.save();
 

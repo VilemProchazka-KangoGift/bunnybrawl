@@ -23,12 +23,19 @@
   z-index: 1;
 }
 
-.fg-canvas {
+.bg-night-canvas {
   z-index: 2;
+  opacity: 0;
+  pointer-events: none;
+  will-change: opacity;
+}
+
+.fg-canvas {
+  z-index: 3;
 }
 
 .hud-canvas {
-  z-index: 3;
+  z-index: 4;
   pointer-events: none;
 }
 

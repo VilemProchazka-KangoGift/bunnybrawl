@@ -13,14 +13,26 @@
 // Architecture lesson chain (rim-light → outlines → here): lighting is per-frame,
 // screen-space, post-sprite-cache. Never bake into a sprite cache.
 //
-// Mechanism:
-//   - beginFrame() computes a tint color + alpha from ambient(theme, dayPhase).
-//   - composite() does ONE fillRect with source-over on the FG ctx, applying
-//     the tint over the rendered scene. Sky shows through the partial-alpha
-//     overlay via CSS stacking (bg canvas is behind fg in the DOM).
+// Mechanism (two modes, picked at construction by the renderer):
 //
-// Cost: one fillRect at backing res per frame — the cheapest full-canvas op
-// canvas has. Negligible vs a multiply or destination-over pass.
+//   1. CSS-composited cross-fade (Match.tsx wires bgNightCanvas):
+//      - beginFrame() computes a tint alpha from ambient(theme, dayPhase).
+//      - getBgNightOpacity() maps that to [0,1] and the renderer drives
+//        `bgNightCanvas.style.opacity` per frame. The browser compositor
+//        cross-fades between the day and night BG variants for ~free.
+//      - composite() is a no-op. Sprites stay bright at night per the
+//        party-game readability rule.
+//
+//   2. Source-over tint fallback (lobby, tests, anywhere bgNight isn't wired):
+//      - composite() does ONE fillRect with source-over on the FG ctx.
+//        Sky shows through partial alpha via CSS stacking (bg behind fg).
+//
+// Cost (mode 1): two extra ops per arena-load (drawImage + fillRect on the
+// night canvas inside renderBackground), CSS opacity assignment per frame.
+// The opacity write is GPU compositor work, not painting — effectively zero.
+//
+// Cost (mode 2): one fillRect at backing res per frame — cheapest full-canvas
+// canvas op there is.
 //
 // L2 (per-arena emitters) will add point-light passes via 'lighter' (additive)
 // blend on top of this tint. L3 (shadows) will read sun direction from
@@ -49,9 +61,21 @@ export class LightingPipeline {
   /** Tint alpha for this frame, set by beginFrame, consumed by composite. */
   private tintAlpha = 0;
 
+  /** When true, the renderer wired a bgNightCanvas — composite() goes silent
+   *  (CSS-driven cross-fade does the darkening) and getBgNightOpacity() drives
+   *  that canvas's style.opacity per frame. When false (lobby, tests), the
+   *  legacy source-over tint pass on the FG ctx is the only darkening path. */
+  private bgNightWired = false;
+
   constructor(width: number, height: number) {
     this.width = width;
     this.height = height;
+  }
+
+  /** Renderer hook: declare whether a bgNightCanvas is wired. Toggles which
+   *  darkening mechanism is active. Called once at construction. */
+  setBgNightWired(wired: boolean): void {
+    this.bgNightWired = wired;
   }
 
   /**
@@ -75,16 +99,28 @@ export class LightingPipeline {
 
   /**
    * Apply the precomputed tint as a single source-over fillRect on the FG ctx.
-   * Skipped entirely when the tint is below visibility threshold.
+   * Skipped entirely when the tint is below visibility threshold OR when a
+   * bgNightCanvas is wired (in that mode, CSS opacity on the stacked night-bg
+   * canvas does the darkening — sprites stay bright, BG cross-fades).
    */
   composite(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D): void {
     if (!this.isEnabled()) return;
+    if (this.bgNightWired) return;
     if (this.tintAlpha < 0.01) return;
     ctx.save();
     ctx.globalCompositeOperation = 'source-over';
     ctx.fillStyle = `rgba(${TINT_COLOR.r},${TINT_COLOR.g},${TINT_COLOR.b},${this.tintAlpha})`;
     ctx.fillRect(0, 0, this.width, this.height);
     ctx.restore();
+  }
+
+  /** Renderer hook: compute the opacity for the cross-fade bgNightCanvas this
+   *  frame. Returns 0 when lighting is off. Mapped from tintAlpha → [0,1] so
+   *  midnight (tintAlpha ≈ MAX_TINT_ALPHA) reaches full opacity and the visible
+   *  effective alpha matches the legacy source-over path. */
+  getBgNightOpacity(): number {
+    if (!this.isEnabled()) return 0;
+    return Math.min(1, this.tintAlpha / MAX_TINT_ALPHA);
   }
 
   resize(w: number, h: number, _scale: number): void {

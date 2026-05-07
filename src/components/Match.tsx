@@ -69,6 +69,7 @@ function kickoffLoading(
 export function Match() {
   const { t } = useTranslation();
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
+  const bgNightCanvasRef = useRef<HTMLCanvasElement>(null);
   const fgCanvasRef = useRef<HTMLCanvasElement>(null);
   const hudCanvasRef = useRef<HTMLCanvasElement>(null);
   const gameLoopRef = useRef<GameLoop | null>(null);
@@ -246,9 +247,10 @@ export function Match() {
 
   useEffect(() => {
     const bgCanvas = bgCanvasRef.current;
+    const bgNightCanvas = bgNightCanvasRef.current;
     const fgCanvas = fgCanvasRef.current;
     const hudCanvas = hudCanvasRef.current;
-    if (!bgCanvas || !fgCanvas || !hudCanvas) return;
+    if (!bgCanvas || !bgNightCanvas || !fgCanvas || !hudCanvas) return;
 
     const clearTimer = (ref: { current: ReturnType<typeof setTimeout> | null }) => {
       if (ref.current) { clearTimeout(ref.current); ref.current = null; }
@@ -294,6 +296,7 @@ export function Match() {
 
       const netMatch = new NetMatch({
         bgCanvas,
+        bgNightCanvas,
         fgCanvas,
         hudCanvas,
         arena,
@@ -456,6 +459,8 @@ export function Match() {
       activePlayers,
       onMatchEnd,
       hudCanvas,
+      undefined, // rng
+      bgNightCanvas,
     );
 
     gameLoopRef.current = loop;
@@ -490,6 +495,12 @@ export function Match() {
         <canvas
           ref={bgCanvasRef}
           className="game-canvas bg-canvas"
+          width={CANVAS_WIDTH}
+          height={CANVAS_HEIGHT}
+        />
+        <canvas
+          ref={bgNightCanvasRef}
+          className="game-canvas bg-night-canvas"
           width={CANVAS_WIDTH}
           height={CANVAS_HEIGHT}
         />
