@@ -27,6 +27,7 @@ export class PlayerTransitionSystem implements CosmeticSystem {
     playSound: (name: string) => void,
     playAnimal: (name: string) => void,
     particleSystem: ParticleSystem,
+    onStomp?: (x: number, y: number) => void,
   ) {
     this.state = state;
     this.settings = settings;
@@ -42,6 +43,7 @@ export class PlayerTransitionSystem implements CosmeticSystem {
       spawnKillSplatter: (v) => this.particleSystem.spawnKillSplatter(v, this.settings),
       pickupCarrotVFX: (x, y) => this.particleSystem.pickupCarrotVFX(x, y),
       spawnPlayerSpawnVFX: (x, y) => this.particleSystem.spawnRingVFX(x, y),
+      onStomp,
     };
   }
 
