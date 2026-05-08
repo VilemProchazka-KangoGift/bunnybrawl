@@ -2,6 +2,7 @@ import type { Arena, MatchState, PlayerSlot } from '../../types';
 import type { CosmeticSystem } from '../types';
 import type { ParticleSystem } from './ParticleSystem';
 import { updatePlayerCosmetics } from './playerCosmetics';
+import { Accumulator } from '../../accumulator';
 
 export class PlayerCosmeticSystem implements CosmeticSystem {
   private state: MatchState;
@@ -9,8 +10,8 @@ export class PlayerCosmeticSystem implements CosmeticSystem {
   private effWalkSpeed: number;
   private playSound: (name: string) => void;
 
-  private afterimageAccumulators: Map<PlayerSlot, number> = new Map();
-  private footstepAccumulators: Map<PlayerSlot, number> = new Map();
+  private afterimageAccumulators: Accumulator<PlayerSlot> = new Accumulator();
+  private footstepAccumulators: Accumulator<PlayerSlot> = new Accumulator();
   private readonly _emitParticle: (x: number, y: number, vx: number, vy: number, life: number, size: number, color: string) => void;
 
   constructor(

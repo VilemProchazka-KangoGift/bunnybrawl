@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { fastSin, fastCos, hexToRGB, hexToHSL } from './fastMath';
+import { fastSin, fastCos, hexToRGB, hexToHSL, blendRgb } from './fastMath';
 
 describe('fastSin', () => {
   it('sin(0) ≈ 0', () => {
@@ -160,5 +160,37 @@ describe('fastSin/fastCos identity', () => {
       const rad = deg * Math.PI / 180;
       expect(fastCos(-rad)).toBeCloseTo(fastCos(rad), 1);
     }
+  });
+});
+
+describe('blendRgb', () => {
+  const RED = { r: 255, g: 0, b: 0 };
+  const BLUE = { r: 0, g: 0, b: 255 };
+
+  it('returns a at t=0', () => {
+    expect(blendRgb(RED, BLUE, 0)).toEqual(RED);
+  });
+
+  it('returns b at t=1', () => {
+    expect(blendRgb(RED, BLUE, 1)).toEqual(BLUE);
+  });
+
+  it('mid lerp is rounded average', () => {
+    expect(blendRgb(RED, BLUE, 0.5)).toEqual({ r: 128, g: 0, b: 128 });
+  });
+
+  it('writes into out when provided (allocation-free)', () => {
+    const out = { r: -1, g: -1, b: -1 };
+    const result = blendRgb(RED, BLUE, 0.25, out);
+    expect(result).toBe(out);
+    expect(out).toEqual({ r: 191, g: 0, b: 64 });
+  });
+
+  it('does not mutate input arguments', () => {
+    const a = { ...RED };
+    const b = { ...BLUE };
+    blendRgb(a, b, 0.5);
+    expect(a).toEqual(RED);
+    expect(b).toEqual(BLUE);
   });
 });

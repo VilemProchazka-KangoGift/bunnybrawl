@@ -3,7 +3,8 @@ import type {
 } from '../types';
 import { isBotSlot } from '../types';
 import { SeededRNG } from '../net/prng';
-import type { PlayerInput } from '../input/PlayerInput';
+import type { PlayerInput, PlayerInputContext } from '../input/PlayerInput';
+import { TouchAdapter } from '../input/TouchAdapter';
 import type { ThemeConfig } from '../themes/types';
 import type { ParticleEmitter, SimulatorEvents, SimulatorOptions, TouchInputProvider } from './types';
 import { getArena, getTheme, mirrorArena } from '../arenas';
@@ -23,8 +24,7 @@ import { perfTrace } from '../perfTrace';
 import { fastSin } from '../fastMath';
 import { RuleBasedBot } from '../input/RuleBasedBot';
 
-import { getOrCreateCooldowns } from '../sfxCooldowns';
-import type { SfxCooldowns } from '../sfxCooldowns';
+import { PlayerSfxCooldowns } from '../sfxCooldowns';
 import { HazardSystem } from '../gameLoop/gameplay/HazardSystem';
 import { CarrotSystem } from '../gameLoop/gameplay/CarrotSystem';
 import { ArenaEntitySystem } from '../gameLoop/gameplay/ArenaEntitySystem';
@@ -89,16 +89,20 @@ export class Simulator {
   private _aiControllers: Map<string, AIController> = new Map();
   private _playerInputs: Map<PlayerSlot, PlayerInput> = new Map();
 
-  // Touch override (set by browser adapter; null in headless runs)
-  private _touchInput: TouchInputProvider | null = null;
+  // Touch slot tracker (TouchAdapter is installed into _playerInputs for the
+  // active touch slot — this only records which slot to move on setLocalSlot).
   private _touchSlot: PlayerSlot | null = null;
 
   // Side effects
   private readonly _events: Required<SimulatorEvents>;
   private _particleEmitter: ParticleEmitter;
 
-  // Per-tick state for fixedUpdate
-  private _networkInputs?: Map<string, InputState>;
+  // Per-tick state for fixedUpdate. `_mutCtx` is the single reused ctx object
+  // — fields are overwritten at the top of each fixedUpdate. `_tickCtx` is
+  // the public reference handed to PlayerInput.getAction; it always points
+  // at `_mutCtx` once fixedUpdate has run. PlayerInput impls must NOT mutate.
+  private readonly _mutCtx: { networkInputs?: ReadonlyMap<string, InputState>; airborne?: boolean } = {};
+  private _tickCtx: PlayerInputContext = this._mutCtx;
   private _resimulating = false;
   private _loadingGeneration = 0;
 
@@ -123,9 +127,11 @@ export class Simulator {
   private _stompSystem!: StompSystem;
   private _matchSystem!: MatchSystem;
 
-  // Cooldowns map injected by adapter's PlayerTransitionSystem (for headbonk + crouch).
-  // Default: empty map — gameplay still works, cooldowns just always start at 0.
-  private _sfxCooldownsGetter: () => Map<PlayerSlot, SfxCooldowns> = () => new Map();
+  // Cooldowns injected by adapter's PlayerTransitionSystem (for headbonk + crouch).
+  // Default: a fresh local instance — gameplay still works, cooldowns just
+  // never decay (PlayerTransitionSystem is the central decay site).
+  private _sfxCooldownsGetter: () => PlayerSfxCooldowns = () => this._defaultSfxCooldowns;
+  private readonly _defaultSfxCooldowns = new PlayerSfxCooldowns();
 
   constructor(opts: SimulatorOptions) {
     const e = opts.events ?? {};
@@ -189,15 +195,26 @@ export class Simulator {
     this._particleEmitter = emitter;
   }
 
-  /** Register a touch input provider for a specific slot. Set to null to disable. */
+  /** Register a touch input provider for a specific slot. Set to null to disable.
+   *  Installs a TouchAdapter into the playerInputs map for the new slot,
+   *  replacing whatever PlayerInput was there. The previous touch slot's adapter
+   *  is removed from the map (caller is responsible for restoring its prior
+   *  input via setPlayerInput if needed). */
   setTouchInput(input: TouchInputProvider | null, slot: PlayerSlot | null): void {
-    this._touchInput = input;
-    this._touchSlot = slot;
+    // Remove any TouchAdapter on the previous slot.
+    if (this._touchSlot !== null) {
+      const prev = this._playerInputs.get(this._touchSlot);
+      if (prev instanceof TouchAdapter) this._playerInputs.delete(this._touchSlot);
+    }
+    this._touchSlot = input && slot ? slot : null;
+    if (input && slot) {
+      this._playerInputs.set(slot, new TouchAdapter(slot, input));
+    }
   }
 
   /** Inject a getter for SFX cooldown state owned by the cosmetic adapter
    *  (PlayerTransitionSystem). Used by headbonk + crouch + zero-G sounds. */
-  setSfxCooldownsGetter(getter: () => Map<PlayerSlot, SfxCooldowns>): void {
+  setSfxCooldownsGetter(getter: () => PlayerSfxCooldowns): void {
     this._sfxCooldownsGetter = getter;
     // Rebuild EffectZoneSystem so it picks up the fresh getter (it captured
     // the previous one at construction).
@@ -343,9 +360,32 @@ export class Simulator {
 
   // Hot path -------------------------------------------------------------
 
-  /** Run one fixed-timestep simulation tick. */
-  fixedUpdate(dt: number, networkInputs?: Map<string, InputState>): void {
-    this._networkInputs = networkInputs;
+  /** Run one fixed-timestep simulation tick.
+   *
+   *  `ctxOrNetworkInputs` accepts either the new PlayerInputContext or the
+   *  legacy Map<string, InputState> form (for backward compatibility with
+   *  GameLoop callers and tests). When a Map is passed, it's wrapped into
+   *  `{ networkInputs: <map> }`. The ctx is built once per tick and shared
+   *  across every PlayerInput.getAction call. */
+  fixedUpdate(dt: number, ctxOrNetworkInputs?: PlayerInputContext | ReadonlyMap<string, InputState>): void {
+    // Normalize ctx once per tick. We always reuse `_mutCtx` (no allocation
+    // per tick) and overwrite its fields. Map = legacy networkInputs arg;
+    // plain object = new PlayerInputContext.
+    if (!ctxOrNetworkInputs) {
+      this._mutCtx.networkInputs = undefined;
+    } else if (ctxOrNetworkInputs instanceof Map) {
+      this._mutCtx.networkInputs = ctxOrNetworkInputs as ReadonlyMap<string, InputState>;
+    } else {
+      this._mutCtx.networkInputs = (ctxOrNetworkInputs as PlayerInputContext).networkInputs;
+    }
+    // Pre-compute airborne for the touch slot. Other slots ignore ctx.airborne.
+    if (this._touchSlot !== null) {
+      const tp = this._state.players.find(p => p.id === this._touchSlot);
+      this._mutCtx.airborne = tp?.state === 'airborne';
+    } else {
+      this._mutCtx.airborne = undefined;
+    }
+    this._tickCtx = this._mutCtx;
     if (this._state.matchOver) return;
     if (this._state.phase === 'loading') return;
     this._state.timeElapsed = f(this._state.timeElapsed + dt);
@@ -389,7 +429,8 @@ export class Simulator {
         player.hitstopTimer = Math.max(0, f(player.hitstopTimer - dt));
         if (player.hitstopTimer > 0) continue;
       }
-      const input = this._getPlayerInput(player);
+      const pi = this._playerInputs.get(player.id);
+      const input = pi ? pi.getAction(this._state, this._tickCtx) : Simulator._NEUTRAL_INPUT;
       const wasAirborne = player.state === 'airborne';
       const prevVy = player.vy;
       const prevVx = player.vx;
@@ -418,10 +459,10 @@ export class Simulator {
       updatePlayerState(player);
 
       if (wasAirborne && player.state === 'airborne' && prevVy < -10 && player.vy === 0) {
-        const cd = getOrCreateCooldowns(this._sfxCooldownsGetter(), player.id);
-        if (cd.headbonk <= 0) {
+        const cd = this._sfxCooldownsGetter();
+        if (cd.headbonk.isReady(player.id)) {
           this._events.onSfxRequest('headbonk');
-          cd.headbonk = 0.15;
+          cd.headbonk.set(player.id, 0.15);
         }
       }
 
@@ -442,10 +483,10 @@ export class Simulator {
       if (input.down && player.state !== 'airborne') {
         player.squashScale = SQUASH_ON_CROUCH;
         if (!wasCrouching) {
-          const cd = getOrCreateCooldowns(this._sfxCooldownsGetter(), player.id);
-          if (cd.crouch <= 0) {
+          const cd = this._sfxCooldownsGetter();
+          if (cd.crouch.isReady(player.id)) {
             this._events.onSfxRequest('crouch');
-            cd.crouch = 0.2;
+            cd.crouch.set(player.id, 0.2);
           }
         }
       } else {
@@ -617,39 +658,25 @@ export class Simulator {
     return this._rng ? this._rng.nextFloat() : Math.random();
   }
 
-  /** Reusable scratch InputState for the airborne-jump→fast-fall remap path.
-   *  Consumed inline within _getPlayerInput's caller — never capture the ref. */
-  private readonly _airborneFastFallScratch: InputState = { left: false, right: false, jump: false, down: false };
   private static readonly _NEUTRAL_INPUT: Readonly<InputState> = { left: false, right: false, jump: false, down: false };
 
-  private _getPlayerInput(player: Player): InputState {
-    if (this._networkInputs) {
-      const net = this._networkInputs.get(player.id);
-      if (net) {
-        if (net.jump && player.state === 'airborne') {
-          const s = this._airborneFastFallScratch;
-          s.left = net.left;
-          s.right = net.right;
-          s.jump = false;
-          s.down = true;
-          return s;
-        }
-        return net;
-      }
-    }
-    if (this._touchInput && player.id === this._touchSlot) {
-      return this._touchInput.getInputForPlayer(player.state === 'airborne');
+  /** Test-only: drives the unified PlayerInput dispatch path so tests can
+   *  assert the result without driving a full fixedUpdate tick.
+   *
+   *  Builds the same per-tick ctx as fixedUpdate would, then calls the
+   *  registered PlayerInput.getAction directly. Returns the neutral default
+   *  when no PlayerInput is registered for the slot. */
+  getPlayerInputForTest(player: Player, networkInputs?: ReadonlyMap<string, InputState>): InputState {
+    this._mutCtx.networkInputs = networkInputs;
+    if (this._touchSlot !== null) {
+      const tp = this._state.players.find(p => p.id === this._touchSlot);
+      this._mutCtx.airborne = tp?.state === 'airborne';
+    } else {
+      this._mutCtx.airborne = undefined;
     }
     const pi = this._playerInputs.get(player.id);
-    if (pi) return pi.getAction(this._state);
-    return Simulator._NEUTRAL_INPUT;
-  }
-
-  /** Test-only: forwards to _getPlayerInput so dispatch branches can be
-   *  asserted without driving a full fixedUpdate tick. */
-  getPlayerInputForTest(player: Player, networkInputs?: Map<string, InputState>): InputState {
-    if (networkInputs) this._networkInputs = networkInputs;
-    return this._getPlayerInput(player);
+    if (!pi) return Simulator._NEUTRAL_INPUT;
+    return pi.getAction(this._state, this._mutCtx);
   }
 
   private _buildSystems(): void {

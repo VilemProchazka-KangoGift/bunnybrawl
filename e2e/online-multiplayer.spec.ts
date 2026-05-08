@@ -89,7 +89,7 @@ async function waitPastCountdown(page: Page) {
 /** Set a short time limit on the host so the match ends quickly. */
 async function setShortTimeLimit(page: Page, seconds = 5) {
   await page.evaluate((s) => {
-    (window as any).__gameStore?.getState().setMatchSettings({ timeLimit: s });
+    window.__bunnyTest?.gameStore()?.getState().setMatchSettings({ timeLimit: s });
   }, seconds);
 }
 
@@ -147,10 +147,10 @@ test.describe('Online Multiplayer — Connection', { tag: '@online' }, () => {
 
       // Check playerNames map on both sides
       const hostNames = await pair.host.evaluate(() => {
-        return (window as any).__gameStore?.getState().online.playerNames;
+        return window.__bunnyTest?.gameStore()?.getState().online.playerNames;
       });
       const guestNames = await pair.guest.evaluate(() => {
-        return (window as any).__gameStore?.getState().online.playerNames;
+        return window.__bunnyTest?.gameStore()?.getState().online.playerNames;
       });
 
       expect(hostNames['P1']).toBe('Alice');
@@ -236,8 +236,8 @@ test.describe('Online Multiplayer — Match Start', { tag: '@online' }, () => {
       await waitPastCountdown(pair.host);
 
       const hostTime = await pair.host.evaluate(() => {
-        const gl = (window as any).__gameLoop;
-        return gl ? gl.getState().timeElapsed : -1;
+        const gl = window.__bunnyTest;
+        return gl ? gl.state().timeElapsed : -1;
       });
       expect(hostTime).toBeGreaterThan(0.5);
     } finally {
@@ -463,9 +463,9 @@ test.describe('Online Multiplayer — State Sync', { tag: '@online' }, () => {
 
         const [hostState, guestState] = await Promise.all([
           pair.host.evaluate(() => {
-            const gl = (window as any).__gameLoop;
+            const gl = window.__bunnyTest;
             if (!gl) return null;
-            const s = gl.getState();
+            const s = gl.state();
             return {
               timeElapsed: s.timeElapsed,
               players: s.players.map((p: any) => ({
@@ -478,9 +478,9 @@ test.describe('Online Multiplayer — State Sync', { tag: '@online' }, () => {
             };
           }),
           pair.guest.evaluate(() => {
-            const gl = (window as any).__gameLoop;
+            const gl = window.__bunnyTest;
             if (!gl) return null;
-            const s = gl.getState();
+            const s = gl.state();
             return {
               timeElapsed: s.timeElapsed,
               players: s.players.map((p: any) => ({
@@ -537,7 +537,7 @@ test.describe('Online Multiplayer — State Sync', { tag: '@online' }, () => {
     try {
       // Add 2 bots for the match
       await pair.host.evaluate(() => {
-        (window as any).__gameStore?.getState().setMatchSettings({ botCount: 2, botDifficulty: 'medium' });
+        window.__bunnyTest?.gameStore()?.getState().setMatchSettings({ botCount: 2, botDifficulty: 'medium' });
       });
 
       await startOnlineMatch(pair);
@@ -550,9 +550,9 @@ test.describe('Online Multiplayer — State Sync', { tag: '@online' }, () => {
 
         const [hostState, guestState] = await Promise.all([
           pair.host.evaluate(() => {
-            const gl = (window as any).__gameLoop;
+            const gl = window.__bunnyTest;
             if (!gl) return null;
-            const s = gl.getState();
+            const s = gl.state();
             return {
               timeElapsed: s.timeElapsed,
               players: s.players.map((p: any) => ({
@@ -564,9 +564,9 @@ test.describe('Online Multiplayer — State Sync', { tag: '@online' }, () => {
             };
           }),
           pair.guest.evaluate(() => {
-            const gl = (window as any).__gameLoop;
+            const gl = window.__bunnyTest;
             if (!gl) return null;
-            const s = gl.getState();
+            const s = gl.state();
             return {
               timeElapsed: s.timeElapsed,
               players: s.players.map((p: any) => ({

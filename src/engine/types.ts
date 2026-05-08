@@ -1,5 +1,14 @@
 // Core game engine types
 
+/** Either Canvas2D context type. Used at OffscreenCanvas seams (sprite cache,
+ *  HUD cache, foreground-nature cache) where helpers draw into both an
+ *  OffscreenCanvas (cache) and the main canvas via the same code path. The
+ *  drawing methods used in this codebase (fillRect, drawImage, beginPath,
+ *  ellipse, save/restore, transforms, gradients, fillStyle/strokeStyle, etc.)
+ *  exist on both interfaces; the Canvas-only methods (drawFocusIfNeeded,
+ *  isPointInPath, scrollPathIntoView) are not used. */
+export type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+
 export interface Vec2 {
   x: number;
   y: number;

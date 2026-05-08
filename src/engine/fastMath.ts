@@ -34,12 +34,37 @@ export function wrapToUnit(x: number): number {
   return ((x % 1) + 1) % 1;
 }
 
+/** Per-channel linear blend between two RGB triples, rounded to ints.
+ *  `t = 0` returns `a`, `t = 1` returns `b`. Pass `out` to write into a
+ *  caller-owned scratch (allocation-free hot-path use). */
+export function blendRgb(
+  a: { r: number; g: number; b: number },
+  b: { r: number; g: number; b: number },
+  t: number,
+  out?: { r: number; g: number; b: number },
+): { r: number; g: number; b: number } {
+  const o = out ?? { r: 0, g: 0, b: 0 };
+  o.r = Math.round(a.r + (b.r - a.r) * t);
+  o.g = Math.round(a.g + (b.g - a.g) * t);
+  o.b = Math.round(a.b + (b.b - a.b) * t);
+  return o;
+}
+
 /** Parse hex color '#RRGGBB' to {r,g,b} components. Cache the result. */
 export function hexToRGB(hex: string): { r: number; g: number; b: number } {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
   return { r, g, b };
+}
+
+/** Darken a '#RRGGBB' hex color by multiplying each channel by `factor` (0..1).
+ *  Returns an `rgb(r, g, b)` string. `factor = 1` returns the input unchanged
+ *  (in rgb() form); `factor = 0` returns black. Out-of-range factors are
+ *  passed through verbatim — caller is expected to clamp if needed. */
+export function darken(hex: string, factor: number): string {
+  const { r, g, b } = hexToRGB(hex);
+  return `rgb(${Math.round(r * factor)}, ${Math.round(g * factor)}, ${Math.round(b * factor)})`;
 }
 
 /** Convert hex color "#RRGGBB" to HSL components (h ∈ [0,360], s,l ∈ [0,1]). */

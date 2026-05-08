@@ -22,6 +22,9 @@ vi.mock('./rendering', () => ({
   drawBouncyPlatformOverlay: vi.fn(),
   drawPigeonFlock: vi.fn(),
   drawDayNightCycle: vi.fn(),
+  computeNightIntensity: vi.fn(() => 0),
+  fireflyPosition: vi.fn((_i: number, _t: number, out: { x: number; y: number }) => { out.x = 0; out.y = 0; }),
+  FIREFLY_COUNT: 8,
   drawHUD: vi.fn(),
   drawCountdown: vi.fn(),
   drawConnectionQuality: vi.fn(),
@@ -221,7 +224,7 @@ describe('Renderer — construction', () => {
   it('creates with valid canvases and theme', () => {
     const { canvas: bg } = makeCanvas();
     const { canvas: fg } = makeCanvas();
-    const renderer = new Renderer(bg, fg, makeTheme());
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme() });
     expect(renderer).toBeDefined();
   });
 
@@ -230,14 +233,14 @@ describe('Renderer — construction', () => {
     const { canvas: fg } = makeCanvas();
     const theme = makeTheme();
     theme.clouds.count = 5;
-    const renderer = new Renderer(bg, fg, theme);
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme });
     expect((renderer as any).clouds).toHaveLength(5);
   });
 
   it('handles mirrored mode', () => {
     const { canvas: bg } = makeCanvas();
     const { canvas: fg } = makeCanvas();
-    const renderer = new Renderer(bg, fg, makeTheme(), true);
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme(), mirrored: true });
     expect((renderer as any).mirrored).toBe(true);
   });
 });
@@ -247,7 +250,7 @@ describe('Renderer — setters', () => {
   beforeEach(() => {
     const { canvas: bg } = makeCanvas();
     const { canvas: fg } = makeCanvas();
-    renderer = new Renderer(bg, fg, makeTheme());
+    renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme() });
   });
 
   it('setPlayerNames stores names', () => {
@@ -284,7 +287,7 @@ describe('Renderer — renderBackground', () => {
   it('draws sky gradient, hills, platforms, and ground', () => {
     const { canvas: bg, ctx: bgCtx } = makeCanvas();
     const { canvas: fg } = makeCanvas();
-    const renderer = new Renderer(bg, fg, makeTheme());
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme() });
 
     renderer.renderBackground(makeArena());
 
@@ -296,7 +299,7 @@ describe('Renderer — renderBackground', () => {
     const { canvas: bg } = makeCanvas();
     const { canvas: fg } = makeCanvas();
     const theme = makeTheme();
-    const renderer = new Renderer(bg, fg, theme);
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme });
 
     renderer.renderBackground(makeArena());
     expect(theme.drawFarBackground).toHaveBeenCalled();
@@ -305,7 +308,7 @@ describe('Renderer — renderBackground', () => {
   it('draws grass blades when theme enables them', () => {
     const { canvas: bg, ctx: bgCtx } = makeCanvas();
     const { canvas: fg } = makeCanvas();
-    const renderer = new Renderer(bg, fg, makeTheme());
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme() });
 
     renderer.renderBackground(makeArena());
     expect(bgCtx.stroke).toHaveBeenCalled(); // grass blade strokes
@@ -314,7 +317,7 @@ describe('Renderer — renderBackground', () => {
   it('applies mirror transform when mirrored', () => {
     const { canvas: bg, ctx: bgCtx } = makeCanvas();
     const { canvas: fg } = makeCanvas();
-    const renderer = new Renderer(bg, fg, makeTheme(), true);
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme(), mirrored: true });
 
     renderer.renderBackground(makeArena());
     expect(bgCtx.scale).toHaveBeenCalledWith(-1, 1);
@@ -323,7 +326,7 @@ describe('Renderer — renderBackground', () => {
   it('draws floating platform with accent color and moss', () => {
     const { canvas: bg, ctx: bgCtx } = makeCanvas();
     const { canvas: fg } = makeCanvas();
-    const renderer = new Renderer(bg, fg, makeTheme());
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme() });
 
     renderer.renderBackground(makeArena());
     // Multiple fillRect calls for ground + floating platforms
@@ -335,7 +338,7 @@ describe('Renderer — renderBackground', () => {
     const { canvas: fg } = makeCanvas();
     const theme = makeTheme();
     theme.platform.customDraw = vi.fn();
-    const renderer = new Renderer(bg, fg, theme);
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme });
 
     renderer.renderBackground(makeArena());
     expect(theme.platform.customDraw).toHaveBeenCalled();
@@ -351,7 +354,7 @@ describe('Renderer — renderFrame basics', () => {
     const { canvas: bg } = makeCanvas();
     const fg = makeCanvas();
     fgCtx = fg.ctx;
-    renderer = new Renderer(bg.canvas ?? bg as any, fg.canvas, makeTheme());
+    renderer = new Renderer({ bgCanvas: bg.canvas ?? bg as any, fgCanvas: fg.canvas, theme: makeTheme() });
   });
 
   it('clears foreground canvas each frame', () => {
@@ -397,7 +400,7 @@ describe('Renderer — renderFrame conditional branches', () => {
     vi.clearAllMocks();
     const { canvas: bg } = makeCanvas();
     const fg = makeCanvas();
-    renderer = new Renderer(bg.canvas ?? bg as any, fg.canvas, makeTheme());
+    renderer = new Renderer({ bgCanvas: bg.canvas ?? bg as any, fgCanvas: fg.canvas, theme: makeTheme() });
   });
 
   it('draws weather when particles present', () => {
@@ -419,7 +422,7 @@ describe('Renderer — renderFrame conditional branches', () => {
     const fg = makeCanvas();
     const theme = makeTheme();
     theme.drawAnimatedBackground = vi.fn();
-    const r = new Renderer(bg.canvas ?? bg as any, fg.canvas, theme);
+    const r = new Renderer({ bgCanvas: bg.canvas ?? bg as any, fgCanvas: fg.canvas, theme });
     r.renderFrame(makeState(), makeArena(), []);
     expect(theme.drawAnimatedBackground).toHaveBeenCalled();
     expect(r.getDiagnostics().animatedBg).toBe(true);
@@ -579,7 +582,7 @@ describe('Renderer — renderFrame conditional branches', () => {
     const fg = makeCanvas();
     const theme = makeTheme();
     theme.dayNight.enabled = true;
-    const r = new Renderer(bg.canvas ?? bg as any, fg.canvas, theme);
+    const r = new Renderer({ bgCanvas: bg.canvas ?? bg as any, fgCanvas: fg.canvas, theme });
     const state = makeState({ dayPhase: 0.5 });
     r.renderFrame(state, makeArena(), []);
     expect(drawDayNightCycle).toHaveBeenCalled();
@@ -656,7 +659,7 @@ describe('Renderer — renderFrame conditional branches', () => {
     const { canvas: bg } = makeCanvas();
     const fg = makeCanvas();
     const theme = makeTheme();
-    const r = new Renderer(bg.canvas ?? bg as any, fg.canvas, theme, true);
+    const r = new Renderer({ bgCanvas: bg.canvas ?? bg as any, fgCanvas: fg.canvas, theme, mirrored: true });
     r.renderFrame(makeState(), makeArena(), []);
     expect(theme.drawForegroundNature).toHaveBeenCalled();
   });
@@ -666,7 +669,7 @@ describe('Renderer — bakeGibs', () => {
   it('draws gibs onto background canvas', () => {
     const { canvas: bg, ctx: bgCtx } = makeCanvas();
     const { canvas: fg } = makeCanvas();
-    const renderer = new Renderer(bg, fg, makeTheme());
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme() });
     const gibs = [{ x: 100, y: 200, rotation: 0.5, type: 'ear', width: 8, height: 6, color: '#FF0000' }];
     renderer.bakeGibs(gibs as any);
     expect(bgCtx.save).toHaveBeenCalled();
@@ -681,7 +684,7 @@ describe('Renderer — renderBloodDrips', () => {
   it('draws blood drips onto background canvas', () => {
     const { canvas: bg, ctx: bgCtx } = makeCanvas();
     const { canvas: fg } = makeCanvas();
-    const renderer = new Renderer(bg, fg, makeTheme());
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme() });
     const drips = [{ x: 200, y: 300, radius: 3, color: '#880000' }];
     renderer.renderBloodDrips(drips);
     expect(bgCtx.arc).toHaveBeenCalled();
@@ -695,7 +698,7 @@ describe('Renderer — bgNight bake on bg writes', () => {
     const { canvas: bgNight, ctx: bgNightCtx } = makeCanvas();
     const { canvas: fg } = makeCanvas();
     const fgTint = document.createElement('div');
-    const renderer = new Renderer(bg, fg, makeTheme(), false, undefined, bgNight, fgTint);
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme(), bgNightCanvas: bgNight, fgNightTint: fgTint });
     const gibs = [{ x: 100, y: 200, rotation: 0.5, type: 'ear', width: 8, height: 6, color: '#FF0000' }];
     (bgNightCtx.drawImage as any).mockClear();
     renderer.bakeGibs(gibs as any);
@@ -708,7 +711,7 @@ describe('Renderer — bgNight bake on bg writes', () => {
     const { canvas: bgNight, ctx: bgNightCtx } = makeCanvas();
     const { canvas: fg } = makeCanvas();
     const fgTint = document.createElement('div');
-    const renderer = new Renderer(bg, fg, makeTheme(), false, undefined, bgNight, fgTint);
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme(), bgNightCanvas: bgNight, fgNightTint: fgTint });
     const gibs = [{ x: 100, y: 200, rotation: 0.5, type: 'ear', width: 8, height: 6, color: '#FF0000' }];
     const drips = [{ x: 200, y: 300, radius: 3, color: '#880000' }];
     (bgNightCtx.drawImage as any).mockClear();
@@ -725,7 +728,7 @@ describe('Renderer — bgNight bake on bg writes', () => {
     const { canvas: bgNight, ctx: bgNightCtx } = makeCanvas();
     const { canvas: fg } = makeCanvas();
     const fgTint = document.createElement('div');
-    const renderer = new Renderer(bg, fg, makeTheme(), false, undefined, bgNight, fgTint);
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme(), bgNightCanvas: bgNight, fgNightTint: fgTint });
     (bgNightCtx.drawImage as any).mockClear();
     renderer.renderFrame(makeState(), makeArena(), []);
     expect(bgNightCtx.drawImage).not.toHaveBeenCalled();
@@ -736,7 +739,7 @@ describe('Renderer — blendColor', () => {
   it('blends two hex colors', () => {
     const { canvas: bg } = makeCanvas();
     const { canvas: fg } = makeCanvas();
-    const renderer = new Renderer(bg, fg, makeTheme());
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme() });
     const blended = (renderer as any).blendColor('#FF0000', '#0000FF', 0.5);
     expect(blended).toMatch(/^rgb\(\d+,\d+,\d+\)$/);
     // Should be purple-ish (128, 0, 128)
@@ -746,8 +749,204 @@ describe('Renderer — blendColor', () => {
   it('returns first color at amount=0', () => {
     const { canvas: bg } = makeCanvas();
     const { canvas: fg } = makeCanvas();
-    const renderer = new Renderer(bg, fg, makeTheme());
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme() });
     const blended = (renderer as any).blendColor('#FF0000', '#0000FF', 0);
     expect(blended).toBe('rgb(255,0,0)');
+  });
+});
+
+// ============================================================================
+// Light burst lifecycle (spawn / stomp flashes)
+// ============================================================================
+// These lock the fg-direct burst path (not the L2 emitter pipeline). The
+// effect is visible at any dayPhase by design — see `engine/CLAUDE.md` Lighting
+// section. Easy to silently regress in a conflict that re-merges renderFrame
+// or `_synthesizeDynamicLights`.
+
+describe('Renderer — emitLightBurst', () => {
+  it('queues a spawn burst at the requested coords', () => {
+    const { canvas: bg } = makeCanvas();
+    const { canvas: fg } = makeCanvas();
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme() });
+
+    renderer.emitLightBurst(123, 456, 'spawn');
+
+    const bursts = (renderer as any)._lightBursts as Array<any>;
+    expect(bursts).toHaveLength(1);
+    expect(bursts[0]).toMatchObject({ x: 123, y: 456, age: 0, kind: 'spawn' });
+    expect(bursts[0].duration).toBeGreaterThan(0);
+    expect(bursts[0].peakRadius).toBeGreaterThan(0);
+  });
+
+  it('spawn and stomp use distinct configs (duration / radius / peakIntensity)', () => {
+    const { canvas: bg } = makeCanvas();
+    const { canvas: fg } = makeCanvas();
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme() });
+
+    renderer.emitLightBurst(0, 0, 'spawn');
+    renderer.emitLightBurst(0, 0, 'stomp');
+
+    const bursts = (renderer as any)._lightBursts as Array<any>;
+    const spawn = bursts.find((b) => b.kind === 'spawn')!;
+    const stomp = bursts.find((b) => b.kind === 'stomp')!;
+    // Spawn is wider + slower than stomp; stomp peaks brighter (sat past 1.0).
+    expect(spawn.duration).toBeGreaterThan(stomp.duration);
+    expect(spawn.peakRadius).toBeGreaterThanOrEqual(stomp.peakRadius * 0.9);
+    expect(stomp.peakIntensity).toBeGreaterThan(spawn.peakIntensity);
+  });
+
+  it('expired bursts are removed by _drawLightBursts', () => {
+    const { canvas: bg } = makeCanvas();
+    const { canvas: fg, ctx: fgCtx } = makeCanvas();
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme() });
+
+    renderer.emitLightBurst(100, 100, 'stomp');
+    expect((renderer as any)._lightBursts).toHaveLength(1);
+
+    // Force expiry by aging past duration; the next draw call sweeps it.
+    (renderer as any)._lightBursts[0].age = (renderer as any)._lightBursts[0].duration + 1;
+    (renderer as any)._drawLightBursts(fgCtx);
+
+    expect((renderer as any)._lightBursts).toHaveLength(0);
+  });
+
+  it('swap-remove preserves a non-expired survivor when a middle entry expires', () => {
+    const { canvas: bg } = makeCanvas();
+    const { canvas: fg, ctx: fgCtx } = makeCanvas();
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme() });
+
+    renderer.emitLightBurst(10, 10, 'stomp');
+    renderer.emitLightBurst(20, 20, 'stomp');
+    renderer.emitLightBurst(30, 30, 'stomp');
+    const bursts = (renderer as any)._lightBursts as Array<any>;
+
+    // Expire the middle one. Reverse-iteration + swap-remove must leave 10 and 30.
+    bursts[1].age = bursts[1].duration + 1;
+    (renderer as any)._drawLightBursts(fgCtx);
+
+    expect(bursts).toHaveLength(2);
+    const xs = bursts.map((b) => b.x).sort((a, b) => a - b);
+    expect(xs).toEqual([10, 30]);
+  });
+
+  it('draws each live burst as one createRadialGradient + fillRect on the fg ctx', () => {
+    const { canvas: bg } = makeCanvas();
+    const { canvas: fg, ctx: fgCtx } = makeCanvas();
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme() });
+
+    renderer.emitLightBurst(100, 100, 'spawn');
+    renderer.emitLightBurst(200, 200, 'stomp');
+    (fgCtx.createRadialGradient as any).mockClear();
+    (fgCtx.fillRect as any).mockClear();
+
+    (renderer as any)._drawLightBursts(fgCtx);
+
+    expect(fgCtx.createRadialGradient).toHaveBeenCalledTimes(2);
+    expect(fgCtx.fillRect).toHaveBeenCalledTimes(2);
+  });
+
+  it('uses additive blend (globalCompositeOperation = "lighter") for the burst pass', () => {
+    const { canvas: bg } = makeCanvas();
+    const { canvas: fg, ctx: fgCtx } = makeCanvas();
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme() });
+
+    // Capture the value at the moment of fillRect — restore() will reset it.
+    let blendDuringFill: string | undefined;
+    (fgCtx.fillRect as any).mockImplementation(() => {
+      blendDuringFill = fgCtx.globalCompositeOperation;
+    });
+
+    renderer.emitLightBurst(50, 50, 'stomp');
+    (renderer as any)._drawLightBursts(fgCtx);
+
+    expect(blendDuringFill).toBe('lighter');
+  });
+});
+
+// ============================================================================
+// Dynamic light synthesis (carrots + fireflies)
+// ============================================================================
+// _synthesizeDynamicLights is the per-frame populator for the L2 emitter
+// pipeline's dynamic stamps. Tested here at the renderer level because it
+// reads MatchState + theme.dayNight directly, then writes _dynamicLights.
+
+describe('Renderer — _synthesizeDynamicLights', () => {
+  it('emits one light slot per active carrot', () => {
+    const { canvas: bg } = makeCanvas();
+    const { canvas: fg } = makeCanvas();
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme() });
+    const state = makeState({
+      carrots: [
+        { active: true, x: 300, y: 300, spawnTime: 0 },
+        { active: true, x: 500, y: 500, spawnTime: 0 },
+        { active: false, x: 700, y: 700, spawnTime: 0 },
+      ],
+      timeElapsed: 5,
+    });
+
+    renderer.renderFrame(state, makeArena(), []);
+
+    const dyn = (renderer as any)._dynamicLights as Array<any>;
+    expect(dyn).toHaveLength(2); // two ACTIVE carrots, fireflies disabled (theme.dayNight.enabled=false)
+    expect(dyn[0]).toMatchObject({ x: 300, y: 300 });
+    expect(dyn[1]).toMatchObject({ x: 500, y: 500 });
+  });
+
+  it('emits FIREFLY_COUNT extra slots when fireflies are enabled and night intensity > 0.4', async () => {
+    const rendering = await import('./rendering');
+    const computeNightIntensitySpy = vi.mocked(rendering.computeNightIntensity);
+    computeNightIntensitySpy.mockReturnValue(0.6);
+
+    const { canvas: bg } = makeCanvas();
+    const { canvas: fg } = makeCanvas();
+    const theme = makeTheme();
+    theme.dayNight = { enabled: true, showFireflies: true } as any;
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme });
+
+    renderer.renderFrame(makeState({ dayPhase: 0.5 }), makeArena(), []);
+
+    const dyn = (renderer as any)._dynamicLights as Array<any>;
+    // 0 carrots + FIREFLY_COUNT (8) fireflies
+    expect(dyn).toHaveLength(8);
+
+    computeNightIntensitySpy.mockReturnValue(0); // restore default for other tests
+  });
+
+  it('does NOT emit fireflies during daytime (gate: nightIntensity > 0.4)', async () => {
+    const rendering = await import('./rendering');
+    const computeNightIntensitySpy = vi.mocked(rendering.computeNightIntensity);
+    computeNightIntensitySpy.mockReturnValue(0.3); // below the 0.4 gate
+
+    const { canvas: bg } = makeCanvas();
+    const { canvas: fg } = makeCanvas();
+    const theme = makeTheme();
+    theme.dayNight = { enabled: true, showFireflies: true } as any;
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme });
+
+    renderer.renderFrame(makeState(), makeArena(), []);
+
+    const dyn = (renderer as any)._dynamicLights as Array<any>;
+    expect(dyn).toHaveLength(0);
+
+    computeNightIntensitySpy.mockReturnValue(0);
+  });
+
+  it('does NOT emit fireflies when theme.dayNight.showFireflies is false (even at midnight)', async () => {
+    const rendering = await import('./rendering');
+    const computeNightIntensitySpy = vi.mocked(rendering.computeNightIntensity);
+    computeNightIntensitySpy.mockReturnValue(1.0); // full midnight
+
+    const { canvas: bg } = makeCanvas();
+    const { canvas: fg } = makeCanvas();
+    const theme = makeTheme();
+    theme.dayNight = { enabled: true, showFireflies: false } as any;
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme });
+
+    renderer.renderFrame(makeState(), makeArena(), []);
+
+    const dyn = (renderer as any)._dynamicLights as Array<any>;
+    expect(dyn).toHaveLength(0);
+
+    computeNightIntensitySpy.mockReturnValue(0);
   });
 });

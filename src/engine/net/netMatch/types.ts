@@ -11,6 +11,7 @@ export interface NetMatchConfig {
   bgCanvas: HTMLCanvasElement;
   bgNightCanvas?: HTMLCanvasElement;
   fgNightTint?: HTMLDivElement;
+  lightCanvas?: HTMLCanvasElement;
   fgCanvas: HTMLCanvasElement;
   hudCanvas?: HTMLCanvasElement;
   arena: Arena;

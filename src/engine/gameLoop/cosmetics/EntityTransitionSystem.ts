@@ -1,12 +1,15 @@
-import type { MatchState } from '../../types';
+import type { MatchState, SpringMushroom } from '../../types';
 import type { CosmeticSystem } from '../types';
-import type { PrevEntityState } from './entityTransitions';
-import { detectEntityTransitions } from './entityTransitions';
+import { detectEntityTransitions, snapshotSpringBounce } from './entityTransitions';
+import { TransitionTracker } from '../../transitionTracker';
 
 export class EntityTransitionSystem implements CosmeticSystem {
   private state: MatchState;
   private playSound: (name: string) => void;
-  private pes: PrevEntityState = { springBounces: new Map(), countdownSec: 4, matchOver: false };
+  private prevCountdownSec = 4;
+  private prevMatchOver = false;
+  private readonly springTracker: TransitionTracker<SpringMushroom, number, SpringMushroom> =
+    new TransitionTracker<SpringMushroom, number, SpringMushroom>(snapshotSpringBounce);
 
   constructor(state: MatchState, playSound: (name: string) => void) {
     this.state = state;
@@ -14,13 +17,24 @@ export class EntityTransitionSystem implements CosmeticSystem {
   }
 
   init(): void {
-    this.pes.springBounces = new Map(this.state.springs.map(s => [s, s.bounceTimer]));
-    this.pes.countdownSec = Math.ceil(this.state.countdown);
-    this.pes.matchOver = this.state.matchOver;
+    this.springTracker.clear();
+    for (const s of this.state.springs) {
+      this.springTracker.prime(s, s);
+    }
+    this.prevCountdownSec = Math.ceil(this.state.countdown);
+    this.prevMatchOver = this.state.matchOver;
   }
 
   cosmeticUpdate(_dt: number): void {
-    detectEntityTransitions(this.state, this.pes, this.playSound);
+    const next = detectEntityTransitions(
+      this.state,
+      this.prevCountdownSec,
+      this.prevMatchOver,
+      this.springTracker,
+      this.playSound,
+    );
+    this.prevCountdownSec = next.countdownSec;
+    this.prevMatchOver = next.matchOver;
   }
 
   cleanup(): void {}

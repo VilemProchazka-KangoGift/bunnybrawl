@@ -2,7 +2,8 @@
 
 import type { Arena } from '../types';
 import type { ThemeConfig } from '../themes/types';
-import { getArenaPackOrThrow, toArena, toThemeConfig } from './registry';
+import type { Light } from '../lighting/types';
+import { getArenaPack, getArenaPackOrThrow, toArena, toThemeConfig } from './registry';
 import { CANVAS_WIDTH } from '../constants';
 
 export function getArena(id: string = 'meadow'): Arena {
@@ -11,6 +12,13 @@ export function getArena(id: string = 'meadow'): Arena {
 
 export function getTheme(id: string): ThemeConfig {
   return toThemeConfig(getArenaPackOrThrow(id));
+}
+
+/** L2: static emitter catalog for an arena. Returns empty array for arenas
+ *  that haven't opted into the lighting catalog yet, or for unknown arena IDs
+ *  (test fixtures often use synthetic IDs). */
+export function getArenaLights(id: string): ReadonlyArray<Light> {
+  return getArenaPack(id)?.lights ?? [];
 }
 
 /** Create a horizontally mirrored copy of an arena. Never mutates the original. */

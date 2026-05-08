@@ -1,6 +1,6 @@
 // src/engine/input/RandomInput.ts
 import type { InputState, MatchState, PlayerSlot } from '../types';
-import type { PlayerInput } from './PlayerInput';
+import type { PlayerInput, PlayerInputContext } from './PlayerInput';
 import type { SeededRNG } from '../net/prng';
 
 export interface RandomInputConfig {
@@ -28,7 +28,7 @@ export class RandomInput implements PlayerInput {
     this.downProb = config?.downProb ?? 0.05;
   }
 
-  getAction(_state: Readonly<MatchState>): InputState {
+  getAction(_state: Readonly<MatchState>, _ctx?: PlayerInputContext): InputState {
     // Roll order (fixed for determinism): move-yes/no, left-vs-right, jump, down.
     const r1 = this.rng ? this.rng.nextFloat() : Math.random();
     const r2 = this.rng ? this.rng.nextFloat() : Math.random();

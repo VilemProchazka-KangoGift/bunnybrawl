@@ -63,6 +63,7 @@ export class NetMatch {
       undefined, // rng
       config.bgNightCanvas,
       config.fgNightTint,
+      config.lightCanvas,
     );
 
     // Build shared context + collaborators. Order matters: context first,

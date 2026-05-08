@@ -8,11 +8,14 @@
 ## Reading order (start here)
 
 1. **This doc** — pillar decomposition, dependency graph, cross-pillar conventions.
-2. **`engine/CLAUDE.md` "## Lighting" section** — what shipped in L1, in primary voice.
+2. **`engine/CLAUDE.md` "## Lighting" section** — what shipped in L1+L2, in primary voice.
 3. **`docs/superpowers/specs/2026-05-07-lighting-l1-foundation-design.md`** — L1 design. Has an "Implementation drift" header explaining where it diverged from plan.
-4. **`docs/superpowers/reviews/2026-05-07-lighting-l1-cross-fade-review.md`** — round-1 post-implementation review with cross-cutting patterns.
-5. **`docs/superpowers/specs/2026-05-07-lighting-l2-brainstorm-prep.md`** — open questions for L2 (read before starting L2 brainstorm).
-6. **`perf-runs/lmode-comparison/REPORT.md`** — the 7-mode A/B test that picked the cross-fade architecture.
+4. **`docs/superpowers/reviews/2026-05-07-lighting-l1-cross-fade-review.md`** — L1 post-implementation review with cross-cutting patterns.
+5. **`perf-runs/lmode-comparison/REPORT.md`** — the L1 7-mode A/B test that picked the cross-fade architecture.
+6. **`docs/superpowers/specs/2026-05-07-lighting-l2-emitters-design.md`** — L2 design (emitter pipeline, per-arena `lights` catalog, dynamic synthesis).
+7. **`perf-runs/l2-emitter-comparison/REPORT.md`** — the L2 combined-vs-split bakeoff (wash; combined picked on simplicity tiebreaker).
+8. **`docs/superpowers/reviews/2026-05-08-lighting-l2-emitters-review.md`** — L2 post-implementation review.
+9. **`docs/superpowers/specs/2026-05-08-lighting-l3-brainstorm-prep.md`** — open questions for L3 (read before starting L3 brainstorm).
 
 The plan doc (`plans/2026-05-07-lighting-l1-foundation.md`) is the original 2700-line TDD task list — historical reference, not a current source of truth. The PERF doc (`plans/PERF-LIGHTING-L1.md`) is **superseded** — it captures the failed deferred-lite pipeline's perf gate; the shipping perf is in `perf-runs/lmode-comparison/REPORT.md`.
 
@@ -29,17 +32,17 @@ This program builds a real pipeline first, then plugs features in. The doc spans
 
 Blocks: L2, L3, L4, L5. **Spec: `2026-05-07-lighting-l1-foundation-design.md`** (deep-dive, brainstormed alongside this doc).
 
-### L2 — Light catalog & per-arena emitters
-Point/spot/area light primitives (ref §3). Falloff library (ref §4). Then arena-specific emitters: lava emissive on volcano (ref §8), torches in graveyard/castle (ref §6) with deterministic flicker (ref §6.2), firefly point-lights integrated with existing firefly particles (ref §7), carrot pickup glow (ref §17.5), spawn pillars (ref §17.7), per-player aura with critical-moment bump (ref §17.4 + §17.6). Arena packs gain a `lights:` field.
+### L2 — Light catalog & per-arena emitters ✓ SHIPPED (2026-05-08, branch `feat/lighting-l2-emitters`)
+Point/spot light primitives via `Light` discriminated union (`PointLight | SpotLight`). Falloff library: inverse-square / linear / smoothstep. `EmitterPipeline` parallel to `AmbientPipeline` under thin `Lighting` orchestrator. Single screen-blend `lightCanvas` DOM sibling above fg-night-tint (the combined-vs-split bakeoff was a wash; combined picked on simplicity tiebreaker). Castle: 5 torch emitters at the existing `TORCH_X` positions with deterministic flicker. Volcano: 3 lava emissives at hazard zone centers. Treetops/any `dayNight.showFireflies` arena: 8 firefly emitters synthesized from `effects.ts:fireflyPosition` (visual draw + emitter share the drift formula). Per-player aura derived from `Player.x/y/character.color`. Spawn pillar: aura intensity + radius ramp during respawn invincibility. Carrot glow: subtle warm-orange so they stay visible at night. Points-leader aura: gold-tinted boost (replaced the originally-spec'd low-health bump — game has no health stat; "who to chase" is a more useful read). All deterministic via `SeededRNG.floatFromTick(seed, tick)` with `tick = floor(timeElapsed * 60)`. Boundary question (entity-self-registration vs arena-pack declaration) resolved as: **static** lights via `ArenaPack.lights`, **dynamic** lights synthesized inline from existing entity fields (no `Player`/`Carrot` schema change). 
 
-Boundary question deferred to L2 brainstorm: do FoliageSystem entities carry `light?: LightConfig` and self-register, or do arena packs declare lights independently? Picked once both systems are concrete.
-
-Depends on: L1.
+Spec: `2026-05-07-lighting-l2-emitters-design.md`. Review: `2026-05-08-lighting-l2-emitters-review.md`. Bakeoff: `perf-runs/l2-emitter-comparison/REPORT.md`.
 
 ### L3 — Shadows (pragmatic hybrid §9.10)
-Drop shadows under characters (ref §9.8) — already partly shipped on `feat/drop-shadows`, finish/integrate. Blob shadows under emissives (ref §9.9). Directional sun shadows from platform edges (ref §9.6) — orientation per platform, soft-blurred. No per-light point-shadow casting in this milestone (curiosity tier, deferred to L5). Self-shadow on character sprite (ref §9.11) optional via shading pass.
+Player drop shadows are already on main (`rendering/players.ts` cached ellipse with height-based scaling). L3 extends: blob shadows under arena emissives (ref §9.9), directional sun shadows from platform edges (ref §9.6) — orientation per platform via a restored `sun.ts > sunDirection(dayPhase)`, soft-blurred. Per-light point-shadow casting (ref §9.2) is curiosity tier, deferred to L5. Self-shadow on character sprite (ref §9.11) optional, deferred until base shadow types ship.
 
-Depends on: L1. Parallel-able with L2.
+Depends on: L1. Was originally parallel-able with L2; L2 has now landed so L3 starts on top of L1+L2.
+
+**Brainstorm prep: `2026-05-08-lighting-l3-brainstorm-prep.md`** (read before starting L3 brainstorm).
 
 ### L4 — Atmosphere & post-processing
 Bloom (ref §11.1) with threshold pre-pass (ref §11.2). Vignette (ref §11.3). Color grading per arena (ref §11.4) — read warm/cool tints from `ThemeConfig`. Underwater tint deepens (ref §11.13). Lightning flashes (ref §11.17) coupled to weather. Camera shake already exists; integrate with hit-flash brightness (ref §17.8). Frame composition (ref §11.18). Brightness/perf tier and photosensitivity toggle gate intensity.
@@ -107,12 +110,13 @@ These rules apply to every pillar; they're set in L1 and inherited.
 
 ## Sequencing
 
-| Order | When |
-|---|---|
-| L1 | Now (this brainstorm). 3-PR sequence (integration stub → pipeline+sun → debug tooling). |
-| L2 + L3 | After L1 merges. Parallel worktrees. L2 may depend on FoliageSystem boundary decision — coordinate. |
-| L4 | After L2 + L3 stable. |
-| L5 | Last. Includes the settings UI for accessibility toggles. |
+| Order | When | Status |
+|---|---|---|
+| L1 | 2026-05-07 | ✓ Shipped. Single PR after pivot from 3-PR plan to cross-fade architecture. |
+| L2 | 2026-05-07 → 2026-05-08 | ✓ Shipped. Single PR (`feat/lighting-l2-emitters`, 14 commits across 7 phases). FoliageSystem boundary resolved as "static via `ArenaPack.lights`, dynamic via inline synthesis." |
+| L3 | Next | Pre-brainstorm. See `2026-05-08-lighting-l3-brainstorm-prep.md`. |
+| L4 | After L3 stable | Atmosphere & post-processing. |
+| L5 | Last | Exotic + settings UI. |
 
 Each pillar gets its own brainstorm session at the time it starts. This program doc is updated as pillars land — strikethroughs for completed items, adjustments for things learned.
 

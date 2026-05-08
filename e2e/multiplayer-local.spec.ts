@@ -16,8 +16,8 @@ test.describe('Local Multiplayer', () => {
     // Verify player count: 1 human + 2 bots = 3
     await page.waitForTimeout(1000);
     const playerCount = await page.evaluate(() => {
-      const loop = (window as any).__gameLoop;
-      return loop?.getState()?.players?.length ?? 0;
+      const loop = window.__bunnyTest;
+      return loop?.state()?.players?.length ?? 0;
     });
     expect(playerCount).toBe(3);
   });
@@ -28,13 +28,13 @@ test.describe('Local Multiplayer', () => {
     await expect(page.getByTestId('match-screen')).toBeVisible({ timeout: 10000 });
     // Wait for countdown to finish (polls game state instead of hardcoded wait)
     await page.waitForFunction(() => {
-      const loop = (window as any).__gameLoop;
-      return loop?.getState()?.countdown === 0;
+      const loop = window.__bunnyTest;
+      return loop?.state()?.countdown === 0;
     }, { timeout: 8000 });
 
     const xBefore = await page.evaluate(() => {
-      const loop = (window as any).__gameLoop;
-      const p1 = loop?.getState()?.players?.find((p: any) => p.id === 'P1');
+      const loop = window.__bunnyTest;
+      const p1 = loop?.state()?.players?.find((p: any) => p.id === 'P1');
       return p1?.x ?? 0;
     });
 
@@ -44,8 +44,8 @@ test.describe('Local Multiplayer', () => {
     await page.keyboard.up('d');
 
     const xAfter = await page.evaluate(() => {
-      const loop = (window as any).__gameLoop;
-      const p1 = loop?.getState()?.players?.find((p: any) => p.id === 'P1');
+      const loop = window.__bunnyTest;
+      const p1 = loop?.state()?.players?.find((p: any) => p.id === 'P1');
       return p1?.x ?? 0;
     });
 
@@ -82,8 +82,8 @@ test.describe('URL Parameter Shortcuts', () => {
     await expect(page.getByTestId('match-screen')).toBeVisible({ timeout: 10000 });
     await page.waitForTimeout(500);
     const playerCount = await page.evaluate(() => {
-      const loop = (window as any).__gameLoop;
-      return loop?.getState()?.players?.length ?? 0;
+      const loop = window.__bunnyTest;
+      return loop?.state()?.players?.length ?? 0;
     });
     // 1 human + 3 bots = 4
     expect(playerCount).toBe(4);
@@ -93,7 +93,7 @@ test.describe('URL Parameter Shortcuts', () => {
     await page.goto('/?arena=meadow&bots=1&killLimit=8');
     await expect(page.getByTestId('match-screen')).toBeVisible({ timeout: 10000 });
     const killLimit = await page.evaluate(() => {
-      return (window as any).__gameStore?.getState()?.matchSettings?.killLimit;
+      return window.__bunnyTest?.gameStore()?.getState()?.matchSettings?.killLimit;
     });
     expect(killLimit).toBe(8);
   });
@@ -102,7 +102,7 @@ test.describe('URL Parameter Shortcuts', () => {
     await page.goto('/?arena=meadow&bots=1&timeLimit=30');
     await expect(page.getByTestId('match-screen')).toBeVisible({ timeout: 10000 });
     const timeLimit = await page.evaluate(() => {
-      return (window as any).__gameStore?.getState()?.matchSettings?.timeLimit;
+      return window.__bunnyTest?.gameStore()?.getState()?.matchSettings?.timeLimit;
     });
     expect(timeLimit).toBe(30);
   });
@@ -111,7 +111,7 @@ test.describe('URL Parameter Shortcuts', () => {
     await page.goto('/?arena=meadow&bots=2&difficulty=hard');
     await expect(page.getByTestId('match-screen')).toBeVisible({ timeout: 10000 });
     const diff = await page.evaluate(() => {
-      return (window as any).__gameStore?.getState()?.matchSettings?.botDifficulty;
+      return window.__bunnyTest?.gameStore()?.getState()?.matchSettings?.botDifficulty;
     });
     expect(diff).toBe('hard');
   });
@@ -120,7 +120,7 @@ test.describe('URL Parameter Shortcuts', () => {
     await page.goto('/?arena=castle&bots=2&killLimit=4&difficulty=hard&timeLimit=60');
     await expect(page.getByTestId('match-screen')).toBeVisible({ timeout: 10000 });
     const settings = await page.evaluate(() => {
-      const store = (window as any).__gameStore;
+      const store = window.__bunnyTest?.gameStore();
       if (!store) return null;
       const s = store.getState().matchSettings;
       return { arena: s.arenaId, bots: s.botCount, killLimit: s.killLimit, difficulty: s.botDifficulty, timeLimit: s.timeLimit };
@@ -137,8 +137,8 @@ test.describe('URL Parameter Shortcuts', () => {
     await expect(page.getByTestId('match-screen')).toBeVisible({ timeout: 10000 });
     await page.waitForTimeout(500);
     const playerCount = await page.evaluate(() => {
-      const loop = (window as any).__gameLoop;
-      return loop?.getState()?.players?.length ?? 0;
+      const loop = window.__bunnyTest;
+      return loop?.state()?.players?.length ?? 0;
     });
     // Default: 1 human + 1 bot = 2
     expect(playerCount).toBe(2);
@@ -152,7 +152,7 @@ test.describe('URL Parameter Shortcuts', () => {
       await page.goto(`/?arena=${arena}&bots=1`);
       await expect(page.getByTestId('match-screen')).toBeVisible({ timeout: 10000 });
       const loadedArena = await page.evaluate(() => {
-        return (window as any).__gameStore?.getState()?.matchSettings?.arenaId;
+        return window.__bunnyTest?.gameStore()?.getState()?.matchSettings?.arenaId;
       });
       expect(loadedArena).toBe(arena);
     }

@@ -31,12 +31,11 @@ beforeAll(async () => {
 import { updateLavaRocks, updateGhosts, updateGeyserTimers, updatePigeonFlocks } from '../gameplay/arenaEntities';
 import { checkMatchEnd } from '../gameplay/match';
 import {
-  decaySfxCooldowns,
-  getOrCreateCooldowns,
+  PlayerSfxCooldowns,
   updateCrowdCheering,
   tickPeriodicAmbient,
-  type SfxCooldowns,
 } from '../cosmetics/sfx';
+import { Cooldowns } from '../../cooldowns';
 import { audio } from '../../audio';
 import type { PlayerSlot } from '../../types';
 import type { ThemeConfig } from '../../themes/types';
@@ -417,65 +416,61 @@ describe('checkMatchEnd', () => {
 // cosmetics/sfx.ts
 // ════════════════════════════════════════════════════════════════════════════
 
-describe('getOrCreateCooldowns', () => {
-  it('creates a new cooldown entry when none exists', () => {
-    const map = new Map<PlayerSlot, SfxCooldowns>();
-    const cd = getOrCreateCooldowns(map, 'P1');
-    expect(cd).toEqual({ land: 0, headbonk: 0, crouch: 0 });
-    expect(map.has('P1')).toBe(true);
-  });
-
-  it('returns the existing entry without overwriting it', () => {
-    const map = new Map<PlayerSlot, SfxCooldowns>();
-    const existing: SfxCooldowns = { land: 0.3, headbonk: 0.1, crouch: 0 };
-    map.set('P2', existing);
-    const cd = getOrCreateCooldowns(map, 'P2');
-    expect(cd).toBe(existing);
-    expect(cd.land).toBe(0.3);
-  });
-});
-
-// ────────────────────────────────────────────────────────────────────────────
-
-describe('decaySfxCooldowns', () => {
+describe('PlayerSfxCooldowns', () => {
   const dt = f(1 / 60);
 
-  it('returns early (no-op) when player has no cooldown entry', () => {
-    const map = new Map<PlayerSlot, SfxCooldowns>();
-    // Should not throw and should not create an entry
-    expect(() => decaySfxCooldowns(map, 'P1', dt)).not.toThrow();
-    expect(map.has('P1')).toBe(false);
+  it('exposes three independent Cooldowns<PlayerSlot> instances', () => {
+    const cd = new PlayerSfxCooldowns();
+    expect(cd.land.isReady('P1')).toBe(true);
+    expect(cd.headbonk.isReady('P1')).toBe(true);
+    expect(cd.crouch.isReady('P1')).toBe(true);
   });
 
-  it('decays all positive cooldowns by dt', () => {
-    const map = new Map<PlayerSlot, SfxCooldowns>();
-    map.set('P1', { land: 0.5, headbonk: 0.2, crouch: 0.1 });
-    decaySfxCooldowns(map, 'P1', dt);
-    const cd = map.get('P1')!;
-    expect(cd.land).toBeCloseTo(0.5 - dt, 4);
-    expect(cd.headbonk).toBeCloseTo(0.2 - dt, 4);
-    expect(cd.crouch).toBeCloseTo(0.1 - dt, 4);
+  it('isReady returns false for a slot whose timer is set, true once it elapses', () => {
+    const cd = new PlayerSfxCooldowns();
+    cd.land.set('P1', 0.1);
+    expect(cd.land.isReady('P1')).toBe(false);
+    cd.land.tick('P1', 0.1);
+    expect(cd.land.isReady('P1')).toBe(true);
   });
 
-  it('does not decay cooldowns that are already at or below zero', () => {
-    const map = new Map<PlayerSlot, SfxCooldowns>();
-    map.set('P1', { land: 0, headbonk: -1, crouch: 0 });
-    decaySfxCooldowns(map, 'P1', dt);
-    const cd = map.get('P1')!;
-    // None of these were > 0, so they should be unchanged
-    expect(cd.land).toBe(0);
-    expect(cd.headbonk).toBe(-1);
-    expect(cd.crouch).toBe(0);
+  it('decay() ticks all three cooldowns by dt for the given slot', () => {
+    const cd = new PlayerSfxCooldowns();
+    cd.land.set('P1', 0.5);
+    cd.headbonk.set('P1', 0.2);
+    cd.crouch.set('P1', 0.1);
+    cd.decay('P1', dt);
+    expect(cd.land.isReady('P1')).toBe(false);
+    expect(cd.headbonk.isReady('P1')).toBe(false);
+    expect(cd.crouch.isReady('P1')).toBe(false);
+    // Ticking enough to fully drain crouch (which had only 0.1s)
+    cd.decay('P1', 0.1);
+    expect(cd.crouch.isReady('P1')).toBe(true);
   });
 
-  it('only decays the cooldowns that are positive', () => {
-    const map = new Map<PlayerSlot, SfxCooldowns>();
-    map.set('P1', { land: 0.3, headbonk: 0, crouch: 0 });
-    decaySfxCooldowns(map, 'P1', dt);
-    const cd = map.get('P1')!;
-    expect(cd.land).toBeCloseTo(0.3 - dt, 4);
-    expect(cd.headbonk).toBe(0);
-    expect(cd.crouch).toBe(0);
+  it('decay() is a no-op for a never-set slot', () => {
+    const cd = new PlayerSfxCooldowns();
+    expect(() => cd.decay('P1', dt)).not.toThrow();
+    expect(cd.land.isReady('P1')).toBe(true);
+  });
+
+  it('keys are isolated across slots', () => {
+    const cd = new PlayerSfxCooldowns();
+    cd.land.set('P1', 0.3);
+    expect(cd.land.isReady('P2')).toBe(true);
+    cd.decay('P2', 1.0); // decaying a different slot doesn't drain P1
+    expect(cd.land.isReady('P1')).toBe(false);
+  });
+
+  it('clear() resets all three cooldowns for all slots', () => {
+    const cd = new PlayerSfxCooldowns();
+    cd.land.set('P1', 0.5);
+    cd.headbonk.set('P2', 0.5);
+    cd.crouch.set('P3', 0.5);
+    cd.clear();
+    expect(cd.land.isReady('P1')).toBe(true);
+    expect(cd.headbonk.isReady('P2')).toBe(true);
+    expect(cd.crouch.isReady('P3')).toBe(true);
   });
 });
 
@@ -545,7 +540,7 @@ describe('updateCrowdCheering', () => {
 describe('tickPeriodicAmbient', () => {
   it('does nothing when theme has no ambientSoundConfig', () => {
     const theme = makeThemeWithoutLavaRock(); // no ambientSoundConfig
-    const timers = new Map<string, number>();
+    const timers = new Cooldowns<string>();
     const playSound = vi.fn();
     expect(() => tickPeriodicAmbient(theme, timers, 1 / 60, playSound)).not.toThrow();
     expect(playSound).not.toHaveBeenCalled();
@@ -553,7 +548,7 @@ describe('tickPeriodicAmbient', () => {
 
   it('does nothing when ambientSoundConfig has no periodic array', () => {
     const theme = { ...makeThemeWithoutLavaRock(), ambientSoundConfig: { loops: ['wind'] } } as unknown as ThemeConfig;
-    const timers = new Map<string, number>();
+    const timers = new Cooldowns<string>();
     const playSound = vi.fn();
     tickPeriodicAmbient(theme, timers, 1 / 60, playSound);
     expect(playSound).not.toHaveBeenCalled();
@@ -567,12 +562,15 @@ describe('tickPeriodicAmbient', () => {
         periodic: [{ sound: 'bird_chirp', intervalRange: [5, 5] as [number, number] }],
       },
     } as unknown as ThemeConfig;
-    const timers = new Map<string, number>([['bird_chirp', 0.001]]);
+    const timers = new Cooldowns<string>();
+    timers.set('bird_chirp', 0.001);
     const dt = 1 / 60;
     tickPeriodicAmbient(theme, timers, dt, playSound);
     expect(playSound).toHaveBeenCalledWith('bird_chirp');
-    // Timer should be reset to a new interval value (5 since range is [5,5])
-    expect(timers.get('bird_chirp')).toBeCloseTo(5, 1);
+    // After firing, timer should be re-set to ~5 — verify by ticking up to but
+    // not past 5s and confirming no further fire, then crossing 5s and firing.
+    expect(timers.tick('bird_chirp', 4.99)).toBe(false);
+    expect(timers.tick('bird_chirp', 0.02)).toBe(true);
   });
 
   it('decrements timer without playing when it is still above zero', () => {
@@ -584,10 +582,13 @@ describe('tickPeriodicAmbient', () => {
       },
     } as unknown as ThemeConfig;
     const dt = 1 / 60;
-    const timers = new Map<string, number>([['bird_chirp', 3]]);
+    const timers = new Cooldowns<string>();
+    timers.set('bird_chirp', 3);
     tickPeriodicAmbient(theme, timers, dt, playSound);
     expect(playSound).not.toHaveBeenCalled();
-    expect(timers.get('bird_chirp')).toBeCloseTo(3 - dt, 4);
+    // Timer decremented by dt — confirm by ticking the residual to expiry.
+    expect(timers.tick('bird_chirp', 3 - dt - 0.001)).toBe(false);
+    expect(timers.tick('bird_chirp', 0.002)).toBe(true);
   });
 
   it('initialises missing timer to 0 and fires immediately on first tick', () => {
@@ -598,9 +599,9 @@ describe('tickPeriodicAmbient', () => {
         periodic: [{ sound: 'wind_gust', intervalRange: [4, 4] as [number, number] }],
       },
     } as unknown as ThemeConfig;
-    const timers = new Map<string, number>(); // no entry for 'wind_gust' → defaults to 0
+    const timers = new Cooldowns<string>(); // no entry for 'wind_gust' → uninitialized = ready
     tickPeriodicAmbient(theme, timers, 1 / 60, playSound);
-    // 0 - dt = negative → fires
+    // Uninitialized → fires
     expect(playSound).toHaveBeenCalledWith('wind_gust');
   });
 
@@ -617,13 +618,14 @@ describe('tickPeriodicAmbient', () => {
     } as unknown as ThemeConfig;
     const dt = 1 / 60;
     // Only bird_chirp is about to fire
-    const timers = new Map<string, number>([
-      ['bird_chirp', 0.001],
-      ['frog_croak', 4],
-    ]);
+    const timers = new Cooldowns<string>();
+    timers.set('bird_chirp', 0.001);
+    timers.set('frog_croak', 4);
     tickPeriodicAmbient(theme, timers, dt, playSound);
     expect(playSound).toHaveBeenCalledTimes(1);
     expect(playSound).toHaveBeenCalledWith('bird_chirp');
-    expect(timers.get('frog_croak')).toBeCloseTo(4 - dt, 4);
+    // frog_croak decremented by dt — confirm via residual tick
+    expect(timers.tick('frog_croak', 4 - dt - 0.001)).toBe(false);
+    expect(timers.tick('frog_croak', 0.002)).toBe(true);
   });
 });

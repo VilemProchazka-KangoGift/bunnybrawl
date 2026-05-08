@@ -31,3 +31,21 @@ describe('SeededRNG.fromTick', () => {
     }
   });
 });
+
+describe('SeededRNG.floatFromTick (allocation-free)', () => {
+  it('matches fromTick().nextFloat() for the same (seed, tick)', () => {
+    for (const [seed, tick] of [[1, 0], [42, 100], [-7, 9999], [0xdead, 0xbeef]]) {
+      const direct = SeededRNG.floatFromTick(seed, tick);
+      const viaRng = SeededRNG.fromTick(seed, tick).nextFloat();
+      expect(direct).toBe(viaRng);
+    }
+  });
+
+  it('output is in [0, 1)', () => {
+    for (let tick = 0; tick < 50; tick++) {
+      const v = SeededRNG.floatFromTick(7, tick);
+      expect(v).toBeGreaterThanOrEqual(0);
+      expect(v).toBeLessThan(1);
+    }
+  });
+});

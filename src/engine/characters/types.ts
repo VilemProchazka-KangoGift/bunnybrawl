@@ -1,5 +1,5 @@
 import type { Howl } from 'howler';
-import type { SplatShape, GibType, PlayerState, Vec2 } from '../types';
+import type { SplatShape, GibType, PlayerState, Vec2, Ctx2D } from '../types';
 import type { GibDef } from '../stomp';
 import type { BodyEllipseParams } from '../spriteShading';
 
@@ -10,7 +10,7 @@ import type { BodyEllipseParams } from '../spriteShading';
  *  Must be a PURE FUNCTION of its inputs — the result is cached to OffscreenCanvas.
  *  Do NOT use external mutable state; derive all animation from the provided parameters. */
 export type CharacterRenderer = (
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   cx: number,
   yOff: number,
   w: number,
@@ -25,7 +25,7 @@ export type CharacterRenderer = (
 /** Draws a single gib piece. Called with ctx already translated + rotated to gib position.
  *  The 'body' gibType is handled generically — this is only called for non-body gibs. */
 export type GibRenderer = (
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   gibType: GibType,
   width: number,
   height: number,

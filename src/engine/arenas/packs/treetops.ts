@@ -1,27 +1,61 @@
 import type { ArenaPack } from '../types';
-import type { Platform } from '../../types';
+import type { Arena, Platform, Ctx2D } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin, fastCos } from '../../fastMath';
-import { getSlowDevice } from '../../perfFlags';
 import { drawTree, drawFgLeafCluster } from '../../themes/drawPrimitives';
 import { buildHangingVine, buildFern } from '../../gameLoop/cosmetics/sharedDecorationKinds';
-import { pushFromPlayers, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
+import { pushFromPlayers, type GroundCritterState, type GroundCritterConfig } from '../../themes/utils';
+import { buildGroundCritter, type WildlifeInstance } from '../../gameLoop/cosmetics/wildlife';
 import type { Player } from '../../types';
 import {
   registerReactiveKind, createReactiveInstance,
   type ReactiveInstance,
 } from '../../gameLoop/cosmetics/reactiveDecorations';
 
-const SQUIRRELS_CFG = [
+const SQUIRRELS_CFG: GroundCritterConfig[] = [
   { platL: 450, platR: 730, platTopY: 256, walkSpeed: 45, fleeSpeed: 140, fleeRadius: 110, yTolerance: 60 },
   { platL: 520, platR: 760, platTopY: 366, walkSpeed: 50, fleeSpeed: 150, fleeRadius: 110, yTolerance: 60 },
   { platL: 140, platR: 310, platTopY: 486, walkSpeed: 45, fleeSpeed: 140, fleeRadius: 100, yTolerance: 60 },
 ];
-const _squirrels: GroundCritterState[] = SQUIRRELS_CFG.map((cfg, i) => ({
-  x: (cfg.platL + cfg.platR) / 2,
-  dir: i % 2 === 0 ? 1 : -1, facingEase: 1, fleeing: false, committedFleeDir: 0,
-}));
-const _tickSquirrelDt = makeDtTracker();
+
+function drawOneSquirrel(
+  ctx: Ctx2D,
+  state: GroundCritterState,
+  cfg: GroundCritterConfig,
+  time: number,
+  seed: number,
+): void {
+  const fleeing = state.fleeing;
+  const bob = fastSin(time * (fleeing ? 18 : 8) + seed) * (fleeing ? 2 : 1) * Math.abs(state.facingEase);
+  ctx.save();
+  ctx.translate(state.x, cfg.platTopY + bob);
+  if (state.facingEase < 0) ctx.scale(-1, 1);
+  ctx.fillStyle = '#a5683a';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 9, 5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(-7, 0);
+  ctx.bezierCurveTo(-18, -3, -22, -14, -10, -14);
+  ctx.lineTo(-10, -6);
+  ctx.bezierCurveTo(-14, -7, -10, -2, -7, 0);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(7, -1, 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(8, -4);
+  ctx.lineTo(10, -7);
+  ctx.lineTo(11, -4);
+  ctx.fill();
+  ctx.fillStyle = '#000';
+  ctx.fillRect(8, -2, 1.5, 1.5);
+  ctx.fillStyle = '#e8c89a';
+  ctx.beginPath();
+  ctx.ellipse(0, 1.5, 5, 2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
 const TREETOPS_BUTTERFLY_HUES = [320, 60, 200, 290, 30, 160] as const;
 const TREETOPS_BUTTERFLY_COLORS = TREETOPS_BUTTERFLY_HUES.map(h => `hsl(${h},80%,65%)`);
 const TREETOPS_FERN_COLOR = '#2A6A2A';
@@ -30,7 +64,7 @@ const TREETOPS_BEE_CLUSTERS = [
   { homeX: 940, homeY: 360, phase: 2.4 },
 ] as const;
 
-function drawTreetopsButterfly(ctx: CanvasRenderingContext2D, i: number, time: number, players: ReadonlyArray<Player>): void {
+function drawTreetopsButterfly(ctx: Ctx2D, i: number, time: number, players: ReadonlyArray<Player>): void {
   const driftSpeed = 0.05 + (i % 3) * 0.015;
   const homeX = ((i * 220 + time * 60 * driftSpeed) % (CANVAS_WIDTH + 200)) - 100;
   const homeY = 320 + fastSin(time * 0.4 + i * 1.7) * 90 + (i % 3) * 30;
@@ -47,7 +81,7 @@ function drawTreetopsButterfly(ctx: CanvasRenderingContext2D, i: number, time: n
   ctx.fillRect(r.x - 0.5, r.y - 3, 1, 6);
 }
 
-function drawTreetopsBeeCluster(ctx: CanvasRenderingContext2D, ci: number, time: number, players: ReadonlyArray<Player>): void {
+function drawTreetopsBeeCluster(ctx: Ctx2D, ci: number, time: number, players: ReadonlyArray<Player>): void {
   const c = TREETOPS_BEE_CLUSTERS[ci];
   const wanderX = c.homeX + fastSin(time * 0.25 + c.phase) * 180;
   const wanderY = c.homeY + fastSin(time * 0.4 + c.phase + 1) * 50;
@@ -76,7 +110,7 @@ import {
 
 const MOSS_TUFT_COLORS = ['#4a7828', '#6a9a3a', '#8fa84f'];
 
-function drawTreetopsPlatformBg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+function drawTreetopsPlatformBg(ctx: Ctx2D, platform: Platform): void {
   const rng = mulberry32(seedFor(platform.x, platform.y));
   const cF = capFrontY(platform);
   const cB = capBackY(platform);
@@ -126,7 +160,7 @@ function drawTreetopsPlatformBg(ctx: CanvasRenderingContext2D, platform: Platfor
   }, leftPts);
 }
 
-function drawTreetopsPlatformFg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+function drawTreetopsPlatformFg(ctx: Ctx2D, platform: Platform): void {
   const rng = mulberry32(seedFor(platform.x, platform.y) ^ BODY_SEED_OFFSET);
   const cF = capFrontY(platform);
   const bodyTop = cF;
@@ -575,11 +609,11 @@ export const treetops: ArenaPack = {
     ctx.restore();
   },
 
-  drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
+  drawPlatform: (ctx: Ctx2D, platform: Platform, _isGround: boolean) => {
     drawTreetopsPlatformBg(ctx, platform);
   },
 
-  drawPlatformOverlay: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
+  drawPlatformOverlay: (ctx: Ctx2D, platform: Platform, _isGround: boolean) => {
     drawTreetopsPlatformFg(ctx, platform);
   },
 
@@ -653,49 +687,22 @@ export const treetops: ArenaPack = {
     ctx.restore();
   },
 
-  drawAnimatedBackground: (ctx, _arena, time, _dayPhase, matchState) => {
-    if (getSlowDevice()) return;
-    ctx.save();
-
-    const dt = _tickSquirrelDt(time);
-    const players = matchState?.players ?? [];
-    for (let si = 0; si < _squirrels.length; si++) {
-      const sq = _squirrels[si];
-      const cfg = SQUIRRELS_CFG[si];
-      tickGroundCritter(sq, players, dt, cfg);
-      const fleeing = sq.fleeing;
-      const bob = fastSin(time * (fleeing ? 18 : 8) + si) * (fleeing ? 2 : 1) * Math.abs(sq.facingEase);
-      ctx.save();
-      ctx.translate(sq.x, cfg.platTopY + bob);
-      if (sq.facingEase < 0) ctx.scale(-1, 1);
-      ctx.fillStyle = '#a5683a';
-      ctx.beginPath();
-      ctx.ellipse(0, 0, 9, 5, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(-7, 0);
-      ctx.bezierCurveTo(-18, -3, -22, -14, -10, -14);
-      ctx.lineTo(-10, -6);
-      ctx.bezierCurveTo(-14, -7, -10, -2, -7, 0);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(7, -1, 4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(8, -4);
-      ctx.lineTo(10, -7);
-      ctx.lineTo(11, -4);
-      ctx.fill();
-      ctx.fillStyle = '#000';
-      ctx.fillRect(8, -2, 1.5, 1.5);
-      ctx.fillStyle = '#e8c89a';
-      ctx.beginPath();
-      ctx.ellipse(0, 1.5, 5, 2, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
+  buildWildlife: (_arena: Arena): WildlifeInstance[] => {
+    const out: WildlifeInstance[] = [];
+    for (let i = 0; i < SQUIRRELS_CFG.length; i++) {
+      const cfg = SQUIRRELS_CFG[i];
+      const seed = i;
+      out.push(buildGroundCritter({
+        seed,
+        cfg,
+        initialDir: i % 2 === 0 ? 1 : -1,
+        // Squirrels render in the early-bg slot (between far-bg and clouds)
+        // — preserves their pre-migration `drawAnimatedBackground` z-order.
+        layer: 'animBackground',
+        draw: ({ ctx, state, cfg: c, time }) => drawOneSquirrel(ctx, state, c, time, seed),
+      }));
     }
-
-    ctx.restore();
+    return out;
   },
 
   // ---- Audio ----

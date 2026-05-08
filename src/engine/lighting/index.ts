@@ -1,7 +1,7 @@
 // src/engine/lighting/index.ts
 //
 // Lighting kill switch + public surface. `?lighting=off` makes
-// LightingPipeline a no-op via isLightingEnabled() — accessibility safety
+// AmbientPipeline a no-op via isLightingEnabled() — accessibility safety
 // valve plus regression-test hook (every L*+ pillar must produce a clean
 // downgrade when the toggle is set).
 
@@ -26,5 +26,8 @@ export const subscribeLightingEnabled = emitter.subscribe;
 export const setLightingEnabled = emitter.set;
 export const initLighting = emitter.init;
 
-export type { PerfTier, RGB } from './types';
-export { LightingPipeline } from './pipeline';
+export type { PerfTier, RGB, Light, LightKind, Falloff, Flicker, PointLight, SpotLight } from './types';
+export { AmbientPipeline } from './pipeline';
+export { EmitterPipeline } from './emitter';
+export { Lighting } from './orchestrator';
+export { lightStamp, effectiveIntensity, PHOTOSENSITIVITY_INTENSITY_CAP } from './lightStamp';

@@ -1,34 +1,37 @@
 import type { ArenaPack } from '../types';
-import type { Platform, PlayerSlot } from '../../types';
+import type { Platform, PlayerSlot, Ctx2D } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
+import { Cooldowns } from '../../cooldowns';
 import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
-import { pushFromPlayers, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
+import { pushFromPlayers, type GroundCritterState, type GroundCritterConfig } from '../../themes/utils';
+import { buildGroundCritter, type WildlifeInstance } from '../../gameLoop/cosmetics/wildlife';
 import type { Player } from '../../types';
+import type { Arena } from '../../types';
 
-const CRABS_CFG = [
+const CRABS_CFG: GroundCritterConfig[] = [
   { platL: 50,   platR: 380,  platTopY: 660, walkSpeed: 35, fleeSpeed: 130, fleeRadius: 100, yTolerance: 80 },
   { platL: 480,  platR: 800,  platTopY: 660, walkSpeed: 30, fleeSpeed: 120, fleeRadius: 100, yTolerance: 80 },
   { platL: 900,  platR: 1230, platTopY: 660, walkSpeed: 32, fleeSpeed: 140, fleeRadius: 100, yTolerance: 80 },
 ];
-const _crabs: GroundCritterState[] = CRABS_CFG.map((cfg, i) => ({
-  x: (cfg.platL + cfg.platR) / 2,
-  dir: i % 2 === 0 ? 1 : -1, facingEase: 1, fleeing: false, committedFleeDir: 0,
-}));
-const _tickCrabDt = makeDtTracker();
 
 // ---- Bubble trails (env-wakes from Batch D) ----
-const _bubbleAccum = new Map<PlayerSlot, number>();
+const _bubbleCooldowns = new Cooldowns<PlayerSlot>();
 const BUBBLE_INTERVAL = 0.08; // seconds between bubble emits per player
 const BUBBLE_VX_THRESHOLD = 50;
 
-function drawOneCrab(ctx: CanvasRenderingContext2D, time: number, crab: GroundCritterState, cfg: typeof CRABS_CFG[number]): void {
-  const fleeing = crab.fleeing;
-  const motion = Math.abs(crab.facingEase);
+function drawOneCrab(
+  ctx: Ctx2D,
+  state: GroundCritterState,
+  cfg: GroundCritterConfig,
+  time: number,
+): void {
+  const fleeing = state.fleeing;
+  const motion = Math.abs(state.facingEase);
   ctx.save();
-  ctx.translate(crab.x, cfg.platTopY - 6);
-  if (crab.facingEase < 0) ctx.scale(-1, 1);
+  ctx.translate(state.x, cfg.platTopY - 6);
+  if (state.facingEase < 0) ctx.scale(-1, 1);
 
   // 6 legs (3 on each side, splayed under the body) — alternating step lift.
   ctx.strokeStyle = '#7a1f12';
@@ -151,14 +154,6 @@ function drawOneCrab(ctx: CanvasRenderingContext2D, time: number, crab: GroundCr
   ctx.restore();
 }
 
-function drawCrab(ctx: CanvasRenderingContext2D, time: number, players: ReadonlyArray<Player>): void {
-  const dt = _tickCrabDt(time);
-  for (let i = 0; i < _crabs.length; i++) {
-    tickGroundCritter(_crabs[i], players, dt, CRABS_CFG[i]);
-    drawOneCrab(ctx, time, _crabs[i], CRABS_CFG[i]);
-  }
-}
-
 const FISH_SPECIES = [
   { color: '#ffaa3a', size: 0.7 },
   { color: '#5fb4d8', size: 1.0 },
@@ -193,7 +188,7 @@ const FISH_BOB_FREQ = 0.5;
 const FISH_BOB_AMP = 40;
 const FISH_BASE_Y = 380;
 
-function drawFish(ctx: CanvasRenderingContext2D, i: number, time: number, cxBase: number, cy: number, facing: 1 | -1, players: ReadonlyArray<Player>): void {
+function drawFish(ctx: Ctx2D, i: number, time: number, cxBase: number, cy: number, facing: 1 | -1, players: ReadonlyArray<Player>): void {
   const sp = FISH_SPECIES[i % FISH_SPECIES.length];
   const ox = (i % 6) * 26 - 65;
   const oy = Math.floor(i / 6) * 22 - 22 + (i % 2) * 6;
@@ -256,7 +251,7 @@ function darkenSeaweedColor(color: string): string {
 }
 
 function drawSeaweed(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   sx: number,
   sy: number,
   h: number,
@@ -358,7 +353,7 @@ function drawSeaweed(
 }
 
 function drawFgKelp(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   sx: number,
   gy: number,
   h: number,
@@ -389,7 +384,7 @@ function drawFgKelp(
 }
 
 function drawFgSeaweed(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   sx: number,
   gy: number,
   h: number,
@@ -417,7 +412,7 @@ function drawFgSeaweed(
 // strand carries its own seeded params so reactive instances stay stable.
 interface PlatformKelpParams { kx: number; klen: number; phase: number; swayAmp: number; bb: number; leafN: number; }
 function drawPlatformKelpStrand(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   params: PlatformKelpParams,
   bendX = 0,
 ): void {
@@ -599,7 +594,7 @@ const UNDERWATER_STONE_PALETTE: StonePaletteRow[] = [
   { base: '#627268', dark: '#32423a', light: '#82928a' },
 ];
 
-function drawUnderwaterPlatformBg(ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean): void {
+function drawUnderwaterPlatformBg(ctx: Ctx2D, platform: Platform, isGround: boolean): void {
   const rng = mulberry32(seedFor(platform.x, platform.y));
   const cF = capFrontY(platform);
   const cB = capBackY(platform);
@@ -646,7 +641,7 @@ function drawUnderwaterPlatformBg(ctx: CanvasRenderingContext2D, platform: Platf
   // — see underwater.platformKelp + buildReactiveDecorations below.
 }
 
-function drawUnderwaterPlatformFg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+function drawUnderwaterPlatformFg(ctx: Ctx2D, platform: Platform): void {
   const rng = mulberry32(seedFor(platform.x, platform.y) ^ BODY_SEED_OFFSET);
   const cF = capFrontY(platform);
   const bodyTop = cF;
@@ -1153,11 +1148,11 @@ export const underwater: ArenaPack = {
     ctx.restore();
   },
 
-  drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => {
+  drawPlatform: (ctx: Ctx2D, platform: Platform, isGround: boolean) => {
     drawUnderwaterPlatformBg(ctx, platform, isGround);
   },
 
-  drawPlatformOverlay: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
+  drawPlatformOverlay: (ctx: Ctx2D, platform: Platform, _isGround: boolean) => {
     drawUnderwaterPlatformFg(ctx, platform);
   },
 
@@ -1424,9 +1419,18 @@ export const underwater: ArenaPack = {
     ctx.restore();
   },
 
-  drawGroundCritters: (ctx, _arena, time, _dayPhase, matchState) => {
-    if (getSlowDevice() || !matchState) return;
-    drawCrab(ctx, time, matchState.players);
+  buildWildlife: (_arena: Arena): WildlifeInstance[] => {
+    const out: WildlifeInstance[] = [];
+    for (let i = 0; i < CRABS_CFG.length; i++) {
+      const cfg = CRABS_CFG[i];
+      out.push(buildGroundCritter({
+        seed: i,
+        cfg,
+        initialDir: i % 2 === 0 ? 1 : -1,
+        draw: ({ ctx, state, cfg: c, time }) => drawOneCrab(ctx, state, c, time),
+      }));
+    }
+    return out;
   },
 
   cosmeticTick: (state, dt, services) => {
@@ -1436,9 +1440,8 @@ export const underwater: ArenaPack = {
       if (!p.active || p.state === 'splat' || p.state === 'respawning') continue;
       if (Math.abs(p.vx) < BUBBLE_VX_THRESHOLD) continue;
 
-      const next = (_bubbleAccum.get(p.id) ?? 0) - dt;
-      if (next > 0) { _bubbleAccum.set(p.id, next); continue; }
-      _bubbleAccum.set(p.id, BUBBLE_INTERVAL);
+      if (!_bubbleCooldowns.tick(p.id, dt)) continue;
+      _bubbleCooldowns.set(p.id, BUBBLE_INTERVAL);
 
       // Emit one bubble behind the player at hip height.
       const offsetX = p.facing === 'right' ? -p.width * 0.5 : p.width * 0.5;

@@ -19,7 +19,6 @@ P2P WebRTC via PeerJS with GGPO-style rollback netcode. Free signaling at `0.pee
 1. **Snapshot timing is critical** — `snapshot[f]` MUST represent state BEFORE tick f. Taking snapshot AFTER `fixedUpdate` but storing at the same frame index causes +1dt drift per rollback, compounding into high-speed mode.
 2. **Don't rollback every frame** — track `lastSyncedFrame`. Only rollback when `remoteConfirmedFrame > lastSyncedFrame`. Without this, confirmed flags are never cleared and resimulation happens needlessly.
 3. **Real-time timers in network mode** — `slowMotion`, `screenFlash`, `hitstopZoom` are decremented in `loop()` which doesn't run in network mode. Must decay in `renderFrame(frameDt)` instead. Missing this causes kills to freeze visual effects permanently.
-4. **Audio during resimulation** — `playSound()` wrapper + `setAudioEnabled(false)` before resim, `true` after. The `replace_all` of `audio.play` → `this.playSound` also replaced the call INSIDE `playSound` itself, creating infinite recursion. Always verify self-referential replacements.
 
 ## React + Network Pitfalls
 1. **useEffect cleanup with deps** — `[online.connectionStatus]` in deps causes cleanup to fire on every status change. The stale closure destroys the transport mid-connection. Use empty deps `[]` for unmount-only cleanup + a ref (`transitioningToMatch`) to skip cleanup when transitioning.

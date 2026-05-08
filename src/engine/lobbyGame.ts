@@ -19,6 +19,7 @@ import { updateWildlife } from './gameLoop/cosmetics/environment';
 import { createEmptyMatchState } from './simulator/initialState';
 import { getArena, getTheme } from './arenas';
 import { pickWeighted, randRange, shuffleInPlace } from './themes/utils';
+import { Accumulator } from './accumulator';
 import {
   SLOTS, READY_ZONE_X, COUNTDOWN_SECONDS, GROUND_Y, LOBBY_DAY_CYCLE,
   LOBBY_GRAVITY, LOBBY_SPEED, LOBBY_JUMP,
@@ -138,7 +139,10 @@ export class LobbyGame {
   private _particles: Particle[] = [];
   private _particleFreeList: Particle[] = [];
   private _prevState = new WeakMap<Player, { state: Player['state']; vy: number }>();
-  private _footstepAccs = new WeakMap<Player, number>();
+  // Keyed by Player object — lobby has a fixed roster (players + bots + extras
+  // set at construction, never grows) and explicit teardown, so a Map<Player>
+  // is functionally equivalent to the prior WeakMap (no GC concern).
+  private _footstepAccs = new Accumulator<Player>();
   // Cached lobby ground colour for landing dust (read once at construction).
   private _dustColor: string;
 
@@ -234,14 +238,11 @@ export class LobbyGame {
       if (p.state === 'run') {
         const speedRatio = Math.min(Math.abs(p.vx) / LOBBY_SPEED, 1);
         const interval = 0.22 - speedRatio * 0.12;
-        let acc = (this._footstepAccs.get(p) ?? 0) + dt;
-        if (acc >= interval) {
-          acc -= interval;
+        if (this._footstepAccs.advance(p, dt, interval)) {
           spawnFootstepDustParticles(this._particles, this._particleFreeList, p);
         }
-        this._footstepAccs.set(p, acc);
       } else {
-        this._footstepAccs.set(p, 0);
+        this._footstepAccs.clear(p);
       }
       this._prevState.set(p, { state: p.state, vy: p.vy });
 
