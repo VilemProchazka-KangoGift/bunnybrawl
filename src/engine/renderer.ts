@@ -40,6 +40,7 @@ import { getBrightness } from './lighting/brightness';
 import { getSlowDevice } from './perfFlags';
 import { perfTrace } from './perfTrace';
 import { getReactiveKind } from './gameLoop/cosmetics/reactiveDecorations';
+import { getWildlifeKind } from './gameLoop/cosmetics/wildlife';
 
 interface Cloud {
   x: number;
@@ -606,6 +607,24 @@ export class Renderer {
     }
   }
 
+  /** Draw all wildlife instances for one layer. Like `_drawReactiveLayer`,
+   *  iterates a pre-bucketed list — no per-frame allocation or layer filter. */
+  private _drawWildlifeLayer(
+    ctx: CanvasRenderingContext2D,
+    instances: ReadonlyArray<import('./gameLoop/cosmetics/wildlife').WildlifeInstance>,
+    matchState: MatchState,
+  ): void {
+    if (!instances || instances.length === 0) return;
+    if (getSlowDevice()) return;
+    const time = matchState.timeElapsed;
+    for (let i = 0; i < instances.length; i++) {
+      const inst = instances[i];
+      const cfg = getWildlifeKind(inst.kindId);
+      if (!cfg) continue;
+      cfg.draw(ctx, inst, time, matchState);
+    }
+  }
+
   /** Apply mirror transform and call into theme's foreground draw. Shared by
    *  the cache builder and the test-env (no OffscreenCanvas) fallback path. */
   private _drawForegroundNatureDirect(ctx: CanvasRenderingContext2D, themeArena: Arena): void {
@@ -752,6 +771,7 @@ export class Renderer {
     particles: Particle[],
     cosmeticLead = 0,
     reactive?: import('./gameLoop/cosmetics/reactiveDecorations').ReactiveRenderArg,
+    wildlife?: import('./gameLoop/cosmetics/wildlife').WildlifeRenderArg,
   ): void {
     perfTrace.measure('renderFrame', () => {
       const ctx = this.fgCtx;
@@ -799,6 +819,11 @@ export class Renderer {
         const thA = this.originalArena ?? arena;
         this.withMirror(ctx, () => this.theme.drawAnimatedBackground!(ctx, thA, matchState.timeElapsed, matchState.dayPhase, matchState));
         d.animatedBg = true;
+      }
+      // Wildlife — animBackground layer (e.g. treetops squirrels). Same slot
+      // the legacy `drawAnimatedBackground` wildlife branch occupied.
+      if (wildlife && wildlife.animBackground.length > 0) {
+        this.withMirror(ctx, () => this._drawWildlifeLayer(ctx, wildlife.animBackground, matchState));
       }
 
       const now = this.frameTime / 1000;
@@ -1075,9 +1100,15 @@ export class Renderer {
 
       // Ground critters (snails, rats, crabs…) — drawn BEFORE fg-nature so
       // grass tufts / bushes can occlude them when they walk behind foliage.
+      // Two paths: the legacy `theme.drawGroundCritters` callback (for any
+      // arena pack still owning its critter state) and the WildlifeSystem
+      // (post-migration packs).
       if (this.theme.drawGroundCritters) {
         const thA = this.originalArena ?? arena;
         this.withMirror(ctx, () => this.theme.drawGroundCritters!(ctx, thA, matchState.timeElapsed, matchState.dayPhase, matchState));
+      }
+      if (wildlife && wildlife.groundCritter.length > 0) {
+        this.withMirror(ctx, () => this._drawWildlifeLayer(ctx, wildlife.groundCritter, matchState));
       }
 
       // Mirror is baked into the cache so blit at identity transform; explicit

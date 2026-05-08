@@ -40,6 +40,8 @@ import { SurfaceImpactSystem } from './cosmetics/SurfaceImpactSystem';
 import { HUDFeedbackSystem } from './cosmetics/HUDFeedbackSystem';
 import { ReactiveDecorationSystem } from './cosmetics/ReactiveDecorationSystem';
 import type { ReactiveInstance, ReactiveRenderArg } from './cosmetics/reactiveDecorations';
+import { WildlifeSystem } from './cosmetics/WildlifeSystem';
+import type { WildlifeRenderArg } from './cosmetics/wildlife';
 
 /** Half-rate cosmetic threshold: particles/SFX/VFX tick at ~30Hz while render stays at 60Hz. */
 const COSMETIC_INTERVAL = FIXED_TIMESTEP * 2;
@@ -71,6 +73,7 @@ export class GameLoop {
   private surfaceImpactSystem!: SurfaceImpactSystem;
   private hudFeedbackSystem!: HUDFeedbackSystem;
   private reactiveDecorationSystem!: ReactiveDecorationSystem;
+  private wildlifeSystem!: WildlifeSystem;
 
   private _debugKeyHandler: ((e: KeyboardEvent) => void) | null = null;
   private _unsubRenderScale: (() => void) | null = null;
@@ -144,6 +147,11 @@ export class GameLoop {
     );
     if (sTheme.buildReactiveDecorations) {
       this.reactiveDecorationSystem.setInstances(sTheme.buildReactiveDecorations(sArena));
+    }
+
+    this.wildlifeSystem = new WildlifeSystem(sState, sArena);
+    if (sTheme.buildWildlife) {
+      this.wildlifeSystem.setInstances(sTheme.buildWildlife(sArena));
     }
 
     this.playerTransitionSystem = new PlayerTransitionSystem(
@@ -393,6 +401,11 @@ export class GameLoop {
       this.reactiveDecorationSystem.setInstances(newTheme.buildReactiveDecorations(sArena));
     }
 
+    this.wildlifeSystem = new WildlifeSystem(sState, sArena);
+    if (newTheme.buildWildlife) {
+      this.wildlifeSystem.setInstances(newTheme.buildWildlife(sArena));
+    }
+
     this.playerTransitionSystem = new PlayerTransitionSystem(
       sState, settings, (name) => this.playSound(name),
       (name) => { if (this._audioEnabled) audio.playAnimal(name); },
@@ -428,6 +441,11 @@ export class GameLoop {
   /** Reactive decoration system accessor (used by Renderer to draw instances). */
   getReactiveDecorationSystem(): ReactiveDecorationSystem {
     return this.reactiveDecorationSystem;
+  }
+
+  /** Wildlife system accessor (used by tests + Renderer). */
+  getWildlifeSystem(): WildlifeSystem {
+    return this.wildlifeSystem;
   }
 
   /** Get the (possibly mirrored) arena. */
@@ -504,6 +522,7 @@ export class GameLoop {
     this.surfaceImpactSystem.resetBaseline();
     this.hudFeedbackSystem.resetBaseline();
     this.reactiveDecorationSystem.resetBaseline();
+    this.wildlifeSystem.resetBaseline();
   }
 
   /** Seconds since the last cosmeticStep fired. */
@@ -535,6 +554,7 @@ export class GameLoop {
     this.surfaceImpactSystem.cosmeticUpdate(dt);
     this.hudFeedbackSystem.cosmeticUpdate(dt);
     this.reactiveDecorationSystem.cosmeticUpdate(dt);
+    this.wildlifeSystem.cosmeticUpdate(dt);
   }
 
   /** Tick all cosmetic-only systems (particles, environment, visual decays). */
@@ -580,6 +600,10 @@ export class GameLoop {
         const reactiveStart = perfTrace.begin('cosmetic.reactive');
         this.reactiveDecorationSystem.cosmeticUpdate(dt * 2);
         perfTrace.end('cosmetic.reactive', reactiveStart);
+
+        const wildlifeStart = perfTrace.begin('cosmetic.wildlife');
+        this.wildlifeSystem.cosmeticUpdate(dt * 2);
+        perfTrace.end('cosmetic.wildlife', wildlifeStart);
       }
 
       // Per-arena bespoke cosmetic logic (e.g. underwater bubble trails).
@@ -608,7 +632,7 @@ export class GameLoop {
       }
     }
     this.particleSystem.bakeToRenderer(this.renderer);
-    this.renderer.renderFrame(state, arena, this.particleSystem.getParticles(), this._cosmeticLead, this._buildReactiveArg());
+    this.renderer.renderFrame(state, arena, this.particleSystem.getParticles(), this._cosmeticLead, this._buildReactiveArg(), this._buildWildlifeArg());
   }
 
   /** Capture a snapshot of all gameplay state for rollback. */
@@ -643,7 +667,7 @@ export class GameLoop {
 
     if (this.paused) {
       this.lastTime = currentTime;
-      this.renderer.renderFrame(state, arena, this.particleSystem.getParticles(), 0, this._buildReactiveArg());
+      this.renderer.renderFrame(state, arena, this.particleSystem.getParticles(), 0, this._buildReactiveArg(), this._buildWildlifeArg());
       this.rafId = requestAnimationFrame(this.loop);
       return;
     }
@@ -692,7 +716,7 @@ export class GameLoop {
       this.renderer.setBotNavDebugStates(botStates);
     }
 
-    this.renderer.renderFrame(state, arena, this.particleSystem.getParticles(), this._cosmeticLead, this._buildReactiveArg());
+    this.renderer.renderFrame(state, arena, this.particleSystem.getParticles(), this._cosmeticLead, this._buildReactiveArg(), this._buildWildlifeArg());
     this.rafId = requestAnimationFrame(this.loop);
   };
 
@@ -704,6 +728,15 @@ export class GameLoop {
       prePlayer: this.reactiveDecorationSystem.getInstancesForLayer('prePlayer'),
       postPlayer: this.reactiveDecorationSystem.getInstancesForLayer('postPlayer'),
       windPhase: this.reactiveDecorationSystem.getWindPhase(),
+    };
+  }
+
+  /** Build the per-frame wildlife arg passed to renderFrame. Same stable-ref
+   *  contract as `_buildReactiveArg`. */
+  private _buildWildlifeArg(): WildlifeRenderArg {
+    return {
+      groundCritter: this.wildlifeSystem.getInstancesForLayer('groundCritter'),
+      animBackground: this.wildlifeSystem.getInstancesForLayer('animBackground'),
     };
   }
 
