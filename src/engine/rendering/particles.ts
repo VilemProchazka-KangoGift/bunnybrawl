@@ -144,56 +144,56 @@ export function drawGibShape(ctx: CanvasRenderingContext2D, gib: Gib): void {
 }
 
 export function drawConfetti(ctx: CanvasRenderingContext2D, confetti: ConfettiParticle[], lead = 0): void {
+  // Pre-rotate vertices manually to avoid per-particle save/translate/rotate/restore.
+  // For each shape we compute cos/sin of rotation once, then transform each
+  // local-space vertex (vx, vy) → (vx*cos - vy*sin, vx*sin + vy*cos) + (cx, cy).
   for (const c of confetti) {
     const alpha = (c.life / c.maxLife) * 0.9;
-    ctx.save();
-    ctx.translate(c.x + c.vx * lead, c.y + c.vy * lead);
-    ctx.rotate(c.rotation + c.rotationSpeed * lead);
+    const cx = c.x + c.vx * lead;
+    const cy = c.y + c.vy * lead;
     ctx.fillStyle = rgbString(c.color);
     ctx.globalAlpha = alpha;
 
-    switch (c.shape) {
-      case 'star': {
-        ctx.beginPath();
+    if (c.shape === 'star' || c.shape === 'diamond' || c.shape === 'ribbon') {
+      const rot = c.rotation + c.rotationSpeed * lead;
+      const cs = Math.cos(rot);
+      const sn = Math.sin(rot);
+      ctx.beginPath();
+      if (c.shape === 'star') {
         for (let i = 0; i < 5; i++) {
           const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
           const aInner = a + Math.PI / 5;
-          ctx.lineTo(Math.cos(a) * c.size, Math.sin(a) * c.size);
-          ctx.lineTo(Math.cos(aInner) * c.size * 0.4, Math.sin(aInner) * c.size * 0.4);
+          const ox = Math.cos(a) * c.size, oy = Math.sin(a) * c.size;
+          const ix = Math.cos(aInner) * c.size * 0.4, iy = Math.sin(aInner) * c.size * 0.4;
+          ctx.lineTo(cx + ox * cs - oy * sn, cy + ox * sn + oy * cs);
+          ctx.lineTo(cx + ix * cs - iy * sn, cy + ix * sn + iy * cs);
         }
-        ctx.closePath();
-        ctx.fill();
-        break;
-      }
-      case 'diamond': {
+      } else if (c.shape === 'diamond') {
         const s = c.size;
-        ctx.beginPath();
-        ctx.moveTo(0, -s);
-        ctx.lineTo(s * 0.6, 0);
-        ctx.lineTo(0, s);
-        ctx.lineTo(-s * 0.6, 0);
-        ctx.closePath();
-        ctx.fill();
-        break;
-      }
-      case 'ribbon': {
+        // (0, -s), (s*0.6, 0), (0, s), (-s*0.6, 0)
+        ctx.moveTo(cx - (-s) * sn, cy + (-s) * cs);
+        ctx.lineTo(cx + s * 0.6 * cs, cy + s * 0.6 * sn);
+        ctx.lineTo(cx - s * sn, cy + s * cs);
+        ctx.lineTo(cx - s * 0.6 * cs, cy - s * 0.6 * sn);
+      } else { // ribbon
         const s = c.size;
-        ctx.beginPath();
-        ctx.moveTo(-s, -s * 0.3);
-        ctx.quadraticCurveTo(0, -s * 0.8, s, -s * 0.3);
-        ctx.lineTo(s, s * 0.3);
-        ctx.quadraticCurveTo(0, s * 0.8, -s, s * 0.3);
-        ctx.closePath();
-        ctx.fill();
-        break;
+        const s3 = s * 0.3, s8 = s * 0.8;
+        // 6 points pre-rotated inline (no closure allocation).
+        ctx.moveTo(cx + -s * cs - -s3 * sn, cy + -s * sn + -s3 * cs);
+        ctx.quadraticCurveTo(cx - -s8 * sn, cy + -s8 * cs, cx + s * cs - -s3 * sn, cy + s * sn + -s3 * cs);
+        ctx.lineTo(cx + s * cs - s3 * sn, cy + s * sn + s3 * cs);
+        ctx.quadraticCurveTo(cx - s8 * sn, cy + s8 * cs, cx + -s * cs - s3 * sn, cy + -s * sn + s3 * cs);
       }
-      default: // circle
-        ctx.beginPath();
-        ctx.arc(0, 0, c.size, 0, Math.PI * 2);
-        ctx.fill();
+      ctx.closePath();
+      ctx.fill();
+    } else {
+      // Circle — rotation invisible, no transform stack needed.
+      ctx.beginPath();
+      ctx.arc(cx, cy, c.size, 0, Math.PI * 2);
+      ctx.fill();
     }
-    ctx.restore();
   }
+  ctx.globalAlpha = 1;
 }
 
 export function drawFireworks(ctx: CanvasRenderingContext2D, particles: Particle[], frameTime: number, lead = 0): void {
