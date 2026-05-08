@@ -265,34 +265,32 @@ function drawSeaweed(
     const stalkH = h * (0.7 + (s === 0 ? 0.3 : (s === 1 ? 0.2 : 0.05)));
     const baseOffset = (s - (stalkCount - 1) / 2) * Math.max(1.5, h * 0.05);
     const sway = Math.min(9, h * 0.22);
-    const pointAt = (t: number) => {
-      const ny = t / stalkH;
-      // bendX scales linearly with height progress (tip displacement)
-      const x = sx + baseOffset + Math.sin(phase + t * 0.18) * sway * (0.3 + ny * 0.9) + bendX * ny;
-      const y = sy - t;
-      return { x, y };
-    };
+    const baseX0 = sx + baseOffset; // x at t=0 (ny=0, bendX*ny=0, sin(phase)*sway*0.3)
     // Outer glow pass — translucent, wider stroke
     ctx.strokeStyle = color + 'cc'; // 80% alpha suffix works for #RGB/#RRGGBB hex
     ctx.lineCap = 'round';
     ctx.lineWidth = 4;
     ctx.beginPath();
-    let p = pointAt(0);
-    ctx.moveTo(p.x, p.y);
+    ctx.moveTo(baseX0 + Math.sin(phase) * sway * 0.3, sy);
     for (let t = 2; t <= stalkH; t += 3) {
-      p = pointAt(t);
-      ctx.lineTo(p.x, p.y);
+      const ny = t / stalkH;
+      ctx.lineTo(
+        baseX0 + Math.sin(phase + t * 0.18) * sway * (0.3 + ny * 0.9) + bendX * ny,
+        sy - t,
+      );
     }
     ctx.stroke();
     // Inner core — thinner darker stroke for depth
     ctx.strokeStyle = darker;
     ctx.lineWidth = 1.8;
     ctx.beginPath();
-    p = pointAt(0);
-    ctx.moveTo(p.x, p.y);
+    ctx.moveTo(baseX0 + Math.sin(phase) * sway * 0.3, sy);
     for (let t = 2; t <= stalkH; t += 3) {
-      p = pointAt(t);
-      ctx.lineTo(p.x, p.y);
+      const ny = t / stalkH;
+      ctx.lineTo(
+        baseX0 + Math.sin(phase + t * 0.18) * sway * (0.3 + ny * 0.9) + bendX * ny,
+        sy - t,
+      );
     }
     ctx.stroke();
     ctx.lineCap = 'butt';
@@ -300,16 +298,21 @@ function drawSeaweed(
     // Leaves — alternate sides, taper toward the top
     ctx.fillStyle = color;
     for (let t = Math.max(10, stalkH * 0.2); t < stalkH - 4; t += Math.max(10, stalkH * 0.2)) {
-      const anchor = pointAt(t);
       const ny = t / stalkH;
+      const ax = baseX0 + Math.sin(phase + t * 0.18) * sway * (0.3 + ny * 0.9) + bendX * ny;
+      const ay = sy - t;
+      const t2 = Math.max(0, t - 2);
+      const ny2 = t2 / stalkH;
+      const ax2 = baseX0 + Math.sin(phase + t2 * 0.18) * sway * (0.3 + ny2 * 0.9) + bendX * ny2;
+      const ay2 = sy - t2;
       const side = (Math.floor(t / 8) % 2) === 0 ? 1 : -1;
       const leafLen = 5 + (1 - ny) * 4;
       const leafW = 1.8 + (1 - ny) * 1.2;
-      const angle = Math.atan2(anchor.y - pointAt(Math.max(0, t - 2)).y, anchor.x - pointAt(Math.max(0, t - 2)).x) + side * 0.6;
+      const angle = Math.atan2(ay - ay2, ax - ax2) + side * 0.6;
       ctx.beginPath();
       ctx.ellipse(
-        anchor.x + Math.cos(angle) * leafLen * 0.55,
-        anchor.y + Math.sin(angle) * leafLen * 0.55,
+        ax + Math.cos(angle) * leafLen * 0.55,
+        ay + Math.sin(angle) * leafLen * 0.55,
         leafLen * 0.6,
         leafW,
         angle,
@@ -321,8 +324,8 @@ function drawSeaweed(
       ctx.fillStyle = 'rgba(255,255,255,0.15)';
       ctx.beginPath();
       ctx.ellipse(
-        anchor.x + Math.cos(angle) * leafLen * 0.55 - Math.sin(angle) * leafW * 0.4,
-        anchor.y + Math.sin(angle) * leafLen * 0.55 + Math.cos(angle) * leafW * 0.4,
+        ax + Math.cos(angle) * leafLen * 0.55 - Math.sin(angle) * leafW * 0.4,
+        ay + Math.sin(angle) * leafLen * 0.55 + Math.cos(angle) * leafW * 0.4,
         leafLen * 0.35,
         leafW * 0.45,
         angle,
@@ -334,10 +337,11 @@ function drawSeaweed(
     }
 
     // Tiny bright tip — suggests a polyp or bubble
-    const tip = pointAt(stalkH);
+    const tipX = baseX0 + Math.sin(phase + stalkH * 0.18) * sway * 1.2 + bendX;
+    const tipY = sy - stalkH;
     ctx.fillStyle = 'rgba(220,255,240,0.7)';
     ctx.beginPath();
-    ctx.arc(tip.x, tip.y, 1.1, 0, Math.PI * 2);
+    ctx.arc(tipX, tipY, 1.1, 0, Math.PI * 2);
     ctx.fill();
   }
 }
