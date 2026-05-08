@@ -5,31 +5,33 @@ import { Cooldowns } from '../../cooldowns';
 import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
-import { pushFromPlayers, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
+import { pushFromPlayers, type GroundCritterState, type GroundCritterConfig } from '../../themes/utils';
+import { buildGroundCritter, type WildlifeInstance } from '../../gameLoop/cosmetics/wildlife';
 import type { Player } from '../../types';
+import type { Arena } from '../../types';
 
-const CRABS_CFG = [
+const CRABS_CFG: GroundCritterConfig[] = [
   { platL: 50,   platR: 380,  platTopY: 660, walkSpeed: 35, fleeSpeed: 130, fleeRadius: 100, yTolerance: 80 },
   { platL: 480,  platR: 800,  platTopY: 660, walkSpeed: 30, fleeSpeed: 120, fleeRadius: 100, yTolerance: 80 },
   { platL: 900,  platR: 1230, platTopY: 660, walkSpeed: 32, fleeSpeed: 140, fleeRadius: 100, yTolerance: 80 },
 ];
-const _crabs: GroundCritterState[] = CRABS_CFG.map((cfg, i) => ({
-  x: (cfg.platL + cfg.platR) / 2,
-  dir: i % 2 === 0 ? 1 : -1, facingEase: 1, fleeing: false, committedFleeDir: 0,
-}));
-const _tickCrabDt = makeDtTracker();
 
 // ---- Bubble trails (env-wakes from Batch D) ----
 const _bubbleCooldowns = new Cooldowns<PlayerSlot>();
 const BUBBLE_INTERVAL = 0.08; // seconds between bubble emits per player
 const BUBBLE_VX_THRESHOLD = 50;
 
-function drawOneCrab(ctx: CanvasRenderingContext2D, time: number, crab: GroundCritterState, cfg: typeof CRABS_CFG[number]): void {
-  const fleeing = crab.fleeing;
-  const motion = Math.abs(crab.facingEase);
+function drawOneCrab(
+  ctx: CanvasRenderingContext2D,
+  state: GroundCritterState,
+  cfg: GroundCritterConfig,
+  time: number,
+): void {
+  const fleeing = state.fleeing;
+  const motion = Math.abs(state.facingEase);
   ctx.save();
-  ctx.translate(crab.x, cfg.platTopY - 6);
-  if (crab.facingEase < 0) ctx.scale(-1, 1);
+  ctx.translate(state.x, cfg.platTopY - 6);
+  if (state.facingEase < 0) ctx.scale(-1, 1);
 
   // 6 legs (3 on each side, splayed under the body) — alternating step lift.
   ctx.strokeStyle = '#7a1f12';
@@ -150,14 +152,6 @@ function drawOneCrab(ctx: CanvasRenderingContext2D, time: number, crab: GroundCr
   ctx.restore();
 
   ctx.restore();
-}
-
-function drawCrab(ctx: CanvasRenderingContext2D, time: number, players: ReadonlyArray<Player>): void {
-  const dt = _tickCrabDt(time);
-  for (let i = 0; i < _crabs.length; i++) {
-    tickGroundCritter(_crabs[i], players, dt, CRABS_CFG[i]);
-    drawOneCrab(ctx, time, _crabs[i], CRABS_CFG[i]);
-  }
 }
 
 const FISH_SPECIES = [
@@ -1425,9 +1419,18 @@ export const underwater: ArenaPack = {
     ctx.restore();
   },
 
-  drawGroundCritters: (ctx, _arena, time, _dayPhase, matchState) => {
-    if (getSlowDevice() || !matchState) return;
-    drawCrab(ctx, time, matchState.players);
+  buildWildlife: (_arena: Arena): WildlifeInstance[] => {
+    const out: WildlifeInstance[] = [];
+    for (let i = 0; i < CRABS_CFG.length; i++) {
+      const cfg = CRABS_CFG[i];
+      out.push(buildGroundCritter({
+        seed: i,
+        cfg,
+        initialDir: i % 2 === 0 ? 1 : -1,
+        draw: ({ ctx, state, cfg: c, time }) => drawOneCrab(ctx, state, c, time),
+      }));
+    }
+    return out;
   },
 
   cosmeticTick: (state, dt, services) => {

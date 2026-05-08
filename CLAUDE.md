@@ -47,6 +47,8 @@ src/
         EnvironmentSystem.ts      # Wildlife, fog, pollen, shooting stars, shockwaves
         ReactiveDecorationSystem.ts # Arena-anchored decorations: wind sway, velocity-driven bend, stomp shake, burst
         reactiveDecorations.ts    # Pure helpers: spring-damper primitives, kind registry, factory
+        WildlifeSystem.ts         # Ambient wildlife (snails, crabs, rats, gumdrops, robots, squirrels): kind registry + per-instance state
+        wildlife.ts               # Pure helpers: kind registry, factory, built-in wildlife.groundCritter kind wrapping tickGroundCritter
         particles.ts  gibs.ts  environment.ts  sfx.ts  # Pure functions (used by systems)
         playerTransitions.ts  playerCosmetics.ts  entityTransitions.ts
       gameplay/     # Gameplay systems (driven by fixedUpdate)
@@ -311,6 +313,16 @@ All mechanics are configured directly in the `ArenaPack`:
 4. Tune via `proximity.magnitude` (= px of bend at typical walk speed); `radius` controls reach.
 5. Per-kind mutable runtime state goes in `inst.data` (NOT module-level WeakMaps); register `resetData` callback for in-flight animations (e.g. dandelion seed-burst phase).
 6. Decorations with no proximity/stomp/burst behavior should stay STATIC in `drawForegroundNature` / `drawBackgroundNature` so they bake into the OffscreenCanvas cache. Only opt into the reactive system if per-frame reactivity is needed.
+
+### Migrating an arena's wildlife to WildlifeSystem
+Mirrors the reactive-decoration pattern for ambient creatures (snails, crabs, rats, gumdrops, robots, squirrels). Use this whenever a pack needs `tickGroundCritter` patrol/flee logic — replaces the legacy module-scope state arrays + `makeDtTracker` + `drawGroundCritters` callback.
+
+1. In the arena pack, add `buildWildlife(arena): WildlifeInstance[]` (from `gameLoop/cosmetics/wildlife`). For standard ground critters, call `buildGroundCritter({ seed, cfg, initialDir?, initialX?, layer?, draw })` — the built-in `wildlife.groundCritter` kind handles tick + reset.
+2. The pack-supplied `draw({ ctx, state, cfg, time, matchState })` runs each frame; the live `state.x / state.facingEase / state.fleeing` are already advanced by the system before draw fires.
+3. Set `layer: 'animBackground'` to render in the early-bg slot (between far-bg and clouds, where the legacy `drawAnimatedBackground` ran). Default `groundCritter` slot renders between fog and fg-nature, so foliage occludes critters walking behind it.
+4. For wildlife with extra per-instance state (e.g. candyLand gumdrops have a `rot` accumulator), register a custom kind via `registerWildlifeKind('<arenaId>.<name>', { layer, tick, draw, resetData? })` and emit instances via `createWildlifeInstance({...})`.
+5. Delete the old `_<critter>: GroundCritterState[]`, `_tick<Critter>Dt = makeDtTracker()`, and `drawGroundCritters` (or `drawAnimatedBackground`) callback once `buildWildlife` covers the whole inventory.
+6. Butterflies / bees / fish-school stay in `ReactiveDecorationSystem` — they use proximity-based flee and don't fit the patrol/flee primitive.
 
 ### Adding a new game mechanic / pickup
 1. Define interface in `types.ts`, add constants in `constants.ts`

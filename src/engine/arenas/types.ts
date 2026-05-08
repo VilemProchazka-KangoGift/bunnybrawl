@@ -1,6 +1,7 @@
 import type { Arena, Platform, SpawnPoint, HazardZone, EffectZone, AABB, SurfaceTag, WeatherParticle } from '../types';
 import type { ThemeConfig } from '../themes/types';
 import type { ReactiveInstance } from '../gameLoop/cosmetics/reactiveDecorations';
+import type { WildlifeInstance } from '../gameLoop/cosmetics/wildlife';
 import type {
   GradientStop, CloudConfig, WeatherConfig, WildlifeConfig,
   FogConfig, AmbientParticleConfig, DayNightConfig,
@@ -129,6 +130,12 @@ export interface ArenaPack {
    *  All `kind` values must be pre-registered via `registerReactiveKind` (the
    *  arena pack typically does that at module load time). */
   buildReactiveDecorations?: (arena: Arena) => ReactiveInstance[];
+
+  /** Build the arena's wildlife instance list (snails, crabs, rats, etc.).
+   *  Called once per arena load. All `kindId` values must be pre-registered
+   *  via `registerWildlifeKind` — packs typically use the built-in
+   *  `wildlife.groundCritter` kind via `buildGroundCritter(...)`. */
+  buildWildlife?: (arena: Arena) => WildlifeInstance[];
 
   /** Per-tick cosmetic logic specific to this arena. Runs in cosmeticStep at
    *  ~30Hz. Use for arena-specific particle emitters or bespoke effects that

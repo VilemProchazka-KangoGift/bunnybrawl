@@ -28,6 +28,7 @@ export type PerfSection =
   | 'cosmetic.surfaceImpact'
   | 'cosmetic.hudFeedback'
   | 'cosmetic.reactive'
+  | 'cosmetic.wildlife'
   | 'cosmetic.arena'
   | 'net.decodeSnapshot'
   | 'net.applySnapshot'

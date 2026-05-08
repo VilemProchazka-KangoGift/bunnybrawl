@@ -123,6 +123,14 @@
 - **`isLivePlayer(p)`** in `themes/utils.ts` — use it instead of inlining `!p.active || p.state === 'splat' || p.state === 'respawning'`. Multiple cosmetic systems duplicate this guard inline; new code should not.
 - **Static decorations stay in `drawForegroundNature`/`drawBackgroundNature`** so they bake into the OffscreenCanvas cache. Only opt into the reactive system if the kind genuinely needs per-frame reactivity (proximity, stomp, burst). Wind-only sway alone is not worth the per-frame cost.
 
+## Wildlife
+- **System** (`gameLoop/cosmetics/WildlifeSystem.ts`): ambient ground creatures (snails, crabs, rats, gumdrops, robots, squirrels). Mirrors `ReactiveDecorationSystem`: kind registry + per-instance data bag + factory + 30Hz cosmetic-stagger tick.
+- **Built-in kind `wildlife.groundCritter`** wraps `tickGroundCritter` from `themes/utils.ts`. Each instance carries its own `GroundCritterState + GroundCritterConfig + draw` in `data` — packs share the patrol/flee tick but supply unique sprite art. Use `buildGroundCritter({ seed, cfg, initialDir?, initialX?, layer?, draw })`.
+- **Layer** is `'groundCritter'` (the legacy `drawGroundCritters` slot — between fog and fg-nature, so foliage occludes critters walking behind it) or `'animBackground'` (the legacy `drawAnimatedBackground` slot — early bg, behind clouds; used by the treetops squirrel that perches on far-back branches).
+- **Custom kinds** for wildlife with extra per-instance state (e.g. candyLand gumdrops have a `rot` accumulator, so the pack registers `'candyLand.gumdrop'` with its own tick that wraps `tickGroundCritter` and adds `d.rot += ...`). Emit instances via `createWildlifeInstance({ kindId, seed, home, data })`.
+- **`resetBaseline`** is invoked from `GameLoop.resetCosmeticBaselines()` — wildlife per-instance state should reset to a clean default in `kind.resetData`. Module-scope state arrays are gone; `inst.data` is the only mutation surface.
+- **Butterflies / bees / fish-school stay in `ReactiveDecorationSystem`** — they use proximity-flee + 60Hz flock motion, not the patrol/flee primitive.
+
 ## AI
 - Awareness uses single pass over `state.players` — no `.filter()` loops.
 - Evaluators must not allocate arrays — runs 60x/bot/sec.
