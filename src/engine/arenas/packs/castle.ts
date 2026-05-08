@@ -3,7 +3,8 @@ import type { Arena, Platform, WeatherParticle } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
-import { getFloatingPlatforms, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
+import { getFloatingPlatforms, type GroundCritterConfig } from '../../themes/utils';
+import { buildGroundCritter, type WildlifeInstance } from '../../gameLoop/cosmetics/wildlife';
 import { drawRat } from '../../themes/drawPrimitives';
 import {
   registerReactiveKind,
@@ -12,16 +13,11 @@ import {
   type ReactiveInstance,
 } from '../../gameLoop/cosmetics/reactiveDecorations';
 
-const RATS_CFG = [
+const RATS_CFG: GroundCritterConfig[] = [
   { platL: 30,   platR: 220,  platTopY: 660, walkSpeed: 50, fleeSpeed: 180, fleeRadius: 120, yTolerance: 80 },
   { platL: 420,  platR: 860,  platTopY: 660, walkSpeed: 50, fleeSpeed: 180, fleeRadius: 120, yTolerance: 80 },
   { platL: 1060, platR: 1260, platTopY: 660, walkSpeed: 50, fleeSpeed: 180, fleeRadius: 120, yTolerance: 80 },
 ];
-const _castleRats: GroundCritterState[] = RATS_CFG.map((cfg, i) => ({
-  x: (cfg.platL + cfg.platR) / 2,
-  dir: i % 2 === 0 ? 1 : -1, facingEase: 1, fleeing: false, committedFleeDir: 0,
-}));
-const _tickCastleRatDt = makeDtTracker();
 
 // x=1180 conflicted with the tall floating platform at x=1120 y=580; moved to x=1080 (clear ground space).
 const TORCH_X = [100, 400, 640, 880, 1080] as const;
@@ -953,14 +949,19 @@ export const castle: ArenaPack = {
     ctx.restore();
   },
 
-  drawGroundCritters: (ctx, _arena, time, _dayPhase, matchState) => {
-    if (!matchState) return;
-    const dt = _tickCastleRatDt(time);
-    for (let i = 0; i < _castleRats.length; i++) {
-      const r = _castleRats[i];
-      tickGroundCritter(r, matchState.players, dt, RATS_CFG[i]);
-      drawRat(ctx, r.x, RATS_CFG[i].platTopY - 4, r.facingEase < 0 ? -1 : 1, time, Math.abs(r.facingEase), r.fleeing);
+  buildWildlife: (_arena: Arena): WildlifeInstance[] => {
+    const out: WildlifeInstance[] = [];
+    for (let i = 0; i < RATS_CFG.length; i++) {
+      const cfg = RATS_CFG[i];
+      out.push(buildGroundCritter({
+        seed: i,
+        cfg,
+        initialDir: i % 2 === 0 ? 1 : -1,
+        draw: ({ ctx, state, cfg: c, time }) =>
+          drawRat(ctx, state.x, c.platTopY - 4, state.facingEase < 0 ? -1 : 1, time, Math.abs(state.facingEase), state.fleeing),
+      }));
     }
+    return out;
   },
 
   buildReactiveDecorations: (arena: Arena) => {
