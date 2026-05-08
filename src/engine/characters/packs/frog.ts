@@ -1,6 +1,7 @@
 import { Howl } from 'howler';
 import type { CharacterPack } from '../types';
 import type { IdleAction } from '../../rendering/idleActions';
+import type { Ctx2D } from '../../types';
 import { fillBodyGradient } from '../../spriteShading';
 import { floatBufferToWavDataUri } from '../../audio/synthesis/wav';
 
@@ -13,7 +14,7 @@ const LEFT_PUPIL_DX = -6;
 const RIGHT_PUPIL_DX = 8;
 const LID_HALF = 3;
 
-function drawEyeWhites(ctx: CanvasRenderingContext2D, cx: number, yOff: number, lightColor: string): void {
+function drawEyeWhites(ctx: Ctx2D, cx: number, yOff: number, lightColor: string): void {
   ctx.fillStyle = lightColor;
   ctx.beginPath();
   ctx.arc(cx - EYE_DX, yOff + EYE_Y, EYE_R, 0, Math.PI * 2);
