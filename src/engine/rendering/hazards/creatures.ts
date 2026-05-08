@@ -1,4 +1,5 @@
 import type { ThemeConfig, ScatterFlockSpecies } from '../../themes/types';
+import type { Ctx2D } from '../../types';
 import { fastSin } from '../../fastMath';
 
 // Ghost glow: cached gradient OBJECT was reused across frames, but the per-frame
@@ -46,7 +47,7 @@ export function drawGhost(
     glowImage = useOffscreen
       ? new OffscreenCanvas(bakeW, bakeW)
       : (() => { const c = document.createElement('canvas'); c.width = bakeW; c.height = bakeW; return c; })();
-    const gctx = glowImage.getContext('2d') as CanvasRenderingContext2D;
+    const gctx = glowImage.getContext('2d')! as Ctx2D;
     const half = bakeW / 2;
     const radial = gctx.createRadialGradient(half, half, half * (0.2 / 1.5), half, half, half);
     radial.addColorStop(0, glowColor + '33');
