@@ -129,3 +129,75 @@ much cheaper than `fill()` with a gradient.
 - `winterLake.ts` `drawSceneTint` — full-canvas night tint
 - `rendering/hazards.ts` `drawCurrentZone` — waterfall body fill (clipped path)
 - `rendering/effects.ts` `getAfterglowGradient` — dawn/dusk overlay (next)
+
+## Pattern: Inline closures over per-frame `pointAt(t)` callbacks
+
+### Symptom
+
+A draw fn computes a curve via `const pointAt = (t) => ({ x, y })` and calls
+the closure 15-30 times in inner stroke/leaf loops. Closures + `{ x, y }`
+object literals show up as a hot spot in the perf profile.
+
+### Fix
+
+Inline the closure body at each call site. `{ x, y }` becomes two locals
+(`px`, `py`); V8 scalar-replaces them into registers without escape analysis
+having to track them through a closure.
+
+### Real result (`underwater.ts` `drawSeaweed`, 30 stalks × 30Hz)
+
+Avg frame 7.7ms → 7.2ms (`-0.5ms`, ~7% better). Long frames 1/600 → 0/600.
+See commit `0d38a06`.
+
+## Pattern: Alpha bucketing for batched per-particle paths
+
+### Symptom
+
+A loop draws N particles each with a unique alpha, requiring one
+`globalAlpha` mutation + one `beginPath`/`fill` per particle. With N ≈ 30-50
+this dominates `drawAnimatedBackground` cost.
+
+### Fix
+
+Quantize alpha into K buckets (4-6). Per particle, push (x, y, r) into the
+bucket's reusable `Path2D` via `moveTo` + `arc` sub-paths. After the loop,
+iterate buckets and stroke/fill each one once. K ≪ N so the operation count
+collapses dramatically.
+
+```ts
+const K = 5;
+const buckets: (Path2D | null)[] = new Array(K).fill(null);
+// ...per frame:
+for (let b = 0; b < K; b++) buckets[b] = null;
+for (const p of particles) {
+  const b = Math.floor(p.alpha * K);
+  let path = buckets[b];
+  if (!path) { path = new Path2D(); buckets[b] = path; }
+  path.moveTo(p.x + p.r, p.y);
+  path.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+}
+for (let b = 0; b < K; b++) {
+  const path = buckets[b];
+  if (path) {
+    ctx.globalAlpha = (b + 0.5) / K;
+    ctx.fill(path);
+  }
+}
+```
+
+### Real result (`underwater.ts` `drawAnimatedBackground`, ~46 bubbles)
+
+Avg frame 7.2ms → 6.5ms (`-0.7ms`, ~10% better). p99 14.0 → 9.0
+(huge tail-latency win — the per-particle `beginPath` was the worst-case
+GC trigger). 76 path operations/frame collapsed to ~10. See commit `44ca136`.
+
+### Counter-example: don't pre-bake small paths to Path2D when each needs a transform
+
+Tried baking each seaweed stalk's natural curve to a `Path2D`, then drawing
+under a per-stalk shear transform (`save`/`transform`/`stroke(path)`/`restore`)
+to apply the bend offset. Result: regressed avg 6.5ms → 19.0ms, with 64% of
+frames exceeding 16.7ms. Root cause: `save`/`restore` × 30 stalks/frame
+×30Hz = 1800 state-stack pushes/sec dominates the savings from skipping
+per-frame `Math.sin` calls. **Use Path2D pre-bake only when the path is
+drawn at the identity transform** (e.g. cached gradient strips), or batch
+many paths under a single `save`/`restore` pair.
