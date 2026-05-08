@@ -30,6 +30,8 @@ import type { AuthSnapshot } from './snapshot';
 import { encodeInputMessage } from './protocol';
 import { encodeSnapshotAck } from './core/protocol';
 import { applyDelta, readDeltaBaseFrame } from './core/deltaCompression';
+import { createNetMatchContext, type NetMatchContext } from './netMatch/NetMatchContext';
+import { LoadingHandshake } from './netMatch/LoadingHandshake';
 
 export interface NetMatchConfig {
   bgCanvas: HTMLCanvasElement;
@@ -145,17 +147,11 @@ export class NetMatch {
   // would re-send the message every frame after autoSlow trips.
   private _autoSlowReported = false;
 
-  // Host-side LOADED handshake state
-  private loadedGuests = new Set<PlayerSlot>();
-  private hostSelfLoaded = false;
-  // One-shot flag: if loading timeout fires while hostSelfLoaded is false,
-  // re-arm the timer once instead of force-flipping. Reset on each new
-  // loading session via resetLoadingHandshake().
-  private _loadingTimeoutExtended = false;
-  private loadingTimeout: ReturnType<typeof setTimeout> | null = null;
-  /** Maximum time host waits for all guests to signal LOADED before force-
-   *  advancing phase to 'playing' (and treating laggards as disconnected). */
-  private static readonly LOADING_TIMEOUT_MS = 15000;
+  // Host-side LOADED handshake — owned by LoadingHandshake collaborator.
+  private loading: LoadingHandshake;
+
+  // Shared cross-collaborator state seam.
+  private ctx: NetMatchContext;
 
   // Shared
   private rafId = 0;
@@ -190,6 +186,27 @@ export class NetMatch {
       config.fgNightTint,
     );
 
+    // Build shared context + collaborators. Order matters: context first,
+    // then host-only / guest-only init populates context's hostAuthority /
+    // interpolation, then collaborators reference back through context.
+    this.ctx = createNetMatchContext({
+      transport: this.transport,
+      isHost: this._isHost,
+      localSlot: this.localSlot,
+      gameLoop: this.gameLoop,
+      onMatchEnd: this.onMatchEnd,
+      onDisconnect: this.onDisconnect,
+      onArenaChange: this.onArenaChange,
+      onReconnecting: this.onReconnecting,
+      onStall: this.onStall,
+      onPhaseChange: this.onPhaseChange,
+      onGuestConnectionUnstable: this.onGuestConnectionUnstable,
+      onReconnectAttempt: this.onReconnectAttempt,
+      onGuestReconnected: this.onGuestReconnected,
+      onLoadingTimeout: this.onLoadingTimeout,
+    });
+    this.loading = new LoadingHandshake(this.ctx);
+
     if (this._isHost) {
       this.initHost(config);
     } else {
@@ -207,17 +224,18 @@ export class NetMatch {
         // Drop any stale LOADED signal for a slot that's disconnecting —
         // otherwise a later reconnect would skip the handshake because its
         // slot is still marked "loaded" from the original session.
-        this.loadedGuests.delete(slot as PlayerSlot);
+        this.loading.forgetSlot(slot as PlayerSlot);
         config.onPlayerDisconnect?.(slot as PlayerSlot);
         // Re-evaluate the LOADED handshake. If the disconnecting guest was
         // the only slot we were still waiting on, expected→[] now and the
         // phase should advance instead of hanging until the 15-30s
         // LOADING_TIMEOUT_MS forces it.
         if (this.gameLoop.getState().phase === 'loading') {
-          this.checkAllLoaded();
+          this.loading.checkAllLoaded();
         }
       },
     });
+    this.ctx.hostAuthority = this.hostAuthority;
 
     // Register remote human players
     for (const slot of config.remoteSlots) {
@@ -237,12 +255,14 @@ export class NetMatch {
 
   private initGuest(config: NetMatchConfig): void {
     this.interpolation = new EntityInterpolation();
+    this.ctx.interpolation = this.interpolation;
     this.snapshotPool = Array.from(
       { length: NetMatch.SNAPSHOT_POOL_SIZE },
       () => createEmptySnapshot(),
     );
     this.snapshotPoolIdx = 0;
     this.ownReclaimToken = config.ownReclaimToken ?? null;
+    this.ctx.ownReclaimToken = this.ownReclaimToken;
     // Input echo: instant visual feedback without position prediction.
     // Disable with ?noecho URL param.
     const noEcho = typeof location !== 'undefined'
@@ -302,61 +322,21 @@ export class NetMatch {
     if (this._isHost && this.hostAuthority) {
       this.hostAuthority.start();
       this.hostAuthority.enableDeltaCompression(true);
-      this.armLoadingTimeout();
+      this.loading.armLoadingTimeout();
       this.startHostLoop();
     } else {
       this.startGuestLoop();
     }
   }
 
-  /** Host: hard timeout for the LOADED handshake. If any guest fails to
-   *  signal within LOADING_TIMEOUT_MS, force the match forward and treat
-   *  non-responding slots as disconnected. Called from start() and from
-   *  resetLoadingHandshake() on rematch/arena-change. */
-  private armLoadingTimeout(): void {
-    if (this.loadingTimeout) clearTimeout(this.loadingTimeout);
-    this.loadingTimeout = setTimeout(() => {
-      if (this.gameLoop.getState().phase !== 'loading') return;
-      // Defer the force-flip if our own preload is still in flight — flipping
-      // before host's assets are warm makes audio + sprites pop in over the
-      // first few seconds of play. The check has a single retry budget so a
-      // permanently-stuck host preload still progresses.
-      if (!this.hostSelfLoaded && !this._loadingTimeoutExtended) {
-        console.warn('[NetMatch] loading timeout fired but host not loaded — extending');
-        this._loadingTimeoutExtended = true;
-        this.armLoadingTimeout();
-        return;
-      }
-      console.warn('[NetMatch] loading timeout — forcing phase=playing');
-      const expected = this.hostAuthority!.getExpectedGuestSlots();
-      const laggards: PlayerSlot[] = [];
-      for (const slot of expected) {
-        if (!this.loadedGuests.has(slot)) {
-          laggards.push(slot);
-          this.gameLoop.disconnectPlayer(slot);
-        }
-      }
-      this.onLoadingTimeout?.(laggards);
-      this.gameLoop.setPhase('playing');
-    }, NetMatch.LOADING_TIMEOUT_MS);
-  }
-
-  /** Host: signal that this side's own loading tasks have completed. When
-   *  combined with LOADED messages from all guests, flips phase to 'playing'. */
+  /** Host: signal that this side's own loading tasks have completed. */
   markHostLoaded(): void {
-    if (!this._isHost) return;
-    this.hostSelfLoaded = true;
-    this.checkAllLoaded();
+    this.loading.markHostLoaded();
   }
 
-  /** Guest: tell host that our local loading is done. Host broadcasts a
-   *  new snapshot with phase='playing' once all guests have signalled. */
+  /** Guest: tell host that our local loading is done. */
   signalGuestLoaded(): void {
-    if (this._isHost) return;
-    this.transport.sendReliable({
-      type: MsgType.LOADED,
-      slot: this.localSlot,
-    } as ReliableMessage);
+    this.loading.signalGuestLoaded();
   }
 
   /** Guest-only: returns the latest received snapshot's host-frame number,
@@ -414,32 +394,9 @@ export class NetMatch {
   }
 
   /** Host: reset loading-handshake state when re-entering the 'loading'
-   *  phase (rematch, arena change). Without this, a stale LOADED from the
-   *  first match would cause checkAllLoaded to flip phase back to 'playing'
-   *  before guests finish warming the new arena. */
+   *  phase (rematch, arena change). */
   resetLoadingHandshake(): void {
-    if (!this._isHost) return;
-    this.loadedGuests.clear();
-    this.hostSelfLoaded = false;
-    this._loadingTimeoutExtended = false;
-    this.armLoadingTimeout();
-  }
-
-  /** Host: check whether all expected guests + host itself have completed
-   *  loading. If so, flip phase to 'playing' — the next broadcast snapshot
-   *  carries the new phase, auto-syncing all guests. */
-  private checkAllLoaded(): void {
-    if (!this._isHost || !this.hostAuthority) return;
-    if (!this.hostSelfLoaded) return;
-    const expected = this.hostAuthority.getExpectedGuestSlots();
-    const allIn = expected.every(s => this.loadedGuests.has(s));
-    if (!allIn) return;
-    if (this.gameLoop.getState().phase !== 'loading') return;
-    if (this.loadingTimeout) {
-      clearTimeout(this.loadingTimeout);
-      this.loadingTimeout = null;
-    }
-    this.gameLoop.setPhase('playing');
+    this.loading.resetLoadingHandshake();
   }
 
   /** Host: simulate + broadcast + render. */
@@ -903,8 +860,7 @@ export class NetMatch {
       if (!fromPeerId || !this.hostAuthority) return;
       const senderSlot = this.hostAuthority.getSlotForPeer(fromPeerId) as PlayerSlot | undefined;
       if (!senderSlot) return;
-      this.loadedGuests.add(senderSlot);
-      this.checkAllLoaded();
+      this.loading.recordGuestLoaded(senderSlot);
     } else if (this._isHost && msg.type === MsgType.CONNECTION_UNSTABLE) {
       const stalled = (msg as { stalled: boolean }).stalled;
       if (fromPeerId && this.hostAuthority) {
@@ -930,7 +886,7 @@ export class NetMatch {
         paused: this.gameLoop.isPaused(),
       } as ReliableMessage);
       this.hostAuthority.sendSnapshotTo(fromPeerId, this.gameLoop.getState());
-      this.loadedGuests.delete(reqSlot);
+      this.loading.forgetSlot(reqSlot);
       this.onGuestReconnected?.(reqSlot);
     }
   }
@@ -1033,10 +989,7 @@ export class NetMatch {
       clearInterval(this.reconnectTimer);
       this.reconnectTimer = null;
     }
-    if (this.loadingTimeout) {
-      clearTimeout(this.loadingTimeout);
-      this.loadingTimeout = null;
-    }
+    this.loading.dispose();
     if (this._visibilityHandler) {
       document.removeEventListener('visibilitychange', this._visibilityHandler);
       this._visibilityHandler = null;
