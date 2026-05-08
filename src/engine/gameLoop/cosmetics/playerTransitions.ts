@@ -43,6 +43,10 @@ export interface TransitionCallbacks {
    *  Receives the stomp position (victim's center). Used by
    *  ReactiveDecorationSystem to shake nearby trees / saplings. */
   onStomp?: (x: number, y: number) => void;
+  /** Optional: queue an additive light flash on the fg canvas. Fires on
+   *  splat (stomp explosion) and on respawn (spawn pillar). Bypasses the
+   *  lightCanvas opacity gate so the flash is visible at any dayPhase. */
+  lightBurst?: (x: number, y: number, kind: 'spawn' | 'stomp') => void;
 }
 
 /**
@@ -97,11 +101,11 @@ export function detectPlayerTransitions(
     cb.playSound('stomp');
     cb.playAnimal(player.character.name);
     cb.spawnKillSplatter(player);
-    state.shockwaves.push({
-      x: player.x + player.width / 2, y: player.y + player.height / 2,
-      radius: 0, maxRadius: SHOCKWAVE_MAX_RADIUS, life: SHOCKWAVE_DURATION,
-    });
-    if (cb.onStomp) cb.onStomp(player.x + player.width / 2, player.y + player.height / 2);
+    const sx = player.x + player.width / 2;
+    const sy = player.y + player.height / 2;
+    state.shockwaves.push({ x: sx, y: sy, radius: 0, maxRadius: SHOCKWAVE_MAX_RADIUS, life: SHOCKWAVE_DURATION });
+    if (cb.onStomp) cb.onStomp(sx, sy);
+    cb.lightBurst?.(sx, sy, 'stomp');
   }
 
   // Respawn (any path: stomp, fall-off, OOB failsafe). invincibleTimer rises
@@ -109,7 +113,10 @@ export function detectPlayerTransitions(
   // Game start is handled separately by PlayerTransitionSystem.init().
   if (player.invincibleTimer > prev.invincibleTimer) {
     cb.playSound('land');
-    cb.spawnPlayerSpawnVFX(player.x + player.width / 2, player.y + player.height / 2);
+    const sx = player.x + player.width / 2;
+    const sy = player.y + player.height / 2;
+    cb.spawnPlayerSpawnVFX(sx, sy);
+    cb.lightBurst?.(sx, sy, 'spawn');
   }
 
   // Push bump (sideSquash === 0.8 is exact collision marker; wall hits set 0.75)

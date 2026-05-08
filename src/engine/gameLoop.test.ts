@@ -48,6 +48,7 @@ vi.mock('./renderer', () => ({
     setPlayerNames = vi.fn();
     setTimeLimit = vi.fn();
     setNetworkMode = vi.fn();
+    emitLightBurst = vi.fn();
     getDiagnostics = vi.fn(() => ({ clouds: false, weather: false, wildlife: false, playersDrawn: 0 }));
   },
 }));

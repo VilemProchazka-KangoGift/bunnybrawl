@@ -41,6 +41,7 @@ vi.mock('../../renderer', () => ({
     setNetworkMode = vi.fn();
     setConnectionQuality = vi.fn();
     warmSpriteCache = vi.fn();
+    emitLightBurst = vi.fn();
     getDiagnostics = vi.fn(() => ({ clouds: false, weather: false, wildlife: false, playersDrawn: 0 }));
     setRenderScale = vi.fn();
     destroy = vi.fn();

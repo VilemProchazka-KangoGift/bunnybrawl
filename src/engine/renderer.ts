@@ -6,7 +6,6 @@ import {
   SCREEN_SHAKE_INTENSITY,
   SHOCKWAVE_DURATION, SCREEN_FLASH_DURATION,
   HITSTOP_DURATION, HITSTOP_ZOOM,
-  INVINCIBLE_DURATION,
 } from './constants';
 import {
   drawHill, drawPlatformMoss,
@@ -37,9 +36,9 @@ import { setSpriteCacheScale } from './rendering/players';
 import { setHudScale } from './rendering/hud';
 import { applyRenderScaleToCanvas, getRenderScale } from './renderScale';
 import { Lighting } from './lighting';
-import type { Light, PointLight } from './lighting';
+import type { Light, PointLight, RGB } from './lighting';
 import { getArenaLights } from './arenas/operations';
-import { isLivePlayer } from './themes/utils';
+import { swapRemove, makeDtTracker } from './themes/utils';
 import { getBrightness } from './lighting/brightness';
 import { getSlowDevice } from './perfFlags';
 import { perfTrace } from './perfTrace';
@@ -64,29 +63,6 @@ function getCachedHsl(hex: string): { h: number; s: number; l: number } {
 }
 const _invincibleHsl = getCachedHsl('#88BBFF');
 
-/** Memoized hex→RGB for L2 per-player aura color. Same cardinality bound. */
-const _rgbCache = new Map<string, { r: number; g: number; b: number }>();
-function getCachedRgb(hex: string): { r: number; g: number; b: number } {
-  let v = _rgbCache.get(hex);
-  if (!v) { v = hexToRGB(hex); _rgbCache.set(hex, v); }
-  return v;
-}
-
-/** Memoized "leader-tinted" RGB — base color lerped toward gold by
- *  LEADER_TINT_AMOUNT. The points leader's aura uses this; all other
- *  players use the unmodified cache. Per-character allocation, never per-frame. */
-const _leaderRgbCache = new Map<string, { r: number; g: number; b: number }>();
-const LEADER_TINT_AMOUNT = 0.6;
-const GOLD_RGB = { r: 255, g: 215, b: 0 } as const;
-function getLeaderRgb(hex: string): { r: number; g: number; b: number } {
-  let v = _leaderRgbCache.get(hex);
-  if (!v) {
-    v = blendRgb(hexToRGB(hex), GOLD_RGB, LEADER_TINT_AMOUNT);
-    _leaderRgbCache.set(hex, v);
-  }
-  return v;
-}
-
 /** Warm-orange tint used for the per-carrot glow emitter. Frozen + shared
  *  across all carrots — the renderer never mutates it. */
 const CARROT_GLOW_RGB: Readonly<{ r: number; g: number; b: number }> =
@@ -102,7 +78,36 @@ const _fireflyPos = { x: 0, y: 0 };
 /** Pre-built per-firefly flicker configs — distinct seeds so they pulse
  *  independently. Length follows FIREFLY_COUNT by construction. */
 const FIREFLY_FLICKER: ReadonlyArray<{ seed: number; amplitude: number }> =
-  Array.from({ length: FIREFLY_COUNT }, (_, i) => ({ seed: 101 + i, amplitude: 0.5 }));
+  Array.from({ length: FIREFLY_COUNT }, (_, i) => ({ seed: 101 + i, amplitude: 0.12 }));
+
+/** Transient additive flash emitted on spawn / stomp. Drawn on fg with
+ *  `'lighter'` blend so visible at any dayPhase. Coords + color are baked at
+ *  emission time (does NOT track entity motion — these effects last <1s). */
+interface LightBurst {
+  x: number;
+  y: number;
+  age: number;
+  duration: number;
+  peakIntensity: number;
+  peakRadius: number;
+  color: RGB;
+  kind: 'spawn' | 'stomp';
+}
+
+/** Spawn flash — sin-bell envelope (slow ramp up + down). Wide soft halo, not
+ *  a spotlight — gentle warmth around the respawn point that fades quietly. */
+const SPAWN_BURST_DURATION = 2.5;
+const SPAWN_BURST_PEAK_INTENSITY = 0.15;
+const SPAWN_BURST_PEAK_RADIUS = 320;
+const SPAWN_BURST_COLOR: RGB = { r: 255, g: 248, b: 220 };
+
+/** Stomp flash — sharp peak, quick fade. Punchy hit-cue; intensity peaks
+ *  past saturation on bright daytime pixels so the flash is unambiguous on
+ *  any arena. */
+const STOMP_BURST_DURATION = 0.4;
+const STOMP_BURST_PEAK_INTENSITY = 1.6;
+const STOMP_BURST_PEAK_RADIUS = 180;
+const STOMP_BURST_COLOR: RGB = { r: 255, g: 230, b: 180 };
 
 /** Sprite extends ~12 px above the bbox top for tall ears, horns, and gib pivots. */
 const SPRITE_TOP_PAD = 12;
@@ -250,12 +255,12 @@ export class Renderer {
    *  reuses entries by index, growing on demand. Cleared by trimming `length`. */
   private _dynamicLights: Light[] = [];
   private _lastLightOpacity = -1;
-  /** Cached top-score and the score-sum that produced it. Scores monotonically
-   *  increase, so a sum-change is a sufficient (and overshooting-safe) trigger
-   *  to re-scan for the new leader instead of recomputing every frame. */
-  private _cachedLeaderScore = 0;
-  private _lastScoreSum = -1;
-  private _lastMatchOver = false;
+  /** Transient additive light flashes (spawn / stomp). Drawn directly on the
+   *  fg ctx with `'lighter'` blend so they're visible regardless of dayPhase
+   *  — the lightCanvas opacity gate (which fades emitters out at noon) does
+   *  not apply. Grows; entries swap-removed on expiry. */
+  private _lightBursts: LightBurst[] = [];
+  private _burstDt = makeDtTracker(0.1);
   private bgCtx: CanvasRenderingContext2D;
   private bgNightCtx: CanvasRenderingContext2D | null = null;
   private fgCtx: CanvasRenderingContext2D;
@@ -645,48 +650,16 @@ export class Renderer {
    *  Light objects in `_dynamicLights`, trimming `length` to the live count.
    *
    *  Sources:
-   *  - Per-player aura — soft warm glow on the player center; intensity +
-   *    radius ramp during respawn invincibility (the "spawn pillar" effect).
-   *    The points leader gets a gold-tinted, brighter, wider variant — visual
-   *    "who's winning" cue at a glance for the couch-co-op format.
    *  - Per-carrot glow — subtle warm-orange so carrots stay visible at night.
    *    Brightens briefly after spawn (uses `Carrot.spawnTime`).
    *  - Firefly emitters — per-particle yellow-green glow, locked to the
-   *    visual draw via `fireflyPosition`. */
+   *    visual draw via `fireflyPosition`.
+   *
+   *  Player-anchored lights (spawn pillar, stomp flash) are NOT here — they're
+   *  drawn directly on the fg ctx via `_drawLightBursts` so they're visible at
+   *  any dayPhase, not gated by the lightCanvas opacity. */
   private _synthesizeDynamicLights(matchState: MatchState): void {
     let i = 0;
-
-    // Re-scan leader only when scores or matchOver change. Scores increase
-    // monotonically so sum-equality = no change.
-    let scoreSum = 0;
-    for (const p of matchState.players) scoreSum += p.score;
-    if (scoreSum !== this._lastScoreSum || matchState.matchOver !== this._lastMatchOver) {
-      this._lastScoreSum = scoreSum;
-      this._lastMatchOver = matchState.matchOver;
-      let leader = 0;
-      if (!matchState.matchOver) {
-        for (const p of matchState.players) {
-          if (p.score > leader) leader = p.score;
-        }
-      }
-      this._cachedLeaderScore = leader;
-    }
-    const leaderScore = this._cachedLeaderScore;
-
-    for (const player of matchState.players) {
-      if (!isLivePlayer(player)) continue;
-      const slot = this._ensureLightSlot(i++);
-      slot.x = player.x + player.width / 2;
-      slot.y = player.y + player.height / 2;
-      slot.falloff = 'smoothstep';
-      const pillar = Math.max(0, player.invincibleTimer) / INVINCIBLE_DURATION;
-      const isLeader = leaderScore > 0 && player.score === leaderScore;
-      slot.color = isLeader
-        ? getLeaderRgb(player.character.color)
-        : getCachedRgb(player.character.color);
-      slot.intensity = 0.3 + pillar * 0.5 + (isLeader ? 0.25 : 0);
-      slot.radius = 70 + pillar * 60 + (isLeader ? 25 : 0);
-    }
 
     for (const carrot of matchState.carrots) {
       if (!carrot.active) continue;
@@ -725,6 +698,75 @@ export class Renderer {
     }
 
     this._dynamicLights.length = i;
+  }
+
+  /** Queue a transient additive light at (x, y). Drawn directly on the fg
+   *  ctx with `'lighter'` blend by `_drawLightBursts` — bypasses the
+   *  lightCanvas opacity gate, so visible at any dayPhase including noon.
+   *  Called from PlayerTransitionSystem on splat / spawn transitions. */
+  emitLightBurst(x: number, y: number, kind: 'spawn' | 'stomp'): void {
+    if (kind === 'spawn') {
+      this._lightBursts.push({
+        x, y, age: 0,
+        duration: SPAWN_BURST_DURATION,
+        peakIntensity: SPAWN_BURST_PEAK_INTENSITY,
+        peakRadius: SPAWN_BURST_PEAK_RADIUS,
+        color: SPAWN_BURST_COLOR,
+        kind,
+      });
+    } else {
+      this._lightBursts.push({
+        x, y, age: 0,
+        duration: STOMP_BURST_DURATION,
+        peakIntensity: STOMP_BURST_PEAK_INTENSITY,
+        peakRadius: STOMP_BURST_PEAK_RADIUS,
+        color: STOMP_BURST_COLOR,
+        kind,
+      });
+    }
+  }
+
+  /** Draw + decay queued bursts on the fg ctx with `'lighter'` blend. Decay
+   *  uses wall-clock dt — bursts last <1s of real time regardless of
+   *  slowMotion or pause (pause stops `renderFrame` from being called, so
+   *  age implicitly freezes there). The tracker is advanced every frame
+   *  (even when empty) so the first frame after an idle window gets a real
+   *  per-frame dt instead of a clamped `maxDt`. */
+  private _drawLightBursts(ctx: CanvasRenderingContext2D): void {
+    const dt = this._burstDt(this.frameTime);
+    if (this._lightBursts.length === 0) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = this._lightBursts.length - 1; i >= 0; i--) {
+      const burst = this._lightBursts[i];
+      burst.age += dt;
+      if (burst.age >= burst.duration) {
+        swapRemove(this._lightBursts, i);
+        continue;
+      }
+      const t = burst.age / burst.duration;
+      let intensity: number;
+      let radius: number;
+      if (burst.kind === 'spawn') {
+        // sin-bell envelope: 0 → 1 (mid) → 0
+        const env = Math.sin(t * Math.PI);
+        intensity = burst.peakIntensity * env;
+        radius = burst.peakRadius * (0.6 + 0.4 * env);
+      } else {
+        // sharp peak then quadratic fade
+        const env = (1 - t) * (1 - t);
+        intensity = burst.peakIntensity * env;
+        radius = burst.peakRadius * (0.7 + 0.3 * (1 - t));
+      }
+      const grad = ctx.createRadialGradient(burst.x, burst.y, 0, burst.x, burst.y, radius);
+      const { r, g, b } = burst.color;
+      grad.addColorStop(0, `rgba(${r},${g},${b},${intensity})`);
+      grad.addColorStop(0.5, `rgba(${r},${g},${b},${intensity * 0.35})`);
+      grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+      ctx.fillStyle = grad;
+      ctx.fillRect(burst.x - radius, burst.y - radius, radius * 2, radius * 2);
+    }
+    ctx.restore();
   }
 
   /** L2: register the static emitter catalog for the current arena. Called
@@ -1404,6 +1446,12 @@ export class Renderer {
       }
 
       perfTrace.end('render.fg-nature', fgStart);
+
+      // Transient additive light flashes (spawn / stomp). Drawn here on the
+      // fg ctx with `'lighter'` blend so they punch through the entire scene
+      // regardless of dayPhase — the lightCanvas opacity gate would otherwise
+      // hide them at noon.
+      this._drawLightBursts(ctx);
 
       // Lighting composite — multiplies the light buffer onto the fg ctx.
       // Sits inside the hitstop/screen-shake transform so lights ride the shake.

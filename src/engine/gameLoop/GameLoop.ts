@@ -161,6 +161,7 @@ export class GameLoop {
       (name) => { if (this._audioEnabled) audio.playAnimal(name); },
       this.particleSystem,
       (x, y) => this.reactiveDecorationSystem.applyStompImpulse(x, y),
+      (x, y, kind) => this.renderer.emitLightBurst(x, y, kind),
     );
     this.playerCosmeticSystem = new PlayerCosmeticSystem(
       sState, this.simulator.getEffWalkSpeed(), this.particleSystem,
@@ -408,6 +409,7 @@ export class GameLoop {
       (name) => { if (this._audioEnabled) audio.playAnimal(name); },
       this.particleSystem,
       (x, y) => this.reactiveDecorationSystem.applyStompImpulse(x, y),
+      (x, y, kind) => this.renderer.emitLightBurst(x, y, kind),
     );
     this.playerCosmeticSystem = new PlayerCosmeticSystem(
       sState, this.simulator.getEffWalkSpeed(), this.particleSystem,
