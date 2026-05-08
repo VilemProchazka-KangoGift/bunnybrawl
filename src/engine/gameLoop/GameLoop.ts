@@ -9,6 +9,7 @@ import type { GameSnapshot } from '../net/serialize';
 import { KeyboardManager } from '../input/KeyboardManager';
 import { KeyboardInput } from '../input/KeyboardInput';
 import { RuleBasedBot } from '../input/RuleBasedBot';
+import { RemoteInput } from '../input/RemoteInput';
 import type { PlayerInput } from '../input/PlayerInput';
 import { TouchInputManager } from '../touchInput';
 import { isTouchPrimary } from '../touchDetect';
@@ -350,10 +351,36 @@ export class GameLoop {
     return kb;
   }
 
-  /** Enable network mode: external code drives the loop. */
+  /** Enable network mode: external code drives the loop.
+   *
+   *  Swaps the per-slot PlayerInput so every human slot reads from
+   *  `ctx.networkInputs` via RemoteInput (was: keyboard / touch reads).
+   *  Bot slots keep their RuleBasedBot — the host's AI generates their
+   *  inputs locally and they're not in the network buffer. The mobile-host
+   *  touch slot is also moved to RemoteInput; the host loop already merges
+   *  keyboard + touch into the network buffer via getInputAny, so the touch
+   *  signal flows through that single path. On disable, we restore
+   *  KeyboardInput / re-install TouchAdapter as appropriate. */
   setNetworkMode(enabled: boolean): void {
+    if (this._networkMode === enabled) {
+      this.renderer.setNetworkMode(enabled);
+      return;
+    }
     this._networkMode = enabled;
     this.renderer.setNetworkMode(enabled);
+    for (const player of this.simulator.getState().players) {
+      if (isBotSlot(player.id)) continue; // bots stay on RuleBasedBot
+      if (enabled) {
+        this.simulator.setPlayerInput(player.id, new RemoteInput(player.id));
+      } else if (player.id === this.touchSlot && this.touchInput) {
+        // Restore TouchAdapter via setTouchInput's bookkeeping.
+        this.simulator.setTouchInput(this.touchInput, this.touchSlot);
+      } else {
+        this.simulator.setPlayerInput(player.id, new KeyboardInput(
+          player.id as CharacterSlot, this.keyboardManager,
+        ));
+      }
+    }
   }
 
   /** Register a callback that fires whenever the match phase changes. */
@@ -757,7 +784,7 @@ export class GameLoop {
   }
 
   /** @internal Test-only: forwards to simulator's getPlayerInputForTest. */
-  getPlayerInputForTest(player: import('../types').Player, networkInputs?: Map<string, InputState>): InputState {
+  getPlayerInputForTest(player: import('../types').Player, networkInputs?: ReadonlyMap<string, InputState>): InputState {
     return this.simulator.getPlayerInputForTest(player, networkInputs);
   }
 
