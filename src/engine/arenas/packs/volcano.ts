@@ -195,6 +195,17 @@ function drawVolcanoPlatformFg(ctx: CanvasRenderingContext2D, platform: Platform
   ctx.restore();
 }
 
+/** Bright orange-red lava — shared by L2 emitters and (potentially) future
+ *  arena-side draws so the color stays in lockstep. */
+const LAVA_GLOW_RGB = { r: 255, g: 80, b: 30 } as const;
+
+/** L2 emitter centers + radii (one per hazard zone). Sorted by x. */
+const LAVA_EMITTERS = [
+  { x: 340, y: 696, radius: 150 },
+  { x: 610, y: 656, radius: 130 },
+  { x: 900, y: 696, radius: 150 },
+] as const;
+
 export const volcano: ArenaPack = {
   // ---- Identity ----
   id: 'volcano',
@@ -843,21 +854,15 @@ export const volcano: ArenaPack = {
     loops: ['amb_lava'],
     periodic: [{ sound: 'amb_volcano_burst', intervalRange: [8, 20] }],
   },
-  // L2 emitters: bright orange-red lava emissive at each hazard zone center.
-  // Inverse-square falloff so the source reads as a hot point, large radius
-  // so the heat halo bleeds onto nearby platforms. Subtle flicker — lava is
-  // mostly steady but occasional ripples brighten it slightly.
-  lights: [
-    { kind: 'point', x: 340, y: 696, color: { r: 255, g: 80, b: 30 },
-      intensity: 0.9, radius: 150, falloff: 'inverse-square',
-      flicker: { seed: 11, amplitude: 0.08 } },
-    { kind: 'point', x: 900, y: 696, color: { r: 255, g: 80, b: 30 },
-      intensity: 0.9, radius: 150, falloff: 'inverse-square',
-      flicker: { seed: 12, amplitude: 0.08 } },
-    { kind: 'point', x: 610, y: 656, color: { r: 255, g: 80, b: 30 },
-      intensity: 0.9, radius: 130, falloff: 'inverse-square',
-      flicker: { seed: 13, amplitude: 0.08 } },
-  ],
+  // Lava emissives at hazard zones — read as hot points with bleed onto nearby platforms.
+  lights: LAVA_EMITTERS.map((e, i) => ({
+    kind: 'point' as const,
+    x: e.x, y: e.y, radius: e.radius,
+    color: LAVA_GLOW_RGB,
+    intensity: 0.9,
+    falloff: 'inverse-square' as const,
+    flicker: { seed: 11 + i, amplitude: 0.08 },
+  })),
 
   musicFile: 'volcano.mp3',
   // NAV-DATA-START — auto-generated, do not hand-edit

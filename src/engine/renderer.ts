@@ -105,13 +105,9 @@ const FIREFLY_GLOW_RGB: Readonly<{ r: number; g: number; b: number }> =
 /** Reused scratch for fireflyPosition fills (avoids per-firefly alloc). */
 const _fireflyPos = { x: 0, y: 0 };
 /** Pre-built per-firefly flicker configs — distinct seeds so they pulse
- *  independently. Length must match FIREFLY_COUNT (8). */
-const FIREFLY_FLICKER: ReadonlyArray<{ seed: number; amplitude: number }> = [
-  { seed: 101, amplitude: 0.5 }, { seed: 102, amplitude: 0.5 },
-  { seed: 103, amplitude: 0.5 }, { seed: 104, amplitude: 0.5 },
-  { seed: 105, amplitude: 0.5 }, { seed: 106, amplitude: 0.5 },
-  { seed: 107, amplitude: 0.5 }, { seed: 108, amplitude: 0.5 },
-];
+ *  independently. Length follows FIREFLY_COUNT by construction. */
+const FIREFLY_FLICKER: ReadonlyArray<{ seed: number; amplitude: number }> =
+  Array.from({ length: FIREFLY_COUNT }, (_, i) => ({ seed: 101 + i, amplitude: 0.5 }));
 
 /** Sprite extends ~12 px above the bbox top for tall ears, horns, and gib pivots. */
 const SPRITE_TOP_PAD = 12;
@@ -665,10 +661,8 @@ export class Renderer {
   private _synthesizeDynamicLights(matchState: MatchState): void {
     let i = 0;
 
-    // Leader detection: only re-scan when score totals or matchOver changed.
-    // Scores monotonically increase, so the sum is a cheap dirty check.
-    // Splat/respawning players still count for leader (the aura just doesn't
-    // render while they're dead — they reclaim the boost on respawn).
+    // Re-scan leader only when scores or matchOver change. Scores increase
+    // monotonically so sum-equality = no change.
     let scoreSum = 0;
     for (const p of matchState.players) scoreSum += p.score;
     if (scoreSum !== this._lastScoreSum || matchState.matchOver !== this._lastMatchOver) {
@@ -690,12 +684,7 @@ export class Renderer {
       slot.x = player.x + player.width / 2;
       slot.y = player.y + player.height / 2;
       slot.falloff = 'smoothstep';
-      // Spawn pillar: invincibility i-frames boost the aura toward a brighter,
-      // wider pillar of the player's color. Linear fade from peak at full
-      // timer → baseline at timer=0.
       const pillar = Math.max(0, player.invincibleTimer) / INVINCIBLE_DURATION;
-      // Leader boost: gold-tinted color, additive intensity/radius. Stacks
-      // with the spawn pillar — a respawning leader briefly glows huge.
       const isLeader = leaderScore > 0 && player.score === leaderScore;
       slot.color = isLeader
         ? getLeaderRgb(player.character.color)
