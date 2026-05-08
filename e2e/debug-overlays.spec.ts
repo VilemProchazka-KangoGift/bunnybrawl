@@ -20,9 +20,9 @@ async function startMatchWithDebug(
 async function waitForCountdown(page: any, timeoutMs = 10000) {
   await page.waitForFunction(
     () => {
-      const loop = (window as any).__gameLoop;
-      if (!loop) return false;
-      return loop.getState().countdown <= 0;
+      const s = window.__bunnyTest?.state();
+      if (!s) return false;
+      return s.countdown <= 0;
     },
     { timeout: timeoutMs },
   );
@@ -30,9 +30,9 @@ async function waitForCountdown(page: any, timeoutMs = 10000) {
 
 async function getDiag(page: any) {
   return page.evaluate(() => {
-    const loop = (window as any).__gameLoop;
-    if (!loop || !loop.getRendererDiagnostics) return null;
-    return loop.getRendererDiagnostics();
+    const loop = window.__bunnyTest;
+    if (!loop) return null;
+    return loop.diagnostics() ?? null;
   });
 }
 

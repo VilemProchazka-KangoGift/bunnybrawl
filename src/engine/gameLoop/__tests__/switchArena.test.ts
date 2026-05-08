@@ -35,6 +35,7 @@ vi.mock('../../renderer', () => ({
     setTimeLimit = vi.fn();
     setTheme = vi.fn();
     warmSpriteCache = vi.fn();
+    emitLightBurst = vi.fn();
     getDiagnostics = vi.fn(() => ({ clouds: false, weather: false, wildlife: false, playersDrawn: 0 }));
   },
 }));

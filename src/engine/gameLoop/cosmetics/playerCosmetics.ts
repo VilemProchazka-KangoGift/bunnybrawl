@@ -7,6 +7,7 @@ import { audio } from '../../audio';
 import { surfaceAt, swapRemove } from '../../themes/utils';
 import { getSlowDevice } from '../../perfFlags';
 import { SURFACE_PALETTE } from './surfacePalette';
+import type { Accumulator } from '../../accumulator';
 
 const FIRE_COLORS = ['#FF4400', '#FF8800', '#FFCC00', '#FFAA00'];
 
@@ -21,8 +22,8 @@ const AIR_LEAN_DECAY_PER_S = 1.5;
 export function updatePlayerCosmetics(
   player: Player, dt: number,
   effWalkSpeed: number,
-  afterimageAccs: Map<PlayerSlot, number>,
-  footstepAccs: Map<PlayerSlot, number>,
+  afterimageAccs: Accumulator<PlayerSlot>,
+  footstepAccs: Accumulator<PlayerSlot>,
   emitParticle: (x: number, y: number, vx: number, vy: number, life: number, size: number, color: string) => void,
   playSound: (name: string) => void,
   arena: Arena,
@@ -79,17 +80,15 @@ export function updatePlayerCosmetics(
   const spawnAfterimage = !getSlowDevice()
     && (speed > AFTERIMAGE_SPEED_THRESHOLD || player.invincibleTimer > 0);
   if (spawnAfterimage) {
-    let acc = afterimageAccs.get(player.id) || 0;
-    acc += dt;
-    while (acc >= AFTERIMAGE_INTERVAL) {
-      acc -= AFTERIMAGE_INTERVAL;
+    let fired = afterimageAccs.advance(player.id, dt, AFTERIMAGE_INTERVAL);
+    while (fired) {
       if (player.afterimages.length < AFTERIMAGE_MAX) {
         player.afterimages.push({ x: player.x, y: player.y, facing: player.facing, alpha: 1 });
       }
+      fired = afterimageAccs.advance(player.id, 0, AFTERIMAGE_INTERVAL);
     }
-    afterimageAccs.set(player.id, acc);
   } else {
-    afterimageAccs.set(player.id, 0);
+    afterimageAccs.clear(player.id);
   }
   // Decay afterimage alpha
   for (let i = player.afterimages.length - 1; i >= 0; i--) {
@@ -103,10 +102,7 @@ export function updatePlayerCosmetics(
     const runSpeed = Math.abs(player.vx);
     const speedRatio = Math.min(runSpeed / effWalkSpeed, 1);
     const interval = 0.22 - speedRatio * 0.12;
-    let fAcc = footstepAccs.get(player.id) || 0;
-    fAcc += dt;
-    if (fAcc >= interval) {
-      fAcc -= interval;
+    if (footstepAccs.advance(player.id, dt, interval)) {
 
       const cx = player.x + player.width / 2;
       const fy = player.y + player.height;
@@ -141,9 +137,8 @@ export function updatePlayerCosmetics(
         }
       }
     }
-    footstepAccs.set(player.id, fAcc);
   } else {
-    footstepAccs.set(player.id, 0);
+    footstepAccs.clear(player.id);
   }
 
   // Expression overrides (dizzy/scared) moved to Simulator.fixedUpdate —

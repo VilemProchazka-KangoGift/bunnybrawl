@@ -1,4 +1,4 @@
-import type { Arena, MatchState, Player, PlayerSlot, Ripple, SurfaceTag } from '../../types';
+import type { Arena, MatchState, Player, Ripple, SurfaceTag } from '../../types';
 import {
   DUST_LAND_VY_THRESHOLD,
   HARD_LAND_VY_THRESHOLD,
@@ -136,19 +136,6 @@ export function detectSurfaceImpact(
     pushRipple(state, player.x + player.width / 2, player.y + player.height, 'lava');
   }
 
-  prev.state = player.state;
-  prev.vy = player.vy;
-  prev.inLava = inLava;
-  prev.fastFalling = player.fastFalling;
-}
-
-export function resetSurfaceImpactBaselines(
-  state: MatchState,
-  arena: Arena,
-  prevMap: Map<PlayerSlot, PrevSurfaceImpactState>,
-): void {
-  prevMap.clear();
-  for (const p of state.players) {
-    prevMap.set(p.id, snapshotSurfaceImpactState(p, arena));
-  }
+  // Note: prev-state refresh is handled by TransitionTracker.detect() in
+  // SurfaceImpactSystem — no separate prev-update block lives here.
 }

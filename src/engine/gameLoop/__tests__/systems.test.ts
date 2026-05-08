@@ -352,10 +352,12 @@ describe('PlayerTransitionSystem', () => {
     const { sys } = makePlayerTransitionSystem(state);
     sys.init();
 
-    // getSfxCooldowns returns the internal map — should be empty initially
-    // (cooldowns populated lazily on first sound event)
+    // getSfxCooldowns returns the PlayerSfxCooldowns instance — all three
+    // cooldowns are ready (uninitialized) for any slot at start.
     const cooldowns = sys.getSfxCooldowns();
-    expect(cooldowns).toBeInstanceOf(Map);
+    expect(cooldowns.land.isReady('P1')).toBe(true);
+    expect(cooldowns.headbonk.isReady('P1')).toBe(true);
+    expect(cooldowns.crouch.isReady('P1')).toBe(true);
   });
 
   it('cosmeticUpdate() fires jump sound on grounded → airborne transition', () => {
@@ -386,9 +388,11 @@ describe('PlayerTransitionSystem', () => {
     const state = makeSystemState();
     const { sys } = makePlayerTransitionSystem(state);
     sys.init();
+    // Set a cooldown so we can observe the clear.
+    sys.getSfxCooldowns().land.set('P1', 0.5);
+    expect(sys.getSfxCooldowns().land.isReady('P1')).toBe(false);
     sys.cleanup();
-
-    expect(sys.getSfxCooldowns().size).toBe(0);
+    expect(sys.getSfxCooldowns().land.isReady('P1')).toBe(true);
   });
 
   it('score increase WITHOUT fatTimer change (kill score +2) does NOT fire crunch', () => {

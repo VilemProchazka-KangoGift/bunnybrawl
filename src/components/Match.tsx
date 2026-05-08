@@ -1,24 +1,23 @@
-import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../store/gameStore';
 import { GameLoop } from '../engine/gameLoop';
 import { NetMatch } from '../engine/net/netMatch';
 import { MsgType } from '../engine/net/protocol';
-import { getModalTransport, tearDownOnlineSession, getHostReclaimTokens, getGuestOwnReclaimToken } from './OnlineModal';
-import { getArena, listPlayableArenaPacks } from '../engine/arenas';
-import { ArenaGrid } from './ArenaGrid';
-import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
+import { getModalTransport, tearDownOnlineSession } from './OnlineModal';
+import { listPlayableArenaPacks } from '../engine/arenas';
 import { isTouchPrimary } from '../engine/touchDetect';
-import { perfTrace } from '../engine/perfTrace';
-import * as fpsCounter from '../engine/fpsCounter';
 import { TouchOverlay } from './TouchOverlay';
 import type { TouchInputManager } from '../engine/touchInput';
-import type { PlayerSlot, MatchPhase } from '../engine/types';
-import { runLoadingTasks } from '../engine/matchLoading';
 import { useTransientBanner } from '../hooks/useTransientBanner';
-import { useDelayedFlag } from '../hooks/useDelayedFlag';
 import { useWakeLock } from '../hooks/useWakeLock';
-import logoImg from '/logo.png?url';
+import { useLoadingOverlay } from './match/useLoadingOverlay';
+import { useLocalMatch, kickoffLoading } from './match/useLocalMatch';
+import { useOnlineMatch } from './match/useOnlineMatch';
+import { useMatchKeyboard } from './match/useMatchKeyboard';
+import { MatchCanvases } from './match/MatchCanvases';
+import { MatchOverlays } from './match/MatchOverlays';
+import { attachMatch as attachBunnyTestMatch } from './bunnyTestShim';
 import './Match.css';
 
 // Track last resolved arena so random doesn't repeat on rematch. Intentionally
@@ -38,34 +37,6 @@ function resolveArenaId(arenaId: string): string {
   return pick.id;
 }
 
-/** Run loading tasks for a GameLoop, applying a stale-promise guard so a
- *  rapid arena swap can't mis-signal readiness for an outdated arena.
- *  `onReady` fires only when both:
- *    - the GameLoop is still the current one (`isCurrent()`)
- *    - no switchArena has bumped the loading generation since we started
- *  Catch-branch fires too on timeout (graceful degradation — match starts
- *  anyway with whatever assets made it in). */
-function kickoffLoading(
-  loop: GameLoop,
-  isCurrent: () => boolean,
-  onReady: () => void,
-  netMatch?: NetMatch | null,
-): void {
-  const startGen = loop.getLoadingGeneration();
-  runLoadingTasks({
-    arenaId: loop.getArena().themeId,
-    characterNames: loop.getActiveCharacterNames(),
-    renderer: loop.getRenderer(),
-    arena: loop.getArena(),
-    originalArena: loop.getOriginalArena(),
-    netMatch,
-  }).finally(() => {
-    if (!isCurrent()) return;
-    if (loop.getLoadingGeneration() !== startGen) return;
-    onReady();
-  });
-}
-
 export function Match() {
   const { t } = useTranslation();
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -73,6 +44,8 @@ export function Match() {
   const fgCanvasRef = useRef<HTMLCanvasElement>(null);
   const hudCanvasRef = useRef<HTMLCanvasElement>(null);
   const fgNightTintRef = useRef<HTMLDivElement>(null);
+  // L2 emitter compositing — single screen-blend DOM sibling above fg-night-tint.
+  const lightCanvasRef = useRef<HTMLCanvasElement>(null);
   const gameLoopRef = useRef<GameLoop | null>(null);
   const victoryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { activePlayers, matchSettings, setMatchResult, setScreen, setActivePlayers, setMatchSettings, online, resetOnline, clearMatchResult } = useGameStore();
@@ -90,19 +63,15 @@ export function Match() {
   const disconnectDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const netMatchRef = useRef<NetMatch | null>(null);
   const [touchInput, setTouchInput] = useState<TouchInputManager | null>(null);
-  // Two sources drive the loading overlay:
-  //   - `phaseIsLoading`: the authoritative gameplay phase (from setPhase on
-  //     host OR from snapshot on guest). False once the match can be played.
-  //   - `localTasksDone`: THIS client has finished its runLoadingTasks
-  //     (music buffered, background painted, sprites warmed).
-  // Overlay shows while either is still "not ready" — prevents the guest
-  // from hiding the overlay the moment host flips phase if the guest's own
-  // asset preload hasn't finished yet.
-  const [phaseIsLoading, setPhaseIsLoading] = useState(true);
-  const [localTasksDone, setLocalTasksDone] = useState(false);
-  const showLoadingOverlay = phaseIsLoading || !localTasksDone;
-  // Cancel button only appears after a delay so brief loads don't flicker it.
-  const showLoadingCancel = useDelayedFlag(showLoadingOverlay, 3000);
+  // Loading overlay state machine. Two signals must clear before the overlay
+  // hides: `phaseIsLoading` (gameplay phase from setPhase on host or
+  // NetMatch.onPhaseChange on guest) and `localTasksDone` (this client's
+  // runLoadingTasks finished). Cancel button auto-appears after 3s.
+  const {
+    phaseIsLoading, localTasksDone,
+    showLoadingOverlay, showLoadingCancel,
+    setPhaseIsLoading, setLocalTasksDone,
+  } = useLoadingOverlay();
   // Reconnect progress for the overlay. `attempt` goes 0..max as retries fire.
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
   const [reconnectMax, setReconnectMax] = useState(12);
@@ -204,293 +173,43 @@ export function Match() {
     }, nm);
   }, [setMatchSettings, online.isOnline, online.isHost]);
 
+  // Esc/Enter pause-resume + skip-countdown shortcuts + beforeunload prompt.
+  useMatchKeyboard(gameLoopRef, showLevelSelect, setShowLevelSelect, handlePause, handleResume);
+
+  // Local-mode lifecycle (extracted hook). Early-returns when isOnline.
+  useLocalMatch({
+    bgCanvasRef, bgNightCanvasRef, fgCanvasRef, fgNightTintRef, lightCanvasRef, hudCanvasRef,
+    gameLoopRef, victoryTimeoutRef,
+    currentArenaId, activePlayers, matchSettings,
+    setMatchResult, setTouchInput,
+    setPhaseIsLoading, setLocalTasksDone,
+    isOnline: online.isOnline,
+  });
+
+  // Online-mode lifecycle (extracted hook). Early-returns when !isOnline.
+  useOnlineMatch({
+    bgCanvasRef, bgNightCanvasRef, fgCanvasRef, fgNightTintRef, lightCanvasRef, hudCanvasRef,
+    gameLoopRef, netMatchRef, victoryTimeoutRef, disconnectDelayRef,
+    reconnectFailedRef, isReconnectingRef,
+    currentArenaId, activePlayers, matchSettings,
+    isOnline: online.isOnline, isHost: online.isHost, localSlot: online.localSlot,
+    setMatchResult, setScreen, setMatchSettings, setCurrentArenaId,
+    resetLastResolvedArena: (id: string) => { lastResolvedArenaId = id; },
+    setTouchInput,
+    setPhaseIsLoading, setLocalTasksDone,
+    setUnstable, setIsReconnecting, setReconnectFailed,
+    setReconnectAttempt, setReconnectMax, flashBanner, t,
+  });
+
+  // Wire the unified E2E diagnostic snapshot to this Match's refs. Reads
+  // are function-getter form so each call sees the CURRENT GameLoop /
+  // NetMatch (rematch, arena swap, online↔local rebind via the same refs).
+  // No-op in production builds.
   useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        if (showLevelSelect) {
-          setShowLevelSelect(false);
-          return;
-        }
-        const loop = gameLoopRef.current;
-        if (!loop) return;
-
-        if (loop.isPaused()) {
-          handleResume();
-        } else {
-          handlePause();
-        }
-      }
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        const loop = gameLoopRef.current;
-        if (!loop) return;
-        if (loop.isPaused() && !showLevelSelect) {
-          handleResume();
-        } else {
-          loop.skipCountdown();
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [handleResume, handlePause, showLevelSelect]);
-
-  useEffect(() => {
-    const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = '';
-    };
-    window.addEventListener('beforeunload', onBeforeUnload);
-    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+    const detach = attachBunnyTestMatch({ gameLoopRef, netMatchRef });
+    return detach;
   }, []);
 
-  useEffect(() => {
-    const bgCanvas = bgCanvasRef.current;
-    const fgCanvas = fgCanvasRef.current;
-    const hudCanvas = hudCanvasRef.current;
-    if (!bgCanvas || !fgCanvas || !hudCanvas) return;
-    // Optional lighting overlays: when missing, Renderer falls back to the
-    // source-over fillRect tint path. Don't block match mount on them.
-    const bgNightCanvas = bgNightCanvasRef.current ?? undefined;
-    const fgNightTint = fgNightTintRef.current ?? undefined;
-
-    const clearTimer = (ref: { current: ReturnType<typeof setTimeout> | null }) => {
-      if (ref.current) { clearTimeout(ref.current); ref.current = null; }
-    };
-    const commonCleanup = () => {
-      gameLoopRef.current = null;
-      setTouchInput(null);
-      clearTimer(victoryTimeoutRef);
-    };
-
-    const arena = getArena(currentArenaId);
-    let matchEnded = false;
-    const onMatchEnd = (winner: import('../engine/types').PlayerSlot | null, state: import('../engine/types').MatchState) => {
-      if (matchEnded) return; // guard against double-fire (GameLoop + MATCH_RESULT)
-      matchEnded = true;
-      // Suppress stall detection during victory transition
-      if (netMatchRef.current) netMatchRef.current.setMatchOver();
-      // In online mode, host sends match result to guest
-      if (online.isOnline && online.isHost) {
-        const transport = getModalTransport();
-        if (transport) {
-          transport.sendReliable({ type: MsgType.MATCH_RESULT, winner } as import('../engine/net/protocol').ReliableMessage);
-        }
-      }
-      victoryTimeoutRef.current = setTimeout(() => {
-        setMatchResult(winner, state);
-      }, 1500);
-    };
-
-    window.__perfTrace = perfTrace;
-    window.__fpsCounter = fpsCounter;
-
-    if (online.isOnline) {
-      // Network mode
-      setPhaseIsLoading(true);
-      setLocalTasksDone(false);
-      const transport = getModalTransport();
-      if (!transport) {
-        console.error('No active transport for online match');
-        setScreen('menu');
-        return;
-      }
-
-      const netMatch = new NetMatch({
-        bgCanvas,
-        bgNightCanvas,
-        fgNightTint,
-        fgCanvas,
-        hudCanvas,
-        arena,
-        settings: matchSettings,
-        activePlayers,
-        onMatchEnd,
-        transport,
-        localSlot: online.isHost ? 'P1' : 'P2',
-        remoteSlots: activePlayers.filter(s => s !== (online.isHost ? 'P1' : 'P2') && s.startsWith('P')) as PlayerSlot[],
-        // Reclaim tokens issued during the lobby. Host: full Map<slot,token>;
-        // guest: own token only. Used to authenticate RECONNECT_REQUEST so a
-        // malicious peer in the room can't claim a disconnected stranger's slot.
-        reclaimTokens: online.isHost ? getHostReclaimTokens() : undefined,
-        ownReclaimToken: !online.isHost ? (getGuestOwnReclaimToken() ?? undefined) : undefined,
-        onStall: (stalled) => {
-          setUnstable(stalled ? { kind: 'mine' } : null);
-        },
-        onDisconnect: () => {
-          // If the match ended naturally and the peer disconnected during the
-          // 1.5s pre-victory pause, replace the queued natural-result with a
-          // disconnect-win so the victory screen suppresses the now-pointless
-          // rematch buttons.
-          if (matchEnded) {
-            if (victoryTimeoutRef.current) {
-              clearTimeout(victoryTimeoutRef.current);
-              victoryTimeoutRef.current = null;
-            }
-            if (gameLoopRef.current) {
-              setMatchResult(null, gameLoopRef.current.getState(), true);
-            }
-            return;
-          }
-          // Flash "Could not reconnect" for ~1.8s before the victory screen.
-          reconnectFailedRef.current = true;
-          setReconnectFailed(true);
-          if (disconnectDelayRef.current) clearTimeout(disconnectDelayRef.current);
-          disconnectDelayRef.current = setTimeout(() => {
-            disconnectDelayRef.current = null;
-            reconnectFailedRef.current = false;
-            setReconnectFailed(false);
-            // If the match also ended naturally during the 1.8s flash window,
-            // the natural-result victoryTimeoutRef has already fired —
-            // skip to avoid clobbering the winner with a null disconnect-win.
-            if (matchEnded) return;
-            if (gameLoopRef.current) {
-              setMatchResult(null, gameLoopRef.current.getState(), true);
-            }
-          }, 1800);
-        },
-        onReconnecting: (reconnecting) => {
-          const wasReconnecting = isReconnectingRef.current;
-          isReconnectingRef.current = reconnecting;
-          setIsReconnecting(reconnecting);
-          if (!reconnecting) setReconnectAttempt(0);
-          if (wasReconnecting && !reconnecting && !reconnectFailedRef.current) {
-            flashBanner(t('reconnected', 'Reconnected!'), 2000);
-          }
-        },
-        onReconnectAttempt: (current, max) => {
-          setReconnectAttempt(current);
-          setReconnectMax(max);
-        },
-        onPlayerDisconnect: (slot) => {
-          const name = useGameStore.getState().online.playerNames[slot] || slot;
-          flashBanner(t('player_disconnected_name', '{{name}} left the match', { name }), 4000);
-        },
-        onGuestReconnected: (slot) => {
-          // Guest reclaimed their slot — re-send SETTINGS_SYNC so they see
-          // any arena change that happened while they were disconnected.
-          if (!online.isHost) return;
-          const ms = useGameStore.getState().matchSettings;
-          const transport = getModalTransport();
-          if (transport) {
-            transport.sendReliableTo(slot, {
-              type: MsgType.SETTINGS_SYNC, arenaId: ms.arenaId,
-              killLimit: ms.killLimit, timeLimit: ms.timeLimit,
-              goreMode: ms.goreMode, mods: ms.mods,
-              rngSeed: useGameStore.getState().online.rngSeed,
-              botCount: ms.botCount, botDifficulty: ms.botDifficulty,
-            } as import('../engine/net/protocol').ReliableMessage);
-          }
-          const name = useGameStore.getState().online.playerNames[slot] || slot;
-          flashBanner(t('player_reconnected_name', '{{name}} reconnected', { name }), 3000);
-        },
-        onArenaChange: (arenaId: string) => {
-          // Guest: host changed arena — switch in place and rerun loading
-          lastResolvedArenaId = arenaId;
-          setCurrentArenaId(arenaId);
-          setMatchSettings({ arenaId });
-          const loop = gameLoopRef.current;
-          const nm = netMatchRef.current;
-          if (!loop || !nm) return;
-          setLocalTasksDone(false);
-          loop.switchArena(arenaId);
-          kickoffLoading(loop, () => netMatchRef.current === nm, () => {
-            setLocalTasksDone(true);
-            if (online.isHost) nm.markHostLoaded();
-            else nm.signalGuestLoaded();
-          }, nm);
-        },
-        onPhaseChange: (phase) => {
-          setPhaseIsLoading(phase === 'loading');
-        },
-        onLoadingTimeout: (slots) => {
-          if (!slots.length) return;
-          const names = slots
-            .map(s => useGameStore.getState().online.playerNames[s] || s)
-            .join(', ');
-          flashBanner(t('loading_starting_without', 'Starting without {{names}}', { names }), 4000);
-        },
-        onGuestConnectionUnstable: (slot, stalled) => {
-          if (!stalled) {
-            setUnstable(prev => prev?.kind === 'them' ? null : prev);
-            return;
-          }
-          const name = useGameStore.getState().online.playerNames[slot] || slot;
-          setUnstable({ kind: 'them', name });
-        },
-      });
-
-      netMatchRef.current = netMatch;
-      gameLoopRef.current = netMatch.getGameLoop();
-      window.__gameLoop = netMatch.getGameLoop();
-      (window as any).__netMatch = netMatch;
-      netMatch.getGameLoop().setPlayerNames(useGameStore.getState().online.playerNames);
-      netMatch.getGameLoop().setLocalSlot((online.isHost ? 'P1' : online.localSlot) as PlayerSlot);
-      netMatch.start();
-      setTouchInput(netMatch.getGameLoop().getTouchInput());
-
-      // Online loading: both sides preload, then signal readiness. Host flips
-      // phase to 'playing' only after all guests report LOADED (or after the
-      // 15s hard timeout in NetMatch).
-      kickoffLoading(
-        netMatch.getGameLoop(),
-        () => netMatchRef.current === netMatch,
-        () => {
-          setLocalTasksDone(true);
-          if (online.isHost) netMatch.markHostLoaded();
-          else netMatch.signalGuestLoaded();
-        },
-        netMatch,
-      );
-
-      return () => {
-        netMatch.stop();
-        netMatchRef.current = null;
-        commonCleanup();
-        clearTimer(disconnectDelayRef);
-      };
-    }
-
-    // Local mode
-    setPhaseIsLoading(true);
-    setLocalTasksDone(false);
-    const loop = new GameLoop(
-      bgCanvas,
-      fgCanvas,
-      arena,
-      matchSettings,
-      activePlayers,
-      onMatchEnd,
-      hudCanvas,
-      undefined, // rng
-      bgNightCanvas,
-      fgNightTint,
-    );
-
-    gameLoopRef.current = loop;
-    window.__gameLoop = loop;
-    loop.setOnPhaseChange((phase: MatchPhase) => {
-      setPhaseIsLoading(phase === 'loading');
-    });
-    loop.start();
-    setTouchInput(loop.getTouchInput());
-
-    // Kick off loading — music preload + background render + sprite warmup.
-    // `.finally` path also covers timeout (graceful degradation; match
-    // starts with whatever assets made it in).
-    kickoffLoading(loop, () => gameLoopRef.current === loop, () => {
-      setLocalTasksDone(true);
-      loop.setPhase('playing');
-    });
-
-    return () => {
-      loop.stop();
-      commonCleanup();
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activePlayers, matchSettings, setMatchResult, online.isOnline]);
 
   // Wake lock: prevent screen dimming during match on mobile
   useWakeLock(isMobile);
@@ -498,35 +217,13 @@ export function Match() {
   return (
     <div className="match-container" data-testid="match-screen">
       <div className="canvas-container">
-        <canvas
-          ref={bgCanvasRef}
-          className="game-canvas bg-canvas"
-          width={CANVAS_WIDTH}
-          height={CANVAS_HEIGHT}
-        />
-        <canvas
-          ref={bgNightCanvasRef}
-          className="game-canvas bg-night-canvas"
-          width={CANVAS_WIDTH}
-          height={CANVAS_HEIGHT}
-        />
-        <canvas
-          ref={fgCanvasRef}
-          className="game-canvas fg-canvas"
-          width={CANVAS_WIDTH}
-          height={CANVAS_HEIGHT}
-          data-testid="game-canvas"
-        />
-        <div
-          ref={fgNightTintRef}
-          className="fg-night-tint"
-          aria-hidden="true"
-        />
-        <canvas
-          ref={hudCanvasRef}
-          className="game-canvas hud-canvas"
-          width={CANVAS_WIDTH}
-          height={CANVAS_HEIGHT}
+        <MatchCanvases
+          bgRef={bgCanvasRef}
+          bgNightRef={bgNightCanvasRef}
+          fgRef={fgCanvasRef}
+          fgNightTintRef={fgNightTintRef}
+          lightRef={lightCanvasRef}
+          hudRef={hudCanvasRef}
         />
         {touchInput && <TouchOverlay touchInput={touchInput} />}
         {isMobile && !paused && (
@@ -534,141 +231,27 @@ export function Match() {
             &#9646;&#9646;
           </button>
         )}
-        {showLoadingOverlay && (
-          <div
-            className="match-loading-overlay"
-            data-testid="match-loading-overlay"
-            role="status"
-            aria-live="polite"
-            aria-busy="true"
-          >
-            <img src={logoImg} alt="Carrot Royale" className="match-loading-logo" />
-            <div className="match-loading-spinner" />
-            <div className="match-loading-text">{t('loading', 'Loading...')}</div>
-            <div className="match-loading-sub" data-testid="match-loading-sub">
-              {online.isOnline && localTasksDone && phaseIsLoading
-                ? t('loading_waiting_others', 'Waiting for other players...')
-                : t('loading_arena', 'Loading arena...')}
-            </div>
-            {showLoadingCancel && (
-              <button
-                className="btn-base pause-btn quit-btn match-loading-cancel"
-                onClick={handleQuit}
-                data-testid="match-loading-cancel"
-              >
-                {t('loading_cancel', 'Cancel')}
-              </button>
-            )}
-          </div>
-        )}
-        {paused && (
-          <div className="pause-overlay" data-testid="pause-menu">
-            <div className="pause-box">
-              {showLevelSelect ? (
-                <>
-                  <h2 className="pause-title">{t('pause_change_level')}</h2>
-                  <div className="pause-arena-grid">
-                    <ArenaGrid
-                      classPrefix="pause-arena"
-                      currentId={currentArenaId}
-                      selectedClass="current"
-                      onSelect={handleChangeArena}
-                    />
-                  </div>
-                  <button className="btn-base pause-btn quit-btn" onClick={() => setShowLevelSelect(false)}>
-                    {t('pause_back')}
-                  </button>
-                </>
-              ) : online.isOnline ? (
-                /* Online pause menu */
-                <>
-                  <h2 className="pause-title">{t('pause_title')}</h2>
-                  <button className="btn-base pause-btn resume-btn" onClick={handleResume} data-testid="resume-button">
-                    {t('pause_resume')}
-                  </button>
-                  {online.isHost && (
-                    <button className="btn-base pause-btn level-btn" onClick={() => setShowLevelSelect(true)}>
-                      {t('pause_change_level')}
-                    </button>
-                  )}
-                  {online.isHost ? (
-                    <button className="btn-base pause-btn quit-btn" onClick={handleQuit} data-testid="quit-button">
-                      {t('cancel_game', 'Cancel Game')}
-                    </button>
-                  ) : (
-                    <button className="btn-base pause-btn quit-btn" onClick={handleQuit} data-testid="quit-button">
-                      {t('leave_game', 'Leave Game')}
-                    </button>
-                  )}
-                </>
-              ) : (
-                /* Local pause menu */
-                <>
-                  <h2 className="pause-title">{t('pause_title')}</h2>
-                  <button className="btn-base pause-btn resume-btn" onClick={handleResume} data-testid="resume-button">
-                    {t('pause_resume')}
-                  </button>
-                  <button className="btn-base pause-btn level-btn" onClick={() => setShowLevelSelect(true)}>
-                    {t('pause_change_level')}
-                  </button>
-                  <button className="btn-base pause-btn quit-btn" onClick={handleQuit} data-testid="quit-button">
-                    {t('pause_quit')}
-                  </button>
-                  <p className="pause-hint">{t('pause_hint')}</p>
-                </>
-              )}
-            </div>
-          </div>
-        )}
-        {!paused && online.isOnline && (() => {
-          // Unstable-indicator slot: unstable takes priority over the transient
-          // banner when both would show simultaneously.
-          if (unstable && !isReconnecting) return (
-            <div
-              className="connection-unstable-indicator"
-              data-testid={unstable.kind === 'mine' ? 'connection-unstable' : 'connection-unstable-them'}
-              role="status"
-              aria-live="polite"
-            >
-              {unstable.kind === 'mine'
-                ? t('connection_unstable_mine', 'Your connection is unstable')
-                : t('connection_unstable_them', '{{name}} has a slow connection', { name: unstable.name })}
-            </div>
-          );
-          if (banner) return (
-            <div className="connection-unstable-indicator" data-testid="disconnect-banner" role="status" aria-live="polite">
-              {banner}
-            </div>
-          );
-          return null;
-        })()}
-        {isReconnecting && online.isOnline && (
-          <div className="reconnecting-overlay" role="status" aria-live="polite">
-            <div className="reconnecting-box">
-              <div className="reconnecting-spinner" />
-              <div className="reconnecting-text">
-                {t('reconnecting', 'Reconnecting...')}
-              </div>
-              {reconnectAttempt > 0 && (
-                <div className="reconnecting-sub">
-                  {t('reconnecting_attempt', 'Attempt {{n}}/{{max}}', { n: reconnectAttempt, max: reconnectMax })}
-                </div>
-              )}
-              <button className="btn-base pause-btn quit-btn" onClick={handleQuit} data-testid="reconnect-give-up">
-                {t('give_up', 'Give Up')}
-              </button>
-            </div>
-          </div>
-        )}
-        {reconnectFailed && online.isOnline && (
-          <div className="reconnecting-overlay" data-testid="reconnect-failed" role="alert" aria-live="assertive">
-            <div className="reconnecting-box">
-              <div className="reconnecting-text">
-                {t('reconnect_failed', 'Could not reconnect.')}
-              </div>
-            </div>
-          </div>
-        )}
+        <MatchOverlays
+          paused={paused}
+          showLevelSelect={showLevelSelect}
+          currentArenaId={currentArenaId}
+          setShowLevelSelect={setShowLevelSelect}
+          handleResume={handleResume}
+          handleQuit={handleQuit}
+          handleChangeArena={handleChangeArena}
+          isOnline={online.isOnline}
+          isHost={online.isHost}
+          showLoadingOverlay={showLoadingOverlay}
+          showLoadingCancel={showLoadingCancel}
+          phaseIsLoading={phaseIsLoading}
+          localTasksDone={localTasksDone}
+          unstable={unstable}
+          banner={banner}
+          isReconnecting={isReconnecting}
+          reconnectAttempt={reconnectAttempt}
+          reconnectMax={reconnectMax}
+          reconnectFailed={reconnectFailed}
+        />
       </div>
     </div>
   );

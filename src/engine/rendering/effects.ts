@@ -27,7 +27,7 @@ const STAR_PHASE = new Float32Array(STAR_COUNT); // i * 1.7 baked in
   }
 }
 
-const FIREFLY_COUNT = 8;
+export const FIREFLY_COUNT = 8;
 const FIREFLY_BASE_X = new Float32Array(FIREFLY_COUNT);
 const FIREFLY_BASE_Y = new Float32Array(FIREFLY_COUNT);
 {
@@ -36,6 +36,15 @@ const FIREFLY_BASE_Y = new Float32Array(FIREFLY_COUNT);
     FIREFLY_BASE_X[i] = (i * 173 + 57) % CANVAS_WIDTH;
     FIREFLY_BASE_Y[i] = 100 + ((i * 211 + 29) % skyHeight);
   }
+}
+
+/** Compute the drifted (x, y) for firefly `i` at `frameTimeMs`. Shared between
+ *  the visual draw in drawDayNightCycle and the L2 emitter synthesis in the
+ *  renderer so the two paths stay in lockstep without duplicating the math. */
+export function fireflyPosition(i: number, frameTimeMs: number, out: { x: number; y: number }): void {
+  const now = frameTimeMs / 1000;
+  out.x = FIREFLY_BASE_X[i] + fastSin(now * 0.5 + i * 2.3) * 30;
+  out.y = FIREFLY_BASE_Y[i] + fastCos(now * 0.4 + i * 1.7) * 20;
 }
 
 // Pre-rendered visuals. Stars: the entire 30-star field baked into one bitmap
@@ -233,28 +242,27 @@ export function drawDayNightCycle(
     const fireflyAlpha = Math.min((nightIntensity - 0.4) / 0.4, 1) * 0.7;
     const now = frameTime / 1000;
     const stamp = getFireflyStamp();
+    const pos = { x: 0, y: 0 };
     if (stamp) {
       for (let i = 0; i < FIREFLY_COUNT; i++) {
-        const fx = FIREFLY_BASE_X[i] + fastSin(now * 0.5 + i * 2.3) * 30;
-        const fy = FIREFLY_BASE_Y[i] + fastCos(now * 0.4 + i * 1.7) * 20;
+        fireflyPosition(i, frameTime, pos);
         const pulse = fastSin(now * 2 + i * 1.1) * 0.3 + 0.7;
         ctx.globalAlpha = fireflyAlpha * pulse;
-        ctx.drawImage(stamp, fx - 6, fy - 6);
+        ctx.drawImage(stamp, pos.x - 6, pos.y - 6);
       }
     } else {
       ctx.fillStyle = '#AAFF44';
       for (let i = 0; i < FIREFLY_COUNT; i++) {
-        const fx = FIREFLY_BASE_X[i] + fastSin(now * 0.5 + i * 2.3) * 30;
-        const fy = FIREFLY_BASE_Y[i] + fastCos(now * 0.4 + i * 1.7) * 20;
+        fireflyPosition(i, frameTime, pos);
         const pulse = fastSin(now * 2 + i * 1.1) * 0.3 + 0.7;
         ctx.globalAlpha = fireflyAlpha * pulse * 0.3;
         ctx.beginPath();
-        ctx.arc(fx, fy, 6, 0, Math.PI * 2);
+        ctx.arc(pos.x, pos.y, 6, 0, Math.PI * 2);
         ctx.fill();
         ctx.fillStyle = '#CCFF66';
         ctx.globalAlpha = fireflyAlpha * pulse;
         ctx.beginPath();
-        ctx.arc(fx, fy, 2, 0, Math.PI * 2);
+        ctx.arc(pos.x, pos.y, 2, 0, Math.PI * 2);
         ctx.fill();
         ctx.fillStyle = '#AAFF44';
       }

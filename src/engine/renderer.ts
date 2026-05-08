@@ -1,4 +1,4 @@
-import type { Arena, MatchState, Particle, Platform, Player, PlayerSlot, Gib } from './types';
+import type { Arena, MatchState, Particle, Platform, Player, PlayerSlot, Gib, Ctx2D } from './types';
 import type { ThemeConfig } from './themes/types';
 import { aabbOverlap } from './physics';
 import {
@@ -11,7 +11,7 @@ import {
   drawHill, drawPlatformMoss,
   capFrontY, capBackY, skewPx,
 } from './themes/drawPrimitives';
-import { hexToRGB, hexToHSL } from './fastMath';
+import { hexToRGB, hexToHSL, blendRgb } from './fastMath';
 import { debugFlags } from './debugFlags';
 import { drawNavDebugOverlay } from './navDebugOverlay';
 import type { BotNavDebugState } from './navDebugOverlay';
@@ -24,7 +24,7 @@ import {
   drawCarrot, drawSpringMushroom, drawThorn,
   drawWeather, drawParticles, drawGibs, drawGibShape, drawConfetti, drawFireworks, drawWildlife, drawSpringTrail,
   drawHazardZone, drawGhost, drawLavaRock, drawZeroGZone, drawCurrentZone, drawGeyser, drawBouncyPlatformOverlay, drawPigeonFlock, drawScatterFlock,
-  drawDayNightCycle,
+  drawDayNightCycle, computeNightIntensity, fireflyPosition, FIREFLY_COUNT,
   drawHUD, drawCountdown, drawConnectionQuality, drawComboPopups, invalidateHudCache, isHudDirty,
   drawPlayer,
   warmSpriteCacheForCharacters,
@@ -35,11 +35,15 @@ import {
 import { setSpriteCacheScale } from './rendering/players';
 import { setHudScale } from './rendering/hud';
 import { applyRenderScaleToCanvas, getRenderScale } from './renderScale';
-import { LightingPipeline } from './lighting';
+import { Lighting } from './lighting';
+import type { Light, PointLight, RGB } from './lighting';
+import { getArenaLights } from './arenas/operations';
+import { swapRemove, makeDtTracker } from './themes/utils';
 import { getBrightness } from './lighting/brightness';
 import { getSlowDevice } from './perfFlags';
 import { perfTrace } from './perfTrace';
 import { getReactiveKind } from './gameLoop/cosmetics/reactiveDecorations';
+import { getWildlifeKind } from './gameLoop/cosmetics/wildlife';
 
 interface Cloud {
   x: number;
@@ -60,8 +64,70 @@ function getCachedHsl(hex: string): { h: number; s: number; l: number } {
 }
 const _invincibleHsl = getCachedHsl('#88BBFF');
 
+/** Warm-orange tint used for the per-carrot glow emitter. Frozen + shared
+ *  across all carrots — the renderer never mutates it. */
+const CARROT_GLOW_RGB: Readonly<{ r: number; g: number; b: number }> =
+  { r: 255, g: 180, b: 80 };
+/** Seconds of bright pulse on carrot spawn before settling to baseline. */
+const CARROT_SPAWN_FLASH_S = 0.6;
+
+/** Yellow-green firefly emitter color, matches the visual draw in effects.ts. */
+const FIREFLY_GLOW_RGB: Readonly<{ r: number; g: number; b: number }> =
+  { r: 170, g: 255, b: 68 };
+/** Reused scratch for fireflyPosition fills (avoids per-firefly alloc). */
+const _fireflyPos = { x: 0, y: 0 };
+/** Pre-built per-firefly flicker configs — distinct seeds so they pulse
+ *  independently. Length follows FIREFLY_COUNT by construction. */
+const FIREFLY_FLICKER: ReadonlyArray<{ seed: number; amplitude: number }> =
+  Array.from({ length: FIREFLY_COUNT }, (_, i) => ({ seed: 101 + i, amplitude: 0.12 }));
+
+/** Transient additive flash emitted on spawn / stomp. Drawn on fg with
+ *  `'lighter'` blend so visible at any dayPhase. Coords + color are baked at
+ *  emission time (does NOT track entity motion — these effects last <1s). */
+interface LightBurst {
+  x: number;
+  y: number;
+  age: number;
+  duration: number;
+  peakIntensity: number;
+  peakRadius: number;
+  color: RGB;
+  kind: 'spawn' | 'stomp';
+}
+
+/** Spawn flash — sin-bell envelope (slow ramp up + down). Wide soft halo, not
+ *  a spotlight — gentle warmth around the respawn point that fades quietly. */
+const SPAWN_BURST_DURATION = 2.5;
+const SPAWN_BURST_PEAK_INTENSITY = 0.15;
+const SPAWN_BURST_PEAK_RADIUS = 320;
+const SPAWN_BURST_COLOR: RGB = { r: 255, g: 248, b: 220 };
+
+/** Stomp flash — sharp peak, quick fade. Punchy hit-cue; intensity peaks
+ *  past saturation on bright daytime pixels so the flash is unambiguous on
+ *  any arena. */
+const STOMP_BURST_DURATION = 0.4;
+const STOMP_BURST_PEAK_INTENSITY = 1.6;
+const STOMP_BURST_PEAK_RADIUS = 180;
+const STOMP_BURST_COLOR: RGB = { r: 255, g: 230, b: 180 };
+
 /** Sprite extends ~12 px above the bbox top for tall ears, horns, and gib pivots. */
 const SPRITE_TOP_PAD = 12;
+
+/** Constructor options. Required: bgCanvas + fgCanvas + theme. All others
+ *  are optional; lobby and tests pass only the required three and stay on the
+ *  source-over fillRect lighting fallback. L2 will add light-canvas fields. */
+export interface RendererOptions {
+  bgCanvas: HTMLCanvasElement;
+  fgCanvas: HTMLCanvasElement;
+  theme: ThemeConfig;
+  mirrored?: boolean;
+  hudCanvas?: HTMLCanvasElement;
+  bgNightCanvas?: HTMLCanvasElement;
+  fgNightTint?: HTMLDivElement;
+  /** L2 emitter compositing layer (single screen-blend DOM sibling above
+   *  fg-night-tint). Bakeoff history: `perf-runs/l2-emitter-comparison/REPORT.md`. */
+  lightCanvas?: HTMLCanvasElement;
+}
 
 /** Diagnostic flags tracking which rendering branches fired each frame. */
 export interface RenderDiagnostics {
@@ -179,7 +245,23 @@ export class Renderer {
   private bgNightCanvas: HTMLCanvasElement | null = null;
   private fgCanvas: HTMLCanvasElement;
   private hudCanvas: HTMLCanvasElement | null = null;
-  private lighting: LightingPipeline;
+  private lighting: Lighting;
+  // L2 emitter compositing — single screen-blend DOM sibling, static cache
+  // baked once at arena-load + dynamic stamps per frame.
+  private _lightCanvas: HTMLCanvasElement | null = null;
+  private _lightCtx: CanvasRenderingContext2D | null = null;
+  /** Static contribution baked once per arena; blitted onto lightCanvas each frame. */
+  private _lightStaticCache: OffscreenCanvas | null = null;
+  /** Per-frame buffer for dynamic emitters. Pooled — `_synthesizeDynamicLights`
+   *  reuses entries by index, growing on demand. Cleared by trimming `length`. */
+  private _dynamicLights: Light[] = [];
+  private _lastLightOpacity = -1;
+  /** Transient additive light flashes (spawn / stomp). Drawn directly on the
+   *  fg ctx with `'lighter'` blend so they're visible regardless of dayPhase
+   *  — the lightCanvas opacity gate (which fades emitters out at noon) does
+   *  not apply. Grows; entries swap-removed on expiry. */
+  private _lightBursts: LightBurst[] = [];
+  private _burstDt = makeDtTracker(0.1);
   private bgCtx: CanvasRenderingContext2D;
   private bgNightCtx: CanvasRenderingContext2D | null = null;
   private fgCtx: CanvasRenderingContext2D;
@@ -256,28 +338,33 @@ export class Renderer {
   // maintained. Consumers use hasWarmedAll() to verify preload coverage.
   private _warmedNames: Set<string> = new Set();
 
-  constructor(bgCanvas: HTMLCanvasElement, fgCanvas: HTMLCanvasElement, theme: ThemeConfig, mirrored = false, hudCanvas?: HTMLCanvasElement, bgNightCanvas?: HTMLCanvasElement, fgNightTint?: HTMLDivElement) {
+  constructor(opts: RendererOptions) {
     clearRenderingCaches();
-    this.bgCanvas = bgCanvas;
-    this.fgCanvas = fgCanvas;
-    this.bgCtx = bgCanvas.getContext('2d')!;
-    this.fgCtx = fgCanvas.getContext('2d')!;
+    this.bgCanvas = opts.bgCanvas;
+    this.fgCanvas = opts.fgCanvas;
+    this.bgCtx = opts.bgCanvas.getContext('2d')!;
+    this.fgCtx = opts.fgCanvas.getContext('2d')!;
     this._diag.ctx = this.fgCtx;
-    this.theme = theme;
-    this.mirrored = mirrored;
+    this.theme = opts.theme;
+    this.mirrored = opts.mirrored ?? false;
 
-    if (hudCanvas) {
-      this.hudCanvas = hudCanvas;
-      this.hudCtx = hudCanvas.getContext('2d')!;
+    if (opts.hudCanvas) {
+      this.hudCanvas = opts.hudCanvas;
+      this.hudCtx = opts.hudCanvas.getContext('2d')!;
     }
 
     // Optional cross-fade night-variant BG canvas; see lighting/pipeline.ts.
-    if (bgNightCanvas) {
-      this.bgNightCanvas = bgNightCanvas;
-      this.bgNightCtx = bgNightCanvas.getContext('2d')!;
+    if (opts.bgNightCanvas) {
+      this.bgNightCanvas = opts.bgNightCanvas;
+      this.bgNightCtx = opts.bgNightCanvas.getContext('2d')!;
     }
-    if (fgNightTint) {
-      this._fgNightTint = fgNightTint;
+    if (opts.fgNightTint) {
+      this._fgNightTint = opts.fgNightTint;
+    }
+
+    if (opts.lightCanvas) {
+      this._lightCanvas = opts.lightCanvas;
+      this._lightCtx = opts.lightCanvas.getContext('2d')!;
     }
 
     // Apply initial render scale to all canvases (sets backing-store dims + ctx transform)
@@ -287,11 +374,11 @@ export class Renderer {
     setHudScale(this._renderScale);
 
     this.initClouds();
-    this.lighting = new LightingPipeline(CANVAS_WIDTH, CANVAS_HEIGHT);
+    this.lighting = new Lighting(CANVAS_WIDTH, CANVAS_HEIGHT);
 
     // Lobby/tests with no DOM darkening stay on the source-over fillRect path.
     this._hasDomDarkening = this.bgNightCanvas !== null || this._fgNightTint !== null;
-    this.lighting.setHasDomDarkening(this._hasDomDarkening);
+    this.lighting.ambient.setHasDomDarkening(this._hasDomDarkening);
   }
 
   private _applyScaleToCanvases(): void {
@@ -303,6 +390,9 @@ export class Renderer {
     }
     if (this.hudCanvas && this.hudCtx) {
       applyRenderScaleToCanvas(this.hudCanvas, this.hudCtx, s);
+    }
+    if (this._lightCanvas && this._lightCtx) {
+      applyRenderScaleToCanvas(this._lightCanvas, this._lightCtx, s);
     }
   }
 
@@ -489,6 +579,9 @@ export class Renderer {
     // one drawImage + one fillRect per arena-load / render-scale change. CSS
     // opacity then drives the day↔night cross-fade per frame at ~0 GPU cost.
     this._bakeBgNightVariant();
+    // L2 emitters: load the static catalog from the arena pack registry and
+    // bake into the light cache. Empty for arenas without a `lights` field.
+    this.setArenaLights(getArenaLights(arena.id));
   }
 
   /** Drive bgNight + fg-tint opacity from the lighting pipeline. Quantized
@@ -497,14 +590,14 @@ export class Renderer {
     if (!this._hasDomDarkening) return;
     // When lighting is off, getBgNightOpacity() returns 0 and setQuantizedOpacity
     // short-circuits on equal values — no DOM writes after the initial settle.
-    const intensity = this.lighting.getBgNightOpacity();
+    const intensity = this.lighting.ambient.getBgNightOpacity();
     if (this.bgNightCanvas) {
       this._lastBgNightOpacity = setQuantizedOpacity(
         this.bgNightCanvas, intensity, this._lastBgNightOpacity);
     }
     if (this._fgNightTint) {
       this._lastFgTintOpacity = setQuantizedOpacity(
-        this._fgNightTint, this.lighting.getFgTintOpacity(intensity), this._lastFgTintOpacity);
+        this._fgNightTint, this.lighting.ambient.getFgTintOpacity(intensity), this._lastFgTintOpacity);
     }
   }
 
@@ -529,9 +622,207 @@ export class Renderer {
     // at 1:1 px or the per-canvas render-scale transform would double-scale.
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.drawImage(this.bgCanvas, 0, 0);
-    ctx.fillStyle = this.lighting.getBgNightBakeColor();
+    ctx.fillStyle = this.lighting.ambient.getBgNightBakeColor();
     ctx.fillRect(0, 0, w, h);
     ctx.restore();
+  }
+
+  /** Pool a `_dynamicLights` slot for a point emitter at the given index,
+   *  creating it on first use. Clears `flicker` so reused slots don't carry
+   *  stale config from a different emitter type the previous frame. */
+  private _ensureLightSlot(i: number): PointLight {
+    let slot = this._dynamicLights[i] as PointLight | undefined;
+    if (!slot) {
+      slot = {
+        kind: 'point',
+        x: 0, y: 0,
+        color: { r: 0, g: 0, b: 0 },
+        intensity: 0,
+        radius: 0,
+        falloff: 'smoothstep',
+      };
+      this._dynamicLights[i] = slot;
+    }
+    slot.flicker = undefined;
+    return slot;
+  }
+
+  /** Synthesize per-frame dynamic emitters from live entity state. Pools
+   *  Light objects in `_dynamicLights`, trimming `length` to the live count.
+   *
+   *  Sources:
+   *  - Per-carrot glow — subtle warm-orange so carrots stay visible at night.
+   *    Brightens briefly after spawn (uses `Carrot.spawnTime`).
+   *  - Firefly emitters — per-particle yellow-green glow, locked to the
+   *    visual draw via `fireflyPosition`.
+   *
+   *  Player-anchored lights (spawn pillar, stomp flash) are NOT here — they're
+   *  drawn directly on the fg ctx via `_drawLightBursts` so they're visible at
+   *  any dayPhase, not gated by the lightCanvas opacity. */
+  private _synthesizeDynamicLights(matchState: MatchState): void {
+    let i = 0;
+
+    for (const carrot of matchState.carrots) {
+      if (!carrot.active) continue;
+      const slot = this._ensureLightSlot(i++);
+      slot.x = carrot.x;
+      slot.y = carrot.y;
+      slot.color = CARROT_GLOW_RGB;
+      slot.falloff = 'smoothstep';
+      // Spawn flash: brief brightness pulse over CARROT_SPAWN_FLASH_S after
+      // spawnTime, then settles to baseline. timeElapsed - spawnTime can be
+      // negative briefly during snapshot interpolation; max(0,...) clamps.
+      const age = Math.max(0, matchState.timeElapsed - carrot.spawnTime);
+      const flash = age < CARROT_SPAWN_FLASH_S ? 1 - age / CARROT_SPAWN_FLASH_S : 0;
+      slot.intensity = 0.25 + flash * 0.35;
+      slot.radius = 30 + flash * 20;
+    }
+
+    // Firefly emitters — themes opt in via dayNight.showFireflies. Visible
+    // only past the same nightIntensity > 0.4 threshold the visual draw uses
+    // in `effects.ts`, so the lights match the bright dots one-to-one.
+    if (this.theme.dayNight.showFireflies && this.theme.dayNight.enabled) {
+      const nightIntensity = computeNightIntensity(matchState.dayPhase);
+      if (nightIntensity > 0.4) {
+        for (let f = 0; f < FIREFLY_COUNT; f++) {
+          fireflyPosition(f, this.frameTime, _fireflyPos);
+          const slot = this._ensureLightSlot(i++);
+          slot.x = _fireflyPos.x;
+          slot.y = _fireflyPos.y;
+          slot.color = FIREFLY_GLOW_RGB;
+          slot.intensity = 0.18;
+          slot.radius = 30;
+          slot.falloff = 'smoothstep';
+          slot.flicker = FIREFLY_FLICKER[f];
+        }
+      }
+    }
+
+    this._dynamicLights.length = i;
+  }
+
+  /** Queue a transient additive light at (x, y). Drawn directly on the fg
+   *  ctx with `'lighter'` blend by `_drawLightBursts` — bypasses the
+   *  lightCanvas opacity gate, so visible at any dayPhase including noon.
+   *  Called from PlayerTransitionSystem on splat / spawn transitions. */
+  emitLightBurst(x: number, y: number, kind: 'spawn' | 'stomp'): void {
+    if (kind === 'spawn') {
+      this._lightBursts.push({
+        x, y, age: 0,
+        duration: SPAWN_BURST_DURATION,
+        peakIntensity: SPAWN_BURST_PEAK_INTENSITY,
+        peakRadius: SPAWN_BURST_PEAK_RADIUS,
+        color: SPAWN_BURST_COLOR,
+        kind,
+      });
+    } else {
+      this._lightBursts.push({
+        x, y, age: 0,
+        duration: STOMP_BURST_DURATION,
+        peakIntensity: STOMP_BURST_PEAK_INTENSITY,
+        peakRadius: STOMP_BURST_PEAK_RADIUS,
+        color: STOMP_BURST_COLOR,
+        kind,
+      });
+    }
+  }
+
+  /** Draw + decay queued bursts on the fg ctx with `'lighter'` blend. Decay
+   *  uses wall-clock dt — bursts last <1s of real time regardless of
+   *  slowMotion or pause (pause stops `renderFrame` from being called, so
+   *  age implicitly freezes there). The tracker is advanced every frame
+   *  (even when empty) so the first frame after an idle window gets a real
+   *  per-frame dt instead of a clamped `maxDt`. */
+  private _drawLightBursts(ctx: CanvasRenderingContext2D): void {
+    const dt = this._burstDt(this.frameTime);
+    if (this._lightBursts.length === 0) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = this._lightBursts.length - 1; i >= 0; i--) {
+      const burst = this._lightBursts[i];
+      burst.age += dt;
+      if (burst.age >= burst.duration) {
+        swapRemove(this._lightBursts, i);
+        continue;
+      }
+      const t = burst.age / burst.duration;
+      let intensity: number;
+      let radius: number;
+      if (burst.kind === 'spawn') {
+        // sin-bell envelope: 0 → 1 (mid) → 0
+        const env = Math.sin(t * Math.PI);
+        intensity = burst.peakIntensity * env;
+        radius = burst.peakRadius * (0.6 + 0.4 * env);
+      } else {
+        // sharp peak then quadratic fade
+        const env = (1 - t) * (1 - t);
+        intensity = burst.peakIntensity * env;
+        radius = burst.peakRadius * (0.7 + 0.3 * (1 - t));
+      }
+      const grad = ctx.createRadialGradient(burst.x, burst.y, 0, burst.x, burst.y, radius);
+      const { r, g, b } = burst.color;
+      grad.addColorStop(0, `rgba(${r},${g},${b},${intensity})`);
+      grad.addColorStop(0.5, `rgba(${r},${g},${b},${intensity * 0.35})`);
+      grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+      ctx.fillStyle = grad;
+      ctx.fillRect(burst.x - radius, burst.y - radius, radius * 2, radius * 2);
+    }
+    ctx.restore();
+  }
+
+  /** L2: register the static emitter catalog for the current arena. Called
+   *  from renderBackground after the bg cache is built. Triggers a one-time
+   *  bake into an OffscreenCanvas, blitted onto lightCanvas each frame. */
+  setArenaLights(lights: ReadonlyArray<Light>): void {
+    this.lighting.emitters.setStaticLights(lights);
+    this._bakeStaticEmitters();
+  }
+
+  private _bakeStaticEmitters(): void {
+    if (!this._lightCanvas) return;
+    const bw = this._lightCanvas.width;
+    const bh = this._lightCanvas.height;
+    if (!this._lightStaticCache || this._lightStaticCache.width !== bw || this._lightStaticCache.height !== bh) {
+      this._lightStaticCache = new OffscreenCanvas(bw, bh);
+    }
+    const cacheCtx = this._lightStaticCache.getContext('2d')!;
+    cacheCtx.save();
+    cacheCtx.setTransform(this._renderScale, 0, 0, this._renderScale, 0, 0);
+    cacheCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    this.lighting.emitters.bakeStatic(cacheCtx);
+    cacheCtx.restore();
+  }
+
+  /** L2 emitter compositing — runs once per frame in renderFrame.
+   *  Clear → blit static cache → dynamic stamps + flicker overlay. Skips
+   *  the per-frame stamp work entirely during the day (light layer would
+   *  composite at opacity 0 anyway). */
+  private _compositeEmitters(): void {
+    if (!this.lighting.isEnabled()) return;
+    const ctx = this._lightCtx;
+    const canvas = this._lightCanvas;
+    if (!ctx || !canvas) return;
+    this._driveLightOpacity();
+    // Skip below JND threshold — the screen-blend layer at <2% opacity is
+    // visually indistinguishable from "off" but the per-frame stamp work
+    // (clearRect + drawImage(staticCache) + N gradient creations) isn't free.
+    if (this._lastLightOpacity < 0.02) return;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (this._lightStaticCache) {
+      ctx.drawImage(this._lightStaticCache, 0, 0);
+    }
+    ctx.restore();
+    this.lighting.emitters.compositeDynamic(ctx);
+  }
+
+  /** Light layer opacity tracks bgNightOpacity — emitters fade in with night,
+   *  invisible during the day. Browser compositor skips zero-opacity layers. */
+  private _driveLightOpacity(): void {
+    if (!this._lightCanvas) return;
+    const target = this.lighting.ambient.getBgNightOpacity();
+    this._lastLightOpacity = setQuantizedOpacity(this._lightCanvas, target, this._lastLightOpacity);
   }
 
   /**
@@ -548,7 +839,7 @@ export class Renderer {
     if (!this._overlayCanvas || this._overlayCanvas.width !== w || this._overlayCanvas.height !== h) {
       this._overlayCanvas = new OffscreenCanvas(w, h);
     }
-    const octx = this._overlayCanvas.getContext('2d')! as unknown as CanvasRenderingContext2D;
+    const octx = this._overlayCanvas.getContext('2d')!;
     octx.setTransform(s, 0, 0, s, 0, 0);
     octx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     for (const plat of arena.platforms) {
@@ -578,7 +869,7 @@ export class Renderer {
     }
     const cctx = this._fgNatureCacheCtx!;
     cctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    this._drawForegroundNatureDirect(cctx as unknown as CanvasRenderingContext2D, themeArena);
+    this._drawForegroundNatureDirect(cctx, themeArena);
     this._fgNatureCacheArena = themeArena;
   }
 
@@ -606,9 +897,27 @@ export class Renderer {
     }
   }
 
+  /** Draw all wildlife instances for one layer. Like `_drawReactiveLayer`,
+   *  iterates a pre-bucketed list — no per-frame allocation or layer filter. */
+  private _drawWildlifeLayer(
+    ctx: CanvasRenderingContext2D,
+    instances: ReadonlyArray<import('./gameLoop/cosmetics/wildlife').WildlifeInstance>,
+    matchState: MatchState,
+  ): void {
+    if (!instances || instances.length === 0) return;
+    if (getSlowDevice()) return;
+    const time = matchState.timeElapsed;
+    for (let i = 0; i < instances.length; i++) {
+      const inst = instances[i];
+      const cfg = getWildlifeKind(inst.kindId);
+      if (!cfg) continue;
+      cfg.draw(ctx, inst, time, matchState);
+    }
+  }
+
   /** Apply mirror transform and call into theme's foreground draw. Shared by
    *  the cache builder and the test-env (no OffscreenCanvas) fallback path. */
-  private _drawForegroundNatureDirect(ctx: CanvasRenderingContext2D, themeArena: Arena): void {
+  private _drawForegroundNatureDirect(ctx: Ctx2D, themeArena: Arena): void {
     if (this.mirrored) { ctx.save(); ctx.scale(-1, 1); ctx.translate(-CANVAS_WIDTH, 0); }
     this.theme.drawForegroundNature(ctx, themeArena);
     if (this.mirrored) { ctx.restore(); }
@@ -695,12 +1004,8 @@ export class Renderer {
   }
 
   private blendColor(hex: string, target: string, amount: number): string {
-    const a = hexToRGB(hex);
-    const b = hexToRGB(target);
-    const r = Math.round(a.r + (b.r - a.r) * amount);
-    const g = Math.round(a.g + (b.g - a.g) * amount);
-    const bl = Math.round(a.b + (b.b - a.b) * amount);
-    return `rgb(${r},${g},${bl})`;
+    const c = blendRgb(hexToRGB(hex), hexToRGB(target), amount);
+    return `rgb(${c.r},${c.g},${c.b})`;
   }
 
   /** Bake gibs onto the bg canvas. Marks bgNight dirty so the cross-fade
@@ -752,6 +1057,7 @@ export class Renderer {
     particles: Particle[],
     cosmeticLead = 0,
     reactive?: import('./gameLoop/cosmetics/reactiveDecorations').ReactiveRenderArg,
+    wildlife?: import('./gameLoop/cosmetics/wildlife').WildlifeRenderArg,
   ): void {
     perfTrace.measure('renderFrame', () => {
       const ctx = this.fgCtx;
@@ -763,7 +1069,13 @@ export class Renderer {
 
       // Cache time once per frame
       this.frameTime = performance.now();
-      this.lighting.beginFrame(this.theme, matchState.dayPhase);
+      this.lighting.ambient.beginFrame(this.theme, matchState.dayPhase);
+      this._synthesizeDynamicLights(matchState);
+      // Tick derived from timeElapsed (60Hz fixed-step). On guests, timeElapsed
+      // is interpolated between snapshots → flicker advances smoothly without
+      // a wire-format change for an explicit tick field.
+      const tick = Math.floor(matchState.timeElapsed * 60);
+      this.lighting.emitters.beginFrame(this._dynamicLights, tick);
       // Drain mid-match bg writes (gibs, splat marks) into the bgNight bake.
       if (this._bgNightDirty) this._bakeBgNightVariant();
       this._driveBgNightOpacity();
@@ -799,6 +1111,11 @@ export class Renderer {
         const thA = this.originalArena ?? arena;
         this.withMirror(ctx, () => this.theme.drawAnimatedBackground!(ctx, thA, matchState.timeElapsed, matchState.dayPhase, matchState));
         d.animatedBg = true;
+      }
+      // Wildlife — animBackground layer (e.g. treetops squirrels). Same slot
+      // the legacy `drawAnimatedBackground` wildlife branch occupied.
+      if (wildlife && wildlife.animBackground.length > 0) {
+        this.withMirror(ctx, () => this._drawWildlifeLayer(ctx, wildlife.animBackground, matchState));
       }
 
       const now = this.frameTime / 1000;
@@ -1075,9 +1392,15 @@ export class Renderer {
 
       // Ground critters (snails, rats, crabs…) — drawn BEFORE fg-nature so
       // grass tufts / bushes can occlude them when they walk behind foliage.
+      // Two paths: the legacy `theme.drawGroundCritters` callback (for any
+      // arena pack still owning its critter state) and the WildlifeSystem
+      // (post-migration packs).
       if (this.theme.drawGroundCritters) {
         const thA = this.originalArena ?? arena;
         this.withMirror(ctx, () => this.theme.drawGroundCritters!(ctx, thA, matchState.timeElapsed, matchState.dayPhase, matchState));
+      }
+      if (wildlife && wildlife.groundCritter.length > 0) {
+        this.withMirror(ctx, () => this._drawWildlifeLayer(ctx, wildlife.groundCritter, matchState));
       }
 
       // Mirror is baked into the cache so blit at identity transform; explicit
@@ -1155,11 +1478,20 @@ export class Renderer {
 
       perfTrace.end('render.fg-nature', fgStart);
 
+      // Transient additive light flashes (spawn / stomp). Drawn here on the
+      // fg ctx with `'lighter'` blend so they punch through the entire scene
+      // regardless of dayPhase — the lightCanvas opacity gate would otherwise
+      // hide them at noon.
+      this._drawLightBursts(ctx);
+
       // Lighting composite — multiplies the light buffer onto the fg ctx.
       // Sits inside the hitstop/screen-shake transform so lights ride the shake.
       if (this.lighting.isEnabled()) {
-        this.lighting.composite(ctx);
+        this.lighting.ambient.composite(ctx);
       }
+      // L2 emitter composite — writes to lightCanvas. Skipped silently
+      // when not wired (lobby/tests stay on the source-over ambient fallback only).
+      this._compositeEmitters();
 
       // Brightness slider: applied AFTER lighting so users can tune the whole
       // composited frame. Skipped at value 1.0.

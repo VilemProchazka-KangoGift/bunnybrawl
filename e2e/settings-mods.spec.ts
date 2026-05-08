@@ -125,7 +125,7 @@ test.describe('URL Params', () => {
 
     // Verify the arena was set in match settings via the store
     const arenaId = await page.evaluate(() => {
-      const store = (window as any).__gameStore;
+      const store = window.__bunnyTest?.gameStore();
       if (store) return store.getState().matchSettings.arenaId;
       // Fallback: check localStorage (set by setMatchSettings)
       return localStorage.getItem('carrotroyale_arena');
@@ -139,7 +139,7 @@ test.describe('URL Params', () => {
 
     // Verify difficulty was applied
     const difficulty = await page.evaluate(() => {
-      const store = (window as any).__gameStore;
+      const store = window.__bunnyTest?.gameStore();
       if (store) return store.getState().matchSettings.botDifficulty;
       return localStorage.getItem('carrotroyale_botdiff');
     });

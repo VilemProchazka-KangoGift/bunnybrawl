@@ -23,7 +23,6 @@ const mockGameLoopInstance = {
   disconnectPlayer: vi.fn(),
   skipCountdown: vi.fn(),
   setNetDebugStats: vi.fn(),
-  setAudioEnabled: vi.fn(),
   setResimulating: vi.fn(),
   cosmeticStep: vi.fn(),
   tickCosmetic: vi.fn(),

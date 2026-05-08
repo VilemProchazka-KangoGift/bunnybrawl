@@ -1,5 +1,6 @@
-import type { Arena, WeatherParticle, WildlifeEntity } from '../types';
+import type { Arena, WeatherParticle, WildlifeEntity, Ctx2D } from '../types';
 import type { ReactiveInstance } from '../gameLoop/cosmetics/reactiveDecorations';
+import type { WildlifeInstance } from '../gameLoop/cosmetics/wildlife';
 
 export type ScatterFlockSpecies = 'bird' | 'bat' | 'crow';
 
@@ -117,7 +118,7 @@ export interface ThemeConfig {
     groundBodyColor: string;
     groundTopColor: string;
     drawMoss: boolean;
-    customDraw?: (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, isGround: boolean) => void;
+    customDraw?: (ctx: Ctx2D, x: number, y: number, w: number, h: number, isGround: boolean) => void;
   };
 
   // Ambient systems
@@ -130,24 +131,28 @@ export interface ThemeConfig {
 
   // Custom draw functions for theme-specific decorations
   /** Drawn between hills and platforms — distant scenery like mountain ranges or treelines */
-  drawFarBackground?: (ctx: CanvasRenderingContext2D, arena: Arena) => void;
+  drawFarBackground?: (ctx: Ctx2D, arena: Arena) => void;
   /** Drawn after platforms — trees, snowmen, decorations behind players */
-  drawBackgroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => void;
+  drawBackgroundNature: (ctx: Ctx2D, arena: Arena) => void;
   /** Drawn over players — foreground bushes, snow piles */
-  drawForegroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => void;
-  drawPlatform?: (ctx: CanvasRenderingContext2D, platform: import('../types').Platform, isGround: boolean) => void;
+  drawForegroundNature: (ctx: Ctx2D, arena: Arena) => void;
+  drawPlatform?: (ctx: Ctx2D, platform: import('../types').Platform, isGround: boolean) => void;
   /** Foreground overlay for platform body face — drawn after players for occlusion. */
-  drawPlatformOverlay?: (ctx: CanvasRenderingContext2D, platform: import('../types').Platform, isGround: boolean) => void;
+  drawPlatformOverlay?: (ctx: Ctx2D, platform: import('../types').Platform, isGround: boolean) => void;
 
   /** Per-frame animated background. Drawn after the static bg cache and BEFORE clouds, so it composes as far-sky atmosphere (aurora, distant space objects). dayPhase: 0=noon, 0.5=midnight. matchState provides player positions for parting/proximity effects. */
-  drawAnimatedBackground?: (ctx: CanvasRenderingContext2D, arena: Arena, time: number, dayPhase: number, matchState?: import('../types').MatchState) => void;
+  drawAnimatedBackground?: (ctx: Ctx2D, arena: Arena, time: number, dayPhase: number, matchState?: import('../types').MatchState) => void;
 
   /** Per-frame animated foreground. Drawn AFTER players + foreground-nature + platform overlays, so entities composed here cover platforms in front of the player. Pair with drawAnimatedBackground to split entities by z-order (e.g. half a flock in front, half behind). */
-  drawAnimatedForeground?: (ctx: CanvasRenderingContext2D, arena: Arena, time: number, dayPhase: number, matchState?: import('../types').MatchState) => void;
+  drawAnimatedForeground?: (ctx: Ctx2D, arena: Arena, time: number, dayPhase: number, matchState?: import('../types').MatchState) => void;
 
   /** Mirror of `ArenaPack.buildReactiveDecorations` — see arenas/types.ts for
    *  contract. Forwarded by `toThemeConfig` so the Renderer can read it via theme. */
   buildReactiveDecorations?: (arena: Arena) => ReactiveInstance[];
+
+  /** Mirror of `ArenaPack.buildWildlife` — see arenas/types.ts for contract.
+   *  Forwarded by `toThemeConfig` so GameLoop can populate WildlifeSystem. */
+  buildWildlife?: (arena: Arena) => WildlifeInstance[];
 
   /** Mirror of `ArenaPack.cosmeticTick` — see arenas/types.ts for contract.
    *  Services shape inlined here (rather than imported as `ArenaCosmeticServices`)
@@ -163,25 +168,25 @@ export interface ThemeConfig {
    *  Drawn AFTER players + fog but BEFORE the foreground-nature cache, so grass
    *  tufts / bushes occlude critters that walk behind them. Use this instead of
    *  drawAnimatedForeground for anything that should disappear under foliage. */
-  drawGroundCritters?: (ctx: CanvasRenderingContext2D, arena: Arena, time: number, dayPhase: number, matchState?: import('../types').MatchState) => void;
+  drawGroundCritters?: (ctx: Ctx2D, arena: Arena, time: number, dayPhase: number, matchState?: import('../types').MatchState) => void;
 
   /** Per-frame full-scene tint, drawn LAST after day-night overlay. Use for global mood washes (aurora green, lava red glow) that should affect every layer including players. */
-  drawSceneTint?: (ctx: CanvasRenderingContext2D, dayPhase: number, time: number) => void;
+  drawSceneTint?: (ctx: Ctx2D, dayPhase: number, time: number) => void;
 
   // Optional custom particle renderer (overrides default leaf/petal/snow drawing)
-  drawWeatherParticle?: (ctx: CanvasRenderingContext2D, particle: WeatherParticle) => void;
+  drawWeatherParticle?: (ctx: Ctx2D, particle: WeatherParticle) => void;
 
   // Optional custom hazard zone renderer (e.g. icicle spikes instead of lava)
-  drawCustomHazardZone?: (ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, time: number) => void;
+  drawCustomHazardZone?: (ctx: Ctx2D, x: number, y: number, width: number, height: number, time: number) => void;
 
   // Optional custom ghost renderer (e.g. wasps for treetops)
-  drawCustomGhost?: (ctx: CanvasRenderingContext2D, x: number, y: number, size: number, alpha: number, time: number) => void;
+  drawCustomGhost?: (ctx: Ctx2D, x: number, y: number, size: number, alpha: number, time: number) => void;
 
   // Optional custom thorn renderer (e.g. zombie hand for graveyard)
-  drawCustomThorn?: (ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, growScale: number, fadeAlpha: number) => void;
+  drawCustomThorn?: (ctx: Ctx2D, x: number, y: number, width: number, height: number, growScale: number, fadeAlpha: number) => void;
 
   // Optional custom spring renderer (e.g. bubble for underwater)
-  drawCustomSpring?: (ctx: CanvasRenderingContext2D, x: number, y: number, size: number, bounceTimer: number, growScale: number, fadeAlpha: number) => void;
+  drawCustomSpring?: (ctx: Ctx2D, x: number, y: number, size: number, bounceTimer: number, growScale: number, fadeAlpha: number) => void;
 
   // Optional ghost hazards (roaming enemies that hurt on touch)
   ghostConfig?: {

@@ -35,6 +35,8 @@ export interface NetMatchConfig {
   bgCanvas: HTMLCanvasElement;
   bgNightCanvas?: HTMLCanvasElement;
   fgNightTint?: HTMLDivElement;
+  /** L2 emitter compositing — single screen-blend DOM sibling. */
+  lightCanvas?: HTMLCanvasElement;
   fgCanvas: HTMLCanvasElement;
   hudCanvas?: HTMLCanvasElement;
   arena: Arena;
@@ -188,6 +190,7 @@ export class NetMatch {
       undefined, // rng
       config.bgNightCanvas,
       config.fgNightTint,
+      config.lightCanvas,
     );
 
     if (this._isHost) {

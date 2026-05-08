@@ -1,6 +1,7 @@
 // Foreground primitives — closer decorations drawn on top of platforms.
 
 import { fastSin } from '../../fastMath';
+import type { Ctx2D } from '../../types';
 
 export interface FgBushColors {
   backLayer: string;
@@ -23,7 +24,7 @@ const DEFAULT_FG_BUSH_COLORS: FgBushColors = {
 };
 
 export function drawFgBush(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   x: number,
   groundY: number,
   size: number,
@@ -73,7 +74,7 @@ export function drawFgBush(
 /** bendX shifts the TIP of each blade only; base stays anchored at groundY.
  *  Default 0 = static draw. Used by ReactiveDecorationSystem to bend grass
  *  with wind / player proximity. */
-export function drawTallGrass(ctx: CanvasRenderingContext2D, x: number, groundY: number, bladeCount: number, darkColor = '#2D7A2D', lightColor = '#3A8A3A', bendX = 0): void {
+export function drawTallGrass(ctx: Ctx2D, x: number, groundY: number, bladeCount: number, darkColor = '#2D7A2D', lightColor = '#3A8A3A', bendX = 0): void {
   for (let i = 0; i < bladeCount; i++) {
     const bx = x + (i - bladeCount / 2) * 6;
     const height = 14 + (i * 7 % 10);
@@ -101,7 +102,7 @@ export function drawTallGrass(ctx: CanvasRenderingContext2D, x: number, groundY:
 
 /** bendX shifts the stem TIP and frond attachment points proportionally to
  *  height. Base stays anchored at groundY. */
-export function drawFern(ctx: CanvasRenderingContext2D, x: number, groundY: number, color = '#2D6B2D', bendX = 0): void {
+export function drawFern(ctx: Ctx2D, x: number, groundY: number, color = '#2D6B2D', bendX = 0): void {
   const height = 22;
   ctx.strokeStyle = color;
   ctx.lineWidth = 2;
@@ -131,7 +132,7 @@ export function drawFern(ctx: CanvasRenderingContext2D, x: number, groundY: numb
 /** bendX shifts the BOTTOM tip; top stays anchored at (x, topY). The vine
  *  retains its baseline static curl (`Math.sin(x * 0.1) * 4`); bendX adds on
  *  top of that for dynamic wind / player lean. */
-export function drawHangingVine(ctx: CanvasRenderingContext2D, x: number, topY: number, length: number, bendX = 0): void {
+export function drawHangingVine(ctx: Ctx2D, x: number, topY: number, length: number, bendX = 0): void {
   ctx.strokeStyle = '#3A7A3A';
   ctx.lineWidth = 1.5;
   const baseSway = Math.sin(x * 0.1) * 4;
@@ -157,7 +158,7 @@ export function drawHangingVine(ctx: CanvasRenderingContext2D, x: number, topY: 
   }
 }
 
-export function drawFgLeafCluster(ctx: CanvasRenderingContext2D, x: number, platY: number, colors = ['#2E7A2E', '#3A8C3A', '#4A9C4A']): void {
+export function drawFgLeafCluster(ctx: Ctx2D, x: number, platY: number, colors = ['#2E7A2E', '#3A8C3A', '#4A9C4A']): void {
   ctx.fillStyle = colors[0];
   ctx.beginPath();
   ctx.ellipse(x - 6, platY - 4, 8, 5, -0.4, 0, Math.PI * 2);
@@ -172,7 +173,7 @@ export function drawFgLeafCluster(ctx: CanvasRenderingContext2D, x: number, plat
   ctx.fill();
 }
 
-export function drawFgWildflower(ctx: CanvasRenderingContext2D, x: number, groundY: number, color: string, height: number): void {
+export function drawFgWildflower(ctx: Ctx2D, x: number, groundY: number, color: string, height: number): void {
   ctx.strokeStyle = '#2D6B2D';
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -201,7 +202,7 @@ export function drawFgWildflower(ctx: CanvasRenderingContext2D, x: number, groun
 
 /** Tree stump — solid jumpable obstacle. Draws a cut trunk with rings and moss.
  *  x/topY is top-left corner, matching the platform position. */
-export function drawTreeStump(ctx: CanvasRenderingContext2D, x: number, topY: number, width: number, height: number): void {
+export function drawTreeStump(ctx: Ctx2D, x: number, topY: number, width: number, height: number): void {
   // Bark body
   ctx.fillStyle = '#5C3A1E';
   ctx.fillRect(x, topY, width, height);
@@ -268,7 +269,7 @@ export function drawTreeStump(ctx: CanvasRenderingContext2D, x: number, topY: nu
 // Animated rat sprite. Caller owns position, facing, and motion magnitude.
 // `motion` ∈ [0,1] scales scurry/leg amplitude (use facingEase magnitude).
 export function drawRat(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   x: number, y: number,
   facing: 1 | -1,
   time: number,

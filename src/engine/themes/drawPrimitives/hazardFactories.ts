@@ -1,9 +1,10 @@
 // Hazard renderer factories — wrap theme-specific thorn/spring drawing with shared
 // grow/fade/transform boilerplate so each arena's custom draw fn stays concise.
+import type { Ctx2D } from '../../types';
 
 export function createThornRenderer(
-  draw: (ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, fadeAlpha: number) => void
-): (ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, growScale: number, fadeAlpha: number) => void {
+  draw: (ctx: Ctx2D, x: number, y: number, width: number, height: number, fadeAlpha: number) => void
+): (ctx: Ctx2D, x: number, y: number, width: number, height: number, growScale: number, fadeAlpha: number) => void {
   return (ctx, x, y, width, height, growScale, fadeAlpha) => {
     ctx.save();
     ctx.globalAlpha = fadeAlpha;
@@ -18,8 +19,8 @@ export function createThornRenderer(
 }
 
 export function createSpringRenderer(
-  draw: (ctx: CanvasRenderingContext2D, x: number, y: number, size: number, bounceTimer: number, fadeAlpha: number) => void
-): (ctx: CanvasRenderingContext2D, x: number, y: number, size: number, bounceTimer: number, growScale: number, fadeAlpha: number) => void {
+  draw: (ctx: Ctx2D, x: number, y: number, size: number, bounceTimer: number, fadeAlpha: number) => void
+): (ctx: Ctx2D, x: number, y: number, size: number, bounceTimer: number, growScale: number, fadeAlpha: number) => void {
   return (ctx, x, y, size, bounceTimer, growScale, fadeAlpha) => {
     ctx.save();
     ctx.globalAlpha = fadeAlpha;

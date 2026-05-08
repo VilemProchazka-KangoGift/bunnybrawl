@@ -1,12 +1,12 @@
 import type { MatchState, MatchSettings } from '../../types';
 import type { ThemeConfig } from '../../themes/types';
+import type { Cooldowns } from '../../cooldowns';
 import { randRange } from '../../themes/utils';
 
-// SfxCooldowns + getOrCreateCooldowns + decaySfxCooldowns moved to
-// src/engine/sfxCooldowns.ts so the Simulator can share them without pulling
-// this file (and its theme/audio-adjacent dependencies) into the pure import graph.
-export type { SfxCooldowns } from '../../sfxCooldowns';
-export { getOrCreateCooldowns, decaySfxCooldowns } from '../../sfxCooldowns';
+// PlayerSfxCooldowns moved to src/engine/sfxCooldowns.ts so the Simulator can
+// share it without pulling this file (and its theme/audio-adjacent dependencies)
+// into the pure import graph.
+export { PlayerSfxCooldowns } from '../../sfxCooldowns';
 
 /**
  * Drive crowd-cheering loop volume based on score. Caller injects audio side
@@ -45,20 +45,16 @@ export function updateCrowdCheering(
 
 export function tickPeriodicAmbient(
   theme: ThemeConfig,
-  periodicTimers: Map<string, number>,
+  periodicTimers: Cooldowns<string>,
   dt: number,
   playSound: (name: string) => void,
 ): void {
   const ambConfig = theme.ambientSoundConfig;
   if (!ambConfig?.periodic) return;
   for (const p of ambConfig.periodic) {
-    const remaining = (periodicTimers.get(p.sound) ?? 0) - dt;
-    if (remaining <= 0) {
+    if (periodicTimers.tick(p.sound, dt)) {
       playSound(p.sound);
-      const next = randRange(p.intervalRange);
-      periodicTimers.set(p.sound, next);
-    } else {
-      periodicTimers.set(p.sound, remaining);
+      periodicTimers.set(p.sound, randRange(p.intervalRange));
     }
   }
 }
