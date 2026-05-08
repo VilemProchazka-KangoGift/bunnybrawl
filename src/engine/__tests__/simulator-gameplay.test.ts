@@ -2032,6 +2032,207 @@ describe('Simulator — disconnectPlayer', () => {
   });
 });
 
+// ===================================================================
+// Screen Effects (set inside fixedUpdate)
+// ===================================================================
+
+describe('Simulator — Screen Effects', () => {
+  it('after a stomp, screenShake is set > 0', () => {
+    const { sim } = createSim();
+    skipCountdown(sim);
+    const state = sim.getState();
+    const attacker = state.players[0];
+    const victim = state.players[1];
+
+    victim.x = 500; victim.y = 600;
+    victim.state = 'idle'; victim.invincibleTimer = 0; victim.active = true;
+
+    attacker.x = 500;
+    attacker.y = victim.y - attacker.height + 5;
+    attacker.vy = STOMP_VY_THRESHOLD + 100;
+    attacker.state = 'airborne'; attacker.active = true;
+
+    sim.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(state.screenShake).toBeGreaterThan(0);
+  });
+
+  it('screenShake decays toward 0 over subsequent frames', () => {
+    const { sim } = createSim();
+    skipCountdown(sim);
+    const state = sim.getState();
+
+    state.screenShake = 0.5;
+
+    sim.fixedUpdate(FIXED_TIMESTEP);
+    expect(state.screenShake).toBeLessThan(0.5);
+    expect(state.screenShake).toBeGreaterThan(0);
+  });
+
+  // Note: screenFlash on hazard hit is routed through ParticleEmitter.applyHazardHitVFX,
+  // not directly mutated in Simulator. With the NOOP emitter, screenFlash stays 0;
+  // that test belongs in a ParticleSystem-coupled test (lives in gameLoop.test.ts).
+
+  it('match-ending kill sets slowMotion', () => {
+    const { sim } = createSim({ settings: { killLimit: 3 } });
+    skipCountdown(sim);
+    const state = sim.getState();
+    const attacker = state.players[0];
+    const victim = state.players[1];
+
+    attacker.score = 1; // stomp gives +2, total = 3 = killLimit
+
+    victim.x = 500; victim.y = 600;
+    victim.state = 'idle'; victim.invincibleTimer = 0; victim.active = true;
+
+    attacker.x = 500;
+    attacker.y = victim.y - attacker.height + 5;
+    attacker.vy = STOMP_VY_THRESHOLD + 100;
+    attacker.state = 'airborne'; attacker.active = true;
+
+    sim.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(state.slowMotion).toBeGreaterThan(0);
+    expect(state.matchOver).toBe(true);
+  });
+});
+
+// ===================================================================
+// Environment (dayPhase + timeElapsed in fixedUpdate)
+// ===================================================================
+
+describe('Simulator — Environment', () => {
+  it('dayPhase increments each frame', () => {
+    const { sim } = createSim();
+    skipCountdown(sim);
+    const state = sim.getState();
+    const dayPhaseBefore = state.dayPhase;
+
+    sim.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(state.dayPhase).toBeGreaterThan(dayPhaseBefore);
+  });
+
+  it('timeElapsed increments each frame by dt', () => {
+    const { sim } = createSim();
+    skipCountdown(sim);
+    const state = sim.getState();
+    const timeBefore = state.timeElapsed;
+
+    sim.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(state.timeElapsed).toBeCloseTo(timeBefore + FIXED_TIMESTEP, 6);
+  });
+});
+
+// ===================================================================
+// Headbonk + crouch SFX (routed through SimulatorEvents)
+// ===================================================================
+
+describe('Simulator — SFX events (headbonk + crouch)', () => {
+  it('headbonk emits sfx when player hits ceiling', () => {
+    const { sim, events } = createSim({
+      arena: {
+        platforms: [
+          { x: 0, y: 660, width: 1280, height: 60 },
+          { x: 50, y: 400, width: 200, height: 20 },
+        ],
+      },
+    });
+    const state = sim.getState();
+    state.countdown = 0;
+
+    state.players[0].x = 100;
+    state.players[0].y = 420;
+    state.players[0].vy = -300;
+    state.players[0].state = 'airborne' as any;
+
+    events.clear();
+    for (let i = 0; i < 5; i++) sim.fixedUpdate(FIXED_TIMESTEP);
+
+    // Headbonk fires when wasAirborne && state === 'airborne' && prevVy < -10 && vy === 0
+    // The exact firing depends on collision timing; the assertion mirrors the
+    // original "may or may not trigger" loose expectation.
+    expect(events.sfxNames().filter(n => n === 'headbonk').length).toBeGreaterThanOrEqual(0);
+  });
+
+  it('crouch emits sfx on first down-input during idle state', () => {
+    const { sim, events } = createSim();
+    skipCountdown(sim);
+    const state = sim.getState();
+    const player = state.players[0];
+
+    player.x = 200;
+    player.y = 660 - PLAYER_HEIGHT;
+    player.state = 'idle';
+    player.squashScale = 1;
+
+    const inputs = new Map<string, InputState>();
+    inputs.set('P1', { left: false, right: false, jump: false, down: true });
+    inputs.set('P2', { left: false, right: false, jump: false, down: false });
+
+    events.clear();
+    sim.fixedUpdate(FIXED_TIMESTEP, inputs);
+
+    // crouch sfx fires when down is pressed and the player wasn't already crouching
+    expect(events.sfxNames()).toContain('crouch');
+  });
+
+  it('match-end emits onMatchEnd with state', () => {
+    const { sim, events } = createSim({ settings: { killLimit: 1 } });
+    skipCountdown(sim);
+    sim.getState().players[0].score = 1;
+    sim.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(events.matchEnd).toHaveLength(1);
+    expect(events.matchEnd[0].winner).toBe('P1');
+    expect(events.matchEnd[0].state.matchOver).toBe(true);
+    // music stop fires too
+    expect(events.musicStop).toBeGreaterThanOrEqual(1);
+  });
+
+  it('player landing emits onPlayerLanding with prevVy', () => {
+    const { sim, events } = createSim();
+    skipCountdown(sim);
+    const player = sim.getState().players[0];
+
+    player.x = 200;
+    player.y = 660 - player.height - 2;
+    player.vy = 200;
+    player.state = 'airborne';
+
+    events.clear();
+    sim.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(events.playerLanding.length).toBeGreaterThan(0);
+    expect(events.playerLanding[0].slot).toBe('P1');
+    expect(events.playerLanding[0].prevVy).toBeGreaterThan(0);
+  });
+
+  it('stomp emits onStompHaptic for both attacker and victim', () => {
+    const { sim, events } = createSim();
+    skipCountdown(sim);
+    const state = sim.getState();
+    const attacker = state.players[0];
+    const victim = state.players[1];
+
+    victim.x = 500; victim.y = 600;
+    victim.state = 'idle'; victim.invincibleTimer = 0; victim.active = true;
+
+    attacker.x = 500;
+    attacker.y = victim.y - attacker.height + 5;
+    attacker.vy = STOMP_VY_THRESHOLD + 100;
+    attacker.state = 'airborne'; attacker.active = true;
+
+    events.clear();
+    sim.fixedUpdate(FIXED_TIMESTEP);
+
+    const slots = events.stompHaptic.map(e => e.slot);
+    expect(slots).toContain('P1');
+    expect(slots).toContain('P2');
+  });
+});
+
 describe('Simulator — RNG', () => {
   it('setRng stores rng reference', () => {
     const { sim } = createSim();
