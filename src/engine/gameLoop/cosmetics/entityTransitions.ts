@@ -2,23 +2,16 @@ import type { MatchState, Player, SpringMushroom } from '../../types';
 import { SPRING_TRAIL_DURATION } from '../../constants';
 import { TransitionTracker } from '../../transitionTracker';
 
-/** Scalar prev-state for non-keyed entity transitions (countdown, matchOver).
- *  Spring-bounce prev-state lives in a separate `TransitionTracker` keyed by
- *  spring object identity — see `EntityTransitionSystem`. */
-export interface PrevEntityState {
-  countdownSec: number;
-  matchOver: boolean;
-}
-
 /** Snapshot fn for the spring-bounce TransitionTracker. */
 export const snapshotSpringBounce = (spring: SpringMushroom): number => spring.bounceTimer;
 
 export function detectEntityTransitions(
   state: MatchState,
-  pes: PrevEntityState,
+  prevCountdownSec: number,
+  prevMatchOver: boolean,
   springTracker: TransitionTracker<SpringMushroom, number, SpringMushroom>,
   playSound: (name: string) => void,
-): void {
+): { countdownSec: number; matchOver: boolean } {
   // Springs: bounceTimer 0 → >0. The tracker stores prev bounceTimer per
   // spring (object identity, not array index — swapRemove() reuses indices).
   // We collect a Set of live springs and prune stale tracker entries after.
@@ -26,8 +19,8 @@ export function detectEntityTransitions(
   for (const spring of state.springs) {
     live.add(spring);
     const cur = spring.bounceTimer;
-    springTracker.detect(spring, spring, (prev) => {
-      if (prev <= 0 && cur > 0) {
+    springTracker.detect(spring, spring, (prevBounce) => {
+      if (prevBounce <= 0 && cur > 0) {
         playSound('spring');
         let closest: Player | null = null;
         let minDist = 60;
@@ -57,16 +50,17 @@ export function detectEntityTransitions(
   // minor effects and acceptable to miss.
 
   // Countdown
+  let countdownSec = prevCountdownSec;
   if (state.countdown > 0) {
     const curSec = Math.ceil(state.countdown);
-    if (curSec < pes.countdownSec) playSound('countdown_beep');
-    pes.countdownSec = curSec;
-  } else if (pes.countdownSec > 0) {
+    if (curSec < countdownSec) playSound('countdown_beep');
+    countdownSec = curSec;
+  } else if (countdownSec > 0) {
     playSound('countdown_go');
-    pes.countdownSec = 0;
+    countdownSec = 0;
   }
 
   // Match over
-  if (state.matchOver && !pes.matchOver) playSound('victory');
-  pes.matchOver = state.matchOver;
+  if (state.matchOver && !prevMatchOver) playSound('victory');
+  return { countdownSec, matchOver: state.matchOver };
 }
