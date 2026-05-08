@@ -1,4 +1,4 @@
-import type { Player, MatchState } from '../types';
+import type { Player, MatchState, Ctx2D } from '../types';
 import { isBotSlot } from '../types';
 import {
   CANVAS_WIDTH, CANVAS_HEIGHT, SCORE_ANIM_DURATION, MATCH_COUNTDOWN,
@@ -90,7 +90,7 @@ export function drawHUD(ctx: CanvasRenderingContext2D, state: MatchState, frameT
     hctx.clearRect(0, 0, CANVAS_WIDTH, 90);
 
     // Draw HUD content to cache
-    _drawHUDImpl(hctx as unknown as CanvasRenderingContext2D, state, frameTime, playerNames, timeLimit);
+    _drawHUDImpl(hctx, state, frameTime, playerNames, timeLimit);
 
     hudLastTimer = Math.floor(matchTimeSec(state));
     let ac = 0;
@@ -111,7 +111,7 @@ export function drawHUD(ctx: CanvasRenderingContext2D, state: MatchState, frameT
   }
 }
 
-function _drawHUDImpl(ctx: CanvasRenderingContext2D, state: MatchState, frameTime: number, playerNames: Record<string, string> | null, timeLimit = 0): void {
+function _drawHUDImpl(ctx: Ctx2D, state: MatchState, frameTime: number, playerNames: Record<string, string> | null, timeLimit = 0): void {
   // Reuse the persistent _hudActivePlayers array — Array.filter() allocates a
   // fresh array every call (every frame during goal-pulse animation), and
   // _drawScoreAnimations holds a reference to it across calls anyway.
@@ -227,7 +227,7 @@ function _drawHUDImpl(ctx: CanvasRenderingContext2D, state: MatchState, frameTim
   }
 }
 
-function _drawScoreAnimations(ctx: CanvasRenderingContext2D, state: MatchState): void {
+function _drawScoreAnimations(ctx: Ctx2D, state: MatchState): void {
   const activePlayers = _hudActivePlayers;
   const startX = _hudStartX;
   const scoreWidth = _hudScoreWidth;

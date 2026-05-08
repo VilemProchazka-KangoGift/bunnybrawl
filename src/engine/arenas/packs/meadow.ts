@@ -2,18 +2,13 @@ import type { ArenaPack } from '../types';
 import type { Arena, Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin, fastCos } from '../../fastMath';
-import { getSlowDevice } from '../../perfFlags';
-import { getFloatingPlatforms, pushFromPlayers, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
+import { getFloatingPlatforms, pushFromPlayers, type GroundCritterState, type GroundCritterConfig } from '../../themes/utils';
+import { buildGroundCritter, type WildlifeInstance } from '../../gameLoop/cosmetics/wildlife';
 
-const SNAILS_CFG: Array<{ platL: number; platR: number; platTopY: number; walkSpeed: number; fleeSpeed: number; fleeRadius: number; yTolerance: number; turnEaseRate: number }> = [
+const SNAILS_CFG: GroundCritterConfig[] = [
   { platL: 900, platR: 1080, platTopY: 660, walkSpeed: 8, fleeSpeed: 22, fleeRadius: 70, yTolerance: 80, turnEaseRate: 2 },
   { platL: 200, platR: 380,  platTopY: 660, walkSpeed: 7, fleeSpeed: 20, fleeRadius: 70, yTolerance: 80, turnEaseRate: 2 },
 ];
-const _snails: GroundCritterState[] = SNAILS_CFG.map((cfg, i) => ({
-  x: (cfg.platL + cfg.platR) / 2 + i * 7,
-  dir: i % 2 === 0 ? 1 : -1, facingEase: 1, fleeing: false, committedFleeDir: 0,
-}));
-const _tickSnailDt = makeDtTracker();
 
 const BUTTERFLY_HUES = [320, 60, 200, 290, 30, 160, 180, 40] as const;
 const BUTTERFLY_COLORS = BUTTERFLY_HUES.map(h => `hsl(${h},80%,65%)`);
@@ -64,10 +59,15 @@ function drawButterfly(ctx: CanvasRenderingContext2D, i: number, time: number, p
   ctx.fillRect(r.x - 0.5, r.y - 3, 1, 6);
 }
 
-function drawOneSnail(ctx: CanvasRenderingContext2D, time: number, snail: GroundCritterState, cfg: typeof SNAILS_CFG[number]): void {
+function drawOneSnail(
+  ctx: CanvasRenderingContext2D,
+  state: GroundCritterState,
+  cfg: GroundCritterConfig,
+  time: number,
+): void {
   ctx.save();
-  ctx.translate(snail.x, cfg.platTopY - 4);
-  if (snail.facingEase < 0) ctx.scale(-1, 1);
+  ctx.translate(state.x, cfg.platTopY - 4);
+  if (state.facingEase < 0) ctx.scale(-1, 1);
   ctx.fillStyle = '#b89878';
   ctx.beginPath();
   ctx.ellipse(0, 0, 9, 3.5, 0, 0, Math.PI * 2);
@@ -103,14 +103,6 @@ function drawOneSnail(ctx: CanvasRenderingContext2D, time: number, snail: Ground
   ctx.restore();
 }
 
-function drawSnails(ctx: CanvasRenderingContext2D, time: number, players: ReadonlyArray<import('../../types').Player>): void {
-  const dt = _tickSnailDt(time);
-  for (let i = 0; i < _snails.length; i++) {
-    tickGroundCritter(_snails[i], players, dt, SNAILS_CFG[i]);
-    drawOneSnail(ctx, time, _snails[i], SNAILS_CFG[i]);
-  }
-}
-
 function drawBeeCluster(ctx: CanvasRenderingContext2D, ci: number, time: number, players: ReadonlyArray<import('../../types').Player>): void {
   const c = BEE_CLUSTERS[ci];
   const wanderX = c.homeX + fastSin(time * 0.25 + c.phase) * 200;
@@ -132,8 +124,11 @@ function drawBeeCluster(ctx: CanvasRenderingContext2D, ci: number, time: number,
 }
 import {
   drawTree, drawBush, drawFlower, drawMushroom, drawGrassTuft,
-  drawFgBush, drawTallGrass, drawFern, drawHangingVine, drawFgLeafCluster, drawFgWildflower,
+  drawFgBush, drawFgLeafCluster, drawFgWildflower,
 } from '../../themes/drawPrimitives';
+import {
+  buildHangingVine, buildFern, buildTallGrass,
+} from '../../gameLoop/cosmetics/sharedDecorationKinds';
 import {
   CAP_DEPTH, SKEW_RATIO, BODY_SEED_OFFSET, applyIsoInsets, mulberry32, seedFor,
   drawPlatformRightFace, drawPlatformCap,
@@ -147,7 +142,6 @@ import {
 import {
   registerReactiveKind,
   createReactiveInstance,
-  composeBend,
   type ReactiveInstance,
 } from '../../gameLoop/cosmetics/reactiveDecorations';
 
@@ -176,63 +170,6 @@ registerReactiveKind('meadow.tree', {
     ctx.rotate(lean * 0.015);
     drawTree(ctx, 0, 0, size);
     ctx.restore();
-  },
-});
-
-// ---- meadow.tallGrass ----
-// Bends at the tip (base anchored). Wind sway + push WITH passing player.
-interface TallGrassData { count: number; }
-function meadowTallGrass(x: number, y: number, count: number): ReactiveInstance {
-  return createReactiveInstance({
-    pos: { x, y }, kind: 'meadow.tallGrass',
-    seed: Math.floor((x * 89 + y * 41) % 997),
-    data: { count } satisfies TallGrassData,
-    windAmp: 6,
-    proximity: { radius: 36, mode: 'lean', magnitude: 30 },
-  });
-}
-registerReactiveKind('meadow.tallGrass', {
-  layer: 'prePlayer',
-  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
-    const { count } = inst.data as TallGrassData;
-    drawTallGrass(ctx, inst.pos.x, inst.pos.y, count, undefined, undefined, composeBend(inst, swayPhase));
-  },
-});
-
-// ---- meadow.fern ----
-function meadowFern(x: number, y: number): ReactiveInstance {
-  return createReactiveInstance({
-    pos: { x, y }, kind: 'meadow.fern',
-    seed: Math.floor((x * 79 + y * 37) % 997),
-    windAmp: 7,
-    proximity: { radius: 36, mode: 'lean', magnitude: 24 },
-  });
-}
-registerReactiveKind('meadow.fern', {
-  layer: 'prePlayer',
-  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
-    drawFern(ctx, inst.pos.x, inst.pos.y, undefined, composeBend(inst, swayPhase));
-  },
-});
-
-// ---- meadow.hangingVine ----
-// Bends at the bottom tip (top anchored to platform). Wind sway + lean toward
-// passing players (opposite sign to flee).
-interface HangingVineData { length: number; }
-function meadowHangingVine(x: number, y: number, length: number): ReactiveInstance {
-  return createReactiveInstance({
-    pos: { x, y }, kind: 'meadow.hangingVine',
-    seed: Math.floor((x * 97 + y * 47) % 997),
-    data: { length } satisfies HangingVineData,
-    windAmp: 10,
-    proximity: { radius: 36, mode: 'lean', magnitude: 30 },
-  });
-}
-registerReactiveKind('meadow.hangingVine', {
-  layer: 'prePlayer',
-  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
-    const { length } = inst.data as HangingVineData;
-    drawHangingVine(ctx, inst.pos.x, inst.pos.y, length, composeBend(inst, swayPhase));
   },
 });
 
@@ -700,24 +637,24 @@ export const meadow: ArenaPack = {
     out.push(meadowTree(1180, y, 45));
 
     // Tall grass clusters (player parting)
-    out.push(meadowTallGrass(310, y, 7));
-    out.push(meadowTallGrass(680, y, 9));
-    out.push(meadowTallGrass(1020, y, 6));
-    out.push(meadowTallGrass(430, y, 5));
+    out.push(buildTallGrass(310, y, 7));
+    out.push(buildTallGrass(680, y, 9));
+    out.push(buildTallGrass(1020, y, 6));
+    out.push(buildTallGrass(430, y, 5));
 
     // Ferns (player parting)
-    out.push(meadowFern(80, y));
-    out.push(meadowFern(770, y));
-    out.push(meadowFern(1220, y));
+    out.push(buildFern(80, y));
+    out.push(buildFern(770, y));
+    out.push(buildFern(1220, y));
 
     // Floating-platform reactive decorations: hanging vines (lean)
     const floats = getFloatingPlatforms(arena.platforms);
     for (const plat of floats) {
       if (plat.width > 180) {
-        out.push(meadowHangingVine(plat.x + 15, plat.y + plat.height, 25));
-        out.push(meadowHangingVine(plat.x + plat.width - 15, plat.y + plat.height, 20));
+        out.push(buildHangingVine(plat.x + 15, plat.y + plat.height, 25));
+        out.push(buildHangingVine(plat.x + plat.width - 15, plat.y + plat.height, 20));
       } else {
-        out.push(meadowHangingVine(plat.x + plat.width / 2, plat.y + plat.height, 18));
+        out.push(buildHangingVine(plat.x + plat.width / 2, plat.y + plat.height, 18));
       }
     }
 
@@ -862,15 +799,20 @@ export const meadow: ArenaPack = {
     ctx.fillRect(platform.x, bodyTop + bodyH - 4, platform.width, 4);
   },
 
-  // drawAnimatedBackground removed — dandelions migrated to ReactiveDecorationSystem.
-
-  drawGroundCritters: (ctx, _arena, time, _dayPhase, matchState) => {
-    if (getSlowDevice() || !matchState) return;
-    drawSnails(ctx, time, matchState.players);
-  },
-
-  drawAnimatedForeground: (_ctx, _arena, _time, _dayPhase, _matchState) => {
-    // drawAnimatedForeground removed — butterflies + bees migrated to ReactiveDecorationSystem.
+  buildWildlife: (_arena: Arena): WildlifeInstance[] => {
+    const out: WildlifeInstance[] = [];
+    for (let i = 0; i < SNAILS_CFG.length; i++) {
+      const cfg = SNAILS_CFG[i];
+      out.push(buildGroundCritter({
+        seed: i,
+        cfg,
+        // Original snail positions: midpoint + i * 7 (small offset).
+        initialX: (cfg.platL + cfg.platR) / 2 + i * 7,
+        initialDir: i % 2 === 0 ? 1 : -1,
+        draw: ({ ctx, state, cfg: c, time }) => drawOneSnail(ctx, state, c, time),
+      }));
+    }
+    return out;
   },
 
   // ---- Audio ----

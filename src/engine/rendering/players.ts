@@ -5,7 +5,7 @@ import { FAT_SCALE, HITSTOP_DURATION, MAX_WALK_SPEED, PLAYER_WIDTH, PLAYER_HEIGH
 import { hasCustomEyes, getSpriteRenderer, getCharacterPack, drawLegs } from '../characters';
 import { drawHighlightSpot } from '../spriteShading';
 import { getSlowDevice } from '../perfFlags';
-import { hexToRGB } from '../fastMath';
+import { darken, hexToRGB } from '../fastMath';
 import { bakeRadialGradientSquare } from '../themes/utils';
 import { getIdleAction, type IdleAction } from './idleActions';
 
@@ -74,11 +74,6 @@ function getFireCache(): OffscreenCanvas | null {
 
 export function clearSpriteCache(): void {
   spriteCache.clear();
-}
-
-function darken(hex: string, factor: number): string {
-  const { r, g, b } = hexToRGB(hex);
-  return `rgb(${Math.round(r * factor)}, ${Math.round(g * factor)}, ${Math.round(b * factor)})`;
 }
 
 // Outline color is derived from char.color, NOT pack.darkColor — darkColor is the

@@ -1,26 +1,31 @@
 import type { ArenaPack } from '../types';
-import type { Platform, Player } from '../../types';
+import type { Arena, Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin } from '../../fastMath';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
-import { getFloatingPlatforms, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
+import { getFloatingPlatforms, type GroundCritterState, type GroundCritterConfig } from '../../themes/utils';
+import { buildGroundCritter, type WildlifeInstance } from '../../gameLoop/cosmetics/wildlife';
+import {
+  registerReactiveKind, createReactiveInstance, composeBend,
+  type ReactiveInstance,
+} from '../../gameLoop/cosmetics/reactiveDecorations';
 
-const ROBOTS_CFG = [
+const ROBOTS_CFG: GroundCritterConfig[] = [
   { platL: 20,   platR: 200,  platTopY: 660, walkSpeed: 22, fleeSpeed: 70, fleeRadius: 90, yTolerance: 80, turnEaseRate: 2 },
   { platL: 1080, platR: 1260, platTopY: 660, walkSpeed: 24, fleeSpeed: 75, fleeRadius: 90, yTolerance: 80, turnEaseRate: 2 },
   { platL: 35,   platR: 195,  platTopY: 360, walkSpeed: 18, fleeSpeed: 60, fleeRadius: 85, yTolerance: 60, turnEaseRate: 2 },
 ];
-const _robots: GroundCritterState[] = ROBOTS_CFG.map((cfg, i) => ({
-  x: (cfg.platL + cfg.platR) / 2,
-  dir: i % 2 === 0 ? 1 : -1, facingEase: 1, fleeing: false, committedFleeDir: 0,
-}));
-const _tickRobotDt = makeDtTracker();
 
-function drawOneRobot(ctx: CanvasRenderingContext2D, time: number, robot: GroundCritterState, cfg: typeof ROBOTS_CFG[number]): void {
-  const step = fastSin(time * (robot.fleeing ? 14 : 6)) * Math.abs(robot.facingEase);
+function drawOneRobot(
+  ctx: CanvasRenderingContext2D,
+  state: GroundCritterState,
+  cfg: GroundCritterConfig,
+  time: number,
+): void {
+  const step = fastSin(time * (state.fleeing ? 14 : 6)) * Math.abs(state.facingEase);
   ctx.save();
-  ctx.translate(robot.x, cfg.platTopY - 6);
-  if (robot.facingEase < 0) ctx.scale(-1, 1);
+  ctx.translate(state.x, cfg.platTopY - 6);
+  if (state.facingEase < 0) ctx.scale(-1, 1);
   ctx.fillStyle = '#5a6a78';
   ctx.fillRect(-3, 1 - Math.max(0, step) * 1.2, 2, 5);
   ctx.fillRect(1, 1 - Math.max(0, -step) * 1.2, 2, 5);
@@ -46,14 +51,6 @@ function drawOneRobot(ctx: CanvasRenderingContext2D, time: number, robot: Ground
   ctx.arc(0, -11.5, 1, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
-}
-
-function drawRobot(ctx: CanvasRenderingContext2D, time: number, players: ReadonlyArray<Player>): void {
-  const dt = _tickRobotDt(time);
-  for (let i = 0; i < _robots.length; i++) {
-    tickGroundCritter(_robots[i], players, dt, ROBOTS_CFG[i]);
-    drawOneRobot(ctx, time, _robots[i], ROBOTS_CFG[i]);
-  }
 }
 
 import {
@@ -198,6 +195,52 @@ function drawSpacePlatformFg(ctx: CanvasRenderingContext2D, platform: Platform):
   // Reference rng so unused-warning is suppressed; cheap noise fleck for grain.
   if (rng() < 0) ctx.fillRect(0, 0, 0, 0);
 }
+
+// ============================================================================
+// Reactive decoration: space_station.cable
+// ============================================================================
+// A drooping cable connecting two points (e.g. wall to ground/platform).
+// `bendX` shifts the curve laterally (player proximity sway).
+function drawSpaceCable(
+  ctx: CanvasRenderingContext2D,
+  x1: number, y1: number,
+  x2: number, y2: number,
+  color: string,
+  bendX: number = 0,
+): void {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x1 + bendX, y1);
+  ctx.quadraticCurveTo((x1 + x2) / 2 + bendX, Math.max(y1, y2) + 15, x2 + bendX, y2);
+  ctx.stroke();
+}
+
+interface CableData {
+  x1: number; y1: number;
+  x2: number; y2: number;
+  color: string;
+}
+function spaceStationCable(x1: number, y1: number, x2: number, y2: number, color: string): ReactiveInstance {
+  // Anchor pos at the midpoint — used by proximity check.
+  const midX = (x1 + x2) / 2;
+  const midY = Math.max(y1, y2) + 15;
+  return createReactiveInstance({
+    pos: { x: midX, y: midY },
+    kind: 'space_station.cable',
+    seed: Math.floor((x1 * 73 + y1 * 31 + x2 * 19) % 997),
+    data: { x1, y1, x2, y2, color } satisfies CableData,
+    windAmp: 4,
+    proximity: { radius: 36, mode: 'lean', magnitude: 18 },
+  });
+}
+registerReactiveKind('space_station.cable', {
+  layer: 'prePlayer',
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
+    const { x1, y1, x2, y2, color } = inst.data as CableData;
+    drawSpaceCable(ctx, x1, y1, x2, y2, color, composeBend(inst, swayPhase));
+  },
+});
 
 let scanLinePattern: CanvasPattern | null = null;
 
@@ -503,9 +546,18 @@ export const spaceStation: ArenaPack = {
     ctx.restore();
   },
 
-  drawGroundCritters: (ctx, _arena, time, _dayPhase, matchState) => {
-    if (!matchState) return;
-    drawRobot(ctx, time, matchState.players);
+  buildWildlife: (_arena: Arena): WildlifeInstance[] => {
+    const out: WildlifeInstance[] = [];
+    for (let i = 0; i < ROBOTS_CFG.length; i++) {
+      const cfg = ROBOTS_CFG[i];
+      out.push(buildGroundCritter({
+        seed: i,
+        cfg,
+        initialDir: i % 2 === 0 ? 1 : -1,
+        draw: ({ ctx, state, cfg: c, time }) => drawOneRobot(ctx, state, c, time),
+      }));
+    }
+    return out;
   },
 
   drawFarBackground: (ctx, _arena) => {
@@ -676,21 +728,6 @@ export const spaceStation: ArenaPack = {
     drawCrate(160, y, 22);
     drawCrate(1100, y, 20);
 
-    // Cables on side walls only
-    const drawCable = (x1: number, y1: number, x2: number, y2: number, color: string) => {
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.quadraticCurveTo((x1 + x2) / 2, Math.max(y1, y2) + 15, x2, y2);
-      ctx.stroke();
-    };
-
-    drawCable(30, y - 40, 180, y - 30, '#FF4444');
-    drawCable(35, y - 35, 175, y - 25, '#00AAFF');
-    drawCable(1100, y - 45, 1240, y - 35, '#FFAA00');
-    drawCable(1105, y - 40, 1235, y - 30, '#00CC44');
-
     // Platform decorations -- only on side stack platforms
     const floats = getFloatingPlatforms(arena.platforms).filter(p => p.x < 250 || p.x > 1000);
     for (let i = 0; i < floats.length; i++) {
@@ -716,6 +753,17 @@ export const spaceStation: ArenaPack = {
         ctx.globalAlpha = 1;
       }
     }
+  },
+
+  buildReactiveDecorations: (arena) => {
+    const out: ReactiveInstance[] = [];
+    const y = arena.platforms[0].y;
+    // Same positions as the previous static draws in drawBackgroundNature.
+    out.push(spaceStationCable(30, y - 40, 180, y - 30, '#FF4444'));
+    out.push(spaceStationCable(35, y - 35, 175, y - 25, '#00AAFF'));
+    out.push(spaceStationCable(1100, y - 45, 1240, y - 35, '#FFAA00'));
+    out.push(spaceStationCable(1105, y - 40, 1235, y - 30, '#00CC44'));
+    return out;
   },
 
   drawForegroundNature: (ctx, arena) => {

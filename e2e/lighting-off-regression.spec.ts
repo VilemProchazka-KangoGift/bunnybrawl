@@ -12,7 +12,7 @@ async function startMatch(page: any, params: string) {
   await expect(page.getByTestId('match-screen')).toBeVisible({ timeout: 10000 });
   await expect(page.getByTestId('game-canvas')).toBeVisible();
   await page.waitForFunction(
-    () => (window as any).__gameLoop?.getState()?.countdown === 0,
+    () => window.__bunnyTest?.state()?.countdown === 0,
     { timeout: 10000 },
   );
 }
@@ -22,8 +22,8 @@ test.describe('Lighting kill switch', () => {
     await startMatch(page, 'lighting=off');
     await page.waitForTimeout(1000);
     const isAlive = await page.evaluate(() => {
-      const loop = (window as any).__gameLoop;
-      return loop && !loop.getState().matchOver;
+      const s = window.__bunnyTest?.state();
+      return !!s && !s.matchOver;
     });
     expect(isAlive).toBe(true);
   });
@@ -32,8 +32,8 @@ test.describe('Lighting kill switch', () => {
     await startMatch(page, 'lighting=on');
     await page.waitForTimeout(500);
     const isAlive = await page.evaluate(() => {
-      const loop = (window as any).__gameLoop;
-      return loop && !loop.getState().matchOver;
+      const s = window.__bunnyTest?.state();
+      return !!s && !s.matchOver;
     });
     expect(isAlive).toBe(true);
   });
@@ -42,8 +42,8 @@ test.describe('Lighting kill switch', () => {
     await startMatch(page, '');
     await page.waitForTimeout(500);
     const isAlive = await page.evaluate(() => {
-      const loop = (window as any).__gameLoop;
-      return loop && !loop.getState().matchOver;
+      const s = window.__bunnyTest?.state();
+      return !!s && !s.matchOver;
     });
     expect(isAlive).toBe(true);
   });
@@ -53,8 +53,10 @@ test.describe('Lighting kill switch', () => {
     // Pin dayPhase to midnight; with lighting off, both DOM darkening
     // overlays should stay at opacity 0.
     const opacities = await page.evaluate(() => {
-      const loop = (window as any).__gameLoop;
-      const id = setInterval(() => { loop.getState().dayPhase = 0.5; }, 4);
+      const id = setInterval(() => {
+        const s = window.__bunnyTest?.state();
+        if (s) s.dayPhase = 0.5;
+      }, 4);
       return new Promise<{ bg: string; fg: string }>((resolve) => {
         setTimeout(() => {
           clearInterval(id);

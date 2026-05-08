@@ -1,10 +1,14 @@
 import type { ArenaPack } from '../types';
-import type { Platform } from '../../types';
+import type { Arena, Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
-import { getFloatingPlatforms, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
+import { getFloatingPlatforms, tickGroundCritter, type GroundCritterState, type GroundCritterConfig } from '../../themes/utils';
+import {
+  createWildlifeInstance, registerWildlifeKind,
+  type WildlifeInstance,
+} from '../../gameLoop/cosmetics/wildlife';
 
 const CANDY_CLOUDS = [
   { x: 200, y: 110, r: 26 },
@@ -13,29 +17,90 @@ const CANDY_CLOUDS = [
 ] as const;
 const SPRINKLE_HUES = [10, 45, 120, 200, 280, 320] as const;
 const WEATHER_SPRINKLE_COLORS = SPRINKLE_HUES.map(h => `hsl(${h},80%,65%)`);
-interface GumdropDef {
-  gy: number; color: string;
-  cfg: { platL: number; platR: number; platTopY: number; walkSpeed: number; fleeSpeed: number; fleeRadius: number; yTolerance: number; turnEaseRate: number };
-  state: GroundCritterState;
-  rot: number;
-}
+
 const GUMDROP_R = 14;
-function makeGumdrop(platL: number, platR: number, gy: number, color: string): GumdropDef {
-  const startX = (platL + platR) / 2;
-  return {
-    gy, color,
-    cfg: { platL: platL + GUMDROP_R, platR: platR - GUMDROP_R, platTopY: gy, walkSpeed: 35, fleeSpeed: 110, fleeRadius: 90, yTolerance: 60, turnEaseRate: 3 },
-    state: { x: startX, dir: 1, facingEase: 1, fleeing: false, committedFleeDir: 0 },
-    rot: 0,
-  };
+interface GumdropDef {
+  cfg: GroundCritterConfig;
+  gy: number;
+  color: string;
 }
 const GUMDROPS: GumdropDef[] = [
-  makeGumdrop(38,   200,  530, '#ff5e8a'),
-  makeGumdrop(1098, 1224, 510, '#7be0a3'),
-  makeGumdrop(58,   188,  350, '#ffe066'),
-  makeGumdrop(1108, 1208, 325, '#c899ff'),
+  { cfg: { platL: 38   + GUMDROP_R, platR: 200  - GUMDROP_R, platTopY: 530, walkSpeed: 35, fleeSpeed: 110, fleeRadius: 90, yTolerance: 60, turnEaseRate: 3 }, gy: 530, color: '#ff5e8a' },
+  { cfg: { platL: 1098 + GUMDROP_R, platR: 1224 - GUMDROP_R, platTopY: 510, walkSpeed: 35, fleeSpeed: 110, fleeRadius: 90, yTolerance: 60, turnEaseRate: 3 }, gy: 510, color: '#7be0a3' },
+  { cfg: { platL: 58   + GUMDROP_R, platR: 188  - GUMDROP_R, platTopY: 350, walkSpeed: 35, fleeSpeed: 110, fleeRadius: 90, yTolerance: 60, turnEaseRate: 3 }, gy: 350, color: '#ffe066' },
+  { cfg: { platL: 1108 + GUMDROP_R, platR: 1208 - GUMDROP_R, platTopY: 325, walkSpeed: 35, fleeSpeed: 110, fleeRadius: 90, yTolerance: 60, turnEaseRate: 3 }, gy: 325, color: '#c899ff' },
 ];
-const _tickGumdropDt = makeDtTracker();
+
+// Gumdrops have an extra `rot` accumulator for rolling motion — register a
+// dedicated kind that wraps the groundCritter tick + adds rotation, instead
+// of using the built-in wildlife.groundCritter.
+interface CandyGumdropData {
+  state: GroundCritterState;
+  cfg: GroundCritterConfig;
+  gy: number;
+  color: string;
+  rot: number;
+}
+
+registerWildlifeKind<CandyGumdropData>('candyLand.gumdrop', {
+  layer: 'groundCritter',
+  tick: (inst, dt, players) => {
+    const d = inst.data;
+    tickGroundCritter(d.state, players, dt, d.cfg);
+    const speed = d.state.fleeing ? d.cfg.fleeSpeed : d.cfg.walkSpeed;
+    d.rot += (d.state.facingEase * speed / GUMDROP_R) * dt;
+  },
+  draw: (ctx, inst) => {
+    const d = inst.data;
+    const cx = d.state.x;
+    const cy = d.gy - GUMDROP_R + 2;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(d.rot);
+    ctx.fillStyle = d.color;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, GUMDROP_R, GUMDROP_R, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    for (let j = 0; j < 6; j++) {
+      const a = (j / 6) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.arc(fastCos(a) * GUMDROP_R * 0.6, fastSin(a) * GUMDROP_R * 0.6, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.beginPath();
+    ctx.ellipse(-4, -3, 3, 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  },
+  resetData: (data) => {
+    const d = data as CandyGumdropData;
+    d.state.x = (d.cfg.platL + d.cfg.platR) / 2;
+    d.state.dir = 1;
+    d.state.facingEase = 1;
+    d.state.fleeing = false;
+    d.state.committedFleeDir = 0;
+    d.rot = 0;
+  },
+});
+
+function buildCandyGumdrop(seed: number, def: GumdropDef): WildlifeInstance<CandyGumdropData> {
+  const startX = (def.cfg.platL + def.cfg.platR) / 2;
+  const data: CandyGumdropData = {
+    state: { x: startX, dir: 1, facingEase: 1, fleeing: false, committedFleeDir: 0 },
+    cfg: def.cfg,
+    gy: def.gy,
+    color: def.color,
+    rot: 0,
+  };
+  return createWildlifeInstance<CandyGumdropData>({
+    kindId: 'candyLand.gumdrop',
+    seed,
+    home: { x: startX, y: def.gy },
+    data,
+  });
+}
 // 8-wisp ring around each cloud, hoisted so the loop avoids 24 sin+cos per frame.
 const CLOUD_WISP_COS = new Float32Array(8);
 const CLOUD_WISP_SIN = new Float32Array(8);
@@ -495,29 +560,29 @@ export const candyLand: ArenaPack = {
   },
 
   drawWeatherParticle: (ctx, w) => {
-    ctx.save();
-    ctx.translate(w.x, w.y);
-    ctx.rotate(w.rotation);
     if (w.type === 'sprinkle') {
-      // Colorful sprinkle
+      // Sprinkle is a rotated rectangle with rounded ends — needs the
+      // transform stack because fillRect doesn't accept rotation.
+      ctx.save();
+      ctx.translate(w.x, w.y);
+      ctx.rotate(w.rotation);
       const colors = ['#FF69B4', '#FFD700', '#87CEEB', '#98FB98', '#DDA0DD', '#FF6347'];
       ctx.fillStyle = colors[Math.floor(w.x * 0.1) % colors.length];
       ctx.fillRect(-w.size, -w.size * 0.3, w.size * 2, w.size * 0.6);
-      // Rounded ends
       ctx.beginPath();
       ctx.arc(-w.size, 0, w.size * 0.3, 0, Math.PI * 2);
       ctx.fill();
       ctx.beginPath();
       ctx.arc(w.size, 0, w.size * 0.3, 0, Math.PI * 2);
       ctx.fill();
+      ctx.restore();
     } else {
       // Sugar petal
       ctx.fillStyle = 'rgba(255, 200, 220, 0.5)';
       ctx.beginPath();
-      ctx.ellipse(0, 0, w.size, w.size * 0.6, 0, 0, Math.PI * 2);
+      ctx.ellipse(w.x, w.y, w.size, w.size * 0.6, w.rotation, 0, Math.PI * 2);
       ctx.fill();
     }
-    ctx.restore();
   },
 
   drawCustomThorn: createThornRenderer((ctx, x, y, width, height, _fadeAlpha) => {
@@ -663,39 +728,12 @@ export const candyLand: ArenaPack = {
     ctx.restore();
   },
 
-  drawGroundCritters: (ctx, _arena, time, _dayPhase, matchState) => {
-    if (getSlowDevice()) return;
-    const dt = _tickGumdropDt(time);
-    const players = matchState?.players ?? [];
-    ctx.save();
+  buildWildlife: (_arena: Arena): WildlifeInstance[] => {
+    const out: WildlifeInstance[] = [];
     for (let i = 0; i < GUMDROPS.length; i++) {
-      const g = GUMDROPS[i];
-      tickGroundCritter(g.state, players, dt, g.cfg);
-      const speed = g.state.fleeing ? g.cfg.fleeSpeed : g.cfg.walkSpeed;
-      g.rot += (g.state.facingEase * speed / GUMDROP_R) * dt;
-      const cx = g.state.x;
-      const cy = g.gy - GUMDROP_R + 2;
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(g.rot);
-      ctx.fillStyle = g.color;
-      ctx.beginPath();
-      ctx.ellipse(0, 0, GUMDROP_R, GUMDROP_R, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,0.35)';
-      for (let j = 0; j < 6; j++) {
-        const a = (j / 6) * Math.PI * 2;
-        ctx.beginPath();
-        ctx.arc(fastCos(a) * GUMDROP_R * 0.6, fastSin(a) * GUMDROP_R * 0.6, 1.2, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.fillStyle = 'rgba(255,255,255,0.7)';
-      ctx.beginPath();
-      ctx.ellipse(-4, -3, 3, 2, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
+      out.push(buildCandyGumdrop(i, GUMDROPS[i]));
     }
-    ctx.restore();
+    return out;
   },
 
   // ---- Audio ----

@@ -5,8 +5,14 @@ import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
 import { computeNightIntensity } from '../../rendering';
 import { createThornRenderer } from '../../themes/drawPrimitives';
-import { getFloatingPlatforms, drawDriftBand, makeDtTracker, tickGroundCritter, type DriftBandConfig, type GroundCritterState } from '../../themes/utils';
+import { getFloatingPlatforms, drawDriftBand, type DriftBandConfig, type GroundCritterConfig } from '../../themes/utils';
+import { buildGroundCritter, type WildlifeInstance } from '../../gameLoop/cosmetics/wildlife';
 import { drawRat } from '../../themes/drawPrimitives';
+import type { Arena } from '../../types';
+import {
+  registerReactiveKind, createReactiveInstance, composeBend,
+  type ReactiveInstance,
+} from '../../gameLoop/cosmetics/reactiveDecorations';
 
 const FOG_CONFIG: DriftBandConfig = {
   topY: 600,
@@ -15,15 +21,10 @@ const FOG_CONFIG: DriftBandConfig = {
   alphas: [0.10, 0.14, 0.20],
 };
 
-const RATS_CFG = [
+const RATS_CFG: GroundCritterConfig[] = [
   { platL: 30,  platR: 460,  platTopY: 660, walkSpeed: 50, fleeSpeed: 180, fleeRadius: 120, yTolerance: 80 },
   { platL: 820, platR: 1260, platTopY: 660, walkSpeed: 52, fleeSpeed: 180, fleeRadius: 120, yTolerance: 80 },
 ];
-const _graveRats: GroundCritterState[] = RATS_CFG.map((cfg, i) => ({
-  x: (cfg.platL + cfg.platR) / 2,
-  dir: i % 2 === 0 ? 1 : -1, facingEase: 1, fleeing: false, committedFleeDir: 0,
-}));
-const _tickGraveRatDt = makeDtTracker();
 
 const WISPS = [
   { x: 200, y: 540, phase: 0 },
@@ -47,6 +48,86 @@ const HAUNTED_STONE_PALETTE: StonePaletteRow[] = [
   { base: '#534858', dark: '#2c2434', light: '#74687e' },
 ];
 
+// ============================================================================
+// Reactive decoration draw helpers + factories
+// ============================================================================
+
+/** Dead-tree silhouette. Origin is the BASE of the trunk (foot at y=0).
+ *  Draws upward — caller is responsible for translate+rotate. */
+function drawDeadTreeShape(ctx: CanvasRenderingContext2D, size: number): void {
+  ctx.fillStyle = '#2A2020';
+  const tw = size * 0.12;
+  ctx.fillRect(-tw / 2, -size, tw, size);
+  ctx.strokeStyle = '#2A2020';
+  ctx.lineWidth = 2;
+  // Branch L (mid)
+  ctx.beginPath();
+  ctx.moveTo(0, -size * 0.6);
+  ctx.lineTo(-size * 0.3, -size * 0.8);
+  ctx.stroke();
+  // Branch R (low)
+  ctx.beginPath();
+  ctx.moveTo(0, -size * 0.4);
+  ctx.lineTo(size * 0.25, -size * 0.55);
+  ctx.stroke();
+  // Top spike
+  ctx.beginPath();
+  ctx.moveTo(0, -size);
+  ctx.lineTo(size * 0.1, -size * 1.1);
+  ctx.stroke();
+}
+
+// ---- haunted_graveyard.deadTree ----
+interface DeadTreeData { size: number; }
+function hauntedDeadTree(x: number, y: number, size: number): ReactiveInstance {
+  return createReactiveInstance({
+    pos: { x, y },
+    kind: 'haunted_graveyard.deadTree',
+    seed: Math.floor((x * 73 + y * 31) % 997),
+    data: { size } satisfies DeadTreeData,
+    windAmp: 3,
+    shakeRadius: 90,
+    burst: { threshold: 0.95, particleKind: 'leaf', count: 10 },
+    // No proximity — dead trees are stiff, no lean from passing players.
+  });
+}
+registerReactiveKind('haunted_graveyard.deadTree', {
+  layer: 'prePlayer',
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
+    const { size } = inst.data as DeadTreeData;
+    // Stiff lean: only stomp shudder on top of a faint wind sway.
+    const lean = swayPhase + (inst.shakeDecay > 0 ? Math.sin(inst.shakeDecay * 40) * inst.shakeDecay * 4 : 0);
+    ctx.save();
+    ctx.translate(inst.pos.x, inst.pos.y);
+    // Smaller rotation coefficient than treetops.tree — gnarled, not whippy.
+    ctx.rotate(lean * 0.012);
+    drawDeadTreeShape(ctx, size);
+    ctx.restore();
+  },
+});
+
+// ---- haunted_graveyard.cobweb ----
+// Cobweb glued to a platform corner. Subtle proximity-lean; the corner anchor
+// stays put while the radial strands lean horizontally with bendX.
+interface CobwebData { dirX: number; dirY: number; }
+function hauntedCobweb(cornerX: number, cornerY: number, dirX: number, dirY: number): ReactiveInstance {
+  return createReactiveInstance({
+    pos: { x: cornerX, y: cornerY },
+    kind: 'haunted_graveyard.cobweb',
+    seed: Math.floor((cornerX * 97 + cornerY * 47) % 997),
+    data: { dirX, dirY } satisfies CobwebData,
+    windAmp: 3,
+    proximity: { radius: 32, mode: 'lean', magnitude: 14 },
+  });
+}
+registerReactiveKind('haunted_graveyard.cobweb', {
+  layer: 'prePlayer',
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
+    const { dirX, dirY } = inst.data as CobwebData;
+    drawCobweb(ctx, inst.pos.x, inst.pos.y, dirX, dirY, composeBend(inst, swayPhase));
+  },
+});
+
 /**
  * Cobweb in a body-front-face corner. (cornerX, cornerY) is the corner anchor;
  * (dirX, dirY) (each ±1) is the diagonal direction the web fans into the body.
@@ -58,6 +139,7 @@ function drawCobweb(
   cornerY: number,
   dirX: number,
   dirY: number,
+  bendX: number = 0,
 ): void {
   const len = 14;
   // Fan angles span the inward 90° quadrant: from "along the horizontal edge"
@@ -70,7 +152,8 @@ function drawCobweb(
   ctx.strokeStyle = 'rgba(220,220,230,0.5)';
   ctx.lineWidth = 0.7;
 
-  // Radial strands
+  // Radial strands. The endpoints lean horizontally with bendX; the corner
+  // anchor stays put (web is glued to the platform corner).
   const angles: number[] = [];
   for (let i = 0; i < strands; i++) {
     const t = i / (strands - 1);
@@ -78,16 +161,18 @@ function drawCobweb(
     angles.push(a);
     ctx.beginPath();
     ctx.moveTo(cornerX, cornerY);
-    ctx.lineTo(cornerX + Math.cos(a) * len, cornerY + Math.sin(a) * len);
+    ctx.lineTo(cornerX + Math.cos(a) * len + bendX, cornerY + Math.sin(a) * len);
     ctx.stroke();
   }
 
-  // Three cross-strand arc chords at increasing radii
+  // Three cross-strand arc chords at increasing radii. Bend scales with radius
+  // so inner chords stay tight to the corner.
   for (let r = 1; r <= 3; r++) {
     const radius = (r / 3.5) * len;
+    const bendScale = radius / len;
     ctx.beginPath();
     for (let i = 0; i < strands; i++) {
-      const px = cornerX + Math.cos(angles[i]) * radius;
+      const px = cornerX + Math.cos(angles[i]) * radius + bendX * bendScale;
       const py = cornerY + Math.sin(angles[i]) * radius;
       if (i === 0) ctx.moveTo(px, py);
       else ctx.lineTo(px, py);
@@ -139,8 +224,8 @@ function drawHauntedPlatformBg(ctx: CanvasRenderingContext2D, platform: Platform
   }
 }
 
-// Fg pass: body + cracks + cobwebs. Drawn after players for occlusion.
-function drawHauntedPlatformFg(ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean): void {
+// Fg pass: body + cracks. Drawn after players for occlusion.
+function drawHauntedPlatformFg(ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean): void {
   const rng = mulberry32(seedFor(platform.x, platform.y) ^ BODY_SEED_OFFSET);
   const cF = capFrontY(platform);
   const bodyTop = cF;
@@ -209,25 +294,6 @@ function drawHauntedPlatformFg(ctx: CanvasRenderingContext2D, platform: Platform
   // Bottom bevel
   ctx.fillStyle = 'rgba(0,0,0,0.30)';
   ctx.fillRect(platform.x, bodyTop + bodyH - 3, platform.width, 3);
-
-  // Cobwebs in front-face corners
-  if (!isGround && bodyH >= 10) {
-    const bb = bodyTop + bodyH;
-    let leftTop = rng() < 0.7;
-    let leftBot = rng() < 0.7;
-    let rightTop = rng() < 0.7;
-    let rightBot = rng() < 0.7;
-    if (leftTop && leftBot) {
-      if (rng() < 0.5) leftBot = false; else leftTop = false;
-    }
-    if (rightTop && rightBot) {
-      if (rng() < 0.5) rightBot = false; else rightTop = false;
-    }
-    if (leftTop)  drawCobweb(ctx, platform.x, bodyTop, +1, +1);
-    if (rightTop) drawCobweb(ctx, platform.x + platform.width, bodyTop, -1, +1);
-    if (leftBot)  drawCobweb(ctx, platform.x, bb, +1, -1);
-    if (rightBot) drawCobweb(ctx, platform.x + platform.width, bb, -1, -1);
-  }
 }
 
 export const hauntedGraveyard: ArenaPack = {
@@ -547,33 +613,7 @@ export const hauntedGraveyard: ArenaPack = {
     drawJackOLantern(850, y, 22);
     drawJackOLantern(1200, y, 16);
 
-    // Dead trees (foreground detail)
-    const drawDeadTree = (dx: number, dy: number, size: number) => {
-      ctx.fillStyle = '#2A2020';
-      const tw = size * 0.12;
-      ctx.fillRect(dx - tw / 2, dy - size, tw, size);
-      ctx.strokeStyle = '#2A2020';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(dx, dy - size * 0.6);
-      ctx.lineTo(dx - size * 0.3, dy - size * 0.8);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(dx, dy - size * 0.4);
-      ctx.lineTo(dx + size * 0.25, dy - size * 0.55);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(dx, dy - size);
-      ctx.lineTo(dx + size * 0.1, dy - size * 1.1);
-      ctx.stroke();
-    };
-
-    drawDeadTree(50, y, 70);
-    drawDeadTree(350, y, 55);
-    drawDeadTree(700, y, 65);
-    drawDeadTree(1050, y, 60);
-
-    // Platform decorations
+    // Platform decorations (tombstones + jack-o-lanterns)
     const floats = getFloatingPlatforms(arena.platforms);
     for (let i = 0; i < floats.length; i++) {
       const plat = floats[i];
@@ -582,9 +622,8 @@ export const hauntedGraveyard: ArenaPack = {
         drawTombstone(mid, plat.y, i % 3);
       } else if (i % 3 === 1) {
         drawJackOLantern(mid, plat.y, 14);
-      } else {
-        drawDeadTree(mid, plat.y, 30);
       }
+      // i % 3 === 2 → dead tree (reactive)
     }
   },
 
@@ -641,23 +680,17 @@ export const hauntedGraveyard: ArenaPack = {
   },
 
   drawWeatherParticle: (ctx, w) => {
-    ctx.save();
-    ctx.translate(w.x, w.y);
-    ctx.rotate(w.rotation);
     if (w.type === 'ash') {
-      // Ghost-like mist particle
       ctx.fillStyle = w.color || 'rgba(100, 80, 120, 0.4)';
       ctx.beginPath();
-      ctx.ellipse(0, 0, w.size, w.size * 0.5, 0, 0, Math.PI * 2);
+      ctx.ellipse(w.x, w.y, w.size, w.size * 0.5, w.rotation, 0, Math.PI * 2);
       ctx.fill();
     } else {
-      // Dead leaf
       ctx.fillStyle = 'rgba(80, 60, 40, 0.4)';
       ctx.beginPath();
-      ctx.ellipse(0, 0, w.size, w.size * 0.35, 0, 0, Math.PI * 2);
+      ctx.ellipse(w.x, w.y, w.size, w.size * 0.35, w.rotation, 0, Math.PI * 2);
       ctx.fill();
     }
-    ctx.restore();
   },
 
   drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => {
@@ -665,6 +698,57 @@ export const hauntedGraveyard: ArenaPack = {
   },
   drawPlatformOverlay: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => {
     drawHauntedPlatformFg(ctx, platform, isGround);
+  },
+
+  buildReactiveDecorations: (arena) => {
+    const out: ReactiveInstance[] = [];
+
+    // Ground dead trees (mirror of the original silhouettes in drawBackgroundNature).
+    // Foot anchored on the ground platform's top edge (y = arena.platforms[0].y).
+    const groundY = arena.platforms[0].y;
+    out.push(hauntedDeadTree(50, groundY, 70));
+    out.push(hauntedDeadTree(350, groundY, 55));
+    out.push(hauntedDeadTree(700, groundY, 65));
+    out.push(hauntedDeadTree(1050, groundY, 60));
+
+    // Platform-top dead trees (every 3rd floating platform — i % 3 === 2).
+    const floats = getFloatingPlatforms(arena.platforms);
+    for (let i = 0; i < floats.length; i++) {
+      if (i % 3 !== 2) continue;
+      const plat = floats[i];
+      const mid = plat.x + plat.width / 2;
+      out.push(hauntedDeadTree(mid, plat.y, 30));
+    }
+
+    // Cobwebs in front-face corners of floating platforms. Mirrors the seeded
+    // selection logic from the (now-removed) drawHauntedPlatformFg block.
+    for (const plat of floats) {
+      const cF = capFrontY(plat);
+      const bodyTop = cF;
+      const bodyH = plat.height - CAP_DEPTH / 2;
+      if (bodyH < 10) continue;
+      // Independent seed for cobweb selection — the original draw fn consumed a
+      // variable number of rng() calls in the crack-stem block before reaching
+      // cobwebs, so we use a separate seed here for stable determinism.
+      const cobwebRng = mulberry32(seedFor(plat.x, plat.y) ^ 0xC0BCEB);
+      let leftTop = cobwebRng() < 0.7;
+      let leftBot = cobwebRng() < 0.7;
+      let rightTop = cobwebRng() < 0.7;
+      let rightBot = cobwebRng() < 0.7;
+      if (leftTop && leftBot) {
+        if (cobwebRng() < 0.5) leftBot = false; else leftTop = false;
+      }
+      if (rightTop && rightBot) {
+        if (cobwebRng() < 0.5) rightBot = false; else rightTop = false;
+      }
+      const bb = bodyTop + bodyH;
+      if (leftTop)  out.push(hauntedCobweb(plat.x, bodyTop, +1, +1));
+      if (rightTop) out.push(hauntedCobweb(plat.x + plat.width, bodyTop, -1, +1));
+      if (leftBot)  out.push(hauntedCobweb(plat.x, bb, +1, -1));
+      if (rightBot) out.push(hauntedCobweb(plat.x + plat.width, bb, -1, -1));
+    }
+
+    return out;
   },
 
   drawCustomThorn: createThornRenderer((ctx, x, y, width, height, fadeAlpha) => {
@@ -774,14 +858,19 @@ export const hauntedGraveyard: ArenaPack = {
     ctx.restore();
   },
 
-  drawGroundCritters: (ctx, _arena, time, _dayPhase, matchState) => {
-    if (getSlowDevice() || !matchState) return;
-    const dt = _tickGraveRatDt(time);
-    for (let i = 0; i < _graveRats.length; i++) {
-      const r = _graveRats[i];
-      tickGroundCritter(r, matchState.players, dt, RATS_CFG[i]);
-      drawRat(ctx, r.x, RATS_CFG[i].platTopY - 4, r.facingEase < 0 ? -1 : 1, time, Math.abs(r.facingEase), r.fleeing);
+  buildWildlife: (_arena: Arena): WildlifeInstance[] => {
+    const out: WildlifeInstance[] = [];
+    for (let i = 0; i < RATS_CFG.length; i++) {
+      const cfg = RATS_CFG[i];
+      out.push(buildGroundCritter({
+        seed: i,
+        cfg,
+        initialDir: i % 2 === 0 ? 1 : -1,
+        draw: ({ ctx, state, cfg: c, time }) =>
+          drawRat(ctx, state.x, c.platTopY - 4, state.facingEase < 0 ? -1 : 1, time, Math.abs(state.facingEase), state.fleeing),
+      }));
     }
+    return out;
   },
 
   drawAnimatedForeground: (ctx, _arena, time) => {

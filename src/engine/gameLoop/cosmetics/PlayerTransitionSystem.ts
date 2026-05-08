@@ -1,4 +1,4 @@
-import type { MatchState, MatchSettings, PlayerSlot } from '../../types';
+import type { MatchState, MatchSettings, Player, PlayerSlot } from '../../types';
 import type { CosmeticSystem } from '../types';
 import type { ParticleSystem } from './ParticleSystem';
 import { PlayerSfxCooldowns } from './sfx';
@@ -8,6 +8,7 @@ import {
 } from './playerTransitions';
 import type { PrevPlayerCosmeticState, TransitionCallbacks } from './playerTransitions';
 import { getSlowDevice } from '../../perfFlags';
+import { TransitionTracker } from '../../transitionTracker';
 
 export class PlayerTransitionSystem implements CosmeticSystem {
   private state: MatchState;
@@ -16,7 +17,8 @@ export class PlayerTransitionSystem implements CosmeticSystem {
   private playAnimal: (name: string) => void;
   private particleSystem: ParticleSystem;
 
-  private prevCosmeticState: Map<PlayerSlot, PrevPlayerCosmeticState> = new Map();
+  private readonly tracker: TransitionTracker<PlayerSlot, PrevPlayerCosmeticState, Player> =
+    new TransitionTracker<PlayerSlot, PrevPlayerCosmeticState, Player>(snapshotPlayerCosmeticState);
   private sfxCooldowns: PlayerSfxCooldowns = new PlayerSfxCooldowns();
   private callbacks: TransitionCallbacks;
 
@@ -27,6 +29,7 @@ export class PlayerTransitionSystem implements CosmeticSystem {
     playAnimal: (name: string) => void,
     particleSystem: ParticleSystem,
     onStomp?: (x: number, y: number) => void,
+    lightBurst?: (x: number, y: number, kind: 'spawn' | 'stomp') => void,
   ) {
     this.state = state;
     this.settings = settings;
@@ -43,12 +46,13 @@ export class PlayerTransitionSystem implements CosmeticSystem {
       pickupCarrotVFX: (x, y) => this.particleSystem.pickupCarrotVFX(x, y),
       spawnPlayerSpawnVFX: (x, y) => this.particleSystem.spawnRingVFX(x, y),
       onStomp,
+      lightBurst,
     };
   }
 
   init(): void {
     for (const p of this.state.players) {
-      this.prevCosmeticState.set(p.id, snapshotPlayerCosmeticState(p));
+      this.tracker.prime(p.id, p);
       if (p.active && p.state !== 'splat' && p.state !== 'respawning') {
         this.callbacks.spawnPlayerSpawnVFX(p.x + p.width / 2, p.y + p.height / 2);
       }
@@ -67,13 +71,12 @@ export class PlayerTransitionSystem implements CosmeticSystem {
       if (player.damageFlashTimer > 0) player.damageFlashTimer = Math.max(0, player.damageFlashTimer - dt);
       if (player.springTrailTimer > 0) player.springTrailTimer = Math.max(0, player.springTrailTimer - dt);
 
-      // Transition-triggered effects (must fire even during hitstop, e.g. stomp)
-      const prev = this.prevCosmeticState.get(player.id);
-      if (prev) {
+      // Transition-triggered effects (must fire even during hitstop, e.g. stomp).
+      // Tracker fires onTransition only after a baseline exists, then
+      // re-snapshots player as the next-frame baseline.
+      this.tracker.detect(player.id, player, (prev) => {
         detectPlayerTransitions(player, prev, this.state, this.sfxCooldowns, this.callbacks);
-      } else {
-        this.prevCosmeticState.set(player.id, snapshotPlayerCosmeticState(player));
-      }
+      });
     }
   }
 
@@ -88,14 +91,14 @@ export class PlayerTransitionSystem implements CosmeticSystem {
    *  loading→playing edge (initial baseline was captured before the host's
    *  countdown advanced). */
   resetBaseline(): void {
-    this.prevCosmeticState.clear();
+    this.tracker.clear();
     for (const p of this.state.players) {
-      this.prevCosmeticState.set(p.id, snapshotPlayerCosmeticState(p));
+      this.tracker.prime(p.id, p);
     }
   }
 
   cleanup(): void {
-    this.prevCosmeticState.clear();
+    this.tracker.clear();
     this.sfxCooldowns.clear();
   }
 }

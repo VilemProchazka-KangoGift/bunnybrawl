@@ -1,6 +1,6 @@
 // src/engine/input/RuleBasedBot.ts
 import type { InputState, MatchState, PlayerSlot, BotSlot, Arena } from '../types';
-import type { PlayerInput } from './PlayerInput';
+import type { PlayerInput, PlayerInputContext } from './PlayerInput';
 import type { AIController } from '../ai';
 
 const NO_INPUT: InputState = { left: false, right: false, jump: false, down: false };
@@ -25,7 +25,7 @@ export class RuleBasedBot implements PlayerInput {
     this.arena = arena;
   }
 
-  getAction(state: Readonly<MatchState>): InputState {
+  getAction(state: Readonly<MatchState>, _ctx?: PlayerInputContext): InputState {
     const self = state.players.find(p => p.id === this.slot);
     if (!self) return { ...NO_INPUT };
     // AIController only reads MatchState — the cast strips Readonly to match its

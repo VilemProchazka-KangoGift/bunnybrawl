@@ -3,7 +3,6 @@ export { launchGib, spawnGibs, updateGibs } from './gibs';
 export { createWeatherParticle, updateWeather, updateWildlife, updateFog, updatePollen, updateShootingStars, updateShockwaves, updateScoreAnimations, updateBouncyWobble, updatePigeonScatterParticles } from './environment';
 export { PlayerSfxCooldowns, updateCrowdCheering, tickPeriodicAmbient } from './sfx';
 export { detectEntityTransitions } from './entityTransitions';
-export type { PrevEntityState } from './entityTransitions';
 export { detectPlayerTransitions, snapshotPlayerCosmeticState } from './playerTransitions';
 export type { PrevPlayerCosmeticState, TransitionCallbacks } from './playerTransitions';
 export { updatePlayerCosmetics } from './playerCosmetics';

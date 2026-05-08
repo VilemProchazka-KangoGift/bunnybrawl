@@ -168,7 +168,7 @@ export function CharacterSelect() {
     const theme = getTheme('lobby');
     // Lobby skips bgNightCanvas/fgNightTint and stays on the source-over
     // fillRect path — the cross-fade infrastructure isn't worth its VRAM here.
-    const renderer = new Renderer(bg, fg, theme, false, hud);
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme, hudCanvas: hud });
 
     // Static world (sky, hills, far background, platform iso skin) baked once.
     const game = lobbyGameRef.current;

@@ -42,12 +42,19 @@ export interface TransitionCallbacks {
    *  Receives the stomp position (victim's center). Used by
    *  ReactiveDecorationSystem to shake nearby trees / saplings. */
   onStomp?: (x: number, y: number) => void;
+  /** Optional: queue an additive light flash on the fg canvas. Fires on
+   *  splat (stomp explosion) and on respawn (spawn pillar). Bypasses the
+   *  lightCanvas opacity gate so the flash is visible at any dayPhase. */
+  lightBurst?: (x: number, y: number, kind: 'spawn' | 'stomp') => void;
 }
 
 /**
  * Detect per-player state transitions and fire sounds/VFX.
  * Must fire even during hitstop (e.g. stomp sound).
- * Mutates `prev` in place to track frame-to-frame changes.
+ *
+ * Pure: reads `prev` for transition detection. The next-frame baseline is
+ * managed by the caller (`TransitionTracker.detect()`), which re-snapshots
+ * `player` after this function returns — see `PlayerTransitionSystem`.
  */
 export function detectPlayerTransitions(
   player: Player,
@@ -95,11 +102,11 @@ export function detectPlayerTransitions(
     cb.playSound('stomp');
     cb.playAnimal(player.character.name);
     cb.spawnKillSplatter(player);
-    state.shockwaves.push({
-      x: player.x + player.width / 2, y: player.y + player.height / 2,
-      radius: 0, maxRadius: SHOCKWAVE_MAX_RADIUS, life: SHOCKWAVE_DURATION,
-    });
-    if (cb.onStomp) cb.onStomp(player.x + player.width / 2, player.y + player.height / 2);
+    const sx = player.x + player.width / 2;
+    const sy = player.y + player.height / 2;
+    state.shockwaves.push({ x: sx, y: sy, radius: 0, maxRadius: SHOCKWAVE_MAX_RADIUS, life: SHOCKWAVE_DURATION });
+    if (cb.onStomp) cb.onStomp(sx, sy);
+    cb.lightBurst?.(sx, sy, 'stomp');
   }
 
   // Respawn (any path: stomp, fall-off, OOB failsafe). invincibleTimer rises
@@ -107,7 +114,10 @@ export function detectPlayerTransitions(
   // Game start is handled separately by PlayerTransitionSystem.init().
   if (player.invincibleTimer > prev.invincibleTimer) {
     cb.playSound('land');
-    cb.spawnPlayerSpawnVFX(player.x + player.width / 2, player.y + player.height / 2);
+    const sx = player.x + player.width / 2;
+    const sy = player.y + player.height / 2;
+    cb.spawnPlayerSpawnVFX(sx, sy);
+    cb.lightBurst?.(sx, sy, 'spawn');
   }
 
   // Push bump (sideSquash === 0.8 is exact collision marker; wall hits set 0.75)
@@ -135,16 +145,7 @@ export function detectPlayerTransitions(
   // Slow start → thorn/hazard/ghost/lava rock hit sound
   if (prev.slowTimer <= 0 && player.slowTimer > 0) cb.playSound('thornhit');
 
-  // Update prev state
-  prev.state = player.state;
-  prev.vx = player.vx;
-  prev.vy = player.vy;
-  prev.score = player.score;
-  prev.fatTimer = player.fatTimer;
-  prev.sideSquash = player.sideSquash;
-  prev.burnTimer = player.burnTimer;
-  prev.invincibleTimer = player.invincibleTimer;
-  prev.slowTimer = player.slowTimer;
-  prev.fastFalling = player.fastFalling;
-  prev.springTrailTimer = player.springTrailTimer;
+  // Note: prev-state refresh is handled by TransitionTracker.detect() in
+  // PlayerTransitionSystem — adding new prev fields needs only the interface
+  // and snapshotPlayerCosmeticState() (NOT a third update site here).
 }

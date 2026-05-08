@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { LightingPipeline } from '../pipeline';
+import { AmbientPipeline } from '../pipeline';
 
-describe('LightingPipeline.getFgTintOpacity (dusk-aware ramp)', () => {
-  const p = new LightingPipeline(1280, 720);
+describe('AmbientPipeline.getFgTintOpacity (dusk-aware ramp)', () => {
+  const p = new AmbientPipeline(1280, 720);
   // Pin the threshold by reading the curve shape rather than a magic constant.
 
   it('returns 0 below the dusk threshold', () => {

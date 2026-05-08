@@ -76,10 +76,10 @@ async function closePair(pair: OnlinePair) {
 /** Grab a state snapshot from one peer — includes hash, positions, scores, and rollback stats. */
 async function grabSnapshot(page: Page) {
   return page.evaluate(() => {
-    const gl = (window as any).__gameLoop;
-    const nm = (window as any).__netMatch;
+    const gl = window.__bunnyTest;
+    const nm = window.__bunnyTest?.netMatch();
     if (!gl) return null;
-    const s = gl.getState();
+    const s = gl.state();
     const hash = gl.getStateHash?.() ?? null;
     const rollback = nm?.getRollbackStats?.() ?? null;
     return {
@@ -139,7 +139,7 @@ test.describe('Desync Detection @online @desync', () => {
     try {
       // Configure: 5 bots, hard difficulty, meadow arena (lots of features)
       await pair.host.evaluate(() => {
-        (window as any).__gameStore?.getState().setMatchSettings({
+        window.__bunnyTest?.gameStore()?.getState().setMatchSettings({
           botCount: 5,
           botDifficulty: 'hard',
           killLimit: 99, // high limit so match doesn't end early
@@ -158,8 +158,8 @@ test.describe('Desync Detection @online @desync', () => {
 
       // Wait past countdown
       await pair.host.waitForFunction(() => {
-        const gl = (window as any).__gameLoop;
-        return gl?.getState()?.countdown <= 0;
+        const gl = window.__bunnyTest;
+        return gl?.state()?.countdown <= 0;
       }, { timeout: 10000 });
 
       // ---- Snapshot collection phase ----
@@ -327,7 +327,7 @@ test.describe('Desync Detection @online @desync', () => {
     const pair = await createPair(browser);
     try {
       await pair.host.evaluate(() => {
-        (window as any).__gameStore?.getState().setMatchSettings({
+        window.__bunnyTest?.gameStore()?.getState().setMatchSettings({
           botCount: 3,
           botDifficulty: 'medium',
           killLimit: 99,
@@ -344,8 +344,8 @@ test.describe('Desync Detection @online @desync', () => {
       await expect(pair.guest.getByTestId('match-screen')).toBeVisible({ timeout: 15000 });
 
       await pair.host.waitForFunction(() => {
-        const gl = (window as any).__gameLoop;
-        return gl?.getState()?.countdown <= 0;
+        const gl = window.__bunnyTest;
+        return gl?.state()?.countdown <= 0;
       }, { timeout: 10000 });
 
       // Measure hash mismatch rate in first half vs second half
@@ -398,7 +398,7 @@ test.describe('Desync Detection @online @desync', () => {
         await guest.goto('/' + suffix);
 
         await host.evaluate(() => {
-          (window as any).__gameStore?.getState().setMatchSettings({
+          window.__bunnyTest?.gameStore()?.getState().setMatchSettings({
             botCount: 2, botDifficulty: 'medium', killLimit: 99, timeLimit: 15,
           });
         });
