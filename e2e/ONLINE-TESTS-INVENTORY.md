@@ -48,7 +48,7 @@ async function createOnlineMatch(browser: Browser) {
 | # | Test | Steps | Verifies |
 |---|------|-------|----------|
 | 8 | **Match starts with correct players** | Start online match with host=Bunny, guest=Fox. | Both canvases render, game-canvas visible on both tabs |
-| 9 | **Input reaches remote player** | Host holds right arrow for 2 seconds. | Host's character moves right on guest's screen (verify via `window.__gameLoop.getState()`) |
+| 9 | **Input reaches remote player** | Host holds right arrow for 2 seconds. | Host's character moves right on guest's screen (verify via `window.__bunnyTest.state()`) |
 | 10 | **Stomp registers on both clients** | Bot stomps a player (use `?bots=1`). | Kill feed updates on both, scores match |
 | 11 | **Match ends simultaneously** | Play until kill limit reached. | Both reach victory screen, winner matches |
 | 12 | **Pause syncs** | Host presses Escape to pause. | Guest sees pause overlay too |
@@ -109,6 +109,6 @@ Match.tsx already has: `match-screen`, `game-canvas`, `pause-menu`, `resume-butt
 
 - **Timing**: Online tests are inherently slower (PeerJS signaling ~500ms, WebRTC handshake ~300ms). Use generous timeouts (10-15s for connection, 30s for match play).
 - **Flakiness**: PeerJS free server can be unreliable. Tag all online tests `@online` and consider separate CI job with retries.
-- **State verification**: Use `page.evaluate(() => window.__gameLoop?.getState())` to read game state from both tabs for position/score assertions.
+- **State verification**: Use `page.evaluate(() => window.__bunnyTest?.state())` to read game state from both tabs for position/score assertions.
 - **Room code extraction**: Host creates room → extract code from `.online-code` element → paste into guest's input.
 - **Bot-assisted tests**: Use `?bots=1` URL param to ensure matches end quickly without manual input.

@@ -19,6 +19,7 @@ import { useTransientBanner } from '../hooks/useTransientBanner';
 import { useDelayedFlag } from '../hooks/useDelayedFlag';
 import { useWakeLock } from '../hooks/useWakeLock';
 import logoImg from '/logo.png?url';
+import { attachMatch as attachBunnyTestMatch } from './bunnyTestShim';
 import './Match.css';
 
 // Track last resolved arena so random doesn't repeat on rematch. Intentionally
@@ -259,6 +260,12 @@ export function Match() {
     const fgNightTint = fgNightTintRef.current ?? undefined;
     const lightCanvas = lightCanvasRef.current ?? undefined;
 
+    // Wire the unified E2E diagnostic snapshot to this Match's refs. Reads
+    // are function-getter form so each call sees the CURRENT GameLoop /
+    // NetMatch (rematch, arena swap, online↔local rebind via the same
+    // refs). No-op in production builds.
+    const detachBunnyTest = attachBunnyTestMatch({ gameLoopRef, netMatchRef });
+
     const clearTimer = (ref: { current: ReturnType<typeof setTimeout> | null }) => {
       if (ref.current) { clearTimeout(ref.current); ref.current = null; }
     };
@@ -266,6 +273,7 @@ export function Match() {
       gameLoopRef.current = null;
       setTouchInput(null);
       clearTimer(victoryTimeoutRef);
+      detachBunnyTest();
     };
 
     const arena = getArena(currentArenaId);
@@ -428,8 +436,6 @@ export function Match() {
 
       netMatchRef.current = netMatch;
       gameLoopRef.current = netMatch.getGameLoop();
-      window.__gameLoop = netMatch.getGameLoop();
-      (window as any).__netMatch = netMatch;
       netMatch.getGameLoop().setPlayerNames(useGameStore.getState().online.playerNames);
       netMatch.getGameLoop().setLocalSlot((online.isHost ? 'P1' : online.localSlot) as PlayerSlot);
       netMatch.start();
@@ -475,7 +481,6 @@ export function Match() {
     );
 
     gameLoopRef.current = loop;
-    window.__gameLoop = loop;
     loop.setOnPhaseChange((phase: MatchPhase) => {
       setPhaseIsLoading(phase === 'loading');
     });

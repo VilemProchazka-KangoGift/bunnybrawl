@@ -62,7 +62,7 @@ test('perf profile run', async ({ page, context }) => {
     + `&killLimit=999&debug=perffps`
     + (process.env.PERF_EXTRA_URL ?? '');
   await page.goto(url);
-  await page.waitForFunction(() => window.__gameLoop?.getState()?.countdown === 0, undefined, { timeout: 15000 });
+  await page.waitForFunction(() => window.__bunnyTest?.state()?.countdown === 0, undefined, { timeout: 15000 });
   expect(await page.evaluate(() => window.__perfTrace?.enabled)).toBe(true);
 
   // Reset perfTrace so countdown samples don't pollute the run

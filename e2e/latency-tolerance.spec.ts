@@ -79,7 +79,7 @@ test.describe('Latency Tolerance @online @desync', () => {
         await guest.goto('/' + suffix);
 
         await host.evaluate(() => {
-          (window as any).__gameStore?.getState().setMatchSettings({
+          window.__bunnyTest?.gameStore()?.getState().setMatchSettings({
             botCount: 2, botDifficulty: 'medium', killLimit: 99, timeLimit: 15,
           });
         });
@@ -106,8 +106,8 @@ test.describe('Latency Tolerance @online @desync', () => {
 
         // Wait past countdown
         await host.waitForFunction(() => {
-          const gl = (window as any).__gameLoop;
-          return gl?.getState()?.countdown <= 0;
+          const gl = window.__bunnyTest;
+          return gl?.state()?.countdown <= 0;
         }, { timeout: 15000 }).catch(() => {});
 
         // Sample for 10 seconds
@@ -118,16 +118,16 @@ test.describe('Latency Tolerance @online @desync', () => {
         for (let i = 0; i < 5; i++) {
           await host.waitForTimeout(2000);
 
-          const hostAlive = await host.evaluate(() => !!(window as any).__gameLoop).catch(() => false);
+          const hostAlive = await host.evaluate(() => !!window.__bunnyTest?.state()).catch(() => false);
           if (!hostAlive) { matchSurvived = false; break; }
 
           const [hs, gs] = await Promise.all([
             host.evaluate(() => {
-              const s = (window as any).__gameLoop?.getState();
+              const s = window.__bunnyTest?.state();
               return s ? { players: s.players.map((p: any) => ({ score: p.score, x: Math.round(p.x), y: Math.round(p.y) })) } : null;
             }).catch(() => null),
             guest.evaluate(() => {
-              const s = (window as any).__gameLoop?.getState();
+              const s = window.__bunnyTest?.state();
               return s ? { players: s.players.map((p: any) => ({ score: p.score, x: Math.round(p.x), y: Math.round(p.y) })) } : null;
             }).catch(() => null),
           ]);
@@ -143,7 +143,7 @@ test.describe('Latency Tolerance @online @desync', () => {
 
         // Final stats
         const stats = await host.evaluate(() => {
-          const nm = (window as any).__netMatch;
+          const nm = window.__bunnyTest?.netMatch();
           if (!nm) return null;
           const s = nm.getRollbackStats();
           return { rtt: Math.round(s.rtt), jitter: Math.round(s.jitter), inputDelay: s.inputDelay,
