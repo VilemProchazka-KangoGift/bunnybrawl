@@ -72,6 +72,26 @@ function getCachedRgb(hex: string): { r: number; g: number; b: number } {
   return v;
 }
 
+/** Memoized "leader-tinted" RGB — base color lerped toward gold (#FFD700)
+ *  by LEADER_TINT_AMOUNT. The points leader's aura uses this; all other
+ *  players use the unmodified cache. Per-character allocation, never per-frame. */
+const _leaderRgbCache = new Map<string, { r: number; g: number; b: number }>();
+const LEADER_TINT_AMOUNT = 0.6;
+function getLeaderRgb(hex: string): { r: number; g: number; b: number } {
+  let v = _leaderRgbCache.get(hex);
+  if (!v) {
+    const b = hexToRGB(hex);
+    const t = LEADER_TINT_AMOUNT;
+    v = {
+      r: Math.round(b.r * (1 - t) + 255 * t),
+      g: Math.round(b.g * (1 - t) + 215 * t),
+      b: Math.round(b.b * (1 - t) +   0 * t),
+    };
+    _leaderRgbCache.set(hex, v);
+  }
+  return v;
+}
+
 /** Warm-orange tint used for the per-carrot glow emitter. Frozen + shared
  *  across all carrots — the renderer never mutates it. */
 const CARROT_GLOW_RGB: Readonly<{ r: number; g: number; b: number }> =
@@ -630,24 +650,43 @@ export class Renderer {
    *  Sources:
    *  - Per-player aura — soft warm glow on the player center; intensity +
    *    radius ramp during respawn invincibility (the "spawn pillar" effect).
+   *    The points leader gets a gold-tinted, brighter, wider variant — visual
+   *    "who's winning" cue at a glance for the couch-co-op format.
    *  - Per-carrot glow — subtle warm-orange so carrots stay visible at night.
-   *    Brightens briefly after spawn (uses `Carrot.spawnTime`). */
+   *    Brightens briefly after spawn (uses `Carrot.spawnTime`).
+   *  - Firefly emitters — per-particle yellow-green glow, locked to the
+   *    visual draw via `fireflyPosition`. */
   private _synthesizeDynamicLights(matchState: MatchState): void {
     let i = 0;
+
+    // Leader = highest active score. Empty/everyone-tied-at-0/match-over
+    // disables the boost (no leader to highlight at start, no relevance after).
+    let leaderScore = 0;
+    if (!matchState.matchOver) {
+      for (const p of matchState.players) {
+        if (!isLivePlayer(p)) continue;
+        if (p.score > leaderScore) leaderScore = p.score;
+      }
+    }
 
     for (const player of matchState.players) {
       if (!isLivePlayer(player)) continue;
       const slot = this._ensureLightSlot(i++);
       slot.x = player.x + player.width / 2;
       slot.y = player.y + player.height / 2;
-      slot.color = getCachedRgb(player.character.color);
       slot.falloff = 'smoothstep';
-      // Spawn pillar: invincibility i-frames boost the aura toward a
-      // brighter, wider pillar of the player's color. Linear fade from
-      // (boost peak) at full timer → (baseline) at timer=0.
+      // Spawn pillar: invincibility i-frames boost the aura toward a brighter,
+      // wider pillar of the player's color. Linear fade from peak at full
+      // timer → baseline at timer=0.
       const pillar = Math.max(0, player.invincibleTimer) / INVINCIBLE_DURATION;
-      slot.intensity = 0.3 + pillar * 0.5;
-      slot.radius = 70 + pillar * 60;
+      // Leader boost: gold-tinted color, additive intensity/radius. Stacks
+      // with the spawn pillar — a respawning leader briefly glows huge.
+      const isLeader = leaderScore > 0 && player.score === leaderScore;
+      slot.color = isLeader
+        ? getLeaderRgb(player.character.color)
+        : getCachedRgb(player.character.color);
+      slot.intensity = 0.3 + pillar * 0.5 + (isLeader ? 0.25 : 0);
+      slot.radius = 70 + pillar * 60 + (isLeader ? 25 : 0);
     }
 
     for (const carrot of matchState.carrots) {

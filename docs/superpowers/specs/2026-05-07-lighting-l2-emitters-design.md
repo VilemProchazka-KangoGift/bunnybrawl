@@ -183,7 +183,7 @@ Touches every test setup once; subsequent L2 PRs add one field instead of one po
 
 - **Phase 4** — Carrot glow (dynamic emitter on `Carrot` entity, decays after pickup); spawn pillars (static emitters around spawn points, fade with respawn invincibility timer).
 - **Phase 5** — Lava emissive (volcano arena: bottom-aligned warm point lights along the lava surface, intensity coupled to lava activity); firefly lights (treetops arena: per-particle dim point lights synthesized from existing firefly particles).
-- **Phase 6** — Per-player aura + critical-moment bump (intensity ramps when player is in danger or near a kill).
+- **Phase 6** — Points-leader aura: gold-tinted, brighter, wider than the baseline aura. Visual "who's winning" cue at a glance. (Replaced the originally planned low-health critical-moment bump — the game has no health stat, and "who to chase next" is a more useful read for couch-co-op than "who's vulnerable.")
 - **Phase 7** — Pre-L3 cleanup; CLAUDE.md updates documenting L2's lessons; L3 brainstorm prep.
 
 ## Resolved questions from L2 brainstorm prep
