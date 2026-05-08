@@ -80,17 +80,12 @@ export function updatePlayerCosmetics(
   const spawnAfterimage = !getSlowDevice()
     && (speed > AFTERIMAGE_SPEED_THRESHOLD || player.invincibleTimer > 0);
   if (spawnAfterimage) {
-    // Drain residual: fire once per interval crossed (matches original `while` behaviour).
-    // First call adds dt; subsequent calls in the loop pass dt=0 to consume residuals.
-    if (afterimageAccs.advance(player.id, dt, AFTERIMAGE_INTERVAL)) {
+    let fired = afterimageAccs.advance(player.id, dt, AFTERIMAGE_INTERVAL);
+    while (fired) {
       if (player.afterimages.length < AFTERIMAGE_MAX) {
         player.afterimages.push({ x: player.x, y: player.y, facing: player.facing, alpha: 1 });
       }
-      while (afterimageAccs.advance(player.id, 0, AFTERIMAGE_INTERVAL)) {
-        if (player.afterimages.length < AFTERIMAGE_MAX) {
-          player.afterimages.push({ x: player.x, y: player.y, facing: player.facing, alpha: 1 });
-        }
-      }
+      fired = afterimageAccs.advance(player.id, 0, AFTERIMAGE_INTERVAL);
     }
   } else {
     afterimageAccs.clear(player.id);
