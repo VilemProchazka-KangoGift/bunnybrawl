@@ -249,90 +249,79 @@ export function drawFireworks(ctx: CanvasRenderingContext2D, particles: Particle
 }
 
 export function drawWildlife(ctx: CanvasRenderingContext2D, wildlife: WildlifeEntity[]): void {
+  // No save/translate per entity — absolute coords throughout (wildlife
+  // doesn't rotate, just translates). Saves N save/restore pairs/frame.
   for (const w of wildlife) {
-    ctx.save();
-    ctx.translate(w.x, w.y);
+    const cx = w.x;
+    const cy = w.y;
 
     if (w.type === 'butterfly') {
-      // Butterfly: small colored V-shapes that flutter
       const wingAngle = Math.sin(w.wingPhase) * 0.6;
       const wcos = Math.cos(wingAngle);
       const wsin = Math.abs(Math.sin(wingAngle));
       const wingX = 6 * wcos;
       const wingY = -4 * wsin - 3;
       ctx.fillStyle = w.color;
-      // Left wing
       ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(-wingX, wingY);
-      ctx.lineTo(-3, 0);
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx - wingX, cy + wingY);
+      ctx.lineTo(cx - 3, cy);
       ctx.closePath();
       ctx.fill();
-      // Right wing
       ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(wingX, wingY);
-      ctx.lineTo(3, 0);
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + wingX, cy + wingY);
+      ctx.lineTo(cx + 3, cy);
       ctx.closePath();
       ctx.fill();
-      // Body
       ctx.fillStyle = '#333';
-      ctx.fillRect(-0.5, -1, 1, 3);
+      ctx.fillRect(cx - 0.5, cy - 1, 1, 3);
     } else if (w.type === 'fish') {
-      // Fish: oval body + wagging tail
       const tailWag = Math.sin(w.wingPhase * 2) * 0.4;
-      // Body
       ctx.fillStyle = w.color;
       ctx.beginPath();
-      ctx.ellipse(0, 0, 7, 4, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx, cy, 7, 4, 0, 0, Math.PI * 2);
       ctx.fill();
-      // Tail fin
       ctx.beginPath();
-      ctx.moveTo(-6, 0);
-      ctx.lineTo(-12, -4 + tailWag * 4);
-      ctx.lineTo(-12, 4 + tailWag * 4);
+      ctx.moveTo(cx - 6, cy);
+      ctx.lineTo(cx - 12, cy - 4 + tailWag * 4);
+      ctx.lineTo(cx - 12, cy + 4 + tailWag * 4);
       ctx.closePath();
       ctx.fill();
-      // Dorsal fin
       ctx.fillStyle = w.color;
       ctx.globalAlpha = 0.7;
       ctx.beginPath();
-      ctx.moveTo(-2, -3);
-      ctx.lineTo(1, -7);
-      ctx.lineTo(4, -3);
+      ctx.moveTo(cx - 2, cy - 3);
+      ctx.lineTo(cx + 1, cy - 7);
+      ctx.lineTo(cx + 4, cy - 3);
       ctx.closePath();
       ctx.fill();
       ctx.globalAlpha = 1;
-      // Eye
       ctx.fillStyle = '#111';
       ctx.beginPath();
-      ctx.arc(4, -1, 1.2, 0, Math.PI * 2);
+      ctx.arc(cx + 4, cy - 1, 1.2, 0, Math.PI * 2);
       ctx.fill();
     } else if (w.type === 'bat') {
-      // Bat: angular pointed wings with fast flap
       ctx.fillStyle = w.color;
       const wingFlap = Math.sin(w.wingPhase) * 5;
-      // Left wing
       ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(-4, -2 + wingFlap * 0.3);
-      ctx.lineTo(-10, wingFlap);
-      ctx.lineTo(-7, 0);
-      ctx.lineTo(-4, 1);
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx - 4, cy - 2 + wingFlap * 0.3);
+      ctx.lineTo(cx - 10, cy + wingFlap);
+      ctx.lineTo(cx - 7, cy);
+      ctx.lineTo(cx - 4, cy + 1);
       ctx.closePath();
       ctx.fill();
-      // Right wing
       ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(4, -2 + wingFlap * 0.3);
-      ctx.lineTo(10, wingFlap);
-      ctx.lineTo(7, 0);
-      ctx.lineTo(4, 1);
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + 4, cy - 2 + wingFlap * 0.3);
+      ctx.lineTo(cx + 10, cy + wingFlap);
+      ctx.lineTo(cx + 7, cy);
+      ctx.lineTo(cx + 4, cy + 1);
       ctx.closePath();
       ctx.fill();
-      // Body
       ctx.beginPath();
-      ctx.ellipse(0, 0, 2, 3, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx, cy, 2, 3, 0, 0, Math.PI * 2);
       ctx.fill();
     } else {
       // Bird: simple M-shape silhouette
@@ -340,15 +329,13 @@ export function drawWildlife(ctx: CanvasRenderingContext2D, wildlife: WildlifeEn
       ctx.lineWidth = 2;
       const wingFlap = Math.sin(w.wingPhase) * 4;
       ctx.beginPath();
-      ctx.moveTo(-8, wingFlap);
-      ctx.lineTo(-3, -3);
-      ctx.lineTo(0, 0);
-      ctx.lineTo(3, -3);
-      ctx.lineTo(8, wingFlap);
+      ctx.moveTo(cx - 8, cy + wingFlap);
+      ctx.lineTo(cx - 3, cy - 3);
+      ctx.lineTo(cx, cy);
+      ctx.lineTo(cx + 3, cy - 3);
+      ctx.lineTo(cx + 8, cy + wingFlap);
       ctx.stroke();
     }
-
-    ctx.restore();
   }
 }
 
