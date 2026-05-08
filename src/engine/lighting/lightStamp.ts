@@ -9,7 +9,7 @@
 // `SeededRNG.fromTick`. Co-located emitters with distinct seeds desync.
 
 import { SeededRNG } from '../seededRng';
-import type { Light } from './types';
+import type { Light, SpotLight } from './types';
 
 /** Cap intensity for photosensitivity-aware callers. Mirrors L1's sun cap. */
 export const PHOTOSENSITIVITY_INTENSITY_CAP = 0.7;
@@ -21,10 +21,10 @@ export const PHOTOSENSITIVITY_INTENSITY_CAP = 0.7;
  *  deltas clamp to 0 since `'lighter'` blend can't subtract — net result is a
  *  small positive bias of ~amp/8 over time, sub-perceptual at amp ≤ 0.15. */
 export function effectiveIntensity(light: Light, tick: number): number {
-  if (light.flickerSeed === undefined) return light.intensity;
-  const amp = light.flickerAmplitude ?? 0;
-  if (amp === 0) return light.intensity;
-  const delta = (SeededRNG.floatFromTick(light.flickerSeed, tick) - 0.5) * amp;
+  if (!light.flicker) return light.intensity;
+  const { seed, amplitude } = light.flicker;
+  if (amplitude === 0) return light.intensity;
+  const delta = (SeededRNG.floatFromTick(seed, tick) - 0.5) * amplitude;
   return Math.max(0, light.intensity + delta);
 }
 
@@ -42,13 +42,15 @@ export function lightStamp(
   if (intensity <= 0) return;
 
   if (light.kind === 'point') {
-    stampPoint(ctx, light, intensity);
+    stampGradient(ctx, light, intensity);
   } else {
     stampSpot(ctx, light, intensity);
   }
 }
 
-function stampPoint(
+/** Shared gradient stamp — reads only common fields, so it accepts either
+ *  variant. `stampSpot` clips to a cone before calling. */
+function stampGradient(
   ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
   light: Light,
   intensity: number,
@@ -67,19 +69,17 @@ function stampPoint(
 
 function stampSpot(
   ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
-  light: Light,
+  light: SpotLight,
   intensity: number,
 ): void {
-  const direction = light.direction ?? 0;
-  const cone = light.cone ?? Math.PI / 3;
-  const half = cone / 2;
+  const half = light.cone / 2;
   ctx.save();
   ctx.beginPath();
   ctx.moveTo(light.x, light.y);
-  ctx.arc(light.x, light.y, light.radius, direction - half, direction + half);
+  ctx.arc(light.x, light.y, light.radius, light.direction - half, light.direction + half);
   ctx.closePath();
   ctx.clip();
-  stampPoint(ctx, light, intensity);
+  stampGradient(ctx, light, intensity);
   ctx.restore();
 }
 

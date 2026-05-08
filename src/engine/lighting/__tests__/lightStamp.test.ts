@@ -71,32 +71,32 @@ describe('effectiveIntensity', () => {
     expect(effectiveIntensity(BASE, 999)).toBe(0.8);
   });
 
-  it('returns base intensity when flickerAmplitude is 0', () => {
-    expect(effectiveIntensity({ ...BASE, flickerSeed: 1, flickerAmplitude: 0 }, 5)).toBe(0.8);
+  it('returns base intensity when amplitude is 0', () => {
+    expect(effectiveIntensity({ ...BASE, flicker: { seed: 1, amplitude: 0 } }, 5)).toBe(0.8);
   });
 
   it('produces deterministic per-tick output for same seed+tick', () => {
-    const a = effectiveIntensity({ ...BASE, flickerSeed: 42, flickerAmplitude: 0.2 }, 10);
-    const b = effectiveIntensity({ ...BASE, flickerSeed: 42, flickerAmplitude: 0.2 }, 10);
+    const a = effectiveIntensity({ ...BASE, flicker: { seed: 42, amplitude: 0.2 } }, 10);
+    const b = effectiveIntensity({ ...BASE, flicker: { seed: 42, amplitude: 0.2 } }, 10);
     expect(a).toBe(b);
   });
 
   it('different ticks produce different intensities', () => {
-    const a = effectiveIntensity({ ...BASE, flickerSeed: 42, flickerAmplitude: 0.2 }, 10);
-    const b = effectiveIntensity({ ...BASE, flickerSeed: 42, flickerAmplitude: 0.2 }, 11);
+    const a = effectiveIntensity({ ...BASE, flicker: { seed: 42, amplitude: 0.2 } }, 10);
+    const b = effectiveIntensity({ ...BASE, flicker: { seed: 42, amplitude: 0.2 } }, 11);
     expect(a).not.toBe(b);
   });
 
   it('different seeds at same tick produce different intensities', () => {
-    const a = effectiveIntensity({ ...BASE, flickerSeed: 1, flickerAmplitude: 0.2 }, 10);
-    const b = effectiveIntensity({ ...BASE, flickerSeed: 2, flickerAmplitude: 0.2 }, 10);
+    const a = effectiveIntensity({ ...BASE, flicker: { seed: 1, amplitude: 0.2 } }, 10);
+    const b = effectiveIntensity({ ...BASE, flicker: { seed: 2, amplitude: 0.2 } }, 10);
     expect(a).not.toBe(b);
   });
 
   it('flicker stays within ±amplitude/2 of base intensity', () => {
     const amp = 0.3;
     for (let tick = 0; tick < 200; tick++) {
-      const v = effectiveIntensity({ ...BASE, flickerSeed: 7, flickerAmplitude: amp }, tick);
+      const v = effectiveIntensity({ ...BASE, flicker: { seed: 7, amplitude: amp } }, tick);
       expect(v).toBeGreaterThanOrEqual(BASE.intensity - amp / 2);
       expect(v).toBeLessThanOrEqual(BASE.intensity + amp / 2);
     }

@@ -24,9 +24,9 @@ describe('castle arena lights catalog', () => {
     }
   });
 
-  it('each torch has a distinct flickerSeed', () => {
+  it('each torch has a distinct flicker seed', () => {
     const lights = getArenaLights('castle');
-    const seeds = lights.map(l => l.flickerSeed);
+    const seeds = lights.map(l => l.flicker?.seed);
     expect(new Set(seeds).size).toBe(seeds.length);
     for (const s of seeds) expect(s).toBeDefined();
   });

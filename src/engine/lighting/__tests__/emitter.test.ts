@@ -73,7 +73,7 @@ describe('EmitterPipeline', () => {
 
   it('compositeDynamic also stamps flicker deltas at flickering static positions', () => {
     const p = new EmitterPipeline();
-    const flickering: Light = { ...RED, flickerSeed: 1, flickerAmplitude: 0.2 };
+    const flickering: Light = { ...RED, flicker: { seed: 1, amplitude: 0.2 } };
     const steady: Light = RED;
     p.setStaticLights([flickering, steady]);
     p.beginFrame([], 100);

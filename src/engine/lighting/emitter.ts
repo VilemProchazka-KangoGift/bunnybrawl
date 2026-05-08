@@ -21,7 +21,7 @@ import type { Light } from './types';
 
 export class EmitterPipeline {
   private _staticLights: ReadonlyArray<Light> = [];
-  /** Pre-computed flicker overlays for the static lights with flickerSeed —
+  /** Pre-computed flicker overlays for the static lights with `flicker` set —
    *  `intensity: 0` so `lightStamp` adds only the per-tick delta on top of
    *  the baked static contribution. Built once per `setStaticLights`. */
   private _staticFlickerOverlays: ReadonlyArray<Light> = [];
@@ -33,7 +33,7 @@ export class EmitterPipeline {
   setStaticLights(lights: ReadonlyArray<Light>): void {
     this._staticLights = lights;
     this._staticFlickerOverlays = lights
-      .filter(l => l.flickerSeed !== undefined)
+      .filter(l => l.flicker !== undefined)
       .map(l => ({ ...l, intensity: 0 }));
   }
 
@@ -56,8 +56,8 @@ export class EmitterPipeline {
     ctx.globalCompositeOperation = 'lighter';
     for (const light of this._staticLights) {
       // Bake at base intensity ignoring flicker — flicker overlays per-frame.
-      const baked: Light = light.flickerSeed !== undefined
-        ? { ...light, flickerSeed: undefined, flickerAmplitude: 0 }
+      const baked: Light = light.flicker
+        ? { ...light, flicker: undefined }
         : light;
       lightStamp(ctx, baked, 0, cap);
     }

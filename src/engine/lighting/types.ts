@@ -10,12 +10,22 @@ export interface RGB {
   b: number;
 }
 
-/** Light catalog (L2). */
+/** Light catalog (L2). Discriminated by `kind` so spot-only fields never
+ *  appear on point lights, and so flicker config is atomic (you can't have
+ *  a seed without an amplitude or vice versa). */
 export type LightKind = 'point' | 'spot';
 export type Falloff = 'inverse-square' | 'linear' | 'smoothstep';
 
-export interface Light {
-  kind: LightKind;
+/** Optional per-tick intensity modulation, deterministic via
+ *  `SeededRNG.floatFromTick(seed, tick)`. Both fields are required when
+ *  flicker is set — half-config is a compile error. */
+export interface Flicker {
+  seed: number;
+  /** Peak deviation from base intensity, 0..1. */
+  amplitude: number;
+}
+
+interface CommonLight {
   /** Logical 1280×720 coordinates. */
   x: number;
   y: number;
@@ -25,13 +35,20 @@ export interface Light {
   /** Falloff radius in logical px. */
   radius: number;
   falloff: Falloff;
-  /** Spot-only: cone center direction, radians. 0 = right, π/2 = down. */
-  direction?: number;
-  /** Spot-only: full cone angular width in radians. */
-  cone?: number;
-  /** Present → `SeededRNG.fromTick(seed, tick)` modulates intensity per-tick. */
-  flickerSeed?: number;
-  /** Peak deviation from base intensity, 0..1. */
-  flickerAmplitude?: number;
+  flicker?: Flicker;
 }
+
+export interface PointLight extends CommonLight {
+  kind: 'point';
+}
+
+export interface SpotLight extends CommonLight {
+  kind: 'spot';
+  /** Cone center direction, radians. 0 = right, π/2 = down. */
+  direction: number;
+  /** Full cone angular width in radians. */
+  cone: number;
+}
+
+export type Light = PointLight | SpotLight;
 

@@ -941,8 +941,7 @@ export const castle: ArenaPack = {
     intensity: 0.85,
     radius: 110,
     falloff: 'inverse-square' as const,
-    flickerSeed: i + 1,
-    flickerAmplitude: 0.1,
+    flicker: { seed: i + 1, amplitude: 0.1 },
   })),
 
   // NAV-DATA-START — auto-generated, do not hand-edit
