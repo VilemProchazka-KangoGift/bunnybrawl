@@ -778,9 +778,6 @@ export const castle: ArenaPack = {
     drawChain(200, gy - 40, 4);
     drawChain(1080, gy - 35, 3);
     ctx.restore();
-
-    // Banners are drawn in drawAnimatedForeground so they animate every frame
-    // and can react to nearby players (drawForegroundNature is cached at load).
   },
 
   drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
