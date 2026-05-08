@@ -98,16 +98,16 @@ export function drawSpringMushroom(ctx: CanvasRenderingContext2D, spring: Spring
   ctx.fillStyle = '#F5F0E0';
   ctx.fillRect(x - 6, y - s * 0.7 + squash, 12, s * 0.7 - squash);
 
-  // Spring coils on stem
+  // Spring coils on stem — batched into one path with sub-paths.
   ctx.strokeStyle = '#AAA';
   ctx.lineWidth = 2;
+  ctx.beginPath();
   for (let i = 0; i < 3; i++) {
     const cy = y - 4 - i * 6;
-    ctx.beginPath();
     ctx.moveTo(x - 5, cy);
     ctx.lineTo(x + 5, cy - 3);
-    ctx.stroke();
   }
+  ctx.stroke();
 
   // Cap
   ctx.fillStyle = '#2ECC40';
@@ -157,22 +157,29 @@ export function drawThorn(ctx: CanvasRenderingContext2D, thorn: Thorn, theme: Th
   ctx.fillStyle = '#3A5C1E';
   ctx.fillRect(x, y + height - 4, width, 4);
 
-  // Spikes
+  // Spikes — batch all stem triangles into one path, all tip arcs into another.
   const spikeCount = Math.floor(width / 7);
+  ctx.fillStyle = '#5C3A1E';
+  ctx.beginPath();
   for (let i = 0; i < spikeCount; i++) {
     const sx = x + 4 + i * (width / spikeCount);
     const spikeH = height + 4 + (i % 2) * 3;
-    ctx.fillStyle = '#5C3A1E';
-    ctx.beginPath();
     ctx.moveTo(sx - 4, y + height - 4);
     ctx.lineTo(sx, y + height - spikeH);
     ctx.lineTo(sx + 4, y + height - 4);
-    ctx.fill();
-    ctx.fillStyle = '#DD2222';
-    ctx.beginPath();
-    ctx.arc(sx, y + height - spikeH + 1, 2, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.closePath();
   }
+  ctx.fill();
+  ctx.fillStyle = '#DD2222';
+  ctx.beginPath();
+  for (let i = 0; i < spikeCount; i++) {
+    const sx = x + 4 + i * (width / spikeCount);
+    const spikeH = height + 4 + (i % 2) * 3;
+    const tipY = y + height - spikeH + 1;
+    ctx.moveTo(sx + 2, tipY);
+    ctx.arc(sx, tipY, 2, 0, Math.PI * 2);
+  }
+  ctx.fill();
 
   ctx.restore();
 }

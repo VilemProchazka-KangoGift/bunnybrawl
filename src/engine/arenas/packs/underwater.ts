@@ -168,6 +168,14 @@ const BUBBLE_COLUMNS = [120, 380, 900, 1180] as const;
 const BUBBLE_ALPHA_BUCKETS = 5;
 const _bubbleStrokeBuckets: (Path2D | null)[] = new Array(BUBBLE_ALPHA_BUCKETS).fill(null);
 const _bubbleFillBuckets: (Path2D | null)[] = new Array(BUBBLE_ALPHA_BUCKETS).fill(null);
+
+function _pushBubble(buckets: (Path2D | null)[], a: number, x: number, y: number, r: number): void {
+  const b = Math.min(BUBBLE_ALPHA_BUCKETS - 1, Math.max(0, Math.floor(a * BUBBLE_ALPHA_BUCKETS)));
+  let p = buckets[b];
+  if (!p) { p = new Path2D(); buckets[b] = p; }
+  p.moveTo(x + r, y);
+  p.arc(x, y, r, 0, Math.PI * 2);
+}
 const FISH_COUNT = 18;
 // Fish-school sweep: slow horizontal oscillation across the canvas. Amplitude
 // stays under CANVAS_WIDTH/2 so the school never crosses the edge — earlier
@@ -1362,36 +1370,13 @@ export const underwater: ArenaPack = {
     if (getSlowDevice()) return;
     ctx.save();
     // Bubbles only — fish school renders entirely in foreground so it doesn't
-    // get split across z-order layers.
-    //
-    // Alpha bucketing: each bubble has a different alpha (driven by its
-    // life-progress t), but the canvas requires one fill/stroke per alpha
-    // value. Bucket bubbles into BUBBLE_ALPHA_BUCKETS quantized alphas,
-    // batch each bucket as one path with sub-paths and a single stroke/fill.
-    // Cuts ~76 path operations/frame down to ~12.
+    // get split across z-order layers. Alpha-bucketed; see docs/perf-patterns.md.
     ctx.strokeStyle = '#dcf0ff';
     ctx.fillStyle = '#ffffff';
     ctx.lineWidth = 1;
 
-    // Stroke buckets (outer ring of leak bubbles + column bubbles).
     for (let b = 0; b < BUBBLE_ALPHA_BUCKETS; b++) _bubbleStrokeBuckets[b] = null;
-    // Fill buckets (inner highlight of leak bubbles).
     for (let b = 0; b < BUBBLE_ALPHA_BUCKETS; b++) _bubbleFillBuckets[b] = null;
-
-    const pushStroke = (a: number, x: number, y: number, r: number) => {
-      const b = Math.min(BUBBLE_ALPHA_BUCKETS - 1, Math.max(0, Math.floor(a * BUBBLE_ALPHA_BUCKETS)));
-      let p = _bubbleStrokeBuckets[b];
-      if (!p) { p = new Path2D(); _bubbleStrokeBuckets[b] = p; }
-      p.moveTo(x + r, y);
-      p.arc(x, y, r, 0, Math.PI * 2);
-    };
-    const pushFill = (a: number, x: number, y: number, r: number) => {
-      const b = Math.min(BUBBLE_ALPHA_BUCKETS - 1, Math.max(0, Math.floor(a * BUBBLE_ALPHA_BUCKETS)));
-      let p = _bubbleFillBuckets[b];
-      if (!p) { p = new Path2D(); _bubbleFillBuckets[b] = p; }
-      p.moveTo(x + r, y);
-      p.arc(x, y, r, 0, Math.PI * 2);
-    };
 
     for (let li = 0; li < BUBBLE_LEAKS.length; li++) {
       const lk = BUBBLE_LEAKS[li];
@@ -1401,8 +1386,8 @@ export const underwater: ArenaPack = {
         const by = lk.y - t * 80;
         const rad = 1.2 + t * 1.8;
         const a = (1 - t) * 0.85;
-        pushStroke(a, bx, by, rad);
-        pushFill(a * 0.4, bx - 0.5, by - 0.5, rad * 0.3);
+        _pushBubble(_bubbleStrokeBuckets, a, bx, by, rad);
+        _pushBubble(_bubbleFillBuckets, a * 0.4, bx - 0.5, by - 0.5, rad * 0.3);
       }
     }
     for (let ci = 0; ci < BUBBLE_COLUMNS.length; ci++) {
@@ -1411,7 +1396,7 @@ export const underwater: ArenaPack = {
         const bx = BUBBLE_COLUMNS[ci] + fastSin(time * 1.5 + i + ci) * 12;
         const by = 660 - t * 600;
         const rad = 1.5 + t * 2.5;
-        pushStroke((1 - t) * 0.7, bx, by, rad);
+        _pushBubble(_bubbleStrokeBuckets, (1 - t) * 0.7, bx, by, rad);
       }
     }
 
