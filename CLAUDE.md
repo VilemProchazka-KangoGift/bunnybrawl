@@ -151,7 +151,15 @@ src/
       hostAuthority.ts  # Host: runs simulation, buffers guest inputs, broadcasts snapshots
       interpolation.ts  # Game-specific: entity interpolation, extrapolation, applySnapshotToState
       snapshot.ts       # Binary snapshot encode/decode, Uint8 timer compression
-      netMatch.ts       # Orchestrator: host loop (simulate+broadcast) or guest loop (interpolate+render)
+      netMatch/         # Thin orchestrator + 5 collaborators (Phase 13 decomposition)
+        NetMatch.ts         # Lifecycle + host/guest branching (~310 lines)
+        NetMatchContext.ts  # Typed shared-state seam threaded between collaborators
+        LoadingHandshake.ts # Host-side LOADED handshake + 15s force-flip timeout
+        ReconnectController.ts # Guest-side reconnect retry loop
+        MessageRouter.ts    # Reliable + unreliable MsgType switch
+        HostLoop.ts         # Host's simulate + broadcast rAF loop
+        GuestLoop.ts        # Guest's input-send + snapshot-apply rAF loop + wire handlers
+        types.ts  index.ts  # Public NetMatchConfig + barrel
       inputEcho.ts      # Guest visual feedback without position prediction (facing, anim, squash)
       prng.ts           # SeededRNG (used for local-mode determinism)
       serialize.ts      # Legacy GameSnapshot take/restore (local-mode, test-only)
@@ -356,7 +364,7 @@ Online play uses host-authoritative architecture with Trystero MQTT signaling fo
 
 **Architecture**: Host runs full GameLoop (identical to local play), broadcasts compact binary snapshots to guests every tick. Guests send inputs to host, interpolate between received snapshots for smooth rendering. No determinism requirements — host is the single source of truth.
 
-**Key files**: `net/transport.ts` (Trystero signaling + WebRTC), `net/hostAuthority.ts` (host input buffering + snapshot broadcast), `net/interpolation.ts` (guest entity interpolation), `net/snapshot.ts` (binary snapshot encode/decode), `net/netMatch.ts` (orchestrator)
+**Key files**: `net/transport.ts` (Trystero signaling + WebRTC), `net/hostAuthority.ts` (host input buffering + snapshot broadcast), `net/interpolation.ts` (guest entity interpolation), `net/snapshot.ts` (binary snapshot encode/decode), `net/netMatch/` (orchestrator + 5 collaborators: NetMatch, HostLoop, GuestLoop, LoadingHandshake, ReconnectController, MessageRouter; NetMatchContext is the shared-state seam)
 
 **Host loop** (`NetMatch.startHostLoop`):
 - Fixed-timestep accumulator drives `gameLoop.fixedUpdate()`
@@ -398,5 +406,5 @@ Largest files to be aware of when context is limited:
 - `audio/` directory total ~1050 lines (split: AudioManager ~140, MusicManager ~90, soundRegistry ~80, synthesis/ ~700) — `VictoryScreen.css` ~520 lines
 - Arena pack files ~200-800 lines each (11 arenas in `arenas/packs/`)
 - AI: `utility.ts` ~450, `awareness.ts` ~370
-- Net: `snapshot.ts` ~575, `netMatch.ts` ~770, `transport.ts` ~500, `interpolation.ts` ~350
+- Net: `snapshot.ts` ~575, `netMatch/` ~1100 lines split across 7 files (NetMatch ~310, GuestLoop ~330, HostLoop ~155, MessageRouter ~140, ReconnectController ~115, LoadingHandshake ~125, NetMatchContext ~125), `transport.ts` ~500, `interpolation.ts` ~350
 - Hooks: `useTransientBanner.ts` ~30, `useDelayedFlag.ts` ~15
