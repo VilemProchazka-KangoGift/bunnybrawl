@@ -25,7 +25,7 @@ import {
   drawCarrot, drawSpringMushroom, drawThorn,
   drawWeather, drawParticles, drawGibs, drawGibShape, drawConfetti, drawFireworks, drawWildlife, drawSpringTrail,
   drawHazardZone, drawGhost, drawLavaRock, drawZeroGZone, drawCurrentZone, drawGeyser, drawBouncyPlatformOverlay, drawPigeonFlock, drawScatterFlock,
-  drawDayNightCycle,
+  drawDayNightCycle, computeNightIntensity, fireflyPosition, FIREFLY_COUNT,
   drawHUD, drawCountdown, drawConnectionQuality, drawComboPopups, invalidateHudCache, isHudDirty,
   drawPlayer,
   warmSpriteCacheForCharacters,
@@ -78,6 +78,20 @@ const CARROT_GLOW_RGB: Readonly<{ r: number; g: number; b: number }> =
   { r: 255, g: 180, b: 80 };
 /** Seconds of bright pulse on carrot spawn before settling to baseline. */
 const CARROT_SPAWN_FLASH_S = 0.6;
+
+/** Yellow-green firefly emitter color, matches the visual draw in effects.ts. */
+const FIREFLY_GLOW_RGB: Readonly<{ r: number; g: number; b: number }> =
+  { r: 170, g: 255, b: 68 };
+/** Reused scratch for fireflyPosition fills (avoids per-firefly alloc). */
+const _fireflyPos = { x: 0, y: 0 };
+/** Pre-built per-firefly flicker configs — distinct seeds so they pulse
+ *  independently. Length must match FIREFLY_COUNT (8). */
+const FIREFLY_FLICKER: ReadonlyArray<{ seed: number; amplitude: number }> = [
+  { seed: 101, amplitude: 0.5 }, { seed: 102, amplitude: 0.5 },
+  { seed: 103, amplitude: 0.5 }, { seed: 104, amplitude: 0.5 },
+  { seed: 105, amplitude: 0.5 }, { seed: 106, amplitude: 0.5 },
+  { seed: 107, amplitude: 0.5 }, { seed: 108, amplitude: 0.5 },
+];
 
 /** Sprite extends ~12 px above the bbox top for tall ears, horns, and gib pivots. */
 const SPRITE_TOP_PAD = 12;
@@ -591,7 +605,8 @@ export class Renderer {
   }
 
   /** Pool a `_dynamicLights` slot for a point emitter at the given index,
-   *  creating it on first use. Caller mutates fields after. */
+   *  creating it on first use. Clears `flicker` so reused slots don't carry
+   *  stale config from a different emitter type the previous frame. */
   private _ensureLightSlot(i: number): PointLight {
     let slot = this._dynamicLights[i] as PointLight | undefined;
     if (!slot) {
@@ -605,6 +620,7 @@ export class Renderer {
       };
       this._dynamicLights[i] = slot;
     }
+    slot.flicker = undefined;
     return slot;
   }
 
@@ -648,6 +664,26 @@ export class Renderer {
       const flash = age < CARROT_SPAWN_FLASH_S ? 1 - age / CARROT_SPAWN_FLASH_S : 0;
       slot.intensity = 0.25 + flash * 0.35;
       slot.radius = 30 + flash * 20;
+    }
+
+    // Firefly emitters — themes opt in via dayNight.showFireflies. Visible
+    // only past the same nightIntensity > 0.4 threshold the visual draw uses
+    // in `effects.ts`, so the lights match the bright dots one-to-one.
+    if (this.theme.dayNight.showFireflies && this.theme.dayNight.enabled) {
+      const nightIntensity = computeNightIntensity(matchState.dayPhase);
+      if (nightIntensity > 0.4) {
+        for (let f = 0; f < FIREFLY_COUNT; f++) {
+          fireflyPosition(f, this.frameTime, _fireflyPos);
+          const slot = this._ensureLightSlot(i++);
+          slot.x = _fireflyPos.x;
+          slot.y = _fireflyPos.y;
+          slot.color = FIREFLY_GLOW_RGB;
+          slot.intensity = 0.18;
+          slot.radius = 30;
+          slot.falloff = 'smoothstep';
+          slot.flicker = FIREFLY_FLICKER[f];
+        }
+      }
     }
 
     this._dynamicLights.length = i;

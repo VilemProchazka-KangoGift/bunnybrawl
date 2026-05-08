@@ -211,6 +211,7 @@
 - **Per-arena lights catalog:** add `lights: ReadonlyArray<Light>` to an `ArenaPack` to declare static emitters (e.g. castle's 5 torches). Loaded automatically by `Renderer.renderBackground` via `getArenaLights(arena.id)`. Dynamic emitters synthesized in `_synthesizeDynamicLights` from entity state — no `Player`/snapshot schema changes:
   - **Per-player aura** — soft warm glow on every live player; intensity + radius ramp during respawn invincibility (the "spawn pillar" effect — `Player.invincibleTimer / INVINCIBLE_DURATION` drives the boost).
   - **Carrot glow** — subtle warm-orange light per active carrot so they stay visible at night. Fresh carrots get a brief brightness pulse over `CARROT_SPAWN_FLASH_S` keyed off `Carrot.spawnTime`.
+  - **Firefly emitters** — yellow-green points at the same drifted positions as the bright dots in `effects.ts > drawDayNightCycle`. Both paths share `fireflyPosition(i, frameTime, out)` so visual + light stay locked. Gated on `theme.dayNight.showFireflies && nightIntensity > 0.4` (matches the visual gate).
 - **Determinism (L2 flicker):** per-emitter `flickerSeed` keyed via `SeededRNG.fromTick(seed, tick)` where `tick = floor(matchState.timeElapsed * 60)`. Co-located emitters with distinct seeds desync. Guests see ~2-tick flicker lag (acceptable per L2 spec).
 - **What lives where:** `effects.ts > drawDayNightCycle` retains sun, moon, stars, fireflies, sunset afterglow (procedural celestial drawing). The pipeline owns ambient darkening; the celestial drawing in `effects.ts` is independent of the pipeline.
 

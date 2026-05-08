@@ -843,6 +843,22 @@ export const volcano: ArenaPack = {
     loops: ['amb_lava'],
     periodic: [{ sound: 'amb_volcano_burst', intervalRange: [8, 20] }],
   },
+  // L2 emitters: bright orange-red lava emissive at each hazard zone center.
+  // Inverse-square falloff so the source reads as a hot point, large radius
+  // so the heat halo bleeds onto nearby platforms. Subtle flicker — lava is
+  // mostly steady but occasional ripples brighten it slightly.
+  lights: [
+    { kind: 'point', x: 340, y: 696, color: { r: 255, g: 80, b: 30 },
+      intensity: 0.9, radius: 150, falloff: 'inverse-square',
+      flicker: { seed: 11, amplitude: 0.08 } },
+    { kind: 'point', x: 900, y: 696, color: { r: 255, g: 80, b: 30 },
+      intensity: 0.9, radius: 150, falloff: 'inverse-square',
+      flicker: { seed: 12, amplitude: 0.08 } },
+    { kind: 'point', x: 610, y: 656, color: { r: 255, g: 80, b: 30 },
+      intensity: 0.9, radius: 130, falloff: 'inverse-square',
+      flicker: { seed: 13, amplitude: 0.08 } },
+  ],
+
   musicFile: 'volcano.mp3',
   // NAV-DATA-START — auto-generated, do not hand-edit
   navData: {
