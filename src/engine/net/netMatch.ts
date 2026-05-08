@@ -33,6 +33,7 @@ import { applyDelta, readDeltaBaseFrame } from './core/deltaCompression';
 import { createNetMatchContext, type NetMatchContext } from './netMatch/NetMatchContext';
 import { LoadingHandshake } from './netMatch/LoadingHandshake';
 import { ReconnectController } from './netMatch/ReconnectController';
+import { MessageRouter } from './netMatch/MessageRouter';
 
 export interface NetMatchConfig {
   bgCanvas: HTMLCanvasElement;
@@ -136,6 +137,8 @@ export class NetMatch {
 
   // Host-side LOADED handshake — owned by LoadingHandshake collaborator.
   private loading: LoadingHandshake;
+  // Reliable + unreliable transport message switch.
+  private router!: MessageRouter;
 
   // Shared cross-collaborator state seam.
   private ctx: NetMatchContext;
@@ -194,6 +197,10 @@ export class NetMatch {
     });
     this.loading = new LoadingHandshake(this.ctx);
     this.reconnect = new ReconnectController(this.ctx);
+    this.router = new MessageRouter(this.ctx, this.loading, this.reconnect, {
+      handleGuestSnapshot: (data) => this.handleGuestSnapshot(data),
+      handleGuestDelta: (data) => this.handleGuestDelta(data),
+    });
 
     if (this._isHost) {
       this.initHost(config);
@@ -689,18 +696,7 @@ export class NetMatch {
   }
 
   handleUnreliableMessage(data: ArrayBuffer, fromPeerId?: string): void {
-    const view = new DataView(data);
-    if (view.byteLength < 1) return;
-    const type = view.getUint8(0);
-
-    if (this._isHost && this.hostAuthority) {
-      this.hostAuthority.handleUnreliableMessage(data, fromPeerId);
-    } else if (type === MsgType.SNAPSHOT) {
-      this.handleGuestSnapshot(data);
-    } else if (type === MsgType.SNAPSHOT_DELTA) {
-      this.handleGuestDelta(data);
-    }
-    // Ping/pong handled by Transport — it intercepts before dispatching here.
+    this.router.handleUnreliableMessage(data, fromPeerId);
   }
 
   /** Update stall-detection bookkeeping after any successful snapshot
@@ -798,84 +794,7 @@ export class NetMatch {
   }
 
   handleReliableMessage(msg: ReliableMessage, fromPeerId?: string): void {
-    if (this._isHost && this.hostAuthority) {
-      this.hostAuthority.handleReliableMessage(msg, fromPeerId);
-    }
-
-    if (msg.type === MsgType.PAUSE) {
-      if ((msg as { paused: boolean }).paused) {
-        this.gameLoop.pause();
-      } else {
-        this.gameLoop.resume();
-      }
-    } else if (!this._isHost && msg.type === MsgType.SETTINGS_SYNC) {
-      // Host-authoritative — guests apply the host's settings, the host never
-      // accepts SETTINGS_SYNC from anyone. Without the !isHost gate, a buggy
-      // or hostile guest could swap the host's arena mid-match by sending
-      // SETTINGS_SYNC{arenaId:'volcano'} — Match.tsx wires onArenaChange to
-      // gameLoop.switchArena which rebuilds the host's match state in place.
-      if ('arenaId' in msg) {
-        this.onArenaChange?.((msg as { arenaId: string }).arenaId);
-      }
-    } else if (!this._isHost && msg.type === MsgType.MATCH_RESULT) {
-      // Host-broadcast only. A guest sending MATCH_RESULT to the host would
-      // otherwise schedule a victory transition with the guest's chosen
-      // winner, racing the host's authoritative endMatch.
-      this.onMatchEnd?.((msg as { winner: string | null }).winner as PlayerSlot | null, this.gameLoop.getState());
-    } else if (!this._isHost && msg.type === MsgType.DISCONNECT) {
-      // Host receives a guest's graceful DISCONNECT via hostAuthority
-      // (peer removal). The NetMatchConfig.onDisconnect callback is the
-      // guest's "reconnect-budget exhausted → flash 'Could not reconnect'"
-      // hook — firing it on the host on a guest's polite leave would push
-      // the host into the disconnect-victory screen.
-      this.onDisconnect?.();
-    } else if (!this._isHost && msg.type === MsgType.RECONNECT_SYNC) {
-      // Honor host's pause state so the guest's render doesn't diverge from
-      // a suspended simulation on the other end. Host gating: a guest sending
-      // RECONNECT_SYNC could otherwise pause/unpause the host's sim and reset
-      // the host's cosmetic prev-state baselines (silencing legitimate SFX
-      // until the next state transition).
-      const syncMsg = msg as { paused?: boolean };
-      if (syncMsg.paused) this.gameLoop.pause();
-      else this.gameLoop.resume();
-      this.reconnect.completeReconnection();
-    } else if (this._isHost && msg.type === MsgType.LOADED) {
-      // Source-authenticate the slot from peerId. A peer could otherwise send
-      // LOADED{slot: anotherPeer} and force-start the match before that peer
-      // has actually warmed assets. CONNECTION_UNSTABLE below uses the same
-      // pattern.
-      if (!fromPeerId || !this.hostAuthority) return;
-      const senderSlot = this.hostAuthority.getSlotForPeer(fromPeerId) as PlayerSlot | undefined;
-      if (!senderSlot) return;
-      this.loading.recordGuestLoaded(senderSlot);
-    } else if (this._isHost && msg.type === MsgType.CONNECTION_UNSTABLE) {
-      const stalled = (msg as { stalled: boolean }).stalled;
-      if (fromPeerId && this.hostAuthority) {
-        // Half-rate broadcast to this peer while they're stalled. Pairs with
-        // the widened interpolation delay ceiling on the guest side — guest
-        // can absorb the larger inter-arrival gaps without falling out of
-        // the lerp window into extrapolation.
-        this.hostAuthority.setPeerUnstable(fromPeerId, stalled);
-        const slot = this.hostAuthority.getSlotForPeer(fromPeerId);
-        if (slot) this.onGuestConnectionUnstable?.(slot, stalled);
-      }
-    } else if (this._isHost && msg.type === MsgType.RECONNECT_REQUEST) {
-      if (!fromPeerId || !this.hostAuthority) return;
-      const reqSlot = (msg as { slot: string }).slot as PlayerSlot;
-      const presentedToken = (msg as { reclaimToken?: string }).reclaimToken;
-      if (!this.hostAuthority.handleReconnectRequest(reqSlot, fromPeerId, presentedToken)) return;
-      // Ack with current pause state so the guest's render doesn't diverge
-      // from a suspended host sim.
-      this.transport.sendReliableTo(fromPeerId, {
-        type: MsgType.RECONNECT_SYNC,
-        slot: reqSlot,
-        snapshotFrame: this.hostAuthority.getLocalFrame(),
-        paused: this.gameLoop.isPaused(),
-      } as ReliableMessage);
-      this.hostAuthority.sendSnapshotTo(fromPeerId, this.gameLoop.getState());
-      this.loading.forgetSlot(reqSlot);
-      this.onGuestReconnected?.(reqSlot);
-    }
+    this.router.handleReliableMessage(msg, fromPeerId);
   }
 
   removePlayer(slot: PlayerSlot): void {
