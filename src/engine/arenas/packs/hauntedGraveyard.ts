@@ -1,5 +1,5 @@
 import type { ArenaPack } from '../types';
-import type { Platform } from '../../types';
+import type { Platform, Ctx2D } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
@@ -54,7 +54,7 @@ const HAUNTED_STONE_PALETTE: StonePaletteRow[] = [
 
 /** Dead-tree silhouette. Origin is the BASE of the trunk (foot at y=0).
  *  Draws upward — caller is responsible for translate+rotate. */
-function drawDeadTreeShape(ctx: CanvasRenderingContext2D, size: number): void {
+function drawDeadTreeShape(ctx: Ctx2D, size: number): void {
   ctx.fillStyle = '#2A2020';
   const tw = size * 0.12;
   ctx.fillRect(-tw / 2, -size, tw, size);
@@ -134,7 +134,7 @@ registerReactiveKind('haunted_graveyard.cobweb', {
  * Five radial strands ~14px long + three concentric arc chords between them.
  */
 function drawCobweb(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   cornerX: number,
   cornerY: number,
   dirX: number,
@@ -184,7 +184,7 @@ function drawCobweb(
 }
 
 // Bg pass: cap + right face + left-protrusion stones. Sit behind the player.
-function drawHauntedPlatformBg(ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean): void {
+function drawHauntedPlatformBg(ctx: Ctx2D, platform: Platform, isGround: boolean): void {
   const rng = mulberry32(seedFor(platform.x, platform.y));
   const cF = capFrontY(platform);
   const cB = capBackY(platform);
@@ -225,7 +225,7 @@ function drawHauntedPlatformBg(ctx: CanvasRenderingContext2D, platform: Platform
 }
 
 // Fg pass: body + cracks. Drawn after players for occlusion.
-function drawHauntedPlatformFg(ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean): void {
+function drawHauntedPlatformFg(ctx: Ctx2D, platform: Platform, _isGround: boolean): void {
   const rng = mulberry32(seedFor(platform.x, platform.y) ^ BODY_SEED_OFFSET);
   const cF = capFrontY(platform);
   const bodyTop = cF;
@@ -693,10 +693,10 @@ export const hauntedGraveyard: ArenaPack = {
     }
   },
 
-  drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => {
+  drawPlatform: (ctx: Ctx2D, platform: Platform, isGround: boolean) => {
     drawHauntedPlatformBg(ctx, platform, isGround);
   },
-  drawPlatformOverlay: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => {
+  drawPlatformOverlay: (ctx: Ctx2D, platform: Platform, isGround: boolean) => {
     drawHauntedPlatformFg(ctx, platform, isGround);
   },
 

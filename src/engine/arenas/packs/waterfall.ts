@@ -1,5 +1,5 @@
 import type { ArenaPack } from '../types';
-import type { Arena, Platform } from '../../types';
+import type { Arena, Platform, Ctx2D } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
@@ -209,7 +209,7 @@ registerReactiveKind('waterfall.frogJump', {
   },
 });
 
-function drawWaterfallPlatformBg(ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean): void {
+function drawWaterfallPlatformBg(ctx: Ctx2D, platform: Platform, isGround: boolean): void {
   const rng = mulberry32(seedFor(platform.x, platform.y));
   const cF = capFrontY(platform);
   const cB = capBackY(platform);
@@ -273,7 +273,7 @@ function drawWaterfallPlatformBg(ctx: CanvasRenderingContext2D, platform: Platfo
   }
 }
 
-function drawWaterfallPlatformFg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+function drawWaterfallPlatformFg(ctx: Ctx2D, platform: Platform): void {
   const rng = mulberry32(seedFor(platform.x, platform.y) ^ BODY_SEED_OFFSET);
   const cF = capFrontY(platform);
   const bodyTop = cF;

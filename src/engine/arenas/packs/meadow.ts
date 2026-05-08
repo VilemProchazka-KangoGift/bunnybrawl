@@ -1,5 +1,5 @@
 import type { ArenaPack } from '../types';
-import type { Arena, Platform } from '../../types';
+import type { Arena, Platform, Ctx2D } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin, fastCos } from '../../fastMath';
 import { getFloatingPlatforms, pushFromPlayers, type GroundCritterState, type GroundCritterConfig } from '../../themes/utils';
@@ -42,7 +42,7 @@ const DANDELION_SEED_SIN = new Float32Array(14);
   }
 }
 
-function drawButterfly(ctx: CanvasRenderingContext2D, i: number, time: number, players: ReadonlyArray<import('../../types').Player>): void {
+function drawButterfly(ctx: Ctx2D, i: number, time: number, players: ReadonlyArray<import('../../types').Player>): void {
   const driftSpeed = 0.04 + (i % 3) * 0.015;
   const homeX = ((i * 200 + time * 60 * driftSpeed) % (CANVAS_WIDTH + 200)) - 100;
   const homeY = 380 + fastSin(time * 0.4 + i * 1.7) * 80 + (i % 3) * 30;
@@ -60,7 +60,7 @@ function drawButterfly(ctx: CanvasRenderingContext2D, i: number, time: number, p
 }
 
 function drawOneSnail(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   state: GroundCritterState,
   cfg: GroundCritterConfig,
   time: number,
@@ -103,7 +103,7 @@ function drawOneSnail(
   ctx.restore();
 }
 
-function drawBeeCluster(ctx: CanvasRenderingContext2D, ci: number, time: number, players: ReadonlyArray<import('../../types').Player>): void {
+function drawBeeCluster(ctx: Ctx2D, ci: number, time: number, players: ReadonlyArray<import('../../types').Player>): void {
   const c = BEE_CLUSTERS[ci];
   const wanderX = c.homeX + fastSin(time * 0.25 + c.phase) * 200;
   const wanderY = c.homeY + fastSin(time * 0.4 + c.phase + 1) * 60;
@@ -324,7 +324,7 @@ const STONE_PALETTE = [
   { base: '#787068', dark: '#484038', light: '#a89888' },
 ];
 
-function drawMeadowStump(ctx: CanvasRenderingContext2D, platform: Platform): void {
+function drawMeadowStump(ctx: Ctx2D, platform: Platform): void {
   const rng = mulberry32(seedFor(platform.x, platform.y));
   const cF = platform.y + CAP_DEPTH / 2;
   const cB = platform.y - CAP_DEPTH / 2;
@@ -565,7 +565,7 @@ export const meadow: ArenaPack = {
   },
 
   // ---- Custom draw functions ----
-  drawFarBackground: (ctx: CanvasRenderingContext2D, _arena: Arena) => {
+  drawFarBackground: (ctx: Ctx2D, _arena: Arena) => {
     // Dark treeline — jagged tops suggesting a dense forest
     ctx.fillStyle = 'rgba(58,106,58,0.25)';
     ctx.beginPath();
@@ -596,7 +596,7 @@ export const meadow: ArenaPack = {
   // live in `buildReactiveDecorations`. Trade: bushes/flowers/mushrooms/
   // grass-tufts/fgBush/fgLeafCluster/fgWildflower lose their wind sway, but
   // skip 50+ per-frame draw calls.
-  drawBackgroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => {
+  drawBackgroundNature: (ctx: Ctx2D, arena: Arena) => {
     const ground = arena.platforms[0];
     const y = ground.y;
     drawBush(ctx, 200, y, 30);
@@ -670,7 +670,7 @@ export const meadow: ArenaPack = {
     return out;
   },
 
-  drawForegroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => {
+  drawForegroundNature: (ctx: Ctx2D, arena: Arena) => {
     const ground = arena.platforms[0];
     const gy = ground.y;
     drawFgBush(ctx, 160, gy, 60);
@@ -694,7 +694,7 @@ export const meadow: ArenaPack = {
     drawFgWildflower(ctx, 1180, gy, '#FF69B4', 22);
   },
 
-  drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
+  drawPlatform: (ctx: Ctx2D, platform: Platform, _isGround: boolean) => {
     if (platform.style === 'stump') {
       drawMeadowStump(ctx, platform);
       return;
@@ -762,7 +762,7 @@ export const meadow: ArenaPack = {
 
   // Body face overlay — drawn AFTER players so a player rising up next to or
   // through a platform's body is occluded ("goes behind the platform").
-  drawPlatformOverlay: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
+  drawPlatformOverlay: (ctx: Ctx2D, platform: Platform, _isGround: boolean) => {
     if (platform.style === 'stump') return;
     const rng = mulberry32(seedFor(platform.x, platform.y) ^ BODY_SEED_OFFSET);
     const cF = platform.y + CAP_DEPTH / 2;

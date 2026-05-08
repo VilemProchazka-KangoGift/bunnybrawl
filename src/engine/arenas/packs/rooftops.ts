@@ -1,5 +1,5 @@
 import type { ArenaPack } from '../types';
-import type { Platform } from '../../types';
+import type { Platform, Ctx2D } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
@@ -22,7 +22,7 @@ const HALLWAYS: ReadonlyArray<Hallway> = [
   { x: 970, y: 480, w: 230 },
 ];
 const _hallwayGlowGrads = new WeakMap<Hallway, CanvasGradient>();
-function getHallwayGlow(ctx: CanvasRenderingContext2D, h: Hallway): CanvasGradient {
+function getHallwayGlow(ctx: Ctx2D, h: Hallway): CanvasGradient {
   let g = _hallwayGlowGrads.get(h);
   if (!g) {
     const cx = h.x + h.w / 2;
@@ -49,7 +49,7 @@ import {
 
 // --- 3D rooftop cap: gravel + tar texture, with a raised parapet along the back.
 // No body is drawn; drawFarBackground owns the building facades below.
-function drawRoofPlatform(ctx: CanvasRenderingContext2D, platform: Platform): void {
+function drawRoofPlatform(ctx: Ctx2D, platform: Platform): void {
   const rng = mulberry32(seedFor(platform.x, platform.y));
   const cF = capFrontY(platform);
   const cB = capBackY(platform);
@@ -104,7 +104,7 @@ function drawRoofPlatform(ctx: CanvasRenderingContext2D, platform: Platform): vo
 
 // --- Hallway floor: wood planks + crimson carpet runner, with a short wood body
 // representing the floor's edge thickness.
-function drawHallwayPlatformBg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+function drawHallwayPlatformBg(ctx: Ctx2D, platform: Platform): void {
   const rng = mulberry32(seedFor(platform.x, platform.y));
   const cF = capFrontY(platform);
   const cB = capBackY(platform);
@@ -172,7 +172,7 @@ function drawHallwayPlatformBg(ctx: CanvasRenderingContext2D, platform: Platform
 }
 
 // Hallway body fg pass — wood planks with grain. Drawn after players for occlusion.
-function drawHallwayPlatformFg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+function drawHallwayPlatformFg(ctx: Ctx2D, platform: Platform): void {
   const cF = capFrontY(platform);
   const bodyTop = cF;
   const bodyH = platform.height - CAP_DEPTH / 2;
@@ -198,7 +198,7 @@ function drawHallwayPlatformFg(ctx: CanvasRenderingContext2D, platform: Platform
 // previous customDraw branches. These render the full prop body; no 3D cap
 // framework because the props have their own silhouette (brick stack, AC fan
 // grill, vent slats, awning).
-function drawChimneyBg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+function drawChimneyBg(ctx: Ctx2D, platform: Platform): void {
   const rng = mulberry32(seedFor(platform.x, platform.y));
   const cF = capFrontY(platform);
   const cB = capBackY(platform);
@@ -242,7 +242,7 @@ function drawChimneyBg(ctx: CanvasRenderingContext2D, platform: Platform): void 
 }
 
 // Chimney body fg pass — brick column. Drawn after players for occlusion.
-function drawChimneyFg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+function drawChimneyFg(ctx: Ctx2D, platform: Platform): void {
   const cF = capFrontY(platform);
   const bodyTop = cF;
   const bodyExt = CAP_DEPTH / 2;
@@ -270,7 +270,7 @@ function drawChimneyFg(ctx: CanvasRenderingContext2D, platform: Platform): void 
   }
 }
 
-function drawBalcony(ctx: CanvasRenderingContext2D, platform: Platform): void {
+function drawBalcony(ctx: Ctx2D, platform: Platform): void {
   const { x, y, width: w, height: h } = platform;
   ctx.fillStyle = '#6A6A78';
   ctx.fillRect(x, y, w, h);
@@ -316,7 +316,7 @@ function drawBalcony(ctx: CanvasRenderingContext2D, platform: Platform): void {
   }
 }
 
-function drawAcUnitBg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+function drawAcUnitBg(ctx: Ctx2D, platform: Platform): void {
   const rng = mulberry32(seedFor(platform.x, platform.y));
   const cF = capFrontY(platform);
   const cB = capBackY(platform);
@@ -357,7 +357,7 @@ function drawAcUnitBg(ctx: CanvasRenderingContext2D, platform: Platform): void {
 
 // AC body fg pass — housing + fan + vent slats + rubber feet. Drawn after
 // players for occlusion (so the player's right edge "goes behind" the AC).
-function drawAcUnitFg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+function drawAcUnitFg(ctx: Ctx2D, platform: Platform): void {
   const cF = capFrontY(platform);
   const bodyTop = cF;
   const bodyExt = 14;
@@ -423,7 +423,7 @@ function drawAcUnitFg(ctx: CanvasRenderingContext2D, platform: Platform): void {
   ctx.fillRect(x + w - 8, bodyTop + bodyH, 4, 2);
 }
 
-function drawHvacBlock(ctx: CanvasRenderingContext2D, platform: Platform): void {
+function drawHvacBlock(ctx: Ctx2D, platform: Platform): void {
   const { x, y, width: w, height: h } = platform;
   ctx.fillStyle = '#5A5A68';
   ctx.fillRect(x, y, w, h);
@@ -443,7 +443,7 @@ function drawHvacBlock(ctx: CanvasRenderingContext2D, platform: Platform): void 
 }
 
 // Bg pass dispatch — cap + right face for iso styles, full draw for bespoke styles.
-function drawRooftopsPlatformBg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+function drawRooftopsPlatformBg(ctx: Ctx2D, platform: Platform): void {
   switch (platform.style) {
     case 'roof':     return drawRoofPlatform(ctx, platform);
     case 'hallway':  return drawHallwayPlatformBg(ctx, platform);
@@ -461,7 +461,7 @@ function drawRooftopsPlatformBg(ctx: CanvasRenderingContext2D, platform: Platfor
 }
 
 // Fg pass dispatch — body face for iso styles only. Bespoke styles render fully in bg.
-function drawRooftopsPlatformFg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+function drawRooftopsPlatformFg(ctx: Ctx2D, platform: Platform): void {
   switch (platform.style) {
     case 'hallway':  return drawHallwayPlatformFg(ctx, platform);
     case 'chimney':  return drawChimneyFg(ctx, platform);
@@ -1158,11 +1158,11 @@ export const rooftops: ArenaPack = {
     return out;
   },
 
-  drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
+  drawPlatform: (ctx: Ctx2D, platform: Platform, _isGround: boolean) => {
     drawRooftopsPlatformBg(ctx, platform);
   },
 
-  drawPlatformOverlay: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
+  drawPlatformOverlay: (ctx: Ctx2D, platform: Platform, _isGround: boolean) => {
     drawRooftopsPlatformFg(ctx, platform);
   },
 
