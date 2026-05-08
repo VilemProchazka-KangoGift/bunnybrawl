@@ -75,7 +75,7 @@ async function runScenario(
     await guest.goto('/' + urlSuffix);
 
     await host.evaluate(() => {
-      (window as any).__gameStore?.getState().setMatchSettings({
+      window.__bunnyTest?.gameStore()?.getState().setMatchSettings({
         botCount: 3, botDifficulty: 'hard', killLimit: 99, timeLimit: 20,
       });
     });
@@ -90,8 +90,8 @@ async function runScenario(
 
     // Wait past countdown
     await host.waitForFunction(() => {
-      const gl = (window as any).__gameLoop;
-      return gl?.getState()?.countdown <= 0;
+      const gl = window.__bunnyTest;
+      return gl?.state()?.countdown <= 0;
     }, { timeout: 10000 });
 
     // Let gameplay run for 12 seconds, sampling every 2s
@@ -102,17 +102,17 @@ async function runScenario(
 
       const [hostSnap, guestSnap] = await Promise.all([
         host.evaluate(() => {
-          const gl = (window as any).__gameLoop;
+          const gl = window.__bunnyTest;
           if (!gl) return null;
-          const s = gl.getState();
+          const s = gl.state();
           return {
             players: s.players.map((p: any) => ({ id: p.id, x: Math.round(p.x), y: Math.round(p.y), score: p.score })),
           };
         }),
         guest.evaluate(() => {
-          const gl = (window as any).__gameLoop;
+          const gl = window.__bunnyTest;
           if (!gl) return null;
-          const s = gl.getState();
+          const s = gl.state();
           return {
             players: s.players.map((p: any) => ({ id: p.id, x: Math.round(p.x), y: Math.round(p.y), score: p.score })),
           };
@@ -131,8 +131,8 @@ async function runScenario(
 
     // Final stats snapshot
     const finalStats = await host.evaluate(() => {
-      const nm = (window as any).__netMatch;
-      const gl = (window as any).__gameLoop;
+      const nm = window.__bunnyTest?.netMatch();
+      const gl = window.__bunnyTest;
       if (!nm || !gl) return null;
       const stats = nm.getRollbackStats();
       return {
@@ -147,7 +147,7 @@ async function runScenario(
     });
 
     const guestFrame = await guest.evaluate(() => {
-      const nm = (window as any).__netMatch;
+      const nm = window.__bunnyTest?.netMatch();
       return nm?.getRollbackStats()?.localFrame ?? 0;
     });
 

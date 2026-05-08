@@ -4,7 +4,7 @@ import { test, expect } from '@playwright/test';
  * E2E tests for gameplay verification.
  * Tests game state, mechanics, arena features, and multi-player input.
  * Uses URL params to skip lobby: /?arena=meadow&bots=3&killLimit=16
- * Accesses game state via window.__gameLoop.getState() and window.__gameStore.getState().
+ * Accesses game state via window.__bunnyTest.state() and window.__bunnyTest.gameStore()?.getState().
  */
 
 /** Navigate to a match via URL shortcut and wait for canvas to be visible. */
@@ -24,9 +24,9 @@ async function startMatch(
 async function waitForCountdown(page: any, timeoutMs = 10000) {
   await page.waitForFunction(
     () => {
-      const loop = (window as any).__gameLoop;
+      const loop = window.__bunnyTest;
       if (!loop) return false;
-      return loop.getState().countdown <= 0;
+      return loop.state().countdown <= 0;
     },
     { timeout: timeoutMs },
   );
@@ -35,9 +35,9 @@ async function waitForCountdown(page: any, timeoutMs = 10000) {
 /** Get the current match state from the game loop. */
 async function getState(page: any) {
   return page.evaluate(() => {
-    const loop = (window as any).__gameLoop;
+    const loop = window.__bunnyTest;
     if (!loop) return null;
-    const s = loop.getState();
+    const s = loop.state();
     return {
       timeElapsed: s.timeElapsed,
       matchOver: s.matchOver,
@@ -142,9 +142,9 @@ test.describe('Gameplay Mechanics', () => {
 
     // Wait for at least one kill (polls game state instead of fixed wait)
     await page.waitForFunction(() => {
-      const loop = (window as any).__gameLoop;
+      const loop = window.__bunnyTest;
       if (!loop) return false;
-      const state = loop.getState();
+      const state = loop.state();
       return state.players.some((p: any) => p.score > 0);
     }, { timeout: 15000 });
 
@@ -162,9 +162,9 @@ test.describe('Gameplay Mechanics', () => {
     // Wait for some kills to happen
     await page.waitForFunction(
       () => {
-        const loop = (window as any).__gameLoop;
+        const loop = window.__bunnyTest;
         if (!loop) return false;
-        return loop.getState().killFeed.length > 0;
+        return loop.state().killFeed.length > 0;
       },
       { timeout: 30000 },
     );
@@ -182,9 +182,9 @@ test.describe('Gameplay Mechanics', () => {
     // Carrots spawn on a timer; wait until at least one exists
     await page.waitForFunction(
       () => {
-        const loop = (window as any).__gameLoop;
+        const loop = window.__bunnyTest;
         if (!loop) return false;
-        return loop.getState().carrots.length > 0;
+        return loop.state().carrots.length > 0;
       },
       { timeout: 30000 },
     );
@@ -201,8 +201,8 @@ test.describe('Gameplay Mechanics', () => {
 
     // Get initial P1 position
     const initial = await page.evaluate(() => {
-      const loop = (window as any).__gameLoop;
-      const p1 = loop.getState().players.find((p: any) => p.id === 'P1');
+      const loop = window.__bunnyTest;
+      const p1 = loop.state().players.find((p: any) => p.id === 'P1');
       return p1 ? p1.x : null;
     });
     expect(initial).not.toBeNull();
@@ -214,8 +214,8 @@ test.describe('Gameplay Mechanics', () => {
 
     // Check P1 moved right
     const after = await page.evaluate(() => {
-      const loop = (window as any).__gameLoop;
-      const p1 = loop.getState().players.find((p: any) => p.id === 'P1');
+      const loop = window.__bunnyTest;
+      const p1 = loop.state().players.find((p: any) => p.id === 'P1');
       return p1 ? p1.x : null;
     });
     expect(after).not.toBeNull();
@@ -251,9 +251,9 @@ test.describe('Arena-Specific Features', () => {
     // bubbleHelmet is on the ThemeConfig, accessed via the gameLoop's private theme field
     // (JS doesn't enforce private at runtime)
     const hasBubble = await page.evaluate(() => {
-      const loop = (window as any).__gameLoop;
-      if (!loop) return null;
-      return (loop as any).theme?.bubbleHelmet ?? false;
+      const gl = window.__bunnyTest?.gameLoop();
+      if (!gl) return null;
+      return (gl as unknown as { theme?: { bubbleHelmet?: boolean } }).theme?.bubbleHelmet ?? false;
     });
     expect(hasBubble).toBe(true);
   });
@@ -305,8 +305,8 @@ test.describe('Multi-Player Input', () => {
 
     // Get P1 initial x
     const p1Start = await page.evaluate(() => {
-      const loop = (window as any).__gameLoop;
-      return loop.getState().players.find((p: any) => p.id === 'P1')?.x ?? 0;
+      const loop = window.__bunnyTest;
+      return loop.state().players.find((p: any) => p.id === 'P1')?.x ?? 0;
     });
 
     // Hold both 'd' (P1 right) simultaneously - this tests the input system handles concurrent keys
@@ -319,8 +319,8 @@ test.describe('Multi-Player Input', () => {
     await page.keyboard.up('d');
 
     const p1After = await page.evaluate(() => {
-      const loop = (window as any).__gameLoop;
-      return loop.getState().players.find((p: any) => p.id === 'P1')?.x ?? 0;
+      const loop = window.__bunnyTest;
+      return loop.state().players.find((p: any) => p.id === 'P1')?.x ?? 0;
     });
 
     // P1 should have moved right
@@ -337,8 +337,8 @@ test.describe('Multi-Player Input', () => {
 
     // Record P1 y position on ground
     const groundY = await page.evaluate(() => {
-      const loop = (window as any).__gameLoop;
-      return loop.getState().players.find((p: any) => p.id === 'P1')?.y ?? 0;
+      const loop = window.__bunnyTest;
+      return loop.state().players.find((p: any) => p.id === 'P1')?.y ?? 0;
     });
 
     // Press jump and hold it briefly to ensure the input registers
@@ -349,9 +349,9 @@ test.describe('Multi-Player Input', () => {
     // Poll until player is airborne (y decreases) or timeout
     await page.waitForFunction(
       (refY: number) => {
-        const loop = (window as any).__gameLoop;
+        const loop = window.__bunnyTest;
         if (!loop) return false;
-        const p1 = loop.getState().players.find((p: any) => p.id === 'P1');
+        const p1 = loop.state().players.find((p: any) => p.id === 'P1');
         return p1 && p1.y < refY - 5;
       },
       groundY,
@@ -359,8 +359,8 @@ test.describe('Multi-Player Input', () => {
     );
 
     const airY = await page.evaluate(() => {
-      const loop = (window as any).__gameLoop;
-      return loop.getState().players.find((p: any) => p.id === 'P1')?.y ?? 0;
+      const loop = window.__bunnyTest;
+      return loop.state().players.find((p: any) => p.id === 'P1')?.y ?? 0;
     });
 
     expect(airY, 'player should be higher after jumping (lower y value)').toBeLessThan(groundY);

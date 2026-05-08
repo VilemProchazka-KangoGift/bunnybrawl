@@ -13,8 +13,8 @@ test.describe('Pause Menu', () => {
     await expect(page.getByTestId('match-screen')).toBeVisible({ timeout: 10000 });
     // Wait for countdown to finish (polls game state)
     await page.waitForFunction(() => {
-      const loop = (window as any).__gameLoop;
-      return loop?.getState()?.countdown === 0;
+      const loop = window.__bunnyTest;
+      return loop?.state()?.countdown === 0;
     }, { timeout: 8000 });
   });
 
