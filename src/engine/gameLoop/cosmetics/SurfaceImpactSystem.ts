@@ -1,14 +1,14 @@
-import type { Arena, MatchState, PlayerSlot } from '../../types';
+import type { Arena, MatchState, Player, PlayerSlot } from '../../types';
 import type { CosmeticSystem } from '../types';
 import { getSlowDevice } from '../../perfFlags';
 import {
   detectSurfaceImpact,
-  resetSurfaceImpactBaselines,
   snapshotSurfaceImpactState,
   updateSurfaceLifetimes,
   type PrevSurfaceImpactState,
   type SurfaceImpactCallbacks,
 } from './surfaceImpact';
+import { TransitionTracker } from '../../transitionTracker';
 
 /**
  * Cosmetic system: surface-aware impact decals + liquid ripples + tagged
@@ -20,12 +20,17 @@ import {
 export class SurfaceImpactSystem implements CosmeticSystem {
   private state: MatchState;
   private arena: Arena;
-  private prev: Map<PlayerSlot, PrevSurfaceImpactState> = new Map();
+  private readonly tracker: TransitionTracker<PlayerSlot, PrevSurfaceImpactState, Player>;
   private readonly _cb: SurfaceImpactCallbacks;
 
   constructor(state: MatchState, arena: Arena) {
     this.state = state;
     this.arena = arena;
+    // Snapshot fn closes over `arena` — snapshotSurfaceImpactState reads
+    // arena.hazardZones for lava-zone detection.
+    this.tracker = new TransitionTracker<PlayerSlot, PrevSurfaceImpactState, Player>(
+      (player) => snapshotSurfaceImpactState(player, this.arena),
+    );
     this._cb = {
       isSlowDevice: () => getSlowDevice(),
     };
@@ -33,7 +38,7 @@ export class SurfaceImpactSystem implements CosmeticSystem {
 
   init(): void {
     for (const p of this.state.players) {
-      this.prev.set(p.id, snapshotSurfaceImpactState(p, this.arena));
+      this.tracker.prime(p.id, p);
     }
   }
 
@@ -43,22 +48,22 @@ export class SurfaceImpactSystem implements CosmeticSystem {
     for (const player of this.state.players) {
       if (!player.active) continue;
 
-      const prev = this.prev.get(player.id);
-      if (prev) {
+      this.tracker.detect(player.id, player, (prev) => {
         detectSurfaceImpact(player, prev, this.state, this.arena, this._cb);
-      } else {
-        this.prev.set(player.id, snapshotSurfaceImpactState(player, this.arena));
-      }
+      });
     }
   }
 
   /** Re-prime baselines (guest reconnect, loading→playing edge). switchArena
    *  rebuilds the system entirely so it doesn't go through here. */
   resetBaseline(): void {
-    resetSurfaceImpactBaselines(this.state, this.arena, this.prev);
+    this.tracker.clear();
+    for (const p of this.state.players) {
+      this.tracker.prime(p.id, p);
+    }
   }
 
   cleanup(): void {
-    this.prev.clear();
+    this.tracker.clear();
   }
 }
