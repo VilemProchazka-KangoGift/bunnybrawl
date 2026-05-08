@@ -495,29 +495,29 @@ export const candyLand: ArenaPack = {
   },
 
   drawWeatherParticle: (ctx, w) => {
-    ctx.save();
-    ctx.translate(w.x, w.y);
-    ctx.rotate(w.rotation);
     if (w.type === 'sprinkle') {
-      // Colorful sprinkle
+      // Sprinkle is a rotated rectangle with rounded ends — needs the
+      // transform stack because fillRect doesn't accept rotation.
+      ctx.save();
+      ctx.translate(w.x, w.y);
+      ctx.rotate(w.rotation);
       const colors = ['#FF69B4', '#FFD700', '#87CEEB', '#98FB98', '#DDA0DD', '#FF6347'];
       ctx.fillStyle = colors[Math.floor(w.x * 0.1) % colors.length];
       ctx.fillRect(-w.size, -w.size * 0.3, w.size * 2, w.size * 0.6);
-      // Rounded ends
       ctx.beginPath();
       ctx.arc(-w.size, 0, w.size * 0.3, 0, Math.PI * 2);
       ctx.fill();
       ctx.beginPath();
       ctx.arc(w.size, 0, w.size * 0.3, 0, Math.PI * 2);
       ctx.fill();
+      ctx.restore();
     } else {
-      // Sugar petal
+      // Sugar petal — ctx.ellipse rotation arg avoids save/restore.
       ctx.fillStyle = 'rgba(255, 200, 220, 0.5)';
       ctx.beginPath();
-      ctx.ellipse(0, 0, w.size, w.size * 0.6, 0, 0, Math.PI * 2);
+      ctx.ellipse(w.x, w.y, w.size, w.size * 0.6, w.rotation, 0, Math.PI * 2);
       ctx.fill();
     }
-    ctx.restore();
   },
 
   drawCustomThorn: createThornRenderer((ctx, x, y, width, height, _fadeAlpha) => {

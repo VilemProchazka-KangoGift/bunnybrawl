@@ -683,23 +683,18 @@ export const hauntedGraveyard: ArenaPack = {
   },
 
   drawWeatherParticle: (ctx, w) => {
-    ctx.save();
-    ctx.translate(w.x, w.y);
-    ctx.rotate(w.rotation);
+    // ctx.ellipse rotation arg avoids per-particle save/translate/rotate/restore.
     if (w.type === 'ash') {
-      // Ghost-like mist particle
       ctx.fillStyle = w.color || 'rgba(100, 80, 120, 0.4)';
       ctx.beginPath();
-      ctx.ellipse(0, 0, w.size, w.size * 0.5, 0, 0, Math.PI * 2);
+      ctx.ellipse(w.x, w.y, w.size, w.size * 0.5, w.rotation, 0, Math.PI * 2);
       ctx.fill();
     } else {
-      // Dead leaf
       ctx.fillStyle = 'rgba(80, 60, 40, 0.4)';
       ctx.beginPath();
-      ctx.ellipse(0, 0, w.size, w.size * 0.35, 0, 0, Math.PI * 2);
+      ctx.ellipse(w.x, w.y, w.size, w.size * 0.35, w.rotation, 0, Math.PI * 2);
       ctx.fill();
     }
-    ctx.restore();
   },
 
   drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => {
