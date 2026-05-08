@@ -245,4 +245,160 @@ describe('snapshot wire format (golden bytes)', () => {
     expect(decoded!.screenFlash).toBeCloseTo(0.15, 1);
     expect(decoded!.hitstopZoom).toBeCloseTo(1.05, 1);
   });
+
+  // -------- Phase 12 hardening: 5-player roster --------
+  // Exercises the packed-bool boundary at byte 8 (5 players × ceil(5/8)=1
+  // bool byte for carrots etc.) and the full per-player block count in
+  // the encoder hot loop.
+  it('encodes a 5-player roster (max human roster)', () => {
+    const players = (['P1', 'P2', 'P3', 'P4', 'P5'] as PlayerSlot[]).map((id, i) => ({
+      id,
+      x: 100 + i * 50,
+      y: 400,
+      vx: i * 10,
+      vy: 0,
+      state: 'idle' as const,
+      facing: (i % 2 === 0 ? 'left' : 'right') as 'left' | 'right',
+      animFrame: i,
+      score: i * 2,
+      hitstopTimer: 0,
+      invincibleTimer: i * 0.1,
+      fastFalling: i % 2 === 1,
+      splatTimer: 0,
+      respawnTimer: 0,
+      fatTimer: 0,
+      slowTimer: 0,
+      burnTimer: 0,
+      squashScale: 1,
+      expression: 'normal' as const,
+      killStreak: i,
+      disconnected: false,
+      active: true,
+      width: 32,
+      height: 32,
+      sideSquash: 1,
+      damageFlashTimer: 0,
+      damageFlashSide: null as null,
+    }));
+    const state = {
+      phase: 'playing' as const,
+      players,
+      carrots: [],
+      springs: [],
+      thorns: [],
+      ghosts: [],
+      lavaRocks: [],
+      geyserStates: [],
+      killFeed: [],
+      totalKills: 0,
+      timeElapsed: 1,
+      countdown: 0,
+      dayPhase: 0,
+      matchOver: false,
+      winner: null,
+      screenShake: 0,
+      slowMotion: 0,
+      screenFlash: 0,
+      hitstopZoom: 0,
+      scoreAnimations: [],
+    } as unknown as MatchState;
+    const snap = takeAuthSnapshot(7, state);
+    const { buffer, length } = encodeSnapshot(snap);
+    const bytes = new Uint8Array(buffer.slice(0, length));
+    const dump = `len=${length}\n${bytesToHexLines(bytes)}\n`;
+    expect(dump).toMatchSnapshot();
+
+    const decoded = decodeSnapshot(buffer.slice(0, length));
+    expect(decoded).not.toBeNull();
+    expect(decoded!.players).toHaveLength(5);
+  });
+
+  // -------- Phase 12 hardening: int16 velocity clamp boundary --------
+  // The encoder clamps |vx|, |vy| to ±32767. Values outside that range
+  // (e.g. an underwater geyser plus a turbo mod stacking) must encode at
+  // the clamp limits; the round trip must read them back at ±32767, never
+  // wrap to a small or sign-flipped value.
+  it('clamps out-of-range velocities to int16 boundaries', () => {
+    const state = {
+      phase: 'playing' as const,
+      players: [
+        {
+          id: 'P1' as PlayerSlot,
+          x: 100, y: 200,
+          vx: 35000,    // above +32767, must clamp to +32767
+          vy: -35000,   // below -32767, must clamp to -32767
+          state: 'airborne' as const, facing: 'right' as const,
+          animFrame: 0, score: 0,
+          hitstopTimer: 0, invincibleTimer: 0, fastFalling: false,
+          splatTimer: 0, respawnTimer: 0, fatTimer: 0,
+          slowTimer: 0, burnTimer: 0,
+          squashScale: 1, expression: 'normal' as const,
+          killStreak: 0, disconnected: false, active: true,
+          width: 32, height: 32, sideSquash: 1,
+          damageFlashTimer: 0, damageFlashSide: null as null,
+        },
+      ],
+      carrots: [], springs: [], thorns: [], ghosts: [],
+      lavaRocks: [], geyserStates: [], killFeed: [], totalKills: 0,
+      timeElapsed: 0, countdown: 0, dayPhase: 0,
+      matchOver: false, winner: null,
+      screenShake: 0, slowMotion: 0, screenFlash: 0, hitstopZoom: 0,
+      scoreAnimations: [],
+    } as unknown as MatchState;
+    const snap = takeAuthSnapshot(1, state);
+    const { buffer, length } = encodeSnapshot(snap);
+    const bytes = new Uint8Array(buffer.slice(0, length));
+    const dump = `len=${length}\n${bytesToHexLines(bytes)}\n`;
+    expect(dump).toMatchSnapshot();
+
+    const decoded = decodeSnapshot(buffer.slice(0, length));
+    expect(decoded).not.toBeNull();
+    expect(decoded!.players[0].vx).toBe(32767);
+    expect(decoded!.players[0].vy).toBe(-32767);
+  });
+
+  // -------- Phase 12 hardening: empty-array edge case --------
+  // Zero carrots / zero springs / zero thorns exercises the count=0
+  // varint-style paths and the packed-bool functions called with n=0
+  // (must not write any bytes).
+  it('encodes empty entity arrays without overwriting count bytes', () => {
+    const state = {
+      phase: 'playing' as const,
+      players: [
+        {
+          id: 'P1' as PlayerSlot,
+          x: 100, y: 200, vx: 0, vy: 0,
+          state: 'idle' as const, facing: 'right' as const,
+          animFrame: 0, score: 0,
+          hitstopTimer: 0, invincibleTimer: 0, fastFalling: false,
+          splatTimer: 0, respawnTimer: 0, fatTimer: 0,
+          slowTimer: 0, burnTimer: 0,
+          squashScale: 1, expression: 'normal' as const,
+          killStreak: 0, disconnected: false, active: true,
+          width: 32, height: 32, sideSquash: 1,
+          damageFlashTimer: 0, damageFlashSide: null as null,
+        },
+      ],
+      carrots: [], springs: [], thorns: [], ghosts: [],
+      lavaRocks: [], geyserStates: [], killFeed: [], totalKills: 0,
+      timeElapsed: 0, countdown: 0, dayPhase: 0,
+      matchOver: false, winner: null,
+      screenShake: 0, slowMotion: 0, screenFlash: 0, hitstopZoom: 0,
+      scoreAnimations: [],
+    } as unknown as MatchState;
+    const snap = takeAuthSnapshot(0, state);
+    const { buffer, length } = encodeSnapshot(snap);
+    const bytes = new Uint8Array(buffer.slice(0, length));
+    const dump = `len=${length}\n${bytesToHexLines(bytes)}\n`;
+    expect(dump).toMatchSnapshot();
+
+    const decoded = decodeSnapshot(buffer.slice(0, length));
+    expect(decoded).not.toBeNull();
+    expect(decoded!.carrots).toHaveLength(0);
+    expect(decoded!.springs).toHaveLength(0);
+    expect(decoded!.thorns).toHaveLength(0);
+    expect(decoded!.ghosts).toHaveLength(0);
+    expect(decoded!.lavaRocks).toHaveLength(0);
+    expect(decoded!.geyserStates).toHaveLength(0);
+  });
 });

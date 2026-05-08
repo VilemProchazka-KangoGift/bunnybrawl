@@ -1,5 +1,31 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`snapshot wire format (golden bytes) > clamps out-of-range velocities to int16 boundaries 1`] = `
+"len=69
+0000: 01 00 00 00 01 01 00 00 c8 42 00 00 48 43 ff 7f
+0010: 01 80 02 09 00 00 00 00 32 00 00 20 20 32 00 00
+0020: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+0030: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+0040: 00 00 00 04 00
+"
+`;
+
+exports[`snapshot wire format (golden bytes) > encodes a 5-player roster (max human roster) 1`] = `
+"len=173
+0000: 07 00 00 00 05 01 00 00 c8 42 00 00 c8 43 00 00
+0010: 00 00 00 08 00 00 00 00 32 00 00 20 20 32 02 00
+0020: 00 16 43 00 00 c8 43 0a 00 00 00 00 0b 01 02 00
+0030: 02 06 32 01 00 20 20 32 03 00 00 48 43 00 00 c8
+0040: 43 14 00 00 00 00 08 02 04 00 02 0c 32 02 00 20
+0050: 20 32 04 00 00 7a 43 00 00 c8 43 1e 00 00 00 00
+0060: 0b 03 06 00 02 12 32 03 00 20 20 32 05 00 00 96
+0070: 43 00 00 c8 43 28 00 00 00 00 08 04 08 00 02 18
+0080: 32 04 00 20 20 32 00 00 00 00 00 00 00 00 00 00
+0090: 00 80 3f 00 00 00 00 00 00 00 00 00 00 00 00 00
+00a0: 00 00 00 00 00 00 00 00 00 00 00 04 00
+"
+`;
+
 exports[`snapshot wire format (golden bytes) > encodes a known MatchState to a byte-identical buffer 1`] = `
 "len=241
 0000: 2a 00 00 00 02 01 00 00 f7 42 00 20 e4 43 32 00
@@ -18,5 +44,15 @@ exports[`snapshot wire format (golden bytes) > encodes a known MatchState to a b
 00d0: 00 00 00 00 00 00 80 3e cd cc cc 3e cd cc 4c 3e
 00e0: 9a 99 19 3e 66 66 86 3f 0b 01 01 01 02 cd cc cc
 00f0: 3e
+"
+`;
+
+exports[`snapshot wire format (golden bytes) > encodes empty entity arrays without overwriting count bytes 1`] = `
+"len=69
+0000: 00 00 00 00 01 01 00 00 c8 42 00 00 48 43 00 00
+0010: 00 00 00 09 00 00 00 00 32 00 00 20 20 32 00 00
+0020: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+0030: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+0040: 00 00 00 04 00
 "
 `;
