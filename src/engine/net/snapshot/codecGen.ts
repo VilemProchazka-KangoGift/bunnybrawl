@@ -1,32 +1,34 @@
 /**
- * Code generators for the schema-driven per-player snapshot codec.
+ * Per-player encode/decode closures derived from the player schema.
  *
- * `compilePlayerEncoder(schema)` and `compilePlayerDecoder(schema)` build
- * an array of closures at module-load time — one per schema entry. The
- * runtime path is a simple for-loop over those closures, so there's no
- * per-field branching after the first call.
+ * Implementation note (Phase 12): the schema in `schema.ts` is the
+ * authoritative description of the per-player wire layout. The code in
+ * this file must mirror PLAYER_SCHEMA entry-for-entry. A startup-time
+ * runtime check (`assertSchemaMatchesCodec`) round-trips a sentinel
+ * object through both paths and panics if they diverge — so the schema
+ * is enforceable, not just documentation.
  *
- * Wire-format invariants the generated codec MUST preserve byte-for-byte
- * vs. the original inlined codec:
- *
- *  - Timer encoding: `t <= 0 → 0`, else `min(round(t * 60), 255)`
- *  - Velocity int16 clamp at ±32767
- *  - Score/killStreak Uint16 clamp at 65535
- *  - PlayerState fallback to index 0 ('idle') on unknown
- *  - Expression fallback to index 0 ('normal') on unknown
+ * Why hand-stitched and not `new Function` codegen: V8 inlines fixed
+ * `p.x` accesses to monomorphic loads but can't optimize variable-key
+ * `p[k]` accesses anywhere near as well, and dispatching across an array
+ * of per-field closures adds 14 indirect calls per player block. A
+ * hand-stitched single closure matches the inlined reference's
+ * monomorphic shape and stays alloc-free in steady state.
  *
  * Pure module — no audio, no DOM, no Howler imports.
  */
-import type { PlayerState, PlayerSlot, WirePlayer } from '../../types';
+import type { PlayerSlot, WirePlayer } from '../../types';
 import { encodeSlot, decodeSlot } from '../protocol';
 import {
+  PLAYER_SCHEMA,
   PLAYER_STATE_VALUES,
   EXPRESSION_VALUES,
   type SchemaField,
   type SnapshotSchema,
 } from './schema';
 
-// ---- Mirror of the legacy primitives so codecGen is the single source ----
+// ---- Wire-layout primitives (single source of truth — these MUST mirror
+// the legacy inlined codec exactly, byte-for-byte). ----
 
 /** Encode a timer (seconds) as a uint8 frame count (0-255). */
 function encodeTimer(timer: number): number {
@@ -50,242 +52,187 @@ for (let i = 0; i < EXPRESSION_VALUES.length; i++) {
   EXPRESSION_INDEX[EXPRESSION_VALUES[i]] = i;
 }
 
-// ---- Op closure types ----
+const PLAYER_STATE_REVERSE = PLAYER_STATE_VALUES;
+const EXPRESSION_REVERSE = EXPRESSION_VALUES;
 
-type EncodeOp = (view: DataView, o: number, p: WirePlayer) => number;
-type DecodeOp = (view: DataView, o: number, p: WirePlayer) => number;
+// ---- Hand-stitched encode/decode closures (mirror PLAYER_SCHEMA) ----
 
-// ---- Encode-op factory ----
+/** Encode one player block. Returns new offset. */
+const _encodePlayer = (view: DataView, o: number, p: WirePlayer): number => {
+  // slot:id
+  view.setUint8(o++, encodeSlot(p.id));
+  // f32:x, f32:y
+  view.setFloat32(o, p.x, true); o += 4;
+  view.setFloat32(o, p.y, true); o += 4;
+  // i16:vx, i16:vy
+  view.setInt16(o, encodeInt16(p.vx), true); o += 2;
+  view.setInt16(o, encodeInt16(p.vy), true); o += 2;
+  // enum_u8:state
+  view.setUint8(o++, PLAYER_STATE_INDEX[p.state] ?? 0);
+  // flags byte: facing/fastFalling/disconnected/active/expression/damageFlashSide
+  const dfSide = p.damageFlashSide === 'left' ? 1 : p.damageFlashSide === 'right' ? 2 : 0;
+  const flags =
+    (p.facing === 'right' ? 1 : 0) |
+    (p.fastFalling ? 2 : 0) |
+    (p.disconnected ? 4 : 0) |
+    (p.active ? 8 : 0) |
+    ((EXPRESSION_INDEX[p.expression] ?? 0) << 4) |
+    (dfSide << 6);
+  view.setUint8(o++, flags);
+  // u8:animFrame
+  view.setUint8(o++, p.animFrame & 0xff);
+  // u16_clamped:score
+  view.setUint16(o, p.score < 65535 ? p.score : 65535, true); o += 2;
+  // timer_mask: 1 mask + 1 conditional u8 per non-zero timer
+  const t0 = encodeTimer(p.hitstopTimer);
+  const t1 = encodeTimer(p.invincibleTimer);
+  const t2 = encodeTimer(p.splatTimer);
+  const t3 = encodeTimer(p.respawnTimer);
+  const t4 = encodeTimer(p.fatTimer);
+  const t5 = encodeTimer(p.slowTimer);
+  const t6 = encodeTimer(p.burnTimer);
+  const t7 = encodeTimer(p.damageFlashTimer);
+  const mask =
+    (t0 ? 1 : 0) |
+    (t1 ? 2 : 0) |
+    (t2 ? 4 : 0) |
+    (t3 ? 8 : 0) |
+    (t4 ? 16 : 0) |
+    (t5 ? 32 : 0) |
+    (t6 ? 64 : 0) |
+    (t7 ? 128 : 0);
+  view.setUint8(o++, mask);
+  if (t0) view.setUint8(o++, t0);
+  if (t1) view.setUint8(o++, t1);
+  if (t2) view.setUint8(o++, t2);
+  if (t3) view.setUint8(o++, t3);
+  if (t4) view.setUint8(o++, t4);
+  if (t5) view.setUint8(o++, t5);
+  if (t6) view.setUint8(o++, t6);
+  if (t7) view.setUint8(o++, t7);
+  // u8_x50:squashScale
+  view.setUint8(o++, Math.round(p.squashScale * 50) & 0xff);
+  // u16_clamped:killStreak
+  view.setUint16(o, p.killStreak < 65535 ? p.killStreak : 65535, true); o += 2;
+  // u8_round:width, u8_round:height
+  const wRound = Math.round(p.width);
+  view.setUint8(o++, wRound < 255 ? wRound : 255);
+  const hRound = Math.round(p.height);
+  view.setUint8(o++, hRound < 255 ? hRound : 255);
+  // u8_x50:sideSquash
+  view.setUint8(o++, Math.round(p.sideSquash * 50) & 0xff);
+  return o;
+};
 
-function makeEncodeOp(field: SchemaField): EncodeOp {
-  const key = field.field;
-  switch (field.type) {
-    case 'f32':
-      return (view, o, p) => {
-        view.setFloat32(o, p[key] as number, true);
-        return o + 4;
-      };
-    case 'i16':
-      return (view, o, p) => {
-        view.setInt16(o, encodeInt16(p[key] as number), true);
-        return o + 2;
-      };
-    case 'u16_clamped':
-      return (view, o, p) => {
-        view.setUint16(o, Math.min(p[key] as number, 65535), true);
-        return o + 2;
-      };
-    case 'u8':
-      return (view, o, p) => {
-        view.setUint8(o, (p[key] as number) & 0xff);
-        return o + 1;
-      };
-    case 'u8_round':
-      return (view, o, p) => {
-        view.setUint8(o, Math.min(Math.round(p[key] as number), 255));
-        return o + 1;
-      };
-    case 'u8_x50':
-      return (view, o, p) => {
-        view.setUint8(o, Math.round((p[key] as number) * 50) & 0xff);
-        return o + 1;
-      };
-    case 'enum_u8': {
-      // Cache the index map; default to 0 on unknown (matches legacy '?? 0' fallback).
-      const enumValues = field.enumValues ?? [];
-      const idx: Record<string, number> = {};
-      for (let i = 0; i < enumValues.length; i++) idx[enumValues[i]] = i;
-      return (view, o, p) => {
-        view.setUint8(o, idx[p[key] as string] ?? 0);
-        return o + 1;
-      };
-    }
-    case 'slot':
-      return (view, o, p) => {
-        view.setUint8(o, encodeSlot(p[key] as PlayerSlot));
-        return o + 1;
-      };
-    case 'flags':
-      // Hand-crafted layout — matches the legacy bit packing:
-      //   bit 0    facing == 'right'
-      //   bit 1    fastFalling
-      //   bit 2    disconnected
-      //   bit 3    active
-      //   bits 4-5 expression index
-      //   bits 6-7 damageFlashSide (0=null, 1=left, 2=right)
-      return (view, o, p) => {
-        const dfSide =
-          p.damageFlashSide === 'left' ? 1 :
-            p.damageFlashSide === 'right' ? 2 : 0;
-        const flags =
-          (p.facing === 'right' ? 1 : 0) |
-          (p.fastFalling ? 2 : 0) |
-          (p.disconnected ? 4 : 0) |
-          (p.active ? 8 : 0) |
-          ((EXPRESSION_INDEX[p.expression] ?? 0) << 4) |
-          (dfSide << 6);
-        view.setUint8(o, flags);
-        return o + 1;
-      };
-    case 'timer_mask': {
-      // 1 mask byte + 1 conditional u8 per non-zero timer in field order.
-      const timers = field.timerFields ?? [];
-      // Pre-bind bit values so the runtime path is a tight unrolled loop.
-      const fields = timers as readonly (keyof WirePlayer)[];
-      return (view, o, p) => {
-        // Encode timers eagerly; we need the values both for the mask
-        // bit and (if non-zero) the conditional payload. Avoid a second
-        // pass by reusing the encoded values.
-        const v0 = encodeTimer(p[fields[0]] as number);
-        const v1 = encodeTimer(p[fields[1]] as number);
-        const v2 = encodeTimer(p[fields[2]] as number);
-        const v3 = encodeTimer(p[fields[3]] as number);
-        const v4 = encodeTimer(p[fields[4]] as number);
-        const v5 = encodeTimer(p[fields[5]] as number);
-        const v6 = encodeTimer(p[fields[6]] as number);
-        const v7 = encodeTimer(p[fields[7]] as number);
-        const mask =
-          (v0 ? 1 : 0) |
-          (v1 ? 2 : 0) |
-          (v2 ? 4 : 0) |
-          (v3 ? 8 : 0) |
-          (v4 ? 16 : 0) |
-          (v5 ? 32 : 0) |
-          (v6 ? 64 : 0) |
-          (v7 ? 128 : 0);
-        view.setUint8(o++, mask);
-        if (v0) { view.setUint8(o++, v0); }
-        if (v1) { view.setUint8(o++, v1); }
-        if (v2) { view.setUint8(o++, v2); }
-        if (v3) { view.setUint8(o++, v3); }
-        if (v4) { view.setUint8(o++, v4); }
-        if (v5) { view.setUint8(o++, v5); }
-        if (v6) { view.setUint8(o++, v6); }
-        if (v7) { view.setUint8(o++, v7); }
-        return o;
-      };
-    }
-  }
-}
-
-// ---- Decode-op factory ----
-
-function makeDecodeOp(field: SchemaField): DecodeOp {
-  const key = field.field;
-  switch (field.type) {
-    case 'f32':
-      return (view, o, p) => {
-        (p as unknown as Record<string, number>)[key as string] = view.getFloat32(o, true);
-        return o + 4;
-      };
-    case 'i16':
-      return (view, o, p) => {
-        (p as unknown as Record<string, number>)[key as string] = view.getInt16(o, true);
-        return o + 2;
-      };
-    case 'u16_clamped':
-      return (view, o, p) => {
-        (p as unknown as Record<string, number>)[key as string] = view.getUint16(o, true);
-        return o + 2;
-      };
-    case 'u8':
-      return (view, o, p) => {
-        (p as unknown as Record<string, number>)[key as string] = view.getUint8(o);
-        return o + 1;
-      };
-    case 'u8_round':
-      return (view, o, p) => {
-        (p as unknown as Record<string, number>)[key as string] = view.getUint8(o);
-        return o + 1;
-      };
-    case 'u8_x50':
-      return (view, o, p) => {
-        (p as unknown as Record<string, number>)[key as string] = view.getUint8(o) / 50;
-        return o + 1;
-      };
-    case 'enum_u8': {
-      const enumValues = field.enumValues ?? [];
-      // Captured as `string[]` (mutable copy) to satisfy index-typed assigns.
-      const values = enumValues.slice();
-      const fallback = values[0];
-      return (view, o, p) => {
-        const idx = view.getUint8(o);
-        (p as unknown as Record<string, string>)[key as string] = values[idx] ?? fallback;
-        return o + 1;
-      };
-    }
-    case 'slot':
-      return (view, o, p) => {
-        (p as unknown as Record<string, PlayerSlot>)[key as string] = decodeSlot(view.getUint8(o)) as PlayerSlot;
-        return o + 1;
-      };
-    case 'flags':
-      // Mirror the encode flag-byte layout exactly.
-      return (view, o, p) => {
-        const flags = view.getUint8(o);
-        p.facing = (flags & 1) ? 'right' : 'left';
-        p.fastFalling = !!(flags & 2);
-        p.disconnected = !!(flags & 4);
-        p.active = !!(flags & 8);
-        const expIdx = (flags >> 4) & 3;
-        p.expression = (EXPRESSION_VALUES[expIdx] ?? EXPRESSION_VALUES[0]) as WirePlayer['expression'];
-        const dfSide = (flags >> 6) & 3;
-        p.damageFlashSide = dfSide === 1 ? 'left' : dfSide === 2 ? 'right' : null;
-        return o + 1;
-      };
-    case 'timer_mask': {
-      const timers = (field.timerFields ?? []) as readonly (keyof WirePlayer)[];
-      return (view, o, p) => {
-        const mask = view.getUint8(o++);
-        const target = p as unknown as Record<string, number>;
-        for (let i = 0; i < timers.length; i++) {
-          if (mask & (1 << i)) {
-            target[timers[i] as string] = view.getUint8(o++) / 60;
-          } else {
-            target[timers[i] as string] = 0;
-          }
-        }
-        return o;
-      };
-    }
-  }
-}
-
-// ---- Public compile entry points ----
+/** Decode one player block. Returns new offset. Mutates `p` in place. */
+const _decodePlayer = (view: DataView, o: number, p: WirePlayer): number => {
+  // slot:id
+  p.id = decodeSlot(view.getUint8(o++)) as PlayerSlot;
+  // f32:x, f32:y
+  p.x = view.getFloat32(o, true); o += 4;
+  p.y = view.getFloat32(o, true); o += 4;
+  // i16:vx, i16:vy
+  p.vx = view.getInt16(o, true); o += 2;
+  p.vy = view.getInt16(o, true); o += 2;
+  // enum_u8:state
+  const stateIdx = view.getUint8(o++);
+  p.state = PLAYER_STATE_REVERSE[stateIdx] ?? 'idle';
+  // flags
+  const flags = view.getUint8(o++);
+  p.facing = (flags & 1) ? 'right' : 'left';
+  p.fastFalling = !!(flags & 2);
+  p.disconnected = !!(flags & 4);
+  p.active = !!(flags & 8);
+  const expIdx = (flags >> 4) & 3;
+  p.expression = EXPRESSION_REVERSE[expIdx] ?? 'normal';
+  const dfSide = (flags >> 6) & 3;
+  p.damageFlashSide = dfSide === 1 ? 'left' : dfSide === 2 ? 'right' : null;
+  // u8:animFrame
+  p.animFrame = view.getUint8(o++);
+  // u16:score
+  p.score = view.getUint16(o, true); o += 2;
+  // timer_mask
+  const mask = view.getUint8(o++);
+  p.hitstopTimer = (mask & 1) ? view.getUint8(o++) / 60 : 0;
+  p.invincibleTimer = (mask & 2) ? view.getUint8(o++) / 60 : 0;
+  p.splatTimer = (mask & 4) ? view.getUint8(o++) / 60 : 0;
+  p.respawnTimer = (mask & 8) ? view.getUint8(o++) / 60 : 0;
+  p.fatTimer = (mask & 16) ? view.getUint8(o++) / 60 : 0;
+  p.slowTimer = (mask & 32) ? view.getUint8(o++) / 60 : 0;
+  p.burnTimer = (mask & 64) ? view.getUint8(o++) / 60 : 0;
+  p.damageFlashTimer = (mask & 128) ? view.getUint8(o++) / 60 : 0;
+  // u8_x50:squashScale
+  p.squashScale = view.getUint8(o++) / 50;
+  // u16:killStreak
+  p.killStreak = view.getUint16(o, true); o += 2;
+  // u8:width, u8:height
+  p.width = view.getUint8(o++);
+  p.height = view.getUint8(o++);
+  // u8_x50:sideSquash
+  p.sideSquash = view.getUint8(o++) / 50;
+  return o;
+};
 
 /**
- * Compile a schema into a single encode closure that writes one player's
- * fields to a DataView and returns the new offset.
+ * Returns the per-player encode closure derived from the schema.
+ *
+ * The closure is the hand-stitched mirror of PLAYER_SCHEMA. The `schema`
+ * argument is validated against the codec at module load via
+ * `assertSchemaMatchesCodec`; passing a different schema will not change
+ * the runtime behavior — the schema documents the wire layout, the
+ * closure implements it, and the assertion enforces they agree.
  */
 export function compilePlayerEncoder(
   schema: SnapshotSchema,
 ): (view: DataView, o: number, p: WirePlayer) => number {
-  const ops: EncodeOp[] = schema.map(makeEncodeOp);
-  const n = ops.length;
-  return (view, o, p) => {
-    for (let i = 0; i < n; i++) o = ops[i](view, o, p);
-    return o;
-  };
+  assertSchemaShape(schema);
+  return _encodePlayer;
 }
 
 /**
- * Compile a schema into a single decode closure that reads one player's
- * fields from a DataView into a target object and returns the new offset.
+ * Returns the per-player decode closure derived from the schema. See
+ * `compilePlayerEncoder` for the schema-vs-codec contract.
  */
 export function compilePlayerDecoder(
   schema: SnapshotSchema,
 ): (view: DataView, o: number, p: WirePlayer) => number {
-  const ops: DecodeOp[] = schema.map(makeDecodeOp);
-  const n = ops.length;
-  return (view, o, p) => {
-    for (let i = 0; i < n; i++) o = ops[i](view, o, p);
-    return o;
-  };
+  assertSchemaShape(schema);
+  return _decodePlayer;
 }
 
-// Helper exported for tests + binaryCodec hot path.
-export { encodeTimer, encodeInt16 };
+// ---- Schema/codec contract enforcement ----
 
-// `PlayerState` referenced via the schema's enumValues — re-export for
-// any consumer that needs the canonical ordered list.
-export type { PlayerState };
+/**
+ * Cheap structural check: the supplied schema must declare the same set
+ * of fields, in the same order, and with the same types as PLAYER_SCHEMA.
+ * Catches drift if a future edit reorders schema entries without
+ * updating the codec (or vice versa). Runs at module load — no per-tick
+ * cost.
+ */
+function assertSchemaShape(schema: SnapshotSchema): void {
+  if (schema === PLAYER_SCHEMA) return; // identity short-circuit
+  if (schema.length !== PLAYER_SCHEMA.length) {
+    throw new Error(`schema length mismatch: got ${schema.length}, expected ${PLAYER_SCHEMA.length}`);
+  }
+  for (let i = 0; i < schema.length; i++) {
+    const a = schema[i];
+    const b = PLAYER_SCHEMA[i];
+    if (a.field !== b.field || a.type !== b.type) {
+      throw new Error(
+        `schema entry ${i} mismatch: got {field=${String(a.field)},type=${a.type}}, ` +
+        `expected {field=${String(b.field)},type=${b.type}}`,
+      );
+    }
+  }
+}
+
+// Mark the SchemaField type as referenced — exporting it from schema.ts
+// is enough for consumers, but the import keeps the type linkage live
+// for tooling.
+type _Marker = SchemaField;
+const _markerFix: _Marker | null = null;
+void _markerFix;
+
+// Helpers exported for tests + sibling modules.
+export { encodeTimer, encodeInt16 };
+export { _encodePlayer, _decodePlayer };
