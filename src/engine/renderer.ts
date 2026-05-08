@@ -259,6 +259,12 @@ export class Renderer {
    *  reuses entries by index, growing on demand. Cleared by trimming `length`. */
   private _dynamicLights: Light[] = [];
   private _lastLightOpacity = -1;
+  /** Cached top-score and the score-sum that produced it. Scores monotonically
+   *  increase, so a sum-change is a sufficient (and overshooting-safe) trigger
+   *  to re-scan for the new leader instead of recomputing every frame. */
+  private _cachedLeaderScore = 0;
+  private _lastScoreSum = -1;
+  private _lastMatchOver = false;
   private bgCtx: CanvasRenderingContext2D;
   private bgNightCtx: CanvasRenderingContext2D | null = null;
   private fgCtx: CanvasRenderingContext2D;
@@ -659,15 +665,24 @@ export class Renderer {
   private _synthesizeDynamicLights(matchState: MatchState): void {
     let i = 0;
 
-    // Leader = highest active score. Empty/everyone-tied-at-0/match-over
-    // disables the boost (no leader to highlight at start, no relevance after).
-    let leaderScore = 0;
-    if (!matchState.matchOver) {
-      for (const p of matchState.players) {
-        if (!isLivePlayer(p)) continue;
-        if (p.score > leaderScore) leaderScore = p.score;
+    // Leader detection: only re-scan when score totals or matchOver changed.
+    // Scores monotonically increase, so the sum is a cheap dirty check.
+    // Splat/respawning players still count for leader (the aura just doesn't
+    // render while they're dead — they reclaim the boost on respawn).
+    let scoreSum = 0;
+    for (const p of matchState.players) scoreSum += p.score;
+    if (scoreSum !== this._lastScoreSum || matchState.matchOver !== this._lastMatchOver) {
+      this._lastScoreSum = scoreSum;
+      this._lastMatchOver = matchState.matchOver;
+      let leader = 0;
+      if (!matchState.matchOver) {
+        for (const p of matchState.players) {
+          if (p.score > leader) leader = p.score;
+        }
       }
+      this._cachedLeaderScore = leader;
     }
+    const leaderScore = this._cachedLeaderScore;
 
     for (const player of matchState.players) {
       if (!isLivePlayer(player)) continue;
