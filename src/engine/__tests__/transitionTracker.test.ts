@@ -140,6 +140,23 @@ describe('TransitionTracker', () => {
     expect(cb).toHaveBeenCalledWith(10);
   });
 
+  it('fires onTransition with prev=undefined when T includes undefined as a valid value', () => {
+    // Regression: detect() must use Map.has() to check for prev existence,
+    // NOT `prev !== undefined` — otherwise callbacks never fire for snapshot
+    // types that legitimately produce undefined.
+    const tracker = new TransitionTracker<string, number, number | undefined>(
+      (n) => (n === 0 ? undefined : n),
+    );
+    const cb = vi.fn();
+    // Prime with a source that snapshots to undefined.
+    tracker.detect('p1', 0, cb);
+    expect(cb).not.toHaveBeenCalled();
+    // Second tick: prev exists (it is undefined), so callback MUST fire.
+    tracker.detect('p1', 5, cb);
+    expect(cb).toHaveBeenCalledTimes(1);
+    expect(cb).toHaveBeenCalledWith(undefined);
+  });
+
   it('snapshot fn can transform the source into a different shape', () => {
     interface Big { id: string; state: string; vy: number; ignored: number[] }
     interface Small { state: string; vy: number }

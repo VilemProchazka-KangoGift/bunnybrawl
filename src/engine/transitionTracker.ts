@@ -28,8 +28,9 @@ export class TransitionTracker<K, T, S = unknown> {
    *  baseline exists for this key. After firing (or on first call without
    *  baseline), stores a fresh snapshot as the new prev. */
   detect(k: K, source: S, onTransition: (prev: T) => void): void {
-    const prev = this._prev.get(k);
-    if (prev !== undefined) onTransition(prev);
+    if (this._prev.has(k)) {
+      onTransition(this._prev.get(k) as T);
+    }
     this._prev.set(k, this._snapshot(source));
   }
 
