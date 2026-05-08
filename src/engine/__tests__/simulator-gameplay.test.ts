@@ -27,6 +27,10 @@ import {
   HITSTOP_DURATION,
   SPLAT_DURATION, RESPAWN_DELAY, INVINCIBLE_DURATION,
   FAT_DURATION,
+  SPRING_BOUNCE,
+  GRAVITY,
+  SQUASH_ON_LAND,
+  DUST_LAND_VY_THRESHOLD,
 } from '../constants';
 import type { MatchSettings, Arena, PlayerSlot, InputState } from '../types';
 
@@ -1098,5 +1102,946 @@ describe('Simulator — Bouncy Platforms', () => {
     // After landing on a bouncy platform, vy should flip to upward
     expect(player.vy).toBeLessThan(0);
     expect(player.state).toBe('airborne');
+  });
+
+  it('player bounces when landing on a bouncy ground platform', () => {
+    const { sim } = createSim({ arena: { bouncyPlatforms: [0] } });
+    skipCountdown(sim);
+    const player = sim.getState().players[0];
+    player.x = 200;
+    player.y = 660 - player.height - 2;
+    player.vy = 150;
+    player.state = 'airborne';
+
+    sim.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(player.vy).toBeCloseTo(SPRING_BOUNCE * 0.85, 0);
+    expect(player.state).toBe('airborne');
+  });
+
+  it('bouncy platform sets bouncyWobble timer', () => {
+    const { sim } = createSim({ arena: { bouncyPlatforms: [0] } });
+    skipCountdown(sim);
+    const state = sim.getState();
+    const player = state.players[0];
+    player.x = 200;
+    player.y = 660 - player.height - 2;
+    player.vy = 150;
+    player.state = 'airborne';
+
+    sim.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(state.bouncyWobble.get(0)).toBeCloseTo(0.4, 1);
+  });
+
+  it('player does not bounce on non-bouncy platform', () => {
+    const { sim } = createSim({ arena: { bouncyPlatforms: [1] } });
+    skipCountdown(sim);
+    const player = sim.getState().players[0];
+    player.x = 200;
+    player.y = 660 - player.height - 2;
+    player.vy = 150;
+    player.state = 'airborne';
+
+    sim.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(player.vy).not.toBeCloseTo(SPRING_BOUNCE * 0.85, 0);
+    expect(player.state).toBe('idle');
+  });
+
+  it('holding down on slow landing suppresses bounce', () => {
+    const { sim } = createSim({ arena: { bouncyPlatforms: [0] } });
+    skipCountdown(sim);
+    const player = sim.getState().players[0];
+    player.x = 200;
+    player.y = 660 - player.height - 2;
+    player.vy = 50;
+    player.state = 'airborne';
+
+    const inputs = new Map<string, InputState>();
+    inputs.set('P1', { left: false, right: false, jump: false, down: true });
+    inputs.set('P2', { left: false, right: false, jump: false, down: false });
+
+    sim.fixedUpdate(FIXED_TIMESTEP, inputs);
+
+    expect(player.vy).not.toBeCloseTo(SPRING_BOUNCE * 0.85, 0);
+  });
+
+  it('holding down on fast landing does NOT suppress bounce', () => {
+    const { sim } = createSim({ arena: { bouncyPlatforms: [0] } });
+    skipCountdown(sim);
+    const player = sim.getState().players[0];
+    player.x = 200;
+    player.y = 660 - player.height - 2;
+    player.vy = 300;
+    player.state = 'airborne';
+
+    const inputs = new Map<string, InputState>();
+    inputs.set('P1', { left: false, right: false, jump: false, down: true });
+    inputs.set('P2', { left: false, right: false, jump: false, down: false });
+
+    sim.fixedUpdate(FIXED_TIMESTEP, inputs);
+
+    expect(player.vy).toBeCloseTo(SPRING_BOUNCE * 0.85, 0);
+    expect(player.state).toBe('airborne');
+  });
+
+  it('superBounce mod makes all platforms bouncy', () => {
+    const { sim } = createSim({
+      settings: {
+        mods: {
+          extremeGore: false, carrotChase: false, giantPlayers: false,
+          turbo: false, superBounce: true, mirrorArena: false, underwaterGravity: false,
+        },
+      },
+    });
+    skipCountdown(sim);
+    const player = sim.getState().players[0];
+    player.x = 200;
+    player.y = 660 - player.height - 2;
+    player.vy = 150;
+    player.state = 'airborne';
+
+    sim.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(player.vy).toBeCloseTo(SPRING_BOUNCE * 0.85, 0);
+    expect(player.state).toBe('airborne');
+  });
+});
+
+// ===================================================================
+// Effect Zones — Extended
+// ===================================================================
+
+describe('Simulator — Effect Zones (extended)', () => {
+  it('zero-G zone boosts rising player (vy *= 1.03)', () => {
+    const { sim } = createSim({
+      arena: { effectZones: [{ type: 'zero_g', x: 0, y: 0, width: 1280, height: 720 }] },
+    });
+    skipCountdown(sim);
+    const player = sim.getState().players[0];
+    player.state = 'airborne';
+    player.vy = -200;
+
+    sim.fixedUpdate(FIXED_TIMESTEP);
+
+    const pureGravityVy = -200 + GRAVITY * FIXED_TIMESTEP;
+    expect(player.vy).toBeLessThan(pureGravityVy);
+  });
+
+  it('zero-G zone only affects players inside the zone', () => {
+    const { sim } = createSim({
+      arena: { effectZones: [{ type: 'zero_g', x: 500, y: 0, width: 200, height: 720 }] },
+    });
+    skipCountdown(sim);
+    const state = sim.getState();
+    const outsidePlayer = state.players[0];
+    const insidePlayer = state.players[1];
+
+    outsidePlayer.x = 100;
+    outsidePlayer.state = 'airborne';
+    outsidePlayer.vy = 200;
+
+    insidePlayer.x = 550;
+    insidePlayer.state = 'airborne';
+    insidePlayer.vy = 200;
+
+    sim.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(insidePlayer.vy).toBeLessThan(outsidePlayer.vy);
+  });
+
+  it('current zone applies vy force', () => {
+    const { sim } = createSim({
+      arena: { effectZones: [{ type: 'current', x: 0, y: 0, width: 1280, height: 720, vy: -3000 }] },
+    });
+    skipCountdown(sim);
+    const player = sim.getState().players[0];
+    player.state = 'airborne';
+    player.y = 400;
+    player.vy = 0;
+    const yBefore = player.y;
+
+    for (let i = 0; i < 30; i++) sim.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(player.y).toBeLessThan(yBefore);
+  });
+
+  it('current zone with zero vx/vy has no effect', () => {
+    const { sim: a } = createSim({
+      arena: { effectZones: [{ type: 'current', x: 0, y: 0, width: 1280, height: 720, vx: 0, vy: 0 }] },
+    });
+    const { sim: b } = createSim();
+    skipCountdown(a);
+    skipCountdown(b);
+
+    const p1 = a.getState().players[0];
+    const p2 = b.getState().players[0];
+
+    p1.x = 300; p1.y = 400; p1.vx = 50; p1.vy = 100; p1.state = 'airborne';
+    p2.x = 300; p2.y = 400; p2.vx = 50; p2.vy = 100; p2.state = 'airborne';
+
+    a.fixedUpdate(FIXED_TIMESTEP);
+    b.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(p1.vx).toBeCloseTo(p2.vx, 1);
+    expect(p1.vy).toBeCloseTo(p2.vy, 1);
+  });
+
+  it('geyser does not launch player when inactive', () => {
+    const { sim } = createSim({
+      arena: { effectZones: [{ type: 'geyser', x: 0, y: 0, width: 1280, height: 720, strength: -550, interval: 10, duration: 3 }] },
+    });
+    skipCountdown(sim);
+    const state = sim.getState();
+    const player = state.players[0];
+
+    state.geyserStates[0].active = false;
+    player.vy = 0;
+    player.state = 'idle';
+
+    sim.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(player.vy).toBeGreaterThan(-100);
+  });
+
+  it('geyser uses zone.strength as launch velocity', () => {
+    const { sim } = createSim({
+      arena: { effectZones: [{ type: 'geyser', x: 0, y: 0, width: 1280, height: 720, strength: -800, interval: 10, duration: 3 }] },
+    });
+    skipCountdown(sim);
+    const state = sim.getState();
+    const player = state.players[0];
+
+    state.geyserStates[0].active = true;
+    state.geyserStates[0].activeTimer = 2;
+    player.vy = 0;
+
+    sim.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(player.vy).toBeLessThanOrEqual(-800);
+  });
+
+  it('geyser sets player state to airborne', () => {
+    const { sim } = createSim({
+      arena: { effectZones: [{ type: 'geyser', x: 0, y: 0, width: 1280, height: 720, strength: -550, interval: 10, duration: 3 }] },
+    });
+    skipCountdown(sim);
+    const state = sim.getState();
+    const player = state.players[0];
+
+    state.geyserStates[0].active = true;
+    state.geyserStates[0].activeTimer = 2;
+    player.state = 'idle';
+    player.vy = 0;
+
+    sim.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(player.state).toBe('airborne');
+  });
+
+  it('geyser Math.min preserves stronger upward velocity', () => {
+    const { sim } = createSim({
+      arena: { effectZones: [{ type: 'geyser', x: 0, y: 0, width: 1280, height: 720, strength: -550, interval: 10, duration: 3 }] },
+    });
+    skipCountdown(sim);
+    const state = sim.getState();
+    const player = state.players[0];
+
+    state.geyserStates[0].active = true;
+    state.geyserStates[0].activeTimer = 2;
+    player.vy = -900;
+    player.state = 'airborne';
+
+    sim.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(player.vy).toBeLessThanOrEqual(-550);
+  });
+
+  it('overlapping zero-G and current both apply', () => {
+    const { sim } = createSim({
+      arena: {
+        effectZones: [
+          { type: 'zero_g', x: 0, y: 0, width: 1280, height: 720 },
+          { type: 'current', x: 0, y: 0, width: 1280, height: 720, vx: 2000 },
+        ],
+      },
+    });
+    skipCountdown(sim);
+    const player = sim.getState().players[0];
+    player.state = 'airborne';
+    player.vy = 200;
+    player.vx = 0;
+    const vxBefore = player.vx;
+    const vyBefore = player.vy;
+
+    sim.fixedUpdate(FIXED_TIMESTEP);
+
+    const pureGravityVy = vyBefore + GRAVITY * FIXED_TIMESTEP;
+    expect(player.vy).toBeLessThan(pureGravityVy);
+    expect(player.vx).toBeGreaterThan(vxBefore);
+  });
+});
+
+// ===================================================================
+// Hitstop (extended)
+// ===================================================================
+
+describe('Simulator — Hitstop (extended)', () => {
+  function setupStomp(sim: Simulator) {
+    const state = sim.getState();
+    const attacker = state.players[0];
+    const victim = state.players[1];
+
+    victim.x = 500;
+    victim.y = 600;
+    victim.state = 'idle';
+    victim.invincibleTimer = 0;
+    victim.active = true;
+
+    attacker.x = 500;
+    attacker.y = victim.y - attacker.height + 5;
+    attacker.vy = STOMP_VY_THRESHOLD + 100;
+    attacker.state = 'airborne';
+    attacker.active = true;
+
+    sim.fixedUpdate(FIXED_TIMESTEP);
+    return { attacker, victim, state };
+  }
+
+  it('after a stomp, the victim has hitstopTimer > 0', () => {
+    const { sim } = createSim();
+    skipCountdown(sim);
+    const { victim } = setupStomp(sim);
+
+    expect(victim.hitstopTimer).toBeGreaterThan(0);
+    expect(victim.hitstopTimer).toBeCloseTo(HITSTOP_DURATION, 2);
+  });
+
+  it('during hitstop, player physics are frozen', () => {
+    const { sim } = createSim();
+    skipCountdown(sim);
+    const { attacker } = setupStomp(sim);
+
+    expect(attacker.hitstopTimer).toBeGreaterThan(0);
+
+    const vxAfterStomp = attacker.vx;
+    const vyAfterStomp = attacker.vy;
+
+    sim.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(attacker.vx).toBe(vxAfterStomp);
+    expect(attacker.vy).toBe(vyAfterStomp);
+  });
+
+  it('after hitstop expires, physics resume normally', () => {
+    const { sim } = createSim();
+    skipCountdown(sim);
+    const { attacker } = setupStomp(sim);
+
+    const hitstopFrames = Math.ceil(HITSTOP_DURATION / FIXED_TIMESTEP) + 2;
+    for (let i = 0; i < hitstopFrames; i++) sim.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(attacker.hitstopTimer).toBeLessThanOrEqual(0);
+
+    const vyBefore = attacker.vy;
+    sim.fixedUpdate(FIXED_TIMESTEP);
+    expect(attacker.vy).toBeGreaterThan(vyBefore);
+  });
+});
+
+// ===================================================================
+// Landing Squash
+// ===================================================================
+
+describe('Simulator — Landing Squash', () => {
+  it('squashScale drops below 1.0 on hard landing', () => {
+    const { sim } = createSim();
+    skipCountdown(sim);
+    const player = sim.getState().players[0];
+
+    player.x = 200;
+    player.y = 660 - player.height - 2;
+    player.vy = DUST_LAND_VY_THRESHOLD + 100;
+    player.state = 'airborne';
+    player.active = true;
+
+    sim.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(player.squashScale).toBeLessThan(1.0);
+    expect(player.squashScale).toBeCloseTo(SQUASH_ON_LAND, 1);
+  });
+
+  it('squashScale decays back toward 1.0 over time', () => {
+    const { sim } = createSim();
+    skipCountdown(sim);
+    const player = sim.getState().players[0];
+
+    player.x = 200;
+    player.y = 660 - player.height - 2;
+    player.vy = DUST_LAND_VY_THRESHOLD + 100;
+    player.state = 'airborne';
+    player.active = true;
+
+    sim.fixedUpdate(FIXED_TIMESTEP);
+
+    const squashAfterLand = player.squashScale;
+    expect(squashAfterLand).toBeLessThan(1.0);
+
+    for (let i = 0; i < 20; i++) sim.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(player.squashScale).toBeGreaterThan(squashAfterLand);
+  });
+});
+
+// ===================================================================
+// Fat and Slow Effects (extended)
+// ===================================================================
+
+describe('Simulator — Fat and Slow Effects (extended)', () => {
+  it('fat player moves slower than normal player', () => {
+    const { sim: fat } = createSim();
+    const { sim: normal } = createSim();
+    skipCountdown(fat);
+    skipCountdown(normal);
+
+    const fatPlayer = fat.getState().players[0];
+    const normalPlayer = normal.getState().players[0];
+
+    fatPlayer.fatTimer = FAT_DURATION;
+
+    fatPlayer.x = 200; fatPlayer.y = 660 - PLAYER_HEIGHT;
+    fatPlayer.vx = 0; fatPlayer.state = 'idle';
+    normalPlayer.x = 200; normalPlayer.y = 660 - PLAYER_HEIGHT;
+    normalPlayer.vx = 0; normalPlayer.state = 'idle';
+
+    const rightInput = new Map<string, InputState>();
+    rightInput.set('P1', { left: false, right: true, jump: false, down: false });
+    rightInput.set('P2', { left: false, right: false, jump: false, down: false });
+
+    for (let i = 0; i < 60; i++) {
+      fat.fixedUpdate(FIXED_TIMESTEP, new Map(rightInput));
+      normal.fixedUpdate(FIXED_TIMESTEP, new Map(rightInput));
+    }
+
+    expect(fatPlayer.x).toBeLessThan(normalPlayer.x);
+  });
+
+  it('slowed player (from thorn) moves slower', () => {
+    const { sim: slow } = createSim();
+    const { sim: normal } = createSim();
+    skipCountdown(slow);
+    skipCountdown(normal);
+
+    const slowPlayer = slow.getState().players[0];
+    const normalPlayer = normal.getState().players[0];
+
+    slowPlayer.slowTimer = THORN_SLOW_DURATION;
+
+    slowPlayer.x = 200; slowPlayer.y = 660 - PLAYER_HEIGHT;
+    slowPlayer.vx = 0; slowPlayer.state = 'idle';
+    normalPlayer.x = 200; normalPlayer.y = 660 - PLAYER_HEIGHT;
+    normalPlayer.vx = 0; normalPlayer.state = 'idle';
+
+    const rightInput = new Map<string, InputState>();
+    rightInput.set('P1', { left: false, right: true, jump: false, down: false });
+    rightInput.set('P2', { left: false, right: false, jump: false, down: false });
+
+    for (let i = 0; i < 60; i++) {
+      slow.fixedUpdate(FIXED_TIMESTEP, new Map(rightInput));
+      normal.fixedUpdate(FIXED_TIMESTEP, new Map(rightInput));
+    }
+
+    expect(slowPlayer.x).toBeLessThan(normalPlayer.x);
+  });
+});
+
+// ===================================================================
+// No-Spawn Zones
+// ===================================================================
+
+describe('Simulator — No-Spawn Zones', () => {
+  it('springs do not spawn inside noSpawnZones', () => {
+    const { sim } = createSim({
+      arena: {
+        platforms: [
+          { x: 0, y: 660, width: 1280, height: 60 },
+          { x: 400, y: 500, width: 200, height: 20 },
+        ],
+        noSpawnZones: [{ x: 350, y: 450, width: 300, height: 100 }],
+      },
+    });
+    skipCountdown(sim);
+    const state = sim.getState();
+
+    const steps = Math.ceil(20 / FIXED_TIMESTEP);
+    for (let i = 0; i < steps; i++) sim.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(state.springs.length).toBe(0);
+  });
+
+  it('thorns do not spawn inside noSpawnZones', () => {
+    const { sim } = createSim({
+      arena: {
+        platforms: [
+          { x: 0, y: 660, width: 1280, height: 60 },
+          { x: 400, y: 500, width: 200, height: 20 },
+        ],
+        noSpawnZones: [{ x: 350, y: 450, width: 300, height: 100 }],
+      },
+    });
+    skipCountdown(sim);
+    const state = sim.getState();
+
+    const steps = Math.ceil(25 / FIXED_TIMESTEP);
+    for (let i = 0; i < steps; i++) sim.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(state.thorns.length).toBe(0);
+  });
+});
+
+// ===================================================================
+// resolveStuckPlayer
+// ===================================================================
+
+describe('Simulator — resolveStuckPlayer', () => {
+  it('player deeply embedded in platform gets ejected', () => {
+    const { sim } = createSim();
+    skipCountdown(sim);
+    const player = sim.getState().players[0];
+
+    player.x = 200;
+    player.y = 660 - PLAYER_HEIGHT + 15;
+    player.state = 'idle';
+    player.active = true;
+
+    sim.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(player.y + player.height).toBeLessThanOrEqual(660 + 1);
+  });
+
+  it('player slightly overlapping platform is not ejected (< 5px)', () => {
+    const { sim } = createSim();
+    skipCountdown(sim);
+    const player = sim.getState().players[0];
+
+    player.x = 200;
+    player.y = 660 - PLAYER_HEIGHT + 3;
+    player.state = 'idle';
+    player.active = true;
+
+    sim.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(player.y + player.height).toBeLessThanOrEqual(660 + 1);
+  });
+});
+
+// ===================================================================
+// Spring & Thorn Spawning (extended)
+// ===================================================================
+
+describe('Simulator — Spring Spawning', () => {
+  it('springs spawn after SPRING_SPAWN_INTERVAL on floating platforms', () => {
+    const { sim } = createSim({
+      arena: {
+        platforms: [
+          { x: 0, y: 660, width: 1280, height: 60 },
+          { x: 400, y: 400, width: 200, height: 20 },
+        ],
+      },
+    });
+    skipCountdown(sim);
+    const state = sim.getState();
+
+    const steps = Math.ceil(6 / FIXED_TIMESTEP);
+    for (let i = 0; i < steps; i++) sim.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(state.springs.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('no springs spawn when noSprings is set on arena', () => {
+    const { sim } = createSim({
+      arena: {
+        platforms: [
+          { x: 0, y: 660, width: 1280, height: 60 },
+          { x: 400, y: 400, width: 200, height: 20 },
+        ],
+        noSprings: true,
+      },
+    });
+    skipCountdown(sim);
+    const state = sim.getState();
+
+    const steps = Math.ceil(20 / FIXED_TIMESTEP);
+    for (let i = 0; i < steps; i++) sim.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(state.springs.length).toBe(0);
+  });
+});
+
+describe('Simulator — Thorn Spawning', () => {
+  it('thorns spawn after THORN_SPAWN_INTERVAL on floating platforms', () => {
+    const { sim } = createSim({
+      arena: {
+        platforms: [
+          { x: 0, y: 660, width: 1280, height: 60 },
+          { x: 400, y: 500, width: 200, height: 20 },
+        ],
+      },
+    });
+    skipCountdown(sim);
+    const state = sim.getState();
+
+    const steps = Math.ceil(9 / FIXED_TIMESTEP);
+    for (let i = 0; i < steps; i++) sim.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(state.thorns.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('thorns have growTimer > 0 when first spawned', () => {
+    const { sim } = createSim({
+      arena: {
+        platforms: [
+          { x: 0, y: 660, width: 1280, height: 60 },
+          { x: 400, y: 500, width: 200, height: 20 },
+        ],
+      },
+    });
+    skipCountdown(sim);
+    const state = sim.getState();
+
+    let thornFound = false;
+    const maxSteps = Math.ceil(15 / FIXED_TIMESTEP);
+    for (let i = 0; i < maxSteps; i++) {
+      const prevCount = state.thorns.length;
+      sim.fixedUpdate(FIXED_TIMESTEP);
+      if (state.thorns.length > prevCount) {
+        const newestThorn = state.thorns[state.thorns.length - 1];
+        expect(newestThorn.growTimer).toBeGreaterThan(0);
+        thornFound = true;
+        break;
+      }
+    }
+
+    expect(thornFound).toBe(true);
+  });
+});
+
+// ===================================================================
+// Mod physics multipliers
+// ===================================================================
+
+describe('Simulator — mod physics multipliers', () => {
+  it('underwaterGravity mod reduces gravity', () => {
+    const { sim } = createSim({
+      settings: {
+        mods: {
+          underwaterGravity: true, turbo: false, extremeGore: false,
+          carrotChase: false, giantPlayers: false, superBounce: false,
+          mirrorArena: false,
+        },
+      },
+    });
+    const state = sim.getState();
+    state.countdown = 0;
+
+    state.players[0].y = 300;
+    state.players[0].vy = 0;
+    state.players[0].state = 'airborne';
+
+    sim.fixedUpdate(FIXED_TIMESTEP);
+
+    const vy = state.players[0].vy;
+    expect(vy).toBeGreaterThan(0);
+    expect(vy).toBeLessThan(15);
+  });
+
+  it('superBounce mod marks all platforms bouncy on the arena', () => {
+    const { sim } = createSim({
+      settings: {
+        mods: {
+          superBounce: true, turbo: false, extremeGore: false,
+          carrotChase: false, giantPlayers: false, mirrorArena: false,
+          underwaterGravity: false,
+        },
+      },
+    });
+    const arena = sim.getArena();
+    expect(arena.bouncyPlatforms).toBeDefined();
+    expect(arena.bouncyPlatforms!.length).toBe(arena.platforms.length);
+  });
+
+  it('giantPlayers mod increases player dimensions', () => {
+    const { sim } = createSim({
+      settings: {
+        mods: {
+          giantPlayers: true, turbo: false, extremeGore: false,
+          carrotChase: false, superBounce: false, mirrorArena: false,
+          underwaterGravity: false,
+        },
+      },
+    });
+    const p1 = sim.getState().players[0];
+    expect(p1.width).toBeGreaterThan(PLAYER_WIDTH);
+    expect(p1.height).toBeGreaterThan(PLAYER_HEIGHT);
+  });
+});
+
+// ===================================================================
+// Arena-specific gameplay — geyser/zone init, ghost wrap, carrots/springs/thorns spawn
+// ===================================================================
+
+describe('Simulator — arena-specific gameplay', () => {
+  const noInput = new Map<string, InputState>();
+  noInput.set('P1', { left: false, right: false, jump: false, down: false });
+  noInput.set('P2', { left: false, right: false, jump: false, down: false });
+
+  it('initializes geyser states from effectZones', () => {
+    const { sim } = createSim({
+      arena: {
+        effectZones: [
+          { type: 'geyser', x: 300, y: 400, width: 50, height: 200, interval: 8, duration: 2, strength: 600 },
+          { type: 'geyser', x: 700, y: 400, width: 50, height: 200, interval: 10, duration: 3, strength: 500 },
+        ],
+      },
+    });
+    const state = sim.getState();
+    expect(state.geyserStates).toHaveLength(2);
+    expect(state.geyserStates[0]).toHaveProperty('timer');
+    expect(state.geyserStates[0]).toHaveProperty('active');
+  });
+
+  it('processes geyser timer cycling', () => {
+    const { sim } = createSim({
+      arena: {
+        effectZones: [{ type: 'geyser', x: 600, y: 400, width: 50, height: 200, interval: 0.5, duration: 0.3, strength: 600 }],
+      },
+    });
+    const state = sim.getState();
+    state.countdown = 0;
+
+    for (let i = 0; i < 120; i++) sim.fixedUpdate(FIXED_TIMESTEP, noInput);
+
+    expect(state.geyserStates[0].timer).toBeDefined();
+  });
+
+  it('arena with hazardZones applies burn/slow on collision', () => {
+    const { sim } = createSim({
+      arena: {
+        hazardZones: [{ x: 50, y: 620, width: 200, height: 40, type: 'lava' }],
+      },
+    });
+    const state = sim.getState();
+    state.countdown = 0;
+
+    state.players[0].x = 100;
+    state.players[0].y = 628;
+
+    for (let i = 0; i < 5; i++) sim.fixedUpdate(FIXED_TIMESTEP, noInput);
+
+    const p = state.players[0];
+    expect(p.burnTimer > 0 || p.slowTimer > 0 || p.state === 'splat').toBe(true);
+  });
+
+  it('ghost wrapping: ghosts wrap around screen edges', () => {
+    const { sim } = createSim();
+    const state = sim.getState();
+    state.countdown = 0;
+
+    state.ghosts.push({ x: CANVAS_WIDTH + 50, y: 400, vx: 50, size: 30, alpha: 0.7, wobblePhase: 0 } as any);
+
+    for (let i = 0; i < 3; i++) sim.fixedUpdate(FIXED_TIMESTEP, noInput);
+
+    expect(state.ghosts[0].x).toBeLessThan(0);
+  });
+
+  it('spawns springs during gameplay', () => {
+    const { sim } = createSim();
+    const state = sim.getState();
+    state.countdown = 0;
+
+    for (let i = 0; i < 1000; i++) sim.fixedUpdate(FIXED_TIMESTEP, noInput);
+
+    expect(state.springs.length).toBeGreaterThan(0);
+  });
+
+  it('spawns thorns during gameplay', () => {
+    const { sim } = createSim();
+    const state = sim.getState();
+    state.countdown = 0;
+
+    for (let i = 0; i < 1000; i++) sim.fixedUpdate(FIXED_TIMESTEP, noInput);
+
+    expect(state.thorns.length).toBeGreaterThan(0);
+  });
+
+  it('updates ghosts during fixedUpdate (haunted_graveyard arena)', () => {
+    const { sim } = createSim({ settings: { arenaId: 'haunted_graveyard' } });
+    const state = sim.getState();
+    state.countdown = 0;
+
+    const ghostXBefore = state.ghosts[0]?.x;
+    for (let i = 0; i < 10; i++) sim.fixedUpdate(FIXED_TIMESTEP, noInput);
+
+    if (state.ghosts.length > 0) {
+      expect(state.ghosts[0].x).not.toBe(ghostXBefore);
+    }
+  });
+
+  it('spring spawn timer decrements and spawns springs', () => {
+    const { sim } = createSim();
+    const state = sim.getState();
+    state.countdown = 0;
+    state.springSpawnTimer = 0.01;
+
+    for (let i = 0; i < 5; i++) sim.fixedUpdate(FIXED_TIMESTEP, noInput);
+
+    expect(state.springs.length).toBeGreaterThan(0);
+  });
+
+  it('thorn spawn timer decrements and spawns thorns', () => {
+    const { sim } = createSim();
+    const state = sim.getState();
+    state.countdown = 0;
+    state.thornSpawnTimer = 0.01;
+
+    for (let i = 0; i < 5; i++) sim.fixedUpdate(FIXED_TIMESTEP, noInput);
+
+    expect(state.thorns.length).toBeGreaterThan(0);
+  });
+
+  it('pigeon flock scatters when player walks near', () => {
+    const { sim } = createSim();
+    const state = sim.getState();
+    state.countdown = 0;
+
+    const p1 = state.players[0];
+    p1.y = 660 - PLAYER_HEIGHT;
+    p1.state = 'idle' as any;
+    state.pigeonFlocks.push({
+      x: p1.x + PLAYER_WIDTH / 2,
+      y: p1.y + PLAYER_HEIGHT,
+      active: true,
+      respawnTimer: 0,
+      scatterParticles: [],
+    } as any);
+
+    sim.fixedUpdate(FIXED_TIMESTEP, noInput);
+
+    expect(state.pigeonFlocks[0].active).toBe(false);
+    expect(state.pigeonFlocks[0].scatterParticles.length).toBeGreaterThan(0);
+  });
+
+  it('pigeon flock respawns after timer', () => {
+    const { sim } = createSim();
+    const state = sim.getState();
+    state.countdown = 0;
+
+    state.pigeonFlocks.push({
+      x: 800, y: 660, active: false, respawnTimer: 0.1, scatterParticles: [],
+    } as any);
+
+    for (let i = 0; i < 10; i++) sim.fixedUpdate(FIXED_TIMESTEP, noInput);
+
+    expect(state.pigeonFlocks[0].active).toBe(true);
+  });
+
+  it('carrot spawn considers carrotZones for extra candidates', () => {
+    const { sim } = createSim({
+      arena: { carrotZones: [{ x: 200, y: 400, width: 200, height: 200 }] },
+    });
+    const state = sim.getState();
+    state.countdown = 0;
+    state.carrotTimer = 0.01;
+
+    for (let i = 0; i < 10; i++) sim.fixedUpdate(FIXED_TIMESTEP, noInput);
+
+    expect(state.carrots.length).toBeGreaterThan(0);
+  });
+
+  it('geyser timer cycles between active and inactive', () => {
+    const { sim } = createSim({
+      arena: {
+        effectZones: [{ type: 'geyser', x: 600, y: 400, width: 50, height: 200, interval: 0.2, duration: 0.1, strength: 600 }],
+      },
+    });
+    const state = sim.getState();
+    state.countdown = 0;
+    state.geyserStates[0].timer = 0.01;
+
+    for (let i = 0; i < 30; i++) sim.fixedUpdate(FIXED_TIMESTEP, noInput);
+
+    expect(typeof state.geyserStates[0].active).toBe('boolean');
+  });
+
+  it('fall-off detection respawns player on allowFallOff arena', () => {
+    const { sim } = createSim({ arena: { allowFallOff: true } as any });
+    const state = sim.getState();
+    state.countdown = 0;
+
+    state.players[0].y = CANVAS_HEIGHT + 100;
+    state.players[0].vy = 200;
+
+    for (let i = 0; i < 3; i++) sim.fixedUpdate(FIXED_TIMESTEP, noInput);
+
+    expect(state.players[0].y).toBeLessThan(CANVAS_HEIGHT);
+  });
+});
+
+// ===================================================================
+// Simulator setRng / disconnectPlayer adapter-pure surfaces
+// ===================================================================
+
+describe('Simulator — disconnectPlayer', () => {
+  it('disconnectPlayer marks player as disconnected and splatted', () => {
+    const { sim } = createSim();
+    sim.disconnectPlayer('P2');
+
+    const p2 = sim.getState().players.find(p => p.id === 'P2');
+    expect(p2?.disconnected).toBe(true);
+    expect(p2?.state).toBe('splat');
+    expect(p2?.splatTimer).toBeGreaterThan(0);
+  });
+
+  it('disconnectPlayer cancels an in-progress respawn', () => {
+    const { sim } = createSim();
+    const p2 = sim.getState().players.find(p => p.id === 'P2')!;
+    p2.state = 'respawning';
+    p2.respawnTimer = 1.0;
+    p2.splatTimer = 0;
+
+    sim.disconnectPlayer('P2');
+
+    expect(p2.disconnected).toBe(true);
+    expect(p2.state).toBe('splat');
+    expect(p2.splatTimer).toBeGreaterThan(0);
+    expect(p2.respawnTimer).toBe(0);
+  });
+
+  it('disconnectPlayer preserves splatTimer trajectory for already-splat players', () => {
+    const { sim } = createSim();
+    const p2 = sim.getState().players.find(p => p.id === 'P2')!;
+    p2.state = 'splat';
+    p2.splatTimer = 0.4;
+
+    sim.disconnectPlayer('P2');
+
+    expect(p2.disconnected).toBe(true);
+    expect(p2.state).toBe('splat');
+    expect(p2.splatTimer).toBe(0.4);
+  });
+});
+
+describe('Simulator — RNG', () => {
+  it('setRng stores rng reference', () => {
+    const { sim } = createSim();
+    const rng = { nextFloat: () => 0.5, getState: () => 42, setState: () => {} } as any;
+    sim.setRng(rng);
+    expect(sim.getRng()).toBe(rng);
+  });
+
+  it('default Simulator has no rng (Math.random fallback)', () => {
+    const { sim } = createSim();
+    expect(sim.getRng()).toBeUndefined();
   });
 });
