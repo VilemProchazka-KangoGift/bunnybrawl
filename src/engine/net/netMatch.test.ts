@@ -142,61 +142,161 @@ function makeConfig(transport: ReturnType<typeof makeMockTransport>, overrides?:
 }
 
 describe('NetMatch', () => {
-  let transport: ReturnType<typeof makeMockTransport>;
-  let netMatch: NetMatch;
+  // ---------------------------------------------------------------------
+  // Orchestrator: construction + host/guest branching + lifecycle plumbing
+  // (NetMatch.ts in the new layout)
+  // ---------------------------------------------------------------------
+  describe('orchestrator', () => {
+    let transport: ReturnType<typeof makeMockTransport>;
+    let netMatch: NetMatch;
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    transport = makeMockTransport(true);
-    netMatch = new NetMatch(makeConfig(transport));
+    beforeEach(() => {
+      vi.clearAllMocks();
+      transport = makeMockTransport(true);
+      netMatch = new NetMatch(makeConfig(transport));
+    });
+
+    describe('construction (host)', () => {
+      it('creates successfully with valid config', () => {
+        expect(netMatch).toBeDefined();
+      });
+
+      it('exposes getState() from game loop (host)', () => {
+        expect(netMatch.getState()).toBeDefined();
+      });
+
+      it('exposes getGameLoop() for host', () => {
+        expect(netMatch.getGameLoop()).toBeDefined();
+      });
+
+      it('getDebugStats() returns stats (host)', () => {
+        const stats = netMatch.getDebugStats();
+        expect(stats).toBeDefined();
+        expect(stats!.localFrame).toBe(0);
+      });
+
+      it('isHost reflects transport isHost', () => {
+        expect(netMatch.isHost).toBe(true);
+      });
+    });
+
+    describe('construction (guest)', () => {
+      it('getGameLoop() returns a GameLoop for guest (used for rendering)', () => {
+        const guestTransport = makeMockTransport(false);
+        const guestMatch = new NetMatch(makeConfig(guestTransport, {
+          localSlot: 'P2' as PlayerSlot,
+          remoteSlots: ['P1'] as PlayerSlot[],
+        }));
+        expect(guestMatch.getGameLoop()).toBeDefined();
+      });
+
+      it('isHost is false for guest', () => {
+        const guestTransport = makeMockTransport(false);
+        const guestMatch = new NetMatch(makeConfig(guestTransport, {
+          localSlot: 'P2' as PlayerSlot,
+          remoteSlots: ['P1'] as PlayerSlot[],
+        }));
+        expect(guestMatch.isHost).toBe(false);
+      });
+    });
+
+    describe('lifecycle: pause/resume/stop/removePlayer/skipCountdown', () => {
+      it('pause() pauses game loop and broadcasts', () => {
+        netMatch.pause();
+        expect(mockGameLoopInstance.pause).toHaveBeenCalled();
+        expect(transport.sendReliable).toHaveBeenCalledWith(
+          expect.objectContaining({ type: MsgType.PAUSE, paused: true }),
+        );
+      });
+
+      it('resume() resumes game loop and broadcasts', () => {
+        netMatch.resume();
+        expect(mockGameLoopInstance.resume).toHaveBeenCalled();
+        expect(transport.sendReliable).toHaveBeenCalledWith(
+          expect.objectContaining({ type: MsgType.PAUSE, paused: false }),
+        );
+      });
+
+      it('isPaused() delegates to game loop', () => {
+        mockGameLoopInstance.isPaused.mockReturnValue(true);
+        expect(netMatch.isPaused()).toBe(true);
+      });
+
+      it('removePlayer() disconnects player in game loop (host)', () => {
+        netMatch.removePlayer('P2' as PlayerSlot);
+        expect(mockGameLoopInstance.disconnectPlayer).toHaveBeenCalledWith('P2');
+      });
+
+      it('stop() stops host authority and game loop', () => {
+        netMatch.stop();
+        expect(mockHostAuthorityInstance.stop).toHaveBeenCalled();
+        expect(mockGameLoopInstance.stop).toHaveBeenCalled();
+      });
+
+      it('skipCountdown() delegates to game loop', () => {
+        netMatch.skipCountdown();
+        expect(mockGameLoopInstance.skipCountdown).toHaveBeenCalled();
+      });
+    });
+
+    describe('visibilitychange listener', () => {
+      let visTransport: ReturnType<typeof makeMockTransport>;
+      let addSpy: ReturnType<typeof vi.spyOn>;
+      let removeSpy: ReturnType<typeof vi.spyOn>;
+
+      beforeEach(() => {
+        visTransport = makeMockTransport(true);
+        addSpy = vi.spyOn(document, 'addEventListener');
+        removeSpy = vi.spyOn(document, 'removeEventListener');
+      });
+
+      afterEach(() => {
+        addSpy.mockRestore();
+        removeSpy.mockRestore();
+      });
+
+      it('start() registers a visibilitychange listener', () => {
+        const nm = new NetMatch(makeConfig(visTransport));
+        nm.start();
+        const visibilityCalls = addSpy.mock.calls.filter(c => c[0] === 'visibilitychange');
+        expect(visibilityCalls).toHaveLength(1);
+        nm.stop();
+      });
+
+      it('stop() removes the visibilitychange listener', () => {
+        const nm = new NetMatch(makeConfig(visTransport));
+        nm.start();
+        removeSpy.mockClear();
+        nm.stop();
+        const visibilityCalls = removeSpy.mock.calls.filter(c => c[0] === 'visibilitychange');
+        expect(visibilityCalls).toHaveLength(1);
+      });
+
+      it('uses the same handler reference for add and remove (no listener leak)', () => {
+        const nm = new NetMatch(makeConfig(visTransport));
+        nm.start();
+        const addedHandler = addSpy.mock.calls.find(c => c[0] === 'visibilitychange')?.[1];
+        nm.stop();
+        const removedHandler = removeSpy.mock.calls.find(c => c[0] === 'visibilitychange')?.[1];
+        expect(addedHandler).toBe(removedHandler);
+      });
+    });
   });
 
-  describe('construction', () => {
-    it('creates successfully with valid config', () => {
-      expect(netMatch).toBeDefined();
+  // ---------------------------------------------------------------------
+  // HostLoop — start() + host authority init
+  // ---------------------------------------------------------------------
+  describe('host loop', () => {
+    let transport: ReturnType<typeof makeMockTransport>;
+    let netMatch: NetMatch;
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      transport = makeMockTransport(true);
+      netMatch = new NetMatch(makeConfig(transport));
     });
 
-    it('exposes getState() from game loop (host)', () => {
-      expect(netMatch.getState()).toBeDefined();
-    });
-
-    it('exposes getGameLoop() for host', () => {
-      expect(netMatch.getGameLoop()).toBeDefined();
-    });
-
-    it('getDebugStats() returns stats (host)', () => {
-      const stats = netMatch.getDebugStats();
-      expect(stats).toBeDefined();
-      expect(stats!.localFrame).toBe(0);
-    });
-
-    it('isHost reflects transport isHost', () => {
-      expect(netMatch.isHost).toBe(true);
-    });
-  });
-
-  describe('guest construction', () => {
-    it('getGameLoop() returns a GameLoop for guest (used for rendering)', () => {
-      const guestTransport = makeMockTransport(false);
-      const guestMatch = new NetMatch(makeConfig(guestTransport, {
-        localSlot: 'P2' as PlayerSlot,
-        remoteSlots: ['P1'] as PlayerSlot[],
-      }));
-      expect(guestMatch.getGameLoop()).toBeDefined();
-    });
-
-    it('isHost is false for guest', () => {
-      const guestTransport = makeMockTransport(false);
-      const guestMatch = new NetMatch(makeConfig(guestTransport, {
-        localSlot: 'P2' as PlayerSlot,
-        remoteSlots: ['P1'] as PlayerSlot[],
-      }));
-      expect(guestMatch.isHost).toBe(false);
-    });
-  });
-
-  describe('start()', () => {
-    it('wires transport events', () => {
+    it('start() wires transport events', () => {
       netMatch.start();
       expect(transport.setEvents).toHaveBeenCalledWith(expect.objectContaining({
         onStatusChange: expect.any(Function),
@@ -206,635 +306,578 @@ describe('NetMatch', () => {
       }));
     });
 
-    it('starts host authority for host', () => {
+    it('start() starts host authority for host', () => {
       netMatch.start();
       expect(mockHostAuthorityInstance.start).toHaveBeenCalled();
     });
   });
 
-  describe('reconnection (guest)', () => {
-    it('fires the first joinRoom() attempt immediately, not 1.5s later', () => {
-      // Without the immediate first attempt, the user stares at "Reconnecting..."
-      // for a full setInterval period before the first joinRoom even fires.
-      // We use fake timers to verify joinRoom is called BEFORE any timer advance.
-      vi.useFakeTimers();
-      try {
+  // ---------------------------------------------------------------------
+  // MessageRouter — handleReliableMessage / handleUnreliableMessage
+  //                 + transport event wiring
+  // ---------------------------------------------------------------------
+  describe('message router', () => {
+    let transport: ReturnType<typeof makeMockTransport>;
+    let netMatch: NetMatch;
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      transport = makeMockTransport(true);
+      netMatch = new NetMatch(makeConfig(transport));
+    });
+
+    describe('handleUnreliableMessage()', () => {
+      it('host forwards to HostAuthority', () => {
+        const data = new ArrayBuffer(10);
+        netMatch.handleUnreliableMessage(data, 'peer-a');
+        expect(mockHostAuthorityInstance.handleUnreliableMessage).toHaveBeenCalledWith(data, 'peer-a');
+      });
+    });
+
+    describe('handleReliableMessage()', () => {
+      it('PAUSE message pauses game loop (host)', () => {
+        netMatch.handleReliableMessage({ type: MsgType.PAUSE, paused: true } as any);
+        expect(mockGameLoopInstance.pause).toHaveBeenCalled();
+      });
+
+      it('PAUSE with paused=false resumes game loop', () => {
+        netMatch.handleReliableMessage({ type: MsgType.PAUSE, paused: false } as any);
+        expect(mockGameLoopInstance.resume).toHaveBeenCalled();
+      });
+
+      it('SETTINGS_SYNC with arenaId calls onArenaChange (guest receives from host)', () => {
         const guestTransport = makeMockTransport(false);
+        const onArenaChange = vi.fn();
         const nm = new NetMatch(makeConfig(guestTransport, {
+          onArenaChange, localSlot: 'P2' as PlayerSlot, remoteSlots: ['P1'] as PlayerSlot[],
+        }));
+        nm.handleReliableMessage({ type: MsgType.SETTINGS_SYNC, arenaId: 'volcano' } as any);
+        expect(onArenaChange).toHaveBeenCalledWith('volcano');
+      });
+
+      it('SETTINGS_SYNC on HOST is rejected (security: guest cannot swap host arena)', () => {
+        const onArenaChange = vi.fn();
+        const nm = new NetMatch(makeConfig(transport, { onArenaChange }));
+        nm.handleReliableMessage({ type: MsgType.SETTINGS_SYNC, arenaId: 'volcano' } as any, 'peer-bad');
+        expect(onArenaChange).not.toHaveBeenCalled();
+      });
+
+      it('MATCH_RESULT calls onMatchEnd (guest receives from host)', () => {
+        const guestTransport = makeMockTransport(false);
+        const onMatchEnd = vi.fn();
+        const nm = new NetMatch(makeConfig(guestTransport, {
+          onMatchEnd, localSlot: 'P2' as PlayerSlot, remoteSlots: ['P1'] as PlayerSlot[],
+        }));
+        nm.handleReliableMessage({ type: MsgType.MATCH_RESULT, winner: 'P1' } as any);
+        expect(onMatchEnd).toHaveBeenCalledWith('P1', expect.anything());
+      });
+
+      it('MATCH_RESULT on HOST is rejected (security: guest cannot declare a winner)', () => {
+        const onMatchEnd = vi.fn();
+        const nm = new NetMatch(makeConfig(transport, { onMatchEnd }));
+        nm.handleReliableMessage({ type: MsgType.MATCH_RESULT, winner: 'P2' } as any, 'peer-bad');
+        expect(onMatchEnd).not.toHaveBeenCalled();
+      });
+
+      it('DISCONNECT calls onDisconnect (guest receives from host)', () => {
+        const guestTransport = makeMockTransport(false);
+        const onDisconnect = vi.fn();
+        const nm = new NetMatch(makeConfig(guestTransport, {
+          onDisconnect, localSlot: 'P2' as PlayerSlot, remoteSlots: ['P1'] as PlayerSlot[],
+        }));
+        nm.handleReliableMessage({ type: MsgType.DISCONNECT } as any);
+        expect(onDisconnect).toHaveBeenCalled();
+      });
+
+      it('DISCONNECT on HOST is rejected (security: guest cannot trigger Could-not-reconnect on host)', () => {
+        // Host's correct response to a guest leaving is hostAuthority.removeGuest
+        // (driven by transport peer-tracking), not the onDisconnect callback —
+        // which Match.tsx wires to the "reconnect budget exhausted" UX flash.
+        const onDisconnect = vi.fn();
+        const nm = new NetMatch(makeConfig(transport, { onDisconnect }));
+        nm.handleReliableMessage({ type: MsgType.DISCONNECT } as any, 'peer-bad');
+        expect(onDisconnect).not.toHaveBeenCalled();
+      });
+
+      it('RECONNECT_SYNC on HOST is rejected (security: guest cannot pause host or clobber baselines)', () => {
+        const nm = new NetMatch(makeConfig(transport));
+        nm.handleReliableMessage({ type: MsgType.RECONNECT_SYNC, paused: true, slot: 'P2' } as any, 'peer-bad');
+        expect(mockGameLoopInstance.pause).not.toHaveBeenCalled();
+        expect(mockGameLoopInstance.resetCosmeticBaselines).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('transport event wiring', () => {
+      it('onStatusChange disconnected triggers onDisconnect', () => {
+        const onDisconnect = vi.fn();
+        const nm = new NetMatch(makeConfig(transport, { onDisconnect }));
+        nm.start();
+
+        const events = transport.setEvents.mock.calls[0][0];
+        events.onStatusChange('disconnected');
+        expect(onDisconnect).toHaveBeenCalled();
+      });
+
+      it('onStatusChange error triggers onDisconnect', () => {
+        const onDisconnect = vi.fn();
+        const nm = new NetMatch(makeConfig(transport, { onDisconnect }));
+        nm.start();
+
+        const events = transport.setEvents.mock.calls[0][0];
+        events.onStatusChange('error', 'some error');
+        expect(onDisconnect).toHaveBeenCalled();
+      });
+
+      it('onStatusChange connected does not trigger onDisconnect', () => {
+        const onDisconnect = vi.fn();
+        const nm = new NetMatch(makeConfig(transport, { onDisconnect }));
+        nm.start();
+
+        const events = transport.setEvents.mock.calls[0][0];
+        events.onStatusChange('connected');
+        expect(onDisconnect).not.toHaveBeenCalled();
+      });
+
+      it('onReliableMessage routes through handleReliableMessage', () => {
+        netMatch.start();
+        const events = transport.setEvents.mock.calls[0][0];
+        events.onReliableMessage({ type: MsgType.PAUSE, paused: true });
+        expect(mockGameLoopInstance.pause).toHaveBeenCalled();
+      });
+
+      it('onUnreliableMessage routes to host authority', () => {
+        netMatch.start();
+        const events = transport.setEvents.mock.calls[0][0];
+        const data = new ArrayBuffer(10);
+        events.onUnreliableMessage(data, 'peer-a');
+        expect(mockHostAuthorityInstance.handleUnreliableMessage).toHaveBeenCalledWith(data, 'peer-a');
+      });
+    });
+  });
+
+  // ---------------------------------------------------------------------
+  // LoadingHandshake — armLoadingTimeout, markHostLoaded,
+  //                    signalGuestLoaded, checkAllLoaded
+  // ---------------------------------------------------------------------
+  describe('loading handshake', () => {
+    describe('LOADED handshake (host)', () => {
+      let transport: ReturnType<typeof makeMockTransport>;
+      let netMatch: NetMatch;
+
+      beforeEach(() => {
+        transport = makeMockTransport(true);
+        mockHostAuthorityInstance.getExpectedGuestSlots.mockReturnValue(['P2']);
+        // The host now derives the LOADED sender's slot from the peerId rather
+        // than trusting msg.slot — wire the mock so peer-p2 resolves to P2.
+        mockHostAuthorityInstance.getSlotForPeer.mockImplementation((peerId: string) => {
+          if (peerId === 'peer-p2') return 'P2';
+          if (peerId === 'peer-p3') return 'P3';
+          if (peerId === 'peer-p4') return 'P4';
+          return undefined;
+        });
+        netMatch = new NetMatch(makeConfig(transport));
+      });
+
+      it('does NOT flip phase when only host loaded, no guests in', () => {
+        netMatch.start();
+        mockGameLoopInstance.setPhase.mockClear();
+        netMatch.markHostLoaded();
+        // P2 hasn't sent LOADED → still loading
+        expect(mockGameLoopInstance.setPhase).not.toHaveBeenCalled();
+      });
+
+      it('does NOT flip phase when only guest loaded, host not loaded', () => {
+        netMatch.start();
+        mockGameLoopInstance.setPhase.mockClear();
+        const events = transport.setEvents.mock.calls[0][0];
+        events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' }, 'peer-p2');
+        // Host hasn't marked self loaded → still loading
+        expect(mockGameLoopInstance.setPhase).not.toHaveBeenCalled();
+      });
+
+      it('flips phase to "playing" when host and all expected guests loaded', () => {
+        netMatch.start();
+        mockGameLoopInstance.setPhase.mockClear();
+        netMatch.markHostLoaded();
+        const events = transport.setEvents.mock.calls[0][0];
+        events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' }, 'peer-p2');
+        expect(mockGameLoopInstance.setPhase).toHaveBeenCalledWith('playing');
+      });
+
+      it('flips phase only once even if LOADED arrives twice', () => {
+        netMatch.start();
+        netMatch.markHostLoaded();
+        const events = transport.setEvents.mock.calls[0][0];
+        events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' }, 'peer-p2');
+        // Simulate phase already flipped
+        mockGameLoopInstance.getState.mockReturnValueOnce({ players: [], matchOver: false, winner: null, phase: 'playing' });
+        mockGameLoopInstance.setPhase.mockClear();
+        events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' }, 'peer-p2');
+        expect(mockGameLoopInstance.setPhase).not.toHaveBeenCalled();
+      });
+
+      it('REJECTS LOADED with spoofed slot field (uses sender peerId, not msg.slot)', () => {
+        // Scenario: P3 sends LOADED{slot: 'P2'} pretending to be P2. If the host
+        // trusted msg.slot, it would mark P2 as loaded and force-start the match
+        // before P2 has actually warmed assets. With source-authentication, the
+        // host derives the slot from fromPeerId — peer-p3 maps to 'P3', NOT 'P2'.
+        mockHostAuthorityInstance.getExpectedGuestSlots.mockReturnValue(['P2', 'P3']);
+        netMatch.start();
+        netMatch.markHostLoaded();
+        mockGameLoopInstance.setPhase.mockClear();
+        const events = transport.setEvents.mock.calls[0][0];
+        // P3 sends LOADED with msg.slot='P2' (spoofed)
+        events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' }, 'peer-p3');
+        // Phase must NOT flip — only P3 has loaded, P2 is still genuinely waiting
+        expect(mockGameLoopInstance.setPhase).not.toHaveBeenCalledWith('playing');
+        // Now the real P2 sends LOADED — phase should advance.
+        events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' }, 'peer-p2');
+        expect(mockGameLoopInstance.setPhase).toHaveBeenCalledWith('playing');
+      });
+
+      it('IGNORES LOADED from an unknown peerId (no slot mapping)', () => {
+        netMatch.start();
+        netMatch.markHostLoaded();
+        mockGameLoopInstance.setPhase.mockClear();
+        const events = transport.setEvents.mock.calls[0][0];
+        // Unknown peer (e.g., a stale peer id that already disconnected, or noise)
+        events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' }, 'peer-unknown');
+        expect(mockGameLoopInstance.setPhase).not.toHaveBeenCalled();
+      });
+
+      it('progresses phase immediately when the only laggard guest disconnects mid-load', () => {
+        // Scenario: host loaded, P2 has not signalled LOADED yet, P2 disconnects.
+        // expected becomes empty after removeGuest — phase should advance now,
+        // not 15-30s later when LOADING_TIMEOUT_MS fires.
+        mockGameLoopInstance.getState.mockReturnValue({ players: [], matchOver: false, winner: null, phase: 'loading' });
+        netMatch.start();
+        netMatch.markHostLoaded();
+        mockGameLoopInstance.setPhase.mockClear();
+
+        // Production: hostAuthority.removeGuest fires the constructor-supplied
+        // onPlayerDisconnect with the slot. NetMatch's wrapper deletes from
+        // loadedGuests + calls checkAllLoaded. Once expected is empty,
+        // every() trivially returns true and phase flips.
+        mockHostAuthorityInstance.getExpectedGuestSlots.mockReturnValue([]);
+        expect(lastHostAuthorityConfig).toBeTruthy();
+        lastHostAuthorityConfig!.onPlayerDisconnect?.('P2');
+
+        expect(mockGameLoopInstance.setPhase).toHaveBeenCalledWith('playing');
+      });
+
+      it('does NOT flip phase when a guest disconnects but other guests are still loading', () => {
+        // P2 + P3 connected, only P2 sent LOADED, P3 disconnects mid-load.
+        // expected becomes [P2] (still). loadedGuests has {P2}. every() returns
+        // true → phase flips. But this is the early-progression behavior we
+        // want — verify the orthogonal case where another guest is still
+        // un-loaded blocks progression.
+        mockHostAuthorityInstance.getExpectedGuestSlots.mockReturnValue(['P2', 'P3', 'P4']);
+        transport = makeMockTransport(true);
+        netMatch = new NetMatch(makeConfig(transport));
+        mockGameLoopInstance.getState.mockReturnValue({ players: [], matchOver: false, winner: null, phase: 'loading' });
+        netMatch.start();
+        netMatch.markHostLoaded();
+        mockGameLoopInstance.setPhase.mockClear();
+
+        // P4 disconnects, but P2 and P3 are still connected and not yet loaded.
+        mockHostAuthorityInstance.getExpectedGuestSlots.mockReturnValue(['P2', 'P3']);
+        lastHostAuthorityConfig!.onPlayerDisconnect?.('P4');
+        expect(mockGameLoopInstance.setPhase).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('armLoadingTimeout (host)', () => {
+      let transport: ReturnType<typeof makeMockTransport>;
+      let netMatch: NetMatch;
+      let onLoadingTimeout: ReturnType<typeof vi.fn>;
+
+      beforeEach(() => {
+        vi.useFakeTimers();
+        transport = makeMockTransport(true);
+        mockHostAuthorityInstance.getExpectedGuestSlots.mockReturnValue(['P2', 'P3']);
+        mockHostAuthorityInstance.getSlotForPeer.mockImplementation((peerId: string) => {
+          if (peerId === 'peer-p2') return 'P2';
+          if (peerId === 'peer-p3') return 'P3';
+          return undefined;
+        });
+        mockGameLoopInstance.getState.mockReturnValue({ players: [], matchOver: false, winner: null, phase: 'loading' });
+        onLoadingTimeout = vi.fn();
+        netMatch = new NetMatch(makeConfig(transport, { onLoadingTimeout }));
+      });
+
+      afterEach(() => {
+        vi.useRealTimers();
+      });
+
+      it('fires onLoadingTimeout with laggard slots after 15s', () => {
+        netMatch.start();
+        netMatch.markHostLoaded();
+        // Only P2 sent LOADED; P3 is the laggard
+        const events = transport.setEvents.mock.calls[0][0];
+        events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' }, 'peer-p2');
+        onLoadingTimeout.mockClear();
+
+        vi.advanceTimersByTime(14999);
+        expect(onLoadingTimeout).not.toHaveBeenCalled();
+        vi.advanceTimersByTime(2);
+        expect(onLoadingTimeout).toHaveBeenCalledTimes(1);
+        expect(onLoadingTimeout).toHaveBeenCalledWith(['P3']);
+      });
+
+      it('disconnects laggards and forces phase=playing on timeout', () => {
+        netMatch.start();
+        netMatch.markHostLoaded();
+        mockGameLoopInstance.disconnectPlayer.mockClear();
+        mockGameLoopInstance.setPhase.mockClear();
+        vi.advanceTimersByTime(15001);
+        // Both expected guests are laggards (no LOADED arrived)
+        expect(mockGameLoopInstance.disconnectPlayer).toHaveBeenCalledWith('P2');
+        expect(mockGameLoopInstance.disconnectPlayer).toHaveBeenCalledWith('P3');
+        expect(mockGameLoopInstance.setPhase).toHaveBeenCalledWith('playing');
+      });
+
+      it('extends the timer (not force-flip) when host is still loading at timeout', () => {
+        netMatch.start();
+        // hostSelfLoaded stays false — simulating a slow host preload.
+        mockGameLoopInstance.disconnectPlayer.mockClear();
+        mockGameLoopInstance.setPhase.mockClear();
+        onLoadingTimeout.mockClear();
+
+        // First 15s: should extend, not force-flip.
+        vi.advanceTimersByTime(15001);
+        expect(mockGameLoopInstance.setPhase).not.toHaveBeenCalled();
+        expect(onLoadingTimeout).not.toHaveBeenCalled();
+
+        // After the extension's 15s, force-flip even with host still not loaded.
+        vi.advanceTimersByTime(15001);
+        expect(mockGameLoopInstance.setPhase).toHaveBeenCalledWith('playing');
+      });
+
+      it('does NOT fire when phase already advanced before timeout', () => {
+        netMatch.start();
+        // Simulate the phase already being 'playing' by the time the timeout
+        // hits — checkAllLoaded got there first.
+        mockGameLoopInstance.getState.mockReturnValue({ players: [], matchOver: false, winner: null, phase: 'playing' });
+        onLoadingTimeout.mockClear();
+        vi.advanceTimersByTime(15001);
+        expect(onLoadingTimeout).not.toHaveBeenCalled();
+      });
+
+      it('resetLoadingHandshake() re-arms the timer', () => {
+        netMatch.start();
+        netMatch.markHostLoaded();
+        vi.advanceTimersByTime(10000);
+        netMatch.resetLoadingHandshake();
+        // resetLoadingHandshake clears hostSelfLoaded — re-mark to skip the
+        // host-not-loaded extension branch.
+        netMatch.markHostLoaded();
+        onLoadingTimeout.mockClear();
+        // 5s more from original start would have tripped the original timer;
+        // resetLoadingHandshake should have restarted the clock.
+        vi.advanceTimersByTime(5500);
+        expect(onLoadingTimeout).not.toHaveBeenCalled();
+        vi.advanceTimersByTime(10000);
+        expect(onLoadingTimeout).toHaveBeenCalled();
+      });
+
+      it('stop() cancels the loading timeout', () => {
+        netMatch.start();
+        netMatch.stop();
+        onLoadingTimeout.mockClear();
+        vi.advanceTimersByTime(20000);
+        expect(onLoadingTimeout).not.toHaveBeenCalled();
+      });
+    });
+  });
+
+  // ---------------------------------------------------------------------
+  // ReconnectController — startReconnection, completeReconnection
+  // ---------------------------------------------------------------------
+  describe('reconnect controller', () => {
+    describe('reconnection (guest)', () => {
+      it('fires the first joinRoom() attempt immediately, not 1.5s later', () => {
+        // Without the immediate first attempt, the user stares at "Reconnecting..."
+        // for a full setInterval period before the first joinRoom even fires.
+        // We use fake timers to verify joinRoom is called BEFORE any timer advance.
+        vi.useFakeTimers();
+        try {
+          const guestTransport = makeMockTransport(false);
+          const nm = new NetMatch(makeConfig(guestTransport, {
+            localSlot: 'P2' as PlayerSlot,
+            remoteSlots: ['P1'] as PlayerSlot[],
+          }));
+          nm.start();
+          const events = guestTransport.setEvents.mock.calls[0][0];
+          guestTransport.joinRoom.mockClear();
+          // Trigger reconnect path
+          events.onPeerDisconnected('peer-a');
+          // Without advancing timers — joinRoom must already be called.
+          expect(guestTransport.joinRoom).toHaveBeenCalledTimes(1);
+          expect(guestTransport.joinRoom).toHaveBeenCalledWith('TEST');
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+    });
+
+    describe('completeReconnection (guest)', () => {
+      let transport: ReturnType<typeof makeMockTransport>;
+      let netMatch: NetMatch;
+      let onReconnecting: ReturnType<typeof vi.fn>;
+      let onStall: ReturnType<typeof vi.fn>;
+
+      beforeEach(() => {
+        transport = makeMockTransport(false);
+        onReconnecting = vi.fn();
+        onStall = vi.fn();
+        // Clear instance log so we know which one our guest creates
+        interpInstances.length = 0;
+        netMatch = new NetMatch(makeConfig(transport, {
+          localSlot: 'P2' as PlayerSlot,
+          remoteSlots: ['P1'] as PlayerSlot[],
+          onReconnecting,
+          onStall,
+        }));
+      });
+
+      it('RECONNECT_SYNC resets interpolation', () => {
+        netMatch.start();
+        const interp = interpInstances[interpInstances.length - 1];
+        interp.reset.mockClear();
+        const events = transport.setEvents.mock.calls[0][0];
+        events.onReliableMessage({ type: MsgType.RECONNECT_SYNC, slot: 'P2', snapshotFrame: 100, paused: false });
+        expect(interp.reset).toHaveBeenCalled();
+      });
+
+      it('RECONNECT_SYNC resets cosmetic baselines on the gameLoop', () => {
+        netMatch.start();
+        mockGameLoopInstance.resetCosmeticBaselines.mockClear();
+        const events = transport.setEvents.mock.calls[0][0];
+        events.onReliableMessage({ type: MsgType.RECONNECT_SYNC, slot: 'P2', snapshotFrame: 100, paused: false });
+        expect(mockGameLoopInstance.resetCosmeticBaselines).toHaveBeenCalledTimes(1);
+      });
+
+      it('RECONNECT_SYNC fires onReconnecting(false) and onStall(false)', () => {
+        netMatch.start();
+        onReconnecting.mockClear();
+        onStall.mockClear();
+        const events = transport.setEvents.mock.calls[0][0];
+        events.onReliableMessage({ type: MsgType.RECONNECT_SYNC, slot: 'P2', snapshotFrame: 100, paused: false });
+        expect(onReconnecting).toHaveBeenCalledWith(false);
+        expect(onStall).toHaveBeenCalledWith(false);
+      });
+
+      it('RECONNECT_SYNC honors paused flag (host suspended)', () => {
+        netMatch.start();
+        mockGameLoopInstance.pause.mockClear();
+        mockGameLoopInstance.resume.mockClear();
+        const events = transport.setEvents.mock.calls[0][0];
+        events.onReliableMessage({ type: MsgType.RECONNECT_SYNC, slot: 'P2', snapshotFrame: 100, paused: true });
+        expect(mockGameLoopInstance.pause).toHaveBeenCalled();
+      });
+
+      it('RECONNECT_SYNC honors paused=false (host running)', () => {
+        netMatch.start();
+        mockGameLoopInstance.resume.mockClear();
+        const events = transport.setEvents.mock.calls[0][0];
+        events.onReliableMessage({ type: MsgType.RECONNECT_SYNC, slot: 'P2', snapshotFrame: 100, paused: false });
+        expect(mockGameLoopInstance.resume).toHaveBeenCalled();
+      });
+    });
+  });
+
+  // ---------------------------------------------------------------------
+  // GuestLoop — guest snapshot/delta path, baseline ring, ack
+  // ---------------------------------------------------------------------
+  describe('guest loop', () => {
+    describe('delta compression path', () => {
+      let transport: ReturnType<typeof makeMockTransport>;
+      let netMatch: NetMatch;
+
+      beforeEach(async () => {
+        transport = makeMockTransport(false);
+        interpInstances.length = 0;
+        netMatch = new NetMatch(makeConfig(transport, {
           localSlot: 'P2' as PlayerSlot,
           remoteSlots: ['P1'] as PlayerSlot[],
         }));
-        nm.start();
-        const events = guestTransport.setEvents.mock.calls[0][0];
-        guestTransport.joinRoom.mockClear();
-        // Trigger reconnect path
-        events.onPeerDisconnected('peer-a');
-        // Without advancing timers — joinRoom must already be called.
-        expect(guestTransport.joinRoom).toHaveBeenCalledTimes(1);
-        expect(guestTransport.joinRoom).toHaveBeenCalledWith('TEST');
-      } finally {
-        vi.useRealTimers();
+      });
+
+      /** Build a synthetic full SNAPSHOT message (with 0x20 type prefix). */
+      async function buildSnapshotMsg(frame: number) {
+        const { takeAuthSnapshot, encodeSnapshot } = await import('./snapshot');
+        const { makeState } = await import('../__tests__/testHelpers');
+        const state = makeState({ countdown: 0 });
+        const snap = takeAuthSnapshot(frame, state);
+        const { buffer, length } = encodeSnapshot(snap);
+        const out = new Uint8Array(1 + length);
+        out[0] = MsgType.SNAPSHOT;
+        out.set(new Uint8Array(buffer, 0, length), 1);
+        return { msg: out.buffer, raw: buffer.slice(0, length) };
       }
-    });
-  });
 
-  describe('handleUnreliableMessage()', () => {
-    it('host forwards to HostAuthority', () => {
-      const data = new ArrayBuffer(10);
-      netMatch.handleUnreliableMessage(data, 'peer-a');
-      expect(mockHostAuthorityInstance.handleUnreliableMessage).toHaveBeenCalledWith(data, 'peer-a');
-    });
-  });
+      it('SNAPSHOT_DELTA reconstructs against stored baseline and ACKs', async () => {
+        const { createDelta } = await import('./core/deltaCompression');
+        const { encodeSnapshotAck } = await import('./core/protocol');
 
-  describe('handleReliableMessage()', () => {
-    it('PAUSE message pauses game loop (host)', () => {
-      netMatch.handleReliableMessage({ type: MsgType.PAUSE, paused: true } as any);
-      expect(mockGameLoopInstance.pause).toHaveBeenCalled();
-    });
+        const { msg: fullA, raw: rawA } = await buildSnapshotMsg(1);
+        const { raw: rawB } = await buildSnapshotMsg(2);
+        // Receive the full first
+        netMatch.handleUnreliableMessage(fullA);
+        // ACK for frame 1 should have been sent
+        const ackBuf = encodeSnapshotAck(1);
+        const ackSent = transport.sendUnreliable.mock.calls.some(
+          (c: unknown[]) => (c[0] as ArrayBuffer).byteLength === ackBuf.byteLength,
+        );
+        expect(ackSent).toBe(true);
 
-    it('PAUSE with paused=false resumes game loop', () => {
-      netMatch.handleReliableMessage({ type: MsgType.PAUSE, paused: false } as any);
-      expect(mockGameLoopInstance.resume).toHaveBeenCalled();
-    });
+        // Build a delta frame-2 against frame-1 and feed it as SNAPSHOT_DELTA
+        const delta = createDelta(rawB, rawA, 1);
+        transport.sendUnreliable.mockClear();
+        netMatch.handleUnreliableMessage(delta);
 
-    it('SETTINGS_SYNC with arenaId calls onArenaChange (guest receives from host)', () => {
-      const guestTransport = makeMockTransport(false);
-      const onArenaChange = vi.fn();
-      const nm = new NetMatch(makeConfig(guestTransport, {
-        onArenaChange, localSlot: 'P2' as PlayerSlot, remoteSlots: ['P1'] as PlayerSlot[],
-      }));
-      nm.handleReliableMessage({ type: MsgType.SETTINGS_SYNC, arenaId: 'volcano' } as any);
-      expect(onArenaChange).toHaveBeenCalledWith('volcano');
-    });
-
-    it('SETTINGS_SYNC on HOST is rejected (security: guest cannot swap host arena)', () => {
-      const onArenaChange = vi.fn();
-      const nm = new NetMatch(makeConfig(transport, { onArenaChange }));
-      nm.handleReliableMessage({ type: MsgType.SETTINGS_SYNC, arenaId: 'volcano' } as any, 'peer-bad');
-      expect(onArenaChange).not.toHaveBeenCalled();
-    });
-
-    it('MATCH_RESULT calls onMatchEnd (guest receives from host)', () => {
-      const guestTransport = makeMockTransport(false);
-      const onMatchEnd = vi.fn();
-      const nm = new NetMatch(makeConfig(guestTransport, {
-        onMatchEnd, localSlot: 'P2' as PlayerSlot, remoteSlots: ['P1'] as PlayerSlot[],
-      }));
-      nm.handleReliableMessage({ type: MsgType.MATCH_RESULT, winner: 'P1' } as any);
-      expect(onMatchEnd).toHaveBeenCalledWith('P1', expect.anything());
-    });
-
-    it('MATCH_RESULT on HOST is rejected (security: guest cannot declare a winner)', () => {
-      const onMatchEnd = vi.fn();
-      const nm = new NetMatch(makeConfig(transport, { onMatchEnd }));
-      nm.handleReliableMessage({ type: MsgType.MATCH_RESULT, winner: 'P2' } as any, 'peer-bad');
-      expect(onMatchEnd).not.toHaveBeenCalled();
-    });
-
-    it('DISCONNECT calls onDisconnect (guest receives from host)', () => {
-      const guestTransport = makeMockTransport(false);
-      const onDisconnect = vi.fn();
-      const nm = new NetMatch(makeConfig(guestTransport, {
-        onDisconnect, localSlot: 'P2' as PlayerSlot, remoteSlots: ['P1'] as PlayerSlot[],
-      }));
-      nm.handleReliableMessage({ type: MsgType.DISCONNECT } as any);
-      expect(onDisconnect).toHaveBeenCalled();
-    });
-
-    it('DISCONNECT on HOST is rejected (security: guest cannot trigger Could-not-reconnect on host)', () => {
-      // Host's correct response to a guest leaving is hostAuthority.removeGuest
-      // (driven by transport peer-tracking), not the onDisconnect callback —
-      // which Match.tsx wires to the "reconnect budget exhausted" UX flash.
-      const onDisconnect = vi.fn();
-      const nm = new NetMatch(makeConfig(transport, { onDisconnect }));
-      nm.handleReliableMessage({ type: MsgType.DISCONNECT } as any, 'peer-bad');
-      expect(onDisconnect).not.toHaveBeenCalled();
-    });
-
-    it('RECONNECT_SYNC on HOST is rejected (security: guest cannot pause host or clobber baselines)', () => {
-      const nm = new NetMatch(makeConfig(transport));
-      nm.handleReliableMessage({ type: MsgType.RECONNECT_SYNC, paused: true, slot: 'P2' } as any, 'peer-bad');
-      expect(mockGameLoopInstance.pause).not.toHaveBeenCalled();
-      expect(mockGameLoopInstance.resetCosmeticBaselines).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('removePlayer()', () => {
-    it('disconnects player in game loop (host)', () => {
-      netMatch.removePlayer('P2' as PlayerSlot);
-      expect(mockGameLoopInstance.disconnectPlayer).toHaveBeenCalledWith('P2');
-    });
-  });
-
-  describe('pause() / resume()', () => {
-    it('pause() pauses game loop and broadcasts', () => {
-      netMatch.pause();
-      expect(mockGameLoopInstance.pause).toHaveBeenCalled();
-      expect(transport.sendReliable).toHaveBeenCalledWith(
-        expect.objectContaining({ type: MsgType.PAUSE, paused: true }),
-      );
-    });
-
-    it('resume() resumes game loop and broadcasts', () => {
-      netMatch.resume();
-      expect(mockGameLoopInstance.resume).toHaveBeenCalled();
-      expect(transport.sendReliable).toHaveBeenCalledWith(
-        expect.objectContaining({ type: MsgType.PAUSE, paused: false }),
-      );
-    });
-
-    it('isPaused() delegates to game loop', () => {
-      mockGameLoopInstance.isPaused.mockReturnValue(true);
-      expect(netMatch.isPaused()).toBe(true);
-    });
-  });
-
-  describe('stop()', () => {
-    it('stops host authority and game loop', () => {
-      netMatch.stop();
-      expect(mockHostAuthorityInstance.stop).toHaveBeenCalled();
-      expect(mockGameLoopInstance.stop).toHaveBeenCalled();
-    });
-  });
-
-  describe('skipCountdown()', () => {
-    it('delegates to game loop', () => {
-      netMatch.skipCountdown();
-      expect(mockGameLoopInstance.skipCountdown).toHaveBeenCalled();
-    });
-  });
-
-  describe('transport event wiring', () => {
-    it('onStatusChange disconnected triggers onDisconnect', () => {
-      const onDisconnect = vi.fn();
-      const nm = new NetMatch(makeConfig(transport, { onDisconnect }));
-      nm.start();
-
-      const events = transport.setEvents.mock.calls[0][0];
-      events.onStatusChange('disconnected');
-      expect(onDisconnect).toHaveBeenCalled();
-    });
-
-    it('onStatusChange error triggers onDisconnect', () => {
-      const onDisconnect = vi.fn();
-      const nm = new NetMatch(makeConfig(transport, { onDisconnect }));
-      nm.start();
-
-      const events = transport.setEvents.mock.calls[0][0];
-      events.onStatusChange('error', 'some error');
-      expect(onDisconnect).toHaveBeenCalled();
-    });
-
-    it('onStatusChange connected does not trigger onDisconnect', () => {
-      const onDisconnect = vi.fn();
-      const nm = new NetMatch(makeConfig(transport, { onDisconnect }));
-      nm.start();
-
-      const events = transport.setEvents.mock.calls[0][0];
-      events.onStatusChange('connected');
-      expect(onDisconnect).not.toHaveBeenCalled();
-    });
-
-    it('onReliableMessage routes through handleReliableMessage', () => {
-      netMatch.start();
-      const events = transport.setEvents.mock.calls[0][0];
-      events.onReliableMessage({ type: MsgType.PAUSE, paused: true });
-      expect(mockGameLoopInstance.pause).toHaveBeenCalled();
-    });
-
-    it('onUnreliableMessage routes to host authority', () => {
-      netMatch.start();
-      const events = transport.setEvents.mock.calls[0][0];
-      const data = new ArrayBuffer(10);
-      events.onUnreliableMessage(data, 'peer-a');
-      expect(mockHostAuthorityInstance.handleUnreliableMessage).toHaveBeenCalledWith(data, 'peer-a');
-    });
-  });
-
-  describe('LOADED handshake (host)', () => {
-    let transport: ReturnType<typeof makeMockTransport>;
-    let netMatch: NetMatch;
-
-    beforeEach(() => {
-      transport = makeMockTransport(true);
-      mockHostAuthorityInstance.getExpectedGuestSlots.mockReturnValue(['P2']);
-      // The host now derives the LOADED sender's slot from the peerId rather
-      // than trusting msg.slot — wire the mock so peer-p2 resolves to P2.
-      mockHostAuthorityInstance.getSlotForPeer.mockImplementation((peerId: string) => {
-        if (peerId === 'peer-p2') return 'P2';
-        if (peerId === 'peer-p3') return 'P3';
-        if (peerId === 'peer-p4') return 'P4';
-        return undefined;
+        // Interpolation should have received the reconstructed snapshot
+        const interp = interpInstances[interpInstances.length - 1];
+        expect(interp.pushSnapshot).toHaveBeenCalled();
+        // ACK for frame 2 sent
+        expect(transport.sendUnreliable).toHaveBeenCalled();
       });
-      netMatch = new NetMatch(makeConfig(transport));
-    });
 
-    it('does NOT flip phase when only host loaded, no guests in', () => {
-      netMatch.start();
-      mockGameLoopInstance.setPhase.mockClear();
-      netMatch.markHostLoaded();
-      // P2 hasn't sent LOADED → still loading
-      expect(mockGameLoopInstance.setPhase).not.toHaveBeenCalled();
-    });
+      it('SNAPSHOT_DELTA against unknown baseline frame is dropped (no push, no ACK)', async () => {
+        const { createDelta } = await import('./core/deltaCompression');
+        const { raw: rawA } = await buildSnapshotMsg(1);
+        const { raw: rawB } = await buildSnapshotMsg(2);
 
-    it('does NOT flip phase when only guest loaded, host not loaded', () => {
-      netMatch.start();
-      mockGameLoopInstance.setPhase.mockClear();
-      const events = transport.setEvents.mock.calls[0][0];
-      events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' }, 'peer-p2');
-      // Host hasn't marked self loaded → still loading
-      expect(mockGameLoopInstance.setPhase).not.toHaveBeenCalled();
-    });
+        // Build a delta whose baseFrame=999 — guest never received it, so drop
+        const delta = createDelta(rawB, rawA, 999);
+        transport.sendUnreliable.mockClear();
+        netMatch.handleUnreliableMessage(delta);
 
-    it('flips phase to "playing" when host and all expected guests loaded', () => {
-      netMatch.start();
-      mockGameLoopInstance.setPhase.mockClear();
-      netMatch.markHostLoaded();
-      const events = transport.setEvents.mock.calls[0][0];
-      events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' }, 'peer-p2');
-      expect(mockGameLoopInstance.setPhase).toHaveBeenCalledWith('playing');
-    });
-
-    it('flips phase only once even if LOADED arrives twice', () => {
-      netMatch.start();
-      netMatch.markHostLoaded();
-      const events = transport.setEvents.mock.calls[0][0];
-      events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' }, 'peer-p2');
-      // Simulate phase already flipped
-      mockGameLoopInstance.getState.mockReturnValueOnce({ players: [], matchOver: false, winner: null, phase: 'playing' });
-      mockGameLoopInstance.setPhase.mockClear();
-      events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' }, 'peer-p2');
-      expect(mockGameLoopInstance.setPhase).not.toHaveBeenCalled();
-    });
-
-    it('REJECTS LOADED with spoofed slot field (uses sender peerId, not msg.slot)', () => {
-      // Scenario: P3 sends LOADED{slot: 'P2'} pretending to be P2. If the host
-      // trusted msg.slot, it would mark P2 as loaded and force-start the match
-      // before P2 has actually warmed assets. With source-authentication, the
-      // host derives the slot from fromPeerId — peer-p3 maps to 'P3', NOT 'P2'.
-      mockHostAuthorityInstance.getExpectedGuestSlots.mockReturnValue(['P2', 'P3']);
-      netMatch.start();
-      netMatch.markHostLoaded();
-      mockGameLoopInstance.setPhase.mockClear();
-      const events = transport.setEvents.mock.calls[0][0];
-      // P3 sends LOADED with msg.slot='P2' (spoofed)
-      events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' }, 'peer-p3');
-      // Phase must NOT flip — only P3 has loaded, P2 is still genuinely waiting
-      expect(mockGameLoopInstance.setPhase).not.toHaveBeenCalledWith('playing');
-      // Now the real P2 sends LOADED — phase should advance.
-      events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' }, 'peer-p2');
-      expect(mockGameLoopInstance.setPhase).toHaveBeenCalledWith('playing');
-    });
-
-    it('IGNORES LOADED from an unknown peerId (no slot mapping)', () => {
-      netMatch.start();
-      netMatch.markHostLoaded();
-      mockGameLoopInstance.setPhase.mockClear();
-      const events = transport.setEvents.mock.calls[0][0];
-      // Unknown peer (e.g., a stale peer id that already disconnected, or noise)
-      events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' }, 'peer-unknown');
-      expect(mockGameLoopInstance.setPhase).not.toHaveBeenCalled();
-    });
-
-    it('progresses phase immediately when the only laggard guest disconnects mid-load', () => {
-      // Scenario: host loaded, P2 has not signalled LOADED yet, P2 disconnects.
-      // expected becomes empty after removeGuest — phase should advance now,
-      // not 15-30s later when LOADING_TIMEOUT_MS fires.
-      mockGameLoopInstance.getState.mockReturnValue({ players: [], matchOver: false, winner: null, phase: 'loading' });
-      netMatch.start();
-      netMatch.markHostLoaded();
-      mockGameLoopInstance.setPhase.mockClear();
-
-      // Production: hostAuthority.removeGuest fires the constructor-supplied
-      // onPlayerDisconnect with the slot. NetMatch's wrapper deletes from
-      // loadedGuests + calls checkAllLoaded. Once expected is empty,
-      // every() trivially returns true and phase flips.
-      mockHostAuthorityInstance.getExpectedGuestSlots.mockReturnValue([]);
-      expect(lastHostAuthorityConfig).toBeTruthy();
-      lastHostAuthorityConfig!.onPlayerDisconnect?.('P2');
-
-      expect(mockGameLoopInstance.setPhase).toHaveBeenCalledWith('playing');
-    });
-
-    it('does NOT flip phase when a guest disconnects but other guests are still loading', () => {
-      // P2 + P3 connected, only P2 sent LOADED, P3 disconnects mid-load.
-      // expected becomes [P2] (still). loadedGuests has {P2}. every() returns
-      // true → phase flips. But this is the early-progression behavior we
-      // want — verify the orthogonal case where another guest is still
-      // un-loaded blocks progression.
-      mockHostAuthorityInstance.getExpectedGuestSlots.mockReturnValue(['P2', 'P3', 'P4']);
-      transport = makeMockTransport(true);
-      netMatch = new NetMatch(makeConfig(transport));
-      mockGameLoopInstance.getState.mockReturnValue({ players: [], matchOver: false, winner: null, phase: 'loading' });
-      netMatch.start();
-      netMatch.markHostLoaded();
-      mockGameLoopInstance.setPhase.mockClear();
-
-      // P4 disconnects, but P2 and P3 are still connected and not yet loaded.
-      mockHostAuthorityInstance.getExpectedGuestSlots.mockReturnValue(['P2', 'P3']);
-      lastHostAuthorityConfig!.onPlayerDisconnect?.('P4');
-      expect(mockGameLoopInstance.setPhase).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('armLoadingTimeout (host)', () => {
-    let transport: ReturnType<typeof makeMockTransport>;
-    let netMatch: NetMatch;
-    let onLoadingTimeout: ReturnType<typeof vi.fn>;
-
-    beforeEach(() => {
-      vi.useFakeTimers();
-      transport = makeMockTransport(true);
-      mockHostAuthorityInstance.getExpectedGuestSlots.mockReturnValue(['P2', 'P3']);
-      mockHostAuthorityInstance.getSlotForPeer.mockImplementation((peerId: string) => {
-        if (peerId === 'peer-p2') return 'P2';
-        if (peerId === 'peer-p3') return 'P3';
-        return undefined;
+        const interp = interpInstances[interpInstances.length - 1];
+        expect(interp.pushSnapshot).not.toHaveBeenCalled();
+        expect(transport.sendUnreliable).not.toHaveBeenCalled();
       });
-      mockGameLoopInstance.getState.mockReturnValue({ players: [], matchOver: false, winner: null, phase: 'loading' });
-      onLoadingTimeout = vi.fn();
-      netMatch = new NetMatch(makeConfig(transport, { onLoadingTimeout }));
-    });
 
-    afterEach(() => {
-      vi.useRealTimers();
-    });
+      it('completeReconnection clears the guest baseline ring', async () => {
+        const { createDelta } = await import('./core/deltaCompression');
+        const { msg: fullA, raw: rawA } = await buildSnapshotMsg(1);
+        const { raw: rawB } = await buildSnapshotMsg(2);
 
-    it('fires onLoadingTimeout with laggard slots after 15s', () => {
-      netMatch.start();
-      netMatch.markHostLoaded();
-      // Only P2 sent LOADED; P3 is the laggard
-      const events = transport.setEvents.mock.calls[0][0];
-      events.onReliableMessage({ type: MsgType.LOADED, slot: 'P2' }, 'peer-p2');
-      onLoadingTimeout.mockClear();
+        netMatch.handleUnreliableMessage(fullA); // baseline 1 stored
+        netMatch.start();
 
-      vi.advanceTimersByTime(14999);
-      expect(onLoadingTimeout).not.toHaveBeenCalled();
-      vi.advanceTimersByTime(2);
-      expect(onLoadingTimeout).toHaveBeenCalledTimes(1);
-      expect(onLoadingTimeout).toHaveBeenCalledWith(['P3']);
-    });
+        // Simulate reconnect — should drop baselines
+        const events = transport.setEvents.mock.calls[0][0];
+        events.onReliableMessage({ type: MsgType.RECONNECT_SYNC, slot: 'P2', snapshotFrame: 50, paused: false });
 
-    it('disconnects laggards and forces phase=playing on timeout', () => {
-      netMatch.start();
-      netMatch.markHostLoaded();
-      mockGameLoopInstance.disconnectPlayer.mockClear();
-      mockGameLoopInstance.setPhase.mockClear();
-      vi.advanceTimersByTime(15001);
-      // Both expected guests are laggards (no LOADED arrived)
-      expect(mockGameLoopInstance.disconnectPlayer).toHaveBeenCalledWith('P2');
-      expect(mockGameLoopInstance.disconnectPlayer).toHaveBeenCalledWith('P3');
-      expect(mockGameLoopInstance.setPhase).toHaveBeenCalledWith('playing');
-    });
-
-    it('extends the timer (not force-flip) when host is still loading at timeout', () => {
-      netMatch.start();
-      // hostSelfLoaded stays false — simulating a slow host preload.
-      mockGameLoopInstance.disconnectPlayer.mockClear();
-      mockGameLoopInstance.setPhase.mockClear();
-      onLoadingTimeout.mockClear();
-
-      // First 15s: should extend, not force-flip.
-      vi.advanceTimersByTime(15001);
-      expect(mockGameLoopInstance.setPhase).not.toHaveBeenCalled();
-      expect(onLoadingTimeout).not.toHaveBeenCalled();
-
-      // After the extension's 15s, force-flip even with host still not loaded.
-      vi.advanceTimersByTime(15001);
-      expect(mockGameLoopInstance.setPhase).toHaveBeenCalledWith('playing');
-    });
-
-    it('does NOT fire when phase already advanced before timeout', () => {
-      netMatch.start();
-      // Simulate the phase already being 'playing' by the time the timeout
-      // hits — checkAllLoaded got there first.
-      mockGameLoopInstance.getState.mockReturnValue({ players: [], matchOver: false, winner: null, phase: 'playing' });
-      onLoadingTimeout.mockClear();
-      vi.advanceTimersByTime(15001);
-      expect(onLoadingTimeout).not.toHaveBeenCalled();
-    });
-
-    it('resetLoadingHandshake() re-arms the timer', () => {
-      netMatch.start();
-      netMatch.markHostLoaded();
-      vi.advanceTimersByTime(10000);
-      netMatch.resetLoadingHandshake();
-      // resetLoadingHandshake clears hostSelfLoaded — re-mark to skip the
-      // host-not-loaded extension branch.
-      netMatch.markHostLoaded();
-      onLoadingTimeout.mockClear();
-      // 5s more from original start would have tripped the original timer;
-      // resetLoadingHandshake should have restarted the clock.
-      vi.advanceTimersByTime(5500);
-      expect(onLoadingTimeout).not.toHaveBeenCalled();
-      vi.advanceTimersByTime(10000);
-      expect(onLoadingTimeout).toHaveBeenCalled();
-    });
-
-    it('stop() cancels the loading timeout', () => {
-      netMatch.start();
-      netMatch.stop();
-      onLoadingTimeout.mockClear();
-      vi.advanceTimersByTime(20000);
-      expect(onLoadingTimeout).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('completeReconnection (guest)', () => {
-    let transport: ReturnType<typeof makeMockTransport>;
-    let netMatch: NetMatch;
-    let onReconnecting: ReturnType<typeof vi.fn>;
-    let onStall: ReturnType<typeof vi.fn>;
-
-    beforeEach(() => {
-      transport = makeMockTransport(false);
-      onReconnecting = vi.fn();
-      onStall = vi.fn();
-      // Clear instance log so we know which one our guest creates
-      interpInstances.length = 0;
-      netMatch = new NetMatch(makeConfig(transport, {
-        localSlot: 'P2' as PlayerSlot,
-        remoteSlots: ['P1'] as PlayerSlot[],
-        onReconnecting,
-        onStall,
-      }));
-    });
-
-    it('RECONNECT_SYNC resets interpolation', () => {
-      netMatch.start();
-      const interp = interpInstances[interpInstances.length - 1];
-      interp.reset.mockClear();
-      const events = transport.setEvents.mock.calls[0][0];
-      events.onReliableMessage({ type: MsgType.RECONNECT_SYNC, slot: 'P2', snapshotFrame: 100, paused: false });
-      expect(interp.reset).toHaveBeenCalled();
-    });
-
-    it('RECONNECT_SYNC resets cosmetic baselines on the gameLoop', () => {
-      netMatch.start();
-      mockGameLoopInstance.resetCosmeticBaselines.mockClear();
-      const events = transport.setEvents.mock.calls[0][0];
-      events.onReliableMessage({ type: MsgType.RECONNECT_SYNC, slot: 'P2', snapshotFrame: 100, paused: false });
-      expect(mockGameLoopInstance.resetCosmeticBaselines).toHaveBeenCalledTimes(1);
-    });
-
-    it('RECONNECT_SYNC fires onReconnecting(false) and onStall(false)', () => {
-      netMatch.start();
-      onReconnecting.mockClear();
-      onStall.mockClear();
-      const events = transport.setEvents.mock.calls[0][0];
-      events.onReliableMessage({ type: MsgType.RECONNECT_SYNC, slot: 'P2', snapshotFrame: 100, paused: false });
-      expect(onReconnecting).toHaveBeenCalledWith(false);
-      expect(onStall).toHaveBeenCalledWith(false);
-    });
-
-    it('RECONNECT_SYNC honors paused flag (host suspended)', () => {
-      netMatch.start();
-      mockGameLoopInstance.pause.mockClear();
-      mockGameLoopInstance.resume.mockClear();
-      const events = transport.setEvents.mock.calls[0][0];
-      events.onReliableMessage({ type: MsgType.RECONNECT_SYNC, slot: 'P2', snapshotFrame: 100, paused: true });
-      expect(mockGameLoopInstance.pause).toHaveBeenCalled();
-    });
-
-    it('RECONNECT_SYNC honors paused=false (host running)', () => {
-      netMatch.start();
-      mockGameLoopInstance.resume.mockClear();
-      const events = transport.setEvents.mock.calls[0][0];
-      events.onReliableMessage({ type: MsgType.RECONNECT_SYNC, slot: 'P2', snapshotFrame: 100, paused: false });
-      expect(mockGameLoopInstance.resume).toHaveBeenCalled();
-    });
-  });
-
-  describe('guest delta compression path', () => {
-    let transport: ReturnType<typeof makeMockTransport>;
-    let netMatch: NetMatch;
-
-    beforeEach(async () => {
-      transport = makeMockTransport(false);
-      interpInstances.length = 0;
-      netMatch = new NetMatch(makeConfig(transport, {
-        localSlot: 'P2' as PlayerSlot,
-        remoteSlots: ['P1'] as PlayerSlot[],
-      }));
-    });
-
-    /** Build a synthetic full SNAPSHOT message (with 0x20 type prefix). */
-    async function buildSnapshotMsg(frame: number) {
-      const { takeAuthSnapshot, encodeSnapshot } = await import('./snapshot');
-      const { makeState } = await import('../__tests__/testHelpers');
-      const state = makeState({ countdown: 0 });
-      const snap = takeAuthSnapshot(frame, state);
-      const { buffer, length } = encodeSnapshot(snap);
-      const out = new Uint8Array(1 + length);
-      out[0] = MsgType.SNAPSHOT;
-      out.set(new Uint8Array(buffer, 0, length), 1);
-      return { msg: out.buffer, raw: buffer.slice(0, length) };
-    }
-
-    it('SNAPSHOT_DELTA reconstructs against stored baseline and ACKs', async () => {
-      const { createDelta } = await import('./core/deltaCompression');
-      const { encodeSnapshotAck } = await import('./core/protocol');
-
-      const { msg: fullA, raw: rawA } = await buildSnapshotMsg(1);
-      const { raw: rawB } = await buildSnapshotMsg(2);
-      // Receive the full first
-      netMatch.handleUnreliableMessage(fullA);
-      // ACK for frame 1 should have been sent
-      const ackBuf = encodeSnapshotAck(1);
-      const ackSent = transport.sendUnreliable.mock.calls.some(
-        (c: unknown[]) => (c[0] as ArrayBuffer).byteLength === ackBuf.byteLength,
-      );
-      expect(ackSent).toBe(true);
-
-      // Build a delta frame-2 against frame-1 and feed it as SNAPSHOT_DELTA
-      const delta = createDelta(rawB, rawA, 1);
-      transport.sendUnreliable.mockClear();
-      netMatch.handleUnreliableMessage(delta);
-
-      // Interpolation should have received the reconstructed snapshot
-      const interp = interpInstances[interpInstances.length - 1];
-      expect(interp.pushSnapshot).toHaveBeenCalled();
-      // ACK for frame 2 sent
-      expect(transport.sendUnreliable).toHaveBeenCalled();
-    });
-
-    it('SNAPSHOT_DELTA against unknown baseline frame is dropped (no push, no ACK)', async () => {
-      const { createDelta } = await import('./core/deltaCompression');
-      const { raw: rawA } = await buildSnapshotMsg(1);
-      const { raw: rawB } = await buildSnapshotMsg(2);
-
-      // Build a delta whose baseFrame=999 — guest never received it, so drop
-      const delta = createDelta(rawB, rawA, 999);
-      transport.sendUnreliable.mockClear();
-      netMatch.handleUnreliableMessage(delta);
-
-      const interp = interpInstances[interpInstances.length - 1];
-      expect(interp.pushSnapshot).not.toHaveBeenCalled();
-      expect(transport.sendUnreliable).not.toHaveBeenCalled();
-    });
-
-    it('completeReconnection clears the guest baseline ring', async () => {
-      const { createDelta } = await import('./core/deltaCompression');
-      const { msg: fullA, raw: rawA } = await buildSnapshotMsg(1);
-      const { raw: rawB } = await buildSnapshotMsg(2);
-
-      netMatch.handleUnreliableMessage(fullA); // baseline 1 stored
-      netMatch.start();
-
-      // Simulate reconnect — should drop baselines
-      const events = transport.setEvents.mock.calls[0][0];
-      events.onReliableMessage({ type: MsgType.RECONNECT_SYNC, slot: 'P2', snapshotFrame: 50, paused: false });
-
-      // After reset, a delta against frame 1 must be dropped
-      const interp = interpInstances[interpInstances.length - 1];
-      interp.pushSnapshot.mockClear();
-      transport.sendUnreliable.mockClear();
-      const delta = createDelta(rawB, rawA, 1);
-      netMatch.handleUnreliableMessage(delta);
-      expect(interp.pushSnapshot).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('visibilitychange listener', () => {
-    let transport: ReturnType<typeof makeMockTransport>;
-    let addSpy: ReturnType<typeof vi.spyOn>;
-    let removeSpy: ReturnType<typeof vi.spyOn>;
-
-    beforeEach(() => {
-      transport = makeMockTransport(true);
-      addSpy = vi.spyOn(document, 'addEventListener');
-      removeSpy = vi.spyOn(document, 'removeEventListener');
-    });
-
-    afterEach(() => {
-      addSpy.mockRestore();
-      removeSpy.mockRestore();
-    });
-
-    it('start() registers a visibilitychange listener', () => {
-      const nm = new NetMatch(makeConfig(transport));
-      nm.start();
-      const visibilityCalls = addSpy.mock.calls.filter(c => c[0] === 'visibilitychange');
-      expect(visibilityCalls).toHaveLength(1);
-      nm.stop();
-    });
-
-    it('stop() removes the visibilitychange listener', () => {
-      const nm = new NetMatch(makeConfig(transport));
-      nm.start();
-      removeSpy.mockClear();
-      nm.stop();
-      const visibilityCalls = removeSpy.mock.calls.filter(c => c[0] === 'visibilitychange');
-      expect(visibilityCalls).toHaveLength(1);
-    });
-
-    it('uses the same handler reference for add and remove (no listener leak)', () => {
-      const nm = new NetMatch(makeConfig(transport));
-      nm.start();
-      const addedHandler = addSpy.mock.calls.find(c => c[0] === 'visibilitychange')?.[1];
-      nm.stop();
-      const removedHandler = removeSpy.mock.calls.find(c => c[0] === 'visibilitychange')?.[1];
-      expect(addedHandler).toBe(removedHandler);
+        // After reset, a delta against frame 1 must be dropped
+        const interp = interpInstances[interpInstances.length - 1];
+        interp.pushSnapshot.mockClear();
+        transport.sendUnreliable.mockClear();
+        const delta = createDelta(rawB, rawA, 1);
+        netMatch.handleUnreliableMessage(delta);
+        expect(interp.pushSnapshot).not.toHaveBeenCalled();
+      });
     });
   });
 });
