@@ -1,5 +1,5 @@
 import type { ArenaPack } from '../types';
-import type { Arena, Platform, WeatherParticle } from '../../types';
+import type { Arena, Platform, WeatherParticle, Ctx2D } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
@@ -37,7 +37,7 @@ import {
  * Matches the haunted-graveyard web shape so both packs feel consistent.
  */
 function drawCastleCobweb(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   cornerX: number,
   cornerY: number,
   dirX: number,
@@ -88,7 +88,7 @@ function drawCastleCobweb(
 }
 
 // Bg pass: cap + right face. These always sit BEHIND the player.
-function drawCastlePlatformBg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+function drawCastlePlatformBg(ctx: Ctx2D, platform: Platform): void {
   const rng = mulberry32(seedFor(platform.x, platform.y));
   const cF = capFrontY(platform);
   const cB = capBackY(platform);
@@ -150,7 +150,7 @@ function drawCastlePlatformBg(ctx: CanvasRenderingContext2D, platform: Platform)
 // Fg pass: body face. Drawn AFTER players so the body occludes any player
 // whose bbox overlaps the body region — gives the iso phantom strip (between
 // plat.x and plat.x + leftCollisionInset) a "going behind" feel.
-function drawCastlePlatformFg(ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean): void {
+function drawCastlePlatformFg(ctx: Ctx2D, platform: Platform, _isGround: boolean): void {
   // Independent seed (offset from bg) so bg and fg rng streams don't interfere.
   const rng = mulberry32(seedFor(platform.x, platform.y) ^ BODY_SEED_OFFSET);
   const cF = capFrontY(platform);
@@ -463,7 +463,7 @@ export const castle: ArenaPack = {
   },
 
   // ---- Custom draw functions ----
-  drawFarBackground: (ctx: CanvasRenderingContext2D, _arena: Arena) => {
+  drawFarBackground: (ctx: Ctx2D, _arena: Arena) => {
     ctx.save();
 
     // Stone wall background — fill entire background with wall texture
@@ -602,7 +602,7 @@ export const castle: ArenaPack = {
     ctx.restore();
   },
 
-  drawBackgroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => {
+  drawBackgroundNature: (ctx: Ctx2D, arena: Arena) => {
     const ground = arena.platforms[0];
     const y = ground.y;
 
@@ -677,7 +677,7 @@ export const castle: ArenaPack = {
     // here; that double-paint produced flat caps/bases poking through the 3D body.)
   },
 
-  drawForegroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => {
+  drawForegroundNature: (ctx: Ctx2D, arena: Arena) => {
     const ground = arena.platforms[0];
     const gy = ground.y;
 
@@ -776,14 +776,14 @@ export const castle: ArenaPack = {
     ctx.restore();
   },
 
-  drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
+  drawPlatform: (ctx: Ctx2D, platform: Platform, _isGround: boolean) => {
     drawCastlePlatformBg(ctx, platform);
   },
-  drawPlatformOverlay: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => {
+  drawPlatformOverlay: (ctx: Ctx2D, platform: Platform, isGround: boolean) => {
     drawCastlePlatformFg(ctx, platform, isGround);
   },
 
-  drawWeatherParticle: (ctx: CanvasRenderingContext2D, w: WeatherParticle) => {
+  drawWeatherParticle: (ctx: Ctx2D, w: WeatherParticle) => {
     // Torch spark — concentric circles, no rotation. Draw at world coords;
     // reset globalAlpha at end since save/restore is gone.
     ctx.fillStyle = w.color || '#FF8844';

@@ -1,5 +1,5 @@
 import type { ArenaPack } from '../types';
-import type { Arena, Platform, WeatherParticle } from '../../types';
+import type { Arena, Platform, WeatherParticle, Ctx2D } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
@@ -34,7 +34,7 @@ const LAVA_ZONES: ReadonlyArray<LavaZone> = [
 const LAVA_VENTS = [220, 640, 1060] as const;
 const HAZE_COL_H = 80;
 const _hazeGradients = new WeakMap<LavaZone, CanvasGradient>();
-function getHazeGradient(ctx: CanvasRenderingContext2D, lz: LavaZone): CanvasGradient {
+function getHazeGradient(ctx: Ctx2D, lz: LavaZone): CanvasGradient {
   let g = _hazeGradients.get(lz);
   if (!g) {
     g = ctx.createLinearGradient(0, lz.cy - HAZE_COL_H, 0, lz.cy);
@@ -54,7 +54,7 @@ const VOLCANO_STONE_PALETTE = [
   { base: '#221a1a', dark: '#0c0606', light: '#3e3030' },
 ];
 
-function drawVolcanoPlatformBg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+function drawVolcanoPlatformBg(ctx: Ctx2D, platform: Platform): void {
   const rng = mulberry32(seedFor(platform.x, platform.y));
   const cF = capFrontY(platform);
   const cB = capBackY(platform);
@@ -104,7 +104,7 @@ function drawVolcanoPlatformBg(ctx: CanvasRenderingContext2D, platform: Platform
   }, leftPts);
 }
 
-function drawVolcanoPlatformFg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+function drawVolcanoPlatformFg(ctx: Ctx2D, platform: Platform): void {
   const rng = mulberry32(seedFor(platform.x, platform.y) ^ BODY_SEED_OFFSET);
   const cF = capFrontY(platform);
   const bodyTop = cF;
@@ -406,7 +406,7 @@ export const volcano: ArenaPack = {
   },
 
   // ---- Custom draw functions ----
-  drawFarBackground: (ctx: CanvasRenderingContext2D, _arena: Arena) => {
+  drawFarBackground: (ctx: Ctx2D, _arena: Arena) => {
     ctx.save();
     // Distant volcano silhouette
     ctx.fillStyle = '#1A0808';
@@ -446,7 +446,7 @@ export const volcano: ArenaPack = {
     ctx.restore();
   },
 
-  drawBackgroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => {
+  drawBackgroundNature: (ctx: Ctx2D, arena: Arena) => {
     const ground = arena.platforms[0];
     const y = ground.y;
 
@@ -529,7 +529,7 @@ export const volcano: ArenaPack = {
     return out;
   },
 
-  drawForegroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => {
+  drawForegroundNature: (ctx: Ctx2D, arena: Arena) => {
     const ground = arena.platforms[0];
     const gy = ground.y;
 
@@ -631,15 +631,15 @@ export const volcano: ArenaPack = {
     ctx.restore();
   },
 
-  drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
+  drawPlatform: (ctx: Ctx2D, platform: Platform, _isGround: boolean) => {
     drawVolcanoPlatformBg(ctx, platform);
   },
 
-  drawPlatformOverlay: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
+  drawPlatformOverlay: (ctx: Ctx2D, platform: Platform, _isGround: boolean) => {
     drawVolcanoPlatformFg(ctx, platform);
   },
 
-  drawWeatherParticle: (ctx: CanvasRenderingContext2D, w: WeatherParticle) => {
+  drawWeatherParticle: (ctx: Ctx2D, w: WeatherParticle) => {
     if (w.type === 'ember') {
       // Embers are circles — rotation has no visual effect, so skip the
       // save/translate/rotate/restore canvas-state dance and draw directly

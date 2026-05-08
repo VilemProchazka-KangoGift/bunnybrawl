@@ -1,5 +1,5 @@
 import type { ArenaPack } from '../types';
-import type { Arena, Platform } from '../../types';
+import type { Arena, Platform, Ctx2D } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin } from '../../fastMath';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
@@ -17,7 +17,7 @@ const ROBOTS_CFG: GroundCritterConfig[] = [
 ];
 
 function drawOneRobot(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   state: GroundCritterState,
   cfg: GroundCritterConfig,
   time: number,
@@ -61,7 +61,7 @@ import {
 } from '../../themes/drawPrimitives';
 
 // Bg pass: cap + right face + status LEDs. Sit behind the player.
-function drawSpacePlatformBg(ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean): void {
+function drawSpacePlatformBg(ctx: Ctx2D, platform: Platform, isGround: boolean): void {
   const rng = mulberry32(seedFor(platform.x, platform.y));
   const cF = capFrontY(platform);
   const cB = capBackY(platform);
@@ -135,7 +135,7 @@ function drawSpacePlatformBg(ctx: CanvasRenderingContext2D, platform: Platform, 
 }
 
 // Fg pass: body face. Drawn after players for occlusion.
-function drawSpacePlatformFg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+function drawSpacePlatformFg(ctx: Ctx2D, platform: Platform): void {
   const rng = mulberry32(seedFor(platform.x, platform.y) ^ BODY_SEED_OFFSET);
   const cF = capFrontY(platform);
   const bodyTop = cF;
@@ -202,7 +202,7 @@ function drawSpacePlatformFg(ctx: CanvasRenderingContext2D, platform: Platform):
 // A drooping cable connecting two points (e.g. wall to ground/platform).
 // `bendX` shifts the curve laterally (player proximity sway).
 function drawSpaceCable(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   x1: number, y1: number,
   x2: number, y2: number,
   color: string,
@@ -298,7 +298,7 @@ function resetSpaceAnimations() {
   lastAnimTime = -1;
 }
 
-function drawAsteroid(ctx: CanvasRenderingContext2D, obj: SpaceObject) {
+function drawAsteroid(ctx: Ctx2D, obj: SpaceObject) {
   ctx.save();
   ctx.translate(obj.x, obj.y);
   ctx.rotate(obj.rotation);
@@ -336,7 +336,7 @@ function drawAsteroid(ctx: CanvasRenderingContext2D, obj: SpaceObject) {
   ctx.restore();
 }
 
-function drawSatellite(ctx: CanvasRenderingContext2D, obj: SpaceObject) {
+function drawSatellite(ctx: Ctx2D, obj: SpaceObject) {
   ctx.save();
   ctx.translate(obj.x, obj.y);
   ctx.rotate(obj.rotation);
@@ -891,10 +891,10 @@ export const spaceStation: ArenaPack = {
     ctx.restore();
   },
 
-  drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => {
+  drawPlatform: (ctx: Ctx2D, platform: Platform, isGround: boolean) => {
     drawSpacePlatformBg(ctx, platform, isGround);
   },
-  drawPlatformOverlay: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
+  drawPlatformOverlay: (ctx: Ctx2D, platform: Platform, _isGround: boolean) => {
     drawSpacePlatformFg(ctx, platform);
   },
 

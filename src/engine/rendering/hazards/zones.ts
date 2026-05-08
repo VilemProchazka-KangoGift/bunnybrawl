@@ -1,4 +1,5 @@
 import type { ThemeConfig } from '../../themes/types';
+import type { Ctx2D } from '../../types';
 import { fastSin } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
 
@@ -68,7 +69,7 @@ export function drawHazardZone(
       const bodyStrip = useOffscreen
         ? new OffscreenCanvas(1, hz.height)
         : (() => { const c = document.createElement('canvas'); c.width = 1; c.height = hz.height; return c; })();
-      const sctx = bodyStrip.getContext('2d') as CanvasRenderingContext2D;
+      const sctx = bodyStrip.getContext('2d')! as Ctx2D;
       const bodyG = sctx.createLinearGradient(0, 0, 0, hz.height);
       bodyG.addColorStop(0, '#FF6600');
       bodyG.addColorStop(0.5, '#FF4400');
@@ -84,7 +85,7 @@ export function drawHazardZone(
       const haloImage = useOffscreen
         ? new OffscreenCanvas(haloBakeW, haloBakeH)
         : (() => { const c = document.createElement('canvas'); c.width = haloBakeW; c.height = haloBakeH; return c; })();
-      const hctx = haloImage.getContext('2d') as CanvasRenderingContext2D;
+      const hctx = haloImage.getContext('2d')! as Ctx2D;
       const haloG = hctx.createRadialGradient(haloBakeW / 2, haloBakeH / 2, 1, haloBakeW / 2, haloBakeH / 2, haloBakeW * 0.5);
       haloG.addColorStop(0, 'rgba(255, 100, 0, 0.3)');
       haloG.addColorStop(1, 'rgba(255, 60, 0, 0)');
@@ -141,7 +142,7 @@ export function drawZeroGZone(
     bgStrip = useOffscreen
       ? new OffscreenCanvas(1, zone.height)
       : (() => { const c = document.createElement('canvas'); c.width = 1; c.height = zone.height; return c; })();
-    const sctx = bgStrip.getContext('2d') as CanvasRenderingContext2D;
+    const sctx = bgStrip.getContext('2d')! as Ctx2D;
     const g = sctx.createLinearGradient(0, 0, 0, zone.height);
     g.addColorStop(0, 'rgba(0, 180, 255, 0.2)');
     g.addColorStop(0.5, 'rgba(0, 220, 255, 0.08)');
@@ -234,7 +235,7 @@ export function drawCurrentZone(
       const strip = useOffscreen
         ? new OffscreenCanvas(1, zh)
         : (() => { const c = document.createElement('canvas'); c.width = 1; c.height = zh; return c; })();
-      const sctx = strip.getContext('2d') as CanvasRenderingContext2D;
+      const sctx = strip.getContext('2d')! as Ctx2D;
       const water = sctx.createLinearGradient(0, 0, 0, zh);
       water.addColorStop(0, 'rgba(140, 200, 240, 0.45)');
       water.addColorStop(0.3, 'rgba(100, 180, 230, 0.4)');
@@ -247,7 +248,7 @@ export function drawCurrentZone(
       const highlightStrip = useOffscreen
         ? new OffscreenCanvas(HIGHLIGHT_W, 1)
         : (() => { const c = document.createElement('canvas'); c.width = HIGHLIGHT_W; c.height = 1; return c; })();
-      const hlctx = highlightStrip.getContext('2d') as CanvasRenderingContext2D;
+      const hlctx = highlightStrip.getContext('2d')! as Ctx2D;
       const highlight = hlctx.createLinearGradient(0, 0, HIGHLIGHT_W, 0);
       highlight.addColorStop(0, 'rgba(255,255,255,0)');
       highlight.addColorStop(0.5, 'rgba(255,255,255,1)');
