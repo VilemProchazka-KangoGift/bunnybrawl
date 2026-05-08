@@ -226,18 +226,18 @@ describe('GameLoop.switchArena', () => {
     const loop = createLoop('meadow');
     loop.setPhase('playing');
     const state = loop.getState();
-    const meadowP1x = state.players[0].x;
 
     loop.switchArena('volcano');
 
-    // Volcano has different spawn points than meadow. createInitialPlayers
-    // centers the player's top-left x on (spawn.x - width/2), so allow a small
-    // PLAYER_WIDTH/2 offset when comparing.
+    // createInitialPlayers shuffles spawnPoints and assigns by index, so
+    // players[0] lands at SOME volcano spawn — not necessarily spawnPoints[0].
+    // It centers top-left x on (spawn.x - width/2).
     const volcanoArena = getArena('volcano');
-    const spawnX = volcanoArena.spawnPoints[0].x;
-    expect(state.players[0].x).toBeCloseTo(spawnX - state.players[0].width / 2, 0);
-    // And positions should not equal the old ones (unless by coincidence; volcano/meadow differ)
-    expect(state.players[0].x).not.toBe(meadowP1x);
+    const halfW = state.players[0].width / 2;
+    const validXs = volcanoArena.spawnPoints.map(sp => sp.x - halfW);
+    const validYs = volcanoArena.spawnPoints.map(sp => sp.y - state.players[0].height);
+    expect(validXs).toContain(state.players[0].x);
+    expect(validYs).toContain(state.players[0].y);
   });
 
   it('swaps the renderer theme', () => {
