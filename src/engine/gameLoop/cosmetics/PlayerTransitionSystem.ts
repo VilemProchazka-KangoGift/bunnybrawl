@@ -1,8 +1,7 @@
 import type { MatchState, MatchSettings, Player, PlayerSlot } from '../../types';
 import type { CosmeticSystem } from '../types';
 import type { ParticleSystem } from './ParticleSystem';
-import type { SfxCooldowns } from './sfx';
-import { decaySfxCooldowns } from './sfx';
+import { PlayerSfxCooldowns } from './sfx';
 import {
   detectPlayerTransitions,
   snapshotPlayerCosmeticState,
@@ -20,7 +19,7 @@ export class PlayerTransitionSystem implements CosmeticSystem {
 
   private readonly tracker: TransitionTracker<PlayerSlot, PrevPlayerCosmeticState, Player> =
     new TransitionTracker<PlayerSlot, PrevPlayerCosmeticState, Player>(snapshotPlayerCosmeticState);
-  private sfxCooldowns: Map<PlayerSlot, SfxCooldowns> = new Map();
+  private sfxCooldowns: PlayerSfxCooldowns = new PlayerSfxCooldowns();
   private callbacks: TransitionCallbacks;
 
   constructor(
@@ -64,8 +63,9 @@ export class PlayerTransitionSystem implements CosmeticSystem {
     for (const player of this.state.players) {
       if (!player.active) continue;
 
-      // SFX cooldown decay (must tick even during hitstop so cooldowns don't accumulate)
-      decaySfxCooldowns(this.sfxCooldowns, player.id, dt);
+      // SFX cooldown decay (must tick even during hitstop so cooldowns don't accumulate).
+      // This is the ONE central decay site — consume sites use isReady() (read-only).
+      this.sfxCooldowns.decay(player.id, dt);
 
       // Cosmetic timer decay (runs even during hitstop for smooth visuals)
       if (player.damageFlashTimer > 0) player.damageFlashTimer = Math.max(0, player.damageFlashTimer - dt);
@@ -81,7 +81,7 @@ export class PlayerTransitionSystem implements CosmeticSystem {
   }
 
   /** Exposes sfxCooldowns for GameLoop's fixedUpdate (headbonk + crouch cooldowns). */
-  getSfxCooldowns(): Map<PlayerSlot, SfxCooldowns> {
+  getSfxCooldowns(): PlayerSfxCooldowns {
     return this.sfxCooldowns;
   }
 

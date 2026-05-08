@@ -24,8 +24,7 @@ import { perfTrace } from '../perfTrace';
 import { fastSin } from '../fastMath';
 import { RuleBasedBot } from '../input/RuleBasedBot';
 
-import { getOrCreateCooldowns } from '../sfxCooldowns';
-import type { SfxCooldowns } from '../sfxCooldowns';
+import { PlayerSfxCooldowns } from '../sfxCooldowns';
 import { HazardSystem } from '../gameLoop/gameplay/HazardSystem';
 import { CarrotSystem } from '../gameLoop/gameplay/CarrotSystem';
 import { ArenaEntitySystem } from '../gameLoop/gameplay/ArenaEntitySystem';
@@ -128,9 +127,11 @@ export class Simulator {
   private _stompSystem!: StompSystem;
   private _matchSystem!: MatchSystem;
 
-  // Cooldowns map injected by adapter's PlayerTransitionSystem (for headbonk + crouch).
-  // Default: empty map — gameplay still works, cooldowns just always start at 0.
-  private _sfxCooldownsGetter: () => Map<PlayerSlot, SfxCooldowns> = () => new Map();
+  // Cooldowns injected by adapter's PlayerTransitionSystem (for headbonk + crouch).
+  // Default: a fresh local instance — gameplay still works, cooldowns just
+  // never decay (PlayerTransitionSystem is the central decay site).
+  private _sfxCooldownsGetter: () => PlayerSfxCooldowns = () => this._defaultSfxCooldowns;
+  private readonly _defaultSfxCooldowns = new PlayerSfxCooldowns();
 
   constructor(opts: SimulatorOptions) {
     const e = opts.events ?? {};
@@ -213,7 +214,7 @@ export class Simulator {
 
   /** Inject a getter for SFX cooldown state owned by the cosmetic adapter
    *  (PlayerTransitionSystem). Used by headbonk + crouch + zero-G sounds. */
-  setSfxCooldownsGetter(getter: () => Map<PlayerSlot, SfxCooldowns>): void {
+  setSfxCooldownsGetter(getter: () => PlayerSfxCooldowns): void {
     this._sfxCooldownsGetter = getter;
     // Rebuild EffectZoneSystem so it picks up the fresh getter (it captured
     // the previous one at construction).
@@ -458,10 +459,10 @@ export class Simulator {
       updatePlayerState(player);
 
       if (wasAirborne && player.state === 'airborne' && prevVy < -10 && player.vy === 0) {
-        const cd = getOrCreateCooldowns(this._sfxCooldownsGetter(), player.id);
-        if (cd.headbonk <= 0) {
+        const cd = this._sfxCooldownsGetter();
+        if (cd.headbonk.isReady(player.id)) {
           this._events.onSfxRequest('headbonk');
-          cd.headbonk = 0.15;
+          cd.headbonk.set(player.id, 0.15);
         }
       }
 
@@ -482,10 +483,10 @@ export class Simulator {
       if (input.down && player.state !== 'airborne') {
         player.squashScale = SQUASH_ON_CROUCH;
         if (!wasCrouching) {
-          const cd = getOrCreateCooldowns(this._sfxCooldownsGetter(), player.id);
-          if (cd.crouch <= 0) {
+          const cd = this._sfxCooldownsGetter();
+          if (cd.crouch.isReady(player.id)) {
             this._events.onSfxRequest('crouch');
-            cd.crouch = 0.2;
+            cd.crouch.set(player.id, 0.2);
           }
         }
       } else {

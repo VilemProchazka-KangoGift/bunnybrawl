@@ -1,8 +1,7 @@
-import type { Player, PlayerSlot, PlayerState, MatchState } from '../../types';
+import type { Player, PlayerState, MatchState } from '../../types';
 import { DUST_LAND_VY_THRESHOLD, SHOCKWAVE_MAX_RADIUS, SHOCKWAVE_DURATION, SCORE_ANIM_DURATION } from '../../constants';
 import { haptics } from '../../haptics';
-import type { SfxCooldowns } from './sfx';
-import { getOrCreateCooldowns } from './sfx';
+import type { PlayerSfxCooldowns } from './sfx';
 
 /** Previous-frame player state for cosmetic transition detection. */
 export interface PrevPlayerCosmeticState {
@@ -61,7 +60,7 @@ export function detectPlayerTransitions(
   player: Player,
   prev: PrevPlayerCosmeticState,
   state: MatchState,
-  sfxCooldowns: Map<PlayerSlot, SfxCooldowns>,
+  sfxCooldowns: PlayerSfxCooldowns,
   cb: TransitionCallbacks,
 ): void {
   const wasGrounded = prev.state === 'idle' || prev.state === 'run';
@@ -88,10 +87,9 @@ export function detectPlayerTransitions(
 
   // Landing: airborne → grounded
   if (wasAirborne && isGrounded && Math.abs(prev.vy) >= DUST_LAND_VY_THRESHOLD) {
-    const cd = getOrCreateCooldowns(sfxCooldowns, player.id);
-    if (cd.land <= 0) {
+    if (sfxCooldowns.land.isReady(player.id)) {
       cb.playSound('land');
-      cd.land = 0.1;
+      sfxCooldowns.land.set(player.id, 0.1);
     }
     cb.spawnDustParticles(player, Math.abs(prev.vy));
   }

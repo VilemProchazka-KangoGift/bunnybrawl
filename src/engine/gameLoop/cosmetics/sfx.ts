@@ -3,11 +3,10 @@ import type { ThemeConfig } from '../../themes/types';
 import type { Cooldowns } from '../../cooldowns';
 import { randRange } from '../../themes/utils';
 
-// SfxCooldowns + getOrCreateCooldowns + decaySfxCooldowns moved to
-// src/engine/sfxCooldowns.ts so the Simulator can share them without pulling
-// this file (and its theme/audio-adjacent dependencies) into the pure import graph.
-export type { SfxCooldowns } from '../../sfxCooldowns';
-export { getOrCreateCooldowns, decaySfxCooldowns } from '../../sfxCooldowns';
+// PlayerSfxCooldowns moved to src/engine/sfxCooldowns.ts so the Simulator can
+// share it without pulling this file (and its theme/audio-adjacent dependencies)
+// into the pure import graph.
+export { PlayerSfxCooldowns } from '../../sfxCooldowns';
 
 /**
  * Drive crowd-cheering loop volume based on score. Caller injects audio side

@@ -31,11 +31,9 @@ beforeAll(async () => {
 import { updateLavaRocks, updateGhosts, updateGeyserTimers, updatePigeonFlocks } from '../gameplay/arenaEntities';
 import { checkMatchEnd } from '../gameplay/match';
 import {
-  decaySfxCooldowns,
-  getOrCreateCooldowns,
+  PlayerSfxCooldowns,
   updateCrowdCheering,
   tickPeriodicAmbient,
-  type SfxCooldowns,
 } from '../cosmetics/sfx';
 import { Cooldowns } from '../../cooldowns';
 import { audio } from '../../audio';
@@ -418,65 +416,61 @@ describe('checkMatchEnd', () => {
 // cosmetics/sfx.ts
 // ════════════════════════════════════════════════════════════════════════════
 
-describe('getOrCreateCooldowns', () => {
-  it('creates a new cooldown entry when none exists', () => {
-    const map = new Map<PlayerSlot, SfxCooldowns>();
-    const cd = getOrCreateCooldowns(map, 'P1');
-    expect(cd).toEqual({ land: 0, headbonk: 0, crouch: 0 });
-    expect(map.has('P1')).toBe(true);
-  });
-
-  it('returns the existing entry without overwriting it', () => {
-    const map = new Map<PlayerSlot, SfxCooldowns>();
-    const existing: SfxCooldowns = { land: 0.3, headbonk: 0.1, crouch: 0 };
-    map.set('P2', existing);
-    const cd = getOrCreateCooldowns(map, 'P2');
-    expect(cd).toBe(existing);
-    expect(cd.land).toBe(0.3);
-  });
-});
-
-// ────────────────────────────────────────────────────────────────────────────
-
-describe('decaySfxCooldowns', () => {
+describe('PlayerSfxCooldowns', () => {
   const dt = f(1 / 60);
 
-  it('returns early (no-op) when player has no cooldown entry', () => {
-    const map = new Map<PlayerSlot, SfxCooldowns>();
-    // Should not throw and should not create an entry
-    expect(() => decaySfxCooldowns(map, 'P1', dt)).not.toThrow();
-    expect(map.has('P1')).toBe(false);
+  it('exposes three independent Cooldowns<PlayerSlot> instances', () => {
+    const cd = new PlayerSfxCooldowns();
+    expect(cd.land.isReady('P1')).toBe(true);
+    expect(cd.headbonk.isReady('P1')).toBe(true);
+    expect(cd.crouch.isReady('P1')).toBe(true);
   });
 
-  it('decays all positive cooldowns by dt', () => {
-    const map = new Map<PlayerSlot, SfxCooldowns>();
-    map.set('P1', { land: 0.5, headbonk: 0.2, crouch: 0.1 });
-    decaySfxCooldowns(map, 'P1', dt);
-    const cd = map.get('P1')!;
-    expect(cd.land).toBeCloseTo(0.5 - dt, 4);
-    expect(cd.headbonk).toBeCloseTo(0.2 - dt, 4);
-    expect(cd.crouch).toBeCloseTo(0.1 - dt, 4);
+  it('isReady returns false for a slot whose timer is set, true once it elapses', () => {
+    const cd = new PlayerSfxCooldowns();
+    cd.land.set('P1', 0.1);
+    expect(cd.land.isReady('P1')).toBe(false);
+    cd.land.tick('P1', 0.1);
+    expect(cd.land.isReady('P1')).toBe(true);
   });
 
-  it('does not decay cooldowns that are already at or below zero', () => {
-    const map = new Map<PlayerSlot, SfxCooldowns>();
-    map.set('P1', { land: 0, headbonk: -1, crouch: 0 });
-    decaySfxCooldowns(map, 'P1', dt);
-    const cd = map.get('P1')!;
-    // None of these were > 0, so they should be unchanged
-    expect(cd.land).toBe(0);
-    expect(cd.headbonk).toBe(-1);
-    expect(cd.crouch).toBe(0);
+  it('decay() ticks all three cooldowns by dt for the given slot', () => {
+    const cd = new PlayerSfxCooldowns();
+    cd.land.set('P1', 0.5);
+    cd.headbonk.set('P1', 0.2);
+    cd.crouch.set('P1', 0.1);
+    cd.decay('P1', dt);
+    expect(cd.land.isReady('P1')).toBe(false);
+    expect(cd.headbonk.isReady('P1')).toBe(false);
+    expect(cd.crouch.isReady('P1')).toBe(false);
+    // Ticking enough to fully drain crouch (which had only 0.1s)
+    cd.decay('P1', 0.1);
+    expect(cd.crouch.isReady('P1')).toBe(true);
   });
 
-  it('only decays the cooldowns that are positive', () => {
-    const map = new Map<PlayerSlot, SfxCooldowns>();
-    map.set('P1', { land: 0.3, headbonk: 0, crouch: 0 });
-    decaySfxCooldowns(map, 'P1', dt);
-    const cd = map.get('P1')!;
-    expect(cd.land).toBeCloseTo(0.3 - dt, 4);
-    expect(cd.headbonk).toBe(0);
-    expect(cd.crouch).toBe(0);
+  it('decay() is a no-op for a never-set slot', () => {
+    const cd = new PlayerSfxCooldowns();
+    expect(() => cd.decay('P1', dt)).not.toThrow();
+    expect(cd.land.isReady('P1')).toBe(true);
+  });
+
+  it('keys are isolated across slots', () => {
+    const cd = new PlayerSfxCooldowns();
+    cd.land.set('P1', 0.3);
+    expect(cd.land.isReady('P2')).toBe(true);
+    cd.decay('P2', 1.0); // decaying a different slot doesn't drain P1
+    expect(cd.land.isReady('P1')).toBe(false);
+  });
+
+  it('clear() resets all three cooldowns for all slots', () => {
+    const cd = new PlayerSfxCooldowns();
+    cd.land.set('P1', 0.5);
+    cd.headbonk.set('P2', 0.5);
+    cd.crouch.set('P3', 0.5);
+    cd.clear();
+    expect(cd.land.isReady('P1')).toBe(true);
+    expect(cd.headbonk.isReady('P2')).toBe(true);
+    expect(cd.crouch.isReady('P3')).toBe(true);
   });
 });
 

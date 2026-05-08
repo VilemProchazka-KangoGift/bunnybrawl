@@ -41,6 +41,15 @@ export class Cooldowns<K> {
     return false;
   }
 
+  /**
+   * Read-only readiness check. Returns true if the key is uninitialized OR
+   * its timer has reached zero. Does NOT decay — pair with one `tick()` per
+   * frame at a central decay site to avoid double-stepping.
+   */
+  isReady(key: K): boolean {
+    return (this.remaining.get(key) ?? 0) <= 0;
+  }
+
   /** Reset all keys (or one) to ready. */
   clear(key?: K): void {
     if (key === undefined) this.remaining.clear();

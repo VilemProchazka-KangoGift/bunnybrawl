@@ -342,7 +342,7 @@ Mirrors the reactive-decoration pattern for ambient creatures (snails, crabs, ra
 3. Add entry to the declarative table in `audio/soundRegistry.ts`
 4. Call `audio.play('name')` in `gameLoop.ts`
 4. **Volume calibration**: test on laptop speakers. Frequencies below 100Hz are inaudible on most laptop speakers — use 130Hz+ for thuds/impacts. Generation amplitude * Howl volume should be ≥0.05 effective for one-shots, ≥0.02 for ambient loops. Reference: existing `jump` sound = square wave 0.25 amplitude * Howl 0.3 = 0.075 effective at 300-600Hz.
-5. **Cooldown for rapid-fire SFX**: use per-player `Map<PlayerSlot, number>` accumulators (like `footstepAccumulators`), or a global cooldown number. Decay every frame. Sound plays only when cooldown ≤ 0.
+5. **Cooldown for rapid-fire SFX**: use `Cooldowns<PlayerSlot>` from `engine/cooldowns.ts` (countdown shape: `set(k, T) → tick(k, dt) → fire on cross-zero → re-set`) — see `PlayerSfxCooldowns` in `engine/sfxCooldowns.ts` for the land/headbonk/crouch bundle. For drift-free accumulator-style timers (footsteps, afterimages — variable per-tick interval), use `Accumulator<K>` from `engine/accumulator.ts` instead.
 
 ### Adding per-arena ambient sounds
 Arena packs support ambient sounds via `ArenaPack.ambientSoundConfig`:
