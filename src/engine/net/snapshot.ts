@@ -12,65 +12,13 @@ import type {
   PlayerSlot, PlayerState, KillFeedEntry, MatchState, MatchPhase,
 } from '../types';
 import { encodeSlot, decodeSlot } from './protocol';
+import type { AuthSnapshot, SnapshotPlayer } from './snapshot/types';
 
-// ---- Snapshot data structures ----
-
-export interface SnapshotPlayer {
-  id: PlayerSlot;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  state: PlayerState;
-  facing: 'left' | 'right';
-  animFrame: number;
-  score: number;
-  hitstopTimer: number;
-  invincibleTimer: number;
-  fastFalling: boolean;
-  splatTimer: number;
-  respawnTimer: number;
-  fatTimer: number;
-  slowTimer: number;
-  burnTimer: number;
-  squashScale: number;
-  expression: 'normal' | 'scared' | 'angry' | 'dizzy';
-  killStreak: number;
-  disconnected: boolean;
-  active: boolean;
-  width: number;
-  height: number;
-  sideSquash: number;
-  damageFlashTimer: number;
-  damageFlashSide: 'left' | 'right' | null;
-}
-
-export interface AuthSnapshot {
-  frame: number;
-  phase: MatchPhase;
-  players: SnapshotPlayer[];
-  carrots: Array<{ x: number; y: number; active: boolean }>;
-  springs: Array<{ x: number; y: number; bounceTimer: number; life: number; growTimer: number }>;
-  thorns: Array<{ x: number; y: number; life: number; growTimer: number; hit: boolean }>;
-  ghosts: Array<{ x: number; y: number; vx: number; wobblePhase: number }>;
-  lavaRocks: Array<{ x: number; y: number; vy: number; active: boolean }>;
-  geyserStates: Array<{ timer: number; active: boolean; activeTimer: number }>;
-  killFeed: KillFeedEntry[];
-  /** Match-wide stomp counter (uncapped; killFeed is the last-10 HUD slice).
-   *  Source of truth for VictoryScreen "Total Splats". Encoded as Uint16 —
-   *  caps at 65535 stomps which is far beyond any practical match length. */
-  totalKills: number;
-  timeElapsed: number;
-  countdown: number;
-  dayPhase: number;
-  matchOver: boolean;
-  winner: PlayerSlot | null;
-  screenShake: number;
-  slowMotion: number;
-  screenFlash: number;
-  hitstopZoom: number;
-  scoreAnimations: Array<{ playerId: PlayerSlot; value: number; timer: number }>;
-}
+// Re-export types from the new module location. `from './snapshot'` callers
+// continue to work via this shim; the file-split is in progress and the
+// rest of the implementation is moved out in subsequent commits.
+export type { AuthSnapshot, SnapshotPlayer } from './snapshot/types';
+export { createEmptySnapshot } from './snapshot/types';
 
 // ---- State encoding helpers ----
 
@@ -86,35 +34,6 @@ const EXPRESSION_REVERSE = ['normal', 'scared', 'angry', 'dizzy'] as const;
 
 /** Decode slot byte to PlayerSlot (type-narrowing wrapper around decodeSlot). */
 const decodeSlotAs = (b: number) => decodeSlot(b) as PlayerSlot;
-
-/** Build a fully-formed empty AuthSnapshot. All arrays exist and are empty so
- *  V8 can lock the hidden class on first use; pooled instances reuse the same
- *  shape for every decode. */
-export function createEmptySnapshot(): AuthSnapshot {
-  return {
-    frame: 0,
-    phase: 'loading',
-    players: [],
-    carrots: [],
-    springs: [],
-    thorns: [],
-    ghosts: [],
-    lavaRocks: [],
-    geyserStates: [],
-    killFeed: [],
-    totalKills: 0,
-    timeElapsed: 0,
-    countdown: 0,
-    dayPhase: 0,
-    matchOver: false,
-    winner: null,
-    screenShake: 0,
-    slowMotion: 0,
-    screenFlash: 0,
-    hitstopZoom: 0,
-    scoreAnimations: [],
-  };
-}
 
 /** Reused boolean array for readPackedBools — avoids `new Array(n)` per call.
  *  Decoder is single-threaded; the buffer is consumed before the next read. */
