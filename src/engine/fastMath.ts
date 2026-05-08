@@ -58,6 +58,15 @@ export function hexToRGB(hex: string): { r: number; g: number; b: number } {
   return { r, g, b };
 }
 
+/** Darken a '#RRGGBB' hex color by multiplying each channel by `factor` (0..1).
+ *  Returns an `rgb(r, g, b)` string. `factor = 1` returns the input unchanged
+ *  (in rgb() form); `factor = 0` returns black. Out-of-range factors are
+ *  passed through verbatim — caller is expected to clamp if needed. */
+export function darken(hex: string, factor: number): string {
+  const { r, g, b } = hexToRGB(hex);
+  return `rgb(${Math.round(r * factor)}, ${Math.round(g * factor)}, ${Math.round(b * factor)})`;
+}
+
 /** Convert hex color "#RRGGBB" to HSL components (h ∈ [0,360], s,l ∈ [0,1]). */
 export function hexToHSL(hex: string): { h: number; s: number; l: number } {
   const { r: r255, g: g255, b: b255 } = hexToRGB(hex);
