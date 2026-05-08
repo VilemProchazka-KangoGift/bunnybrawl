@@ -1,6 +1,9 @@
 /**
  * Tests for GameLoop.getPlayerInput dispatch — wiring the unified PlayerInput
- * abstraction (KeyboardInput, RuleBasedBot) with network and touch overrides.
+ * abstraction. Every input source (keyboard, AI bot, network remote, touch) is
+ * a PlayerInput in the simulator's playerInputs map. The per-tick context
+ * (`PlayerInputContext`) carries network input buffer + local-touch airborne
+ * flag.
  *
  * Strategy: uses a thin internal `getPlayerInputForTest` forwarder on GameLoop
  * to assert each dispatch branch directly, rather than driving full fixedUpdate
@@ -152,8 +155,9 @@ afterEach(() => {
 // ===================================================================
 
 describe('GameLoop.getPlayerInput dispatch', () => {
-  it('returns network input verbatim when networkInputs has the slot', () => {
+  it('routes to RemoteInput in network mode (returns buffered input verbatim)', () => {
     const loop = createLoop();
+    loop.setNetworkMode(true);
     const player = loop.getState().players.find(p => p.id === 'P1')!;
     player.state = 'idle';
     const netInput: InputState = { left: false, right: true, jump: false, down: false };
@@ -166,6 +170,7 @@ describe('GameLoop.getPlayerInput dispatch', () => {
 
   it('converts jump→down (fast-fall) for an airborne player in network mode', () => {
     const loop = createLoop();
+    loop.setNetworkMode(true);
     const player = loop.getState().players.find(p => p.id === 'P1')!;
     player.state = 'airborne';
     const netInput: InputState = { left: true, right: false, jump: true, down: false };
@@ -176,19 +181,29 @@ describe('GameLoop.getPlayerInput dispatch', () => {
     expect(result).toEqual({ left: true, right: false, jump: false, down: true });
   });
 
-  it('falls through to PlayerInput when networkInputs has no entry for the slot', () => {
+  it('RemoteInput returns all-false when networkInputs has no entry for the slot', () => {
     const loop = createLoop();
+    loop.setNetworkMode(true);
     const player = loop.getState().players.find(p => p.id === 'P1')!;
     player.state = 'idle';
-    // Inject a stub PlayerInput so we can detect the fall-through.
-    const stubAction: InputState = { left: false, right: false, jump: true, down: false };
-    const stub = { slot: 'P1' as PlayerSlot, getAction: vi.fn(() => stubAction) };
-    loop.getSimulator().setPlayerInput('P1', stub);
 
     const networkInputs = new Map<string, InputState>([
       ['P2', { left: false, right: false, jump: false, down: false }],
     ]);
     const result = loop.getPlayerInputForTest(player, networkInputs);
+
+    expect(result).toEqual({ left: false, right: false, jump: false, down: false });
+  });
+
+  it('a registered stub PlayerInput overrides the default KeyboardInput in local mode', () => {
+    const loop = createLoop();
+    const player = loop.getState().players.find(p => p.id === 'P1')!;
+    player.state = 'idle';
+    const stubAction: InputState = { left: false, right: false, jump: true, down: false };
+    const stub = { slot: 'P1' as PlayerSlot, getAction: vi.fn(() => stubAction) };
+    loop.getSimulator().setPlayerInput('P1', stub);
+
+    const result = loop.getPlayerInputForTest(player);
 
     expect(result).toBe(stubAction);
     expect(stub.getAction).toHaveBeenCalledTimes(1);

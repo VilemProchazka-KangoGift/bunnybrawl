@@ -1,5 +1,7 @@
 // src/engine/input/PlayerInput.ts
 import type { InputState, MatchState, PlayerSlot } from '../types';
+// PlayerSlot is a string subtype; networkInputs uses string keys to interop
+// freely with the host's per-tick buffer. PlayerInput impls cast as needed.
 
 /**
  * Per-tick context passed to every PlayerInput.getAction. Built once per
@@ -16,7 +18,7 @@ import type { InputState, MatchState, PlayerSlot } from '../types';
  * and shared by every slot. Per-slot data still lives inside the impl.
  */
 export interface PlayerInputContext {
-  readonly networkInputs?: ReadonlyMap<PlayerSlot, InputState>;
+  readonly networkInputs?: ReadonlyMap<string, InputState>;
   readonly airborne?: boolean;
 }
 
