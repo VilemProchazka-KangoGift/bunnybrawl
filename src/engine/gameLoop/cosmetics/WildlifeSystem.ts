@@ -26,9 +26,11 @@ import {
  *    (early bg pass, behind clouds), used by the treetops squirrel.
  *
  * `slow-device` is honoured: the system skips its tick + draw entirely when
- * the slow flag is set. This matches per-pack guards (`getSlowDevice() return`)
- * the migration replaces. Packs that historically did NOT slow-gate (e.g.
- * castle rats) are documented inline at registration time.
+ * the slow flag is set — wildlife disappears on slow devices across ALL
+ * arenas. Pre-migration this was inconsistent (5 packs slow-gated; castle
+ * and space-station did not); the migration unifies behavior. If a future
+ * arena needs an opt-out, add a `slowDeviceVisible: true` flag to the
+ * `WildlifeKind` config and gate accordingly.
  */
 export class WildlifeSystem implements CosmeticSystem {
   private state: MatchState;
