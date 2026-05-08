@@ -16,8 +16,8 @@ import type { TouchInputManager } from '../engine/touchInput';
 import type { PlayerSlot, MatchPhase } from '../engine/types';
 import { runLoadingTasks } from '../engine/matchLoading';
 import { useTransientBanner } from '../hooks/useTransientBanner';
-import { useDelayedFlag } from '../hooks/useDelayedFlag';
 import { useWakeLock } from '../hooks/useWakeLock';
+import { useLoadingOverlay, loadingSubKey } from './match/useLoadingOverlay';
 import logoImg from '/logo.png?url';
 import './Match.css';
 
@@ -90,19 +90,15 @@ export function Match() {
   const disconnectDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const netMatchRef = useRef<NetMatch | null>(null);
   const [touchInput, setTouchInput] = useState<TouchInputManager | null>(null);
-  // Two sources drive the loading overlay:
-  //   - `phaseIsLoading`: the authoritative gameplay phase (from setPhase on
-  //     host OR from snapshot on guest). False once the match can be played.
-  //   - `localTasksDone`: THIS client has finished its runLoadingTasks
-  //     (music buffered, background painted, sprites warmed).
-  // Overlay shows while either is still "not ready" — prevents the guest
-  // from hiding the overlay the moment host flips phase if the guest's own
-  // asset preload hasn't finished yet.
-  const [phaseIsLoading, setPhaseIsLoading] = useState(true);
-  const [localTasksDone, setLocalTasksDone] = useState(false);
-  const showLoadingOverlay = phaseIsLoading || !localTasksDone;
-  // Cancel button only appears after a delay so brief loads don't flicker it.
-  const showLoadingCancel = useDelayedFlag(showLoadingOverlay, 3000);
+  // Loading overlay state machine. Two signals must clear before the overlay
+  // hides: `phaseIsLoading` (gameplay phase from setPhase on host or
+  // NetMatch.onPhaseChange on guest) and `localTasksDone` (this client's
+  // runLoadingTasks finished). Cancel button auto-appears after 3s.
+  const {
+    phaseIsLoading, localTasksDone,
+    showLoadingOverlay, showLoadingCancel,
+    setPhaseIsLoading, setLocalTasksDone,
+  } = useLoadingOverlay();
   // Reconnect progress for the overlay. `attempt` goes 0..max as retries fire.
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
   const [reconnectMax, setReconnectMax] = useState(12);
@@ -546,7 +542,7 @@ export function Match() {
             <div className="match-loading-spinner" />
             <div className="match-loading-text">{t('loading', 'Loading...')}</div>
             <div className="match-loading-sub" data-testid="match-loading-sub">
-              {online.isOnline && localTasksDone && phaseIsLoading
+              {loadingSubKey(online.isOnline, localTasksDone, phaseIsLoading) === 'loading_waiting_others'
                 ? t('loading_waiting_others', 'Waiting for other players...')
                 : t('loading_arena', 'Loading arena...')}
             </div>
