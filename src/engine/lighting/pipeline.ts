@@ -1,6 +1,7 @@
 // src/engine/lighting/pipeline.ts
 //
-// LightingPipeline — Carrot Royale's L1 Foundation lighting.
+// AmbientPipeline — L1 Foundation ambient darkening.
+// (Was `LightingPipeline` pre-L2; renamed when L2 split out EmitterPipeline.)
 //
 // Per the reference doc §5.1 ("the sun isn't a 'light' in the buffer"), 2D
 // lighting cannot do per-pixel directional contribution without normal maps.
@@ -46,7 +47,7 @@ const FG_TINT_DUSK_THRESHOLD = 0.55;
 /** fg-tint peak multiplier — applied after the dusk threshold ramps in. */
 const FG_TINT_PEAK_MUL = 0.7;
 
-export class LightingPipeline {
+export class AmbientPipeline {
   private width: number;
   private height: number;
 

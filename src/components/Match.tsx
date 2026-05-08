@@ -73,6 +73,8 @@ export function Match() {
   const fgCanvasRef = useRef<HTMLCanvasElement>(null);
   const hudCanvasRef = useRef<HTMLCanvasElement>(null);
   const fgNightTintRef = useRef<HTMLDivElement>(null);
+  // L2 emitter compositing — single screen-blend DOM sibling above fg-night-tint.
+  const lightCanvasRef = useRef<HTMLCanvasElement>(null);
   const gameLoopRef = useRef<GameLoop | null>(null);
   const victoryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { activePlayers, matchSettings, setMatchResult, setScreen, setActivePlayers, setMatchSettings, online, resetOnline, clearMatchResult } = useGameStore();
@@ -255,6 +257,7 @@ export function Match() {
     // source-over fillRect tint path. Don't block match mount on them.
     const bgNightCanvas = bgNightCanvasRef.current ?? undefined;
     const fgNightTint = fgNightTintRef.current ?? undefined;
+    const lightCanvas = lightCanvasRef.current ?? undefined;
 
     const clearTimer = (ref: { current: ReturnType<typeof setTimeout> | null }) => {
       if (ref.current) { clearTimeout(ref.current); ref.current = null; }
@@ -302,6 +305,7 @@ export function Match() {
         bgCanvas,
         bgNightCanvas,
         fgNightTint,
+        lightCanvas,
         fgCanvas,
         hudCanvas,
         arena,
@@ -467,6 +471,7 @@ export function Match() {
       undefined, // rng
       bgNightCanvas,
       fgNightTint,
+      lightCanvas,
     );
 
     gameLoopRef.current = loop;
@@ -521,6 +526,13 @@ export function Match() {
           ref={fgNightTintRef}
           className="fg-night-tint"
           aria-hidden="true"
+        />
+        {/* L2 emitter compositing — screen-blend layer above fg-night-tint. */}
+        <canvas
+          ref={lightCanvasRef}
+          className="game-canvas light-canvas"
+          width={CANVAS_WIDTH}
+          height={CANVAS_HEIGHT}
         />
         <canvas
           ref={hudCanvasRef}

@@ -29,6 +29,18 @@ export class SeededRNG {
     return new SeededRNG((seed * 0x9E3779B1 + tick * 0x85EBCA77) | 0);
   }
 
+  /** Allocation-free single-float draw keyed by (seed, tick). Equivalent to
+   *  `SeededRNG.fromTick(seed, tick).nextFloat()` without instantiating an
+   *  RNG — for hot paths that need one deterministic sample per emitter per
+   *  tick (e.g. lighting flicker). Returns a float in [0, 1). */
+  static floatFromTick(seed: number, tick: number): number {
+    let state = (seed * 0x9E3779B1 + tick * 0x85EBCA77) | 0;
+    state = (state + 0x6d2b79f5) | 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+
   /** Advance state and return next float in [0, 1). */
   nextFloat(): number {
     this.state |= 0;

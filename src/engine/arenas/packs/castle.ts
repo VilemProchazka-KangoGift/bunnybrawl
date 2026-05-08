@@ -924,21 +924,10 @@ export const castle: ArenaPack = {
 
   drawAnimatedBackground: (ctx, _arena, time) => {
     if (getSlowDevice()) return;
+    // Embers only — torch halo comes from the L2 emitter pipeline (`lights`).
     ctx.save();
-    // Subtle: smaller halo, slow flicker, gentler embers.
     for (let i = 0; i < TORCH_X.length; i++) {
       const tx = TORCH_X[i];
-      const flicker = 0.95 + fastSin(time * 6 + i * 1.7) * 0.05;
-      ctx.fillStyle = '#ff7828';
-      ctx.globalAlpha = 0.10 * flicker;
-      ctx.beginPath();
-      ctx.arc(tx, TORCH_FLAME_Y, 32 * flicker, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 0.06 * flicker;
-      ctx.beginPath();
-      ctx.arc(tx, TORCH_FLAME_Y, 18 * flicker, 0, Math.PI * 2);
-      ctx.fill();
-      // Single drifting ember per torch (was 2 with snappy motion).
       const u = ((time * 0.3 + i * 0.31) % 1);
       ctx.globalAlpha = (1 - u) * 0.45;
       ctx.fillStyle = '#ff9a3a';
@@ -999,6 +988,22 @@ export const castle: ArenaPack = {
   ],
 
   musicFile: 'castle.mp3',
+
+  // L2 emitters: warm torchlight at the existing TORCH_X positions. Replaces
+  // the alpha-modulated halo in drawAnimatedBackground that gets crushed by
+  // the fg-night-tint multiply at midnight; the EmitterPipeline writes to a
+  // screen-blend DOM sibling that punches through.
+  lights: TORCH_X.map((tx, i) => ({
+    kind: 'point' as const,
+    x: tx,
+    y: TORCH_FLAME_Y,
+    color: { r: 255, g: 150, b: 60 },
+    intensity: 0.85,
+    radius: 110,
+    falloff: 'inverse-square' as const,
+    flicker: { seed: i + 1, amplitude: 0.1 },
+  })),
+
   // NAV-DATA-START — auto-generated, do not hand-edit
   navData: {
     edges: [

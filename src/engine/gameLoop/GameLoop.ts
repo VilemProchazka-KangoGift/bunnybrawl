@@ -97,6 +97,7 @@ export class GameLoop {
     rng?: SeededRNG,
     bgNightCanvas?: HTMLCanvasElement,
     fgNightTint?: HTMLDivElement,
+    lightCanvas?: HTMLCanvasElement,
   ) {
     this.onMatchEnd = onMatchEnd;
     this.keyboardManager = new KeyboardManager();
@@ -120,7 +121,16 @@ export class GameLoop {
       },
     });
 
-    this.renderer = new Renderer(bgCanvas, fgCanvas, this.simulator.getTheme(), settings.mods.mirrorArena, hudCanvas, bgNightCanvas, fgNightTint);
+    this.renderer = new Renderer({
+      bgCanvas,
+      fgCanvas,
+      theme: this.simulator.getTheme(),
+      mirrored: settings.mods.mirrorArena,
+      hudCanvas,
+      bgNightCanvas,
+      fgNightTint,
+      lightCanvas,
+    });
     this.renderer.setTimeLimit(settings.timeLimit);
 
     // ParticleSystem references the simulator's state/arena/theme/settings and
@@ -151,6 +161,7 @@ export class GameLoop {
       (name) => { if (this._audioEnabled) audio.playAnimal(name); },
       this.particleSystem,
       (x, y) => this.reactiveDecorationSystem.applyStompImpulse(x, y),
+      (x, y, kind) => this.renderer.emitLightBurst(x, y, kind),
     );
     this.playerCosmeticSystem = new PlayerCosmeticSystem(
       sState, this.simulator.getEffWalkSpeed(), this.particleSystem,
@@ -398,6 +409,7 @@ export class GameLoop {
       (name) => { if (this._audioEnabled) audio.playAnimal(name); },
       this.particleSystem,
       (x, y) => this.reactiveDecorationSystem.applyStompImpulse(x, y),
+      (x, y, kind) => this.renderer.emitLightBurst(x, y, kind),
     );
     this.playerCosmeticSystem = new PlayerCosmeticSystem(
       sState, this.simulator.getEffWalkSpeed(), this.particleSystem,
