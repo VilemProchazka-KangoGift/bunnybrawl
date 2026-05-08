@@ -266,7 +266,7 @@
 - Network simulator: `?simLatency=50&simJitter=20&simLoss=5` URL params.
 - Debug overlay: `?debug=net` URL param. Toggle with `` ` `` key.
 - E2E online tests in `e2e/online-multiplayer.spec.ts`.
-- `window.__gameStore`, `window.__gameLoop`, `window.__netMatch` exposed for E2E.
+- `window.__bunnyTest` (typed `BunnyTestSnapshot` from `src/components/bunnyTestShim.ts`) is the single E2E diagnostic surface — exposes `state()`, `gameStore()`, `netMatch()`, `diagnostics()`, etc. Old per-object globals (`__gameLoop` / `__netMatch` / `__gameStore`) are gone.
 - **`Math.fround()` covers all simulation-affecting arithmetic.** Nest fround for FMA prevention: `f(a + f(b * c))`. `const f = Math.fround` in physics.ts, gameLoop.ts, stomp.ts, hazardCollision.ts.
 - **ARM FTZ**: Snap `|vx|, |vy| < 1e-4` to 0 after physics, before `updatePlayerState()`.
 - **NEVER use float `===` float in collision.** Use index-based selection instead of value comparison.
