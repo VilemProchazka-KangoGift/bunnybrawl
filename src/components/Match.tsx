@@ -6,17 +6,16 @@ import { NetMatch } from '../engine/net/netMatch';
 import { MsgType } from '../engine/net/protocol';
 import { getModalTransport, tearDownOnlineSession } from './OnlineModal';
 import { listPlayableArenaPacks } from '../engine/arenas';
-import { ArenaGrid } from './ArenaGrid';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
 import { isTouchPrimary } from '../engine/touchDetect';
 import { TouchOverlay } from './TouchOverlay';
 import type { TouchInputManager } from '../engine/touchInput';
 import { useTransientBanner } from '../hooks/useTransientBanner';
 import { useWakeLock } from '../hooks/useWakeLock';
-import { useLoadingOverlay, loadingSubKey } from './match/useLoadingOverlay';
+import { useLoadingOverlay } from './match/useLoadingOverlay';
 import { useLocalMatch, kickoffLoading } from './match/useLocalMatch';
 import { useOnlineMatch } from './match/useOnlineMatch';
-import logoImg from '/logo.png?url';
+import { MatchOverlays } from './match/MatchOverlays';
 import './Match.css';
 
 // Track last resolved arena so random doesn't repeat on rematch. Intentionally
@@ -279,141 +278,27 @@ export function Match() {
             &#9646;&#9646;
           </button>
         )}
-        {showLoadingOverlay && (
-          <div
-            className="match-loading-overlay"
-            data-testid="match-loading-overlay"
-            role="status"
-            aria-live="polite"
-            aria-busy="true"
-          >
-            <img src={logoImg} alt="Carrot Royale" className="match-loading-logo" />
-            <div className="match-loading-spinner" />
-            <div className="match-loading-text">{t('loading', 'Loading...')}</div>
-            <div className="match-loading-sub" data-testid="match-loading-sub">
-              {loadingSubKey(online.isOnline, localTasksDone, phaseIsLoading) === 'loading_waiting_others'
-                ? t('loading_waiting_others', 'Waiting for other players...')
-                : t('loading_arena', 'Loading arena...')}
-            </div>
-            {showLoadingCancel && (
-              <button
-                className="btn-base pause-btn quit-btn match-loading-cancel"
-                onClick={handleQuit}
-                data-testid="match-loading-cancel"
-              >
-                {t('loading_cancel', 'Cancel')}
-              </button>
-            )}
-          </div>
-        )}
-        {paused && (
-          <div className="pause-overlay" data-testid="pause-menu">
-            <div className="pause-box">
-              {showLevelSelect ? (
-                <>
-                  <h2 className="pause-title">{t('pause_change_level')}</h2>
-                  <div className="pause-arena-grid">
-                    <ArenaGrid
-                      classPrefix="pause-arena"
-                      currentId={currentArenaId}
-                      selectedClass="current"
-                      onSelect={handleChangeArena}
-                    />
-                  </div>
-                  <button className="btn-base pause-btn quit-btn" onClick={() => setShowLevelSelect(false)}>
-                    {t('pause_back')}
-                  </button>
-                </>
-              ) : online.isOnline ? (
-                /* Online pause menu */
-                <>
-                  <h2 className="pause-title">{t('pause_title')}</h2>
-                  <button className="btn-base pause-btn resume-btn" onClick={handleResume} data-testid="resume-button">
-                    {t('pause_resume')}
-                  </button>
-                  {online.isHost && (
-                    <button className="btn-base pause-btn level-btn" onClick={() => setShowLevelSelect(true)}>
-                      {t('pause_change_level')}
-                    </button>
-                  )}
-                  {online.isHost ? (
-                    <button className="btn-base pause-btn quit-btn" onClick={handleQuit} data-testid="quit-button">
-                      {t('cancel_game', 'Cancel Game')}
-                    </button>
-                  ) : (
-                    <button className="btn-base pause-btn quit-btn" onClick={handleQuit} data-testid="quit-button">
-                      {t('leave_game', 'Leave Game')}
-                    </button>
-                  )}
-                </>
-              ) : (
-                /* Local pause menu */
-                <>
-                  <h2 className="pause-title">{t('pause_title')}</h2>
-                  <button className="btn-base pause-btn resume-btn" onClick={handleResume} data-testid="resume-button">
-                    {t('pause_resume')}
-                  </button>
-                  <button className="btn-base pause-btn level-btn" onClick={() => setShowLevelSelect(true)}>
-                    {t('pause_change_level')}
-                  </button>
-                  <button className="btn-base pause-btn quit-btn" onClick={handleQuit} data-testid="quit-button">
-                    {t('pause_quit')}
-                  </button>
-                  <p className="pause-hint">{t('pause_hint')}</p>
-                </>
-              )}
-            </div>
-          </div>
-        )}
-        {!paused && online.isOnline && (() => {
-          // Unstable-indicator slot: unstable takes priority over the transient
-          // banner when both would show simultaneously.
-          if (unstable && !isReconnecting) return (
-            <div
-              className="connection-unstable-indicator"
-              data-testid={unstable.kind === 'mine' ? 'connection-unstable' : 'connection-unstable-them'}
-              role="status"
-              aria-live="polite"
-            >
-              {unstable.kind === 'mine'
-                ? t('connection_unstable_mine', 'Your connection is unstable')
-                : t('connection_unstable_them', '{{name}} has a slow connection', { name: unstable.name })}
-            </div>
-          );
-          if (banner) return (
-            <div className="connection-unstable-indicator" data-testid="disconnect-banner" role="status" aria-live="polite">
-              {banner}
-            </div>
-          );
-          return null;
-        })()}
-        {isReconnecting && online.isOnline && (
-          <div className="reconnecting-overlay" role="status" aria-live="polite">
-            <div className="reconnecting-box">
-              <div className="reconnecting-spinner" />
-              <div className="reconnecting-text">
-                {t('reconnecting', 'Reconnecting...')}
-              </div>
-              {reconnectAttempt > 0 && (
-                <div className="reconnecting-sub">
-                  {t('reconnecting_attempt', 'Attempt {{n}}/{{max}}', { n: reconnectAttempt, max: reconnectMax })}
-                </div>
-              )}
-              <button className="btn-base pause-btn quit-btn" onClick={handleQuit} data-testid="reconnect-give-up">
-                {t('give_up', 'Give Up')}
-              </button>
-            </div>
-          </div>
-        )}
-        {reconnectFailed && online.isOnline && (
-          <div className="reconnecting-overlay" data-testid="reconnect-failed" role="alert" aria-live="assertive">
-            <div className="reconnecting-box">
-              <div className="reconnecting-text">
-                {t('reconnect_failed', 'Could not reconnect.')}
-              </div>
-            </div>
-          </div>
-        )}
+        <MatchOverlays
+          paused={paused}
+          showLevelSelect={showLevelSelect}
+          currentArenaId={currentArenaId}
+          setShowLevelSelect={setShowLevelSelect}
+          handleResume={handleResume}
+          handleQuit={handleQuit}
+          handleChangeArena={handleChangeArena}
+          isOnline={online.isOnline}
+          isHost={online.isHost}
+          showLoadingOverlay={showLoadingOverlay}
+          showLoadingCancel={showLoadingCancel}
+          phaseIsLoading={phaseIsLoading}
+          localTasksDone={localTasksDone}
+          unstable={unstable}
+          banner={banner}
+          isReconnecting={isReconnecting}
+          reconnectAttempt={reconnectAttempt}
+          reconnectMax={reconnectMax}
+          reconnectFailed={reconnectFailed}
+        />
       </div>
     </div>
   );
