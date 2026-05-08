@@ -79,7 +79,6 @@ export class GameLoop {
   private touchSlot: PlayerSlot | null = null;
 
   private _networkMode = false;
-  private _audioEnabled = true;
 
   private onPhaseChange?: (phase: MatchPhase) => void;
 
@@ -158,7 +157,7 @@ export class GameLoop {
 
     this.playerTransitionSystem = new PlayerTransitionSystem(
       sState, settings, (name) => this.playSound(name),
-      (name) => { if (this._audioEnabled) audio.playAnimal(name); },
+      (name) => audio.playAnimal(name),
       this.particleSystem,
       (x, y) => this.reactiveDecorationSystem.applyStompImpulse(x, y),
       (x, y, kind) => this.renderer.emitLightBurst(x, y, kind),
@@ -265,9 +264,9 @@ export class GameLoop {
     }
   }
 
-  /** Play a sound, respecting audio mute (used during rollback resimulation). */
+  /** Play a sound (thin indirection used by cosmetic systems). */
   private playSound(name: string): void {
-    if (this._audioEnabled) audio.play(name as Parameters<typeof audio.play>[0]);
+    audio.play(name as Parameters<typeof audio.play>[0]);
   }
 
   private _emitReactiveBurst(instance: ReactiveInstance): void {
@@ -406,7 +405,7 @@ export class GameLoop {
 
     this.playerTransitionSystem = new PlayerTransitionSystem(
       sState, settings, (name) => this.playSound(name),
-      (name) => { if (this._audioEnabled) audio.playAnimal(name); },
+      (name) => audio.playAnimal(name),
       this.particleSystem,
       (x, y) => this.reactiveDecorationSystem.applyStompImpulse(x, y),
       (x, y, kind) => this.renderer.emitLightBurst(x, y, kind),
@@ -484,11 +483,6 @@ export class GameLoop {
   /** Mark a player as disconnected. */
   disconnectPlayer(slot: PlayerSlot): void {
     this.simulator.disconnectPlayer(slot);
-  }
-
-  /** Mute/unmute audio (used during rollback resimulation). */
-  setAudioEnabled(enabled: boolean): void {
-    this._audioEnabled = enabled;
   }
 
   /** Mark that we're in rollback resimulation. */
