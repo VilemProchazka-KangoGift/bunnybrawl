@@ -1,3 +1,4 @@
+import type { Ctx2D } from '../types';
 import type { CharacterColors, LegStyle } from './types';
 
 // ---- Defaults ----
@@ -9,7 +10,7 @@ const DEF_FOOT_HEIGHT = 2;
 // ---- Helpers ----
 
 function drawRoundRect(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   x: number, y: number, w: number, h: number, r: number,
 ): void {
   ctx.beginPath();
@@ -20,7 +21,7 @@ function drawRoundRect(
 // ---- Foot renderers ----
 
 function drawFootPaw(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   fx: number, fy: number, fw: number, fh: number, color: string,
 ): void {
   ctx.fillStyle = color;
@@ -30,7 +31,7 @@ function drawFootPaw(
 }
 
 function drawFootHoof(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   fx: number, fy: number, fw: number, fh: number, color: string,
 ): void {
   ctx.fillStyle = color;
@@ -38,7 +39,7 @@ function drawFootHoof(
 }
 
 function drawFootWebbed(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   fx: number, fy: number, fw: number, fh: number, color: string,
 ): void {
   ctx.fillStyle = color;
@@ -56,7 +57,7 @@ function drawFootWebbed(
 }
 
 function drawFootClaw(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   fx: number, fy: number, fw: number, fh: number, color: string,
 ): void {
   ctx.strokeStyle = color;
@@ -72,7 +73,7 @@ function drawFootClaw(
 }
 
 function drawFootRound(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   fx: number, fy: number, fw: number, fh: number, color: string,
 ): void {
   ctx.fillStyle = color;
@@ -81,7 +82,7 @@ function drawFootRound(
   ctx.fill();
 }
 
-type FootDrawer = (ctx: CanvasRenderingContext2D, fx: number, fy: number, fw: number, fh: number, color: string) => void;
+type FootDrawer = (ctx: Ctx2D, fx: number, fy: number, fw: number, fh: number, color: string) => void;
 
 const FOOT_DRAWERS: Record<Exclude<LegStyle['footStyle'], 'none'>, FootDrawer> = {
   paw: drawFootPaw,
@@ -94,7 +95,7 @@ const FOOT_DRAWERS: Record<Exclude<LegStyle['footStyle'], 'none'>, FootDrawer> =
 // ---- Leg shape renderers ----
 
 function drawLegRounded(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   lx: number, ly: number, lw: number, lh: number, kneeOff: number,
 ): void {
   if (lh <= 5) {
@@ -125,7 +126,7 @@ function drawLegRounded(
 }
 
 function drawLegTapered(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   lx: number, ly: number, lw: number, lh: number, kneeOff: number,
 ): void {
   if (lh <= 5) {
@@ -147,7 +148,7 @@ function drawLegTapered(
 }
 
 function drawLegStick(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   lx: number, ly: number, lw: number, lh: number, kneeOff: number,
 ): void {
   const cx = lx + lw / 2;
@@ -167,7 +168,7 @@ function drawLegStick(
 }
 
 function drawLegWide(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   lx: number, ly: number, lw: number, lh: number, kneeOff: number,
 ): void {
   if (lh <= 5) {
@@ -184,7 +185,7 @@ function drawLegWide(
   }
 }
 
-type LegDrawer = (ctx: CanvasRenderingContext2D, lx: number, ly: number, lw: number, lh: number, kneeOff: number) => void;
+type LegDrawer = (ctx: Ctx2D, lx: number, ly: number, lw: number, lh: number, kneeOff: number) => void;
 
 const LEG_DRAWERS: Record<LegStyle['shape'], LegDrawer> = {
   rounded: drawLegRounded,
@@ -203,7 +204,7 @@ const LEG_DRAWERS: Record<LegStyle['shape'], LegDrawer> = {
  * Must be a pure function of its inputs.
  */
 export function drawLegs(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   cx: number,
   yOff: number,
   h: number,

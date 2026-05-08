@@ -1,4 +1,5 @@
 import { hexToRGB } from './fastMath';
+import type { Ctx2D } from './types';
 
 export interface BodyEllipseParams {
   cx: number;
@@ -17,7 +18,7 @@ function blendColors(hex1: string, hex2: string, t: number): string {
 
 /** Fill a body ellipse with radial gradient shading. Restores fillStyle to char.color after. */
 export function fillBodyGradient(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   params: BodyEllipseParams,
   char: { color: string; darkColor: string; lightColor: string },
 ): void {
@@ -45,7 +46,7 @@ export function fillBodyGradient(
 
 /** Fill a circle with radial gradient (for Sheep's overlapping body circles). */
 export function fillBodyGradientCircle(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   circCx: number,
   circCy: number,
   radius: number,
@@ -68,7 +69,7 @@ export function fillBodyGradientCircle(
 
 /** Draw a soft white highlight spot on the body. */
 export function drawHighlightSpot(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   params: BodyEllipseParams,
 ): void {
   const { cx, cy, rx, ry } = params;
