@@ -20,9 +20,6 @@ export function drawWeather(ctx: CanvasRenderingContext2D, weather: WeatherParti
     for (const w of weather) customDraw(ctx, w);
     return;
   }
-  // Asymmetric shapes (leaf/petal/ash) use `ctx.ellipse(x, y, rx, ry, rotation)`
-  // directly — the rotation param eliminates the need for per-particle
-  // save/translate/rotate/restore (~30 stack pushes/frame on meadow).
   for (const w of weather) {
     const px = w.x + w.vx * lead;
     const py = w.y + w.vy * lead;
@@ -143,54 +140,79 @@ export function drawGibShape(ctx: CanvasRenderingContext2D, gib: Gib): void {
   gibRenderer(ctx, gibType, gib.width, gib.height, { color, darkColor, lightColor });
 }
 
+// Star vertices on a unit circle (5 outer + 5 inner alternating). Constant
+// across all particles — only multiplied by per-particle size + rotation.
+const _STAR_UNIT = (() => {
+  const out = new Float32Array(20);
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
+    const aIn = a + Math.PI / 5;
+    out[i * 4 + 0] = Math.cos(a);
+    out[i * 4 + 1] = Math.sin(a);
+    out[i * 4 + 2] = Math.cos(aIn) * 0.4;
+    out[i * 4 + 3] = Math.sin(aIn) * 0.4;
+  }
+  return out;
+})();
+
 export function drawConfetti(ctx: CanvasRenderingContext2D, confetti: ConfettiParticle[], lead = 0): void {
-  // Pre-rotate vertices manually to avoid per-particle save/translate/rotate/restore.
-  // For each shape we compute cos/sin of rotation once, then transform each
-  // local-space vertex (vx, vy) → (vx*cos - vy*sin, vx*sin + vy*cos) + (cx, cy).
+  // Hot path: rotation inlined per shape. See docs/perf-patterns.md.
   for (const c of confetti) {
-    const alpha = (c.life / c.maxLife) * 0.9;
     const cx = c.x + c.vx * lead;
     const cy = c.y + c.vy * lead;
     ctx.fillStyle = rgbString(c.color);
-    ctx.globalAlpha = alpha;
+    ctx.globalAlpha = (c.life / c.maxLife) * 0.9;
 
-    if (c.shape === 'star' || c.shape === 'diamond' || c.shape === 'ribbon') {
-      const rot = c.rotation + c.rotationSpeed * lead;
-      const cs = Math.cos(rot);
-      const sn = Math.sin(rot);
-      ctx.beginPath();
-      if (c.shape === 'star') {
+    switch (c.shape) {
+      case 'star': {
+        const rot = c.rotation + c.rotationSpeed * lead;
+        const cs = Math.cos(rot), sn = Math.sin(rot);
+        const sz = c.size;
+        ctx.beginPath();
         for (let i = 0; i < 5; i++) {
-          const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
-          const aInner = a + Math.PI / 5;
-          const ox = Math.cos(a) * c.size, oy = Math.sin(a) * c.size;
-          const ix = Math.cos(aInner) * c.size * 0.4, iy = Math.sin(aInner) * c.size * 0.4;
+          const ox = _STAR_UNIT[i * 4 + 0] * sz;
+          const oy = _STAR_UNIT[i * 4 + 1] * sz;
+          const ix = _STAR_UNIT[i * 4 + 2] * sz;
+          const iy = _STAR_UNIT[i * 4 + 3] * sz;
           ctx.lineTo(cx + ox * cs - oy * sn, cy + ox * sn + oy * cs);
           ctx.lineTo(cx + ix * cs - iy * sn, cy + ix * sn + iy * cs);
         }
-      } else if (c.shape === 'diamond') {
-        const s = c.size;
-        // (0, -s), (s*0.6, 0), (0, s), (-s*0.6, 0)
-        ctx.moveTo(cx - (-s) * sn, cy + (-s) * cs);
-        ctx.lineTo(cx + s * 0.6 * cs, cy + s * 0.6 * sn);
-        ctx.lineTo(cx - s * sn, cy + s * cs);
-        ctx.lineTo(cx - s * 0.6 * cs, cy - s * 0.6 * sn);
-      } else { // ribbon
-        const s = c.size;
-        const s3 = s * 0.3, s8 = s * 0.8;
-        // 6 points pre-rotated inline (no closure allocation).
-        ctx.moveTo(cx + -s * cs - -s3 * sn, cy + -s * sn + -s3 * cs);
-        ctx.quadraticCurveTo(cx - -s8 * sn, cy + -s8 * cs, cx + s * cs - -s3 * sn, cy + s * sn + -s3 * cs);
-        ctx.lineTo(cx + s * cs - s3 * sn, cy + s * sn + s3 * cs);
-        ctx.quadraticCurveTo(cx - s8 * sn, cy + s8 * cs, cx + -s * cs - s3 * sn, cy + -s * sn + s3 * cs);
+        ctx.closePath();
+        ctx.fill();
+        break;
       }
-      ctx.closePath();
-      ctx.fill();
-    } else {
-      // Circle — rotation invisible, no transform stack needed.
-      ctx.beginPath();
-      ctx.arc(cx, cy, c.size, 0, Math.PI * 2);
-      ctx.fill();
+      case 'diamond': {
+        const rot = c.rotation + c.rotationSpeed * lead;
+        const cs = Math.cos(rot), sn = Math.sin(rot);
+        const s = c.size;
+        // Local verts: (0,-s), (0.6s,0), (0,s), (-0.6s,0)
+        ctx.beginPath();
+        ctx.moveTo(cx + s * sn, cy - s * cs);
+        ctx.lineTo(cx + 0.6 * s * cs, cy + 0.6 * s * sn);
+        ctx.lineTo(cx - s * sn, cy + s * cs);
+        ctx.lineTo(cx - 0.6 * s * cs, cy - 0.6 * s * sn);
+        ctx.closePath();
+        ctx.fill();
+        break;
+      }
+      case 'ribbon': {
+        const rot = c.rotation + c.rotationSpeed * lead;
+        const cs = Math.cos(rot), sn = Math.sin(rot);
+        const s = c.size, s3 = s * 0.3, s8 = s * 0.8;
+        // Local verts: (-s,-s3), Q(0,-s8) → (s,-s3), L(s,s3), Q(0,s8) → (-s,s3)
+        ctx.beginPath();
+        ctx.moveTo(cx - s * cs + s3 * sn, cy - s * sn - s3 * cs);
+        ctx.quadraticCurveTo(cx + s8 * sn, cy - s8 * cs, cx + s * cs + s3 * sn, cy + s * sn - s3 * cs);
+        ctx.lineTo(cx + s * cs - s3 * sn, cy + s * sn + s3 * cs);
+        ctx.quadraticCurveTo(cx - s8 * sn, cy + s8 * cs, cx - s * cs - s3 * sn, cy - s * sn + s3 * cs);
+        ctx.closePath();
+        ctx.fill();
+        break;
+      }
+      default: // circle — rotation invisible
+        ctx.beginPath();
+        ctx.arc(cx, cy, c.size, 0, Math.PI * 2);
+        ctx.fill();
     }
   }
   ctx.globalAlpha = 1;
@@ -249,8 +271,6 @@ export function drawFireworks(ctx: CanvasRenderingContext2D, particles: Particle
 }
 
 export function drawWildlife(ctx: CanvasRenderingContext2D, wildlife: WildlifeEntity[]): void {
-  // No save/translate per entity — absolute coords throughout (wildlife
-  // doesn't rotate, just translates). Saves N save/restore pairs/frame.
   for (const w of wildlife) {
     const cx = w.x;
     const cy = w.y;

@@ -651,8 +651,7 @@ export const volcano: ArenaPack = {
       ctx.fill();
       ctx.globalAlpha = 1;
     } else {
-      // Ash is an asymmetric ellipse — ctx.ellipse rotation arg avoids the
-      // per-particle save/translate/rotate/restore.
+      // Ash — asymmetric ellipse
       ctx.fillStyle = w.color || 'rgba(120, 100, 90, 0.5)';
       ctx.beginPath();
       ctx.ellipse(w.x, w.y, w.size, w.size * 0.4, w.rotation, 0, Math.PI * 2);

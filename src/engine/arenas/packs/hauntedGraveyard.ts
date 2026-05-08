@@ -683,7 +683,6 @@ export const hauntedGraveyard: ArenaPack = {
   },
 
   drawWeatherParticle: (ctx, w) => {
-    // ctx.ellipse rotation arg avoids per-particle save/translate/rotate/restore.
     if (w.type === 'ash') {
       ctx.fillStyle = w.color || 'rgba(100, 80, 120, 0.4)';
       ctx.beginPath();

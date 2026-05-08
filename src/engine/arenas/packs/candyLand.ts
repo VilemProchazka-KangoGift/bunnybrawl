@@ -512,7 +512,7 @@ export const candyLand: ArenaPack = {
       ctx.fill();
       ctx.restore();
     } else {
-      // Sugar petal — ctx.ellipse rotation arg avoids save/restore.
+      // Sugar petal
       ctx.fillStyle = 'rgba(255, 200, 220, 0.5)';
       ctx.beginPath();
       ctx.ellipse(w.x, w.y, w.size, w.size * 0.6, w.rotation, 0, Math.PI * 2);
