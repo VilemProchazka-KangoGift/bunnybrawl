@@ -34,6 +34,22 @@ export function wrapToUnit(x: number): number {
   return ((x % 1) + 1) % 1;
 }
 
+/** Per-channel linear blend between two RGB triples, rounded to ints.
+ *  `t = 0` returns `a`, `t = 1` returns `b`. Pass `out` to write into a
+ *  caller-owned scratch (allocation-free hot-path use). */
+export function blendRgb(
+  a: { r: number; g: number; b: number },
+  b: { r: number; g: number; b: number },
+  t: number,
+  out?: { r: number; g: number; b: number },
+): { r: number; g: number; b: number } {
+  const o = out ?? { r: 0, g: 0, b: 0 };
+  o.r = Math.round(a.r + (b.r - a.r) * t);
+  o.g = Math.round(a.g + (b.g - a.g) * t);
+  o.b = Math.round(a.b + (b.b - a.b) * t);
+  return o;
+}
+
 /** Parse hex color '#RRGGBB' to {r,g,b} components. Cache the result. */
 export function hexToRGB(hex: string): { r: number; g: number; b: number } {
   const r = parseInt(hex.slice(1, 3), 16);

@@ -12,7 +12,7 @@ import {
   drawHill, drawPlatformMoss,
   capFrontY, capBackY, skewPx,
 } from './themes/drawPrimitives';
-import { hexToRGB, hexToHSL } from './fastMath';
+import { hexToRGB, hexToHSL, blendRgb } from './fastMath';
 import { debugFlags } from './debugFlags';
 import { drawNavDebugOverlay } from './navDebugOverlay';
 import type { BotNavDebugState } from './navDebugOverlay';
@@ -72,21 +72,16 @@ function getCachedRgb(hex: string): { r: number; g: number; b: number } {
   return v;
 }
 
-/** Memoized "leader-tinted" RGB — base color lerped toward gold (#FFD700)
- *  by LEADER_TINT_AMOUNT. The points leader's aura uses this; all other
+/** Memoized "leader-tinted" RGB — base color lerped toward gold by
+ *  LEADER_TINT_AMOUNT. The points leader's aura uses this; all other
  *  players use the unmodified cache. Per-character allocation, never per-frame. */
 const _leaderRgbCache = new Map<string, { r: number; g: number; b: number }>();
 const LEADER_TINT_AMOUNT = 0.6;
+const GOLD_RGB = { r: 255, g: 215, b: 0 } as const;
 function getLeaderRgb(hex: string): { r: number; g: number; b: number } {
   let v = _leaderRgbCache.get(hex);
   if (!v) {
-    const b = hexToRGB(hex);
-    const t = LEADER_TINT_AMOUNT;
-    v = {
-      r: Math.round(b.r * (1 - t) + 255 * t),
-      g: Math.round(b.g * (1 - t) + 215 * t),
-      b: Math.round(b.b * (1 - t) +   0 * t),
-    };
+    v = blendRgb(hexToRGB(hex), GOLD_RGB, LEADER_TINT_AMOUNT);
     _leaderRgbCache.set(hex, v);
   }
   return v;
@@ -945,12 +940,8 @@ export class Renderer {
   }
 
   private blendColor(hex: string, target: string, amount: number): string {
-    const a = hexToRGB(hex);
-    const b = hexToRGB(target);
-    const r = Math.round(a.r + (b.r - a.r) * amount);
-    const g = Math.round(a.g + (b.g - a.g) * amount);
-    const bl = Math.round(a.b + (b.b - a.b) * amount);
-    return `rgb(${r},${g},${bl})`;
+    const c = blendRgb(hexToRGB(hex), hexToRGB(target), amount);
+    return `rgb(${c.r},${c.g},${c.b})`;
   }
 
   /** Bake gibs onto the bg canvas. Marks bgNight dirty so the cross-fade
