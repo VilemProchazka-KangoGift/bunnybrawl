@@ -1,4 +1,4 @@
-import type { Arena, MatchState, Particle, Platform, Player, PlayerSlot, Gib } from './types';
+import type { Arena, Ctx2D, MatchState, Particle, Platform, Player, PlayerSlot, Gib } from './types';
 import type { ThemeConfig } from './themes/types';
 import { aabbOverlap } from './physics';
 import {
@@ -548,7 +548,7 @@ export class Renderer {
     if (!this._overlayCanvas || this._overlayCanvas.width !== w || this._overlayCanvas.height !== h) {
       this._overlayCanvas = new OffscreenCanvas(w, h);
     }
-    const octx = this._overlayCanvas.getContext('2d')! as unknown as CanvasRenderingContext2D;
+    const octx = this._overlayCanvas.getContext('2d')!;
     octx.setTransform(s, 0, 0, s, 0, 0);
     octx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     for (const plat of arena.platforms) {
@@ -578,7 +578,7 @@ export class Renderer {
     }
     const cctx = this._fgNatureCacheCtx!;
     cctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    this._drawForegroundNatureDirect(cctx as unknown as CanvasRenderingContext2D, themeArena);
+    this._drawForegroundNatureDirect(cctx, themeArena);
     this._fgNatureCacheArena = themeArena;
   }
 
@@ -608,7 +608,7 @@ export class Renderer {
 
   /** Apply mirror transform and call into theme's foreground draw. Shared by
    *  the cache builder and the test-env (no OffscreenCanvas) fallback path. */
-  private _drawForegroundNatureDirect(ctx: CanvasRenderingContext2D, themeArena: Arena): void {
+  private _drawForegroundNatureDirect(ctx: Ctx2D, themeArena: Arena): void {
     if (this.mirrored) { ctx.save(); ctx.scale(-1, 1); ctx.translate(-CANVAS_WIDTH, 0); }
     this.theme.drawForegroundNature(ctx, themeArena);
     if (this.mirrored) { ctx.restore(); }
