@@ -239,6 +239,37 @@ export class GuestLoop {
     return snap ? snap.frame : -1;
   }
 
+  /** Wait until the snapshot stream has warmed up before signalling LOADED.
+   *  See NetMatch.waitForGuestNetworkReady for the full rationale. Resolves
+   *  on success or graceful timeout — never rejects. */
+  async waitForNetworkReady(opts: {
+    minSnapshots?: number;
+    minMs?: number;
+    timeoutMs?: number;
+  } = {}): Promise<void> {
+    if (!this.ctx.interpolation) return;
+    const minSnapshots = opts.minSnapshots ?? 12;
+    const minMs = opts.minMs ?? 250;
+    const timeoutMs = opts.timeoutMs ?? 4000;
+    const startTime = performance.now();
+    let firstSnapshotTime = 0;
+    return new Promise<void>((resolve) => {
+      const check = () => {
+        if (!this.ctx.interpolation) { resolve(); return; }
+        const depth = this.ctx.interpolation.getBufferDepth();
+        const rtt = this.ctx.transport.currentRtt;
+        const now = performance.now();
+        if (depth > 0 && firstSnapshotTime === 0) firstSnapshotTime = now;
+        const elapsed = now - startTime;
+        const sinceFirst = firstSnapshotTime > 0 ? now - firstSnapshotTime : 0;
+        if (depth >= minSnapshots && rtt > 0 && sinceFirst >= minMs) { resolve(); return; }
+        if (elapsed >= timeoutMs) { resolve(); return; }
+        setTimeout(check, 50);
+      };
+      check();
+    });
+  }
+
   handleGuestSnapshot(data: ArrayBuffer): void {
     if (!this.ctx.interpolation) return;
     this.noteSnapshotArrival();
