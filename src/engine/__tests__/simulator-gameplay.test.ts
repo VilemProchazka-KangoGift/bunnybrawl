@@ -31,6 +31,7 @@ import {
   GRAVITY,
   SQUASH_ON_LAND,
   DUST_LAND_VY_THRESHOLD,
+  ANIM_FRAME_DURATION,
 } from '../constants';
 import type { MatchSettings, Arena, PlayerSlot, InputState } from '../types';
 
@@ -2230,6 +2231,54 @@ describe('Simulator — SFX events (headbonk + crouch)', () => {
     const slots = events.stompHaptic.map(e => e.slot);
     expect(slots).toContain('P1');
     expect(slots).toContain('P2');
+  });
+});
+
+// ===================================================================
+// Animation Timers (host-authoritative animFrame/animTimer in fixedUpdate)
+// ===================================================================
+
+describe('Simulator — Animation Timers (host-authoritative)', () => {
+  it('animTimer increments each frame for running players', () => {
+    const { sim } = createSim();
+    skipCountdown(sim);
+    const state = sim.getState();
+    const player = state.players[0];
+
+    player.x = 200;
+    player.y = 660 - PLAYER_HEIGHT;
+    player.active = true;
+    player.hitstopTimer = 0;
+    player.animTimer = 0;
+    player.vx = 300;
+
+    sim.fixedUpdate(FIXED_TIMESTEP);
+
+    expect(player.animTimer).toBeGreaterThan(0);
+    expect(player.animTimer).toBeCloseTo(FIXED_TIMESTEP, 6);
+  });
+
+  it('animFrame advances when animTimer exceeds threshold', () => {
+    const { sim } = createSim();
+    skipCountdown(sim);
+    const state = sim.getState();
+    const player = state.players[0];
+
+    player.x = 200;
+    player.y = 660 - PLAYER_HEIGHT;
+    player.active = true;
+    player.hitstopTimer = 0;
+    player.animTimer = 0;
+    player.animFrame = 0;
+
+    const steps = Math.ceil(ANIM_FRAME_DURATION / FIXED_TIMESTEP) + 1;
+    for (let i = 0; i < steps; i++) {
+      player.vx = 300;
+      player.state = 'run';
+      sim.fixedUpdate(FIXED_TIMESTEP);
+    }
+
+    expect(player.animFrame).toBeGreaterThan(0);
   });
 });
 
