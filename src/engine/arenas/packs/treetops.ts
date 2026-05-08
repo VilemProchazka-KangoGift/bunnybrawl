@@ -3,9 +3,14 @@ import type { Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
-import { drawTree, drawHangingVine, drawFgLeafCluster, drawFern } from '../../themes/drawPrimitives';
+import { drawTree, drawFgLeafCluster } from '../../themes/drawPrimitives';
+import { buildHangingVine, buildFern } from '../../gameLoop/cosmetics/sharedDecorationKinds';
 import { pushFromPlayers, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
 import type { Player } from '../../types';
+import {
+  registerReactiveKind, createReactiveInstance,
+  type ReactiveInstance,
+} from '../../gameLoop/cosmetics/reactiveDecorations';
 
 const SQUIRRELS_CFG = [
   { platL: 450, platR: 730, platTopY: 256, walkSpeed: 45, fleeSpeed: 140, fleeRadius: 110, yTolerance: 60 },
@@ -19,6 +24,7 @@ const _squirrels: GroundCritterState[] = SQUIRRELS_CFG.map((cfg, i) => ({
 const _tickSquirrelDt = makeDtTracker();
 const TREETOPS_BUTTERFLY_HUES = [320, 60, 200, 290, 30, 160] as const;
 const TREETOPS_BUTTERFLY_COLORS = TREETOPS_BUTTERFLY_HUES.map(h => `hsl(${h},80%,65%)`);
+const TREETOPS_FERN_COLOR = '#2A6A2A';
 const TREETOPS_BEE_CLUSTERS = [
   { homeX: 280, homeY: 380, phase: 0 },
   { homeX: 940, homeY: 360, phase: 2.4 },
@@ -169,6 +175,71 @@ function drawTreetopsPlatformFg(ctx: CanvasRenderingContext2D, platform: Platfor
   ctx.fillStyle = 'rgba(0,0,0,0.32)';
   ctx.fillRect(platform.x, bodyTop + bodyH - 4, platform.width, 4);
 }
+
+// ============================================================================
+// Reactive decoration factories + draw fns
+// ============================================================================
+
+type TreeFoliage = { color: string; yOff: number; rx: number; ry: number };
+
+// ---- treetops.tree ----
+interface TreeData { size: number; foliage: TreeFoliage[]; }
+function treetopsTree(x: number, y: number, size: number, foliage: TreeFoliage[]): ReactiveInstance {
+  return createReactiveInstance({
+    pos: { x, y },
+    kind: 'treetops.tree',
+    seed: Math.floor((x * 73 + y * 31) % 997),
+    data: { size, foliage } satisfies TreeData,
+    windAmp: 3,
+    shakeRadius: 100, // larger than meadow trees (treetops trees are bigger)
+    burst: { threshold: 0.95, particleKind: 'leaf', count: 14 },
+  });
+}
+registerReactiveKind('treetops.tree', {
+  layer: 'prePlayer',
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
+    const { size, foliage } = inst.data as TreeData;
+    const lean = swayPhase + (inst.shakeDecay > 0 ? Math.sin(inst.shakeDecay * 40) * inst.shakeDecay * 4 : 0);
+    ctx.save();
+    ctx.translate(inst.pos.x, inst.pos.y);
+    ctx.rotate(lean * 0.015);
+    drawTree(ctx, 0, 0, size, { trunk: '#4A3018', bark: '#3A2010', foliage });
+    ctx.restore();
+  },
+});
+
+// ---- treetops.butterfly ----
+function treetopsButterfly(idx: number): ReactiveInstance {
+  return createReactiveInstance({
+    pos: { x: 0, y: 0 }, kind: 'treetops.butterfly',
+    seed: idx,
+    proximity: { radius: 70, mode: 'flee', magnitude: 14 },
+  });
+}
+registerReactiveKind('treetops.butterfly', {
+  layer: 'postPlayer',
+  highFrequency: true, // flock motion needs 60Hz
+  draw: (ctx, inst, _swayPhase, time, _dayPhase, state) => {
+    drawTreetopsButterfly(ctx, inst.seed, time, state.players);
+  },
+});
+
+// ---- treetops.bee ----
+function treetopsBeeCluster(idx: number): ReactiveInstance {
+  return createReactiveInstance({
+    pos: { x: TREETOPS_BEE_CLUSTERS[idx].homeX, y: TREETOPS_BEE_CLUSTERS[idx].homeY },
+    kind: 'treetops.bee',
+    seed: idx,
+    proximity: { radius: 110, mode: 'flee', magnitude: 28 },
+  });
+}
+registerReactiveKind('treetops.bee', {
+  layer: 'postPlayer',
+  highFrequency: true,
+  draw: (ctx, inst, _swayPhase, time, _dayPhase, state) => {
+    drawTreetopsBeeCluster(ctx, inst.seed, time, state.players);
+  },
+});
 
 export const treetops: ArenaPack = {
   // ---- Identity ----
@@ -361,39 +432,11 @@ export const treetops: ArenaPack = {
     ctx.restore();
   },
 
+  // Trees, hanging vines, ferns, butterflies, bees are reactive
+  // (built via buildReactiveDecorations below). drawBackgroundNature only
+  // emits static decorations (nests, acorns) so they bake into the
+  // OffscreenCanvas cache.
   drawBackgroundNature: (ctx, arena) => {
-    // No ground in treetops -- use bottom of screen as tree root reference
-    const y = 750;
-
-    // Large trees rooted below (trunks visible going down)
-    drawTree(ctx, 100, y, 70, {
-      trunk: '#4A3018',
-      bark: '#3A2010',
-      foliage: [
-        { color: '#1A5A1A', yOff: 0.4, rx: 0.6, ry: 0.35 },
-        { color: '#2A7A2A', yOff: 0.65, rx: 0.5, ry: 0.3 },
-        { color: '#3A8A3A', yOff: 0.85, rx: 0.35, ry: 0.22 },
-      ],
-    });
-    drawTree(ctx, 640, y, 80, {
-      trunk: '#4A3018',
-      bark: '#3A2010',
-      foliage: [
-        { color: '#1A5A1A', yOff: 0.4, rx: 0.55, ry: 0.35 },
-        { color: '#2A7A2A', yOff: 0.6, rx: 0.45, ry: 0.3 },
-        { color: '#3A8A3A', yOff: 0.8, rx: 0.3, ry: 0.2 },
-      ],
-    });
-    drawTree(ctx, 1180, y, 65, {
-      trunk: '#4A3018',
-      bark: '#3A2010',
-      foliage: [
-        { color: '#1A5A1A', yOff: 0.45, rx: 0.55, ry: 0.3 },
-        { color: '#2A7A2A', yOff: 0.65, rx: 0.45, ry: 0.25 },
-        { color: '#3A8A3A', yOff: 0.8, rx: 0.3, ry: 0.2 },
-      ],
-    });
-
     // Bird nests on platforms
     const drawNest = (nx: number, ny: number, size: number) => {
       ctx.fillStyle = '#5A3A18';
@@ -440,34 +483,62 @@ export const treetops: ArenaPack = {
       ctx.stroke();
     };
 
-    // Platform decorations
+    // Platform static decorations (nests + acorns only — vines + ferns are reactive)
     const floats = getFloatingPlatforms(arena.platforms);
     for (let i = 0; i < floats.length; i++) {
       const plat = floats[i];
       const mid = plat.x + plat.width / 2;
-
-      // Hanging vines from every platform
-      drawHangingVine(ctx, plat.x + 10, plat.y + plat.height, 20 + i * 3);
-      drawHangingVine(ctx, plat.x + plat.width - 10, plat.y + plat.height, 18 + i * 2);
-
       if (plat.width > 200) {
         drawNest(mid, plat.y, 20);
-        drawFern(ctx, plat.x + 15, plat.y, '#2A6A2A');
-        drawFern(ctx, plat.x + plat.width - 15, plat.y, '#2A6A2A');
         drawAcorn(plat.x + 40, plat.y);
         drawAcorn(plat.x + plat.width - 40, plat.y);
       } else if (plat.width > 120) {
-        if (i % 2 === 0) {
-          drawNest(mid, plat.y, 15);
-        } else {
-          drawAcorn(mid - 8, plat.y);
-          drawAcorn(mid + 8, plat.y);
-        }
-        drawFern(ctx, plat.x + 8, plat.y, '#2A6A2A');
+        if (i % 2 === 0) drawNest(mid, plat.y, 15);
+        else { drawAcorn(mid - 8, plat.y); drawAcorn(mid + 8, plat.y); }
       } else {
         drawAcorn(mid, plat.y);
       }
     }
+  },
+
+  buildReactiveDecorations: (arena) => {
+    const out: ReactiveInstance[] = [];
+    // Three large rooted trees (rooted at y=750, below the visible canvas)
+    out.push(treetopsTree(100, 750, 70, [
+      { color: '#1A5A1A', yOff: 0.4, rx: 0.6, ry: 0.35 },
+      { color: '#2A7A2A', yOff: 0.65, rx: 0.5, ry: 0.3 },
+      { color: '#3A8A3A', yOff: 0.85, rx: 0.35, ry: 0.22 },
+    ]));
+    out.push(treetopsTree(640, 750, 80, [
+      { color: '#1A5A1A', yOff: 0.4, rx: 0.55, ry: 0.35 },
+      { color: '#2A7A2A', yOff: 0.6, rx: 0.45, ry: 0.3 },
+      { color: '#3A8A3A', yOff: 0.8, rx: 0.3, ry: 0.2 },
+    ]));
+    out.push(treetopsTree(1180, 750, 65, [
+      { color: '#1A5A1A', yOff: 0.45, rx: 0.55, ry: 0.3 },
+      { color: '#2A7A2A', yOff: 0.65, rx: 0.45, ry: 0.25 },
+      { color: '#3A8A3A', yOff: 0.8, rx: 0.3, ry: 0.2 },
+    ]));
+
+    // Hanging vines + ferns on floating platforms
+    const floats = getFloatingPlatforms(arena.platforms);
+    for (let i = 0; i < floats.length; i++) {
+      const plat = floats[i];
+      out.push(buildHangingVine(plat.x + 10, plat.y + plat.height, 20 + i * 3));
+      out.push(buildHangingVine(plat.x + plat.width - 10, plat.y + plat.height, 18 + i * 2));
+      if (plat.width > 200) {
+        out.push(buildFern(plat.x + 15, plat.y, TREETOPS_FERN_COLOR));
+        out.push(buildFern(plat.x + plat.width - 15, plat.y, TREETOPS_FERN_COLOR));
+      } else if (plat.width > 120) {
+        out.push(buildFern(plat.x + 8, plat.y, TREETOPS_FERN_COLOR));
+      }
+    }
+
+    // Butterflies + bee clusters (60Hz flock motion)
+    for (let i = 0; i < TREETOPS_BUTTERFLY_HUES.length; i++) out.push(treetopsButterfly(i));
+    for (let ci = 0; ci < TREETOPS_BEE_CLUSTERS.length; ci++) out.push(treetopsBeeCluster(ci));
+
+    return out;
   },
 
   drawForegroundNature: (ctx, arena) => {
@@ -488,8 +559,8 @@ export const treetops: ArenaPack = {
     // Foreground leaf clusters on platforms
     for (const plat of floats) {
       if (plat.width > 150) {
-        drawFgLeafCluster(ctx, plat.x + plat.width * 0.3, plat.y, ['#1A5A1A', '#2A6A2A', '#3A7A3A']);
-        drawFgLeafCluster(ctx, plat.x + plat.width * 0.7, plat.y, ['#1A5A1A', '#2A6A2A', '#3A7A3A']);
+        drawFgLeafCluster(ctx, plat.x + plat.width * 0.3, plat.y, ['#1A5A1A', TREETOPS_FERN_COLOR, '#3A7A3A']);
+        drawFgLeafCluster(ctx, plat.x + plat.width * 0.7, plat.y, ['#1A5A1A', TREETOPS_FERN_COLOR, '#3A7A3A']);
       }
     }
 
@@ -627,18 +698,8 @@ export const treetops: ArenaPack = {
     ctx.restore();
   },
 
-  drawAnimatedForeground: (ctx, _arena, time, _dayPhase, matchState) => {
-    if (getSlowDevice() || !matchState) return;
-    ctx.save();
-    const players = matchState.players;
-    for (let i = 0; i < TREETOPS_BUTTERFLY_HUES.length; i++) {
-      drawTreetopsButterfly(ctx, i, time, players);
-    }
-    for (let ci = 0; ci < TREETOPS_BEE_CLUSTERS.length; ci++) {
-      drawTreetopsBeeCluster(ctx, ci, time, players);
-    }
-    ctx.restore();
-  },
+  // Butterflies + bees moved to ReactiveDecorationSystem (postPlayer layer,
+  // 60Hz bucket). drawAnimatedForeground no longer needed.
 
   // ---- Audio ----
   ambientSoundConfig: {

@@ -12,30 +12,32 @@ beforeAll(() => {
   registerBuiltinArenas();
 });
 
-describe('meadow — buildReactiveDecorations', () => {
+describe('castle — buildReactiveDecorations', () => {
   it('builds a non-empty instance list', () => {
-    const pack = getArenaPack('meadow');
+    const pack = getArenaPack('castle');
     expect(pack).toBeDefined();
-    const arena = getArena('meadow');
+    const arena = getArena('castle');
     const list = pack!.buildReactiveDecorations!(arena);
-    expect(list.length).toBeGreaterThan(40); // 3 trees + 5 bushes + 10 flowers + 9 dandelions + 8 butterflies + ...
+    // Banners alone yield ~12 (one per floating platform with width >= 100);
+    // cobwebs are RNG-driven (45% chance per corner) and add several more.
+    expect(list.length).toBeGreaterThan(10);
   });
 
   it('every instance has a registered kind', () => {
-    const pack = getArenaPack('meadow');
-    const arena = getArena('meadow');
+    const pack = getArenaPack('castle');
+    const arena = getArena('castle');
     const list = pack!.buildReactiveDecorations!(arena);
     for (const inst of list) {
       expect(hasReactiveKind(inst.kind)).toBe(true);
     }
   });
 
-  it('every instance position is within arena bounds', () => {
-    const pack = getArenaPack('meadow');
-    const arena = getArena('meadow');
+  it('every instance position is within sane bounds', () => {
+    const pack = getArenaPack('castle');
+    const arena = getArena('castle');
     const list = pack!.buildReactiveDecorations!(arena);
     for (const inst of list) {
-      expect(inst.pos.x).toBeGreaterThanOrEqual(-50); // some hang off-edge slightly
+      expect(inst.pos.x).toBeGreaterThanOrEqual(-50);
       expect(inst.pos.x).toBeLessThanOrEqual(arena.width + 50);
       expect(inst.pos.y).toBeGreaterThanOrEqual(0);
       expect(inst.pos.y).toBeLessThanOrEqual(arena.height + 50);
@@ -43,45 +45,51 @@ describe('meadow — buildReactiveDecorations', () => {
   });
 
   it('expected kinds are present', () => {
-    const expected = [
-      'meadow.tree', 'decoration.tallGrass', 'decoration.fern', 'decoration.hangingVine',
-      'meadow.dandelion', 'meadow.butterfly', 'meadow.bee',
-    ];
+    const expected = ['castle.cobweb', 'castle.banner'];
     for (const k of expected) {
       expect(hasReactiveKind(k)).toBe(true);
     }
   });
 
-  it('butterflies + bees register as foreground + highFrequency', () => {
-    const butterfly = getReactiveKind('meadow.butterfly');
-    expect(butterfly?.layer).toBe('postPlayer');
-    expect(butterfly?.highFrequency).toBe(true);
-    const bee = getReactiveKind('meadow.bee');
-    expect(bee?.layer).toBe('postPlayer');
-    expect(bee?.highFrequency).toBe(true);
+  it('cobwebs + banners register as postPlayer', () => {
+    const cobweb = getReactiveKind('castle.cobweb');
+    expect(cobweb?.layer).toBe('postPlayer');
+    const banner = getReactiveKind('castle.banner');
+    expect(banner?.layer).toBe('postPlayer');
   });
 
-  it('system.resetBaseline() rewinds dandelion bursts to idle', () => {
-    // Pins the round-3 fix: on guest reconnect / loading→playing edge, in-
-    // flight dandelion seed-bursts must reset so reconnects don't show partial
-    // puffs. A future refactor that drops the resetData wiring (in
-    // GameLoop.resetCosmeticBaselines or in the meadow.dandelion registration)
-    // would silently regress without this test.
-    const pack = getArenaPack('meadow');
-    const arena = getArena('meadow');
+  it('emits at least one banner per banner-eligible floating platform', () => {
+    const pack = getArenaPack('castle');
+    const arena = getArena('castle');
+    const list = pack!.buildReactiveDecorations!(arena);
+    const banners = list.filter((i) => i.kind === 'castle.banner');
+    // Castle has many wide floating platforms — at least 8 banner-eligible.
+    expect(banners.length).toBeGreaterThanOrEqual(8);
+  });
+
+  it('system.resetBaseline() rewinds banner excite state to idle', () => {
+    // Mirrors meadow-decorations.test.ts dandelion-resetData test. The banner
+    // migration replaced a module-level Float32Array with per-instance
+    // `inst.data.excite`; `resetData` must zero it on reconnect / loading→
+    // playing edge so guests don't resume mid-wobble.
+    const pack = getArenaPack('castle');
+    const arena = getArena('castle');
     const list = pack!.buildReactiveDecorations!(arena);
     const sys = new ReactiveDecorationSystem(makeState({ phase: 'playing' }), arena, () => {});
     sys.setInstances(list);
-    const dandelion = list.find((i) => i.kind === 'meadow.dandelion');
-    expect(dandelion).toBeDefined();
-    (dandelion!.data as { phase: number }).phase = 3.5; // mid-burst
+    const banner = list.find((i) => i.kind === 'castle.banner');
+    expect(banner).toBeDefined();
+    const data = banner!.data as { colorIdx: number; excite: number; lastTime: number };
+    data.excite = 0.7; // mid-wobble
+    data.lastTime = 5;
     sys.resetBaseline();
-    expect((dandelion!.data as { phase: number }).phase).toBe(-1);
+    expect(data.excite).toBe(0);
+    expect(data.lastTime).toBe(-1);
   });
 
   it('renders without errors at multiple windPhase slices', () => {
-    const pack = getArenaPack('meadow');
-    const arena = getArena('meadow');
+    const pack = getArenaPack('castle');
+    const arena = getArena('castle');
     const list = pack!.buildReactiveDecorations!(arena);
     const ctx = {
       save: () => {}, restore: () => {}, translate: () => {}, rotate: () => {},
@@ -98,9 +106,8 @@ describe('meadow — buildReactiveDecorations', () => {
     for (const slice of [0, 0.5, 1.0, 5.0]) {
       for (const inst of list) {
         const cfg = getReactiveKind(inst.kind)!;
-        // sway phase = sin(slice + seed * 0.7) * (windAmp ?? 0)
         const sway = Math.sin(slice + inst.seed * 0.7) * (inst.windAmp ?? 0);
-        expect(() => cfg.draw(ctx, inst, sway, 0, 0, fakeState)).not.toThrow();
+        expect(() => cfg.draw(ctx, inst, sway, slice, 0, fakeState)).not.toThrow();
       }
     }
   });
