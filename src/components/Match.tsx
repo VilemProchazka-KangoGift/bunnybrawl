@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
+import { useRef, useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../store/gameStore';
 import { GameLoop } from '../engine/gameLoop';
@@ -6,7 +6,6 @@ import { NetMatch } from '../engine/net/netMatch';
 import { MsgType } from '../engine/net/protocol';
 import { getModalTransport, tearDownOnlineSession } from './OnlineModal';
 import { listPlayableArenaPacks } from '../engine/arenas';
-import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
 import { isTouchPrimary } from '../engine/touchDetect';
 import { TouchOverlay } from './TouchOverlay';
 import type { TouchInputManager } from '../engine/touchInput';
@@ -15,6 +14,8 @@ import { useWakeLock } from '../hooks/useWakeLock';
 import { useLoadingOverlay } from './match/useLoadingOverlay';
 import { useLocalMatch, kickoffLoading } from './match/useLocalMatch';
 import { useOnlineMatch } from './match/useOnlineMatch';
+import { useMatchKeyboard } from './match/useMatchKeyboard';
+import { MatchCanvases } from './match/MatchCanvases';
 import { MatchOverlays } from './match/MatchOverlays';
 import './Match.css';
 
@@ -169,47 +170,8 @@ export function Match() {
     }, nm);
   }, [setMatchSettings, online.isOnline, online.isHost]);
 
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        if (showLevelSelect) {
-          setShowLevelSelect(false);
-          return;
-        }
-        const loop = gameLoopRef.current;
-        if (!loop) return;
-
-        if (loop.isPaused()) {
-          handleResume();
-        } else {
-          handlePause();
-        }
-      }
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        const loop = gameLoopRef.current;
-        if (!loop) return;
-        if (loop.isPaused() && !showLevelSelect) {
-          handleResume();
-        } else {
-          loop.skipCountdown();
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [handleResume, handlePause, showLevelSelect]);
-
-  useEffect(() => {
-    const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = '';
-    };
-    window.addEventListener('beforeunload', onBeforeUnload);
-    return () => window.removeEventListener('beforeunload', onBeforeUnload);
-  }, []);
+  // Esc/Enter pause-resume + skip-countdown shortcuts + beforeunload prompt.
+  useMatchKeyboard(gameLoopRef, showLevelSelect, setShowLevelSelect, handlePause, handleResume);
 
   // Local-mode lifecycle (extracted hook). Early-returns when isOnline.
   useLocalMatch({
@@ -242,35 +204,12 @@ export function Match() {
   return (
     <div className="match-container" data-testid="match-screen">
       <div className="canvas-container">
-        <canvas
-          ref={bgCanvasRef}
-          className="game-canvas bg-canvas"
-          width={CANVAS_WIDTH}
-          height={CANVAS_HEIGHT}
-        />
-        <canvas
-          ref={bgNightCanvasRef}
-          className="game-canvas bg-night-canvas"
-          width={CANVAS_WIDTH}
-          height={CANVAS_HEIGHT}
-        />
-        <canvas
-          ref={fgCanvasRef}
-          className="game-canvas fg-canvas"
-          width={CANVAS_WIDTH}
-          height={CANVAS_HEIGHT}
-          data-testid="game-canvas"
-        />
-        <div
-          ref={fgNightTintRef}
-          className="fg-night-tint"
-          aria-hidden="true"
-        />
-        <canvas
-          ref={hudCanvasRef}
-          className="game-canvas hud-canvas"
-          width={CANVAS_WIDTH}
-          height={CANVAS_HEIGHT}
+        <MatchCanvases
+          bgRef={bgCanvasRef}
+          bgNightRef={bgNightCanvasRef}
+          fgRef={fgCanvasRef}
+          fgNightTintRef={fgNightTintRef}
+          hudRef={hudCanvasRef}
         />
         {touchInput && <TouchOverlay touchInput={touchInput} />}
         {isMobile && !paused && (
