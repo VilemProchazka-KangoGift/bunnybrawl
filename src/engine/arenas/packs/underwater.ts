@@ -1,6 +1,7 @@
 import type { ArenaPack } from '../types';
 import type { Platform, PlayerSlot } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
+import { Cooldowns } from '../../cooldowns';
 import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
@@ -19,7 +20,7 @@ const _crabs: GroundCritterState[] = CRABS_CFG.map((cfg, i) => ({
 const _tickCrabDt = makeDtTracker();
 
 // ---- Bubble trails (env-wakes from Batch D) ----
-const _bubbleAccum = new Map<PlayerSlot, number>();
+const _bubbleCooldowns = new Cooldowns<PlayerSlot>();
 const BUBBLE_INTERVAL = 0.08; // seconds between bubble emits per player
 const BUBBLE_VX_THRESHOLD = 50;
 
@@ -1218,9 +1219,8 @@ export const underwater: ArenaPack = {
       if (!p.active || p.state === 'splat' || p.state === 'respawning') continue;
       if (Math.abs(p.vx) < BUBBLE_VX_THRESHOLD) continue;
 
-      const next = (_bubbleAccum.get(p.id) ?? 0) - dt;
-      if (next > 0) { _bubbleAccum.set(p.id, next); continue; }
-      _bubbleAccum.set(p.id, BUBBLE_INTERVAL);
+      if (!_bubbleCooldowns.tick(p.id, dt)) continue;
+      _bubbleCooldowns.set(p.id, BUBBLE_INTERVAL);
 
       // Emit one bubble behind the player at hip height.
       const offsetX = p.facing === 'right' ? -p.width * 0.5 : p.width * 0.5;
