@@ -1,5 +1,6 @@
 import type { Arena, WeatherParticle, WildlifeEntity } from '../types';
 import type { ReactiveInstance } from '../gameLoop/cosmetics/reactiveDecorations';
+import type { WildlifeInstance } from '../gameLoop/cosmetics/wildlife';
 
 export type ScatterFlockSpecies = 'bird' | 'bat' | 'crow';
 
@@ -148,6 +149,10 @@ export interface ThemeConfig {
   /** Mirror of `ArenaPack.buildReactiveDecorations` — see arenas/types.ts for
    *  contract. Forwarded by `toThemeConfig` so the Renderer can read it via theme. */
   buildReactiveDecorations?: (arena: Arena) => ReactiveInstance[];
+
+  /** Mirror of `ArenaPack.buildWildlife` — see arenas/types.ts for contract.
+   *  Forwarded by `toThemeConfig` so GameLoop can populate WildlifeSystem. */
+  buildWildlife?: (arena: Arena) => WildlifeInstance[];
 
   /** Mirror of `ArenaPack.cosmeticTick` — see arenas/types.ts for contract.
    *  Services shape inlined here (rather than imported as `ArenaCosmeticServices`)

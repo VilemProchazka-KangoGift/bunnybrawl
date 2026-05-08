@@ -21,21 +21,18 @@ test('meadow noon default lighting baseline', async ({ page }) => {
 
   // Wait for countdown to clear
   await page.waitForFunction(
-    () => (window as any).__gameLoop?.getState()?.countdown === 0,
+    () => window.__bunnyTest?.state()?.countdown === 0,
     { timeout: 10000 },
   );
 
   // Pin dayPhase to noon (game convention: 0 = noon), stop the RAF loop so
   // the canvas freezes at the next frame, then immediately screenshot.
   await page.evaluate(() => {
-    const loop = (window as any).__gameLoop;
-    if (loop) {
-      if (loop.getState) {
-        loop.getState().dayPhase = 0;
-      }
-      // stop() cancels requestAnimationFrame — canvas freezes after current frame.
-      loop.stop();
-    }
+    const bt = window.__bunnyTest;
+    const s = bt?.state();
+    if (s) s.dayPhase = 0;
+    // stop() cancels requestAnimationFrame — canvas freezes after current frame.
+    bt?.gameLoop()?.stop();
   });
 
   // One RAF cycle has been cancelled. Canvas is now frozen.

@@ -3,7 +3,8 @@ import type { Arena, Platform, WeatherParticle } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
-import { getFloatingPlatforms, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
+import { getFloatingPlatforms, type GroundCritterConfig } from '../../themes/utils';
+import { buildGroundCritter, type WildlifeInstance } from '../../gameLoop/cosmetics/wildlife';
 import { drawRat } from '../../themes/drawPrimitives';
 import {
   registerReactiveKind,
@@ -12,16 +13,11 @@ import {
   type ReactiveInstance,
 } from '../../gameLoop/cosmetics/reactiveDecorations';
 
-const RATS_CFG = [
+const RATS_CFG: GroundCritterConfig[] = [
   { platL: 30,   platR: 220,  platTopY: 660, walkSpeed: 50, fleeSpeed: 180, fleeRadius: 120, yTolerance: 80 },
   { platL: 420,  platR: 860,  platTopY: 660, walkSpeed: 50, fleeSpeed: 180, fleeRadius: 120, yTolerance: 80 },
   { platL: 1060, platR: 1260, platTopY: 660, walkSpeed: 50, fleeSpeed: 180, fleeRadius: 120, yTolerance: 80 },
 ];
-const _castleRats: GroundCritterState[] = RATS_CFG.map((cfg, i) => ({
-  x: (cfg.platL + cfg.platR) / 2,
-  dir: i % 2 === 0 ? 1 : -1, facingEase: 1, fleeing: false, committedFleeDir: 0,
-}));
-const _tickCastleRatDt = makeDtTracker();
 
 // x=1180 conflicted with the tall floating platform at x=1120 y=580; moved to x=1080 (clear ground space).
 const TORCH_X = [100, 400, 640, 880, 1080] as const;
@@ -924,21 +920,10 @@ export const castle: ArenaPack = {
 
   drawAnimatedBackground: (ctx, _arena, time) => {
     if (getSlowDevice()) return;
+    // Embers only — torch halo comes from the L2 emitter pipeline (`lights`).
     ctx.save();
-    // Subtle: smaller halo, slow flicker, gentler embers.
     for (let i = 0; i < TORCH_X.length; i++) {
       const tx = TORCH_X[i];
-      const flicker = 0.95 + fastSin(time * 6 + i * 1.7) * 0.05;
-      ctx.fillStyle = '#ff7828';
-      ctx.globalAlpha = 0.10 * flicker;
-      ctx.beginPath();
-      ctx.arc(tx, TORCH_FLAME_Y, 32 * flicker, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 0.06 * flicker;
-      ctx.beginPath();
-      ctx.arc(tx, TORCH_FLAME_Y, 18 * flicker, 0, Math.PI * 2);
-      ctx.fill();
-      // Single drifting ember per torch (was 2 with snappy motion).
       const u = ((time * 0.3 + i * 0.31) % 1);
       ctx.globalAlpha = (1 - u) * 0.45;
       ctx.fillStyle = '#ff9a3a';
@@ -950,14 +935,19 @@ export const castle: ArenaPack = {
     ctx.restore();
   },
 
-  drawGroundCritters: (ctx, _arena, time, _dayPhase, matchState) => {
-    if (!matchState) return;
-    const dt = _tickCastleRatDt(time);
-    for (let i = 0; i < _castleRats.length; i++) {
-      const r = _castleRats[i];
-      tickGroundCritter(r, matchState.players, dt, RATS_CFG[i]);
-      drawRat(ctx, r.x, RATS_CFG[i].platTopY - 4, r.facingEase < 0 ? -1 : 1, time, Math.abs(r.facingEase), r.fleeing);
+  buildWildlife: (_arena: Arena): WildlifeInstance[] => {
+    const out: WildlifeInstance[] = [];
+    for (let i = 0; i < RATS_CFG.length; i++) {
+      const cfg = RATS_CFG[i];
+      out.push(buildGroundCritter({
+        seed: i,
+        cfg,
+        initialDir: i % 2 === 0 ? 1 : -1,
+        draw: ({ ctx, state, cfg: c, time }) =>
+          drawRat(ctx, state.x, c.platTopY - 4, state.facingEase < 0 ? -1 : 1, time, Math.abs(state.facingEase), state.fleeing),
+      }));
     }
+    return out;
   },
 
   buildReactiveDecorations: (arena: Arena) => {
@@ -999,6 +989,22 @@ export const castle: ArenaPack = {
   ],
 
   musicFile: 'castle.mp3',
+
+  // L2 emitters: warm torchlight at the existing TORCH_X positions. Replaces
+  // the alpha-modulated halo in drawAnimatedBackground that gets crushed by
+  // the fg-night-tint multiply at midnight; the EmitterPipeline writes to a
+  // screen-blend DOM sibling that punches through.
+  lights: TORCH_X.map((tx, i) => ({
+    kind: 'point' as const,
+    x: tx,
+    y: TORCH_FLAME_Y,
+    color: { r: 255, g: 150, b: 60 },
+    intensity: 0.85,
+    radius: 110,
+    falloff: 'inverse-square' as const,
+    flicker: { seed: i + 1, amplitude: 0.1 },
+  })),
+
   // NAV-DATA-START — auto-generated, do not hand-edit
   navData: {
     edges: [

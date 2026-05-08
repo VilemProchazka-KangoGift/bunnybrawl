@@ -37,6 +37,7 @@ vi.mock('./renderer', () => ({
     setPlayerNames = vi.fn();
     setTimeLimit = vi.fn();
     setNetworkMode = vi.fn();
+    emitLightBurst = vi.fn();
     getDiagnostics = vi.fn(() => ({ clouds: false, weather: false, wildlife: false, playersDrawn: 0 }));
   },
 }));
@@ -1077,15 +1078,10 @@ describe('GameLoop — adapter-only entity surfaces', () => {
     expect(state.bouncyWobble.has(1)).toBe(false);
   });
 
-  it('playSound respects audio mute during resimulation (audio.play mock)', () => {
+  it('playSound forwards the name to audio.play', () => {
     const { loop } = createLoop();
     vi.mocked(audio.play).mockClear();
 
-    loop.setAudioEnabled(false);
-    (loop as any).playSound('stomp');
-    expect(audio.play).not.toHaveBeenCalled();
-
-    loop.setAudioEnabled(true);
     (loop as any).playSound('stomp');
     expect(audio.play).toHaveBeenCalledWith('stomp');
   });

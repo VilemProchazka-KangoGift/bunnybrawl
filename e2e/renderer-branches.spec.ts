@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 /**
  * E2E tests exercising renderer.ts conditional branches.
  * Each test auto-starts a match on a specific arena to trigger different rendering paths,
- * then reads renderer diagnostics via window.__gameLoop.getRendererDiagnostics().
+ * then reads renderer diagnostics via window.__bunnyTest.diagnostics().
  *
  * These tests verify that the renderer code paths execute — not pixel-perfect output.
  */
@@ -27,9 +27,9 @@ async function startMatch(
 async function waitForCountdown(page: any, timeoutMs = 10000) {
   await page.waitForFunction(
     () => {
-      const loop = (window as any).__gameLoop;
+      const loop = window.__bunnyTest;
       if (!loop) return false;
-      return loop.getState().countdown <= 0;
+      return loop.state().countdown <= 0;
     },
     { timeout: timeoutMs },
   );
@@ -37,17 +37,17 @@ async function waitForCountdown(page: any, timeoutMs = 10000) {
 
 async function getDiag(page: any) {
   return page.evaluate(() => {
-    const loop = (window as any).__gameLoop;
-    if (!loop || !loop.getRendererDiagnostics) return null;
-    return loop.getRendererDiagnostics();
+    const loop = window.__bunnyTest;
+    if (!loop) return null;
+    return loop.diagnostics() ?? null;
   });
 }
 
 async function getState(page: any) {
   return page.evaluate(() => {
-    const loop = (window as any).__gameLoop;
+    const loop = window.__bunnyTest;
     if (!loop) return null;
-    const s = loop.getState();
+    const s = loop.state();
     return {
       timeElapsed: s.timeElapsed,
       countdown: s.countdown,
@@ -87,8 +87,8 @@ test.describe('Renderer — basic match (meadow)', () => {
 
     // Wait a moment for weather to spawn
     await page.waitForFunction(() => {
-      const loop = (window as any).__gameLoop;
-      return loop?.getState()?.weather?.length > 0;
+      const loop = window.__bunnyTest;
+      return loop?.state()?.weather?.length > 0;
     }, { timeout: 10000 });
 
     const diag = await getDiag(page);
@@ -117,7 +117,7 @@ test.describe('Renderer — basic match (meadow)', () => {
 
     // Wait for springs/thorns to spawn
     await page.waitForFunction(() => {
-      const s = (window as any).__gameLoop?.getState();
+      const s = window.__bunnyTest?.state();
       return s && (s.springs.length > 0 || s.thorns.length > 0);
     }, { timeout: 15000 });
 
@@ -134,7 +134,7 @@ test.describe('Renderer — stomp effects', () => {
 
     // Wait for at least one kill to happen (which triggers stomp effects)
     await page.waitForFunction(() => {
-      const s = (window as any).__gameLoop?.getState();
+      const s = window.__bunnyTest?.state();
       return s && s.killFeed.length > 0;
     }, { timeout: 30000 });
 
@@ -149,7 +149,7 @@ test.describe('Renderer — stomp effects', () => {
 
     // Wait for a kill (produces gibs in gore mode)
     await page.waitForFunction(() => {
-      const s = (window as any).__gameLoop?.getState();
+      const s = window.__bunnyTest?.state();
       return s && s.gibs.length > 0;
     }, { timeout: 30000 });
 
@@ -163,7 +163,7 @@ test.describe('Renderer — stomp effects', () => {
 
     // Wait for a kill (produces confetti in no-gore mode)
     await page.waitForFunction(() => {
-      const s = (window as any).__gameLoop?.getState();
+      const s = window.__bunnyTest?.state();
       return s && s.confetti.length > 0;
     }, { timeout: 30000 });
 
@@ -179,7 +179,7 @@ test.describe('Renderer — arena-specific features', () => {
 
     // Wait for lava rocks to spawn
     await page.waitForFunction(() => {
-      const s = (window as any).__gameLoop?.getState();
+      const s = window.__bunnyTest?.state();
       return s && s.lavaRocks.some((r: any) => r.active);
     }, { timeout: 20000 });
 
@@ -212,7 +212,7 @@ test.describe('Renderer — arena-specific features', () => {
 
     // Wait longer for ghosts to appear (they have spawn timers)
     await page.waitForFunction(() => {
-      const s = (window as any).__gameLoop?.getState();
+      const s = window.__bunnyTest?.state();
       return s && s.ghosts.length > 0;
     }, { timeout: 25000 });
 
@@ -237,7 +237,7 @@ test.describe('Renderer — arena-specific features', () => {
 
     // Wait for pollen to spawn
     await page.waitForFunction(() => {
-      const s = (window as any).__gameLoop?.getState();
+      const s = window.__bunnyTest?.state();
       return s && s.pollenParticles && s.pollenParticles.length > 0;
     }, { timeout: 15000 });
 
@@ -262,7 +262,7 @@ test.describe('Renderer — match lifecycle', () => {
 
     // Wait for match to end
     await page.waitForFunction(() => {
-      const s = (window as any).__gameLoop?.getState();
+      const s = window.__bunnyTest?.state();
       return s && s.matchOver;
     }, { timeout: 60000 });
 
@@ -279,7 +279,7 @@ test.describe('Renderer — match lifecycle', () => {
 
     // Wait for a carrot to spawn
     await page.waitForFunction(() => {
-      const s = (window as any).__gameLoop?.getState();
+      const s = window.__bunnyTest?.state();
       return s && s.carrots.some((c: any) => c.active);
     }, { timeout: 15000 });
 

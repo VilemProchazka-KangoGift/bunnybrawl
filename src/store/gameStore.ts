@@ -131,7 +131,10 @@ export const useGameStore = create<GameStore>((set) => ({
     }),
 }));
 
-// Expose store for E2E testing
+// Mount the bunnyTest E2E shim with this store so lobby/menu specs can read
+// it before any Match is open. Match.tsx augments the same global with
+// GameLoop / NetMatch refs on mount.
+import { mountStore as mountBunnyTestStore } from '../components/bunnyTestShim';
 if (typeof window !== 'undefined') {
-  window.__gameStore = useGameStore;
+  mountBunnyTestStore(useGameStore);
 }

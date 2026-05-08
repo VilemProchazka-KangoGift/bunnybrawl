@@ -37,6 +37,7 @@ import {
   tickPeriodicAmbient,
   type SfxCooldowns,
 } from '../cosmetics/sfx';
+import { Cooldowns } from '../../cooldowns';
 import { audio } from '../../audio';
 import type { PlayerSlot } from '../../types';
 import type { ThemeConfig } from '../../themes/types';
@@ -545,7 +546,7 @@ describe('updateCrowdCheering', () => {
 describe('tickPeriodicAmbient', () => {
   it('does nothing when theme has no ambientSoundConfig', () => {
     const theme = makeThemeWithoutLavaRock(); // no ambientSoundConfig
-    const timers = new Map<string, number>();
+    const timers = new Cooldowns<string>();
     const playSound = vi.fn();
     expect(() => tickPeriodicAmbient(theme, timers, 1 / 60, playSound)).not.toThrow();
     expect(playSound).not.toHaveBeenCalled();
@@ -553,7 +554,7 @@ describe('tickPeriodicAmbient', () => {
 
   it('does nothing when ambientSoundConfig has no periodic array', () => {
     const theme = { ...makeThemeWithoutLavaRock(), ambientSoundConfig: { loops: ['wind'] } } as unknown as ThemeConfig;
-    const timers = new Map<string, number>();
+    const timers = new Cooldowns<string>();
     const playSound = vi.fn();
     tickPeriodicAmbient(theme, timers, 1 / 60, playSound);
     expect(playSound).not.toHaveBeenCalled();
@@ -567,12 +568,15 @@ describe('tickPeriodicAmbient', () => {
         periodic: [{ sound: 'bird_chirp', intervalRange: [5, 5] as [number, number] }],
       },
     } as unknown as ThemeConfig;
-    const timers = new Map<string, number>([['bird_chirp', 0.001]]);
+    const timers = new Cooldowns<string>();
+    timers.set('bird_chirp', 0.001);
     const dt = 1 / 60;
     tickPeriodicAmbient(theme, timers, dt, playSound);
     expect(playSound).toHaveBeenCalledWith('bird_chirp');
-    // Timer should be reset to a new interval value (5 since range is [5,5])
-    expect(timers.get('bird_chirp')).toBeCloseTo(5, 1);
+    // After firing, timer should be re-set to ~5 — verify by ticking up to but
+    // not past 5s and confirming no further fire, then crossing 5s and firing.
+    expect(timers.tick('bird_chirp', 4.99)).toBe(false);
+    expect(timers.tick('bird_chirp', 0.02)).toBe(true);
   });
 
   it('decrements timer without playing when it is still above zero', () => {
@@ -584,10 +588,13 @@ describe('tickPeriodicAmbient', () => {
       },
     } as unknown as ThemeConfig;
     const dt = 1 / 60;
-    const timers = new Map<string, number>([['bird_chirp', 3]]);
+    const timers = new Cooldowns<string>();
+    timers.set('bird_chirp', 3);
     tickPeriodicAmbient(theme, timers, dt, playSound);
     expect(playSound).not.toHaveBeenCalled();
-    expect(timers.get('bird_chirp')).toBeCloseTo(3 - dt, 4);
+    // Timer decremented by dt — confirm by ticking the residual to expiry.
+    expect(timers.tick('bird_chirp', 3 - dt - 0.001)).toBe(false);
+    expect(timers.tick('bird_chirp', 0.002)).toBe(true);
   });
 
   it('initialises missing timer to 0 and fires immediately on first tick', () => {
@@ -598,9 +605,9 @@ describe('tickPeriodicAmbient', () => {
         periodic: [{ sound: 'wind_gust', intervalRange: [4, 4] as [number, number] }],
       },
     } as unknown as ThemeConfig;
-    const timers = new Map<string, number>(); // no entry for 'wind_gust' → defaults to 0
+    const timers = new Cooldowns<string>(); // no entry for 'wind_gust' → uninitialized = ready
     tickPeriodicAmbient(theme, timers, 1 / 60, playSound);
-    // 0 - dt = negative → fires
+    // Uninitialized → fires
     expect(playSound).toHaveBeenCalledWith('wind_gust');
   });
 
@@ -617,13 +624,14 @@ describe('tickPeriodicAmbient', () => {
     } as unknown as ThemeConfig;
     const dt = 1 / 60;
     // Only bird_chirp is about to fire
-    const timers = new Map<string, number>([
-      ['bird_chirp', 0.001],
-      ['frog_croak', 4],
-    ]);
+    const timers = new Cooldowns<string>();
+    timers.set('bird_chirp', 0.001);
+    timers.set('frog_croak', 4);
     tickPeriodicAmbient(theme, timers, dt, playSound);
     expect(playSound).toHaveBeenCalledTimes(1);
     expect(playSound).toHaveBeenCalledWith('bird_chirp');
-    expect(timers.get('frog_croak')).toBeCloseTo(4 - dt, 4);
+    // frog_croak decremented by dt — confirm via residual tick
+    expect(timers.tick('frog_croak', 4 - dt - 0.001)).toBe(false);
+    expect(timers.tick('frog_croak', 0.002)).toBe(true);
   });
 });

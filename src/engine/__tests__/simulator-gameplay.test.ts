@@ -13,6 +13,7 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import { Simulator } from '../simulator/Simulator';
+import { RemoteInput } from '../input/RemoteInput';
 import { registerBuiltinArenas } from '../arenas/builtin';
 import { registerBuiltinCharacters } from '../characters/builtin';
 import { CapturedEvents } from './helpers/eventSink';
@@ -70,7 +71,10 @@ interface SimHandle {
 }
 
 /** Construct a Simulator with the same defaults `gameLoop.test.ts createLoop` uses:
- *  custom 2-platform arena, P1+P2 players, phase pre-flipped to 'playing'. */
+ *  custom 2-platform arena, P1+P2 players, phase pre-flipped to 'playing'.
+ *  Human slots are wired with RemoteInput so the legacy Map<slot, InputState>
+ *  argument to fixedUpdate(dt, networkInputs) drives them — matches the
+ *  pre-PlayerInputContext test pattern. */
 function createSim(opts?: {
   settings?: Partial<MatchSettings>;
   arena?: Partial<Arena>;
@@ -79,15 +83,21 @@ function createSim(opts?: {
   const arena = makeArena(opts?.arena);
   const settings = makeSettings(opts?.settings);
   const events = new CapturedEvents();
+  const players = opts?.players ?? (['P1', 'P2'] as PlayerSlot[]);
   const sim = new Simulator({
     arena,
     settings,
-    activePlayers: opts?.players ?? (['P1', 'P2'] as PlayerSlot[]),
+    activePlayers: players,
     events,
   });
   // Match createLoop semantics: phase 'playing' so fixedUpdate runs.
   // (Skips the music-start side effect that setPhase fires.)
   sim.getState().phase = 'playing';
+  // Swap KeyboardInput → RemoteInput for human slots so tests that pass
+  // a Map<slot, InputState> to fixedUpdate dispatch through ctx.networkInputs.
+  for (const slot of players) {
+    if (!slot.startsWith('B')) sim.setPlayerInput(slot, new RemoteInput(slot));
+  }
   return { sim, events, arena, settings };
 }
 

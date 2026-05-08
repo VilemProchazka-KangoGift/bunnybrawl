@@ -189,8 +189,7 @@ async function startPlayerFeelSampler(p: PerfPage): Promise<void> {
     const start = window.__samplerStart;
 
     const sampleFrame = () => {
-      const loop = window.__gameLoop;
-      const state = loop?.getState?.();
+      const state = window.__bunnyTest?.state();
       if (state?.players) {
         const t = performance.now() - start;
         const d: number[] = [];
@@ -206,12 +205,12 @@ async function startPlayerFeelSampler(p: PerfPage): Promise<void> {
 
     // Poll the latest received snapshot frame number. NetMatch exposes
     // getLatestSnapshotFrame() for this. Polling at 4ms catches every arrival
-    // (snapshots come in at ~16ms intervals @ 60Hz). Re-resolve __netMatch
-    // every poll — it can be unset at sampler-start during early loading or
+    // (snapshots come in at ~16ms intervals @ 60Hz). Re-resolve via
+    // __bunnyTest each poll — NetMatch can be unset at sampler-start during early loading or
     // get replaced on reconnect, and a const-capture would silently miss it.
     let lastSeenFrame = -1;
     const pollSnap = () => {
-      const nm = (window as { __netMatch?: { getLatestSnapshotFrame?: () => number } }).__netMatch;
+      const nm = window.__bunnyTest?.netMatch();
       const frame = nm?.getLatestSnapshotFrame?.() ?? -1;
       if (frame >= 0 && frame !== lastSeenFrame) {
         lastSeenFrame = frame;
@@ -286,8 +285,8 @@ async function waitForLobby(page: Page): Promise<void> {
 
 async function configureMatch(page: Page, arena: string, mods: Record<string, boolean>): Promise<void> {
   await page.evaluate(({ arena, mods }) => {
-    const store = (window as { __gameStore?: { getState: () => { setMatchSettings: (s: unknown) => void } } }).__gameStore;
-    store?.getState().setMatchSettings({ arenaId: arena, mods, killLimit: 999, timeLimit: 999 });
+    const store = window.__bunnyTest?.gameStore();
+    store?.state().setMatchSettings({ arenaId: arena, mods, killLimit: 999, timeLimit: 999 });
   }, { arena, mods });
 }
 
@@ -588,12 +587,12 @@ async function runScenario(browser: Browser, scenario: Scenario, baseOutDir: str
 
     // Wait for both peers to leave loading + countdown.
     await Promise.all([
-      host.page.waitForFunction(() => window.__gameLoop?.getState()?.phase === 'playing', undefined, { timeout: 20000 }),
-      guest.page.waitForFunction(() => window.__gameLoop?.getState()?.phase === 'playing', undefined, { timeout: 20000 }),
+      host.page.waitForFunction(() => window.__bunnyTest?.state()?.phase === 'playing', undefined, { timeout: 20000 }),
+      guest.page.waitForFunction(() => window.__bunnyTest?.state()?.phase === 'playing', undefined, { timeout: 20000 }),
     ]);
     await Promise.all([
-      host.page.waitForFunction(() => window.__gameLoop?.getState()?.countdown === 0, undefined, { timeout: 15000 }),
-      guest.page.waitForFunction(() => window.__gameLoop?.getState()?.countdown === 0, undefined, { timeout: 15000 }),
+      host.page.waitForFunction(() => window.__bunnyTest?.state()?.countdown === 0, undefined, { timeout: 15000 }),
+      guest.page.waitForFunction(() => window.__bunnyTest?.state()?.countdown === 0, undefined, { timeout: 15000 }),
     ]);
 
     await Promise.all([
@@ -628,7 +627,7 @@ async function runScenario(browser: Browser, scenario: Scenario, baseOutDir: str
     // Capture host snapshot bandwidth (rolling 120-sample mean from
     // HostAuthority — measured BEFORE we tear down the page).
     const bandwidth = await host.page.evaluate(() => {
-      const nm = (window as { __netMatch?: { getDebugStats?: () => { snapshotBytesMean: number; snapshotBytesMax: number } } }).__netMatch;
+      const nm = window.__bunnyTest?.netMatch();
       const s = nm?.getDebugStats?.();
       return {
         snapshotBytesMean: s?.snapshotBytesMean ?? 0,
@@ -637,8 +636,8 @@ async function runScenario(browser: Browser, scenario: Scenario, baseOutDir: str
     });
 
     const autoSlow = {
-      host: await host.page.evaluate(() => window.__gameLoop?.isAutoSlowFlipped?.() === true),
-      guest: await guest.page.evaluate(() => window.__gameLoop?.isAutoSlowFlipped?.() === true),
+      host: await host.page.evaluate(() => window.__bunnyTest?.autoSlowFlipped() === true),
+      guest: await guest.page.evaluate(() => window.__bunnyTest?.autoSlowFlipped() === true),
     };
 
     const hostProfile = await stopAndCapture(host, cdpHost, heapHost.timeline);

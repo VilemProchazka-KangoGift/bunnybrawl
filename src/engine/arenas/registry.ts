@@ -120,6 +120,7 @@ export function toThemeConfig(pack: ArenaPack): ThemeConfig {
     drawAnimatedBackground: pack.drawAnimatedBackground,
     drawAnimatedForeground: pack.drawAnimatedForeground,
     buildReactiveDecorations: pack.buildReactiveDecorations,
+    buildWildlife: pack.buildWildlife,
     cosmeticTick: pack.cosmeticTick,
     drawGroundCritters: pack.drawGroundCritters,
     drawSceneTint: pack.drawSceneTint,
