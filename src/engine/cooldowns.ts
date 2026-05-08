@@ -24,6 +24,10 @@ export class Cooldowns<K> {
   /**
    * Decay the cooldown by `dt`. Returns true the tick the timer crosses zero
    * (or if the key was never set / already expired). Negative `dt` is clamped.
+   *
+   * Once expired, subsequent ticks keep returning true until `set` is called
+   * again — call sites are expected to re-`set` immediately after observing
+   * `true` to start the next cycle.
    */
   tick(key: K, dt: number): boolean {
     const prev = this.remaining.get(key) ?? 0;
