@@ -1,4 +1,4 @@
-import type { Player, PlayerState } from '../types';
+import type { Ctx2D, Player, PlayerState } from '../types';
 import type { ThemeConfig } from '../themes/types';
 import type { EyebrowAnchor } from '../characters/types';
 import { FAT_SCALE, HITSTOP_DURATION, MAX_WALK_SPEED, PLAYER_WIDTH, PLAYER_HEIGHT } from '../constants';
@@ -151,9 +151,8 @@ export function warmSpriteCacheForCharacters(names: string[], theme?: ThemeConfi
   const cw = PLAYER_WIDTH + 20;
   const ch = PLAYER_HEIGHT + 20;
   const scratch = new OffscreenCanvas(cw, ch);
-  const sctx = scratch.getContext('2d');
-  if (!sctx) return;
-  const ctx = sctx as unknown as CanvasRenderingContext2D;
+  const ctx = scratch.getContext('2d');
+  if (!ctx) return;
 
   // idleAction = -1 short-circuits the idle-action overlay path in
   // drawCharacterSprite/blitWithIdleTransform, so the stub player is never read.
@@ -170,7 +169,7 @@ export function warmSpriteCacheForCharacters(names: string[], theme?: ThemeConfi
   }
 }
 
-export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player, nearCarrot: boolean, theme: ThemeConfig, frameTime: number): void {
+export function drawPlayer(ctx: Ctx2D, player: Player, nearCarrot: boolean, theme: ThemeConfig, frameTime: number): void {
   const { width, height, character, state, facing, invincibleTimer, animFrame, fastFalling, fatTimer, slowTimer } = player;
   // Apply visual correction offset from rollback smoothing
   const x = player.x + player.renderOffsetX;
@@ -378,7 +377,7 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player, nearCa
 }
 
 function drawCharacterSprite(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   x: number, y: number, w: number, h: number,
   char: { name: string; color: string; darkColor: string; lightColor: string },
   state: PlayerState, animFrame: number, fastFalling: boolean,
@@ -425,7 +424,7 @@ function drawCharacterSprite(
   // Backing store at scaled pixel dims so the bitmap stays sharp when blitted into a scaled main ctx.
   const s = _spriteScale;
   cached = new OffscreenCanvas(Math.max(1, Math.ceil(cw * s)), Math.max(1, Math.ceil(ch * s)));
-  const sctx = cached.getContext('2d')! as unknown as CanvasRenderingContext2D;
+  const sctx = cached.getContext('2d')!;
   sctx.scale(s, s);
   sctx.translate(-x + pad, -y + pad);
 
@@ -443,7 +442,7 @@ function drawCharacterSprite(
 
 /** Blit cached sprite, optionally with an idle-action ctx transform around it. */
 function blitWithIdleTransform(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   cached: OffscreenCanvas,
   x: number, y: number, w: number, h: number, pad: number,
   idleAnimAction: IdleAction | null,
@@ -473,7 +472,7 @@ function blitWithIdleTransform(
 
 /** Core character drawing: sprite + highlight + eyes + legs. Shared by match and lobby. */
 export function drawCharacterCore(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   cx: number, yOff: number, w: number, h: number,
   charName: string, state: string, animFrame: number,
   squashScale: number,
@@ -502,7 +501,7 @@ export function drawCharacterCore(
 }
 
 function _drawCharacterSpriteImpl(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   x: number, y: number, w: number, h: number,
   char: { name: string; color: string; darkColor: string; lightColor: string },
   state: string, animFrame: number, fastFalling: boolean,
@@ -574,7 +573,7 @@ function _drawCharacterSpriteImpl(
 
 /** Two short white lines trailing below an airborne character. Drawn outside the
  *  sprite cache so the outline pass doesn't stamp them. */
-function drawMotionLines(ctx: CanvasRenderingContext2D, cx: number, footY: number): void {
+function drawMotionLines(ctx: Ctx2D, cx: number, footY: number): void {
   ctx.strokeStyle = 'rgba(255,255,255,0.4)';
   ctx.lineWidth = 1;
   ctx.beginPath();
@@ -593,7 +592,7 @@ function drawMotionLines(ctx: CanvasRenderingContext2D, cx: number, footY: numbe
  *  Falls back to legacy flat lines when slow-device is on. Drawn outside the
  *  sprite cache so the outline pass doesn't stamp it. */
 export function drawFastFallStreaks(
-  ctx: CanvasRenderingContext2D, cx: number, headY: number,
+  ctx: Ctx2D, cx: number, headY: number,
   color: string, vx = 0, alpha = 1,
 ): void {
   if (alpha <= FASTFALL_ALPHA_EPSILON) return;
@@ -646,7 +645,7 @@ export function drawFastFallStreaks(
   ctx.stroke();
 }
 
-export function drawSplatCharacter(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, color: string, darkColor: string): void {
+export function drawSplatCharacter(ctx: Ctx2D, x: number, y: number, w: number, h: number, color: string, darkColor: string): void {
   ctx.fillStyle = color;
   ctx.beginPath();
   ctx.ellipse(x + w / 2, y + h - 4, w * 0.6, 5, 0, 0, Math.PI * 2);
@@ -678,7 +677,7 @@ const DEFAULT_EYEBROW_ANCHOR: EyebrowAnchor = {
   rightInner: { x: 4, y: 13.6 },
 };
 
-export function drawExpression(ctx: CanvasRenderingContext2D, player: Player, frameTime: number): void {
+export function drawExpression(ctx: Ctx2D, player: Player, frameTime: number): void {
   const expression = player.expression;
   if (!expression || expression === 'normal') return;
 

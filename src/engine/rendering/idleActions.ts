@@ -1,5 +1,5 @@
 import type { CharacterColors } from '../characters/types';
-import type { Player } from '../types';
+import type { Ctx2D, Player } from '../types';
 import { getCharacterPack } from '../characters/registry';
 import { IDLE_FIRST_DELAY, IDLE_REST_MIN, IDLE_REST_MAX } from '../constants';
 import { fastSin } from '../fastMath';
@@ -17,7 +17,7 @@ export interface IdleAction {
   weight?: number;
   /** Apply transform/effect for normalized t in [0, 1]. Called before the cached sprite is drawn. */
   apply: (
-    ctx: CanvasRenderingContext2D,
+    ctx: Ctx2D,
     cx: number, yOff: number, w: number, h: number,
     t: number,
     colors: CharacterColors,
@@ -25,7 +25,7 @@ export interface IdleAction {
   ) => void;
   /** Runs inside the same save/restore as `apply`, so the active ctx transform still applies. */
   applyAfter?: (
-    ctx: CanvasRenderingContext2D,
+    ctx: Ctx2D,
     cx: number, yOff: number, w: number, h: number,
     t: number,
     colors: CharacterColors,
