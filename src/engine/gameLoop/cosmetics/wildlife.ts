@@ -180,23 +180,30 @@ registerWildlifeKind<GroundCritterData>(KIND_GROUND_CRITTER_ANIM_BG, {
 /** Build a groundCritter instance. The pack supplies the patrol config, an
  *  optional starting offset, and the draw function. Set `layer` to
  *  `'animBackground'` for critters that should render in the animated-bg slot
- *  (e.g. the treetops squirrel). */
+ *  (e.g. the treetops squirrel).
+ *
+ *  `initialFacingEase` defaults to 1 to match legacy pack initialization
+ *  (most packs hand-rolled critter state with `facingEase: 1` regardless of
+ *  starting `dir`). Override per-pack if a different starting facing is
+ *  desired. */
 export function buildGroundCritter(opts: {
   seed: number;
   cfg: GroundCritterConfig;
   initialX?: number;
   initialDir?: 1 | -1;
+  initialFacingEase?: number;
   layer?: WildlifeLayer;
   draw: GroundCritterData['draw'];
 }): WildlifeInstance<GroundCritterData> {
   const cfg = opts.cfg;
   const startX = opts.initialX ?? (cfg.platL + cfg.platR) / 2;
   const dir: 1 | -1 = opts.initialDir ?? 1;
+  const facingEase = opts.initialFacingEase ?? 1;
   const data: GroundCritterData = {
     state: {
       x: startX,
       dir,
-      facingEase: dir,
+      facingEase,
       fleeing: false,
       committedFleeDir: 0,
     },
