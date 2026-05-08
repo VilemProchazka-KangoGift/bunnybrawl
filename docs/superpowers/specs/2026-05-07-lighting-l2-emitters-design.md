@@ -219,3 +219,39 @@ Touches every test setup once; subsequent L2 PRs add one field instead of one po
 - L3 will read sun direction. The deleted `sun.ts` will be re-added in L3 with the real shape (not the L1 placeholder).
 - L4 will add per-arena `bgKeyframes` for hue-shifted nights — same `bgNightCanvas` mechanism, multiple keyframes lerped instead of one uniform tint.
 - L5 includes settings UI for accessibility toggles. Until then, L2 stays URL+localStorage like L1.
+
+---
+
+## Implementation status (closed 2026-05-08)
+
+| Phase | Commit | Notes |
+|---|---|---|
+| 0 — Constructor refactor | `2d388c4` | 24 call sites converted (1 GameLoop, 1 CharacterSelect, 22 tests). |
+| 1 — Scaffold + bakeoff infra | `037650d` | EmitterPipeline + Lighting orchestrator + AmbientPipeline rename + `?lmode=combined\|split` URL switch. |
+| 2 — Test scene | `3fd4783` | **Drift:** switched arena from haunted_graveyard → castle (mid-implementation; user-suggested). 5 torch emitters at existing TORCH_X. Per-player aura inline. |
+| 3 — Bakeoff + decision | `d6cf70e` | 3 runs each, all percentile deltas ≤ noise floor. Combined picked on simplicity. Split path ripped out. |
+| 4 — Carrot glow + spawn pillars | `ceb9c61` | Carrot glow per active carrot (warm-orange). Spawn pillar folded into per-player aura ramp during invincibility. |
+| 5 — Lava + fireflies | `c545f24` | Volcano: 3 lava emitters at hazard zone centers. Fireflies: 8 per night at the existing visual positions, drift formula shared via `fireflyPosition`. |
+| 6 — Critical-moment bump | `b7dabe6` + `b5c47e7` | **Drift:** inverted to "leader aura" per user direction. Cached on score-sum + matchOver dirty key (perf follow-up commit). |
+| 7 — Pre-L3 cleanup | this doc + `2026-05-08-lighting-l3-brainstorm-prep.md` | |
+
+Standalone refactors that landed alongside the phases:
+
+| Commit | What |
+|---|---|
+| `e79d620` | Phase-1-through-5 simplify pass (alloc cleanup, isLivePlayer rule, daytime skip in `_compositeEmitters`, deltaOnly elimination) |
+| `4ac1f87` | `Light` discriminated union (`PointLight \| SpotLight`, atomic `Flicker`) |
+| `12f46a5` | Phase-4-through-6 simplify pass (volcano table-and-map, FIREFLY_FLICKER `Array.from`, comment trimming, mock fix) |
+| `adf2f4b` | `blendRgb` lifted to `fastMath.ts`, deduped 3 color-lerp callers |
+
+## Decisions log
+
+- **Castle over haunted_graveyard** for the bakeoff scene. Existing `TORCH_X` positions + an existing 2D halo to replace gave a sharper before/after demo than inventing graveyard torch placements from scratch.
+- **Combined wins** the bakeoff at all percentiles within noise. Combined picked on simplicity (one fewer DOM layer, half the GPU memory, simpler renderer code).
+- **Inline synthesis from existing entity fields** for dynamic emitters — no `Player`/`Carrot` schema change, no snapshot wire-format change. Render-side decode of state.
+- **Discriminated union over optional fields** for `Light`. Catches typos at compile time. `Flicker` sub-object atomic.
+- **Leader aura instead of low-health bump** for Phase 6. The game has no health stat; "who to chase" reinforces the score HUD's competitive read.
+- **Score-sum dirty check** for leader cache. Scores monotonically increase; sum equality = no change.
+- **`SeededRNG.floatFromTick`** (allocation-free) added for the L2 hot path. ~360 fewer allocs/sec on castle's 5 torches at 60Hz.
+- **`fireflyPosition` shared helper** between visual draw and emitter synthesis. The two paths can't drift.
+- **`blendRgb` lifted to `fastMath.ts`** when the third color-lerp caller appeared. Wrappers in three call sites.
