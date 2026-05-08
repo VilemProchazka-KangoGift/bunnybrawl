@@ -1,5 +1,5 @@
 import type { ArenaPack } from '../types';
-import type { Platform } from '../../types';
+import type { Ctx2D, Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
@@ -56,7 +56,7 @@ import {
 const SPRINKLE_COLORS = ['#FF69B4', '#FFD700', '#87CEEB', '#98FB98', '#DDA0DD', '#FF6347'];
 
 // Bg pass: cap + right face. Sit behind the player.
-function drawCandyPlatformBg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+function drawCandyPlatformBg(ctx: Ctx2D, platform: Platform): void {
   const rng = mulberry32(seedFor(platform.x, platform.y));
   const cF = capFrontY(platform);
   const cB = capBackY(platform);
@@ -99,7 +99,7 @@ function drawCandyPlatformBg(ctx: CanvasRenderingContext2D, platform: Platform):
 }
 
 // Fg pass: body face. Drawn after players for occlusion.
-function drawCandyPlatformFg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+function drawCandyPlatformFg(ctx: Ctx2D, platform: Platform): void {
   const rng = mulberry32(seedFor(platform.x, platform.y) ^ BODY_SEED_OFFSET);
   const cF = capFrontY(platform);
   const bodyTop = cF;
@@ -487,10 +487,10 @@ export const candyLand: ArenaPack = {
     ctx.restore();
   },
 
-  drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
+  drawPlatform: (ctx: Ctx2D, platform: Platform, _isGround: boolean) => {
     drawCandyPlatformBg(ctx, platform);
   },
-  drawPlatformOverlay: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
+  drawPlatformOverlay: (ctx: Ctx2D, platform: Platform, _isGround: boolean) => {
     drawCandyPlatformFg(ctx, platform);
   },
 

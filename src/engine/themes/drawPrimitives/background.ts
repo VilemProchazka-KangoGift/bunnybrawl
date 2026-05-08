@@ -1,5 +1,7 @@
 // Background primitives — distant/mid-ground decorations drawn behind platforms.
 
+import type { Ctx2D } from '../../types';
+
 export interface TreeColors {
   trunk: string;
   bark: string;
@@ -17,7 +19,7 @@ const DEFAULT_TREE_COLORS: TreeColors = {
 };
 
 export function drawTree(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   x: number,
   groundY: number,
   size: number,
@@ -59,7 +61,7 @@ const DEFAULT_BUSH_COLORS: BushColors = {
 };
 
 export function drawBush(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   x: number,
   groundY: number,
   size: number,
@@ -79,7 +81,7 @@ export function drawBush(
   ctx.fill();
 }
 
-export function drawFlower(ctx: CanvasRenderingContext2D, x: number, groundY: number, color: string): void {
+export function drawFlower(ctx: Ctx2D, x: number, groundY: number, color: string): void {
   ctx.strokeStyle = '#3A7A3A';
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -101,7 +103,7 @@ export function drawFlower(ctx: CanvasRenderingContext2D, x: number, groundY: nu
   ctx.fill();
 }
 
-export function drawMushroom(ctx: CanvasRenderingContext2D, x: number, groundY: number): void {
+export function drawMushroom(ctx: Ctx2D, x: number, groundY: number): void {
   ctx.fillStyle = '#F5F0E0';
   ctx.fillRect(x - 3, groundY - 10, 6, 10);
   ctx.fillStyle = '#D32F2F';
@@ -117,7 +119,7 @@ export function drawMushroom(ctx: CanvasRenderingContext2D, x: number, groundY: 
   ctx.fill();
 }
 
-export function drawGrassTuft(ctx: CanvasRenderingContext2D, x: number, groundY: number, color = '#5DAF4A'): void {
+export function drawGrassTuft(ctx: Ctx2D, x: number, groundY: number, color = '#5DAF4A'): void {
   ctx.strokeStyle = color;
   ctx.lineWidth = 2;
   for (let i = -1; i <= 1; i++) {
@@ -128,14 +130,14 @@ export function drawGrassTuft(ctx: CanvasRenderingContext2D, x: number, groundY:
   }
 }
 
-export function drawHill(ctx: CanvasRenderingContext2D, x: number, baseY: number, width: number, height: number): void {
+export function drawHill(ctx: Ctx2D, x: number, baseY: number, width: number, height: number): void {
   ctx.beginPath();
   ctx.moveTo(x, baseY + 60);
   ctx.quadraticCurveTo(x + width / 2, baseY - height, x + width, baseY + 60);
   ctx.fill();
 }
 
-export function drawCloud(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, color = 'rgba(255, 255, 255, 0.7)'): void {
+export function drawCloud(ctx: Ctx2D, x: number, y: number, size: number, color = 'rgba(255, 255, 255, 0.7)'): void {
   ctx.fillStyle = color;
   ctx.beginPath();
   ctx.arc(x, y, size * 0.5, 0, Math.PI * 2);
@@ -145,7 +147,7 @@ export function drawCloud(ctx: CanvasRenderingContext2D, x: number, y: number, s
   ctx.fill();
 }
 
-export function drawPlatformMoss(ctx: CanvasRenderingContext2D, edgeX: number, platY: number, platH: number): void {
+export function drawPlatformMoss(ctx: Ctx2D, edgeX: number, platY: number, platH: number): void {
   ctx.fillStyle = '#3A7A3A';
   for (let i = 0; i < 3; i++) {
     const ox = (i - 1) * 4;

@@ -1,5 +1,5 @@
 import type { ArenaPack } from '../types';
-import type { Platform } from '../../types';
+import type { Ctx2D, Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
@@ -30,7 +30,7 @@ const TREETOPS_BEE_CLUSTERS = [
   { homeX: 940, homeY: 360, phase: 2.4 },
 ] as const;
 
-function drawTreetopsButterfly(ctx: CanvasRenderingContext2D, i: number, time: number, players: ReadonlyArray<Player>): void {
+function drawTreetopsButterfly(ctx: Ctx2D, i: number, time: number, players: ReadonlyArray<Player>): void {
   const driftSpeed = 0.05 + (i % 3) * 0.015;
   const homeX = ((i * 220 + time * 60 * driftSpeed) % (CANVAS_WIDTH + 200)) - 100;
   const homeY = 320 + fastSin(time * 0.4 + i * 1.7) * 90 + (i % 3) * 30;
@@ -47,7 +47,7 @@ function drawTreetopsButterfly(ctx: CanvasRenderingContext2D, i: number, time: n
   ctx.fillRect(r.x - 0.5, r.y - 3, 1, 6);
 }
 
-function drawTreetopsBeeCluster(ctx: CanvasRenderingContext2D, ci: number, time: number, players: ReadonlyArray<Player>): void {
+function drawTreetopsBeeCluster(ctx: Ctx2D, ci: number, time: number, players: ReadonlyArray<Player>): void {
   const c = TREETOPS_BEE_CLUSTERS[ci];
   const wanderX = c.homeX + fastSin(time * 0.25 + c.phase) * 180;
   const wanderY = c.homeY + fastSin(time * 0.4 + c.phase + 1) * 50;
@@ -76,7 +76,7 @@ import {
 
 const MOSS_TUFT_COLORS = ['#4a7828', '#6a9a3a', '#8fa84f'];
 
-function drawTreetopsPlatformBg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+function drawTreetopsPlatformBg(ctx: Ctx2D, platform: Platform): void {
   const rng = mulberry32(seedFor(platform.x, platform.y));
   const cF = capFrontY(platform);
   const cB = capBackY(platform);
@@ -126,7 +126,7 @@ function drawTreetopsPlatformBg(ctx: CanvasRenderingContext2D, platform: Platfor
   }, leftPts);
 }
 
-function drawTreetopsPlatformFg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+function drawTreetopsPlatformFg(ctx: Ctx2D, platform: Platform): void {
   const rng = mulberry32(seedFor(platform.x, platform.y) ^ BODY_SEED_OFFSET);
   const cF = capFrontY(platform);
   const bodyTop = cF;
@@ -575,11 +575,11 @@ export const treetops: ArenaPack = {
     ctx.restore();
   },
 
-  drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
+  drawPlatform: (ctx: Ctx2D, platform: Platform, _isGround: boolean) => {
     drawTreetopsPlatformBg(ctx, platform);
   },
 
-  drawPlatformOverlay: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
+  drawPlatformOverlay: (ctx: Ctx2D, platform: Platform, _isGround: boolean) => {
     drawTreetopsPlatformFg(ctx, platform);
   },
 

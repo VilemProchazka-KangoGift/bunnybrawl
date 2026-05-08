@@ -6,7 +6,7 @@
  * the full design rationale.
  */
 
-import type { Platform } from '../../types';
+import type { Ctx2D, Platform } from '../../types';
 
 // ---- Locked parameters ----
 /** Vertical extent of the 3D top cap (px). Straddles the collision line. */
@@ -349,7 +349,7 @@ export function skewPx(): number { return CAP_DEPTH * SKEW_RATIO; }
 // ---- Rendering helpers ----
 
 /** Blurred oval shadow under the platform footprint. Covers full 3D footprint width including overhang. */
-export function drawPlatformDropShadow(ctx: CanvasRenderingContext2D, platform: Platform): void {
+export function drawPlatformDropShadow(ctx: Ctx2D, platform: Platform): void {
   const sp = skewPx();
   const footprintBottom = platform.y + platform.height;
   ctx.save();
@@ -364,7 +364,7 @@ export function drawPlatformDropShadow(ctx: CanvasRenderingContext2D, platform: 
  * `bottomY` overrides the body's bottom edge (defaults to platform.y + platform.height);
  * useful for shapes whose visual body extends past their collision rect (e.g. stumps).
  */
-export function drawPlatformRightFace(ctx: CanvasRenderingContext2D, platform: Platform, fillStyle: string, bottomY?: number): void {
+export function drawPlatformRightFace(ctx: Ctx2D, platform: Platform, fillStyle: string, bottomY?: number): void {
   const sp = skewPx();
   const bt = capFrontY(platform);
   const bb = bottomY ?? (platform.y + platform.height);
@@ -382,7 +382,7 @@ export interface CapRenderOpts {
   capColor: string;
   capLight?: string;
   /** Callback that paints additional texture inside the clipped cap polygon. */
-  drawCapTexture: (ctx: CanvasRenderingContext2D, cF: number, cB: number, sp: number) => void;
+  drawCapTexture: (ctx: Ctx2D, cF: number, cB: number, sp: number) => void;
 }
 
 /**
@@ -392,7 +392,7 @@ export interface CapRenderOpts {
  * left edge stays vertical at platform.x — preserving the original behavior.
  */
 export function drawPlatformCap(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   platform: Platform,
   frontPts: EdgePoint[],
   backPts: EdgePoint[],
@@ -448,7 +448,7 @@ export function drawPlatformCap(
 
 /** Three-layer stone: dark base ellipse + colored base + lighter highlight. */
 export function drawStone(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   cx: number, cy: number,
   rx: number, ry: number,
   angle: number,
@@ -467,7 +467,7 @@ export function drawStone(
 }
 
 /** 3-5 overlapping leaves around a center, with faint veins. */
-export function drawLeafCluster(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number, rng: () => number): void {
+export function drawLeafCluster(ctx: Ctx2D, cx: number, cy: number, size: number, rng: () => number): void {
   const greens = ['#4a8028', '#5a9030', '#6aa838', '#3a7020'];
   const n = 3 + Math.floor(rng() * 2);
   for (let i = 0; i < n; i++) {
@@ -499,7 +499,7 @@ export interface LeftStoneOpts {
 
 /** Draw a column of varied stones protruding LEFT of the body. */
 export function drawLeftStones(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   platform: Platform,
   palette: StonePaletteRow[],
   rng: () => number,

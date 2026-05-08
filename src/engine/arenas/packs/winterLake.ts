@@ -1,5 +1,5 @@
 import type { ArenaPack } from '../types';
-import type { Arena, Platform } from '../../types';
+import type { Ctx2D, Arena, Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
@@ -115,7 +115,7 @@ const FLOAT_TOP = '#D8E8F0';
 const GROUND_BODY = '#4A6A7C';
 const GROUND_TOP = '#E0EEF5';
 
-function drawWinterPlatformBg(ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean): void {
+function drawWinterPlatformBg(ctx: Ctx2D, platform: Platform, isGround: boolean): void {
   const rng = mulberry32(seedFor(platform.x, platform.y));
   const cF = capFrontY(platform);
   const cB = capBackY(platform);
@@ -172,7 +172,7 @@ function drawWinterPlatformBg(ctx: CanvasRenderingContext2D, platform: Platform,
   }
 }
 
-function drawWinterPlatformFg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+function drawWinterPlatformFg(ctx: Ctx2D, platform: Platform): void {
   const rng = mulberry32(seedFor(platform.x, platform.y) ^ BODY_SEED_OFFSET);
   const cF = capFrontY(platform);
   const bodyTop = cF;
@@ -345,7 +345,7 @@ export const winterLake: ArenaPack = {
   },
 
   // ---- Custom draw functions ----
-  drawFarBackground: (ctx: CanvasRenderingContext2D, _arena: Arena) => {
+  drawFarBackground: (ctx: Ctx2D, _arena: Arena) => {
     // Distant snowy mountain range
     ctx.save();
     ctx.globalAlpha = 0.35;
@@ -406,7 +406,7 @@ export const winterLake: ArenaPack = {
     ctx.restore();
   },
 
-  drawBackgroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => {
+  drawBackgroundNature: (ctx: Ctx2D, arena: Arena) => {
     const ground = arena.platforms[0];
     const y = ground.y;
     const floats = getFloatingPlatforms(arena.platforms);
@@ -482,7 +482,7 @@ export const winterLake: ArenaPack = {
     }
   },
 
-  drawForegroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => {
+  drawForegroundNature: (ctx: Ctx2D, arena: Arena) => {
     const ground = arena.platforms[0];
     const gy = ground.y;
     const floats = getFloatingPlatforms(arena.platforms);
@@ -616,7 +616,7 @@ export const winterLake: ArenaPack = {
     ctx.restore();
   },
 
-  drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => {
+  drawPlatform: (ctx: Ctx2D, platform: Platform, isGround: boolean) => {
     if (platform.style === 'iceCube') {
       const depth = platform.width * ICE_CUBE_DEPTH_RATIO;
       drawIceCube(ctx, platform.x, platform.y + depth / 2, platform.width, platform.height - depth / 2);
@@ -625,7 +625,7 @@ export const winterLake: ArenaPack = {
     drawWinterPlatformBg(ctx, platform, isGround);
   },
 
-  drawPlatformOverlay: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
+  drawPlatformOverlay: (ctx: Ctx2D, platform: Platform, _isGround: boolean) => {
     if (platform.style === 'iceCube') return;
     drawWinterPlatformFg(ctx, platform);
   },
@@ -744,7 +744,7 @@ export const winterLake: ArenaPack = {
     }
   }),
 
-  drawCustomHazardZone: (ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, _time: number) => {
+  drawCustomHazardZone: (ctx: Ctx2D, x: number, y: number, width: number, height: number, _time: number) => {
     ctx.save();
     const icicleCount = Math.floor(width / 12);
     const step = width / icicleCount;

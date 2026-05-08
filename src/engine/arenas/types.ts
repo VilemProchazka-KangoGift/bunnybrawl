@@ -1,4 +1,4 @@
-import type { Arena, Platform, SpawnPoint, HazardZone, EffectZone, AABB, SurfaceTag, WeatherParticle } from '../types';
+import type { Arena, Ctx2D, Platform, SpawnPoint, HazardZone, EffectZone, AABB, SurfaceTag, WeatherParticle } from '../types';
 import type { ThemeConfig } from '../themes/types';
 import type { ReactiveInstance } from '../gameLoop/cosmetics/reactiveDecorations';
 import type {
@@ -85,7 +85,7 @@ export interface ArenaPack {
     groundBodyColor: string;
     groundTopColor: string;
     drawMoss: boolean;
-    customDraw?: (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, isGround: boolean) => void;
+    customDraw?: (ctx: Ctx2D, x: number, y: number, w: number, h: number, isGround: boolean) => void;
   };
 
   // ---- Ambient systems ----
@@ -97,9 +97,9 @@ export interface ArenaPack {
   dayNight: DayNightConfig;
 
   // ---- Custom draw functions ----
-  drawFarBackground?: (ctx: CanvasRenderingContext2D, arena: Arena) => void;
-  drawBackgroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => void;
-  drawForegroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => void;
+  drawFarBackground?: (ctx: Ctx2D, arena: Arena) => void;
+  drawBackgroundNature: (ctx: Ctx2D, arena: Arena) => void;
+  drawForegroundNature: (ctx: Ctx2D, arena: Arena) => void;
   /**
    * Optional full override of platform rendering. When defined, the renderer
    * calls this instead of the built-in flat-rect fallback. Receives the full
@@ -110,7 +110,7 @@ export interface ArenaPack {
    * sit behind the player). The body face goes in `drawPlatformOverlay` so
    * it can occlude players that enter the iso phantom strip.
    */
-  drawPlatform?: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => void;
+  drawPlatform?: (ctx: Ctx2D, platform: Platform, isGround: boolean) => void;
   /**
    * Optional foreground overlay for the platform's body face. Called by the
    * renderer AFTER players are drawn, so the body occludes any player whose
@@ -120,9 +120,9 @@ export interface ArenaPack {
    * body face hides the part of the sprite that would otherwise reveal the
    * collision-vs-visible mismatch.
    */
-  drawPlatformOverlay?: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => void;
-  drawAnimatedBackground?: (ctx: CanvasRenderingContext2D, arena: Arena, time: number, dayPhase: number, matchState?: import('../types').MatchState) => void;
-  drawAnimatedForeground?: (ctx: CanvasRenderingContext2D, arena: Arena, time: number, dayPhase: number, matchState?: import('../types').MatchState) => void;
+  drawPlatformOverlay?: (ctx: Ctx2D, platform: Platform, isGround: boolean) => void;
+  drawAnimatedBackground?: (ctx: Ctx2D, arena: Arena, time: number, dayPhase: number, matchState?: import('../types').MatchState) => void;
+  drawAnimatedForeground?: (ctx: Ctx2D, arena: Arena, time: number, dayPhase: number, matchState?: import('../types').MatchState) => void;
 
   /** Build the arena's reactive decoration instance list. Called once per
    *  arena load. Positions can depend on platform layout (use `arena.platforms`).
@@ -141,13 +141,13 @@ export interface ArenaPack {
     services: ArenaCosmeticServices,
   ) => void;
 
-  drawGroundCritters?: (ctx: CanvasRenderingContext2D, arena: Arena, time: number, dayPhase: number, matchState?: import('../types').MatchState) => void;
-  drawSceneTint?: (ctx: CanvasRenderingContext2D, dayPhase: number, time: number) => void;
-  drawWeatherParticle?: (ctx: CanvasRenderingContext2D, particle: WeatherParticle) => void;
-  drawCustomHazardZone?: (ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, time: number) => void;
-  drawCustomGhost?: (ctx: CanvasRenderingContext2D, x: number, y: number, size: number, alpha: number, time: number) => void;
-  drawCustomThorn?: (ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, growScale: number, fadeAlpha: number) => void;
-  drawCustomSpring?: (ctx: CanvasRenderingContext2D, x: number, y: number, size: number, bounceTimer: number, growScale: number, fadeAlpha: number) => void;
+  drawGroundCritters?: (ctx: Ctx2D, arena: Arena, time: number, dayPhase: number, matchState?: import('../types').MatchState) => void;
+  drawSceneTint?: (ctx: Ctx2D, dayPhase: number, time: number) => void;
+  drawWeatherParticle?: (ctx: Ctx2D, particle: WeatherParticle) => void;
+  drawCustomHazardZone?: (ctx: Ctx2D, x: number, y: number, width: number, height: number, time: number) => void;
+  drawCustomGhost?: (ctx: Ctx2D, x: number, y: number, size: number, alpha: number, time: number) => void;
+  drawCustomThorn?: (ctx: Ctx2D, x: number, y: number, width: number, height: number, growScale: number, fadeAlpha: number) => void;
+  drawCustomSpring?: (ctx: Ctx2D, x: number, y: number, size: number, bounceTimer: number, growScale: number, fadeAlpha: number) => void;
 
   // ---- Gameplay modifiers (types synced with ThemeConfig) ----
   /** Render a glass bubble helmet on all characters in this arena. */

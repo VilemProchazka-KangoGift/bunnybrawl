@@ -1,5 +1,5 @@
 import type { ArenaPack } from '../types';
-import type { Platform, PlayerSlot } from '../../types';
+import type { Ctx2D, Platform, PlayerSlot } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
@@ -23,7 +23,7 @@ const _bubbleAccum = new Map<PlayerSlot, number>();
 const BUBBLE_INTERVAL = 0.08; // seconds between bubble emits per player
 const BUBBLE_VX_THRESHOLD = 50;
 
-function drawOneCrab(ctx: CanvasRenderingContext2D, time: number, crab: GroundCritterState, cfg: typeof CRABS_CFG[number]): void {
+function drawOneCrab(ctx: Ctx2D, time: number, crab: GroundCritterState, cfg: typeof CRABS_CFG[number]): void {
   const fleeing = crab.fleeing;
   const motion = Math.abs(crab.facingEase);
   ctx.save();
@@ -151,7 +151,7 @@ function drawOneCrab(ctx: CanvasRenderingContext2D, time: number, crab: GroundCr
   ctx.restore();
 }
 
-function drawCrab(ctx: CanvasRenderingContext2D, time: number, players: ReadonlyArray<Player>): void {
+function drawCrab(ctx: Ctx2D, time: number, players: ReadonlyArray<Player>): void {
   const dt = _tickCrabDt(time);
   for (let i = 0; i < _crabs.length; i++) {
     tickGroundCritter(_crabs[i], players, dt, CRABS_CFG[i]);
@@ -182,7 +182,7 @@ const FISH_BOB_FREQ = 0.5;
 const FISH_BOB_AMP = 40;
 const FISH_BASE_Y = 380;
 
-function drawFish(ctx: CanvasRenderingContext2D, i: number, time: number, cxBase: number, cy: number, facing: 1 | -1, players: ReadonlyArray<Player>): void {
+function drawFish(ctx: Ctx2D, i: number, time: number, cxBase: number, cy: number, facing: 1 | -1, players: ReadonlyArray<Player>): void {
   const sp = FISH_SPECIES[i % FISH_SPECIES.length];
   const ox = (i % 6) * 26 - 65;
   const oy = Math.floor(i / 6) * 22 - 22 + (i % 2) * 6;
@@ -238,7 +238,7 @@ import {
 // ============================================================================
 
 function drawSeaweed(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   sx: number,
   sy: number,
   h: number,
@@ -340,7 +340,7 @@ function drawSeaweed(
 }
 
 function drawFgKelp(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   sx: number,
   gy: number,
   h: number,
@@ -371,7 +371,7 @@ function drawFgKelp(
 }
 
 function drawFgSeaweed(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   sx: number,
   gy: number,
   h: number,
@@ -399,7 +399,7 @@ function drawFgSeaweed(
 // strand carries its own seeded params so reactive instances stay stable.
 interface PlatformKelpParams { kx: number; klen: number; phase: number; swayAmp: number; bb: number; }
 function drawPlatformKelpStrand(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   params: PlatformKelpParams,
   bendX = 0,
 ): void {
@@ -566,7 +566,7 @@ const UNDERWATER_STONE_PALETTE: StonePaletteRow[] = [
   { base: '#627268', dark: '#32423a', light: '#82928a' },
 ];
 
-function drawUnderwaterPlatformBg(ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean): void {
+function drawUnderwaterPlatformBg(ctx: Ctx2D, platform: Platform, isGround: boolean): void {
   const rng = mulberry32(seedFor(platform.x, platform.y));
   const cF = capFrontY(platform);
   const cB = capBackY(platform);
@@ -613,7 +613,7 @@ function drawUnderwaterPlatformBg(ctx: CanvasRenderingContext2D, platform: Platf
   // — see underwater.platformKelp + buildReactiveDecorations below.
 }
 
-function drawUnderwaterPlatformFg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+function drawUnderwaterPlatformFg(ctx: Ctx2D, platform: Platform): void {
   const rng = mulberry32(seedFor(platform.x, platform.y) ^ BODY_SEED_OFFSET);
   const cF = capFrontY(platform);
   const bodyTop = cF;
@@ -1126,11 +1126,11 @@ export const underwater: ArenaPack = {
     ctx.restore();
   },
 
-  drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => {
+  drawPlatform: (ctx: Ctx2D, platform: Platform, isGround: boolean) => {
     drawUnderwaterPlatformBg(ctx, platform, isGround);
   },
 
-  drawPlatformOverlay: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
+  drawPlatformOverlay: (ctx: Ctx2D, platform: Platform, _isGround: boolean) => {
     drawUnderwaterPlatformFg(ctx, platform);
   },
 

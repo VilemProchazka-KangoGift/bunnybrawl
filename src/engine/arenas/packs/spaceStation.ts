@@ -1,5 +1,5 @@
 import type { ArenaPack } from '../types';
-import type { Platform, Player } from '../../types';
+import type { Ctx2D, Platform, Player } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin } from '../../fastMath';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
@@ -20,7 +20,7 @@ const _robots: GroundCritterState[] = ROBOTS_CFG.map((cfg, i) => ({
 }));
 const _tickRobotDt = makeDtTracker();
 
-function drawOneRobot(ctx: CanvasRenderingContext2D, time: number, robot: GroundCritterState, cfg: typeof ROBOTS_CFG[number]): void {
+function drawOneRobot(ctx: Ctx2D, time: number, robot: GroundCritterState, cfg: typeof ROBOTS_CFG[number]): void {
   const step = fastSin(time * (robot.fleeing ? 14 : 6)) * Math.abs(robot.facingEase);
   ctx.save();
   ctx.translate(robot.x, cfg.platTopY - 6);
@@ -52,7 +52,7 @@ function drawOneRobot(ctx: CanvasRenderingContext2D, time: number, robot: Ground
   ctx.restore();
 }
 
-function drawRobot(ctx: CanvasRenderingContext2D, time: number, players: ReadonlyArray<Player>): void {
+function drawRobot(ctx: Ctx2D, time: number, players: ReadonlyArray<Player>): void {
   const dt = _tickRobotDt(time);
   for (let i = 0; i < _robots.length; i++) {
     tickGroundCritter(_robots[i], players, dt, ROBOTS_CFG[i]);
@@ -68,7 +68,7 @@ import {
 } from '../../themes/drawPrimitives';
 
 // Bg pass: cap + right face + status LEDs. Sit behind the player.
-function drawSpacePlatformBg(ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean): void {
+function drawSpacePlatformBg(ctx: Ctx2D, platform: Platform, isGround: boolean): void {
   const rng = mulberry32(seedFor(platform.x, platform.y));
   const cF = capFrontY(platform);
   const cB = capBackY(platform);
@@ -142,7 +142,7 @@ function drawSpacePlatformBg(ctx: CanvasRenderingContext2D, platform: Platform, 
 }
 
 // Fg pass: body face. Drawn after players for occlusion.
-function drawSpacePlatformFg(ctx: CanvasRenderingContext2D, platform: Platform): void {
+function drawSpacePlatformFg(ctx: Ctx2D, platform: Platform): void {
   const rng = mulberry32(seedFor(platform.x, platform.y) ^ BODY_SEED_OFFSET);
   const cF = capFrontY(platform);
   const bodyTop = cF;
@@ -209,7 +209,7 @@ function drawSpacePlatformFg(ctx: CanvasRenderingContext2D, platform: Platform):
 // A drooping cable connecting two points (e.g. wall to ground/platform).
 // `bendX` shifts the curve laterally (player proximity sway).
 function drawSpaceCable(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   x1: number, y1: number,
   x2: number, y2: number,
   color: string,
@@ -305,7 +305,7 @@ function resetSpaceAnimations() {
   lastAnimTime = -1;
 }
 
-function drawAsteroid(ctx: CanvasRenderingContext2D, obj: SpaceObject) {
+function drawAsteroid(ctx: Ctx2D, obj: SpaceObject) {
   ctx.save();
   ctx.translate(obj.x, obj.y);
   ctx.rotate(obj.rotation);
@@ -343,7 +343,7 @@ function drawAsteroid(ctx: CanvasRenderingContext2D, obj: SpaceObject) {
   ctx.restore();
 }
 
-function drawSatellite(ctx: CanvasRenderingContext2D, obj: SpaceObject) {
+function drawSatellite(ctx: Ctx2D, obj: SpaceObject) {
   ctx.save();
   ctx.translate(obj.x, obj.y);
   ctx.rotate(obj.rotation);
@@ -892,10 +892,10 @@ export const spaceStation: ArenaPack = {
     ctx.restore();
   },
 
-  drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean) => {
+  drawPlatform: (ctx: Ctx2D, platform: Platform, isGround: boolean) => {
     drawSpacePlatformBg(ctx, platform, isGround);
   },
-  drawPlatformOverlay: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
+  drawPlatformOverlay: (ctx: Ctx2D, platform: Platform, _isGround: boolean) => {
     drawSpacePlatformFg(ctx, platform);
   },
 

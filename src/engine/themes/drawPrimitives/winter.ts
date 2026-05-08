@@ -1,6 +1,8 @@
 // Winter primitives — snow, ice, and festive props used by winterLake and similar themes.
 
-export function drawPineTree(ctx: CanvasRenderingContext2D, x: number, groundY: number, size: number, snowCover = false): void {
+import type { Ctx2D } from '../../types';
+
+export function drawPineTree(ctx: Ctx2D, x: number, groundY: number, size: number, snowCover = false): void {
   const trunkW = size * 0.15;
   const trunkH = size * 0.3;
 
@@ -39,7 +41,7 @@ export function drawPineTree(ctx: CanvasRenderingContext2D, x: number, groundY: 
   }
 }
 
-export function drawChristmasTree(ctx: CanvasRenderingContext2D, x: number, groundY: number, size: number): void {
+export function drawChristmasTree(ctx: Ctx2D, x: number, groundY: number, size: number): void {
   const trunkW = size * 0.15;
   const trunkH = size * 0.3;
 
@@ -136,7 +138,7 @@ export function drawChristmasTree(ctx: CanvasRenderingContext2D, x: number, grou
   }
 }
 
-export function drawSnowball(ctx: CanvasRenderingContext2D, x: number, groundY: number, radius: number): void {
+export function drawSnowball(ctx: Ctx2D, x: number, groundY: number, radius: number): void {
   ctx.fillStyle = '#E4ECF4';
   ctx.beginPath();
   ctx.arc(x, groundY - radius, radius, 0, Math.PI * 2);
@@ -153,7 +155,7 @@ export function drawSnowball(ctx: CanvasRenderingContext2D, x: number, groundY: 
   ctx.fill();
 }
 
-export function drawSnowballPyramid(ctx: CanvasRenderingContext2D, x: number, groundY: number, ballRadius: number): void {
+export function drawSnowballPyramid(ctx: Ctx2D, x: number, groundY: number, ballRadius: number): void {
   const r = ballRadius;
   const gap = r * 0.15;
   // Bottom row — 3 balls
@@ -194,7 +196,7 @@ export function drawSnowballPyramid(ctx: CanvasRenderingContext2D, x: number, gr
 }
 
 /** Large pyramid: 4-3-2-1 rows (10 balls) with depth shading. */
-export function drawLargeSnowballPyramid(ctx: CanvasRenderingContext2D, x: number, groundY: number, ballRadius: number): void {
+export function drawLargeSnowballPyramid(ctx: Ctx2D, x: number, groundY: number, ballRadius: number): void {
   const r = ballRadius;
   const gap = r * 0.12;
   const rowSpacing = r * 1.7;
@@ -250,7 +252,7 @@ export const ICE_CUBE_DEPTH_RATIO = 0.3;
 
 /** Ice cube — translucent 3D block. Draws behind the platform at (x, topY).
  *  width/height are the visual cube dimensions (platform sits on top edge). */
-export function drawIceCube(ctx: CanvasRenderingContext2D, x: number, topY: number, width: number, height: number): void {
+export function drawIceCube(ctx: Ctx2D, x: number, topY: number, width: number, height: number): void {
   const depth = width * ICE_CUBE_DEPTH_RATIO;
 
   // Back face (darker, offset)
@@ -328,7 +330,7 @@ export function drawIceCube(ctx: CanvasRenderingContext2D, x: number, topY: numb
   ctx.fill();
 }
 
-export function drawSnowDrift(ctx: CanvasRenderingContext2D, x: number, groundY: number, width: number, height: number): void {
+export function drawSnowDrift(ctx: Ctx2D, x: number, groundY: number, width: number, height: number): void {
   ctx.fillStyle = 'rgba(230, 240, 250, 0.7)';
   ctx.beginPath();
   ctx.ellipse(x, groundY - height * 0.3, width / 2, height * 0.6, 0, 0, Math.PI * 2);
@@ -340,7 +342,7 @@ export function drawSnowDrift(ctx: CanvasRenderingContext2D, x: number, groundY:
   ctx.fill();
 }
 
-export function drawIcePatch(ctx: CanvasRenderingContext2D, x: number, groundY: number, width: number): void {
+export function drawIcePatch(ctx: Ctx2D, x: number, groundY: number, width: number): void {
   // Semi-transparent ice surface
   ctx.fillStyle = 'rgba(180, 210, 240, 0.35)';
   ctx.beginPath();
@@ -353,7 +355,7 @@ export function drawIcePatch(ctx: CanvasRenderingContext2D, x: number, groundY: 
   ctx.fill();
 }
 
-export function drawIcicle(ctx: CanvasRenderingContext2D, x: number, topY: number, length: number): void {
+export function drawIcicle(ctx: Ctx2D, x: number, topY: number, length: number): void {
   // Main icicle triangle
   ctx.fillStyle = 'rgba(180, 215, 240, 0.7)';
   ctx.beginPath();
@@ -374,7 +376,7 @@ export function drawIcicle(ctx: CanvasRenderingContext2D, x: number, topY: numbe
 
 /** Big snowman — purely decorative (drawn behind platforms). For the large
  *  jumpable snowman, a platform is placed at the head and this draws the body. */
-export function drawBigSnowman(ctx: CanvasRenderingContext2D, x: number, groundY: number, size: number): void {
+export function drawBigSnowman(ctx: Ctx2D, x: number, groundY: number, size: number): void {
   const bottomR = size * 0.42;
   const midR = size * 0.32;
   const headR = size * 0.22;
@@ -455,7 +457,7 @@ export function drawBigSnowman(ctx: CanvasRenderingContext2D, x: number, groundY
 
 /** Igloo — decorative dome drawn behind platforms. A platform at the top
  *  makes it jumpable. */
-export function drawIgloo(ctx: CanvasRenderingContext2D, x: number, groundY: number, width: number, height: number): void {
+export function drawIgloo(ctx: Ctx2D, x: number, groundY: number, width: number, height: number): void {
   // Snow dome
   ctx.fillStyle = '#E0E8F0';
   ctx.beginPath();
@@ -504,7 +506,7 @@ export function drawIgloo(ctx: CanvasRenderingContext2D, x: number, groundY: num
   ctx.fill();
 }
 
-export function drawSnowman(ctx: CanvasRenderingContext2D, x: number, groundY: number, size: number): void {
+export function drawSnowman(ctx: Ctx2D, x: number, groundY: number, size: number): void {
   const bodyR = size * 0.35;
   const headR = size * 0.22;
 

@@ -1,4 +1,4 @@
-import type { Arena, Platform, Player, SurfaceTag } from '../types';
+import type { Arena, Ctx2D, Platform, Player, SurfaceTag } from '../types';
 import { fastSin } from '../fastMath';
 import { CANVAS_WIDTH } from '../constants';
 
@@ -182,7 +182,7 @@ export interface DriftBandConfig {
 }
 
 export function drawDriftBand(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   time: number,
   cfg: DriftBandConfig,
 ): void {

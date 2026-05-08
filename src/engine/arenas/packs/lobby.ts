@@ -1,5 +1,5 @@
 import type { ArenaPack } from '../types';
-import type { Arena, Platform } from '../../types';
+import type { Ctx2D, Arena, Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import {
   drawTree, drawBush, drawFlower, drawMushroom, drawGrassTuft,
@@ -22,7 +22,7 @@ const LOBBY_TREELINE = [
   1150, -50, 1200, -70, 1250, -55, 1300, -65,
 ];
 
-function drawLobbyGround(ctx: CanvasRenderingContext2D, platform: Platform): void {
+function drawLobbyGround(ctx: Ctx2D, platform: Platform): void {
   const rng = mulberry32(seedFor(platform.x, platform.y));
   const cF = platform.y + CAP_DEPTH / 2;
   const cB = platform.y - CAP_DEPTH / 2;
@@ -93,7 +93,7 @@ function drawLobbyGround(ctx: CanvasRenderingContext2D, platform: Platform): voi
   }
 }
 
-function drawLobbyWall(ctx: CanvasRenderingContext2D, platform: Platform): void {
+function drawLobbyWall(ctx: Ctx2D, platform: Platform): void {
   const rng = mulberry32(seedFor(platform.x, platform.y));
   const cF = platform.y + CAP_DEPTH / 2;
   const cB = platform.y - CAP_DEPTH / 2;
@@ -289,7 +289,7 @@ export const lobby: ArenaPack = {
   },
 
   // ---- Custom draw functions ----
-  drawFarBackground: (ctx: CanvasRenderingContext2D, _arena: Arena) => {
+  drawFarBackground: (ctx: Ctx2D, _arena: Arena) => {
     ctx.save();
     ctx.globalAlpha = 0.25;
     ctx.fillStyle = '#3A6A3A';
@@ -304,7 +304,7 @@ export const lobby: ArenaPack = {
     ctx.restore();
   },
 
-  drawBackgroundNature: (ctx: CanvasRenderingContext2D, _arena: Arena) => {
+  drawBackgroundNature: (ctx: Ctx2D, _arena: Arena) => {
     drawTree(ctx, 50, GROUND_Y, 55);
     drawTree(ctx, 380, GROUND_Y, 45);
     drawTree(ctx, 650, GROUND_Y, 50);
@@ -327,7 +327,7 @@ export const lobby: ArenaPack = {
 
   drawForegroundNature: () => {},
 
-  drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
+  drawPlatform: (ctx: Ctx2D, platform: Platform, _isGround: boolean) => {
     if (platform.style === 'wall') {
       drawLobbyWall(ctx, platform);
     } else {
