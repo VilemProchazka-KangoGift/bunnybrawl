@@ -80,4 +80,30 @@ describe('Cooldowns', () => {
       expect(cd.tick(1, 0.1)).toBe(true);
     });
   });
+
+  describe('isReady', () => {
+    it('returns true for uninitialized keys', () => {
+      const cd = new Cooldowns<string>();
+      expect(cd.isReady('never-set')).toBe(true);
+    });
+
+    it('returns false while the timer is positive, true once it reaches 0', () => {
+      const cd = new Cooldowns<string>();
+      cd.set('a', 0.3);
+      expect(cd.isReady('a')).toBe(false);
+      cd.tick('a', 0.1);
+      expect(cd.isReady('a')).toBe(false);
+      cd.tick('a', 0.2);
+      expect(cd.isReady('a')).toBe(true);
+    });
+
+    it('does NOT decay or mutate', () => {
+      const cd = new Cooldowns<string>();
+      cd.set('a', 0.3);
+      // Many isReady calls should not advance the timer.
+      for (let i = 0; i < 100; i++) cd.isReady('a');
+      // Tick by less than the original interval — still not ready.
+      expect(cd.tick('a', 0.29)).toBe(false);
+    });
+  });
 });

@@ -1,14 +1,14 @@
-import type { MatchState, Arena, Player, PlayerSlot } from '../../types';
+import type { MatchState, Arena, Player } from '../../types';
 import type { GameplaySystem } from '../types';
 import type { ArenaEntitySystem } from './ArenaEntitySystem';
-import type { SfxCooldowns } from '../../sfxCooldowns';
+import type { PlayerSfxCooldowns } from '../../sfxCooldowns';
 import { applyEffectZones, updateZeroGSound } from './effectZones';
 
 export class EffectZoneSystem implements GameplaySystem {
   private state: MatchState;
   private arena: Arena;
   private arenaEntitySystem: ArenaEntitySystem;
-  private sfxCooldownsGetter: () => Map<PlayerSlot, SfxCooldowns>;
+  private sfxCooldownsGetter: () => PlayerSfxCooldowns;
   private playSound: (name: string) => void;
   private stopSound: (name: string) => void;
   private zeroGSoundPlaying = false;
@@ -17,7 +17,7 @@ export class EffectZoneSystem implements GameplaySystem {
     state: MatchState,
     arena: Arena,
     arenaEntitySystem: ArenaEntitySystem,
-    sfxCooldownsGetter: () => Map<PlayerSlot, SfxCooldowns>,
+    sfxCooldownsGetter: () => PlayerSfxCooldowns,
     playSound: (name: string) => void,
     stopSound: (name: string) => void,
   ) {
