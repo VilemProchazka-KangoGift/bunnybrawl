@@ -20,6 +20,10 @@ import {
   drawPlatformRightFace, drawPlatformCap,
   jaggedDown, backWavyUp, drawLeftStones, leftJagged,
 } from '../../themes/drawPrimitives';
+import {
+  registerReactiveKind, createReactiveInstance,
+  type ReactiveInstance,
+} from '../../gameLoop/cosmetics/reactiveDecorations';
 
 interface LavaZone { cx: number; cy: number; w: number }
 const LAVA_ZONES: ReadonlyArray<LavaZone> = [
@@ -205,6 +209,63 @@ const LAVA_EMITTERS = [
   { x: 610, y: 656, radius: 130 },
   { x: 900, y: 696, radius: 150 },
 ] as const;
+
+// ============================================================================
+// Reactive decoration factories + draw fns
+// ============================================================================
+
+// ---- volcano.deadTree ----
+// Charred trees: stomp-shake + ash burst. Minimal wind sway (dead wood).
+// No proximity (dead trees don't bend toward players).
+interface DeadTreeData { size: number; }
+function volcanoDeadTree(x: number, y: number, size: number): ReactiveInstance {
+  return createReactiveInstance({
+    pos: { x, y },
+    kind: 'volcano.deadTree',
+    seed: Math.floor((x * 83 + y * 41) % 997),
+    data: { size } satisfies DeadTreeData,
+    windAmp: 2,
+    shakeRadius: 90,
+    burst: { threshold: 0.95, particleKind: 'ash', count: 10 },
+  });
+}
+registerReactiveKind('volcano.deadTree', {
+  layer: 'prePlayer',
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
+    const { size } = inst.data as DeadTreeData;
+    const lean = swayPhase + (inst.shakeDecay > 0 ? Math.sin(inst.shakeDecay * 40) * inst.shakeDecay * 4 : 0);
+    ctx.save();
+    ctx.translate(inst.pos.x, inst.pos.y);
+    ctx.rotate(lean * 0.012);
+
+    const trunkW = size * 0.15;
+    const trunkH = size;
+    ctx.fillStyle = '#1A1010';
+    ctx.fillRect(-trunkW / 2, -trunkH, trunkW, trunkH);
+    // Branches
+    ctx.strokeStyle = '#2A1818';
+    ctx.lineWidth = 2;
+    // Left branch
+    ctx.beginPath();
+    ctx.moveTo(-2, -trunkH * 0.7);
+    ctx.lineTo(-size * 0.4, -trunkH * 0.9);
+    ctx.lineTo(-size * 0.5, -trunkH * 1.05);
+    ctx.stroke();
+    // Right branch
+    ctx.beginPath();
+    ctx.moveTo(2, -trunkH * 0.5);
+    ctx.lineTo(size * 0.35, -trunkH * 0.7);
+    ctx.lineTo(size * 0.3, -trunkH * 0.85);
+    ctx.stroke();
+    // Top
+    ctx.beginPath();
+    ctx.moveTo(0, -trunkH);
+    ctx.lineTo(-size * 0.1, -trunkH * 1.15);
+    ctx.stroke();
+
+    ctx.restore();
+  },
+});
 
 export const volcano: ArenaPack = {
   // ---- Identity ----
@@ -419,42 +480,6 @@ export const volcano: ArenaPack = {
     drawLavaPool(550, 80);
     drawLavaPool(900, 120);
 
-    // Dead trees (charred, no leaves)
-    const drawDeadTree = (dx: number, dy: number, size: number) => {
-      ctx.save();
-      const trunkW = size * 0.15;
-      const trunkH = size;
-      ctx.fillStyle = '#1A1010';
-      ctx.fillRect(dx - trunkW / 2, dy - trunkH, trunkW, trunkH);
-      // Branches
-      ctx.strokeStyle = '#2A1818';
-      ctx.lineWidth = 2;
-      // Left branch
-      ctx.beginPath();
-      ctx.moveTo(dx - 2, dy - trunkH * 0.7);
-      ctx.lineTo(dx - size * 0.4, dy - trunkH * 0.9);
-      ctx.lineTo(dx - size * 0.5, dy - trunkH * 1.05);
-      ctx.stroke();
-      // Right branch
-      ctx.beginPath();
-      ctx.moveTo(dx + 2, dy - trunkH * 0.5);
-      ctx.lineTo(dx + size * 0.35, dy - trunkH * 0.7);
-      ctx.lineTo(dx + size * 0.3, dy - trunkH * 0.85);
-      ctx.stroke();
-      // Top
-      ctx.beginPath();
-      ctx.moveTo(dx, dy - trunkH);
-      ctx.lineTo(dx - size * 0.1, dy - trunkH * 1.15);
-      ctx.stroke();
-      ctx.restore();
-    };
-
-    drawDeadTree(80, y, 55);
-    drawDeadTree(450, y, 45);
-    drawDeadTree(750, y, 50);
-    drawDeadTree(1100, y, 40);
-    drawDeadTree(1220, y, 55);
-
     // Volcanic rocks
     const drawRock = (rx: number, ry: number, rw: number, rh: number) => {
       ctx.fillStyle = '#2A1818';
@@ -488,6 +513,20 @@ export const volcano: ArenaPack = {
         drawLavaPool(plat.x + plat.width * 0.4, 30);
       }
     }
+  },
+
+  buildReactiveDecorations: (arena) => {
+    const out: ReactiveInstance[] = [];
+    const ground = arena.platforms[0];
+    const y = ground.y;
+    // Five charred dead trees rooted on the ground — same positions/sizes
+    // the static draws used.
+    out.push(volcanoDeadTree(80, y, 55));
+    out.push(volcanoDeadTree(450, y, 45));
+    out.push(volcanoDeadTree(750, y, 50));
+    out.push(volcanoDeadTree(1100, y, 40));
+    out.push(volcanoDeadTree(1220, y, 55));
+    return out;
   },
 
   drawForegroundNature: (ctx: CanvasRenderingContext2D, arena: Arena) => {
@@ -623,15 +662,11 @@ export const volcano: ArenaPack = {
       ctx.fill();
       ctx.globalAlpha = 1;
     } else {
-      // Ash is an asymmetric ellipse — rotation matters.
-      ctx.save();
-      ctx.translate(w.x, w.y);
-      ctx.rotate(w.rotation);
+      // Ash — asymmetric ellipse
       ctx.fillStyle = w.color || 'rgba(120, 100, 90, 0.5)';
       ctx.beginPath();
-      ctx.ellipse(0, 0, w.size, w.size * 0.4, 0, 0, Math.PI * 2);
+      ctx.ellipse(w.x, w.y, w.size, w.size * 0.4, w.rotation, 0, Math.PI * 2);
       ctx.fill();
-      ctx.restore();
     }
   },
 

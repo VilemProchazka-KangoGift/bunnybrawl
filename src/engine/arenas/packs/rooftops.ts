@@ -42,6 +42,10 @@ import {
   drawPlatformRightFace, drawPlatformCap,
   subtleDown, backIso, leftIso,
 } from '../../themes/drawPrimitives';
+import {
+  registerReactiveKind, createReactiveInstance, composeBend,
+  type ReactiveInstance,
+} from '../../gameLoop/cosmetics/reactiveDecorations';
 
 // --- 3D rooftop cap: gravel + tar texture, with a raised parapet along the back.
 // No body is drawn; drawFarBackground owns the building facades below.
@@ -465,6 +469,133 @@ function drawRooftopsPlatformFg(ctx: CanvasRenderingContext2D, platform: Platfor
     // 'roof' has no body. 'balcony' and 'hvac' rendered fully in bg pass.
   }
 }
+
+// ============================================================================
+// Reactive decoration factories + draw fns
+// ============================================================================
+
+// ---- rooftops.clothesline ----
+const CLOTHESLINE_COLORS = ['#CC4444', '#4444CC', '#44CC44', '#CCCC44', '#CC44CC', '#CC8844'];
+interface ClotheslineData { x1: number; y1: number; x2: number; y2: number; }
+function rooftopsClothesline(x1: number, y1: number, x2: number, y2: number): ReactiveInstance {
+  return createReactiveInstance({
+    pos: { x: (x1 + x2) / 2, y: Math.max(y1, y2) + 15 },
+    kind: 'rooftops.clothesline',
+    seed: Math.floor((x1 * 91 + y1 * 41 + x2 * 53) % 997),
+    data: { x1, y1, x2, y2 } satisfies ClotheslineData,
+    windAmp: 8,
+    proximity: { radius: 40, mode: 'lean', magnitude: 22 },
+  });
+}
+registerReactiveKind('rooftops.clothesline', {
+  layer: 'prePlayer',
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
+    const { x1, y1, x2, y2 } = inst.data as ClotheslineData;
+    const bend = composeBend(inst, swayPhase);
+    ctx.save();
+    ctx.globalAlpha = 1;
+    // Wall attachment hooks (fixed — anchored to building walls)
+    ctx.fillStyle = '#5A5A68';
+    ctx.fillRect(x1 - 2, y1 - 3, 5, 6);
+    ctx.fillRect(x2 - 2, y2 - 3, 5, 6);
+    // Rope with sag — midpoint bends with wind/proximity
+    ctx.strokeStyle = '#6A6A7A';
+    ctx.lineWidth = 1;
+    const midY = Math.max(y1, y2) + 15;
+    const midX = (x1 + x2) / 2 + bend;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.quadraticCurveTo(midX, midY, x2, y2);
+    ctx.stroke();
+    // Hanging clothes — bend amount tapers from 0 at hooks to full at midpoint
+    const n = Math.floor((x2 - x1) / 28);
+    for (let i = 0; i < n; i++) {
+      const t = (i + 0.5) / n;
+      const cx = x1 + (x2 - x1) * t;
+      const sagY = Math.min(y1, y2) + (midY - Math.min(y1, y2)) * 4 * t * (1 - t);
+      // Taper bend along rope (max at midpoint t=0.5)
+      const taper = 4 * t * (1 - t);
+      const itemBend = bend * taper;
+      ctx.fillStyle = CLOTHESLINE_COLORS[i % CLOTHESLINE_COLORS.length];
+      ctx.globalAlpha = 0.65;
+      ctx.save();
+      ctx.translate(cx + itemBend, sagY + 2);
+      // Wind-flap rotation responds to bend velocity for liveliness
+      const flap = 0.12 + Math.sin(i * 1.7) * 0.08 + (bend * 0.01);
+      ctx.rotate(flap);
+      if (i % 4 === 0) {
+        // Shirt -- T shape
+        ctx.fillRect(-4, 0, 8, 11);
+        ctx.fillRect(-7, 0, 3, 5);
+        ctx.fillRect(4, 0, 3, 5);
+      } else if (i % 4 === 1) {
+        // Pants
+        ctx.fillRect(-3, 0, 6, 5);
+        ctx.fillRect(-3, 5, 2, 7);
+        ctx.fillRect(1, 5, 2, 7);
+      } else if (i % 4 === 2) {
+        // Towel / sheet -- flapping
+        ctx.fillRect(-3, 0, 6, 14);
+        ctx.fillStyle = CLOTHESLINE_COLORS[(i + 2) % CLOTHESLINE_COLORS.length];
+        ctx.globalAlpha = 0.25;
+        ctx.fillRect(-3, 4, 6, 2);
+      } else {
+        // Sock pair
+        ctx.fillRect(-4, 0, 3, 8);
+        ctx.fillRect(1, 0, 3, 8);
+      }
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+  },
+});
+
+// ---- rooftops.antenna ----
+interface AntennaData { h: number; }
+function rooftopsAntenna(x: number, y: number, h: number): ReactiveInstance {
+  return createReactiveInstance({
+    pos: { x, y },
+    kind: 'rooftops.antenna',
+    seed: Math.floor((x * 67 + y * 23 + h) % 997),
+    data: { h } satisfies AntennaData,
+    windAmp: 1,        // rigid metal — minimal sway
+    shakeRadius: 60,   // small wobble on rooftop stomp
+  });
+}
+registerReactiveKind('rooftops.antenna', {
+  layer: 'prePlayer',
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
+    const { h } = inst.data as AntennaData;
+    // Rigid metal: tiny wind sway + brief shake on stomp.
+    const lean = swayPhase + (inst.shakeDecay > 0 ? Math.sin(inst.shakeDecay * 40) * inst.shakeDecay * 4 : 0);
+    ctx.save();
+    ctx.translate(inst.pos.x, inst.pos.y);
+    // Rotate around the base so the tip sways further than the base.
+    ctx.rotate(lean * 0.012);
+    ctx.strokeStyle = '#5A5A6A';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(0, -h);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-10, -h * 0.7);
+    ctx.lineTo(10, -h * 0.7);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-7, -h * 0.85);
+    ctx.lineTo(7, -h * 0.85);
+    ctx.stroke();
+    ctx.fillStyle = '#FF0000';
+    ctx.globalAlpha = 0.6;
+    ctx.beginPath();
+    ctx.arc(0, -h, 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  },
+});
 
 export const rooftops: ArenaPack = {
   // ---- Identity ----
@@ -912,64 +1043,6 @@ export const rooftops: ArenaPack = {
       }
     }
 
-    // === Clotheslines between buildings (attached to building walls) ===
-    ctx.globalAlpha = 1;
-    const drawClothesline = (x1: number, y1: number, x2: number, y2: number) => {
-      // Wall attachment hooks
-      ctx.fillStyle = '#5A5A68';
-      ctx.fillRect(x1 - 2, y1 - 3, 5, 6);
-      ctx.fillRect(x2 - 2, y2 - 3, 5, 6);
-      // Rope with sag
-      ctx.strokeStyle = '#6A6A7A';
-      ctx.lineWidth = 1;
-      const midY = Math.max(y1, y2) + 15;
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.quadraticCurveTo((x1 + x2) / 2, midY, x2, y2);
-      ctx.stroke();
-      // Hanging clothes -- windblown with varied shapes
-      const colors = ['#CC4444', '#4444CC', '#44CC44', '#CCCC44', '#CC44CC', '#CC8844'];
-      const n = Math.floor((x2 - x1) / 28);
-      for (let i = 0; i < n; i++) {
-        const t = (i + 0.5) / n;
-        const cx = x1 + (x2 - x1) * t;
-        const sagY = Math.min(y1, y2) + (midY - Math.min(y1, y2)) * 4 * t * (1 - t);
-        ctx.fillStyle = colors[i % colors.length];
-        ctx.globalAlpha = 0.65;
-        // Wind angle -- items blow slightly right
-        ctx.save();
-        ctx.translate(cx, sagY + 2);
-        ctx.rotate(0.12 + Math.sin(i * 1.7) * 0.08);
-        if (i % 4 === 0) {
-          // Shirt -- T shape
-          ctx.fillRect(-4, 0, 8, 11);
-          ctx.fillRect(-7, 0, 3, 5);
-          ctx.fillRect(4, 0, 3, 5);
-        } else if (i % 4 === 1) {
-          // Pants
-          ctx.fillRect(-3, 0, 6, 5);
-          ctx.fillRect(-3, 5, 2, 7);
-          ctx.fillRect(1, 5, 2, 7);
-        } else if (i % 4 === 2) {
-          // Towel / sheet -- flapping
-          ctx.fillRect(-3, 0, 6, 14);
-          ctx.fillStyle = colors[(i + 2) % colors.length];
-          ctx.globalAlpha = 0.25;
-          ctx.fillRect(-3, 4, 6, 2);
-        } else {
-          // Sock pair
-          ctx.fillRect(-4, 0, 3, 8);
-          ctx.fillRect(1, 0, 3, 8);
-        }
-        ctx.restore();
-        ctx.globalAlpha = 1;
-      }
-    };
-    // Gap 1: B1 right wall (x=350) to B2 left wall (x=510)
-    drawClothesline(350, 480 + 12, 510, 370 + 12);
-    // Gap 2: B2 right wall (x=810) to B3 left wall (x=970)
-    drawClothesline(810, 370 + 12, 970, 300 + 12);
-
     ctx.restore();
   },
 
@@ -1033,33 +1106,6 @@ export const rooftops: ArenaPack = {
     drawTinyChimney(720, b2RoofY, 7, 12);
     drawTinyChimney(795, b2RoofY, 6, 10);
 
-    // Antennas on B1 right edge
-    const drawAntenna = (ax: number, ay: number, h: number) => {
-      ctx.strokeStyle = '#5A5A6A';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(ax, ay);
-      ctx.lineTo(ax, ay - h);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(ax - 10, ay - h * 0.7);
-      ctx.lineTo(ax + 10, ay - h * 0.7);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(ax - 7, ay - h * 0.85);
-      ctx.lineTo(ax + 7, ay - h * 0.85);
-      ctx.stroke();
-      ctx.fillStyle = '#FF0000';
-      ctx.globalAlpha = 0.6;
-      ctx.beginPath();
-      ctx.arc(ax, ay - h, 2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-    };
-    // B1 roof (P0, y=480)
-    drawAntenna(330, arena.platforms[0].y, 45);
-    drawAntenna(345, arena.platforms[0].y, 58);
-
     // Vent pipes
     ctx.fillStyle = '#5A5060';
     ctx.fillRect(180, arena.platforms[0].y - 14, 12, 14);
@@ -1093,6 +1139,23 @@ export const rooftops: ArenaPack = {
     ctx.closePath();
     ctx.fill();
     ctx.restore();
+  },
+
+  buildReactiveDecorations: (arena) => {
+    const out: ReactiveInstance[] = [];
+
+    // Clotheslines spanning between buildings — rope sag + clothes flap.
+    // Gap 1: B1 right wall (x=350) to B2 left wall (x=510)
+    out.push(rooftopsClothesline(350, 480 + 12, 510, 370 + 12));
+    // Gap 2: B2 right wall (x=810) to B3 left wall (x=970)
+    out.push(rooftopsClothesline(810, 370 + 12, 970, 300 + 12));
+
+    // Antennas on B1 roof (P0). Stomp-shake on rooftop landings.
+    const b1RoofY = arena.platforms[0].y;
+    out.push(rooftopsAntenna(330, b1RoofY, 45));
+    out.push(rooftopsAntenna(345, b1RoofY, 58));
+
+    return out;
   },
 
   drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {

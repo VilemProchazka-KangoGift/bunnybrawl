@@ -4,6 +4,10 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin } from '../../fastMath';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
 import { getFloatingPlatforms, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
+import {
+  registerReactiveKind, createReactiveInstance, composeBend,
+  type ReactiveInstance,
+} from '../../gameLoop/cosmetics/reactiveDecorations';
 
 const ROBOTS_CFG = [
   { platL: 20,   platR: 200,  platTopY: 660, walkSpeed: 22, fleeSpeed: 70, fleeRadius: 90, yTolerance: 80, turnEaseRate: 2 },
@@ -198,6 +202,52 @@ function drawSpacePlatformFg(ctx: CanvasRenderingContext2D, platform: Platform):
   // Reference rng so unused-warning is suppressed; cheap noise fleck for grain.
   if (rng() < 0) ctx.fillRect(0, 0, 0, 0);
 }
+
+// ============================================================================
+// Reactive decoration: space_station.cable
+// ============================================================================
+// A drooping cable connecting two points (e.g. wall to ground/platform).
+// `bendX` shifts the curve laterally (player proximity sway).
+function drawSpaceCable(
+  ctx: CanvasRenderingContext2D,
+  x1: number, y1: number,
+  x2: number, y2: number,
+  color: string,
+  bendX: number = 0,
+): void {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x1 + bendX, y1);
+  ctx.quadraticCurveTo((x1 + x2) / 2 + bendX, Math.max(y1, y2) + 15, x2 + bendX, y2);
+  ctx.stroke();
+}
+
+interface CableData {
+  x1: number; y1: number;
+  x2: number; y2: number;
+  color: string;
+}
+function spaceStationCable(x1: number, y1: number, x2: number, y2: number, color: string): ReactiveInstance {
+  // Anchor pos at the midpoint — used by proximity check.
+  const midX = (x1 + x2) / 2;
+  const midY = Math.max(y1, y2) + 15;
+  return createReactiveInstance({
+    pos: { x: midX, y: midY },
+    kind: 'space_station.cable',
+    seed: Math.floor((x1 * 73 + y1 * 31 + x2 * 19) % 997),
+    data: { x1, y1, x2, y2, color } satisfies CableData,
+    windAmp: 4,
+    proximity: { radius: 36, mode: 'lean', magnitude: 18 },
+  });
+}
+registerReactiveKind('space_station.cable', {
+  layer: 'prePlayer',
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
+    const { x1, y1, x2, y2, color } = inst.data as CableData;
+    drawSpaceCable(ctx, x1, y1, x2, y2, color, composeBend(inst, swayPhase));
+  },
+});
 
 let scanLinePattern: CanvasPattern | null = null;
 
@@ -676,21 +726,6 @@ export const spaceStation: ArenaPack = {
     drawCrate(160, y, 22);
     drawCrate(1100, y, 20);
 
-    // Cables on side walls only
-    const drawCable = (x1: number, y1: number, x2: number, y2: number, color: string) => {
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.quadraticCurveTo((x1 + x2) / 2, Math.max(y1, y2) + 15, x2, y2);
-      ctx.stroke();
-    };
-
-    drawCable(30, y - 40, 180, y - 30, '#FF4444');
-    drawCable(35, y - 35, 175, y - 25, '#00AAFF');
-    drawCable(1100, y - 45, 1240, y - 35, '#FFAA00');
-    drawCable(1105, y - 40, 1235, y - 30, '#00CC44');
-
     // Platform decorations -- only on side stack platforms
     const floats = getFloatingPlatforms(arena.platforms).filter(p => p.x < 250 || p.x > 1000);
     for (let i = 0; i < floats.length; i++) {
@@ -716,6 +751,17 @@ export const spaceStation: ArenaPack = {
         ctx.globalAlpha = 1;
       }
     }
+  },
+
+  buildReactiveDecorations: (arena) => {
+    const out: ReactiveInstance[] = [];
+    const y = arena.platforms[0].y;
+    // Same positions as the previous static draws in drawBackgroundNature.
+    out.push(spaceStationCable(30, y - 40, 180, y - 30, '#FF4444'));
+    out.push(spaceStationCable(35, y - 35, 175, y - 25, '#00AAFF'));
+    out.push(spaceStationCable(1100, y - 45, 1240, y - 35, '#FFAA00'));
+    out.push(spaceStationCable(1105, y - 40, 1235, y - 30, '#00CC44'));
+    return out;
   },
 
   drawForegroundNature: (ctx, arena) => {

@@ -3,8 +3,14 @@ import type { Arena, Platform, WeatherParticle } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
-import { getFloatingPlatforms, isLivePlayer, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
+import { getFloatingPlatforms, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
 import { drawRat } from '../../themes/drawPrimitives';
+import {
+  registerReactiveKind,
+  createReactiveInstance,
+  composeBend,
+  type ReactiveInstance,
+} from '../../gameLoop/cosmetics/reactiveDecorations';
 
 const RATS_CFG = [
   { platL: 30,   platR: 220,  platTopY: 660, walkSpeed: 50, fleeSpeed: 180, fleeRadius: 120, yTolerance: 80 },
@@ -15,21 +21,7 @@ const _castleRats: GroundCritterState[] = RATS_CFG.map((cfg, i) => ({
   x: (cfg.platL + cfg.platR) / 2,
   dir: i % 2 === 0 ? 1 : -1, facingEase: 1, fleeing: false, committedFleeDir: 0,
 }));
-let _bannerExcite: Float32Array | null = null;
-const _tickBannerDt = makeDtTracker();
 const _tickCastleRatDt = makeDtTracker();
-// Cached banner-eligible floating platforms (.filter() in drawAnimatedForeground
-// otherwise allocates per frame). Keyed by arena.platforms identity for
-// auto-invalidation on switchArena.
-const _bannerFloatsCache = new WeakMap<Platform[], Platform[]>();
-function getBannerFloats(arena: Arena): Platform[] {
-  let cached = _bannerFloatsCache.get(arena.platforms);
-  if (!cached) {
-    cached = getFloatingPlatforms(arena.platforms).filter(p => p.width >= 100);
-    _bannerFloatsCache.set(arena.platforms, cached);
-  }
-  return cached;
-}
 
 // x=1180 conflicted with the tall floating platform at x=1120 y=580; moved to x=1080 (clear ground space).
 const TORCH_X = [100, 400, 640, 880, 1080] as const;
@@ -54,6 +46,7 @@ function drawCastleCobweb(
   cornerY: number,
   dirX: number,
   dirY: number,
+  bendX = 0,
 ): void {
   const len = 13;
   const baseAngle = Math.atan2(dirY, dirX);
@@ -62,25 +55,30 @@ function drawCastleCobweb(
   ctx.save();
   ctx.strokeStyle = 'rgba(230,230,230,0.55)';
   ctx.lineWidth = 0.7;
+  // The web fans into the body — bend tilts the outer rim by `bendX` while
+  // the corner anchor stays pinned (cobwebs are attached at the corner).
   const angles: number[] = [];
   for (let i = 0; i < strands; i++) {
     const a = baseAngle - halfSpread + (i / (strands - 1)) * (halfSpread * 2);
     angles.push(a);
     ctx.beginPath();
     ctx.moveTo(cornerX, cornerY);
-    ctx.lineTo(cornerX + Math.cos(a) * len, cornerY + Math.sin(a) * len);
+    ctx.lineTo(cornerX + Math.cos(a) * len + bendX, cornerY + Math.sin(a) * len);
     ctx.stroke();
   }
   for (let r = 1; r <= 3; r++) {
     const radius = (r / 4) * len;
+    // Bend ramps from 0 at the corner up to full bendX at the outer rim.
+    const bendT = r / 4;
+    const localBend = bendX * bendT;
     ctx.beginPath();
     for (let i = 0; i < strands; i++) {
-      const x1 = cornerX + Math.cos(angles[i]) * radius;
+      const x1 = cornerX + Math.cos(angles[i]) * radius + localBend;
       const y1 = cornerY + Math.sin(angles[i]) * radius;
       if (i === 0) ctx.moveTo(x1, y1);
       else {
         const a0 = angles[i - 1];
-        const x0 = cornerX + Math.cos(a0) * radius;
+        const x0 = cornerX + Math.cos(a0) * radius + localBend;
         const y0 = cornerY + Math.sin(a0) * radius;
         // Slight catenary sag toward the corner
         const mx = (x0 + x1) * 0.5 + (cornerX - (x0 + x1) * 0.5) * 0.15;
@@ -153,10 +151,10 @@ function drawCastlePlatformBg(ctx: CanvasRenderingContext2D, platform: Platform)
   }, leftPts);
 }
 
-// Fg pass: body face + cobwebs. Drawn AFTER players so the body occludes any
-// player whose bbox overlaps the body region — gives the iso phantom strip
-// (between plat.x and plat.x + leftCollisionInset) a "going behind" feel.
-function drawCastlePlatformFg(ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean): void {
+// Fg pass: body face. Drawn AFTER players so the body occludes any player
+// whose bbox overlaps the body region — gives the iso phantom strip (between
+// plat.x and plat.x + leftCollisionInset) a "going behind" feel.
+function drawCastlePlatformFg(ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean): void {
   // Independent seed (offset from bg) so bg and fg rng streams don't interfere.
   const rng = mulberry32(seedFor(platform.x, platform.y) ^ BODY_SEED_OFFSET);
   const cF = capFrontY(platform);
@@ -209,27 +207,132 @@ function drawCastlePlatformFg(ctx: CanvasRenderingContext2D, platform: Platform,
   }
 
   ctx.restore();
-
-  // Cobwebs in front-face corners — 45% chance per corner. Never both corners
-  // on the same vertical side. Floating only, bodyH >= 10 only.
-  if (!isGround && bodyH >= 10) {
-    const bb = bodyTop + bodyH;
-    let leftTop = rng() < 0.45;
-    let leftBot = rng() < 0.45;
-    let rightTop = rng() < 0.45;
-    let rightBot = rng() < 0.45;
-    if (leftTop && leftBot) {
-      if (rng() < 0.5) leftBot = false; else leftTop = false;
-    }
-    if (rightTop && rightBot) {
-      if (rng() < 0.5) rightBot = false; else rightTop = false;
-    }
-    if (leftTop)  drawCastleCobweb(ctx, platform.x, bodyTop, +1, +1);
-    if (rightTop) drawCastleCobweb(ctx, platform.x + platform.width, bodyTop, -1, +1);
-    if (leftBot)  drawCastleCobweb(ctx, platform.x, bb, +1, -1);
-    if (rightBot) drawCastleCobweb(ctx, platform.x + platform.width, bb, -1, -1);
-  }
 }
+
+/**
+ * Re-runs the same RNG-driven corner-pick logic that used to live in
+ * `drawCastlePlatformFg` so the reactive cobweb instance list lines up with
+ * the original static placements. Kept in lock-step with the inline
+ * pre-migration logic — change both together if the placement rule moves.
+ */
+function pickCobwebCorners(platform: Platform): Array<{ x: number; y: number; dirX: number; dirY: number }> {
+  const isGround = platform.y >= 650;
+  const cF = capFrontY(platform);
+  const bodyTop = cF;
+  const bodyH = platform.height - CAP_DEPTH / 2;
+  if (isGround || bodyH < 10) return [];
+
+  const rng = mulberry32(seedFor(platform.x, platform.y) ^ BODY_SEED_OFFSET);
+  // Mirror the body-face RNG stream up to the cobweb decision: replay the
+  // body-fill blotches consume so we land on the same RNG state that the
+  // original inline draw used for the corner picks.
+  const blotchCount = 3 + Math.floor(rng() * 2);
+  for (let i = 0; i < blotchCount; i++) {
+    rng(); rng(); rng(); rng(); rng(); // bx, by, brx, bry, ellipse-rotation
+  }
+
+  const bb = bodyTop + bodyH;
+  let leftTop = rng() < 0.45;
+  let leftBot = rng() < 0.45;
+  let rightTop = rng() < 0.45;
+  let rightBot = rng() < 0.45;
+  if (leftTop && leftBot) {
+    if (rng() < 0.5) leftBot = false; else leftTop = false;
+  }
+  if (rightTop && rightBot) {
+    if (rng() < 0.5) rightBot = false; else rightTop = false;
+  }
+  const out: Array<{ x: number; y: number; dirX: number; dirY: number }> = [];
+  if (leftTop)  out.push({ x: platform.x,                    y: bodyTop, dirX: +1, dirY: +1 });
+  if (rightTop) out.push({ x: platform.x + platform.width,   y: bodyTop, dirX: -1, dirY: +1 });
+  if (leftBot)  out.push({ x: platform.x,                    y: bb,      dirX: +1, dirY: -1 });
+  if (rightBot) out.push({ x: platform.x + platform.width,   y: bb,      dirX: -1, dirY: -1 });
+  return out;
+}
+
+// ============================================================================
+// Reactive decoration kinds
+// ============================================================================
+
+// ---- castle.cobweb ----
+// Subtle bend toward passing players. The corner stays anchored; the outer
+// rim sways. windAmp is small (cobwebs are delicate).
+interface CobwebData { dirX: number; dirY: number; }
+function castleCobweb(x: number, y: number, dirX: number, dirY: number): ReactiveInstance {
+  return createReactiveInstance({
+    pos: { x, y },
+    kind: 'castle.cobweb',
+    seed: Math.floor((x * 71 + y * 29 + dirX * 11 + dirY * 13) % 997),
+    data: { dirX, dirY } satisfies CobwebData,
+    windAmp: 3,
+    proximity: { radius: 32, mode: 'lean', magnitude: 14 },
+  });
+}
+registerReactiveKind('castle.cobweb', {
+  layer: 'postPlayer',
+  draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
+    const { dirX, dirY } = inst.data as CobwebData;
+    drawCastleCobweb(ctx, inst.pos.x, inst.pos.y, dirX, dirY, composeBend(inst, swayPhase));
+  },
+});
+
+// ---- castle.banner ----
+// Floating-platform banners with proximity-driven excitement amplifying sway.
+interface BannerData { colorIdx: number; }
+function castleBanner(x: number, y: number, colorIdx: number): ReactiveInstance {
+  return createReactiveInstance({
+    pos: { x, y },
+    kind: 'castle.banner',
+    seed: colorIdx * 17 + Math.floor((x * 31 + y * 41) % 997),
+    data: { colorIdx } satisfies BannerData,
+    windAmp: 6,
+    proximity: { radius: 40, mode: 'lean', magnitude: 16 },
+  });
+}
+registerReactiveKind('castle.banner', {
+  layer: 'postPlayer',
+  draw: (ctx, inst, _swayPhase, time, _dayPhase, _state) => {
+    const data = inst.data as BannerData;
+    const excite = inst.excitement;
+
+    const bx = inst.pos.x;
+    const by = inst.pos.y;
+    const i = inst.seed;
+    const color = BANNER_COLORS[data.colorIdx % BANNER_COLORS.length];
+
+    const baseSway = fastSin(time * 1.5 + i * 1.8) * 6;
+    const reactSway = fastSin(time * (1.5 + excite * 4) + i * 1.8) * excite * 5;
+    const sway = baseSway + reactSway;
+    const h = 35;
+
+    ctx.save();
+    ctx.globalAlpha = 0.7;
+    ctx.fillStyle = '#8A8A6A';
+    ctx.fillRect(bx - 14, by - 2, 28, 3);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(bx - 12, by);
+    ctx.lineTo(bx + 12, by);
+    ctx.quadraticCurveTo(bx + 10 + sway * 0.5, by + h * 0.5, bx + 8 + sway, by + h);
+    ctx.lineTo(bx + sway, by + h + 12);
+    ctx.lineTo(bx - 8 + sway, by + h);
+    ctx.quadraticCurveTo(bx - 10 + sway * 0.5, by + h * 0.5, bx - 12, by);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+    const ex = bx + sway * 0.3;
+    ctx.beginPath();
+    ctx.moveTo(ex, by + 8);
+    ctx.lineTo(ex + 6, by + 13);
+    ctx.lineTo(ex + 6, by + 22);
+    ctx.lineTo(ex, by + 27);
+    ctx.lineTo(ex - 6, by + 22);
+    ctx.lineTo(ex - 6, by + 13);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  },
+});
 
 export const castle: ArenaPack = {
   // ---- Identity ----
@@ -675,9 +778,6 @@ export const castle: ArenaPack = {
     drawChain(200, gy - 40, 4);
     drawChain(1080, gy - 35, 3);
     ctx.restore();
-
-    // Banners are drawn in drawAnimatedForeground so they animate every frame
-    // and can react to nearby players (drawForegroundNature is cached at load).
   },
 
   drawPlatform: (ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean) => {
@@ -849,65 +949,25 @@ export const castle: ArenaPack = {
     }
   },
 
-  drawAnimatedForeground: (ctx, arena, time, _dayPhase, matchState) => {
-    // Reactive banners: nearest-player distance amplifies sway. Excitement is
-    // eased over ~0.5s so the wobble fades in/out smoothly instead of jumping.
-    const floats = getBannerFloats(arena);
-    const players = matchState?.players;
-    if (!_bannerExcite || _bannerExcite.length < floats.length) {
-      _bannerExcite = new Float32Array(floats.length);
+  buildReactiveDecorations: (arena: Arena) => {
+    const out: ReactiveInstance[] = [];
+    // Cobwebs — replay the per-platform RNG corner picks so positions match
+    // the pre-migration static layout exactly.
+    for (const plat of arena.platforms) {
+      const corners = pickCobwebCorners(plat);
+      for (const c of corners) {
+        out.push(castleCobweb(c.x, c.y, c.dirX, c.dirY));
+      }
     }
-    const dt = _tickBannerDt(time);
-    ctx.save();
-    ctx.globalAlpha = 0.7;
+    // Banners — one per banner-eligible floating platform (width >= 100).
+    const floats = getFloatingPlatforms(arena.platforms).filter(p => p.width >= 100);
     for (let i = 0; i < floats.length; i++) {
       const plat = floats[i];
       const bx = plat.x + plat.width / 2;
       const by = plat.y + plat.height;
-      const color = BANNER_COLORS[i % BANNER_COLORS.length];
-      let nearest = Infinity;
-      if (players) {
-        for (const p of players) {
-          if (!isLivePlayer(p)) continue;
-          const dx = (p.x + p.width * 0.5) - bx;
-          const dy = (p.y + p.height * 0.5) - (by + 18);
-          const d2 = dx * dx + dy * dy;
-          if (d2 < nearest) nearest = d2;
-        }
-      }
-      const target = nearest < 90 * 90 ? 1 - Math.sqrt(nearest) / 90 : 0;
-      _bannerExcite[i] = Math.max(0, _bannerExcite[i] + (target - _bannerExcite[i]) * dt * 3);
-      const excite = _bannerExcite[i];
-      const baseSway = fastSin(time * 1.5 + i * 1.8) * 6;
-      // Reactive amplitude scales smoothly with eased excitement.
-      const reactSway = fastSin(time * (1.5 + excite * 4) + i * 1.8) * excite * 5;
-      const sway = baseSway + reactSway;
-      const h = 35;
-      ctx.fillStyle = '#8A8A6A';
-      ctx.fillRect(bx - 14, by - 2, 28, 3);
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.moveTo(bx - 12, by);
-      ctx.lineTo(bx + 12, by);
-      ctx.quadraticCurveTo(bx + 10 + sway * 0.5, by + h * 0.5, bx + 8 + sway, by + h);
-      ctx.lineTo(bx + sway, by + h + 12);
-      ctx.lineTo(bx - 8 + sway, by + h);
-      ctx.quadraticCurveTo(bx - 10 + sway * 0.5, by + h * 0.5, bx - 12, by);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-      const ex = bx + sway * 0.3;
-      ctx.beginPath();
-      ctx.moveTo(ex, by + 8);
-      ctx.lineTo(ex + 6, by + 13);
-      ctx.lineTo(ex + 6, by + 22);
-      ctx.lineTo(ex, by + 27);
-      ctx.lineTo(ex - 6, by + 22);
-      ctx.lineTo(ex - 6, by + 13);
-      ctx.closePath();
-      ctx.fill();
+      out.push(castleBanner(bx, by, i));
     }
-    ctx.restore();
+    return out;
   },
 
   // ---- Audio ----

@@ -24,7 +24,6 @@ export function drawWeather(ctx: CanvasRenderingContext2D, weather: WeatherParti
     const px = w.x + w.vx * lead;
     const py = w.y + w.vy * lead;
     if (w.type === 'snow') {
-      // Symmetric — rotation invisible, draw at world coords.
       ctx.fillStyle = w.color || 'rgba(230, 240, 255, 0.7)';
       ctx.beginPath();
       ctx.arc(px, py, w.size, 0, Math.PI * 2);
@@ -36,7 +35,6 @@ export function drawWeather(ctx: CanvasRenderingContext2D, weather: WeatherParti
         ctx.fill();
       }
     } else if (w.type === 'ember') {
-      // Symmetric concentric circles — rotation invisible.
       ctx.fillStyle = w.color || 'rgba(255, 120, 30, 0.6)';
       ctx.beginPath();
       ctx.arc(px, py, w.size, 0, Math.PI * 2);
@@ -45,34 +43,31 @@ export function drawWeather(ctx: CanvasRenderingContext2D, weather: WeatherParti
       ctx.beginPath();
       ctx.arc(px, py, w.size * 0.5, 0, Math.PI * 2);
       ctx.fill();
-    } else {
-      // Asymmetric shapes (leaf, petal, ash) — keep the transform.
-      ctx.save();
-      ctx.translate(px, py);
-      ctx.rotate(w.rotation + w.rotSpeed * lead);
-      if (w.type === 'leaf') {
-        ctx.fillStyle = 'rgba(90, 160, 60, 0.4)';
-        ctx.beginPath();
-        ctx.ellipse(0, 0, w.size, w.size * 0.4, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(60, 120, 40, 0.3)';
-        ctx.lineWidth = 0.5;
-        ctx.beginPath();
-        ctx.moveTo(-w.size * 0.7, 0);
-        ctx.lineTo(w.size * 0.7, 0);
-        ctx.stroke();
-      } else if (w.type === 'petal') {
-        ctx.fillStyle = 'rgba(255, 180, 200, 0.35)';
-        ctx.beginPath();
-        ctx.ellipse(0, 0, w.size, w.size * 0.6, 0, 0, Math.PI * 2);
-        ctx.fill();
-      } else if (w.type === 'ash') {
-        ctx.fillStyle = w.color || 'rgba(150, 150, 150, 0.4)';
-        ctx.beginPath();
-        ctx.ellipse(0, 0, w.size, w.size * 0.5, 0, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.restore();
+    } else if (w.type === 'leaf') {
+      const rot = w.rotation + w.rotSpeed * lead;
+      ctx.fillStyle = 'rgba(90, 160, 60, 0.4)';
+      ctx.beginPath();
+      ctx.ellipse(px, py, w.size, w.size * 0.4, rot, 0, Math.PI * 2);
+      ctx.fill();
+      // Vein line: from (-size*0.7, 0) to (size*0.7, 0) in the rotated frame.
+      const dx = w.size * 0.7 * Math.cos(rot);
+      const dy = w.size * 0.7 * Math.sin(rot);
+      ctx.strokeStyle = 'rgba(60, 120, 40, 0.3)';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(px - dx, py - dy);
+      ctx.lineTo(px + dx, py + dy);
+      ctx.stroke();
+    } else if (w.type === 'petal') {
+      ctx.fillStyle = 'rgba(255, 180, 200, 0.35)';
+      ctx.beginPath();
+      ctx.ellipse(px, py, w.size, w.size * 0.6, w.rotation + w.rotSpeed * lead, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (w.type === 'ash') {
+      ctx.fillStyle = w.color || 'rgba(150, 150, 150, 0.4)';
+      ctx.beginPath();
+      ctx.ellipse(px, py, w.size, w.size * 0.5, w.rotation + w.rotSpeed * lead, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
 }
@@ -145,57 +140,82 @@ export function drawGibShape(ctx: CanvasRenderingContext2D, gib: Gib): void {
   gibRenderer(ctx, gibType, gib.width, gib.height, { color, darkColor, lightColor });
 }
 
+// Star vertices on a unit circle (5 outer + 5 inner alternating). Constant
+// across all particles — only multiplied by per-particle size + rotation.
+const _STAR_UNIT = (() => {
+  const out = new Float32Array(20);
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
+    const aIn = a + Math.PI / 5;
+    out[i * 4 + 0] = Math.cos(a);
+    out[i * 4 + 1] = Math.sin(a);
+    out[i * 4 + 2] = Math.cos(aIn) * 0.4;
+    out[i * 4 + 3] = Math.sin(aIn) * 0.4;
+  }
+  return out;
+})();
+
 export function drawConfetti(ctx: CanvasRenderingContext2D, confetti: ConfettiParticle[], lead = 0): void {
+  // Hot path: rotation inlined per shape. See docs/perf-patterns.md.
   for (const c of confetti) {
-    const alpha = (c.life / c.maxLife) * 0.9;
-    ctx.save();
-    ctx.translate(c.x + c.vx * lead, c.y + c.vy * lead);
-    ctx.rotate(c.rotation + c.rotationSpeed * lead);
+    const cx = c.x + c.vx * lead;
+    const cy = c.y + c.vy * lead;
     ctx.fillStyle = rgbString(c.color);
-    ctx.globalAlpha = alpha;
+    ctx.globalAlpha = (c.life / c.maxLife) * 0.9;
 
     switch (c.shape) {
       case 'star': {
+        const rot = c.rotation + c.rotationSpeed * lead;
+        const cs = Math.cos(rot), sn = Math.sin(rot);
+        const sz = c.size;
         ctx.beginPath();
         for (let i = 0; i < 5; i++) {
-          const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
-          const aInner = a + Math.PI / 5;
-          ctx.lineTo(Math.cos(a) * c.size, Math.sin(a) * c.size);
-          ctx.lineTo(Math.cos(aInner) * c.size * 0.4, Math.sin(aInner) * c.size * 0.4);
+          const ox = _STAR_UNIT[i * 4 + 0] * sz;
+          const oy = _STAR_UNIT[i * 4 + 1] * sz;
+          const ix = _STAR_UNIT[i * 4 + 2] * sz;
+          const iy = _STAR_UNIT[i * 4 + 3] * sz;
+          ctx.lineTo(cx + ox * cs - oy * sn, cy + ox * sn + oy * cs);
+          ctx.lineTo(cx + ix * cs - iy * sn, cy + ix * sn + iy * cs);
         }
         ctx.closePath();
         ctx.fill();
         break;
       }
       case 'diamond': {
+        const rot = c.rotation + c.rotationSpeed * lead;
+        const cs = Math.cos(rot), sn = Math.sin(rot);
         const s = c.size;
+        // Local verts: (0,-s), (0.6s,0), (0,s), (-0.6s,0)
         ctx.beginPath();
-        ctx.moveTo(0, -s);
-        ctx.lineTo(s * 0.6, 0);
-        ctx.lineTo(0, s);
-        ctx.lineTo(-s * 0.6, 0);
+        ctx.moveTo(cx + s * sn, cy - s * cs);
+        ctx.lineTo(cx + 0.6 * s * cs, cy + 0.6 * s * sn);
+        ctx.lineTo(cx - s * sn, cy + s * cs);
+        ctx.lineTo(cx - 0.6 * s * cs, cy - 0.6 * s * sn);
         ctx.closePath();
         ctx.fill();
         break;
       }
       case 'ribbon': {
-        const s = c.size;
+        const rot = c.rotation + c.rotationSpeed * lead;
+        const cs = Math.cos(rot), sn = Math.sin(rot);
+        const s = c.size, s3 = s * 0.3, s8 = s * 0.8;
+        // Local verts: (-s,-s3), Q(0,-s8) → (s,-s3), L(s,s3), Q(0,s8) → (-s,s3)
         ctx.beginPath();
-        ctx.moveTo(-s, -s * 0.3);
-        ctx.quadraticCurveTo(0, -s * 0.8, s, -s * 0.3);
-        ctx.lineTo(s, s * 0.3);
-        ctx.quadraticCurveTo(0, s * 0.8, -s, s * 0.3);
+        ctx.moveTo(cx - s * cs + s3 * sn, cy - s * sn - s3 * cs);
+        ctx.quadraticCurveTo(cx + s8 * sn, cy - s8 * cs, cx + s * cs + s3 * sn, cy + s * sn - s3 * cs);
+        ctx.lineTo(cx + s * cs - s3 * sn, cy + s * sn + s3 * cs);
+        ctx.quadraticCurveTo(cx - s8 * sn, cy + s8 * cs, cx - s * cs - s3 * sn, cy - s * sn + s3 * cs);
         ctx.closePath();
         ctx.fill();
         break;
       }
-      default: // circle
+      default: // circle — rotation invisible
         ctx.beginPath();
-        ctx.arc(0, 0, c.size, 0, Math.PI * 2);
+        ctx.arc(cx, cy, c.size, 0, Math.PI * 2);
         ctx.fill();
     }
-    ctx.restore();
   }
+  ctx.globalAlpha = 1;
 }
 
 export function drawFireworks(ctx: CanvasRenderingContext2D, particles: Particle[], frameTime: number, lead = 0): void {
@@ -252,89 +272,76 @@ export function drawFireworks(ctx: CanvasRenderingContext2D, particles: Particle
 
 export function drawWildlife(ctx: CanvasRenderingContext2D, wildlife: WildlifeEntity[]): void {
   for (const w of wildlife) {
-    ctx.save();
-    ctx.translate(w.x, w.y);
+    const cx = w.x;
+    const cy = w.y;
 
     if (w.type === 'butterfly') {
-      // Butterfly: small colored V-shapes that flutter
       const wingAngle = Math.sin(w.wingPhase) * 0.6;
       const wcos = Math.cos(wingAngle);
       const wsin = Math.abs(Math.sin(wingAngle));
       const wingX = 6 * wcos;
       const wingY = -4 * wsin - 3;
       ctx.fillStyle = w.color;
-      // Left wing
       ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(-wingX, wingY);
-      ctx.lineTo(-3, 0);
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx - wingX, cy + wingY);
+      ctx.lineTo(cx - 3, cy);
       ctx.closePath();
       ctx.fill();
-      // Right wing
       ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(wingX, wingY);
-      ctx.lineTo(3, 0);
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + wingX, cy + wingY);
+      ctx.lineTo(cx + 3, cy);
       ctx.closePath();
       ctx.fill();
-      // Body
       ctx.fillStyle = '#333';
-      ctx.fillRect(-0.5, -1, 1, 3);
+      ctx.fillRect(cx - 0.5, cy - 1, 1, 3);
     } else if (w.type === 'fish') {
-      // Fish: oval body + wagging tail
       const tailWag = Math.sin(w.wingPhase * 2) * 0.4;
-      // Body
       ctx.fillStyle = w.color;
       ctx.beginPath();
-      ctx.ellipse(0, 0, 7, 4, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx, cy, 7, 4, 0, 0, Math.PI * 2);
       ctx.fill();
-      // Tail fin
       ctx.beginPath();
-      ctx.moveTo(-6, 0);
-      ctx.lineTo(-12, -4 + tailWag * 4);
-      ctx.lineTo(-12, 4 + tailWag * 4);
+      ctx.moveTo(cx - 6, cy);
+      ctx.lineTo(cx - 12, cy - 4 + tailWag * 4);
+      ctx.lineTo(cx - 12, cy + 4 + tailWag * 4);
       ctx.closePath();
       ctx.fill();
-      // Dorsal fin
       ctx.fillStyle = w.color;
       ctx.globalAlpha = 0.7;
       ctx.beginPath();
-      ctx.moveTo(-2, -3);
-      ctx.lineTo(1, -7);
-      ctx.lineTo(4, -3);
+      ctx.moveTo(cx - 2, cy - 3);
+      ctx.lineTo(cx + 1, cy - 7);
+      ctx.lineTo(cx + 4, cy - 3);
       ctx.closePath();
       ctx.fill();
       ctx.globalAlpha = 1;
-      // Eye
       ctx.fillStyle = '#111';
       ctx.beginPath();
-      ctx.arc(4, -1, 1.2, 0, Math.PI * 2);
+      ctx.arc(cx + 4, cy - 1, 1.2, 0, Math.PI * 2);
       ctx.fill();
     } else if (w.type === 'bat') {
-      // Bat: angular pointed wings with fast flap
       ctx.fillStyle = w.color;
       const wingFlap = Math.sin(w.wingPhase) * 5;
-      // Left wing
       ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(-4, -2 + wingFlap * 0.3);
-      ctx.lineTo(-10, wingFlap);
-      ctx.lineTo(-7, 0);
-      ctx.lineTo(-4, 1);
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx - 4, cy - 2 + wingFlap * 0.3);
+      ctx.lineTo(cx - 10, cy + wingFlap);
+      ctx.lineTo(cx - 7, cy);
+      ctx.lineTo(cx - 4, cy + 1);
       ctx.closePath();
       ctx.fill();
-      // Right wing
       ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(4, -2 + wingFlap * 0.3);
-      ctx.lineTo(10, wingFlap);
-      ctx.lineTo(7, 0);
-      ctx.lineTo(4, 1);
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + 4, cy - 2 + wingFlap * 0.3);
+      ctx.lineTo(cx + 10, cy + wingFlap);
+      ctx.lineTo(cx + 7, cy);
+      ctx.lineTo(cx + 4, cy + 1);
       ctx.closePath();
       ctx.fill();
-      // Body
       ctx.beginPath();
-      ctx.ellipse(0, 0, 2, 3, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx, cy, 2, 3, 0, 0, Math.PI * 2);
       ctx.fill();
     } else {
       // Bird: simple M-shape silhouette
@@ -342,15 +349,13 @@ export function drawWildlife(ctx: CanvasRenderingContext2D, wildlife: WildlifeEn
       ctx.lineWidth = 2;
       const wingFlap = Math.sin(w.wingPhase) * 4;
       ctx.beginPath();
-      ctx.moveTo(-8, wingFlap);
-      ctx.lineTo(-3, -3);
-      ctx.lineTo(0, 0);
-      ctx.lineTo(3, -3);
-      ctx.lineTo(8, wingFlap);
+      ctx.moveTo(cx - 8, cy + wingFlap);
+      ctx.lineTo(cx - 3, cy - 3);
+      ctx.lineTo(cx, cy);
+      ctx.lineTo(cx + 3, cy - 3);
+      ctx.lineTo(cx + 8, cy + wingFlap);
       ctx.stroke();
     }
-
-    ctx.restore();
   }
 }
 
