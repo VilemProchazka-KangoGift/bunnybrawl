@@ -8,3 +8,5 @@
  */
 export type { AuthSnapshot, SnapshotPlayer } from './types';
 export { createEmptySnapshot } from './types';
+
+export { encodeSnapshot, decodeSnapshot } from './binaryCodec';
