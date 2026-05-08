@@ -32,6 +32,7 @@ import { encodeSnapshotAck } from './core/protocol';
 import { applyDelta, readDeltaBaseFrame } from './core/deltaCompression';
 import { createNetMatchContext, type NetMatchContext } from './netMatch/NetMatchContext';
 import { LoadingHandshake } from './netMatch/LoadingHandshake';
+import { ReconnectController } from './netMatch/ReconnectController';
 
 export interface NetMatchConfig {
   bgCanvas: HTMLCanvasElement;
@@ -95,9 +96,6 @@ export class NetMatch {
   // Guest-specific
   private interpolation: EntityInterpolation | null = null;
   private inputEcho: InputEcho | null = null;
-  private ownReclaimToken: string | null = null;  // token to authenticate RECONNECT_REQUEST
-  private lastSnapshotTime = 0;    // wall-clock time of last received snapshot
-  private stallNotified = false;    // whether onStall(true) has been fired
   // Pool of pre-allocated AuthSnapshot instances cycled through during decode.
   // Size matches the interpolation ring (30) so by the time we wrap back to
   // slot 0, the ring has already evicted whatever this slot used to hold.
@@ -108,16 +106,11 @@ export class NetMatch {
   private snapshotPoolIdx = 0;
 
   // Guest-side delta compression: ring of recently-applied raw encoded
-  // snapshots, keyed by host frame. When a SNAPSHOT_DELTA arrives we peek
-  // its baseFrame, look up the matching baseline bytes here, apply the
-  // delta, then send a SNAPSHOT_ACK for the new frame so the host can
-  // delta against it next tick.
+  // snapshots, keyed by host frame. Lives on ctx (shared with reconnect).
   private static readonly GUEST_BASELINE_RING_SIZE = 120; // ~2s at 60Hz
-  private guestBaselines = new Map<number, ArrayBuffer>();
 
-  // Reconnection state (guest only)
-  private reconnecting = false;
-  private reconnectTimer: ReturnType<typeof setInterval> | null = null;
+  // Reconnection state — owned by ReconnectController; flag lives on context.
+  private reconnect!: ReconnectController;
   private onReconnecting?: (reconnecting: boolean) => void;
   private onStall?: (stalled: boolean) => void;
 
@@ -137,15 +130,9 @@ export class NetMatch {
   // stall-detection timestamps when the tab returns so a long backgrounded
   // period doesn't fire a spurious "Connection Unstable" banner.
   private _visibilityHandler: (() => void) | null = null;
-  // Previous phase seen in guest snapshots — drives onPhaseChange on transition.
-  private _prevGuestPhase: MatchPhase = 'loading';
-  // Latches on the first snapshot where matchOver=true so guest-side match-end
-  // fires exactly once, even if MATCH_RESULT reliable message is dropped.
-  private _guestMatchOverFired = false;
-  // Latches once the guest has signalled CONNECTION_UNSTABLE due to its own
-  // auto-slow-device flip. Without this latch, the per-frame guest loop
-  // would re-send the message every frame after autoSlow trips.
-  private _autoSlowReported = false;
+  // Cross-collaborator guest-runtime flags live on context:
+  //   prevGuestPhase, guestMatchOverFired, autoSlowReported,
+  //   lastSnapshotTime, stallNotified, reconnecting, guestBaselines
 
   // Host-side LOADED handshake — owned by LoadingHandshake collaborator.
   private loading: LoadingHandshake;
@@ -206,6 +193,7 @@ export class NetMatch {
       onLoadingTimeout: this.onLoadingTimeout,
     });
     this.loading = new LoadingHandshake(this.ctx);
+    this.reconnect = new ReconnectController(this.ctx);
 
     if (this._isHost) {
       this.initHost(config);
@@ -261,8 +249,7 @@ export class NetMatch {
       () => createEmptySnapshot(),
     );
     this.snapshotPoolIdx = 0;
-    this.ownReclaimToken = config.ownReclaimToken ?? null;
-    this.ctx.ownReclaimToken = this.ownReclaimToken;
+    this.ctx.ownReclaimToken = config.ownReclaimToken ?? null;
     // Input echo: instant visual feedback without position prediction.
     // Disable with ?noecho URL param.
     const noEcho = typeof location !== 'undefined'
@@ -281,7 +268,7 @@ export class NetMatch {
             this.onDisconnect?.();
           } else {
             // Guest: attempt reconnection instead of immediate disconnect
-            this.startReconnection();
+            this.reconnect.startReconnection();
           }
         }
       },
@@ -293,7 +280,7 @@ export class NetMatch {
           this.hostAuthority.removeGuest(peerId);
         } else {
           // Guest: attempt reconnection instead of immediate disconnect
-          this.startReconnection();
+          this.reconnect.startReconnection();
         }
       },
     });
@@ -312,8 +299,8 @@ export class NetMatch {
     if (typeof document !== 'undefined') {
       this._visibilityHandler = () => {
         if (document.hidden) return;
-        if (this.lastSnapshotTime > 0) {
-          this.lastSnapshotTime = performance.now();
+        if (this.ctx.lastSnapshotTime > 0) {
+          this.ctx.lastSnapshotTime = performance.now();
         }
       };
       document.addEventListener('visibilitychange', this._visibilityHandler);
@@ -600,15 +587,15 @@ export class NetMatch {
       // applySnapshotToState), so onPhaseChange must be forwarded here.
       const state = this.gameLoop.getState();
       const curPhase = state.phase;
-      if (curPhase !== this._prevGuestPhase) {
+      if (curPhase !== this.ctx.prevGuestPhase) {
         // loading→playing edge: kick off music, ambient, per-arena loops,
         // and re-prime cosmetic prev-state baselines. Mirrors host's
         // setPhase('playing'). Without this, the guest plays the entire
         // match in silence (no music, no per-arena ambient).
-        if (this._prevGuestPhase === 'loading' && curPhase === 'playing') {
+        if (this.ctx.prevGuestPhase === 'loading' && curPhase === 'playing') {
           this.gameLoop.onEnterPlayingPhase();
         }
-        this._prevGuestPhase = curPhase;
+        this.ctx.prevGuestPhase = curPhase;
         this.onPhaseChange?.(curPhase);
       }
       // 2c. Snapshot-driven match-end fallback. The MATCH_RESULT reliable
@@ -616,8 +603,8 @@ export class NetMatch {
       // mid-send. The match-over tail of 20 snapshots (core/hostAuthority.ts)
       // gives us redundant delivery — as soon as any of them lands with
       // matchOver=true, synthesize the onMatchEnd callback locally.
-      if (!this._guestMatchOverFired && state.matchOver) {
-        this._guestMatchOverFired = true;
+      if (!this.ctx.guestMatchOverFired && state.matchOver) {
+        this.ctx.guestMatchOverFired = true;
         this.onMatchEnd?.(state.winner as PlayerSlot | null, state);
       }
 
@@ -653,9 +640,9 @@ export class NetMatch {
 
       // 5b. Signal slow CPU to host once our local autoSlow flips — host
       // halves broadcast rate and skips delta encoding to this peer.
-      if (!this._autoSlowReported && state.phase !== 'loading'
+      if (!this.ctx.autoSlowReported && state.phase !== 'loading'
           && autoSlowDetect.isFlipped()) {
-        this._autoSlowReported = true;
+        this.ctx.autoSlowReported = true;
         this.transport.sendReliable({
           type: MsgType.CONNECTION_UNSTABLE,
           stalled: true,
@@ -674,11 +661,11 @@ export class NetMatch {
       // snapshot decode path on a cold guest, and the ensuing
       // CONNECTION_UNSTABLE message would tell the host "guest has a slow
       // connection" before the match has even started.
-      if (this.lastSnapshotTime > 0 && !this.reconnecting && !state.matchOver
+      if (this.ctx.lastSnapshotTime > 0 && !this.ctx.reconnecting && !state.matchOver
           && state.phase !== 'loading') {
-        const elapsed = now - this.lastSnapshotTime;
-        if (elapsed > 500 && !this.stallNotified) {
-          this.stallNotified = true;
+        const elapsed = now - this.ctx.lastSnapshotTime;
+        if (elapsed > 500 && !this.ctx.stallNotified) {
+          this.ctx.stallNotified = true;
           this.onStall?.(true);
           // Reliable hint to host: "my snapshot stream is lagging." Host will
           // show a banner so the human running the host knows why the guest
@@ -720,9 +707,9 @@ export class NetMatch {
    *  arrival (full or delta). Called by both handleGuestSnapshot and
    *  handleGuestDelta. */
   private noteSnapshotArrival(): void {
-    this.lastSnapshotTime = performance.now();
-    if (this.stallNotified) {
-      this.stallNotified = false;
+    this.ctx.lastSnapshotTime = performance.now();
+    if (this.ctx.stallNotified) {
+      this.ctx.stallNotified = false;
       this.onStall?.(false);
       this.transport.sendReliable({
         type: MsgType.CONNECTION_UNSTABLE,
@@ -734,11 +721,11 @@ export class NetMatch {
   /** Push raw encoded bytes (no type prefix) into the guest baseline ring
    *  and trim oldest entries to bound memory. */
   private storeGuestBaseline(frame: number, encoded: ArrayBuffer): void {
-    this.guestBaselines.set(frame, encoded);
-    if (this.guestBaselines.size > NetMatch.GUEST_BASELINE_RING_SIZE) {
+    this.ctx.guestBaselines.set(frame, encoded);
+    if (this.ctx.guestBaselines.size > NetMatch.GUEST_BASELINE_RING_SIZE) {
       // Drop the oldest (smallest frame number)
-      const oldest = this.guestBaselines.keys().next().value;
-      if (oldest !== undefined) this.guestBaselines.delete(oldest);
+      const oldest = this.ctx.guestBaselines.keys().next().value;
+      if (oldest !== undefined) this.ctx.guestBaselines.delete(oldest);
     }
   }
 
@@ -764,7 +751,7 @@ export class NetMatch {
       this.interpolation.pushSnapshot(snap);
       // Skip baseline-store + ACK after we've signalled slow CPU — the host
       // bypasses delta encoding to unstable peers so this work is unused.
-      if (!this._autoSlowReported) {
+      if (!this.ctx.autoSlowReported) {
         this.storeGuestBaseline(snap.frame, data.slice(1));
         this.sendAck(snap.frame);
       }
@@ -781,7 +768,7 @@ export class NetMatch {
       perfTrace.end('net.handleDelta', handleStart);
       return;
     }
-    const baseline = this.guestBaselines.get(baseFrame);
+    const baseline = this.ctx.guestBaselines.get(baseFrame);
     if (!baseline) {
       // Baseline not in our ring — host will keyframe within
       // STALE_ACK_THRESHOLD frames, so just drop. No sense ACKing nothing.
@@ -851,7 +838,7 @@ export class NetMatch {
       const syncMsg = msg as { paused?: boolean };
       if (syncMsg.paused) this.gameLoop.pause();
       else this.gameLoop.resume();
-      this.completeReconnection();
+      this.reconnect.completeReconnection();
     } else if (this._isHost && msg.type === MsgType.LOADED) {
       // Source-authenticate the slot from peerId. A peer could otherwise send
       // LOADED{slot: anotherPeer} and force-start the match before that peer
@@ -891,91 +878,6 @@ export class NetMatch {
     }
   }
 
-  /** Start reconnection attempt after disconnect/hard stall (guest only). */
-  private startReconnection(): void {
-    if (this.reconnecting || this._isHost) return;
-    this.reconnecting = true;
-    this.onReconnecting?.(true);
-
-    let attempts = 0;
-    // 12 attempts × 1.5s = 18s total. Must stay within host's 20s
-    // GRACE_PERIOD so the same slot can be reclaimed — otherwise the user
-    // rejoins as a brand-new peer with lost state.
-    const MAX_ATTEMPTS = 12;
-    this.onReconnectAttempt?.(attempts, MAX_ATTEMPTS);
-
-    const tryAttempt = () => {
-      attempts++;
-      if (attempts > MAX_ATTEMPTS) {
-        this.abortReconnection();
-        return;
-      }
-      this.onReconnectAttempt?.(attempts, MAX_ATTEMPTS);
-      const code = this.transport.roomCode;
-      if (!code) return;
-      this.transport.joinRoom(code).then(() => {
-        // Re-send on every tick after a successful joinRoom — if
-        // RECONNECT_SYNC was lost, the next RECONNECT_REQUEST will produce
-        // another response from the host (handler is idempotent).
-        this.transport.sendReliable({
-          type: MsgType.RECONNECT_REQUEST,
-          slot: this.localSlot,
-          playerName: '',
-          reclaimToken: this.ownReclaimToken ?? '',
-        } as import('./protocol').ReliableMessage);
-      }).catch(() => { /* retry next tick */ });
-    };
-    tryAttempt();
-    this.reconnectTimer = setInterval(tryAttempt, 1500);
-  }
-
-  /** Complete reconnection after host confirms. */
-  private completeReconnection(): void {
-    this.reconnecting = false;
-    if (this.reconnectTimer) {
-      clearInterval(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
-    // Stale snapshots would block fresh ones via the out-of-order guard, or
-    // lerp across a huge frame gap and teleport entities. Reset latches too
-    // so the first post-reconnect snapshot re-fires any phase/match-end edge.
-    this.interpolation?.reset();
-    // Drop the encoded baseline ring too — frames the host knew we ACKed are
-    // gone after reconnect; the next snapshot must be a full keyframe and we
-    // start over from there. Clear `_autoSlowReported` so the guest will
-    // re-signal CONNECTION_UNSTABLE if its autoSlow is still flipped, since
-    // the host's per-peer state has been reset.
-    this.guestBaselines.clear();
-    this._autoSlowReported = false;
-    // Cosmetic prev-state baselines also need a reset — without this, the
-    // first post-reconnect snapshot triggers transitions against pre-
-    // disconnect state (e.g. jump/land sounds for a player who landed
-    // during the disconnect, score-anim crunch for delta points scored
-    // while we were gone, possibly a duplicate victory sound).
-    this.gameLoop.resetCosmeticBaselines();
-    this._guestMatchOverFired = false;
-    // Sync prev-phase to current state so the next snapshot tick doesn't see
-    // a synthetic loading→playing edge and re-fire onEnterPlayingPhase. That
-    // would double-start non-idempotent ambient loops (wind/lava/etc.) and
-    // append duplicate entries to MatchSystem.activeAmbientLoops.
-    this._prevGuestPhase = this.gameLoop.getState().phase;
-    this.lastSnapshotTime = performance.now();
-    this.stallNotified = false;
-    this.onReconnecting?.(false);
-    this.onStall?.(false);
-  }
-
-  /** Abort reconnection after timeout — disconnect as before. */
-  private abortReconnection(): void {
-    if (this.reconnectTimer) {
-      clearInterval(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
-    this.reconnecting = false;
-    this.onReconnecting?.(false);
-    this.onDisconnect?.();
-  }
-
   removePlayer(slot: PlayerSlot): void {
     this.gameLoop.disconnectPlayer(slot);
   }
@@ -985,17 +887,14 @@ export class NetMatch {
       cancelAnimationFrame(this.rafId);
       this.rafId = 0;
     }
-    if (this.reconnectTimer) {
-      clearInterval(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
+    this.reconnect.dispose();
     this.loading.dispose();
     if (this._visibilityHandler) {
       document.removeEventListener('visibilitychange', this._visibilityHandler);
       this._visibilityHandler = null;
     }
     this.hostAuthority?.stop();
-    this.guestBaselines.clear();
+    this.ctx.guestBaselines.clear();
     this.gameLoop.stop();
   }
 
