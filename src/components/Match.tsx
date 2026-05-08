@@ -13,11 +13,11 @@ import { perfTrace } from '../engine/perfTrace';
 import * as fpsCounter from '../engine/fpsCounter';
 import { TouchOverlay } from './TouchOverlay';
 import type { TouchInputManager } from '../engine/touchInput';
-import type { PlayerSlot, MatchPhase } from '../engine/types';
-import { runLoadingTasks } from '../engine/matchLoading';
+import type { PlayerSlot } from '../engine/types';
 import { useTransientBanner } from '../hooks/useTransientBanner';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { useLoadingOverlay, loadingSubKey } from './match/useLoadingOverlay';
+import { useLocalMatch, kickoffLoading } from './match/useLocalMatch';
 import logoImg from '/logo.png?url';
 import './Match.css';
 
@@ -36,34 +36,6 @@ function resolveArenaId(arenaId: string): string {
   const pick = available[Math.floor(Math.random() * available.length)] || allArenas[0];
   lastResolvedArenaId = pick.id;
   return pick.id;
-}
-
-/** Run loading tasks for a GameLoop, applying a stale-promise guard so a
- *  rapid arena swap can't mis-signal readiness for an outdated arena.
- *  `onReady` fires only when both:
- *    - the GameLoop is still the current one (`isCurrent()`)
- *    - no switchArena has bumped the loading generation since we started
- *  Catch-branch fires too on timeout (graceful degradation — match starts
- *  anyway with whatever assets made it in). */
-function kickoffLoading(
-  loop: GameLoop,
-  isCurrent: () => boolean,
-  onReady: () => void,
-  netMatch?: NetMatch | null,
-): void {
-  const startGen = loop.getLoadingGeneration();
-  runLoadingTasks({
-    arenaId: loop.getArena().themeId,
-    characterNames: loop.getActiveCharacterNames(),
-    renderer: loop.getRenderer(),
-    arena: loop.getArena(),
-    originalArena: loop.getOriginalArena(),
-    netMatch,
-  }).finally(() => {
-    if (!isCurrent()) return;
-    if (loop.getLoadingGeneration() !== startGen) return;
-    onReady();
-  });
 }
 
 export function Match() {
@@ -242,7 +214,18 @@ export function Match() {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, []);
 
+  // Local-mode lifecycle (extracted hook). Early-returns when isOnline.
+  useLocalMatch({
+    bgCanvasRef, bgNightCanvasRef, fgCanvasRef, fgNightTintRef, hudCanvasRef,
+    gameLoopRef, victoryTimeoutRef,
+    currentArenaId, activePlayers, matchSettings,
+    setMatchResult, setTouchInput,
+    setPhaseIsLoading, setLocalTasksDone,
+    isOnline: online.isOnline,
+  });
+
   useEffect(() => {
+    if (!online.isOnline) return;
     const bgCanvas = bgCanvasRef.current;
     const fgCanvas = fgCanvasRef.current;
     const hudCanvas = hudCanvasRef.current;
@@ -269,7 +252,7 @@ export function Match() {
       // Suppress stall detection during victory transition
       if (netMatchRef.current) netMatchRef.current.setMatchOver();
       // In online mode, host sends match result to guest
-      if (online.isOnline && online.isHost) {
+      if (online.isHost) {
         const transport = getModalTransport();
         if (transport) {
           transport.sendReliable({ type: MsgType.MATCH_RESULT, winner } as import('../engine/net/protocol').ReliableMessage);
@@ -283,18 +266,17 @@ export function Match() {
     window.__perfTrace = perfTrace;
     window.__fpsCounter = fpsCounter;
 
-    if (online.isOnline) {
-      // Network mode
-      setPhaseIsLoading(true);
-      setLocalTasksDone(false);
-      const transport = getModalTransport();
-      if (!transport) {
-        console.error('No active transport for online match');
-        setScreen('menu');
-        return;
-      }
+    // Network mode
+    setPhaseIsLoading(true);
+    setLocalTasksDone(false);
+    const transport = getModalTransport();
+    if (!transport) {
+      console.error('No active transport for online match');
+      setScreen('menu');
+      return;
+    }
 
-      const netMatch = new NetMatch({
+    const netMatch = new NetMatch({
         bgCanvas,
         bgNightCanvas,
         fgNightTint,
@@ -416,74 +398,36 @@ export function Match() {
           const name = useGameStore.getState().online.playerNames[slot] || slot;
           setUnstable({ kind: 'them', name });
         },
-      });
+    });
 
-      netMatchRef.current = netMatch;
-      gameLoopRef.current = netMatch.getGameLoop();
-      window.__gameLoop = netMatch.getGameLoop();
-      (window as any).__netMatch = netMatch;
-      netMatch.getGameLoop().setPlayerNames(useGameStore.getState().online.playerNames);
-      netMatch.getGameLoop().setLocalSlot((online.isHost ? 'P1' : online.localSlot) as PlayerSlot);
-      netMatch.start();
-      setTouchInput(netMatch.getGameLoop().getTouchInput());
+    netMatchRef.current = netMatch;
+    gameLoopRef.current = netMatch.getGameLoop();
+    window.__gameLoop = netMatch.getGameLoop();
+    (window as any).__netMatch = netMatch;
+    netMatch.getGameLoop().setPlayerNames(useGameStore.getState().online.playerNames);
+    netMatch.getGameLoop().setLocalSlot((online.isHost ? 'P1' : online.localSlot) as PlayerSlot);
+    netMatch.start();
+    setTouchInput(netMatch.getGameLoop().getTouchInput());
 
-      // Online loading: both sides preload, then signal readiness. Host flips
-      // phase to 'playing' only after all guests report LOADED (or after the
-      // 15s hard timeout in NetMatch).
-      kickoffLoading(
-        netMatch.getGameLoop(),
-        () => netMatchRef.current === netMatch,
-        () => {
-          setLocalTasksDone(true);
-          if (online.isHost) netMatch.markHostLoaded();
-          else netMatch.signalGuestLoaded();
-        },
-        netMatch,
-      );
-
-      return () => {
-        netMatch.stop();
-        netMatchRef.current = null;
-        commonCleanup();
-        clearTimer(disconnectDelayRef);
-      };
-    }
-
-    // Local mode
-    setPhaseIsLoading(true);
-    setLocalTasksDone(false);
-    const loop = new GameLoop(
-      bgCanvas,
-      fgCanvas,
-      arena,
-      matchSettings,
-      activePlayers,
-      onMatchEnd,
-      hudCanvas,
-      undefined, // rng
-      bgNightCanvas,
-      fgNightTint,
+    // Online loading: both sides preload, then signal readiness. Host flips
+    // phase to 'playing' only after all guests report LOADED (or after the
+    // 15s hard timeout in NetMatch).
+    kickoffLoading(
+      netMatch.getGameLoop(),
+      () => netMatchRef.current === netMatch,
+      () => {
+        setLocalTasksDone(true);
+        if (online.isHost) netMatch.markHostLoaded();
+        else netMatch.signalGuestLoaded();
+      },
+      netMatch,
     );
 
-    gameLoopRef.current = loop;
-    window.__gameLoop = loop;
-    loop.setOnPhaseChange((phase: MatchPhase) => {
-      setPhaseIsLoading(phase === 'loading');
-    });
-    loop.start();
-    setTouchInput(loop.getTouchInput());
-
-    // Kick off loading — music preload + background render + sprite warmup.
-    // `.finally` path also covers timeout (graceful degradation; match
-    // starts with whatever assets made it in).
-    kickoffLoading(loop, () => gameLoopRef.current === loop, () => {
-      setLocalTasksDone(true);
-      loop.setPhase('playing');
-    });
-
     return () => {
-      loop.stop();
+      netMatch.stop();
+      netMatchRef.current = null;
       commonCleanup();
+      clearTimer(disconnectDelayRef);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePlayers, matchSettings, setMatchResult, online.isOnline]);
