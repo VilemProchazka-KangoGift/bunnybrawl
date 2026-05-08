@@ -824,8 +824,7 @@ export const castle: ArenaPack = {
 
   drawAnimatedBackground: (ctx, _arena, time) => {
     if (getSlowDevice()) return;
-    // Halo glow now comes from the L2 EmitterPipeline (see `lights` above);
-    // this draws only the drifting embers, which belong on the FG ctx.
+    // Embers only — torch halo comes from the L2 emitter pipeline (`lights`).
     ctx.save();
     for (let i = 0; i < TORCH_X.length; i++) {
       const tx = TORCH_X[i];

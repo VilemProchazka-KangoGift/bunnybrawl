@@ -14,14 +14,17 @@ import type { Light } from './types';
 /** Cap intensity for photosensitivity-aware callers. Mirrors L1's sun cap. */
 export const PHOTOSENSITIVITY_INTENSITY_CAP = 0.7;
 
-/** Compute effective intensity for this tick — base × (1 + flicker delta).
- *  Returns 0..(1 + flickerAmplitude) when flicker is present, else base. */
+/** Compute effective intensity for this tick — base + flicker delta, clamped
+ *  to ≥0. Allocation-free (uses `SeededRNG.floatFromTick`). The delta is
+ *  centered ±amp/2 *before* the clamp; in pure-overlay mode (caller passes
+ *  base=0 so the underlying static stamp is at full intensity), negative
+ *  deltas clamp to 0 since `'lighter'` blend can't subtract — net result is a
+ *  small positive bias of ~amp/8 over time, sub-perceptual at amp ≤ 0.15. */
 export function effectiveIntensity(light: Light, tick: number): number {
   if (light.flickerSeed === undefined) return light.intensity;
   const amp = light.flickerAmplitude ?? 0;
   if (amp === 0) return light.intensity;
-  // Centered ±amp/2 so average intensity over time = base.
-  const delta = (SeededRNG.fromTick(light.flickerSeed, tick).nextFloat() - 0.5) * amp;
+  const delta = (SeededRNG.floatFromTick(light.flickerSeed, tick) - 0.5) * amp;
   return Math.max(0, light.intensity + delta);
 }
 

@@ -21,6 +21,10 @@ import type { Light } from './types';
 
 export class EmitterPipeline {
   private _staticLights: ReadonlyArray<Light> = [];
+  /** Pre-computed flicker overlays for the static lights with flickerSeed —
+   *  `intensity: 0` so `lightStamp` adds only the per-tick delta on top of
+   *  the baked static contribution. Built once per `setStaticLights`. */
+  private _staticFlickerOverlays: ReadonlyArray<Light> = [];
   /** Re-used buffer; renderer pushes per-frame entries via beginFrame. */
   private _dynamicLights: Light[] = [];
   private _photosensitivity = false;
@@ -28,6 +32,9 @@ export class EmitterPipeline {
 
   setStaticLights(lights: ReadonlyArray<Light>): void {
     this._staticLights = lights;
+    this._staticFlickerOverlays = lights
+      .filter(l => l.flickerSeed !== undefined)
+      .map(l => ({ ...l, intensity: 0 }));
   }
 
   /** Begin a frame. Renderer passes the freshly synthesized dynamic list and
@@ -67,12 +74,11 @@ export class EmitterPipeline {
     for (const light of this._dynamicLights) {
       lightStamp(ctx, light, this._tick, cap);
     }
-    // Static flicker deltas: a small additive pulse at each flickering static
-    // emitter's position. The static base was baked at full intensity; this
-    // adds a centered ±amplitude/2 modulation per tick.
-    for (const light of this._staticLights) {
-      if (light.flickerSeed === undefined) continue;
-      lightStamp(ctx, deltaOnly(light), this._tick, cap);
+    // Static flicker overlays — additive pulses at each flickering static
+    // emitter's position. Pre-built in setStaticLights to avoid per-frame
+    // object spread.
+    for (const overlay of this._staticFlickerOverlays) {
+      lightStamp(ctx, overlay, this._tick, cap);
     }
     ctx.restore();
   }
@@ -89,9 +95,3 @@ export class EmitterPipeline {
   }
 }
 
-/** Build a flicker-only Light: zero base intensity, full flicker amplitude.
- *  Stamped per-frame on top of the baked static contribution. Net effect:
- *  baseline = full intensity, occasional pulse adds up to amplitude on top. */
-function deltaOnly(light: Light): Light {
-  return { ...light, intensity: 0 };
-}

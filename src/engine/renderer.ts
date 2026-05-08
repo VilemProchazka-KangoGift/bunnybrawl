@@ -38,6 +38,7 @@ import { applyRenderScaleToCanvas, getRenderScale } from './renderScale';
 import { Lighting } from './lighting';
 import type { Light } from './lighting';
 import { getArenaLights } from './arenas/operations';
+import { isLivePlayer } from './themes/utils';
 import { getBrightness } from './lighting/brightness';
 import { getSlowDevice } from './perfFlags';
 import { perfTrace } from './perfTrace';
@@ -62,6 +63,14 @@ function getCachedHsl(hex: string): { h: number; s: number; l: number } {
 }
 const _invincibleHsl = getCachedHsl('#88BBFF');
 
+/** Memoized hex→RGB for L2 per-player aura color. Same cardinality bound. */
+const _rgbCache = new Map<string, { r: number; g: number; b: number }>();
+function getCachedRgb(hex: string): { r: number; g: number; b: number } {
+  let v = _rgbCache.get(hex);
+  if (!v) { v = hexToRGB(hex); _rgbCache.set(hex, v); }
+  return v;
+}
+
 /** Sprite extends ~12 px above the bbox top for tall ears, horns, and gib pivots. */
 const SPRITE_TOP_PAD = 12;
 
@@ -76,10 +85,8 @@ export interface RendererOptions {
   hudCanvas?: HTMLCanvasElement;
   bgNightCanvas?: HTMLCanvasElement;
   fgNightTint?: HTMLDivElement;
-  /** L2 emitter compositing — single screen-blend DOM sibling above
-   *  fg-night-tint. Static catalog baked into an internal cache; dynamic
-   *  emitters stamped per frame. (Bakeoff vs a split static/dynamic
-   *  layout was a wash — see `perf-runs/l2-emitter-comparison/REPORT.md`.) */
+  /** L2 emitter compositing layer (single screen-blend DOM sibling above
+   *  fg-night-tint). Bakeoff history: `perf-runs/l2-emitter-comparison/REPORT.md`. */
   lightCanvas?: HTMLCanvasElement;
 }
 
@@ -206,7 +213,8 @@ export class Renderer {
   private _lightCtx: CanvasRenderingContext2D | null = null;
   /** Static contribution baked once per arena; blitted onto lightCanvas each frame. */
   private _lightStaticCache: OffscreenCanvas | null = null;
-  /** Per-frame buffer for dynamic emitters; cleared at top of renderFrame. */
+  /** Per-frame buffer for dynamic emitters. Pooled — `_synthesizeDynamicLights`
+   *  reuses entries by index, growing on demand. Cleared by trimming `length`. */
   private _dynamicLights: Light[] = [];
   private _lastLightOpacity = -1;
   private bgCtx: CanvasRenderingContext2D;
@@ -574,6 +582,30 @@ export class Renderer {
     ctx.restore();
   }
 
+  /** Pool the per-frame dynamic emitters: per-player aura derived from live
+   *  entity state. Mutates pre-allocated entries in `_dynamicLights` in place,
+   *  growing on demand; trims length to active-player count so EmitterPipeline
+   *  iterates exactly the live emitters. */
+  private _synthesizeDynamicLights(matchState: MatchState): void {
+    let i = 0;
+    for (const player of matchState.players) {
+      if (!isLivePlayer(player)) continue;
+      const slot = this._dynamicLights[i] ?? (this._dynamicLights[i] = {
+        kind: 'point',
+        x: 0, y: 0,
+        color: { r: 0, g: 0, b: 0 },
+        intensity: 0.3,
+        radius: 70,
+        falloff: 'smoothstep',
+      });
+      slot.x = player.x + player.width / 2;
+      slot.y = player.y + player.height / 2;
+      slot.color = getCachedRgb(player.character.color);
+      i++;
+    }
+    this._dynamicLights.length = i;
+  }
+
   /** L2: register the static emitter catalog for the current arena. Called
    *  from renderBackground after the bg cache is built. Triggers a one-time
    *  bake into an OffscreenCanvas, blitted onto lightCanvas each frame. */
@@ -598,12 +630,16 @@ export class Renderer {
   }
 
   /** L2 emitter compositing — runs once per frame in renderFrame.
-   *  Clear → blit static cache → dynamic stamps + flicker overlay. */
+   *  Clear → blit static cache → dynamic stamps + flicker overlay. Skips
+   *  the per-frame stamp work entirely during the day (light layer would
+   *  composite at opacity 0 anyway). */
   private _compositeEmitters(): void {
     if (!this.lighting.isEnabled()) return;
     const ctx = this._lightCtx;
     const canvas = this._lightCanvas;
     if (!ctx || !canvas) return;
+    this._driveLightOpacity();
+    if (this._lastLightOpacity <= 0) return;
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -612,7 +648,6 @@ export class Renderer {
     }
     ctx.restore();
     this.lighting.emitters.compositeDynamic(ctx);
-    this._driveLightOpacity();
   }
 
   /** Light layer opacity tracks bgNightOpacity — emitters fade in with night,
@@ -853,22 +888,7 @@ export class Renderer {
       // Cache time once per frame
       this.frameTime = performance.now();
       this.lighting.ambient.beginFrame(this.theme, matchState.dayPhase);
-      // L2 emitters: synthesize per-player aura emitters from live entity
-      // state — no Player schema change needed. Phase 4+ adds carrot glow,
-      // spawn pillars, lava emissive on top.
-      this._dynamicLights.length = 0;
-      for (const player of matchState.players) {
-        if (!player.active || player.state === 'splat' || player.state === 'respawning') continue;
-        this._dynamicLights.push({
-          kind: 'point',
-          x: player.x + player.width / 2,
-          y: player.y + player.height / 2,
-          color: hexToRGB(player.character.color),
-          intensity: 0.3,
-          radius: 70,
-          falloff: 'smoothstep',
-        });
-      }
+      this._synthesizeDynamicLights(matchState);
       // Tick derived from timeElapsed (60Hz fixed-step). On guests, timeElapsed
       // is interpolated between snapshots → flicker advances smoothly without
       // a wire-format change for an explicit tick field.
