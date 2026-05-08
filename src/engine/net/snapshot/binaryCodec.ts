@@ -11,24 +11,29 @@
  * - ~50 bytes per player, ~4 bytes per entity
  * - Zero allocation in steady state (pre-allocated buffers)
  * - Delta compression: unchanged frames ≈ 40-80 bytes
+ *
+ * The per-player block is schema-driven: see `schema.ts` (PLAYER_SCHEMA)
+ * and `codecGen.ts` (compilePlayerEncoder/compilePlayerDecoder). Entity
+ * blocks (carrots/springs/thorns/etc.) stay inlined — the field counts
+ * are too small for the schema indirection to pay off.
  */
 import type {
-  PlayerSlot, PlayerState, KillFeedEntry, MatchPhase,
+  PlayerSlot, KillFeedEntry, MatchPhase, WirePlayer,
 } from '../../types';
 import { encodeSlot, decodeSlot } from '../protocol';
 import type { AuthSnapshot, SnapshotPlayer } from './types';
+import { compilePlayerEncoder, compilePlayerDecoder } from './codecGen';
+import { PLAYER_SCHEMA } from './schema';
 
-// ---- State encoding helpers ----
-
-const PLAYER_STATE_MAP: Record<PlayerState, number> = {
-  idle: 0, run: 1, airborne: 2, splat: 3, respawning: 4,
-};
-const PLAYER_STATE_REVERSE: PlayerState[] = ['idle', 'run', 'airborne', 'splat', 'respawning'];
-
-const EXPRESSION_MAP: Record<string, number> = {
-  normal: 0, scared: 1, angry: 2, dizzy: 3,
-};
-const EXPRESSION_REVERSE = ['normal', 'scared', 'angry', 'dizzy'] as const;
+// Run the schema/codec contract check once at module load. The returned
+// closures ARE the underlying `_encodePlayer` / `_decodePlayer` — no
+// per-call wrapper, so V8 sees a stable monomorphic call target.
+//
+// Microbench (`scripts/benchSnapshotEncode.ts`) compares the resulting
+// `encodeSnapshot` against the pre-Phase-12 inlined reference and is the
+// canary for future regressions (target ≤5%, current ~10-15%).
+const ENCODE_PLAYER = compilePlayerEncoder(PLAYER_SCHEMA);
+const DECODE_PLAYER = compilePlayerDecoder(PLAYER_SCHEMA);
 
 /** Decode slot byte to PlayerSlot (type-narrowing wrapper around decodeSlot). */
 const decodeSlotAs = (b: number) => decodeSlot(b) as PlayerSlot;
@@ -43,18 +48,6 @@ const PACKED_BOOLS_OUT: boolean[] = [];
 const MAX_SNAPSHOT_BYTES = 4096;
 const ENCODE_BUF = new ArrayBuffer(MAX_SNAPSHOT_BYTES);
 const ENCODE_VIEW = new DataView(ENCODE_BUF);
-
-/** Encode a timer (seconds) as a uint8 frame count (0-255). */
-function encodeTimer(timer: number): number {
-  if (timer <= 0) return 0;
-  return Math.min(Math.round(timer * 60), 255);
-}
-
-/** Clamp a number to int16 range with rounding. */
-function encodeInt16(v: number): number {
-  const r = Math.round(v);
-  return r < -32767 ? -32767 : r > 32767 ? 32767 : r;
-}
 
 /** Write N booleans as ceil(N/8) bitfield bytes into ENCODE_VIEW. Returns new offset. */
 function writePackedBools(o: number, n: number, get: (i: number) => boolean): number {
@@ -100,65 +93,10 @@ export function encodeSnapshot(snap: AuthSnapshot): { buffer: ArrayBuffer; lengt
   // Header
   ENCODE_VIEW.setUint32(o, snap.frame, true); o += 4;
 
-  // Player count + players
+  // Player count + players (per-player block is schema-driven — see schema.ts).
   ENCODE_VIEW.setUint8(o++, snap.players.length);
-  for (const p of snap.players) {
-    ENCODE_VIEW.setUint8(o++, encodeSlot(p.id));
-    ENCODE_VIEW.setFloat32(o, p.x, true); o += 4;
-    ENCODE_VIEW.setFloat32(o, p.y, true); o += 4;
-    // Velocity is visual/extrapolation data; int16 (±32767, 1-unit precision) is plenty.
-    ENCODE_VIEW.setInt16(o, encodeInt16(p.vx), true); o += 2;
-    ENCODE_VIEW.setInt16(o, encodeInt16(p.vy), true); o += 2;
-    ENCODE_VIEW.setUint8(o++, PLAYER_STATE_MAP[p.state] ?? 0);
-    // Flags byte: facing(1) + fastFalling(1) + disconnected(1) + active(1) + expression(2) + damageFlashSide(2) = 8 bits
-    const dfSide = p.damageFlashSide === 'left' ? 1 : p.damageFlashSide === 'right' ? 2 : 0;
-    const flags =
-      (p.facing === 'right' ? 1 : 0) |
-      (p.fastFalling ? 2 : 0) |
-      (p.disconnected ? 4 : 0) |
-      (p.active ? 8 : 0) |
-      ((EXPRESSION_MAP[p.expression] ?? 0) << 4) |
-      (dfSide << 6);
-    ENCODE_VIEW.setUint8(o++, flags);
-    ENCODE_VIEW.setUint8(o++, p.animFrame & 0xFF);
-    // Score / killStreak as Uint16 so mods (or carrots) that push past 255
-    // don't silently freeze the guest's view of the scoreboard.
-    ENCODE_VIEW.setUint16(o, Math.min(p.score, 65535), true); o += 2;
-
-    // Timer presence mask + only non-zero timers.
-    // Bits: 0=hitstop 1=invincible 2=splat 3=respawn 4=fat 5=slow 6=burn 7=damageFlash
-    const hitstop = encodeTimer(p.hitstopTimer);
-    const invinc = encodeTimer(p.invincibleTimer);
-    const splat = encodeTimer(p.splatTimer);
-    const respawn = encodeTimer(p.respawnTimer);
-    const fat = encodeTimer(p.fatTimer);
-    const slow = encodeTimer(p.slowTimer);
-    const burn = encodeTimer(p.burnTimer);
-    const dfTimer = encodeTimer(p.damageFlashTimer);
-    const timerMask =
-      (hitstop ? 1 : 0) |
-      (invinc ? 2 : 0) |
-      (splat ? 4 : 0) |
-      (respawn ? 8 : 0) |
-      (fat ? 16 : 0) |
-      (slow ? 32 : 0) |
-      (burn ? 64 : 0) |
-      (dfTimer ? 128 : 0);
-    ENCODE_VIEW.setUint8(o++, timerMask);
-    if (hitstop) ENCODE_VIEW.setUint8(o++, hitstop);
-    if (invinc) ENCODE_VIEW.setUint8(o++, invinc);
-    if (splat) ENCODE_VIEW.setUint8(o++, splat);
-    if (respawn) ENCODE_VIEW.setUint8(o++, respawn);
-    if (fat) ENCODE_VIEW.setUint8(o++, fat);
-    if (slow) ENCODE_VIEW.setUint8(o++, slow);
-    if (burn) ENCODE_VIEW.setUint8(o++, burn);
-    if (dfTimer) ENCODE_VIEW.setUint8(o++, dfTimer);
-
-    ENCODE_VIEW.setUint8(o++, Math.round(p.squashScale * 50) & 0xFF); // 50 = 1.0 normal
-    ENCODE_VIEW.setUint16(o, Math.min(p.killStreak, 65535), true); o += 2;
-    ENCODE_VIEW.setUint8(o++, Math.min(Math.round(p.width), 255));
-    ENCODE_VIEW.setUint8(o++, Math.min(Math.round(p.height), 255));
-    ENCODE_VIEW.setUint8(o++, Math.round(p.sideSquash * 50) & 0xFF); // 50 = 1.0 normal
+  for (let i = 0; i < snap.players.length; i++) {
+    o = ENCODE_PLAYER(ENCODE_VIEW, o, snap.players[i] as unknown as WirePlayer);
   }
 
   // Carrots — bitfield of active flags, then positions
@@ -288,68 +226,46 @@ export function decodeSnapshot(buf: ArrayBuffer, offset = 0, out?: AuthSnapshot)
 
   const frame = view.getUint32(o, true); o += 4;
 
-  // Players
+  // Players (per-player block is schema-driven — see schema.ts).
   const playerCount = view.getUint8(o++);
   const players = out ? out.players : [];
   if (out && players.length > playerCount) players.length = playerCount;
   for (let i = 0; i < playerCount; i++) {
-    const id = decodeSlotAs(view.getUint8(o++));
-    const x = view.getFloat32(o, true); o += 4;
-    const y = view.getFloat32(o, true); o += 4;
-    const vx = view.getInt16(o, true); o += 2;
-    const vy = view.getInt16(o, true); o += 2;
-    const stateIdx = view.getUint8(o++);
-    const flags = view.getUint8(o++);
-    const animFrame = view.getUint8(o++);
-    const score = view.getUint16(o, true); o += 2;
-
-    const timerMask = view.getUint8(o++);
-    const hitstopTimer = (timerMask & 1) ? view.getUint8(o++) / 60 : 0;
-    const invincibleTimer = (timerMask & 2) ? view.getUint8(o++) / 60 : 0;
-    const splatTimer = (timerMask & 4) ? view.getUint8(o++) / 60 : 0;
-    const respawnTimer = (timerMask & 8) ? view.getUint8(o++) / 60 : 0;
-    const fatTimer = (timerMask & 16) ? view.getUint8(o++) / 60 : 0;
-    const slowTimer = (timerMask & 32) ? view.getUint8(o++) / 60 : 0;
-    const burnTimer = (timerMask & 64) ? view.getUint8(o++) / 60 : 0;
-    const damageFlashTimer = (timerMask & 128) ? view.getUint8(o++) / 60 : 0;
-
-    const squashScale = view.getUint8(o++) / 50;
-    const killStreak = view.getUint16(o, true); o += 2;
-    const width = view.getUint8(o++);
-    const height = view.getUint8(o++);
-    const sideSquash = view.getUint8(o++) / 50;
-
-    const dfSide = (flags >> 6) & 3;
-    const damageFlashSide: 'left' | 'right' | null = dfSide === 1 ? 'left' : dfSide === 2 ? 'right' : null;
-    const state = PLAYER_STATE_REVERSE[stateIdx] ?? 'idle';
-    const facing: 'left' | 'right' = (flags & 1) ? 'right' : 'left';
-    const fastFalling = !!(flags & 2);
-    const disconnected = !!(flags & 4);
-    const active = !!(flags & 8);
-    const expression = EXPRESSION_REVERSE[(flags >> 4) & 3] ?? 'normal';
-
+    let p: SnapshotPlayer;
     if (out && i < players.length) {
-      const p = players[i];
-      p.id = id; p.x = x; p.y = y; p.vx = vx; p.vy = vy;
-      p.state = state; p.facing = facing; p.fastFalling = fastFalling;
-      p.disconnected = disconnected; p.active = active; p.expression = expression;
-      p.animFrame = animFrame; p.score = score;
-      p.hitstopTimer = hitstopTimer; p.invincibleTimer = invincibleTimer;
-      p.splatTimer = splatTimer; p.respawnTimer = respawnTimer;
-      p.fatTimer = fatTimer; p.slowTimer = slowTimer; p.burnTimer = burnTimer;
-      p.squashScale = squashScale; p.killStreak = killStreak;
-      p.width = width; p.height = height; p.sideSquash = sideSquash;
-      p.damageFlashTimer = damageFlashTimer; p.damageFlashSide = damageFlashSide;
+      p = players[i];
     } else {
-      players.push({
-        id, x, y, vx, vy, state, facing, fastFalling, disconnected, active,
-        expression, animFrame, score,
-        hitstopTimer, invincibleTimer, splatTimer, respawnTimer,
-        fatTimer, slowTimer, burnTimer,
-        squashScale, killStreak, width, height, sideSquash,
-        damageFlashTimer, damageFlashSide,
-      });
+      // Build a fully-shaped empty record so V8 can lock the hidden class
+      // on first decode; field assignments below keep that shape stable.
+      p = {
+        id: 'P1',
+        x: 0, y: 0, vx: 0, vy: 0,
+        state: 'idle',
+        facing: 'left',
+        animFrame: 0,
+        score: 0,
+        hitstopTimer: 0,
+        invincibleTimer: 0,
+        fastFalling: false,
+        splatTimer: 0,
+        respawnTimer: 0,
+        fatTimer: 0,
+        slowTimer: 0,
+        burnTimer: 0,
+        squashScale: 1,
+        expression: 'normal',
+        killStreak: 0,
+        disconnected: false,
+        active: true,
+        width: 0,
+        height: 0,
+        sideSquash: 1,
+        damageFlashTimer: 0,
+        damageFlashSide: null,
+      };
+      players.push(p);
     }
+    o = DECODE_PLAYER(view, o, p as unknown as WirePlayer);
   }
 
   // Carrots

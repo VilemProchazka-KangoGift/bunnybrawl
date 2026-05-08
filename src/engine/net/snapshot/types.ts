@@ -7,40 +7,18 @@
  * `snapshot-wire-format.test.ts` and `PROTOCOL_VERSION` in `core/protocol.ts`.
  */
 import type {
-  PlayerSlot, PlayerState, KillFeedEntry, MatchPhase,
+  PlayerSlot, KillFeedEntry, MatchPhase, WirePlayer,
 } from '../../types';
 
 // ---- Snapshot data structures ----
 
-export interface SnapshotPlayer {
-  id: PlayerSlot;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  state: PlayerState;
-  facing: 'left' | 'right';
-  animFrame: number;
-  score: number;
-  hitstopTimer: number;
-  invincibleTimer: number;
-  fastFalling: boolean;
-  splatTimer: number;
-  respawnTimer: number;
-  fatTimer: number;
-  slowTimer: number;
-  burnTimer: number;
-  squashScale: number;
-  expression: 'normal' | 'scared' | 'angry' | 'dizzy';
-  killStreak: number;
-  disconnected: boolean;
-  active: boolean;
-  width: number;
-  height: number;
-  sideSquash: number;
-  damageFlashTimer: number;
-  damageFlashSide: 'left' | 'right' | null;
-}
+/**
+ * SnapshotPlayer is the per-player wire shape. As of Phase 12 it's an
+ * alias for `WirePlayer` (defined in `engine/types.ts`) — extending the
+ * snapshot is a single-source-of-truth edit there. See
+ * `net/snapshot/schema.ts` for the wire layout description.
+ */
+export type SnapshotPlayer = WirePlayer;
 
 export interface AuthSnapshot {
   frame: number;

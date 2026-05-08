@@ -143,9 +143,20 @@ export interface CharacterDef {
 
 export type PlayerState = 'idle' | 'run' | 'airborne' | 'splat' | 'respawning';
 
-export interface Player {
+/**
+ * Player fields that are part of the host→guest snapshot (wire format).
+ *
+ * Defined SEPARATELY from `Player` so the snapshot codec can be
+ * schema-driven (see `net/snapshot/schema.ts`). The split also makes the
+ * "what's authoritative on guests" question answerable by reading one
+ * interface — anything outside `WirePlayer` is locally simulated by each
+ * peer (cosmetic divergence is acceptable).
+ *
+ * Keep this interface in lockstep with `SnapshotPlayer` in
+ * `net/snapshot/types.ts` and with `PLAYER_SCHEMA`.
+ */
+export interface WirePlayer {
   id: PlayerSlot;
-  character: CharacterDef;
   x: number;
   y: number;
   vx: number;
@@ -160,19 +171,33 @@ export interface Player {
   score: number;
   active: boolean;
   animFrame: number;
-  animTimer: number;
   fastFalling: boolean;
   fatTimer: number;
   slowTimer: number;
   squashScale: number;   // 1.0 = normal, <1 = squashed, >1 = stretched (vertical)
-  squashTimer: number;   // decay timer for squash/stretch
   sideSquash: number;    // 1.0 = normal, <1 = squashed horizontally (wall/push)
+  expression: 'normal' | 'scared' | 'angry' | 'dizzy';
+  killStreak: number;    // current consecutive kills without dying
+  damageFlashSide: 'left' | 'right' | null; // which side got hit
+  damageFlashTimer: number;    // >0 = show red flash
+  burnTimer: number;           // >0 = on fire from lava, spawns flame particles
+  hitstopTimer: number;        // >0 = physics frozen (post-kill freeze)
+  disconnected: boolean;       // true = player disconnected mid-match, don't respawn
+}
+
+/**
+ * Player fields that are NOT snapshotted — simulated independently on each
+ * peer. Cosmetic divergence is accepted (idle action picks, breathing
+ * phase, render-offset decay). NaN-sentinel anchors live here.
+ */
+export interface LocalPlayer {
+  character: CharacterDef;
+  animTimer: number;
+  squashTimer: number;   // decay timer for squash/stretch
   afterimages: Array<{x: number; y: number; facing: 'left'|'right'; alpha: number}>;
   idleAction: number;        // index into pack's idle action pool, -1 = none (resting)
   idleActionTimer: number;   // seconds remaining in current action or rest gap
   idleActionDuration: number;// total duration of current action; 0 during rest
-  expression: 'normal' | 'scared' | 'angry' | 'dizzy';
-  killStreak: number;    // current consecutive kills without dying
   breathTimer: number;         // for idle breathing animation
   springTrailTimer: number;    // >0 = spiral trail active after spring bounce
   springLaunchX: number;     // local-only — anchor x for drawSpringTrail (set to spring.x at bounce). NaN = unset.
@@ -181,14 +206,18 @@ export interface Player {
   airLean: number;             // local-only — 0..1, primed to 1 on jump rise, decays during descent; lerps body-lean magnitude run→air
   fastFallAnchorX: number;     // local-only — cx where fastFalling stopped; smudge fades from there instead of riding a stomp bounce. NaN = unset.
   fastFallAnchorY: number;     // local-only — headY where fastFalling stopped. NaN = unset.
-  damageFlashSide: 'left' | 'right' | null; // which side got hit
-  damageFlashTimer: number;    // >0 = show red flash
-  burnTimer: number;           // >0 = on fire from lava, spawns flame particles
-  hitstopTimer: number;        // >0 = physics frozen (post-kill freeze)
   renderOffsetX: number;       // visual-only offset from rollback correction, decays to 0
   renderOffsetY: number;       // visual-only offset from rollback correction, decays to 0
-  disconnected: boolean;       // true = player disconnected mid-match, don't respawn
 }
+
+/**
+ * Full Player = wire-snapshotted fields + local-only fields.
+ *
+ * Existing call sites that read/write any field of Player keep working
+ * unchanged because `WirePlayer & LocalPlayer` exposes the same shape as
+ * the original flat `Player` interface.
+ */
+export type Player = WirePlayer & LocalPlayer;
 
 export type SplatShape = 'circle' | 'star' | 'splat' | 'ring' | 'paw';
 
