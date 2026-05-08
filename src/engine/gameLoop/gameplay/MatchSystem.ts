@@ -5,6 +5,7 @@ import type { GameplaySystem } from '../types';
 import { updateCrowdCheering, tickPeriodicAmbient } from '../cosmetics/sfx';
 import { checkMatchEnd } from './match';
 import { SLOW_MO_DURATION } from '../../constants';
+import { Cooldowns } from '../../cooldowns';
 import { randRange } from '../../themes/utils';
 
 export class MatchSystem implements GameplaySystem {
@@ -19,7 +20,7 @@ export class MatchSystem implements GameplaySystem {
 
   private crowdStarted: boolean;
   private activeAmbientLoops: string[];
-  private periodicAmbientTimers: Map<string, number>;
+  private periodicAmbientTimers: Cooldowns<string>;
 
   constructor(
     state: MatchState,
@@ -41,7 +42,7 @@ export class MatchSystem implements GameplaySystem {
     this.onMatchEnd = onMatchEnd;
     this.crowdStarted = false;
     this.activeAmbientLoops = [];
-    this.periodicAmbientTimers = new Map();
+    this.periodicAmbientTimers = new Cooldowns<string>();
   }
 
   init(): void {

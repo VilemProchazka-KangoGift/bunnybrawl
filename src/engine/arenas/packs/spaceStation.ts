@@ -1,30 +1,31 @@
 import type { ArenaPack } from '../types';
-import type { Platform, Player } from '../../types';
+import type { Arena, Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin } from '../../fastMath';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
-import { getFloatingPlatforms, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
+import { getFloatingPlatforms, type GroundCritterState, type GroundCritterConfig } from '../../themes/utils';
+import { buildGroundCritter, type WildlifeInstance } from '../../gameLoop/cosmetics/wildlife';
 import {
   registerReactiveKind, createReactiveInstance, composeBend,
   type ReactiveInstance,
 } from '../../gameLoop/cosmetics/reactiveDecorations';
 
-const ROBOTS_CFG = [
+const ROBOTS_CFG: GroundCritterConfig[] = [
   { platL: 20,   platR: 200,  platTopY: 660, walkSpeed: 22, fleeSpeed: 70, fleeRadius: 90, yTolerance: 80, turnEaseRate: 2 },
   { platL: 1080, platR: 1260, platTopY: 660, walkSpeed: 24, fleeSpeed: 75, fleeRadius: 90, yTolerance: 80, turnEaseRate: 2 },
   { platL: 35,   platR: 195,  platTopY: 360, walkSpeed: 18, fleeSpeed: 60, fleeRadius: 85, yTolerance: 60, turnEaseRate: 2 },
 ];
-const _robots: GroundCritterState[] = ROBOTS_CFG.map((cfg, i) => ({
-  x: (cfg.platL + cfg.platR) / 2,
-  dir: i % 2 === 0 ? 1 : -1, facingEase: 1, fleeing: false, committedFleeDir: 0,
-}));
-const _tickRobotDt = makeDtTracker();
 
-function drawOneRobot(ctx: CanvasRenderingContext2D, time: number, robot: GroundCritterState, cfg: typeof ROBOTS_CFG[number]): void {
-  const step = fastSin(time * (robot.fleeing ? 14 : 6)) * Math.abs(robot.facingEase);
+function drawOneRobot(
+  ctx: CanvasRenderingContext2D,
+  state: GroundCritterState,
+  cfg: GroundCritterConfig,
+  time: number,
+): void {
+  const step = fastSin(time * (state.fleeing ? 14 : 6)) * Math.abs(state.facingEase);
   ctx.save();
-  ctx.translate(robot.x, cfg.platTopY - 6);
-  if (robot.facingEase < 0) ctx.scale(-1, 1);
+  ctx.translate(state.x, cfg.platTopY - 6);
+  if (state.facingEase < 0) ctx.scale(-1, 1);
   ctx.fillStyle = '#5a6a78';
   ctx.fillRect(-3, 1 - Math.max(0, step) * 1.2, 2, 5);
   ctx.fillRect(1, 1 - Math.max(0, -step) * 1.2, 2, 5);
@@ -50,14 +51,6 @@ function drawOneRobot(ctx: CanvasRenderingContext2D, time: number, robot: Ground
   ctx.arc(0, -11.5, 1, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
-}
-
-function drawRobot(ctx: CanvasRenderingContext2D, time: number, players: ReadonlyArray<Player>): void {
-  const dt = _tickRobotDt(time);
-  for (let i = 0; i < _robots.length; i++) {
-    tickGroundCritter(_robots[i], players, dt, ROBOTS_CFG[i]);
-    drawOneRobot(ctx, time, _robots[i], ROBOTS_CFG[i]);
-  }
 }
 
 import {
@@ -553,9 +546,18 @@ export const spaceStation: ArenaPack = {
     ctx.restore();
   },
 
-  drawGroundCritters: (ctx, _arena, time, _dayPhase, matchState) => {
-    if (!matchState) return;
-    drawRobot(ctx, time, matchState.players);
+  buildWildlife: (_arena: Arena): WildlifeInstance[] => {
+    const out: WildlifeInstance[] = [];
+    for (let i = 0; i < ROBOTS_CFG.length; i++) {
+      const cfg = ROBOTS_CFG[i];
+      out.push(buildGroundCritter({
+        seed: i,
+        cfg,
+        initialDir: i % 2 === 0 ? 1 : -1,
+        draw: ({ ctx, state, cfg: c, time }) => drawOneRobot(ctx, state, c, time),
+      }));
+    }
+    return out;
   },
 
   drawFarBackground: (ctx, _arena) => {

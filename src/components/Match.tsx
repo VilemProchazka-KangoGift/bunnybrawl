@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useMemo } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../store/gameStore';
 import { GameLoop } from '../engine/gameLoop';
@@ -17,6 +17,7 @@ import { useOnlineMatch } from './match/useOnlineMatch';
 import { useMatchKeyboard } from './match/useMatchKeyboard';
 import { MatchCanvases } from './match/MatchCanvases';
 import { MatchOverlays } from './match/MatchOverlays';
+import { attachMatch as attachBunnyTestMatch } from './bunnyTestShim';
 import './Match.css';
 
 // Track last resolved arena so random doesn't repeat on rematch. Intentionally
@@ -43,6 +44,8 @@ export function Match() {
   const fgCanvasRef = useRef<HTMLCanvasElement>(null);
   const hudCanvasRef = useRef<HTMLCanvasElement>(null);
   const fgNightTintRef = useRef<HTMLDivElement>(null);
+  // L2 emitter compositing — single screen-blend DOM sibling above fg-night-tint.
+  const lightCanvasRef = useRef<HTMLCanvasElement>(null);
   const gameLoopRef = useRef<GameLoop | null>(null);
   const victoryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { activePlayers, matchSettings, setMatchResult, setScreen, setActivePlayers, setMatchSettings, online, resetOnline, clearMatchResult } = useGameStore();
@@ -175,7 +178,7 @@ export function Match() {
 
   // Local-mode lifecycle (extracted hook). Early-returns when isOnline.
   useLocalMatch({
-    bgCanvasRef, bgNightCanvasRef, fgCanvasRef, fgNightTintRef, hudCanvasRef,
+    bgCanvasRef, bgNightCanvasRef, fgCanvasRef, fgNightTintRef, lightCanvasRef, hudCanvasRef,
     gameLoopRef, victoryTimeoutRef,
     currentArenaId, activePlayers, matchSettings,
     setMatchResult, setTouchInput,
@@ -185,7 +188,7 @@ export function Match() {
 
   // Online-mode lifecycle (extracted hook). Early-returns when !isOnline.
   useOnlineMatch({
-    bgCanvasRef, bgNightCanvasRef, fgCanvasRef, fgNightTintRef, hudCanvasRef,
+    bgCanvasRef, bgNightCanvasRef, fgCanvasRef, fgNightTintRef, lightCanvasRef, hudCanvasRef,
     gameLoopRef, netMatchRef, victoryTimeoutRef, disconnectDelayRef,
     reconnectFailedRef, isReconnectingRef,
     currentArenaId, activePlayers, matchSettings,
@@ -198,6 +201,16 @@ export function Match() {
     setReconnectAttempt, setReconnectMax, flashBanner, t,
   });
 
+  // Wire the unified E2E diagnostic snapshot to this Match's refs. Reads
+  // are function-getter form so each call sees the CURRENT GameLoop /
+  // NetMatch (rematch, arena swap, online↔local rebind via the same refs).
+  // No-op in production builds.
+  useEffect(() => {
+    const detach = attachBunnyTestMatch({ gameLoopRef, netMatchRef });
+    return detach;
+  }, []);
+
+
   // Wake lock: prevent screen dimming during match on mobile
   useWakeLock(isMobile);
 
@@ -209,6 +222,7 @@ export function Match() {
           bgNightRef={bgNightCanvasRef}
           fgRef={fgCanvasRef}
           fgNightTintRef={fgNightTintRef}
+          lightRef={lightCanvasRef}
           hudRef={hudCanvasRef}
         />
         {touchInput && <TouchOverlay touchInput={touchInput} />}

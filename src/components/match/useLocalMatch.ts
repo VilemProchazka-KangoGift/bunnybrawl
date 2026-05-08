@@ -40,6 +40,7 @@ export interface UseLocalMatchParams {
   bgNightCanvasRef: React.RefObject<HTMLCanvasElement | null>;
   fgCanvasRef: React.RefObject<HTMLCanvasElement | null>;
   fgNightTintRef: React.RefObject<HTMLDivElement | null>;
+  lightCanvasRef: React.RefObject<HTMLCanvasElement | null>;
   hudCanvasRef: React.RefObject<HTMLCanvasElement | null>;
 
   // Lifecycle refs the hook owns/clears.
@@ -88,7 +89,7 @@ export interface UseLocalMatchParams {
  */
 export function useLocalMatch(p: UseLocalMatchParams): void {
   const {
-    bgCanvasRef, bgNightCanvasRef, fgCanvasRef, fgNightTintRef, hudCanvasRef,
+    bgCanvasRef, bgNightCanvasRef, fgCanvasRef, fgNightTintRef, lightCanvasRef, hudCanvasRef,
     gameLoopRef, victoryTimeoutRef,
     currentArenaId, activePlayers, matchSettings,
     setMatchResult, setTouchInput,
@@ -106,6 +107,7 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
     // source-over fillRect tint path. Don't block match mount on them.
     const bgNightCanvas = bgNightCanvasRef.current ?? undefined;
     const fgNightTint = fgNightTintRef.current ?? undefined;
+    const lightCanvas = lightCanvasRef.current ?? undefined;
 
     const arena = getArena(currentArenaId);
     let matchEnded = false;
@@ -137,10 +139,10 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
       undefined, // rng
       bgNightCanvas,
       fgNightTint,
+      lightCanvas,
     );
 
     gameLoopRef.current = loop;
-    window.__gameLoop = loop;
     loop.setOnPhaseChange((phase: MatchPhase) => {
       setPhaseIsLoading(phase === 'loading');
     });

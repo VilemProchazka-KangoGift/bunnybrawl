@@ -5,8 +5,10 @@ import { fastSin, fastCos } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
 import { computeNightIntensity } from '../../rendering';
 import { createThornRenderer } from '../../themes/drawPrimitives';
-import { getFloatingPlatforms, drawDriftBand, makeDtTracker, tickGroundCritter, type DriftBandConfig, type GroundCritterState } from '../../themes/utils';
+import { getFloatingPlatforms, drawDriftBand, type DriftBandConfig, type GroundCritterConfig } from '../../themes/utils';
+import { buildGroundCritter, type WildlifeInstance } from '../../gameLoop/cosmetics/wildlife';
 import { drawRat } from '../../themes/drawPrimitives';
+import type { Arena } from '../../types';
 import {
   registerReactiveKind, createReactiveInstance, composeBend,
   type ReactiveInstance,
@@ -19,15 +21,10 @@ const FOG_CONFIG: DriftBandConfig = {
   alphas: [0.10, 0.14, 0.20],
 };
 
-const RATS_CFG = [
+const RATS_CFG: GroundCritterConfig[] = [
   { platL: 30,  platR: 460,  platTopY: 660, walkSpeed: 50, fleeSpeed: 180, fleeRadius: 120, yTolerance: 80 },
   { platL: 820, platR: 1260, platTopY: 660, walkSpeed: 52, fleeSpeed: 180, fleeRadius: 120, yTolerance: 80 },
 ];
-const _graveRats: GroundCritterState[] = RATS_CFG.map((cfg, i) => ({
-  x: (cfg.platL + cfg.platR) / 2,
-  dir: i % 2 === 0 ? 1 : -1, facingEase: 1, fleeing: false, committedFleeDir: 0,
-}));
-const _tickGraveRatDt = makeDtTracker();
 
 const WISPS = [
   { x: 200, y: 540, phase: 0 },
@@ -861,14 +858,19 @@ export const hauntedGraveyard: ArenaPack = {
     ctx.restore();
   },
 
-  drawGroundCritters: (ctx, _arena, time, _dayPhase, matchState) => {
-    if (getSlowDevice() || !matchState) return;
-    const dt = _tickGraveRatDt(time);
-    for (let i = 0; i < _graveRats.length; i++) {
-      const r = _graveRats[i];
-      tickGroundCritter(r, matchState.players, dt, RATS_CFG[i]);
-      drawRat(ctx, r.x, RATS_CFG[i].platTopY - 4, r.facingEase < 0 ? -1 : 1, time, Math.abs(r.facingEase), r.fleeing);
+  buildWildlife: (_arena: Arena): WildlifeInstance[] => {
+    const out: WildlifeInstance[] = [];
+    for (let i = 0; i < RATS_CFG.length; i++) {
+      const cfg = RATS_CFG[i];
+      out.push(buildGroundCritter({
+        seed: i,
+        cfg,
+        initialDir: i % 2 === 0 ? 1 : -1,
+        draw: ({ ctx, state, cfg: c, time }) =>
+          drawRat(ctx, state.x, c.platTopY - 4, state.facingEase < 0 ? -1 : 1, time, Math.abs(state.facingEase), state.fleeing),
+      }));
     }
+    return out;
   },
 
   drawAnimatedForeground: (ctx, _arena, time) => {

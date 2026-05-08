@@ -20,6 +20,7 @@ export interface UseOnlineMatchParams {
   bgNightCanvasRef: React.RefObject<HTMLCanvasElement | null>;
   fgCanvasRef: React.RefObject<HTMLCanvasElement | null>;
   fgNightTintRef: React.RefObject<HTMLDivElement | null>;
+  lightCanvasRef: React.RefObject<HTMLCanvasElement | null>;
   hudCanvasRef: React.RefObject<HTMLCanvasElement | null>;
 
   // Lifecycle refs.
@@ -83,7 +84,7 @@ export interface UseOnlineMatchParams {
  */
 export function useOnlineMatch(p: UseOnlineMatchParams): void {
   const {
-    bgCanvasRef, bgNightCanvasRef, fgCanvasRef, fgNightTintRef, hudCanvasRef,
+    bgCanvasRef, bgNightCanvasRef, fgCanvasRef, fgNightTintRef, lightCanvasRef, hudCanvasRef,
     gameLoopRef, netMatchRef, victoryTimeoutRef, disconnectDelayRef,
     reconnectFailedRef, isReconnectingRef,
     currentArenaId, activePlayers, matchSettings, isOnline, isHost, localSlot,
@@ -102,6 +103,7 @@ export function useOnlineMatch(p: UseOnlineMatchParams): void {
     if (!bgCanvas || !fgCanvas || !hudCanvas) return;
     const bgNightCanvas = bgNightCanvasRef.current ?? undefined;
     const fgNightTint = fgNightTintRef.current ?? undefined;
+    const lightCanvas = lightCanvasRef.current ?? undefined;
 
     const clearTimer = (ref: { current: ReturnType<typeof setTimeout> | null }) => {
       if (ref.current) { clearTimeout(ref.current); ref.current = null; }
@@ -147,6 +149,7 @@ export function useOnlineMatch(p: UseOnlineMatchParams): void {
       bgCanvas,
       bgNightCanvas,
       fgNightTint,
+      lightCanvas,
       fgCanvas,
       hudCanvas,
       arena,
@@ -269,8 +272,6 @@ export function useOnlineMatch(p: UseOnlineMatchParams): void {
 
     netMatchRef.current = netMatch;
     gameLoopRef.current = netMatch.getGameLoop();
-    window.__gameLoop = netMatch.getGameLoop();
-    (window as unknown as { __netMatch: NetMatch }).__netMatch = netMatch;
     netMatch.getGameLoop().setPlayerNames(useGameStore.getState().online.playerNames);
     netMatch.getGameLoop().setLocalSlot((isHost ? 'P1' : localSlot) as PlayerSlot);
     netMatch.start();

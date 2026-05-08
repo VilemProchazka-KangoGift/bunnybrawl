@@ -134,7 +134,7 @@ test.describe('Online Lobby — Player List Integrity', { tag: '@online' }, () =
 
       // Guest should have exactly 1 remote player (the host, P1)
       const guestRemotePlayers = await pair.guest.evaluate(() => {
-        return (window as any).__gameStore?.getState().online.remotePlayers;
+        return window.__bunnyTest?.gameStore()?.getState().online.remotePlayers;
       });
 
       expect(guestRemotePlayers).toHaveLength(1);
@@ -153,11 +153,11 @@ test.describe('Online Lobby — Player List Integrity', { tag: '@online' }, () =
       // Host changes character and wait for it to propagate to guest
       const hostSelect = pair.host.locator('.online-char-select');
       const oldChar = await pair.guest.evaluate(() =>
-        (window as any).__gameStore?.getState().online.remotePlayers?.[0]?.characterName
+        window.__bunnyTest?.gameStore()?.getState().online.remotePlayers?.[0]?.characterName
       );
       await hostSelect.selectOption({ index: 3 });
       await pair.guest.waitForFunction((prev) => {
-        const rp = (window as any).__gameStore?.getState().online.remotePlayers;
+        const rp = window.__bunnyTest?.gameStore()?.getState().online.remotePlayers;
         return rp?.[0]?.characterName && rp[0].characterName !== prev;
       }, oldChar, { timeout: 5000 });
 
@@ -167,7 +167,7 @@ test.describe('Online Lobby — Player List Integrity', { tag: '@online' }, () =
 
       // Guest's remotePlayers should still have exactly 1 entry (the host)
       const guestRemotePlayers = await pair.guest.evaluate(() => {
-        return (window as any).__gameStore?.getState().online.remotePlayers;
+        return window.__bunnyTest?.gameStore()?.getState().online.remotePlayers;
       });
       expect(guestRemotePlayers).toHaveLength(1);
     } finally {
@@ -208,13 +208,13 @@ test.describe('Online — Mobile Guest Controls', { tag: '@online' }, () => {
 
       // Wait past countdown
       await pair.guest.waitForFunction(() => {
-        const gl = (window as any).__gameLoop;
-        return gl?.getState()?.countdown <= 0;
+        const gl = window.__bunnyTest;
+        return gl?.state()?.countdown <= 0;
       }, { timeout: 10000 });
 
       // Verify touch input manager exists on guest
       const hasTouchInput = await pair.guest.evaluate(() => {
-        const gl = (window as any).__gameLoop;
+        const gl = window.__bunnyTest;
         return gl?.getTouchInput() !== null;
       });
       expect(hasTouchInput).toBe(true);
@@ -225,7 +225,7 @@ test.describe('Online — Mobile Guest Controls', { tag: '@online' }, () => {
       // Simulate touch input by setting the touch manager's internal fields,
       // then verify getInputAny() picks it up
       const inputMerged = await pair.guest.evaluate(() => {
-        const gl = (window as any).__gameLoop;
+        const gl = window.__bunnyTest;
         const ti = gl?.getTouchInput();
         if (!ti) return null;
 
@@ -274,13 +274,13 @@ test.describe('Online — Mobile Guest Controls', { tag: '@online' }, () => {
 
       // Guest should have localSlot set to P2 (not P1 which is the host)
       const guestSlot = await pair.guest.evaluate(() => {
-        return (window as any).__gameStore?.getState().online.localSlot;
+        return window.__bunnyTest?.gameStore()?.getState().online.localSlot;
       });
       expect(guestSlot).toBe('P2');
 
       // GameLoop's touchSlot should match the local slot
       const touchSlot = await pair.guest.evaluate(() => {
-        const gl = (window as any).__gameLoop;
+        const gl = window.__bunnyTest;
         return (gl as any)?.touchSlot;
       });
       expect(touchSlot).toBe('P2');
@@ -298,7 +298,7 @@ test.describe('Online — Visual Effects During Rollback', { tag: '@online' }, (
     try {
       // Use volcano arena (has lava hazards that trigger screenFlash)
       await pair.host.evaluate(() => {
-        (window as any).__gameStore?.getState().setMatchSettings({
+        window.__bunnyTest?.gameStore()?.getState().setMatchSettings({
           botCount: 3,
           botDifficulty: 'hard',
           killLimit: 99,
@@ -314,7 +314,7 @@ test.describe('Online — Visual Effects During Rollback', { tag: '@online' }, (
 
       // Change to volcano arena
       await pair.host.evaluate(() => {
-        (window as any).__gameStore?.getState().setMatchSettings({ arenaId: 'volcano' });
+        window.__bunnyTest?.gameStore()?.getState().setMatchSettings({ arenaId: 'volcano' });
       });
 
       await pair.host.getByTestId('online-start-btn').click();
@@ -323,8 +323,8 @@ test.describe('Online — Visual Effects During Rollback', { tag: '@online' }, (
 
       // Wait past countdown
       await pair.host.waitForFunction(() => {
-        const gl = (window as any).__gameLoop;
-        return gl?.getState()?.countdown <= 0;
+        const gl = window.__bunnyTest;
+        return gl?.state()?.countdown <= 0;
       }, { timeout: 10000 });
 
       // Sample screenFlash over 15 seconds — it should never exceed SCREEN_FLASH_DURATION (0.15)
@@ -338,12 +338,12 @@ test.describe('Online — Visual Effects During Rollback', { tag: '@online' }, (
 
         const [hostFlash, guestFlash] = await Promise.all([
           pair.host.evaluate(() => {
-            const gl = (window as any).__gameLoop;
-            return gl?.getState()?.screenFlash ?? 0;
+            const gl = window.__bunnyTest;
+            return gl?.state()?.screenFlash ?? 0;
           }),
           pair.guest.evaluate(() => {
-            const gl = (window as any).__gameLoop;
-            return gl?.getState()?.screenFlash ?? 0;
+            const gl = window.__bunnyTest;
+            return gl?.state()?.screenFlash ?? 0;
           }),
         ]);
 
@@ -366,7 +366,7 @@ test.describe('Online — Visual Effects During Rollback', { tag: '@online' }, (
     const pair = await createPair(browser);
     try {
       await pair.host.evaluate(() => {
-        (window as any).__gameStore?.getState().setMatchSettings({
+        window.__bunnyTest?.gameStore()?.getState().setMatchSettings({
           botCount: 3,
           botDifficulty: 'hard',
           arenaId: 'volcano',
@@ -379,8 +379,8 @@ test.describe('Online — Visual Effects During Rollback', { tag: '@online' }, (
 
       // Wait past countdown
       await pair.host.waitForFunction(() => {
-        const gl = (window as any).__gameLoop;
-        return gl?.getState()?.countdown <= 0;
+        const gl = window.__bunnyTest;
+        return gl?.state()?.countdown <= 0;
       }, { timeout: 10000 });
 
       let maxShakeHost = 0;
@@ -389,8 +389,8 @@ test.describe('Online — Visual Effects During Rollback', { tag: '@online' }, (
       for (let i = 0; i < 12; i++) {
         await pair.host.waitForTimeout(1000);
         const shake = await pair.host.evaluate(() => {
-          const gl = (window as any).__gameLoop;
-          return gl?.getState()?.screenShake ?? 0;
+          const gl = window.__bunnyTest;
+          return gl?.state()?.screenShake ?? 0;
         });
         maxShakeHost = Math.max(maxShakeHost, shake);
       }
@@ -411,7 +411,7 @@ test.describe('Online — Cross-Architecture Sync (fround)', { tag: '@online' },
     try {
       // Volcano: lava zones, lava rocks, effect zones — max stress for float precision
       await pair.host.evaluate(() => {
-        (window as any).__gameStore?.getState().setMatchSettings({
+        window.__bunnyTest?.gameStore()?.getState().setMatchSettings({
           botCount: 2,
           botDifficulty: 'hard',
           arenaId: 'volcano',
@@ -424,8 +424,8 @@ test.describe('Online — Cross-Architecture Sync (fround)', { tag: '@online' },
 
       // Wait past countdown
       await pair.host.waitForFunction(() => {
-        const gl = (window as any).__gameLoop;
-        return gl?.getState()?.countdown <= 0;
+        const gl = window.__bunnyTest;
+        return gl?.state()?.countdown <= 0;
       }, { timeout: 10000 });
 
       // Sample for 25 seconds — specifically checking that positions don't diverge
@@ -437,9 +437,9 @@ test.describe('Online — Cross-Architecture Sync (fround)', { tag: '@online' },
 
         const [hostState, guestState] = await Promise.all([
           pair.host.evaluate(() => {
-            const gl = (window as any).__gameLoop;
+            const gl = window.__bunnyTest;
             if (!gl) return null;
-            const s = gl.getState();
+            const s = gl.state();
             return {
               timeElapsed: s.timeElapsed,
               players: s.players.map((p: any) => ({
@@ -449,9 +449,9 @@ test.describe('Online — Cross-Architecture Sync (fround)', { tag: '@online' },
             };
           }),
           pair.guest.evaluate(() => {
-            const gl = (window as any).__gameLoop;
+            const gl = window.__bunnyTest;
             if (!gl) return null;
-            const s = gl.getState();
+            const s = gl.state();
             return {
               timeElapsed: s.timeElapsed,
               players: s.players.map((p: any) => ({
@@ -504,7 +504,7 @@ test.describe('Online — Cross-Architecture Sync (fround)', { tag: '@online' },
     try {
       // Underwater has zero-G effect zones + currents
       await pair.host.evaluate(() => {
-        (window as any).__gameStore?.getState().setMatchSettings({
+        window.__bunnyTest?.gameStore()?.getState().setMatchSettings({
           botCount: 2,
           botDifficulty: 'medium',
           arenaId: 'underwater',
@@ -516,8 +516,8 @@ test.describe('Online — Cross-Architecture Sync (fround)', { tag: '@online' },
       await startOnlineMatch(pair);
 
       await pair.host.waitForFunction(() => {
-        const gl = (window as any).__gameLoop;
-        return gl?.getState()?.countdown <= 0;
+        const gl = window.__bunnyTest;
+        return gl?.state()?.countdown <= 0;
       }, { timeout: 10000 });
 
       // Sample for 20 seconds
@@ -528,12 +528,12 @@ test.describe('Online — Cross-Architecture Sync (fround)', { tag: '@online' },
 
         const [hostScores, guestScores] = await Promise.all([
           pair.host.evaluate(() => {
-            const gl = (window as any).__gameLoop;
-            return gl?.getState()?.players.map((p: any) => ({ id: p.id, score: p.score })) ?? [];
+            const gl = window.__bunnyTest;
+            return gl?.state()?.players.map((p: any) => ({ id: p.id, score: p.score })) ?? [];
           }),
           pair.guest.evaluate(() => {
-            const gl = (window as any).__gameLoop;
-            return gl?.getState()?.players.map((p: any) => ({ id: p.id, score: p.score })) ?? [];
+            const gl = window.__bunnyTest;
+            return gl?.state()?.players.map((p: any) => ({ id: p.id, score: p.score })) ?? [];
           }),
         ]);
 

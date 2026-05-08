@@ -9,6 +9,7 @@ import type { GameSnapshot } from '../net/serialize';
 import { KeyboardManager } from '../input/KeyboardManager';
 import { KeyboardInput } from '../input/KeyboardInput';
 import { RuleBasedBot } from '../input/RuleBasedBot';
+import { RemoteInput } from '../input/RemoteInput';
 import type { PlayerInput } from '../input/PlayerInput';
 import { TouchInputManager } from '../touchInput';
 import { isTouchPrimary } from '../touchDetect';
@@ -40,6 +41,8 @@ import { SurfaceImpactSystem } from './cosmetics/SurfaceImpactSystem';
 import { HUDFeedbackSystem } from './cosmetics/HUDFeedbackSystem';
 import { ReactiveDecorationSystem } from './cosmetics/ReactiveDecorationSystem';
 import type { ReactiveInstance, ReactiveRenderArg } from './cosmetics/reactiveDecorations';
+import { WildlifeSystem } from './cosmetics/WildlifeSystem';
+import type { WildlifeRenderArg } from './cosmetics/wildlife';
 
 /** Half-rate cosmetic threshold: particles/SFX/VFX tick at ~30Hz while render stays at 60Hz. */
 const COSMETIC_INTERVAL = FIXED_TIMESTEP * 2;
@@ -71,6 +74,7 @@ export class GameLoop {
   private surfaceImpactSystem!: SurfaceImpactSystem;
   private hudFeedbackSystem!: HUDFeedbackSystem;
   private reactiveDecorationSystem!: ReactiveDecorationSystem;
+  private wildlifeSystem!: WildlifeSystem;
 
   private _debugKeyHandler: ((e: KeyboardEvent) => void) | null = null;
   private _unsubRenderScale: (() => void) | null = null;
@@ -79,7 +83,6 @@ export class GameLoop {
   private touchSlot: PlayerSlot | null = null;
 
   private _networkMode = false;
-  private _audioEnabled = true;
 
   private onPhaseChange?: (phase: MatchPhase) => void;
 
@@ -97,6 +100,7 @@ export class GameLoop {
     rng?: SeededRNG,
     bgNightCanvas?: HTMLCanvasElement,
     fgNightTint?: HTMLDivElement,
+    lightCanvas?: HTMLCanvasElement,
   ) {
     this.onMatchEnd = onMatchEnd;
     this.keyboardManager = new KeyboardManager();
@@ -120,7 +124,16 @@ export class GameLoop {
       },
     });
 
-    this.renderer = new Renderer(bgCanvas, fgCanvas, this.simulator.getTheme(), settings.mods.mirrorArena, hudCanvas, bgNightCanvas, fgNightTint);
+    this.renderer = new Renderer({
+      bgCanvas,
+      fgCanvas,
+      theme: this.simulator.getTheme(),
+      mirrored: settings.mods.mirrorArena,
+      hudCanvas,
+      bgNightCanvas,
+      fgNightTint,
+      lightCanvas,
+    });
     this.renderer.setTimeLimit(settings.timeLimit);
 
     // ParticleSystem references the simulator's state/arena/theme/settings and
@@ -146,11 +159,17 @@ export class GameLoop {
       this.reactiveDecorationSystem.setInstances(sTheme.buildReactiveDecorations(sArena));
     }
 
+    this.wildlifeSystem = new WildlifeSystem(sState, sArena);
+    if (sTheme.buildWildlife) {
+      this.wildlifeSystem.setInstances(sTheme.buildWildlife(sArena));
+    }
+
     this.playerTransitionSystem = new PlayerTransitionSystem(
       sState, settings, (name) => this.playSound(name),
-      (name) => { if (this._audioEnabled) audio.playAnimal(name); },
+      (name) => audio.playAnimal(name),
       this.particleSystem,
       (x, y) => this.reactiveDecorationSystem.applyStompImpulse(x, y),
+      (x, y, kind) => this.renderer.emitLightBurst(x, y, kind),
     );
     this.playerCosmeticSystem = new PlayerCosmeticSystem(
       sState, this.simulator.getEffWalkSpeed(), this.particleSystem,
@@ -254,9 +273,9 @@ export class GameLoop {
     }
   }
 
-  /** Play a sound, respecting audio mute (used during rollback resimulation). */
+  /** Play a sound (thin indirection used by cosmetic systems). */
   private playSound(name: string): void {
-    if (this._audioEnabled) audio.play(name as Parameters<typeof audio.play>[0]);
+    audio.play(name as Parameters<typeof audio.play>[0]);
   }
 
   private _emitReactiveBurst(instance: ReactiveInstance): void {
@@ -332,10 +351,36 @@ export class GameLoop {
     return kb;
   }
 
-  /** Enable network mode: external code drives the loop. */
+  /** Enable network mode: external code drives the loop.
+   *
+   *  Swaps the per-slot PlayerInput so every human slot reads from
+   *  `ctx.networkInputs` via RemoteInput (was: keyboard / touch reads).
+   *  Bot slots keep their RuleBasedBot — the host's AI generates their
+   *  inputs locally and they're not in the network buffer. The mobile-host
+   *  touch slot is also moved to RemoteInput; the host loop already merges
+   *  keyboard + touch into the network buffer via getInputAny, so the touch
+   *  signal flows through that single path. On disable, we restore
+   *  KeyboardInput / re-install TouchAdapter as appropriate. */
   setNetworkMode(enabled: boolean): void {
+    if (this._networkMode === enabled) {
+      this.renderer.setNetworkMode(enabled);
+      return;
+    }
     this._networkMode = enabled;
     this.renderer.setNetworkMode(enabled);
+    for (const player of this.simulator.getState().players) {
+      if (isBotSlot(player.id)) continue; // bots stay on RuleBasedBot
+      if (enabled) {
+        this.simulator.setPlayerInput(player.id, new RemoteInput(player.id));
+      } else if (player.id === this.touchSlot && this.touchInput) {
+        // Restore TouchAdapter via setTouchInput's bookkeeping.
+        this.simulator.setTouchInput(this.touchInput, this.touchSlot);
+      } else {
+        this.simulator.setPlayerInput(player.id, new KeyboardInput(
+          player.id as CharacterSlot, this.keyboardManager,
+        ));
+      }
+    }
   }
 
   /** Register a callback that fires whenever the match phase changes. */
@@ -393,11 +438,17 @@ export class GameLoop {
       this.reactiveDecorationSystem.setInstances(newTheme.buildReactiveDecorations(sArena));
     }
 
+    this.wildlifeSystem = new WildlifeSystem(sState, sArena);
+    if (newTheme.buildWildlife) {
+      this.wildlifeSystem.setInstances(newTheme.buildWildlife(sArena));
+    }
+
     this.playerTransitionSystem = new PlayerTransitionSystem(
       sState, settings, (name) => this.playSound(name),
-      (name) => { if (this._audioEnabled) audio.playAnimal(name); },
+      (name) => audio.playAnimal(name),
       this.particleSystem,
       (x, y) => this.reactiveDecorationSystem.applyStompImpulse(x, y),
+      (x, y, kind) => this.renderer.emitLightBurst(x, y, kind),
     );
     this.playerCosmeticSystem = new PlayerCosmeticSystem(
       sState, this.simulator.getEffWalkSpeed(), this.particleSystem,
@@ -428,6 +479,11 @@ export class GameLoop {
   /** Reactive decoration system accessor (used by Renderer to draw instances). */
   getReactiveDecorationSystem(): ReactiveDecorationSystem {
     return this.reactiveDecorationSystem;
+  }
+
+  /** Wildlife system accessor (used by tests + Renderer). */
+  getWildlifeSystem(): WildlifeSystem {
+    return this.wildlifeSystem;
   }
 
   /** Get the (possibly mirrored) arena. */
@@ -474,11 +530,6 @@ export class GameLoop {
     this.simulator.disconnectPlayer(slot);
   }
 
-  /** Mute/unmute audio (used during rollback resimulation). */
-  setAudioEnabled(enabled: boolean): void {
-    this._audioEnabled = enabled;
-  }
-
   /** Mark that we're in rollback resimulation. */
   setResimulating(resim: boolean): void {
     this.simulator.setResimulating(resim);
@@ -504,6 +555,7 @@ export class GameLoop {
     this.surfaceImpactSystem.resetBaseline();
     this.hudFeedbackSystem.resetBaseline();
     this.reactiveDecorationSystem.resetBaseline();
+    this.wildlifeSystem.resetBaseline();
   }
 
   /** Seconds since the last cosmeticStep fired. */
@@ -535,6 +587,7 @@ export class GameLoop {
     this.surfaceImpactSystem.cosmeticUpdate(dt);
     this.hudFeedbackSystem.cosmeticUpdate(dt);
     this.reactiveDecorationSystem.cosmeticUpdate(dt);
+    this.wildlifeSystem.cosmeticUpdate(dt);
   }
 
   /** Tick all cosmetic-only systems (particles, environment, visual decays). */
@@ -580,6 +633,10 @@ export class GameLoop {
         const reactiveStart = perfTrace.begin('cosmetic.reactive');
         this.reactiveDecorationSystem.cosmeticUpdate(dt * 2);
         perfTrace.end('cosmetic.reactive', reactiveStart);
+
+        const wildlifeStart = perfTrace.begin('cosmetic.wildlife');
+        this.wildlifeSystem.cosmeticUpdate(dt * 2);
+        perfTrace.end('cosmetic.wildlife', wildlifeStart);
       }
 
       // Per-arena bespoke cosmetic logic (e.g. underwater bubble trails).
@@ -608,7 +665,7 @@ export class GameLoop {
       }
     }
     this.particleSystem.bakeToRenderer(this.renderer);
-    this.renderer.renderFrame(state, arena, this.particleSystem.getParticles(), this._cosmeticLead, this._buildReactiveArg());
+    this.renderer.renderFrame(state, arena, this.particleSystem.getParticles(), this._cosmeticLead, this._buildReactiveArg(), this._buildWildlifeArg());
   }
 
   /** Capture a snapshot of all gameplay state for rollback. */
@@ -643,7 +700,7 @@ export class GameLoop {
 
     if (this.paused) {
       this.lastTime = currentTime;
-      this.renderer.renderFrame(state, arena, this.particleSystem.getParticles(), 0, this._buildReactiveArg());
+      this.renderer.renderFrame(state, arena, this.particleSystem.getParticles(), 0, this._buildReactiveArg(), this._buildWildlifeArg());
       this.rafId = requestAnimationFrame(this.loop);
       return;
     }
@@ -692,7 +749,7 @@ export class GameLoop {
       this.renderer.setBotNavDebugStates(botStates);
     }
 
-    this.renderer.renderFrame(state, arena, this.particleSystem.getParticles(), this._cosmeticLead, this._buildReactiveArg());
+    this.renderer.renderFrame(state, arena, this.particleSystem.getParticles(), this._cosmeticLead, this._buildReactiveArg(), this._buildWildlifeArg());
     this.rafId = requestAnimationFrame(this.loop);
   };
 
@@ -707,6 +764,15 @@ export class GameLoop {
     };
   }
 
+  /** Build the per-frame wildlife arg passed to renderFrame. Same stable-ref
+   *  contract as `_buildReactiveArg`. */
+  private _buildWildlifeArg(): WildlifeRenderArg {
+    return {
+      groundCritter: this.wildlifeSystem.getInstancesForLayer('groundCritter'),
+      animBackground: this.wildlifeSystem.getInstancesForLayer('animBackground'),
+    };
+  }
+
   /** Run one fixed-timestep simulation tick. Public for rollback engine. */
   fixedUpdate(dt: number, networkInputs?: Map<string, InputState>): void {
     if (this.stopped) return;
@@ -718,7 +784,7 @@ export class GameLoop {
   }
 
   /** @internal Test-only: forwards to simulator's getPlayerInputForTest. */
-  getPlayerInputForTest(player: import('../types').Player, networkInputs?: Map<string, InputState>): InputState {
+  getPlayerInputForTest(player: import('../types').Player, networkInputs?: ReadonlyMap<string, InputState>): InputState {
     return this.simulator.getPlayerInputForTest(player, networkInputs);
   }
 

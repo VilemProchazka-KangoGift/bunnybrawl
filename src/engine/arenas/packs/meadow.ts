@@ -2,18 +2,13 @@ import type { ArenaPack } from '../types';
 import type { Arena, Platform } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin, fastCos } from '../../fastMath';
-import { getSlowDevice } from '../../perfFlags';
-import { getFloatingPlatforms, pushFromPlayers, makeDtTracker, tickGroundCritter, type GroundCritterState } from '../../themes/utils';
+import { getFloatingPlatforms, pushFromPlayers, type GroundCritterState, type GroundCritterConfig } from '../../themes/utils';
+import { buildGroundCritter, type WildlifeInstance } from '../../gameLoop/cosmetics/wildlife';
 
-const SNAILS_CFG: Array<{ platL: number; platR: number; platTopY: number; walkSpeed: number; fleeSpeed: number; fleeRadius: number; yTolerance: number; turnEaseRate: number }> = [
+const SNAILS_CFG: GroundCritterConfig[] = [
   { platL: 900, platR: 1080, platTopY: 660, walkSpeed: 8, fleeSpeed: 22, fleeRadius: 70, yTolerance: 80, turnEaseRate: 2 },
   { platL: 200, platR: 380,  platTopY: 660, walkSpeed: 7, fleeSpeed: 20, fleeRadius: 70, yTolerance: 80, turnEaseRate: 2 },
 ];
-const _snails: GroundCritterState[] = SNAILS_CFG.map((cfg, i) => ({
-  x: (cfg.platL + cfg.platR) / 2 + i * 7,
-  dir: i % 2 === 0 ? 1 : -1, facingEase: 1, fleeing: false, committedFleeDir: 0,
-}));
-const _tickSnailDt = makeDtTracker();
 
 const BUTTERFLY_HUES = [320, 60, 200, 290, 30, 160, 180, 40] as const;
 const BUTTERFLY_COLORS = BUTTERFLY_HUES.map(h => `hsl(${h},80%,65%)`);
@@ -64,10 +59,15 @@ function drawButterfly(ctx: CanvasRenderingContext2D, i: number, time: number, p
   ctx.fillRect(r.x - 0.5, r.y - 3, 1, 6);
 }
 
-function drawOneSnail(ctx: CanvasRenderingContext2D, time: number, snail: GroundCritterState, cfg: typeof SNAILS_CFG[number]): void {
+function drawOneSnail(
+  ctx: CanvasRenderingContext2D,
+  state: GroundCritterState,
+  cfg: GroundCritterConfig,
+  time: number,
+): void {
   ctx.save();
-  ctx.translate(snail.x, cfg.platTopY - 4);
-  if (snail.facingEase < 0) ctx.scale(-1, 1);
+  ctx.translate(state.x, cfg.platTopY - 4);
+  if (state.facingEase < 0) ctx.scale(-1, 1);
   ctx.fillStyle = '#b89878';
   ctx.beginPath();
   ctx.ellipse(0, 0, 9, 3.5, 0, 0, Math.PI * 2);
@@ -101,14 +101,6 @@ function drawOneSnail(ctx: CanvasRenderingContext2D, time: number, snail: Ground
   ctx.arc(11 - wig, -4, 0.6, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
-}
-
-function drawSnails(ctx: CanvasRenderingContext2D, time: number, players: ReadonlyArray<import('../../types').Player>): void {
-  const dt = _tickSnailDt(time);
-  for (let i = 0; i < _snails.length; i++) {
-    tickGroundCritter(_snails[i], players, dt, SNAILS_CFG[i]);
-    drawOneSnail(ctx, time, _snails[i], SNAILS_CFG[i]);
-  }
 }
 
 function drawBeeCluster(ctx: CanvasRenderingContext2D, ci: number, time: number, players: ReadonlyArray<import('../../types').Player>): void {
@@ -807,9 +799,20 @@ export const meadow: ArenaPack = {
     ctx.fillRect(platform.x, bodyTop + bodyH - 4, platform.width, 4);
   },
 
-  drawGroundCritters: (ctx, _arena, time, _dayPhase, matchState) => {
-    if (getSlowDevice() || !matchState) return;
-    drawSnails(ctx, time, matchState.players);
+  buildWildlife: (_arena: Arena): WildlifeInstance[] => {
+    const out: WildlifeInstance[] = [];
+    for (let i = 0; i < SNAILS_CFG.length; i++) {
+      const cfg = SNAILS_CFG[i];
+      out.push(buildGroundCritter({
+        seed: i,
+        cfg,
+        // Original snail positions: midpoint + i * 7 (small offset).
+        initialX: (cfg.platL + cfg.platR) / 2 + i * 7,
+        initialDir: i % 2 === 0 ? 1 : -1,
+        draw: ({ ctx, state, cfg: c, time }) => drawOneSnail(ctx, state, c, time),
+      }));
+    }
+    return out;
   },
 
   // ---- Audio ----

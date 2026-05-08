@@ -1,6 +1,6 @@
 // src/engine/input/KeyboardInput.ts
 import type { InputState, MatchState, PlayerSlot, CharacterSlot } from '../types';
-import type { PlayerInput } from './PlayerInput';
+import type { PlayerInput, PlayerInputContext } from './PlayerInput';
 import type { KeyboardManager } from './KeyboardManager';
 
 /** PlayerInput backed by a slot's keyboard bindings. */
@@ -15,7 +15,7 @@ export class KeyboardInput implements PlayerInput {
     this.mgr = mgr;
   }
 
-  getAction(_state: Readonly<MatchState>): InputState {
+  getAction(_state: Readonly<MatchState>, _ctx?: PlayerInputContext): InputState {
     return this.mgr.readSlot(this.characterSlot);
   }
 }

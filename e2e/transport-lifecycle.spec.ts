@@ -70,7 +70,7 @@ test.describe('Transport lifecycle @online', () => {
 
     // Check host store reflects online state
     const hostOnline = await hostPage.evaluate(() => {
-      const store = (window as any).__gameStore;
+      const store = window.__bunnyTest?.gameStore();
       if (!store) return null;
       const s = store.getState();
       return { isOnline: s.online.isOnline, isHost: s.online.isHost };
@@ -82,7 +82,7 @@ test.describe('Transport lifecycle @online', () => {
 
     // Check guest store
     const guestOnline = await guestPage.evaluate(() => {
-      const store = (window as any).__gameStore;
+      const store = window.__bunnyTest?.gameStore();
       if (!store) return null;
       const s = store.getState();
       return { isOnline: s.online.isOnline, isHost: s.online.isHost };
@@ -119,8 +119,8 @@ test.describe('Transport lifecycle @online', () => {
     if (hostMatch) {
       // Verify game state exists on both peers
       const hostState = await hostPage.evaluate(() => {
-        const loop = (window as any).__gameLoop;
-        return loop ? { hasState: true, playerCount: loop.getState().players.length } : null;
+        const loop = window.__bunnyTest;
+        return loop ? { hasState: true, playerCount: loop.state().players.length } : null;
       });
 
       expect(hostState).not.toBeNull();

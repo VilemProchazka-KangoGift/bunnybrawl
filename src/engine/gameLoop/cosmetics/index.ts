@@ -4,7 +4,6 @@ export { createWeatherParticle, updateWeather, updateWildlife, updateFog, update
 export { decaySfxCooldowns, getOrCreateCooldowns, updateCrowdCheering, tickPeriodicAmbient } from './sfx';
 export type { SfxCooldowns } from './sfx';
 export { detectEntityTransitions } from './entityTransitions';
-export type { PrevEntityState } from './entityTransitions';
 export { detectPlayerTransitions, snapshotPlayerCosmeticState } from './playerTransitions';
 export type { PrevPlayerCosmeticState, TransitionCallbacks } from './playerTransitions';
 export { updatePlayerCosmetics } from './playerCosmetics';

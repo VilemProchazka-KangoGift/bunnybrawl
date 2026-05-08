@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 /**
  * E2E tests for AI bot behavior.
  * These tests verify bots move, don't get stuck, and work across all arenas.
- * Uses window.__gameLoop to access match state for position tracking.
+ * Uses window.__bunnyTest.state() to access match state for position tracking.
  */
 
 const ARENAS = [
@@ -119,9 +119,8 @@ test.describe('Bot In-Match Behavior', () => {
   // Helper: get bot positions from the game state
   async function getBotPositions(page: any): Promise<Array<{ id: string; x: number; y: number; score: number; state: string }>> {
     return page.evaluate(() => {
-      const loop = (window as any).__gameLoop;
-      if (!loop) return [];
-      const state = loop.getState();
+      const state = window.__bunnyTest?.state();
+      if (!state) return [];
       return state.players
         .filter((p: any) => p.id.startsWith('B'))
         .map((p: any) => ({ id: p.id, x: Math.round(p.x), y: Math.round(p.y), score: p.score, state: p.state }));
