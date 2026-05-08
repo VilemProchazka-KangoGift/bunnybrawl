@@ -760,7 +760,10 @@ export class Renderer {
     const canvas = this._lightCanvas;
     if (!ctx || !canvas) return;
     this._driveLightOpacity();
-    if (this._lastLightOpacity <= 0) return;
+    // Skip below JND threshold — the screen-blend layer at <2% opacity is
+    // visually indistinguishable from "off" but the per-frame stamp work
+    // (clearRect + drawImage(staticCache) + N gradient creations) isn't free.
+    if (this._lastLightOpacity < 0.02) return;
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
