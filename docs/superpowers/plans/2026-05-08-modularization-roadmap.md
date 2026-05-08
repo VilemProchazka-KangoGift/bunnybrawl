@@ -102,6 +102,12 @@ Phases 1–5 can ship in any order or in parallel branches (no shared files exce
 
 **Goal:** Three `darken` impls collapse to one; ~5 `as unknown as CanvasRenderingContext2D` casts disappear.
 
+> **Scope correction (made during implementation):** Site survey at branch base showed:
+> - Only 1 of the 3 documented `darken` impls actually existed (`rendering/players.ts:79`). The other two had already been cleaned up in prior rounds; the `src/engine/CLAUDE.md` hint was stale and has been refreshed in this PR.
+> - Only 1 of the 5 casts was removable within scope (`hud.ts:93`, via widening private helpers `_drawHUDImpl` and `_drawScoreAnimations` to `Ctx2D`). The other 4 (`renderer.ts:551`, `renderer.ts:581`, `players.ts:158`, `players.ts:430`) flow into `theme.drawPlatformOverlay`, `theme.drawForegroundNature`, `CharacterRenderer`, `GibRenderer`, `IdleAction.apply` — all typed `CanvasRenderingContext2D` in `themes/types.ts`, `idleActions.ts`, `characters/types.ts`. Removing them requires widening interfaces that reverberate across all 11 arena packs and all 17 character packs.
+>
+> **Phase 2b (filed):** widen `drawForegroundNature` / `drawPlatformOverlay` / `CharacterRenderer` / `GibRenderer` / `IdleAction.apply` to `Ctx2D`. With `Ctx2D` now centralized, the follow-up is a mechanical find-and-replace at the chosen seam — but should be its own scoped phase with its own review.
+
 **Files:**
 - Modify: `src/engine/fastMath.ts` — add `export function darken(hex: string, amount: number): string` next to `hexToRGB`.
 - Modify: `src/engine/types.ts` — add `export type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D`.
