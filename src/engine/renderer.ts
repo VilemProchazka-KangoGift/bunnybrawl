@@ -6,6 +6,7 @@ import {
   SCREEN_SHAKE_INTENSITY,
   SHOCKWAVE_DURATION, SCREEN_FLASH_DURATION,
   HITSTOP_DURATION, HITSTOP_ZOOM,
+  INVINCIBLE_DURATION,
 } from './constants';
 import {
   drawHill, drawPlatformMoss,
@@ -36,7 +37,7 @@ import { setSpriteCacheScale } from './rendering/players';
 import { setHudScale } from './rendering/hud';
 import { applyRenderScaleToCanvas, getRenderScale } from './renderScale';
 import { Lighting } from './lighting';
-import type { Light } from './lighting';
+import type { Light, PointLight } from './lighting';
 import { getArenaLights } from './arenas/operations';
 import { isLivePlayer } from './themes/utils';
 import { getBrightness } from './lighting/brightness';
@@ -70,6 +71,13 @@ function getCachedRgb(hex: string): { r: number; g: number; b: number } {
   if (!v) { v = hexToRGB(hex); _rgbCache.set(hex, v); }
   return v;
 }
+
+/** Warm-orange tint used for the per-carrot glow emitter. Frozen + shared
+ *  across all carrots — the renderer never mutates it. */
+const CARROT_GLOW_RGB: Readonly<{ r: number; g: number; b: number }> =
+  { r: 255, g: 180, b: 80 };
+/** Seconds of bright pulse on carrot spawn before settling to baseline. */
+const CARROT_SPAWN_FLASH_S = 0.6;
 
 /** Sprite extends ~12 px above the bbox top for tall ears, horns, and gib pivots. */
 const SPRITE_TOP_PAD = 12;
@@ -582,27 +590,66 @@ export class Renderer {
     ctx.restore();
   }
 
-  /** Pool the per-frame dynamic emitters: per-player aura derived from live
-   *  entity state. Mutates pre-allocated entries in `_dynamicLights` in place,
-   *  growing on demand; trims length to active-player count so EmitterPipeline
-   *  iterates exactly the live emitters. */
-  private _synthesizeDynamicLights(matchState: MatchState): void {
-    let i = 0;
-    for (const player of matchState.players) {
-      if (!isLivePlayer(player)) continue;
-      const slot = this._dynamicLights[i] ?? (this._dynamicLights[i] = {
+  /** Pool a `_dynamicLights` slot for a point emitter at the given index,
+   *  creating it on first use. Caller mutates fields after. */
+  private _ensureLightSlot(i: number): PointLight {
+    let slot = this._dynamicLights[i] as PointLight | undefined;
+    if (!slot) {
+      slot = {
         kind: 'point',
         x: 0, y: 0,
         color: { r: 0, g: 0, b: 0 },
-        intensity: 0.3,
-        radius: 70,
+        intensity: 0,
+        radius: 0,
         falloff: 'smoothstep',
-      });
+      };
+      this._dynamicLights[i] = slot;
+    }
+    return slot;
+  }
+
+  /** Synthesize per-frame dynamic emitters from live entity state. Pools
+   *  Light objects in `_dynamicLights`, trimming `length` to the live count.
+   *
+   *  Sources:
+   *  - Per-player aura — soft warm glow on the player center; intensity +
+   *    radius ramp during respawn invincibility (the "spawn pillar" effect).
+   *  - Per-carrot glow — subtle warm-orange so carrots stay visible at night.
+   *    Brightens briefly after spawn (uses `Carrot.spawnTime`). */
+  private _synthesizeDynamicLights(matchState: MatchState): void {
+    let i = 0;
+
+    for (const player of matchState.players) {
+      if (!isLivePlayer(player)) continue;
+      const slot = this._ensureLightSlot(i++);
       slot.x = player.x + player.width / 2;
       slot.y = player.y + player.height / 2;
       slot.color = getCachedRgb(player.character.color);
-      i++;
+      slot.falloff = 'smoothstep';
+      // Spawn pillar: invincibility i-frames boost the aura toward a
+      // brighter, wider pillar of the player's color. Linear fade from
+      // (boost peak) at full timer → (baseline) at timer=0.
+      const pillar = Math.max(0, player.invincibleTimer) / INVINCIBLE_DURATION;
+      slot.intensity = 0.3 + pillar * 0.5;
+      slot.radius = 70 + pillar * 60;
     }
+
+    for (const carrot of matchState.carrots) {
+      if (!carrot.active) continue;
+      const slot = this._ensureLightSlot(i++);
+      slot.x = carrot.x;
+      slot.y = carrot.y;
+      slot.color = CARROT_GLOW_RGB;
+      slot.falloff = 'smoothstep';
+      // Spawn flash: brief brightness pulse over CARROT_SPAWN_FLASH_S after
+      // spawnTime, then settles to baseline. timeElapsed - spawnTime can be
+      // negative briefly during snapshot interpolation; max(0,...) clamps.
+      const age = Math.max(0, matchState.timeElapsed - carrot.spawnTime);
+      const flash = age < CARROT_SPAWN_FLASH_S ? 1 - age / CARROT_SPAWN_FLASH_S : 0;
+      slot.intensity = 0.25 + flash * 0.35;
+      slot.radius = 30 + flash * 20;
+    }
+
     this._dynamicLights.length = i;
   }
 
