@@ -153,9 +153,7 @@ function drawCastlePlatformBg(ctx: CanvasRenderingContext2D, platform: Platform)
 
 // Fg pass: body face. Drawn AFTER players so the body occludes any player
 // whose bbox overlaps the body region — gives the iso phantom strip (between
-// plat.x and plat.x + leftCollisionInset) a "going behind" feel. Cobwebs that
-// formerly lived here have moved to the ReactiveDecorationSystem
-// (kind = 'castle.cobweb') so they can react to nearby players.
+// plat.x and plat.x + leftCollisionInset) a "going behind" feel.
 function drawCastlePlatformFg(ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean): void {
   // Independent seed (offset from bg) so bg and fg rng streams don't interfere.
   const rng = mulberry32(seedFor(platform.x, platform.y) ^ BODY_SEED_OFFSET);
@@ -209,7 +207,6 @@ function drawCastlePlatformFg(ctx: CanvasRenderingContext2D, platform: Platform,
   }
 
   ctx.restore();
-  // Cobwebs reactive — see castle.cobweb kind + buildReactiveDecorations.
 }
 
 /**
@@ -280,47 +277,23 @@ registerReactiveKind('castle.cobweb', {
 });
 
 // ---- castle.banner ----
-// Floating-platform banners with proximity-driven excitement amplifying
-// sway. The previous module-level `_bannerExcite: Float32Array` and
-// `_tickBannerDt` are gone; per-banner runtime state lives on `inst.data` and
-// `resetData` zeroes it on guest reconnect / loading→playing edge.
-interface BannerData {
-  colorIdx: number;
-  /** Eased excitement scalar (0..1) — separate from `inst.excitement` so the
-   *  cosmetic system's spring-coupled excitement stays at its native sense
-   *  (proximity-distance) and we keep the banner's slower 0.5s ease to avoid
-   *  jumpy wobble in/out of range. */
-  excite: number;
-  /** Last `time` seen, for local dt computation (banners are postPlayer +
-   *  default 30Hz). */
-  lastTime: number;
-}
+// Floating-platform banners with proximity-driven excitement amplifying sway.
+interface BannerData { colorIdx: number; }
 function castleBanner(x: number, y: number, colorIdx: number): ReactiveInstance {
   return createReactiveInstance({
     pos: { x, y },
     kind: 'castle.banner',
     seed: colorIdx * 17 + Math.floor((x * 31 + y * 41) % 997),
-    data: { colorIdx, excite: 0, lastTime: -1 } satisfies BannerData,
+    data: { colorIdx } satisfies BannerData,
     windAmp: 6,
     proximity: { radius: 40, mode: 'lean', magnitude: 16 },
   });
 }
 registerReactiveKind('castle.banner', {
   layer: 'postPlayer',
-  resetData: (d) => {
-    const data = d as BannerData;
-    data.excite = 0;
-    data.lastTime = -1;
-  },
   draw: (ctx, inst, _swayPhase, time, _dayPhase, _state) => {
     const data = inst.data as BannerData;
-    // Local dt — first call seeds lastTime. The reactive system already runs
-    // proximity excitement on `inst.excitement`; we use it as the *target*
-    // for our 0.5s-eased visual excite scalar.
-    const dt = data.lastTime < 0 ? 0 : Math.max(0, Math.min(0.1, time - data.lastTime));
-    data.lastTime = time;
-    data.excite = Math.max(0, data.excite + (inst.excitement - data.excite) * dt * 3);
-    const excite = data.excite;
+    const excite = inst.excitement;
 
     const bx = inst.pos.x;
     const by = inst.pos.y;
@@ -988,10 +961,6 @@ export const castle: ArenaPack = {
       tickGroundCritter(r, matchState.players, dt, RATS_CFG[i]);
       drawRat(ctx, r.x, RATS_CFG[i].platTopY - 4, r.facingEase < 0 ? -1 : 1, time, Math.abs(r.facingEase), r.fleeing);
     }
-  },
-
-  drawAnimatedForeground: (_ctx, _arena, _time, _dayPhase, _matchState) => {
-    // Banners migrated to ReactiveDecorationSystem (kind = 'castle.banner').
   },
 
   buildReactiveDecorations: (arena: Arena) => {

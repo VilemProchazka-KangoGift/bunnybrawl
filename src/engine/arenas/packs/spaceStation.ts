@@ -726,9 +726,6 @@ export const spaceStation: ArenaPack = {
     drawCrate(160, y, 22);
     drawCrate(1100, y, 20);
 
-    // Cables moved to ReactiveDecorationSystem (proximity-lean sway).
-    // See buildReactiveDecorations below.
-
     // Platform decorations -- only on side stack platforms
     const floats = getFloatingPlatforms(arena.platforms).filter(p => p.x < 250 || p.x > 1000);
     for (let i = 0; i < floats.length; i++) {

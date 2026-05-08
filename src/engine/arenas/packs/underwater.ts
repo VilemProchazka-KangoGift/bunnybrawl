@@ -237,19 +237,22 @@ import {
 // scaled by height progress. Base stays anchored.
 // ============================================================================
 
+function darkenSeaweedColor(color: string): string {
+  return color.replace(/#(..)(..)(..)/, (_m, r, g, b) => {
+    const d = (hex: string) => Math.max(0, Math.floor(parseInt(hex, 16) * 0.6)).toString(16).padStart(2, '0');
+    return `#${d(r)}${d(g)}${d(b)}`;
+  });
+}
+
 function drawSeaweed(
   ctx: CanvasRenderingContext2D,
   sx: number,
   sy: number,
   h: number,
   color: string,
+  darker: string,
   bendX = 0,
 ): void {
-  // Darker shade derived from the base color by dimming each channel ~60%.
-  const darker = color.replace(/#(..)(..)(..)/, (_m, r, g, b) => {
-    const d = (hex: string) => Math.max(0, Math.floor(parseInt(hex, 16) * 0.6)).toString(16).padStart(2, '0');
-    return `#${d(r)}${d(g)}${d(b)}`;
-  });
   // Small dark holdfast where the seaweed anchors
   ctx.fillStyle = darker;
   ctx.beginPath();
@@ -397,13 +400,13 @@ function drawFgSeaweed(
 
 // Per-platform kelp strand (extracted from drawUnderwaterPlatformBg). Each
 // strand carries its own seeded params so reactive instances stay stable.
-interface PlatformKelpParams { kx: number; klen: number; phase: number; swayAmp: number; bb: number; }
+interface PlatformKelpParams { kx: number; klen: number; phase: number; swayAmp: number; bb: number; leafN: number; }
 function drawPlatformKelpStrand(
   ctx: CanvasRenderingContext2D,
   params: PlatformKelpParams,
   bendX = 0,
 ): void {
-  const { kx, klen, phase, swayAmp, bb } = params;
+  const { kx, klen, phase, swayAmp, bb, leafN } = params;
   ctx.strokeStyle = '#2a6838';
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -416,7 +419,6 @@ function drawPlatformKelpStrand(
     ctx.lineTo(px, py);
   }
   ctx.stroke();
-  const leafN = 3 + Math.floor(((phase * 137) % 2));
   ctx.fillStyle = '#3a7848';
   for (let l = 0; l < leafN; l++) {
     const t = (l + 0.6) / leafN;
@@ -442,7 +444,8 @@ function computePlatformKelpForPlatform(platform: Platform): PlatformKelpParams[
     const klen = 18 + rng() * 10;
     const phase = rng() * Math.PI * 2;
     const swayAmp = 3 + rng() * 2;
-    out.push({ kx, klen, phase, swayAmp, bb });
+    const leafN = 3 + Math.floor(((phase * 137) % 2));
+    out.push({ kx, klen, phase, swayAmp, bb, leafN });
   }
   return out;
 }
@@ -452,12 +455,12 @@ function computePlatformKelpForPlatform(platform: Platform): PlatformKelpParams[
 // ============================================================================
 
 // ---- underwater.seaweed ----
-interface SeaweedData { h: number; color: string; }
+interface SeaweedData { h: number; color: string; darker: string; }
 function underwaterSeaweed(x: number, y: number, h: number, color: string): ReactiveInstance {
   return createReactiveInstance({
     pos: { x, y }, kind: 'underwater.seaweed',
     seed: Math.floor((x * 73 + y * 31) % 997),
-    data: { h, color } satisfies SeaweedData,
+    data: { h, color, darker: darkenSeaweedColor(color) } satisfies SeaweedData,
     windAmp: 8,
     proximity: { radius: 36, mode: 'lean', magnitude: 26 },
   });
@@ -465,8 +468,8 @@ function underwaterSeaweed(x: number, y: number, h: number, color: string): Reac
 registerReactiveKind('underwater.seaweed', {
   layer: 'prePlayer',
   draw: (ctx, inst, swayPhase, _time, _dayPhase, _state) => {
-    const { h, color } = inst.data as SeaweedData;
-    drawSeaweed(ctx, inst.pos.x, inst.pos.y, h, color, composeBend(inst, swayPhase));
+    const { h, color, darker } = inst.data as SeaweedData;
+    drawSeaweed(ctx, inst.pos.x, inst.pos.y, h, color, darker, composeBend(inst, swayPhase));
   },
 });
 
@@ -544,16 +547,31 @@ function underwaterFishSchool(idx: number): ReactiveInstance {
     proximity: { radius: 90, mode: 'flee', magnitude: 22 },
   });
 }
+
+// Schoolwide motion (cxBase/cy/facing) depends only on time — memoize once
+// per frame instead of recomputing 18× at 60Hz.
+let _fishMotionTime = -1;
+let _fishMotionCxBase = 0;
+let _fishMotionCy = 0;
+let _fishMotionFacing: 1 | -1 = 1;
+function getFishMotion(time: number): { cxBase: number; cy: number; facing: 1 | -1 } {
+  if (time !== _fishMotionTime) {
+    // Math.sin (not fastSin) — at this slow frequency fastSin's 1° table
+    // resolution would step in 7-12px chunks (~10Hz visible updates).
+    const sweep = time * FISH_SWEEP_FREQ;
+    _fishMotionCxBase = CANVAS_WIDTH * 0.5 + Math.sin(sweep) * (CANVAS_WIDTH * FISH_SWEEP_AMP_RATIO);
+    _fishMotionCy = FISH_BASE_Y + Math.sin(time * FISH_BOB_FREQ) * FISH_BOB_AMP;
+    _fishMotionFacing = Math.cos(sweep) >= 0 ? 1 : -1;
+    _fishMotionTime = time;
+  }
+  return { cxBase: _fishMotionCxBase, cy: _fishMotionCy, facing: _fishMotionFacing };
+}
+
 registerReactiveKind('underwater.fishSchool', {
   layer: 'postPlayer',
   highFrequency: true,
   draw: (ctx, inst, _swayPhase, time, _dayPhase, state) => {
-    // Math.sin (not fastSin) — at this slow frequency fastSin's 1° table
-    // resolution would step in 7-12px chunks (~10Hz visible updates).
-    const sweep = time * FISH_SWEEP_FREQ;
-    const cxBase = CANVAS_WIDTH * 0.5 + Math.sin(sweep) * (CANVAS_WIDTH * FISH_SWEEP_AMP_RATIO);
-    const cy = FISH_BASE_Y + Math.sin(time * FISH_BOB_FREQ) * FISH_BOB_AMP;
-    const facing: 1 | -1 = Math.cos(sweep) >= 0 ? 1 : -1;
+    const { cxBase, cy, facing } = getFishMotion(time);
     drawFish(ctx, inst.seed, time, cxBase, cy, facing, state.players);
   },
 });
@@ -899,9 +917,6 @@ export const underwater: ArenaPack = {
     const ground = arena.platforms[0];
     const y = ground.y;
 
-    // Seaweed (ground + per-platform) is now reactive — see
-    // underwater.seaweed in buildReactiveDecorations.
-
     // Coral formations
     const drawCoral = (cx: number, cy: number, size: number, color: string) => {
       ctx.fillStyle = color;
@@ -984,17 +999,14 @@ export const underwater: ArenaPack = {
     drawStarfish(340, y - 3, 10, '#FF6347');
     drawStarfish(880, y - 2, 8, '#FF8C00');
 
-    // Platform decorations — seaweed is reactive (see buildReactiveDecorations);
-    // coral/starfish stay static here so they bake into the bg cache.
+    // Platform coral/starfish (i % 3 === 0 platforms get reactive seaweed instead).
     const floats = getFloatingPlatforms(arena.platforms);
     for (let i = 0; i < floats.length; i++) {
       const plat = floats[i];
       const mid = plat.x + plat.width / 2;
-      if (i % 3 === 0) {
-        // Reactive seaweed handled in buildReactiveDecorations
-      } else if (i % 3 === 1) {
+      if (i % 3 === 1) {
         drawCoral(mid, plat.y, 20, '#FF6B6B');
-      } else {
+      } else if (i % 3 === 2) {
         drawStarfish(mid, plat.y - 2, 6, '#FFD700');
       }
     }
@@ -1391,9 +1403,6 @@ export const underwater: ArenaPack = {
     if (getSlowDevice() || !matchState) return;
     drawCrab(ctx, time, matchState.players);
   },
-
-  // Fish school migrated to ReactiveDecorationSystem (postPlayer + 60Hz) —
-  // see underwater.fishSchool. drawAnimatedForeground no longer needed.
 
   cosmeticTick: (state, dt, services) => {
     if (getSlowDevice()) return;

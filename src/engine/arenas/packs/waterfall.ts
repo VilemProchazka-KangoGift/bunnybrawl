@@ -133,15 +133,13 @@ function waterfallFrogJump(padIndex: number): ReactiveInstance {
 }
 registerReactiveKind('waterfall.frogJump', {
   layer: 'postPlayer',
-  // Excitement is reset to 0 by the system; we have nothing else mutable so
-  // resetData is a no-op. Defining it for symmetry with other animated kinds.
-  resetData: (_d) => { /* excite scalar lives on inst.excitement, system handles reset */ },
   draw: (ctx, inst, _swayPhase, time, _dayPhase, _state) => {
     const { padIndex } = inst.data as FrogJumpData;
     const lp = LILY_PADS[padIndex];
     const e = inst.excitement;
-    // Hop arc: e ramps 0..1; lift = -sin(e*pi)*18 (peak at e=0.5)
-    const lift = -fastSin(e * Math.PI) * 18;
+    // e is system-driven by spring-damper; at low excitement its rate of
+    // change is sub-1° per frame, so fastSin(e * PI) would step choppily.
+    const lift = -Math.sin(e * Math.PI) * 18;
 
     // Lily pad (under frog).
     ctx.fillStyle = '#3d8a3a';
@@ -836,7 +834,6 @@ export const waterfall: ArenaPack = {
     }
     ctx.globalAlpha = 1;
     ctx.restore();
-    // Lily-pad frogs migrated to ReactiveDecorationSystem (waterfall.frogJump).
   },
 
   drawAnimatedForeground: (ctx, _arena, time) => {

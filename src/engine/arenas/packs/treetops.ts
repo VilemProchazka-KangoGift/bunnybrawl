@@ -698,9 +698,6 @@ export const treetops: ArenaPack = {
     ctx.restore();
   },
 
-  // Butterflies + bees moved to ReactiveDecorationSystem (postPlayer layer,
-  // 60Hz bucket). drawAnimatedForeground no longer needed.
-
   // ---- Audio ----
   ambientSoundConfig: {
     loops: ['amb_wind'],

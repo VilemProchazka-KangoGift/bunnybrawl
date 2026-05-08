@@ -475,6 +475,7 @@ function drawRooftopsPlatformFg(ctx: CanvasRenderingContext2D, platform: Platfor
 // ============================================================================
 
 // ---- rooftops.clothesline ----
+const CLOTHESLINE_COLORS = ['#CC4444', '#4444CC', '#44CC44', '#CCCC44', '#CC44CC', '#CC8844'];
 interface ClotheslineData { x1: number; y1: number; x2: number; y2: number; }
 function rooftopsClothesline(x1: number, y1: number, x2: number, y2: number): ReactiveInstance {
   return createReactiveInstance({
@@ -507,7 +508,6 @@ registerReactiveKind('rooftops.clothesline', {
     ctx.quadraticCurveTo(midX, midY, x2, y2);
     ctx.stroke();
     // Hanging clothes — bend amount tapers from 0 at hooks to full at midpoint
-    const colors = ['#CC4444', '#4444CC', '#44CC44', '#CCCC44', '#CC44CC', '#CC8844'];
     const n = Math.floor((x2 - x1) / 28);
     for (let i = 0; i < n; i++) {
       const t = (i + 0.5) / n;
@@ -516,7 +516,7 @@ registerReactiveKind('rooftops.clothesline', {
       // Taper bend along rope (max at midpoint t=0.5)
       const taper = 4 * t * (1 - t);
       const itemBend = bend * taper;
-      ctx.fillStyle = colors[i % colors.length];
+      ctx.fillStyle = CLOTHESLINE_COLORS[i % CLOTHESLINE_COLORS.length];
       ctx.globalAlpha = 0.65;
       ctx.save();
       ctx.translate(cx + itemBend, sagY + 2);
@@ -536,7 +536,7 @@ registerReactiveKind('rooftops.clothesline', {
       } else if (i % 4 === 2) {
         // Towel / sheet -- flapping
         ctx.fillRect(-3, 0, 6, 14);
-        ctx.fillStyle = colors[(i + 2) % colors.length];
+        ctx.fillStyle = CLOTHESLINE_COLORS[(i + 2) % CLOTHESLINE_COLORS.length];
         ctx.globalAlpha = 0.25;
         ctx.fillRect(-3, 4, 6, 2);
       } else {
@@ -1043,10 +1043,6 @@ export const rooftops: ArenaPack = {
       }
     }
 
-    // Clotheslines between buildings moved to ReactiveDecorationSystem
-    // (built via buildReactiveDecorations). Rope sag bends with wind +
-    // proximity; clothes flap when players pass nearby.
-
     ctx.restore();
   },
 
@@ -1109,9 +1105,6 @@ export const rooftops: ArenaPack = {
     drawTinyChimney(605, b2RoofY, 8, 18);
     drawTinyChimney(720, b2RoofY, 7, 12);
     drawTinyChimney(795, b2RoofY, 6, 10);
-
-    // Antennas on B1 right edge moved to ReactiveDecorationSystem
-    // (built via buildReactiveDecorations). Stomp-shake on rooftop landings.
 
     // Vent pipes
     ctx.fillStyle = '#5A5060';

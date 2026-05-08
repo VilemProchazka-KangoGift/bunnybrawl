@@ -3,8 +3,6 @@ import { registerBuiltinArenas } from '../../builtin';
 import { getArenaPack } from '../../registry';
 import { getArena } from '../../operations';
 import { hasReactiveKind, getReactiveKind } from '../../../gameLoop/cosmetics';
-import { ReactiveDecorationSystem } from '../../../gameLoop/cosmetics/ReactiveDecorationSystem';
-import { makeState } from '../../../__tests__/testHelpers';
 
 vi.mock('../../../perfFlags', () => ({ getSlowDevice: () => false }));
 
@@ -65,26 +63,6 @@ describe('castle — buildReactiveDecorations', () => {
     const banners = list.filter((i) => i.kind === 'castle.banner');
     // Castle has many wide floating platforms — at least 8 banner-eligible.
     expect(banners.length).toBeGreaterThanOrEqual(8);
-  });
-
-  it('system.resetBaseline() rewinds banner excite state to idle', () => {
-    // Mirrors meadow-decorations.test.ts dandelion-resetData test. The banner
-    // migration replaced a module-level Float32Array with per-instance
-    // `inst.data.excite`; `resetData` must zero it on reconnect / loading→
-    // playing edge so guests don't resume mid-wobble.
-    const pack = getArenaPack('castle');
-    const arena = getArena('castle');
-    const list = pack!.buildReactiveDecorations!(arena);
-    const sys = new ReactiveDecorationSystem(makeState({ phase: 'playing' }), arena, () => {});
-    sys.setInstances(list);
-    const banner = list.find((i) => i.kind === 'castle.banner');
-    expect(banner).toBeDefined();
-    const data = banner!.data as { colorIdx: number; excite: number; lastTime: number };
-    data.excite = 0.7; // mid-wobble
-    data.lastTime = 5;
-    sys.resetBaseline();
-    expect(data.excite).toBe(0);
-    expect(data.lastTime).toBe(-1);
   });
 
   it('renders without errors at multiple windPhase slices', () => {

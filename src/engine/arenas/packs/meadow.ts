@@ -807,15 +807,9 @@ export const meadow: ArenaPack = {
     ctx.fillRect(platform.x, bodyTop + bodyH - 4, platform.width, 4);
   },
 
-  // drawAnimatedBackground removed — dandelions migrated to ReactiveDecorationSystem.
-
   drawGroundCritters: (ctx, _arena, time, _dayPhase, matchState) => {
     if (getSlowDevice() || !matchState) return;
     drawSnails(ctx, time, matchState.players);
-  },
-
-  drawAnimatedForeground: (_ctx, _arena, _time, _dayPhase, _matchState) => {
-    // drawAnimatedForeground removed — butterflies + bees migrated to ReactiveDecorationSystem.
   },
 
   // ---- Audio ----

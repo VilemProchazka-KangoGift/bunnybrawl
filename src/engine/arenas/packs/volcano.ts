@@ -469,9 +469,6 @@ export const volcano: ArenaPack = {
     drawLavaPool(550, 80);
     drawLavaPool(900, 120);
 
-    // Dead trees moved to ReactiveDecorationSystem (see buildReactiveDecorations
-    // below) — they shake on stomps and burst ash particles.
-
     // Volcanic rocks
     const drawRock = (rx: number, ry: number, rw: number, rh: number) => {
       ctx.fillStyle = '#2A1818';

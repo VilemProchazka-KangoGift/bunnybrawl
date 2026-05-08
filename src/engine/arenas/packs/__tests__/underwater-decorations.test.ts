@@ -3,7 +3,7 @@ import { registerBuiltinArenas } from '../../builtin';
 import { getArenaPack } from '../../registry';
 import { getArena } from '../../operations';
 import { hasReactiveKind, getReactiveKind } from '../../../gameLoop/cosmetics';
-import { makeArena, makeState, makePlayer } from '../../../__tests__/testHelpers';
+import { makeState, makePlayer } from '../../../__tests__/testHelpers';
 
 vi.mock('../../../perfFlags', () => ({ getSlowDevice: () => false }));
 
@@ -146,11 +146,5 @@ describe('underwater — cosmeticTick (bubble trails) regression', () => {
       pack!.cosmeticTick!(state, 1 / 30, { emitParticle });
     }
     expect(emitParticle).not.toHaveBeenCalled();
-  });
-
-  // makeArena is imported to ensure test helpers are available — touch it so
-  // an unused-import lint doesn't strip it.
-  it('exposes makeArena helper', () => {
-    expect(typeof makeArena).toBe('function');
   });
 });

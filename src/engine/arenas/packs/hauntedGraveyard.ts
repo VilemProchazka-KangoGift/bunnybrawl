@@ -227,8 +227,7 @@ function drawHauntedPlatformBg(ctx: CanvasRenderingContext2D, platform: Platform
   }
 }
 
-// Fg pass: body + cracks. Drawn after players for occlusion. Cobwebs are now
-// reactive decorations — see buildReactiveDecorations below.
+// Fg pass: body + cracks. Drawn after players for occlusion.
 function drawHauntedPlatformFg(ctx: CanvasRenderingContext2D, platform: Platform, _isGround: boolean): void {
   const rng = mulberry32(seedFor(platform.x, platform.y) ^ BODY_SEED_OFFSET);
   const cF = capFrontY(platform);
@@ -298,8 +297,6 @@ function drawHauntedPlatformFg(ctx: CanvasRenderingContext2D, platform: Platform
   // Bottom bevel
   ctx.fillStyle = 'rgba(0,0,0,0.30)';
   ctx.fillRect(platform.x, bodyTop + bodyH - 3, platform.width, 3);
-
-  // Cobwebs migrated to ReactiveDecorationSystem — see buildReactiveDecorations.
 }
 
 export const hauntedGraveyard: ArenaPack = {
@@ -619,10 +616,7 @@ export const hauntedGraveyard: ArenaPack = {
     drawJackOLantern(850, y, 22);
     drawJackOLantern(1200, y, 16);
 
-    // Dead trees (4 ground + per-platform) migrated to ReactiveDecorationSystem.
-    // See buildReactiveDecorations below.
-
-    // Platform decorations (tombstones + jack-o-lanterns; dead trees are reactive)
+    // Platform decorations (tombstones + jack-o-lanterns)
     const floats = getFloatingPlatforms(arena.platforms);
     for (let i = 0; i < floats.length; i++) {
       const plat = floats[i];
