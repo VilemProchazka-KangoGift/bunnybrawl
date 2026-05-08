@@ -4,20 +4,18 @@ import { useGameStore } from '../store/gameStore';
 import { GameLoop } from '../engine/gameLoop';
 import { NetMatch } from '../engine/net/netMatch';
 import { MsgType } from '../engine/net/protocol';
-import { getModalTransport, tearDownOnlineSession, getHostReclaimTokens, getGuestOwnReclaimToken } from './OnlineModal';
-import { getArena, listPlayableArenaPacks } from '../engine/arenas';
+import { getModalTransport, tearDownOnlineSession } from './OnlineModal';
+import { listPlayableArenaPacks } from '../engine/arenas';
 import { ArenaGrid } from './ArenaGrid';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
 import { isTouchPrimary } from '../engine/touchDetect';
-import { perfTrace } from '../engine/perfTrace';
-import * as fpsCounter from '../engine/fpsCounter';
 import { TouchOverlay } from './TouchOverlay';
 import type { TouchInputManager } from '../engine/touchInput';
-import type { PlayerSlot } from '../engine/types';
 import { useTransientBanner } from '../hooks/useTransientBanner';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { useLoadingOverlay, loadingSubKey } from './match/useLoadingOverlay';
 import { useLocalMatch, kickoffLoading } from './match/useLocalMatch';
+import { useOnlineMatch } from './match/useOnlineMatch';
 import logoImg from '/logo.png?url';
 import './Match.css';
 
@@ -224,213 +222,20 @@ export function Match() {
     isOnline: online.isOnline,
   });
 
-  useEffect(() => {
-    if (!online.isOnline) return;
-    const bgCanvas = bgCanvasRef.current;
-    const fgCanvas = fgCanvasRef.current;
-    const hudCanvas = hudCanvasRef.current;
-    if (!bgCanvas || !fgCanvas || !hudCanvas) return;
-    // Optional lighting overlays: when missing, Renderer falls back to the
-    // source-over fillRect tint path. Don't block match mount on them.
-    const bgNightCanvas = bgNightCanvasRef.current ?? undefined;
-    const fgNightTint = fgNightTintRef.current ?? undefined;
-
-    const clearTimer = (ref: { current: ReturnType<typeof setTimeout> | null }) => {
-      if (ref.current) { clearTimeout(ref.current); ref.current = null; }
-    };
-    const commonCleanup = () => {
-      gameLoopRef.current = null;
-      setTouchInput(null);
-      clearTimer(victoryTimeoutRef);
-    };
-
-    const arena = getArena(currentArenaId);
-    let matchEnded = false;
-    const onMatchEnd = (winner: import('../engine/types').PlayerSlot | null, state: import('../engine/types').MatchState) => {
-      if (matchEnded) return; // guard against double-fire (GameLoop + MATCH_RESULT)
-      matchEnded = true;
-      // Suppress stall detection during victory transition
-      if (netMatchRef.current) netMatchRef.current.setMatchOver();
-      // In online mode, host sends match result to guest
-      if (online.isHost) {
-        const transport = getModalTransport();
-        if (transport) {
-          transport.sendReliable({ type: MsgType.MATCH_RESULT, winner } as import('../engine/net/protocol').ReliableMessage);
-        }
-      }
-      victoryTimeoutRef.current = setTimeout(() => {
-        setMatchResult(winner, state);
-      }, 1500);
-    };
-
-    window.__perfTrace = perfTrace;
-    window.__fpsCounter = fpsCounter;
-
-    // Network mode
-    setPhaseIsLoading(true);
-    setLocalTasksDone(false);
-    const transport = getModalTransport();
-    if (!transport) {
-      console.error('No active transport for online match');
-      setScreen('menu');
-      return;
-    }
-
-    const netMatch = new NetMatch({
-        bgCanvas,
-        bgNightCanvas,
-        fgNightTint,
-        fgCanvas,
-        hudCanvas,
-        arena,
-        settings: matchSettings,
-        activePlayers,
-        onMatchEnd,
-        transport,
-        localSlot: online.isHost ? 'P1' : 'P2',
-        remoteSlots: activePlayers.filter(s => s !== (online.isHost ? 'P1' : 'P2') && s.startsWith('P')) as PlayerSlot[],
-        // Reclaim tokens issued during the lobby. Host: full Map<slot,token>;
-        // guest: own token only. Used to authenticate RECONNECT_REQUEST so a
-        // malicious peer in the room can't claim a disconnected stranger's slot.
-        reclaimTokens: online.isHost ? getHostReclaimTokens() : undefined,
-        ownReclaimToken: !online.isHost ? (getGuestOwnReclaimToken() ?? undefined) : undefined,
-        onStall: (stalled) => {
-          setUnstable(stalled ? { kind: 'mine' } : null);
-        },
-        onDisconnect: () => {
-          // If the match ended naturally and the peer disconnected during the
-          // 1.5s pre-victory pause, replace the queued natural-result with a
-          // disconnect-win so the victory screen suppresses the now-pointless
-          // rematch buttons.
-          if (matchEnded) {
-            if (victoryTimeoutRef.current) {
-              clearTimeout(victoryTimeoutRef.current);
-              victoryTimeoutRef.current = null;
-            }
-            if (gameLoopRef.current) {
-              setMatchResult(null, gameLoopRef.current.getState(), true);
-            }
-            return;
-          }
-          // Flash "Could not reconnect" for ~1.8s before the victory screen.
-          reconnectFailedRef.current = true;
-          setReconnectFailed(true);
-          if (disconnectDelayRef.current) clearTimeout(disconnectDelayRef.current);
-          disconnectDelayRef.current = setTimeout(() => {
-            disconnectDelayRef.current = null;
-            reconnectFailedRef.current = false;
-            setReconnectFailed(false);
-            // If the match also ended naturally during the 1.8s flash window,
-            // the natural-result victoryTimeoutRef has already fired —
-            // skip to avoid clobbering the winner with a null disconnect-win.
-            if (matchEnded) return;
-            if (gameLoopRef.current) {
-              setMatchResult(null, gameLoopRef.current.getState(), true);
-            }
-          }, 1800);
-        },
-        onReconnecting: (reconnecting) => {
-          const wasReconnecting = isReconnectingRef.current;
-          isReconnectingRef.current = reconnecting;
-          setIsReconnecting(reconnecting);
-          if (!reconnecting) setReconnectAttempt(0);
-          if (wasReconnecting && !reconnecting && !reconnectFailedRef.current) {
-            flashBanner(t('reconnected', 'Reconnected!'), 2000);
-          }
-        },
-        onReconnectAttempt: (current, max) => {
-          setReconnectAttempt(current);
-          setReconnectMax(max);
-        },
-        onPlayerDisconnect: (slot) => {
-          const name = useGameStore.getState().online.playerNames[slot] || slot;
-          flashBanner(t('player_disconnected_name', '{{name}} left the match', { name }), 4000);
-        },
-        onGuestReconnected: (slot) => {
-          // Guest reclaimed their slot — re-send SETTINGS_SYNC so they see
-          // any arena change that happened while they were disconnected.
-          if (!online.isHost) return;
-          const ms = useGameStore.getState().matchSettings;
-          const transport = getModalTransport();
-          if (transport) {
-            transport.sendReliableTo(slot, {
-              type: MsgType.SETTINGS_SYNC, arenaId: ms.arenaId,
-              killLimit: ms.killLimit, timeLimit: ms.timeLimit,
-              goreMode: ms.goreMode, mods: ms.mods,
-              rngSeed: useGameStore.getState().online.rngSeed,
-              botCount: ms.botCount, botDifficulty: ms.botDifficulty,
-            } as import('../engine/net/protocol').ReliableMessage);
-          }
-          const name = useGameStore.getState().online.playerNames[slot] || slot;
-          flashBanner(t('player_reconnected_name', '{{name}} reconnected', { name }), 3000);
-        },
-        onArenaChange: (arenaId: string) => {
-          // Guest: host changed arena — switch in place and rerun loading
-          lastResolvedArenaId = arenaId;
-          setCurrentArenaId(arenaId);
-          setMatchSettings({ arenaId });
-          const loop = gameLoopRef.current;
-          const nm = netMatchRef.current;
-          if (!loop || !nm) return;
-          setLocalTasksDone(false);
-          loop.switchArena(arenaId);
-          kickoffLoading(loop, () => netMatchRef.current === nm, () => {
-            setLocalTasksDone(true);
-            if (online.isHost) nm.markHostLoaded();
-            else nm.signalGuestLoaded();
-          }, nm);
-        },
-        onPhaseChange: (phase) => {
-          setPhaseIsLoading(phase === 'loading');
-        },
-        onLoadingTimeout: (slots) => {
-          if (!slots.length) return;
-          const names = slots
-            .map(s => useGameStore.getState().online.playerNames[s] || s)
-            .join(', ');
-          flashBanner(t('loading_starting_without', 'Starting without {{names}}', { names }), 4000);
-        },
-        onGuestConnectionUnstable: (slot, stalled) => {
-          if (!stalled) {
-            setUnstable(prev => prev?.kind === 'them' ? null : prev);
-            return;
-          }
-          const name = useGameStore.getState().online.playerNames[slot] || slot;
-          setUnstable({ kind: 'them', name });
-        },
-    });
-
-    netMatchRef.current = netMatch;
-    gameLoopRef.current = netMatch.getGameLoop();
-    window.__gameLoop = netMatch.getGameLoop();
-    (window as any).__netMatch = netMatch;
-    netMatch.getGameLoop().setPlayerNames(useGameStore.getState().online.playerNames);
-    netMatch.getGameLoop().setLocalSlot((online.isHost ? 'P1' : online.localSlot) as PlayerSlot);
-    netMatch.start();
-    setTouchInput(netMatch.getGameLoop().getTouchInput());
-
-    // Online loading: both sides preload, then signal readiness. Host flips
-    // phase to 'playing' only after all guests report LOADED (or after the
-    // 15s hard timeout in NetMatch).
-    kickoffLoading(
-      netMatch.getGameLoop(),
-      () => netMatchRef.current === netMatch,
-      () => {
-        setLocalTasksDone(true);
-        if (online.isHost) netMatch.markHostLoaded();
-        else netMatch.signalGuestLoaded();
-      },
-      netMatch,
-    );
-
-    return () => {
-      netMatch.stop();
-      netMatchRef.current = null;
-      commonCleanup();
-      clearTimer(disconnectDelayRef);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activePlayers, matchSettings, setMatchResult, online.isOnline]);
+  // Online-mode lifecycle (extracted hook). Early-returns when !isOnline.
+  useOnlineMatch({
+    bgCanvasRef, bgNightCanvasRef, fgCanvasRef, fgNightTintRef, hudCanvasRef,
+    gameLoopRef, netMatchRef, victoryTimeoutRef, disconnectDelayRef,
+    reconnectFailedRef, isReconnectingRef,
+    currentArenaId, activePlayers, matchSettings,
+    isOnline: online.isOnline, isHost: online.isHost, localSlot: online.localSlot,
+    setMatchResult, setScreen, setMatchSettings, setCurrentArenaId,
+    resetLastResolvedArena: (id: string) => { lastResolvedArenaId = id; },
+    setTouchInput,
+    setPhaseIsLoading, setLocalTasksDone,
+    setUnstable, setIsReconnecting, setReconnectFailed,
+    setReconnectAttempt, setReconnectMax, flashBanner, t,
+  });
 
   // Wake lock: prevent screen dimming during match on mobile
   useWakeLock(isMobile);
