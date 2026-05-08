@@ -1,23 +1,32 @@
-// Barrel for the hazards rendering module. Public API and cache lifecycle live
-// here; per-category files (lava.ts, zones.ts, creatures.ts) own their own
-// module-local caches and expose `clearXCaches()` helpers that this barrel
-// aggregates into the single public `clearHazardCaches()`.
+// Barrel for the hazards rendering module. Re-exports the full public API
+// from the per-category files (lava, zones, creatures) and aggregates each
+// category's cache-clearing helper into the single public
+// `clearHazardCaches()`.
 //
-// Scaffold step: while extraction is in progress, this barrel simply
-// re-exports the legacy `../hazards.ts` surface unchanged. Later commits
-// move functions out of `hazards.ts` and into the category files; consumers
-// continue to import from `'../rendering/hazards'` (which now resolves to
-// this directory) without code change.
+// Consumers continue to import from `'../rendering/hazards'`; TypeScript
+// resolves that to this directory's index.
+import { clearLavaCaches } from './lava';
+import { clearZoneCaches } from './zones';
+import { clearCreatureCaches } from './creatures';
+
+export { drawLavaRock } from './lava';
 export {
   drawHazardZone,
-  drawGhost,
-  drawLavaRock,
   drawZeroGZone,
   drawCurrentZone,
   drawGeyser,
   drawBouncyPlatformOverlay,
+} from './zones';
+export {
+  drawGhost,
   drawPigeonFlock,
   drawScatterFlock,
   pickScatterColor,
-  clearHazardCaches,
-} from '../hazards';
+} from './creatures';
+
+/** Clear every module-local cache owned by the hazards rendering module. */
+export function clearHazardCaches(): void {
+  clearLavaCaches();
+  clearZoneCaches();
+  clearCreatureCaches();
+}
