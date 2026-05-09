@@ -29,6 +29,17 @@ import type {
   HostInitMsg, HostStopMsg, HostToWorkerMsg, WorkerToHostMsg,
 } from './messages';
 
+/** Cumulative worker render-time stats, accumulated across the
+ *  per-second flushes from the worker. Read by E2E via
+ *  `window.__bunnyTest.workerPerfStats()`. */
+export interface WorkerRenderStats {
+  frames: number;
+  renderSumMs: number;
+  renderMaxMs: number;
+  handlerSumMs: number;
+  handlerMaxMs: number;
+}
+
 export interface RendererProxyOptions {
   bgCanvas: HTMLCanvasElement;
   fgCanvas: HTMLCanvasElement;
@@ -74,6 +85,27 @@ export class RendererProxy implements IRenderer {
    *  has been posted; the worker is fast enough that the actual sprites
    *  paint correctly even if a pre-warm round is racing the first frame. */
   private warmedNames = new Set<string>();
+  /** Cumulative worker render-time stats since proxy construction. Updated
+   *  on every `worker:perfStats` push. */
+  private renderStats: WorkerRenderStats = {
+    frames: 0,
+    renderSumMs: 0,
+    renderMaxMs: 0,
+    handlerSumMs: 0,
+    handlerMaxMs: 0,
+  };
+
+  /** Snapshot of the cumulative worker render-time stats. */
+  getRenderStats(): WorkerRenderStats {
+    return { ...this.renderStats };
+  }
+  resetRenderStats(): void {
+    this.renderStats.frames = 0;
+    this.renderStats.renderSumMs = 0;
+    this.renderStats.renderMaxMs = 0;
+    this.renderStats.handlerSumMs = 0;
+    this.renderStats.handlerMaxMs = 0;
+  }
 
   constructor(opts: RendererProxyOptions) {
     this.opts = {
@@ -125,6 +157,12 @@ export class RendererProxy implements IRenderer {
     // Lift the onReady out of the closure so it survives across messages.
     this.onReady = opts.onReady;
     this.worker.postMessage(init, transfer);
+
+    // Expose the proxy so E2E + the perf harness can read worker render-
+    // time stats. Single global; replaced on subsequent constructs.
+    if (typeof window !== 'undefined') {
+      (window as unknown as { __rendererProxy?: RendererProxy }).__rendererProxy = this;
+    }
   }
 
   private onReady?: () => void;
@@ -152,6 +190,18 @@ export class RendererProxy implements IRenderer {
         if (this.bgNightCanvasEl) this.bgNightCanvasEl.style.opacity = value;
         if (this.lightCanvasEl) this.lightCanvasEl.style.opacity = value;
       }
+      return;
+    }
+    if (msg.type === 'worker:perfStats') {
+      this.renderStats.frames += msg.frames;
+      this.renderStats.renderSumMs += msg.renderSumMs;
+      if (msg.renderMaxMs > this.renderStats.renderMaxMs) {
+        this.renderStats.renderMaxMs = msg.renderMaxMs;
+      }
+      this.renderStats.handlerSumMs += msg.handlerSumMs;
+      if (msg.handlerMaxMs > this.renderStats.handlerMaxMs) {
+        this.renderStats.handlerMaxMs = msg.handlerMaxMs;
+      }
     }
   };
 
@@ -165,6 +215,10 @@ export class RendererProxy implements IRenderer {
       // Worker may already be in a bad state — terminate is recovery.
     }
     this.worker.terminate();
+    if (typeof window !== 'undefined') {
+      const w = window as unknown as { __rendererProxy?: RendererProxy };
+      if (w.__rendererProxy === this) w.__rendererProxy = undefined;
+    }
   }
 
   // ---- IRenderer surface — each call is one structured-clone postMessage. ----

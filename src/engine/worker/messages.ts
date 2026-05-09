@@ -110,4 +110,26 @@ export interface WorkerNightOpacityMsg {
   opacity: number;
 }
 
-export type WorkerToHostMsg = WorkerReadyMsg | WorkerErrorMsg | WorkerNightOpacityMsg;
+/** Periodic perf rollup pushed from worker → main. The harness reads this
+ *  via `window.__bunnyTest.workerPerfStats()` to get the real render cost
+ *  inside the worker — main-thread rAF measurements are vsync-paced once
+ *  the canvases are transferred, so they can't see worker render time. */
+export interface WorkerPerfStatsMsg {
+  type: 'worker:perfStats';
+  /** Number of renderFrame calls aggregated. */
+  frames: number;
+  /** Sum of renderer.renderFrame() ms (excludes msg-handler overhead). */
+  renderSumMs: number;
+  /** Max single-frame render ms. */
+  renderMaxMs: number;
+  /** Sum of full message-handler ms (incl. cosmetic ticks + state copy). */
+  handlerSumMs: number;
+  /** Max single-frame handler ms. */
+  handlerMaxMs: number;
+}
+
+export type WorkerToHostMsg =
+  | WorkerReadyMsg
+  | WorkerErrorMsg
+  | WorkerNightOpacityMsg
+  | WorkerPerfStatsMsg;

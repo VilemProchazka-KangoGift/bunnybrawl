@@ -34,6 +34,7 @@ import type {
   WorkerReadyMsg,
   WorkerErrorMsg,
   WorkerNightOpacityMsg,
+  WorkerPerfStatsMsg,
 } from './messages';
 
 const ctxScope = self as DedicatedWorkerGlobalScope;
@@ -69,6 +70,37 @@ function postNightOpacity(kind: 'bg' | 'fg', opacity: number): void {
   ctxScope.postMessage(m);
 }
 
+/** Per-frame perf stats accumulated in the worker. Flushed to main once per
+ *  second; main exposes via the `__bunnyTest` E2E surface. */
+const _perf = {
+  frames: 0,
+  renderSumMs: 0,
+  renderMaxMs: 0,
+  handlerSumMs: 0,
+  handlerMaxMs: 0,
+  lastFlushAt: 0,
+};
+
+function flushPerfStats(now: number): void {
+  if (_perf.frames === 0) return;
+  if (now - _perf.lastFlushAt < 1000) return;
+  const m: WorkerPerfStatsMsg = {
+    type: 'worker:perfStats',
+    frames: _perf.frames,
+    renderSumMs: _perf.renderSumMs,
+    renderMaxMs: _perf.renderMaxMs,
+    handlerSumMs: _perf.handlerSumMs,
+    handlerMaxMs: _perf.handlerMaxMs,
+  };
+  ctxScope.postMessage(m);
+  _perf.frames = 0;
+  _perf.renderSumMs = 0;
+  _perf.renderMaxMs = 0;
+  _perf.handlerSumMs = 0;
+  _perf.handlerMaxMs = 0;
+  _perf.lastFlushAt = now;
+}
+
 /** Rebuild the local cosmetic systems for a new arena. Safe to call with
  *  the same arenaId — early-returns. */
 function ensureCosmeticSystemsFor(arena: Arena, theme: ThemeConfig, state: MatchState): void {
@@ -92,6 +124,7 @@ function ensureCosmeticSystemsFor(arena: Arena, theme: ThemeConfig, state: Match
 ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
   if (stopped) return;
   const msg = e.data;
+  const handlerStart = msg.type === 'host:renderFrame' ? performance.now() : 0;
   try {
     switch (msg.type) {
       case 'host:init': {
@@ -224,6 +257,7 @@ ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
           groundCritter: wildlifeSystem.getInstancesForLayer('groundCritter'),
           animBackground: wildlifeSystem.getInstancesForLayer('animBackground'),
         } : { groundCritter: [], animBackground: [] };
+        const renderStart = performance.now();
         renderer.renderFrame(
           workerState,
           arena,
@@ -232,6 +266,15 @@ ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
           reactiveArg,
           wildlifeArg,
         );
+        const renderEnd = performance.now();
+        const renderMs = renderEnd - renderStart;
+        const handlerMs = renderEnd - handlerStart;
+        _perf.frames += 1;
+        _perf.renderSumMs += renderMs;
+        if (renderMs > _perf.renderMaxMs) _perf.renderMaxMs = renderMs;
+        _perf.handlerSumMs += handlerMs;
+        if (handlerMs > _perf.handlerMaxMs) _perf.handlerMaxMs = handlerMs;
+        flushPerfStats(renderEnd);
         // Touch currentArena to silence the unused-var warning when the
         // optional capture path doesn't read it later.
         void currentArena;

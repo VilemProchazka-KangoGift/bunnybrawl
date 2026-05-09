@@ -73,6 +73,14 @@ test('perf profile run', async ({ page, context }) => {
   await cdp.send('HeapProfiler.enable');
   await cdp.send('Performance.enable');
 
+  // Optional CPU throttling: PERF_CPU_THROTTLE=4 → 4× slowdown. Used by the
+  // worker-offload stress test to demonstrate worker mode keeping 60fps
+  // while main-thread mode drops below it.
+  const cpuThrottle = Number(process.env.PERF_CPU_THROTTLE ?? '1');
+  if (cpuThrottle > 1) {
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: cpuThrottle });
+  }
+
   // Wrap collection in try/finally so the profilers are always stopped, even
   // on test failure — otherwise they keep running until the page closes.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -135,6 +143,14 @@ test('perf profile run', async ({ page, context }) => {
   const sections = await page.evaluate(() => window.__perfTrace?.snapshot() ?? {});
   const frames = await page.evaluate(() => window.__fpsCounter?.dumpSamples() ?? { dts: [], count: 0, lastSampleTime: 0 });
   const longTasks = await page.evaluate(() => window.__longTasks ?? []);
+  // Worker render-time stats — only present when ?worker is on (or the
+  // localStorage default flag is on). Direct measurement of `renderer.
+  // renderFrame()` cost INSIDE the worker, immune to vsync pacing on main.
+  const workerStats = await page.evaluate(() => {
+    type ProxyLike = { getRenderStats?(): unknown };
+    const w = window as unknown as { __rendererProxy?: ProxyLike };
+    return w.__rendererProxy?.getRenderStats?.() ?? null;
+  });
 
   const meta = {
     scenario: { arena, bots: Number(bots), difficulty, durationS },
@@ -152,6 +168,10 @@ test('perf profile run', async ({ page, context }) => {
   writeFileSync(path.join(outDir, 'long-tasks.json'), JSON.stringify(longTasks));
   writeFileSync(path.join(outDir, 'heap-timeline.json'), JSON.stringify(heapTimeline));
   writeFileSync(path.join(outDir, 'metadata.json'), JSON.stringify(meta, null, 2));
+  writeFileSync(path.join(outDir, 'worker-stats.json'), JSON.stringify({
+    cpuThrottle,
+    workerStats,
+  }, null, 2));
 
   expect(cpu.profile.samples?.length ?? 0).toBeGreaterThan(0);
 });
