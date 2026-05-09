@@ -6,11 +6,18 @@
  * thread (proxied via `RendererProxy`) into method calls. The simulation
  * stays on main; this worker only paints.
  *
- * Wire format: `messages.ts`. The full set of messages mirrors the public
- * Renderer surface used by `GameLoop` + `ParticleSystem.bakeToRenderer`.
+ * Wildlife + reactive decorations are special-cased: their instance arrays
+ * carry per-pack draw functions inside `inst.data` which can't survive
+ * structured-clone. The worker therefore constructs its OWN
+ * `WildlifeSystem` + `ReactiveDecorationSystem` for the current arena and
+ * ticks them locally using the shipped state. Main also has its own copies
+ * (for burst→particle emission); the duplication is cheap (cosmetic ticks
+ * are ~0.05–0.1 ms) and keeps the wire payload structured-clone-safe.
  *
- * Bundle hygiene: this file's transitive imports must stay browser-pure.
- * The regression test in `worker-bundle-no-main-deps.test.ts` enforces it.
+ * Wire format: `messages.ts`. Bundle hygiene: this file's transitive
+ * imports must stay browser-pure. The regression test in
+ * `worker-bundle-no-main-deps.test.ts` enforces it. Howler is stubbed via
+ * `vite.config.ts > worker.plugins`.
  */
 
 import { Renderer } from '../renderer';
@@ -18,6 +25,10 @@ import { registerBuiltinArenas } from '../arenas/builtin';
 import { registerBuiltinCharacters } from '../characters/builtin';
 import { getArena, getTheme } from '../arenas/operations';
 import { setHudLanguage } from '../rendering/hud';
+import { ReactiveDecorationSystem } from '../gameLoop/cosmetics/ReactiveDecorationSystem';
+import { WildlifeSystem } from '../gameLoop/cosmetics/WildlifeSystem';
+import type { MatchState, Arena } from '../types';
+import type { ThemeConfig } from '../themes/types';
 import type {
   HostToWorkerMsg,
   WorkerReadyMsg,
@@ -30,10 +41,14 @@ const ctxScope = self as DedicatedWorkerGlobalScope;
 let renderer: Renderer | null = null;
 let stopped = false;
 
-/** Bootstrap arena + character registries inside the worker. The worker
- *  module graph mirrors main's, but module-scope side-effects in `App.tsx`
- *  (which is React and never reaches the worker) don't run. We register here
- *  exactly once. The registries are idempotent on duplicate calls. */
+/** Stable MatchState container the worker mutates each frame so the cosmetic
+ *  systems can keep a single state ref and not need rebuilding per tick. */
+let workerState: MatchState | null = null;
+let reactiveSystem: ReactiveDecorationSystem | null = null;
+let wildlifeSystem: WildlifeSystem | null = null;
+let currentArenaId: string | null = null;
+let currentArena: Arena | null = null;
+
 function bootstrap(): void {
   registerBuiltinArenas();
   registerBuiltinCharacters();
@@ -52,6 +67,26 @@ function postError(message: string): void {
 function postNightOpacity(kind: 'bg' | 'fg', opacity: number): void {
   const m: WorkerNightOpacityMsg = { type: 'worker:nightOpacity', kind, opacity };
   ctxScope.postMessage(m);
+}
+
+/** Rebuild the local cosmetic systems for a new arena. Safe to call with
+ *  the same arenaId — early-returns. */
+function ensureCosmeticSystemsFor(arena: Arena, theme: ThemeConfig, state: MatchState): void {
+  if (currentArenaId === arena.id && reactiveSystem && wildlifeSystem) return;
+  currentArena = arena;
+  currentArenaId = arena.id;
+  // Worker-side burst is a no-op: emitting particles would need a
+  // ParticleSystem, which lives on main. Bursts on worker affect the
+  // visual flag but skip emission — main's mirror of the system fires
+  // the actual particles.
+  reactiveSystem = new ReactiveDecorationSystem(state, arena, () => { /* noop */ });
+  if (theme.buildReactiveDecorations) {
+    reactiveSystem.setInstances(theme.buildReactiveDecorations(arena));
+  }
+  wildlifeSystem = new WildlifeSystem(state, arena);
+  if (theme.buildWildlife) {
+    wildlifeSystem.setInstances(theme.buildWildlife(arena));
+  }
 }
 
 ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
@@ -78,14 +113,19 @@ ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
         postReady();
         return;
       }
-      case 'host:setLanguage':
-        setHudLanguage(msg.language);
-        return;
       case 'host:stop': {
         stopped = true;
         renderer = null;
+        reactiveSystem = null;
+        wildlifeSystem = null;
+        workerState = null;
+        currentArena = null;
+        currentArenaId = null;
         return;
       }
+      case 'host:setLanguage':
+        setHudLanguage(msg.language);
+        return;
     }
     if (!renderer) return;
     switch (msg.type) {
@@ -112,6 +152,11 @@ ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
         return;
       case 'host:setTheme':
         renderer.setTheme(getTheme(msg.themeId));
+        // Theme changed → cosmetic systems need rebuild against the new
+        // arena. Done on the next renderBackground / renderFrame.
+        currentArenaId = null;
+        reactiveSystem = null;
+        wildlifeSystem = null;
         return;
       case 'host:setArenaLights':
         renderer.setArenaLights(msg.lights);
@@ -136,21 +181,60 @@ ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
         return;
       case 'host:renderFrame': {
         const arena = getArena(msg.arenaId);
-        // The state is a structured-clone of main's MatchState. The proxy
-        // sets the per-frame decay timers (slowMotion/screenFlash/hitstop)
-        // directly on the cloned state before transit; main keeps its own
-        // copy for sim. We don't write back — the worker's clone is throwaway.
-        msg.state.slowMotion = msg.slowMotion;
-        msg.state.screenFlash = msg.screenFlash;
-        msg.state.hitstopZoom = msg.hitstopZoom;
+        // Mutate the stable state container in place (Object.assign copies
+        // top-level field refs — players, particles, etc.) so the cosmetic
+        // systems' captured state ref stays stable. Construct on first
+        // call.
+        if (!workerState) {
+          workerState = msg.state;
+        } else {
+          Object.assign(workerState, msg.state);
+        }
+        // Per-frame timer decay (the proxy ships them out of band so the
+        // worker doesn't need to know about network mode).
+        workerState.slowMotion = msg.slowMotion;
+        workerState.screenFlash = msg.screenFlash;
+        workerState.hitstopZoom = msg.hitstopZoom;
+        ensureCosmeticSystemsFor(arena, getTheme(arena.themeId), workerState);
+        // Tick local cosmetic systems before render. Reactive 60Hz happens
+        // here too (main's GameLoop runs it in fixedUpdate; we approximate
+        // by running both buckets at the same dt — the visual difference is
+        // negligible for sway). dt = cosmeticLead is the seconds-since-last
+        // cosmeticStep — the same value the proxy ships, mirrored from
+        // GameLoop.getCosmeticLead. Reactive cosmeticUpdate (30Hz bucket)
+        // and fixedUpdate (60Hz + windPhase) advance separately on main;
+        // we collapse them with a single tick.
+        const dt = msg.cosmeticLead > 0 ? msg.cosmeticLead : 1 / 60;
+        if (reactiveSystem) {
+          reactiveSystem.fixedUpdate(dt);
+          reactiveSystem.cosmeticUpdate(dt);
+        }
+        if (wildlifeSystem) {
+          wildlifeSystem.cosmeticUpdate(dt);
+        }
+        // Build the per-frame arg from the worker's local systems. The
+        // wire-shipped reactiveArg/wildlifeArg are ignored — they're
+        // stripped at the proxy.
+        const reactiveArg = reactiveSystem ? {
+          prePlayer: reactiveSystem.getInstancesForLayer('prePlayer'),
+          postPlayer: reactiveSystem.getInstancesForLayer('postPlayer'),
+          windPhase: reactiveSystem.getWindPhase(),
+        } : { prePlayer: [], postPlayer: [], windPhase: 0 };
+        const wildlifeArg = wildlifeSystem ? {
+          groundCritter: wildlifeSystem.getInstancesForLayer('groundCritter'),
+          animBackground: wildlifeSystem.getInstancesForLayer('animBackground'),
+        } : { groundCritter: [], animBackground: [] };
         renderer.renderFrame(
-          msg.state,
+          workerState,
           arena,
           msg.particles,
           msg.cosmeticLead,
-          msg.reactiveArg,
-          msg.wildlifeArg,
+          reactiveArg,
+          wildlifeArg,
         );
+        // Touch currentArena to silence the unused-var warning when the
+        // optional capture path doesn't read it later.
+        void currentArena;
         return;
       }
     }
@@ -159,5 +243,4 @@ ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
   }
 });
 
-// Keep the module type "module worker" for Vite.
 export {};

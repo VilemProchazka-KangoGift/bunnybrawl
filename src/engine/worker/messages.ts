@@ -15,8 +15,6 @@
  */
 
 import type { MatchState, Particle, Gib } from '../types';
-import type { ReactiveRenderArg } from '../gameLoop/cosmetics/reactiveDecorations';
-import type { WildlifeRenderArg } from '../gameLoop/cosmetics/wildlife';
 import type { Light } from '../lighting';
 import type { BotNavDebugState } from '../navDebugOverlay';
 import type { NetDebugStats } from '../net/core/debugOverlay';
@@ -69,8 +67,11 @@ export interface HostRenderFrameMsg {
   arenaId: string;
   particles: Particle[];
   cosmeticLead: number;
-  reactiveArg: ReactiveRenderArg;
-  wildlifeArg: WildlifeRenderArg;
+  // reactiveArg + wildlifeArg are NOT shipped: their per-instance `data`
+  // can carry pack-supplied draw functions (notably `GroundCritterData.draw`)
+  // which structured-clone rejects. The worker maintains its own local
+  // ReactiveDecorationSystem + WildlifeSystem, ticked from the shipped
+  // state, and renders from them.
   /** Frame-decay timers — the proxy ships them so the worker doesn't need
    *  to know about network mode. Same values the main-thread renderFrame
    *  decays before drawing. */

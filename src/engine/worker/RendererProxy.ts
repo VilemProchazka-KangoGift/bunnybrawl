@@ -238,22 +238,26 @@ export class RendererProxy implements IRenderer {
     arena: Arena,
     particles: Particle[],
     cosmeticLead = 0,
-    reactive?: ReactiveRenderArg,
-    wildlife?: WildlifeRenderArg,
+    _reactive?: ReactiveRenderArg,
+    _wildlife?: WildlifeRenderArg,
   ): void {
     if (this.destroyed) return;
     // Build a structured-clone-safe payload. MatchState contains a
     // `bouncyWobble: Map`, which structured clone supports. We deliberately
     // ship the per-frame timer values out of band so the worker's clone
     // doesn't need to know about main's per-frame decay logic.
+    //
+    // The reactive + wildlife args are deliberately NOT shipped: their
+    // per-instance data can carry pack-supplied draw functions which
+    // structured-clone rejects (`DataCloneError`). The worker maintains its
+    // own local copies of those systems and ticks them from the shipped
+    // state. See `renderWorker.ts > ensureCosmeticSystemsFor`.
     this.post({
       type: 'host:renderFrame',
       state: matchState,
       arenaId: arena.id,
       particles,
       cosmeticLead,
-      reactiveArg: reactive ?? { prePlayer: [], postPlayer: [], windPhase: 0 },
-      wildlifeArg: wildlife ?? { groundCritter: [], animBackground: [] },
       slowMotion: matchState.slowMotion,
       screenFlash: matchState.screenFlash,
       hitstopZoom: matchState.hitstopZoom,
