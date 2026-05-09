@@ -1,3 +1,4 @@
+import type { Ctx2D } from './types';
 // Lobby HUD overlay. World rendering lives in the lobby arena pack;
 // this module only paints the UI layer (ready zone, character labels,
 // countdown, instructions) on the dedicated hud canvas via the standard
@@ -12,10 +13,10 @@ import { READY_ZONE_X, GROUND_Y } from './lobbyConstants';
 
 // Cached zone gradient — kept stable across overlay frames since the readyzone
 // rect doesn't move.
-let _overlayCtx: CanvasRenderingContext2D | null = null;
+let _overlayCtx: Ctx2D | null = null;
 let _overlayZoneGrad: CanvasGradient | null = null;
 
-function getOverlayZoneGrad(ctx: CanvasRenderingContext2D): CanvasGradient {
+function getOverlayZoneGrad(ctx: Ctx2D): CanvasGradient {
   if (_overlayCtx !== ctx) {
     _overlayCtx = ctx;
     _overlayZoneGrad = ctx.createLinearGradient(READY_ZONE_X, 0, CANVAS_WIDTH, 0);
@@ -46,7 +47,7 @@ export interface LobbyOverlayState {
  * UI: ready zone, character labels, countdown, instructions.
  */
 export function drawLobbyOverlay(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   state: LobbyOverlayState,
 ): void {
   // Read i18n once per frame — calling i18n.t / i18n.language inside loops

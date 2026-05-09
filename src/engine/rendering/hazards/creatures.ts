@@ -15,7 +15,7 @@ export function clearCreatureCaches(): void {
 }
 
 export function drawGhost(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   ghost: { x: number; y: number; size: number; alpha: number; wobblePhase: number },
   theme: ThemeConfig,
   time: number,
@@ -95,7 +95,7 @@ export function drawGhost(
 }
 
 export function drawPigeonFlock(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   flock: { x: number; y: number; active: boolean; scatterParticles: Array<{ x: number; y: number; vx: number; vy: number; life: number }> },
   time: number,
   lead = 0,
@@ -184,7 +184,7 @@ const BAT_OFFSETS: ReadonlyArray<{ dx: number; dy: number }> = [
   { dx: 14,  dy: 1 },
 ];
 
-const PERCHED_FLOCK_DRAWERS: Record<ScatterFlockSpecies, (ctx: CanvasRenderingContext2D, cx: number, cy: number, time: number) => void> = {
+const PERCHED_FLOCK_DRAWERS: Record<ScatterFlockSpecies, (ctx: Ctx2D, cx: number, cy: number, time: number) => void> = {
   bat: (ctx, cx, cy, time) => {
     ctx.globalAlpha = 0.8;
     for (let i = 0; i < 3; i++) {
@@ -280,7 +280,7 @@ export function pickScatterColor(species: ScatterFlockSpecies, rand: number): st
 type ScatterParticle = { x: number; y: number; vx: number; vy: number; life: number; phase: number; color: string };
 
 export function drawScatterFlock(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   flock: {
     species: ScatterFlockSpecies;
     x: number; y: number;
@@ -297,7 +297,7 @@ export function drawScatterFlock(
   ctx.restore();
 }
 
-function drawFlyingScatter(ctx: CanvasRenderingContext2D, species: ScatterFlockSpecies, sp: ScatterParticle, lead = 0): void {
+function drawFlyingScatter(ctx: Ctx2D, species: ScatterFlockSpecies, sp: ScatterParticle, lead = 0): void {
   const cfg = FLYING_CFG[species];
   // Position extrapolated by lead seconds for 60fps motion vs 30Hz update rate
   const x = sp.x + sp.vx * lead;

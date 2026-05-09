@@ -76,7 +76,7 @@ export function isHudDirty(state: MatchState): boolean {
   return false;
 }
 
-export function drawHUD(ctx: CanvasRenderingContext2D, state: MatchState, frameTime: number, playerNames: Record<string, string> | null, timeLimit = 0, precomputedDirty?: boolean): void {
+export function drawHUD(ctx: Ctx2D, state: MatchState, frameTime: number, playerNames: Record<string, string> | null, timeLimit = 0, precomputedDirty?: boolean): void {
   const needsRedraw = precomputedDirty !== undefined ? precomputedDirty : isHudDirty(state);
 
   if (needsRedraw) {
@@ -258,7 +258,7 @@ function _drawScoreAnimations(ctx: Ctx2D, state: MatchState): void {
 
 /** Draw active combo popups (×N text) — post-player, pre-HUD layer.
  *  Rises COMBO_POPUP_RISE_PX over the first 60% of life, fades over the last 40%. */
-export function drawComboPopups(ctx: CanvasRenderingContext2D, state: MatchState): void {
+export function drawComboPopups(ctx: Ctx2D, state: MatchState): void {
   if (state.comboPopups.length === 0) return;
   const RISE_FRACTION = 0.6;
   ctx.font = COMBO_POPUP_FONT;
@@ -288,7 +288,7 @@ export function drawComboPopups(ctx: CanvasRenderingContext2D, state: MatchState
   }
 }
 
-export function drawConnectionQuality(ctx: CanvasRenderingContext2D, rtt: number, jitter: number, canvasWidth: number): void {
+export function drawConnectionQuality(ctx: Ctx2D, rtt: number, jitter: number, canvasWidth: number): void {
   ctx.save();
 
   // Determine quality level
@@ -322,7 +322,7 @@ export function drawConnectionQuality(ctx: CanvasRenderingContext2D, rtt: number
   ctx.restore();
 }
 
-export function drawCountdown(ctx: CanvasRenderingContext2D, countdown: number): void {
+export function drawCountdown(ctx: Ctx2D, countdown: number): void {
   const secs = Math.ceil(countdown);
   const frac = countdown - Math.floor(countdown);
   const text = secs > 0 ? `${secs}` : 'GO!';

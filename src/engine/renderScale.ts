@@ -82,15 +82,20 @@ export function subscribeRenderScale(cb: Listener): () => void {
  * one atomic call instead of two steps.
  */
 export function applyRenderScaleToCanvas(
-  canvas: HTMLCanvasElement,
-  ctx: CanvasRenderingContext2D,
+  canvas: HTMLCanvasElement | OffscreenCanvas,
+  ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
   scale: number,
 ): void {
   const pxW = Math.max(1, Math.round(CANVAS_WIDTH * scale));
   const pxH = Math.max(1, Math.round(CANVAS_HEIGHT * scale));
   if (canvas.width !== pxW) canvas.width = pxW;
   if (canvas.height !== pxH) canvas.height = pxH;
-  canvas.style.width = `${CANVAS_WIDTH}px`;
-  canvas.style.height = `${CANVAS_HEIGHT}px`;
+  // OffscreenCanvas has no .style (no DOM layout). HTMLCanvasElement needs
+  // CSS dims pinned to logical so the visual size doesn't change with backing-
+  // store growth.
+  if ('style' in canvas) {
+    canvas.style.width = `${CANVAS_WIDTH}px`;
+    canvas.style.height = `${CANVAS_HEIGHT}px`;
+  }
   ctx.setTransform(scale, 0, 0, scale, 0, 0);
 }

@@ -1,3 +1,4 @@
+import type { Ctx2D } from '../types';
 // src/engine/lighting/pipeline.ts
 //
 // AmbientPipeline — L1 Foundation ambient darkening.
@@ -86,7 +87,7 @@ export class AmbientPipeline {
   }
 
   /** Source-over fallback path (no DOM darkening layers wired). */
-  composite(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D): void {
+  composite(ctx: Ctx2D | OffscreenCanvasRenderingContext2D): void {
     if (!this.isEnabled()) return;
     if (this.hasDomDarkening) return;
     if (this.tintAlpha < 0.01) return;

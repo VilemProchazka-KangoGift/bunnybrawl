@@ -1,3 +1,4 @@
+import type { Ctx2D } from '../types';
 // src/engine/lighting/lightStamp.ts
 //
 // Pure light rendering. One emitter → one fillRect/arc with `'lighter'` blend
@@ -32,7 +33,7 @@ export function effectiveIntensity(light: Light, tick: number): number {
  *  responsible for the ctx state machine — typically wraps a batch of stamps
  *  in save/restore + sets globalCompositeOperation = 'lighter' once. */
 export function lightStamp(
-  ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+  ctx: Ctx2D | OffscreenCanvasRenderingContext2D,
   light: Light,
   tick: number,
   intensityCap = 1.0,
@@ -51,7 +52,7 @@ export function lightStamp(
 /** Shared gradient stamp — reads only common fields, so it accepts either
  *  variant. `stampSpot` clips to a cone before calling. */
 function stampGradient(
-  ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+  ctx: Ctx2D | OffscreenCanvasRenderingContext2D,
   light: Light,
   intensity: number,
 ): void {
@@ -68,7 +69,7 @@ function stampGradient(
 }
 
 function stampSpot(
-  ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+  ctx: Ctx2D | OffscreenCanvasRenderingContext2D,
   light: SpotLight,
   intensity: number,
 ): void {

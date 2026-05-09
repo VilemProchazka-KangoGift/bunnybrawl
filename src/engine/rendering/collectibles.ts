@@ -1,3 +1,4 @@
+import type { Ctx2D } from '../types';
 import type { Carrot, SpringMushroom, Thorn } from '../types';
 import type { ThemeConfig } from '../themes/types';
 import { CARROT_SIZE, SPRING_SIZE, HAZARD_GROW_TIME } from '../constants';
@@ -9,7 +10,7 @@ function calcHazardAnim(growTimer: number, life: number) {
   return _hazardAnim;
 }
 
-export function drawCarrot(ctx: CanvasRenderingContext2D, carrot: Carrot, timeElapsed: number, frameTime: number): void {
+export function drawCarrot(ctx: Ctx2D, carrot: Carrot, timeElapsed: number, frameTime: number): void {
   const x = carrot.x;
   const y = carrot.y;
   const bob = Math.sin(frameTime / 300) * 3;
@@ -74,7 +75,7 @@ export function drawCarrot(ctx: CanvasRenderingContext2D, carrot: Carrot, timeEl
   ctx.fill();
 }
 
-export function drawSpringMushroom(ctx: CanvasRenderingContext2D, spring: SpringMushroom, theme: ThemeConfig): void {
+export function drawSpringMushroom(ctx: Ctx2D, spring: SpringMushroom, theme: ThemeConfig): void {
   const x = spring.x;
   const y = spring.y;
   const squash = spring.bounceTimer > 0 ? Math.sin(spring.bounceTimer * 20) * 5 : 0;
@@ -136,7 +137,7 @@ export function drawSpringMushroom(ctx: CanvasRenderingContext2D, spring: Spring
   ctx.restore();
 }
 
-export function drawThorn(ctx: CanvasRenderingContext2D, thorn: Thorn, theme: ThemeConfig): void {
+export function drawThorn(ctx: Ctx2D, thorn: Thorn, theme: ThemeConfig): void {
   const { x, y, width, height } = thorn;
 
   const { growScale, fadeAlpha } = calcHazardAnim(thorn.growTimer, thorn.life);

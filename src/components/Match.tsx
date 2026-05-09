@@ -17,7 +17,6 @@ import { useOnlineMatch } from './match/useOnlineMatch';
 import { useMatchKeyboard } from './match/useMatchKeyboard';
 import { MatchCanvases } from './match/MatchCanvases';
 import { MatchOverlays } from './match/MatchOverlays';
-import { WorkerSmoke, isWorkerSmokeRequested } from './match/WorkerSmoke';
 import { attachMatch as attachBunnyTestMatch } from './bunnyTestShim';
 import './Match.css';
 
@@ -227,7 +226,6 @@ export function Match() {
           hudRef={hudCanvasRef}
         />
         {touchInput && <TouchOverlay touchInput={touchInput} />}
-        {isWorkerSmokeRequested() && <WorkerSmoke />}
         {isMobile && !paused && (
           <button className="mobile-overlay-btn mobile-pause-btn" onClick={handlePause} data-testid="mobile-pause-btn">
             &#9646;&#9646;

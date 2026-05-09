@@ -1,3 +1,4 @@
+import type { Ctx2D } from '../types';
 import type { MatchState } from '../types';
 import type { ThemeConfig } from '../themes/types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../constants';
@@ -99,7 +100,7 @@ function getFireflyStamp(): OffscreenCanvas | null {
 }
 
 export function drawDayNightCycle(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   dayPhase: number,
   matchState: MatchState | undefined,
   theme: ThemeConfig,

@@ -1,3 +1,4 @@
+import type { Ctx2D } from '../../types';
 /**
  * Network debug overlay — draws host-authoritative netcode stats on the canvas.
  * Activated via ?debug=net URL param, toggled with ` key.
@@ -28,7 +29,7 @@ const lines: string[] = new Array(MAX_LINES);
 
 /** Draw network debug stats in the top-right corner of the canvas. */
 export function drawNetDebugOverlay(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   stats: NetDebugStats,
   canvasWidth: number,
 ): void {
