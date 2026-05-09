@@ -6,14 +6,50 @@ Use when adding game feel: visual effects, sound effects, screen feedback (hitst
 
 ### Adding a New Sound
 
-1. Add name to `SoundName` union in `audio.ts` (line ~4)
-2. Add `this.sounds.set('name', new Howl({ src: [generateXxxSound()], volume: N }))` in `init()`
-3. Write the generator function — patterns:
-   - **Simple tone**: `generateToneBuffer(freq, duration, oscType, vol, freqEnd?)` — single oscillator with envelope
-   - **Noise burst** (crunch, footstep): fill buffer with `Math.random() * 2 - 1`, shape with envelope
-   - **Layered** (crunch with body): combine noise + low tone + high click transient
-   - **Multi-segment** (complex animal): use `generateMultiSegmentTone(segments, vol)` with `ToneSegment[]`
-4. Call `audio.play('name')` in `gameLoop.ts` where needed
+The audio system is split: `audio/AudioManager.ts` (singleton + Howl map), `audio/MusicManager.ts` (music lifecycle), `audio/soundRegistry.ts` (declarative SFX table), and `audio/synthesis/` (pure generators — no Howler dependency).
+
+1. Add the name to `SoundName` union in `audio/types.ts`
+2. Write the generator function in the appropriate `audio/synthesis/` file:
+   - `sfx.ts` — gameplay one-shots (jump, stomp, land, etc.)
+   - `ambient.ts` — looping background (wind, lava, underwater, etc.)
+   - `periodic.ts` — periodic one-shots (bird chirp, ghost, etc.)
+3. Add an entry to the declarative table in `audio/soundRegistry.ts`
+4. Call `audio.play('name')` from gameplay/cosmetic systems where needed
+
+**Generator patterns**:
+- **Simple tone**: `generateToneBuffer(freq, duration, oscType, vol, freqEnd?)` from `audio/synthesis/core` — single oscillator with envelope
+- **Noise burst** (crunch, footstep): fill buffer with `Math.random() * 2 - 1`, shape with envelope
+- **Layered** (crunch with body): combine noise + low tone + high click transient
+- **Multi-segment** (complex animal): use `generateMultiSegmentTone(segments, vol)` from `audio/synthesis/core` with `ToneSegment[]`
+- **Custom WAV**: build a `Float32Array` and pipe through `floatBufferToWavDataUri()` from `audio/synthesis/wav`
+
+### Volume Calibration
+
+Test on laptop speakers. **Frequencies below 100Hz are inaudible on most laptop speakers** — use 130Hz+ for thuds/impacts.
+
+Generation amplitude × Howl volume should be:
+- **≥0.05 effective** for one-shots
+- **≥0.02 effective** for ambient loops
+
+Reference: `jump` sound = square wave 0.25 amplitude × Howl 0.3 = 0.075 effective at 300-600Hz.
+
+### Cooldown for Rapid-Fire SFX
+
+Use `Cooldowns<PlayerSlot>` from `engine/cooldowns.ts` (countdown shape: `set(k, T) → tick(k, dt) → fire on cross-zero → re-set`). See `PlayerSfxCooldowns` in `engine/sfxCooldowns.ts` for the land/headbonk/crouch bundle.
+
+For drift-free **accumulator-style** timers (footsteps, afterimages — variable per-tick interval), use `Accumulator<K>` from `engine/accumulator.ts` instead.
+
+### Per-Arena Ambient Sounds
+
+Set `ambientSoundConfig` on the `ArenaPack`:
+- **Loops** (`loops: string[]`): continuous background, started in `GameLoop.start()`, stopped in `stop()`
+- **Periodic** (`periodic: [{sound, intervalRange}]`): one-shots fired at random intervals, ticked in `fixedUpdate()`
+- All active loops tracked in `GameLoop.activeAmbientLoops[]` and stopped on match end
+
+### Arena MP3 Music
+
+1. Place MP3 in `public/audio/<arenaId>.mp3`
+2. Set `musicFile: '<arenaId>.mp3'` in the arena pack file
 
 ### Sound Design Patterns
 

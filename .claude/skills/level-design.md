@@ -19,17 +19,50 @@ Use when creating or modifying arena levels, themes, platform layouts, or decora
 - **Minimum gap for a challenge**: 100px horizontal, 150px vertical
 - **Spawn points**: must be ~20px above their platform (y = platform.y - PLAYER_HEIGHT)
 
-## Architecture
+## Architecture: Arena Pack System
 
-### Files to Modify
+Arenas are bundled as `ArenaPack` objects — one file per arena under `src/engine/arenas/packs/`. A pack contains layout + visuals + translations + music + physics mods + hazard configs + ambient sounds. There is **no separate theme file or locale keys** — everything lives in the pack.
 
-| File | Purpose |
-|------|---------|
-| `src/engine/themes/newTheme.ts` | Theme config (colors, particles, draw functions) |
-| `src/engine/themes/registry.ts` | Register theme in THEMES map |
-| `src/engine/themes/drawPrimitives.ts` | Add new shared drawing functions |
-| `src/engine/arena.ts` | Platform layout + spawn points + themeId |
-| `src/locales/en.json` / `cs.json` | Arena display name |
+Shared drawing primitives live in `src/engine/themes/drawPrimitives/` (split by category: `background.ts`, `foreground.ts`, `winter.ts`, `hazardFactories.ts`).
+
+### Adding a New Arena
+
+1. Create `packs/newArena.ts` — copy an existing pack (e.g. `meadow.ts`). Provide:
+   - **Layout**: `platforms`, `spawnPoints`, `width`, `height`
+   - **Visuals**: `sky`, `hills`, `ground`, `platform`, `clouds`, `weather`, `wildlife`, `fog`, `ambientParticles`, `dayNight`
+   - **Draw functions**: `drawBackgroundNature`, `drawForegroundNature`, optionally `drawFarBackground`, `drawAnimatedBackground`
+   - **Translations**: `translations: { en: 'Name', cs: 'Jméno', hi: '...', fil: '...' }`
+   - **Preview**: `previewGradient` + `previewIcon` for arena selector UI
+   - **Music**: `musicFile: 'newArena.mp3'` (place MP3 in `public/audio/`)
+   - **Optional**: `bubbleHelmet`, `ghostConfig`, `pigeonConfig`, `physics`, `ambientSoundConfig`, `hazardZones`, `effectZones`, etc.
+2. Import and add to the array in `arenas/builtin.ts`
+3. Re-run `npx vite-node scripts/generateNavData.ts` (regenerates AI nav data)
+
+### Arena-Specific Mechanics
+
+All mechanics are configured directly in the `ArenaPack`:
+
+| Field | Effect |
+|-------|--------|
+| `hazardZones` | Static danger zones; weighted into AI nav graph danger scores |
+| `effectZones` | `zero_g`, `current`, `geyser` — applied to players AND gibs |
+| `noSpawnZones` | Exclude springs/thorns/carrots/characters from these regions |
+| `bouncyPlatforms` | Indices of platforms with jelly bounce + jelly overlay |
+| `allowFallOff` | Gaps in ground; falling players respawn |
+| `ghostConfig` / `pigeonConfig` | Roaming hazards |
+| `carrotZones` | Boosted carrot spawn likelihood in these regions |
+| `noSprings` | Disable spring spawns entirely |
+| `drawCustomThorn` / `drawCustomSpring` | Theme-specific hazard skins |
+| `physics` | Multipliers on `gravity`, `friction`, `walkSpeed`, `jumpImpulse` |
+| `bubbleHelmet: true` | Glass dome on all characters (used by underwater + space station) |
+
+### Per-Arena Ambient Sounds
+
+Set `ambientSoundConfig` on the pack:
+- **Loops** (`loops: string[]`): continuous background, started in `GameLoop.start()`, stopped in `stop()`
+- **Periodic** (`periodic: [{sound, intervalRange}]`): one-shots fired at random intervals, ticked in `fixedUpdate()`
+
+All active loops tracked in `GameLoop.activeAmbientLoops[]` and stopped on match end. Sound generators belong in `audio/synthesis/`.
 
 ### Render Layer Order (back to front)
 
@@ -207,46 +240,24 @@ Keep ground SPARSE — platforms carry most of the visual interest. Ground shoul
 
 Avoid clustering. More is not better — clutter makes the playfield hard to read.
 
-## Example: Creating a New Level
+## Migrating Decorations to ReactiveDecorationSystem
 
-```typescript
-// 1. Define theme in src/engine/themes/myTheme.ts
-import type { ThemeConfig } from './types';
-import { drawPineTree, drawSnowDrift /* ... */ } from './drawPrimitives';
+For decorations that need to react to players (wind sway, velocity-driven bend, stomp shake, burst):
 
-export const MY_THEME: ThemeConfig = {
-  id: 'my_theme',
-  nameKey: 'arena_my_theme',
-  previewGradient: 'linear-gradient(to bottom, #color1, #color2)',
-  sky: { gradient: [{ offset: 0, color: '#top' }, { offset: 1, color: '#bottom' }] },
-  hills: [{ x: 0, baseY: 620, width: 300, height: 100, color: '#hillcolor' }],
-  ground: { surfaceColor: '#surface', surfaceThickness: 4 },
-  platform: { floatingBodyColor: '#body', floatingTopColor: '#top', groundBodyColor: '#gbody', groundTopColor: '#gtop', drawMoss: false },
-  clouds: { count: 4, color: 'rgba(255,255,255,0.6)', minSize: 50, maxSize: 80, minSpeed: 5, maxSpeed: 10, yRange: [40, 100] },
-  weather: { particleCount: 30, types: [{ type: 'leaf', weight: 1, sizeRange: [3,6], vxRange: [10,30], vyRange: [15,35], rotSpeedRange: [1,3] }] },
-  wildlife: { count: 3, types: [{ type: 'butterfly', weight: 1, colors: ['#FFD700'], speedRange: [15,30], yRange: [0.2,0.8] }] },
-  fog: { count: 15, baseY: 655, yVariance: 10, speedRange: [3,8], alphaRange: [0.1,0.25], color: '#FFF', sizeX: 40, sizeY: 8 },
-  ambientParticles: { count: 10, sizeRange: [1,2], vxRange: [-3,3], vyRange: [-8,-20], alphaRange: [0.2,0.5], colors: ['#FFF'] },
-  dayNight: { enabled: true, cycleDuration: 120, maxNightAlpha: 0.6, showFireflies: true, showShootingStars: true },
-  drawBackgroundNature: (ctx, arena) => { /* ... */ },
-  drawForegroundNature: (ctx, arena) => { /* ... */ },
-};
+1. In the arena pack, add `buildReactiveDecorations(arena): ReactiveInstance[]` — return one instance per reactive decoration (use `createReactiveInstance({...})` factory from `gameLoop/cosmetics/reactiveDecorations`).
+2. Register each kind via `registerReactiveKind('<arenaId>.<name>', { layer, draw, highFrequency?, resetData? })` at module scope. Layer is `'prePlayer'` or `'postPlayer'`.
+3. Draw fns call `composeBend(inst, swayPhase)` for the bend offset (handles wind muting + bendValue).
+4. Tune via `proximity.magnitude` (= px of bend at typical walk speed); `radius` controls reach.
+5. Per-kind mutable runtime state goes in `inst.data` (NOT module-level WeakMaps); register `resetData` callback for in-flight animations (e.g. dandelion seed-burst phase).
+6. **Decorations with no proximity/stomp/burst behavior should stay STATIC** in `drawForegroundNature` / `drawBackgroundNature` so they bake into the OffscreenCanvas cache. Only opt into the reactive system if per-frame reactivity is needed.
 
-// 2. Register in registry.ts
-import { MY_THEME } from './myTheme';
-// Add to THEMES map
+## Migrating Wildlife to WildlifeSystem
 
-// 3. Add layout in arena.ts
-export const MY_ARENA: Arena = {
-  id: 'my_theme', name: 'My Theme', themeId: 'my_theme',
-  width: 1280, height: 720,
-  platforms: [
-    { x: 0, y: 660, width: 1280, height: 60 }, // ground always first
-    // ... floating platforms within jump reach of each other
-  ],
-  spawnPoints: [ /* 6 points, above platforms */ ],
-};
-// Add to ARENA_LIST
+Mirrors the reactive-decoration pattern for ambient creatures (snails, crabs, rats, gumdrops, robots, squirrels). Use this whenever a pack needs `tickGroundCritter` patrol/flee logic — replaces the legacy module-scope state arrays + `makeDtTracker` + `drawGroundCritters` callback.
 
-// 4. Add to locales: "arena_my_theme": "My Theme"
-```
+1. In the arena pack, add `buildWildlife(arena): WildlifeInstance[]` (from `gameLoop/cosmetics/wildlife`). For standard ground critters, call `buildGroundCritter({ seed, cfg, initialDir?, initialX?, layer?, draw })` — the built-in `wildlife.groundCritter` kind handles tick + reset.
+2. The pack-supplied `draw({ ctx, state, cfg, time, matchState })` runs each frame; the live `state.x / state.facingEase / state.fleeing` are already advanced by the system before draw fires.
+3. Set `layer: 'animBackground'` to render in the early-bg slot (between far-bg and clouds, where the legacy `drawAnimatedBackground` ran). Default `groundCritter` slot renders between fog and fg-nature, so foliage occludes critters walking behind it.
+4. For wildlife with extra per-instance state (e.g. candyLand gumdrops have a `rot` accumulator), register a custom kind via `registerWildlifeKind('<arenaId>.<name>', { layer, tick, draw, resetData? })` and emit instances via `createWildlifeInstance({...})`.
+5. Delete the old `_<critter>: GroundCritterState[]`, `_tick<Critter>Dt = makeDtTracker()`, and `drawGroundCritters` (or `drawAnimatedBackground`) callback once `buildWildlife` covers the whole inventory.
+6. Butterflies / bees / fish-school stay in `ReactiveDecorationSystem` — they use proximity-based flee and don't fit the patrol/flee primitive.
