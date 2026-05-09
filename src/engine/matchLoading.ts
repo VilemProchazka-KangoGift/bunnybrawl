@@ -1,6 +1,6 @@
 import { audio } from './audio';
 import type { Arena } from './types';
-import type { Renderer } from './renderer';
+import type { IRenderer } from './renderer';
 import type { NetMatch } from './net';
 
 /**
@@ -19,7 +19,7 @@ const DEFAULT_TIMEOUT_MS = 15000;
 export interface RunLoadingTasksOpts {
   arenaId: string;
   characterNames: string[];
-  renderer: Renderer;
+  renderer: IRenderer;
   arena: Arena;
   originalArena: Arena;
   /** When set, guests wait for the snapshot stream to warm up before the

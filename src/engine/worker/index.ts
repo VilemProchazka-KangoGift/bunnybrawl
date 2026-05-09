@@ -1,7 +1,7 @@
-export { WorkerHost } from './workerHost';
-export type { WorkerHostEvents } from './workerHost';
+export { RendererProxy } from './RendererProxy';
+export type { RendererProxyOptions } from './RendererProxy';
 export type {
   HostInitMsg, HostStopMsg, HostToWorkerMsg,
-  WorkerReadyMsg, WorkerErrorMsg, WorkerToHostMsg,
+  WorkerReadyMsg, WorkerErrorMsg, WorkerNightOpacityMsg, WorkerToHostMsg,
 } from './messages';
 export { isWorkerEnabled, setWorkerEnabled, subscribeWorkerFlag } from './workerFlag';

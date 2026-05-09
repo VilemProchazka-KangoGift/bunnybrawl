@@ -33,7 +33,7 @@ import {
   drawSurfaceDecals, drawRipples,
 } from './rendering';
 import { setSpriteCacheScale } from './rendering/players';
-import { setHudScale } from './rendering/hud';
+import { setHudScale, setHudLanguage } from './rendering/hud';
 import { applyRenderScaleToCanvas, getRenderScale } from './renderScale';
 import { Lighting } from './lighting';
 import type { Light, PointLight, RGB } from './lighting';
@@ -144,6 +144,42 @@ export interface RendererOptions {
    *  places — same as the main-thread DOM path — so postMessage chatter is
    *  bounded to ~thousands per match in the worst case. */
   nightOpacityCallback?: (kind: 'bg' | 'fg', opacity: number) => void;
+  /** Initial UI language for HUD character-name translations. Defaults to
+   *  `'en'`. Worker-hosted Renderers receive this on init from main; main-
+   *  hosted Renderers don't need it (they call `setLanguage` from i18n). */
+  language?: string;
+}
+
+/** Public Renderer surface used by GameLoop, ParticleSystem.bakeToRenderer,
+ *  matchLoading, and CharacterSelect. The class `Renderer` and the worker-
+ *  proxy `RendererProxy` both implement this so GameLoop can hold either
+ *  without branching. */
+export interface IRenderer {
+  setRenderScale(scale: number): void;
+  setBotNavDebugStates(states: BotNavDebugState[]): void;
+  setNetDebugStats(stats: NetDebugStats | null): void;
+  setPlayerNames(names: Record<string, string>): void;
+  setTimeLimit(timeLimit: number): void;
+  setNetworkMode(isNetwork: boolean): void;
+  setConnectionQuality(rtt: number, jitter: number): void;
+  setLobbyOverlayFn(fn: ((ctx: Ctx2D) => void) | null): void;
+  getDiagnostics(): RenderDiagnostics;
+  warmSpriteCache(names: string[]): void;
+  hasWarmedAll(names: string[]): boolean;
+  setTheme(theme: ThemeConfig): void;
+  renderBackground(arena: Arena, originalArena?: Arena): void;
+  emitLightBurst(x: number, y: number, kind: 'spawn' | 'stomp'): void;
+  setArenaLights(lights: ReadonlyArray<Light>): void;
+  bakeGibs(gibs: Gib[]): void;
+  renderBloodDrips(drips: Array<{ x: number; y: number; radius: number; color: string }>): void;
+  renderFrame(
+    matchState: MatchState,
+    arena: Arena,
+    particles: Particle[],
+    cosmeticLead?: number,
+    reactive?: import('./gameLoop/cosmetics/reactiveDecorations').ReactiveRenderArg,
+    wildlife?: import('./gameLoop/cosmetics/wildlife').WildlifeRenderArg,
+  ): void;
 }
 
 /** Diagnostic flags tracking which rendering branches fired each frame. */
@@ -257,7 +293,7 @@ function resetDiag(d: RenderDiagnostics): void {
   d.hitstop = false; d.screenShake = false; d.zeroGShimmer = false; d.playersDrawn = 0;
 }
 
-export class Renderer {
+export class Renderer implements IRenderer {
   private bgCanvas: RendererCanvas;
   private bgNightCanvas: RendererCanvas | null = null;
   private fgCanvas: RendererCanvas;
@@ -393,6 +429,9 @@ export class Renderer {
 
     if (opts.nightOpacityCallback) {
       this._nightOpacityCallback = opts.nightOpacityCallback;
+    }
+    if (opts.language) {
+      setHudLanguage(opts.language);
     }
 
     // Apply initial render scale to all canvases (sets backing-store dims + ctx transform)

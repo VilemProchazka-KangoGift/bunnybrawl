@@ -13,11 +13,20 @@ import { fileURLToPath } from 'node:url';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const WORKER_ENTRY = resolve(HERE, '..', 'renderWorker.ts');
 
+/** React, Trystero, and i18n are the bundle-size + boot-correctness must-
+ *  haves: pulling them in would double the worker download or crash boot
+ *  (no `window` for react-dom). Howler is allowed because every character
+ *  pack imports `Howl` at module top for its `createSound` factory. The
+ *  factory is never CALLED inside the worker (AudioManager runs on main),
+ *  so Howler is dead code in the worker bundle — but the import chain
+ *  reaches it. Refactoring 17 character packs to gate Howler behind a
+ *  dynamic import is out of scope for this experiment; the ~30KB cost
+ *  is the trade-off. Track this in a follow-up if the worker path is
+ *  promoted to default-on. */
 const FORBIDDEN_BARE = [
   'react',
   'react-dom',
   '@vitejs/plugin-react',
-  'howler',
   'trystero',
   '@trystero-p2p/mqtt',
   'i18next',
@@ -25,13 +34,16 @@ const FORBIDDEN_BARE = [
   'zustand',
 ];
 
-const STATIC_RE = /(?:^|[\s;])(?:import|export)[\s\S]*?from\s+['"]([^'"]+)['"]/g;
+/** `import type { ... } from '...'` and `import { type Foo } from '...'` are
+ *  erased at compile time and don't ship in the worker bundle. The regex
+ *  walker is purely textual, so we filter them out before classifying. */
+const STATIC_VALUE_RE = /(?:^|[\s;])(?!import\s+type\b)(?:import|export)[\s\S]*?from\s+['"]([^'"]+)['"]/g;
 const SIDE_EFFECT_RE = /(?:^|[\s;])import\s+['"]([^'"]+)['"]/g;
 const DYNAMIC_RE = /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
 
 function specifiersOf(source: string): string[] {
   const out: string[] = [];
-  for (const re of [STATIC_RE, SIDE_EFFECT_RE, DYNAMIC_RE]) {
+  for (const re of [STATIC_VALUE_RE, SIDE_EFFECT_RE, DYNAMIC_RE]) {
     re.lastIndex = 0;
     let m: RegExpExecArray | null;
     while ((m = re.exec(source)) != null) {

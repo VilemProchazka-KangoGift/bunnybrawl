@@ -1,10 +1,13 @@
 import { useEffect } from 'react';
 import { GameLoop } from '../../engine/gameLoop';
 import { NetMatch } from '../../engine/net/netMatch';
-import { getArena } from '../../engine/arenas';
+import { getArena, getTheme } from '../../engine/arenas';
 import { perfTrace } from '../../engine/perfTrace';
 import * as fpsCounter from '../../engine/fpsCounter';
 import { runLoadingTasks } from '../../engine/matchLoading';
+import { isWorkerEnabled, RendererProxy } from '../../engine/worker';
+import { getRenderScale } from '../../engine/renderScale';
+import i18n from '../../i18n';
 import type { TouchInputManager } from '../../engine/touchInput';
 import type {
   PlayerSlot, MatchPhase, MatchState, MatchSettings,
@@ -128,6 +131,37 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
     setPhaseIsLoading(true);
     setLocalTasksDone(false);
 
+    // Worker offload: when the local-device flag is on, transfer the
+    // canvases' drawing surfaces to a Web Worker that hosts the Renderer.
+    // GameLoop adopts the proxy (an IRenderer) and pushes per-frame state
+    // across postMessage. Online play stays on the main-thread Renderer
+    // (NetMatch is too tightly wound around the renderer for this pass).
+    const useWorker = isWorkerEnabled();
+    let workerProxy: RendererProxy | null = null;
+    if (useWorker) {
+      try {
+        workerProxy = new RendererProxy({
+          bgCanvas,
+          fgCanvas,
+          hudCanvas,
+          bgNightCanvas,
+          fgNightTint,
+          lightCanvas,
+          theme: getTheme(arena.themeId),
+          mirrored: matchSettings.mods.mirrorArena,
+          timeLimit: matchSettings.timeLimit,
+          renderScale: getRenderScale(),
+          language: i18n.language,
+          onError: (m) => console.error('[render worker]', m),
+        });
+      } catch (e) {
+        // Browser without OffscreenCanvas / Worker module support — fall
+        // back to main-thread Renderer.
+        console.warn('[worker offload] proxy construction failed, falling back:', e);
+        workerProxy = null;
+      }
+    }
+
     const loop = new GameLoop(
       bgCanvas,
       fgCanvas,
@@ -140,6 +174,7 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
       bgNightCanvas,
       fgNightTint,
       lightCanvas,
+      workerProxy ?? undefined,
     );
 
     gameLoopRef.current = loop;
@@ -161,6 +196,9 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
       loop.stop();
       gameLoopRef.current = null;
       setTouchInput(null);
+      if (workerProxy) {
+        workerProxy.destroy();
+      }
       if (victoryTimeoutRef.current) {
         clearTimeout(victoryTimeoutRef.current);
         victoryTimeoutRef.current = null;

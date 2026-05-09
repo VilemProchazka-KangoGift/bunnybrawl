@@ -14,7 +14,7 @@ import type { PlayerInput } from '../input/PlayerInput';
 import { TouchInputManager } from '../touchInput';
 import { isTouchPrimary } from '../touchDetect';
 import { haptics } from '../haptics';
-import { Renderer } from '../renderer';
+import { Renderer, type IRenderer } from '../renderer';
 import { subscribeRenderScale } from '../renderScale';
 import { audio } from '../audio';
 import {
@@ -56,7 +56,7 @@ export type MatchEndCallback = (winner: PlayerSlot | null, state: MatchState) =>
 export class GameLoop {
   private simulator: Simulator;
   private keyboardManager: KeyboardManager;
-  private renderer: Renderer;
+  private renderer: IRenderer;
   private onMatchEnd: MatchEndCallback;
 
   private lastTime = 0;
@@ -101,6 +101,12 @@ export class GameLoop {
     bgNightCanvas?: HTMLCanvasElement,
     fgNightTint?: HTMLDivElement,
     lightCanvas?: HTMLCanvasElement,
+    /** When provided, GameLoop adopts this renderer instead of constructing
+     *  a fresh main-thread `Renderer` from the canvas args. Used by the
+     *  worker-offload path: Match.tsx builds a `RendererProxy` (which has
+     *  already transferred the canvas drawing surfaces to a Web Worker) and
+     *  hands it in. The bg/fg/etc. canvas args are ignored in that case. */
+    injectedRenderer?: IRenderer,
   ) {
     this.onMatchEnd = onMatchEnd;
     this.keyboardManager = new KeyboardManager();
@@ -124,16 +130,23 @@ export class GameLoop {
       },
     });
 
-    this.renderer = new Renderer({
-      bgCanvas,
-      fgCanvas,
-      theme: this.simulator.getTheme(),
-      mirrored: settings.mods.mirrorArena,
-      hudCanvas,
-      bgNightCanvas,
-      fgNightTint,
-      lightCanvas,
-    });
+    if (injectedRenderer) {
+      // Worker-offload path: the proxy already holds the offscreen canvases
+      // and is wired to its worker. Tell it our settings; canvas args are
+      // unused.
+      this.renderer = injectedRenderer;
+    } else {
+      this.renderer = new Renderer({
+        bgCanvas,
+        fgCanvas,
+        theme: this.simulator.getTheme(),
+        mirrored: settings.mods.mirrorArena,
+        hudCanvas,
+        bgNightCanvas,
+        fgNightTint,
+        lightCanvas,
+      });
+    }
     this.renderer.setTimeLimit(settings.timeLimit);
 
     // ParticleSystem references the simulator's state/arena/theme/settings and
@@ -472,7 +485,7 @@ export class GameLoop {
   }
 
   /** Get the renderer instance. */
-  getRenderer(): Renderer {
+  getRenderer(): IRenderer {
     return this.renderer;
   }
 

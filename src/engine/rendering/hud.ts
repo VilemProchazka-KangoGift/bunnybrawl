@@ -5,7 +5,13 @@ import {
   COMBO_POPUP_DURATION, COMBO_POPUP_RISE_PX, GOAL_PULSE_DURATION,
 } from '../constants';
 import { getCharacterEmoji, getCharacterDisplayName } from '../characters';
-import i18n from '../../i18n';
+
+/** Module-scope language for HUD character-name lookups. Set by Renderer
+ *  at construction (and on language-change forwarded from main). The HUD
+ *  doesn't import the React-coupled `src/i18n.ts` directly so the worker
+ *  bundle doesn't pull in `react-i18next`. */
+let _hudLanguage = 'en';
+export function setHudLanguage(lang: string): void { _hudLanguage = lang; invalidateHudCache(); }
 
 // Used by OnlineModal as input maxLength too.
 export const PLAYER_NAME_MAX_LENGTH = 12;
@@ -165,7 +171,7 @@ function _drawHUDImpl(ctx: Ctx2D, state: MatchState, frameTime: number, playerNa
     ctx.textBaseline = 'alphabetic';
 
     const customName = playerNames?.[player.id];
-    const translatedName = customName || getCharacterDisplayName(player.character.name, i18n.language);
+    const translatedName = customName || getCharacterDisplayName(player.character.name, _hudLanguage);
     // Defensive clamp — old-version peers can broadcast names past the input maxLength.
     const displayName = translatedName.slice(0, compact ? PLAYER_NAME_MAX_LENGTH_COMPACT : PLAYER_NAME_MAX_LENGTH);
     ctx.fillStyle = player.character.color;
