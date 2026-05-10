@@ -166,10 +166,54 @@ function ensureCosmeticSystemsFor(arena: Arena, theme: ThemeConfig, state: Match
   }
 }
 
+/** Lazy-loaded engine bindings. The renderer-only path leaves these null
+ *  forever; sim-in-worker resolves them on first `host:initEngine`. */
+let engineBindings: typeof import('./engineWorkerInit') | null = null;
+async function ensureEngineBindings(): Promise<typeof import('./engineWorkerInit')> {
+  if (!engineBindings) engineBindings = await import('./engineWorkerInit');
+  return engineBindings;
+}
+
 ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
   if (stopped) return;
   const msg = e.data;
   const handlerStart = msg.type === 'host:renderFrame' ? performance.now() : 0;
+
+  // Engine-mode messages are async (lazy import on first init). All other
+  // handlers are synchronous below. We dispatch to the engine async path
+  // first; if it's not an engine message, fall through to the sync switch.
+  if (msg.type === 'host:initEngine') {
+    void ensureEngineBindings().then((m) => {
+      m.initEngine(msg);
+      postReady();
+    }).catch((err) => postError(err instanceof Error ? err.message : String(err)));
+    return;
+  }
+  if (msg.type === 'host:engineInputBatch') {
+    if (engineBindings) engineBindings.applyInputBatch(msg);
+    return;
+  }
+  if (msg.type === 'host:enginePause') {
+    if (engineBindings) engineBindings.pauseEngine();
+    return;
+  }
+  if (msg.type === 'host:engineResume') {
+    if (engineBindings) engineBindings.resumeEngine();
+    return;
+  }
+  if (msg.type === 'host:engineSwitchArena') {
+    if (engineBindings) engineBindings.switchArenaInWorker(msg);
+    return;
+  }
+  if (msg.type === 'host:engineSetPhase') {
+    if (engineBindings) engineBindings.setPhaseInWorker(msg);
+    return;
+  }
+  if (msg.type === 'host:engineSkipCountdown') {
+    if (engineBindings) engineBindings.skipCountdownInWorker();
+    return;
+  }
+
   try {
     switch (msg.type) {
       case 'host:init': {
@@ -203,6 +247,7 @@ ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
         workerState = null;
         currentArena = null;
         currentArenaId = null;
+        if (engineBindings) engineBindings.stopEngine();
         return;
       }
       case 'host:setLanguage':

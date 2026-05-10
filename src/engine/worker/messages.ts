@@ -14,7 +14,7 @@
  * crosses the wire.
  */
 
-import type { MatchState, Particle, Gib } from '../types';
+import type { MatchState, Particle, Gib, MatchSettings, PlayerSlot, InputState, MatchPhase } from '../types';
 import type { Light } from '../lighting';
 import type { BotNavDebugState } from '../navDebugOverlay';
 import type { NetDebugStats } from '../net/core/debugOverlay';
@@ -66,6 +66,46 @@ export interface HostRenderBackgroundMsg {
 }
 export interface HostWarmSpriteCacheMsg { type: 'host:warmSpriteCache'; names: string[] }
 export interface HostWarmHudFontsMsg { type: 'host:warmHudFonts' }
+
+// ---- Sim-in-worker mode ('?simWorker=on') ----------------------------------
+// In addition to the renderer the worker hosts the GameLoop. Main becomes
+// a thin shell forwarding keyboard inputs and dispatching SFX/haptic events.
+
+/** Bring up Simulator + GameLoop + Renderer inside the worker. Replaces
+ *  HostInitMsg for sim-worker mode (engine includes init semantics). The
+ *  same canvas transfers happen; in addition we ship the simulation params. */
+export interface HostInitEngineMsg {
+  type: 'host:initEngine';
+  bgCanvas: OffscreenCanvas;
+  fgCanvas: OffscreenCanvas;
+  hudCanvas: OffscreenCanvas | null;
+  bgNightCanvas: OffscreenCanvas | null;
+  lightCanvas: OffscreenCanvas | null;
+  arenaId: string;
+  settings: MatchSettings;
+  activePlayers: PlayerSlot[];
+  mirrored: boolean;
+  renderScale: number;
+  language: string;
+  perfEnabled: boolean;
+}
+
+/** Per-frame input batch from main. The worker's RemoteInput adapters
+ *  read this map; their existing usage in network play handles the
+ *  same shape. */
+export interface HostEngineInputBatchMsg {
+  type: 'host:engineInputBatch';
+  /** Encoded as flat array because Maps survive structured clone but
+   *  array round-trip is a hair faster and matches the existing wire
+   *  shape used in netMatch. */
+  inputs: Array<[PlayerSlot, InputState]>;
+}
+
+export interface HostEnginePauseMsg { type: 'host:enginePause' }
+export interface HostEngineResumeMsg { type: 'host:engineResume' }
+export interface HostEngineSwitchArenaMsg { type: 'host:engineSwitchArena'; arenaId: string; settingsOverrides?: Partial<MatchSettings> }
+export interface HostEngineSetPhaseMsg { type: 'host:engineSetPhase'; phase: MatchPhase }
+export interface HostEngineSkipCountdownMsg { type: 'host:engineSkipCountdown' }
 export interface HostRenderFrameMsg {
   type: 'host:renderFrame';
   state: MatchState;
@@ -104,7 +144,14 @@ export type HostToWorkerMsg =
   | HostRenderBackgroundMsg
   | HostWarmSpriteCacheMsg
   | HostWarmHudFontsMsg
-  | HostRenderFrameMsg;
+  | HostRenderFrameMsg
+  | HostInitEngineMsg
+  | HostEngineInputBatchMsg
+  | HostEnginePauseMsg
+  | HostEngineResumeMsg
+  | HostEngineSwitchArenaMsg
+  | HostEngineSetPhaseMsg
+  | HostEngineSkipCountdownMsg;
 
 export interface WorkerReadyMsg { type: 'worker:ready' }
 export interface WorkerErrorMsg { type: 'worker:error'; message: string }
@@ -163,8 +210,41 @@ export interface WorkerPerfStatsMsg {
   longFrames?: WorkerLongFrameSample[];
 }
 
+/** Engine-side events posted from the worker's GameLoop callbacks back to
+ *  main. Main dispatches `audio` / haptic / phase-change / match-end. The
+ *  union keeps wire shape compact; main's handler switches on `kind`. */
+export interface WorkerEngineEventMsg {
+  type: 'worker:engineEvent';
+  kind:
+    | 'sfx' | 'animal' | 'musicStart' | 'musicStop' | 'soundStop'
+    | 'soundVolume' | 'allGameSoundsStop' | 'paused' | 'resumeContext'
+    | 'preloadArena' | 'haptic'
+    | 'phaseChange' | 'matchEnd';
+  name?: string;
+  themeId?: string;
+  volume?: number;
+  paused?: boolean;
+  arenaId?: string;
+  flavor?: 'landing' | 'hitstop';
+  slot?: PlayerSlot;
+  prevVy?: number;
+  phase?: MatchPhase;
+  winner?: PlayerSlot | null;
+}
+
+/** Periodic state mirror for E2E (`window.__bunnyTest.state()`) and for
+ *  Match.tsx's getActiveCharacterNames / getArena / etc. callsites that
+ *  need a synchronous read on main. Posted at low frequency (~5Hz). */
+export interface WorkerEngineStateMirrorMsg {
+  type: 'worker:engineStateMirror';
+  state: MatchState;
+  arenaId: string;
+}
+
 export type WorkerToHostMsg =
   | WorkerReadyMsg
   | WorkerErrorMsg
   | WorkerNightOpacityMsg
-  | WorkerPerfStatsMsg;
+  | WorkerPerfStatsMsg
+  | WorkerEngineEventMsg
+  | WorkerEngineStateMirrorMsg;

@@ -6,6 +6,8 @@ import { perfTrace } from '../../engine/perfTrace';
 import * as fpsCounter from '../../engine/fpsCounter';
 import { runLoadingTasks } from '../../engine/matchLoading';
 import { isWorkerEnabled, RendererProxy } from '../../engine/worker';
+import { isSimWorkerEnabled } from '../../engine/worker/simWorkerFlag';
+import { EngineWorkerProxy } from '../../engine/worker/EngineWorkerProxy';
 import { getRenderScale } from '../../engine/renderScale';
 import { debugFlags } from '../../engine/debugFlags';
 import i18n from '../../i18n';
@@ -132,11 +134,57 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
     setPhaseIsLoading(true);
     setLocalTasksDone(false);
 
-    // Worker offload: when the local-device flag is on, transfer the
-    // canvases' drawing surfaces to a Web Worker that hosts the Renderer.
-    // GameLoop adopts the proxy (an IRenderer) and pushes per-frame state
-    // across postMessage. Online play stays on the main-thread Renderer
-    // (NetMatch is too tightly wound around the renderer for this pass).
+    // Worker offload: two stacked flags govern this.
+    //   ?simWorker=on (default off) → the worker hosts the FULL GameLoop
+    //     (sim + cosmetic + render). Main is a thin keyboard/audio shell.
+    //     Local play only — online play has too much NetMatch coupling.
+    //   ?worker=on    (default on)  → renderer-only worker. Sim stays on
+    //     main; per-frame state ships to worker for paint.
+    // Both off → pure main-thread render path (the safe baseline).
+    const useSimWorker = isSimWorkerEnabled();
+    if (useSimWorker) {
+      try {
+        const engineProxy = new EngineWorkerProxy({
+          bgCanvas, fgCanvas, hudCanvas, bgNightCanvas, fgNightTint, lightCanvas,
+          arena, settings: matchSettings, activePlayers,
+          onMatchEnd,
+          mirrored: matchSettings.mods.mirrorArena,
+          renderScale: getRenderScale(),
+          language: i18n.language,
+          perfEnabled: debugFlags.perfEnabled,
+          onError: (m) => console.error('[engine worker]', m),
+        });
+        // Type-cast: EngineWorkerProxy implements the GameLoop public
+        // surface that Match.tsx + matchLoading + bunnyTestShim use.
+        // Not an `extends GameLoop` because the parent constructor has
+        // expensive side effects we'd want to skip.
+        gameLoopRef.current = engineProxy as unknown as GameLoop;
+        engineProxy.setOnPhaseChange((phase) => setPhaseIsLoading(phase === 'loading'));
+        engineProxy.start();
+        setTouchInput(engineProxy.getTouchInput());
+        kickoffLoading(
+          engineProxy as unknown as GameLoop,
+          () => gameLoopRef.current === (engineProxy as unknown as GameLoop),
+          () => {
+            setLocalTasksDone(true);
+            engineProxy.setPhase('playing');
+          },
+        );
+        return () => {
+          engineProxy.stop();
+          gameLoopRef.current = null;
+          setTouchInput(null);
+          if (victoryTimeoutRef.current) {
+            clearTimeout(victoryTimeoutRef.current);
+            victoryTimeoutRef.current = null;
+          }
+        };
+      } catch (e) {
+        console.warn('[sim-worker] proxy construction failed, falling back to renderer-only worker:', e);
+        // Fall through to the renderer-only worker path below.
+      }
+    }
+
     const useWorker = isWorkerEnabled();
     let workerProxy: RendererProxy | null = null;
     if (useWorker) {
