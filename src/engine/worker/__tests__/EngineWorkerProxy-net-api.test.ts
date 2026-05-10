@@ -6,13 +6,12 @@ import { describe, it, expect } from 'vitest';
 import { EngineWorkerProxy } from '../EngineWorkerProxy';
 
 describe('EngineWorkerProxy net API', () => {
-  it('exposes the 6 net-mode methods NetMatch will drive', () => {
+  it('exposes the net-mode methods NetMatch + HostAuthority drive', () => {
     const proto = EngineWorkerProxy.prototype as unknown as Record<string, unknown>;
     for (const name of [
       'setNetMode',
-      'setExpectedSlots',
       'pumpIncomingSnapshot',
-      'disconnectSlot',
+      'disconnectPlayer',
       'reconnectSlot',
       'onSnapshotReady',
     ]) {

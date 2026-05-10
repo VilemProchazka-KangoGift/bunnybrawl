@@ -36,6 +36,9 @@ export class HostLoop {
     const FIXED_DT = FIXED_TIMESTEP;
     let accumulator = 0;
     let lastBroadcastTime = 0;
+    // Stable for the lifetime of the loop — captured once so the per-tick
+    // branches don't repeat the method call.
+    const remoteSim = this.ctx.gameLoop.isRemoteSim();
 
     // Fairness delay: buffer host inputs to match guest round-trip latency.
     // Without this, host has 0ms input lag while guest has RTT/2 + interpolation delay.
@@ -116,39 +119,28 @@ export class HostLoop {
           if (input.jump) consumedJumpSlots.push(slot as PlayerSlot);
         }
 
-        // Phase 2: branch on whether the simulation lives in the worker.
-        // When remote, post the already-fairness-delayed input map to the
-        // worker; the worker's driveTick consumes it and runs fixedUpdate
-        // + encode + emit there. Main stays oblivious to the encode side;
-        // worker:netSnapshot is pumped to broadcastEncodedSnapshot in
-        // NetMatch.start (Task 17 wiring).
-        if (this.ctx.gameLoop.isRemoteSim()) {
+        // Remote-sim: post the fairness-delayed input map to the worker,
+        // which runs fixedUpdate + encode + emit. Local-sim: drive
+        // fixedUpdate + cosmetics inline. Cosmetics double-fire if both
+        // sides tick them, so the local-sim block owns tickCosmetic.
+        if (remoteSim) {
           this.ctx.gameLoop.postInputBatch(networkInputs as ReadonlyMap<PlayerSlot, InputState>);
         } else {
           this.ctx.gameLoop.fixedUpdate(FIXED_DT, networkInputs);
         }
         this.ctx.hostAuthority!.consumeGuestJumps(consumedJumpSlots);
-        // Tick reconnection grace timers (always on main — host owns the
-        // grace ring + transport, regardless of where sim runs).
+        // Grace timers always tick on main — host owns the grace ring +
+        // transport regardless of where the sim runs.
         this.ctx.hostAuthority!.tickGraceTimers(FIXED_DT);
-        // Local-sim only: drive cosmetics here so prev-state baselines
-        // capture against the just-mutated state. In remote-sim mode the
-        // worker drives both fixedUpdate and tickCosmetic inside the same
-        // tick, so calling it again on main would double-fire transitions.
-        if (!this.ctx.gameLoop.isRemoteSim()) {
-          this.ctx.gameLoop.tickCosmetic(FIXED_DT);
-        }
+        if (!remoteSim) this.ctx.gameLoop.tickCosmetic(FIXED_DT);
         accumulator -= FIXED_DT;
       }
 
-      // Throttle to 60Hz. A 120Hz host display would otherwise broadcast 120
-      // snapshots/sec and double the guest's decode + GC load for no benefit
-      // (the simulation is fixed-timestep at 60Hz).
-      //
-      // In remote-sim mode the worker emits worker:netSnapshot per tick and
-      // NetMatch pumps to broadcastEncodedSnapshot — we skip the inline
+      // Throttle to 60Hz so a 120Hz host display doesn't double the guest's
+      // decode + GC load. Remote-sim emits worker:netSnapshot per tick and
+      // NetMatch pumps it to broadcastEncodedSnapshot — we skip the inline
       // broadcast here so we don't double-send.
-      if (!this.ctx.gameLoop.isRemoteSim() && now - lastBroadcastTime >= BROADCAST_INTERVAL_MS) {
+      if (!remoteSim && now - lastBroadcastTime >= BROADCAST_INTERVAL_MS) {
         lastBroadcastTime = now;
         const broadcastStart = perfTrace.begin('net.broadcastSnapshot');
         this.ctx.hostAuthority!.broadcastSnapshot(this.ctx.gameLoop.getState());

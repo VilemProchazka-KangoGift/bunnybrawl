@@ -9,6 +9,7 @@ import type { GameSnapshot } from '../net/serialize';
 import { KeyboardManager } from '../input/KeyboardManager';
 import { KeyboardInput } from '../input/KeyboardInput';
 import { RuleBasedBot } from '../input/RuleBasedBot';
+import { mergeKeyboardTouchInput } from '../input/mergeKeyboardTouch';
 import { RemoteInput } from '../input/RemoteInput';
 import type { PlayerInput } from '../input/PlayerInput';
 import { TouchInputManager } from '../touchInput';
@@ -359,20 +360,10 @@ export class GameLoop {
   /** Read merged input from all key bindings + touch (for online play). */
   getInputAny(): InputState {
     const kb = this.keyboardManager.readAny();
-    if (this.touchInput) {
-      const touchPlayer = this.touchSlot
-        ? this.simulator.getState().players.find(p => p.id === this.touchSlot)
-        : null;
-      const airborne = touchPlayer?.state === 'airborne';
-      const ti = this.touchInput.getInputForPlayer(airborne);
-      return {
-        left: kb.left || ti.left,
-        right: kb.right || ti.right,
-        jump: kb.jump || ti.jump,
-        down: kb.down || ti.down,
-      };
-    }
-    return kb;
+    const touchPlayer = this.touchSlot
+      ? this.simulator.getState().players.find(p => p.id === this.touchSlot)
+      : null;
+    return mergeKeyboardTouchInput(kb, this.touchInput, touchPlayer?.state === 'airborne');
   }
 
   /** Enable network mode: external code drives the loop.
@@ -564,19 +555,7 @@ export class GameLoop {
   onSnapshotReady(_cb: (buffer: ArrayBuffer, frame: number) => void): void { /* no-op */ }
   pumpIncomingSnapshot(_buffer: ArrayBuffer): void { /* no-op */ }
   setNetMode(_mode: 'host' | 'guest' | 'off', _delayFrames?: number): void { /* no-op */ }
-  setExpectedSlots(_slots: PlayerSlot[]): void { /* no-op */ }
-  disconnectSlot(slot: PlayerSlot): void { this.simulator.disconnectPlayer(slot); }
-  reconnectSlot(slot: PlayerSlot): void {
-    const player = this.simulator.getState().players.find((p) => p.id === slot);
-    if (!player) return;
-    player.disconnected = false;
-    player.active = true;
-    if (player.state === 'splat') {
-      player.state = 'respawning';
-      player.respawnTimer = 1.5;
-      player.splatTimer = 0;
-    }
-  }
+  reconnectSlot(slot: PlayerSlot): void { this.simulator.reconnectPlayer(slot); }
 
   /** Mark that we're in rollback resimulation. */
   setResimulating(resim: boolean): void {

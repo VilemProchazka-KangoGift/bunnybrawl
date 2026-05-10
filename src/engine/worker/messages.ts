@@ -158,13 +158,6 @@ export interface HostNetSetModeMsg {
   delayFrames: number;
 }
 
-export interface HostNetSetExpectedSlotsMsg {
-  type: 'host:netSetExpectedSlots';
-  /** Asserted against the worker's existing sim — main posts this to catch
-   *  lobby ↔ match slot-set drift before fixedUpdate runs. */
-  slots: PlayerSlot[];
-}
-
 /** Guest-only. Worker decodes + interpolates + applies. Buffer is
  *  transferred from main (main owns the transport, worker owns the decode
  *  pool). The Trystero 1-byte type prefix is stripped on main before
@@ -254,7 +247,6 @@ export type HostToWorkerMsg =
   | HostEngineSetPhaseMsg
   | HostEngineSkipCountdownMsg
   | HostNetSetModeMsg
-  | HostNetSetExpectedSlotsMsg
   | HostNetSnapshotApplyMsg
   | HostNetDisconnectSlotMsg
   | HostNetReconnectSlotMsg;

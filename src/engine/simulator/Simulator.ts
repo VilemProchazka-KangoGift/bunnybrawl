@@ -345,6 +345,20 @@ export class Simulator {
     player.respawnTimer = 0;
   }
 
+  /** Reverse `disconnectPlayer`. If the player was killed mid-disconnect,
+   *  schedule a respawn at the standard delay so they pop back in cleanly. */
+  reconnectPlayer(slot: PlayerSlot): void {
+    const player = this._state.players.find(p => p.id === slot);
+    if (!player) return;
+    player.disconnected = false;
+    player.active = true;
+    if (player.state === 'splat') {
+      player.state = 'respawning';
+      player.respawnTimer = 1.5;
+      player.splatTimer = 0;
+    }
+  }
+
   /** Free system-owned timers (ambient loops, periodic ambient timers).
    *  Adapters should call this in their teardown. */
   cleanup(): void {
