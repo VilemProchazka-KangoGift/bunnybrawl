@@ -274,6 +274,20 @@ ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
       case 'host:setLanguage':
         setHudLanguage(msg.language);
         return;
+      case 'host:setDebugFlag': {
+        // Runtime debug-flag propagation from main (backtick keypress,
+        // DevMenu). Mirrors `setDebugFlag()` semantics: flip *Allowed and
+        // *Enabled together so a value=true unconditionally activates the
+        // overlay (the URL-gating step already happened on main).
+        const { name, value } = msg;
+        switch (name) {
+          case 'nav':  debugFlags.navDebugAllowed = value; debugFlags.navDebugEnabled = value; break;
+          case 'net':  debugFlags.netDebugAllowed = value; debugFlags.netDebugEnabled = value; break;
+          case 'fps':  debugFlags.fpsAllowed     = value; debugFlags.fpsEnabled     = value; break;
+          case 'perf': debugFlags.perfEnabled = value; _perfEnabled = value; break;
+        }
+        return;
+      }
     }
     if (!renderer) return;
     switch (msg.type) {

@@ -153,41 +153,55 @@ export class EngineWorkerProxy {
       this.onError?.('worker structured-clone failed');
     });
 
-    const bgOff = opts.bgCanvas.transferControlToOffscreen();
-    const fgOff = opts.fgCanvas.transferControlToOffscreen();
-    const hudOff = opts.hudCanvas?.transferControlToOffscreen() ?? null;
-    const bgNightOff = opts.bgNightCanvas?.transferControlToOffscreen() ?? null;
-    const lightOff = opts.lightCanvas?.transferControlToOffscreen() ?? null;
+    // Wrap the canvas-transfer + postMessage in a try/catch so a partial
+    // failure (e.g. one canvas already detached, structured-clone refusing
+    // a payload field) terminates the spawned worker instead of leaking
+    // it. Without this guard, a throw between `new Worker()` and the
+    // constructor's return strands the worker — the local `engineProxy`
+    // binding never gets assigned, the caller's catch block can't reach
+    // the worker reference, and the worker keeps its message listener +
+    // canvases alive forever (review round 8 #32).
+    try {
+      const bgOff = opts.bgCanvas.transferControlToOffscreen();
+      const fgOff = opts.fgCanvas.transferControlToOffscreen();
+      const hudOff = opts.hudCanvas?.transferControlToOffscreen() ?? null;
+      const bgNightOff = opts.bgNightCanvas?.transferControlToOffscreen() ?? null;
+      const lightOff = opts.lightCanvas?.transferControlToOffscreen() ?? null;
 
-    // Resolve the slot → CharacterDef pairs on main where the lobby's
-    // CHARACTERS / BOT_CHARACTERS state lives, then ship to the worker.
-    const characters: Array<[PlayerSlot, ReturnType<typeof getCharacterForSlot>]> =
-      opts.activePlayers.map((slot) => [slot, getCharacterForSlot(slot)]);
+      // Resolve the slot → CharacterDef pairs on main where the lobby's
+      // CHARACTERS / BOT_CHARACTERS state lives, then ship to the worker.
+      const characters: Array<[PlayerSlot, ReturnType<typeof getCharacterForSlot>]> =
+        opts.activePlayers.map((slot) => [slot, getCharacterForSlot(slot)]);
 
-    const init: HostInitEngineMsg = {
-      type: 'host:initEngine',
-      bgCanvas: bgOff,
-      fgCanvas: fgOff,
-      hudCanvas: hudOff,
-      bgNightCanvas: bgNightOff,
-      lightCanvas: lightOff,
-      arenaId: opts.arena.id,
-      settings: opts.settings,
-      activePlayers: opts.activePlayers,
-      characters,
-      mirrored: opts.mirrored ?? false,
-      renderScale: opts.renderScale,
-      language: opts.language ?? 'en',
-      perfEnabled: opts.perfEnabled ?? false,
-      navDebugEnabled: opts.navDebugEnabled ?? false,
-      netDebugEnabled: opts.netDebugEnabled ?? false,
-      fpsEnabled: opts.fpsEnabled ?? false,
-    };
-    const transfer: Transferable[] = [bgOff, fgOff];
-    if (hudOff) transfer.push(hudOff);
-    if (bgNightOff) transfer.push(bgNightOff);
-    if (lightOff) transfer.push(lightOff);
-    this.worker.postMessage(init, transfer);
+      const init: HostInitEngineMsg = {
+        type: 'host:initEngine',
+        bgCanvas: bgOff,
+        fgCanvas: fgOff,
+        hudCanvas: hudOff,
+        bgNightCanvas: bgNightOff,
+        lightCanvas: lightOff,
+        arenaId: opts.arena.id,
+        settings: opts.settings,
+        activePlayers: opts.activePlayers,
+        characters,
+        mirrored: opts.mirrored ?? false,
+        renderScale: opts.renderScale,
+        language: opts.language ?? 'en',
+        perfEnabled: opts.perfEnabled ?? false,
+        navDebugEnabled: opts.navDebugEnabled ?? false,
+        netDebugEnabled: opts.netDebugEnabled ?? false,
+        fpsEnabled: opts.fpsEnabled ?? false,
+      };
+      const transfer: Transferable[] = [bgOff, fgOff];
+      if (hudOff) transfer.push(hudOff);
+      if (bgNightOff) transfer.push(bgNightOff);
+      if (lightOff) transfer.push(lightOff);
+      this.worker.postMessage(init, transfer);
+    } catch (err) {
+      this.worker.terminate();
+      this.destroyed = true;
+      throw err;
+    }
 
     // Touch input lives on main and forwards into the input batch.
     if (isTouchPrimary()) {
@@ -349,6 +363,11 @@ export class EngineWorkerProxy {
   setLocalSlot(_slot: PlayerSlot): void { /* online not in this path */ }
   setMatchOver(): void { /* online-only */ }
   resetCosmeticBaselines(): void { /* worker handles internally */ }
+  /** Forward a runtime debug-flag toggle to the worker's GameLoop so its
+   *  Renderer sees the same overlay state as main. */
+  setDebugFlag(name: 'nav' | 'net' | 'fps' | 'perf', value: boolean): void {
+    this.worker.postMessage({ type: 'host:setDebugFlag', name, value });
+  }
 
   private handleMessage = (e: MessageEvent<WorkerToHostMsg>): void => {
     if (this.destroyed) return;

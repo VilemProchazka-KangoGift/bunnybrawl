@@ -9,7 +9,7 @@ import { isWorkerEnabled, RendererProxy } from '../../engine/worker';
 import { isSimWorkerEnabled } from '../../engine/worker/simWorkerFlag';
 import { EngineWorkerProxy } from '../../engine/worker/EngineWorkerProxy';
 import { getRenderScale } from '../../engine/renderScale';
-import { debugFlags } from '../../engine/debugFlags';
+import { debugFlags, subscribeDebugFlags } from '../../engine/debugFlags';
 import i18n from '../../i18n';
 import type { TouchInputManager } from '../../engine/touchInput';
 import type {
@@ -174,6 +174,13 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
         engineProxy.setOnPhaseChange((phase) => setPhaseIsLoading(phase === 'loading'));
         engineProxy.start();
         setTouchInput(engineProxy.getTouchInput());
+        // Forward runtime debug-flag toggles into the worker so the in-
+        // worker Renderer's overlay state matches main's. URL-gated initial
+        // state already shipped in the init message; this covers backtick
+        // keypress / DevMenu toggles mid-match (review round 8 #33).
+        const unsubscribeDebug = subscribeDebugFlags((name, value) => {
+          engineProxy.setDebugFlag(name, value);
+        });
         kickoffLoading(
           engineProxy as unknown as GameLoop,
           () => gameLoopRef.current === (engineProxy as unknown as GameLoop),
@@ -183,6 +190,7 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
           },
         );
         return () => {
+          unsubscribeDebug();
           engineProxy.stop();
           gameLoopRef.current = null;
           setTouchInput(null);
@@ -266,6 +274,12 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
     loop.start();
     setTouchInput(loop.getTouchInput());
 
+    // Same debug-flag forwarding as the sim-worker path — only fires when
+    // a renderer-only proxy is actually active; main-thread mode is a no-op.
+    const unsubscribeDebug = workerProxy
+      ? subscribeDebugFlags((name, value) => workerProxy?.setDebugFlag(name, value))
+      : () => { /* noop — no worker to forward to */ };
+
     // Kick off loading — music preload + background render + sprite warmup.
     // `.finally` path also covers timeout (graceful degradation; match
     // starts with whatever assets made it in).
@@ -275,6 +289,7 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
     });
 
     return () => {
+      unsubscribeDebug();
       loop.stop();
       gameLoopRef.current = null;
       setTouchInput(null);
@@ -291,14 +306,20 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
 }
 
 /** True when any of the supplied canvases has been transferred to a
- *  worker (offscreen). After `transferControlToOffscreen`, `getContext`
- *  returns null on the original element. We use this to detect a
- *  half-transferred state where a proxy threw mid-construction — in that
- *  case the cascading fallback can't safely re-transfer or fall back to
- *  a main-thread Renderer (whose `getContext('2d')` would also be null). */
+ *  worker (offscreen). After `transferControlToOffscreen`, calling
+ *  `getContext('2d')` on the original element **throws** `InvalidStateError`
+ *  ("Cannot get context from a canvas that has transferred its control
+ *  to offscreen") — not returns null as you might expect. Wrap the probe
+ *  in a try/catch and treat throw as "detached". Verified empirically in
+ *  Chrome 147; matches the HTML spec's transfer-control behavior. */
 function canvasesDetached(...canvases: Array<HTMLCanvasElement | undefined>): boolean {
   for (const c of canvases) {
-    if (c && c.getContext('2d') === null) return true;
+    if (!c) continue;
+    try {
+      c.getContext('2d');
+    } catch {
+      return true;
+    }
   }
   return false;
 }

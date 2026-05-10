@@ -1,4 +1,4 @@
-import { Howl } from 'howler';
+import { Howl } from '../../audio/howlShim';
 import type { CharacterPack } from '../types';
 import { fillBodyGradient } from '../../spriteShading';
 import { generateMultiSegmentTone } from '../../audio/synthesis/core';

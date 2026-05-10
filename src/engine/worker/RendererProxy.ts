@@ -185,42 +185,52 @@ export class RendererProxy implements IRenderer {
       opts.onError?.('worker structured-clone failed');
     });
 
-    // Transfer the canvases. Each `transferControlToOffscreen` call detaches
-    // the canvas from the main rendering pipeline — main can no longer draw
-    // into it, but we keep the HTMLCanvasElement reference alive so we can
-    // still write to its `.style.opacity` for the night-tint cross-fade.
-    const bgOff = opts.bgCanvas.transferControlToOffscreen();
-    const fgOff = opts.fgCanvas.transferControlToOffscreen();
-    const hudOff = opts.hudCanvas?.transferControlToOffscreen() ?? null;
-    const bgNightOff = opts.bgNightCanvas?.transferControlToOffscreen() ?? null;
-    const lightOff = opts.lightCanvas?.transferControlToOffscreen() ?? null;
+    // Wrap canvas-transfer + postMessage in try/catch — see EngineWorkerProxy
+    // (review round 8 #32) for the rationale. A throw between `new Worker()`
+    // and constructor return strands the worker; terminate it explicitly
+    // before re-throwing so the caller's catch only deals with the error.
+    try {
+      // Each `transferControlToOffscreen` call detaches the canvas from
+      // main's rendering pipeline — we keep the HTMLCanvasElement
+      // reference alive so we can still write to its `.style.opacity`
+      // for the night-tint cross-fade.
+      const bgOff = opts.bgCanvas.transferControlToOffscreen();
+      const fgOff = opts.fgCanvas.transferControlToOffscreen();
+      const hudOff = opts.hudCanvas?.transferControlToOffscreen() ?? null;
+      const bgNightOff = opts.bgNightCanvas?.transferControlToOffscreen() ?? null;
+      const lightOff = opts.lightCanvas?.transferControlToOffscreen() ?? null;
 
-    const init: HostInitMsg = {
-      type: 'host:init',
-      bgCanvas: bgOff,
-      fgCanvas: fgOff,
-      hudCanvas: hudOff,
-      bgNightCanvas: bgNightOff,
-      lightCanvas: lightOff,
-      themeId: opts.theme.id,
-      mirrored: this.opts.mirrored,
-      timeLimit: this.opts.timeLimit,
-      renderScale: this.opts.renderScale,
-      language: opts.language ?? 'en',
-      perfEnabled: opts.perfEnabled ?? false,
-      navDebugEnabled: opts.navDebugEnabled ?? false,
-      netDebugEnabled: opts.netDebugEnabled ?? false,
-      fpsEnabled: opts.fpsEnabled ?? false,
-    };
+      const init: HostInitMsg = {
+        type: 'host:init',
+        bgCanvas: bgOff,
+        fgCanvas: fgOff,
+        hudCanvas: hudOff,
+        bgNightCanvas: bgNightOff,
+        lightCanvas: lightOff,
+        themeId: opts.theme.id,
+        mirrored: this.opts.mirrored,
+        timeLimit: this.opts.timeLimit,
+        renderScale: this.opts.renderScale,
+        language: opts.language ?? 'en',
+        perfEnabled: opts.perfEnabled ?? false,
+        navDebugEnabled: opts.navDebugEnabled ?? false,
+        netDebugEnabled: opts.netDebugEnabled ?? false,
+        fpsEnabled: opts.fpsEnabled ?? false,
+      };
 
-    const transfer: Transferable[] = [bgOff, fgOff];
-    if (hudOff) transfer.push(hudOff);
-    if (bgNightOff) transfer.push(bgNightOff);
-    if (lightOff) transfer.push(lightOff);
+      const transfer: Transferable[] = [bgOff, fgOff];
+      if (hudOff) transfer.push(hudOff);
+      if (bgNightOff) transfer.push(bgNightOff);
+      if (lightOff) transfer.push(lightOff);
 
-    // Lift the onReady out of the closure so it survives across messages.
-    this.onReady = opts.onReady;
-    this.worker.postMessage(init, transfer);
+      // Lift the onReady out of the closure so it survives across messages.
+      this.onReady = opts.onReady;
+      this.worker.postMessage(init, transfer);
+    } catch (err) {
+      this.worker.terminate();
+      this.destroyed = true;
+      throw err;
+    }
 
     // Expose the proxy so E2E + the perf harness can read worker render-
     // time stats. Single global; replaced on subsequent constructs.
@@ -388,6 +398,12 @@ export class RendererProxy implements IRenderer {
   }
   warmHudFonts(): void {
     this.post({ type: 'host:warmHudFonts' });
+  }
+  /** Forward a runtime debug-flag toggle so the worker's overlay state
+   *  matches main's. Subscribed by `useLocalMatch` /  `useOnlineMatch` to
+   *  `debugFlags.subscribeDebugFlags`. */
+  setDebugFlag(name: 'nav' | 'net' | 'fps' | 'perf', value: boolean): void {
+    this.post({ type: 'host:setDebugFlag', name, value });
   }
   hasWarmedAll(names: string[]): boolean {
     for (const n of names) if (!this.warmedNames.has(n)) return false;

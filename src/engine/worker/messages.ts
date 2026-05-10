@@ -50,6 +50,15 @@ export interface HostInitMsg {
 
 export interface HostStopMsg { type: 'host:stop' }
 
+/** Runtime debug-flag toggle (backtick key, DevMenu, etc). Without this the
+ *  worker's `debugFlags` module copy is frozen at init — overlay state
+ *  diverges from main when the user toggles mid-match (review #33). */
+export interface HostSetDebugFlagMsg {
+  type: 'host:setDebugFlag';
+  name: 'nav' | 'net' | 'fps' | 'perf';
+  value: boolean;
+}
+
 export interface HostSetRenderScaleMsg { type: 'host:setRenderScale'; scale: number }
 export interface HostSetBotNavDebugMsg { type: 'host:setBotNavDebug'; states: BotNavDebugState[] }
 export interface HostSetNetDebugMsg { type: 'host:setNetDebug'; stats: NetDebugStats | null }
@@ -153,6 +162,7 @@ export type HostToWorkerMsg =
   | HostSetConnectionQualityMsg
   | HostSetThemeMsg
   | HostSetLanguageMsg
+  | HostSetDebugFlagMsg
   | HostSetArenaLightsMsg
   | HostEmitLightBurstMsg
   | HostBakeGibsMsg

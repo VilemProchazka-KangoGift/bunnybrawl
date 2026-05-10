@@ -41,6 +41,15 @@ const STUB_BY_RESOLVED: Record<string, string> = {
   [path.resolve(__dirname, 'src/engine/haptics')]: hapticsStubPath,
   [path.resolve(__dirname, 'src/engine/input/KeyboardManager')]: keyboardManagerStubPath,
   [path.resolve(__dirname, 'src/engine/touchDetect')]: touchDetectStubPath,
+  // Character packs import `Howl` from this shim. The shim itself does
+  // `export { Howl } from 'howler'` (real module on main). In worker
+  // context we redirect the shim to the no-op stub so the worker bundle
+  // never reaches howler at all. This is the load-bearing alias for
+  // worker-mode dev: bare `'howler'` imports get rewritten by Vite's
+  // optimizeDeps BEFORE worker.plugins.resolveId can intercept them,
+  // but RELATIVE imports of project files go through the worker
+  // plugin chain correctly.
+  [path.resolve(__dirname, 'src/engine/audio/howlShim')]: howlerStubPath,
 }
 
 function stripExt(p: string): string {
