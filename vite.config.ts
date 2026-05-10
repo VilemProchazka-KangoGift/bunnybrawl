@@ -64,6 +64,16 @@ export default defineConfig({
       enforce: 'pre',
       resolveId(id: string, importer?: string) {
         if (id === 'howler') return howlerStubPath
+        // In dev, Vite's optimizeDeps rewrites `from 'howler'` in the
+        // IMPORTER's transformed source to `/node_modules/.vite/deps/howler.js`
+        // BEFORE our resolver sees the bare specifier. The transformed file
+        // is cached and shared between main and worker bundles, so the
+        // worker imports the prebundled URL too. Intercept that URL here and
+        // redirect to the stub. Production builds skip optimizeDeps entirely,
+        // so the bare-specifier match alone is sufficient there — but the
+        // URL match is harmless in prod (the path doesn't exist) and gives
+        // us defense in depth.
+        if (id.includes('/.vite/deps/howler.')) return howlerStubPath
         if (!importer || !id.startsWith('.')) return null
         // Resolve the relative import to an absolute path; strip extension
         // + /index suffix so `../audio`, `../audio.ts`, `../audio/index.ts`
