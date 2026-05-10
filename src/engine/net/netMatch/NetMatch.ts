@@ -51,23 +51,33 @@ export class NetMatch {
   constructor(config: NetMatchConfig) {
     this._isHost = config.transport.isHost;
 
-    // Both host and guest create a GameLoop (needed for canvas rendering).
-    // When an injectedRenderer is provided (worker-offload path), GameLoop
-    // adopts it and ignores the canvas args.
-    this.gameLoop = new GameLoop(
-      config.bgCanvas,
-      config.fgCanvas,
-      config.arena,
-      config.settings,
-      config.activePlayers,
-      config.onMatchEnd,
-      config.hudCanvas,
-      undefined, // rng
-      config.bgNightCanvas,
-      config.fgNightTint,
-      config.lightCanvas,
-      config.injectedRenderer,
-    );
+    // Phase 2: when `injectedDriver` is provided, sim runs in a worker
+    // and the driver IS the sim — skip constructing a local GameLoop.
+    // The driver implements the NetMatchDriver surface plus everything
+    // GameLoop exposed (proxy is API-compatible). Cast covers the
+    // GameLoop-typed `this.gameLoop` field; HostLoop / GuestLoop only
+    // ever call NetMatchDriver methods.
+    if (config.injectedDriver) {
+      this.gameLoop = config.injectedDriver as unknown as GameLoop;
+    } else {
+      // Both host and guest create a GameLoop (needed for canvas rendering).
+      // When an injectedRenderer is provided (worker-offload renderer-only
+      // path), GameLoop adopts it and ignores the canvas args.
+      this.gameLoop = new GameLoop(
+        config.bgCanvas,
+        config.fgCanvas,
+        config.arena,
+        config.settings,
+        config.activePlayers,
+        config.onMatchEnd,
+        config.hudCanvas,
+        undefined, // rng
+        config.bgNightCanvas,
+        config.fgNightTint,
+        config.lightCanvas,
+        config.injectedRenderer,
+      );
+    }
 
     // Build shared context + collaborators. Order matters: context first,
     // then host-only / guest-only init populates context's hostAuthority /

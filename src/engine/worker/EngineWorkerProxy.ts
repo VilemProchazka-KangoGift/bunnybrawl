@@ -33,6 +33,7 @@ import { createInputSab, setSlotCount, writeSlotInput, SAB_INPUT_MAX_SLOTS } fro
 import type { Arena, MatchSettings, MatchState, MatchPhase, PlayerSlot, InputState, CharacterSlot } from '../types';
 import type { ThemeConfig } from '../themes/types';
 import type { IRenderer, RenderDiagnostics } from '../renderer';
+import type { NetDebugStats } from '../net/core/debugOverlay';
 import type {
   HostInitEngineMsg, HostStopMsg, HostEngineInputBatchMsg,
   HostEnginePauseMsg, HostEngineResumeMsg,
@@ -361,6 +362,40 @@ export class EngineWorkerProxy {
    *  the worker. Same wire shape as `disconnectSlot`. */
   disconnectPlayer(slot: PlayerSlot): void {
     this.disconnectSlot(slot);
+  }
+
+  // ---- NetMatchDriver remainder (worker-hosted, mostly no-op on main) ----
+  // Sim lives in the worker, so the per-frame tick/cosmetic/render hooks
+  // are no-ops here. Main still serves up local input via the keyboard
+  // manager so HostLoop's input-fairness ring can read it.
+
+  /** Read main's local input. HostLoop calls this on every fixedUpdate to
+   *  feed the input fairness ring before posting the per-tick batch. */
+  getInputAny(): InputState {
+    const kb = this.keyboardManager.readAny();
+    if (this.touchInput) {
+      const touchPlayer = this.touchSlot
+        ? this.mirrorState?.players.find((p) => p.id === this.touchSlot)
+        : null;
+      const airborne = touchPlayer?.state === 'airborne';
+      const ti = this.touchInput.getInputForPlayer(airborne);
+      return {
+        left: kb.left || ti.left,
+        right: kb.right || ti.right,
+        jump: kb.jump || ti.jump,
+        down: kb.down || ti.down,
+      };
+    }
+    return kb;
+  }
+
+  fixedUpdate(_dt: number, _networkInputs?: Map<string, InputState>): void { /* worker drives */ }
+  tickCosmetic(_dt: number): void { /* worker drives */ }
+  warmupCosmeticDuringLoading(_dt: number): void { /* worker drives */ }
+  onEnterPlayingPhase(): void { /* worker detects phase change from snapshot.phase */ }
+  renderFrame(_dt: number): void { /* worker drives its own RAF + render */ }
+  setNetDebugStats(stats: NetDebugStats | null): void {
+    this.worker.postMessage({ type: 'host:setNetDebug', stats });
   }
   skipCountdown(): void {
     const m: HostEngineSkipCountdownMsg = { type: 'host:engineSkipCountdown' };
