@@ -49,31 +49,26 @@ function assertDevMode(r: { isDev: boolean }): void {
   ).toBe(true);
 }
 
-test('StrictMode dev ?worker=off reaches playing cleanly', async ({ page }) => {
-  // Kill switch: pure main-thread path, no worker involved. Should be
-  // completely error-free.
-  const r = await probe(page, 'worker=off', '/?arena=castle&bots=2&killLimit=4&worker=off');
-  assertDevMode(r);
-  expect(r.phase).toBe('playing');
-  const fatal = r.errors.filter((e) => !e.includes('AudioContext') && !e.includes('HTML5 Audio pool'));
-  expect(fatal, `unexpected errors: ${fatal.join('\n')}`).toEqual([]);
-});
+// `?worker=off` row deleted alongside the kill-switch removal — the URL
+// param no longer steers paths after 2026-05-10 (workerFlag.ts is now a
+// capability check only). Main-thread Renderer is reachable only on hosts
+// without OffscreenCanvas / module Worker support; that's environmental
+// and not exercised here.
 
-test('StrictMode dev ?worker=on reaches playing (howler warning tolerated)', async ({ page }) => {
-  // The Phase 1 ship default. Renderer-only worker survives in dev despite
-  // a `HowlerGlobal is not defined` console error because the howler module
-  // init throws ASYNCHRONOUSLY after the worker has already passed its
-  // first message dispatch — the error doesn't interrupt setPhase('playing').
-  // The error is a dev-only artifact of Vite's optimizeDeps caching the
-  // howler-rewritten transform of the audio/index.ts re-export. Production
-  // builds are unaffected (no optimizeDeps).
-  const r = await probe(page, 'worker=on', '/?arena=castle&bots=2&killLimit=4&worker=on');
+test('StrictMode dev default (worker on) reaches playing', async ({ page }) => {
+  // Phase 1 ship default: renderer-only worker via capability check.
+  // Survives StrictMode's dev double-mount via the deferred-teardown
+  // pattern in useLocalMatch.lifecycleRef.
+  const r = await probe(page, 'default', '/?arena=castle&bots=2&killLimit=4');
   assertDevMode(r);
-  if (r.phase !== 'playing') console.log('[worker=on] errors:', r.errors);
+  if (r.phase !== 'playing') console.log('[default] errors:', r.errors);
   expect(r.phase).toBe('playing');
-  // We do NOT assert "no errors" for ?worker=on in dev — the HowlerGlobal
-  // warning is documented and benign. A StrictMode regression would manifest
-  // as phase=loading + InvalidStateError (canvas detached), which the phase
+  // We do NOT assert "no errors" — the dev-mode `HowlerGlobal is not
+  // defined` warning is documented and benign (howler module init throws
+  // asynchronously in the worker after the first message dispatch has
+  // already succeeded). Production builds skip optimizeDeps and don't
+  // trip the warning. A real StrictMode regression manifests as
+  // phase=loading + InvalidStateError (canvas detached), which the phase
   // assert catches.
 });
 

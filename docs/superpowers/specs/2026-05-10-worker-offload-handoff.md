@@ -164,16 +164,17 @@ scripts/analyzePerfProfile.mjs   — worker offload diagnostics section
 
 ## Rollback
 
-If the worker path causes a production crash, the URL kill switch
-(`?worker=off`) reverts to the main-thread-only path. localStorage
-remembers it across sessions:
-```js
-// in browser console:
-localStorage.setItem('carrotroyale_worker', 'off')
-```
+**Update 2026-05-10:** The user-toggleable `?worker=off` kill switch +
+`carrotroyale_worker` localStorage key were removed alongside the
+Phase 1 production validation. Worker offload is the only path on
+supported browsers; hosts without OffscreenCanvas / module `Worker`
+auto-fall back to the main-thread `Renderer` via the proxy-construction
+catch in `useLocalMatch` / `useOnlineMatch`. No URL flag needed.
 
-The branch keeps both code paths alive. Removing the main-thread path
-is a separate cleanup commit (not yet done).
+If the worker path causes a production crash post-removal, the
+escape hatch is `git revert` on the kill-switch-removal commit
+(which re-introduces the URL/localStorage toggle) followed by a
+hotfix deploy.
 
 ## How to continue
 

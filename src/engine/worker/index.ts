@@ -4,4 +4,4 @@ export type {
   HostInitMsg, HostStopMsg, HostToWorkerMsg,
   WorkerReadyMsg, WorkerErrorMsg, WorkerNightOpacityMsg, WorkerToHostMsg,
 } from './messages';
-export { isWorkerEnabled, setWorkerEnabled, subscribeWorkerFlag } from './workerFlag';
+export { isWorkerEnabled } from './workerFlag';
