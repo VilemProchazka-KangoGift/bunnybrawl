@@ -31,6 +31,7 @@ import type {
   WorkerEngineEventMsg, WorkerEngineStateMirrorMsg,
 } from './messages';
 import type { PlayerSlot, BotSlot, CharacterSlot, InputState, MatchPhase } from '../types';
+import { readSlotInput } from './sabInput';
 
 const ctxScope = self as DedicatedWorkerGlobalScope;
 
@@ -39,6 +40,14 @@ let renderer: Renderer | null = null;
 /** Per-frame input map — RemoteInput adapters read this map when fixedUpdate
  *  asks for each slot's action. Mirrors HostAuthority's getNetworkInputs(). */
 const inputMap = new Map<PlayerSlot, InputState>();
+/** SAB-backed input reader (Step 2). When main allocates the SAB and
+ *  ships it in `host:initEngine`, we install a typed view here and
+ *  refresh `inputMap` at the top of each `driveTick`. Pre-allocated
+ *  `InputState` objects are reused across ticks (the map references the
+ *  same object every tick — RemoteInput only reads booleans). */
+let inputSabView: Int32Array | null = null;
+let inputSabSlots: PlayerSlot[] = [];
+const inputSabScratch: InputState[] = [];
 let rafId = 0;
 let running = false;
 let paused = false;
@@ -141,6 +150,20 @@ export function initEngine(msg: HostInitEngineMsg): void {
     postEvent({ kind: 'phaseChange', phase });
   });
 
+  // Install the SAB input reader (Step 2). The fallback path keeps
+  // working when main couldn't allocate a SAB (no crossOriginIsolated).
+  if (msg.inputSab && msg.inputSabSlots) {
+    inputSabView = new Int32Array(msg.inputSab);
+    inputSabSlots = msg.inputSabSlots;
+    inputSabScratch.length = 0;
+    for (let i = 0; i < inputSabSlots.length; i++) {
+      const slot = inputSabSlots[i];
+      const obj: InputState = { left: false, right: false, jump: false, down: false };
+      inputSabScratch.push(obj);
+      inputMap.set(slot, obj);
+    }
+  }
+
   // We start `running` here so the drive loop fires; we do NOT call
   // gameLoop.start() because that would attach the (stubbed) keyboard
   // manager and run the main rAF loop. We drive it ourselves.
@@ -161,6 +184,16 @@ function driveTick(currentTime: number): void {
   let frameTime = (currentTime - lastTime) / 1000;
   lastTime = currentTime;
   if (frameTime > MAX_FRAME_TIME) frameTime = MAX_FRAME_TIME;
+
+  // SAB input fast path — refresh per-slot bitfields once per visual
+  // frame. The inner fixedUpdate loop may iterate multiple times per
+  // frame on long frames; consuming the same bitfield across those
+  // iterations is fine — the postMessage path had the same property.
+  if (inputSabView) {
+    for (let i = 0; i < inputSabSlots.length; i++) {
+      readSlotInput(inputSabView, i, inputSabScratch[i]);
+    }
+  }
 
   const state = gameLoop.getState();
   const timeScale = state.slowMotion > 0 ? SLOW_MO_FACTOR : 1;

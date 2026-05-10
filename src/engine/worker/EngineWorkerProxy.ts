@@ -29,6 +29,7 @@ import { getArena, getTheme } from '../arenas/operations';
 import { getCharacterForSlot } from '../characters/defaults';
 import { createInitialPlayers, createInitialMatchState } from '../simulator/initialState';
 import { CANVAS_WIDTH } from '../constants';
+import { createInputSab, setSlotCount, writeSlotInput, SAB_INPUT_MAX_SLOTS } from './sabInput';
 import type { Arena, MatchSettings, MatchState, MatchPhase, PlayerSlot, InputState, CharacterSlot } from '../types';
 import type { ThemeConfig } from '../themes/types';
 import type { IRenderer, RenderDiagnostics } from '../renderer';
@@ -96,6 +97,11 @@ export class EngineWorkerProxy {
    *  receives at least one batch even on a frame with all-empty inputs
    *  (so RemoteInput's read finds the slot in the map). */
   private inputsEverSent = false;
+  /** SAB-backed input view (Step 2 of the SAB roadmap). When the browser
+   *  exposes `crossOriginIsolated` + SAB, main writes per-slot bitfields
+   *  here instead of postMessaging an input batch. Null in prod / non-
+   *  isolated contexts; the postMessage fallback handles those. */
+  private inputSabView: Int32Array | null = null;
   /** The current arena (un-mirrored layout — Match.tsx hands the proxy the
    *  arena from `getArena(id)`). The worker re-applies `mirrorArena()`
    *  internally when `mods.mirrorArena=true`, so this field is the raw
@@ -173,6 +179,15 @@ export class EngineWorkerProxy {
       const characters: Array<[PlayerSlot, ReturnType<typeof getCharacterForSlot>]> =
         opts.activePlayers.map((slot) => [slot, getCharacterForSlot(slot)]);
 
+      // SAB input wire (Step 2). Allocate only the human slots — bots
+      // run inside the worker's Simulator and never read this view.
+      const humanSlots = opts.activePlayers.filter((s) => !isBotSlot(s));
+      const inputSab = humanSlots.length <= SAB_INPUT_MAX_SLOTS ? createInputSab() : null;
+      if (inputSab) {
+        this.inputSabView = new Int32Array(inputSab);
+        setSlotCount(this.inputSabView, humanSlots.length);
+      }
+
       const init: HostInitEngineMsg = {
         type: 'host:initEngine',
         bgCanvas: bgOff,
@@ -191,6 +206,8 @@ export class EngineWorkerProxy {
         navDebugEnabled: opts.navDebugEnabled ?? false,
         netDebugEnabled: opts.netDebugEnabled ?? false,
         fpsEnabled: opts.fpsEnabled ?? false,
+        inputSab: inputSab ?? undefined,
+        inputSabSlots: inputSab ? humanSlots : undefined,
       };
       const transfer: Transferable[] = [bgOff, fgOff];
       if (hudOff) transfer.push(hudOff);
@@ -275,10 +292,20 @@ export class EngineWorkerProxy {
       this.lastSentInputs[humanIdx] = merged;
       humanIdx++;
     }
-    // Skip the post when nothing changed since last frame. The worker's
-    // input map keeps the previous values; RemoteInput re-reads them each
-    // tick so unchanged inputs stay correct without a refresh.
-    if (changed) {
+    // Two delivery paths:
+    //  - SAB (crossOriginIsolated dev/preview): Atomics.store the per-slot
+    //    bitfield. Worker polls every fixedUpdate, no message hop.
+    //  - postMessage fallback (prod / GitHub Pages, no COOP/COEP): same
+    //    `host:engineInputBatch` wire as before.
+    if (this.inputSabView) {
+      for (let i = 0; i < inputs.length; i++) {
+        const merged = inputs[i][1];
+        // Index is humanIdx because we built `inputs` by skipping bot
+        // slots in the same order as `inputSabSlots`.
+        writeSlotInput(this.inputSabView, i, merged);
+      }
+      this.inputsEverSent = true;
+    } else if (changed) {
       const m: HostEngineInputBatchMsg = { type: 'host:engineInputBatch', inputs };
       this.worker.postMessage(m);
       this.inputsEverSent = true;

@@ -113,6 +113,15 @@ export interface HostInitEngineMsg {
   navDebugEnabled?: boolean;
   netDebugEnabled?: boolean;
   fpsEnabled?: boolean;
+  /** SAB-backed input ring — Step 2 of the SAB roadmap. Present only
+   *  when `crossOriginIsolated` is true on main (GitHub Pages can't set
+   *  COOP/COEP, so prod falls back to `host:engineInputBatch`).
+   *
+   *  `inputSabSlots` lists the human slots in the same order as the
+   *  SAB bitfield (slot N maps to view[2+N]). The worker stores it
+   *  alongside its `inputMap` and decodes each tick. */
+  inputSab?: SharedArrayBuffer;
+  inputSabSlots?: PlayerSlot[];
 }
 
 /** Per-frame input batch from main. The worker's RemoteInput adapters
