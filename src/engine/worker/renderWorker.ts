@@ -27,14 +27,18 @@ import { getArena, getTheme } from '../arenas/operations';
 import { setHudLanguage } from '../rendering/hud';
 import { ReactiveDecorationSystem } from '../gameLoop/cosmetics/ReactiveDecorationSystem';
 import { WildlifeSystem } from '../gameLoop/cosmetics/WildlifeSystem';
+import { perfTrace } from '../perfTrace';
+import { debugFlags } from '../debugFlags';
 import type { MatchState, Arena } from '../types';
 import type { ThemeConfig } from '../themes/types';
-import type {
-  HostToWorkerMsg,
-  WorkerReadyMsg,
-  WorkerErrorMsg,
-  WorkerNightOpacityMsg,
-  WorkerPerfStatsMsg,
+import {
+  HIST_BUCKET_MS, HIST_BUCKET_COUNT,
+  type HostToWorkerMsg,
+  type WorkerReadyMsg,
+  type WorkerErrorMsg,
+  type WorkerNightOpacityMsg,
+  type WorkerPerfStatsMsg,
+  type WorkerLongFrameSample,
 } from './messages';
 
 const ctxScope = self as DedicatedWorkerGlobalScope;
@@ -70,8 +74,17 @@ function postNightOpacity(kind: 'bg' | 'fg', opacity: number): void {
   ctxScope.postMessage(m);
 }
 
+/** Soft long-frame threshold inside the worker. Crossings get attribution
+ *  capture (which `perfTrace` sections were hot that frame) and ride
+ *  along on the next per-second flush. 12 ms = "user-noticeable hitch
+ *  even if vsync hasn't dropped a frame yet." */
+const LONG_FRAME_MS = 12;
+const LONG_FRAME_BUFFER_CAP = 32;
+
 /** Per-frame perf stats accumulated in the worker. Flushed to main once per
- *  second; main exposes via the `__bunnyTest` E2E surface. */
+ *  second. The histogram replaces the old sum-only fields so main can
+ *  reconstruct p50/p95/p99/long-frame counts; the section snapshot mirrors
+ *  main's perfTrace breakdown; the long-frame buffer captures attribution. */
 const _perf = {
   frames: 0,
   renderSumMs: 0,
@@ -79,11 +92,34 @@ const _perf = {
   handlerSumMs: 0,
   handlerMaxMs: 0,
   lastFlushAt: 0,
+  /** Render-time histogram. Index = floor(renderMs / HIST_BUCKET_MS); the
+   *  last bucket also accumulates frames over the upper bound. */
+  histogram: new Uint32Array(HIST_BUCKET_COUNT),
+  overflowFrames: 0,
+  longFrames: [] as WorkerLongFrameSample[],
 };
+
+let _perfEnabled = false;
+
+function recordHistogram(renderMs: number): void {
+  let idx = Math.floor(renderMs / HIST_BUCKET_MS);
+  if (idx < 0) idx = 0;
+  if (idx >= HIST_BUCKET_COUNT) {
+    idx = HIST_BUCKET_COUNT - 1;
+    _perf.overflowFrames += 1;
+  }
+  _perf.histogram[idx] += 1;
+}
 
 function flushPerfStats(now: number): void {
   if (_perf.frames === 0) return;
   if (now - _perf.lastFlushAt < 1000) return;
+  // Convert Uint32Array → number[] for structured-clone compactness; the
+  // histogram is small (200 entries), so the copy cost is trivial. (The
+  // alternative — Transferable Uint32Array — would force us to allocate
+  // a fresh buffer every flush since the worker can't keep using a
+  // transferred-out buffer.)
+  const histogram = Array.from(_perf.histogram);
   const m: WorkerPerfStatsMsg = {
     type: 'worker:perfStats',
     frames: _perf.frames,
@@ -91,13 +127,22 @@ function flushPerfStats(now: number): void {
     renderMaxMs: _perf.renderMaxMs,
     handlerSumMs: _perf.handlerSumMs,
     handlerMaxMs: _perf.handlerMaxMs,
+    histogram,
+    overflowFrames: _perf.overflowFrames,
   };
+  if (_perfEnabled) {
+    m.sections = perfTrace.snapshot();
+    if (_perf.longFrames.length > 0) m.longFrames = _perf.longFrames;
+  }
   ctxScope.postMessage(m);
   _perf.frames = 0;
   _perf.renderSumMs = 0;
   _perf.renderMaxMs = 0;
   _perf.handlerSumMs = 0;
   _perf.handlerMaxMs = 0;
+  _perf.histogram.fill(0);
+  _perf.overflowFrames = 0;
+  _perf.longFrames = [];
   _perf.lastFlushAt = now;
 }
 
@@ -129,6 +174,10 @@ ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
     switch (msg.type) {
       case 'host:init': {
         bootstrap();
+        if (msg.perfEnabled) {
+          debugFlags.perfEnabled = true;
+          _perfEnabled = true;
+        }
         const theme = getTheme(msg.themeId);
         renderer = new Renderer({
           bgCanvas: msg.bgCanvas,
@@ -257,6 +306,10 @@ ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
           groundCritter: wildlifeSystem.getInstancesForLayer('groundCritter'),
           animBackground: wildlifeSystem.getInstancesForLayer('animBackground'),
         } : { groundCritter: [], animBackground: [] };
+        // For long-frame attribution we capture cumulative section totals
+        // before/after this frame and diff. Cheap (read-only Map walk),
+        // skipped entirely when perfTrace is off.
+        const sectionsBefore = _perfEnabled ? perfTrace.cumulativeTotals() : null;
         const renderStart = performance.now();
         renderer.renderFrame(
           workerState,
@@ -274,6 +327,19 @@ ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
         if (renderMs > _perf.renderMaxMs) _perf.renderMaxMs = renderMs;
         _perf.handlerSumMs += handlerMs;
         if (handlerMs > _perf.handlerMaxMs) _perf.handlerMaxMs = handlerMs;
+        recordHistogram(renderMs);
+        if (renderMs > LONG_FRAME_MS && _perf.longFrames.length < LONG_FRAME_BUFFER_CAP) {
+          // Diff cumulative totals to attribute THIS frame's hot sections.
+          const after = sectionsBefore ? perfTrace.cumulativeTotals() : null;
+          const sections: Record<string, number> = {};
+          if (sectionsBefore && after) {
+            for (const k of Object.keys(after)) {
+              const delta = after[k] - (sectionsBefore[k] ?? 0);
+              if (delta > 0.01) sections[k] = delta;
+            }
+          }
+          _perf.longFrames.push({ ms: renderMs, sections });
+        }
         flushPerfStats(renderEnd);
         // Touch currentArena to silence the unused-var warning when the
         // optional capture path doesn't read it later.

@@ -7,6 +7,7 @@ import * as fpsCounter from '../../engine/fpsCounter';
 import { runLoadingTasks } from '../../engine/matchLoading';
 import { isWorkerEnabled, RendererProxy } from '../../engine/worker';
 import { getRenderScale } from '../../engine/renderScale';
+import { debugFlags } from '../../engine/debugFlags';
 import i18n from '../../i18n';
 import type { TouchInputManager } from '../../engine/touchInput';
 import type {
@@ -152,6 +153,9 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
           timeLimit: matchSettings.timeLimit,
           renderScale: getRenderScale(),
           language: i18n.language,
+          // Enable worker-side perfTrace + section snapshot when ?debug=perf.
+          // Same gate as main-thread perfTrace; ships per-second rollups.
+          perfEnabled: debugFlags.perfEnabled,
           onError: (m) => console.error('[render worker]', m),
         });
       } catch (e) {

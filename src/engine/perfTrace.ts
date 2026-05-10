@@ -137,4 +137,13 @@ export const perfTrace = {
   reset(): void {
     sections.clear();
   },
+
+  /** Cumulative `totalMs` per section without sorting — cheap enough to
+   *  call per frame for delta-based attribution (e.g. worker long-frame
+   *  diagnostics). Returns a fresh object. */
+  cumulativeTotals(): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const [name, buf] of sections) out[name] = buf.totalMs;
+    return out;
+  },
 };

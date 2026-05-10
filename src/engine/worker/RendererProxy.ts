@@ -25,19 +25,31 @@ import type { WildlifeRenderArg } from '../gameLoop/cosmetics/wildlife';
 import type { Light } from '../lighting';
 import type { BotNavDebugState } from '../navDebugOverlay';
 import type { NetDebugStats } from '../net/core/debugOverlay';
-import type {
-  HostInitMsg, HostStopMsg, HostToWorkerMsg, WorkerToHostMsg,
+import {
+  HIST_BUCKET_COUNT, HIST_BUCKET_MS,
+  type HostInitMsg, type HostStopMsg, type HostToWorkerMsg, type WorkerToHostMsg,
+  type WorkerLongFrameSample,
 } from './messages';
 
 /** Cumulative worker render-time stats, accumulated across the
- *  per-second flushes from the worker. Read by E2E via
- *  `window.__bunnyTest.workerPerfStats()`. */
+ *  per-second flushes from the worker. Read by the perf harness. */
 export interface WorkerRenderStats {
   frames: number;
   renderSumMs: number;
   renderMaxMs: number;
   handlerSumMs: number;
   handlerMaxMs: number;
+  /** Render-time histogram (HIST_BUCKET_COUNT × HIST_BUCKET_MS ms). Frames
+   *  above the upper bound counted in `overflowFrames`. */
+  histogram: number[];
+  histogramBucketMs: number;
+  overflowFrames: number;
+  /** Latest worker-side perfTrace section snapshot. Cumulative since the
+   *  worker booted. Only present when perfEnabled was set on init. */
+  sections?: Record<string, { calls: number; totalMs: number; avgMs: number; p95Ms: number }>;
+  /** Long frames captured since proxy construction (ring-buffer-capped
+   *  per-flush in the worker so this list grows bounded over time). */
+  longFrames: WorkerLongFrameSample[];
 }
 
 export interface RendererProxyOptions {
@@ -55,6 +67,9 @@ export interface RendererProxyOptions {
   renderScale: number;
   /** Initial UI language code. Defaults to `'en'`. */
   language?: string;
+  /** When true, the worker enables `perfTrace` and ships per-section
+   *  timings + long-frame attribution back to main. */
+  perfEnabled?: boolean;
   /** If set, the worker constructor reports init failures here. The caller
    *  should fall back to a main-thread Renderer on error. */
   onError?: (message: string) => void;
@@ -93,11 +108,26 @@ export class RendererProxy implements IRenderer {
     renderMaxMs: 0,
     handlerSumMs: 0,
     handlerMaxMs: 0,
+    histogram: new Array(HIST_BUCKET_COUNT).fill(0),
+    histogramBucketMs: HIST_BUCKET_MS,
+    overflowFrames: 0,
+    longFrames: [],
   };
+  /** Compositor frame-presentation pacing. Captured via
+   *  requestVideoFrameCallback on a hidden video element on main —
+   *  fires when the browser presents a video frame, paced alongside
+   *  canvas paints by the same compositor. The deltas between callbacks
+   *  are the user-perceived frame intervals. */
+  private composPacing: { lastT: number; samples: number[] } = { lastT: 0, samples: [] };
+  private composRunning = false;
 
   /** Snapshot of the cumulative worker render-time stats. */
   getRenderStats(): WorkerRenderStats {
-    return { ...this.renderStats };
+    return {
+      ...this.renderStats,
+      histogram: this.renderStats.histogram.slice(),
+      longFrames: this.renderStats.longFrames.slice(),
+    };
   }
   resetRenderStats(): void {
     this.renderStats.frames = 0;
@@ -105,6 +135,19 @@ export class RendererProxy implements IRenderer {
     this.renderStats.renderMaxMs = 0;
     this.renderStats.handlerSumMs = 0;
     this.renderStats.handlerMaxMs = 0;
+    this.renderStats.histogram.fill(0);
+    this.renderStats.overflowFrames = 0;
+    this.renderStats.longFrames.length = 0;
+    this.renderStats.sections = undefined;
+  }
+
+  /** Compositor frame-presentation deltas (ms) since last reset. */
+  getCompositorPacing(): number[] {
+    return this.composPacing.samples.slice();
+  }
+  resetCompositorPacing(): void {
+    this.composPacing.samples.length = 0;
+    this.composPacing.lastT = 0;
   }
 
   constructor(opts: RendererProxyOptions) {
@@ -147,6 +190,7 @@ export class RendererProxy implements IRenderer {
       timeLimit: this.opts.timeLimit,
       renderScale: this.opts.renderScale,
       language: opts.language ?? 'en',
+      perfEnabled: opts.perfEnabled ?? false,
     };
 
     const transfer: Transferable[] = [bgOff, fgOff];
@@ -160,8 +204,56 @@ export class RendererProxy implements IRenderer {
 
     // Expose the proxy so E2E + the perf harness can read worker render-
     // time stats. Single global; replaced on subsequent constructs.
+    // Compositor pacing is opt-in (call startCompositorPacing()) — the
+    // hidden video + captureStream setup can stall window.onload in some
+    // environments (headless Chrome with no media decoders), so we don't
+    // auto-attach it on construction.
     if (typeof window !== 'undefined') {
       (window as unknown as { __rendererProxy?: RendererProxy }).__rendererProxy = this;
+    }
+  }
+
+  /** Set up a hidden 1×1 video sourced from a captureStream of a synthetic
+   *  canvas. `requestVideoFrameCallback` then fires on each frame the
+   *  browser presents, giving us ground-truth compositor presentation
+   *  pacing. The deltas between presentations are the user-perceived
+   *  frame intervals — crucial signal in worker mode where main-thread
+   *  rAF is also vsync-paced and so can't be told apart from the same
+   *  metric on the no-worker baseline.
+   *
+   *  The canvas is fed at 60 fps via captureStream(60) so the stream
+   *  always has a frame ready; the actual presentation pacing is dictated
+   *  by the browser compositor, not the source canvas. */
+  private composRafId = 0;
+
+  /** Start the compositor pacing capture. Opt-in — not auto-started.
+   *
+   *  Originally tried `requestVideoFrameCallback` on a hidden video sourced
+   *  from a canvas captureStream. Headless Chrome / no-decoder environments
+   *  often produce zero VFC fires (the video never gets a first decoded
+   *  frame), so we fall through to the rAF-delta approach which gives the
+   *  same answer in worker mode: the browser paces rAF callbacks at vsync,
+   *  and dropped vsyncs show up as deltas > 1 frame interval. */
+  startCompositorPacing(): void {
+    if (this.composRunning) return;
+    if (typeof requestAnimationFrame === 'undefined') return;
+    this.composRunning = true;
+    const tick = (t: number): void => {
+      if (this.destroyed || !this.composRunning) return;
+      if (this.composPacing.lastT > 0) {
+        this.composPacing.samples.push(t - this.composPacing.lastT);
+      }
+      this.composPacing.lastT = t;
+      this.composRafId = requestAnimationFrame(tick);
+    };
+    this.composRafId = requestAnimationFrame(tick);
+  }
+
+  private stopCompositorPacing(): void {
+    this.composRunning = false;
+    if (this.composRafId) {
+      cancelAnimationFrame(this.composRafId);
+      this.composRafId = 0;
     }
   }
 
@@ -202,6 +294,17 @@ export class RendererProxy implements IRenderer {
       if (msg.handlerMaxMs > this.renderStats.handlerMaxMs) {
         this.renderStats.handlerMaxMs = msg.handlerMaxMs;
       }
+      // Merge histograms bucket-by-bucket.
+      const h = this.renderStats.histogram;
+      for (let i = 0; i < h.length && i < msg.histogram.length; i++) {
+        h[i] += msg.histogram[i];
+      }
+      this.renderStats.overflowFrames += msg.overflowFrames;
+      // Sections snapshot is cumulative since worker boot — overwrite.
+      if (msg.sections) this.renderStats.sections = msg.sections;
+      if (msg.longFrames && msg.longFrames.length > 0) {
+        for (const lf of msg.longFrames) this.renderStats.longFrames.push(lf);
+      }
     }
   };
 
@@ -215,6 +318,7 @@ export class RendererProxy implements IRenderer {
       // Worker may already be in a bad state — terminate is recovery.
     }
     this.worker.terminate();
+    this.stopCompositorPacing();
     if (typeof window !== 'undefined') {
       const w = window as unknown as { __rendererProxy?: RendererProxy };
       if (w.__rendererProxy === this) w.__rendererProxy = undefined;

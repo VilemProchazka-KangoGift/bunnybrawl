@@ -35,6 +35,10 @@ export interface HostInitMsg {
    *  before the first frame so character-name lookups don't flash English
    *  for one frame. Updates after init via `host:setLanguage`. */
   language: string;
+  /** When true, the worker enables `perfTrace` and ships per-second
+   *  rollups (histogram + section snapshot + long-frame attribution)
+   *  back to main. */
+  perfEnabled: boolean;
 }
 
 export interface HostStopMsg { type: 'host:stop' }
@@ -110,15 +114,30 @@ export interface WorkerNightOpacityMsg {
   opacity: number;
 }
 
-/** Periodic perf rollup pushed from worker → main. The harness reads this
- *  via `window.__bunnyTest.workerPerfStats()` to get the real render cost
- *  inside the worker — main-thread rAF measurements are vsync-paced once
- *  the canvases are transferred, so they can't see worker render time. */
+/** Histogram bucket width for the worker render-time distribution.
+ *  HIST_BUCKET_COUNT × HIST_BUCKET_MS = 20 ms upper bound; anything above
+ *  is clamped into the last bucket and counted toward `overflowFrames`. */
+export const HIST_BUCKET_MS = 0.1;
+export const HIST_BUCKET_COUNT = 200;
+
+export interface WorkerLongFrameSample {
+  /** Total renderFrame ms — exceeded the soft threshold. */
+  ms: number;
+  /** Worker-side perfTrace section sums for THAT frame only (not
+   *  cumulative). Only populated when perfEnabled. */
+  sections: Record<string, number>;
+}
+
+/** Periodic perf rollup pushed from worker → main. Replaces the older
+ *  sum-only `worker:perfStats`. The harness reads via
+ *  `window.__rendererProxy.getRenderStats()` to get the real per-frame
+ *  cost distribution inside the worker — main-thread rAF measurements
+ *  are vsync-paced once the canvases are transferred. */
 export interface WorkerPerfStatsMsg {
   type: 'worker:perfStats';
-  /** Number of renderFrame calls aggregated. */
+  /** Number of renderFrame calls aggregated since last flush. */
   frames: number;
-  /** Sum of renderer.renderFrame() ms (excludes msg-handler overhead). */
+  /** Sum of renderer.renderFrame() ms over the flush window. */
   renderSumMs: number;
   /** Max single-frame render ms. */
   renderMaxMs: number;
@@ -126,6 +145,20 @@ export interface WorkerPerfStatsMsg {
   handlerSumMs: number;
   /** Max single-frame handler ms. */
   handlerMaxMs: number;
+  /** Histogram of per-frame renderFrame ms. Each bucket spans
+   *  HIST_BUCKET_MS; index i covers [i × w, (i+1) × w). Frames > the
+   *  upper bound are clamped to the last bucket and counted in
+   *  `overflowFrames`. Plain array (structured-clone-safe; tiny). */
+  histogram: number[];
+  /** Frames whose renderFrame ms exceeded the histogram upper bound. */
+  overflowFrames: number;
+  /** Per-second snapshot of the worker's perfTrace state. Only populated
+   *  when `perfEnabled` was set on init. Format matches main's
+   *  perfTrace.snapshot() output. */
+  sections?: Record<string, { calls: number; totalMs: number; avgMs: number; p95Ms: number }>;
+  /** Frames that crossed the soft long-frame threshold (~12ms) since the
+   *  last flush, with attribution from this-frame perfTrace section sums. */
+  longFrames?: WorkerLongFrameSample[];
 }
 
 export type WorkerToHostMsg =

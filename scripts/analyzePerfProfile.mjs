@@ -197,6 +197,101 @@ function flattenHeapProfile(heap, durationS) {
   return out;
 }
 
+/** Render the worker render-time + section + long-frame + compositor-pacing
+ *  sections of the report. workerData is the parsed worker-stats.json. */
+function appendWorkerReport(lines, workerData) {
+  const { cpuThrottle, workerStats, compositorPacing } = workerData;
+  if (!workerStats && (!compositorPacing || compositorPacing.length === 0)) {
+    return;
+  }
+  lines.push('## Worker offload diagnostics');
+  lines.push('');
+  if (cpuThrottle && cpuThrottle > 1) {
+    lines.push(`> CPU throttle ${cpuThrottle}× applied to main thread (workers run on a separate thread, unaffected).`);
+    lines.push('');
+  }
+  if (workerStats) {
+    lines.push('### Worker render time (per-frame distribution)');
+    lines.push('');
+    const histStats = computeHistogramStats(workerStats.histogram, workerStats.histogramBucketMs, workerStats.frames);
+    if (workerStats.frames > 0) {
+      lines.push(`- frames: ${workerStats.frames}`);
+      lines.push(`- avg renderFrame: ${(workerStats.renderSumMs / workerStats.frames).toFixed(2)}ms`);
+      lines.push(`- p50 ${histStats.p50.toFixed(2)} · p95 ${histStats.p95.toFixed(2)} · p99 ${histStats.p99.toFixed(2)} · max ${workerStats.renderMaxMs.toFixed(2)}`);
+      lines.push(`- avg handler (incl cosmetic ticks): ${(workerStats.handlerSumMs / workerStats.frames).toFixed(2)}ms`);
+      lines.push(`- long(>12ms): ${histStats.over12} · long(>16.67ms): ${histStats.over1667}`);
+      if (workerStats.overflowFrames > 0) {
+        lines.push(`- ⚠ ${workerStats.overflowFrames} frames exceeded the histogram upper bound`);
+      }
+    }
+    lines.push('');
+    if (workerStats.sections && Object.keys(workerStats.sections).length > 0) {
+      lines.push('### Worker section timings (perfTrace inside the worker)');
+      lines.push('');
+      lines.push('| Section | Calls | Total ms | Avg ms | p95 ms |');
+      lines.push('|---------|-------|----------|--------|--------|');
+      const wSecRows = Object.entries(workerStats.sections).sort((a, b) => b[1].avgMs - a[1].avgMs);
+      for (const [name, s] of wSecRows) {
+        lines.push(`| ${name} | ${s.calls} | ${s.totalMs.toFixed(1)} | ${s.avgMs.toFixed(2)} | ${s.p95Ms.toFixed(2)} |`);
+      }
+      lines.push('');
+    }
+    if (workerStats.longFrames && workerStats.longFrames.length > 0) {
+      lines.push(`### Worker long frames (>12ms — first ${Math.min(20, workerStats.longFrames.length)})`);
+      lines.push('');
+      lines.push('| frame ms | hot sections (this-frame totals) |');
+      lines.push('|----------|----------------------------------|');
+      for (const lf of workerStats.longFrames.slice(0, 20)) {
+        const top = Object.entries(lf.sections)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 4)
+          .map(([n, ms]) => `${n} ${ms.toFixed(2)}ms`)
+          .join(', ');
+        lines.push(`| ${lf.ms.toFixed(2)} | ${top || '_(no perfTrace data)_'} |`);
+      }
+      lines.push('');
+    }
+  }
+  if (compositorPacing && compositorPacing.length > 0) {
+    lines.push('### Compositor frame pacing (requestVideoFrameCallback deltas)');
+    lines.push('');
+    const sorted = [...compositorPacing].sort((a, b) => a - b);
+    const sum = sorted.reduce((s, x) => s + x, 0);
+    const avg = sum / sorted.length;
+    const p50 = sorted[Math.floor(sorted.length * 0.5)];
+    const p95 = sorted[Math.floor(sorted.length * 0.95)];
+    const p99 = sorted[Math.floor(sorted.length * 0.99)];
+    const max = sorted[sorted.length - 1];
+    const drops = sorted.filter((x) => x > 16.67 + 4).length;  // > vsync + tolerance
+    const heavyDrops = sorted.filter((x) => x > 33.33).length;
+    lines.push(`- presentations: ${sorted.length}`);
+    lines.push(`- avg ${avg.toFixed(2)}ms (${(1000 / avg).toFixed(0)} fps observed) · p50 ${p50.toFixed(2)} · p95 ${p95.toFixed(2)} · p99 ${p99.toFixed(2)} · max ${max.toFixed(2)}`);
+    lines.push(`- frame drops (>20.67ms): ${drops}/${sorted.length} (${((drops / sorted.length) * 100).toFixed(1)}%)`);
+    lines.push(`- heavy drops (>33.33ms): ${heavyDrops}/${sorted.length}`);
+    lines.push('');
+  }
+}
+
+function computeHistogramStats(histogram, bucketMs, totalFrames) {
+  let cum = 0;
+  let p50 = 0, p95 = 0, p99 = 0;
+  let over12 = 0, over1667 = 0;
+  if (!histogram || totalFrames === 0) return { p50, p95, p99, over12, over1667 };
+  const targetP50 = totalFrames * 0.5;
+  const targetP95 = totalFrames * 0.95;
+  const targetP99 = totalFrames * 0.99;
+  for (let i = 0; i < histogram.length; i++) {
+    const upper = (i + 1) * bucketMs;
+    cum += histogram[i];
+    if (p50 === 0 && cum >= targetP50) p50 = upper;
+    if (p95 === 0 && cum >= targetP95) p95 = upper;
+    if (p99 === 0 && cum >= targetP99) p99 = upper;
+    if (upper > 12) over12 += histogram[i];
+    if (upper > 16.67) over1667 += histogram[i];
+  }
+  return { p50, p95, p99, over12, over1667 };
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const inIdx = args.indexOf('--in');
@@ -209,6 +304,12 @@ async function main() {
   const longTasks = JSON.parse(readFileSync(path.join(inDir, 'long-tasks.json'), 'utf8'));
   const heapTimeline = JSON.parse(readFileSync(path.join(inDir, 'heap-timeline.json'), 'utf8'));
   const meta = JSON.parse(readFileSync(path.join(inDir, 'metadata.json'), 'utf8'));
+  // Worker stats are present iff the proxy is active. Tolerate the file
+  // missing (no-worker baseline runs predate this analyzer change).
+  let workerData = null;
+  try {
+    workerData = JSON.parse(readFileSync(path.join(inDir, 'worker-stats.json'), 'utf8'));
+  } catch { /* legacy run — worker-stats.json absent */ }
 
   const cpuFlat = flattenCpuProfile(cpu);
   const heapFlat = flattenHeapProfile(heap, meta.scenario.durationS);
@@ -330,6 +431,9 @@ async function main() {
     }
   }
   lines.push('');
+  if (workerData) {
+    appendWorkerReport(lines, workerData);
+  }
   lines.push('## How to read this report');
   lines.push('');
   lines.push('The fastest path to fixes:');

@@ -68,6 +68,16 @@ test('perf profile run', async ({ page, context }) => {
   // Reset perfTrace so countdown samples don't pollute the run
   await page.evaluate(() => window.__perfTrace?.reset());
 
+  // Start compositor frame-pacing capture (no-op when proxy isn't active).
+  // Ground-truth presentation timing via requestVideoFrameCallback on a
+  // hidden video. Wrapped in try-catch on the page side so a media-stack
+  // hiccup doesn't fail the whole run.
+  await page.evaluate(() => {
+    type ProxyLike = { startCompositorPacing?(): void };
+    const w = window as unknown as { __rendererProxy?: ProxyLike };
+    try { w.__rendererProxy?.startCompositorPacing?.(); } catch { /* ignore */ }
+  });
+
   const cdp = await context.newCDPSession(page);
   await cdp.send('Profiler.enable');
   await cdp.send('HeapProfiler.enable');
@@ -151,6 +161,15 @@ test('perf profile run', async ({ page, context }) => {
     const w = window as unknown as { __rendererProxy?: ProxyLike };
     return w.__rendererProxy?.getRenderStats?.() ?? null;
   });
+  // Compositor frame-presentation pacing — captured via
+  // `requestVideoFrameCallback` on a hidden video sourced from a
+  // captureStream of a synthetic canvas. Each delta is the gap between
+  // two consecutive presentations as the browser sees them.
+  const compositorPacing = await page.evaluate(() => {
+    type ProxyLike = { getCompositorPacing?(): number[] };
+    const w = window as unknown as { __rendererProxy?: ProxyLike };
+    return w.__rendererProxy?.getCompositorPacing?.() ?? null;
+  });
 
   const meta = {
     scenario: { arena, bots: Number(bots), difficulty, durationS },
@@ -171,6 +190,7 @@ test('perf profile run', async ({ page, context }) => {
   writeFileSync(path.join(outDir, 'worker-stats.json'), JSON.stringify({
     cpuThrottle,
     workerStats,
+    compositorPacing,
   }, null, 2));
 
   expect(cpu.profile.samples?.length ?? 0).toBeGreaterThan(0);
