@@ -7,6 +7,7 @@ import type { Arena, MatchSettings } from '../../types';
 import type { MatchEndCallback } from '../../gameLoop';
 import type { IRenderer } from '../../renderer';
 import type { Transport } from '../transport';
+import type { NetMatchDriver } from './NetMatchDriver';
 
 export interface NetMatchConfig {
   bgCanvas: HTMLCanvasElement;
@@ -27,6 +28,12 @@ export interface NetMatchConfig {
    *  main-thread Renderer from the canvas args. Mirrors the local-mode
    *  worker-offload path; the canvas args are ignored in that case. */
   injectedRenderer?: IRenderer;
+  /** Phase 2: when provided, NetMatch skips constructing its own GameLoop
+   *  and uses the supplied driver instead. The caller (useOnlineMatch in
+   *  ?simWorker=on mode) hands in an EngineWorkerProxy that hosts the
+   *  full simulation in a Web Worker. Mutually exclusive with
+   *  injectedRenderer — the proxy already owns its hosted Renderer. */
+  injectedDriver?: NetMatchDriver;
   onStall?: (stalled: boolean) => void;
   onDisconnect?: () => void;
   onPlayerDisconnect?: (slot: PlayerSlot) => void;

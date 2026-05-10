@@ -29,9 +29,14 @@ import type {
   HostInitEngineMsg, HostEngineInputBatchMsg,
   HostEngineSwitchArenaMsg, HostEngineSetPhaseMsg,
   WorkerEngineEventMsg, WorkerEngineStateMirrorMsg,
+  WorkerNetSnapshotMsg,
 } from './messages';
 import type { PlayerSlot, BotSlot, CharacterSlot, InputState, MatchPhase } from '../types';
 import { readSlotInput } from './sabInput';
+import { takeAuthSnapshot, encodeSnapshot, decodeSnapshot, createEmptySnapshot } from '../net/snapshot';
+import type { AuthSnapshot } from '../net/snapshot';
+import { EntityInterpolation, applySnapshotToState } from '../net/interpolation';
+import type { Simulator } from '../simulator/Simulator';
 
 const ctxScope = self as DedicatedWorkerGlobalScope;
 
@@ -55,6 +60,60 @@ let accumulator = 0;
 let lastTime = 0;
 let lastMirrorAt = 0;
 const STATE_MIRROR_INTERVAL_MS = 200;  // 5Hz
+
+/** Phase 2 net-mode flag. 'off' = local-only (Phase 1 default); 'host' =
+ *  encode + emit snapshots per fixedUpdate tick; 'guest' = decode + apply
+ *  incoming snapshots (wired up by Task 12). */
+type NetMode = 'off' | 'host' | 'guest';
+let netMode: NetMode = 'off';
+let hostFrame = 0;
+
+/** Guest-side snapshot decode pool and interpolation engine. Constructed
+ *  on transition into 'guest' mode; torn down on transition out so the
+ *  module state matches a fresh match's expectations. */
+const GUEST_POOL_SIZE = 30;
+let guestInterp: EntityInterpolation | null = null;
+let guestPool: AuthSnapshot[] = [];
+let guestPoolIdx = 0;
+
+export function setNetMode(mode: NetMode, _delayFrames = 0): void {
+  netMode = mode;
+  hostFrame = 0;
+  // _delayFrames is consumed by EntityInterpolation's adaptive delay
+  // tracker; the constructor doesn't take it currently. We accept it
+  // here for the wire-level contract (HostNetSetModeMsg) and consume
+  // it later if the interpolation engine grows an initial-delay knob.
+  if (mode === 'guest') {
+    guestInterp = new EntityInterpolation();
+    guestPool = Array.from({ length: GUEST_POOL_SIZE }, () => createEmptySnapshot());
+    guestPoolIdx = 0;
+  } else {
+    guestInterp = null;
+    guestPool = [];
+    guestPoolIdx = 0;
+  }
+}
+
+/** Read-only for tests / debug overlay. */
+export function getGuestInterpDepth(): number {
+  return guestInterp?.getBufferDepth() ?? 0;
+}
+
+/** Read-only for tests. */
+export function getNetMode(): NetMode { return netMode; }
+export function getHostFrame(): number { return hostFrame; }
+
+/** Snapshot + encode helper. Exported as a seam so Task 10's regression
+ *  test can drive a Simulator without spawning a real worker. Returns a
+ *  copied ArrayBuffer owned by the caller — safe to `transfer` to main. */
+export function takeAndEncodeForHost(sim: Simulator): ArrayBuffer {
+  hostFrame++;
+  const snap = takeAuthSnapshot(hostFrame, sim.getState());
+  const { buffer, length } = encodeSnapshot(snap);
+  // .slice copies into a buffer the caller can transfer without disturbing
+  // the codec's reusable scratch.
+  return buffer.slice(0, length);
+}
 
 /** Distributive Omit so each variant in the union keeps its own
  *  required-fields shape (a plain `Omit<WorkerEngineEventMsg, 'type'>`
@@ -199,9 +258,29 @@ function driveTick(currentTime: number): void {
   const timeScale = state.slowMotion > 0 ? SLOW_MO_FACTOR : 1;
   accumulator += frameTime * timeScale;
 
-  while (accumulator >= FIXED_TIMESTEP) {
-    gameLoop.fixedUpdate(FIXED_TIMESTEP, inputMap);
-    accumulator -= FIXED_TIMESTEP;
+  if (netMode === 'guest') {
+    // Guest doesn't fixedUpdate — sim authority lives on the host. We apply
+    // the latest interpolated snapshot so cosmetic systems (which read
+    // state via state-transition detection) see a coherent world. The
+    // accumulator is intentionally NOT advanced; clear it so a netMode
+    // flip doesn't leak frames of work into the next branch.
+    accumulator = 0;
+    const snap = guestInterp?.getInterpolatedState();
+    if (snap) applySnapshotToState(snap, state);
+  } else {
+    while (accumulator >= FIXED_TIMESTEP) {
+      gameLoop.fixedUpdate(FIXED_TIMESTEP, inputMap);
+      accumulator -= FIXED_TIMESTEP;
+      // Host net mode: encode + post snapshot per fixedUpdate so the host's
+      // 60Hz broadcast cadence rides off the simulation tick, not main's rAF.
+      // Main pumps the buffer into HostAuthority.broadcastEncodedSnapshot
+      // which respects per-peer broadcast tier + delta bypass.
+      if (netMode === 'host') {
+        const buf = takeAndEncodeForHost(gameLoop.getSimulator());
+        const msg: WorkerNetSnapshotMsg = { type: 'worker:netSnapshot', buffer: buf, frame: hostFrame };
+        ctxScope.postMessage(msg, [buf]);
+      }
+    }
   }
 
   gameLoop.tickCosmetic(FIXED_TIMESTEP);
@@ -229,9 +308,20 @@ function driveTick(currentTime: number): void {
   rafId = ctxScope.requestAnimationFrame(driveTick);
 }
 
+/** Pure helper: replace `target` Map contents from a per-slot list. Slots
+ *  absent from the list are evicted. Phase 2 introduces an out-of-worker
+ *  caller (the netmatch async path), so the seam is extracted from
+ *  `applyInputBatch` for testability. */
+export function applyInputBatchTo(
+  target: Map<PlayerSlot, InputState>,
+  inputs: ReadonlyArray<readonly [PlayerSlot, InputState]>,
+): void {
+  target.clear();
+  for (const [slot, input] of inputs) target.set(slot, input);
+}
+
 export function applyInputBatch(msg: HostEngineInputBatchMsg): void {
-  inputMap.clear();
-  for (const [slot, input] of msg.inputs) inputMap.set(slot, input);
+  applyInputBatchTo(inputMap, msg.inputs);
 }
 
 export function pauseEngine(): void {
@@ -270,6 +360,61 @@ export function stopEngine(): void {
   gameLoop = null;
   renderer = null;
   inputMap.clear();
+  netMode = 'off';
+  hostFrame = 0;
+}
+
+// ---- Phase 2: NetMatch async fixedUpdate handlers --------------------------
+
+/** Defensive: the host may post the expected-slot list before the worker's
+ *  fixedUpdate runs. We assert the sim's slot set matches and emit a
+ *  worker:error if it doesn't. Doesn't mutate state — the sim was already
+ *  constructed from `msg.activePlayers` at initEngine time. */
+export function setExpectedSlots(slots: PlayerSlot[]): void {
+  if (!gameLoop) return;
+  const worldSlots = new Set(gameLoop.getState().players.map((p) => p.id));
+  for (const s of slots) {
+    if (!worldSlots.has(s)) {
+      ctxScope.postMessage({
+        type: 'worker:error',
+        message: `[engineWorker] expected slot ${s} missing from sim — host/worker slot mismatch`,
+      });
+    }
+  }
+}
+
+/** Guest-only. Main strips the Trystero 1-byte type prefix before posting,
+ *  so we decode from offset 0. The decode reuses one of GUEST_POOL_SIZE
+ *  AuthSnapshot instances — matches the interpolation ring depth so the
+ *  slot we're about to overwrite has already been evicted from the ring. */
+export function applyIncomingSnapshot(buffer: ArrayBuffer): void {
+  if (netMode !== 'guest' || !guestInterp || buffer.byteLength === 0) return;
+  const out = guestPool[guestPoolIdx];
+  guestPoolIdx = (guestPoolIdx + 1) % GUEST_POOL_SIZE;
+  const snap = decodeSnapshot(buffer, 0, out);
+  if (snap) guestInterp.pushSnapshot(snap);
+}
+
+/** Host posts this when a peer's grace timer expires. The sim's
+ *  `disconnectPlayer` already handles state.disconnected + player.active. */
+export function disconnectSlotInWorker(slot: PlayerSlot): void {
+  if (!gameLoop) return;
+  gameLoop.getSimulator().disconnectPlayer(slot);
+}
+
+/** Host posts this on a successful RECONNECT_REQUEST. Mirrors
+ *  hostAuthority's onPlayerReconnect callback. */
+export function reconnectSlotInWorker(slot: PlayerSlot): void {
+  if (!gameLoop) return;
+  const player = gameLoop.getState().players.find((p) => p.id === slot);
+  if (!player) return;
+  player.disconnected = false;
+  player.active = true;
+  if (player.state === 'splat') {
+    player.state = 'respawning';
+    player.respawnTimer = 1.5;
+    player.splatTimer = 0;
+  }
 }
 
 /** Used by `renderWorker.ts` to route IRenderer-shaped messages

@@ -51,23 +51,33 @@ export class NetMatch {
   constructor(config: NetMatchConfig) {
     this._isHost = config.transport.isHost;
 
-    // Both host and guest create a GameLoop (needed for canvas rendering).
-    // When an injectedRenderer is provided (worker-offload path), GameLoop
-    // adopts it and ignores the canvas args.
-    this.gameLoop = new GameLoop(
-      config.bgCanvas,
-      config.fgCanvas,
-      config.arena,
-      config.settings,
-      config.activePlayers,
-      config.onMatchEnd,
-      config.hudCanvas,
-      undefined, // rng
-      config.bgNightCanvas,
-      config.fgNightTint,
-      config.lightCanvas,
-      config.injectedRenderer,
-    );
+    // Phase 2: when `injectedDriver` is provided, sim runs in a worker
+    // and the driver IS the sim — skip constructing a local GameLoop.
+    // The driver implements the NetMatchDriver surface plus everything
+    // GameLoop exposed (proxy is API-compatible). Cast covers the
+    // GameLoop-typed `this.gameLoop` field; HostLoop / GuestLoop only
+    // ever call NetMatchDriver methods.
+    if (config.injectedDriver) {
+      this.gameLoop = config.injectedDriver as unknown as GameLoop;
+    } else {
+      // Both host and guest create a GameLoop (needed for canvas rendering).
+      // When an injectedRenderer is provided (worker-offload renderer-only
+      // path), GameLoop adopts it and ignores the canvas args.
+      this.gameLoop = new GameLoop(
+        config.bgCanvas,
+        config.fgCanvas,
+        config.arena,
+        config.settings,
+        config.activePlayers,
+        config.onMatchEnd,
+        config.hudCanvas,
+        undefined, // rng
+        config.bgNightCanvas,
+        config.fgNightTint,
+        config.lightCanvas,
+        config.injectedRenderer,
+      );
+    }
 
     // Build shared context + collaborators. Order matters: context first,
     // then host-only / guest-only init populates context's hostAuthority /
@@ -202,9 +212,25 @@ export class NetMatch {
       this.hostAuthority.start();
       this.hostAuthority.enableDeltaCompression(true);
       this.loading.armLoadingTimeout();
+      // Phase 2: when sim runs in the worker, route worker-emitted
+      // encoded snapshots into HostAuthority.broadcastEncodedSnapshot
+      // (which respects per-peer broadcast tier + delta bypass exactly
+      // like the inline broadcast does). Tell the worker its role.
+      if (this.ctx.gameLoop.isRemoteSim()) {
+        const authority = this.hostAuthority;
+        this.ctx.gameLoop.onSnapshotReady((buffer, frame) => {
+          authority.broadcastEncodedSnapshot(buffer, frame);
+        });
+        this.ctx.gameLoop.setNetMode('host', 0);
+      }
       this.hostLoop = new HostLoop(this.ctx);
       this.hostLoop.start();
     } else {
+      // Phase 2 guest-side: wake the worker into guest mode before the
+      // snapshot stream arrives so the interpolation engine is ready.
+      if (this.ctx.gameLoop.isRemoteSim()) {
+        this.ctx.gameLoop.setNetMode('guest', 2 /* initial delayFrames */);
+      }
       this.guestLoop!.start();
     }
   }

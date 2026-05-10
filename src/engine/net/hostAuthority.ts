@@ -69,6 +69,14 @@ export class HostAuthority {
           };
         },
         onPlayerReconnect: (state, slot) => {
+          // Phase 2: when the sim runs in a Web Worker, state-mutating
+          // operations have to go through the proxy. The `state` arg here
+          // is main's mirror copy; mutating it doesn't propagate to the
+          // worker's authoritative sim state. Route through the driver.
+          if (this.gameLoop.isRemoteSim()) {
+            this.gameLoop.reconnectSlot(slot as PlayerSlot);
+            return;
+          }
           const player = state.players.find(p => p.id === slot);
           if (player) {
             player.disconnected = false;
@@ -104,6 +112,12 @@ export class HostAuthority {
   setMatchOver(): void { this.core.setMatchOver(); }
 
   broadcastSnapshot(state: MatchState): void { this.core.broadcastSnapshot(state); }
+  /** Phase 2: worker-emitted encoded snapshot. Buffer is the same wire
+   *  shape produced by `takeAuthSnapshot + encodeSnapshot`. Per-peer
+   *  broadcast tier + delta-compression bypass apply unchanged. */
+  broadcastEncodedSnapshot(buffer: ArrayBuffer, frame: number): void {
+    this.core.broadcastEncodedSnapshot(buffer, frame);
+  }
   sendSnapshotTo(peerId: string, state: MatchState): void { this.core.sendSnapshotTo(peerId, state); }
   getLocalFrame(): number { return this.core.getLocalFrame(); }
   setPeerUnstable(peerId: string, unstable: boolean): void { this.core.setPeerUnstable(peerId, unstable); }

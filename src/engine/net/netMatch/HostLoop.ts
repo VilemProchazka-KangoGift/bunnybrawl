@@ -115,18 +115,40 @@ export class HostLoop {
         for (const [slot, input] of networkInputs) {
           if (input.jump) consumedJumpSlots.push(slot as PlayerSlot);
         }
-        this.ctx.gameLoop.fixedUpdate(FIXED_DT, networkInputs);
+
+        // Phase 2: branch on whether the simulation lives in the worker.
+        // When remote, post the already-fairness-delayed input map to the
+        // worker; the worker's driveTick consumes it and runs fixedUpdate
+        // + encode + emit there. Main stays oblivious to the encode side;
+        // worker:netSnapshot is pumped to broadcastEncodedSnapshot in
+        // NetMatch.start (Task 17 wiring).
+        if (this.ctx.gameLoop.isRemoteSim()) {
+          this.ctx.gameLoop.postInputBatch(networkInputs as ReadonlyMap<PlayerSlot, InputState>);
+        } else {
+          this.ctx.gameLoop.fixedUpdate(FIXED_DT, networkInputs);
+        }
         this.ctx.hostAuthority!.consumeGuestJumps(consumedJumpSlots);
-        // Tick reconnection grace timers
+        // Tick reconnection grace timers (always on main — host owns the
+        // grace ring + transport, regardless of where sim runs).
         this.ctx.hostAuthority!.tickGraceTimers(FIXED_DT);
-        this.ctx.gameLoop.tickCosmetic(FIXED_DT);
+        // Local-sim only: drive cosmetics here so prev-state baselines
+        // capture against the just-mutated state. In remote-sim mode the
+        // worker drives both fixedUpdate and tickCosmetic inside the same
+        // tick, so calling it again on main would double-fire transitions.
+        if (!this.ctx.gameLoop.isRemoteSim()) {
+          this.ctx.gameLoop.tickCosmetic(FIXED_DT);
+        }
         accumulator -= FIXED_DT;
       }
 
       // Throttle to 60Hz. A 120Hz host display would otherwise broadcast 120
       // snapshots/sec and double the guest's decode + GC load for no benefit
       // (the simulation is fixed-timestep at 60Hz).
-      if (now - lastBroadcastTime >= BROADCAST_INTERVAL_MS) {
+      //
+      // In remote-sim mode the worker emits worker:netSnapshot per tick and
+      // NetMatch pumps to broadcastEncodedSnapshot — we skip the inline
+      // broadcast here so we don't double-send.
+      if (!this.ctx.gameLoop.isRemoteSim() && now - lastBroadcastTime >= BROADCAST_INTERVAL_MS) {
         lastBroadcastTime = now;
         const broadcastStart = perfTrace.begin('net.broadcastSnapshot');
         this.ctx.hostAuthority!.broadcastSnapshot(this.ctx.gameLoop.getState());

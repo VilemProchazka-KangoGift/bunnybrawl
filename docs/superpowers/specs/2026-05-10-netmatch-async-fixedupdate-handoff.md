@@ -139,3 +139,68 @@ already cheap, ~5ms/30s on main). The bigger wins are architectural:
 ~1-2 focused days for someone who knows the netcode. Risk: medium —
 the input fairness delay timing is the subtlest part of the netcode
 and breaking it would cause user-visible jitter.
+
+## Decisions locked at planning time (2026-05-10)
+
+These ADRs were chosen before any Phase 2 code was written, so the
+implementation can't drift away from the agreed boundaries. Each option
+considered is captured for future readers.
+
+### ADR.1 — Snapshot encode location
+
+**Chosen: A.** Worker encodes after each `fixedUpdate`, posts ArrayBuffer
+to main via `worker:netSnapshot { buffer, frame }`, main hands the buffer
+to `transport.sendUnreliable` (or `hostAuthority.broadcastEncodedSnapshot`
+which respects per-peer broadcast tier).
+
+Rejected: B (main encodes after a state-mirror message arrives). Adds
+~16ms one-frame latency, doubles state-mirror traffic, and breaks the
+host's existing 60Hz broadcast cadence.
+
+### ADR.2 — Snapshot decode location (guest)
+
+**Chosen: A.** Worker decodes + interpolates + applies. Main only
+forwards the buffer via `host:netSnapshotApply { buffer }` (transferable).
+The `EntityInterpolation` ring + `decodeSnapshot` pool live in the worker.
+
+Rejected: B (main decodes, posts the structured-cloned `AuthSnapshot` to
+worker). Pays the clone twice and orphans interpolation timing from the
+sim that consumes it.
+
+### ADR.3 — Input fairness ring location
+
+**Chosen: A.** `HostLoop` on main keeps the input ring + `delayFrames` +
+RTT-derived adaptation verbatim. Each tick main posts the *already
+delayed* per-slot input map as `host:engineInputBatch` (same wire format
+as Phase 1's local sim-in-worker). Worker is oblivious to fairness.
+
+Rejected: B (move the ring to the worker). Saves one postMessage per
+tick but introduces a second source of truth for `delayFrames` against
+the RTT measured on main. The risk vs the 0.5ms/tick saving isn't
+justified — the input-fairness math is the subtlest piece of the
+netcode per the handoff's own risk callout.
+
+### ADR.4 — Transport location
+
+**Chosen: A.** Trystero + WebRTC + MQTT signaling stay entirely on
+main. Worker emits encoded snapshots; main pumps them into
+`transport.sendUnreliable` / receives via the existing handlers and
+forwards buffers to the worker via `host:netSnapshotApply`.
+
+Rejected: B (move Transport to a SharedWorker / dedicated transport
+worker). Trystero, MQTT, and WebRTC code paths can't migrate into a
+worker without a port-relay refactor that's out of Phase 2 scope. Also
+gated on `crossOriginIsolated` which GitHub Pages can't provide.
+
+### ADR.5 — Sim-in-worker is the only Phase 2 mode
+
+**Chosen.** Phase 2 wires `?simWorker=on` for online. The renderer-only
+worker path (default, `?worker=on`) stays on the Phase 1 architecture
+where main runs the simulation. Both paths coexist via the
+`NetMatchDriver.isRemoteSim()` discriminator.
+
+Rationale: pulling the renderer-only path through the same async
+refactor would force every `HostLoop` / `GuestLoop` deviation onto an
+identical seam — but main already runs the sim there cheaply (~5ms/30s
+per the netmatch handoff), so the architectural win has no perf payoff
+on that path.

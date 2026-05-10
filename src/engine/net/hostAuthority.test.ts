@@ -75,6 +75,17 @@ const mockGameLoopInstance = {
   setPlayerNames: vi.fn(),
   renderFrame: vi.fn(),
   skipCountdown: vi.fn(),
+  // Phase 2 NetMatchDriver hooks. Default to local-sim behavior (isRemoteSim
+  // returns false) so the existing test scenarios continue to exercise the
+  // local-state-mutation branch.
+  isRemoteSim: vi.fn(() => false),
+  postInputBatch: vi.fn(),
+  onSnapshotReady: vi.fn(),
+  pumpIncomingSnapshot: vi.fn(),
+  setNetMode: vi.fn(),
+  setExpectedSlots: vi.fn(),
+  disconnectSlot: vi.fn(),
+  reconnectSlot: vi.fn(),
 };
 
 vi.mock('../gameLoop', () => ({

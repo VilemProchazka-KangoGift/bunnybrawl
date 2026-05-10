@@ -8,6 +8,8 @@ import { getArena, getTheme } from '../../engine/arenas';
 import { perfTrace } from '../../engine/perfTrace';
 import * as fpsCounter from '../../engine/fpsCounter';
 import { isWorkerEnabled, RendererProxy } from '../../engine/worker';
+import { isSimWorkerEnabled } from '../../engine/worker/simWorkerFlag';
+import { EngineWorkerProxy } from '../../engine/worker/EngineWorkerProxy';
 import { getRenderScale } from '../../engine/renderScale';
 import { debugFlags } from '../../engine/debugFlags';
 import i18n from '../../i18n';
@@ -186,11 +188,38 @@ export function useOnlineMatch(p: UseOnlineMatchParams): void {
       return;
     }
 
-    // Worker offload: same path as useLocalMatch — when the local-device
-    // flag is on, transfer the canvases to a Web Worker that hosts the
-    // Renderer. NetMatch's GameLoop adopts the proxy via injectedRenderer.
-    // Both host and guest paths use the same flag.
-    const useWorker = isWorkerEnabled();
+    // Worker offload paths, mirroring useLocalMatch's three-way branch.
+    //   ?simWorker=on → EngineWorkerProxy hosts the FULL simulation in
+    //     the worker. NetMatch adopts the proxy as its driver via
+    //     `injectedDriver`. Phase 2 — both host and guest.
+    //   ?worker=on (default) → renderer-only RendererProxy. Sim stays
+    //     on main; only renderer.* messages cross the wire. Phase 1.
+    //   neither → main-thread Renderer + main-thread sim. Capability
+    //     fallback.
+    const useSimWorker = isSimWorkerEnabled();
+    let engineProxy: EngineWorkerProxy | null = null;
+    if (useSimWorker) {
+      try {
+        engineProxy = new EngineWorkerProxy({
+          bgCanvas, fgCanvas, hudCanvas, bgNightCanvas, fgNightTint, lightCanvas,
+          arena, settings: matchSettings, activePlayers,
+          onMatchEnd,
+          mirrored: matchSettings.mods.mirrorArena,
+          renderScale: getRenderScale(),
+          language: i18n.language,
+          perfEnabled: debugFlags.perfEnabled,
+          navDebugEnabled: debugFlags.navDebugEnabled,
+          netDebugEnabled: debugFlags.netDebugEnabled,
+          fpsEnabled: debugFlags.fpsEnabled,
+          onError: (m) => console.error('[engine worker]', m),
+        });
+      } catch (e) {
+        console.warn('[sim-worker online] proxy construction failed; falling back:', e);
+        engineProxy = null;
+      }
+    }
+
+    const useWorker = !engineProxy && isWorkerEnabled();
     let workerProxy: RendererProxy | null = null;
     if (useWorker) {
       try {
@@ -216,6 +245,7 @@ export function useOnlineMatch(p: UseOnlineMatchParams): void {
     }
 
     const netMatch = new NetMatch({
+      injectedDriver: engineProxy ?? undefined,
       injectedRenderer: workerProxy ?? undefined,
       bgCanvas,
       bgNightCanvas,
@@ -367,6 +397,7 @@ export function useOnlineMatch(p: UseOnlineMatchParams): void {
       netMatchRef.current = null;
       commonCleanup();
       if (workerProxy) workerProxy.destroy();
+      if (engineProxy) engineProxy.stop();
       clearTimer(disconnectDelayRef);
     };
     lifecycleRef.current.teardown = teardown;

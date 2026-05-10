@@ -30,6 +30,7 @@ import {
   type HostInitMsg, type HostStopMsg, type HostToWorkerMsg, type WorkerToHostMsg,
   type WorkerLongFrameSample,
 } from './messages';
+import { createParticlesSab, makeViews, writeParticles, type ParticleSabViews } from './sabParticles';
 
 /** Cumulative worker render-time stats, accumulated across the
  *  per-second flushes from the worker. Read by the perf harness. */
@@ -95,6 +96,10 @@ const STUB_DIAGNOSTICS: RenderDiagnostics = Object.freeze({
 export class RendererProxy implements IRenderer {
   private worker: Worker;
   private destroyed = false;
+  /** SAB-backed particles wire (Step 4). Null in prod / non-isolated
+   *  contexts; the existing `particles: Particle[]` field in
+   *  `host:renderFrame` handles those. */
+  private particleSabViews: ParticleSabViews | null = null;
   private fgNightTint: HTMLDivElement | null;
   private bgNightCanvasEl: HTMLCanvasElement | null;
   private lightCanvasEl: HTMLCanvasElement | null;
@@ -200,6 +205,9 @@ export class RendererProxy implements IRenderer {
       const bgNightOff = opts.bgNightCanvas?.transferControlToOffscreen() ?? null;
       const lightOff = opts.lightCanvas?.transferControlToOffscreen() ?? null;
 
+      const particlesSab = createParticlesSab();
+      if (particlesSab) this.particleSabViews = makeViews(particlesSab);
+
       const init: HostInitMsg = {
         type: 'host:init',
         bgCanvas: bgOff,
@@ -216,6 +224,7 @@ export class RendererProxy implements IRenderer {
         navDebugEnabled: opts.navDebugEnabled ?? false,
         netDebugEnabled: opts.netDebugEnabled ?? false,
         fpsEnabled: opts.fpsEnabled ?? false,
+        particlesSab: particlesSab ?? undefined,
       };
 
       const transfer: Transferable[] = [bgOff, fgOff];
@@ -450,11 +459,17 @@ export class RendererProxy implements IRenderer {
     // structured-clone rejects (`DataCloneError`). The worker maintains its
     // own local copies of those systems and ticks them from the shipped
     // state. See `renderWorker.ts > ensureCosmeticSystemsFor`.
+    // SAB fast path — write particles into shared memory, leave the
+    // postMessage `particles` field empty so structured clone has
+    // nothing to do. The worker reads from the SAB instead.
+    if (this.particleSabViews) {
+      writeParticles(this.particleSabViews, particles);
+    }
     this.post({
       type: 'host:renderFrame',
       state: matchState,
       arenaId: arena.id,
-      particles,
+      particles: this.particleSabViews ? [] : particles,
       cosmeticLead,
       slowMotion: matchState.slowMotion,
       screenFlash: matchState.screenFlash,

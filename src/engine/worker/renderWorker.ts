@@ -29,8 +29,9 @@ import { ReactiveDecorationSystem } from '../gameLoop/cosmetics/ReactiveDecorati
 import { WildlifeSystem } from '../gameLoop/cosmetics/WildlifeSystem';
 import { perfTrace } from '../perfTrace';
 import { debugFlags } from '../debugFlags';
-import type { MatchState, Arena } from '../types';
+import type { MatchState, Arena, Particle } from '../types';
 import type { ThemeConfig } from '../themes/types';
+import { makeViews, readParticles, ColorCache, type ParticleSabViews } from './sabParticles';
 import {
   HIST_BUCKET_MS, HIST_BUCKET_COUNT,
   type HostToWorkerMsg,
@@ -68,6 +69,16 @@ let reactiveSystem: ReactiveDecorationSystem | null = null;
 let wildlifeSystem: WildlifeSystem | null = null;
 let currentArenaId: string | null = null;
 let currentArena: Arena | null = null;
+
+/** SAB-backed particles reader (Step 4 of the SAB roadmap). When main
+ *  ships a `particlesSab` in `host:init`, we install the views here and
+ *  read from them each frame instead of the `host:renderFrame.particles`
+ *  field. The Particle[] pool is reused across frames (the renderer only
+ *  reads, never retains references). */
+let particleSabViews: ParticleSabViews | null = null;
+const particlePool: Particle[] = [];
+const colorCache = new ColorCache();
+let particlePoolLen = 0;
 
 function bootstrap(): void {
   registerBuiltinArenas();
@@ -226,6 +237,13 @@ ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
   if (msg.type === 'host:engineSwitchArena') { engineBindings.switchArenaInWorker(msg); return; }
   if (msg.type === 'host:engineSetPhase') { engineBindings.setPhaseInWorker(msg); return; }
   if (msg.type === 'host:engineSkipCountdown') { engineBindings.skipCountdownInWorker(); return; }
+  // Phase 2: NetMatch async fixedUpdate wiring. Worker hosts encode/decode;
+  // main only forwards buffers to/from the transport.
+  if (msg.type === 'host:netSetMode') { engineBindings.setNetMode(msg.mode, msg.delayFrames); return; }
+  if (msg.type === 'host:netSetExpectedSlots') { engineBindings.setExpectedSlots(msg.slots); return; }
+  if (msg.type === 'host:netSnapshotApply') { engineBindings.applyIncomingSnapshot(msg.buffer); return; }
+  if (msg.type === 'host:netDisconnectSlot') { engineBindings.disconnectSlotInWorker(msg.slot); return; }
+  if (msg.type === 'host:netReconnectSlot') { engineBindings.reconnectSlotInWorker(msg.slot); return; }
 
   try {
     switch (msg.type) {
@@ -257,6 +275,7 @@ ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
         });
         renderer.setRenderScale(msg.renderScale);
         renderer.setTimeLimit(msg.timeLimit);
+        if (msg.particlesSab) particleSabViews = makeViews(msg.particlesSab);
         postReady();
         return;
       }
@@ -397,11 +416,26 @@ ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
         // before/after this frame and diff. Cheap (read-only Map walk),
         // skipped entirely when perfTrace is off.
         const sectionsBefore = _perfEnabled ? perfTrace.cumulativeTotals() : null;
+        // SAB fast path — read particles from shared memory into the
+        // reused worker-side pool, then slice to the live count so the
+        // renderer's `for..of` doesn't paint stale entries. Pool keeps
+        // its peak capacity to avoid re-allocating Particle objects when
+        // count dips. The slice is N ref copies — cheap vs the
+        // structured-clone-per-particle this path replaces.
+        let particles: Particle[];
+        if (particleSabViews) {
+          particlePoolLen = readParticles(particleSabViews, particlePool, colorCache);
+          particles = particlePool.length === particlePoolLen
+            ? particlePool
+            : particlePool.slice(0, particlePoolLen);
+        } else {
+          particles = msg.particles;
+        }
         const renderStart = performance.now();
         renderer.renderFrame(
           workerState,
           arena,
-          msg.particles,
+          particles,
           msg.cosmeticLead,
           reactiveArg,
           wildlifeArg,

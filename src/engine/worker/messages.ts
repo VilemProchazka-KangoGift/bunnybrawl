@@ -46,6 +46,10 @@ export interface HostInitMsg {
   navDebugEnabled?: boolean;
   netDebugEnabled?: boolean;
   fpsEnabled?: boolean;
+  /** SAB-backed particles wire — Step 4 of the SAB roadmap. Present
+   *  only when `crossOriginIsolated` is true (GitHub Pages prod falls
+   *  back to shipping `particles` in `host:renderFrame`). */
+  particlesSab?: SharedArrayBuffer;
 }
 
 export interface HostStopMsg { type: 'host:stop' }
@@ -140,10 +144,72 @@ export interface HostEngineResumeMsg { type: 'host:engineResume' }
 export interface HostEngineSwitchArenaMsg { type: 'host:engineSwitchArena'; arenaId: string; settingsOverrides?: Partial<MatchSettings> }
 export interface HostEngineSetPhaseMsg { type: 'host:engineSetPhase'; phase: MatchPhase }
 export interface HostEngineSkipCountdownMsg { type: 'host:engineSkipCountdown' }
+
+// ---- Phase 2: NetMatch async fixedUpdate ----------------------------------
+// Worker hosts the simulation in online play; main is the I/O hub for
+// Trystero + audio + keyboard. Wire format extends the sim-in-worker base.
+
+export interface HostNetSetModeMsg {
+  type: 'host:netSetMode';
+  /** 'host' = encode + emit snapshots; 'guest' = decode + interpolate;
+   *  'off' = back to local-only sim. */
+  mode: 'host' | 'guest' | 'off';
+  /** Guest only: initial interpolation delay in frames. Ignored on host. */
+  delayFrames: number;
+}
+
+export interface HostNetSetExpectedSlotsMsg {
+  type: 'host:netSetExpectedSlots';
+  /** Asserted against the worker's existing sim — main posts this to catch
+   *  lobby ↔ match slot-set drift before fixedUpdate runs. */
+  slots: PlayerSlot[];
+}
+
+/** Guest-only. Worker decodes + interpolates + applies. Buffer is
+ *  transferred from main (main owns the transport, worker owns the decode
+ *  pool). The Trystero 1-byte type prefix is stripped on main before
+ *  posting. */
+export interface HostNetSnapshotApplyMsg {
+  type: 'host:netSnapshotApply';
+  buffer: ArrayBuffer;
+}
+
+/** Host-only. Snapshot encoded by the worker, ready for sendUnreliable.
+ *  Main pumps the buffer into `HostAuthority.broadcastEncodedSnapshot`
+ *  which respects per-peer broadcast tier + delta bypass for unstable
+ *  peers. Buffer is transferred OUT of the worker. Frame is for debug
+ *  overlay + perf instrumentation. */
+export interface WorkerNetSnapshotMsg {
+  type: 'worker:netSnapshot';
+  buffer: ArrayBuffer;
+  frame: number;
+}
+
+/** Guest-only. Periodic interp stats so main's debug HUD can render them
+ *  without a synchronous read into the worker's interpolation ring. */
+export interface WorkerNetInterpStatsMsg {
+  type: 'worker:netInterpStats';
+  bufferDepth: number;
+  delayFrames: number;
+}
+
+export interface HostNetDisconnectSlotMsg {
+  type: 'host:netDisconnectSlot';
+  slot: PlayerSlot;
+}
+
+export interface HostNetReconnectSlotMsg {
+  type: 'host:netReconnectSlot';
+  slot: PlayerSlot;
+}
 export interface HostRenderFrameMsg {
   type: 'host:renderFrame';
   state: MatchState;
   arenaId: string;
+  /** Particles array — only populated when the SAB-backed path is
+   *  unavailable (no `crossOriginIsolated`). When the proxy sent a
+   *  `particlesSab` at init, this field is empty and the worker reads
+   *  particles from the SAB instead. Step 4 of the SAB roadmap. */
   particles: Particle[];
   cosmeticLead: number;
   // reactiveArg + wildlifeArg are NOT shipped: their per-instance `data`
@@ -186,7 +252,12 @@ export type HostToWorkerMsg =
   | HostEngineResumeMsg
   | HostEngineSwitchArenaMsg
   | HostEngineSetPhaseMsg
-  | HostEngineSkipCountdownMsg;
+  | HostEngineSkipCountdownMsg
+  | HostNetSetModeMsg
+  | HostNetSetExpectedSlotsMsg
+  | HostNetSnapshotApplyMsg
+  | HostNetDisconnectSlotMsg
+  | HostNetReconnectSlotMsg;
 
 export interface WorkerReadyMsg { type: 'worker:ready' }
 export interface WorkerErrorMsg { type: 'worker:error'; message: string }
@@ -294,4 +365,6 @@ export type WorkerToHostMsg =
   | WorkerNightOpacityMsg
   | WorkerPerfStatsMsg
   | WorkerEngineEventMsg
-  | WorkerEngineStateMirrorMsg;
+  | WorkerEngineStateMirrorMsg
+  | WorkerNetSnapshotMsg
+  | WorkerNetInterpStatsMsg;

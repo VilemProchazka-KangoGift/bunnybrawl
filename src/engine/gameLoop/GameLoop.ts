@@ -554,6 +554,30 @@ export class GameLoop {
     this.simulator.disconnectPlayer(slot);
   }
 
+  // ---- Phase 2 NetMatchDriver hooks (local-sim no-ops) -------------------
+  // GameLoop runs the sim inline; the Phase 2 worker-routing hooks are
+  // no-ops on this implementation. Both GameLoop and EngineWorkerProxy
+  // satisfy NetMatchDriver; HostLoop / GuestLoop branch on isRemoteSim().
+
+  isRemoteSim(): boolean { return false; }
+  postInputBatch(_inputs: ReadonlyMap<PlayerSlot, InputState>): void { /* no-op */ }
+  onSnapshotReady(_cb: (buffer: ArrayBuffer, frame: number) => void): void { /* no-op */ }
+  pumpIncomingSnapshot(_buffer: ArrayBuffer): void { /* no-op */ }
+  setNetMode(_mode: 'host' | 'guest' | 'off', _delayFrames?: number): void { /* no-op */ }
+  setExpectedSlots(_slots: PlayerSlot[]): void { /* no-op */ }
+  disconnectSlot(slot: PlayerSlot): void { this.simulator.disconnectPlayer(slot); }
+  reconnectSlot(slot: PlayerSlot): void {
+    const player = this.simulator.getState().players.find((p) => p.id === slot);
+    if (!player) return;
+    player.disconnected = false;
+    player.active = true;
+    if (player.state === 'splat') {
+      player.state = 'respawning';
+      player.respawnTimer = 1.5;
+      player.splatTimer = 0;
+    }
+  }
+
   /** Mark that we're in rollback resimulation. */
   setResimulating(resim: boolean): void {
     this.simulator.setResimulating(resim);

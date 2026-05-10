@@ -34,6 +34,17 @@ const mockGameLoopInstance = {
   setPhase: vi.fn(),
   setConnectionQuality: vi.fn(),
   resetCosmeticBaselines: vi.fn(),
+  onEnterPlayingPhase: vi.fn(),
+  // Phase 2 NetMatchDriver hooks. Local-sim mocks default to false so the
+  // remote-sim branches stay dormant unless a specific test opts in.
+  isRemoteSim: vi.fn(() => false),
+  postInputBatch: vi.fn(),
+  onSnapshotReady: vi.fn(),
+  pumpIncomingSnapshot: vi.fn(),
+  setNetMode: vi.fn(),
+  setExpectedSlots: vi.fn(),
+  disconnectSlot: vi.fn(),
+  reconnectSlot: vi.fn(),
 };
 
 vi.mock('../gameLoop', () => ({
