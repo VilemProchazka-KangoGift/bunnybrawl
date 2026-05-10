@@ -62,7 +62,10 @@ test('perf profile run', async ({ page, context }) => {
     + `&killLimit=999&debug=perffps`
     + (process.env.PERF_EXTRA_URL ?? '');
   await page.goto(url);
-  await page.waitForFunction(() => window.__bunnyTest?.state()?.countdown === 0, undefined, { timeout: 15000 });
+  // 30s tolerates sim-worker cold-start (lazy-imports the GameLoop bundle in
+  // the worker on first `host:initEngine`). Renderer-only and main-thread
+  // paths comfortably under 5s.
+  await page.waitForFunction(() => window.__bunnyTest?.state()?.countdown === 0, undefined, { timeout: 30000 });
   expect(await page.evaluate(() => window.__perfTrace?.enabled)).toBe(true);
 
   // Reset perfTrace so countdown samples don't pollute the run

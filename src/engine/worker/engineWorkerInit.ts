@@ -19,6 +19,7 @@ import { Renderer } from '../renderer';
 import { getArena, getTheme } from '../arenas/operations';
 import { registerBuiltinArenas } from '../arenas/builtin';
 import { registerBuiltinCharacters } from '../characters/builtin';
+import { CHARACTERS, BOT_CHARACTERS } from '../characters/defaults';
 import { setHudLanguage } from '../rendering/hud';
 import { RemoteInput } from '../input/RemoteInput';
 import { isBotSlot } from '../types';
@@ -29,7 +30,7 @@ import type {
   HostEngineSwitchArenaMsg, HostEngineSetPhaseMsg,
   WorkerEngineEventMsg, WorkerEngineStateMirrorMsg,
 } from './messages';
-import type { PlayerSlot, InputState, MatchPhase } from '../types';
+import type { PlayerSlot, BotSlot, CharacterSlot, InputState, MatchPhase } from '../types';
 
 const ctxScope = self as DedicatedWorkerGlobalScope;
 
@@ -54,6 +55,18 @@ function postEvent(ev: Omit<WorkerEngineEventMsg, 'type'>): void {
 export function initEngine(msg: HostInitEngineMsg): void {
   registerBuiltinArenas();
   registerBuiltinCharacters();
+  // Re-populate slot → CharacterDef mappings inside the worker. Main owns
+  // the lobby UI that mutates these maps; without this rebuild the worker
+  // would throw "No character assigned to bot slot Bx" inside
+  // `createInitialPlayers` and the loading screen would hang.
+  BOT_CHARACTERS.clear();
+  for (const [slot, def] of msg.characters) {
+    if (isBotSlot(slot)) {
+      BOT_CHARACTERS.set(slot as BotSlot, def);
+    } else {
+      CHARACTERS[slot as CharacterSlot] = def;
+    }
+  }
   if (msg.perfEnabled) debugFlags.perfEnabled = true;
   setHudLanguage(msg.language);
 
@@ -210,4 +223,13 @@ export function stopEngine(): void {
   gameLoop = null;
   renderer = null;
   inputMap.clear();
+}
+
+/** Used by `renderWorker.ts` to route IRenderer-shaped messages
+ *  (`host:warmSpriteCache`, `host:renderBackground`, `host:warmHudFonts`,
+ *  …) to the engine-mode Renderer. Without this hook the messages would
+ *  fall into the renderer-only dispatch and be dropped because that
+ *  module's `renderer` is null in sim-worker mode. */
+export function getEngineRenderer(): Renderer | null {
+  return renderer;
 }

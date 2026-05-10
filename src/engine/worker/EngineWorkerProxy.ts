@@ -26,6 +26,8 @@ import { isTouchPrimary } from '../touchDetect';
 import { TouchInputManager } from '../touchInput';
 import { isBotSlot } from '../types';
 import { getArena, getTheme } from '../arenas/operations';
+import { getCharacterForSlot } from '../characters/defaults';
+import { createInitialPlayers, createInitialMatchState } from '../simulator/initialState';
 import { CANVAS_WIDTH } from '../constants';
 import type { Arena, MatchSettings, MatchState, MatchPhase, PlayerSlot, InputState, CharacterSlot } from '../types';
 import type { ThemeConfig } from '../themes/types';
@@ -115,21 +117,39 @@ export class EngineWorkerProxy {
     this.activePlayers = opts.activePlayers;
     this.onMatchEnd = opts.onMatchEnd;
     this.onError = opts.onError;
-    this.bootState = makeBootState(opts.arena, opts.activePlayers);
+    this.bootState = makeBootState(opts.arena, opts.activePlayers, opts.settings);
 
     this.worker = new Worker(
       new URL('./renderWorker.ts', import.meta.url),
       { type: 'module', name: 'carrot-royale-engine' },
     );
     this.worker.addEventListener('message', this.handleMessage);
-    this.worker.addEventListener('error', (e) => this.onError?.(e.message || 'worker error'));
-    this.worker.addEventListener('messageerror', () => this.onError?.('worker structured-clone failed'));
+    // On a worker runtime error / structured-clone failure, mark the proxy
+    // dead so subsequent input batch posts no-op (a silent worker is better
+    // than throwing per-rAF). Stop the rAF loop on main too. The caller's
+    // onError lets Match.tsx flash a banner and quit the match.
+    this.worker.addEventListener('error', (e) => {
+      const m = e.message || 'worker error';
+      this.destroyed = true;
+      this.running = false;
+      this.onError?.(m);
+    });
+    this.worker.addEventListener('messageerror', () => {
+      this.destroyed = true;
+      this.running = false;
+      this.onError?.('worker structured-clone failed');
+    });
 
     const bgOff = opts.bgCanvas.transferControlToOffscreen();
     const fgOff = opts.fgCanvas.transferControlToOffscreen();
     const hudOff = opts.hudCanvas?.transferControlToOffscreen() ?? null;
     const bgNightOff = opts.bgNightCanvas?.transferControlToOffscreen() ?? null;
     const lightOff = opts.lightCanvas?.transferControlToOffscreen() ?? null;
+
+    // Resolve the slot → CharacterDef pairs on main where the lobby's
+    // CHARACTERS / BOT_CHARACTERS state lives, then ship to the worker.
+    const characters: Array<[PlayerSlot, ReturnType<typeof getCharacterForSlot>]> =
+      opts.activePlayers.map((slot) => [slot, getCharacterForSlot(slot)]);
 
     const init: HostInitEngineMsg = {
       type: 'host:initEngine',
@@ -141,6 +161,7 @@ export class EngineWorkerProxy {
       arenaId: opts.arena.id,
       settings: opts.settings,
       activePlayers: opts.activePlayers,
+      characters,
       mirrored: opts.mirrored ?? false,
       renderScale: opts.renderScale,
       language: opts.language ?? 'en',
@@ -302,6 +323,7 @@ export class EngineWorkerProxy {
   resetCosmeticBaselines(): void { /* worker handles internally */ }
 
   private handleMessage = (e: MessageEvent<WorkerToHostMsg>): void => {
+    if (this.destroyed) return;
     const msg = e.data;
     if (msg.type === 'worker:nightOpacity') {
       const value = String(msg.opacity);
@@ -354,17 +376,14 @@ export class EngineWorkerProxy {
   }
 }
 
-/** Build the boot MatchState. Phase=loading + empty arrays so the first
- *  paint and any pre-mirror callsites see a consistent shape. The worker's
- *  Simulator is the source of truth; this is just a placeholder until the
- *  first state mirror arrives. */
-function makeBootState(arena: Arena, _activePlayers: PlayerSlot[]): MatchState {
-  // Lazy: import MatchState constructor only here to avoid heavyweight
-  // setup costs at proxy module-load time.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { createInitialMatchState } = require('../simulator/initialState');
+/** Build the boot MatchState. Placeholder shape so `getState()` /
+ *  `getActiveCharacterNames()` answer synchronously before the first
+ *  worker:engineStateMirror lands. The worker's Simulator is the source of
+ *  truth — anything mutated here is overwritten on first mirror. */
+function makeBootState(arena: Arena, activePlayers: PlayerSlot[], settings: MatchSettings): MatchState {
   const theme = getTheme(arena.themeId);
-  return createInitialMatchState(arena, theme);
+  const players = createInitialPlayers(activePlayers, arena, settings.mods.giantPlayers, Math.random);
+  return createInitialMatchState(arena, theme, settings, players, activePlayers, Math.random);
 }
 
 /** Implements the IRenderer surface that matchLoading needs. Each call

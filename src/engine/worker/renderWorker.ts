@@ -23,7 +23,7 @@
 import { Renderer } from '../renderer';
 import { registerBuiltinArenas } from '../arenas/builtin';
 import { registerBuiltinCharacters } from '../characters/builtin';
-import { getArena, getTheme } from '../arenas/operations';
+import { getArena, getTheme, mirrorArena } from '../arenas/operations';
 import { setHudLanguage } from '../rendering/hud';
 import { ReactiveDecorationSystem } from '../gameLoop/cosmetics/ReactiveDecorationSystem';
 import { WildlifeSystem } from '../gameLoop/cosmetics/WildlifeSystem';
@@ -45,6 +45,21 @@ const ctxScope = self as DedicatedWorkerGlobalScope;
 
 let renderer: Renderer | null = null;
 let stopped = false;
+/** Tracks `mods.mirrorArena` for the lifetime of the match. Mirror is a
+ *  match setting (no mid-match change), so we cache it once at init and
+ *  re-apply `mirrorArena()` to any arena resolved from id. Without this,
+ *  the worker's cosmetic systems + Renderer use the non-mirrored layout
+ *  while main's Simulator runs against the mirrored coords. */
+let _mirror = false;
+
+/** Resolve an arena by id, applying horizontal mirror if the match has it
+ *  on. The result MUST be used everywhere the worker would otherwise call
+ *  `getArena(id)` for a layout-bearing arena (renderFrame, renderBackground,
+ *  cosmetic systems). */
+function resolveArena(id: string): Arena {
+  const a = getArena(id);
+  return _mirror ? mirrorArena(a) : a;
+}
 
 /** Stable MatchState container the worker mutates each frame so the cosmetic
  *  systems can keep a single state ref and not need rebuilding per tick. */
@@ -183,8 +198,17 @@ ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
   // handlers are synchronous below. We dispatch to the engine async path
   // first; if it's not an engine message, fall through to the sync switch.
   if (msg.type === 'host:initEngine') {
+    _mirror = msg.mirrored;
     void ensureEngineBindings().then((m) => {
       m.initEngine(msg);
+      // Sim-in-worker hosts its own Renderer inside engineWorkerInit. Route
+      // the renderer-only IRenderer messages (warmSpriteCache, renderBackground,
+      // warmHudFonts, setRenderScale, setTheme, setBotNavDebugStates, …)
+      // through that same Renderer so the loading pipeline works (otherwise
+      // the proxy posts run forever while the worker's own dispatch sees
+      // a null `renderer`).
+      const engineRenderer = m.getEngineRenderer();
+      if (engineRenderer) renderer = engineRenderer;
       postReady();
     }).catch((err) => postError(err instanceof Error ? err.message : String(err)));
     return;
@@ -222,6 +246,7 @@ ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
           debugFlags.perfEnabled = true;
           _perfEnabled = true;
         }
+        _mirror = msg.mirrored;
         const theme = getTheme(msg.themeId);
         renderer = new Renderer({
           bgCanvas: msg.bgCanvas,
@@ -298,7 +323,11 @@ ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
         renderer.renderBloodDrips(msg.drips);
         return;
       case 'host:renderBackground': {
-        const arena = getArena(msg.arenaId);
+        const arena = resolveArena(msg.arenaId);
+        // originalArena (used by Renderer for the bg/fg-nature paint paths)
+        // is the un-mirrored layout — the canvas itself is flipped via the
+        // Renderer's `mirrored` flag, so the nature draw fns receive the
+        // original coords.
         const original = msg.originalArenaId ? getArena(msg.originalArenaId) : undefined;
         renderer.renderBackground(arena, original);
         return;
@@ -310,7 +339,7 @@ ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
         renderer.warmHudFonts();
         return;
       case 'host:renderFrame': {
-        const arena = getArena(msg.arenaId);
+        const arena = resolveArena(msg.arenaId);
         // Mutate the stable state container in place (Object.assign copies
         // top-level field refs — players, particles, etc.) so the cosmetic
         // systems' captured state ref stays stable. Construct on first

@@ -165,8 +165,20 @@ export class RendererProxy implements IRenderer {
       { type: 'module', name: 'carrot-royale-render' },
     );
     this.worker.addEventListener('message', this.handleMessage);
-    this.worker.addEventListener('error', (e) => opts.onError?.(e.message || 'worker error'));
-    this.worker.addEventListener('messageerror', () => opts.onError?.('worker structured-clone failed'));
+    // On a worker runtime error / structured-clone failure, mark the proxy
+    // dead so subsequent postMessage calls no-op (silent worker is better
+    // than a thrown error per frame). The caller's onError lets Match.tsx
+    // surface a banner / decide whether to fall back to a main-thread
+    // Renderer; the proxy itself does not auto-fallback.
+    this.worker.addEventListener('error', (e) => {
+      const msg = e.message || 'worker error';
+      this.destroyed = true;
+      opts.onError?.(msg);
+    });
+    this.worker.addEventListener('messageerror', () => {
+      this.destroyed = true;
+      opts.onError?.('worker structured-clone failed');
+    });
 
     // Transfer the canvases. Each `transferControlToOffscreen` call detaches
     // the canvas from the main rendering pipeline — main can no longer draw
@@ -260,6 +272,7 @@ export class RendererProxy implements IRenderer {
   private onReady?: () => void;
 
   private handleMessage = (e: MessageEvent<WorkerToHostMsg>): void => {
+    if (this.destroyed) return;
     const msg = e.data;
     if (msg.type === 'worker:ready') {
       this.onReady?.();

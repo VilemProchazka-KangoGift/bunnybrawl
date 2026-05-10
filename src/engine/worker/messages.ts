@@ -14,7 +14,7 @@
  * crosses the wire.
  */
 
-import type { MatchState, Particle, Gib, MatchSettings, PlayerSlot, InputState, MatchPhase } from '../types';
+import type { MatchState, Particle, Gib, MatchSettings, PlayerSlot, InputState, MatchPhase, CharacterDef } from '../types';
 import type { Light } from '../lighting';
 import type { BotNavDebugState } from '../navDebugOverlay';
 import type { NetDebugStats } from '../net/core/debugOverlay';
@@ -84,6 +84,12 @@ export interface HostInitEngineMsg {
   arenaId: string;
   settings: MatchSettings;
   activePlayers: PlayerSlot[];
+  /** Slot → CharacterDef assignments resolved on main. The lobby UI mutates
+   *  the `CHARACTERS` record and `assignBotCharacters` populates
+   *  `BOT_CHARACTERS` per match — neither map crosses the worker boundary,
+   *  so we ship the resolved pairs here and re-populate the worker-side
+   *  registry before constructing the Simulator. */
+  characters: Array<[PlayerSlot, CharacterDef]>;
   mirrored: boolean;
   renderScale: number;
   language: string;

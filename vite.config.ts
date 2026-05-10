@@ -30,6 +30,25 @@ const hapticsStubPath = path.resolve(__dirname, 'src/engine/worker/stubs/haptics
 const keyboardManagerStubPath = path.resolve(__dirname, 'src/engine/worker/stubs/keyboardManager-worker-stub.ts')
 const touchDetectStubPath = path.resolve(__dirname, 'src/engine/worker/stubs/touchDetect-worker-stub.ts')
 
+/** Map from a real engine module's resolved-absolute path → worker stub.
+ *  Resolution is done by joining (importer dir, id) and dropping any `.ts` /
+ *  `/index.ts` suffix. This is robust to any relative-path depth (`../audio`,
+ *  `../../audio`, `../../../audio`, …) and rejects unrelated modules whose
+ *  path happens to end in `/audio` (the previous tail-match heuristic was
+ *  brittle to that). */
+const STUB_BY_RESOLVED: Record<string, string> = {
+  [path.resolve(__dirname, 'src/engine/audio')]: audioStubPath,
+  [path.resolve(__dirname, 'src/engine/haptics')]: hapticsStubPath,
+  [path.resolve(__dirname, 'src/engine/input/KeyboardManager')]: keyboardManagerStubPath,
+  [path.resolve(__dirname, 'src/engine/touchDetect')]: touchDetectStubPath,
+}
+
+function stripExt(p: string): string {
+  if (p.endsWith('/index.ts') || p.endsWith('\\index.ts')) return p.slice(0, -9)
+  if (p.endsWith('.ts')) return p.slice(0, -3)
+  return p
+}
+
 export default defineConfig({
   plugins: [react()],
   base: '/bunnybrawl/',
@@ -45,15 +64,13 @@ export default defineConfig({
       enforce: 'pre',
       resolveId(id: string, importer?: string) {
         if (id === 'howler') return howlerStubPath
-        // Tail-match the relative imports because the same module is
-        // imported with different relative paths from different files.
-        // Order: longest match first (e.g. ../../audio before ../audio).
-        if (!importer) return null
-        if (id.endsWith('/audio') || id.endsWith('/audio/index') || id === '../audio' || id === '../../audio') return audioStubPath
-        if (id.endsWith('/haptics') || id === '../haptics' || id === '../../haptics') return hapticsStubPath
-        if (id.endsWith('/input/KeyboardManager') || id === '../input/KeyboardManager' || id === '../../input/KeyboardManager') return keyboardManagerStubPath
-        if (id.endsWith('/touchDetect') || id === '../touchDetect' || id === '../../touchDetect') return touchDetectStubPath
-        return null
+        if (!importer || !id.startsWith('.')) return null
+        // Resolve the relative import to an absolute path; strip extension
+        // + /index suffix so `../audio`, `../audio.ts`, `../audio/index.ts`
+        // all collapse to `<root>/src/engine/audio`. Compare against the
+        // stub map. Any depth of `../` works.
+        const resolved = stripExt(path.resolve(path.dirname(importer), id))
+        return STUB_BY_RESOLVED[resolved] ?? null
       },
     }],
   },
