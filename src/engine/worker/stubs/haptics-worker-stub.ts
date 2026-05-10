@@ -34,6 +34,4 @@ export const haptics = {
   hazardHit(): void { /* no-op in worker; main fires from its own state if needed */ },
   spring(): void { /* no-op in worker */ },
   bump(): void { /* no-op in worker */ },
-  enabled: false,
-  localSlot: null as PlayerSlot | null,
 };
