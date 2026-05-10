@@ -29,9 +29,12 @@ import type {
   HostInitEngineMsg, HostEngineInputBatchMsg,
   HostEngineSwitchArenaMsg, HostEngineSetPhaseMsg,
   WorkerEngineEventMsg, WorkerEngineStateMirrorMsg,
+  WorkerNetSnapshotMsg,
 } from './messages';
 import type { PlayerSlot, BotSlot, CharacterSlot, InputState, MatchPhase } from '../types';
 import { readSlotInput } from './sabInput';
+import { takeAuthSnapshot, encodeSnapshot } from '../net/snapshot';
+import type { Simulator } from '../simulator/Simulator';
 
 const ctxScope = self as DedicatedWorkerGlobalScope;
 
@@ -55,6 +58,36 @@ let accumulator = 0;
 let lastTime = 0;
 let lastMirrorAt = 0;
 const STATE_MIRROR_INTERVAL_MS = 200;  // 5Hz
+
+/** Phase 2 net-mode flag. 'off' = local-only (Phase 1 default); 'host' =
+ *  encode + emit snapshots per fixedUpdate tick; 'guest' = decode + apply
+ *  incoming snapshots (wired up by Task 12). */
+type NetMode = 'off' | 'host' | 'guest';
+let netMode: NetMode = 'off';
+let hostFrame = 0;
+
+export function setNetMode(mode: NetMode, _delayFrames = 0): void {
+  netMode = mode;
+  hostFrame = 0;
+  // _delayFrames is consumed by the guest-side interpolation setup (Task 12);
+  // host ignores it. Underscore prefix silences noUnusedParameters until then.
+}
+
+/** Read-only for tests. */
+export function getNetMode(): NetMode { return netMode; }
+export function getHostFrame(): number { return hostFrame; }
+
+/** Snapshot + encode helper. Exported as a seam so Task 10's regression
+ *  test can drive a Simulator without spawning a real worker. Returns a
+ *  copied ArrayBuffer owned by the caller — safe to `transfer` to main. */
+export function takeAndEncodeForHost(sim: Simulator): ArrayBuffer {
+  hostFrame++;
+  const snap = takeAuthSnapshot(hostFrame, sim.getState());
+  const { buffer, length } = encodeSnapshot(snap);
+  // .slice copies into a buffer the caller can transfer without disturbing
+  // the codec's reusable scratch.
+  return buffer.slice(0, length);
+}
 
 /** Distributive Omit so each variant in the union keeps its own
  *  required-fields shape (a plain `Omit<WorkerEngineEventMsg, 'type'>`
@@ -202,6 +235,15 @@ function driveTick(currentTime: number): void {
   while (accumulator >= FIXED_TIMESTEP) {
     gameLoop.fixedUpdate(FIXED_TIMESTEP, inputMap);
     accumulator -= FIXED_TIMESTEP;
+    // Host net mode: encode + post snapshot per fixedUpdate so the host's
+    // 60Hz broadcast cadence rides off the simulation tick, not main's rAF.
+    // Main pumps the buffer into HostAuthority.broadcastEncodedSnapshot
+    // which respects per-peer broadcast tier + delta bypass.
+    if (netMode === 'host') {
+      const buf = takeAndEncodeForHost(gameLoop.getSimulator());
+      const msg: WorkerNetSnapshotMsg = { type: 'worker:netSnapshot', buffer: buf, frame: hostFrame };
+      ctxScope.postMessage(msg, [buf]);
+    }
   }
 
   gameLoop.tickCosmetic(FIXED_TIMESTEP);
