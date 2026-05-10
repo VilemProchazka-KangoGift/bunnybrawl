@@ -4,9 +4,13 @@ import { GameLoop } from '../../engine/gameLoop';
 import { NetMatch } from '../../engine/net/netMatch';
 import { MsgType } from '../../engine/net/protocol';
 import { getModalTransport, getHostReclaimTokens, getGuestOwnReclaimToken } from '../OnlineModal';
-import { getArena } from '../../engine/arenas';
+import { getArena, getTheme } from '../../engine/arenas';
 import { perfTrace } from '../../engine/perfTrace';
 import * as fpsCounter from '../../engine/fpsCounter';
+import { isWorkerEnabled, RendererProxy } from '../../engine/worker';
+import { getRenderScale } from '../../engine/renderScale';
+import { debugFlags } from '../../engine/debugFlags';
+import i18n from '../../i18n';
 import type { TouchInputManager } from '../../engine/touchInput';
 import type {
   PlayerSlot, MatchState, MatchSettings, GameScreen,
@@ -145,7 +149,37 @@ export function useOnlineMatch(p: UseOnlineMatchParams): void {
       return;
     }
 
+    // Worker offload: same path as useLocalMatch — when the local-device
+    // flag is on, transfer the canvases to a Web Worker that hosts the
+    // Renderer. NetMatch's GameLoop adopts the proxy via injectedRenderer.
+    // Both host and guest paths use the same flag.
+    const useWorker = isWorkerEnabled();
+    let workerProxy: RendererProxy | null = null;
+    if (useWorker) {
+      try {
+        workerProxy = new RendererProxy({
+          bgCanvas,
+          fgCanvas,
+          hudCanvas,
+          bgNightCanvas,
+          fgNightTint,
+          lightCanvas,
+          theme: getTheme(arena.themeId),
+          mirrored: matchSettings.mods.mirrorArena,
+          timeLimit: matchSettings.timeLimit,
+          renderScale: getRenderScale(),
+          language: i18n.language,
+          perfEnabled: debugFlags.perfEnabled,
+          onError: (m) => console.error('[render worker]', m),
+        });
+      } catch (e) {
+        console.warn('[worker offload] proxy construction failed (online), falling back:', e);
+        workerProxy = null;
+      }
+    }
+
     const netMatch = new NetMatch({
+      injectedRenderer: workerProxy ?? undefined,
       bgCanvas,
       bgNightCanvas,
       fgNightTint,
@@ -295,6 +329,7 @@ export function useOnlineMatch(p: UseOnlineMatchParams): void {
       netMatch.stop();
       netMatchRef.current = null;
       commonCleanup();
+      if (workerProxy) workerProxy.destroy();
       clearTimer(disconnectDelayRef);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps

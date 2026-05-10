@@ -33,7 +33,7 @@ import {
   drawSurfaceDecals, drawRipples,
 } from './rendering';
 import { setSpriteCacheScale } from './rendering/players';
-import { setHudScale, setHudLanguage } from './rendering/hud';
+import { setHudScale, setHudLanguage, warmHudFonts } from './rendering/hud';
 import { applyRenderScaleToCanvas, getRenderScale } from './renderScale';
 import { Lighting } from './lighting';
 import type { Light, PointLight, RGB } from './lighting';
@@ -168,6 +168,10 @@ export interface IRenderer {
   hasWarmedAll(names: string[]): boolean;
   setTheme(theme: ThemeConfig): void;
   renderBackground(arena: Arena, originalArena?: Arena): void;
+  /** Pre-render HUD font/glyph combinations so the first in-match HUD
+   *  draw doesn't JIT a 30+ms font-shaping pass. Called from
+   *  matchLoading. */
+  warmHudFonts(): void;
   emitLightBurst(x: number, y: number, kind: 'spawn' | 'stomp'): void;
   setArenaLights(lights: ReadonlyArray<Light>): void;
   bakeGibs(gibs: Gib[]): void;
@@ -527,6 +531,14 @@ export class Renderer implements IRenderer {
   warmSpriteCache(names: string[]): void {
     warmSpriteCacheForCharacters(names, this.theme);
     for (const name of names) this._warmedNames.add(name);
+  }
+
+  /** Pre-render every HUD font + size combination so the first in-match
+   *  draw doesn't JIT a font-shaping pass. The fg ctx is the right
+   *  surface — the off-screen probe coords sit far outside the visible
+   *  region so this is invisible to the eye. */
+  warmHudFonts(): void {
+    warmHudFonts(this.fgCtx);
   }
 
   /** True when every name has been warmed under the current theme. Used by

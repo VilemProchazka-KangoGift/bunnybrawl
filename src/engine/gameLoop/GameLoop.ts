@@ -89,6 +89,16 @@ export class GameLoop {
   private _cosmeticLead = 0;
   private _cosmeticTick = 0;
 
+  /** True when an external renderer (RendererProxy) was injected. The worker
+   *  hosts its own copies of `WildlifeSystem` and the per-frame
+   *  reactive/wildlife render args, so main can skip:
+   *   - WildlifeSystem.cosmeticUpdate (purely visual; no burst callbacks)
+   *   - building the per-frame reactive/wildlife arg objects (proxy strips them)
+   *  Reactive's tick stays on main because its burst → particle-emit path
+   *  fires from `applyStompImpulse` → `cosmeticUpdate`, and ParticleSystem
+   *  lives on main. */
+  private _workerActive = false;
+
   constructor(
     bgCanvas: HTMLCanvasElement,
     fgCanvas: HTMLCanvasElement,
@@ -135,6 +145,7 @@ export class GameLoop {
       // and is wired to its worker. Tell it our settings; canvas args are
       // unused.
       this.renderer = injectedRenderer;
+      this._workerActive = true;
     } else {
       this.renderer = new Renderer({
         bgCanvas,
@@ -647,9 +658,14 @@ export class GameLoop {
         this.reactiveDecorationSystem.cosmeticUpdate(dt * 2);
         perfTrace.end('cosmetic.reactive', reactiveStart);
 
-        const wildlifeStart = perfTrace.begin('cosmetic.wildlife');
-        this.wildlifeSystem.cosmeticUpdate(dt * 2);
-        perfTrace.end('cosmetic.wildlife', wildlifeStart);
+        // WildlifeSystem.cosmeticUpdate is purely visual (no burst /
+        // particle callback). When the worker hosts the renderer it
+        // maintains its own WildlifeSystem; main's tick is dead weight.
+        if (!this._workerActive) {
+          const wildlifeStart = perfTrace.begin('cosmetic.wildlife');
+          this.wildlifeSystem.cosmeticUpdate(dt * 2);
+          perfTrace.end('cosmetic.wildlife', wildlifeStart);
+        }
       }
 
       // Per-arena bespoke cosmetic logic (e.g. underwater bubble trails).
@@ -768,8 +784,14 @@ export class GameLoop {
 
   /** Build the per-frame reactive arg passed to renderFrame. The inner arrays
    *  are stable references owned by the system (rebuilt only on `setInstances`)
-   *  — no per-frame element copy. */
+   *  — no per-frame element copy. Worker-mode short-circuit: the proxy
+   *  strips this arg before postMessage, so building it on main is wasted
+   *  work. The worker has its own ReactiveDecorationSystem and renders
+   *  from there. */
+  private static _EMPTY_REACTIVE: ReactiveRenderArg = { prePlayer: [], postPlayer: [], windPhase: 0 };
+  private static _EMPTY_WILDLIFE: WildlifeRenderArg = { groundCritter: [], animBackground: [] };
   private _buildReactiveArg(): ReactiveRenderArg {
+    if (this._workerActive) return GameLoop._EMPTY_REACTIVE;
     return {
       prePlayer: this.reactiveDecorationSystem.getInstancesForLayer('prePlayer'),
       postPlayer: this.reactiveDecorationSystem.getInstancesForLayer('postPlayer'),
@@ -780,6 +802,7 @@ export class GameLoop {
   /** Build the per-frame wildlife arg passed to renderFrame. Same stable-ref
    *  contract as `_buildReactiveArg`. */
   private _buildWildlifeArg(): WildlifeRenderArg {
+    if (this._workerActive) return GameLoop._EMPTY_WILDLIFE;
     return {
       groundCritter: this.wildlifeSystem.getInstancesForLayer('groundCritter'),
       animBackground: this.wildlifeSystem.getInstancesForLayer('animBackground'),

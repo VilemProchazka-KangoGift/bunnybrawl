@@ -13,6 +13,36 @@ import { getCharacterEmoji, getCharacterDisplayName } from '../characters';
 let _hudLanguage = 'en';
 export function setHudLanguage(lang: string): void { _hudLanguage = lang; invalidateHudCache(); }
 
+/** Pre-render every font-size + family combination drawHUD uses, so the
+ *  first in-match HUD draw doesn't JIT a 30+ms font-shaping pass.
+ *  Mirrors the `warmSpriteCache` pattern. Called from `matchLoading` for
+ *  both main-thread and worker-hosted Renderers (HUD lives in either). */
+export function warmHudFonts(ctx: Ctx2D): void {
+  const fonts: string[] = [
+    '28px sans-serif',
+    'bold 12px "Press Start 2P", monospace',
+    'bold 16px "Press Start 2P", monospace',
+    'bold 14px "Press Start 2P", monospace',
+    'bold 18px "Press Start 2P", monospace',
+    'bold 7px monospace',
+    'bold 14px monospace',
+    COMBO_POPUP_FONT,
+    'bold 80px "Nunito", sans-serif',
+  ];
+  const probeText = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz:+×';
+  ctx.save();
+  // Off-screen probe — paint at (-9999, -9999) so the warm-up paints don't
+  // smear on top of any real drawing. The font shaping engine still
+  // exercises every glyph at every size, which is what we want.
+  ctx.fillStyle = '#000';
+  for (const f of fonts) {
+    ctx.font = f;
+    ctx.fillText(probeText, -9999, -9999);
+    ctx.measureText(probeText);
+  }
+  ctx.restore();
+}
+
 // Used by OnlineModal as input maxLength too.
 export const PLAYER_NAME_MAX_LENGTH = 12;
 const PLAYER_NAME_MAX_LENGTH_COMPACT = 4;

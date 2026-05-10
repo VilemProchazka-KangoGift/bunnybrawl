@@ -68,6 +68,11 @@ export async function runLoadingTasks(opts: RunLoadingTasksOpts): Promise<void> 
   const spriteTask = new Promise<void>((resolve) => {
     setTimeout(() => {
       opts.renderer.warmSpriteCache(opts.characterNames);
+      // Pre-render HUD font + glyph combinations so the first in-match
+      // HUD draw doesn't JIT a font-shaping pass (cost ~30ms first
+      // invocation; observed in worker-offload phase 5 perf as the only
+      // long frame in scenario A).
+      opts.renderer.warmHudFonts();
       resolve();
     }, 0);
   });

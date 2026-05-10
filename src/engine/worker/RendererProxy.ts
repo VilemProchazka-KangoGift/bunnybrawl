@@ -365,6 +365,9 @@ export class RendererProxy implements IRenderer {
     for (const n of names) this.warmedNames.add(n);
     this.post({ type: 'host:warmSpriteCache', names });
   }
+  warmHudFonts(): void {
+    this.post({ type: 'host:warmHudFonts' });
+  }
   hasWarmedAll(names: string[]): boolean {
     for (const n of names) if (!this.warmedNames.has(n)) return false;
     return true;

@@ -65,6 +65,7 @@ export interface HostRenderBackgroundMsg {
   originalArenaId?: string;
 }
 export interface HostWarmSpriteCacheMsg { type: 'host:warmSpriteCache'; names: string[] }
+export interface HostWarmHudFontsMsg { type: 'host:warmHudFonts' }
 export interface HostRenderFrameMsg {
   type: 'host:renderFrame';
   state: MatchState;
@@ -102,6 +103,7 @@ export type HostToWorkerMsg =
   | HostRenderBloodDripsMsg
   | HostRenderBackgroundMsg
   | HostWarmSpriteCacheMsg
+  | HostWarmHudFontsMsg
   | HostRenderFrameMsg;
 
 export interface WorkerReadyMsg { type: 'worker:ready' }

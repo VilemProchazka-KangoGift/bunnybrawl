@@ -51,7 +51,9 @@ export class NetMatch {
   constructor(config: NetMatchConfig) {
     this._isHost = config.transport.isHost;
 
-    // Both host and guest create a GameLoop (needed for canvas rendering)
+    // Both host and guest create a GameLoop (needed for canvas rendering).
+    // When an injectedRenderer is provided (worker-offload path), GameLoop
+    // adopts it and ignores the canvas args.
     this.gameLoop = new GameLoop(
       config.bgCanvas,
       config.fgCanvas,
@@ -64,6 +66,7 @@ export class NetMatch {
       config.bgNightCanvas,
       config.fgNightTint,
       config.lightCanvas,
+      config.injectedRenderer,
     );
 
     // Build shared context + collaborators. Order matters: context first,

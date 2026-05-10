@@ -261,6 +261,9 @@ ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
       case 'host:warmSpriteCache':
         renderer.warmSpriteCache(msg.names);
         return;
+      case 'host:warmHudFonts':
+        renderer.warmHudFonts();
+        return;
       case 'host:renderFrame': {
         const arena = getArena(msg.arenaId);
         // Mutate the stable state container in place (Object.assign copies
