@@ -54,6 +54,16 @@ export default defineConfig({
   base: '/bunnybrawl/',
   optimizeDeps: {
     include: ['@trystero-p2p/mqtt'],
+    // Exclude howler from prebundling so the worker's `id === 'howler'`
+    // alias in `worker.plugins` actually fires in dev. Without this,
+    // Vite's optimizeDeps rewrites worker `import 'howler'` to
+    // `/node_modules/.vite/deps/howler.js` BEFORE the worker plugin's
+    // resolver runs — the prebundled module then crashes the worker at
+    // init with `HowlerGlobal is not defined`. Production builds aren't
+    // affected (no optimizeDeps; rollup respects worker.plugins normally).
+    // Trade-off: main-thread dev startup is ~200ms slower the first time
+    // it imports howler. Acceptable.
+    exclude: ['howler'],
   },
   define: {
     __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
