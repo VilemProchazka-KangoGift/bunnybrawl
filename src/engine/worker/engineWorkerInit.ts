@@ -47,9 +47,16 @@ let lastTime = 0;
 let lastMirrorAt = 0;
 const STATE_MIRROR_INTERVAL_MS = 200;  // 5Hz
 
-function postEvent(ev: Omit<WorkerEngineEventMsg, 'type'>): void {
-  const msg: WorkerEngineEventMsg = { type: 'worker:engineEvent', ...ev };
-  ctxScope.postMessage(msg);
+/** Distributive Omit so each variant in the union keeps its own
+ *  required-fields shape (a plain `Omit<WorkerEngineEventMsg, 'type'>`
+ *  collapses the union into a single intersection that loses
+ *  per-variant required fields). */
+type EventBody = WorkerEngineEventMsg extends infer T
+  ? T extends { type: 'worker:engineEvent' } ? Omit<T, 'type'> : never
+  : never;
+
+function postEvent(ev: EventBody): void {
+  ctxScope.postMessage({ type: 'worker:engineEvent', ...ev } as WorkerEngineEventMsg);
 }
 
 export function initEngine(msg: HostInitEngineMsg): void {

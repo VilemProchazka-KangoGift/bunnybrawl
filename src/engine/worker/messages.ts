@@ -219,28 +219,36 @@ export interface WorkerPerfStatsMsg {
 /** Engine-side events posted from the worker's GameLoop callbacks back to
  *  main. Main dispatches `audio` / haptic / phase-change / match-end. The
  *  union keeps wire shape compact; main's handler switches on `kind`. */
-export interface WorkerEngineEventMsg {
-  type: 'worker:engineEvent';
-  kind:
-    | 'sfx' | 'animal' | 'musicStart' | 'musicStop' | 'soundStop'
-    | 'soundVolume' | 'allGameSoundsStop' | 'paused' | 'resumeContext'
-    | 'preloadArena' | 'haptic'
-    | 'phaseChange' | 'matchEnd';
-  name?: string;
-  themeId?: string;
-  volume?: number;
-  paused?: boolean;
-  arenaId?: string;
-  flavor?: 'landing' | 'hitstop';
-  slot?: PlayerSlot;
-  prevVy?: number;
-  phase?: MatchPhase;
-  winner?: PlayerSlot | null;
-  /** Carried by `kind === 'matchEnd'`. Worker includes the final
-   *  MatchState in the event so VictoryScreen never reads a stale
-   *  bootState if matchEnd fires before the next 5Hz state mirror. */
-  state?: MatchState;
-}
+/** Discriminated union — each `kind` carries exactly the fields it needs.
+ *  Per-variant typing prevents a regression where, e.g., a `'sfx'` event
+ *  accidentally sets `state` (was previously possible because all fields
+ *  were optional on a single interface). The dispatcher in
+ *  `EngineWorkerProxy.dispatchEngineEvent` narrows automatically per case;
+ *  its `default` branch uses `kind: never` to make missing cases a
+ *  type error. */
+interface WorkerEngineEventBase { type: 'worker:engineEvent' }
+export type WorkerEngineEventMsg =
+  | (WorkerEngineEventBase & { kind: 'sfx' | 'animal' | 'soundStop'; name: string })
+  | (WorkerEngineEventBase & { kind: 'musicStart'; themeId: string })
+  | (WorkerEngineEventBase & { kind: 'musicStop' | 'allGameSoundsStop' | 'resumeContext' })
+  | (WorkerEngineEventBase & { kind: 'soundVolume'; name: string; volume: number })
+  | (WorkerEngineEventBase & { kind: 'paused'; paused: boolean })
+  | (WorkerEngineEventBase & { kind: 'preloadArena'; arenaId: string })
+  | (WorkerEngineEventBase & {
+      kind: 'haptic';
+      flavor: 'landing' | 'hitstop';
+      slot?: PlayerSlot;
+      prevVy?: number;
+    })
+  | (WorkerEngineEventBase & { kind: 'phaseChange'; phase: MatchPhase })
+  | (WorkerEngineEventBase & {
+      kind: 'matchEnd';
+      winner: PlayerSlot | null;
+      /** Final MatchState shipped alongside the event so VictoryScreen
+       *  never reads a stale bootState if matchEnd outruns the 5Hz
+       *  state mirror. */
+      state?: MatchState;
+    });
 
 /** Periodic state mirror for E2E (`window.__bunnyTest.state()`) and for
  *  Match.tsx's getActiveCharacterNames / getArena / etc. callsites that

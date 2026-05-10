@@ -362,7 +362,7 @@ export class EngineWorkerProxy {
       return;
     }
     if (msg.type === 'worker:engineEvent') {
-      this.dispatchEngineEvent(msg.kind, msg);
+      this.dispatchEngineEvent(msg);
       return;
     }
     if (msg.type === 'worker:error') {
@@ -372,18 +372,18 @@ export class EngineWorkerProxy {
     }
   };
 
-  private dispatchEngineEvent(kind: WorkerEngineEventMsg['kind'], m: WorkerEngineEventMsg): void {
-    switch (kind) {
-      case 'sfx':              if (m.name) audio.play(m.name as Parameters<typeof audio.play>[0]); break;
-      case 'animal':           if (m.name) audio.playAnimal(m.name as Parameters<typeof audio.playAnimal>[0]); break;
-      case 'musicStart':       if (m.themeId) audio.playMusic(m.themeId); break;
+  private dispatchEngineEvent(m: WorkerEngineEventMsg): void {
+    switch (m.kind) {
+      case 'sfx':              audio.play(m.name as Parameters<typeof audio.play>[0]); break;
+      case 'animal':           audio.playAnimal(m.name as Parameters<typeof audio.playAnimal>[0]); break;
+      case 'soundStop':        audio.stop(m.name as Parameters<typeof audio.stop>[0]); break;
+      case 'musicStart':       audio.playMusic(m.themeId); break;
       case 'musicStop':        audio.stopMusic(); break;
-      case 'soundStop':        if (m.name) audio.stop(m.name as Parameters<typeof audio.stop>[0]); break;
-      case 'soundVolume':      if (m.name && typeof m.volume === 'number') audio.setVolume(m.name as Parameters<typeof audio.setVolume>[0], m.volume); break;
+      case 'soundVolume':      audio.setVolume(m.name as Parameters<typeof audio.setVolume>[0], m.volume); break;
       case 'allGameSoundsStop': audio.stopAllGameSounds(); break;
-      case 'paused':           audio.setPaused(!!m.paused); break;
+      case 'paused':           audio.setPaused(m.paused); break;
       case 'resumeContext':    audio.resumeContext(); break;
-      case 'preloadArena':     if (m.arenaId) audio.preloadArena(m.arenaId); break;
+      case 'preloadArena':     audio.preloadArena(m.arenaId); break;
       case 'haptic': {
         if (m.slot && haptics.isLocal(m.slot)) {
           if (m.flavor === 'landing' && typeof m.prevVy === 'number') haptics.landing(m.prevVy);
@@ -391,8 +391,14 @@ export class EngineWorkerProxy {
         }
         break;
       }
-      case 'phaseChange':      if (m.phase) this.onPhaseChange?.(m.phase); break;
-      case 'matchEnd':         this.onMatchEnd(m.winner ?? null, m.state ?? this.mirrorState ?? this.bootState); break;
+      case 'phaseChange':      this.onPhaseChange?.(m.phase); break;
+      case 'matchEnd':         this.onMatchEnd(m.winner, m.state ?? this.mirrorState ?? this.bootState); break;
+      default: {
+        // Exhaustiveness check: if a new kind is added to WorkerEngineEventMsg
+        // without a case here, `m` won't narrow to `never` and TS errors.
+        const _exhaustive: never = m;
+        void _exhaustive;
+      }
     }
   }
 }
