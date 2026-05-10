@@ -68,25 +68,13 @@ export class HostAuthority {
             down: incoming.down,
           };
         },
-        onPlayerReconnect: (state, slot) => {
-          // Phase 2: when the sim runs in a Web Worker, state-mutating
-          // operations have to go through the proxy. The `state` arg here
-          // is main's mirror copy; mutating it doesn't propagate to the
-          // worker's authoritative sim state. Route through the driver.
-          if (this.gameLoop.isRemoteSim()) {
-            this.gameLoop.reconnectSlot(slot as PlayerSlot);
-            return;
-          }
-          const player = state.players.find(p => p.id === slot);
-          if (player) {
-            player.disconnected = false;
-            player.active = true;
-            if (player.state === 'splat') {
-              player.state = 'respawning';
-              player.respawnTimer = 1.5;
-              player.splatTimer = 0;
-            }
-          }
+        onPlayerReconnect: (_state, slot) => {
+          // When the sim runs in a Web Worker, the `state` arg here is
+          // main's 5Hz mirror — mutating it doesn't propagate. Routing
+          // through `reconnectSlot` posts a `host:netReconnectSlot`
+          // message that runs `Simulator.reconnectPlayer` inside the
+          // worker.
+          this.gameLoop.reconnectSlot(slot as PlayerSlot);
         },
         onPlayerDisconnect: config.onPlayerDisconnect,
       },

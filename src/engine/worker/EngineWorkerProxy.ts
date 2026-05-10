@@ -20,6 +20,7 @@
  */
 
 import { KeyboardManager } from '../input/KeyboardManager';
+import { mergeKeyboardTouchInput } from '../input/mergeKeyboardTouch';
 import { audio } from '../audio';
 import { haptics } from '../haptics';
 import { isTouchPrimary } from '../touchDetect';
@@ -38,7 +39,7 @@ import type {
   HostInitEngineMsg, HostStopMsg, HostEngineInputBatchMsg,
   HostEnginePauseMsg, HostEngineResumeMsg,
   HostEngineSwitchArenaMsg, HostEngineSetPhaseMsg, HostEngineSkipCountdownMsg,
-  HostNetSetModeMsg, HostNetSetExpectedSlotsMsg, HostNetSnapshotApplyMsg,
+  HostNetSetModeMsg, HostNetSnapshotApplyMsg,
   HostNetDisconnectSlotMsg, HostNetReconnectSlotMsg,
   WorkerEngineEventMsg, WorkerToHostMsg,
 } from './messages';
@@ -356,12 +357,12 @@ export class EngineWorkerProxy {
   isPaused(): boolean { return this.paused; }
   isAutoSlowFlipped(): boolean { return false; }  // worker-side flag not mirrored yet
 
-  /** NetMatchDriver: host-side disconnect propagation. The generic core
-   *  HostAuthority calls `simulation.disconnectPlayer(slot)` when a peer's
-   *  grace timer expires; for remote-sim mode that has to route through
-   *  the worker. Same wire shape as `disconnectSlot`. */
+  /** Host-side disconnect propagation. The generic core HostAuthority
+   *  calls `simulation.disconnectPlayer(slot)` when a peer's grace timer
+   *  expires; in remote-sim mode that routes through this postMessage. */
   disconnectPlayer(slot: PlayerSlot): void {
-    this.disconnectSlot(slot);
+    const m: HostNetDisconnectSlotMsg = { type: 'host:netDisconnectSlot', slot };
+    this.worker.postMessage(m);
   }
 
   // ---- NetMatchDriver remainder (worker-hosted, mostly no-op on main) ----
@@ -373,20 +374,10 @@ export class EngineWorkerProxy {
    *  feed the input fairness ring before posting the per-tick batch. */
   getInputAny(): InputState {
     const kb = this.keyboardManager.readAny();
-    if (this.touchInput) {
-      const touchPlayer = this.touchSlot
-        ? this.mirrorState?.players.find((p) => p.id === this.touchSlot)
-        : null;
-      const airborne = touchPlayer?.state === 'airborne';
-      const ti = this.touchInput.getInputForPlayer(airborne);
-      return {
-        left: kb.left || ti.left,
-        right: kb.right || ti.right,
-        jump: kb.jump || ti.jump,
-        down: kb.down || ti.down,
-      };
-    }
-    return kb;
+    const touchPlayer = this.touchSlot
+      ? this.mirrorState?.players.find((p) => p.id === this.touchSlot)
+      : null;
+    return mergeKeyboardTouchInput(kb, this.touchInput, touchPlayer?.state === 'airborne');
   }
 
   fixedUpdate(_dt: number, _networkInputs?: Map<string, InputState>): void { /* worker drives */ }
@@ -413,12 +404,34 @@ export class EngineWorkerProxy {
 
   /** Replace the previous batch and post a fresh host:engineInputBatch
    *  with the (already-fairness-delayed) input map. Reuses the existing
-   *  Phase 1 wire shape — SAB Step 2's bitfield path may take over per
-   *  frame once it's wired, but the postMessage path is the fallback. */
+   *  Phase 1 wire shape — SAB Step 2's bitfield path may take over once
+   *  wired, but the postMessage path is the COOP/COEP-less fallback.
+   *  Reuses a class-scoped scratch tuple list across calls to avoid a
+   *  per-tick array allocation; dedups against the previous batch so a
+   *  60Hz host with idle hands posts ~0 messages/sec, matching the SAB
+   *  fast path's cadence. */
+  private _inputBatchScratch: Array<[PlayerSlot, InputState]> = [];
+  private _lastInputBatchHash = 0;
   postInputBatch(inputs: ReadonlyMap<PlayerSlot, InputState>): void {
-    const arr: Array<[PlayerSlot, InputState]> = [];
-    for (const [slot, input] of inputs) arr.push([slot, input]);
-    const m: HostEngineInputBatchMsg = { type: 'host:engineInputBatch', inputs: arr };
+    // Bitfield hash over the input map. 4 bits per slot, slot order
+    // matches insertion (which `HostAuthority.getNetworkInputs` keeps
+    // stable). Collisions are acceptable — at worst we miss one update.
+    let hash = 0;
+    let bit = 0;
+    for (const [, input] of inputs) {
+      if (input.left)  hash |= 1 << bit;
+      if (input.right) hash |= 1 << (bit + 1);
+      if (input.jump)  hash |= 1 << (bit + 2);
+      if (input.down)  hash |= 1 << (bit + 3);
+      bit += 4;
+    }
+    if (hash === this._lastInputBatchHash && this.inputsEverSent) return;
+    this._lastInputBatchHash = hash;
+    this.inputsEverSent = true;
+
+    this._inputBatchScratch.length = 0;
+    for (const [slot, input] of inputs) this._inputBatchScratch.push([slot, input]);
+    const m: HostEngineInputBatchMsg = { type: 'host:engineInputBatch', inputs: this._inputBatchScratch };
     this.worker.postMessage(m);
   }
 
@@ -432,28 +445,13 @@ export class EngineWorkerProxy {
     this.worker.postMessage(m);
   }
 
-  /** Defensive: assert the worker's sim has the slot set the host expects.
-   *  Posts host:netSetExpectedSlots; the worker logs a worker:error on
-   *  mismatch. Not load-bearing for correctness; helps catch lobby drift. */
-  setExpectedSlots(slots: PlayerSlot[]): void {
-    const m: HostNetSetExpectedSlotsMsg = { type: 'host:netSetExpectedSlots', slots };
-    this.worker.postMessage(m);
-  }
-
   /** Guest-only. Hand an encoded snapshot buffer to the worker for decode
    *  + interp + apply. The buffer is transferred — main must not retain
    *  a reference after this call. The Trystero 1-byte type prefix is
-   *  already stripped by the caller (the netmatch GuestLoop handler). */
+   *  already stripped by the caller. */
   pumpIncomingSnapshot(buffer: ArrayBuffer): void {
     const m: HostNetSnapshotApplyMsg = { type: 'host:netSnapshotApply', buffer };
     this.worker.postMessage(m, [buffer]);
-  }
-
-  /** Host-only. Tell the worker a peer's grace timer expired — the sim
-   *  marks the player disconnected and stops simulating their inputs. */
-  disconnectSlot(slot: PlayerSlot): void {
-    const m: HostNetDisconnectSlotMsg = { type: 'host:netDisconnectSlot', slot };
-    this.worker.postMessage(m);
   }
 
   /** Host-only. Tell the worker a peer reconnected — the sim respawns the

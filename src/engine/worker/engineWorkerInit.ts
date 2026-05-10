@@ -366,23 +366,6 @@ export function stopEngine(): void {
 
 // ---- Phase 2: NetMatch async fixedUpdate handlers --------------------------
 
-/** Defensive: the host may post the expected-slot list before the worker's
- *  fixedUpdate runs. We assert the sim's slot set matches and emit a
- *  worker:error if it doesn't. Doesn't mutate state — the sim was already
- *  constructed from `msg.activePlayers` at initEngine time. */
-export function setExpectedSlots(slots: PlayerSlot[]): void {
-  if (!gameLoop) return;
-  const worldSlots = new Set(gameLoop.getState().players.map((p) => p.id));
-  for (const s of slots) {
-    if (!worldSlots.has(s)) {
-      ctxScope.postMessage({
-        type: 'worker:error',
-        message: `[engineWorker] expected slot ${s} missing from sim — host/worker slot mismatch`,
-      });
-    }
-  }
-}
-
 /** Guest-only. Main strips the Trystero 1-byte type prefix before posting,
  *  so we decode from offset 0. The decode reuses one of GUEST_POOL_SIZE
  *  AuthSnapshot instances — matches the interpolation ring depth so the
@@ -402,19 +385,9 @@ export function disconnectSlotInWorker(slot: PlayerSlot): void {
   gameLoop.getSimulator().disconnectPlayer(slot);
 }
 
-/** Host posts this on a successful RECONNECT_REQUEST. Mirrors
- *  hostAuthority's onPlayerReconnect callback. */
+/** Host posts this on a successful RECONNECT_REQUEST. */
 export function reconnectSlotInWorker(slot: PlayerSlot): void {
-  if (!gameLoop) return;
-  const player = gameLoop.getState().players.find((p) => p.id === slot);
-  if (!player) return;
-  player.disconnected = false;
-  player.active = true;
-  if (player.state === 'splat') {
-    player.state = 'respawning';
-    player.respawnTimer = 1.5;
-    player.splatTimer = 0;
-  }
+  gameLoop?.getSimulator().reconnectPlayer(slot);
 }
 
 /** Used by `renderWorker.ts` to route IRenderer-shaped messages

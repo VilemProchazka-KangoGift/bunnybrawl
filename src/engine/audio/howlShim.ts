@@ -25,12 +25,12 @@
  * `Howl` export to consumers once the await completes.
  */
 import type { Howl as RealHowl } from 'howler';
-const _isWorker = typeof (globalThis as { importScripts?: unknown }).importScripts === 'function';
+import { isWorkerScope } from '../isWorker';
 // The stub's API is a strict subset of Howler's. Character packs declare
 // `createSound: () => Howl` and only ever invoke the constructor; in worker
 // context the stub class is never instantiated (audio events route back to
 // main). Cast to the real Howl constructor type so the union doesn't widen
 // at the call sites.
-export const Howl = (_isWorker
+export const Howl = (isWorkerScope
   ? (await import('../worker/howlerStub')).Howl
   : (await import('howler')).Howl) as unknown as typeof RealHowl;

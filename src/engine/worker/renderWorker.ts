@@ -240,7 +240,6 @@ ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
   // Phase 2: NetMatch async fixedUpdate wiring. Worker hosts encode/decode;
   // main only forwards buffers to/from the transport.
   if (msg.type === 'host:netSetMode') { engineBindings.setNetMode(msg.mode, msg.delayFrames); return; }
-  if (msg.type === 'host:netSetExpectedSlots') { engineBindings.setExpectedSlots(msg.slots); return; }
   if (msg.type === 'host:netSnapshotApply') { engineBindings.applyIncomingSnapshot(msg.buffer); return; }
   if (msg.type === 'host:netDisconnectSlot') { engineBindings.disconnectSlotInWorker(msg.slot); return; }
   if (msg.type === 'host:netReconnectSlot') { engineBindings.reconnectSlotInWorker(msg.slot); return; }

@@ -84,12 +84,6 @@ export interface NetMatchDriver {
   /** Phase 2: tell the worker which net role it's running. */
   setNetMode(mode: 'host' | 'guest' | 'off', delayFrames?: number): void;
 
-  /** Phase 2: defensive slot-set assertion (host → worker). */
-  setExpectedSlots(slots: PlayerSlot[]): void;
-
-  /** Phase 2: route a grace-timer-expired disconnect to the worker's sim. */
-  disconnectSlot(slot: PlayerSlot): void;
-
   /** Phase 2: route a RECONNECT_REQUEST acceptance to the worker's sim. */
   reconnectSlot(slot: PlayerSlot): void;
 }

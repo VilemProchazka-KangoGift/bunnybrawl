@@ -276,29 +276,14 @@ export class GuestLoop {
   }
 
   handleGuestSnapshot(data: ArrayBuffer): void {
-    // Phase 2: in remote-sim mode the worker owns the interpolation ring +
-    // decode pool. Main strips the 1-byte type prefix and ships the buffer
-    // straight across — no decode on main. Baseline-store + ACK still run
-    // on main because delta-compression bookkeeping rides on the transport
-    // layer and the host's per-peer divisor logic lives in HostAuthority.
+    // Remote-sim mode: worker owns the interpolation ring + decode pool.
+    // Strip the 1-byte type prefix and transfer the buffer over. The host
+    // will keyframe-recover via STALE_ACK_THRESHOLD when the delta path
+    // stalls; baseline-store + ACK on main return when the worker reports
+    // applied frames back via `worker:netInterpStats`.
     if (this.ctx.gameLoop.isRemoteSim()) {
       this.noteSnapshotArrival();
-      const stripped = data.slice(1);
-      this.ctx.gameLoop.pumpIncomingSnapshot(stripped);
-      // The slice was transferred to the worker; we need a fresh copy for
-      // the baseline ring. data.slice(1) above also detached the original
-      // by the time we hit pumpIncomingSnapshot — but the SOURCE `data`
-      // isn't detached, only the copy we just produced. So duplicate.
-      if (!this.ctx.autoSlowReported) {
-        const baselineCopy = data.slice(1);
-        // Need the frame number from the encoded bytes; readDeltaBaseFrame
-        // helper isn't right for full snapshots. Skip baseline + ACK in
-        // remote-sim mode for now (the worker won't ACK either); host will
-        // keyframe-recover via STALE_ACK_THRESHOLD if delta path stalls.
-        // (Future: ship frame back via worker:netInterpStats so we can
-        // keep delta running.)
-        void baselineCopy;
-      }
+      this.ctx.gameLoop.pumpIncomingSnapshot(data.slice(1));
       return;
     }
 

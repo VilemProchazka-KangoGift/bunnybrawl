@@ -1101,30 +1101,20 @@ describe('HostAuthority', () => {
       });
     });
 
-    it('reactivates a disconnected player and triggers respawn if splatted', () => {
+    it('routes the reactivation through gameLoop.reconnectSlot', () => {
       const { host } = makeHostAuthority();
-      const player = {
-        id: 'P2' as PlayerSlot,
-        disconnected: true,
-        active: false,
-        state: 'splat' as const,
-        respawnTimer: 0,
-        splatTimer: 1.5,
-      };
-      mockGameLoopInstance.getState.mockReturnValue({
-        ...makeMinimalMatchState(),
-        players: [player],
-      });
-
       host.addGuest('peer-a', 'P2' as PlayerSlot, 'token-xyz');
       host.removeGuest('peer-a');
+      mockGameLoopInstance.reconnectSlot.mockClear();
+
       host.handleReconnectRequest('P2' as PlayerSlot, 'peer-new', 'token-xyz');
 
-      expect(player.disconnected).toBe(false);
-      expect(player.active).toBe(true);
-      expect(player.state).toBe('respawning');
-      expect(player.respawnTimer).toBe(1.5);
-      expect(player.splatTimer).toBe(0);
+      // State mutation (disconnected=false, splat→respawning, respawnTimer)
+      // lives in Simulator.reconnectPlayer. Both code paths — local sim
+      // (GameLoop.reconnectSlot → simulator.reconnectPlayer) and remote
+      // sim (proxy posts host:netReconnectSlot, worker calls the same
+      // simulator method) — route through this single seam.
+      expect(mockGameLoopInstance.reconnectSlot).toHaveBeenCalledWith('P2');
     });
   });
 
