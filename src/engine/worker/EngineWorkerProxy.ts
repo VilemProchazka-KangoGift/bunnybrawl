@@ -37,6 +37,8 @@ import type {
   HostInitEngineMsg, HostStopMsg, HostEngineInputBatchMsg,
   HostEnginePauseMsg, HostEngineResumeMsg,
   HostEngineSwitchArenaMsg, HostEngineSetPhaseMsg, HostEngineSkipCountdownMsg,
+  HostNetSetModeMsg, HostNetSetExpectedSlotsMsg, HostNetSnapshotApplyMsg,
+  HostNetDisconnectSlotMsg, HostNetReconnectSlotMsg,
   WorkerEngineEventMsg, WorkerToHostMsg,
 } from './messages';
 
@@ -88,6 +90,9 @@ export class EngineWorkerProxy {
   private running = false;
   private paused = false;
   private mirrorState: MatchState | null = null;
+  /** Phase 2: host-mode subscriber for worker-emitted encoded snapshots.
+   *  Single-caller — NetMatch wires it in `start()`. Null when offline. */
+  private snapshotReadyCb: ((buffer: ArrayBuffer, frame: number) => void) | null = null;
   /** Last input batch posted to the worker. Per-rAF reads compare against
    *  this to skip identical posts — inputs change far less often than 60Hz
    *  so the dedup cuts postMessage volume 3-10×. Indexed by slot order in
@@ -357,6 +362,72 @@ export class EngineWorkerProxy {
     const m: HostEngineSetPhaseMsg = { type: 'host:engineSetPhase', phase };
     this.worker.postMessage(m);
   }
+
+  /** NetMatchDriver discriminator. EngineWorkerProxy hosts the simulation
+   *  in a worker — HostLoop branches on this to forward input batches
+   *  instead of calling fixedUpdate locally. */
+  isRemoteSim(): boolean { return true; }
+
+  /** Replace the previous batch and post a fresh host:engineInputBatch
+   *  with the (already-fairness-delayed) input map. Reuses the existing
+   *  Phase 1 wire shape — SAB Step 2's bitfield path may take over per
+   *  frame once it's wired, but the postMessage path is the fallback. */
+  postInputBatch(inputs: ReadonlyMap<PlayerSlot, InputState>): void {
+    const arr: Array<[PlayerSlot, InputState]> = [];
+    for (const [slot, input] of inputs) arr.push([slot, input]);
+    const m: HostEngineInputBatchMsg = { type: 'host:engineInputBatch', inputs: arr };
+    this.worker.postMessage(m);
+  }
+
+  // ---- Phase 2: NetMatch async fixedUpdate -------------------------------
+
+  /** Tell the worker which side of the netcode it's running. host =
+   *  encode + emit snapshots per tick; guest = decode + interpolate from
+   *  buffers fed via pumpIncomingSnapshot. */
+  setNetMode(mode: 'host' | 'guest' | 'off', delayFrames = 0): void {
+    const m: HostNetSetModeMsg = { type: 'host:netSetMode', mode, delayFrames };
+    this.worker.postMessage(m);
+  }
+
+  /** Defensive: assert the worker's sim has the slot set the host expects.
+   *  Posts host:netSetExpectedSlots; the worker logs a worker:error on
+   *  mismatch. Not load-bearing for correctness; helps catch lobby drift. */
+  setExpectedSlots(slots: PlayerSlot[]): void {
+    const m: HostNetSetExpectedSlotsMsg = { type: 'host:netSetExpectedSlots', slots };
+    this.worker.postMessage(m);
+  }
+
+  /** Guest-only. Hand an encoded snapshot buffer to the worker for decode
+   *  + interp + apply. The buffer is transferred — main must not retain
+   *  a reference after this call. The Trystero 1-byte type prefix is
+   *  already stripped by the caller (the netmatch GuestLoop handler). */
+  pumpIncomingSnapshot(buffer: ArrayBuffer): void {
+    const m: HostNetSnapshotApplyMsg = { type: 'host:netSnapshotApply', buffer };
+    this.worker.postMessage(m, [buffer]);
+  }
+
+  /** Host-only. Tell the worker a peer's grace timer expired — the sim
+   *  marks the player disconnected and stops simulating their inputs. */
+  disconnectSlot(slot: PlayerSlot): void {
+    const m: HostNetDisconnectSlotMsg = { type: 'host:netDisconnectSlot', slot };
+    this.worker.postMessage(m);
+  }
+
+  /** Host-only. Tell the worker a peer reconnected — the sim respawns the
+   *  player and resumes their input wiring. */
+  reconnectSlot(slot: PlayerSlot): void {
+    const m: HostNetReconnectSlotMsg = { type: 'host:netReconnectSlot', slot };
+    this.worker.postMessage(m);
+  }
+
+  /** Host-only subscription. The proxy fires the callback for every
+   *  worker:netSnapshot it receives — NetMatch funnels the buffer into
+   *  HostAuthority.broadcastEncodedSnapshot. Only one subscriber at a
+   *  time (NetMatch is the single caller). */
+  onSnapshotReady(cb: (buffer: ArrayBuffer, frame: number) => void): void {
+    this.snapshotReadyCb = cb;
+  }
+
   switchArena(arenaId: string, settingsOverrides?: Partial<MatchSettings>): void {
     this._arena = getArena(arenaId);
     this.originalArena = this._arena;
@@ -416,6 +487,16 @@ export class EngineWorkerProxy {
     }
     if (msg.type === 'worker:engineEvent') {
       this.dispatchEngineEvent(msg);
+      return;
+    }
+    // Phase 2: host emits encoded snapshots; main pumps into transport.
+    if (msg.type === 'worker:netSnapshot') {
+      this.snapshotReadyCb?.(msg.buffer, msg.frame);
+      return;
+    }
+    if (msg.type === 'worker:netInterpStats') {
+      // Guest-side interp stats forwarded here. Currently no consumer;
+      // hook for the debug overlay lands when net stats integrate.
       return;
     }
     if (msg.type === 'worker:error') {
