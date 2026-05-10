@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { GameLoop } from '../../engine/gameLoop';
 import { NetMatch } from '../../engine/net/netMatch';
 import { getArena, getTheme } from '../../engine/arenas';
@@ -112,8 +112,60 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
     isOnline,
   } = p;
 
+  /**
+   * Deferred-teardown state to survive React StrictMode's dev double-mount.
+   *
+   * The worker-offload paths call `transferControlToOffscreen()` on the
+   * canvas refs. That operation is one-way per the HTML spec — the canvas
+   * is permanently detached on main and getContext throws thereafter.
+   * StrictMode's "fake unmount + remount" sequence (introduced in React 18
+   * to test effect idempotence) would otherwise:
+   *   1. mount → construct proxy → transfer all canvases
+   *   2. cleanup → terminate worker (canvases die with it)
+   *   3. remount → try to construct proxy → 2nd transferControlToOffscreen
+   *                 throws InvalidStateError → match never starts
+   *
+   * Fix: defer the real cleanup with setTimeout(0). React's StrictMode
+   * cycle (cleanup → remount setup) all happens in the same microtask;
+   * the macrotask scheduled by setTimeout doesn't fire until after the
+   * remount runs and CANCELS the timer. Real unmount has no following
+   * setup, so the timer fires and tears down for real.
+   *
+   * Stored in a ref so the closure survives every effect run for this
+   * component instance.
+   */
+  const lifecycleRef = useRef<{
+    teardown: (() => void) | null;
+    timer: ReturnType<typeof setTimeout> | null;
+  }>({ teardown: null, timer: null });
+
   useEffect(() => {
     if (isOnline) return; // online hook handles this branch
+
+    // Cancel any deferred teardown from a prior cleanup. If a timer was
+    // pending, that means React just re-mounted us (StrictMode dev or
+    // synchronous-dep-change) before the timeout fired — the existing
+    // proxy is alive, its canvases are transferred and bound to the
+    // running worker. Reuse it instead of re-constructing (which would
+    // call transferControlToOffscreen on already-detached canvases and
+    // throw).
+    if (lifecycleRef.current.timer !== null) {
+      clearTimeout(lifecycleRef.current.timer);
+      lifecycleRef.current.timer = null;
+      const reusedTeardown = lifecycleRef.current.teardown;
+      // Re-schedule teardown for the new mount's eventual cleanup. The
+      // closure still points to the original proxy + the original mount's
+      // resource handles — that's correct because gameLoopRef and the
+      // setState setters captured by useLocalMatch are stable across
+      // StrictMode mounts.
+      return () => {
+        lifecycleRef.current.timer = setTimeout(() => {
+          reusedTeardown?.();
+          lifecycleRef.current.teardown = null;
+          lifecycleRef.current.timer = null;
+        }, 0);
+      };
+    }
     const bgCanvas = bgCanvasRef.current;
     const fgCanvas = fgCanvasRef.current;
     const hudCanvas = hudCanvasRef.current;
@@ -189,7 +241,7 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
             engineProxy.setPhase('playing');
           },
         );
-        return () => {
+        const teardown = (): void => {
           unsubscribeDebug();
           engineProxy.stop();
           gameLoopRef.current = null;
@@ -198,6 +250,15 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
             clearTimeout(victoryTimeoutRef.current);
             victoryTimeoutRef.current = null;
           }
+        };
+        lifecycleRef.current.teardown = teardown;
+        return () => {
+          // See top-of-effect comment: defer for StrictMode safety.
+          lifecycleRef.current.timer = setTimeout(() => {
+            teardown();
+            lifecycleRef.current.teardown = null;
+            lifecycleRef.current.timer = null;
+          }, 0);
         };
       } catch (e) {
         console.warn('[sim-worker] proxy construction failed:', e);
@@ -288,7 +349,7 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
       loop.setPhase('playing');
     });
 
-    return () => {
+    const teardown = (): void => {
       unsubscribeDebug();
       loop.stop();
       gameLoopRef.current = null;
@@ -300,6 +361,18 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
         clearTimeout(victoryTimeoutRef.current);
         victoryTimeoutRef.current = null;
       }
+    };
+    lifecycleRef.current.teardown = teardown;
+    return () => {
+      // See top-of-effect comment: defer for StrictMode safety. Main-thread
+      // path doesn't strictly need this (no transferControlToOffscreen if
+      // workerProxy is null) but the renderer-only worker path does, and
+      // making one branch deferred but not the other invites confusion.
+      lifecycleRef.current.timer = setTimeout(() => {
+        teardown();
+        lifecycleRef.current.teardown = null;
+        lifecycleRef.current.timer = null;
+      }, 0);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePlayers, matchSettings, setMatchResult, isOnline]);
