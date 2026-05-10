@@ -135,8 +135,8 @@ export class GameLoop {
         onAllGameSoundsStopRequest: () => audio.stopAllGameSounds(),
         onPhaseChange: (phase) => this._handlePhaseChange(phase),
         onMatchEnd: (winner) => this._handleMatchEnd(winner),
-        onPlayerLanding: (slot, prevVy) => { if (haptics.isLocal(slot)) haptics.landing(prevVy); },
-        onStompHaptic: (slot) => { if (haptics.isLocal(slot)) haptics.hitstop(); },
+        onPlayerLanding: (slot, prevVy) => { if (haptics.isLocal(slot)) haptics.landing(prevVy, slot); },
+        onStompHaptic: (slot) => { if (haptics.isLocal(slot)) haptics.hitstop(slot); },
       },
     });
 

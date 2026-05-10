@@ -20,8 +20,12 @@ export const haptics = {
     return this.enabled && slot === this.localSlot;
   },
 
-  /** Hitstop — local player involved in kill (attacker or victim). */
-  hitstop() {
+  /** Hitstop — local player involved in kill (attacker or victim).
+   *  `_slot` is ignored on main (the localSlot gate already happened
+   *  upstream in `isLocal`); the worker stub uses it to thread slot
+   *  into the wire payload so main can re-gate after the cross-thread
+   *  hop. Optional, defaults preserved. */
+  hitstop(_slot?: PlayerSlot) {
     if (this.enabled) navigator.vibrate(70);
   },
 
@@ -40,8 +44,9 @@ export const haptics = {
     if (this.enabled) navigator.vibrate(25);
   },
 
-  /** Landing — intensity scales with fall speed (vy at moment of impact). */
-  landing(vy: number) {
+  /** Landing — intensity scales with fall speed (vy at moment of impact).
+   *  See `hitstop` for `_slot` semantics. */
+  landing(vy: number, _slot?: PlayerSlot) {
     if (!this.enabled) return;
     // Only vibrate for significant landings (vy > 200)
     if (vy < 200) return;

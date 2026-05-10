@@ -9,17 +9,16 @@
  * methods would crash the worker the moment Simulator triggers them.
  */
 
-interface EngineAudioEvent {
-  type: 'worker:engineEvent';
+import type { WorkerEngineEventMsg } from '../messages';
+
+/** Audio events the stub can emit — share the wire-format union so adding a
+ *  new audio kind to `messages.ts > WorkerEngineEventMsg` ripples here at
+ *  compile time. */
+type EngineAudioEvent = Extract<WorkerEngineEventMsg, {
   kind: 'sfx' | 'animal' | 'musicStart' | 'musicStop' | 'soundStop'
       | 'soundVolume' | 'allGameSoundsStop' | 'paused' | 'resumeContext'
       | 'preloadArena';
-  name?: string;
-  themeId?: string;
-  volume?: number;
-  paused?: boolean;
-  arenaId?: string;
-}
+}>;
 
 declare const self: DedicatedWorkerGlobalScope;
 
