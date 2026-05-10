@@ -229,9 +229,20 @@ function driveTick(currentTime: number): void {
   rafId = ctxScope.requestAnimationFrame(driveTick);
 }
 
+/** Pure helper: replace `target` Map contents from a per-slot list. Slots
+ *  absent from the list are evicted. Phase 2 introduces an out-of-worker
+ *  caller (the netmatch async path), so the seam is extracted from
+ *  `applyInputBatch` for testability. */
+export function applyInputBatchTo(
+  target: Map<PlayerSlot, InputState>,
+  inputs: ReadonlyArray<readonly [PlayerSlot, InputState]>,
+): void {
+  target.clear();
+  for (const [slot, input] of inputs) target.set(slot, input);
+}
+
 export function applyInputBatch(msg: HostEngineInputBatchMsg): void {
-  inputMap.clear();
-  for (const [slot, input] of msg.inputs) inputMap.set(slot, input);
+  applyInputBatchTo(inputMap, msg.inputs);
 }
 
 export function pauseEngine(): void {
