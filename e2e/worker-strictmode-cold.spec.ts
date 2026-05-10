@@ -77,10 +77,18 @@ test('StrictMode dev ?worker=on reaches playing (howler warning tolerated)', asy
   // assert catches.
 });
 
-test.skip('StrictMode dev ?simWorker=on — known broken (opt-in only, prod works)', async () => {
-  // ?simWorker=on boots GameLoop synchronously inside the worker. The dev-
-  // mode howler error (see ?worker=on test) interrupts that sync boot path,
-  // leaving the worker stuck in loading. Production unaffected.
-  // Documented limitation; not blocking Phase 1 ship (renderer-only worker
-  // is the default + headline).
+test.skip('StrictMode dev ?simWorker=on reaches playing — still stuck (opt-in, prod works)', async () => {
+  // The howler-side blockers are now gone (audio/index.ts conditionally
+  // routes to the worker stub via `typeof importScripts === 'function'`
+  // detection — howler never enters the worker module graph). But sim-
+  // worker still doesn't reach playing in dev — the worker module
+  // initializes and receives `host:engineSetPhase` but `host:initEngine`
+  // is never processed. Suspected: top-level-await ordering between
+  // renderWorker.ts's message listener registration and the host's
+  // postMessage. Production builds skip the audio/index.ts top-level
+  // await entirely (rollup tree-shakes), so prod is unaffected.
+  //
+  // Phase 1 ship target is renderer-only worker (?worker=on default).
+  // That path works in both dev and prod. sim-worker dev remains the
+  // outstanding limitation.
 });
