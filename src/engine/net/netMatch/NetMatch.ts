@@ -202,9 +202,25 @@ export class NetMatch {
       this.hostAuthority.start();
       this.hostAuthority.enableDeltaCompression(true);
       this.loading.armLoadingTimeout();
+      // Phase 2: when sim runs in the worker, route worker-emitted
+      // encoded snapshots into HostAuthority.broadcastEncodedSnapshot
+      // (which respects per-peer broadcast tier + delta bypass exactly
+      // like the inline broadcast does). Tell the worker its role.
+      if (this.ctx.gameLoop.isRemoteSim()) {
+        const authority = this.hostAuthority;
+        this.ctx.gameLoop.onSnapshotReady((buffer, frame) => {
+          authority.broadcastEncodedSnapshot(buffer, frame);
+        });
+        this.ctx.gameLoop.setNetMode('host', 0);
+      }
       this.hostLoop = new HostLoop(this.ctx);
       this.hostLoop.start();
     } else {
+      // Phase 2 guest-side: wake the worker into guest mode before the
+      // snapshot stream arrives so the interpolation engine is ready.
+      if (this.ctx.gameLoop.isRemoteSim()) {
+        this.ctx.gameLoop.setNetMode('guest', 2 /* initial delayFrames */);
+      }
       this.guestLoop!.start();
     }
   }

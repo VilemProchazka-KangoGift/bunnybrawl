@@ -313,6 +313,26 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
     this.localFrame++;
     const snap = this.snapshotEncoder.takeSnapshot(this.localFrame, state);
     const encodeBuf = this.snapshotEncoder.encode(snap);
+    this._broadcastEncodedInternal(encodeBuf);
+  }
+
+  /** Phase 2: worker-emitted snapshot path. The simulation lives in a
+   *  Web Worker, which produces the encoded buffer (same wire shape as
+   *  takeAuthSnapshot+encodeSnapshot). Main pumps the buffer here so the
+   *  existing per-peer broadcast tier + delta-compression bypass still
+   *  applies — we just skip the local takeSnapshot+encode step.
+   *
+   *  `frame` is the worker's host-frame counter; we adopt it as our
+   *  localFrame so guests see continuous frame numbers. The
+   *  matchOverSnapshotsLeft tail behaves the same as broadcastSnapshot. */
+  broadcastEncodedSnapshot(encodeBuf: ArrayBuffer, frame: number): void {
+    if (this.matchOverSnapshotsLeft === 0) return;
+    if (this.matchOverSnapshotsLeft > 0) this.matchOverSnapshotsLeft--;
+    this.localFrame = frame;
+    this._broadcastEncodedInternal(encodeBuf);
+  }
+
+  private _broadcastEncodedInternal(encodeBuf: ArrayBuffer): void {
     this._lastBroadcastFulls = 0;
     this._lastBroadcastDeltas = 0;
 

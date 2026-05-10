@@ -354,6 +354,14 @@ export class EngineWorkerProxy {
   }
   isPaused(): boolean { return this.paused; }
   isAutoSlowFlipped(): boolean { return false; }  // worker-side flag not mirrored yet
+
+  /** NetMatchDriver: host-side disconnect propagation. The generic core
+   *  HostAuthority calls `simulation.disconnectPlayer(slot)` when a peer's
+   *  grace timer expires; for remote-sim mode that has to route through
+   *  the worker. Same wire shape as `disconnectSlot`. */
+  disconnectPlayer(slot: PlayerSlot): void {
+    this.disconnectSlot(slot);
+  }
   skipCountdown(): void {
     const m: HostEngineSkipCountdownMsg = { type: 'host:engineSkipCountdown' };
     this.worker.postMessage(m);
