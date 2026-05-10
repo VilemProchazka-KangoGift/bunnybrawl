@@ -46,7 +46,7 @@ export function clearZoneCaches(): void {
 }
 
 export function drawHazardZone(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   hz: { x: number; y: number; width: number; height: number; type: string },
   theme: ThemeConfig,
   time: number,
@@ -128,7 +128,7 @@ export function drawHazardZone(
 }
 
 export function drawZeroGZone(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   zone: { x: number; y: number; width: number; height: number },
   time: number,
 ): void {
@@ -215,7 +215,7 @@ export function drawZeroGZone(
 }
 
 export function drawCurrentZone(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   zone: { x: number; y: number; width: number; height: number; vx?: number; vy?: number },
   time: number,
 ): void {
@@ -384,7 +384,7 @@ export function drawCurrentZone(
 }
 
 export function drawGeyser(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   zone: { x: number; y: number; width: number; height: number },
   gs: { active: boolean; activeTimer: number },
   time: number,
@@ -421,7 +421,7 @@ export function drawGeyser(
 }
 
 export function drawBouncyPlatformOverlay(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   bp: { x: number; y: number; width: number; height: number },
   wobble: number,
   time: number,

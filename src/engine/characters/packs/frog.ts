@@ -1,4 +1,4 @@
-import { Howl } from 'howler';
+import { Howl } from '../../audio/howlShim';
 import type { CharacterPack } from '../types';
 import type { IdleAction } from '../../rendering/idleActions';
 import type { Ctx2D } from '../../types';

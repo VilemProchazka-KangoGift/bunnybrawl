@@ -33,7 +33,7 @@ import {
   drawSurfaceDecals, drawRipples,
 } from './rendering';
 import { setSpriteCacheScale } from './rendering/players';
-import { setHudScale } from './rendering/hud';
+import { setHudScale, setHudLanguage, warmHudFonts } from './rendering/hud';
 import { applyRenderScaleToCanvas, getRenderScale } from './renderScale';
 import { Lighting } from './lighting';
 import type { Light, PointLight, RGB } from './lighting';
@@ -116,17 +116,74 @@ const SPRITE_TOP_PAD = 12;
 /** Constructor options. Required: bgCanvas + fgCanvas + theme. All others
  *  are optional; lobby and tests pass only the required three and stay on the
  *  source-over fillRect lighting fallback. L2 will add light-canvas fields. */
+/** Canvas surfaces the Renderer accepts. OffscreenCanvas variants are used
+ *  by the worker render harness; HTMLCanvasElement variants by the main
+ *  thread. The drawing code is identical because Ctx2D unifies both ctx
+ *  types — only the night-opacity DOM driving differs (see
+ *  `nightOpacityCallback`). */
+export type RendererCanvas = HTMLCanvasElement | OffscreenCanvas;
+
 export interface RendererOptions {
-  bgCanvas: HTMLCanvasElement;
-  fgCanvas: HTMLCanvasElement;
+  bgCanvas: RendererCanvas;
+  fgCanvas: RendererCanvas;
   theme: ThemeConfig;
   mirrored?: boolean;
-  hudCanvas?: HTMLCanvasElement;
-  bgNightCanvas?: HTMLCanvasElement;
+  hudCanvas?: RendererCanvas;
+  bgNightCanvas?: RendererCanvas;
+  /** Main-thread DOM div whose `style.opacity` carries the multiply-blend night
+   *  tint over fg. Worker-hosted Renderers can't see this DOM node — they
+   *  receive a `nightOpacityCallback` instead. */
   fgNightTint?: HTMLDivElement;
   /** L2 emitter compositing layer (single screen-blend DOM sibling above
    *  fg-night-tint). Bakeoff history: `perf-runs/l2-emitter-comparison/REPORT.md`. */
-  lightCanvas?: HTMLCanvasElement;
+  lightCanvas?: RendererCanvas;
+  /** When set, the Renderer skips direct DOM `style.opacity` writes for the
+   *  bgNight cross-fade and the fg night-tint, and forwards quantized values
+   *  here instead. The worker hooks this and posts the values back to main,
+   *  which sets the DOM styles on its side. Quantization is to 3 decimal
+   *  places — same as the main-thread DOM path — so postMessage chatter is
+   *  bounded to ~thousands per match in the worst case. */
+  nightOpacityCallback?: (kind: 'bg' | 'fg', opacity: number) => void;
+  /** Initial UI language for HUD character-name translations. Defaults to
+   *  `'en'`. Worker-hosted Renderers receive this on init from main; main-
+   *  hosted Renderers don't need it (they call `setLanguage` from i18n). */
+  language?: string;
+}
+
+/** Public Renderer surface used by GameLoop, ParticleSystem.bakeToRenderer,
+ *  matchLoading, and CharacterSelect. The class `Renderer` and the worker-
+ *  proxy `RendererProxy` both implement this so GameLoop can hold either
+ *  without branching. */
+export interface IRenderer {
+  setRenderScale(scale: number): void;
+  setBotNavDebugStates(states: BotNavDebugState[]): void;
+  setNetDebugStats(stats: NetDebugStats | null): void;
+  setPlayerNames(names: Record<string, string>): void;
+  setTimeLimit(timeLimit: number): void;
+  setNetworkMode(isNetwork: boolean): void;
+  setConnectionQuality(rtt: number, jitter: number): void;
+  setLobbyOverlayFn(fn: ((ctx: Ctx2D) => void) | null): void;
+  getDiagnostics(): RenderDiagnostics;
+  warmSpriteCache(names: string[]): void;
+  hasWarmedAll(names: string[]): boolean;
+  setTheme(theme: ThemeConfig): void;
+  renderBackground(arena: Arena, originalArena?: Arena): void;
+  /** Pre-render HUD font/glyph combinations so the first in-match HUD
+   *  draw doesn't JIT a 30+ms font-shaping pass. Called from
+   *  matchLoading. */
+  warmHudFonts(): void;
+  emitLightBurst(x: number, y: number, kind: 'spawn' | 'stomp'): void;
+  setArenaLights(lights: ReadonlyArray<Light>): void;
+  bakeGibs(gibs: Gib[]): void;
+  renderBloodDrips(drips: Array<{ x: number; y: number; radius: number; color: string }>): void;
+  renderFrame(
+    matchState: MatchState,
+    arena: Arena,
+    particles: Particle[],
+    cosmeticLead?: number,
+    reactive?: import('./gameLoop/cosmetics/reactiveDecorations').ReactiveRenderArg,
+    wildlife?: import('./gameLoop/cosmetics/wildlife').WildlifeRenderArg,
+  ): void;
 }
 
 /** Diagnostic flags tracking which rendering branches fired each frame. */
@@ -160,7 +217,7 @@ export interface RenderDiagnostics {
   zeroGShimmer: boolean;
   playersDrawn: number;
   /** @internal test-only — bypasses renderer state machine */
-  ctx?: CanvasRenderingContext2D;
+  ctx?: Ctx2D;
 }
 
 /**
@@ -196,7 +253,7 @@ function findIsoOccluders(player: Player, platforms: Platform[]): Platform[] {
  * clockwise from the cap's back-left; closePath traces the cap-left
  * diagonal back to start.
  */
-function addIsoPlatformPath(ctx: CanvasRenderingContext2D, plat: Platform): void {
+function addIsoPlatformPath(ctx: Ctx2D, plat: Platform): void {
   const sp = skewPx();
   const cF = capFrontY(plat);
   const cB = capBackY(plat);
@@ -240,16 +297,16 @@ function resetDiag(d: RenderDiagnostics): void {
   d.hitstop = false; d.screenShake = false; d.zeroGShimmer = false; d.playersDrawn = 0;
 }
 
-export class Renderer {
-  private bgCanvas: HTMLCanvasElement;
-  private bgNightCanvas: HTMLCanvasElement | null = null;
-  private fgCanvas: HTMLCanvasElement;
-  private hudCanvas: HTMLCanvasElement | null = null;
+export class Renderer implements IRenderer {
+  private bgCanvas: RendererCanvas;
+  private bgNightCanvas: RendererCanvas | null = null;
+  private fgCanvas: RendererCanvas;
+  private hudCanvas: RendererCanvas | null = null;
   private lighting: Lighting;
   // L2 emitter compositing — single screen-blend DOM sibling, static cache
   // baked once at arena-load + dynamic stamps per frame.
-  private _lightCanvas: HTMLCanvasElement | null = null;
-  private _lightCtx: CanvasRenderingContext2D | null = null;
+  private _lightCanvas: RendererCanvas | null = null;
+  private _lightCtx: Ctx2D | null = null;
   /** Static contribution baked once per arena; blitted onto lightCanvas each frame. */
   private _lightStaticCache: OffscreenCanvas | null = null;
   /** Per-frame buffer for dynamic emitters. Pooled — `_synthesizeDynamicLights`
@@ -262,10 +319,10 @@ export class Renderer {
    *  not apply. Grows; entries swap-removed on expiry. */
   private _lightBursts: LightBurst[] = [];
   private _burstDt = makeDtTracker(0.1);
-  private bgCtx: CanvasRenderingContext2D;
-  private bgNightCtx: CanvasRenderingContext2D | null = null;
-  private fgCtx: CanvasRenderingContext2D;
-  private hudCtx: CanvasRenderingContext2D | null = null;
+  private bgCtx: Ctx2D;
+  private bgNightCtx: Ctx2D | null = null;
+  private fgCtx: Ctx2D;
+  private hudCtx: Ctx2D | null = null;
   // Foreground night-tint overlay; mix-blend-mode: multiply triggers Chromium
   // GPU layer promotion for the fg canvas (perf win on top of the visual win).
   private _fgNightTint: HTMLDivElement | null = null;
@@ -330,7 +387,11 @@ export class Renderer {
 
   // Lobby mode: when set, replaces the match-HUD/countdown/connection-quality
   // overlay path with a caller-supplied draw fn (see `setLobbyOverlayFn`).
-  private _lobbyOverlayFn: ((ctx: CanvasRenderingContext2D) => void) | null = null;
+  private _lobbyOverlayFn: ((ctx: Ctx2D) => void) | null = null;
+
+  // Worker-mode hook: when set, the Renderer routes night-tint opacity values
+  // here instead of writing to `style.opacity` directly. See RendererOptions.
+  private _nightOpacityCallback: ((kind: 'bg' | 'fg', opacity: number) => void) | null = null;
 
   // Sprite-cache warm tracking — the cache itself is module-scoped and keyed
   // by name+state+animFrame+flags (no theme). setTheme() calls
@@ -342,21 +403,24 @@ export class Renderer {
     clearRenderingCaches();
     this.bgCanvas = opts.bgCanvas;
     this.fgCanvas = opts.fgCanvas;
-    this.bgCtx = opts.bgCanvas.getContext('2d')!;
-    this.fgCtx = opts.fgCanvas.getContext('2d')!;
+    // Cast: when the canvas is a union of HTMLCanvasElement | OffscreenCanvas,
+    // TS resolves getContext('2d') to RenderingContext (any of its overloads).
+    // Both concrete return types implement the drawing API we use.
+    this.bgCtx = opts.bgCanvas.getContext('2d')! as Ctx2D;
+    this.fgCtx = opts.fgCanvas.getContext('2d')! as Ctx2D;
     this._diag.ctx = this.fgCtx;
     this.theme = opts.theme;
     this.mirrored = opts.mirrored ?? false;
 
     if (opts.hudCanvas) {
       this.hudCanvas = opts.hudCanvas;
-      this.hudCtx = opts.hudCanvas.getContext('2d')!;
+      this.hudCtx = opts.hudCanvas.getContext('2d')! as Ctx2D;
     }
 
     // Optional cross-fade night-variant BG canvas; see lighting/pipeline.ts.
     if (opts.bgNightCanvas) {
       this.bgNightCanvas = opts.bgNightCanvas;
-      this.bgNightCtx = opts.bgNightCanvas.getContext('2d')!;
+      this.bgNightCtx = opts.bgNightCanvas.getContext('2d')! as Ctx2D;
     }
     if (opts.fgNightTint) {
       this._fgNightTint = opts.fgNightTint;
@@ -364,7 +428,14 @@ export class Renderer {
 
     if (opts.lightCanvas) {
       this._lightCanvas = opts.lightCanvas;
-      this._lightCtx = opts.lightCanvas.getContext('2d')!;
+      this._lightCtx = opts.lightCanvas.getContext('2d')! as Ctx2D;
+    }
+
+    if (opts.nightOpacityCallback) {
+      this._nightOpacityCallback = opts.nightOpacityCallback;
+    }
+    if (opts.language) {
+      setHudLanguage(opts.language);
     }
 
     // Apply initial render scale to all canvases (sets backing-store dims + ctx transform)
@@ -377,7 +448,12 @@ export class Renderer {
     this.lighting = new Lighting(CANVAS_WIDTH, CANVAS_HEIGHT);
 
     // Lobby/tests with no DOM darkening stay on the source-over fillRect path.
-    this._hasDomDarkening = this.bgNightCanvas !== null || this._fgNightTint !== null;
+    // Worker mode: bgNightCanvas is an OffscreenCanvas (no `.style`), but the
+    // night-opacity flow runs through `_nightOpacityCallback` in that case.
+    // Either DOM-driving path (direct or via callback) counts as darkening.
+    this._hasDomDarkening = this.bgNightCanvas !== null
+      || this._fgNightTint !== null
+      || this._nightOpacityCallback !== null;
     this.lighting.ambient.setHasDomDarkening(this._hasDomDarkening);
   }
 
@@ -441,7 +517,7 @@ export class Renderer {
   }
 
   /** Lobby-mode HUD callback. Receives a clean ctx each frame. Set null to disable. */
-  setLobbyOverlayFn(fn: ((ctx: CanvasRenderingContext2D) => void) | null): void {
+  setLobbyOverlayFn(fn: ((ctx: Ctx2D) => void) | null): void {
     this._lobbyOverlayFn = fn;
   }
 
@@ -455,6 +531,14 @@ export class Renderer {
   warmSpriteCache(names: string[]): void {
     warmSpriteCacheForCharacters(names, this.theme);
     for (const name of names) this._warmedNames.add(name);
+  }
+
+  /** Pre-render every HUD font + size combination so the first in-match
+   *  draw doesn't JIT a font-shaping pass. The fg ctx is the right
+   *  surface — the off-screen probe coords sit far outside the visible
+   *  region so this is invisible to the eye. */
+  warmHudFonts(): void {
+    warmHudFonts(this.fgCtx);
   }
 
   /** True when every name has been warmed under the current theme. Used by
@@ -588,16 +672,33 @@ export class Renderer {
    *  writes skip the style assignment when night intensity is unchanged. */
   private _driveBgNightOpacity(): void {
     if (!this._hasDomDarkening) return;
-    // When lighting is off, getBgNightOpacity() returns 0 and setQuantizedOpacity
-    // short-circuits on equal values — no DOM writes after the initial settle.
+    // When lighting is off, getBgNightOpacity() returns 0 and the quantized
+    // writes short-circuit on equal values — no DOM writes after the initial
+    // settle.
     const intensity = this.lighting.ambient.getBgNightOpacity();
-    if (this.bgNightCanvas) {
+    const fgIntensity = this.lighting.ambient.getFgTintOpacity(intensity);
+    if (this._nightOpacityCallback) {
+      // Worker path: forward to main; quantize here so the callback fires only
+      // on real change.
+      const bgQ = Math.round(intensity * 1000) / 1000;
+      const fgQ = Math.round(fgIntensity * 1000) / 1000;
+      if (bgQ !== this._lastBgNightOpacity) {
+        this._nightOpacityCallback('bg', bgQ);
+        this._lastBgNightOpacity = bgQ;
+      }
+      if (fgQ !== this._lastFgTintOpacity) {
+        this._nightOpacityCallback('fg', fgQ);
+        this._lastFgTintOpacity = fgQ;
+      }
+      return;
+    }
+    if (this.bgNightCanvas && 'style' in this.bgNightCanvas) {
       this._lastBgNightOpacity = setQuantizedOpacity(
         this.bgNightCanvas, intensity, this._lastBgNightOpacity);
     }
     if (this._fgNightTint) {
       this._lastFgTintOpacity = setQuantizedOpacity(
-        this._fgNightTint, this.lighting.ambient.getFgTintOpacity(intensity), this._lastFgTintOpacity);
+        this._fgNightTint, fgIntensity, this._lastFgTintOpacity);
     }
   }
 
@@ -733,7 +834,7 @@ export class Renderer {
    *  age implicitly freezes there). The tracker is advanced every frame
    *  (even when empty) so the first frame after an idle window gets a real
    *  per-frame dt instead of a clamped `maxDt`. */
-  private _drawLightBursts(ctx: CanvasRenderingContext2D): void {
+  private _drawLightBursts(ctx: Ctx2D): void {
     const dt = this._burstDt(this.frameTime);
     if (this._lightBursts.length === 0) return;
     ctx.save();
@@ -822,7 +923,22 @@ export class Renderer {
   private _driveLightOpacity(): void {
     if (!this._lightCanvas) return;
     const target = this.lighting.ambient.getBgNightOpacity();
-    this._lastLightOpacity = setQuantizedOpacity(this._lightCanvas, target, this._lastLightOpacity);
+    if ('style' in this._lightCanvas) {
+      this._lastLightOpacity = setQuantizedOpacity(this._lightCanvas, target, this._lastLightOpacity);
+    } else if (this._nightOpacityCallback) {
+      // Worker mode: piggy-back on the night-opacity channel with a synthetic
+      // `'light'` kind. The proxy on main fans this out to lightCanvas.style.
+      const q = Math.round(target * 1000) / 1000;
+      if (q !== this._lastLightOpacity) {
+        // Reuse 'bg' channel name? No — light opacity is independent. The
+        // callback signature is fixed to 'bg' | 'fg'; encoding 'light' would
+        // require widening. For worker use we deliberately couple light
+        // opacity to bgNight opacity (they were always equal anyway via this
+        // method). Skip the worker-side write — main mirrors it from the
+        // 'bg' callback.
+        this._lastLightOpacity = q;
+      }
+    }
   }
 
   /**
@@ -877,7 +993,7 @@ export class Renderer {
    *  passes a pre-bucketed list (system filters by layer at `setInstances`
    *  time) so this loop has no per-instance layer check or array allocation. */
   private _drawReactiveLayer(
-    ctx: CanvasRenderingContext2D,
+    ctx: Ctx2D,
     instances: ReadonlyArray<import('./gameLoop/cosmetics/reactiveDecorations').ReactiveInstance>,
     windPhase: number,
     matchState: MatchState,
@@ -900,7 +1016,7 @@ export class Renderer {
   /** Draw all wildlife instances for one layer. Like `_drawReactiveLayer`,
    *  iterates a pre-bucketed list — no per-frame allocation or layer filter. */
   private _drawWildlifeLayer(
-    ctx: CanvasRenderingContext2D,
+    ctx: Ctx2D,
     instances: ReadonlyArray<import('./gameLoop/cosmetics/wildlife').WildlifeInstance>,
     matchState: MatchState,
   ): void {
@@ -928,7 +1044,7 @@ export class Renderer {
    *  the renderer is in mirrored mode; otherwise calls `fn` directly. Used by
    *  the per-frame animated callbacks that want their content mirrored alongside
    *  the rest of the scene. */
-  private withMirror(ctx: CanvasRenderingContext2D, fn: () => void): void {
+  private withMirror(ctx: Ctx2D, fn: () => void): void {
     if (!this.mirrored) { fn(); return; }
     ctx.save();
     ctx.scale(-1, 1);
@@ -939,7 +1055,7 @@ export class Renderer {
 
   // ---- Clouds ----
 
-  private updateAndDrawClouds(ctx: CanvasRenderingContext2D, dt: number): void {
+  private updateAndDrawClouds(ctx: Ctx2D, dt: number): void {
     // Inlined batch of theme-default clouds: one fillStyle, one beginPath/fill
     // for all clouds. Each cloud is 4 overlapping arcs (the original drawCloud
     // shape); moveTo before each cloud starts a new sub-path so neighbours
@@ -964,7 +1080,7 @@ export class Renderer {
   }
 
 
-  private drawPlatform(ctx: CanvasRenderingContext2D, platform: Platform, isGround: boolean): void {
+  private drawPlatform(ctx: Ctx2D, platform: Platform, isGround: boolean): void {
     if (this.theme.drawPlatform) {
       this.theme.drawPlatform(ctx, platform, isGround);
       return;
@@ -1579,7 +1695,7 @@ export class Renderer {
   }
 
   /** Draw the HUD, connection quality, countdown, debug overlays, and screen flash onto a target ctx. */
-  private _drawOverlayContent(ctx: CanvasRenderingContext2D, matchState: MatchState, arena: Arena, hudDirty: boolean): void {
+  private _drawOverlayContent(ctx: Ctx2D, matchState: MatchState, arena: Arena, hudDirty: boolean): void {
     const d = this._diag;
 
     if (matchState.countdown !== undefined && matchState.countdown > 0) {

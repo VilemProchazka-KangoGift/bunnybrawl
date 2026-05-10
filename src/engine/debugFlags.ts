@@ -32,21 +32,39 @@ export function initDebugFlags(searchString: string): void {
   debugFlags.perfEnabled = debugParam.includes('perf');
 }
 
+/** Notified after any flag changes via toggle/set helpers. Consumers
+ *  outside the main thread (the worker bundle's Renderer) need to hear
+ *  about runtime toggles, not just URL-gated init state. `useLocalMatch`
+ *  / `useOnlineMatch` subscribe and forward toggles to the worker proxy
+ *  via `setDebugFlag(name, value)` on the proxy. */
+type DebugFlagListener = (name: DebugFlagName, value: boolean) => void;
+const _debugListeners = new Set<DebugFlagListener>();
+function _notifyDebugFlag(name: DebugFlagName, value: boolean): void {
+  for (const cb of _debugListeners) cb(name, value);
+}
+export function subscribeDebugFlags(cb: DebugFlagListener): () => void {
+  _debugListeners.add(cb);
+  return () => { _debugListeners.delete(cb); };
+}
+
 export function toggleNavDebug(): void {
   if (debugFlags.navDebugAllowed) {
     debugFlags.navDebugEnabled = !debugFlags.navDebugEnabled;
+    _notifyDebugFlag('nav', debugFlags.navDebugEnabled);
   }
 }
 
 export function toggleNetDebug(): void {
   if (debugFlags.netDebugAllowed) {
     debugFlags.netDebugEnabled = !debugFlags.netDebugEnabled;
+    _notifyDebugFlag('net', debugFlags.netDebugEnabled);
   }
 }
 
 export function toggleFpsDebug(): void {
   if (debugFlags.fpsAllowed) {
     debugFlags.fpsEnabled = !debugFlags.fpsEnabled;
+    _notifyDebugFlag('fps', debugFlags.fpsEnabled);
   }
 }
 
@@ -71,6 +89,7 @@ export function setDebugFlag(name: DebugFlagName, value: boolean): void {
       debugFlags.perfEnabled = value;
       break;
   }
+  _notifyDebugFlag(name, value);
 }
 
 export function getDebugFlag(name: DebugFlagName): boolean {

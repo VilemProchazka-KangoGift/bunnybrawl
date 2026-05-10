@@ -1,3 +1,4 @@
+import type { Ctx2D } from '../types';
 // src/engine/lighting/emitter.ts
 //
 // EmitterPipeline — owns per-frame emitter state for L2.
@@ -49,7 +50,7 @@ export class EmitterPipeline {
   /** Bake all static lights at full intensity (no flicker) onto target ctx.
    *  Called once at arena-load (or when static catalog changes). Caller is
    *  responsible for clearing the target first. */
-  bakeStatic(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D): void {
+  bakeStatic(ctx: Ctx2D | OffscreenCanvasRenderingContext2D): void {
     if (!this.isEnabled()) return;
     const cap = this._photosensitivity ? PHOTOSENSITIVITY_INTENSITY_CAP : 1.0;
     ctx.save();
@@ -66,7 +67,7 @@ export class EmitterPipeline {
 
   /** Stamp the dynamic lights + per-frame static flicker deltas. Used by both
    *  modes per frame. Mode A also calls drawImage(staticCache) BEFORE this. */
-  compositeDynamic(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D): void {
+  compositeDynamic(ctx: Ctx2D | OffscreenCanvasRenderingContext2D): void {
     if (!this.isEnabled()) return;
     const cap = this._photosensitivity ? PHOTOSENSITIVITY_INTENSITY_CAP : 1.0;
     ctx.save();

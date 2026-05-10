@@ -1,3 +1,4 @@
+import type { Ctx2D } from './types';
 // Dev-only FPS counter. Sampled at the rAF level (local + network loops),
 // rendered as a bottom-left overlay when ?debug=fps is set.
 
@@ -105,7 +106,7 @@ let _cachedLine2 = '';
 let _lastStatsTime = 0;
 const STATS_REFRESH_MS = 100;
 
-export function drawFpsCounter(ctx: CanvasRenderingContext2D, canvasWidth: number): void {
+export function drawFpsCounter(ctx: Ctx2D, canvasWidth: number): void {
   if (!debugFlags.fpsEnabled) return;
   const now = performance.now();
   if (!_cachedStats || now - _lastStatsTime >= STATS_REFRESH_MS) {

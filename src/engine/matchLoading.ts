@@ -1,6 +1,6 @@
 import { audio } from './audio';
 import type { Arena } from './types';
-import type { Renderer } from './renderer';
+import type { IRenderer } from './renderer';
 import type { NetMatch } from './net';
 
 /**
@@ -19,7 +19,7 @@ const DEFAULT_TIMEOUT_MS = 15000;
 export interface RunLoadingTasksOpts {
   arenaId: string;
   characterNames: string[];
-  renderer: Renderer;
+  renderer: IRenderer;
   arena: Arena;
   originalArena: Arena;
   /** When set, guests wait for the snapshot stream to warm up before the
@@ -68,6 +68,11 @@ export async function runLoadingTasks(opts: RunLoadingTasksOpts): Promise<void> 
   const spriteTask = new Promise<void>((resolve) => {
     setTimeout(() => {
       opts.renderer.warmSpriteCache(opts.characterNames);
+      // Pre-render HUD font + glyph combinations so the first in-match
+      // HUD draw doesn't JIT a font-shaping pass (cost ~30ms first
+      // invocation; observed in worker-offload phase 5 perf as the only
+      // long frame in scenario A).
+      opts.renderer.warmHudFonts();
       resolve();
     }, 0);
   });

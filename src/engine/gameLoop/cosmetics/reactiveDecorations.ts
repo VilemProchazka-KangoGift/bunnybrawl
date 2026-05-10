@@ -1,3 +1,4 @@
+import type { Ctx2D } from '../../types';
 // src/engine/gameLoop/cosmetics/reactiveDecorations.ts
 
 export type ReactiveLayer = 'prePlayer' | 'postPlayer';
@@ -84,7 +85,7 @@ export interface ReactiveRenderArg {
  *  - state: full MatchState (needed by kinds that query player positions, e.g. flee behaviors).
  */
 export type ReactiveDraw = (
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   instance: ReactiveInstance,
   swayPhase: number,
   time: number,

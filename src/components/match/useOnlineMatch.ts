@@ -1,12 +1,16 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import { GameLoop } from '../../engine/gameLoop';
 import { NetMatch } from '../../engine/net/netMatch';
 import { MsgType } from '../../engine/net/protocol';
 import { getModalTransport, getHostReclaimTokens, getGuestOwnReclaimToken } from '../OnlineModal';
-import { getArena } from '../../engine/arenas';
+import { getArena, getTheme } from '../../engine/arenas';
 import { perfTrace } from '../../engine/perfTrace';
 import * as fpsCounter from '../../engine/fpsCounter';
+import { isWorkerEnabled, RendererProxy } from '../../engine/worker';
+import { getRenderScale } from '../../engine/renderScale';
+import { debugFlags } from '../../engine/debugFlags';
+import i18n from '../../i18n';
 import type { TouchInputManager } from '../../engine/touchInput';
 import type {
   PlayerSlot, MatchState, MatchSettings, GameScreen,
@@ -95,8 +99,45 @@ export function useOnlineMatch(p: UseOnlineMatchParams): void {
     setReconnectAttempt, setReconnectMax, flashBanner, t,
   } = p;
 
+  /** See useLocalMatch.ts for the rationale — deferred teardown survives
+   *  React StrictMode's dev double-mount of effects that can't safely
+   *  unmount/remount (worker spawn + transferControlToOffscreen). */
+  const lifecycleRef = useRef<{
+    teardown: (() => void) | null;
+    timer: ReturnType<typeof setTimeout> | null;
+    deps: { activePlayers: typeof activePlayers; matchSettings: typeof matchSettings } | null;
+  }>({ teardown: null, timer: null, deps: null });
+
   useEffect(() => {
     if (!isOnline) return;
+
+    // StrictMode-safe deferred teardown: cancel pending timer if this is
+    // a remount with unchanged deps, reuse the existing NetMatch.
+    if (lifecycleRef.current.timer !== null) {
+      clearTimeout(lifecycleRef.current.timer);
+      lifecycleRef.current.timer = null;
+      const prev = lifecycleRef.current.deps;
+      const depsUnchanged = prev !== null
+        && prev.activePlayers === activePlayers
+        && prev.matchSettings === matchSettings;
+      if (depsUnchanged) {
+        const reusedTeardown = lifecycleRef.current.teardown;
+        return () => {
+          lifecycleRef.current.timer = setTimeout(() => {
+            reusedTeardown?.();
+            lifecycleRef.current.teardown = null;
+            lifecycleRef.current.deps = null;
+            lifecycleRef.current.timer = null;
+          }, 0);
+        };
+      }
+      // Real dep change: tear down old NetMatch synchronously. Canvases
+      // stay detached — fresh construction below will hit the same wall
+      // as the local-mode path. Documented limitation.
+      lifecycleRef.current.teardown?.();
+      lifecycleRef.current.teardown = null;
+      lifecycleRef.current.deps = null;
+    }
     const bgCanvas = bgCanvasRef.current;
     const fgCanvas = fgCanvasRef.current;
     const hudCanvas = hudCanvasRef.current;
@@ -145,7 +186,37 @@ export function useOnlineMatch(p: UseOnlineMatchParams): void {
       return;
     }
 
+    // Worker offload: same path as useLocalMatch — when the local-device
+    // flag is on, transfer the canvases to a Web Worker that hosts the
+    // Renderer. NetMatch's GameLoop adopts the proxy via injectedRenderer.
+    // Both host and guest paths use the same flag.
+    const useWorker = isWorkerEnabled();
+    let workerProxy: RendererProxy | null = null;
+    if (useWorker) {
+      try {
+        workerProxy = new RendererProxy({
+          bgCanvas,
+          fgCanvas,
+          hudCanvas,
+          bgNightCanvas,
+          fgNightTint,
+          lightCanvas,
+          theme: getTheme(arena.themeId),
+          mirrored: matchSettings.mods.mirrorArena,
+          timeLimit: matchSettings.timeLimit,
+          renderScale: getRenderScale(),
+          language: i18n.language,
+          perfEnabled: debugFlags.perfEnabled,
+          onError: (m) => console.error('[render worker]', m),
+        });
+      } catch (e) {
+        console.warn('[worker offload] proxy construction failed (online), falling back:', e);
+        workerProxy = null;
+      }
+    }
+
     const netMatch = new NetMatch({
+      injectedRenderer: workerProxy ?? undefined,
       bgCanvas,
       bgNightCanvas,
       fgNightTint,
@@ -291,11 +362,24 @@ export function useOnlineMatch(p: UseOnlineMatchParams): void {
       netMatch,
     );
 
-    return () => {
+    const teardown = (): void => {
       netMatch.stop();
       netMatchRef.current = null;
       commonCleanup();
+      if (workerProxy) workerProxy.destroy();
       clearTimer(disconnectDelayRef);
+    };
+    lifecycleRef.current.teardown = teardown;
+    lifecycleRef.current.deps = { activePlayers, matchSettings };
+    return () => {
+      // Defer for StrictMode safety. The remount will cancel this timer
+      // before it fires; real unmount lets it fire.
+      lifecycleRef.current.timer = setTimeout(() => {
+        teardown();
+        lifecycleRef.current.teardown = null;
+        lifecycleRef.current.deps = null;
+        lifecycleRef.current.timer = null;
+      }, 0);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePlayers, matchSettings, setMatchResult, isOnline]);

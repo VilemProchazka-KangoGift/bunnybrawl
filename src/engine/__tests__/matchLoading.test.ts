@@ -19,6 +19,7 @@ function makeRendererStub(): Renderer {
   return {
     renderBackground: vi.fn(),
     warmSpriteCache: vi.fn(),
+    warmHudFonts: vi.fn(),
     hasWarmedAll: vi.fn(() => true),
   } as unknown as Renderer;
 }

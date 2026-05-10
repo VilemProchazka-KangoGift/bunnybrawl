@@ -1,0 +1,10 @@
+{
+  "cpuThrottle": 4,
+  "workerStats": {
+    "frames": 3714,
+    "renderSumMs": 1939.200000002049,
+    "renderMaxMs": 36.40000000037253,
+    "handlerSumMs": 2008.8999999947846,
+    "handlerMaxMs": 37.299999999813735
+  }
+}

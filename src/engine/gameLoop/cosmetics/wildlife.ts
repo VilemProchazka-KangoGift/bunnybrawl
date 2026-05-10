@@ -1,3 +1,4 @@
+import type { Ctx2D } from '../../types';
 // src/engine/gameLoop/cosmetics/wildlife.ts
 //
 // Cosmetic helpers + kind registry + factory for the WildlifeSystem.
@@ -49,7 +50,7 @@ export type WildlifeTick<TData = unknown> = (
 ) => void;
 
 export type WildlifeDraw<TData = unknown> = (
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   inst: WildlifeInstance<TData>,
   time: number,
   state: MatchState,
@@ -130,7 +131,7 @@ export const KIND_GROUND_CRITTER = 'wildlife.groundCritter';
 export const KIND_GROUND_CRITTER_ANIM_BG = 'wildlife.groundCritter.animBg';
 
 export interface GroundCritterDrawArgs {
-  ctx: CanvasRenderingContext2D;
+  ctx: Ctx2D;
   state: GroundCritterState;
   cfg: GroundCritterConfig;
   time: number;

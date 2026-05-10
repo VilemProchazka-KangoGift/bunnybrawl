@@ -2,7 +2,7 @@ import type { MatchState, MatchSettings, Arena, Particle, ParticleShape, Gib, Pl
 import type { ThemeConfig } from '../../themes/types';
 import type { CosmeticSystem } from '../types';
 import type { HazardHitResult } from '../gameplay/playerCollisions';
-import type { Renderer } from '../../renderer';
+import type { IRenderer } from '../../renderer';
 import type { ParticleEmitter } from '../../simulator/types';
 import { BLOOD_COLOR, CARROT_SIZE } from '../../constants';
 import { haptics } from '../../haptics';
@@ -234,7 +234,7 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
   }
 
   /** Flush settled gibs and blood drips to the renderer background canvas. */
-  bakeToRenderer(renderer: Renderer): void {
+  bakeToRenderer(renderer: IRenderer): void {
     if (this.newGroundedGibsSinceRender.length > 0) {
       renderer.bakeGibs(this.newGroundedGibsSinceRender);
       this.newGroundedGibsSinceRender.length = 0;

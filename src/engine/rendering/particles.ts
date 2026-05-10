@@ -1,3 +1,4 @@
+import type { Ctx2D } from '../types';
 import type { Particle, WeatherParticle, WildlifeEntity, Gib, ConfettiParticle, Player } from '../types';
 import type { ThemeConfig } from '../themes/types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT, SPRING_TRAIL_DURATION } from '../constants';
@@ -14,7 +15,7 @@ function rgbString(hex: string): string {
   return s;
 }
 
-export function drawWeather(ctx: CanvasRenderingContext2D, weather: WeatherParticle[], theme: ThemeConfig, lead = 0): void {
+export function drawWeather(ctx: Ctx2D, weather: WeatherParticle[], theme: ThemeConfig, lead = 0): void {
   const customDraw = theme.drawWeatherParticle;
   if (customDraw) {
     for (const w of weather) customDraw(ctx, w);
@@ -72,7 +73,7 @@ export function drawWeather(ctx: CanvasRenderingContext2D, weather: WeatherParti
   }
 }
 
-export function drawParticles(ctx: CanvasRenderingContext2D, particles: Particle[], lead = 0): void {
+export function drawParticles(ctx: Ctx2D, particles: Particle[], lead = 0): void {
   let lastColor = '';
   for (const p of particles) {
     const dx = p.x + p.vx * lead;
@@ -109,7 +110,7 @@ export function drawParticles(ctx: CanvasRenderingContext2D, particles: Particle
   ctx.globalAlpha = 1;
 }
 
-export function drawGibs(ctx: CanvasRenderingContext2D, gibs: Gib[], lead = 0): void {
+export function drawGibs(ctx: Ctx2D, gibs: Gib[], lead = 0): void {
   for (const gib of gibs) {
     const dx = gib.x + gib.vx * lead;
     const dy = gib.y + gib.vy * lead;
@@ -123,7 +124,7 @@ export function drawGibs(ctx: CanvasRenderingContext2D, gibs: Gib[], lead = 0): 
   }
 }
 
-export function drawGibShape(ctx: CanvasRenderingContext2D, gib: Gib): void {
+export function drawGibShape(ctx: Ctx2D, gib: Gib): void {
   const { characterName, gibType, color, darkColor, lightColor } = gib;
 
   // Body gib is generic for all characters -- colored oval
@@ -155,7 +156,7 @@ const _STAR_UNIT = (() => {
   return out;
 })();
 
-export function drawConfetti(ctx: CanvasRenderingContext2D, confetti: ConfettiParticle[], lead = 0): void {
+export function drawConfetti(ctx: Ctx2D, confetti: ConfettiParticle[], lead = 0): void {
   // Hot path: rotation inlined per shape. See docs/perf-patterns.md.
   for (const c of confetti) {
     const cx = c.x + c.vx * lead;
@@ -218,7 +219,7 @@ export function drawConfetti(ctx: CanvasRenderingContext2D, confetti: ConfettiPa
   ctx.globalAlpha = 1;
 }
 
-export function drawFireworks(ctx: CanvasRenderingContext2D, particles: Particle[], frameTime: number, lead = 0): void {
+export function drawFireworks(ctx: Ctx2D, particles: Particle[], frameTime: number, lead = 0): void {
   const now = frameTime / 1000;
   for (const p of particles) {
     const alpha = p.life / p.maxLife;
@@ -270,7 +271,7 @@ export function drawFireworks(ctx: CanvasRenderingContext2D, particles: Particle
   ctx.globalAlpha = 1;
 }
 
-export function drawWildlife(ctx: CanvasRenderingContext2D, wildlife: WildlifeEntity[]): void {
+export function drawWildlife(ctx: Ctx2D, wildlife: WildlifeEntity[]): void {
   for (const w of wildlife) {
     const cx = w.x;
     const cy = w.y;
@@ -359,7 +360,7 @@ export function drawWildlife(ctx: CanvasRenderingContext2D, wildlife: WildlifeEn
   }
 }
 
-export function drawSpringTrail(ctx: CanvasRenderingContext2D, player: Player, frameTime: number): void {
+export function drawSpringTrail(ctx: Ctx2D, player: Player, frameTime: number): void {
   // Anchored at the spring (where the player launched from), not the moving player.
   // Two layers: a yellow energy column rising out of the spring + animated coil
   // rings racing up the column, both fading with springTrailTimer.

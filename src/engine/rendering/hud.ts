@@ -5,7 +5,43 @@ import {
   COMBO_POPUP_DURATION, COMBO_POPUP_RISE_PX, GOAL_PULSE_DURATION,
 } from '../constants';
 import { getCharacterEmoji, getCharacterDisplayName } from '../characters';
-import i18n from '../../i18n';
+
+/** Module-scope language for HUD character-name lookups. Set by Renderer
+ *  at construction (and on language-change forwarded from main). The HUD
+ *  doesn't import the React-coupled `src/i18n.ts` directly so the worker
+ *  bundle doesn't pull in `react-i18next`. */
+let _hudLanguage = 'en';
+export function setHudLanguage(lang: string): void { _hudLanguage = lang; invalidateHudCache(); }
+
+/** Pre-render every font-size + family combination drawHUD uses, so the
+ *  first in-match HUD draw doesn't JIT a 30+ms font-shaping pass.
+ *  Mirrors the `warmSpriteCache` pattern. Called from `matchLoading` for
+ *  both main-thread and worker-hosted Renderers (HUD lives in either). */
+export function warmHudFonts(ctx: Ctx2D): void {
+  const fonts: string[] = [
+    '28px sans-serif',
+    'bold 12px "Press Start 2P", monospace',
+    'bold 16px "Press Start 2P", monospace',
+    'bold 14px "Press Start 2P", monospace',
+    'bold 18px "Press Start 2P", monospace',
+    'bold 7px monospace',
+    'bold 14px monospace',
+    COMBO_POPUP_FONT,
+    'bold 80px "Nunito", sans-serif',
+  ];
+  const probeText = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz:+×';
+  ctx.save();
+  // Off-screen probe — paint at (-9999, -9999) so the warm-up paints don't
+  // smear on top of any real drawing. The font shaping engine still
+  // exercises every glyph at every size, which is what we want.
+  ctx.fillStyle = '#000';
+  for (const f of fonts) {
+    ctx.font = f;
+    ctx.fillText(probeText, -9999, -9999);
+    ctx.measureText(probeText);
+  }
+  ctx.restore();
+}
 
 // Used by OnlineModal as input maxLength too.
 export const PLAYER_NAME_MAX_LENGTH = 12;
@@ -76,7 +112,7 @@ export function isHudDirty(state: MatchState): boolean {
   return false;
 }
 
-export function drawHUD(ctx: CanvasRenderingContext2D, state: MatchState, frameTime: number, playerNames: Record<string, string> | null, timeLimit = 0, precomputedDirty?: boolean): void {
+export function drawHUD(ctx: Ctx2D, state: MatchState, frameTime: number, playerNames: Record<string, string> | null, timeLimit = 0, precomputedDirty?: boolean): void {
   const needsRedraw = precomputedDirty !== undefined ? precomputedDirty : isHudDirty(state);
 
   if (needsRedraw) {
@@ -165,7 +201,7 @@ function _drawHUDImpl(ctx: Ctx2D, state: MatchState, frameTime: number, playerNa
     ctx.textBaseline = 'alphabetic';
 
     const customName = playerNames?.[player.id];
-    const translatedName = customName || getCharacterDisplayName(player.character.name, i18n.language);
+    const translatedName = customName || getCharacterDisplayName(player.character.name, _hudLanguage);
     // Defensive clamp — old-version peers can broadcast names past the input maxLength.
     const displayName = translatedName.slice(0, compact ? PLAYER_NAME_MAX_LENGTH_COMPACT : PLAYER_NAME_MAX_LENGTH);
     ctx.fillStyle = player.character.color;
@@ -258,7 +294,7 @@ function _drawScoreAnimations(ctx: Ctx2D, state: MatchState): void {
 
 /** Draw active combo popups (×N text) — post-player, pre-HUD layer.
  *  Rises COMBO_POPUP_RISE_PX over the first 60% of life, fades over the last 40%. */
-export function drawComboPopups(ctx: CanvasRenderingContext2D, state: MatchState): void {
+export function drawComboPopups(ctx: Ctx2D, state: MatchState): void {
   if (state.comboPopups.length === 0) return;
   const RISE_FRACTION = 0.6;
   ctx.font = COMBO_POPUP_FONT;
@@ -288,7 +324,7 @@ export function drawComboPopups(ctx: CanvasRenderingContext2D, state: MatchState
   }
 }
 
-export function drawConnectionQuality(ctx: CanvasRenderingContext2D, rtt: number, jitter: number, canvasWidth: number): void {
+export function drawConnectionQuality(ctx: Ctx2D, rtt: number, jitter: number, canvasWidth: number): void {
   ctx.save();
 
   // Determine quality level
@@ -322,7 +358,7 @@ export function drawConnectionQuality(ctx: CanvasRenderingContext2D, rtt: number
   ctx.restore();
 }
 
-export function drawCountdown(ctx: CanvasRenderingContext2D, countdown: number): void {
+export function drawCountdown(ctx: Ctx2D, countdown: number): void {
   const secs = Math.ceil(countdown);
   const frac = countdown - Math.floor(countdown);
   const text = secs > 0 ? `${secs}` : 'GO!';

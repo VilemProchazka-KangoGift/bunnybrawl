@@ -1,4 +1,4 @@
-import { Howl } from 'howler';
+import { Howl } from '../../audio/howlShim';
 import type { CharacterPack } from '../types';
 import { fillBodyGradientCircle } from '../../spriteShading';
 import { floatBufferToWavDataUri } from '../../audio/synthesis/wav';

@@ -5,6 +5,7 @@
 import type { PlayerSlot, MatchPhase } from '../../types';
 import type { Arena, MatchSettings } from '../../types';
 import type { MatchEndCallback } from '../../gameLoop';
+import type { IRenderer } from '../../renderer';
 import type { Transport } from '../transport';
 
 export interface NetMatchConfig {
@@ -21,6 +22,11 @@ export interface NetMatchConfig {
   transport: Transport;
   localSlot: PlayerSlot;
   remoteSlots: PlayerSlot[];
+  /** When provided, NetMatch's GameLoop adopts this Renderer (a worker-
+   *  hosted RendererProxy in practice) instead of constructing a fresh
+   *  main-thread Renderer from the canvas args. Mirrors the local-mode
+   *  worker-offload path; the canvas args are ignored in that case. */
+  injectedRenderer?: IRenderer;
   onStall?: (stalled: boolean) => void;
   onDisconnect?: () => void;
   onPlayerDisconnect?: (slot: PlayerSlot) => void;

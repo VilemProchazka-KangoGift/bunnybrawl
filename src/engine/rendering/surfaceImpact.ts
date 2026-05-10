@@ -1,3 +1,4 @@
+import type { Ctx2D } from '../types';
 import type { MatchState, SurfaceDecal } from '../types';
 import { SURFACE_RIPPLE_LIFE, SURFACE_RIPPLE_MAX_RADIUS } from '../constants';
 import { fastSin, fastCos } from '../fastMath';
@@ -30,7 +31,7 @@ const CRACK_STYLES: Record<SurfaceDecal['kind'], (d: SurfaceDecal) => CrackStyle
   }),
 };
 
-export function drawSurfaceDecals(ctx: CanvasRenderingContext2D, state: MatchState): void {
+export function drawSurfaceDecals(ctx: Ctx2D, state: MatchState): void {
   const decals = state.surfaceDecals;
   if (decals.length === 0) return;
 
@@ -52,7 +53,7 @@ export function drawSurfaceDecals(ctx: CanvasRenderingContext2D, state: MatchSta
  * Caller is responsible for ctx.save()/restore() — we only set up the clip.
  */
 function applyDecalClip(
-  ctx: CanvasRenderingContext2D, d: SurfaceDecal, halfW: number, halfH: number,
+  ctx: Ctx2D, d: SurfaceDecal, halfW: number, halfH: number,
 ): boolean {
   const minX = d.clipMinX;
   const maxX = d.clipMaxX;
@@ -72,7 +73,7 @@ function applyDecalClip(
 }
 
 function drawCrackPattern(
-  ctx: CanvasRenderingContext2D, d: SurfaceDecal, fade: number, style: CrackStyle,
+  ctx: Ctx2D, d: SurfaceDecal, fade: number, style: CrackStyle,
 ): void {
   const { spokes, len, alpha, lineWidth, dotRadius, bifurcate } = style;
   const baseAngle = d.seed * Math.PI * 2;
@@ -112,7 +113,7 @@ function drawCrackPattern(
  * Liquid ripple: 3 expanding rings over the ripple's lifetime. Lava ripples
  * use warm orange, water ripples use cool cyan.
  */
-export function drawRipples(ctx: CanvasRenderingContext2D, state: MatchState): void {
+export function drawRipples(ctx: Ctx2D, state: MatchState): void {
   const ripples = state.ripples;
   if (ripples.length === 0) return;
 

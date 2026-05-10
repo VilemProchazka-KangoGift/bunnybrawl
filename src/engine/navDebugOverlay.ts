@@ -1,3 +1,4 @@
+import type { Ctx2D } from './types';
 /**
  * Dev-only nav graph debug overlay.
  * Renders AI navigation edges, platform indices, approach points, and bot nav targets.
@@ -40,7 +41,7 @@ function blendTowardRed(hex: string, t: number): string {
 }
 
 /** Draw a small arrowhead at (tx, ty) pointing from (fx, fy) */
-function drawArrowhead(ctx: CanvasRenderingContext2D, fx: number, fy: number, tx: number, ty: number, size: number): void {
+function drawArrowhead(ctx: Ctx2D, fx: number, fy: number, tx: number, ty: number, size: number): void {
   const angle = Math.atan2(ty - fy, tx - fx);
   ctx.beginPath();
   ctx.moveTo(tx, ty);
@@ -51,7 +52,7 @@ function drawArrowhead(ctx: CanvasRenderingContext2D, fx: number, fy: number, tx
 }
 
 export function drawNavDebugOverlay(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   arena: Arena,
   mirrored: boolean,
   botNavStates?: BotNavDebugState[],

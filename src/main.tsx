@@ -12,6 +12,15 @@ import './index.css'
 import './components/shared.css'
 
 initDebugFlags(window.location.search);
+// COOP/COEP set in vite.config.ts gates `crossOriginIsolated`, which is the
+// prereq for SharedArrayBuffer + Atomics. GitHub Pages can't set those
+// headers, so prod will report false here and SAB-gated paths must check
+// `crossOriginIsolated` at runtime. Logged once at boot so the foundation
+// is visible without a devtools dive.
+console.info(
+  '[boot] crossOriginIsolated=' + crossOriginIsolated
+  + ' SharedArrayBuffer=' + (typeof SharedArrayBuffer !== 'undefined'),
+);
 initLighting(window.location.search);
 initPerfTier(window.location.search);
 initBrightness(window.location.search);
@@ -19,6 +28,10 @@ initPhotosensitivity(window.location.search);
 // Orphaned key from the removed outline-style toggle. One-shot cleanup so the
 // per-user localStorage doesn't accumulate dead values across deploys.
 safeStorage.remove('carrotroyale_outline_style');
+
+if (new URLSearchParams(window.location.search).has('sabDemo')) {
+  void import('./engine/worker/sabDemo').then((m) => m.startSabDemo());
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -68,10 +68,28 @@ test('perf profile run', async ({ page, context }) => {
   // Reset perfTrace so countdown samples don't pollute the run
   await page.evaluate(() => window.__perfTrace?.reset());
 
+  // Start compositor frame-pacing capture (no-op when proxy isn't active).
+  // Ground-truth presentation timing via requestVideoFrameCallback on a
+  // hidden video. Wrapped in try-catch on the page side so a media-stack
+  // hiccup doesn't fail the whole run.
+  await page.evaluate(() => {
+    type ProxyLike = { startCompositorPacing?(): void };
+    const w = window as unknown as { __rendererProxy?: ProxyLike };
+    try { w.__rendererProxy?.startCompositorPacing?.(); } catch { /* ignore */ }
+  });
+
   const cdp = await context.newCDPSession(page);
   await cdp.send('Profiler.enable');
   await cdp.send('HeapProfiler.enable');
   await cdp.send('Performance.enable');
+
+  // Optional CPU throttling: PERF_CPU_THROTTLE=4 → 4× slowdown. Used by the
+  // worker-offload stress test to demonstrate worker mode keeping 60fps
+  // while main-thread mode drops below it.
+  const cpuThrottle = Number(process.env.PERF_CPU_THROTTLE ?? '1');
+  if (cpuThrottle > 1) {
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: cpuThrottle });
+  }
 
   // Wrap collection in try/finally so the profilers are always stopped, even
   // on test failure — otherwise they keep running until the page closes.
@@ -135,6 +153,23 @@ test('perf profile run', async ({ page, context }) => {
   const sections = await page.evaluate(() => window.__perfTrace?.snapshot() ?? {});
   const frames = await page.evaluate(() => window.__fpsCounter?.dumpSamples() ?? { dts: [], count: 0, lastSampleTime: 0 });
   const longTasks = await page.evaluate(() => window.__longTasks ?? []);
+  // Worker render-time stats — only present when ?worker is on (or the
+  // localStorage default flag is on). Direct measurement of `renderer.
+  // renderFrame()` cost INSIDE the worker, immune to vsync pacing on main.
+  const workerStats = await page.evaluate(() => {
+    type ProxyLike = { getRenderStats?(): unknown };
+    const w = window as unknown as { __rendererProxy?: ProxyLike };
+    return w.__rendererProxy?.getRenderStats?.() ?? null;
+  });
+  // Compositor frame-presentation pacing — captured via
+  // `requestVideoFrameCallback` on a hidden video sourced from a
+  // captureStream of a synthetic canvas. Each delta is the gap between
+  // two consecutive presentations as the browser sees them.
+  const compositorPacing = await page.evaluate(() => {
+    type ProxyLike = { getCompositorPacing?(): number[] };
+    const w = window as unknown as { __rendererProxy?: ProxyLike };
+    return w.__rendererProxy?.getCompositorPacing?.() ?? null;
+  });
 
   const meta = {
     scenario: { arena, bots: Number(bots), difficulty, durationS },
@@ -152,6 +187,11 @@ test('perf profile run', async ({ page, context }) => {
   writeFileSync(path.join(outDir, 'long-tasks.json'), JSON.stringify(longTasks));
   writeFileSync(path.join(outDir, 'heap-timeline.json'), JSON.stringify(heapTimeline));
   writeFileSync(path.join(outDir, 'metadata.json'), JSON.stringify(meta, null, 2));
+  writeFileSync(path.join(outDir, 'worker-stats.json'), JSON.stringify({
+    cpuThrottle,
+    workerStats,
+    compositorPacing,
+  }, null, 2));
 
   expect(cpu.profile.samples?.length ?? 0).toBeGreaterThan(0);
 });

@@ -1,3 +1,4 @@
+import type { Ctx2D } from '../../types';
 import type { ThemeConfig } from '../../themes/types';
 
 // drawLavaRock has no module-local caches; clearLavaCaches is a no-op kept
@@ -8,7 +9,7 @@ export function clearLavaCaches(): void {
 }
 
 export function drawLavaRock(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx2D,
   rock: { x: number; y: number; size: number; rotation: number },
   theme: ThemeConfig,
 ): void {
