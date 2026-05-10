@@ -58,8 +58,37 @@ function stripExt(p: string): string {
   return p
 }
 
+/** Apply the worker module-stub aliases. Same function used in both the
+ *  top-level `plugins:` (for dev) and `worker.plugins:` (for prod rollup).
+ *  In dev, Vite tags worker-context imports with a `?worker_file` query
+ *  suffix on the importer URL — we scope the alias to those only so main-
+ *  thread imports of `howler` / `audio` / etc. still resolve normally. */
+function resolveWorkerStub(id: string, importer: string | undefined, isWorkerContext: boolean): string | null {
+  if (!isWorkerContext) return null
+  if (id === 'howler') return howlerStubPath
+  if (id.includes('/.vite/deps/howler.')) return howlerStubPath
+  if (!importer || !id.startsWith('.')) return null
+  // Strip query suffix before path-resolving the importer
+  const importerPath = importer.split('?')[0]
+  const resolved = stripExt(path.resolve(path.dirname(importerPath), id))
+  return STUB_BY_RESOLVED[resolved] ?? null
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      // Dev server applies top-level plugins to ALL transforms, including
+      // worker files. `worker.plugins` is only applied during rollup
+      // builds — it's effectively dead code in dev. So the worker-stub
+      // alias has to live here too, scoped by importer query suffix.
+      name: 'worker-module-stubs-dev',
+      enforce: 'pre',
+      resolveId(id: string, importer?: string) {
+        return resolveWorkerStub(id, importer, !!importer && importer.includes('?worker_file'))
+      },
+    },
+  ],
   base: '/bunnybrawl/',
   optimizeDeps: {
     include: ['@trystero-p2p/mqtt'],
@@ -68,28 +97,16 @@ export default defineConfig({
     __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
   },
   worker: {
+    // Production rollup respects this plugin chain. In dev, the top-level
+    // `plugins:` entry above does the equivalent work scoped by importer
+    // query suffix.
     plugins: () => [{
       name: 'worker-module-stubs',
       enforce: 'pre',
       resolveId(id: string, importer?: string) {
-        if (id === 'howler') return howlerStubPath
-        // In dev, Vite's optimizeDeps rewrites `from 'howler'` in the
-        // IMPORTER's transformed source to `/node_modules/.vite/deps/howler.js`
-        // BEFORE our resolver sees the bare specifier. The transformed file
-        // is cached and shared between main and worker bundles, so the
-        // worker imports the prebundled URL too. Intercept that URL here and
-        // redirect to the stub. Production builds skip optimizeDeps entirely,
-        // so the bare-specifier match alone is sufficient there — but the
-        // URL match is harmless in prod (the path doesn't exist) and gives
-        // us defense in depth.
-        if (id.includes('/.vite/deps/howler.')) return howlerStubPath
-        if (!importer || !id.startsWith('.')) return null
-        // Resolve the relative import to an absolute path; strip extension
-        // + /index suffix so `../audio`, `../audio.ts`, `../audio/index.ts`
-        // all collapse to `<root>/src/engine/audio`. Compare against the
-        // stub map. Any depth of `../` works.
-        const resolved = stripExt(path.resolve(path.dirname(importer), id))
-        return STUB_BY_RESOLVED[resolved] ?? null
+        // For prod builds, EVERY resolveId call inside the worker bundle
+        // is in worker context, so we pass `true` unconditionally.
+        return resolveWorkerStub(id, importer, true)
       },
     }],
   },

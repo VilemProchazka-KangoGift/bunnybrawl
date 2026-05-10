@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import { GameLoop } from '../../engine/gameLoop';
 import { NetMatch } from '../../engine/net/netMatch';
@@ -99,8 +99,45 @@ export function useOnlineMatch(p: UseOnlineMatchParams): void {
     setReconnectAttempt, setReconnectMax, flashBanner, t,
   } = p;
 
+  /** See useLocalMatch.ts for the rationale — deferred teardown survives
+   *  React StrictMode's dev double-mount of effects that can't safely
+   *  unmount/remount (worker spawn + transferControlToOffscreen). */
+  const lifecycleRef = useRef<{
+    teardown: (() => void) | null;
+    timer: ReturnType<typeof setTimeout> | null;
+    deps: { activePlayers: typeof activePlayers; matchSettings: typeof matchSettings } | null;
+  }>({ teardown: null, timer: null, deps: null });
+
   useEffect(() => {
     if (!isOnline) return;
+
+    // StrictMode-safe deferred teardown: cancel pending timer if this is
+    // a remount with unchanged deps, reuse the existing NetMatch.
+    if (lifecycleRef.current.timer !== null) {
+      clearTimeout(lifecycleRef.current.timer);
+      lifecycleRef.current.timer = null;
+      const prev = lifecycleRef.current.deps;
+      const depsUnchanged = prev !== null
+        && prev.activePlayers === activePlayers
+        && prev.matchSettings === matchSettings;
+      if (depsUnchanged) {
+        const reusedTeardown = lifecycleRef.current.teardown;
+        return () => {
+          lifecycleRef.current.timer = setTimeout(() => {
+            reusedTeardown?.();
+            lifecycleRef.current.teardown = null;
+            lifecycleRef.current.deps = null;
+            lifecycleRef.current.timer = null;
+          }, 0);
+        };
+      }
+      // Real dep change: tear down old NetMatch synchronously. Canvases
+      // stay detached — fresh construction below will hit the same wall
+      // as the local-mode path. Documented limitation.
+      lifecycleRef.current.teardown?.();
+      lifecycleRef.current.teardown = null;
+      lifecycleRef.current.deps = null;
+    }
     const bgCanvas = bgCanvasRef.current;
     const fgCanvas = fgCanvasRef.current;
     const hudCanvas = hudCanvasRef.current;
@@ -325,12 +362,24 @@ export function useOnlineMatch(p: UseOnlineMatchParams): void {
       netMatch,
     );
 
-    return () => {
+    const teardown = (): void => {
       netMatch.stop();
       netMatchRef.current = null;
       commonCleanup();
       if (workerProxy) workerProxy.destroy();
       clearTimer(disconnectDelayRef);
+    };
+    lifecycleRef.current.teardown = teardown;
+    lifecycleRef.current.deps = { activePlayers, matchSettings };
+    return () => {
+      // Defer for StrictMode safety. The remount will cancel this timer
+      // before it fires; real unmount lets it fire.
+      lifecycleRef.current.timer = setTimeout(() => {
+        teardown();
+        lifecycleRef.current.teardown = null;
+        lifecycleRef.current.deps = null;
+        lifecycleRef.current.timer = null;
+      }, 0);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePlayers, matchSettings, setMatchResult, isOnline]);
