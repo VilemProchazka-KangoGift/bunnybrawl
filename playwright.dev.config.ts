@@ -10,7 +10,7 @@ import { defineConfig, devices } from '@playwright/test';
  *  `npx playwright test --config=playwright.dev.config.ts`). */
 export default defineConfig({
   testDir: './e2e',
-  testMatch: ['**/worker-strictmode-cold.spec.ts'],
+  testMatch: ['**/worker-strictmode-cold.spec.ts', '**/sab-demo.spec.ts'],
   fullyParallel: false,
   retries: 0,
   workers: 1,

@@ -90,6 +90,26 @@ export default defineConfig({
     },
   ],
   base: '/bunnybrawl/',
+  // COOP/COEP headers in dev + preview unlock `crossOriginIsolated === true`,
+  // which is the gate for SharedArrayBuffer + Atomics.wait/notify. Step 1 of
+  // the SAB experimentation roadmap: confirm the foundation works locally
+  // before any production hosting work. GitHub Pages can't set these
+  // headers, so SAB-gated code paths must check `crossOriginIsolated` at
+  // runtime and fall back. Side effect: cross-origin iframes / scripts
+  // without CORP get blocked — none in this app today, but flagging for
+  // future third-party integrations.
+  server: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    },
+  },
+  preview: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    },
+  },
   optimizeDeps: {
     include: ['@trystero-p2p/mqtt'],
   },
