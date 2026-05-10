@@ -181,13 +181,17 @@ function ensureCosmeticSystemsFor(arena: Arena, theme: ThemeConfig, state: Match
   }
 }
 
-/** Lazy-loaded engine bindings. The renderer-only path leaves these null
- *  forever; sim-in-worker resolves them on first `host:initEngine`. */
-let engineBindings: typeof import('./engineWorkerInit') | null = null;
-async function ensureEngineBindings(): Promise<typeof import('./engineWorkerInit')> {
-  if (!engineBindings) engineBindings = await import('./engineWorkerInit');
-  return engineBindings;
-}
+/** Engine bindings statically imported. We previously code-split this
+ *  via dynamic `import()` to keep the renderer-only path slim — but the
+ *  resulting runtime fetch added 3–5s of cold-start to the first
+ *  `host:initEngine` (worse under devtools / throttling), which made
+ *  `?simWorker=on` feel sluggish at match start. The renderer-only path
+ *  tree-shakes most of GameLoop (ParticleSystem etc.) anyway because
+ *  the Renderer constructor already pulls in arenas/characters/themes;
+ *  the marginal bundle cost is small (~tens of KB) and pays for itself
+ *  by eliminating the cold-start hitch the moment a player flips the
+ *  flag on. */
+import * as engineBindings from './engineWorkerInit';
 
 ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
   if (stopped) return;
@@ -199,44 +203,28 @@ ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
   // first; if it's not an engine message, fall through to the sync switch.
   if (msg.type === 'host:initEngine') {
     _mirror = msg.mirrored;
-    void ensureEngineBindings().then((m) => {
-      m.initEngine(msg);
+    try {
+      engineBindings.initEngine(msg);
       // Sim-in-worker hosts its own Renderer inside engineWorkerInit. Route
       // the renderer-only IRenderer messages (warmSpriteCache, renderBackground,
       // warmHudFonts, setRenderScale, setTheme, setBotNavDebugStates, …)
       // through that same Renderer so the loading pipeline works (otherwise
       // the proxy posts run forever while the worker's own dispatch sees
       // a null `renderer`).
-      const engineRenderer = m.getEngineRenderer();
+      const engineRenderer = engineBindings.getEngineRenderer();
       if (engineRenderer) renderer = engineRenderer;
       postReady();
-    }).catch((err) => postError(err instanceof Error ? err.message : String(err)));
+    } catch (err) {
+      postError(err instanceof Error ? (err.stack ?? err.message) : String(err));
+    }
     return;
   }
-  if (msg.type === 'host:engineInputBatch') {
-    if (engineBindings) engineBindings.applyInputBatch(msg);
-    return;
-  }
-  if (msg.type === 'host:enginePause') {
-    if (engineBindings) engineBindings.pauseEngine();
-    return;
-  }
-  if (msg.type === 'host:engineResume') {
-    if (engineBindings) engineBindings.resumeEngine();
-    return;
-  }
-  if (msg.type === 'host:engineSwitchArena') {
-    if (engineBindings) engineBindings.switchArenaInWorker(msg);
-    return;
-  }
-  if (msg.type === 'host:engineSetPhase') {
-    if (engineBindings) engineBindings.setPhaseInWorker(msg);
-    return;
-  }
-  if (msg.type === 'host:engineSkipCountdown') {
-    if (engineBindings) engineBindings.skipCountdownInWorker();
-    return;
-  }
+  if (msg.type === 'host:engineInputBatch') { engineBindings.applyInputBatch(msg); return; }
+  if (msg.type === 'host:enginePause') { engineBindings.pauseEngine(); return; }
+  if (msg.type === 'host:engineResume') { engineBindings.resumeEngine(); return; }
+  if (msg.type === 'host:engineSwitchArena') { engineBindings.switchArenaInWorker(msg); return; }
+  if (msg.type === 'host:engineSetPhase') { engineBindings.setPhaseInWorker(msg); return; }
+  if (msg.type === 'host:engineSkipCountdown') { engineBindings.skipCountdownInWorker(); return; }
 
   try {
     switch (msg.type) {
