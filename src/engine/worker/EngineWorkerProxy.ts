@@ -81,6 +81,15 @@ export class EngineWorkerProxy {
   private running = false;
   private paused = false;
   private mirrorState: MatchState | null = null;
+  /** Last input batch posted to the worker. Per-rAF reads compare against
+   *  this to skip identical posts — inputs change far less often than 60Hz
+   *  so the dedup cuts postMessage volume 3-10×. Indexed by slot order in
+   *  `activePlayers`. */
+  private lastSentInputs: InputState[] = [];
+  /** True until the first input batch has been posted, ensuring the worker
+   *  receives at least one batch even on a frame with all-empty inputs
+   *  (so RemoteInput's read finds the slot in the map). */
+  private inputsEverSent = false;
   private mirrorArena: Arena;
   private originalArena: Arena;
   private settings: MatchSettings;
@@ -178,6 +187,8 @@ export class EngineWorkerProxy {
     // run inside the worker's Simulator (RuleBasedBot) so we don't include
     // their inputs.
     const inputs: Array<[PlayerSlot, InputState]> = [];
+    let humanIdx = 0;
+    let changed = !this.inputsEverSent;
     for (const slot of this.activePlayers) {
       if (isBotSlot(slot)) continue;
       const kb = this.keyboardManager.readSlot(slot as CharacterSlot);
@@ -194,9 +205,25 @@ export class EngineWorkerProxy {
         };
       }
       inputs.push([slot, merged]);
+      const last = this.lastSentInputs[humanIdx];
+      if (!last
+        || last.left !== merged.left
+        || last.right !== merged.right
+        || last.jump !== merged.jump
+        || last.down !== merged.down) {
+        changed = true;
+      }
+      this.lastSentInputs[humanIdx] = merged;
+      humanIdx++;
     }
-    const m: HostEngineInputBatchMsg = { type: 'host:engineInputBatch', inputs };
-    this.worker.postMessage(m);
+    // Skip the post when nothing changed since last frame. The worker's
+    // input map keeps the previous values; RemoteInput re-reads them each
+    // tick so unchanged inputs stay correct without a refresh.
+    if (changed) {
+      const m: HostEngineInputBatchMsg = { type: 'host:engineInputBatch', inputs };
+      this.worker.postMessage(m);
+      this.inputsEverSent = true;
+    }
     this.rafId = requestAnimationFrame(this.tick);
   };
 

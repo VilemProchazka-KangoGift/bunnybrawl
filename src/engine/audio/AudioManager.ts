@@ -38,6 +38,13 @@ class AudioManager {
   init(): void {
     if (this.initialized) return;
 
+    // Disable Howler's auto-suspend feature. It's intended to save battery
+    // by suspending the AudioContext after 30s of silence — but our game
+    // is always firing SFX (footsteps, jumps, stomps), so the periodic
+    // _autoSuspend check fires every play() to no effect. Surfaced in
+    // worker-mode CPU profiles at ~3ms / 30s.
+    (Howler as unknown as { autoSuspend: boolean }).autoSuspend = false;
+
     registerAllSounds(this.sounds);
 
     this._visibilityHandler = () => {
