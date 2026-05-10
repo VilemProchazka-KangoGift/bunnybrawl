@@ -90,8 +90,12 @@ export function initEngine(msg: HostInitEngineMsg): void {
   renderer.setRenderScale(msg.renderScale);
   renderer.setTimeLimit(msg.settings.timeLimit);
 
-  const onMatchEnd = (winner: PlayerSlot | null /*, _state: MatchState */): void => {
-    postEvent({ kind: 'matchEnd', winner });
+  const onMatchEnd = (winner: PlayerSlot | null): void => {
+    // Ship the final state alongside the event so main's VictoryScreen
+    // never reads the placeholder bootState (the 5Hz mirror could race
+    // matchEnd by up to 200ms — see review #19).
+    const state = gameLoop?.getState();
+    postEvent({ kind: 'matchEnd', winner, state });
   };
 
   // Construct GameLoop with the worker-hosted Renderer injected. The

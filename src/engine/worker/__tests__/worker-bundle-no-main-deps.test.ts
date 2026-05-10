@@ -3,6 +3,15 @@
  * main-thread-only dependencies. The worker bundle is browser-only but ships
  * separately from the React/UI bundle; pulling in React or Howler from the
  * worker would silently double the download size and break worker boot.
+ *
+ * Coverage caveat: this walks RAW source imports — it does NOT apply the
+ * vite worker stub map (`vite.config.ts > worker.plugins`) that swaps
+ * `audio`, `haptics`, `KeyboardManager`, `touchDetect` for worker-safe
+ * stubs. So we catch regressions where someone makes the engine source
+ * itself import a banned module (good — the stub redirect would mask
+ * that mistake), but we don't validate the post-stub graph. If a stub
+ * file ITSELF were to import a banned module, this test would miss it.
+ * Stub files are tiny and hand-reviewed; verify them by inspection.
  */
 
 import { describe, it, expect } from 'vitest';

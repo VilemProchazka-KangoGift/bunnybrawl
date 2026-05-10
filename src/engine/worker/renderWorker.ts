@@ -186,11 +186,12 @@ function ensureCosmeticSystemsFor(arena: Arena, theme: ThemeConfig, state: Match
  *  resulting runtime fetch added 3–5s of cold-start to the first
  *  `host:initEngine` (worse under devtools / throttling), which made
  *  `?simWorker=on` feel sluggish at match start. The renderer-only path
- *  tree-shakes most of GameLoop (ParticleSystem etc.) anyway because
- *  the Renderer constructor already pulls in arenas/characters/themes;
- *  the marginal bundle cost is small (~tens of KB) and pays for itself
- *  by eliminating the cold-start hitch the moment a player flips the
- *  flag on. */
+ *  tree-shakes part of GameLoop (the cosmetic systems are already
+ *  imported separately above) — net bundle delta is on the order of
+ *  ~100-200 KB minified, paid once per worker spawn and cached by the
+ *  browser. The trade-off (always pay the bigger fetch, never pay the
+ *  cold-start hitch) is the right one because the cold-start was the
+ *  user-visible problem; bundle size is invisible after first load. */
 import * as engineBindings from './engineWorkerInit';
 
 ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {

@@ -36,7 +36,7 @@ import type {
   HostInitEngineMsg, HostStopMsg, HostEngineInputBatchMsg,
   HostEnginePauseMsg, HostEngineResumeMsg,
   HostEngineSwitchArenaMsg, HostEngineSetPhaseMsg, HostEngineSkipCountdownMsg,
-  WorkerToHostMsg,
+  WorkerEngineEventMsg, WorkerToHostMsg,
 } from './messages';
 
 /** EngineWorkerProxy creation options. Mirrors RendererProxyOptions but
@@ -92,7 +92,12 @@ export class EngineWorkerProxy {
    *  receives at least one batch even on a frame with all-empty inputs
    *  (so RemoteInput's read finds the slot in the map). */
   private inputsEverSent = false;
-  private mirrorArena: Arena;
+  /** The current arena (un-mirrored layout — Match.tsx hands the proxy the
+   *  arena from `getArena(id)`). The worker re-applies `mirrorArena()`
+   *  internally when `mods.mirrorArena=true`, so this field is the raw
+   *  arena, not a mirrored copy despite living in a class adjacent to
+   *  the mirror flag. */
+  private _arena: Arena;
   private originalArena: Arena;
   private settings: MatchSettings;
   private activePlayers: PlayerSlot[];
@@ -106,12 +111,16 @@ export class EngineWorkerProxy {
   /** Stand-in for IRenderer that matchLoading expects. Methods post to the
    *  worker; the worker's hosted Renderer applies them. */
   readonly renderer: IRenderer;
+  /** Drops the `warmedNames` set inside `makeRendererProxy`'s closure.
+   *  Called from `switchArena` so a level switch doesn't leave a falsely
+   *  pre-warmed roster on the new arena. Wired by the constructor. */
+  private _clearWarmedNames?: () => void;
 
   constructor(opts: EngineWorkerProxyOptions) {
     this.fgNightTint = opts.fgNightTint ?? null;
     this.bgNightCanvasEl = opts.bgNightCanvas ?? null;
     this.lightCanvasEl = opts.lightCanvas ?? null;
-    this.mirrorArena = opts.arena;
+    this._arena = opts.arena;
     this.originalArena = opts.arena;
     this.settings = opts.settings;
     this.activePlayers = opts.activePlayers;
@@ -182,8 +191,16 @@ export class EngineWorkerProxy {
 
     // Build the IRenderer adapter. Each method posts a message; the
     // worker's hosted Renderer applies it. matchLoading uses these.
-    this.renderer = makeRendererProxy(this);
+    // The factory hands back a clearer for the warmedNames intent set so
+    // `switchArena()` can drop stale entries (review #23).
+    const adapter = makeRendererProxy(this);
+    this.renderer = adapter.renderer;
+    this._clearWarmedNames = adapter.clearWarmedNames;
 
+    // Globals carry the most-recently-constructed proxy so E2E + the perf
+    // harness can read worker stats. React StrictMode double-mount in dev
+    // is safe: the first proxy's `stop()` only nulls the global if it
+    // still points at `=== this`, so we never clobber the live one.
     if (typeof window !== 'undefined') {
       (window as unknown as { __engineWorkerProxy?: EngineWorkerProxy }).__engineWorkerProxy = this;
     }
@@ -278,7 +295,7 @@ export class EngineWorkerProxy {
   resume(): void {
     if (!this.paused) return;
     this.paused = false;
-    audio.setPaused(false, this.mirrorArena.themeId);
+    audio.setPaused(false, this._arena.themeId);
     const m: HostEngineResumeMsg = { type: 'host:engineResume' };
     this.worker.postMessage(m);
   }
@@ -293,9 +310,13 @@ export class EngineWorkerProxy {
     this.worker.postMessage(m);
   }
   switchArena(arenaId: string, settingsOverrides?: Partial<MatchSettings>): void {
-    this.mirrorArena = getArena(arenaId);
-    this.originalArena = this.mirrorArena;
+    this._arena = getArena(arenaId);
+    this.originalArena = this._arena;
     if (settingsOverrides) Object.assign(this.settings, settingsOverrides);
+    // Drop the warmedNames intent set so `hasWarmedAll` doesn't falsely
+    // report true for old characters after a level switch (review #23).
+    // The next `runLoadingTasks` pass will re-warm against the new roster.
+    this._clearWarmedNames?.();
     const m: HostEngineSwitchArenaMsg = { type: 'host:engineSwitchArena', arenaId, settingsOverrides };
     this.worker.postMessage(m);
   }
@@ -308,7 +329,7 @@ export class EngineWorkerProxy {
       .map((slot) => this.bootState.players.find((p) => p.id === slot)?.character?.name)
       .filter((n): n is string => !!n);
   }
-  getArena(): Arena { return this.mirrorArena; }
+  getArena(): Arena { return this._arena; }
   getOriginalArena(): Arena { return this.originalArena; }
   getRenderer(): IRenderer { return this.renderer; }
   getTouchInput(): TouchInputManager | null { return this.touchInput; }
@@ -337,7 +358,7 @@ export class EngineWorkerProxy {
     }
     if (msg.type === 'worker:engineStateMirror') {
       this.mirrorState = msg.state;
-      if (msg.arenaId !== this.mirrorArena.id) this.mirrorArena = getArena(msg.arenaId);
+      if (msg.arenaId !== this._arena.id) this._arena = getArena(msg.arenaId);
       return;
     }
     if (msg.type === 'worker:engineEvent') {
@@ -351,7 +372,7 @@ export class EngineWorkerProxy {
     }
   };
 
-  private dispatchEngineEvent(kind: string, m: { name?: string; themeId?: string; volume?: number; paused?: boolean; arenaId?: string; flavor?: string; slot?: PlayerSlot; prevVy?: number; phase?: MatchPhase; winner?: PlayerSlot | null }): void {
+  private dispatchEngineEvent(kind: WorkerEngineEventMsg['kind'], m: WorkerEngineEventMsg): void {
     switch (kind) {
       case 'sfx':              if (m.name) audio.play(m.name as Parameters<typeof audio.play>[0]); break;
       case 'animal':           if (m.name) audio.playAnimal(m.name as Parameters<typeof audio.playAnimal>[0]); break;
@@ -371,7 +392,7 @@ export class EngineWorkerProxy {
         break;
       }
       case 'phaseChange':      if (m.phase) this.onPhaseChange?.(m.phase); break;
-      case 'matchEnd':         this.onMatchEnd(m.winner ?? null, this.mirrorState ?? this.bootState); break;
+      case 'matchEnd':         this.onMatchEnd(m.winner ?? null, m.state ?? this.mirrorState ?? this.bootState); break;
     }
   }
 }
@@ -387,11 +408,13 @@ function makeBootState(arena: Arena, activePlayers: PlayerSlot[], settings: Matc
 }
 
 /** Implements the IRenderer surface that matchLoading needs. Each call
- *  posts a host:* message to the worker. */
-function makeRendererProxy(proxy: EngineWorkerProxy): IRenderer {
+ *  posts a host:* message to the worker. Returns the renderer plus a
+ *  `clearWarmedNames` callback so `switchArena` can flush the pre-warm
+ *  intent set when the roster changes. */
+function makeRendererProxy(proxy: EngineWorkerProxy): { renderer: IRenderer; clearWarmedNames: () => void } {
   const worker = (proxy as unknown as { worker: Worker }).worker;
   const warmedNames = new Set<string>();
-  return {
+  const renderer: IRenderer = {
     setRenderScale(scale) { worker.postMessage({ type: 'host:setRenderScale', scale }); },
     setBotNavDebugStates(states) { worker.postMessage({ type: 'host:setBotNavDebug', states }); },
     setNetDebugStats(stats) { worker.postMessage({ type: 'host:setNetDebug', stats }); },
@@ -418,5 +441,9 @@ function makeRendererProxy(proxy: EngineWorkerProxy): IRenderer {
     /** Worker drives its own RAF; this is only called if main accidentally
      *  calls renderFrame on the IRenderer. Safe no-op. */
     renderFrame() { /* worker drives its own RAF */ },
+  };
+  return {
+    renderer,
+    clearWarmedNames: () => warmedNames.clear(),
   };
 }

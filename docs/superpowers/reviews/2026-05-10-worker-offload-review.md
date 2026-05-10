@@ -194,16 +194,76 @@ is safe.
 `path.resolve` on Windows produce backslashes; lookup uses the same
 function so they match. Verified.
 
-## Recommended next session
+## Round 3 findings (post-fix re-review)
 
-In priority order:
-1. **#19** matchEnd race — small, real bug, easy fix.
-2. **#18** field rename — clarity win.
-3. **#20** test gap comment — 5 minutes.
-4. **#5** render-scale propagation in sim-worker — low impact, easy.
-5. **#14** GameLoop cast → typed interface — refactor, defer until
-   sim-worker is promoted to default.
+A third review round looked at the tree after rounds 1 & 2 with fresh
+eyes (concurrency, memory leaks, mirror chain, bundle leaks, type
+safety, test coverage). **No new BLOCKERs or HIGHs.** Two MEDIUMs
+plus a handful of LOW/NITs.
 
-The branch is **mergeable as-is**. None of the LOW/NIT items block
-shipping the renderer-only worker default-on. Sim-worker is opt-in
-and the LOWs above all live behind that flag.
+### MEDIUM
+
+**#23 — `warmedNames` not cleared on switchArena (engine-mode).**
+`EngineWorkerProxy.makeRendererProxy`'s `warmedNames` Set accumulates
+across arena swaps. After `switchArena`, `hasWarmedAll` can falsely
+return true for old characters; the new arena's first frame paints
+without a pre-warmed sprite cache.
+
+**#24 — React StrictMode double-mount of EngineWorkerProxy.**
+Verified safe (the `=== this` guard on `__engineWorkerProxy` global
+protects), but the interaction wasn't documented and would surprise
+the next reader.
+
+### LOW / NIT
+
+- **#25** `host:stop` posted before `worker:ready` — robust, no fix.
+- **#26** `i18next` in worker bundle test allowlist — verified zero
+  imports today; allowlist retained as future-proofing.
+- **#27** `STATE_MIRROR_INTERVAL_MS=200` vs `LOADING_TIMEOUT_MS=15000`
+  — safe in practice.
+- **#28** iOS background tab — consistent with no-worker behavior.
+- **#29** Carry-over of #18 (mirrorArena field naming).
+- **#30** `dispatchEngineEvent`'s `kind: string` defeats the
+  `WorkerEngineEventMsg.kind` union. Adding a new kind in messages.ts
+  won't error here.
+
+### Verified safe in round 3
+
+- Worker bundle hygiene (raw grep against shipped JS — no
+  `react`/`howler`/`i18next`)
+- `__rendererProxy` / `__engineWorkerProxy` global cleanup uses
+  `=== this` guards correctly
+- Worker-death postMessage race — silent drop, no throw
+- `BOT_CHARACTERS.clear()` per init — per-worker, no contamination
+- `_perf.longFrames` ring — per-worker, no carry-over
+- `mirrorArena` re-application in sim-worker mode — `resolveArena`
+  is only called from the renderer-only dispatch path; sim-worker
+  routes through `engineWorkerInit.getEngineRenderer()` so the
+  worker's own Renderer.mirrored handles it. No double-mirror.
+
+## Status — all rounds 1-3
+
+All actionable findings have been addressed in code:
+
+| # | Severity | Status |
+|---|----------|--------|
+| 1 | BLOCKER | fixed (`9152651`) |
+| 2-7 | HIGH | fixed (`9152651`) — including bonus discoveries |
+| 8 | HIGH | mitigated by `10fb8bc` |
+| 9-13 | MEDIUM | accepted (low impact in practice) |
+| 14 | MEDIUM | deferred (typed interface refactor) |
+| 15-17 | LOW | cosmetic, not addressed |
+| 18 / 29 | LOW | fixed: field renamed `mirrorArena` → `_arena` |
+| 19 | LOW | fixed: worker ships final state in `matchEnd` payload |
+| 20 | LOW | fixed: comment added clarifying stub-graph gap |
+| 21 | NIT | accepted |
+| 22 | NIT | fixed: comment updated (~tens of KB → ~100-200 KB) |
+| 23 | MEDIUM | fixed: `switchArena` flushes `warmedNames` |
+| 24 | MEDIUM | fixed: comment added near `__engineWorkerProxy` |
+| 25-28 | LOW/NIT | verified safe, no action needed |
+| 30 | NIT | fixed: typed `kind` against `WorkerEngineEventMsg['kind']` |
+
+**The branch is mergeable.** Renderer-only worker is the production
+default. Sim-worker is opt-in via `?simWorker=on` for local play, with
+the path to default-on documented in the top-level handoff and the
+NetMatch async-fixedUpdate handoff.

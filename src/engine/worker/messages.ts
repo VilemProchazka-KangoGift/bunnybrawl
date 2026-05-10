@@ -236,6 +236,10 @@ export interface WorkerEngineEventMsg {
   prevVy?: number;
   phase?: MatchPhase;
   winner?: PlayerSlot | null;
+  /** Carried by `kind === 'matchEnd'`. Worker includes the final
+   *  MatchState in the event so VictoryScreen never reads a stale
+   *  bootState if matchEnd fires before the next 5Hz state mirror. */
+  state?: MatchState;
 }
 
 /** Periodic state mirror for E2E (`window.__bunnyTest.state()`) and for
