@@ -70,6 +70,11 @@ export interface RendererProxyOptions {
   /** When true, the worker enables `perfTrace` and ships per-section
    *  timings + long-frame attribution back to main. */
   perfEnabled?: boolean;
+  /** URL-gated debug overlays. Forwarded to the worker so the renderer
+   *  inside it draws the overlay instead of the (gone-from-main) Renderer. */
+  navDebugEnabled?: boolean;
+  netDebugEnabled?: boolean;
+  fpsEnabled?: boolean;
   /** If set, the worker constructor reports init failures here. The caller
    *  should fall back to a main-thread Renderer on error. */
   onError?: (message: string) => void;
@@ -203,6 +208,9 @@ export class RendererProxy implements IRenderer {
       renderScale: this.opts.renderScale,
       language: opts.language ?? 'en',
       perfEnabled: opts.perfEnabled ?? false,
+      navDebugEnabled: opts.navDebugEnabled ?? false,
+      netDebugEnabled: opts.netDebugEnabled ?? false,
+      fpsEnabled: opts.fpsEnabled ?? false,
     };
 
     const transfer: Transferable[] = [bgOff, fgOff];

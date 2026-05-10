@@ -92,6 +92,15 @@ export interface UseLocalMatchParams {
  *
  * The "reset phaseIsLoading=true / localTasksDone=false at top of branch"
  * caveat from CLAUDE.md is preserved here.
+ *
+ * HMR caveat: editing engine code while a match is running with
+ * `?worker=on` updates Match.tsx's transitive deps on main but leaves the
+ * worker bundle running the previously-compiled module graph. Vite does
+ * not propagate HMR into Web Workers. To pick up engine changes, hard-
+ * refresh (Ctrl+Shift+R) or quit-to-menu and re-enter the match — that
+ * tears down the proxy via this effect's cleanup and the next mount
+ * spawns a fresh worker that fetches the updated bundle. Production is
+ * unaffected (no HMR).
  */
 export function useLocalMatch(p: UseLocalMatchParams): void {
   const {
@@ -152,6 +161,9 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
           renderScale: getRenderScale(),
           language: i18n.language,
           perfEnabled: debugFlags.perfEnabled,
+          navDebugEnabled: debugFlags.navDebugEnabled,
+          netDebugEnabled: debugFlags.netDebugEnabled,
+          fpsEnabled: debugFlags.fpsEnabled,
           onError: (m) => console.error('[engine worker]', m),
         });
         // Type-cast: EngineWorkerProxy implements the GameLoop public
@@ -180,8 +192,18 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
           }
         };
       } catch (e) {
-        console.warn('[sim-worker] proxy construction failed, falling back to renderer-only worker:', e);
-        // Fall through to the renderer-only worker path below.
+        console.warn('[sim-worker] proxy construction failed:', e);
+        // Critical: if the constructor threw AFTER calling
+        // transferControlToOffscreen (e.g. partial transfer, postMessage
+        // failure), the canvases are now detached — getContext returns null
+        // and any further proxy / GameLoop construction would silently
+        // produce a black screen. Detect detachment and short-circuit
+        // instead of cascading. User recovers via ?simWorker=off.
+        if (canvasesDetached(bgCanvas, fgCanvas, hudCanvas, bgNightCanvas, lightCanvas)) {
+          console.error('[sim-worker] canvases detached, cannot fall back; refresh with ?simWorker=off to recover');
+          return;
+        }
+        // Canvases still fresh — fall through to the renderer-only path.
       }
     }
 
@@ -204,13 +226,21 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
           // Enable worker-side perfTrace + section snapshot when ?debug=perf.
           // Same gate as main-thread perfTrace; ships per-second rollups.
           perfEnabled: debugFlags.perfEnabled,
+          navDebugEnabled: debugFlags.navDebugEnabled,
+          netDebugEnabled: debugFlags.netDebugEnabled,
+          fpsEnabled: debugFlags.fpsEnabled,
           onError: (m) => console.error('[render worker]', m),
         });
       } catch (e) {
-        // Browser without OffscreenCanvas / Worker module support — fall
-        // back to main-thread Renderer.
-        console.warn('[worker offload] proxy construction failed, falling back:', e);
+        console.warn('[worker offload] proxy construction failed:', e);
         workerProxy = null;
+        // Same detachment guard — if RendererProxy partially transferred
+        // before throwing, GameLoop's `getContext('2d')` would return null
+        // and the canvas would silently render nothing.
+        if (canvasesDetached(bgCanvas, fgCanvas, hudCanvas, bgNightCanvas, lightCanvas)) {
+          console.error('[render worker] canvases detached, cannot fall back; refresh with ?worker=off to recover');
+          return;
+        }
       }
     }
 
@@ -258,4 +288,17 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePlayers, matchSettings, setMatchResult, isOnline]);
+}
+
+/** True when any of the supplied canvases has been transferred to a
+ *  worker (offscreen). After `transferControlToOffscreen`, `getContext`
+ *  returns null on the original element. We use this to detect a
+ *  half-transferred state where a proxy threw mid-construction — in that
+ *  case the cascading fallback can't safely re-transfer or fall back to
+ *  a main-thread Renderer (whose `getContext('2d')` would also be null). */
+function canvasesDetached(...canvases: Array<HTMLCanvasElement | undefined>): boolean {
+  for (const c of canvases) {
+    if (c && c.getContext('2d') === null) return true;
+  }
+  return false;
 }

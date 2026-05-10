@@ -56,6 +56,10 @@ export interface EngineWorkerProxyOptions {
   renderScale: number;
   language?: string;
   perfEnabled?: boolean;
+  /** URL-gated debug overlays forwarded to the worker. */
+  navDebugEnabled?: boolean;
+  netDebugEnabled?: boolean;
+  fpsEnabled?: boolean;
   onError?: (message: string) => void;
 }
 
@@ -175,6 +179,9 @@ export class EngineWorkerProxy {
       renderScale: opts.renderScale,
       language: opts.language ?? 'en',
       perfEnabled: opts.perfEnabled ?? false,
+      navDebugEnabled: opts.navDebugEnabled ?? false,
+      netDebugEnabled: opts.netDebugEnabled ?? false,
+      fpsEnabled: opts.fpsEnabled ?? false,
     };
     const transfer: Transferable[] = [bgOff, fgOff];
     if (hudOff) transfer.push(hudOff);

@@ -39,6 +39,13 @@ export interface HostInitMsg {
    *  rollups (histogram + section snapshot + long-frame attribution)
    *  back to main. */
   perfEnabled: boolean;
+  /** Forward URL-gated debug overlays so they render inside the worker.
+   *  Without these, `?worker=on&debug=nav` (or `=net`, `=fps`) silently
+   *  shows nothing because the worker's `debugFlags` module-scope copy
+   *  defaults to all-false. */
+  navDebugEnabled?: boolean;
+  netDebugEnabled?: boolean;
+  fpsEnabled?: boolean;
 }
 
 export interface HostStopMsg { type: 'host:stop' }
@@ -94,6 +101,9 @@ export interface HostInitEngineMsg {
   renderScale: number;
   language: string;
   perfEnabled: boolean;
+  navDebugEnabled?: boolean;
+  netDebugEnabled?: boolean;
+  fpsEnabled?: boolean;
 }
 
 /** Per-frame input batch from main. The worker's RemoteInput adapters

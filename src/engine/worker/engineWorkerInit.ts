@@ -75,6 +75,9 @@ export function initEngine(msg: HostInitEngineMsg): void {
     }
   }
   if (msg.perfEnabled) debugFlags.perfEnabled = true;
+  if (msg.navDebugEnabled) { debugFlags.navDebugAllowed = true; debugFlags.navDebugEnabled = true; }
+  if (msg.netDebugEnabled) { debugFlags.netDebugAllowed = true; debugFlags.netDebugEnabled = true; }
+  if (msg.fpsEnabled)      { debugFlags.fpsAllowed = true;      debugFlags.fpsEnabled = true; }
   setHudLanguage(msg.language);
 
   const arena = getArena(msg.arenaId);

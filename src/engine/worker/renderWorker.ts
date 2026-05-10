@@ -235,6 +235,13 @@ ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
           debugFlags.perfEnabled = true;
           _perfEnabled = true;
         }
+        // URL-gated overlays — same allowed/enabled pair as main's
+        // initDebugFlags() does. Without this, ?worker=on&debug=nav would
+        // silently disable the overlay because the worker's debugFlags
+        // module-scope copy defaults to all-false.
+        if (msg.navDebugEnabled) { debugFlags.navDebugAllowed = true; debugFlags.navDebugEnabled = true; }
+        if (msg.netDebugEnabled) { debugFlags.netDebugAllowed = true; debugFlags.netDebugEnabled = true; }
+        if (msg.fpsEnabled)      { debugFlags.fpsAllowed = true;      debugFlags.fpsEnabled = true; }
         _mirror = msg.mirrored;
         const theme = getTheme(msg.themeId);
         renderer = new Renderer({
