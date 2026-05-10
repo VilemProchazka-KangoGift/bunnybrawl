@@ -49,8 +49,8 @@
  *   _loadingTimeoutExtended         — LoadingHandshake only
  */
 import type { PlayerSlot, MatchState, MatchPhase } from '../../types';
-import type { GameLoop } from '../../gameLoop';
 import type { MatchEndCallback } from '../../gameLoop';
+import type { NetMatchDriver } from './NetMatchDriver';
 import { Transport } from '../transport';
 import { HostAuthority } from '../hostAuthority';
 import { EntityInterpolation } from '../interpolation';
@@ -66,7 +66,7 @@ export interface NetMatchContext {
   readonly transport: Transport;
   readonly isHost: boolean;
   readonly localSlot: PlayerSlot;
-  readonly gameLoop: GameLoop;
+  readonly gameLoop: NetMatchDriver;
 
   /** Host-only; null on guest. */
   hostAuthority: HostAuthority | null;
@@ -103,7 +103,7 @@ export function createNetMatchContext(init: {
   transport: Transport;
   isHost: boolean;
   localSlot: PlayerSlot;
-  gameLoop: GameLoop;
+  gameLoop: NetMatchDriver;
   onMatchEnd?: MatchEndCallback;
   onDisconnect?: () => void;
   onArenaChange?: (arenaId: string) => void;
