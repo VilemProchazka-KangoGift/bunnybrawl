@@ -1,6 +1,6 @@
 import type { MatchState, SpringMushroom } from '../../types';
 import type { CosmeticSystem } from '../types';
-import { detectEntityTransitions, snapshotSpringBounce } from './entityTransitions';
+import { detectEntityTransitions, snapshotSpringBounce, awardSpringTrailTo, type EntityTxResult } from './entityTransitions';
 import { TransitionTracker } from '../../transitionTracker';
 
 export class EntityTransitionSystem implements CosmeticSystem {
@@ -10,6 +10,16 @@ export class EntityTransitionSystem implements CosmeticSystem {
   private prevMatchOver = false;
   private readonly springTracker: TransitionTracker<SpringMushroom, number, SpringMushroom> =
     new TransitionTracker<SpringMushroom, number, SpringMushroom>(snapshotSpringBounce);
+  /** Stable scratches reused across cosmeticUpdate calls so the detect path
+   *  doesn't allocate a fresh Set + closure + result object per call. */
+  private readonly _liveSprings: Set<SpringMushroom> = new Set();
+  private readonly _txResult: EntityTxResult = { countdownSec: 0, matchOver: false };
+  private readonly _onSpringTransition = (prevBounce: number, spring: SpringMushroom): void => {
+    if (prevBounce <= 0 && spring.bounceTimer > 0) {
+      this.playSound('spring');
+      awardSpringTrailTo(this.state, spring);
+    }
+  };
 
   constructor(state: MatchState, playSound: (name: string) => void) {
     this.state = state;
@@ -32,6 +42,9 @@ export class EntityTransitionSystem implements CosmeticSystem {
       this.prevMatchOver,
       this.springTracker,
       this.playSound,
+      this._liveSprings,
+      this._onSpringTransition,
+      this._txResult,
     );
     this.prevCountdownSec = next.countdownSec;
     this.prevMatchOver = next.matchOver;

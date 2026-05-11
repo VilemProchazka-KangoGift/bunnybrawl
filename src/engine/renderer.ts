@@ -1040,17 +1040,19 @@ export class Renderer implements IRenderer {
   }
 
 
-  /** Mirror-aware draw helper. Wraps `fn` in a save/scale(-1,1)/translate when
-   *  the renderer is in mirrored mode; otherwise calls `fn` directly. Used by
-   *  the per-frame animated callbacks that want their content mirrored alongside
-   *  the rest of the scene. */
-  private withMirror(ctx: Ctx2D, fn: () => void): void {
-    if (!this.mirrored) { fn(); return; }
+  /** Mirror-aware draw helper, begin/end form. Returns true if a transform
+   *  was applied — callers pass that flag to `_endMirror` to balance the
+   *  save/restore. The split avoids the per-call closure that a `withMirror(fn)`
+   *  wrapper would allocate at 7 call sites per renderFrame. */
+  private _beginMirror(ctx: Ctx2D): boolean {
+    if (!this.mirrored) return false;
     ctx.save();
     ctx.scale(-1, 1);
     ctx.translate(-CANVAS_WIDTH, 0);
-    fn();
-    ctx.restore();
+    return true;
+  }
+  private _endMirror(ctx: Ctx2D, applied: boolean): void {
+    if (applied) ctx.restore();
   }
 
   // ---- Clouds ----
@@ -1226,13 +1228,13 @@ export class Renderer implements IRenderer {
       // objects) compose under weather and clouds.
       if (this.theme.drawAnimatedBackground) {
         const thA = this.originalArena ?? arena;
-        this.withMirror(ctx, () => this.theme.drawAnimatedBackground!(ctx, thA, matchState.timeElapsed, matchState.dayPhase, matchState));
+        { const m = this._beginMirror(ctx); this.theme.drawAnimatedBackground!(ctx, thA, matchState.timeElapsed, matchState.dayPhase, matchState); this._endMirror(ctx, m); }
         d.animatedBg = true;
       }
       // Wildlife — animBackground layer (e.g. treetops squirrels). Same slot
       // the legacy `drawAnimatedBackground` wildlife branch occupied.
       if (wildlife && wildlife.animBackground.length > 0) {
-        this.withMirror(ctx, () => this._drawWildlifeLayer(ctx, wildlife.animBackground, matchState));
+        { const m = this._beginMirror(ctx); this._drawWildlifeLayer(ctx, wildlife.animBackground, matchState); this._endMirror(ctx, m); }
       }
 
       const now = this.frameTime / 1000;
@@ -1514,10 +1516,10 @@ export class Renderer implements IRenderer {
       // (post-migration packs).
       if (this.theme.drawGroundCritters) {
         const thA = this.originalArena ?? arena;
-        this.withMirror(ctx, () => this.theme.drawGroundCritters!(ctx, thA, matchState.timeElapsed, matchState.dayPhase, matchState));
+        { const m = this._beginMirror(ctx); this.theme.drawGroundCritters!(ctx, thA, matchState.timeElapsed, matchState.dayPhase, matchState); this._endMirror(ctx, m); }
       }
       if (wildlife && wildlife.groundCritter.length > 0) {
-        this.withMirror(ctx, () => this._drawWildlifeLayer(ctx, wildlife.groundCritter, matchState));
+        { const m = this._beginMirror(ctx); this._drawWildlifeLayer(ctx, wildlife.groundCritter, matchState); this._endMirror(ctx, m); }
       }
 
       // Mirror is baked into the cache so blit at identity transform; explicit
@@ -1531,7 +1533,7 @@ export class Renderer implements IRenderer {
 
       // Reactive decorations — pre-player layer.
       if (reactive) {
-        this.withMirror(ctx, () => this._drawReactiveLayer(ctx, reactive.prePlayer, reactive.windPhase, matchState));
+        { const m = this._beginMirror(ctx); this._drawReactiveLayer(ctx, reactive.prePlayer, reactive.windPhase, matchState); this._endMirror(ctx, m); }
       }
 
       // Ghosts (drawn over foreground, semi-transparent)
@@ -1581,12 +1583,12 @@ export class Renderer implements IRenderer {
 
       if (this.theme.drawAnimatedForeground) {
         const thA = this.originalArena ?? arena;
-        this.withMirror(ctx, () => this.theme.drawAnimatedForeground!(ctx, thA, matchState.timeElapsed, matchState.dayPhase, matchState));
+        { const m = this._beginMirror(ctx); this.theme.drawAnimatedForeground!(ctx, thA, matchState.timeElapsed, matchState.dayPhase, matchState); this._endMirror(ctx, m); }
       }
 
       // Reactive decorations — post-player layer.
       if (reactive) {
-        this.withMirror(ctx, () => this._drawReactiveLayer(ctx, reactive.postPlayer, reactive.windPhase, matchState));
+        { const m = this._beginMirror(ctx); this._drawReactiveLayer(ctx, reactive.postPlayer, reactive.windPhase, matchState); this._endMirror(ctx, m); }
       }
 
       if (!slow && this.theme.drawSceneTint) {
