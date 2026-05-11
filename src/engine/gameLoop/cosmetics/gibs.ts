@@ -9,7 +9,7 @@ import { swapRemove } from '../../themes/utils';
 import { CONFETTI_COLORS } from './particles';
 
 export function launchGib(
-  gibs: Gib[],
+  gibs: Gib[], freeList: Gib[],
   cx: number, cy: number, spread: number,
   angleMin: number, angleMax: number, speedMin: number, speedMax: number,
   w: number, h: number,
@@ -18,23 +18,36 @@ export function launchGib(
 ): void {
   const angle = -Math.PI * (angleMin + Math.random() * (angleMax - angleMin));
   const speed = speedMin + Math.random() * (speedMax - speedMin);
-  gibs.push({
-    x: cx + (Math.random() - 0.5) * spread,
-    y: cy + (Math.random() - 0.5) * spread * 0.7,
-    vx: Math.cos(angle) * speed * (Math.random() < 0.5 ? 1 : -1),
-    vy: Math.sin(angle) * speed,
-    rotation: Math.random() * Math.PI * 2,
-    rotationSpeed: (Math.random() - 0.5) * 2 * GIB_ROTATION_MAX,
-    width: w, height: h,
-    color, darkColor, lightColor,
-    characterName, gibType,
-    bounced: false,
-    life: GIB_MAX_FLIGHT,
-  });
+  const x = cx + (Math.random() - 0.5) * spread;
+  const y = cy + (Math.random() - 0.5) * spread * 0.7;
+  const vx = Math.cos(angle) * speed * (Math.random() < 0.5 ? 1 : -1);
+  const vy = Math.sin(angle) * speed;
+  const rotation = Math.random() * Math.PI * 2;
+  const rotationSpeed = (Math.random() - 0.5) * 2 * GIB_ROTATION_MAX;
+  const recycled = freeList.pop();
+  if (recycled) {
+    recycled.x = x; recycled.y = y; recycled.vx = vx; recycled.vy = vy;
+    recycled.rotation = rotation; recycled.rotationSpeed = rotationSpeed;
+    recycled.width = w; recycled.height = h;
+    recycled.color = color; recycled.darkColor = darkColor; recycled.lightColor = lightColor;
+    recycled.characterName = characterName; recycled.gibType = gibType;
+    recycled.bounced = false;
+    recycled.life = GIB_MAX_FLIGHT;
+    gibs.push(recycled);
+  } else {
+    gibs.push({
+      x, y, vx, vy, rotation, rotationSpeed,
+      width: w, height: h,
+      color, darkColor, lightColor,
+      characterName, gibType,
+      bounced: false,
+      life: GIB_MAX_FLIGHT,
+    });
+  }
 }
 
 export function spawnGibs(
-  gibs: Gib[], victim: Player, settings: MatchSettings,
+  gibs: Gib[], freeList: Gib[], victim: Player, settings: MatchSettings,
 ): void {
   const cx = victim.x + victim.width / 2;
   const cy = victim.y + victim.height / 2;
@@ -48,7 +61,7 @@ export function spawnGibs(
   if (gibDefs) {
     for (let r = 0; r < mult; r++) {
       for (const def of gibDefs) {
-        launchGib(gibs, cx, cy, 12 + r * 3, 0.15, 0.85, GIB_LAUNCH_SPEED_MIN, GIB_LAUNCH_SPEED_MAX,
+        launchGib(gibs, freeList, cx, cy, 12 + r * 3, 0.15, 0.85, GIB_LAUNCH_SPEED_MIN, GIB_LAUNCH_SPEED_MAX,
           def.width, def.height, color, darkColor, lightColor, name, def.gibType);
       }
     }
@@ -58,7 +71,7 @@ export function spawnGibs(
   for (let i = 0; i < chunkCount; i++) {
     const size = 4 + Math.random() * 6;
     const c = gore ? BLOOD_COLOR : pickConfetti();
-    launchGib(gibs, cx, cy, 16, 0.1, 0.9, GIB_LAUNCH_SPEED_MIN * 0.8, GIB_LAUNCH_SPEED_MAX,
+    launchGib(gibs, freeList, cx, cy, 16, 0.1, 0.9, GIB_LAUNCH_SPEED_MIN * 0.8, GIB_LAUNCH_SPEED_MAX,
       size, size * (0.6 + Math.random() * 0.4), c, c, c, '', 'body');
   }
   // Micro drop gibs
@@ -66,18 +79,21 @@ export function spawnGibs(
   for (let i = 0; i < microCount; i++) {
     const size = 1.5 + Math.random() * 2.5;
     const c = gore ? BLOOD_COLOR : pickConfetti();
-    launchGib(gibs, cx, cy, 20, 0.05, 0.95, GIB_LAUNCH_SPEED_MIN * 0.5, GIB_LAUNCH_SPEED_MAX * 1.2,
+    launchGib(gibs, freeList, cx, cy, 20, 0.05, 0.95, GIB_LAUNCH_SPEED_MIN * 0.5, GIB_LAUNCH_SPEED_MAX * 1.2,
       size, size, c, c, c, '', 'body');
   }
-  // Cap airborne gibs
+  // Cap airborne gibs — dropped objects rejoin the free list (don't leak).
   const gibCap = extreme ? GIB_MAX_COUNT * 10 : GIB_MAX_COUNT;
   while (gibs.length > gibCap) {
+    const dropped = gibs[0];
     swapRemove(gibs, 0);
+    freeList.push(dropped);
   }
 }
 
 export function updateGibs(
-  gibs: Gib[], platforms: readonly Platform[], effectZones: readonly EffectZone[] | undefined,
+  gibs: Gib[], freeList: Gib[],
+  platforms: readonly Platform[], effectZones: readonly EffectZone[] | undefined,
   geyserIndexMap: ReadonlyMap<EffectZone, number>,
   geyserStates: ReadonlyArray<{ active: boolean }>,
   groundedGibs: Gib[],
@@ -135,6 +151,10 @@ export function updateGibs(
     }
     if (settled) continue;
     if (g.life <= 0) {
+      // Expired in flight — recycle. (Settled gibs go to groundedGibs first;
+      // they're recycled in ParticleSystem.bakeToRenderer after the renderer
+      // copies their data into the bg canvas.)
+      freeList.push(g);
       swapRemove(gibs, i);
     }
   }

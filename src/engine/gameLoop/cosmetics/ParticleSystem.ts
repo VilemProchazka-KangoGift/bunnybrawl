@@ -20,6 +20,11 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
 
   private _particles: Particle[] = [];
   private particleFreeList: Particle[] = [];
+  /** Pool of dead Gib objects awaiting reuse. Refilled when gibs expire mid-air,
+   *  get capped out of the airborne array, or are recycled after their data is
+   *  baked into the renderer's bg canvas. Eliminates the ~30-300 object literals
+   *  per kill that previously dominated heap churn in goreMode + extremeGore. */
+  private gibFreeList: Gib[] = [];
   private newBloodDripsSinceRender: Array<{ x: number; y: number; radius: number; color: string }> = [];
   private newGroundedGibsSinceRender: Gib[] = [];
   private fireworkTimer: number = 0;
@@ -80,7 +85,7 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
     if (settings.goreMode) {
       _spawnGoreParticles(this._particles, this.particleFreeList, victim, settings.mods.extremeGore);
     }
-    spawnGibs(this.state.gibs, victim, settings);
+    spawnGibs(this.state.gibs, this.gibFreeList, victim, settings);
     if (!settings.goreMode) {
       _spawnConfetti(this.state.confetti, victim);
     }
@@ -92,11 +97,11 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
     // Orange carrot chunks
     for (let i = 0; i < 4; i++) {
       const s = 4 + Math.random() * 3;
-      launchGib(this.state.gibs, x, cy, 10, 0.15, 0.85, 80, 200, s, s, '#FF8C00', '#CC6600', '#FFB040', '', 'body');
+      launchGib(this.state.gibs, this.gibFreeList, x, cy, 10, 0.15, 0.85, 80, 200, s, s, '#FF8C00', '#CC6600', '#FFB040', '', 'body');
     }
     // Green leaf pieces
     for (let i = 0; i < 2; i++) {
-      launchGib(this.state.gibs, x, cy, 8, 0.2, 0.8, 60, 160, 5, 3, '#4CAF50', '#2E7D32', '#81C784', '', 'body');
+      launchGib(this.state.gibs, this.gibFreeList, x, cy, 8, 0.2, 0.8, 60, 160, 5, 3, '#4CAF50', '#2E7D32', '#81C784', '', 'body');
     }
     // Orange/gold particle burst
     for (let i = 0; i < 16; i++) {
@@ -218,7 +223,7 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
   cosmeticUpdate(dt: number): void {
     updateWeather(this.state, this.theme, dt);
     updateParticles(this._particles, this.particleFreeList, this.arena.platforms, this.settings.goreMode, this.newBloodDripsSinceRender, dt);
-    updateGibs(this.state.gibs, this.arena.platforms, this.arena.effectZones, this.geyserIndexMap, this.state.geyserStates, this.newGroundedGibsSinceRender, dt);
+    updateGibs(this.state.gibs, this.gibFreeList, this.arena.platforms, this.arena.effectZones, this.geyserIndexMap, this.state.geyserStates, this.newGroundedGibsSinceRender, dt);
     updateConfetti(this.state.confetti, this.state.timeElapsed, dt);
   }
 
@@ -237,6 +242,12 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
   bakeToRenderer(renderer: IRenderer): void {
     if (this.newGroundedGibsSinceRender.length > 0) {
       renderer.bakeGibs(this.newGroundedGibsSinceRender);
+      // bakeGibs copies the gibs' data into the bg-canvas — the Gib objects
+      // are dead after this returns. Move them to the free list instead of
+      // dropping for GC; the next kill burst will reuse them.
+      for (let i = 0; i < this.newGroundedGibsSinceRender.length; i++) {
+        this.gibFreeList.push(this.newGroundedGibsSinceRender[i]);
+      }
       this.newGroundedGibsSinceRender.length = 0;
     }
     if (this.newBloodDripsSinceRender.length > 0) {
