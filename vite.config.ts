@@ -6,14 +6,10 @@ import { fileURLToPath } from 'url'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-/** Worker-only alias for `howler`. The character packs all `import { Howl }
- *  from 'howler'` to declare their `createSound` factory; that factory is
- *  only ever called from the main-thread AudioManager, but the bare ESM
- *  import still pulls Howler's module-init into the worker bundle — and
- *  that init crashes with `HowlerGlobal is not defined` once it falls
- *  through the worker-context branches. The stub gives the worker bundle
- *  a no-op Howl/Howler so the imports resolve cleanly without dragging in
- *  the real audio runtime. Main bundle keeps the real Howler. */
+/** Worker-only alias for `howler`. Defense in depth — no worker-bound
+ *  module imports howler today; the alias neutralizes any future stray
+ *  import that would otherwise crash the worker with `HowlerGlobal is
+ *  not defined`. */
 const howlerStubPath = path.resolve(__dirname, 'src/engine/worker/howlerStub.ts')
 
 /** Sim-in-worker mode (?simWorker=on) hosts the entire GameLoop inside the
@@ -41,15 +37,6 @@ const STUB_BY_RESOLVED: Record<string, string> = {
   [path.resolve(__dirname, 'src/engine/haptics')]: hapticsStubPath,
   [path.resolve(__dirname, 'src/engine/input/KeyboardManager')]: keyboardManagerStubPath,
   [path.resolve(__dirname, 'src/engine/touchDetect')]: touchDetectStubPath,
-  // Character packs import `Howl` from this shim. The shim itself does
-  // `export { Howl } from 'howler'` (real module on main). In worker
-  // context we redirect the shim to the no-op stub so the worker bundle
-  // never reaches howler at all. This is the load-bearing alias for
-  // worker-mode dev: bare `'howler'` imports get rewritten by Vite's
-  // optimizeDeps BEFORE worker.plugins.resolveId can intercept them,
-  // but RELATIVE imports of project files go through the worker
-  // plugin chain correctly.
-  [path.resolve(__dirname, 'src/engine/audio/howlShim')]: howlerStubPath,
 }
 
 function stripExt(p: string): string {

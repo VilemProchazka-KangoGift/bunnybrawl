@@ -31,6 +31,7 @@ import { getCharacterForSlot } from '../characters/defaults';
 import { createInitialPlayers, createInitialMatchState } from '../simulator/initialState';
 import { CANVAS_WIDTH } from '../constants';
 import { createInputSab, setSlotCount, writeSlotInput, SAB_INPUT_MAX_SLOTS } from './sabInput';
+import { installWorkerBootQueue, type WorkerBootQueue } from './workerBootQueue';
 import type { Arena, MatchSettings, MatchState, MatchPhase, PlayerSlot, InputState, CharacterSlot } from '../types';
 import type { ThemeConfig } from '../themes/types';
 import type { IRenderer, RenderDiagnostics } from '../renderer';
@@ -132,6 +133,10 @@ export class EngineWorkerProxy {
    *  Called from `switchArena` so a level switch doesn't leave a falsely
    *  pre-warmed roster on the new arena. Wired by the constructor. */
   private _clearWarmedNames?: () => void;
+  /** Buffers postMessage calls until the worker posts `worker:bootReady`,
+   *  then restores native postMessage so the 60Hz input-batch hot path
+   *  has no wrapper branch. See `workerBootQueue.ts` for the rationale. */
+  private _bootQueue!: WorkerBootQueue;
 
   constructor(opts: EngineWorkerProxyOptions) {
     this.fgNightTint = opts.fgNightTint ?? null;
@@ -149,6 +154,7 @@ export class EngineWorkerProxy {
       new URL('./renderWorker.ts', import.meta.url),
       { type: 'module', name: 'carrot-royale-engine' },
     );
+    this._bootQueue = installWorkerBootQueue(this.worker);
     this.worker.addEventListener('message', this.handleMessage);
     // On a worker runtime error / structured-clone failure, mark the proxy
     // dead so subsequent input batch posts no-op (a silent worker is better
@@ -511,6 +517,10 @@ export class EngineWorkerProxy {
   private handleMessage = (e: MessageEvent<WorkerToHostMsg>): void => {
     if (this.destroyed) return;
     const msg = e.data;
+    if (msg.type === 'worker:bootReady') {
+      this._bootQueue.release();
+      return;
+    }
     if (msg.type === 'worker:nightOpacity') {
       const value = String(msg.opacity);
       if (msg.kind === 'fg') {

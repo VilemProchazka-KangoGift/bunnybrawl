@@ -1,7 +1,5 @@
-import { Howl } from '../../audio/howlShim';
 import type { CharacterPack } from '../types';
 import { fillBodyGradient } from '../../spriteShading';
-import { generateMultiSegmentTone } from '../../audio/synthesis/core';
 
 const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, _state, _animFrame, _isIdleAnim, _idleT, colors) => {
   fillBodyGradient(ctx, { cx, cy: yOff + h * 0.52, rx: w * 0.42, ry: h * 0.42 }, colors);
@@ -77,11 +75,4 @@ export const tiger: CharacterPack = {
   legStyle: { shape: 'tapered', footStyle: 'paw', legWidth: 5 },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.52, rx: w * 0.42, ry: h * 0.42 }),
   drawSprite, drawGib,
-  createSound: () => new Howl({
-    src: [generateMultiSegmentTone([
-      { freq: 200, freqEnd: 120, duration: 0.28, type: 'sawtooth' },
-      { freq: 120, freqEnd: 80, duration: 0.22, type: 'sawtooth' },
-    ], 0.5)],
-    volume: 0.45,
-  }),
 };

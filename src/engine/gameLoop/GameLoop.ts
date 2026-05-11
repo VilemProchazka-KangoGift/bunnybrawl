@@ -712,8 +712,18 @@ export class GameLoop {
 
   getState(): MatchState { return this.simulator.getState(); }
   getRendererDiagnostics() { return this.renderer.getDiagnostics(); }
-  pause(): void { this.paused = true; audio.setPaused(true); this.simulator.getState().screenShake = 0; }
-  resume(): void { this.paused = false; this.lastTime = performance.now(); audio.setPaused(false, this.simulator.getArena().themeId); }
+  pause(): void {
+    if (this.paused) return;
+    this.paused = true;
+    audio.setPaused(true);
+    this.simulator.getState().screenShake = 0;
+  }
+  resume(): void {
+    if (!this.paused) return;
+    this.paused = false;
+    this.lastTime = performance.now();
+    audio.setPaused(false, this.simulator.getArena().themeId);
+  }
   isPaused(): boolean { return this.paused; }
   isAutoSlowFlipped(): boolean { return autoSlowDetect.isFlipped(); }
   skipCountdown(): void {

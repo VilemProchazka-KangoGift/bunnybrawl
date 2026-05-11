@@ -7,6 +7,11 @@ import { VictoryScreen } from './components/VictoryScreen';
 import { GameScaler } from './components/GameScaler';
 import { LandscapePrompt } from './components/LandscapePrompt';
 import { assignBotCharacters, registerBuiltinCharacters } from './engine/characters';
+// MAIN-ONLY side-effect manifest: imports every pack's `.audio.ts`, each
+// of which self-registers its voice factory via registerCharacterVoice.
+// Sim-in-worker bundle deliberately doesn't import this — Howler stays
+// on main.
+import './engine/characters/builtinSounds';
 import { isTouchPrimary } from './engine/touchDetect';
 import { registerBuiltinArenas } from './engine/arenas';
 import type { PlayerSlot, BotSlot, CharacterSlot } from './engine/types';

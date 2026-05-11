@@ -142,11 +142,24 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
      *  (same refs → reuse proxy) from a real dep change (different refs
      *  → tear down old proxy NOW and fall through to fresh construct).
      *  Without this we'd silently reuse a proxy built for stale settings. */
-    deps: { activePlayers: typeof activePlayers; matchSettings: typeof matchSettings } | null;
+    deps: { activePlayers: typeof activePlayers } | null;
   }>({ teardown: null, timer: null, deps: null });
+
+  // matchSettings is consumed once at construction; the live loop is
+  // frozen against the snapshot taken here. Worker canvases can only
+  // `transferControlToOffscreen` once, so an effect re-run would
+  // permanently detach them. Contract: the only field that changes
+  // mid-match is `arenaId`, applied via `gameLoop.switchArena()` from
+  // `handleChangeArena`. Any other field (mods, killLimit, timeLimit)
+  // is implicitly frozen for the match's lifetime — changes are
+  // captured into this ref but never propagate to the live loop. Mods
+  // UI surface accepts changes only outside a match.
+  const matchSettingsRef = useRef(matchSettings);
+  matchSettingsRef.current = matchSettings;
 
   useEffect(() => {
     if (isOnline) return; // online hook handles this branch
+    const matchSettings = matchSettingsRef.current;
 
     // Cancel any deferred teardown from a prior cleanup. If a timer was
     // pending, the previous mount's teardown closure is still alive —
@@ -156,8 +169,7 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
       lifecycleRef.current.timer = null;
       const prev = lifecycleRef.current.deps;
       const depsUnchanged = prev !== null
-        && prev.activePlayers === activePlayers
-        && prev.matchSettings === matchSettings;
+        && prev.activePlayers === activePlayers;
       if (depsUnchanged) {
         // StrictMode remount (or any cleanup→setup cycle with identical
         // deps). Existing proxy is correct; reuse without reconstructing.
@@ -271,7 +283,7 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
           }
         };
         lifecycleRef.current.teardown = teardown;
-        lifecycleRef.current.deps = { activePlayers, matchSettings };
+        lifecycleRef.current.deps = { activePlayers };
         return () => {
           // See top-of-effect comment: defer for StrictMode safety.
           lifecycleRef.current.timer = setTimeout(() => {
@@ -384,7 +396,7 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
       }
     };
     lifecycleRef.current.teardown = teardown;
-    lifecycleRef.current.deps = { activePlayers, matchSettings };
+    lifecycleRef.current.deps = { activePlayers };
     return () => {
       // See top-of-effect comment: defer for StrictMode safety. Main-thread
       // path doesn't strictly need this (no transferControlToOffscreen if
@@ -398,7 +410,7 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
       }, 0);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activePlayers, matchSettings, setMatchResult, isOnline]);
+  }, [activePlayers, setMatchResult, isOnline]);
 }
 
 /** True when any of the supplied canvases has been transferred to a

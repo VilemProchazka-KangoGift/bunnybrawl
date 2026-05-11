@@ -31,6 +31,7 @@ import {
   type WorkerLongFrameSample,
 } from './messages';
 import { createParticlesSab, makeViews, writeParticles, type ParticleSabViews } from './sabParticles';
+import { installWorkerBootQueue, type WorkerBootQueue } from './workerBootQueue';
 
 /** Cumulative worker render-time stats, accumulated across the
  *  per-second flushes from the worker. Read by the perf harness. */
@@ -96,6 +97,10 @@ const STUB_DIAGNOSTICS: RenderDiagnostics = Object.freeze({
 export class RendererProxy implements IRenderer {
   private worker: Worker;
   private destroyed = false;
+  /** Buffers postMessage calls until the worker posts `worker:bootReady`,
+   *  then restores native postMessage so the 60Hz renderFrame hot path
+   *  has no wrapper branch. See `workerBootQueue.ts` for the rationale. */
+  private _bootQueue!: WorkerBootQueue;
   /** SAB-backed particles wire (Step 4). Null in prod / non-isolated
    *  contexts; the existing `particles: Particle[]` field in
    *  `host:renderFrame` handles those. */
@@ -174,6 +179,7 @@ export class RendererProxy implements IRenderer {
       new URL('./renderWorker.ts', import.meta.url),
       { type: 'module', name: 'carrot-royale-render' },
     );
+    this._bootQueue = installWorkerBootQueue(this.worker);
     this.worker.addEventListener('message', this.handleMessage);
     // On a worker runtime error / structured-clone failure, mark the proxy
     // dead so subsequent postMessage calls no-op (silent worker is better
@@ -301,6 +307,10 @@ export class RendererProxy implements IRenderer {
   private handleMessage = (e: MessageEvent<WorkerToHostMsg>): void => {
     if (this.destroyed) return;
     const msg = e.data;
+    if (msg.type === 'worker:bootReady') {
+      this._bootQueue.release();
+      return;
+    }
     if (msg.type === 'worker:ready') {
       this.onReady?.();
       return;

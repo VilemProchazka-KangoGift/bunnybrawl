@@ -39,26 +39,31 @@ vi.mock('./arenas/registry', () => ({
   getArenaPack: vi.fn().mockReturnValue({ musicFile: 'test-arena.mp3' }),
 }));
 
-// Mock character registry — provide packs with createSound for animal sound registration
-vi.mock('./characters/registry', () => {
+// Mock the per-character voice-factory registry that `soundRegistry.ts`
+// now consumes (replaces the old `pack.createSound` field on
+// `CharacterPack`).
+vi.mock('./audio/characterVoices', () => {
   const instances: any[] = (globalThis as any).__howlInstances ??= [];
   const animals = ['Bunny', 'Fox', 'Frog', 'Bear', 'Owl', 'Cat', 'Wolf', 'Panda',
     'Pig', 'Cow', 'Goat', 'Horse', 'Sheep', 'Monkey', 'Tiger', 'Rhino', 'Hedgehog'];
+  const factories = new Map<string, () => any>();
+  for (const name of animals) {
+    factories.set(name, () => {
+      const h: any = {
+        play: vi.fn(),
+        stop: vi.fn(),
+        volume: vi.fn().mockReturnValue(0.5),
+        unload: vi.fn(),
+        playing: vi.fn().mockReturnValue(false),
+      };
+      instances.push(h);
+      return h;
+    });
+  }
   return {
-    listCharacterPacks: () => animals.map(name => ({
-      name,
-      createSound: () => {
-        const h: any = {
-          play: vi.fn(),
-          stop: vi.fn(),
-          volume: vi.fn().mockReturnValue(0.5),
-          unload: vi.fn(),
-          playing: vi.fn().mockReturnValue(false),
-        };
-        instances.push(h);
-        return h;
-      },
-    })),
+    getCharacterVoices: () => factories,
+    registerCharacterVoice: vi.fn(),
+    clearCharacterVoicesForTest: vi.fn(),
   };
 });
 
