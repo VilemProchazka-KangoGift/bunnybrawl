@@ -134,8 +134,9 @@ export function applyDelta(deltaBuf: ArrayBuffer, baseline: ArrayBuffer): ArrayB
   const xor = _xorScratch;
   // Clear used portion — pool may carry leftovers from a prior larger call,
   // and the RLE loop below only writes non-zero bytes (zero runs are implied
-  // by skipping `count` indices).
-  for (let i = 0; i < maxLen; i++) xor[i] = 0;
+  // by skipping `count` indices). `.fill(0)` is internally memset on a typed
+  // array (faster than a JS-level for loop).
+  xor.fill(0, 0, maxLen);
 
   let di = DELTA_HEADER_BYTES;
   let xi = 0;
