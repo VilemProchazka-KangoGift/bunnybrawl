@@ -18,7 +18,6 @@ import type { PerfTier } from '../engine/lighting/types';
 import { isSimWorkerEnabled, setSimWorkerEnabled } from '../engine/worker/simWorkerFlag';
 import { isInputEchoEnabled, setInputEchoEnabled } from '../engine/net/inputEchoFlag';
 import { isTurnEnabled, setTurnEnabled } from '../engine/net/turnFlag';
-import { isSabDemoEnabled, setSabDemoEnabled } from '../engine/worker/sabDemoFlag';
 import {
   getSimLatency, setSimLatency,
   getSimJitter, setSimJitter,
@@ -112,7 +111,7 @@ function NumberRow({ testId, label, desc, value, min, max, step, onChange }: Num
 // Getters for the reload-on-close flag set. Snapshot taken on mount, compared
 // on close — any drift triggers a reload so boot-only flags take effect.
 const RELOAD_GETTERS = [
-  isSimWorkerEnabled, isInputEchoEnabled, isTurnEnabled, isSabDemoEnabled,
+  isSimWorkerEnabled, isInputEchoEnabled, isTurnEnabled,
   getSimLatency, getSimJitter, getSimLoss,
 ] as const;
 
@@ -214,14 +213,6 @@ export function DevMenu({ onClose }: DevMenuProps) {
           checked={isTurnEnabled()}
           onChange={(v) => { setTurnEnabled(v); rerender(); }}
         />
-        <ToggleRow
-          testId="dev-toggle-sabdemo"
-          label="SAB demo entry"
-          desc="Boot into the SharedArrayBuffer demo harness instead of the app."
-          checked={isSabDemoEnabled()}
-          onChange={(v) => { setSabDemoEnabled(v); rerender(); }}
-        />
-
         <SectionHeader>Network simulation (reload on close)</SectionHeader>
         <NumberRow
           testId="dev-input-simlatency"

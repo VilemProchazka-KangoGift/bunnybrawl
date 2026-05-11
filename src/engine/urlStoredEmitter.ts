@@ -2,7 +2,7 @@
 //
 // Factory for the URL+localStorage+emitter pattern shared by lighting,
 // brightness, perfTier, photosensitivity, and dev-only flags (simWorker,
-// inputEcho, turn, sabDemo, net-sim trio). URL param wins over storage.
+// inputEcho, turn, net-sim trio). URL param wins over storage.
 // `parse` returns null when its input doesn't represent a valid value, so the
 // caller can fall through to the next priority source.
 
@@ -27,8 +27,8 @@ export interface UrlStoredEmitterOptions<T> {
   serialize: (value: T) => string;
   /** Optional legacy bare-flag alias: if URL contains `?<legacyDisableParam>`
    *  (with no value), force the emitter to `false`. Only meaningful for
-   *  `T = boolean`. Replaces the old `?noecho`/`?noturn`/`?sabDemo` shapes
-   *  without each caller redoing window/URLSearchParams plumbing. */
+   *  `T = boolean`. Replaces the old `?noecho`/`?noturn` shapes without
+   *  each caller redoing window/URLSearchParams plumbing. */
   legacyDisableParam?: string;
 }
 

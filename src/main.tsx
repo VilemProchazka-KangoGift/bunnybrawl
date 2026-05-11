@@ -8,7 +8,6 @@ import { initPhotosensitivity } from './engine/lighting/photosensitivity';
 import { initInputEcho } from './engine/net/inputEchoFlag';
 import { initTurn } from './engine/net/turnFlag';
 import { initNetSimFlags } from './engine/net/netSimFlags';
-import { initSabDemo, isSabDemoEnabled } from './engine/worker/sabDemoFlag';
 import { initSimWorker } from './engine/worker/simWorkerFlag';
 import { safeStorage } from './storage';
 import './i18n';
@@ -34,15 +33,11 @@ initPhotosensitivity(_search);
 initInputEcho(_search);
 initTurn(_search);
 initNetSimFlags(_search);
-initSabDemo(_search);
 initSimWorker(_search);
-// Orphaned key from the removed outline-style toggle. One-shot cleanup so the
-// per-user localStorage doesn't accumulate dead values across deploys.
+// Orphaned keys from removed flags. One-shot cleanup so the per-user
+// localStorage doesn't accumulate dead values across deploys.
 safeStorage.remove('carrotroyale_outline_style');
-
-if (isSabDemoEnabled()) {
-  void import('./engine/worker/sabDemo').then((m) => m.startSabDemo());
-}
+safeStorage.remove('carrotroyale_sab_demo');
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
