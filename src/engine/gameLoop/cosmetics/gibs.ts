@@ -8,6 +8,12 @@ import { getCharacterGibs } from '../../characters';
 import { swapRemove } from '../../themes/utils';
 import { CONFETTI_COLORS } from './particles';
 
+/** Hard cap on the recycled-Gib pool. Same order of magnitude as the particle
+ *  pool cap (300) — covers a normal-mode kill burst (~40 gibs) plus a few
+ *  rounds of turnover. ExtremeGore churns at the cap; that's fine, dropped
+ *  gibs go to GC instead of growing the pool unboundedly across a match. */
+export const GIB_FREELIST_CAP = 600;
+
 export function launchGib(
   gibs: Gib[], freeList: Gib[],
   cx: number, cy: number, spread: number,
@@ -82,12 +88,12 @@ export function spawnGibs(
     launchGib(gibs, freeList, cx, cy, 20, 0.05, 0.95, GIB_LAUNCH_SPEED_MIN * 0.5, GIB_LAUNCH_SPEED_MAX * 1.2,
       size, size, c, c, c, '', 'body');
   }
-  // Cap airborne gibs — dropped objects rejoin the free list (don't leak).
+  // Cap airborne gibs — dropped objects rejoin the free list up to GIB_FREELIST_CAP.
   const gibCap = extreme ? GIB_MAX_COUNT * 10 : GIB_MAX_COUNT;
   while (gibs.length > gibCap) {
     const dropped = gibs[0];
     swapRemove(gibs, 0);
-    freeList.push(dropped);
+    if (freeList.length < GIB_FREELIST_CAP) freeList.push(dropped);
   }
 }
 
@@ -154,7 +160,7 @@ export function updateGibs(
       // Expired in flight — recycle. (Settled gibs go to groundedGibs first;
       // they're recycled in ParticleSystem.bakeToRenderer after the renderer
       // copies their data into the bg canvas.)
-      freeList.push(g);
+      if (freeList.length < GIB_FREELIST_CAP) freeList.push(g);
       swapRemove(gibs, i);
     }
   }

@@ -48,13 +48,10 @@ export class PlayerTransitionSystem implements CosmeticSystem {
   };
   private readonly tracker: TransitionTracker<PlayerSlot, PrevPlayerCosmeticState, Player> =
     new TransitionTracker<PlayerSlot, PrevPlayerCosmeticState, Player>(this._snapshotPooled);
-  /** Stable callback bound at construction. Reads `_currentPlayer` (set before
-   *  each detect call) instead of capturing per-player, so the cosmeticUpdate
-   *  loop doesn't allocate a fresh arrow per slot per frame. */
-  private _currentPlayer: Player | null = null;
-  private readonly _onPlayerTransition = (prev: PrevPlayerCosmeticState): void => {
-    const p = this._currentPlayer;
-    if (p) detectPlayerTransitions(p, prev, this.state, this.sfxCooldowns, this.callbacks);
+  /** Stable callback bound at construction; tracker passes `source` through so
+   *  we don't need a per-iteration closure capturing `player`. */
+  private readonly _onPlayerTransition = (prev: PrevPlayerCosmeticState, player: Player): void => {
+    detectPlayerTransitions(player, prev, this.state, this.sfxCooldowns, this.callbacks);
   };
   private sfxCooldowns: PlayerSfxCooldowns = new PlayerSfxCooldowns();
   private callbacks: TransitionCallbacks;
@@ -111,9 +108,7 @@ export class PlayerTransitionSystem implements CosmeticSystem {
       // Transition-triggered effects (must fire even during hitstop, e.g. stomp).
       // Tracker fires onTransition only after a baseline exists, then
       // re-snapshots player as the next-frame baseline.
-      this._currentPlayer = player;
       this.tracker.detect(player.id, player, this._onPlayerTransition);
-      this._currentPlayer = null;
     }
   }
 

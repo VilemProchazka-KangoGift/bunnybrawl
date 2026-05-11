@@ -17,7 +17,7 @@ describe('TransitionTracker', () => {
     tracker.detect('p1', { state: 'idle', v: 0 }, cb);
     tracker.detect('p1', { state: 'run', v: 100 }, cb);
     expect(cb).toHaveBeenCalledTimes(1);
-    expect(cb).toHaveBeenCalledWith({ state: 'idle', v: 0 });
+    expect(cb).toHaveBeenCalledWith({ state: 'idle', v: 0 }, { state: 'run', v: 100 });
   });
 
   it('onTransition fires every tick after first, regardless of equality', () => {
@@ -66,11 +66,11 @@ describe('TransitionTracker', () => {
 
     tracker.detect('p1', { state: 'run', v: 50 }, cb);
     expect(cb).toHaveBeenCalledTimes(1);
-    expect(cb).toHaveBeenLastCalledWith({ state: 'idle', v: 0 });
+    expect(cb).toHaveBeenLastCalledWith({ state: 'idle', v: 0 }, { state: 'run', v: 50 });
 
     tracker.detect('p2', { state: 'idle', v: 200 }, cb);
     expect(cb).toHaveBeenCalledTimes(2);
-    expect(cb).toHaveBeenLastCalledWith({ state: 'run', v: 100 });
+    expect(cb).toHaveBeenLastCalledWith({ state: 'run', v: 100 }, { state: 'idle', v: 200 });
   });
 
   it('prime() seeds baseline without firing onTransition', () => {
@@ -80,7 +80,7 @@ describe('TransitionTracker', () => {
     tracker.detect('p1', { state: 'run', v: 50 }, cb);
     // Now detect already has a prev from prime, so it fires
     expect(cb).toHaveBeenCalledTimes(1);
-    expect(cb).toHaveBeenCalledWith({ state: 'idle', v: 0 });
+    expect(cb).toHaveBeenCalledWith({ state: 'idle', v: 0 }, { state: 'run', v: 50 });
   });
 
   it('clear() drops all baselines so the next detect is a fresh prime', () => {
@@ -137,7 +137,7 @@ describe('TransitionTracker', () => {
 
     tracker.detect(a, a, cb);
     expect(cb).toHaveBeenCalledTimes(1);
-    expect(cb).toHaveBeenCalledWith(10);
+    expect(cb).toHaveBeenCalledWith(10, a);
   });
 
   it('fires onTransition with prev=undefined when T includes undefined as a valid value', () => {
@@ -154,7 +154,7 @@ describe('TransitionTracker', () => {
     // Second tick: prev exists (it is undefined), so callback MUST fire.
     tracker.detect('p1', 5, cb);
     expect(cb).toHaveBeenCalledTimes(1);
-    expect(cb).toHaveBeenCalledWith(undefined);
+    expect(cb).toHaveBeenCalledWith(undefined, 5);
   });
 
   it('snapshot fn can transform the source into a different shape', () => {

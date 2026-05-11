@@ -7,7 +7,7 @@ import type { ParticleEmitter } from '../../simulator/types';
 import { BLOOD_COLOR, CARROT_SIZE } from '../../constants';
 import { haptics } from '../../haptics';
 import { emitParticle as _emitParticle, spawnDustParticles as _spawnDustParticles, spawnJumpDustParticles as _spawnJumpDustParticles, spawnGoreParticles as _spawnGoreParticles, spawnConfetti as _spawnConfetti, spawnCarrotVFX as _spawnCarrotVFX, spawnRingVFX as _spawnRingVFX, spawnFirework as _spawnFirework, updateParticles, updateConfetti } from './particles';
-import { launchGib, spawnGibs, updateGibs } from './gibs';
+import { launchGib, spawnGibs, updateGibs, GIB_FREELIST_CAP } from './gibs';
 import { updateWeather } from './environment';
 
 const CARROT_PICKUP_COLORS = ['#FF8C00', '#FF6600', '#FFA500', '#FF7700', '#FFD700', '#FF8C00'];
@@ -20,10 +20,9 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
 
   private _particles: Particle[] = [];
   private particleFreeList: Particle[] = [];
-  /** Pool of dead Gib objects awaiting reuse. Refilled when gibs expire mid-air,
-   *  get capped out of the airborne array, or are recycled after their data is
-   *  baked into the renderer's bg canvas. Eliminates the ~30-300 object literals
-   *  per kill that previously dominated heap churn in goreMode + extremeGore. */
+  /** Pool of dead Gibs reused across kills to avoid GC churn. Refilled from
+   *  three sources: mid-air expiration, airborne-cap eviction, and post-bake
+   *  recycling. Capped at GIB_FREELIST_CAP. */
   private gibFreeList: Gib[] = [];
   private newBloodDripsSinceRender: Array<{ x: number; y: number; radius: number; color: string }> = [];
   private newGroundedGibsSinceRender: Gib[] = [];
@@ -242,10 +241,10 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
   bakeToRenderer(renderer: IRenderer): void {
     if (this.newGroundedGibsSinceRender.length > 0) {
       renderer.bakeGibs(this.newGroundedGibsSinceRender);
-      // bakeGibs copies the gibs' data into the bg-canvas — the Gib objects
-      // are dead after this returns. Move them to the free list instead of
-      // dropping for GC; the next kill burst will reuse them.
+      // bakeGibs copies the gibs into the bg canvas; the source objects are dead
+      // after this returns. Recycle up to GIB_FREELIST_CAP; the rest go to GC.
       for (let i = 0; i < this.newGroundedGibsSinceRender.length; i++) {
+        if (this.gibFreeList.length >= GIB_FREELIST_CAP) break;
         this.gibFreeList.push(this.newGroundedGibsSinceRender[i]);
       }
       this.newGroundedGibsSinceRender.length = 0;
