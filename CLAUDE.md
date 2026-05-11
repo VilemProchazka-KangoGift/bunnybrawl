@@ -72,6 +72,7 @@ http://localhost:5173/bunnybrawl/?mobile&arena=meadow&bots=2       # force touch
 - **`playwright-report/` clutters `git status`** from background test runs — filter with `grep -v "playwright-report"` when reviewing changes. Don't stage it.
 - **Flaky in full suite, passes alone**: `src/engine/integration.test.ts > 'fixedUpdate with explicit inputMap drives both players'` fails ~always via `npx vitest run` (P2 wraps to ~1249px) but passes via `npx vitest run src/engine/integration.test.ts`. Pre-existing test-ordering issue; don't chase it as a regression.
 - **"Test suite" ≠ "vitest"**: `npm test` runs vitest (~2000 unit tests); `npm run test:e2e` runs Playwright (~120 browser tests, builds first). They cover DIFFERENT failure modes — e2e catches renderer/diag/visual regressions vitest can't see. When reporting "tests pass," name the runner explicitly ("vitest passes; e2e not run"). Do not call a verification "deep" unless e2e was run.
+- **E2E regressions for worker-sensitive features must cover all three modes**: `?worker=on` (default renderer-only), `?worker=off` (main-thread), `?simWorker=on` (sim-in-worker). Several recent regressions (canvas clipping, arena-switch freeze, fast-fall) were bisectable to mode.
 - **Document lessons in `.claude/skills/*.md`** after completing features.
 
 ## Skills Index
