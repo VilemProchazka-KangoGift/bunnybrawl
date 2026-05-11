@@ -31,6 +31,7 @@ import { getCharacterForSlot } from '../characters/defaults';
 import { createInitialPlayers, createInitialMatchState } from '../simulator/initialState';
 import { CANVAS_WIDTH } from '../constants';
 import { createInputSab, setSlotCount, writeSlotInput, SAB_INPUT_MAX_SLOTS } from './sabInput';
+import { installWorkerBootQueue, type WorkerBootQueue } from './workerBootQueue';
 import type { Arena, MatchSettings, MatchState, MatchPhase, PlayerSlot, InputState, CharacterSlot } from '../types';
 import type { ThemeConfig } from '../themes/types';
 import type { IRenderer, RenderDiagnostics } from '../renderer';
@@ -132,11 +133,10 @@ export class EngineWorkerProxy {
    *  Called from `switchArena` so a level switch doesn't leave a falsely
    *  pre-warmed roster on the new arena. Wired by the constructor. */
   private _clearWarmedNames?: () => void;
-  /** Native worker.postMessage captured before the boot-queue wrapper
-   *  replaces it. Restored in `_releaseBootQueue` so the hot path doesn't
-   *  pay the wrapper's branch on every input batch. */
-  private _origPostMessage!: Worker['postMessage'];
-  private _bootQueue: Array<{ msg: unknown; transfer: Transferable[] }> = [];
+  /** Buffers postMessage calls until the worker posts `worker:bootReady`,
+   *  then restores native postMessage so the 60Hz input-batch hot path
+   *  has no wrapper branch. See `workerBootQueue.ts` for the rationale. */
+  private _bootQueue!: WorkerBootQueue;
 
   constructor(opts: EngineWorkerProxyOptions) {
     this.fgNightTint = opts.fgNightTint ?? null;
@@ -154,16 +154,7 @@ export class EngineWorkerProxy {
       new URL('./renderWorker.ts', import.meta.url),
       { type: 'module', name: 'carrot-royale-engine' },
     );
-    // Boot handshake — Vite dev's module-worker boot can drop messages
-    // posted before the worker finishes evaluating its top-level code,
-    // even though the spec requires them to queue. Buffer postMessage
-    // calls locally until `worker:bootReady` arrives, then flush in order
-    // and restore the native method so subsequent posts (input batches at
-    // 60Hz) hit the worker without the wrapper branch.
-    this._origPostMessage = this.worker.postMessage.bind(this.worker);
-    this.worker.postMessage = ((msg: unknown, transfer?: Transferable[]): void => {
-      this._bootQueue.push({ msg, transfer: transfer ?? [] });
-    }) as Worker['postMessage'];
+    this._bootQueue = installWorkerBootQueue(this.worker);
     this.worker.addEventListener('message', this.handleMessage);
     // On a worker runtime error / structured-clone failure, mark the proxy
     // dead so subsequent input batch posts no-op (a silent worker is better
@@ -523,23 +514,11 @@ export class EngineWorkerProxy {
     this.worker.postMessage({ type: 'host:setDebugFlag', name, value });
   }
 
-  private _releaseBootQueue(): void {
-    if (this.worker.postMessage === this._origPostMessage) return; // already flushed
-    this.worker.postMessage = this._origPostMessage;
-    for (const { msg, transfer } of this._bootQueue) {
-      if (transfer.length > 0) this._origPostMessage(msg, transfer);
-      else this._origPostMessage(msg);
-    }
-    this._bootQueue.length = 0;
-  }
-
   private handleMessage = (e: MessageEvent<WorkerToHostMsg>): void => {
     if (this.destroyed) return;
     const msg = e.data;
     if (msg.type === 'worker:bootReady') {
-      // Worker has attached its message listener — flush anything queued
-      // during the dev-mode boot window and restore the native postMessage.
-      this._releaseBootQueue();
+      this._bootQueue.release();
       return;
     }
     if (msg.type === 'worker:nightOpacity') {

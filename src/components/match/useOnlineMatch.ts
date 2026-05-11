@@ -110,10 +110,11 @@ export function useOnlineMatch(p: UseOnlineMatchParams): void {
     deps: { activePlayers: typeof activePlayers } | null;
   }>({ teardown: null, timer: null, deps: null });
 
-  // matchSettings is consumed once at construction. Host arena swap calls
-  // `setMatchSettings({arenaId})` which would otherwise re-run this effect
-  // and remount NetMatch (dropping transport wiring) AND attempt a second
-  // transferControlToOffscreen on worker canvases (permanent detach).
+  // matchSettings is consumed once at construction; see `useLocalMatch.ts`
+  // for the full contract. Online additionally: a re-run would drop the
+  // NetMatch transport wiring. Mid-match `arenaId` is propagated to guests
+  // via SETTINGS_SYNC and applied through `gameLoop.switchArena()`; other
+  // fields are frozen for the match lifetime even if the store mutates.
   const matchSettingsRef = useRef(matchSettings);
   matchSettingsRef.current = matchSettings;
 

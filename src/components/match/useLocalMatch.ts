@@ -145,11 +145,15 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
     deps: { activePlayers: typeof activePlayers } | null;
   }>({ teardown: null, timer: null, deps: null });
 
-  // matchSettings is consumed once at construction. Subsequent changes
-  // (handleChangeArena's `setMatchSettings({arenaId})`) must NOT re-run
-  // this effect — worker canvases can only `transferControlToOffscreen`
-  // once and a remount would detach them permanently. Mid-match arena
-  // swap goes through `gameLoop.switchArena()` directly.
+  // matchSettings is consumed once at construction; the live loop is
+  // frozen against the snapshot taken here. Worker canvases can only
+  // `transferControlToOffscreen` once, so an effect re-run would
+  // permanently detach them. Contract: the only field that changes
+  // mid-match is `arenaId`, applied via `gameLoop.switchArena()` from
+  // `handleChangeArena`. Any other field (mods, killLimit, timeLimit)
+  // is implicitly frozen for the match's lifetime — changes are
+  // captured into this ref but never propagate to the live loop. Mods
+  // UI surface accepts changes only outside a match.
   const matchSettingsRef = useRef(matchSettings);
   matchSettingsRef.current = matchSettings;
 
