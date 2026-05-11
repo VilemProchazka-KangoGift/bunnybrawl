@@ -40,6 +40,7 @@ import type {
   HostInitEngineMsg, HostStopMsg, HostEngineInputBatchMsg,
   HostEnginePauseMsg, HostEngineResumeMsg,
   HostEngineSwitchArenaMsg, HostEngineSetPhaseMsg, HostEngineSkipCountdownMsg,
+  HostPerfResetMsg,
   HostNetSetModeMsg, HostNetSnapshotApplyMsg,
   HostNetDisconnectSlotMsg, HostNetReconnectSlotMsg,
   WorkerEngineEventMsg, WorkerToHostMsg,
@@ -137,6 +138,13 @@ export class EngineWorkerProxy {
    *  then restores native postMessage so the 60Hz input-batch hot path
    *  has no wrapper branch. See `workerBootQueue.ts` for the rationale. */
   private _bootQueue!: WorkerBootQueue;
+
+  /** Latest worker perfStats flush. Populated from `worker:perfStats`
+   *  messages and read by the bench via `__fpsCounter` / `__perfTrace`
+   *  shims (the global rAF observer + perfTrace on main are unfed when
+   *  the loop runs in the worker). */
+  private _latestFpsSamples: { dts: number[]; lastSampleTime: number } = { dts: [], lastSampleTime: 0 };
+  private _latestSections: Record<string, { calls: number; totalMs: number; avgMs: number; p95Ms: number }> = {};
 
   constructor(opts: EngineWorkerProxyOptions) {
     this.fgNightTint = opts.fgNightTint ?? null;
@@ -254,7 +262,51 @@ export class EngineWorkerProxy {
     // still points at `=== this`, so we never clobber the live one.
     if (typeof window !== 'undefined') {
       (window as unknown as { __engineWorkerProxy?: EngineWorkerProxy }).__engineWorkerProxy = this;
+      this._installPerfShims();
     }
+  }
+
+  /** Override `window.__fpsCounter` + `__perfTrace` with worker-backed
+   *  shims so the perf bench (which expects main-thread modules) reads
+   *  the worker's actual frame timings and section snapshots. The
+   *  useLocalMatch / useOnlineMatch shells set the real modules first;
+   *  this overwrites them in simWorker mode where those modules are
+   *  never fed. Cleared in `stop()` if the global still points at us. */
+  private _installPerfShims(): void {
+    type FpsLike = { dumpSamples(): { dts: number[]; count: number; lastSampleTime: number } };
+    type PerfLike = {
+      enabled: boolean;
+      snapshot(): Record<string, { calls: number; totalMs: number; avgMs: number; p95Ms: number }>;
+      reset(): void;
+    };
+    const w = window as unknown as {
+      __fpsCounter?: FpsLike;
+      __perfTrace?: PerfLike;
+    };
+    w.__fpsCounter = {
+      dumpSamples: () => {
+        const s = this._latestFpsSamples;
+        return { dts: s.dts, count: s.dts.length, lastSampleTime: s.lastSampleTime };
+      },
+    };
+    w.__perfTrace = {
+      enabled: true,
+      snapshot: () => this._latestSections,
+      reset: () => this.resetPerfStats(),
+    };
+  }
+
+  /** Resets the worker's perfTrace + fpsCounter rings AND clears the
+   *  proxy's last-known snapshot so a subsequent shim read returns empty
+   *  until the next perfStats flush arrives. Mirrors main's
+   *  perfTrace.reset() semantics. */
+  resetPerfStats(): void {
+    this._latestSections = {};
+    this._latestFpsSamples = { dts: [], lastSampleTime: 0 };
+    const msg: HostPerfResetMsg = { type: 'host:perfReset' };
+    // workerBootQueue wraps `worker.postMessage` so pre-bootReady calls
+    // are buffered transparently.
+    this.worker.postMessage(msg);
   }
 
   start(): void {
@@ -341,8 +393,18 @@ export class EngineWorkerProxy {
     } catch { /* worker may already be down */ }
     this.worker.terminate();
     if (typeof window !== 'undefined') {
-      const w = window as unknown as { __engineWorkerProxy?: EngineWorkerProxy };
-      if (w.__engineWorkerProxy === this) w.__engineWorkerProxy = undefined;
+      const w = window as unknown as {
+        __engineWorkerProxy?: EngineWorkerProxy;
+        __fpsCounter?: unknown;
+        __perfTrace?: unknown;
+      };
+      if (w.__engineWorkerProxy === this) {
+        w.__engineWorkerProxy = undefined;
+        // Drop the perf shims we installed. Tests / next match's proxy
+        // re-install when they construct a fresh EngineWorkerProxy.
+        w.__fpsCounter = undefined;
+        w.__perfTrace = undefined;
+      }
     }
   }
 
@@ -556,6 +618,14 @@ export class EngineWorkerProxy {
     if (msg.type === 'worker:netInterpStats') {
       // Guest-side interp stats forwarded here. Currently no consumer;
       // hook for the debug overlay lands when net stats integrate.
+      return;
+    }
+    if (msg.type === 'worker:perfStats') {
+      // Sections snapshot is cumulative since worker boot (or last reset)
+      // — overwrite per flush. fpsSamples is the current ring dump, also
+      // a fresh per-flush snapshot.
+      if (msg.sections) this._latestSections = msg.sections;
+      if (msg.fpsSamples) this._latestFpsSamples = msg.fpsSamples;
       return;
     }
     if (msg.type === 'worker:error') {

@@ -237,6 +237,12 @@ ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
   if (msg.type === 'host:engineSwitchArena') { engineBindings.switchArenaInWorker(msg); return; }
   if (msg.type === 'host:engineSetPhase') { engineBindings.setPhaseInWorker(msg); return; }
   if (msg.type === 'host:engineSkipCountdown') { engineBindings.skipCountdownInWorker(); return; }
+  if (msg.type === 'host:perfReset') {
+    // engineBindings.resetPerfStats handles both perfTrace + fpsCounter
+    // in one place (the modules live in engineWorkerInit's scope).
+    engineBindings.resetPerfStats();
+    return;
+  }
   // Phase 2: NetMatch async fixedUpdate wiring. Worker hosts encode/decode;
   // main only forwards buffers to/from the transport.
   if (msg.type === 'host:netSetMode') { engineBindings.setNetMode(msg.mode, msg.delayFrames); return; }

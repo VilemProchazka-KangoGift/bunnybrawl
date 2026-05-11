@@ -37,6 +37,9 @@ import { takeAuthSnapshot, encodeSnapshot, decodeSnapshot, createEmptySnapshot }
 import type { AuthSnapshot } from '../net/snapshot';
 import { EntityInterpolation, applySnapshotToState } from '../net/interpolation';
 import type { Simulator } from '../simulator/Simulator';
+import { perfTrace } from '../perfTrace';
+import { dumpSamples as dumpFpsSamples, resetFpsCounter, sampleFps } from '../fpsCounter';
+import type { WorkerPerfStatsMsg } from './messages';
 
 const ctxScope = self as DedicatedWorkerGlobalScope;
 
@@ -60,6 +63,13 @@ let accumulator = 0;
 let lastTime = 0;
 let lastMirrorAt = 0;
 const STATE_MIRROR_INTERVAL_MS = 200;  // 5Hz
+
+/** Perf-stats flush schedule (mirrors renderWorker.ts's renderer-only
+ *  perfStats cadence). Posted as `worker:perfStats` so EngineWorkerProxy
+ *  can expose the worker's fpsCounter / perfTrace state to the bench. */
+let lastPerfFlushAt = 0;
+const PERF_FLUSH_INTERVAL_MS = 1000;
+const PERF_HISTOGRAM_STUB: number[] = [];
 
 /** Phase 2 net-mode flag. 'off' = local-only (Phase 1 default); 'host' =
  *  encode + emit snapshots per fixedUpdate tick; 'guest' = decode + apply
@@ -234,6 +244,10 @@ export function initEngine(msg: HostInitEngineMsg): void {
 
 function driveTick(currentTime: number): void {
   if (!running || !gameLoop || !renderer) return;
+  // GameLoop.loop() owns the sampleFps call in main-thread mode; we drive
+  // the worker's loop manually, so feed fpsCounter directly. No-op when
+  // `debugFlags.fpsEnabled` is false (the perf bench sets it via the URL).
+  sampleFps(currentTime);
   if (paused) {
     lastTime = currentTime;
     renderer.renderFrame(gameLoop.getState(), gameLoop.getArena(), [], 0);
@@ -305,6 +319,30 @@ function driveTick(currentTime: number): void {
     ctxScope.postMessage(mirror);
   }
 
+  // Periodic perf flush. Lets the bench read worker-side fpsCounter +
+  // perfTrace state via `__fpsCounter` / `__perfTrace` shims that
+  // EngineWorkerProxy installs on main.
+  if (currentTime - lastPerfFlushAt >= PERF_FLUSH_INTERVAL_MS) {
+    lastPerfFlushAt = currentTime;
+    const m: WorkerPerfStatsMsg = {
+      type: 'worker:perfStats',
+      // The histogram + render-time fields belong to renderWorker.ts's
+      // renderer-only path. Sim-in-worker doesn't separately time render
+      // (the GameLoop's perfTrace sections cover it). Stub to keep
+      // RendererProxy's accumulator type-safe.
+      frames: 0,
+      renderSumMs: 0,
+      renderMaxMs: 0,
+      handlerSumMs: 0,
+      handlerMaxMs: 0,
+      histogram: PERF_HISTOGRAM_STUB,
+      overflowFrames: 0,
+    };
+    if (debugFlags.perfEnabled) m.sections = perfTrace.snapshot();
+    if (debugFlags.fpsEnabled) m.fpsSamples = dumpFpsSamples();
+    ctxScope.postMessage(m);
+  }
+
   rafId = ctxScope.requestAnimationFrame(driveTick);
 }
 
@@ -345,6 +383,14 @@ export function switchArenaInWorker(msg: HostEngineSwitchArenaMsg): void {
 export function setPhaseInWorker(msg: HostEngineSetPhaseMsg): void {
   if (!gameLoop) return;
   gameLoop.setPhase(msg.phase);
+}
+
+/** Reset perfTrace + fpsCounter rings. Used by the perf bench between
+ *  countdown and steady-state capture so accumulated sections / dts
+ *  don't include startup noise. */
+export function resetPerfStats(): void {
+  perfTrace.reset();
+  resetFpsCounter();
 }
 
 export function skipCountdownInWorker(): void {

@@ -145,6 +145,12 @@ export interface HostEngineSwitchArenaMsg { type: 'host:engineSwitchArena'; aren
 export interface HostEngineSetPhaseMsg { type: 'host:engineSetPhase'; phase: MatchPhase }
 export interface HostEngineSkipCountdownMsg { type: 'host:engineSkipCountdown' }
 
+/** Reset the worker's perfTrace + fpsCounter rings. Used by the perf
+ *  bench between countdown and the steady-state capture window so the
+ *  recorded sections / frame timings don't include startup noise. Only
+ *  meaningful in simWorker mode (the worker owns those modules). */
+export interface HostPerfResetMsg { type: 'host:perfReset' }
+
 // ---- Phase 2: NetMatch async fixedUpdate ----------------------------------
 // Worker hosts the simulation in online play; main is the I/O hub for
 // Trystero + audio + keyboard. Wire format extends the sim-in-worker base.
@@ -246,6 +252,7 @@ export type HostToWorkerMsg =
   | HostEngineSwitchArenaMsg
   | HostEngineSetPhaseMsg
   | HostEngineSkipCountdownMsg
+  | HostPerfResetMsg
   | HostNetSetModeMsg
   | HostNetSnapshotApplyMsg
   | HostNetDisconnectSlotMsg
@@ -312,6 +319,11 @@ export interface WorkerPerfStatsMsg {
   /** Frames that crossed the soft long-frame threshold (~12ms) since the
    *  last flush, with attribution from this-frame perfTrace section sums. */
   longFrames?: WorkerLongFrameSample[];
+  /** Snapshot of the worker's fpsCounter ring at flush time. The bench
+   *  reads via `__fpsCounter.dumpSamples()` shim installed by
+   *  EngineWorkerProxy in simWorker mode (main's fpsCounter is never
+   *  sampled when the rAF loop lives in the worker). */
+  fpsSamples?: { dts: number[]; lastSampleTime: number };
 }
 
 /** Engine-side events posted from the worker's GameLoop callbacks back to
