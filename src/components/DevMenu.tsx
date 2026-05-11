@@ -45,11 +45,7 @@ const FLAGS: readonly FlagDef[] = [
 const PERF_TIERS: readonly PerfTier[] = ['low', 'med', 'high'];
 
 function SectionHeader({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{ marginTop: 14, marginBottom: 6, opacity: 0.85, fontSize: 12, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>
-      {children}
-    </div>
-  );
+  return <div className="dev-section-header">{children}</div>;
 }
 
 interface ToggleRowProps {
@@ -92,13 +88,14 @@ interface NumberRowProps {
 
 function NumberRow({ testId, label, desc, value, min, max, step, onChange }: NumberRowProps) {
   return (
-    <div className="mod-row" style={{ alignItems: 'center' }}>
-      <div className="mod-info" style={{ flex: 1 }}>
+    <div className="dev-row">
+      <div className="mod-info">
         <span className="mod-name">{label}</span>
         <span className="mod-desc">{desc}</span>
       </div>
       <input
         type="number"
+        className="dev-input"
         value={value}
         min={min}
         max={max}
@@ -108,7 +105,6 @@ function NumberRow({ testId, label, desc, value, min, max, step, onChange }: Num
           onChange(Number.isFinite(v) ? v : 0);
         }}
         data-testid={testId}
-        style={{ width: 90, padding: 4, fontFamily: 'inherit' }}
       />
     </div>
   );
@@ -148,7 +144,7 @@ export function DevMenu({ onClose }: DevMenuProps) {
 
   return (
     <div className="mods-overlay" onClick={closeAndMaybeReload}>
-      <div className="mods-modal" onClick={e => e.stopPropagation()} data-testid="dev-menu">
+      <div className="mods-modal dev-menu-modal" onClick={e => e.stopPropagation()} data-testid="dev-menu">
         <h2 className="mods-title">Dev Menu</h2>
         <p className="help-text" style={{ opacity: 0.7, marginBottom: 12 }}>
           Mirrors every <code>?param</code> debug flag. Press <kbd>`</kbd> to open/close.
@@ -192,16 +188,16 @@ export function DevMenu({ onClose }: DevMenuProps) {
           step={0.05}
           onChange={(v) => { setBrightness(v); rerender(); }}
         />
-        <div className="mod-row" style={{ alignItems: 'center' }}>
-          <div className="mod-info" style={{ flex: 1 }}>
+        <div className="dev-row">
+          <div className="mod-info">
             <span className="mod-name">Perf tier</span>
             <span className="mod-desc">Lighting pipeline quality tier (M1 only honors med).</span>
           </div>
           <select
+            className="dev-input"
             value={getPerfTier()}
             onChange={(e) => { setPerfTier(e.target.value as PerfTier); rerender(); }}
             data-testid="dev-select-perftier"
-            style={{ padding: 4, fontFamily: 'inherit' }}
           >
             {PERF_TIERS.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
