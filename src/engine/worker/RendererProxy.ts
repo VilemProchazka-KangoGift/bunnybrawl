@@ -96,6 +96,11 @@ const STUB_DIAGNOSTICS: RenderDiagnostics = Object.freeze({
 export class RendererProxy implements IRenderer {
   private worker: Worker;
   private destroyed = false;
+  /** Native worker.postMessage captured before the boot-queue wrapper
+   *  replaces it. Restored on `worker:bootReady` so the hot path
+   *  (`renderFrame` at 60Hz) doesn't pay the wrapper branch. */
+  private _origPostMessage!: Worker['postMessage'];
+  private _bootQueue: Array<{ msg: unknown; transfer: Transferable[] }> = [];
   /** SAB-backed particles wire (Step 4). Null in prod / non-isolated
    *  contexts; the existing `particles: Particle[]` field in
    *  `host:renderFrame` handles those. */
@@ -174,6 +179,16 @@ export class RendererProxy implements IRenderer {
       new URL('./renderWorker.ts', import.meta.url),
       { type: 'module', name: 'carrot-royale-render' },
     );
+    // Same boot-handshake workaround as EngineWorkerProxy: Vite dev's
+    // module-worker boot drops messages posted before the worker finishes
+    // top-level eval (the spec requires queuing; module-worker dev mode
+    // doesn't deliver on it). Buffer postMessage locally until
+    // `worker:bootReady` lands, then restore the native method so the
+    // hot path (renderFrame at 60Hz) has no wrapper branch.
+    this._origPostMessage = this.worker.postMessage.bind(this.worker);
+    this.worker.postMessage = ((msg: unknown, transfer?: Transferable[]): void => {
+      this._bootQueue.push({ msg, transfer: transfer ?? [] });
+    }) as Worker['postMessage'];
     this.worker.addEventListener('message', this.handleMessage);
     // On a worker runtime error / structured-clone failure, mark the proxy
     // dead so subsequent postMessage calls no-op (silent worker is better
@@ -298,9 +313,23 @@ export class RendererProxy implements IRenderer {
 
   private onReady?: () => void;
 
+  private _releaseBootQueue(): void {
+    if (this.worker.postMessage === this._origPostMessage) return;
+    this.worker.postMessage = this._origPostMessage;
+    for (const { msg, transfer } of this._bootQueue) {
+      if (transfer.length > 0) this._origPostMessage(msg, transfer);
+      else this._origPostMessage(msg);
+    }
+    this._bootQueue.length = 0;
+  }
+
   private handleMessage = (e: MessageEvent<WorkerToHostMsg>): void => {
     if (this.destroyed) return;
     const msg = e.data;
+    if (msg.type === 'worker:bootReady') {
+      this._releaseBootQueue();
+      return;
+    }
     if (msg.type === 'worker:ready') {
       this.onReady?.();
       return;
