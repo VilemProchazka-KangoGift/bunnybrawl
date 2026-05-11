@@ -18,10 +18,14 @@
  * MatchState clones forever.
  */
 
-/** Cap chosen empirically: dev-mode boot is <100ms, so 120 entries buys
- *  ~2s of 60Hz traffic before the queue starts dropping. Real boot lands
- *  well inside that budget; only a silently-wedged worker hits the cap. */
-const MAX_QUEUED = 120;
+/** Cap chosen empirically. Dev-mode boot is <100ms; prod-build boot of the
+ *  ~500KB renderWorker bundle can take 1-2s on cold-cache mid-tier hardware,
+ *  during which `RendererProxy` queues `host:renderFrame` at 60Hz. 600
+ *  entries buys ~10s of 60Hz traffic — comfortably past any realistic boot
+ *  delay, while still tripping the wedged-worker fail-safe. Combined with
+ *  the renderFrame-preferential drop policy below, even an 11s boot won't
+ *  cost us the (irreplaceable) `host:init` message. */
+const MAX_QUEUED = 600;
 
 export interface WorkerBootQueue {
   /** Flush queued messages to the worker in order, then restore native
@@ -36,10 +40,22 @@ export function installWorkerBootQueue(worker: Worker): WorkerBootQueue {
 
   worker.postMessage = ((msg: unknown, transfer?: Transferable[]): void => {
     if (queue.length >= MAX_QUEUED) {
-      queue.shift();
+      // Prefer dropping the oldest `host:renderFrame` — those are stale per-frame
+      // state that the next renderFrame will supersede anyway. Setup messages
+      // (`host:init`, `host:renderBackground`, `host:setRenderScale`, …) are
+      // one-shot and irreplaceable; losing `host:init` leaves the worker
+      // forever without a Renderer and silently black-screens the canvas. If
+      // somehow the queue has no renderFrames (shouldn't happen — they
+      // dominate at 60Hz), fall through and shift the absolute oldest.
+      let idx = -1;
+      for (let i = 0; i < queue.length; i++) {
+        if ((queue[i].msg as { type?: string }).type === 'host:renderFrame') { idx = i; break; }
+      }
+      if (idx < 0) idx = 0;
+      queue.splice(idx, 1);
       droppedCount++;
       if (droppedCount === 1) {
-        console.warn('[workerBootQueue] worker:bootReady not received yet; dropping oldest queued messages');
+        console.warn('[workerBootQueue] worker:bootReady not received yet; dropping oldest queued renderFrame messages');
       }
     }
     queue.push({ msg, transfer: transfer ?? [] });
