@@ -15,6 +15,29 @@ const SNAPSHOT_DELTA = CoreMsgType.SNAPSHOT_DELTA;
 const DELTA_HEADER_BYTES = 1 + 4 + 2 + 2; // type + baseFrame + curLen + baseLen
 
 /**
+ * Pooled scratch buffers. createDelta and applyDelta both allocate transient
+ * XOR/RLE buffers per call; at host 60Hz × N peers that's ~1.5KB/peer/tick of
+ * GC pressure. Pooled at module scope, sized to comfortably hold typical
+ * snapshots (200-500 bytes); grown on demand if a future schema pushes
+ * snapshots larger. Single-threaded — callers consume the returned output
+ * buffer before the next call.
+ */
+let _xorScratch = new Uint8Array(4096);
+let _rleScratch = new Uint8Array(DELTA_HEADER_BYTES + 4096 * 2);
+let _rleView = new DataView(_rleScratch.buffer);
+
+function ensureXorCap(n: number): void {
+  if (_xorScratch.length < n) _xorScratch = new Uint8Array(n);
+}
+
+function ensureRleCap(n: number): void {
+  if (_rleScratch.length < n) {
+    _rleScratch = new Uint8Array(n);
+    _rleView = new DataView(_rleScratch.buffer);
+  }
+}
+
+/**
  * Build a delta from `current` against `baseline`. `baseFrame` is recorded
  * in the header so the receiver can detect baseline mismatch and discard
  * the delta instead of producing corrupt output.
@@ -34,13 +57,16 @@ export function createDelta(current: ArrayBuffer, baseline: ArrayBuffer | null, 
   const base = new Uint8Array(baseline);
   const maxLen = Math.max(cur.length, base.length);
 
-  const xor = new Uint8Array(maxLen);
+  ensureXorCap(maxLen);
+  ensureRleCap(DELTA_HEADER_BYTES + maxLen * 2);
+  const xor = _xorScratch;
+  const rle = _rleScratch;
+  const view = _rleView;
+
   for (let i = 0; i < maxLen; i++) {
     xor[i] = (cur[i] ?? 0) ^ (base[i] ?? 0);
   }
 
-  const rle = new Uint8Array(DELTA_HEADER_BYTES + maxLen * 2);
-  const view = new DataView(rle.buffer);
   let ro = 0;
   rle[ro++] = SNAPSHOT_DELTA;
   view.setUint32(ro, baseFrame, true); ro += 4;
@@ -103,7 +129,13 @@ export function applyDelta(deltaBuf: ArrayBuffer, baseline: ArrayBuffer): ArrayB
   const delta = new Uint8Array(deltaBuf);
   const base = new Uint8Array(baseline);
   const maxLen = Math.max(curLen, baseLen);
-  const xor = new Uint8Array(maxLen);
+
+  ensureXorCap(maxLen);
+  const xor = _xorScratch;
+  // Clear used portion — pool may carry leftovers from a prior larger call,
+  // and the RLE loop below only writes non-zero bytes (zero runs are implied
+  // by skipping `count` indices).
+  for (let i = 0; i < maxLen; i++) xor[i] = 0;
 
   let di = DELTA_HEADER_BYTES;
   let xi = 0;

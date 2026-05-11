@@ -7,72 +7,54 @@
  * whole engine in.
  */
 import type { MatchState } from '../../types';
-import type { AuthSnapshot } from './types';
+import type { AuthSnapshot, SnapshotPlayer } from './types';
+import { createEmptySnapshot } from './types';
+
+/**
+ * Pooled scratch — the snapshot is consumed synchronously by `encodeSnapshot`
+ * before the next call (host path: takeAuthSnapshot → encodeSnapshot →
+ * broadcast bytes → drop reference). Reused across all callers (main host,
+ * worker host, tests) since the consumption pattern is identical.
+ */
+const _scratch: AuthSnapshot = createEmptySnapshot();
 
 /**
  * Extract an AuthSnapshot from the current MatchState.
  * Called by the host every tick to prepare state for transmission.
+ *
+ * Returns a reused scratch object. Entity arrays are direct references to
+ * MatchState arrays — the binary encoder reads only the wire-relevant
+ * fields, ignoring extras like `Carrot.spawnTime` or `Player.character`.
+ * Callers MUST consume the snapshot before the next `takeAuthSnapshot`
+ * call; storing the reference across ticks will see mutated data.
  */
 export function takeAuthSnapshot(frame: number, state: MatchState): AuthSnapshot {
-  return {
-    frame,
-    phase: state.phase,
-    players: state.players.map(p => ({
-      id: p.id,
-      x: p.x, y: p.y,
-      vx: p.vx, vy: p.vy,
-      state: p.state,
-      facing: p.facing,
-      animFrame: p.animFrame,
-      score: p.score,
-      hitstopTimer: p.hitstopTimer,
-      invincibleTimer: p.invincibleTimer,
-      fastFalling: p.fastFalling,
-      splatTimer: p.splatTimer,
-      respawnTimer: p.respawnTimer,
-      fatTimer: p.fatTimer,
-      slowTimer: p.slowTimer,
-      burnTimer: p.burnTimer,
-      squashScale: p.squashScale,
-      expression: p.expression,
-      killStreak: p.killStreak,
-      disconnected: p.disconnected,
-      active: p.active,
-      width: p.width,
-      height: p.height,
-      sideSquash: p.sideSquash,
-      damageFlashTimer: p.damageFlashTimer,
-      damageFlashSide: p.damageFlashSide,
-    })),
-    carrots: state.carrots.map(c => ({ x: c.x, y: c.y, active: c.active })),
-    springs: state.springs.map(s => ({
-      x: s.x, y: s.y,
-      bounceTimer: s.bounceTimer, life: s.life, growTimer: s.growTimer,
-    })),
-    thorns: state.thorns.map(t => ({
-      x: t.x, y: t.y,
-      life: t.life, growTimer: t.growTimer, hit: t.hit,
-    })),
-    ghosts: state.ghosts.map(g => ({
-      x: g.x, y: g.y, vx: g.vx, wobblePhase: g.wobblePhase,
-    })),
-    lavaRocks: state.lavaRocks.map(r => ({
-      x: r.x, y: r.y, vy: r.vy, active: r.active,
-    })),
-    geyserStates: state.geyserStates.map(gs => ({
-      timer: gs.timer, active: gs.active, activeTimer: gs.activeTimer,
-    })),
-    killFeed: state.killFeed,
-    totalKills: state.totalKills,
-    timeElapsed: state.timeElapsed,
-    countdown: state.countdown,
-    dayPhase: state.dayPhase,
-    matchOver: state.matchOver,
-    winner: state.winner,
-    screenShake: state.screenShake,
-    slowMotion: state.slowMotion,
-    screenFlash: state.screenFlash,
-    hitstopZoom: state.hitstopZoom,
-    scoreAnimations: state.scoreAnimations,
-  };
+  const s = _scratch;
+  s.frame = frame;
+  s.phase = state.phase;
+  // Direct references — encoder reads wire-relevant fields only; extras on
+  // the source types (Carrot.spawnTime, SpringMushroom.platformIndex,
+  // Thorn.width/height/platformIndex, Ghost.size/alpha, LavaRock.size/rotation,
+  // Player local-only fields) are ignored. Casts narrow the type to the
+  // wire-relevant subset that AuthSnapshot promises.
+  s.players = state.players as unknown as SnapshotPlayer[];
+  s.carrots = state.carrots as unknown as AuthSnapshot['carrots'];
+  s.springs = state.springs as unknown as AuthSnapshot['springs'];
+  s.thorns = state.thorns as unknown as AuthSnapshot['thorns'];
+  s.ghosts = state.ghosts as unknown as AuthSnapshot['ghosts'];
+  s.lavaRocks = state.lavaRocks as unknown as AuthSnapshot['lavaRocks'];
+  s.geyserStates = state.geyserStates as unknown as AuthSnapshot['geyserStates'];
+  s.killFeed = state.killFeed;
+  s.totalKills = state.totalKills;
+  s.timeElapsed = state.timeElapsed;
+  s.countdown = state.countdown;
+  s.dayPhase = state.dayPhase;
+  s.matchOver = state.matchOver;
+  s.winner = state.winner;
+  s.screenShake = state.screenShake;
+  s.slowMotion = state.slowMotion;
+  s.screenFlash = state.screenFlash;
+  s.hitstopZoom = state.hitstopZoom;
+  s.scoreAnimations = state.scoreAnimations;
+  return s;
 }

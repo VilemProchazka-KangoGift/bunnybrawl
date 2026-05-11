@@ -257,6 +257,26 @@ The lobby runs its own 60fps rAF loop. Same hot-path rules apply:
 - **AudioManager**: Call `sound.unload()` on all Howl instances when destroying the game loop
 - **Splat marks are baked into the background canvas** — once rendered, the array entry is only needed if the background is fully redrawn. Safe to prune old entries.
 
+## Object Pooling — Lifetime Rules
+
+Goal: zero GC events during a 30s match. Achieved by killing per-frame allocators. Three rules learned the hard way:
+
+1. **Don't pool objects whose references escape the producer's scope.** If `producer.push(obj)` writes into a state array that the renderer or next-tick consumer reads, the obj must not be recycled until the consumer is done with it. Example: a `KillFeedEntry` pushed into `state.killFeed` (lifetime ≈ 10 entries, many ticks) cannot share a free-list with the producer's per-tick scratch — recycling next tick mutates the displayed entry. The lifetime-bounded pool would need explicit hand-off + sentinel tracking, which costs more than the alloc it saves.
+2. **Pool only what fires at frame rate.** Per-tick allocations (60Hz, every tick regardless of events) are worth aggressive pooling — e.g. `_splatMarksResult` / `_killFeedResult` / `_checkStompsResult` envelope in `stomp.ts:checkStomps`. Per-event allocations at kill/spawn rate (1-3/sec peak) — `SplatMark`, `KillFeedEntry`, `shockwave`, `scoreAnimation`, `comboPopup`, `_lightBurst` — are GC-negligible and not worth pooling, especially given rule 1.
+3. **Per-tick result envelopes are safe.** When `checkStomps` returns `{ splatMarks, killFeedEntries }`, both arrays + the wrapping object can be module-scope scratch, cleared at the top of each call. Callers consume synchronously inside the same `fixedUpdate` and pull values out by index — they don't store the envelope reference.
+
+Per-frame allocators eliminated in the 2026-05 GC pass (see commits ab6dafc, 0ff0ffb, 3e7d247):
+- `perfTrace.measure(...)` closures on hot orchestrator paths → `begin/end` pairs
+- Fresh `{splatMarks, killFeedEntries}` envelope + arrays per `checkStomps` call
+- Fresh `InputState` allocs in `KeyboardManager.readSlot` / `readAny`, `RemoteInput`, `mergeKeyboardTouch` → per-slot + `_anyInput` scratches
+- `withMirror(ctx, () => fn(...))` closures in `renderer.ts` (7 sites, ~420/sec) → `_beginMirror` / `_endMirror`
+- Surface decals + ripples → pool-recycled in `surfaceImpact.ts`
+- AI awareness sub-objects + `airborneAbove` / `nearbyHazards` arrays → `AwarenessScratch` factory
+- `state.players.find(p => p.id === ...)` closures → indexed for-loops
+- Per-call `EntityTxResult` + `liveSprings` Set + spring-transition closure → system-owned scratches
+- Confetti + afterimage spawn paths → `freeList` recycling
+- Pre-warmed particle/gib/confetti pools in `ParticleSystem` constructor
+
 ## Profiling Workflow
 
 1. Open DevTools Performance tab, record 10s of gameplay

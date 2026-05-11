@@ -9,9 +9,11 @@ import { aabbOverlap } from './physics';
 const f = Math.fround;
 import { getCharacterSplatShape } from './characters';
 
-/** Reused arrays so checkStomps doesn't allocate empty arrays at the top of
- *  every fixedUpdate. Callers consume the result synchronously (push into
- *  state.killFeed, etc.) and don't store references across ticks. */
+/** Reused arrays + result envelope so checkStomps doesn't allocate fresh
+ *  arrays + a wrapping object on every fixedUpdate. Kills are rare; the
+ *  arrays stay empty most ticks. Callers consume synchronously (push into
+ *  state.killFeed, etc.) and don't store references across ticks — the
+ *  arrays are cleared at the top of the next call. */
 const _splatMarksResult: SplatMark[] = [];
 const _killFeedResult: KillFeedEntry[] = [];
 const _checkStompsResult: { splatMarks: SplatMark[]; killFeedEntries: KillFeedEntry[] } = {
