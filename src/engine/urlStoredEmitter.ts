@@ -1,12 +1,13 @@
-// src/engine/lighting/urlStoredEmitter.ts
+// src/engine/urlStoredEmitter.ts
 //
 // Factory for the URL+localStorage+emitter pattern shared by lighting,
-// brightness, perfTier, and photosensitivity. URL param wins over storage.
+// brightness, perfTier, photosensitivity, and dev-only flags (simWorker,
+// inputEcho, turn, sabDemo, net-sim trio). URL param wins over storage.
 // `parse` returns null when its input doesn't represent a valid value, so the
 // caller can fall through to the next priority source.
 
-import { safeStorage } from '../../storage';
-import { createEmitter } from '../emitter';
+import { safeStorage } from '../storage';
+import { createEmitter } from './emitter';
 
 export interface UrlStoredEmitterOptions<T> {
   /** localStorage key. */

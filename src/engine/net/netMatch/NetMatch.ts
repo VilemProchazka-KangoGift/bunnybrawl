@@ -31,6 +31,7 @@ import { MessageRouter } from './MessageRouter';
 import { HostLoop } from './HostLoop';
 import { GuestLoop } from './GuestLoop';
 import type { NetMatchConfig } from './types';
+import { isInputEchoEnabled } from '../inputEchoFlag';
 
 export type { NetMatchConfig } from './types';
 
@@ -155,10 +156,8 @@ export class NetMatch {
     this.ctx.interpolation = new EntityInterpolation();
     this.ctx.ownReclaimToken = config.ownReclaimToken ?? null;
     // Input echo: instant visual feedback without position prediction.
-    // Disable with ?noecho URL param.
-    const noEcho = typeof location !== 'undefined'
-      && new URLSearchParams(location.search).has('noecho');
-    this.guestLoop = new GuestLoop(this.ctx, { disableInputEcho: noEcho });
+    // Disable via DevMenu (or legacy ?noecho).
+    this.guestLoop = new GuestLoop(this.ctx, { disableInputEcho: !isInputEchoEnabled() });
   }
 
   /** Start the network match. */

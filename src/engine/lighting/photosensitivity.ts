@@ -9,7 +9,7 @@
 // URL: ?photosensitivity=on|off (overrides storage)
 // Storage: carrotroyale_photosensitivity ('on'/'off' — matches lighting kill-switch convention)
 
-import { createUrlStoredEmitter } from './urlStoredEmitter';
+import { createUrlStoredEmitter } from '../urlStoredEmitter';
 
 function parse(raw: string): boolean | null {
   if (raw === 'on' || raw === '1') return true;

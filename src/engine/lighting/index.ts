@@ -5,7 +5,7 @@
 // valve plus regression-test hook (every L*+ pillar must produce a clean
 // downgrade when the toggle is set).
 
-import { createUrlStoredEmitter } from './urlStoredEmitter';
+import { createUrlStoredEmitter } from '../urlStoredEmitter';
 
 function parse(raw: string): boolean | null {
   if (raw === 'on' || raw === '1') return true;
