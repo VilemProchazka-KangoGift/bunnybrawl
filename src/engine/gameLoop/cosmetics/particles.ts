@@ -100,7 +100,7 @@ export function spawnGoreParticles(
 }
 
 export function spawnConfetti(
-  confetti: ConfettiParticle[],
+  confetti: ConfettiParticle[], freeList: ConfettiParticle[],
   victim: Player,
 ): void {
   const cx = victim.x + victim.width / 2;
@@ -109,19 +109,26 @@ export function spawnConfetti(
     const angle = Math.random() * Math.PI * 2;
     const speed = 60 + Math.random() * 190;
     const life = CONFETTI_LIFE_MIN + Math.random() * (CONFETTI_LIFE_MAX - CONFETTI_LIFE_MIN);
-    confetti.push({
-      x: cx + (Math.random() - 0.5) * 10,
-      y: cy + (Math.random() - 0.5) * 10,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed - 80,
-      life, maxLife: life,
-      size: 3 + Math.random() * 4,
-      color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
-      shape: CONFETTI_SHAPES[Math.floor(Math.random() * CONFETTI_SHAPES.length)],
-      rotation: Math.random() * Math.PI * 2,
-      rotationSpeed: (Math.random() - 0.5) * 10,
-      flutter: Math.random() * Math.PI * 2,
-    });
+    const x = cx + (Math.random() - 0.5) * 10;
+    const y = cy + (Math.random() - 0.5) * 10;
+    const vx = Math.cos(angle) * speed;
+    const vy = Math.sin(angle) * speed - 80;
+    const size = 3 + Math.random() * 4;
+    const color = CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)];
+    const shape = CONFETTI_SHAPES[Math.floor(Math.random() * CONFETTI_SHAPES.length)];
+    const rotation = Math.random() * Math.PI * 2;
+    const rotationSpeed = (Math.random() - 0.5) * 10;
+    const flutter = Math.random() * Math.PI * 2;
+    const r = freeList.pop();
+    if (r) {
+      r.x = x; r.y = y; r.vx = vx; r.vy = vy;
+      r.life = life; r.maxLife = life; r.size = size;
+      r.color = color; r.shape = shape;
+      r.rotation = rotation; r.rotationSpeed = rotationSpeed; r.flutter = flutter;
+      confetti.push(r);
+    } else {
+      confetti.push({ x, y, vx, vy, life, maxLife: life, size, color, shape, rotation, rotationSpeed, flutter });
+    }
   }
 }
 
@@ -189,14 +196,19 @@ export function updateParticles(
   }
 }
 
+/** Cap on the recycled confetti pool — matches the per-kill CONFETTI_COUNT × ~5
+ *  kills of headroom, beyond which dropped confetti go to GC instead. */
+const CONFETTI_FREELIST_CAP = 120;
+
 export function updateConfetti(
-  confetti: ConfettiParticle[],
+  confetti: ConfettiParticle[], freeList: ConfettiParticle[],
   timeElapsed: number, dt: number,
 ): void {
   for (let i = confetti.length - 1; i >= 0; i--) {
     const c = confetti[i];
     c.life -= dt;
     if (c.life <= 0) {
+      if (freeList.length < CONFETTI_FREELIST_CAP) freeList.push(c);
       swapRemove(confetti, i);
       continue;
     }

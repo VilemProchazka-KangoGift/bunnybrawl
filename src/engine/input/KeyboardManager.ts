@@ -1,5 +1,5 @@
 // src/engine/input/KeyboardManager.ts
-import type { CharacterSlot, KeyBindings } from '../types';
+import type { CharacterSlot, InputState, KeyBindings } from '../types';
 
 export const KEY_BINDINGS: Record<CharacterSlot, KeyBindings> = {
   P1: { left: 'a', right: 'd', jump: 'w', down: 's' },
@@ -20,6 +20,16 @@ const BINDING_ENTRIES = Object.entries(KEY_BINDINGS) as [CharacterSlot, KeyBindi
 export class KeyboardManager {
   private keys: Set<string> = new Set();
   private jumpPressed: Map<CharacterSlot, boolean> = new Map();
+  /** Per-slot output scratches reused across reads. Each slot's InputState is
+   *  written in place by `readSlot`; the merged `readAny` writes its own. */
+  private readonly _slotInputs: Record<CharacterSlot, InputState> = {
+    P1: { left: false, right: false, jump: false, down: false },
+    P2: { left: false, right: false, jump: false, down: false },
+    P3: { left: false, right: false, jump: false, down: false },
+    P4: { left: false, right: false, jump: false, down: false },
+    P5: { left: false, right: false, jump: false, down: false },
+  };
+  private readonly _anyInput: InputState = { left: false, right: false, jump: false, down: false };
 
   private readonly _onKeyDown = (e: KeyboardEvent): void => {
     e.preventDefault();
@@ -55,22 +65,24 @@ export class KeyboardManager {
     return this.keys.size > 0;
   }
 
-  /** Read pressed-key state for a slot. Used by KeyboardInput.getAction(). */
-  readSlot(slot: CharacterSlot): { left: boolean; right: boolean; jump: boolean; down: boolean } {
+  /** Read pressed-key state for a slot. Used by KeyboardInput.getAction().
+   *  Returns a per-slot stable scratch — caller must consume synchronously. */
+  readSlot(slot: CharacterSlot): InputState {
     const b = KEY_BINDINGS[slot];
     const jumpHeld = this.keys.has(b.jump);
     const jumpEdge = jumpHeld && !this.jumpPressed.get(slot);
     if (jumpEdge) this.jumpPressed.set(slot, true);
-    return {
-      left: this.keys.has(b.left),
-      right: this.keys.has(b.right),
-      jump: jumpEdge,
-      down: this.keys.has(b.down),
-    };
+    const out = this._slotInputs[slot];
+    out.left = this.keys.has(b.left);
+    out.right = this.keys.has(b.right);
+    out.jump = jumpEdge;
+    out.down = this.keys.has(b.down);
+    return out;
   }
 
-  /** Read input from ALL key bindings merged (for online play — any keys work). */
-  readAny(): { left: boolean; right: boolean; jump: boolean; down: boolean } {
+  /** Read input from ALL key bindings merged (for online play — any keys work).
+   *  Returns a shared scratch — caller must consume synchronously. */
+  readAny(): InputState {
     let left = false, right = false, jump = false, down = false;
     for (const [slot, b] of BINDING_ENTRIES) {
       if (this.keys.has(b.left)) left = true;
@@ -81,7 +93,9 @@ export class KeyboardManager {
         this.jumpPressed.set(slot, true);
       }
     }
-    return { left, right, jump, down };
+    const out = this._anyInput;
+    out.left = left; out.right = right; out.jump = jump; out.down = down;
+    return out;
   }
 
   private normalizeKey(key: string): string {

@@ -9,14 +9,26 @@ import { aabbOverlap } from './physics';
 const f = Math.fround;
 import { getCharacterSplatShape } from './characters';
 
+/** Reused arrays so checkStomps doesn't allocate empty arrays at the top of
+ *  every fixedUpdate. Callers consume the result synchronously (push into
+ *  state.killFeed, etc.) and don't store references across ticks. */
+const _splatMarksResult: SplatMark[] = [];
+const _killFeedResult: KillFeedEntry[] = [];
+const _checkStompsResult: { splatMarks: SplatMark[]; killFeedEntries: KillFeedEntry[] } = {
+  splatMarks: _splatMarksResult,
+  killFeedEntries: _killFeedResult,
+};
+
 export function checkStomps(
   players: Player[],
   _spawnPoints: SpawnPoint[],
   timeElapsed: number,
   mods?: GameMods,
 ): { splatMarks: SplatMark[]; killFeedEntries: KillFeedEntry[] } {
-  const splatMarks: SplatMark[] = [];
-  const killFeedEntries: KillFeedEntry[] = [];
+  _splatMarksResult.length = 0;
+  _killFeedResult.length = 0;
+  const splatMarks = _splatMarksResult;
+  const killFeedEntries = _killFeedResult;
 
   // NETCODE CONTRACT: Iteration order must be deterministic across peers.
   // players[] is initialized from activePlayers at match start (same order on all peers)
@@ -50,7 +62,7 @@ export function checkStomps(
     }
   }
 
-  return { splatMarks, killFeedEntries };
+  return _checkStompsResult;
 }
 
 export function isStomping(attacker: Player, victim: Player): boolean {

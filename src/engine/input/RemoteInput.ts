@@ -23,12 +23,22 @@ const NO_INPUT: InputState = { left: false, right: false, jump: false, down: fal
  */
 export class RemoteInput implements PlayerInput {
   readonly slot: PlayerSlot;
+  /** Per-instance fallback scratch returned when ctx.networkInputs has no entry
+   *  for this slot. Caller consumes synchronously — same contract as KeyboardInput. */
+  private readonly _fallback: InputState = { left: false, right: false, jump: false, down: false };
 
   constructor(slot: PlayerSlot) {
     this.slot = slot;
   }
 
   getAction(_state: Readonly<MatchState>, ctx?: PlayerInputContext): InputState {
-    return ctx?.networkInputs?.get(this.slot) ?? { ...NO_INPUT };
+    const entry = ctx?.networkInputs?.get(this.slot);
+    if (entry) return entry;
+    // Ensure stale fallback contents from a prior tick can't leak through if
+    // anyone mutated it — re-zero on every miss.
+    const f_ = this._fallback;
+    f_.left = NO_INPUT.left; f_.right = NO_INPUT.right;
+    f_.jump = NO_INPUT.jump; f_.down = NO_INPUT.down;
+    return f_;
   }
 }

@@ -380,11 +380,19 @@ export class EngineWorkerProxy {
    *  feed the input fairness ring before posting the per-tick batch. */
   getInputAny(): InputState {
     const kb = this.keyboardManager.readAny();
-    const touchPlayer = this.touchSlot
-      ? this.mirrorState?.players.find((p) => p.id === this.touchSlot)
-      : null;
-    return mergeKeyboardTouchInput(kb, this.touchInput, touchPlayer?.state === 'airborne');
+    let airborne = false;
+    if (this.touchSlot && this.mirrorState) {
+      const players = this.mirrorState.players;
+      for (let i = 0; i < players.length; i++) {
+        if (players[i].id === this.touchSlot) {
+          airborne = players[i].state === 'airborne';
+          break;
+        }
+      }
+    }
+    return mergeKeyboardTouchInput(kb, this.touchInput, airborne, this._inputAnyScratch);
   }
+  private readonly _inputAnyScratch: InputState = { left: false, right: false, jump: false, down: false };
 
   fixedUpdate(_dt: number, _networkInputs?: Map<string, InputState>): void { /* worker drives */ }
   tickCosmetic(_dt: number): void { /* worker drives */ }

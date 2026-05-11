@@ -393,9 +393,17 @@ export class Simulator {
       this._mutCtx.networkInputs = (ctxOrNetworkInputs as PlayerInputContext).networkInputs;
     }
     // Pre-compute airborne for the touch slot. Other slots ignore ctx.airborne.
+    // Indexed loop avoids the per-tick `find(p => ...)` closure allocation.
     if (this._touchSlot !== null) {
-      const tp = this._state.players.find(p => p.id === this._touchSlot);
-      this._mutCtx.airborne = tp?.state === 'airborne';
+      let tpAirborne = false;
+      const players = this._state.players;
+      for (let i = 0; i < players.length; i++) {
+        if (players[i].id === this._touchSlot) {
+          tpAirborne = players[i].state === 'airborne';
+          break;
+        }
+      }
+      this._mutCtx.airborne = tpAirborne;
     } else {
       this._mutCtx.airborne = undefined;
     }

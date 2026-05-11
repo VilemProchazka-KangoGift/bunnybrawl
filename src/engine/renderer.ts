@@ -1175,7 +1175,8 @@ export class Renderer implements IRenderer {
     reactive?: import('./gameLoop/cosmetics/reactiveDecorations').ReactiveRenderArg,
     wildlife?: import('./gameLoop/cosmetics/wildlife').WildlifeRenderArg,
   ): void {
-    perfTrace.measure('renderFrame', () => {
+    const tRender = perfTrace.begin('renderFrame');
+    try {
       const ctx = this.fgCtx;
       ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
@@ -1647,7 +1648,9 @@ export class Renderer implements IRenderer {
         }
       }
       perfTrace.end('render.overlay', overlayStart);
-    });
+    } finally {
+      perfTrace.end('renderFrame', tRender);
+    }
   }
 
   /**
