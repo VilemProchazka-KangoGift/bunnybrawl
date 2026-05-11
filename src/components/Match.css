@@ -15,6 +15,14 @@
   position: absolute;
   top: 0;
   left: 0;
+  /* Lock the displayed size to logical 1280×720 so high-DPI backing-store
+   * growth (intrinsic bumped to 1280×scale via applyRenderScaleToCanvas)
+   * can't enlarge the visible canvas. Worker-mode `transferControlToOffscreen`
+   * resizes the OffscreenCanvas bitmap, which syncs to the main element's
+   * intrinsic dims — without these CSS dims pinned, the canvas displays at
+   * the bumped intrinsic and clips inside GameScaler's 1280×720 container. */
+  width: 1280px;
+  height: 720px;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
 }
