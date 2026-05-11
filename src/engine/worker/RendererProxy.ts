@@ -211,7 +211,13 @@ export class RendererProxy implements IRenderer {
       const bgNightOff = opts.bgNightCanvas?.transferControlToOffscreen() ?? null;
       const lightOff = opts.lightCanvas?.transferControlToOffscreen() ?? null;
 
-      const particlesSab = createParticlesSab();
+      // Bench gate: `?sabParticles=off` forces the postMessage particles
+      // fallback even when SAB is available, so the SAB-vs-fallback paths
+      // can be A/B'd in `npm run perf`. No storage; URL-only.
+      const sabParticlesDisabled =
+        typeof window !== 'undefined'
+        && new URLSearchParams(window.location.search).get('sabParticles') === 'off';
+      const particlesSab = sabParticlesDisabled ? null : createParticlesSab();
       if (particlesSab) this.particleSabViews = makeViews(particlesSab);
 
       const init: HostInitMsg = {
