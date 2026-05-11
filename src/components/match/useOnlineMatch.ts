@@ -107,11 +107,19 @@ export function useOnlineMatch(p: UseOnlineMatchParams): void {
   const lifecycleRef = useRef<{
     teardown: (() => void) | null;
     timer: ReturnType<typeof setTimeout> | null;
-    deps: { activePlayers: typeof activePlayers; matchSettings: typeof matchSettings } | null;
+    deps: { activePlayers: typeof activePlayers } | null;
   }>({ teardown: null, timer: null, deps: null });
+
+  // matchSettings is consumed once at construction. Host arena swap calls
+  // `setMatchSettings({arenaId})` which would otherwise re-run this effect
+  // and remount NetMatch (dropping transport wiring) AND attempt a second
+  // transferControlToOffscreen on worker canvases (permanent detach).
+  const matchSettingsRef = useRef(matchSettings);
+  matchSettingsRef.current = matchSettings;
 
   useEffect(() => {
     if (!isOnline) return;
+    const matchSettings = matchSettingsRef.current;
 
     // StrictMode-safe deferred teardown: cancel pending timer if this is
     // a remount with unchanged deps, reuse the existing NetMatch.
@@ -120,8 +128,7 @@ export function useOnlineMatch(p: UseOnlineMatchParams): void {
       lifecycleRef.current.timer = null;
       const prev = lifecycleRef.current.deps;
       const depsUnchanged = prev !== null
-        && prev.activePlayers === activePlayers
-        && prev.matchSettings === matchSettings;
+        && prev.activePlayers === activePlayers;
       if (depsUnchanged) {
         const reusedTeardown = lifecycleRef.current.teardown;
         return () => {
@@ -401,7 +408,7 @@ export function useOnlineMatch(p: UseOnlineMatchParams): void {
       clearTimer(disconnectDelayRef);
     };
     lifecycleRef.current.teardown = teardown;
-    lifecycleRef.current.deps = { activePlayers, matchSettings };
+    lifecycleRef.current.deps = { activePlayers };
     return () => {
       // Defer for StrictMode safety. The remount will cancel this timer
       // before it fires; real unmount lets it fire.
@@ -413,5 +420,5 @@ export function useOnlineMatch(p: UseOnlineMatchParams): void {
       }, 0);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activePlayers, matchSettings, setMatchResult, isOnline]);
+  }, [activePlayers, setMatchResult, isOnline]);
 }

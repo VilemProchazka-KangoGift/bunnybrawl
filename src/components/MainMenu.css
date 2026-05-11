@@ -989,6 +989,20 @@
    * its rounded corners. */
   max-height: 620px;
   overflow-y: auto;
+  /* Force white throughout — the modal sits on a dark panel and ambient
+   * styles vary between modes (e.g. `.mod-desc` is 0.6-alpha white). */
+  color: #fff;
+}
+
+.dev-menu-modal .mod-desc,
+.dev-menu-modal .dev-menu-hint {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.dev-menu-modal .mods-title,
+.dev-menu-modal .mod-name,
+.dev-menu-modal .dev-section-header {
+  color: #fff;
 }
 
 .dev-menu-hint {
