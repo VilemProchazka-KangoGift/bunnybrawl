@@ -95,4 +95,4 @@ export const hedgehog: CharacterPack = {
   bodyEllipse: (cx, yOff, w, h) => ({ cx: cx + 2, cy: yOff + h * 0.55, rx: w * 0.34, ry: h * 0.32 }),
   noHighlight: true,
   drawSprite, drawGib,
-};;
+};

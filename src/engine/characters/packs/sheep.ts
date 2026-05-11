@@ -63,4 +63,4 @@ export const sheep: CharacterPack = {
   },
   bodyEllipse: (cx, yOff, _w, h) => ({ cx, cy: yOff + h * 0.46, rx: 12, ry: h * 0.18 }),
   drawSprite, drawGib,
-};;
+};

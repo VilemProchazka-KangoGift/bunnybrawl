@@ -65,4 +65,4 @@ export const rhino: CharacterPack = {
   legStyle: { shape: 'wide', footStyle: 'round', legWidth: 6, legHeight: 4 },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.55, rx: w * 0.44, ry: h * 0.4 }),
   drawSprite, drawGib,
-};;
+};

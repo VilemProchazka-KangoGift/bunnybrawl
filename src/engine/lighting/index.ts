@@ -5,20 +5,13 @@
 // valve plus regression-test hook (every L*+ pillar must produce a clean
 // downgrade when the toggle is set).
 
-import { createUrlStoredEmitter } from '../urlStoredEmitter';
-
-function parse(raw: string): boolean | null {
-  if (raw === 'on' || raw === '1') return true;
-  if (raw === 'off' || raw === '0') return false;
-  return null;
-}
+import { createUrlStoredEmitter, BOOL_ON_OFF } from '../urlStoredEmitter';
 
 const emitter = createUrlStoredEmitter<boolean>({
   storageKey: 'carrotroyale_lighting',
   paramName: 'lighting',
   defaultValue: true,
-  parse,
-  serialize: (enabled) => enabled ? 'on' : 'off',
+  ...BOOL_ON_OFF,
 });
 
 export const isLightingEnabled = emitter.get;

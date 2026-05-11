@@ -54,17 +54,15 @@ interface ToggleRowProps {
   desc: string;
   checked: boolean;
   onChange: (v: boolean) => void;
-  disabled?: boolean;
 }
 
-function ToggleRow({ testId, label, desc, checked, onChange, disabled }: ToggleRowProps) {
+function ToggleRow({ testId, label, desc, checked, onChange }: ToggleRowProps) {
   return (
-    <div className="mod-row" style={disabled ? { opacity: 0.5 } : undefined}>
+    <div className="mod-row">
       <label className="mod-toggle">
         <input
           type="checkbox"
           checked={checked}
-          disabled={disabled}
           onChange={(e) => onChange(e.target.checked)}
           data-testid={testId}
         />
@@ -102,39 +100,28 @@ function NumberRow({ testId, label, desc, value, min, max, step, onChange }: Num
         min={min}
         max={max}
         step={step}
-        onChange={(e) => {
-          const v = Number.parseFloat(e.target.value);
-          onChange(Number.isFinite(v) ? v : 0);
-        }}
+        // Emitter's `parse` clamps invalid input to the default — no need to
+        // pre-validate here.
+        onChange={(e) => onChange(Number.parseFloat(e.target.value))}
         data-testid={testId}
       />
     </div>
   );
 }
 
+// Getters for the reload-on-close flag set. Snapshot taken on mount, compared
+// on close — any drift triggers a reload so boot-only flags take effect.
+const RELOAD_GETTERS = [
+  isSimWorkerEnabled, isInputEchoEnabled, isTurnEnabled, isSabDemoEnabled,
+  getSimLatency, getSimJitter, getSimLoss,
+] as const;
+
 export function DevMenu({ onClose }: DevMenuProps) {
   const [, rerender] = useReducer((x: number) => x + 1, 0);
-
-  // Snapshot reload-required flags at mount. If any differ at close, reload.
-  const initialBoot = useRef({
-    simWorker: isSimWorkerEnabled(),
-    inputEcho: isInputEchoEnabled(),
-    turn: isTurnEnabled(),
-    sabDemo: isSabDemoEnabled(),
-    simLatency: getSimLatency(),
-    simJitter: getSimJitter(),
-    simLoss: getSimLoss(),
-  });
+  const initialSnapshot = useRef(RELOAD_GETTERS.map(g => g()));
 
   const closeAndMaybeReload = () => {
-    const b = initialBoot.current;
-    const dirty = b.simWorker !== isSimWorkerEnabled()
-      || b.inputEcho !== isInputEchoEnabled()
-      || b.turn !== isTurnEnabled()
-      || b.sabDemo !== isSabDemoEnabled()
-      || b.simLatency !== getSimLatency()
-      || b.simJitter !== getSimJitter()
-      || b.simLoss !== getSimLoss();
+    const dirty = RELOAD_GETTERS.some((g, i) => g() !== initialSnapshot.current[i]);
     onClose();
     if (dirty) location.reload();
   };
@@ -148,7 +135,7 @@ export function DevMenu({ onClose }: DevMenuProps) {
     <div className="mods-overlay" onClick={closeAndMaybeReload}>
       <div className="mods-modal dev-menu-modal" onClick={e => e.stopPropagation()} data-testid="dev-menu">
         <h2 className="mods-title">Dev Menu</h2>
-        <p className="help-text" style={{ opacity: 0.7, marginBottom: 12 }}>
+        <p className="dev-menu-hint">
           Mirrors every <code>?param</code> debug flag. Press <kbd>`</kbd> to open/close.
           Some flags require a page reload — closing the modal will reload automatically.
         </p>

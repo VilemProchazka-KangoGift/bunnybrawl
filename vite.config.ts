@@ -6,11 +6,10 @@ import { fileURLToPath } from 'url'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-/** Worker-only alias for `howler` — defense in depth. Since the
- *  `characters/builtinSounds.ts` split, no worker-bound module imports
- *  `howler` (visual packs no longer carry `createSound`). The alias
- *  remains so that any future stray import is silently neutralized
- *  rather than crashing the worker with `HowlerGlobal is not defined`. */
+/** Worker-only alias for `howler`. Defense in depth — no worker-bound
+ *  module imports howler today; the alias neutralizes any future stray
+ *  import that would otherwise crash the worker with `HowlerGlobal is
+ *  not defined`. */
 const howlerStubPath = path.resolve(__dirname, 'src/engine/worker/howlerStub.ts')
 
 /** Sim-in-worker mode (?simWorker=on) hosts the entire GameLoop inside the
@@ -38,9 +37,6 @@ const STUB_BY_RESOLVED: Record<string, string> = {
   [path.resolve(__dirname, 'src/engine/haptics')]: hapticsStubPath,
   [path.resolve(__dirname, 'src/engine/input/KeyboardManager')]: keyboardManagerStubPath,
   [path.resolve(__dirname, 'src/engine/touchDetect')]: touchDetectStubPath,
-  // (Removed: `audio/howlShim` alias. The shim file is gone — character
-  // voice factories live in `characters/builtinSounds.ts`, imported only
-  // by App.tsx on main, never reached from the worker bundle.)
 }
 
 function stripExt(p: string): string {

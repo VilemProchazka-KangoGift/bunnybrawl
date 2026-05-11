@@ -86,4 +86,4 @@ export const owl: CharacterPack = {
   },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.5, rx: w * 0.4, ry: h * 0.42 }),
   drawSprite, drawGib,
-};;
+};

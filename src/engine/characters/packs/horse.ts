@@ -98,4 +98,4 @@ export const horse: CharacterPack = {
   legStyle: { shape: 'tapered', footStyle: 'hoof', legHeight: 5, legWidth: 5 },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.52, rx: w * 0.38, ry: h * 0.42 }),
   drawSprite, drawGib,
-};;
+};

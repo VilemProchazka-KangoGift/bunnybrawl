@@ -82,4 +82,4 @@ export const frog: CharacterPack = {
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.55, rx: w * 0.42, ry: h * 0.35 }),
   idleActions: { custom: [blinkAction] },
   drawSprite, drawGib,
-};;
+};

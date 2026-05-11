@@ -25,7 +25,24 @@ export interface UrlStoredEmitterOptions<T> {
    *  `String(true)` returns `'true'` which most `parse` functions reject,
    *  silently corrupting state on the next page load. */
   serialize: (value: T) => string;
+  /** Optional legacy bare-flag alias: if URL contains `?<legacyDisableParam>`
+   *  (with no value), force the emitter to `false`. Only meaningful for
+   *  `T = boolean`. Replaces the old `?noecho`/`?noturn`/`?sabDemo` shapes
+   *  without each caller redoing window/URLSearchParams plumbing. */
+  legacyDisableParam?: string;
 }
+
+/** Shared parser+serializer pair for on/off URL flags. Reused by 5+ flag
+ *  modules (`?lighting`, `?photosensitivity`, `?inputEcho`, `?turn`, …). */
+export const BOOL_ON_OFF: {
+  parse: (raw: string) => boolean | null;
+  serialize: (v: boolean) => string;
+} = {
+  parse: (raw) => raw === 'on' || raw === '1' ? true
+                : raw === 'off' || raw === '0' ? false
+                : null,
+  serialize: (v) => v ? 'on' : 'off',
+};
 
 export interface UrlStoredEmitter<T> {
   /** Read current value. */
@@ -39,7 +56,7 @@ export interface UrlStoredEmitter<T> {
 }
 
 export function createUrlStoredEmitter<T>(opts: UrlStoredEmitterOptions<T>): UrlStoredEmitter<T> {
-  const { storageKey, paramName, defaultValue, parse, serialize } = opts;
+  const { storageKey, paramName, defaultValue, parse, serialize, legacyDisableParam } = opts;
   const value = createEmitter<T>(defaultValue);
   /** Round-trip via serialize/parse so callers' invalid inputs (out-of-range
    *  numbers, garbage strings) end up as the default rather than corrupting
@@ -60,8 +77,12 @@ export function createUrlStoredEmitter<T>(opts: UrlStoredEmitterOptions<T>): Url
     subscribe: value.subscribe,
     set(v: T): void {
       const normalized = normalize(v);
+      const prev = value.get();
       value.set(normalized);
-      safeStorage.set(storageKey, serialize(normalized));
+      // Skip the localStorage write when the new value matches the prior
+      // one — set() lands on the synchronous DOM write path and DevMenu
+      // toggles can fire many times during a single user click.
+      if (!Object.is(prev, normalized)) safeStorage.set(storageKey, serialize(normalized));
     },
     init(searchString: string): void {
       const params = new URLSearchParams(searchString);
@@ -71,14 +92,18 @@ export function createUrlStoredEmitter<T>(opts: UrlStoredEmitterOptions<T>): Url
         // otherwise default. NEVER fall through to storage when the user
         // supplied a URL param — a typo shouldn't silently inherit prior state.
         setSilentIfDefault(parse(urlRaw) ?? defaultValue);
-        return;
+      } else {
+        const stored = safeStorage.get(storageKey);
+        const parsed = stored !== null ? parse(stored) : null;
+        setSilentIfDefault(parsed !== null ? parsed : defaultValue);
       }
-      const stored = safeStorage.get(storageKey);
-      if (stored !== null) {
-        const parsed = parse(stored);
-        if (parsed !== null) { setSilentIfDefault(parsed); return; }
+      // Legacy bare-flag alias: e.g. `?noecho` forces off. Applied after
+      // the primary URL/storage resolution so the flag wins regardless of
+      // what they said. Boolean-only by construction; the cast is the
+      // narrowest workaround for the generic `T` signature.
+      if (legacyDisableParam && params.has(legacyDisableParam)) {
+        setSilentIfDefault(false as unknown as T);
       }
-      setSilentIfDefault(defaultValue);
     },
   };
 }

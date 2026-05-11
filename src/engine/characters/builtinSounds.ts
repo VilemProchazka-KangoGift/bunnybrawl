@@ -1,16 +1,6 @@
-/**
- * Side-effect manifest. Importing this module triggers each
- * `packs/<name>.audio.ts` to run its top-level
- * `registerCharacterVoice('<Name>', () => new Howl(...))` call,
- * populating the audio module's voice registry.
- *
- * MAIN-ONLY — every imported file pulls Howler into the bundle.
- * `App.tsx` imports this once at startup; the sim-in-worker bundle
- * never does, so Howler never enters the worker module graph.
- *
- * Each pack's audio file owns its own character name; this file is
- * just a list of side-effect imports.
- */
+// Side-effect manifest — each import registers a character voice factory.
+// MAIN-ONLY; the sim-in-worker bundle never imports this so Howler stays
+// out of the worker module graph.
 
 import './packs/axolotl.audio';
 import './packs/bear.audio';

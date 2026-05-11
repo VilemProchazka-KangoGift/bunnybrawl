@@ -120,4 +120,4 @@ export const cat: CharacterPack = {
   legStyle: { shape: 'tapered', footStyle: 'paw' },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.55, rx: w * 0.42, ry: h * 0.36 }),
   drawSprite, drawGib,
-};;
+};

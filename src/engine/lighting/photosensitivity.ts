@@ -9,20 +9,13 @@
 // URL: ?photosensitivity=on|off (overrides storage)
 // Storage: carrotroyale_photosensitivity ('on'/'off' — matches lighting kill-switch convention)
 
-import { createUrlStoredEmitter } from '../urlStoredEmitter';
-
-function parse(raw: string): boolean | null {
-  if (raw === 'on' || raw === '1') return true;
-  if (raw === 'off' || raw === '0') return false;
-  return null;
-}
+import { createUrlStoredEmitter, BOOL_ON_OFF } from '../urlStoredEmitter';
 
 const emitter = createUrlStoredEmitter<boolean>({
   storageKey: 'carrotroyale_photosensitivity',
   paramName: 'photosensitivity',
   defaultValue: false,
-  parse,
-  serialize: (v) => v ? 'on' : 'off',
+  ...BOOL_ON_OFF,
 });
 
 export const getPhotosensitivity = emitter.get;

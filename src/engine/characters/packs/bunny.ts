@@ -51,4 +51,4 @@ export const bunny: CharacterPack = {
   legStyle: { shape: 'rounded', footStyle: 'paw', footHeight: 2 },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.55, rx: w * 0.4, ry: h * 0.4 }),
   drawSprite, drawGib,
-};;
+};

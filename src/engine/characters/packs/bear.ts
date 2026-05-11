@@ -50,4 +50,4 @@ export const bear: CharacterPack = {
   legStyle: { shape: 'rounded', footStyle: 'round', legWidth: 6, legHeight: 4 },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.5, rx: w * 0.42, ry: h * 0.42 }),
   drawSprite, drawGib,
-};;
+};

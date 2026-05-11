@@ -81,4 +81,4 @@ export const chick: CharacterPack = {
   legStyle: { shape: 'stick', footStyle: 'claw', legWidth: 3, legHeight: 4, footWidth: 6, footHeight: 3, footColor: BEAK_COLOR },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.55, rx: w * 0.4, ry: h * 0.4 }),
   drawSprite, drawGib,
-};;
+};

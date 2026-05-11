@@ -77,4 +77,4 @@ export const monkey: CharacterPack = {
   },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.52, rx: w * 0.4, ry: h * 0.4 }),
   drawSprite, drawGib,
-};;
+};

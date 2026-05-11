@@ -73,4 +73,4 @@ export const pig: CharacterPack = {
   legStyle: { shape: 'rounded', footStyle: 'hoof', footColor: '#FFD0D8' },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.55, rx: w * 0.4, ry: h * 0.38 }),
   drawSprite, drawGib,
-};;
+};

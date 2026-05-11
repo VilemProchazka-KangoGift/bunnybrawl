@@ -9,6 +9,7 @@ import { initInputEcho } from './engine/net/inputEchoFlag';
 import { initTurn } from './engine/net/turnFlag';
 import { initNetSimFlags } from './engine/net/netSimFlags';
 import { initSabDemo, isSabDemoEnabled } from './engine/worker/sabDemoFlag';
+import { initSimWorker } from './engine/worker/simWorkerFlag';
 import { safeStorage } from './storage';
 import './i18n';
 import App from './App'
@@ -33,6 +34,7 @@ initInputEcho(window.location.search);
 initTurn(window.location.search);
 initNetSimFlags(window.location.search);
 initSabDemo(window.location.search);
+initSimWorker(window.location.search);
 // Orphaned key from the removed outline-style toggle. One-shot cleanup so the
 // per-user localStorage doesn't accumulate dead values across deploys.
 safeStorage.remove('carrotroyale_outline_style');

@@ -64,4 +64,4 @@ export const fox: CharacterPack = {
   legStyle: { shape: 'tapered', footStyle: 'paw' },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.55, rx: w * 0.38, ry: h * 0.38 }),
   drawSprite, drawGib,
-};;
+};
