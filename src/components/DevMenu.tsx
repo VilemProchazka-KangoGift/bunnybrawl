@@ -15,7 +15,7 @@ import { getBrightness, setBrightness } from '../engine/lighting/brightness';
 import { getPhotosensitivity, setPhotosensitivity } from '../engine/lighting/photosensitivity';
 import { getPerfTier, setPerfTier } from '../engine/lighting/perfTier';
 import type { PerfTier } from '../engine/lighting/types';
-import { isSimWorkerEnabled, setSimWorkerEnabled } from '../engine/worker/simWorkerFlag';
+import { isSimWorkerEnabled, setSimWorkerEnabled, SIM_WORKER_DEV_BLOCKED } from '../engine/worker/simWorkerFlag';
 import { isInputEchoEnabled, setInputEchoEnabled } from '../engine/net/inputEchoFlag';
 import { isTurnEnabled, setTurnEnabled } from '../engine/net/turnFlag';
 import { isSabDemoEnabled, setSabDemoEnabled } from '../engine/worker/sabDemoFlag';
@@ -54,15 +54,17 @@ interface ToggleRowProps {
   desc: string;
   checked: boolean;
   onChange: (v: boolean) => void;
+  disabled?: boolean;
 }
 
-function ToggleRow({ testId, label, desc, checked, onChange }: ToggleRowProps) {
+function ToggleRow({ testId, label, desc, checked, onChange, disabled }: ToggleRowProps) {
   return (
-    <div className="mod-row">
+    <div className="mod-row" style={disabled ? { opacity: 0.5 } : undefined}>
       <label className="mod-toggle">
         <input
           type="checkbox"
           checked={checked}
+          disabled={disabled}
           onChange={(e) => onChange(e.target.checked)}
           data-testid={testId}
         />
@@ -207,8 +209,11 @@ export function DevMenu({ onClose }: DevMenuProps) {
         <ToggleRow
           testId="dev-toggle-simworker"
           label="Sim in worker"
-          desc="Run the full Simulator inside the engine worker (?simWorker=on)."
+          desc={SIM_WORKER_DEV_BLOCKED
+            ? 'Disabled in dev — broken by a worker TLA-ordering bug. Use `npm run build && npm run preview` to test.'
+            : 'Run the full Simulator inside the engine worker (?simWorker=on).'}
           checked={isSimWorkerEnabled()}
+          disabled={SIM_WORKER_DEV_BLOCKED}
           onChange={(v) => { setSimWorkerEnabled(v); rerender(); }}
         />
         <ToggleRow
