@@ -1,19 +1,21 @@
 /**
- * Local-device flag for sim-in-worker mode (the more aggressive offload).
- *
- * `?simWorker=on` causes the worker to host not just the Renderer but the
- * entire Simulator + ParticleSystem + cosmetic systems. Main becomes a
- * thin shell forwarding keyboard inputs and dispatching SFX / match-end /
+ * Sim-in-worker mode — the worker hosts the full GameLoop (Simulator +
+ * ParticleSystem + cosmetic systems + Renderer). Main becomes a thin shell
+ * forwarding keyboard/touch inputs and dispatching SFX / match-end /
  * phase-change events posted back from the worker.
  *
  * Distinct from the renderer-only `worker` flag (workerFlag.ts):
- *   ?worker=on (default ON)        — renderer in worker, sim on main
- *   ?simWorker=on (default OFF)    — renderer + sim in worker
- *   ?worker=off                    — both on main (safe fallback)
+ *   ?simWorker=on (default ON)     — renderer + sim in worker (this flag)
+ *   ?worker=on    (default ON)     — renderer in worker, sim on main
+ *   ?simWorker=off                 — sim falls back to renderer-only worker
+ *   ?worker=off                    — both on main (capability fallback)
  *
- * Local play only — online play stays on the renderer-only path because
- * NetMatch's host/guest loops drive `gameLoop.fixedUpdate` synchronously
- * and a sim-async refactor of NetMatch is out of scope for this experiment.
+ * Default flipped to ON 2026-05-11 after a 4× CPU-throttle bench showed
+ * main-thread profile time drop from 2,590 ms to 716 ms (-72%) on
+ * castle/4-bot/30s. Online play also runs through this path — the Phase 2
+ * netmatch-async refactor (PR #38) wired `EngineWorkerProxy` as
+ * `NetMatchDriver.injectedDriver` so host/guest loops drive the
+ * worker-hosted sim asynchronously.
  */
 
 import { createUrlStoredEmitter, BOOL_ON_OFF } from '../urlStoredEmitter';
@@ -21,7 +23,7 @@ import { createUrlStoredEmitter, BOOL_ON_OFF } from '../urlStoredEmitter';
 const emitter = createUrlStoredEmitter<boolean>({
   storageKey: 'carrotroyale_sim_worker',
   paramName: 'simWorker',
-  defaultValue: false,
+  defaultValue: true,
   ...BOOL_ON_OFF,
 });
 

@@ -197,9 +197,9 @@ export function useOnlineMatch(p: UseOnlineMatchParams): void {
     }
 
     // Worker offload paths, mirroring useLocalMatch's three-way branch.
-    //   ?simWorker=on → EngineWorkerProxy hosts the FULL simulation in
-    //     the worker. NetMatch adopts the proxy as its driver via
-    //     `injectedDriver`. Phase 2 — both host and guest.
+    //   ?simWorker=on (default) → EngineWorkerProxy hosts the FULL
+    //     simulation in the worker. NetMatch adopts the proxy as its
+    //     driver via `injectedDriver`. Phase 2 — both host and guest.
     //   ?worker=on (default) → renderer-only RendererProxy. Sim stays
     //     on main; only renderer.* messages cross the wire. Phase 1.
     //   neither → main-thread Renderer + main-thread sim. Capability

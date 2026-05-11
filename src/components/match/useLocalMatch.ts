@@ -227,11 +227,11 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
     setLocalTasksDone(false);
 
     // Worker offload: two stacked flags govern this.
-    //   ?simWorker=on (default off) → the worker hosts the FULL GameLoop
+    //   ?simWorker=on (default on)  → the worker hosts the FULL GameLoop
     //     (sim + cosmetic + render). Main is a thin keyboard/audio shell.
-    //     Local play only — online play has too much NetMatch coupling.
     //   ?worker=on    (default on)  → renderer-only worker. Sim stays on
-    //     main; per-frame state ships to worker for paint.
+    //     main; per-frame state ships to worker for paint. Used when
+    //     simWorker=off but worker=on.
     // Both off → pure main-thread render path (the safe baseline).
     const useSimWorker = isSimWorkerEnabled();
     if (useSimWorker) {
