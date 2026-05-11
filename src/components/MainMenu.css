@@ -983,7 +983,11 @@
   text-align: left;
   min-width: 440px;
   max-width: 540px;
-  max-height: 80vh;
+  /* Bounded by the menu-content gray card (min-height 660px in the 720px
+   * logical viewport). 620px leaves a ~20px buffer above and below the
+   * modal so it visually sits inside the card rather than spilling past
+   * its rounded corners. */
+  max-height: 620px;
   overflow-y: auto;
 }
 
