@@ -42,6 +42,22 @@ async function switchArenaAndAssertPlaying(page: Page, query: string): Promise<v
     { timeout: 12000 },
   );
   await expect(page.locator('.match-loading-overlay')).toHaveCount(0);
+
+  // Sim must actually tick — pause-menu→change-arena flow used to skip
+  // `loop.resume()`, leaving the new match frozen with `countdown=3` on
+  // screen forever. timeElapsed only advances inside fixedUpdate. The
+  // sim-worker mirrors state at 5Hz, so let one mirror cycle settle
+  // before sampling.
+  type Probe = { __bunnyTest?: { state?: () => { timeElapsed?: number } } };
+  await page.waitForTimeout(300);
+  const tStart = await page.evaluate(() =>
+    (window as unknown as Probe).__bunnyTest?.state?.()?.timeElapsed ?? 0,
+  );
+  await page.waitForTimeout(1500);
+  const tEnd = await page.evaluate(() =>
+    (window as unknown as Probe).__bunnyTest?.state?.()?.timeElapsed ?? 0,
+  );
+  expect(tEnd - tStart, 'sim must advance after arena swap').toBeGreaterThan(0.5);
 }
 
 test('arena switch mid-match reaches phase=playing (renderer-only worker — default)', async ({ page }) => {

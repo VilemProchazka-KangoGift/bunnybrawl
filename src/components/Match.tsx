@@ -142,6 +142,11 @@ export function Match() {
     lastResolvedArenaId = newArenaId;
     setCurrentArenaId(newArenaId);
     setMatchSettings({ arenaId: newArenaId });
+    // Arena swap is triggered from the pause menu, which means the loop is
+    // currently paused. Without resume() the new match's countdown freezes
+    // at the start value and physics never ticks.
+    if (netMatchRef.current) netMatchRef.current.resume();
+    else loop?.resume();
     setPaused(false);
     setShowLevelSelect(false);
     // Online: notify guest of arena change (the guest's SETTINGS_SYNC handler
