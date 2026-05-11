@@ -4,7 +4,6 @@ import type { ParticleSystem } from './ParticleSystem';
 import { PlayerSfxCooldowns } from './sfx';
 import {
   detectPlayerTransitions,
-  snapshotPlayerCosmeticState,
 } from './playerTransitions';
 import type { PrevPlayerCosmeticState, TransitionCallbacks } from './playerTransitions';
 import { getSlowDevice } from '../../perfFlags';
@@ -17,8 +16,46 @@ export class PlayerTransitionSystem implements CosmeticSystem {
   private playAnimal: (name: string) => void;
   private particleSystem: ParticleSystem;
 
+  /** Per-slot pool of PrevPlayerCosmeticState scratches. The tracker stores
+   *  these references as its prev-baseline, and the snapshot fn mutates them
+   *  in place rather than allocating fresh objects every detect. Pre-pool sits
+   *  on the system, not on the tracker, so the tracker stays single-source-of-
+   *  truth-keyed and the pool key matches the tracker key (slot). */
+  private readonly _scratchPrev: Map<PlayerSlot, PrevPlayerCosmeticState> = new Map();
+  private readonly _snapshotPooled = (player: Player): PrevPlayerCosmeticState => {
+    let p = this._scratchPrev.get(player.id);
+    if (!p) {
+      p = {
+        state: 'idle', vx: 0, vy: 0, score: 0,
+        fatTimer: 0, sideSquash: 1,
+        burnTimer: 0, slowTimer: 0, invincibleTimer: 0,
+        fastFalling: false, springTrailTimer: 0,
+      };
+      this._scratchPrev.set(player.id, p);
+    }
+    p.state = player.state;
+    p.vx = player.vx;
+    p.vy = player.vy;
+    p.score = player.score;
+    p.fatTimer = player.fatTimer;
+    p.sideSquash = player.sideSquash;
+    p.burnTimer = player.burnTimer;
+    p.slowTimer = player.slowTimer;
+    p.invincibleTimer = player.invincibleTimer;
+    p.fastFalling = player.fastFalling;
+    p.springTrailTimer = player.springTrailTimer;
+    return p;
+  };
   private readonly tracker: TransitionTracker<PlayerSlot, PrevPlayerCosmeticState, Player> =
-    new TransitionTracker<PlayerSlot, PrevPlayerCosmeticState, Player>(snapshotPlayerCosmeticState);
+    new TransitionTracker<PlayerSlot, PrevPlayerCosmeticState, Player>(this._snapshotPooled);
+  /** Stable callback bound at construction. Reads `_currentPlayer` (set before
+   *  each detect call) instead of capturing per-player, so the cosmeticUpdate
+   *  loop doesn't allocate a fresh arrow per slot per frame. */
+  private _currentPlayer: Player | null = null;
+  private readonly _onPlayerTransition = (prev: PrevPlayerCosmeticState): void => {
+    const p = this._currentPlayer;
+    if (p) detectPlayerTransitions(p, prev, this.state, this.sfxCooldowns, this.callbacks);
+  };
   private sfxCooldowns: PlayerSfxCooldowns = new PlayerSfxCooldowns();
   private callbacks: TransitionCallbacks;
 
@@ -74,9 +111,9 @@ export class PlayerTransitionSystem implements CosmeticSystem {
       // Transition-triggered effects (must fire even during hitstop, e.g. stomp).
       // Tracker fires onTransition only after a baseline exists, then
       // re-snapshots player as the next-frame baseline.
-      this.tracker.detect(player.id, player, (prev) => {
-        detectPlayerTransitions(player, prev, this.state, this.sfxCooldowns, this.callbacks);
-      });
+      this._currentPlayer = player;
+      this.tracker.detect(player.id, player, this._onPlayerTransition);
+      this._currentPlayer = null;
     }
   }
 

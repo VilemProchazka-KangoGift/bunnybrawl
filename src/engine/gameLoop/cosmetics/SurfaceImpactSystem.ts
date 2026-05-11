@@ -3,7 +3,7 @@ import type { CosmeticSystem } from '../types';
 import { getSlowDevice } from '../../perfFlags';
 import {
   detectSurfaceImpact,
-  snapshotSurfaceImpactState,
+  isInLavaZone,
   updateSurfaceLifetimes,
   type PrevSurfaceImpactState,
   type SurfaceImpactCallbacks,
@@ -23,14 +23,33 @@ export class SurfaceImpactSystem implements CosmeticSystem {
   private readonly tracker: TransitionTracker<PlayerSlot, PrevSurfaceImpactState, Player>;
   private readonly _cb: SurfaceImpactCallbacks;
 
+  /** Per-slot pool of PrevSurfaceImpactState scratches — see PlayerTransitionSystem
+   *  for the design rationale. Mutates in place instead of allocating per detect. */
+  private readonly _scratchPrev: Map<PlayerSlot, PrevSurfaceImpactState> = new Map();
+  private readonly _snapshotPooled = (player: Player): PrevSurfaceImpactState => {
+    let p = this._scratchPrev.get(player.id);
+    if (!p) {
+      p = { state: 'idle', vy: 0, inLava: false, fastFalling: false };
+      this._scratchPrev.set(player.id, p);
+    }
+    p.state = player.state;
+    p.vy = player.vy;
+    p.inLava = isInLavaZone(player, this.arena);
+    p.fastFalling = player.fastFalling;
+    return p;
+  };
+  /** Stable callback bound at construction; reads `_currentPlayer` instead of
+   *  capturing per-iteration. */
+  private _currentPlayer: Player | null = null;
+  private readonly _onSurfaceImpact = (prev: PrevSurfaceImpactState): void => {
+    const p = this._currentPlayer;
+    if (p) detectSurfaceImpact(p, prev, this.state, this.arena, this._cb);
+  };
+
   constructor(state: MatchState, arena: Arena) {
     this.state = state;
     this.arena = arena;
-    // Snapshot fn closes over `arena` — snapshotSurfaceImpactState reads
-    // arena.hazardZones for lava-zone detection.
-    this.tracker = new TransitionTracker<PlayerSlot, PrevSurfaceImpactState, Player>(
-      (player) => snapshotSurfaceImpactState(player, this.arena),
-    );
+    this.tracker = new TransitionTracker<PlayerSlot, PrevSurfaceImpactState, Player>(this._snapshotPooled);
     this._cb = {
       isSlowDevice: () => getSlowDevice(),
     };
@@ -48,9 +67,9 @@ export class SurfaceImpactSystem implements CosmeticSystem {
     for (const player of this.state.players) {
       if (!player.active) continue;
 
-      this.tracker.detect(player.id, player, (prev) => {
-        detectSurfaceImpact(player, prev, this.state, this.arena, this._cb);
-      });
+      this._currentPlayer = player;
+      this.tracker.detect(player.id, player, this._onSurfaceImpact);
+      this._currentPlayer = null;
     }
   }
 
