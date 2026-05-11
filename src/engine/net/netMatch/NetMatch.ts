@@ -309,11 +309,13 @@ export class NetMatch {
   }
 
   pause(): void {
+    if (this.gameLoop.isPaused()) return;
     this.gameLoop.pause();
     this.ctx.transport.sendReliable({ type: MsgType.PAUSE, paused: true });
   }
 
   resume(): void {
+    if (!this.gameLoop.isPaused()) return;
     this.gameLoop.resume();
     this.ctx.transport.sendReliable({ type: MsgType.PAUSE, paused: false });
   }

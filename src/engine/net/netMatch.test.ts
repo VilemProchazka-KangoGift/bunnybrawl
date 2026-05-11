@@ -212,6 +212,7 @@ describe('NetMatch', () => {
 
     describe('lifecycle: pause/resume/stop/removePlayer/skipCountdown', () => {
       it('pause() pauses game loop and broadcasts', () => {
+        mockGameLoopInstance.isPaused.mockReturnValue(false);
         netMatch.pause();
         expect(mockGameLoopInstance.pause).toHaveBeenCalled();
         expect(transport.sendReliable).toHaveBeenCalledWith(
@@ -219,10 +220,29 @@ describe('NetMatch', () => {
         );
       });
 
+      it('pause() is a no-op when already paused', () => {
+        mockGameLoopInstance.isPaused.mockReturnValue(true);
+        netMatch.pause();
+        expect(mockGameLoopInstance.pause).not.toHaveBeenCalled();
+        expect(transport.sendReliable).not.toHaveBeenCalledWith(
+          expect.objectContaining({ type: MsgType.PAUSE, paused: true }),
+        );
+      });
+
       it('resume() resumes game loop and broadcasts', () => {
+        mockGameLoopInstance.isPaused.mockReturnValue(true);
         netMatch.resume();
         expect(mockGameLoopInstance.resume).toHaveBeenCalled();
         expect(transport.sendReliable).toHaveBeenCalledWith(
+          expect.objectContaining({ type: MsgType.PAUSE, paused: false }),
+        );
+      });
+
+      it('resume() is a no-op when not paused', () => {
+        mockGameLoopInstance.isPaused.mockReturnValue(false);
+        netMatch.resume();
+        expect(mockGameLoopInstance.resume).not.toHaveBeenCalled();
+        expect(transport.sendReliable).not.toHaveBeenCalledWith(
           expect.objectContaining({ type: MsgType.PAUSE, paused: false }),
         );
       });

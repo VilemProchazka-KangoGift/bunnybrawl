@@ -142,13 +142,8 @@ export function Match() {
     lastResolvedArenaId = newArenaId;
     setCurrentArenaId(newArenaId);
     setMatchSettings({ arenaId: newArenaId });
-    // Arena swap is triggered from the pause menu, which means the loop is
-    // currently paused. Without resume() the new match's countdown freezes
-    // at the start value and physics never ticks.
-    if (netMatchRef.current) netMatchRef.current.resume();
-    else loop?.resume();
-    setPaused(false);
     setShowLevelSelect(false);
+    setPaused(false);
     // Online: notify guest of arena change (the guest's SETTINGS_SYNC handler
     // drives its own switchArena + runLoadingTasks).
     if (online.isOnline && online.isHost) {
@@ -161,6 +156,12 @@ export function Match() {
     // In-place arena swap — no remount, no transport wiring loss. Scores reset.
     setLocalTasksDone(false);
     loop.switchArena(newArenaId);
+    // Resume AFTER switchArena so a paused guest doesn't see one frame of
+    // the old arena unpaused before SETTINGS_SYNC arrives. resume() is
+    // guarded against not-paused state (no-op when called from a non-pause
+    // path), so calling it unconditionally is safe.
+    if (netMatchRef.current) netMatchRef.current.resume();
+    else loop.resume();
     // In online mode, host must re-run the LOADED handshake so guests can't
     // be treated as pre-loaded based on the PREVIOUS arena's signals.
     const nm = netMatchRef.current;
