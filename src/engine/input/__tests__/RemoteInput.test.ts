@@ -30,16 +30,22 @@ describe('RemoteInput', () => {
     expect(remote.getAction(state)).toEqual({ left: false, right: false, jump: false, down: false });
   });
 
-  it('converts airborne+jump to fast-fall (jump:false, down:true), preserving left/right', () => {
+  it('passes airborne+jump through verbatim (no fast-fall conversion)', () => {
+    // Regression: the conversion used to live here, but it turned every
+    // keyboard `jump`-press into a fast-fall in sim-worker mode and for
+    // online keyboard guests. The touch source is the only path that
+    // should map an airborne tap to fast-fall — and it does, via
+    // `TouchInputManager.getInputForPlayer(airborne)`.
     const buffer = new Map<PlayerSlot, InputState>();
-    buffer.set('P1', { left: true, right: false, jump: true, down: false });
+    const raw: InputState = { left: true, right: false, jump: true, down: false };
+    buffer.set('P1', raw);
     const remote = new RemoteInput('P1' as PlayerSlot);
     const state = makeState({ players: [makePlayer({ id: 'P1', state: 'airborne' })] });
 
-    expect(remote.getAction(state, { networkInputs: buffer })).toEqual({ left: true, right: false, jump: false, down: true });
+    expect(remote.getAction(state, { networkInputs: buffer })).toBe(raw);
   });
 
-  it('does not convert when the player is grounded and jump is true', () => {
+  it('passes grounded+jump through verbatim', () => {
     const buffer = new Map<PlayerSlot, InputState>();
     const raw: InputState = { left: false, right: true, jump: true, down: false };
     buffer.set('P1', raw);
@@ -49,9 +55,9 @@ describe('RemoteInput', () => {
     expect(remote.getAction(state, { networkInputs: buffer })).toBe(raw);
   });
 
-  it('does not convert when jump is false on an airborne player', () => {
+  it('passes airborne+down through verbatim (touch source already converted)', () => {
     const buffer = new Map<PlayerSlot, InputState>();
-    const raw: InputState = { left: false, right: true, jump: false, down: false };
+    const raw: InputState = { left: false, right: true, jump: false, down: true };
     buffer.set('P1', raw);
     const remote = new RemoteInput('P1' as PlayerSlot);
     const state = makeState({ players: [makePlayer({ id: 'P1', state: 'airborne' })] });
