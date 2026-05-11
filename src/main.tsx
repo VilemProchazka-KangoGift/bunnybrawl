@@ -16,7 +16,8 @@ import App from './App'
 import './index.css'
 import './components/shared.css'
 
-initDebugFlags(window.location.search);
+const _search = window.location.search;
+initDebugFlags(_search);
 // COOP/COEP set in vite.config.ts gates `crossOriginIsolated`, which is the
 // prereq for SharedArrayBuffer + Atomics. GitHub Pages can't set those
 // headers, so prod will report false here and SAB-gated paths must check
@@ -26,15 +27,15 @@ console.info(
   '[boot] crossOriginIsolated=' + crossOriginIsolated
   + ' SharedArrayBuffer=' + (typeof SharedArrayBuffer !== 'undefined'),
 );
-initLighting(window.location.search);
-initPerfTier(window.location.search);
-initBrightness(window.location.search);
-initPhotosensitivity(window.location.search);
-initInputEcho(window.location.search);
-initTurn(window.location.search);
-initNetSimFlags(window.location.search);
-initSabDemo(window.location.search);
-initSimWorker(window.location.search);
+initLighting(_search);
+initPerfTier(_search);
+initBrightness(_search);
+initPhotosensitivity(_search);
+initInputEcho(_search);
+initTurn(_search);
+initNetSimFlags(_search);
+initSabDemo(_search);
+initSimWorker(_search);
 // Orphaned key from the removed outline-style toggle. One-shot cleanup so the
 // per-user localStorage doesn't accumulate dead values across deploys.
 safeStorage.remove('carrotroyale_outline_style');
