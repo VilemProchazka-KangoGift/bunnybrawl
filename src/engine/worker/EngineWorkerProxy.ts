@@ -132,6 +132,9 @@ export class EngineWorkerProxy {
    *  Called from `switchArena` so a level switch doesn't leave a falsely
    *  pre-warmed roster on the new arena. Wired by the constructor. */
   private _clearWarmedNames?: () => void;
+  /** Flushes messages queued during the Vite-dev worker-boot window.
+   *  See the postMessage monkeypatch in the constructor for context. */
+  private _releaseBootQueue?: () => void;
 
   constructor(opts: EngineWorkerProxyOptions) {
     this.fgNightTint = opts.fgNightTint ?? null;
@@ -149,6 +152,33 @@ export class EngineWorkerProxy {
       new URL('./renderWorker.ts', import.meta.url),
       { type: 'module', name: 'carrot-royale-engine' },
     );
+    // Boot handshake — Vite dev's module-worker boot can drop messages
+    // posted before the worker finishes evaluating its top-level code,
+    // even though the spec requires them to queue. Wrap `postMessage` so
+    // calls made before `worker:bootReady` are buffered locally, then
+    // flushed in order on receipt. In prod (where queuing works), the
+    // first inbound message is the bootReady ping and the queue is empty
+    // at flush time — net cost is one extra postMessage per worker spawn.
+    const _origPostMessage = this.worker.postMessage.bind(this.worker);
+    const _bootQueue: Array<{ msg: unknown; transfer: Transferable[] }> = [];
+    let _bootReady = false;
+    this.worker.postMessage = ((msg: unknown, transfer?: Transferable[]): void => {
+      if (_bootReady) {
+        if (transfer && transfer.length > 0) _origPostMessage(msg, transfer);
+        else _origPostMessage(msg);
+        return;
+      }
+      _bootQueue.push({ msg, transfer: transfer ?? [] });
+    }) as Worker['postMessage'];
+    this._releaseBootQueue = () => {
+      if (_bootReady) return;
+      _bootReady = true;
+      for (const item of _bootQueue) {
+        if (item.transfer.length > 0) _origPostMessage(item.msg, item.transfer);
+        else _origPostMessage(item.msg);
+      }
+      _bootQueue.length = 0;
+    };
     this.worker.addEventListener('message', this.handleMessage);
     // On a worker runtime error / structured-clone failure, mark the proxy
     // dead so subsequent input batch posts no-op (a silent worker is better
@@ -511,6 +541,12 @@ export class EngineWorkerProxy {
   private handleMessage = (e: MessageEvent<WorkerToHostMsg>): void => {
     if (this.destroyed) return;
     const msg = e.data;
+    if (msg.type === 'worker:bootReady') {
+      // Worker has attached its message listener — safe to flush anything
+      // queued during the dev-mode boot window.
+      this._releaseBootQueue?.();
+      return;
+    }
     if (msg.type === 'worker:nightOpacity') {
       const value = String(msg.opacity);
       if (msg.kind === 'fg') {

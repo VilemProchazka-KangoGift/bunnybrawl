@@ -1,7 +1,5 @@
-import { Howl } from '../../audio/howlShim';
 import type { CharacterPack } from '../types';
 import { fillBodyGradient } from '../../spriteShading';
-import { generateToneBuffer } from '../../audio/synthesis/core';
 
 const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, _state, _animFrame, _isIdleAnim, _idleT, colors) => {
   fillBodyGradient(ctx, { cx, cy: yOff + h * 0.5, rx: w * 0.42, ry: h * 0.42 }, colors);
@@ -52,8 +50,4 @@ export const bear: CharacterPack = {
   legStyle: { shape: 'rounded', footStyle: 'round', legWidth: 6, legHeight: 4 },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.5, rx: w * 0.42, ry: h * 0.42 }),
   drawSprite, drawGib,
-  createSound: () => new Howl({
-    src: [generateToneBuffer(120, 0.3, 'sawtooth', 0.4, 80)],
-    volume: 0.4,
-  }),
-};
+};;

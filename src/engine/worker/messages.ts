@@ -252,6 +252,12 @@ export type HostToWorkerMsg =
   | HostNetReconnectSlotMsg;
 
 export interface WorkerReadyMsg { type: 'worker:ready' }
+/** Fired immediately after the worker attaches its `message` listener.
+ *  Vite dev's module-worker boot can drop messages posted before the worker
+ *  finishes evaluating its top-level code (the browser is supposed to queue
+ *  these per spec, but observably doesn't for module workers in dev). The
+ *  proxy queues `postMessage` calls locally until this lands. */
+export interface WorkerBootReadyMsg { type: 'worker:bootReady' }
 export interface WorkerErrorMsg { type: 'worker:error'; message: string }
 /** Fired when the worker's Renderer wants to update one of the night-tint
  *  DOM opacities. Main applies it to the corresponding HTMLElement.style. */
@@ -353,6 +359,7 @@ export interface WorkerEngineStateMirrorMsg {
 
 export type WorkerToHostMsg =
   | WorkerReadyMsg
+  | WorkerBootReadyMsg
   | WorkerErrorMsg
   | WorkerNightOpacityMsg
   | WorkerPerfStatsMsg

@@ -472,4 +472,11 @@ ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
   }
 });
 
+// Boot handshake. Vite dev's module-worker boot can drop messages posted
+// before the worker finishes evaluating its top-level code (the browser
+// spec says they should queue; in module-worker dev mode they don't,
+// observably). The proxy buffers `postMessage` calls until this lands.
+// In prod where queuing works correctly, this is a harmless one-byte ping.
+ctxScope.postMessage({ type: 'worker:bootReady' });
+
 export {};

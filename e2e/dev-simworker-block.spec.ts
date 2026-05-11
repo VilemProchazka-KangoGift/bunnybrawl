@@ -1,16 +1,21 @@
-// Verifies the dev-mode simWorker block: `?simWorker=on` in dev must NOT
-// hang at phase=loading. SIM_WORKER_DEV_BLOCKED forces the flag off at
-// boot, so the URL request is ignored and the local-match path uses the
-// non-worker (or renderer-only worker) fallback.
+// Verifies sim-in-worker reaches phase=playing on the dev server.
 //
-// Runs against the dev server (not preview) — that's where the block
-// matters. Other E2E specs run against preview by default.
+// History: this used to be a "dev block" guard around the worker
+// TLA-ordering hang in `audio/howlShim.ts`. That shim was deleted when
+// character audio factories moved out of the visual packs into per-pack
+// `*.audio.ts` files imported only from the main bundle. With Howler
+// gone from the worker module graph the hang is gone, so this spec now
+// asserts the positive case: `?simWorker=on` in dev actually runs the
+// simulator inside the worker (isRemoteSim === true) without hanging.
+//
+// Other E2E specs run against `vite preview` (prod build). This one
+// runs against the dev server because dev was the broken path.
 
 import { test, expect } from '@playwright/test';
 
 test.use({ baseURL: 'http://localhost:5173/bunnybrawl/' });
 
-test('?simWorker=on in dev does not soft-brick (dev-block fallback reaches phase=playing)', async ({ page }) => {
+test('?simWorker=on works on the dev server (sim runs inside worker)', async ({ page }) => {
   await page.goto('?arena=meadow&bots=2&simWorker=on');
   await expect(page.getByTestId('match-screen')).toBeVisible({ timeout: 15000 });
   await page.waitForFunction(
@@ -23,5 +28,5 @@ test('?simWorker=on in dev does not soft-brick (dev-block fallback reaches phase
     const t = (window as unknown as { __bunnyTest?: { gameLoop?: () => { isRemoteSim?: () => boolean } } }).__bunnyTest;
     return t?.gameLoop?.()?.isRemoteSim?.() === true;
   });
-  expect(isRemoteSim, 'dev should NOT be on the simWorker proxy').toBe(false);
+  expect(isRemoteSim, 'sim should run inside the worker on the dev server').toBe(true);
 });

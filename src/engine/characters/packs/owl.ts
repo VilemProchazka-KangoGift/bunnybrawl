@@ -1,7 +1,5 @@
-import { Howl } from '../../audio/howlShim';
 import type { CharacterPack } from '../types';
 import { fillBodyGradient } from '../../spriteShading';
-import { generateMultiSegmentTone } from '../../audio/synthesis/core';
 
 const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, state, animFrame, _isIdleAnim, _idleT, colors) => {
   const isAirborne = state === 'airborne';
@@ -88,12 +86,4 @@ export const owl: CharacterPack = {
   },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.5, rx: w * 0.4, ry: h * 0.42 }),
   drawSprite, drawGib,
-  createSound: () => new Howl({
-    src: [generateMultiSegmentTone([
-      { freq: 380, freqEnd: 320, duration: 0.1, type: 'sine' },
-      { freq: 380, freqEnd: 320, duration: 0.1, type: 'sine' },
-      { freq: 360, freqEnd: 280, duration: 0.18, type: 'sine' },
-    ], 0.4)],
-    volume: 0.4,
-  }),
-};
+};;

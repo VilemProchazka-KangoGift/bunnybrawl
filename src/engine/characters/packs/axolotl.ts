@@ -1,7 +1,5 @@
-import { Howl } from '../../audio/howlShim';
 import type { CharacterPack } from '../types';
 import { fillBodyGradient } from '../../spriteShading';
-import { generateMultiSegmentTone } from '../../audio/synthesis/core';
 
 const SIDES = [-1, 1] as const;
 
@@ -151,11 +149,4 @@ export const axolotl: CharacterPack = {
   },
   bodyEllipse: (cx, yOff, w, h) => ({ cx, cy: yOff + h * 0.55, rx: w * 0.42, ry: h * 0.38 }),
   drawSprite, drawGib,
-  createSound: () => new Howl({
-    src: [generateMultiSegmentTone([
-      { freq: 600, freqEnd: 800, duration: 0.06, type: 'sine' },
-      { freq: 750, freqEnd: 650, duration: 0.06, type: 'sine' },
-    ], 0.3)],
-    volume: 0.4,
-  }),
 };

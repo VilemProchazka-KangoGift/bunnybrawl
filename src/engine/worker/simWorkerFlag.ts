@@ -21,18 +21,7 @@ import { createEmitter } from '../emitter';
 
 const STORAGE_KEY = 'carrotroyale_sim_worker';
 
-// `?simWorker=on` is broken on `npm run dev` — module top-level-await
-// ordering inside the worker hangs the engine init promise, leaving the
-// match stuck on the loading overlay with no console error. Prod build is
-// fine. Force-disable in dev so a DevMenu toggle can't soft-brick a
-// developer's local session (they can't get back to MainMenu to flip it
-// off once the loading overlay is stuck).
-export const SIM_WORKER_DEV_BLOCKED: boolean = (() => {
-  try { return import.meta.env.DEV; } catch { return false; }
-})();
-
 function readInitial(): boolean {
-  if (SIM_WORKER_DEV_BLOCKED) return false;
   if (typeof window !== 'undefined') {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -51,7 +40,6 @@ export const isSimWorkerEnabled = emitter.get;
 export const subscribeSimWorkerFlag = emitter.subscribe;
 
 export function setSimWorkerEnabled(v: boolean): void {
-  if (SIM_WORKER_DEV_BLOCKED && v) return;
   if (v === emitter.get()) return;
   emitter.set(v);
   safeStorage.set(STORAGE_KEY, v ? 'on' : 'off');

@@ -15,7 +15,7 @@ import { getBrightness, setBrightness } from '../engine/lighting/brightness';
 import { getPhotosensitivity, setPhotosensitivity } from '../engine/lighting/photosensitivity';
 import { getPerfTier, setPerfTier } from '../engine/lighting/perfTier';
 import type { PerfTier } from '../engine/lighting/types';
-import { isSimWorkerEnabled, setSimWorkerEnabled, SIM_WORKER_DEV_BLOCKED } from '../engine/worker/simWorkerFlag';
+import { isSimWorkerEnabled, setSimWorkerEnabled } from '../engine/worker/simWorkerFlag';
 import { isInputEchoEnabled, setInputEchoEnabled } from '../engine/net/inputEchoFlag';
 import { isTurnEnabled, setTurnEnabled } from '../engine/net/turnFlag';
 import { isSabDemoEnabled, setSabDemoEnabled } from '../engine/worker/sabDemoFlag';
@@ -209,11 +209,8 @@ export function DevMenu({ onClose }: DevMenuProps) {
         <ToggleRow
           testId="dev-toggle-simworker"
           label="Sim in worker"
-          desc={SIM_WORKER_DEV_BLOCKED
-            ? 'Disabled in dev — broken by a worker TLA-ordering bug. Use `npm run build && npm run preview` to test.'
-            : 'Run the full Simulator inside the engine worker (?simWorker=on).'}
+          desc="Run the full Simulator inside the engine worker (?simWorker=on)."
           checked={isSimWorkerEnabled()}
-          disabled={SIM_WORKER_DEV_BLOCKED}
           onChange={(v) => { setSimWorkerEnabled(v); rerender(); }}
         />
         <ToggleRow
