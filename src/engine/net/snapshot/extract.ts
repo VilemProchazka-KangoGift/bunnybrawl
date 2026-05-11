@@ -7,7 +7,7 @@
  * whole engine in.
  */
 import type { MatchState } from '../../types';
-import type { AuthSnapshot, SnapshotPlayer } from './types';
+import type { AuthSnapshot } from './types';
 import { createEmptySnapshot } from './types';
 
 /**
@@ -37,7 +37,7 @@ export function takeAuthSnapshot(frame: number, state: MatchState): AuthSnapshot
   // Thorn.width/height/platformIndex, Ghost.size/alpha, LavaRock.size/rotation,
   // Player local-only fields) are ignored. Casts narrow the type to the
   // wire-relevant subset that AuthSnapshot promises.
-  s.players = state.players as unknown as SnapshotPlayer[];
+  s.players = state.players as unknown as AuthSnapshot['players'];
   s.carrots = state.carrots as unknown as AuthSnapshot['carrots'];
   s.springs = state.springs as unknown as AuthSnapshot['springs'];
   s.thorns = state.thorns as unknown as AuthSnapshot['thorns'];
