@@ -637,17 +637,11 @@ describe('ArenaEntitySystem', () => {
     expect(state.geyserStates).toBeDefined();
   });
 
-  it('init() spawns ghosts into state when theme has ghostConfig', () => {
-    const themeWithGhosts = {
-      ...mockTheme,
-      ghostConfig: { count: 3, speed: 60, size: 30 },
-    };
-    const state = makeSystemState();
-    const sys = new ArenaEntitySystem(state, mockArena, themeWithGhosts, Math.random);
-    sys.init();
-
-    expect(state.ghosts).toHaveLength(3);
-  });
+  // Ghost spawn moved to `ghostsEntity.init` in `src/engine/entities/ghosts.ts`;
+  // it now runs from `createInitialMatchState` via the entity registry instead
+  // of `ArenaEntitySystem.init()`. The behavior is covered by
+  // `src/engine/__tests__/simulator-gameplay.test.ts` which constructs a real
+  // Simulator with a ghost-configured theme.
 
   it('getCachedGeyserZones() returns same reference set during init()', () => {
     const state = makeSystemState();

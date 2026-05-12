@@ -14,6 +14,7 @@ import { assignBotCharacters, registerBuiltinCharacters } from './engine/charact
 import './engine/characters/builtinSounds';
 import { isTouchPrimary } from './engine/touchDetect';
 import { registerBuiltinArenas } from './engine/arenas';
+import { registerBuiltinEntities } from './engine/entities';
 import type { PlayerSlot, BotSlot, CharacterSlot } from './engine/types';
 import { ALL_BOT_SLOTS } from './engine/types';
 import { MAX_BOT_COUNT } from './engine/constants';
@@ -22,6 +23,7 @@ import logoUrl from '/logo.png?url';
 // Register all built-in packs at module load time
 registerBuiltinCharacters();
 registerBuiltinArenas();
+registerBuiltinEntities();
 
 /**
  * Dev test link: skip lobby and jump straight into a match.

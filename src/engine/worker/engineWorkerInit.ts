@@ -19,6 +19,7 @@ import { Renderer } from '../renderer';
 import { getArena, getTheme } from '../arenas/operations';
 import { registerBuiltinArenas } from '../arenas/builtin';
 import { registerBuiltinCharacters } from '../characters/builtin';
+import { registerBuiltinEntities, getEntities } from '../entities';
 import { CHARACTERS, BOT_CHARACTERS } from '../characters/defaults';
 import { setHudLanguage } from '../rendering/hud';
 import { RemoteInput } from '../input/RemoteInput';
@@ -140,6 +141,7 @@ function postEvent(ev: EventBody): void {
 export function initEngine(msg: HostInitEngineMsg): void {
   registerBuiltinArenas();
   registerBuiltinCharacters();
+  registerBuiltinEntities();
   // Re-populate slot → CharacterDef mappings inside the worker. Main owns
   // the lobby UI that mutates these maps; without this rebuild the worker
   // would throw "No character assigned to bot slot Bx" inside
@@ -359,12 +361,12 @@ const _slimStatsScratch: MatchState['stats'] = {
 
 /** Build a structured-clone-friendly MatchState with renderer/cosmetic
  *  fields stripped. Saves the bulk of the per-mirror clone cost on main.
- *  Audit (2026-05-12) confirmed zero main-side reads of any stripped
- *  field — they all live in worker-side Renderer / ParticleSystem /
- *  cosmetic systems. If a future consumer needs a stripped field,
- *  restore it here AND add a brief note explaining the consumer. */
+ *  Entity collections are filtered via `EntityKind.mirror` (`'full'` keeps
+ *  the array reference, `'none'` substitutes a frozen empty array).
+ *  Non-entity fields stay listed explicitly so the Kept vs Stripped
+ *  audit (2026-05-12) remains visible. */
 function buildSlimMirror(s: MatchState): MatchState {
-  return {
+  const out: MatchState = {
     // ── Kept (main reads these) ─────────────────────────────────────
     players: s.players,
     phase: s.phase,
@@ -385,28 +387,36 @@ function buildSlimMirror(s: MatchState): MatchState {
     countdown: s.countdown,
     screenFlash: s.screenFlash,
     hitstopZoom: s.hitstopZoom,
-    scoreAnimations: s.scoreAnimations,
-    ghosts: s.ghosts,
-    lavaRocks: s.lavaRocks,
     lavaRockTimer: s.lavaRockTimer,
-    geyserStates: s.geyserStates,
     stats: _slimStatsScratch,
-    // ── Stripped (renderer / cosmetic only) ─────────────────────────
+    // ── Stripped non-entity fields ───────────────────────────────────
     weather: EMPTY_ARRAY as MatchState['weather'],
-    shockwaves: EMPTY_ARRAY as MatchState['shockwaves'],
     wildlife: EMPTY_ARRAY as MatchState['wildlife'],
+    goalPulseTimers: _emptyMap as unknown as MatchState['goalPulseTimers'],
+    bouncyWobble: _emptyMap as unknown as MatchState['bouncyWobble'],
+    // ── Entity collections — filled below from `EntityKind.mirror` ──
+    lavaRocks: EMPTY_ARRAY as MatchState['lavaRocks'],
+    ghosts: EMPTY_ARRAY as MatchState['ghosts'],
+    geyserStates: EMPTY_ARRAY as MatchState['geyserStates'],
+    scatterFlocks: EMPTY_ARRAY as MatchState['scatterFlocks'],
+    surfaceDecals: EMPTY_ARRAY as MatchState['surfaceDecals'],
+    gibs: EMPTY_ARRAY as MatchState['gibs'],
+    confetti: EMPTY_ARRAY as MatchState['confetti'],
+    shockwaves: EMPTY_ARRAY as MatchState['shockwaves'],
+    ripples: EMPTY_ARRAY as MatchState['ripples'],
+    scoreAnimations: EMPTY_ARRAY as MatchState['scoreAnimations'],
+    comboPopups: EMPTY_ARRAY as MatchState['comboPopups'],
     fogParticles: EMPTY_ARRAY as MatchState['fogParticles'],
     pollenParticles: EMPTY_ARRAY as MatchState['pollenParticles'],
     shootingStars: EMPTY_ARRAY as MatchState['shootingStars'],
-    comboPopups: EMPTY_ARRAY as MatchState['comboPopups'],
-    scatterFlocks: EMPTY_ARRAY as MatchState['scatterFlocks'],
-    gibs: EMPTY_ARRAY as MatchState['gibs'],
-    confetti: EMPTY_ARRAY as MatchState['confetti'],
-    surfaceDecals: EMPTY_ARRAY as MatchState['surfaceDecals'],
-    ripples: EMPTY_ARRAY as MatchState['ripples'],
-    goalPulseTimers: _emptyMap as unknown as MatchState['goalPulseTimers'],
-    bouncyWobble: _emptyMap as unknown as MatchState['bouncyWobble'],
   };
+  for (const e of getEntities()) {
+    if ((e.mirror ?? 'full') === 'full') {
+      (out as unknown as Record<string, unknown[]>)[e.id] =
+        (s as unknown as Record<string, unknown[]>)[e.id];
+    }
+  }
+  return out;
 }
 
 /** Pure helper: replace `target` Map contents from a per-slot list. Slots

@@ -9,6 +9,7 @@ import type {
 } from '../types';
 import type { SeededRNG } from './prng';
 import type { AIController } from '../ai/aiController';
+import { getEntities } from '../entities/registry';
 
 // ---- Snapshot types (plain objects, no Maps) ----
 
@@ -89,6 +90,12 @@ export interface GameSnapshot {
   hitstopZoom: number;
   scoreAnimations: Array<{ playerId: PlayerSlot; value: number; timer: number }>;
   shockwaves: Array<{ x: number; y: number; radius: number; maxRadius: number; life: number }>;
+  /** Cloned entity collections keyed by `EntityKind.id`. Populated for every
+   *  entity in the registry — see `getEntities()` in `entities/registry.ts`.
+   *  The above per-entity fields are convenience aliases that point at the
+   *  same arrays for the most-tested entity types; new entities only need
+   *  the `entities` record. */
+  entities: Record<string, unknown[]>;
   stats: [PlayerSlot, PlayerStats][];
   aiStates: [string, AISnapshot][];
 }
@@ -188,6 +195,13 @@ export function takeSnapshot(
   aiControllers: Map<string, AIController>,
   aiRng?: SeededRNG,
 ): GameSnapshot {
+  const entities: Record<string, unknown[]> = {};
+  for (const e of getEntities()) {
+    const arr = ((state as unknown as Record<string, unknown[]>)[e.id] ?? []) as unknown[];
+    entities[e.id] = e.serialize
+      ? e.serialize(arr as never)
+      : arr.map(item => ({ ...(item as object) }));
+  }
   return {
     frame,
     rngState: rng ? rng.getState() : 0,
@@ -205,17 +219,18 @@ export function takeSnapshot(
     thorns: cloneArray(state.thorns),
     springSpawnTimer: state.springSpawnTimer,
     thornSpawnTimer: state.thornSpawnTimer,
-    ghosts: cloneArray(state.ghosts),
-    lavaRocks: cloneArray(state.lavaRocks),
+    ghosts: (entities.ghosts as GhostEntity[] | undefined) ?? [],
+    lavaRocks: (entities.lavaRocks as LavaRock[] | undefined) ?? [],
     lavaRockTimer: state.lavaRockTimer,
-    geyserStates: state.geyserStates.map(g => ({ ...g })),
+    geyserStates: (entities.geyserStates as GameSnapshot['geyserStates'] | undefined) ?? [],
     bouncyWobble: Array.from(state.bouncyWobble.entries()).sort((a, b) => a[0] - b[0]),
     screenShake: state.screenShake,
     slowMotion: state.slowMotion,
     screenFlash: state.screenFlash,
     hitstopZoom: state.hitstopZoom,
-    scoreAnimations: state.scoreAnimations.map(s => ({ ...s })),
-    shockwaves: state.shockwaves.map(s => ({ ...s })),
+    scoreAnimations: (entities.scoreAnimations as GameSnapshot['scoreAnimations'] | undefined) ?? [],
+    shockwaves: (entities.shockwaves as GameSnapshot['shockwaves'] | undefined) ?? [],
+    entities,
     stats: Array.from(state.stats.perPlayer.entries()).sort((a, b) => a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0).map(([slot, stats]) => [slot, { ...stats }]),
     aiStates: Array.from(aiControllers.entries()).sort((a, b) => a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0).map(([id, ai]) => [id, ai.serialize()]),
   };
@@ -251,11 +266,7 @@ export function restoreSnapshot(
   state.springSpawnTimer = snap.springSpawnTimer;
   state.thornSpawnTimer = snap.thornSpawnTimer;
 
-  copyArrayInto(state.ghosts, snap.ghosts);
-  copyArrayInto(state.lavaRocks, snap.lavaRocks);
   state.lavaRockTimer = snap.lavaRockTimer;
-
-  copyArrayInto(state.geyserStates, snap.geyserStates);
 
   state.bouncyWobble.clear();
   for (const [k, v] of snap.bouncyWobble) {
@@ -267,8 +278,18 @@ export function restoreSnapshot(
   state.screenFlash = snap.screenFlash;
   state.hitstopZoom = snap.hitstopZoom;
 
-  copyArrayInto(state.scoreAnimations, snap.scoreAnimations);
-  copyArrayInto(state.shockwaves, snap.shockwaves);
+  // Restore entity collections via the registry. Entities with a `restore`
+  // override drive their own merge; default is in-place `copyArrayInto`.
+  for (const e of getEntities()) {
+    const target = (state as unknown as Record<string, unknown[]>)[e.id];
+    const src = snap.entities[e.id];
+    if (!src || !target) continue;
+    if (e.restore) {
+      e.restore(target as never, src as never);
+    } else {
+      copyArrayInto(target as object[], src as object[]);
+    }
+  }
 
   state.stats.perPlayer.clear();
   for (let i = 0; i < snap.stats.length; i++) {

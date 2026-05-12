@@ -4,14 +4,14 @@ import { aabbOverlap } from './physics';
 import {
   CANVAS_WIDTH, CANVAS_HEIGHT,
   SCREEN_SHAKE_INTENSITY,
-  SHOCKWAVE_DURATION, SCREEN_FLASH_DURATION,
+  SCREEN_FLASH_DURATION,
   HITSTOP_DURATION, HITSTOP_ZOOM,
 } from './constants';
 import {
   drawHill,
   capFrontY, capBackY, skewPx,
 } from './themes/drawPrimitives';
-import { hexToRGB, hexToHSL } from './fastMath';
+import { hexToHSL } from './fastMath';
 import { debugFlags } from './debugFlags';
 import { drawNavDebugOverlay } from './navDebugOverlay';
 import type { BotNavDebugState } from './navDebugOverlay';
@@ -22,16 +22,21 @@ import { drawFpsCounter } from './fpsCounter';
 // Extracted rendering modules
 import {
   drawCarrot, drawSpringMushroom, drawThorn,
-  drawWeather, drawParticles, drawGibs, drawGibShape, drawConfetti, drawFireworks, drawWildlife, drawSpringTrail,
-  drawHazardZone, drawGhost, drawLavaRock, drawZeroGZone, drawCurrentZone, drawGeyser, drawBouncyPlatformOverlay, drawScatterFlock,
+  drawWeather, drawParticles, drawGibShape, drawFireworks, drawWildlife, drawSpringTrail,
+  drawHazardZone, drawZeroGZone, drawCurrentZone, drawGeyser, drawBouncyPlatformOverlay,
   drawDayNightCycle, computeNightIntensity, fireflyPosition, FIREFLY_COUNT,
-  drawHUD, drawCountdown, drawConnectionQuality, drawComboPopups, invalidateHudCache, isHudDirty,
+  drawHUD, drawCountdown, drawConnectionQuality, invalidateHudCache, isHudDirty,
   drawPlayer,
   warmSpriteCacheForCharacters,
   clearRenderingCaches,
   clearArenaCaches,
-  drawSurfaceDecals, drawRipples,
 } from './rendering';
+import { getEntitiesForLayer } from './entities/registry';
+import { fogParticlesEntity } from './entities/fogParticles';
+import { ghostsEntity } from './entities/ghosts';
+import { pollenParticlesEntity } from './entities/pollenParticles';
+import { comboPopupsEntity } from './entities/comboPopups';
+import type { EntityRenderCtx } from './entities/types';
 import { setSpriteCacheScale } from './rendering/players';
 import { setHudScale, setHudLanguage, warmHudFonts } from './rendering/hud';
 import { applyRenderScaleToCanvas, getRenderScale } from './renderScale';
@@ -364,9 +369,16 @@ export class Renderer implements IRenderer {
   private theme: ThemeConfig;
   private frameTime = 0; // cached performance.now() per frame
 
-  private _fogRGB: { r: number; g: number; b: number } | null = null;
-  private _ambientRGBs: { r: number; g: number; b: number }[] | null = null;
-  private _ambientRGBStrings: string[] | null = null;
+  /** Reused entity-draw ctx — entities MUST NOT mutate. Fields overwritten
+   *  per frame at the top of `renderFrame`. */
+  private readonly _entityRenderCtx: EntityRenderCtx = {
+    state: null as unknown as MatchState,
+    arena: null as unknown as Arena,
+    theme: null as unknown as ThemeConfig,
+    time: 0,
+    cosmeticLead: 0,
+    frameTime: 0,
+  };
 
   private mirrored = false;
   private originalArena: Arena | null = null;  // un-mirrored arena for theme draw calls
@@ -556,9 +568,6 @@ export class Renderer implements IRenderer {
    *  includes a bubble-helmet bit, so cross-arena sprite reuse is safe). */
   setTheme(theme: ThemeConfig): void {
     this.theme = theme;
-    this._fogRGB = null;
-    this._ambientRGBs = null;
-    this._ambientRGBStrings = null;
     this.initClouds();
     clearArenaCaches();
     invalidateHudCache();
@@ -1122,6 +1131,15 @@ export class Renderer implements IRenderer {
 
       // Cache time once per frame
       this.frameTime = performance.now();
+
+      // Refresh entity render ctx — fields read by EntityKind.draw across
+      // every layer dispatch below.
+      this._entityRenderCtx.state = matchState;
+      this._entityRenderCtx.arena = arena;
+      this._entityRenderCtx.theme = this.theme;
+      this._entityRenderCtx.time = matchState.timeElapsed;
+      this._entityRenderCtx.cosmeticLead = cosmeticLead;
+      this._entityRenderCtx.frameTime = this.frameTime;
       this.lighting.ambient.beginFrame(this.theme, matchState.dayPhase);
       this._synthesizeDynamicLights(matchState);
       // Tick derived from timeElapsed (60Hz fixed-step). On guests, timeElapsed
@@ -1230,20 +1248,14 @@ export class Renderer implements IRenderer {
 
       // Surface decals (cracks, scuffs) — drawn between platforms and entities so
       // platform caps occlude them only on edges (decal y is platform top + small fudge).
-      drawSurfaceDecals(ctx, matchState);
-
+      // Entity-driven 'entities' layer: surfaceDecals → scatterFlocks → lavaRocks
+      // (registration order). Direct hot-path field reads inside each entity's
+      // draw fn; renderer dispatches via the registry.
       const entStart = perfTrace.begin('render.entities');
-      // Species-aware scatter flocks (birds, bats, crows)
-      for (const flock of matchState.scatterFlocks) {
-        drawScatterFlock(ctx, flock, matchState.timeElapsed, cosmeticLead);
+      for (const e of getEntitiesForLayer('entities')) {
+        e.draw!(ctx, (matchState as unknown as Record<string, unknown[]>)[e.id], this._entityRenderCtx);
       }
-
-      // Lava rocks (falling hazards)
-      for (const rock of matchState.lavaRocks) {
-        if (!rock.active) continue;
-        drawLavaRock(ctx, rock, this.theme);
-        d.lavaRocks = true;
-      }
+      if (matchState.lavaRocks.length > 0) d.lavaRocks = true;
 
       // Springs and thorns (behind players)
       for (const spring of matchState.springs) { drawSpringMushroom(ctx, spring, this.theme); d.springs = true; }
@@ -1258,27 +1270,13 @@ export class Renderer implements IRenderer {
       const partStart = perfTrace.begin('render.particles');
       drawParticles(ctx, particles, cosmeticLead);
 
-      if (matchState.gibs.length > 0) { drawGibs(ctx, matchState.gibs, cosmeticLead); d.gibs = true; }
-      if (matchState.confetti.length > 0) { drawConfetti(ctx, matchState.confetti, cosmeticLead); d.confetti = true; }
-
-      // Stomp shockwaves (e) -- after particles, before players
-      if (matchState.shockwaves && matchState.shockwaves.length > 0) {
-        d.shockwaves = true;
-        ctx.save();
-        ctx.strokeStyle = '#FFFFFF';
-        for (const sw of matchState.shockwaves) {
-          const progress = 1 - sw.life / SHOCKWAVE_DURATION;
-          ctx.globalAlpha = sw.life / SHOCKWAVE_DURATION;
-          ctx.lineWidth = Math.max(1, 4 * (1 - progress));
-          ctx.beginPath();
-          ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
-          ctx.stroke();
-        }
-        ctx.restore();
+      // Entity-driven 'particles' layer: gibs → confetti → shockwaves → ripples.
+      for (const e of getEntitiesForLayer('particles')) {
+        e.draw!(ctx, (matchState as unknown as Record<string, unknown[]>)[e.id], this._entityRenderCtx);
       }
-
-      // Liquid impact ripples (env-ripples)
-      drawRipples(ctx, matchState);
+      if (matchState.gibs.length > 0) d.gibs = true;
+      if (matchState.confetti.length > 0) d.confetti = true;
+      if (matchState.shockwaves && matchState.shockwaves.length > 0) d.shockwaves = true;
       perfTrace.end('render.particles', partStart);
 
       const aiStart = perfTrace.begin('render.afterimages');
@@ -1418,23 +1416,9 @@ export class Renderer implements IRenderer {
 
       const fgStart = perfTrace.begin('render.fg-nature');
       // Ground fog (o) -- after players, before foreground nature
-      const fogCfg = this.theme.fog;
-      if (fogCfg && matchState.fogParticles && matchState.fogParticles.length > 0) {
+      if (matchState.fogParticles && matchState.fogParticles.length > 0 && this.theme.fog) {
         d.fog = true;
-        if (!this._fogRGB) {
-          this._fogRGB = hexToRGB(fogCfg.color);
-        }
-        const { r, g, b } = this._fogRGB;
-        const opacity = fogCfg.opacity ?? 0.3;
-        ctx.save();
-        ctx.fillStyle = `rgb(${r},${g},${b})`;
-        for (const fp of matchState.fogParticles) {
-          ctx.globalAlpha = fp.alpha * opacity;
-          ctx.beginPath();
-          ctx.ellipse(fp.x, fp.y, fogCfg.sizeX, fogCfg.sizeY, 0, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.restore();
+        fogParticlesEntity.draw!(ctx, matchState.fogParticles, this._entityRenderCtx);
       }
 
       // Ground critters (snails, rats, crabs…) — drawn BEFORE fg-nature so
@@ -1458,36 +1442,12 @@ export class Renderer implements IRenderer {
       }
 
       // Ghosts (drawn over foreground, semi-transparent)
-      for (const ghost of matchState.ghosts) {
-        drawGhost(ctx, ghost, this.theme, matchState.timeElapsed);
-      }
+      ghostsEntity.draw!(ctx, matchState.ghosts, this._entityRenderCtx);
 
       // Ambient particles (pollen / snow drift / sparkles)
       if (!slow && matchState.pollenParticles && matchState.pollenParticles.length > 0) {
         d.ambient = true;
-        const ambCfg = this.theme.ambientParticles;
-        if (!this._ambientRGBs) {
-          this._ambientRGBs = ambCfg.colors.map(hexToRGB);
-        }
-        if (!this._ambientRGBStrings || this._ambientRGBStrings.length !== this._ambientRGBs.length) {
-          this._ambientRGBStrings = this._ambientRGBs.map(c => `rgb(${c.r},${c.g},${c.b})`);
-        }
-        const colorStrings = this._ambientRGBStrings;
-        const hasTwoColors = colorStrings.length > 1;
-        ctx.save();
-        let lastCi = -1;
-        for (const pp of matchState.pollenParticles) {
-          const ci = pp.size > 2 ? 0 : (hasTwoColors ? 1 : 0);
-          if (ci !== lastCi) {
-            ctx.fillStyle = colorStrings[ci];
-            lastCi = ci;
-          }
-          ctx.globalAlpha = pp.alpha * 0.7;
-          ctx.beginPath();
-          ctx.arc(pp.x, pp.y, pp.size, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.restore();
+        pollenParticlesEntity.draw!(ctx, matchState.pollenParticles, this._entityRenderCtx);
       }
 
       // Fireworks when match is over
@@ -1630,7 +1590,7 @@ export class Renderer implements IRenderer {
     }
 
     // Combo popups float over the field but under the HUD pill, so draw before drawHUD.
-    drawComboPopups(ctx, matchState);
+    comboPopupsEntity.draw!(ctx, matchState.comboPopups, this._entityRenderCtx);
 
     drawHUD(ctx, matchState, this.frameTime, this._playerNames, this._timeLimit, hudDirty);
 

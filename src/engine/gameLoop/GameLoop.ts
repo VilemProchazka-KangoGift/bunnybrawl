@@ -209,7 +209,7 @@ export class GameLoop {
       (name) => this.playSound(name),
       sArena,
     );
-    this.environmentSystem = new EnvironmentSystem(sState, sTheme);
+    this.environmentSystem = new EnvironmentSystem(sState, sTheme, sArena);
     this.entityTransitionSystem = new EntityTransitionSystem(sState, (name) => this.playSound(name));
     this.surfaceImpactSystem = new SurfaceImpactSystem(sState, sArena);
     this.hudFeedbackSystem = new HUDFeedbackSystem(sState);
@@ -487,7 +487,7 @@ export class GameLoop {
       (name) => this.playSound(name),
       sArena,
     );
-    this.environmentSystem = new EnvironmentSystem(sState, newTheme);
+    this.environmentSystem = new EnvironmentSystem(sState, newTheme, sArena);
     this.entityTransitionSystem = new EntityTransitionSystem(sState, (name) => this.playSound(name));
     this.surfaceImpactSystem = new SurfaceImpactSystem(sState, sArena);
     this.hudFeedbackSystem = new HUDFeedbackSystem(sState);
