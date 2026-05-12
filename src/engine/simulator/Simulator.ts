@@ -32,6 +32,8 @@ import { EffectZoneSystem } from '../gameLoop/gameplay/EffectZoneSystem';
 import { PlayerCollisionSystem } from '../gameLoop/gameplay/PlayerCollisionSystem';
 import { StompSystem } from '../gameLoop/gameplay/StompSystem';
 import { MatchSystem } from '../gameLoop/gameplay/MatchSystem';
+import { getEntities } from '../entities/registry';
+import type { EntityFixedCtx } from '../entities/types';
 import type { ScatterFlockSpecies } from '../themes/types';
 import { pickScatterColor } from '../rendering/hazards';
 
@@ -103,6 +105,10 @@ export class Simulator {
   // at `_mutCtx` once fixedUpdate has run. PlayerInput impls must NOT mutate.
   private readonly _mutCtx: { networkInputs?: ReadonlyMap<string, InputState>; airborne?: boolean } = {};
   private _tickCtx: PlayerInputContext = this._mutCtx;
+  // Reused entity-dispatch ctx — fields overwritten at the top of fixedUpdate
+  // so the per-tick entity loop doesn't allocate. Entities MUST NOT mutate
+  // the ctx object (read-only contract).
+  private readonly _entityCtx: EntityFixedCtx;
   private _resimulating = false;
   private _loadingGeneration = 0;
 
@@ -183,6 +189,23 @@ export class Simulator {
     }
 
     this._state = createInitialMatchState(this._arena, this._theme, opts.settings, players, opts.activePlayers, this._boundGameRandom);
+
+    // Build the entity dispatch ctx once. Fields that depend on per-tick
+    // state (`dt`, `resimulating`) are overwritten in `fixedUpdate`; the
+    // rest are stable per-Simulator-lifetime. `arena` / `theme` / `settings`
+    // are reassigned on `switchArena`.
+    this._entityCtx = {
+      dt: 0,
+      state: this._state,
+      arena: this._arena,
+      theme: this._theme,
+      settings: this._settings,
+      players: this._state.players,
+      rng: this._boundGameRandom,
+      events: this._events,
+      particles: this._boundParticleEmitter,
+      resimulating: false,
+    };
 
     this._buildSystems();
   }
@@ -324,6 +347,12 @@ export class Simulator {
     );
     Object.assign(this._state, fresh);
 
+    // Refresh entity ctx for the new arena/theme/settings.
+    this._entityCtx.arena = this._arena;
+    this._entityCtx.theme = this._theme;
+    this._entityCtx.settings = this._settings;
+    this._entityCtx.players = this._state.players;
+
     this._buildSystems();
 
     this._loadingGeneration++;
@@ -435,8 +464,19 @@ export class Simulator {
     this._carrotSystem.fixedUpdate(dt);
     perfTrace.end('gameplay.carrot', carrotStart);
 
+    // Entity-registry fixedUpdate dispatch. Iteration order = registration
+    // order (locked in `entities/index.ts > registerBuiltinEntities`) and
+    // matches the original explicit call order: lavaRocks → ghosts →
+    // geyserStates → scatterFlocks. Re-ordering invalidates the
+    // determinism snapshots.
     const arenaEntityStart = perfTrace.begin('gameplay.arenaEntity');
-    this._arenaEntitySystem.fixedUpdate(dt);
+    this._entityCtx.dt = dt;
+    this._entityCtx.resimulating = this._resimulating;
+    const stateRec = this._state as unknown as Record<string, unknown[]>;
+    for (const e of getEntities()) {
+      const tick = e.fixedUpdate;
+      if (tick) tick(stateRec[e.id], this._entityCtx);
+    }
     perfTrace.end('gameplay.arenaEntity', arenaEntityStart);
 
     const perPlayerStart = perfTrace.begin('simulator.perPlayerPhysics');

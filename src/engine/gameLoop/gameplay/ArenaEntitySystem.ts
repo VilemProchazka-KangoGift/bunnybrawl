@@ -1,24 +1,23 @@
 import type { MatchState, Arena, EffectZone } from '../../types';
 import type { ThemeConfig } from '../../themes/types';
 import type { GameplaySystem } from '../types';
-import { CANVAS_WIDTH } from '../../constants';
-import { updateLavaRocks, updateGhosts, updateGeyserTimers, updateScatterFlocks } from './arenaEntities';
 
+/**
+ * Caches arena effectZone arrays consumed by EffectZoneSystem +
+ * ParticleSystem. Entity ticks (lava rocks, ghosts, geysers, scatter
+ * flocks) live in `src/engine/entities/` and dispatch through the entity
+ * registry — see `Simulator.fixedUpdate`. Ghost spawn moved to
+ * `ghostsEntity.init`; geyser-timer init moved to `geyserStatesEntity.init`.
+ */
 export class ArenaEntitySystem implements GameplaySystem {
-  private state: MatchState;
   private arena: Arena;
-  private theme: ThemeConfig;
-  private gameRandom: () => number;
 
   cachedGeyserZones: EffectZone[] = [];
   cachedZeroGZones: EffectZone[] = [];
   geyserIndexMap: Map<EffectZone, number> = new Map();
 
-  constructor(state: MatchState, arena: Arena, theme: ThemeConfig, gameRandom: () => number) {
-    this.state = state;
+  constructor(_state: MatchState, arena: Arena, _theme: ThemeConfig, _gameRandom: () => number) {
     this.arena = arena;
-    this.theme = theme;
-    this.gameRandom = gameRandom;
   }
 
   init(): void {
@@ -26,29 +25,11 @@ export class ArenaEntitySystem implements GameplaySystem {
     this.cachedGeyserZones = (this.arena.effectZones || []).filter(z => z.type === 'geyser');
     this.cachedZeroGZones = (this.arena.effectZones || []).filter(z => z.type === 'zero_g');
     this.geyserIndexMap = new Map(this.cachedGeyserZones.map((z, i) => [z, i]));
-
-    // Initialize ghosts from theme config
-    if (this.theme.ghostConfig) {
-      const gc = this.theme.ghostConfig;
-      for (let i = 0; i < gc.count; i++) {
-        this.state.ghosts.push({
-          x: this.gameRandom() * CANVAS_WIDTH,
-          y: 300 + this.gameRandom() * 300,
-          vx: (this.gameRandom() < 0.5 ? -1 : 1) * gc.speed * (0.7 + this.gameRandom() * 0.6),
-          size: gc.size,
-          alpha: 0.5 + this.gameRandom() * 0.3,
-          wobblePhase: this.gameRandom() * Math.PI * 2,
-        });
-      }
-    }
   }
 
-  fixedUpdate(dt: number): void {
-    updateLavaRocks(this.state, this.theme, dt, this.gameRandom);
-    updateGhosts(this.state, dt);
-    updateGeyserTimers(this.state, this.cachedGeyserZones, dt);
-    updateScatterFlocks(this.state, dt);
-  }
+  /** No per-tick work — entity ticks dispatched via `getEntities()` in
+   *  `Simulator.fixedUpdate`. The method stays to satisfy `GameplaySystem`. */
+  fixedUpdate(_dt: number): void {}
 
   getCachedGeyserZones(): EffectZone[] {
     return this.cachedGeyserZones;
