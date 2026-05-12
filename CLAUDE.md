@@ -67,6 +67,11 @@ http://localhost:5173/bunnybrawl/?mobile&arena=meadow&bots=2       # force touch
 - **Verify with `tsc -b`** locally before pushing — CI uses `tsc -b && vite build`, which is stricter than `--noEmit`.
 - **Default to Simulator-level tests** with `CapturedEvents`, NOT GameLoop. Sim tests need no mocks and run ~10× faster. See `testing.md`.
 - **Vitest CRLF churn on Windows**: `npm test` rewrites `__snapshots__/*.snap` with platform line endings. Always check `git diff --stat` before committing — if only LF→CRLF, revert.
+- **Multi-file mechanical edits via Node**: when scripting bulk strips/replacements across many files, normalize line endings in the same pass (`s.replace(/\r\n/g, '\n')` before `fs.writeFileSync`). Repo stores files as LF; a naive Node rewrite can produce whole-file CRLF diffs in the commit.
+- **`tsc -b` alone won't catch dead refs in scripts, e2e, or test mocks** — they cast as `any` / `as ArenaPack`. After a type-level field removal, grep for the deleted symbol across `scripts/`, `e2e/`, and `**/*.test.ts` before committing.
+- **`playwright-report/` clutters `git status`** from background test runs — filter with `grep -v "playwright-report"` when reviewing changes. Don't stage it.
+- **Flaky in full suite, passes alone**: `src/engine/integration.test.ts > 'fixedUpdate with explicit inputMap drives both players'` fails ~always via `npx vitest run` (P2 wraps to ~1249px) but passes via `npx vitest run src/engine/integration.test.ts`. Pre-existing test-ordering issue; don't chase it as a regression.
+- **"Test suite" ≠ "vitest"**: `npm test` runs vitest (~2000 unit tests); `npm run test:e2e` runs Playwright (~120 browser tests, builds first). They cover DIFFERENT failure modes — e2e catches renderer/diag/visual regressions vitest can't see. When reporting "tests pass," name the runner explicitly ("vitest passes; e2e not run"). Do not call a verification "deep" unless e2e was run.
 - **Document lessons in `.claude/skills/*.md`** after completing features.
 
 ## Skills Index
