@@ -8,10 +8,10 @@ import {
   HITSTOP_DURATION, HITSTOP_ZOOM,
 } from './constants';
 import {
-  drawHill, drawPlatformMoss,
+  drawHill,
   capFrontY, capBackY, skewPx,
 } from './themes/drawPrimitives';
-import { hexToRGB, hexToHSL, blendRgb } from './fastMath';
+import { hexToRGB, hexToHSL } from './fastMath';
 import { debugFlags } from './debugFlags';
 import { drawNavDebugOverlay } from './navDebugOverlay';
 import type { BotNavDebugState } from './navDebugOverlay';
@@ -621,30 +621,11 @@ export class Renderer implements IRenderer {
 
     if (this.mirrored) { ctx.restore(); }
 
-    // Platforms (use mirrored arena data, no canvas transform needed)
+    // Platforms (use mirrored arena data, no canvas transform needed). Each
+    // pack's drawPlatform is responsible for the ground cap (surface line,
+    // grass blades, moss, etc.).
     for (const plat of arena.platforms) {
       this.drawPlatform(ctx, plat, plat.y >= 650);
-    }
-
-    // Ground-top grass blades + surface line — packs that own drawPlatform render their own ground cap.
-    if (!this.theme.drawPlatform) {
-      const ground = arena.platforms[0];
-      ctx.fillStyle = theme.ground.surfaceColor;
-      ctx.fillRect(ground.x, ground.y, ground.width, theme.ground.surfaceThickness);
-
-      // Grass blades (if enabled by theme)
-      if (theme.ground.grassBlades) {
-        const gb = theme.ground.grassBlades;
-        ctx.strokeStyle = gb.color;
-        ctx.lineWidth = 2;
-        for (let x = 10; x < CANVAS_WIDTH; x += gb.spacing + Math.random() * (gb.spacing * 0.67)) {
-          const h = gb.heightRange[0] + Math.random() * (gb.heightRange[1] - gb.heightRange[0]);
-          ctx.beginPath();
-          ctx.moveTo(x, ground.y);
-          ctx.lineTo(x - 3, ground.y - h);
-          ctx.stroke();
-        }
-      }
     }
 
     // Theme-specific background nature (pass original arena, canvas transform handles mirroring)
@@ -1082,42 +1063,7 @@ export class Renderer implements IRenderer {
 
 
   private drawPlatform(ctx: Ctx2D, platform: Platform, isGround: boolean): void {
-    if (this.theme.drawPlatform) {
-      this.theme.drawPlatform(ctx, platform, isGround);
-      return;
-    }
-
-    const tp = this.theme.platform;
-    const { x, y, width: w, height: h } = platform;
-    if (isGround) {
-      ctx.fillStyle = tp.groundBodyColor;
-      ctx.fillRect(x, y + 4, w, h - 4);
-      ctx.fillStyle = tp.groundTopColor;
-      ctx.fillRect(x, y, w, 8);
-      const spotColor = this.blendColor(tp.groundBodyColor, '#FFFFFF', 0.15);
-      ctx.fillStyle = spotColor;
-      for (let dx = 10; dx < w; dx += 30 + Math.random() * 20) {
-        ctx.fillRect(x + dx, y + 15 + Math.random() * 20, 4, 3);
-      }
-    } else {
-      ctx.fillStyle = tp.floatingBodyColor;
-      ctx.fillRect(x, y + 4, w, h - 4);
-      ctx.fillStyle = tp.floatingTopColor;
-      ctx.fillRect(x, y, w, 6);
-      if (tp.floatingAccentColor) {
-        ctx.fillStyle = tp.floatingAccentColor;
-        ctx.fillRect(x, y, w, 3);
-      }
-      if (tp.drawMoss) {
-        drawPlatformMoss(ctx, x, y, h);
-        drawPlatformMoss(ctx, x + w, y, h);
-      }
-    }
-  }
-
-  private blendColor(hex: string, target: string, amount: number): string {
-    const c = blendRgb(hexToRGB(hex), hexToRGB(target), amount);
-    return `rgb(${c.r},${c.g},${c.b})`;
+    this.theme.drawPlatform!(ctx, platform, isGround);
   }
 
   /** Bake gibs onto the bg canvas. Marks bgNight dirty so the cross-fade

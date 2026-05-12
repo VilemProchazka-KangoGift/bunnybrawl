@@ -396,18 +396,7 @@ export const castle: ArenaPack = {
   ],
 
   ground: {
-    surfaceColor: '#4A4A5E',
-    surfaceThickness: 4,
-  },
-
-  platform: {
-    floatingBodyColor: '#3A3A50',
-    floatingTopColor: '#5A5A70',
-    floatingAccentColor: undefined,
-    groundBodyColor: '#2A2A40',
-    groundTopColor: '#4A4A5E',
-    drawMoss: false,
-  },
+    surfaceColor: '#4A4A5E',  },
 
   // ---- Ambient systems ----
   clouds: {

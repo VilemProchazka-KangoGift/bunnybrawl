@@ -440,18 +440,7 @@ export const spaceStation: ArenaPack = {
   hills: [],
 
   ground: {
-    surfaceColor: '#3A3A4A',
-    surfaceThickness: 3,
-  },
-
-  platform: {
-    floatingBodyColor: '#2A2A3A',
-    floatingTopColor: '#4A4A5A',
-    floatingAccentColor: '#00CCFF',
-    groundBodyColor: '#1A1A2A',
-    groundTopColor: '#3A3A4A',
-    drawMoss: false,
-  },
+    surfaceColor: '#3A3A4A',  },
 
   // ---- Ambient systems ----
   clouds: {

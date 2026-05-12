@@ -100,12 +100,9 @@ export function toThemeConfig(pack: ArenaPack): ThemeConfig {
   return {
     id: pack.id,
     nameKey: `arena_${pack.id}`,
-    previewGradient: pack.previewGradient,
-    previewIcon: pack.previewIcon,
     sky: pack.sky,
     hills: pack.hills,
     ground: pack.ground,
-    platform: pack.platform,
     clouds: pack.clouds,
     weather: pack.weather,
     wildlife: pack.wildlife,

@@ -171,7 +171,7 @@
 - **Object-pool lifetime rule**: pool objects that get fully consumed before the next reuse, NOT objects whose references escape into long-lived state arrays. Per-tick scratches (result envelopes, scratch input states, scratch awareness sub-objects) are safe — caller pulls values out by index inside the same `fixedUpdate`. Per-event payloads pushed into `state.killFeed` / `state.shockwaves` / `state.scoreAnimations` / HUD `comboPopups` / `_lightBursts` are NOT safe to pool — the renderer reads them across many frames, and recycling next emit mutates the displayed entry. Kill/spawn-rate allocations (≈1-3/sec) are GC-negligible vs. per-frame allocators; don't trade real lifetime bugs for marginal alloc savings. Full lessons + the 2026-05 round-by-round list in `.claude/skills/performance.md` → "Object Pooling — Lifetime Rules".
 
 ## Mobile / Touch Input
-- `TouchInputManager` follows same `attach()`/`detach()`/`getInput() → InputState` contract as `InputManager`. Integrated via `getPlayerInput()` touch branch in gameLoop.
+- `TouchInputManager` follows same `attach()`/`detach()`/`getInput() → InputState` contract as `KeyboardManager`. Integrated via `getPlayerInput()` touch branch in gameLoop.
 - `isTouchPrimary()` result is cached at module scope — safe to call frequently, but `?mobile` URL param override only works on first call.
 - Touch coordinate mapping: cache `getBoundingClientRect()` on attach + resize. NEVER call per-touch-event (causes layout reflow at 60-120Hz).
 - `e.preventDefault()` on touch events blocks synthetic click events on buttons. Always check `target.tagName === 'BUTTON'` before preventing default.
@@ -195,7 +195,7 @@
 - **Network mode wiring** (`GameLoop.setNetworkMode(true)`): swaps each human-slot PlayerInput from KeyboardInput → RemoteInput. Bots keep their RuleBasedBot. The mobile-host touch slot is also moved to RemoteInput; the host's `getInputAny()` already merges keyboard + touch into the network buffer, so the touch signal flows through that single path. On disable, KeyboardInput is restored (or TouchAdapter for the touch slot).
 - **Touch wiring** (`Simulator.setTouchInput(provider, slot)`): installs a TouchAdapter into the playerInputs map for the new slot, removes the previous TouchAdapter (caller restores via `setPlayerInput` if needed). The touch slot's airborne state is precomputed once per tick at the top of `fixedUpdate` into `ctx.airborne` — TouchAdapter falls back to looking up the player itself if ctx.airborne is undefined (defensive, for tests).
 - `Simulator.fixedUpdate(dt, ctxOrNetworkInputs?)` accepts either the new `PlayerInputContext` or the legacy `ReadonlyMap<string, InputState>` form for backward compat. GameLoop's public `fixedUpdate(dt, networkInputs?)` still takes a Map (preserved for existing callers in netMatch.ts and tests).
-- `InputManager` in `src/engine/input.ts` is now a 26-line deprecation shim around `KeyboardManager`. Lobby code still uses it; new code should import `KeyboardManager` directly.
+- Use `KeyboardManager` from `src/engine/input/KeyboardManager.ts` directly. (The old `InputManager` shim is gone.)
 
 ## Headless / ML pipeline
 - `src/engine/headless/` is Node-only and intentionally outside the browser-pure path (it imports `node:fs` for NDJSON file recording — gated by a triple-slash `/// <reference types="node" />` directive in `recording.ts`, so only that file pulls @types/node).

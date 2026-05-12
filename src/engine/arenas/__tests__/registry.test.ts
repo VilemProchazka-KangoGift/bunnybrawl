@@ -33,7 +33,7 @@ function makeMockPack(overrides: Partial<ArenaPack> & { id: string }): ArenaPack
     spawnPoints: [{ x: 200, y: 650, platformIndex: 0 }],
     sky: { gradient: [{ offset: 0, color: '#000' }, { offset: 1, color: '#111' }] },
     hills: [],
-    ground: { surfaceColor: '#555', surfaceThickness: 4 },
+    ground: { surfaceColor: '#555' },
     platform: {
       floatingBodyColor: '#444',
       floatingTopColor: '#666',
@@ -228,8 +228,6 @@ describe('Arena registry', () => {
 
     expect(theme.id).toBe('test_to_theme');
     expect(theme.nameKey).toBe('arena_test_to_theme');
-    expect(theme.previewGradient).toBe(pack.previewGradient);
-    expect(theme.previewIcon).toBe(pack.previewIcon);
     expect(theme.sky).toBe(pack.sky);
     expect(theme.drawBackgroundNature).toBe(drawBg);
     expect(theme.drawForegroundNature).toBe(drawFg);

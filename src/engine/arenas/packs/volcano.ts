@@ -339,18 +339,7 @@ export const volcano: ArenaPack = {
   ],
 
   ground: {
-    surfaceColor: '#3A2A2A',
-    surfaceThickness: 5,
-  },
-
-  platform: {
-    floatingBodyColor: '#2A2020',
-    floatingTopColor: '#4A3535',
-    floatingAccentColor: '#FF6600',
-    groundBodyColor: '#1A1010',
-    groundTopColor: '#3A2A2A',
-    drawMoss: false,
-  },
+    surfaceColor: '#3A2A2A',  },
 
   // ---- Ambient systems ----
   clouds: {

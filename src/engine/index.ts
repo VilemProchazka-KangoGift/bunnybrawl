@@ -1,6 +1,6 @@
 export { GameLoop } from './gameLoop';
 export type { MatchEndCallback } from './gameLoop';
-export { InputManager, KEY_BINDINGS } from './input';
+export { KEY_BINDINGS } from './input/KeyboardManager';
 export { Renderer } from './renderer';
 export { audio } from './audio';
 export { CHARACTERS, getCharacterForSlot, BOT_CHARACTERS, assignBotCharacters, getCharacterEmoji, hasCustomEyes, registerBuiltinCharacters, getAllCharacters } from './characters';

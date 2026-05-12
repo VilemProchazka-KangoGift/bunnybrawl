@@ -257,21 +257,6 @@ export const candyLand: ArenaPack = {
 
   ground: {
     surfaceColor: '#FF9ECE',
-    surfaceThickness: 5,
-    grassBlades: {
-      color: '#FF85C0',
-      spacing: 20,
-      heightRange: [4, 7],
-    },
-  },
-
-  platform: {
-    floatingBodyColor: '#FFD4A8',
-    floatingTopColor: '#FFE8CC',
-    floatingAccentColor: '#FF9ECE',
-    groundBodyColor: '#F5C49C',
-    groundTopColor: '#FFD4B8',
-    drawMoss: false,
   },
 
   // ---- Ambient systems ----

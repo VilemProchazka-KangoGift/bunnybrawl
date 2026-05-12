@@ -660,18 +660,7 @@ export const rooftops: ArenaPack = {
   hills: [],
 
   ground: {
-    surfaceColor: '#5A5060',
-    surfaceThickness: 4,
-  },
-
-  platform: {
-    floatingBodyColor: '#4A4050',
-    floatingTopColor: '#6A5A6A',
-    floatingAccentColor: undefined,
-    groundBodyColor: '#3A3040',
-    groundTopColor: '#5A5060',
-    drawMoss: false,
-  },
+    surfaceColor: '#5A5060',  },
 
   // ---- Ambient systems ----
   clouds: {

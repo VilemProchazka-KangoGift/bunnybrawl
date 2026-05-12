@@ -109,12 +109,6 @@ function getSceneTintCache(): OffscreenCanvas | null {
   return _sceneTintCache;
 }
 
-// Platform colors — legacy fields kept for ThemeConfig compat; unused once drawPlatform owns rendering.
-const FLOAT_BODY = '#5A7A8C';
-const FLOAT_TOP = '#D8E8F0';
-const GROUND_BODY = '#4A6A7C';
-const GROUND_TOP = '#E0EEF5';
-
 function drawWinterPlatformBg(ctx: Ctx2D, platform: Platform, isGround: boolean): void {
   const rng = mulberry32(seedFor(platform.x, platform.y));
   const cF = capFrontY(platform);
@@ -277,18 +271,7 @@ export const winterLake: ArenaPack = {
   ],
 
   ground: {
-    surfaceColor: '#E8F0F8',
-    surfaceThickness: 5,
-    // No grass blades in winter
-  },
-
-  platform: {
-    floatingBodyColor: FLOAT_BODY,
-    floatingTopColor: FLOAT_TOP,
-    floatingAccentColor: undefined,
-    groundBodyColor: GROUND_BODY,
-    groundTopColor: GROUND_TOP,
-    drawMoss: false,
+    surfaceColor: '#E8F0F8',    // No grass blades in winter
   },
 
   // ---- Ambient systems ----

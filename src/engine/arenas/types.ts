@@ -72,22 +72,7 @@ export interface ArenaPack {
   hills: Array<{ x: number; baseY: number; width: number; height: number; color: string }>;
   ground: {
     surfaceColor: string;
-    surfaceThickness: number;
-    grassBlades?: {
-      color: string;
-      spacing: number;
-      heightRange: [number, number];
-    };
   };
-  platform: {
-    floatingBodyColor: string;
-    floatingTopColor: string;
-    floatingAccentColor?: string;
-    groundBodyColor: string;
-    groundTopColor: string;
-    drawMoss: boolean;
-  };
-
   // ---- Ambient systems ----
   clouds: CloudConfig;
   weather: WeatherConfig;

@@ -49,7 +49,6 @@ vi.mock('./rendering/hud', () => ({
 vi.mock('./themes/drawPrimitives', () => ({
   drawCloud: vi.fn(),
   drawHill: vi.fn(),
-  drawPlatformMoss: vi.fn(),
 }));
 
 vi.mock('./navDebugOverlay', () => ({
@@ -131,12 +130,7 @@ function makeTheme() {
   return {
     sky: { gradient: [{ offset: 0, color: '#87CEEB' }, { offset: 1, color: '#B0E0E6' }] },
     hills: [{ x: 200, baseY: 600, width: 300, height: 100, color: '#4A7C3F' }],
-    ground: { color: '#4A7C3F', surfaceColor: '#5A8C4F', surfaceThickness: 4, grassBlades: { color: '#2D5025', spacing: 15, heightRange: [5, 12] } },
-    platform: {
-      groundTopColor: '#5A8C4F', groundBodyColor: '#4A7C3F',
-      floatingTopColor: '#6A5C4F', floatingBodyColor: '#5A4C3F',
-      floatingAccentColor: '#7A6C5F', drawMoss: true,
-    },
+    ground: { color: '#4A7C3F', surfaceColor: '#5A8C4F' },
     clouds: { count: 3, color: '#fff', minSize: 30, maxSize: 60, minSpeed: 10, maxSpeed: 20, yRange: [30, 80] },
     weather: { type: 'leaves', count: 20 },
     fog: { color: '#AABBCC', sizeX: 40, sizeY: 15, opacity: 0.3 },
@@ -146,6 +140,7 @@ function makeTheme() {
     drawForegroundNature: vi.fn(),
     drawFarBackground: vi.fn(),
     drawAnimatedBackground: null as any,
+    drawPlatform: vi.fn(),
   } as any;
 }
 
@@ -301,15 +296,6 @@ describe('Renderer — renderBackground', () => {
     expect(theme.drawFarBackground).toHaveBeenCalled();
   });
 
-  it('draws grass blades when theme enables them', () => {
-    const { canvas: bg, ctx: bgCtx } = makeCanvas();
-    const { canvas: fg } = makeCanvas();
-    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme() });
-
-    renderer.renderBackground(makeArena());
-    expect(bgCtx.stroke).toHaveBeenCalled(); // grass blade strokes
-  });
-
   it('applies mirror transform when mirrored', () => {
     const { canvas: bg, ctx: bgCtx } = makeCanvas();
     const { canvas: fg } = makeCanvas();
@@ -317,16 +303,6 @@ describe('Renderer — renderBackground', () => {
 
     renderer.renderBackground(makeArena());
     expect(bgCtx.scale).toHaveBeenCalledWith(-1, 1);
-  });
-
-  it('draws floating platform with accent color and moss', () => {
-    const { canvas: bg, ctx: bgCtx } = makeCanvas();
-    const { canvas: fg } = makeCanvas();
-    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme() });
-
-    renderer.renderBackground(makeArena());
-    // Multiple fillRect calls for ground + floating platforms
-    expect(bgCtx.fillRect.mock.calls.length).toBeGreaterThan(3);
   });
 
 });
@@ -711,26 +687,6 @@ describe('Renderer — bgNight bake on bg writes', () => {
     (bgNightCtx.drawImage as any).mockClear();
     renderer.renderFrame(makeState(), makeArena(), []);
     expect(bgNightCtx.drawImage).not.toHaveBeenCalled();
-  });
-});
-
-describe('Renderer — blendColor', () => {
-  it('blends two hex colors', () => {
-    const { canvas: bg } = makeCanvas();
-    const { canvas: fg } = makeCanvas();
-    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme() });
-    const blended = (renderer as any).blendColor('#FF0000', '#0000FF', 0.5);
-    expect(blended).toMatch(/^rgb\(\d+,\d+,\d+\)$/);
-    // Should be purple-ish (128, 0, 128)
-    expect(blended).toBe('rgb(128,0,128)');
-  });
-
-  it('returns first color at amount=0', () => {
-    const { canvas: bg } = makeCanvas();
-    const { canvas: fg } = makeCanvas();
-    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme() });
-    const blended = (renderer as any).blendColor('#FF0000', '#0000FF', 0);
-    expect(blended).toBe('rgb(255,0,0)');
   });
 });
 

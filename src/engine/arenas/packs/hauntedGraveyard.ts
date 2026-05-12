@@ -361,21 +361,6 @@ export const hauntedGraveyard: ArenaPack = {
 
   ground: {
     surfaceColor: '#3A3530',
-    surfaceThickness: 4,
-    grassBlades: {
-      color: '#2A3520',
-      spacing: 25,
-      heightRange: [5, 9],
-    },
-  },
-
-  platform: {
-    floatingBodyColor: '#3A3040',
-    floatingTopColor: '#5A4A60',
-    floatingAccentColor: undefined,
-    groundBodyColor: '#2A2530',
-    groundTopColor: '#3A3530',
-    drawMoss: false,
   },
 
   // ---- Ambient systems ----

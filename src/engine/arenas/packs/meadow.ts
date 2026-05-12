@@ -492,21 +492,6 @@ export const meadow: ArenaPack = {
 
   ground: {
     surfaceColor: '#6BBF59',
-    surfaceThickness: 4,
-    grassBlades: {
-      color: '#5DAF4A',
-      spacing: 15,
-      heightRange: [6, 10],
-    },
-  },
-
-  platform: {
-    floatingBodyColor: '#6B4E1B',
-    floatingTopColor: '#8B6914',
-    floatingAccentColor: '#6BBF59',
-    groundBodyColor: '#5C3A1E',
-    groundTopColor: '#4a8c3f',
-    drawMoss: true,
   },
 
   // ---- Ambient systems ----

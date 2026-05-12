@@ -90,8 +90,6 @@ export interface PhysicsModifiers {
 export interface ThemeConfig {
   id: string;
   nameKey: string;           // i18n key for display name
-  previewGradient: string;   // CSS gradient for menu thumbnail
-  previewIcon: string;       // Unicode icon for arena tile
 
   // Sky
   sky: { gradient: GradientStop[] };
@@ -99,26 +97,11 @@ export interface ThemeConfig {
   // Hills behind platforms
   hills: Array<{ x: number; baseY: number; width: number; height: number; color: string }>;
 
-  // Ground surface styling
+  // Ground surface styling (read by ParticleSystem and lobbyGame for dust color)
   ground: {
-    surfaceColor: string;       // top surface line color
-    surfaceThickness: number;   // px
-    grassBlades?: {
-      color: string;
-      spacing: number;           // px between blades
-      heightRange: [number, number];
-    };
+    surfaceColor: string;
   };
 
-  // Platform rendering
-  platform: {
-    floatingBodyColor: string;
-    floatingTopColor: string;
-    floatingAccentColor?: string;  // e.g. moss green or snow white strip
-    groundBodyColor: string;
-    groundTopColor: string;
-    drawMoss: boolean;
-  };
 
   // Ambient systems
   clouds: CloudConfig;

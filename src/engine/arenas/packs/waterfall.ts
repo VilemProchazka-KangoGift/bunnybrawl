@@ -387,21 +387,6 @@ export const waterfall: ArenaPack = {
 
   ground: {
     surfaceColor: '#5AAF49',
-    surfaceThickness: 4,
-    grassBlades: {
-      color: '#4D9F3A',
-      spacing: 14,
-      heightRange: [5, 9],
-    },
-  },
-
-  platform: {
-    floatingBodyColor: '#5A6B5A',
-    floatingTopColor: '#6A7B6A',
-    floatingAccentColor: '#5AAF49',
-    groundBodyColor: '#4A5A3E',
-    groundTopColor: '#3A7A3A',
-    drawMoss: true,
   },
 
   // ---- Ambient systems ----
