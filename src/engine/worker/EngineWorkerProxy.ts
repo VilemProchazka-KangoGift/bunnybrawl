@@ -100,7 +100,10 @@ export class EngineWorkerProxy {
   /** Last input batch posted to the worker. Per-rAF reads compare against
    *  this to skip identical posts — inputs change far less often than 60Hz
    *  so the dedup cuts postMessage volume 3-10×. Indexed by slot order in
-   *  `activePlayers`. */
+   *  `activePlayers`. Each entry is its own scratch (NOT a reference to
+   *  the current tick's `merged` source, which is itself a reused scratch
+   *  from KeyboardManager / touchMerged — those mutate every tick, so a
+   *  shared reference would defeat the field-equality check). */
   private lastSentInputs: InputState[] = [];
   /** True until the first input batch has been posted, ensuring the worker
    *  receives at least one batch even on a frame with all-empty inputs
@@ -145,6 +148,13 @@ export class EngineWorkerProxy {
    *  the loop runs in the worker). */
   private _latestFpsSamples: { dts: number[]; lastSampleTime: number } = { dts: [], lastSampleTime: 0 };
   private _latestSections: Record<string, { calls: number; totalMs: number; avgMs: number; p95Ms: number }> = {};
+
+  /** Per-rAF scratches so the input loop allocates zero objects in
+   *  steady state. Inputs are read into these, then either SAB-written
+   *  or postMessage-posted. The postMessage path retains the array
+   *  reference across ticks (structured clone copies it on send). */
+  private _inputsScratch: Array<[PlayerSlot, InputState]> = [];
+  private _touchMerged: InputState = { left: false, right: false, jump: false, down: false };
 
   constructor(opts: EngineWorkerProxyOptions) {
     this.fgNightTint = opts.fgNightTint ?? null;
@@ -327,7 +337,11 @@ export class EngineWorkerProxy {
     // Build per-slot input batch from KeyboardManager + TouchInput. Bots
     // run inside the worker's Simulator (RuleBasedBot) so we don't include
     // their inputs.
-    const inputs: Array<[PlayerSlot, InputState]> = [];
+    //
+    // Allocations: zero in steady state. `_inputsScratch` is retained,
+    // truncated, and refilled each tick. Tuples are recycled in place.
+    // Touch-merge writes into a single `_touchMerged` scratch.
+    const inputs = this._inputsScratch;
     let humanIdx = 0;
     let changed = !this.inputsEverSent;
     for (const slot of this.activePlayers) {
@@ -335,28 +349,54 @@ export class EngineWorkerProxy {
       const kb = this.keyboardManager.readSlot(slot as CharacterSlot);
       let merged: InputState = kb;
       if (this.touchInput && slot === this.touchSlot) {
-        const player = this.mirrorState?.players.find((p) => p.id === slot);
-        const airborne = player?.state === 'airborne';
+        // Index-based lookup avoids the per-rAF closure that
+        // `players.find(p => p.id === slot)` allocates.
+        let airborne = false;
+        if (this.mirrorState) {
+          const players = this.mirrorState.players;
+          for (let i = 0; i < players.length; i++) {
+            if (players[i].id === slot) { airborne = players[i].state === 'airborne'; break; }
+          }
+        }
         const ti = this.touchInput.getInputForPlayer(airborne);
-        merged = {
-          left: kb.left || ti.left,
-          right: kb.right || ti.right,
-          jump: kb.jump || ti.jump,
-          down: kb.down || ti.down,
-        };
+        const tm = this._touchMerged;
+        tm.left = kb.left || ti.left;
+        tm.right = kb.right || ti.right;
+        tm.jump = kb.jump || ti.jump;
+        tm.down = kb.down || ti.down;
+        merged = tm;
       }
-      inputs.push([slot, merged]);
-      const last = this.lastSentInputs[humanIdx];
-      if (!last
-        || last.left !== merged.left
+      // Reuse the existing tuple at this index if present; otherwise
+      // push a fresh one (one-time per slot, amortized across the match).
+      if (humanIdx < inputs.length) {
+        inputs[humanIdx][0] = slot;
+        inputs[humanIdx][1] = merged;
+      } else {
+        inputs.push([slot, merged]);
+      }
+      let last = this.lastSentInputs[humanIdx];
+      if (!last) {
+        last = { left: false, right: false, jump: false, down: false };
+        this.lastSentInputs[humanIdx] = last;
+        changed = true;
+      } else if (last.left !== merged.left
         || last.right !== merged.right
         || last.jump !== merged.jump
         || last.down !== merged.down) {
         changed = true;
       }
-      this.lastSentInputs[humanIdx] = merged;
+      // Copy fields (not reference) — merged is itself a reused scratch
+      // that will be overwritten next tick; storing the reference would
+      // make next-tick's `last.x === merged.x` trivially true.
+      last.left = merged.left;
+      last.right = merged.right;
+      last.jump = merged.jump;
+      last.down = merged.down;
       humanIdx++;
     }
+    // Truncate to the actual human-slot count (no-op in steady state).
+    if (inputs.length > humanIdx) inputs.length = humanIdx;
+
     // Two delivery paths:
     //  - SAB (crossOriginIsolated dev/preview): Atomics.store the per-slot
     //    bitfield. Worker polls every fixedUpdate, no message hop.
@@ -364,10 +404,7 @@ export class EngineWorkerProxy {
     //    `host:engineInputBatch` wire as before.
     if (this.inputSabView) {
       for (let i = 0; i < inputs.length; i++) {
-        const merged = inputs[i][1];
-        // Index is humanIdx because we built `inputs` by skipping bot
-        // slots in the same order as `inputSabSlots`.
-        writeSlotInput(this.inputSabView, i, merged);
+        writeSlotInput(this.inputSabView, i, inputs[i][1]);
       }
       this.inputsEverSent = true;
     } else if (changed) {
