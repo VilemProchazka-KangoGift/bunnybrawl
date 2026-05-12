@@ -41,7 +41,6 @@ function makeState(overrides?: Partial<MatchState>): MatchState {
     lavaRockTimer: 10,
 
     geyserStates: [],
-    pigeonFlocks: [],
     bouncyWobble: new Map(),
     ...overrides,
   };

@@ -23,7 +23,7 @@ import { drawFpsCounter } from './fpsCounter';
 import {
   drawCarrot, drawSpringMushroom, drawThorn,
   drawWeather, drawParticles, drawGibs, drawGibShape, drawConfetti, drawFireworks, drawWildlife, drawSpringTrail,
-  drawHazardZone, drawGhost, drawLavaRock, drawZeroGZone, drawCurrentZone, drawGeyser, drawBouncyPlatformOverlay, drawPigeonFlock, drawScatterFlock,
+  drawHazardZone, drawGhost, drawLavaRock, drawZeroGZone, drawCurrentZone, drawGeyser, drawBouncyPlatformOverlay, drawScatterFlock,
   drawDayNightCycle, computeNightIntensity, fireflyPosition, FIREFLY_COUNT,
   drawHUD, drawCountdown, drawConnectionQuality, drawComboPopups, invalidateHudCache, isHudDirty,
   drawPlayer,
@@ -195,7 +195,6 @@ export interface RenderDiagnostics {
   hazardZones: boolean;
   effectZones: boolean;
   bouncyPlatforms: boolean;
-  pigeons: boolean;
   lavaRocks: boolean;
   springs: boolean;
   thorns: boolean;
@@ -269,7 +268,7 @@ function addIsoPlatformPath(ctx: Ctx2D, plat: Platform): void {
 function freshDiag(): RenderDiagnostics {
   return {
     clouds: false, weather: false, wildlife: false, animatedBg: false,
-    hazardZones: false, effectZones: false, bouncyPlatforms: false, pigeons: false,
+    hazardZones: false, effectZones: false, bouncyPlatforms: false,
     lavaRocks: false, springs: false, thorns: false, carrots: false,
     gibs: false, confetti: false, shockwaves: false, afterimages: false,
     fog: false, ambient: false, fireworks: false, dayNight: false,
@@ -289,7 +288,7 @@ function setQuantizedOpacity(el: HTMLElement, target: number, last: number): num
 
 function resetDiag(d: RenderDiagnostics): void {
   d.clouds = false; d.weather = false; d.wildlife = false; d.animatedBg = false;
-  d.hazardZones = false; d.effectZones = false; d.bouncyPlatforms = false; d.pigeons = false;
+  d.hazardZones = false; d.effectZones = false; d.bouncyPlatforms = false;
   d.lavaRocks = false; d.springs = false; d.thorns = false; d.carrots = false;
   d.gibs = false; d.confetti = false; d.shockwaves = false; d.afterimages = false;
   d.fog = false; d.ambient = false; d.fireworks = false; d.dayNight = false;
@@ -1299,12 +1298,6 @@ export class Renderer implements IRenderer {
       drawSurfaceDecals(ctx, matchState);
 
       const entStart = perfTrace.begin('render.entities');
-      // Pigeon flocks
-      for (const flock of matchState.pigeonFlocks) {
-        drawPigeonFlock(ctx, flock, matchState.timeElapsed, cosmeticLead);
-        d.pigeons = true;
-      }
-
       // Species-aware scatter flocks (birds, bats, crows)
       for (const flock of matchState.scatterFlocks) {
         drawScatterFlock(ctx, flock, matchState.timeElapsed, cosmeticLead);

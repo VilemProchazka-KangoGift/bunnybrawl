@@ -131,7 +131,6 @@ export function toThemeConfig(pack: ArenaPack): ThemeConfig {
     drawCustomSpring: pack.drawCustomSpring,
     ghostConfig: pack.ghostConfig,
     lavaRockConfig: pack.lavaRockConfig,
-    pigeonConfig: pack.pigeonConfig,
     scatterFlockConfigs: pack.scatterFlockConfigs,
     physics: pack.physics,
     ambientSoundConfig: pack.ambientSoundConfig,

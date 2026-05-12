@@ -20,7 +20,6 @@ vi.mock('./rendering', () => ({
   drawCurrentZone: vi.fn(),
   drawGeyser: vi.fn(),
   drawBouncyPlatformOverlay: vi.fn(),
-  drawPigeonFlock: vi.fn(),
   drawDayNightCycle: vi.fn(),
   computeNightIntensity: vi.fn(() => 0),
   fireflyPosition: vi.fn((_i: number, _t: number, out: { x: number; y: number }) => { out.x = 0; out.y = 0; }),
@@ -71,7 +70,7 @@ import { debugFlags } from './debugFlags';
 import {
   drawCarrot, drawSpringMushroom, drawThorn,
   drawWeather, drawParticles, drawGibs, drawGibShape, drawConfetti, drawFireworks, drawWildlife, drawSpringTrail,
-  drawHazardZone, drawGhost, drawLavaRock, drawZeroGZone, drawCurrentZone, drawGeyser, drawBouncyPlatformOverlay, drawPigeonFlock,
+  drawHazardZone, drawGhost, drawLavaRock, drawZeroGZone, drawCurrentZone, drawGeyser, drawBouncyPlatformOverlay,
   drawDayNightCycle,
   drawHUD, drawCountdown,
   drawPlayer,
@@ -148,7 +147,6 @@ function makeTheme() {
     drawForegroundNature: vi.fn(),
     drawFarBackground: vi.fn(),
     drawAnimatedBackground: null as any,
-    pigeonConfig: null as any,
   } as any;
 }
 
@@ -204,7 +202,6 @@ function makeState(overrides?: any) {
     shockwaves: [],
     ghosts: [],
     lavaRocks: [],
-    pigeonFlocks: [],
     fogParticles: null,
     pollenParticles: null,
     geyserStates: [],
@@ -465,13 +462,6 @@ describe('Renderer — renderFrame conditional branches', () => {
     renderer.renderFrame(makeState(), arena, []);
     expect(drawBouncyPlatformOverlay).toHaveBeenCalled();
     expect(renderer.getDiagnostics().bouncyPlatforms).toBe(true);
-  });
-
-  it('draws pigeon flocks when present', () => {
-    const state = makeState({ pigeonFlocks: [{ x: 200, y: 100, active: true }] });
-    renderer.renderFrame(state, makeArena(), []);
-    expect(drawPigeonFlock).toHaveBeenCalled();
-    expect(renderer.getDiagnostics().pigeons).toBe(true);
   });
 
   it('draws active lava rocks', () => {

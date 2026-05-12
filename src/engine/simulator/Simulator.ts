@@ -587,28 +587,6 @@ export class Simulator {
         }
       }
 
-      for (const flock of this._state.pigeonFlocks) {
-        if (!flock.active) continue;
-        const dx = (player.x + player.width / 2) - flock.x;
-        const dy = (player.y + player.height) - flock.y;
-        if (dx * dx + dy * dy < 60 * 60 && player.state !== 'airborne') {
-          flock.active = false;
-          flock.respawnTimer = this._theme.pigeonConfig?.respawnTime || 12;
-          this._events.onSfxRequest('pigeon_scatter');
-          for (let pi = 0; pi < 6; pi++) {
-            const angle = -Math.PI * 0.5 + (Math.random() - 0.5) * Math.PI * 0.8;
-            const speed = 150 + Math.random() * 200;
-            flock.scatterParticles.push({
-              x: flock.x + (Math.random() - 0.5) * 20,
-              y: flock.y - 5,
-              vx: Math.cos(angle) * speed * (Math.random() < 0.5 ? -1 : 1),
-              vy: Math.sin(angle) * speed - 80,
-              life: 1.0 + Math.random() * 0.5,
-            });
-          }
-        }
-      }
-
       for (const flock of this._state.scatterFlocks) {
         if (!flock.active) continue;
         const dx = (player.x + player.width / 2) - flock.x;

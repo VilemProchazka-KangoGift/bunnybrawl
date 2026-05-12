@@ -399,7 +399,6 @@ function buildSlimMirror(s: MatchState): MatchState {
     pollenParticles: EMPTY_ARRAY as MatchState['pollenParticles'],
     shootingStars: EMPTY_ARRAY as MatchState['shootingStars'],
     comboPopups: EMPTY_ARRAY as MatchState['comboPopups'],
-    pigeonFlocks: EMPTY_ARRAY as MatchState['pigeonFlocks'],
     scatterFlocks: EMPTY_ARRAY as MatchState['scatterFlocks'],
     gibs: EMPTY_ARRAY as MatchState['gibs'],
     confetti: EMPTY_ARRAY as MatchState['confetti'],

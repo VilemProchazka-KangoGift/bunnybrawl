@@ -1,7 +1,7 @@
 import type { MatchState } from '../../types';
 import type { ThemeConfig } from '../../themes/types';
 import type { CosmeticSystem } from '../types';
-import { updateWildlife, updateFog, updatePollen, updateShootingStars, updateShockwaves, updateScoreAnimations, updateBouncyWobble, updatePigeonScatterParticles, updateScatterFlockParticles } from './environment';
+import { updateWildlife, updateFog, updatePollen, updateShootingStars, updateShockwaves, updateScoreAnimations, updateBouncyWobble, updateScatterFlockParticles } from './environment';
 import { getSlowDevice } from '../../perfFlags';
 
 export class EnvironmentSystem implements CosmeticSystem {
@@ -26,7 +26,6 @@ export class EnvironmentSystem implements CosmeticSystem {
     updateShockwaves(this.state, dt);
     updateScoreAnimations(this.state, dt);
     updateBouncyWobble(this.state, dt);
-    updatePigeonScatterParticles(this.state, dt);
     updateScatterFlockParticles(this.state, dt);
   }
 

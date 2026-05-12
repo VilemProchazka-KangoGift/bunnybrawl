@@ -127,19 +127,6 @@ export function updateBouncyWobble(state: MatchState, dt: number): void {
   }
 }
 
-export function updatePigeonScatterParticles(state: MatchState, dt: number): void {
-  for (const flock of state.pigeonFlocks) {
-    for (let si = flock.scatterParticles.length - 1; si >= 0; si--) {
-      const sp = flock.scatterParticles[si];
-      sp.x += sp.vx * dt;
-      sp.y += sp.vy * dt;
-      sp.vy += 100 * dt;
-      sp.life -= dt;
-      if (sp.life <= 0) swapRemove(flock.scatterParticles, si);
-    }
-  }
-}
-
 const SCATTER_FLOCK_GRAVITY: Record<import('../../themes/types').ScatterFlockSpecies, number> = {
   bat: 20,
   bird: 80,

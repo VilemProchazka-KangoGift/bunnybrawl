@@ -161,7 +161,6 @@ export interface ArenaPack {
   bubbleHelmet?: boolean;
   ghostConfig?: ThemeConfig['ghostConfig'];
   lavaRockConfig?: ThemeConfig['lavaRockConfig'];
-  pigeonConfig?: ThemeConfig['pigeonConfig'];
   scatterFlockConfigs?: ThemeConfig['scatterFlockConfigs'];
   physics?: PhysicsModifiers;
 

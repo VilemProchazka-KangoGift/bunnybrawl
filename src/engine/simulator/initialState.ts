@@ -108,7 +108,7 @@ export function createEmptyMatchState(): MatchState {
     fogParticles: [], pollenParticles: [], shootingStars: [],
     scoreAnimations: [], comboPopups: [], goalPulseTimers: new Map(), ghosts: [],
     lavaRocks: [], lavaRockTimer: 0,
-    geyserStates: [], pigeonFlocks: [], scatterFlocks: [], bouncyWobble: new Map(),
+    geyserStates: [], scatterFlocks: [], bouncyWobble: new Map(),
     gibs: [], confetti: [],
     surfaceDecals: [], ripples: [],
   };
@@ -196,10 +196,6 @@ export function createInitialMatchState(
       timer: (z.interval || 10) * gameRandom(),
       active: false,
       activeTimer: 0,
-    })),
-    pigeonFlocks: (theme.pigeonConfig?.positions || []).map(p => ({
-      x: p.x, y: p.y, active: true, respawnTimer: 0,
-      scatterParticles: [],
     })),
     scatterFlocks: (theme.scatterFlockConfigs || []).flatMap(cfg =>
       cfg.positions.map(p => ({

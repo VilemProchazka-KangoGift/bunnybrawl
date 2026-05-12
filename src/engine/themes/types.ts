@@ -207,12 +207,6 @@ export interface ThemeConfig {
   };
 
 
-  // Optional pigeon flocks that scatter when disturbed
-  pigeonConfig?: {
-    positions: Array<{ x: number; y: number }>;
-    respawnTime: number;
-  };
-
   scatterFlockConfigs?: Array<{
     species: ScatterFlockSpecies;
     positions: Array<{ x: number; y: number }>;

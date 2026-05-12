@@ -73,7 +73,7 @@ export interface EngineWorkerProxyOptions {
 /** Stub diagnostics until the worker periodically posts the real ones. */
 const STUB_DIAGNOSTICS: RenderDiagnostics = Object.freeze({
   clouds: false, weather: false, wildlife: false, animatedBg: false,
-  hazardZones: false, effectZones: false, bouncyPlatforms: false, pigeons: false,
+  hazardZones: false, effectZones: false, bouncyPlatforms: false,
   lavaRocks: false, springs: false, thorns: false, carrots: false,
   gibs: false, confetti: false, shockwaves: false, afterimages: false,
   fog: false, ambient: false, fireworks: false, dayNight: false,

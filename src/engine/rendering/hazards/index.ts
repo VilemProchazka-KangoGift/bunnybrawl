@@ -19,7 +19,6 @@ export {
 } from './zones';
 export {
   drawGhost,
-  drawPigeonFlock,
   drawScatterFlock,
   pickScatterColor,
 } from './creatures';

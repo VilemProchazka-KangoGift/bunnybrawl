@@ -2,7 +2,7 @@ import type { MatchState, Arena, EffectZone } from '../../types';
 import type { ThemeConfig } from '../../themes/types';
 import type { GameplaySystem } from '../types';
 import { CANVAS_WIDTH } from '../../constants';
-import { updateLavaRocks, updateGhosts, updateGeyserTimers, updatePigeonFlocks, updateScatterFlocks } from './arenaEntities';
+import { updateLavaRocks, updateGhosts, updateGeyserTimers, updateScatterFlocks } from './arenaEntities';
 
 export class ArenaEntitySystem implements GameplaySystem {
   private state: MatchState;
@@ -47,7 +47,6 @@ export class ArenaEntitySystem implements GameplaySystem {
     updateLavaRocks(this.state, this.theme, dt, this.gameRandom);
     updateGhosts(this.state, dt);
     updateGeyserTimers(this.state, this.cachedGeyserZones, dt);
-    updatePigeonFlocks(this.state, dt);
     updateScatterFlocks(this.state, dt);
   }
 

@@ -28,7 +28,7 @@ beforeAll(async () => {
 });
 
 // ── Imports after mocks ──────────────────────────────────────────────────────
-import { updateLavaRocks, updateGhosts, updateGeyserTimers, updatePigeonFlocks } from '../gameplay/arenaEntities';
+import { updateLavaRocks, updateGhosts, updateGeyserTimers } from '../gameplay/arenaEntities';
 import { checkMatchEnd } from '../gameplay/match';
 import {
   PlayerSfxCooldowns,
@@ -310,44 +310,6 @@ describe('updateGeyserTimers', () => {
     });
     updateGeyserTimers(stateDeactivate, [zone], dt);
     expect(stateDeactivate.geyserStates[0].timer).toBe(10);
-  });
-});
-
-// ────────────────────────────────────────────────────────────────────────────
-
-describe('updatePigeonFlocks', () => {
-  const dt = f(1 / 60);
-
-  it('decrements respawnTimer for inactive flocks', () => {
-    const state = makeState({
-      pigeonFlocks: [
-        { x: 200, y: 400, active: false, respawnTimer: 2, scatterParticles: [] },
-      ],
-    });
-    updatePigeonFlocks(state, dt);
-    expect(state.pigeonFlocks[0].respawnTimer).toBeCloseTo(2 - dt, 4);
-    expect(state.pigeonFlocks[0].active).toBe(false);
-  });
-
-  it('reactivates a flock when respawnTimer reaches zero', () => {
-    const state = makeState({
-      pigeonFlocks: [
-        { x: 200, y: 400, active: false, respawnTimer: 0.001, scatterParticles: [] },
-      ],
-    });
-    updatePigeonFlocks(state, dt);
-    expect(state.pigeonFlocks[0].active).toBe(true);
-  });
-
-  it('does not touch active flocks', () => {
-    const state = makeState({
-      pigeonFlocks: [
-        { x: 200, y: 400, active: true, respawnTimer: 5, scatterParticles: [] },
-      ],
-    });
-    updatePigeonFlocks(state, dt);
-    expect(state.pigeonFlocks[0].respawnTimer).toBe(5);
-    expect(state.pigeonFlocks[0].active).toBe(true);
   });
 });
 

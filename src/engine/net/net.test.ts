@@ -352,7 +352,6 @@ function makeTestMatchState(): MatchState {
     lavaRocks: [],
     lavaRockTimer: 15.0,
     geyserStates: [{ timer: 3.0, active: true, activeTimer: 1.5 }],
-    pigeonFlocks: [{ x: 200, y: 100, active: true, respawnTimer: 0, scatterParticles: [] }],
     bouncyWobble: new Map([[0, 0.5], [2, 0.3]]),
     gibs: [],
     confetti: [],

@@ -84,7 +84,6 @@ function makeTestMatchState(): MatchState {
     lavaRocks: [{ x: 400, y: 300, active: true } as any],
     lavaRockTimer: 15.0,
     geyserStates: [{ timer: 3.0, active: true, activeTimer: 1.5 }],
-    pigeonFlocks: [{ x: 200, y: 100, active: true, respawnTimer: 0, scatterParticles: [] }],
     bouncyWobble: new Map([[0, 0.5], [2, 0.3]]),
     gibs: [],
     confetti: [],
@@ -220,7 +219,6 @@ describe('takeSnapshot', () => {
     state.ghosts = [];
     state.lavaRocks = [];
     state.geyserStates = [];
-    state.pigeonFlocks = [];
     state.bouncyWobble.clear();
     state.scoreAnimations = [];
     state.shockwaves = [];
@@ -282,20 +280,6 @@ describe('restoreSnapshot', () => {
     // Mutating snap should not affect restored state
     snap.stats[0][1].bestStreak = 999;
     expect(state.stats.perPlayer.get('P1')!.bestStreak).toBe(3);
-  });
-
-  it('preserves pigeon scatterParticles (cosmetic field) during restore', () => {
-    const state = makeTestMatchState();
-    state.pigeonFlocks[0].scatterParticles = [{ x: 1, y: 2 }] as any;
-    const snap = takeSnapshot(0, state, undefined, new Map());
-
-    // Mutate pigeon position but keep scatterParticles
-    state.pigeonFlocks[0].x = 999;
-    restoreSnapshot(snap, state, undefined, new Map());
-
-    expect(state.pigeonFlocks[0].x).toBe(200);
-    // scatterParticles should still exist (restore only copies x, y, active, respawnTimer)
-    expect(state.pigeonFlocks[0].scatterParticles).toBeDefined();
   });
 
   it('restores AI controller state via restore()', () => {

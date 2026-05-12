@@ -82,7 +82,6 @@ export interface GameSnapshot {
   lavaRocks: LavaRock[];
   lavaRockTimer: number;
   geyserStates: Array<{ timer: number; active: boolean; activeTimer: number }>;
-  pigeonFlocks: Array<{ x: number; y: number; active: boolean; respawnTimer: number }>;
   bouncyWobble: [number, number][];
   screenShake: number;
   slowMotion: number;
@@ -210,9 +209,6 @@ export function takeSnapshot(
     lavaRocks: cloneArray(state.lavaRocks),
     lavaRockTimer: state.lavaRockTimer,
     geyserStates: state.geyserStates.map(g => ({ ...g })),
-    pigeonFlocks: state.pigeonFlocks.map(p => ({
-      x: p.x, y: p.y, active: p.active, respawnTimer: p.respawnTimer,
-    })),
     bouncyWobble: Array.from(state.bouncyWobble.entries()).sort((a, b) => a[0] - b[0]),
     screenShake: state.screenShake,
     slowMotion: state.slowMotion,
@@ -260,12 +256,6 @@ export function restoreSnapshot(
   state.lavaRockTimer = snap.lavaRockTimer;
 
   copyArrayInto(state.geyserStates, snap.geyserStates);
-
-  for (let i = 0; i < state.pigeonFlocks.length && i < snap.pigeonFlocks.length; i++) {
-    const pf = state.pigeonFlocks[i];
-    const sf = snap.pigeonFlocks[i];
-    pf.x = sf.x; pf.y = sf.y; pf.active = sf.active; pf.respawnTimer = sf.respawnTimer;
-  }
 
   state.bouncyWobble.clear();
   for (const [k, v] of snap.bouncyWobble) {
