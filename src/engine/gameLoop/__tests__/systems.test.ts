@@ -74,7 +74,6 @@ const mockTheme = {
   fog: { count: 0 },
   ambientParticles: { count: 0 },
   dayNight: { enabled: false, cycleDuration: 120, showShootingStars: false },
-  platform: { floatingBodyColor: '#888', groundTopColor: '#666' },
   physics: {},
 } as any;
 

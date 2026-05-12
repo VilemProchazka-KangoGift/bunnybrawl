@@ -49,7 +49,7 @@ All mechanics are configured directly in the `ArenaPack`:
 | `noSpawnZones` | Exclude springs/thorns/carrots/characters from these regions |
 | `bouncyPlatforms` | Indices of platforms with jelly bounce + jelly overlay |
 | `allowFallOff` | Gaps in ground; falling players respawn |
-| `ghostConfig` / `pigeonConfig` | Roaming hazards |
+| `ghostConfig` / `scatterFlockConfigs` | Roaming hazards / ambient bird-flock cosmetics |
 | `carrotZones` | Boosted carrot spawn likelihood in these regions |
 | `noSprings` | Disable spring spawns entirely |
 | `drawCustomThorn` / `drawCustomSpring` | Theme-specific hazard skins |
