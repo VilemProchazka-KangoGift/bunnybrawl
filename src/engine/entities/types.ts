@@ -49,20 +49,17 @@ export interface EntityRenderCtx {
 }
 
 /** Visual layer the entity participates in. The renderer walks the
- *  registry once per layer in `renderFrame`. Order within a layer follows
- *  the registry's insertion order, which is locked in
- *  `entities/registerBuiltinEntities`. */
+ *  registry once per layer in `renderFrame`; only the layers below are
+ *  iterated. Other entities (ghosts, fog, pollen, combo popups) are
+ *  dispatched by direct reference in `renderer.ts` because their draw
+ *  site interleaves with non-entity rendering. */
 export type EntityRenderLayer =
-  /** Drawn between platform decorations and players (lava rocks,
-   *  scatter flocks, surface decals). */
+  /** Drawn between platform decorations and players (surface decals,
+   *  scatter flocks, lava rocks). */
   | 'entities'
-  /** Drawn after entities, before player sprites (gibs, confetti, ripples,
-   *  shockwaves drawn inline already — gibs/confetti go here). */
-  | 'particles'
-  /** Drawn after player sprites, before fg-nature cache (ghosts, ambient). */
-  | 'postPlayers'
-  /** Drawn over the HUD (combo popups, score animations). */
-  | 'hud';
+  /** Drawn after entities and before player sprites (gibs, confetti,
+   *  shockwaves, ripples). */
+  | 'particles';
 
 /** Worker→main slim-mirror policy. `'full'` clones the field; `'none'`
  *  substitutes a frozen empty array. The wire snapshot (`net/snapshot/`)

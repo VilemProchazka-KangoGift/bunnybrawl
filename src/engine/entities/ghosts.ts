@@ -5,10 +5,11 @@ import { updateGhosts } from '../gameLoop/gameplay/arenaEntities';
 import { drawGhost } from '../rendering';
 
 /** Per-player collision (`handleGhostCollision`) stays in
- *  `gameLoop/gameplay/playerCollisions.ts` — entity owns motion only. */
+ *  `gameLoop/gameplay/playerCollisions.ts` — entity owns motion only.
+ *  Drawn inline in `renderer.ts` between fg-nature and pollen so the
+ *  call site doesn't go through `getEntitiesForLayer`. */
 export const ghostsEntity: EntityKind<GhostEntity> = {
   id: 'ghosts',
-  renderLayer: 'postPlayers',
   mirror: 'full',
 
   init({ theme, rng }) {
@@ -28,9 +29,8 @@ export const ghostsEntity: EntityKind<GhostEntity> = {
     return out;
   },
 
-  fixedUpdate(state, { dt, state: matchState }) {
+  fixedUpdate(_state, { dt, state: matchState }) {
     updateGhosts(matchState, dt);
-    void state;
   },
 
   draw(ctx, state, { theme, time }) {

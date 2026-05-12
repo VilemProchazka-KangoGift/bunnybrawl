@@ -27,9 +27,9 @@ export class ArenaEntitySystem implements GameplaySystem {
     this.geyserIndexMap = new Map(this.cachedGeyserZones.map((z, i) => [z, i]));
   }
 
-  fixedUpdate(_dt: number): void {
-    // Entity ticks dispatched via `getEntities()` in `Simulator.fixedUpdate`.
-  }
+  /** No per-tick work — entity ticks dispatched via `getEntities()` in
+   *  `Simulator.fixedUpdate`. The method stays to satisfy `GameplaySystem`. */
+  fixedUpdate(_dt: number): void {}
 
   getCachedGeyserZones(): EffectZone[] {
     return this.cachedGeyserZones;

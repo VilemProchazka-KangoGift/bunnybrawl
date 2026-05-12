@@ -12,9 +12,8 @@ export const lavaRocksEntity: EntityKind<LavaRock> = {
     return [];
   },
 
-  fixedUpdate(state, { dt, theme, rng, state: matchState }) {
+  fixedUpdate(_state, { dt, theme, rng, state: matchState }) {
     updateLavaRocks(matchState, theme, dt, rng);
-    void state;
   },
 
   draw(ctx, state, { theme }) {

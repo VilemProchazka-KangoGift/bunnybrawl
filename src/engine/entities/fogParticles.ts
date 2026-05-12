@@ -1,6 +1,6 @@
 import type { MatchState } from '../types';
 import type { EntityKind } from './types';
-import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../constants';
+import { CANVAS_WIDTH } from '../constants';
 import { updateFog } from '../gameLoop/cosmetics/environment';
 import { hexToRGB } from '../fastMath';
 import { getSlowDevice } from '../perfFlags';
@@ -14,9 +14,11 @@ interface FogColorCache {
 }
 let _cache: FogColorCache | null = null;
 
+/** Drawn inline in `renderer.ts` (interleaved with the foreground-nature
+ *  cache blit + reactive decorations); the renderer calls
+ *  `fogParticlesEntity.draw` directly rather than via `getEntitiesForLayer`. */
 export const fogParticlesEntity: EntityKind<FogParticle> = {
   id: 'fogParticles',
-  renderLayer: 'postPlayers',
   mirror: 'none',
 
   init({ theme }) {
@@ -40,7 +42,6 @@ export const fogParticlesEntity: EntityKind<FogParticle> = {
   },
 
   draw(ctx, state, { theme }) {
-    void CANVAS_HEIGHT;  // referenced for parity with original site
     const fogCfg = theme.fog;
     if (!fogCfg || state.length === 0) return;
     if (!_cache || _cache.themeFog !== fogCfg) {

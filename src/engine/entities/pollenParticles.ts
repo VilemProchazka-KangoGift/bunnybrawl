@@ -14,9 +14,10 @@ interface AmbientColorCache {
 }
 let _cache: AmbientColorCache | null = null;
 
+/** Drawn inline in `renderer.ts` (after ghosts); dispatched directly,
+ *  not via `getEntitiesForLayer`. */
 export const pollenParticlesEntity: EntityKind<PollenParticle> = {
   id: 'pollenParticles',
-  renderLayer: 'postPlayers',
   mirror: 'none',
 
   init({ theme }) {

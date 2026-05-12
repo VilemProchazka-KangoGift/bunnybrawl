@@ -1246,14 +1246,13 @@ export class Renderer implements IRenderer {
 
       perfTrace.end('render.bg', bgStart);
 
-      // Surface decals (cracks, scuffs) — drawn between platforms and entities so
-      // platform caps occlude them only on edges (decal y is platform top + small fudge).
-      // Entity-driven 'entities' layer: surfaceDecals → scatterFlocks → lavaRocks
-      // (registration order). Direct hot-path field reads inside each entity's
-      // draw fn; renderer dispatches via the registry.
+      // Entity-driven 'entities' layer — surface decals must draw before
+      // scatter flocks / lava rocks so platform caps occlude only the decals.
+      // Order follows `entities/index.ts > registerBuiltinEntities`.
       const entStart = perfTrace.begin('render.entities');
+      const stateRec = matchState as unknown as Record<string, unknown[]>;
       for (const e of getEntitiesForLayer('entities')) {
-        e.draw!(ctx, (matchState as unknown as Record<string, unknown[]>)[e.id], this._entityRenderCtx);
+        e.draw!(ctx, stateRec[e.id], this._entityRenderCtx);
       }
       if (matchState.lavaRocks.length > 0) d.lavaRocks = true;
 
@@ -1270,9 +1269,8 @@ export class Renderer implements IRenderer {
       const partStart = perfTrace.begin('render.particles');
       drawParticles(ctx, particles, cosmeticLead);
 
-      // Entity-driven 'particles' layer: gibs → confetti → shockwaves → ripples.
       for (const e of getEntitiesForLayer('particles')) {
-        e.draw!(ctx, (matchState as unknown as Record<string, unknown[]>)[e.id], this._entityRenderCtx);
+        e.draw!(ctx, stateRec[e.id], this._entityRenderCtx);
       }
       if (matchState.gibs.length > 0) d.gibs = true;
       if (matchState.confetti.length > 0) d.confetti = true;

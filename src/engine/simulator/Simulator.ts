@@ -464,20 +464,18 @@ export class Simulator {
     this._carrotSystem.fixedUpdate(dt);
     perfTrace.end('gameplay.carrot', carrotStart);
 
-    const arenaEntityStart = perfTrace.begin('gameplay.arenaEntity');
-    this._arenaEntitySystem.fixedUpdate(dt);
     // Entity-registry fixedUpdate dispatch. Iteration order = registration
     // order (locked in `entities/index.ts > registerBuiltinEntities`) and
     // matches the original explicit call order: lavaRocks → ghosts →
     // geyserStates → scatterFlocks. Re-ordering invalidates the
     // determinism snapshots.
+    const arenaEntityStart = perfTrace.begin('gameplay.arenaEntity');
     this._entityCtx.dt = dt;
     this._entityCtx.resimulating = this._resimulating;
-    const state = this._state;
+    const stateRec = this._state as unknown as Record<string, unknown[]>;
     for (const e of getEntities()) {
       const tick = e.fixedUpdate;
-      if (!tick) continue;
-      tick((state as unknown as Record<string, unknown[]>)[e.id], this._entityCtx);
+      if (tick) tick(stateRec[e.id], this._entityCtx);
     }
     perfTrace.end('gameplay.arenaEntity', arenaEntityStart);
 
