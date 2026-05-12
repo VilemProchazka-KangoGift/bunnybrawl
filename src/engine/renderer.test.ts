@@ -136,7 +136,6 @@ function makeTheme() {
       groundTopColor: '#5A8C4F', groundBodyColor: '#4A7C3F',
       floatingTopColor: '#6A5C4F', floatingBodyColor: '#5A4C3F',
       floatingAccentColor: '#7A6C5F', drawMoss: true,
-      customDraw: null,
     },
     clouds: { count: 3, color: '#fff', minSize: 30, maxSize: 60, minSpeed: 10, maxSpeed: 20, yRange: [30, 80] },
     weather: { type: 'leaves', count: 20 },
@@ -330,16 +329,6 @@ describe('Renderer — renderBackground', () => {
     expect(bgCtx.fillRect.mock.calls.length).toBeGreaterThan(3);
   });
 
-  it('uses customDraw when platform theme provides it', () => {
-    const { canvas: bg } = makeCanvas();
-    const { canvas: fg } = makeCanvas();
-    const theme = makeTheme();
-    theme.platform.customDraw = vi.fn();
-    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme });
-
-    renderer.renderBackground(makeArena());
-    expect(theme.platform.customDraw).toHaveBeenCalled();
-  });
 });
 
 describe('Renderer — renderFrame basics', () => {

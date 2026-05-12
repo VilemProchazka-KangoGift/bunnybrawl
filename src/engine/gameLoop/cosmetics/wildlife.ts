@@ -22,11 +22,11 @@ import {
 } from '../../themes/utils';
 
 /** Render layer — drawn in the renderer slot that matches the layer name.
- *  - `groundCritter`: renderer slot where ground-walking ambient creatures
- *    appear (the existing `drawGroundCritters` callsite).
- *  - `animBackground`: renderer slot where animated mid-distance background
- *    elements appear (the existing `drawAnimatedBackground` callsite, used by
- *    the treetops squirrel that perches on far-back branches). */
+ *  - `groundCritter`: between fog and fg-nature, so foliage occludes critters
+ *    walking behind it.
+ *  - `animBackground`: animated mid-distance background elements (drawn at the
+ *    `drawAnimatedBackground` callsite, used by the treetops squirrel that
+ *    perches on far-back branches). */
 export type WildlifeLayer = 'groundCritter' | 'animBackground';
 
 export interface WildlifeInstance<TData = unknown> {

@@ -19,11 +19,10 @@ import {
  * the renderer (which calls `kind.draw` at the appropriate slot).
  *
  * Layer semantics:
- *  - `groundCritter`: renderer slot where the legacy `drawGroundCritters`
- *    callback ran (between fog and fg-nature, so foliage occludes critters
- *    walking behind it).
- *  - `animBackground`: renderer slot where `drawAnimatedBackground` ran
- *    (early bg pass, behind clouds), used by the treetops squirrel.
+ *  - `groundCritter`: between fog and fg-nature, so foliage occludes critters
+ *    walking behind it.
+ *  - `animBackground`: `drawAnimatedBackground` slot (early bg pass, behind
+ *    clouds), used by the treetops squirrel.
  *
  * `slow-device` is honoured: the system skips its tick + draw entirely when
  * the slow flag is set — wildlife disappears on slow devices across ALL

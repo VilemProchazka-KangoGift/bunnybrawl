@@ -1088,11 +1088,6 @@ export class Renderer implements IRenderer {
     }
 
     const tp = this.theme.platform;
-    if (tp.customDraw) {
-      tp.customDraw(ctx, platform.x, platform.y, platform.width, platform.height, isGround);
-      return;
-    }
-
     const { x, y, width: w, height: h } = platform;
     if (isGround) {
       ctx.fillStyle = tp.groundBodyColor;
@@ -1504,13 +1499,6 @@ export class Renderer implements IRenderer {
 
       // Ground critters (snails, rats, crabs…) — drawn BEFORE fg-nature so
       // grass tufts / bushes can occlude them when they walk behind foliage.
-      // Two paths: the legacy `theme.drawGroundCritters` callback (for any
-      // arena pack still owning its critter state) and the WildlifeSystem
-      // (post-migration packs).
-      if (this.theme.drawGroundCritters) {
-        const thA = this.originalArena ?? arena;
-        { const m = this._beginMirror(ctx); this.theme.drawGroundCritters!(ctx, thA, matchState.timeElapsed, matchState.dayPhase, matchState); this._endMirror(ctx, m); }
-      }
       if (wildlife && wildlife.groundCritter.length > 0) {
         { const m = this._beginMirror(ctx); this._drawWildlifeLayer(ctx, wildlife.groundCritter, matchState); this._endMirror(ctx, m); }
       }

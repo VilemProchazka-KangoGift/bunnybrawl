@@ -118,7 +118,6 @@ export interface ThemeConfig {
     groundBodyColor: string;
     groundTopColor: string;
     drawMoss: boolean;
-    customDraw?: (ctx: Ctx2D, x: number, y: number, w: number, h: number, isGround: boolean) => void;
   };
 
   // Ambient systems
@@ -163,12 +162,6 @@ export interface ThemeConfig {
     dt: number,
     services: { emitParticle: (x: number, y: number, vx: number, vy: number, life: number, size: number, color: string) => void },
   ) => void;
-
-  /** Per-frame ground-level critters (snails, rats, squirrels, crabs, robots).
-   *  Drawn AFTER players + fog but BEFORE the foreground-nature cache, so grass
-   *  tufts / bushes occlude critters that walk behind them. Use this instead of
-   *  drawAnimatedForeground for anything that should disappear under foliage. */
-  drawGroundCritters?: (ctx: Ctx2D, arena: Arena, time: number, dayPhase: number, matchState?: import('../types').MatchState) => void;
 
   /** Per-frame full-scene tint, drawn LAST after day-night overlay. Use for global mood washes (aurora green, lava red glow) that should affect every layer including players. */
   drawSceneTint?: (ctx: Ctx2D, dayPhase: number, time: number) => void;

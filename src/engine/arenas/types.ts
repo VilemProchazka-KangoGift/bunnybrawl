@@ -86,7 +86,6 @@ export interface ArenaPack {
     groundBodyColor: string;
     groundTopColor: string;
     drawMoss: boolean;
-    customDraw?: (ctx: Ctx2D, x: number, y: number, w: number, h: number, isGround: boolean) => void;
   };
 
   // ---- Ambient systems ----
@@ -148,7 +147,6 @@ export interface ArenaPack {
     services: ArenaCosmeticServices,
   ) => void;
 
-  drawGroundCritters?: (ctx: Ctx2D, arena: Arena, time: number, dayPhase: number, matchState?: import('../types').MatchState) => void;
   drawSceneTint?: (ctx: Ctx2D, dayPhase: number, time: number) => void;
   drawWeatherParticle?: (ctx: Ctx2D, particle: WeatherParticle) => void;
   drawCustomHazardZone?: (ctx: Ctx2D, x: number, y: number, width: number, height: number, time: number) => void;

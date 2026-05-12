@@ -122,7 +122,6 @@ export function toThemeConfig(pack: ArenaPack): ThemeConfig {
     buildReactiveDecorations: pack.buildReactiveDecorations,
     buildWildlife: pack.buildWildlife,
     cosmeticTick: pack.cosmeticTick,
-    drawGroundCritters: pack.drawGroundCritters,
     drawSceneTint: pack.drawSceneTint,
     drawWeatherParticle: pack.drawWeatherParticle,
     drawCustomHazardZone: pack.drawCustomHazardZone,
