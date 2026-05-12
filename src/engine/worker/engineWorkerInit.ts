@@ -62,7 +62,7 @@ let paused = false;
 let accumulator = 0;
 let lastTime = 0;
 let lastMirrorAt = 0;
-const STATE_MIRROR_INTERVAL_MS = 200;  // 5Hz
+const STATE_MIRROR_INTERVAL_MS = 1000;  // 1Hz
 
 /** Perf-stats flush schedule (mirrors renderWorker.ts's renderer-only
  *  perfStats cadence). Posted as `worker:perfStats` so EngineWorkerProxy
