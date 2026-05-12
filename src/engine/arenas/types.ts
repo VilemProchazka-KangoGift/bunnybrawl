@@ -95,7 +95,7 @@ export interface ArenaPack {
    * sit behind the player). The body face goes in `drawPlatformOverlay` so
    * it can occlude players that enter the iso phantom strip.
    */
-  drawPlatform?: (ctx: Ctx2D, platform: Platform, isGround: boolean) => void;
+  drawPlatform: (ctx: Ctx2D, platform: Platform, isGround: boolean) => void;
   /**
    * Optional foreground overlay for the platform's body face. Called by the
    * renderer AFTER players are drawn, so the body occludes any player whose

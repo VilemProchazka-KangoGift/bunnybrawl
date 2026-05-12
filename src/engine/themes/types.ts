@@ -118,7 +118,7 @@ export interface ThemeConfig {
   drawBackgroundNature: (ctx: Ctx2D, arena: Arena) => void;
   /** Drawn over players — foreground bushes, snow piles */
   drawForegroundNature: (ctx: Ctx2D, arena: Arena) => void;
-  drawPlatform?: (ctx: Ctx2D, platform: import('../types').Platform, isGround: boolean) => void;
+  drawPlatform: (ctx: Ctx2D, platform: import('../types').Platform, isGround: boolean) => void;
   /** Foreground overlay for platform body face — drawn after players for occlusion. */
   drawPlatformOverlay?: (ctx: Ctx2D, platform: import('../types').Platform, isGround: boolean) => void;
 

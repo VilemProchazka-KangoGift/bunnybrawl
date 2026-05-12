@@ -54,7 +54,6 @@ function makeRichState(): MatchState {
     splatMarks: [],
     newSplatsSinceRender: [],
     bouncyWobble: new Map(),
-    pigeonFlocks: [],
     stats: { perPlayer: new Map() },
   } as unknown as MatchState;
 

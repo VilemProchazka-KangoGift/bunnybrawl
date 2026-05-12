@@ -140,7 +140,7 @@ Vite config needs `optimizeDeps.include: ['trystero']`.
 - `randRange()` in `themes/utils.ts` uses `Math.random()` internally — inline the math for any future deterministic paths.
 - `assignBotCharacters` used `Math.random()` for shuffle — each peer got different bot characters → different AI → instant desync. Fixed with optional seed.
 - AI personalities amplified desync; were disabled (all bots used neutral DEFAULT_PERSONALITY).
-- `InputManager.getInput('P1')` only reads WASD. Online play needed `getInputAny()` merging all 5 key bindings.
+- `KeyboardManager.readSlot('P1')` only reads WASD. Online play needed `readAny()` merging all 5 key bindings.
 
 ### PeerJS Pitfalls
 
@@ -165,5 +165,5 @@ Vite config needs `optimizeDeps.include: ['trystero']`.
 
 - **Snapshot pool**: `takeSnapshotInto()` copies into pre-allocated objects. `createEmptySnapshot()` for ring buffer init.
 - **Input map**: reuse single `Map` with `.clear()` instead of `new Map()` per frame.
-- **Pre-allocated `_anyInput`**: `InputManager.getInputAny()` reuses one `InputState` object — no spread copies.
+- **Pre-allocated `_anyInput`**: `KeyboardManager.readAny()` reuses one `InputState` object — no spread copies.
 - **Return const references** (like `NO_INPUT`) instead of spreading copies in cold paths too.

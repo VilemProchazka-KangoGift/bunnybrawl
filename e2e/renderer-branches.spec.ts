@@ -63,7 +63,6 @@ async function getState(page: any) {
       ghostCount: s.ghosts.length,
       fogCount: s.fogParticles?.length ?? 0,
       pollenCount: s.pollenParticles?.length ?? 0,
-      pigeonFlockCount: s.pigeonFlocks.length,
       killFeedLength: s.killFeed.length,
     };
   });

@@ -29,12 +29,12 @@ Shared drawing primitives live in `src/engine/themes/drawPrimitives/` (split by 
 
 1. Create `packs/newArena.ts` — copy an existing pack (e.g. `meadow.ts`). Provide:
    - **Layout**: `platforms`, `spawnPoints`, `width`, `height`
-   - **Visuals**: `sky`, `hills`, `ground`, `platform`, `clouds`, `weather`, `wildlife`, `fog`, `ambientParticles`, `dayNight`
-   - **Draw functions**: `drawBackgroundNature`, `drawForegroundNature`, optionally `drawFarBackground`, `drawAnimatedBackground`
+   - **Visuals**: `sky`, `hills`, `ground` (surfaceColor only), `clouds`, `weather`, `wildlife`, `fog`, `ambientParticles`, `dayNight`
+   - **Draw functions**: `drawPlatform` (required), `drawBackgroundNature`, `drawForegroundNature`, optionally `drawFarBackground`, `drawAnimatedBackground`
    - **Translations**: `translations: { en: 'Name', cs: 'Jméno', hi: '...', fil: '...' }`
    - **Preview**: `previewGradient` + `previewIcon` for arena selector UI
    - **Music**: `musicFile: 'newArena.mp3'` (place MP3 in `public/audio/`)
-   - **Optional**: `bubbleHelmet`, `ghostConfig`, `pigeonConfig`, `physics`, `ambientSoundConfig`, `hazardZones`, `effectZones`, etc.
+   - **Optional**: `bubbleHelmet`, `ghostConfig`, `scatterFlockConfigs`, `physics`, `ambientSoundConfig`, `hazardZones`, `effectZones`, etc.
 2. Import and add to the array in `arenas/builtin.ts`
 3. Re-run `npx vite-node scripts/generateNavData.ts` (regenerates AI nav data)
 
@@ -69,29 +69,27 @@ All active loops tracked in `GameLoop.activeAmbientLoops[]` and stopped on match
 1. **Sky gradient** — `theme.sky.gradient`
 2. **Hills** — `theme.hills` array (background silhouette shapes)
 3. **Far background** — `theme.drawFarBackground?()` (mountains, distant forest)
-4. **Platforms** — drawn from `theme.platform` config or `customDraw`
-5. **Ground surface** — `theme.ground.surfaceColor` line + optional grass blades
-6. **Background nature** — `theme.drawBackgroundNature()` (trees, snowmen, decorations BEHIND players)
-7. **Clouds** — animated, from `theme.clouds` config
-8. **Weather** — particles from `theme.weather` (leaves, petals, snow, embers)
-9. **Wildlife** — from `theme.wildlife` (butterflies, birds)
-10. **Game objects** — springs, thorns, carrots (engine-managed)
-11. **Players** — characters with all effects
-12. **Fog** — ground-level mist from `theme.fog`
-13. **Foreground nature** — `theme.drawForegroundNature()` (drawn OVER players — large trees, pyramids, bushes)
-14. **Ambient particles** — pollen/sparkles from `theme.ambientParticles`
-15. **Day/night cycle** — sun, moon, stars, darkness overlay from `theme.dayNight`
-16. **HUD** — scores, timer, kill feed (engine-managed)
+4. **Platforms** — `theme.drawPlatform()` (each pack owns its own platform art, including any ground cap, grass, moss, or props)
+5. **Background nature** — `theme.drawBackgroundNature()` (trees, snowmen, decorations BEHIND players)
+6. **Clouds** — animated, from `theme.clouds` config
+7. **Weather** — particles from `theme.weather` (leaves, petals, snow, embers)
+8. **Wildlife** — from `theme.wildlife` (butterflies, birds)
+9. **Game objects** — springs, thorns, carrots (engine-managed)
+10. **Players** — characters with all effects
+11. **Fog** — ground-level mist from `theme.fog`
+12. **Foreground nature** — `theme.drawForegroundNature()` (drawn OVER players — large trees, pyramids, bushes)
+13. **Ambient particles** — pollen/sparkles from `theme.ambientParticles`
+14. **Day/night cycle** — sun, moon, stars, darkness overlay from `theme.dayNight`
+15. **HUD** — scores, timer, kill feed (engine-managed)
 
 ### ThemeConfig Fields
 
 ```
-id, nameKey, previewGradient          — identity + menu thumbnail
+id, nameKey                           — identity (ArenaPack carries previewGradient/previewIcon for the selector)
 sky.gradient: GradientStop[]          — sky colors top to bottom
 hills: {x, baseY, width, height, color}[]  — background hill shapes
-ground: {surfaceColor, surfaceThickness, grassBlades?}
-platform: {floatingBodyColor, floatingTopColor, floatingAccentColor?,
-           groundBodyColor, groundTopColor, drawMoss, customDraw?}
+ground: {surfaceColor}                — dust color for landings (ParticleSystem + lobbyGame)
+drawPlatform(ctx, platform, isGround) — required; pack owns platform art entirely
 clouds: {count, color, minSize, maxSize, minSpeed, maxSpeed, yRange}
 weather: {particleCount, types: [{type, weight, sizeRange, vxRange, vyRange, rotSpeedRange, color?}]}
 wildlife: {count, types: [{type, weight, colors, speedRange, yRange}]}
@@ -128,7 +126,6 @@ Import from `./drawPrimitives`. All take `(ctx, x, groundY, ...)` where groundY 
 | `drawGrassTuft` | `x, groundY, color?` | 3 grass blades |
 | `drawHill` | `x, baseY, width, height` | Background hill (quadratic curve). Must set `ctx.fillStyle` before calling |
 | `drawCloud` | `x, y, size, color?` | 4-arc cloud shape |
-| `drawPlatformMoss` | `edgeX, platY, platH` | Hanging moss drapes on platform edges |
 | `drawTreeStump` | `x, topY, width, height` | Cut tree trunk with bark texture, annual rings, moss patches, side mushroom. Solid obstacle — use with matching platform |
 
 ### Foreground (drawn over players)
@@ -253,11 +250,10 @@ For decorations that need to react to players (wind sway, velocity-driven bend, 
 
 ## Migrating Wildlife to WildlifeSystem
 
-Mirrors the reactive-decoration pattern for ambient creatures (snails, crabs, rats, gumdrops, robots, squirrels). Use this whenever a pack needs `tickGroundCritter` patrol/flee logic — replaces the legacy module-scope state arrays + `makeDtTracker` + `drawGroundCritters` callback.
+Mirrors the reactive-decoration pattern for ambient creatures (snails, crabs, rats, gumdrops, robots, squirrels). Use this whenever a pack needs `tickGroundCritter` patrol/flee logic — owns module-scope state arrays + `makeDtTracker` for the pack.
 
 1. In the arena pack, add `buildWildlife(arena): WildlifeInstance[]` (from `gameLoop/cosmetics/wildlife`). For standard ground critters, call `buildGroundCritter({ seed, cfg, initialDir?, initialX?, layer?, draw })` — the built-in `wildlife.groundCritter` kind handles tick + reset.
 2. The pack-supplied `draw({ ctx, state, cfg, time, matchState })` runs each frame; the live `state.x / state.facingEase / state.fleeing` are already advanced by the system before draw fires.
-3. Set `layer: 'animBackground'` to render in the early-bg slot (between far-bg and clouds, where the legacy `drawAnimatedBackground` ran). Default `groundCritter` slot renders between fog and fg-nature, so foliage occludes critters walking behind it.
+3. Set `layer: 'animBackground'` to render in the early-bg slot (between far-bg and clouds, where `drawAnimatedBackground` runs). Default `groundCritter` slot renders between fog and fg-nature, so foliage occludes critters walking behind it.
 4. For wildlife with extra per-instance state (e.g. candyLand gumdrops have a `rot` accumulator), register a custom kind via `registerWildlifeKind('<arenaId>.<name>', { layer, tick, draw, resetData? })` and emit instances via `createWildlifeInstance({...})`.
-5. Delete the old `_<critter>: GroundCritterState[]`, `_tick<Critter>Dt = makeDtTracker()`, and `drawGroundCritters` (or `drawAnimatedBackground`) callback once `buildWildlife` covers the whole inventory.
-6. Butterflies / bees / fish-school stay in `ReactiveDecorationSystem` — they use proximity-based flee and don't fit the patrol/flee primitive.
+5. Butterflies / bees / fish-school stay in `ReactiveDecorationSystem` — they use proximity-based flee and don't fit the patrol/flee primitive.

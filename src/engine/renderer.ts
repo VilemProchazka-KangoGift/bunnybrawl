@@ -621,11 +621,9 @@ export class Renderer implements IRenderer {
 
     if (this.mirrored) { ctx.restore(); }
 
-    // Platforms (use mirrored arena data, no canvas transform needed). Each
-    // pack's drawPlatform is responsible for the ground cap (surface line,
-    // grass blades, moss, etc.).
+    // Platforms (use mirrored arena data, no canvas transform needed).
     for (const plat of arena.platforms) {
-      this.drawPlatform(ctx, plat, plat.y >= 650);
+      theme.drawPlatform(ctx, plat, plat.y >= 650);
     }
 
     // Theme-specific background nature (pass original arena, canvas transform handles mirroring)
@@ -1061,10 +1059,6 @@ export class Renderer implements IRenderer {
     ctx.fill();
   }
 
-
-  private drawPlatform(ctx: Ctx2D, platform: Platform, isGround: boolean): void {
-    this.theme.drawPlatform!(ctx, platform, isGround);
-  }
 
   /** Bake gibs onto the bg canvas. Marks bgNight dirty so the cross-fade
    *  variant picks them up at the next renderFrame (single re-bake even when

@@ -194,10 +194,9 @@ function drawHallwayPlatformFg(ctx: Ctx2D, platform: Platform): void {
   ctx.fillRect(platform.x, bodyTop + bodyH - 2, platform.width, 2);
 }
 
-// --- Prop renderers (chimney / AC / HVAC / balcony) — straight ports of the
-// previous customDraw branches. These render the full prop body; no 3D cap
-// framework because the props have their own silhouette (brick stack, AC fan
-// grill, vent slats, awning).
+// --- Prop renderers (chimney / AC / HVAC / balcony). Each renders the full
+// prop body; no 3D cap framework because the props have their own silhouette
+// (brick stack, AC fan grill, vent slats, awning).
 function drawChimneyBg(ctx: Ctx2D, platform: Platform): void {
   const rng = mulberry32(seedFor(platform.x, platform.y));
   const cF = capFrontY(platform);
