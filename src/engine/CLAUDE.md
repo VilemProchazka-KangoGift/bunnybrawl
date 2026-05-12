@@ -170,6 +170,12 @@
 - **Particle alpha bucketing**: when N particles each have unique alpha (driven by life/distance/etc.), N `fill()` calls are wasteful. Quantize alpha into 4–6 buckets, group particles by bucket, batch each bucket as one path with `moveTo` + `arc` sub-paths and a single `fill()`. Round-12 application: waterfall spray 48 particles → 5 fills, mist 10 → 3 fills. Net 58 state changes/frame → 8.
 - **Object-pool lifetime rule**: pool objects that get fully consumed before the next reuse, NOT objects whose references escape into long-lived state arrays. Per-tick scratches (result envelopes, scratch input states, scratch awareness sub-objects) are safe — caller pulls values out by index inside the same `fixedUpdate`. Per-event payloads pushed into `state.killFeed` / `state.shockwaves` / `state.scoreAnimations` / HUD `comboPopups` / `_lightBursts` are NOT safe to pool — the renderer reads them across many frames, and recycling next emit mutates the displayed entry. Kill/spawn-rate allocations (≈1-3/sec) are GC-negligible vs. per-frame allocators; don't trade real lifetime bugs for marginal alloc savings. Full lessons + the 2026-05 round-by-round list in `.claude/skills/performance.md` → "Object Pooling — Lifetime Rules".
 
+## Worker proxies
+- **Every new worker proxy must call `installWorkerBootQueue(worker)` from `worker/workerBootQueue.ts`** before sending any postMessage. Vite dev drops messages posted before the worker finishes top-level eval; the helper buffers until `worker:bootReady` (posted by the worker after attaching its message listener) and restores native postMessage on flush. Bounded at 120 entries so a silently-wedged worker doesn't leak per-frame state clones.
+
+## Input adapters
+- **`RemoteInput` is a verbatim passthrough** — it does NOT convert airborne+jump to fast-fall. That conversion lives at the source: `TouchInputManager.getInputForPlayer(airborne)` via `mergeKeyboardTouchInput`. New `PlayerInput` adapters should stay stateless w.r.t. semantic transforms; doing them downstream double-fires for any keyboard guest and turns every mid-air W press into a fast-fall.
+
 ## Mobile / Touch Input
 - `TouchInputManager` follows same `attach()`/`detach()`/`getInput() → InputState` contract as `KeyboardManager`. Integrated via `getPlayerInput()` touch branch in gameLoop.
 - `isTouchPrimary()` result is cached at module scope — safe to call frequently, but `?mobile` URL param override only works on first call.

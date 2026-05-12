@@ -28,6 +28,4 @@ const emitter = createUrlStoredEmitter<boolean>({
 });
 
 export const isSimWorkerEnabled = emitter.get;
-export const subscribeSimWorkerFlag = emitter.subscribe;
-export const setSimWorkerEnabled = emitter.set;
 export const initSimWorker = emitter.init;
