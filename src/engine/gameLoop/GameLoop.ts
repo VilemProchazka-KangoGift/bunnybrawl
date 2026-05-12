@@ -30,6 +30,7 @@ import { perfTrace } from '../perfTrace';
 import { getSlowDevice } from '../perfFlags';
 import { sampleFps } from '../fpsCounter';
 import * as autoSlowDetect from '../autoSlowDetect';
+import { isWorkerScope } from '../isWorker';
 import type { BotNavDebugState } from '../navDebugOverlay';
 import type { NetDebugStats } from '../net/core/debugOverlay';
 
@@ -90,15 +91,13 @@ export class GameLoop {
   private _cosmeticLead = 0;
   private _cosmeticTick = 0;
 
-  /** True when an external renderer (RendererProxy) was injected. The worker
-   *  hosts its own copies of `WildlifeSystem` and the per-frame
-   *  reactive/wildlife render args, so main can skip:
-   *   - WildlifeSystem.cosmeticUpdate (purely visual; no burst callbacks)
-   *   - building the per-frame reactive/wildlife arg objects (proxy strips them)
-   *  Reactive's tick stays on main because its burst → particle-emit path
-   *  fires from `applyStompImpulse` → `cosmeticUpdate`, and ParticleSystem
-   *  lives on main. */
-  private _workerActive = false;
+  /** True when the injected renderer is a proxy to a peer worker that hosts
+   *  its own ReactiveDecoration / Wildlife systems — in that case we skip
+   *  WildlifeSystem.cosmeticUpdate and ship empty reactive/wildlife args
+   *  (the proxy strips them anyway). False when this GameLoop is itself
+   *  inside a worker with a local Renderer — the renderer needs the args
+   *  and there's no second system. */
+  private _rendererIsRemote = false;
   /** Stable context for per-arena cosmetic ticks. Built once in the constructor
    *  so cosmeticStep doesn't allocate a fresh `{ emitParticle }` + arrow per
    *  call. The arrow closes over `this.particleSystem` which is a stable ref. */
@@ -146,21 +145,11 @@ export class GameLoop {
     });
 
     if (injectedRenderer) {
-      // Two cases share this path:
-      //   1. Renderer-only worker (`?worker=on`, sim on main): injected is a
-      //      RendererProxy. The worker has its own ReactiveDecorationSystem /
-      //      WildlifeSystem and renders from there, so main strips those args
-      //      to avoid wasted work. `_workerActive = true` enables the strip.
-      //   2. Sim-in-worker (`?simWorker=on`): GameLoop runs INSIDE the worker
-      //      with a real local Renderer injected. The renderer NEEDS the
-      //      reactive/wildlife args — there's no second system to fall back
-      //      to. `_workerActive` must stay false in this case.
-      // Detect by checking whether `this` is constructed inside a worker.
+      // Injected on main = RendererProxy (remote); injected inside a worker
+      // = local Renderer. See `_rendererIsRemote` field doc for the strip
+      // semantics that depend on which.
       this.renderer = injectedRenderer;
-      const inWorker = typeof DedicatedWorkerGlobalScope !== 'undefined'
-        && typeof self !== 'undefined'
-        && self instanceof DedicatedWorkerGlobalScope;
-      this._workerActive = !inWorker;
+      this._rendererIsRemote = !isWorkerScope;
     } else {
       this.renderer = new Renderer({
         bgCanvas,
@@ -693,9 +682,10 @@ export class GameLoop {
         perfTrace.end('cosmetic.reactive', reactiveStart);
 
         // WildlifeSystem.cosmeticUpdate is purely visual (no burst /
-        // particle callback). When the worker hosts the renderer it
-        // maintains its own WildlifeSystem; main's tick is dead weight.
-        if (!this._workerActive) {
+        // particle callback). Skip when a remote peer worker owns the
+        // wildlife system; otherwise (including sim-in-worker mode where
+        // this GameLoop IS the worker) the local system needs the tick.
+        if (!this._rendererIsRemote) {
           const wildlifeStart = perfTrace.begin('cosmetic.wildlife');
           this.wildlifeSystem.cosmeticUpdate(dt * 2);
           perfTrace.end('cosmetic.wildlife', wildlifeStart);
@@ -839,7 +829,7 @@ export class GameLoop {
   private readonly _reactiveArg: ReactiveRenderArg = { prePlayer: [], postPlayer: [], windPhase: 0 };
   private readonly _wildlifeArg: WildlifeRenderArg = { groundCritter: [], animBackground: [] };
   private _buildReactiveArg(): ReactiveRenderArg {
-    if (this._workerActive) return GameLoop._EMPTY_REACTIVE;
+    if (this._rendererIsRemote) return GameLoop._EMPTY_REACTIVE;
     this._reactiveArg.prePlayer = this.reactiveDecorationSystem.getInstancesForLayer('prePlayer');
     this._reactiveArg.postPlayer = this.reactiveDecorationSystem.getInstancesForLayer('postPlayer');
     this._reactiveArg.windPhase = this.reactiveDecorationSystem.getWindPhase();
@@ -849,7 +839,7 @@ export class GameLoop {
   /** Build the per-frame wildlife arg passed to renderFrame. Same stable-ref
    *  contract as `_buildReactiveArg`. */
   private _buildWildlifeArg(): WildlifeRenderArg {
-    if (this._workerActive) return GameLoop._EMPTY_WILDLIFE;
+    if (this._rendererIsRemote) return GameLoop._EMPTY_WILDLIFE;
     this._wildlifeArg.groundCritter = this.wildlifeSystem.getInstancesForLayer('groundCritter');
     this._wildlifeArg.animBackground = this.wildlifeSystem.getInstancesForLayer('animBackground');
     return this._wildlifeArg;
