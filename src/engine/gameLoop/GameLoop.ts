@@ -146,11 +146,21 @@ export class GameLoop {
     });
 
     if (injectedRenderer) {
-      // Worker-offload path: the proxy already holds the offscreen canvases
-      // and is wired to its worker. Tell it our settings; canvas args are
-      // unused.
+      // Two cases share this path:
+      //   1. Renderer-only worker (`?worker=on`, sim on main): injected is a
+      //      RendererProxy. The worker has its own ReactiveDecorationSystem /
+      //      WildlifeSystem and renders from there, so main strips those args
+      //      to avoid wasted work. `_workerActive = true` enables the strip.
+      //   2. Sim-in-worker (`?simWorker=on`): GameLoop runs INSIDE the worker
+      //      with a real local Renderer injected. The renderer NEEDS the
+      //      reactive/wildlife args — there's no second system to fall back
+      //      to. `_workerActive` must stay false in this case.
+      // Detect by checking whether `this` is constructed inside a worker.
       this.renderer = injectedRenderer;
-      this._workerActive = true;
+      const inWorker = typeof DedicatedWorkerGlobalScope !== 'undefined'
+        && typeof self !== 'undefined'
+        && self instanceof DedicatedWorkerGlobalScope;
+      this._workerActive = !inWorker;
     } else {
       this.renderer = new Renderer({
         bgCanvas,
