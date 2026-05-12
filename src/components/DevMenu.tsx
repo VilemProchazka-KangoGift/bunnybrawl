@@ -15,7 +15,7 @@ import { getBrightness, setBrightness } from '../engine/lighting/brightness';
 import { getPhotosensitivity, setPhotosensitivity } from '../engine/lighting/photosensitivity';
 import { getPerfTier, setPerfTier } from '../engine/lighting/perfTier';
 import type { PerfTier } from '../engine/lighting/types';
-import { isSimWorkerEnabled, setSimWorkerEnabled } from '../engine/worker/simWorkerFlag';
+import { isSimWorkerEnabled } from '../engine/worker/simWorkerFlag';
 import { isInputEchoEnabled, setInputEchoEnabled } from '../engine/net/inputEchoFlag';
 import { isTurnEnabled, setTurnEnabled } from '../engine/net/turnFlag';
 import {
@@ -192,13 +192,6 @@ export function DevMenu({ onClose }: DevMenuProps) {
         </div>
 
         <SectionHeader>Experiments (reload on close)</SectionHeader>
-        <ToggleRow
-          testId="dev-toggle-simworker"
-          label="Sim in worker"
-          desc="Run the full Simulator inside the engine worker (?simWorker=on)."
-          checked={isSimWorkerEnabled()}
-          onChange={(v) => { setSimWorkerEnabled(v); rerender(); }}
-        />
         <ToggleRow
           testId="dev-toggle-inputecho"
           label="Input echo"
