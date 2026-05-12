@@ -31,7 +31,7 @@ import type {
   WorkerEngineEventMsg, WorkerEngineStateMirrorMsg,
   WorkerNetSnapshotMsg,
 } from './messages';
-import type { PlayerSlot, BotSlot, CharacterSlot, InputState, MatchPhase } from '../types';
+import type { PlayerSlot, BotSlot, CharacterSlot, InputState, MatchPhase, MatchState } from '../types';
 import { readSlotInput } from './sabInput';
 import { takeAuthSnapshot, encodeSnapshot, decodeSnapshot, createEmptySnapshot } from '../net/snapshot';
 import type { AuthSnapshot } from '../net/snapshot';
@@ -308,12 +308,15 @@ function driveTick(currentTime: number): void {
   gameLoop.particleSystem.bakeToRenderer(renderer);
   gameLoop.renderFrame(frameTime);
 
-  // Periodic state mirror back to main for E2E.
+  // Periodic state mirror back to main for E2E + UI synchronous reads.
+  // Slim payload (renderer/cosmetic-only fields stripped) — audit
+  // confirmed zero main-side reads of the stripped fields. See
+  // `buildSlimMirror` below for the field list + restoration policy.
   if (currentTime - lastMirrorAt >= STATE_MIRROR_INTERVAL_MS) {
     lastMirrorAt = currentTime;
     const mirror: WorkerEngineStateMirrorMsg = {
       type: 'worker:engineStateMirror',
-      state,
+      state: buildSlimMirror(state),
       arenaId: gameLoop.getArena().id,
     };
     ctxScope.postMessage(mirror);
@@ -344,6 +347,67 @@ function driveTick(currentTime: number): void {
   }
 
   rafId = ctxScope.requestAnimationFrame(driveTick);
+}
+
+/** Frozen empty array — shared by every stripped MatchState field on
+ *  the slim mirror. Object.freeze prevents accidental mutation. */
+const EMPTY_ARRAY = Object.freeze([]) as unknown as never[];
+const _emptyMap = new Map<never, never>();
+const _slimStatsScratch: MatchState['stats'] = {
+  perPlayer: _emptyMap as unknown as MatchState['stats']['perPlayer'],
+};
+
+/** Build a structured-clone-friendly MatchState with renderer/cosmetic
+ *  fields stripped. Saves the bulk of the per-mirror clone cost on main.
+ *  Audit (2026-05-12) confirmed zero main-side reads of any stripped
+ *  field — they all live in worker-side Renderer / ParticleSystem /
+ *  cosmetic systems. If a future consumer needs a stripped field,
+ *  restore it here AND add a brief note explaining the consumer. */
+function buildSlimMirror(s: MatchState): MatchState {
+  return {
+    // ── Kept (main reads these) ─────────────────────────────────────
+    players: s.players,
+    phase: s.phase,
+    killFeed: s.killFeed,
+    totalKills: s.totalKills,
+    timeElapsed: s.timeElapsed,
+    matchOver: s.matchOver,
+    winner: s.winner,
+    carrots: s.carrots,
+    carrotTimer: s.carrotTimer,
+    springs: s.springs,
+    thorns: s.thorns,
+    springSpawnTimer: s.springSpawnTimer,
+    thornSpawnTimer: s.thornSpawnTimer,
+    screenShake: s.screenShake,
+    slowMotion: s.slowMotion,
+    dayPhase: s.dayPhase,
+    countdown: s.countdown,
+    screenFlash: s.screenFlash,
+    hitstopZoom: s.hitstopZoom,
+    scoreAnimations: s.scoreAnimations,
+    ghosts: s.ghosts,
+    lavaRocks: s.lavaRocks,
+    lavaRockTimer: s.lavaRockTimer,
+    geyserStates: s.geyserStates,
+    stats: _slimStatsScratch,
+    // ── Stripped (renderer / cosmetic only) ─────────────────────────
+    weather: EMPTY_ARRAY as MatchState['weather'],
+    shockwaves: EMPTY_ARRAY as MatchState['shockwaves'],
+    wildlife: EMPTY_ARRAY as MatchState['wildlife'],
+    fogParticles: EMPTY_ARRAY as MatchState['fogParticles'],
+    pollenParticles: EMPTY_ARRAY as MatchState['pollenParticles'],
+    shootingStars: EMPTY_ARRAY as MatchState['shootingStars'],
+    comboPopups: EMPTY_ARRAY as MatchState['comboPopups'],
+    pigeonFlocks: EMPTY_ARRAY as MatchState['pigeonFlocks'],
+    scatterFlocks: EMPTY_ARRAY as MatchState['scatterFlocks'],
+    gibs: EMPTY_ARRAY as MatchState['gibs'],
+    confetti: EMPTY_ARRAY as MatchState['confetti'],
+    surfaceDecals: EMPTY_ARRAY as MatchState['surfaceDecals'],
+    ripples: EMPTY_ARRAY as MatchState['ripples'],
+    goalPulseTimers: _emptyMap as unknown as MatchState['goalPulseTimers'],
+    bouncyWobble: _emptyMap as unknown as MatchState['bouncyWobble'],
+  };
 }
 
 /** Pure helper: replace `target` Map contents from a per-slot list. Slots
