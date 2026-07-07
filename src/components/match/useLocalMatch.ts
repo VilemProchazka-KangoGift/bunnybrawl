@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { reportFatalError } from '../../fatalError';
 import { GameLoop } from '../../engine/gameLoop';
 import { NetMatch } from '../../engine/net/netMatch';
 import { getArena, getTheme } from '../../engine/arenas';
@@ -247,7 +248,7 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
           navDebugEnabled: debugFlags.navDebugEnabled,
           netDebugEnabled: debugFlags.netDebugEnabled,
           fpsEnabled: debugFlags.fpsEnabled,
-          onError: (m) => console.error('[engine worker]', m),
+          onError: (m) => { console.error('[engine worker]', m); reportFatalError('Engine worker: ' + m); },
         });
         // Type-cast: EngineWorkerProxy implements the GameLoop public
         // surface that Match.tsx + matchLoading + bunnyTestShim use.
@@ -331,7 +332,7 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
           navDebugEnabled: debugFlags.navDebugEnabled,
           netDebugEnabled: debugFlags.netDebugEnabled,
           fpsEnabled: debugFlags.fpsEnabled,
-          onError: (m) => console.error('[render worker]', m),
+          onError: (m) => { console.error('[render worker]', m); reportFatalError('Render worker: ' + m); },
         });
       } catch (e) {
         console.warn('[worker offload] proxy construction failed:', e);

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { reportFatalError } from '../../fatalError';
 import { useGameStore } from '../../store/gameStore';
 import { GameLoop } from '../../engine/gameLoop';
 import { NetMatch } from '../../engine/net/netMatch';
@@ -219,7 +220,7 @@ export function useOnlineMatch(p: UseOnlineMatchParams): void {
           navDebugEnabled: debugFlags.navDebugEnabled,
           netDebugEnabled: debugFlags.netDebugEnabled,
           fpsEnabled: debugFlags.fpsEnabled,
-          onError: (m) => console.error('[engine worker]', m),
+          onError: (m) => { console.error('[engine worker]', m); reportFatalError('Engine worker: ' + m); },
         });
       } catch (e) {
         console.warn('[sim-worker online] proxy construction failed; falling back:', e);
@@ -244,7 +245,7 @@ export function useOnlineMatch(p: UseOnlineMatchParams): void {
           renderScale: getRenderScale(),
           language: i18n.language,
           perfEnabled: debugFlags.perfEnabled,
-          onError: (m) => console.error('[render worker]', m),
+          onError: (m) => { console.error('[render worker]', m); reportFatalError('Render worker: ' + m); },
         });
       } catch (e) {
         console.warn('[worker offload] proxy construction failed (online), falling back:', e);

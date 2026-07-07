@@ -12,6 +12,7 @@ import { initSimWorker } from './engine/worker/simWorkerFlag';
 import { safeStorage } from './storage';
 import './i18n';
 import App from './App'
+import { CrashGuard } from './components/CrashGuard'
 import './index.css'
 import './components/shared.css'
 
@@ -41,6 +42,8 @@ safeStorage.remove('carrotroyale_sab_demo');
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <CrashGuard>
+      <App />
+    </CrashGuard>
   </StrictMode>,
 )
