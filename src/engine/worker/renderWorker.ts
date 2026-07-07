@@ -25,6 +25,11 @@ import { registerBuiltinArenas } from '../arenas/builtin';
 import { registerBuiltinCharacters } from '../characters/builtin';
 import { getArena, getTheme, mirrorArena } from '../arenas/operations';
 import { setHudLanguage } from '../rendering/hud';
+import { setLightingEnabled } from '../lighting';
+import { setBrightness } from '../lighting/brightness';
+import { setPhotosensitivity } from '../lighting/photosensitivity';
+import { setPerfTier } from '../lighting/perfTier';
+import { setSlowDevice } from '../perfFlags';
 import { ReactiveDecorationSystem } from '../gameLoop/cosmetics/ReactiveDecorationSystem';
 import { WildlifeSystem } from '../gameLoop/cosmetics/WildlifeSystem';
 import { perfTrace } from '../perfTrace';
@@ -265,6 +270,15 @@ ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
         if (msg.navDebugEnabled) { debugFlags.navDebugAllowed = true; debugFlags.navDebugEnabled = true; }
         if (msg.netDebugEnabled) { debugFlags.netDebugAllowed = true; debugFlags.netDebugEnabled = true; }
         if (msg.fpsEnabled)      { debugFlags.fpsAllowed = true;      debugFlags.fpsEnabled = true; }
+        // Main-only lighting/perf emitters — see HostInitMsg. Apply BEFORE
+        // constructing the Renderer (and its first renderBackground) so the
+        // first frame honors the user's accessibility/perf settings instead
+        // of the worker's compile-time defaults.
+        if (msg.lightingEnabled !== undefined) setLightingEnabled(msg.lightingEnabled);
+        if (msg.brightness !== undefined) setBrightness(msg.brightness);
+        if (msg.photosensitivity !== undefined) setPhotosensitivity(msg.photosensitivity);
+        if (msg.perfTier !== undefined) setPerfTier(msg.perfTier);
+        if (msg.slowDevice !== undefined) setSlowDevice(msg.slowDevice);
         _mirror = msg.mirrored;
         const theme = getTheme(msg.themeId);
         renderer = new Renderer({

@@ -77,7 +77,9 @@ export function MainMenu() {
     const handleKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
       const inEditable = target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.isContentEditable;
-      if (e.key === 'Enter' && !onlineOpen && !devOpen) {
+      // Enter starts the game — but not while ANY modal is open, or it would
+      // dismiss the modal and jump to CharacterSelect.
+      if (e.key === 'Enter' && !onlineOpen && !devOpen && !helpOpen && !modsOpen && !settingsOpen) {
         e.preventDefault();
         handlePlay();
       }
@@ -88,7 +90,7 @@ export function MainMenu() {
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [handlePlay, onlineOpen, devOpen]);
+  }, [handlePlay, onlineOpen, devOpen, helpOpen, modsOpen, settingsOpen]);
 
   useEffect(() => {
     audio.playMenuMusic();
@@ -107,14 +109,24 @@ export function MainMenu() {
 
   useCanvasRenderScale(canvasRef);
 
+  // Skip the (expensive, full-canvas) menu redraw while a modal covers it —
+  // the animated background isn't visible behind the blurred overlay, and
+  // re-blurring a freshly painted canvas every frame is pure waste. rAF keeps
+  // ticking (cheap) so it resumes instantly on close. A ref (not deps) so the
+  // once-mounted loop sees the current state without re-subscribing.
+  const anyModalOpenRef = useRef(false);
+  anyModalOpenRef.current = modsOpen || helpOpen || onlineOpen || settingsOpen || devOpen;
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d')!;
     const loop = (time: number) => {
-      sampleFps(time);
-      drawMenuBackground(ctx);
-      drawFpsCounter(ctx, CANVAS_WIDTH);
+      if (!anyModalOpenRef.current) {
+        sampleFps(time);
+        drawMenuBackground(ctx);
+        drawFpsCounter(ctx, CANVAS_WIDTH);
+      }
       rafRef.current = requestAnimationFrame(loop);
     };
     rafRef.current = requestAnimationFrame(loop);

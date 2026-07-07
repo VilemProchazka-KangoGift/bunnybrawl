@@ -11,7 +11,7 @@ import * as fpsCounter from '../../engine/fpsCounter';
 import { isWorkerEnabled, RendererProxy } from '../../engine/worker';
 import { isSimWorkerEnabled } from '../../engine/worker/simWorkerFlag';
 import { EngineWorkerProxy } from '../../engine/worker/EngineWorkerProxy';
-import { getRenderScale } from '../../engine/renderScale';
+import { getRenderScale, subscribeRenderScale } from '../../engine/renderScale';
 import { debugFlags } from '../../engine/debugFlags';
 import i18n from '../../i18n';
 import type { TouchInputManager } from '../../engine/touchInput';
@@ -228,6 +228,17 @@ export function useOnlineMatch(p: UseOnlineMatchParams): void {
       }
     }
 
+    // W3: forward render-scale changes (DPR / fullscreen / slow-device
+    // toggle) to the worker-hosted Renderer. Only needed for the sim-worker
+    // path — GameLoop's own subscribeRenderScale runs inside the worker
+    // where no resize / fullscreen events fire. The renderer-only worker
+    // path is already covered by GameLoop's subscription forwarding to the
+    // RendererProxy. Unsubscribed in teardown alongside the proxy stop.
+    const epForScale = engineProxy;
+    const unsubscribeRenderScale = epForScale
+      ? subscribeRenderScale((s) => epForScale.renderer.setRenderScale(s))
+      : null;
+
     const useWorker = !engineProxy && isWorkerEnabled();
     let workerProxy: RendererProxy | null = null;
     if (useWorker) {
@@ -406,6 +417,7 @@ export function useOnlineMatch(p: UseOnlineMatchParams): void {
     );
 
     const teardown = (): void => {
+      unsubscribeRenderScale?.();
       netMatch.stop();
       netMatchRef.current = null;
       commonCleanup();

@@ -9,7 +9,7 @@ import { runLoadingTasks } from '../../engine/matchLoading';
 import { isWorkerEnabled, RendererProxy } from '../../engine/worker';
 import { isSimWorkerEnabled } from '../../engine/worker/simWorkerFlag';
 import { EngineWorkerProxy } from '../../engine/worker/EngineWorkerProxy';
-import { getRenderScale } from '../../engine/renderScale';
+import { getRenderScale, subscribeRenderScale } from '../../engine/renderScale';
 import { debugFlags, subscribeDebugFlags } from '../../engine/debugFlags';
 import i18n from '../../i18n';
 import type { TouchInputManager } from '../../engine/touchInput';
@@ -265,6 +265,15 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
         const unsubscribeDebug = subscribeDebugFlags((name, value) => {
           engineProxy.setDebugFlag(name, value);
         });
+        // W3: render-scale changes (DPR / fullscreen / slow-device toggle)
+        // must reach the worker-hosted Renderer. GameLoop's own
+        // subscribeRenderScale runs INSIDE the worker where no resize /
+        // fullscreen events fire, so main forwards them here. (The
+        // renderer-only worker path is already covered by GameLoop's
+        // subscription forwarding to the RendererProxy.)
+        const unsubscribeRenderScale = subscribeRenderScale((s) => {
+          engineProxy.renderer.setRenderScale(s);
+        });
         kickoffLoading(
           engineProxy as unknown as GameLoop,
           () => gameLoopRef.current === (engineProxy as unknown as GameLoop),
@@ -275,6 +284,7 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
         );
         const teardown = (): void => {
           unsubscribeDebug();
+          unsubscribeRenderScale();
           engineProxy.stop();
           gameLoopRef.current = null;
           setTouchInput(null);

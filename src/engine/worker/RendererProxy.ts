@@ -23,6 +23,11 @@ import type {
 import type { ReactiveRenderArg } from '../gameLoop/cosmetics/reactiveDecorations';
 import type { WildlifeRenderArg } from '../gameLoop/cosmetics/wildlife';
 import type { Light } from '../lighting';
+import { isLightingEnabled } from '../lighting';
+import { getBrightness } from '../lighting/brightness';
+import { getPhotosensitivity } from '../lighting/photosensitivity';
+import { getPerfTier } from '../lighting/perfTier';
+import { getSlowDevice } from '../perfFlags';
 import type { BotNavDebugState } from '../navDebugOverlay';
 import type { NetDebugStats } from '../net/core/debugOverlay';
 import {
@@ -237,6 +242,13 @@ export class RendererProxy implements IRenderer {
         netDebugEnabled: opts.netDebugEnabled ?? false,
         fpsEnabled: opts.fpsEnabled ?? false,
         particlesSab: particlesSab ?? undefined,
+        // Main-only lighting/perf emitters — the worker's module-scope copies
+        // never see the URL params / localStorage that main read at startup.
+        lightingEnabled: isLightingEnabled(),
+        brightness: getBrightness(),
+        photosensitivity: getPhotosensitivity(),
+        perfTier: getPerfTier(),
+        slowDevice: getSlowDevice(),
       };
 
       const transfer: Transferable[] = [bgOff, fgOff];

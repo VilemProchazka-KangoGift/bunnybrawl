@@ -8,6 +8,10 @@ import { perfTrace } from '../perfTrace';
 type AirborneAboveEntry = AwarenessSnapshot['airborneAbove'][number];
 type NearbyHazardEntry = AwarenessSnapshot['nearbyHazards'][number];
 
+/** Shared empty array for `?? EMPTY` fallbacks — avoids allocating a fresh
+ *  `[]` per buildAwareness call when an arena has no hazard/effect zones. */
+const EMPTY: never[] = [];
+
 /**
  * Per-AIController scratch struct. Pre-allocated once and reused across every
  * buildAwarenessInto() call so the bot decision frame allocates zero objects
@@ -223,8 +227,10 @@ function _buildAwarenessImpl(
 
     // Clustering: count nearby bots
     if (isBotSlot(p.id) && p.state !== 'splat' && p.state !== 'respawning') {
-      const bDist = wrapDistance(self.x, self.y, p.x, p.y);
-      if (bDist < 120) nearbyBotCount++;
+      // Squared-distance compare — sqrt(d²) < 120 ⟺ d² < 120². Avoids the sqrt.
+      const bdx = wrapDx(p.x - self.x);
+      const bdy = p.y - self.y;
+      if (bdx * bdx + bdy * bdy < 120 * 120) nearbyBotCount++;
     }
 
     if (p.state === 'splat' || p.state === 'respawning') continue;
@@ -316,7 +322,7 @@ function _buildAwarenessImpl(
   const HAZARD_DETECT_RADIUS = 200;
   const hazardRadius = Math.max(awarenessRadius, HAZARD_DETECT_RADIUS);
 
-  for (const hz of arena.hazardZones ?? []) {
+  for (const hz of arena.hazardZones ?? EMPTY) {
     const hx = hz.x + hz.width / 2, hy = hz.y + hz.height / 2;
     const dx = hx - self.x, dy = hy - self.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
@@ -453,7 +459,7 @@ function _buildAwarenessImpl(
   let nearGeyser: AwarenessSnapshot['nearGeyser'] = null;
   let geyserEscapeDx = 0;
   let geyserIdx = 0;
-  for (const zone of arena.effectZones ?? []) {
+  for (const zone of arena.effectZones ?? EMPTY) {
     const inZone = self.x + PLAYER_WIDTH > zone.x && self.x < zone.x + zone.width &&
                    self.y + PLAYER_HEIGHT > zone.y && self.y < zone.y + zone.height;
     if (zone.type === 'zero_g' && inZone) inZeroG = true;

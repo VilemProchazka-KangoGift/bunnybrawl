@@ -69,6 +69,21 @@ function getCachedHsl(hex: string): { h: number; s: number; l: number } {
 }
 const _invincibleHsl = getCachedHsl('#88BBFF');
 
+/** Memoized `hsl(h,s%,l%)` strings for afterimage hue-shifted trails. Keyed by
+ *  the rounded (h,s,l) integers that fully determine the string, so the hot
+ *  loop avoids a template-literal allocation per afterimage per frame. Bounded
+ *  by (character colors × discrete hue shifts) — a few hundred entries max. */
+const _afterimageHslStrings = new Map<number, string>();
+function afterimageHslString(rH: number, rS: number, rL: number): string {
+  const key = rH * 65536 + rS * 256 + rL;
+  let s = _afterimageHslStrings.get(key);
+  if (s === undefined) {
+    s = `hsl(${rH},${rS}%,${rL}%)`;
+    _afterimageHslStrings.set(key, s);
+  }
+  return s;
+}
+
 /** Warm-orange tint used for the per-carrot glow emitter. Frozen + shared
  *  across all carrots — the renderer never mutates it. */
 const CARROT_GLOW_RGB: Readonly<{ r: number; g: number; b: number }> =
@@ -1291,14 +1306,15 @@ export class Renderer implements IRenderer {
             const baseHsl = player.invincibleTimer > 0
               ? _invincibleHsl
               : getCachedHsl(player.character.color);
-            const slSuffix = `,${Math.round(baseHsl.s * 100)}%,${Math.round(baseHsl.l * 100)}%)`;
+            const rS = Math.round(baseHsl.s * 100);
+            const rL = Math.round(baseHsl.l * 100);
             const total = afterimages.length;
             for (let i = 0; i < total; i++) {
               const img = afterimages[i];
               // Oldest (i=0) shifted -18°, newest (i=total-1) at base hue.
               const shift = ((i / Math.max(1, total - 1)) - 1) * 18;
               const h = (baseHsl.h + shift + 360) % 360;
-              ctx.fillStyle = `hsl(${Math.round(h)}${slSuffix}`;
+              ctx.fillStyle = afterimageHslString(Math.round(h), rS, rL);
               ctx.globalAlpha = img.alpha;
               ctx.beginPath();
               ctx.ellipse(

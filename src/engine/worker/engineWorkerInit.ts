@@ -22,6 +22,11 @@ import { registerBuiltinCharacters } from '../characters/builtin';
 import { registerBuiltinEntities, getEntities } from '../entities';
 import { CHARACTERS, BOT_CHARACTERS } from '../characters/defaults';
 import { setHudLanguage } from '../rendering/hud';
+import { setLightingEnabled } from '../lighting';
+import { setBrightness } from '../lighting/brightness';
+import { setPhotosensitivity } from '../lighting/photosensitivity';
+import { setPerfTier } from '../lighting/perfTier';
+import { setSlowDevice } from '../perfFlags';
 import { RemoteInput } from '../input/RemoteInput';
 import { isBotSlot } from '../types';
 import { FIXED_TIMESTEP, MAX_FRAME_TIME, SLOW_MO_FACTOR } from '../constants';
@@ -158,6 +163,15 @@ export function initEngine(msg: HostInitEngineMsg): void {
   if (msg.navDebugEnabled) { debugFlags.navDebugAllowed = true; debugFlags.navDebugEnabled = true; }
   if (msg.netDebugEnabled) { debugFlags.netDebugAllowed = true; debugFlags.netDebugEnabled = true; }
   if (msg.fpsEnabled)      { debugFlags.fpsAllowed = true;      debugFlags.fpsEnabled = true; }
+  // Main-only lighting/perf emitters — see HostInitEngineMsg. Apply BEFORE
+  // constructing the Renderer (and its first renderBackground) so the first
+  // frame honors the user's accessibility/perf settings instead of the
+  // worker's compile-time defaults.
+  if (msg.lightingEnabled !== undefined) setLightingEnabled(msg.lightingEnabled);
+  if (msg.brightness !== undefined) setBrightness(msg.brightness);
+  if (msg.photosensitivity !== undefined) setPhotosensitivity(msg.photosensitivity);
+  if (msg.perfTier !== undefined) setPerfTier(msg.perfTier);
+  if (msg.slowDevice !== undefined) setSlowDevice(msg.slowDevice);
   setHudLanguage(msg.language);
 
   const arena = getArena(msg.arenaId);

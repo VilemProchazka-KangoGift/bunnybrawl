@@ -27,6 +27,11 @@ import { isTouchPrimary } from '../touchDetect';
 import { TouchInputManager } from '../touchInput';
 import { isBotSlot } from '../types';
 import { getArena, getTheme } from '../arenas/operations';
+import { isLightingEnabled } from '../lighting';
+import { getBrightness } from '../lighting/brightness';
+import { getPhotosensitivity } from '../lighting/photosensitivity';
+import { getPerfTier } from '../lighting/perfTier';
+import { getSlowDevice } from '../perfFlags';
 import { getCharacterForSlot } from '../characters/defaults';
 import { createInitialPlayers, createInitialMatchState } from '../simulator/initialState';
 import { CANVAS_WIDTH } from '../constants';
@@ -239,6 +244,13 @@ export class EngineWorkerProxy {
         fpsEnabled: opts.fpsEnabled ?? false,
         inputSab: inputSab ?? undefined,
         inputSabSlots: inputSab ? humanSlots : undefined,
+        // Main-only lighting/perf emitters — the worker's module-scope copies
+        // never see the URL params / localStorage that main read at startup.
+        lightingEnabled: isLightingEnabled(),
+        brightness: getBrightness(),
+        photosensitivity: getPhotosensitivity(),
+        perfTier: getPerfTier(),
+        slowDevice: getSlowDevice(),
       };
       const transfer: Transferable[] = [bgOff, fgOff];
       if (hudOff) transfer.push(hudOff);

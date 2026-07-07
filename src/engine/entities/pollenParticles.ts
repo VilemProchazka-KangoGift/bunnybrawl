@@ -53,18 +53,32 @@ export const pollenParticlesEntity: EntityKind<PollenParticle> = {
     }
     const colorStrings = _cache.strings;
     const hasTwoColors = colorStrings.length > 1;
+    // Group by colour index (only 0/1 are ever used) then alpha-bucket within
+    // each colour: one path + fill per (colour, bucket). Same pattern as the
+    // waterfall spray/mist batching. Pollen dots are tiny + sparse so batching
+    // does not perceptibly change overlap.
+    const maxA = (ambCfg.alphaRange?.[1] ?? 1) * 0.7;
+    const POLLEN_BUCKETS = 6;
+    const nColors = hasTwoColors ? 2 : 1;
     ctx.save();
-    let lastCi = -1;
-    for (const pp of state) {
-      const ci = pp.size > 2 ? 0 : (hasTwoColors ? 1 : 0);
-      if (ci !== lastCi) {
-        ctx.fillStyle = colorStrings[ci];
-        lastCi = ci;
+    for (let c = 0; c < nColors; c++) {
+      ctx.fillStyle = colorStrings[c];
+      for (let bkt = 0; bkt < POLLEN_BUCKETS; bkt++) {
+        ctx.globalAlpha = (bkt + 0.5) / POLLEN_BUCKETS * maxA;
+        ctx.beginPath();
+        let any = false;
+        for (const pp of state) {
+          const ci = pp.size > 2 ? 0 : (hasTwoColors ? 1 : 0);
+          if (ci !== c) continue;
+          const eff = pp.alpha * 0.7;
+          const bucket = maxA > 0 ? Math.min(POLLEN_BUCKETS - 1, Math.floor(eff / maxA * POLLEN_BUCKETS)) : 0;
+          if (bucket !== bkt) continue;
+          ctx.moveTo(pp.x + pp.size, pp.y);
+          ctx.arc(pp.x, pp.y, pp.size, 0, Math.PI * 2);
+          any = true;
+        }
+        if (any) ctx.fill();
       }
-      ctx.globalAlpha = pp.alpha * 0.7;
-      ctx.beginPath();
-      ctx.arc(pp.x, pp.y, pp.size, 0, Math.PI * 2);
-      ctx.fill();
     }
     ctx.restore();
   },
