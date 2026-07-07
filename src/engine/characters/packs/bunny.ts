@@ -43,7 +43,7 @@ const drawGib: CharacterPack['drawGib'] = (ctx, gibType, _w, _h, colors) => {
 
 export const bunny: CharacterPack = {
   name: 'Bunny',
-  color: '#FFFFFF', darkColor: '#CCCCCC', lightColor: '#FFFFFF',
+  color: '#FFFFFF', darkColor: '#CCCCCC', lightColor: '#FFF8F0',
   emoji: '\uD83D\uDC30', customEyes: false,
   splatShape: 'paw',
   gibs: [{ gibType: 'ear', width: 8, height: 20 }, { gibType: 'ear', width: 8, height: 20 }, { gibType: 'tail', width: 8, height: 8 }, { gibType: 'body', width: 14, height: 12 }],

@@ -41,6 +41,13 @@ export interface Sample {
   reward: number;
   /** True on the LAST tick of the episode (matchOver fired or max_ticks). */
   done: boolean;
+  /**
+   * False when `action` is STALE: the Simulator skipped input dispatch this
+   * tick because the recorded slot's player was in hitstop (`hitstopTimer > 0`),
+   * so `getAction` never ran and the captured action is the last non-hitstop
+   * one. Consumers training on actions should mask ticks where this is false.
+   */
+  actionValid: boolean;
 }
 
 /** Episode-level metadata, written once at begin(). */
@@ -132,8 +139,14 @@ export class InMemoryRecorder implements MatchRecorder {
  * ticks, reason) is written instead.
  */
 export class NDJSONFileRecorder implements MatchRecorder {
+  /** Flush the line buffer to disk once it reaches ~64KB. One writeSync per
+   *  sample was a syscall per (slot, tick) — millions per run. */
+  private static readonly FLUSH_THRESHOLD_BYTES = 64 * 1024;
+
   private readonly _path: string;
   private _fd: number | null = null;
+  private _buf: string[] = [];
+  private _bufBytes = 0;
 
   constructor(path: string) {
     this._path = path;
@@ -145,14 +158,14 @@ export class NDJSONFileRecorder implements MatchRecorder {
       writeFileSync(this._path, '');
       this._fd = openSync(this._path, 'a');
     }
-    writeSync(this._fd, JSON.stringify({ type: 'header', header }) + '\n');
+    this._enqueue(JSON.stringify({ type: 'header', header }) + '\n');
   }
 
   record(sample: Sample): void {
     if (this._fd === null) {
       throw new Error('NDJSONFileRecorder.record called before begin()');
     }
-    writeSync(this._fd, JSON.stringify({ type: 'sample', sample }) + '\n');
+    this._enqueue(JSON.stringify({ type: 'sample', sample }) + '\n');
   }
 
   end(result: MatchResult): void {
@@ -164,15 +177,36 @@ export class NDJSONFileRecorder implements MatchRecorder {
       ticks: result.ticks,
       reason: result.reason,
     };
-    writeSync(this._fd, JSON.stringify({ type: 'end', result: summary }) + '\n');
+    this._enqueue(JSON.stringify({ type: 'end', result: summary }) + '\n');
+    // Flush at every episode boundary so each match's data is durable even if
+    // the process is killed mid-run (the fd stays open for the next episode).
+    this._flushBuffer();
   }
 
   async flush(): Promise<void> {
     if (this._fd !== null) {
+      this._flushBuffer();
       closeSync(this._fd);
       this._fd = null;
     }
   }
 
   getPath(): string { return this._path; }
+
+  /** Append a line to the buffer; flush once it crosses the byte threshold. */
+  private _enqueue(line: string): void {
+    this._buf.push(line);
+    this._bufBytes += line.length;
+    if (this._bufBytes >= NDJSONFileRecorder.FLUSH_THRESHOLD_BYTES) {
+      this._flushBuffer();
+    }
+  }
+
+  /** Write the accumulated lines in one syscall. No-op if empty or closed. */
+  private _flushBuffer(): void {
+    if (this._fd === null || this._buf.length === 0) return;
+    writeSync(this._fd, this._buf.join(''));
+    this._buf.length = 0;
+    this._bufBytes = 0;
+  }
 }

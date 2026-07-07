@@ -1,5 +1,10 @@
 # Modularization Backlog
 
+> **✅ FULLY COMPLETED / ARCHIVED — 2026-07-07.** All 13 findings below have
+> shipped. This document is kept for historical context only; there is no
+> remaining actionable work here. Each item is annotated inline with a `DONE`
+> marker and where it landed. Do not treat any entry as an open task.
+
 Generated 2026-05-08 from a 3-agent codebase review on `feat/reactive-treetops`
 (commit `900e967`). Each finding is independently actionable; pick one and
 ignore the rest.
@@ -10,7 +15,9 @@ Ranked by leverage within each tier (S/M/L effort).
 
 ## Quick wins (S effort, low risk)
 
-### 1. Promote `Cooldowns<K>` utility — S
+### 1. Promote `Cooldowns<K>` utility — S ✅ DONE
+
+**DONE** — shipped as `src/engine/cooldowns.ts` (`Cooldowns<K>`) plus the sibling `accumulator.ts` (`Accumulator<K>`); the per-slot SFX bundle lives in `sfxCooldowns.ts` and drains through `PlayerTransitionSystem`.
 
 **Files**: `src/engine/sfxCooldowns.ts` (current narrow impl), `src/engine/lobbyGame.ts:141`,
 `src/engine/arenas/packs/underwater.ts:22` (`_bubbleAccum`),
@@ -26,7 +33,9 @@ Ranked by leverage within each tier (S/M/L effort).
 
 ---
 
-### 2. Hoist `darken()` + `Ctx2D` type alias — S
+### 2. Hoist `darken()` + `Ctx2D` type alias — S ✅ DONE
+
+**DONE** — `darken()`/`hexToRGB()` live in `fastMath.ts`; `Ctx2D` is exported from `engine/types.ts` and used on the `_drawX(ctx, …)` helper signatures (the OffscreenCanvas casts are gone).
 
 **Files**: `darken` exists in `src/engine/rendering/players.ts`, `src/engine/arenas/packs/underwater.ts`,
 `src/engine/navDebugOverlay.ts` (CLAUDE.md flags this directly: *"fold into a
@@ -45,7 +54,9 @@ casts disappear.
 
 ---
 
-### 3. Generic `TransitionTracker<K, T>` — S
+### 3. Generic `TransitionTracker<K, T>` — S ✅ DONE
+
+**DONE** — shipped as `src/engine/transitionTracker.ts`; consumers (`PlayerTransitionSystem`, `SurfaceImpactSystem`, `EntityTransitionSystem`) supply a single `snapshot` fn, collapsing the old three-place footgun.
 
 **Files**: `src/engine/gameLoop/cosmetics/playerTransitions.ts` +
 `PlayerTransitionSystem.ts`, `entityTransitions.ts` + `EntityTransitionSystem.ts`,
@@ -75,7 +86,9 @@ catch any drift.
 
 ---
 
-### 4. Delete `_audioEnabled` — S
+### 4. Delete `_audioEnabled` — S ✅ DONE
+
+**DONE** — the flag and its gates are gone; silenced replays are now achieved by subscribing a no-op `SimulatorEvents` impl (see `src/engine/CLAUDE.md` Simulator section), not a per-call boolean.
 
 **Files**: `src/engine/gameLoop/GameLoop.ts:149, 257, 396, 477` and similar.
 
@@ -92,7 +105,9 @@ silenced replays, use a SimulatorEvents impl whose callbacks are no-ops
 
 ---
 
-### 5. Single `__bunnyTest` E2E shim — S
+### 5. Single `__bunnyTest` E2E shim — S ✅ DONE
+
+**DONE** — shipped as `window.__bunnyTest` (typed `BunnyTestSnapshot` from `src/components/bunnyTestShim.ts`); the old per-object globals (`__gameLoop` / `__netMatch` / `__gameStore`) were removed.
 
 **Files**: `src/components/Match.tsx:419-462` (the `window.__gameLoop` /
 `__netMatch` / `__gameStore` setup), `src/store/gameStore.ts:136`.
@@ -117,7 +132,9 @@ straight property-rename. Pairs with Big Refactor #13 (after).
 
 ## Medium consolidations (M effort)
 
-### 6. WildlifeSystem — M
+### 6. WildlifeSystem — M ✅ DONE
+
+**DONE** — shipped as `src/engine/gameLoop/cosmetics/WildlifeSystem.ts` (kind registry + per-instance `data` bag + factory, mirroring `ReactiveDecorationSystem`); the module-level `_squirrels`/`_crabs`/`_snails` arrays are gone.
 
 **Files**: 8 arena packs roll their own flock/critter systems.
 - `src/engine/arenas/packs/treetops.ts` — squirrels, butterflies, bees
@@ -144,7 +161,9 @@ this backlog.
 
 ---
 
-### 7. Split `net/snapshot.ts` (708 lines) — M
+### 7. Split `net/snapshot.ts` (708 lines) — M ✅ DONE
+
+**DONE** — split into the `src/engine/net/snapshot/` directory (`schema.ts`, `codecGen.ts`, `binaryCodec.ts`, `extract.ts`, `types.ts`); superseded by #11's schema-driven codec.
 
 **Files**: `src/engine/net/snapshot.ts`.
 
@@ -165,7 +184,9 @@ encoding itself, just the file layout.
 
 ---
 
-### 8. Split `rendering/hazards.ts` (879 lines) — M
+### 8. Split `rendering/hazards.ts` (879 lines) — M ✅ DONE
+
+**DONE** — split into `src/engine/rendering/hazards/` (`zones.ts`, `creatures.ts`, `lava.ts`, `index.ts` barrel + `clearHazardCaches`).
 
 **Files**: `src/engine/rendering/hazards.ts`.
 
@@ -186,7 +207,9 @@ into `index.ts`.
 
 ---
 
-### 9. Split `Match.tsx` (~600 lines) — M
+### 9. Split `Match.tsx` (~600 lines) — M ✅ DONE
+
+**DONE** — lifecycle extracted into hooks under `src/components/match/` (`useLocalMatch.ts` and siblings); Match.tsx is now the thin composition + overlay shell.
 
 **Files**: `src/components/Match.tsx`.
 
@@ -213,7 +236,9 @@ hook params.
 
 ---
 
-### 10. PlayerInput context arg — M (small but architectural)
+### 10. PlayerInput context arg — M (small but architectural) ✅ DONE
+
+**DONE** — `PlayerInput.getAction(state, ctx?: PlayerInputContext)` now carries `networkInputs` / `airborne`; `RemoteInput` and `TouchAdapter` read from ctx, `Simulator._getPlayerInput` branching is gone, and the playerInputs map is the single source of truth.
 
 **Files**: `src/engine/simulator/Simulator.ts:347-651` (the
 `_getPlayerInput` branching), `src/engine/input/PlayerInput.ts` interface,
@@ -238,7 +263,9 @@ correctness. Verifiable via `regression-determinism.test.ts` snapshot.
 
 ## Big refactors (L effort)
 
-### 11. Schema-driven snapshot codec + `WirePlayer` split — L
+### 11. Schema-driven snapshot codec + `WirePlayer` split — L ✅ DONE
+
+**DONE** — shipped in PROTOCOL_VERSION 12: `Player = WirePlayer & LocalPlayer` in `engine/types.ts`; wire layout declared in `net/snapshot/schema.ts` (`PLAYER_SCHEMA`) and driven by `codecGen.ts` (`assertSchemaShape` guards drift). Golden-byte regression in `snapshot-wire-format.test.ts`. New field = 3-edit chain + version bump.
 
 **Files**: `src/engine/net/snapshot.ts:18-216` (`SnapshotPlayer` interface +
 encode/decode), `src/engine/types.ts` (`Player` interface),
@@ -286,7 +313,9 @@ catch indirect breakage before snapshot tests run).
 
 ---
 
-### 12. Decompose `net/netMatch.ts` (1084 lines) — L
+### 12. Decompose `net/netMatch.ts` (1084 lines) — L ✅ DONE
+
+**DONE** — shipped as the `src/engine/net/netMatch/` directory: thin `NetMatch.ts` orchestrator + `NetMatchContext`, `HostLoop`, `GuestLoop`, `MessageRouter`, `LoadingHandshake`, `ReconnectController` (and later `NetMatchDriver`). `netMatch.test.ts` regrouped to match.
 
 **Files**: `src/engine/net/netMatch.ts`.
 
@@ -325,7 +354,9 @@ parallel reorganization — do that first.
 
 ---
 
-### 13. Move gameplay tests from GameLoop → Simulator — L (mechanical)
+### 13. Move gameplay tests from GameLoop → Simulator — L (mechanical) ✅ DONE
+
+**DONE** — gameplay/SFX-transition tests now run mock-free against `Simulator` + systems via a `CapturedEvents` sink (see `testing.md`); the project convention is "default to Simulator-level tests, NOT GameLoop." GameLoop tests keep only genuine adapter behavior.
 
 **Files**: `src/engine/gameLoop.test.ts` is **3,959 lines** with a 33-line
 module-mock prelude (`audio` 12 stubs, `renderer` 8 stubs, `howler`

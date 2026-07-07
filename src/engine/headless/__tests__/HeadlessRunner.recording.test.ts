@@ -18,6 +18,7 @@ import { registerBuiltinCharacters } from '../../characters/builtin';
 import { getArena } from '../../arenas';
 import { SeededRNG } from '../../net/prng';
 import { RandomInput } from '../../input/RandomInput';
+import { RuleBasedBot } from '../../input/RuleBasedBot';
 import type { InputState, MatchSettings, PlayerSlot } from '../../types';
 import type { PlayerInput } from '../../input/PlayerInput';
 import type { HeadlessRunnerConfig } from '../types';
@@ -272,6 +273,42 @@ describe('HeadlessRunner recording integration', () => {
     expect(samples[samples.length - 2].done).toBe(true);
     // Earlier samples should NOT have done=true.
     expect(samples[0].done).toBe(false);
+  });
+
+  it('records the REAL action for a bot slot wired post-construction (H1 regression)', () => {
+    // Bots need the Simulator's AIController, so they're installed AFTER
+    // construction via setPlayerInput — which bypasses the constructor's
+    // ActionCapturingInput wrap. Without wrapRecordedSlot the bot's samples
+    // record all-false actions. This pins the fix.
+    const recorder = new InMemoryRecorder();
+    const players: PlayerSlot[] = ['P1', 'B1'];
+    const config: HeadlessRunnerConfig = {
+      arenaId: 'meadow',
+      activePlayers: players,
+      settings: makeSettings({ killLimit: 999, playerCount: 2, botCount: 1 }),
+      rng: new SeededRNG(5),
+      inputs: new Map(), // B1 wired post-construction below
+      maxTicks: 300,
+      recording: { recorder, slots: ['B1'] },
+    };
+
+    const runner = new HeadlessRunner(config);
+    runner.getSimulator().getState().countdown = 0;
+
+    const ai = runner.getSimulator().getAIControllers().get('B1')!;
+    const arena = getArena('meadow');
+    runner.getSimulator().setPlayerInput('B1', new RuleBasedBot('B1', ai, arena, false, false));
+    runner.wrapRecordedSlot('B1'); // re-wrap so the bot's action is captured
+
+    runner.runMatch();
+
+    const b1 = recorder.getSamples().filter(s => s.slot === 'B1');
+    expect(b1.length).toBe(300);
+    // A rule-based bot moves — at least one recorded action must be non-trivial.
+    const anyAction = b1.some(
+      s => s.action.left || s.action.right || s.action.jump || s.action.down,
+    );
+    expect(anyAction).toBe(true);
   });
 
   it('non-recorded slots produce no samples', async () => {

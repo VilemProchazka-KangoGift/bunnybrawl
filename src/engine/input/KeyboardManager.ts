@@ -46,11 +46,15 @@ export class KeyboardManager {
   };
 
   attach(): void {
+    // In the sim-worker bundle (dev, where the stub alias doesn't fire) `window`
+    // is undefined — guard so attach/detach don't throw on match teardown.
+    if (typeof window === 'undefined') return;
     window.addEventListener('keydown', this._onKeyDown);
     window.addEventListener('keyup', this._onKeyUp);
   }
 
   detach(): void {
+    if (typeof window === 'undefined') return;
     window.removeEventListener('keydown', this._onKeyDown);
     window.removeEventListener('keyup', this._onKeyUp);
     this.keys.clear();

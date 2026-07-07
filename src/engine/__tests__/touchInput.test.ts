@@ -229,13 +229,15 @@ describe('TouchInputManager', () => {
       expect(input2.jump).toBe(false);
     });
 
-    it('resets jump state on touch end', () => {
+    it('commits a quick-tap jump on release without waiting out the swipe window', () => {
       tapRight(800, 400);
-      manager.getInput(); // consume
-      endRight(800, 400);
-
-      const input = manager.getInput();
-      expect(input.jump).toBe(false);
+      // Read within the commit window: still pending (could yet become a swipe).
+      expect(manager.getInput().jump).toBe(false);
+      endRight(800, 400); // finger lifts early — can no longer be a swipe
+      // The jump commits immediately on the next read (T4 fix)…
+      expect(manager.getInput().jump).toBe(true);
+      // …and fires only once.
+      expect(manager.getInput().jump).toBe(false);
     });
 
     it('ignores second jump touch while first is active', () => {

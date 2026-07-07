@@ -324,7 +324,7 @@ describe('checkMatchEnd', () => {
       players: [makePlayer({ id: 'P1', score: 16, active: true })],
     });
     const result = checkMatchEnd(state, makeSettings({ killLimit: 16 }));
-    expect(result).toBe('P1');
+    expect(result?.winner).toBe('P1');
   });
 
   it('ignores inactive players for kill-limit check', () => {
@@ -344,7 +344,33 @@ describe('checkMatchEnd', () => {
       ],
     });
     const result = checkMatchEnd(state, makeSettings({ killLimit: 100, timeLimit: 60 }));
-    expect(result).toBe('P2');
+    expect(result?.winner).toBe('P2');
+  });
+
+  it('ends in a draw (winner null) on an exact score tie at the time limit', () => {
+    const state = makeState({
+      timeElapsed: 120,
+      players: [
+        makePlayer({ id: 'P1', score: 7, active: true }),
+        makePlayer({ id: 'P2', score: 7, active: true }),
+      ],
+    });
+    const result = checkMatchEnd(state, makeSettings({ killLimit: 100, timeLimit: 60 }));
+    // Match ends (non-null result) but there is no winner (draw).
+    expect(result).not.toBeNull();
+    expect(result?.winner).toBeNull();
+  });
+
+  it('excludes disconnected players from the time-limit winner', () => {
+    const state = makeState({
+      timeElapsed: 120,
+      players: [
+        makePlayer({ id: 'P1', score: 20, active: true, disconnected: true }),
+        makePlayer({ id: 'P2', score: 3, active: true }),
+      ],
+    });
+    const result = checkMatchEnd(state, makeSettings({ killLimit: 100, timeLimit: 60 }));
+    expect(result?.winner).toBe('P2');
   });
 
   it('returns null for timeLimit when no active players exist', () => {

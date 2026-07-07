@@ -7,28 +7,28 @@ exports[`Simulator determinism (Task 3.4 — standalone, no GameLoop) > locks th
   "positions": [
     {
       "slot": "P1",
-      "x": 639.7222900390625,
-      "y": 628,
+      "x": 885.1669311523438,
+      "y": 557.75,
     },
     {
       "slot": "P2",
-      "x": 55.611045837402344,
-      "y": 507.5,
+      "x": 93.72216033935547,
+      "y": 488,
     },
     {
       "slot": "B1",
-      "x": 697.2109375,
-      "y": 385.75,
+      "x": 933.2001342773438,
+      "y": 383,
     },
     {
       "slot": "B2",
-      "x": 105.44446563720703,
-      "y": 545.25,
+      "x": 929,
+      "y": 541.8335571289062,
     },
   ],
   "scores": [
     {
-      "score": 0,
+      "score": 2,
       "slot": "P1",
     },
     {
@@ -36,7 +36,7 @@ exports[`Simulator determinism (Task 3.4 — standalone, no GameLoop) > locks th
       "slot": "P2",
     },
     {
-      "score": 2,
+      "score": 0,
       "slot": "B1",
     },
     {

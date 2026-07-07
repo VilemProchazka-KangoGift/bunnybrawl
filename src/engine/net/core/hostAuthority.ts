@@ -480,14 +480,10 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
         this.lastConsumedFrame.set(slot, entry.frame);
       }
 
-      // Relay to other guests
-      if (fromPeerId) {
-        for (const pid of this.transport.getPeerIds()) {
-          if (pid !== fromPeerId) {
-            this.transport.sendUnreliableTo(pid, data);
-          }
-        }
-      }
+      // (No relay to other guests: nothing on the guest side decodes a peer's
+      // INPUT message — only the host consumes INPUT. Relaying it was pure dead
+      // traffic that scaled O(guests²) and, at 4 guests, exceeded the entire
+      // snapshot broadcast in host upstream bandwidth.)
     } else if (type === CoreMsgType.PING) {
       const pp = decodePingPong(data);
       if (pp && fromPeerId) {

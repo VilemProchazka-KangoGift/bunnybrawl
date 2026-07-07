@@ -419,7 +419,7 @@ describe('HostAuthority', () => {
       expect(guestInput.jump).toBe(true);
     });
 
-    it('relays input to other connected peers', () => {
+    it('does NOT relay INPUT to other peers (nothing guest-side decodes it)', () => {
       const transport = makeMockTransport();
       transport.getPeerIds.mockReturnValue(['peer-a', 'peer-b']);
       const { host } = makeHostAuthority({ transport: transport as any });
@@ -433,12 +433,10 @@ describe('HostAuthority', () => {
 
       host.handleUnreliableMessage(inputMsg, 'peer-a');
 
-      // Should relay to peer-b but NOT back to peer-a
-      expect(transport.sendUnreliableTo).toHaveBeenCalledWith('peer-b', inputMsg);
-      // Should not have been called with peer-a
-      const calls = transport.sendUnreliableTo.mock.calls;
-      const relayedToPeerA = calls.some((c: any[]) => c[0] === 'peer-a');
-      expect(relayedToPeerA).toBe(false);
+      // The host consumes INPUT itself; relaying it to other guests was dead
+      // traffic (O(guests²), larger than the snapshot broadcast) — now removed.
+      const relayedInput = transport.sendUnreliableTo.mock.calls.some((c: any[]) => c[1] === inputMsg);
+      expect(relayedInput).toBe(false);
     });
 
     it('ignores messages with empty data', () => {

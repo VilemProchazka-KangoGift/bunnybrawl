@@ -520,7 +520,13 @@ export class Simulator {
       if (player.vy !== 0 && player.vy > -1e-4 && player.vy < 1e-4) player.vy = 0;
       updatePlayerState(player);
 
-      if (wasAirborne && player.state === 'airborne' && prevVy < -10 && player.vy === 0) {
+      // Headbonk: was rising, now stopped dead — only a ceiling does that.
+      // Detected BEFORE the landing split because a ceiling bonk zeroes vy, so
+      // updatePlayerState reports the player as non-airborne for one tick.
+      // (The old condition also required state === 'airborne', which needs
+      // vy !== 0 — logically unsatisfiable, so the headbonk SFX never fired.)
+      const headbonked = wasAirborne && prevVy < -10 && player.vy === 0;
+      if (headbonked) {
         const cd = this._sfxCooldownsGetter();
         if (cd.headbonk.isReady(player.id)) {
           this._events.onSfxRequest('headbonk');
@@ -528,7 +534,9 @@ export class Simulator {
         }
       }
 
-      const justLanded = wasAirborne && player.state !== 'airborne';
+      // Exclude the ceiling bonk from "landed" so it doesn't fire landing
+      // squash / thud / haptic while the player is pressed against a ceiling.
+      const justLanded = wasAirborne && player.state !== 'airborne' && !headbonked;
 
       if (justLanded) this._events.onPlayerLanding(player.id, prevVy);
 
@@ -607,6 +615,13 @@ export class Simulator {
         if (player.state === 'airborne') ps.timeAirborne += dt;
         ps.distanceTraveled += (Math.abs(player.vx) + Math.abs(player.vy)) * dt;
       }
+
+      // Dead / disconnected corpses must not interact with the world: no
+      // spring/geyser resurrection, no carrot pickups, no flock triggers, no
+      // bouncy launches. Physics above already no-ops for them; this guards the
+      // collision, effect-zone, bouncy, scatter-flock and carrot logic below.
+      // (disconnectPlayer sets state = 'splat', so this covers it too.)
+      if (player.state === 'splat' || player.state === 'respawning') continue;
 
       this._playerCollisionSystem.checkCollisions(player);
       this._effectZoneSystem.applyToPlayer(player, justLanded, wasAirborne, prevVy, dt);

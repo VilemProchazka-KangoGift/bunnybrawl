@@ -305,11 +305,18 @@ describe('Fast Fall', () => {
     expect(p.vy).toBeLessThanOrEqual(FAST_FALL_SPEED);
   });
 
-  it('first frame of fast-fall snaps vy to at least FAST_FALL_INITIAL', () => {
-    const p = makePlayer({ state: 'airborne', vy: -200, fastFalling: false });
+  it('first frame of fast-fall snaps vy to at least FAST_FALL_INITIAL (at/after apex)', () => {
+    const p = makePlayer({ state: 'airborne', vy: 0, fastFalling: false });
     applyInput(p, { left: false, right: false, jump: false, down: true }, 1 / 60);
     expect(p.vy).toBeGreaterThanOrEqual(FAST_FALL_INITIAL);
     expect(p.fastFalling).toBe(true);
+  });
+
+  it('does NOT snap downward while still rising — preserves spring/bounce launches', () => {
+    const p = makePlayer({ state: 'airborne', vy: -700, fastFalling: false }); // just launched
+    applyInput(p, { left: false, right: false, jump: false, down: true }, 1 / 60);
+    expect(p.vy).toBeLessThan(0);       // still rising; launch not cancelled
+    expect(p.fastFalling).toBe(true);   // fast-fall still engages (fast gravity)
   });
 
   it('fastFalling clears on ground', () => {

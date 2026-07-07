@@ -266,8 +266,12 @@ export function useOnlineMatch(p: UseOnlineMatchParams): void {
       activePlayers,
       onMatchEnd,
       transport,
-      localSlot: isHost ? 'P1' : 'P2',
-      remoteSlots: activePlayers.filter(s => s !== (isHost ? 'P1' : 'P2') && s.startsWith('P')) as PlayerSlot[],
+      // Guests MUST use their real lobby slot, not a hardcoded 'P2'. With the
+      // old hardcode, P3/P4/P5 guests sent inputs claiming 'P2' → the host's
+      // source-auth silently dropped them and those players stood frozen; only
+      // 1v1 worked. `localSlot` is the actual assigned slot (null only for host).
+      localSlot: isHost ? 'P1' : (localSlot ?? 'P2'),
+      remoteSlots: activePlayers.filter(s => s !== (isHost ? 'P1' : (localSlot ?? 'P2')) && s.startsWith('P')) as PlayerSlot[],
       // Reclaim tokens issued during the lobby. Host: full Map<slot,token>;
       // guest: own token only. Used to authenticate RECONNECT_REQUEST so a
       // malicious peer in the room can't claim a disconnected stranger's slot.

@@ -609,10 +609,19 @@ export class EngineWorkerProxy {
   getState(): MatchState { return this.mirrorState ?? this.bootState; }
   getRendererDiagnostics(): RenderDiagnostics { return STUB_DIAGNOSTICS; }
   setOnPhaseChange(cb: (phase: MatchPhase) => void): void { this.onPhaseChange = cb; }
-  setNetworkMode(_enabled: boolean): void { /* sim-worker is local-only */ }
-  setPlayerNames(_names: Record<string, string>): void { /* online not in this path */ }
-  setConnectionQuality(_rtt: number, _jitter: number): void { /* online not in this path */ }
-  setLocalSlot(_slot: PlayerSlot): void { /* online not in this path */ }
+  setNetworkMode(_enabled: boolean): void { /* worker sim enters network mode via its init message / NetMatchDriver, not here */ }
+  // Online DOES run through this proxy (PR #38 wired it as NetMatchDriver).
+  // These forward the HUD-visible values to the worker-hosted Renderer, which
+  // owns the player-name labels and the connection-quality signal icon.
+  setPlayerNames(names: Record<string, string>): void { this.renderer.setPlayerNames(names); }
+  setConnectionQuality(rtt: number, jitter: number): void { this.renderer.setConnectionQuality(rtt, jitter); }
+  // Retarget the local touch slot (mobile online guest is P2+). The proxy reads
+  // this.touchSlot for the airborne→fast-fall conversion when forwarding input,
+  // and haptics must fire for the guest's own player, not the host's P1.
+  setLocalSlot(slot: PlayerSlot): void {
+    this.touchSlot = slot;
+    haptics.init(slot);
+  }
   setMatchOver(): void { /* online-only */ }
   resetCosmeticBaselines(): void { /* worker handles internally */ }
   /** Forward a runtime debug-flag toggle to the worker's GameLoop so its

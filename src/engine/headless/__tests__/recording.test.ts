@@ -14,6 +14,7 @@ const SAMPLE: Sample = {
   action: { left: true, right: false, jump: false, down: false },
   reward: 0.5,
   done: false,
+  actionValid: true,
 };
 
 const HEADER: MatchHeader = {

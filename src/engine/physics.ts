@@ -83,8 +83,13 @@ export function applyInput(
 
   // Fast fall — hold down while airborne: instant direction change
   if (input.down && player.state === 'airborne') {
-    if (!player.fastFalling) {
-      // First frame of fast-fall: snap velocity downward immediately
+    // The first fast-fall frame snaps velocity downward — but NOT while the
+    // player is still rising (vy < 0) from a launch. A spring/bouncy launch
+    // (vy ≈ -700) begins with fastFalling == false when down was held from the
+    // ground, so without this guard the snap to +500 cancels the bounce the
+    // very next tick. Snapping still fires at/after the apex (vy >= 0), which
+    // is where fast-fall is actually used.
+    if (!player.fastFalling && player.vy >= 0) {
       player.vy = f(Math.max(player.vy, FAST_FALL_INITIAL));
     }
     player.fastFalling = true;
