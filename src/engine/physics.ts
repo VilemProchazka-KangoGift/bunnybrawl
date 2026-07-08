@@ -81,25 +81,22 @@ export function applyInput(
   // Clamp horizontal speed
   player.vx = f(Math.max(-maxSpeed, Math.min(maxSpeed, player.vx)));
 
-  // Fast fall — hold down while airborne to dive. Snap to a fast downward
-  // velocity ONCE, at/after the apex (vy >= 0) — never mid-ascent, which would
-  // cancel a spring/bounce/jump launch the tick it fires. Dropping the old
-  // `!fastFalling` edge check makes the snap behave the same whether Down was
-  // tapped at the apex or held continuously from launch: while rising it's
-  // skipped, and it fires the first frame past the apex. Idempotent — the next
-  // tick's FAST_FALL_GRAVITY carries vy past FAST_FALL_INITIAL.
+  // Fast fall — hold down while airborne to dive. Snap to the dive velocity
+  // only at/after the apex (vy >= 0), never mid-ascent (that would cancel a
+  // spring/bounce/jump launch the tick it fires). The `!fastFalling` edge guard
+  // fires the snap once, so a zero-G / current zone that pulls a held-Down
+  // player's vy back below the dive speed doesn't re-snap (which would pin them
+  // at 500 and negate the zone). `Math.max` never DECELERATES a player already
+  // falling faster than the dive speed. fastFalling stays "down + airborne" for
+  // gravity, the bounce invariant, cosmetics, and guest input-echo pose parity.
+  // Trade-off: a dive held continuously from launch latches fastFalling during
+  // the ascent, so it gets fast-fall gravity but not the apex velocity snap — a
+  // minor, acceptable feel difference vs. tapping Down at the apex.
   if (input.down && player.state === 'airborne') {
-    // Snap to the dive velocity ONCE, the first frame at/after the apex
-    // (vy >= 0), and latch fastFalling on that snap so it can't re-fire. Guard
-    // with `!fastFalling`, not `vy < FAST_FALL_INITIAL`: a zero-G / current zone
-    // pulls a held-Down player's vy back below 500 every tick, which the
-    // velocity guard would re-snap — pinning them at 500 and negating the zone.
-    // Never snaps mid-ascent (vy < 0), so launches survive; a dive held from
-    // launch still snaps at the apex.
     if (!player.fastFalling && player.vy >= 0) {
-      player.vy = f(FAST_FALL_INITIAL);
-      player.fastFalling = true;
+      player.vy = f(Math.max(player.vy, FAST_FALL_INITIAL));
     }
+    player.fastFalling = true;
   } else {
     player.fastFalling = false;
   }

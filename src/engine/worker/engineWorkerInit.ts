@@ -103,8 +103,17 @@ let guestPool: AuthSnapshot[] = [];
 let guestPoolIdx = 0;
 
 export function setNetMode(mode: NetMode, _delayFrames = 0): void {
+  const wasHost = netMode === 'host';
   netMode = mode;
   hostFrame = 0;
+  // If we become a host while already hidden-and-rAF-parked, the throttled rAF
+  // may never fire to re-evaluate the driver — re-arm so scheduleNextTick picks
+  // the setTimeout fallback and the host keeps feeding guests while backgrounded.
+  if (running && workerHidden && mode === 'host' && !wasHost) {
+    if (rafId) { ctxScope.cancelAnimationFrame(rafId); rafId = 0; }
+    if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
+    scheduleNextTick();
+  }
   // _delayFrames is consumed by EntityInterpolation's adaptive delay
   // tracker; the constructor doesn't take it currently. We accept it
   // here for the wire-level contract (HostNetSetModeMsg) and consume

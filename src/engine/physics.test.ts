@@ -315,8 +315,15 @@ describe('Fast Fall', () => {
   it('does NOT snap downward while still rising — preserves spring/bounce launches', () => {
     const p = makePlayer({ state: 'airborne', vy: -700, fastFalling: false }); // just launched
     applyInput(p, { left: false, right: false, jump: false, down: true }, 1 / 60);
-    expect(p.vy).toBe(-700);            // unchanged; launch not cancelled mid-ascent
-    expect(p.fastFalling).toBe(false);  // snap (and the fast-fall latch) waits for the apex
+    expect(p.vy).toBe(-700);           // unchanged; launch not cancelled mid-ascent
+    expect(p.fastFalling).toBe(true);  // stays "down + airborne" (fast gravity, echo/cosmetic parity)
+  });
+
+  it('does NOT decelerate a player already falling faster than the dive speed', () => {
+    const p = makePlayer({ state: 'airborne', vy: 580, fastFalling: false }); // free-falling fast
+    applyInput(p, { left: false, right: false, jump: false, down: true }, 1 / 60);
+    expect(p.vy).toBe(580);            // Math.max leaves the faster velocity; no one-frame slow-down
+    expect(p.fastFalling).toBe(true);
   });
 
   it('snaps only once — a zero-G pull below FAST_FALL_INITIAL does not re-snap', () => {
@@ -327,7 +334,7 @@ describe('Fast Fall', () => {
     expect(p.fastFalling).toBe(true);
     p.vy = FAST_FALL_INITIAL - 40;           // simulate zero-G damping (0.92×)
     applyInput(p, down, 1 / 60);
-    expect(p.vy).toBe(FAST_FALL_INITIAL - 40); // NOT re-snapped to 500
+    expect(p.vy).toBe(FAST_FALL_INITIAL - 40); // NOT re-snapped to 500 (!fastFalling guard)
   });
 
   it('fastFalling clears on ground', () => {
