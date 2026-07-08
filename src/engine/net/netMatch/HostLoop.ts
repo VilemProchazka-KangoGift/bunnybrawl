@@ -25,6 +25,11 @@ const BROADCAST_INTERVAL_MS = 1000 / 60;
 export class HostLoop {
   private ctx: NetMatchContext;
   private rafId = 0;
+  /** Fallback driver while the tab is hidden (rAF throttles toward 0 in a
+   *  backgrounded tab, which would stop the host sim and freeze every guest
+   *  indefinitely — pongs keep flowing so nobody detects the stall). */
+  private intervalId: ReturnType<typeof setInterval> | null = null;
+  private onVisibility: (() => void) | null = null;
 
   constructor(ctx: NetMatchContext) {
     this.ctx = ctx;
@@ -167,15 +172,46 @@ export class HostLoop {
       }
 
       this.ctx.gameLoop.renderFrame(dt);
-      this.rafId = requestAnimationFrame(loop);
     };
-    this.rafId = requestAnimationFrame(loop);
+
+    // Driver: rAF while visible, a setInterval fallback while hidden. A hidden
+    // tab still throttles setInterval (~1Hz), but 1Hz keeps guests fed and lets
+    // the match still end — infinitely better than the 0Hz rAF freeze. Sim time
+    // slips (dt is capped at 3 ticks) rather than bursting on return.
+    const rafDriver = () => {
+      loop(performance.now());
+      this.rafId = requestAnimationFrame(rafDriver);
+    };
+    const startRaf = () => { if (!this.rafId) this.rafId = requestAnimationFrame(rafDriver); };
+    const stopRaf = () => { if (this.rafId) { cancelAnimationFrame(this.rafId); this.rafId = 0; } };
+    const startInterval = () => {
+      if (!this.intervalId) this.intervalId = setInterval(() => loop(performance.now()), BROADCAST_INTERVAL_MS);
+    };
+    const stopInterval = () => { if (this.intervalId) { clearInterval(this.intervalId); this.intervalId = null; } };
+
+    if (typeof document !== 'undefined') {
+      this.onVisibility = () => {
+        if (document.hidden) { stopRaf(); startInterval(); }
+        else { stopInterval(); startRaf(); }
+      };
+      document.addEventListener('visibilitychange', this.onVisibility);
+    }
+    if (typeof document !== 'undefined' && document.hidden) startInterval();
+    else startRaf();
   }
 
   stop(): void {
     if (this.rafId) {
       cancelAnimationFrame(this.rafId);
       this.rafId = 0;
+    }
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+      this.intervalId = null;
+    }
+    if (this.onVisibility && typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', this.onVisibility);
+      this.onVisibility = null;
     }
   }
 }

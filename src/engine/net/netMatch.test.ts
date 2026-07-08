@@ -285,30 +285,39 @@ describe('NetMatch', () => {
         removeSpy.mockRestore();
       });
 
-      it('start() registers a visibilitychange listener', () => {
+      // A host NetMatch registers TWO visibilitychange listeners: NetMatch's
+      // own stall-clock refresh AND HostLoop's rAF/interval driver fallback
+      // (keeps the host sim alive when the tab is backgrounded). The contract
+      // these tests protect is "no listener leak": every one added is removed.
+      it('start() registers at least one visibilitychange listener', () => {
         const nm = new NetMatch(makeConfig(visTransport));
         nm.start();
         const visibilityCalls = addSpy.mock.calls.filter(c => c[0] === 'visibilitychange');
-        expect(visibilityCalls).toHaveLength(1);
+        expect(visibilityCalls.length).toBeGreaterThanOrEqual(1);
         nm.stop();
       });
 
-      it('stop() removes the visibilitychange listener', () => {
+      it('stop() removes every visibilitychange listener it added', () => {
         const nm = new NetMatch(makeConfig(visTransport));
         nm.start();
+        const added = addSpy.mock.calls.filter(c => c[0] === 'visibilitychange').length;
         removeSpy.mockClear();
         nm.stop();
-        const visibilityCalls = removeSpy.mock.calls.filter(c => c[0] === 'visibilitychange');
-        expect(visibilityCalls).toHaveLength(1);
+        const removed = removeSpy.mock.calls.filter(c => c[0] === 'visibilitychange').length;
+        expect(removed).toBe(added);
       });
 
-      it('uses the same handler reference for add and remove (no listener leak)', () => {
+      it('adds and removes the SAME handler references (no listener leak)', () => {
         const nm = new NetMatch(makeConfig(visTransport));
         nm.start();
-        const addedHandler = addSpy.mock.calls.find(c => c[0] === 'visibilitychange')?.[1];
+        const addedHandlers = new Set(
+          addSpy.mock.calls.filter(c => c[0] === 'visibilitychange').map(c => c[1]),
+        );
         nm.stop();
-        const removedHandler = removeSpy.mock.calls.find(c => c[0] === 'visibilitychange')?.[1];
-        expect(addedHandler).toBe(removedHandler);
+        const removedHandlers = new Set(
+          removeSpy.mock.calls.filter(c => c[0] === 'visibilitychange').map(c => c[1]),
+        );
+        expect(removedHandlers).toEqual(addedHandlers);
       });
     });
   });

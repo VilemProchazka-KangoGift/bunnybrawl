@@ -45,7 +45,7 @@ import {
 import type { RewardWeights } from '../src/engine/headless/reward';
 import { RandomInput } from '../src/engine/input/RandomInput';
 import { RuleBasedBot } from '../src/engine/input/RuleBasedBot';
-import type { MatchSettings, PlayerSlot } from '../src/engine/types';
+import type { MatchSettings, PlayerSlot, BotSlot } from '../src/engine/types';
 import type { PlayerInput } from '../src/engine/input/PlayerInput';
 import type { HeadlessRunnerConfig } from '../src/engine/headless/types';
 
@@ -204,7 +204,7 @@ async function runEpisode(
 
   // Wire RuleBasedBots post-construction (they need the simulator's AIController).
   const arena = getArena(args.arenaId);
-  for (const slot of ['B1', 'B2'] as PlayerSlot[]) {
+  for (const slot of ['B1', 'B2'] as BotSlot[]) {
     const ai = runner.getSimulator().getAIControllers().get(slot)!;
     runner.getSimulator().setPlayerInput(slot, new RuleBasedBot(slot, ai, arena, false, false));
     // Re-wrap so the bot's ACTUAL action is captured. setPlayerInput bypasses
