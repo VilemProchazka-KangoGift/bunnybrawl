@@ -2,33 +2,33 @@
 
 exports[`Simulator determinism (Task 3.4 — standalone, no GameLoop) > locks the standalone Simulator fingerprint (refactor regression) 1`] = `
 {
-  "kills": 1,
+  "kills": 2,
   "phase": "playing",
   "positions": [
     {
       "slot": "P1",
-      "x": 885.1669311523438,
-      "y": 557.75,
+      "x": 561.6111450195312,
+      "y": 187.58338928222656,
     },
     {
       "slot": "P2",
-      "x": 93.72216033935547,
-      "y": 488,
+      "x": 376.611083984375,
+      "y": 222.33322143554688,
     },
     {
       "slot": "B1",
-      "x": 933.2001342773438,
-      "y": 383,
+      "x": 46.93263626098633,
+      "y": 462.6668395996094,
     },
     {
       "slot": "B2",
-      "x": 929,
-      "y": 541.8335571289062,
+      "x": 806.2334594726562,
+      "y": 557.5833740234375,
     },
   ],
   "scores": [
     {
-      "score": 2,
+      "score": 0,
       "slot": "P1",
     },
     {
@@ -36,11 +36,11 @@ exports[`Simulator determinism (Task 3.4 — standalone, no GameLoop) > locks th
       "slot": "P2",
     },
     {
-      "score": 0,
+      "score": 2,
       "slot": "B1",
     },
     {
-      "score": 0,
+      "score": 2,
       "slot": "B2",
     },
   ],

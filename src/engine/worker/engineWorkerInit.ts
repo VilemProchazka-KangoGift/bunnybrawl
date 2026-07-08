@@ -279,7 +279,11 @@ export function initEngine(msg: HostInitEngineMsg): void {
  *  here either from the end of a just-fired `driveTick`, from `initEngine`,
  *  or from `setEngineVisibility` after cancelling both handles. */
 function scheduleNextTick(): void {
-  if (workerHidden) {
+  // The hidden-tab setTimeout fallback exists to keep a network HOST feeding its
+  // guests while backgrounded. For local (offline) and guest play, let rAF
+  // throttle to ~0Hz as normal — otherwise a local sim-worker match would keep
+  // advancing (timer, kills) in the background, diverging from main-thread play.
+  if (workerHidden && netMode === 'host') {
     rafId = 0;
     fallbackTimer = setTimeout(() => {
       fallbackTimer = null;

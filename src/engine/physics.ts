@@ -89,10 +89,17 @@ export function applyInput(
   // skipped, and it fires the first frame past the apex. Idempotent — the next
   // tick's FAST_FALL_GRAVITY carries vy past FAST_FALL_INITIAL.
   if (input.down && player.state === 'airborne') {
-    if (player.vy >= 0 && player.vy < FAST_FALL_INITIAL) {
+    // Snap to the dive velocity ONCE, the first frame at/after the apex
+    // (vy >= 0), and latch fastFalling on that snap so it can't re-fire. Guard
+    // with `!fastFalling`, not `vy < FAST_FALL_INITIAL`: a zero-G / current zone
+    // pulls a held-Down player's vy back below 500 every tick, which the
+    // velocity guard would re-snap — pinning them at 500 and negating the zone.
+    // Never snaps mid-ascent (vy < 0), so launches survive; a dive held from
+    // launch still snaps at the apex.
+    if (!player.fastFalling && player.vy >= 0) {
       player.vy = f(FAST_FALL_INITIAL);
+      player.fastFalling = true;
     }
-    player.fastFalling = true;
   } else {
     player.fastFalling = false;
   }

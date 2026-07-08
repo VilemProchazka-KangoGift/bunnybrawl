@@ -315,8 +315,19 @@ describe('Fast Fall', () => {
   it('does NOT snap downward while still rising — preserves spring/bounce launches', () => {
     const p = makePlayer({ state: 'airborne', vy: -700, fastFalling: false }); // just launched
     applyInput(p, { left: false, right: false, jump: false, down: true }, 1 / 60);
-    expect(p.vy).toBeLessThan(0);       // still rising; launch not cancelled
-    expect(p.fastFalling).toBe(true);   // fast-fall still engages (fast gravity)
+    expect(p.vy).toBe(-700);            // unchanged; launch not cancelled mid-ascent
+    expect(p.fastFalling).toBe(false);  // snap (and the fast-fall latch) waits for the apex
+  });
+
+  it('snaps only once — a zero-G pull below FAST_FALL_INITIAL does not re-snap', () => {
+    const p = makePlayer({ state: 'airborne', vy: 0, fastFalling: false });
+    const down = { left: false, right: false, jump: false, down: true };
+    applyInput(p, down, 1 / 60);
+    expect(p.vy).toBe(FAST_FALL_INITIAL);   // snapped at apex
+    expect(p.fastFalling).toBe(true);
+    p.vy = FAST_FALL_INITIAL - 40;           // simulate zero-G damping (0.92×)
+    applyInput(p, down, 1 / 60);
+    expect(p.vy).toBe(FAST_FALL_INITIAL - 40); // NOT re-snapped to 500
   });
 
   it('fastFalling clears on ground', () => {
