@@ -1,8 +1,10 @@
 import { Component, useEffect, useState, type ReactNode } from 'react';
 import './CrashGuard.css';
 
-// Chromium fires this benign message on window.error; it is not a crash.
-const BENIGN = /ResizeObserver loop/i;
+// Not our crashes: Chromium's ResizeObserver-loop notice, and the opaque
+// cross-origin "Script error." that browser extensions / third-party scripts
+// surface (never actionable, and not a game-loop failure).
+const BENIGN = /ResizeObserver loop|^Script error\.?$/i;
 
 function CrashOverlay({ message, onDismiss }: { message: string; onDismiss?: () => void }) {
   return (
