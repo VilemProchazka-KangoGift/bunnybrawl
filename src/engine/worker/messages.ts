@@ -163,6 +163,14 @@ export interface HostEngineInputBatchMsg {
 
 export interface HostEnginePauseMsg { type: 'host:enginePause' }
 export interface HostEngineResumeMsg { type: 'host:engineResume' }
+/** Main forwards the host tab's visibility so the worker can switch its
+ *  sim driver. The worker has no `document`, so it can't detect this
+ *  itself. When `hidden`, the worker's rAF-driven loop (tied to a hidden
+ *  OffscreenCanvas presentation) throttles to ~0Hz and the sim + net
+ *  snapshots stop — freezing every connected guest. On `hidden`, the
+ *  worker falls back to a `setTimeout` driver so ticks + snapshots keep
+ *  flowing (throttled to ~1Hz, but alive). */
+export interface HostEngineVisibilityMsg { type: 'host:engineVisibility'; hidden: boolean }
 export interface HostEngineSwitchArenaMsg { type: 'host:engineSwitchArena'; arenaId: string; settingsOverrides?: Partial<MatchSettings> }
 export interface HostEngineSetPhaseMsg { type: 'host:engineSetPhase'; phase: MatchPhase }
 export interface HostEngineSkipCountdownMsg { type: 'host:engineSkipCountdown' }
@@ -271,6 +279,7 @@ export type HostToWorkerMsg =
   | HostEngineInputBatchMsg
   | HostEnginePauseMsg
   | HostEngineResumeMsg
+  | HostEngineVisibilityMsg
   | HostEngineSwitchArenaMsg
   | HostEngineSetPhaseMsg
   | HostEngineSkipCountdownMsg

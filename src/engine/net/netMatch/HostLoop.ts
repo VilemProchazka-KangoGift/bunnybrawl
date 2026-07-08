@@ -69,7 +69,14 @@ export class HostLoop {
       // Cap dt to 3 ticks — prevents tick burst after fullscreen/tab-switch pauses
       const dt = Math.min((now - lastTime) / 1000, FIXED_DT * 3);
       lastTime = now;
-      autoSlowDetect.feedFrame(dt * 1000);
+      // Skip the perf-symptom monitor while the tab is hidden: the interval
+      // fallback ticks at the browser's throttled ~1Hz, and the burst-cap makes
+      // each idle frame look like a plausible 50ms slow frame — enough to trip
+      // permanent slow-device mode after ~1 min backgrounded. Real gameplay
+      // frames (visible, rAF-driven) still feed it.
+      if (typeof document === 'undefined' || !document.hidden) {
+        autoSlowDetect.feedFrame(dt * 1000);
+      }
       accumulator += dt;
 
       // Periodically adapt delay to match guest RTT (every ~1s)

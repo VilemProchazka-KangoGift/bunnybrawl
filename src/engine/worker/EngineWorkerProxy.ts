@@ -43,7 +43,7 @@ import type { IRenderer, RenderDiagnostics } from '../renderer';
 import type { NetDebugStats } from '../net/core/debugOverlay';
 import type {
   HostInitEngineMsg, HostStopMsg, HostEngineInputBatchMsg,
-  HostEnginePauseMsg, HostEngineResumeMsg,
+  HostEnginePauseMsg, HostEngineResumeMsg, HostEngineVisibilityMsg,
   HostEngineSwitchArenaMsg, HostEngineSetPhaseMsg, HostEngineSkipCountdownMsg,
   HostPerfResetMsg,
   HostNetSetModeMsg, HostNetSnapshotApplyMsg,
@@ -331,8 +331,25 @@ export class EngineWorkerProxy {
     this.worker.postMessage(msg);
   }
 
+  /** Bound so add/removeEventListener target the same ref. Forwards the host
+   *  tab's visibility to the worker, which has no `document` and would
+   *  otherwise let its rAF-driven sim throttle to ~0Hz when hidden — freezing
+   *  every connected guest (the worker switches to a setTimeout driver on
+   *  hidden). Guarded for non-DOM environments (tests). */
+  private _onVisibilityChange = (): void => {
+    if (typeof document === 'undefined') return;
+    const m: HostEngineVisibilityMsg = { type: 'host:engineVisibility', hidden: document.hidden };
+    this.worker.postMessage(m);
+  };
+
   start(): void {
     this.keyboardManager.attach();
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', this._onVisibilityChange);
+      // Post the current state once so a tab that starts hidden (or a match
+      // begun while backgrounded) picks the right driver immediately.
+      this._onVisibilityChange();
+    }
     if (this.touchInput) {
       const container = document.querySelector('.game-scaler-content') as HTMLElement | null;
       if (container) {
@@ -431,6 +448,9 @@ export class EngineWorkerProxy {
     this.running = false;
     if (this.rafId) cancelAnimationFrame(this.rafId);
     this.rafId = 0;
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', this._onVisibilityChange);
+    }
     this.keyboardManager.detach();
     this.touchInput?.detach();
     audio.stopAllGameSounds();

@@ -81,16 +81,16 @@ export function applyInput(
   // Clamp horizontal speed
   player.vx = f(Math.max(-maxSpeed, Math.min(maxSpeed, player.vx)));
 
-  // Fast fall — hold down while airborne: instant direction change
+  // Fast fall — hold down while airborne to dive. Snap to a fast downward
+  // velocity ONCE, at/after the apex (vy >= 0) — never mid-ascent, which would
+  // cancel a spring/bounce/jump launch the tick it fires. Dropping the old
+  // `!fastFalling` edge check makes the snap behave the same whether Down was
+  // tapped at the apex or held continuously from launch: while rising it's
+  // skipped, and it fires the first frame past the apex. Idempotent — the next
+  // tick's FAST_FALL_GRAVITY carries vy past FAST_FALL_INITIAL.
   if (input.down && player.state === 'airborne') {
-    // The first fast-fall frame snaps velocity downward — but NOT while the
-    // player is still rising (vy < 0) from a launch. A spring/bouncy launch
-    // (vy ≈ -700) begins with fastFalling == false when down was held from the
-    // ground, so without this guard the snap to +500 cancels the bounce the
-    // very next tick. Snapping still fires at/after the apex (vy >= 0), which
-    // is where fast-fall is actually used.
-    if (!player.fastFalling && player.vy >= 0) {
-      player.vy = f(Math.max(player.vy, FAST_FALL_INITIAL));
+    if (player.vy >= 0 && player.vy < FAST_FALL_INITIAL) {
+      player.vy = f(FAST_FALL_INITIAL);
     }
     player.fastFalling = true;
   } else {

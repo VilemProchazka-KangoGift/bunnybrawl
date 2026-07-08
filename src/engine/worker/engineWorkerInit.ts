@@ -63,6 +63,16 @@ let inputSabView: Int32Array | null = null;
 let inputSabSlots: PlayerSlot[] = [];
 const inputSabScratch: InputState[] = [];
 let rafId = 0;
+/** Set true when main tells us the host tab is hidden (`host:engineVisibility`).
+ *  A hidden worker's `requestAnimationFrame` (tied to a hidden OffscreenCanvas
+ *  presentation) throttles to ~0Hz, which stops `fixedUpdate` and the net
+ *  snapshot emit — freezing every connected guest. While hidden we drive the
+ *  loop from `setTimeout` instead (browsers throttle a hidden worker's
+ *  setTimeout to ~1Hz, but that keeps the sim + snapshots alive vs 0Hz). */
+let workerHidden = false;
+/** The setTimeout handle used while `workerHidden`. Mutually exclusive with
+ *  `rafId` — `scheduleNextTick()` picks exactly one driver. */
+let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
 let running = false;
 let paused = false;
 let accumulator = 0;
@@ -255,8 +265,58 @@ export function initEngine(msg: HostInitEngineMsg): void {
   running = true;
   paused = false;
   lastTime = performance.now();
-  rafId = ctxScope.requestAnimationFrame(driveTick);
+  // Route `host:engineVisibility` to the sim driver (see `onEngineMessage`).
+  // Idempotent: addEventListener dedupes the stable handler ref if initEngine
+  // ever runs twice on one worker.
+  ctxScope.addEventListener('message', onEngineMessage);
+  scheduleNextTick();
 }
+
+/** Schedule the next `driveTick`, picking the driver by visibility. Only
+ *  ever schedules ONE driver (rAF when visible, setTimeout when hidden) and
+ *  clears the handle of the other so `stopEngine`/the visibility switch never
+ *  cancel a stale id. Assumes no driver is currently pending — callers reach
+ *  here either from the end of a just-fired `driveTick`, from `initEngine`,
+ *  or from `setEngineVisibility` after cancelling both handles. */
+function scheduleNextTick(): void {
+  if (workerHidden) {
+    rafId = 0;
+    fallbackTimer = setTimeout(() => {
+      fallbackTimer = null;
+      driveTick(performance.now());
+    }, 1000 / 60);
+  } else {
+    fallbackTimer = null;
+    rafId = ctxScope.requestAnimationFrame(driveTick);
+  }
+}
+
+/** Handle `host:engineVisibility`. Flip the driver immediately so the switch
+ *  takes effect this frame instead of waiting for a throttled rAF that may
+ *  never fire (the whole point — a hidden worker's rAF is at ~0Hz). */
+export function setEngineVisibility(hidden: boolean): void {
+  if (hidden === workerHidden) return;
+  workerHidden = hidden;
+  // No driver is pending before init / after stop — just record the state so
+  // `initEngine`'s first `scheduleNextTick` honors it.
+  if (!running) return;
+  if (rafId) { ctxScope.cancelAnimationFrame(rafId); rafId = 0; }
+  if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
+  scheduleNextTick();
+}
+
+/** The worker's message dispatch lives in `renderWorker.ts` (an if-chain that
+ *  silently ignores unknown types). `host:engineVisibility` is routed here via
+ *  this dedicated listener — installed in `initEngine`, removed in `stopEngine`
+ *  — so the visibility signal reaches the sim driver without editing the
+ *  renderWorker dispatch. Every other message type falls through to
+ *  renderWorker's handler unchanged. */
+const onEngineMessage = (e: MessageEvent): void => {
+  const data = e.data as { type?: string; hidden?: boolean } | null;
+  if (data && data.type === 'host:engineVisibility') {
+    setEngineVisibility(!!data.hidden);
+  }
+};
 
 function driveTick(currentTime: number): void {
   if (!running || !gameLoop || !renderer) return;
@@ -267,7 +327,7 @@ function driveTick(currentTime: number): void {
   if (paused) {
     lastTime = currentTime;
     renderer.renderFrame(gameLoop.getState(), gameLoop.getArena(), [], 0);
-    rafId = ctxScope.requestAnimationFrame(driveTick);
+    scheduleNextTick();
     return;
   }
   let frameTime = (currentTime - lastTime) / 1000;
@@ -362,7 +422,7 @@ function driveTick(currentTime: number): void {
     ctxScope.postMessage(m);
   }
 
-  rafId = ctxScope.requestAnimationFrame(driveTick);
+  scheduleNextTick();
 }
 
 /** Frozen empty array — shared by every stripped MatchState field on
@@ -487,8 +547,10 @@ export function skipCountdownInWorker(): void {
 
 export function stopEngine(): void {
   running = false;
+  ctxScope.removeEventListener('message', onEngineMessage);
   if (rafId) ctxScope.cancelAnimationFrame(rafId);
   rafId = 0;
+  if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
   gameLoop?.stop();
   gameLoop = null;
   renderer = null;

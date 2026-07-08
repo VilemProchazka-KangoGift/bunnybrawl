@@ -1,71 +1,49 @@
-import { Component, useEffect, useState, type ReactNode } from 'react';
-import { reportFatalError, subscribeFatalError, getFatalError } from '../fatalError';
+import { Component, type ReactNode } from 'react';
 import './CrashGuard.css';
 
-// Chromium fires this benign message on window.error; it is not a crash.
-const BENIGN = /ResizeObserver loop/i;
-
-function CrashOverlay({ message }: { message: string }) {
-  return (
-    <div className="crash-overlay" role="alert">
-      <div className="crash-panel">
-        <h2>Something went wrong</h2>
-        <p>The game hit an unexpected error and needs to reload.</p>
-        <button className="btn-base crash-reload" onClick={() => window.location.reload()}>
-          Reload
-        </button>
-        <details className="crash-details">
-          <summary>Details</summary>
-          <pre>{message}</pre>
-        </details>
-      </div>
-    </div>
-  );
-}
-
-/** Catches throws from the React subtree (render + effects). */
-class ReactErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
-  state = { hasError: false };
-  static getDerivedStateFromError() { return { hasError: true }; }
-  componentDidCatch(error: Error) { reportFatalError(error?.message || String(error)); }
-  render() { return this.state.hasError ? null : this.props.children; }
-}
+interface State { error: string | null }
 
 /**
- * Wraps the app. Surfaces a recovery overlay for three otherwise-silent
- * failure classes:
- *  - React render/effect throws (ErrorBoundary → root unmount is worse than an
- *    overlay: React 19 blanks the page with no ErrorBoundary present).
- *  - Uncaught main-thread errors (a thrown rAF frame in the game/net loop
- *    propagates to window.onerror; the loop stops rescheduling silently).
- *  - Worker crashes (proxies call reportFatalError from their onError).
+ * Catches throws from the React subtree (render + effects). Without a boundary,
+ * a React 19 render/effect throw unmounts the whole root → permanent blank
+ * page; here it shows a reload overlay instead.
+ *
+ * DELIBERATELY does NOT install global `window` 'error'/'unhandledrejection'
+ * handlers: routine WebRTC/Trystero renegotiation and Howler autoplay-policy
+ * rejections fire those constantly, and escalating them to a full-screen,
+ * first-error-wins overlay covered a fully-playable game with no way out but a
+ * reload. A broken React tree, by contrast, genuinely cannot recover without a
+ * reload — so a persistent overlay is correct for that case only. (Worker
+ * onError is likewise logged, not escalated — the worker's per-frame try/catch
+ * often recovers.)
  */
-export function CrashGuard({ children }: { children: ReactNode }) {
-  const [fatal, setFatal] = useState<string | null>(getFatalError());
+export class CrashGuard extends Component<{ children: ReactNode }, State> {
+  state: State = { error: null };
 
-  useEffect(() => subscribeFatalError((m) => setFatal(m)), []);
+  static getDerivedStateFromError(error: Error): State {
+    return { error: error?.message || String(error) };
+  }
 
-  useEffect(() => {
-    const onErr = (e: ErrorEvent) => {
-      if (e?.message && BENIGN.test(e.message)) return;
-      reportFatalError(e?.message || 'Unknown error');
-    };
-    const onRej = (e: PromiseRejectionEvent) => {
-      const reason = e?.reason;
-      reportFatalError(reason?.message || String(reason ?? 'Unhandled rejection'));
-    };
-    window.addEventListener('error', onErr);
-    window.addEventListener('unhandledrejection', onRej);
-    return () => {
-      window.removeEventListener('error', onErr);
-      window.removeEventListener('unhandledrejection', onRej);
-    };
-  }, []);
+  componentDidCatch(error: Error): void {
+    console.error('[crash]', error);
+  }
 
-  return (
-    <>
-      <ReactErrorBoundary>{children}</ReactErrorBoundary>
-      {fatal && <CrashOverlay message={fatal} />}
-    </>
-  );
+  render(): ReactNode {
+    if (this.state.error === null) return this.props.children;
+    return (
+      <div className="crash-overlay" role="alert">
+        <div className="crash-panel">
+          <h2>Something went wrong</h2>
+          <p>The game hit an unexpected error and needs to reload.</p>
+          <button className="btn-base crash-reload" onClick={() => window.location.reload()}>
+            Reload
+          </button>
+          <details className="crash-details">
+            <summary>Details</summary>
+            <pre>{this.state.error}</pre>
+          </details>
+        </div>
+      </div>
+    );
+  }
 }
