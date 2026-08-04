@@ -29,7 +29,7 @@ Ranked by leverage within each tier (S/M/L effort).
 ### 2. Hoist `darken()` + `Ctx2D` type alias — S
 
 **Files**: `darken` exists in `src/engine/rendering/players.ts`, `src/engine/arenas/packs/underwater.ts`,
-`src/engine/navDebugOverlay.ts` (CLAUDE.md flags this directly: *"fold into a
+`src/engine/navDebugOverlay.ts` (AGENTS.md flags this directly: *"fold into a
 shared util when adding a fourth"*). `Ctx2D` casts at `src/engine/renderer.ts:458,488`,
 `src/engine/rendering/hud.ts:93`, `src/engine/rendering/players.ts:161,433`.
 
@@ -52,7 +52,7 @@ casts disappear.
 `surfaceImpact.ts` + `SurfaceImpactSystem.ts`.
 
 **Smell**: three near-identical impls of "store prev state, detect transitions,
-refresh prev". CLAUDE.md (engine) literally warns:
+refresh prev". AGENTS.md (engine) literally warns:
 
 > Extending `PrevPlayerCosmeticState` requires updating three locations…
 > missing one location leaves the prev field at its initial value, creating a
@@ -80,9 +80,9 @@ catch any drift.
 **Files**: `src/engine/gameLoop/GameLoop.ts:149, 257, 396, 477` and similar.
 
 **Smell**: every `audio.play()` is gated `if (this._audioEnabled)` because
-rollback resimulation needed silenced replays. Rollback was abandoned (CLAUDE.md
+rollback resimulation needed silenced replays. Rollback was abandoned (AGENTS.md
 net section: *"Client prediction was tried and abandoned"*). The flag is always
-true; CLAUDE.md still tells you to "always gate" — discipline for dead code.
+true; AGENTS.md still tells you to "always gate" — discipline for dead code.
 
 **Cleanup**: delete the field, delete the gates. If any caller still wants
 silenced replays, use a SimulatorEvents impl whose callbacks are no-ops
@@ -221,7 +221,7 @@ hook params.
 `src/engine/input/RuleBasedBot.ts`, `src/engine/input/KeyboardInput.ts`.
 
 **Smell**: Simulator's per-player loop has 3 input branches (network → touch →
-playerInputs map). CLAUDE.md acknowledges the wart. `RemoteInput` adapter
+playerInputs map). AGENTS.md acknowledges the wart. `RemoteInput` adapter
 exists but is bypassed by the per-tick `networkInputs` arg to `fixedUpdate`.
 
 **Cleanup**: extend interface to
@@ -246,7 +246,7 @@ encode/decode), `src/engine/types.ts` (`Player` interface),
 
 **Smell**: `SnapshotPlayer` (lines 18-46) is a 28-field hand-curated mirror
 of `Player`. Every wire-relevant field requires edits in 6 places + a
-`PROTOCOL_VERSION` bump. CLAUDE.md flags 3 separate "must update both"
+`PROTOCOL_VERSION` bump. AGENTS.md flags 3 separate "must update both"
 gotchas tracing here:
 - "Idle action state is local-only — NOT in `net/snapshot.ts`"
 - "`Player.disconnected` must be in snapshots"
@@ -365,7 +365,7 @@ those refactors want a proper Simulator-level safety net.
 If sequencing PRs:
 
 1. **Quick wins #1–#5 in one batch** — pure cleanup, no risk, removes 4
-   documented footguns from CLAUDE.md.
+   documented footguns from AGENTS.md.
 2. **#6 WildlifeSystem** — natural follow-on to ReactiveDecorationSystem,
    biggest LOC reduction, well-formed pattern.
 3. **#7 + #8 splits** — safe mechanical decompositions, prep for later work.
@@ -387,5 +387,5 @@ independent of the rest.
 - Pending: this branch is ready to merge into main (perf-clean, all tests
   pass except the documented pre-existing 41).
 - After merge, all the file paths above remain valid against `main`.
-- For each finding, CLAUDE.md (root + `src/engine/CLAUDE.md`) is the best
+- For each finding, AGENTS.md (root + `src/engine/AGENTS.md`) is the best
   context source; many findings cite it directly.

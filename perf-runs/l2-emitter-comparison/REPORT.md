@@ -36,7 +36,7 @@ Predicted trade-off: combined pays one extra `drawImage` per frame; split pays o
 
 ### Deltas (split minus combined)
 
-| Metric | Δ (ms) | Verdict (vs CLAUDE.md 0.3ms noise floor) |
+| Metric | Δ (ms) | Verdict (vs AGENTS.md 0.3ms noise floor) |
 |---|---|---|
 | avg | −0.20 | noise |
 | p50 | −0.14 | noise |

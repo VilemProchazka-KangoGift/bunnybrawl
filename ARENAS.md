@@ -2,7 +2,7 @@
 
 ## Architecture
 
-Theme system lives in `src/engine/themes/`. See CLAUDE.md "Adding a new arena" for the step-by-step pattern.
+Theme system lives in `src/engine/themes/`. See AGENTS.md "Adding a new arena" for the step-by-step pattern.
 
 ### Progress
 

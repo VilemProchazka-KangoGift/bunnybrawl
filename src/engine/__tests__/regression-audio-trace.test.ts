@@ -178,7 +178,7 @@ function runAudioScenario(): string[] {
     loop.fixedUpdate(FIXED_TIMESTEP, inputs);
     // Run cosmetic systems (per-tick, not half-rate) so transition-driven
     // SFX fire deterministically. This mirrors what tests in the project
-    // already do (per CLAUDE.md: "Tests call cosmeticStep(FIXED_TIMESTEP)
+    // already do (per AGENTS.md: "Tests call cosmeticStep(FIXED_TIMESTEP)
     // directly to exercise the unthrottled per-tick behavior").
     loop.cosmeticStep(FIXED_TIMESTEP);
   }

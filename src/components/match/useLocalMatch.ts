@@ -91,7 +91,7 @@ export interface UseLocalMatchParams {
  * sibling online effect.
  *
  * The "reset phaseIsLoading=true / localTasksDone=false at top of branch"
- * caveat from CLAUDE.md is preserved here.
+ * caveat from AGENTS.md is preserved here.
  *
  * HMR caveat: editing engine code while a match is running with
  * `?worker=on` updates Match.tsx's transitive deps on main but leaves the
