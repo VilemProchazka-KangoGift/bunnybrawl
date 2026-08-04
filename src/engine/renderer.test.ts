@@ -711,7 +711,7 @@ describe('Renderer — bgNight bake on bg writes', () => {
 // Light burst lifecycle (spawn / stomp flashes)
 // ============================================================================
 // These lock the fg-direct burst path (not the L2 emitter pipeline). The
-// effect is visible at any dayPhase by design — see `engine/CLAUDE.md` Lighting
+// effect is visible at any dayPhase by design — see `engine/AGENTS.md` Lighting
 // section. Easy to silently regress in a conflict that re-merges renderFrame
 // or `_synthesizeDynamicLights`.
 
