@@ -65,7 +65,7 @@ export function MainMenu() {
     if (isTouchPrimary() && matchSettings.botCount < 1) {
       setMatchSettings({ botCount: 1 });
     }
-  }, []);
+  }, [matchSettings.botCount, setMatchSettings]);
 
   const handlePlay = useCallback(() => {
     audio.init();
@@ -115,7 +115,9 @@ export function MainMenu() {
   // ticking (cheap) so it resumes instantly on close. A ref (not deps) so the
   // once-mounted loop sees the current state without re-subscribing.
   const anyModalOpenRef = useRef(false);
-  anyModalOpenRef.current = modsOpen || helpOpen || onlineOpen || settingsOpen || devOpen;
+  useEffect(() => {
+    anyModalOpenRef.current = modsOpen || helpOpen || onlineOpen || settingsOpen || devOpen;
+  }, [modsOpen, helpOpen, onlineOpen, settingsOpen, devOpen]);
 
   useEffect(() => {
     const canvas = canvasRef.current;

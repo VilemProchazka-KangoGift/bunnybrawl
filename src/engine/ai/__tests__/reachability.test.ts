@@ -1,24 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import {
-  canJumpTo,
-  canDropTo,
-  canWalkTo,
-  canGeyserTo,
-  canZeroGTo,
-  computeEdgeDanger,
-  type ReachResult,
-} from '../reachability';
+import { canJumpTo, canDropTo, canWalkTo, canGeyserTo, canZeroGTo, computeEdgeDanger } from '../reachability';
 import type { Platform, EffectZone } from '../../types';
-import {
-  JUMP_IMPULSE,
-  GRAVITY,
-  MAX_WALK_SPEED,
-  PLAYER_WIDTH,
-  CANVAS_WIDTH,
-} from '../../constants';
+import { PLAYER_WIDTH, CANVAS_WIDTH } from '../../constants';
 
-// Derived constant matching the source: v^2 / (2g) ~= 174.22
-const MAX_JUMP_HEIGHT = (JUMP_IMPULSE * JUMP_IMPULSE) / (2 * GRAVITY);
 
 /** Helper to create a platform object. */
 function plat(x: number, y: number, width: number, height = 20): Platform {

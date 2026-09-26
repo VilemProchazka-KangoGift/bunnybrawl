@@ -126,6 +126,7 @@ function correlateLongFrames(dts, lastSampleTime, longTasks, gcTimes = []) {
   }
   timeline.reverse(); // oldest-first
   const long = timeline.filter((f) => f.dt > 25);
+  void gcTimes; // reserved for cross-timeline correlation once origins align
   return long.map((f) => {
     const window = 50; // ms window for matching a longTask to a frame
     const overlap = longTasks.find((lt) => {
@@ -141,7 +142,6 @@ function correlateLongFrames(dts, lastSampleTime, longTasks, gcTimes = []) {
       longTaskMs: overlap ? overlap.duration.toFixed(1) : '—',
     };
   });
-  void gcTimes; // reserved for cross-timeline correlation once origins align
 }
 
 /** Threshold for flagging a heap-usage drop as a GC event. The 1Hz

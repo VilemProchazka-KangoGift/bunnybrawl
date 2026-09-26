@@ -36,8 +36,8 @@ import {
   tickPeriodicAmbient,
 } from '../cosmetics/sfx';
 import { Cooldowns } from '../../cooldowns';
-import { audio } from '../../audio';
-import type { PlayerSlot } from '../../types';
+
+
 import type { ThemeConfig } from '../../themes/types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { makePlayer, makeState, makeSettings } from '../../__tests__/testHelpers';

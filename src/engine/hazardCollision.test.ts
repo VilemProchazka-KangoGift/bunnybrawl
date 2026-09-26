@@ -7,7 +7,7 @@ import {
   checkLavaRockCollision,
 } from './hazardCollision';
 import type { SpringMushroom, Thorn, GhostEntity, LavaRock, HazardZone } from './types';
-import { PLAYER_WIDTH, PLAYER_HEIGHT, SPRING_SIZE, THORN_SLOW_DURATION } from './constants';
+import { THORN_SLOW_DURATION } from './constants';
 import { makePlayer } from './__tests__/testHelpers';
 
 function makeSpring(overrides: Partial<SpringMushroom> = {}): SpringMushroom {

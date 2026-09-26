@@ -1,10 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import {
-  registerReactiveKind, getReactiveKind, hasReactiveKind, _resetReactiveKindsForTest,
-  updateExcitement, applyShakeImpulse, decayShake, shouldFireBurst, composeBend,
-  tickBendDynamics, bendCoeffForProximity, createReactiveInstance,
-  type ReactiveInstance, type ReactiveKindConfig,
-} from '../reactiveDecorations';
+import { registerReactiveKind, getReactiveKind, hasReactiveKind, _resetReactiveKindsForTest, updateExcitement, applyShakeImpulse, decayShake, shouldFireBurst, composeBend, tickBendDynamics, bendCoeffForProximity, createReactiveInstance, type ReactiveInstance } from '../reactiveDecorations';
 
 function makeInstance(overrides: Partial<ReactiveInstance> = {}): ReactiveInstance {
   return {

@@ -55,6 +55,8 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
   // on cold start. Staged copy reassures the user that work is happening.
   const [connectingStage, setConnectingStage] = useState<ConnectingStage>('initial');
   useEffect(() => {
+    // A new connection attempt must start with the initial status message.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setConnectingStage('initial');
     if (step !== 'connecting' || online.isHost) return;
     const timers = CONNECTING_STAGE_TIMINGS.map(s => setTimeout(() => setConnectingStage(s.key), s.at));

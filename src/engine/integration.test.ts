@@ -5,11 +5,7 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest';
 import type { MatchSettings, Arena, PlayerSlot, InputState } from './types';
 import { makeArena } from './__tests__/testHelpers';
-import {
-  FIXED_TIMESTEP, MATCH_COUNTDOWN,
-  CANVAS_WIDTH, PLAYER_WIDTH, PLAYER_HEIGHT,
-  SPRING_BOUNCE, STOMP_BOUNCE,
-} from './constants';
+import { FIXED_TIMESTEP, MATCH_COUNTDOWN, CANVAS_WIDTH, PLAYER_WIDTH, PLAYER_HEIGHT } from './constants';
 
 vi.mock('./audio', () => ({
   audio: {
@@ -88,7 +84,7 @@ afterEach(() => {
 
 describe('Integration: full match lifecycle', () => {
   it('countdown → gameplay → kill → score → match end', () => {
-    const { loop, onMatchEnd } = createLoop({ settings: { killLimit: 2 } });
+    const { loop } = createLoop({ settings: { killLimit: 2 } });
     const state = loop.getState();
 
     // Phase 1: countdown
@@ -379,7 +375,6 @@ describe('Integration: timer decay interactions', () => {
 
 describe('Integration: arena-specific features', () => {
   it('mirror arena mod reverses platform positions', () => {
-    const { loop: normal } = createLoop();
     const { loop: mirrored } = createLoop({
       settings: { mods: { mirrorArena: true, extremeGore: false, carrotChase: false, giantPlayers: false, turbo: false, superBounce: false, underwaterGravity: false } },
     });

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { PlayerSlot, InputState, MatchState } from '../types';
+import type { PlayerSlot, MatchState } from '../types';
 import { MsgType, encodeInputMessage, encodePing } from './protocol';
 import { makeState } from '../__tests__/testHelpers';
 

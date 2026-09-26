@@ -298,3 +298,6 @@ const applyMsPerFrame = r4.nsPerOp / 1e6;
 console.log(`  decode (no pool):  ${decodeNoPoolMsPerFrame.toFixed(3)} ms (${(decodeNoPoolMsPerFrame / 16.67 * 100).toFixed(2)}% of frame)`);
 console.log(`  decode (pooled):   ${decodePoolMsPerFrame.toFixed(3)} ms (${(decodePoolMsPerFrame / 16.67 * 100).toFixed(2)}% of frame)`);
 console.log(`  applySnapshotToState: ${applyMsPerFrame.toFixed(3)} ms (${(applyMsPerFrame / 16.67 * 100).toFixed(2)}% of frame)`);
+// Keep the benchmark sinks observable so the measured work cannot be elided.
+void SINK_X;
+void SINK_LEN;

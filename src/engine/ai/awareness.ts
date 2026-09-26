@@ -526,7 +526,7 @@ function _buildAwarenessImpl(
 
         if (goalIdx !== currentPlatformIdx) {
           const hopTable = preferSafePath && nav.safeHop ? nav.safeHop : nav.nextHop;
-          let nextIdx = hopTable[currentPlatformIdx]?.[goalIdx] ?? -2;
+          const nextIdx = hopTable[currentPlatformIdx]?.[goalIdx] ?? -2;
 
           // Medium difficulty: clamp to 1-hop (don't follow full multi-hop paths)
           if (pathfindingDepth === 1 && nextIdx >= 0) {

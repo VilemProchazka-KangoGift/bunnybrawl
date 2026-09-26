@@ -155,7 +155,7 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
   // captured into this ref but never propagate to the live loop. Mods
   // UI surface accepts changes only outside a match.
   const matchSettingsRef = useRef(matchSettings);
-  matchSettingsRef.current = matchSettings;
+  useEffect(() => { matchSettingsRef.current = matchSettings; }, [matchSettings]);
 
   useEffect(() => {
     if (isOnline) return; // online hook handles this branch
@@ -174,12 +174,13 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
         // StrictMode remount (or any cleanup→setup cycle with identical
         // deps). Existing proxy is correct; reuse without reconstructing.
         const reusedTeardown = lifecycleRef.current.teardown;
+        const lifecycle = lifecycleRef.current;
         return () => {
-          lifecycleRef.current.timer = setTimeout(() => {
+          lifecycle.timer = setTimeout(() => {
             reusedTeardown?.();
-            lifecycleRef.current.teardown = null;
-            lifecycleRef.current.deps = null;
-            lifecycleRef.current.timer = null;
+            lifecycle.teardown = null;
+            lifecycle.deps = null;
+            lifecycle.timer = null;
           }, 0);
         };
       }
@@ -294,13 +295,14 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
         };
         lifecycleRef.current.teardown = teardown;
         lifecycleRef.current.deps = { activePlayers };
+        const lifecycle = lifecycleRef.current;
         return () => {
           // See top-of-effect comment: defer for StrictMode safety.
-          lifecycleRef.current.timer = setTimeout(() => {
+          lifecycle.timer = setTimeout(() => {
             teardown();
-            lifecycleRef.current.teardown = null;
-            lifecycleRef.current.deps = null;
-            lifecycleRef.current.timer = null;
+            lifecycle.teardown = null;
+            lifecycle.deps = null;
+            lifecycle.timer = null;
           }, 0);
         };
       } catch (e) {
@@ -407,16 +409,17 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
     };
     lifecycleRef.current.teardown = teardown;
     lifecycleRef.current.deps = { activePlayers };
+    const lifecycle = lifecycleRef.current;
     return () => {
       // See top-of-effect comment: defer for StrictMode safety. Main-thread
       // path doesn't strictly need this (no transferControlToOffscreen if
       // workerProxy is null) but the renderer-only worker path does, and
       // making one branch deferred but not the other invites confusion.
-      lifecycleRef.current.timer = setTimeout(() => {
+      lifecycle.timer = setTimeout(() => {
         teardown();
-        lifecycleRef.current.teardown = null;
-        lifecycleRef.current.deps = null;
-        lifecycleRef.current.timer = null;
+        lifecycle.teardown = null;
+        lifecycle.deps = null;
+        lifecycle.timer = null;
       }, 0);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps

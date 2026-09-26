@@ -116,7 +116,7 @@ export function useOnlineMatch(p: UseOnlineMatchParams): void {
   // via SETTINGS_SYNC and applied through `gameLoop.switchArena()`; other
   // fields are frozen for the match lifetime even if the store mutates.
   const matchSettingsRef = useRef(matchSettings);
-  matchSettingsRef.current = matchSettings;
+  useEffect(() => { matchSettingsRef.current = matchSettings; }, [matchSettings]);
 
   useEffect(() => {
     if (!isOnline) return;
@@ -132,12 +132,13 @@ export function useOnlineMatch(p: UseOnlineMatchParams): void {
         && prev.activePlayers === activePlayers;
       if (depsUnchanged) {
         const reusedTeardown = lifecycleRef.current.teardown;
+        const lifecycle = lifecycleRef.current;
         return () => {
-          lifecycleRef.current.timer = setTimeout(() => {
+          lifecycle.timer = setTimeout(() => {
             reusedTeardown?.();
-            lifecycleRef.current.teardown = null;
-            lifecycleRef.current.deps = null;
-            lifecycleRef.current.timer = null;
+            lifecycle.teardown = null;
+            lifecycle.deps = null;
+            lifecycle.timer = null;
           }, 0);
         };
       }
@@ -426,14 +427,15 @@ export function useOnlineMatch(p: UseOnlineMatchParams): void {
     };
     lifecycleRef.current.teardown = teardown;
     lifecycleRef.current.deps = { activePlayers };
+    const lifecycle = lifecycleRef.current;
     return () => {
       // Defer for StrictMode safety. The remount will cancel this timer
       // before it fires; real unmount lets it fire.
-      lifecycleRef.current.timer = setTimeout(() => {
+      lifecycle.timer = setTimeout(() => {
         teardown();
-        lifecycleRef.current.teardown = null;
-        lifecycleRef.current.deps = null;
-        lifecycleRef.current.timer = null;
+        lifecycle.teardown = null;
+        lifecycle.deps = null;
+        lifecycle.timer = null;
       }, 0);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps

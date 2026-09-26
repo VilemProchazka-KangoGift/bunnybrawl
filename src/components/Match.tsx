@@ -177,7 +177,7 @@ export function Match() {
         loop.setPhase('playing');
       }
     }, nm);
-  }, [setMatchSettings, online.isOnline, online.isHost]);
+  }, [setMatchSettings, setLocalTasksDone, online.isOnline, online.isHost]);
 
   // Esc/Enter pause-resume + skip-countdown shortcuts + beforeunload prompt.
   useMatchKeyboard(gameLoopRef, showLevelSelect, setShowLevelSelect, handlePause, handleResume);

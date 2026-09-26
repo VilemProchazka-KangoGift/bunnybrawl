@@ -2,9 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TouchInputManager } from '../touchInput';
 
 // Constants mirrored from touchInput.ts for readable assertions
-const CANVAS_WIDTH = 1280;
 const DEAD_ZONE = 12;
-const MAX_RADIUS = 60;
 const SWIPE_DISTANCE = 25;
 
 // ---------- helpers ----------
@@ -52,7 +50,7 @@ function fakeTouchEvent(
 }
 
 // Access private bound handlers
-type AnyTIM = { // eslint-disable-line @typescript-eslint/no-explicit-any
+type AnyTIM = {
   boundTouchStart: (e: TouchEvent) => void;
   boundTouchMove: (e: TouchEvent) => void;
   boundTouchEnd: (e: TouchEvent) => void;

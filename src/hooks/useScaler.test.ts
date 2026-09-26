@@ -35,22 +35,6 @@ describe('useScaler', () => {
     expect(result.current.isFullscreen).toBe(false);
   });
 
-  it('applies correct scale transform when container is attached', () => {
-    // Set viewport to 1920x1080
-    Object.defineProperty(window, 'innerWidth', { value: 1920, writable: true, configurable: true });
-    Object.defineProperty(window, 'innerHeight', { value: 1080, writable: true, configurable: true });
-
-    const { result } = renderHook(() => useScaler());
-
-    // Simulate attaching a div to the ref
-    const div = document.createElement('div');
-    // Manually set the ref's current value by rendering with a real element
-    // The hook applies transform in useEffect, so we need to verify the logic
-    // Expected scale: min(1920/1280, 1080/720) = min(1.5, 1.5) = 1.5
-    const expectedScale = Math.min(1920 / CANVAS_WIDTH, 1080 / CANVAS_HEIGHT);
-    expect(expectedScale).toBe(1.5);
-  });
-
   it('calculates scale based on min of width and height ratios', () => {
     // Wide viewport — height is the limiting factor
     Object.defineProperty(window, 'innerWidth', { value: 2560, writable: true, configurable: true });

@@ -1051,7 +1051,6 @@ describe('collidePlayersHorizontal chain overlap', () => {
     const c = makePlayer({ id: 'P3', x: 120, y: 600, state: 'idle', active: true, invincibleTimer: 0 });
 
     const origAx = a.x;
-    const origBx = b.x;
     const origCx = c.x;
 
     collidePlayersHorizontal([a, b, c]);
