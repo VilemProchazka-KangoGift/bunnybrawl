@@ -51,6 +51,12 @@ function makeSettings(overrides?: Partial<MatchSettings>): MatchSettings {
   };
 }
 
+function signedWrappedDelta(from: number, to: number): number {
+  // World X wraps at CANVAS_WIDTH; a left move across zero becomes a large
+  // positive raw-coordinate jump. These 30 ticks move less than half a world.
+  return ((to - from + CANVAS_WIDTH * 1.5) % CANVAS_WIDTH) - CANVAS_WIDTH / 2;
+}
+
 let _lastLoop: GameLoop | null = null;
 
 function createLoop(opts?: { settings?: Partial<MatchSettings>; arena?: Partial<Arena>; players?: PlayerSlot[]; rng?: SeededRNG }) {
@@ -134,8 +140,8 @@ describe('Integration: network mode round-trip', () => {
       loop.fixedUpdate(FIXED_TIMESTEP, inputs);
     }
 
-    expect(p1.x).toBeGreaterThan(xP1); // P1 moved right
-    expect(p2.x).toBeLessThan(xP2);    // P2 moved left
+    expect(signedWrappedDelta(xP1, p1.x)).toBeGreaterThan(0); // P1 moved right
+    expect(signedWrappedDelta(xP2, p2.x)).toBeLessThan(0);    // P2 moved left
   });
 });
 

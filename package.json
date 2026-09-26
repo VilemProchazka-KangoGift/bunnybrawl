@@ -11,6 +11,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "npm run build && playwright test",
+    "test:smoke": "npm run build && playwright test e2e/game-flow.spec.ts e2e/arena-switch-mid-match.spec.ts --grep-invert @flaky --workers=2 --retries=0",
     "test:all": "vitest run && playwright test",
     "clean": "node -e \"require('fs').rmSync('node_modules/.vite',{recursive:true,force:true});require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "perf:build": "tsc -b && vite build --sourcemap --outDir dist-perf",
