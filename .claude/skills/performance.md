@@ -2,6 +2,10 @@
 
 Use when profiling, optimizing, or writing performance-critical code in the game engine or renderer.
 
+## Cold-load measurement
+
+The menu is the first interactive screen. Keep match and lobby screens and the online lobby modal behind dynamic imports; a static import of `OnlineModal` from `MainMenu` pulls the network stack into the first load. To compare a production build, run `npm run build`, start `node node_modules/vite/bin/vite.js preview --host=127.0.0.1 --port=4187`, then run `node scripts/measureColdLoad.mjs`. The probe uses a fresh Chromium context with cache disabled and 4× CPU slowdown for each run, and reports time to menu mount, JavaScript transferred before the menu, and the cost of opening Online. Verify both worker modes and the online flow after changing imports.
+
 ## Architecture — Hot Path Overview
 
 The game runs a **fixed 60fps timestep** with two-layer Canvas 2D rendering:
