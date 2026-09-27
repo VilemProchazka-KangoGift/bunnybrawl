@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { buildAwareness } from '../awareness';
-import type { Arena, PlayerSlot } from '../../types';
+import type { PlayerSlot } from '../../types';
 import { makePlayer, makeArena, makeState } from '../../__tests__/testHelpers';
-import { PLAYER_WIDTH, PLAYER_HEIGHT, CANVAS_WIDTH } from '../../constants';
-import { registerArena, getArenaNav } from '../../arenas/registry';
+import { CANVAS_WIDTH } from '../../constants';
+import { registerArena } from '../../arenas/registry';
 
 describe('buildAwareness', () => {
   // ── Self state detection ──────────────────────────────────────────────

@@ -30,7 +30,7 @@ export interface EffectivePhysics {
 export function computeEffectivePhysics(theme: ThemeConfig, mods: MatchSettings['mods']): EffectivePhysics {
   const pm = theme.physics;
   let gravity = GRAVITY * (pm?.gravity ?? 1);
-  let friction = FRICTION * (pm?.friction ?? 1);
+  const friction = FRICTION * (pm?.friction ?? 1);
   let walkSpeed = MAX_WALK_SPEED * (pm?.walkSpeed ?? 1);
   let jumpImpulse = JUMP_IMPULSE * (pm?.jumpImpulse ?? 1);
   let maxFallSpeed = MAX_FALL_SPEED * (pm?.gravity ?? 1);

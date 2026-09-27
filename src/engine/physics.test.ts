@@ -305,11 +305,36 @@ describe('Fast Fall', () => {
     expect(p.vy).toBeLessThanOrEqual(FAST_FALL_SPEED);
   });
 
-  it('first frame of fast-fall snaps vy to at least FAST_FALL_INITIAL', () => {
-    const p = makePlayer({ state: 'airborne', vy: -200, fastFalling: false });
+  it('first frame of fast-fall snaps vy to at least FAST_FALL_INITIAL (at/after apex)', () => {
+    const p = makePlayer({ state: 'airborne', vy: 0, fastFalling: false });
     applyInput(p, { left: false, right: false, jump: false, down: true }, 1 / 60);
     expect(p.vy).toBeGreaterThanOrEqual(FAST_FALL_INITIAL);
     expect(p.fastFalling).toBe(true);
+  });
+
+  it('does NOT snap downward while still rising — preserves spring/bounce launches', () => {
+    const p = makePlayer({ state: 'airborne', vy: -700, fastFalling: false }); // just launched
+    applyInput(p, { left: false, right: false, jump: false, down: true }, 1 / 60);
+    expect(p.vy).toBe(-700);           // unchanged; launch not cancelled mid-ascent
+    expect(p.fastFalling).toBe(true);  // stays "down + airborne" (fast gravity, echo/cosmetic parity)
+  });
+
+  it('does NOT decelerate a player already falling faster than the dive speed', () => {
+    const p = makePlayer({ state: 'airborne', vy: 580, fastFalling: false }); // free-falling fast
+    applyInput(p, { left: false, right: false, jump: false, down: true }, 1 / 60);
+    expect(p.vy).toBe(580);            // Math.max leaves the faster velocity; no one-frame slow-down
+    expect(p.fastFalling).toBe(true);
+  });
+
+  it('snaps only once — a zero-G pull below FAST_FALL_INITIAL does not re-snap', () => {
+    const p = makePlayer({ state: 'airborne', vy: 0, fastFalling: false });
+    const down = { left: false, right: false, jump: false, down: true };
+    applyInput(p, down, 1 / 60);
+    expect(p.vy).toBe(FAST_FALL_INITIAL);   // snapped at apex
+    expect(p.fastFalling).toBe(true);
+    p.vy = FAST_FALL_INITIAL - 40;           // simulate zero-G damping (0.92×)
+    applyInput(p, down, 1 / 60);
+    expect(p.vy).toBe(FAST_FALL_INITIAL - 40); // NOT re-snapped to 500 (!fastFalling guard)
   });
 
   it('fastFalling clears on ground', () => {
@@ -1026,7 +1051,6 @@ describe('collidePlayersHorizontal chain overlap', () => {
     const c = makePlayer({ id: 'P3', x: 120, y: 600, state: 'idle', active: true, invincibleTimer: 0 });
 
     const origAx = a.x;
-    const origBx = b.x;
     const origCx = c.x;
 
     collidePlayersHorizontal([a, b, c]);

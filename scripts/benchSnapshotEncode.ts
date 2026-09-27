@@ -283,4 +283,5 @@ if (ratio <= 1.05) {
   console.log('PASS: schema codec is within 5% of the inlined reference.');
 } else {
   console.log(`FAIL: ${((ratio - 1) * 100).toFixed(1)}% regression — investigate before merge.`);
+  process.exitCode = 1;
 }

@@ -66,16 +66,9 @@ vi.mock('./debugFlags', () => ({
 
 
 import { Renderer } from './renderer';
-import type { RenderDiagnostics } from './renderer';
+
 import { debugFlags } from './debugFlags';
-import {
-  drawCarrot, drawSpringMushroom, drawThorn,
-  drawWeather, drawParticles, drawGibs, drawGibShape, drawConfetti, drawFireworks, drawWildlife, drawSpringTrail,
-  drawHazardZone, drawGhost, drawLavaRock, drawZeroGZone, drawCurrentZone, drawGeyser, drawBouncyPlatformOverlay,
-  drawDayNightCycle,
-  drawHUD, drawCountdown,
-  drawPlayer,
-} from './rendering';
+import { drawCarrot, drawSpringMushroom, drawThorn, drawWeather, drawGibShape, drawFireworks, drawWildlife, drawSpringTrail, drawHazardZone, drawZeroGZone, drawCurrentZone, drawGeyser, drawBouncyPlatformOverlay, drawDayNightCycle, drawHUD, drawCountdown, drawPlayer } from './rendering';
 import { drawNavDebugOverlay } from './navDebugOverlay';
 import { drawNetDebugOverlay } from './net/core/debugOverlay';
 
@@ -711,7 +704,7 @@ describe('Renderer — bgNight bake on bg writes', () => {
 // Light burst lifecycle (spawn / stomp flashes)
 // ============================================================================
 // These lock the fg-direct burst path (not the L2 emitter pipeline). The
-// effect is visible at any dayPhase by design — see `engine/CLAUDE.md` Lighting
+// effect is visible at any dayPhase by design — see `engine/AGENTS.md` Lighting
 // section. Easy to silently regress in a conflict that re-merges renderFrame
 // or `_synthesizeDynamicLights`.
 

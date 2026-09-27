@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { evaluateActions } from '../utility';
-import type { AwarenessSnapshot, AIPersonality, ActionScores } from '../types';
+import type { AwarenessSnapshot, AIPersonality } from '../types';
 import { SeededRNG } from '../../net/prng';
 
 // ---- Helpers ----

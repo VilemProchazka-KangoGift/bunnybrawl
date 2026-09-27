@@ -26,8 +26,15 @@ export class RuleBasedBot implements PlayerInput {
   }
 
   getAction(state: Readonly<MatchState>, _ctx?: PlayerInputContext): InputState {
-    const self = state.players.find(p => p.id === this.slot);
-    if (!self) return { ...NO_INPUT };
+    // Indexed loop instead of Array.find — avoids a closure alloc per bot per tick.
+    let self: Readonly<MatchState>['players'][number] | undefined;
+    const players = state.players;
+    for (let i = 0; i < players.length; i++) {
+      if (players[i].id === this.slot) { self = players[i]; break; }
+    }
+    // NO_INPUT is treated read-only by consumers (physics.applyInput only reads
+    // input; Simulator uses a shared _NEUTRAL_INPUT const on the same path).
+    if (!self) return NO_INPUT;
     // AIController only reads MatchState — the cast strips Readonly to match its
     // mutable-state signature without actually mutating state.
     return this.controller.getInput(self, state as MatchState, this.arena, this.carrotChase, this.mirrorNav);

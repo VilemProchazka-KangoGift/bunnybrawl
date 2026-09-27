@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { Arena, MatchState, Player } from '../../types';
+import type { Arena, Player } from '../../types';
 import { makePlayer, makeArena, makeState } from '../../__tests__/testHelpers';
 import {
   detectSurfaceImpact,

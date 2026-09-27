@@ -27,6 +27,11 @@ import { isTouchPrimary } from '../touchDetect';
 import { TouchInputManager } from '../touchInput';
 import { isBotSlot } from '../types';
 import { getArena, getTheme } from '../arenas/operations';
+import { isLightingEnabled } from '../lighting';
+import { getBrightness } from '../lighting/brightness';
+import { getPhotosensitivity } from '../lighting/photosensitivity';
+import { getPerfTier } from '../lighting/perfTier';
+import { getSlowDevice } from '../perfFlags';
 import { getCharacterForSlot } from '../characters/defaults';
 import { createInitialPlayers, createInitialMatchState } from '../simulator/initialState';
 import { CANVAS_WIDTH } from '../constants';
@@ -38,7 +43,7 @@ import type { IRenderer, RenderDiagnostics } from '../renderer';
 import type { NetDebugStats } from '../net/core/debugOverlay';
 import type {
   HostInitEngineMsg, HostStopMsg, HostEngineInputBatchMsg,
-  HostEnginePauseMsg, HostEngineResumeMsg,
+  HostEnginePauseMsg, HostEngineResumeMsg, HostEngineVisibilityMsg,
   HostEngineSwitchArenaMsg, HostEngineSetPhaseMsg, HostEngineSkipCountdownMsg,
   HostPerfResetMsg,
   HostNetSetModeMsg, HostNetSnapshotApplyMsg,
@@ -239,6 +244,13 @@ export class EngineWorkerProxy {
         fpsEnabled: opts.fpsEnabled ?? false,
         inputSab: inputSab ?? undefined,
         inputSabSlots: inputSab ? humanSlots : undefined,
+        // Main-only lighting/perf emitters — the worker's module-scope copies
+        // never see the URL params / localStorage that main read at startup.
+        lightingEnabled: isLightingEnabled(),
+        brightness: getBrightness(),
+        photosensitivity: getPhotosensitivity(),
+        perfTier: getPerfTier(),
+        slowDevice: getSlowDevice(),
       };
       const transfer: Transferable[] = [bgOff, fgOff];
       if (hudOff) transfer.push(hudOff);
@@ -319,8 +331,25 @@ export class EngineWorkerProxy {
     this.worker.postMessage(msg);
   }
 
+  /** Bound so add/removeEventListener target the same ref. Forwards the host
+   *  tab's visibility to the worker, which has no `document` and would
+   *  otherwise let its rAF-driven sim throttle to ~0Hz when hidden — freezing
+   *  every connected guest (the worker switches to a setTimeout driver on
+   *  hidden). Guarded for non-DOM environments (tests). */
+  private _onVisibilityChange = (): void => {
+    if (typeof document === 'undefined') return;
+    const m: HostEngineVisibilityMsg = { type: 'host:engineVisibility', hidden: document.hidden };
+    this.worker.postMessage(m);
+  };
+
   start(): void {
     this.keyboardManager.attach();
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', this._onVisibilityChange);
+      // Post the current state once so a tab that starts hidden (or a match
+      // begun while backgrounded) picks the right driver immediately.
+      this._onVisibilityChange();
+    }
     if (this.touchInput) {
       const container = document.querySelector('.game-scaler-content') as HTMLElement | null;
       if (container) {
@@ -419,6 +448,9 @@ export class EngineWorkerProxy {
     this.running = false;
     if (this.rafId) cancelAnimationFrame(this.rafId);
     this.rafId = 0;
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', this._onVisibilityChange);
+    }
     this.keyboardManager.detach();
     this.touchInput?.detach();
     audio.stopAllGameSounds();
@@ -609,10 +641,19 @@ export class EngineWorkerProxy {
   getState(): MatchState { return this.mirrorState ?? this.bootState; }
   getRendererDiagnostics(): RenderDiagnostics { return STUB_DIAGNOSTICS; }
   setOnPhaseChange(cb: (phase: MatchPhase) => void): void { this.onPhaseChange = cb; }
-  setNetworkMode(_enabled: boolean): void { /* sim-worker is local-only */ }
-  setPlayerNames(_names: Record<string, string>): void { /* online not in this path */ }
-  setConnectionQuality(_rtt: number, _jitter: number): void { /* online not in this path */ }
-  setLocalSlot(_slot: PlayerSlot): void { /* online not in this path */ }
+  setNetworkMode(_enabled: boolean): void { /* worker sim enters network mode via its init message / NetMatchDriver, not here */ }
+  // Online DOES run through this proxy (PR #38 wired it as NetMatchDriver).
+  // These forward the HUD-visible values to the worker-hosted Renderer, which
+  // owns the player-name labels and the connection-quality signal icon.
+  setPlayerNames(names: Record<string, string>): void { this.renderer.setPlayerNames(names); }
+  setConnectionQuality(rtt: number, jitter: number): void { this.renderer.setConnectionQuality(rtt, jitter); }
+  // Retarget the local touch slot (mobile online guest is P2+). The proxy reads
+  // this.touchSlot for the airborne→fast-fall conversion when forwarding input,
+  // and haptics must fire for the guest's own player, not the host's P1.
+  setLocalSlot(slot: PlayerSlot): void {
+    this.touchSlot = slot;
+    haptics.init(slot);
+  }
   setMatchOver(): void { /* online-only */ }
   resetCosmeticBaselines(): void { /* worker handles internally */ }
   /** Forward a runtime debug-flag toggle to the worker's GameLoop so its

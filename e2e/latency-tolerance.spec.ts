@@ -1,4 +1,4 @@
-import { test, expect, type Page, type Browser, type BrowserContext } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 
 /**
  * Latency tolerance test — measures how the netcode degrades at increasing RTT.

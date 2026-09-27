@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
-import type { MatchSettings, Arena, PlayerSlot, InputState } from './types';
+import type { MatchSettings, Arena, PlayerSlot } from './types';
 import { makeArena } from './__tests__/testHelpers';
-import { FIXED_TIMESTEP, DUST_LAND_VY_THRESHOLD, MATCH_COUNTDOWN, JUMP_IMPULSE } from './constants';
+import { FIXED_TIMESTEP, DUST_LAND_VY_THRESHOLD, JUMP_IMPULSE } from './constants';
 
 // --- Mocks ---
 

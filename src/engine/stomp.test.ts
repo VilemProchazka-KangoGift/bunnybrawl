@@ -389,8 +389,6 @@ describe('isStomping - geometry precision', () => {
 
   it('1px horizontal overlap returns true (with valid stomp geometry)', () => {
     // attacker right = victim left + 1 → overlap of 1px
-    const victim = makePlayer({ id: 'P2', x: 100 + PLAYER_WIDTH - 1, y: 400 });
-    const attacker = makePlayer({ id: 'P1', x: 100, y: 395, vy: 200 });
     // attacker right = 132, victim left = 131 → 132 > 131 ✓
     // vertical overlap = (395 + 32) - 400 = 27 → but 27 >= 11.2 → too deep
     // Need less vertical overlap: attacker.y such that overlap < 11.2

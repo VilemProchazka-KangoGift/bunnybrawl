@@ -37,6 +37,9 @@ export function checkStomps(
   // and is never re-sorted during gameplay. Any future sort MUST include a tiebreaker on player.id.
   for (const attacker of players) {
     if (!attacker.active || attacker.state === 'splat' || attacker.state === 'respawning') continue;
+    // A hitstop-frozen attacker has a stale downward vy but isn't actually
+    // moving — don't let a motionless player's armed hitbox splat a passer-by.
+    if (attacker.hitstopTimer > 0) continue;
 
     for (const victim of players) {
       if (victim === attacker) continue;

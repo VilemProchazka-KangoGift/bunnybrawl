@@ -6,6 +6,8 @@ import { useEffect, useState } from 'react';
 export function useDelayedFlag(active: boolean, ms: number): boolean {
   const [flag, setFlag] = useState(false);
   useEffect(() => {
+    // Clear a previous activation before starting another delay.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!active) { setFlag(false); return; }
     const id = setTimeout(() => setFlag(true), ms);
     return () => clearTimeout(id);

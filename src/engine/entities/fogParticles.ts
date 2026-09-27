@@ -49,12 +49,22 @@ export const fogParticlesEntity: EntityKind<FogParticle> = {
     }
     const { r, g, b } = _cache.rgb;
     const opacity = fogCfg.opacity ?? 0.3;
+    // Alpha-bucket into a few passes (same pattern as waterfall spray/mist):
+    // one path + fill per bucket instead of one fill per particle.
+    const maxA = (fogCfg.alphaRange?.[1] ?? 1) * opacity;
+    const FOG_BUCKETS = 4;
     ctx.save();
     ctx.fillStyle = `rgb(${r},${g},${b})`;
-    for (const fp of state) {
-      ctx.globalAlpha = fp.alpha * opacity;
+    for (let bkt = 0; bkt < FOG_BUCKETS; bkt++) {
+      ctx.globalAlpha = (bkt + 0.5) / FOG_BUCKETS * maxA;
       ctx.beginPath();
-      ctx.ellipse(fp.x, fp.y, fogCfg.sizeX, fogCfg.sizeY, 0, 0, Math.PI * 2);
+      for (const fp of state) {
+        const eff = fp.alpha * opacity;
+        const bucket = maxA > 0 ? Math.min(FOG_BUCKETS - 1, Math.floor(eff / maxA * FOG_BUCKETS)) : 0;
+        if (bucket !== bkt) continue;
+        ctx.moveTo(fp.x + fogCfg.sizeX, fp.y);
+        ctx.ellipse(fp.x, fp.y, fogCfg.sizeX, fogCfg.sizeY, 0, 0, Math.PI * 2);
+      }
       ctx.fill();
     }
     ctx.restore();

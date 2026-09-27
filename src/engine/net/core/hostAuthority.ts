@@ -81,6 +81,12 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
 
   // Guest input buffers: slot → latest input
   private guestInputs = new Map<string, TInput>();
+  // slot → wall-clock time (ms) of the last input actually received. Used to
+  // decay a silent guest (tab hidden / app backgrounded) back to neutral —
+  // otherwise the host holds their last-held direction forever and their
+  // player runs into a wall / gets farmed for free.
+  private lastInputAt = new Map<string, number>();
+  private static readonly INPUT_STALE_MS = 400;
   // Peer → slot mapping
   private peerSlotMap = new Map<string, string>();
 
@@ -181,6 +187,7 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
     this.peerLastKeyframe.delete(peerId);
     if (slot) {
       this.guestInputs.delete(slot);
+      this.lastInputAt.delete(slot);
       // Clear lastConsumedFrame too: a fresh peer reconnecting into the same
       // slot (without going through the explicit RECONNECT_REQUEST flow)
       // starts at guestFrame=1 — if a stale lastConsumedFrame from the prior
@@ -479,15 +486,13 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
         maxFrameThisCall = entry.frame;
         this.lastConsumedFrame.set(slot, entry.frame);
       }
+      // Re-arm the staleness clock: this slot is actively sending.
+      this.lastInputAt.set(slot, this.now());
 
-      // Relay to other guests
-      if (fromPeerId) {
-        for (const pid of this.transport.getPeerIds()) {
-          if (pid !== fromPeerId) {
-            this.transport.sendUnreliableTo(pid, data);
-          }
-        }
-      }
+      // (No relay to other guests: nothing on the guest side decodes a peer's
+      // INPUT message — only the host consumes INPUT. Relaying it was pure dead
+      // traffic that scaled O(guests²) and, at 4 guests, exceeded the entire
+      // snapshot broadcast in host upstream bandwidth.)
     } else if (type === CoreMsgType.PING) {
       const pp = decodePingPong(data);
       if (pp && fromPeerId) {
@@ -512,7 +517,23 @@ export class GenericHostAuthority<TInput, TState, TSnapshot> {
   }
 
   getNetworkInputs(): Map<string, TInput> {
+    // Decay any guest that stopped sending (tab hidden / backgrounded) to a
+    // neutral input. Set once per silent episode and drop the timestamp so we
+    // don't re-allocate a neutral every tick; a fresh input re-arms it above.
+    const now = this.now();
+    for (const [slot, at] of this.lastInputAt) {
+      if (now - at > GenericHostAuthority.INPUT_STALE_MS) {
+        this.guestInputs.set(slot, this.inputCodec.noInput());
+        this.lastInputAt.delete(slot);
+      }
+    }
     return this.guestInputs;
+  }
+
+  /** Monotonic-ish wall clock (browser + worker). Host-only timing; no
+   *  cross-peer determinism requirement. */
+  private now(): number {
+    return typeof performance !== 'undefined' ? performance.now() : Date.now();
   }
 
   getStats(): HostDebugStats {

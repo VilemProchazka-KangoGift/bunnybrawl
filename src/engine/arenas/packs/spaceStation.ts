@@ -759,11 +759,16 @@ export const spaceStation: ArenaPack = {
     const ground = arena.platforms[0];
     const gy = ground.y;
 
-    // Holographic scan lines (single pattern blit instead of 180 fillRects)
+    // Holographic scan lines (single pattern blit instead of 180 fillRects).
+    // Use OffscreenCanvas in the render worker (the default mode) — `document`
+    // is undefined there, so `document.createElement` threw and silently killed
+    // the whole foreground layer on space station. (Matches the bake pattern in
+    // rendering/hazards/zones.ts.)
     if (!scanLinePattern) {
-      const c = document.createElement('canvas');
-      c.width = 1; c.height = 4;
-      const pc = c.getContext('2d')!;
+      const c = typeof OffscreenCanvas !== 'undefined'
+        ? new OffscreenCanvas(1, 4)
+        : (() => { const el = document.createElement('canvas'); el.width = 1; el.height = 4; return el; })();
+      const pc = c.getContext('2d')! as Ctx2D;
       pc.fillStyle = '#00CCFF';
       pc.fillRect(0, 0, 1, 1);
       scanLinePattern = ctx.createPattern(c, 'repeat')!;

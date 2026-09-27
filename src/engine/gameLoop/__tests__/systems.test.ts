@@ -8,9 +8,9 @@
  * We do NOT re-test pure function logic in isolation here.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { MatchState, MatchSettings, Arena, Player, PlayerSlot } from '../../types';
-import { makePlayer, makeArena, makeState, makeSettings } from '../../__tests__/testHelpers';
+import { describe, it, expect, vi } from 'vitest';
+import type { MatchState, Arena } from '../../types';
+import { makePlayer, makeState, makeSettings } from '../../__tests__/testHelpers';
 
 // ── Mocks (must be declared before any import that transitively loads them) ──
 

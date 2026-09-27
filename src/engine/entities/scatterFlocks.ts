@@ -1,5 +1,6 @@
 import type { MatchState } from '../types';
 import type { EntityKind } from './types';
+import { CANVAS_WIDTH } from '../constants';
 import { updateScatterFlocks } from '../gameLoop/gameplay/arenaEntities';
 import { updateScatterFlockParticles } from '../gameLoop/cosmetics/environment';
 import { drawScatterFlock } from '../rendering';
@@ -14,11 +15,15 @@ export const scatterFlocksEntity: EntityKind<ScatterFlock> = {
   renderLayer: 'entities',
   mirror: 'none',
 
-  init({ theme }) {
+  init({ theme, settings }) {
+    // Flock positions come from the theme, which mirrorArena never touches — so
+    // on a mirrored layout the flocks would hover over the un-mirrored (now
+    // empty) ledge. Mirror their x here so they sit over the mirrored perch.
+    const mirror = settings.mods.mirrorArena;
     return (theme.scatterFlockConfigs || []).flatMap(cfg =>
       cfg.positions.map(p => ({
         species: cfg.species,
-        x: p.x, y: p.y,
+        x: mirror ? CANVAS_WIDTH - p.x : p.x, y: p.y,
         radius: cfg.radius,
         respawnTime: cfg.respawnTime,
         active: true, armed: true, respawnTimer: 0,

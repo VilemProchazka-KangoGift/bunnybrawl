@@ -16,7 +16,7 @@
  * These tests pin those guarantees so we don't silently regress the way the
  * old implementation did.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { GenericHostAuthority } from './hostAuthority';
 import { CoreMsgType, encodeSnapshotAck } from './protocol';
 import { applyDelta, readDeltaBaseFrame } from './deltaCompression';

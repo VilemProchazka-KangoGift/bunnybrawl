@@ -258,21 +258,6 @@ const r7 = bench('applyDelta', ITERATIONS, () => {
   if (a) SINK_LEN += a.byteLength;
 });
 
-// Memory pressure: count allocations indirectly via heap delta.
-// Run a lot of decodes back-to-back, force GC if available, measure heap.
-function measureHeap(label: string, iterations: number, fn: () => void): void {
-  if (typeof global.gc !== 'function') return;
-  global.gc(); global.gc();
-  const before = process.memoryUsage().heapUsed;
-  for (let i = 0; i < iterations; i++) fn();
-  const afterPre = process.memoryUsage().heapUsed;
-  global.gc(); global.gc();
-  const afterPost = process.memoryUsage().heapUsed;
-  const peak = (afterPre - before) / 1024;
-  const retained = (afterPost - before) / 1024;
-  console.log(`  ${label}: peak +${peak.toFixed(0)} KB, retained ${retained > 0 ? '+' : ''}${retained.toFixed(0)} KB after GC`);
-}
-
 // --- Report ----------------------------------------------------------------
 
 const rows = [r1, r2, r3, r4, r5, r6, r7];
@@ -313,3 +298,6 @@ const applyMsPerFrame = r4.nsPerOp / 1e6;
 console.log(`  decode (no pool):  ${decodeNoPoolMsPerFrame.toFixed(3)} ms (${(decodeNoPoolMsPerFrame / 16.67 * 100).toFixed(2)}% of frame)`);
 console.log(`  decode (pooled):   ${decodePoolMsPerFrame.toFixed(3)} ms (${(decodePoolMsPerFrame / 16.67 * 100).toFixed(2)}% of frame)`);
 console.log(`  applySnapshotToState: ${applyMsPerFrame.toFixed(3)} ms (${(applyMsPerFrame / 16.67 * 100).toFixed(2)}% of frame)`);
+// Keep the benchmark sinks observable so the measured work cannot be elided.
+void SINK_X;
+void SINK_LEN;

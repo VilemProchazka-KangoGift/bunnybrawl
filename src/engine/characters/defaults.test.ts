@@ -129,7 +129,6 @@ describe('assignBotCharacters', () => {
 
   it('clears previous assignments before reassigning', () => {
     assignBotCharacters(['P1'] as CharacterSlot[], ['B1'] as BotSlot[], 42);
-    const first = BOT_CHARACTERS.get('B1' as BotSlot)!.name;
     assignBotCharacters(['P1'] as CharacterSlot[], ['B2'] as BotSlot[], 42);
     expect(BOT_CHARACTERS.has('B1' as BotSlot)).toBe(false);
     expect(BOT_CHARACTERS.has('B2' as BotSlot)).toBe(true);

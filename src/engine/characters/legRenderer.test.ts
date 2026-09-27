@@ -44,7 +44,6 @@ describe('drawLegs', () => {
     it('sets darkColor for leg fill', () => {
       const ctx = makeMockCtx();
       const fillStyles: string[] = [];
-      const origSet = Object.getOwnPropertyDescriptor(ctx, 'fillStyle')!;
       let current = '';
       Object.defineProperty(ctx, 'fillStyle', {
         get: () => current,

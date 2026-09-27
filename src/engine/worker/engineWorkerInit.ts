@@ -22,6 +22,11 @@ import { registerBuiltinCharacters } from '../characters/builtin';
 import { registerBuiltinEntities, getEntities } from '../entities';
 import { CHARACTERS, BOT_CHARACTERS } from '../characters/defaults';
 import { setHudLanguage } from '../rendering/hud';
+import { setLightingEnabled } from '../lighting';
+import { setBrightness } from '../lighting/brightness';
+import { setPhotosensitivity } from '../lighting/photosensitivity';
+import { setPerfTier } from '../lighting/perfTier';
+import { setSlowDevice } from '../perfFlags';
 import { RemoteInput } from '../input/RemoteInput';
 import { isBotSlot } from '../types';
 import { FIXED_TIMESTEP, MAX_FRAME_TIME, SLOW_MO_FACTOR } from '../constants';
@@ -58,6 +63,16 @@ let inputSabView: Int32Array | null = null;
 let inputSabSlots: PlayerSlot[] = [];
 const inputSabScratch: InputState[] = [];
 let rafId = 0;
+/** Set true when main tells us the host tab is hidden (`host:engineVisibility`).
+ *  A hidden worker's `requestAnimationFrame` (tied to a hidden OffscreenCanvas
+ *  presentation) throttles to ~0Hz, which stops `fixedUpdate` and the net
+ *  snapshot emit — freezing every connected guest. While hidden we drive the
+ *  loop from `setTimeout` instead (browsers throttle a hidden worker's
+ *  setTimeout to ~1Hz, but that keeps the sim + snapshots alive vs 0Hz). */
+let workerHidden = false;
+/** The setTimeout handle used while `workerHidden`. Mutually exclusive with
+ *  `rafId` — `scheduleNextTick()` picks exactly one driver. */
+let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
 let running = false;
 let paused = false;
 let accumulator = 0;
@@ -88,8 +103,17 @@ let guestPool: AuthSnapshot[] = [];
 let guestPoolIdx = 0;
 
 export function setNetMode(mode: NetMode, _delayFrames = 0): void {
+  const wasHost = netMode === 'host';
   netMode = mode;
   hostFrame = 0;
+  // If we become a host while already hidden-and-rAF-parked, the throttled rAF
+  // may never fire to re-evaluate the driver — re-arm so scheduleNextTick picks
+  // the setTimeout fallback and the host keeps feeding guests while backgrounded.
+  if (running && workerHidden && mode === 'host' && !wasHost) {
+    if (rafId) { ctxScope.cancelAnimationFrame(rafId); rafId = 0; }
+    if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
+    scheduleNextTick();
+  }
   // _delayFrames is consumed by EntityInterpolation's adaptive delay
   // tracker; the constructor doesn't take it currently. We accept it
   // here for the wire-level contract (HostNetSetModeMsg) and consume
@@ -158,6 +182,15 @@ export function initEngine(msg: HostInitEngineMsg): void {
   if (msg.navDebugEnabled) { debugFlags.navDebugAllowed = true; debugFlags.navDebugEnabled = true; }
   if (msg.netDebugEnabled) { debugFlags.netDebugAllowed = true; debugFlags.netDebugEnabled = true; }
   if (msg.fpsEnabled)      { debugFlags.fpsAllowed = true;      debugFlags.fpsEnabled = true; }
+  // Main-only lighting/perf emitters — see HostInitEngineMsg. Apply BEFORE
+  // constructing the Renderer (and its first renderBackground) so the first
+  // frame honors the user's accessibility/perf settings instead of the
+  // worker's compile-time defaults.
+  if (msg.lightingEnabled !== undefined) setLightingEnabled(msg.lightingEnabled);
+  if (msg.brightness !== undefined) setBrightness(msg.brightness);
+  if (msg.photosensitivity !== undefined) setPhotosensitivity(msg.photosensitivity);
+  if (msg.perfTier !== undefined) setPerfTier(msg.perfTier);
+  if (msg.slowDevice !== undefined) setSlowDevice(msg.slowDevice);
   setHudLanguage(msg.language);
 
   const arena = getArena(msg.arenaId);
@@ -241,8 +274,62 @@ export function initEngine(msg: HostInitEngineMsg): void {
   running = true;
   paused = false;
   lastTime = performance.now();
-  rafId = ctxScope.requestAnimationFrame(driveTick);
+  // Route `host:engineVisibility` to the sim driver (see `onEngineMessage`).
+  // Idempotent: addEventListener dedupes the stable handler ref if initEngine
+  // ever runs twice on one worker.
+  ctxScope.addEventListener('message', onEngineMessage);
+  scheduleNextTick();
 }
+
+/** Schedule the next `driveTick`, picking the driver by visibility. Only
+ *  ever schedules ONE driver (rAF when visible, setTimeout when hidden) and
+ *  clears the handle of the other so `stopEngine`/the visibility switch never
+ *  cancel a stale id. Assumes no driver is currently pending — callers reach
+ *  here either from the end of a just-fired `driveTick`, from `initEngine`,
+ *  or from `setEngineVisibility` after cancelling both handles. */
+function scheduleNextTick(): void {
+  // The hidden-tab setTimeout fallback exists to keep a network HOST feeding its
+  // guests while backgrounded. For local (offline) and guest play, let rAF
+  // throttle to ~0Hz as normal — otherwise a local sim-worker match would keep
+  // advancing (timer, kills) in the background, diverging from main-thread play.
+  if (workerHidden && netMode === 'host') {
+    rafId = 0;
+    fallbackTimer = setTimeout(() => {
+      fallbackTimer = null;
+      driveTick(performance.now());
+    }, 1000 / 60);
+  } else {
+    fallbackTimer = null;
+    rafId = ctxScope.requestAnimationFrame(driveTick);
+  }
+}
+
+/** Handle `host:engineVisibility`. Flip the driver immediately so the switch
+ *  takes effect this frame instead of waiting for a throttled rAF that may
+ *  never fire (the whole point — a hidden worker's rAF is at ~0Hz). */
+export function setEngineVisibility(hidden: boolean): void {
+  if (hidden === workerHidden) return;
+  workerHidden = hidden;
+  // No driver is pending before init / after stop — just record the state so
+  // `initEngine`'s first `scheduleNextTick` honors it.
+  if (!running) return;
+  if (rafId) { ctxScope.cancelAnimationFrame(rafId); rafId = 0; }
+  if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
+  scheduleNextTick();
+}
+
+/** The worker's message dispatch lives in `renderWorker.ts` (an if-chain that
+ *  silently ignores unknown types). `host:engineVisibility` is routed here via
+ *  this dedicated listener — installed in `initEngine`, removed in `stopEngine`
+ *  — so the visibility signal reaches the sim driver without editing the
+ *  renderWorker dispatch. Every other message type falls through to
+ *  renderWorker's handler unchanged. */
+const onEngineMessage = (e: MessageEvent): void => {
+  const data = e.data as { type?: string; hidden?: boolean } | null;
+  if (data && data.type === 'host:engineVisibility') {
+    setEngineVisibility(!!data.hidden);
+  }
+};
 
 function driveTick(currentTime: number): void {
   if (!running || !gameLoop || !renderer) return;
@@ -253,7 +340,7 @@ function driveTick(currentTime: number): void {
   if (paused) {
     lastTime = currentTime;
     renderer.renderFrame(gameLoop.getState(), gameLoop.getArena(), [], 0);
-    rafId = ctxScope.requestAnimationFrame(driveTick);
+    scheduleNextTick();
     return;
   }
   let frameTime = (currentTime - lastTime) / 1000;
@@ -348,7 +435,7 @@ function driveTick(currentTime: number): void {
     ctxScope.postMessage(m);
   }
 
-  rafId = ctxScope.requestAnimationFrame(driveTick);
+  scheduleNextTick();
 }
 
 /** Frozen empty array — shared by every stripped MatchState field on
@@ -473,8 +560,10 @@ export function skipCountdownInWorker(): void {
 
 export function stopEngine(): void {
   running = false;
+  ctxScope.removeEventListener('message', onEngineMessage);
   if (rafId) ctxScope.cancelAnimationFrame(rafId);
   rafId = 0;
+  if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
   gameLoop?.stop();
   gameLoop = null;
   renderer = null;
