@@ -18,9 +18,16 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  webServer: {
-    command: 'npm run preview -- --port 4174',
-    url: 'http://localhost:4174/bunnybrawl/',
-    reuseExistingServer: !process.env.CI,
-  },
+  webServer: [
+    ...(process.env.VITE_E2E_MQTT_URL ? [{
+      command: 'node scripts/testMqttBroker.mjs',
+      url: 'http://127.0.0.1:18888/health',
+      reuseExistingServer: false,
+    }] : []),
+    {
+      command: 'npm run preview -- --port 4174',
+      url: 'http://localhost:4174/bunnybrawl/',
+      reuseExistingServer: !process.env.CI,
+    },
+  ],
 });

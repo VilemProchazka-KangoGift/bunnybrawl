@@ -6,9 +6,8 @@ import { test, expect, type Page, type Browser, type BrowserContext } from '@pla
  * peers and survives a 25s match window under both clean and adverse
  * simulated network conditions.
  *
- * Tag: `@online` — Trystero MQTT signaling is flaky on free brokers; the
- * spec uses Playwright's retries (2 by default, 3 in CI) to handle the
- * known signaling jitter.
+ * Tag: `@online` — the smoke runner builds with a local MQTT relay and
+ * starts that relay through Playwright, avoiding public broker variability.
  *
  * Runs against `vite preview` (production build) — `?simWorker=on` is
  * broken in dev per the known top-level-await ordering issue, but prod
@@ -22,6 +21,8 @@ interface Pair {
   guestCtx: BrowserContext;
   hostErrors: string[];
   guestErrors: string[];
+  hostSocketUrls: string[];
+  guestSocketUrls: string[];
 }
 
 async function createPair(browser: Browser, query: string): Promise<Pair> {
@@ -31,6 +32,8 @@ async function createPair(browser: Browser, query: string): Promise<Pair> {
   const guest = await guestCtx.newPage();
   const hostErrors: string[] = [];
   const guestErrors: string[] = [];
+  const hostSocketUrls: string[] = [];
+  const guestSocketUrls: string[] = [];
   // Filter known-benign console noise: Howler autoplay warning, devtools
   // tip, prebundled-howler info logs. Capture everything else for the
   // assertion at end of match.
@@ -38,13 +41,9 @@ async function createPair(browser: Browser, query: string): Promise<Pair> {
     t.includes('HTML5 Audio pool') ||
     t.includes('react-devtools') ||
     t.includes('AudioContext was not allowed to start') ||
-    t.includes('autoplay policy') ||
-    // Trystero MQTT signaling: free brokers (test.mosquitto.org,
-    // broker.emqx.io, etc.) drop connections intermittently. Trystero
-    // auto-reconnects; WebRTC stays alive in the meantime. Pre-existing,
-    // unrelated to Phase 2.
-    t.includes('mqtt') ||
-    t.includes('mosquitto');
+    t.includes('autoplay policy');
+  host.on('websocket', socket => hostSocketUrls.push(socket.url()));
+  guest.on('websocket', socket => guestSocketUrls.push(socket.url()));
   host.on('console', (m) => {
     if (m.type() === 'error' && !isBenign(m.text())) hostErrors.push(m.text());
   });
@@ -55,7 +54,7 @@ async function createPair(browser: Browser, query: string): Promise<Pair> {
   guest.on('pageerror', (e) => guestErrors.push('pageerror: ' + e.message));
   await host.goto('/' + query);
   await guest.goto('/' + query);
-  return { host, guest, hostCtx, guestCtx, hostErrors, guestErrors };
+  return { host, guest, hostCtx, guestCtx, hostErrors, guestErrors, hostSocketUrls, guestSocketUrls };
 }
 
 async function closePair(pair: Pair): Promise<void> {
@@ -116,10 +115,14 @@ async function runMatrixRow(browser: Browser, query: string, label: string, opts
   const soakMs = opts.soakMs ?? 8000;
   const pair = await createPair(browser, query);
   try {
+    const relayUrl = process.env.VITE_E2E_MQTT_URL;
+    expect(relayUrl, 'online smoke must use the local MQTT relay').toBeTruthy();
     const code = await hostCreateRoom(pair.host);
     await guestJoin(pair.guest, code);
     await waitForLobby(pair.host);
     await waitForLobby(pair.guest);
+    expect(pair.hostSocketUrls, `${label} host relay`).toContain(relayUrl);
+    expect(pair.guestSocketUrls, `${label} guest relay`).toContain(relayUrl);
 
     // Start the match. The "start" button label varies; the host's
     // online-start-btn is the canonical entry.
