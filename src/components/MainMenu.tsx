@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useState, useSyncExternalStore } from 'react';
+import { lazy, Suspense, useEffect, useRef, useCallback, useState, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../store/gameStore';
 import { audio } from '../engine/audio';
@@ -11,11 +11,13 @@ import { drawMenuBackground } from './menuBackground';
 import { sampleFps, drawFpsCounter } from '../engine/fpsCounter';
 import { HelpModal } from './HelpModal';
 import { ModsModal } from './ModsModal';
-import { OnlineModal } from './OnlineModal';
 import { SettingsModal } from './SettingsModal';
 import { DevMenu } from './DevMenu';
 import logoImg from '/logo.png?url';
 import './MainMenu.css';
+
+const OnlineModal = lazy(() => import('./OnlineModal')
+  .then((module) => ({ default: module.OnlineModal })));
 
 export function MainMenu() {
   const { t, i18n } = useTranslation();
@@ -253,7 +255,11 @@ export function MainMenu() {
           </button>
           {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
           {modsOpen && <ModsModal onClose={() => setModsOpen(false)} />}
-          {onlineOpen && <OnlineModal onClose={() => setOnlineOpen(false)} />}
+          {onlineOpen && (
+            <Suspense fallback={<div className="mods-overlay" role="status">{t('loading')}</div>}>
+              <OnlineModal onClose={() => setOnlineOpen(false)} />
+            </Suspense>
+          )}
           {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
           {devOpen && <DevMenu onClose={() => setDevOpen(false)} />}
         </div>

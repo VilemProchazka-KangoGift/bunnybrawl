@@ -1,9 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useGameStore } from './store/gameStore';
 import { MainMenu } from './components/MainMenu';
-import { CharacterSelect } from './components/CharacterSelect';
-import { Match } from './components/Match';
-import { VictoryScreen } from './components/VictoryScreen';
 import { GameScaler } from './components/GameScaler';
 import { LandscapePrompt } from './components/LandscapePrompt';
 import { assignBotCharacters, registerBuiltinCharacters } from './engine/characters';
@@ -19,6 +16,13 @@ import type { PlayerSlot, BotSlot, CharacterSlot } from './engine/types';
 import { ALL_BOT_SLOTS } from './engine/types';
 import { MAX_BOT_COUNT } from './engine/constants';
 import logoUrl from '/logo.png?url';
+
+const CharacterSelect = lazy(() => import('./components/CharacterSelect')
+  .then((module) => ({ default: module.CharacterSelect })));
+const Match = lazy(() => import('./components/Match')
+  .then((module) => ({ default: module.Match })));
+const VictoryScreen = lazy(() => import('./components/VictoryScreen')
+  .then((module) => ({ default: module.VictoryScreen })));
 
 // Register all built-in packs at module load time
 registerBuiltinCharacters();
@@ -118,9 +122,11 @@ function App() {
       <LandscapePrompt />
       <GameScaler>
         {screen === 'menu' && ready && <MainMenu />}
-        {screen === 'charSelect' && <CharacterSelect />}
-        {screen === 'match' && <Match />}
-        {screen === 'victory' && <VictoryScreen />}
+        <Suspense fallback={<div className="screen-loading"><img src={logoUrl} alt="" /></div>}>
+          {screen === 'charSelect' && <CharacterSelect />}
+          {screen === 'match' && <Match />}
+          {screen === 'victory' && <VictoryScreen />}
+        </Suspense>
       </GameScaler>
     </>
   );

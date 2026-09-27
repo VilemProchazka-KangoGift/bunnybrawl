@@ -18,6 +18,18 @@ body {
   height: 100vh;
 }
 
+.screen-loading {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+}
+
+.screen-loading img {
+  width: 340px;
+  max-width: 70%;
+}
+
 button {
   font-family: 'Nunito', sans-serif;
   transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.2s ease;
