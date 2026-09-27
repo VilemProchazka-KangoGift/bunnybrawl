@@ -2,7 +2,7 @@
 // Owns the Trystero Transport for the menu→lobby→match lifecycle; the modal
 // is pure UI and calls into this hook for connect/cleanup/startMatch.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGameStore, type RemotePlayerInfo } from '../store/gameStore';
 import { useTransientBanner } from '../hooks/useTransientBanner';
@@ -118,13 +118,13 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
   const [localChar, setLocalChar] = useState(() =>
     safeStorage.get(LS_ONLINE_CHAR) || CHARACTERS.P1.name
   );
-  const localCharRef = useRef(CHARACTERS.P1.name);
-  localCharRef.current = localChar;
+  const localCharRef = useRef(localChar);
+  useLayoutEffect(() => { localCharRef.current = localChar; }, [localChar]);
   const [playerName, setPlayerNameState] = useState(() =>
     (safeStorage.get(LS_PLAYER_NAME) || '').slice(0, PLAYER_NAME_MAX_LENGTH)
   );
-  const playerNameRef = useRef('');
-  playerNameRef.current = playerName;
+  const playerNameRef = useRef(playerName);
+  useLayoutEffect(() => { playerNameRef.current = playerName; }, [playerName]);
   const [remoteReady, setRemoteReady] = useState(false);
   const [localReady, setLocalReady] = useState(false);
   const transportRef = useRef<Transport | null>(null);
@@ -158,6 +158,9 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
     const alt = allChars.find(c => !takenNames.has(c.name) && c.name !== localChar);
     if (alt) {
       const prev = localChar;
+      // The remote roster can invalidate the selected character after render.
+      // Synchronize the local selection and peer announcement in this effect.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLocalChar(alt.name);
       localCharRef.current = alt.name;
       transportRef.current?.sendReliable({ type: MsgType.CHARACTER_SELECT, characterName: alt.name });
@@ -190,7 +193,7 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
   // Match.tsx is taking ownership in that case (handoff via _modalTransport).
   const matchHandedOff = useRef(false);
   const cleanupRef = useRef(cleanup);
-  cleanupRef.current = cleanup;
+  useLayoutEffect(() => { cleanupRef.current = cleanup; }, [cleanup]);
   useEffect(() => {
     return () => {
       if (matchHandedOff.current) return;
@@ -263,7 +266,7 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
   }, [allChars, setActivePlayers, setOnline, setScreen, onMatchStart]);
 
   const startMatchRef = useRef(startMatchAsGuest);
-  startMatchRef.current = startMatchAsGuest;
+  useLayoutEffect(() => { startMatchRef.current = startMatchAsGuest; }, [startMatchAsGuest]);
 
   const handleCharChange = useCallback((value: string) => {
     setLocalChar(value);

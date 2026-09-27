@@ -15,7 +15,7 @@
  */
 
 import type { MatchState, Particle, Gib, MatchSettings, PlayerSlot, InputState, MatchPhase, CharacterDef } from '../types';
-import type { Light } from '../lighting';
+import type { Light, PerfTier } from '../lighting';
 import type { BotNavDebugState } from '../navDebugOverlay';
 import type { NetDebugStats } from '../net/core/debugOverlay';
 
@@ -50,6 +50,17 @@ export interface HostInitMsg {
    *  only when `crossOriginIsolated` is true (GitHub Pages prod falls
    *  back to shipping `particles` in `host:renderFrame`). */
   particlesSab?: SharedArrayBuffer;
+  /** Main-only lighting/perf emitters. These read from module-scope
+   *  emitters that ONLY the main thread initializes (from URL params +
+   *  localStorage). Without threading them here the worker ignores the
+   *  user's accessibility/perf settings (`?lighting=off`, `?brightness`,
+   *  `?photosensitivity`, perf tier, slow-device pref) and stays at
+   *  compile-time defaults. */
+  lightingEnabled?: boolean;
+  brightness?: number;
+  photosensitivity?: boolean;
+  perfTier?: PerfTier;
+  slowDevice?: boolean;
 }
 
 export interface HostStopMsg { type: 'host:stop' }
@@ -126,6 +137,17 @@ export interface HostInitEngineMsg {
    *  alongside its `inputMap` and decodes each tick. */
   inputSab?: SharedArrayBuffer;
   inputSabSlots?: PlayerSlot[];
+  /** Main-only lighting/perf emitters. These read from module-scope
+   *  emitters that ONLY the main thread initializes (from URL params +
+   *  localStorage). Without threading them here the worker ignores the
+   *  user's accessibility/perf settings (`?lighting=off`, `?brightness`,
+   *  `?photosensitivity`, perf tier, slow-device pref) and stays at
+   *  compile-time defaults. */
+  lightingEnabled?: boolean;
+  brightness?: number;
+  photosensitivity?: boolean;
+  perfTier?: PerfTier;
+  slowDevice?: boolean;
 }
 
 /** Per-frame input batch from main. The worker's RemoteInput adapters
@@ -141,6 +163,14 @@ export interface HostEngineInputBatchMsg {
 
 export interface HostEnginePauseMsg { type: 'host:enginePause' }
 export interface HostEngineResumeMsg { type: 'host:engineResume' }
+/** Main forwards the host tab's visibility so the worker can switch its
+ *  sim driver. The worker has no `document`, so it can't detect this
+ *  itself. When `hidden`, the worker's rAF-driven loop (tied to a hidden
+ *  OffscreenCanvas presentation) throttles to ~0Hz and the sim + net
+ *  snapshots stop — freezing every connected guest. On `hidden`, the
+ *  worker falls back to a `setTimeout` driver so ticks + snapshots keep
+ *  flowing (throttled to ~1Hz, but alive). */
+export interface HostEngineVisibilityMsg { type: 'host:engineVisibility'; hidden: boolean }
 export interface HostEngineSwitchArenaMsg { type: 'host:engineSwitchArena'; arenaId: string; settingsOverrides?: Partial<MatchSettings> }
 export interface HostEngineSetPhaseMsg { type: 'host:engineSetPhase'; phase: MatchPhase }
 export interface HostEngineSkipCountdownMsg { type: 'host:engineSkipCountdown' }
@@ -249,6 +279,7 @@ export type HostToWorkerMsg =
   | HostEngineInputBatchMsg
   | HostEnginePauseMsg
   | HostEngineResumeMsg
+  | HostEngineVisibilityMsg
   | HostEngineSwitchArenaMsg
   | HostEngineSetPhaseMsg
   | HostEngineSkipCountdownMsg

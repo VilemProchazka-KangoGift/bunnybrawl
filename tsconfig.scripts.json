@@ -1,0 +1,35 @@
+{
+  // Typechecks scripts/**/*.ts (and the src modules they import) under `tsc -b`.
+  // Referenced from tsconfig.json. Because scripts pull in src modules, this
+  // program needs vite/client (import.meta.env) in types and WebWorker in lib
+  // (DedicatedWorkerGlobalScope in worker stubs); skipLibCheck hides the
+  // DOM/WebWorker global overlap.
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.scripts.tsbuildinfo",
+    "target": "ES2023",
+    // WebWorker lib is required because some scripts pull in src worker stubs
+    // that reference DedicatedWorkerGlobalScope; skipLibCheck suppresses the
+    // DOM/WebWorker global overlap. vite/client provides import.meta.env typing
+    // for src modules (e.g. MusicManager) imported transitively by scripts.
+    "lib": ["ES2023", "DOM", "DOM.Iterable", "WebWorker"],
+    "module": "ESNext",
+    "types": ["node", "vite/client"],
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true
+  },
+  "include": ["scripts/**/*.ts"]
+}

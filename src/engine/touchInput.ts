@@ -33,6 +33,7 @@ export class TouchInputManager {
   private jumpStartTime = 0;
   private jumpTriggered = false;
   private jumpConsumed = false;
+  private jumpCommittable = false;
   private downFromSwipe = false;
 
   // Container & scale
@@ -131,8 +132,9 @@ export class TouchInputManager {
     // If a swipe is detected within JUMP_COMMIT_DELAY_MS, downFromSwipe
     // overrides and jumpTriggered is cleared by the touchmove handler.
     const elapsed = performance.now() - this.jumpStartTime;
-    const jumpReady = this.jumpTriggered && !this.jumpConsumed && elapsed >= JUMP_COMMIT_DELAY_MS;
-    if (jumpReady) this.jumpConsumed = true;
+    const jumpReady = this.jumpTriggered && !this.jumpConsumed
+      && (elapsed >= JUMP_COMMIT_DELAY_MS || this.jumpCommittable);
+    if (jumpReady) { this.jumpConsumed = true; this.jumpCommittable = false; }
 
     return {
       left: this.leftActive,
@@ -172,6 +174,14 @@ export class TouchInputManager {
     const target = e.target as HTMLElement;
     if (target.tagName === 'BUTTON' || target.closest('button')) return;
     e.preventDefault();
+
+    // Refresh the layout cache at gesture start. A CSS-transform scale change
+    // (device rotation, fullscreen entry — which the first in-match tap itself
+    // triggers, iOS toolbar collapse) fires NO resize event, so the rect/scale
+    // cached on attach/resize goes stale and touches mis-map (wrong half, wrong
+    // joystick origin) for the rest of the match. One gBCR per gesture start is
+    // not the per-frame reflow the per-touchmove cache exists to avoid.
+    this.updateCachedLayout();
 
     for (let i = 0; i < e.changedTouches.length; i++) {
       const touch = e.changedTouches[i];
@@ -281,6 +291,12 @@ export class TouchInputManager {
     if (this.jumpConsumed || elapsed >= JUMP_COMMIT_DELAY_MS) {
       this.jumpTriggered = false;
       this.jumpConsumed = false;
+      this.jumpCommittable = false;
+    } else if (this.jumpTriggered && !this.downFromSwipe) {
+      // Quick tap released before the swipe window elapsed: a lifted finger can
+      // no longer become a swipe-crouch, so commit the jump on the next
+      // getInput() instead of making the player wait out the full 80ms.
+      this.jumpCommittable = true;
     }
     this.downFromSwipe = false;
     this.onJumpFeedback?.(false);

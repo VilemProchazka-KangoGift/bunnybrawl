@@ -154,7 +154,6 @@ test.describe('Online Modal', () => {
   test('create button hidden without player name', async ({ page }) => {
     await page.getByTestId('online-btn').click();
     // Create button should be hidden or disabled without name
-    const createBtn = page.getByTestId('online-create-btn');
     // The button visibility depends on whether name is entered
     await expect(page.getByTestId('online-name-input')).toBeVisible();
   });

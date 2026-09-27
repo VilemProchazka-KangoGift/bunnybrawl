@@ -90,7 +90,7 @@ async function main() {
   await run('npm', ['run', 'perf:build']);
 
   console.log(`[2/4] Starting preview server on port ${port}…`);
-  const preview = spawn('npx', ['vite', 'preview', '--outDir', buildDir, '--port', port], {
+  const preview = spawn('npx', ['vite', 'preview', '--outDir', buildDir, '--port', port, '--strictPort'], {
     stdio: 'pipe',
     shell: process.platform === 'win32',
   });

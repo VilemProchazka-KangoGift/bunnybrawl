@@ -47,6 +47,7 @@ npm run dev       # Dev server with HMR
 npm run build     # Production build (tsc + vite)
 npm test          # Vitest (~2000 tests)
 npm run test:e2e  # Playwright (~120 tests, builds first)
+npm run test:smoke # Production-preview Chromium smoke gate (menu, lobby, worker arena switch)
 npx vite-node scripts/generateNavData.ts                    # Regenerate AI nav data after arena/physics changes
 npx vite-node scripts/selfPlay.ts -- --episodes 5 --arena meadow --out data/run.ndjson
 ```
@@ -70,9 +71,8 @@ http://localhost:5173/bunnybrawl/?mobile&arena=meadow&bots=2       # force touch
 - **Multi-file mechanical edits via Node**: when scripting bulk strips/replacements across many files, normalize line endings in the same pass (`s.replace(/\r\n/g, '\n')` before `fs.writeFileSync`). Repo stores files as LF; a naive Node rewrite can produce whole-file CRLF diffs in the commit.
 - **`tsc -b` alone won't catch dead refs in scripts, e2e, or test mocks** — they cast as `any` / `as ArenaPack`. After a type-level field removal, grep for the deleted symbol across `scripts/`, `e2e/`, and `**/*.test.ts` before committing.
 - **`playwright-report/` clutters `git status`** from background test runs — filter with `grep -v "playwright-report"` when reviewing changes. Don't stage it.
-- **Flaky in full suite, passes alone**: `src/engine/integration.test.ts > 'fixedUpdate with explicit inputMap drives both players'` fails ~always via `npx vitest run` (P2 wraps to ~1249px) but passes via `npx vitest run src/engine/integration.test.ts`. Pre-existing test-ordering issue; don't chase it as a regression.
 - **"Test suite" ≠ "vitest"**: `npm test` runs vitest (~2000 unit tests); `npm run test:e2e` runs Playwright (~120 browser tests, builds first). They cover DIFFERENT failure modes — e2e catches renderer/diag/visual regressions vitest can't see. When reporting "tests pass," name the runner explicitly ("vitest passes; e2e not run"). Do not call a verification "deep" unless e2e was run.
-- **E2E regressions for worker-sensitive features must cover all three modes**: `?worker=on` (default renderer-only), `?worker=off` (main-thread), `?simWorker=on` (sim-in-worker). Several recent regressions (canvas clipping, arena-switch freeze, fast-fall) were bisectable to mode.
+- **E2E regressions for worker-sensitive features must cover the worker modes**: the default (sim-in-worker — `?simWorker` defaults ON) and `?simWorker=off` (sim on main thread, renderer still in its own worker). Main-thread-everything exists only as a runtime capability fallback (`workerFlag.ts` is a feature check, not a toggle) and can't be forced from the URL. The old `?worker=on|off` param was removed 2026-05-10 — don't reference it. Several past regressions (canvas clipping, arena-switch freeze, fast-fall) were bisectable to mode.
 - **Document lessons in `.claude/skills/*.md`** after completing features.
 
 ## Skills Index

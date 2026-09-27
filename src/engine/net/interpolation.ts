@@ -241,7 +241,7 @@ function interpolateSnapshots(a: AuthSnapshot, b: AuthSnapshot, t: number): Auth
   return r;
 }
 
-function interpArrayInPlace<T extends Record<string, any>>(
+function interpArrayInPlace<T extends object>(
   out: T[], aArr: T[], bArr: T[],
   fn: (a: T, b: T, out: T) => void,
 ): void {

@@ -66,16 +66,9 @@ vi.mock('./debugFlags', () => ({
 
 
 import { Renderer } from './renderer';
-import type { RenderDiagnostics } from './renderer';
+
 import { debugFlags } from './debugFlags';
-import {
-  drawCarrot, drawSpringMushroom, drawThorn,
-  drawWeather, drawParticles, drawGibs, drawGibShape, drawConfetti, drawFireworks, drawWildlife, drawSpringTrail,
-  drawHazardZone, drawGhost, drawLavaRock, drawZeroGZone, drawCurrentZone, drawGeyser, drawBouncyPlatformOverlay,
-  drawDayNightCycle,
-  drawHUD, drawCountdown,
-  drawPlayer,
-} from './rendering';
+import { drawCarrot, drawSpringMushroom, drawThorn, drawWeather, drawGibShape, drawFireworks, drawWildlife, drawSpringTrail, drawHazardZone, drawZeroGZone, drawCurrentZone, drawGeyser, drawBouncyPlatformOverlay, drawDayNightCycle, drawHUD, drawCountdown, drawPlayer } from './rendering';
 import { drawNavDebugOverlay } from './navDebugOverlay';
 import { drawNetDebugOverlay } from './net/core/debugOverlay';
 

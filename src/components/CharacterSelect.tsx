@@ -27,19 +27,20 @@ export function CharacterSelect() {
   const lobbyTouchRef = useRef<TouchInputManager | null>(null);
   const lobbyGameRef = useRef<LobbyGame | null>(null);
   const isMobile = useMemo(() => isTouchPrimary(), []);
+  const initialBotCount = useRef(matchSettings.botCount);
 
   // Initialise LobbyGame once
   useEffect(() => {
     regenerateLobbyRoster();
     lobbyGameRef.current = new LobbyGame({
-      botCount: matchSettings.botCount,
+      botCount: initialBotCount.current,
       isMobile,
     });
     return () => {
       lobbyGameRef.current?.destroy();
       lobbyGameRef.current = null;
     };
-  }, []);
+  }, [isMobile]);
 
   const startMatch = useCallback(() => {
     if (startedRef.current) return;
@@ -115,7 +116,7 @@ export function CharacterSelect() {
       lobbyTouchRef.current?.detach();
       lobbyTouchRef.current = null;
     };
-  }, [setScreen, startMatch]);
+  }, [setScreen, startMatch, isMobile]);
 
   useEffect(() => {
     const canvas = fgCanvasRef.current;

@@ -5,8 +5,8 @@ Use when profiling, optimizing, or writing performance-critical code in the game
 ## Architecture — Hot Path Overview
 
 The game runs a **fixed 60fps timestep** with two-layer Canvas 2D rendering:
-- **`gameLoop.ts` `fixedUpdate()`** — runs every 1/60s. Physics, collision, entity updates.
-- **`gameLoop.ts` `loop()`** — runs every rAF tick. Accumulator, timers, calls `renderer.renderFrame()`.
+- **`simulator/Simulator.ts` `fixedUpdate()`** — runs every 1/60s. Physics, collision, entity updates. This is the Node-pure sim path; the gameplay work lives here and in the `gameLoop/gameplay/*` systems it owns. `GameLoop.fixedUpdate()` is a thin browser adapter that delegates to it, then runs cosmetic systems. **New hot-path physics/gameplay optimizations land in Simulator + `gameLoop/gameplay/*`, not in the adapter.**
+- **`GameLoop.loop()`** — runs every rAF tick. Accumulator, timers, calls `renderer.renderFrame()`.
 - **`renderer.ts` `renderFrame()`** — clears foreground canvas, draws ALL dynamic elements every frame.
 - **`renderer.ts` `renderBackground()`** — draws static background ONCE (sky, hills, platforms, background nature).
 - **`renderer.ts` `renderSplatMarks()`** — draws to background canvas only when splats happen.
@@ -67,19 +67,19 @@ Used for: particles, springs, thorns, carrots, lavaRocks, shockwaves, scoreAnima
 
 ### Cache Arena-Derived Data in Constructor
 
-Arena layout doesn't change during a match. Compute once:
+Arena layout doesn't change during a match. Compute once — in the **gameplay-system constructor on the Node-pure sim path** (e.g. `gameLoop/gameplay/ArenaEntitySystem.ts` owns `cachedGeyserZones` / `geyserIndexMap`; other systems cache their own zone filters), NOT in the browser adapter:
 
 ```ts
-// In GameLoop constructor:
+// In a gameplay-system constructor (owned by Simulator):
 this.floatingPlatforms = arena.platforms
   .map((p, i) => ({ plat: p, idx: i }))
   .filter(({ plat }) => plat.y < 650);
-this.geyserZones = (arena.effectZones || []).filter(z => z.type === 'geyser');
-this.zeroGZones = (arena.effectZones || []).filter(z => z.type === 'zero_g');
-this.geyserIndexMap = new Map(this.geyserZones.map((z, i) => [z, i]));
+this.cachedGeyserZones = (arena.effectZones || []).filter(z => z.type === 'geyser');
+this.cachedZeroGZones = (arena.effectZones || []).filter(z => z.type === 'zero_g');
+this.geyserIndexMap = new Map(this.cachedGeyserZones.map((z, i) => [z, i]));
 ```
 
-Never call `.filter()` on `effectZones` inside `fixedUpdate()` or `renderFrame()`.
+On `switchArena` the systems are rebuilt, so the caches refresh. Never call `.filter()` on `effectZones` inside `fixedUpdate()` or `renderFrame()`.
 
 ### Squared Distance Comparisons
 
@@ -218,7 +218,7 @@ load. Two consequences:
 
 ## Audio Init Performance
 
-The `floatBufferToWavDataUri` function uses O(n^2) string concatenation. Fix with chunked conversion:
+`floatBufferToWavDataUri` (`audio/synthesis/wav.ts`) already builds its base64 in 8192-byte chunks — keep it that way. A naive `binary += String.fromCharCode(bytes[i])` accumulator is O(n²) and stalls menu-mount SFX decode; the chunked form below is O(n):
 
 ```ts
 // BAD — O(n^2) string building
@@ -227,10 +227,10 @@ for (let i = 0; i < bytes.length; i++) {
   binary += String.fromCharCode(bytes[i]);
 }
 
-// GOOD — O(n) chunked
+// GOOD — O(n) chunked (current impl)
 const chunks: string[] = [];
 for (let i = 0; i < bytes.length; i += 8192) {
-  chunks.push(String.fromCharCode.apply(null, bytes.subarray(i, i + 8192)));
+  chunks.push(String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + 8192))));
 }
 return 'data:audio/wav;base64,' + btoa(chunks.join(''));
 ```
@@ -252,9 +252,9 @@ The lobby runs its own 60fps rAF loop. Same hot-path rules apply:
 
 ## Memory Leak Prevention
 
-- **Cap unbounded arrays**: `splatMarks` (cap ~200), `killFeed` (cap ~10), `particles` (soft cap ~1000)
+- **Cap unbounded arrays**: `splatMarks` (cap ~200), `killFeed` (cap ~10), `particles` (hard cap 600 — `MAX_LIVE_PARTICLES` in `gameLoop/cosmetics/particles.ts:12`; `emitParticle` early-returns past it)
 - **Clean up setTimeout/setInterval**: Store IDs in refs, clear in useEffect cleanup
-- **AudioManager**: Call `sound.unload()` on all Howl instances when destroying the game loop
+- **AudioManager**: Howls are intentionally app-lifetime — do NOT `unload()` them per match. `GameLoop.stop()` teardown calls `audio.stopAllGameSounds()` (stops looping SFX/music, resets `gamePaused`); it never unloads. `AudioManager.destroy()` (which does `sound.unload()` on every Howl) is test-only teardown. Adding per-match unload would regress rematch latency — the ~40 WAV SFX buffers would have to re-decode on every match start.
 - **Splat marks are baked into the background canvas** — once rendered, the array entry is only needed if the background is fully redrawn. Safe to prune old entries.
 
 ## Object Pooling — Lifetime Rules

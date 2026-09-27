@@ -270,8 +270,8 @@ export function decodeSnapshot(buf: ArrayBuffer, offset = 0, out?: AuthSnapshot)
 
   // Carrots
   const carrotCount = view.getUint8(o++);
-  let carrotActives: boolean[];
-  [carrotActives, o] = readPackedBools(view, o, carrotCount);
+  const [carrotActives, carrotOffset] = readPackedBools(view, o, carrotCount);
+  o = carrotOffset;
   const carrots = out ? out.carrots : [] as AuthSnapshot['carrots'];
   if (out && carrots.length > carrotCount) carrots.length = carrotCount;
   for (let i = 0; i < carrotCount; i++) {
@@ -305,8 +305,8 @@ export function decodeSnapshot(buf: ArrayBuffer, offset = 0, out?: AuthSnapshot)
 
   // Thorns
   const thornCount = view.getUint8(o++);
-  let thornHits: boolean[];
-  [thornHits, o] = readPackedBools(view, o, thornCount);
+  const [thornHits, thornOffset] = readPackedBools(view, o, thornCount);
+  o = thornOffset;
   const thorns = out ? out.thorns : [] as AuthSnapshot['thorns'];
   if (out && thorns.length > thornCount) thorns.length = thornCount;
   for (let i = 0; i < thornCount; i++) {
@@ -342,8 +342,8 @@ export function decodeSnapshot(buf: ArrayBuffer, offset = 0, out?: AuthSnapshot)
 
   // Lava rocks
   const lrCount = view.getUint8(o++);
-  let lrActives: boolean[];
-  [lrActives, o] = readPackedBools(view, o, lrCount);
+  const [lrActives, lavaRockOffset] = readPackedBools(view, o, lrCount);
+  o = lavaRockOffset;
   const lavaRocks = out ? out.lavaRocks : [] as AuthSnapshot['lavaRocks'];
   if (out && lavaRocks.length > lrCount) lavaRocks.length = lrCount;
   for (let i = 0; i < lrCount; i++) {
@@ -361,8 +361,8 @@ export function decodeSnapshot(buf: ArrayBuffer, offset = 0, out?: AuthSnapshot)
 
   // Geyser states
   const gsCount = view.getUint8(o++);
-  let gsActives: boolean[];
-  [gsActives, o] = readPackedBools(view, o, gsCount);
+  const [gsActives, geyserOffset] = readPackedBools(view, o, gsCount);
+  o = geyserOffset;
   const geyserStates = out ? out.geyserStates : [] as AuthSnapshot['geyserStates'];
   if (out && geyserStates.length > gsCount) geyserStates.length = gsCount;
   for (let i = 0; i < gsCount; i++) {

@@ -73,12 +73,20 @@ export class HeadlessRunner {
   private readonly _obsBuffers: Map<PlayerSlot, Float32Array> = new Map();
   /** Pre-tick observation snapshots (cloned to plain arrays for the recorder). */
   private readonly _obsSnapshots: Map<PlayerSlot, number[]> = new Map();
+  /** RNG state captured BEFORE the Simulator constructor consumed any draws.
+   *  Stamped as header.seed so `new SeededRNG(seed)` reproduces the match. */
+  private readonly _initialSeed: number | undefined;
   private _ticks = 0;
   private _consumed = false;
 
   constructor(config: HeadlessRunnerConfig) {
     this._config = config;
     this._recording = config.recording ?? null;
+
+    // Snapshot the RNG state up-front. The Simulator constructor draws from the
+    // rng (ghost/lava/geyser init), so reading getState() later (as runMatch
+    // used to) yields a mid-stream value that can't reproduce the episode.
+    this._initialSeed = config.rng?.getState();
 
     // Bot character assignment must run before Simulator construction —
     // createInitialPlayers reads from BOT_CHARACTERS for each bot slot.
@@ -138,7 +146,7 @@ export class HeadlessRunner {
     if (this._recording) {
       this._recording.recorder.begin({
         arenaId: this._config.arenaId,
-        seed: this._config.rng?.getState(),
+        seed: this._initialSeed,
         activePlayers: this._config.activePlayers,
         startedAt: Date.now(),
         tags: this._recording.tags,
@@ -179,6 +187,30 @@ export class HeadlessRunner {
     return this._simulator;
   }
 
+  /**
+   * Re-wrap the PlayerInput currently installed for `slot` in an
+   * ActionCapturingInput so its recorded samples carry the REAL action.
+   *
+   * The constructor only wraps inputs passed via `config.inputs`. Bots that
+   * need the Simulator's AIController are installed post-construction via
+   * `getSimulator().setPlayerInput(slot, new RuleBasedBot(...))`, which bypasses
+   * that wrap — so without this call the slot's samples record all-false
+   * actions. Callers that do post-construction wiring (see scripts/selfPlay.ts)
+   * must call this for each recorded slot AFTER installing its input.
+   *
+   * No-op if recording is disabled, the slot isn't a recorded slot, no input is
+   * installed, or the input is already wrapped. Additive — the Simulator sees
+   * the same action either way.
+   */
+  wrapRecordedSlot(slot: PlayerSlot): void {
+    if (!this._recording || !this._recording.slots.includes(slot)) return;
+    const current = this._simulator.getPlayerInput(slot);
+    if (!current || current instanceof ActionCapturingInput) return;
+    const wrapper = new ActionCapturingInput(slot, current);
+    this._capturingWrappers.set(slot, wrapper);
+    this._simulator.setPlayerInput(slot, wrapper);
+  }
+
   /** Snapshot pre-tick observations for each recorded slot. Called BEFORE fixedUpdate. */
   private _snapshotObservations(): void {
     if (!this._recording) return;
@@ -202,6 +234,10 @@ export class HeadlessRunner {
       const action = wrapper
         ? { ...wrapper.lastAction }
         : { ...ALL_FALSE_INPUT };
+      // During hitstop the sim skips getAction, so `lastAction` is stale — flag
+      // the sample so consumers can mask it. Missing player → treat as valid.
+      const player = state.players.find(p => p.id === slot);
+      const actionValid = (player?.hitstopTimer ?? 0) <= 0;
       const reward = this._recording.rewardShapers?.get(slot)?.observe(state) ?? 0;
       // Snapshot was filled into _obsSnapshots[slot] pre-tick; clone for the sink.
       const snap = this._obsSnapshots.get(slot)!;
@@ -212,6 +248,7 @@ export class HeadlessRunner {
         action,
         reward,
         done,
+        actionValid,
       });
     }
   }
@@ -230,20 +267,28 @@ export class HeadlessRunner {
    *
    *  - If MatchSystem flipped `state.winner` (kill limit / time limit / lone
    *    survivor / all-disconnected), trust it.
-   *  - Otherwise (max-tick exhaustion), pick the highest-scoring still-active
-   *    non-disconnected player. Ties broken by player array order. Returns
-   *    null only if no active non-disconnected player exists. */
+   *  - Otherwise (max-tick exhaustion), pick the UNIQUE highest-scoring
+   *    still-active non-disconnected player. A tie for the top score — including
+   *    the all-zero 0-0-0-0 case — resolves to `null`, and so does any board
+   *    with no positive scorer. Matches the doc: "null on draw / max-tick
+   *    exhaustion with no scorer". Never fabricates a winner from array order. */
   private _inferWinner(state: MatchState): PlayerSlot | null {
     if (state.winner !== null) return state.winner;
     let best: PlayerSlot | null = null;
     let bestScore = -Infinity;
+    let tied = false;
     for (const p of state.players) {
       if (!p.active || p.disconnected) continue;
       if (p.score > bestScore) {
         bestScore = p.score;
         best = p.id;
+        tied = false;
+      } else if (p.score === bestScore) {
+        tied = true;
       }
     }
+    // No eligible player, a tie at the top, or nobody scored → no winner.
+    if (best === null || tied || bestScore <= 0) return null;
     return best;
   }
 }

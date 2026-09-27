@@ -7,8 +7,9 @@
 //
 // Detection is event-based — kills come from `state.killFeed` (the canonical
 // stomp event log), carrots from `state.stats.perPlayer.get(slot).carrotsEaten`,
-// hazard hits from rising edges of `slowTimer` / `burnTimer`, fall-offs from
-// the player.state transition into 'respawning' without a 'splat' interlude,
+// hazard hits from rising edges of `slowTimer` / `burnTimer`, fall-offs from the
+// respawn fingerprint that `handleFallOff` leaves (invincibleTimer rising +
+// slowTimer→~2.0, with no 'splat'/'respawning' interlude and no killFeed death),
 // and match end from the `matchOver` false→true edge.
 //
 // This works uniformly across game modes — including `mods.carrotChase`, where
@@ -24,9 +25,16 @@
 //   per-tick airborne  → -0.0005
 //   hazard hit         → -0.3   (rising edge of slow OR burn)
 //   per-tick burn      → -0.005 (lava DoT while burning)
-//   fall-off           → -0.5   (state→'respawning' without splat first)
+//   fall-off           → -0.5   (respawn to 'idle' with slow~2.0, no kill/splat)
 
 import type { MatchState, PlayerSlot, PlayerState } from '../types';
+
+/** slowTimer value that `handleFallOff` (gameLoop/gameplay/playerCollisions.ts)
+ *  writes on a fall-off respawn. Distinguishes a fall-off (~2.0) from a
+ *  thorn/ghost/lava hit (THORN_SLOW_DURATION = 5.0) at the shared slowTimer
+ *  rising edge. Kept as a local literal — the shaper stays browser/engine-pure
+ *  and doesn't import gameplay constants. */
+const FALL_OFF_SLOW_TIMER = 2.0;
 
 export interface RewardWeights {
   /** Bonus per stomp kill (per killFeed entry where attacker === slot). Default 1.0. */
@@ -47,7 +55,7 @@ export interface RewardWeights {
   hazardHitPenalty?: number;
   /** Per-tick penalty while burnTimer > 0 (lava DoT). Default -0.005. */
   burnTickPenalty?: number;
-  /** Penalty when state transitions into 'respawning' without going through 'splat' (fall-off). Default -0.5. */
+  /** Penalty on a fall-off respawn (invincibleTimer rises + slowTimer→~2.0, no killFeed death, no splat). Default -0.5. */
   fallOffPenalty?: number;
 }
 
@@ -103,6 +111,7 @@ export class RewardShaper {
   private _prevPlayerState: PlayerState = 'idle';
   private _prevSlowTimer = 0;
   private _prevBurnTimer = 0;
+  private _prevInvincibleTimer = 0;
   private _prevMatchOver = false;
 
   constructor(slot: PlayerSlot, weights?: RewardWeights) {
@@ -128,6 +137,7 @@ export class RewardShaper {
       this._prevPlayerState = self.state;
       this._prevSlowTimer = self.slowTimer;
       this._prevBurnTimer = self.burnTimer;
+      this._prevInvincibleTimer = self.invincibleTimer;
       this._prevMatchOver = state.matchOver;
       // Set baseline to the highest existing killFeed timestamp so prior
       // entries don't get credited on the first observe. Empty feed → -Infinity
@@ -146,10 +156,11 @@ export class RewardShaper {
     // (entries are pushed regardless of score). Trim-safe: `state.killFeed`
     // is capped at 10, but the timestamp baseline keeps us from re-counting.
     let maxTs = this._lastKillFeedTimestamp;
+    let victimThisTick = false; // a stomp death this tick → not a fall-off
     for (const e of state.killFeed) {
       if (e.timestamp <= this._lastKillFeedTimestamp) continue;
       if (e.attacker === this.slot) r += this._w.killBonus;
-      if (e.victim === this.slot) r += this._w.deathPenalty;
+      if (e.victim === this.slot) { r += this._w.deathPenalty; victimThisTick = true; }
       if (e.timestamp > maxTs) maxTs = e.timestamp;
     }
     this._lastKillFeedTimestamp = maxTs;
@@ -160,29 +171,44 @@ export class RewardShaper {
     if (dCarrots > 0) r += this._w.carrotBonus * dCarrots;
     this._prevCarrotsEaten = carrotsEaten;
 
-    // Hazard hit — rising edge of either slowTimer or burnTimer. Both timers
-    // are set to THORN_SLOW_DURATION on hit (player.slowTimer for thorn/ghost,
-    // both for lava). One penalty per hit-event regardless of which timer
-    // triggered. Don't fire during invincible — the hit was already counted
-    // at the start of the i-frames; later transitions are visual artifacts.
-    const hazardHitNow =
-      (self.slowTimer > 0 && this._prevSlowTimer <= 0) ||
-      (self.burnTimer > 0 && this._prevBurnTimer <= 0);
-    if (hazardHitNow) r += this._w.hazardHitPenalty;
+    // Fall-off vs hazard-hit disambiguation.
+    //
+    // `handleFallOff` (playerCollisions.ts) respawns a player DIRECTLY to state
+    // 'idle' — it never passes through 'splat'/'respawning' — setting
+    // invincibleTimer=1.5 and slowTimer=2.0. The old `state → 'respawning'`
+    // fall-off test was therefore dead code, and the slowTimer 0→2.0 edge was
+    // being mis-billed as a hazard hit. A thorn/ghost/lava hit instead sets
+    // slowTimer to THORN_SLOW_DURATION (5.0) and grants NO i-frames
+    // (hazardCollision.ts early-returns while invincible). So the fall-off
+    // fingerprint is: invincibleTimer rising edge + slowTimer rising to ~2.0
+    // (not ~5.0) + no burn edge + no killFeed death this tick + prev state not
+    // splat/respawning (which would make the invincibleTimer edge a post-stomp
+    // respawn, already billed via killFeed.victim).
+    const slowRising = self.slowTimer > 0 && this._prevSlowTimer <= 0;
+    const burnRising = self.burnTimer > 0 && this._prevBurnTimer <= 0;
+    const invincibleRising =
+      self.invincibleTimer > 0 && this._prevInvincibleTimer <= 0;
+    const isFallOff =
+      invincibleRising &&
+      slowRising &&
+      !burnRising &&
+      !victimThisTick &&
+      this._prevPlayerState !== 'splat' &&
+      this._prevPlayerState !== 'respawning' &&
+      self.slowTimer <= FALL_OFF_SLOW_TIMER + 0.5; // ~2.0 fall-off, not ~5.0 hazard
+
+    if (isFallOff) {
+      // Bill the fall-off and SUPPRESS the hazard-hit penalty the slowTimer edge
+      // would otherwise trigger.
+      r += this._w.fallOffPenalty;
+    } else if (slowRising || burnRising) {
+      // Hazard hit — rising edge of either timer. One penalty per hit-event
+      // regardless of which timer triggered.
+      r += this._w.hazardHitPenalty;
+    }
 
     // Per-tick burn (lava DoT) while burnTimer > 0.
     if (self.burnTimer > 0) r += this._w.burnTickPenalty;
-
-    // Fall-off: transitioned into 'respawning' without going through 'splat'.
-    // Splat-rising-edge is covered by the killFeed.victim path above (every
-    // current splat cause is a stomp), so we deliberately don't double-count.
-    if (
-      self.state === 'respawning' &&
-      this._prevPlayerState !== 'respawning' &&
-      this._prevPlayerState !== 'splat'
-    ) {
-      r += this._w.fallOffPenalty;
-    }
 
     // Match end — fires exactly once on the false→true transition.
     if (state.matchOver && !this._prevMatchOver) {
@@ -205,6 +231,7 @@ export class RewardShaper {
     // Update prev-state for next observe.
     this._prevSlowTimer = self.slowTimer;
     this._prevBurnTimer = self.burnTimer;
+    this._prevInvincibleTimer = self.invincibleTimer;
     this._prevPlayerState = self.state;
 
     return r;
@@ -218,6 +245,7 @@ export class RewardShaper {
     this._prevPlayerState = 'idle';
     this._prevSlowTimer = 0;
     this._prevBurnTimer = 0;
+    this._prevInvincibleTimer = 0;
     this._prevMatchOver = false;
   }
 }

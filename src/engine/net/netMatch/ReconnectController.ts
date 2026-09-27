@@ -22,15 +22,34 @@ export const RECONNECT_INTERVAL_MS = 1500;
 export class ReconnectController {
   private ctx: NetMatchContext;
   private reconnectTimer: ReturnType<typeof setInterval> | null = null;
+  /** A `joinRoom` is in flight — re-joining would `cleanupPriorRoom()` and
+   *  abort it (its promise never settles), so every 1.5s tick used to cancel
+   *  the join it was waiting on. On flaky/mobile networks a full Trystero join
+   *  takes 1.5–5s, so reconnection could never complete. */
+  private joinInFlight = false;
+  /** Joined the room at least once this reconnect cycle — subsequent ticks
+   *  only re-send RECONNECT_REQUEST (idempotent) instead of re-joining. */
+  private joinedOnce = false;
 
   constructor(ctx: NetMatchContext) {
     this.ctx = ctx;
+  }
+
+  private sendReconnectRequest(): void {
+    this.ctx.transport.sendReliable({
+      type: MsgType.RECONNECT_REQUEST,
+      slot: this.ctx.localSlot,
+      playerName: '',
+      reclaimToken: this.ctx.ownReclaimToken ?? '',
+    } as ReliableMessage);
   }
 
   /** Start reconnection attempt after disconnect/hard stall (guest only). */
   startReconnection(): void {
     if (this.ctx.reconnecting || this.ctx.isHost) return;
     this.ctx.reconnecting = true;
+    this.joinInFlight = false;
+    this.joinedOnce = false;
     this.ctx.onReconnecting?.(true);
 
     let attempts = 0;
@@ -45,17 +64,17 @@ export class ReconnectController {
       this.ctx.onReconnectAttempt?.(attempts, MAX_RECONNECT_ATTEMPTS);
       const code = this.ctx.transport.roomCode;
       if (!code) return;
+      // Don't restart a join that hasn't resolved yet — that was the bug.
+      if (this.joinInFlight) return;
+      // Already in the room: just re-ping the host in case RECONNECT_SYNC was
+      // lost (the host's handler is idempotent). No re-join.
+      if (this.joinedOnce) { this.sendReconnectRequest(); return; }
+      this.joinInFlight = true;
       this.ctx.transport.joinRoom(code).then(() => {
-        // Re-send on every tick after a successful joinRoom — if
-        // RECONNECT_SYNC was lost, the next RECONNECT_REQUEST will produce
-        // another response from the host (handler is idempotent).
-        this.ctx.transport.sendReliable({
-          type: MsgType.RECONNECT_REQUEST,
-          slot: this.ctx.localSlot,
-          playerName: '',
-          reclaimToken: this.ctx.ownReclaimToken ?? '',
-        } as ReliableMessage);
-      }).catch(() => { /* retry next tick */ });
+        this.joinInFlight = false;
+        this.joinedOnce = true;
+        this.sendReconnectRequest();
+      }).catch(() => { this.joinInFlight = false; /* retry next tick */ });
     };
     tryAttempt();
     this.reconnectTimer = setInterval(tryAttempt, RECONNECT_INTERVAL_MS);

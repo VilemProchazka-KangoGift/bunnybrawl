@@ -10,8 +10,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
-  generateJumpSound, generateLandSound, generateFootstepGrass,
-  generateFootstepWood, generateCrouchSound, generateFastfallSound,
+  generateJumpSound, generateFootstepGrass,
+  generateFastfallSound,
   generateSelectSound, generateVictorySound,
 } from '../src/engine/audio/synthesis/sfx';
 import {
@@ -821,9 +821,9 @@ function springPhaseJumpB(): string {
 function springPhaseJumpC(): string {
   // Stepped arpeggio — three discrete pitch jumps (most chiptune-like)
   return generateMultiSegmentTone([
-    { freq: 330, duration: 0.04, type: 'square', amplitude: 0.32 },
-    { freq: 494, duration: 0.04, type: 'square', amplitude: 0.32 },
-    { freq: 740, duration: 0.06, type: 'square', amplitude: 0.32 },
+    { freq: 330, duration: 0.04, type: 'square' },
+    { freq: 494, duration: 0.04, type: 'square' },
+    { freq: 740, duration: 0.06, type: 'square' },
   ]);
 }
 
@@ -1825,8 +1825,6 @@ function ohYeah(t: number, startT: number, scaleOrParams: number | Partial<OhYea
 // ---------------------------------------------------------------------------
 // Layered stomp recipes — kept cartoon-splat (longer 450ms) + celebratory layer
 
-const STOMP_KEPT_PARAMS: Partial<CartoonSplatParams> = { duration: 0.45 };
-
 // Generic layer wrapper — runs the kept splat (450ms) and adds a layer fn
 function stompWithLayer(
   totalDuration: number,
@@ -1971,7 +1969,6 @@ const TRIPLE_TWO_BITE_CENTERS = [0.18, 0.62];
 
 function crunchTwoBitesPlusCoin(): string {
   return buildBuffer(0.4, (t) => {
-    const prog = t / 0.4;
     let env = 0;
     let transient = 0;
     if (t < 0.28) {
@@ -2322,9 +2319,9 @@ function countdownTwoTone(): string {
 function goAscending(): string {
   // 3-note rapid ascending arpeggio — feels like "go!"
   return generateMultiSegmentTone([
-    { freq: 523, duration: 0.05, type: 'square', amplitude: 0.3 },
-    { freq: 784, duration: 0.05, type: 'square', amplitude: 0.3 },
-    { freq: 1047, duration: 0.12, type: 'square', amplitude: 0.3 },
+    { freq: 523, duration: 0.05, type: 'square' },
+    { freq: 784, duration: 0.05, type: 'square' },
+    { freq: 1047, duration: 0.12, type: 'square' },
   ]);
 }
 
@@ -2904,91 +2901,6 @@ function volcanoCrack(): string {
     }
     const rumble = Math.sin(2 * Math.PI * 55 * t) * Math.max(0, 1 - p * 2) * 0.25;
     return sample + rumble;
-  });
-}
-
-interface DripParams {
-  duration: number; startF: number; endF: number;
-  toneAmp: number; noiseAmp: number;
-}
-
-function dripVariant(p: Partial<DripParams> = {}): string {
-  const { duration = 0.08, startF = 600, endF = 400,
-          toneAmp = 1.0, noiseAmp = 0.1 } = p;
-  return buildBuffer(duration, (t) => {
-    const prog = t / duration;
-    const f = startF + (endF - startF) * prog;
-    const env = Math.max(0, 1 - prog * 3) * 0.4;
-    const tone = Math.sin(2 * Math.PI * f * t) * toneAmp;
-    const noise = (Math.random() * 2 - 1) * noiseAmp;
-    return (tone + noise) * env;
-  });
-}
-
-function dripPlink(): string {
-  // Bell-like plink with inharmonic partial
-  return buildBuffer(0.18, (t) => {
-    const p = t / 0.18;
-    const env = Math.min(1, p * 200) * Math.exp(-p * 8);
-    let sample = 0;
-    sample += Math.sin(2 * Math.PI * 1100 * t) * 0.32;
-    sample += Math.sin(2 * Math.PI * 1100 * 2.42 * t) * 0.12;
-    return sample * env;
-  });
-}
-
-function dripPlop(): string {
-  // Lower descending tone — bigger drop
-  return buildBuffer(0.12, (t) => {
-    const p = t / 0.12;
-    const f = 350 - 250 * p;
-    const env = Math.max(0, 1 - p * 5) * 0.5;
-    return Math.sin(2 * Math.PI * f * t) * env;
-  });
-}
-
-function dripCaveEcho(): string {
-  // Drip + echo tail (delayed quieter copy)
-  return buildBuffer(0.28, (t) => {
-    const p = t / 0.28;
-    let sample = 0;
-    // Main drip at t=0
-    if (p < 0.3) {
-      const lp = p / 0.3;
-      const f = 600 - 200 * lp;
-      sample += Math.sin(2 * Math.PI * f * t) * Math.exp(-lp * 4) * 0.4;
-    }
-    // Echo at t=0.13
-    if (p > 0.42 && p < 0.92) {
-      const lp = (p - 0.42) / 0.5;
-      const f = 600 - 200 * lp;
-      sample += Math.sin(2 * Math.PI * f * t) * Math.exp(-lp * 5) * 0.18;
-    }
-    return sample;
-  });
-}
-
-function dripCaveDeep(): string {
-  // Lower pitch with reverb feel
-  let lp = 0;
-  return buildBuffer(0.2, (t) => {
-    const p = t / 0.2;
-    const f = 250 - 60 * p;
-    const tone = Math.sin(2 * Math.PI * f * t);
-    const noise = Math.random() * 2 - 1;
-    lp += 0.04 * (noise - lp);
-    const env = Math.min(1, p * 30) * Math.exp(-p * 4) * 0.45;
-    return (tone + lp * 0.4) * env;
-  });
-}
-
-function dripSplashDrop(): string {
-  // Tiny splash texture — noise burst with brief tone
-  return buildBuffer(0.1, (t) => {
-    const p = t / 0.1;
-    const noise = (Math.random() * 2 - 1) * Math.max(0, 1 - p * 10) * 0.45;
-    const tone = Math.sin(2 * Math.PI * 700 * t) * Math.max(0, 1 - p * 6) * 0.18;
-    return noise + tone;
   });
 }
 
@@ -4042,7 +3954,7 @@ function buildAmbientLoopsPage(): PageDef {
         name: 'ambient',
         description: 'Generic background — used as a fallback ambient. Currently barely audible (vol 0.12). Pick 1.',
         candidates: [
-          proc('ambient', 'current', generateAmbientSound(),
+          proc('ambient', 'current', ambientGenericVariant(),
                'Current — brownian noise, very faint (2s)'),
           proc('ambient', 'brighter', ambientGenericVariant({ brownDecay: 0.99 }),
                'Brighter (less integrated, more white character)'),

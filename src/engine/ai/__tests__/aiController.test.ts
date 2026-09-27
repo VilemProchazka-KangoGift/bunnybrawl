@@ -3,7 +3,7 @@ import { AIController } from '../aiController';
 import { buildAwareness } from '../awareness';
 import { evaluateActions } from '../utility';
 import { getPersonality, getDifficultyParams } from '../personality';
-import type { MatchState, Arena, PlayerSlot, InputState } from '../../types';
+import type { MatchState, Arena, InputState } from '../../types';
 import { makePlayer } from '../../__tests__/testHelpers';
 
 // Helper to create a minimal match state

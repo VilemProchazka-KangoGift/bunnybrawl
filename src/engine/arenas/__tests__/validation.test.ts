@@ -29,13 +29,13 @@ const EXPECTED_ARENA_IDS = [
 describe('Arena validation - all 11 built-in arenas', () => {
 
   it('all 11 expected arenas are registered', () => {
-    const list = listArenaPacks();
-    const ids = list.map(e => e.id);
+    const packs = getAllPacks();
+    const ids = packs.map(e => e.id);
     for (const expectedId of EXPECTED_ARENA_IDS) {
       expect(ids, `Missing arena: ${expectedId}`).toContain(expectedId);
     }
     // At least 11 (may have more from other test suites that register mocks)
-    expect(list.length).toBeGreaterThanOrEqual(11);
+    expect(packs.length).toBeGreaterThanOrEqual(11);
   });
 
   // ---------------------------------------------------------------------------

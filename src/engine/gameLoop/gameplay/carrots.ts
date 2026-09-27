@@ -2,11 +2,23 @@ import type { MatchState, Arena, EffectZone } from '../../types';
 import { CARROT_SIZE } from '../../constants';
 import { swapRemove } from '../../themes/utils';
 
+/** Cap on concurrent carrots. Without it, carrotChase with no collectors grows
+ *  the snapshot ~8 bytes/carrot every spawn until the encoder throws past
+ *  MAX_SNAPSHOT_BYTES (~460 carrots ≈ 15 min) and crashes the host. Also bounds
+ *  the per-tick AI + spawn carrot-scan cost. Carrots are pruned when eaten, so
+ *  `state.carrots` is effectively the live set. */
+const MAX_ACTIVE_CARROTS = 12;
+
 export function spawnCarrot(
   state: MatchState, arena: Arena,
   cachedZeroGZones: readonly EffectZone[],
   gameRandom: () => number,
 ): void {
+  // Early-out before generating candidates / consuming RNG when already at cap.
+  let activeCarrots = 0;
+  for (const c of state.carrots) if (c.active) activeCarrots++;
+  if (activeCarrots >= MAX_ACTIVE_CARROTS) return;
+
   const candidates: Array<{ x: number; y: number; distSq: number }> = [];
 
   const minDistSqTo = (cx: number, cy: number): number => {

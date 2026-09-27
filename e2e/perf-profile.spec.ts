@@ -93,7 +93,7 @@ test('perf profile run', async ({ page, context }) => {
 
   // Wrap collection in try/finally so the profilers are always stopped, even
   // on test failure — otherwise they keep running until the page closes.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   let cpu: any, heap: any;
   let cpuStarted = false, heapStarted = false;
   const heapTimeline: { t: number; usedMB: number; totalMB: number }[] = [];

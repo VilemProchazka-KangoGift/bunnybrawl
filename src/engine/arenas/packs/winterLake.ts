@@ -19,6 +19,24 @@ import {
   wavyDown, backWavyUp, leftWavy,
 } from '../../themes/drawPrimitives';
 
+// Cached crystal-body gradient for ice thorns. Depends only on crystal height
+// (`ch`); defined in local space (0,0)→(0,-ch) so it renders correctly under
+// each crystal's translate/rotate. Avoids a fresh CanvasGradient per crystal
+// per thorn per frame.
+const _crystalGrdCache = new Map<number, CanvasGradient>();
+function getCrystalGrd(ctx: Ctx2D, ch: number): CanvasGradient {
+  const key = Math.round(ch);
+  let g = _crystalGrdCache.get(key);
+  if (!g) {
+    g = ctx.createLinearGradient(0, 0, 0, -ch);
+    g.addColorStop(0, 'rgba(160, 200, 240, 0.6)');
+    g.addColorStop(0.5, 'rgba(180, 220, 255, 0.5)');
+    g.addColorStop(1, 'rgba(220, 240, 255, 0.3)');
+    _crystalGrdCache.set(key, g);
+  }
+  return g;
+}
+
 const AURORA_STRIPES = [
   { color: '#7be0a3', y: 56,  h: 64, speed: 0.6,  phase: 0   },
   { color: '#c899ff', y: 120, h: 64, speed: 0.55, phase: 2.4 },
@@ -644,11 +662,7 @@ export const winterLake: ArenaPack = {
       ctx.rotate(c.tilt);
 
       // Crystal body — translucent blue
-      const crystalGrd = ctx.createLinearGradient(0, 0, 0, -ch);
-      crystalGrd.addColorStop(0, 'rgba(160, 200, 240, 0.6)');
-      crystalGrd.addColorStop(0.5, 'rgba(180, 220, 255, 0.5)');
-      crystalGrd.addColorStop(1, 'rgba(220, 240, 255, 0.3)');
-      ctx.fillStyle = crystalGrd;
+      ctx.fillStyle = getCrystalGrd(ctx, ch);
       ctx.beginPath();
       ctx.moveTo(-cw, 0);
       ctx.lineTo(-cw * 0.3, -ch * 0.6);

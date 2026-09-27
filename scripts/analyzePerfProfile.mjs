@@ -126,6 +126,7 @@ function correlateLongFrames(dts, lastSampleTime, longTasks, gcTimes = []) {
   }
   timeline.reverse(); // oldest-first
   const long = timeline.filter((f) => f.dt > 25);
+  void gcTimes; // reserved for cross-timeline correlation once origins align
   return long.map((f) => {
     const window = 50; // ms window for matching a longTask to a frame
     const overlap = longTasks.find((lt) => {
@@ -137,10 +138,10 @@ function correlateLongFrames(dts, lastSampleTime, longTasks, gcTimes = []) {
     return {
       tSec: (f.tMs / 1000).toFixed(2),
       frameMs: f.dt.toFixed(1),
-      gcPauseMs: overlap ? overlap.duration.toFixed(1) : '—',
+      // Any long task (≥50ms) overlapping this frame — NOT specifically a GC pause.
+      longTaskMs: overlap ? overlap.duration.toFixed(1) : '—',
     };
   });
-  void gcTimes; // reserved for cross-timeline correlation once origins align
 }
 
 /** Threshold for flagging a heap-usage drop as a GC event. The 1Hz
@@ -435,15 +436,15 @@ async function main() {
     lines.push(`| ${b.module} | ${pct} | ${b.selfMs.toFixed(0)} |`);
   }
   lines.push('');
-  lines.push('## Long frames (with GC attribution)');
+  lines.push('## Long frames (with long-task correlation)');
   lines.push('');
   if (longFrames.length === 0) {
     lines.push('_(no frames over 25ms)_');
   } else {
-    lines.push('| t | frame ms | GC pause |');
-    lines.push('|---|----------|----------|');
+    lines.push('| t | frame ms | long task ms |');
+    lines.push('|---|----------|--------------|');
     for (const f of longFrames) {
-      lines.push(`| ${f.tSec}s | ${f.frameMs} | ${f.gcPauseMs} |`);
+      lines.push(`| ${f.tSec}s | ${f.frameMs} | ${f.longTaskMs} |`);
     }
   }
   lines.push('');

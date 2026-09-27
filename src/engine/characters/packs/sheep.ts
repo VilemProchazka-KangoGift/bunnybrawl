@@ -39,12 +39,15 @@ const drawGib: CharacterPack['drawGib'] = (ctx, gibType, _w, _h, colors) => {
     ctx.fill();
   } else if (gibType === 'wool') {
     ctx.fillStyle = colors.lightColor;
+    ctx.beginPath();
     for (let i = 0; i < 5; i++) {
       const a = (i / 5) * Math.PI * 2;
-      ctx.beginPath();
-      ctx.arc(Math.cos(a) * 4, Math.sin(a) * 3, 4, 0, Math.PI * 2);
-      ctx.fill();
+      const cx = Math.cos(a) * 4;
+      const cy = Math.sin(a) * 3;
+      ctx.moveTo(cx + 4, cy);
+      ctx.arc(cx, cy, 4, 0, Math.PI * 2);
     }
+    ctx.fill();
   }
 };
 

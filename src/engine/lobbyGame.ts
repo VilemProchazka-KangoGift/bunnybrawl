@@ -120,6 +120,9 @@ export class LobbyGame {
   // state shape. `timeElapsed` doubles as our day-night clock.
   private _matchState: MatchState;
   private _renderEntities: Player[] = []; // reused by getMatchState() each call
+  // Lobby layout is static — cache the arena once instead of rebuilding it
+  // (getArena('lobby') constructs a fresh Arena) per-entity per-frame in step().
+  private _arena: Arena;
 
   // Pre-allocated combined arrays (rebuilt in update, avoid per-frame spread)
   private _allLobby: Player[] = [];
@@ -151,6 +154,7 @@ export class LobbyGame {
     const botSlots = ALL_BOT_SLOTS.slice(0, botCount);
     const theme = getTheme('lobby');
     this._matchState = buildLobbyMatchState(theme);
+    this._arena = getArena('lobby');
     this._dustColor = theme.ground.surfaceColor;
 
     // On mobile, only spawn P1 (touch player)
@@ -322,7 +326,7 @@ export class LobbyGame {
 
   /** Lobby arena (registry-backed). Use for canvas mounts that need the platform layout. */
   getArena(): Arena {
-    return getArena('lobby');
+    return this._arena;
   }
 
   /** Read-only ready-zone counts for HUD overlay. */

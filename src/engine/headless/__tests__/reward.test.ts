@@ -7,7 +7,8 @@
 //   carrots come from state.stats.perPlayer.get(slot).carrotsEaten.
 //   hazard hits come from rising edge of slowTimer / burnTimer.
 //   per-tick burn fires while burnTimer > 0.
-//   fall-off fires on state→'respawning' without prior 'splat'.
+//   fall-off fires on the handleFallOff respawn fingerprint (idle respawn with
+//     slow~2.0 + i-frames, no killFeed death) and suppresses the hazard hit.
 //   match-end win/loss bonus fires exactly once on false→true transition.
 //   per-tick survival + airborne shaping.
 
@@ -255,16 +256,36 @@ describe('RewardShaper (event-based, pure Node)', () => {
     expect(r).toBeCloseTo(-0.004, 4);
   });
 
-  it('fall-off penalty fires on idle → respawning transition', () => {
+  it('fall-off penalty fires on the real handleFallOff fingerprint (idle respawn, slow~2.0 + i-frames, no killFeed)', () => {
+    const shaper = new RewardShaper('P1');
+    // Prime: alive, no timers.
+    shaper.observe(makeState({
+      players: [makePlayer({ id: 'P1', state: 'idle', slowTimer: 0, invincibleTimer: 0 })],
+    }));
+    // handleFallOff respawns to 'idle' with slowTimer=2.0 + invincibleTimer=1.5
+    // and pushes NO killFeed entry — this is the transition the sim actually
+    // produces (respawnPlayer sets state='idle', never 'respawning'/'splat').
+    const r = shaper.observe(makeState({
+      players: [makePlayer({ id: 'P1', state: 'idle', slowTimer: 2.0, invincibleTimer: 1.5 })],
+    }));
+    // -0.5 (fall-off) + 0.001 (survival — player is idle/alive). The slowTimer
+    // 0→2.0 edge is NOT double-billed as a hazard hit; -0.499 proves suppression
+    // (a hazard hit would land at -0.299, both firing at -0.799).
+    expect(r).toBeCloseTo(-0.499, 4);
+  });
+
+  it('a real hazard hit (slowTimer→5.0, no i-frames) is NOT mistaken for a fall-off', () => {
     const shaper = new RewardShaper('P1');
     shaper.observe(makeState({
-      players: [makePlayer({ id: 'P1', state: 'idle' })],
+      players: [makePlayer({ id: 'P1', state: 'idle', slowTimer: 0, invincibleTimer: 0 })],
     }));
+    // Thorn/ghost/lava sets slowTimer to THORN_SLOW_DURATION (5.0) and grants no
+    // i-frames — invincibleTimer stays 0, so the fall-off fingerprint fails.
     const r = shaper.observe(makeState({
-      players: [makePlayer({ id: 'P1', state: 'respawning' })],
+      players: [makePlayer({ id: 'P1', state: 'idle', slowTimer: 5.0, invincibleTimer: 0 })],
     }));
-    // -0.5 (fall-off). No survival — respawning is suppressed.
-    expect(r).toBeCloseTo(-0.5, 4);
+    // -0.3 (hazard hit) + 0.001 (survival) = -0.299
+    expect(r).toBeCloseTo(-0.299, 4);
   });
 
   it('splat → respawning does NOT fire fall-off penalty (death already counted via killFeed)', () => {
