@@ -255,4 +255,4 @@ Python consumers using `numpy.frombuffer` can convert `obs` from `list[float]` �
 - `src/engine/headless/reward.ts` — `RewardShaper`, `DEFAULT_REWARD_WEIGHTS`
 - `src/engine/headless/recording.ts` — `MatchRecorder`, `NDJSONFileRecorder`, `Sample`, `MatchHeader`
 - `scripts/selfPlay.ts` — example pipeline driver with full CLI surface
-- `src/engine/CLAUDE.md` § "Headless / ML pipeline" — implementation notes / design rationale
+- `src/engine/AGENTS.md` § "Headless / ML pipeline" — implementation notes / design rationale

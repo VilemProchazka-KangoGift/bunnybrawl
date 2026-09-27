@@ -36,6 +36,10 @@ import {
  * (dirX, dirY) (each ±1) is the diagonal direction the web fans into the body.
  * Matches the haunted-graveyard web shape so both packs feel consistent.
  */
+// Reused scratch for the 5 strand angles — always fully overwritten (strands=5),
+// so a module-scope array is safe and avoids a per-call allocation.
+const _castleCobwebAngles: number[] = [];
+
 function drawCastleCobweb(
   ctx: Ctx2D,
   cornerX: number,
@@ -53,27 +57,29 @@ function drawCastleCobweb(
   ctx.lineWidth = 0.7;
   // The web fans into the body — bend tilts the outer rim by `bendX` while
   // the corner anchor stays pinned (cobwebs are attached at the corner).
-  const angles: number[] = [];
+  // Strands share the corner anchor (translucent overlap there), so they stay
+  // as individual strokes to preserve the anchor blend.
   for (let i = 0; i < strands; i++) {
     const a = baseAngle - halfSpread + (i / (strands - 1)) * (halfSpread * 2);
-    angles.push(a);
+    _castleCobwebAngles[i] = a;
     ctx.beginPath();
     ctx.moveTo(cornerX, cornerY);
     ctx.lineTo(cornerX + Math.cos(a) * len + bendX, cornerY + Math.sin(a) * len);
     ctx.stroke();
   }
+  // Concentric chord rings (non-overlapping) → batch into a single stroke.
+  ctx.beginPath();
   for (let r = 1; r <= 3; r++) {
     const radius = (r / 4) * len;
     // Bend ramps from 0 at the corner up to full bendX at the outer rim.
     const bendT = r / 4;
     const localBend = bendX * bendT;
-    ctx.beginPath();
     for (let i = 0; i < strands; i++) {
-      const x1 = cornerX + Math.cos(angles[i]) * radius + localBend;
-      const y1 = cornerY + Math.sin(angles[i]) * radius;
+      const x1 = cornerX + Math.cos(_castleCobwebAngles[i]) * radius + localBend;
+      const y1 = cornerY + Math.sin(_castleCobwebAngles[i]) * radius;
       if (i === 0) ctx.moveTo(x1, y1);
       else {
-        const a0 = angles[i - 1];
+        const a0 = _castleCobwebAngles[i - 1];
         const x0 = cornerX + Math.cos(a0) * radius + localBend;
         const y0 = cornerY + Math.sin(a0) * radius;
         // Slight catenary sag toward the corner
@@ -82,8 +88,8 @@ function drawCastleCobweb(
         ctx.quadraticCurveTo(mx, my, x1, y1);
       }
     }
-    ctx.stroke();
   }
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -396,18 +402,7 @@ export const castle: ArenaPack = {
   ],
 
   ground: {
-    surfaceColor: '#4A4A5E',
-    surfaceThickness: 4,
-  },
-
-  platform: {
-    floatingBodyColor: '#3A3A50',
-    floatingTopColor: '#5A5A70',
-    floatingAccentColor: undefined,
-    groundBodyColor: '#2A2A40',
-    groundTopColor: '#4A4A5E',
-    drawMoss: false,
-  },
+    surfaceColor: '#4A4A5E',  },
 
   // ---- Ambient systems ----
   clouds: {

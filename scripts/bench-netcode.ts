@@ -19,7 +19,7 @@ import { registerBuiltinCharacters } from '../src/engine/characters/builtin';
 import { getArena } from '../src/engine/arenas';
 import {
   takeAuthSnapshot, encodeSnapshot, decodeSnapshot, createEmptySnapshot,
-  applySnapshotToState,
+  applySnapshotToState, createDelta, applyDelta,
 } from '../src/engine/net';
 import type { MatchState } from '../src/engine/types';
 
@@ -54,7 +54,6 @@ function makeRichState(): MatchState {
     splatMarks: [],
     newSplatsSinceRender: [],
     bouncyWobble: new Map(),
-    pigeonFlocks: [],
     stats: { perPlayer: new Map() },
   } as unknown as MatchState;
 
@@ -226,24 +225,42 @@ const r4 = bench('applySnapshotToState', ITERATIONS, () => {
   SINK_X += targetState.players.length;
 });
 
-// Memory pressure: count allocations indirectly via heap delta.
-// Run a lot of decodes back-to-back, force GC if available, measure heap.
-function measureHeap(label: string, iterations: number, fn: () => void): void {
-  if (typeof global.gc !== 'function') return;
-  global.gc(); global.gc();
-  const before = process.memoryUsage().heapUsed;
-  for (let i = 0; i < iterations; i++) fn();
-  const afterPre = process.memoryUsage().heapUsed;
-  global.gc(); global.gc();
-  const afterPost = process.memoryUsage().heapUsed;
-  const peak = (afterPre - before) / 1024;
-  const retained = (afterPost - before) / 1024;
-  console.log(`  ${label}: peak +${peak.toFixed(0)} KB, retained ${retained > 0 ? '+' : ''}${retained.toFixed(0)} KB after GC`);
-}
+// 5. takeAuthSnapshot (host hot path — extract scratch from MatchState)
+let SINK_FRAME = 0;
+const r5 = bench('takeAuthSnapshot', ITERATIONS, () => {
+  const s = takeAuthSnapshot(SINK_FRAME++, state);
+  SINK_X += s.players.length;
+});
+
+// Prep buffers for delta benches — perturb state and re-encode to get a "next" snapshot.
+const baselineBuf = wireBuf; // pre-perturbation snapshot
+const stateMutated = makeRichState();
+stateMutated.players[0].x += 7.5;
+stateMutated.players[1].vy = -120;
+stateMutated.players[2].score += 1;
+stateMutated.lavaRocks[3].active = false;
+const snapMutated = takeAuthSnapshot(43, stateMutated);
+const encodedMutated = encodeSnapshot(snapMutated);
+const currentBuf = encodedMutated.buffer.slice(0, encodedMutated.length);
+
+// 6. createDelta (host hot path — XOR + RLE encode)
+const r6 = bench('createDelta', ITERATIONS, () => {
+  const d = createDelta(currentBuf, baselineBuf, 42);
+  SINK_LEN += d.byteLength;
+});
+
+// Build a real delta to apply for the applyDelta bench (we need a valid one).
+const deltaBytes = createDelta(currentBuf, baselineBuf, 42);
+
+// 7. applyDelta (guest hot path — RLE + XOR decode)
+const r7 = bench('applyDelta', ITERATIONS, () => {
+  const a = applyDelta(deltaBytes, baselineBuf);
+  if (a) SINK_LEN += a.byteLength;
+});
 
 // --- Report ----------------------------------------------------------------
 
-const rows = [r1, r2, r3, r4];
+const rows = [r1, r2, r3, r4, r5, r6, r7];
 const nameW = Math.max(...rows.map(r => r.name.length));
 console.log('Results:');
 console.log('-'.repeat(nameW + 60));
@@ -281,3 +298,6 @@ const applyMsPerFrame = r4.nsPerOp / 1e6;
 console.log(`  decode (no pool):  ${decodeNoPoolMsPerFrame.toFixed(3)} ms (${(decodeNoPoolMsPerFrame / 16.67 * 100).toFixed(2)}% of frame)`);
 console.log(`  decode (pooled):   ${decodePoolMsPerFrame.toFixed(3)} ms (${(decodePoolMsPerFrame / 16.67 * 100).toFixed(2)}% of frame)`);
 console.log(`  applySnapshotToState: ${applyMsPerFrame.toFixed(3)} ms (${(applyMsPerFrame / 16.67 * 100).toFixed(2)}% of frame)`);
+// Keep the benchmark sinks observable so the measured work cannot be elided.
+void SINK_X;
+void SINK_LEN;

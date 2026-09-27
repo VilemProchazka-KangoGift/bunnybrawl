@@ -32,6 +32,8 @@ import { EffectZoneSystem } from '../gameLoop/gameplay/EffectZoneSystem';
 import { PlayerCollisionSystem } from '../gameLoop/gameplay/PlayerCollisionSystem';
 import { StompSystem } from '../gameLoop/gameplay/StompSystem';
 import { MatchSystem } from '../gameLoop/gameplay/MatchSystem';
+import { getEntities } from '../entities/registry';
+import type { EntityFixedCtx } from '../entities/types';
 import type { ScatterFlockSpecies } from '../themes/types';
 import { pickScatterColor } from '../rendering/hazards';
 
@@ -103,6 +105,10 @@ export class Simulator {
   // at `_mutCtx` once fixedUpdate has run. PlayerInput impls must NOT mutate.
   private readonly _mutCtx: { networkInputs?: ReadonlyMap<string, InputState>; airborne?: boolean } = {};
   private _tickCtx: PlayerInputContext = this._mutCtx;
+  // Reused entity-dispatch ctx — fields overwritten at the top of fixedUpdate
+  // so the per-tick entity loop doesn't allocate. Entities MUST NOT mutate
+  // the ctx object (read-only contract).
+  private readonly _entityCtx: EntityFixedCtx;
   private _resimulating = false;
   private _loadingGeneration = 0;
 
@@ -183,6 +189,23 @@ export class Simulator {
     }
 
     this._state = createInitialMatchState(this._arena, this._theme, opts.settings, players, opts.activePlayers, this._boundGameRandom);
+
+    // Build the entity dispatch ctx once. Fields that depend on per-tick
+    // state (`dt`, `resimulating`) are overwritten in `fixedUpdate`; the
+    // rest are stable per-Simulator-lifetime. `arena` / `theme` / `settings`
+    // are reassigned on `switchArena`.
+    this._entityCtx = {
+      dt: 0,
+      state: this._state,
+      arena: this._arena,
+      theme: this._theme,
+      settings: this._settings,
+      players: this._state.players,
+      rng: this._boundGameRandom,
+      events: this._events,
+      particles: this._boundParticleEmitter,
+      resimulating: false,
+    };
 
     this._buildSystems();
   }
@@ -324,6 +347,12 @@ export class Simulator {
     );
     Object.assign(this._state, fresh);
 
+    // Refresh entity ctx for the new arena/theme/settings.
+    this._entityCtx.arena = this._arena;
+    this._entityCtx.theme = this._theme;
+    this._entityCtx.settings = this._settings;
+    this._entityCtx.players = this._state.players;
+
     this._buildSystems();
 
     this._loadingGeneration++;
@@ -393,9 +422,17 @@ export class Simulator {
       this._mutCtx.networkInputs = (ctxOrNetworkInputs as PlayerInputContext).networkInputs;
     }
     // Pre-compute airborne for the touch slot. Other slots ignore ctx.airborne.
+    // Indexed loop avoids the per-tick `find(p => ...)` closure allocation.
     if (this._touchSlot !== null) {
-      const tp = this._state.players.find(p => p.id === this._touchSlot);
-      this._mutCtx.airborne = tp?.state === 'airborne';
+      let tpAirborne = false;
+      const players = this._state.players;
+      for (let i = 0; i < players.length; i++) {
+        if (players[i].id === this._touchSlot) {
+          tpAirborne = players[i].state === 'airborne';
+          break;
+        }
+      }
+      this._mutCtx.airborne = tpAirborne;
     } else {
       this._mutCtx.airborne = undefined;
     }
@@ -427,8 +464,19 @@ export class Simulator {
     this._carrotSystem.fixedUpdate(dt);
     perfTrace.end('gameplay.carrot', carrotStart);
 
+    // Entity-registry fixedUpdate dispatch. Iteration order = registration
+    // order (locked in `entities/index.ts > registerBuiltinEntities`) and
+    // matches the original explicit call order: lavaRocks → ghosts →
+    // geyserStates → scatterFlocks. Re-ordering invalidates the
+    // determinism snapshots.
     const arenaEntityStart = perfTrace.begin('gameplay.arenaEntity');
-    this._arenaEntitySystem.fixedUpdate(dt);
+    this._entityCtx.dt = dt;
+    this._entityCtx.resimulating = this._resimulating;
+    const stateRec = this._state as unknown as Record<string, unknown[]>;
+    for (const e of getEntities()) {
+      const tick = e.fixedUpdate;
+      if (tick) tick(stateRec[e.id], this._entityCtx);
+    }
     perfTrace.end('gameplay.arenaEntity', arenaEntityStart);
 
     const perPlayerStart = perfTrace.begin('simulator.perPlayerPhysics');
@@ -472,7 +520,13 @@ export class Simulator {
       if (player.vy !== 0 && player.vy > -1e-4 && player.vy < 1e-4) player.vy = 0;
       updatePlayerState(player);
 
-      if (wasAirborne && player.state === 'airborne' && prevVy < -10 && player.vy === 0) {
+      // Headbonk: was rising, now stopped dead — only a ceiling does that.
+      // Detected BEFORE the landing split because a ceiling bonk zeroes vy, so
+      // updatePlayerState reports the player as non-airborne for one tick.
+      // (The old condition also required state === 'airborne', which needs
+      // vy !== 0 — logically unsatisfiable, so the headbonk SFX never fired.)
+      const headbonked = wasAirborne && prevVy < -10 && player.vy === 0;
+      if (headbonked) {
         const cd = this._sfxCooldownsGetter();
         if (cd.headbonk.isReady(player.id)) {
           this._events.onSfxRequest('headbonk');
@@ -480,7 +534,9 @@ export class Simulator {
         }
       }
 
-      const justLanded = wasAirborne && player.state !== 'airborne';
+      // Exclude the ceiling bonk from "landed" so it doesn't fire landing
+      // squash / thud / haptic while the player is pressed against a ceiling.
+      const justLanded = wasAirborne && player.state !== 'airborne' && !headbonked;
 
       if (justLanded) this._events.onPlayerLanding(player.id, prevVy);
 
@@ -560,6 +616,13 @@ export class Simulator {
         ps.distanceTraveled += (Math.abs(player.vx) + Math.abs(player.vy)) * dt;
       }
 
+      // Dead / disconnected corpses must not interact with the world: no
+      // spring/geyser resurrection, no carrot pickups, no flock triggers, no
+      // bouncy launches. Physics above already no-ops for them; this guards the
+      // collision, effect-zone, bouncy, scatter-flock and carrot logic below.
+      // (disconnectPlayer sets state = 'splat', so this covers it too.)
+      if (player.state === 'splat' || player.state === 'respawning') continue;
+
       this._playerCollisionSystem.checkCollisions(player);
       this._effectZoneSystem.applyToPlayer(player, justLanded, wasAirborne, prevVy, dt);
 
@@ -575,28 +638,6 @@ export class Simulator {
             player.state = 'airborne';
             this._state.bouncyWobble.set(bi, 0.4);
             break;
-          }
-        }
-      }
-
-      for (const flock of this._state.pigeonFlocks) {
-        if (!flock.active) continue;
-        const dx = (player.x + player.width / 2) - flock.x;
-        const dy = (player.y + player.height) - flock.y;
-        if (dx * dx + dy * dy < 60 * 60 && player.state !== 'airborne') {
-          flock.active = false;
-          flock.respawnTimer = this._theme.pigeonConfig?.respawnTime || 12;
-          this._events.onSfxRequest('pigeon_scatter');
-          for (let pi = 0; pi < 6; pi++) {
-            const angle = -Math.PI * 0.5 + (Math.random() - 0.5) * Math.PI * 0.8;
-            const speed = 150 + Math.random() * 200;
-            flock.scatterParticles.push({
-              x: flock.x + (Math.random() - 0.5) * 20,
-              y: flock.y - 5,
-              vx: Math.cos(angle) * speed * (Math.random() < 0.5 ? -1 : 1),
-              vy: Math.sin(angle) * speed - 80,
-              life: 1.0 + Math.random() * 0.5,
-            });
           }
         }
       }

@@ -15,19 +15,16 @@ import {
 import type { ReliableMessage } from './protocol';
 import { NetworkSimulator } from './core/networkSimulator';
 import type { SimulatorConfig } from './core/networkSimulator';
+import { getSimLatency, getSimJitter, getSimLoss } from './netSimFlags';
+import { isTurnEnabled } from './turnFlag';
 
-/** Read simulator config from URL params (?simLatency, ?simJitter, ?simLoss). */
+/** Read simulator config from emitter-backed flags (URL params seed them). */
 function readSimConfigFromUrl(): SimulatorConfig | null {
-  const params = new URLSearchParams(window.location.search);
-  const latency = params.get('simLatency');
-  const jitter = params.get('simJitter');
-  const loss = params.get('simLoss');
-  if (!latency && !jitter && !loss) return null;
-  return {
-    latencyMs: latency ? parseInt(latency, 10) || 0 : 0,
-    jitterMs: jitter ? parseInt(jitter, 10) || 0 : 0,
-    packetLossPercent: loss ? parseFloat(loss) || 0 : 0,
-  };
+  const latencyMs = getSimLatency();
+  const jitterMs = getSimJitter();
+  const packetLossPercent = getSimLoss();
+  if (!latencyMs && !jitterMs && !packetLossPercent) return null;
+  return { latencyMs, jitterMs, packetLossPercent };
 }
 
 export type ConnectionStatus = 'idle' | 'creating' | 'joining' | 'connected' | 'disconnected' | 'error';
@@ -60,10 +57,9 @@ const PONG_TIMEOUT_MS = 5000;
 const DEGRADED_THRESHOLD_MS = 2500;
 const RTT_ALPHA = 0.1;
 
-// TURN config (free relay for symmetric NAT fallback)
-const TURN_DISABLED = typeof location !== 'undefined' && new URLSearchParams(location.search).has('noturn');
-
-const TURN_SERVERS = TURN_DISABLED ? [] : [
+// TURN config (free relay for symmetric NAT fallback). Toggle via DevMenu
+// (or legacy `?noturn`). Read at module load — reload required to flip.
+const TURN_SERVERS = !isTurnEnabled() ? [] : [
   {
     urls: [
       'turn:global.relay.metered.ca:80',

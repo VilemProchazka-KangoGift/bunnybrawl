@@ -9,6 +9,7 @@ import type { ThemeConfig } from '../themes/types';
 import { getCharacterForSlot } from '../characters';
 import { createWeatherParticle } from '../gameLoop/cosmetics/environment';
 import { randRange, pickWeighted, shuffleInPlace } from '../themes/utils';
+import { getEntities } from '../entities/registry';
 import {
   PLAYER_WIDTH, PLAYER_HEIGHT, GIANT_SCALE,
   CARROT_FIRST_SPAWN_DELAY, CARROT_CHASE_FIRST_SPAWN_DELAY,
@@ -29,7 +30,7 @@ export interface EffectivePhysics {
 export function computeEffectivePhysics(theme: ThemeConfig, mods: MatchSettings['mods']): EffectivePhysics {
   const pm = theme.physics;
   let gravity = GRAVITY * (pm?.gravity ?? 1);
-  let friction = FRICTION * (pm?.friction ?? 1);
+  const friction = FRICTION * (pm?.friction ?? 1);
   let walkSpeed = MAX_WALK_SPEED * (pm?.walkSpeed ?? 1);
   let jumpImpulse = JUMP_IMPULSE * (pm?.jumpImpulse ?? 1);
   let maxFallSpeed = MAX_FALL_SPEED * (pm?.gravity ?? 1);
@@ -108,7 +109,7 @@ export function createEmptyMatchState(): MatchState {
     fogParticles: [], pollenParticles: [], shootingStars: [],
     scoreAnimations: [], comboPopups: [], goalPulseTimers: new Map(), ghosts: [],
     lavaRocks: [], lavaRockTimer: 0,
-    geyserStates: [], pigeonFlocks: [], scatterFlocks: [], bouncyWobble: new Map(),
+    geyserStates: [], scatterFlocks: [], bouncyWobble: new Map(),
     gibs: [], confetti: [],
     surfaceDecals: [], ripples: [],
   };
@@ -149,37 +150,11 @@ export function createInitialMatchState(
     });
   }
 
-  const fc = theme.fog;
-  const fogParticles: Array<{ x: number; y: number; vx: number; alpha: number }> = [];
-  if (fc) {
-    for (let i = 0; i < fc.count; i++) {
-      fogParticles.push({
-        x: Math.random() * CANVAS_WIDTH,
-        y: fc.baseY + (Math.random() * 2 - 1) * fc.yVariance,
-        vx: randRange(fc.speedRange),
-        alpha: randRange(fc.alphaRange),
-      });
-    }
-  }
-
-  const ac = theme.ambientParticles;
-  const pollenParticles: Array<{ x: number; y: number; vx: number; vy: number; size: number; alpha: number }> = [];
-  for (let i = 0; i < ac.count; i++) {
-    pollenParticles.push({
-      x: Math.random() * CANVAS_WIDTH,
-      y: Math.random() * CANVAS_HEIGHT,
-      vx: randRange(ac.vxRange),
-      vy: randRange(ac.vyRange),
-      size: randRange(ac.sizeRange),
-      alpha: randRange(ac.alphaRange),
-    });
-  }
-
   const lavaRockTimer = theme.lavaRockConfig
     ? theme.lavaRockConfig.spawnInterval[0] + gameRandom() * (theme.lavaRockConfig.spawnInterval[1] - theme.lavaRockConfig.spawnInterval[0])
     : 9999;
 
-  return {
+  const out: MatchState = {
     ...createEmptyMatchState(),
     players,
     carrotTimer: settings.mods.carrotChase ? CARROT_CHASE_FIRST_SPAWN_DELAY : CARROT_FIRST_SPAWN_DELAY,
@@ -189,27 +164,20 @@ export function createInitialMatchState(
     countdown: MATCH_COUNTDOWN,
     stats,
     wildlife,
-    fogParticles,
-    pollenParticles,
     lavaRockTimer,
-    geyserStates: (arena.effectZones || []).filter(z => z.type === 'geyser').map(z => ({
-      timer: (z.interval || 10) * gameRandom(),
-      active: false,
-      activeTimer: 0,
-    })),
-    pigeonFlocks: (theme.pigeonConfig?.positions || []).map(p => ({
-      x: p.x, y: p.y, active: true, respawnTimer: 0,
-      scatterParticles: [],
-    })),
-    scatterFlocks: (theme.scatterFlockConfigs || []).flatMap(cfg =>
-      cfg.positions.map(p => ({
-        species: cfg.species,
-        x: p.x, y: p.y,
-        radius: cfg.radius,
-        respawnTime: cfg.respawnTime,
-        active: true, armed: true, respawnTimer: 0,
-        scatterParticles: [] as Array<{ x: number; y: number; vx: number; vy: number; life: number; phase: number; color: string }>,
-      }))
-    ),
   };
+
+  // Entity-owned init: each registered EntityKind owns its initial state
+  // shape (lavaRocks, ghosts, geyserStates, scatterFlocks, fogParticles,
+  // pollenParticles, …). Iteration order is registration order, which is
+  // observable for RNG consumers (lavaRockTimer above + geyserStates +
+  // ghosts all sample gameRandom on init).
+  const initArgs = { arena, theme, settings, rng: gameRandom };
+  for (const e of getEntities()) {
+    // Each entity's `id` is `keyof MatchState`. We trust the contract here
+    // — the registry's typing pins entity.id to a MatchState field, and
+    // entity.init returns the matching array shape.
+    (out as unknown as Record<string, unknown[]>)[e.id] = e.init(initArgs);
+  }
+  return out;
 }

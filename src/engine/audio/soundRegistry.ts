@@ -1,5 +1,5 @@
 import { Howl } from 'howler';
-import { listCharacterPacks } from '../characters/registry';
+import { getCharacterVoices } from './characterVoices';
 import {
   generateJumpSound, generateStompSound, generateVictorySound,
   generateSelectSound, generateThornHitSound, generateCrunchSound,
@@ -79,10 +79,9 @@ export function registerAllSounds(sounds: Map<string, Howl>): void {
   registerDefs(sounds, AMBIENT_DEFS);
   registerDefs(sounds, PERIODIC_DEFS);
 
-  // Register character sounds from pack registry
-  for (const pack of listCharacterPacks()) {
-    if (pack.createSound) {
-      sounds.set(pack.name.toLowerCase(), pack.createSound());
-    }
+  // Register character voice sounds from the main-only factory registry
+  // populated by side-effect imports in `characters/builtinSounds.ts`.
+  for (const [name, factory] of getCharacterVoices()) {
+    sounds.set(name.toLowerCase(), factory());
   }
 }

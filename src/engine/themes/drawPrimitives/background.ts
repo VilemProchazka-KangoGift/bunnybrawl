@@ -147,17 +147,3 @@ export function drawCloud(ctx: Ctx2D, x: number, y: number, size: number, color 
   ctx.fill();
 }
 
-export function drawPlatformMoss(ctx: Ctx2D, edgeX: number, platY: number, platH: number): void {
-  ctx.fillStyle = '#3A7A3A';
-  for (let i = 0; i < 3; i++) {
-    const ox = (i - 1) * 4;
-    const hang = 5 + i * 2;
-    ctx.beginPath();
-    ctx.ellipse(edgeX + ox, platY + platH + hang * 0.5, 3, hang * 0.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.fillStyle = '#2D6B2D';
-  ctx.beginPath();
-  ctx.ellipse(edgeX, platY + platH + 2, 5, 3, 0, 0, Math.PI * 2);
-  ctx.fill();
-}

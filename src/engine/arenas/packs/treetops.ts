@@ -337,18 +337,7 @@ export const treetops: ArenaPack = {
   ],
 
   ground: {
-    surfaceColor: '#2D5A2D',
-    surfaceThickness: 3,
-  },
-
-  platform: {
-    floatingBodyColor: '#5A3A20',
-    floatingTopColor: '#7A5A30',
-    floatingAccentColor: '#4A8A3A',
-    groundBodyColor: '#4A3018',
-    groundTopColor: '#6A4A28',
-    drawMoss: true,
-  },
+    surfaceColor: '#2D5A2D',  },
 
   // ---- Ambient systems ----
   clouds: {

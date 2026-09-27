@@ -1921,42 +1921,6 @@ describe('Simulator — arena-specific gameplay', () => {
     expect(state.thorns.length).toBeGreaterThan(0);
   });
 
-  it('pigeon flock scatters when player walks near', () => {
-    const { sim } = createSim();
-    const state = sim.getState();
-    state.countdown = 0;
-
-    const p1 = state.players[0];
-    p1.y = 660 - PLAYER_HEIGHT;
-    p1.state = 'idle' as any;
-    state.pigeonFlocks.push({
-      x: p1.x + PLAYER_WIDTH / 2,
-      y: p1.y + PLAYER_HEIGHT,
-      active: true,
-      respawnTimer: 0,
-      scatterParticles: [],
-    } as any);
-
-    sim.fixedUpdate(FIXED_TIMESTEP, noInput);
-
-    expect(state.pigeonFlocks[0].active).toBe(false);
-    expect(state.pigeonFlocks[0].scatterParticles.length).toBeGreaterThan(0);
-  });
-
-  it('pigeon flock respawns after timer', () => {
-    const { sim } = createSim();
-    const state = sim.getState();
-    state.countdown = 0;
-
-    state.pigeonFlocks.push({
-      x: 800, y: 660, active: false, respawnTimer: 0.1, scatterParticles: [],
-    } as any);
-
-    for (let i = 0; i < 10; i++) sim.fixedUpdate(FIXED_TIMESTEP, noInput);
-
-    expect(state.pigeonFlocks[0].active).toBe(true);
-  });
-
   it('carrot spawn considers carrotZones for extra candidates', () => {
     const { sim } = createSim({
       arena: { carrotZones: [{ x: 200, y: 400, width: 200, height: 200 }] },

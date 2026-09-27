@@ -6,7 +6,7 @@ import {
   encodePing, decodePingPong,
   MsgType,
 } from './protocol';
-import { takeSnapshot, restoreSnapshot, hashGameState } from './serialize';
+import { takeSnapshot, restoreSnapshot } from './serialize';
 import type { MatchState, Player, PlayerSlot } from '../types';
 
 describe('SeededRNG', () => {
@@ -164,8 +164,8 @@ describe('Message loop prevention', () => {
   // Simulates one peer's message handler. Returns any outgoing messages it would send.
   function simulateLobbyHandler(
     msg: { type: number; [key: string]: unknown },
-    localChar: string,
-    allCharNames: string[],
+    _localChar: string,
+    _allCharNames: string[],
   ): Array<{ type: number; [key: string]: unknown }> {
     const outgoing: Array<{ type: number; [key: string]: unknown }> = [];
 
@@ -352,7 +352,6 @@ function makeTestMatchState(): MatchState {
     lavaRocks: [],
     lavaRockTimer: 15.0,
     geyserStates: [{ timer: 3.0, active: true, activeTimer: 1.5 }],
-    pigeonFlocks: [{ x: 200, y: 100, active: true, respawnTimer: 0, scatterParticles: [] }],
     bouncyWobble: new Map([[0, 0.5], [2, 0.3]]),
     gibs: [],
     confetti: [],

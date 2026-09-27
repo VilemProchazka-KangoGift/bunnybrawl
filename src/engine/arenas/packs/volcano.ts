@@ -339,18 +339,7 @@ export const volcano: ArenaPack = {
   ],
 
   ground: {
-    surfaceColor: '#3A2A2A',
-    surfaceThickness: 5,
-  },
-
-  platform: {
-    floatingBodyColor: '#2A2020',
-    floatingTopColor: '#4A3535',
-    floatingAccentColor: '#FF6600',
-    groundBodyColor: '#1A1010',
-    groundTopColor: '#3A2A2A',
-    drawMoss: false,
-  },
+    surfaceColor: '#3A2A2A',  },
 
   // ---- Ambient systems ----
   clouds: {
@@ -768,19 +757,23 @@ export const volcano: ArenaPack = {
     // Diffuse smoky fog above each lava zone — stacked drifting ellipses
     // create the soft "haze" feel without a Canvas blur filter (which is
     // expensive in Canvas2D).
+    // Smoky haze ellipses — same colour, alpha depends only on layer index `i`
+    // (6 discrete values). Group by `i` so each alpha is one fill across all
+    // zones. Same-colour translucent → order-independent, so this is exact.
     ctx.fillStyle = '#3a1a1a';
-    for (const lz of LAVA_ZONES) {
-      const halfW = lz.w * 0.7;
-      for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 6; i++) {
+      ctx.globalAlpha = 0.10 + (1 - i / 6) * 0.10;
+      ctx.beginPath();
+      for (const lz of LAVA_ZONES) {
+        const halfW = lz.w * 0.7;
         const drift = fastSin(time * 0.3 + i * 1.3) * halfW * 0.4;
         const py = lz.cy - 30 - i * 12;
         const sx = halfW + 16 + fastSin(time * 0.4 + i * 0.7) * 8;
         const sy = 16 + i * 1.5;
-        ctx.globalAlpha = 0.10 + (1 - i / 6) * 0.10;
-        ctx.beginPath();
+        ctx.moveTo(lz.cx + drift + sx, py);
         ctx.ellipse(lz.cx + drift, py, sx, sy, 0, 0, Math.PI * 2);
-        ctx.fill();
       }
+      ctx.fill();
     }
     ctx.globalAlpha = 1;
     for (const lz of LAVA_ZONES) {
@@ -821,30 +814,49 @@ export const volcano: ArenaPack = {
         ctx.stroke();
       }
     }
+    // Rising vent particles. Alpha-bucketed across all vents (same colour) to
+    // collapse ~80 per-particle fills into a handful. Vents are spatially
+    // separated so batching across them doesn't change any overlap. Matches the
+    // shipped waterfall spray/mist bucketing pattern.
     ctx.fillStyle = '#3a201a';
-    for (const vx of LAVA_VENTS) {
-      for (let i = 0; i < 14; i++) {
-        const t = ((time * 0.4 + i * 0.07) % 1);
-        const px = vx + fastSin(time * 1.3 + i * 1.7) * 28 * t;
-        const py = 660 - t * 240;
-        const sz = 2 + t * 6;
-        const a = (1 - t) * 0.7;
-        ctx.globalAlpha = a;
-        ctx.beginPath();
-        ctx.arc(px, py, sz, 0, Math.PI * 2);
-        ctx.fill();
+    const VENT_BUCKETS = 5;
+    for (let b = 0; b < VENT_BUCKETS; b++) {
+      ctx.globalAlpha = (b + 0.5) / VENT_BUCKETS * 0.7;
+      ctx.beginPath();
+      for (const vx of LAVA_VENTS) {
+        for (let i = 0; i < 14; i++) {
+          const t = ((time * 0.4 + i * 0.07) % 1);
+          const a = (1 - t) * 0.7;
+          const bucket = Math.min(VENT_BUCKETS - 1, Math.floor(a / 0.7 * VENT_BUCKETS));
+          if (bucket !== b) continue;
+          const px = vx + fastSin(time * 1.3 + i * 1.7) * 28 * t;
+          const py = 660 - t * 240;
+          const sz = 2 + t * 6;
+          ctx.moveTo(px + sz, py);
+          ctx.arc(px, py, sz, 0, Math.PI * 2);
+        }
       }
-      ctx.fillStyle = '#ff8a3a';
-      for (let i = 0; i < 4; i++) {
-        const t = ((time * 0.7 + i * 0.21) % 1);
-        const px = vx + fastSin(time * 2 + i) * 14 * t;
-        const py = 660 - t * 200;
-        ctx.globalAlpha = (1 - t) * 0.85;
-        ctx.beginPath();
-        ctx.arc(px, py, 1.2, 0, Math.PI * 2);
-        ctx.fill();
+      ctx.fill();
+    }
+    // Bright inner sparks — drawn after (on top of) the dark particles, bucketed.
+    ctx.fillStyle = '#ff8a3a';
+    const SPARK_BUCKETS = 4;
+    for (let b = 0; b < SPARK_BUCKETS; b++) {
+      ctx.globalAlpha = (b + 0.5) / SPARK_BUCKETS * 0.85;
+      ctx.beginPath();
+      for (const vx of LAVA_VENTS) {
+        for (let i = 0; i < 4; i++) {
+          const t = ((time * 0.7 + i * 0.21) % 1);
+          const a = (1 - t) * 0.85;
+          const bucket = Math.min(SPARK_BUCKETS - 1, Math.floor(a / 0.85 * SPARK_BUCKETS));
+          if (bucket !== b) continue;
+          const px = vx + fastSin(time * 2 + i) * 14 * t;
+          const py = 660 - t * 200;
+          ctx.moveTo(px + 1.2, py);
+          ctx.arc(px, py, 1.2, 0, Math.PI * 2);
+        }
       }
-      ctx.fillStyle = '#3a201a';
+      ctx.fill();
     }
     ctx.globalAlpha = 1;
     for (let zi = 0; zi < LAVA_ZONES.length; zi++) {
@@ -869,17 +881,20 @@ export const volcano: ArenaPack = {
     if (getSlowDevice()) return;
     drawDriftBand(ctx, time, HEAT_SHIMMER_CONFIG);
     ctx.save();
+    // Heat plumes — same colour, alpha depends only on plume index `pi`
+    // (3 discrete values). Group by `pi`: one fill per alpha. Exact.
     ctx.fillStyle = '#ff8c5a';
-    for (let zi = 0; zi < LAVA_ZONES.length; zi++) {
-      const lz = LAVA_ZONES[zi];
-      const halfW = lz.w * 0.9;
-      for (let pi = 0; pi < 3; pi++) {
+    for (let pi = 0; pi < 3; pi++) {
+      ctx.globalAlpha = 0.18 - pi * 0.04;
+      ctx.beginPath();
+      for (let zi = 0; zi < LAVA_ZONES.length; zi++) {
+        const lz = LAVA_ZONES[zi];
+        const halfW = lz.w * 0.9;
         const wob = fastSin(time * 0.8 + pi + zi) * 12;
-        ctx.globalAlpha = 0.18 - pi * 0.04;
-        ctx.beginPath();
+        ctx.moveTo(lz.cx + wob + halfW, lz.cy - 18 - pi * 8);
         ctx.ellipse(lz.cx + wob, lz.cy - 18 - pi * 8, halfW, 14 + pi * 2, 0, 0, Math.PI * 2);
-        ctx.fill();
       }
+      ctx.fill();
     }
     ctx.restore();
   },

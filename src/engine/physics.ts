@@ -81,10 +81,19 @@ export function applyInput(
   // Clamp horizontal speed
   player.vx = f(Math.max(-maxSpeed, Math.min(maxSpeed, player.vx)));
 
-  // Fast fall — hold down while airborne: instant direction change
+  // Fast fall — hold down while airborne to dive. Snap to the dive velocity
+  // only at/after the apex (vy >= 0), never mid-ascent (that would cancel a
+  // spring/bounce/jump launch the tick it fires). The `!fastFalling` edge guard
+  // fires the snap once, so a zero-G / current zone that pulls a held-Down
+  // player's vy back below the dive speed doesn't re-snap (which would pin them
+  // at 500 and negate the zone). `Math.max` never DECELERATES a player already
+  // falling faster than the dive speed. fastFalling stays "down + airborne" for
+  // gravity, the bounce invariant, cosmetics, and guest input-echo pose parity.
+  // Trade-off: a dive held continuously from launch latches fastFalling during
+  // the ascent, so it gets fast-fall gravity but not the apex velocity snap — a
+  // minor, acceptable feel difference vs. tapping Down at the apex.
   if (input.down && player.state === 'airborne') {
-    if (!player.fastFalling) {
-      // First frame of fast-fall: snap velocity downward immediately
+    if (!player.fastFalling && player.vy >= 0) {
       player.vy = f(Math.max(player.vy, FAST_FALL_INITIAL));
     }
     player.fastFalling = true;

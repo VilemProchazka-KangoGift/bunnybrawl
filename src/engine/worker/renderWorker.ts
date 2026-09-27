@@ -25,6 +25,11 @@ import { registerBuiltinArenas } from '../arenas/builtin';
 import { registerBuiltinCharacters } from '../characters/builtin';
 import { getArena, getTheme, mirrorArena } from '../arenas/operations';
 import { setHudLanguage } from '../rendering/hud';
+import { setLightingEnabled } from '../lighting';
+import { setBrightness } from '../lighting/brightness';
+import { setPhotosensitivity } from '../lighting/photosensitivity';
+import { setPerfTier } from '../lighting/perfTier';
+import { setSlowDevice } from '../perfFlags';
 import { ReactiveDecorationSystem } from '../gameLoop/cosmetics/ReactiveDecorationSystem';
 import { WildlifeSystem } from '../gameLoop/cosmetics/WildlifeSystem';
 import { perfTrace } from '../perfTrace';
@@ -237,6 +242,12 @@ ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
   if (msg.type === 'host:engineSwitchArena') { engineBindings.switchArenaInWorker(msg); return; }
   if (msg.type === 'host:engineSetPhase') { engineBindings.setPhaseInWorker(msg); return; }
   if (msg.type === 'host:engineSkipCountdown') { engineBindings.skipCountdownInWorker(); return; }
+  if (msg.type === 'host:perfReset') {
+    // engineBindings.resetPerfStats handles both perfTrace + fpsCounter
+    // in one place (the modules live in engineWorkerInit's scope).
+    engineBindings.resetPerfStats();
+    return;
+  }
   // Phase 2: NetMatch async fixedUpdate wiring. Worker hosts encode/decode;
   // main only forwards buffers to/from the transport.
   if (msg.type === 'host:netSetMode') { engineBindings.setNetMode(msg.mode, msg.delayFrames); return; }
@@ -259,6 +270,15 @@ ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
         if (msg.navDebugEnabled) { debugFlags.navDebugAllowed = true; debugFlags.navDebugEnabled = true; }
         if (msg.netDebugEnabled) { debugFlags.netDebugAllowed = true; debugFlags.netDebugEnabled = true; }
         if (msg.fpsEnabled)      { debugFlags.fpsAllowed = true;      debugFlags.fpsEnabled = true; }
+        // Main-only lighting/perf emitters — see HostInitMsg. Apply BEFORE
+        // constructing the Renderer (and its first renderBackground) so the
+        // first frame honors the user's accessibility/perf settings instead
+        // of the worker's compile-time defaults.
+        if (msg.lightingEnabled !== undefined) setLightingEnabled(msg.lightingEnabled);
+        if (msg.brightness !== undefined) setBrightness(msg.brightness);
+        if (msg.photosensitivity !== undefined) setPhotosensitivity(msg.photosensitivity);
+        if (msg.perfTier !== undefined) setPerfTier(msg.perfTier);
+        if (msg.slowDevice !== undefined) setSlowDevice(msg.slowDevice);
         _mirror = msg.mirrored;
         const theme = getTheme(msg.themeId);
         renderer = new Renderer({
@@ -471,5 +491,12 @@ ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
     postError(err instanceof Error ? (err.stack ?? err.message) : String(err));
   }
 });
+
+// Boot handshake. Vite dev's module-worker boot can drop messages posted
+// before the worker finishes evaluating its top-level code (the browser
+// spec says they should queue; in module-worker dev mode they don't,
+// observably). The proxy buffers `postMessage` calls until this lands.
+// In prod where queuing works correctly, this is a harmless one-byte ping.
+ctxScope.postMessage({ type: 'worker:bootReady' });
 
 export {};

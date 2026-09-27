@@ -257,21 +257,6 @@ export const candyLand: ArenaPack = {
 
   ground: {
     surfaceColor: '#FF9ECE',
-    surfaceThickness: 5,
-    grassBlades: {
-      color: '#FF85C0',
-      spacing: 20,
-      heightRange: [4, 7],
-    },
-  },
-
-  platform: {
-    floatingBodyColor: '#FFD4A8',
-    floatingTopColor: '#FFE8CC',
-    floatingAccentColor: '#FF9ECE',
-    groundBodyColor: '#F5C49C',
-    groundTopColor: '#FFD4B8',
-    drawMoss: false,
   },
 
   // ---- Ambient systems ----
@@ -566,8 +551,7 @@ export const candyLand: ArenaPack = {
       ctx.save();
       ctx.translate(w.x, w.y);
       ctx.rotate(w.rotation);
-      const colors = ['#FF69B4', '#FFD700', '#87CEEB', '#98FB98', '#DDA0DD', '#FF6347'];
-      ctx.fillStyle = colors[Math.floor(w.x * 0.1) % colors.length];
+      ctx.fillStyle = SPRINKLE_COLORS[Math.floor(w.x * 0.1) % SPRINKLE_COLORS.length];
       ctx.fillRect(-w.size, -w.size * 0.3, w.size * 2, w.size * 0.6);
       ctx.beginPath();
       ctx.arc(-w.size, 0, w.size * 0.3, 0, Math.PI * 2);
@@ -715,15 +699,25 @@ export const candyLand: ArenaPack = {
       ctx.arc(cx, cy, c.r * 0.5, 0, Math.PI * 2);
       ctx.fill();
     }
-    for (let i = 0; i < 28; i++) {
-      const x = ((i * 137 + time * 30) % (CANVAS_WIDTH + 20)) - 10;
-      const y = ((i * 211 + time * 60) % CANVAS_HEIGHT);
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.rotate(time * 1.5 + i);
-      ctx.fillStyle = WEATHER_SPRINKLE_COLORS[i % WEATHER_SPRINKLE_COLORS.length];
-      ctx.fillRect(-3, -1, 6, 2);
-      ctx.restore();
+    // Falling sprinkles: rotated 6x2 quads. Batch by colour (6 buckets) with
+    // JS-computed rotated corners — no per-particle save/translate/rotate.
+    // fillRect(-3,-1,6,2) corners in local space: (-3,-1)(3,-1)(3,1)(-3,1).
+    const nSprinkleColors = WEATHER_SPRINKLE_COLORS.length;
+    for (let bucket = 0; bucket < nSprinkleColors; bucket++) {
+      ctx.fillStyle = WEATHER_SPRINKLE_COLORS[bucket];
+      ctx.beginPath();
+      for (let i = bucket; i < 28; i += nSprinkleColors) {
+        const x = ((i * 137 + time * 30) % (CANVAS_WIDTH + 20)) - 10;
+        const y = ((i * 211 + time * 60) % CANVAS_HEIGHT);
+        const a = time * 1.5 + i;
+        const cos = Math.cos(a), sin = Math.sin(a);
+        ctx.moveTo(x + -3 * cos - -1 * sin, y + -3 * sin + -1 * cos);
+        ctx.lineTo(x + 3 * cos - -1 * sin, y + 3 * sin + -1 * cos);
+        ctx.lineTo(x + 3 * cos - 1 * sin, y + 3 * sin + 1 * cos);
+        ctx.lineTo(x + -3 * cos - 1 * sin, y + -3 * sin + 1 * cos);
+        ctx.closePath();
+      }
+      ctx.fill();
     }
     ctx.restore();
   },

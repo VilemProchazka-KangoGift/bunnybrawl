@@ -979,6 +979,80 @@
   background: rgba(255, 255, 255, 0.18);
 }
 
+.dev-menu-modal {
+  text-align: left;
+  min-width: 440px;
+  max-width: 540px;
+  /* Bounded by the menu-content gray card (min-height 660px in the 720px
+   * logical viewport). 620px leaves a ~20px buffer above and below the
+   * modal so it visually sits inside the card rather than spilling past
+   * its rounded corners. */
+  max-height: 620px;
+  overflow-y: auto;
+  /* Force white throughout — the modal sits on a dark panel and ambient
+   * styles vary between modes (e.g. `.mod-desc` is 0.6-alpha white). */
+  color: #fff;
+}
+
+.dev-menu-modal .mod-desc,
+.dev-menu-modal .dev-menu-hint {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.dev-menu-modal .mods-title,
+.dev-menu-modal .mod-name,
+.dev-menu-modal .dev-section-header {
+  color: #fff;
+}
+
+.dev-menu-hint {
+  opacity: 0.7;
+  margin: 0 0 12px;
+}
+
+.dev-section-header {
+  font-family: 'Nunito', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  color: #FFF;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  text-align: left;
+  margin: 18px 0 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.dev-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+  text-align: left;
+}
+
+.dev-row .mod-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.dev-input {
+  width: 96px;
+  padding: 6px 8px;
+  font-family: inherit;
+  font-size: 14px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  color: #FFF;
+  flex-shrink: 0;
+}
+
+.dev-input:focus {
+  outline: none;
+  border-color: rgba(255, 215, 0, 0.6);
+}
+
 .help-btn {
   position: absolute;
   bottom: 12px;

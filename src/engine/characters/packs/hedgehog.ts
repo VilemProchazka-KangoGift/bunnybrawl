@@ -1,7 +1,5 @@
-import { Howl } from '../../audio/howlShim';
 import type { CharacterPack } from '../types';
 import { fillBodyGradient } from '../../spriteShading';
-import { generateMultiSegmentTone } from '../../audio/synthesis/core';
 
 const drawSprite: CharacterPack['drawSprite'] = (ctx, cx, yOff, w, h, _state, _animFrame, _isIdleAnim, _idleT, colors) => {
   const bodyCx = cx + 2;
@@ -97,11 +95,4 @@ export const hedgehog: CharacterPack = {
   bodyEllipse: (cx, yOff, w, h) => ({ cx: cx + 2, cy: yOff + h * 0.55, rx: w * 0.34, ry: h * 0.32 }),
   noHighlight: true,
   drawSprite, drawGib,
-  createSound: () => new Howl({
-    src: [generateMultiSegmentTone([
-      { freq: 750, freqEnd: 1000, duration: 0.06, type: 'triangle' },
-      { freq: 1000, freqEnd: 620, duration: 0.1, type: 'triangle' },
-    ], 0.4)],
-    volume: 0.4,
-  }),
 };

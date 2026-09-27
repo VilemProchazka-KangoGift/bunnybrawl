@@ -9,20 +9,37 @@ import { aabbOverlap } from './physics';
 const f = Math.fround;
 import { getCharacterSplatShape } from './characters';
 
+/** Reused arrays + result envelope so checkStomps doesn't allocate fresh
+ *  arrays + a wrapping object on every fixedUpdate. Kills are rare; the
+ *  arrays stay empty most ticks. Callers consume synchronously (push into
+ *  state.killFeed, etc.) and don't store references across ticks — the
+ *  arrays are cleared at the top of the next call. */
+const _splatMarksResult: SplatMark[] = [];
+const _killFeedResult: KillFeedEntry[] = [];
+const _checkStompsResult: { splatMarks: SplatMark[]; killFeedEntries: KillFeedEntry[] } = {
+  splatMarks: _splatMarksResult,
+  killFeedEntries: _killFeedResult,
+};
+
 export function checkStomps(
   players: Player[],
   _spawnPoints: SpawnPoint[],
   timeElapsed: number,
   mods?: GameMods,
 ): { splatMarks: SplatMark[]; killFeedEntries: KillFeedEntry[] } {
-  const splatMarks: SplatMark[] = [];
-  const killFeedEntries: KillFeedEntry[] = [];
+  _splatMarksResult.length = 0;
+  _killFeedResult.length = 0;
+  const splatMarks = _splatMarksResult;
+  const killFeedEntries = _killFeedResult;
 
   // NETCODE CONTRACT: Iteration order must be deterministic across peers.
   // players[] is initialized from activePlayers at match start (same order on all peers)
   // and is never re-sorted during gameplay. Any future sort MUST include a tiebreaker on player.id.
   for (const attacker of players) {
     if (!attacker.active || attacker.state === 'splat' || attacker.state === 'respawning') continue;
+    // A hitstop-frozen attacker has a stale downward vy but isn't actually
+    // moving — don't let a motionless player's armed hitbox splat a passer-by.
+    if (attacker.hitstopTimer > 0) continue;
 
     for (const victim of players) {
       if (victim === attacker) continue;
@@ -50,7 +67,7 @@ export function checkStomps(
     }
   }
 
-  return { splatMarks, killFeedEntries };
+  return _checkStompsResult;
 }
 
 export function isStomping(attacker: Player, victim: Player): boolean {

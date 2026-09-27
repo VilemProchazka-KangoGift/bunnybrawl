@@ -133,6 +133,27 @@ registerReactiveKind('haunted_graveyard.cobweb', {
  * (dirX, dirY) (each ±1) is the diagonal direction the web fans into the body.
  * Five radial strands ~14px long + three concentric arc chords between them.
  */
+// Reused scratch for the 5 strand angles — always fully overwritten (strands=5),
+// so a module-scope array is safe and avoids a per-call allocation.
+const _cobwebAngles: number[] = [];
+
+// Cached green glow radial gradient for the grave-hand thorn. Depends only on
+// `armH` (constant thorn geometry). Drawn in local space (translated to the
+// hand's cx/baseY) so the same object renders correctly at every hand position,
+// avoiding a fresh CanvasGradient per hand per frame.
+const _graveGlowCache = new Map<number, CanvasGradient>();
+function getGraveGlow(ctx: Ctx2D, armH: number): CanvasGradient {
+  const key = Math.round(armH);
+  let g = _graveGlowCache.get(key);
+  if (!g) {
+    g = ctx.createRadialGradient(0, -armH * 0.5, 2, 0, -armH * 0.5, 25);
+    g.addColorStop(0, '#44AA44');
+    g.addColorStop(1, 'rgba(40, 100, 40, 0)');
+    _graveGlowCache.set(key, g);
+  }
+  return g;
+}
+
 function drawCobweb(
   ctx: Ctx2D,
   cornerX: number,
@@ -154,11 +175,12 @@ function drawCobweb(
 
   // Radial strands. The endpoints lean horizontally with bendX; the corner
   // anchor stays put (web is glued to the platform corner).
-  const angles: number[] = [];
+  // Strands share the corner anchor (translucent overlap there), so they stay
+  // as individual strokes to preserve the anchor blend.
   for (let i = 0; i < strands; i++) {
     const t = i / (strands - 1);
     const a = baseAngle - halfSpread + t * (halfSpread * 2);
-    angles.push(a);
+    _cobwebAngles[i] = a;
     ctx.beginPath();
     ctx.moveTo(cornerX, cornerY);
     ctx.lineTo(cornerX + Math.cos(a) * len + bendX, cornerY + Math.sin(a) * len);
@@ -166,19 +188,20 @@ function drawCobweb(
   }
 
   // Three cross-strand arc chords at increasing radii. Bend scales with radius
-  // so inner chords stay tight to the corner.
+  // so inner chords stay tight to the corner. Concentric (non-overlapping) →
+  // batch into a single stroke (each ring starts its own sub-path via moveTo).
+  ctx.beginPath();
   for (let r = 1; r <= 3; r++) {
     const radius = (r / 3.5) * len;
     const bendScale = radius / len;
-    ctx.beginPath();
     for (let i = 0; i < strands; i++) {
-      const px = cornerX + Math.cos(angles[i]) * radius + bendX * bendScale;
-      const py = cornerY + Math.sin(angles[i]) * radius;
+      const px = cornerX + Math.cos(_cobwebAngles[i]) * radius + bendX * bendScale;
+      const py = cornerY + Math.sin(_cobwebAngles[i]) * radius;
       if (i === 0) ctx.moveTo(px, py);
       else ctx.lineTo(px, py);
     }
-    ctx.stroke();
   }
+  ctx.stroke();
 
   ctx.restore();
 }
@@ -361,21 +384,6 @@ export const hauntedGraveyard: ArenaPack = {
 
   ground: {
     surfaceColor: '#3A3530',
-    surfaceThickness: 4,
-    grassBlades: {
-      color: '#2A3520',
-      spacing: 25,
-      heightRange: [5, 9],
-    },
-  },
-
-  platform: {
-    floatingBodyColor: '#3A3040',
-    floatingTopColor: '#5A4A60',
-    floatingAccentColor: undefined,
-    groundBodyColor: '#2A2530',
-    groundTopColor: '#3A3530',
-    drawMoss: false,
   },
 
   // ---- Ambient systems ----
@@ -811,13 +819,14 @@ export const hauntedGraveyard: ArenaPack = {
     ctx.arc(cx + 5, baseY - armH * 0.95, 2, 0, Math.PI * 2);
     ctx.fill();
 
-    // Green glow
+    // Green glow. Translate to the hand so the cached local-space gradient
+    // lands at the same screen position the absolute-coord version did.
     ctx.globalAlpha = fadeAlpha * 0.15;
-    const glow = ctx.createRadialGradient(cx, baseY - armH * 0.5, 2, cx, baseY - armH * 0.5, 25);
-    glow.addColorStop(0, '#44AA44');
-    glow.addColorStop(1, 'rgba(40, 100, 40, 0)');
-    ctx.fillStyle = glow;
-    ctx.fillRect(cx - 25, baseY - armH - 10, 50, armH + 20);
+    ctx.save();
+    ctx.translate(cx, baseY);
+    ctx.fillStyle = getGraveGlow(ctx, armH);
+    ctx.fillRect(-25, -armH - 10, 50, armH + 20);
+    ctx.restore();
   }),
 
   // ---- Gameplay modifiers ----

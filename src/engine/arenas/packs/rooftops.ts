@@ -6,6 +6,23 @@ import { getSlowDevice } from '../../perfFlags';
 import { createThornRenderer, createSpringRenderer } from '../../themes/drawPrimitives';
 import { isLivePlayer } from '../../themes/utils';
 
+// Cached rust gradient for thorn nails. Depends only on nail height (thorn
+// geometry is constant), and is defined in local gradient space (0,0)→(0,-maxNh)
+// so the same object renders correctly under each nail's translate/rotate.
+// Avoids allocating a fresh CanvasGradient per thorn per frame.
+const _rustGrdCache = new Map<number, CanvasGradient>();
+function getRustGrd(ctx: Ctx2D, maxNh: number): CanvasGradient {
+  const key = Math.round(maxNh);
+  let g = _rustGrdCache.get(key);
+  if (!g) {
+    g = ctx.createLinearGradient(0, 0, 0, -maxNh);
+    g.addColorStop(0, '#7A5030');
+    g.addColorStop(1, '#C07040');
+    _rustGrdCache.set(key, g);
+  }
+  return g;
+}
+
 const CHIMNEYS = [
   { x: 144, y: 440 },
   { x: 264, y: 444 },
@@ -194,10 +211,9 @@ function drawHallwayPlatformFg(ctx: Ctx2D, platform: Platform): void {
   ctx.fillRect(platform.x, bodyTop + bodyH - 2, platform.width, 2);
 }
 
-// --- Prop renderers (chimney / AC / HVAC / balcony) — straight ports of the
-// previous customDraw branches. These render the full prop body; no 3D cap
-// framework because the props have their own silhouette (brick stack, AC fan
-// grill, vent slats, awning).
+// --- Prop renderers (chimney / AC / HVAC / balcony). Each renders the full
+// prop body; no 3D cap framework because the props have their own silhouette
+// (brick stack, AC fan grill, vent slats, awning).
 function drawChimneyBg(ctx: Ctx2D, platform: Platform): void {
   const rng = mulberry32(seedFor(platform.x, platform.y));
   const cF = capFrontY(platform);
@@ -660,18 +676,7 @@ export const rooftops: ArenaPack = {
   hills: [],
 
   ground: {
-    surfaceColor: '#5A5060',
-    surfaceThickness: 4,
-  },
-
-  platform: {
-    floatingBodyColor: '#4A4050',
-    floatingTopColor: '#6A5A6A',
-    floatingAccentColor: undefined,
-    groundBodyColor: '#3A3040',
-    groundTopColor: '#5A5060',
-    drawMoss: false,
-  },
+    surfaceColor: '#5A5060',  },
 
   // ---- Ambient systems ----
   clouds: {
@@ -1195,9 +1200,7 @@ export const rooftops: ArenaPack = {
       { sx: 0.85, sh: 0.55, tilt: 0.06 },
     ];
     const maxNh = height * 1.0;
-    const rustGrd = ctx.createLinearGradient(0, 0, 0, -maxNh);
-    rustGrd.addColorStop(0, '#7A5030');
-    rustGrd.addColorStop(1, '#C07040');
+    const rustGrd = getRustGrd(ctx, maxNh);
     for (const n of nails) {
       const nx = x + width * n.sx;
       const nh = height * n.sh;

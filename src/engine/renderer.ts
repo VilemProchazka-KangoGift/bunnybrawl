@@ -4,14 +4,14 @@ import { aabbOverlap } from './physics';
 import {
   CANVAS_WIDTH, CANVAS_HEIGHT,
   SCREEN_SHAKE_INTENSITY,
-  SHOCKWAVE_DURATION, SCREEN_FLASH_DURATION,
+  SCREEN_FLASH_DURATION,
   HITSTOP_DURATION, HITSTOP_ZOOM,
 } from './constants';
 import {
-  drawHill, drawPlatformMoss,
+  drawHill,
   capFrontY, capBackY, skewPx,
 } from './themes/drawPrimitives';
-import { hexToRGB, hexToHSL, blendRgb } from './fastMath';
+import { hexToHSL } from './fastMath';
 import { debugFlags } from './debugFlags';
 import { drawNavDebugOverlay } from './navDebugOverlay';
 import type { BotNavDebugState } from './navDebugOverlay';
@@ -22,16 +22,21 @@ import { drawFpsCounter } from './fpsCounter';
 // Extracted rendering modules
 import {
   drawCarrot, drawSpringMushroom, drawThorn,
-  drawWeather, drawParticles, drawGibs, drawGibShape, drawConfetti, drawFireworks, drawWildlife, drawSpringTrail,
-  drawHazardZone, drawGhost, drawLavaRock, drawZeroGZone, drawCurrentZone, drawGeyser, drawBouncyPlatformOverlay, drawPigeonFlock, drawScatterFlock,
+  drawWeather, drawParticles, drawGibShape, drawFireworks, drawWildlife, drawSpringTrail,
+  drawHazardZone, drawZeroGZone, drawCurrentZone, drawGeyser, drawBouncyPlatformOverlay,
   drawDayNightCycle, computeNightIntensity, fireflyPosition, FIREFLY_COUNT,
-  drawHUD, drawCountdown, drawConnectionQuality, drawComboPopups, invalidateHudCache, isHudDirty,
+  drawHUD, drawCountdown, drawConnectionQuality, invalidateHudCache, isHudDirty,
   drawPlayer,
   warmSpriteCacheForCharacters,
   clearRenderingCaches,
   clearArenaCaches,
-  drawSurfaceDecals, drawRipples,
 } from './rendering';
+import { getEntitiesForLayer } from './entities/registry';
+import { fogParticlesEntity } from './entities/fogParticles';
+import { ghostsEntity } from './entities/ghosts';
+import { pollenParticlesEntity } from './entities/pollenParticles';
+import { comboPopupsEntity } from './entities/comboPopups';
+import type { EntityRenderCtx } from './entities/types';
 import { setSpriteCacheScale } from './rendering/players';
 import { setHudScale, setHudLanguage, warmHudFonts } from './rendering/hud';
 import { applyRenderScaleToCanvas, getRenderScale } from './renderScale';
@@ -63,6 +68,21 @@ function getCachedHsl(hex: string): { h: number; s: number; l: number } {
   return v;
 }
 const _invincibleHsl = getCachedHsl('#88BBFF');
+
+/** Memoized `hsl(h,s%,l%)` strings for afterimage hue-shifted trails. Keyed by
+ *  the rounded (h,s,l) integers that fully determine the string, so the hot
+ *  loop avoids a template-literal allocation per afterimage per frame. Bounded
+ *  by (character colors × discrete hue shifts) — a few hundred entries max. */
+const _afterimageHslStrings = new Map<number, string>();
+function afterimageHslString(rH: number, rS: number, rL: number): string {
+  const key = rH * 65536 + rS * 256 + rL;
+  let s = _afterimageHslStrings.get(key);
+  if (s === undefined) {
+    s = `hsl(${rH},${rS}%,${rL}%)`;
+    _afterimageHslStrings.set(key, s);
+  }
+  return s;
+}
 
 /** Warm-orange tint used for the per-carrot glow emitter. Frozen + shared
  *  across all carrots — the renderer never mutates it. */
@@ -195,7 +215,6 @@ export interface RenderDiagnostics {
   hazardZones: boolean;
   effectZones: boolean;
   bouncyPlatforms: boolean;
-  pigeons: boolean;
   lavaRocks: boolean;
   springs: boolean;
   thorns: boolean;
@@ -269,7 +288,7 @@ function addIsoPlatformPath(ctx: Ctx2D, plat: Platform): void {
 function freshDiag(): RenderDiagnostics {
   return {
     clouds: false, weather: false, wildlife: false, animatedBg: false,
-    hazardZones: false, effectZones: false, bouncyPlatforms: false, pigeons: false,
+    hazardZones: false, effectZones: false, bouncyPlatforms: false,
     lavaRocks: false, springs: false, thorns: false, carrots: false,
     gibs: false, confetti: false, shockwaves: false, afterimages: false,
     fog: false, ambient: false, fireworks: false, dayNight: false,
@@ -289,7 +308,7 @@ function setQuantizedOpacity(el: HTMLElement, target: number, last: number): num
 
 function resetDiag(d: RenderDiagnostics): void {
   d.clouds = false; d.weather = false; d.wildlife = false; d.animatedBg = false;
-  d.hazardZones = false; d.effectZones = false; d.bouncyPlatforms = false; d.pigeons = false;
+  d.hazardZones = false; d.effectZones = false; d.bouncyPlatforms = false;
   d.lavaRocks = false; d.springs = false; d.thorns = false; d.carrots = false;
   d.gibs = false; d.confetti = false; d.shockwaves = false; d.afterimages = false;
   d.fog = false; d.ambient = false; d.fireworks = false; d.dayNight = false;
@@ -365,9 +384,16 @@ export class Renderer implements IRenderer {
   private theme: ThemeConfig;
   private frameTime = 0; // cached performance.now() per frame
 
-  private _fogRGB: { r: number; g: number; b: number } | null = null;
-  private _ambientRGBs: { r: number; g: number; b: number }[] | null = null;
-  private _ambientRGBStrings: string[] | null = null;
+  /** Reused entity-draw ctx — entities MUST NOT mutate. Fields overwritten
+   *  per frame at the top of `renderFrame`. */
+  private readonly _entityRenderCtx: EntityRenderCtx = {
+    state: null as unknown as MatchState,
+    arena: null as unknown as Arena,
+    theme: null as unknown as ThemeConfig,
+    time: 0,
+    cosmeticLead: 0,
+    frameTime: 0,
+  };
 
   private mirrored = false;
   private originalArena: Arena | null = null;  // un-mirrored arena for theme draw calls
@@ -557,9 +583,6 @@ export class Renderer implements IRenderer {
    *  includes a bubble-helmet bit, so cross-arena sprite reuse is safe). */
   setTheme(theme: ThemeConfig): void {
     this.theme = theme;
-    this._fogRGB = null;
-    this._ambientRGBs = null;
-    this._ambientRGBStrings = null;
     this.initClouds();
     clearArenaCaches();
     invalidateHudCache();
@@ -622,30 +645,9 @@ export class Renderer implements IRenderer {
 
     if (this.mirrored) { ctx.restore(); }
 
-    // Platforms (use mirrored arena data, no canvas transform needed)
+    // Platforms (use mirrored arena data, no canvas transform needed).
     for (const plat of arena.platforms) {
-      this.drawPlatform(ctx, plat, plat.y >= 650);
-    }
-
-    // Ground-top grass blades + surface line — packs that own drawPlatform render their own ground cap.
-    if (!this.theme.drawPlatform) {
-      const ground = arena.platforms[0];
-      ctx.fillStyle = theme.ground.surfaceColor;
-      ctx.fillRect(ground.x, ground.y, ground.width, theme.ground.surfaceThickness);
-
-      // Grass blades (if enabled by theme)
-      if (theme.ground.grassBlades) {
-        const gb = theme.ground.grassBlades;
-        ctx.strokeStyle = gb.color;
-        ctx.lineWidth = 2;
-        for (let x = 10; x < CANVAS_WIDTH; x += gb.spacing + Math.random() * (gb.spacing * 0.67)) {
-          const h = gb.heightRange[0] + Math.random() * (gb.heightRange[1] - gb.heightRange[0]);
-          ctx.beginPath();
-          ctx.moveTo(x, ground.y);
-          ctx.lineTo(x - 3, ground.y - h);
-          ctx.stroke();
-        }
-      }
+      theme.drawPlatform(ctx, plat, plat.y >= 650);
     }
 
     // Theme-specific background nature (pass original arena, canvas transform handles mirroring)
@@ -1040,17 +1042,19 @@ export class Renderer implements IRenderer {
   }
 
 
-  /** Mirror-aware draw helper. Wraps `fn` in a save/scale(-1,1)/translate when
-   *  the renderer is in mirrored mode; otherwise calls `fn` directly. Used by
-   *  the per-frame animated callbacks that want their content mirrored alongside
-   *  the rest of the scene. */
-  private withMirror(ctx: Ctx2D, fn: () => void): void {
-    if (!this.mirrored) { fn(); return; }
+  /** Mirror-aware draw helper, begin/end form. Returns true if a transform
+   *  was applied — callers pass that flag to `_endMirror` to balance the
+   *  save/restore. The split avoids the per-call closure that a `withMirror(fn)`
+   *  wrapper would allocate at 7 call sites per renderFrame. */
+  private _beginMirror(ctx: Ctx2D): boolean {
+    if (!this.mirrored) return false;
     ctx.save();
     ctx.scale(-1, 1);
     ctx.translate(-CANVAS_WIDTH, 0);
-    fn();
-    ctx.restore();
+    return true;
+  }
+  private _endMirror(ctx: Ctx2D, applied: boolean): void {
+    if (applied) ctx.restore();
   }
 
   // ---- Clouds ----
@@ -1079,50 +1083,6 @@ export class Renderer implements IRenderer {
     ctx.fill();
   }
 
-
-  private drawPlatform(ctx: Ctx2D, platform: Platform, isGround: boolean): void {
-    if (this.theme.drawPlatform) {
-      this.theme.drawPlatform(ctx, platform, isGround);
-      return;
-    }
-
-    const tp = this.theme.platform;
-    if (tp.customDraw) {
-      tp.customDraw(ctx, platform.x, platform.y, platform.width, platform.height, isGround);
-      return;
-    }
-
-    const { x, y, width: w, height: h } = platform;
-    if (isGround) {
-      ctx.fillStyle = tp.groundBodyColor;
-      ctx.fillRect(x, y + 4, w, h - 4);
-      ctx.fillStyle = tp.groundTopColor;
-      ctx.fillRect(x, y, w, 8);
-      const spotColor = this.blendColor(tp.groundBodyColor, '#FFFFFF', 0.15);
-      ctx.fillStyle = spotColor;
-      for (let dx = 10; dx < w; dx += 30 + Math.random() * 20) {
-        ctx.fillRect(x + dx, y + 15 + Math.random() * 20, 4, 3);
-      }
-    } else {
-      ctx.fillStyle = tp.floatingBodyColor;
-      ctx.fillRect(x, y + 4, w, h - 4);
-      ctx.fillStyle = tp.floatingTopColor;
-      ctx.fillRect(x, y, w, 6);
-      if (tp.floatingAccentColor) {
-        ctx.fillStyle = tp.floatingAccentColor;
-        ctx.fillRect(x, y, w, 3);
-      }
-      if (tp.drawMoss) {
-        drawPlatformMoss(ctx, x, y, h);
-        drawPlatformMoss(ctx, x + w, y, h);
-      }
-    }
-  }
-
-  private blendColor(hex: string, target: string, amount: number): string {
-    const c = blendRgb(hexToRGB(hex), hexToRGB(target), amount);
-    return `rgb(${c.r},${c.g},${c.b})`;
-  }
 
   /** Bake gibs onto the bg canvas. Marks bgNight dirty so the cross-fade
    *  variant picks them up at the next renderFrame (single re-bake even when
@@ -1175,7 +1135,8 @@ export class Renderer implements IRenderer {
     reactive?: import('./gameLoop/cosmetics/reactiveDecorations').ReactiveRenderArg,
     wildlife?: import('./gameLoop/cosmetics/wildlife').WildlifeRenderArg,
   ): void {
-    perfTrace.measure('renderFrame', () => {
+    const tRender = perfTrace.begin('renderFrame');
+    try {
       const ctx = this.fgCtx;
       ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
@@ -1185,6 +1146,15 @@ export class Renderer implements IRenderer {
 
       // Cache time once per frame
       this.frameTime = performance.now();
+
+      // Refresh entity render ctx — fields read by EntityKind.draw across
+      // every layer dispatch below.
+      this._entityRenderCtx.state = matchState;
+      this._entityRenderCtx.arena = arena;
+      this._entityRenderCtx.theme = this.theme;
+      this._entityRenderCtx.time = matchState.timeElapsed;
+      this._entityRenderCtx.cosmeticLead = cosmeticLead;
+      this._entityRenderCtx.frameTime = this.frameTime;
       this.lighting.ambient.beginFrame(this.theme, matchState.dayPhase);
       this._synthesizeDynamicLights(matchState);
       // Tick derived from timeElapsed (60Hz fixed-step). On guests, timeElapsed
@@ -1225,13 +1195,13 @@ export class Renderer implements IRenderer {
       // objects) compose under weather and clouds.
       if (this.theme.drawAnimatedBackground) {
         const thA = this.originalArena ?? arena;
-        this.withMirror(ctx, () => this.theme.drawAnimatedBackground!(ctx, thA, matchState.timeElapsed, matchState.dayPhase, matchState));
+        { const m = this._beginMirror(ctx); this.theme.drawAnimatedBackground!(ctx, thA, matchState.timeElapsed, matchState.dayPhase, matchState); this._endMirror(ctx, m); }
         d.animatedBg = true;
       }
       // Wildlife — animBackground layer (e.g. treetops squirrels). Same slot
       // the legacy `drawAnimatedBackground` wildlife branch occupied.
       if (wildlife && wildlife.animBackground.length > 0) {
-        this.withMirror(ctx, () => this._drawWildlifeLayer(ctx, wildlife.animBackground, matchState));
+        { const m = this._beginMirror(ctx); this._drawWildlifeLayer(ctx, wildlife.animBackground, matchState); this._endMirror(ctx, m); }
       }
 
       const now = this.frameTime / 1000;
@@ -1291,28 +1261,15 @@ export class Renderer implements IRenderer {
 
       perfTrace.end('render.bg', bgStart);
 
-      // Surface decals (cracks, scuffs) — drawn between platforms and entities so
-      // platform caps occlude them only on edges (decal y is platform top + small fudge).
-      drawSurfaceDecals(ctx, matchState);
-
+      // Entity-driven 'entities' layer — surface decals must draw before
+      // scatter flocks / lava rocks so platform caps occlude only the decals.
+      // Order follows `entities/index.ts > registerBuiltinEntities`.
       const entStart = perfTrace.begin('render.entities');
-      // Pigeon flocks
-      for (const flock of matchState.pigeonFlocks) {
-        drawPigeonFlock(ctx, flock, matchState.timeElapsed, cosmeticLead);
-        d.pigeons = true;
+      const stateRec = matchState as unknown as Record<string, unknown[]>;
+      for (const e of getEntitiesForLayer('entities')) {
+        e.draw!(ctx, stateRec[e.id], this._entityRenderCtx);
       }
-
-      // Species-aware scatter flocks (birds, bats, crows)
-      for (const flock of matchState.scatterFlocks) {
-        drawScatterFlock(ctx, flock, matchState.timeElapsed, cosmeticLead);
-      }
-
-      // Lava rocks (falling hazards)
-      for (const rock of matchState.lavaRocks) {
-        if (!rock.active) continue;
-        drawLavaRock(ctx, rock, this.theme);
-        d.lavaRocks = true;
-      }
+      if (matchState.lavaRocks.length > 0) d.lavaRocks = true;
 
       // Springs and thorns (behind players)
       for (const spring of matchState.springs) { drawSpringMushroom(ctx, spring, this.theme); d.springs = true; }
@@ -1327,27 +1284,12 @@ export class Renderer implements IRenderer {
       const partStart = perfTrace.begin('render.particles');
       drawParticles(ctx, particles, cosmeticLead);
 
-      if (matchState.gibs.length > 0) { drawGibs(ctx, matchState.gibs, cosmeticLead); d.gibs = true; }
-      if (matchState.confetti.length > 0) { drawConfetti(ctx, matchState.confetti, cosmeticLead); d.confetti = true; }
-
-      // Stomp shockwaves (e) -- after particles, before players
-      if (matchState.shockwaves && matchState.shockwaves.length > 0) {
-        d.shockwaves = true;
-        ctx.save();
-        ctx.strokeStyle = '#FFFFFF';
-        for (const sw of matchState.shockwaves) {
-          const progress = 1 - sw.life / SHOCKWAVE_DURATION;
-          ctx.globalAlpha = sw.life / SHOCKWAVE_DURATION;
-          ctx.lineWidth = Math.max(1, 4 * (1 - progress));
-          ctx.beginPath();
-          ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
-          ctx.stroke();
-        }
-        ctx.restore();
+      for (const e of getEntitiesForLayer('particles')) {
+        e.draw!(ctx, stateRec[e.id], this._entityRenderCtx);
       }
-
-      // Liquid impact ripples (env-ripples)
-      drawRipples(ctx, matchState);
+      if (matchState.gibs.length > 0) d.gibs = true;
+      if (matchState.confetti.length > 0) d.confetti = true;
+      if (matchState.shockwaves && matchState.shockwaves.length > 0) d.shockwaves = true;
       perfTrace.end('render.particles', partStart);
 
       const aiStart = perfTrace.begin('render.afterimages');
@@ -1364,14 +1306,15 @@ export class Renderer implements IRenderer {
             const baseHsl = player.invincibleTimer > 0
               ? _invincibleHsl
               : getCachedHsl(player.character.color);
-            const slSuffix = `,${Math.round(baseHsl.s * 100)}%,${Math.round(baseHsl.l * 100)}%)`;
+            const rS = Math.round(baseHsl.s * 100);
+            const rL = Math.round(baseHsl.l * 100);
             const total = afterimages.length;
             for (let i = 0; i < total; i++) {
               const img = afterimages[i];
               // Oldest (i=0) shifted -18°, newest (i=total-1) at base hue.
               const shift = ((i / Math.max(1, total - 1)) - 1) * 18;
               const h = (baseHsl.h + shift + 360) % 360;
-              ctx.fillStyle = `hsl(${Math.round(h)}${slSuffix}`;
+              ctx.fillStyle = afterimageHslString(Math.round(h), rS, rL);
               ctx.globalAlpha = img.alpha;
               ctx.beginPath();
               ctx.ellipse(
@@ -1487,36 +1430,15 @@ export class Renderer implements IRenderer {
 
       const fgStart = perfTrace.begin('render.fg-nature');
       // Ground fog (o) -- after players, before foreground nature
-      const fogCfg = this.theme.fog;
-      if (fogCfg && matchState.fogParticles && matchState.fogParticles.length > 0) {
+      if (matchState.fogParticles && matchState.fogParticles.length > 0 && this.theme.fog) {
         d.fog = true;
-        if (!this._fogRGB) {
-          this._fogRGB = hexToRGB(fogCfg.color);
-        }
-        const { r, g, b } = this._fogRGB;
-        const opacity = fogCfg.opacity ?? 0.3;
-        ctx.save();
-        ctx.fillStyle = `rgb(${r},${g},${b})`;
-        for (const fp of matchState.fogParticles) {
-          ctx.globalAlpha = fp.alpha * opacity;
-          ctx.beginPath();
-          ctx.ellipse(fp.x, fp.y, fogCfg.sizeX, fogCfg.sizeY, 0, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.restore();
+        fogParticlesEntity.draw!(ctx, matchState.fogParticles, this._entityRenderCtx);
       }
 
       // Ground critters (snails, rats, crabs…) — drawn BEFORE fg-nature so
       // grass tufts / bushes can occlude them when they walk behind foliage.
-      // Two paths: the legacy `theme.drawGroundCritters` callback (for any
-      // arena pack still owning its critter state) and the WildlifeSystem
-      // (post-migration packs).
-      if (this.theme.drawGroundCritters) {
-        const thA = this.originalArena ?? arena;
-        this.withMirror(ctx, () => this.theme.drawGroundCritters!(ctx, thA, matchState.timeElapsed, matchState.dayPhase, matchState));
-      }
       if (wildlife && wildlife.groundCritter.length > 0) {
-        this.withMirror(ctx, () => this._drawWildlifeLayer(ctx, wildlife.groundCritter, matchState));
+        { const m = this._beginMirror(ctx); this._drawWildlifeLayer(ctx, wildlife.groundCritter, matchState); this._endMirror(ctx, m); }
       }
 
       // Mirror is baked into the cache so blit at identity transform; explicit
@@ -1530,40 +1452,16 @@ export class Renderer implements IRenderer {
 
       // Reactive decorations — pre-player layer.
       if (reactive) {
-        this.withMirror(ctx, () => this._drawReactiveLayer(ctx, reactive.prePlayer, reactive.windPhase, matchState));
+        { const m = this._beginMirror(ctx); this._drawReactiveLayer(ctx, reactive.prePlayer, reactive.windPhase, matchState); this._endMirror(ctx, m); }
       }
 
       // Ghosts (drawn over foreground, semi-transparent)
-      for (const ghost of matchState.ghosts) {
-        drawGhost(ctx, ghost, this.theme, matchState.timeElapsed);
-      }
+      ghostsEntity.draw!(ctx, matchState.ghosts, this._entityRenderCtx);
 
       // Ambient particles (pollen / snow drift / sparkles)
       if (!slow && matchState.pollenParticles && matchState.pollenParticles.length > 0) {
         d.ambient = true;
-        const ambCfg = this.theme.ambientParticles;
-        if (!this._ambientRGBs) {
-          this._ambientRGBs = ambCfg.colors.map(hexToRGB);
-        }
-        if (!this._ambientRGBStrings || this._ambientRGBStrings.length !== this._ambientRGBs.length) {
-          this._ambientRGBStrings = this._ambientRGBs.map(c => `rgb(${c.r},${c.g},${c.b})`);
-        }
-        const colorStrings = this._ambientRGBStrings;
-        const hasTwoColors = colorStrings.length > 1;
-        ctx.save();
-        let lastCi = -1;
-        for (const pp of matchState.pollenParticles) {
-          const ci = pp.size > 2 ? 0 : (hasTwoColors ? 1 : 0);
-          if (ci !== lastCi) {
-            ctx.fillStyle = colorStrings[ci];
-            lastCi = ci;
-          }
-          ctx.globalAlpha = pp.alpha * 0.7;
-          ctx.beginPath();
-          ctx.arc(pp.x, pp.y, pp.size, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.restore();
+        pollenParticlesEntity.draw!(ctx, matchState.pollenParticles, this._entityRenderCtx);
       }
 
       // Fireworks when match is over
@@ -1580,12 +1478,12 @@ export class Renderer implements IRenderer {
 
       if (this.theme.drawAnimatedForeground) {
         const thA = this.originalArena ?? arena;
-        this.withMirror(ctx, () => this.theme.drawAnimatedForeground!(ctx, thA, matchState.timeElapsed, matchState.dayPhase, matchState));
+        { const m = this._beginMirror(ctx); this.theme.drawAnimatedForeground!(ctx, thA, matchState.timeElapsed, matchState.dayPhase, matchState); this._endMirror(ctx, m); }
       }
 
       // Reactive decorations — post-player layer.
       if (reactive) {
-        this.withMirror(ctx, () => this._drawReactiveLayer(ctx, reactive.postPlayer, reactive.windPhase, matchState));
+        { const m = this._beginMirror(ctx); this._drawReactiveLayer(ctx, reactive.postPlayer, reactive.windPhase, matchState); this._endMirror(ctx, m); }
       }
 
       if (!slow && this.theme.drawSceneTint) {
@@ -1647,7 +1545,9 @@ export class Renderer implements IRenderer {
         }
       }
       perfTrace.end('render.overlay', overlayStart);
-    });
+    } finally {
+      perfTrace.end('renderFrame', tRender);
+    }
   }
 
   /**
@@ -1704,7 +1604,7 @@ export class Renderer implements IRenderer {
     }
 
     // Combo popups float over the field but under the HUD pill, so draw before drawHUD.
-    drawComboPopups(ctx, matchState);
+    comboPopupsEntity.draw!(ctx, matchState.comboPopups, this._entityRenderCtx);
 
     drawHUD(ctx, matchState, this.frameTime, this._playerNames, this._timeLimit, hudDirty);
 

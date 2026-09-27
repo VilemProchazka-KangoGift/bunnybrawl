@@ -19,8 +19,14 @@ import { Renderer } from '../renderer';
 import { getArena, getTheme } from '../arenas/operations';
 import { registerBuiltinArenas } from '../arenas/builtin';
 import { registerBuiltinCharacters } from '../characters/builtin';
+import { registerBuiltinEntities, getEntities } from '../entities';
 import { CHARACTERS, BOT_CHARACTERS } from '../characters/defaults';
 import { setHudLanguage } from '../rendering/hud';
+import { setLightingEnabled } from '../lighting';
+import { setBrightness } from '../lighting/brightness';
+import { setPhotosensitivity } from '../lighting/photosensitivity';
+import { setPerfTier } from '../lighting/perfTier';
+import { setSlowDevice } from '../perfFlags';
 import { RemoteInput } from '../input/RemoteInput';
 import { isBotSlot } from '../types';
 import { FIXED_TIMESTEP, MAX_FRAME_TIME, SLOW_MO_FACTOR } from '../constants';
@@ -31,12 +37,15 @@ import type {
   WorkerEngineEventMsg, WorkerEngineStateMirrorMsg,
   WorkerNetSnapshotMsg,
 } from './messages';
-import type { PlayerSlot, BotSlot, CharacterSlot, InputState, MatchPhase } from '../types';
+import type { PlayerSlot, BotSlot, CharacterSlot, InputState, MatchPhase, MatchState } from '../types';
 import { readSlotInput } from './sabInput';
 import { takeAuthSnapshot, encodeSnapshot, decodeSnapshot, createEmptySnapshot } from '../net/snapshot';
 import type { AuthSnapshot } from '../net/snapshot';
 import { EntityInterpolation, applySnapshotToState } from '../net/interpolation';
 import type { Simulator } from '../simulator/Simulator';
+import { perfTrace } from '../perfTrace';
+import { dumpSamples as dumpFpsSamples, resetFpsCounter, sampleFps } from '../fpsCounter';
+import type { WorkerPerfStatsMsg } from './messages';
 
 const ctxScope = self as DedicatedWorkerGlobalScope;
 
@@ -54,12 +63,29 @@ let inputSabView: Int32Array | null = null;
 let inputSabSlots: PlayerSlot[] = [];
 const inputSabScratch: InputState[] = [];
 let rafId = 0;
+/** Set true when main tells us the host tab is hidden (`host:engineVisibility`).
+ *  A hidden worker's `requestAnimationFrame` (tied to a hidden OffscreenCanvas
+ *  presentation) throttles to ~0Hz, which stops `fixedUpdate` and the net
+ *  snapshot emit — freezing every connected guest. While hidden we drive the
+ *  loop from `setTimeout` instead (browsers throttle a hidden worker's
+ *  setTimeout to ~1Hz, but that keeps the sim + snapshots alive vs 0Hz). */
+let workerHidden = false;
+/** The setTimeout handle used while `workerHidden`. Mutually exclusive with
+ *  `rafId` — `scheduleNextTick()` picks exactly one driver. */
+let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
 let running = false;
 let paused = false;
 let accumulator = 0;
 let lastTime = 0;
 let lastMirrorAt = 0;
-const STATE_MIRROR_INTERVAL_MS = 200;  // 5Hz
+const STATE_MIRROR_INTERVAL_MS = 1000;  // 1Hz
+
+/** Perf-stats flush schedule (mirrors renderWorker.ts's renderer-only
+ *  perfStats cadence). Posted as `worker:perfStats` so EngineWorkerProxy
+ *  can expose the worker's fpsCounter / perfTrace state to the bench. */
+let lastPerfFlushAt = 0;
+const PERF_FLUSH_INTERVAL_MS = 1000;
+const PERF_HISTOGRAM_STUB: number[] = [];
 
 /** Phase 2 net-mode flag. 'off' = local-only (Phase 1 default); 'host' =
  *  encode + emit snapshots per fixedUpdate tick; 'guest' = decode + apply
@@ -77,8 +103,17 @@ let guestPool: AuthSnapshot[] = [];
 let guestPoolIdx = 0;
 
 export function setNetMode(mode: NetMode, _delayFrames = 0): void {
+  const wasHost = netMode === 'host';
   netMode = mode;
   hostFrame = 0;
+  // If we become a host while already hidden-and-rAF-parked, the throttled rAF
+  // may never fire to re-evaluate the driver — re-arm so scheduleNextTick picks
+  // the setTimeout fallback and the host keeps feeding guests while backgrounded.
+  if (running && workerHidden && mode === 'host' && !wasHost) {
+    if (rafId) { ctxScope.cancelAnimationFrame(rafId); rafId = 0; }
+    if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
+    scheduleNextTick();
+  }
   // _delayFrames is consumed by EntityInterpolation's adaptive delay
   // tracker; the constructor doesn't take it currently. We accept it
   // here for the wire-level contract (HostNetSetModeMsg) and consume
@@ -130,6 +165,7 @@ function postEvent(ev: EventBody): void {
 export function initEngine(msg: HostInitEngineMsg): void {
   registerBuiltinArenas();
   registerBuiltinCharacters();
+  registerBuiltinEntities();
   // Re-populate slot → CharacterDef mappings inside the worker. Main owns
   // the lobby UI that mutates these maps; without this rebuild the worker
   // would throw "No character assigned to bot slot Bx" inside
@@ -146,6 +182,15 @@ export function initEngine(msg: HostInitEngineMsg): void {
   if (msg.navDebugEnabled) { debugFlags.navDebugAllowed = true; debugFlags.navDebugEnabled = true; }
   if (msg.netDebugEnabled) { debugFlags.netDebugAllowed = true; debugFlags.netDebugEnabled = true; }
   if (msg.fpsEnabled)      { debugFlags.fpsAllowed = true;      debugFlags.fpsEnabled = true; }
+  // Main-only lighting/perf emitters — see HostInitEngineMsg. Apply BEFORE
+  // constructing the Renderer (and its first renderBackground) so the first
+  // frame honors the user's accessibility/perf settings instead of the
+  // worker's compile-time defaults.
+  if (msg.lightingEnabled !== undefined) setLightingEnabled(msg.lightingEnabled);
+  if (msg.brightness !== undefined) setBrightness(msg.brightness);
+  if (msg.photosensitivity !== undefined) setPhotosensitivity(msg.photosensitivity);
+  if (msg.perfTier !== undefined) setPerfTier(msg.perfTier);
+  if (msg.slowDevice !== undefined) setSlowDevice(msg.slowDevice);
   setHudLanguage(msg.language);
 
   const arena = getArena(msg.arenaId);
@@ -229,15 +274,73 @@ export function initEngine(msg: HostInitEngineMsg): void {
   running = true;
   paused = false;
   lastTime = performance.now();
-  rafId = ctxScope.requestAnimationFrame(driveTick);
+  // Route `host:engineVisibility` to the sim driver (see `onEngineMessage`).
+  // Idempotent: addEventListener dedupes the stable handler ref if initEngine
+  // ever runs twice on one worker.
+  ctxScope.addEventListener('message', onEngineMessage);
+  scheduleNextTick();
 }
+
+/** Schedule the next `driveTick`, picking the driver by visibility. Only
+ *  ever schedules ONE driver (rAF when visible, setTimeout when hidden) and
+ *  clears the handle of the other so `stopEngine`/the visibility switch never
+ *  cancel a stale id. Assumes no driver is currently pending — callers reach
+ *  here either from the end of a just-fired `driveTick`, from `initEngine`,
+ *  or from `setEngineVisibility` after cancelling both handles. */
+function scheduleNextTick(): void {
+  // The hidden-tab setTimeout fallback exists to keep a network HOST feeding its
+  // guests while backgrounded. For local (offline) and guest play, let rAF
+  // throttle to ~0Hz as normal — otherwise a local sim-worker match would keep
+  // advancing (timer, kills) in the background, diverging from main-thread play.
+  if (workerHidden && netMode === 'host') {
+    rafId = 0;
+    fallbackTimer = setTimeout(() => {
+      fallbackTimer = null;
+      driveTick(performance.now());
+    }, 1000 / 60);
+  } else {
+    fallbackTimer = null;
+    rafId = ctxScope.requestAnimationFrame(driveTick);
+  }
+}
+
+/** Handle `host:engineVisibility`. Flip the driver immediately so the switch
+ *  takes effect this frame instead of waiting for a throttled rAF that may
+ *  never fire (the whole point — a hidden worker's rAF is at ~0Hz). */
+export function setEngineVisibility(hidden: boolean): void {
+  if (hidden === workerHidden) return;
+  workerHidden = hidden;
+  // No driver is pending before init / after stop — just record the state so
+  // `initEngine`'s first `scheduleNextTick` honors it.
+  if (!running) return;
+  if (rafId) { ctxScope.cancelAnimationFrame(rafId); rafId = 0; }
+  if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
+  scheduleNextTick();
+}
+
+/** The worker's message dispatch lives in `renderWorker.ts` (an if-chain that
+ *  silently ignores unknown types). `host:engineVisibility` is routed here via
+ *  this dedicated listener — installed in `initEngine`, removed in `stopEngine`
+ *  — so the visibility signal reaches the sim driver without editing the
+ *  renderWorker dispatch. Every other message type falls through to
+ *  renderWorker's handler unchanged. */
+const onEngineMessage = (e: MessageEvent): void => {
+  const data = e.data as { type?: string; hidden?: boolean } | null;
+  if (data && data.type === 'host:engineVisibility') {
+    setEngineVisibility(!!data.hidden);
+  }
+};
 
 function driveTick(currentTime: number): void {
   if (!running || !gameLoop || !renderer) return;
+  // GameLoop.loop() owns the sampleFps call in main-thread mode; we drive
+  // the worker's loop manually, so feed fpsCounter directly. No-op when
+  // `debugFlags.fpsEnabled` is false (the perf bench sets it via the URL).
+  sampleFps(currentTime);
   if (paused) {
     lastTime = currentTime;
     renderer.renderFrame(gameLoop.getState(), gameLoop.getArena(), [], 0);
-    rafId = ctxScope.requestAnimationFrame(driveTick);
+    scheduleNextTick();
     return;
   }
   let frameTime = (currentTime - lastTime) / 1000;
@@ -294,18 +397,113 @@ function driveTick(currentTime: number): void {
   gameLoop.particleSystem.bakeToRenderer(renderer);
   gameLoop.renderFrame(frameTime);
 
-  // Periodic state mirror back to main for E2E.
+  // Periodic state mirror back to main for E2E + UI synchronous reads.
+  // Slim payload (renderer/cosmetic-only fields stripped) — audit
+  // confirmed zero main-side reads of the stripped fields. See
+  // `buildSlimMirror` below for the field list + restoration policy.
   if (currentTime - lastMirrorAt >= STATE_MIRROR_INTERVAL_MS) {
     lastMirrorAt = currentTime;
     const mirror: WorkerEngineStateMirrorMsg = {
       type: 'worker:engineStateMirror',
-      state,
+      state: buildSlimMirror(state),
       arenaId: gameLoop.getArena().id,
     };
     ctxScope.postMessage(mirror);
   }
 
-  rafId = ctxScope.requestAnimationFrame(driveTick);
+  // Periodic perf flush. Lets the bench read worker-side fpsCounter +
+  // perfTrace state via `__fpsCounter` / `__perfTrace` shims that
+  // EngineWorkerProxy installs on main.
+  if (currentTime - lastPerfFlushAt >= PERF_FLUSH_INTERVAL_MS) {
+    lastPerfFlushAt = currentTime;
+    const m: WorkerPerfStatsMsg = {
+      type: 'worker:perfStats',
+      // The histogram + render-time fields belong to renderWorker.ts's
+      // renderer-only path. Sim-in-worker doesn't separately time render
+      // (the GameLoop's perfTrace sections cover it). Stub to keep
+      // RendererProxy's accumulator type-safe.
+      frames: 0,
+      renderSumMs: 0,
+      renderMaxMs: 0,
+      handlerSumMs: 0,
+      handlerMaxMs: 0,
+      histogram: PERF_HISTOGRAM_STUB,
+      overflowFrames: 0,
+    };
+    if (debugFlags.perfEnabled) m.sections = perfTrace.snapshot();
+    if (debugFlags.fpsEnabled) m.fpsSamples = dumpFpsSamples();
+    ctxScope.postMessage(m);
+  }
+
+  scheduleNextTick();
+}
+
+/** Frozen empty array — shared by every stripped MatchState field on
+ *  the slim mirror. Object.freeze prevents accidental mutation. */
+const EMPTY_ARRAY = Object.freeze([]) as unknown as never[];
+const _emptyMap = new Map<never, never>();
+const _slimStatsScratch: MatchState['stats'] = {
+  perPlayer: _emptyMap as unknown as MatchState['stats']['perPlayer'],
+};
+
+/** Build a structured-clone-friendly MatchState with renderer/cosmetic
+ *  fields stripped. Saves the bulk of the per-mirror clone cost on main.
+ *  Entity collections are filtered via `EntityKind.mirror` (`'full'` keeps
+ *  the array reference, `'none'` substitutes a frozen empty array).
+ *  Non-entity fields stay listed explicitly so the Kept vs Stripped
+ *  audit (2026-05-12) remains visible. */
+function buildSlimMirror(s: MatchState): MatchState {
+  const out: MatchState = {
+    // ── Kept (main reads these) ─────────────────────────────────────
+    players: s.players,
+    phase: s.phase,
+    killFeed: s.killFeed,
+    totalKills: s.totalKills,
+    timeElapsed: s.timeElapsed,
+    matchOver: s.matchOver,
+    winner: s.winner,
+    carrots: s.carrots,
+    carrotTimer: s.carrotTimer,
+    springs: s.springs,
+    thorns: s.thorns,
+    springSpawnTimer: s.springSpawnTimer,
+    thornSpawnTimer: s.thornSpawnTimer,
+    screenShake: s.screenShake,
+    slowMotion: s.slowMotion,
+    dayPhase: s.dayPhase,
+    countdown: s.countdown,
+    screenFlash: s.screenFlash,
+    hitstopZoom: s.hitstopZoom,
+    lavaRockTimer: s.lavaRockTimer,
+    stats: _slimStatsScratch,
+    // ── Stripped non-entity fields ───────────────────────────────────
+    weather: EMPTY_ARRAY as MatchState['weather'],
+    wildlife: EMPTY_ARRAY as MatchState['wildlife'],
+    goalPulseTimers: _emptyMap as unknown as MatchState['goalPulseTimers'],
+    bouncyWobble: _emptyMap as unknown as MatchState['bouncyWobble'],
+    // ── Entity collections — filled below from `EntityKind.mirror` ──
+    lavaRocks: EMPTY_ARRAY as MatchState['lavaRocks'],
+    ghosts: EMPTY_ARRAY as MatchState['ghosts'],
+    geyserStates: EMPTY_ARRAY as MatchState['geyserStates'],
+    scatterFlocks: EMPTY_ARRAY as MatchState['scatterFlocks'],
+    surfaceDecals: EMPTY_ARRAY as MatchState['surfaceDecals'],
+    gibs: EMPTY_ARRAY as MatchState['gibs'],
+    confetti: EMPTY_ARRAY as MatchState['confetti'],
+    shockwaves: EMPTY_ARRAY as MatchState['shockwaves'],
+    ripples: EMPTY_ARRAY as MatchState['ripples'],
+    scoreAnimations: EMPTY_ARRAY as MatchState['scoreAnimations'],
+    comboPopups: EMPTY_ARRAY as MatchState['comboPopups'],
+    fogParticles: EMPTY_ARRAY as MatchState['fogParticles'],
+    pollenParticles: EMPTY_ARRAY as MatchState['pollenParticles'],
+    shootingStars: EMPTY_ARRAY as MatchState['shootingStars'],
+  };
+  for (const e of getEntities()) {
+    if ((e.mirror ?? 'full') === 'full') {
+      (out as unknown as Record<string, unknown[]>)[e.id] =
+        (s as unknown as Record<string, unknown[]>)[e.id];
+    }
+  }
+  return out;
 }
 
 /** Pure helper: replace `target` Map contents from a per-slot list. Slots
@@ -347,6 +545,14 @@ export function setPhaseInWorker(msg: HostEngineSetPhaseMsg): void {
   gameLoop.setPhase(msg.phase);
 }
 
+/** Reset perfTrace + fpsCounter rings. Used by the perf bench between
+ *  countdown and steady-state capture so accumulated sections / dts
+ *  don't include startup noise. */
+export function resetPerfStats(): void {
+  perfTrace.reset();
+  resetFpsCounter();
+}
+
 export function skipCountdownInWorker(): void {
   if (!gameLoop) return;
   gameLoop.skipCountdown();
@@ -354,8 +560,10 @@ export function skipCountdownInWorker(): void {
 
 export function stopEngine(): void {
   running = false;
+  ctxScope.removeEventListener('message', onEngineMessage);
   if (rafId) ctxScope.cancelAnimationFrame(rafId);
   rafId = 0;
+  if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
   gameLoop?.stop();
   gameLoop = null;
   renderer = null;

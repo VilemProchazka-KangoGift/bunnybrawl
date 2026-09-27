@@ -28,7 +28,7 @@ beforeAll(async () => {
 });
 
 // ── Imports after mocks ──────────────────────────────────────────────────────
-import { updateLavaRocks, updateGhosts, updateGeyserTimers, updatePigeonFlocks } from '../gameplay/arenaEntities';
+import { updateLavaRocks, updateGhosts, updateGeyserTimers } from '../gameplay/arenaEntities';
 import { checkMatchEnd } from '../gameplay/match';
 import {
   PlayerSfxCooldowns,
@@ -36,8 +36,8 @@ import {
   tickPeriodicAmbient,
 } from '../cosmetics/sfx';
 import { Cooldowns } from '../../cooldowns';
-import { audio } from '../../audio';
-import type { PlayerSlot } from '../../types';
+
+
 import type { ThemeConfig } from '../../themes/types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { makePlayer, makeState, makeSettings } from '../../__tests__/testHelpers';
@@ -56,14 +56,7 @@ function makeThemeWithLavaRock(overrides: Partial<ThemeConfig['lavaRockConfig']>
     previewIcon: '',
     sky: { gradient: [] },
     hills: [],
-    ground: { surfaceColor: '#000', surfaceThickness: 1 },
-    platform: {
-      floatingBodyColor: '#000',
-      floatingTopColor: '#000',
-      groundBodyColor: '#000',
-      groundTopColor: '#000',
-      drawMoss: false,
-    },
+    ground: { surfaceColor: '#000' },
     clouds: { count: 0, color: '#fff', minSize: 10, maxSize: 20, minSpeed: 1, maxSpeed: 2, yRange: [0, 100] },
     weather: { particleCount: 0, types: [] },
     wildlife: { count: 0, types: [] },
@@ -313,44 +306,6 @@ describe('updateGeyserTimers', () => {
   });
 });
 
-// ────────────────────────────────────────────────────────────────────────────
-
-describe('updatePigeonFlocks', () => {
-  const dt = f(1 / 60);
-
-  it('decrements respawnTimer for inactive flocks', () => {
-    const state = makeState({
-      pigeonFlocks: [
-        { x: 200, y: 400, active: false, respawnTimer: 2, scatterParticles: [] },
-      ],
-    });
-    updatePigeonFlocks(state, dt);
-    expect(state.pigeonFlocks[0].respawnTimer).toBeCloseTo(2 - dt, 4);
-    expect(state.pigeonFlocks[0].active).toBe(false);
-  });
-
-  it('reactivates a flock when respawnTimer reaches zero', () => {
-    const state = makeState({
-      pigeonFlocks: [
-        { x: 200, y: 400, active: false, respawnTimer: 0.001, scatterParticles: [] },
-      ],
-    });
-    updatePigeonFlocks(state, dt);
-    expect(state.pigeonFlocks[0].active).toBe(true);
-  });
-
-  it('does not touch active flocks', () => {
-    const state = makeState({
-      pigeonFlocks: [
-        { x: 200, y: 400, active: true, respawnTimer: 5, scatterParticles: [] },
-      ],
-    });
-    updatePigeonFlocks(state, dt);
-    expect(state.pigeonFlocks[0].respawnTimer).toBe(5);
-    expect(state.pigeonFlocks[0].active).toBe(true);
-  });
-});
-
 // ════════════════════════════════════════════════════════════════════════════
 // gameplay/match.ts
 // ════════════════════════════════════════════════════════════════════════════
@@ -369,7 +324,7 @@ describe('checkMatchEnd', () => {
       players: [makePlayer({ id: 'P1', score: 16, active: true })],
     });
     const result = checkMatchEnd(state, makeSettings({ killLimit: 16 }));
-    expect(result).toBe('P1');
+    expect(result?.winner).toBe('P1');
   });
 
   it('ignores inactive players for kill-limit check', () => {
@@ -389,7 +344,33 @@ describe('checkMatchEnd', () => {
       ],
     });
     const result = checkMatchEnd(state, makeSettings({ killLimit: 100, timeLimit: 60 }));
-    expect(result).toBe('P2');
+    expect(result?.winner).toBe('P2');
+  });
+
+  it('ends in a draw (winner null) on an exact score tie at the time limit', () => {
+    const state = makeState({
+      timeElapsed: 120,
+      players: [
+        makePlayer({ id: 'P1', score: 7, active: true }),
+        makePlayer({ id: 'P2', score: 7, active: true }),
+      ],
+    });
+    const result = checkMatchEnd(state, makeSettings({ killLimit: 100, timeLimit: 60 }));
+    // Match ends (non-null result) but there is no winner (draw).
+    expect(result).not.toBeNull();
+    expect(result?.winner).toBeNull();
+  });
+
+  it('excludes disconnected players from the time-limit winner', () => {
+    const state = makeState({
+      timeElapsed: 120,
+      players: [
+        makePlayer({ id: 'P1', score: 20, active: true, disconnected: true }),
+        makePlayer({ id: 'P2', score: 3, active: true }),
+      ],
+    });
+    const result = checkMatchEnd(state, makeSettings({ killLimit: 100, timeLimit: 60 }));
+    expect(result?.winner).toBe('P2');
   });
 
   it('returns null for timeLimit when no active players exist', () => {

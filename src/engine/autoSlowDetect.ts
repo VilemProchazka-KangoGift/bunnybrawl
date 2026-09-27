@@ -70,6 +70,11 @@ export function start(): void {
   if (typeof PerformanceObserver !== 'undefined') {
     try {
       _longTaskObs = new PerformanceObserver((list) => {
+        // Match feedFrame's warmup — initial JS-bundle parse on a cold load
+        // routinely produces a >250ms longtask (1.3MB main chunk). Without this
+        // gate, every first-match session permanently flips into slow-device
+        // mode and disables wildlife, dandelions, vines, snails, etc.
+        if (_elapsedMs < WARMUP_MS) return;
         for (const entry of list.getEntries()) {
           if (entry.duration >= LONG_TASK_TRIGGER_MS) {
             flip();

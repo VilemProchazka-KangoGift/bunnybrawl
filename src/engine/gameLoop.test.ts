@@ -1098,36 +1098,10 @@ describe('GameLoop — collision and interaction paths (cosmetic + audio couplin
     for (let i = 0; i < n; i++) loop.fixedUpdate(FIXED_TIMESTEP, noInput);
   }
 
-  // Pigeon scatter/respawn, carrot zones, geyser cycling, spring bounce, fall-off
-  // respawn, headbonk simulation, wall oof are gameplay-pure and migrated to
+  // Carrot zones, geyser cycling, spring bounce, fall-off respawn, headbonk
+  // simulation, wall oof are gameplay-pure and migrated to
   // simulator-gameplay.test.ts. The cases that stay here exercise cosmetic-step
-  // coupling (gib effect zones, scatter particle decay) or audio.play assertion
-  // surfaces.
-
-  it('pigeon scatter particles decay and are removed (cosmeticStep)', () => {
-    const { loop } = createLoop();
-    const state = loop.getState();
-    state.countdown = 0;
-    loop.setNetworkMode(true);
-
-    state.pigeonFlocks.push({
-      x: 800, y: 660,
-      active: false,
-      respawnTimer: 999,
-      scatterParticles: [
-        { x: 800, y: 640, vx: 50, vy: -100, life: 0.02 },
-      ],
-    } as any);
-
-    // cosmeticStep now handles scatter particle decay (moved from fixedUpdate)
-    for (let i = 0; i < 5; i++) {
-      loop.fixedUpdate(FIXED_TIMESTEP, noInput);
-      loop.cosmeticStep(FIXED_TIMESTEP);
-    }
-
-    // Scatter particle should have been removed (life expired)
-    expect(state.pigeonFlocks[0].scatterParticles.length).toBe(0);
-  });
+  // coupling (gib effect zones) or audio.play assertion surfaces.
 
   it('effect zones modify gib physics (zero-G slows falling gibs, cosmeticStep)', () => {
     const { loop } = createLoop({

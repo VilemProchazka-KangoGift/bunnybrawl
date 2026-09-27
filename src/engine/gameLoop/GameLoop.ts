@@ -30,6 +30,7 @@ import { perfTrace } from '../perfTrace';
 import { getSlowDevice } from '../perfFlags';
 import { sampleFps } from '../fpsCounter';
 import * as autoSlowDetect from '../autoSlowDetect';
+import { isWorkerScope } from '../isWorker';
 import type { BotNavDebugState } from '../navDebugOverlay';
 import type { NetDebugStats } from '../net/core/debugOverlay';
 
@@ -90,15 +91,17 @@ export class GameLoop {
   private _cosmeticLead = 0;
   private _cosmeticTick = 0;
 
-  /** True when an external renderer (RendererProxy) was injected. The worker
-   *  hosts its own copies of `WildlifeSystem` and the per-frame
-   *  reactive/wildlife render args, so main can skip:
-   *   - WildlifeSystem.cosmeticUpdate (purely visual; no burst callbacks)
-   *   - building the per-frame reactive/wildlife arg objects (proxy strips them)
-   *  Reactive's tick stays on main because its burst → particle-emit path
-   *  fires from `applyStompImpulse` → `cosmeticUpdate`, and ParticleSystem
-   *  lives on main. */
-  private _workerActive = false;
+  /** True when the injected renderer is a proxy to a peer worker that hosts
+   *  its own ReactiveDecoration / Wildlife systems — in that case we skip
+   *  WildlifeSystem.cosmeticUpdate and ship empty reactive/wildlife args
+   *  (the proxy strips them anyway). False when this GameLoop is itself
+   *  inside a worker with a local Renderer — the renderer needs the args
+   *  and there's no second system. */
+  private _rendererIsRemote = false;
+  /** Stable context for per-arena cosmetic ticks. Built once in the constructor
+   *  so cosmeticStep doesn't allocate a fresh `{ emitParticle }` + arrow per
+   *  call. The arrow closes over `this.particleSystem` which is a stable ref. */
+  private readonly _arenaCosmeticCtx: { emitParticle: (x: number, y: number, vx: number, vy: number, life: number, size: number, color: string) => void };
 
   constructor(
     bgCanvas: HTMLCanvasElement,
@@ -142,11 +145,11 @@ export class GameLoop {
     });
 
     if (injectedRenderer) {
-      // Worker-offload path: the proxy already holds the offscreen canvases
-      // and is wired to its worker. Tell it our settings; canvas args are
-      // unused.
+      // Injected on main = RendererProxy (remote); injected inside a worker
+      // = local Renderer. See `_rendererIsRemote` field doc for the strip
+      // semantics that depend on which.
       this.renderer = injectedRenderer;
-      this._workerActive = true;
+      this._rendererIsRemote = !isWorkerScope;
     } else {
       this.renderer = new Renderer({
         bgCanvas,
@@ -172,6 +175,10 @@ export class GameLoop {
       this.simulator.getArenaEntitySystem().getGeyserIndexMap(),
     );
     this.simulator.setParticleEmitter(this.particleSystem);
+    this._arenaCosmeticCtx = {
+      emitParticle: (x, y, vx, vy, life, size, color) =>
+        this.particleSystem.emitParticle(x, y, vx, vy, life, size, color),
+    };
 
     // Cosmetic systems — own particle/transition baselines on the browser side.
     // ReactiveDecorationSystem must be constructed before PlayerTransitionSystem
@@ -201,7 +208,7 @@ export class GameLoop {
       (name) => this.playSound(name),
       sArena,
     );
-    this.environmentSystem = new EnvironmentSystem(sState, sTheme);
+    this.environmentSystem = new EnvironmentSystem(sState, sTheme, sArena);
     this.entityTransitionSystem = new EntityTransitionSystem(sState, (name) => this.playSound(name));
     this.surfaceImpactSystem = new SurfaceImpactSystem(sState, sArena);
     this.hudFeedbackSystem = new HUDFeedbackSystem(sState);
@@ -357,14 +364,23 @@ export class GameLoop {
     return this.simulator.getPlayerInputs();
   }
 
-  /** Read merged input from all key bindings + touch (for online play). */
+  /** Read merged input from all key bindings + touch (for online play).
+   *  Returns a stable scratch — caller consumes synchronously. */
   getInputAny(): InputState {
     const kb = this.keyboardManager.readAny();
-    const touchPlayer = this.touchSlot
-      ? this.simulator.getState().players.find(p => p.id === this.touchSlot)
-      : null;
-    return mergeKeyboardTouchInput(kb, this.touchInput, touchPlayer?.state === 'airborne');
+    let airborne = false;
+    if (this.touchSlot) {
+      const players = this.simulator.getState().players;
+      for (let i = 0; i < players.length; i++) {
+        if (players[i].id === this.touchSlot) {
+          airborne = players[i].state === 'airborne';
+          break;
+        }
+      }
+    }
+    return mergeKeyboardTouchInput(kb, this.touchInput, airborne, this._inputAnyScratch);
   }
+  private readonly _inputAnyScratch: InputState = { left: false, right: false, jump: false, down: false };
 
   /** Enable network mode: external code drives the loop.
    *
@@ -470,7 +486,7 @@ export class GameLoop {
       (name) => this.playSound(name),
       sArena,
     );
-    this.environmentSystem = new EnvironmentSystem(sState, newTheme);
+    this.environmentSystem = new EnvironmentSystem(sState, newTheme, sArena);
     this.entityTransitionSystem = new EntityTransitionSystem(sState, (name) => this.playSound(name));
     this.surfaceImpactSystem = new SurfaceImpactSystem(sState, sArena);
     this.hudFeedbackSystem = new HUDFeedbackSystem(sState);
@@ -564,7 +580,8 @@ export class GameLoop {
 
   /** Half-rate wrapper around cosmeticStep (third-rate on slow-device). */
   tickCosmetic(dt: number): void {
-    perfTrace.measure('tickCosmetic', () => {
+    const t = perfTrace.begin('tickCosmetic');
+    try {
       if (!Number.isFinite(dt) || dt <= 0) return;
       this._cosmeticLead += dt;
       const interval = getSlowDevice() ? COSMETIC_INTERVAL_SLOW : COSMETIC_INTERVAL;
@@ -572,7 +589,9 @@ export class GameLoop {
       const stepDt = Math.min(this._cosmeticLead, COSMETIC_MAX_STEP);
       this._cosmeticLead = Math.max(0, this._cosmeticLead - stepDt);
       this.cosmeticStep(stepDt);
-    });
+    } finally {
+      perfTrace.end('tickCosmetic', t);
+    }
   }
 
   /** Re-prime cosmetic baselines against the current state. */
@@ -619,7 +638,8 @@ export class GameLoop {
 
   /** Tick all cosmetic-only systems (particles, environment, visual decays). */
   cosmeticStep(dt: number): void {
-    perfTrace.measure('cosmeticStep', () => {
+    const tCosmetic = perfTrace.begin('cosmeticStep');
+    try {
       if (this.simulator.getState().phase === 'loading') return;
       const tickIdx = this._cosmeticTick++;
 
@@ -662,9 +682,10 @@ export class GameLoop {
         perfTrace.end('cosmetic.reactive', reactiveStart);
 
         // WildlifeSystem.cosmeticUpdate is purely visual (no burst /
-        // particle callback). When the worker hosts the renderer it
-        // maintains its own WildlifeSystem; main's tick is dead weight.
-        if (!this._workerActive) {
+        // particle callback). Skip when a remote peer worker owns the
+        // wildlife system; otherwise (including sim-in-worker mode where
+        // this GameLoop IS the worker) the local system needs the tick.
+        if (!this._rendererIsRemote) {
           const wildlifeStart = perfTrace.begin('cosmetic.wildlife');
           this.wildlifeSystem.cosmeticUpdate(dt * 2);
           perfTrace.end('cosmetic.wildlife', wildlifeStart);
@@ -675,13 +696,12 @@ export class GameLoop {
       const tick = this.simulator.getTheme().cosmeticTick;
       if (tick) {
         const arenaCosmeticStart = perfTrace.begin('cosmetic.arena');
-        tick(this.simulator.getState(), dt, {
-          emitParticle: (x, y, vx, vy, life, size, color) =>
-            this.particleSystem.emitParticle(x, y, vx, vy, life, size, color),
-        });
+        tick(this.simulator.getState(), dt, this._arenaCosmeticCtx);
         perfTrace.end('cosmetic.arena', arenaCosmeticStart);
       }
-    });
+    } finally {
+      perfTrace.end('cosmeticStep', tCosmetic);
+    }
   }
 
   /** Render current frame. Public for network loop. */
@@ -712,8 +732,18 @@ export class GameLoop {
 
   getState(): MatchState { return this.simulator.getState(); }
   getRendererDiagnostics() { return this.renderer.getDiagnostics(); }
-  pause(): void { this.paused = true; audio.setPaused(true); this.simulator.getState().screenShake = 0; }
-  resume(): void { this.paused = false; this.lastTime = performance.now(); audio.setPaused(false, this.simulator.getArena().themeId); }
+  pause(): void {
+    if (this.paused) return;
+    this.paused = true;
+    audio.setPaused(true);
+    this.simulator.getState().screenShake = 0;
+  }
+  resume(): void {
+    if (!this.paused) return;
+    this.paused = false;
+    this.lastTime = performance.now();
+    audio.setPaused(false, this.simulator.getArena().themeId);
+  }
   isPaused(): boolean { return this.paused; }
   isAutoSlowFlipped(): boolean { return autoSlowDetect.isFlipped(); }
   skipCountdown(): void {
@@ -793,33 +823,39 @@ export class GameLoop {
    *  from there. */
   private static _EMPTY_REACTIVE: ReactiveRenderArg = { prePlayer: [], postPlayer: [], windPhase: 0 };
   private static _EMPTY_WILDLIFE: WildlifeRenderArg = { groundCritter: [], animBackground: [] };
+  /** Stable arg objects mutated each frame so renderFrame doesn't see a new
+   *  reference (and doesn't allocate one per call). The inner arrays are
+   *  already stable refs owned by the systems. */
+  private readonly _reactiveArg: ReactiveRenderArg = { prePlayer: [], postPlayer: [], windPhase: 0 };
+  private readonly _wildlifeArg: WildlifeRenderArg = { groundCritter: [], animBackground: [] };
   private _buildReactiveArg(): ReactiveRenderArg {
-    if (this._workerActive) return GameLoop._EMPTY_REACTIVE;
-    return {
-      prePlayer: this.reactiveDecorationSystem.getInstancesForLayer('prePlayer'),
-      postPlayer: this.reactiveDecorationSystem.getInstancesForLayer('postPlayer'),
-      windPhase: this.reactiveDecorationSystem.getWindPhase(),
-    };
+    if (this._rendererIsRemote) return GameLoop._EMPTY_REACTIVE;
+    this._reactiveArg.prePlayer = this.reactiveDecorationSystem.getInstancesForLayer('prePlayer');
+    this._reactiveArg.postPlayer = this.reactiveDecorationSystem.getInstancesForLayer('postPlayer');
+    this._reactiveArg.windPhase = this.reactiveDecorationSystem.getWindPhase();
+    return this._reactiveArg;
   }
 
   /** Build the per-frame wildlife arg passed to renderFrame. Same stable-ref
    *  contract as `_buildReactiveArg`. */
   private _buildWildlifeArg(): WildlifeRenderArg {
-    if (this._workerActive) return GameLoop._EMPTY_WILDLIFE;
-    return {
-      groundCritter: this.wildlifeSystem.getInstancesForLayer('groundCritter'),
-      animBackground: this.wildlifeSystem.getInstancesForLayer('animBackground'),
-    };
+    if (this._rendererIsRemote) return GameLoop._EMPTY_WILDLIFE;
+    this._wildlifeArg.groundCritter = this.wildlifeSystem.getInstancesForLayer('groundCritter');
+    this._wildlifeArg.animBackground = this.wildlifeSystem.getInstancesForLayer('animBackground');
+    return this._wildlifeArg;
   }
 
   /** Run one fixed-timestep simulation tick. Public for rollback engine. */
   fixedUpdate(dt: number, networkInputs?: Map<string, InputState>): void {
     if (this.stopped) return;
-    perfTrace.measure('fixedUpdate', () => {
+    const t = perfTrace.begin('fixedUpdate');
+    try {
       // 60Hz path: advance windPhase + run high-frequency reactive instances.
       this.reactiveDecorationSystem.fixedUpdate(dt);
       this.simulator.fixedUpdate(dt, networkInputs);
-    });
+    } finally {
+      perfTrace.end('fixedUpdate', t);
+    }
   }
 
   /** @internal Test-only: forwards to simulator's getPlayerInputForTest. */

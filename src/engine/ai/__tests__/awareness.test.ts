@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { buildAwareness } from '../awareness';
-import type { Arena, PlayerSlot } from '../../types';
+import type { PlayerSlot } from '../../types';
 import { makePlayer, makeArena, makeState } from '../../__tests__/testHelpers';
-import { PLAYER_WIDTH, PLAYER_HEIGHT, CANVAS_WIDTH } from '../../constants';
-import { registerArena, getArenaNav } from '../../arenas/registry';
+import { CANVAS_WIDTH } from '../../constants';
+import { registerArena } from '../../arenas/registry';
 
 describe('buildAwareness', () => {
   // ── Self state detection ──────────────────────────────────────────────
@@ -1089,8 +1089,7 @@ describe('buildAwareness', () => {
       previewIcon: '',
       sky: { gradient: [{ offset: 0, color: '#000' }] },
       hills: [],
-      ground: { color: '#000', surfaceColor: '#000', surfaceThickness: 2 },
-      platform: { groundTopColor: '#000', groundBodyColor: '#000', floatingTopColor: '#000', floatingBodyColor: '#000' },
+      ground: { color: '#000', surfaceColor: '#000' },
       clouds: { count: 0, color: '#fff', minSize: 20, maxSize: 40, minSpeed: 5, maxSpeed: 10, yRange: [20, 80] },
       weather: { type: 'none' as any, count: 0 },
       fog: { color: '#fff', sizeX: 40, sizeY: 15 },
@@ -1179,8 +1178,7 @@ describe('buildAwareness', () => {
         previewGradient: ['#000', '#000'], previewIcon: '',
         sky: { gradient: [{ offset: 0, color: '#000' }] },
         hills: [],
-        ground: { color: '#000', surfaceColor: '#000', surfaceThickness: 2 },
-        platform: { groundTopColor: '#000', groundBodyColor: '#000', floatingTopColor: '#000', floatingBodyColor: '#000' },
+        ground: { color: '#000', surfaceColor: '#000' },
         clouds: { count: 0, color: '#fff', minSize: 20, maxSize: 40, minSpeed: 5, maxSpeed: 10, yRange: [20, 80] },
         weather: { type: 'none' as any, count: 0 },
         fog: { color: '#fff', sizeX: 40, sizeY: 15 },

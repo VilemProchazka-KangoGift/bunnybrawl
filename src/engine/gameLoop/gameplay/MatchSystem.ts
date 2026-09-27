@@ -73,11 +73,12 @@ export class MatchSystem implements GameplaySystem {
       tickPeriodicAmbient(this.theme, this.periodicAmbientTimers, dt, this.playSound);
     }
 
-    // Check match end
-    const winner = checkMatchEnd(this.state, this.settings);
-    if (winner !== null) {
+    // Check match end. A non-null result means the match ended — its `winner`
+    // may itself be null (a draw at the time limit), which must still fire.
+    const result = checkMatchEnd(this.state, this.settings);
+    if (result !== null) {
       this.state.slowMotion = SLOW_MO_DURATION;
-      this.onMatchEnd(winner);
+      this.onMatchEnd(result.winner);
       return;
     }
 
@@ -89,8 +90,10 @@ export class MatchSystem implements GameplaySystem {
     if (!this.resimulatingGetter() && !this.state.matchOver) {
       let activeHumans = 0;
       let activeBots = 0;
+      let anyDisconnected = false;
       let lastActiveHuman: PlayerSlot | null = null;
       for (const p of this.state.players) {
+        if (p.disconnected) anyDisconnected = true;
         if (p.disconnected || !p.active) continue;
         if (isBotSlot(p.id)) {
           activeBots++;
@@ -99,10 +102,17 @@ export class MatchSystem implements GameplaySystem {
           lastActiveHuman = p.id;
         }
       }
-      if (activeHumans + activeBots === 0) {
-        this.onMatchEnd(null);
-      } else if (activeHumans === 1 && activeBots === 0) {
-        this.onMatchEnd(lastActiveHuman);
+      // Only a disconnection can trigger the lone-survivor / everyone-left end.
+      // Without this guard a legitimate solo match (1 human, 0 bots — e.g. the
+      // `?arena=X` dev flow with botCount 0) ends the instant the countdown
+      // finishes. `disconnected` never flips in local play, so this is a no-op
+      // there and preserves the online forfeit behavior.
+      if (anyDisconnected) {
+        if (activeHumans + activeBots === 0) {
+          this.onMatchEnd(null);
+        } else if (activeHumans === 1 && activeBots === 0) {
+          this.onMatchEnd(lastActiveHuman);
+        }
       }
     }
   }

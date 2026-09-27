@@ -12,6 +12,10 @@ const _jitterBuf = new Float64Array(10);
 /**
  * Score all possible actions based on awareness and personality.
  * Each evaluator adds positive/negative values to moveLeft, moveRight, jump, drop.
+ *
+ * Hot callers (AIController) pass a long-lived scratch via `out` so the
+ * decision frame stays allocation-free. Tests + ad-hoc callers can omit `out`
+ * and get a fresh ActionScores per call.
  */
 export function evaluateActions(
   awareness: AwarenessSnapshot,
@@ -19,8 +23,12 @@ export function evaluateActions(
   precisionMult: number = 0,
   carrotChase: boolean = false,
   rng?: SeededRNG,
+  out?: ActionScores,
 ): ActionScores {
-  const scores: ActionScores = { moveLeft: 0, moveRight: 0, jump: 0, drop: 0 };
+  const scores: ActionScores = out ?? { moveLeft: 0, moveRight: 0, jump: 0, drop: 0 };
+  if (out) {
+    scores.moveLeft = 0; scores.moveRight = 0; scores.jump = 0; scores.drop = 0;
+  }
 
   if (carrotChase) {
     // In carrot chase, kills are worthless — skip combat, heavily pursue carrots

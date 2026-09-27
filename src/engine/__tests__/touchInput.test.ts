@@ -2,9 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TouchInputManager } from '../touchInput';
 
 // Constants mirrored from touchInput.ts for readable assertions
-const CANVAS_WIDTH = 1280;
 const DEAD_ZONE = 12;
-const MAX_RADIUS = 60;
 const SWIPE_DISTANCE = 25;
 
 // ---------- helpers ----------
@@ -52,7 +50,7 @@ function fakeTouchEvent(
 }
 
 // Access private bound handlers
-type AnyTIM = { // eslint-disable-line @typescript-eslint/no-explicit-any
+type AnyTIM = {
   boundTouchStart: (e: TouchEvent) => void;
   boundTouchMove: (e: TouchEvent) => void;
   boundTouchEnd: (e: TouchEvent) => void;
@@ -229,13 +227,15 @@ describe('TouchInputManager', () => {
       expect(input2.jump).toBe(false);
     });
 
-    it('resets jump state on touch end', () => {
+    it('commits a quick-tap jump on release without waiting out the swipe window', () => {
       tapRight(800, 400);
-      manager.getInput(); // consume
-      endRight(800, 400);
-
-      const input = manager.getInput();
-      expect(input.jump).toBe(false);
+      // Read within the commit window: still pending (could yet become a swipe).
+      expect(manager.getInput().jump).toBe(false);
+      endRight(800, 400); // finger lifts early — can no longer be a swipe
+      // The jump commits immediately on the next read (T4 fix)…
+      expect(manager.getInput().jump).toBe(true);
+      // …and fires only once.
+      expect(manager.getInput().jump).toBe(false);
     });
 
     it('ignores second jump touch while first is active', () => {

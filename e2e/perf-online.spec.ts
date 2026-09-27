@@ -364,7 +364,7 @@ async function stopAndCapture(
   cdp: import('@playwright/test').CDPSession,
   heapTimeline: { t: number; usedMB: number; totalMB: number }[],
 ): Promise<CapturedProfile> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   let heap: any, cpu: any;
   try { heap = await cdp.send('HeapProfiler.stopSampling'); }
   catch (e) { console.error(`[${p.label}] HeapProfiler.stopSampling failed:`, e); }

@@ -72,23 +72,7 @@ export interface ArenaPack {
   hills: Array<{ x: number; baseY: number; width: number; height: number; color: string }>;
   ground: {
     surfaceColor: string;
-    surfaceThickness: number;
-    grassBlades?: {
-      color: string;
-      spacing: number;
-      heightRange: [number, number];
-    };
   };
-  platform: {
-    floatingBodyColor: string;
-    floatingTopColor: string;
-    floatingAccentColor?: string;
-    groundBodyColor: string;
-    groundTopColor: string;
-    drawMoss: boolean;
-    customDraw?: (ctx: Ctx2D, x: number, y: number, w: number, h: number, isGround: boolean) => void;
-  };
-
   // ---- Ambient systems ----
   clouds: CloudConfig;
   weather: WeatherConfig;
@@ -111,7 +95,7 @@ export interface ArenaPack {
    * sit behind the player). The body face goes in `drawPlatformOverlay` so
    * it can occlude players that enter the iso phantom strip.
    */
-  drawPlatform?: (ctx: Ctx2D, platform: Platform, isGround: boolean) => void;
+  drawPlatform: (ctx: Ctx2D, platform: Platform, isGround: boolean) => void;
   /**
    * Optional foreground overlay for the platform's body face. Called by the
    * renderer AFTER players are drawn, so the body occludes any player whose
@@ -148,7 +132,6 @@ export interface ArenaPack {
     services: ArenaCosmeticServices,
   ) => void;
 
-  drawGroundCritters?: (ctx: Ctx2D, arena: Arena, time: number, dayPhase: number, matchState?: import('../types').MatchState) => void;
   drawSceneTint?: (ctx: Ctx2D, dayPhase: number, time: number) => void;
   drawWeatherParticle?: (ctx: Ctx2D, particle: WeatherParticle) => void;
   drawCustomHazardZone?: (ctx: Ctx2D, x: number, y: number, width: number, height: number, time: number) => void;
@@ -161,7 +144,6 @@ export interface ArenaPack {
   bubbleHelmet?: boolean;
   ghostConfig?: ThemeConfig['ghostConfig'];
   lavaRockConfig?: ThemeConfig['lavaRockConfig'];
-  pigeonConfig?: ThemeConfig['pigeonConfig'];
   scatterFlockConfigs?: ThemeConfig['scatterFlockConfigs'];
   physics?: PhysicsModifiers;
 

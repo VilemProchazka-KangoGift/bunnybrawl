@@ -14,6 +14,13 @@ const FIRE_COLORS = ['#FF4400', '#FF8800', '#FFCC00', '#FFAA00'];
 // Air-lean fades to 0 over ~0.7s — roughly the descent of a full jump.
 const AIR_LEAN_DECAY_PER_S = 1.5;
 
+/** Module-scope pool of dead afterimage entries reused across all players.
+ *  Capped to AFTERIMAGE_MAX × 6 to cover all simultaneously-running players
+ *  with headroom; beyond that, dropped entries go to GC. */
+type Afterimage = { x: number; y: number; facing: 'left' | 'right'; alpha: number };
+const _afterimagePool: Afterimage[] = [];
+const AFTERIMAGE_POOL_CAP = AFTERIMAGE_MAX * 6;
+
 /**
  * Update per-player cosmetic state: animation, fire particles, idle anim,
  * afterimages, footstep sounds, expressions, squash decay, fat wobble.
@@ -83,17 +90,26 @@ export function updatePlayerCosmetics(
     let fired = afterimageAccs.advance(player.id, dt, AFTERIMAGE_INTERVAL);
     while (fired) {
       if (player.afterimages.length < AFTERIMAGE_MAX) {
-        player.afterimages.push({ x: player.x, y: player.y, facing: player.facing, alpha: 1 });
+        const r = _afterimagePool.pop();
+        if (r) {
+          r.x = player.x; r.y = player.y; r.facing = player.facing; r.alpha = 1;
+          player.afterimages.push(r);
+        } else {
+          player.afterimages.push({ x: player.x, y: player.y, facing: player.facing, alpha: 1 });
+        }
       }
       fired = afterimageAccs.advance(player.id, 0, AFTERIMAGE_INTERVAL);
     }
   } else {
     afterimageAccs.clear(player.id);
   }
-  // Decay afterimage alpha
+  // Decay afterimage alpha. Expired entries return to the module-scope pool.
   for (let i = player.afterimages.length - 1; i >= 0; i--) {
     player.afterimages[i].alpha -= dt * 4;
-    if (player.afterimages[i].alpha <= 0) swapRemove(player.afterimages, i);
+    if (player.afterimages[i].alpha <= 0) {
+      if (_afterimagePool.length < AFTERIMAGE_POOL_CAP) _afterimagePool.push(player.afterimages[i]);
+      swapRemove(player.afterimages, i);
+    }
   }
 
   // Surface-aware footstep dispatch (sound + var-dust puff). Tempo,

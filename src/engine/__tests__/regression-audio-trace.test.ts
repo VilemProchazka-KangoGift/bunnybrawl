@@ -148,7 +148,7 @@ function runAudioScenario(): string[] {
   );
 
   // Network mode: tells fixedUpdate to use the explicit `networkInputs` arg
-  // instead of reading from its internal InputManager (which has no listeners attached in Node).
+  // instead of reading from its internal KeyboardManager (which has no listeners attached in Node).
   loop.setNetworkMode(true);
   // Directly drive fixedUpdate. Set phase to 'playing' (test default is 'loading',
   // and cosmeticStep early-returns during 'loading').
@@ -178,7 +178,7 @@ function runAudioScenario(): string[] {
     loop.fixedUpdate(FIXED_TIMESTEP, inputs);
     // Run cosmetic systems (per-tick, not half-rate) so transition-driven
     // SFX fire deterministically. This mirrors what tests in the project
-    // already do (per CLAUDE.md: "Tests call cosmeticStep(FIXED_TIMESTEP)
+    // already do (per AGENTS.md: "Tests call cosmeticStep(FIXED_TIMESTEP)
     // directly to exercise the unthrottled per-tick behavior").
     loop.cosmeticStep(FIXED_TIMESTEP);
   }

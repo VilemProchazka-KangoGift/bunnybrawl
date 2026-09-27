@@ -8,9 +8,9 @@
  * We do NOT re-test pure function logic in isolation here.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { MatchState, MatchSettings, Arena, Player, PlayerSlot } from '../../types';
-import { makePlayer, makeArena, makeState, makeSettings } from '../../__tests__/testHelpers';
+import { describe, it, expect, vi } from 'vitest';
+import type { MatchState, Arena } from '../../types';
+import { makePlayer, makeState, makeSettings } from '../../__tests__/testHelpers';
 
 // ── Mocks (must be declared before any import that transitively loads them) ──
 
@@ -74,7 +74,6 @@ const mockTheme = {
   fog: { count: 0 },
   ambientParticles: { count: 0 },
   dayNight: { enabled: false, cycleDuration: 120, showShootingStars: false },
-  platform: { floatingBodyColor: '#888', groundTopColor: '#666' },
   physics: {},
 } as any;
 
@@ -638,17 +637,11 @@ describe('ArenaEntitySystem', () => {
     expect(state.geyserStates).toBeDefined();
   });
 
-  it('init() spawns ghosts into state when theme has ghostConfig', () => {
-    const themeWithGhosts = {
-      ...mockTheme,
-      ghostConfig: { count: 3, speed: 60, size: 30 },
-    };
-    const state = makeSystemState();
-    const sys = new ArenaEntitySystem(state, mockArena, themeWithGhosts, Math.random);
-    sys.init();
-
-    expect(state.ghosts).toHaveLength(3);
-  });
+  // Ghost spawn moved to `ghostsEntity.init` in `src/engine/entities/ghosts.ts`;
+  // it now runs from `createInitialMatchState` via the entity registry instead
+  // of `ArenaEntitySystem.init()`. The behavior is covered by
+  // `src/engine/__tests__/simulator-gameplay.test.ts` which constructs a real
+  // Simulator with a ghost-configured theme.
 
   it('getCachedGeyserZones() returns same reference set during init()', () => {
     const state = makeSystemState();

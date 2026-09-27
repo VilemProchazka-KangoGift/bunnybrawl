@@ -55,6 +55,8 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
   // on cold start. Staged copy reassures the user that work is happening.
   const [connectingStage, setConnectingStage] = useState<ConnectingStage>('initial');
   useEffect(() => {
+    // A new connection attempt must start with the initial status message.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setConnectingStage('initial');
     if (step !== 'connecting' || online.isHost) return;
     const timers = CONNECTING_STAGE_TIMINGS.map(s => setTimeout(() => setConnectingStage(s.key), s.at));
@@ -104,15 +106,7 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
                   />
                 )}
               </div>
-              {matchSettings.botCount > 0 && <p className="online-info">{(() => {
-                const n = matchSettings.botCount;
-                if (i18n.language === 'cs') {
-                  if (n === 1) return t('online_bots_info_one');
-                  if (n >= 2 && n <= 4) return t('online_bots_info_few', { count: n });
-                  return t('online_bots_info_other', { count: n });
-                }
-                return t('online_bots_info', { count: n });
-              })()}</p>}
+              {matchSettings.botCount > 0 && <p className="online-info">{t('online_bots_info', { count: matchSettings.botCount })}</p>}
               {playerName.trim() && (<>
               <button className="btn-base menu-btn online-create-btn" data-testid="online-create-btn" onClick={() => { audio.play('select'); audio.init(); connect(true); }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: 'middle', marginRight: 6 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>

@@ -17,9 +17,17 @@ export function mergeKeyboardTouchInput(
   kb: InputState,
   touch: TouchInputManager | null,
   airborne: boolean,
+  out?: InputState,
 ): InputState {
   if (!touch) return kb;
   const ti = touch.getInputForPlayer(airborne);
+  if (out) {
+    out.left = kb.left || ti.left;
+    out.right = kb.right || ti.right;
+    out.jump = kb.jump || ti.jump;
+    out.down = kb.down || ti.down;
+    return out;
+  }
   return {
     left: kb.left || ti.left,
     right: kb.right || ti.right,

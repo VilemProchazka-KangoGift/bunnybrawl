@@ -805,18 +805,7 @@ export const underwater: ArenaPack = {
   ],
 
   ground: {
-    surfaceColor: '#C2A868',
-    surfaceThickness: 5,
-  },
-
-  platform: {
-    floatingBodyColor: '#3A7A6A',
-    floatingTopColor: '#5AA08A',
-    floatingAccentColor: '#FF6B6B',
-    groundBodyColor: '#8A7A50',
-    groundTopColor: '#C2A868',
-    drawMoss: false,
-  },
+    surfaceColor: '#C2A868',  },
 
   // ---- Ambient systems ----
   clouds: {

@@ -11,7 +11,7 @@ import { resolve } from 'node:path';
 import { registerBuiltinArenas } from '../src/engine/arenas/builtin';
 import { getArena, listArenaPacks } from '../src/engine/arenas';
 import { canJumpTo, canDropTo, canWalkTo, canGeyserTo, canZeroGTo, computeEdgeDanger } from '../src/engine/ai/reachability';
-import type { Platform, Arena } from '../src/engine/types';
+import type { Arena } from '../src/engine/types';
 
 registerBuiltinArenas();
 

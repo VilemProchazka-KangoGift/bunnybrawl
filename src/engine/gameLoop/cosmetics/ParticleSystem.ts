@@ -1,4 +1,4 @@
-import type { MatchState, MatchSettings, Arena, Particle, ParticleShape, Gib, Player, PlayerSlot, EffectZone } from '../../types';
+import type { MatchState, MatchSettings, Arena, Particle, ParticleShape, Gib, ConfettiParticle, Player, PlayerSlot, EffectZone } from '../../types';
 import type { ThemeConfig } from '../../themes/types';
 import type { CosmeticSystem } from '../types';
 import type { HazardHitResult } from '../gameplay/playerCollisions';
@@ -7,7 +7,7 @@ import type { ParticleEmitter } from '../../simulator/types';
 import { BLOOD_COLOR, CARROT_SIZE } from '../../constants';
 import { haptics } from '../../haptics';
 import { emitParticle as _emitParticle, spawnDustParticles as _spawnDustParticles, spawnJumpDustParticles as _spawnJumpDustParticles, spawnGoreParticles as _spawnGoreParticles, spawnConfetti as _spawnConfetti, spawnCarrotVFX as _spawnCarrotVFX, spawnRingVFX as _spawnRingVFX, spawnFirework as _spawnFirework, updateParticles, updateConfetti } from './particles';
-import { launchGib, spawnGibs, updateGibs } from './gibs';
+import { launchGib, spawnGibs, updateGibs, GIB_FREELIST_CAP } from './gibs';
 import { updateWeather } from './environment';
 
 const CARROT_PICKUP_COLORS = ['#FF8C00', '#FF6600', '#FFA500', '#FF7700', '#FFD700', '#FF8C00'];
@@ -20,6 +20,12 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
 
   private _particles: Particle[] = [];
   private particleFreeList: Particle[] = [];
+  /** Pool of dead Gibs reused across kills to avoid GC churn. Refilled from
+   *  three sources: mid-air expiration, airborne-cap eviction, and post-bake
+   *  recycling. Capped at GIB_FREELIST_CAP. */
+  private gibFreeList: Gib[] = [];
+  /** Pool of dead Confetti reused across kills (non-gore kill VFX). */
+  private confettiFreeList: ConfettiParticle[] = [];
   private newBloodDripsSinceRender: Array<{ x: number; y: number; radius: number; color: string }> = [];
   private newGroundedGibsSinceRender: Gib[] = [];
   private fireworkTimer: number = 0;
@@ -39,6 +45,25 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
     this.theme = theme;
     this.settings = settings;
     this.geyserIndexMap = geyserIndexMap;
+    // Pre-warm the pools so the first kill / dust burst doesn't allocate.
+    // Sized to cover a representative kill burst (gibs ~40, particles ~100,
+    // confetti ~30); beyond that, on-demand allocation is acceptable.
+    for (let i = 0; i < 200; i++) {
+      this.particleFreeList.push({ x: 0, y: 0, vx: 0, vy: 0, life: 0, maxLife: 0, size: 0, color: '', shape: undefined });
+    }
+    for (let i = 0; i < 100; i++) {
+      this.gibFreeList.push({
+        x: 0, y: 0, vx: 0, vy: 0, rotation: 0, rotationSpeed: 0,
+        width: 0, height: 0, color: '', darkColor: '', lightColor: '',
+        characterName: '', gibType: 'body', bounced: false, life: 0,
+      });
+    }
+    for (let i = 0; i < 30; i++) {
+      this.confettiFreeList.push({
+        x: 0, y: 0, vx: 0, vy: 0, life: 0, maxLife: 0, size: 0,
+        color: '', shape: 'circle', rotation: 0, rotationSpeed: 0, flutter: 0,
+      });
+    }
   }
 
   init(): void {}
@@ -60,7 +85,7 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
   }
 
   spawnConfettiVFX(victim: Player): void {
-    _spawnConfetti(this.state.confetti, victim);
+    _spawnConfetti(this.state.confetti, this.confettiFreeList, victim);
   }
 
   spawnCarrotVFX(x: number, y: number): void {
@@ -80,9 +105,9 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
     if (settings.goreMode) {
       _spawnGoreParticles(this._particles, this.particleFreeList, victim, settings.mods.extremeGore);
     }
-    spawnGibs(this.state.gibs, victim, settings);
+    spawnGibs(this.state.gibs, this.gibFreeList, victim, settings);
     if (!settings.goreMode) {
-      _spawnConfetti(this.state.confetti, victim);
+      _spawnConfetti(this.state.confetti, this.confettiFreeList, victim);
     }
   }
 
@@ -92,11 +117,11 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
     // Orange carrot chunks
     for (let i = 0; i < 4; i++) {
       const s = 4 + Math.random() * 3;
-      launchGib(this.state.gibs, x, cy, 10, 0.15, 0.85, 80, 200, s, s, '#FF8C00', '#CC6600', '#FFB040', '', 'body');
+      launchGib(this.state.gibs, this.gibFreeList, x, cy, 10, 0.15, 0.85, 80, 200, s, s, '#FF8C00', '#CC6600', '#FFB040', '', 'body');
     }
     // Green leaf pieces
     for (let i = 0; i < 2; i++) {
-      launchGib(this.state.gibs, x, cy, 8, 0.2, 0.8, 60, 160, 5, 3, '#4CAF50', '#2E7D32', '#81C784', '', 'body');
+      launchGib(this.state.gibs, this.gibFreeList, x, cy, 8, 0.2, 0.8, 60, 160, 5, 3, '#4CAF50', '#2E7D32', '#81C784', '', 'body');
     }
     // Orange/gold particle burst
     for (let i = 0; i < 16; i++) {
@@ -218,8 +243,8 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
   cosmeticUpdate(dt: number): void {
     updateWeather(this.state, this.theme, dt);
     updateParticles(this._particles, this.particleFreeList, this.arena.platforms, this.settings.goreMode, this.newBloodDripsSinceRender, dt);
-    updateGibs(this.state.gibs, this.arena.platforms, this.arena.effectZones, this.geyserIndexMap, this.state.geyserStates, this.newGroundedGibsSinceRender, dt);
-    updateConfetti(this.state.confetti, this.state.timeElapsed, dt);
+    updateGibs(this.state.gibs, this.gibFreeList, this.arena.platforms, this.arena.effectZones, this.geyserIndexMap, this.state.geyserStates, this.newGroundedGibsSinceRender, dt);
+    updateConfetti(this.state.confetti, this.confettiFreeList, this.state.timeElapsed, dt);
   }
 
   /** Tick the firework spawn timer (called every frame on matchOver).
@@ -237,6 +262,12 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
   bakeToRenderer(renderer: IRenderer): void {
     if (this.newGroundedGibsSinceRender.length > 0) {
       renderer.bakeGibs(this.newGroundedGibsSinceRender);
+      // bakeGibs copies the gibs into the bg canvas; the source objects are dead
+      // after this returns. Recycle up to GIB_FREELIST_CAP; the rest go to GC.
+      for (let i = 0; i < this.newGroundedGibsSinceRender.length; i++) {
+        if (this.gibFreeList.length >= GIB_FREELIST_CAP) break;
+        this.gibFreeList.push(this.newGroundedGibsSinceRender[i]);
+      }
       this.newGroundedGibsSinceRender.length = 0;
     }
     if (this.newBloodDripsSinceRender.length > 0) {

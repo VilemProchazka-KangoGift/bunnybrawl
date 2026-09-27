@@ -6,7 +6,7 @@
 // In M1 only "med" is implemented; low/high fall through. L2+ adds tier branching.
 
 import type { PerfTier } from './types';
-import { createUrlStoredEmitter } from './urlStoredEmitter';
+import { createUrlStoredEmitter } from '../urlStoredEmitter';
 
 function parse(raw: string): PerfTier | null {
   return raw === 'low' || raw === 'med' || raw === 'high' ? raw : null;

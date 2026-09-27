@@ -45,7 +45,7 @@ import {
 import type { RewardWeights } from '../src/engine/headless/reward';
 import { RandomInput } from '../src/engine/input/RandomInput';
 import { RuleBasedBot } from '../src/engine/input/RuleBasedBot';
-import type { MatchSettings, PlayerSlot } from '../src/engine/types';
+import type { MatchSettings, PlayerSlot, BotSlot } from '../src/engine/types';
 import type { PlayerInput } from '../src/engine/input/PlayerInput';
 import type { HeadlessRunnerConfig } from '../src/engine/headless/types';
 
@@ -60,6 +60,20 @@ interface CliArgs {
 }
 
 const REWARD_FLAG_PREFIX = '--reward.';
+
+/** Parse a numeric CLI flag value, exiting with a clear error on a missing or
+ *  non-finite value. Without this, `Number(undefined)` / a typo'd value yields
+ *  NaN, which silently runs 0 episodes and reports success (H10 / S10). */
+function parseNumericFlag(flag: string, raw: string | undefined): number {
+  const n = Number(raw);
+  if (raw === undefined || raw.trim() === '' || !Number.isFinite(n)) {
+    console.error(
+      `Error: ${flag} expects a finite number, got ${raw === undefined ? '(missing value)' : `'${raw}'`}.`,
+    );
+    process.exit(1);
+  }
+  return n;
+}
 
 function loadRewardsFile(path: string): Partial<RewardWeights> {
   const raw = readFileSync(resolve(process.cwd(), path), 'utf8');
@@ -95,15 +109,22 @@ function parseArgs(argv: string[]): CliArgs {
 
   // File loaded first so individual --reward.<key> flags below override it.
   const fileIdx = argv.indexOf('--rewards-file');
-  if (fileIdx >= 0) Object.assign(args.rewardWeights, loadRewardsFile(argv[fileIdx + 1]));
+  if (fileIdx >= 0) {
+    const filePath = argv[fileIdx + 1];
+    if (filePath === undefined || filePath.startsWith('--')) {
+      console.error('Error: --rewards-file requires a file path argument.');
+      process.exit(1);
+    }
+    Object.assign(args.rewardWeights, loadRewardsFile(filePath));
+  }
 
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--episodes') args.episodes = Number(argv[++i]);
+    if (a === '--episodes') args.episodes = parseNumericFlag(a, argv[++i]);
     else if (a === '--arena') args.arenaId = argv[++i];
     else if (a === '--out') args.out = argv[++i];
-    else if (a === '--seed') args.seed = Number(argv[++i]);
-    else if (a === '--ticks') args.ticks = Number(argv[++i]);
+    else if (a === '--seed') args.seed = parseNumericFlag(a, argv[++i]);
+    else if (a === '--ticks') args.ticks = parseNumericFlag(a, argv[++i]);
     else if (a === '--rewards-file') i++;
     else if (a.startsWith(REWARD_FLAG_PREFIX)) {
       const key = a.slice(REWARD_FLAG_PREFIX.length) as keyof RewardWeights;
@@ -183,9 +204,13 @@ async function runEpisode(
 
   // Wire RuleBasedBots post-construction (they need the simulator's AIController).
   const arena = getArena(args.arenaId);
-  for (const slot of ['B1', 'B2'] as PlayerSlot[]) {
+  for (const slot of ['B1', 'B2'] as BotSlot[]) {
     const ai = runner.getSimulator().getAIControllers().get(slot)!;
     runner.getSimulator().setPlayerInput(slot, new RuleBasedBot(slot, ai, arena, false, false));
+    // Re-wrap so the bot's ACTUAL action is captured. setPlayerInput bypasses
+    // the constructor's ActionCapturingInput wrap; without this the bot's
+    // recorded samples would all be {left:false,...} (H1).
+    runner.wrapRecordedSlot(slot);
   }
 
   const result = runner.runMatch();

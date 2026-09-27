@@ -24,12 +24,14 @@ export class TransitionTracker<K, T, S = unknown> {
     this._snapshot = snapshot;
   }
 
-  /** Run transition detection. Fires `onTransition(prev)` only if a prev
-   *  baseline exists for this key. After firing (or on first call without
-   *  baseline), stores a fresh snapshot as the new prev. */
-  detect(k: K, source: S, onTransition: (prev: T) => void): void {
+  /** Run transition detection. Fires `onTransition(prev, source)` only if a
+   *  prev baseline exists for this key. After firing (or on first call without
+   *  baseline), stores a fresh snapshot as the new prev. The `source` arg is
+   *  passed through so callers can use a stable class-field arrow as the
+   *  callback without a per-iteration closure that captures the live source. */
+  detect(k: K, source: S, onTransition: (prev: T, source: S) => void): void {
     if (this._prev.has(k)) {
-      onTransition(this._prev.get(k) as T);
+      onTransition(this._prev.get(k) as T, source);
     }
     this._prev.set(k, this._snapshot(source));
   }

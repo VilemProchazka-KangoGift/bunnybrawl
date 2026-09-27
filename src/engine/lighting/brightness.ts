@@ -4,7 +4,7 @@
 // Range [0.5, 1.5]. Skipped when value === 1.0.
 // URL: ?brightness=0.7 (overrides storage); Storage: carrotroyale_brightness
 
-import { createUrlStoredEmitter } from './urlStoredEmitter';
+import { createUrlStoredEmitter } from '../urlStoredEmitter';
 
 const MIN = 0.5;
 const MAX = 1.5;

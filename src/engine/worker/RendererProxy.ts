@@ -23,6 +23,11 @@ import type {
 import type { ReactiveRenderArg } from '../gameLoop/cosmetics/reactiveDecorations';
 import type { WildlifeRenderArg } from '../gameLoop/cosmetics/wildlife';
 import type { Light } from '../lighting';
+import { isLightingEnabled } from '../lighting';
+import { getBrightness } from '../lighting/brightness';
+import { getPhotosensitivity } from '../lighting/photosensitivity';
+import { getPerfTier } from '../lighting/perfTier';
+import { getSlowDevice } from '../perfFlags';
 import type { BotNavDebugState } from '../navDebugOverlay';
 import type { NetDebugStats } from '../net/core/debugOverlay';
 import {
@@ -31,6 +36,7 @@ import {
   type WorkerLongFrameSample,
 } from './messages';
 import { createParticlesSab, makeViews, writeParticles, type ParticleSabViews } from './sabParticles';
+import { installWorkerBootQueue, type WorkerBootQueue } from './workerBootQueue';
 
 /** Cumulative worker render-time stats, accumulated across the
  *  per-second flushes from the worker. Read by the perf harness. */
@@ -85,7 +91,7 @@ export interface RendererProxyOptions {
 
 const STUB_DIAGNOSTICS: RenderDiagnostics = Object.freeze({
   clouds: false, weather: false, wildlife: false, animatedBg: false,
-  hazardZones: false, effectZones: false, bouncyPlatforms: false, pigeons: false,
+  hazardZones: false, effectZones: false, bouncyPlatforms: false,
   lavaRocks: false, springs: false, thorns: false, carrots: false,
   gibs: false, confetti: false, shockwaves: false, afterimages: false,
   fog: false, ambient: false, fireworks: false, dayNight: false,
@@ -96,6 +102,10 @@ const STUB_DIAGNOSTICS: RenderDiagnostics = Object.freeze({
 export class RendererProxy implements IRenderer {
   private worker: Worker;
   private destroyed = false;
+  /** Buffers postMessage calls until the worker posts `worker:bootReady`,
+   *  then restores native postMessage so the 60Hz renderFrame hot path
+   *  has no wrapper branch. See `workerBootQueue.ts` for the rationale. */
+  private _bootQueue!: WorkerBootQueue;
   /** SAB-backed particles wire (Step 4). Null in prod / non-isolated
    *  contexts; the existing `particles: Particle[]` field in
    *  `host:renderFrame` handles those. */
@@ -174,6 +184,7 @@ export class RendererProxy implements IRenderer {
       new URL('./renderWorker.ts', import.meta.url),
       { type: 'module', name: 'carrot-royale-render' },
     );
+    this._bootQueue = installWorkerBootQueue(this.worker);
     this.worker.addEventListener('message', this.handleMessage);
     // On a worker runtime error / structured-clone failure, mark the proxy
     // dead so subsequent postMessage calls no-op (silent worker is better
@@ -205,7 +216,13 @@ export class RendererProxy implements IRenderer {
       const bgNightOff = opts.bgNightCanvas?.transferControlToOffscreen() ?? null;
       const lightOff = opts.lightCanvas?.transferControlToOffscreen() ?? null;
 
-      const particlesSab = createParticlesSab();
+      // Bench gate: `?sabParticles=off` forces the postMessage particles
+      // fallback even when SAB is available, so the SAB-vs-fallback paths
+      // can be A/B'd in `npm run perf`. No storage; URL-only.
+      const sabParticlesDisabled =
+        typeof window !== 'undefined'
+        && new URLSearchParams(window.location.search).get('sabParticles') === 'off';
+      const particlesSab = sabParticlesDisabled ? null : createParticlesSab();
       if (particlesSab) this.particleSabViews = makeViews(particlesSab);
 
       const init: HostInitMsg = {
@@ -225,6 +242,13 @@ export class RendererProxy implements IRenderer {
         netDebugEnabled: opts.netDebugEnabled ?? false,
         fpsEnabled: opts.fpsEnabled ?? false,
         particlesSab: particlesSab ?? undefined,
+        // Main-only lighting/perf emitters — the worker's module-scope copies
+        // never see the URL params / localStorage that main read at startup.
+        lightingEnabled: isLightingEnabled(),
+        brightness: getBrightness(),
+        photosensitivity: getPhotosensitivity(),
+        perfTier: getPerfTier(),
+        slowDevice: getSlowDevice(),
       };
 
       const transfer: Transferable[] = [bgOff, fgOff];
@@ -301,6 +325,10 @@ export class RendererProxy implements IRenderer {
   private handleMessage = (e: MessageEvent<WorkerToHostMsg>): void => {
     if (this.destroyed) return;
     const msg = e.data;
+    if (msg.type === 'worker:bootReady') {
+      this._bootQueue.release();
+      return;
+    }
     if (msg.type === 'worker:ready') {
       this.onReady?.();
       return;

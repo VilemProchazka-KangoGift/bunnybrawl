@@ -113,7 +113,7 @@ export async function buildSourceMapResolver(mapsDir) {
   };
 }
 
-function correlateLongFrames(dts, lastSampleTime, longTasks) {
+function correlateLongFrames(dts, lastSampleTime, longTasks, gcTimes = []) {
   // dts is newest-first. Reconstruct absolute (performance.now()-relative)
   // timestamps so they align with longTask.startTime in the same reference frame.
   // Each frame's timestamp is the END of the frame interval; this is what the
@@ -126,6 +126,7 @@ function correlateLongFrames(dts, lastSampleTime, longTasks) {
   }
   timeline.reverse(); // oldest-first
   const long = timeline.filter((f) => f.dt > 25);
+  void gcTimes; // reserved for cross-timeline correlation once origins align
   return long.map((f) => {
     const window = 50; // ms window for matching a longTask to a frame
     const overlap = longTasks.find((lt) => {
@@ -137,10 +138,18 @@ function correlateLongFrames(dts, lastSampleTime, longTasks) {
     return {
       tSec: (f.tMs / 1000).toFixed(2),
       frameMs: f.dt.toFixed(1),
-      gcPauseMs: overlap ? overlap.duration.toFixed(1) : '—',
+      // Any long task (≥50ms) overlapping this frame — NOT specifically a GC pause.
+      longTaskMs: overlap ? overlap.duration.toFixed(1) : '—',
     };
   });
 }
+
+/** Threshold for flagging a heap-usage drop as a GC event. The 1Hz
+ *  sampler can miss tiny minor GCs entirely (heap recovers between
+ *  samples), so any drop >2 MB at sample boundaries is almost certainly
+ *  a major GC. The previous 5 MB threshold missed real ~3 MB majors
+ *  (see 2026-05-12 castle bench burst analysis). */
+const GC_DROP_THRESHOLD_MB = 2.0;
 
 function summarizeHeapTimeline(timeline) {
   if (timeline.length === 0) return null;
@@ -150,11 +159,13 @@ function summarizeHeapTimeline(timeline) {
   const trough = Math.min(...timeline.map((p) => p.usedMB));
   let gcEvents = 0;
   let totalDrop = 0;
+  const gcTimes = [];
   for (let i = 1; i < timeline.length; i++) {
     const drop = timeline[i - 1].usedMB - timeline[i].usedMB;
-    if (drop > 5) {
+    if (drop > GC_DROP_THRESHOLD_MB) {
       gcEvents++;
       totalDrop += drop;
+      gcTimes.push({ t: timeline[i].t, dropMB: drop });
     }
   }
   return {
@@ -164,6 +175,7 @@ function summarizeHeapTimeline(timeline) {
     sawtoothMB: (peak - trough).toFixed(1),
     gcEvents,
     avgDropMB: gcEvents > 0 ? (totalDrop / gcEvents).toFixed(1) : '0',
+    gcTimes,
     growthMB: (end - start).toFixed(1),
     leakSuspect: end - start > 30 && gcEvents < 3,
   };
@@ -343,7 +355,9 @@ async function main() {
   const buckets = bucketByModule(cpuFlat);
   const totalCpuMs = cpuFlat.reduce((s, n) => s + n.selfMs, 0);
   const heapSummary = summarizeHeapTimeline(heapTimeline);
-  const longFrames = correlateLongFrames(frames.dts ?? [], frames.lastSampleTime ?? 0, longTasks);
+  const longFrames = correlateLongFrames(
+    frames.dts ?? [], frames.lastSampleTime ?? 0, longTasks, heapSummary?.gcTimes ?? [],
+  );
 
   const lines = [];
   lines.push(`# Perf Profile — ${meta.runStartedAt}`);
@@ -372,7 +386,10 @@ async function main() {
   if (heapSummary) {
     lines.push(`- start ${heapSummary.startMB}MB · peak ${heapSummary.peakMB}MB · end ${heapSummary.endMB}MB`);
     lines.push(`- growth ${heapSummary.growthMB}MB · sawtooth amplitude ~${heapSummary.sawtoothMB}MB`);
-    lines.push(`- GC events: ${heapSummary.gcEvents} (avg drop ${heapSummary.avgDropMB}MB)`);
+    lines.push(`- GC events: ${heapSummary.gcEvents} (avg drop ${heapSummary.avgDropMB}MB, threshold ${GC_DROP_THRESHOLD_MB}MB)`);
+    if (heapSummary.gcTimes.length > 0) {
+      lines.push(`  - drops: ${heapSummary.gcTimes.map((g) => `${g.t.toFixed(1)}s/-${g.dropMB.toFixed(1)}MB`).join(', ')}`);
+    }
     if (heapSummary.leakSuspect) lines.push('- ⚠ Possible leak: heap grew >30MB with <3 GC events');
   } else {
     lines.push('_(no samples collected)_');
@@ -419,15 +436,15 @@ async function main() {
     lines.push(`| ${b.module} | ${pct} | ${b.selfMs.toFixed(0)} |`);
   }
   lines.push('');
-  lines.push('## Long frames (with GC attribution)');
+  lines.push('## Long frames (with long-task correlation)');
   lines.push('');
   if (longFrames.length === 0) {
     lines.push('_(no frames over 25ms)_');
   } else {
-    lines.push('| t | frame ms | GC pause |');
-    lines.push('|---|----------|----------|');
+    lines.push('| t | frame ms | long task ms |');
+    lines.push('|---|----------|--------------|');
     for (const f of longFrames) {
-      lines.push(`| ${f.tSec}s | ${f.frameMs} | ${f.gcPauseMs} |`);
+      lines.push(`| ${f.tSec}s | ${f.frameMs} | ${f.longTaskMs} |`);
     }
   }
   lines.push('');

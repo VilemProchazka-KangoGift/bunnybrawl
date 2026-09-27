@@ -2,7 +2,7 @@ import type { Player, MatchState, Arena, InputState, BotDifficulty } from '../ty
 import type { AIPersonality, DifficultyParams, AwarenessSnapshot } from './types';
 import type { SeededRNG } from '../net/prng';
 import type { AISnapshot } from '../net/serialize';
-import { buildAwareness } from './awareness';
+import { buildAwarenessInto, createAwarenessScratch, type AwarenessScratch } from './awareness';
 import { evaluateActions } from './utility';
 import { getPersonality, getDifficultyParams } from './personality';
 
@@ -31,6 +31,14 @@ export class AIController {
   private frameCounter = 0;
   private botIndex: number;
   private _lastNavTarget: AwarenessSnapshot['navTarget'] = null;
+  private readonly _awarenessScratch: AwarenessScratch = createAwarenessScratch();
+  /** Reused score buffer for evaluateActions — zeroed at the top of each call. */
+  private readonly _actionScores: { moveLeft: number; moveRight: number; jump: number; drop: number } =
+    { moveLeft: 0, moveRight: 0, jump: 0, drop: 0 };
+  /** Reused InputState for early-exit return paths (taunt, randomInput). The
+   *  ring buffer slots are independent pre-allocated instances; this scratch
+   *  covers the paths that bypass the ring. */
+  private readonly _returnScratch: InputState = { left: false, right: false, jump: false, down: false };
   private rng?: SeededRNG;
 
   constructor(_slot: string, characterName: string, difficulty: BotDifficulty, botIndex = 0, rng?: SeededRNG) { // slot used as map key by caller
@@ -80,7 +88,9 @@ export class AIController {
     }
     if (this.tauntTimer > 0) {
       this.tauntTimer--;
-      return { left: false, right: false, jump: false, down: this.tauntTimer % 6 < 3 };
+      const r = this._returnScratch;
+      r.left = false; r.right = false; r.jump = false; r.down = this.tauntTimer % 6 < 3;
+      return r;
     }
 
     // Stuck detection — but only when the bot is actually trying to move.
@@ -106,15 +116,22 @@ export class AIController {
     }
 
     // Throttle: only compute new decisions every 3rd frame (staggered by botIndex).
-    // On skipped frames, re-push the previous decision so the ring buffer advances at full speed.
+    // On skipped frames, copy the previous decision forward so the ring buffer
+    // advances at full speed. We write into the existing pre-allocated slot
+    // rather than assigning a new reference; the slot identity stays stable
+    // across ticks and the ring stops allocating per push.
     this.frameCounter++;
     const isDecisionFrame = this.frameCounter % 3 === this.botIndex % 3;
-    const ideal = isDecisionFrame
-      ? this.computeIdealInput(self, state, arena, carrotChase, mirrorNav)
-      : this.ringBuffer[(this.ringWrite - 1 + this.ringSize) % this.ringSize];
-
-    // Push through ring buffer
-    this.ringBuffer[this.ringWrite] = ideal;
+    const writeSlot = this.ringBuffer[this.ringWrite];
+    if (isDecisionFrame) {
+      this.computeIdealInputInto(writeSlot, self, state, arena, carrotChase, mirrorNav);
+    } else {
+      const prevSlot = this.ringBuffer[(this.ringWrite - 1 + this.ringSize) % this.ringSize];
+      writeSlot.left = prevSlot.left;
+      writeSlot.right = prevSlot.right;
+      writeSlot.jump = prevSlot.jump;
+      writeSlot.down = prevSlot.down;
+    }
     this.ringWrite = (this.ringWrite + 1) % this.ringSize;
     const delayed = this.ringBuffer[this.ringRead];
     this.ringRead = (this.ringRead + 1) % this.ringSize;
@@ -124,7 +141,8 @@ export class AIController {
 
     // Apply difficulty noise
     if (this.rnd() < this.difficulty.noiseChance) {
-      return this.randomInput();
+      this.randomInputInto(this._returnScratch);
+      return this._returnScratch;
     }
 
     // Consume jump (only fire once, then cooldown)
@@ -139,10 +157,10 @@ export class AIController {
     return delayed;
   }
 
-  private computeIdealInput(self: Player, state: MatchState, arena: Arena, carrotChase = false, mirrorNav = false): InputState {
+  private computeIdealInputInto(out: InputState, self: Player, state: MatchState, arena: Arena, carrotChase = false, mirrorNav = false): void {
     // Build awareness once, reuse for stuck recovery and normal path
     const preferSafe = this.personality.cautiousness >= 1.2;
-    const awareness = buildAwareness(self, state, arena, this.difficulty.awarenessRadius, this.difficulty.pathfindingDepth, preferSafe, mirrorNav);
+    const awareness = buildAwarenessInto(this._awarenessScratch, self, state, arena, this.difficulty.awarenessRadius, this.difficulty.pathfindingDepth, preferSafe, mirrorNav);
     this._lastNavTarget = awareness.navTarget;
 
     if (this.stuckTimer > 45) {
@@ -153,19 +171,17 @@ export class AIController {
       // Use nav target to escape in the right direction (jump over obstacles, drop off edges)
       if (awareness.navTarget) {
         const dx = awareness.navTarget.approachX - self.x;
-        return {
-          left: dx < -10,
-          right: dx > 10,
-          jump: awareness.navTarget.type !== 'd',
-          down: awareness.navTarget.type === 'd',
-        };
+        out.left = dx < -10;
+        out.right = dx > 10;
+        out.jump = awareness.navTarget.type !== 'd';
+        out.down = awareness.navTarget.type === 'd';
+        return;
       }
-      return {
-        left: escapeR1 > 0.5,
-        right: escapeR2 > 0.5,
-        jump: true,
-        down: false,
-      };
+      out.left = escapeR1 > 0.5;
+      out.right = escapeR2 > 0.5;
+      out.jump = true;
+      out.down = false;
+      return;
     }
 
     // Search pause: when nothing is in immediate radius, pause briefly before roaming
@@ -183,10 +199,13 @@ export class AIController {
     }
     if (this.searchTimer > 0) {
       this.searchTimer--;
-      return NO_INPUT;
+      out.left = false; out.right = false; out.jump = false; out.down = false;
+      return;
     }
 
-    // Wolf special: target the score leader
+    // Wolf special: target the score leader. Mutates awareness._nearestEnemy
+    // in place — awareness.nearestEnemy already points at that scratch when set
+    // (or is null; we only enter this branch if nearestEnemy is non-null).
     if (this.personality.targetLeader && awareness.nearestEnemy) {
       let leader: Player | null = null;
       let bestScore = self.score;
@@ -200,11 +219,14 @@ export class AIController {
         const dx = leader.x - self.x;
         const dy = leader.y - self.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        awareness.nearestEnemy = { x: leader.x, y: leader.y, vx: leader.vx, vy: leader.vy, dx, dy, dist, score: leader.score };
+        const ne = this._awarenessScratch._nearestEnemy;
+        ne.x = leader.x; ne.y = leader.y; ne.vx = leader.vx; ne.vy = leader.vy;
+        ne.dx = dx; ne.dy = dy; ne.dist = dist; ne.score = leader.score;
+        // awareness.nearestEnemy already === ne, no reassignment needed.
       }
     }
 
-    const scores = evaluateActions(awareness, this.personality, this.difficulty.precisionMult, carrotChase, this.rng);
+    const scores = evaluateActions(awareness, this.personality, this.difficulty.precisionMult, carrotChase, this.rng, this._actionScores);
 
     // Add chaos noise (suppressed at high difficulty)
     const effectiveChaos = this.personality.chaosAffinity * (1 - this.difficulty.chaosSuppress);
@@ -223,12 +245,10 @@ export class AIController {
     const dropT = DROP_THRESHOLD * (1 - pm * 0.4);   // 0.50 → 0.30
 
     const netHorizontal = scores.moveRight - scores.moveLeft;
-    return {
-      left: netHorizontal < -moveT,
-      right: netHorizontal > moveT,
-      jump: scores.jump > jumpT,
-      down: scores.drop > dropT,
-    };
+    out.left = netHorizontal < -moveT;
+    out.right = netHorizontal > moveT;
+    out.jump = scores.jump > jumpT;
+    out.down = scores.drop > dropT;
   }
 
   /** Serialize internal state for rollback snapshot. */
@@ -296,12 +316,10 @@ export class AIController {
     this.frameCounter = snap.frameCounter;
   }
 
-  private randomInput(): InputState {
-    return {
-      left: this.rnd() > 0.5,
-      right: this.rnd() > 0.5,
-      jump: this.rnd() > 0.92,
-      down: this.rnd() > 0.95,
-    };
+  private randomInputInto(out: InputState): void {
+    out.left = this.rnd() > 0.5;
+    out.right = this.rnd() > 0.5;
+    out.jump = this.rnd() > 0.92;
+    out.down = this.rnd() > 0.95;
   }
 }

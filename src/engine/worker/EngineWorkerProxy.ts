@@ -27,18 +27,25 @@ import { isTouchPrimary } from '../touchDetect';
 import { TouchInputManager } from '../touchInput';
 import { isBotSlot } from '../types';
 import { getArena, getTheme } from '../arenas/operations';
+import { isLightingEnabled } from '../lighting';
+import { getBrightness } from '../lighting/brightness';
+import { getPhotosensitivity } from '../lighting/photosensitivity';
+import { getPerfTier } from '../lighting/perfTier';
+import { getSlowDevice } from '../perfFlags';
 import { getCharacterForSlot } from '../characters/defaults';
 import { createInitialPlayers, createInitialMatchState } from '../simulator/initialState';
 import { CANVAS_WIDTH } from '../constants';
 import { createInputSab, setSlotCount, writeSlotInput, SAB_INPUT_MAX_SLOTS } from './sabInput';
+import { installWorkerBootQueue, type WorkerBootQueue } from './workerBootQueue';
 import type { Arena, MatchSettings, MatchState, MatchPhase, PlayerSlot, InputState, CharacterSlot } from '../types';
 import type { ThemeConfig } from '../themes/types';
 import type { IRenderer, RenderDiagnostics } from '../renderer';
 import type { NetDebugStats } from '../net/core/debugOverlay';
 import type {
   HostInitEngineMsg, HostStopMsg, HostEngineInputBatchMsg,
-  HostEnginePauseMsg, HostEngineResumeMsg,
+  HostEnginePauseMsg, HostEngineResumeMsg, HostEngineVisibilityMsg,
   HostEngineSwitchArenaMsg, HostEngineSetPhaseMsg, HostEngineSkipCountdownMsg,
+  HostPerfResetMsg,
   HostNetSetModeMsg, HostNetSnapshotApplyMsg,
   HostNetDisconnectSlotMsg, HostNetReconnectSlotMsg,
   WorkerEngineEventMsg, WorkerToHostMsg,
@@ -71,7 +78,7 @@ export interface EngineWorkerProxyOptions {
 /** Stub diagnostics until the worker periodically posts the real ones. */
 const STUB_DIAGNOSTICS: RenderDiagnostics = Object.freeze({
   clouds: false, weather: false, wildlife: false, animatedBg: false,
-  hazardZones: false, effectZones: false, bouncyPlatforms: false, pigeons: false,
+  hazardZones: false, effectZones: false, bouncyPlatforms: false,
   lavaRocks: false, springs: false, thorns: false, carrots: false,
   gibs: false, confetti: false, shockwaves: false, afterimages: false,
   fog: false, ambient: false, fireworks: false, dayNight: false,
@@ -98,7 +105,10 @@ export class EngineWorkerProxy {
   /** Last input batch posted to the worker. Per-rAF reads compare against
    *  this to skip identical posts — inputs change far less often than 60Hz
    *  so the dedup cuts postMessage volume 3-10×. Indexed by slot order in
-   *  `activePlayers`. */
+   *  `activePlayers`. Each entry is its own scratch (NOT a reference to
+   *  the current tick's `merged` source, which is itself a reused scratch
+   *  from KeyboardManager / touchMerged — those mutate every tick, so a
+   *  shared reference would defeat the field-equality check). */
   private lastSentInputs: InputState[] = [];
   /** True until the first input batch has been posted, ensuring the worker
    *  receives at least one batch even on a frame with all-empty inputs
@@ -132,6 +142,24 @@ export class EngineWorkerProxy {
    *  Called from `switchArena` so a level switch doesn't leave a falsely
    *  pre-warmed roster on the new arena. Wired by the constructor. */
   private _clearWarmedNames?: () => void;
+  /** Buffers postMessage calls until the worker posts `worker:bootReady`,
+   *  then restores native postMessage so the 60Hz input-batch hot path
+   *  has no wrapper branch. See `workerBootQueue.ts` for the rationale. */
+  private _bootQueue!: WorkerBootQueue;
+
+  /** Latest worker perfStats flush. Populated from `worker:perfStats`
+   *  messages and read by the bench via `__fpsCounter` / `__perfTrace`
+   *  shims (the global rAF observer + perfTrace on main are unfed when
+   *  the loop runs in the worker). */
+  private _latestFpsSamples: { dts: number[]; lastSampleTime: number } = { dts: [], lastSampleTime: 0 };
+  private _latestSections: Record<string, { calls: number; totalMs: number; avgMs: number; p95Ms: number }> = {};
+
+  /** Per-rAF scratches so the input loop allocates zero objects in
+   *  steady state. Inputs are read into these, then either SAB-written
+   *  or postMessage-posted. The postMessage path retains the array
+   *  reference across ticks (structured clone copies it on send). */
+  private _inputsScratch: Array<[PlayerSlot, InputState]> = [];
+  private _touchMerged: InputState = { left: false, right: false, jump: false, down: false };
 
   constructor(opts: EngineWorkerProxyOptions) {
     this.fgNightTint = opts.fgNightTint ?? null;
@@ -149,6 +177,7 @@ export class EngineWorkerProxy {
       new URL('./renderWorker.ts', import.meta.url),
       { type: 'module', name: 'carrot-royale-engine' },
     );
+    this._bootQueue = installWorkerBootQueue(this.worker);
     this.worker.addEventListener('message', this.handleMessage);
     // On a worker runtime error / structured-clone failure, mark the proxy
     // dead so subsequent input batch posts no-op (a silent worker is better
@@ -215,6 +244,13 @@ export class EngineWorkerProxy {
         fpsEnabled: opts.fpsEnabled ?? false,
         inputSab: inputSab ?? undefined,
         inputSabSlots: inputSab ? humanSlots : undefined,
+        // Main-only lighting/perf emitters — the worker's module-scope copies
+        // never see the URL params / localStorage that main read at startup.
+        lightingEnabled: isLightingEnabled(),
+        brightness: getBrightness(),
+        photosensitivity: getPhotosensitivity(),
+        perfTier: getPerfTier(),
+        slowDevice: getSlowDevice(),
       };
       const transfer: Transferable[] = [bgOff, fgOff];
       if (hudOff) transfer.push(hudOff);
@@ -248,11 +284,72 @@ export class EngineWorkerProxy {
     // still points at `=== this`, so we never clobber the live one.
     if (typeof window !== 'undefined') {
       (window as unknown as { __engineWorkerProxy?: EngineWorkerProxy }).__engineWorkerProxy = this;
+      this._installPerfShims();
     }
   }
 
+  /** Override `window.__fpsCounter` + `__perfTrace` with worker-backed
+   *  shims so the perf bench (which expects main-thread modules) reads
+   *  the worker's actual frame timings and section snapshots. The
+   *  useLocalMatch / useOnlineMatch shells set the real modules first;
+   *  this overwrites them in simWorker mode where those modules are
+   *  never fed. Cleared in `stop()` if the global still points at us. */
+  private _installPerfShims(): void {
+    type FpsLike = { dumpSamples(): { dts: number[]; count: number; lastSampleTime: number } };
+    type PerfLike = {
+      enabled: boolean;
+      snapshot(): Record<string, { calls: number; totalMs: number; avgMs: number; p95Ms: number }>;
+      reset(): void;
+    };
+    const w = window as unknown as {
+      __fpsCounter?: FpsLike;
+      __perfTrace?: PerfLike;
+    };
+    w.__fpsCounter = {
+      dumpSamples: () => {
+        const s = this._latestFpsSamples;
+        return { dts: s.dts, count: s.dts.length, lastSampleTime: s.lastSampleTime };
+      },
+    };
+    w.__perfTrace = {
+      enabled: true,
+      snapshot: () => this._latestSections,
+      reset: () => this.resetPerfStats(),
+    };
+  }
+
+  /** Resets the worker's perfTrace + fpsCounter rings AND clears the
+   *  proxy's last-known snapshot so a subsequent shim read returns empty
+   *  until the next perfStats flush arrives. Mirrors main's
+   *  perfTrace.reset() semantics. */
+  resetPerfStats(): void {
+    this._latestSections = {};
+    this._latestFpsSamples = { dts: [], lastSampleTime: 0 };
+    const msg: HostPerfResetMsg = { type: 'host:perfReset' };
+    // workerBootQueue wraps `worker.postMessage` so pre-bootReady calls
+    // are buffered transparently.
+    this.worker.postMessage(msg);
+  }
+
+  /** Bound so add/removeEventListener target the same ref. Forwards the host
+   *  tab's visibility to the worker, which has no `document` and would
+   *  otherwise let its rAF-driven sim throttle to ~0Hz when hidden — freezing
+   *  every connected guest (the worker switches to a setTimeout driver on
+   *  hidden). Guarded for non-DOM environments (tests). */
+  private _onVisibilityChange = (): void => {
+    if (typeof document === 'undefined') return;
+    const m: HostEngineVisibilityMsg = { type: 'host:engineVisibility', hidden: document.hidden };
+    this.worker.postMessage(m);
+  };
+
   start(): void {
     this.keyboardManager.attach();
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', this._onVisibilityChange);
+      // Post the current state once so a tab that starts hidden (or a match
+      // begun while backgrounded) picks the right driver immediately.
+      this._onVisibilityChange();
+    }
     if (this.touchInput) {
       const container = document.querySelector('.game-scaler-content') as HTMLElement | null;
       if (container) {
@@ -269,7 +366,11 @@ export class EngineWorkerProxy {
     // Build per-slot input batch from KeyboardManager + TouchInput. Bots
     // run inside the worker's Simulator (RuleBasedBot) so we don't include
     // their inputs.
-    const inputs: Array<[PlayerSlot, InputState]> = [];
+    //
+    // Allocations: zero in steady state. `_inputsScratch` is retained,
+    // truncated, and refilled each tick. Tuples are recycled in place.
+    // Touch-merge writes into a single `_touchMerged` scratch.
+    const inputs = this._inputsScratch;
     let humanIdx = 0;
     let changed = !this.inputsEverSent;
     for (const slot of this.activePlayers) {
@@ -277,28 +378,54 @@ export class EngineWorkerProxy {
       const kb = this.keyboardManager.readSlot(slot as CharacterSlot);
       let merged: InputState = kb;
       if (this.touchInput && slot === this.touchSlot) {
-        const player = this.mirrorState?.players.find((p) => p.id === slot);
-        const airborne = player?.state === 'airborne';
+        // Index-based lookup avoids the per-rAF closure that
+        // `players.find(p => p.id === slot)` allocates.
+        let airborne = false;
+        if (this.mirrorState) {
+          const players = this.mirrorState.players;
+          for (let i = 0; i < players.length; i++) {
+            if (players[i].id === slot) { airborne = players[i].state === 'airborne'; break; }
+          }
+        }
         const ti = this.touchInput.getInputForPlayer(airborne);
-        merged = {
-          left: kb.left || ti.left,
-          right: kb.right || ti.right,
-          jump: kb.jump || ti.jump,
-          down: kb.down || ti.down,
-        };
+        const tm = this._touchMerged;
+        tm.left = kb.left || ti.left;
+        tm.right = kb.right || ti.right;
+        tm.jump = kb.jump || ti.jump;
+        tm.down = kb.down || ti.down;
+        merged = tm;
       }
-      inputs.push([slot, merged]);
-      const last = this.lastSentInputs[humanIdx];
-      if (!last
-        || last.left !== merged.left
+      // Reuse the existing tuple at this index if present; otherwise
+      // push a fresh one (one-time per slot, amortized across the match).
+      if (humanIdx < inputs.length) {
+        inputs[humanIdx][0] = slot;
+        inputs[humanIdx][1] = merged;
+      } else {
+        inputs.push([slot, merged]);
+      }
+      let last = this.lastSentInputs[humanIdx];
+      if (!last) {
+        last = { left: false, right: false, jump: false, down: false };
+        this.lastSentInputs[humanIdx] = last;
+        changed = true;
+      } else if (last.left !== merged.left
         || last.right !== merged.right
         || last.jump !== merged.jump
         || last.down !== merged.down) {
         changed = true;
       }
-      this.lastSentInputs[humanIdx] = merged;
+      // Copy fields (not reference) — merged is itself a reused scratch
+      // that will be overwritten next tick; storing the reference would
+      // make next-tick's `last.x === merged.x` trivially true.
+      last.left = merged.left;
+      last.right = merged.right;
+      last.jump = merged.jump;
+      last.down = merged.down;
       humanIdx++;
     }
+    // Truncate to the actual human-slot count (no-op in steady state).
+    if (inputs.length > humanIdx) inputs.length = humanIdx;
+
     // Two delivery paths:
     //  - SAB (crossOriginIsolated dev/preview): Atomics.store the per-slot
     //    bitfield. Worker polls every fixedUpdate, no message hop.
@@ -306,10 +433,7 @@ export class EngineWorkerProxy {
     //    `host:engineInputBatch` wire as before.
     if (this.inputSabView) {
       for (let i = 0; i < inputs.length; i++) {
-        const merged = inputs[i][1];
-        // Index is humanIdx because we built `inputs` by skipping bot
-        // slots in the same order as `inputSabSlots`.
-        writeSlotInput(this.inputSabView, i, merged);
+        writeSlotInput(this.inputSabView, i, inputs[i][1]);
       }
       this.inputsEverSent = true;
     } else if (changed) {
@@ -324,6 +448,9 @@ export class EngineWorkerProxy {
     this.running = false;
     if (this.rafId) cancelAnimationFrame(this.rafId);
     this.rafId = 0;
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', this._onVisibilityChange);
+    }
     this.keyboardManager.detach();
     this.touchInput?.detach();
     audio.stopAllGameSounds();
@@ -335,8 +462,18 @@ export class EngineWorkerProxy {
     } catch { /* worker may already be down */ }
     this.worker.terminate();
     if (typeof window !== 'undefined') {
-      const w = window as unknown as { __engineWorkerProxy?: EngineWorkerProxy };
-      if (w.__engineWorkerProxy === this) w.__engineWorkerProxy = undefined;
+      const w = window as unknown as {
+        __engineWorkerProxy?: EngineWorkerProxy;
+        __fpsCounter?: unknown;
+        __perfTrace?: unknown;
+      };
+      if (w.__engineWorkerProxy === this) {
+        w.__engineWorkerProxy = undefined;
+        // Drop the perf shims we installed. Tests / next match's proxy
+        // re-install when they construct a fresh EngineWorkerProxy.
+        w.__fpsCounter = undefined;
+        w.__perfTrace = undefined;
+      }
     }
   }
 
@@ -374,11 +511,19 @@ export class EngineWorkerProxy {
    *  feed the input fairness ring before posting the per-tick batch. */
   getInputAny(): InputState {
     const kb = this.keyboardManager.readAny();
-    const touchPlayer = this.touchSlot
-      ? this.mirrorState?.players.find((p) => p.id === this.touchSlot)
-      : null;
-    return mergeKeyboardTouchInput(kb, this.touchInput, touchPlayer?.state === 'airborne');
+    let airborne = false;
+    if (this.touchSlot && this.mirrorState) {
+      const players = this.mirrorState.players;
+      for (let i = 0; i < players.length; i++) {
+        if (players[i].id === this.touchSlot) {
+          airborne = players[i].state === 'airborne';
+          break;
+        }
+      }
+    }
+    return mergeKeyboardTouchInput(kb, this.touchInput, airborne, this._inputAnyScratch);
   }
+  private readonly _inputAnyScratch: InputState = { left: false, right: false, jump: false, down: false };
 
   fixedUpdate(_dt: number, _networkInputs?: Map<string, InputState>): void { /* worker drives */ }
   tickCosmetic(_dt: number): void { /* worker drives */ }
@@ -496,10 +641,19 @@ export class EngineWorkerProxy {
   getState(): MatchState { return this.mirrorState ?? this.bootState; }
   getRendererDiagnostics(): RenderDiagnostics { return STUB_DIAGNOSTICS; }
   setOnPhaseChange(cb: (phase: MatchPhase) => void): void { this.onPhaseChange = cb; }
-  setNetworkMode(_enabled: boolean): void { /* sim-worker is local-only */ }
-  setPlayerNames(_names: Record<string, string>): void { /* online not in this path */ }
-  setConnectionQuality(_rtt: number, _jitter: number): void { /* online not in this path */ }
-  setLocalSlot(_slot: PlayerSlot): void { /* online not in this path */ }
+  setNetworkMode(_enabled: boolean): void { /* worker sim enters network mode via its init message / NetMatchDriver, not here */ }
+  // Online DOES run through this proxy (PR #38 wired it as NetMatchDriver).
+  // These forward the HUD-visible values to the worker-hosted Renderer, which
+  // owns the player-name labels and the connection-quality signal icon.
+  setPlayerNames(names: Record<string, string>): void { this.renderer.setPlayerNames(names); }
+  setConnectionQuality(rtt: number, jitter: number): void { this.renderer.setConnectionQuality(rtt, jitter); }
+  // Retarget the local touch slot (mobile online guest is P2+). The proxy reads
+  // this.touchSlot for the airborne→fast-fall conversion when forwarding input,
+  // and haptics must fire for the guest's own player, not the host's P1.
+  setLocalSlot(slot: PlayerSlot): void {
+    this.touchSlot = slot;
+    haptics.init(slot);
+  }
   setMatchOver(): void { /* online-only */ }
   resetCosmeticBaselines(): void { /* worker handles internally */ }
   /** Forward a runtime debug-flag toggle to the worker's GameLoop so its
@@ -511,6 +665,10 @@ export class EngineWorkerProxy {
   private handleMessage = (e: MessageEvent<WorkerToHostMsg>): void => {
     if (this.destroyed) return;
     const msg = e.data;
+    if (msg.type === 'worker:bootReady') {
+      this._bootQueue.release();
+      return;
+    }
     if (msg.type === 'worker:nightOpacity') {
       const value = String(msg.opacity);
       if (msg.kind === 'fg') {
@@ -538,6 +696,14 @@ export class EngineWorkerProxy {
     if (msg.type === 'worker:netInterpStats') {
       // Guest-side interp stats forwarded here. Currently no consumer;
       // hook for the debug overlay lands when net stats integrate.
+      return;
+    }
+    if (msg.type === 'worker:perfStats') {
+      // Sections snapshot is cumulative since worker boot (or last reset)
+      // — overwrite per flush. fpsSamples is the current ring dump, also
+      // a fresh per-flush snapshot.
+      if (msg.sections) this._latestSections = msg.sections;
+      if (msg.fpsSamples) this._latestFpsSamples = msg.fpsSamples;
       return;
     }
     if (msg.type === 'worker:error') {

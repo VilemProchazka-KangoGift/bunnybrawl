@@ -1,4 +1,4 @@
-import type { Arena, MatchState, Player, Ripple, SurfaceTag } from '../../types';
+import type { Arena, MatchState, Player, Ripple, SurfaceDecal, SurfaceTag } from '../../types';
 import {
   DUST_LAND_VY_THRESHOLD,
   HARD_LAND_VY_THRESHOLD,
@@ -56,34 +56,61 @@ export function isInLavaZone(player: Player, arena: Arena): boolean {
   return false;
 }
 
+/** Module-scope pools shared across matches. Both kinds are tiny (caps 30 +
+ *  12); persistence is intentional — switchArena's state reset drops the live
+ *  decals/ripples but leaves the pool intact for the next match. */
+const _decalPool: SurfaceDecal[] = [];
+const _ripplePool: Ripple[] = [];
+
 export function pushSurfaceDecal(
   state: MatchState,
   decal: { kind: 'full' | 'mini'; x: number; y: number; life: number; seed: number; color: string; surface: SurfaceTag; clipMinX?: number; clipMaxX?: number },
 ): void {
   if (decal.life <= 0) return;
   if (state.surfaceDecals.length >= SURFACE_DECAL_MAX) {
-    state.surfaceDecals.shift();
+    const evicted = state.surfaceDecals.shift();
+    if (evicted) _decalPool.push(evicted);
   }
-  state.surfaceDecals.push({ ...decal, age: 0 });
+  const d = _decalPool.pop();
+  if (d) {
+    d.kind = decal.kind; d.x = decal.x; d.y = decal.y;
+    d.life = decal.life; d.seed = decal.seed; d.color = decal.color;
+    d.surface = decal.surface;
+    d.clipMinX = decal.clipMinX;
+    d.clipMaxX = decal.clipMaxX;
+    d.age = 0;
+    state.surfaceDecals.push(d);
+  } else {
+    state.surfaceDecals.push({ ...decal, age: 0 });
+  }
 }
 
 export function pushRipple(state: MatchState, x: number, y: number, surface: Ripple['surface']): void {
   if (state.ripples.length >= SURFACE_RIPPLE_MAX) {
-    state.ripples.shift();
+    const evicted = state.ripples.shift();
+    if (evicted) _ripplePool.push(evicted);
   }
-  state.ripples.push({ x, y, surface, age: 0 });
+  const r = _ripplePool.pop();
+  if (r) {
+    r.x = x; r.y = y; r.surface = surface; r.age = 0;
+    state.ripples.push(r);
+  } else {
+    state.ripples.push({ x, y, surface, age: 0 });
+  }
 }
 
 export function updateSurfaceLifetimes(state: MatchState, dt: number): void {
   for (let i = state.surfaceDecals.length - 1; i >= 0; i--) {
     state.surfaceDecals[i].age += dt;
     if (state.surfaceDecals[i].age >= state.surfaceDecals[i].life) {
+      _decalPool.push(state.surfaceDecals[i]);
       swapRemove(state.surfaceDecals, i);
     }
   }
   for (let i = state.ripples.length - 1; i >= 0; i--) {
     state.ripples[i].age += dt;
     if (state.ripples[i].age >= SURFACE_RIPPLE_LIFE) {
+      _ripplePool.push(state.ripples[i]);
       swapRemove(state.ripples, i);
     }
   }

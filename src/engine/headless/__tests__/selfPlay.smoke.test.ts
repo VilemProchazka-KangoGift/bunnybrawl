@@ -20,7 +20,7 @@ import { getArena } from '../../arenas';
 import { SeededRNG } from '../../net/prng';
 import { RuleBasedBot } from '../../input/RuleBasedBot';
 import { RandomInput } from '../../input/RandomInput';
-import type { InputState, MatchSettings, PlayerSlot } from '../../types';
+import type { MatchSettings, PlayerSlot } from '../../types';
 import type { PlayerInput } from '../../input/PlayerInput';
 import type { HeadlessRunnerConfig } from '../types';
 

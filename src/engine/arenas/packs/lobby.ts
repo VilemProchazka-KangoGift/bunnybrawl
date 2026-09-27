@@ -224,17 +224,7 @@ export const lobby: ArenaPack = {
   ],
 
   ground: {
-    surfaceColor: '#5DAF4A',
-    surfaceThickness: 4,
-  },
-
-  platform: {
-    floatingBodyColor: '#8B7355',
-    floatingTopColor: '#B59A78',
-    groundBodyColor: '#3D6B35',
-    groundTopColor: '#5DAF4A',
-    drawMoss: false,
-  },
+    surfaceColor: '#5DAF4A',  },
 
   // ---- Ambient systems ----
   clouds: {

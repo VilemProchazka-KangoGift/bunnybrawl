@@ -75,7 +75,7 @@ Probably the cosmetic-step particle update or spawn loop. Not L2-related. Worth 
 
 ### 6. **Castle's drawAnimatedBackground embers — NIT**
 
-35ms / 1.1%. Five floating ember sprites at 60Hz with `fastSin` drift. Could batch into one path-fill per frame (5 fills → 1 fill via `moveTo` + `arc` sub-paths). Already a documented pattern in CLAUDE.md.
+35ms / 1.1%. Five floating ember sprites at 60Hz with `fastSin` drift. Could batch into one path-fill per frame (5 fills → 1 fill via `moveTo` + `arc` sub-paths). Already a documented pattern in AGENTS.md.
 
 **Estimated win:** ~10-15ms profiled = ~0.3ms/frame.
 

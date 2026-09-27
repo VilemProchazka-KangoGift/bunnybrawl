@@ -5,11 +5,7 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest';
 import type { MatchSettings, Arena, PlayerSlot, InputState } from './types';
 import { makeArena } from './__tests__/testHelpers';
-import {
-  FIXED_TIMESTEP, MATCH_COUNTDOWN,
-  CANVAS_WIDTH, PLAYER_WIDTH, PLAYER_HEIGHT,
-  SPRING_BOUNCE, STOMP_BOUNCE,
-} from './constants';
+import { FIXED_TIMESTEP, MATCH_COUNTDOWN, CANVAS_WIDTH, PLAYER_WIDTH, PLAYER_HEIGHT } from './constants';
 
 vi.mock('./audio', () => ({
   audio: {
@@ -51,6 +47,12 @@ function makeSettings(overrides?: Partial<MatchSettings>): MatchSettings {
   };
 }
 
+function signedWrappedDelta(from: number, to: number): number {
+  // World X wraps at CANVAS_WIDTH; a left move across zero becomes a large
+  // positive raw-coordinate jump. These 30 ticks move less than half a world.
+  return ((to - from + CANVAS_WIDTH * 1.5) % CANVAS_WIDTH) - CANVAS_WIDTH / 2;
+}
+
 let _lastLoop: GameLoop | null = null;
 
 function createLoop(opts?: { settings?: Partial<MatchSettings>; arena?: Partial<Arena>; players?: PlayerSlot[]; rng?: SeededRNG }) {
@@ -82,7 +84,7 @@ afterEach(() => {
 
 describe('Integration: full match lifecycle', () => {
   it('countdown → gameplay → kill → score → match end', () => {
-    const { loop, onMatchEnd } = createLoop({ settings: { killLimit: 2 } });
+    const { loop } = createLoop({ settings: { killLimit: 2 } });
     const state = loop.getState();
 
     // Phase 1: countdown
@@ -134,8 +136,8 @@ describe('Integration: network mode round-trip', () => {
       loop.fixedUpdate(FIXED_TIMESTEP, inputs);
     }
 
-    expect(p1.x).toBeGreaterThan(xP1); // P1 moved right
-    expect(p2.x).toBeLessThan(xP2);    // P2 moved left
+    expect(signedWrappedDelta(xP1, p1.x)).toBeGreaterThan(0); // P1 moved right
+    expect(signedWrappedDelta(xP2, p2.x)).toBeLessThan(0);    // P2 moved left
   });
 });
 
@@ -373,7 +375,6 @@ describe('Integration: timer decay interactions', () => {
 
 describe('Integration: arena-specific features', () => {
   it('mirror arena mod reverses platform positions', () => {
-    const { loop: normal } = createLoop();
     const { loop: mirrored } = createLoop({
       settings: { mods: { mirrorArena: true, extremeGore: false, carrotChase: false, giantPlayers: false, turbo: false, superBounce: false, underwaterGravity: false } },
     });

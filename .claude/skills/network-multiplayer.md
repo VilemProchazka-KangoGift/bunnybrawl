@@ -15,7 +15,7 @@ Online play uses host-authoritative architecture with **Trystero MQTT signaling*
 | `net/transport.ts` | Trystero MQTT signaling + WebRTC data channels, RTT/jitter tracking |
 | `net/hostAuthority.ts` | Host: input buffering, snapshot broadcast |
 | `net/interpolation.ts` | Game-specific entity interpolation, extrapolation, `applySnapshotToState` |
-| `net/snapshot.ts` | Binary snapshot encode/decode, Uint8 timer compression |
+| `net/snapshot/` | Directory (not a single file): `schema.ts` (declarative `PLAYER_SCHEMA`), `codecGen.ts` (schema-driven encode/decode closures), `binaryCodec.ts`, `extract.ts` (`takeAuthSnapshot`), `types.ts`. Uint8 timer compression. Adding a wire field is a 3-edit chain (`WirePlayer` + `PLAYER_SCHEMA` + `codecGen`) plus a `PROTOCOL_VERSION` bump. |
 | `net/inputEcho.ts` | Guest visual feedback without position prediction (facing, anim, squash) |
 | `net/netMatch/` | Thin orchestrator + 5 collaborators (see below) |
 | `net/core/` | Generic netcode core (reusable foundation, zero game imports) |
@@ -31,6 +31,7 @@ Online play uses host-authoritative architecture with **Trystero MQTT signaling*
 | `MessageRouter.ts` | Reliable + unreliable MsgType switch |
 | `HostLoop.ts` | Host's simulate + broadcast rAF loop |
 | `GuestLoop.ts` | Guest's input-send + snapshot-apply rAF loop + wire handlers |
+| `NetMatchDriver.ts` | Async sim-driver interface implemented by both `GameLoop` (local sim) and `EngineWorkerProxy` (sim-in-worker); collaborators drive the sim through it without branching on the impl (PR #38). `isRemoteSim()` discriminates. |
 
 ## Host Loop (`HostLoop`)
 
@@ -56,11 +57,12 @@ Both host and guest call `gameLoop.cosmeticStep(dt)` for all SFX, particles, VFX
 - **Timers as Uint8 frame counts**: `timer * 60`, clamped 0-255
 - **Positions as Float32**
 - **All timer decrements use `Math.max(0, ...)`** to prevent negative values wrapping to 255 in Uint8
+- **Delta compression is re-enabled** (`PROTOCOL_VERSION 12`, auto-enabled in `NetMatch.start`). Self-healing baseline: the base frame is in the delta header so the guest validates before applying (never garbage on baseline mismatch); host keeps a 120-snapshot ring, promotes a peer baseline only on a live SNAPSHOT_ACK, and forces a full keyframe every 60 frames or after 30 frames of ACK silence. Slow/stressed peers bypass delta and get full snapshots. See engine `CLAUDE.md` for the full protocol.
 
 ## Transport Lifecycle
 
 1. MainMenu modal creates Transport with lobby callbacks
-2. `Transport.setEvents()` re-wires to match callbacks when NetMatch starts (**critical** — without this, the rollback engine never receives input messages → game freezes)
+2. `Transport.setEvents()` re-wires to match callbacks when NetMatch starts (**critical** — without this, NetMatch never receives input/snapshot messages → game freezes)
 3. VictoryScreen re-wires transport for rematch / arena signals from host
 4. On disconnect/quit: `transport.destroy()` + `resetOnline()`
 
@@ -80,7 +82,7 @@ Vite config needs `optimizeDeps.include: ['trystero']`.
 
 - Pause menu differs by role: host gets Resume / Change Level / Cancel Game; guest gets Resume / Leave Game.
 - Victory screen: only host sees Rematch and Change Arena. Guest only sees Leave Game.
-- Game doesn't actually pause in online mode — ESC just shows the overlay while the game continues.
+- Online pause is real, not overlay-only. `NetMatch.pause()` pauses the host sim and broadcasts `MsgType.PAUSE` (0x05); guests apply pause/resume in `MessageRouter`, and `RECONNECT_SYNC` carries the host's `paused` flag so a reclaiming guest resumes in the same suspended state.
 
 ## Network Simulator & Debug
 
@@ -140,7 +142,7 @@ Vite config needs `optimizeDeps.include: ['trystero']`.
 - `randRange()` in `themes/utils.ts` uses `Math.random()` internally — inline the math for any future deterministic paths.
 - `assignBotCharacters` used `Math.random()` for shuffle — each peer got different bot characters → different AI → instant desync. Fixed with optional seed.
 - AI personalities amplified desync; were disabled (all bots used neutral DEFAULT_PERSONALITY).
-- `InputManager.getInput('P1')` only reads WASD. Online play needed `getInputAny()` merging all 5 key bindings.
+- `KeyboardManager.readSlot('P1')` only reads WASD. Online play needed `readAny()` merging all 5 key bindings.
 
 ### PeerJS Pitfalls
 
@@ -165,5 +167,5 @@ Vite config needs `optimizeDeps.include: ['trystero']`.
 
 - **Snapshot pool**: `takeSnapshotInto()` copies into pre-allocated objects. `createEmptySnapshot()` for ring buffer init.
 - **Input map**: reuse single `Map` with `.clear()` instead of `new Map()` per frame.
-- **Pre-allocated `_anyInput`**: `InputManager.getInputAny()` reuses one `InputState` object — no spread copies.
+- **Pre-allocated `_anyInput`**: `KeyboardManager.readAny()` reuses one `InputState` object — no spread copies.
 - **Return const references** (like `NO_INPUT`) instead of spreading copies in cold paths too.

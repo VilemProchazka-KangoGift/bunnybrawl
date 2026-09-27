@@ -387,21 +387,6 @@ export const waterfall: ArenaPack = {
 
   ground: {
     surfaceColor: '#5AAF49',
-    surfaceThickness: 4,
-    grassBlades: {
-      color: '#4D9F3A',
-      spacing: 14,
-      heightRange: [5, 9],
-    },
-  },
-
-  platform: {
-    floatingBodyColor: '#5A6B5A',
-    floatingTopColor: '#6A7B6A',
-    floatingAccentColor: '#5AAF49',
-    groundBodyColor: '#4A5A3E',
-    groundTopColor: '#3A7A3A',
-    drawMoss: true,
   },
 
   // ---- Ambient systems ----
@@ -819,6 +804,10 @@ export const waterfall: ArenaPack = {
       ctx.fillStyle = '#ffffff';
       ctx.globalAlpha = (1 - u) * 0.85;
       const splashAnchors = 5;
+      // All 30 droplets share one colour + alpha + radius this frame → batch
+      // into a single path (moveTo before each arc so they stay separate discs).
+      const dropR = 2 + u * 2;
+      ctx.beginPath();
       for (let s = 0; s < splashAnchors; s++) {
         const sx = WATERFALL_BASE_LX + (s + 0.5) * (WATERFALL_BASE_W / splashAnchors);
         for (let i = 0; i < 6; i++) {
@@ -826,11 +815,11 @@ export const waterfall: ArenaPack = {
           const speed = 40 + (i % 3) * 18;
           const px = sx + fastCos(a) * speed * u;
           const py = WATERFALL_BASE_Y - 4 + fastSin(a) * speed * u + 40 * u * u;
-          ctx.beginPath();
-          ctx.arc(px, py, 2 + u * 2, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.moveTo(px + dropR, py);
+          ctx.arc(px, py, dropR, 0, Math.PI * 2);
         }
       }
+      ctx.fill();
     }
     ctx.globalAlpha = 1;
     ctx.restore();

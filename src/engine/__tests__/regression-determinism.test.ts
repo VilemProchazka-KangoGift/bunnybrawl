@@ -143,7 +143,7 @@ function runScenario(opts: {
   );
 
   // Network mode: tells fixedUpdate to use the explicit `networkInputs` arg
-  // instead of reading from its internal InputManager (which has no listeners attached in Node).
+  // instead of reading from its internal KeyboardManager (which has no listeners attached in Node).
   loop.setNetworkMode(true);
   // Directly drive fixedUpdate. Set phase to 'playing' (test default is 'loading').
   loop.getState().phase = 'playing';

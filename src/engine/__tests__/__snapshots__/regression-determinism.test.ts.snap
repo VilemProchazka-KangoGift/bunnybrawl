@@ -7,13 +7,13 @@ exports[`regression: determinism > locks the deterministic-scenario fingerprint 
   "positions": [
     {
       "slot": "P1",
-      "x": 343.6665344238281,
-      "y": 464.25018310546875,
+      "x": 306.99993896484375,
+      "y": 324.24969482421875,
     },
     {
       "slot": "P2",
-      "x": 939.6679077148438,
-      "y": 518.0003051757812,
+      "x": 1015.0010986328125,
+      "y": 503,
     },
   ],
 }

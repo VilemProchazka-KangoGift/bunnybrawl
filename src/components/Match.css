@@ -15,6 +15,14 @@
   position: absolute;
   top: 0;
   left: 0;
+  /* Lock the displayed size to logical 1280×720 so high-DPI backing-store
+   * growth (intrinsic bumped to 1280×scale via applyRenderScaleToCanvas)
+   * can't enlarge the visible canvas. Worker-mode `transferControlToOffscreen`
+   * resizes the OffscreenCanvas bitmap, which syncs to the main element's
+   * intrinsic dims — without these CSS dims pinned, the canvas displays at
+   * the bumped intrinsic and clips inside GameScaler's 1280×720 container. */
+  width: 1280px;
+  height: 720px;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
 }
@@ -316,9 +324,11 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: rgba(10, 10, 20, 0.55);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  /* Solid overlay instead of a full-viewport backdrop blur: the loading screen
+     runs during the cold-start JIT warmup on exactly the low-end devices where
+     a per-composite GPU blur hurts most, and the canvas is fully covered
+     anyway so the blur was barely visible. */
+  background: rgba(10, 10, 20, 0.92);
   color: #fff;
   font-size: 28px;
   font-weight: bold;

@@ -8,7 +8,7 @@ import { runLoadingTasks } from '../../engine/matchLoading';
 import { isWorkerEnabled, RendererProxy } from '../../engine/worker';
 import { isSimWorkerEnabled } from '../../engine/worker/simWorkerFlag';
 import { EngineWorkerProxy } from '../../engine/worker/EngineWorkerProxy';
-import { getRenderScale } from '../../engine/renderScale';
+import { getRenderScale, subscribeRenderScale } from '../../engine/renderScale';
 import { debugFlags, subscribeDebugFlags } from '../../engine/debugFlags';
 import i18n from '../../i18n';
 import type { TouchInputManager } from '../../engine/touchInput';
@@ -91,7 +91,7 @@ export interface UseLocalMatchParams {
  * sibling online effect.
  *
  * The "reset phaseIsLoading=true / localTasksDone=false at top of branch"
- * caveat from CLAUDE.md is preserved here.
+ * caveat from AGENTS.md is preserved here.
  *
  * HMR caveat: editing engine code while a match is running with
  * `?worker=on` updates Match.tsx's transitive deps on main but leaves the
@@ -142,11 +142,24 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
      *  (same refs → reuse proxy) from a real dep change (different refs
      *  → tear down old proxy NOW and fall through to fresh construct).
      *  Without this we'd silently reuse a proxy built for stale settings. */
-    deps: { activePlayers: typeof activePlayers; matchSettings: typeof matchSettings } | null;
+    deps: { activePlayers: typeof activePlayers } | null;
   }>({ teardown: null, timer: null, deps: null });
+
+  // matchSettings is consumed once at construction; the live loop is
+  // frozen against the snapshot taken here. Worker canvases can only
+  // `transferControlToOffscreen` once, so an effect re-run would
+  // permanently detach them. Contract: the only field that changes
+  // mid-match is `arenaId`, applied via `gameLoop.switchArena()` from
+  // `handleChangeArena`. Any other field (mods, killLimit, timeLimit)
+  // is implicitly frozen for the match's lifetime — changes are
+  // captured into this ref but never propagate to the live loop. Mods
+  // UI surface accepts changes only outside a match.
+  const matchSettingsRef = useRef(matchSettings);
+  useEffect(() => { matchSettingsRef.current = matchSettings; }, [matchSettings]);
 
   useEffect(() => {
     if (isOnline) return; // online hook handles this branch
+    const matchSettings = matchSettingsRef.current;
 
     // Cancel any deferred teardown from a prior cleanup. If a timer was
     // pending, the previous mount's teardown closure is still alive —
@@ -156,18 +169,18 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
       lifecycleRef.current.timer = null;
       const prev = lifecycleRef.current.deps;
       const depsUnchanged = prev !== null
-        && prev.activePlayers === activePlayers
-        && prev.matchSettings === matchSettings;
+        && prev.activePlayers === activePlayers;
       if (depsUnchanged) {
         // StrictMode remount (or any cleanup→setup cycle with identical
         // deps). Existing proxy is correct; reuse without reconstructing.
         const reusedTeardown = lifecycleRef.current.teardown;
+        const lifecycle = lifecycleRef.current;
         return () => {
-          lifecycleRef.current.timer = setTimeout(() => {
+          lifecycle.timer = setTimeout(() => {
             reusedTeardown?.();
-            lifecycleRef.current.teardown = null;
-            lifecycleRef.current.deps = null;
-            lifecycleRef.current.timer = null;
+            lifecycle.teardown = null;
+            lifecycle.deps = null;
+            lifecycle.timer = null;
           }, 0);
         };
       }
@@ -215,11 +228,11 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
     setLocalTasksDone(false);
 
     // Worker offload: two stacked flags govern this.
-    //   ?simWorker=on (default off) → the worker hosts the FULL GameLoop
+    //   ?simWorker=on (default on)  → the worker hosts the FULL GameLoop
     //     (sim + cosmetic + render). Main is a thin keyboard/audio shell.
-    //     Local play only — online play has too much NetMatch coupling.
     //   ?worker=on    (default on)  → renderer-only worker. Sim stays on
-    //     main; per-frame state ships to worker for paint.
+    //     main; per-frame state ships to worker for paint. Used when
+    //     simWorker=off but worker=on.
     // Both off → pure main-thread render path (the safe baseline).
     const useSimWorker = isSimWorkerEnabled();
     if (useSimWorker) {
@@ -252,6 +265,15 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
         const unsubscribeDebug = subscribeDebugFlags((name, value) => {
           engineProxy.setDebugFlag(name, value);
         });
+        // W3: render-scale changes (DPR / fullscreen / slow-device toggle)
+        // must reach the worker-hosted Renderer. GameLoop's own
+        // subscribeRenderScale runs INSIDE the worker where no resize /
+        // fullscreen events fire, so main forwards them here. (The
+        // renderer-only worker path is already covered by GameLoop's
+        // subscription forwarding to the RendererProxy.)
+        const unsubscribeRenderScale = subscribeRenderScale((s) => {
+          engineProxy.renderer.setRenderScale(s);
+        });
         kickoffLoading(
           engineProxy as unknown as GameLoop,
           () => gameLoopRef.current === (engineProxy as unknown as GameLoop),
@@ -262,6 +284,7 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
         );
         const teardown = (): void => {
           unsubscribeDebug();
+          unsubscribeRenderScale();
           engineProxy.stop();
           gameLoopRef.current = null;
           setTouchInput(null);
@@ -271,14 +294,15 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
           }
         };
         lifecycleRef.current.teardown = teardown;
-        lifecycleRef.current.deps = { activePlayers, matchSettings };
+        lifecycleRef.current.deps = { activePlayers };
+        const lifecycle = lifecycleRef.current;
         return () => {
           // See top-of-effect comment: defer for StrictMode safety.
-          lifecycleRef.current.timer = setTimeout(() => {
+          lifecycle.timer = setTimeout(() => {
             teardown();
-            lifecycleRef.current.teardown = null;
-            lifecycleRef.current.deps = null;
-            lifecycleRef.current.timer = null;
+            lifecycle.teardown = null;
+            lifecycle.deps = null;
+            lifecycle.timer = null;
           }, 0);
         };
       } catch (e) {
@@ -384,21 +408,22 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
       }
     };
     lifecycleRef.current.teardown = teardown;
-    lifecycleRef.current.deps = { activePlayers, matchSettings };
+    lifecycleRef.current.deps = { activePlayers };
+    const lifecycle = lifecycleRef.current;
     return () => {
       // See top-of-effect comment: defer for StrictMode safety. Main-thread
       // path doesn't strictly need this (no transferControlToOffscreen if
       // workerProxy is null) but the renderer-only worker path does, and
       // making one branch deferred but not the other invites confusion.
-      lifecycleRef.current.timer = setTimeout(() => {
+      lifecycle.timer = setTimeout(() => {
         teardown();
-        lifecycleRef.current.teardown = null;
-        lifecycleRef.current.deps = null;
-        lifecycleRef.current.timer = null;
+        lifecycle.teardown = null;
+        lifecycle.deps = null;
+        lifecycle.timer = null;
       }, 0);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activePlayers, matchSettings, setMatchResult, isOnline]);
+  }, [activePlayers, setMatchResult, isOnline]);
 }
 
 /** True when any of the supplied canvases has been transferred to a

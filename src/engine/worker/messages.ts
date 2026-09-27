@@ -15,7 +15,7 @@
  */
 
 import type { MatchState, Particle, Gib, MatchSettings, PlayerSlot, InputState, MatchPhase, CharacterDef } from '../types';
-import type { Light } from '../lighting';
+import type { Light, PerfTier } from '../lighting';
 import type { BotNavDebugState } from '../navDebugOverlay';
 import type { NetDebugStats } from '../net/core/debugOverlay';
 
@@ -50,6 +50,17 @@ export interface HostInitMsg {
    *  only when `crossOriginIsolated` is true (GitHub Pages prod falls
    *  back to shipping `particles` in `host:renderFrame`). */
   particlesSab?: SharedArrayBuffer;
+  /** Main-only lighting/perf emitters. These read from module-scope
+   *  emitters that ONLY the main thread initializes (from URL params +
+   *  localStorage). Without threading them here the worker ignores the
+   *  user's accessibility/perf settings (`?lighting=off`, `?brightness`,
+   *  `?photosensitivity`, perf tier, slow-device pref) and stays at
+   *  compile-time defaults. */
+  lightingEnabled?: boolean;
+  brightness?: number;
+  photosensitivity?: boolean;
+  perfTier?: PerfTier;
+  slowDevice?: boolean;
 }
 
 export interface HostStopMsg { type: 'host:stop' }
@@ -126,6 +137,17 @@ export interface HostInitEngineMsg {
    *  alongside its `inputMap` and decodes each tick. */
   inputSab?: SharedArrayBuffer;
   inputSabSlots?: PlayerSlot[];
+  /** Main-only lighting/perf emitters. These read from module-scope
+   *  emitters that ONLY the main thread initializes (from URL params +
+   *  localStorage). Without threading them here the worker ignores the
+   *  user's accessibility/perf settings (`?lighting=off`, `?brightness`,
+   *  `?photosensitivity`, perf tier, slow-device pref) and stays at
+   *  compile-time defaults. */
+  lightingEnabled?: boolean;
+  brightness?: number;
+  photosensitivity?: boolean;
+  perfTier?: PerfTier;
+  slowDevice?: boolean;
 }
 
 /** Per-frame input batch from main. The worker's RemoteInput adapters
@@ -141,9 +163,23 @@ export interface HostEngineInputBatchMsg {
 
 export interface HostEnginePauseMsg { type: 'host:enginePause' }
 export interface HostEngineResumeMsg { type: 'host:engineResume' }
+/** Main forwards the host tab's visibility so the worker can switch its
+ *  sim driver. The worker has no `document`, so it can't detect this
+ *  itself. When `hidden`, the worker's rAF-driven loop (tied to a hidden
+ *  OffscreenCanvas presentation) throttles to ~0Hz and the sim + net
+ *  snapshots stop — freezing every connected guest. On `hidden`, the
+ *  worker falls back to a `setTimeout` driver so ticks + snapshots keep
+ *  flowing (throttled to ~1Hz, but alive). */
+export interface HostEngineVisibilityMsg { type: 'host:engineVisibility'; hidden: boolean }
 export interface HostEngineSwitchArenaMsg { type: 'host:engineSwitchArena'; arenaId: string; settingsOverrides?: Partial<MatchSettings> }
 export interface HostEngineSetPhaseMsg { type: 'host:engineSetPhase'; phase: MatchPhase }
 export interface HostEngineSkipCountdownMsg { type: 'host:engineSkipCountdown' }
+
+/** Reset the worker's perfTrace + fpsCounter rings. Used by the perf
+ *  bench between countdown and the steady-state capture window so the
+ *  recorded sections / frame timings don't include startup noise. Only
+ *  meaningful in simWorker mode (the worker owns those modules). */
+export interface HostPerfResetMsg { type: 'host:perfReset' }
 
 // ---- Phase 2: NetMatch async fixedUpdate ----------------------------------
 // Worker hosts the simulation in online play; main is the I/O hub for
@@ -243,15 +279,23 @@ export type HostToWorkerMsg =
   | HostEngineInputBatchMsg
   | HostEnginePauseMsg
   | HostEngineResumeMsg
+  | HostEngineVisibilityMsg
   | HostEngineSwitchArenaMsg
   | HostEngineSetPhaseMsg
   | HostEngineSkipCountdownMsg
+  | HostPerfResetMsg
   | HostNetSetModeMsg
   | HostNetSnapshotApplyMsg
   | HostNetDisconnectSlotMsg
   | HostNetReconnectSlotMsg;
 
 export interface WorkerReadyMsg { type: 'worker:ready' }
+/** Fired immediately after the worker attaches its `message` listener.
+ *  Vite dev's module-worker boot can drop messages posted before the worker
+ *  finishes evaluating its top-level code (the browser is supposed to queue
+ *  these per spec, but observably doesn't for module workers in dev). The
+ *  proxy queues `postMessage` calls locally until this lands. */
+export interface WorkerBootReadyMsg { type: 'worker:bootReady' }
 export interface WorkerErrorMsg { type: 'worker:error'; message: string }
 /** Fired when the worker's Renderer wants to update one of the night-tint
  *  DOM opacities. Main applies it to the corresponding HTMLElement.style. */
@@ -306,6 +350,11 @@ export interface WorkerPerfStatsMsg {
   /** Frames that crossed the soft long-frame threshold (~12ms) since the
    *  last flush, with attribution from this-frame perfTrace section sums. */
   longFrames?: WorkerLongFrameSample[];
+  /** Snapshot of the worker's fpsCounter ring at flush time. The bench
+   *  reads via `__fpsCounter.dumpSamples()` shim installed by
+   *  EngineWorkerProxy in simWorker mode (main's fpsCounter is never
+   *  sampled when the rAF loop lives in the worker). */
+  fpsSamples?: { dts: number[]; lastSampleTime: number };
 }
 
 /** Engine-side events posted from the worker's GameLoop callbacks back to
@@ -353,6 +402,7 @@ export interface WorkerEngineStateMirrorMsg {
 
 export type WorkerToHostMsg =
   | WorkerReadyMsg
+  | WorkerBootReadyMsg
   | WorkerErrorMsg
   | WorkerNightOpacityMsg
   | WorkerPerfStatsMsg

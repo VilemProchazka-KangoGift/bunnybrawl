@@ -1,4 +1,4 @@
-import { useRef, useEffect, useMemo, useState, useCallback } from 'react';
+import { useRef, useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../store/gameStore';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
@@ -214,7 +214,7 @@ export function VictoryScreen() {
     return stats.perPlayer.get(playerId) ?? null;
   };
 
-  const mvpHighlights = useMemo(() => {
+  const mvpHighlights = (() => {
     const highlights: Array<{ label: string; icon: string; rawName: string; playerName: string; playerColor: string; value: string }> = [];
     if (!sortedPlayers.length) return highlights;
 
@@ -235,7 +235,7 @@ export function VictoryScreen() {
     if (bestStreak.val > 0) highlights.push({ label: t('mvp_serial_killer'), icon: '\uD83D\uDD25', rawName: bestStreak.name, playerName: charName(bestStreak.name, bestStreak.slot), playerColor: bestStreak.color, value: String(bestStreak.val) + ' ' + t('mvp_streak') });
 
     return highlights;
-  }, [sortedPlayers, lastMatchState, t, online.isOnline, online.playerNames]);
+  })();
 
   const canRematch = !disconnectWin && (!online.isOnline || online.isHost) && peerConnected;
 

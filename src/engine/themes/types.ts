@@ -90,8 +90,6 @@ export interface PhysicsModifiers {
 export interface ThemeConfig {
   id: string;
   nameKey: string;           // i18n key for display name
-  previewGradient: string;   // CSS gradient for menu thumbnail
-  previewIcon: string;       // Unicode icon for arena tile
 
   // Sky
   sky: { gradient: GradientStop[] };
@@ -99,27 +97,11 @@ export interface ThemeConfig {
   // Hills behind platforms
   hills: Array<{ x: number; baseY: number; width: number; height: number; color: string }>;
 
-  // Ground surface styling
+  // Ground surface styling (read by ParticleSystem and lobbyGame for dust color)
   ground: {
-    surfaceColor: string;       // top surface line color
-    surfaceThickness: number;   // px
-    grassBlades?: {
-      color: string;
-      spacing: number;           // px between blades
-      heightRange: [number, number];
-    };
+    surfaceColor: string;
   };
 
-  // Platform rendering
-  platform: {
-    floatingBodyColor: string;
-    floatingTopColor: string;
-    floatingAccentColor?: string;  // e.g. moss green or snow white strip
-    groundBodyColor: string;
-    groundTopColor: string;
-    drawMoss: boolean;
-    customDraw?: (ctx: Ctx2D, x: number, y: number, w: number, h: number, isGround: boolean) => void;
-  };
 
   // Ambient systems
   clouds: CloudConfig;
@@ -136,7 +118,7 @@ export interface ThemeConfig {
   drawBackgroundNature: (ctx: Ctx2D, arena: Arena) => void;
   /** Drawn over players — foreground bushes, snow piles */
   drawForegroundNature: (ctx: Ctx2D, arena: Arena) => void;
-  drawPlatform?: (ctx: Ctx2D, platform: import('../types').Platform, isGround: boolean) => void;
+  drawPlatform: (ctx: Ctx2D, platform: import('../types').Platform, isGround: boolean) => void;
   /** Foreground overlay for platform body face — drawn after players for occlusion. */
   drawPlatformOverlay?: (ctx: Ctx2D, platform: import('../types').Platform, isGround: boolean) => void;
 
@@ -163,12 +145,6 @@ export interface ThemeConfig {
     dt: number,
     services: { emitParticle: (x: number, y: number, vx: number, vy: number, life: number, size: number, color: string) => void },
   ) => void;
-
-  /** Per-frame ground-level critters (snails, rats, squirrels, crabs, robots).
-   *  Drawn AFTER players + fog but BEFORE the foreground-nature cache, so grass
-   *  tufts / bushes occlude critters that walk behind them. Use this instead of
-   *  drawAnimatedForeground for anything that should disappear under foliage. */
-  drawGroundCritters?: (ctx: Ctx2D, arena: Arena, time: number, dayPhase: number, matchState?: import('../types').MatchState) => void;
 
   /** Per-frame full-scene tint, drawn LAST after day-night overlay. Use for global mood washes (aurora green, lava red glow) that should affect every layer including players. */
   drawSceneTint?: (ctx: Ctx2D, dayPhase: number, time: number) => void;
@@ -206,12 +182,6 @@ export interface ThemeConfig {
     glowColor: string;
   };
 
-
-  // Optional pigeon flocks that scatter when disturbed
-  pigeonConfig?: {
-    positions: Array<{ x: number; y: number }>;
-    respawnTime: number;
-  };
 
   scatterFlockConfigs?: Array<{
     species: ScatterFlockSpecies;

@@ -169,19 +169,6 @@ describe('GameLoop.getPlayerInput dispatch', () => {
     expect(result).toBe(netInput);
   });
 
-  it('converts jump→down (fast-fall) for an airborne player in network mode', () => {
-    const loop = createLoop();
-    loop.setNetworkMode(true);
-    const player = loop.getState().players.find(p => p.id === 'P1')!;
-    player.state = 'airborne';
-    const netInput: InputState = { left: true, right: false, jump: true, down: false };
-    const networkInputs = new Map<string, InputState>([['P1', netInput]]);
-
-    const result = loop.getPlayerInputForTest(player, networkInputs);
-
-    expect(result).toEqual({ left: true, right: false, jump: false, down: true });
-  });
-
   it('RemoteInput returns all-false when networkInputs has no entry for the slot', () => {
     const loop = createLoop();
     loop.setNetworkMode(true);

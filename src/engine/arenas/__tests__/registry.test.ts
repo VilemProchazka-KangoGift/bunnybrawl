@@ -33,14 +33,7 @@ function makeMockPack(overrides: Partial<ArenaPack> & { id: string }): ArenaPack
     spawnPoints: [{ x: 200, y: 650, platformIndex: 0 }],
     sky: { gradient: [{ offset: 0, color: '#000' }, { offset: 1, color: '#111' }] },
     hills: [],
-    ground: { surfaceColor: '#555', surfaceThickness: 4 },
-    platform: {
-      floatingBodyColor: '#444',
-      floatingTopColor: '#666',
-      groundBodyColor: '#333',
-      groundTopColor: '#555',
-      drawMoss: false,
-    },
+    ground: { surfaceColor: '#555' },
     clouds: { count: 0, color: '#fff', minSize: 10, maxSize: 20, minSpeed: 0.1, maxSpeed: 0.3, yRange: [0, 100] },
     weather: { particleCount: 0, types: [] },
     wildlife: { count: 0, types: [] },
@@ -49,6 +42,7 @@ function makeMockPack(overrides: Partial<ArenaPack> & { id: string }): ArenaPack
     dayNight: { enabled: false },
     drawBackgroundNature: noop as ArenaPack['drawBackgroundNature'],
     drawForegroundNature: noop as ArenaPack['drawForegroundNature'],
+    drawPlatform: noop as ArenaPack['drawPlatform'],
     ...overrides,
   } as ArenaPack;
 }
@@ -228,8 +222,6 @@ describe('Arena registry', () => {
 
     expect(theme.id).toBe('test_to_theme');
     expect(theme.nameKey).toBe('arena_test_to_theme');
-    expect(theme.previewGradient).toBe(pack.previewGradient);
-    expect(theme.previewIcon).toBe(pack.previewIcon);
     expect(theme.sky).toBe(pack.sky);
     expect(theme.drawBackgroundNature).toBe(drawBg);
     expect(theme.drawForegroundNature).toBe(drawFg);
