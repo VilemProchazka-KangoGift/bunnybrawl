@@ -73,9 +73,13 @@ const TURN_SERVERS = !isTurnEnabled() ? [] : [
 ];
 
 function getRoomConfig(roomId: string) {
+  // The browser smoke suite supplies a local MQTT broker at build time.
+  // Normal builds continue to use Trystero's public relay list.
+  const testRelayUrl = import.meta.env.VITE_E2E_MQTT_URL;
   return {
     config: {
       appId: APP_ID,
+      ...(testRelayUrl ? { relayUrls: [testRelayUrl] } : {}),
       rtcConfig: {
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
