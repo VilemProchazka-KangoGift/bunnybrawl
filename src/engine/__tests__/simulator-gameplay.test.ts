@@ -1308,11 +1308,14 @@ describe('Simulator — Effect Zones (extended)', () => {
     const player = state.players[0];
 
     state.geyserStates[0].active = false;
+    // Initialization randomizes the cooldown; keep it inactive for this tick.
+    state.geyserStates[0].timer = 10;
     player.vy = 0;
     player.state = 'idle';
 
     sim.fixedUpdate(FIXED_TIMESTEP);
 
+    expect(state.geyserStates[0].active).toBe(false);
     expect(player.vy).toBeGreaterThan(-100);
   });
 
