@@ -6,6 +6,10 @@ Use when profiling, optimizing, or writing performance-critical code in the game
 
 The menu is the first interactive screen. Keep match and lobby screens and the online lobby modal behind dynamic imports; a static import of `OnlineModal` from `MainMenu` pulls the network stack into the first load. To compare a production build, run `npm run build`, start `node node_modules/vite/bin/vite.js preview --host=127.0.0.1 --port=4187`, then run `node scripts/measureColdLoad.mjs`. The probe uses a fresh Chromium context with cache disabled and 4× CPU slowdown for each run, and reports time to menu mount, JavaScript transferred before the menu, and the cost of opening Online. Verify both worker modes and the online flow after changing imports.
 
+Use `node scripts/measureColdLoad.mjs http://127.0.0.1:4187/bunnybrawl/ 5 lobby constrained` to measure lobby entry with 100 ms latency and 200,000 bytes/s download throughput. Omit `constrained` for local network conditions or use `online` instead of `lobby`. Resource counts stop at the DOM mount mark, excluding later prefetch completion. Compare the same profile on both builds and report timing variability separately from byte savings.
+
+Arena previews must import `arenas/previewCatalog.ts` directly. Full pack modules have registration side effects; importing the `arenas` barrel can bring them into a screen even when only a lookup helper is needed. The local lobby uses `arenas/operations` and awaits only its own pack, then prefetches the match pack bundle. Keep full registration ahead of Match mount, including direct-match URLs.
+
 ## Architecture — Hot Path Overview
 
 The game runs a **fixed 60fps timestep** with two-layer Canvas 2D rendering:

@@ -10,23 +10,27 @@ import { assignBotCharacters, registerBuiltinCharacters } from './engine/charact
 // on main.
 import './engine/characters/builtinSounds';
 import { isTouchPrimary } from './engine/touchDetect';
-import { registerBuiltinArenas } from './engine/arenas';
 import { registerBuiltinEntities } from './engine/entities';
+import { loadBuiltinArenas, loadLobbyArena } from './engine/arenas/loading';
 import type { PlayerSlot, BotSlot, CharacterSlot } from './engine/types';
 import { ALL_BOT_SLOTS } from './engine/types';
 import { MAX_BOT_COUNT } from './engine/constants';
 import logoUrl from '/logo.png?url';
 
-const CharacterSelect = lazy(() => import('./components/CharacterSelect')
+/** Register required packs before gameplay mounts, while fetching screen code in parallel. */
+function loadGameplayScreen<T>(screen: Promise<T>, arenas: Promise<void>): Promise<T> {
+  return Promise.all([screen, arenas]).then(([module]) => module);
+}
+
+const CharacterSelect = lazy(() => loadGameplayScreen(import('./components/CharacterSelect'), loadLobbyArena())
   .then((module) => ({ default: module.CharacterSelect })));
-const Match = lazy(() => import('./components/Match')
+const Match = lazy(() => loadGameplayScreen(import('./components/Match'), loadBuiltinArenas())
   .then((module) => ({ default: module.Match })));
 const VictoryScreen = lazy(() => import('./components/VictoryScreen')
   .then((module) => ({ default: module.VictoryScreen })));
 
-// Register all built-in packs at module load time
+// Characters/entities are needed by menu controls; arenas load before gameplay.
 registerBuiltinCharacters();
-registerBuiltinArenas();
 registerBuiltinEntities();
 
 /**

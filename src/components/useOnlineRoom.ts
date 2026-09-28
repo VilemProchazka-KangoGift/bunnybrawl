@@ -18,7 +18,7 @@ import {
   CHARACTERS, BOT_CHARACTERS, getLobbyRoster, assignBotCharacters,
 } from '../engine/characters';
 import { ALL_BOT_SLOTS, isBotSlot } from '../engine/types';
-import { listPlayableArenaPacks } from '../engine/arenas';
+import { listPlayableArenaPreviews } from '../engine/arenas/previewCatalog';
 import type { BotSlot, CharacterSlot, PlayerSlot } from '../engine/types';
 import { PLAYER_NAME_MAX_LENGTH } from '../engine/rendering/hud';
 import { safeStorage } from '../storage';
@@ -35,7 +35,7 @@ const LS_PLAYER_NAME = 'carrotroyale_player_name';
  *  the other side doesn't have). */
 export function resolveRandomArena(arenaId: string): string {
   if (arenaId !== 'random') return arenaId;
-  const all = listPlayableArenaPacks();
+  const all = listPlayableArenaPreviews();
   return all[Math.floor(Math.random() * all.length)]?.id ?? 'meadow';
 }
 

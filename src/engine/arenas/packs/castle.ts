@@ -1,3 +1,4 @@
+import { BUILTIN_ARENA_PREVIEWS } from '../previewCatalog';
 import type { ArenaPack } from '../types';
 import type { Arena, Platform, WeatherParticle, Ctx2D } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
@@ -337,15 +338,8 @@ registerReactiveKind('castle.banner', {
 });
 
 export const castle: ArenaPack = {
-  // ---- Identity ----
-  id: 'castle',
-
-  // ---- UI metadata ----
-  previewGradient: 'linear-gradient(to bottom, #0A0A2E 0%, #1A1A4E 40%, #3A3A5E 100%)',
-  previewIcon: '\u{1F3F0}',
-
-  // ---- Translations ----
-  translations: { en: 'Castle', cs: 'Hrad', hi: '\u0915\u093F\u0932\u093E', fil: 'Kastilyo' },
+  // ---- Identity, preview, and translations ----
+  ...BUILTIN_ARENA_PREVIEWS.castle,
 
   // ---- Layout ----
   defaultSurface: 'stone',

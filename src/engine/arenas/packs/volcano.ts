@@ -1,3 +1,4 @@
+import { BUILTIN_ARENA_PREVIEWS } from '../previewCatalog';
 import type { ArenaPack } from '../types';
 import type { Arena, Platform, WeatherParticle, Ctx2D } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
@@ -268,15 +269,8 @@ registerReactiveKind('volcano.deadTree', {
 });
 
 export const volcano: ArenaPack = {
-  // ---- Identity ----
-  id: 'volcano',
-
-  // ---- UI metadata ----
-  previewGradient: 'linear-gradient(to bottom, #1A0505 0%, #8B2500 50%, #FF4500 100%)',
-  previewIcon: '\u{1F30B}',
-
-  // ---- Translations ----
-  translations: { en: 'Volcano', cs: 'Sopka', hi: '\u091C\u094D\u0935\u093E\u0932\u093E\u092E\u0941\u0916\u0940', fil: 'Bulkan' },
+  // ---- Identity, preview, and translations ----
+  ...BUILTIN_ARENA_PREVIEWS.volcano,
 
   // ---- Layout ----
   defaultSurface: 'stone',

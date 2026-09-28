@@ -21,7 +21,7 @@ Use when creating or modifying arena levels, themes, platform layouts, or decora
 
 ## Architecture: Arena Pack System
 
-Arenas are bundled as `ArenaPack` objects — one file per arena under `src/engine/arenas/packs/`. A pack contains layout + visuals + translations + music + physics mods + hazard configs + ambient sounds. There is **no separate theme file or locale keys** — everything lives in the pack.
+Arenas are bundled as `ArenaPack` objects — one file per arena under `src/engine/arenas/packs/`. A pack contains layout + visuals + music + physics mods + hazard configs + ambient sounds. Identity, translations, and previews live in the lightweight `arenas/previewCatalog.ts` and are spread into each full pack. There is **no separate theme file or locale keys**.
 
 Shared drawing primitives live in `src/engine/themes/drawPrimitives/` (split by category: `background.ts`, `foreground.ts`, `winter.ts`, `hazardFactories.ts`).
 
@@ -31,8 +31,7 @@ Shared drawing primitives live in `src/engine/themes/drawPrimitives/` (split by 
    - **Layout**: `platforms`, `spawnPoints`, `width`, `height`
    - **Visuals**: `sky`, `hills`, `ground` (surfaceColor only), `clouds`, `weather`, `wildlife`, `fog`, `ambientParticles`, `dayNight`
    - **Draw functions**: `drawPlatform` (required), `drawBackgroundNature`, `drawForegroundNature`, optionally `drawFarBackground`, `drawAnimatedBackground`
-   - **Translations**: `translations: { en: 'Name', cs: 'Jméno', hi: '...', fil: '...' }`
-   - **Preview**: `previewGradient` + `previewIcon` for arena selector UI
+   - **Translations and preview**: add an entry to `BUILTIN_ARENA_PREVIEWS` in `previewCatalog.ts` (id, translations, previewGradient, previewIcon); spread it into the pack so the menu doesn't need to import drawing code.
    - **Music**: `musicFile: 'newArena.mp3'` (place MP3 in `public/audio/`)
    - **Optional**: `bubbleHelmet`, `ghostConfig`, `scatterFlockConfigs`, `physics`, `ambientSoundConfig`, `hazardZones`, `effectZones`, etc.
 2. Import and add to the array in `arenas/builtin.ts`

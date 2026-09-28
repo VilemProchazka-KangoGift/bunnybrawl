@@ -1,3 +1,4 @@
+import { BUILTIN_ARENA_PREVIEWS } from '../previewCatalog';
 import type { ArenaPack } from '../types';
 import type { Arena, Platform, Ctx2D } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
@@ -318,15 +319,8 @@ function drawWaterfallPlatformFg(ctx: Ctx2D, platform: Platform): void {
 }
 
 export const waterfall: ArenaPack = {
-  // ---- Identity ----
-  id: 'waterfall',
-
-  // ---- UI metadata ----
-  previewGradient: 'linear-gradient(to bottom, #3A80C9 0%, #6ABED8 40%, #3A7A5A 100%)',
-  previewIcon: '\u{1F4A7}',
-
-  // ---- Translations ----
-  translations: { en: 'Waterfall', cs: 'Vodopád', hi: 'झरना', fil: 'Talon' },
+  // ---- Identity, preview, and translations ----
+  ...BUILTIN_ARENA_PREVIEWS.waterfall,
 
   // ---- Layout ----
   defaultSurface: 'stone',

@@ -1,3 +1,4 @@
+import { BUILTIN_ARENA_PREVIEWS } from '../previewCatalog';
 import type { ArenaPack } from '../types';
 import type { Platform, Ctx2D } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
@@ -614,15 +615,8 @@ registerReactiveKind('rooftops.antenna', {
 });
 
 export const rooftops: ArenaPack = {
-  // ---- Identity ----
-  id: 'rooftops',
-
-  // ---- UI metadata ----
-  previewGradient: 'linear-gradient(to bottom, #FF6B35 0%, #FF8C5A 40%, #3A2A4A 100%)',
-  previewIcon: '\u{1F3D9}\u{FE0F}',
-
-  // ---- Translations ----
-  translations: { en: 'Rooftops', cs: 'St\u0159echy', hi: '\u091B\u0924\u0947\u0902', fil: 'Bubungan' },
+  // ---- Identity, preview, and translations ----
+  ...BUILTIN_ARENA_PREVIEWS.rooftops,
 
   // ---- Layout ----
   defaultSurface: 'wood',

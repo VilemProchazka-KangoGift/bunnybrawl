@@ -1,3 +1,4 @@
+import { BUILTIN_ARENA_PREVIEWS } from '../previewCatalog';
 import type { ArenaPack } from '../types';
 import type { Arena, Platform, Ctx2D } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
@@ -388,15 +389,8 @@ function drawSatellite(ctx: Ctx2D, obj: SpaceObject) {
 }
 
 export const spaceStation: ArenaPack = {
-  // ---- Identity ----
-  id: 'space_station',
-
-  // ---- UI metadata ----
-  previewGradient: 'linear-gradient(to bottom, #000010 0%, #0A0A2A 40%, #1A1A3A 100%)',
-  previewIcon: '\u{1F680}',
-
-  // ---- Translations ----
-  translations: { en: 'Space Station', cs: 'Vesm\u00EDrn\u00E1 stanice', hi: '\u0905\u0902\u0924\u0930\u093F\u0915\u094D\u0937 \u0938\u094D\u091F\u0947\u0936\u0928', fil: 'Kalawakan' },
+  // ---- Identity, preview, and translations ----
+  ...BUILTIN_ARENA_PREVIEWS.spaceStation,
 
   // ---- Layout ----
   defaultSurface: 'metal',

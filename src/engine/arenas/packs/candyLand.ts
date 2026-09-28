@@ -1,3 +1,4 @@
+import { BUILTIN_ARENA_PREVIEWS } from '../previewCatalog';
 import type { ArenaPack } from '../types';
 import type { Arena, Platform, Ctx2D } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
@@ -206,15 +207,8 @@ function drawCandyPlatformFg(ctx: Ctx2D, platform: Platform): void {
 }
 
 export const candyLand: ArenaPack = {
-  // ---- Identity ----
-  id: 'candy_land',
-
-  // ---- UI metadata ----
-  previewGradient: 'linear-gradient(to bottom, #FFB6C1 0%, #FFDAB9 50%, #FFE4E1 100%)',
-  previewIcon: '\u{1F36D}',
-
-  // ---- Translations ----
-  translations: { en: 'Candy Land', cs: 'Cukr\u00E1rna', hi: '\u0915\u0948\u0902\u0921\u0940 \u0932\u0948\u0902\u0921', fil: 'Candy Land' },
+  // ---- Identity, preview, and translations ----
+  ...BUILTIN_ARENA_PREVIEWS.candyLand,
 
   // ---- Layout ----
   defaultSurface: 'wood',

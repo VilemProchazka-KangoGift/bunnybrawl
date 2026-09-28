@@ -10,7 +10,8 @@ import { TouchInputManager } from '../engine/touchInput';
 import { LobbyGame, READY_ZONE_X } from '../engine/lobbyGame';
 import { drawLobbyOverlay } from '../engine/lobbyRender';
 import { Renderer } from '../engine/renderer';
-import { getTheme } from '../engine/arenas';
+import { getTheme } from '../engine/arenas/operations';
+import { loadBuiltinArenas } from '../engine/arenas/loading';
 import { sampleFps, drawFpsCounter } from '../engine/fpsCounter';
 import { useCanvasRenderScale } from '../hooks/useCanvasRenderScale';
 import './CharacterSelect.css';
@@ -28,6 +29,13 @@ export function CharacterSelect() {
   const lobbyGameRef = useRef<LobbyGame | null>(null);
   const isMobile = useMemo(() => isTouchPrimary(), []);
   const initialBotCount = useRef(matchSettings.botCount);
+
+  // Fetch match packs while players choose; lobby entry only waits for its own pack.
+  useEffect(() => {
+    void loadBuiltinArenas().catch(() => {
+      // Match's loader retries if this speculative fetch failed.
+    });
+  }, []);
 
   // Initialise LobbyGame once
   useEffect(() => {

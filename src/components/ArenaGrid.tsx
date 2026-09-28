@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { listPlayableArenaPacks, getArenaDisplayName } from '../engine/arenas';
+import { listPlayableArenaPreviews, getArenaPreviewDisplayName } from '../engine/arenas/previewCatalog';
 
 interface ArenaGridProps {
   onSelect: (arenaId: string) => void;
@@ -13,7 +13,7 @@ interface ArenaGridProps {
 export function ArenaGrid({ onSelect, currentId, classPrefix, selectedClass = 'selected' }: ArenaGridProps) {
   const { i18n } = useTranslation();
   return <>
-    {listPlayableArenaPacks().map(a => (
+    {listPlayableArenaPreviews().map(a => (
       <button
         key={a.id}
         className={`${classPrefix}-btn${currentId === a.id ? ` ${selectedClass}` : ''}`}
@@ -22,7 +22,7 @@ export function ArenaGrid({ onSelect, currentId, classPrefix, selectedClass = 's
         <div className={`${classPrefix}-preview`} style={{ background: a.previewGradient }}>
           <span className={`${classPrefix}-icon`}>{a.previewIcon}</span>
         </div>
-        <span className={`${classPrefix}-name`}>{getArenaDisplayName(a.id, i18n.language)}</span>
+        <span className={`${classPrefix}-name`}>{getArenaPreviewDisplayName(a.id, i18n.language)}</span>
       </button>
     ))}
   </>;

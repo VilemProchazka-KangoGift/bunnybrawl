@@ -1,3 +1,4 @@
+import { BUILTIN_ARENA_PREVIEWS } from '../previewCatalog';
 import type { ArenaPack } from '../types';
 import type { Arena, Platform, Ctx2D } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
@@ -439,15 +440,8 @@ function drawMeadowStump(ctx: Ctx2D, platform: Platform): void {
 }
 
 export const meadow: ArenaPack = {
-  // ---- Identity ----
-  id: 'meadow',
-
-  // ---- UI metadata ----
-  previewGradient: 'linear-gradient(to bottom, #4A90D9 0%, #87CEEB 60%, #4a8c3f 100%)',
-  previewIcon: '\u{1F33F}',
-
-  // ---- Translations ----
-  translations: { en: 'Meadow', cs: 'Louka', hi: '\u0918\u093E\u0938 \u0915\u093E \u092E\u0948\u0926\u093E\u0928', fil: 'Damuhan' },
+  // ---- Identity, preview, and translations ----
+  ...BUILTIN_ARENA_PREVIEWS.meadow,
 
   // ---- Layout ----
   defaultSurface: 'grass',

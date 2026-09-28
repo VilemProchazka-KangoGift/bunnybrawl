@@ -1,3 +1,4 @@
+import { BUILTIN_ARENA_PREVIEWS } from '../previewCatalog';
 import type { ArenaPack } from '../types';
 import type { Platform, Ctx2D } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
@@ -320,15 +321,8 @@ function drawHauntedPlatformFg(ctx: Ctx2D, platform: Platform, _isGround: boolea
 }
 
 export const hauntedGraveyard: ArenaPack = {
-  // ---- Identity ----
-  id: 'haunted_graveyard',
-
-  // ---- UI metadata ----
-  previewGradient: 'linear-gradient(to bottom, #0A0015 0%, #1A0A30 40%, #2A1540 100%)',
-  previewIcon: '\u{1F47B}',
-
-  // ---- Translations ----
-  translations: { en: 'Haunted Graveyard', cs: 'Stra\u0161ideln\u00FD h\u0159bitov', hi: '\u092D\u0942\u0924\u093F\u092F\u093E \u0915\u092C\u094D\u0930\u093F\u0938\u094D\u0924\u093E\u0928', fil: 'Sementeryo' },
+  // ---- Identity, preview, and translations ----
+  ...BUILTIN_ARENA_PREVIEWS.hauntedGraveyard,
 
   // ---- Layout ----
   defaultSurface: 'stone',
