@@ -63,3 +63,23 @@ jobs:
             playwright-report/
             test-results/
           if-no-files-found: ignore
+
+  loading-budget:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx vitest run scripts/__tests__/loadingBudget.test.mjs
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:loading-budget
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: loading-measurements
+          path: perf-runs/loading/
+          if-no-files-found: error

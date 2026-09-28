@@ -10,6 +10,10 @@ Use `node scripts/measureColdLoad.mjs http://127.0.0.1:4187/bunnybrawl/ 5 lobby 
 
 Arena previews must import `arenas/previewCatalog.ts` directly. Full pack modules have registration side effects; importing the `arenas` barrel can bring them into a screen even when only a lookup helper is needed. The local lobby uses `arenas/operations` and awaits only its own pack, then prefetches the match pack bundle. Keep full registration ahead of Match mount, including direct-match URLs.
 
+`npm run test:loading-budget` builds production code, enforces the committed `scripts/loadingBudget.json` budget, and records three constrained Chromium runs each for lobby and online entry under `perf-runs/loading/`. CI uploads these even when the gate fails. The 160 KiB gzip ceiling counts each entry and every transitive static chunk once; it excludes deferred screens and workers. Arena `packs/` modules and `builtin.ts` are forbidden in that graph regardless of emitted chunk names. Browser probes also reject requests for arena chunks before any interaction, including early dynamic imports whose responses finish after menu mount. Vite emits the source-module evidence in `dist/.vite/initial-bundle.json`. Browser timing is informational: runner speed and transfer compression differ, so do not use the probe's transfer bytes or menu milliseconds as the deterministic size gate. Fixture tests must prove oversized shared chunks and eager arena imports fail before changing the guard. Raise the committed budget only for an intentional reviewed tradeoff.
+
+Use `generateBundle: { order: 'post', handler(...) }` for bundle-size reports: Vite 8 injects preload helpers during its normal `generateBundle` hook, after user plugins with only `enforce: 'post'`. The checker also compares reported raw/gzip sizes with emitted files, so a future hook-order change fails visibly instead of undercounting.
+
 ## Architecture — Hot Path Overview
 
 The game runs a **fixed 60fps timestep** with two-layer Canvas 2D rendering:

@@ -1,0 +1,9 @@
+{
+  "maxInitialGzipBytes": 163840,
+  "forbiddenModulePrefixes": [
+    "src/engine/arenas/packs/"
+  ],
+  "forbiddenModules": [
+    "src/engine/arenas/builtin.ts"
+  ]
+}

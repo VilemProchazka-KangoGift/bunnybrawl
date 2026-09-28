@@ -35,6 +35,8 @@ These tests need the audio/renderer/howler/canvas mock prelude at the top of `ga
 
 ## Cosmetic Transition Tests
 
+For simulator tests that depend on an entity staying inactive, set its remaining cooldown as well as its `active` flag. Geyser initialization randomizes `timer` within its interval; `updateGeyserTimers` runs before effect-zone forces, so an otherwise inactive geyser with `timer <= dt` activates during that same tick. Use a known timer greater than the simulated step and assert that it remains inactive.
+
 Cosmetic transitions don't fire from a single `fixedUpdate`. `tickCosmetic` accumulates dt and only forwards once per `COSMETIC_INTERVAL` (2× `FIXED_TIMESTEP`).
 
 Call `loop.cosmeticStep(FIXED_TIMESTEP)` directly with a prev-then-curr state pair (e.g. set airborne → tick → set idle → tick).

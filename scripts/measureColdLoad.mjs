@@ -1,5 +1,10 @@
 /* global document, MutationObserver */
 import { chromium } from 'playwright';
+import { readFileSync } from 'node:fs';
+
+// CI supplies build provenance; standalone timing comparisons remain unrestricted.
+const arenaChunks = process.env.LOADING_BUDGET_REPORT
+  ? JSON.parse(readFileSync(process.env.LOADING_BUDGET_REPORT, 'utf8')).arenaChunks : [];
 
 const url = process.argv[2] ?? 'http://127.0.0.1:4187/bunnybrawl/';
 const runs = Number(process.argv[3] ?? 5);
@@ -16,6 +21,12 @@ try {
   for (let i = 0; i < runs; i++) {
     const context = await browser.newContext();
     const page = await context.newPage();
+    const earlyArenaRequests = new Set();
+    const onRequest = request => {
+      const pathname = new URL(request.url()).pathname;
+      if (arenaChunks.some(file => pathname.endsWith(`/${file}`))) earlyArenaRequests.add(pathname);
+    };
+    page.on('request', onRequest);
     const cdp = await context.newCDPSession(page);
     await cdp.send('Network.enable');
     await cdp.send('Network.setCacheDisabled', { cacheDisabled: true });
@@ -47,6 +58,15 @@ try {
         scripts: scripts.map((entry) => new URL(entry.name).pathname.split('/').at(-1)),
       };
     });
+    if (process.env.LOADING_BUDGET_REPORT) {
+      // Wait for outstanding menu requests too: a slow eager fetch must not evade
+      // the gate just because its response completes after the menu mount mark.
+      await page.waitForLoadState('networkidle');
+    }
+    page.off('request', onRequest);
+    if (earlyArenaRequests.size) {
+      throw new Error(`Arena chunks requested before interaction: ${[...earlyArenaRequests].join(', ')}`);
+    }
     await page.evaluate(({ buttonTestId, targetSelector }) => {
       const observer = new MutationObserver(() => {
         if (document.querySelector(targetSelector)) {
