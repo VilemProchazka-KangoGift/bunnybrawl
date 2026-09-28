@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Meadow — colour and depth</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#111923;color:#eef2f6;font:16px system-ui,sans-serif}main{max-width:1320px;padding:30px 24px;margin:auto}h1{font-size:30px;margin:0 0 8px}p{color:#b8c4d1;line-height:1.5;margin:8px 0 20px}button{font:inherit;border:1px solid #4f6478;background:#223346;color:#fff;border-radius:8px;padding:9px 16px;cursor:pointer}button[aria-pressed=true]{background:#cde0d6;color:#152a23;border-color:#cde0d6}nav{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0}.compare{position:relative;aspect-ratio:16/9;overflow:hidden;border-radius:10px;background:#000}.compare img{display:block;width:100%;height:100%;position:absolute;inset:0}.before{clip-path:inset(0 50% 0 0)}.divider{position:absolute;left:50%;height:100%;width:2px;background:white;pointer-events:none}.tag{position:absolute;top:10px;background:#101822d9;padding:5px 10px;border-radius:6px;font-size:13px}.tag.left{left:10px}.tag.right{right:10px}label{display:flex;align-items:center;gap:14px;margin:14px 0 28px}input{flex:1;accent-color:#cde0d6}h2{font-size:20px;margin:20px 0 14px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}figure{margin:0}figure img{display:block;width:100%;border-radius:8px}figcaption{padding:8px 0;font-weight:600}small{display:block;color:#aabacb;font-weight:400;margin-top:4px}.note{margin-top:25px;font-size:14px}@media(max-width:700px){.grid{grid-template-columns:1fr}main{padding:18px 12px}}
+</style></head>
+<body><main>
+<h1>Meadow: colour &amp; depth</h1>
+<p>Three palette studies using the existing game renderer. Same fixed scene, characters, platforms and lighting. Choose a direction, then drag the divider to compare it with the current colours.</p>
+<nav aria-label="Palette"><button data-option="a" aria-pressed="true">A · Airy storybook</button><button data-option="b" aria-pressed="false">B · Warm meadow</button><button data-option="c" aria-pressed="false">C · Cool woodland</button></nav>
+<nav aria-label="Time of day"><button data-time="day" aria-pressed="true">Daylight</button><button data-time="night" aria-pressed="false">Midnight</button></nav>
+<div class="compare"><img id="after" src="a-day.png" alt="Airy storybook palette"><img id="before" class="before" src="current-day.png" alt="Current Meadow palette"><div class="divider"></div><span class="tag left">Current</span><span class="tag right" id="candidate">A · Airy storybook</span></div>
+<label>Current <input type="range" min="0" max="100" value="50" aria-label="Comparison divider"> Proposed</label>
+<section id="overview"><h2>All four directions</h2><div class="grid">
+<figure><img data-preview="current" src="current-day.png" alt="Current Meadow"><figcaption>Current<small>Saturated blue sky and green distance.</small></figcaption></figure>
+<figure><img data-preview="a" src="a-day.png" alt="Airy storybook Meadow"><figcaption>A · Airy storybook<small>Misty sage distance. My preferred starting point.</small></figcaption></figure>
+<figure><img data-preview="b" src="b-day.png" alt="Warm Meadow"><figcaption>B · Warm meadow<small>Cream and peach sky, muted plum distance.</small></figcaption></figure>
+<figure><img data-preview="c" src="c-day.png" alt="Cool woodland Meadow"><figcaption>C · Cool woodland<small>Periwinkle sky and blue-green distance.</small></figcaption></figure>
+</div></section>
+<p class="note">Design studies, not a gameplay release. Night views deliberately retain the current foreground tint; palette changes alone do not solve dark characters or bushes obscuring players. Baseline: main commit 3ef5d80. Rendered at 1280 × 720, noon/midnight, with fixed positions and visual timers.</p>
+</main><script>
+let option='a',time='day';const titles={a:'A · Airy storybook',b:'B · Warm meadow',c:'C · Cool woodland'};
+function update(){document.getElementById('before').src=`current-${time}.png`;const after=document.getElementById('after');after.src=`${option}-${time}.png`;after.alt=titles[option];document.getElementById('candidate').textContent=titles[option];document.querySelectorAll('[data-preview]').forEach(img=>img.src=`${img.dataset.preview}-${time}.png`);document.querySelectorAll('[data-option]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.option===option)));document.querySelectorAll('[data-time]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.time===time)));}
+document.querySelectorAll('[data-option]').forEach(b=>b.addEventListener('click',()=>{option=b.dataset.option;update()}));document.querySelectorAll('[data-time]').forEach(b=>b.addEventListener('click',()=>{time=b.dataset.time;update()}));document.querySelector('input').addEventListener('input',e=>{document.querySelector('.before').style.clipPath=`inset(0 ${100-e.target.value}% 0 0)`;document.querySelector('.divider').style.left=`${e.target.value}%`});
+</script></body></html>

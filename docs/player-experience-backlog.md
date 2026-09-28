@@ -97,6 +97,8 @@ The numbered priorities preserve the ordering of the eight follow-up suggestions
 
 ## Existing foundations
 
+Visual opportunities and the first Meadow palette studies are documented in [the visual improvement backlog](visual-improvement-backlog.md).
+
 - [PlayerInput](../src/engine/input/PlayerInput.ts): common action-source interface.
 - [KeyboardManager](../src/engine/input/KeyboardManager.ts): current keyboard bindings and input state.
 - [EngineWorkerProxy](../src/engine/worker/EngineWorkerProxy.ts): main-thread input forwarding to the simulation worker.
