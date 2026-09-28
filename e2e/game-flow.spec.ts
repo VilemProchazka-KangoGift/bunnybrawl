@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import type { BunnyTestSnapshot } from '../src/components/bunnyTestShim';
 
 test.describe('Carrot Royale E2E', () => {
   test.beforeEach(async ({ page }) => {
@@ -9,6 +10,7 @@ test.describe('Carrot Royale E2E', () => {
     await expect(page.getByTestId('main-menu')).toBeVisible();
     await expect(page.getByTestId('main-menu').getByAltText('Carrot Royale')).toBeVisible();
     await expect(page.getByTestId('play-button')).toBeVisible();
+    await expect(page.getByTestId('arena-selector').locator('.arena-btn')).toHaveCount(12);
   });
 
   test('navigates from menu to lobby', async ({ page }) => {
@@ -65,3 +67,44 @@ test.describe('Carrot Royale E2E', () => {
     await expect(page.getByTestId('gore-toggle')).toBeVisible();
   });
 });
+
+for (const mode of ['default', 'simWorker=off']) {
+  test(`lobby opens before match packs and match waits for them (${mode})`, async ({ page }) => {
+    let releasePacks!: () => void;
+    const packsReleased = new Promise<void>(resolve => { releasePacks = resolve; });
+    let markRequested!: () => void;
+    const packsRequested = new Promise<void>(resolve => { markRequested = resolve; });
+    // Delay the real production pack chunks to exercise the preload/start race.
+    await page.route('**/assets/builtin-*.js', async route => {
+      markRequested();
+      await packsReleased;
+      await route.continue();
+    });
+
+    try {
+      await page.goto(mode === 'default' ? '/' : '?simWorker=off');
+      await page.getByTestId('play-button').click();
+      await expect(page.getByTestId('char-select')).toBeVisible();
+      await packsRequested;
+
+      // The diagnostic store bypasses walking to START; this test targets asset readiness.
+      await page.evaluate(() => {
+        const shim = (window as Window & { __bunnyTest?: BunnyTestSnapshot }).__bunnyTest;
+        const store = shim?.gameStore()?.getState();
+        if (!store) throw new Error('Missing diagnostic store');
+        store.setActivePlayers(['P1', 'P2']);
+        store.setMatchSettings({ arenaId: 'meadow', botCount: 0, playerCount: 2 });
+        store.setScreen('match');
+      });
+      await expect(page.locator('.screen-loading')).toBeVisible();
+      await expect(page.getByTestId('match-screen')).toHaveCount(0);
+      releasePacks();
+
+      await expect(page.getByTestId('match-screen')).toBeVisible();
+      await page.waitForFunction(() => window.__bunnyTest?.state()?.phase === 'playing');
+      await expect(page.locator('.match-loading-overlay')).toHaveCount(0);
+    } finally {
+      releasePacks();
+    }
+  });
+}

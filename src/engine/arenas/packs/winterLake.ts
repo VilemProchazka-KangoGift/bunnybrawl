@@ -1,3 +1,4 @@
+import { BUILTIN_ARENA_PREVIEWS } from '../previewCatalog';
 import type { ArenaPack } from '../types';
 import type { Arena, Platform, Ctx2D } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
@@ -224,15 +225,8 @@ function drawWinterPlatformFg(ctx: Ctx2D, platform: Platform): void {
 }
 
 export const winterLake: ArenaPack = {
-  // ---- Identity ----
-  id: 'winter_lake',
-
-  // ---- UI metadata ----
-  previewGradient: 'linear-gradient(to bottom, #2C3E6B 0%, #8FA8C8 60%, #D8E8F0 100%)',
-  previewIcon: '\u2744\uFE0F',
-
-  // ---- Translations ----
-  translations: { en: 'Winter Lake', cs: 'Zamrzl\u00E9 jezero', hi: '\u0938\u0930\u094D\u0926\u0940 \u0915\u0940 \u091D\u0940\u0932', fil: 'Lawa sa Taglamig' },
+  // ---- Identity, preview, and translations ----
+  ...BUILTIN_ARENA_PREVIEWS.winterLake,
 
   // ---- Layout ----
   defaultSurface: 'snow',

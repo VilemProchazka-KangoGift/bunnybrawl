@@ -1,3 +1,4 @@
+import { BUILTIN_ARENA_PREVIEWS } from '../previewCatalog';
 import type { ArenaPack } from '../types';
 import type { Arena, Platform, Ctx2D } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
@@ -182,16 +183,8 @@ function drawLobbyWall(ctx: Ctx2D, platform: Platform): void {
 }
 
 export const lobby: ArenaPack = {
-  // ---- Identity ----
-  id: 'lobby',
-  playable: false,
-
-  // ---- UI metadata ----
-  previewGradient: 'linear-gradient(to bottom, #4A90D9 0%, #87CEEB 60%, #4a8c3f 100%)',
-  previewIcon: '\u{1F3E1}',
-
-  // ---- Translations ----
-  translations: { en: 'Lobby', cs: 'Lobby', hi: 'Lobby', fil: 'Lobby' },
+  // ---- Identity, preview, and translations ----
+  ...BUILTIN_ARENA_PREVIEWS.lobby,
 
   // ---- Layout ----
   defaultSurface: 'grass',
@@ -224,7 +217,8 @@ export const lobby: ArenaPack = {
   ],
 
   ground: {
-    surfaceColor: '#5DAF4A',  },
+    surfaceColor: '#5DAF4A',
+  },
 
   // ---- Ambient systems ----
   clouds: {

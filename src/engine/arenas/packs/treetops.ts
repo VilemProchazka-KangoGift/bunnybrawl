@@ -1,3 +1,4 @@
+import { BUILTIN_ARENA_PREVIEWS } from '../previewCatalog';
 import type { ArenaPack } from '../types';
 import type { Arena, Platform, Ctx2D } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
@@ -276,15 +277,8 @@ registerReactiveKind('treetops.bee', {
 });
 
 export const treetops: ArenaPack = {
-  // ---- Identity ----
-  id: 'treetops',
-
-  // ---- UI metadata ----
-  previewGradient: 'linear-gradient(to bottom, #1A3A1A 0%, #2D5A2D 40%, #4A8A4A 100%)',
-  previewIcon: '\u{1F333}',
-
-  // ---- Translations ----
-  translations: { en: 'Treetops', cs: 'Koruny strom\u016F', hi: '\u092A\u0947\u0921\u093C\u094B\u0902 \u0915\u0940 \u091A\u094B\u091F\u0940', fil: 'Tuktok ng Puno' },
+  // ---- Identity, preview, and translations ----
+  ...BUILTIN_ARENA_PREVIEWS.treetops,
 
   // ---- Layout ----
   defaultSurface: 'wood',
@@ -337,7 +331,8 @@ export const treetops: ArenaPack = {
   ],
 
   ground: {
-    surfaceColor: '#2D5A2D',  },
+    surfaceColor: '#2D5A2D',
+  },
 
   // ---- Ambient systems ----
   clouds: {

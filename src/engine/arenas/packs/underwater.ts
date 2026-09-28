@@ -1,3 +1,4 @@
+import { BUILTIN_ARENA_PREVIEWS } from '../previewCatalog';
 import type { ArenaPack } from '../types';
 import type { Platform, PlayerSlot, Ctx2D } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
@@ -745,15 +746,8 @@ function drawUnderwaterPlatformFg(ctx: Ctx2D, platform: Platform): void {
 }
 
 export const underwater: ArenaPack = {
-  // ---- Identity ----
-  id: 'underwater',
-
-  // ---- UI metadata ----
-  previewGradient: 'linear-gradient(to bottom, #0A3A6B 0%, #0E4A8B 40%, #1A6AAA 100%)',
-  previewIcon: '\u{1F420}',
-
-  // ---- Translations ----
-  translations: { en: 'Underwater', cs: 'Pod vodou', hi: '\u092A\u093E\u0928\u0940 \u0915\u0947 \u0928\u0940\u091A\u0947', fil: 'Ilalim ng Tubig' },
+  // ---- Identity, preview, and translations ----
+  ...BUILTIN_ARENA_PREVIEWS.underwater,
 
   // ---- Layout ----
   defaultSurface: 'stone',
@@ -805,7 +799,8 @@ export const underwater: ArenaPack = {
   ],
 
   ground: {
-    surfaceColor: '#C2A868',  },
+    surfaceColor: '#C2A868',
+  },
 
   // ---- Ambient systems ----
   clouds: {

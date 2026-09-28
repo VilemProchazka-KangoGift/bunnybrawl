@@ -17,7 +17,7 @@ import { getLobbyRoster } from './characters';
 import { audio } from './audio';
 import { updateWildlife } from './gameLoop/cosmetics/environment';
 import { createEmptyMatchState } from './simulator/initialState';
-import { getArena, getTheme } from './arenas';
+import { getArena, getTheme } from './arenas/operations';
 import { pickWeighted, randRange, shuffleInPlace } from './themes/utils';
 import { Accumulator } from './accumulator';
 import {
