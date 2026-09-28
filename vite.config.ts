@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { initialBundleReport } from './scripts/initialBundleReport.ts'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -64,6 +65,7 @@ function resolveWorkerStub(id: string, importer: string | undefined, isWorkerCon
 export default defineConfig({
   plugins: [
     react(),
+    initialBundleReport(),
     {
       // Dev server applies top-level plugins to ALL transforms, including
       // worker files. `worker.plugins` is only applied during rollup
