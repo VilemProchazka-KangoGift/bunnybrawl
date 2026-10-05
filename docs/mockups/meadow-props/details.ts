@@ -5,19 +5,26 @@ import { studies } from './variants';
 import type { Ctx2D, Platform } from '../../../src/engine/types';
 
 const canvas = document.querySelector('#details') as HTMLCanvasElement;
+const params = new URLSearchParams(location.search);
+const shrubSet = params.get('set') === 'shrubs';
+if (shrubSet) canvas.width = 2100;
 const c = canvas.getContext('2d') as Ctx2D;
 const theme = toThemeConfig(meadow);
-const columns = [210, 630, 1050, 1470];
-const leafySet = new URLSearchParams(location.search).get('set') === 'leafy';
-const variants = leafySet
+const columns = shrubSet ? [210, 630, 1050, 1470, 1890] : [210, 630, 1050, 1470];
+const leafySet = params.get('set') === 'leafy';
+const variants = shrubSet
+  ? [studies.leafy, studies.shrubBranch, studies.shrubHedge, studies.shrubBramble, studies.shrubBloom]
+  : leafySet
   ? [studies.leafy, studies.leafyAiry, studies.leafyBloom, studies.leafyDusky]
   : [undefined, studies.botanical, studies.leafy, studies.animation];
-const names = leafySet
+const names = shrubSet
+  ? ['Leafy storybook', 'Branching shrub', 'Hedge canopy', 'Wild bramble', 'Flowering shrub']
+  : leafySet
   ? ['Leafy storybook', 'Airy leaves', 'Bloom garden', 'Dusky leaves']
   : ['Current', 'Botanical ink', 'Leafy storybook', 'Bold animation'];
-c.fillStyle = '#dce9e8'; c.fillRect(0, 0, 1680, 760);
-c.fillStyle = '#193a38'; c.font = 'bold 29px sans-serif'; c.fillText(leafySet ? 'Leafy storybook — variation study' : 'Meadow props — detail study', 30, 42);
-c.font = '16px sans-serif'; c.fillText('Native Canvas drawings enlarged for inspection. Full scenes show their actual play size.', 31, 66);
+c.fillStyle = '#dce9e8'; c.fillRect(0, 0, canvas.width, 760);
+c.fillStyle = '#193a38'; c.font = 'bold 29px sans-serif'; c.fillText(shrubSet ? 'Leafy storybook — living bush structures' : leafySet ? 'Leafy storybook — variation study' : 'Meadow props — detail study', 30, 42);
+c.font = '16px sans-serif'; c.fillText(shrubSet ? 'Bush construction changes only; platforms, flowers, stumps, and mushrooms stay Leafy storybook.' : 'Native Canvas drawings enlarged for inspection. Full scenes show their actual play size.', 31, 66);
 
 const sample = (cx: number, baseline: number, scale: number, draw: () => void) => {
   c.save(); c.translate(cx, baseline); c.scale(scale, scale); draw(); c.restore();
@@ -28,6 +35,16 @@ for (let col = 0; col < variants.length; col++) {
   c.strokeStyle = '#a7bcb4'; c.strokeRect(cx - 200.5, 82.5, 401, 656);
   c.fillStyle = '#183a37'; c.font = 'bold 21px sans-serif'; c.textAlign = 'center'; c.fillText(names[col], cx, 117);
   c.font = 'bold 14px sans-serif';
+  if (shrubSet) {
+    c.fillText('Foreground cover · enlarged', cx, 158);
+    c.fillText('Foreground cover · native size', cx, 510);
+    c.fillStyle = '#83ad8a';
+    c.fillRect(cx - 180, 390, 360, 3);
+    c.fillRect(cx - 180, 651, 360, 3);
+    sample(cx, 390, 3.2, () => study!.drawBush(c, 0, 0, 60, true));
+    sample(cx, 651, 1, () => study!.drawBush(c, 0, 0, 60, true));
+    continue;
+  }
   c.fillText('Foreground bush · full cover', cx, 151);
   c.fillText('Platform edge and stump', cx, 366);
   c.fillText('Flower and mushroom', cx, 592);

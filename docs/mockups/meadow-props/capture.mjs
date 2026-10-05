@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const variants = process.argv.slice(2).length ? process.argv.slice(2) : ['current', 'storybook', 'woodcut', 'botanical', 'leafy', 'animation', 'leafyAiry', 'leafyBloom', 'leafyDusky'];
+const variants = process.argv.slice(2).length ? process.argv.slice(2) : ['current', 'storybook', 'woodcut', 'botanical', 'leafy', 'animation', 'leafyAiry', 'leafyBloom', 'leafyDusky', 'shrubBranch', 'shrubHedge', 'shrubBramble', 'shrubBloom'];
 const browser = await chromium.launch({ headless: true });
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
@@ -27,6 +27,11 @@ try {
   await page.locator('html[data-ready="true"]').waitFor({ timeout: 15000 });
   await page.locator('#details').screenshot({ path: join(here, 'details-leafy.png') });
   console.log('details-leafy.png captured');
+  await page.setViewportSize({ width: 2100, height: 760 });
+  await page.goto('http://127.0.0.1:4190/bunnybrawl/docs/mockups/meadow-props/details.html?set=shrubs');
+  await page.locator('html[data-ready="true"]').waitFor({ timeout: 15000 });
+  await page.locator('#details').screenshot({ path: join(here, 'details-shrubs.png') });
+  console.log('details-shrubs.png captured');
   if (errors.length) throw new Error(errors.join('\n'));
 } finally {
   await browser.close();

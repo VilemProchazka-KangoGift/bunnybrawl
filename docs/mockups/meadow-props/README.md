@@ -1,6 +1,25 @@
 # Meadow prop art studies
 
-Eight experimental redraws of Meadow's decorative objects, compared with the current Morning blue arena. These are renderer-backed stills, not a game art change. They use the production arena layout, characters, background, HUD, and night treatment. Only bushes, flowers, mushrooms, platforms, and stumps are redrawn.
+Twelve experimental redraws of Meadow's decorative objects, compared with the current Morning blue arena. These are renderer-backed stills, not a game art change. They use the production arena layout, characters, background, HUD, and night treatment. Only bushes, flowers, mushrooms, platforms, and stumps are redrawn.
+
+## Fourth round: bush construction
+
+Leafy storybook remains the reference. These four studies change **only the bush drawing**; platforms, stumps, flowers, and mushrooms use the exact same Leafy storybook functions. All keep opaque foreground cover at the same arena positions, including the bush hiding the rabbit on the left platform.
+
+| Leafy storybook | Branching shrub | Hedge canopy | Wild bramble | Flowering shrub |
+| --- | --- | --- | --- | --- |
+| ![Leafy storybook day](leafy-day.png) | ![Branching shrub day](shrubBranch-day.png) | ![Hedge canopy day](shrubHedge-day.png) | ![Wild bramble day](shrubBramble-day.png) | ![Flowering shrub day](shrubBloom-day.png) |
+| ![Leafy storybook night](leafy-night.png) | ![Branching shrub night](shrubBranch-night.png) | ![Hedge canopy night](shrubHedge-night.png) | ![Wild bramble night](shrubBramble-night.png) | ![Flowering shrub night](shrubBloom-night.png) |
+
+![Enlarged and native-size comparison of five bush approaches](details-shrubs.png)
+
+**Branching shrub:** woody stems fan from a rooted center into connected leaf crowns. The support structure is clearest, although it starts to resemble a very small tree.
+
+**Hedge canopy:** a continuous crown with visible low branches and leaf clusters. It has the simplest bush silhouette, but is closer to a clipped garden hedge.
+
+**Wild bramble:** asymmetric arching canes, attached leaves and small berry clusters. This feels the most untamed; its fine details are dense at gameplay size.
+
+**Flowering shrub:** a rooted branch fan with broad foliage and sparse pale blossoms. Its flowers make it distinctive without changing the surrounding props.
 
 ## Third round: variations on Leafy storybook
 
@@ -53,4 +72,4 @@ These images are a static art direction test. They do not evaluate motion, gamep
 
 ## Reproduce
 
-From the repository root, start `npm run dev -- --host 127.0.0.1 --port 4190`, then run `node docs/mockups/meadow-props/capture.mjs`. The fixture is at `/bunnybrawl/docs/mockups/meadow-props/render.html` with `variant=current|storybook|woodcut|botanical|leafy|animation|leafyAiry|leafyBloom|leafyDusky` and `time=day|night` query parameters. The capture script writes the eighteen scene PNGs and two detail sheets in this directory. Pass variant names as arguments to recapture only those scenes. It uses seeded randomness and fixed player positions for comparable scenes.
+From the repository root, start `npm run dev -- --host 127.0.0.1 --port 4190`, then run `node docs/mockups/meadow-props/capture.mjs`. The fixture is at `/bunnybrawl/docs/mockups/meadow-props/render.html` with `variant=current|storybook|woodcut|botanical|leafy|animation|leafyAiry|leafyBloom|leafyDusky|shrubBranch|shrubHedge|shrubBramble|shrubBloom` and `time=day|night` query parameters. The capture script writes the twenty-six scene PNGs and three detail sheets in this directory. Pass variant names as arguments to recapture only those scenes. It uses seeded randomness and fixed player positions for comparable scenes.
