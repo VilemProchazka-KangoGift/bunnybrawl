@@ -225,6 +225,26 @@ describe('Renderer — construction', () => {
     expect((renderer as any).clouds).toHaveLength(5);
   });
 
+  it('animates arena cloud silhouettes from their own placements', () => {
+    const { canvas: bg, ctx } = makeCanvas();
+    const { canvas: fg } = makeCanvas();
+    const theme = makeTheme();
+    const initial = [
+      { x: 100, y: 46, size: 130, height: 46, speed: 8 },
+      { x: 1278, y: 81, size: 122, height: 44, speed: 6 },
+    ];
+    const draw = vi.fn();
+    theme.clouds.initialClouds = initial;
+    theme.clouds.draw = draw;
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme });
+
+    (renderer as any).updateAndDrawClouds(ctx, 1);
+
+    expect(draw).toHaveBeenNthCalledWith(1, ctx, 108, 46, 130, 46);
+    expect(draw).toHaveBeenNthCalledWith(2, ctx, -122, 81, 122, 44);
+    expect(initial[0].x).toBe(100);
+  });
+
   it('handles mirrored mode', () => {
     const { canvas: bg } = makeCanvas();
     const { canvas: fg } = makeCanvas();

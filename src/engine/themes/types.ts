@@ -19,6 +19,10 @@ export interface CloudConfig {
   minSpeed: number;
   maxSpeed: number;
   yRange: [number, number];
+  /** Optional fixed layout for an arena's cloud composition. Copied before animation. */
+  initialClouds?: ReadonlyArray<{ x: number; y: number; size: number; height?: number; speed: number }>;
+  /** Optional arena-specific shape; default clouds retain the batched arc renderer. */
+  draw?: (ctx: Ctx2D, x: number, y: number, width: number, height: number) => void;
 }
 
 export interface WeatherTypeConfig {

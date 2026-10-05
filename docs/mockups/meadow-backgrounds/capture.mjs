@@ -6,8 +6,8 @@ const directory = dirname(fileURLToPath(import.meta.url));
 const server = process.env.MEADOW_MOCKUP_URL ?? 'http://127.0.0.1:4192';
 const browser = await chromium.launch({ headless: true });
 try {
-  for (const variant of ['current', 'wooded-valley', 'countryside', 'storybook-clouds', 'valley-and-clouds', 'raised-hills', 'tall-hills']) {
-    for (const time of ['day', 'night']) {
+  for (const variant of ['current', 'wooded-valley', 'countryside', 'storybook-clouds', 'valley-and-clouds', 'raised-hills', 'tall-hills', 'production']) {
+    for (const time of variant === 'production' ? ['day', 'sunset', 'night'] : ['day', 'night']) {
       const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
       const errors = [];
       page.on('pageerror', error => errors.push(error.message));
