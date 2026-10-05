@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Carrot Royale character style studies</title>
+<style>
+  html, body { margin: 0; background: #e8e5db; font-family: system-ui, sans-serif; }
+  .heading { box-sizing: border-box; width: 1280px; height: 62px; padding: 12px 30px; color: #223a36; }
+  .heading strong { display: block; font-size: 22px; line-height: 25px; }
+  .heading span { font-size: 13px; }
+  .scene { position: relative; width: 1280px; height: 720px; isolation: isolate; }
+  .scene canvas, .tint { position: absolute; inset: 0; width: 1280px; height: 720px; }
+  .tint { background: rgb(20, 24, 48); mix-blend-mode: multiply; pointer-events: none; }
+  #lineup { display: block; width: 1280px; height: 215px; }
+</style>
+<div class="heading"><strong id="title"></strong><span>Same Meadow, players, positions, and poses in every prototype · game scale above, 2× study below</span></div>
+<div class="scene">
+  <canvas id="bg"></canvas><canvas id="night"></canvas><canvas id="fg"></canvas>
+  <div class="tint"></div><canvas id="hud"></canvas>
+</div>
+<canvas id="lineup" width="1280" height="215"></canvas>
+<script type="module" src="./render.ts"></script>
+</html>
