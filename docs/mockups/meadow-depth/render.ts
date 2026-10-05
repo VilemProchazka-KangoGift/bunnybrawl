@@ -12,9 +12,9 @@ const query = new URLSearchParams(location.search);
 const option = query.get('option') ?? 'current';
 const night = query.get('time') === 'night';
 const palettes: Record<string, {sky: string[]; hill: string; far: string[]; cloud: string}> = {
-  a: {sky: ['#91B9D5', '#D2E4E5', '#E8EFDC'], hill: '#8AA895', far: ['rgba(97,131,138,.26)', 'rgba(126,156,154,.22)'], cloud: 'rgba(255,253,242,.66)'},
-  b: {sky: ['#D8B7A6', '#F2DCC1', '#F4E9CB'], hill: '#A7AD8E', far: ['rgba(132,117,140,.24)', 'rgba(151,143,151,.22)'], cloud: 'rgba(255,249,230,.65)'},
-  c: {sky: ['#9EAED0', '#C9DCE0', '#DCE8DB'], hill: '#81A5A1', far: ['rgba(83,115,142,.28)', 'rgba(108,143,154,.22)'], cloud: 'rgba(240,248,255,.62)'},
+  a: {sky: ['#316DAA', '#92C6E0', '#E5EBD5'], hill: '#719981', far: ['rgba(86,116,147,.32)', 'rgba(116,148,150,.23)'], cloud: 'rgba(255,255,248,.78)'},
+  b: {sky: ['#B9768C', '#E2B69C', '#F5DEB5'], hill: '#8A9D76', far: ['rgba(105,98,140,.33)', 'rgba(146,121,138,.24)'], cloud: 'rgba(255,248,229,.68)'},
+  c: {sky: ['#276F82', '#7EB9BD', '#D6E9D5'], hill: '#647F82', far: ['rgba(48,91,111,.42)', 'rgba(75,122,137,.28)'], cloud: 'rgba(240,252,248,.75)'},
 };
 
 // Repeatable atmosphere and cloud placement for every candidate.

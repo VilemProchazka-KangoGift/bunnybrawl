@@ -24,15 +24,15 @@ try {
   const comparisonErrors = [];
   comparison.on('pageerror', error => comparisonErrors.push(error.message));
   await comparison.goto('http://127.0.0.1:4190/bunnybrawl/docs/mockups/meadow-depth/index.html');
-  await comparison.waitForFunction(() => [...document.images].every(img => img.complete && img.naturalWidth === 1280));
+  await comparison.waitForFunction('Array.from(document.images).every(img => img.complete && img.naturalWidth === 1280)');
   await comparison.locator('#overview').screenshot({path:fileURLToPath(new URL('./overview.png', import.meta.url))});
-  await comparison.getByRole('button', {name:'C · Cool woodland'}).click();
+  await comparison.getByRole('button', {name:'C · Deep teal'}).click();
   await comparison.getByRole('button', {name:'Midnight'}).click();
   assert.equal(await comparison.locator('#after').getAttribute('src'), 'c-night.png');
   assert.equal(await comparison.locator('#before').getAttribute('src'), 'current-night.png');
   await comparison.locator('input').evaluate(el => {el.value = '25'; el.dispatchEvent(new Event('input', {bubbles:true}));});
   assert.equal(await comparison.locator('.divider').evaluate(el => el.style.left), '25%');
-  await comparison.waitForFunction(() => [...document.images].every(img => img.complete && img.naturalWidth === 1280));
+  await comparison.waitForFunction('Array.from(document.images).every(img => img.complete && img.naturalWidth === 1280)');
   assert.deepEqual(comparisonErrors, []);
   console.log('comparison: palette, midnight toggle, divider and image loading verified');
   console.log('overview: captured');

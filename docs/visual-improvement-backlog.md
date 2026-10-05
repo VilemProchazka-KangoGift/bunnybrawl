@@ -4,7 +4,7 @@ These are design opportunities, not approved gameplay changes. Start with **3: c
 
 | # | Opportunity | Direction | How to judge it |
 |---|---|---|---|
-| 1 | Character prominence | Put bulky decorations behind players; keep heads and landing edges clear. | Follow every character through bushes and busy areas at normal gameplay size. |
+| 1 | Character prominence outside cover | Improve contrast for exposed characters. Keep Meadow bushes in front of players: hiding in them is intentional gameplay. | Exposed characters read clearly at normal gameplay size; a character inside a bush can still hide. |
 | 2 | Platform materials | Refine grass lips and roots, chipped stone, and restrained volcanic seams. Bake shading into the artwork. | Platforms feel substantial and their collision edges stay obvious. |
 | 3 | Depth through colour | Quiet distant scenery, separate near and far values, and choose a controlled palette for each arena. | Players and platforms read immediately in daylight and at night. |
 | 4 | Illustrated arena previews | Replace emoji tiles with small illustrations rendered from the actual arenas. | Players recognize layout and atmosphere before selecting an arena. |
@@ -17,13 +17,13 @@ These are design opportunities, not approved gameplay changes. Start with **3: c
 
 [Comparison mockups](mockups/meadow-depth/index.html) include the current renderer and three palette alternatives, each at noon and midnight:
 
-- **A — Airy storybook:** pale blue sky, misty sage distance. Closest to the existing Meadow identity.
-- **B — Warm meadow:** cream and peach sky, muted plum distance. A warmer, more illustrated mood.
-- **C — Cool woodland:** periwinkle sky, blue-green distance. Stronger cool atmosphere with warm platforms.
+- **A — Morning blue:** deeper blue overhead, pale horizon, cooler distant shapes.
+- **B — Apricot sky:** rose and peach atmosphere, muted purple distance.
+- **C — Deep teal:** cooler teal sky and darker slate distant shapes.
 
-The mockups retain platform geometry, player artwork, decoration placement, HUD, and the existing lighting pipeline. They change sky, hill, distant treeline, and cloud colours only. They do not introduce shadows or change foreground occlusion. Those remain separate opportunities.
+The mockups retain platform geometry, player artwork, decoration placement, HUD, and the existing lighting pipeline. They change sky, hill, distant treeline, and cloud colours only. Bush concealment is intentionally identical in every sample. They do not introduce shadows or change foreground occlusion.
 
-Use A as the initial candidate, subject to visual preference. Evaluate all three at full size, then in moving gameplay with five players, representative character colours, stomps, and transitions through sunset. A still image does not establish gameplay readability or performance.
+There is no selected candidate yet. Evaluate all three at full size, then in moving gameplay with five players, representative character colours, stomps, and transitions through sunset. A still image does not establish gameplay readability or performance.
 
 ### Lessons from the abandoned lighting experiment
 
