@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const variants = process.argv.slice(2).length ? process.argv.slice(2) : ['current', 'storybook', 'woodcut', 'botanical', 'leafy', 'animation', 'leafyAiry', 'leafyBloom', 'leafyDusky', 'shrubBranch', 'shrubHedge', 'shrubBramble', 'shrubBloom'];
+const variants = process.argv.slice(2).length ? process.argv.slice(2) : ['current', 'storybook', 'woodcut', 'botanical', 'leafy', 'animation', 'leafyAiry', 'leafyBloom', 'leafyDusky', 'shrubBranch', 'shrubHedge', 'shrubBramble', 'shrubBloom', 'mixed'];
 const browser = await chromium.launch({ headless: true });
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });

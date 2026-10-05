@@ -1,15 +1,23 @@
 # Meadow prop art studies
 
-Twelve experimental redraws of Meadow's decorative objects, compared with the current Morning blue arena. These are renderer-backed stills, not a game art change. They use the production arena layout, characters, background, HUD, and night treatment. Only bushes, flowers, mushrooms, platforms, and stumps are redrawn.
+Twelve experimental redraws and one mixed composition of Meadow's decorative objects, compared with the current Morning blue arena. These are renderer-backed stills. They use the production arena layout, characters, background, HUD, and night treatment. Only bushes, flowers, mushrooms, platforms, and stumps are redrawn.
 
-## Fourth round: branch-free berry bushes
+## Selected mix: Leafy, Hedge, and Flower thicket
 
-Leafy storybook remains the reference. These four studies change **only the bush drawing**; platforms, stumps, flowers, and mushrooms use the exact same Leafy storybook functions. The visible woody branches and canes from the first iteration of this round were removed, and each variant now has coral berries. All keep opaque foreground cover at the same arena positions, including the bush hiding the rabbit on the left platform.
+The stage can mix the three selected bush shapes. Leafy storybook supplies the platforms, stumps, flowers, mushrooms, and some bushes; Hedge and Flower thicket are distributed across ground and floating platforms. The Flower thicket uses the Flowering bush's small yellow blossoms in place of its red berries. Foreground bushes retain their opaque hiding role.
 
-| Leafy storybook | Clustered foliage | Hedge canopy | Berry thicket | Flowering bush |
+| Day | Night |
+| --- | --- |
+| ![Mixed Meadow day](mixed-day.png) | ![Mixed Meadow night](mixed-night.png) |
+
+## Fourth round: branch-free bush shapes
+
+Leafy storybook remains the reference. These four studies change **only the bush drawing**; platforms, stumps, flowers, and mushrooms use the exact same Leafy storybook functions. The visible woody branches and canes from the first iteration of this round were removed. The Flower thicket now uses yellow blossoms; the other new shapes have coral berries. All keep opaque foreground cover at the same arena positions, including the bush hiding the rabbit on the left platform.
+
+| Leafy storybook | Clustered foliage | Hedge canopy | Flower thicket | Flowering bush |
 | --- | --- | --- | --- | --- |
-| ![Leafy storybook day](leafy-day.png) | ![Clustered foliage day](shrubBranch-day.png) | ![Hedge canopy day](shrubHedge-day.png) | ![Berry thicket day](shrubBramble-day.png) | ![Flowering bush day](shrubBloom-day.png) |
-| ![Leafy storybook night](leafy-night.png) | ![Clustered foliage night](shrubBranch-night.png) | ![Hedge canopy night](shrubHedge-night.png) | ![Berry thicket night](shrubBramble-night.png) | ![Flowering bush night](shrubBloom-night.png) |
+| ![Leafy storybook day](leafy-day.png) | ![Clustered foliage day](shrubBranch-day.png) | ![Hedge canopy day](shrubHedge-day.png) | ![Flower thicket day](shrubBramble-day.png) | ![Flowering bush day](shrubBloom-day.png) |
+| ![Leafy storybook night](leafy-night.png) | ![Clustered foliage night](shrubBranch-night.png) | ![Hedge canopy night](shrubHedge-night.png) | ![Flower thicket night](shrubBramble-night.png) | ![Flowering bush night](shrubBloom-night.png) |
 
 ![Enlarged and native-size comparison of five bush approaches](details-shrubs.png)
 
@@ -17,9 +25,9 @@ Leafy storybook remains the reference. These four studies change **only the bush
 
 **Hedge canopy:** a continuous scalloped crown with subtle leaf texture and berries. It is the simplest, most orderly silhouette.
 
-**Berry thicket:** asymmetric foliage and extra berry clusters. This is the most untamed and detailed option.
+**Flower thicket:** asymmetric foliage with yellow blossoms replacing its former berries. This is the most untamed and detailed option.
 
-**Flowering bush:** broad foliage, sparse pale blossoms and coral berries. Its flowers distinguish it from the other bush shapes.
+**Flowering bush:** broad foliage, sparse yellow blossoms and coral berries. Its flowers distinguish it from the other bush shapes.
 
 ## Third round: variations on Leafy storybook
 
@@ -72,4 +80,4 @@ These images are a static art direction test. They do not evaluate motion, gamep
 
 ## Reproduce
 
-From the repository root, start `npm run dev -- --host 127.0.0.1 --port 4190`, then run `node docs/mockups/meadow-props/capture.mjs`. The fixture is at `/bunnybrawl/docs/mockups/meadow-props/render.html` with `variant=current|storybook|woodcut|botanical|leafy|animation|leafyAiry|leafyBloom|leafyDusky|shrubBranch|shrubHedge|shrubBramble|shrubBloom` and `time=day|night` query parameters. The capture script writes the twenty-six scene PNGs and three detail sheets in this directory. Pass variant names as arguments to recapture only those scenes. It uses seeded randomness and fixed player positions for comparable scenes.
+From the repository root, start `npm run dev -- --host 127.0.0.1 --port 4190`, then run `node docs/mockups/meadow-props/capture.mjs`. The fixture is at `/bunnybrawl/docs/mockups/meadow-props/render.html` with `variant=current|storybook|woodcut|botanical|leafy|animation|leafyAiry|leafyBloom|leafyDusky|shrubBranch|shrubHedge|shrubBramble|shrubBloom|mixed` and `time=day|night` query parameters. The capture script writes the twenty-eight scene PNGs and three detail sheets in this directory. Pass variant names as arguments to recapture only those scenes. It uses seeded randomness and fixed player positions for comparable scenes.

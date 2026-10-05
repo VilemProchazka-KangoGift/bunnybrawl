@@ -18,13 +18,13 @@ const variants = shrubSet
   ? [studies.leafy, studies.leafyAiry, studies.leafyBloom, studies.leafyDusky]
   : [undefined, studies.botanical, studies.leafy, studies.animation];
 const names = shrubSet
-  ? ['Leafy storybook', 'Clustered foliage', 'Hedge canopy', 'Berry thicket', 'Flowering bush']
+  ? ['Leafy storybook', 'Clustered foliage', 'Hedge canopy', 'Flower thicket', 'Flowering bush']
   : leafySet
   ? ['Leafy storybook', 'Airy leaves', 'Bloom garden', 'Dusky leaves']
   : ['Current', 'Botanical ink', 'Leafy storybook', 'Bold animation'];
 c.fillStyle = '#dce9e8'; c.fillRect(0, 0, canvas.width, 760);
-c.fillStyle = '#193a38'; c.font = 'bold 29px sans-serif'; c.fillText(shrubSet ? 'Leafy storybook — berry bush studies' : leafySet ? 'Leafy storybook — variation study' : 'Meadow props — detail study', 30, 42);
-c.font = '16px sans-serif'; c.fillText(shrubSet ? 'No exposed branches; every bush has berries. Other props stay Leafy storybook.' : 'Native Canvas drawings enlarged for inspection. Full scenes show their actual play size.', 31, 66);
+c.fillStyle = '#193a38'; c.font = 'bold 29px sans-serif'; c.fillText(shrubSet ? 'Leafy storybook — bush studies' : leafySet ? 'Leafy storybook — variation study' : 'Meadow props — detail study', 30, 42);
+c.font = '16px sans-serif'; c.fillText(shrubSet ? 'The Flower thicket replaces berries with yellow blossoms. Other props stay Leafy storybook.' : 'Native Canvas drawings enlarged for inspection. Full scenes show their actual play size.', 31, 66);
 
 const sample = (cx: number, baseline: number, scale: number, draw: () => void) => {
   c.save(); c.translate(cx, baseline); c.scale(scale, scale); draw(); c.restore();

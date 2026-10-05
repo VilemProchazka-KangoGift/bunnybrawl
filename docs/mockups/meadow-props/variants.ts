@@ -432,7 +432,7 @@ function foliageBush(c: Ctx2D,x: number,gy: number,size: number,fg: boolean,styl
     sprig(-27,-22,-2.1,8);sprig(17,-28,-.6,9);sprig(7,-17,-1.2,8);
     for(const [bx,by] of [[-20,-27],[-2,-35],[24,-22]]) {
       for(let i=0;i<5;i++) {
-        const a=i*TAU/5;oval(c,bx+Math.cos(a)*2.6,by+Math.sin(a)*2.6,2.4,1.9,'#e7c2a7',a);
+        const a=i*TAU/5;oval(c,bx+Math.cos(a)*2.6,by+Math.sin(a)*2.6,2.4,1.9,'#f1d56e',a);
       }
       oval(c,bx,by,1.4,1.4,'#b58342');oval(c,bx-.4,by-.5,.6,.6,'#ffe2a0');
     }
@@ -446,13 +446,23 @@ function foliageBush(c: Ctx2D,x: number,gy: number,size: number,fg: boolean,styl
   const berrySpots: Record<ShrubStyle, [number,number][]> = {
     shrubBranch: [[-24,-20],[-2,-34],[23,-18]],
     shrubHedge: [[-25,-17],[-3,-29],[21,-16]],
-    shrubBramble: [[-20,-17],[-4,-31],[14,-21],[28,-9]],
+    shrubBramble: [],
     shrubBloom: [[-26,-14],[10,-28],[26,-13]],
   };
   for(const [bx,by] of berrySpots[style]) {
     for(const [dx,dy] of [[-1.8,0],[1.5,1.3]]) {
       oval(c,bx+dx,by+dy,2,2.2,'#bd675f');
       oval(c,bx+dx-.55,by+dy-.65,.65,.65,'#f4b7a0');
+    }
+  }
+  if(style==='shrubBramble') {
+    for(const [bx,by] of [[-20,-17],[-4,-31],[14,-21],[28,-9]]) {
+      for(let i=0;i<5;i++) {
+        const a=i*TAU/5;
+        oval(c,bx+Math.cos(a)*2.5,by+Math.sin(a)*2.5,2.2,1.8,'#f1d56e',a);
+      }
+      oval(c,bx,by,1.4,1.4,'#b58342');
+      oval(c,bx-.4,by-.5,.6,.6,'#fff0b3');
     }
   }
   c.restore();
@@ -463,13 +473,27 @@ function makeShrubStudy(style: ShrubStyle,name: string,summary: string): PropStu
   return {...leafyStudy,name,summary,drawBush:(c,x,y,s,f)=>foliageBush(c,x,y,s,f,style)};
 }
 
-export const studies: Record<'storybook' | 'woodcut' | LeafStyle | ShrubStyle, PropStudy> = {
+const hedgeStudy=makeShrubStudy('shrubHedge','Hedge canopy','One coherent scalloped canopy with leaf texture and coral berries.');
+const flowerThicketStudy=makeShrubStudy('shrubBramble','Flower thicket','Asymmetric foliage clusters with small yellow flowers instead of berries.');
+function mixedBushIndex(x: number, y: number, foreground: boolean): number {
+  if (y >= 650) {
+    if (foreground) return x < 300 ? 0 : x < 800 ? 1 : x < 1080 ? 2 : 0;
+    return x < 300 ? 1 : x < 600 ? 2 : x < 850 ? 0 : x < 1050 ? 1 : 2;
+  }
+  return (Math.floor(x / 150) + Math.floor(y / 110) + (foreground ? 0 : 1)) % 3;
+}
+const mixedBushStudies=[leafyStudy,hedgeStudy,flowerThicketStudy];
+const mixedStudy: PropStudy={...leafyStudy,name:'Mixed Meadow',summary:'Leafy, Hedge, and yellow-flowered thicket bushes share one stage.',
+  drawBush:(c,x,y,s,f)=>mixedBushStudies[mixedBushIndex(x,y,f)].drawBush(c,x,y,s,f)};
+
+export const studies: Record<'storybook' | 'woodcut' | 'mixed' | LeafStyle | ShrubStyle, PropStudy> = {
   shrubBranch: makeShrubStudy('shrubBranch','Clustered foliage','Several leafy crowns join into one opaque bush with coral berries.'),
-  shrubHedge: makeShrubStudy('shrubHedge','Hedge canopy','One coherent scalloped canopy with leaf texture and coral berries.'),
-  shrubBramble: makeShrubStudy('shrubBramble','Berry thicket','Asymmetric foliage clusters carry extra coral berry pairs.'),
-  shrubBloom: makeShrubStudy('shrubBloom','Flowering bush','Connected foliage heads with sparse pale blossoms and coral berries.'),
+  shrubHedge: hedgeStudy,
+  shrubBramble: flowerThicketStudy,
+  shrubBloom: makeShrubStudy('shrubBloom','Flowering bush','Connected foliage heads with sparse yellow blossoms and coral berries.'),
   botanical: makeLeafStudy('botanical', 'Botanical ink', 'Fine outlined pointed leaf sprays, visible branching, amber field mushrooms and etched earthen ledges.'),
   leafy: leafyStudy,
+  mixed: mixedStudy,
   leafyAiry: makeLeafStudy('leafyAiry', 'Leafy airy', 'Larger spaced sage leaves, gentle ink, cream daisies and quiet sandy ledges.'),
   leafyBloom: makeLeafStudy('leafyBloom', 'Leafy bloom', 'Layered rounded foliage with two dusty rose blossom clusters, matching flowers and warm earthen ledges.'),
   leafyDusky: makeLeafStudy('leafyDusky', 'Leafy dusky', 'Cool eucalyptus leaves with pale readable edges, cream flowers and contrasting warm clay ledges.'),
