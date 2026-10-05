@@ -4,6 +4,8 @@ Use when creating or modifying arena levels, themes, platform layouts, or decora
 
 ## Canvas Dimensions & Physics
 
+When changing Meadow's static art, compare the production arena and renderer against the approved prop study at a fixed 1280 × 720 viewport. Keep foreground bushes opaque and in the post-player foreground layer so they continue to hide characters. Preserve the platform cap's landing plane and front-face overlay when changing its fake 3D styling.
+
 - **Canvas**: 1280 x 720 px
 - **Ground**: always `platforms[0]` at y=660, height=60, full width
 - **Player size**: 32 x 32 px
