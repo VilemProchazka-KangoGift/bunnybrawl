@@ -43,11 +43,15 @@ describe('meadow — buildReactiveDecorations', () => {
   });
 
   it('expected kinds are present', () => {
+    const pack = getArenaPack('meadow');
+    const arena = getArena('meadow');
+    const actual = new Set(pack!.buildReactiveDecorations!(arena).map(inst => inst.kind));
     const expected = [
-      'meadow.tree', 'decoration.tallGrass', 'decoration.fern', 'decoration.hangingVine',
+      'meadow.tree', 'meadow.tallGrass', 'meadow.fern', 'meadow.hangingVine',
       'meadow.dandelion', 'meadow.butterfly', 'meadow.bee',
     ];
     for (const k of expected) {
+      expect(actual.has(k)).toBe(true);
       expect(hasReactiveKind(k)).toBe(true);
     }
   });

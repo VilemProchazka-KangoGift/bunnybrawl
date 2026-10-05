@@ -9,6 +9,11 @@ import {
   drawMeadowBush, drawMeadowFlower, drawMeadowMushroom,
   drawMeadowPlatform, drawMeadowPlatformOverlay,
 } from './meadowSelectedArt';
+import {
+  drawMeadowTree, drawMeadowGrassTuft, drawMeadowLeafCluster,
+  drawMeadowHangingVine, drawMeadowFern, drawMeadowTallGrass,
+  drawMeadowDandelion, drawMeadowButterfly, drawMeadowBee, drawMeadowSnail,
+} from './meadowStorybookDetails';
 
 const SNAILS_CFG: GroundCritterConfig[] = [
   { platL: 900, platR: 1080, platTopY: 660, walkSpeed: 8, fleeSpeed: 22, fleeRadius: 70, yTolerance: 80, turnEaseRate: 2 },
@@ -37,16 +42,6 @@ const DANDELIONS = [
   { x: 640,  gy: 285 },
   { x: 1090, gy: 530 },
 ] as const;
-const DANDELION_SEED_COS = new Float32Array(14);
-const DANDELION_SEED_SIN = new Float32Array(14);
-{
-  for (let i = 0; i < 14; i++) {
-    const a = (i / 14) * Math.PI * 2;
-    DANDELION_SEED_COS[i] = Math.cos(a);
-    DANDELION_SEED_SIN[i] = Math.sin(a);
-  }
-}
-
 function drawButterfly(ctx: Ctx2D, i: number, time: number, players: ReadonlyArray<import('../../types').Player>): void {
   const driftSpeed = 0.04 + (i % 3) * 0.015;
   const homeX = ((i * 200 + time * 60 * driftSpeed) % (CANVAS_WIDTH + 200)) - 100;
@@ -55,13 +50,7 @@ function drawButterfly(ctx: Ctx2D, i: number, time: number, players: ReadonlyArr
   const flutterY = homeY + fastSin(time * 1.5 + i * 1.7) * 14;
   const r = pushFromPlayers(players, flutterX, flutterY, 70, 14, 4);
   const flap = fastSin(time * 14 + i * 3) * 0.5 + 0.5;
-  ctx.fillStyle = BUTTERFLY_COLORS[i];
-  ctx.beginPath();
-  ctx.ellipse(r.x - 4, r.y, 4 * flap, 5, 0, 0, Math.PI * 2);
-  ctx.ellipse(r.x + 4, r.y, 4 * flap, 5, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#000';
-  ctx.fillRect(r.x - 0.5, r.y - 3, 1, 6);
+  drawMeadowButterfly(ctx, r.x, r.y, flap, BUTTERFLY_COLORS[i]);
 }
 
 function drawOneSnail(
@@ -70,42 +59,7 @@ function drawOneSnail(
   cfg: GroundCritterConfig,
   time: number,
 ): void {
-  ctx.save();
-  ctx.translate(state.x, cfg.platTopY - 4);
-  if (state.facingEase < 0) ctx.scale(-1, 1);
-  ctx.fillStyle = '#b89878';
-  ctx.beginPath();
-  ctx.ellipse(0, 0, 9, 3.5, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = 'rgba(120,100,80,0.5)';
-  ctx.fillRect(-9, 2.5, 18, 1.5);
-  ctx.fillStyle = '#8a5a3a';
-  ctx.beginPath();
-  ctx.arc(-1, -3, 5.5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = '#5a3a20';
-  ctx.lineWidth = 0.8;
-  ctx.beginPath();
-  for (let r = 4.5; r >= 1; r -= 1.6) {
-    ctx.moveTo(-1 + r, -3);
-    ctx.arc(-1, -3, r, 0, Math.PI * 1.8);
-  }
-  ctx.stroke();
-  const wig = fastSin(time * 6) * 0.5;
-  ctx.strokeStyle = '#8a6a4a';
-  ctx.lineWidth = 0.8;
-  ctx.beginPath();
-  ctx.moveTo(7, -1);
-  ctx.lineTo(10 + wig, -5);
-  ctx.moveTo(8, -1);
-  ctx.lineTo(11 - wig, -4);
-  ctx.stroke();
-  ctx.fillStyle = '#000';
-  ctx.beginPath();
-  ctx.arc(10 + wig, -5, 0.6, 0, Math.PI * 2);
-  ctx.arc(11 - wig, -4, 0.6, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
+  drawMeadowSnail(ctx, state.x, cfg.platTopY - 4, state.facingEase, time);
 }
 
 function drawBeeCluster(ctx: Ctx2D, ci: number, time: number, players: ReadonlyArray<import('../../types').Player>): void {
@@ -118,21 +72,9 @@ function drawBeeCluster(ctx: Ctx2D, ci: number, time: number, players: ReadonlyA
     const bx = r.x + fastSin(time * 4 + ph) * 18 + (i % 3 - 1) * 6;
     const by = r.y + fastCos(time * 3 + ph) * 12 + (Math.floor(i / 3) - 0.5) * 6;
     const wig = fastSin(time * 16 + ph) * 1.5;
-    ctx.fillStyle = '#ffd54a';
-    ctx.beginPath();
-    ctx.ellipse(bx, by + wig, 3, 2.2, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#3a2a08';
-    ctx.fillRect(bx - 2, by + wig - 0.3, 1, 0.7);
-    ctx.fillRect(bx, by + wig - 0.3, 1, 0.7);
+    drawMeadowBee(ctx, bx, by, wig);
   }
 }
-import {
-  drawTree, drawGrassTuft, drawFgLeafCluster,
-} from '../../themes/drawPrimitives';
-import {
-  buildHangingVine, buildFern, buildTallGrass,
-} from '../../gameLoop/cosmetics/sharedDecorationKinds';
 import { applyIsoInsets } from '../../themes/drawPrimitives';
 
 // ============================================================================
@@ -142,6 +84,7 @@ import { applyIsoInsets } from '../../themes/drawPrimitives';
 import {
   registerReactiveKind,
   createReactiveInstance,
+  composeBend,
   type ReactiveInstance,
 } from '../../gameLoop/cosmetics/reactiveDecorations';
 
@@ -168,8 +111,61 @@ registerReactiveKind('meadow.tree', {
     ctx.save();
     ctx.translate(inst.pos.x, inst.pos.y);
     ctx.rotate(lean * 0.015);
-    drawTree(ctx, 0, 0, size);
+    drawMeadowTree(ctx, 0, 0, size);
     ctx.restore();
+  },
+});
+
+// Meadow-specific art keeps the shared decorations' movement and interaction
+// tuning while allowing their silhouettes to match this arena's style.
+interface MeadowVineData { length: number; }
+function meadowHangingVine(x: number, y: number, length: number): ReactiveInstance {
+  return createReactiveInstance({
+    pos: { x, y }, kind: 'meadow.hangingVine',
+    seed: Math.floor((x * 97 + y * 47) % 997),
+    data: { length } satisfies MeadowVineData,
+    windAmp: 10,
+    proximity: { radius: 36, mode: 'lean', magnitude: 30 },
+  });
+}
+registerReactiveKind('meadow.hangingVine', {
+  layer: 'prePlayer',
+  draw: (ctx, inst, swayPhase) => {
+    const { length } = inst.data as MeadowVineData;
+    drawMeadowHangingVine(ctx, inst.pos.x, inst.pos.y, length, composeBend(inst, swayPhase));
+  },
+});
+
+function meadowFern(x: number, y: number): ReactiveInstance {
+  return createReactiveInstance({
+    pos: { x, y }, kind: 'meadow.fern',
+    seed: Math.floor((x * 79 + y * 37) % 997),
+    windAmp: 7,
+    proximity: { radius: 36, mode: 'lean', magnitude: 24 },
+  });
+}
+registerReactiveKind('meadow.fern', {
+  layer: 'prePlayer',
+  draw: (ctx, inst, swayPhase) => {
+    drawMeadowFern(ctx, inst.pos.x, inst.pos.y, composeBend(inst, swayPhase));
+  },
+});
+
+interface MeadowTallGrassData { count: number; }
+function meadowTallGrass(x: number, y: number, count: number): ReactiveInstance {
+  return createReactiveInstance({
+    pos: { x, y }, kind: 'meadow.tallGrass',
+    seed: Math.floor((x * 89 + y * 41) % 997),
+    data: { count } satisfies MeadowTallGrassData,
+    windAmp: 6,
+    proximity: { radius: 36, mode: 'lean', magnitude: 30 },
+  });
+}
+registerReactiveKind('meadow.tallGrass', {
+  layer: 'prePlayer',
+  draw: (ctx, inst, swayPhase) => {
+    const { count } = inst.data as MeadowTallGrassData;
+    drawMeadowTallGrass(ctx, inst.pos.x, inst.pos.y, count, composeBend(inst, swayPhase));
   },
 });
 
@@ -207,14 +203,6 @@ registerReactiveKind('meadow.dandelion', {
     const gy = inst.pos.y;
     const puffY = gy - 9;
 
-    // Stem.
-    ctx.strokeStyle = '#5fb45a';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(x, gy + 4);
-    ctx.lineTo(x, gy - 8);
-    ctx.stroke();
-
     // Puff (shrinks during seed-fly, regrows after).
     let puffR = 6;
     if (phase >= 0) {
@@ -225,23 +213,7 @@ registerReactiveKind('meadow.dandelion', {
         puffR = 6 * Math.min(1, regrow);
       }
     }
-    if (puffR > 0.3) {
-      ctx.fillStyle = '#ffffff';
-      ctx.globalAlpha = 0.95;
-      ctx.beginPath();
-      ctx.arc(x, puffY, puffR, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#dcdcc8';
-      ctx.globalAlpha = 0.75;
-      for (let i = 0; i < 6; i++) {
-        const c = DANDELION_SEED_COS[i * 2];
-        const s = DANDELION_SEED_SIN[i * 2];
-        ctx.beginPath();
-        ctx.arc(x + c * puffR * 0.7, puffY + s * puffR * 0.7, 0.7, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.globalAlpha = 1;
-    }
+    drawMeadowDandelion(ctx, x, gy, puffR);
 
     // Seed-fly particles.
     if (phase >= 0 && phase < DANDELION_SEED_FLY_DURATION) {
@@ -475,11 +447,11 @@ export const meadow: ArenaPack = {
         drawMeadowBush(ctx, mid - 30, plat.y, 15, false);
         drawMeadowFlower(ctx, plat.x + 20, plat.y, '#FFD700');
         drawMeadowFlower(ctx, plat.x + plat.width - 25, plat.y, '#FF69B4');
-        drawGrassTuft(ctx, plat.x + 10, plat.y);
-        drawGrassTuft(ctx, plat.x + plat.width - 15, plat.y);
+        drawMeadowGrassTuft(ctx, plat.x + 10, plat.y);
+        drawMeadowGrassTuft(ctx, plat.x + plat.width - 15, plat.y);
       } else {
         drawMeadowFlower(ctx, mid - 10, plat.y, '#DDA0DD');
-        drawGrassTuft(ctx, plat.x + 8, plat.y);
+        drawMeadowGrassTuft(ctx, plat.x + 8, plat.y);
       }
     }
   },
@@ -495,24 +467,24 @@ export const meadow: ArenaPack = {
     out.push(meadowTree(1180, y, 45));
 
     // Tall grass clusters (player parting)
-    out.push(buildTallGrass(310, y, 7));
-    out.push(buildTallGrass(680, y, 9));
-    out.push(buildTallGrass(1020, y, 6));
-    out.push(buildTallGrass(430, y, 5));
+    out.push(meadowTallGrass(310, y, 7));
+    out.push(meadowTallGrass(680, y, 9));
+    out.push(meadowTallGrass(1020, y, 6));
+    out.push(meadowTallGrass(430, y, 5));
 
     // Ferns (player parting)
-    out.push(buildFern(80, y));
-    out.push(buildFern(770, y));
-    out.push(buildFern(1220, y));
+    out.push(meadowFern(80, y));
+    out.push(meadowFern(770, y));
+    out.push(meadowFern(1220, y));
 
     // Floating-platform reactive decorations: hanging vines (lean)
     const floats = getFloatingPlatforms(arena.platforms);
     for (const plat of floats) {
       if (plat.width > 180) {
-        out.push(buildHangingVine(plat.x + 15, plat.y + plat.height, 25));
-        out.push(buildHangingVine(plat.x + plat.width - 15, plat.y + plat.height, 20));
+        out.push(meadowHangingVine(plat.x + 15, plat.y + plat.height, 25));
+        out.push(meadowHangingVine(plat.x + plat.width - 15, plat.y + plat.height, 20));
       } else {
-        out.push(buildHangingVine(plat.x + plat.width / 2, plat.y + plat.height, 18));
+        out.push(meadowHangingVine(plat.x + plat.width / 2, plat.y + plat.height, 18));
       }
     }
 
@@ -541,7 +513,7 @@ export const meadow: ArenaPack = {
       if (plat.width > 180) {
         drawMeadowBush(ctx, plat.x + plat.width * 0.15, plat.y, pi % 2 === 0 ? 45 : 18, true);
         drawMeadowBush(ctx, plat.x + plat.width * 0.85, plat.y, pi % 2 === 0 ? 18 : 42, true);
-        drawFgLeafCluster(ctx, plat.x + plat.width / 2, plat.y);
+        drawMeadowLeafCluster(ctx, plat.x + plat.width / 2, plat.y);
       } else {
         drawMeadowBush(ctx, plat.x + plat.width * 0.5, plat.y, pi % 3 === 0 ? 38 : 16, true);
       }

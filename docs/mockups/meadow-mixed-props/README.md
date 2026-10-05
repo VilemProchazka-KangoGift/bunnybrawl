@@ -10,4 +10,15 @@ The terrain, flowers, and mushrooms use Leafy Storybook styling. Foreground bush
 
 The day capture matches the selected mixed mockup pixel for pixel. Night captures can differ in ambient particle positions.
 
+## All Meadow props
+
+The following pass carries the same storybook style into the remaining Meadow props: trees, grass tufts and clusters, ferns, hanging vines, dandelions, butterflies, bees, snails, and foreground leaf clusters. The platforms and stumps retain their fake 3D top and front faces from the selected mixed version. The sky, hills, distant treeline, clouds, and character art are unchanged.
+
+| Time | Selected mixed version | All Meadow props |
+| --- | --- | --- |
+| Day | ![Selected mixed Meadow during the day](production-day.png) | ![All Meadow props during the day](all-assets-day.png) |
+| Night | ![Selected mixed Meadow at night](production-night.png) | ![All Meadow props at night](all-assets-night.png) |
+
+These are fixed-position production-renderer comparisons. Live match captures in the [default simulation-worker mode](live-default.png) and [simWorker=off mode](live-simWorker-off.png) show the same art with the HUD, animated props, and characters in motion. Foreground bushes still hide players; platform front faces still draw over players who move behind them.
+
 The reusable design rules, including background contrast with characters, are in the [visual style skill](../../../.claude/skills/visual-style/SKILL.md).

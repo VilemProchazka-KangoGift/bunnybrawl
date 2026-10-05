@@ -5,7 +5,7 @@ description: Use for Carrot Royale arena or character visual redesigns, procedur
 
 # Carrot Royale visual style
 
-Use the [mixed Meadow day](../../../docs/mockups/meadow-mixed-props/production-day.png) and [night](../../../docs/mockups/meadow-mixed-props/production-night.png) captures as the current art reference. They show the production renderer, not isolated asset drawings. Apply the visual language to other arenas without copying Meadow's green palette or plant motifs into every setting.
+Use the [complete Meadow day](../../../docs/mockups/meadow-mixed-props/all-assets-day.png) and [night](../../../docs/mockups/meadow-mixed-props/all-assets-night.png) captures as the current art reference. They show the production renderer, not isolated asset drawings. Apply the visual language to other arenas without copying Meadow's green palette or plant motifs into every setting.
 
 ## Start with the design brief
 
@@ -47,9 +47,11 @@ Check characters against each major background zone they cross: open sky, hills 
 | Hedge bush | A denser, continuous foliage silhouette with clustered leaf texture. |
 | Flower thicket | The former Berry shape, with pale yellow five-petal blossoms in place of its berries; no exposed branch structure. |
 | Flowers and mushrooms | Simple readable storybook shapes, sized in proportion to 32 × 32 characters. Use accents sparingly. |
+| Trees and secondary foliage | A grounded trunk with connected, irregular foliage; tapered grass and ferns; vines that hang visibly from platform edges. Keep motion and player-parting behavior. |
+| Small wildlife | Readable silhouettes and limited ink detail at match scale; keep their existing movement and avoidance behavior. |
 | Platforms and stumps | A visible top cap, warm front face, darker side face, inked edge, and enough irregularity to feel organic. Preserve the fake 3D depth. |
 
-The three bush styles coexist in Meadow. Their current placement and drawing live in [`meadowSelectedArt.ts`](../../../src/engine/arenas/packs/meadowSelectedArt.ts), with background and foreground positions in [`meadow.ts`](../../../src/engine/arenas/packs/meadow.ts). Background bushes sit behind players; opaque foreground bushes draw over them. Platform front-face overlays also draw after players, preserving the sense of moving behind the terrain. Art changes must preserve the collision plane and these layer relationships.
+The three bush styles coexist in Meadow. Their current placement and drawing live in [`meadowSelectedArt.ts`](../../../src/engine/arenas/packs/meadowSelectedArt.ts), while the trees, secondary foliage, and small wildlife live in [`meadowStorybookDetails.ts`](../../../src/engine/arenas/packs/meadowStorybookDetails.ts), with placement in [`meadow.ts`](../../../src/engine/arenas/packs/meadow.ts). Background bushes sit behind players; opaque foreground bushes draw over them. Platform front-face overlays also draw after players, preserving the sense of moving behind the terrain. Art changes must preserve the collision plane and these layer relationships.
 
 ## Redesign and review loop
 
