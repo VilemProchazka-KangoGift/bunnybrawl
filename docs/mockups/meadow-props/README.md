@@ -1,6 +1,23 @@
 # Meadow prop art studies
 
-Five experimental redraws of Meadow's decorative objects, compared with the current Morning blue arena. These are renderer-backed stills, not a game art change. They use the production arena layout, characters, background, HUD, and night treatment. Only bushes, flowers, mushrooms, platforms, and stumps are redrawn.
+Eight experimental redraws of Meadow's decorative objects, compared with the current Morning blue arena. These are renderer-backed stills, not a game art change. They use the production arena layout, characters, background, HUD, and night treatment. Only bushes, flowers, mushrooms, platforms, and stumps are redrawn.
+
+## Third round: variations on Leafy storybook
+
+Leafy storybook was selected as the strongest second-round direction. These variations keep its individually outlined foliage, opaque player cover, and extruded platform geometry while changing the foliage structure and color treatment.
+
+| Leafy storybook | Airy leaves | Bloom garden | Dusky leaves |
+| --- | --- | --- | --- |
+| ![Leafy storybook day](leafy-day.png) | ![Airy leaves day](leafyAiry-day.png) | ![Bloom garden day](leafyBloom-day.png) | ![Dusky leaves day](leafyDusky-day.png) |
+| ![Leafy storybook night](leafy-night.png) | ![Airy leaves night](leafyAiry-night.png) | ![Bloom garden night](leafyBloom-night.png) | ![Dusky leaves night](leafyDusky-night.png) |
+
+![Enlarged Leafy storybook, Airy, Bloom, and Dusky prop comparison](details-leafy.png)
+
+**Airy leaves:** fewer, larger sage leaves and thin outlines; broad quiet grass caps. This is the least busy option, though the pale foliage feels less grounded in the scene.
+
+**Bloom garden:** a wide lower leaf fan with two small dusty rose blossom clusters; slightly more scalloped platform edges. This keeps the Leafy identity and reads best of the new variants at night.
+
+**Dusky leaves:** small upright eucalyptus leaves over warm clay soil. The cooler foliage is distinct by day but loses more definition under the existing night tint.
 
 ## Second round: outlined leaves and dimensional platforms
 
@@ -36,4 +53,4 @@ These images are a static art direction test. They do not evaluate motion, gamep
 
 ## Reproduce
 
-From the repository root, start `npm run dev -- --host 127.0.0.1 --port 4190`, then run `node docs/mockups/meadow-props/capture.mjs`. The fixture is at `/bunnybrawl/docs/mockups/meadow-props/render.html` with `variant=current|storybook|woodcut|botanical|leafy|animation` and `time=day|night` query parameters. The capture script writes the twelve scene PNGs and detail sheet in this directory. It uses seeded randomness and fixed player positions for comparable scenes.
+From the repository root, start `npm run dev -- --host 127.0.0.1 --port 4190`, then run `node docs/mockups/meadow-props/capture.mjs`. The fixture is at `/bunnybrawl/docs/mockups/meadow-props/render.html` with `variant=current|storybook|woodcut|botanical|leafy|animation|leafyAiry|leafyBloom|leafyDusky` and `time=day|night` query parameters. The capture script writes the eighteen scene PNGs and two detail sheets in this directory. Pass variant names as arguments to recapture only those scenes. It uses seeded randomness and fixed player positions for comparable scenes.

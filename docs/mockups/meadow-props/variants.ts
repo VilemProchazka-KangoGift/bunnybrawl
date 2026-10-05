@@ -127,7 +127,8 @@ function platform(c: Ctx2D, p: Platform, ground: boolean, ink: boolean) {
   c.restore();
 }
 
-type LeafStyle = 'botanical' | 'leafy' | 'animation';
+type LeafStyle = 'botanical' | 'leafy' | 'animation' | 'leafyAiry' | 'leafyBloom' | 'leafyDusky';
+const isLeafy = (style: LeafStyle) => style.startsWith('leafy');
 interface InkPalette {
   ink: string; shade: string; mid: string; light: string; tip: string;
   earth: string; earthLight: string; side: string; cap: string; width: number;
@@ -136,17 +137,21 @@ const palettes: Record<LeafStyle, InkPalette> = {
   botanical: { ink:'#243e35', shade:'#244c3b', mid:'#527750', light:'#89a96c', tip:'#c5d58d', earth:'#97734d', earthLight:'#c3a06a', side:'#493c2f', cap:'#8cac66', width:1.15 },
   leafy: { ink:'#334937', shade:'#31523c', mid:'#6d8c4c', light:'#a3b966', tip:'#dfd992', earth:'#ad7953', earthLight:'#d5a77a', side:'#61422f', cap:'#a2bb67', width:1.5 },
   animation: { ink:'#173c39', shade:'#1f5b47', mid:'#388b57', light:'#77bd65', tip:'#c3e58c', earth:'#b07946', earthLight:'#e0b676', side:'#503f32', cap:'#8ec961', width:2.2 },
+  leafyAiry: { ink:'#51634a', shade:'#496345', mid:'#8ca06a', light:'#bfcd8d', tip:'#e6e3b5', earth:'#b99170', earthLight:'#dcc1a0', side:'#79604a', cap:'#bbcb86', width:1.05 },
+  leafyBloom: { ink:'#334b3e', shade:'#2e5240', mid:'#66895c', light:'#a0b779', tip:'#dce0a2', earth:'#ad805f', earthLight:'#d4ad84', side:'#674a38', cap:'#a4bc79', width:1.4 },
+  leafyDusky: { ink:'#344a47', shade:'#354f49', mid:'#6a9186', light:'#a3bdb0', tip:'#dfdfb6', earth:'#b78968', earthLight:'#e1b898', side:'#705042', cap:'#9fb7a0', width:1.5 },
 };
 
 // Leaves, rather than ovals, define the silhouette at native game scale.
 function inkLeaf(c: Ctx2D, x: number, y: number, length: number, angle: number, fill: string, style: LeafStyle) {
   const p = palettes[style];
   c.save(); c.translate(x,y); c.rotate(angle); c.fillStyle=fill;
+  if(style==='leafyDusky') c.scale(1,.72);
   c.strokeStyle=p.ink; c.lineWidth=p.width; c.beginPath(); c.moveTo(0,0);
   if(style==='botanical') {
     c.bezierCurveTo(length*.22,-length*.26,length*.72,-length*.32,length,0);
     c.bezierCurveTo(length*.61,length*.28,length*.26,length*.2,0,0);
-  } else if(style==='leafy') {
+  } else if(isLeafy(style)) {
     c.bezierCurveTo(length*.04,-length*.38,length*.55,-length*.57,length*.82,-length*.21);
     c.quadraticCurveTo(length*.94,-length*.2,length,0);
     c.bezierCurveTo(length*.7,length*.46,length*.23,length*.46,0,0);
@@ -173,9 +178,15 @@ function branchingBush(c: Ctx2D, x: number, gy: number, size: number, fg: boolea
   c.beginPath(); c.moveTo(-34,0); c.lineTo(-33,-17); c.lineTo(-25,-25);
   c.lineTo(-18,-29); c.lineTo(-10,-37); c.lineTo(4,-38); c.lineTo(15,-32);
   c.lineTo(26,-26); c.lineTo(34,-16); c.lineTo(35,0); c.closePath(); c.fill(); c.stroke();
-  const sprays = style==='botanical'
+  const sprays = style==='leafyAiry'
+    ? [[-24,-23,-2.45],[1,-34,-1.48],[26,-21,-.58]]
+    : style==='leafyBloom'
+      ? [[-26,-19,-2.65],[-10,-28,-1.98],[12,-27,-1.03],[29,-13,-.25]]
+    : style==='leafyDusky'
+      ? [[-23,-27,-1.8],[-8,-35,-1.65],[10,-35,-1.42],[27,-24,-1.22]]
+    : style==='botanical'
     ? [[-25,-18,-2.28],[-12,-27,-1.96],[1,-31,-1.5],[13,-26,-1.06],[25,-17,-.57]]
-    : style==='leafy'
+    : isLeafy(style)
       ? [[-26,-14,-2.6],[-15,-26,-2.08],[0,-29,-1.55],[16,-23,-.95],[25,-11,-.32]]
       : [[-23,-19,-2.2],[-7,-29,-1.77],[12,-26,-1.08],[25,-13,-.46]];
   // Each branch carries alternating paired leaves and a terminal leaf.
@@ -183,18 +194,36 @@ function branchingBush(c: Ctx2D, x: number, gy: number, size: number, fg: boolea
     const [tx,ty,a]=sprays[i];
     c.strokeStyle=p.ink; c.lineWidth=style==='animation'?2.8:1.7;
     c.beginPath(); c.moveTo(i%2?3:-4,1); c.quadraticCurveTo(tx*.6,-10,tx,ty); c.stroke();
-    const count=style==='botanical'?4:3;
+    const count=style==='botanical'?4:style==='leafyAiry'?1:3;
     for(let j=0;j<count;j++) {
-      const t=.4+j*.19, bx=tx*t, by=ty*t;
-      const len=style==='botanical'?10+j*.9:style==='leafy'?14+j:16+j;
-      inkLeaf(c,bx,by,len,a-.78,j%2?p.light:p.mid,style);
-      inkLeaf(c,bx,by,len*.92,a+.85,j%2?p.mid:p.light,style);
+      const t=style==='leafyAiry'?.48+j*.28:.4+j*.19, bx=tx*t, by=ty*t;
+      const len=style==='botanical'?10+j*.9:style==='leafyAiry'?25:style==='leafyDusky'?12+j:isLeafy(style)?14+j:16+j;
+      const spread=style==='leafyDusky'?1.25:.78;
+      inkLeaf(c,bx,by,len,a-spread,j%2?p.light:p.mid,style);
+      inkLeaf(c,bx,by,len*.92,a+spread+.07,j%2?p.mid:p.light,style);
     }
-    inkLeaf(c,tx*.89,ty*.89,style==='botanical'?13:16,a,p.light,style);
+    inkLeaf(c,tx*.89,ty*.89,style==='botanical'?13:style==='leafyAiry'?22:style==='leafyDusky'?12:16,a,p.light,style);
   }
   // Layered lower leaves remove gaps around the stems without alpha blending.
-  for(let i=0;i<6;i++) {
-    inkLeaf(c,-29+i*10,-3-(i%2)*4,style==='botanical'?12:15,-1.9+(i%3)*.9,i%2?p.mid:p.light,style);
+  const lowerCount=style==='leafyAiry'?4:style==='leafyBloom'?5:6;
+  for(let i=0;i<lowerCount;i++) {
+    const lx=-29+i*(style==='leafyAiry'||style==='leafyBloom'?58/(lowerCount-1):10);
+    const len=style==='leafyAiry'?23:style==='leafyBloom'?24:style==='botanical'?12:15;
+    const angle=style==='leafyBloom'?-2.9+i*.62:style==='leafyDusky'?-1.8+(i%2)*.55:-1.9+(i%3)*.9;
+    inkLeaf(c,lx,-3-(i%2)*4,len,angle,i%2?p.mid:p.light,style);
+  }
+  if(style==='leafyBloom') {
+    // A second, readable fan of broad leaves, with just two small blossom clusters.
+    for(const [lx,ly,a] of [[-20,-11,-2.5],[-6,-17,-1.8],[12,-13,-.8]]) {
+      inkLeaf(c,lx,ly,18,a,p.light,style);
+    }
+    for(const [bx,by] of [[-20,-24],[19,-19]]) {
+      for(let i=0;i<5;i++) {
+        const a=i*TAU/5;
+        oval(c,bx+Math.cos(a)*3.5,by+Math.sin(a)*3.5,3,2.2,'#dfb6ac',a);
+      }
+      oval(c,bx,by,1.5,1.5,'#eee0ad');
+    }
   }
   if(style==='leafy') {
     for(const [bx,by] of [[-22,-14],[10,-21],[22,-7]]) {
@@ -239,17 +268,18 @@ function extrudedPlatform(c: Ctx2D, p: Platform, ground: boolean, style: LeafSty
     c.fillStyle=q.earthLight; c.beginPath(); c.moveTo(x+3,y+12); c.lineTo(x+w-3,y+12);
     c.lineTo(x+w-7,y+17); c.lineTo(x+w*.63,y+16); c.lineTo(x+w*.42,y+20); c.lineTo(x+3,y+17); c.closePath(); c.fill();
   } else {
-    c.strokeStyle=q.earthLight; c.lineWidth=style==='leafy'?2.6:1;
+    c.strokeStyle=q.earthLight; c.lineWidth=isLeafy(style)?2.6:1;
     c.beginPath(); c.moveTo(x+3,y+15); c.bezierCurveTo(x+w*.3,y+11,x+w*.6,y+20,x+w-3,y+15); c.stroke();
   }
-  for(let i=0;i<Math.floor(w/25);i++) {
-    const px=x+13+i*25, py=y+18+(i*7%Math.max(1,h-22));
+  const stoneSpacing=style==='leafyAiry'?65:style==='leafyDusky'?42:25;
+  for(let i=0;i<Math.floor(w/stoneSpacing);i++) {
+    const px=x+13+i*stoneSpacing, py=y+18+(i*7%Math.max(1,h-22));
     oval(c,px,py,style==='animation'?3.7:2.4,1.2,q.earthLight,-.25);
     if(style==='botanical'){ c.strokeStyle=q.ink; c.lineWidth=.7; c.beginPath(); c.moveTo(px-4,py+2); c.lineTo(px,py+1); c.stroke(); }
   }
   c.fillStyle=q.cap; c.strokeStyle=q.ink; c.lineWidth=q.width;
   c.beginPath(); c.moveTo(x,y+8); c.lineTo(x+8,y-8);
-  const n=Math.max(3,Math.ceil(w/26));
+  const n=Math.max(3,Math.ceil(w/(style==='leafyAiry'?45:style==='leafyBloom'?18:26)));
   for(let i=0;i<n;i++) {
     const a=x+8+i*w/n, b=x+8+(i+1)*w/n;
     c.bezierCurveTo(a+w/n*.3,y-11,b-w/n*.2,y-9,b,y-8);
@@ -263,9 +293,18 @@ function extrudedPlatform(c: Ctx2D, p: Platform, ground: boolean, style: LeafSty
   // A restrained center-plane highlight retains the legible landing level.
   c.strokeStyle=q.tip; c.lineWidth=style==='animation'?2:1;
   c.beginPath(); c.moveTo(x+7,y); c.lineTo(x+w-3,y); c.stroke();
-  for(let i=0;i<Math.floor(w/21);i++) {
-    const px=x+13+i*21; c.strokeStyle=q.mid; c.lineWidth=style==='animation'?1.7:1;
+  const grassSpacing=style==='leafyAiry'?42:21;
+  for(let i=0;i<Math.floor(w/grassSpacing);i++) {
+    const px=x+13+i*grassSpacing; c.strokeStyle=q.mid; c.lineWidth=style==='animation'?1.7:1;
     c.beginPath(); c.moveTo(px-2,y+4); c.lineTo(px,y+1); c.lineTo(px+2,y+4); c.stroke();
+    if(style==='leafyBloom' && i%3===1) {
+      oval(c,px+5,y+2,2,1.4,'#dfb6ac');
+    }
+    if(style==='leafyDusky') {
+      // Small paired eucalyptus marks echo the upright bush rhythm.
+      oval(c,px-3,y+2,2.5,1.2,q.light,-.5);
+      oval(c,px+3,y+2,2.5,1.2,q.light,.5);
+    }
   }
   if(!ground) {
     c.strokeStyle=q.ink; c.lineWidth=1.3;
@@ -277,12 +316,13 @@ function extrudedPlatform(c: Ctx2D, p: Platform, ground: boolean, style: LeafSty
 function studyFlower(c: Ctx2D,x: number,y: number,color: string,h: number,style: LeafStyle) {
   if(style==='botanical'){flower(c,x,y,color,h,true);return;}
   const p=palettes[style]; c.save(); c.strokeStyle=p.ink; c.lineWidth=p.width;
+  const petal=style==='leafyAiry'?'#ede5c3':style==='leafyBloom'?'#dfb6ac':style==='leafyDusky'?'#e3c8ac':color;
   c.beginPath();c.moveTo(x,y);c.quadraticCurveTo(x-3,y-h*.5,x,y-h);c.stroke();
   inkLeaf(c,x,y-h*.25,style==='animation'?9:8,-2.5,p.mid,style);
   inkLeaf(c,x-1,y-h*.5,8,-.6,p.light,style);
   const count=style==='animation'?5:8, r=style==='animation'?5:4;
   for(let i=0;i<count;i++) {
-    const a=i*TAU/count; oval(c,x+Math.cos(a)*r,y-h+Math.sin(a)*r,r*.85,r*.6,color,a);
+    const a=i*TAU/count; oval(c,x+Math.cos(a)*r,y-h+Math.sin(a)*r,r*.85,r*.6,petal,a);
     c.strokeStyle=p.ink;c.lineWidth=style==='animation'?1.3:.8;
     c.beginPath();c.ellipse(x+Math.cos(a)*r,y-h+Math.sin(a)*r,r*.85,r*.6,a,0,TAU);c.stroke();
   }
@@ -291,7 +331,7 @@ function studyFlower(c: Ctx2D,x: number,y: number,color: string,h: number,style:
 function studyMushroom(c: Ctx2D,x: number,y: number,style: LeafStyle) {
   const p=palettes[style]; c.save(); c.translate(x,y); c.strokeStyle=p.ink;c.lineWidth=p.width;
   c.fillStyle='#eddbad';c.beginPath();c.moveTo(-2,-12);c.lineTo(3,-12);c.lineTo(4,0);c.quadraticCurveTo(0,2,-3,0);c.closePath();c.fill();c.stroke();
-  c.fillStyle=style==='botanical'?'#b88858':style==='leafy'?'#c4775b':'#e68b55';
+  c.fillStyle=style==='botanical'?'#b88858':style==='leafyAiry'?'#c09a78':style==='leafyBloom'?'#be8170':style==='leafyDusky'?'#c49783':style==='leafy'?'#c4775b':'#e68b55';
   c.beginPath();c.moveTo(-10,-11);
   if(style==='botanical') {c.quadraticCurveTo(-4,-23,1,-23);c.quadraticCurveTo(7,-18,10,-11);}
   else {c.bezierCurveTo(-9,-24,9,-24,11,-11);}
@@ -312,9 +352,12 @@ function makeLeafStudy(style: LeafStyle,name: string,summary: string): PropStudy
   };
 }
 
-export const studies: Record<'storybook' | 'woodcut' | 'botanical' | 'leafy' | 'animation', PropStudy> = {
+export const studies: Record<'storybook' | 'woodcut' | LeafStyle, PropStudy> = {
   botanical: makeLeafStudy('botanical', 'Botanical ink', 'Fine outlined pointed leaf sprays, visible branching, amber field mushrooms and etched earthen ledges.'),
   leafy: makeLeafStudy('leafy', 'Leafy storybook', 'Broad rounded leaves on spreading branches, coral berries, daisy rosettes and warm terracotta ledges.'),
+  leafyAiry: makeLeafStudy('leafyAiry', 'Leafy airy', 'Larger spaced sage leaves, gentle ink, cream daisies and quiet sandy ledges.'),
+  leafyBloom: makeLeafStudy('leafyBloom', 'Leafy bloom', 'Layered rounded foliage with two dusty rose blossom clusters, matching flowers and warm earthen ledges.'),
+  leafyDusky: makeLeafStudy('leafyDusky', 'Leafy dusky', 'Cool eucalyptus leaves with pale readable edges, cream flowers and contrasting warm clay ledges.'),
   animation: makeLeafStudy('animation', 'Bold animation', 'Large graphic leaves, strong dark contours, bright lime planes and chunky golden soil accents.'),
   storybook: {
     name: 'Garden storybook',

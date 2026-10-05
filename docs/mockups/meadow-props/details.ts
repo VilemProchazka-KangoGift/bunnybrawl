@@ -8,10 +8,15 @@ const canvas = document.querySelector('#details') as HTMLCanvasElement;
 const c = canvas.getContext('2d') as Ctx2D;
 const theme = toThemeConfig(meadow);
 const columns = [210, 630, 1050, 1470];
-const variants = [undefined, studies.botanical, studies.leafy, studies.animation];
-const names = ['Current', 'Botanical ink', 'Leafy storybook', 'Bold animation'];
+const leafySet = new URLSearchParams(location.search).get('set') === 'leafy';
+const variants = leafySet
+  ? [studies.leafy, studies.leafyAiry, studies.leafyBloom, studies.leafyDusky]
+  : [undefined, studies.botanical, studies.leafy, studies.animation];
+const names = leafySet
+  ? ['Leafy storybook', 'Airy leaves', 'Bloom garden', 'Dusky leaves']
+  : ['Current', 'Botanical ink', 'Leafy storybook', 'Bold animation'];
 c.fillStyle = '#dce9e8'; c.fillRect(0, 0, 1680, 760);
-c.fillStyle = '#193a38'; c.font = 'bold 29px sans-serif'; c.fillText('Meadow props — detail study', 30, 42);
+c.fillStyle = '#193a38'; c.font = 'bold 29px sans-serif'; c.fillText(leafySet ? 'Leafy storybook — variation study' : 'Meadow props — detail study', 30, 42);
 c.font = '16px sans-serif'; c.fillText('Native Canvas drawings enlarged for inspection. Full scenes show their actual play size.', 31, 66);
 
 const sample = (cx: number, baseline: number, scale: number, draw: () => void) => {
