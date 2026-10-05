@@ -5,7 +5,7 @@ description: Use for Carrot Royale arena or character visual redesigns, procedur
 
 # Carrot Royale visual style
 
-Use the [complete Meadow day](../../../docs/mockups/meadow-mixed-props/all-assets-day.png) and [night](../../../docs/mockups/meadow-mixed-props/all-assets-night.png) captures as the current art reference. They show the production renderer, not isolated asset drawings. Apply the visual language to other arenas without copying Meadow's green palette or plant motifs into every setting.
+Use the [complete Meadow day](../../../docs/mockups/meadow-backgrounds/production-day.png) and [night](../../../docs/mockups/meadow-backgrounds/production-night.png) captures as the current art reference. They show the production renderer, not isolated asset drawings. Apply the visual language to other arenas without copying Meadow's green palette or plant motifs into every setting.
 
 ## Start with the design brief
 
@@ -38,6 +38,17 @@ For a new arena, choose a setting-specific palette and landmarks, then apply the
 - **Keep deliberate cover opaque.** Foreground bushes render over players and are supposed to hide them. Improve readability of the rest of the scene without thinning, fading, or moving those bushes solely to expose characters.
 
 Check characters against each major background zone they cross: open sky, hills or distant scenery, platform top, and ground. Test pale, dark, warm, and green characters rather than judging the palette with one favorite character. If one disappears, adjust the layer behind it first: simplify nearby edges, shift value or hue, or reduce saturation. Recheck the entire scene after the change so another character does not lose contrast elsewhere.
+
+### Landscape and cloud lessons from Meadow
+
+- Make distant shapes read as the intended place. Meadow's sharp repeated treeline read as mountain peaks; broad rolling contours and sparse tree silhouettes read as a valley. Keep far trees smaller, quieter, and visibly attached to their ground plane.
+- Tune **height and spacing**, not just palette. The first valley study left the hills too low. Raise the far ridge enough to be seen between lower platforms, then raise middle and near slopes by smaller amounts so the layers remain distinct. Keep the highest platforms and upper jump lanes against open sky.
+- Use uneven, continuous hill contours instead of repeated semicircles. Give each depth layer its own cool, muted value; avoid dark outlines and tiny texture in the distance. The near layer may be stronger, but must still sit behind players and their opaque cover.
+- A cloud is a silhouette, not a stack of equal circles. Elongated, irregular forms with restrained underside detail suit the storybook props. Compare cloud shape separately from land shape, then review the combination. Preserve slow cloud drift and wrapping when integrating a static mockup into the game.
+- Treat a large edge canopy or scenic landmark as a possible obstruction. A woodland frame looked attractive in isolation but crowded Meadow's outer platforms, so it was dropped. Leave quiet space wherever players jump or the HUD sits.
+- Compare full production-renderer scenes at fixed player positions and day/night phases. Keep the selected mockup and the old scene available together; after integration, capture the real game again. A static mockup does not prove animated clouds or night compositing work in production.
+
+Meadow's [background comparison gallery](../../../docs/mockups/meadow-backgrounds/README.md) records the alternatives, height studies, and production result. Its height variants are a useful example of changing composition without moving gameplay geometry or modifying character art. The valley and cloud shapes live in [`meadowBackdrop.ts`](../../../src/engine/arenas/packs/meadowBackdrop.ts); Meadow's cloud configuration supplies starting positions to the existing animated cloud system.
 
 ## Meadow reference props
 

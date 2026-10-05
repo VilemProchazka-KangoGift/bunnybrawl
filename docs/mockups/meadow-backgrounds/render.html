@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Meadow background study</title>
+<style>
+  html, body { margin: 0; background: #111; }
+  .scene { position: relative; width: 1280px; height: 720px; isolation: isolate; }
+  .scene canvas, .tint { position: absolute; inset: 0; width: 1280px; height: 720px; }
+  .tint { background: rgb(20, 24, 48); mix-blend-mode: multiply; pointer-events: none; }
+</style>
+<div class="scene">
+  <canvas id="bg"></canvas><canvas id="night"></canvas><canvas id="fg"></canvas>
+  <div class="tint"></div><canvas id="hud"></canvas>
+</div>
+<script type="module" src="./render.ts"></script>
+</html>

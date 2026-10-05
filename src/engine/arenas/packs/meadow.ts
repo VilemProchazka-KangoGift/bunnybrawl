@@ -14,6 +14,7 @@ import {
   drawMeadowHangingVine, drawMeadowFern, drawMeadowTallGrass,
   drawMeadowDandelion, drawMeadowButterfly, drawMeadowBee, drawMeadowSnail,
 } from './meadowStorybookDetails';
+import { drawMeadowValley, drawMeadowCloud, MEADOW_CLOUDS } from './meadowBackdrop';
 
 const SNAILS_CFG: GroundCritterConfig[] = [
   { platL: 900, platR: 1080, platTopY: 660, walkSpeed: 8, fleeSpeed: 22, fleeRadius: 70, yTolerance: 80, turnEaseRate: 2 },
@@ -278,16 +279,6 @@ registerReactiveKind('meadow.bee', {
   },
 });
 
-// Shared decoration data — hoisted so we don't realloc per bake.
-const FOREST_TREE_POSITIONS = [
-  0, 530, 30, 510, 55, 530, 80, 495, 110, 525, 140, 500,
-  170, 520, 200, 490, 235, 515, 265, 485, 300, 510, 330, 495,
-  365, 520, 395, 480, 430, 505, 460, 490, 500, 515, 535, 485,
-  570, 510, 600, 475, 635, 500, 665, 490, 700, 510, 740, 480,
-  775, 505, 810, 495, 845, 515, 880, 475, 920, 500, 955, 490,
-  990, 510, 1025, 485, 1060, 505, 1095, 480, 1130, 500, 1165, 490,
-  1200, 510, 1235, 485, 1270, 505, 1300, 520,
-];
 const FLOWER_COLORS = ['#FF6B8A', '#FFD700', '#FF69B4', '#87CEEB', '#DDA0DD', '#FFA07A'];
 export const meadow: ArenaPack = {
   // ---- Identity, preview, and translations ----
@@ -328,12 +319,7 @@ export const meadow: ArenaPack = {
     ],
   },
 
-  hills: [
-    { x: 0, baseY: 620, width: 300, height: 120, color: '#719981' },
-    { x: 250, baseY: 630, width: 400, height: 100, color: '#719981' },
-    { x: 600, baseY: 620, width: 350, height: 130, color: '#719981' },
-    { x: 900, baseY: 635, width: 400, height: 100, color: '#719981' },
-  ],
+  hills: [], // The selected layered valley is drawn in drawFarBackground.
 
   ground: {
     surfaceColor: '#6BBF59',
@@ -348,6 +334,8 @@ export const meadow: ArenaPack = {
     minSpeed: 6,
     maxSpeed: 12,
     yRange: [40, 100],
+    initialClouds: MEADOW_CLOUDS,
+    draw: drawMeadowCloud,
   },
 
   weather: {
@@ -395,29 +383,7 @@ export const meadow: ArenaPack = {
   },
 
   // ---- Custom draw functions ----
-  drawFarBackground: (ctx: Ctx2D, _arena: Arena) => {
-    // Distant treeline — jagged tops suggesting a dense forest
-    ctx.fillStyle = 'rgba(86, 116, 147, 0.32)';
-    ctx.beginPath();
-    ctx.moveTo(-10, 660);
-    for (let i = 0; i < FOREST_TREE_POSITIONS.length; i += 2) {
-      ctx.lineTo(FOREST_TREE_POSITIONS[i], FOREST_TREE_POSITIONS[i + 1]);
-    }
-    ctx.lineTo(1300, 660);
-    ctx.closePath();
-    ctx.fill();
-
-    // Lighter layer in front — slightly higher, more detail
-    ctx.fillStyle = 'rgba(116, 148, 150, 0.23)';
-    ctx.beginPath();
-    ctx.moveTo(-10, 660);
-    for (let i = 0; i < FOREST_TREE_POSITIONS.length; i += 2) {
-      ctx.lineTo(FOREST_TREE_POSITIONS[i] + 15, FOREST_TREE_POSITIONS[i + 1] + 25);
-    }
-    ctx.lineTo(1300, 660);
-    ctx.closePath();
-    ctx.fill();
-  },
+  drawFarBackground: (ctx) => drawMeadowValley(ctx),
 
   // Static-shape decorations route through the cached fg/bg-nature layers
   // (one-time bake). Only kinds that genuinely need per-frame reactivity —

@@ -54,6 +54,7 @@ interface Cloud {
   x: number;
   y: number;
   size: number;
+  height?: number;
   speed: number;
 }
 
@@ -595,6 +596,10 @@ export class Renderer implements IRenderer {
   /** Populate `this.clouds` from the current theme's cloud config. */
   private initClouds(): void {
     const cc = this.theme.clouds;
+    if (cc.initialClouds) {
+      this.clouds = cc.initialClouds.map(cloud => ({ ...cloud }));
+      return;
+    }
     this.clouds = [];
     for (let i = 0; i < cc.count; i++) {
       this.clouds.push({
@@ -1060,6 +1065,15 @@ export class Renderer implements IRenderer {
   // ---- Clouds ----
 
   private updateAndDrawClouds(ctx: Ctx2D, dt: number): void {
+    const customDraw = this.theme.clouds.draw;
+    if (customDraw) {
+      for (const cloud of this.clouds) {
+        cloud.x += cloud.speed * dt;
+        if (cloud.x > CANVAS_WIDTH) cloud.x = -cloud.size;
+        customDraw(ctx, cloud.x, cloud.y, cloud.size, cloud.height ?? cloud.size * .38);
+      }
+      return;
+    }
     // Inlined batch of theme-default clouds: one fillStyle, one beginPath/fill
     // for all clouds. Each cloud is 4 overlapping arcs (the original drawCloud
     // shape); moveTo before each cloud starts a new sub-path so neighbours
