@@ -7,6 +7,12 @@ description: Use for Carrot Royale arena or character visual redesigns, procedur
 
 Use the [mixed Meadow day](../../../docs/mockups/meadow-mixed-props/production-day.png) and [night](../../../docs/mockups/meadow-mixed-props/production-night.png) captures as the current art reference. They show the production renderer, not isolated asset drawings. Apply the visual language to other arenas without copying Meadow's green palette or plant motifs into every setting.
 
+## Start with the design brief
+
+Before drawing, identify the arena or asset being changed, the gameplay information it must show, and any deliberate occlusion it must preserve. Capture the current production scene with representative characters at noon and night. Note what is actually failing: silhouette, color separation, platform readability, depth, repetition, or clutter. State one visual goal for the iteration so a prettier detail does not distract from the problem being solved.
+
+For a new arena, choose a setting-specific palette and landmarks, then apply the hierarchy and shape rules below. For an existing arena, preserve its gameplay geometry and behavior unless the task explicitly includes changing them.
+
 ## Visual hierarchy
 
 1. Characters, hazards, pickups, and landing surfaces must be recognizable immediately at the game's 1280 × 720 logical size and when displayed smaller.
@@ -31,6 +37,8 @@ Use the [mixed Meadow day](../../../docs/mockups/meadow-mixed-props/production-d
 - Judge contrast in the full scene at native size and at a smaller display size. A quick grayscale or squint check exposes value collisions that hue alone can hide. Review moving gameplay as well as still screenshots.
 - **Keep deliberate cover opaque.** Foreground bushes render over players and are supposed to hide them. Improve readability of the rest of the scene without thinning, fading, or moving those bushes solely to expose characters.
 
+Check characters against each major background zone they cross: open sky, hills or distant scenery, platform top, and ground. Test pale, dark, warm, and green characters rather than judging the palette with one favorite character. If one disappears, adjust the layer behind it first: simplify nearby edges, shift value or hue, or reduce saturation. Recheck the entire scene after the change so another character does not lose contrast elsewhere.
+
 ## Meadow reference props
 
 | Prop | What to preserve |
@@ -45,10 +53,23 @@ The three bush styles coexist in Meadow. Their current placement and drawing liv
 
 ## Redesign and review loop
 
-1. Start with several materially different shapes or compositions, rendered in the actual arena and renderer. Show the current scene alongside candidates at identical camera, character positions, and time of day.
-2. Inspect the whole arena before polishing a single prop. Check character contrast, landing-surface clarity, cover behavior, and whether repeated decorations become clutter.
-3. Compare day and night, then watch live gameplay with different characters. Check the default simulation worker and `?simWorker=off` when integrating changes that touch arena rendering.
-4. Keep detailed static scenery in the background and foreground caches. Avoid expensive gradients, shadows, or large numbers of new paths in the per-frame draw path; see [`performance.md`](../performance.md).
-5. Save reviewable captures with the change. If the Meadow composition changes intentionally, refresh and rerun the visual baseline in `e2e/lighting-baseline.spec.ts`.
+1. **Explore distinct directions.** For a broad redesign, make several variants that change a meaningful dimension such as silhouette, foliage structure, platform treatment, or backdrop palette. Label what each variant tests. Do not produce near-duplicates distinguished only by tiny color shifts.
+2. **Compare fairly.** Render the current scene and candidates through the actual arena and renderer, with the same camera, character positions, and time of day. Show both the whole arena and a crop of the changed prop when detail matters. Save durable PNGs or static previews in the repo so the comparison remains accessible after a local server stops.
+3. **Select the direction.** Review in this order: gameplay silhouette and landing surfaces; character contrast outside deliberate cover; cover and terrain occlusion; coherent shape language; color and fine detail. For a user-facing design choice, present the comparisons and the tradeoffs before applying the chosen direction throughout production.
+4. **Integrate without changing gameplay accidentally.** Preserve collision tops, platform front-face overlay, and foreground hiding. Keep detailed static scenery in the background and foreground caches. Avoid expensive gradients, shadows, or large numbers of new paths in the per-frame draw path; see [`performance.md`](../performance.md).
+5. **Verify the full scene.** Compare noon, sunset, and night at 1280 × 720 and at a smaller display size; watch live gameplay with different characters and player positions. Check the default simulation worker and `?simWorker=off` when arena rendering changes. If the Meadow composition changes intentionally, refresh and rerun the visual baseline in `e2e/lighting-baseline.spec.ts`.
+
+### When a candidate fails
+
+| Symptom | First design adjustment |
+| --- | --- |
+| Bush reads as a rock | Break up its outline with attached leaf groups and botanical asymmetry. |
+| Bush reads as a pile of leaves | Add a continuous underlying crown and show how leaves grow from it. |
+| Platform looks flat | Restore a clear top cap, warm front face, and darker side face without moving its collision top. |
+| Character is lost against scenery | Quiet or shift the scenery behind that character; test the rest of the roster again. |
+| Scene is busy despite attractive props | Remove repeated accents or detail near movement lanes before adding more effects. |
+| Night scene loses silhouettes | Retune distant values and night tint while keeping foreground cover opaque. |
+
+A direction is ready to carry forward when its whole-scene comparison shows readable characters outside intentional cover, clear playable surfaces, distinct prop silhouettes, and no loss of the arena's gameplay cues. Keep unresolved tradeoffs visible in the comparison rather than claiming the artwork is finished.
 
 For arena geometry and draw-layer contracts, also read [`level-design.md`](../level-design.md). For character silhouette and sprite-caching rules, read [`character-sprites.md`](../character-sprites.md).
