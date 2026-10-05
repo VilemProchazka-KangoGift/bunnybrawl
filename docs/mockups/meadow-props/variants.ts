@@ -354,8 +354,8 @@ function makeLeafStudy(style: LeafStyle,name: string,summary: string): PropStudy
 
 type ShrubStyle = 'shrubBranch' | 'shrubHedge' | 'shrubBramble' | 'shrubBloom';
 
-// Continuous opaque undergrowth behind the stems keeps the foreground cover intact.
-// Crown lobes describe branches bearing foliage, with only a few individual leaves.
+// Continuous opaque foliage keeps the foreground cover intact.
+// The overlapping crown lobes form a bush without exposed woody structure.
 function shrubMass(c: Ctx2D, x: number, y: number, w: number, h: number, fill: string) {
   c.save(); c.translate(x,y); c.scale(w,h);
   c.fillStyle=fill; c.strokeStyle=palettes.leafy.ink; c.lineWidth=1.1/Math.max(w,h);
@@ -371,14 +371,12 @@ function shrubMass(c: Ctx2D, x: number, y: number, w: number, h: number, fill: s
   c.quadraticCurveTo(-.45,.65,-.46,.43);c.lineTo(-.79,.59);
   c.quadraticCurveTo(-1,.56,-1,.35);c.closePath();c.fill();c.stroke();
   c.restore();
-  // Two attached leaves and their shared twig break up each crown's flat surface.
-  c.strokeStyle=palettes.leafy.shade;c.lineWidth=1.1;
-  c.beginPath();c.moveTo(x+w*.2,y+h*.35);c.lineTo(x-w*.23,y-h*.12);c.stroke();
+  // Two leaf marks break up each crown's flat surface.
   inkLeaf(c,x-w*.13,y-h*.04,w*.52,-2.25,palettes.leafy.light,'leafy');
   inkLeaf(c,x-w*.13,y-h*.04,w*.45,-.82,fill,'leafy');
 }
 
-function rootedShrub(c: Ctx2D,x: number,gy: number,size: number,fg: boolean,style: ShrubStyle) {
+function foliageBush(c: Ctx2D,x: number,gy: number,size: number,fg: boolean,style: ShrubStyle) {
   const p=palettes.leafy;
   c.save(); c.translate(x,gy); c.scale(size/50,size/50); c.lineCap='round'; c.lineJoin='round';
   c.fillStyle=fg?p.shade:'#496447'; c.strokeStyle=p.ink; c.lineWidth=1.4;
@@ -399,25 +397,17 @@ function rootedShrub(c: Ctx2D,x: number,gy: number,size: number,fg: boolean,styl
   c.lineTo(-23,3);c.quadraticCurveTo(-28,4,-30,0);
   c.closePath();c.fill();c.stroke();
 
-  const stem=(ex: number,ey: number,bend: number,width=2.8)=>{
-    c.strokeStyle=p.ink;c.lineWidth=width+1.5;
-    c.beginPath();c.moveTo(-1,1);c.bezierCurveTo(bend,-9,bend,ey+10,ex,ey);c.stroke();
-    c.strokeStyle='#af8d5b';c.lineWidth=width;c.stroke();
-  };
   const sprig=(sx: number,sy: number,angle: number,length=8)=>{
     inkLeaf(c,sx,sy,length,angle,p.light,'leafy');
     inkLeaf(c,sx,sy,length*.8,angle-1.2,p.mid,'leafy');
   };
   if(style==='shrubBranch') {
-    // Five woody stems fan from one stool; crowns sit at their tips, not on the soil.
-    for(const [ex,ey,bend] of [[-28,-24,-12],[-14,-34,-5],[4,-36,3],[24,-26,10],[30,-12,17]]) stem(ex,ey,bend);
+    // Separate leafy crowns join into one opaque, irregular bush.
     for(const [cx,cy,w,h,color] of [
       [-25,-23,10,10,p.mid],[-12,-32,12,10,p.light],[7,-33,11,10,p.mid],
       [24,-24,11,10,p.light],[-19,-12,12,8,p.mid],[17,-12,14,9,p.mid],
     ] as [number,number,number,number,string][]) shrubMass(c,cx,cy,w,h,color);
     sprig(-27,-24,-2.6,7);sprig(-11,-32,-2.2,7);sprig(21,-25,-.8,7);
-    // Long forked wood connects the rooted stool directly to the top crown surfaces.
-    stem(-21,-24,-9,2.8);stem(-8,-30,-3,2.5);stem(19,-24,7,2.8);
     sprig(-21,-24,-2.4,8);sprig(-8,-30,-1.7,8);sprig(19,-24,-.7,8);
   } else if(style==='shrubHedge') {
     // A continuous clipped crown; small nested scallops read as attached leaf surfaces.
@@ -427,26 +417,15 @@ function rootedShrub(c: Ctx2D,x: number,gy: number,size: number,fg: boolean,styl
     for(const [lx,ly] of [[-25,-24],[-13,-31],[1,-35],[15,-28],[25,-20],[-13,-18],[5,-23],[14,-12]]) {
       c.beginPath();c.moveTo(lx-3,ly+1);c.quadraticCurveTo(lx-2,ly-3,lx+1,ly-2);c.quadraticCurveTo(lx+3,ly-4,lx+5,ly-1);c.stroke();
     }
-    stem(-10,-15,-1,2.7);stem(12,-18,3,2.4);
     sprig(-10,-15,-2.5,7);sprig(12,-18,-.5,7);
     for(const [sx,sy,a] of [[-29,-21,-2.5],[-11,-33,-1.9],[11,-33,-.6],[29,-15,-.1]]) sprig(sx,sy,a,7);
   } else if(style==='shrubBramble') {
-    // Long asymmetrical fruiting canes bend from the stool toward the right.
+    // An asymmetrical thicket puts more foliage and fruit on the right.
     shrubMass(c,-21,-20,14,17,p.mid);shrubMass(c,-7,-30,16,15,p.mid);
     shrubMass(c,15,-22,18,13,p.mid);shrubMass(c,25,-10,11,11,p.mid);
-    for(const [a,b,d,e] of [[-4,-42,28,-20],[-25,-32,-29,-13],[9,-35,33,-8]]) {
-      c.strokeStyle=p.ink;c.lineWidth=3.9;c.beginPath();c.moveTo(-3,1);c.bezierCurveTo(-14,-19,a,b,d,e);c.stroke();
-      c.strokeStyle='#b59966';c.lineWidth=1.8;c.stroke();
-    }
     for(const [lx,ly,a] of [[-18,-23,-2.4],[-8,-30,-1.9],[4,-30,-.8],[17,-25,-.6],[26,-15,-.8],[-22,-14,2.8]]) sprig(lx,ly,a,8);
-    for(const [bx,by] of [[-14,-18],[11,-23],[26,-8]]) {
-      c.strokeStyle=p.ink;c.lineWidth=1;c.beginPath();c.moveTo(bx,by-5);c.lineTo(bx,by);c.stroke();
-      for(const [dx,dy] of [[-1.8,0],[1.6,.3],[0,2.3]]) oval(c,bx+dx,by+dy,1.8,2,'#b96762');
-      oval(c,bx-.8,by-.8,.7,.7,'#efc498');
-    }
   } else {
-    // Broad connected flowering heads grow above a short, visible woody stool.
-    stem(-23,-24,-12);stem(-5,-35,-2);stem(21,-28,9);
+    // Broad connected foliage heads carry a few pale blossoms.
     shrubMass(c,-22,-22,14,15,p.mid);shrubMass(c,-3,-30,18,15,p.light);
     shrubMass(c,21,-22,15,15,p.mid);shrubMass(c,-8,-12,18,10,p.mid);
     shrubMass(c,18,-10,15,10,p.mid);
@@ -457,28 +436,38 @@ function rootedShrub(c: Ctx2D,x: number,gy: number,size: number,fg: boolean,styl
       }
       oval(c,bx,by,1.4,1.4,'#b58342');oval(c,bx-.4,by-.5,.6,.6,'#ffe2a0');
     }
-    stem(-16,-20,-5,2.8);stem(13,-20,4,2.6);
     sprig(-16,-20,-2.7,8);sprig(13,-20,-.6,8);
     sprig(-28,-24,-2.4,8);sprig(2,-34,-1.1,8);sprig(28,-20,-.4,8);
   }
-  // Low leaf fans stay attached to short basal twigs, softening the ground contact.
+  // Low leaves soften the ground contact without visible branches.
   for(const [sx,sy,a] of [[-29,0,-2.3],[-18,1,-1.8],[17,1,-1.1],[28,0,-.7]]) {
-    c.strokeStyle='#8b8651';c.lineWidth=1.2;c.beginPath();c.moveTo(sx,sy+1);c.lineTo(sx+Math.cos(a)*4,sy-4);c.stroke();
     inkLeaf(c,sx,sy,7,a,p.mid,'leafy');
+  }
+  const berrySpots: Record<ShrubStyle, [number,number][]> = {
+    shrubBranch: [[-24,-20],[-2,-34],[23,-18]],
+    shrubHedge: [[-25,-17],[-3,-29],[21,-16]],
+    shrubBramble: [[-20,-17],[-4,-31],[14,-21],[28,-9]],
+    shrubBloom: [[-26,-14],[10,-28],[26,-13]],
+  };
+  for(const [bx,by] of berrySpots[style]) {
+    for(const [dx,dy] of [[-1.8,0],[1.5,1.3]]) {
+      oval(c,bx+dx,by+dy,2,2.2,'#bd675f');
+      oval(c,bx+dx-.55,by+dy-.65,.65,.65,'#f4b7a0');
+    }
   }
   c.restore();
 }
 
 const leafyStudy=makeLeafStudy('leafy', 'Leafy storybook', 'Broad rounded leaves on spreading branches, coral berries, daisy rosettes and warm terracotta ledges.');
 function makeShrubStudy(style: ShrubStyle,name: string,summary: string): PropStudy {
-  return {...leafyStudy,name,summary,drawBush:(c,x,y,s,f)=>rootedShrub(c,x,y,s,f,style)};
+  return {...leafyStudy,name,summary,drawBush:(c,x,y,s,f)=>foliageBush(c,x,y,s,f,style)};
 }
 
 export const studies: Record<'storybook' | 'woodcut' | LeafStyle | ShrubStyle, PropStudy> = {
-  shrubBranch: makeShrubStudy('shrubBranch','Rooted branch fan','A woody stool fans into five attached foliage crowns above dense opaque undergrowth.'),
-  shrubHedge: makeShrubStudy('shrubHedge','Living garden hedge','One coherent scalloped canopy with attached leaf texture and short root-branch cues.'),
-  shrubBramble: makeShrubStudy('shrubBramble','Arcing berry bramble','Asymmetric arching canes carry paired leaves and hanging coral berry clusters.'),
-  shrubBloom: makeShrubStudy('shrubBloom','Flowering garden shrub','Large connected foliage heads, a rooted woody base and three sparse cream-peach blossoms.'),
+  shrubBranch: makeShrubStudy('shrubBranch','Clustered foliage','Several leafy crowns join into one opaque bush with coral berries.'),
+  shrubHedge: makeShrubStudy('shrubHedge','Hedge canopy','One coherent scalloped canopy with leaf texture and coral berries.'),
+  shrubBramble: makeShrubStudy('shrubBramble','Berry thicket','Asymmetric foliage clusters carry extra coral berry pairs.'),
+  shrubBloom: makeShrubStudy('shrubBloom','Flowering bush','Connected foliage heads with sparse pale blossoms and coral berries.'),
   botanical: makeLeafStudy('botanical', 'Botanical ink', 'Fine outlined pointed leaf sprays, visible branching, amber field mushrooms and etched earthen ledges.'),
   leafy: leafyStudy,
   leafyAiry: makeLeafStudy('leafyAiry', 'Leafy airy', 'Larger spaced sage leaves, gentle ink, cream daisies and quiet sandy ledges.'),

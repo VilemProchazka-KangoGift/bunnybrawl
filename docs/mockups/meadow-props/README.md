@@ -2,24 +2,24 @@
 
 Twelve experimental redraws of Meadow's decorative objects, compared with the current Morning blue arena. These are renderer-backed stills, not a game art change. They use the production arena layout, characters, background, HUD, and night treatment. Only bushes, flowers, mushrooms, platforms, and stumps are redrawn.
 
-## Fourth round: bush construction
+## Fourth round: branch-free berry bushes
 
-Leafy storybook remains the reference. These four studies change **only the bush drawing**; platforms, stumps, flowers, and mushrooms use the exact same Leafy storybook functions. All keep opaque foreground cover at the same arena positions, including the bush hiding the rabbit on the left platform.
+Leafy storybook remains the reference. These four studies change **only the bush drawing**; platforms, stumps, flowers, and mushrooms use the exact same Leafy storybook functions. The visible woody branches and canes from the first iteration of this round were removed, and each variant now has coral berries. All keep opaque foreground cover at the same arena positions, including the bush hiding the rabbit on the left platform.
 
-| Leafy storybook | Branching shrub | Hedge canopy | Wild bramble | Flowering shrub |
+| Leafy storybook | Clustered foliage | Hedge canopy | Berry thicket | Flowering bush |
 | --- | --- | --- | --- | --- |
-| ![Leafy storybook day](leafy-day.png) | ![Branching shrub day](shrubBranch-day.png) | ![Hedge canopy day](shrubHedge-day.png) | ![Wild bramble day](shrubBramble-day.png) | ![Flowering shrub day](shrubBloom-day.png) |
-| ![Leafy storybook night](leafy-night.png) | ![Branching shrub night](shrubBranch-night.png) | ![Hedge canopy night](shrubHedge-night.png) | ![Wild bramble night](shrubBramble-night.png) | ![Flowering shrub night](shrubBloom-night.png) |
+| ![Leafy storybook day](leafy-day.png) | ![Clustered foliage day](shrubBranch-day.png) | ![Hedge canopy day](shrubHedge-day.png) | ![Berry thicket day](shrubBramble-day.png) | ![Flowering bush day](shrubBloom-day.png) |
+| ![Leafy storybook night](leafy-night.png) | ![Clustered foliage night](shrubBranch-night.png) | ![Hedge canopy night](shrubHedge-night.png) | ![Berry thicket night](shrubBramble-night.png) | ![Flowering bush night](shrubBloom-night.png) |
 
 ![Enlarged and native-size comparison of five bush approaches](details-shrubs.png)
 
-**Branching shrub:** woody stems fan from a rooted center into connected leaf crowns. The support structure is clearest, although it starts to resemble a very small tree.
+**Clustered foliage:** several irregular leaf crowns form one bush. The wide crown keeps the original cover without visible branch lines.
 
-**Hedge canopy:** a continuous crown with visible low branches and leaf clusters. It has the simplest bush silhouette, but is closer to a clipped garden hedge.
+**Hedge canopy:** a continuous scalloped crown with subtle leaf texture and berries. It is the simplest, most orderly silhouette.
 
-**Wild bramble:** asymmetric arching canes, attached leaves and small berry clusters. This feels the most untamed; its fine details are dense at gameplay size.
+**Berry thicket:** asymmetric foliage and extra berry clusters. This is the most untamed and detailed option.
 
-**Flowering shrub:** a rooted branch fan with broad foliage and sparse pale blossoms. Its flowers make it distinctive without changing the surrounding props.
+**Flowering bush:** broad foliage, sparse pale blossoms and coral berries. Its flowers distinguish it from the other bush shapes.
 
 ## Third round: variations on Leafy storybook
 
