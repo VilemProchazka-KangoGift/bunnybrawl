@@ -164,6 +164,8 @@ Use all 3 draw layers for visual depth:
 - **Background** (`drawBackgroundNature`): full-opacity decorations behind players — trees, snowmen, landmarks, structures on platforms
 - **Foreground** (`drawForegroundNature`): full-opacity decorations OVER players — large trees, bushes, snowball pyramids. Creates parallax depth
 
+In Meadow, bushes drawn over players are deliberate hiding places. Preserve that cover when tuning depth or colour; adjust `sky`, `hills`, `clouds`, and `drawFarBackground` for distant atmosphere without moving or fading the foreground bushes. Inspect the result in a moving five-player match at noon, sunset, and night in both the default simulation-worker mode and `?simWorker=off`.
+
 ### Overlap Prevention (CRITICAL)
 
 Before placing any decoration, check it doesn't overlap with:
