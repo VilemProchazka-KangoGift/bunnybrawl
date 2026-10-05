@@ -6,7 +6,7 @@ import { registerArena, toArena, toThemeConfig } from '../../../src/engine/arena
 import { registerBuiltinCharacters } from '../../../src/engine/characters';
 import { createEmptyMatchState, createInitialPlayers } from '../../../src/engine/simulator/initialState';
 import { getReactiveKind } from '../../../src/engine/gameLoop/cosmetics/reactiveDecorations';
-import { backgroundVariants, storybookClouds } from './variants';
+import { backgroundVariants, storybookClouds, woodedValley } from './variants';
 
 const query = new URLSearchParams(location.search);
 const variant = query.get('variant') ?? 'current';
@@ -21,11 +21,12 @@ registerArena(meadow);
 registerBuiltinCharacters();
 const arena = toArena(meadow);
 const theme = toThemeConfig(meadow);
-if (variant === 'valley-and-clouds') {
+if (variant === 'valley-and-clouds' || variant === 'raised-hills' || variant === 'tall-hills') {
+  const hillRise = variant === 'raised-hills' ? 38 : variant === 'tall-hills' ? 70 : 0;
   theme.hills = [];
   theme.clouds = { ...theme.clouds, count: 0 };
   theme.drawFarBackground = (ctx) => {
-    backgroundVariants['wooded-valley'](ctx);
+    woodedValley(ctx, hillRise);
     storybookClouds(ctx);
   };
 } else if (variant === 'storybook-clouds') {

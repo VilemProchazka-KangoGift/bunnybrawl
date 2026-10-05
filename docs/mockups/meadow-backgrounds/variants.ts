@@ -44,12 +44,17 @@ function grove(c: Ctx2D, positions: readonly Point[], color: string, trunk: stri
   }
 }
 
-function woodedValley(c: Ctx2D): void {
+function raised(points: readonly Point[], amount: number): Point[] {
+  return points.map(([x, y]) => [x, y - amount]);
+}
+
+export function woodedValley(c: Ctx2D, hillRise = 0): void {
   // The nearby canopy follows rolling ground instead of drawing sawteeth.
-  rollingBand(c, '#a0b9bb', [[0, 539], [125, 518], [260, 538], [395, 495], [540, 531], [685, 508], [815, 526], [960, 487], [1110, 516], [1280, 496]]);
-  rollingBand(c, '#8ca9ac', [[0, 591], [170, 552], [305, 579], [470, 541], [635, 576], [780, 536], [940, 562], [1100, 534], [1280, 573]]);
-  grove(c, [[50, 585], [135, 568], [210, 579], [315, 573], [390, 552], [510, 566], [600, 577], [735, 562], [825, 543], [905, 565], [1040, 549], [1145, 563], [1230, 570]], '#789a9a', '#678987');
-  rollingBand(c, '#71928f', [[0, 653], [165, 613], [310, 633], [480, 592], [655, 624], [830, 599], [990, 630], [1160, 605], [1280, 630]]);
+  const middleRise = hillRise * .72;
+  rollingBand(c, '#a0b9bb', raised([[0, 539], [125, 518], [260, 538], [395, 495], [540, 531], [685, 508], [815, 526], [960, 487], [1110, 516], [1280, 496]], hillRise));
+  rollingBand(c, '#8ca9ac', raised([[0, 591], [170, 552], [305, 579], [470, 541], [635, 576], [780, 536], [940, 562], [1100, 534], [1280, 573]], middleRise));
+  grove(c, raised([[50, 585], [135, 568], [210, 579], [315, 573], [390, 552], [510, 566], [600, 577], [735, 562], [825, 543], [905, 565], [1040, 549], [1145, 563], [1230, 570]], middleRise), '#789a9a', '#678987');
+  rollingBand(c, '#71928f', raised([[0, 653], [165, 613], [310, 633], [480, 592], [655, 624], [830, 599], [990, 630], [1160, 605], [1280, 630]], hillRise * .38));
 }
 
 function cottage(c: Ctx2D, x: number, groundY: number): void {
