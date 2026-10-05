@@ -9,3 +9,5 @@ These captures use the production Meadow arena and renderer at 1280 × 720. The 
 The terrain, flowers, and mushrooms use Leafy Storybook styling. Foreground bushes remain opaque and draw over characters, preserving their hiding role. Platform front faces still cover characters moving behind them.
 
 The day capture matches the selected mixed mockup pixel for pixel. Night captures can differ in ambient particle positions.
+
+The reusable design rules, including background contrast with characters, are in the [visual style skill](../../../.claude/skills/visual-style/SKILL.md).

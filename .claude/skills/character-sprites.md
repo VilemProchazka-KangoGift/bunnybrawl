@@ -2,6 +2,8 @@
 
 Use when adding or modifying character visual rendering: body sprites, legs, feet, eyes, accessories, or per-character visual features.
 
+For character readability against arena backgrounds, also read [`visual-style/SKILL.md`](visual-style/SKILL.md).
+
 ## Architecture
 
 - **Body**: drawn by `CharacterPack.drawSprite` in each pack file (`characters/packs/*.ts`)
