@@ -10,7 +10,7 @@ function mockCanvasContext(): any {
     arc: noop, ellipse: noop,
     quadraticCurveTo: noop, bezierCurveTo: noop,
     fill: noop, stroke: noop, clip: noop,
-    fillRect: noop, strokeRect: noop,
+    rect: noop, fillRect: noop, strokeRect: noop,
     translate: noop, rotate: noop, scale: noop,
     createLinearGradient: () => ({ addColorStop: noop }),
     createRadialGradient: () => ({ addColorStop: noop }),
