@@ -14,7 +14,7 @@ try {
       const address = `${server}/bunnybrawl/docs/mockups/meadow-backgrounds/render.html?variant=${variant}&time=${time}`;
       const response = await page.goto(address);
       if (!response?.ok()) throw new Error(`${address}: HTTP ${response?.status()}`);
-      await page.waitForFunction(() => document.documentElement.dataset.ready === 'true');
+      await page.locator('html[data-ready="true"]').waitFor();
       if (errors.length) throw new Error(`${variant} ${time}: ${errors.join('; ')}`);
       await page.locator('.scene').screenshot({ path: join(directory, `${variant}-${time}.png`) });
       console.log(`${variant}-${time}.png`);
