@@ -469,19 +469,20 @@ export const meadow: ArenaPack = {
   ],
 
   // ---- Visual config ----
+  // Morning blue softens the distant scenery without changing foreground cover.
   sky: {
     gradient: [
-      { offset: 0, color: '#4A90D9' },
-      { offset: 0.6, color: '#87CEEB' },
-      { offset: 1, color: '#B0E0E6' },
+      { offset: 0, color: '#316DAA' },
+      { offset: 0.6, color: '#92C6E0' },
+      { offset: 1, color: '#E5EBD5' },
     ],
   },
 
   hills: [
-    { x: 0, baseY: 620, width: 300, height: 120, color: '#5C9E4C' },
-    { x: 250, baseY: 630, width: 400, height: 100, color: '#5C9E4C' },
-    { x: 600, baseY: 620, width: 350, height: 130, color: '#5C9E4C' },
-    { x: 900, baseY: 635, width: 400, height: 100, color: '#5C9E4C' },
+    { x: 0, baseY: 620, width: 300, height: 120, color: '#719981' },
+    { x: 250, baseY: 630, width: 400, height: 100, color: '#719981' },
+    { x: 600, baseY: 620, width: 350, height: 130, color: '#719981' },
+    { x: 900, baseY: 635, width: 400, height: 100, color: '#719981' },
   ],
 
   ground: {
@@ -491,7 +492,7 @@ export const meadow: ArenaPack = {
   // ---- Ambient systems ----
   clouds: {
     count: 5,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: 'rgba(255, 255, 248, 0.78)',
     minSize: 50,
     maxSize: 85,
     minSpeed: 6,
@@ -545,8 +546,8 @@ export const meadow: ArenaPack = {
 
   // ---- Custom draw functions ----
   drawFarBackground: (ctx: Ctx2D, _arena: Arena) => {
-    // Dark treeline — jagged tops suggesting a dense forest
-    ctx.fillStyle = 'rgba(58,106,58,0.25)';
+    // Distant treeline — jagged tops suggesting a dense forest
+    ctx.fillStyle = 'rgba(86, 116, 147, 0.32)';
     ctx.beginPath();
     ctx.moveTo(-10, 660);
     for (let i = 0; i < FOREST_TREE_POSITIONS.length; i += 2) {
@@ -557,7 +558,7 @@ export const meadow: ArenaPack = {
     ctx.fill();
 
     // Lighter layer in front — slightly higher, more detail
-    ctx.fillStyle = 'rgba(74,122,74,0.18)';
+    ctx.fillStyle = 'rgba(116, 148, 150, 0.23)';
     ctx.beginPath();
     ctx.moveTo(-10, 660);
     for (let i = 0; i < FOREST_TREE_POSITIONS.length; i += 2) {
