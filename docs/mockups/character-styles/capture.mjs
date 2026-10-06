@@ -6,7 +6,7 @@ const directory = dirname(fileURLToPath(import.meta.url));
 const server = process.env.CHARACTER_MOCKUP_URL ?? 'http://127.0.0.1:4193';
 const browser = await chromium.launch({ headless: true });
 try {
-  for (const style of ['current', 'storybook', 'plush', 'cartoon']) {
+  for (const style of ['current', 'plush', 'pocket-plush', 'floppy-beanbags', 'layered-felt']) {
     for (const time of ['day', 'night']) {
       const page = await browser.newPage({ viewport: { width: 1280, height: 997 }, deviceScaleFactor: 1 });
       const errors = [];

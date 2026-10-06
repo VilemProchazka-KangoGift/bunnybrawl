@@ -10,11 +10,14 @@ import { createEmptyMatchState, createInitialPlayers } from '../../../src/engine
 import { getReactiveKind } from '../../../src/engine/gameLoop/cosmetics/reactiveDecorations';
 import type { PlayerState } from '../../../src/engine/types';
 import { registerPrototypePacks, STUDY_CHARACTERS, type PrototypeStyle } from './prototypePacks';
+import { registerRasterConceptPacks, type RasterStyle } from './rasterConceptPacks';
 
 const query = new URLSearchParams(location.search);
 const style = query.get('style') ?? 'current';
 const time = query.get('time') ?? 'day';
-if (!['current', 'storybook', 'plush', 'cartoon'].includes(style)) throw new Error(`Unknown style: ${style}`);
+const rasterStyles = ['pocket-plush', 'floppy-beanbags', 'layered-felt'];
+const isRaster = rasterStyles.includes(style);
+if (!['current', 'plush', ...rasterStyles].includes(style)) throw new Error(`Unknown style: ${style}`);
 if (!['day', 'night'].includes(time)) throw new Error(`Unknown time: ${time}`);
 let seed = 7341;
 Math.random = () => {
@@ -23,13 +26,17 @@ Math.random = () => {
 };
 
 document.getElementById('title')!.textContent = ({
-  current: 'Current characters', storybook: 'Storybook creatures',
-  plush: 'Soft toys', cartoon: 'Animated cartoons',
+  current: 'Current characters', plush: 'Original soft toys',
+  'pocket-plush': 'Pocket plush', 'floppy-beanbags': 'Floppy beanbags',
+  'layered-felt': 'Layered felt',
 } as Record<string, string>)[style];
+if (isRaster) document.querySelector('.heading span')!.textContent =
+  'Generated concept art in the production renderer · static sprites only; animation needs separate parts';
 
 registerArena(meadow);
 registerBuiltinCharacters();
-if (style !== 'current') registerPrototypePacks(style as PrototypeStyle);
+if (isRaster) await registerRasterConceptPacks(style as RasterStyle);
+else if (style !== 'current') registerPrototypePacks(style as PrototypeStyle);
 const arena = toArena(meadow);
 const theme = toThemeConfig(meadow);
 
@@ -78,6 +85,17 @@ for (let i = 0; i < STUDY_CHARACTERS.length; i++) {
   const left = 28 + i * 250;
   c.fillStyle = '#263e39'; c.font = 'bold 17px system-ui'; c.fillText(name, left, 27);
   c.fillStyle = '#52665e'; c.font = '12px system-ui';
+  if (isRaster) {
+    c.fillText('static concept · motion TBD', left, 193);
+    c.save(); c.translate(left + 56, 57); c.scale(3, 3);
+    drawCharacterCore(c, 16, 0, 32, 32, name, 'idle', .25, 1,
+      { color: pack.color, darkColor: pack.darkColor, lightColor: pack.lightColor });
+    c.restore();
+    if (i < STUDY_CHARACTERS.length - 1) {
+      c.strokeStyle = '#d6d6c9'; c.beginPath(); c.moveTo(left + 238, 18); c.lineTo(left + 238, 196); c.stroke();
+    }
+    continue;
+  }
   for (const [poseIndex, pose] of (['idle', 'run', 'airborne'] as const).entries()) {
     const x = left + poseIndex * 78;
     c.fillText(pose === 'airborne' ? 'air' : pose, x, 193);
