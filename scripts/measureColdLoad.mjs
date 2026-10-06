@@ -13,6 +13,8 @@ const flow = process.argv[4] ?? 'online';
 if (!['online', 'lobby'].includes(flow)) throw new Error('Flow must be online or lobby');
 const network = process.argv[5] ?? 'local';
 if (!['local', 'constrained'].includes(network)) throw new Error('Network must be local or constrained');
+const menuDwellMs = Number(process.argv[6] ?? 0);
+if (!Number.isFinite(menuDwellMs) || menuDwellMs < 0) throw new Error('Menu dwell must be nonnegative');
 const buttonTestId = flow === 'lobby' ? 'play-button' : 'online-btn';
 const targetSelector = flow === 'lobby' ? '[data-testid="char-select"]' : '.online-modal';
 const browser = await chromium.launch({ headless: true });
@@ -21,14 +23,15 @@ try {
   for (let i = 0; i < runs; i++) {
     const context = await browser.newContext();
     const page = await context.newPage();
-    const earlyArenaRequests = new Set();
-    const onRequest = request => {
-      const pathname = new URL(request.url()).pathname;
-      if (arenaChunks.some(file => pathname.endsWith(`/${file}`))) earlyArenaRequests.add(pathname);
-    };
-    page.on('request', onRequest);
     const cdp = await context.newCDPSession(page);
     await cdp.send('Network.enable');
+    const arenaRequests = [];
+    cdp.on('Network.requestWillBeSent', event => {
+      const pathname = new URL(event.request.url).pathname;
+      if (arenaChunks.some(file => pathname.endsWith(`/${file}`))) {
+        arenaRequests.push({ pathname, startedAt: event.wallTime * 1000 });
+      }
+    });
     await cdp.send('Network.setCacheDisabled', { cacheDisabled: true });
     if (network === 'constrained') {
       await cdp.send('Network.emulateNetworkConditions', {
@@ -53,20 +56,20 @@ try {
       const scripts = resources.filter((entry) => entry.name.endsWith('.js') && entry.responseEnd <= menuAt);
       return {
         menuMs: Math.round(menuAt),
+        menuEpochMs: performance.timeOrigin + menuAt,
         jsTransferKiB: Math.round(scripts.reduce((sum, entry) => sum + entry.transferSize, 0) / 1024),
         jsDecodedKiB: Math.round(scripts.reduce((sum, entry) => sum + entry.decodedBodySize, 0) / 1024),
         scripts: scripts.map((entry) => new URL(entry.name).pathname.split('/').at(-1)),
       };
     });
-    if (process.env.LOADING_BUDGET_REPORT) {
-      // Wait for outstanding menu requests too: a slow eager fetch must not evade
-      // the gate just because its response completes after the menu mount mark.
-      await page.waitForLoadState('networkidle');
+    // CDP records request start time, so an eager arena fetch is caught even
+    // when its response finishes after the menu mounts.
+    const earlyArenaRequests = arenaRequests.filter(request => request.startedAt < menu.menuEpochMs);
+    if (earlyArenaRequests.length) {
+      throw new Error(`Arena chunks requested before menu paint: ${earlyArenaRequests.map(request => request.pathname).join(', ')}`);
     }
-    page.off('request', onRequest);
-    if (earlyArenaRequests.size) {
-      throw new Error(`Arena chunks requested before interaction: ${[...earlyArenaRequests].join(', ')}`);
-    }
+    delete menu.menuEpochMs;
+    if (menuDwellMs) await page.waitForTimeout(menuDwellMs);
     await page.evaluate(({ buttonTestId, targetSelector }) => {
       const observer = new MutationObserver(() => {
         if (document.querySelector(targetSelector)) {
@@ -88,7 +91,7 @@ try {
           .reduce((sum, entry) => sum + entry.transferSize, 0) / 1024),
       };
     });
-    console.log(JSON.stringify({ run: i + 1, flow, network, ...menu, ...entry }));
+    console.log(JSON.stringify({ run: i + 1, flow, network, menuDwellMs, ...menu, ...entry }));
     await context.close();
   }
 } finally {

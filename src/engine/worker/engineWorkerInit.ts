@@ -170,6 +170,10 @@ export async function initEngine(msg: HostInitEngineMsg): Promise<void> {
     const { registerPocketBunnyRig } = await import('../characters/prototypes/pocketBunnyRig');
     await registerPocketBunnyRig();
   }
+  if (!msg.classicCharacters) {
+    const { registerPlayablePlushRoster } = await import('../characters/plush/playableRoster');
+    await registerPlayablePlushRoster();
+  }
   // Re-populate slot → CharacterDef mappings inside the worker. Main owns
   // the lobby UI that mutates these maps; without this rebuild the worker
   // would throw "No character assigned to bot slot Bx" inside
