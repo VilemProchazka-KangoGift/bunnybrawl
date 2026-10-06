@@ -2,6 +2,8 @@
 
 This gallery completes **visual pose studies for all 19 built-in characters**. Bunny is the playable prototype; [batch 1](../character-roster-batch-1/README.md) covers Fox and Frog, [batch 2](../character-roster-batch-2/README.md) covers Bear, Owl, and Cat, and this page covers the other 13. The new animals here are **review previews**, not live gameplay replacements.
 
+The [expressive roster pass](../character-roster-expressive/README.md) revisits **all 19** with more varied body shapes, personalities, and trait-driven walk, sit, stomp, and landing poses. Use that newer gallery when choosing a direction for playable integration; this page preserves the first full-roster comparison.
+
 Each board puts the current procedural character above ten proposed authored poses: resting idle, three walk phases, jump, attentive idle, blink, sit, angry fast stomp, and landing impact. A small pair at the foot of every tile shows match scale. The original has no separate authored drawing for every listed beat, so its closest existing state is shown repeatedly. The boards compare art and acting vocabulary, not animation timing or responsiveness.
 
 ## Tailed and compact animals
