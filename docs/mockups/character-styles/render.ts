@@ -12,6 +12,7 @@ import type { PlayerState } from '../../../src/engine/types';
 import { registerPrototypePacks, STUDY_CHARACTERS, type PrototypeStyle } from './prototypePacks';
 import { registerRasterConceptPacks, type RasterStyle } from './rasterConceptPacks';
 import { registerPocketBunnyRig } from '../../../src/engine/characters/prototypes/pocketBunnyRig';
+import { registerBatchOnePreviewPacks } from '../character-roster-batch-1/previewPacks';
 
 const query = new URLSearchParams(location.search);
 const style = query.get('style') ?? 'current';
@@ -21,7 +22,8 @@ const frame = Number(query.get('frame') ?? 0) & 3;
 const rasterStyles = ['pocket-plush', 'floppy-beanbags', 'layered-felt'];
 const isRaster = rasterStyles.includes(style);
 const isRig = style === 'pocket-bunny-rig';
-if (!['current', 'plush', ...rasterStyles, 'pocket-bunny-rig'].includes(style)) throw new Error(`Unknown style: ${style}`);
+const isBatchOne = style === 'roster-batch-1';
+if (!['current', 'plush', ...rasterStyles, 'pocket-bunny-rig', 'roster-batch-1'].includes(style)) throw new Error(`Unknown style: ${style}`);
 if (!['day', 'night'].includes(time)) throw new Error(`Unknown time: ${time}`);
 if (isRig && !['idle', 'blink', 'sit', 'sit-exit', 'crouch', 'crouch-run', 'impact', 'run', 'airborne', 'fastfall'].includes(pose)) throw new Error(`Unknown pose: ${pose}`);
 let seed = 7341;
@@ -34,11 +36,14 @@ document.getElementById('title')!.textContent = ({
   current: 'Current characters', plush: 'Original soft toys',
   'pocket-plush': 'Pocket plush', 'floppy-beanbags': 'Floppy beanbags',
   'layered-felt': 'Layered felt', 'pocket-bunny-rig': 'Pocket Plush Bunny authored poses',
+  'roster-batch-1': 'Pocket Plush · Bunny, Fox and Frog pose preview',
 } as Record<string, string>)[style];
 if (isRaster) document.querySelector('.heading span')!.textContent =
   'Generated concept art in the production renderer · static sprites only; animation needs separate parts';
 if (isRig) document.querySelector('.heading span')!.textContent =
   'Authored pose atlas in the production renderer · Bunny only · idle, sit, walk, jump, stomp, and impact';
+if (isBatchOne) document.querySelector('.heading span')!.textContent =
+  'Bunny prototype with new Fox and Frog pose sheets in the production renderer · visual preview only';
 
 registerArena(meadow);
 registerBuiltinCharacters();
@@ -46,6 +51,10 @@ if (isRaster) await registerRasterConceptPacks(style as RasterStyle);
 else if (isRig) {
   await registerRasterConceptPacks('pocket-plush');
   await registerPocketBunnyRig();
+}
+else if (isBatchOne) {
+  await registerPocketBunnyRig();
+  await registerBatchOnePreviewPacks();
 }
 else if (style !== 'current') registerPrototypePacks(style as PrototypeStyle);
 const arena = toArena(meadow);
@@ -132,8 +141,11 @@ for (let i = 0; i < STUDY_CHARACTERS.length; i++) {
     }
     continue;
   }
-  if (isRaster || isRig) {
-    c.fillText('static concept · motion TBD', left, 193);
+  if (isRaster || isRig || isBatchOne) {
+    const note = isBatchOne
+      ? name === 'Bunny' ? 'playable prototype' : name === 'Fox' || name === 'Frog' ? 'authored poses · timing TBD' : 'original character'
+      : 'static concept · motion TBD';
+    c.fillText(note, left, 193);
     c.save(); c.translate(left + 56, 57); c.scale(3, 3);
     drawCharacterCore(c, 16, 0, 32, 32, name, 'idle', .25, 1,
       { color: pack.color, darkColor: pack.darkColor, lightColor: pack.lightColor });
