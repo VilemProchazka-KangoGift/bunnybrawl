@@ -23,7 +23,7 @@ const poses = [
   [1, 34, 21, 393, 699, 28, 42],   // attentive idle
   [1, 548, 23, 400, 696, 28, 42],  // blink
   [1, 1101, 94, 423, 627, 30, 33], // seated
-  [4, 44, 95, 974, 1290, 36, 43],// round-bodied angry fast stomp
+  [4, 44, 95, 974, 1290, 32, 43],// angry fast stomp at roster-matched scale
   [3, 997, 21, 627, 834, 32, 33],  // stomp impact
 ];
 const browser = await chromium.launch({ headless: true });
