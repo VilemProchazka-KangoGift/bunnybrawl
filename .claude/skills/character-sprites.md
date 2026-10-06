@@ -97,3 +97,6 @@ Oval foot styles (paw, round, webbed, claw) look good slightly wider than the le
 
 ### Keep canvas drawing functions pure
 `drawLegs()` must be a pure function of its inputs because its output is cached to OffscreenCanvas. No external mutable state, no randomness, no side effects. Derive all animation from the explicit parameters (state, animFrame, squashScale).
+
+### Rig flattened concept art before committing to a roster-wide redraw
+The Pocket Plush Bunny study in `docs/mockups/character-styles/pocketBunnyRig.ts` masks ears and feet into four cutout layers from one flattened image. It rotates them from the four existing `animFrame` values and lets the renderer apply bounce, fast-fall squash, lighting, outline, and sprite caching. This is enough to test whether the style moves at game scale, but it cannot reveal art hidden behind the original limbs and cannot create convincing extreme poses. Keep the study outside production packs until a live match test covers both worker modes. Export character-only assets at display resolution before shipping; the full concept sheet is too large for the loading budget.
