@@ -19,8 +19,8 @@ The script in [`captureVariants.mjs`](captureVariants.mjs) temporarily applies e
 
 | Original pickup | Selected long-root design |
 | --- | --- |
-| ![Current carrot in Meadow by day](before-day.png) | ![Redesigned carrot in Meadow by day](after-day.png) |
-| ![Current carrot in Meadow at night](before-night.png) | ![Redesigned carrot in Meadow at night](after-night.png) |
+| ![Original carrot in Meadow by day](before-day.png) | ![Redesigned carrot in Meadow by day](after-day.png) |
+| ![Original carrot in Meadow at night](before-night.png) | ![Redesigned carrot in Meadow at night](after-night.png) |
 
 These are captures from running matches with three carrots placed at fixed coordinates and the Meadow day phase set to noon or midnight. Both versions use the same arena art and camera; wildlife and other match details may vary between captures. Inspect the whole scene at normal size: the pickup must remain recognizable near flowers, bushes, and platform edges. Foreground cover still draws over it.
 
@@ -33,8 +33,8 @@ Volcano supplies a second palette check: the warm root still has a separate dark
 To recapture either version from a running Vite server:
 
 ```bash
-node docs/mockups/carrot-pickup/capture.mjs http://127.0.0.1:4196/bunnybrawl/ docs/mockups/carrot-pickup/after
+node docs/mockups/carrot-pickup/capture.mjs "<base-url>" docs/mockups/carrot-pickup/after
 ```
 
-The capture uses `?simWorker=off` so it can place carrots through the diagnostic match state, then saves day and night PNGs. Use the version of the code being compared for each capture.
+Replace `<base-url>` with the running Vite URL, including `/bunnybrawl/` and a trailing slash. The capture uses `?simWorker=off` so it can place carrots through the diagnostic match state, then saves day and night PNGs. Use the version of the code being compared for each capture.
 Pass an arena ID as a third argument to inspect another setting.
