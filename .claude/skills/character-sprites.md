@@ -77,6 +77,10 @@ legStyle?: {
 
 ## Lessons Learned
 
+### Expressive Pocket Plush runtime
+
+The [playable roster](../../../docs/mockups/playable-plush-roster/README.md) uses eight authored beats per animal: idle, alternating walk contacts, jump, sit, fast stomp, landing, and attention. `plush/playableRoster.ts` maps physics and idle-action state to those beats; species differences are drawn in each sheet. Keep authored poses out of the old body lean and squash transforms, while preserving the small seated movement sway. Runtime sheets are generated from the approved high-resolution studies by `scripts/generatePlayablePlush.py` at 96 pixels per cell and WebP quality 88, retaining at least 2x displayed resolution. Keep the source sheets and generated files in sync. Authored ears, horns, tails, and quills can extend beyond the 32-pixel collision box, so the sprite cache uses 16 pixels of padding for these packs. Verify at actual match size in both default sim-worker and `?simWorker=off` modes; a concept-sheet preview does not establish that game rendering or loading works.
+
 ### Thick legs need explicit gap spacing
 Characters with `legWidth >= 7` (Bear, Panda, Rhino) will have their legs touch/overlap at the default hip spacing of 3px. The leg renderer uses `Math.max(3, legWidth/2 + 1)` for hip offset to guarantee a visible gap. Always check wide-legged characters after adjusting leg width.
 

@@ -30,11 +30,10 @@ export function CharacterSelect() {
   const isMobile = useMemo(() => isTouchPrimary(), []);
   const initialBotCount = useRef(matchSettings.botCount);
 
-  // Fetch match packs while players choose; lobby entry only waits for its own pack.
+  // Fetch the match screen and packs while players choose.
   useEffect(() => {
-    void loadBuiltinArenas().catch(() => {
-      // Match's loader retries if this speculative fetch failed.
-    });
+    // Match's loader retries if either speculative fetch failed.
+    void Promise.allSettled([loadBuiltinArenas(), import('./Match')]);
   }, []);
 
   // Initialise LobbyGame once

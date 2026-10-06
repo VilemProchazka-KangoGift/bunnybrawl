@@ -427,7 +427,8 @@ function drawCharacterSprite(
     ? getIdleAction(char.name, idleAction)
     : null;
 
-  const pad = 10;
+  // Authored silhouettes (ears, horns, tails) extend beyond the 32px hitbox.
+  const pad = pack?.resolvePose ? 16 : 10;
   const cw = Math.ceil(w) + pad * 2;
   const ch = Math.ceil(h) + pad * 2;
 
