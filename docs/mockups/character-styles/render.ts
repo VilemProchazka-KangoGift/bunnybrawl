@@ -33,12 +33,12 @@ Math.random = () => {
 document.getElementById('title')!.textContent = ({
   current: 'Current characters', plush: 'Original soft toys',
   'pocket-plush': 'Pocket plush', 'floppy-beanbags': 'Floppy beanbags',
-  'layered-felt': 'Layered felt', 'pocket-bunny-rig': 'Pocket Plush Bunny motion rig',
+  'layered-felt': 'Layered felt', 'pocket-bunny-rig': 'Pocket Plush Bunny authored poses',
 } as Record<string, string>)[style];
 if (isRaster) document.querySelector('.heading span')!.textContent =
   'Generated concept art in the production renderer · static sprites only; animation needs separate parts';
 if (isRig) document.querySelector('.heading span')!.textContent =
-  'Prototype cutout rig in the production renderer · Bunny only · four cached run frames, jump and fast fall';
+  'Authored pose atlas in the production renderer · Bunny only · four cached walk frames and a jump pose';
 
 registerArena(meadow);
 registerBuiltinCharacters();

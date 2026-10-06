@@ -6,7 +6,11 @@ for (const [mode, query] of [
 ] as const) {
   test(`Pocket Plush Bunny is playable with ${mode}`, async ({ page }, testInfo) => {
     const errors: string[] = [];
+    const atlasResponses: number[] = [];
     page.on('pageerror', error => errors.push(error.message));
+    page.on('response', response => {
+      if (response.url().includes('pocket-bunny-poses')) atlasResponses.push(response.status());
+    });
     await page.goto(query);
     await expect(page.getByTestId('match-screen')).toBeVisible({ timeout: 20000 });
     await page.waitForFunction(() => window.__bunnyTest?.state()?.phase === 'playing', undefined, { timeout: 20000 });
@@ -18,6 +22,7 @@ for (const [mode, query] of [
       return { x: player.x, name: player.character.name };
     });
     expect(before.name).toBe('Bunny');
+    expect(atlasResponses).toContain(200);
     const key = before.x < 1000 ? 'd' : 'a';
     await page.keyboard.down(key);
     try {

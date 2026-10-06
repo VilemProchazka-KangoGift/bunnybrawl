@@ -98,7 +98,7 @@ const RUN_LEAN_MAX_RAD = 0.06;     // ~3.4° at full ground speed — subtler th
 /** Bake an outline into the cached sprite by stamping its silhouette at 4 offsets in
  *  the outline color, behind the original pixels. The silhouette is captured by
  *  cloning the sprite to a temp canvas then tinting it via `source-in`. */
-function applyOutlineToCache(cached: OffscreenCanvas, color: string): void {
+function applyOutlineToCache(cached: OffscreenCanvas, color: string, width = 1): void {
   const w = cached.width;
   const h = cached.height;
   if (w === 0 || h === 0) return;
@@ -120,7 +120,7 @@ function applyOutlineToCache(cached: OffscreenCanvas, color: string): void {
   sctx.setTransform(1, 0, 0, 1, 0, 0);
   sctx.globalCompositeOperation = 'destination-over';
   // Outline width scales with sprite cache scale so it stays 1px in logical units.
-  const px = _spriteScale;
+  const px = _spriteScale * width;
   for (const [dx, dy] of OUTLINE_OFFSETS_4) {
     sctx.drawImage(temp, dx * px, dy * px);
   }
@@ -431,9 +431,8 @@ function drawCharacterSprite(
 
   _drawCharacterSpriteImpl(sctx, x, y, w, h, char, state, animFrame, fastFalling, idleAction, idleActionTimer, idleActionDuration, squashScale, theme);
 
-  if (!getCharacterPack(char.name)?.noOutline) {
-    applyOutlineToCache(cached, darken(char.color, OUTLINE_DARKEN));
-  }
+  const pack = getCharacterPack(char.name);
+  applyOutlineToCache(cached, pack?.outlineColor ?? darken(char.color, OUTLINE_DARKEN), pack?.outlineWidth);
 
   if (spriteCache.size > _spriteCacheCap) {
     const first = spriteCache.keys().next().value;

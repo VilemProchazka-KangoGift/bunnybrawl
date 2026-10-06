@@ -10,12 +10,12 @@ const server = process.env.CHARACTER_MOCKUP_URL ?? 'http://127.0.0.1:4193';
 const temporary = await mkdtemp(join(tmpdir(), 'pocket-bunny-motion-'));
 const browser = await chromium.launch({ headless: true });
 const frames = [
-  ...Array.from({ length: 8 }, (_, i) => ({ pose: 'run', frame: i & 3, dx: i * 10, dy: 0 })),
-  ...[-15, -30, -35, -25].map((dy, i) => ({ pose: 'airborne', frame: 0, dx: 80 + i * 9, dy })),
-  { pose: 'fastfall', frame: 0, dx: 120, dy: -10 },
-  { pose: 'fastfall', frame: 0, dx: 125, dy: 6 },
-  { pose: 'idle', frame: 0, dx: 130, dy: 0 },
-  { pose: 'idle', frame: 0, dx: 130, dy: 0 },
+  ...Array.from({ length: 8 }, (_, i) => ({ pose: 'run', frame: i & 3, dx: 45 + i * 8, dy: 0 })),
+  ...[-15, -30, -35, -25].map((dy, i) => ({ pose: 'airborne', frame: 0, dx: 80 + i * 7, dy })),
+  { pose: 'fastfall', frame: 0, dx: 105, dy: -10 },
+  { pose: 'fastfall', frame: 0, dx: 110, dy: 6 },
+  { pose: 'idle', frame: 0, dx: 80, dy: 0 },
+  { pose: 'idle', frame: 0, dx: 80, dy: 0 },
 ];
 
 async function visit(page, params) {
