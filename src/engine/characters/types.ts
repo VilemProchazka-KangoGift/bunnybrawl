@@ -95,9 +95,8 @@ export interface CharacterPack {
   bodyEllipse: (cx: number, yOff: number, w: number, h: number) => BodyEllipseParams;
   /** Skip the white highlight spot overlay (for characters with their own light belly/face). */
   noHighlight?: boolean;
-  /** Override the generic silhouette stamp for character art with a painted edge. */
-  outlineColor?: string;
-  outlineWidth?: number;
+  /** Skip the generic low-resolution outline when the pack draws its own edge. */
+  noOutline?: boolean;
 
   translations?: Record<string, string>;
 
