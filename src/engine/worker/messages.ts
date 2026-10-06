@@ -22,6 +22,8 @@ import type { NetDebugStats } from '../net/core/debugOverlay';
 /** Initial handoff. Transferable canvases ride the `transfer` list. */
 export interface HostInitMsg {
   type: 'host:init';
+  /** Restore the previous procedural character art for visual comparison. */
+  classicCharacters?: boolean;
   /** Local URL-only Pocket Plush Bunny playtest. */
   pocketBunny?: boolean;
   bgCanvas: OffscreenCanvas;
@@ -109,6 +111,8 @@ export interface HostWarmHudFontsMsg { type: 'host:warmHudFonts' }
  *  same canvas transfers happen; in addition we ship the simulation params. */
 export interface HostInitEngineMsg {
   type: 'host:initEngine';
+  /** Restore the previous procedural character art for visual comparison. */
+  classicCharacters?: boolean;
   /** Local URL-only Pocket Plush Bunny playtest. */
   pocketBunny?: boolean;
   bgCanvas: OffscreenCanvas;

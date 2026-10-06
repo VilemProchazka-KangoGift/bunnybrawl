@@ -101,12 +101,16 @@ const particlePool: Particle[] = [];
 const colorCache = new ColorCache();
 let particlePoolLen = 0;
 
-async function bootstrap(pocketBunny: boolean): Promise<void> {
+async function bootstrap(pocketBunny: boolean, classicCharacters: boolean): Promise<void> {
   registerBuiltinArenas();
   registerBuiltinCharacters();
   if (pocketBunny) {
     const { registerPocketBunnyRig } = await import('../characters/prototypes/pocketBunnyRig');
     await registerPocketBunnyRig();
+  }
+  if (!classicCharacters) {
+    const { registerPlayablePlushRoster } = await import('../characters/plush/playableRoster');
+    await registerPlayablePlushRoster();
   }
 }
 
@@ -289,7 +293,7 @@ ctxScope.addEventListener('message', async (e: MessageEvent<HostToWorkerMsg>) =>
     switch (msg.type) {
       case 'host:init': {
         initPending = true;
-        await bootstrap(msg.pocketBunny ?? false);
+        await bootstrap(msg.pocketBunny ?? false, msg.classicCharacters ?? false);
         if (msg.perfEnabled) {
           debugFlags.perfEnabled = true;
           _perfEnabled = true;
