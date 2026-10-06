@@ -4,6 +4,7 @@ import type { ThemeConfig } from '../themes/types';
 import { CARROT_SIZE, SPRING_SIZE, HAZARD_GROW_TIME } from '../constants';
 
 const _hazardAnim = { growScale: 1, fadeAlpha: 1 };
+const CARROT_ART = { tilt: -0.28, width: 0.82, height: 0.82 } as const;
 function calcHazardAnim(growTimer: number, life: number) {
   _hazardAnim.growScale = growTimer > 0 ? 1 - (growTimer / HAZARD_GROW_TIME) : 1;
   _hazardAnim.fadeAlpha = life < 2 ? life / 2 : 1;
@@ -28,8 +29,8 @@ export function drawCarrot(ctx: Ctx2D, carrot: Carrot, timeElapsed: number, fram
   }
 
   ctx.translate(x, y + CARROT_SIZE / 2 + bob);
-  ctx.scale(0.82, 0.82);
-  ctx.rotate(0.12);
+  ctx.rotate(CARROT_ART.tilt);
+  ctx.scale(CARROT_ART.width, CARROT_ART.height);
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
 

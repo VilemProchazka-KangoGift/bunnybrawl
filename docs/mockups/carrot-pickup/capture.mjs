@@ -9,9 +9,9 @@ const browser = await chromium.launch({ headless: true });
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
   await page.goto(`${url}?arena=${encodeURIComponent(arena)}&bots=0&simWorker=off`, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => window.__bunnyTest?.state()?.countdown === 0, null, { timeout: 20000 });
+  await page.waitForFunction(() => globalThis.__bunnyTest?.state()?.countdown === 0, null, { timeout: 20000 });
   await page.evaluate(() => {
-    const state = window.__bunnyTest?.state();
+    const state = globalThis.__bunnyTest?.state();
     if (!state) throw new Error('Match state unavailable');
     state.players[0].x = 75;
     state.players[0].y = 620;
@@ -27,8 +27,12 @@ try {
   });
   await page.waitForTimeout(250);
   await page.screenshot({ path: `${outputPrefix}-day.png` });
+  await page.screenshot({
+    path: `${outputPrefix}-detail.png`,
+    clip: { x: 330, y: 325, width: 100, height: 90 },
+  });
   await page.evaluate(() => {
-    const state = window.__bunnyTest?.state();
+    const state = globalThis.__bunnyTest?.state();
     if (state) state.dayPhase = 0.5;
   });
   await page.waitForTimeout(250);
