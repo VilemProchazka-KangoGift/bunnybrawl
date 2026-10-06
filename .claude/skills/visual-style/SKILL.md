@@ -28,6 +28,10 @@ For a new arena, choose a setting-specific palette and landmarks, then apply the
 - Keep highlights and tiny details secondary to the silhouette. At match scale, the shape must still work after petals, veins, or pebbles become too small to see.
 - Meadow's olive ink (`#334937`), greens (`#31523c`, `#6d8c4c`, `#a3b966`), warm earth (`#ad7953`), and pale yellow blossoms (`#f1d56e`) are references for their *roles*. Choose equivalent colors that suit each new arena.
 
+### Pickups must read as objects in motion
+
+Use the [carrot pickup comparison](../../../docs/mockups/carrot-pickup/README.md) when drawing small collectibles. At match scale, the carrot reads through broad orange shoulders, a tapered root, and leaves visibly attached to its crown; small stripes alone did not make the older sideways oval feel like a vegetable. A dark continuous edge and restrained light/dark planes separate it from nearby flowers and terrain. Keep the pickup's short spawn cue and gentle bob distinct from the static scenery, but avoid a blurred halo or a large effect that overwhelms the 32 px characters. Review the same pickup over different arena palettes and at night. Its artwork, particle cues, and visual bounds should support the existing collision target and foreground cover order; changing the art must not silently change collection behavior.
+
 ## Backgrounds: contrast with characters
 
 - Design sky, hills, distant trees, and other backdrops around the character roster, not as standalone illustrations. Aim for a clear difference in value, hue, or both behind each character. Check light, dark, warm, and green characters; a palette that suits Bunny may lose Frog.
