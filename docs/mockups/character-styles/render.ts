@@ -14,6 +14,10 @@ import { registerRasterConceptPacks, type RasterStyle } from './rasterConceptPac
 import { registerPocketBunnyRig } from '../../../src/engine/characters/prototypes/pocketBunnyRig';
 import { registerBatchOnePreviewPacks } from '../character-roster-batch-1/previewPacks';
 import { registerBatchTwoPreviewPacks } from '../character-roster-batch-2/previewPacks';
+import { registerCompletionPreviewPacks } from '../character-roster-completion/previewPacks';
+import { groups } from '../character-roster-completion/roster';
+import { expressiveGroups } from '../character-roster-expressive/roster';
+import { registerExpressivePreviewPacks } from '../character-roster-expressive/previewPacks';
 
 const query = new URLSearchParams(location.search);
 const style = query.get('style') ?? 'current';
@@ -26,7 +30,16 @@ const isRig = style === 'pocket-bunny-rig';
 const isBatchOne = style === 'roster-batch-1';
 const isBatchTwoPreview = style === 'roster-batch-2';
 const isBatchTwoOriginal = style === 'roster-batch-2-original';
-if (!['current', 'plush', ...rasterStyles, 'pocket-bunny-rig', 'roster-batch-1', 'roster-batch-2', 'roster-batch-2-original'].includes(style)) throw new Error(`Unknown style: ${style}`);
+const isCompletionPreview = style === 'roster-completion-preview';
+const isCompletionOriginal = style === 'roster-completion-original';
+const isExpressivePrior = style === 'roster-expressive-prior';
+const isExpressivePreview = style === 'roster-expressive-preview';
+const groupKey = query.get('group') ?? 'A';
+if ((isCompletionPreview || isCompletionOriginal) && !(groupKey in groups)) throw new Error(`Unknown roster group: ${groupKey}`);
+if ((isExpressivePrior || isExpressivePreview) && !(groupKey in expressiveGroups)) throw new Error(`Unknown expressive group: ${groupKey}`);
+const completionGroup = (groupKey in groups ? groups[groupKey as keyof typeof groups] : groups.A) as readonly string[];
+const expressiveGroup = (groupKey in expressiveGroups ? expressiveGroups[groupKey as keyof typeof expressiveGroups] : expressiveGroups.A) as readonly string[];
+if (!['current', 'plush', ...rasterStyles, 'pocket-bunny-rig', 'roster-batch-1', 'roster-batch-2', 'roster-batch-2-original', 'roster-completion-original', 'roster-completion-preview', 'roster-expressive-prior', 'roster-expressive-preview'].includes(style)) throw new Error(`Unknown style: ${style}`);
 if (!['day', 'night'].includes(time)) throw new Error(`Unknown time: ${time}`);
 if (isRig && !['idle', 'blink', 'sit', 'sit-exit', 'crouch', 'crouch-run', 'impact', 'run', 'airborne', 'fastfall'].includes(pose)) throw new Error(`Unknown pose: ${pose}`);
 let seed = 7341;
@@ -42,6 +55,10 @@ document.getElementById('title')!.textContent = ({
   'roster-batch-1': 'Pocket Plush · Bunny, Fox and Frog pose preview',
   'roster-batch-2': 'Pocket Plush · Bear, Owl and Cat pose preview',
   'roster-batch-2-original': 'Original · Bunny, Fox, Cat, Bear and Owl',
+  'roster-completion-original': `Original · ${completionGroup.join(', ')}`,
+  'roster-completion-preview': `Pocket Plush · ${completionGroup.join(', ')}`,
+  'roster-expressive-prior': `Earlier Pocket Plush · ${expressiveGroup.join(', ')}`,
+  'roster-expressive-preview': `Expressive Pocket Plush · ${expressiveGroup.join(', ')}`,
 } as Record<string, string>)[style];
 if (isRaster) document.querySelector('.heading span')!.textContent =
   'Generated concept art in the production renderer · static sprites only; animation needs separate parts';
@@ -51,6 +68,10 @@ if (isBatchOne) document.querySelector('.heading span')!.textContent =
   'Bunny prototype with new Fox and Frog pose sheets in the production renderer · visual preview only';
 if (isBatchTwoPreview || isBatchTwoOriginal) document.querySelector('.heading span')!.textContent =
   'Same five characters, arena, positions, and lighting · compare the original and proposed day/night scenes';
+if (isCompletionPreview || isCompletionOriginal) document.querySelector('.heading span')!.textContent =
+  'Same five characters, arena, positions, and lighting · original and proposed scene comparison';
+if (isExpressivePrior || isExpressivePreview) document.querySelector('.heading span')!.textContent =
+  'Same five characters, arena, positions, and lighting · previous and expressive art comparison';
 
 registerArena(meadow);
 registerBuiltinCharacters();
@@ -68,7 +89,21 @@ else if (isBatchTwoPreview) {
   await registerBatchOnePreviewPacks();
   await registerBatchTwoPreviewPacks();
 }
-else if (style !== 'current' && !isBatchTwoOriginal) registerPrototypePacks(style as PrototypeStyle);
+else if (isCompletionPreview) {
+  if (groupKey === 'C') {
+    await registerPocketBunnyRig();
+    await registerBatchOnePreviewPacks();
+  }
+  await registerCompletionPreviewPacks(completionGroup);
+}
+else if (isExpressivePrior) {
+  if (expressiveGroup.includes('Bunny')) await registerPocketBunnyRig();
+  if (expressiveGroup.includes('Fox') || expressiveGroup.includes('Frog')) await registerBatchOnePreviewPacks();
+  if (expressiveGroup.includes('Bear') || expressiveGroup.includes('Owl') || expressiveGroup.includes('Cat')) await registerBatchTwoPreviewPacks();
+  await registerCompletionPreviewPacks(expressiveGroup);
+}
+else if (isExpressivePreview) await registerExpressivePreviewPacks(expressiveGroup);
+else if (style !== 'current' && !isBatchTwoOriginal && !isCompletionOriginal) registerPrototypePacks(style as PrototypeStyle);
 const arena = toArena(meadow);
 const theme = toThemeConfig(meadow);
 
@@ -87,7 +122,15 @@ state.phase = 'playing';
 state.timeElapsed = 18;
 state.dayPhase = time === 'night' ? .5 : 0;
 state.players = createInitialPlayers(['P1', 'P2', 'P3', 'P4', 'P5'], arena, false, Math.random);
-if (isBatchTwoPreview || isBatchTwoOriginal) {
+if (isExpressivePrior || isExpressivePreview || isCompletionPreview || isCompletionOriginal) {
+  const names = isExpressivePrior || isExpressivePreview ? expressiveGroup : completionGroup;
+  state.players.forEach((player, i) => {
+    const selected = getCharacterPack(names[i])!;
+    player.character = { ...player.character, name: selected.name,
+      color: selected.color, darkColor: selected.darkColor, lightColor: selected.lightColor };
+  });
+}
+else if (isBatchTwoPreview || isBatchTwoOriginal) {
   const cat = getCharacterPack('Cat')!;
   state.players[2].character = { ...state.players[2].character, name: cat.name,
     color: cat.color, darkColor: cat.darkColor, lightColor: cat.lightColor };
@@ -139,8 +182,9 @@ const lineup = document.getElementById('lineup') as HTMLCanvasElement;
 const c = lineup.getContext('2d')!;
 c.fillStyle = '#f4f0e5'; c.fillRect(0, 0, lineup.width, lineup.height);
 c.fillStyle = '#a8b6aa'; c.fillRect(0, 0, lineup.width, 2);
-const lineupCharacters = isBatchTwoPreview || isBatchTwoOriginal
-  ? ['Bunny', 'Fox', 'Cat', 'Bear', 'Owl'] : STUDY_CHARACTERS;
+const lineupCharacters = isExpressivePrior || isExpressivePreview ? expressiveGroup
+  : isCompletionPreview || isCompletionOriginal ? completionGroup
+  : isBatchTwoPreview || isBatchTwoOriginal ? ['Bunny', 'Fox', 'Cat', 'Bear', 'Owl'] : STUDY_CHARACTERS;
 for (let i = 0; i < lineupCharacters.length; i++) {
   const name = lineupCharacters[i];
   const pack = getCharacterPack(name)!;
@@ -160,8 +204,8 @@ for (let i = 0; i < lineupCharacters.length; i++) {
     }
     continue;
   }
-  if (isRaster || isRig || isBatchOne || isBatchTwoPreview || isBatchTwoOriginal) {
-    const note = isBatchTwoOriginal ? 'original character' : isBatchTwoPreview ? 'authored pose preview'
+  if (isRaster || isRig || isBatchOne || isBatchTwoPreview || isBatchTwoOriginal || isCompletionPreview || isCompletionOriginal || isExpressivePrior || isExpressivePreview) {
+    const note = isBatchTwoOriginal || isCompletionOriginal ? 'original character' : isExpressivePrior ? 'earlier Pocket Plush' : isExpressivePreview ? 'expressive action study' : isBatchTwoPreview || isCompletionPreview ? 'authored pose preview'
       : isBatchOne
       ? name === 'Bunny' ? 'playable prototype' : name === 'Fox' || name === 'Frog' ? 'authored poses · timing TBD' : 'original character'
       : 'static concept · motion TBD';

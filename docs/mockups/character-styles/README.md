@@ -2,6 +2,9 @@
 
 The first Storybook and Cartoon studies were rejected. This set keeps the original **Soft toys** prototype and explores three stronger plush directions. Pocket Plush Bunny can now be played in a local match through an opt-in URL flag. The default Bunny, hitboxes, and foreground cover remain unchanged.
 
+The later roster studies are in [Fox and Frog](../character-roster-batch-1/README.md), [Bear, Owl, and Cat](../character-roster-batch-2/README.md), and the [remaining 13 animals](../character-roster-completion/README.md). Together they cover visual pose comparisons for all 19 built-in animals. Only Bunny is playable in the opt-in prototype.
+The [expressive second pass](../character-roster-expressive/README.md) pushes all 19 farther apart in body shape, physical traits, personality, and action silhouettes.
+
 The upper half of each capture is the production Meadow renderer at 1280 × 720. The lower strip enlarges the same five study characters: Bunny, Fox, Frog, Bear, and Owl. Positions, lighting phase, and random seed are fixed. Frog stands on the middle platform to keep all five visible outside deliberate bush cover. The source concept sheets are transparent and appear below the comparisons.
 
 | Direction | Day at match scale | Night at match scale | Design question |
@@ -62,7 +65,7 @@ These high-resolution concepts were generated from art briefs. The match-scale p
 - Keep large source sheets out of the runtime bundle. Pack at game scale and benchmark both arena entry and live frame pacing.
 - Keep opaque foreground bushes over players. Any character outline, face highlight, or moving appendage must remain inside the player layer so cover still hides it.
 
-The next decision is a longer hands-on gameplay review of pose timing, occlusion, and input feel before expanding to Fox or the full roster.
+The next implementation decision is a longer hands-on gameplay review of pose timing, occlusion, and input feel before turning the later visual studies into playable character packs.
 
 ## Reproduce
 
