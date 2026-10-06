@@ -32,13 +32,15 @@ The roster overview strips away color beside each new idle pose to test whether 
 | Wolf | Lean guard-dog posture, low prowl, raised hackles in the attack |
 | Panda | Pear-shaped belly, slow waddle, rump plop and clumsy recovery |
 | Pig | Barrel torso, tiny-hoof trot, ear flop and snout-led stubbornness |
-| Cow | High hips, subtle udder weight, gangly hoof steps and horn dip |
+| Cow | Prominent rounded udder as a comic pendulum beneath high hips; gangly steps, horn dip, sideways sit and wide landing |
 
 ![Cat before and expressive action comparison](cat-acting-comparison.png)
 ![Wolf before and expressive action comparison](wolf-acting-comparison.png)
 ![Panda before and expressive action comparison](panda-acting-comparison.png)
 ![Pig before and expressive action comparison](pig-acting-comparison.png)
 ![Cow before and expressive action comparison](cow-acting-comparison.png)
+
+The revised Cow makes the udder easy to spot even in the small comparison pairs. It sways with the alternating steps, trails the jump, rests in the sit, and follows the stomp and landing. The joke comes from its weight and timing while the cow remains gentle and recognizable.
 
 ## Goat, Horse, Sheep, Monkey, Tiger
 

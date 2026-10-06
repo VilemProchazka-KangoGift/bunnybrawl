@@ -13,7 +13,7 @@ This pass uses the previous Pocket Plush drawings as **palette, ink, and materia
 | Wolf | Wary, rugged; lean chest, shaggy hackles, brush tail | Low long-stride prowl with tail held low | Alert guard-dog haunch seat | Hackles rise, forepaws curl, one foot drives down | Protective nose-low skid |
 | Panda | Sweet, sleepy, clumsy; pear belly, tiny dark feet | Side-to-side waddle and effortful jump | Rump plop, paws against belly | Abrupt one-foot stamp with both paws raised | Seated tumble and bewildered recovery |
 | Pig | Silly and eager; barrel body, floppy ears, curly tail | Quick little-hoof trot, ears lag each step | Loose side plop | Both front hooves plant, snout scrunches | Belly-first catch, tail springs up |
-| Cow | Gentle, absent-minded; high hips, small attached udder, wide hooves | Gangly uneven amble; udder follows body weight subtly | Awkward sideways fold with front hooves to one side | Surprising front-hoof strike, horns lower | Wide hoof brace, horns bob |
+| Cow | Gentle, absent-minded, unintentionally funny; high hips, wide hooves, and a prominent rounded pink udder with four soft teat nubs | Gangly uneven amble; the attached udder swings opposite each hoof step and hangs below a tucked jump | Awkward sideways fold; udder settles gently between the legs | Surprising front-hoof strike with lowered horns; udder lags behind the sudden thrust | Wide hoof brace; udder follows through with a soft bounce, then settles |
 | Goat | Stubborn, playful; lean legs, curled horns, beard | Sharp cloven-hoof prance and nimble tuck | Compact perch on folded hind legs | Horn-led headbutt-like dash plus hoof stamp | Hooves skid and beard flicks |
 | Horse | Elegant, nervous; long limbs, muzzle, mane, tail | High-stepping trot and athletic rear | Long legs folded to one side, mane falls forward | Rearing front-hoof strike | Front hooves brace, head bows, tail sweeps |
 | Sheep | Shy and dreamy; connected wool cloud on tiny dark legs | Short hoof shuffle under lagging fleece | Wool mound with hooves and face peeking out | Brave low head-and-hoof thrust | Legs disappear into wool, face pops back up |
@@ -25,6 +25,8 @@ This pass uses the previous Pocket Plush drawings as **palette, ink, and materia
 | Axolotl | Dreamy, playful; narrow lanky body, long webbed fingers, long tail, external gills | Toe-first fluid glide with arm sweeps and S-tail | Long limbs fold cross-legged, hand rests on tail | Open-handed martial-arts lunge, gills stream back | Long hands catch the floor, tail curls underneath |
 
 ## Review questions
+
+The Cow revision makes the udder the comic movement driver. It must remain attached to a believable belly and visible at native match size; its delayed sway and bounce provide the joke while the face, hooves, and horns still communicate the action. Avoid stretching or detaching it, and keep the humor sweet rather than crude.
 
 - Can the player tell the animal and the action from its silhouette at actual match size, without relying only on the face?
 - Does a species trait cause the motion rather than appear as decoration attached to a shared pose?
