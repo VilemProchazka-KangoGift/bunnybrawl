@@ -1,7 +1,7 @@
 import type { Player, PlayerState, Ctx2D } from '../types';
 import type { ThemeConfig } from '../themes/types';
 import type { EyebrowAnchor } from '../characters/types';
-import { FAT_SCALE, HITSTOP_DURATION, MAX_WALK_SPEED, PLAYER_WIDTH, PLAYER_HEIGHT } from '../constants';
+import { ANIM_FRAME_DURATION, FAT_SCALE, HITSTOP_DURATION, MAX_WALK_SPEED, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CROUCH } from '../constants';
 import { hasCustomEyes, getSpriteRenderer, getCharacterPack, drawLegs } from '../characters';
 import { drawHighlightSpot } from '../spriteShading';
 import { getSlowDevice } from '../perfFlags';
@@ -276,10 +276,24 @@ export function drawPlayer(ctx: Ctx2D, player: Player, nearCarrot: boolean, them
   if (state === 'splat') {
     drawSplatCharacter(ctx, x, y, width, height, character.color, character.darkColor);
   } else {
-    const pivotY = cy - height / 2;
+    const sitExit = authoredPose && state === 'run' && player.idleActionDuration < 0
+      && !!getIdleAction(character.name, player.idleAction)?.exitDuration;
+    const movingWhileSeated = authoredPose && state === 'run' && squashScale <= SQUASH_ON_CROUCH + .05;
+    const pivotY = sitExit || movingWhileSeated ? cy : cy - height / 2;
     ctx.save();
     ctx.translate(cx, pivotY);
-    if (!authoredPose) ctx.rotate(leanRad);
+    if (!authoredPose) {
+      ctx.rotate(leanRad);
+    } else if (sitExit) {
+      // Brief foot-anchored sway when an authored sitting action is interrupted.
+      const t = Math.max(0, Math.min(1, 1 - player.idleActionTimer / -player.idleActionDuration));
+      ctx.rotate(Math.sin(t * Math.PI * 3) * Math.sin(t * Math.PI) * 0.07);
+    } else if (movingWhileSeated) {
+      // A held crouch remains seated while moving; alternate the sway with the
+      // existing run clock without changing collision or movement speed.
+      const stride = player.animFrame + player.animTimer / ANIM_FRAME_DURATION;
+      ctx.rotate(Math.sin(stride * Math.PI) * .07);
+    }
     ctx.translate(-cx, -pivotY);
     drawCharacterSprite(ctx, x, y, width, height, character, state, animFrame, fastFalling, player.idleAction, player.idleActionTimer, player.idleActionDuration, player.squashScale, theme, player);
     ctx.restore();
@@ -389,7 +403,7 @@ function drawCharacterSprite(
   player: Player,
 ): void {
   const pack = getCharacterPack(char.name);
-  const idleT = idleActionDuration > 0 ? 1 - idleActionTimer / idleActionDuration : 0;
+  const idleT = idleActionDuration !== 0 ? 1 - idleActionTimer / Math.abs(idleActionDuration) : 0;
   const poseIndex = pack?.resolvePose?.(state, animFrame, fastFalling, idleAction, idleT, squashScale) ?? 0;
   const sqKey = pack?.resolvePose ? 0 : Math.round(squashScale * 10);
   // Helmet bit prevents bubble-helmet arenas (underwater, space_station) from

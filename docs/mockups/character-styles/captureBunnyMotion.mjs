@@ -20,7 +20,11 @@ const frames = [
   { pose: 'idle', frame: 0, dx: 80, dy: 0 },
   { pose: 'sit', frame: 0, dx: 80, dy: 0 },
   { pose: 'sit', frame: 0, dx: 80, dy: 0 },
-  { pose: 'idle', frame: 0, dx: 80, dy: 0 },
+  ...[.12, .34, .54, .73, .9].map((exitT, i) => ({ pose: 'sit-exit', exitT, frame: 0, dx: 80 + i * 3, dy: 0 })),
+  { pose: 'run', frame: 1, dx: 98, dy: 0 },
+  { pose: 'crouch', frame: 0, dx: 98, dy: 0 },
+  ...Array.from({ length: 4 }, (_, i) => ({ pose: 'crouch-run', frame: i, dx: 98 + i * 4, dy: 0 })),
+  { pose: 'run', frame: 1, dx: 118, dy: 0 },
 ];
 
 async function visit(page, params) {

@@ -23,7 +23,7 @@ const isRaster = rasterStyles.includes(style);
 const isRig = style === 'pocket-bunny-rig';
 if (!['current', 'plush', ...rasterStyles, 'pocket-bunny-rig'].includes(style)) throw new Error(`Unknown style: ${style}`);
 if (!['day', 'night'].includes(time)) throw new Error(`Unknown time: ${time}`);
-if (isRig && !['idle', 'blink', 'sit', 'impact', 'run', 'airborne', 'fastfall'].includes(pose)) throw new Error(`Unknown pose: ${pose}`);
+if (isRig && !['idle', 'blink', 'sit', 'sit-exit', 'crouch', 'crouch-run', 'impact', 'run', 'airborne', 'fastfall'].includes(pose)) throw new Error(`Unknown pose: ${pose}`);
 let seed = 7341;
 Math.random = () => {
   seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
@@ -77,7 +77,9 @@ state.players.forEach((player, i) => {
   player.facing = i % 2 ? 'left' : 'right';
 });
 if (isRig) {
-  state.players[0].state = ['fastfall'].includes(pose) ? 'airborne' : ['blink', 'sit', 'impact'].includes(pose) ? 'idle' : pose as PlayerState;
+  state.players[0].state = pose === 'fastfall' ? 'airborne'
+    : ['sit-exit', 'crouch-run'].includes(pose) ? 'run'
+      : ['blink', 'sit', 'crouch', 'impact'].includes(pose) ? 'idle' : pose as PlayerState;
   state.players[0].animFrame = frame;
   state.players[0].fastFalling = pose === 'fastfall';
   if (pose === 'blink' || pose === 'sit') {
@@ -85,7 +87,15 @@ if (isRig) {
     state.players[0].idleActionDuration = 1;
     state.players[0].idleActionTimer = .5;
   }
+  if (pose === 'sit-exit') {
+    const exitT = Math.max(0, Math.min(1, Number(query.get('exitT') ?? .3)));
+    state.players[0].idleAction = 1;
+    state.players[0].idleActionDuration = -.24;
+    state.players[0].idleActionTimer = .24 * (1 - exitT);
+  }
   if (pose === 'impact') state.players[0].squashScale = .8;
+  if (pose === 'crouch' || pose === 'crouch-run') state.players[0].squashScale = .6;
+  if (pose === 'crouch-run') state.players[0].animTimer = .06;
   state.players[0].x += Number(query.get('dx') ?? 0);
   state.players[0].y += Number(query.get('dy') ?? 0);
 }
@@ -117,7 +127,7 @@ for (let i = 0; i < STUDY_CHARACTERS.length; i++) {
       drawCharacterCore(c, 16, 0, 32, 32, name, sample === 'fastfall' ? 'airborne' : sample,
         sample === 'run' ? frame : 0, 1,
         { color: pack.color, darkColor: pack.darkColor, lightColor: pack.lightColor }, false, 0,
-        sample === 'idle' ? 5 : sample === 'run' ? 1 : sample === 'airborne' ? 4 : 9);
+        sample === 'idle' ? 5 : sample === 'run' ? 1 : sample === 'airborne' ? 4 : 8);
       c.restore();
     }
     continue;
@@ -155,12 +165,15 @@ if (isRig) {
   const pack = getCharacterPack('Bunny')!;
   const samples = [
     ['idle', 5], ['blink', 6], ['walk A', 1], ['walk pass', 2], ['walk B', 3],
-    ['jump', 4], ['fast stomp', 9], ['impact', 10], ['sit down', 7], ['seated', 8],
+    ['jump', 4], ['fast stomp', 8], ['impact', 9], ['idle sit', 7], ['held sit', 7], ['move+sit', 7],
   ] as const;
   samples.forEach(([label, index], i) => {
-    const x = 30 + i * 124;
+    const x = 30 + i * 113;
     ac.fillStyle = '#52665e'; ac.font = '12px system-ui'; ac.fillText(label, x, 145);
     ac.save(); ac.translate(x + 26, 42); ac.scale(1.8, 1.8);
+    if (label === 'move+sit') {
+      ac.translate(16, 32); ac.rotate(.06); ac.translate(-16, -32);
+    }
     drawCharacterCore(ac, 16, 0, 32, 32, 'Bunny', 'idle', 0, 1,
       { color: pack.color, darkColor: pack.darkColor, lightColor: pack.lightColor }, false, 0, index);
     ac.restore();

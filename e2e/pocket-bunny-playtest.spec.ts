@@ -24,14 +24,25 @@ for (const [mode, query] of [
     expect(before.name).toBe('Bunny');
     expect(atlasResponses).toContain(200);
     const key = before.x < 1000 ? 'd' : 'a';
-    await page.keyboard.down(key);
+    await page.keyboard.down('s');
     try {
-      await expect.poll(async () => page.evaluate((startX) => {
-        const x = window.__bunnyTest?.state()?.players.find(p => p.id === 'P1')?.x ?? startX;
-        return Math.abs(x - startX) > 5;
-      }, before.x)).toBe(true);
+      await expect.poll(() => page.evaluate(() => {
+        const player = window.__bunnyTest?.state()?.players.find(p => p.id === 'P1');
+        return !!player && player.state !== 'airborne' && player.squashScale <= .65;
+      })).toBe(true);
+      const crouchStartX = await page.evaluate(() => window.__bunnyTest?.state()?.players.find(p => p.id === 'P1')?.x ?? 0);
+      await page.keyboard.down(key);
+      try {
+        await expect.poll(() => page.evaluate((startX) => {
+          const player = window.__bunnyTest?.state()?.players.find(p => p.id === 'P1');
+          return !!player && player.squashScale <= .65 && Math.abs(player.x - startX) > 5;
+        }, crouchStartX)).toBe(true);
+        await page.screenshot({ path: testInfo.outputPath('pocket-bunny-moving-crouch.png') });
+      } finally {
+        await page.keyboard.up(key);
+      }
     } finally {
-      await page.keyboard.up(key);
+      await page.keyboard.up('s');
     }
     const screenshot = await page.screenshot({ path: testInfo.outputPath('pocket-bunny-in-game.png') });
     const sky = await page.evaluate(async (base64) => {
