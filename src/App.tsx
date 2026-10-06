@@ -19,7 +19,13 @@ import logoUrl from '/logo.png?url';
 
 /** Register required packs before gameplay mounts, while fetching screen code in parallel. */
 function loadGameplayScreen<T>(screen: Promise<T>, arenas: Promise<void>): Promise<T> {
-  return Promise.all([screen, arenas]).then(([module]) => module);
+  return Promise.all([screen, arenas, loadPlayableCharacters()]).then(([module]) => module);
+}
+
+function loadPlayableCharacters(): Promise<void> {
+  if (new URLSearchParams(window.location.search).get('classicCharacters') === '1') return Promise.resolve();
+  return import('./engine/characters/plush/playableRoster')
+    .then(({ registerPlayablePlushRoster }) => registerPlayablePlushRoster());
 }
 
 const CharacterSelect = lazy(() => loadGameplayScreen(import('./components/CharacterSelect'), loadLobbyArena())

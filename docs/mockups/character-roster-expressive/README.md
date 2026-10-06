@@ -2,7 +2,7 @@
 
 The [first full-roster study](../character-roster-completion/README.md) gave all 19 animals a shared ten-pose vocabulary. This second pass changes their **body shapes, personality, and physical acting**. [Art direction briefs](ART_DIRECTION.md) describe the trait driving each animal’s gait, sit, stomp, and landing.
 
-Each board compares the earlier plush study with the new expressive study in eight matched beats: idle, two walk contacts, jump, sit, angry fast stomp, landing, and attention. The small pair in each tile shows approximately 41-pixel game height. The previous five-column source sheets were mapped to the closest corresponding actions; Bunny uses its opt-in game atlas. These are **art studies**, not new live gameplay animations. Only the earlier Pocket Bunny prototype is wired into a playable match.
+Each board compares the earlier plush study with the new expressive study in eight matched beats: idle, two walk contacts, jump, sit, angry fast stomp, landing, and attention. The small pair in each tile shows approximately 41-pixel game height. The previous five-column source sheets were mapped to the closest corresponding actions; Bunny uses its opt-in game atlas. Hedgehog's earlier source and comparison board were absent from the saved study, so its new eight-pose sheet is shown directly below. These sheets now feed the [playable roster implementation](../playable-plush-roster/README.md); the boards themselves remain static art comparisons.
 
 The roster overview strips away color beside each new idle pose to test whether the animals have genuinely different body shapes. It also shows a native-height sample:
 
@@ -68,13 +68,13 @@ The revised Cow makes the udder easy to spot even in the small comparison pairs.
 | Axolotl | Thin lanky torso, long webbed fingers, fluid tail and gill-led lunge |
 
 ![Rhino before and expressive action comparison](rhino-acting-comparison.png)
-![Hedgehog before and expressive action comparison](hedgehog-acting-comparison.png)
+![Hedgehog eight expressive poses](hedgehog-expressive-source.png)
 ![Chick before and expressive action comparison](chick-acting-comparison.png)
 ![Axolotl before and expressive action comparison](axolotl-acting-comparison.png)
 
 ## Meadow at match scale
 
-The production Meadow renderer shows four matched five-player groups. Each pair has the same characters, positions, and lighting. The bushes remain opaque foreground cover. The preview pack loads the new art only for this static renderer page.
+The production Meadow renderer shows four matched five-player groups. Each pair has the same characters, positions, and lighting. The bushes remain opaque foreground cover. The preview pack loads the new art for this static renderer page; the game uses smaller runtime atlases from the same source sheets.
 
 ### Group A · Bunny, Fox, Frog, Bear, Owl
 

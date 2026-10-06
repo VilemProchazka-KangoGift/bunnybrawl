@@ -10,6 +10,9 @@ try {
   for (const group of ['A', 'B', 'C', 'D']) {
     for (const time of ['day', 'night']) {
       for (const version of ['prior', 'preview']) {
+        // The older Hedgehog source sheet was never saved; retain the checked-in
+        // group D prior capture instead of attempting to decode a missing atlas.
+        if (group === 'D' && version === 'prior') continue;
         const page = await browser.newPage({ viewport: { width: 1280, height: 997 }, deviceScaleFactor: 1 });
         const errors = [];
         page.on('pageerror', error => errors.push(error.message));
