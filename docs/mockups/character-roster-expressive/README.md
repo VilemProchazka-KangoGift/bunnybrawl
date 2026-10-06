@@ -4,6 +4,10 @@ The [first full-roster study](../character-roster-completion/README.md) gave all
 
 Each board compares the earlier plush study with the new expressive study in eight matched beats: idle, two walk contacts, jump, sit, angry fast stomp, landing, and attention. The small pair in each tile shows approximately 41-pixel game height. The previous five-column source sheets were mapped to the closest corresponding actions; Bunny uses its opt-in game atlas. These are **art studies**, not new live gameplay animations. Only the earlier Pocket Bunny prototype is wired into a playable match.
 
+The roster overview strips away color beside each new idle pose to test whether the animals have genuinely different body shapes. It also shows a native-height sample:
+
+![Nineteen Pocket Plush character silhouettes beside color and native-height samples](roster-silhouettes.png)
+
 ## Bunny, Fox, Frog, Bear, Owl
 
 | Character | New physical acting |
@@ -109,6 +113,7 @@ Bear, Owl, and Panda received a second targeted walk pass after the first drawin
 ```text
 python docs/mockups/character-roster-expressive/prepare_atlases.py
 python docs/mockups/character-roster-expressive/render_boards.py
+python docs/mockups/character-roster-expressive/render_roster.py
 node docs/mockups/character-roster-expressive/capture.mjs <running-vite-base-url>
 ```
 
