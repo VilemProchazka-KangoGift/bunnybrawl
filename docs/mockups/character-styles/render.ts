@@ -105,9 +105,9 @@ for (let i = 0; i < STUDY_CHARACTERS.length; i++) {
   c.fillStyle = '#52665e'; c.font = '12px system-ui';
   if (isRig && name === 'Bunny') {
     for (const [poseIndex, sample] of (['idle', 'run', 'airborne', 'fastfall'] as const).entries()) {
-      const x = left + poseIndex * 55;
+      const x = left + poseIndex * 60;
       c.fillText(sample === 'airborne' ? 'jump' : sample, x, 193);
-      c.save(); c.translate(x, 76); c.scale(2.5, 2.5);
+      c.save(); c.translate(x, 76); c.scale(2, 2);
       if (sample === 'fastfall') {
         c.translate(16, 16); c.scale(.85, 1.15); c.translate(-16, -16);
       }

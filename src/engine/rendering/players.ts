@@ -431,7 +431,9 @@ function drawCharacterSprite(
 
   _drawCharacterSpriteImpl(sctx, x, y, w, h, char, state, animFrame, fastFalling, idleAction, idleActionTimer, idleActionDuration, squashScale, theme);
 
-  applyOutlineToCache(cached, darken(char.color, OUTLINE_DARKEN));
+  if (!getCharacterPack(char.name)?.noOutline) {
+    applyOutlineToCache(cached, darken(char.color, OUTLINE_DARKEN));
+  }
 
   if (spriteCache.size > _spriteCacheCap) {
     const first = spriteCache.keys().next().value;
