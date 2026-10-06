@@ -5,7 +5,7 @@ description: Use for Carrot Royale arena or character visual redesigns, procedur
 
 # Carrot Royale visual style
 
-Use the [complete Meadow day](../../../docs/mockups/meadow-backgrounds/production-day.png) and [night](../../../docs/mockups/meadow-backgrounds/production-night.png) captures as the current art reference. They show the production renderer, not isolated asset drawings. Apply the visual language to other arenas without copying Meadow's green palette or plant motifs into every setting.
+Use the [complete Meadow day](../../../docs/mockups/meadow-backgrounds/production-day.png) and [night](../../../docs/mockups/meadow-backgrounds/production-night.png) captures as the arena art reference. They show the production renderer, not isolated asset drawings. The [Pocket Bunny study](../../../docs/mockups/character-styles/README.md) is the character direction and iteration record; its playable version is still opt-in. Apply the visual language to other arenas without copying Meadow's green palette or plant motifs into every setting.
 
 ## Start with the design brief
 
@@ -67,13 +67,75 @@ When a ground platform reaches the viewport boundary, extend its drawing beyond 
 
 The three bush styles coexist in Meadow. Their current placement and drawing live in [`meadowSelectedArt.ts`](../../../src/engine/arenas/packs/meadowSelectedArt.ts), while the trees, secondary foliage, and small wildlife live in [`meadowStorybookDetails.ts`](../../../src/engine/arenas/packs/meadowStorybookDetails.ts), with placement in [`meadow.ts`](../../../src/engine/arenas/packs/meadow.ts). Background bushes sit behind players; opaque foreground bushes draw over them. Platform front-face overlays also draw after players, preserving the sense of moving behind the terrain. Art changes must preserve the collision plane and these layer relationships.
 
+## Characters: a soft toy with readable acting
+
+**Design direction, not a completed roster conversion.** The [character study gallery](../../../docs/mockups/character-styles/README.md) compared several looks. Soft toys were the promising family; Pocket Plush became the playable Bunny experiment. The other animals are still static concept studies, and the original procedural Bunny remains the default. Treat the opt-in `?pocketBunny=1` Bunny as evidence for a method and a visual direction, not as proof that one silhouette, face, or atlas will work for every animal. Before converting a pack, inspect its species features, gameplay states, current drawing, and actual arena backgrounds. The implementation and cache contracts are in [`character-sprites.md`](../character-sprites.md).
+
+### What the player should feel
+
+The roster should feel like a cast of small, lively storybook toys in a playful competition. Each animal needs a distinct personality, but all should remain warm and appealing even while attacking or losing. Acting must survive at match scale: **silhouette and body pose carry the action, face reinforces it, fabric detail finishes it.** A small mouth or eyebrow change alone cannot carry a fast action. Do not turn every animal into the same plush body with a different head ornament.
+
+| State or beat | Emotion to convey | Shape and acting cue | What to avoid |
+| --- | --- | --- | --- |
+| Resting idle | Safe, curious, quietly alive | Comfortable stance, clear gaze, small timed blink or attentive change; subtle breathing is optional. | A frozen cutout or constant bouncing that makes stillness impossible. |
+| Occasional idle sit and held sit | Relaxed, cozy, self-possessed | One balanced seated silhouette with visible paws and a stable contact point. Add a small foot-anchored sway when the seated character starts moving. | A strained squat that reads as taking a poop; instant frozen sliding when movement begins. |
+| Walk or run | Eager, purposeful, a little mischievous | Alternating foot contacts, a passing pose, shifting limbs and body weight; species features follow the motion. | Translating or rotating a rigid sprite while the feet and arms stay identical. |
+| Jump and airtime | Exertion followed by buoyancy | Clear separation from the grounded pose: lifted feet, changed limb reach, and an appropriate ear, tail, wing, or body response. A landing pose returns the weight to the ground. | Stretching the standing picture into an airborne picture; identical expression and limb arrangement throughout. |
+| Fast stomp | Brief, comic determination and anger | A dedicated downward attack silhouette, compressed intent in arms and feet, and a face readable at speed. Bunny's swept ears, clenched paws, narrowed eyes, and gritted mouth are one solution. | A barely changed falling pose, detached generic eyebrows, or a threatening expression that loses the game's charm. |
+| Landing or impact | Soft weight, surprise, resilience | Contact, bent or gathered limbs, and a short recovery that still looks like the same animal. | A large generic squash that flattens its anatomy or confuses the attack and landing shapes. |
+| Scared, dizzy, or other status expressions | A legible interruption of the usual confidence | Adapt the pack's eyes, face, and posture to the actual gameplay cue; preserve the action and species silhouette underneath. | A face overlay whose coordinates drift as the head changes pose. |
+
+These are **acting goals for future packs**, not a claim that the Bunny prototype has a unique frame for every beat. Its present atlas has ten authored poses, including three walk shapes, a single jump, fast stomp, impact, blink, attention, idle, and seated. If a species needs extra anticipation or recovery frames, add them because they improve the live action, then check load and cache cost. Keep input response immediate; an attractive transition must not make the character feel sluggish.
+
+### Shape, material, and identity
+
+- Start with a recognizable species silhouette and a personality brief. Decide what its ears, wings, muzzle, tail, horns, or feet do in motion. Use different mass distribution and stance across the roster: a round bear, long-eared Bunny, wide-footed Frog, and compact Owl should not share a body template merely to simplify packing. These are shape prompts, not approved final designs.
+- Preserve the same character through every pose. Compare head-to-body ratio, torso width, cheek shape, face placement, limb thickness, and appendage roots side by side at the **final packed size**. Dynamic poses may change contour, but a fast stomp must not look like a thinner or much fatter replacement animal. Bunny's first angry drawing lost its roundness; the next export at 36 game pixels looked too fat. Packing that same round-bodied art at 32 pixels brought its width into line with the jump pose. Those numbers describe Bunny, not a roster-wide size rule.
+- Use a continuous, confidently dark ink edge that stays legible over the scene. Keep the interior soft: matte color planes, restrained shading, and sparse seam or fabric suggestions can evoke a toy without making it dirty or overworked. The ink should define the silhouette, not form a bright cutout halo. Inspect light and dark characters over Meadow's day and night zones before adjusting an outline globally.
+- Attach anatomy cleanly. An ear or limb may overlap the body, but its root must read as joined; do not leave transparent gaps, leaked background pixels, or scar-like cut lines across the forehead. A plush seam is intentional only when it reads as construction at match scale.
+- Give each animal a few repeatable identity marks and expressive features, then keep them placed consistently in all poses. Avoid tiny decorations as the only way to tell two characters apart. Do not add a foreground glow or outline that reveals a player through an opaque bush: hiding behind that cover is deliberate gameplay.
+
+### Build motion from poses, then add restraint
+
+The first Pocket Bunny animation tried to rotate ears and limbs cut from a flat illustration. The missing art behind those joints showed through, the forehead looked scarred, and the torso stayed stiff. Author complete poses with the volume, face, appendage roots, and ink redrawn together. At minimum, review resting, walking contact and passing, jump, fast stomp, landing, and seated behavior for each redesigned animal. Test an actual run and jump sequence; a row of attractive stills does not demonstrate life or responsiveness.
+
+Small transforms can support an authored performance, but they should not *be* the performance. For Pocket Bunny, the generic run bounce and lean, landing squash, fast-fall stretch, and shared transform-based idle actions are skipped; the poses carry the large changes. Its idle sit and player-held grounded crouch share the same appealing seated drawing. Starting to move from a sit gets a short seated exit cue, and moving while crouched gets a small sway anchored at the feet. Apply the principle to another species by asking what its weight and anatomy would do, not by copying Bunny's exact timer or wobble.
+
+Make the edge as carefully as the pose. Stamping a heavy outline around the finished low-resolution Bunny produced jagged steps. The prototype extends the silhouette by a fraction of a logical pixel at 4× display resolution, composites the pose on top, then downsamples once; it suppresses the generic outline so a second ring is not added. Check the result at actual game size, not only at zoom. Similarly, the generic angry eyebrows drifted over the differently shaped authored heads and seated movement. The Bunny pack suppresses those eyebrows and paints its angry face into the stomp pose. If a future pack uses shared expression overlays, anchor them to that pack's moving face and verify every relevant pose.
+
+### Why the Bunny direction changed
+
+| Observation in the experiment | Decision and transferable reason |
+| --- | --- |
+| Early character style studies looked poor in the game; only the soft toy family seemed usable. | Keep Pocket Plush as the working direction and test it as a playable Bunny before promising a roster redesign. Judge concepts in the production renderer, not solely as full-size art. |
+| The first playable plush looked stiff, and its limbs barely moved during walk and jump. | Replace the flat cutout rig with complete authored poses whose limbs and body weight change. Movement must be visible without relying on squash, rotation, or bounce. |
+| Rotated ear attachments leaked and the forehead looked scarred. | Redraw connection points in each full pose and inspect transparent edges over contrasting backgrounds. |
+| A stronger low-resolution outline looked jagged or halo-like. | Build the dark edge at source resolution, downsample once, and avoid stacking the renderer's generic outline on it. |
+| The first explicit sit looked strained, while the idle sit felt natural. | Use the calm idle seated silhouette for both idle and input-held sit; make movement from that shape perceptible with a restrained, grounded sway. |
+| Fast stomp was too close to ordinary airtime, then its first angry art was too slim; a wider export looked too fat. | Differentiate the attack through silhouette **and** expression, then compare all poses at their packed game size. Adjust art scale and anatomy together before changing the established character proportions. |
+| Generic angry brows floated away from the authored face. | Put the expression in the authored pose or tie any reusable overlay to pose-specific facial anchors. |
+| Bright foreground art and dark background at night gave inconsistent lighting. | Evaluate the character in the complete day/night scene, with foreground ambient tint and intentional opaque bush cover intact. |
+
+The [Pocket Bunny comparison and iteration record](../../../docs/mockups/character-styles/README.md) contains live scene crops, the motion preview, atlas, and retained failed variants. Use it to understand *why* a choice was made. Treat the preview GIF as a keyed illustration; gameplay and timing must be checked in the running arena.
+
+### Roster redesign workflow and acceptance checks
+
+1. **Brief one animal.** Record its current silhouette, palette, species landmarks, and the emotional signature it should bring to the cast. Choose one or two ways its acting differs from Bunny. Keep the shared storybook ink and softness while preserving that species' identity.
+2. **Explore at match size.** Compare genuinely different proportion and face treatments, not small recolors. Put resting, walk, jump, stomp, and seated studies beside the current character and the selected Pocket Bunny. Check the whole roster together so the new animal does not become a duplicate or an outlier in scale.
+3. **Make a playable slice.** Author the key poses, load a compact atlas or equivalent cacheable asset, and wire state selection. Preserve facing, power-up scale, hitbox and physics, and the foreground draw order. Keep the current pack available for a fair comparison until the new one is accepted.
+4. **Review emotions in motion.** Can someone identify idle, sit, walk, jump, fast stomp, and impact from the silhouette at normal speed? Is fast stomp angry and distinct while still cute? Do feet contact the ground and do appendages stay attached? Does the character retain its body shape across poses and directions? Watch crouched movement and transitions, not only still frames.
+5. **Review the complete arena.** Compare matched day, sunset, and night captures over sky, hills, platforms, and ground, at 1280 × 720 and a smaller display size. Test pale, dark, warm, and green roster mates at the same time. Let opaque bushes hide players as designed. Evaluate both the default simulation worker and `?simWorker=off` if rendering integration changes.
+6. **Check delivery cost and decide.** Compare cold arena entry, decoded asset size, frame time during a busy match, and play feel against the current pack on available devices. An efficient warmed sprite draw does not prove startup is fast. Record which parts are approved visual direction, which are implemented, and which remain untested before expanding to the next animal.
+
+Advance one animal only after its in-game acting and scene comparisons hold up. The roster is ready when its members feel related by material and ink, individually recognizable by shape and motion, and readable outside intentional cover across the supported lighting states.
+
 ## Redesign and review loop
 
 1. **Explore distinct directions.** For a broad redesign, make several variants that change a meaningful dimension such as silhouette, foliage structure, platform treatment, or backdrop palette. Label what each variant tests. Do not produce near-duplicates distinguished only by tiny color shifts.
 2. **Compare fairly.** Render the current scene and candidates through the actual arena and renderer, with the same camera, character positions, and time of day. Show both the whole arena and a crop of the changed prop when detail matters. Save durable PNGs or static previews in the repo so the comparison remains accessible after a local server stops.
-3. **Select the direction.** Review in this order: gameplay silhouette and landing surfaces; character contrast outside deliberate cover; cover and terrain occlusion; coherent shape language; color and fine detail. For a user-facing design choice, present the comparisons and the tradeoffs before applying the chosen direction throughout production.
+3. **Select the direction.** For arenas, review in this order: gameplay silhouette and landing surfaces; character contrast outside deliberate cover; cover and terrain occlusion; coherent shape language; color and fine detail. For characters, use the acting and roster checks above, beginning with action silhouettes and stable identity across poses. For a user-facing design choice, present the comparisons and the tradeoffs before applying the chosen direction throughout production.
 4. **Integrate without changing gameplay accidentally.** Preserve collision tops, platform front-face overlay, and foreground hiding. Keep detailed static scenery in the background and foreground caches. Avoid expensive gradients, shadows, or large numbers of new paths in the per-frame draw path; see [`performance.md`](../performance.md).
-5. **Verify the full scene.** Compare noon, sunset, and night at 1280 × 720 and at a smaller display size; watch live gameplay with different characters and player positions. Check the default simulation worker and `?simWorker=off` when arena rendering changes. If the Meadow composition changes intentionally, refresh and rerun the visual baseline in `e2e/lighting-baseline.spec.ts`.
+5. **Verify the full scene.** Compare noon, sunset, and night at 1280 × 720 and at a smaller display size; watch live gameplay with different characters and player positions. For character work, also review every authored pose in motion, including transitions, with the old character beside it. Check the default simulation worker and `?simWorker=off` when rendering changes. If the Meadow composition changes intentionally, refresh and rerun the visual baseline in `e2e/lighting-baseline.spec.ts`.
 
 ### When a candidate fails
 
