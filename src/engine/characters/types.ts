@@ -107,4 +107,6 @@ export interface CharacterPack {
   legStyle?: LegStyle;
 
   eyebrowAnchor?: EyebrowAnchor;
+  /** The pose artwork supplies angry brows; skip the fixed-position overlay. */
+  authoredAngryBrows?: boolean;
 }

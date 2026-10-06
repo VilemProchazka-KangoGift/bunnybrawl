@@ -41,6 +41,7 @@ export async function registerPocketBunnyRig(): Promise<void> {
     customEyes: true,
     noHighlight: true,
     noOutline: true,
+    authoredAngryBrows: true,
     legStyle: { shape: 'rounded', footStyle: 'none', legWidth: 1, legHeight: 1, footHeight: 0 },
     idleActions: {
       weights: { headBob: 0, headTilt: 0, headShake: 0, littleHop: 0, stretch: 0, lookAround: 0 },

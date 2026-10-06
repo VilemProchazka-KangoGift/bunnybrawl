@@ -10,7 +10,7 @@ const sources = await Promise.all([
   readFile(join(base, 'v4/idle-sit-source.png')),
   readFile(join(base, 'v4/fast-stomp-source.png')),
   readFile(join(base, 'v4/sit-impact-source.png')),
-  readFile(join(base, 'v5/angry-fast-stomp-source.png')),
+  readFile(join(base, 'v5/angry-fast-stomp-chubby-source.png')),
 ]);
 // Bounding boxes are measured from the source alpha and retain each complete silhouette.
 // Indices are shared with resolvePose in src/engine/characters/prototypes/pocketBunnyRig.ts.
@@ -23,7 +23,7 @@ const poses = [
   [1, 34, 21, 393, 699, 28, 42],   // attentive idle
   [1, 548, 23, 400, 696, 28, 42],  // blink
   [1, 1101, 94, 423, 627, 30, 33], // seated
-  [4, 78, 185, 890, 1125, 32, 43],// angry fast stomp
+  [4, 44, 95, 974, 1290, 36, 43],// round-bodied angry fast stomp
   [3, 997, 21, 627, 834, 32, 33],  // stomp impact
 ];
 const browser = await chromium.launch({ headless: true });

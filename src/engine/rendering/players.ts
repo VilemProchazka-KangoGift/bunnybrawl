@@ -711,6 +711,9 @@ export function drawExpression(ctx: Ctx2D, player: Player, frameTime: number): v
 
   if (expression === 'angry') {
     const pack = getCharacterPack(player.character.name);
+    // Whole-body authored poses carry their own face. The generic overlay
+    // uses fixed coordinates and drifts across the Bunny's changing head.
+    if (pack?.authoredAngryBrows) return;
     const anchor = pack?.eyebrowAnchor ?? DEFAULT_EYEBROW_ANCHOR;
     ctx.strokeStyle = 'rgba(200, 40, 40, 0.8)';
     ctx.lineWidth = 2;
