@@ -22,10 +22,10 @@ function loadGameplayScreen<T>(screen: Promise<T>, arenas: Promise<void>): Promi
   return Promise.all([screen, arenas, loadPlayableCharacters()]).then(([module]) => module);
 }
 
-function loadPlayableCharacters(): Promise<void> {
+function loadPlayableCharacters(signal?: AbortSignal): Promise<void> {
   if (new URLSearchParams(window.location.search).get('classicCharacters') === '1') return Promise.resolve();
   return import('./engine/characters/plush/playableRoster')
-    .then(({ registerPlayablePlushRoster }) => registerPlayablePlushRoster());
+    .then(({ registerPlayablePlushRoster }) => registerPlayablePlushRoster(signal));
 }
 
 const CharacterSelect = lazy(() => loadGameplayScreen(import('./components/CharacterSelect'), loadLobbyArena())
@@ -34,6 +34,16 @@ const Match = lazy(() => loadGameplayScreen(import('./components/Match'), loadBu
   .then((module) => ({ default: module.Match })));
 const VictoryScreen = lazy(() => import('./components/VictoryScreen')
   .then((module) => ({ default: module.VictoryScreen })));
+
+/** Start the expensive lobby work after the first menu paint. Gameplay still
+ * awaits these loaders, so an immediate click remains correct. */
+function preloadLobby(signal: AbortSignal): void {
+  void Promise.allSettled([
+    import('./components/CharacterSelect'),
+    loadLobbyArena(),
+    loadPlayableCharacters(signal),
+  ]);
+}
 
 // Characters/entities are needed by menu controls; arenas load before gameplay.
 registerBuiltinCharacters();
@@ -131,7 +141,7 @@ function App() {
     <>
       <LandscapePrompt />
       <GameScaler>
-        {screen === 'menu' && ready && <MainMenu />}
+        {screen === 'menu' && ready && <MainMenu preloadLobby={preloadLobby} />}
         <Suspense fallback={<div className="screen-loading"><img src={logoUrl} alt="" /></div>}>
           {screen === 'charSelect' && <CharacterSelect />}
           {screen === 'match' && <Match />}

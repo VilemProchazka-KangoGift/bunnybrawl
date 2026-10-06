@@ -26,6 +26,30 @@ describe('playable plush roster', () => {
     vi.unstubAllGlobals();
   });
 
+  it('retries gameplay registration when a menu preload is canceled', async () => {
+    vi.resetModules();
+    const { registerBuiltinCharacters: registerFreshBuiltins } = await import('../builtin');
+    registerFreshBuiltins();
+    const { registerPlayablePlushRoster: registerFreshRoster } = await import('./playableRoster');
+    const controller = new AbortController();
+    const fetchMock = vi.fn((_url: string, options?: { signal?: AbortSignal }) => {
+      if (!options?.signal) return Promise.resolve({ ok: true, blob: async () => new Blob() });
+      return new Promise((_, reject) => {
+        options.signal?.addEventListener('abort', () => reject(new DOMException('canceled', 'AbortError')), { once: true });
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('createImageBitmap', vi.fn(async () => ({} as ImageBitmap)));
+
+    const speculative = registerFreshRoster(controller.signal);
+    const gameplay = registerFreshRoster();
+    controller.abort();
+    await expect(speculative).rejects.toMatchObject({ name: 'AbortError' });
+    await gameplay;
+    expect(fetchMock).toHaveBeenCalledTimes(PLUSH_ANIMALS.length * 2);
+    vi.unstubAllGlobals();
+  });
+
   it('uses authored sit, stomp, landing, and alternating gait poses', () => {
     expect(selectPlushPose('run', 0, false, -1, 0, 1)).toBe(PLUSH_POSE.walkA);
     expect(selectPlushPose('run', 1, false, -1, 0, 1)).toBe(PLUSH_POSE.walkB);

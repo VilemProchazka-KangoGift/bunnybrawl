@@ -16,7 +16,7 @@ const COLS = 4;
 const noop = () => {};
 
 // Static URLs let Vite fingerprint each atlas while the browser fetches them
-// only on lobby/match entry. Keep the key set aligned with builtins.ts.
+// only when menu preloading or gameplay begins. Keep keys aligned with builtins.ts.
 const atlasUrls = {
   Bunny: new URL('./assets/bunny.webp', import.meta.url).href,
   Fox: new URL('./assets/fox.webp', import.meta.url).href,
@@ -96,22 +96,30 @@ function plushPack(original: CharacterPack, atlas: ImageBitmap, size: number): C
 let pending: Promise<void> | undefined;
 
 /** Register complete art for main-thread lobby, main-thread fallback, or worker. */
-export function registerPlayablePlushRoster(): Promise<void> {
-  if (pending) return pending;
-  pending = Promise.all(PLUSH_ANIMALS.map(async animal => {
-    const original = getCharacterPack(animal);
-    if (!original) throw new Error(`Missing ${animal} pack`);
-    const response = await fetch(atlasUrls[animal]);
-    if (!response.ok) throw new Error(`${animal} Plush atlas failed: HTTP ${response.status}`);
-    const atlas = await createImageBitmap(await response.blob());
-    return plushPack(original, atlas, displaySize[animal]);
-  })).then(packs => {
-    for (const pack of packs) registerCharacter(pack);
-    clearIdleActionCache();
-    clearSpriteCache();
-  });
-  return pending.catch(error => {
-    pending = undefined;
+export function registerPlayablePlushRoster(signal?: AbortSignal): Promise<void> {
+  if (!pending) {
+    pending = Promise.all(PLUSH_ANIMALS.map(async animal => {
+      const original = getCharacterPack(animal);
+      if (!original) throw new Error(`Missing ${animal} pack`);
+      const response = await fetch(atlasUrls[animal], { signal });
+      if (!response.ok) throw new Error(`${animal} Plush atlas failed: HTTP ${response.status}`);
+      const atlas = await createImageBitmap(await response.blob());
+      return plushPack(original, atlas, displaySize[animal]);
+    })).then(packs => {
+      if (signal?.aborted) throw new DOMException('Plush preload canceled', 'AbortError');
+      for (const pack of packs) registerCharacter(pack);
+      clearIdleActionCache();
+      clearSpriteCache();
+    }).catch(error => {
+      pending = undefined;
+      throw error;
+    });
+  }
+  // A real lobby or match can arrive while a speculative menu load is being
+  // canceled. Join it, then retry without a cancelable signal if necessary.
+  if (!signal) return pending.catch((error: unknown) => {
+    if (error instanceof DOMException && error.name === 'AbortError') return registerPlayablePlushRoster();
     throw error;
   });
+  return pending;
 }
