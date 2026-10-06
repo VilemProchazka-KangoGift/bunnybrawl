@@ -13,6 +13,7 @@ import { registerPrototypePacks, STUDY_CHARACTERS, type PrototypeStyle } from '.
 import { registerRasterConceptPacks, type RasterStyle } from './rasterConceptPacks';
 import { registerPocketBunnyRig } from '../../../src/engine/characters/prototypes/pocketBunnyRig';
 import { registerBatchOnePreviewPacks } from '../character-roster-batch-1/previewPacks';
+import { registerBatchTwoPreviewPacks } from '../character-roster-batch-2/previewPacks';
 
 const query = new URLSearchParams(location.search);
 const style = query.get('style') ?? 'current';
@@ -23,7 +24,9 @@ const rasterStyles = ['pocket-plush', 'floppy-beanbags', 'layered-felt'];
 const isRaster = rasterStyles.includes(style);
 const isRig = style === 'pocket-bunny-rig';
 const isBatchOne = style === 'roster-batch-1';
-if (!['current', 'plush', ...rasterStyles, 'pocket-bunny-rig', 'roster-batch-1'].includes(style)) throw new Error(`Unknown style: ${style}`);
+const isBatchTwoPreview = style === 'roster-batch-2';
+const isBatchTwoOriginal = style === 'roster-batch-2-original';
+if (!['current', 'plush', ...rasterStyles, 'pocket-bunny-rig', 'roster-batch-1', 'roster-batch-2', 'roster-batch-2-original'].includes(style)) throw new Error(`Unknown style: ${style}`);
 if (!['day', 'night'].includes(time)) throw new Error(`Unknown time: ${time}`);
 if (isRig && !['idle', 'blink', 'sit', 'sit-exit', 'crouch', 'crouch-run', 'impact', 'run', 'airborne', 'fastfall'].includes(pose)) throw new Error(`Unknown pose: ${pose}`);
 let seed = 7341;
@@ -37,6 +40,8 @@ document.getElementById('title')!.textContent = ({
   'pocket-plush': 'Pocket plush', 'floppy-beanbags': 'Floppy beanbags',
   'layered-felt': 'Layered felt', 'pocket-bunny-rig': 'Pocket Plush Bunny authored poses',
   'roster-batch-1': 'Pocket Plush · Bunny, Fox and Frog pose preview',
+  'roster-batch-2': 'Pocket Plush · Bear, Owl and Cat pose preview',
+  'roster-batch-2-original': 'Original · Bunny, Fox, Cat, Bear and Owl',
 } as Record<string, string>)[style];
 if (isRaster) document.querySelector('.heading span')!.textContent =
   'Generated concept art in the production renderer · static sprites only; animation needs separate parts';
@@ -44,6 +49,8 @@ if (isRig) document.querySelector('.heading span')!.textContent =
   'Authored pose atlas in the production renderer · Bunny only · idle, sit, walk, jump, stomp, and impact';
 if (isBatchOne) document.querySelector('.heading span')!.textContent =
   'Bunny prototype with new Fox and Frog pose sheets in the production renderer · visual preview only';
+if (isBatchTwoPreview || isBatchTwoOriginal) document.querySelector('.heading span')!.textContent =
+  'Same five characters, arena, positions, and lighting · compare the original and proposed day/night scenes';
 
 registerArena(meadow);
 registerBuiltinCharacters();
@@ -56,7 +63,12 @@ else if (isBatchOne) {
   await registerPocketBunnyRig();
   await registerBatchOnePreviewPacks();
 }
-else if (style !== 'current') registerPrototypePacks(style as PrototypeStyle);
+else if (isBatchTwoPreview) {
+  await registerPocketBunnyRig();
+  await registerBatchOnePreviewPacks();
+  await registerBatchTwoPreviewPacks();
+}
+else if (style !== 'current' && !isBatchTwoOriginal) registerPrototypePacks(style as PrototypeStyle);
 const arena = toArena(meadow);
 const theme = toThemeConfig(meadow);
 
@@ -75,6 +87,11 @@ state.phase = 'playing';
 state.timeElapsed = 18;
 state.dayPhase = time === 'night' ? .5 : 0;
 state.players = createInitialPlayers(['P1', 'P2', 'P3', 'P4', 'P5'], arena, false, Math.random);
+if (isBatchTwoPreview || isBatchTwoOriginal) {
+  const cat = getCharacterPack('Cat')!;
+  state.players[2].character = { ...state.players[2].character, name: cat.name,
+    color: cat.color, darkColor: cat.darkColor, lightColor: cat.lightColor };
+}
 const positions = [[320, 380], [850, 395], [650, 470], [1040, 480], [605, 270]];
 const poses: PlayerState[] = ['idle', 'run', 'airborne', 'idle', 'airborne'];
 state.players.forEach((player, i) => {
@@ -122,8 +139,10 @@ const lineup = document.getElementById('lineup') as HTMLCanvasElement;
 const c = lineup.getContext('2d')!;
 c.fillStyle = '#f4f0e5'; c.fillRect(0, 0, lineup.width, lineup.height);
 c.fillStyle = '#a8b6aa'; c.fillRect(0, 0, lineup.width, 2);
-for (let i = 0; i < STUDY_CHARACTERS.length; i++) {
-  const name = STUDY_CHARACTERS[i];
+const lineupCharacters = isBatchTwoPreview || isBatchTwoOriginal
+  ? ['Bunny', 'Fox', 'Cat', 'Bear', 'Owl'] : STUDY_CHARACTERS;
+for (let i = 0; i < lineupCharacters.length; i++) {
+  const name = lineupCharacters[i];
   const pack = getCharacterPack(name)!;
   const left = 28 + i * 250;
   c.fillStyle = '#263e39'; c.font = 'bold 17px system-ui'; c.fillText(name, left, 27);
@@ -141,8 +160,9 @@ for (let i = 0; i < STUDY_CHARACTERS.length; i++) {
     }
     continue;
   }
-  if (isRaster || isRig || isBatchOne) {
-    const note = isBatchOne
+  if (isRaster || isRig || isBatchOne || isBatchTwoPreview || isBatchTwoOriginal) {
+    const note = isBatchTwoOriginal ? 'original character' : isBatchTwoPreview ? 'authored pose preview'
+      : isBatchOne
       ? name === 'Bunny' ? 'playable prototype' : name === 'Fox' || name === 'Frog' ? 'authored poses · timing TBD' : 'original character'
       : 'static concept · motion TBD';
     c.fillText(note, left, 193);
@@ -150,7 +170,7 @@ for (let i = 0; i < STUDY_CHARACTERS.length; i++) {
     drawCharacterCore(c, 16, 0, 32, 32, name, 'idle', .25, 1,
       { color: pack.color, darkColor: pack.darkColor, lightColor: pack.lightColor });
     c.restore();
-    if (i < STUDY_CHARACTERS.length - 1) {
+    if (i < lineupCharacters.length - 1) {
       c.strokeStyle = '#d6d6c9'; c.beginPath(); c.moveTo(left + 238, 18); c.lineTo(left + 238, 196); c.stroke();
     }
     continue;
@@ -163,7 +183,7 @@ for (let i = 0; i < STUDY_CHARACTERS.length; i++) {
       { color: pack.color, darkColor: pack.darkColor, lightColor: pack.lightColor });
     c.restore();
   }
-  if (i < STUDY_CHARACTERS.length - 1) {
+  if (i < lineupCharacters.length - 1) {
     c.strokeStyle = '#d6d6c9'; c.beginPath(); c.moveTo(left + 238, 18); c.lineTo(left + 238, 196); c.stroke();
   }
 }
