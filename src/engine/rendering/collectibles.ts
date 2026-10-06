@@ -4,7 +4,7 @@ import type { ThemeConfig } from '../themes/types';
 import { CARROT_SIZE, SPRING_SIZE, HAZARD_GROW_TIME } from '../constants';
 
 const _hazardAnim = { growScale: 1, fadeAlpha: 1 };
-const CARROT_ART = { tilt: -0.28, width: 0.82, height: 0.82 } as const;
+const CARROT_ART = { tilt: -0.55, width: 0.72, height: 0.96 } as const;
 function calcHazardAnim(growTimer: number, life: number) {
   _hazardAnim.growScale = growTimer > 0 ? 1 - (growTimer / HAZARD_GROW_TIME) : 1;
   _hazardAnim.fadeAlpha = life < 2 ? life / 2 : 1;
