@@ -19,6 +19,7 @@ export type CharacterRenderer = (
   isIdleAnim: boolean,
   idleT: number,
   colors: CharacterColors,
+  poseIndex?: number,
 ) => void;
 
 /** Draws a single gib piece. Called with ctx already translated + rotated to gib position.
@@ -86,6 +87,8 @@ export interface CharacterPack {
   /** Optional config: weight overrides for shared idle actions, plus custom signatures. */
   idleActions?: import('../rendering/idleActions').PackIdleActionsConfig;
   drawSprite: CharacterRenderer;
+  /** Optional authored-pose selection. The result is included in the sprite cache key. */
+  resolvePose?: (state: PlayerState, animFrame: number, fastFalling: boolean, idleAction: number, idleT: number, squashScale: number) => number;
   drawGib: GibRenderer;
 
   splatShape: SplatShape;

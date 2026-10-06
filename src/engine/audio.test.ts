@@ -253,6 +253,25 @@ describe('AudioManager', () => {
       expect(getInstances().length).toBe(countAfterFirst);
     });
 
+    it('retries blocked arena autoplay on the first gameplay gesture without duplicate playback', () => {
+      audio.init();
+      audio.playMusic('meadow');
+      const arenaHowl = getInstances()[getInstances().length - 1];
+      const emit = (event: string) => {
+        const listener = arenaHowl.on.mock.calls.find(([name]: [string]) => name === event)?.[1];
+        expect(listener).toBeTypeOf('function');
+        listener();
+      };
+      emit('playerror');
+      arenaHowl.play.mockClear();
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
+      expect(arenaHowl.stop).toHaveBeenCalled();
+      expect(arenaHowl.play).toHaveBeenCalledTimes(1);
+      emit('play');
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
+      expect(arenaHowl.play).toHaveBeenCalledTimes(1);
+    });
+
     it('playMusic does not play when muted', () => {
       audio.init();
       audio.toggleMute();

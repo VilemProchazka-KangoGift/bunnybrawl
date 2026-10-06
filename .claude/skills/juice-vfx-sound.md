@@ -171,3 +171,7 @@ this.state.hitstopZoom = HITSTOP_DURATION * 0.5;
 ## Audio-Disabling Mods
 
 Music disable is centralized in `AudioManager.setMusicDisabled(bool)` — sets `musicDisabled` flag and stops active music. Both `playMenuMusic()` and `playMusic()` early-return when the flag is set (same pattern as `muted`). Call sites don't need guards — just call `audio.setMusicDisabled()` from the mod toggle in `MainMenu.tsx`.
+
+### Direct arena music and browser activation
+
+A direct `?arena=...` link can finish asynchronous loading after the browser's initial user activation expires. Arena MP3 autoplay may then fail silently until pause/unpause calls `playMusic()` again. `Howler.playing()` can report true after a blocked HTMLAudio attempt. Track arena `play`, `stop`, and `playerror` events, and distinguish a pending call from actual playback to avoid duplicate HTMLAudio instances. Retry inside the first subsequent key, pointer, or touch event, then remove those listeners when music plays or stops. `e2e/arena-music-gesture.spec.ts` forces a blocked attempt and checks the first movement key starts one track.

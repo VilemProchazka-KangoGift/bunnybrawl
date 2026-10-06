@@ -9,7 +9,7 @@ for (const [mode, query] of [
     const atlasResponses: number[] = [];
     page.on('pageerror', error => errors.push(error.message));
     page.on('response', response => {
-      if (response.url().includes('pocket-bunny-poses')) atlasResponses.push(response.status());
+      if (response.url().includes('pocket-bunny-game-atlas')) atlasResponses.push(response.status());
     });
     await page.goto(query);
     await expect(page.getByTestId('match-screen')).toBeVisible({ timeout: 20000 });

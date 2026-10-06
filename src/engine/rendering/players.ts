@@ -243,7 +243,8 @@ export function drawPlayer(ctx: Ctx2D, player: Player, nearCarrot: boolean, them
   const squashScale = player.squashScale;
   const sideSquash = player.sideSquash;
   const hasSideSquash = sideSquash !== 1;
-  if (squashScale !== 1 || hasSideSquash) {
+  const authoredPose = !!getCharacterPack(character.name)?.resolvePose;
+  if (!authoredPose && (squashScale !== 1 || hasSideSquash)) {
     const ssX = (1 + (1 - squashScale) * 0.5) * (hasSideSquash ? sideSquash : 1);
     const ssY = squashScale * (hasSideSquash ? 1 + (1 - sideSquash) * 0.4 : 1); // taller when side-squashed
     ctx.translate(cx, cy);
@@ -278,7 +279,7 @@ export function drawPlayer(ctx: Ctx2D, player: Player, nearCarrot: boolean, them
     const pivotY = cy - height / 2;
     ctx.save();
     ctx.translate(cx, pivotY);
-    ctx.rotate(leanRad);
+    if (!authoredPose) ctx.rotate(leanRad);
     ctx.translate(-cx, -pivotY);
     drawCharacterSprite(ctx, x, y, width, height, character, state, animFrame, fastFalling, player.idleAction, player.idleActionTimer, player.idleActionDuration, player.squashScale, theme, player);
     ctx.restore();
@@ -387,24 +388,28 @@ function drawCharacterSprite(
   theme: ThemeConfig | undefined,
   player: Player,
 ): void {
-  const sqKey = Math.round(squashScale * 10);
+  const pack = getCharacterPack(char.name);
+  const idleT = idleActionDuration > 0 ? 1 - idleActionTimer / idleActionDuration : 0;
+  const poseIndex = pack?.resolvePose?.(state, animFrame, fastFalling, idleAction, idleT, squashScale) ?? 0;
+  const sqKey = pack?.resolvePose ? 0 : Math.round(squashScale * 10);
   // Helmet bit prevents bubble-helmet arenas (underwater, space_station) from
   // poisoning the cache: helmet is baked in at draw time, so a helmet-less
   // first render would otherwise be reused at the helmet variant.
   const helmetKey = theme?.bubbleHelmet ? 1 : 0;
-  // Packed bitfield: char(5) | state(3) | animFrame(4) | fastFalling(1) | sqKey(5) | helmet(1)
+  // Packed bitfield: char(5) | state(3) | animFrame(4) | fastFalling(1) | sqKey(5) | helmet(1) | pose(4)
   const cacheKey =
     (charIndex(char.name) & 0x1F) |
     (_stateIndex[state] << 5) |
     ((animFrame & 0xF) << 8) |
     ((fastFalling ? 1 : 0) << 12) |
     ((sqKey & 0x1F) << 13) |
-    (helmetKey << 18);
+    (helmetKey << 18) |
+    ((poseIndex & 0xF) << 19);
 
   // Idle action ctx transform — applied to main ctx, OUTSIDE the cached bitmap, so the
   // animated transform doesn't get baked into the (1-bit-keyed) sprite cache entry.
   // Resolved lazily so non-idle players (the common case) skip allocation + save/restore.
-  const idleAnimAction = (idleAction >= 0 && state !== 'run' && state !== 'airborne')
+  const idleAnimAction = (!pack?.resolvePose && idleAction >= 0 && state !== 'run' && state !== 'airborne')
     ? getIdleAction(char.name, idleAction)
     : null;
 
@@ -429,9 +434,8 @@ function drawCharacterSprite(
   sctx.scale(s, s);
   sctx.translate(-x + pad, -y + pad);
 
-  _drawCharacterSpriteImpl(sctx, x, y, w, h, char, state, animFrame, fastFalling, idleAction, idleActionTimer, idleActionDuration, squashScale, theme);
+  _drawCharacterSpriteImpl(sctx, x, y, w, h, char, state, animFrame, fastFalling, idleAction, idleActionTimer, idleActionDuration, squashScale, theme, poseIndex);
 
-  const pack = getCharacterPack(char.name);
   if (!pack?.noOutline) applyOutlineToCache(cached, darken(char.color, OUTLINE_DARKEN));
 
   if (spriteCache.size > _spriteCacheCap) {
@@ -479,10 +483,10 @@ export function drawCharacterCore(
   charName: string, state: string, animFrame: number,
   squashScale: number,
   colors: { color: string; darkColor: string; lightColor: string },
-  isIdleAnim = false, idleT = -1,
+  isIdleAnim = false, idleT = -1, poseIndex = 0,
 ): ReturnType<typeof getCharacterPack> {
   const spriteRenderer = getSpriteRenderer(charName);
-  spriteRenderer(ctx, cx, yOff, w, h, state, animFrame, isIdleAnim, idleT >= 0 ? idleT : 0, colors);
+  spriteRenderer(ctx, cx, yOff, w, h, state, animFrame, isIdleAnim, idleT >= 0 ? idleT : 0, colors, poseIndex);
 
   const pack = getCharacterPack(charName);
   if (pack && !pack.noHighlight) {
@@ -510,18 +514,20 @@ function _drawCharacterSpriteImpl(
   idleAction: number, idleActionTimer: number, idleActionDuration: number,
   squashScale: number,
   theme: ThemeConfig | undefined,
+  poseIndex: number,
 ): void {
   const cx = x + w / 2;
   const isRunning = state === 'run';
-  const bounce = isRunning ? Math.sin(animFrame * Math.PI / 2) * 2 : 0;
+  const authoredPose = !!getCharacterPack(char.name)?.resolvePose;
+  const bounce = isRunning && !authoredPose ? Math.sin(animFrame * Math.PI / 2) * 2 : 0;
   const yOff = y - bounce;
 
   // Squash/stretch for fast fall (part of cache key, so safe to bake in)
-  const scaleX = fastFalling ? 0.85 : 1;
-  const scaleY = fastFalling ? 1.15 : 1;
+  const scaleX = fastFalling && !authoredPose ? 0.85 : 1;
+  const scaleY = fastFalling && !authoredPose ? 1.15 : 1;
 
   ctx.save();
-  if (fastFalling) {
+  if (fastFalling && !authoredPose) {
     ctx.translate(cx, yOff + h / 2);
     ctx.scale(scaleX, scaleY);
     ctx.translate(-cx, -(yOff + h / 2));
@@ -533,7 +539,7 @@ function _drawCharacterSpriteImpl(
   const idleT = idleActionDuration > 0 ? 1 - (idleActionTimer / idleActionDuration) : 0;
   const colors = { color: char.color, darkColor: char.darkColor, lightColor: char.lightColor };
 
-  drawCharacterCore(ctx, cx, yOff, w, h, char.name, state, animFrame, squashScale, colors, isIdleAnimFlag, idleT);
+  drawCharacterCore(ctx, cx, yOff, w, h, char.name, state, animFrame, squashScale, colors, isIdleAnimFlag, idleT, poseIndex);
 
   // Bubble helmet (enabled per-arena via bubbleHelmet flag)
   if (theme?.bubbleHelmet) {

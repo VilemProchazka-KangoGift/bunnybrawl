@@ -23,7 +23,7 @@ const isRaster = rasterStyles.includes(style);
 const isRig = style === 'pocket-bunny-rig';
 if (!['current', 'plush', ...rasterStyles, 'pocket-bunny-rig'].includes(style)) throw new Error(`Unknown style: ${style}`);
 if (!['day', 'night'].includes(time)) throw new Error(`Unknown time: ${time}`);
-if (isRig && !['idle', 'run', 'airborne', 'fastfall'].includes(pose)) throw new Error(`Unknown pose: ${pose}`);
+if (isRig && !['idle', 'blink', 'sit', 'impact', 'run', 'airborne', 'fastfall'].includes(pose)) throw new Error(`Unknown pose: ${pose}`);
 let seed = 7341;
 Math.random = () => {
   seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
@@ -38,7 +38,7 @@ document.getElementById('title')!.textContent = ({
 if (isRaster) document.querySelector('.heading span')!.textContent =
   'Generated concept art in the production renderer · static sprites only; animation needs separate parts';
 if (isRig) document.querySelector('.heading span')!.textContent =
-  'Authored pose atlas in the production renderer · Bunny only · four cached walk frames and a jump pose';
+  'Authored pose atlas in the production renderer · Bunny only · idle, sit, walk, jump, stomp, and impact';
 
 registerArena(meadow);
 registerBuiltinCharacters();
@@ -77,9 +77,15 @@ state.players.forEach((player, i) => {
   player.facing = i % 2 ? 'left' : 'right';
 });
 if (isRig) {
-  state.players[0].state = pose === 'fastfall' ? 'airborne' : pose as PlayerState;
+  state.players[0].state = ['fastfall'].includes(pose) ? 'airborne' : ['blink', 'sit', 'impact'].includes(pose) ? 'idle' : pose as PlayerState;
   state.players[0].animFrame = frame;
   state.players[0].fastFalling = pose === 'fastfall';
+  if (pose === 'blink' || pose === 'sit') {
+    state.players[0].idleAction = pose === 'blink' ? 0 : 1;
+    state.players[0].idleActionDuration = 1;
+    state.players[0].idleActionTimer = .5;
+  }
+  if (pose === 'impact') state.players[0].squashScale = .8;
   state.players[0].x += Number(query.get('dx') ?? 0);
   state.players[0].y += Number(query.get('dy') ?? 0);
 }
@@ -108,12 +114,10 @@ for (let i = 0; i < STUDY_CHARACTERS.length; i++) {
       const x = left + poseIndex * 60;
       c.fillText(sample === 'airborne' ? 'jump' : sample, x, 193);
       c.save(); c.translate(x, 76); c.scale(2, 2);
-      if (sample === 'fastfall') {
-        c.translate(16, 16); c.scale(.85, 1.15); c.translate(-16, -16);
-      }
       drawCharacterCore(c, 16, 0, 32, 32, name, sample === 'fastfall' ? 'airborne' : sample,
         sample === 'run' ? frame : 0, 1,
-        { color: pack.color, darkColor: pack.darkColor, lightColor: pack.lightColor });
+        { color: pack.color, darkColor: pack.darkColor, lightColor: pack.lightColor }, false, 0,
+        sample === 'idle' ? 5 : sample === 'run' ? 1 : sample === 'airborne' ? 4 : 9);
       c.restore();
     }
     continue;
@@ -140,6 +144,27 @@ for (let i = 0; i < STUDY_CHARACTERS.length; i++) {
   if (i < STUDY_CHARACTERS.length - 1) {
     c.strokeStyle = '#d6d6c9'; c.beginPath(); c.moveTo(left + 238, 18); c.lineTo(left + 238, 196); c.stroke();
   }
+}
+if (isRig) {
+  const actions = document.getElementById('actions') as HTMLCanvasElement;
+  actions.hidden = false;
+  const ac = actions.getContext('2d')!;
+  ac.fillStyle = '#e8e4d8'; ac.fillRect(0, 0, 1280, 155);
+  ac.fillStyle = '#263e39'; ac.font = 'bold 17px system-ui';
+  ac.fillText('Pocket Plush Bunny motion vocabulary', 28, 26);
+  const pack = getCharacterPack('Bunny')!;
+  const samples = [
+    ['idle', 5], ['blink', 6], ['walk A', 1], ['walk pass', 2], ['walk B', 3],
+    ['jump', 4], ['fast stomp', 9], ['impact', 10], ['sit down', 7], ['seated', 8],
+  ] as const;
+  samples.forEach(([label, index], i) => {
+    const x = 30 + i * 124;
+    ac.fillStyle = '#52665e'; ac.font = '12px system-ui'; ac.fillText(label, x, 145);
+    ac.save(); ac.translate(x + 26, 42); ac.scale(1.8, 1.8);
+    drawCharacterCore(ac, 16, 0, 32, 32, 'Bunny', 'idle', 0, 1,
+      { color: pack.color, darkColor: pack.darkColor, lightColor: pack.lightColor }, false, 0, index);
+    ac.restore();
+  });
 }
 Object.assign(window, { benchmarkMockup: (count = 400) => {
   // Warm all run cache entries before timing steady-state production frames.

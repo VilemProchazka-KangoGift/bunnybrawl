@@ -20,19 +20,30 @@ Start the dev server with `npx vite --host 127.0.0.1 --port 4193`, then open [Me
 
 ![Pocket Plush Bunny in a live Meadow match](pocket-bunny-playable-day.png)
 
-The image above was captured from a running match. Browser tests verify that P1 moves in both worker modes. The authored Bunny pose atlas loads only with the opt-in flag. It is still 1.50 MB, so startup and transfer size are not production-ready.
+The image above was captured from a running match. Browser tests verify that P1 moves in both worker modes. The authored Bunny pose atlas loads only with the opt-in flag. The packed game atlas is 381 KB; the larger source paintings remain in this study folder.
 
 ### Motion study
 
-![Bunny run, jump, and fast fall in Meadow](pocket-bunny-motion.gif)
+![Bunny run, jump, fast stomp, landing, blink, and sit in Meadow](pocket-bunny-motion.gif)
 
-| Day, with idle/run/jump/fast fall poses | Night, same renderer and lighting |
+| Day, with idle, sit, walk, jump, fast stomp, and impact poses | Night, same renderer and lighting |
 | --- | --- |
 | ![Pocket Plush Bunny motion rig, day](pocket-bunny-rig-day.png) | ![Pocket Plush Bunny motion rig, night](pocket-bunny-rig-night.png) |
 
-This revision replaces the cutout rig with five whole-body poses [in the new Bunny sheet](v3/pocket-bunny-poses.png): idle, two opposing walk strides, a passing pose, and jump. The four-frame walk cycle reuses the passing pose between strides. Both the body and limbs change shape, while the face and ears are painted continuously in each pose; no ear cut crosses the forehead. The first dark outline was stamped around an already reduced sprite and looked jagged when enlarged. Bunny now gets a thin dark edge at 4× game resolution, which is reduced with the artwork; the renderer skips its later generic outline for this pack. The production renderer still applies bounce, fast fall squash, lighting, and sprite caching. Other animals retain their static Pocket Plush concepts for comparison. The GIF's path is manually keyed through an open area of the platform to show the action; it does not show live physics or input.
+This revision uses [11 authored poses in a compact atlas](v4/pocket-bunny-game-atlas.png): attentive idle, blink, three walk shapes, jump, fast stomp, landing impact, half-sit, and seated. The four-frame walk cycle repeats the passing shape. The original source art is retained in [v4](v4/); `packPocketBunnyAtlas.mjs` crops and packs the production-size sheet with a dark edge built at 4× game resolution. The generic outline, lean, run bounce, fast-fall stretch, landing squash, and transform-based idle actions are disabled for this Bunny only. Sprite caching, facing flip, gameplay physics, and foreground bush cover remain. Other animals retain their static Pocket Plush concepts for comparison. The GIF's path is manually keyed; it does not show live physics or input.
 
-Across three local headless Chromium runs, the full Meadow frame measured **0.29–0.38 ms** with static Pocket Plush and **0.28–0.37 ms** with the pose atlas (each run used five samples of 400 warmed frames at the same pose). The variation is larger than the difference between styles; this probe found no meaningful steady-state render cost. It does **not** establish cold load cost or performance across devices. The 1.50 MB pose sheet needs a compact game-scale export before shipping. The atlas was generated from the Pocket Plush concept with a brief requiring consistent features, clean ear attachment, stronger dark edges, wider body, and distinct walk and jump poses; its five frames were then reviewed at match scale.
+### Performance and audio check
+
+Headless Chromium on this development machine, three fresh browser contexts per variant, production preview, Meadow with one bot:
+
+| Mode | Original Bunny: median arena ready | Pocket Bunny: median arena ready | Frame median and p95 |
+| --- | ---: | ---: | --- |
+| Default simulation worker | 1467 ms | 1531 ms | 16.66 / 16.67 ms for both |
+| `simWorker=off` | 1073 ms | 1129 ms | 16.66 / 16.67 ms for both |
+
+The prototype adds about **56–64 ms** to cold arena entry here, while neither variant missed the browser's 60 fps cadence during the two-second frame sample. A separate warmed full-renderer probe measured **0.348 ms** for the current procedural roster, **0.278 ms** for static Pocket Plush, and **0.263 ms** for the authored Bunny with the other four Pocket Plush concepts. The full-renderer styles change other characters too, so that probe is indicative only. These short local runs do not establish performance on slower devices or explain every aspect of perceived movement speed. The packed atlas transfers 381,323 bytes instead of the old 1.50 MB source sheet. Reproduce with `benchmarkPocketBunny.mjs` against a production preview and `captureBunnyMotion.mjs` against a dev server.
+
+Direct arena entry can finish loading without browser user activation. If autoplay rejects the arena MP3, the first gameplay key, pointer, or touch now retries playback; pause/unpause is no longer required. A browser test forces that rejection and checks that the retry does not create a second track.
 
 ## Full-size concept art
 
@@ -44,12 +55,12 @@ These high-resolution concepts were generated from art briefs. The match-scale p
 
 ## Animation and rendering feasibility
 
-- The static previews prove that the designs can be placed and sprite-cached in the current renderer. The Bunny pose atlas now runs in a real match in both worker modes; loading size and performance across devices remain unmeasured.
-- Whole-sprite lean, squash, stretch, and bounce can use existing transforms. The original flattened concept could not produce clean, expressive joints: moving cutouts exposed missing art and scarred the forehead. Authored whole-body poses solved that for Bunny. Other characters still need their own pose art if selected.
-- The three source sheets total about 4.8 MB and are unsuitable as production assets. A production pass should export compact per-character sprites or an atlas at the actual display scale, then measure loading budget and the default and `simWorker=off` modes.
+- The static previews prove that the designs can be placed and sprite-cached in the current renderer. The 11-pose Bunny atlas runs in a real match in both worker modes; slower devices remain unmeasured.
+- The original flattened concept could not produce clean joints: moving cutouts exposed missing art and scarred the forehead. Authored whole-body poses solve that for Bunny. Other characters still need their own pose art if selected.
+- Keep large source sheets out of the runtime bundle. Pack at game scale and benchmark both arena entry and live frame pacing.
 - Keep opaque foreground bushes over players. Any character outline, face highlight, or moving appendage must remain inside the player layer so cover still hides it.
 
-If this Bunny motion direction works visually, the next step is a compact game-scale atlas plus a longer gameplay review of jump timing, occlusion, and loading cost before expanding to Fox or the full roster.
+The next decision is a longer hands-on gameplay review of pose timing, occlusion, and input feel before expanding to Fox or the full roster.
 
 ## Reproduce
 

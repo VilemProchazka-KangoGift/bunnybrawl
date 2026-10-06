@@ -14,7 +14,12 @@ const frames = [
   ...[-15, -30, -35, -25].map((dy, i) => ({ pose: 'airborne', frame: 0, dx: 80 + i * 7, dy })),
   { pose: 'fastfall', frame: 0, dx: 105, dy: -10 },
   { pose: 'fastfall', frame: 0, dx: 110, dy: 6 },
+  { pose: 'impact', frame: 0, dx: 110, dy: 0 },
   { pose: 'idle', frame: 0, dx: 80, dy: 0 },
+  { pose: 'blink', frame: 0, dx: 80, dy: 0 },
+  { pose: 'idle', frame: 0, dx: 80, dy: 0 },
+  { pose: 'sit', frame: 0, dx: 80, dy: 0 },
+  { pose: 'sit', frame: 0, dx: 80, dy: 0 },
   { pose: 'idle', frame: 0, dx: 80, dy: 0 },
 ];
 
@@ -48,7 +53,7 @@ try {
   if (ffmpeg.status !== 0) throw new Error(ffmpeg.stderr);
   console.log(`Saved day/night captures and ${output}`);
 
-  for (const style of ['pocket-plush', 'pocket-bunny-rig']) {
+  for (const style of ['current', 'pocket-plush', 'pocket-bunny-rig']) {
     await visit(page, { style, time: 'day', pose: 'run', frame: '0' });
     const samples = [];
     for (let i = 0; i < 5; i++) {

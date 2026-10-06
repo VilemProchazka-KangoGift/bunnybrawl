@@ -27,6 +27,53 @@ export class MusicManager {
   private muted = false;
   private musicHowl: Howl | null = null;
   private musicThemeId: string | null = null;
+  private arenaMusicActuallyPlaying = false;
+  private arenaMusicPlayPending = false;
+  private arenaGestureArmed = false;
+  private readonly retryArenaMusicOnGesture = () => {
+    if (!this.musicHowl || this.muted || this.musicDisabled || this.arenaMusicActuallyPlaying) return;
+    // A blocked HTMLAudio play can leave Howler's playing() optimistically true.
+    // Stop that attempt before retrying inside the browser's user activation.
+    this.musicHowl.stop();
+    this.arenaMusicPlayPending = true;
+    this.musicHowl.play();
+  };
+
+  private armArenaGesture(): void {
+    if (this.arenaGestureArmed || typeof window === 'undefined') return;
+    this.arenaGestureArmed = true;
+    for (const event of ['keydown', 'pointerdown', 'touchstart']) {
+      window.addEventListener(event, this.retryArenaMusicOnGesture, { capture: true });
+    }
+  }
+
+  private disarmArenaGesture(): void {
+    if (!this.arenaGestureArmed || typeof window === 'undefined') return;
+    this.arenaGestureArmed = false;
+    for (const event of ['keydown', 'pointerdown', 'touchstart']) {
+      window.removeEventListener(event, this.retryArenaMusicOnGesture, { capture: true });
+    }
+  }
+
+  private bindArenaHowl(howl: Howl): void {
+    howl.on('play', () => {
+      if (this.musicHowl !== howl) return;
+      this.arenaMusicActuallyPlaying = true;
+      this.arenaMusicPlayPending = false;
+      this.disarmArenaGesture();
+    });
+    howl.on('stop', () => {
+      if (this.musicHowl !== howl) return;
+      this.arenaMusicActuallyPlaying = false;
+      this.arenaMusicPlayPending = false;
+    });
+    howl.on('playerror', () => {
+      if (this.musicHowl !== howl) return;
+      this.arenaMusicActuallyPlaying = false;
+      this.arenaMusicPlayPending = false;
+      this.armArenaGesture();
+    });
+  }
   // Dedupe concurrent preloads. musicHowl/musicThemeId are only set on the
   // `load` event, so without this track, two rapid preloadArena(same theme)
   // calls would both start a fresh Howl fetch. If the themeId differs, we
@@ -138,7 +185,11 @@ export class MusicManager {
       // Pause only mutes Howler globally — the arena Howl keeps running
       // silently. Calling play() again on an already-playing Howl starts
       // a second concurrent instance (offset doubling). Guard with playing().
-      if (!this.musicHowl.playing()) this.musicHowl.play();
+      if (!this.arenaMusicActuallyPlaying && !this.arenaMusicPlayPending) {
+        this.arenaMusicPlayPending = true;
+        this.armArenaGesture();
+        this.musicHowl.play();
+      }
       return;
     }
     this.stopMusic();
@@ -150,7 +201,10 @@ export class MusicManager {
     const mp3 = getArenaPack(themeId)?.musicFile;
     if (!mp3) { console.warn(`[audio] No musicFile for arena '${themeId}'`); return; }
     this.musicHowl = new Howl({ src: [AUDIO_BASE + mp3], volume: ARENA_BASE_VOLUME * this.musicVolumeScalar, loop: true, html5: true });
+    this.bindArenaHowl(this.musicHowl);
     this.musicThemeId = themeId;
+    this.arenaMusicPlayPending = true;
+    this.armArenaGesture();
     this.musicHowl.play();
   }
 
@@ -210,6 +264,7 @@ export class MusicManager {
           resolve();
         },
       });
+      this.bindArenaHowl(howl);
       this.inFlightPreloadHowl = howl;
       howl.load();
     });
@@ -225,12 +280,16 @@ export class MusicManager {
   }
 
   stopMusic(): void {
+    this.disarmArenaGesture();
+    this.arenaMusicActuallyPlaying = false;
+    this.arenaMusicPlayPending = false;
     if (this.musicHowl) {
       this.musicHowl.stop();
     }
   }
 
   destroy(): void {
+    this.disarmArenaGesture();
     if (this.menuMusicHowl) {
       this.menuMusicHowl.unload();
       this.menuMusicHowl = null;
