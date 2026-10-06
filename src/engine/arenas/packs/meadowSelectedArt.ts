@@ -189,7 +189,11 @@ export function drawMeadowMushroom(c: Ctx2D, x: number, y: number): void {
 }
 
 export function drawMeadowPlatform(c: Ctx2D, platform: Platform, isGround: boolean): void {
-  const q = palette, { x, y, width: w, height: h } = platform;
+  const q = palette, { y, height: h } = platform;
+  // Extend the visual ground beyond both viewport edges. Collision geometry
+  // stays at 0..CANVAS_WIDTH; only the painted cap and soil overscan.
+  const x = isGround ? platform.x - 20 : platform.x;
+  const w = isGround ? platform.width + 40 : platform.width;
   c.save(); c.lineJoin = 'round'; c.lineCap = 'round'; c.strokeStyle = q.ink; c.lineWidth = q.width;
   if (platform.style === 'stump') {
     c.fillStyle = q.earth; c.beginPath(); c.moveTo(x, y); c.lineTo(x + w, y);
@@ -257,7 +261,8 @@ export function drawMeadowPlatform(c: Ctx2D, platform: Platform, isGround: boole
 export function drawMeadowPlatformOverlay(c: Ctx2D, platform: Platform, isGround: boolean): void {
   if (platform.style === 'stump') return;
   c.save(); c.beginPath();
-  c.rect(platform.x, platform.y + 4, platform.width, platform.height - 4);
+  c.rect(isGround ? platform.x - 20 : platform.x, platform.y + 4,
+    isGround ? platform.width + 40 : platform.width, platform.height - 4);
   c.clip();
   drawMeadowPlatform(c, platform, isGround);
   c.restore();

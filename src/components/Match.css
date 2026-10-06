@@ -47,8 +47,8 @@
   pointer-events: none;
 }
 
-/* Foreground night-tint: multiply preserves sprite color while darkening,
-   and the blend mode triggers Chromium layer promotion of the fg canvas. */
+/* Legacy foreground tint element is kept for the worker canvas contract.
+   AmbientPipeline now tints the painted foreground pixels in-canvas. */
 .fg-night-tint {
   position: absolute;
   top: 0;

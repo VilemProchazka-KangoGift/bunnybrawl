@@ -13,11 +13,9 @@ import type { Ctx2D } from '../types';
 // screen-space, post-sprite-cache. Never bake into a sprite cache.
 //
 // Two darkening paths picked by the renderer at construction:
-//   - DOM cross-fade (bgNightCanvas + fgNightTint wired): composite() is a
-//     no-op; getBgNightOpacity() + getFgTintOpacity() drive stacked DOM
-//     layers via style.opacity. Browser compositor blends them for ~free.
-//   - Source-over tint fallback (lobby, tests): composite() does one fillRect
-//     on the FG ctx. Simpler but pays full-canvas pixel cost per frame.
+//   - DOM background cross-fade: composite() tints painted FG pixels with
+//     source-atop, leaving the already-darkened BG untouched.
+//   - Source-over fallback (lobby, tests): composite() tints the full FG ctx.
 
 import type { ThemeConfig } from '../themes/types';
 import { isLightingEnabled } from './index';
@@ -39,15 +37,6 @@ const BG_NIGHT_BAKE_RGBA =
  *  values delay the night tint, larger values approach midnight earlier. */
 const TINT_GAIN = 0.7;
 
-/** Below this bg-night opacity, the fg multiply layer stays silent. 0.55
- *  corresponds to dayPhase ≈ 0.32 (post-sunset, well past the 0.16–0.30
- *  afterglow window). The threshold protects the warm sunset redshift —
- *  multiply on a cool-blue layer crushes red/orange channels otherwise. */
-const FG_TINT_DUSK_THRESHOLD = 0.55;
-
-/** fg-tint peak multiplier — applied after the dusk threshold ramps in. */
-const FG_TINT_PEAK_MUL = 0.7;
-
 export class AmbientPipeline {
   private width: number;
   private height: number;
@@ -55,8 +44,7 @@ export class AmbientPipeline {
   /** Tint alpha for this frame, set by beginFrame, consumed by composite. */
   private tintAlpha = 0;
 
-  /** Renderer toggles this when DOM darkening layers are wired — flips
-   *  composite() to no-op and the CSS path takes over. */
+  /** Renderer toggles this when the background has its own DOM night layer. */
   private hasDomDarkening = false;
 
   /** Reused scratch buffer for themeToAmbient — avoids per-frame allocation. */
@@ -86,13 +74,14 @@ export class AmbientPipeline {
     this.tintAlpha = Number.isFinite(raw) ? raw : 0;
   }
 
-  /** Source-over fallback path (no DOM darkening layers wired). */
+  /** Tint only foreground pixels when the background has its own night canvas.
+   *  Source-atop preserves alpha, so transparent foreground areas leave the
+   *  already-darkened background untouched. */
   composite(ctx: Ctx2D | OffscreenCanvasRenderingContext2D): void {
     if (!this.isEnabled()) return;
-    if (this.hasDomDarkening) return;
     if (this.tintAlpha < 0.01) return;
     ctx.save();
-    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalCompositeOperation = this.hasDomDarkening ? 'source-atop' : 'source-over';
     ctx.fillStyle = `rgba(${TINT_COLOR.r},${TINT_COLOR.g},${TINT_COLOR.b},${this.tintAlpha})`;
     ctx.fillRect(0, 0, this.width, this.height);
     ctx.restore();
@@ -103,12 +92,6 @@ export class AmbientPipeline {
   getBgNightOpacity(): number {
     if (!this.isEnabled()) return 0;
     return Math.min(1, this.tintAlpha / MAX_TINT_ALPHA);
-  }
-
-  /** Map bg-night opacity to fg-tint multiply opacity with a dusk-protect ramp. */
-  getFgTintOpacity(bgNightOpacity: number): number {
-    const t = (bgNightOpacity - FG_TINT_DUSK_THRESHOLD) / (1 - FG_TINT_DUSK_THRESHOLD);
-    return Math.max(0, Math.min(1, t)) * FG_TINT_PEAK_MUL;
   }
 
   /** Color string the renderer paints over the day-bg snapshot to bake the

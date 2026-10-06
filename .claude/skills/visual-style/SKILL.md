@@ -47,6 +47,7 @@ Check characters against each major background zone they cross: open sky, hills 
 - A cloud is a silhouette, not a stack of equal circles. Elongated, irregular forms with restrained underside detail suit the storybook props. Compare cloud shape separately from land shape, then review the combination. Preserve slow cloud drift and wrapping when integrating a static mockup into the game.
 - Treat a large edge canopy or scenic landmark as a possible obstruction. A woodland frame looked attractive in isolation but crowded Meadow's outer platforms, so it was dropped. Leave quiet space wherever players jump or the HUD sits.
 - Compare full production-renderer scenes at fixed player positions and day/night phases. Keep the selected mockup and the old scene available together; after integration, capture the real game again. A static mockup does not prove animated clouds or night compositing work in production.
+- At night, compare props baked into the background with live foreground props and characters. Tint painted foreground pixels with the same ambient color and alpha as the background night variant. A full-screen DOM blend can double-tint the background while leaving foreground props too bright. Keep transparency clear so foreground bushes still hide characters without a tinted rectangle.
 
 Meadow's [background comparison gallery](../../../docs/mockups/meadow-backgrounds/README.md) records the alternatives, height studies, and production result. Its height variants are a useful example of changing composition without moving gameplay geometry or modifying character art. The valley and cloud shapes live in [`meadowBackdrop.ts`](../../../src/engine/arenas/packs/meadowBackdrop.ts); Meadow's cloud configuration supplies starting positions to the existing animated cloud system.
 
@@ -61,6 +62,8 @@ Meadow's [background comparison gallery](../../../docs/mockups/meadow-background
 | Trees and secondary foliage | A grounded trunk with connected, irregular foliage; tapered grass and ferns; vines that hang visibly from platform edges. Keep motion and player-parting behavior. |
 | Small wildlife | Readable silhouettes and limited ink detail at match scale; keep their existing movement and avoidance behavior. |
 | Platforms and stumps | A visible top cap, warm front face, darker side face, inked edge, and enough irregularity to feel organic. Preserve the fake 3D depth. |
+
+When a ground platform reaches the viewport boundary, extend its drawing beyond both screen edges so its cap and soil do not expose vertical endpoints. Keep collision bounds and playable top unchanged, and extend any foreground body-cover clip by the same amount.
 
 The three bush styles coexist in Meadow. Their current placement and drawing live in [`meadowSelectedArt.ts`](../../../src/engine/arenas/packs/meadowSelectedArt.ts), while the trees, secondary foliage, and small wildlife live in [`meadowStorybookDetails.ts`](../../../src/engine/arenas/packs/meadowStorybookDetails.ts), with placement in [`meadow.ts`](../../../src/engine/arenas/packs/meadow.ts). Background bushes sit behind players; opaque foreground bushes draw over them. Platform front-face overlays also draw after players, preserving the sense of moving behind the terrain. Art changes must preserve the collision plane and these layer relationships.
 

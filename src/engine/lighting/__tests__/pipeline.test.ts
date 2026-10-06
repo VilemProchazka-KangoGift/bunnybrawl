@@ -126,13 +126,14 @@ describe('AmbientPipeline (L1 minimal source-over tint)', () => {
     expect(fills[0].h).toBe(600);
   });
 
-  it('setHasDomDarkening(true) makes composite a no-op even at midnight', () => {
+  it('setHasDomDarkening(true) tints only painted foreground pixels', () => {
     const p = new AmbientPipeline(1280, 720);
     p.setHasDomDarkening(true);
     p.beginFrame(mockTheme(), 0.5);
     const { ctx, fills } = makeCtx();
     p.composite(ctx);
-    expect(fills).toHaveLength(0);
+    expect(fills).toHaveLength(1);
+    expect(fills[0].gco).toBe('source-atop');
   });
 
   it('getBgNightOpacity is 0 when lighting is off, regardless of dayPhase', () => {

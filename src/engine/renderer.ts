@@ -683,7 +683,9 @@ export class Renderer implements IRenderer {
     // writes short-circuit on equal values — no DOM writes after the initial
     // settle.
     const intensity = this.lighting.ambient.getBgNightOpacity();
-    const fgIntensity = this.lighting.ambient.getFgTintOpacity(intensity);
+    // Foreground pixels are tinted in-canvas with source-atop. Keep the old
+    // DOM layer transparent; a full-screen blend also re-tints the background.
+    const fgIntensity = 0;
     if (this._nightOpacityCallback) {
       // Worker path: forward to main; quantize here so the callback fires only
       // on real change.
@@ -1506,17 +1508,14 @@ export class Renderer implements IRenderer {
 
       perfTrace.end('render.fg-nature', fgStart);
 
-      // Transient additive light flashes (spawn / stomp). Drawn here on the
-      // fg ctx with `'lighter'` blend so they punch through the entire scene
-      // regardless of dayPhase — the lightCanvas opacity gate would otherwise
-      // hide them at noon.
-      this._drawLightBursts(ctx);
-
-      // Lighting composite — multiplies the light buffer onto the fg ctx.
+      // Tint only painted foreground pixels. The background has a separately
+      // tinted night canvas, so transparent foreground pixels must stay clear.
       // Sits inside the hitstop/screen-shake transform so lights ride the shake.
       if (this.lighting.isEnabled()) {
         this.lighting.ambient.composite(ctx);
       }
+      // Transient flashes stay bright through the ambient tint.
+      this._drawLightBursts(ctx);
       // L2 emitter composite — writes to lightCanvas. Skipped silently
       // when not wired (lobby/tests stay on the source-over ambient fallback only).
       this._compositeEmitters();
