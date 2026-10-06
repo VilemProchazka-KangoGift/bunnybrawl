@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   SHARED_ACTION_IDS, getSharedAction, getActionPool, pickIdleAction, getIdleAction,
-  clearIdleActionCache,
+  clearIdleActionCache, tickIdleStateMachine,
 } from '../idleActions';
 import { registerCharacter } from '../../characters/registry';
 import { registerBuiltinCharacters } from '../../characters/builtin';
@@ -111,6 +111,30 @@ describe('idleActions', () => {
   it('getIdleAction returns null for invalid index', () => {
     expect(getIdleAction('Bunny', -1)).toBeNull();
     expect(getIdleAction('Bunny', 99)).toBeNull();
+  });
+
+  it('keeps a short exit cue only when an idle action is interrupted by running', () => {
+    registerCharacter({
+      name: 'TestSitExit', emoji: '!', color: '#fff', darkColor: '#888', lightColor: '#fff',
+      customEyes: false,
+      idleActions: {
+        weights: { headBob: 0, headTilt: 0, headShake: 0, littleHop: 0, stretch: 0, lookAround: 0 },
+        custom: [{ id: 'sit', duration: 2, exitDuration: .24, apply: () => {} }],
+      },
+      drawSprite: () => {}, drawGib: () => {}, splatShape: 'circle', gibs: [],
+      bodyEllipse: () => ({ cx: 0, cy: 0, rx: 1, ry: 1 }),
+    } as Parameters<typeof registerCharacter>[0]);
+    clearIdleActionCache();
+    const p = {
+      state: 'run' as const, character: { name: 'TestSitExit' } as Parameters<typeof tickIdleStateMachine>[0]['character'],
+      idleAction: 0, idleActionTimer: 1, idleActionDuration: 2,
+    };
+    tickIdleStateMachine(p, .03);
+    expect(p).toMatchObject({ idleAction: 0, idleActionDuration: -.24, idleActionTimer: .24 });
+    tickIdleStateMachine(p, .12);
+    expect(p.idleActionTimer).toBeCloseTo(.12);
+    tickIdleStateMachine(p, .12);
+    expect(p).toMatchObject({ idleAction: -1, idleActionDuration: 0, idleActionTimer: 0 });
   });
 });
 

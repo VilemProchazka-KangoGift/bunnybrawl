@@ -13,6 +13,8 @@ export interface IdleActionPlayerView {
 export interface IdleAction {
   id: string;
   duration: number;
+  /** Optional short animation when movement interrupts this idle action. */
+  exitDuration?: number;
   /** Optional per-action weight. Used for custom actions in PackIdleActionsConfig.custom; ignored for shared actions (overridden via weights map). */
   weight?: number;
   /** Apply transform/effect for normalized t in [0, 1]. Called before the cached sprite is drawn. */
@@ -193,10 +195,28 @@ export type IdleStateMachineTarget = Pick<Player, 'state' | 'character' | 'idleA
 
 export function tickIdleStateMachine(p: IdleStateMachineTarget, dt: number, suppress = false): void {
   if (suppress || p.state !== 'idle') {
+    if (!suppress && p.state === 'run' && p.idleAction >= 0) {
+      const exitDuration = getIdleAction(p.character.name, p.idleAction)?.exitDuration;
+      if (exitDuration) {
+        if (p.idleActionDuration >= 0) {
+          p.idleActionDuration = -exitDuration;
+          p.idleActionTimer = exitDuration;
+          return;
+        }
+        p.idleActionTimer -= dt;
+        if (p.idleActionTimer > 0) return;
+      }
+    }
     p.idleAction = -1;
     p.idleActionTimer = 0;
     p.idleActionDuration = 0;
     return;
+  }
+  // A player who stops moving before the exit cue completes starts fresh idle timing.
+  if (p.idleActionDuration < 0) {
+    p.idleAction = -1;
+    p.idleActionTimer = 0;
+    p.idleActionDuration = 0;
   }
   // Seed first-action delay on the frame we (re-)enter idle.
   if (p.idleActionTimer === 0 && p.idleAction === -1 && p.idleActionDuration === 0) {

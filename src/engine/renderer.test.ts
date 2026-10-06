@@ -678,6 +678,17 @@ describe('Renderer — renderBloodDrips', () => {
 });
 
 describe('Renderer — bgNight bake on bg writes', () => {
+  it('uses the bg night cross-fade while keeping the old fg DOM tint transparent', () => {
+    const { canvas: bg } = makeCanvas();
+    const { canvas: bgNight } = makeCanvas();
+    const { canvas: fg } = makeCanvas();
+    const fgTint = document.createElement('div');
+    const renderer = new Renderer({ bgCanvas: bg, fgCanvas: fg, theme: makeTheme(), bgNightCanvas: bgNight, fgNightTint: fgTint });
+    renderer.renderFrame(makeState({ dayPhase: 0.5 }), makeArena(), []);
+    expect(Number(bgNight.style.opacity)).toBeGreaterThan(0);
+    expect(fgTint.style.opacity).toBe('0');
+  });
+
   it('bakeGibs marks bgNight dirty without baking eagerly', () => {
     const { canvas: bg } = makeCanvas();
     const { canvas: bgNight, ctx: bgNightCtx } = makeCanvas();

@@ -1,6 +1,7 @@
 # Logs
 logs
 *.log
+__pycache__/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -18,7 +19,6 @@ dist-ssr
 # Playwright MCP / E2E output
 .playwright-mcp/
 src/.playwright-mcp/
-hedgehog-*.png
 src/fullscreen-check.png
 
 # Editor directories and files

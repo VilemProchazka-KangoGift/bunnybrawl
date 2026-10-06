@@ -40,10 +40,25 @@ initSimWorker(_search);
 safeStorage.remove('carrotroyale_outline_style');
 safeStorage.remove('carrotroyale_sab_demo');
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <CrashGuard>
-      <App />
-    </CrashGuard>
-  </StrictMode>,
-)
+function mountApp(): void {
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <CrashGuard>
+        <App />
+      </CrashGuard>
+    </StrictMode>,
+  )
+}
+
+if (new URLSearchParams(_search).get('pocketBunny') === '1') {
+  import('./engine/characters/prototypes/pocketBunnyRig')
+    .then(({ registerPocketBunnyRig }) => registerPocketBunnyRig())
+    .then(mountApp)
+    .catch((error: unknown) => {
+      console.error('Pocket Plush Bunny playtest failed to load', error)
+      const loading = document.getElementById('loading-screen')
+      if (loading) loading.textContent = 'Pocket Plush Bunny failed to load. Check the console and refresh.'
+    })
+} else {
+  mountApp()
+}

@@ -1,7 +1,7 @@
 import type { Player, PlayerState, Ctx2D } from '../types';
 import type { ThemeConfig } from '../themes/types';
 import type { EyebrowAnchor } from '../characters/types';
-import { FAT_SCALE, HITSTOP_DURATION, MAX_WALK_SPEED, PLAYER_WIDTH, PLAYER_HEIGHT } from '../constants';
+import { ANIM_FRAME_DURATION, FAT_SCALE, HITSTOP_DURATION, MAX_WALK_SPEED, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CROUCH } from '../constants';
 import { hasCustomEyes, getSpriteRenderer, getCharacterPack, drawLegs } from '../characters';
 import { drawHighlightSpot } from '../spriteShading';
 import { getSlowDevice } from '../perfFlags';
@@ -243,7 +243,8 @@ export function drawPlayer(ctx: Ctx2D, player: Player, nearCarrot: boolean, them
   const squashScale = player.squashScale;
   const sideSquash = player.sideSquash;
   const hasSideSquash = sideSquash !== 1;
-  if (squashScale !== 1 || hasSideSquash) {
+  const authoredPose = !!getCharacterPack(character.name)?.resolvePose;
+  if (!authoredPose && (squashScale !== 1 || hasSideSquash)) {
     const ssX = (1 + (1 - squashScale) * 0.5) * (hasSideSquash ? sideSquash : 1);
     const ssY = squashScale * (hasSideSquash ? 1 + (1 - sideSquash) * 0.4 : 1); // taller when side-squashed
     ctx.translate(cx, cy);
@@ -275,10 +276,24 @@ export function drawPlayer(ctx: Ctx2D, player: Player, nearCarrot: boolean, them
   if (state === 'splat') {
     drawSplatCharacter(ctx, x, y, width, height, character.color, character.darkColor);
   } else {
-    const pivotY = cy - height / 2;
+    const sitExit = authoredPose && state === 'run' && player.idleActionDuration < 0
+      && !!getIdleAction(character.name, player.idleAction)?.exitDuration;
+    const movingWhileSeated = authoredPose && state === 'run' && squashScale <= SQUASH_ON_CROUCH + .05;
+    const pivotY = sitExit || movingWhileSeated ? cy : cy - height / 2;
     ctx.save();
     ctx.translate(cx, pivotY);
-    ctx.rotate(leanRad);
+    if (!authoredPose) {
+      ctx.rotate(leanRad);
+    } else if (sitExit) {
+      // Brief foot-anchored sway when an authored sitting action is interrupted.
+      const t = Math.max(0, Math.min(1, 1 - player.idleActionTimer / -player.idleActionDuration));
+      ctx.rotate(Math.sin(t * Math.PI * 3) * Math.sin(t * Math.PI) * 0.07);
+    } else if (movingWhileSeated) {
+      // A held crouch remains seated while moving; alternate the sway with the
+      // existing run clock without changing collision or movement speed.
+      const stride = player.animFrame + player.animTimer / ANIM_FRAME_DURATION;
+      ctx.rotate(Math.sin(stride * Math.PI) * .07);
+    }
     ctx.translate(-cx, -pivotY);
     drawCharacterSprite(ctx, x, y, width, height, character, state, animFrame, fastFalling, player.idleAction, player.idleActionTimer, player.idleActionDuration, player.squashScale, theme, player);
     ctx.restore();
@@ -387,28 +402,33 @@ function drawCharacterSprite(
   theme: ThemeConfig | undefined,
   player: Player,
 ): void {
-  const sqKey = Math.round(squashScale * 10);
+  const pack = getCharacterPack(char.name);
+  const idleT = idleActionDuration !== 0 ? 1 - idleActionTimer / Math.abs(idleActionDuration) : 0;
+  const poseIndex = pack?.resolvePose?.(state, animFrame, fastFalling, idleAction, idleT, squashScale) ?? 0;
+  const sqKey = pack?.resolvePose ? 0 : Math.round(squashScale * 10);
   // Helmet bit prevents bubble-helmet arenas (underwater, space_station) from
   // poisoning the cache: helmet is baked in at draw time, so a helmet-less
   // first render would otherwise be reused at the helmet variant.
   const helmetKey = theme?.bubbleHelmet ? 1 : 0;
-  // Packed bitfield: char(5) | state(3) | animFrame(4) | fastFalling(1) | sqKey(5) | helmet(1)
+  // Packed bitfield: char(5) | state(3) | animFrame(4) | fastFalling(1) | sqKey(5) | helmet(1) | pose(4)
   const cacheKey =
     (charIndex(char.name) & 0x1F) |
     (_stateIndex[state] << 5) |
     ((animFrame & 0xF) << 8) |
     ((fastFalling ? 1 : 0) << 12) |
     ((sqKey & 0x1F) << 13) |
-    (helmetKey << 18);
+    (helmetKey << 18) |
+    ((poseIndex & 0xF) << 19);
 
   // Idle action ctx transform — applied to main ctx, OUTSIDE the cached bitmap, so the
   // animated transform doesn't get baked into the (1-bit-keyed) sprite cache entry.
   // Resolved lazily so non-idle players (the common case) skip allocation + save/restore.
-  const idleAnimAction = (idleAction >= 0 && state !== 'run' && state !== 'airborne')
+  const idleAnimAction = (!pack?.resolvePose && idleAction >= 0 && state !== 'run' && state !== 'airborne')
     ? getIdleAction(char.name, idleAction)
     : null;
 
-  const pad = 10;
+  // Authored silhouettes (ears, horns, tails) extend beyond the 32px hitbox.
+  const pad = pack?.resolvePose ? 16 : 10;
   const cw = Math.ceil(w) + pad * 2;
   const ch = Math.ceil(h) + pad * 2;
 
@@ -429,9 +449,9 @@ function drawCharacterSprite(
   sctx.scale(s, s);
   sctx.translate(-x + pad, -y + pad);
 
-  _drawCharacterSpriteImpl(sctx, x, y, w, h, char, state, animFrame, fastFalling, idleAction, idleActionTimer, idleActionDuration, squashScale, theme);
+  _drawCharacterSpriteImpl(sctx, x, y, w, h, char, state, animFrame, fastFalling, idleAction, idleActionTimer, idleActionDuration, squashScale, theme, poseIndex);
 
-  applyOutlineToCache(cached, darken(char.color, OUTLINE_DARKEN));
+  if (!pack?.noOutline) applyOutlineToCache(cached, darken(char.color, OUTLINE_DARKEN));
 
   if (spriteCache.size > _spriteCacheCap) {
     const first = spriteCache.keys().next().value;
@@ -478,10 +498,10 @@ export function drawCharacterCore(
   charName: string, state: string, animFrame: number,
   squashScale: number,
   colors: { color: string; darkColor: string; lightColor: string },
-  isIdleAnim = false, idleT = -1,
+  isIdleAnim = false, idleT = -1, poseIndex = 0,
 ): ReturnType<typeof getCharacterPack> {
   const spriteRenderer = getSpriteRenderer(charName);
-  spriteRenderer(ctx, cx, yOff, w, h, state, animFrame, isIdleAnim, idleT >= 0 ? idleT : 0, colors);
+  spriteRenderer(ctx, cx, yOff, w, h, state, animFrame, isIdleAnim, idleT >= 0 ? idleT : 0, colors, poseIndex);
 
   const pack = getCharacterPack(charName);
   if (pack && !pack.noHighlight) {
@@ -509,18 +529,20 @@ function _drawCharacterSpriteImpl(
   idleAction: number, idleActionTimer: number, idleActionDuration: number,
   squashScale: number,
   theme: ThemeConfig | undefined,
+  poseIndex: number,
 ): void {
   const cx = x + w / 2;
   const isRunning = state === 'run';
-  const bounce = isRunning ? Math.sin(animFrame * Math.PI / 2) * 2 : 0;
+  const authoredPose = !!getCharacterPack(char.name)?.resolvePose;
+  const bounce = isRunning && !authoredPose ? Math.sin(animFrame * Math.PI / 2) * 2 : 0;
   const yOff = y - bounce;
 
   // Squash/stretch for fast fall (part of cache key, so safe to bake in)
-  const scaleX = fastFalling ? 0.85 : 1;
-  const scaleY = fastFalling ? 1.15 : 1;
+  const scaleX = fastFalling && !authoredPose ? 0.85 : 1;
+  const scaleY = fastFalling && !authoredPose ? 1.15 : 1;
 
   ctx.save();
-  if (fastFalling) {
+  if (fastFalling && !authoredPose) {
     ctx.translate(cx, yOff + h / 2);
     ctx.scale(scaleX, scaleY);
     ctx.translate(-cx, -(yOff + h / 2));
@@ -532,7 +554,7 @@ function _drawCharacterSpriteImpl(
   const idleT = idleActionDuration > 0 ? 1 - (idleActionTimer / idleActionDuration) : 0;
   const colors = { color: char.color, darkColor: char.darkColor, lightColor: char.lightColor };
 
-  drawCharacterCore(ctx, cx, yOff, w, h, char.name, state, animFrame, squashScale, colors, isIdleAnimFlag, idleT);
+  drawCharacterCore(ctx, cx, yOff, w, h, char.name, state, animFrame, squashScale, colors, isIdleAnimFlag, idleT, poseIndex);
 
   // Bubble helmet (enabled per-arena via bubbleHelmet flag)
   if (theme?.bubbleHelmet) {
@@ -690,6 +712,9 @@ export function drawExpression(ctx: Ctx2D, player: Player, frameTime: number): v
 
   if (expression === 'angry') {
     const pack = getCharacterPack(player.character.name);
+    // Whole-body authored poses carry their own face. The generic overlay
+    // uses fixed coordinates and drifts across the Bunny's changing head.
+    if (pack?.authoredAngryBrows) return;
     const anchor = pack?.eyebrowAnchor ?? DEFAULT_EYEBROW_ANCHOR;
     ctx.strokeStyle = 'rgba(200, 40, 40, 0.8)';
     ctx.lineWidth = 2;

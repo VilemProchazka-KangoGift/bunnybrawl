@@ -51,6 +51,22 @@ const ctxScope = self as DedicatedWorkerGlobalScope;
 
 let renderer: Renderer | null = null;
 let stopped = false;
+let initPending = false;
+const pendingDuringInit: HostToWorkerMsg[] = [];
+
+function finishInit(ready: boolean): void {
+  initPending = false;
+  if (!ready) {
+    pendingDuringInit.length = 0;
+    return;
+  }
+  // The main proxy can post arena setup before a playtest image has decoded.
+  // Replay those messages in order after the renderer and pack are ready.
+  for (const queued of pendingDuringInit.splice(0)) {
+    if (stopped) break;
+    ctxScope.dispatchEvent(new MessageEvent<HostToWorkerMsg>('message', { data: queued }));
+  }
+}
 /** Tracks `mods.mirrorArena` for the lifetime of the match. Mirror is a
  *  match setting (no mid-match change), so we cache it once at init and
  *  re-apply `mirrorArena()` to any arena resolved from id. Without this,
@@ -85,9 +101,17 @@ const particlePool: Particle[] = [];
 const colorCache = new ColorCache();
 let particlePoolLen = 0;
 
-function bootstrap(): void {
+async function bootstrap(pocketBunny: boolean, classicCharacters: boolean): Promise<void> {
   registerBuiltinArenas();
   registerBuiltinCharacters();
+  if (pocketBunny) {
+    const { registerPocketBunnyRig } = await import('../characters/prototypes/pocketBunnyRig');
+    await registerPocketBunnyRig();
+  }
+  if (!classicCharacters) {
+    const { registerPlayablePlushRoster } = await import('../characters/plush/playableRoster');
+    await registerPlayablePlushRoster();
+  }
 }
 
 function postReady(): void {
@@ -210,9 +234,16 @@ function ensureCosmeticSystemsFor(arena: Arena, theme: ThemeConfig, state: Match
  *  user-visible problem; bundle size is invisible after first load. */
 import * as engineBindings from './engineWorkerInit';
 
-ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
+ctxScope.addEventListener('message', async (e: MessageEvent<HostToWorkerMsg>) => {
   if (stopped) return;
   const msg = e.data;
+  if (initPending) {
+    // Per-frame payloads are superseded by the next frame after startup.
+    if (msg.type !== 'host:renderFrame' && msg.type !== 'host:engineInputBatch') {
+      pendingDuringInit.push(msg);
+    }
+    return;
+  }
   const handlerStart = msg.type === 'host:renderFrame' ? performance.now() : 0;
 
   // Engine-mode messages are async (lazy import on first init). All other
@@ -220,8 +251,9 @@ ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
   // first; if it's not an engine message, fall through to the sync switch.
   if (msg.type === 'host:initEngine') {
     _mirror = msg.mirrored;
+    initPending = true;
     try {
-      engineBindings.initEngine(msg);
+      await engineBindings.initEngine(msg);
       // Sim-in-worker hosts its own Renderer inside engineWorkerInit. Route
       // the renderer-only IRenderer messages (warmSpriteCache, renderBackground,
       // warmHudFonts, setRenderScale, setTheme, setBotNavDebugStates, …)
@@ -231,7 +263,9 @@ ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
       const engineRenderer = engineBindings.getEngineRenderer();
       if (engineRenderer) renderer = engineRenderer;
       postReady();
+      finishInit(true);
     } catch (err) {
+      finishInit(false);
       postError(err instanceof Error ? (err.stack ?? err.message) : String(err));
     }
     return;
@@ -258,7 +292,8 @@ ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
   try {
     switch (msg.type) {
       case 'host:init': {
-        bootstrap();
+        initPending = true;
+        await bootstrap(msg.pocketBunny ?? false, msg.classicCharacters ?? false);
         if (msg.perfEnabled) {
           debugFlags.perfEnabled = true;
           _perfEnabled = true;
@@ -296,6 +331,7 @@ ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
         renderer.setTimeLimit(msg.timeLimit);
         if (msg.particlesSab) particleSabViews = makeViews(msg.particlesSab);
         postReady();
+        finishInit(true);
         return;
       }
       case 'host:stop': {
@@ -488,6 +524,7 @@ ctxScope.addEventListener('message', (e: MessageEvent<HostToWorkerMsg>) => {
       }
     }
   } catch (err) {
+    if (initPending) finishInit(false);
     postError(err instanceof Error ? (err.stack ?? err.message) : String(err));
   }
 });

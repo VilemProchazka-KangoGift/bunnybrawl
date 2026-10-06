@@ -227,6 +227,8 @@ export class RendererProxy implements IRenderer {
 
       const init: HostInitMsg = {
         type: 'host:init',
+        classicCharacters: new URLSearchParams(window.location.search).get('classicCharacters') === '1',
+        pocketBunny: new URLSearchParams(window.location.search).get('pocketBunny') === '1',
         bgCanvas: bgOff,
         fgCanvas: fgOff,
         hudCanvas: hudOff,

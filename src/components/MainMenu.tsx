@@ -19,7 +19,7 @@ import './MainMenu.css';
 const OnlineModal = lazy(() => import('./OnlineModal')
   .then((module) => ({ default: module.OnlineModal })));
 
-export function MainMenu() {
+export function MainMenu({ preloadLobby }: { preloadLobby?: (signal: AbortSignal) => void }) {
   const { t, i18n } = useTranslation();
   const { setScreen, matchSettings, setMatchSettings } = useGameStore();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -30,6 +30,23 @@ export function MainMenu() {
   const [onlineOpen, setOnlineOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [devOpen, setDevOpen] = useState(false);
+  const preloadControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    if (onlineOpen) {
+      preloadControllerRef.current?.abort();
+      preloadControllerRef.current = null;
+      return;
+    }
+    if (!preloadLobby) return;
+    // Give an immediate menu action priority over speculative atlas decoding.
+    const timer = window.setTimeout(() => {
+      const controller = new AbortController();
+      preloadControllerRef.current = controller;
+      preloadLobby(controller.signal);
+    }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [preloadLobby, onlineOpen]);
   const settingsLongPressTimer = useRef<number | null>(null);
   const settingsLongPressFired = useRef(false);
 
