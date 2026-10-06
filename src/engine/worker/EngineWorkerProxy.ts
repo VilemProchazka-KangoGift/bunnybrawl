@@ -226,6 +226,7 @@ export class EngineWorkerProxy {
 
       const init: HostInitEngineMsg = {
         type: 'host:initEngine',
+        pocketBunny: new URLSearchParams(window.location.search).get('pocketBunny') === '1',
         bgCanvas: bgOff,
         fgCanvas: fgOff,
         hudCanvas: hudOff,

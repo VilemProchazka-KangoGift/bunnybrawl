@@ -11,7 +11,7 @@ import { getReactiveKind } from '../../../src/engine/gameLoop/cosmetics/reactive
 import type { PlayerState } from '../../../src/engine/types';
 import { registerPrototypePacks, STUDY_CHARACTERS, type PrototypeStyle } from './prototypePacks';
 import { registerRasterConceptPacks, type RasterStyle } from './rasterConceptPacks';
-import { registerPocketBunnyRig } from './pocketBunnyRig';
+import { registerPocketBunnyRig } from '../../../src/engine/characters/prototypes/pocketBunnyRig';
 
 const query = new URLSearchParams(location.search);
 const style = query.get('style') ?? 'current';

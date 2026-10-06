@@ -1,6 +1,6 @@
-import type { CharacterPack } from '../../../src/engine/characters/types';
-import type { Ctx2D } from '../../../src/engine/types';
-import { getCharacterPack, registerCharacter } from '../../../src/engine/characters/registry';
+import type { CharacterPack } from '../types';
+import type { Ctx2D } from '../../types';
+import { getCharacterPack, registerCharacter } from '../registry';
 
 // Prototype-only cutout rig from the Pocket Plush concept sheet. All coordinates
 // are local to Bunny's source crop; the game renderer caches the four-frame poses.
@@ -15,7 +15,7 @@ const SHAPES = {
 } as const;
 type Part = keyof typeof SHAPES;
 
-function path(ctx: CanvasRenderingContext2D, part: Part): void {
+function path(ctx: OffscreenCanvasRenderingContext2D, part: Part): void {
   const points = SHAPES[part];
   ctx.beginPath();
   ctx.moveTo(points[0][0], points[0][1]);
@@ -23,10 +23,8 @@ function path(ctx: CanvasRenderingContext2D, part: Part): void {
   ctx.closePath();
 }
 
-function layer(image: HTMLImageElement, keep: Part | null): HTMLCanvasElement {
-  const canvas = document.createElement('canvas');
-  canvas.width = SIZE.w * RESOLUTION;
-  canvas.height = SIZE.h * RESOLUTION;
+function layer(image: ImageBitmap, keep: Part | null): OffscreenCanvas {
+  const canvas = new OffscreenCanvas(SIZE.w * RESOLUTION, SIZE.h * RESOLUTION);
   const ctx = canvas.getContext('2d')!;
   ctx.drawImage(image, SOURCE.x, SOURCE.y, SOURCE.w, SOURCE.h, 0, 0, canvas.width, canvas.height);
   ctx.save();
@@ -46,7 +44,7 @@ function layer(image: HTMLImageElement, keep: Part | null): HTMLCanvasElement {
   return canvas;
 }
 
-function drawPart(ctx: Ctx2D, bitmap: HTMLCanvasElement, dx: number, dy: number,
+function drawPart(ctx: Ctx2D, bitmap: OffscreenCanvas, dx: number, dy: number,
   pivotX: number, pivotY: number, angle: number): void {
   const x = pivotX * SIZE.w / SOURCE.w;
   const y = pivotY * SIZE.h / SOURCE.h;
@@ -60,14 +58,16 @@ function drawPart(ctx: Ctx2D, bitmap: HTMLCanvasElement, dx: number, dy: number,
 export async function registerPocketBunnyRig(): Promise<void> {
   const original = getCharacterPack('Bunny');
   if (!original) throw new Error('Missing Bunny pack');
-  const image = new Image();
-  image.src = new URL('./v2/pocket-plush-concept.png', import.meta.url).href;
-  await image.decode();
+  const source = new URL('../../../../docs/mockups/character-styles/v2/pocket-plush-concept.png', import.meta.url);
+  const response = await fetch(source);
+  if (!response.ok) throw new Error(`Pocket Plush art failed to load: HTTP ${response.status}`);
+  const image = await createImageBitmap(await response.blob());
   const body = layer(image, null);
   const leftEar = layer(image, 'leftEar');
   const rightEar = layer(image, 'rightEar');
   const leftFoot = layer(image, 'leftFoot');
   const rightFoot = layer(image, 'rightFoot');
+  image.close();
   const run = [-1, 0, 1, 0];
   const pack: CharacterPack = {
     ...original,
