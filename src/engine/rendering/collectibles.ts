@@ -137,45 +137,81 @@ export function drawSpringMushroom(ctx: Ctx2D, spring: SpringMushroom, theme: Th
   ctx.globalAlpha = fadeAlpha;
   ctx.translate(x, y);
   ctx.scale(growScale, growScale);
-  ctx.translate(-x, -y);
+  const ink = '#493d42';
+  const capY = -13 + squash * 0.75;
+  const halfCap = 19 + Math.max(0, squash) * 0.55;
+  const stemTop = capY + 1;
 
-  // Stem
-  ctx.fillStyle = '#F5F0E0';
-  ctx.fillRect(x - 6, y - s * 0.7 + squash, 12, s * 0.7 - squash);
-
-  // Spring coils on stem — batched into one path with sub-paths.
-  ctx.strokeStyle = '#AAA';
+  // A flared foot and folded stem make the compression legible without a
+  // metal spring. Keep the foot on the platform as the cap moves.
+  ctx.fillStyle = '#718553';
+  ctx.beginPath();
+  ctx.ellipse(0, -1, 10, 2.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#e9d9b6';
+  ctx.strokeStyle = ink;
   ctx.lineWidth = 2;
   ctx.beginPath();
-  for (let i = 0; i < 3; i++) {
-    const cy = y - 4 - i * 6;
-    ctx.moveTo(x - 5, cy);
-    ctx.lineTo(x + 5, cy - 3);
-  }
+  ctx.moveTo(-5, stemTop);
+  ctx.bezierCurveTo(-6, -7, -5, -3, -8, 0);
+  ctx.quadraticCurveTo(0, 2, 8, 0);
+  ctx.bezierCurveTo(5, -3, 6, -7, 5, stemTop);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.strokeStyle = '#b69d8c';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(-4.5, -5);
+  ctx.quadraticCurveTo(0, -3, 4.5, -5);
+  ctx.moveTo(-4.5, -8);
+  ctx.quadraticCurveTo(0, -6, 4.5, -8);
   ctx.stroke();
 
-  // Cap
-  ctx.fillStyle = '#2ECC40';
+  // Pale underside stays visible beneath the broad, slightly uneven cap.
+  ctx.fillStyle = '#f3cbb0';
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = 1.7;
   ctx.beginPath();
-  ctx.ellipse(x, y - s * 0.7 + squash, s * 0.7, s * 0.4 - squash * 0.5, 0, Math.PI, 0);
+  ctx.ellipse(0, capY, halfCap, 4.5, 0, 0, Math.PI * 2);
   ctx.fill();
+  ctx.stroke();
+  ctx.strokeStyle = '#a67b77';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(-11, capY + 1);
+  ctx.lineTo(-6, capY + 3);
+  ctx.moveTo(11, capY + 1);
+  ctx.lineTo(6, capY + 3);
+  ctx.stroke();
 
-  // Cap highlight
-  ctx.fillStyle = '#5DDE70';
+  ctx.fillStyle = '#d46f82';
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = 2.2;
   ctx.beginPath();
-  ctx.ellipse(x, y - s * 0.8 + squash, s * 0.4, s * 0.15, 0, Math.PI, 0);
+  ctx.moveTo(-halfCap, capY);
+  ctx.bezierCurveTo(-halfCap + 1, capY - 8, -13, capY - 16, -5, capY - 16);
+  ctx.bezierCurveTo(-1, capY - 19, 5, capY - 17, 9, capY - 15);
+  ctx.bezierCurveTo(16, capY - 12, halfCap - 1, capY - 6, halfCap, capY);
+  ctx.quadraticCurveTo(9, capY + 2, 0, capY + 1);
+  ctx.quadraticCurveTo(-11, capY + 2, -halfCap, capY);
+  ctx.closePath();
   ctx.fill();
+  ctx.stroke();
 
-  // Spots
-  ctx.fillStyle = '#FFF';
+  // One broad color plane and three uneven spots survive match-scale viewing.
+  ctx.fillStyle = '#efa2a0';
   ctx.beginPath();
-  ctx.arc(x - 6, y - s * 0.85 + squash, 3.5, 0, Math.PI * 2);
+  ctx.moveTo(-13, capY - 6);
+  ctx.quadraticCurveTo(-10, capY - 14, -4, capY - 14);
+  ctx.quadraticCurveTo(-9, capY - 10, -10, capY - 5);
+  ctx.closePath();
   ctx.fill();
+  ctx.fillStyle = '#f5dfa4';
   ctx.beginPath();
-  ctx.arc(x + 6, y - s * 0.75 + squash, 3, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(x, y - s * 0.9 + squash, 2.5, 0, Math.PI * 2);
+  ctx.ellipse(-8, capY - 8, 3.2, 2.2, -0.35, 0, Math.PI * 2);
+  ctx.ellipse(2, capY - 11, 2.8, 2, 0.25, 0, Math.PI * 2);
+  ctx.ellipse(11, capY - 5, 2.5, 1.8, 0.3, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.restore();
