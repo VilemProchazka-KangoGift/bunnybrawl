@@ -2,13 +2,20 @@ import type { Ctx2D } from '../../../src/engine/types';
 
 type Point = readonly [number, number];
 
-export const VARIANTS = ['current', 'quiet-shore', 'glacial-basin', 'violet-inlet'] as const;
+export const VARIANTS = [
+  'current', 'quiet-shore', 'glacial-basin', 'violet-inlet',
+  'mirror-ice', 'fir-shore', 'rose-dawn', 'polar-gap',
+] as const;
 export type Variant = (typeof VARIANTS)[number];
 
 export const descriptions: Record<Exclude<Variant, 'current'>, string> = {
   'quiet-shore': 'A wide, level frozen lake and low rolling shore leave the most breathing room around players.',
   'glacial-basin': 'Asymmetric glacial walls make the lake feel enclosed while keeping the center jump lane open.',
   'violet-inlet': 'A winding inlet and violet distance add storybook atmosphere, with shoreline silhouettes limited to the edges.',
+  'mirror-ice': 'An uninterrupted blue ice sheet and broad glacier shoulders make the lake unmistakable.',
+  'fir-shore': 'A dark fir belt gives the lake a wooded sense of place while keeping the ice open.',
+  'rose-dawn': 'A warmer sunrise palette and blue ice test a gentler, less monochrome winter mood.',
+  'polar-gap': 'Tall ice cliffs frame a distant gap for the most dramatic, enclosed composition.',
 };
 
 export const skies: Record<Exclude<Variant, 'current'>, { offset: number; color: string }[]> = {
@@ -24,7 +31,32 @@ export const skies: Record<Exclude<Variant, 'current'>, { offset: number; color:
     { offset: 0, color: '#47547B' }, { offset: .42, color: '#858EBA' },
     { offset: .76, color: '#BFC1D3' }, { offset: 1, color: '#D9D8D8' },
   ],
+  'mirror-ice': [
+    { offset: 0, color: '#344E75' }, { offset: .43, color: '#688EAF' },
+    { offset: .78, color: '#B5CFD8' }, { offset: 1, color: '#D5E7E8' },
+  ],
+  'fir-shore': [
+    { offset: 0, color: '#445777' }, { offset: .43, color: '#7F9AAA' },
+    { offset: .78, color: '#B8CBC9' }, { offset: 1, color: '#DDE1D7' },
+  ],
+  'rose-dawn': [
+    { offset: 0, color: '#655978' }, { offset: .39, color: '#A98FA6' },
+    { offset: .75, color: '#DCC0BC' }, { offset: 1, color: '#E6D6D2' },
+  ],
+  'polar-gap': [
+    { offset: 0, color: '#334967' }, { offset: .43, color: '#6C8CA4' },
+    { offset: .78, color: '#B3CCD0' }, { offset: 1, color: '#D8E4E3' },
+  ],
 };
+
+function polygon(ctx: Ctx2D, color: string, points: readonly Point[]): void {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(points[0][0], points[0][1]);
+  for (const [x, y] of points.slice(1)) ctx.lineTo(x, y);
+  ctx.closePath();
+  ctx.fill();
+}
 
 function band(ctx: Ctx2D, color: string, points: readonly Point[]): void {
   ctx.fillStyle = color;
@@ -132,8 +164,58 @@ function violetInlet(ctx: Ctx2D): void {
   icePlane(ctx, [[-20, 648], [220, 625], [430, 616], [600, 588], [755, 575], [890, 552], [1080, 550], [1300, 569]], '#C4D0DA', 'rgba(113, 126, 159, 0.34)');
 }
 
+function mirrorIce(ctx: Ctx2D): void {
+  // Two broad glacier shoulders leave the upper middle open for jumping.
+  polygon(ctx, '#91B3C2', [[-20, 560], [-20, 405], [100, 420], [225, 339], [315, 395], [405, 365], [550, 510], [630, 560]]);
+  polygon(ctx, '#AAC8D0', [[120, 421], [225, 339], [315, 395], [249, 387], [200, 419]]);
+  polygon(ctx, '#799FB2', [[-20, 560], [145, 481], [290, 499], [410, 451], [630, 560]]);
+  polygon(ctx, '#9DBFCC', [[665, 560], [790, 453], [905, 382], [1040, 404], [1150, 346], [1300, 427], [1300, 560]]);
+  polygon(ctx, '#C0D8DC', [[902, 385], [1150, 346], [1300, 427], [1140, 389], [1046, 425]]);
+  polygon(ctx, '#779DB0', [[665, 560], [810, 495], [944, 506], [1130, 463], [1300, 520], [1300, 560]]);
+  band(ctx, '#6B97AD', [[-20, 548], [175, 525], [410, 546], [630, 533], [815, 548], [1055, 521], [1300, 551]]);
+  icePlane(ctx, [[-20, 542], [175, 537], [360, 548], [570, 541], [775, 548], [1000, 536], [1300, 547]], '#93CAD6', 'rgba(42, 120, 158, 0.42)');
+  polygon(ctx, 'rgba(224, 247, 248, 0.28)', [[110, 586], [510, 566], [683, 579], [280, 605]]);
+  polygon(ctx, 'rgba(238, 250, 249, 0.22)', [[745, 611], [1110, 571], [1240, 580], [905, 625]]);
+}
+
+function firShore(ctx: Ctx2D): void {
+  band(ctx, '#9EB5B7', [[-20, 420], [165, 380], [322, 425], [490, 367], [680, 418], [870, 373], [1030, 432], [1300, 391]]);
+  band(ctx, '#809EA5', [[-20, 495], [220, 448], [410, 480], [660, 437], [875, 486], [1065, 441], [1300, 475]]);
+  // The forest has one connected mass rather than a sawtooth of tiny trees.
+  band(ctx, '#607E82', [[-20, 549], [110, 513], [230, 535], [360, 500], [475, 527], [610, 510], [740, 532], [855, 501], [980, 528], [1115, 505], [1300, 539]]);
+  for (const [x, y, h] of [[34, 531, 30], [116, 510, 38], [184, 522, 27], [313, 510, 41], [429, 511, 28], [796, 515, 30], [901, 510, 43], [1002, 511, 25], [1136, 514, 36], [1220, 522, 28]] as const) {
+    pine(ctx, x, y, h, '#527278');
+  }
+  icePlane(ctx, [[-20, 574], [190, 554], [390, 565], [590, 553], [790, 568], [1000, 550], [1300, 566]], '#B3D0D0', 'rgba(83, 133, 148, 0.35)');
+}
+
+function roseDawn(ctx: Ctx2D): void {
+  band(ctx, '#B3AABC', [[-20, 451], [165, 412], [336, 458], [520, 399], [705, 436], [855, 399], [1040, 449], [1300, 408]]);
+  band(ctx, '#858FAA', [[-20, 525], [145, 475], [345, 499], [545, 451], [735, 489], [960, 453], [1170, 499], [1300, 477]]);
+  // A cool shaded shore preserves the warm sky / cold lake separation.
+  band(ctx, '#708FA6', [[-20, 560], [175, 536], [335, 553], [510, 520], [690, 545], [880, 523], [1085, 550], [1300, 534]]);
+  icePlane(ctx, [[-20, 594], [185, 574], [375, 581], [560, 567], [760, 581], [940, 569], [1120, 575], [1300, 564]], '#AACBD7', 'rgba(74, 130, 168, 0.34)');
+  polygon(ctx, 'rgba(255, 236, 220, 0.16)', [[455, 584], [665, 572], [746, 585], [530, 602]]);
+}
+
+function polarGap(ctx: Ctx2D): void {
+  band(ctx, '#A8C5CF', [[-20, 480], [220, 454], [420, 476], [620, 436], [840, 475], [1030, 441], [1300, 478]]);
+  // Broken ice walls frame the center without painting across the main jump lane.
+  polygon(ctx, '#668FA7', [[-20, 630], [-20, 311], [82, 362], [145, 350], [220, 404], [298, 390], [377, 500], [487, 547], [560, 630]]);
+  polygon(ctx, '#91B8C6', [[-20, 311], [82, 362], [145, 350], [121, 399], [47, 377], [-20, 402]]);
+  polygon(ctx, '#527B96', [[-20, 630], [155, 485], [285, 501], [377, 557], [560, 630]]);
+  polygon(ctx, '#648CA2', [[730, 630], [829, 514], [914, 407], [1007, 378], [1090, 332], [1200, 360], [1300, 308], [1300, 630]]);
+  polygon(ctx, '#A1C2CD', [[914, 407], [1007, 378], [1090, 332], [1200, 360], [1300, 308], [1300, 390], [1190, 399], [1095, 372], [989, 425]]);
+  polygon(ctx, '#4F7790', [[730, 630], [853, 530], [992, 493], [1144, 506], [1300, 466], [1300, 630]]);
+  icePlane(ctx, [[-20, 645], [185, 593], [355, 568], [530, 546], [720, 548], [890, 560], [1080, 591], [1300, 638]], '#AED0D5', 'rgba(64, 129, 153, 0.37)');
+}
+
 export const drawBackdrop: Record<Exclude<Variant, 'current'>, (ctx: Ctx2D) => void> = {
   'quiet-shore': quietShore,
   'glacial-basin': glacialBasin,
   'violet-inlet': violetInlet,
+  'mirror-ice': mirrorIce,
+  'fir-shore': firShore,
+  'rose-dawn': roseDawn,
+  'polar-gap': polarGap,
 };

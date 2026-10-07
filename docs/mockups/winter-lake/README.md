@@ -38,7 +38,20 @@ The following images use the same production `Renderer`, Winter Lake platforms, 
 | **Glacial basin** | ![Glacial basin, noon](glacial-basin-day.png) | ![Glacial basin, midnight](glacial-basin-night.png) | Taller asymmetric snow walls framing a central opening and stronger sense of enclosure. |
 | **Violet inlet** | ![Violet inlet, noon](violet-inlet-day.png) | ![Violet inlet, midnight](violet-inlet-night.png) | A winding frozen inlet and violet distance that separate warm characters and add a more distinctive mood. |
 
-**Assessment:** Quiet shore best establishes the lake without crowding the platforms, though its landscape may need a stronger landmark. Glacial basin has more scale, but its side walls approach the outer jump lanes and the broad snow curves could read as hills rather than cliffs. Violet inlet has the most character; its diagonal shore leads the eye toward the center, but the pale ice is close in value to the current snow platforms. My preferred base is Quiet shore, potentially borrowing Violet inlet's restrained violet sky. The repeated decorated trees and snowmen remain in every image; they will be addressed in the prop pass rather than being quietly removed during background selection.
+**First-round assessment:** Quiet shore best establishes the lake without crowding the platforms, though its landscape may need a stronger landmark. Glacial basin has more scale, but its side walls approach the outer jump lanes and the broad snow curves could read as hills rather than cliffs. Violet inlet has the most character; its diagonal shore leads the eye toward the center, but the pale ice is close in value to the current snow platforms.
+
+### Second round: stronger compositions
+
+The first round was useful for value and shoreline studies, but the options shared too much of one layered-hill structure. The second round changes the lake's prominence, shoreline vegetation, lighting palette, and frame shape more decisively. Everything outside the backdrop is still identical to the matched fixture above.
+
+| Direction | Noon | Midnight | What it tests |
+| --- | --- | --- | --- |
+| **Mirror Ice** | ![Mirror Ice, noon](mirror-ice-day.png) | ![Mirror Ice, midnight](mirror-ice-night.png) | A larger turquoise ice sheet and broad faceted glacier shoulders; the lake becomes the main shape. |
+| **Fir Shore** | ![Fir Shore, noon](fir-shore-day.png) | ![Fir Shore, midnight](fir-shore-night.png) | A connected, dark fir belt behind the playfield, with pale ice below it. |
+| **Rose Dawn** | ![Rose Dawn, noon](rose-dawn-day.png) | ![Rose Dawn, midnight](rose-dawn-night.png) | A mauve and peach sky against cold blue ice, moving the arena away from monochrome winter blue. |
+| **Polar Gap** | ![Polar Gap, noon](polar-gap-day.png) | ![Polar Gap, midnight](polar-gap-night.png) | Angular ice cliffs on both sides and an opening through the center. |
+
+**Second-round assessment:** Mirror Ice most clearly reads as a frozen lake, and its cool ice plane separates the dark Wolf well. The stronger cyan area may need softening if it competes with effects or pickups during play. Fir Shore gives the place a believable edge, but dark characters could disappear against the tree belt while jumping. Rose Dawn provides the most distinctive mood without changing geometry; its warm sky should be checked with orange and pale roster members in motion. Polar Gap has the strongest frame, but the cliff edges sit close to outer platforms and could make those lanes busy. None of these is selected production art yet. The old decorated trees and snowmen remain visible in every variant and will be reviewed in the prop pass.
 
 The fixture and variant functions are in [`render.ts`](render.ts) and [`variants.ts`](variants.ts). To reproduce, run Vite on port 4222 and then `node docs/mockups/winter-lake/capture-variants.mjs`. The earlier live-match baseline above remains available to compare the fixture with the game.
 
