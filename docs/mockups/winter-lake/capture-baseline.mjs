@@ -55,7 +55,7 @@ try {
       if (state) state.dayPhase = phase;
     }, phase);
     await page.waitForTimeout(120);
-    await page.screenshot({ path: join(directory, `current-${time}.png`) });
+    await page.screenshot({ path: join(directory, `live-current-${time}.png`) });
   }
   if (errors.length) throw new Error(errors.join('; '));
   console.log(`Captured current day/night with ${characters.join(', ')}`);
