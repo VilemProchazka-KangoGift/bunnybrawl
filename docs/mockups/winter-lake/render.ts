@@ -10,6 +10,7 @@ import { createEmptyMatchState, createInitialPlayers } from '../../../src/engine
 import { drawBackdrop, skies, VARIANTS, type Variant } from './variants';
 import { preloadIllustratedBackdrop } from '../../../src/engine/arenas/illustratedBackdropAsset';
 import { drawPlatformStudyBack, drawPlatformStudyFront, isIllustratedStudy, PLATFORM_VARIANTS, type PlatformVariant } from '../winter-platforms/variants';
+import { drawPaintedPlatformBack, drawPaintedPlatformFront, preloadPaintedPlatforms } from '../winter-platforms/painted';
 
 const query = new URLSearchParams(location.search);
 const variant = query.get('variant') ?? 'current';
@@ -34,15 +35,24 @@ if (platformVariant) {
   // The study's `current` background is the approved Pearl plate. Without a
   // platform query, older background comparisons retain their old baseline.
   await preloadIllustratedBackdrop('winter_lake');
+  if (platformVariant === 'painted-sprite') await preloadPaintedPlatforms();
   const originalBack = theme.drawPlatform;
   const originalFront = theme.drawPlatformOverlay;
   theme.drawPlatform = (ctx, platform, isGround) => {
+    if (platformVariant === 'painted-sprite') {
+      drawPaintedPlatformBack(ctx, platform, isGround);
+      return;
+    }
     if (!isIllustratedStudy(platformVariant as PlatformVariant) || platform.style === 'iceCube') {
       originalBack(ctx, platform, isGround);
     }
     drawPlatformStudyBack(ctx, platform, platformVariant as PlatformVariant, isGround);
   };
   theme.drawPlatformOverlay = (ctx, platform, isGround) => {
+    if (platformVariant === 'painted-sprite') {
+      drawPaintedPlatformFront(ctx, platform, isGround);
+      return;
+    }
     if (!isIllustratedStudy(platformVariant as PlatformVariant)) originalFront?.(ctx, platform, isGround);
     drawPlatformStudyFront(ctx, platform, platformVariant as PlatformVariant, isGround);
   };

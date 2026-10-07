@@ -2,9 +2,20 @@
 
 Pearl Painted is the approved backdrop. This is **arena redesign step 3**: compare playable snow shelves, ground, and the two jumpable ice cubes in the full scene before choosing a production treatment. Geometry, landing heights, slippery friction, character placements, props, foreground cover, and time of day remain identical across captures. These are fixture overrides, not changes to the playable platform art.
 
+## Painted platform prototype
+
+The procedural cartoon follow-ups below were judged too simple beside the generated reference. This prototype draws **actual transparent illustrated assets** in the production renderer: a narrow [long shelf](painted-shelf-long.png), the earlier [wide shelf](glacial-ceramic-art-direction.png) for medium platforms, and a matching [ice block](painted-ice-block.png). The fixture selects a source by platform width, maps its painted bounds onto each existing platform rectangle, and redraws the body in the foreground cover pass. It also overscans the visual ground past both viewport edges.
+
+| Selected baseline | Painted prototype |
+| --- | --- |
+| ![Glacial Ceramic at noon](glacial-ceramic-day.png) | ![Painted shelves and blocks at noon](painted-sprite-day.png) |
+| ![Glacial Ceramic at midnight](glacial-ceramic-night.png) | ![Painted shelves and blocks at midnight](painted-sprite-night.png) |
+
+This is finally close to the reference's snowy overhang, blue facets, ink edge, and frosted texture at match scale. The two ice blocks use matching art rather than the old translucent wireframe. The old pine trees, snowmen, igloo, snowballs, and long icicle fringe remain; they now stand out as the next visual mismatch. The sprite images are large unoptimized PNGs and the same painted motifs recur on shelves of equal size. These are **prototype costs to solve before production adoption**, along with verifying that painted cap edges and foreground opacity match collision and cover during moving gameplay. No runtime pack or preload logic has changed yet.
+
 ## Glacial Ceramic cartoon and texture iteration
 
-**Glacial Ceramic was selected** from the previous round. Its clean ice color worked, but the gradient and repeated long highlight still felt like smooth vector plastic. Astra reviewed the captures and advised stronger connected outlines, flatter value planes, irregular snow volume, and localized texture. We tested three code-native texture directions, then a more ambitious Storybook Glaze treatment based on those lessons and an isolated illustrated [art-direction reference](glacial-ceramic-art-direction.png). The reference has much thicker ice than the real platforms and is **not** a gameplay screenshot or shippable sprite; it guided color, outline, and clustered frost only.
+**Glacial Ceramic was selected** from the previous round. Its clean ice color worked, but the gradient and repeated long highlight still felt like smooth vector plastic. Astra reviewed the captures and advised stronger connected outlines, flatter value planes, irregular snow volume, and localized texture. We tested three code-native texture directions, then a more ambitious Storybook Glaze treatment based on those lessons and an isolated illustrated [art-direction reference](glacial-ceramic-art-direction.png). That reference has much thicker ice than the real platforms and was later reused as the medium-width source for the painted prototype above; it is not a standalone gameplay screenshot.
 
 | Treatment | Noon | Midnight | Scene-scale result |
 | --- | --- | --- | --- |
@@ -50,4 +61,4 @@ The first capture pass made the full-width ground into a repeated patterned ribb
 
 ## Reproduction
 
-The [fixture](../winter-lake/render.ts) uses the production `Renderer` and Winter Lake pack with the selected Pearl WebP decoded before the first frame. It overrides only `drawPlatform` and `drawPlatformOverlay` with the [platform studies](variants.ts); the real game art stays unchanged. Run Vite from the repo root on port 4225, then `node docs/mockups/winter-platforms/capture.mjs` to recapture Glacial Ceramic and its four cartoon follow-ups. Direct fixture URLs use `/bunnybrawl/docs/mockups/winter-lake/render.html?variant=current&platform=storybook-glaze&time=day`, with `platform=current|ink-rim|ice-strata|snow-crust|snow-pillow|glacial-ceramic|layered-snowbank|inked-glaze|bubble-glacier|chalk-frost|storybook-glaze` and `time=day|night`.
+The [fixture](../winter-lake/render.ts) uses the production `Renderer` and Winter Lake pack with the selected Pearl WebP decoded before the first frame. It overrides only `drawPlatform` and `drawPlatformOverlay` with the [platform studies](variants.ts) or the [painted sprite mapper](painted.ts); the real game art stays unchanged. Run Vite from the repo root on port 4225, then `node docs/mockups/winter-platforms/capture.mjs` to recapture the selected Ceramic baseline, code-native Storybook treatment, and painted prototype. Direct fixture URLs use `/bunnybrawl/docs/mockups/winter-lake/render.html?variant=current&platform=painted-sprite&time=day`, with `platform=current|ink-rim|ice-strata|snow-crust|snow-pillow|glacial-ceramic|layered-snowbank|inked-glaze|bubble-glacier|chalk-frost|storybook-glaze|painted-sprite` and `time=day|night`.

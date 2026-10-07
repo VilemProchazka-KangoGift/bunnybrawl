@@ -4,7 +4,7 @@ import { CAP_DEPTH, backWavyUp, capBackY, capFrontY, drawPlatformCap, drawPlatfo
 export const PLATFORM_VARIANTS = [
   'current', 'ink-rim', 'ice-strata', 'snow-crust',
   'snow-pillow', 'glacial-ceramic', 'layered-snowbank',
-  'inked-glaze', 'bubble-glacier', 'chalk-frost', 'storybook-glaze',
+  'inked-glaze', 'bubble-glacier', 'chalk-frost', 'storybook-glaze', 'painted-sprite',
 ] as const;
 export type PlatformVariant = (typeof PLATFORM_VARIANTS)[number];
 
