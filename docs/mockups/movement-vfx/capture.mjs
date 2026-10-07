@@ -1,3 +1,4 @@
+/* global window, crossOriginIsolated -- Playwright callbacks run in the browser. */
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
