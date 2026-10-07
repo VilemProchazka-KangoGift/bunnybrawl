@@ -44,13 +44,8 @@ export function updatePlayerCosmetics(
     player.animTimer = 0;
   }
 
-  // Fast-fall smear fade-in/out. Ramps up while *visually* fast-falling (the
-  // boolean stays true on a spring/geyser/stomp bounce if down is still held —
-  // physics needs that for FAST_FALL_GRAVITY math — but the player is moving
-  // upward, so cosmetically we should fade out). Ramps down faster on exit so
-  // the smudge doesn't linger. Anchor capture lives in the renderer (per-frame)
-  // to catch the transition without cosmeticStep's half-rate lag.
-  // Local-only — not snapshotted.
+  // Local echo opacity ramps up during a downward dive. Rendering also gates
+  // on current velocity so upward spring/stomp bounces never carry a dive trail.
   const activelyFastFalling = player.fastFalling && player.vy >= 0;
   if (activelyFastFalling) {
     player.fastFallStreakAlpha = Math.min(1, player.fastFallStreakAlpha + dt * 10);
@@ -84,7 +79,16 @@ export function updatePlayerCosmetics(
   // Afterimages — spawn at speed threshold or during invincibility. Skipped on
   // slow-device; decay loop below still drains pre-existing entries.
   const speed = Math.max(Math.abs(player.vx), Math.abs(player.vy));
-  const spawnAfterimage = !getSlowDevice()
+  // Cloud pop and pose echoes replace ordinary airborne oval trails. Keep
+  // the invincibility trail outside an active dive as a separate status cue.
+  const movementAirborne = player.state === 'airborne' && player.invincibleTimer <= 0;
+  if (movementAirborne || activelyFastFalling) {
+    for (const image of player.afterimages) {
+      if (_afterimagePool.length < AFTERIMAGE_POOL_CAP) _afterimagePool.push(image);
+    }
+    player.afterimages.length = 0;
+  }
+  const spawnAfterimage = !movementAirborne && !activelyFastFalling && !getSlowDevice()
     && (speed > AFTERIMAGE_SPEED_THRESHOLD || player.invincibleTimer > 0);
   if (spawnAfterimage) {
     let fired = afterimageAccs.advance(player.id, dt, AFTERIMAGE_INTERVAL);

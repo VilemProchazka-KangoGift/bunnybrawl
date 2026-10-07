@@ -15,6 +15,25 @@ function mkParticle(overrides: Partial<Particle> = {}): Particle {
 }
 
 describe('sabParticles', () => {
+  it('keeps cloud silhouettes distinct from spikes across the renderer worker wire', () => {
+    const views = makeViews(new ArrayBuffer(SAB_PARTICLES_BYTES));
+    const particles = [
+      mkParticle({ shape: 'jumpCloud', color: '#FFF3D5', size: 14, maxLife: 0.32 }),
+      mkParticle({ shape: 'landingCloud', color: '#FFF3D5', size: 11, maxLife: 0.38 }),
+      mkParticle({ shape: 'spike', color: '#AA2200' }),
+      mkParticle({ shape: 'impactCrown', color: '#FFE3A0' }),
+    ];
+    writeParticles(views, particles);
+    const pool: Particle[] = [];
+    expect(readParticles(views, pool, new ColorCache())).toBe(4);
+    expect(pool.map(p => p.shape)).toEqual(['jumpCloud', 'landingCloud', 'spike', 'impactCrown']);
+    expect(pool[0].color).toBe('rgb(255,243,213)');
+    expect(pool[0].size).toBe(14);
+    expect(pool[1].maxLife).toBeCloseTo(0.38);
+    writeParticles(views, [mkParticle()]);
+    readParticles(views, pool, new ColorCache());
+    expect(pool[0].shape).toBe('circle');
+  });
   it('round-trips a small batch with mixed shapes and colors', () => {
     const sab = new ArrayBuffer(SAB_PARTICLES_BYTES);
     const views = makeViews(sab);

@@ -8,6 +8,7 @@ export interface PrevPlayerCosmeticState {
   state: PlayerState;
   vx: number;
   vy: number;
+  footY: number;
   score: number;
   fatTimer: number;
   sideSquash: number;
@@ -20,7 +21,7 @@ export interface PrevPlayerCosmeticState {
 
 export function snapshotPlayerCosmeticState(player: Player): PrevPlayerCosmeticState {
   return {
-    state: player.state, vx: player.vx, vy: player.vy,
+    state: player.state, vx: player.vx, vy: player.vy, footY: player.y + player.height,
     score: player.score, fatTimer: player.fatTimer, sideSquash: player.sideSquash,
     burnTimer: player.burnTimer, slowTimer: player.slowTimer,
     invincibleTimer: player.invincibleTimer,
@@ -33,8 +34,8 @@ export function snapshotPlayerCosmeticState(player: Player): PrevPlayerCosmeticS
 export interface TransitionCallbacks {
   playSound: (name: string) => void;
   playAnimal: (characterName: string) => void;
-  spawnDustParticles: (player: Player, landVy: number) => void;
-  spawnJumpDustParticles: (player: Player) => void;
+  spawnDustParticles: (player: Player, landVy: number, fastStomp?: boolean) => void;
+  spawnJumpDustParticles: (player: Player, launchY?: number) => void;
   spawnKillSplatter: (victim: Player) => void;
   pickupCarrotVFX: (x: number, y: number) => void;
   spawnPlayerSpawnVFX: (x: number, y: number) => void;
@@ -77,8 +78,8 @@ export function detectPlayerTransitions(
     // (host) and entityTransitions (guest), not here — this runs at half-rate
     // after physics has already moved the player off the spring.
     const sprangThisTick = prev.springTrailTimer === 0 && player.springTrailTimer > 0;
-    if (!sprangThisTick) {
-      cb.spawnJumpDustParticles(player);
+    if (!sprangThisTick && player.vy < 0) {
+      cb.spawnJumpDustParticles(player, prev.footY);
     }
   }
 
@@ -91,7 +92,8 @@ export function detectPlayerTransitions(
       cb.playSound('land');
       sfxCooldowns.land.set(player.id, 0.1);
     }
-    cb.spawnDustParticles(player, Math.abs(prev.vy));
+    if (prev.fastFalling && prev.vy > 0) cb.spawnDustParticles(player, prev.vy, true);
+    else cb.spawnDustParticles(player, Math.abs(prev.vy));
   }
 
   // Wall hit: was moving fast horizontally, now stopped

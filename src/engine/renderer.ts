@@ -1315,6 +1315,8 @@ export class Renderer implements IRenderer {
         for (const player of matchState.players) {
           if (!player.active) continue;
           if (player.state === 'respawning') continue;
+          // Movement uses cloud puffs / attack-pose echoes, not oval blobs.
+          if (player.state === 'airborne' && (player.invincibleTimer <= 0 || (player.fastFalling && player.vy >= 0))) continue;
           const afterimages = player.afterimages;
           if (afterimages && afterimages.length > 0) {
             d.afterimages = true;

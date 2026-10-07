@@ -4,6 +4,7 @@ import type { ThemeConfig } from '../themes/types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT, SPRING_TRAIL_DURATION } from '../constants';
 import { getGibRenderer } from '../characters';
 import { hexToRGB } from '../fastMath';
+import { drawMovementPuff, drawImpactCrown } from './movementEffects';
 
 const _rgbStringCache = new Map<string, string>();
 function rgbString(hex: string): string {
@@ -79,6 +80,16 @@ export function drawParticles(ctx: Ctx2D, particles: Particle[], lead = 0): void
     const dx = p.x + p.vx * lead;
     const dy = p.y + p.vy * lead;
     if (dx < -20 || dx > CANVAS_WIDTH + 20 || dy < -20 || dy > CANVAS_HEIGHT + 20) continue;
+    if (p.shape === 'impactCrown') {
+      drawImpactCrown(ctx, p, lead);
+      lastColor = '';
+      continue;
+    }
+    if (p.shape === 'jumpCloud' || p.shape === 'landingCloud') {
+      drawMovementPuff(ctx, p, lead);
+      lastColor = ''; // Cloud fill changes the context color.
+      continue;
+    }
     const alpha = p.life / p.maxLife;
     ctx.globalAlpha = alpha * 0.7;
     if (p.color !== lastColor) {
