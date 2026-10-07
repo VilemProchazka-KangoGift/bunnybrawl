@@ -220,6 +220,8 @@ For arena geometry and draw-layer contracts, also read [`level-design.md`](../le
 
 ### Saturday morning UI implementation
 
+The settings roster selector uses the shared `CharacterPortrait` component, not emoji icons. Its 620px minimum width fits all 19 portraits in four rows within the 1280×720 logical canvas; check the entire modal, including its title and close button, after changing portrait size.
+
 Match HUD portraits use 60px in full-width tickets (45px in compact tickets), with feet anchored at y=67. The former 78px size started at y=-11 and clipped against the canvas top. Leave headroom for ticket rotation and the 6% goal pulse when changing this size.
 
 The approved UI uses `src/uiTheme.ts`, `src/components/saturday.css`, and compact cutout portraits in `public/ui/portraits/`. Canvas portraits decode once per renderer realm; `getPortraitRevision()` invalidates the static HUD after an image finishes loading. Keep this worker-safe and keep portraits out of the pure simulator.
