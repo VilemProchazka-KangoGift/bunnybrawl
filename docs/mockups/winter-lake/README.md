@@ -116,6 +116,22 @@ Silver Banks is the selected direction for continued exploration. In the first c
 
 **Assessment:** Refined Silver Banks keeps the color separation the selection was based on and removes the obvious corner. Frostwork demonstrates how far the texture can go, but the quieter version reads better behind characters at native size. These are static mockups; animated gameplay and sunset remain to be checked before integrating this backdrop.
 
+### Silver Banks as a cartoon illustration
+
+The selected Silver Banks composition above is calm and readable, but its smooth fills still look like simple vector scenery. This round keeps that composition as the comparison and explores stronger illustration. Three code-drawn studies run through the same production renderer with unchanged platforms, props, and characters. The painted study uses a raster concept backdrop under those same production elements; its snowbanks are somewhat higher than Refined Silver Banks, so it is a **style target**, not a locked geometry proposal.
+
+| Treatment | Noon | Midnight | What it tests |
+| --- | --- | --- | --- |
+| **Refined Silver Banks** | ![Refined Silver Banks, noon](polar-silver-banks-day.png) | ![Refined Silver Banks, midnight](polar-silver-banks-night.png) | The selected shape and color baseline. |
+| **Hand-inked** | ![Hand-inked Silver Banks, noon](polar-silver-inked-day.png) | ![Hand-inked Silver Banks, midnight](polar-silver-inked-night.png) | Uneven blue-gray contours, short hatching, and sketched ice seams. |
+| **Gouache grain** | ![Gouache Silver Banks, noon](polar-silver-gouache-day.png) | ![Gouache Silver Banks, midnight](polar-silver-gouache-night.png) | Broken brush-like snow and ice pigment without a strong outline. |
+| **Bold cartoon** | ![Bold cartoon Silver Banks, noon](polar-silver-comic-day.png) | ![Bold cartoon Silver Banks, midnight](polar-silver-comic-night.png) | Broader cel shadows and stronger outlines around the distant shore. |
+| **Painted concept in renderer** | ![Painted Silver Banks, noon](polar-silver-painted-day.png) | ![Painted Silver Banks, midnight](polar-silver-painted-night.png) | Hand-painted snow and ice, composited behind the actual game objects at 63% opacity. |
+
+The separate [painted full-scene concept](silver-banks-painted-concept.png) and [hand-inked full-scene concept](silver-banks-inked-concept.png) show the art-direction extremes. They redraw, shift, and sometimes add gameplay objects, so **do not use those two images to judge platform placement or character contrast**. A third generated [clean backdrop](silver-banks-painted-backdrop.png) was composited in the matched renderer fixture for the final row above. The [prompt record](PAINTED-PROMPTS.md) captures how those raster concepts were made.
+
+**Assessment:** The painted composite is the first version that clearly escapes the flat vector look. Its inked snow slopes and glazed lake have more character, but the lake is brighter and the hills reach closer to outer platforms than the selected baseline. At noon, pale Bunny and Panda need a moving contrast check where snow is behind them. The procedural Hand-inked and Bold Cartoon treatments preserve the geometry, but their extra lines still feel like vector outlines; Gouache grain adds texture yet can look speckled. Before any integration, bring the painted texture language back to the lower Silver Banks silhouette, tune the snow value for pale characters, and test at sunset, night, and smaller display sizes. No production arena assets changed in this mockup round.
+
 The fixture and variant functions are in [`render.ts`](render.ts) and [`variants.ts`](variants.ts). To reproduce, run Vite on port 4222 and then `node docs/mockups/winter-lake/capture-variants.mjs`. The earlier live-match baseline above remains available to compare the fixture with the game.
 
 ## Gameplay and render constraints

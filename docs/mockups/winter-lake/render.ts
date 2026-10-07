@@ -30,7 +30,19 @@ if (variant !== 'current') {
   const selected = variant as Exclude<Variant, 'current'>;
   theme.sky = { gradient: skies[selected] };
   theme.hills = [];
-  theme.drawFarBackground = drawBackdrop[selected];
+  if (selected === 'polar-silver-painted') {
+    const backdrop = new Image();
+    backdrop.src = new URL('./silver-banks-painted-backdrop.png', import.meta.url).href;
+    await backdrop.decode();
+    theme.drawFarBackground = ctx => {
+      ctx.save();
+      ctx.globalAlpha = .63;
+      ctx.drawImage(backdrop, 0, 0, 1280, 720);
+      ctx.restore();
+    };
+  } else {
+    theme.drawFarBackground = drawBackdrop[selected];
+  }
 }
 
 function canvas(id: string): HTMLCanvasElement {

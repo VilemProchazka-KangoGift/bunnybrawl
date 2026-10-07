@@ -10,6 +10,8 @@ export const VARIANTS = [
   'polar-powder-bank', 'polar-wind-carved', 'polar-frost-shelves', 'polar-pearl-shore',
   'polar-silver-banks', 'polar-lilac-snow', 'polar-deep-ice', 'polar-warm-drift',
   'polar-silver-banks-before', 'polar-silver-frostwork',
+  'polar-silver-inked', 'polar-silver-gouache', 'polar-silver-comic',
+  'polar-silver-painted',
 ] as const;
 export type Variant = (typeof VARIANTS)[number];
 
@@ -38,6 +40,10 @@ export const descriptions: Record<Exclude<Variant, 'current'>, string> = {
   'polar-warm-drift': 'Warm ivory snow and a cool lake separate the two surfaces gently.',
   'polar-silver-banks-before': 'The first Silver Banks study, retained for the bank-corner and texture comparison.',
   'polar-silver-frostwork': 'The smoothed Silver Banks shape with stronger clustered frost and branching ice seams.',
+  'polar-silver-inked': 'Refined Silver Banks with hand-inked contours, hatch marks, and storybook ice.',
+  'polar-silver-gouache': 'Refined Silver Banks with grainy painted snow and cloudy layered ice.',
+  'polar-silver-comic': 'Refined Silver Banks with bolder cel-shaded forms and lively ice marks.',
+  'polar-silver-painted': 'Painted backdrop concept composited under the exact production platforms and characters.',
 };
 
 export const skies: Record<Exclude<Variant, 'current'>, { offset: number; color: string }[]> = {
@@ -134,6 +140,22 @@ export const skies: Record<Exclude<Variant, 'current'>, { offset: number; color:
     { offset: .78, color: '#BCD0D3' }, { offset: 1, color: '#DFE6E1' },
   ],
   'polar-silver-frostwork': [
+    { offset: 0, color: '#3D5573' }, { offset: .43, color: '#7E9AAD' },
+    { offset: .78, color: '#BCD0D3' }, { offset: 1, color: '#DFE6E1' },
+  ],
+  'polar-silver-inked': [
+    { offset: 0, color: '#3D5573' }, { offset: .43, color: '#7E9AAD' },
+    { offset: .78, color: '#BCD0D3' }, { offset: 1, color: '#DFE6E1' },
+  ],
+  'polar-silver-gouache': [
+    { offset: 0, color: '#3D5573' }, { offset: .43, color: '#7E9AAD' },
+    { offset: .78, color: '#BCD0D3' }, { offset: 1, color: '#DFE6E1' },
+  ],
+  'polar-silver-comic': [
+    { offset: 0, color: '#3D5573' }, { offset: .43, color: '#7E9AAD' },
+    { offset: .78, color: '#BCD0D3' }, { offset: 1, color: '#DFE6E1' },
+  ],
+  'polar-silver-painted': [
     { offset: 0, color: '#3D5573' }, { offset: .43, color: '#7E9AAD' },
     { offset: .78, color: '#BCD0D3' }, { offset: 1, color: '#DFE6E1' },
   ],
@@ -714,14 +736,152 @@ function silverLakeDetails(ctx: Ctx2D, frostwork: boolean): void {
   ctx.restore();
 }
 
-function refinedSilverBanks(ctx: Ctx2D, frostwork: boolean): void {
+type CartoonStyle = 'inked' | 'gouache' | 'comic';
+
+function traceSilverBank(ctx: Ctx2D, ridge: readonly Point[]): void {
+  ctx.moveTo(ridge[0][0], ridge[0][1]);
+  for (let i = 1; i < ridge.length; i++) {
+    const [px, py] = ridge[i - 1];
+    const [x, y] = ridge[i];
+    ctx.quadraticCurveTo(px, py, (px + x) / 2, (py + y) / 2);
+  }
+  ctx.lineTo(ridge[ridge.length - 1][0], ridge[ridge.length - 1][1]);
+}
+
+function silverRandom(seed: number): () => number {
+  let value = seed >>> 0;
+  return () => {
+    value = (Math.imul(value, 1664525) + 1013904223) >>> 0;
+    return value / 4294967296;
+  };
+}
+
+function cartoonBank(ctx: Ctx2D, ridge: readonly Point[], side: 'left' | 'right', style: CartoonStyle): void {
+  const first = ridge[0];
+  const last = ridge[ridge.length - 1];
+  ctx.save();
+  ctx.beginPath();
+  traceSilverBank(ctx, ridge);
+  if (style !== 'gouache') {
+    ctx.strokeStyle = style === 'comic' ? 'rgba(57, 83, 101, 0.72)' : 'rgba(70, 98, 112, 0.55)';
+    ctx.lineWidth = style === 'comic' ? 4 : 2.6;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.stroke();
+  }
+  ctx.lineTo(last[0], 720);
+  ctx.lineTo(first[0], 720);
+  ctx.closePath();
+  ctx.clip();
+
+  const left = side === 'left';
+  const offset = left ? 0 : 780;
+  if (style === 'comic') {
+    ctx.fillStyle = 'rgba(101, 145, 163, 0.24)';
+    ctx.beginPath();
+    ctx.moveTo(offset - 20, 550);
+    ctx.bezierCurveTo(offset + 68, 507, offset + 174, 529, offset + 265, 513);
+    ctx.bezierCurveTo(offset + 342, 504, offset + 412, 542, offset + 485, 554);
+    ctx.lineTo(offset + 530, 675);
+    ctx.lineTo(offset - 20, 675);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  if (style === 'gouache') {
+    const random = silverRandom(left ? 1284 : 8207);
+    for (let i = 0; i < 260; i++) {
+      const x = first[0] + random() * (last[0] - first[0]);
+      const y = 428 + random() * 204;
+      const w = 3 + random() * 19;
+      const h = 1.1 + random() * 4.2;
+      ctx.fillStyle = i % 5 < 3 ? 'rgba(247, 251, 248, 0.11)' : 'rgba(103, 151, 165, 0.09)';
+      ctx.beginPath();
+      ctx.ellipse(x, y, w, h, (random() - .5) * .35, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else {
+    const hatchCount = style === 'comic' ? 11 : 19;
+    ctx.strokeStyle = style === 'comic' ? 'rgba(65, 100, 116, 0.35)' : 'rgba(77, 112, 126, 0.28)';
+    ctx.lineWidth = style === 'comic' ? 2.2 : 1.3;
+    ctx.lineCap = 'round';
+    for (let i = 0; i < hatchCount; i++) {
+      const x = offset + 34 + (i * 89 + (left ? 9 : 47)) % 392;
+      const y = 461 + (i * 47 + (left ? 11 : 29)) % 139;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.quadraticCurveTo(x + 11, y - 4, x + 22 + i % 4 * 4, y - 2);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+function cartoonLake(ctx: Ctx2D, style: CartoonStyle): void {
+  ctx.save();
+  ctx.beginPath();
+  traceLakeShore(ctx, silverLakeShore);
+  ctx.lineTo(1300, 720);
+  ctx.lineTo(-20, 720);
+  ctx.closePath();
+  ctx.clip();
+
+  if (style === 'gouache') {
+    const random = silverRandom(46181);
+    for (let i = 0; i < 360; i++) {
+      const x = -10 + random() * 1300;
+      const y = 557 + random() * 115;
+      const w = 2.5 + random() * 19;
+      ctx.fillStyle = i % 6 < 4 ? 'rgba(224, 247, 246, 0.095)' : 'rgba(64, 130, 157, 0.085)';
+      ctx.beginPath();
+      ctx.ellipse(x, y, w, 1 + random() * 3, (random() - .5) * .22, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else {
+    ctx.strokeStyle = style === 'comic' ? 'rgba(62, 114, 137, 0.46)' : 'rgba(64, 113, 134, 0.31)';
+    ctx.lineWidth = style === 'comic' ? 3.3 : 1.8;
+    ctx.lineCap = 'round';
+    for (const [x, y, length] of [[80, 627, 148], [352, 610, 124], [632, 632, 192], [936, 618, 155]] as const) {
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.bezierCurveTo(x + length * .29, y - 8, x + length * .54, y + 6, x + length, y - 3);
+      ctx.stroke();
+    }
+    // Short offshoots make the ice marks feel drawn rather than stamped ellipses.
+    for (const [x, y] of [[168, 622], [420, 607], [746, 626], [1032, 612]] as const) {
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.quadraticCurveTo(x + 8, y + 9, x + 18, y + 12);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+
+  if (style !== 'gouache') {
+    ctx.save();
+    ctx.beginPath();
+    traceLakeShore(ctx, silverLakeShore);
+    ctx.strokeStyle = style === 'comic' ? 'rgba(61, 100, 119, 0.58)' : 'rgba(71, 110, 126, 0.40)';
+    ctx.lineWidth = style === 'comic' ? 4 : 2.4;
+    ctx.setLineDash(style === 'comic' ? [120, 15, 175, 10] : [158, 11, 90, 8]);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function refinedSilverBanks(ctx: Ctx2D, frostwork: boolean, cartoon?: CartoonStyle): void {
   band(ctx, '#A9BCC7', [[-20, 484], [225, 461], [420, 480], [640, 444], [890, 473], [1125, 453], [1300, 481]]);
   irregularBank(ctx, silverLeftRidge, '#D5DCDB', '#B8CACC', 'wind', 2);
   irregularBank(ctx, silverRightRidge, '#D0DAD9', '#B4C8CB', 'wind', 7);
   silverBankLayers(ctx, silverLeftRidge, 'left', frostwork);
   silverBankLayers(ctx, silverRightRidge, 'right', frostwork);
+  if (cartoon) {
+    cartoonBank(ctx, silverLeftRidge, 'left', cartoon);
+    cartoonBank(ctx, silverRightRidge, 'right', cartoon);
+  }
   organicLake(ctx, silverLakeShore, 5, '#9FC6D0', 'frost');
   silverLakeDetails(ctx, frostwork);
+  if (cartoon) cartoonLake(ctx, cartoon);
 }
 
 function polarSilverBanks(ctx: Ctx2D): void {
@@ -730,6 +890,18 @@ function polarSilverBanks(ctx: Ctx2D): void {
 
 function polarSilverFrostwork(ctx: Ctx2D): void {
   refinedSilverBanks(ctx, true);
+}
+
+function polarSilverInked(ctx: Ctx2D): void {
+  refinedSilverBanks(ctx, false, 'inked');
+}
+
+function polarSilverGouache(ctx: Ctx2D): void {
+  refinedSilverBanks(ctx, false, 'gouache');
+}
+
+function polarSilverComic(ctx: Ctx2D): void {
+  refinedSilverBanks(ctx, false, 'comic');
 }
 
 function polarLilacSnow(ctx: Ctx2D): void {
@@ -790,6 +962,10 @@ export const drawBackdrop: Record<Exclude<Variant, 'current'>, (ctx: Ctx2D) => v
   'polar-silver-banks': polarSilverBanks,
   'polar-silver-banks-before': polarSilverBanksBefore,
   'polar-silver-frostwork': polarSilverFrostwork,
+  'polar-silver-inked': polarSilverInked,
+  'polar-silver-gouache': polarSilverGouache,
+  'polar-silver-comic': polarSilverComic,
+  'polar-silver-painted': polarSilverBanks,
   'polar-lilac-snow': polarLilacSnow,
   'polar-deep-ice': polarDeepIce,
   'polar-warm-drift': polarWarmDrift,
