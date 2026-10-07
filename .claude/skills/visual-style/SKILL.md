@@ -34,7 +34,7 @@ Use the [carrot pickup comparison and angle studies](../../../docs/mockups/carro
 
 ### Springs must look alive and actionable
 
-The [spring mushroom shape and color study](../../../docs/mockups/spring-mushroom/README.md) records a rejected rose spotted dome and six alternative silhouettes. Do not treat the first redesign as approved: its cap looked generic in Meadow. Explore the cap structure as well as hue, and compare candidates over a real arena capture at native size and at night. The top should communicate where to land, while the stem and cap should be able to compress together when bouncing. Keep the foot planted, preserve the collision box, and leave arena-specific spring skins alone unless that arena is in scope. A still mockup is only a direction; implement and inspect the bounce pose after selection.
+The [spring mushroom shape and color study](../../../docs/mockups/spring-mushroom/README.md) records a rejected rose spotted dome, six alternatives, and the selected gold bell in the running game. The first redesign looked generic in Meadow; the gold bell was chosen for its broad downturned landing silhouette and warm separation from foliage. Explore cap structure as well as hue, then compare mockups over a real arena capture at native size and at night. In production, check rest and compression: the foot remains planted while the folded stem shortens and the cap drops and broadens. Preserve the collision box and arena-specific spring skins unless those are explicitly in scope.
 
 ## Backgrounds: contrast with characters
 

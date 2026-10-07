@@ -11,11 +11,11 @@ const browser = await chromium.launch({ headless: true });
 try {
   const page = await browser.newPage({ viewport: { width: 1200, height: 900 }, deviceScaleFactor: 1 });
   await page.goto(url);
-  await page.waitForFunction(() => window.galleryReady === true);
+  await page.waitForFunction(() => globalThis.galleryReady === true);
   await page.screenshot({ path: join(directory, 'gallery.png'), fullPage: true });
   for (const id of ids) {
     for (const phase of ['day', 'night']) {
-      const dataUrl = await page.evaluate(([name, light]) => window.renderVariant(name, light), [id, phase]);
+      const dataUrl = await page.evaluate(([name, light]) => globalThis.renderVariant(name, light), [id, phase]);
       await writeFile(join(directory, `${id}-${phase}.png`), Buffer.from(dataUrl.split(',')[1], 'base64'));
     }
   }
