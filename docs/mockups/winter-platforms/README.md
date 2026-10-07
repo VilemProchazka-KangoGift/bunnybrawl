@@ -2,6 +2,19 @@
 
 Pearl Painted is the approved backdrop. This is **arena redesign step 3**: compare playable snow shelves, ground, and the two jumpable ice cubes in the full scene before choosing a production treatment. Geometry, landing heights, slippery friction, character placements, props, foreground cover, and time of day remain identical across captures. These are fixture overrides, not changes to the playable platform art.
 
+## Ink Rim follow-up: illustrated shelf studies
+
+Ink Rim was the preferred first treatment, but its translucent stroke and speckles left the original airbrushed rectangle intact. With Astra art-direction review, the follow-up studies replace the visible cap and front-face material with larger connected forms. The front face still renders over players, the snow cap stays centered on the original landing height, and the right face retains its fake 3D fold. The ice cubes get a clearer frosted top, tinted side, and internal highlights without changing their hitboxes.
+
+| Treatment | Noon | Midnight | What changes from Ink Rim |
+| --- | --- | --- | --- |
+| **Ink Rim reference** | ![Ink Rim reference at noon](ink-rim-day.png) | ![Ink Rim reference at midnight](ink-rim-night.png) | Thin edge treatment on the existing plain shelf. |
+| **Snow Pillow** | ![Snow Pillow at noon](snow-pillow-day.png) | ![Snow Pillow at midnight](snow-pillow-night.png) | Warm pearl snow with an uneven rolled lip, lavender under-shadow, and sparse broad frost patches. The closest continuation of Ink Rim and the strongest of this set. |
+| **Glacial Ceramic** | ![Glacial Ceramic at noon](glacial-ceramic-day.png) | ![Glacial Ceramic at midnight](glacial-ceramic-night.png) | A thinner cap over a more solid blue-green ice face, curved facets, and a localized polished mark. Clearer ice identity, but brighter and more toy-like. |
+| **Layered Snowbank** | ![Layered Snowbank at noon](layered-snowbank-day.png) | ![Layered Snowbank at midnight](layered-snowbank-night.png) | Compressed snow and blue lower bed. This version still looks striped on the narrow shelves, so it is the weakest of the three. |
+
+The first capture pass made the full-width ground into a repeated patterned ribbon. The revised captures give the ground only four small uneven ice pockets with long quiet spans; they are the files shown above. Original Winter Lake icicles and props still appear in all scenes because they belong to the later prop pass. Their regular spacing is now the clearest remaining mismatch with the new shelf language. The upper tiny shelves also have too little front-face height for elaborate texture; they rely on cap volume and silhouette.
+
 ## Full-scene comparison
 
 | Treatment | Noon | Midnight | Design question |
@@ -11,7 +24,7 @@ Pearl Painted is the approved backdrop. This is **arena redesign step 3**: compa
 | **Ice Strata** | ![Ice Strata at noon](ice-strata-day.png) | ![Ice Strata at midnight](ice-strata-night.png) | Can banded blue ice below the snow give the shelves a distinct material and separate their lower faces from snowy banks? |
 | **Snow Crust** | ![Snow Crust at noon](snow-crust-day.png) | ![Snow Crust at midnight](snow-crust-night.png) | Would a chunkier snow apron over a dark slate core read better, or would its repeating edge become too loud? |
 
-**First assessment:** Ice Strata gives the strongest separation of the lower side shelves from Pearl's snowy banks while keeping the white landing surface and existing fake 3D fold. Ink Rim is restrained, but at full match size its change is small. Snow Crust reads clearly yet the scalloped dark line repeats across every platform and along the entire ground, drawing attention away from play. The outlined ice cubes in the studies remain translucent, but they are easier to find against the painted lake. These are directions to discuss, not a locked implementation.
+**Initial assessment, before the Ink Rim follow-up:** Ice Strata gave the strongest separation of the lower side shelves from Pearl's snowy banks. Ink Rim was restrained, but at full match size its change was small. Snow Crust's repeating edge drew attention away from play. Ink Rim was chosen as the base for the richer studies above; the initial assessment is retained as iteration history.
 
 ## Constraints for the chosen treatment
 
@@ -23,4 +36,4 @@ Pearl Painted is the approved backdrop. This is **arena redesign step 3**: compa
 
 ## Reproduction
 
-The [fixture](../winter-lake/render.ts) uses the production `Renderer` and Winter Lake pack with the selected Pearl WebP decoded before the first frame. It overrides only `drawPlatform` and `drawPlatformOverlay` with the three [platform studies](variants.ts); the real game art stays unchanged. Run Vite from the repo root on port 4225, then `node docs/mockups/winter-platforms/capture.mjs`. Direct fixture URLs use `/bunnybrawl/docs/mockups/winter-lake/render.html?variant=current&platform=ice-strata&time=day`, with `platform=current|ink-rim|ice-strata|snow-crust` and `time=day|night`.
+The [fixture](../winter-lake/render.ts) uses the production `Renderer` and Winter Lake pack with the selected Pearl WebP decoded before the first frame. It overrides only `drawPlatform` and `drawPlatformOverlay` with the [platform studies](variants.ts); the real game art stays unchanged. Run Vite from the repo root on port 4225, then `node docs/mockups/winter-platforms/capture.mjs` to recapture Ink Rim and the three follow-up studies. Direct fixture URLs use `/bunnybrawl/docs/mockups/winter-lake/render.html?variant=current&platform=snow-pillow&time=day`, with `platform=current|ink-rim|ice-strata|snow-crust|snow-pillow|glacial-ceramic|layered-snowbank` and `time=day|night`.

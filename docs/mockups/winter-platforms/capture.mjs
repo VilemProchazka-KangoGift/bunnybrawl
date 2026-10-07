@@ -6,7 +6,7 @@ const directory = dirname(fileURLToPath(import.meta.url));
 const server = process.env.WINTER_PLATFORM_URL ?? 'http://127.0.0.1:4225/bunnybrawl/';
 const browser = await chromium.launch({ headless: true });
 try {
-  for (const variant of ['current', 'ink-rim', 'ice-strata', 'snow-crust']) {
+  for (const variant of ['ink-rim', 'snow-pillow', 'glacial-ceramic', 'layered-snowbank']) {
     for (const time of ['day', 'night']) {
       const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
       const errors = [];

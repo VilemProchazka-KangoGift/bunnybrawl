@@ -9,7 +9,7 @@ import { registerPlayablePlushRoster } from '../../../src/engine/characters/plus
 import { createEmptyMatchState, createInitialPlayers } from '../../../src/engine/simulator/initialState';
 import { drawBackdrop, skies, VARIANTS, type Variant } from './variants';
 import { preloadIllustratedBackdrop } from '../../../src/engine/arenas/illustratedBackdropAsset';
-import { drawPlatformStudyBack, drawPlatformStudyFront, PLATFORM_VARIANTS, type PlatformVariant } from '../winter-platforms/variants';
+import { drawPlatformStudyBack, drawPlatformStudyFront, isIllustratedStudy, PLATFORM_VARIANTS, type PlatformVariant } from '../winter-platforms/variants';
 
 const query = new URLSearchParams(location.search);
 const variant = query.get('variant') ?? 'current';
@@ -37,12 +37,14 @@ if (platformVariant) {
   const originalBack = theme.drawPlatform;
   const originalFront = theme.drawPlatformOverlay;
   theme.drawPlatform = (ctx, platform, isGround) => {
-    originalBack(ctx, platform, isGround);
-    drawPlatformStudyBack(ctx, platform, platformVariant as PlatformVariant);
+    if (!isIllustratedStudy(platformVariant as PlatformVariant) || platform.style === 'iceCube') {
+      originalBack(ctx, platform, isGround);
+    }
+    drawPlatformStudyBack(ctx, platform, platformVariant as PlatformVariant, isGround);
   };
   theme.drawPlatformOverlay = (ctx, platform, isGround) => {
-    originalFront?.(ctx, platform, isGround);
-    drawPlatformStudyFront(ctx, platform, platformVariant as PlatformVariant);
+    if (!isIllustratedStudy(platformVariant as PlatformVariant)) originalFront?.(ctx, platform, isGround);
+    drawPlatformStudyFront(ctx, platform, platformVariant as PlatformVariant, isGround);
   };
 }
 if (variant !== 'current') {
