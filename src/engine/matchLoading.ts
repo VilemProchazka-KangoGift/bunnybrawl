@@ -1,6 +1,8 @@
 import { audio } from './audio';
 import type { Arena } from './types';
 import type { IRenderer } from './renderer';
+import { Renderer } from './renderer';
+import { preloadMeadowBackdrop } from './arenas/meadowBackdropAsset';
 import type { NetMatch } from './net';
 
 /**
@@ -58,12 +60,18 @@ export async function runLoadingTasks(opts: RunLoadingTasksOpts): Promise<void> 
 
   // Yield to the next tick so the loading overlay paints before we block on
   // the (synchronous, potentially slow) background render.
-  const backgroundTask = new Promise<void>((resolve) => {
+  // Worker renderers decode in their own realm before reporting ready. The
+  // direct Renderer path must decode here so its first background paint uses
+  // the selected image rather than the procedural load fallback.
+  const visualTask = opts.arenaId === 'meadow' && opts.renderer instanceof Renderer
+    ? preloadMeadowBackdrop()
+    : Promise.resolve();
+  const backgroundTask = visualTask.then(() => new Promise<void>((resolve) => {
     setTimeout(() => {
       opts.renderer.renderBackground(opts.arena, opts.originalArena);
       resolve();
     }, 0);
-  });
+  }));
 
   const spriteTask = new Promise<void>((resolve) => {
     setTimeout(() => {
@@ -106,4 +114,3 @@ export async function runLoadingTasks(opts: RunLoadingTasksOpts): Promise<void> 
     opts.renderer.warmSpriteCache(opts.characterNames);
   }
 }
-

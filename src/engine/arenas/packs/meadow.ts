@@ -14,7 +14,7 @@ import {
   drawMeadowHangingVine, drawMeadowFern, drawMeadowTallGrass,
   drawMeadowDandelion, drawMeadowButterfly, drawMeadowBee, drawMeadowSnail,
 } from './meadowStorybookDetails';
-import { drawMeadowValley, drawMeadowCloud, MEADOW_CLOUDS } from './meadowBackdrop';
+import { drawPaintedMeadowValley, drawMeadowCloud, MEADOW_CLOUDS } from './meadowBackdrop';
 
 const SNAILS_CFG: GroundCritterConfig[] = [
   { platL: 900, platR: 1080, platTopY: 660, walkSpeed: 8, fleeSpeed: 22, fleeRadius: 70, yTolerance: 80, turnEaseRate: 2 },
@@ -383,7 +383,7 @@ export const meadow: ArenaPack = {
   },
 
   // ---- Custom draw functions ----
-  drawFarBackground: (ctx) => drawMeadowValley(ctx),
+  drawFarBackground: (ctx) => drawPaintedMeadowValley(ctx),
 
   // Static-shape decorations route through the cached fg/bg-nature layers
   // (one-time bake). Only kinds that genuinely need per-frame reactivity —

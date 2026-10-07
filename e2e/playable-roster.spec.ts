@@ -1,10 +1,17 @@
 import { test, expect } from '@playwright/test';
 
+// Meadow now loads its own WebP backdrop. These assertions concern character
+// atlases specifically, including in classic-comparison mode.
+const isPlushAtlas = (url: string) => {
+  const file = new URL(url).pathname.split('/').pop() ?? '';
+  return file.endsWith('.webp') && !file.startsWith('meadow-low-valley');
+};
+
 test('preloads the plush roster while the menu stays usable', async ({ page }) => {
   const assets = new Set<string>();
   page.on('response', response => {
     const file = new URL(response.url()).pathname.split('/').pop() ?? '';
-    if (file.endsWith('.webp')) assets.add(file.split('-')[0]);
+    if (isPlushAtlas(response.url())) assets.add(file.split('-')[0]);
   });
   await page.goto('/');
   await expect(page.getByTestId('main-menu')).toBeVisible();
@@ -17,7 +24,7 @@ test('preloads the plush roster while the menu stays usable', async ({ page }) =
 test('does not preload plush art in classic comparison mode', async ({ page }) => {
   const assets: string[] = [];
   page.on('request', request => {
-    if (new URL(request.url()).pathname.endsWith('.webp')) assets.push(request.url());
+    if (isPlushAtlas(request.url())) assets.push(request.url());
   });
   await page.goto('/?classicCharacters=1');
   await expect(page.getByTestId('main-menu')).toBeVisible();
@@ -28,7 +35,7 @@ test('does not preload plush art in classic comparison mode', async ({ page }) =
 test('keeps an immediate Online click clear of plush downloads', async ({ page }) => {
   const assets: string[] = [];
   page.on('request', request => {
-    if (new URL(request.url()).pathname.endsWith('.webp')) assets.push(request.url());
+    if (isPlushAtlas(request.url())) assets.push(request.url());
   });
   await page.goto('/');
   await expect(page.getByTestId('main-menu')).toBeVisible();
@@ -54,7 +61,7 @@ for (const mode of ['default', 'simWorker=off'] as const) {
     const assets = new Set<string>();
     page.on('response', response => {
       const file = new URL(response.url()).pathname.split('/').pop() ?? '';
-      if (file.endsWith('.webp')) assets.add(file.split('-')[0]);
+      if (isPlushAtlas(response.url())) assets.add(file.split('-')[0]);
     });
     const query = mode === 'default' ? '' : '&simWorker=off';
     await page.goto(`/?arena=meadow&bots=1${query}`);
@@ -69,7 +76,7 @@ for (const mode of ['default', 'simWorker=off'] as const) {
 test('keeps the procedural roster available for comparison', async ({ page }) => {
   const assets: string[] = [];
   page.on('request', request => {
-    if (new URL(request.url()).pathname.endsWith('.webp')) assets.push(request.url());
+    if (isPlushAtlas(request.url())) assets.push(request.url());
   });
   await page.goto('/?arena=meadow&bots=1&classicCharacters=1');
   await expect(page.getByTestId('match-screen')).toBeVisible();

@@ -1,6 +1,6 @@
 # Meadow illustrated-background experiment
 
-This applies the same cartoon-versus-procedural experiment as the Winter Lake study to the **existing Meadow** arena. It is a style study, not a game-art change. The matched captures below use the real production renderer, platform geometry, props, opaque hiding bushes, five character sprites, HUD, clouds, and day/night treatment. Only the distant background plate changes. The frozen state, camera, and 1280 × 720 output are identical.
+This applies the same cartoon-versus-procedural experiment as the Winter Lake study to the **existing Meadow** arena. The matched captures below use the real renderer, platform geometry, props, opaque hiding bushes, five character sprites, HUD, clouds, and day/night treatment. Only the distant background plate changes. The frozen state, camera, and 1280 × 720 output are identical. The selected low painted valley was subsequently integrated into the playable Meadow pack; the gallery retains its earlier vector baseline.
 
 | Background | Day | Night | Reading at game size |
 | --- | --- | --- | --- |
@@ -8,7 +8,7 @@ This applies the same cartoon-versus-procedural experiment as the Winter Lake st
 | **Painted valley** | ![Painted valley day](painted-day.png) | ![Painted valley night](painted-night.png) | Strong storybook setting, but hills climb behind too many platforms and the tree/detail density competes with gameplay. |
 | **Low painted valley — selected** | ![Low painted valley day](low-valley-day.png) | ![Low painted valley night](low-valley-night.png) | Keeps open blue sky behind upper play lanes while adding pale layered hills and a hand-painted texture below. |
 
-The low valley is the selected direction. Keep it **subtle and pale** so the platforms, props, hiding bushes, and characters stay dominant. This revision blends the plate at 65% opacity over the production sky. Its blue sky texture is still more visible than the current gradient, and the background and unchanged foreground props have different mark-making styles. Treat it as a reference for a production backdrop, not finished game art.
+The low valley is the selected direction. Keep it **subtle and pale** so the platforms, props, hiding bushes, and characters stay dominant. This revision blends the plate at 65% opacity over the production sky. The playable version retains a more visible blue-sky texture than the old gradient, and its painted marks differ from the unchanged foreground props. Those are the next polish points, not reasons to move gameplay art into the bitmap.
 
 ### Resolution and loading experiment
 
@@ -22,7 +22,17 @@ Both WebP plates were resized from [the same generated source](low-valley-plate.
 
 In twelve fresh Chromium fixture navigations per variant, with HTTP cache disabled and 4× CPU slowdown, median time to the fixture's first rendered frame was **979 ms** for production, **1341 ms** for the 1280 WebP, and **1403 ms** for the 960 WebP. Median image fetch-plus-decode was **55 ms** and **44 ms**, respectively; the full static background render was **98 ms**, **161 ms**, and **137 ms**. These are local Vite development-server measurements with wide run-to-run ranges, so they are **not production load-time estimates** or proof that 960 is slower. Reproduce with [`measure-local.mjs`](measure-local.mjs). The plate is baked into Meadow's static background canvas when the arena loads; it adds no image draw to the normal per-frame character/particle loop. Preloading and decoding after menu paint or during lobby selection would hide most of the match-entry wait.
 
-For production, start with a single 1280 × 720 WebP (73 KB) unless mobile profiling shows a real memory or load problem. A two-size choice would save only about 29 KB of transfer and 1.54 MiB of decoded image memory for the smaller option. If used, select by the effective rendered canvas size, not by a device label, and keep both behind the arena's lazy load. There is no demonstrated need for a 2× plate for this deliberately soft landscape.
+Production uses a single 1280 × 720 WebP (73 KB) unless mobile profiling shows a real memory or load problem. A two-size choice would save only about 29 KB of transfer and 1.54 MiB of decoded image memory for the smaller option. If used, select by the effective rendered canvas size, not by a device label, and keep both behind the arena's lazy load. There is no demonstrated need for a 2× plate for this deliberately soft landscape.
+
+## Production adoption
+
+The game loads [`meadow-low-valley.webp`](../../../src/engine/arenas/assets/meadow-low-valley.webp) and blends it at 65% in [`meadowBackdrop.ts`](../../../src/engine/arenas/packs/meadowBackdrop.ts). Animated clouds, all playable objects, and foreground hiding bushes remain procedural. When the image is unavailable, the previous vector valley still draws. The menu begins fetching the encoded image **after its first paint** when Meadow is selected; opening Online cancels that speculative request. The lobby also fetches it if the selection changes to Meadow. Match setup decodes it in the canvas-owning thread before the first Meadow background paint, including direct arena links and mid-match switches. It is baked into the static background canvas rather than drawn each frame.
+
+| Live production build, default simulation worker | Live production build, renderer-only worker |
+| --- | --- |
+| ![Live Meadow with painted background in default worker mode](live-default.png) | ![Live Meadow with painted background in renderer-only mode](live-renderer-worker.png) |
+
+The live captures have moving characters and are not pixel-matched to the frozen table above. The production build passed the full Vitest suite (3,049 tests), nine smoke E2E cases, five Meadow backdrop E2E cases covering menu preload, direct entry and arena switches in both worker modes, and the constrained loading-budget gate. The budget kept arena pack code out of the initial menu bundle. Use `npm run build`, start `npx vite preview --host 127.0.0.1 --port 4224`, then run [`capture-live.mjs`](capture-live.mjs) to reproduce the live captures.
 
 ## Full-scene style concepts
 

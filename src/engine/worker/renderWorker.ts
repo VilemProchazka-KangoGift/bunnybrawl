@@ -22,6 +22,7 @@
 
 import { Renderer } from '../renderer';
 import { registerBuiltinArenas } from '../arenas/builtin';
+import { preloadMeadowBackdrop } from '../arenas/meadowBackdropAsset';
 import { registerBuiltinCharacters } from '../characters/builtin';
 import { getArena, getTheme, mirrorArena } from '../arenas/operations';
 import { setHudLanguage } from '../rendering/hud';
@@ -101,9 +102,10 @@ const particlePool: Particle[] = [];
 const colorCache = new ColorCache();
 let particlePoolLen = 0;
 
-async function bootstrap(pocketBunny: boolean, classicCharacters: boolean): Promise<void> {
+async function bootstrap(pocketBunny: boolean, classicCharacters: boolean, themeId: string): Promise<void> {
   registerBuiltinArenas();
   registerBuiltinCharacters();
+  const backdropTask = themeId === 'meadow' ? preloadMeadowBackdrop() : Promise.resolve();
   if (pocketBunny) {
     const { registerPocketBunnyRig } = await import('../characters/prototypes/pocketBunnyRig');
     await registerPocketBunnyRig();
@@ -112,6 +114,7 @@ async function bootstrap(pocketBunny: boolean, classicCharacters: boolean): Prom
     const { registerPlayablePlushRoster } = await import('../characters/plush/playableRoster');
     await registerPlayablePlushRoster();
   }
+  await backdropTask;
 }
 
 function postReady(): void {
@@ -274,7 +277,22 @@ ctxScope.addEventListener('message', async (e: MessageEvent<HostToWorkerMsg>) =>
   if (msg.type === 'host:engineInputBatch') { engineBindings.applyInputBatch(msg); return; }
   if (msg.type === 'host:enginePause') { engineBindings.pauseEngine(); return; }
   if (msg.type === 'host:engineResume') { engineBindings.resumeEngine(); return; }
-  if (msg.type === 'host:engineSwitchArena') { engineBindings.switchArenaInWorker(msg); return; }
+  if (msg.type === 'host:engineSwitchArena') {
+    if (msg.arenaId === 'meadow') {
+      initPending = true;
+      try {
+        await preloadMeadowBackdrop();
+        engineBindings.switchArenaInWorker(msg);
+      } catch (err) {
+        postError(err instanceof Error ? err.message : String(err));
+      } finally {
+        finishInit(true);
+      }
+    } else {
+      engineBindings.switchArenaInWorker(msg);
+    }
+    return;
+  }
   if (msg.type === 'host:engineSetPhase') { engineBindings.setPhaseInWorker(msg); return; }
   if (msg.type === 'host:engineSkipCountdown') { engineBindings.skipCountdownInWorker(); return; }
   if (msg.type === 'host:perfReset') {
@@ -294,7 +312,7 @@ ctxScope.addEventListener('message', async (e: MessageEvent<HostToWorkerMsg>) =>
     switch (msg.type) {
       case 'host:init': {
         initPending = true;
-        await bootstrap(msg.pocketBunny ?? false, msg.classicCharacters ?? false);
+        await bootstrap(msg.pocketBunny ?? false, msg.classicCharacters ?? false, msg.themeId);
         if (msg.perfEnabled) {
           debugFlags.perfEnabled = true;
           _perfEnabled = true;
@@ -387,14 +405,22 @@ ctxScope.addEventListener('message', async (e: MessageEvent<HostToWorkerMsg>) =>
       case 'host:setConnectionQuality':
         renderer.setConnectionQuality(msg.rtt, msg.jitter);
         return;
-      case 'host:setTheme':
-        renderer.setTheme(getTheme(msg.themeId));
-        // Theme changed → cosmetic systems need rebuild against the new
-        // arena. Done on the next renderBackground / renderFrame.
-        currentArenaId = null;
-        reactiveSystem = null;
-        wildlifeSystem = null;
+      case 'host:setTheme': {
+        const needsBackdrop = msg.themeId === 'meadow';
+        if (needsBackdrop) initPending = true;
+        try {
+          if (needsBackdrop) await preloadMeadowBackdrop();
+          renderer.setTheme(getTheme(msg.themeId));
+          // Theme changed → cosmetic systems need rebuild against the new
+          // arena. Done on the next renderBackground / renderFrame.
+          currentArenaId = null;
+          reactiveSystem = null;
+          wildlifeSystem = null;
+        } finally {
+          if (needsBackdrop) finishInit(true);
+        }
         return;
+      }
       case 'host:setArenaLights':
         renderer.setArenaLights(msg.lights);
         return;
