@@ -54,7 +54,20 @@ function drawPreviousTreeline(ctx: Ctx2D): void {
   ctx.lineTo(1300, 660); ctx.closePath(); ctx.fill();
 }
 
-if (variant === 'valley-and-clouds' || variant === 'raised-hills' || variant === 'tall-hills') {
+if (variant === 'painted-landscape' || variant === 'painted-low-valley') {
+  const plate = new Image();
+  plate.src = new URL(variant === 'painted-low-valley'
+    ? '../meadow-painted/low-valley-plate.png'
+    : '../meadow-painted/landscape-plate.png', import.meta.url).href;
+  await plate.decode();
+  theme.hills = [];
+  theme.drawFarBackground = (ctx) => {
+    ctx.save();
+    ctx.globalAlpha = 0.76;
+    ctx.drawImage(plate, 0, 0, 1280, 720);
+    ctx.restore();
+  };
+} else if (variant === 'valley-and-clouds' || variant === 'raised-hills' || variant === 'tall-hills') {
   const hillRise = variant === 'raised-hills' ? 38 : variant === 'tall-hills' ? 70 : 0;
   theme.hills = [];
   theme.clouds = { ...previousClouds, count: 0 };
