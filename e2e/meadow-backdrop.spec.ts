@@ -3,6 +3,7 @@ import { test, expect } from '@playwright/test';
 const isMeadowBackdrop = (url: string) => /meadow-low-valley[^/]*\.webp$/.test(new URL(url).pathname);
 
 test('prefetches the Meadow backdrop while the menu remains usable', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('carrotroyale_arena', 'meadow'));
   const requests: string[] = [];
   page.on('request', request => {
     if (isMeadowBackdrop(request.url())) requests.push(request.url());

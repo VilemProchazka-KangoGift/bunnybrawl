@@ -12,7 +12,7 @@ import { drawLobbyOverlay } from '../engine/lobbyRender';
 import { Renderer } from '../engine/renderer';
 import { getTheme } from '../engine/arenas/operations';
 import { loadBuiltinArenas } from '../engine/arenas/loading';
-import { prefetchMeadowBackdrop } from '../engine/arenas/meadowBackdropAsset';
+import { prefetchIllustratedBackdrop } from '../engine/arenas/illustratedBackdropAsset';
 import { sampleFps, drawFpsCounter } from '../engine/fpsCounter';
 import { useCanvasRenderScale } from '../hooks/useCanvasRenderScale';
 import './CharacterSelect.css';
@@ -38,7 +38,7 @@ export function CharacterSelect() {
   }, []);
 
   useEffect(() => {
-    if (matchSettings.arenaId === 'meadow') void prefetchMeadowBackdrop();
+    void prefetchIllustratedBackdrop(matchSettings.arenaId);
   }, [matchSettings.arenaId]);
 
   // Initialise LobbyGame once

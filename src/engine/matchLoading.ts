@@ -2,7 +2,7 @@ import { audio } from './audio';
 import type { Arena } from './types';
 import type { IRenderer } from './renderer';
 import { Renderer } from './renderer';
-import { preloadMeadowBackdrop } from './arenas/meadowBackdropAsset';
+import { preloadIllustratedBackdrop } from './arenas/illustratedBackdropAsset';
 import type { NetMatch } from './net';
 
 /**
@@ -63,8 +63,8 @@ export async function runLoadingTasks(opts: RunLoadingTasksOpts): Promise<void> 
   // Worker renderers decode in their own realm before reporting ready. The
   // direct Renderer path must decode here so its first background paint uses
   // the selected image rather than the procedural load fallback.
-  const visualTask = opts.arenaId === 'meadow' && opts.renderer instanceof Renderer
-    ? preloadMeadowBackdrop()
+  const visualTask = opts.renderer instanceof Renderer
+    ? preloadIllustratedBackdrop(opts.arenaId)
     : Promise.resolve();
   const backgroundTask = visualTask.then(() => new Promise<void>((resolve) => {
     setTimeout(() => {
