@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
 import type { MatchSettings, Arena, PlayerSlot } from './types';
 import { makeArena } from './__tests__/testHelpers';
-import { FIXED_TIMESTEP, DUST_LAND_VY_THRESHOLD, JUMP_IMPULSE } from './constants';
+import { FIXED_TIMESTEP, DUST_LAND_VY_THRESHOLD, JUMP_IMPULSE, MOVEMENT_PUFF_COLOR } from './constants';
 
 // --- Mocks ---
 
@@ -179,15 +179,18 @@ describe('cosmeticStep transition detection', () => {
     player.springTrailTimer = 0;
     loop.cosmeticStep(FIXED_TIMESTEP);
 
+    const launchFootY = player.y + player.height;
     spy.mockClear();
 
     // Transition to airborne via input.jump (vy = JUMP_IMPULSE)
     player.state = 'airborne';
+    player.y -= 12; // Physics already moved the player before cosmetics.
     player.vy = JUMP_IMPULSE;
     loop.cosmeticStep(FIXED_TIMESTEP);
 
     expect(spy).toHaveBeenCalledOnce();
-    expect(spy).toHaveBeenCalledWith(player);
+    expect(spy).toHaveBeenCalledWith(player, launchFootY);
+    expect(ps.getParticles().find(p => p.shape === 'jumpCloud')?.y).toBeLessThan(launchFootY);
   });
 
   it('does NOT spawn jump dust when launched by a spring (springTrailTimer rising edge)', () => {
@@ -215,7 +218,21 @@ describe('cosmeticStep transition detection', () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
-  it('landing dust uses the arena theme surface color', () => {
+  it('fast stomp contact emits immediately before the half-rate particle bucket', () => {
+    const { loop } = createLoop();
+    const player = loop.getState().players[0];
+    player.state = 'airborne'; player.vy = 800; player.fastFalling = true;
+    loop.tickCosmetic(0.001);
+    player.state = 'idle'; player.vy = 0; player.fastFalling = false;
+    loop.tickCosmetic(0.001);
+    const particles = loop.particleSystem.getParticles();
+    expect(particles.filter(p => p.shape === 'impactCrown')).toHaveLength(1);
+    expect(particles.filter(p => p.shape === 'landingCloud')).toHaveLength(0);
+    loop.tickCosmetic(0.001);
+    expect(particles.filter(p => p.shape === 'impactCrown')).toHaveLength(1);
+  });
+
+  it('landing uses the selected cream cloud silhouettes', () => {
     const { loop } = createLoop();
     const player = loop.getState().players[0];
 
@@ -227,9 +244,9 @@ describe('cosmeticStep transition detection', () => {
     player.vy = 0;
     loop.cosmeticStep(FIXED_TIMESTEP);
 
-    const expected = getTheme('meadow').ground.surfaceColor;
-    const tinted = loop.particleSystem.getParticles().filter(p => p.color === expected);
-    expect(tinted.length).toBeGreaterThan(0);
+    const clouds = loop.particleSystem.getParticles().filter(p => p.shape === 'landingCloud');
+    expect(clouds).toHaveLength(4);
+    expect(clouds.every(p => p.color === MOVEMENT_PUFF_COLOR)).toBe(true);
   });
 
   it('spawns jump dust on input-jump while springTrailTimer is still decaying (not a rising edge)', () => {
@@ -254,7 +271,7 @@ describe('cosmeticStep transition detection', () => {
     loop.cosmeticStep(FIXED_TIMESTEP);
 
     expect(spy).toHaveBeenCalledOnce();
-    expect(spy).toHaveBeenCalledWith(player);
+    expect(spy).toHaveBeenCalledWith(player, player.y + player.height);
   });
 
   it('detects landing: airborne → grounded with sufficient vy plays land sound', () => {
