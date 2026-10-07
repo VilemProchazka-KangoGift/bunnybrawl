@@ -1,4 +1,5 @@
 import type { Ctx2D } from '../types';
+import { drawBriar } from './thornArt';
 import type { Carrot, SpringMushroom, Thorn } from '../types';
 import type { ThemeConfig } from '../themes/types';
 import { CARROT_SIZE, SPRING_SIZE, HAZARD_GROW_TIME } from '../constants';
@@ -230,33 +231,10 @@ export function drawThorn(ctx: Ctx2D, thorn: Thorn, theme: ThemeConfig): void {
   ctx.scale(growScale, growScale);
   ctx.translate(-(x + width / 2), -(y + height));
 
-  // Vine base
-  ctx.fillStyle = '#3A5C1E';
-  ctx.fillRect(x, y + height - 4, width, 4);
-
-  // Spikes — batch all stem triangles into one path, all tip arcs into another.
-  const spikeCount = Math.floor(width / 7);
-  ctx.fillStyle = '#5C3A1E';
-  ctx.beginPath();
-  for (let i = 0; i < spikeCount; i++) {
-    const sx = x + 4 + i * (width / spikeCount);
-    const spikeH = height + 4 + (i % 2) * 3;
-    ctx.moveTo(sx - 4, y + height - 4);
-    ctx.lineTo(sx, y + height - spikeH);
-    ctx.lineTo(sx + 4, y + height - 4);
-    ctx.closePath();
-  }
-  ctx.fill();
-  ctx.fillStyle = '#DD2222';
-  ctx.beginPath();
-  for (let i = 0; i < spikeCount; i++) {
-    const sx = x + 4 + i * (width / spikeCount);
-    const spikeH = height + 4 + (i % 2) * 3;
-    const tipY = y + height - spikeH + 1;
-    ctx.moveTo(sx + 2, tipY);
-    ctx.arc(sx, tipY, 2, 0, Math.PI * 2);
-  }
-  ctx.fill();
+  // Keep the growth pivot on the platform and preserve collision geometry.
+  ctx.translate(x, y + height);
+  ctx.scale(width / 28, height / 12);
+  drawBriar(ctx);
 
   ctx.restore();
 }
