@@ -8,12 +8,16 @@ import { getAllCharacters } from '../../../src/engine/characters/defaults';
 import { registerPlayablePlushRoster } from '../../../src/engine/characters/plush/playableRoster';
 import { createEmptyMatchState, createInitialPlayers } from '../../../src/engine/simulator/initialState';
 import { drawBackdrop, skies, VARIANTS, type Variant } from './variants';
+import { preloadIllustratedBackdrop } from '../../../src/engine/arenas/illustratedBackdropAsset';
+import { drawPlatformStudyBack, drawPlatformStudyFront, PLATFORM_VARIANTS, type PlatformVariant } from '../winter-platforms/variants';
 
 const query = new URLSearchParams(location.search);
 const variant = query.get('variant') ?? 'current';
 const time = query.get('time') ?? 'day';
+const platformVariant = query.get('platform');
 if (!VARIANTS.includes(variant as Variant)) throw new Error(`Unknown background: ${variant}`);
 if (time !== 'day' && time !== 'night') throw new Error(`Unknown time: ${time}`);
+if (platformVariant && !PLATFORM_VARIANTS.includes(platformVariant as PlatformVariant)) throw new Error(`Unknown platform: ${platformVariant}`);
 
 let seed = 7312;
 Math.random = () => {
@@ -26,6 +30,21 @@ registerBuiltinCharacters();
 await registerPlayablePlushRoster();
 const arena = toArena(winterLake);
 const theme = toThemeConfig(winterLake);
+if (platformVariant) {
+  // The study's `current` background is the approved Pearl plate. Without a
+  // platform query, older background comparisons retain their old baseline.
+  await preloadIllustratedBackdrop('winter_lake');
+  const originalBack = theme.drawPlatform;
+  const originalFront = theme.drawPlatformOverlay;
+  theme.drawPlatform = (ctx, platform, isGround) => {
+    originalBack(ctx, platform, isGround);
+    drawPlatformStudyBack(ctx, platform, platformVariant as PlatformVariant);
+  };
+  theme.drawPlatformOverlay = (ctx, platform, isGround) => {
+    originalFront?.(ctx, platform, isGround);
+    drawPlatformStudyFront(ctx, platform, platformVariant as PlatformVariant);
+  };
+}
 if (variant !== 'current') {
   const selected = variant as Exclude<Variant, 'current'>;
   theme.sky = { gradient: skies[selected] };
