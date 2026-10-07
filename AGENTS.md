@@ -81,7 +81,7 @@ For deeper context, invoke the relevant skill:
 
 | Skill | When to use |
 |-------|-------------|
-| `visual-style/SKILL.md` | Arena or character visual redesign, background contrast, storybook props, visual mockups |
+| `visual-style/SKILL.md` | Arena and character redesign sequence, background contrast, storybook props, visual mockups |
 | `character-sprites.md` | Character pack creation, sprite/leg rendering, body shading |
 | `level-design.md` | Arena pack creation, theme drawing, reactive decorations, wildlife |
 | `juice-vfx-sound.md` | Particles, gibs, hitstop, screen shake, sound generation, ambient |
