@@ -11,6 +11,7 @@ const allVariants = [
     'mirror-ice', 'fir-shore', 'rose-dawn', 'polar-gap',
     'polar-open', 'polar-stepped', 'polar-offset', 'polar-alpenglow',
     'polar-soft-shoulders', 'polar-high-bluffs', 'polar-uneven-shore',
+    'polar-powder-bank', 'polar-wind-carved', 'polar-frost-shelves', 'polar-pearl-shore',
   ];
 const selectedVariants = process.argv.slice(2);
 try {

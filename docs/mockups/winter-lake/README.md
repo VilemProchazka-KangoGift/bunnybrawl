@@ -78,6 +78,19 @@ These retain Open Pass's broad central lake and replace its pointed cliff contou
 
 **Assessment:** High Bluffs is the strongest balance of lake identity and softer contours. Soft Shoulders leaves the most visual space around the platforms but risks feeling too flat. Uneven Shore has a natural composition, though its left bank is visually heavier. At midnight, all three stay behind the playable platforms and the foreground cover. These are background mockups only; compare them in motion before selecting one for production.
 
+### Lighter, less symmetrical Soft Shoulders
+
+Soft Shoulders is the preferred direction, but its mirrored banks and dark lower faces draw too much attention. Its lake also reads as a regular lens with geometric markings. These studies keep the same sky and open central composition while drawing each bank separately in paler colors. Each lake has its own uneven shore, interrupted snow rim, scattered frozen patches, and curved surface seams in place of the original triangular reflections. The [original Soft Shoulders at noon](polar-soft-shoulders-day.png) and [midnight](polar-soft-shoulders-night.png) remain the comparison.
+
+| Direction | Noon | Midnight | Surface character |
+| --- | --- | --- | --- |
+| **Powder Bank** | ![Powder Bank, noon](polar-powder-bank-day.png) | ![Powder Bank, midnight](polar-powder-bank-night.png) | Two uneven, pale mounds with fine powder specks; lake ice has lightly snowed patches. |
+| **Wind Carved** | ![Wind Carved, noon](polar-wind-carved-day.png) | ![Wind Carved, midnight](polar-wind-carved-night.png) | Low, unequal banks with thin wind lines; the lake's shoreline and frost seams bend independently. |
+| **Frost Shelves** | ![Frost Shelves, noon](polar-frost-shelves-day.png) | ![Frost Shelves, midnight](polar-frost-shelves-night.png) | Rounded layered snow and pale ice, with more visible seams and an irregular lake edge. |
+| **Pearl Shore** | ![Pearl Shore, noon](polar-pearl-shore-day.png) | ![Pearl Shore, midnight](polar-pearl-shore-night.png) | Slightly warmer, creamy snow with sparse soft patches and the quietest lake markings. |
+
+**Assessment:** Wind Carved best preserves readable shore and lake shapes while taking the dark mass out of the banks. Pearl Shore is the calmest but its pale surfaces may blend together at noon. Frost Shelves shows the most texture; its repeated horizontal marks may need further reduction for play. Powder Bank is an understated middle ground. The midnight overlay compresses their differences, so any final choice needs a moving in-game check at multiple times of day. None is integrated into the production arena.
+
 The fixture and variant functions are in [`render.ts`](render.ts) and [`variants.ts`](variants.ts). To reproduce, run Vite on port 4222 and then `node docs/mockups/winter-lake/capture-variants.mjs`. The earlier live-match baseline above remains available to compare the fixture with the game.
 
 ## Gameplay and render constraints

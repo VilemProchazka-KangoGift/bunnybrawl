@@ -7,6 +7,7 @@ export const VARIANTS = [
   'mirror-ice', 'fir-shore', 'rose-dawn', 'polar-gap',
   'polar-open', 'polar-stepped', 'polar-offset', 'polar-alpenglow',
   'polar-soft-shoulders', 'polar-high-bluffs', 'polar-uneven-shore',
+  'polar-powder-bank', 'polar-wind-carved', 'polar-frost-shelves', 'polar-pearl-shore',
 ] as const;
 export type Variant = (typeof VARIANTS)[number];
 
@@ -25,6 +26,10 @@ export const descriptions: Record<Exclude<Variant, 'current'>, string> = {
   'polar-soft-shoulders': 'Low rounded snow banks retain Open Pass breathing room without pointed cliff edges.',
   'polar-high-bluffs': 'Taller rounded hills keep the gap dramatic while replacing sharp ice peaks.',
   'polar-uneven-shore': 'One broad high hill and one low bank create a gentler asymmetric pass.',
+  'polar-powder-bank': 'Pale, uneven snow mounds with scattered powder texture.',
+  'polar-wind-carved': 'Gentle asymmetric shores with thin wind-swept snow lines.',
+  'polar-frost-shelves': 'Irregular rounded slopes with translucent layers of old snow and ice.',
+  'polar-pearl-shore': 'A warmer pearl-colored snowbank with sparse soft patches.',
 };
 
 export const skies: Record<Exclude<Variant, 'current'>, { offset: number; color: string }[]> = {
@@ -83,6 +88,22 @@ export const skies: Record<Exclude<Variant, 'current'>, { offset: number; color:
   'polar-uneven-shore': [
     { offset: 0, color: '#425574' }, { offset: .43, color: '#8599B2' },
     { offset: .78, color: '#C5CDD5' }, { offset: 1, color: '#E0E2DF' },
+  ],
+  'polar-powder-bank': [
+    { offset: 0, color: '#3D5573' }, { offset: .43, color: '#7E9AAD' },
+    { offset: .78, color: '#BCD0D3' }, { offset: 1, color: '#DFE6E1' },
+  ],
+  'polar-wind-carved': [
+    { offset: 0, color: '#3D5573' }, { offset: .43, color: '#7E9AAD' },
+    { offset: .78, color: '#BCD0D3' }, { offset: 1, color: '#DFE6E1' },
+  ],
+  'polar-frost-shelves': [
+    { offset: 0, color: '#3D5573' }, { offset: .43, color: '#7E9AAD' },
+    { offset: .78, color: '#BCD0D3' }, { offset: 1, color: '#DFE6E1' },
+  ],
+  'polar-pearl-shore': [
+    { offset: 0, color: '#3D5573' }, { offset: .43, color: '#7E9AAD' },
+    { offset: .78, color: '#BCD0D3' }, { offset: 1, color: '#DFE6E1' },
   ],
 };
 
@@ -351,6 +372,165 @@ function polarUnevenShore(ctx: Ctx2D): void {
   icePlane(ctx, [[-20, 655], [165, 624], [370, 587], [575, 555], [780, 545], [1000, 551], [1300, 571]], '#B6D0D8', 'rgba(91, 129, 159, 0.34)');
 }
 
+type BankTexture = 'powder' | 'wind' | 'shelves' | 'patches';
+
+function irregularBank(
+  ctx: Ctx2D, ridge: readonly Point[], face: string, lower: string,
+  texture: BankTexture, seed: number,
+): void {
+  const first = ridge[0];
+  const last = ridge[ridge.length - 1];
+  const minX = first[0];
+  const maxX = last[0];
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(first[0], first[1]);
+  for (let i = 1; i < ridge.length; i++) {
+    const [px, py] = ridge[i - 1];
+    const [x, y] = ridge[i];
+    ctx.quadraticCurveTo(px, py, (px + x) / 2, (py + y) / 2);
+  }
+  ctx.lineTo(last[0], last[1]);
+  ctx.lineTo(maxX, 720);
+  ctx.lineTo(minX, 720);
+  ctx.closePath();
+  const fill = ctx.createLinearGradient(0, 380, 0, 690);
+  fill.addColorStop(0, face);
+  fill.addColorStop(1, lower);
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.clip();
+
+  // The ridge is lit, but the texture stays far below the contrast of platforms.
+  ctx.strokeStyle = 'rgba(237, 247, 245, 0.30)';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(first[0], first[1] + 3);
+  for (let i = 1; i < ridge.length; i++) {
+    const [px, py] = ridge[i - 1];
+    const [x, y] = ridge[i];
+    ctx.quadraticCurveTo(px, py + 3, (px + x) / 2, (py + y) / 2 + 3);
+  }
+  ctx.stroke();
+
+  if (texture === 'powder' || texture === 'patches') {
+    for (let i = 0; i < (texture === 'powder' ? 42 : 12); i++) {
+      const x = minX + 18 + ((i * 97 + seed * 53) % Math.max(1, maxX - minX - 36));
+      const y = 455 + ((i * 61 + seed * 29) % 175);
+      const w = texture === 'powder' ? 2 + i % 3 : 12 + i % 4 * 8;
+      ctx.fillStyle = texture === 'powder'
+        ? 'rgba(240, 248, 246, 0.34)' : 'rgba(236, 246, 241, 0.18)';
+      ctx.beginPath();
+      ctx.ellipse(x, y, w, texture === 'powder' ? 1.5 : 4, -.12, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else {
+    const count = texture === 'wind' ? 7 : 4;
+    for (let i = 0; i < count; i++) {
+      const x = minX + 18 + (i * 83 + seed * 39) % Math.max(1, maxX - minX - 128);
+      const y = 460 + i * (texture === 'wind' ? 27 : 43) + seed % 11;
+      ctx.strokeStyle = texture === 'wind'
+        ? 'rgba(234, 247, 246, 0.28)' : 'rgba(219, 241, 243, 0.35)';
+      ctx.lineWidth = texture === 'wind' ? 2 : 7;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.bezierCurveTo(x + 30, y - 6, x + 78, y + 6, x + 105, y - 2);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+function traceLakeShore(ctx: Ctx2D, shore: readonly Point[]): void {
+  ctx.moveTo(shore[0][0], shore[0][1]);
+  for (let i = 1; i < shore.length; i++) {
+    const [px, py] = shore[i - 1];
+    const [x, y] = shore[i];
+    ctx.quadraticCurveTo(px, py, (px + x) / 2, (py + y) / 2);
+  }
+  ctx.lineTo(shore[shore.length - 1][0], shore[shore.length - 1][1]);
+}
+
+function organicLake(
+  ctx: Ctx2D, shore: readonly Point[], seed: number,
+  color: string, detail: 'frost' | 'veins' | 'snow',
+): void {
+  ctx.save();
+  ctx.beginPath();
+  traceLakeShore(ctx, shore);
+  ctx.lineTo(1300, 720);
+  ctx.lineTo(-20, 720);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.clip();
+
+  // Broad, interrupted patches suggest frozen water under dusted snow.
+  for (let i = 0; i < 9; i++) {
+    const x = 65 + (i * 173 + seed * 61) % 1180;
+    const y = 565 + (i * 71 + seed * 17) % 95;
+    ctx.fillStyle = i % 3 === 0
+      ? 'rgba(91, 150, 168, 0.10)' : 'rgba(239, 249, 247, 0.12)';
+    ctx.beginPath();
+    ctx.ellipse(x, y, 34 + (i % 4) * 17, 4 + i % 3 * 2, -.08 + i % 3 * .08, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  const seamCount = detail === 'veins' ? 7 : detail === 'frost' ? 5 : 3;
+  ctx.lineCap = 'round';
+  for (let i = 0; i < seamCount; i++) {
+    const x = 65 + (i * 229 + seed * 47) % 1000;
+    const y = 588 + (i * 59 + seed * 13) % 70;
+    ctx.strokeStyle = detail === 'snow'
+      ? 'rgba(238, 249, 247, 0.20)' : 'rgba(77, 134, 157, 0.20)';
+    ctx.lineWidth = detail === 'veins' ? 1.5 : 2;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.bezierCurveTo(x + 25, y - 7, x + 46, y + 5, x + 69, y - 4);
+    ctx.bezierCurveTo(x + 87, y - 7, x + 99, y + 1, x + 116, y - 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // Only fragments of the snowy waterline catch the light.
+  ctx.save();
+  ctx.strokeStyle = 'rgba(238, 248, 246, 0.35)';
+  ctx.lineWidth = 3;
+  ctx.setLineDash([81, 46, 17, 71, 49, 63]);
+  ctx.beginPath();
+  traceLakeShore(ctx, shore);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function polarPowderBank(ctx: Ctx2D): void {
+  band(ctx, '#B5CCD1', [[-20, 483], [185, 455], [385, 477], [610, 451], [825, 475], [1040, 448], [1300, 481]]);
+  irregularBank(ctx, [[-20, 434], [95, 411], [185, 431], [285, 409], [385, 476], [510, 560]], '#C8DCDB', '#ACC8CE', 'powder', 1);
+  irregularBank(ctx, [[775, 561], [862, 518], [953, 457], [1052, 441], [1150, 421], [1243, 439], [1300, 429]], '#C4D9D9', '#A9C5CD', 'powder', 4);
+  organicLake(ctx, [[-20, 625], [128, 611], [239, 585], [325, 575], [429, 563], [552, 568], [650, 537], [762, 554], [874, 566], [962, 575], [1075, 583], [1190, 599], [1300, 607]], 2, '#B3D2D5', 'snow');
+}
+
+function polarWindCarved(ctx: Ctx2D): void {
+  band(ctx, '#B2CBD2', [[-20, 484], [225, 461], [420, 480], [640, 444], [890, 473], [1125, 453], [1300, 481]]);
+  irregularBank(ctx, [[-20, 425], [85, 421], [181, 438], [272, 418], [360, 455], [470, 540]], '#BFD5D7', '#A4C1CA', 'wind', 2);
+  irregularBank(ctx, [[759, 561], [862, 515], [965, 474], [1060, 458], [1155, 448], [1240, 425], [1300, 432]], '#C4D9DB', '#ACC8CF', 'wind', 7);
+  organicLake(ctx, [[-20, 614], [125, 604], [215, 585], [320, 575], [448, 574], [545, 548], [671, 569], [769, 535], [859, 560], [965, 576], [1085, 584], [1201, 590], [1300, 616]], 5, '#AED0D5', 'frost');
+}
+
+function polarFrostShelves(ctx: Ctx2D): void {
+  band(ctx, '#B5CDD3', [[-20, 483], [205, 459], [412, 476], [625, 451], [865, 474], [1075, 445], [1300, 482]]);
+  irregularBank(ctx, [[-20, 450], [78, 419], [163, 427], [249, 438], [340, 432], [420, 493], [525, 566]], '#B9D4DB', '#9FC4CE', 'shelves', 3);
+  irregularBank(ctx, [[760, 562], [852, 533], [945, 486], [1018, 457], [1092, 471], [1190, 433], [1300, 442]], '#C3D9DE', '#A9C9D2', 'shelves', 8);
+  organicLake(ctx, [[-20, 628], [105, 605], [212, 591], [345, 572], [454, 568], [559, 536], [668, 567], [783, 550], [901, 565], [1024, 577], [1130, 594], [1210, 590], [1300, 608]], 7, '#ADD0D8', 'veins');
+}
+
+function polarPearlShore(ctx: Ctx2D): void {
+  band(ctx, '#BBCDD0', [[-20, 484], [220, 455], [440, 480], [640, 449], [850, 475], [1075, 452], [1300, 481]]);
+  irregularBank(ctx, [[-20, 443], [75, 436], [155, 414], [248, 419], [340, 463], [420, 500], [510, 565]], '#D6DDD9', '#B6CDCF', 'patches', 6);
+  irregularBank(ctx, [[777, 560], [869, 521], [942, 499], [1032, 465], [1110, 455], [1195, 465], [1300, 436]], '#D0DBDA', '#B4CDCF', 'patches', 9);
+  organicLake(ctx, [[-20, 620], [115, 602], [225, 594], [339, 572], [446, 570], [568, 573], [671, 540], [805, 554], [921, 567], [1038, 571], [1149, 587], [1300, 609]], 4, '#BBD4D5', 'snow');
+}
+
 export const drawBackdrop: Record<Exclude<Variant, 'current'>, (ctx: Ctx2D) => void> = {
   'quiet-shore': quietShore,
   'glacial-basin': glacialBasin,
@@ -366,4 +546,8 @@ export const drawBackdrop: Record<Exclude<Variant, 'current'>, (ctx: Ctx2D) => v
   'polar-soft-shoulders': polarSoftShoulders,
   'polar-high-bluffs': polarHighBluffs,
   'polar-uneven-shore': polarUnevenShore,
+  'polar-powder-bank': polarPowderBank,
+  'polar-wind-carved': polarWindCarved,
+  'polar-frost-shelves': polarFrostShelves,
+  'polar-pearl-shore': polarPearlShore,
 };
