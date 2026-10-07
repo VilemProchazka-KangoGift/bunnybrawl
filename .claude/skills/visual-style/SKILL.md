@@ -34,7 +34,7 @@ Use the [carrot pickup comparison and angle studies](../../../docs/mockups/carro
 
 ### Springs must look alive and actionable
 
-The [spring mushroom comparison](../../../docs/mockups/spring-mushroom/README.md) replaces the default neon cap and grey metal coils with a broad storybook cap, visible gilled underside, and a folded cream stem. A warm cap with a continuous dark edge separates the spring from Meadow's green platform while its wide top still reads as a place to land. Animate the cap and stem together when bouncing: the foot stays planted, the stem compresses, and the cap broadens, then rebounds. Keep the spots and folds large enough to survive at match scale. Check the day/night scene and the compressed frame, not only an enlarged isolated drawing. Preserve the spring collision box and leave arena-specific spring skins alone unless that arena is in scope.
+The [spring mushroom shape and color study](../../../docs/mockups/spring-mushroom/README.md) records a rejected rose spotted dome and six alternative silhouettes. Do not treat the first redesign as approved: its cap looked generic in Meadow. Explore the cap structure as well as hue, and compare candidates over a real arena capture at native size and at night. The top should communicate where to land, while the stem and cap should be able to compress together when bouncing. Keep the foot planted, preserve the collision box, and leave arena-specific spring skins alone unless that arena is in scope. A still mockup is only a direction; implement and inspect the bounce pose after selection.
 
 ## Backgrounds: contrast with characters
 
