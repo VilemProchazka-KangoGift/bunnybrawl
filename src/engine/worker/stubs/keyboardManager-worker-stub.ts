@@ -2,7 +2,7 @@
  * Worker-only stub for KeyboardManager. The real one attaches `window`
  * listeners and tracks pressed keys; in worker, there's no window and no
  * keyboard input — keyboard state is forwarded from main via
- * `host:engineInputBatch` and consumed by RemoteInput-style adapters.
+ * `host:engineInputBatch` and consumed by WorkerInput adapters.
  *
  * GameLoop's constructor instantiates KeyboardManager and start() calls
  * .attach() on it. Both are no-ops here.
@@ -19,6 +19,7 @@ export class KeyboardManager {
   readSlot(_slot: CharacterSlot): InputState { return EMPTY; }
   readAny(): InputState { return EMPTY; }
   isAnyKeyHeld(): boolean { return false; }
+  clearPendingJumps(): void { /* input is owned by WorkerInput */ }
   reset(): void { /* nothing */ }
   /** GameLoop's start() / stop() call onKeyDown / onKeyUp via this. Worker
    *  doesn't process keys — main does. */

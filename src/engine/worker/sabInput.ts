@@ -3,8 +3,8 @@
  *
  *  Replaces the `host:engineInputBatch` postMessage hop for active human
  *  slots with a tiny SharedArrayBuffer. Each slot gets one Int32 holding
- *  a bitfield of the four `InputState` booleans. Main `Atomics.store`s
- *  on change; the worker `Atomics.load`s every tick into its `inputMap`.
+ *  held levels plus a pending jump bit. Main publishes changes atomically;
+ *  WorkerInput clears only the jump bit when the simulator reads that slot.
  *
  *  Wire layout (all Int32):
  *    [0]            = generation — bumped from main if the slot mapping
@@ -59,16 +59,25 @@ export function decodeInputBits(v: number, out: InputState): void {
 }
 
 /** Write a slot's input. `slotIdx` is the human-slot index (0..N-1),
- *  NOT the raw player slot. Uses Atomics.store for cross-thread visibility. */
+ *  NOT the raw player slot. Uses atomic compare-and-exchange for visibility. */
 export function writeSlotInput(view: Int32Array, slotIdx: number, input: InputState): void {
-  Atomics.store(view, SAB_INPUT_HEADER + slotIdx, encodeInputBits(input));
+  const index = SAB_INPUT_HEADER + slotIdx;
+  const levels = encodeInputBits(input);
+  let previous = Atomics.load(view, index);
+  for (;;) {
+    // Preserve a pending jump while replacing held levels. CAS prevents a
+    // concurrent consume from being resurrected by a stale producer read.
+    const next = levels | (previous & BIT_JUMP);
+    const actual = Atomics.compareExchange(view, index, previous, next);
+    if (actual === previous) break;
+    previous = actual;
+  }
 }
 
-/** Read a slot's input into `out`. Returns true if the field decoded
- *  cleanly. The worker pre-allocates one `InputState` per slot and
- *  reuses it across ticks; this function mutates `out` in place. */
+/** Read held levels and atomically consume a pending jump into a reused scratch. */
 export function readSlotInput(view: Int32Array, slotIdx: number, out: InputState): void {
-  decodeInputBits(Atomics.load(view, SAB_INPUT_HEADER + slotIdx), out);
+  // Consume only the jump bit; held movement/Down remain visible next tick.
+  decodeInputBits(Atomics.and(view, SAB_INPUT_HEADER + slotIdx, ~BIT_JUMP), out);
 }
 
 export function setSlotCount(view: Int32Array, count: number): void {
@@ -77,4 +86,14 @@ export function setSlotCount(view: Int32Array, count: number): void {
 
 export function getSlotCount(view: Int32Array): number {
   return Atomics.load(view, 1);
+}
+
+/** Discard pulses at pause boundaries while preserving held levels. */
+export function clearPendingSabJumps(view: Int32Array): void {
+  for (let i = 0; i < getSlotCount(view); i++) Atomics.and(view, SAB_INPUT_HEADER + i, ~BIT_JUMP);
+}
+
+/** Reset inputs on an ownership transition; retain wire headers. */
+export function resetSlotInputs(view: Int32Array): void {
+  for (let i = 0; i < SAB_INPUT_MAX_SLOTS; i++) Atomics.store(view, SAB_INPUT_HEADER + i, 0);
 }

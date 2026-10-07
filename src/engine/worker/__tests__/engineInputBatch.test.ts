@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applyInputBatchTo } from '../engineWorkerInit';
+import { applyInputBatchTo } from '../inputBatch';
 import type { PlayerSlot, InputState } from '../../types';
 
 /** Phase 2 Task 8 seam. The worker's `applyInputBatch` mutates a module-scope
@@ -18,6 +18,21 @@ describe('applyInputBatchTo', () => {
     expect(map.size).toBe(1);
     expect(map.get('P1')).toEqual({ left: false, right: true, jump: true, down: false });
     expect(map.has('P2')).toBe(false);
+  });
+
+  it('retains a jump when a neutral batch arrives before simulation reads it', () => {
+    const map = new Map<PlayerSlot, InputState>();
+    applyInputBatchTo(map, [['P1', { left: false, right: true, jump: true, down: false }]]);
+    applyInputBatchTo(map, [['P1', { left: true, right: false, jump: false, down: true }]]);
+    expect(map.get('P1')).toEqual({ left: true, right: false, jump: true, down: true });
+  });
+
+  it('does not retain mutable references to producer input scratches', () => {
+    const map = new Map<PlayerSlot, InputState>();
+    const input = { left: false, right: false, jump: true, down: false };
+    applyInputBatchTo(map, [['P1', input]]);
+    input.jump = false;
+    expect(map.get('P1')?.jump).toBe(true);
   });
 
   it('accepts an empty batch — map is cleared', () => {

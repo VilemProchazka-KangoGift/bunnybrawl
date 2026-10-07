@@ -169,3 +169,9 @@ Vite config needs `optimizeDeps.include: ['trystero']`.
 - **Input map**: reuse single `Map` with `.clear()` instead of `new Map()` per frame.
 - **Pre-allocated `_anyInput`**: `KeyboardManager.readAny()` reuses one `InputState` object — no spread copies.
 - **Return const references** (like `NO_INPUT`) instead of spreading copies in cold paths too.
+
+## Input Ownership with Simulation Workers
+
+HostLoop/GuestLoop exclusively sample `getInputAny()` online. EngineWorkerProxy must stop local keyboard-event/RAF forwarding in host and guest modes, and WorkerInput must ignore raw local SAB in those modes. Network batches remain behind existing host fairness delay. Switching ownership clears worker buffers and SAB levels. Batch deduplication compares slot IDs and levels; a jump=true batch must always forward because identical consecutive submissions can represent separate presses.
+
+Keep asynchronous pulse retention inside WorkerInput and the browser keyboard boundary. RemoteInput and ML/bot PlayerInput actions are synchronous per-tick values: never mutate, consume, or latch their returned action objects. Headless recordings retain every valid action unchanged. Local-relay online smoke exercises a guest quick tap and held movement on the host in normal, adverse-network and message-fallback modes.

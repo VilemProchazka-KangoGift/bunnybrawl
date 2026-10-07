@@ -735,11 +735,13 @@ export class GameLoop {
   pause(): void {
     if (this.paused) return;
     this.paused = true;
+    this.keyboardManager.clearPendingJumps();
     audio.setPaused(true);
     this.simulator.getState().screenShake = 0;
   }
   resume(): void {
     if (!this.paused) return;
+    this.keyboardManager.clearPendingJumps();
     this.paused = false;
     this.lastTime = performance.now();
     audio.setPaused(false, this.simulator.getArena().themeId);

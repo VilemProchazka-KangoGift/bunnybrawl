@@ -2,7 +2,7 @@
  * Main-thread proxy for sim-in-worker mode (?simWorker=on). Stands in for
  * GameLoop entirely — the worker hosts Simulator + cosmetic systems +
  * Renderer and drives its own RAF. Main only:
- *   - reads keyboard / touch each frame and forwards an input batch
+ *   - publishes local keyboard changes immediately and polls touch each frame
  *   - receives engine events (SFX, music, haptics, phase change, match end)
  *     and dispatches via the real AudioManager / haptics / callbacks
  *   - mirrors the worker's MatchState so getState() answers synchronously
@@ -35,7 +35,7 @@ import { getSlowDevice } from '../perfFlags';
 import { getCharacterForSlot } from '../characters/defaults';
 import { createInitialPlayers, createInitialMatchState } from '../simulator/initialState';
 import { CANVAS_WIDTH } from '../constants';
-import { createInputSab, setSlotCount, writeSlotInput, SAB_INPUT_MAX_SLOTS } from './sabInput';
+import { createInputSab, setSlotCount, writeSlotInput, clearPendingSabJumps, resetSlotInputs, SAB_INPUT_MAX_SLOTS } from './sabInput';
 import { installWorkerBootQueue, type WorkerBootQueue } from './workerBootQueue';
 import type { Arena, MatchSettings, MatchState, MatchPhase, PlayerSlot, InputState, CharacterSlot } from '../types';
 import type { ThemeConfig } from '../themes/types';
@@ -98,6 +98,7 @@ export class EngineWorkerProxy {
   private rafId = 0;
   private running = false;
   private paused = false;
+  private netMode: 'off' | 'host' | 'guest' = 'off';
   private mirrorState: MatchState | null = null;
   /** Phase 2: host-mode subscriber for worker-emitted encoded snapshots.
    *  Single-caller — NetMatch wires it in `start()`. Null when offline. */
@@ -112,7 +113,7 @@ export class EngineWorkerProxy {
   private lastSentInputs: InputState[] = [];
   /** True until the first input batch has been posted, ensuring the worker
    *  receives at least one batch even on a frame with all-empty inputs
-   *  (so RemoteInput's read finds the slot in the map). */
+   *  (so WorkerInput finds the slot in the map). */
   private inputsEverSent = false;
   /** SAB-backed input view (Step 2 of the SAB roadmap). When the browser
    *  exposes `crossOriginIsolated` + SAB, main writes per-slot bitfields
@@ -345,6 +346,7 @@ export class EngineWorkerProxy {
   };
 
   start(): void {
+    this.keyboardManager.setChangeListener(this.forwardKeyboardChange);
     this.keyboardManager.attach();
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', this._onVisibilityChange);
@@ -363,8 +365,18 @@ export class EngineWorkerProxy {
     this.rafId = requestAnimationFrame(this.tick);
   }
 
+  private forwardKeyboardChange = (): void => {
+    if (this.paused) { this.keyboardManager.clearPendingJumps(); return; }
+    if (this.running && !this.destroyed && this.netMode === 'off') this.forwardLocalInputs();
+  };
+
   private tick = (): void => {
     if (!this.running || this.destroyed) return;
+    if (!this.paused && this.netMode === 'off') this.forwardLocalInputs();
+    this.rafId = requestAnimationFrame(this.tick);
+  };
+
+  private forwardLocalInputs(): void {
     // Build per-slot input batch from KeyboardManager + TouchInput. Bots
     // run inside the worker's Simulator (RuleBasedBot) so we don't include
     // their inputs.
@@ -429,7 +441,7 @@ export class EngineWorkerProxy {
     if (inputs.length > humanIdx) inputs.length = humanIdx;
 
     // Two delivery paths:
-    //  - SAB (crossOriginIsolated dev/preview): Atomics.store the per-slot
+    //  - SAB (crossOriginIsolated dev/preview): atomically publish the per-slot
     //    bitfield. Worker polls every fixedUpdate, no message hop.
     //  - postMessage fallback (prod / GitHub Pages, no COOP/COEP): same
     //    `host:engineInputBatch` wire as before.
@@ -443,8 +455,7 @@ export class EngineWorkerProxy {
       this.worker.postMessage(m);
       this.inputsEverSent = true;
     }
-    this.rafId = requestAnimationFrame(this.tick);
-  };
+  }
 
   stop(): void {
     this.running = false;
@@ -453,6 +464,7 @@ export class EngineWorkerProxy {
     if (typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', this._onVisibilityChange);
     }
+    this.keyboardManager.setChangeListener(null);
     this.keyboardManager.detach();
     this.touchInput?.detach();
     audio.stopAllGameSounds();
@@ -482,13 +494,20 @@ export class EngineWorkerProxy {
   pause(): void {
     if (this.paused) return;
     this.paused = true;
+    this.keyboardManager.clearPendingJumps();
+    if (this.inputSabView) clearPendingSabJumps(this.inputSabView);
     audio.setPaused(true);
     const m: HostEnginePauseMsg = { type: 'host:enginePause' };
     this.worker.postMessage(m);
   }
   resume(): void {
     if (!this.paused) return;
+    this.keyboardManager.clearPendingJumps();
     this.paused = false;
+    if (this.netMode === 'off') {
+      this.inputsEverSent = false;
+      this.forwardLocalInputs(); // Publish releases made while paused before resuming.
+    }
     audio.setPaused(false, this._arena.themeId);
     const m: HostEngineResumeMsg = { type: 'host:engineResume' };
     this.worker.postMessage(m);
@@ -558,26 +577,35 @@ export class EngineWorkerProxy {
    *  60Hz host with idle hands posts ~0 messages/sec, matching the SAB
    *  fast path's cadence. */
   private _inputBatchScratch: Array<[PlayerSlot, InputState]> = [];
-  private _lastInputBatchHash = 0;
+  private _lastInputBatch: Array<[PlayerSlot, InputState]> = [];
   postInputBatch(inputs: ReadonlyMap<PlayerSlot, InputState>): void {
-    // Bitfield hash over the input map. 4 bits per slot, slot order
-    // matches insertion (which `HostAuthority.getNetworkInputs` keeps
-    // stable). Collisions are acceptable — at worst we miss one update.
-    let hash = 0;
-    let bit = 0;
-    for (const [, input] of inputs) {
-      if (input.left)  hash |= 1 << bit;
-      if (input.right) hash |= 1 << (bit + 1);
-      if (input.jump)  hash |= 1 << (bit + 2);
-      if (input.down)  hash |= 1 << (bit + 3);
-      bit += 4;
+    // Compare identities and levels exactly. A new jump=true submission is
+    // an event, even when all four fields equal the preceding batch.
+    let changed = !this.inputsEverSent || inputs.size !== this._lastInputBatch.length;
+    let i = 0;
+    for (const [slot, input] of inputs) {
+      const last = this._lastInputBatch[i];
+      if (!last || last[0] !== slot || last[1].left !== input.left
+        || last[1].right !== input.right || last[1].down !== input.down
+        || last[1].jump !== input.jump || input.jump) changed = true;
+      i++;
     }
-    if (hash === this._lastInputBatchHash && this.inputsEverSent) return;
-    this._lastInputBatchHash = hash;
+    if (!changed) return;
     this.inputsEverSent = true;
-
     this._inputBatchScratch.length = 0;
-    for (const [slot, input] of inputs) this._inputBatchScratch.push([slot, input]);
+    i = 0;
+    for (const [slot, input] of inputs) {
+      let last = this._lastInputBatch[i];
+      if (!last) {
+        last = [slot, { left: false, right: false, jump: false, down: false }];
+        this._lastInputBatch[i] = last;
+      }
+      last[0] = slot;
+      Object.assign(last[1], input);
+      this._inputBatchScratch.push(last);
+      i++;
+    }
+    this._lastInputBatch.length = i;
     const m: HostEngineInputBatchMsg = { type: 'host:engineInputBatch', inputs: this._inputBatchScratch };
     this.worker.postMessage(m);
   }
@@ -588,6 +616,10 @@ export class EngineWorkerProxy {
    *  encode + emit snapshots per tick; guest = decode + interpolate from
    *  buffers fed via pumpIncomingSnapshot. */
   setNetMode(mode: 'host' | 'guest' | 'off', delayFrames = 0): void {
+    this.netMode = mode;
+    this.inputsEverSent = false;
+    // HostLoop/GuestLoop owns reads in online mode; local RAF/event sends stop.
+    if (this.inputSabView) resetSlotInputs(this.inputSabView);
     const m: HostNetSetModeMsg = { type: 'host:netSetMode', mode, delayFrames };
     this.worker.postMessage(m);
   }

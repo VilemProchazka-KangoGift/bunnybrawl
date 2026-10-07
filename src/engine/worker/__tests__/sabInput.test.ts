@@ -1,13 +1,30 @@
 import { describe, it, expect } from 'vitest';
 import {
   encodeInputBits, decodeInputBits, writeSlotInput, readSlotInput,
-  setSlotCount, getSlotCount, SAB_INPUT_HEADER, SAB_INPUT_MAX_SLOTS,
+  setSlotCount, getSlotCount, clearPendingSabJumps, resetSlotInputs, SAB_INPUT_HEADER, SAB_INPUT_MAX_SLOTS,
 } from '../sabInput';
 import type { InputState } from '../../types';
 
 const empty = (): InputState => ({ left: false, right: false, jump: false, down: false });
 
 describe('sabInput encode/decode', () => {
+  it('clears paused jump pulses while retaining levels, and resets levels on ownership change', () => {
+    const view = new Int32Array(new SharedArrayBuffer((SAB_INPUT_HEADER + SAB_INPUT_MAX_SLOTS) * 4));
+    setSlotCount(view, 2);
+    for (let i = 0; i < 2; i++) writeSlotInput(view, i, { ...empty(), right: true, jump: true });
+    clearPendingSabJumps(view);
+    for (let i = 0; i < 2; i++) {
+      const out = empty();
+      readSlotInput(view, i, out);
+      expect(out).toEqual({ ...empty(), right: true });
+    }
+    resetSlotInputs(view);
+    expect(getSlotCount(view)).toBe(2);
+    const out = empty();
+    readSlotInput(view, 1, out);
+    expect(out).toEqual(empty());
+  });
+
   it('round-trips all 16 button combinations', () => {
     for (let bits = 0; bits < 16; bits++) {
       const input: InputState = {
@@ -47,12 +64,14 @@ describe('sabInput encode/decode', () => {
     expect(c).toEqual({ left: false, right: false, jump: false, down: false });
   });
 
-  it('overwrites in place — last write wins', () => {
+  it('updates held levels without overwriting an unconsumed jump', () => {
     const view = new Int32Array(new ArrayBuffer((SAB_INPUT_HEADER + SAB_INPUT_MAX_SLOTS) * 4));
     writeSlotInput(view, 0, { left: true, right: true, jump: true, down: true });
     writeSlotInput(view, 0, { left: false, right: false, jump: false, down: false });
     const out = empty();
     readSlotInput(view, 0, out);
-    expect(out).toEqual({ left: false, right: false, jump: false, down: false });
+    expect(out).toEqual({ left: false, right: false, jump: true, down: false });
+    readSlotInput(view, 0, out);
+    expect(out.jump).toBe(false);
   });
 });
