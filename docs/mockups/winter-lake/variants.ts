@@ -8,6 +8,7 @@ export const VARIANTS = [
   'polar-open', 'polar-stepped', 'polar-offset', 'polar-alpenglow',
   'polar-soft-shoulders', 'polar-high-bluffs', 'polar-uneven-shore',
   'polar-powder-bank', 'polar-wind-carved', 'polar-frost-shelves', 'polar-pearl-shore',
+  'polar-silver-banks', 'polar-lilac-snow', 'polar-deep-ice', 'polar-warm-drift',
 ] as const;
 export type Variant = (typeof VARIANTS)[number];
 
@@ -30,6 +31,10 @@ export const descriptions: Record<Exclude<Variant, 'current'>, string> = {
   'polar-wind-carved': 'Gentle asymmetric shores with thin wind-swept snow lines.',
   'polar-frost-shelves': 'Irregular rounded slopes with translucent layers of old snow and ice.',
   'polar-pearl-shore': 'A warmer pearl-colored snowbank with sparse soft patches.',
+  'polar-silver-banks': 'Neutral silver snow banks contrast with a cooler blue lake.',
+  'polar-lilac-snow': 'A soft violet shore frames turquoise ice with a wide, flat pass.',
+  'polar-deep-ice': 'Low pale banks leave room for a bluer frozen lake to define the place.',
+  'polar-warm-drift': 'Warm ivory snow and a cool lake separate the two surfaces gently.',
 };
 
 export const skies: Record<Exclude<Variant, 'current'>, { offset: number; color: string }[]> = {
@@ -102,6 +107,22 @@ export const skies: Record<Exclude<Variant, 'current'>, { offset: number; color:
     { offset: .78, color: '#BCD0D3' }, { offset: 1, color: '#DFE6E1' },
   ],
   'polar-pearl-shore': [
+    { offset: 0, color: '#3D5573' }, { offset: .43, color: '#7E9AAD' },
+    { offset: .78, color: '#BCD0D3' }, { offset: 1, color: '#DFE6E1' },
+  ],
+  'polar-silver-banks': [
+    { offset: 0, color: '#3D5573' }, { offset: .43, color: '#7E9AAD' },
+    { offset: .78, color: '#BCD0D3' }, { offset: 1, color: '#DFE6E1' },
+  ],
+  'polar-lilac-snow': [
+    { offset: 0, color: '#3D5573' }, { offset: .43, color: '#7E9AAD' },
+    { offset: .78, color: '#BCD0D3' }, { offset: 1, color: '#DFE6E1' },
+  ],
+  'polar-deep-ice': [
+    { offset: 0, color: '#3D5573' }, { offset: .43, color: '#7E9AAD' },
+    { offset: .78, color: '#BCD0D3' }, { offset: 1, color: '#DFE6E1' },
+  ],
+  'polar-warm-drift': [
     { offset: 0, color: '#3D5573' }, { offset: .43, color: '#7E9AAD' },
     { offset: .78, color: '#BCD0D3' }, { offset: 1, color: '#DFE6E1' },
   ],
@@ -531,6 +552,74 @@ function polarPearlShore(ctx: Ctx2D): void {
   organicLake(ctx, [[-20, 620], [115, 602], [225, 594], [339, 572], [446, 570], [568, 573], [671, 540], [805, 554], [921, 567], [1038, 571], [1149, 587], [1300, 609]], 4, '#BBD4D5', 'snow');
 }
 
+interface WindStudy {
+  far: string;
+  left: readonly Point[];
+  right: readonly Point[];
+  leftSnow: string;
+  leftBase: string;
+  rightSnow: string;
+  rightBase: string;
+  shore: readonly Point[];
+  lake: string;
+  seed: number;
+}
+
+function windStudy(ctx: Ctx2D, study: WindStudy): void {
+  band(ctx, study.far, [[-20, 484], [225, 461], [420, 480], [640, 444], [890, 473], [1125, 453], [1300, 481]]);
+  irregularBank(ctx, study.left, study.leftSnow, study.leftBase, 'wind', study.seed);
+  irregularBank(ctx, study.right, study.rightSnow, study.rightBase, 'wind', study.seed + 5);
+  organicLake(ctx, study.shore, study.seed + 3, study.lake, 'frost');
+}
+
+function polarSilverBanks(ctx: Ctx2D): void {
+  windStudy(ctx, {
+    far: '#A9BCC7',
+    left: [[-20, 434], [75, 427], [175, 433], [275, 420], [367, 466], [476, 548]],
+    right: [[758, 560], [850, 525], [954, 469], [1051, 453], [1164, 447], [1251, 429], [1300, 437]],
+    leftSnow: '#D5DCDB', leftBase: '#B8CACC',
+    rightSnow: '#D0DAD9', rightBase: '#B4C8CB',
+    shore: [[-20, 620], [130, 604], [245, 588], [366, 574], [480, 562], [593, 558], [702, 559], [818, 558], [928, 570], [1045, 581], [1170, 600], [1300, 615]],
+    lake: '#9FC6D0', seed: 2,
+  });
+}
+
+function polarLilacSnow(ctx: Ctx2D): void {
+  windStudy(ctx, {
+    far: '#B4B9CA',
+    left: [[-20, 438], [82, 419], [185, 435], [291, 443], [380, 484], [476, 547]],
+    right: [[764, 562], [855, 515], [939, 470], [1022, 455], [1117, 459], [1194, 435], [1300, 443]],
+    leftSnow: '#CBCDD9', leftBase: '#B4BFD1',
+    rightSnow: '#D3D3DE', rightBase: '#B8C3D2',
+    shore: [[-20, 620], [118, 601], [247, 586], [364, 567], [480, 559], [595, 558], [700, 561], [820, 557], [937, 570], [1061, 584], [1180, 601], [1300, 613]],
+    lake: '#A5CFD0', seed: 4,
+  });
+}
+
+function polarDeepIce(ctx: Ctx2D): void {
+  windStudy(ctx, {
+    far: '#AABEC6',
+    left: [[-20, 449], [91, 434], [195, 444], [275, 438], [371, 475], [475, 553]],
+    right: [[760, 562], [861, 526], [950, 480], [1047, 464], [1147, 447], [1242, 450], [1300, 444]],
+    leftSnow: '#CDD9D8', leftBase: '#B4CDCF',
+    rightSnow: '#D1DDDB', rightBase: '#B7CED0',
+    shore: [[-20, 625], [113, 603], [245, 587], [366, 576], [482, 566], [594, 561], [707, 559], [820, 563], [936, 571], [1052, 581], [1170, 599], [1300, 615]],
+    lake: '#97B9CB', seed: 6,
+  });
+}
+
+function polarWarmDrift(ctx: Ctx2D): void {
+  windStudy(ctx, {
+    far: '#B4C4C5',
+    left: [[-20, 434], [80, 432], [178, 425], [275, 446], [356, 476], [474, 550]],
+    right: [[760, 561], [850, 530], [946, 490], [1038, 463], [1130, 446], [1220, 456], [1300, 438]],
+    leftSnow: '#DEDCD3', leftBase: '#C5CEC9',
+    rightSnow: '#E0DED6', rightBase: '#C4CFCA',
+    shore: [[-20, 619], [120, 600], [238, 588], [352, 575], [470, 563], [588, 560], [701, 557], [818, 558], [936, 570], [1046, 586], [1172, 601], [1300, 615]],
+    lake: '#9FC8D4', seed: 8,
+  });
+}
+
 export const drawBackdrop: Record<Exclude<Variant, 'current'>, (ctx: Ctx2D) => void> = {
   'quiet-shore': quietShore,
   'glacial-basin': glacialBasin,
@@ -550,4 +639,8 @@ export const drawBackdrop: Record<Exclude<Variant, 'current'>, (ctx: Ctx2D) => v
   'polar-wind-carved': polarWindCarved,
   'polar-frost-shelves': polarFrostShelves,
   'polar-pearl-shore': polarPearlShore,
+  'polar-silver-banks': polarSilverBanks,
+  'polar-lilac-snow': polarLilacSnow,
+  'polar-deep-ice': polarDeepIce,
+  'polar-warm-drift': polarWarmDrift,
 };

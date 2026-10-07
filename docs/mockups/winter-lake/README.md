@@ -91,6 +91,19 @@ Soft Shoulders is the preferred direction, but its mirrored banks and dark lower
 
 **Assessment:** Wind Carved best preserves readable shore and lake shapes while taking the dark mass out of the banks. Pearl Shore is the calmest but its pale surfaces may blend together at noon. Frost Shelves shows the most texture; its repeated horizontal marks may need further reduction for play. Powder Bank is an understated middle ground. The midnight overlay compresses their differences, so any final choice needs a moving in-game check at multiple times of day. None is integrated into the production arena.
 
+### Wind Carved color and shoreline studies
+
+The [original Wind Carved at noon](polar-wind-carved-day.png) and [midnight](polar-wind-carved-night.png) has two noticeable rises along the lake's far edge, and the banks, distant shore, and frozen water sit close together in color. These four studies keep its wind-swept texture, lower those rises to a shallow meander, and separate snow from ice through hue and value. Each also adjusts the two banks independently. Sky, platforms, characters, and day-night treatment are held constant.
+
+| Direction | Noon | Midnight | Color and shape change |
+| --- | --- | --- | --- |
+| **Silver Banks** | ![Silver Banks, noon](polar-silver-banks-day.png) | ![Silver Banks, midnight](polar-silver-banks-night.png) | Neutral silver snow against a bluer lake; the left shoulder rolls twice while the right descends gradually. |
+| **Lilac Snow** | ![Lilac Snow, noon](polar-lilac-snow-day.png) | ![Lilac Snow, midnight](polar-lilac-snow-night.png) | Muted violet banks against turquoise ice; the right bank has a separate low crest. |
+| **Deep Ice** | ![Deep Ice, noon](polar-deep-ice-day.png) | ![Deep Ice, midnight](polar-deep-ice-night.png) | Low neutral banks leave a stronger blue lake as the main landscape feature. |
+| **Warm Drift** | ![Warm Drift, noon](polar-warm-drift-day.png) | ![Warm Drift, midnight](polar-warm-drift-night.png) | Ivory snow contrasts with cool ice; both banks remain broad but have different crests. |
+
+**Assessment:** Lilac Snow makes the snow and ice easiest to distinguish without making either bank dark. Silver Banks is the most restrained option and may fit the existing platform palette best. Deep Ice identifies the lake quickly but its blue area deserves a motion check for pickup and player contrast. Warm Drift has a pleasant warm-cool split, though its beige snow may feel less wintry. The calmer lake edge is shared across this round; no production choice has been made.
+
 The fixture and variant functions are in [`render.ts`](render.ts) and [`variants.ts`](variants.ts). To reproduce, run Vite on port 4222 and then `node docs/mockups/winter-lake/capture-variants.mjs`. The earlier live-match baseline above remains available to compare the fixture with the game.
 
 ## Gameplay and render constraints
