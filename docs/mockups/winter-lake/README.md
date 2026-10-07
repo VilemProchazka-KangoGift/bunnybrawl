@@ -66,6 +66,18 @@ These keep the gap and frozen lake concept while varying the width of the openin
 
 **Tradeoffs:** Open Pass protects the outer jump lanes best, but gives up some of the original's imposing scale. Stepped Ice reads clearly as carved ice; the straight ledges also risk looking like a constructed fortress. Offset Channel has the boldest asymmetry, though its dark left wall dominates the lower-left play space. Alpenglow is a palette study that can combine with another shape; its warm sky needs a live check with pale and orange characters. Open Pass is my strongest shape candidate for gameplay clarity, while the original Polar Gap has more drama. This remains a mockup decision: no production backdrop has been selected or integrated.
 
+### Open Pass with rounded hills
+
+These retain Open Pass's broad central lake and replace its pointed cliff contours with continuous, rounded banks. The [Open Pass noon](polar-open-day.png) and [midnight](polar-open-night.png) captures above are the direct shape comparison. The arena geometry, foreground art, characters, and lighting phases are the same in each image.
+
+| Direction | Noon | Midnight | What changes |
+| --- | --- | --- | --- |
+| **Soft Shoulders** | ![Soft Shoulders, noon](polar-soft-shoulders-day.png) | ![Soft Shoulders, midnight](polar-soft-shoulders-night.png) | Low, wide banks make the center feel most open and keep the outer play lanes quiet. |
+| **High Bluffs** | ![High Bluffs, noon](polar-high-bluffs-day.png) | ![High Bluffs, midnight](polar-high-bluffs-night.png) | Taller, broad hills restore some scale without sharp peaks; the opening stays wide. |
+| **Uneven Shore** | ![Uneven Shore, noon](polar-uneven-shore-day.png) | ![Uneven Shore, midnight](polar-uneven-shore-night.png) | A higher left hill and lower right bank give the pass a gentle asymmetry. |
+
+**Assessment:** High Bluffs is the strongest balance of lake identity and softer contours. Soft Shoulders leaves the most visual space around the platforms but risks feeling too flat. Uneven Shore has a natural composition, though its left bank is visually heavier. At midnight, all three stay behind the playable platforms and the foreground cover. These are background mockups only; compare them in motion before selecting one for production.
+
 The fixture and variant functions are in [`render.ts`](render.ts) and [`variants.ts`](variants.ts). To reproduce, run Vite on port 4222 and then `node docs/mockups/winter-lake/capture-variants.mjs`. The earlier live-match baseline above remains available to compare the fixture with the game.
 
 ## Gameplay and render constraints

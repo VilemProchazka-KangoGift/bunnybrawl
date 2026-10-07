@@ -6,6 +6,7 @@ export const VARIANTS = [
   'current', 'quiet-shore', 'glacial-basin', 'violet-inlet',
   'mirror-ice', 'fir-shore', 'rose-dawn', 'polar-gap',
   'polar-open', 'polar-stepped', 'polar-offset', 'polar-alpenglow',
+  'polar-soft-shoulders', 'polar-high-bluffs', 'polar-uneven-shore',
 ] as const;
 export type Variant = (typeof VARIANTS)[number];
 
@@ -21,6 +22,9 @@ export const descriptions: Record<Exclude<Variant, 'current'>, string> = {
   'polar-stepped': 'Tiered glacier walls emphasize carved ice and a deep, sheltered lake.',
   'polar-offset': 'One high wall and one low shelf lead the eye through a diagonal opening.',
   'polar-alpenglow': 'The original angular frame with warm light on the snow and cool ice below.',
+  'polar-soft-shoulders': 'Low rounded snow banks retain Open Pass breathing room without pointed cliff edges.',
+  'polar-high-bluffs': 'Taller rounded hills keep the gap dramatic while replacing sharp ice peaks.',
+  'polar-uneven-shore': 'One broad high hill and one low bank create a gentler asymmetric pass.',
 };
 
 export const skies: Record<Exclude<Variant, 'current'>, { offset: number; color: string }[]> = {
@@ -67,6 +71,18 @@ export const skies: Record<Exclude<Variant, 'current'>, { offset: number; color:
   'polar-alpenglow': [
     { offset: 0, color: '#545476' }, { offset: .43, color: '#A48DA7' },
     { offset: .78, color: '#D1B7BB' }, { offset: 1, color: '#DFD4D4' },
+  ],
+  'polar-soft-shoulders': [
+    { offset: 0, color: '#3D5573' }, { offset: .43, color: '#7E9AAD' },
+    { offset: .78, color: '#BCD0D3' }, { offset: 1, color: '#DFE6E1' },
+  ],
+  'polar-high-bluffs': [
+    { offset: 0, color: '#354C70' }, { offset: .43, color: '#7896AD' },
+    { offset: .78, color: '#B7CCD4' }, { offset: 1, color: '#DAE5E6' },
+  ],
+  'polar-uneven-shore': [
+    { offset: 0, color: '#425574' }, { offset: .43, color: '#8599B2' },
+    { offset: .78, color: '#C5CDD5' }, { offset: 1, color: '#E0E2DF' },
   ],
 };
 
@@ -276,6 +292,65 @@ function polarAlpenglow(ctx: Ctx2D): void {
   icePlane(ctx, [[-20, 646], [185, 596], [355, 568], [535, 546], [720, 548], [895, 561], [1080, 594], [1300, 640]], '#B2CFDA', 'rgba(92, 123, 159, 0.36)');
 }
 
+function roundedBank(
+  ctx: Ctx2D, side: 'left' | 'right', topY: number, innerX: number,
+  face: string, shadow: string, snow: string,
+): void {
+  ctx.save();
+  if (side === 'right') { ctx.translate(1280, 0); ctx.scale(-1, 1); }
+  ctx.fillStyle = face;
+  ctx.beginPath();
+  ctx.moveTo(-40, 720);
+  ctx.lineTo(-40, topY + 25);
+  ctx.bezierCurveTo(65, topY - 15, 165, topY - 13, 235, topY + 12);
+  ctx.bezierCurveTo(325, topY + 45, innerX - 55, 518, innerX, 583);
+  ctx.bezierCurveTo(innerX + 30, 630, innerX + 55, 666, innerX + 65, 720);
+  ctx.closePath();
+  ctx.fill();
+
+  // A broad curved snow cap follows the hill instead of making another peak.
+  ctx.fillStyle = snow;
+  ctx.beginPath();
+  ctx.moveTo(-40, topY + 25);
+  ctx.bezierCurveTo(65, topY - 15, 165, topY - 13, 235, topY + 12);
+  ctx.bezierCurveTo(325, topY + 45, innerX - 55, 518, innerX, 583);
+  ctx.bezierCurveTo(innerX - 58, 541, 316, topY + 91, 228, topY + 55);
+  ctx.bezierCurveTo(145, topY + 20, 60, topY + 31, -40, topY + 67);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = shadow;
+  ctx.beginPath();
+  ctx.moveTo(-40, 720);
+  ctx.lineTo(-40, topY + 129);
+  ctx.bezierCurveTo(95, topY + 91, 192, topY + 117, 289, topY + 145);
+  ctx.bezierCurveTo(innerX - 26, 579, innerX + 17, 633, innerX + 65, 720);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function polarSoftShoulders(ctx: Ctx2D): void {
+  band(ctx, '#A9C4CC', [[-20, 484], [205, 452], [420, 478], [640, 443], [865, 476], [1080, 450], [1300, 482]]);
+  roundedBank(ctx, 'left', 424, 470, '#7B9DAA', '#577E92', '#B9D2D3');
+  roundedBank(ctx, 'right', 421, 470, '#789AAA', '#537B91', '#BED4D5');
+  icePlane(ctx, [[-20, 625], [165, 586], [345, 558], [535, 544], [725, 545], [930, 558], [1110, 585], [1300, 624]], '#B3D2D5', 'rgba(71, 128, 152, 0.34)');
+}
+
+function polarHighBluffs(ctx: Ctx2D): void {
+  band(ctx, '#A3BFCA', [[-20, 487], [220, 451], [445, 480], [655, 437], [865, 478], [1080, 447], [1300, 483]]);
+  roundedBank(ctx, 'left', 354, 535, '#7395A8', '#486F89', '#BAD2D8');
+  roundedBank(ctx, 'right', 361, 525, '#7496A8', '#4A718B', '#C4D8DC');
+  icePlane(ctx, [[-20, 654], [195, 608], [385, 574], [555, 552], [730, 552], [905, 575], [1090, 608], [1300, 654]], '#A7CCD5', 'rgba(62, 127, 157, 0.36)');
+}
+
+function polarUnevenShore(ctx: Ctx2D): void {
+  band(ctx, '#A8B9C9', [[-20, 479], [220, 447], [440, 474], [650, 425], [875, 466], [1070, 441], [1300, 479]]);
+  roundedBank(ctx, 'left', 356, 575, '#7C8FAB', '#546F8F', '#CBD2DC');
+  roundedBank(ctx, 'right', 446, 420, '#869FB3', '#637F99', '#D4DDE0');
+  icePlane(ctx, [[-20, 655], [165, 624], [370, 587], [575, 555], [780, 545], [1000, 551], [1300, 571]], '#B6D0D8', 'rgba(91, 129, 159, 0.34)');
+}
+
 export const drawBackdrop: Record<Exclude<Variant, 'current'>, (ctx: Ctx2D) => void> = {
   'quiet-shore': quietShore,
   'glacial-basin': glacialBasin,
@@ -288,4 +363,7 @@ export const drawBackdrop: Record<Exclude<Variant, 'current'>, (ctx: Ctx2D) => v
   'polar-stepped': polarStepped,
   'polar-offset': polarOffset,
   'polar-alpenglow': polarAlpenglow,
+  'polar-soft-shoulders': polarSoftShoulders,
+  'polar-high-bluffs': polarHighBluffs,
+  'polar-uneven-shore': polarUnevenShore,
 };

@@ -10,6 +10,7 @@ const allVariants = [
     'current', 'quiet-shore', 'glacial-basin', 'violet-inlet',
     'mirror-ice', 'fir-shore', 'rose-dawn', 'polar-gap',
     'polar-open', 'polar-stepped', 'polar-offset', 'polar-alpenglow',
+    'polar-soft-shoulders', 'polar-high-bluffs', 'polar-uneven-shore',
   ];
 const selectedVariants = process.argv.slice(2);
 try {
