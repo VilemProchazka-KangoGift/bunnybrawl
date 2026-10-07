@@ -1,3 +1,4 @@
+/* global window, crossOriginIsolated */
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
