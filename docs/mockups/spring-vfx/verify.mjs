@@ -26,3 +26,4 @@ try{
   if(errors.length)throw Error(errors.join('\n'));
   console.log('PASS: 3 animated panels, pause/scrub, zoom, night, baseline, selection, 360px layout; no browser errors.');
 }finally{await browser.close();}
+/* global document, innerWidth -- Playwright callbacks run in the browser. */
