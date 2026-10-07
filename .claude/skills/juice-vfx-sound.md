@@ -70,6 +70,18 @@ Set `ambientSoundConfig` on the `ArenaPack`:
 
 ## Visual Effects
 
+### Cartoon movement family
+
+The selected movement effects are **Cloud pop** on input-jump, **Pose echoes** on a downward fast stomp, **Side puffs** on ordinary landing, and **Impact crown** on fast-stomp ground contact. The alternatives and live day/night crops are in `docs/mockups/movement-vfx/`. The standalone study uses scripted motion; judge the implementation in the real renderer.
+
+- Contact clouds use `jumpCloud` / `landingCloud` particles and `rendering/movementEffects.ts`. They expand and fade instead of shrinking as dots. Keep the jump cloud anchored to the **previous grounded foot Y**: cosmetic transition detection runs after physics has already moved the player. Thread that coordinate through both `snapshotPlayerCosmeticState` and `PlayerTransitionSystem._snapshotPooled`; the system uses the pooled snapshot at runtime.
+- Fast-stomp crowns must use the previous descending `fastFalling` state: physics clears that flag on contact. Emit one stationary irregular inked `impactCrown` at the grounded feet, at full size for 0.16 seconds, replacing ordinary side puffs; preserve its shape through SAB packing.
+- Landing clouds move horizontally without particle gravity so they stay on the contact plane. Both cloud shapes use the shared cream palette and restrained ink edge; ordinary footsteps keep their surface colors.
+- A new particle shape must survive **both** structured cloning and the packed SAB wire. `worker/sabParticles.ts` uses bits 24-26 for five shapes. Round-trip tests must distinguish clouds from spikes and check recycled slots return to circles.
+- Fast stomp draws two translucent cached copies of the attack pose before the main sprite. Gate at render time on airborne + fastFalling + **positive vy**, so a held Down key does not carry dive echoes up a spring/stomp bounce. Show echoes immediately (no local fade ramp) at 0.6/0.36 opacity with 0.65�0.85 body-height spacing; short drops must read clearly in worker mode. Multiply inherited alpha and restore it. Pose echoes also work on slow devices without a gradient fallback.
+- Ordinary airborne oval afterimages and the faint white airborne lines are removed from this movement family. Preserve invincibility trails outside an active dive; do not stack generic speed blobs behind the selected clouds or pose echoes.
+- Foreground cover still occludes the effects. Use a clear contact surface for art review as well as a covered location to check draw order. The capture script seeds a clear ground position only in main-simulation mode, then uses real keyboard input; default-worker captures use real movement throughout.
+
 ### Particle Burst (Short-Lived)
 
 Use `this.emitParticle(x, y, vx, vy, life, size, color)` — pooled via free-list, auto-cleaned.
@@ -175,3 +187,5 @@ Music disable is centralized in `AudioManager.setMusicDisabled(bool)` — sets `
 ### Direct arena music and browser activation
 
 A direct `?arena=...` link can finish asynchronous loading after the browser's initial user activation expires. Arena MP3 autoplay may then fail silently until pause/unpause calls `playMusic()` again. `Howler.playing()` can report true after a blocked HTMLAudio attempt. Track arena `play`, `stop`, and `playerror` events, and distinguish a pending call from actual playback to avoid duplicate HTMLAudio instances. Retry inside the first subsequent key, pointer, or touch event, then remove those listeners when music plays or stops. `e2e/arena-music-gesture.spec.ts` forces a blocked attempt and checks the first movement key starts one track.
+
+Player transitions now tick at simulation cadence in `tickCosmetic`; the half-rate particle bucket skips the duplicate transition update. Direct `cosmeticStep` calls still detect transitions for tests and warmup. Contact pops should be visible on their first frame, with irregular jagged points, a warm inset, and detached flecks. Sharp edges are intended; avoid a plain symmetrical vector silhouette.

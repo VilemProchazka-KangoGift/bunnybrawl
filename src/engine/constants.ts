@@ -89,6 +89,9 @@ export const IDLE_FIRST_DELAY  = 0.8;   // seconds standing still before first i
 export const IDLE_REST_MIN     = 0.6;   // min seconds between idle actions
 export const IDLE_REST_MAX     = 1.4;   // max seconds between idle actions
 
+// Cartoon movement contact palette
+export const MOVEMENT_PUFF_COLOR = '#FFF3D5';
+
 // Shockwave
 export const SHOCKWAVE_MAX_RADIUS = 60;
 export const SHOCKWAVE_DURATION = 0.4;

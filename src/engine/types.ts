@@ -204,10 +204,10 @@ export interface LocalPlayer {
   springTrailTimer: number;    // >0 = spiral trail active after spring bounce
   springLaunchX: number;     // local-only — anchor x for drawSpringTrail (set to spring.x at bounce). NaN = unset.
   springLaunchY: number;     // local-only — anchor y for drawSpringTrail (set to spring.y at bounce). NaN = unset.
-  fastFallStreakAlpha: number; // local-only — 0..1, ramps up while fastFalling, ramps down on exit; drives drawFastFallStreaks fade in/out
+  fastFallStreakAlpha: number; // local-only — 0..1, ramps up while fastFalling, ramps down on exit; reserved legacy smear opacity; pose echoes render immediately
   airLean: number;             // local-only — 0..1, primed to 1 on jump rise, decays during descent; lerps body-lean magnitude run→air
-  fastFallAnchorX: number;     // local-only — cx where fastFalling stopped; smudge fades from there instead of riding a stomp bounce. NaN = unset.
-  fastFallAnchorY: number;     // local-only — headY where fastFalling stopped. NaN = unset.
+  fastFallAnchorX: number;     // local-only — cx where fastFalling stopped; reserved legacy smear anchor. NaN = unset.
+  fastFallAnchorY: number;     // local-only — reserved legacy smear anchor. NaN = unset.
   renderOffsetX: number;       // visual-only offset from rollback correction, decays to 0
   renderOffsetY: number;       // visual-only offset from rollback correction, decays to 0
 }
@@ -264,8 +264,8 @@ export interface Particle {
   shape?: ParticleShape;
 }
 
-/** default 'circle'; 'spike' renders as a velocity-aligned triangle. */
-export type ParticleShape = 'circle' | 'spike';
+/** Movement clouds expand and fade; spikes align with velocity. */
+export type ParticleShape = 'circle' | 'spike' | 'jumpCloud' | 'landingCloud' | 'impactCrown';
 
 export type GibType = 'ear' | 'tail' | 'body' | 'snout' | 'horn' | 'wing' | 'beard' | 'mane' | 'wool' | 'spine';
 

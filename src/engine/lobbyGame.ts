@@ -217,6 +217,7 @@ export class LobbyGame {
 
       const prev = this._prevState.get(p);
       const prevState = prev?.state ?? p.state;
+      const prevFootY = p.y + p.height;
       const prevVy = prev?.vy ?? p.vy;
 
       applyInput(p, input, dt, LOBBY_SPEED * this.characterScale, 1500 * this.characterScale, LOBBY_JUMP * this.characterScale, this.characterScale);
@@ -238,7 +239,7 @@ export class LobbyGame {
       const wasGrounded = prevState !== 'airborne';
       const isAirborne = p.state === 'airborne';
       if (wasGrounded && isAirborne && input.jump) {
-        spawnJumpDustParticles(this._particles, this._particleFreeList, p);
+        spawnJumpDustParticles(this._particles, this._particleFreeList, p, prevFootY);
       }
       if (!wasGrounded && !isAirborne && Math.abs(prevVy) >= DUST_LAND_VY_THRESHOLD) {
         spawnDustParticles(this._particles, this._particleFreeList, p, Math.abs(prevVy), this._dustColor);

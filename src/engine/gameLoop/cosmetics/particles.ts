@@ -1,5 +1,5 @@
 import type { Particle, ParticleShape, Player, Platform, ConfettiParticle } from '../../types';
-import { BLOOD_COLOR, CARROT_SIZE, CONFETTI_COUNT, CONFETTI_GRAVITY, CONFETTI_FLUTTER, CONFETTI_LIFE_MIN, CONFETTI_LIFE_MAX, CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
+import { BLOOD_COLOR, CARROT_SIZE, CONFETTI_COUNT, CONFETTI_GRAVITY, CONFETTI_FLUTTER, CONFETTI_LIFE_MIN, CONFETTI_LIFE_MAX, CANVAS_WIDTH, CANVAS_HEIGHT, MOVEMENT_PUFF_COLOR, PLAYER_WIDTH } from '../../constants';
 import { swapRemove } from '../../themes/utils';
 
 export const CONFETTI_COLORS = ['#FFD700', '#FF69B4', '#00FFFF', '#7CFC00', '#FF6347', '#DA70D6', '#FFA500'];
@@ -31,34 +31,30 @@ export function emitParticle(
 
 export function spawnDustParticles(
   particles: Particle[], freeList: Particle[],
-  player: Player, landVy: number, color: string,
+  player: Player, landVy: number, _color: string, fastStomp = false,
 ): void {
   const cx = player.x + player.width / 2;
-  const groundY = player.y + player.height;
-  const intensity = Math.min(landVy / 300, 3);
-  const count = Math.floor(8 + intensity * 6);
-  for (let i = 0; i < count; i++) {
-    const life = 0.3 + Math.random() * 0.4 * intensity;
-    emitParticle(particles, freeList, cx + (Math.random() - 0.5) * player.width * 1.5, groundY - Math.random() * 4, (Math.random() - 0.5) * 150 * intensity, -Math.random() * 80 * intensity - 20, life, 2 + Math.random() * 4 * intensity, color);
+  const groundY = player.y + player.height - 2;
+  const scale = player.width / PLAYER_WIDTH;
+  const intensity = Math.min(1.25, Math.max(0.7, landVy / 550));
+  if (fastStomp) {
+    emitParticle(particles, freeList, cx, groundY, 0, 0, 0.16, 17 * scale, '#FFE3A0', 'impactCrown');
+    return;
+  }
+  for (const side of [-1, 1]) {
+    emitParticle(particles, freeList, cx + side * 10 * scale, groundY,
+      side * 65 * scale * intensity, 0, 0.38, 11 * scale * intensity, MOVEMENT_PUFF_COLOR, 'landingCloud');
+    emitParticle(particles, freeList, cx + side * 20 * scale, groundY + 1,
+      side * 70 * scale * intensity, 0, 0.32, 5 * scale * intensity, MOVEMENT_PUFF_COLOR, 'landingCloud');
   }
 }
 
 export function spawnJumpDustParticles(
   particles: Particle[], freeList: Particle[],
-  player: Player,
+  player: Player, launchY = player.y + player.height,
 ): void {
-  const cx = player.x + player.width / 2;
-  const groundY = player.y + player.height;
-  const count = 9;
-  for (let i = 0; i < count; i++) {
-    const sx = cx + (Math.random() - 0.5) * player.width * 0.7;
-    const sy = groundY - Math.random() * 3;
-    const vx = (Math.random() - 0.5) * 200;
-    const vy = -Math.random() * 110 - 50;
-    const life = 0.4 + Math.random() * 0.25;
-    const size = 2.5 + Math.random() * 2;
-    emitParticle(particles, freeList, sx, sy, vx, vy, life, size, JUMP_DUST_COLOR);
-  }
+  emitParticle(particles, freeList, player.x + player.width / 2, launchY - 2,
+    0, -22, 0.32, 14 * player.width / PLAYER_WIDTH, MOVEMENT_PUFF_COLOR, 'jumpCloud');
 }
 
 /** Small puff of dust at the foot of a running player, trailing behind the
@@ -182,7 +178,7 @@ export function updateParticles(
     const prevY = p.y;
     p.x += p.vx * dt;
     p.y += p.vy * dt;
-    p.vy += 80 * dt;
+    if (p.shape !== 'jumpCloud' && p.shape !== 'landingCloud' && p.shape !== 'impactCrown') p.vy += 80 * dt;
     if (gore && p.color === BLOOD_COLOR && p.vy > 0) {
       for (let pi = 0; pi < platforms.length; pi++) {
         const plat = platforms[pi];
