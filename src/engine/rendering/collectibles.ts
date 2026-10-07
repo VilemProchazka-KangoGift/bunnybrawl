@@ -137,47 +137,79 @@ export function drawSpringMushroom(ctx: Ctx2D, spring: SpringMushroom, theme: Th
   ctx.globalAlpha = fadeAlpha;
   ctx.translate(x, y);
   ctx.scale(growScale, growScale);
-  ctx.translate(-x, -y);
+  ctx.lineJoin = 'round';
+  const ink = '#37443b';
+  const capY = -19 + squash * 1.15;
+  const stemTop = capY + 1;
 
-  // Stem
-  ctx.fillStyle = '#F5F0E0';
-  ctx.fillRect(x - 6, y - s * 0.7 + squash, 12, s * 0.7 - squash);
-
-  // Spring coils on stem — batched into one path with sub-paths.
-  ctx.strokeStyle = '#AAA';
+  // A planted foot and folded stem replace the old metal coils. The foot
+  // stays on the platform while the bell drops and spreads on impact.
+  ctx.fillStyle = '#7a8758';
+  ctx.beginPath();
+  ctx.ellipse(0, -1, 10, 2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#f4dfaa';
+  ctx.strokeStyle = ink;
   ctx.lineWidth = 2;
   ctx.beginPath();
-  for (let i = 0; i < 3; i++) {
-    const cy = y - 4 - i * 6;
-    ctx.moveTo(x - 5, cy);
-    ctx.lineTo(x + 5, cy - 3);
-  }
+  ctx.moveTo(-5, stemTop);
+  ctx.bezierCurveTo(-3, -11, -5, -5, -8, 0);
+  ctx.quadraticCurveTo(0, 2, 8, 0);
+  ctx.bezierCurveTo(5, -5, 3, -11, 5, stemTop);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.strokeStyle = '#c99f74';
+  ctx.lineWidth = 1.3;
+  ctx.beginPath();
+  ctx.moveTo(-5, -11);
+  ctx.quadraticCurveTo(0, -8, 5, -11);
+  ctx.moveTo(-5, -6);
+  ctx.quadraticCurveTo(0, -3, 5, -6);
   ctx.stroke();
 
-  // Cap
-  ctx.fillStyle = '#2ECC40';
+  ctx.save();
+  ctx.translate(0, capY);
+  ctx.scale(1 + Math.max(0, squash) * 0.015, 1);
+  ctx.fillStyle = '#e7ae45';
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = 2.5;
   ctx.beginPath();
-  ctx.ellipse(x, y - s * 0.7 + squash, s * 0.7, s * 0.4 - squash * 0.5, 0, Math.PI, 0);
+  ctx.moveTo(-19, 0);
+  ctx.quadraticCurveTo(-15, -3, -13, -9);
+  ctx.quadraticCurveTo(-7, -20, 0, -18);
+  ctx.quadraticCurveTo(10, -19, 15, -8);
+  ctx.quadraticCurveTo(17, -3, 20, 0);
+  ctx.quadraticCurveTo(15, 4, 11, 0);
+  ctx.quadraticCurveTo(5, 4, 0, 1);
+  ctx.quadraticCurveTo(-6, 4, -11, 0);
+  ctx.quadraticCurveTo(-15, 4, -19, 0);
+  ctx.closePath();
   ctx.fill();
+  ctx.stroke();
 
-  // Cap highlight
-  ctx.fillStyle = '#5DDE70';
+  // A light face and shaded edge give the bell volume without tiny spots.
+  ctx.fillStyle = '#f9d876';
   ctx.beginPath();
-  ctx.ellipse(x, y - s * 0.8 + squash, s * 0.4, s * 0.15, 0, Math.PI, 0);
+  ctx.moveTo(-14, -3);
+  ctx.quadraticCurveTo(-9, -16, 1, -16);
+  ctx.quadraticCurveTo(-6, -12, -7, -2);
+  ctx.closePath();
   ctx.fill();
-
-  // Spots
-  ctx.fillStyle = '#FFF';
+  ctx.fillStyle = '#c87d36';
   ctx.beginPath();
-  ctx.arc(x - 6, y - s * 0.85 + squash, 3.5, 0, Math.PI * 2);
+  ctx.moveTo(3, -15);
+  ctx.quadraticCurveTo(12, -13, 15, -2);
+  ctx.quadraticCurveTo(12, -5, 9, -4);
+  ctx.closePath();
   ctx.fill();
+  ctx.strokeStyle = '#a46b3b';
+  ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.arc(x + 6, y - s * 0.75 + squash, 3, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(x, y - s * 0.9 + squash, 2.5, 0, Math.PI * 2);
-  ctx.fill();
-
+  ctx.moveTo(-12, 0);
+  ctx.quadraticCurveTo(0, 3, 12, 0);
+  ctx.stroke();
+  ctx.restore();
   ctx.restore();
 }
 

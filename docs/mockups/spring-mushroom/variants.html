@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Spring mushroom shape and color studies</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px; background: #e9e5d7; color: #2f3530; font: 16px/1.4 system-ui, sans-serif; }
+  h1 { margin: 0 0 5px; font-size: 27px; }
+  p { margin: 0 0 20px; max-width: 900px; }
+  main { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; max-width: 1200px; }
+  article { padding: 14px; background: #fffdf5; border: 1px solid #c9c7b8; border-radius: 12px; }
+  h2 { margin: 0 0 2px; font-size: 20px; }
+  .tagline { min-height: 23px; margin: 0 0 9px; font-size: 13px; color: #586057; }
+  .views { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .view { overflow: hidden; background: #9db7bd; border: 1px solid #819292; border-radius: 5px; }
+  .view canvas { display: block; width: 100%; height: auto; }
+  .view label { display: block; padding: 2px 5px; font-size: 11px; background: #f5f2e7; }
+  .full { margin-top: 8px; }
+  .full canvas { display: block; width: 100%; height: auto; border: 1px solid #819292; border-radius: 5px; }
+  footer { margin-top: 14px; font-size: 12px; color: #586057; }
+</style>
+<h1>Spring mushroom: six new directions</h1>
+<p>Different cap structures and palettes, drawn at the same 48 px art size on a production Meadow capture. Day and night crops use the same platform. The small full scene keeps the gameplay scale honest.</p>
+<main id="cards"></main>
+<footer>Visual studies only. No spring collision, physics, or production artwork is changed by these candidates.</footer>
+<script type="module">
+const stroke = '#37443b';
+const variants = [
+  {
+    id: 'gold-bell', title: 'A · Gold bell', tagline: 'Wide downturned rim · butter yellow + toasted orange',
+    svg: `<ellipse cx="24" cy="43" rx="10" ry="2" fill="#7a8758"/>
+      <path d="M19 23 Q21 30 18 42 Q24 45 30 42 Q27 29 29 23Z" fill="#f4dfaa" stroke="${stroke}" stroke-width="2.2"/>
+      <path d="M19 32 Q24 35 29 32 M19 37 Q24 40 29 37" fill="none" stroke="#c99f74" stroke-width="1.5"/>
+      <path d="M5 25 Q9 22 11 16 Q17 5 24 7 Q34 6 39 17 Q41 22 44 25 Q39 29 35 25 Q29 29 24 26 Q18 29 13 25 Q9 29 5 25Z" fill="#e7ae45" stroke="${stroke}" stroke-width="2.5" stroke-linejoin="round"/>
+      <path d="M10 22 Q15 9 25 9 Q18 13 17 23Z" fill="#f9d876"/>
+      <path d="M27 10 Q35 11 39 23 Q36 20 33 21Z" fill="#c87d36"/>
+      <path d="M12 25 Q24 28 36 25" fill="none" stroke="#a46b3b" stroke-width="1.5"/>`,
+  },
+  {
+    id: 'blue-inkcap', title: 'B · Blue inkcap', tagline: 'Tall tapered hood · midnight blue + ivory fringe',
+    svg: `<ellipse cx="24" cy="43" rx="8" ry="2" fill="#78845a"/>
+      <path d="M21 29 Q22 34 19 42 Q24 45 29 42 Q26 34 27 29Z" fill="#e9dcb4" stroke="${stroke}" stroke-width="2.2"/>
+      <path d="M7 31 Q13 26 15 13 Q18 5 24 4 Q30 5 33 13 Q35 26 41 31 Q34 35 29 31 Q24 35 19 31 Q13 35 7 31Z" fill="#466e8f" stroke="${stroke}" stroke-width="2.5" stroke-linejoin="round"/>
+      <path d="M13 27 Q18 9 23 7 Q20 18 18 28Z" fill="#83aac3"/>
+      <path d="M29 10 Q35 22 36 29 L31 29Z" fill="#315774"/>
+      <path d="M10 31 Q13 34 16 31 M18 32 Q21 35 24 32 M26 32 Q29 35 32 32 M34 31 Q37 34 39 31" fill="none" stroke="#f6e9c9" stroke-width="2" stroke-linecap="round"/>`,
+  },
+  {
+    id: 'scarlet-fan', title: 'C · Scarlet fan', tagline: 'Low scalloped canopy · deep red + cream gills',
+    svg: `<ellipse cx="24" cy="43" rx="11" ry="2" fill="#788456"/>
+      <path d="M20 25 Q22 34 18 42 Q24 45 30 42 Q26 34 28 25Z" fill="#f2dfbd" stroke="${stroke}" stroke-width="2.2"/>
+      <path d="M7 23 Q24 30 41 23 Q39 29 33 29 Q29 32 24 29 Q19 32 15 29 Q9 30 7 23Z" fill="#f0d3aa" stroke="${stroke}" stroke-width="2"/>
+      <path d="M3 23 Q9 11 16 15 Q22 8 28 14 Q37 9 45 23 Q40 29 34 24 Q30 29 24 24 Q18 29 14 24 Q8 29 3 23Z" fill="#bf514d" stroke="${stroke}" stroke-width="2.5" stroke-linejoin="round"/>
+      <path d="M8 21 Q13 14 17 17 Q22 13 27 17 Q34 13 39 21 Q31 19 24 21 Q15 19 8 21Z" fill="#e78267"/>
+      <path d="M12 25 L15 28 M22 25 L24 29 M34 25 L32 28" stroke="#a87961" stroke-width="1.4"/>`,
+  },
+  {
+    id: 'violet-cup', title: 'D · Violet cup', tagline: 'Upturned rim and shallow bowl · violet + plum',
+    svg: `<ellipse cx="24" cy="43" rx="10" ry="2" fill="#7a855c"/>
+      <path d="M21 27 Q21 34 18 42 Q24 45 30 42 Q27 34 27 27Z" fill="#dfd5b8" stroke="${stroke}" stroke-width="2.2"/>
+      <path d="M4 13 Q7 24 18 28 Q24 31 30 28 Q41 24 44 13 Q40 18 37 18 Q34 24 24 24 Q14 24 11 18 Q8 18 4 13Z" fill="#8b61a1" stroke="${stroke}" stroke-width="2.6" stroke-linejoin="round"/>
+      <path d="M10 18 Q24 28 38 18 Q34 17 30 20 Q24 22 18 20 Q14 17 10 18Z" fill="#b188bc"/>
+      <path d="M5 13 Q11 12 12 17 M36 17 Q38 12 43 13" fill="none" stroke="#d5b4d3" stroke-width="2" stroke-linecap="round"/>
+      <path d="M17 25 Q24 29 31 25" fill="none" stroke="#614b70" stroke-width="1.3"/>`,
+  },
+  {
+    id: 'amber-dome', title: 'E · Amber dome', tagline: 'Round cushion cap · amber + coral, no polka dots',
+    svg: `<ellipse cx="24" cy="43" rx="10" ry="2" fill="#7b8759"/>
+      <path d="M18 28 Q20 34 17 42 Q24 46 31 42 Q28 34 30 28Z" fill="#ead8b2" stroke="${stroke}" stroke-width="2.2"/>
+      <path d="M8 27 Q24 33 40 27 Q37 32 24 33 Q11 32 8 27Z" fill="#f4c997" stroke="${stroke}" stroke-width="1.8"/>
+      <path d="M6 27 Q7 9 21 7 Q36 3 42 21 L42 27 Q35 30 24 29 Q13 30 6 27Z" fill="#dc8a48" stroke="${stroke}" stroke-width="2.6" stroke-linejoin="round"/>
+      <path d="M11 19 Q15 9 25 9 Q33 8 37 16 Q28 13 22 16 Q16 14 11 19Z" fill="#f2b760"/>
+      <path d="M8 25 Q13 26 17 24 M31 26 Q37 27 40 24" fill="none" stroke="#b35f42" stroke-width="1.7" stroke-linecap="round"/>`,
+  },
+  {
+    id: 'turquoise-shelf', title: 'F · Turquoise shelf', tagline: 'Flat layered shelf · turquoise + dark sea blue',
+    svg: `<ellipse cx="24" cy="43" rx="10" ry="2" fill="#7b8658"/>
+      <path d="M20 24 Q22 34 18 42 Q24 45 29 42 Q26 34 29 23Z" fill="#e8d6ad" stroke="${stroke}" stroke-width="2.2"/>
+      <path d="M5 22 Q24 28 43 22 L40 29 Q24 34 8 29Z" fill="#346c78" stroke="${stroke}" stroke-width="2.2" stroke-linejoin="round"/>
+      <path d="M4 22 Q9 18 16 19 Q24 12 33 18 Q40 18 44 22 Q38 25 32 24 Q24 27 16 24 Q9 25 4 22Z" fill="#5aaeb2" stroke="${stroke}" stroke-width="2.6" stroke-linejoin="round"/>
+      <path d="M9 21 Q17 19 23 20 Q31 17 39 21 Q30 21 24 23 Q16 22 9 21Z" fill="#9ed3c1"/>
+      <path d="M12 27 L13 30 M20 28 L21 31 M29 28 L28 31 M37 27 L35 30" stroke="#a8cbba" stroke-width="1.2"/>`,
+  },
+];
+
+const positions = [{ x: 380, y: 400 }, { x: 640, y: 480 }, { x: 650, y: 290 }];
+const images = {};
+for (const phase of ['day', 'night']) {
+  const image = new Image();
+  image.src = `base-${phase}.png`;
+  await image.decode();
+  images[phase] = image;
+}
+async function spriteFor(variant) {
+  const image = new Image();
+  image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">${variant.svg}</svg>`)}`;
+  await image.decode();
+  return image;
+}
+const sprites = Object.fromEntries(await Promise.all(variants.map(async v => [v.id, await spriteFor(v)])));
+function drawScene(canvas, id, phase) {
+  canvas.width = 1280;
+  canvas.height = 720;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(images[phase], 0, 0);
+  for (const p of positions) {
+    ctx.save();
+    if (phase === 'night') ctx.filter = 'brightness(.65) saturate(.75)';
+    ctx.drawImage(sprites[id], p.x - 24, p.y - 44);
+    ctx.restore();
+  }
+}
+window.renderVariant = (id, phase) => {
+  const canvas = document.createElement('canvas');
+  drawScene(canvas, id, phase);
+  return canvas.toDataURL('image/png');
+};
+
+const cards = document.querySelector('#cards');
+for (const variant of variants) {
+  const article = document.createElement('article');
+  article.innerHTML = `<h2>${variant.title}</h2><div class="tagline">${variant.tagline}</div><div class="views"></div><div class="full"></div>`;
+  for (const phase of ['day', 'night']) {
+    const fullCanvas = document.createElement('canvas');
+    drawScene(fullCanvas, variant.id, phase);
+    const crop = document.createElement('canvas');
+    crop.width = 220;
+    crop.height = 94;
+    crop.getContext('2d').drawImage(fullCanvas, 270, 332, 220, 94, 0, 0, 220, 94);
+    const view = document.createElement('div');
+    view.className = 'view';
+    view.append(crop);
+    const label = document.createElement('label');
+    label.textContent = phase === 'day' ? 'Day · native pixel crop' : 'Night · native pixel crop';
+    view.append(label);
+    article.querySelector('.views').append(view);
+    if (phase === 'day') article.querySelector('.full').append(fullCanvas);
+  }
+  cards.append(article);
+}
+window.galleryReady = true;
+</script>
+</html>
