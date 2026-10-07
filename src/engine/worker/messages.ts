@@ -15,6 +15,7 @@
  */
 
 import type { MatchState, Particle, Gib, MatchSettings, PlayerSlot, InputState, MatchPhase, CharacterDef } from '../types';
+import type { InputProbeRequest } from './inputProbe';
 import type { Light, PerfTier } from '../lighting';
 import type { BotNavDebugState } from '../navDebugOverlay';
 import type { NetDebugStats } from '../net/core/debugOverlay';
@@ -158,9 +159,13 @@ export interface HostInitEngineMsg {
   slowDevice?: boolean;
 }
 
-/** Per-frame input batch from main. The worker's RemoteInput adapters
- *  read this map; their existing usage in network play handles the
- *  same shape. */
+/** Perf-only input-read/render probe; does not submit gameplay input. */
+export interface HostInputProbeMsg extends InputProbeRequest { type: 'host:inputProbe' }
+export type WorkerInputProbeMsg =
+  | { type: 'worker:inputProbe'; id: number; armed: true }
+  | { type: 'worker:inputProbe'; id: number; consumedAt: number; renderedAt: number };
+
+/** Latest held levels and jump presses from main, buffered by WorkerInput. */
 export interface HostEngineInputBatchMsg {
   type: 'host:engineInputBatch';
   /** Encoded as flat array because Maps survive structured clone but
@@ -285,6 +290,7 @@ export type HostToWorkerMsg =
   | HostRenderFrameMsg
   | HostInitEngineMsg
   | HostEngineInputBatchMsg
+  | HostInputProbeMsg
   | HostEnginePauseMsg
   | HostEngineResumeMsg
   | HostEngineVisibilityMsg
@@ -409,6 +415,7 @@ export interface WorkerEngineStateMirrorMsg {
 }
 
 export type WorkerToHostMsg =
+  | WorkerInputProbeMsg
   | WorkerReadyMsg
   | WorkerBootReadyMsg
   | WorkerErrorMsg

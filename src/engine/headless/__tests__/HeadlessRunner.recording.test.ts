@@ -53,6 +53,28 @@ class FixedInput implements PlayerInput {
 }
 
 describe('HeadlessRunner recording integration', () => {
+  it('records every repeated ML jump action without browser edge consumption', async () => {
+    const recorder = new InMemoryRecorder();
+    const action: InputState = { left: false, right: true, jump: true, down: false };
+    let calls = 0;
+    const policy: PlayerInput = { slot: 'P1', getAction: () => { calls++; return action; } };
+    const runner = new HeadlessRunner({
+      arenaId: 'meadow', activePlayers: ['P1'], settings: makeSettings({ killLimit: 999 }),
+      inputs: new Map([['P1', policy]]), rng: new SeededRNG(17), maxTicks: 8,
+      recording: { recorder, slots: ['P1'] },
+    });
+    runner.getSimulator().getState().countdown = 0;
+    runner.runMatch();
+    await recorder.flush();
+    expect(calls).toBe(8);
+    expect(action.jump).toBe(true);
+    expect(recorder.getSamples()).toHaveLength(8);
+    for (const sample of recorder.getSamples()) {
+      expect(sample.action).toEqual(action);
+      expect(sample.actionValid).toBe(true);
+    }
+  });
+
   it('emits one sample per recorded slot per tick', async () => {
     const recorder = new InMemoryRecorder();
     const players: PlayerSlot[] = ['P1', 'P2'];

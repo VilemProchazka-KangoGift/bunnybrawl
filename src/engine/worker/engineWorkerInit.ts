@@ -2,7 +2,7 @@
 /**
  * Sim-in-worker init — dynamically imported by `renderWorker.ts` when a
  * `host:initEngine` message arrives. Lazy-loaded so the renderer-only
- * path (`?worker=on`, no `?simWorker=on`) doesn't pay for the GameLoop
+ * path (`?simWorker=off`) doesn't pay for the GameLoop
  * imports.
  *
  * The GameLoop class works unchanged inside the worker thanks to the
@@ -27,7 +27,9 @@ import { setBrightness } from '../lighting/brightness';
 import { setPhotosensitivity } from '../lighting/photosensitivity';
 import { setPerfTier } from '../lighting/perfTier';
 import { setSlowDevice } from '../perfFlags';
-import { RemoteInput } from '../input/RemoteInput';
+import { WorkerInput } from './WorkerInput';
+import { clearPendingSabJumps } from './sabInput';
+import { applyInputBatchTo } from './inputBatch';
 import { isBotSlot } from '../types';
 import { FIXED_TIMESTEP, MAX_FRAME_TIME, SLOW_MO_FACTOR } from '../constants';
 import { debugFlags } from '../debugFlags';
@@ -38,7 +40,8 @@ import type {
   WorkerNetSnapshotMsg,
 } from './messages';
 import type { PlayerSlot, BotSlot, CharacterSlot, InputState, MatchPhase, MatchState } from '../types';
-import { readSlotInput } from './sabInput';
+
+import { InputProbe, type InputProbeRequest } from './inputProbe';
 import { takeAuthSnapshot, encodeSnapshot, decodeSnapshot, createEmptySnapshot } from '../net/snapshot';
 import type { AuthSnapshot } from '../net/snapshot';
 import { EntityInterpolation, applySnapshotToState } from '../net/interpolation';
@@ -48,20 +51,24 @@ import { dumpSamples as dumpFpsSamples, resetFpsCounter, sampleFps } from '../fp
 import type { WorkerPerfStatsMsg } from './messages';
 
 const ctxScope = self as DedicatedWorkerGlobalScope;
+export { applyInputBatchTo } from './inputBatch';
+const inputProbe = new InputProbe();
+export function armInputProbe(request: InputProbeRequest): void {
+  if (!debugFlags.perfEnabled || netMode !== 'off') return;
+  inputProbe.arm(request);
+  ctxScope.postMessage({ type: 'worker:inputProbe', id: request.id, armed: true });
+}
+
 
 let gameLoop: GameLoop | null = null;
 let renderer: Renderer | null = null;
-/** Per-frame input map — RemoteInput adapters read this map when fixedUpdate
- *  asks for each slot's action. Mirrors HostAuthority's getNetworkInputs(). */
+/** Worker-owned held levels and pending jump presses consumed by WorkerInput. */
 const inputMap = new Map<PlayerSlot, InputState>();
-/** SAB-backed input reader (Step 2). When main allocates the SAB and
- *  ships it in `host:initEngine`, we install a typed view here and
- *  refresh `inputMap` at the top of each `driveTick`. Pre-allocated
- *  `InputState` objects are reused across ticks (the map references the
- *  same object every tick — RemoteInput only reads booleans). */
+/** Local-only shared-memory input. Each WorkerInput consumes its own jump
+ *  atomically when the simulator actually reads the slot. */
 let inputSabView: Int32Array | null = null;
 let inputSabSlots: PlayerSlot[] = [];
-const inputSabScratch: InputState[] = [];
+const usesLocalInput = () => netMode === 'off';
 let rafId = 0;
 /** Set true when main tells us the host tab is hidden (`host:engineVisibility`).
  *  A hidden worker's `requestAnimationFrame` (tied to a hidden OffscreenCanvas
@@ -104,6 +111,7 @@ let guestPoolIdx = 0;
 
 export function setNetMode(mode: NetMode, _delayFrames = 0): void {
   const wasHost = netMode === 'host';
+  if (mode !== netMode) { inputMap.clear(); inputProbe.clear(); }
   netMode = mode;
   hostFrame = 0;
   // If we become a host while already hidden-and-rAF-parked, the throttled rAF
@@ -249,32 +257,29 @@ export async function initEngine(msg: HostInitEngineMsg): Promise<void> {
     renderer,
   );
 
-  // Replace KeyboardInput-backed slots with RemoteInput so per-slot
-  // actions come from inputMap (filled by host:engineInputBatch). Bots
-  // keep their RuleBasedBot.
+  // SAB is used only by local browser inputs, never fairness-delayed online batches.
+  inputSabView = msg.inputSab ? new Int32Array(msg.inputSab) : null;
+  inputSabSlots = msg.inputSabSlots ?? [];
+
+  // Asynchronous human input uses a worker-owned one-shot jump latch. Bots
+  // keep their synchronous RuleBasedBot / PlayerInput contract.
   const sim = gameLoop.getSimulator();
   for (const player of sim.getState().players) {
     if (isBotSlot(player.id)) continue;
-    sim.setPlayerInput(player.id, new RemoteInput(player.id));
+    const input = new WorkerInput(player.id, inputMap, inputSabView, inputSabSlots.indexOf(player.id), usesLocalInput);
+    sim.setPlayerInput(player.id, debugFlags.perfEnabled ? {
+      slot: player.id,
+      getAction(state, ctx) {
+        const action = input.getAction(state, ctx);
+        inputProbe.observe(player.id, action, performance.timeOrigin + performance.now());
+        return action;
+      },
+    } : input);
   }
 
   gameLoop.setOnPhaseChange((phase: MatchPhase) => {
     postEvent({ kind: 'phaseChange', phase });
   });
-
-  // Install the SAB input reader (Step 2). The fallback path keeps
-  // working when main couldn't allocate a SAB (no crossOriginIsolated).
-  if (msg.inputSab && msg.inputSabSlots) {
-    inputSabView = new Int32Array(msg.inputSab);
-    inputSabSlots = msg.inputSabSlots;
-    inputSabScratch.length = 0;
-    for (let i = 0; i < inputSabSlots.length; i++) {
-      const slot = inputSabSlots[i];
-      const obj: InputState = { left: false, right: false, jump: false, down: false };
-      inputSabScratch.push(obj);
-      inputMap.set(slot, obj);
-    }
-  }
 
   // We start `running` here so the drive loop fires; we do NOT call
   // gameLoop.start() because that would attach the (stubbed) keyboard
@@ -355,16 +360,6 @@ function driveTick(currentTime: number): void {
   lastTime = currentTime;
   if (frameTime > MAX_FRAME_TIME) frameTime = MAX_FRAME_TIME;
 
-  // SAB input fast path — refresh per-slot bitfields once per visual
-  // frame. The inner fixedUpdate loop may iterate multiple times per
-  // frame on long frames; consuming the same bitfield across those
-  // iterations is fine — the postMessage path had the same property.
-  if (inputSabView) {
-    for (let i = 0; i < inputSabSlots.length; i++) {
-      readSlotInput(inputSabView, i, inputSabScratch[i]);
-    }
-  }
-
   const state = gameLoop.getState();
   const timeScale = state.slowMotion > 0 ? SLOW_MO_FACTOR : 1;
   accumulator += frameTime * timeScale;
@@ -404,6 +399,10 @@ function driveTick(currentTime: number): void {
 
   gameLoop.particleSystem.bakeToRenderer(renderer);
   gameLoop.renderFrame(frameTime);
+  if (debugFlags.perfEnabled) {
+    const sample = inputProbe.rendered(performance.timeOrigin + performance.now());
+    if (sample) ctxScope.postMessage({ type: 'worker:inputProbe', ...sample });
+  }
 
   // Periodic state mirror back to main for E2E + UI synchronous reads.
   // Slim payload (renderer/cosmetic-only fields stripped) — audit
@@ -514,25 +513,21 @@ function buildSlimMirror(s: MatchState): MatchState {
   return out;
 }
 
-/** Pure helper: replace `target` Map contents from a per-slot list. Slots
- *  absent from the list are evicted. Phase 2 introduces an out-of-worker
- *  caller (the netmatch async path), so the seam is extracted from
- *  `applyInputBatch` for testability. */
-export function applyInputBatchTo(
-  target: Map<PlayerSlot, InputState>,
-  inputs: ReadonlyArray<readonly [PlayerSlot, InputState]>,
-): void {
-  target.clear();
-  for (const [slot, input] of inputs) target.set(slot, input);
-}
-
+/** Ingest the newest held levels without losing unconsumed jump presses. */
 export function applyInputBatch(msg: HostEngineInputBatchMsg): void {
   applyInputBatchTo(inputMap, msg.inputs);
+  if (paused) clearPendingWorkerJumps();
+}
+
+function clearPendingWorkerJumps(): void {
+  for (const input of inputMap.values()) input.jump = false;
+  if (inputSabView) clearPendingSabJumps(inputSabView);
 }
 
 export function pauseEngine(): void {
   if (!gameLoop) return;
   paused = true;
+  clearPendingWorkerJumps();
   gameLoop.pause();
 }
 
@@ -576,6 +571,9 @@ export function stopEngine(): void {
   gameLoop = null;
   renderer = null;
   inputMap.clear();
+  inputSabView = null;
+  inputSabSlots = [];
+  inputProbe.clear();
   netMode = 'off';
   hostFrame = 0;
 }

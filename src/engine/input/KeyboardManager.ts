@@ -19,7 +19,12 @@ const BINDING_ENTRIES = Object.entries(KEY_BINDINGS) as [CharacterSlot, KeyBindi
  */
 export class KeyboardManager {
   private keys: Set<string> = new Set();
-  private jumpPressed: Map<CharacterSlot, boolean> = new Map();
+  private pendingJumps: Set<CharacterSlot> = new Set();
+  private changeListener: (() => void) | null = null;
+
+  /** Browser adapters may publish held levels and jump edges immediately. */
+  setChangeListener(listener: (() => void) | null): void { this.changeListener = listener; }
+  clearPendingJumps(): void { this.pendingJumps.clear(); }
   /** Per-slot output scratches reused across reads. Each slot's InputState is
    *  written in place by `readSlot`; the merged `readAny` writes its own. */
   private readonly _slotInputs: Record<CharacterSlot, InputState> = {
@@ -33,16 +38,20 @@ export class KeyboardManager {
 
   private readonly _onKeyDown = (e: KeyboardEvent): void => {
     e.preventDefault();
-    this.keys.add(this.normalizeKey(e.key));
+    const key = this.normalizeKey(e.key);
+    if (this.keys.has(key)) return; // OS repeat is not another press.
+    this.keys.add(key);
+    for (const [slot, binding] of BINDING_ENTRIES) {
+      if (key === binding.jump) this.pendingJumps.add(slot);
+    }
+    this.changeListener?.();
   };
 
   private readonly _onKeyUp = (e: KeyboardEvent): void => {
     e.preventDefault();
-    const key = this.normalizeKey(e.key);
-    this.keys.delete(key);
-    for (const [slot, b] of BINDING_ENTRIES) {
-      if (key === b.jump) this.jumpPressed.set(slot, false);
-    }
+    if (!this.keys.delete(this.normalizeKey(e.key))) return;
+    // A completed quick tap must survive until its input reader consumes it.
+    this.changeListener?.();
   };
 
   attach(): void {
@@ -58,7 +67,7 @@ export class KeyboardManager {
     window.removeEventListener('keydown', this._onKeyDown);
     window.removeEventListener('keyup', this._onKeyUp);
     this.keys.clear();
-    this.jumpPressed.clear();
+    this.pendingJumps.clear();
   }
 
   isKeyDown(key: string): boolean {
@@ -73,9 +82,7 @@ export class KeyboardManager {
    *  Returns a per-slot stable scratch — caller must consume synchronously. */
   readSlot(slot: CharacterSlot): InputState {
     const b = KEY_BINDINGS[slot];
-    const jumpHeld = this.keys.has(b.jump);
-    const jumpEdge = jumpHeld && !this.jumpPressed.get(slot);
-    if (jumpEdge) this.jumpPressed.set(slot, true);
+    const jumpEdge = this.pendingJumps.delete(slot);
     const out = this._slotInputs[slot];
     out.left = this.keys.has(b.left);
     out.right = this.keys.has(b.right);
@@ -92,10 +99,7 @@ export class KeyboardManager {
       if (this.keys.has(b.left)) left = true;
       if (this.keys.has(b.right)) right = true;
       if (this.keys.has(b.down)) down = true;
-      if (this.keys.has(b.jump) && !this.jumpPressed.get(slot)) {
-        jump = true;
-        this.jumpPressed.set(slot, true);
-      }
+      if (this.pendingJumps.delete(slot)) jump = true;
     }
     const out = this._anyInput;
     out.left = left; out.right = right; out.jump = jump; out.down = down;

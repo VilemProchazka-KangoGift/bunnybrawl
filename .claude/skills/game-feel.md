@@ -106,3 +106,9 @@ SCREEN_FLASH_DURATION
 A fresh Down press while airborne must snap downward on the same simulation tick, including while rising. Track `Player.downHeld` separately from `fastFalling`: holding Down through a spring/bounce launch preserves the launch, while releasing and pressing again deliberately cancels ascent. Keep the once-per-dive latch and `Math.max` velocity guard so currents cannot repeatedly trigger the snap or slow an already faster fall. Initialize the input history for match/lobby players and reset it on respawn.
 
 Cover the first-tick reversal and held spring launch in Simulator tests. Browser checks must cover default sim-in-worker and `?simWorker=off`; worker diagnostics mirror at 1Hz, so sampling an arbitrary delay after a jump can observe a stale frame.
+
+## Keyboard Responsiveness and Worker Boundaries
+
+Keyboard jump presses must survive a complete keydown/keyup between reads. OS repeats do not produce extra jumps. Local sim-worker play publishes keyboard changes immediately; touch remains frame-polled. WorkerInput (not RemoteInput or Simulator) retains asynchronous jump pulses until the player is actually read, including hitstop, then consumes once. SAB consumption atomically clears only jump; producers use CAS to avoid resurrecting a consumed pulse. Pause discards pending pulses, and resume publishes current held levels before restarting simulation.
+
+Use `scripts/measureInputLatency.mjs` with a production preview and `?debug=perf` diagnostics. Measure key-event to simulation read separately from render submission/completion; neither measures physical display presentation. Browser regressions should hold main RAF while testing both SAB and message fallback, plus `?simWorker=off` quick taps.

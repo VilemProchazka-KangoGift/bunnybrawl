@@ -31,6 +31,30 @@ describe('KeyboardManager + KeyboardInput', () => {
     expect(input.getAction(fakeState).jump).toBe(false);
   });
 
+  it('retains a complete jump tap between input reads', () => {
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w' }));
+    window.dispatchEvent(new KeyboardEvent('keyup', { key: 'w' }));
+    expect(mgr.readSlot('P1').jump).toBe(true);
+    expect(mgr.readSlot('P1').jump).toBe(false);
+  });
+
+  it('retains quick taps from any binding for online input', () => {
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp' }));
+    window.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowUp' }));
+    expect(mgr.readAny().jump).toBe(true);
+    expect(mgr.readAny().jump).toBe(false);
+  });
+
+  it('ignores repeated keydown and accepts a new press after release', () => {
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w' }));
+    expect(mgr.readSlot('P1').jump).toBe(true);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', repeat: true }));
+    expect(mgr.readSlot('P1').jump).toBe(false);
+    window.dispatchEvent(new KeyboardEvent('keyup', { key: 'w' }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w' }));
+    expect(mgr.readSlot('P1').jump).toBe(true);
+  });
+
   it('detach clears state and listeners', () => {
     const input = new KeyboardInput('P2', mgr);
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));

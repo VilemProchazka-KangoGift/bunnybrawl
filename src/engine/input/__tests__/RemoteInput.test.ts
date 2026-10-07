@@ -77,6 +77,18 @@ describe('RemoteInput', () => {
     expect(remote.getAction(state, ctx)).toEqual({ left: true, right: false, jump: false, down: false });
   });
 
+  it('does not consume or latch repeated per-tick ML actions', () => {
+    const action = { left: false, right: false, jump: true, down: false };
+    const map = new Map<PlayerSlot, InputState>([['P1', action]]);
+    const input = new RemoteInput('P1');
+    const state = makeState();
+    expect(input.getAction(state, { networkInputs: map })).toBe(action);
+    expect(input.getAction(state, { networkInputs: map }).jump).toBe(true);
+    expect(action.jump).toBe(true);
+    action.jump = false;
+    expect(input.getAction(state, { networkInputs: map }).jump).toBe(false);
+  });
+
   it('exposes the slot passed to the constructor', () => {
     const remote = new RemoteInput('B2' as PlayerSlot);
     expect(remote.slot).toBe('B2');

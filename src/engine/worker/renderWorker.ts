@@ -270,6 +270,7 @@ ctxScope.addEventListener('message', async (e: MessageEvent<HostToWorkerMsg>) =>
     }
     return;
   }
+  if (msg.type === 'host:inputProbe') { engineBindings.armInputProbe(msg); return; }
   if (msg.type === 'host:engineInputBatch') { engineBindings.applyInputBatch(msg); return; }
   if (msg.type === 'host:enginePause') { engineBindings.pauseEngine(); return; }
   if (msg.type === 'host:engineResume') { engineBindings.resumeEngine(); return; }

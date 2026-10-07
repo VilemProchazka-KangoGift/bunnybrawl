@@ -1,3 +1,4 @@
+import type { HostAuthority } from '../src/engine/net/hostAuthority';
 import { test, expect, type Page, type Browser, type BrowserContext } from '@playwright/test';
 
 /**
@@ -25,9 +26,14 @@ interface Pair {
   guestSocketUrls: string[];
 }
 
-async function createPair(browser: Browser, query: string): Promise<Pair> {
+async function createPair(browser: Browser, query: string, forceMessages = false): Promise<Pair> {
   const hostCtx = await browser.newContext();
   const guestCtx = await browser.newContext();
+  if (forceMessages) {
+    for (const context of [hostCtx, guestCtx]) {
+      await context.addInitScript(() => Object.defineProperty(window, 'crossOriginIsolated', { value: false }));
+    }
+  }
   const host = await hostCtx.newPage();
   const guest = await guestCtx.newPage();
   const hostErrors: string[] = [];
@@ -109,11 +115,11 @@ async function getPhase(page: Page): Promise<string | null> {
   });
 }
 
-async function runMatrixRow(browser: Browser, query: string, label: string, opts: { matchScreenMs?: number; phaseMs?: number; soakMs?: number } = {}): Promise<void> {
+async function runMatrixRow(browser: Browser, query: string, label: string, opts: { matchScreenMs?: number; phaseMs?: number; soakMs?: number; forceMessages?: boolean } = {}): Promise<void> {
   const matchScreenMs = opts.matchScreenMs ?? 20000;
   const phaseMs = opts.phaseMs ?? 25000;
   const soakMs = opts.soakMs ?? 8000;
-  const pair = await createPair(browser, query);
+  const pair = await createPair(browser, query, opts.forceMessages);
   try {
     const relayUrl = process.env.VITE_E2E_MQTT_URL;
     expect(relayUrl, 'online smoke must use the local MQTT relay').toBeTruthy();
@@ -149,6 +155,34 @@ async function runMatrixRow(browser: Browser, query: string, label: string, opts
       { timeout: phaseMs },
     );
 
+    await pair.host.waitForFunction(() => window.__bunnyTest?.state()?.countdown === 0);
+    // The guest owns P2. Both event edges are deliberately sent in one JS
+    // task, between GuestLoop input reads; keyboard latching must retain it.
+    await pair.host.evaluate(() => {
+      const match = window.__bunnyTest!.netMatch() as unknown as { hostAuthority: HostAuthority };
+      const authority = match.hostAuthority;
+      const read = authority.getNetworkInputs.bind(authority);
+      const observed = window as Window & { __guestJumpReads: number };
+      observed.__guestJumpReads = 0;
+      authority.getNetworkInputs = () => {
+        const inputs = read();
+        if (inputs.get('P2')?.jump) observed.__guestJumpReads++;
+        return inputs;
+      };
+    });
+    await pair.guest.evaluate(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w' }));
+      window.dispatchEvent(new KeyboardEvent('keyup', { key: 'w' }));
+    });
+    await pair.host.waitForFunction(() => (window as Window & { __guestJumpReads?: number }).__guestJumpReads === 1, undefined, { timeout: 8000 });
+    // Exercise held movement and release over real WebRTC, not just an idle soak.
+    await pair.guest.keyboard.down('d');
+    try {
+      await pair.host.waitForFunction(() => (window.__bunnyTest?.state()?.players.find(p => p.id === 'P2')?.vx ?? 0) > 0, undefined, { timeout: 8000 });
+    } finally { await pair.guest.keyboard.up('d'); }
+    await pair.host.waitForFunction(() => Math.abs(window.__bunnyTest?.state()?.players.find(p => p.id === 'P2')?.vx ?? 1) < 1, undefined, { timeout: 8000 });
+    expect(await pair.host.evaluate(() => (window as Window & { __guestJumpReads: number }).__guestJumpReads)).toBe(1);
+
     // Let the match run a bit. Adverse network rows get extra time so
     // the host's broadcast loop + guest's interp can settle.
     await pair.host.waitForTimeout(soakMs);
@@ -172,6 +206,10 @@ test.describe('Phase 2 simWorker online smoke', { tag: '@online' }, () => {
 
   test('baseline — both peers on ?simWorker=on, no simulated network', async ({ browser }) => {
     await runMatrixRow(browser, '?simWorker=on', 'baseline');
+  });
+
+  test('message fallback — online input without shared memory', async ({ browser }) => {
+    await runMatrixRow(browser, '?simWorker=on', 'messages', { forceMessages: true });
   });
 
   test('adverse network — ?simLatency=80 jitter=20 loss=5 on both peers', async ({ browser }) => {
