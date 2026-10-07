@@ -2,6 +2,7 @@
 import type { InputState, MatchState, PlayerSlot, BotSlot, Arena } from '../types';
 import type { PlayerInput, PlayerInputContext } from './PlayerInput';
 import type { AIController } from '../ai';
+import { normalizeCharacterScale } from '../characterScale';
 
 const NO_INPUT: InputState = { left: false, right: false, jump: false, down: false };
 
@@ -12,17 +13,26 @@ export class RuleBasedBot implements PlayerInput {
   private arena: Arena;
   private readonly carrotChase: boolean;
   private readonly mirrorNav: boolean;
+  private movementScale: number;
 
-  constructor(slot: BotSlot, controller: AIController, arena: Arena, carrotChase: boolean, mirrorNav: boolean) {
+  constructor(
+    slot: BotSlot, controller: AIController, arena: Arena,
+    carrotChase: boolean, mirrorNav: boolean, movementScale = 1,
+  ) {
     this.slot = slot;
     this.controller = controller;
     this.arena = arena;
     this.carrotChase = carrotChase;
     this.mirrorNav = mirrorNav;
+    this.movementScale = normalizeCharacterScale(movementScale);
   }
 
   setArena(arena: Arena): void {
     this.arena = arena;
+  }
+
+  setMovementScale(value?: number): void {
+    this.movementScale = normalizeCharacterScale(value);
   }
 
   getAction(state: Readonly<MatchState>, _ctx?: PlayerInputContext): InputState {
@@ -37,6 +47,8 @@ export class RuleBasedBot implements PlayerInput {
     if (!self) return NO_INPUT;
     // AIController only reads MatchState — the cast strips Readonly to match its
     // mutable-state signature without actually mutating state.
-    return this.controller.getInput(self, state as MatchState, this.arena, this.carrotChase, this.mirrorNav);
+    return this.controller.getInput(
+      self, state as MatchState, this.arena, this.carrotChase, this.mirrorNav, this.movementScale,
+    );
   }
 }

@@ -17,8 +17,9 @@ export function processStompsAndCollisions(
   state: MatchState, arena: Arena, settings: MatchSettings,
   dt: number, resimulating: boolean, rng: SeededRNG | undefined,
   onStompHaptic?: (slot: PlayerSlot) => void,
+  movementScale = 1,
 ): void {
-  const { killFeedEntries } = checkStomps(state.players, arena.spawnPoints, state.timeElapsed, settings.mods);
+  const { killFeedEntries } = checkStomps(state.players, arena.spawnPoints, state.timeElapsed, settings.mods, movementScale);
 
   if (killFeedEntries.length > 0 && !resimulating) {
     state.screenShake = SCREEN_SHAKE_DURATION;
@@ -57,7 +58,7 @@ export function processStompsAndCollisions(
     }
   }
 
-  collidePlayersHorizontal(state.players);
+  collidePlayersHorizontal(state.players, movementScale);
   // Re-resolve platform collisions after player-player pushes
   // (prevents getting shoved inside solid blocks like the mausoleum)
   for (const player of state.players) {

@@ -1,3 +1,4 @@
+import { normalizeCharacterScale } from './engine/characterScale';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useGameStore } from './store/gameStore';
 import { MainMenu } from './components/MainMenu';
@@ -75,6 +76,10 @@ function useDevAutoStart() {
   useEffect(() => {
     if (didAutoStart.current) return;
     const params = new URLSearchParams(window.location.search);
+    const rawScale = Number(params.get('characterScale'));
+    if (params.has('characterScale') && Number.isFinite(rawScale)) {
+      setMatchSettings({ characterScale: normalizeCharacterScale(rawScale) });
+    }
     const arena = params.get('arena');
     if (!arena) return;
     didAutoStart.current = true;

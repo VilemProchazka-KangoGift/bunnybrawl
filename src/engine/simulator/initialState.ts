@@ -10,6 +10,7 @@ import { getCharacterForSlot } from '../characters';
 import { createWeatherParticle } from '../gameLoop/cosmetics/environment';
 import { randRange, pickWeighted, shuffleInPlace } from '../themes/utils';
 import { getEntities } from '../entities/registry';
+import { normalizeCharacterScale } from '../characterScale';
 import {
   PLAYER_WIDTH, PLAYER_HEIGHT, GIANT_SCALE,
   CARROT_FIRST_SPAWN_DELAY, CARROT_CHASE_FIRST_SPAWN_DELAY,
@@ -27,7 +28,8 @@ export interface EffectivePhysics {
 }
 
 /** Derive runtime physics constants from base constants, theme modifiers, and active mods. */
-export function computeEffectivePhysics(theme: ThemeConfig, mods: MatchSettings['mods']): EffectivePhysics {
+export function computeEffectivePhysics(theme: ThemeConfig, mods: MatchSettings['mods'], scale = 1): EffectivePhysics {
+  const characterScale = normalizeCharacterScale(scale);
   const pm = theme.physics;
   let gravity = GRAVITY * (pm?.gravity ?? 1);
   const friction = FRICTION * (pm?.friction ?? 1);
@@ -45,7 +47,13 @@ export function computeEffectivePhysics(theme: ThemeConfig, mods: MatchSettings[
     jumpImpulse *= 0.9;
   }
 
-  return { gravity, friction, walkSpeed, jumpImpulse, maxFallSpeed };
+  return {
+    gravity: gravity * characterScale,
+    friction: friction * characterScale,
+    walkSpeed: walkSpeed * characterScale,
+    jumpImpulse: jumpImpulse * characterScale,
+    maxFallSpeed: maxFallSpeed * characterScale,
+  };
 }
 
 /** Build the initial player array for a match. */
@@ -54,9 +62,11 @@ export function createInitialPlayers(
   arena: Arena,
   giantPlayers: boolean,
   gameRandom: () => number,
+  characterScale = 1,
 ): Player[] {
-  const pw = giantPlayers ? PLAYER_WIDTH * GIANT_SCALE : PLAYER_WIDTH;
-  const ph = giantPlayers ? PLAYER_HEIGHT * GIANT_SCALE : PLAYER_HEIGHT;
+  const scale = normalizeCharacterScale(characterScale) * (giantPlayers ? GIANT_SCALE : 1);
+  const pw = PLAYER_WIDTH * scale;
+  const ph = PLAYER_HEIGHT * scale;
 
   const shuffledSpawns = [...arena.spawnPoints];
   shuffleInPlace(shuffledSpawns, gameRandom);

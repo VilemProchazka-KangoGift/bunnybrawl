@@ -106,7 +106,7 @@ function buildSettingsSyncMsg(ms: ReturnType<typeof useGameStore.getState>['matc
   return {
     type: MsgType.SETTINGS_SYNC, arenaId,
     killLimit: ms.killLimit, timeLimit: ms.timeLimit, goreMode: ms.goreMode,
-    mods: ms.mods, rngSeed: seed, botCount: ms.botCount, botDifficulty: ms.botDifficulty,
+    mods: ms.mods, characterScale: ms.characterScale ?? 1, rngSeed: seed, botCount: ms.botCount, botDifficulty: ms.botDifficulty,
   } as ReliableMessage;
 }
 
@@ -545,6 +545,7 @@ export function useOnlineRoom({ onMatchStart }: UseOnlineRoomArgs): UseOnlineRoo
             goreMode: msg.goreMode, botCount: msg.botCount,
             botDifficulty: msg.botDifficulty as 'easy' | 'medium' | 'hard' | 'impossible',
             mods: msg.mods,
+            characterScale: msg.characterScale ?? 1,
           });
           setOnline({ rngSeed: msg.rngSeed });
         } else if (msg.type === MsgType.READY) {

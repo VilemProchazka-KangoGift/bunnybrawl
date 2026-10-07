@@ -398,12 +398,14 @@ function drawCharacterSprite(
     : null;
 
   // Authored silhouettes (ears, horns, tails) extend beyond the 32px hitbox.
-  const pad = pack?.resolvePose ? 16 : 10;
+  const pad = (pack?.resolvePose ? 16 : 10) * Math.max(w / PLAYER_WIDTH, h / PLAYER_HEIGHT);
   const cw = Math.ceil(w) + pad * 2;
   const ch = Math.ceil(h) + pad * 2;
 
   let cached = spriteCache.get(cacheKey);
-  if (cached) {
+  if (cached && cached.width === Math.ceil(cw * _spriteScale) && cached.height === Math.ceil(ch * _spriteScale)) {
+    // Body size can change between lobby/matches and rematches. Never reuse
+    // a bitmap baked at another size (the packed key deliberately stays small).
     // LRU: delete+re-insert moves entry to end of Map iteration order
     spriteCache.delete(cacheKey);
     spriteCache.set(cacheKey, cached);

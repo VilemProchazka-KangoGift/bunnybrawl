@@ -236,6 +236,7 @@ export class GameLoop {
           sArena,
           settings.mods.carrotChase,
           settings.mods.mirrorArena,
+          settings.characterScale,
         ));
       } else {
         this.simulator.setPlayerInput(player.id, new KeyboardInput(
@@ -444,6 +445,9 @@ export class GameLoop {
   /** Swap to a different arena in place. */
   switchArena(arenaId: string, settingsOverrides?: Partial<MatchSettings>): void {
     this.simulator.switchArena(arenaId, settingsOverrides);
+    for (const input of this.simulator.getPlayerInputs().values()) {
+      if (input instanceof RuleBasedBot) input.setMovementScale(this.simulator.getSettings().characterScale);
+    }
     // Cosmetic + renderer wiring needs the new arena/theme/state refs.
     // The simulator Object.assign'd into the existing state, but cosmetic
     // systems captured the prior arena/theme references; rebuild them.

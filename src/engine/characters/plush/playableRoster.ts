@@ -84,10 +84,11 @@ function plushPack(original: CharacterPack, atlas: ImageBitmap, size: number): C
     resolvePose: selectPlushPose,
     drawSprite: (ctx, cx, yOff, _w, h, _state, _animFrame, _isIdleAnim, _idleT, _colors, poseIndex = 0) => {
       const pose = Math.max(0, Math.min(7, poseIndex));
+      const scaledSize = size * h / 32;
       ctx.drawImage(
         atlas,
         pose % COLS * CELL, Math.floor(pose / COLS) * CELL, CELL, CELL,
-        cx - size / 2, yOff + h - size, size, size,
+        cx - scaledSize / 2, yOff + h - scaledSize, scaledSize, scaledSize,
       );
     },
   };

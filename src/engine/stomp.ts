@@ -26,6 +26,7 @@ export function checkStomps(
   _spawnPoints: SpawnPoint[],
   timeElapsed: number,
   mods?: GameMods,
+  movementScale = 1,
 ): { splatMarks: SplatMark[]; killFeedEntries: KillFeedEntry[] } {
   _splatMarksResult.length = 0;
   _killFeedResult.length = 0;
@@ -46,14 +47,14 @@ export function checkStomps(
       if (!victim.active || victim.state === 'splat' || victim.state === 'respawning') continue;
       if (victim.invincibleTimer > 0) continue;
 
-      if (isStomping(attacker, victim)) {
+      if (isStomping(attacker, victim, movementScale)) {
         // Stomp!
         victim.state = 'splat';
         victim.splatTimer = SPLAT_DURATION;
         victim.vx = 0;
         victim.vy = 0;
 
-        attacker.vy = STOMP_BOUNCE;
+        attacker.vy = STOMP_BOUNCE * movementScale;
         attacker.state = 'airborne';
         if (!mods?.carrotChase) attacker.score += 2;
 
@@ -70,9 +71,9 @@ export function checkStomps(
   return _checkStompsResult;
 }
 
-export function isStomping(attacker: Player, victim: Player): boolean {
+export function isStomping(attacker: Player, victim: Player, movementScale = 1): boolean {
   // Attacker must be moving downward
-  if (attacker.vy < STOMP_VY_THRESHOLD) return false;
+  if (attacker.vy < STOMP_VY_THRESHOLD * movementScale) return false;
 
   // Check bounding box overlap
   if (!aabbOverlap(
