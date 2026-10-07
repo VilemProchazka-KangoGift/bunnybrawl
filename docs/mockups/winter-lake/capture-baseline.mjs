@@ -13,15 +13,15 @@ try {
   const url = new URL('?arena=winter_lake&bots=4&simWorker=off', server);
   const response = await page.goto(url.href, { waitUntil: 'domcontentloaded' });
   if (!response?.ok()) throw new Error(`Arena load: HTTP ${response?.status()}`);
-  await page.waitForFunction(() => window.__bunnyTest?.state()?.countdown === 0, null, { timeout: 30000 });
+  await page.waitForFunction(() => globalThis.__bunnyTest?.state()?.countdown === 0, null, { timeout: 30000 });
   await page.addStyleTag({ content: 'canvas.hud-canvas { visibility: hidden }' });
 
   const characters = await page.evaluate(async () => {
     const { getAllCharacters } = await import('/bunnybrawl/src/engine/characters/defaults.ts');
     const byName = new Map(getAllCharacters().map(character => [character.name, character]));
-    const state = window.__bunnyTest?.state();
+    const state = globalThis.__bunnyTest?.state();
     if (!state || state.players.length < 5) throw new Error('Five match players are required');
-    window.__bunnyTest?.gameLoop()?.pause();
+    globalThis.__bunnyTest?.gameLoop()?.pause();
     const placements = [
       ['Bunny', 85, 540],
       ['Frog', 180, 625],
@@ -51,7 +51,7 @@ try {
 
   for (const [time, phase] of [['day', 0], ['night', 0.5]]) {
     await page.evaluate(phase => {
-      const state = window.__bunnyTest?.state();
+      const state = globalThis.__bunnyTest?.state();
       if (state) state.dayPhase = phase;
     }, phase);
     await page.waitForTimeout(120);
