@@ -97,12 +97,24 @@ The [original Wind Carved at noon](polar-wind-carved-day.png) and [midnight](pol
 
 | Direction | Noon | Midnight | Color and shape change |
 | --- | --- | --- | --- |
-| **Silver Banks** | ![Silver Banks, noon](polar-silver-banks-day.png) | ![Silver Banks, midnight](polar-silver-banks-night.png) | Neutral silver snow against a bluer lake; the left shoulder rolls twice while the right descends gradually. |
+| **Silver Banks** | ![Silver Banks, noon](polar-silver-banks-day.png) | ![Silver Banks, midnight](polar-silver-banks-night.png) | Neutral silver snow against a bluer lake; its selected follow-up below smooths the left bank and enriches both surfaces. |
 | **Lilac Snow** | ![Lilac Snow, noon](polar-lilac-snow-day.png) | ![Lilac Snow, midnight](polar-lilac-snow-night.png) | Muted violet banks against turquoise ice; the right bank has a separate low crest. |
 | **Deep Ice** | ![Deep Ice, noon](polar-deep-ice-day.png) | ![Deep Ice, midnight](polar-deep-ice-night.png) | Low neutral banks leave a stronger blue lake as the main landscape feature. |
 | **Warm Drift** | ![Warm Drift, noon](polar-warm-drift-day.png) | ![Warm Drift, midnight](polar-warm-drift-night.png) | Ivory snow contrasts with cool ice; both banks remain broad but have different crests. |
 
 **Assessment:** Lilac Snow makes the snow and ice easiest to distinguish without making either bank dark. Silver Banks is the most restrained option and may fit the existing platform palette best. Deep Ice identifies the lake quickly but its blue area deserves a motion check for pickup and player contrast. Warm Drift has a pleasant warm-cool split, though its beige snow may feel less wintry. The calmer lake edge is shared across this round; no production choice has been made.
+
+### Silver Banks refinement
+
+Silver Banks is the selected direction for continued exploration. In the first capture, the left slope ended against the lake with a conspicuous corner. The revised ridge now eases through several broad curves and runs under the shoreline, so the two contours meet almost level. Its hills use translucent, wind-shaped snow planes, gentle darker layers, and sparse frost grains. The ice adds broken clouded plates and a few branching seams while keeping its marks quieter than the playable platform edges.
+
+| Treatment | Noon | Midnight | Tradeoff |
+| --- | --- | --- | --- |
+| **Before** | ![Original Silver Banks, noon](polar-silver-banks-before-day.png) | ![Original Silver Banks, midnight](polar-silver-banks-before-night.png) | Retains the pointed left-bank junction and simpler interior fills for comparison. |
+| **Refined Silver Banks** | ![Refined Silver Banks, noon](polar-silver-banks-day.png) | ![Refined Silver Banks, midnight](polar-silver-banks-night.png) | Smooth junction and restrained texture; best fit for the background hierarchy so far. |
+| **Frostwork** | ![Silver Frostwork, noon](polar-silver-frostwork-day.png) | ![Silver Frostwork, midnight](polar-silver-frostwork-night.png) | Same smooth banks with more frost grains and ice branching; richer close up, potentially busy at match scale. |
+
+**Assessment:** Refined Silver Banks keeps the color separation the selection was based on and removes the obvious corner. Frostwork demonstrates how far the texture can go, but the quieter version reads better behind characters at native size. These are static mockups; animated gameplay and sunset remain to be checked before integrating this backdrop.
 
 The fixture and variant functions are in [`render.ts`](render.ts) and [`variants.ts`](variants.ts). To reproduce, run Vite on port 4222 and then `node docs/mockups/winter-lake/capture-variants.mjs`. The earlier live-match baseline above remains available to compare the fixture with the game.
 

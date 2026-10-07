@@ -9,6 +9,7 @@ export const VARIANTS = [
   'polar-soft-shoulders', 'polar-high-bluffs', 'polar-uneven-shore',
   'polar-powder-bank', 'polar-wind-carved', 'polar-frost-shelves', 'polar-pearl-shore',
   'polar-silver-banks', 'polar-lilac-snow', 'polar-deep-ice', 'polar-warm-drift',
+  'polar-silver-banks-before', 'polar-silver-frostwork',
 ] as const;
 export type Variant = (typeof VARIANTS)[number];
 
@@ -35,6 +36,8 @@ export const descriptions: Record<Exclude<Variant, 'current'>, string> = {
   'polar-lilac-snow': 'A soft violet shore frames turquoise ice with a wide, flat pass.',
   'polar-deep-ice': 'Low pale banks leave room for a bluer frozen lake to define the place.',
   'polar-warm-drift': 'Warm ivory snow and a cool lake separate the two surfaces gently.',
+  'polar-silver-banks-before': 'The first Silver Banks study, retained for the bank-corner and texture comparison.',
+  'polar-silver-frostwork': 'The smoothed Silver Banks shape with stronger clustered frost and branching ice seams.',
 };
 
 export const skies: Record<Exclude<Variant, 'current'>, { offset: number; color: string }[]> = {
@@ -123,6 +126,14 @@ export const skies: Record<Exclude<Variant, 'current'>, { offset: number; color:
     { offset: .78, color: '#BCD0D3' }, { offset: 1, color: '#DFE6E1' },
   ],
   'polar-warm-drift': [
+    { offset: 0, color: '#3D5573' }, { offset: .43, color: '#7E9AAD' },
+    { offset: .78, color: '#BCD0D3' }, { offset: 1, color: '#DFE6E1' },
+  ],
+  'polar-silver-banks-before': [
+    { offset: 0, color: '#3D5573' }, { offset: .43, color: '#7E9AAD' },
+    { offset: .78, color: '#BCD0D3' }, { offset: 1, color: '#DFE6E1' },
+  ],
+  'polar-silver-frostwork': [
     { offset: 0, color: '#3D5573' }, { offset: .43, color: '#7E9AAD' },
     { offset: .78, color: '#BCD0D3' }, { offset: 1, color: '#DFE6E1' },
   ],
@@ -572,7 +583,7 @@ function windStudy(ctx: Ctx2D, study: WindStudy): void {
   organicLake(ctx, study.shore, study.seed + 3, study.lake, 'frost');
 }
 
-function polarSilverBanks(ctx: Ctx2D): void {
+function polarSilverBanksBefore(ctx: Ctx2D): void {
   windStudy(ctx, {
     far: '#A9BCC7',
     left: [[-20, 434], [75, 427], [175, 433], [275, 420], [367, 466], [476, 548]],
@@ -582,6 +593,143 @@ function polarSilverBanks(ctx: Ctx2D): void {
     shore: [[-20, 620], [130, 604], [245, 588], [366, 574], [480, 562], [593, 558], [702, 559], [818, 558], [928, 570], [1045, 581], [1170, 600], [1300, 615]],
     lake: '#9FC6D0', seed: 2,
   });
+}
+
+const silverLeftRidge: readonly Point[] = [
+  [-20, 434], [75, 427], [175, 433], [275, 420],
+  [362, 466], [438, 525], [497, 553], [554, 564], [620, 567],
+];
+const silverRightRidge: readonly Point[] = [
+  [722, 566], [767, 562], [850, 525], [954, 469],
+  [1051, 453], [1164, 447], [1251, 429], [1300, 437],
+];
+const silverLakeShore: readonly Point[] = [
+  [-20, 620], [130, 604], [245, 588], [366, 574],
+  [480, 562], [593, 558], [702, 559], [818, 558],
+  [928, 570], [1045, 581], [1170, 600], [1300, 615],
+];
+
+function silverBankLayers(ctx: Ctx2D, ridge: readonly Point[], side: 'left' | 'right', frostwork: boolean): void {
+  const first = ridge[0];
+  const last = ridge[ridge.length - 1];
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(first[0], first[1]);
+  for (let i = 1; i < ridge.length; i++) {
+    const [px, py] = ridge[i - 1];
+    const [x, y] = ridge[i];
+    ctx.quadraticCurveTo(px, py, (px + x) / 2, (py + y) / 2);
+  }
+  ctx.lineTo(last[0], last[1]);
+  ctx.lineTo(last[0], 720);
+  ctx.lineTo(first[0], 720);
+  ctx.closePath();
+  ctx.clip();
+
+  const shift = side === 'left' ? 0 : 780;
+  ctx.fillStyle = 'rgba(246, 250, 246, 0.14)';
+  ctx.beginPath();
+  ctx.moveTo(shift - 30, 470);
+  ctx.bezierCurveTo(shift + 65, 452, shift + 126, 471, shift + 204, 456);
+  ctx.bezierCurveTo(shift + 273, 447, shift + 338, 475, shift + 415, 478);
+  ctx.bezierCurveTo(shift + 317, 492, shift + 250, 470, shift + 190, 483);
+  ctx.bezierCurveTo(shift + 106, 495, shift + 41, 478, shift - 30, 500);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = 'rgba(104, 153, 163, 0.10)';
+  ctx.beginPath();
+  ctx.moveTo(shift + 5, 532);
+  ctx.bezierCurveTo(shift + 111, 513, shift + 191, 542, shift + 255, 526);
+  ctx.bezierCurveTo(shift + 318, 510, shift + 383, 537, shift + 450, 556);
+  ctx.bezierCurveTo(shift + 359, 545, shift + 287, 551, shift + 211, 550);
+  ctx.bezierCurveTo(shift + 115, 552, shift + 52, 542, shift + 5, 555);
+  ctx.closePath();
+  ctx.fill();
+
+  // Curved layers follow the wind direction rather than dividing the bank into straight stripes.
+  for (let i = 0; i < 3; i++) {
+    const y = 461 + i * 37 + (side === 'right' ? 17 : 0);
+    ctx.strokeStyle = i === 1 ? 'rgba(119, 157, 163, 0.19)' : 'rgba(248, 251, 247, 0.29)';
+    ctx.lineWidth = frostwork ? 6 - i : 4 - i * .6;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(shift + 28 + i * 15, y);
+    ctx.bezierCurveTo(shift + 95, y - 12, shift + 155, y + 9, shift + 230, y - 3);
+    ctx.bezierCurveTo(shift + 275, y - 9, shift + 322, y + 5, shift + 378, y + 13);
+    ctx.stroke();
+  }
+
+  // Sparse, uneven frost flecks break up the smooth fill without competing with platforms.
+  const count = frostwork ? 23 : 13;
+  for (let i = 0; i < count; i++) {
+    const x = first[0] + 42 + (i * 79 + (side === 'right' ? 29 : 7)) % Math.max(1, last[0] - first[0] - 85);
+    const y = 463 + (i * 57 + (side === 'right' ? 17 : 3)) % 133;
+    ctx.fillStyle = i % 4 === 0 ? 'rgba(125, 165, 169, 0.16)' : 'rgba(246, 251, 247, 0.31)';
+    ctx.beginPath();
+    ctx.ellipse(x, y, frostwork ? 3 + i % 4 : 2 + i % 3, 1.2 + i % 2, -.15, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function silverLakeDetails(ctx: Ctx2D, frostwork: boolean): void {
+  ctx.save();
+  ctx.beginPath();
+  traceLakeShore(ctx, silverLakeShore);
+  ctx.lineTo(1300, 720);
+  ctx.lineTo(-20, 720);
+  ctx.closePath();
+  ctx.clip();
+
+  // Clouded plates have uneven edges and sit below the crisp playfield art.
+  for (const [x, y, w] of [[120, 627, 210], [413, 610, 240], [705, 621, 190], [953, 608, 220]] as const) {
+    ctx.fillStyle = frostwork ? 'rgba(239, 250, 248, 0.13)' : 'rgba(239, 250, 248, 0.10)';
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.bezierCurveTo(x + w * .22, y - 11, x + w * .35, y + 3, x + w * .55, y - 5);
+    ctx.bezierCurveTo(x + w * .76, y - 8, x + w * .86, y + 2, x + w, y - 2);
+    ctx.bezierCurveTo(x + w * .72, y + 9, x + w * .28, y + 11, x, y);
+    ctx.fill();
+  }
+
+  const seams = frostwork
+    ? [[173, 638, 125], [350, 622, 163], [565, 640, 140], [820, 610, 157], [1000, 641, 118]] as const
+    : [[186, 637, 115], [503, 632, 148], [850, 617, 136]] as const;
+  ctx.strokeStyle = 'rgba(67, 130, 151, 0.28)';
+  ctx.lineWidth = 1.5;
+  ctx.lineCap = 'round';
+  for (const [x, y, length] of seams) {
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.bezierCurveTo(x + length * .28, y - 11, x + length * .48, y + 6, x + length * .72, y - 2);
+    ctx.quadraticCurveTo(x + length * .86, y - 6, x + length, y - 1);
+    ctx.stroke();
+    if (frostwork) {
+      ctx.beginPath();
+      ctx.moveTo(x + length * .48, y + 2);
+      ctx.quadraticCurveTo(x + length * .58, y + 11, x + length * .69, y + 10);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+function refinedSilverBanks(ctx: Ctx2D, frostwork: boolean): void {
+  band(ctx, '#A9BCC7', [[-20, 484], [225, 461], [420, 480], [640, 444], [890, 473], [1125, 453], [1300, 481]]);
+  irregularBank(ctx, silverLeftRidge, '#D5DCDB', '#B8CACC', 'wind', 2);
+  irregularBank(ctx, silverRightRidge, '#D0DAD9', '#B4C8CB', 'wind', 7);
+  silverBankLayers(ctx, silverLeftRidge, 'left', frostwork);
+  silverBankLayers(ctx, silverRightRidge, 'right', frostwork);
+  organicLake(ctx, silverLakeShore, 5, '#9FC6D0', 'frost');
+  silverLakeDetails(ctx, frostwork);
+}
+
+function polarSilverBanks(ctx: Ctx2D): void {
+  refinedSilverBanks(ctx, false);
+}
+
+function polarSilverFrostwork(ctx: Ctx2D): void {
+  refinedSilverBanks(ctx, true);
 }
 
 function polarLilacSnow(ctx: Ctx2D): void {
@@ -640,6 +788,8 @@ export const drawBackdrop: Record<Exclude<Variant, 'current'>, (ctx: Ctx2D) => v
   'polar-frost-shelves': polarFrostShelves,
   'polar-pearl-shore': polarPearlShore,
   'polar-silver-banks': polarSilverBanks,
+  'polar-silver-banks-before': polarSilverBanksBefore,
+  'polar-silver-frostwork': polarSilverFrostwork,
   'polar-lilac-snow': polarLilacSnow,
   'polar-deep-ice': polarDeepIce,
   'polar-warm-drift': polarWarmDrift,

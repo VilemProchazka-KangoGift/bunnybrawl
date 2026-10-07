@@ -13,6 +13,7 @@ const allVariants = [
     'polar-soft-shoulders', 'polar-high-bluffs', 'polar-uneven-shore',
     'polar-powder-bank', 'polar-wind-carved', 'polar-frost-shelves', 'polar-pearl-shore',
     'polar-silver-banks', 'polar-lilac-snow', 'polar-deep-ice', 'polar-warm-drift',
+    'polar-silver-banks-before', 'polar-silver-frostwork',
   ];
 const selectedVariants = process.argv.slice(2);
 try {
