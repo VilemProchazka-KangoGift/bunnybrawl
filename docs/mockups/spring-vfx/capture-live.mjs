@@ -35,3 +35,4 @@ try{
   if(errors.length)throw Error(errors.join('\n'));
   console.log('PASS: actual main-simulation collision, renderer-worker day/night captures; no browser errors.');
 }finally{await browser.close();}
+/* global window, requestAnimationFrame -- Playwright callbacks run in the browser. */

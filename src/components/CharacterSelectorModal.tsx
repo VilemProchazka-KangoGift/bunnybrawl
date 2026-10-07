@@ -1,10 +1,11 @@
 import { useSyncExternalStore, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  getAllCharacters, getCharacterEmoji, getCharacterDisplayName,
+  getAllCharacters, getCharacterDisplayName,
   getSelectedCharacters, setSelectedCharacters, subscribeSelectedCharacters,
   MAX_LOBBY_ROSTER,
 } from '../engine/characters';
+import { CharacterPortrait } from './CharacterPortrait';
 
 interface CharacterSelectorModalProps {
   onClose: () => void;
@@ -49,7 +50,7 @@ export function CharacterSelectorModal({ onClose }: CharacterSelectorModalProps)
                 disabled={isFull}
                 title={isFull ? t('char_selector_at_max') : ''}
               >
-                <span className="char-selector-emoji">{getCharacterEmoji(c.name)}</span>
+                <CharacterPortrait name={c.name} className="char-selector-portrait" />
                 <span className="char-selector-name">{getCharacterDisplayName(c.name, i18n.language)}</span>
               </button>
             );
