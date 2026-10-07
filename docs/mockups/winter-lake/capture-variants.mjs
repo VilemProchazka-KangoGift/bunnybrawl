@@ -6,11 +6,14 @@ const directory = dirname(fileURLToPath(import.meta.url));
 const server = process.env.WINTER_LAKE_URL ?? 'http://127.0.0.1:4222/bunnybrawl/';
 const browser = await chromium.launch({ headless: true });
 
-try {
-  for (const variant of [
+const allVariants = [
     'current', 'quiet-shore', 'glacial-basin', 'violet-inlet',
     'mirror-ice', 'fir-shore', 'rose-dawn', 'polar-gap',
-  ]) {
+    'polar-open', 'polar-stepped', 'polar-offset', 'polar-alpenglow',
+  ];
+const selectedVariants = process.argv.slice(2);
+try {
+  for (const variant of selectedVariants.length ? selectedVariants : allVariants) {
     for (const time of ['day', 'night']) {
       const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
       const errors = [];

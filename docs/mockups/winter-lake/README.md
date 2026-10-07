@@ -53,6 +53,19 @@ The first round was useful for value and shoreline studies, but the options shar
 
 **Second-round assessment:** Mirror Ice most clearly reads as a frozen lake, and its cool ice plane separates the dark Wolf well. The stronger cyan area may need softening if it competes with effects or pickups during play. Fir Shore gives the place a believable edge, but dark characters could disappear against the tree belt while jumping. Rose Dawn provides the most distinctive mood without changing geometry; its warm sky should be checked with orange and pale roster members in motion. Polar Gap has the strongest frame, but the cliff edges sit close to outer platforms and could make those lanes busy. None of these is selected production art yet. The old decorated trees and snowmen remain visible in every variant and will be reviewed in the prop pass.
 
+### Polar Gap follow-ups
+
+These keep the gap and frozen lake concept while varying the width of the opening, cliff construction, asymmetry, and warmth of the snow. The original Polar Gap row above is the reference; every capture uses the same characters, platforms, props, and lighting phase.
+
+| Direction | Noon | Midnight | What changes |
+| --- | --- | --- | --- |
+| **Open Pass** | ![Polar Open Pass, noon](polar-open-day.png) | ![Polar Open Pass, midnight](polar-open-night.png) | Lower, more distant cliffs and a wider lake opening. |
+| **Stepped Ice** | ![Polar Stepped Ice, noon](polar-stepped-day.png) | ![Polar Stepped Ice, midnight](polar-stepped-night.png) | Tiered glacier faces, stronger ledges, and a sheltered center. |
+| **Offset Channel** | ![Polar Offset Channel, noon](polar-offset-day.png) | ![Polar Offset Channel, midnight](polar-offset-night.png) | One dominant left wall and a lower right bank lead into a diagonal channel. |
+| **Alpenglow** | ![Polar Alpenglow, noon](polar-alpenglow-day.png) | ![Polar Alpenglow, midnight](polar-alpenglow-night.png) | Angular original-style cliffs with warm light on their snowy caps. |
+
+**Tradeoffs:** Open Pass protects the outer jump lanes best, but gives up some of the original's imposing scale. Stepped Ice reads clearly as carved ice; the straight ledges also risk looking like a constructed fortress. Offset Channel has the boldest asymmetry, though its dark left wall dominates the lower-left play space. Alpenglow is a palette study that can combine with another shape; its warm sky needs a live check with pale and orange characters. Open Pass is my strongest shape candidate for gameplay clarity, while the original Polar Gap has more drama. This remains a mockup decision: no production backdrop has been selected or integrated.
+
 The fixture and variant functions are in [`render.ts`](render.ts) and [`variants.ts`](variants.ts). To reproduce, run Vite on port 4222 and then `node docs/mockups/winter-lake/capture-variants.mjs`. The earlier live-match baseline above remains available to compare the fixture with the game.
 
 ## Gameplay and render constraints

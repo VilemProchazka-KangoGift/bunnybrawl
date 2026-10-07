@@ -5,6 +5,7 @@ type Point = readonly [number, number];
 export const VARIANTS = [
   'current', 'quiet-shore', 'glacial-basin', 'violet-inlet',
   'mirror-ice', 'fir-shore', 'rose-dawn', 'polar-gap',
+  'polar-open', 'polar-stepped', 'polar-offset', 'polar-alpenglow',
 ] as const;
 export type Variant = (typeof VARIANTS)[number];
 
@@ -16,6 +17,10 @@ export const descriptions: Record<Exclude<Variant, 'current'>, string> = {
   'fir-shore': 'A dark fir belt gives the lake a wooded sense of place while keeping the ice open.',
   'rose-dawn': 'A warmer sunrise palette and blue ice test a gentler, less monochrome winter mood.',
   'polar-gap': 'Tall ice cliffs frame a distant gap for the most dramatic, enclosed composition.',
+  'polar-open': 'Lower cliffs and a wide opening give characters and the lake more breathing room.',
+  'polar-stepped': 'Tiered glacier walls emphasize carved ice and a deep, sheltered lake.',
+  'polar-offset': 'One high wall and one low shelf lead the eye through a diagonal opening.',
+  'polar-alpenglow': 'The original angular frame with warm light on the snow and cool ice below.',
 };
 
 export const skies: Record<Exclude<Variant, 'current'>, { offset: number; color: string }[]> = {
@@ -46,6 +51,22 @@ export const skies: Record<Exclude<Variant, 'current'>, { offset: number; color:
   'polar-gap': [
     { offset: 0, color: '#334967' }, { offset: .43, color: '#6C8CA4' },
     { offset: .78, color: '#B3CCD0' }, { offset: 1, color: '#D8E4E3' },
+  ],
+  'polar-open': [
+    { offset: 0, color: '#3B5474' }, { offset: .43, color: '#7A9BAD' },
+    { offset: .78, color: '#BDD1D3' }, { offset: 1, color: '#DFE7E2' },
+  ],
+  'polar-stepped': [
+    { offset: 0, color: '#30476A' }, { offset: .43, color: '#6C90AA' },
+    { offset: .78, color: '#B0CDD7' }, { offset: 1, color: '#D6E4E8' },
+  ],
+  'polar-offset': [
+    { offset: 0, color: '#3B4C72' }, { offset: .43, color: '#7B8EAD' },
+    { offset: .78, color: '#B8C8D3' }, { offset: 1, color: '#DBDEE0' },
+  ],
+  'polar-alpenglow': [
+    { offset: 0, color: '#545476' }, { offset: .43, color: '#A48DA7' },
+    { offset: .78, color: '#D1B7BB' }, { offset: 1, color: '#DFD4D4' },
   ],
 };
 
@@ -210,6 +231,51 @@ function polarGap(ctx: Ctx2D): void {
   icePlane(ctx, [[-20, 645], [185, 593], [355, 568], [530, 546], [720, 548], [890, 560], [1080, 591], [1300, 638]], '#AED0D5', 'rgba(64, 129, 153, 0.37)');
 }
 
+function polarOpen(ctx: Ctx2D): void {
+  band(ctx, '#A9C5CE', [[-20, 475], [230, 442], [440, 478], [640, 435], [825, 476], [1050, 444], [1300, 470]]);
+  polygon(ctx, '#749AAB', [[-20, 620], [-20, 407], [95, 431], [181, 418], [275, 481], [375, 497], [500, 555], [535, 620]]);
+  polygon(ctx, '#B2CFD1', [[-20, 407], [95, 431], [181, 418], [275, 481], [171, 456], [98, 468], [-20, 443]]);
+  polygon(ctx, '#567D96', [[-20, 620], [125, 506], [310, 514], [500, 620]]);
+  polygon(ctx, '#7295A9', [[745, 620], [876, 543], [1000, 466], [1085, 447], [1180, 419], [1300, 434], [1300, 620]]);
+  polygon(ctx, '#B8CFD3', [[1000, 466], [1085, 447], [1180, 419], [1300, 434], [1300, 469], [1182, 460], [1095, 482]]);
+  polygon(ctx, '#547A95', [[745, 620], [934, 520], [1126, 526], [1300, 494], [1300, 620]]);
+  icePlane(ctx, [[-20, 620], [175, 579], [365, 555], [545, 541], [720, 542], [900, 555], [1095, 578], [1300, 620]], '#B4D2D3', 'rgba(72, 129, 153, 0.34)');
+}
+
+function polarStepped(ctx: Ctx2D): void {
+  band(ctx, '#9EBECD', [[-20, 493], [230, 467], [435, 490], [650, 451], [840, 484], [1060, 452], [1300, 485]]);
+  polygon(ctx, '#648AA5', [[-20, 650], [-20, 323], [126, 344], [126, 408], [240, 408], [240, 468], [355, 468], [445, 547], [540, 650]]);
+  polygon(ctx, '#B1CBD2', [[-20, 323], [126, 344], [126, 367], [227, 382], [240, 408], [126, 408], [126, 385], [-20, 370]]);
+  polygon(ctx, '#83ADC0', [[126, 408], [240, 408], [240, 432], [351, 448], [355, 468], [240, 468], [240, 451], [126, 447]]);
+  polygon(ctx, '#456F8D', [[-20, 650], [126, 438], [240, 490], [355, 488], [540, 650]]);
+  polygon(ctx, '#5C83A0', [[740, 650], [829, 540], [895, 465], [1000, 465], [1000, 400], [1105, 400], [1105, 345], [1218, 345], [1300, 310], [1300, 650]]);
+  polygon(ctx, '#ABCBD3', [[895, 465], [1000, 465], [1000, 441], [1105, 422], [1105, 400], [1218, 400], [1218, 368], [1300, 345], [1300, 402], [1218, 422], [1105, 446], [1000, 486]]);
+  polygon(ctx, '#3F6B88', [[740, 650], [918, 510], [1058, 525], [1218, 458], [1300, 460], [1300, 650]]);
+  icePlane(ctx, [[-20, 654], [190, 610], [365, 577], [540, 555], [730, 556], [900, 578], [1085, 611], [1300, 654]], '#A3CAD5', 'rgba(54, 126, 160, 0.38)');
+}
+
+function polarOffset(ctx: Ctx2D): void {
+  band(ctx, '#ACBCD0', [[-20, 469], [205, 429], [416, 465], [630, 414], [850, 454], [1050, 423], [1300, 459]]);
+  polygon(ctx, '#6C819F', [[-20, 685], [-20, 293], [88, 321], [174, 307], [260, 382], [320, 369], [410, 474], [535, 532], [690, 656]]);
+  polygon(ctx, '#A7BED0', [[-20, 293], [88, 321], [174, 307], [260, 382], [166, 347], [77, 361], [-20, 339]]);
+  polygon(ctx, '#4B6C8B', [[-20, 685], [156, 451], [311, 470], [470, 570], [690, 656]]);
+  polygon(ctx, '#8099B0', [[785, 660], [935, 548], [1050, 499], [1145, 471], [1300, 489], [1300, 660]]);
+  polygon(ctx, '#C1D2DA', [[1030, 509], [1145, 471], [1300, 489], [1300, 520], [1155, 502]]);
+  polygon(ctx, '#5F829C', [[785, 660], [988, 569], [1175, 556], [1300, 552], [1300, 660]]);
+  icePlane(ctx, [[-20, 670], [170, 635], [355, 603], [540, 569], [725, 550], [910, 547], [1110, 553], [1300, 563]], '#B7CEDA', 'rgba(78, 119, 151, 0.36)');
+}
+
+function polarAlpenglow(ctx: Ctx2D): void {
+  band(ctx, '#B4AEBE', [[-20, 485], [210, 452], [420, 480], [640, 430], [860, 472], [1055, 438], [1300, 480]]);
+  polygon(ctx, '#8B89AB', [[-20, 635], [-20, 323], [90, 358], [158, 339], [252, 403], [312, 397], [404, 508], [560, 635]]);
+  polygon(ctx, '#D6BFC7', [[-20, 323], [90, 358], [158, 339], [252, 403], [157, 374], [82, 391], [-20, 371]]);
+  polygon(ctx, '#697996', [[-20, 635], [162, 487], [320, 508], [560, 635]]);
+  polygon(ctx, '#8F8FAE', [[735, 635], [846, 513], [934, 401], [1020, 380], [1092, 340], [1204, 363], [1300, 315], [1300, 635]]);
+  polygon(ctx, '#E0C8CB', [[934, 401], [1020, 380], [1092, 340], [1204, 363], [1300, 315], [1300, 396], [1200, 399], [1096, 375], [1008, 427]]);
+  polygon(ctx, '#637995', [[735, 635], [850, 526], [995, 503], [1140, 516], [1300, 469], [1300, 635]]);
+  icePlane(ctx, [[-20, 646], [185, 596], [355, 568], [535, 546], [720, 548], [895, 561], [1080, 594], [1300, 640]], '#B2CFDA', 'rgba(92, 123, 159, 0.36)');
+}
+
 export const drawBackdrop: Record<Exclude<Variant, 'current'>, (ctx: Ctx2D) => void> = {
   'quiet-shore': quietShore,
   'glacial-basin': glacialBasin,
@@ -218,4 +284,8 @@ export const drawBackdrop: Record<Exclude<Variant, 'current'>, (ctx: Ctx2D) => v
   'fir-shore': firShore,
   'rose-dawn': roseDawn,
   'polar-gap': polarGap,
+  'polar-open': polarOpen,
+  'polar-stepped': polarStepped,
+  'polar-offset': polarOffset,
+  'polar-alpenglow': polarAlpenglow,
 };
