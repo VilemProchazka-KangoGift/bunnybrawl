@@ -7,7 +7,9 @@ import type { Ctx2D } from './types';
 import type { Player, CharacterSlot } from './types';
 import { CANVAS_WIDTH, PLAYER_WIDTH } from './constants';
 import { KEY_BINDINGS } from './input';
-import { getCharacterEmoji, getCharacterDisplayName } from './characters';
+import { UI_THEME } from '../uiTheme';
+import { drawUiPortrait } from './rendering/uiPortrait';
+import { getCharacterDisplayName } from './characters';
 import i18n from '../i18n';
 import { READY_ZONE_X, GROUND_Y } from './lobbyConstants';
 
@@ -106,52 +108,30 @@ export function drawLobbyOverlay(
     ctx.fillText(`${p.id}`, tagX, p.y - 10);
   }
 
-  // ---- Top UI bar: per-slot character + key bindings ----
-  const barH = 52;
-  const maxSlotPx = 260;
+  // ---- Top player tickets. World art and start-zone drawing stay unchanged. ----
   const slotCount = state.players.length;
-  const barW = state.isMobile
-    ? Math.min(slotCount * maxSlotPx + 40, CANVAS_WIDTH - 16)
-    : CANVAS_WIDTH - 16;
-  const barX = state.isMobile ? CANVAS_WIDTH - barW - 8 : 8;
-  ctx.fillStyle = 'rgba(0,0,0,0.6)';
-  ctx.beginPath();
-  ctx.roundRect(barX, 6, barW, barH, 10);
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.roundRect(barX + 1, 7, barW - 2, barH - 2, 9);
-  ctx.stroke();
-
-  const slotWidth = (barW - 40) / slotCount;
+  const slotWidth = Math.min(242, (CANVAS_WIDTH - 100) / Math.max(1, slotCount));
+  const barX = state.isMobile ? CANVAS_WIDTH - slotWidth * slotCount - 18 : 80;
   for (let i = 0; i < slotCount; i++) {
     const player = state.players[i];
-    const sx = barX + 20 + i * slotWidth + slotWidth / 2;
-    const emojiX = sx - slotWidth * 0.38;
-    const textX = emojiX + 22;
-
-    ctx.font = '28px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#FFF';
-    ctx.fillText(getCharacterEmoji(player.character.name), emojiX, 32);
-    ctx.textBaseline = 'alphabetic';
-
-    ctx.fillStyle = player.character.color;
-    ctx.textAlign = 'left';
-    ctx.font = "bold 14px 'Nunito', sans-serif";
-    ctx.fillText(`${player.id}: ${getCharacterDisplayName(player.character.name, lang)}`, textX, 26);
-
+    const x = barX + i * slotWidth;
+    ctx.save(); ctx.translate(x, 0);
+    ctx.fillStyle = UI_THEME.ink; ctx.beginPath(); ctx.roundRect(0, 33, slotWidth - 16, 79, 14); ctx.fill();
+    ctx.fillStyle = player.character.lightColor; ctx.strokeStyle = UI_THEME.ink; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(0, 28, slotWidth - 16, 79, 14); ctx.fill(); ctx.stroke();
+    drawUiPortrait(ctx, player.character.name, -3, 0, 90);
+    ctx.fillStyle = UI_THEME.ink; ctx.textAlign = 'left'; ctx.font = "bold 16px 'Nunito', sans-serif";
+    ctx.fillText(`${player.id} · ${getCharacterDisplayName(player.character.name, lang)}`, 94, 52, slotWidth - 115);
     if (!state.isMobile) {
       const bindings = KEY_BINDINGS[player.id as CharacterSlot];
-      ctx.fillStyle = 'rgba(255,255,255,0.6)';
-      ctx.font = "bold 13px 'Nunito', monospace";
-      const fmtKey = (k: string) => k === 'ArrowLeft' ? '←' : k === 'ArrowRight' ? '→' : k === 'ArrowUp' ? '↑' : k === 'ArrowDown' ? '↓' : k;
-      ctx.fillText(`${fmtKey(bindings.left)} ${fmtKey(bindings.right)} ${fmtKey(bindings.jump)} ${fmtKey(bindings.down)}`, textX, 42);
+      const fmt = (key: string) => key.replace('ArrowLeft', '←').replace('ArrowRight', '→').replace('ArrowUp', '↑').replace('ArrowDown', '↓');
+      const keys = [bindings.left, bindings.right, bindings.jump, bindings.down];
+      const keyX = (slotWidth - 16 - 132) / 2;
+      ctx.fillStyle = UI_THEME.paper; ctx.beginPath(); ctx.roundRect(10, 72, slotWidth - 36, 28, 7); ctx.fill();
+      keys.forEach((key, j) => { ctx.strokeStyle = UI_THEME.ink; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.roundRect(keyX + j * 34, 76, 27, 20, 4); ctx.stroke(); ctx.fillStyle = UI_THEME.ink; ctx.textAlign = 'center'; ctx.font = "bold 12px 'Nunito', sans-serif"; ctx.fillText(fmt(key), keyX + j * 34 + 13.5, 90); });
     }
+    ctx.restore();
   }
-
   // ---- Bottom-left: swap instruction ----
   ctx.font = "bold 16px 'Nunito', sans-serif";
   const swapW = ctx.measureText(swapText).width + 28;

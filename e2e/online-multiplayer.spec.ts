@@ -731,14 +731,14 @@ test.describe('Online Multiplayer — Character Select Stability', { tag: '@onli
 
       // If we reach here without timeout, the cascade didn't happen.
       // Verify both peers have different characters (auto-switch resolved the conflict).
-      const hostChar = await pair.host.locator('.online-char-select').inputValue();
-      const guestChar = await pair.guest.locator('.online-char-select').inputValue();
+      const hostChar = await pair.host.locator('.online-char-select').getAttribute('data-character');
+      const guestChar = await pair.guest.locator('.online-char-select').getAttribute('data-character');
       expect(hostChar).not.toBe(guestChar);
 
       // Wait an additional 2s to confirm no further switching happens
-      const hostCharAfter = await pair.host.locator('.online-char-select').inputValue();
+      const hostCharAfter = await pair.host.locator('.online-char-select').getAttribute('data-character');
       await pair.host.waitForTimeout(2000);
-      const hostCharFinal = await pair.host.locator('.online-char-select').inputValue();
+      const hostCharFinal = await pair.host.locator('.online-char-select').getAttribute('data-character');
       expect(hostCharFinal).toBe(hostCharAfter); // no further changes
     } finally {
       await closePair(pair);

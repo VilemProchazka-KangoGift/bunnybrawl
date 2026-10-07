@@ -1,6 +1,7 @@
-// Help modal — static how-to-play content. Pure presentational, no state.
+// Help modal — localized how-to-play content grouped into three pages.
 
 import { useTranslation } from 'react-i18next';
+import { useState } from 'react';
 
 interface HelpModalProps {
   onClose: () => void;
@@ -8,11 +9,15 @@ interface HelpModalProps {
 
 export function HelpModal({ onClose }: HelpModalProps) {
   const { t } = useTranslation();
+  const [page, setPage] = useState(0);
   return (
     <div className="mods-overlay" onClick={onClose}>
       <div className="help-modal" onClick={e => e.stopPropagation()}>
         <h2 className="mods-title">{t('help_title')}</h2>
-        <div className="help-sections">
+        <div className="help-page-tabs" role="group" aria-label={t('help_title')}>
+          {['help_goal_title', 'help_controls_title', 'help_pickups_title'].map((key, i) => <button key={key} className="btn-base" aria-pressed={page === i} onClick={() => setPage(i)}>{t(key)}</button>)}
+        </div>
+        <div className={`help-sections help-page-${page}`}>
           <div className="help-section">
             <h3 className="help-section-title">{t('help_goal_title')}</h3>
             <p className="help-text">{t('help_goal')}</p>

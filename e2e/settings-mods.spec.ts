@@ -13,11 +13,13 @@ test.describe('Arena Selector', () => {
 
     // Click the volcano arena button (arena-btn with text containing the arena icon/name)
     const volcanoBtn = selector.locator('.arena-btn').nth(2); // volcano is 3rd arena
+    await selector.locator('.arena-disclosure').click();
     await volcanoBtn.click();
     await expect(volcanoBtn).toHaveClass(/selected/);
 
     // Click a different arena (meadow, 1st)
     const meadowBtn = selector.locator('.arena-btn').nth(0);
+    await selector.locator('.arena-disclosure').click();
     await meadowBtn.click();
     await expect(meadowBtn).toHaveClass(/selected/);
     // Volcano should no longer be selected
@@ -30,6 +32,7 @@ test.describe('Arena Selector', () => {
 
     // Click volcano (3rd arena)
     const volcanoBtn = selector.locator('.arena-btn').nth(2);
+    await selector.locator('.arena-disclosure').click();
     await volcanoBtn.click();
 
     // Check localStorage

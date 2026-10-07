@@ -1,10 +1,11 @@
 import type { Player, MatchState, Ctx2D } from '../types';
-import { isBotSlot } from '../types';
 import {
   CANVAS_WIDTH, CANVAS_HEIGHT, SCORE_ANIM_DURATION, MATCH_COUNTDOWN,
   COMBO_POPUP_DURATION, COMBO_POPUP_RISE_PX, GOAL_PULSE_DURATION,
 } from '../constants';
-import { getCharacterEmoji, getCharacterDisplayName } from '../characters';
+import { UI_THEME } from '../../uiTheme';
+import { drawUiPortrait, getPortraitRevision } from './uiPortrait';
+import { getCharacterDisplayName } from '../characters';
 
 /** Module-scope language for HUD character-name lookups. Set by Renderer
  *  at construction (and on language-change forwarded from main). The HUD
@@ -19,6 +20,9 @@ export function setHudLanguage(lang: string): void { _hudLanguage = lang; invali
  *  both main-thread and worker-hosted Renderers (HUD lives in either). */
 export function warmHudFonts(ctx: Ctx2D): void {
   const fonts: string[] = [
+    'bold 12px "Nunito", sans-serif',
+    '900 27px "Nunito", sans-serif',
+    '900 25px "Nunito", sans-serif',
     '28px sans-serif',
     'bold 12px "Press Start 2P", monospace',
     'bold 16px "Press Start 2P", monospace',
@@ -48,7 +52,7 @@ export const PLAYER_NAME_MAX_LENGTH = 12;
 const PLAYER_NAME_MAX_LENGTH_COMPACT = 4;
 
 // Warm yellow overlay blended with #FFF score digit during goal pulse.
-const SCORE_PULSE_TINT = '#FFE78A';
+
 
 // ×N popup tier colors (yellow → orange → pink).
 const COMBO_COLORS: Record<number, string> = { 2: '#FFD63A', 3: '#FF9322' };
@@ -59,6 +63,7 @@ const COMBO_POPUP_FONT = 'bold 28px "Press Start 2P", monospace';
 let hudCache: OffscreenCanvas | null = null;
 let hudCacheCtx: OffscreenCanvasRenderingContext2D | null = null;
 let hudLastTimer = -1;
+let portraitRevision = -1;
 let hudLastPlayerCount = -1;
 let _hudScale = 1;
 const _hudPlayerScores: Record<string, number> = {};
@@ -99,7 +104,7 @@ function matchTimeSec(state: MatchState): number {
 /** Check whether the HUD cache needs rebuild. No side effects. */
 export function isHudDirty(state: MatchState): boolean {
   const timerSec = Math.floor(matchTimeSec(state));
-  if (timerSec !== hudLastTimer || !hudCache) return true;
+  if (getPortraitRevision() !== portraitRevision || timerSec !== hudLastTimer || !hudCache) return true;
   // Active goal pulse animates the score pill — redraw every frame until it expires.
   if (state.goalPulseTimers.size > 0) return true;
   let activeCount = 0;
@@ -128,6 +133,7 @@ export function drawHUD(ctx: Ctx2D, state: MatchState, frameTime: number, player
     // Draw HUD content to cache
     _drawHUDImpl(hctx, state, frameTime, playerNames, timeLimit);
 
+    portraitRevision = getPortraitRevision();
     hudLastTimer = Math.floor(matchTimeSec(state));
     let ac = 0;
     for (const p of state.players) {
@@ -147,122 +153,53 @@ export function drawHUD(ctx: Ctx2D, state: MatchState, frameTime: number, player
   }
 }
 
-function _drawHUDImpl(ctx: Ctx2D, state: MatchState, frameTime: number, playerNames: Record<string, string> | null, timeLimit = 0): void {
+function _drawHUDImpl(ctx: Ctx2D, state: MatchState, _frameTime: number, playerNames: Record<string, string> | null, timeLimit = 0): void {
   // Reuse the persistent _hudActivePlayers array — Array.filter() allocates a
   // fresh array every call (every frame during goal-pulse animation), and
   // _drawScoreAnimations holds a reference to it across calls anyway.
   _hudActivePlayers.length = 0;
   for (const p of state.players) if (p.active) _hudActivePlayers.push(p);
   const activePlayers = _hudActivePlayers;
-  const scoreWidth = Math.min(160, Math.floor((CANVAS_WIDTH - 40) / activePlayers.length));
+  const scoreWidth = Math.min(185, Math.floor((CANVAS_WIDTH - 165) / Math.max(1, activePlayers.length)));
   const compact = scoreWidth < 130;
-  const totalWidth = activePlayers.length * scoreWidth;
-  const startX = (CANVAS_WIDTH - totalWidth) / 2;
-
-  _hudStartX = startX;
-  _hudScoreWidth = scoreWidth;
-
+  const startX = 18;
+  _hudStartX = startX; _hudScoreWidth = scoreWidth;
   for (let i = 0; i < activePlayers.length; i++) {
     const player = activePlayers[i];
     const px = startX + i * scoreWidth;
-    const isBot = isBotSlot(player.id);
-
     const pulseT = state.goalPulseTimers.get(player.id) ?? 0;
-    const pulseProgress = pulseT > 0 ? 1 - pulseT / GOAL_PULSE_DURATION : 0;
-    const pulseEnvelope = Math.sin(pulseProgress * Math.PI);
-    const pulseScale = 1 + pulseEnvelope * 0.18;
-
-    if (pulseScale !== 1) {
-      ctx.save();
-      const pillCx = px + (scoreWidth - 10) / 2;
-      const pillCy = 30;
-      ctx.translate(pillCx, pillCy);
-      ctx.scale(pulseScale, pulseScale);
-      ctx.translate(-pillCx, -pillCy);
-    }
-
-    ctx.fillStyle = isBot ? 'rgba(40, 20, 60, 0.55)' : 'rgba(0, 0, 0, 0.5)';
-    ctx.beginPath();
-    ctx.roundRect(px, 10, scoreWidth - 10, 40, 8);
-    ctx.fill();
-
-    if (pulseEnvelope > 0) {
-      ctx.strokeStyle = player.character.color;
-      ctx.globalAlpha = 0.75 * pulseEnvelope;
-      ctx.lineWidth = 3;
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-    }
-
-    ctx.font = '28px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(getCharacterEmoji(player.character.name), px + 20, 30);
-    ctx.textBaseline = 'alphabetic';
-
+    const pulseEnvelope = pulseT > 0 ? Math.sin((1 - pulseT / GOAL_PULSE_DURATION) * Math.PI) : 0;
+    ctx.save();
+    ctx.translate(px + (scoreWidth - 10) / 2, 42);
+    ctx.rotate((i % 2 ? 1 : -1) * .025);
+    ctx.scale(1 + pulseEnvelope * .06, 1 + pulseEnvelope * .06);
+    ctx.translate(-(scoreWidth - 10) / 2, -42);
+    ctx.fillStyle = UI_THEME.ink; ctx.beginPath(); ctx.roundRect(0, 26, scoreWidth - 10, 46, 12); ctx.fill();
+    ctx.fillStyle = player.character.lightColor; ctx.strokeStyle = UI_THEME.ink; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(0, 21, scoreWidth - 10, 46, 12); ctx.fill(); ctx.stroke();
+    const portraitSize = compact ? 45 : 78;
+    drawUiPortrait(ctx, player.character.name, -5, 67 - portraitSize, portraitSize);
+    const textX = compact ? 40 : 85;
     const customName = playerNames?.[player.id];
-    const translatedName = customName || getCharacterDisplayName(player.character.name, _hudLanguage);
-    // Defensive clamp — old-version peers can broadcast names past the input maxLength.
-    const displayName = translatedName.slice(0, compact ? PLAYER_NAME_MAX_LENGTH_COMPACT : PLAYER_NAME_MAX_LENGTH);
-    ctx.fillStyle = player.character.color;
-    ctx.font = `bold ${compact ? 12 : 16}px "Press Start 2P", monospace`;
-    ctx.textAlign = 'left';
-    ctx.fillText(displayName, px + 38, 28);
-    // Boost score-digit lightness via globalAlpha over a fixed warm tint —
-    // avoids a per-frame `rgb(...)` template-literal allocation per pulsed player.
-    ctx.font = `bold ${compact ? 14 : 18}px "Press Start 2P", monospace`;
-    if (pulseEnvelope > 0) {
-      ctx.fillStyle = '#FFF';
-      ctx.fillText(`${player.score}`, px + 38, 45);
-      ctx.fillStyle = SCORE_PULSE_TINT;
-      ctx.globalAlpha = pulseEnvelope;
-      ctx.fillText(`${player.score}`, px + 38, 45);
-      ctx.globalAlpha = 1;
-    } else {
-      ctx.fillStyle = '#FFF';
-      ctx.fillText(`${player.score}`, px + 38, 45);
-    }
-
-    if (isBot) {
-      ctx.fillStyle = 'rgba(180, 140, 255, 0.7)';
-      ctx.font = 'bold 7px monospace';
-      ctx.fillText('BOT', px + 4, 18);
-    }
-
-    if (pulseScale !== 1) ctx.restore();
+    const label = customName || getCharacterDisplayName(player.character.name, _hudLanguage);
+    ctx.fillStyle = UI_THEME.ink; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.font = 'bold 12px "Nunito", sans-serif';
+    ctx.fillText(`${player.id} · ${label.slice(0, compact ? PLAYER_NAME_MAX_LENGTH_COMPACT : PLAYER_NAME_MAX_LENGTH)}`, textX, 35, scoreWidth - textX - 18);
+    ctx.font = '900 27px "Nunito", sans-serif'; ctx.fillText(String(player.score), textX, 59);
+    ctx.restore();
   }
-
   if (state.timeElapsed >= 0) {
-    const displayed = matchTimeSec(state);
-    const minutes = Math.floor(displayed / 60);
-    const seconds = Math.floor(displayed % 60);
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-    ctx.beginPath();
-    ctx.roundRect(CANVAS_WIDTH / 2 - 40, 55, 80, 30, 6);
-    ctx.fill();
-
-    // Timer red pulse when < 30 seconds remaining
-    const remaining = timeLimit > 0 ? timeLimit - displayed : Infinity;
-    if (remaining < 30 && remaining > 0) {
-      const pulse = 1 + Math.sin(frameTime / 200) * 0.1;
-      ctx.save();
-      ctx.translate(CANVAS_WIDTH / 2, 75);
-      ctx.scale(pulse, pulse);
-      ctx.fillStyle = '#FF4444';
-      ctx.font = 'bold 14px monospace';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(`${minutes}:${seconds.toString().padStart(2, '0')}`, 0, 0);
-      ctx.restore();
-    } else {
-      ctx.fillStyle = '#FFF';
-      ctx.font = 'bold 14px monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText(`${minutes}:${seconds.toString().padStart(2, '0')}`, CANVAS_WIDTH / 2, 75);
-    }
+    const elapsed = matchTimeSec(state);
+    const displayed = timeLimit > 0 ? Math.max(0, timeLimit - elapsed) : elapsed;
+    const minutes = Math.floor(displayed / 60), seconds = Math.floor(displayed % 60);
+    ctx.fillStyle = UI_THEME.ink; ctx.beginPath(); ctx.roundRect(CANVAS_WIDTH - 133, 18, 112, 53, 12); ctx.fill();
+    ctx.fillStyle = UI_THEME.paper; ctx.strokeStyle = UI_THEME.ink; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(CANVAS_WIDTH - 133, 13, 112, 53, 12); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = timeLimit > 0 && displayed < 30 ? UI_THEME.danger : UI_THEME.ink;
+    ctx.font = '900 25px "Nunito", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(`${minutes}:${seconds.toString().padStart(2, '0')}`, CANVAS_WIDTH - 77, 40);
   }
 }
-
 function _drawScoreAnimations(ctx: Ctx2D, state: MatchState): void {
   const activePlayers = _hudActivePlayers;
   const startX = _hudStartX;

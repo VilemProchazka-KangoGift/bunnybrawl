@@ -192,3 +192,9 @@ Advance one animal only after its in-game acting and scene comparisons hold up. 
 A direction is ready to carry forward when its whole-scene comparison shows readable characters outside intentional cover, clear playable surfaces, distinct prop silhouettes, and no loss of the arena's gameplay cues. Keep unresolved tradeoffs visible in the comparison rather than claiming the artwork is finished.
 
 For arena geometry and draw-layer contracts, also read [`level-design.md`](../level-design.md). For character silhouette and sprite-caching rules, read [`character-sprites.md`](../character-sprites.md).
+
+### Saturday morning UI implementation
+
+The approved UI uses `src/uiTheme.ts`, `src/components/saturday.css`, and compact cutout portraits in `public/ui/portraits/`. Canvas portraits decode once per renderer realm; `getPortraitRevision()` invalidates the static HUD after an image finishes loading. Keep this worker-safe and keep portraits out of the pure simulator.
+
+The arena picker starts collapsed and new preferences default to Random. Browser tests must open its disclosure before choosing an arena. Online character selection remains a dropdown with image buttons; tests select enabled options and inspect `data-character`, rather than calling native `selectOption()`. Lobby ticket styling is independent of lobby terrain, props, obstacle, and start-zone art; the level redesign is deferred.

@@ -59,7 +59,7 @@ const defaultSettings: MatchSettings = {
   timeLimit: 180, // 3 minutes
   playerCount: 2,
   goreMode: loadStorage('carrotroyale_gore', v => v === 'true', false),
-  arenaId: loadStorage('carrotroyale_arena', v => v || 'meadow', 'meadow'),
+  arenaId: loadStorage('carrotroyale_arena', v => v || 'random', 'random'),
   botCount: loadStorage('carrotroyale_botcount', v => Math.min(MAX_BOT_COUNT, parseInt(v || '0', 10) || 0), 0),
   botDifficulty: loadStorage<'easy' | 'medium' | 'hard' | 'impossible'>('carrotroyale_botdiff', v => {
     return v === 'easy' || v === 'medium' || v === 'hard' || v === 'impossible' ? v : 'medium';

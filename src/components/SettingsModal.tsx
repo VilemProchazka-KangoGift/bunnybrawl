@@ -67,6 +67,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
               max={1}
               step={0.01}
               value={volume}
+              style={{ backgroundImage: `linear-gradient(to right, var(--ui-action) ${volume * 100}%, var(--ui-page) ${volume * 100}%)` }}
               onChange={onVolumeInput}
               aria-label={t('settings_music_volume')}
             />

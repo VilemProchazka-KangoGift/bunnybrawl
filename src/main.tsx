@@ -15,6 +15,7 @@ import App from './App'
 import { CrashGuard } from './components/CrashGuard'
 import './index.css'
 import './components/shared.css'
+import './components/saturday.css'
 
 const _search = window.location.search;
 initDebugFlags(_search);
