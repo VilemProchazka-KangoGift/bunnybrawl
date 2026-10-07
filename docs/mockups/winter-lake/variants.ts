@@ -12,6 +12,7 @@ export const VARIANTS = [
   'polar-silver-banks-before', 'polar-silver-frostwork',
   'polar-silver-inked', 'polar-silver-gouache', 'polar-silver-comic',
   'polar-silver-painted',
+  'polar-silver-pearl-painted', 'polar-silver-wind-painted',
 ] as const;
 export type Variant = (typeof VARIANTS)[number];
 
@@ -44,6 +45,8 @@ export const descriptions: Record<Exclude<Variant, 'current'>, string> = {
   'polar-silver-gouache': 'Refined Silver Banks with grainy painted snow and cloudy layered ice.',
   'polar-silver-comic': 'Refined Silver Banks with bolder cel-shaded forms and lively ice marks.',
   'polar-silver-painted': 'Painted backdrop concept composited under the exact production platforms and characters.',
+  'polar-silver-pearl-painted': 'Pale pearl snow and silver-blue ice in a lower, quieter painted composition.',
+  'polar-silver-wind-painted': 'Asymmetric wind-shaped snowy shoulders and a stronger blue painted lake.',
 };
 
 export const skies: Record<Exclude<Variant, 'current'>, { offset: number; color: string }[]> = {
@@ -156,6 +159,14 @@ export const skies: Record<Exclude<Variant, 'current'>, { offset: number; color:
     { offset: .78, color: '#BCD0D3' }, { offset: 1, color: '#DFE6E1' },
   ],
   'polar-silver-painted': [
+    { offset: 0, color: '#3D5573' }, { offset: .43, color: '#7E9AAD' },
+    { offset: .78, color: '#BCD0D3' }, { offset: 1, color: '#DFE6E1' },
+  ],
+  'polar-silver-pearl-painted': [
+    { offset: 0, color: '#3D5573' }, { offset: .43, color: '#7E9AAD' },
+    { offset: .78, color: '#BCD0D3' }, { offset: 1, color: '#DFE6E1' },
+  ],
+  'polar-silver-wind-painted': [
     { offset: 0, color: '#3D5573' }, { offset: .43, color: '#7E9AAD' },
     { offset: .78, color: '#BCD0D3' }, { offset: 1, color: '#DFE6E1' },
   ],
@@ -966,6 +977,8 @@ export const drawBackdrop: Record<Exclude<Variant, 'current'>, (ctx: Ctx2D) => v
   'polar-silver-gouache': polarSilverGouache,
   'polar-silver-comic': polarSilverComic,
   'polar-silver-painted': polarSilverBanks,
+  'polar-silver-pearl-painted': polarSilverBanks,
+  'polar-silver-wind-painted': polarSilverBanks,
   'polar-lilac-snow': polarLilacSnow,
   'polar-deep-ice': polarDeepIce,
   'polar-warm-drift': polarWarmDrift,

@@ -15,7 +15,7 @@ const allVariants = [
     'polar-silver-banks', 'polar-lilac-snow', 'polar-deep-ice', 'polar-warm-drift',
     'polar-silver-banks-before', 'polar-silver-frostwork',
     'polar-silver-inked', 'polar-silver-gouache', 'polar-silver-comic',
-    'polar-silver-painted',
+    'polar-silver-painted', 'polar-silver-pearl-painted', 'polar-silver-wind-painted',
   ];
 const selectedVariants = process.argv.slice(2);
 try {

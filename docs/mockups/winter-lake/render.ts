@@ -30,13 +30,19 @@ if (variant !== 'current') {
   const selected = variant as Exclude<Variant, 'current'>;
   theme.sky = { gradient: skies[selected] };
   theme.hills = [];
-  if (selected === 'polar-silver-painted') {
+  const paintedPlates = {
+    'polar-silver-painted': ['./silver-banks-painted-backdrop.png', .63],
+    'polar-silver-pearl-painted': ['./silver-banks-pearl-painted-plate.png', .75],
+    'polar-silver-wind-painted': ['./silver-banks-wind-painted-plate.png', .63],
+  } as const;
+  if (selected in paintedPlates) {
+    const [path, alpha] = paintedPlates[selected as keyof typeof paintedPlates];
     const backdrop = new Image();
-    backdrop.src = new URL('./silver-banks-painted-backdrop.png', import.meta.url).href;
+    backdrop.src = new URL(path, import.meta.url).href;
     await backdrop.decode();
     theme.drawFarBackground = ctx => {
       ctx.save();
-      ctx.globalAlpha = .63;
+      ctx.globalAlpha = alpha;
       ctx.drawImage(backdrop, 0, 0, 1280, 720);
       ctx.restore();
     };

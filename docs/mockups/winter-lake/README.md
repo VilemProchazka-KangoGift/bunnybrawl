@@ -132,6 +132,17 @@ The separate [painted full-scene concept](silver-banks-painted-concept.png) and 
 
 **Assessment:** The painted composite is the first version that clearly escapes the flat vector look. Its inked snow slopes and glazed lake have more character, but the lake is brighter and the hills reach closer to outer platforms than the selected baseline. At noon, pale Bunny and Panda need a moving contrast check where snow is behind them. The procedural Hand-inked and Bold Cartoon treatments preserve the geometry, but their extra lines still feel like vector outlines; Gouache grain adds texture yet can look speckled. Before any integration, bring the painted texture language back to the lower Silver Banks silhouette, tune the snow value for pale characters, and test at sunset, night, and smaller display sizes. No production arena assets changed in this mockup round.
 
+### Lower, quieter painted image studies
+
+After Meadow's painted background was adopted, illustrated image plates became the default direction for arena backdrops. These two **background-only** paintings revisit Refined Silver Banks with lower banks and more space around outer platforms. They are composited at the same 1280 × 720 scale beneath the actual Winter Lake platforms, props, characters, clouds, and lighting. The previous painted concept above remains a brighter/higher reference; neither new study changes the playable arena.
+
+| Treatment | Noon | Midnight | What changes |
+| --- | --- | --- | --- |
+| **Pearl Painted** | ![Pearl Painted, noon](polar-silver-pearl-painted-day.png) | ![Pearl Painted, midnight](polar-silver-pearl-painted-night.png) | Pale silver-lilac snow, muted ice, and the quietest overall contrast. The upper play lanes retain open sky. |
+| **Wind Painted** | ![Wind Painted, noon](polar-silver-wind-painted-day.png) | ![Wind Painted, midnight](polar-silver-wind-painted-night.png) | More asymmetry in the banks and a bluer lake. It reads as ice faster, but draws more attention at the bottom of the screen. |
+
+**Current assessment:** Pearl Painted better follows the subtle, pale Meadow lesson; Wind Painted has the clearer lake silhouette. Both preserve the deliberate foreground-cover layer and leave gameplay props untouched. The snowbanks still overlap some lower side lanes, so Bunny/Panda contrast needs a moving check before one is selected for the game. These are reviewable mockups, **not yet production backdrops**. The clean source plates are [`silver-banks-pearl-painted-plate.png`](silver-banks-pearl-painted-plate.png) and [`silver-banks-wind-painted-plate.png`](silver-banks-wind-painted-plate.png); prompts are recorded in [`PAINTED-PROMPTS.md`](PAINTED-PROMPTS.md). Once selected, export one optimized 1280 × 720 WebP and add the same deferred menu/lobby prefetch and renderer-realm decode used by Meadow.
+
 The fixture and variant functions are in [`render.ts`](render.ts) and [`variants.ts`](variants.ts). To reproduce, run Vite on port 4222 and then `node docs/mockups/winter-lake/capture-variants.mjs`. The earlier live-match baseline above remains available to compare the fixture with the game.
 
 ## Gameplay and render constraints
