@@ -54,7 +54,25 @@ function drawPreviousTreeline(ctx: Ctx2D): void {
   ctx.lineTo(1300, 660); ctx.closePath(); ctx.fill();
 }
 
-if (variant === 'valley-and-clouds' || variant === 'raised-hills' || variant === 'tall-hills') {
+let plateLoadMs = 0;
+if (variant === 'painted-landscape' || variant === 'painted-low-valley' || variant === 'painted-low-valley-small') {
+  const loadStart = performance.now();
+  const plate = new Image();
+  plate.src = new URL(variant === 'painted-low-valley-small'
+    ? '../meadow-painted/low-valley-960-q90.webp'
+    : variant === 'painted-low-valley'
+      ? '../meadow-painted/low-valley-1280-q90.webp'
+      : '../meadow-painted/landscape-plate.png', import.meta.url).href;
+  await plate.decode();
+  plateLoadMs = performance.now() - loadStart;
+  theme.hills = [];
+  theme.drawFarBackground = (ctx) => {
+    ctx.save();
+    ctx.globalAlpha = variant === 'painted-landscape' ? 0.76 : 0.65;
+    ctx.drawImage(plate, 0, 0, 1280, 720);
+    ctx.restore();
+  };
+} else if (variant === 'valley-and-clouds' || variant === 'raised-hills' || variant === 'tall-hills') {
   const hillRise = variant === 'raised-hills' ? 38 : variant === 'tall-hills' ? 70 : 0;
   theme.hills = [];
   theme.clouds = { ...previousClouds, count: 0 };
@@ -111,6 +129,9 @@ const reactive = {
   windPhase: 0,
 };
 renderer.warmSpriteCache(state.players.map(p => p.character.name));
+const backgroundStart = performance.now();
 renderer.renderBackground(arena);
+document.documentElement.dataset.backgroundMs = (performance.now() - backgroundStart).toFixed(1);
+document.documentElement.dataset.plateLoadMs = plateLoadMs.toFixed(1);
 renderer.renderFrame(state, arena, [], 0, reactive);
 document.documentElement.dataset.ready = 'true';

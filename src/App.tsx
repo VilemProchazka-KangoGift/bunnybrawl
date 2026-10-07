@@ -38,6 +38,13 @@ const VictoryScreen = lazy(() => import('./components/VictoryScreen')
 /** Start the expensive lobby work after the first menu paint. Gameplay still
  * awaits these loaders, so an immediate click remains correct. */
 function preloadLobby(signal: AbortSignal): void {
+  if (useGameStore.getState().matchSettings.arenaId === 'meadow') {
+    void import('./engine/arenas/meadowBackdropAsset')
+      .then(({ prefetchMeadowBackdrop }) => {
+        if (!signal.aborted) return prefetchMeadowBackdrop(signal);
+      })
+      .catch(() => { /* Match and lobby loaders can retry. */ });
+  }
   void Promise.allSettled([
     import('./components/CharacterSelect'),
     loadLobbyArena(),

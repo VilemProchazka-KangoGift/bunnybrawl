@@ -1,4 +1,5 @@
 import type { Ctx2D } from '../../types';
+import { getMeadowBackdrop } from '../meadowBackdropAsset';
 
 type Point = readonly [number, number];
 
@@ -68,6 +69,19 @@ export function drawMeadowValley(c: Ctx2D, hillRise = 70): void {
     distantTree(c, x, groundY - middleRise, height);
   }
   rollingBand(c, '#71928f', NEAR_RIDGE, hillRise * .38);
+}
+
+/** Pale illustrated hills; the procedural valley remains a safe load fallback. */
+export function drawPaintedMeadowValley(c: Ctx2D): void {
+  const image = getMeadowBackdrop();
+  if (!image) {
+    drawMeadowValley(c);
+    return;
+  }
+  c.save();
+  c.globalAlpha = 0.65;
+  c.drawImage(image, 0, 0, 1280, 720);
+  c.restore();
 }
 
 export const MEADOW_CLOUDS = [

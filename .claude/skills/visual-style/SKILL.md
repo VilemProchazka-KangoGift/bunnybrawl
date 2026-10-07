@@ -5,7 +5,7 @@ description: Use for Carrot Royale arena or character visual redesigns, procedur
 
 # Carrot Royale visual style
 
-Use the [complete Meadow day](../../../docs/mockups/meadow-backgrounds/production-day.png) and [night](../../../docs/mockups/meadow-backgrounds/production-night.png) captures as the arena art reference. They show the production renderer, not isolated asset drawings. The [Pocket Bunny study](../../../docs/mockups/character-styles/README.md) is the character direction and iteration record; its playable version is still opt-in. Apply the visual language to other arenas without copying Meadow's green palette or plant motifs into every setting.
+Use the [illustrated Meadow study](../../../docs/mockups/meadow-painted/README.md) for the current arena reference and its matched day/night comparison. Its live captures show the production renderer, not isolated asset drawings. The [Pocket Bunny study](../../../docs/mockups/character-styles/README.md) records the character direction and iterations; the complete Pocket Plush roster now loads by default, while the original art remains available in classic comparison mode. Apply the visual language to other arenas without copying Meadow's green palette or plant motifs into every setting.
 
 ## Start with the design brief
 
@@ -58,6 +58,14 @@ Check characters against each major background zone they cross: open sky, hills 
 - At night, compare props baked into the background with live foreground props and characters. Tint painted foreground pixels with the same ambient color and alpha as the background night variant. A full-screen DOM blend can double-tint the background while leaving foreground props too bright. Keep transparency clear so foreground bushes still hide characters without a tinted rectangle.
 
 Meadow's [background comparison gallery](../../../docs/mockups/meadow-backgrounds/README.md) records the alternatives, height studies, and production result. Its height variants are a useful example of changing composition without moving gameplay geometry or modifying character art. The valley and cloud shapes live in [`meadowBackdrop.ts`](../../../src/engine/arenas/packs/meadowBackdrop.ts); Meadow's cloud configuration supplies starting positions to the existing animated cloud system.
+
+### Illustrated background integration
+
+The [later painted Meadow experiment](../../../docs/mockups/meadow-painted/README.md) showed that a subtle, pale storybook valley can add character without drawing attention away from gameplay. The first painted valley climbed behind too many platforms; lowering its ridge restored open sky around jumping characters. Keep the image's trees and brushwork quiet, especially behind pale, green, and warm-colored roster members. The selected game plate is a 1280 × 720 WebP blended at 65% over the existing sky; it is deliberately softer and less saturated than the full-scene concept.
+
+Treat image-generated full scenes as art-direction references only. They can repaint character shapes, platform boundaries, and opaque bushes. Extract or author a **background-only plate**, then composite it beneath the real arena geometry, animated clouds, sun/moon, props, and foreground cover. Compare matched noon and night renderer captures before integrating it. Keep a procedural fallback for image load or decode failure.
+
+A bitmap background must be fetched after the menu becomes usable, prefetched again when the lobby selects its arena, and decoded in the realm that actually renders it. Cancel speculative menu fetches when Online opens, and let real lobby/match loads retry. The default simulation worker and renderer-only worker each own their canvas and need their own decoded bitmap; their initial Meadow render and a mid-match switch into Meadow must wait for that decode. Bake the bitmap into the static background canvas, never draw the full-screen image every frame. The chosen 1280 WebP is about 73 KB versus about 1.88 MB for its generated PNG source. A 960 version saves about 29 KB and 1.54 MiB of decoded image memory but is visibly softer at the 1280 reference size. Start with one 1280 asset; add resolution selection only if mobile measurements justify its extra path. Preserve the source and alternate resolution in the study, not in the game's lazy asset set.
 
 ## Meadow reference props
 

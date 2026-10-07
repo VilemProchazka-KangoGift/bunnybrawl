@@ -18,6 +18,7 @@ import { GameLoop } from '../gameLoop';
 import { Renderer } from '../renderer';
 import { getArena, getTheme } from '../arenas/operations';
 import { registerBuiltinArenas } from '../arenas/builtin';
+import { preloadMeadowBackdrop } from '../arenas/meadowBackdropAsset';
 import { registerBuiltinCharacters } from '../characters/builtin';
 import { registerBuiltinEntities, getEntities } from '../entities';
 import { CHARACTERS, BOT_CHARACTERS } from '../characters/defaults';
@@ -172,6 +173,9 @@ function postEvent(ev: EventBody): void {
 
 export async function initEngine(msg: HostInitEngineMsg): Promise<void> {
   registerBuiltinArenas();
+  const backdropTask = msg.arenaId === 'meadow'
+    ? preloadMeadowBackdrop()
+    : Promise.resolve();
   registerBuiltinCharacters();
   registerBuiltinEntities();
   if (msg.pocketBunny) {
@@ -182,6 +186,7 @@ export async function initEngine(msg: HostInitEngineMsg): Promise<void> {
     const { registerPlayablePlushRoster } = await import('../characters/plush/playableRoster');
     await registerPlayablePlushRoster();
   }
+  await backdropTask;
   // Re-populate slot → CharacterDef mappings inside the worker. Main owns
   // the lobby UI that mutates these maps; without this rebuild the worker
   // would throw "No character assigned to bot slot Bx" inside

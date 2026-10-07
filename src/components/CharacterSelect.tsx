@@ -12,6 +12,7 @@ import { drawLobbyOverlay } from '../engine/lobbyRender';
 import { Renderer } from '../engine/renderer';
 import { getTheme } from '../engine/arenas/operations';
 import { loadBuiltinArenas } from '../engine/arenas/loading';
+import { prefetchMeadowBackdrop } from '../engine/arenas/meadowBackdropAsset';
 import { sampleFps, drawFpsCounter } from '../engine/fpsCounter';
 import { useCanvasRenderScale } from '../hooks/useCanvasRenderScale';
 import './CharacterSelect.css';
@@ -35,6 +36,10 @@ export function CharacterSelect() {
     // Match's loader retries if either speculative fetch failed.
     void Promise.allSettled([loadBuiltinArenas(), import('./Match')]);
   }, []);
+
+  useEffect(() => {
+    if (matchSettings.arenaId === 'meadow') void prefetchMeadowBackdrop();
+  }, [matchSettings.arenaId]);
 
   // Initialise LobbyGame once
   useEffect(() => {
