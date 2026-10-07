@@ -22,7 +22,7 @@
 
 import { Renderer } from '../renderer';
 import { registerBuiltinArenas } from '../arenas/builtin';
-import { preloadMeadowBackdrop } from '../arenas/meadowBackdropAsset';
+import { hasIllustratedBackdrop, preloadIllustratedBackdrop } from '../arenas/illustratedBackdropAsset';
 import { registerBuiltinCharacters } from '../characters/builtin';
 import { getArena, getTheme, mirrorArena } from '../arenas/operations';
 import { setHudLanguage } from '../rendering/hud';
@@ -105,7 +105,7 @@ let particlePoolLen = 0;
 async function bootstrap(pocketBunny: boolean, classicCharacters: boolean, themeId: string): Promise<void> {
   registerBuiltinArenas();
   registerBuiltinCharacters();
-  const backdropTask = themeId === 'meadow' ? preloadMeadowBackdrop() : Promise.resolve();
+  const backdropTask = preloadIllustratedBackdrop(themeId);
   if (pocketBunny) {
     const { registerPocketBunnyRig } = await import('../characters/prototypes/pocketBunnyRig');
     await registerPocketBunnyRig();
@@ -278,10 +278,10 @@ ctxScope.addEventListener('message', async (e: MessageEvent<HostToWorkerMsg>) =>
   if (msg.type === 'host:enginePause') { engineBindings.pauseEngine(); return; }
   if (msg.type === 'host:engineResume') { engineBindings.resumeEngine(); return; }
   if (msg.type === 'host:engineSwitchArena') {
-    if (msg.arenaId === 'meadow') {
+    if (hasIllustratedBackdrop(msg.arenaId)) {
       initPending = true;
       try {
-        await preloadMeadowBackdrop();
+        await preloadIllustratedBackdrop(msg.arenaId);
         engineBindings.switchArenaInWorker(msg);
       } catch (err) {
         postError(err instanceof Error ? err.message : String(err));
@@ -406,10 +406,10 @@ ctxScope.addEventListener('message', async (e: MessageEvent<HostToWorkerMsg>) =>
         renderer.setConnectionQuality(msg.rtt, msg.jitter);
         return;
       case 'host:setTheme': {
-        const needsBackdrop = msg.themeId === 'meadow';
+        const needsBackdrop = hasIllustratedBackdrop(msg.themeId);
         if (needsBackdrop) initPending = true;
         try {
-          if (needsBackdrop) await preloadMeadowBackdrop();
+          if (needsBackdrop) await preloadIllustratedBackdrop(msg.themeId);
           renderer.setTheme(getTheme(msg.themeId));
           // Theme changed → cosmetic systems need rebuild against the new
           // arena. Done on the next renderBackground / renderFrame.

@@ -18,7 +18,7 @@ import { GameLoop } from '../gameLoop';
 import { Renderer } from '../renderer';
 import { getArena, getTheme } from '../arenas/operations';
 import { registerBuiltinArenas } from '../arenas/builtin';
-import { preloadMeadowBackdrop } from '../arenas/meadowBackdropAsset';
+import { preloadIllustratedBackdrop } from '../arenas/illustratedBackdropAsset';
 import { registerBuiltinCharacters } from '../characters/builtin';
 import { registerBuiltinEntities, getEntities } from '../entities';
 import { CHARACTERS, BOT_CHARACTERS } from '../characters/defaults';
@@ -173,9 +173,7 @@ function postEvent(ev: EventBody): void {
 
 export async function initEngine(msg: HostInitEngineMsg): Promise<void> {
   registerBuiltinArenas();
-  const backdropTask = msg.arenaId === 'meadow'
-    ? preloadMeadowBackdrop()
-    : Promise.resolve();
+  const backdropTask = preloadIllustratedBackdrop(msg.arenaId);
   registerBuiltinCharacters();
   registerBuiltinEntities();
   if (msg.pocketBunny) {

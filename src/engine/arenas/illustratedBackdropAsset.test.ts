@@ -5,7 +5,7 @@ afterEach(() => {
   vi.resetModules();
 });
 
-describe('Meadow backdrop preload', () => {
+describe('illustrated arena backdrop preload', () => {
   it('reuses the lobby fetch and decodes only once for concurrent match requests', async () => {
     const fetchMock = vi.fn(async () => ({ ok: true, blob: async () => new Blob(['image']) }));
     const bitmap = { width: 1280, height: 720 } as ImageBitmap;
@@ -13,13 +13,13 @@ describe('Meadow backdrop preload', () => {
     vi.stubGlobal('fetch', fetchMock);
     vi.stubGlobal('createImageBitmap', decodeMock);
 
-    const art = await import('./meadowBackdropAsset');
-    await Promise.all([art.prefetchMeadowBackdrop(), art.prefetchMeadowBackdrop()]);
-    await Promise.all([art.preloadMeadowBackdrop(), art.preloadMeadowBackdrop()]);
+    const art = await import('./illustratedBackdropAsset');
+    await Promise.all([art.prefetchIllustratedBackdrop('meadow'), art.prefetchIllustratedBackdrop('meadow')]);
+    await Promise.all([art.preloadIllustratedBackdrop('meadow'), art.preloadIllustratedBackdrop('meadow')]);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(decodeMock).toHaveBeenCalledTimes(1);
-    expect(art.getMeadowBackdrop()).toBe(bitmap);
+    expect(art.getIllustratedBackdrop('meadow')).toBe(bitmap);
   });
 
   it('recovers from a failed speculative fetch when the match starts', async () => {
@@ -29,12 +29,12 @@ describe('Meadow backdrop preload', () => {
     vi.stubGlobal('fetch', fetchMock);
     vi.stubGlobal('createImageBitmap', vi.fn(async () => ({ width: 1280 } as ImageBitmap)));
 
-    const art = await import('./meadowBackdropAsset');
-    await art.prefetchMeadowBackdrop();
-    expect(art.getMeadowBackdrop()).toBeNull();
-    await art.preloadMeadowBackdrop();
+    const art = await import('./illustratedBackdropAsset');
+    await art.prefetchIllustratedBackdrop('meadow');
+    expect(art.getIllustratedBackdrop('meadow')).toBeNull();
+    await art.preloadIllustratedBackdrop('meadow');
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(art.getMeadowBackdrop()).not.toBeNull();
+    expect(art.getIllustratedBackdrop('meadow')).not.toBeNull();
   });
 
   it('retries when Online cancels the menu fetch during match startup', async () => {
@@ -48,13 +48,29 @@ describe('Meadow backdrop preload', () => {
     vi.stubGlobal('fetch', fetchMock);
     vi.stubGlobal('createImageBitmap', vi.fn(async () => ({ width: 1280 } as ImageBitmap)));
 
-    const art = await import('./meadowBackdropAsset');
-    const speculative = art.prefetchMeadowBackdrop(controller.signal);
-    const actual = art.preloadMeadowBackdrop();
+    const art = await import('./illustratedBackdropAsset');
+    const speculative = art.prefetchIllustratedBackdrop('meadow', controller.signal);
+    const actual = art.preloadIllustratedBackdrop('meadow');
     controller.abort();
     await Promise.all([speculative, actual]);
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(art.getMeadowBackdrop()).not.toBeNull();
+    expect(art.getIllustratedBackdrop('meadow')).not.toBeNull();
+  });
+
+  it('loads Winter Lake separately without fetching an unrelated arena', async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, blob: async () => new Blob(['winter']) }));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('createImageBitmap', vi.fn(async () => ({ width: 1280 } as ImageBitmap)));
+
+    const art = await import('./illustratedBackdropAsset');
+    await art.prefetchIllustratedBackdrop('winter_lake');
+    await art.preloadIllustratedBackdrop('winter_lake');
+    await art.prefetchIllustratedBackdrop('rooftops');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toContain('winter-lake-pearl-painted.webp');
+    expect(art.getIllustratedBackdrop('winter_lake')).not.toBeNull();
+    expect(art.getIllustratedBackdrop('meadow')).toBeNull();
   });
 });

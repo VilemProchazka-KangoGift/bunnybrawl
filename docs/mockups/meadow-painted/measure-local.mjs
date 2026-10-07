@@ -17,8 +17,8 @@ try {
       const timing = await page.evaluate(() => ({
         ready: performance.now(),
         plate: performance.getEntriesByType('resource').find(e => e.name.includes('low-valley-') && e.name.includes('.webp'))?.duration ?? null,
-        plateLoad: Number(document.documentElement.dataset.plateLoadMs),
-        background: Number(document.documentElement.dataset.backgroundMs),
+        plateLoad: Number(globalThis.document.documentElement.dataset.plateLoadMs),
+        background: Number(globalThis.document.documentElement.dataset.backgroundMs),
       }));
       samples.push(timing.ready);
       if (timing.plate != null) resourceMs.push(timing.plate);

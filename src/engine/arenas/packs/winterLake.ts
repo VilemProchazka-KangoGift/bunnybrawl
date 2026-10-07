@@ -4,13 +4,14 @@ import type { Arena, Platform, Ctx2D } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
+import { getIllustratedBackdrop } from '../illustratedBackdropAsset';
 import { computeNightIntensity } from '../../rendering';
 import { getFloatingPlatforms, bakeVerticalGradientStrip } from '../../themes/utils';
 import {
   drawPineTree, drawChristmasTree, drawSnowDrift, drawIcePatch, drawIcicle, drawIceCube, ICE_CUBE_DEPTH_RATIO,
   drawBigSnowman, drawIgloo, drawSnowman, drawSnowball,
   drawSnowballPyramid, drawLargeSnowballPyramid,
-  drawFgBush,
+  drawFgBush, drawHill,
   createThornRenderer, createSpringRenderer,
 } from '../../themes/drawPrimitives';
 import {
@@ -268,19 +269,14 @@ export const winterLake: ArenaPack = {
   // ---- Visual config ----
   sky: {
     gradient: [
-      { offset: 0, color: '#2C3E6B' },
-      { offset: 0.35, color: '#5B7BA5' },
-      { offset: 0.7, color: '#8FA8C8' },
-      { offset: 1, color: '#B8C8DC' },
+      { offset: 0, color: '#3D5573' },
+      { offset: 0.43, color: '#7E9AAD' },
+      { offset: 0.78, color: '#BCD0D3' },
+      { offset: 1, color: '#DFE6E1' },
     ],
   },
 
-  hills: [
-    { x: 0, baseY: 620, width: 350, height: 100, color: '#D8E8F0' },
-    { x: 300, baseY: 630, width: 450, height: 80, color: '#C8D8E8' },
-    { x: 700, baseY: 615, width: 380, height: 110, color: '#D0E0EA' },
-    { x: 1000, baseY: 630, width: 350, height: 90, color: '#C4D4E4' },
-  ],
+  hills: [], // The illustrated plate owns the distant shore; fallback hills draw below.
 
   ground: {
     surfaceColor: '#E8F0F8',    // No grass blades in winter
@@ -341,6 +337,25 @@ export const winterLake: ArenaPack = {
 
   // ---- Custom draw functions ----
   drawFarBackground: (ctx: Ctx2D, _arena: Arena) => {
+    const image = getIllustratedBackdrop('winter_lake');
+    if (image) {
+      ctx.save();
+      ctx.globalAlpha = 0.75;
+      ctx.drawImage(image, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.restore();
+      return;
+    }
+
+    // Keep the original procedural scene available when the image fails.
+    for (const hill of [
+      { x: 0, baseY: 620, width: 350, height: 100, color: '#D8E8F0' },
+      { x: 300, baseY: 630, width: 450, height: 80, color: '#C8D8E8' },
+      { x: 700, baseY: 615, width: 380, height: 110, color: '#D0E0EA' },
+      { x: 1000, baseY: 630, width: 350, height: 90, color: '#C4D4E4' },
+    ]) {
+      ctx.fillStyle = hill.color;
+      drawHill(ctx, hill.x, hill.baseY, hill.width, hill.height);
+    }
     // Distant snowy mountain range
     ctx.save();
     ctx.globalAlpha = 0.35;

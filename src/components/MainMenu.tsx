@@ -203,7 +203,15 @@ export function MainMenu({ preloadLobby }: { preloadLobby?: (signal: AbortSignal
               <ArenaGrid
                 classPrefix="arena"
                 currentId={matchSettings.arenaId}
-                onSelect={(id) => { audio.init(); audio.play('select'); setMatchSettings({ arenaId: id }); setArenaOpen(false); arenaTrigger.current?.focus(); }}
+                onSelect={(id) => {
+                  audio.init(); audio.play('select'); setMatchSettings({ arenaId: id });
+                  if (id === 'meadow' || id === 'winter_lake') {
+                    void import('../engine/arenas/illustratedBackdropAsset')
+                      .then(({ prefetchIllustratedBackdrop }) => prefetchIllustratedBackdrop(id))
+                      .catch(() => { /* Lobby and match loaders can retry. */ });
+                  }
+                  setArenaOpen(false); arenaTrigger.current?.focus();
+                }}
               />
               <button
                 className={`arena-btn ${matchSettings.arenaId === 'random' ? 'selected' : ''}`}

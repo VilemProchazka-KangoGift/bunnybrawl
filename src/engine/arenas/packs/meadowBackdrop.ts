@@ -1,5 +1,5 @@
 import type { Ctx2D } from '../../types';
-import { getMeadowBackdrop } from '../meadowBackdropAsset';
+import { getIllustratedBackdrop } from '../illustratedBackdropAsset';
 
 type Point = readonly [number, number];
 
@@ -73,7 +73,7 @@ export function drawMeadowValley(c: Ctx2D, hillRise = 70): void {
 
 /** Pale illustrated hills; the procedural valley remains a safe load fallback. */
 export function drawPaintedMeadowValley(c: Ctx2D): void {
-  const image = getMeadowBackdrop();
+  const image = getIllustratedBackdrop('meadow');
   if (!image) {
     drawMeadowValley(c);
     return;
