@@ -11,6 +11,7 @@ try {
     ['production', 'reference'],
     ['painted-landscape', 'painted'],
     ['painted-low-valley', 'low-valley'],
+    ['painted-low-valley-small', 'low-valley-small'],
   ]) {
     for (const time of ['day', 'night']) {
       const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
