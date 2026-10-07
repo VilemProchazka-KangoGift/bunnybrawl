@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { ArenaGrid } from '../ArenaGrid';
 import { loadingSubKey } from './useLoadingOverlay';
-import logoImg from '/logo.png?url';
+import { CharacterPortrait } from '../CharacterPortrait';
 
 /**
  * Presentational overlay layer for Match: pause menu (with arena-select
@@ -64,7 +64,7 @@ export function MatchOverlays(p: MatchOverlaysProps) {
           aria-live="polite"
           aria-busy="true"
         >
-          <img src={logoImg} alt="Carrot Royale" className="match-loading-logo" />
+          <CharacterPortrait name="Hedgehog" className="match-loading-portrait" />
           <div className="match-loading-spinner" />
           <div className="match-loading-text">{t('loading', 'Loading...')}</div>
           <div className="match-loading-sub" data-testid="match-loading-sub">
@@ -167,6 +167,7 @@ export function MatchOverlays(p: MatchOverlaysProps) {
       {isReconnecting && isOnline && (
         <div className="reconnecting-overlay" role="status" aria-live="polite">
           <div className="reconnecting-box">
+            <CharacterPortrait name="Owl" />
             <div className="reconnecting-spinner" />
             <div className="reconnecting-text">
               {t('reconnecting', 'Reconnecting...')}

@@ -6,6 +6,8 @@ import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../store/gameStore';
 import { audio } from '../engine/audio';
 import { isTouchPrimary } from '../engine/touchDetect';
+import { CharacterPortrait } from './CharacterPortrait';
+import { CharacterDropdown } from './CharacterDropdown';
 import { MobileTextInput } from './MobileTextInput';
 import { getLobbyRoster, getCharacterEmoji, getCharacterDisplayName } from '../engine/characters';
 import { ALL_BOT_SLOTS } from '../engine/types';
@@ -87,7 +89,7 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
 
           {/* Step 1: Choose create or join */}
           {step === 'choose' && !joinMode && (
-            <div className="online-step">
+            <div className="online-step online-choose-layout"><div className="online-welcome"><CharacterPortrait name="Fox" /><p>{t('help_online_desc')}</p></div><div className="online-choose-actions">
               <div className="online-section">
                 <span className="online-section-title">{t('your_name', 'Your name')}</span>
                 {isTouchPrimary() ? (
@@ -123,7 +125,7 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
               </button>
               </>)}
               <button className="btn-base mods-close-btn" onClick={onClose}>{t('back', 'Back')}</button>
-            </div>
+            </div></div>
           )}
 
           {/* Step 1b: Enter join code */}
@@ -169,13 +171,7 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
                   <div className="online-lobby-left">
                     <div className="online-section">
                       <span className="online-section-title">{t('your_character', 'Your character')}</span>
-                      <select className="online-char-select" value={localChar}
-                        onChange={(e) => handleCharChange(e.target.value)}>
-                        {(() => {
-                          const takenNames = new Set(online.remotePlayers.map(rp => rp.characterName));
-                          return allChars.map(c => <option key={c.name} value={c.name} disabled={takenNames.has(c.name)}>{getCharacterEmoji(c.name)} {getCharacterDisplayName(c.name, i18n.language)}{takenNames.has(c.name) ? ` (${t('taken', 'taken')})` : ''}</option>);
-                        })()}
-                      </select>
+                      <CharacterDropdown value={localChar} onChange={handleCharChange} characters={allChars} taken={new Set(online.remotePlayers.map(rp => rp.characterName))} />
                     </div>
                     <div className="online-status-box">
                       {!online.roomCode && online.connectionStatus !== 'error' && t('connecting_server', 'Connecting to server...')}
@@ -227,17 +223,7 @@ export function OnlineModal({ onClose }: OnlineModalProps) {
                 <div className="online-lobby-left">
                   <div className="online-section">
                     <span className="online-section-title">{t('your_character', 'Your character')}</span>
-                    <select className="online-char-select" value={localChar} disabled={localReady}
-                      onChange={(e) => handleCharChange(e.target.value)}>
-                      {(() => {
-                        const takenNames = new Set(online.remotePlayers.map(rp => rp.characterName));
-                        return allChars.map(c => (
-                          <option key={c.name} value={c.name} disabled={takenNames.has(c.name)}>
-                            {getCharacterEmoji(c.name)} {getCharacterDisplayName(c.name, i18n.language)}{takenNames.has(c.name) ? ` (${t('taken', 'taken')})` : ''}
-                          </option>
-                        ));
-                      })()}
-                    </select>
+                    <CharacterDropdown value={localChar} onChange={handleCharChange} characters={allChars} taken={new Set(online.remotePlayers.map(rp => rp.characterName))} disabled={localReady} />
                   </div>
 
                   {/* Guest: ready button or ready badge */}

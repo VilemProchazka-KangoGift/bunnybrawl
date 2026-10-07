@@ -15,6 +15,7 @@ import { SettingsModal } from './SettingsModal';
 import { DevMenu } from './DevMenu';
 import logoImg from '/logo.png?url';
 import './MainMenu.css';
+import { getArenaPreviewDisplayName, listPlayableArenaPreviews } from '../engine/arenas/previewCatalog';
 
 const OnlineModal = lazy(() => import('./OnlineModal')
   .then((module) => ({ default: module.OnlineModal })));
@@ -30,6 +31,9 @@ export function MainMenu({ preloadLobby }: { preloadLobby?: (signal: AbortSignal
   const [onlineOpen, setOnlineOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [devOpen, setDevOpen] = useState(false);
+  const [arenaOpen, setArenaOpen] = useState(false);
+  const arenaTrigger = useRef<HTMLButtonElement>(null);
+  const selectedArena = listPlayableArenaPreviews().find(a => a.id === matchSettings.arenaId);
   const preloadControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -98,7 +102,8 @@ export function MainMenu({ preloadLobby }: { preloadLobby?: (signal: AbortSignal
       const inEditable = target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.isContentEditable;
       // Enter starts the game — but not while ANY modal is open, or it would
       // dismiss the modal and jump to CharacterSelect.
-      if (e.key === 'Enter' && !onlineOpen && !devOpen && !helpOpen && !modsOpen && !settingsOpen) {
+      if (e.key === 'Escape' && arenaOpen) { setArenaOpen(false); arenaTrigger.current?.focus(); }
+      if (e.key === 'Enter' && !inEditable && target?.tagName !== 'BUTTON' && !arenaOpen && !onlineOpen && !devOpen && !helpOpen && !modsOpen && !settingsOpen) {
         e.preventDefault();
         handlePlay();
       }
@@ -109,7 +114,7 @@ export function MainMenu({ preloadLobby }: { preloadLobby?: (signal: AbortSignal
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [handlePlay, onlineOpen, devOpen, helpOpen, modsOpen, settingsOpen]);
+  }, [handlePlay, onlineOpen, devOpen, helpOpen, modsOpen, settingsOpen, arenaOpen]);
 
   useEffect(() => {
     audio.playMenuMusic();
@@ -190,12 +195,15 @@ export function MainMenu({ preloadLobby }: { preloadLobby?: (signal: AbortSignal
           </div>
 
           <div className="arena-selector" data-testid="arena-selector">
-            <span className="arena-label">{t('arena_label')}</span>
-            <div className="arena-options">
+            <button ref={arenaTrigger} className="btn-base arena-disclosure" aria-expanded={arenaOpen} aria-controls="menu-arena-options" onClick={() => setArenaOpen(!arenaOpen)}>
+              <span className="arena-disclosure-picture" style={{ background: selectedArena?.previewGradient }} aria-hidden="true">{matchSettings.arenaId === 'random' || matchSettings.arenaId === 'meadow' ? <img src={`${import.meta.env.BASE_URL}ui/${matchSettings.arenaId === 'random' ? 'random-preview.svg' : 'meadow-preview.png'}`} alt="" /> : selectedArena?.previewIcon}</span>
+              <span>{t('arena_label')} {matchSettings.arenaId === 'random' ? t('arena_random') : getArenaPreviewDisplayName(matchSettings.arenaId, i18n.language)}</span><span>▾</span>
+            </button>
+            <div className="arena-options" id="menu-arena-options" hidden={!arenaOpen}>
               <ArenaGrid
                 classPrefix="arena"
                 currentId={matchSettings.arenaId}
-                onSelect={(id) => { audio.init(); audio.play('select'); setMatchSettings({ arenaId: id }); }}
+                onSelect={(id) => { audio.init(); audio.play('select'); setMatchSettings({ arenaId: id }); setArenaOpen(false); arenaTrigger.current?.focus(); }}
               />
               <button
                 className={`arena-btn ${matchSettings.arenaId === 'random' ? 'selected' : ''}`}
@@ -203,6 +211,7 @@ export function MainMenu({ preloadLobby }: { preloadLobby?: (signal: AbortSignal
                   audio.init();
                   audio.play('select');
                   setMatchSettings({ arenaId: 'random' });
+                  setArenaOpen(false); arenaTrigger.current?.focus();
                 }}
               >
                 <div className="arena-preview arena-preview-random">
@@ -254,13 +263,13 @@ export function MainMenu({ preloadLobby }: { preloadLobby?: (signal: AbortSignal
             ].map((lang, i) => (
               <span key={lang.code}>
                 {i > 0 && ' | '}
-                <span
+                <button type="button" aria-pressed={i18n.language === lang.code}
                   onClick={() => i18n.changeLanguage(lang.code)}
                   style={{ fontWeight: i18n.language === lang.code ? 'bold' : 'normal', opacity: i18n.language === lang.code ? 1 : 0.6 }}
                 >
                   <svg width="18" height="12" viewBox="0 0 60 40" style={{ verticalAlign: 'middle', marginRight: 4 }}>{lang.flag}</svg>
                   {lang.label}
-                </span>
+                </button>
               </span>
             ))}
           </div>

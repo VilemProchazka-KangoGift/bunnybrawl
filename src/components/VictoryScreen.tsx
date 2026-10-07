@@ -12,6 +12,7 @@ import { MsgType } from '../engine/net/protocol';
 import type { ReliableMessage } from '../engine/net/protocol';
 import type { ConnectionStatus, TransportEvents } from '../engine/net/transport';
 import './VictoryScreen.css';
+import { CharacterPortrait } from './CharacterPortrait';
 
 interface FireworkParticle {
   x: number;
@@ -255,11 +256,16 @@ export function VictoryScreen() {
                 <span style={{ color: winnerChar.color }}>{charName(winnerChar.name, winner!)}{botSuffix(winner!)}</span> {t('victory_wins')}
               </h1>
               <div className="winner-avatar winner-avatar-pose" style={{ borderColor: winnerChar.lightColor }}>
-                <span className="winner-emoji">{getCharacterEmoji(winnerChar.name)}</span>
+                <CharacterPortrait name={winnerChar.name} />
               </div>
             </>
           ) : (
-            <h1 className="winner-text">{t('victory_draw')}</h1>
+            <>
+              <h1 className="winner-text">{t('victory_draw')}</h1>
+              <div className="draw-portraits" aria-hidden="true">
+                {sortedPlayers.slice(0, 3).map(player => <CharacterPortrait key={player.id} name={player.character.name} />)}
+              </div>
+            </>
           )}
 
           <div className="victory-columns">
@@ -269,7 +275,7 @@ export function VictoryScreen() {
                 {sortedPlayers.map((player, idx) => (
                   <div key={player.id} className={`score-row ${idx === 0 ? 'first' : ''}`}>
                     <span className="rank">#{idx + 1}</span>
-                    <span className="row-emoji">{getCharacterEmoji(player.character.name)}</span>
+                    <CharacterPortrait name={player.character.name} />
                     <span className="player-name" style={{ color: player.character.color }}>
                       {charName(player.character.name, player.id)}{botSuffix(player.id)}
                     </span>
@@ -286,8 +292,8 @@ export function VictoryScreen() {
 
             <div className="victory-col-right">
               {sortedPlayers.length > 0 && (
-                <div className="player-stats-section">
-                  <h2>{t('victory_stats')}</h2>
+                <details className="player-stats-section">
+                  <summary>{t('victory_stats')}</summary>
                   <div className="stats-grid">
                     <div className="stats-header">
                       <span className="stats-cell stats-name-cell">{t('victory_player')}</span>
@@ -301,7 +307,7 @@ export function VictoryScreen() {
                       return (
                         <div key={player.id} className="stats-row">
                           <span className="stats-cell stats-name-cell" style={{ color: player.character.color }}>
-                            <span className="row-emoji">{getCharacterEmoji(player.character.name)}</span>{charName(player.character.name, player.id)}
+                            <CharacterPortrait name={player.character.name} />{charName(player.character.name, player.id)}
                           </span>
                           <span className="stats-cell">{ps?.bestStreak ?? 0}</span>
                           <span className="stats-cell">{ps ? ps.timeAirborne.toFixed(1) + 's' : '0.0s'}</span>
@@ -311,7 +317,7 @@ export function VictoryScreen() {
                       );
                     })}
                   </div>
-                </div>
+                </details>
               )}
 
               {mvpHighlights.length > 0 && (

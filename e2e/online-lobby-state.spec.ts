@@ -155,7 +155,8 @@ test.describe('Online Lobby — Player List Integrity', { tag: '@online' }, () =
       const oldChar = await pair.guest.evaluate(() =>
         window.__bunnyTest?.gameStore()?.getState().online.remotePlayers?.[0]?.characterName
       );
-      await hostSelect.selectOption({ index: 3 });
+      await hostSelect.click();
+      await pair.host.locator('.ui-character-options button:not(:disabled)').nth(3).click();
       await pair.guest.waitForFunction((prev) => {
         const rp = window.__bunnyTest?.gameStore()?.getState().online.remotePlayers;
         return rp?.[0]?.characterName && rp[0].characterName !== prev;
@@ -181,8 +182,8 @@ test.describe('Online Lobby — Player List Integrity', { tag: '@online' }, () =
       await connectToLobby(pair);
 
       // Both should have resolved to different characters (auto-switch on conflict)
-      const hostChar = await pair.host.locator('.online-char-select').inputValue();
-      const guestChar = await pair.guest.locator('.online-char-select').inputValue();
+      const hostChar = await pair.host.locator('.online-char-select').getAttribute('data-character');
+      const guestChar = await pair.guest.locator('.online-char-select').getAttribute('data-character');
       expect(hostChar).not.toBe(guestChar);
 
       // Guest's player list text should contain both character names
