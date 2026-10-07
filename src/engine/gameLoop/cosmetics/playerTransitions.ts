@@ -122,7 +122,7 @@ export function detectPlayerTransitions(
     cb.lightBurst?.(sx, sy, 'spawn');
   }
 
-  // Push bump (sideSquash === 0.8 is exact collision marker; wall hits set 0.75)
+  // Push bump (sideSquash === 0.8 is exact collision marker; wall hits set WALL_BONK_SQUASH (0.62))
   if (prev.sideSquash >= 0.95 && Math.abs(player.sideSquash - 0.8) < 0.01) {
     cb.playSound('bump');
     if (haptics.isLocal(player.id)) haptics.bump();

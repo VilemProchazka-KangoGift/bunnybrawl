@@ -521,6 +521,11 @@ export class Simulator {
 
       applyGravity(player, dt, this._effGravity, this._effMaxFallSpeed, this._characterScale);
       movePlayer(player, dt);
+      // Recover before contact so holding against a wall keeps a stable compression.
+      if (player.sideSquash !== 1) {
+        player.sideSquash = f(player.sideSquash + f(f(1 - player.sideSquash) * f(SQUASH_DECAY_SPEED * dt)));
+        if (Math.abs(player.sideSquash - 1) < 0.02) player.sideSquash = 1;
+      }
       collidePlatforms(player, this._arena.platforms);
       resolveStuckPlayer(player, this._arena.platforms);
       applyArenaConstraints(player, this._arena);

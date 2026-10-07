@@ -5,7 +5,7 @@
 import type { Arena, CharacterDef, CharacterSlot, MatchState, Particle, Player, PlayerSlot, InputState, WildlifeEntity } from './types';
 import type { ThemeConfig } from './themes/types';
 import { ALL_BOT_SLOTS, isBotSlot } from './types';
-import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED, DUST_LAND_VY_THRESHOLD } from './constants';
+import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT, SQUASH_ON_CROUCH, SQUASH_DECAY_SPEED, WALL_BONK_SQUASH, DUST_LAND_VY_THRESHOLD } from './constants';
 import {
   spawnJumpDustParticles, spawnDustParticles, spawnFootstepDustParticles, updateParticles,
 } from './gameLoop/cosmetics/particles';
@@ -55,11 +55,11 @@ function makeLobbyPlayer(slot: PlayerSlot, char: CharacterDef, x: number, y: num
 function clampLobbyBounds(p: Player): void {
   // Horizontal clamp (NOT wrap — we don't want players teleporting across the canvas)
   if (p.x < 0) {
-    if (p.vx < 0) p.sideSquash = 0.75;
+    if (p.vx < 0) p.sideSquash = WALL_BONK_SQUASH;
     p.x = 0;
     p.vx = 0;
   } else if (p.x + p.width > CANVAS_WIDTH) {
-    if (p.vx > 0) p.sideSquash = 0.75;
+    if (p.vx > 0) p.sideSquash = WALL_BONK_SQUASH;
     p.x = CANVAS_WIDTH - p.width;
     p.vx = 0;
   }

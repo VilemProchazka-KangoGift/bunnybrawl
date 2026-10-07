@@ -2,7 +2,7 @@ import type { Player, Platform, Arena } from './types';
 import {
   GRAVITY, MAX_WALK_SPEED, ACCELERATION, FRICTION,
   JUMP_IMPULSE, MAX_FALL_SPEED, FAST_FALL_GRAVITY, FAST_FALL_SPEED,
-  FAST_FALL_INITIAL, PLAYER_PUSH_FORCE,
+  FAST_FALL_INITIAL, PLAYER_PUSH_FORCE, WALL_BONK_SQUASH,
   FAT_SPEED_MULT, FAT_JUMP_MULT, THORN_SPEED_MULT, THORN_JUMP_MULT,
 } from './constants';
 import type { InputState } from './types';
@@ -192,11 +192,11 @@ export function collidePlatforms(player: Player, platforms: Platform[]): void {
         // Side bonk left — clamped to the inset wall, not raw plat.x.
         if (pastBonkWall) {
           player.x = bonkLeftX - player.width;
-          if (player.vx > 0) { player.sideSquash = 0.75; player.vx = 0; }
+          if (player.vx > 0) { player.sideSquash = WALL_BONK_SQUASH; player.vx = 0; }
         }
       } else if (minDir === 1) {
         player.x = plat.x + plat.width;
-        if (player.vx < 0) { player.sideSquash = 0.75; player.vx = 0; }
+        if (player.vx < 0) { player.sideSquash = WALL_BONK_SQUASH; player.vx = 0; }
       } else {
         // Fallback for tied/sign-conflicting cases: minDir===2 with overlapTop===overlapBottom
         // (top branch's strict-less-than fails) and minDir===3 with vy>=0 (head bump's vy<0 fails).

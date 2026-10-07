@@ -169,7 +169,7 @@ export function updatePlayerCosmetics(
   // sideSquash decay moved to GameLoop.fixedUpdate (before collidePlatforms)
   // so end-of-tick state is the physics-authored value when wall-pressing,
   // not the post-decay value (which the half-rate cosmetic step left
-  // alternating with the freshly-set 0.75 — visible as a 30Hz flicker).
+  // alternating with the freshly-set wall compression — visible as a 30Hz flicker).
 
   // Fat wobble moved to Simulator.fixedUpdate — squashScale is in the snapshot,
   // so applying it on both host and guest cosmeticStep compounded the wobble

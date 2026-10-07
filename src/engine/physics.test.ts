@@ -546,19 +546,19 @@ describe('Simple physics (lobby)', () => {
 // ===================================================================
 
 describe('Wall collision side squash', () => {
-  it('sets sideSquash to 0.75 on left wall collision', () => {
+  it('sets sideSquash to 0.62 on left wall collision', () => {
     const plat: Platform = { x: 200, y: 500, width: 100, height: 100 };
     const p = makePlayer({ x: 200 - PLAYER_WIDTH + 5, y: 530, vx: 50, state: 'idle', active: true });
     collidePlatforms(p, [plat]);
-    expect(p.sideSquash).toBe(0.75);
+    expect(p.sideSquash).toBe(0.62);
     expect(p.vx).toBe(0);
   });
 
-  it('sets sideSquash to 0.75 on right wall collision', () => {
+  it('sets sideSquash to 0.62 on right wall collision', () => {
     const plat: Platform = { x: 200, y: 500, width: 100, height: 100 };
     const p = makePlayer({ x: 300 - 5, y: 530, vx: -50, state: 'idle', active: true });
     collidePlatforms(p, [plat]);
-    expect(p.sideSquash).toBe(0.75);
+    expect(p.sideSquash).toBe(0.62);
     expect(p.vx).toBe(0);
   });
 });
