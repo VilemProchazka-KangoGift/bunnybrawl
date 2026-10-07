@@ -45,7 +45,7 @@ installMockCanvas2D();
 
 // Import after mocks are set up
 import { GameLoop } from './gameLoop';
-import { getTheme, registerBuiltinArenas } from './arenas';
+import { registerBuiltinArenas } from './arenas';
 import { registerBuiltinCharacters } from './characters';
 import { audio } from './audio';
 import type { ParticleSystem } from './gameLoop/cosmetics/ParticleSystem';
