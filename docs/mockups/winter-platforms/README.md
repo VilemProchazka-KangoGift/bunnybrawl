@@ -2,6 +2,20 @@
 
 Pearl Painted is the approved backdrop. This is **arena redesign step 3**: compare playable snow shelves, ground, and the two jumpable ice cubes in the full scene before choosing a production treatment. Geometry, landing heights, slippery friction, character placements, props, foreground cover, and time of day remain identical across captures. These are fixture overrides, not changes to the playable platform art.
 
+## Glacial Ceramic cartoon and texture iteration
+
+**Glacial Ceramic was selected** from the previous round. Its clean ice color worked, but the gradient and repeated long highlight still felt like smooth vector plastic. Astra reviewed the captures and advised stronger connected outlines, flatter value planes, irregular snow volume, and localized texture. We tested three code-native texture directions, then a more ambitious Storybook Glaze treatment based on those lessons and an isolated illustrated [art-direction reference](glacial-ceramic-art-direction.png). The reference has much thicker ice than the real platforms and is **not** a gameplay screenshot or shippable sprite; it guided color, outline, and clustered frost only.
+
+| Treatment | Noon | Midnight | Scene-scale result |
+| --- | --- | --- | --- |
+| **Selected starting point: Glacial Ceramic** | ![Glacial Ceramic at noon](glacial-ceramic-day.png) | ![Glacial Ceramic at midnight](glacial-ceramic-night.png) | Clear material, thin cap, smooth blue-green face. |
+| **Inked Glaze** | ![Inked Glaze at noon](inked-glaze-day.png) | ![Inked Glaze at midnight](inked-glaze-night.png) | Better ink and flatter planes; the small pale crescents still repeat. |
+| **Bubble Glacier** | ![Bubble Glacier at noon](bubble-glacier-day.png) | ![Bubble Glacier at midnight](bubble-glacier-night.png) | Playful trapped bubbles, but too many shelves repeat the same cluster. |
+| **Chalk Frost** | ![Chalk Frost at noon](chalk-frost-day.png) | ![Chalk Frost at midnight](chalk-frost-night.png) | Larger pale frost islands; some read more like paint patches than ice. |
+| **Storybook Glaze** | ![Storybook Glaze at noon](storybook-glaze-day.png) | ![Storybook Glaze at midnight](storybook-glaze-night.png) | Stronger cartoon candidate: irregular deeper snow lip, darker connected outline, broad blue ice facets with grouped frost flecks, and a ground face with quiet separated marks. |
+
+Storybook Glaze is the strongest new treatment at full scene scale. It keeps the original collision plane, slippery behavior, right-side fake 3D depth, ice-cube bounds, and foreground body-cover pass. The texture is concentrated inside facets instead of scattered along every platform. Tiny stepping stones use a shallower lip because their ice faces are only a few pixels tall. The original thin icicles under the wide shelves are still drawn by Winter Lake's decoration layer; they and the current simplified trees/snowmen need their own later prop pass. These captures do not prove the style during moving play or at sunset.
+
 ## Ink Rim follow-up: illustrated shelf studies
 
 Ink Rim was the preferred first treatment, but its translucent stroke and speckles left the original airbrushed rectangle intact. With Astra art-direction review, the follow-up studies replace the visible cap and front-face material with larger connected forms. The front face still renders over players, the snow cap stays centered on the original landing height, and the right face retains its fake 3D fold. The ice cubes get a clearer frosted top, tinted side, and internal highlights without changing their hitboxes.
@@ -9,7 +23,7 @@ Ink Rim was the preferred first treatment, but its translucent stroke and speckl
 | Treatment | Noon | Midnight | What changes from Ink Rim |
 | --- | --- | --- | --- |
 | **Ink Rim reference** | ![Ink Rim reference at noon](ink-rim-day.png) | ![Ink Rim reference at midnight](ink-rim-night.png) | Thin edge treatment on the existing plain shelf. |
-| **Snow Pillow** | ![Snow Pillow at noon](snow-pillow-day.png) | ![Snow Pillow at midnight](snow-pillow-night.png) | Warm pearl snow with an uneven rolled lip, lavender under-shadow, and sparse broad frost patches. The closest continuation of Ink Rim and the strongest of this set. |
+| **Snow Pillow** | ![Snow Pillow at noon](snow-pillow-day.png) | ![Snow Pillow at midnight](snow-pillow-night.png) | Warm pearl snow with an uneven rolled lip, lavender under-shadow, and sparse broad frost patches. The closest continuation of Ink Rim; Glacial Ceramic was selected instead. |
 | **Glacial Ceramic** | ![Glacial Ceramic at noon](glacial-ceramic-day.png) | ![Glacial Ceramic at midnight](glacial-ceramic-night.png) | A thinner cap over a more solid blue-green ice face, curved facets, and a localized polished mark. Clearer ice identity, but brighter and more toy-like. |
 | **Layered Snowbank** | ![Layered Snowbank at noon](layered-snowbank-day.png) | ![Layered Snowbank at midnight](layered-snowbank-night.png) | Compressed snow and blue lower bed. This version still looks striped on the narrow shelves, so it is the weakest of the three. |
 
@@ -36,4 +50,4 @@ The first capture pass made the full-width ground into a repeated patterned ribb
 
 ## Reproduction
 
-The [fixture](../winter-lake/render.ts) uses the production `Renderer` and Winter Lake pack with the selected Pearl WebP decoded before the first frame. It overrides only `drawPlatform` and `drawPlatformOverlay` with the [platform studies](variants.ts); the real game art stays unchanged. Run Vite from the repo root on port 4225, then `node docs/mockups/winter-platforms/capture.mjs` to recapture Ink Rim and the three follow-up studies. Direct fixture URLs use `/bunnybrawl/docs/mockups/winter-lake/render.html?variant=current&platform=snow-pillow&time=day`, with `platform=current|ink-rim|ice-strata|snow-crust|snow-pillow|glacial-ceramic|layered-snowbank` and `time=day|night`.
+The [fixture](../winter-lake/render.ts) uses the production `Renderer` and Winter Lake pack with the selected Pearl WebP decoded before the first frame. It overrides only `drawPlatform` and `drawPlatformOverlay` with the [platform studies](variants.ts); the real game art stays unchanged. Run Vite from the repo root on port 4225, then `node docs/mockups/winter-platforms/capture.mjs` to recapture Glacial Ceramic and its four cartoon follow-ups. Direct fixture URLs use `/bunnybrawl/docs/mockups/winter-lake/render.html?variant=current&platform=storybook-glaze&time=day`, with `platform=current|ink-rim|ice-strata|snow-crust|snow-pillow|glacial-ceramic|layered-snowbank|inked-glaze|bubble-glacier|chalk-frost|storybook-glaze` and `time=day|night`.
