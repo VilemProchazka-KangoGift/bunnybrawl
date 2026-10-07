@@ -100,3 +100,9 @@ HITSTOP_DURATION, HITSTOP_ZOOM
 SHOCKWAVE_MAX_RADIUS, SHOCKWAVE_DURATION
 SCREEN_FLASH_DURATION
 ```
+
+## Fast Stomp Input Edges
+
+A fresh Down press while airborne must snap downward on the same simulation tick, including while rising. Track `Player.downHeld` separately from `fastFalling`: holding Down through a spring/bounce launch preserves the launch, while releasing and pressing again deliberately cancels ascent. Keep the once-per-dive latch and `Math.max` velocity guard so currents cannot repeatedly trigger the snap or slow an already faster fall. Initialize the input history for match/lobby players and reset it on respawn.
+
+Cover the first-tick reversal and held spring launch in Simulator tests. Browser checks must cover default sim-in-worker and `?simWorker=off`; worker diagnostics mirror at 1Hz, so sampling an arbitrary delay after a jump can observe a stale frame.

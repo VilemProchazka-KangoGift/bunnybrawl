@@ -138,9 +138,10 @@ describe('Stomp - respawnPlayer', () => {
   });
 
   it('clears fastFalling on respawn', () => {
-    const player = makePlayer({ state: 'splat', fastFalling: true });
+    const player = makePlayer({ state: 'splat', fastFalling: true, downHeld: true });
     respawnPlayer(player, spawnPoints);
     expect(player.fastFalling).toBe(false);
+    expect(player.downHeld).toBe(false);
   });
 
   it('places player at one of the available spawn points', () => {
@@ -496,6 +497,7 @@ describe('respawnPlayer - spawn avoidance and determinism', () => {
       splatTimer: 0.2,
       respawnTimer: 0.1,
       fastFalling: true,
+      downHeld: true,
       fatTimer: 1.5,
       slowTimer: 2.0,
       burnTimer: 0.8,

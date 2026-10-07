@@ -24,6 +24,7 @@ export function makePlayer(overrides: Partial<Player> & { id?: PlayerSlot } = {}
     animFrame: 0,
     animTimer: 0,
     fastFalling: false,
+    downHeld: false,
     fatTimer: 0,
     slowTimer: 0,
     squashScale: 1,

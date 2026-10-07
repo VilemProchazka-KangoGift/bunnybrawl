@@ -188,9 +188,11 @@ export interface WirePlayer {
 /**
  * Player fields that are NOT snapshotted — simulated independently on each
  * peer. Cosmetic divergence is accepted (idle action picks, breathing
- * phase, render-offset decay). NaN-sentinel anchors live here.
+ * phase, render-offset decay). NaN-sentinel anchors live here. Input-edge
+ * history is also kept here: only the authoritative simulator consumes it.
  */
 export interface LocalPlayer {
+  downHeld: boolean; // previous simulation input; distinguishes a dive press from a held launch
   character: CharacterDef;
   animTimer: number;
   squashTimer: number;   // decay timer for squash/stretch

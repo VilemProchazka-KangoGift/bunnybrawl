@@ -161,6 +161,7 @@ export function respawnPlayer(player: Player, spawnPoints: SpawnPoint[], allPlay
   player.splatTimer = 0;
   player.respawnTimer = 0;
   player.fastFalling = false;
+  player.downHeld = false;
   player.fatTimer = 0;
   player.slowTimer = 0;
   player.burnTimer = 0;

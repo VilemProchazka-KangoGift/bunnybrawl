@@ -312,8 +312,32 @@ describe('Fast Fall', () => {
     expect(p.fastFalling).toBe(true);
   });
 
-  it('does NOT snap downward while still rising — preserves spring/bounce launches', () => {
-    const p = makePlayer({ state: 'airborne', vy: -700, fastFalling: false }); // just launched
+  it('a fresh Down press reverses ascent on the first tick', () => {
+    const p = makePlayer({ state: 'airborne', vy: -400 });
+    applyInput(p, { ...noInput, down: true }, 1 / 60);
+    expect(p.vy).toBe(FAST_FALL_INITIAL);
+    expect(p.fastFalling).toBe(true);
+  });
+
+  it('release and re-press during ascent starts a new immediate dive', () => {
+    const p = makePlayer({ state: 'airborne', vy: -700, downHeld: true, fastFalling: true });
+    applyInput(p, noInput, 1 / 60);
+    applyInput(p, { ...noInput, down: true }, 1 / 60);
+    expect(p.vy).toBe(FAST_FALL_INITIAL);
+  });
+
+  it('holding Down on the ground preserves the subsequent launch', () => {
+    const p = makePlayer({ state: 'idle' });
+    applyInput(p, { ...noInput, down: true }, 1 / 60);
+    p.state = 'airborne';
+    p.vy = -700;
+    applyInput(p, { ...noInput, down: true }, 1 / 60);
+    expect(p.vy).toBe(-700);
+    expect(p.fastFalling).toBe(true);
+  });
+
+  it('does NOT cancel a rising spring/bounce launch when Down was already held', () => {
+    const p = makePlayer({ state: 'airborne', vy: -700, fastFalling: false, downHeld: true }); // just launched
     applyInput(p, { left: false, right: false, jump: false, down: true }, 1 / 60);
     expect(p.vy).toBe(-700);           // unchanged; launch not cancelled mid-ascent
     expect(p.fastFalling).toBe(true);  // stays "down + airborne" (fast gravity, echo/cosmetic parity)

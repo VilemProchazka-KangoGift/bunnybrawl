@@ -38,7 +38,7 @@ function makeLobbyPlayer(slot: PlayerSlot, char: CharacterDef, x: number, y: num
     state: 'idle', facing: 'right',
     splatTimer: 0, respawnTimer: 0, invincibleTimer: 0,
     score: 0, active: true,
-    animFrame: 0, animTimer: 0, fastFalling: false,
+    animFrame: 0, animTimer: 0, fastFalling: false, downHeld: false,
     fatTimer: 0, slowTimer: 0,
     squashScale: 1, squashTimer: 0, sideSquash: 1,
     afterimages: [],

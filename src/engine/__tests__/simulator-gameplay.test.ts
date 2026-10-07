@@ -2272,3 +2272,46 @@ describe('Simulator — RNG', () => {
     expect(sim.getRng()).toBeUndefined();
   });
 });
+
+// Fresh Down must reverse ascent in the same simulation tick, regardless of
+// whether inputs arrive from a keyboard adapter or the worker's RemoteInput.
+describe('Simulator — immediate fast stomp', () => {
+  it('preserves a spring launch with Down held, but lets a new press cancel ascent', () => {
+    const { sim } = createSim({ players: ['P1'], arena: { platforms: [] } });
+    skipCountdown(sim);
+    const state = sim.getState();
+    const player = state.players[0];
+    player.x = 400;
+    player.y = 300;
+    player.state = 'idle';
+    state.springs.push({ x: 416, y: 332, platformIndex: 0, life: 10, growTimer: 0, bounceTimer: 0 });
+    const input = { left: false, right: false, jump: false, down: true };
+    const inputs = new Map<PlayerSlot, InputState>([['P1', input]]);
+    sim.fixedUpdate(FIXED_TIMESTEP, inputs);
+    expect(player.vy).toBe(SPRING_BOUNCE);
+    sim.fixedUpdate(FIXED_TIMESTEP, inputs);
+    expect(player.vy).toBeLessThan(0);
+    input.down = false;
+    sim.fixedUpdate(FIXED_TIMESTEP, inputs);
+    input.down = true;
+    sim.fixedUpdate(FIXED_TIMESTEP, inputs);
+    expect(player.vy).toBeGreaterThanOrEqual(500);
+  });
+
+  it('dives on the first Down tick while rising', () => {
+    const { sim } = createSim({ players: ['P1'], arena: { platforms: [] } });
+    skipCountdown(sim);
+    const player = sim.getState().players[0];
+    player.x = 400;
+    player.y = 250;
+    player.state = 'airborne';
+    player.vy = -400;
+    const inputs = new Map<PlayerSlot, InputState>([['P1', {
+      left: false, right: false, jump: false, down: true,
+    }]]);
+    sim.fixedUpdate(FIXED_TIMESTEP, inputs);
+    expect(player.fastFalling).toBe(true);
+    expect(player.vy).toBeGreaterThanOrEqual(500);
+    expect(player.y).toBeGreaterThan(250);
+  });
+});

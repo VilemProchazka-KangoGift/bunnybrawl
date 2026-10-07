@@ -141,6 +141,8 @@ describe('Simulator determinism (Task 3.4 — standalone, no GameLoop)', () => {
     // Lock-in fixture: this snapshot is INDEPENDENT of the GameLoop-driven
     // determinism snapshot. If this fails, the pure Simulator's observable
     // behavior changed — investigate before regenerating.
+    // Fast-stomp fix: fresh Down presses during ascent now dive immediately,
+    // changing this RandomInput scenario's trajectories and score distribution.
     expect(result).toMatchSnapshot();
   });
 });
