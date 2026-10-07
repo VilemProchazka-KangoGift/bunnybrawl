@@ -70,6 +70,10 @@ Set `ambientSoundConfig` on the `ArenaPack`:
 
 ## Visual Effects
 
+### Spring Boing accents
+
+Spring bounce uses five brief cream-and-ink accents anchored at `springLaunchX`, `springLaunchY - 36` (the mushroom cap). `rendering/springEffects.ts` draws the selected study for 0.18 seconds, replacing the glow column, rings, and random yellow spark burst. Keep the existing 0.35-second spring transport timer: derive launch age from that timer, rather than global frame time. The effect must not follow the player, restart midway, or leak canvas opacity. The spring study freezes the previous renderer in `docs/mockups/spring-vfx/baseline.js` so regenerating the gallery does not silently replace its reference with the newly selected effect.
+
 ### Cartoon movement family
 
 The selected movement effects are **Cloud pop** on input-jump, **Pose echoes** on a downward fast stomp, **Side puffs** on ordinary landing, and **Impact crown** on fast-stomp ground contact. The alternatives and live day/night crops are in `docs/mockups/movement-vfx/`. The standalone study uses scripted motion; judge the implementation in the real renderer.

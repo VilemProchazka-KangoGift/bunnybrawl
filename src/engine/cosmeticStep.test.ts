@@ -218,6 +218,15 @@ describe('cosmeticStep transition detection', () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
+  it('spring feedback does not stack the legacy yellow spark burst', () => {
+    const { loop } = createLoop();
+    const state = loop.getState();
+    const ps = loop.particleSystem;
+    const before = ps.getParticles().length;
+    ps.applyHazardHitVFX({ type: 'spring', px: 200, py: 600, haptic: 'spring' }, state.players[0].id, state, false);
+    expect(ps.getParticles()).toHaveLength(before);
+  });
+
   it('fast stomp contact emits immediately before the half-rate particle bucket', () => {
     const { loop } = createLoop();
     const player = loop.getState().players[0];

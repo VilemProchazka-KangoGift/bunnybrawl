@@ -1399,7 +1399,7 @@ export class Renderer implements IRenderer {
         ctx.drawImage(this._overlayCanvas, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
       }
 
-      // Spring spiral trail (h) -- drawn near players
+      // Spring boing accents -- anchored at the launch mushroom
       for (const player of matchState.players) {
         if (!player.active || player.state === 'respawning') continue;
         if (player.springTrailTimer > 0) {

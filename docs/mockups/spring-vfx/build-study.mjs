@@ -1,0 +1,20 @@
+import fs from 'node:fs';
+import { createRequire } from 'node:module';
+const require=createRequire(new URL('../../../package.json',import.meta.url));
+const ts=require('typescript');
+const repo=new URL('../../../',import.meta.url);
+const read=p=>fs.readFileSync(new URL(p,repo),'utf8');
+const collectibles=read('src/engine/rendering/collectibles.ts');
+const helpers=collectibles.slice(collectibles.indexOf('const _hazardAnim'),collectibles.indexOf('export function drawCarrot'));
+const mushroom=collectibles.slice(collectibles.indexOf('export function drawSpringMushroom'),collectibles.indexOf('export function drawThorn'));
+const baseline=fs.readFileSync(new URL('./baseline.js',import.meta.url),'utf8');
+const source='const SPRING_SIZE=20,HAZARD_GROW_TIME=.5,SPRING_TRAIL_DURATION=.35;\n'+helpers+mushroom.replace('export ','')+baseline.replace('export ','');
+const renderers=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText+fs.readFileSync(new URL('./variants.js',import.meta.url),'utf8');
+// Embedded assets match the existing movement study, without network requests.
+const old=read('docs/mockups/movement-vfx/index.html');
+const atlas=old.match(/atlas.src='([^']+)'/)[1],backdrop=old.match(/backdrop.src='([^']+)'/)[1];
+let fragment=fs.readFileSync(new URL('./template.html',import.meta.url),'utf8').replace('__ATLAS__',atlas).replace('__BACKDROP__',backdrop).replace('/*__RENDERERS__*/',renderers);
+if(fragment.includes('__RENDERERS__')||fragment.length>1e6)throw Error('Invalid study');
+if(process.argv[2])fs.writeFileSync(process.argv[2],fragment);
+fs.writeFileSync(new URL('./index.html',import.meta.url),'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Spring bounce variations</title><style>body{font:14px system-ui;margin:20px auto;padding:0 16px;max-width:1000px;background:#faf8f3;color:#332b25}.viz-controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.form-label,.form-check{display:inline-flex;gap:6px;align-items:center}button,select{font:inherit;padding:8px}input[type=range]{width:100%}h2{font-size:21px}h3{font-size:15px}</style></head><body>'+fragment+'</body></html>');
+console.log('Built spring comparison using actual Bunny atlas, mushroom, and baseline trail.');

@@ -217,18 +217,10 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
         }
         break;
       }
-      case 'spring': {
-        // Small upward fan of yellow spikes — release energy, kept subtle so it
-        // doesn't compete with the player's launch motion.
-        for (let i = 0; i < 8; i++) {
-          const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.0;
-          const speed = 100 + Math.random() * 120;
-          const life = 0.2 + Math.random() * 0.2;
-          const color = i % 2 === 0 ? '#FFD43A' : '#FFA800';
-          this.emitParticle(px, py, Math.cos(angle) * speed, Math.sin(angle) * speed, life, 1.2 + Math.random() * 1.2, color, 'spike');
-        }
+      case 'spring':
+        // Boing accents use the shared launch timer/anchor in the renderer.
+        // Do not stack the old random yellow spikes behind them.
         break;
-      }
       case 'fallOff':
         // No particles — handled by spawnKillSplatter elsewhere.
         break;
