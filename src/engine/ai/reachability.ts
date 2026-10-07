@@ -13,7 +13,12 @@ export interface ReachResult {
  * Can a player standing on `from` jump to land on `to`?
  * Returns the ideal x to stand at on `from` before jumping.
  */
-export function canJumpTo(from: Platform, to: Platform): ReachResult {
+export function canJumpTo(from: Platform, to: Platform, playerScale = 1): ReachResult {
+  const bodyWidth = PLAYER_WIDTH * playerScale;
+  const jumpImpulse = JUMP_IMPULSE * playerScale;
+  const gravity = GRAVITY * playerScale;
+  const walkSpeed = MAX_WALK_SPEED * playerScale;
+  const maxJumpHeight = (jumpImpulse * jumpImpulse) / (2 * gravity);
   // Player stands on from: feet at from.y, head at from.y - PLAYER_HEIGHT
   // Needs to reach to.y (top of target platform) with feet
   // Rise needed = from.y - to.y (positive means 'to' is above)
@@ -22,7 +27,7 @@ export function canJumpTo(from: Platform, to: Platform): ReachResult {
     // Target is below — not a jump target (use drop)
     return { reachable: false, approachX: 0 };
   }
-  if (riseNeeded > MAX_JUMP_HEIGHT) {
+  if (riseNeeded > maxJumpHeight) {
     // Too high to reach
     return { reachable: false, approachX: 0 };
   }
@@ -33,13 +38,13 @@ export function canJumpTo(from: Platform, to: Platform): ReachResult {
   // Player rises by riseNeeded pixels. Time on ascending side:
   // Using quadratic: 0.5*GRAVITY*t² + JUMP_IMPULSE*t + riseNeeded = 0
   // For the horizontal window, we use the full air time at that height (both up and down passes)
-  const discriminant = JUMP_IMPULSE * JUMP_IMPULSE - 2 * GRAVITY * riseNeeded;
+  const discriminant = jumpImpulse * jumpImpulse - 2 * gravity * riseNeeded;
   if (discriminant < 0) return { reachable: false, approachX: 0 };
 
   // Time when player returns to target height (descending)
-  const tDescend = (-JUMP_IMPULSE + Math.sqrt(discriminant)) / GRAVITY;
+  const tDescend = (-jumpImpulse + Math.sqrt(discriminant)) / gravity;
   // Horizontal window: player can travel during [0, tDescend]
-  const maxHDist = MAX_WALK_SPEED * tDescend;
+  const maxHDist = walkSpeed * tDescend;
 
   // Check if any position on `from` can reach any position on `to`
   // Consider both direct and wrapped paths
@@ -49,15 +54,15 @@ export function canJumpTo(from: Platform, to: Platform): ReachResult {
   const toRight = to.x + to.width;
 
   // Try direct path
-  const directResult = checkHorizontalReach(fromLeft, fromRight, toLeft, toRight, maxHDist, 0);
+  const directResult = checkHorizontalReach(fromLeft, fromRight, toLeft, toRight, maxHDist, 0, bodyWidth);
   if (directResult.reachable) return directResult;
 
   // Try wrap-left path (from wraps left to reach to)
-  const wrapLeftResult = checkHorizontalReach(fromLeft, fromRight, toLeft, toRight, maxHDist, -CANVAS_WIDTH);
+  const wrapLeftResult = checkHorizontalReach(fromLeft, fromRight, toLeft, toRight, maxHDist, -CANVAS_WIDTH, bodyWidth);
   if (wrapLeftResult.reachable) return wrapLeftResult;
 
   // Try wrap-right path
-  const wrapRightResult = checkHorizontalReach(fromLeft, fromRight, toLeft, toRight, maxHDist, CANVAS_WIDTH);
+  const wrapRightResult = checkHorizontalReach(fromLeft, fromRight, toLeft, toRight, maxHDist, CANVAS_WIDTH, bodyWidth);
   if (wrapRightResult.reachable) return wrapRightResult;
 
   return { reachable: false, approachX: 0 };
@@ -66,17 +71,17 @@ export function canJumpTo(from: Platform, to: Platform): ReachResult {
 function checkHorizontalReach(
   fromLeft: number, fromRight: number,
   toLeft: number, toRight: number,
-  maxHDist: number, wrapOffset: number,
+  maxHDist: number, wrapOffset: number, bodyWidth: number,
 ): ReachResult {
   const tl = toLeft + wrapOffset;
   const tr = toRight + wrapOffset;
 
   // Best approach: stand as close to target as possible
   // The player center needs to land within [toLeft, toRight] (accounting for PLAYER_WIDTH)
-  const targetCenterLeft = tl + PLAYER_WIDTH / 2;
-  const targetCenterRight = tr - PLAYER_WIDTH / 2;
-  const fromCenterLeft = fromLeft + PLAYER_WIDTH / 2;
-  const fromCenterRight = fromRight - PLAYER_WIDTH / 2;
+  const targetCenterLeft = tl + bodyWidth / 2;
+  const targetCenterRight = tr - bodyWidth / 2;
+  const fromCenterLeft = fromLeft + bodyWidth / 2;
+  const fromCenterRight = fromRight - bodyWidth / 2;
 
   // Minimum horizontal distance from any point on `from` to any point on `to`
   let minDist: number;
@@ -85,7 +90,7 @@ function checkHorizontalReach(
   if (fromCenterRight < targetCenterLeft) {
     // from is entirely left of to
     minDist = targetCenterLeft - fromCenterRight;
-    approachX = fromRight - PLAYER_WIDTH; // stand at right edge of from
+    approachX = fromRight - bodyWidth; // stand at right edge of from
   } else if (fromCenterLeft > targetCenterRight) {
     // from is entirely right of to
     minDist = fromCenterLeft - targetCenterRight;
@@ -95,12 +100,12 @@ function checkHorizontalReach(
     minDist = 0;
     const overlapLeft = Math.max(fromLeft, tl);
     const overlapRight = Math.min(fromRight, tr);
-    approachX = (overlapLeft + overlapRight) / 2 - PLAYER_WIDTH / 2;
+    approachX = (overlapLeft + overlapRight) / 2 - bodyWidth / 2;
   }
 
   if (minDist <= maxHDist) {
     // Clamp approachX to from platform bounds
-    approachX = Math.max(fromLeft, Math.min(approachX, fromRight - PLAYER_WIDTH));
+    approachX = Math.max(fromLeft, Math.min(approachX, fromRight - bodyWidth));
     // Unwrap approachX if needed
     if (approachX < 0) approachX += CANVAS_WIDTH;
     if (approachX >= CANVAS_WIDTH) approachX -= CANVAS_WIDTH;
@@ -113,15 +118,16 @@ function checkHorizontalReach(
 /**
  * Can a player walk off `from` and drop onto `to`?
  */
-export function canDropTo(from: Platform, to: Platform): ReachResult {
+export function canDropTo(from: Platform, to: Platform, playerScale = 1): ReachResult {
   // Target must be below
   const drop = to.y - from.y;
   if (drop < 10) return { reachable: false, approachX: 0 }; // not below enough
 
   // Fall time: d = 0.5*g*t² → t = sqrt(2d/g)
-  const fallTime = Math.sqrt((2 * drop) / GRAVITY);
+  const fallTime = Math.sqrt((2 * drop) / (GRAVITY * playerScale));
   // Horizontal drift during fall
-  const maxHDrift = MAX_WALK_SPEED * fallTime;
+  const maxHDrift = MAX_WALK_SPEED * playerScale * fallTime;
+  const bodyWidth = PLAYER_WIDTH * playerScale;
 
   const fromLeft = from.x;
   const fromRight = from.x + from.width;
@@ -129,14 +135,14 @@ export function canDropTo(from: Platform, to: Platform): ReachResult {
   const toRight = to.x + to.width;
 
   // Check direct
-  const directResult = checkDropReach(fromLeft, fromRight, toLeft, toRight, maxHDrift, 0);
+  const directResult = checkDropReach(fromLeft, fromRight, toLeft, toRight, maxHDrift, 0, bodyWidth);
   if (directResult.reachable) return directResult;
 
   // Check wrap
-  const wrapLeftResult = checkDropReach(fromLeft, fromRight, toLeft, toRight, maxHDrift, -CANVAS_WIDTH);
+  const wrapLeftResult = checkDropReach(fromLeft, fromRight, toLeft, toRight, maxHDrift, -CANVAS_WIDTH, bodyWidth);
   if (wrapLeftResult.reachable) return wrapLeftResult;
 
-  const wrapRightResult = checkDropReach(fromLeft, fromRight, toLeft, toRight, maxHDrift, CANVAS_WIDTH);
+  const wrapRightResult = checkDropReach(fromLeft, fromRight, toLeft, toRight, maxHDrift, CANVAS_WIDTH, bodyWidth);
   if (wrapRightResult.reachable) return wrapRightResult;
 
   return { reachable: false, approachX: 0 };
@@ -145,7 +151,7 @@ export function canDropTo(from: Platform, to: Platform): ReachResult {
 function checkDropReach(
   fromLeft: number, fromRight: number,
   toLeft: number, toRight: number,
-  maxHDrift: number, wrapOffset: number,
+  maxHDrift: number, wrapOffset: number, bodyWidth: number,
 ): ReachResult {
   const tl = toLeft + wrapOffset;
   const tr = toRight + wrapOffset;
@@ -164,14 +170,14 @@ function checkDropReach(
     if (fromLeft >= tl && fromLeft <= tr) minDist = 0;
   } else {
     // Target is right — walk off right edge
-    approachX = fromRight - PLAYER_WIDTH;
+    approachX = fromRight - bodyWidth;
     const rightEdge = fromRight;
     minDist = Math.max(0, tl - rightEdge, rightEdge - tr);
     if (rightEdge >= tl && rightEdge <= tr) minDist = 0;
   }
 
   if (minDist <= maxHDrift) {
-    approachX = Math.max(fromLeft, Math.min(approachX, fromRight - PLAYER_WIDTH));
+    approachX = Math.max(fromLeft, Math.min(approachX, fromRight - bodyWidth));
     if (approachX < 0) approachX += CANVAS_WIDTH;
     if (approachX >= CANVAS_WIDTH) approachX -= CANVAS_WIDTH;
     return { reachable: true, approachX };
@@ -184,12 +190,12 @@ function checkDropReach(
  * Can a player walk directly from `from` to `to`?
  * Platforms must be at similar height and horizontally adjacent/overlapping.
  */
-export function canWalkTo(from: Platform, to: Platform): boolean {
+export function canWalkTo(from: Platform, to: Platform, playerScale = 1): boolean {
   // Same height (within tolerance)
   if (Math.abs(from.y - to.y) > 8) return false;
   // Horizontally adjacent or overlapping (with small gap tolerance for player width)
   const gap = Math.max(0, to.x - (from.x + from.width), from.x - (to.x + to.width));
-  return gap <= PLAYER_WIDTH;
+  return gap <= PLAYER_WIDTH * playerScale;
 }
 
 /**
@@ -199,7 +205,8 @@ export function canWalkTo(from: Platform, to: Platform): boolean {
  * entire zone height — the player can reach any platform whose Y is within the zone.
  * Once outside the zone horizontally, the player drifts under gravity.
  */
-export function canGeyserTo(from: Platform, geyser: EffectZone, to: Platform): ReachResult {
+export function canGeyserTo(from: Platform, geyser: EffectZone, to: Platform, playerScale = 1): ReachResult {
+  const bodyWidth = PLAYER_WIDTH * playerScale;
   // Target must be above
   if (to.y >= from.y) return { reachable: false, approachX: 0 };
 
@@ -215,12 +222,12 @@ export function canGeyserTo(from: Platform, geyser: EffectZone, to: Platform): R
   const fromRight = from.x + from.width;
   const entryLeft = Math.max(fromLeft, geyserLeft);
   const entryRight = Math.min(fromRight, geyserRight);
-  const directOverlap = entryRight - entryLeft >= PLAYER_WIDTH;
+  const directOverlap = entryRight - entryLeft >= bodyWidth;
 
   // If no direct overlap, check if from platform edge is close enough to walk into geyser
   if (!directOverlap) {
     const gapToGeyser = Math.max(0, geyserLeft - fromRight, fromLeft - geyserRight);
-    if (gapToGeyser > PLAYER_WIDTH * 2) return { reachable: false, approachX: 0 };
+    if (gapToGeyser > bodyWidth * 2) return { reachable: false, approachX: 0 };
   }
 
   // The geyser carries the player up. Once at the target platform's height,
@@ -233,15 +240,15 @@ export function canGeyserTo(from: Platform, geyser: EffectZone, to: Platform): R
   if (targetOverlapsGeyser) {
     // Can land directly by steering within the geyser
     const approachX = directOverlap
-      ? Math.max(entryLeft, Math.min((entryLeft + entryRight) / 2 - PLAYER_WIDTH / 2, entryRight - PLAYER_WIDTH))
-      : (geyserLeft + geyserRight) / 2 - PLAYER_WIDTH / 2;
+      ? Math.max(entryLeft, Math.min((entryLeft + entryRight) / 2 - bodyWidth / 2, entryRight - bodyWidth))
+      : (geyserLeft + geyserRight) / 2 - bodyWidth / 2;
     return { reachable: true, approachX: Math.round(Math.max(0, approachX)) };
   }
 
   // Target is outside geyser horizontally — player must exit the zone edge and drift
   // Drift time: fall from geyser exit to platform height (may be at same height if exiting at target Y)
   // Conservative estimate: player can drift MAX_WALK_SPEED * 1.0s (~280px) after exiting the zone
-  const driftBudget = MAX_WALK_SPEED * 1.0;
+  const driftBudget = MAX_WALK_SPEED * playerScale * 1.0;
   const nearestGeyserEdge = Math.abs(toLeft - geyserRight) < Math.abs(toRight - geyserLeft)
     ? geyserRight : geyserLeft;
   const toCenterX = toLeft + to.width / 2;
@@ -250,7 +257,7 @@ export function canGeyserTo(from: Platform, geyser: EffectZone, to: Platform): R
   if (driftNeeded <= driftBudget + to.width / 2) {
     // Approach: stand at the geyser edge closest to the target
     const approachX = nearestGeyserEdge === geyserRight
-      ? geyserRight - PLAYER_WIDTH
+      ? geyserRight - bodyWidth
       : geyserLeft;
     return { reachable: true, approachX: Math.round(Math.max(0, approachX)) };
   }
@@ -263,7 +270,7 @@ export function canGeyserTo(from: Platform, geyser: EffectZone, to: Platform): R
  * Zero-G amplifies jumps (vy *= 1.03 each frame, falls slowed by vy *= 0.92).
  * In practice, players float much further horizontally and vertically.
  */
-export function canZeroGTo(from: Platform, zone: EffectZone, to: Platform): ReachResult {
+export function canZeroGTo(from: Platform, zone: EffectZone, to: Platform, playerScale = 1): ReachResult {
   // Both platforms must be at the edges of (or within) the zero-G zone
   const zoneLeft = zone.x;
   const zoneRight = zone.x + zone.width;
@@ -289,8 +296,8 @@ export function canZeroGTo(from: Platform, zone: EffectZone, to: Platform): Reac
   // In zero-G, effective jump height is much greater (~3-4x normal due to vy amplification)
   // and horizontal drift is much greater (player floats for much longer)
   // Conservative estimate: can cross the full zone width and reach ~400px height
-  const maxZeroGHeight = MAX_JUMP_HEIGHT * 3;
-  const maxZeroGReach = zone.width + 200; // can drift across the whole zone
+  const maxZeroGHeight = MAX_JUMP_HEIGHT * playerScale * 3;
+  const maxZeroGReach = zone.width + 200 * playerScale; // can drift across the whole zone
 
   const riseNeeded = from.y - to.y;
   if (riseNeeded > maxZeroGHeight) return { reachable: false, approachX: 0 };
@@ -304,7 +311,7 @@ export function canZeroGTo(from: Platform, zone: EffectZone, to: Platform): Reac
   const fromCx = from.x + from.width / 2;
   let approachX: number;
   if (fromCx < zoneCx) {
-    approachX = fromRight - PLAYER_WIDTH; // stand at right edge, jump into zone
+    approachX = fromRight - PLAYER_WIDTH * playerScale; // stand at right edge, jump into zone
   } else {
     approachX = fromLeft; // stand at left edge
   }

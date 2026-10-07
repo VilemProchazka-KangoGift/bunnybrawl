@@ -8,11 +8,12 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants';
 import { isTouchPrimary } from '../engine/touchDetect';
 import { TouchInputManager } from '../engine/touchInput';
 import { LobbyGame, READY_ZONE_X } from '../engine/lobbyGame';
+import { LOBBY_CHARACTER_SCALE } from '../engine/lobbyConstants';
 import { drawLobbyOverlay } from '../engine/lobbyRender';
 import { Renderer } from '../engine/renderer';
 import { getTheme } from '../engine/arenas/operations';
 import { loadBuiltinArenas } from '../engine/arenas/loading';
-import { prefetchIllustratedBackdrop } from '../engine/arenas/illustratedBackdropAsset';
+import { prefetchIllustratedBackdrop, preloadIllustratedBackdrop } from '../engine/arenas/illustratedBackdropAsset';
 import { sampleFps, drawFpsCounter } from '../engine/fpsCounter';
 import { useCanvasRenderScale } from '../hooks/useCanvasRenderScale';
 import './CharacterSelect.css';
@@ -47,6 +48,7 @@ export function CharacterSelect() {
     lobbyGameRef.current = new LobbyGame({
       botCount: initialBotCount.current,
       isMobile,
+      characterScale: LOBBY_CHARACTER_SCALE,
     });
     return () => {
       lobbyGameRef.current?.destroy();
@@ -185,8 +187,12 @@ export function CharacterSelect() {
 
     // Static world (sky, hills, far background, platform iso skin) baked once.
     const game = lobbyGameRef.current;
+    let disposed = false;
     if (game) {
       renderer.renderBackground(game.getArena());
+      void preloadIllustratedBackdrop('meadow').then(() => {
+        if (!disposed) renderer.renderBackground(game.getArena());
+      });
     }
 
     // Wire the lobby HUD overlay through the renderer's lobby-mode hook so it
@@ -227,12 +233,13 @@ export function CharacterSelect() {
 
     rafRef.current = requestAnimationFrame(loop);
     return () => {
+      disposed = true;
       cancelAnimationFrame(rafRef.current);
     };
   }, [isMobile, startMatch]);
 
   return (
-    <div className="char-select" data-testid="char-select">
+    <div className="char-select" data-testid="char-select" data-character-scale={LOBBY_CHARACTER_SCALE}>
       <div className="lobby-canvas-container">
         <canvas
           ref={bgCanvasRef}

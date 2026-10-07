@@ -351,7 +351,7 @@ export function useOnlineMatch(p: UseOnlineMatchParams): void {
           tr.sendReliableTo(slot, {
             type: MsgType.SETTINGS_SYNC, arenaId: ms.arenaId,
             killLimit: ms.killLimit, timeLimit: ms.timeLimit,
-            goreMode: ms.goreMode, mods: ms.mods,
+            goreMode: ms.goreMode, mods: ms.mods, characterScale: ms.characterScale ?? 1,
             rngSeed: useGameStore.getState().online.rngSeed,
             botCount: ms.botCount, botDifficulty: ms.botDifficulty,
           } as import('../../engine/net/protocol').ReliableMessage);

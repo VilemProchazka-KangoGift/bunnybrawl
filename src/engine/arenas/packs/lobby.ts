@@ -2,185 +2,15 @@ import { BUILTIN_ARENA_PREVIEWS } from '../previewCatalog';
 import type { ArenaPack } from '../types';
 import type { Arena, Platform, Ctx2D } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
-import {
-  drawTree, drawBush, drawFlower, drawMushroom, drawGrassTuft,
-} from '../../themes/drawPrimitives';
-import {
-  CAP_DEPTH, SKEW_RATIO, applyIsoInsets, mulberry32, seedFor,
-  drawPlatformRightFace, drawPlatformCap,
-  subtleDown, backIso, leftIso,
-} from '../../themes/drawPrimitives';
+import { applyIsoInsets } from '../../themes/drawPrimitives';
 import {
   GROUND_Y, WALL_X, WALL_Y, WALL_WIDTH, WALL_HEIGHT, LOBBY_DAY_CYCLE,
-  FLOWER_COLORS, FLOWER_POSITIONS,
+  FLOWER_COLORS,
 } from '../../lobbyConstants';
-
-const LOBBY_TREELINE = [
-  0, -70, 40, -50, 80, -75, 120, -45, 160, -65, 200, -55,
-  250, -80, 300, -50, 350, -70, 400, -45, 450, -60, 500, -75,
-  550, -50, 600, -80, 650, -55, 700, -65, 750, -50, 800, -70,
-  850, -55, 900, -75, 950, -45, 1000, -65, 1050, -55, 1100, -80,
-  1150, -50, 1200, -70, 1250, -55, 1300, -65,
-];
-
-function drawLobbyGround(ctx: Ctx2D, platform: Platform): void {
-  const rng = mulberry32(seedFor(platform.x, platform.y));
-  const cF = platform.y + CAP_DEPTH / 2;
-  const cB = platform.y - CAP_DEPTH / 2;
-  const sp = CAP_DEPTH * SKEW_RATIO;
-  const bodyTop = cF;
-  const bodyH = platform.height - CAP_DEPTH / 2;
-
-  // Visual extension: the ground reaches the left canvas edge (platform.x = 0),
-  // so the cap's left iso diagonal (front-left → back-left, slope sp px wide)
-  // would be visible at x=0. Shift the visual by `sp` so the diagonal sits in
-  // negative-x space. Collision still uses platform.x; only the cap polygon
-  // and body fill extend leftward.
-  const visX = platform.x - sp;
-  const visW = platform.width + sp;
-  const visPlatform: Platform = { ...platform, x: visX, width: visW };
-
-  // Body — green earth gradient, fading darker toward the bottom of the canvas.
-  const bodyGrad = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
-  bodyGrad.addColorStop(0, '#4A7C3F');
-  bodyGrad.addColorStop(0.3, '#3D6B35');
-  bodyGrad.addColorStop(1, '#2D5025');
-  ctx.fillStyle = bodyGrad;
-  ctx.fillRect(visX, bodyTop, visW, bodyH);
-
-  // Subtle dark dirt clumps so the body isn't flat
-  ctx.fillStyle = 'rgba(20,40,20,0.25)';
-  const clumpN = Math.floor(platform.width / 35);
-  for (let i = 0; i < clumpN; i++) {
-    const px = platform.x + rng() * platform.width;
-    const py = bodyTop + 4 + rng() * (bodyH - 8);
-    ctx.beginPath();
-    ctx.ellipse(px, py, 3 + rng() * 2, 1 + rng() * 0.8, rng() * Math.PI, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // Iso cap (grass top) — wavy edges, sprinkled tufts. Drawn on the extended
-  // visual platform so the front-left corner sits at x = -sp, putting the iso
-  // diagonal off-canvas.
-  const frontPts = subtleDown(visX, visW, cF, rng, { count: 4, amp: 1.5 });
-  const backPts = backIso(visX, visW, cB, sp);
-  const leftPts = leftIso(cB, cF, visX, sp);
-
-  drawPlatformCap(ctx, visPlatform, frontPts, backPts, {
-    capColor: '#5DAF4A',
-    capLight: 'rgba(255,255,220,0.18)',
-    drawCapTexture: (ctx2, capFront, _capBack, skew) => {
-      ctx2.fillStyle = '#4A9A3A';
-      const n = Math.floor(platform.width / 12);
-      for (let i = 0; i < n; i++) {
-        const u = (i + 0.5) / n + (rng() - 0.5) * 0.04;
-        const v = 0.2 + rng() * 0.6;
-        ctx2.beginPath();
-        ctx2.arc(platform.x + u * platform.width + v * skew, capFront - v * CAP_DEPTH, 0.9, 0, Math.PI * 2);
-        ctx2.fill();
-      }
-    },
-  }, leftPts);
-
-  // Grass blades poking up from the cap front
-  ctx.strokeStyle = '#4A9A3A';
-  ctx.lineWidth = 1.5;
-  for (let x = 5; x < platform.width; x += 14 + (x * 7 % 6)) {
-    const h = 5 + (x * 11 % 5);
-    ctx.beginPath();
-    ctx.moveTo(platform.x + x, cF - 1);
-    ctx.lineTo(platform.x + x - 2, cF - 1 - h);
-    ctx.stroke();
-  }
-}
-
-function drawLobbyWall(ctx: Ctx2D, platform: Platform): void {
-  const rng = mulberry32(seedFor(platform.x, platform.y));
-  const cF = platform.y + CAP_DEPTH / 2;
-  const cB = platform.y - CAP_DEPTH / 2;
-  const sp = CAP_DEPTH * SKEW_RATIO;
-  const bodyTop = cF;
-  // Visual extension: the wall sits ON another iso platform (the ground), so
-  // its visible bottom must reach that platform's iso cap front edge — not
-  // its logical y. The ground's front cap sits CAP_DEPTH/2 below GROUND_Y
-  // (= the wall's collision bottom), so extend the body and right face down
-  // by that amount. Collision still uses platform.height.
-  const visualBottom = platform.y + platform.height + CAP_DEPTH / 2;
-  const bodyH = visualBottom - bodyTop;
-
-  // Right face — tan stone shadow side. `bottomY` extends past the collision
-  // rect to meet the ground cap's front edge.
-  drawPlatformRightFace(ctx, platform, '#7A6548', visualBottom);
-
-  // Body — sandstone gradient with mortar courses
-  const bodyGrad = ctx.createLinearGradient(platform.x, bodyTop, platform.x + platform.width, bodyTop + bodyH);
-  bodyGrad.addColorStop(0, '#8B7355');
-  bodyGrad.addColorStop(0.5, '#A0896B');
-  bodyGrad.addColorStop(1, '#7A6548');
-  ctx.fillStyle = bodyGrad;
-  ctx.fillRect(platform.x, bodyTop, platform.width, bodyH);
-
-  // Mortar courses
-  ctx.strokeStyle = 'rgba(0,0,0,0.22)';
-  ctx.lineWidth = 1;
-  for (let row = 0; row < bodyH; row += 14) {
-    ctx.beginPath();
-    ctx.moveTo(platform.x, bodyTop + row);
-    ctx.lineTo(platform.x + platform.width, bodyTop + row);
-    ctx.stroke();
-    if ((row / 14) % 2 === 0) {
-      const mx = platform.x + platform.width * 0.5;
-      ctx.beginPath();
-      ctx.moveTo(mx, bodyTop + row);
-      ctx.lineTo(mx, bodyTop + row + 14);
-      ctx.stroke();
-    }
-  }
-
-  // Iso cap — flat sandstone top with a few worn flecks
-  const frontPts = subtleDown(platform.x, platform.width, cF, rng, { count: 1, amp: 0.4 });
-  const backPts = backIso(platform.x, platform.width, cB, sp);
-  const leftPts = leftIso(cB, cF, platform.x, sp);
-
-  drawPlatformCap(ctx, platform, frontPts, backPts, {
-    capColor: '#B59A78',
-    capLight: 'rgba(255,255,255,0.22)',
-    drawCapTexture: (ctx2, _capFront, capBack, skew) => {
-      ctx2.fillStyle = 'rgba(80,60,40,0.45)';
-      const fleckN = 4;
-      for (let i = 0; i < fleckN; i++) {
-        const u = (i + 0.5) / fleckN;
-        const v = 0.3 + rng() * 0.5;
-        ctx2.beginPath();
-        ctx2.arc(platform.x + u * platform.width + v * skew, capBack + v * CAP_DEPTH, 0.6, 0, Math.PI * 2);
-        ctx2.fill();
-      }
-    },
-  }, leftPts);
-
-  // Tiny grass tuft centered on the iso cap parallelogram (the "moss /
-  // grass-in-cracks" detail from the old hand-drawn wall). Cap center is at
-  // x = platform.x + (width + sp) / 2 (front-left + back-right midpoint),
-  // y = platform.y (between cF front and cB back).
-  const tuftCx = platform.x + (platform.width + sp) / 2;
-  const tuftCy = platform.y;
-  ctx.fillStyle = '#5DAF4A';
-  ctx.beginPath();
-  ctx.ellipse(tuftCx, tuftCy, platform.width / 2 + 2, 4, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = '#4A9A3A';
-  ctx.lineWidth = 1.2;
-  const bladeStep = 3;
-  const bladeHalfRange = platform.width / 2;
-  for (let off = -bladeHalfRange; off <= bladeHalfRange; off += bladeStep) {
-    const gx = tuftCx + off;
-    const h = 5 + ((Math.abs(off) * 7) % 4);
-    ctx.beginPath();
-    ctx.moveTo(gx, tuftCy + 1);
-    ctx.lineTo(gx - 1, tuftCy + 1 - h);
-    ctx.stroke();
-  }
-}
+import {
+  drawMeadowBush, drawMeadowFlower, drawMeadowMushroom, drawMeadowPlatform,
+} from './meadowSelectedArt';
+import { drawPaintedMeadowValley, drawMeadowCloud, MEADOW_CLOUDS } from './meadowBackdrop';
 
 export const lobby: ArenaPack = {
   // ---- Identity, preview, and translations ----
@@ -201,34 +31,32 @@ export const lobby: ArenaPack = {
   allowFallOff: false,
 
   // ---- Visual config ----
+  // Keep the painted valley soft behind the lobby's tutorial and ready cues.
   sky: {
     gradient: [
-      { offset: 0, color: '#4A90D9' },
-      { offset: 0.6, color: '#87CEEB' },
-      { offset: 1, color: '#B0E0E6' },
+      { offset: 0, color: '#316DAA' },
+      { offset: 0.6, color: '#92C6E0' },
+      { offset: 1, color: '#E5EBD5' },
     ],
   },
 
-  hills: [
-    { x: 0, baseY: 620, width: 300, height: 120, color: '#5C9E4C' },
-    { x: 250, baseY: 630, width: 400, height: 100, color: '#5C9E4C' },
-    { x: 600, baseY: 620, width: 350, height: 130, color: '#5C9E4C' },
-    { x: 900, baseY: 635, width: 400, height: 100, color: '#5C9E4C' },
-  ],
+  hills: [],
 
   ground: {
-    surfaceColor: '#5DAF4A',
+    surfaceColor: '#6BBF59',
   },
 
-  // ---- Ambient systems ----
+  // Match Meadow's slow, elongated clouds and keep them high above the play area.
   clouds: {
-    count: 4,
-    color: 'rgba(255, 255, 255, 0.7)',
-    minSize: 55,
-    maxSize: 85,
-    minSpeed: 5,
-    maxSpeed: 11,
-    yRange: [35, 110],
+    count: MEADOW_CLOUDS.length,
+    color: 'rgba(255, 255, 248, 0.78)',
+    minSize: 50,
+    maxSize: 145,
+    minSpeed: 6,
+    maxSpeed: 12,
+    yRange: [40, 100],
+    initialClouds: MEADOW_CLOUDS,
+    draw: drawMeadowCloud,
   },
 
   weather: {
@@ -273,49 +101,56 @@ export const lobby: ArenaPack = {
   },
 
   // ---- Custom draw functions ----
-  drawFarBackground: (ctx: Ctx2D, _arena: Arena) => {
-    ctx.save();
-    ctx.globalAlpha = 0.25;
-    ctx.fillStyle = '#3A6A3A';
-    ctx.beginPath();
-    ctx.moveTo(-10, GROUND_Y + 10);
-    for (let i = 0; i < LOBBY_TREELINE.length; i += 2) {
-      ctx.lineTo(LOBBY_TREELINE[i], GROUND_Y + LOBBY_TREELINE[i + 1]);
-    }
-    ctx.lineTo(1300, GROUND_Y + 10);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-  },
+  drawFarBackground: (ctx: Ctx2D, _arena: Arena) => drawPaintedMeadowValley(ctx),
 
   drawBackgroundNature: (ctx: Ctx2D, _arena: Arena) => {
-    drawTree(ctx, 50, GROUND_Y, 55);
-    drawTree(ctx, 380, GROUND_Y, 45);
-    drawTree(ctx, 650, GROUND_Y, 50);
-
-    drawBush(ctx, 150, GROUND_Y, 28);
-    drawBush(ctx, 300, GROUND_Y, 22);
-    drawBush(ctx, 500, GROUND_Y, 25);
-
-    for (const fx of FLOWER_POSITIONS) {
-      drawFlower(ctx, fx, GROUND_Y, FLOWER_COLORS[Math.floor(fx * 0.01) % FLOWER_COLORS.length]);
-    }
-
-    drawMushroom(ctx, 220, GROUND_Y);
-    drawMushroom(ctx, 560, GROUND_Y);
-
-    for (let gx = 30; gx < WALL_X; gx += 90 + (gx * 3 % 30)) {
-      drawGrassTuft(ctx, gx, GROUND_Y);
-    }
+    // Leave the jump wall, tutorial, and ready zone clear. These bushes are
+    // spaced along the approach so they never overlap one another.
+    drawMeadowBush(ctx, 145, GROUND_Y, 38, false);
+    drawMeadowBush(ctx, 410, GROUND_Y, 34, false);
+    drawMeadowFlower(ctx, 265, GROUND_Y, FLOWER_COLORS[1], 17);
+    drawMeadowFlower(ctx, 575, GROUND_Y, FLOWER_COLORS[3], 18);
+    drawMeadowMushroom(ctx, 305, GROUND_Y);
   },
 
   drawForegroundNature: () => {},
 
-  drawPlatform: (ctx: Ctx2D, platform: Platform, _isGround: boolean) => {
-    if (platform.style === 'wall') {
-      drawLobbyWall(ctx, platform);
-    } else {
-      drawLobbyGround(ctx, platform);
-    }
+  drawPlatform: (ctx: Ctx2D, platform: Platform) => {
+    // The grass floor and tutorial wall share Meadow's storybook earth and cap.
+    // The wall keeps its dedicated, unchanged collision rectangle.
+    if (platform.style === 'wall') drawLobbyLog(ctx, platform);
+    else drawMeadowPlatform(ctx, platform, true);
   },
 };
+
+
+
+/** Irregular bark, a sawn end and broad value planes, cached with terrain. */
+function drawLobbyLog(c: Ctx2D, p: Platform): void {
+  const { x, y, width: w, height: h } = p;
+  c.save(); c.lineJoin = 'round'; c.lineCap = 'round'; c.lineWidth = 2.5; c.strokeStyle = '#334937';
+  c.fillStyle = '#946342';
+  c.beginPath(); c.moveTo(x + 6, y + 2); c.lineTo(x + w - 26, y);
+  c.bezierCurveTo(x + w - 7, y - 1, x + w - 3, y + 15, x + w - 3, y + h / 2);
+  c.bezierCurveTo(x + w - 2, y + h - 12, x + w - 15, y + h + 1, x + w - 28, y + h);
+  c.lineTo(x + 8, y + h - 2); c.lineTo(x + 2, y + h - 11); c.lineTo(x + 5, y + h * .64);
+  c.lineTo(x + 1, y + h * .44); c.lineTo(x + 4, y + 11); c.closePath(); c.fill(); c.stroke();
+  c.fillStyle = '#6c4734'; c.beginPath(); c.moveTo(x + 4, y + h * .65);
+  c.bezierCurveTo(x + w * .4, y + h * .73, x + w * .7, y + h * .58, x + w - 21, y + h * .68);
+  c.lineTo(x + w - 25, y + h); c.lineTo(x + 8, y + h - 2); c.closePath(); c.fill();
+  c.strokeStyle = '#c28f60'; c.lineWidth = 3;
+  c.beginPath(); c.moveTo(x + 10, y + 11); c.bezierCurveTo(x + 32, y + 7, x + 54, y + 15, x + w - 35, y + 9); c.stroke();
+  c.strokeStyle = '#543e30'; c.lineWidth = 1.7;
+  for (const [frac, length] of [[.37, .55], [.56, .35], [.83, .6]]) {
+    c.beginPath(); c.moveTo(x + 9, y + h * frac); c.bezierCurveTo(x + w * .25, y + h * frac - 4, x + w * .35, y + h * frac + 5, x + w * length, y + h * frac - 1); c.stroke();
+  }
+  c.fillStyle = '#d7ad79'; c.strokeStyle = '#543e30'; c.lineWidth = 2.5;
+  const ex = x + w - 19, ey = y + h * .5;
+  c.beginPath(); c.ellipse(ex, ey, 18, h / 2 - 2, -.03, 0, Math.PI * 2); c.fill(); c.stroke();
+  c.strokeStyle = '#9e7048'; c.lineWidth = 1.5;
+  c.beginPath(); c.ellipse(ex - 1, ey + 1, 11, h * .32, .03, 0, Math.PI * 2); c.stroke();
+  c.beginPath(); c.ellipse(ex + 1, ey + 3, 5, h * .15, -.07, 0, Math.PI * 2); c.stroke();
+  c.strokeStyle = '#795439'; c.beginPath(); c.moveTo(ex + 5, y + 5); c.lineTo(ex + 2, y + 17); c.lineTo(ex + 5, y + 25); c.stroke();
+  c.fillStyle = '#617647'; c.beginPath(); c.moveTo(x + 9, y + 3); c.quadraticCurveTo(x + 29, y - 1, x + 41, y + 2); c.lineTo(x + 36, y + 8); c.lineTo(x + 23, y + 6); c.closePath(); c.fill();
+  c.restore();
+}

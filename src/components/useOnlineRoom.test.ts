@@ -346,3 +346,18 @@ describe('resolveRandomArena', () => {
     expect(resolved.length).toBeGreaterThan(0);
   });
 });
+
+
+describe('host character scale synchronization', () => {
+  it('replaces the guest local scale with the host setting', () => {
+    vi.clearAllMocks();
+    act(() => { useGameStore.getState().resetOnline(); useGameStore.getState().setMatchSettings({ characterScale: 1.5 }); });
+    const { result } = renderHook(() => useOnlineRoom({ onMatchStart: vi.fn() }));
+    act(() => result.current.connect(false));
+    act(() => capturedEvents!.onReliableMessage({
+      type: MsgType.SETTINGS_SYNC, ...useGameStore.getState().matchSettings, characterScale: 1.25, rngSeed: 123,
+    }, 'host'));
+    expect(useGameStore.getState().matchSettings.characterScale).toBe(1.25);
+    act(() => result.current.cleanup());
+  });
+});

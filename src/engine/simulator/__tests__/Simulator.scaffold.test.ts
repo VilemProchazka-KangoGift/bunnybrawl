@@ -5,6 +5,7 @@ import { registerBuiltinArenas } from '../../arenas/builtin';
 import { registerBuiltinCharacters } from '../../characters/builtin';
 import { getArena } from '../../arenas';
 import { SeededRNG } from '../../net/prng';
+import { GIANT_SCALE } from '../../constants';
 import type { MatchSettings, PlayerSlot, InputState } from '../../types';
 import type { PlayerInput } from '../../input/PlayerInput';
 
@@ -132,5 +133,54 @@ describe('Simulator (Task 3.2 — real implementation)', () => {
     expect(state).toBeDefined();
     expect(state.players.length).toBe(PLAYERS.length);
     expect(state.phase).toBe('loading');
+  });
+
+  it('scales player dimensions and movement physics while preserving giant stacking', () => {
+    const arena = getArena('meadow');
+    const baseline = new Simulator({ arena, settings: SETTINGS, activePlayers: ['P1'] });
+    const scaled = new Simulator({
+      arena,
+      settings: { ...SETTINGS, characterScale: 1.25 },
+      activePlayers: ['P1'],
+    });
+    const giantScaled = new Simulator({
+      arena,
+      settings: { ...SETTINGS, characterScale: 1.25, mods: { ...SETTINGS.mods, giantPlayers: true } },
+      activePlayers: ['P1'],
+    });
+
+    expect(scaled.getState().players[0].width).toBeCloseTo(baseline.getState().players[0].width * 1.25);
+    expect(scaled.getState().players[0].height).toBeCloseTo(baseline.getState().players[0].height * 1.25);
+    expect(giantScaled.getState().players[0].width).toBeCloseTo(
+      baseline.getState().players[0].width * GIANT_SCALE * 1.25,
+    );
+    expect(scaled.getEffWalkSpeed()).toBeCloseTo(baseline.getEffWalkSpeed() * 1.25);
+
+    baseline.switchArena('volcano');
+    scaled.switchArena('volcano');
+    expect(scaled.getState().players[0].width).toBeCloseTo(baseline.getState().players[0].width * 1.25);
+    expect(scaled.getEffWalkSpeed()).toBeCloseTo(baseline.getEffWalkSpeed() * 1.25);
+  });
+
+  it('scales jump velocity by the same factor at a fixed timestep', () => {
+    const arena = getArena('meadow');
+    const jumpInput: InputState = { left: false, right: false, jump: true, down: false };
+    const base = new Simulator({ arena, settings: SETTINGS, activePlayers: ['P1'] });
+    const scaled = new Simulator({
+      arena,
+      settings: { ...SETTINGS, characterScale: 1.25 },
+      activePlayers: ['P1'],
+    });
+    base.setPlayerInput('P1', { slot: 'P1', getAction: () => jumpInput });
+    scaled.setPlayerInput('P1', { slot: 'P1', getAction: () => jumpInput });
+    base.setPhase('playing');
+    scaled.setPhase('playing');
+    base.getState().countdown = 0;
+    scaled.getState().countdown = 0;
+
+    base.fixedUpdate(1 / 60);
+    scaled.fixedUpdate(1 / 60);
+
+    expect(scaled.getState().players[0].vy).toBeCloseTo(base.getState().players[0].vy * 1.25);
   });
 });

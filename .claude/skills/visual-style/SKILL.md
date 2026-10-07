@@ -220,6 +220,14 @@ For arena geometry and draw-layer contracts, also read [`level-design.md`](../le
 
 ### Saturday morning UI implementation
 
+Match HUD portraits use 60px in full-width tickets (45px in compact tickets), with feet anchored at y=67. The former 78px size started at y=-11 and clipped against the canvas top. Leave headroom for ticket rotation and the 6% goal pulse when changing this size.
+
 The approved UI uses `src/uiTheme.ts`, `src/components/saturday.css`, and compact cutout portraits in `public/ui/portraits/`. Canvas portraits decode once per renderer realm; `getPortraitRevision()` invalidates the static HUD after an image finishes loading. Keep this worker-safe and keep portraits out of the pure simulator.
 
 The arena picker starts collapsed and new preferences default to Random. Browser tests must open its disclosure before choosing an arena. Online character selection remains a dropdown with image buttons; tests select enabled options and inspect `data-character`, rather than calling native `selectOption()`. Lobby ticket styling is independent of lobby terrain, props, obstacle, and start-zone art; the level redesign is deferred.
+
+### Lobby tutorial obstacle art
+
+The fallen lobby log deliberately uses a 120×80 collision body instead of the former narrow 24×120 wall. Keep its bark top at `WALL_Y` and foot at `GROUND_Y`, and rerun `lobbyScale.test.ts` to prove that walking is blocked and jumping clears it at all supported scales. Collision tests should use `WALL_X/WALL_Y/WALL_WIDTH` rather than literal coordinates, so future intentional geometry changes do not invalidate the setup. Start/countdown cards and ground instruction cards share the Saturday UI palette; check wrapped text in all four languages and keep countdown below the top UI but above standing character labels.
+
+The ready zone is a bounded gathering area: use a downward cue and explicit stay-in-area instructions. A button-shaped Start sign with a right arrow misleadingly suggests leaving the screen. Keep the right ground marker inset and show the required player count. Give the log tutorial a localized jump instruction and a visible arc over the obstacle; bark detail alone does not explain the action.

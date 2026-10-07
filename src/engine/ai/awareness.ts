@@ -1,8 +1,9 @@
 import type { Player, MatchState, Arena } from '../types';
 import { isBotSlot } from '../types';
 import type { AwarenessSnapshot, HazardType } from './types';
-import { PLAYER_WIDTH, PLAYER_HEIGHT, CANVAS_WIDTH } from '../constants';
-import { getArenaNav } from '../arenas/registry';
+import { CANVAS_WIDTH } from '../constants';
+import { getArenaNavForScale } from './scaledNav';
+import { normalizeCharacterScale } from '../characterScale';
 import { perfTrace } from '../perfTrace';
 
 type AirborneAboveEntry = AwarenessSnapshot['airborneAbove'][number];
@@ -124,11 +125,11 @@ function wrapDistance(ax: number, ay: number, bx: number, by: number): number {
 }
 
 /** Find which platform a position is standing on (-1 if none) */
-function findPlatformIdx(x: number, y: number, arena: Arena): number {
-  const feetY = y + PLAYER_HEIGHT;
+function findPlatformIdx(x: number, y: number, width: number, height: number, arena: Arena): number {
+  const feetY = y + height;
   for (let i = 0; i < arena.platforms.length; i++) {
     const p = arena.platforms[i];
-    if (x + PLAYER_WIDTH > p.x && x < p.x + p.width &&
+    if (x + width > p.x && x < p.x + p.width &&
         feetY >= p.y - 5 && feetY <= p.y + 10) {
       return i;
     }
@@ -166,8 +167,9 @@ export function buildAwareness(
   pathfindingDepth: number = 0,
   preferSafePath: boolean = false,
   mirrorNav: boolean = false,
+  movementScale: number = 1,
 ): AwarenessSnapshot {
-  return buildAwarenessInto(createAwarenessScratch(), self, state, arena, awarenessRadius, pathfindingDepth, preferSafePath, mirrorNav);
+  return buildAwarenessInto(createAwarenessScratch(), self, state, arena, awarenessRadius, pathfindingDepth, preferSafePath, mirrorNav, movementScale);
 }
 
 export function buildAwarenessInto(
@@ -179,10 +181,11 @@ export function buildAwarenessInto(
   pathfindingDepth: number = 0,
   preferSafePath: boolean = false,
   mirrorNav: boolean = false,
+  movementScale: number = 1,
 ): AwarenessSnapshot {
   const t = perfTrace.begin('awareness');
   try {
-    return _buildAwarenessImpl(scratch, self, state, arena, awarenessRadius, pathfindingDepth, preferSafePath, mirrorNav);
+    return _buildAwarenessImpl(scratch, self, state, arena, awarenessRadius, pathfindingDepth, preferSafePath, mirrorNav, movementScale);
   } finally {
     perfTrace.end('awareness', t);
   }
@@ -197,11 +200,15 @@ function _buildAwarenessImpl(
   pathfindingDepth: number = 0,
   preferSafePath: boolean = false,
   mirrorNav: boolean = false,
+  movementScale: number = 1,
 ): AwarenessSnapshot {
   recycleScratch(scratch);
   const snap = scratch.snapshot;
   const selfOnGround = self.state !== 'airborne';
   const selfAirborne = self.state === 'airborne';
+  const bodyWidth = self.width;
+  const bodyHeight = self.height;
+  const scale = normalizeCharacterScale(movementScale);
 
   // Single pass over all players: nearest enemy, stomp target/threat, airborne above,
   // roam target, priority target, clustering, leader score — avoids separate loops.
@@ -393,9 +400,9 @@ function _buildAwarenessImpl(
   let bestBelowDy = Infinity;
   for (const plat of arena.platforms) {
     // 200px horizontal reach — wide enough for zigzag staircases and offset platforms
-    if (self.x + PLAYER_WIDTH < plat.x - 200 || self.x > plat.x + plat.width + 200) continue;
+    if (self.x + bodyWidth < plat.x - 200 || self.x > plat.x + plat.width + 200) continue;
     const platTop = plat.y;
-    const dy = platTop - (self.y + PLAYER_HEIGHT);
+    const dy = platTop - (self.y + bodyHeight);
     if (dy < -20 && -dy < bestAboveDy) {
       bestAboveDy = -dy;
       const a = scratch._nearestPlatformAbove;
@@ -416,10 +423,10 @@ function _buildAwarenessImpl(
     let bestLandDist = Infinity;
     for (const plat of arena.platforms) {
       const platTop = plat.y;
-      const dy = platTop - (self.y + PLAYER_HEIGHT);
+      const dy = platTop - (self.y + bodyHeight);
       if (dy < 5 || dy > 300) continue; // must be below us, within range
       const centerX = plat.x + plat.width / 2;
-      const centerDx = wrapDx(centerX - (self.x + PLAYER_WIDTH / 2));
+      const centerDx = wrapDx(centerX - (self.x + bodyWidth / 2));
       // Can we reach this platform horizontally? rough estimate
       if (Math.abs(centerDx) > plat.width / 2 + 150) continue;
       const dist = Math.sqrt(centerDx * centerDx + dy * dy);
@@ -437,15 +444,16 @@ function _buildAwarenessImpl(
   if (arena.allowFallOff) {
     let hasGroundBelow = false;
     for (const plat of arena.platforms) {
-      if (self.x + PLAYER_WIDTH > plat.x && self.x < plat.x + plat.width) {
-        const dy = plat.y - (self.y + PLAYER_HEIGHT);
+      if (self.x + bodyWidth > plat.x && self.x < plat.x + plat.width) {
+        const dy = plat.y - (self.y + bodyHeight);
         if (dy >= -5 && dy < 100) { hasGroundBelow = true; break; }
       }
     }
     if (!hasGroundBelow && selfOnGround) nearEdge = true;
     for (const plat of arena.platforms) {
-      if (self.y + PLAYER_HEIGHT >= plat.y - 5 && self.y + PLAYER_HEIGHT <= plat.y + 10) {
-        if (self.x < plat.x + 20 || self.x + PLAYER_WIDTH > plat.x + plat.width - 20) {
+      if (self.y + bodyHeight >= plat.y - 5 && self.y + bodyHeight <= plat.y + 10) {
+        const edgeMargin = 20 * scale;
+        if (self.x < plat.x + edgeMargin || self.x + bodyWidth > plat.x + plat.width - edgeMargin) {
           nearEdge = true;
         }
       }
@@ -460,14 +468,14 @@ function _buildAwarenessImpl(
   let geyserEscapeDx = 0;
   let geyserIdx = 0;
   for (const zone of arena.effectZones ?? EMPTY) {
-    const inZone = self.x + PLAYER_WIDTH > zone.x && self.x < zone.x + zone.width &&
-                   self.y + PLAYER_HEIGHT > zone.y && self.y < zone.y + zone.height;
+    const inZone = self.x + bodyWidth > zone.x && self.x < zone.x + zone.width &&
+                   self.y + bodyHeight > zone.y && self.y < zone.y + zone.height;
     if (zone.type === 'zero_g' && inZone) inZeroG = true;
     if (zone.type === 'current' && inZone) inCurrent = zone.vx ?? 0;
     if (zone.type === 'geyser') {
       const geyserCx = zone.x + zone.width / 2;
-      const dx = geyserCx - (self.x + PLAYER_WIDTH / 2);
-      const dy = zone.y - (self.y + PLAYER_HEIGHT);
+      const dx = geyserCx - (self.x + bodyWidth / 2);
+      const dy = zone.y - (self.y + bodyHeight);
       const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist < 150) {
         const gs = geyserIdx < state.geyserStates.length ? state.geyserStates[geyserIdx] : null;
@@ -479,7 +487,7 @@ function _buildAwarenessImpl(
       }
       // Geyser escape: compute direction to nearest zone edge
       if (inZone) {
-        const selfCx = self.x + PLAYER_WIDTH / 2;
+        const selfCx = self.x + bodyWidth / 2;
         const distToLeft = selfCx - zone.x;
         const distToRight = zone.x + zone.width - selfCx;
         geyserEscapeDx = distToLeft < distToRight ? -(distToLeft + 30) : (distToRight + 30);
@@ -501,16 +509,16 @@ function _buildAwarenessImpl(
 
   // Elevated platform check (above ground level y=650)
   let onElevatedPlatform = false;
-  if (selfOnGround && self.y + PLAYER_HEIGHT < 640) {
+  if (selfOnGround && self.y + bodyHeight < 640) {
     onElevatedPlatform = true;
   }
 
   // Nav graph: find current platform + compute navTarget
-  const currentPlatformIdx = selfOnGround ? findPlatformIdx(self.x, self.y, arena) : -1;
+  const currentPlatformIdx = selfOnGround ? findPlatformIdx(self.x, self.y, bodyWidth, bodyHeight, arena) : -1;
   let navTarget: AwarenessSnapshot['navTarget'] = null;
 
   if (pathfindingDepth > 0 && currentPlatformIdx >= 0) {
-    const nav = getArenaNav(arena.id);
+    const nav = getArenaNavForScale(arena, scale);
     if (nav) {
       // Determine goal: nearest enemy, priority target, or roam target
       let goalX = 0, goalY = 0;
@@ -521,7 +529,7 @@ function _buildAwarenessImpl(
         goalX = roamTarget.x; goalY = roamTarget.y; hasGoal = true;
       }
       if (hasGoal) {
-        const goalPlatIdx = findPlatformIdx(goalX, goalY, arena);
+        const goalPlatIdx = findPlatformIdx(goalX, goalY, bodyWidth, bodyHeight, arena);
         const goalIdx = goalPlatIdx >= 0 ? goalPlatIdx : nearestPlatformIdx(goalX, goalY, arena);
 
         if (goalIdx !== currentPlatformIdx) {
@@ -542,7 +550,7 @@ function _buildAwarenessImpl(
             for (const e of edges) {
               if (e.t === nextIdx) {
                 edgeType = e.y;
-                approachX = mirrorNav ? CANVAS_WIDTH - e.x : e.x;
+                approachX = mirrorNav && scale === 1 ? CANVAS_WIDTH - e.x : e.x;
                 break;
               }
             }
@@ -604,4 +612,3 @@ function _buildAwarenessImpl(
   // populated in place above.
   return snap;
 }
-

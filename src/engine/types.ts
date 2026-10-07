@@ -327,6 +327,8 @@ export interface MatchSettings {
   botCount: number;
   botDifficulty: BotDifficulty;
   mods: GameMods;
+  /** Shared gameplay size/movement scale. Missing or invalid values use 1. */
+  characterScale?: number;
 }
 
 // Pickups and hazards

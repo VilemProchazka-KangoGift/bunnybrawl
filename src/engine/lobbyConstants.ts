@@ -16,11 +16,13 @@ export const LOBBY_JUMP = -400;
 
 // Wall obstacle at ~2/3 of screen — forces players to jump to reach the ready zone
 export const WALL_X = CANVAS_WIDTH * 0.58;
-export const WALL_WIDTH = 24;
-export const WALL_HEIGHT = 120;
+export const WALL_WIDTH = 120;
+export const WALL_HEIGHT = 80;
 export const WALL_Y = GROUND_Y - WALL_HEIGHT;
 
 export const BOT_PAUSE_CHANCE = [0.003, 0.002, 0.004, 0.001, 0.003];
 
 export const FLOWER_COLORS = ['#FF6B8A', '#FFD700', '#FF69B4', '#DDA0DD', '#87CEEB', '#FFA07A'];
 export const FLOWER_POSITIONS = [100, 190, 260, 340, 430, 520, 580, 670];
+/** Lobby-only scale; match size remains controlled by MatchSettings. */
+export const LOBBY_CHARACTER_SCALE = 1.5;

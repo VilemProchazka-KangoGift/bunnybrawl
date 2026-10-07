@@ -11,6 +11,7 @@ export class EffectZoneSystem implements GameplaySystem {
   private sfxCooldownsGetter: () => PlayerSfxCooldowns;
   private playSound: (name: string) => void;
   private stopSound: (name: string) => void;
+  private movementScale: number;
   private zeroGSoundPlaying = false;
 
   constructor(
@@ -20,6 +21,7 @@ export class EffectZoneSystem implements GameplaySystem {
     sfxCooldownsGetter: () => PlayerSfxCooldowns,
     playSound: (name: string) => void,
     stopSound: (name: string) => void,
+    movementScale = 1,
   ) {
     this.state = state;
     this.arena = arena;
@@ -27,6 +29,7 @@ export class EffectZoneSystem implements GameplaySystem {
     this.sfxCooldownsGetter = sfxCooldownsGetter;
     this.playSound = playSound;
     this.stopSound = stopSound;
+    this.movementScale = movementScale;
   }
 
   init(): void {}
@@ -50,6 +53,7 @@ export class EffectZoneSystem implements GameplaySystem {
       this.sfxCooldownsGetter(),
       this.playSound,
       dt,
+      this.movementScale,
     );
   }
 

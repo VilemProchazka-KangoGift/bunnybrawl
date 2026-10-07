@@ -10,6 +10,7 @@ export class StompSystem implements GameplaySystem {
   private resimulatingGetter: () => boolean;
   private rngGetter: () => SeededRNG | undefined;
   private onStompHaptic: (slot: PlayerSlot) => void;
+  private movementScale: number;
 
   constructor(
     state: MatchState,
@@ -18,6 +19,7 @@ export class StompSystem implements GameplaySystem {
     resimulatingGetter: () => boolean,
     rngGetter: () => SeededRNG | undefined,
     onStompHaptic: (slot: PlayerSlot) => void,
+    movementScale = 1,
   ) {
     this.state = state;
     this.arena = arena;
@@ -25,6 +27,7 @@ export class StompSystem implements GameplaySystem {
     this.resimulatingGetter = resimulatingGetter;
     this.rngGetter = rngGetter;
     this.onStompHaptic = onStompHaptic;
+    this.movementScale = movementScale;
   }
 
   init(): void {}
@@ -38,6 +41,7 @@ export class StompSystem implements GameplaySystem {
       this.resimulatingGetter(),
       this.rngGetter(),
       this.onStompHaptic,
+      this.movementScale,
     );
   }
 

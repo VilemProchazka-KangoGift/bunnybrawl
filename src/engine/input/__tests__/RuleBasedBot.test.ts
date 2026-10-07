@@ -40,6 +40,16 @@ describe('RuleBasedBot', () => {
     expect(bot.getAction(state)).toBe(out);
   });
 
+  it('forwards a normalized character scale to the AI controller', () => {
+    const { ctrl, getInput } = makeStubController({ left: false, right: false, jump: false, down: false });
+    const bot = new RuleBasedBot('B2', ctrl, makeArena(), false, false, 1.25);
+    const state = makeState({ players: [makePlayer({ id: 'B2' })] });
+
+    bot.getAction(state);
+
+    expect(getInput.mock.calls[0][5]).toBe(1.25);
+  });
+
   it('returns all-false and skips the controller when the player slot is missing', () => {
     const { ctrl, getInput } = makeStubController({ left: true, right: true, jump: true, down: true });
     const bot = new RuleBasedBot('B3', ctrl, makeArena(), false, false);

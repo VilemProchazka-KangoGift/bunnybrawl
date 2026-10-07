@@ -166,6 +166,7 @@ export interface HandshakeMessage {
 }
 
 export interface SettingsSyncMessage {
+  characterScale?: number;
   type: 0x02;
   arenaId: string;
   killLimit: number;
