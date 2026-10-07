@@ -8,7 +8,8 @@ import { getAllCharacters } from '../../../src/engine/characters/defaults';
 import { registerPlayablePlushRoster } from '../../../src/engine/characters/plush/playableRoster';
 import { createEmptyMatchState, createInitialPlayers } from '../../../src/engine/simulator/initialState';
 import { drawBackdrop, skies, VARIANTS, type Variant } from './variants';
-import { preloadIllustratedBackdrop } from '../../../src/engine/arenas/illustratedBackdropAsset';
+import { preloadIllustratedBackdrop, getWinterPlatformArt } from '../../../src/engine/arenas/illustratedBackdropAsset';
+import { drawPaintedWinterPlatform } from '../../../src/engine/arenas/packs/winterLakePaintedPlatforms';
 import { drawPlatformStudyBack, drawPlatformStudyFront, isIllustratedStudy, PLATFORM_VARIANTS, type PlatformVariant } from '../winter-platforms/variants';
 import { drawPaintedPlatformBack, drawPaintedPlatformFront, preloadPaintedPlatforms } from '../winter-platforms/painted';
 
@@ -39,6 +40,10 @@ if (platformVariant) {
   const originalBack = theme.drawPlatform;
   const originalFront = theme.drawPlatformOverlay;
   theme.drawPlatform = (ctx, platform, isGround) => {
+    if (platformVariant === 'painted-scalable') {
+      drawPaintedWinterPlatform(ctx, platform, isGround, false, getWinterPlatformArt());
+      return;
+    }
     if (platformVariant === 'painted-sprite') {
       drawPaintedPlatformBack(ctx, platform, isGround);
       return;
@@ -49,6 +54,10 @@ if (platformVariant) {
     drawPlatformStudyBack(ctx, platform, platformVariant as PlatformVariant, isGround);
   };
   theme.drawPlatformOverlay = (ctx, platform, isGround) => {
+    if (platformVariant === 'painted-scalable') {
+      drawPaintedWinterPlatform(ctx, platform, isGround, true, getWinterPlatformArt());
+      return;
+    }
     if (platformVariant === 'painted-sprite') {
       drawPaintedPlatformFront(ctx, platform, isGround);
       return;

@@ -1,8 +1,18 @@
 # Winter Lake platform pass: shape and contrast studies
 
-Pearl Painted is the approved backdrop. This is **arena redesign step 3**: compare playable snow shelves, ground, and the two jumpable ice cubes in the full scene before choosing a production treatment. Geometry, landing heights, slippery friction, character placements, props, foreground cover, and time of day remain identical across captures. These are fixture overrides, not changes to the playable platform art.
+Pearl Painted is the approved backdrop. This is **arena redesign step 3**: compare playable snow shelves, ground, and the two jumpable ice cubes in the full scene before choosing a production treatment. Geometry, landing heights, slippery friction, character placements, props, foreground cover, and time of day remain identical across captures. The earlier studies were fixture overrides; the scalable painted treatment is now in the playable arena.
 
-## Painted platform prototype
+## Scalable painted platforms in the playable arena
+
+The painted look uses three optimized transparent WebP assets in the Winter Lake pack. A shelf has fixed-width painted ends and a continuous resizable center, while each ice block uses a two-axis nine-slice. The platform rectangles and slippery physics remain in the arena data, so moving or widening a platform changes its art placement without redrawing an asset. The ground overhang extends past the screen edges. The body-cover portion is drawn after players through the existing cached overlay. Menu and lobby prefetch the art, and each renderer realm decodes it before its first Winter Lake paint; a failed image leaves the prior procedural platform renderer available.
+
+| Earlier whole-image stretch | Scalable production painter | Size and collision study |
+| --- | --- | --- |
+| ![Painted prototype](painted-sprite-day.png) | ![Scalable painted platforms](painted-scalable-day.png) | ![Width and position study](painted-scaling-study.png) |
+
+The [night capture](painted-scalable-night.png) checks the same composition under the arena tint. The size study covers 40–600 px shelves at varied x positions and 40/65/90 px cubes. Orange lines mark the unchanged collision tops. The first resizing attempt repeated a center tile; that created a mechanical row of snow teeth and facets along the ground, so the final painter stretches one continuous interior and keeps the ends at stable screen widths. The two broad shelves carry a `snowBridge` style tag, so changing their width will not suddenly switch artwork at an arbitrary threshold. Large future size changes still need a match-scale review. The current three WebPs total about 521 KB, compared with about 3.5 MB for their source PNGs.
+
+## Earlier painted platform prototype
 
 The procedural cartoon follow-ups below were judged too simple beside the generated reference. This prototype draws **actual transparent illustrated assets** in the production renderer: a narrow [long shelf](painted-shelf-long.png), the earlier [wide shelf](glacial-ceramic-art-direction.png) for medium platforms, and a matching [ice block](painted-ice-block.png). The fixture selects a source by platform width, maps its painted bounds onto each existing platform rectangle, and redraws the body in the foreground cover pass. It also overscans the visual ground past both viewport edges.
 
@@ -11,7 +21,7 @@ The procedural cartoon follow-ups below were judged too simple beside the genera
 | ![Glacial Ceramic at noon](glacial-ceramic-day.png) | ![Painted shelves and blocks at noon](painted-sprite-day.png) |
 | ![Glacial Ceramic at midnight](glacial-ceramic-night.png) | ![Painted shelves and blocks at midnight](painted-sprite-night.png) |
 
-This is finally close to the reference's snowy overhang, blue facets, ink edge, and frosted texture at match scale. The two ice blocks use matching art rather than the old translucent wireframe. The old pine trees, snowmen, igloo, snowballs, and long icicle fringe remain; they now stand out as the next visual mismatch. The sprite images are large unoptimized PNGs and the same painted motifs recur on shelves of equal size. These are **prototype costs to solve before production adoption**, along with verifying that painted cap edges and foreground opacity match collision and cover during moving gameplay. No runtime pack or preload logic has changed yet.
+This brought the snowy overhang, blue facets, ink edge, and frosted texture close to the reference at match scale. The two ice blocks used matching art rather than the old translucent wireframe. The old pine trees, snowmen, igloo, snowballs, and long icicle fringe remained; they stood out as the next visual mismatch. This initial version used large unoptimized PNGs and stretched a whole motif to every shelf. The scalable production treatment above supersedes that mapping.
 
 ## Glacial Ceramic cartoon and texture iteration
 
@@ -61,4 +71,4 @@ The first capture pass made the full-width ground into a repeated patterned ribb
 
 ## Reproduction
 
-The [fixture](../winter-lake/render.ts) uses the production `Renderer` and Winter Lake pack with the selected Pearl WebP decoded before the first frame. It overrides only `drawPlatform` and `drawPlatformOverlay` with the [platform studies](variants.ts) or the [painted sprite mapper](painted.ts); the real game art stays unchanged. Run Vite from the repo root on port 4225, then `node docs/mockups/winter-platforms/capture.mjs` to recapture the selected Ceramic baseline, code-native Storybook treatment, and painted prototype. Direct fixture URLs use `/bunnybrawl/docs/mockups/winter-lake/render.html?variant=current&platform=painted-sprite&time=day`, with `platform=current|ink-rim|ice-strata|snow-crust|snow-pillow|glacial-ceramic|layered-snowbank|inked-glaze|bubble-glacier|chalk-frost|storybook-glaze|painted-sprite` and `time=day|night`.
+The [fixture](../winter-lake/render.ts) uses the production `Renderer` and Winter Lake pack with the selected Pearl WebP decoded before the first frame. Older variants override `drawPlatform` and `drawPlatformOverlay` with the [platform studies](variants.ts) or [whole-image mapper](painted.ts); `painted-scalable` uses the same [painter](../../../src/engine/arenas/packs/winterLakePaintedPlatforms.ts) and optimized WebPs as the playable arena. Run Vite from the repo root, set `WINTER_PLATFORM_URL` to its `/bunnybrawl/` URL, then run `node docs/mockups/winter-platforms/capture.mjs`. The separate [size study](sizing.html) renders moved and resized platforms with collision guides. Direct fixture URLs use `/bunnybrawl/docs/mockups/winter-lake/render.html?variant=current&platform=painted-scalable&time=day`, with `time=day|night`.

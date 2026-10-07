@@ -4,7 +4,8 @@ import type { Arena, Platform, Ctx2D } from '../../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
 import { fastSin } from '../../fastMath';
 import { getSlowDevice } from '../../perfFlags';
-import { getIllustratedBackdrop } from '../illustratedBackdropAsset';
+import { getIllustratedBackdrop, getWinterPlatformArt } from '../illustratedBackdropAsset';
+import { drawPaintedWinterPlatform } from './winterLakePaintedPlatforms';
 import { computeNightIntensity } from '../../rendering';
 import { getFloatingPlatforms, bakeVerticalGradientStrip } from '../../themes/utils';
 import {
@@ -241,9 +242,9 @@ export const winterLake: ArenaPack = {
     { x: 1095, y: 585, width: 145, height: 24 },
     { x: 1050, y: 505, width: 140, height: 24 },
     { x: 1100, y: 425, width: 140, height: 24 },
-    { x: 440, y: 360, width: 400, height: 24 },
+    { x: 440, y: 360, width: 400, height: 24, style: 'snowBridge' },
     { x: 45, y: 330, width: 100, height: 24 },
-    { x: 520, y: 500, width: 240, height: 24 },
+    { x: 520, y: 500, width: 240, height: 24, style: 'snowBridge' },
     { x: 370, y: 610, width: 65, height: 50, style: 'iceCube', surface: 'ice' },
     { x: 870, y: 610, width: 65, height: 50, style: 'iceCube', surface: 'ice' },
     { x: 270, y: 440, width: 90, height: 24 },
@@ -627,6 +628,7 @@ export const winterLake: ArenaPack = {
   },
 
   drawPlatform: (ctx: Ctx2D, platform: Platform, isGround: boolean) => {
+    if (drawPaintedWinterPlatform(ctx, platform, isGround, false, getWinterPlatformArt())) return;
     if (platform.style === 'iceCube') {
       const depth = platform.width * ICE_CUBE_DEPTH_RATIO;
       drawIceCube(ctx, platform.x, platform.y + depth / 2, platform.width, platform.height - depth / 2);
@@ -635,7 +637,8 @@ export const winterLake: ArenaPack = {
     drawWinterPlatformBg(ctx, platform, isGround);
   },
 
-  drawPlatformOverlay: (ctx: Ctx2D, platform: Platform, _isGround: boolean) => {
+  drawPlatformOverlay: (ctx: Ctx2D, platform: Platform, isGround: boolean) => {
+    if (drawPaintedWinterPlatform(ctx, platform, isGround, true, getWinterPlatformArt())) return;
     if (platform.style === 'iceCube') return;
     drawWinterPlatformFg(ctx, platform);
   },

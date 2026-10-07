@@ -48,16 +48,44 @@ const backdrops = {
   winter_lake: createBackdrop(urls.winter_lake),
 };
 
+// Winter's platform sprites live with the arena art but use the same
+// speculative fetch / worker-local decode lifecycle as the backdrop.
+const winterPlatformArt = {
+  shelf: createBackdrop(new URL('./assets/winter-shelf-painted.webp', import.meta.url).href),
+  bridge: createBackdrop(new URL('./assets/winter-bridge-painted.webp', import.meta.url).href),
+  cube: createBackdrop(new URL('./assets/winter-cube-painted.webp', import.meta.url).href),
+};
+
+export function getWinterPlatformArt(): {
+  shelf: ImageBitmap | null; bridge: ImageBitmap | null; cube: ImageBitmap | null;
+} {
+  return {
+    shelf: winterPlatformArt.shelf.get(),
+    bridge: winterPlatformArt.bridge.get(),
+    cube: winterPlatformArt.cube.get(),
+  };
+}
+
 export function hasIllustratedBackdrop(arenaId: string): arenaId is IllustratedArena {
   return Object.hasOwn(backdrops, arenaId);
 }
 
 export function prefetchIllustratedBackdrop(arenaId: string, signal?: AbortSignal): Promise<void> {
-  return hasIllustratedBackdrop(arenaId) ? backdrops[arenaId].prefetch(signal) : Promise.resolve();
+  if (!hasIllustratedBackdrop(arenaId)) return Promise.resolve();
+  if (arenaId !== 'winter_lake') return backdrops[arenaId].prefetch(signal);
+  return Promise.all([
+    backdrops.winter_lake.prefetch(signal),
+    ...Object.values(winterPlatformArt).map(asset => asset.prefetch(signal)),
+  ]).then(() => {});
 }
 
 export function preloadIllustratedBackdrop(arenaId: string): Promise<void> {
-  return hasIllustratedBackdrop(arenaId) ? backdrops[arenaId].preload() : Promise.resolve();
+  if (!hasIllustratedBackdrop(arenaId)) return Promise.resolve();
+  if (arenaId !== 'winter_lake') return backdrops[arenaId].preload();
+  return Promise.all([
+    backdrops.winter_lake.preload(),
+    ...Object.values(winterPlatformArt).map(asset => asset.preload()),
+  ]).then(() => {});
 }
 
 export function getIllustratedBackdrop(arenaId: string): ImageBitmap | null {
