@@ -165,7 +165,7 @@ export function warmSpriteCacheForCharacters(names: string[], theme?: ThemeConfi
   }
 }
 
-export function drawPlayer(ctx: Ctx2D, player: Player, nearCarrot: boolean, theme: ThemeConfig, frameTime: number): void {
+export function drawPlayer(ctx: Ctx2D, player: Player, nearCarrot: boolean, theme: ThemeConfig, frameTime: number, bumpOffset = 0): void {
   const { width, height, character, state, facing, invincibleTimer, animFrame, fastFalling, fatTimer, slowTimer } = player;
   // Apply visual correction offset from rollback smoothing
   const x = player.x + player.renderOffsetX;
@@ -233,6 +233,14 @@ export function drawPlayer(ctx: Ctx2D, player: Player, nearCarrot: boolean, them
 
   // Red pulse overlay when slowed by thorns
   const drawRedPulse = slowTimer > 0;
+
+  // Cosmetic body recoil; keep the shadow, hitbox and physical position fixed.
+  if (bumpOffset !== 0 && state !== 'splat' && state !== 'respawning') {
+    ctx.translate(bumpOffset, 0);
+    ctx.translate(cx, cy);
+    ctx.rotate(bumpOffset * .018);
+    ctx.translate(-cx, -cy);
+  }
 
   // Squash/stretch from landing/jumping (centered on feet)
   const squashScale = player.squashScale;

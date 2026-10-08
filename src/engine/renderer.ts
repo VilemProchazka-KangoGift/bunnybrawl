@@ -1,3 +1,4 @@
+import { BumpRecoil } from './rendering/bumpRecoil';
 import type { Arena, MatchState, Particle, Platform, Player, PlayerSlot, Gib, Ctx2D } from './types';
 import type { ThemeConfig } from './themes/types';
 import { aabbOverlap } from './physics';
@@ -383,6 +384,7 @@ export class Renderer implements IRenderer {
   private clouds: Cloud[] = [];
   private lastCloudTime = 0;
   private theme: ThemeConfig;
+  private readonly bumpRecoil = new BumpRecoil();
   private frameTime = 0; // cached performance.now() per frame
 
   /** Reused entity-draw ctx — entities MUST NOT mutate. Fields overwritten
@@ -1385,7 +1387,7 @@ export class Renderer implements IRenderer {
           for (const plat of occluders!) addIsoPlatformPath(ctx, plat);
           ctx.clip('evenodd');
         }
-        drawPlayer(ctx, player, nearCarrotSet.has(player.id), this.theme, this.frameTime);
+        drawPlayer(ctx, player, nearCarrotSet.has(player.id), this.theme, this.frameTime, this.bumpRecoil.offset(player, matchState.players, this.frameTime));
         if (clipped) ctx.restore();
         d.playersDrawn++;
       }
