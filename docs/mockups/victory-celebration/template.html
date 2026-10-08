@@ -51,7 +51,12 @@
       const progress=Math.max(0,Math.min(1,(time-.4)/3)),camera=index===1?1+1.2*progress*progress*(3-2*progress):1;
       canvas.dataset.camera=String(camera);
       if(index===1)canvas.parentElement.querySelector('h3').textContent='Fireworks + winner zoom · '+camera.toFixed(2)+'×';
-      ctx.save();ctx.translate(w/2,h-20-22*z);ctx.scale(camera,camera);ctx.translate(-w/2,-(h-20-22*z));
+      const winnerX=w/2,winnerY=h-20-22*z;
+      const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
+      const offsetX=clamp(w/2-camera*winnerX,w-camera*w,0);
+      const offsetY=clamp(h/2-camera*winnerY,h-camera*h,0);
+      canvas.dataset.offsetY=String(offsetY);
+      ctx.save();ctx.translate(offsetX,offsetY);ctx.scale(camera,camera);
       if(backdrop.naturalWidth){ctx.globalAlpha=night.checked?.22:.6;ctx.drawImage(backdrop,230,240,480,300,0,0,w,h);ctx.globalAlpha=1;}
       ctx.save();ctx.translate(w/2,h-20);ctx.scale(z,z);
       ctx.fillStyle=night.checked?'#627958':'#9FB875';ctx.fillRect(-w/z,0,w*2/z,24);

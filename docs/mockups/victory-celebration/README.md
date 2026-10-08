@@ -9,3 +9,5 @@ Build: node docs/mockups/victory-celebration/build-study.mjs [optional-inline-pa
 Separate features/victory-celebration worktree starts from origin/main 3aaad95.
 
 Winner zoom revision: second panel now compares original fireworks with the same seeded fireworks plus a whole-scene zoom. Smoothstep eases from 1x to 2.2x over three seconds after victory; pivot is the winner body center. Original remains the first panel, Winner bounce and Carrot shower remain for reference. Zoom endpoint and existing browser checks pass; endpoint screenshot inspected. This remains a scripted review prototype; production camera is unchanged.
+
+Camera framing: target the winner body center at viewport center. Clamp translation to visible scene bounds, placing an edge-adjacent winner as close to center as the bounds permit. The gallery uses cropped scene boundaries as a stand-in for actual arena boundaries; production implementation must clamp against full arena extents. Endpoint browser regression checks the bottom-edge clamp.
