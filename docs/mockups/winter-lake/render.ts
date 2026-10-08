@@ -17,6 +17,7 @@ import { drawTracedSvgBack, drawTracedSvgFront, preloadTracedBridge } from '../w
 import { drawPropStudyBack, drawPropStudyFront, PROP_VARIANTS, type PropVariant } from '../winter-props/variants';
 import { drawIllustratedPropBack, drawIllustratedPropFront, ILLUSTRATED_PROP_VARIANTS, preloadPropAtlas, type IllustratedPropVariant } from '../winter-props/illustrated';
 import { drawRoundGroveBackground, type IglooVariant } from '../../../src/engine/arenas/packs/winterLakeRoundGroveProps';
+import { ACTION_VARIANTS, drawActionSnow, drawActionSpring, drawActionThorn, drawActionZone, type ActionVariant } from '../winter-actionable/variants';
 
 const query = new URLSearchParams(location.search);
 const variant = query.get('variant') ?? 'current';
@@ -24,12 +25,14 @@ const time = query.get('time') ?? 'day';
 const platformVariant = query.get('platform');
 const propVariant = query.get('props');
 const iglooVariant = query.get('igloo');
+const actionVariant = query.get('action');
 if (!VARIANTS.includes(variant as Variant)) throw new Error(`Unknown background: ${variant}`);
 if (time !== 'day' && time !== 'night') throw new Error(`Unknown time: ${time}`);
 if (platformVariant && !PLATFORM_VARIANTS.includes(platformVariant as PlatformVariant)) throw new Error(`Unknown platform: ${platformVariant}`);
 if (propVariant && propVariant !== 'current' && !PROP_VARIANTS.includes(propVariant as PropVariant)
   && !ILLUSTRATED_PROP_VARIANTS.includes(propVariant as IllustratedPropVariant)) throw new Error(`Unknown props: ${propVariant}`);
 if (iglooVariant && !['blue-brick','snow-stone','arched-door'].includes(iglooVariant)) throw new Error(`Unknown igloo: ${iglooVariant}`);
+if (actionVariant && actionVariant !== 'current' && !ACTION_VARIANTS.includes(actionVariant as ActionVariant)) throw new Error(`Unknown action study: ${actionVariant}`);
 
 let seed = 7312;
 Math.random = () => {
@@ -56,6 +59,13 @@ if (propVariant && propVariant !== 'current') {
 if (iglooVariant) {
   if (propVariant && propVariant !== 'current') throw new Error('Igloo variants require current Canvas props');
   theme.drawBackgroundNature = (ctx, currentArena) => drawRoundGroveBackground(ctx, currentArena, iglooVariant as IglooVariant);
+}
+if (actionVariant && actionVariant !== 'current') {
+  const selection = actionVariant as ActionVariant;
+  theme.drawCustomThorn = (ctx, x, y, width, height) => drawActionThorn(ctx, x, y, width, height, selection);
+  theme.drawCustomSpring = (ctx, x, y, size, bounce) => drawActionSpring(ctx, x, y, size, bounce, selection);
+  theme.drawCustomHazardZone = (ctx, x, y, width, height) => drawActionZone(ctx, x, y, width, height, selection);
+  theme.drawWeatherParticle = (ctx, particle) => drawActionSnow(ctx, particle, selection);
 }
 if (platformVariant) {
   // The study's `current` background is the approved Pearl plate. Without a
@@ -165,6 +175,21 @@ state.players.forEach((player, i) => {
   player.score = 0;
   player.facing = i % 2 ? 'left' : 'right';
 });
+if (actionVariant) {
+  // Equal, fixed placements for the old and candidate art. Geometry and
+  // rendering routes are the real arena's; no object is spawned in production.
+  state.springs = [{ x: 635, y: 500, platformIndex: 9, bounceTimer: 0, life: 20, growTimer: 0 }];
+  state.thorns = [
+    { x: 292, y: 421, width: 38, height: 19, platformIndex: 12, life: 20, growTimer: 0, hit: false },
+    { x: 955, y: 421, width: 38, height: 19, platformIndex: 13, life: 20, growTimer: 0, hit: false },
+  ];
+  state.carrots = [{ x: 710, y: 325, active: true, spawnTime: 0 }];
+  state.weather = Array.from({ length: 28 }, (_, i) => ({
+    x: (i * 173 + 71) % 1280, y: (i * 113 + 43) % 650,
+    vx: -7, vy: 45, size: 2 + (i % 4) * .55,
+    type: 'snow' as const, rotation: 0, rotSpeed: 0,
+  }));
+}
 if (query.has('cover')) {
   // Player coordinates are their left edge; center each silhouette in its bush.
   state.players[0].x = 272;

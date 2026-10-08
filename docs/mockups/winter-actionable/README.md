@@ -1,0 +1,36 @@
+# Winter Lake: actionable objects and snow study
+
+This is the first comparison for phase 5 of the [arena redesign sequence](../../../.claude/skills/visual-style/SKILL.md#arena-redesign-sequence). It studies the **existing** hanging danger zones, spawned thorns, spring, carrot, and snowfall over the merged Pearl/Canvas/prop scene. The game pack has not changed. The [production renderer fixture](../winter-lake/render.ts) places identical objects at fixed positions for every candidate; these are review placements, not new spawn rules. The candidate drawings replace only the fixture's thorn, spring, zone, and snow callbacks.
+
+## Full-scene comparisons
+
+| Direction | Day | Night | Reading at 1280 × 720 |
+| --- | --- | --- | --- |
+| **Current** | ![Current day](current-day.png) | ![Current night](current-night.png) | Pale hanging icicles and the spring snow mound nearly disappear against the ice. The long-root carrot stays distinct. |
+| **Ink Bell** | ![Ink Bell day](ink-bell-day.png) | ![Ink Bell night](ink-bell-night.png) | Irregular, ink-edged ice teeth state danger without changing the blue material; a warm snow-rimmed bell makes the spring recognizable. Sparse round snow is quiet. |
+| **Crystal Bloom** | ![Crystal Bloom day](crystal-bloom-day.png) | ![Crystal Bloom night](crystal-bloom-night.png) | Violet edges and a cold bell make a softer magical scene, but the spring is less obvious at night and fine diagonal snow risks becoming visual noise. |
+| **Carved Puck** | ![Carved Puck day](carved-puck-day.png) | ![Carved Puck night](carved-puck-night.png) | Chunkier ice teeth and a low amber launch pad read as a game mechanism; the pad loses the organic mushroom character and has a weak silhouette from far away. |
+
+## Object-size inspection
+
+These native-pixel crops show the underside hazards, side-platform thorns, and the spring on the lower bridge. They are crops of the full scenes, not enlarged concept art.
+
+| Direction | Day detail | Night detail |
+| --- | --- | --- |
+| Current | ![Current objects day](current-day-objects.png) | ![Current objects night](current-night-objects.png) |
+| Ink Bell | ![Ink Bell objects day](ink-bell-day-objects.png) | ![Ink Bell objects night](ink-bell-night-objects.png) |
+| Crystal Bloom | ![Crystal Bloom objects day](crystal-bloom-day-objects.png) | ![Crystal Bloom objects night](crystal-bloom-night-objects.png) |
+| Carved Puck | ![Carved Puck objects day](carved-puck-day-objects.png) | ![Carved Puck objects night](carved-puck-night-objects.png) |
+
+## What this pass establishes
+
+- The current snow mound uses nearly the same value and edge as its platform. An actionable spring needs a distinct cap or mechanism, a visible base, and a compression pose; a still cannot prove the compression and bounce timing.
+- The danger zone should read as **attached to the underside**. The candidates keep the same zone coordinates and draw their longest tips near the existing collision band's bottom instead of hanging far into safe space. Spawned top-side thorns share the material but keep a separate upward silhouette.
+- The selected long-root carrot already provides the warm collectible accent. The comparison fixes it in the same place, including its night glow; no carrot redraw is proposed here.
+- Snow density should stay behind actionable edges. These stills vary round flakes, diagonal streaks, and sparse small flakes. Motion, spawn rate, weather cost, fog, aurora, and glints still need a separate live pass before selecting atmosphere.
+
+**Working recommendation:** carry Ink Bell into a playable prototype first. Its bell distinguishes the spring from snow, and the dark ice edge keeps hazards legible at night. The icicle rhythm may need one more scale pass in motion. Crystal Bloom and Carved Puck are useful alternatives if the warmer mushroom feels out of place, but their night visibility needs improvement before adoption.
+
+## Reproduce
+
+Start Vite from this branch and set `WINTER_ACTION_URL` to its `/bunnybrawl/` URL. Run `node docs/mockups/winter-actionable/capture.mjs` to refresh all eight 1280 × 720 scenes and the matching object crops. The fixture URL is `docs/mockups/winter-lake/render.html?variant=current&props=current&action=current|ink-bell|crystal-bloom|carved-puck&time=day|night`. Captures use a fixed random seed, five fixed character poses, fixed object positions, and 28 snow particles. They are static production-renderer composites, not a gameplay or performance test.
