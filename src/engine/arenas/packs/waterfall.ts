@@ -1,3 +1,4 @@
+import { drawPaintedBackdrop } from '../paintedBackdrop';
 import { BUILTIN_ARENA_PREVIEWS } from '../previewCatalog';
 import type { ArenaPack } from '../types';
 import type { Arena, Platform, Ctx2D } from '../../types';
@@ -385,7 +386,7 @@ export const waterfall: ArenaPack = {
 
   // ---- Ambient systems ----
   clouds: {
-    count: 3,
+    count: 0, // Clouds belong to the painted plate.
     color: 'rgba(255, 255, 255, 0.5)',
     minSize: 40,
     maxSize: 65,
@@ -430,6 +431,8 @@ export const waterfall: ArenaPack = {
 
   // ---- Custom draw functions ----
   drawFarBackground: (ctx, _arena) => {
+    if (drawPaintedBackdrop(ctx, 'waterfall')) return;
+
     ctx.save();
 
     // -- Left rocky hillside rising toward the waterfall source --

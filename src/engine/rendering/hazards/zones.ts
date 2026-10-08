@@ -218,19 +218,22 @@ export function drawCurrentZone(
   ctx: Ctx2D,
   zone: { x: number; y: number; width: number; height: number; vx?: number; vy?: number },
   time: number,
+  visualTop?: number,
 ): void {
   ctx.save();
 
   // Vertical waterfall current
   if (zone.vy && Math.abs(zone.vy) > Math.abs(zone.vx || 0)) {
-    const zx = zone.x, zy = zone.y, zw = zone.width, zh = zone.height;
+    // A visual source may sit above the force zone without extending physics.
+    const zx = zone.x, zy = visualTop ?? zone.y, zw = zone.width;
+    const zh = zone.y + zone.height - zy;
     const cx = zx + zw / 2;
 
     // Water body baked to a 1×height strip image (cached by zone identity).
     // Stretched via drawImage inside a clipped wavy-edge path — avoids the
     // per-pixel CanvasGradient lookup over a 200k+ pixel area.
     let cachedImages = cachedCurrentImages.get(zone as object);
-    if (!cachedImages) {
+    if (!cachedImages || cachedImages.height !== zh) {
       const useOffscreen = typeof OffscreenCanvas !== 'undefined';
       const strip = useOffscreen
         ? new OffscreenCanvas(1, zh)

@@ -1,3 +1,4 @@
+import { drawPaintedBackdrop } from '../paintedBackdrop';
 import { BUILTIN_ARENA_PREVIEWS } from '../previewCatalog';
 import type { ArenaPack } from '../types';
 import type { Platform, PlayerSlot, Ctx2D } from '../../types';
@@ -859,6 +860,8 @@ export const underwater: ArenaPack = {
 
   // ---- Custom draw functions ----
   drawFarBackground: (ctx, _arena) => {
+    const painted = drawPaintedBackdrop(ctx, 'underwater');
+
     ctx.save();
 
     // Light rays from surface
@@ -885,6 +888,8 @@ export const underwater: ArenaPack = {
       ctx.ellipse(wx, wy, 18, 5, 0, 0, Math.PI * 2);
       ctx.fill();
     }
+
+    if (painted) { ctx.restore(); return; }
 
     // Distant underwater terrain
     ctx.globalAlpha = 0.15;

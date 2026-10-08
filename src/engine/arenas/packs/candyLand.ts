@@ -1,3 +1,4 @@
+import { drawPaintedBackdrop } from '../paintedBackdrop';
 import { BUILTIN_ARENA_PREVIEWS } from '../previewCatalog';
 import type { ArenaPack } from '../types';
 import type { Arena, Platform, Ctx2D } from '../../types';
@@ -255,7 +256,7 @@ export const candyLand: ArenaPack = {
 
   // ---- Ambient systems ----
   clouds: {
-    count: 5,
+    count: 0, // Clouds belong to the painted plate.
     color: 'rgba(255, 255, 255, 0.6)',
     minSize: 45,
     maxSize: 75,
@@ -309,6 +310,8 @@ export const candyLand: ArenaPack = {
 
   // ---- Custom draw functions ----
   drawFarBackground: (ctx, _arena) => {
+    if (drawPaintedBackdrop(ctx, 'candy_land')) return;
+
     ctx.save();
     ctx.globalAlpha = 0.3;
 
