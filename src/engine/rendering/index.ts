@@ -1,5 +1,5 @@
 export { drawCarrot, drawSpringMushroom, drawThorn } from './collectibles';
-export { drawWeather, drawParticles, drawGibs, drawGibShape, drawConfetti, drawFireworks, drawWildlife, drawSpringTrail } from './particles';
+export { drawRespawnEntrances, drawWeather, drawParticles, drawGibs, drawGibShape, drawConfetti, drawFireworks, drawWildlife, drawSpringTrail } from './particles';
 export { drawHazardZone, drawGhost, drawLavaRock, drawZeroGZone, drawCurrentZone, drawGeyser, drawBouncyPlatformOverlay, drawScatterFlock, clearHazardCaches } from './hazards';
 export { drawSkyCycle, drawDayNightCycle, computeNightIntensity, fireflyPosition, FIREFLY_COUNT } from './effects';
 export { drawHUD, drawCountdown, drawConnectionQuality, drawComboPopups, invalidateHudCache, isHudDirty, resetHudState } from './hud';

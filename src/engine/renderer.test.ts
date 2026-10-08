@@ -8,6 +8,7 @@ vi.mock('./rendering', () => ({
   drawThorn: vi.fn(),
   drawWeather: vi.fn(),
   drawParticles: vi.fn(),
+  drawRespawnEntrances: vi.fn(),
   drawGibs: vi.fn(),
   drawGibShape: vi.fn(),
   drawConfetti: vi.fn(),

@@ -538,7 +538,7 @@ describe('cosmeticStep transition detection', () => {
     const { loop } = createLoop();
     const state = loop.getState();
     const player = state.players[0];
-    const ringSpy = vi.spyOn(loop.particleSystem, 'spawnRingVFX');
+    const ringSpy = vi.spyOn(loop.particleSystem, 'spawnPlayerEntrance');
 
     // Baseline: still in respawning, no i-frames yet
     player.state = 'respawning';
@@ -561,7 +561,7 @@ describe('cosmeticStep transition detection', () => {
     const { loop } = createLoop();
     const state = loop.getState();
     const player = state.players[0];
-    const ringSpy = vi.spyOn(loop.particleSystem, 'spawnRingVFX');
+    const ringSpy = vi.spyOn(loop.particleSystem, 'spawnPlayerEntrance');
 
     // Baseline: airborne, falling, no i-frames
     player.state = 'airborne';
@@ -584,7 +584,7 @@ describe('cosmeticStep transition detection', () => {
     const { loop } = createLoop();
     const state = loop.getState();
     const player = state.players[0];
-    const ringSpy = vi.spyOn(loop.particleSystem, 'spawnRingVFX');
+    const ringSpy = vi.spyOn(loop.particleSystem, 'spawnPlayerEntrance');
 
     // Baseline: i-frames mid-decay from prior respawn
     player.state = 'airborne';
@@ -605,7 +605,7 @@ describe('cosmeticStep transition detection', () => {
     const { loop } = createLoop();
     const state = loop.getState();
     const player = state.players[0];
-    const ringSpy = vi.spyOn(loop.particleSystem, 'spawnRingVFX');
+    const ringSpy = vi.spyOn(loop.particleSystem, 'spawnPlayerEntrance');
 
     player.state = 'idle';
     player.x = 1270;

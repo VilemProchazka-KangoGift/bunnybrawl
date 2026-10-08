@@ -25,7 +25,7 @@ import { drawFpsCounter } from './fpsCounter';
 // Extracted rendering modules
 import {
   drawCarrot, drawSpringMushroom, drawThorn,
-  drawWeather, drawParticles, drawGibShape, drawFireworks, drawWildlife, drawSpringTrail,
+  drawRespawnEntrances, drawWeather, drawParticles, drawGibShape, drawFireworks, drawWildlife, drawSpringTrail,
   drawHazardZone, drawZeroGZone, drawCurrentZone, drawGeyser, drawBouncyPlatformOverlay,
   drawSkyCycle, drawDayNightCycle, computeNightIntensity, fireflyPosition, FIREFLY_COUNT,
   drawHUD, drawCountdown, drawConnectionQuality, invalidateHudCache, isHudDirty,
@@ -1378,6 +1378,10 @@ export class Renderer implements IRenderer {
       const useIsoClip = this._arenaHasIsoOccluders;
       const isoPlatforms = this._isoOccluderPlatforms;
       for (const player of matchState.players) {
+        const entrance = particles.find(p => p.shape === 'respawnCloud' && p.maxLife - p.life + cosmeticLead < .2
+          && Math.abs(p.x - player.x - player.width / 2) < player.width * .5
+          && Math.abs(p.y - player.y - player.height / 2) < player.height * .5);
+        const entrancePulse = entrance ? Math.max(0, 1 - (entrance.maxLife - entrance.life + cosmeticLead) / .2) : 0;
         const thornPulse = this.thornRecoil.sample(player, particles, this.frameTime);
         const ceilingPulse = this.ceilingSquash.pulse(player, arena.platforms, this.frameTime);
         if (!player.active) continue;
@@ -1391,10 +1395,12 @@ export class Renderer implements IRenderer {
           for (const plat of occluders!) addIsoPlatformPath(ctx, plat);
           ctx.clip('evenodd');
         }
-        drawPlayer(ctx, player, nearCarrotSet.has(player.id), this.theme, this.frameTime, this.bumpRecoil.offset(player, matchState.players, this.frameTime), ceilingPulse, thornPulse);
+        drawPlayer(ctx, player, nearCarrotSet.has(player.id), this.theme, this.frameTime, this.bumpRecoil.offset(player, matchState.players, this.frameTime), ceilingPulse, thornPulse, entrancePulse);
         if (clipped) ctx.restore();
         d.playersDrawn++;
       }
+
+      drawRespawnEntrances(ctx, particles, cosmeticLead);
 
       // Platform body overlay (cached). Drawn AFTER players so the body face
       // occludes any player whose bbox enters the iso phantom strip — the

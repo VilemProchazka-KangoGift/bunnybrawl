@@ -79,9 +79,9 @@ export class PlayerTransitionSystem implements CosmeticSystem {
       spawnJumpDustParticles: (p, launchY) => { if (!getSlowDevice()) this.particleSystem.spawnJumpDustParticles(p, launchY); },
       spawnKillSplatter: (v) => this.particleSystem.spawnKillSplatter(v, this.settings),
       pickupCarrotVFX: (x, y) => this.particleSystem.pickupCarrotVFX(x, y),
-      spawnPlayerSpawnVFX: (x, y) => this.particleSystem.spawnRingVFX(x, y),
+      spawnPlayerSpawnVFX: (x, y) => this.particleSystem.spawnPlayerEntrance(x, y),
       onStomp,
-      lightBurst,
+      lightBurst: (x, y, kind) => { if (kind === 'stomp') lightBurst?.(x, y, kind); },
     };
   }
 

@@ -356,6 +356,21 @@ describe('PlayerTransitionSystem', () => {
     return { sys: new PlayerTransitionSystem(state, mockSettings, playSound, playAnimal, particleSys), playSound, playAnimal };
   }
 
+  it('emits stationary reveal clouds on start and respawn without spawn light bursts', () => {
+    const player=makePlayer({id:'P1',x:100,y:200,invincibleTimer:0});
+    const state=makeSystemState({players:[player]});
+    const ps=new ParticleSystem(state,mockArena,mockTheme,mockSettings,new Map());
+    const light=vi.fn();
+    const sys=new PlayerTransitionSystem(state,mockSettings,vi.fn(),vi.fn(),ps,undefined,light);
+    sys.init();
+    expect(ps.getParticles()).toHaveLength(1);
+    expect(ps.getParticles()[0]).toMatchObject({shape:'respawnCloud',x:116,y:216,vx:0,vy:0,maxLife:.85});
+    player.invincibleTimer=1.5;sys.cosmeticUpdate(1/60);
+    expect(ps.getParticles()).toHaveLength(2);expect(light).not.toHaveBeenCalled();
+    sys.cosmeticUpdate(1/60);expect(ps.getParticles()).toHaveLength(2);
+    expect(player.invincibleTimer).toBe(1.5);
+  });
+
   it('init() populates prevCosmeticState for each player', () => {
     const state = makeSystemState();
     const { sys } = makePlayerTransitionSystem(state);

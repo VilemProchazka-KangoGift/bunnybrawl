@@ -203,3 +203,7 @@ Selected combination: Bite burst + Leaf flick. Actual pickup replaces oval debri
 ### Thorn Pain jolt
 
 Selected thorn hit: Pain jolt without side lightning bolts. Emit one stationary `thornJolt` inked cream/red impact with fourteen age-driven chips (0.48 seconds), replacing blood/wood emission; retain red slow-state pulse, flash, shake, hitstop and sound. Shape occupies the final three-bit SAB code 7; adding further shapes requires expanding the wire. Renderer-owned `ThornRecoil` identifies a newly set/refreshed five-second slow beside a fresh transported `thornJolt` particle (the consumed thorn is removed in the same tick) and applies a 0.4-second backward pose jolt; never alter physical coordinates. It must ignore unrelated slow sources and reset on death/respawn.
+
+### Cloud respawn entrance
+
+Selected spawn/respawn: three large stationary cream clouds for 0.55 s and eight bright gold/orange flecks clearing by 0.85 s. Keep original protection blink and INVINCIBLE_DURATION unchanged; replace spawn ring/light burst only. Draw reveal clouds after players and before platform overlays; attach to original spawn point, not moving player. Particle `respawnCloud` is SAB code 8, requiring four shape bits (24..27) and mask 15; byte layout unchanged. Both startup and invincibility-rise transitions use the same emitter; stomp light bursts remain enabled.

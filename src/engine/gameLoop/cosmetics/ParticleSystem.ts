@@ -90,6 +90,11 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
     _spawnCarrotVFX(this._particles, this.particleFreeList, x, y);
   }
 
+  spawnPlayerEntrance(cx: number, cy: number): void {
+    const player = this.state.players.find(p => Math.abs(p.x + p.width / 2 - cx) < .1 && Math.abs(p.y + p.height / 2 - cy) < .1);
+    this.emitParticle(cx, cy, 0, 0, .85, player ? player.height / 32 : 1, '#FFF0DC', 'respawnCloud');
+  }
+
   spawnRingVFX(cx: number, cy: number): void {
     _spawnRingVFX(this._particles, this.particleFreeList, cx, cy);
   }
