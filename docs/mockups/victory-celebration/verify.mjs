@@ -24,7 +24,7 @@ await page.locator('#victory-character').selectOption('Bunny');await page.locato
 await page.locator('input[value="Fireworks + winner zoom"]').check();
 await scrub(3.4);
 const camera=await page.locator('canvas').nth(1).getAttribute('data-camera');
-if(Math.abs(Number(camera)-1.35)>.001)throw Error('Wrong winner zoom endpoint');
+if(Math.abs(Number(camera)-2.2)>.001)throw Error('Wrong winner zoom endpoint');
 await page.screenshot({path:dir+'/captures/winner-zoom.png',fullPage:true});
 await page.setViewportSize({width:360,height:900});await page.screenshot({path:dir+'/captures/mobile.png',fullPage:true});
 if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Overflow');

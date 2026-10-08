@@ -61,8 +61,9 @@ else{for(let i=0;i<16;i++){const rand=rng(678+i*113),t=age-rand()*.75;if(t<0||t>
       if(canvas.width!==Math.round(w*dpr)||canvas.height!==h*dpr){canvas.width=Math.round(w*dpr);canvas.height=h*dpr;}
       const ctx=canvas.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
       ctx.fillStyle=night.checked?'#334451':'#ACD5DE';ctx.fillRect(0,0,w,h);
-      const progress=Math.max(0,Math.min(1,(time-.4)/3)),camera=index===1?1+.35*progress*progress*(3-2*progress):1;
+      const progress=Math.max(0,Math.min(1,(time-.4)/3)),camera=index===1?1+1.2*progress*progress*(3-2*progress):1;
       canvas.dataset.camera=String(camera);
+      if(index===1)canvas.parentElement.querySelector('h3').textContent='Fireworks + winner zoom · '+camera.toFixed(2)+'×';
       ctx.save();ctx.translate(w/2,h-20-22*z);ctx.scale(camera,camera);ctx.translate(-w/2,-(h-20-22*z));
       if(backdrop.naturalWidth){ctx.globalAlpha=night.checked?.22:.6;ctx.drawImage(backdrop,230,240,480,300,0,0,w,h);ctx.globalAlpha=1;}
       ctx.save();ctx.translate(w/2,h-20);ctx.scale(z,z);

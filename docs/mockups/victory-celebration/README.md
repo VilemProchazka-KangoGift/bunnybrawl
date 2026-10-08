@@ -8,4 +8,4 @@ Build: node docs/mockups/victory-celebration/build-study.mjs [optional-inline-pa
 
 Separate features/victory-celebration worktree starts from origin/main 3aaad95.
 
-Winner zoom revision: second panel now compares original fireworks with the same seeded fireworks plus a whole-scene zoom. Smoothstep eases from 1x to 1.35x over three seconds after victory; pivot is the winner body center. Original remains the first panel, Winner bounce and Carrot shower remain for reference. Zoom endpoint and existing browser checks pass; endpoint screenshot inspected. This remains a scripted review prototype; production camera is unchanged.
+Winner zoom revision: second panel now compares original fireworks with the same seeded fireworks plus a whole-scene zoom. Smoothstep eases from 1x to 2.2x over three seconds after victory; pivot is the winner body center. Original remains the first panel, Winner bounce and Carrot shower remain for reference. Zoom endpoint and existing browser checks pass; endpoint screenshot inspected. This remains a scripted review prototype; production camera is unchanged.
