@@ -207,3 +207,7 @@ Selected thorn hit: Pain jolt without side lightning bolts. Emit one stationary 
 ### Cloud respawn entrance
 
 Selected spawn/respawn: three large stationary cream clouds for 0.55 s and eight bright gold/orange flecks clearing by 0.85 s. Keep original protection blink and INVINCIBLE_DURATION unchanged; replace spawn ring/light burst only. Draw reveal clouds after players and before platform overlays; attach to original spawn point, not moving player. Particle `respawnCloud` is SAB code 8, requiring four shape bits (24..27) and mask 15; byte layout unchanged. Both startup and invincibility-rise transitions use the same emitter; stomp light bursts remain enabled.
+
+### Lava Ember cough
+
+Selected Ember cough emits one stationary burnCough particle on a rising/refreshed burnTimer: two smoke chuffs 150 ms apart with ember cores, total 590 ms. Shape ID 9 survives four-bit SAB packing. Draw chuffs with the foreground entrance pass after players; exclude from generic gravity. Quiet player-following smoke uses the existing five-second burn timer and original warm glow, preserving hazard physics, sounds and impact feedback. Practice calls the real lava collision helper and cosmetic transition, never manually emits the cough. Reset must prime baselines before the lava hit. Build, lint, 185 focused Vitest tests and renderer-worker lava-hit/expiry/replay browser capture passed; both simulation modes booted, full E2E not run.

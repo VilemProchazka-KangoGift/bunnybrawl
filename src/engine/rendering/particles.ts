@@ -1,3 +1,4 @@
+import { drawBurnCough } from './burnEffects';
 import { drawRespawnEntrance } from './respawnEffects';
 import { drawThornJolt } from './thornEffects';
 import { drawCarrotPiece } from './carrotEffects';
@@ -81,7 +82,7 @@ export function drawWeather(ctx: Ctx2D, weather: WeatherParticle[], theme: Theme
 export function drawParticles(ctx: Ctx2D, particles: Particle[], lead = 0): void {
   let lastColor = '';
   for (const p of particles) {
-    if (p.shape === 'respawnCloud') continue;
+    if (p.shape === 'respawnCloud' || p.shape === 'burnCough') continue;
     const dx = p.x + p.vx * lead;
     const dy = p.y + p.vy * lead;
     if (dx < -20 || dx > CANVAS_WIDTH + 20 || dy < -20 || dy > CANVAS_HEIGHT + 20) continue;
@@ -394,5 +395,8 @@ export function drawSpringTrail(ctx: Ctx2D, player: Player, _frameTime: number):
 
 /** Reveal clouds cover the feet, then terrain overlays cover the clouds. */
 export function drawRespawnEntrances(ctx: Ctx2D, particles: readonly Particle[], lead = 0): void {
- for(const p of particles)if(p.shape==='respawnCloud')drawRespawnEntrance(ctx,p,lead);
+ for(const p of particles) {
+  if(p.shape==='respawnCloud')drawRespawnEntrance(ctx,p,lead);
+  else if(p.shape==='burnCough')drawBurnCough(ctx,p,lead);
+ }
 }

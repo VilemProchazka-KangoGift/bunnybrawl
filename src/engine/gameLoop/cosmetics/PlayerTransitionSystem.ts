@@ -73,6 +73,7 @@ export class PlayerTransitionSystem implements CosmeticSystem {
     this.particleSystem = particleSystem;
 
     this.callbacks = {
+      spawnBurnVFX: p => this.particleSystem.spawnBurnCough(p),
       playSound: this.playSound,
       playAnimal: this.playAnimal,
       spawnDustParticles: (p, vy, fastStomp) => this.particleSystem.spawnDustParticles(p, vy, fastStomp),

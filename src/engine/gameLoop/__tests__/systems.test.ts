@@ -371,6 +371,24 @@ describe('PlayerTransitionSystem', () => {
     expect(player.invincibleTimer).toBe(1.5);
   });
 
+  it('burn hits emit once, stay stationary, and repeat only on a refreshed burn', () => {
+    const player=makePlayer({id:'P1',burnTimer:0});
+    const state=makeSystemState({players:[player]});
+    const ps=new ParticleSystem(state,mockArena,mockTheme,mockSettings,new Map());
+    const sys=new PlayerTransitionSystem(state,mockSettings,vi.fn(),vi.fn(),ps);
+    sys.init();player.burnTimer=5;sys.cosmeticUpdate(1/60);
+    expect(ps.getParticles().filter(p=>p.shape==='burnCough')).toHaveLength(1);
+    const cough=ps.getParticles().find(p=>p.shape==='burnCough')!;
+    expect(cough).toMatchObject({vx:0,vy:0,maxLife:.59});
+    const x=cough.x,y=cough.y;ps.cosmeticUpdate(.1);
+    expect(cough.x).toBe(x);expect(cough.y).toBe(y);
+    player.burnTimer=4.5;sys.cosmeticUpdate(1/60);
+    expect(ps.getParticles().filter(p=>p.shape==='burnCough')).toHaveLength(1);
+    player.burnTimer=5;sys.cosmeticUpdate(1/60);
+    expect(ps.getParticles().filter(p=>p.shape==='burnCough')).toHaveLength(2);
+    expect(player.burnTimer).toBe(5);
+  });
+
   it('init() populates prevCosmeticState for each player', () => {
     const state = makeSystemState();
     const { sys } = makePlayerTransitionSystem(state);

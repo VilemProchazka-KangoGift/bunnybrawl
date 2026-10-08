@@ -90,6 +90,10 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
     _spawnCarrotVFX(this._particles, this.particleFreeList, x, y);
   }
 
+  spawnBurnCough(player: Player): void {
+    this.emitParticle(player.x + player.width / 2, player.y + player.height, 0, 0, .59, player.height / 40, '#B0A08A', 'burnCough');
+  }
+
   spawnPlayerEntrance(cx: number, cy: number): void {
     const player = this.state.players.find(p => Math.abs(p.x + p.width / 2 - cx) < .1 && Math.abs(p.y + p.height / 2 - cy) < .1);
     this.emitParticle(cx, cy, 0, 0, .85, player ? player.height / 32 : 1, '#FFF0DC', 'respawnCloud');
@@ -172,6 +176,8 @@ export class ParticleSystem implements CosmeticSystem, ParticleEmitter {
         break;
       }
       case 'hazardZone': {
+        // Lava smoke is emitted by the transported burn-timer transition.
+        if (hit.hazardType === 'lava') break;
         for (let i = 0; i < 24; i++) {
           const angle = Math.random() * Math.PI * 2;
           const speed = 80 + Math.random() * 200;

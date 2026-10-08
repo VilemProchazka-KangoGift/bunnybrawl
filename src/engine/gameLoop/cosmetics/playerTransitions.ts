@@ -32,6 +32,7 @@ export function snapshotPlayerCosmeticState(player: Player): PrevPlayerCosmeticS
 
 /** Callbacks for side effects that cross module boundaries. */
 export interface TransitionCallbacks {
+  spawnBurnVFX?: (player: Player) => void;
   playSound: (name: string) => void;
   playAnimal: (characterName: string) => void;
   spawnDustParticles: (player: Player, landVy: number, fastStomp?: boolean) => void;
@@ -129,7 +130,10 @@ export function detectPlayerTransitions(
   }
 
   // Burn start
-  if (prev.burnTimer <= 0 && player.burnTimer > 0) cb.playSound('oof');
+  if (player.burnTimer > prev.burnTimer) {
+    cb.spawnBurnVFX?.(player);
+    if (prev.burnTimer <= 0) cb.playSound('oof');
+  }
 
   // Score change → score animation (any source: carrot, stomp kill, etc.)
   if (player.score > prev.score) {

@@ -1,3 +1,4 @@
+import { drawBurnWisps } from './burnEffects';
 import type { Player, PlayerState, Ctx2D } from '../types';
 import type { ThemeConfig } from '../themes/types';
 import type { EyebrowAnchor } from '../characters/types';
@@ -368,6 +369,7 @@ export function drawPlayer(ctx: Ctx2D, player: Player, nearCarrot: boolean, them
       ctx.ellipse(cx, ellCy, ellRx, ellRy, 0, 0, Math.PI * 2);
       ctx.fill();
     }
+    drawBurnWisps(ctx, cx, y + height, height / 40, player.burnTimer);
   } else if (drawRedPulse) {
     // Red tint pulse overlay when hit by thorns (non-lava)
     const pulseAlpha = Math.abs(Math.sin(slowTimer * 8)) * 0.3;
@@ -377,8 +379,8 @@ export function drawPlayer(ctx: Ctx2D, player: Player, nearCarrot: boolean, them
     ctx.fill();
   }
 
-  // Damage direction indicator (l)
-  if (player.damageFlashTimer > 0 && player.damageFlashSide) {
+  // Burn hits use Ember cough; omit the legacy rectangular side indicator.
+  if (player.burnTimer <= 0 && player.damageFlashTimer > 0 && player.damageFlashSide) {
     const flashAlpha = Math.min(0.5, player.damageFlashTimer * 3);
     const flashX = player.damageFlashSide === 'left' ? x : x + width - 4;
     ctx.fillStyle = `rgba(255, 0, 0, ${flashAlpha})`;

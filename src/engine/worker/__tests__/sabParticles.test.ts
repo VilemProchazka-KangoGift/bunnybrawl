@@ -147,9 +147,9 @@ describe('sabParticles', () => {
   });
   it('round-trips respawn cloud at shape 8 alongside thorn jolt and clears recycled slots', () => {
     const views=makeViews(new ArrayBuffer(SAB_PARTICLES_BYTES)),pool: Particle[]=[];
-    writeParticles(views,[mkParticle({shape:'respawnCloud'}),mkParticle({shape:'thornJolt'})]);
+    writeParticles(views,[mkParticle({shape:'respawnCloud'}),mkParticle({shape:'burnCough'}),mkParticle({shape:'thornJolt'})]);
     readParticles(views,pool,new ColorCache());
-    expect(pool.map(p=>p.shape)).toEqual(['respawnCloud','thornJolt']);
+    expect(pool.map(p=>p.shape)).toEqual(['respawnCloud','burnCough','thornJolt']);
     writeParticles(views,[mkParticle({shape:'circle'})]);readParticles(views,pool,new ColorCache());
     expect(pool[0].shape).toBe('circle');
   });

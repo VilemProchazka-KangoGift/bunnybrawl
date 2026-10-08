@@ -178,7 +178,7 @@ export function updateParticles(
     const prevY = p.y;
     p.x += p.vx * dt;
     p.y += p.vy * dt;
-    if (p.shape !== 'jumpCloud' && p.shape !== 'landingCloud' && p.shape !== 'impactCrown' && p.shape !== 'thornJolt' && p.shape !== 'respawnCloud') p.vy += 80 * dt;
+    if (p.shape !== 'jumpCloud' && p.shape !== 'landingCloud' && p.shape !== 'impactCrown' && p.shape !== 'thornJolt' && p.shape !== 'respawnCloud' && p.shape !== 'burnCough') p.vy += 80 * dt;
     if (gore && p.color === BLOOD_COLOR && p.vy > 0) {
       for (let pi = 0; pi < platforms.length; pi++) {
         const plat = platforms[pi];
