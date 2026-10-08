@@ -12,6 +12,8 @@ import { preloadIllustratedBackdrop, getWinterPlatformArt } from '../../../src/e
 import { drawPaintedWinterPlatform } from '../../../src/engine/arenas/packs/winterLakePaintedPlatforms';
 import { drawPlatformStudyBack, drawPlatformStudyFront, isIllustratedStudy, PLATFORM_VARIANTS, type PlatformVariant } from '../winter-platforms/variants';
 import { drawPaintedPlatformBack, drawPaintedPlatformFront, preloadPaintedPlatforms } from '../winter-platforms/painted';
+import { drawVectorReplicaBack, drawVectorReplicaFront } from '../winter-platforms/vectorReplica';
+import { drawTracedSvgBack, drawTracedSvgFront, preloadTracedBridge } from '../winter-platforms/tracedSvg';
 
 const query = new URLSearchParams(location.search);
 const variant = query.get('variant') ?? 'current';
@@ -37,9 +39,18 @@ if (platformVariant) {
   // platform query, older background comparisons retain their old baseline.
   await preloadIllustratedBackdrop('winter_lake');
   if (platformVariant === 'painted-sprite') await preloadPaintedPlatforms();
+  if (platformVariant === 'vector-trace') await preloadTracedBridge();
   const originalBack = theme.drawPlatform;
   const originalFront = theme.drawPlatformOverlay;
   theme.drawPlatform = (ctx, platform, isGround) => {
+    if (platformVariant === 'vector-replica') {
+      drawVectorReplicaBack(ctx, platform, isGround);
+      return;
+    }
+    if (platformVariant === 'vector-trace') {
+      drawTracedSvgBack(ctx, platform, isGround);
+      return;
+    }
     if (platformVariant === 'painted-scalable') {
       drawPaintedWinterPlatform(ctx, platform, isGround, false, getWinterPlatformArt());
       return;
@@ -54,6 +65,14 @@ if (platformVariant) {
     drawPlatformStudyBack(ctx, platform, platformVariant as PlatformVariant, isGround);
   };
   theme.drawPlatformOverlay = (ctx, platform, isGround) => {
+    if (platformVariant === 'vector-replica') {
+      drawVectorReplicaFront(ctx, platform, isGround);
+      return;
+    }
+    if (platformVariant === 'vector-trace') {
+      drawTracedSvgFront(ctx, platform, isGround);
+      return;
+    }
     if (platformVariant === 'painted-scalable') {
       drawPaintedWinterPlatform(ctx, platform, isGround, true, getWinterPlatformArt());
       return;

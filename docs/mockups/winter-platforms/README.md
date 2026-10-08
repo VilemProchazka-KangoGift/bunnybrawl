@@ -1,5 +1,20 @@
 # Winter Lake platform pass: shape and contrast studies
 
+## Vector return study (October 2026)
+
+The painted platform assets and their working resizer remain the baseline. This separate study tests whether drawn geometry can keep the same inked snow, translucent ice, fake 3D edge, and flexible platform sizing without depending on a bitmap source. Astra drew the new Canvas 2D `vector-replica` treatment; it is a fixture override and has not replaced production art.
+
+| Playable painted baseline | Astra Canvas replica | Detailed SVG trace hybrid |
+| --- | --- | --- |
+| ![Painted baseline in the arena](painted-scalable-day.png) | ![Procedural vector replica in the arena](vector-replica-day.png) | ![Detailed traced SVG in the arena](vector-trace-day.png) |
+| [Width study](painted-scaling-study.png) | [Width study](vector-scaling-study.png) | [Width study](vector-trace-scaling-study.png) |
+
+The [Canvas night scene](vector-replica-night.png) and [SVG trace night scene](vector-trace-night.png) use the same arena, actors, lighting, and collision shapes. Astra's Canvas version is coherent from 40px steps to 600px bridges and draws every cube. The snow has a continuous dark edge and varying overhang; the ice has broad overlapping facets and localized frost. It still has a more regular rhythm than the painted source, especially on the full-width ground.
+
+Two user-supplied vectorizations of the long painted shelf were inspected. [Tool A](user-vector-tool-a-preview.png) uses 13 large color paths in a 645 KB SVG. It captures the broad silhouette but flattens the brush texture and has an opaque white background, so it cannot be placed over the arena as supplied. [Tool B](user-vector-tool-b-preview.png) has transparent space around the shelf, retains the ink and textured facets well, and uses 4,272 paths in a 1,063 KB SVG. The `vector-trace` sample draws Tool B through Canvas with fixed-size end caps and a stretched center on medium and long shelves; tiny steps and cubes use Astra's drawn shapes. Its long ground rim is close to the painting, but the highly detailed trace becomes crowded at 90–145px and its full-size SVG is much larger than the 112 KB production bridge WebP. Browser decoding and rasterization still happen before Canvas draws an SVG image, so this is a scalable vector source rather than a fully geometric hot-path renderer. A 4,272-path `Path2D` redraw every frame would need a separate performance study; the current trace sample is a static fixture only.
+
+**Current assessment:** Keep the painted production platform intact. The Canvas replica is the better basis if resizing and editable silhouettes are the priority; Tool B is a strong shape and color reference and may be usable as a prerendered source for long bridges. Before adopting either, review the 90–145px silhouettes, ground repetition, night readability, and renderer cost in live play. Neither vector candidate is approved production art yet.
+
 Pearl Painted is the approved backdrop. This is **arena redesign step 3**: compare playable snow shelves, ground, and the two jumpable ice cubes in the full scene before choosing a production treatment. Geometry, landing heights, slippery friction, character placements, props, foreground cover, and time of day remain identical across captures. The earlier studies were fixture overrides; the scalable painted treatment is now in the playable arena.
 
 ## Scalable painted platforms in the playable arena
