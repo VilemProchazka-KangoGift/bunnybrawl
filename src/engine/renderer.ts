@@ -8,7 +8,7 @@ import {
   HITSTOP_DURATION, HITSTOP_ZOOM,
 } from './constants';
 import {
-  drawHill,
+  drawHill, appendCloudPath,
   capFrontY, capBackY, skewPx,
 } from './themes/drawPrimitives';
 import { hexToHSL } from './fastMath';
@@ -24,7 +24,7 @@ import {
   drawCarrot, drawSpringMushroom, drawThorn,
   drawWeather, drawParticles, drawGibShape, drawFireworks, drawWildlife, drawSpringTrail,
   drawHazardZone, drawZeroGZone, drawCurrentZone, drawGeyser, drawBouncyPlatformOverlay,
-  drawDayNightCycle, computeNightIntensity, fireflyPosition, FIREFLY_COUNT,
+  drawSkyCycle, drawDayNightCycle, computeNightIntensity, fireflyPosition, FIREFLY_COUNT,
   drawHUD, drawCountdown, drawConnectionQuality, invalidateHudCache, isHudDirty,
   drawPlayer,
   warmSpriteCacheForCharacters,
@@ -1076,12 +1076,7 @@ export class Renderer implements IRenderer {
       }
       return;
     }
-    // Inlined batch of theme-default clouds: one fillStyle, one beginPath/fill
-    // for all clouds. Each cloud is 4 overlapping arcs (the original drawCloud
-    // shape); moveTo before each cloud starts a new sub-path so neighbours
-    // don't connect with a stray line. (The drawCloud primitive in
-    // drawPrimitives is still used by menu + lobby renderers — those aren't
-    // hot enough to justify duplicating this batch path there.)
+    // Shared silhouette, batched into one fill for all default clouds.
     ctx.fillStyle = this.theme.clouds.color;
     ctx.beginPath();
     for (const cloud of this.clouds) {
@@ -1090,11 +1085,7 @@ export class Renderer implements IRenderer {
         cloud.x = -cloud.size * 2;
       }
       const x = cloud.x, y = cloud.y, s = cloud.size;
-      ctx.moveTo(x + s * 0.5, y);
-      ctx.arc(x, y, s * 0.5, 0, Math.PI * 2);
-      ctx.arc(x + s * 0.4, y - s * 0.15, s * 0.4, 0, Math.PI * 2);
-      ctx.arc(x + s * 0.8, y, s * 0.45, 0, Math.PI * 2);
-      ctx.arc(x + s * 0.35, y + s * 0.1, s * 0.35, 0, Math.PI * 2);
+      appendCloudPath(ctx, x - s * .5, y - s * .45, s * 1.75, s);
     }
     ctx.fill();
   }
@@ -1206,6 +1197,10 @@ export class Renderer implements IRenderer {
 
       const bgStart = perfTrace.begin('render.bg');
       const slow = getSlowDevice();
+
+      if (!slow && this.theme.dayNight.enabled && matchState.dayPhase !== undefined) {
+        drawSkyCycle(ctx, matchState.dayPhase, this.frameTime);
+      }
 
       // Drawn before clouds so sky-atmosphere effects (aurora, distant space
       // objects) compose under weather and clouds.
@@ -1488,7 +1483,7 @@ export class Renderer implements IRenderer {
         d.fireworks = true;
       }
 
-      // Day/night cycle overlay (only if theme has it enabled)
+      // Foreground fireflies and shooting stars (sky bodies were drawn before clouds)
       if (!slow && this.theme.dayNight.enabled && matchState.dayPhase !== undefined) {
         drawDayNightCycle(ctx, matchState.dayPhase, matchState, this.theme, this.frameTime);
         d.dayNight = true;
