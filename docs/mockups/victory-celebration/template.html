@@ -1,0 +1,74 @@
+<div id="victory-study">
+  <h2>Victory celebration</h2>
+  <div class="viz-controls">
+    <label class="form-label">Character <select class="form-select" id="victory-character"></select></label>
+    <button class="btn" type="button" id="victory-play">Pause</button>
+    <label class="form-label">Speed <select class="form-select" id="victory-speed"><option value="1">Normal</option><option value="0.35">Slow motion</option></select></label>
+    <label class="form-label">Scale <select class="form-select" id="victory-scale"><option value="1">Game size</option><option value="2">2× detail</option></select></label>
+    <label class="form-check"><input class="form-check-input" id="victory-night" type="checkbox"><span class="form-check-label">Night</span></label>
+  </div>
+  <label class="form-label" for="victory-time">Victory timing</label>
+  <input class="form-range" id="victory-time" type="range" min="0" max="4.2" step="0.005" value="0">
+  <div class="victory-panels">
+    <section><h3>Current fireworks</h3><canvas aria-label="Victory celebration comparison" role="img"></canvas><label class="form-check"><input class="form-check-input" type="radio" name="victory-choice" value="Current fireworks"><span class="form-check-label">Current fireworks</span></label></section>
+    <section><h3>Fireworks + winner zoom</h3><canvas aria-label="Victory celebration comparison" role="img"></canvas><label class="form-check"><input class="form-check-input" type="radio" name="victory-choice" value="Fireworks + winner zoom"><span class="form-check-label">Fireworks + winner zoom</span></label></section>
+    <section><h3>Winner bounce</h3><canvas aria-label="Victory celebration comparison" role="img"></canvas><label class="form-check"><input class="form-check-input" type="radio" name="victory-choice" value="Winner bounce"><span class="form-check-label">Winner bounce</span></label></section>
+    <section><h3>Carrot shower</h3><canvas aria-label="Victory celebration comparison" role="img"></canvas><label class="form-check"><input class="form-check-input" type="radio" name="victory-choice" value="Carrot shower"><span class="form-check-label">Carrot shower</span></label></section>
+  </div>
+</div>
+<style>
+  #victory-study .victory-panels{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+  #victory-study canvas{display:block;width:100%;height:220px}
+  @media(max-width:560px){#victory-study .victory-panels{grid-template-columns:1fr}}
+</style>
+<script>
+(() => {
+  const root=document.getElementById('victory-study');
+  const characterSources=__CHARACTERS__;
+  const characterImages=Object.fromEntries(Object.entries(characterSources).map(([name,src])=>{const image=new Image();image.src=src;return [name,image]}));
+  const backdrop=new Image();backdrop.src='__BACKDROP__';
+  /*__VARIANTS__*/
+  const play=root.querySelector('#victory-play'),speed=root.querySelector('#victory-speed'),scale=root.querySelector('#victory-scale'),night=root.querySelector('#victory-night'),scrub=root.querySelector('#victory-time');
+  const canvases=[...root.querySelectorAll('canvas')];
+  const character=root.querySelector('#victory-character');
+  for(const name of Object.keys(characterSources)){const option=document.createElement('option');option.value=name;option.textContent=name;character.append(option)}
+  let time=0,playing=!matchMedia('(prefers-reduced-motion: reduce)').matches,last=0;
+  function save(){const choice=root.querySelector('input[name="victory-choice"]:checked')?.value;window.openai?.setWidgetState?.({modelContent:{victory:choice||null,character:character.value},privateContent:{character:character.value,time,playing,speed:speed.value,scale:scale.value,night:night.checked}})?.catch(()=>{});}
+  function restore(state){if(!state)return;const p=state.privateContent||{};if(characterImages[p.character])character.value=p.character;if(Number.isFinite(p.time))time=p.time;if(typeof p.playing==='boolean')playing=p.playing;for(const [name,el] of [['speed',speed],['scale',scale]])if(p[name])el.value=p[name];night.checked=!!p.night;for(const radio of root.querySelectorAll('input[name="victory-choice"]'))radio.checked=radio.value===state.modelContent?.victory;play.textContent=playing?'Pause':'Play';}
+  restore(window.openai?.widgetState);play.textContent=playing?'Pause':'Play';
+  window.addEventListener('openai:set_globals',e=>restore(e.detail?.globals?.widgetState));
+  play.onclick=()=>{playing=!playing;play.textContent=playing?'Pause':'Play';save()};
+  scrub.oninput=()=>{time=Number(scrub.value);playing=false;play.textContent='Play';draw();save()};
+  for(const el of [character,speed,scale,night,...root.querySelectorAll('input[name="victory-choice"]')])el.onchange=()=>{draw();save()};
+  function draw(){
+    scrub.value=String(time);
+    canvases.forEach((canvas,index)=>{
+      const z=Number(scale.value),h=z===2?340:220;canvas.style.height=h+'px';
+      const w=canvas.clientWidth,dpr=Math.min(devicePixelRatio||1,2);
+      if(canvas.width!==Math.round(w*dpr)||canvas.height!==h*dpr){canvas.width=Math.round(w*dpr);canvas.height=h*dpr;}
+      const ctx=canvas.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
+      ctx.fillStyle=night.checked?'#334451':'#ACD5DE';ctx.fillRect(0,0,w,h);
+      const progress=Math.max(0,Math.min(1,(time-.4)/3)),camera=index===1?1+1.2*progress*progress*(3-2*progress):1;
+      canvas.dataset.camera=String(camera);
+      if(index===1)canvas.parentElement.querySelector('h3').textContent='Fireworks + winner zoom · '+camera.toFixed(2)+'×';
+      const winnerX=w/2,winnerY=h-20-22*z;
+      const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
+      const offsetX=clamp(w/2-camera*winnerX,w-camera*w,0);
+      const offsetY=clamp(h/2-camera*winnerY,h-camera*h,0);
+      canvas.dataset.offsetY=String(offsetY);
+      ctx.save();ctx.translate(offsetX,offsetY);ctx.scale(camera,camera);
+      if(backdrop.naturalWidth){ctx.globalAlpha=night.checked?.22:.6;ctx.drawImage(backdrop,230,240,480,300,0,0,w,h);ctx.globalAlpha=1;}
+      ctx.save();ctx.translate(w/2,h-20);ctx.scale(z,z);
+      ctx.fillStyle=night.checked?'#627958':'#9FB875';ctx.fillRect(-w/z,0,w*2/z,24);
+      ctx.strokeStyle='#665344';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-w/z,0);ctx.lineTo(w/z,0);ctx.stroke();
+      canvas.dataset.hit=String(time>=.4);
+      canvas.setAttribute('aria-label',character.value+' victory: '+canvas.parentElement.querySelector('h3').textContent+(time>=.4?', celebrating':', ready'));
+      drawVictoryScene(ctx,characterImages[character.value],character.value,time,index===1?0:index,w/z);
+      ctx.restore();ctx.restore();
+    });
+  }
+  new ResizeObserver(draw).observe(root);for(const image of Object.values(characterImages))image.onload=draw;backdrop.onload=draw;
+  function frame(now){if(playing)time=(time+Math.min(.05,(now-last)/1000)*Number(speed.value))%4.2;last=now;draw();requestAnimationFrame(frame)}
+  draw();requestAnimationFrame(frame);
+})();
+</script>

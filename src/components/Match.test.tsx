@@ -164,25 +164,33 @@ describe('Match — handleQuit timer cleanup', () => {
     await renderActive();
     expect(capturedOnMatchEnd).toBeTruthy();
 
-    // Game just ended — schedules setMatchResult in 1500ms
+    // Game just ended — schedules setMatchResult after the 4500ms celebration
     act(() => capturedOnMatchEnd!('P1' as PlayerSlot, { players: [] } as unknown as MatchState));
 
     // Sanity: not yet on victory
     expect(useGameStore.getState().screen).toBe('match');
 
-    // User clicks Quit before the 1500ms elapses
+    // User clicks Quit before the celebration elapses
     clickQuit();
     expect(useGameStore.getState().screen).toBe('menu');
 
-    // Advance well past the 1500ms timer.
+    // Advance well past the 4500ms timer.
     // If the bug existed (handleQuit didn't clear victoryTimeoutRef), the
     // timer would now fire setMatchResult, which sets screen to 'victory'.
-    act(() => { vi.advanceTimersByTime(3000); });
+    act(() => { vi.advanceTimersByTime(6000); });
 
     expect(useGameStore.getState().screen).toBe('menu');
     expect(useGameStore.getState().winner).toBeNull();
   });
 
+  it('keeps the match visible until the winner zoom and hold complete', async () => {
+    await renderActive();
+    act(() => capturedOnMatchEnd!('P1' as PlayerSlot, { players: [] } as unknown as MatchState));
+    act(() => { vi.advanceTimersByTime(4499); });
+    expect(useGameStore.getState().screen).toBe('match');
+    act(() => { vi.advanceTimersByTime(1); });
+    expect(useGameStore.getState().screen).toBe('victory');
+  });
   it('clicking Quit without any pending timer transitions to menu cleanly', async () => {
     await renderActive();
     clickQuit();

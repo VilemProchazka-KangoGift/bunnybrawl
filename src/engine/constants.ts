@@ -154,3 +154,8 @@ export const SURFACE_RIPPLE_LIFE = 0.6;         // liquid impact ripples
 export const SURFACE_RIPPLE_MAX_RADIUS = 60;    // px expansion target
 export const HARD_LAND_VY_THRESHOLD = 600;      // vy below this = hard land (decal trigger)
 
+
+// Three-second winner camera plus a brief hold before the results screen.
+export const VICTORY_ZOOM_MS = 3000;
+export const VICTORY_ZOOM_SCALE = 2.2;
+export const VICTORY_PRESENTATION_MS = 4500;

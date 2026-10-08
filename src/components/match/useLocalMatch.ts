@@ -1,3 +1,4 @@
+import { VICTORY_PRESENTATION_MS } from '../../engine/constants';
 import { useEffect, useRef } from 'react';
 import { GameLoop } from '../../engine/gameLoop';
 import { NetMatch } from '../../engine/net/netMatch';
@@ -215,7 +216,7 @@ export function useLocalMatch(p: UseLocalMatchParams): void {
       matchEnded = true;
       victoryTimeoutRef.current = setTimeout(() => {
         setMatchResult(winner, state);
-      }, 1500);
+      }, winner ? VICTORY_PRESENTATION_MS : 1500);
     };
 
     window.__perfTrace = perfTrace;

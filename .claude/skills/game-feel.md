@@ -116,3 +116,7 @@ Use `scripts/measureInputLatency.mjs` with a production preview and `?debug=perf
 ## Gentle ceiling squash
 
 Renderer-owned `CeilingSquash` anticipates an upward approach within eight logical pixels of a platform underside, respecting bottom and left collision insets. It also catches an upward-to-stopped snapshot transition beside the ceiling. Use a smoothstep 60 ms compression and 220 ms release, 12 percent height / 6 percent width, anchored at the head. Held proximity must not retrigger; evaluate inactive and respawning players too so contact state clears. Draw only the pose: shadows, physics and transport remain unchanged.
+
+## Victory winner camera
+
+Keep existing fireworks. Renderer-owned VictoryCamera eases to 2.2x over 3000ms, targets winner body center and clamps to arena bounds. Compose background/night/foreground before zoom, transform the separate emitter layer identically, and draw HUD afterward. Reset on live match, missing/new winner, backward clock and theme change. Local/online natural results wait VICTORY_PRESENTATION_MS (4500); draws keep 1500ms. Worker renderer diagnostics are placeholders: verify camera math in unit tests and actual worker frames in screenshots. Quit-timer tests must advance past the longer delay.
