@@ -1,3 +1,4 @@
+/* global document, innerWidth */
 import {chromium} from '../../../node_modules/playwright/index.mjs';
 import fs from 'node:fs';
 const dir=new URL('.',import.meta.url).pathname.replace(/^\/(?=[A-Za-z]:)/,'').replace(/\/$/,'');
