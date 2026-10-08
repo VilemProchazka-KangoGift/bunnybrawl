@@ -1258,7 +1258,10 @@ export class Renderer implements IRenderer {
           if (zone.type === 'zero_g') {
             drawZeroGZone(ctx, zone, matchState.timeElapsed);
           } else if (zone.type === 'current') {
-            drawCurrentZone(ctx, zone, matchState.timeElapsed);
+            // Waterfall water starts at the painted rock lip; the force zone
+            // still starts at y=160 and keeps its existing collision bounds.
+            const sourceY = this.theme.id === 'waterfall' && zone.vy ? 65 : undefined;
+            drawCurrentZone(ctx, zone, matchState.timeElapsed, sourceY);
           } else if (zone.type === 'geyser') {
             const gs = matchState.geyserStates[geyserIdx];
             if (gs) drawGeyser(ctx, zone, gs, matchState.timeElapsed);
