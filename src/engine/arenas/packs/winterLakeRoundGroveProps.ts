@@ -129,13 +129,11 @@ function bush(ctx: Ctx2D, x: number, baseY: number, size: number, style: 0 | 1):
   if (image) {
     const width = style === 0 ? 151 : 153;
     const height = style === 0 ? 73 : 72;
-    // A connected opaque interior preserves the deliberate hiding cover.
-    ctx.beginPath();
-    ctx.moveTo(x-width*.48,baseY);
-    ctx.bezierCurveTo(x-width*.57,baseY-height*.45,x-width*.32,baseY-height*.97,x,baseY-height*.91);
-    ctx.bezierCurveTo(x+width*.32,baseY-height*.97,x+width*.57,baseY-height*.45,x+width*.48,baseY);
-    ctx.closePath(); ctx.fillStyle='#244c4d'; ctx.fill();
-    ctx.drawImage(image,x-width/2,baseY-height,width,height);
+    // The painted foliage is dense enough to provide cover without a backing
+    // shape that could protrude beyond its transparent silhouette.
+    // The source painting includes a little transparent padding at its base.
+    // Set the visible leaves on the ground so feet cannot peek below cover.
+    ctx.drawImage(image,x-width/2,baseY-height+6,width,height);
     return;
   }
   // Meadow's connected silhouette is already proven at gameplay scale.
