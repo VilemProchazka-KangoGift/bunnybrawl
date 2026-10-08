@@ -19,10 +19,10 @@ try {
   ];
   for (const [source,name,sx,sy,sw,sh,width,height] of specs) {
     const encoded = await page.evaluate(async ({url,sx,sy,sw,sh,width,height}) => {
-      const image = new Image();
+      const image = new globalThis.Image();
       image.src=url;
       await image.decode();
-      const canvas=document.createElement('canvas');
+      const canvas=globalThis.document.createElement('canvas');
       canvas.width=width; canvas.height=height;
       const ctx=canvas.getContext('2d');
       if(!ctx) throw new Error('Missing canvas context');

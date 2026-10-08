@@ -13,7 +13,7 @@ try {
       import('/bunnybrawl/src/engine/arenas/packs/winterLakeRoundGroveProps.ts'),
     ]);
     const arena = toArena(winterLake);
-    const canvas = new OffscreenCanvas(1280, 720);
+    const canvas = new globalThis.OffscreenCanvas(1280, 720);
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('No canvas context');
     const t0 = performance.now();

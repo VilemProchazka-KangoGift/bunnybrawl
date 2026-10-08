@@ -19,7 +19,7 @@ try {
       { x: 200, y: 340, width: 48, height: 18 },
       { x: 370, y: 600, width: 50, height: 50, style: 'iceCube' },
     ];
-    const canvas = document.createElement('canvas');
+    const canvas = globalThis.document.createElement('canvas');
     canvas.width = 1280; canvas.height = 720;
     const ctx = canvas.getContext('2d');
     const modes = {
