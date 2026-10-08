@@ -66,16 +66,66 @@ const backdrops = {
   winter_lake: createBackdrop(urls.winter_lake),
 };
 
+// Winter's platform sprites live with the arena art but use the same
+// speculative fetch / worker-local decode lifecycle as the backdrop.
+const winterPlatformArt = {
+  shelf: createBackdrop(new URL('./assets/winter-shelf-painted.webp', import.meta.url).href),
+  bridge: createBackdrop(new URL('./assets/winter-bridge-painted.webp', import.meta.url).href),
+  cube: createBackdrop(new URL('./assets/winter-cube-painted.webp', import.meta.url).href),
+};
+
+const winterPropArt = {
+  leafy: createBackdrop(new URL('./assets/winter-bush-leafy.webp', import.meta.url).href),
+  hedge: createBackdrop(new URL('./assets/winter-bush-hedge.webp', import.meta.url).href),
+  igloo: createBackdrop(new URL('./assets/winter-igloo.webp', import.meta.url).href),
+};
+
+export function getWinterPropArt(): { leafy: ImageBitmap | null; hedge: ImageBitmap | null; igloo: ImageBitmap | null } {
+  return {
+    leafy: winterPropArt.leafy.get(),
+    hedge: winterPropArt.hedge.get(),
+    igloo: winterPropArt.igloo.get(),
+  };
+}
+
+export function getWinterPlatformArt(): {
+  shelf: ImageBitmap | null; bridge: ImageBitmap | null; cube: ImageBitmap | null;
+} {
+  return {
+    shelf: winterPlatformArt.shelf.get(),
+    bridge: winterPlatformArt.bridge.get(),
+    cube: winterPlatformArt.cube.get(),
+  };
+}
+
+// Retained for painted-art comparisons. The playable vector platforms no
+// longer need these three images in menu/lobby prefetch or match startup.
+export function prefetchWinterPlatformArt(signal?: AbortSignal): Promise<void> {
+  return Promise.all(Object.values(winterPlatformArt).map(asset => asset.prefetch(signal))).then(() => {});
+}
+
+export function preloadWinterPlatformArt(): Promise<void> {
+  return Promise.all(Object.values(winterPlatformArt).map(asset => asset.preload())).then(() => {});
+}
+
 export function hasIllustratedBackdrop(arenaId: string): arenaId is IllustratedArena {
   return Object.hasOwn(backdrops, arenaId);
 }
 
 export function prefetchIllustratedBackdrop(arenaId: string, signal?: AbortSignal): Promise<void> {
-  return hasIllustratedBackdrop(arenaId) ? backdrops[arenaId].prefetch(signal) : Promise.resolve();
+  if (!hasIllustratedBackdrop(arenaId)) return Promise.resolve();
+  if (arenaId === 'winter_lake') {
+    return Promise.all([backdrops[arenaId].prefetch(signal), ...Object.values(winterPropArt).map(asset => asset.prefetch(signal))]).then(() => {});
+  }
+  return backdrops[arenaId].prefetch(signal);
 }
 
 export function preloadIllustratedBackdrop(arenaId: string): Promise<void> {
-  return hasIllustratedBackdrop(arenaId) ? backdrops[arenaId].preload() : Promise.resolve();
+  if (!hasIllustratedBackdrop(arenaId)) return Promise.resolve();
+  if (arenaId === 'winter_lake') {
+    return Promise.all([backdrops[arenaId].preload(), ...Object.values(winterPropArt).map(asset => asset.preload())]).then(() => {});
+  }
+  return backdrops[arenaId].preload();
 }
 
 export function getIllustratedBackdrop(arenaId: string): ImageBitmap | null {

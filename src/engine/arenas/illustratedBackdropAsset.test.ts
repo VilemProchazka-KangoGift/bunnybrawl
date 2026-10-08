@@ -86,8 +86,23 @@ describe('illustrated arena backdrop preload', () => {
     await art.preloadIllustratedBackdrop('winter_lake');
     await art.prefetchIllustratedBackdrop('lobby');
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0][0]).toContain('winter-lake-pearl-painted.webp');
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock.mock.calls.map(call => call[0])).toEqual(expect.arrayContaining([
+      expect.stringContaining('winter-lake-pearl-painted.webp'),
+      expect.stringContaining('winter-bush-leafy.webp'),
+      expect.stringContaining('winter-bush-hedge.webp'),
+      expect.stringContaining('winter-igloo.webp'),
+    ]));
+    expect(art.getWinterPropArt().igloo).not.toBeNull();
+    expect(art.getWinterPlatformArt().cube).toBeNull();
+    await art.prefetchWinterPlatformArt();
+    await art.preloadWinterPlatformArt();
+    expect(fetchMock.mock.calls.map(call => call[0])).toEqual(expect.arrayContaining([
+      expect.stringContaining('winter-shelf-painted.webp'),
+      expect.stringContaining('winter-bridge-painted.webp'),
+      expect.stringContaining('winter-cube-painted.webp'),
+    ]));
+    expect(art.getWinterPlatformArt().cube).not.toBeNull();
     expect(art.getIllustratedBackdrop('winter_lake')).not.toBeNull();
     expect(art.getIllustratedBackdrop('meadow')).toBeNull();
   });

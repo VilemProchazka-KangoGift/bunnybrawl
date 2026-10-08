@@ -2,6 +2,8 @@
 
 This is the audit before changing the arena artwork. The game calls this arena **Winter Lake** (`winter_lake`); the redesign brief also calls it Frozen Lake. The [generic arena redesign sequence](../../../.claude/skills/visual-style/SKILL.md#arena-redesign-sequence) governs the following passes.
 
+The cross-pass [Winter Lake lessons and current selections](LESSONS.md) explain how the background, platforms, props, cover, and layout evolved. The comparisons below retain their original assessments, including options that were later superseded.
+
 ## Current production scene
 
 | Noon | Midnight |

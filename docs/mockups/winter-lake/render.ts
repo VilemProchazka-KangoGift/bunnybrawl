@@ -8,12 +8,28 @@ import { getAllCharacters } from '../../../src/engine/characters/defaults';
 import { registerPlayablePlushRoster } from '../../../src/engine/characters/plush/playableRoster';
 import { createEmptyMatchState, createInitialPlayers } from '../../../src/engine/simulator/initialState';
 import { drawBackdrop, skies, VARIANTS, type Variant } from './variants';
+import { preloadIllustratedBackdrop, preloadWinterPlatformArt, getWinterPlatformArt } from '../../../src/engine/arenas/illustratedBackdropAsset';
+import { drawPaintedWinterPlatform } from '../../../src/engine/arenas/packs/winterLakePaintedPlatforms';
+import { drawPlatformStudyBack, drawPlatformStudyFront, isIllustratedStudy, PLATFORM_VARIANTS, type PlatformVariant } from '../winter-platforms/variants';
+import { drawPaintedPlatformBack, drawPaintedPlatformFront, preloadPaintedPlatforms } from '../winter-platforms/painted';
+import { drawWinterVectorPlatformBack, drawWinterVectorPlatformFront } from '../../../src/engine/arenas/packs/winterLakeVectorPlatforms';
+import { drawTracedSvgBack, drawTracedSvgFront, preloadTracedBridge } from '../winter-platforms/tracedSvg';
+import { drawPropStudyBack, drawPropStudyFront, PROP_VARIANTS, type PropVariant } from '../winter-props/variants';
+import { drawIllustratedPropBack, drawIllustratedPropFront, ILLUSTRATED_PROP_VARIANTS, preloadPropAtlas, type IllustratedPropVariant } from '../winter-props/illustrated';
+import { drawRoundGroveBackground, type IglooVariant } from '../../../src/engine/arenas/packs/winterLakeRoundGroveProps';
 
 const query = new URLSearchParams(location.search);
 const variant = query.get('variant') ?? 'current';
 const time = query.get('time') ?? 'day';
+const platformVariant = query.get('platform');
+const propVariant = query.get('props');
+const iglooVariant = query.get('igloo');
 if (!VARIANTS.includes(variant as Variant)) throw new Error(`Unknown background: ${variant}`);
 if (time !== 'day' && time !== 'night') throw new Error(`Unknown time: ${time}`);
+if (platformVariant && !PLATFORM_VARIANTS.includes(platformVariant as PlatformVariant)) throw new Error(`Unknown platform: ${platformVariant}`);
+if (propVariant && propVariant !== 'current' && !PROP_VARIANTS.includes(propVariant as PropVariant)
+  && !ILLUSTRATED_PROP_VARIANTS.includes(propVariant as IllustratedPropVariant)) throw new Error(`Unknown props: ${propVariant}`);
+if (iglooVariant && !['blue-brick','snow-stone','arched-door'].includes(iglooVariant)) throw new Error(`Unknown igloo: ${iglooVariant}`);
 
 let seed = 7312;
 Math.random = () => {
@@ -26,6 +42,72 @@ registerBuiltinCharacters();
 await registerPlayablePlushRoster();
 const arena = toArena(winterLake);
 const theme = toThemeConfig(winterLake);
+await preloadIllustratedBackdrop('winter_lake');
+if (propVariant && propVariant !== 'current') {
+  if (ILLUSTRATED_PROP_VARIANTS.includes(propVariant as IllustratedPropVariant)) {
+    await preloadPropAtlas();
+    theme.drawBackgroundNature = (ctx, currentArena) => drawIllustratedPropBack(ctx, currentArena, propVariant as IllustratedPropVariant);
+    theme.drawForegroundNature = (ctx, currentArena) => drawIllustratedPropFront(ctx, currentArena, propVariant as IllustratedPropVariant);
+  } else {
+    theme.drawBackgroundNature = (ctx, currentArena) => drawPropStudyBack(ctx, currentArena, propVariant as PropVariant);
+    theme.drawForegroundNature = (ctx, currentArena) => drawPropStudyFront(ctx, currentArena, propVariant as PropVariant);
+  }
+}
+if (iglooVariant) {
+  if (propVariant && propVariant !== 'current') throw new Error('Igloo variants require current Canvas props');
+  theme.drawBackgroundNature = (ctx, currentArena) => drawRoundGroveBackground(ctx, currentArena, iglooVariant as IglooVariant);
+}
+if (platformVariant) {
+  // The study's `current` background is the approved Pearl plate. Without a
+  // platform query, older background comparisons retain their old baseline.
+  if (platformVariant === 'painted-scalable') await preloadWinterPlatformArt();
+  if (platformVariant === 'painted-sprite') await preloadPaintedPlatforms();
+  if (platformVariant === 'vector-trace') await preloadTracedBridge();
+  const originalBack = theme.drawPlatform;
+  const originalFront = theme.drawPlatformOverlay;
+  theme.drawPlatform = (ctx, platform, isGround) => {
+    if (platformVariant === 'vector-replica') {
+      drawWinterVectorPlatformBack(ctx, platform, isGround);
+      return;
+    }
+    if (platformVariant === 'vector-trace') {
+      drawTracedSvgBack(ctx, platform, isGround);
+      return;
+    }
+    if (platformVariant === 'painted-scalable') {
+      drawPaintedWinterPlatform(ctx, platform, isGround, false, getWinterPlatformArt());
+      return;
+    }
+    if (platformVariant === 'painted-sprite') {
+      drawPaintedPlatformBack(ctx, platform, isGround);
+      return;
+    }
+    if (!isIllustratedStudy(platformVariant as PlatformVariant) || platform.style === 'iceCube') {
+      originalBack(ctx, platform, isGround);
+    }
+    drawPlatformStudyBack(ctx, platform, platformVariant as PlatformVariant, isGround);
+  };
+  theme.drawPlatformOverlay = (ctx, platform, isGround) => {
+    if (platformVariant === 'vector-replica') {
+      drawWinterVectorPlatformFront(ctx, platform, isGround);
+      return;
+    }
+    if (platformVariant === 'vector-trace') {
+      drawTracedSvgFront(ctx, platform, isGround);
+      return;
+    }
+    if (platformVariant === 'painted-scalable') {
+      drawPaintedWinterPlatform(ctx, platform, isGround, true, getWinterPlatformArt());
+      return;
+    }
+    if (platformVariant === 'painted-sprite') {
+      drawPaintedPlatformFront(ctx, platform, isGround);
+      return;
+    }
+    if (!isIllustratedStudy(platformVariant as PlatformVariant)) originalFront?.(ctx, platform, isGround);
+    drawPlatformStudyFront(ctx, platform, platformVariant as PlatformVariant, isGround);
+  };
+}
 if (variant !== 'current') {
   const selected = variant as Exclude<Variant, 'current'>;
   theme.sky = { gradient: skies[selected] };
@@ -83,6 +165,13 @@ state.players.forEach((player, i) => {
   player.score = 0;
   player.facing = i % 2 ? 'left' : 'right';
 });
+if (query.has('cover')) {
+  // Player coordinates are their left edge; center each silhouette in its bush.
+  state.players[0].x = 272;
+  state.players[0].y = 625;
+  state.players[3].x = 1022;
+  state.players[3].y = 625;
+}
 renderer.warmSpriteCache(state.players.map(player => player.character.name));
 renderer.renderBackground(arena);
 renderer.renderFrame(state, arena, []);
