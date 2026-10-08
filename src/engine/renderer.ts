@@ -1,3 +1,4 @@
+import { ThornRecoil } from './rendering/thornRecoil';
 import { CeilingSquash } from './rendering/ceilingSquash';
 import { BumpRecoil } from './rendering/bumpRecoil';
 import type { Arena, MatchState, Particle, Platform, Player, PlayerSlot, Gib, Ctx2D } from './types';
@@ -385,6 +386,7 @@ export class Renderer implements IRenderer {
   private clouds: Cloud[] = [];
   private lastCloudTime = 0;
   private theme: ThemeConfig;
+  private readonly thornRecoil = new ThornRecoil();
   private readonly ceilingSquash = new CeilingSquash();
   private readonly bumpRecoil = new BumpRecoil();
   private frameTime = 0; // cached performance.now() per frame
@@ -1378,6 +1380,7 @@ export class Renderer implements IRenderer {
       const useIsoClip = this._arenaHasIsoOccluders;
       const isoPlatforms = this._isoOccluderPlatforms;
       for (const player of matchState.players) {
+        const thornPulse = this.thornRecoil.sample(player, particles, this.frameTime);
         const ceilingPulse = this.ceilingSquash.pulse(player, arena.platforms, this.frameTime);
         if (!player.active) continue;
         if (player.state === 'respawning') continue;
@@ -1390,7 +1393,7 @@ export class Renderer implements IRenderer {
           for (const plat of occluders!) addIsoPlatformPath(ctx, plat);
           ctx.clip('evenodd');
         }
-        drawPlayer(ctx, player, nearCarrotSet.has(player.id), this.theme, this.frameTime, this.bumpRecoil.offset(player, matchState.players, this.frameTime), ceilingPulse);
+        drawPlayer(ctx, player, nearCarrotSet.has(player.id), this.theme, this.frameTime, this.bumpRecoil.offset(player, matchState.players, this.frameTime), ceilingPulse, thornPulse);
         if (clipped) ctx.restore();
         d.playersDrawn++;
       }

@@ -275,6 +275,16 @@ describe('ParticleSystem', () => {
     );
   }
 
+  it('thorn hits emit one stationary cartoon jolt and retain the impact flash', () => {
+    const state = makeSystemState();
+    const sys = makeParticleSystem(state);
+    sys.applyHazardHitVFX({type:'thorn',px:100,py:200,sx:100,sy:216},'P1',state,false);
+    const particles = sys.getParticles();
+    expect(particles).toHaveLength(1);
+    expect(particles[0]).toMatchObject({shape:'thornJolt',x:100,y:200,vx:0,vy:0,life:.48});
+    expect(state.screenFlash).toBeGreaterThanOrEqual(.18);
+  });
+
   it('init() is a no-op', () => {
     const state = makeSystemState();
     const sys = makeParticleSystem(state);

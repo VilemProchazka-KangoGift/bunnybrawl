@@ -1,3 +1,4 @@
+import { drawThornJolt } from './thornEffects';
 import { drawCarrotPiece } from './carrotEffects';
 import type { Ctx2D } from '../types';
 import type { Particle, WeatherParticle, WildlifeEntity, Gib, ConfettiParticle, Player } from '../types';
@@ -82,6 +83,10 @@ export function drawParticles(ctx: Ctx2D, particles: Particle[], lead = 0): void
     const dx = p.x + p.vx * lead;
     const dy = p.y + p.vy * lead;
     if (dx < -20 || dx > CANVAS_WIDTH + 20 || dy < -20 || dy > CANVAS_HEIGHT + 20) continue;
+    if (p.shape === 'thornJolt') {
+      ctx.globalAlpha = 1;
+      drawThornJolt(ctx, p, lead); lastColor = ''; continue;
+    }
     if (p.shape === 'carrotChip' || p.shape === 'carrotLeaf') {
       drawCarrotPiece(ctx, p, lead);
       lastColor = '';

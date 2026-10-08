@@ -135,4 +135,14 @@ describe('sabParticles', () => {
     readParticles(views, pool, new ColorCache());
     expect(pool[0].color).toBe('rgb(255,0,255)');
   });
+  it('round-trips thorn jolt at shape 7 and clears it on recycled slots', () => {
+    const views = makeViews(new ArrayBuffer(SAB_PARTICLES_BYTES));
+    const pool: Particle[] = [];
+    writeParticles(views, [mkParticle({shape:'thornJolt'})]);
+    readParticles(views,pool,new ColorCache());
+    expect(pool[0].shape).toBe('thornJolt');
+    writeParticles(views,[mkParticle({shape:'circle'})]);
+    readParticles(views,pool,new ColorCache());
+    expect(pool[0].shape).toBe('circle');
+  });
 });
