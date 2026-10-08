@@ -99,18 +99,12 @@ function getFireflyStamp(): OffscreenCanvas | null {
   return _firefly;
 }
 
-export function drawDayNightCycle(
-  ctx: Ctx2D,
-  dayPhase: number,
-  matchState: MatchState | undefined,
-  theme: ThemeConfig,
-  frameTime: number,
-): void {
-  // Wrap in save/restore so per-star/per-firefly globalAlpha mutations don't
+/** Distant sky art is drawn before clouds and gameplay. */
+export function drawSkyCycle(ctx: Ctx2D, dayPhase: number, frameTime: number): void {
+  // Wrap in save/restore so per-star globalAlpha mutations don't
   // leak to subsequent renderFrame stages. Entry globalAlpha is preserved.
   ctx.save();
   const nightIntensity = computeNightIntensity(dayPhase);
-  const overlayAlpha = nightIntensity * 0.55;
 
   // Sun: visible during the day half. Lighting pipeline owns scene darkening,
   // but the sun disc itself is a celestial body and lives here next to the moon.
@@ -119,7 +113,7 @@ export function drawDayNightCycle(
     const sunT = sunPhase / 0.5; // 0->1 across the day
     const sunX = 60 + sunT * (CANVAS_WIDTH - 120);
     const sunArc = Math.sin(sunT * Math.PI);
-    const sunY = 130 - sunArc * 90;
+    const sunY = 150 - sunArc * 90;
     const sunAlpha = Math.min(1, (1 - nightIntensity) * 1.5);
     if (sunAlpha > 0.05) {
       // Redshift: gold from sunrise through noon, deep orange approaching
@@ -127,24 +121,34 @@ export function drawDayNightCycle(
       // looked bizarre in playtests, and the game's dayPhase visual contract
       // matches pre-M1 behavior. Sunset (sunT > 0.55) ramps toward 1.0.
       const sunRedshift = Math.max(0, (sunT - 0.55) / 0.45);
-      const glowAlpha = sunAlpha * (0.3 + sunRedshift * 0.2);
-      const bodyAlpha = sunAlpha * 0.9;
-      const glowR = lerpCh(255, 240, sunRedshift), glowG = lerpCh(215, 50, sunRedshift), glowB = lerpCh(0, 10, sunRedshift);
-      const bodyR = lerpCh(255, 220, sunRedshift), bodyG = lerpCh(165, 30, sunRedshift);
-      const coreR = 255, coreG = lerpCh(215, 80, sunRedshift);
-      // Body and core share the glow's B channel intentionally — the body
-      // ellipse is small enough that an independent B-redshift would be
-      // imperceptible, and pinning it to glowB keeps the three discs
-      // chromatically continuous as redshift ramps.
-      ctx.globalAlpha = glowAlpha;
-      ctx.fillStyle = `rgb(${glowR},${glowG},${glowB})`;
-      ctx.beginPath(); ctx.arc(sunX, sunY, 32 + sunRedshift * 16, 0, Math.PI * 2); ctx.fill();
-      ctx.globalAlpha = bodyAlpha;
-      ctx.fillStyle = `rgb(${bodyR},${bodyG},${glowB})`;
-      ctx.beginPath(); ctx.arc(sunX, sunY, 15, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = `rgb(${coreR},${coreG},${glowB})`;
-      ctx.beginPath(); ctx.arc(sunX, sunY, 9, 0, Math.PI * 2); ctx.fill();
+      ctx.save();
+      ctx.translate(sunX, sunY);
+      ctx.scale(1.7, 1.7);
+      ctx.translate(-sunX, -sunY);
+      // Flat layered color and short uneven rays match the painted scenery.
+      ctx.globalAlpha = sunAlpha * .1;
+      ctx.fillStyle = '#f5d994';
+      ctx.beginPath(); ctx.arc(sunX, sunY, 34, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = sunAlpha * .55;
+      ctx.strokeStyle = '#dfb771'; ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i < 9; i++) {
+        const a = i * Math.PI * 2 / 9 + .14;
+        const dx = Math.cos(a), dy = Math.sin(a);
+        const end = i % 2 === 0 ? 30 : 27;
+        ctx.moveTo(sunX + dx * 23, sunY + dy * 23);
+        ctx.lineTo(sunX + dx * end, sunY + dy * end);
+      }
+      ctx.stroke();
+      ctx.globalAlpha = sunAlpha;
+      ctx.fillStyle = `rgb(${lerpCh(239, 224, sunRedshift)},${lerpCh(190, 119, sunRedshift)},94)`;
+      ctx.beginPath(); ctx.ellipse(sunX, sunY, 18, 17, -.12, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = `rgb(255,${lerpCh(226, 179, sunRedshift)},139)`;
+      ctx.beginPath(); ctx.ellipse(sunX - 2, sunY - 2, 14.5, 13.5, -.12, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#fff1bf'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(sunX - 2, sunY - 2, 11, 3.65, 4.95); ctx.stroke();
       ctx.globalAlpha = 1;
+      ctx.restore();
       // Light rays during midday only (one path, one fill).
       if (nightIntensity < 0.3) {
         const rayAlpha = 0.04 * (1 - nightIntensity / 0.3);
@@ -195,26 +199,35 @@ export function drawDayNightCycle(
     const moonT = moonPhase / 0.5;
     const moonX = 60 + moonT * (CANVAS_WIDTH - 120);
     const moonArc = Math.sin(moonT * Math.PI);
-    const moonY = 110 - moonArc * 70;
+    const moonY = 130 - moonArc * 70;
     const moonAlpha = Math.min(1, nightIntensity * 2);
 
     if (moonAlpha > 0.05) {
-      // Glow
-      ctx.fillStyle = `rgba(170, 187, 221, ${moonAlpha * 0.15})`;
+      ctx.save();
+      ctx.translate(moonX, moonY);
+      ctx.scale(1.7, 1.7);
+      ctx.translate(-moonX, -moonY);
+      ctx.globalAlpha = moonAlpha * .09;
+      ctx.fillStyle = '#d6e4ee';
+      ctx.beginPath(); ctx.arc(moonX, moonY, 29, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = moonAlpha;
+      ctx.fillStyle = '#aabcca';
+      ctx.beginPath(); ctx.ellipse(moonX, moonY, 17, 18, .12, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#eee9d5';
+      // The crescent is a closed shape, so no dark sky-colored disc leaks outside it.
+      ctx.beginPath(); ctx.moveTo(moonX + 6, moonY - 16);
+      ctx.bezierCurveTo(moonX - 20, moonY - 23, moonX - 23, moonY + 16, moonX + 1, moonY + 17);
+      ctx.quadraticCurveTo(moonX + 10, moonY + 18, moonX + 14, moonY + 10);
+      ctx.bezierCurveTo(moonX - 5, moonY + 13, moonX - 10, moonY - 8, moonX + 6, moonY - 16);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#cdcdbf';
       ctx.beginPath();
-      ctx.arc(moonX, moonY, 22, 0, Math.PI * 2);
+      ctx.ellipse(moonX - 10, moonY - 4, 2.5, 3.5, .3, 0, Math.PI * 2);
+      ctx.moveTo(moonX - 5, moonY + 9);
+      ctx.ellipse(moonX - 7, moonY + 9, 2, 1.5, -.2, 0, Math.PI * 2);
       ctx.fill();
-      // Moon body
-      ctx.fillStyle = `rgba(232, 232, 240, ${moonAlpha * 0.9})`;
-      ctx.beginPath();
-      ctx.arc(moonX, moonY, 12, 0, Math.PI * 2);
-      ctx.fill();
-      // Crescent shadow -- inherits body alpha through globalAlpha multiply originally.
-      // Effective: rgba(10,12,45,overlayAlpha+0.3) * (moonAlpha*0.9)
-      ctx.fillStyle = `rgba(10, 12, 45, ${(overlayAlpha + 0.3) * moonAlpha * 0.9})`;
-      ctx.beginPath();
-      ctx.arc(moonX + 5, moonY - 2, 10, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.restore();
+      ctx.globalAlpha = 1;
     }
   }
 
@@ -239,6 +252,19 @@ export function drawDayNightCycle(
     }
   }
 
+  ctx.restore();
+}
+
+/** Foreground nighttime effects retain their post-gameplay layer. */
+export function drawDayNightCycle(
+  ctx: Ctx2D,
+  dayPhase: number,
+  matchState: MatchState | undefined,
+  theme: ThemeConfig,
+  frameTime: number,
+): void {
+  ctx.save();
+  const nightIntensity = computeNightIntensity(dayPhase);
   if (nightIntensity > 0.4 && theme.dayNight.showFireflies) {
     const fireflyAlpha = Math.min((nightIntensity - 0.4) / 0.4, 1) * 0.7;
     const now = frameTime / 1000;

@@ -54,4 +54,9 @@ export default defineConfig([
       globals: globals.node,
     },
   },
+  {
+    // Playwright probes run callbacks inside the page's browser context.
+    files: ['docs/mockups/{carrot-pickup,ceiling-bonk,player-bump,wall-bonk}/{capture-live,verify}.mjs'],
+    languageOptions: { globals: { ...globals.node, ...globals.browser } },
+  },
 ])
