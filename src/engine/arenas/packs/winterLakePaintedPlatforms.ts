@@ -37,6 +37,96 @@ function drawShelf(ctx: Ctx2D, image: CanvasImageSource, platform: Platform, isG
     x + width - end, y, end, height);
 }
 
+// The illustrated source contains more detail than a 40–50px step can show.
+// At that size its ink is subpixel and three-slice seams become visible. Keep
+// the same snow/ice palette but draw a few broad connected shapes at 1:1 scale.
+function drawTinyShelf(ctx: Ctx2D, image: CanvasImageSource, platform: Platform): void {
+  const x = platform.x;
+  const y = platform.y - CAP_DEPTH / 2;
+  const w = platform.width + skewPx();
+  const bottom = platform.y + platform.height;
+
+  ctx.beginPath();
+  ctx.moveTo(x + 2, y + 5);
+  ctx.quadraticCurveTo(x + 3, y + 2, x + 9, y + 3);
+  ctx.quadraticCurveTo(x + w * .38, y, x + w * .58, y + 3);
+  ctx.quadraticCurveTo(x + w * .85, y + 1, x + w - 3, y + 3);
+  ctx.quadraticCurveTo(x + w, y + 4, x + w - 1, y + 8);
+  ctx.lineTo(x + w - 4, bottom - 3);
+  ctx.quadraticCurveTo(x + w - 5, bottom + 1, x + w - 10, bottom - 1);
+  ctx.quadraticCurveTo(x + w * .48, bottom + 1, x + 5, bottom - 1);
+  ctx.quadraticCurveTo(x, bottom - 2, x + 1, bottom - 6);
+  ctx.closePath();
+  ctx.fillStyle = '#244963';
+  ctx.fill();
+
+  ctx.fillStyle = '#65afc8';
+  ctx.beginPath();
+  ctx.moveTo(x + 3, y + 9);
+  ctx.lineTo(x + w - 3, y + 8);
+  ctx.lineTo(x + w - 6, bottom - 2);
+  ctx.quadraticCurveTo(x + w * .54, bottom - 1, x + 5, bottom - 3);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = '#397d9f';
+  ctx.beginPath();
+  ctx.moveTo(x + w * .22, y + 9);
+  ctx.lineTo(x + w * .42, y + 10);
+  ctx.lineTo(x + w * .58, bottom - 3);
+  ctx.lineTo(x + w * .31, bottom - 2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(x + w * .69, y + 9);
+  ctx.lineTo(x + w * .85, y + 8);
+  ctx.lineTo(x + w * .79, bottom - 2);
+  ctx.lineTo(x + w * .55, bottom - 2);
+  ctx.closePath();
+  ctx.fill();
+
+  // Sample a single broad facet area from the painted source. Its brushwork
+  // provides material variation without shrinking the entire 2112px shelf to
+  // a handful of screen pixels.
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(x + 3, y + 9);
+  ctx.lineTo(x + w - 3, y + 8);
+  ctx.lineTo(x + w - 6, bottom - 2);
+  ctx.quadraticCurveTo(x + w * .54, bottom - 1, x + 5, bottom - 3);
+  ctx.closePath();
+  ctx.clip();
+  ctx.globalAlpha = .64;
+  ctx.drawImage(image, 455, 314, 840, 265, x + 3, y + 8, w - 6, bottom - y - 10);
+  ctx.restore();
+
+  ctx.strokeStyle = '#b8e6ea';
+  ctx.lineWidth = 1.1;
+  ctx.beginPath();
+  ctx.moveTo(x + w * .23, y + 11);
+  ctx.lineTo(x + w * .31, bottom - 4);
+  ctx.moveTo(x + w * .69, y + 10);
+  ctx.lineTo(x + w * .55, bottom - 4);
+  ctx.stroke();
+
+  ctx.fillStyle = '#f6f8f2';
+  ctx.beginPath();
+  ctx.moveTo(x + 2, y + 5);
+  ctx.quadraticCurveTo(x + 5, y + 2, x + 10, y + 3);
+  ctx.quadraticCurveTo(x + w * .39, y + 1, x + w * .56, y + 3);
+  ctx.quadraticCurveTo(x + w * .83, y + 2, x + w - 3, y + 4);
+  ctx.quadraticCurveTo(x + w - 2, y + 7, x + w - 6, y + 8);
+  ctx.quadraticCurveTo(x + w * .79, y + 10, x + w * .64, y + 8);
+  ctx.quadraticCurveTo(x + w * .52, y + 12, x + w * .42, y + 9);
+  ctx.quadraticCurveTo(x + w * .25, y + 11, x + 6, y + 9);
+  ctx.quadraticCurveTo(x + 1, y + 9, x + 2, y + 5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#244963';
+  ctx.lineWidth = 1.4;
+  ctx.stroke();
+}
+
 function drawCube(ctx: Ctx2D, image: CanvasImageSource, platform: Platform): void {
   const source = PAINTED_PLATFORM_SOURCES.cube;
   const depth = platform.width * .3;
@@ -77,7 +167,8 @@ export function drawPaintedWinterPlatform(
       platform.width + skewPx() + (isGround ? 40 : 0), platform.y + platform.height - y);
     ctx.clip();
   }
-  drawShelf(ctx, image, platform, isGround, kind);
+  if (platform.width < 80 && kind === 'shelf') drawTinyShelf(ctx, image, platform);
+  else drawShelf(ctx, image, platform, isGround, kind);
   ctx.restore();
   return true;
 }

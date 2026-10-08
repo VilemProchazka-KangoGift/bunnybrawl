@@ -4,9 +4,10 @@ import { fileURLToPath } from 'node:url';
 
 const directory = dirname(fileURLToPath(import.meta.url));
 const server = process.env.WINTER_PLATFORM_URL ?? 'http://127.0.0.1:4225/bunnybrawl/';
+const variants = process.argv.slice(2);
 const browser = await chromium.launch({ headless: true });
 try {
-  for (const variant of ['glacial-ceramic', 'storybook-glaze', 'painted-sprite', 'painted-scalable']) {
+  for (const variant of variants.length ? variants : ['glacial-ceramic', 'storybook-glaze', 'painted-sprite', 'painted-scalable']) {
     for (const time of ['day', 'night']) {
       const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
       const errors = [];

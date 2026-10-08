@@ -15,12 +15,12 @@ ctx.fillText('Painted platforms: width and placement study', 40, 38);
 ctx.font = '15px sans-serif';
 ctx.fillText('Orange line = collision top. Artwork does not change collision or landing height.', 40, 65);
 
-const widths = [40, 65, 90, 120, 145, 180, 240, 400, 600];
+const widths = [40, 45, 50, 65, 90, 120, 145, 180, 240, 400, 600];
 for (let i = 0; i < widths.length; i++) {
   const width = widths[i];
   const platform: Platform = {
     x: 225 + (i % 3) * 56,
-    y: 140 + i * 83,
+    y: 128 + i * 68,
     width,
     height: width < 80 ? 18 : 24,
     style: width >= 180 ? 'snowBridge' : undefined,

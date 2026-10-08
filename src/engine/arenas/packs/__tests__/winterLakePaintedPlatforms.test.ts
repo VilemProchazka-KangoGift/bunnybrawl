@@ -5,10 +5,12 @@ import { drawPaintedWinterPlatform, paintedPlatformKind } from '../winterLakePai
 
 function recorder() {
   const drawImage = vi.fn();
+  const stroke = vi.fn();
   const ctx = {
     drawImage, save: vi.fn(), restore: vi.fn(), beginPath: vi.fn(), rect: vi.fn(), clip: vi.fn(),
+    moveTo: vi.fn(), lineTo: vi.fn(), quadraticCurveTo: vi.fn(), closePath: vi.fn(), fill: vi.fn(), stroke,
   } as unknown as Ctx2D;
-  return { ctx, drawImage };
+  return { ctx, drawImage, stroke };
 }
 
 const images = {
@@ -23,7 +25,7 @@ describe('painted Winter Lake platforms', () => {
     expect(paintedPlatformKind({ x: 0, y: 100, width: 220, height: 24 }, false)).toBe('shelf');
     expect(paintedPlatformKind({ x: 0, y: 100, width: 145, height: 24, style: 'snowBridge' }, false)).toBe('bridge');
   });
-  it.each([40, 65, 90, 120, 145, 180, 240, 400, 600])('covers a moved %ipx shelf without moving its landing plane', width => {
+  it.each([90, 120, 145, 180, 240, 400, 600])('covers a moved %ipx shelf without moving its landing plane', width => {
     const platform: Platform = { x: 93, y: 371, width, height: width < 80 ? 18 : 24, style: width >= 180 ? 'snowBridge' : undefined };
     const { ctx, drawImage } = recorder();
     expect(drawPaintedWinterPlatform(ctx, platform, false, false, images)).toBe(true);
@@ -34,6 +36,17 @@ describe('painted Winter Lake platforms', () => {
     expect(calls[2][5] + calls[2][7]).toBeCloseTo(platform.x + width + skewPx());
     expect(calls.reduce((sum, call) => sum + call[7], 0)).toBeCloseTo(width + skewPx());
     expect(calls.every(call => call[7] > 0 && call[8] > 0)).toBe(true);
+  });
+
+  it.each([40, 50, 65])('renders a %ipx step with one painted sample and continuous ink paths', width => {
+    const platform: Platform = { x: 93, y: 371, width, height: 18 };
+    const { ctx, drawImage, stroke } = recorder();
+    expect(drawPaintedWinterPlatform(ctx, platform, false, false, images)).toBe(true);
+    expect(drawImage).toHaveBeenCalledTimes(1);
+    expect(stroke).toHaveBeenCalledTimes(2);
+    const call = drawImage.mock.calls[0];
+    expect(call[5]).toBeGreaterThan(platform.x);
+    expect(call[5] + call[7]).toBeLessThan(platform.x + width + skewPx());
   });
 
   it('overscans the ground while keeping the collision geometry untouched', () => {
