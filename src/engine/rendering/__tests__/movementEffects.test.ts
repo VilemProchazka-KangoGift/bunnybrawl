@@ -18,7 +18,7 @@ describe('movement cloud lifecycle', () => {
     const p = makePlayer({ state: 'airborne', invincibleTimer: 0, ...motion });
     p.afterimages.push({ x: 90, y: 390, facing: 'right', alpha: 1 });
     updatePlayerCosmetics(p, 1 / 30, 200, new Accumulator(), new Accumulator(),
-      () => {}, () => {}, { platforms: [] } as never, false);
+      () => {}, () => {}, { platforms: [] } as never, false, new Accumulator());
     expect(p.afterimages).toHaveLength(0);
   });
   it('keeps takeoff at its launch surface and renders a cloud after worker-style color decoding', () => {

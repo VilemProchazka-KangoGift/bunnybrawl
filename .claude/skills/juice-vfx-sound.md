@@ -211,3 +211,7 @@ Selected spawn/respawn: three large stationary cream clouds for 0.55 s and eight
 ### Lava Ember cough
 
 Selected Ember cough emits one stationary burnCough particle on a rising/refreshed burnTimer: two smoke chuffs 150 ms apart with ember cores, total 590 ms. Shape ID 9 survives four-bit SAB packing. Draw chuffs with the foreground entrance pass after players; exclude from generic gravity. Quiet player-following smoke uses the existing five-second burn timer and original warm glow, preserving hazard physics, sounds and impact feedback. Practice calls the real lava collision helper and cosmetic transition, never manually emits the cough. Reset must prime baselines before the lava hit. Build, lint, 185 focused Vitest tests and renderer-worker lava-hit/expiry/replay browser capture passed; both simulation modes booted, full E2E not run.
+
+### Tiny running heel puffs
+
+Running uses one small cream heelCloud every 200ms, 300ms lifetime, 2.8px size scaled with body width, anchored behind the feet and drifting at 9px/s. Keep visual cadence in a separate per-player Accumulator so surface-aware footstep audio retains its tempo and volume. Clear on non-running/inactive players and cleanup; suppress on slow devices. The custom tiny cloud has a half-pixel ink edge and uses SAB shape 11, leaving code 10 available for the kill-ring work. Unlike landingCloud, heelCloud retains normal particle gravity to match the selected study. Generic ground-run speed afterimages remain a separate effect and can obscure these tiny puffs in live review.

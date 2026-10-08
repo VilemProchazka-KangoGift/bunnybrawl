@@ -4,6 +4,7 @@ const MOVEMENT_INK = '#665344';
 
 /** A short, expanding cloud silhouette; one path rather than a shower of dots. */
 export function drawMovementPuff(ctx: Ctx2D, p: Particle, lead = 0): void {
+  if (p.shape === 'heelCloud') { drawHeelPuff(ctx, p, lead); return; }
   const progress = Math.min(1, Math.max(0, (p.maxLife - p.life + lead) / p.maxLife));
   const growth = 1 - (1 - progress) ** 3;
   const r = p.size * (0.5 + growth * 0.5);
@@ -78,4 +79,15 @@ export function drawImpactCrown(ctx: Ctx2D, p: Particle, lead = 0): void {
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
+}
+
+function drawHeelPuff(ctx: Ctx2D, p: Particle, lead: number): void {
+  const t = Math.min(1, Math.max(0, (p.maxLife-p.life+lead)/p.maxLife));
+  const r = p.size*(.7+t*.6), x=p.x+p.vx*lead, y=p.y+p.vy*lead;
+  ctx.globalAlpha=1-t; ctx.fillStyle=p.color; ctx.strokeStyle='#9B8165'; ctx.lineWidth=.5;
+  ctx.beginPath();ctx.moveTo(x-r,y);
+  ctx.bezierCurveTo(x-r*1.4,y-r*.65,x-r*.5,y-r*1.2,x-r*.15,y-r*.7);
+  ctx.bezierCurveTo(x+r*.2,y-r*1.6,x+r,y-r,x+r*.8,y-r*.4);
+  ctx.bezierCurveTo(x+r*1.4,y-r*.1,x+r*.6,y+r*.25,x-r,y);
+  ctx.fill();ctx.stroke();
 }

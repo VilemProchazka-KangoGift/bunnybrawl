@@ -15,7 +15,7 @@
  *                           bit  0..7  = blue
  *                           bit  8..15 = green
  *                           bit 16..23 = red
- *                           bits 24..27 = shape (0=circle, 1=spike, 2=jumpCloud, 3=landingCloud, 4=impactCrown, 5=carrotChip, 6=carrotLeaf, 7=thornJolt, 8=respawnCloud, 9=burnCough)
+ *                           bits 24..27 = shape (0=circle, 1=spike, 2=jumpCloud, 3=landingCloud, 4=impactCrown, 5=carrotChip, 6=carrotLeaf, 7=thornJolt, 8=respawnCloud, 9=burnCough, 11=heelCloud)
  *
  *    Float32 view (per-particle data), starts after the Uint32 region:
  *      For each particle i: [x, y, vx, vy, life, maxLife, size]
@@ -73,7 +73,7 @@ function packColor(hex: string): number {
 
 function packMeta(color: string, shape: ParticleShape | undefined): number {
   const c = packColor(color);
-  const shapeBit = shape === 'spike' ? 1 : shape === 'jumpCloud' ? 2 : shape === 'landingCloud' ? 3 : shape === 'impactCrown' ? 4 : shape === 'carrotChip' ? 5 : shape === 'carrotLeaf' ? 6 : shape === 'thornJolt' ? 7 : shape === 'respawnCloud' ? 8 : shape === 'burnCough' ? 9 : 0;
+  const shapeBit = shape === 'spike' ? 1 : shape === 'jumpCloud' ? 2 : shape === 'landingCloud' ? 3 : shape === 'impactCrown' ? 4 : shape === 'carrotChip' ? 5 : shape === 'carrotLeaf' ? 6 : shape === 'thornJolt' ? 7 : shape === 'respawnCloud' ? 8 : shape === 'burnCough' ? 9 : shape === 'heelCloud' ? 11 : 0;
   return (shapeBit << 24) | c;
 }
 
@@ -140,7 +140,7 @@ export function readParticles(
     const p = pool[i];
     p.color = colors.get(packed);
     const shape = (packed >>> 24) & 15;
-    p.shape = shape === 1 ? 'spike' : shape === 2 ? 'jumpCloud' : shape === 3 ? 'landingCloud' : shape === 4 ? 'impactCrown' : shape === 5 ? 'carrotChip' : shape === 6 ? 'carrotLeaf' : shape === 7 ? 'thornJolt' : shape === 8 ? 'respawnCloud' : shape === 9 ? 'burnCough' : 'circle';
+    p.shape = shape === 1 ? 'spike' : shape === 2 ? 'jumpCloud' : shape === 3 ? 'landingCloud' : shape === 4 ? 'impactCrown' : shape === 5 ? 'carrotChip' : shape === 6 ? 'carrotLeaf' : shape === 7 ? 'thornJolt' : shape === 8 ? 'respawnCloud' : shape === 9 ? 'burnCough' : shape === 11 ? 'heelCloud' : 'circle';
     const off = i * FLOAT_FIELDS_PER_PARTICLE;
     p.x = data[off + 0];
     p.y = data[off + 1];
