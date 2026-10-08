@@ -1,3 +1,4 @@
+import { VICTORY_PRESENTATION_MS } from '../../engine/constants';
 import { useEffect, useRef } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import { GameLoop } from '../../engine/gameLoop';
@@ -182,7 +183,7 @@ export function useOnlineMatch(p: UseOnlineMatchParams): void {
       }
       victoryTimeoutRef.current = setTimeout(() => {
         setMatchResult(winner, state);
-      }, 1500);
+      }, winner ? VICTORY_PRESENTATION_MS : 1500);
     };
 
     window.__perfTrace = perfTrace;

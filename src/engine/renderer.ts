@@ -1,3 +1,4 @@
+import { VictoryCamera } from './rendering/victoryCamera';
 import { ThornRecoil } from './rendering/thornRecoil';
 import { CeilingSquash } from './rendering/ceilingSquash';
 import { BumpRecoil } from './rendering/bumpRecoil';
@@ -321,6 +322,8 @@ function resetDiag(d: RenderDiagnostics): void {
 }
 
 export class Renderer implements IRenderer {
+  private victoryCamera = new VictoryCamera();
+  private victoryScene: OffscreenCanvas | null = null;
   private bgCanvas: RendererCanvas;
   private bgNightCanvas: RendererCanvas | null = null;
   private fgCanvas: RendererCanvas;
@@ -589,6 +592,7 @@ export class Renderer implements IRenderer {
    *  and derived color caches; leaves the sprite cache intact (the cache key
    *  includes a bubble-helmet bit, so cross-arena sprite reuse is safe). */
   setTheme(theme: ThemeConfig): void {
+    this.victoryCamera.clear();
     this.theme = theme;
     this.initClouds();
     clearArenaCaches();
@@ -1557,6 +1561,8 @@ export class Renderer implements IRenderer {
 
       ctx.restore();
 
+      this._drawVictoryCamera(matchState);
+
       const overlayStart = perfTrace.begin('render.overlay');
       // Overlay layer: HUD, countdown, connection quality, debug overlays, screen flash.
       // When hudCtx is set, these go on a dedicated canvas above fg, redrawn only when
@@ -1582,6 +1588,44 @@ export class Renderer implements IRenderer {
    * (no dirty-tracking — lobby HUD has continuously-moving labels and the
    * ready-zone gradient). Screen flash still respected for stomp swaps.
    */
+  /** Compose world layers before the camera move; HUD stays at screen coordinates. */
+  private _drawVictoryCamera(state: MatchState): void {
+    const camera = this.victoryCamera.frame(state, this.frameTime);
+    if (!camera || camera.scale === 1 || typeof OffscreenCanvas === 'undefined') return;
+    const w = this.fgCanvas.width, h = this.fgCanvas.height;
+    if (!this.victoryScene || this.victoryScene.width !== w || this.victoryScene.height !== h) {
+      this.victoryScene = new OffscreenCanvas(w, h);
+    }
+    const scene = this.victoryScene;
+    const composite = scene.getContext('2d')!;
+    composite.clearRect(0, 0, w, h);
+    composite.drawImage(this.bgCanvas, 0, 0, w, h);
+    if (this.bgNightCanvas) {
+      composite.globalAlpha = this.lighting.ambient.getBgNightOpacity();
+      composite.drawImage(this.bgNightCanvas, 0, 0, w, h);
+      composite.globalAlpha = 1;
+    }
+    composite.drawImage(this.fgCanvas, 0, 0, w, h);
+    const ctx = this.fgCtx;
+    ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    ctx.save();
+    ctx.translate(camera.x, camera.y);
+    ctx.scale(camera.scale, camera.scale);
+    ctx.drawImage(scene, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    ctx.restore();
+    // The separately screen-blended emitter layer needs the identical camera.
+    if (this._lightCanvas && this._lightCtx && this._lastLightOpacity >= 0.02) {
+      composite.clearRect(0, 0, w, h);
+      composite.drawImage(this._lightCanvas, 0, 0, w, h);
+      const light = this._lightCtx;
+      light.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      light.save();
+      light.translate(camera.x, camera.y);
+      light.scale(camera.scale, camera.scale);
+      light.drawImage(scene, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      light.restore();
+    }
+  }
   private _renderLobbyOverlay(matchState: MatchState): void {
     const target = this.hudCtx ?? this.fgCtx;
     if (this.hudCtx) target.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
