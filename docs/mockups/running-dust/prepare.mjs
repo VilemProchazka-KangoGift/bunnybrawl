@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 const read=p=>fs.readFileSync(new URL(p,import.meta.url),'utf8');
 let t=read('../victory-celebration/template.html').replaceAll('victory','running').replaceAll('Victory','Running').replaceAll('Running celebration','Running dust').replaceAll('Current fireworks','Current').replaceAll('Fireworks + winner zoom','Tiny heel puffs').replaceAll('Winner bounce','Surface flecks').replaceAll('Carrot shower','None');
-t=t.replace(/      const progress=[\s\S]*?      if\(backdrop.naturalWidth\)/,"      if(backdrop.naturalWidth)");
+t=t.replace(/ {6}const progress=[\s\S]*? {6}if\(backdrop.naturalWidth\)/,"      if(backdrop.naturalWidth)");
 t=t.replace('ctx.restore();ctx.restore();','ctx.restore();');
 t=t.replace("drawRunningScene(ctx,characterImages[character.value],character.value,time,index===1?0:index,w/z)","drawRunningScene(ctx,characterImages[character.value],character.value,time,index,surface.value,w/z)");
 t=t.replace('    <button class="btn"', '    <label class="form-label">Surface <select class="form-select" id="running-surface"><option>grass</option><option>stone</option><option>wood</option><option>snow</option><option>sand</option><option>ice</option><option>metal</option><option>glass</option></select></label>\n    <button class="btn"');
