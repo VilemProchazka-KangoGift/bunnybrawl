@@ -165,7 +165,7 @@ export function warmSpriteCacheForCharacters(names: string[], theme?: ThemeConfi
   }
 }
 
-export function drawPlayer(ctx: Ctx2D, player: Player, nearCarrot: boolean, theme: ThemeConfig, frameTime: number, bumpOffset = 0): void {
+export function drawPlayer(ctx: Ctx2D, player: Player, nearCarrot: boolean, theme: ThemeConfig, frameTime: number, bumpOffset = 0, ceilingPulse = 0): void {
   const { width, height, character, state, facing, invincibleTimer, animFrame, fastFalling, fatTimer, slowTimer } = player;
   // Apply visual correction offset from rollback smoothing
   const x = player.x + player.renderOffsetX;
@@ -240,6 +240,13 @@ export function drawPlayer(ctx: Ctx2D, player: Player, nearCarrot: boolean, them
     ctx.translate(cx, cy);
     ctx.rotate(bumpOffset * .018);
     ctx.translate(-cx, -cy);
+  }
+
+  // Keep the head anchor fixed while the cached pose gently compresses.
+  if (ceilingPulse > 0) {
+    ctx.translate(cx, y);
+    ctx.scale(1 + ceilingPulse * .06, 1 - ceilingPulse * .12);
+    ctx.translate(-cx, -y);
   }
 
   // Squash/stretch from landing/jumping (centered on feet)

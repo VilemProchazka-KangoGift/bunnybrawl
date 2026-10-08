@@ -40,7 +40,7 @@ const SFX_DEFS: Array<[string, SoundDef]> = [
   ['oof',        { generate: generateOofSound, volume: 0.6 }],
   ['splash',     { generate: generateSplashSound, volume: 0.5 }],
   ['land',       { generate: generateLandSound, volume: 0.5 }],
-  ['headbonk',   { generate: generateHeadbonkSound, volume: 1.0 }],
+  ['headbonk',   { generate: generateHeadbonkSound, volume: 0.5 }],
   ['bump',       { generate: generateBumpSound, volume: 1.0 }],
   ['spring',     { generate: generateSpringSound, volume: 1.0 }],
   ['crouch',     { generate: generateCrouchSound, volume: 0.7 }],

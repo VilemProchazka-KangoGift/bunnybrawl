@@ -112,3 +112,7 @@ Cover the first-tick reversal and held spring launch in Simulator tests. Browser
 Keyboard jump presses must survive a complete keydown/keyup between reads. OS repeats do not produce extra jumps. Local sim-worker play publishes keyboard changes immediately; touch remains frame-polled. WorkerInput (not RemoteInput or Simulator) retains asynchronous jump pulses until the player is actually read, including hitstop, then consumes once. SAB consumption atomically clears only jump; producers use CAS to avoid resurrecting a consumed pulse. Pause discards pending pulses, and resume publishes current held levels before restarting simulation.
 
 Use `scripts/measureInputLatency.mjs` with a production preview and `?debug=perf` diagnostics. Measure key-event to simulation read separately from render submission/completion; neither measures physical display presentation. Browser regressions should hold main RAF while testing both SAB and message fallback, plus `?simWorker=off` quick taps.
+
+## Gentle ceiling squash
+
+Renderer-owned `CeilingSquash` anticipates an upward approach within eight logical pixels of a platform underside, respecting bottom and left collision insets. It also catches an upward-to-stopped snapshot transition beside the ceiling. Use a smoothstep 60 ms compression and 220 ms release, 12 percent height / 6 percent width, anchored at the head. Held proximity must not retrigger; evaluate inactive and respawning players too so contact state clears. Draw only the pose: shadows, physics and transport remain unchanged.
