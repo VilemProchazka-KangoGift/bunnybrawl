@@ -1,0 +1,32 @@
+import fs from 'node:fs';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+const require=createRequire(new URL('../../../package.json',import.meta.url));
+const {chromium}=require('playwright');
+const browser=await chromium.launch({headless:true});
+const page=await browser.newPage({viewport:{width:1000,height:650},deviceScaleFactor:1});
+const errors=[];page.on('pageerror',e=>errors.push(e.message));
+await page.addInitScript(()=>{window.openai={setWidgetState:async state=>{window.__choice=state}}});
+const out=new URL('./captures/',import.meta.url);fs.mkdirSync(out,{recursive:true});
+try{
+  await page.goto(new URL('./index.html',import.meta.url).href);
+  await page.getByRole('button',{name:'Pause',exact:true}).click();
+  await page.evaluate(()=>{const el=document.getElementById('bump-time');el.value='.435';el.dispatchEvent(new Event('input',{bubbles:true}));});
+  await page.waitForTimeout(100);
+  await page.screenshot({path:fileURLToPath(new URL('game-size.png',out)),fullPage:true});
+  await page.locator('#bump-scale').selectOption('2');
+  await page.screenshot({path:fileURLToPath(new URL('detail.png',out)),fullPage:true});
+  await page.locator('#bump-night').check();
+  await page.screenshot({path:fileURLToPath(new URL('night.png',out)),fullPage:true});
+  await page.screenshot({path:fileURLToPath(new URL('left-wall.png',out)),fullPage:true});
+  await page.locator('#bump-baseline').check();
+  const frames=await page.locator('canvas').evaluateAll(canvases=>canvases.map(c=>c.toDataURL()));
+  if(!frames.every(frame=>frame===frames[0]))throw Error('Baseline panels differ');
+  await page.locator('input[value="Contact flash"]').check();
+  if(await page.evaluate(()=>window.__choice.modelContent.playerBump)!=='Contact flash')throw Error('Selection not saved');
+  await page.setViewportSize({width:360,height:900});
+  if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Mobile overflow');
+  await page.screenshot({path:fileURLToPath(new URL('mobile.png',out)),fullPage:true});
+  if(errors.length)throw Error(errors.join('\n'));
+  console.log('PASS: three panels, pause/scrub, zoom, night, baseline parity, saved selection, 360px layout; no browser errors.');
+}finally{await browser.close();}

@@ -1,0 +1,64 @@
+<div id="ceiling-study">
+  <h2>Ceiling bonk</h2>
+  <div class="viz-controls">
+    <label class="form-label">Character <select class="form-select" id="ceiling-character"></select></label>
+    <button class="btn" type="button" id="ceiling-play">Pause</button>
+    <label class="form-label">Speed <select class="form-select" id="ceiling-speed"><option value="1">Normal</option><option value="0.35">Slow motion</option></select></label>
+    <label class="form-label">Scale <select class="form-select" id="ceiling-scale"><option value="1">Game size</option><option value="2">2× detail</option></select></label>
+    <label class="form-check"><input class="form-check-input" id="ceiling-night" type="checkbox"><span class="form-check-label">Night</span></label>
+  </div>
+  <label class="form-label" for="ceiling-time">Contact timing</label>
+  <input class="form-range" id="ceiling-time" type="range" min="0" max="1.1" step="0.005" value="0">
+  <div class="ceiling-panels">
+    <section><h3>Current response</h3><canvas aria-label="Bunny hits a ceiling with the current stop and fall response" role="img"></canvas><label class="form-check"><input class="form-check-input" type="radio" name="ceiling-choice" value="Current response"><span class="form-check-label">Current response</span></label></section>
+    <section><h3>Head squash</h3><canvas aria-label="Bunny hits a ceiling with a short head squash" role="img"></canvas><label class="form-check"><input class="form-check-input" type="radio" name="ceiling-choice" value="Head squash"><span class="form-check-label">Head squash</span></label></section>
+    <section><h3>Tiny stars</h3><canvas aria-label="Bunny hits a ceiling with three small inked stars" role="img"></canvas><label class="form-check"><input class="form-check-input" type="radio" name="ceiling-choice" value="Tiny stars"><span class="form-check-label">Tiny stars</span></label></section>
+    <section><h3>Ear wobble</h3><canvas aria-label="Bunny hits a ceiling with a brief upper-pose wobble" role="img"></canvas><label class="form-check"><input class="form-check-input" type="radio" name="ceiling-choice" value="Ear wobble"><span class="form-check-label">Ear wobble</span></label></section>
+  </div>
+</div>
+<style>
+  #ceiling-study .ceiling-panels{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+  #ceiling-study canvas{display:block;width:100%;height:180px}
+  @media(max-width:560px){#ceiling-study .ceiling-panels{grid-template-columns:1fr}}
+</style>
+<script>
+(() => {
+  const root=document.getElementById('ceiling-study');
+  const characterSources=__CHARACTERS__;
+  const characterImages=Object.fromEntries(Object.entries(characterSources).map(([name,src])=>{const image=new Image();image.src=src;return [name,image]}));
+  const backdrop=new Image();backdrop.src='__BACKDROP__';
+  /*__VARIANTS__*/
+  const play=root.querySelector('#ceiling-play'),speed=root.querySelector('#ceiling-speed'),scale=root.querySelector('#ceiling-scale'),night=root.querySelector('#ceiling-night'),scrub=root.querySelector('#ceiling-time');
+  const canvases=[...root.querySelectorAll('canvas')];
+  const character=root.querySelector('#ceiling-character');
+  for(const name of Object.keys(characterSources)){const option=document.createElement('option');option.value=name;option.textContent=name;character.append(option)}
+  let time=0,playing=!matchMedia('(prefers-reduced-motion: reduce)').matches,last=0;
+  function save(){const choice=root.querySelector('input[name="ceiling-choice"]:checked')?.value;window.openai?.setWidgetState?.({modelContent:{ceilingBonk:choice||null,character:character.value},privateContent:{character:character.value,time,playing,speed:speed.value,scale:scale.value,night:night.checked}})?.catch(()=>{});}
+  function restore(state){if(!state)return;const p=state.privateContent||{};if(characterImages[p.character])character.value=p.character;if(Number.isFinite(p.time))time=p.time;if(typeof p.playing==='boolean')playing=p.playing;for(const [name,el] of [['speed',speed],['scale',scale]])if(p[name])el.value=p[name];night.checked=!!p.night;for(const radio of root.querySelectorAll('input[name="ceiling-choice"]'))radio.checked=radio.value===state.modelContent?.ceilingBonk;play.textContent=playing?'Pause':'Play';}
+  restore(window.openai?.widgetState);play.textContent=playing?'Pause':'Play';
+  window.addEventListener('openai:set_globals',e=>restore(e.detail?.globals?.widgetState));
+  play.onclick=()=>{playing=!playing;play.textContent=playing?'Pause':'Play';save()};
+  scrub.oninput=()=>{time=Number(scrub.value);playing=false;play.textContent='Play';draw();save()};
+  for(const el of [character,speed,scale,night,...root.querySelectorAll('input[name="ceiling-choice"]')])el.onchange=()=>{draw();save()};
+  function draw(){
+    scrub.value=String(time);
+    canvases.forEach((canvas,index)=>{
+      const z=Number(scale.value),h=z===2?260:180;canvas.style.height=h+'px';
+      const w=canvas.clientWidth,dpr=Math.min(devicePixelRatio||1,2);
+      if(canvas.width!==Math.round(w*dpr)||canvas.height!==h*dpr){canvas.width=Math.round(w*dpr);canvas.height=h*dpr;}
+      const ctx=canvas.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
+      ctx.fillStyle=night.checked?'#334451':'#ACD5DE';ctx.fillRect(0,0,w,h);
+      if(backdrop.naturalWidth){ctx.globalAlpha=night.checked?.22:.6;ctx.drawImage(backdrop,230,240,480,300,0,0,w,h);ctx.globalAlpha=1;}
+      ctx.save();ctx.translate(w/2,h-20);ctx.scale(z,z);
+      ctx.fillStyle=night.checked?'#627958':'#9FB875';ctx.fillRect(-w/z,0,w*2/z,24);
+      ctx.strokeStyle='#665344';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-w/z,0);ctx.lineTo(w/z,0);ctx.stroke();
+      canvas.setAttribute('aria-label',character.value+' ceiling bonk: '+canvas.parentElement.querySelector('h3').textContent);
+      drawCeilingScene(ctx,characterImages[character.value],time,index);
+      ctx.restore();
+    });
+  }
+  new ResizeObserver(draw).observe(root);for(const image of Object.values(characterImages))image.onload=draw;backdrop.onload=draw;
+  function frame(now){if(playing)time=(time+Math.min(.05,(now-last)/1000)*Number(speed.value))%1.1;last=now;draw();requestAnimationFrame(frame)}
+  draw();requestAnimationFrame(frame);
+})();
+</script>

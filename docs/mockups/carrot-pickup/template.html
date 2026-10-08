@@ -1,0 +1,59 @@
+<div id="pickup-study">
+  <h2>Carrot pickup</h2>
+  <div class="viz-controls">
+    <button class="btn" type="button" id="pickup-play">Pause</button>
+    <label class="form-label">Speed <select class="form-select" id="pickup-speed"><option value="1">Normal</option><option value="0.35">Slow motion</option></select></label>
+    <label class="form-label">Scale <select class="form-select" id="pickup-scale"><option value="1">Game size</option><option value="2">2× detail</option></select></label>
+    <label class="form-check"><input class="form-check-input" id="pickup-night" type="checkbox"><span class="form-check-label">Night</span></label>
+  </div>
+  <label class="form-label" for="pickup-time">Contact timing</label>
+  <input class="form-range" id="pickup-time" type="range" min="0" max="1.1" step="0.005" value="0">
+  <div class="pickup-panels">
+    <section><h3>Current effect</h3><canvas aria-label="Bunny collects a carrot with the current runtime particle and debris burst" role="img"></canvas><label class="form-check"><input class="form-check-input" type="radio" name="pickup-choice" value="Current effect"><span class="form-check-label">Current effect</span></label></section>
+    <section><h3>Bite burst</h3><canvas aria-label="Bunny collects a carrot with flying orange chips" role="img"></canvas><label class="form-check"><input class="form-check-input" type="radio" name="pickup-choice" value="Bite burst"><span class="form-check-label">Bite burst</span></label></section>
+    <section><h3>Leaf flick</h3><canvas aria-label="Bunny collects a carrot with three curling leaves" role="img"></canvas><label class="form-check"><input class="form-check-input" type="radio" name="pickup-choice" value="Leaf flick"><span class="form-check-label">Leaf flick</span></label></section>
+    <section><h3>Crunch pop</h3><canvas aria-label="Bunny collects a carrot with a small irregular crunch pop" role="img"></canvas><label class="form-check"><input class="form-check-input" type="radio" name="pickup-choice" value="Crunch pop"><span class="form-check-label">Crunch pop</span></label></section>
+  </div>
+</div>
+<style>
+  #pickup-study .pickup-panels{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+  #pickup-study canvas{display:block;width:100%;height:180px}
+  @media(max-width:560px){#pickup-study .pickup-panels{grid-template-columns:1fr}}
+</style>
+<script>
+(() => {
+  const root=document.getElementById('pickup-study');
+  const atlas=new Image();atlas.src='__ATLAS__';
+  const backdrop=new Image();backdrop.src='__BACKDROP__';
+  /*__VARIANTS__*/
+  const play=root.querySelector('#pickup-play'),speed=root.querySelector('#pickup-speed'),scale=root.querySelector('#pickup-scale'),night=root.querySelector('#pickup-night'),scrub=root.querySelector('#pickup-time');
+  const canvases=[...root.querySelectorAll('canvas')];
+  let time=0,playing=!matchMedia('(prefers-reduced-motion: reduce)').matches,last=0;
+  function save(){const choice=root.querySelector('input[name="pickup-choice"]:checked')?.value;window.openai?.setWidgetState?.({modelContent:{carrotPickup:choice||null},privateContent:{time,playing,speed:speed.value,scale:scale.value,night:night.checked}})?.catch(()=>{});}
+  function restore(state){if(!state)return;const p=state.privateContent||{};if(Number.isFinite(p.time))time=p.time;if(typeof p.playing==='boolean')playing=p.playing;for(const [name,el] of [['speed',speed],['scale',scale]])if(p[name])el.value=p[name];night.checked=!!p.night;for(const radio of root.querySelectorAll('input[name="pickup-choice"]'))radio.checked=radio.value===state.modelContent?.carrotPickup;play.textContent=playing?'Pause':'Play';}
+  restore(window.openai?.widgetState);play.textContent=playing?'Pause':'Play';
+  window.addEventListener('openai:set_globals',e=>restore(e.detail?.globals?.widgetState));
+  play.onclick=()=>{playing=!playing;play.textContent=playing?'Pause':'Play';save()};
+  scrub.oninput=()=>{time=Number(scrub.value);playing=false;play.textContent='Play';draw();save()};
+  for(const el of [speed,scale,night,...root.querySelectorAll('input[name="pickup-choice"]')])el.onchange=()=>{draw();save()};
+  function draw(){
+    scrub.value=String(time);
+    canvases.forEach((canvas,index)=>{
+      const z=Number(scale.value),h=z===2?260:180;canvas.style.height=h+'px';
+      const w=canvas.clientWidth,dpr=Math.min(devicePixelRatio||1,2);
+      if(canvas.width!==Math.round(w*dpr)||canvas.height!==h*dpr){canvas.width=Math.round(w*dpr);canvas.height=h*dpr;}
+      const ctx=canvas.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
+      ctx.fillStyle=night.checked?'#334451':'#ACD5DE';ctx.fillRect(0,0,w,h);
+      if(backdrop.naturalWidth){ctx.globalAlpha=night.checked?.22:.6;ctx.drawImage(backdrop,230,240,480,300,0,0,w,h);ctx.globalAlpha=1;}
+      ctx.save();ctx.translate(w/2,h-20);ctx.scale(z,z);
+      ctx.fillStyle=night.checked?'#627958':'#9FB875';ctx.fillRect(-w/z,0,w*2/z,24);
+      ctx.strokeStyle='#665344';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-w/z,0);ctx.lineTo(w/z,0);ctx.stroke();
+      drawPickupScene(ctx,atlas,time,index);
+      ctx.restore();
+    });
+  }
+  new ResizeObserver(draw).observe(root);atlas.onload=draw;backdrop.onload=draw;
+  function frame(now){if(playing)time=(time+Math.min(.05,(now-last)/1000)*Number(speed.value))%1.1;last=now;draw();requestAnimationFrame(frame)}
+  draw();requestAnimationFrame(frame);
+})();
+</script>
