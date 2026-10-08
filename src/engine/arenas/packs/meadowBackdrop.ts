@@ -1,4 +1,5 @@
 import type { Ctx2D } from '../../types';
+import { appendCloudPath } from '../../themes/drawPrimitives/background';
 import { getIllustratedBackdrop } from '../illustratedBackdropAsset';
 
 type Point = readonly [number, number];
@@ -94,17 +95,18 @@ export const MEADOW_CLOUDS = [
 
 /** Elongated storybook cloud silhouette; renderer supplies the moving x. */
 export function drawMeadowCloud(c: Ctx2D, x: number, y: number, width: number, height: number): void {
-  c.fillStyle = 'rgba(255, 252, 236, 0.79)';
-  c.beginPath(); c.moveTo(x, y + height * .45);
-  c.bezierCurveTo(x - width * .08, y + height * .14, x + width * .1, y - height * .06, x + width * .28, y + height * .06);
-  c.bezierCurveTo(x + width * .37, y - height * .25, x + width * .61, y - height * .19, x + width * .68, y + height * .04);
-  c.bezierCurveTo(x + width * .94, y - height * .04, x + width * 1.05, y + height * .23, x + width, y + height * .45);
-  c.bezierCurveTo(x + width * .88, y + height * .74, x + width * .68, y + height * .55, x + width * .52, y + height * .63);
-  c.bezierCurveTo(x + width * .3, y + height * .69, x + width * .1, y + height * .72, x, y + height * .45);
-  c.closePath(); c.fill();
-  c.strokeStyle = 'rgba(179, 206, 211, 0.45)'; c.lineWidth = 2;
-  c.beginPath(); c.moveTo(x + width * .13, y + height * .57);
-  c.quadraticCurveTo(x + width * .34, y + height * .65, x + width * .54, y + height * .6);
-  c.quadraticCurveTo(x + width * .75, y + height * .53, x + width * .87, y + height * .55);
+  c.fillStyle = 'rgba(250, 247, 233, 0.82)';
+  c.beginPath();
+  appendCloudPath(c, x, y - height * .2, width, height);
+  c.fill();
+  // Broad cool underside and one broken cream highlight, kept quiet at game scale.
+  c.fillStyle = 'rgba(151, 181, 194, 0.18)';
+  c.beginPath(); c.moveTo(x + width * .08, y + height * .43);
+  c.bezierCurveTo(x + width * .34, y + height * .58, x + width * .64, y + height * .4, x + width * .94, y + height * .48);
+  c.bezierCurveTo(x + width * .74, y + height * .7, x + width * .32, y + height * .73, x + width * .08, y + height * .43);
+  c.fill();
+  c.strokeStyle = 'rgba(255, 254, 244, 0.65)'; c.lineWidth = 2;
+  c.beginPath(); c.moveTo(x + width * .3, y + height * .06);
+  c.bezierCurveTo(x + width * .36, y - height * .17, x + width * .5, y - height * .16, x + width * .54, y + height * .01);
   c.stroke();
 }

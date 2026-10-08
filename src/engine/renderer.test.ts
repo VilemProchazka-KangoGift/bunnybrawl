@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { appendCloudPath } from './themes/drawPrimitives';
 
 // Mock all rendering sub-modules before importing Renderer
 vi.mock('./rendering', () => ({
@@ -20,6 +21,7 @@ vi.mock('./rendering', () => ({
   drawCurrentZone: vi.fn(),
   drawGeyser: vi.fn(),
   drawBouncyPlatformOverlay: vi.fn(),
+  drawSkyCycle: vi.fn(),
   drawDayNightCycle: vi.fn(),
   computeNightIntensity: vi.fn(() => 0),
   fireflyPosition: vi.fn((_i: number, _t: number, out: { x: number; y: number }) => { out.x = 0; out.y = 0; }),
@@ -48,6 +50,7 @@ vi.mock('./rendering/hud', () => ({
 
 vi.mock('./themes/drawPrimitives', () => ({
   drawCloud: vi.fn(),
+  appendCloudPath: vi.fn(),
   drawHill: vi.fn(),
 }));
 
@@ -68,7 +71,7 @@ vi.mock('./debugFlags', () => ({
 import { Renderer } from './renderer';
 
 import { debugFlags } from './debugFlags';
-import { drawCarrot, drawSpringMushroom, drawThorn, drawWeather, drawGibShape, drawFireworks, drawWildlife, drawSpringTrail, drawHazardZone, drawZeroGZone, drawCurrentZone, drawGeyser, drawBouncyPlatformOverlay, drawDayNightCycle, drawHUD, drawCountdown, drawPlayer } from './rendering';
+import { drawCarrot, drawSpringMushroom, drawThorn, drawWeather, drawGibShape, drawFireworks, drawWildlife, drawSpringTrail, drawHazardZone, drawZeroGZone, drawCurrentZone, drawGeyser, drawBouncyPlatformOverlay, drawSkyCycle, drawDayNightCycle, drawHUD, drawCountdown, drawPlayer } from './rendering';
 import { drawNavDebugOverlay } from './navDebugOverlay';
 import { drawNetDebugOverlay } from './net/core/debugOverlay';
 
@@ -570,7 +573,14 @@ describe('Renderer — renderFrame conditional branches', () => {
     const r = new Renderer({ bgCanvas: bg.canvas ?? bg as any, fgCanvas: fg.canvas, theme });
     const state = makeState({ dayPhase: 0.5 });
     r.renderFrame(state, makeArena(), []);
+    expect(drawSkyCycle).toHaveBeenCalled();
+    expect(appendCloudPath).toHaveBeenCalled();
     expect(drawDayNightCycle).toHaveBeenCalled();
+    const skyOrder = vi.mocked(drawSkyCycle).mock.invocationCallOrder[0];
+    const cloudOrder = vi.mocked(appendCloudPath).mock.invocationCallOrder[0];
+    const foregroundOrder = vi.mocked(drawDayNightCycle).mock.invocationCallOrder[0];
+    expect(skyOrder).toBeLessThan(cloudOrder);
+    expect(cloudOrder).toBeLessThan(foregroundOrder);
     expect(r.getDiagnostics().dayNight).toBe(true);
   });
 
