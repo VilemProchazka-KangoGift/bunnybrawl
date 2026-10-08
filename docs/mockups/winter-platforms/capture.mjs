@@ -7,12 +7,13 @@ const server = process.env.WINTER_PLATFORM_URL ?? 'http://127.0.0.1:4225/bunnybr
 const variants = process.argv.slice(2);
 const browser = await chromium.launch({ headless: true });
 try {
-  for (const variant of variants.length ? variants : ['glacial-ceramic', 'storybook-glaze', 'painted-sprite', 'painted-scalable', 'vector-replica', 'vector-trace']) {
+  for (const variant of variants.length ? variants : ['production', 'glacial-ceramic', 'storybook-glaze', 'painted-sprite', 'painted-scalable', 'vector-replica', 'vector-trace']) {
     for (const time of ['day', 'night']) {
       const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
       const errors = [];
       page.on('pageerror', error => errors.push(error.message));
-      const url = new URL(`docs/mockups/winter-lake/render.html?variant=current&platform=${variant}&time=${time}`, server);
+      const platformQuery = variant === 'production' ? '' : `&platform=${variant}`;
+      const url = new URL(`docs/mockups/winter-lake/render.html?variant=current${platformQuery}&time=${time}`, server);
       const response = await page.goto(url.href, { waitUntil: 'domcontentloaded' });
       if (!response?.ok()) throw new Error(`${variant} ${time}: HTTP ${response?.status()}`);
       await page.locator('html[data-ready="true"]').waitFor({ timeout: 30000 });

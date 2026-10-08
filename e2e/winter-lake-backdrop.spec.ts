@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 
 const isWinterBackdrop = (url: string) => /winter-lake-pearl-painted[^/]*\.webp$/.test(new URL(url).pathname);
 const winterPlatformNames = ['winter-shelf-painted', 'winter-bridge-painted', 'winter-cube-painted'];
+const isArchivedPlatformImage = (url: string) => winterPlatformNames.some(name => new URL(url).pathname.includes(name));
 
 test('prefetches Pearl Painted for a selected Winter Lake menu', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('carrotroyale_arena', 'winter_lake'));
@@ -25,15 +26,16 @@ test('prefetches Pearl Painted after choosing Winter Lake in the menu', async ({
 for (const mode of ['default', 'simWorker=off'] as const) {
   test(`loads Pearl Painted before a direct Winter Lake match (${mode})`, async ({ page }) => {
     const errors: string[] = [];
+    const archivedPlatformRequests: string[] = [];
     page.on('pageerror', error => errors.push(error.message));
+    page.on('request', request => { if (isArchivedPlatformImage(request.url())) archivedPlatformRequests.push(request.url()); });
     const backdrop = page.waitForResponse(response => isWinterBackdrop(response.url()));
-    const platforms = winterPlatformNames.map(name => page.waitForResponse(response => new URL(response.url()).pathname.includes(name)));
     const query = mode === 'default' ? '' : '&simWorker=off';
     await page.goto(`/?arena=winter_lake&bots=1${query}`);
     expect((await backdrop).status()).toBe(200);
-    expect((await Promise.all(platforms)).map(response => response.status())).toEqual([200, 200, 200]);
     await page.waitForFunction(() => window.__bunnyTest?.state()?.phase === 'playing');
     await expect(page.locator('.match-loading-overlay')).toHaveCount(0);
+    expect(archivedPlatformRequests).toEqual([]);
     expect(errors).toEqual([]);
   });
 
@@ -45,14 +47,15 @@ for (const mode of ['default', 'simWorker=off'] as const) {
     await expect(page.locator('.pause-overlay')).toBeVisible();
     await page.locator('.level-btn').first().click();
     const backdrop = page.waitForResponse(response => isWinterBackdrop(response.url()));
-    const platforms = winterPlatformNames.map(name => page.waitForResponse(response => new URL(response.url()).pathname.includes(name)));
+    const archivedPlatformRequests: string[] = [];
+    page.on('request', request => { if (isArchivedPlatformImage(request.url())) archivedPlatformRequests.push(request.url()); });
     await page.locator('.pause-arena-btn').filter({ hasText: '❄️' }).click();
     expect((await backdrop).status()).toBe(200);
-    expect((await Promise.all(platforms)).map(response => response.status())).toEqual([200, 200, 200]);
     await page.waitForFunction(() =>
       window.__bunnyTest?.state()?.phase === 'playing'
       && window.__bunnyTest?.gameLoop()?.getArena().id === 'winter_lake',
     );
     await expect(page.locator('.match-loading-overlay')).toHaveCount(0);
+    expect(archivedPlatformRequests).toEqual([]);
   });
 }

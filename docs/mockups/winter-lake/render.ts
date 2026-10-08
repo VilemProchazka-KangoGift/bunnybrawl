@@ -8,11 +8,11 @@ import { getAllCharacters } from '../../../src/engine/characters/defaults';
 import { registerPlayablePlushRoster } from '../../../src/engine/characters/plush/playableRoster';
 import { createEmptyMatchState, createInitialPlayers } from '../../../src/engine/simulator/initialState';
 import { drawBackdrop, skies, VARIANTS, type Variant } from './variants';
-import { preloadIllustratedBackdrop, getWinterPlatformArt } from '../../../src/engine/arenas/illustratedBackdropAsset';
+import { preloadIllustratedBackdrop, preloadWinterPlatformArt, getWinterPlatformArt } from '../../../src/engine/arenas/illustratedBackdropAsset';
 import { drawPaintedWinterPlatform } from '../../../src/engine/arenas/packs/winterLakePaintedPlatforms';
 import { drawPlatformStudyBack, drawPlatformStudyFront, isIllustratedStudy, PLATFORM_VARIANTS, type PlatformVariant } from '../winter-platforms/variants';
 import { drawPaintedPlatformBack, drawPaintedPlatformFront, preloadPaintedPlatforms } from '../winter-platforms/painted';
-import { drawVectorReplicaBack, drawVectorReplicaFront } from '../winter-platforms/vectorReplica';
+import { drawWinterVectorPlatformBack, drawWinterVectorPlatformFront } from '../../../src/engine/arenas/packs/winterLakeVectorPlatforms';
 import { drawTracedSvgBack, drawTracedSvgFront, preloadTracedBridge } from '../winter-platforms/tracedSvg';
 
 const query = new URLSearchParams(location.search);
@@ -34,17 +34,18 @@ registerBuiltinCharacters();
 await registerPlayablePlushRoster();
 const arena = toArena(winterLake);
 const theme = toThemeConfig(winterLake);
+await preloadIllustratedBackdrop('winter_lake');
 if (platformVariant) {
   // The study's `current` background is the approved Pearl plate. Without a
   // platform query, older background comparisons retain their old baseline.
-  await preloadIllustratedBackdrop('winter_lake');
+  if (platformVariant === 'painted-scalable') await preloadWinterPlatformArt();
   if (platformVariant === 'painted-sprite') await preloadPaintedPlatforms();
   if (platformVariant === 'vector-trace') await preloadTracedBridge();
   const originalBack = theme.drawPlatform;
   const originalFront = theme.drawPlatformOverlay;
   theme.drawPlatform = (ctx, platform, isGround) => {
     if (platformVariant === 'vector-replica') {
-      drawVectorReplicaBack(ctx, platform, isGround);
+      drawWinterVectorPlatformBack(ctx, platform, isGround);
       return;
     }
     if (platformVariant === 'vector-trace') {
@@ -66,7 +67,7 @@ if (platformVariant) {
   };
   theme.drawPlatformOverlay = (ctx, platform, isGround) => {
     if (platformVariant === 'vector-replica') {
-      drawVectorReplicaFront(ctx, platform, isGround);
+      drawWinterVectorPlatformFront(ctx, platform, isGround);
       return;
     }
     if (platformVariant === 'vector-trace') {

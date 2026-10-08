@@ -1,5 +1,5 @@
-import type { Ctx2D, Platform } from '../../../src/engine/types';
-import { CAP_DEPTH, capFrontY, skewPx } from '../../../src/engine/themes/drawPrimitives';
+import type { Ctx2D, Platform } from '../../types';
+import { CAP_DEPTH, capFrontY, skewPx } from '../../themes/drawPrimitives';
 
 // Hand-built vector material study. All marks are in logical pixels; increasing
 // the canvas backing scale keeps the ink intact, including on forty-pixel steps.
@@ -206,11 +206,11 @@ function paint(ctx: Ctx2D, p: Platform, ground: boolean): void {
   ctx.restore();
 }
 
-export function drawVectorReplicaBack(ctx: Ctx2D, platform: Platform, isGround: boolean): void {
+export function drawWinterVectorPlatformBack(ctx: Ctx2D, platform: Platform, isGround: boolean): void {
   paint(ctx, platform, isGround);
 }
 
-export function drawVectorReplicaFront(ctx: Ctx2D, platform: Platform, isGround: boolean): void {
+export function drawWinterVectorPlatformFront(ctx: Ctx2D, platform: Platform, isGround: boolean): void {
   if (platform.style === 'iceCube') return;
   ctx.save();
   ctx.beginPath();

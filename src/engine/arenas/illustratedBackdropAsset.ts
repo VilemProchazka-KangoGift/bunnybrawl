@@ -66,26 +66,28 @@ export function getWinterPlatformArt(): {
   };
 }
 
+// Retained for painted-art comparisons. The playable vector platforms no
+// longer need these three images in menu/lobby prefetch or match startup.
+export function prefetchWinterPlatformArt(signal?: AbortSignal): Promise<void> {
+  return Promise.all(Object.values(winterPlatformArt).map(asset => asset.prefetch(signal))).then(() => {});
+}
+
+export function preloadWinterPlatformArt(): Promise<void> {
+  return Promise.all(Object.values(winterPlatformArt).map(asset => asset.preload())).then(() => {});
+}
+
 export function hasIllustratedBackdrop(arenaId: string): arenaId is IllustratedArena {
   return Object.hasOwn(backdrops, arenaId);
 }
 
 export function prefetchIllustratedBackdrop(arenaId: string, signal?: AbortSignal): Promise<void> {
   if (!hasIllustratedBackdrop(arenaId)) return Promise.resolve();
-  if (arenaId !== 'winter_lake') return backdrops[arenaId].prefetch(signal);
-  return Promise.all([
-    backdrops.winter_lake.prefetch(signal),
-    ...Object.values(winterPlatformArt).map(asset => asset.prefetch(signal)),
-  ]).then(() => {});
+  return backdrops[arenaId].prefetch(signal);
 }
 
 export function preloadIllustratedBackdrop(arenaId: string): Promise<void> {
   if (!hasIllustratedBackdrop(arenaId)) return Promise.resolve();
-  if (arenaId !== 'winter_lake') return backdrops[arenaId].preload();
-  return Promise.all([
-    backdrops.winter_lake.preload(),
-    ...Object.values(winterPlatformArt).map(asset => asset.preload()),
-  ]).then(() => {});
+  return backdrops[arenaId].preload();
 }
 
 export function getIllustratedBackdrop(arenaId: string): ImageBitmap | null {

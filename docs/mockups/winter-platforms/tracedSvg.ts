@@ -1,6 +1,6 @@
 import type { Ctx2D, Platform } from '../../../src/engine/types';
 import { drawPaintedWinterPlatform } from '../../../src/engine/arenas/packs/winterLakePaintedPlatforms';
-import { drawVectorReplicaBack, drawVectorReplicaFront } from './vectorReplica';
+import { drawWinterVectorPlatformBack, drawWinterVectorPlatformFront } from '../../../src/engine/arenas/packs/winterLakeVectorPlatforms';
 
 let tracedBridge: HTMLImageElement | null = null;
 
@@ -15,8 +15,8 @@ function draw(ctx: Ctx2D, platform: Platform, isGround: boolean, frontOnly: bool
   // The trace is a long shelf. Its detailed contours cannot survive shrinking
   // to the arena's 40px steps or fit the cubes' upright silhouette.
   if (platform.style === 'iceCube' || (!isGround && platform.width < 80)) {
-    if (frontOnly) drawVectorReplicaFront(ctx, platform, isGround);
-    else drawVectorReplicaBack(ctx, platform, isGround);
+    if (frontOnly) drawWinterVectorPlatformFront(ctx, platform, isGround);
+    else drawWinterVectorPlatformBack(ctx, platform, isGround);
     return;
   }
   if (!tracedBridge) throw new Error('Traced bridge not preloaded');

@@ -1,18 +1,18 @@
 import type { Platform } from '../../../src/engine/types';
-import { preloadIllustratedBackdrop, getWinterPlatformArt } from '../../../src/engine/arenas/illustratedBackdropAsset';
+import { preloadWinterPlatformArt, getWinterPlatformArt } from '../../../src/engine/arenas/illustratedBackdropAsset';
 import { drawPaintedWinterPlatform } from '../../../src/engine/arenas/packs/winterLakePaintedPlatforms';
-import { drawVectorReplicaBack } from './vectorReplica';
+import { drawWinterVectorPlatformBack } from '../../../src/engine/arenas/packs/winterLakeVectorPlatforms';
 import { drawTracedSvgBack, preloadTracedBridge } from './tracedSvg';
 
 const renderer = new URLSearchParams(location.search).get('renderer');
 if (renderer === 'trace') await preloadTracedBridge();
-else if (renderer !== 'vector') await preloadIllustratedBackdrop('winter_lake');
+else if (renderer !== 'vector') await preloadWinterPlatformArt();
 const images = renderer === 'vector' || renderer === 'trace' ? null : getWinterPlatformArt();
 if (!renderer && (!images?.shelf || !images.bridge || !images.cube)) throw new Error('Winter platform art unavailable');
 const canvas = document.querySelector<HTMLCanvasElement>('#study')!;
 const ctx = canvas.getContext('2d')!;
 function drawStudyPlatform(platform: Platform): void {
-  if (renderer === 'vector') drawVectorReplicaBack(ctx, platform, false);
+  if (renderer === 'vector') drawWinterVectorPlatformBack(ctx, platform, false);
   else if (renderer === 'trace') drawTracedSvgBack(ctx, platform, false);
   else drawPaintedWinterPlatform(ctx, platform, false, false, images!);
 }
